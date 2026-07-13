@@ -132,16 +132,167 @@ class PositionLoop:
             # ctypes 调用失败（非 Windows 或 API 不可用）→ 保守隐藏
             return "hide"
 
+    # ── Bug ① 修复：EnumWindows 支持微信 4.x Qt 类名 ────────────────────────
+
+    @staticmethod
+    def _is_wechat_main_window(class_name: str, title: str) -> bool:
+        """
+        判断是否为微信主窗口（支持 3.x mmui 和 4.1.10+ Qt 外框）。
+
+        - mmui::MainWindow：4.1.8.x 标准类名
+        - Qt*QWindowIcon + title=='微信'：4.1.10+ xwechat Qt5 外框（见 find_weixin.py）
+        """
+        if class_name == "mmui::MainWindow":
+            return True
+        # 4.1.10+ Qt 外框：类名含 QWindowIcon 且 title == "微信"
+        if "QWindowIcon" in class_name and title == "微信":
+            return True
+        return False
+
+    @staticmethod
+    def _detect_wechat_hwnd_from_list(window_list: list) -> Optional[int]:
+        """
+        从 [(hwnd, class_name, title), ...] 列表中找微信主窗口句柄（纯函数，可单测）。
+        找到第一个匹配即返回；无匹配返回 None。
+        """
+        for hwnd, cls, title in window_list:
+            if PositionLoop._is_wechat_main_window(cls, title):
+                return hwnd
+        return None
+
     def _find_wechat_hwnd(self) -> Optional[int]:
-        """查找微信主窗口句柄（仅 Windows）。"""
+        """
+        查找微信主窗口句柄（仅 Windows）。
+
+        Bug ① 修复：改用 EnumWindows 枚举所有顶级窗口，支持：
+          - mmui::MainWindow（4.1.8.x）
+          - Qt*QWindowIcon + title=微信（4.1.10+）
+        原 FindWindowW("WeChatMainWndForPC") 仅匹配微信 3.x，4.x 永远返回 None。
+        """
         if sys.platform != "win32":
             return None
         try:
             import ctypes
-            hwnd = ctypes.windll.user32.FindWindowW("WeChatMainWndForPC", None)
-            return hwnd if hwnd else None
+            import ctypes.wintypes
+
+            found: list = []
+            user32 = ctypes.windll.user32
+
+            WNDENUMPROC = ctypes.WINFUNCTYPE(
+                ctypes.c_bool, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM
+            )
+
+            @WNDENUMPROC
+            def _enum_callback(hwnd, _lParam):
+                try:
+                    buf_cls = ctypes.create_unicode_buffer(256)
+                    buf_title = ctypes.create_unicode_buffer(512)
+                    user32.GetClassNameW(hwnd, buf_cls, 256)
+                    user32.GetWindowTextW(hwnd, buf_title, 512)
+                    if PositionLoop._is_wechat_main_window(buf_cls.value, buf_title.value):
+                        found.append(hwnd)
+                        return False  # 停止枚举
+                except Exception:
+                    pass
+                return True
+
+            user32.EnumWindows(_enum_callback, 0)
+            return found[0] if found else None
         except (OSError, AttributeError):
             return None
+
+    # ── Bug ⑤ 修复：贴靠跟随（_calc_dock_position + _dock_to） ──────────────
+
+    @staticmethod
+    def _calc_dock_position(
+        wechat_rect: tuple,
+        screen_width: int,
+        overlay_width: int = 300,
+    ) -> tuple:
+        """
+        计算浮窗贴靠坐标（纯函数，可单测）。
+
+        策略（PRD 2026-07-12）：
+          - 微信右缘外侧能放下（right + overlay_width ≤ screen_width）→ x = right
+          - 放不下 → x = right - 314（嵌内缘，距右边 14px）
+          - y = top + 10
+          - h = clamp(wechat_height - 20, 380, 980)
+
+        返回 (x, y, overlay_width, h)。
+        """
+        left, top, right, bottom = wechat_rect
+        wechat_height = bottom - top
+        h = max(380, min(980, wechat_height - 20))
+
+        if right + overlay_width <= screen_width:
+            x = right
+        else:
+            x = right - 314
+
+        y = top + 10
+        return (x, y, overlay_width, h)
+
+    def _get_overlay_hwnd(self) -> Optional[int]:
+        """从 pywebview window 对象提取 hwnd。"""
+        if self._webview_window is None:
+            return None
+        try:
+            if hasattr(self._webview_window, "native_handle"):
+                return self._webview_window.native_handle
+            if hasattr(self._webview_window, "_window"):
+                w = self._webview_window._window
+                if hasattr(w, "hwnd"):
+                    return w.hwnd
+        except Exception:
+            pass
+        return None
+
+    def _dock_to(self, wechat_hwnd: int, overlay_hwnd: int) -> None:
+        """
+        将浮窗贴靠到微信主窗口右缘（仅 Windows）。
+
+        Bug ④ 修复：声明 SetWindowPos.argtypes 防止 64-bit HWND 截断（裸 windll
+        在 64 位进程里 HWND 参数默认按 32 位传递，导致 err1400 静默不动）。
+        """
+        if sys.platform != "win32":
+            return
+        try:
+            import ctypes
+            import ctypes.wintypes
+
+            user32 = ctypes.windll.user32
+
+            # Bug ④ 修复：声明 argtypes 确保 64-bit HWND 正确传递
+            SWP = user32.SetWindowPos
+            SWP.argtypes = [
+                ctypes.wintypes.HWND,   # hWnd
+                ctypes.wintypes.HWND,   # hWndInsertAfter
+                ctypes.c_int,           # X
+                ctypes.c_int,           # Y
+                ctypes.c_int,           # cx
+                ctypes.c_int,           # cy
+                ctypes.c_uint,          # uFlags
+            ]
+            SWP.restype = ctypes.wintypes.BOOL
+
+            # 获取微信窗口矩形
+            rect = ctypes.wintypes.RECT()
+            if not user32.GetWindowRect(wechat_hwnd, ctypes.byref(rect)):
+                return
+            wechat_rect = (rect.left, rect.top, rect.right, rect.bottom)
+
+            # 获取屏幕宽度
+            screen_width = user32.GetSystemMetrics(0)
+
+            x, y, w, h = self._calc_dock_position(wechat_rect, screen_width)
+
+            HWND_TOPMOST = ctypes.wintypes.HWND(-1)
+            SWP_NOACTIVATE = 0x0010
+            SWP_NOZORDER = 0x0004
+
+            SWP(overlay_hwnd, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE | SWP_NOZORDER)
+        except (OSError, AttributeError, Exception):
+            pass
 
     def attach_to_hwnd_for_test(self, hwnd, iterations: int = 5) -> list:
         """
@@ -160,6 +311,11 @@ class PositionLoop:
                 hwnd = self._find_wechat_hwnd()
                 visibility = self.get_visibility(hwnd)
                 self._apply_visibility(visibility)
+                # Bug ⑤ 修复：show 态执行贴靠跟随
+                if visibility == "show" and hwnd is not None:
+                    overlay_hwnd = self._get_overlay_hwnd()
+                    if overlay_hwnd:
+                        self._dock_to(hwnd, overlay_hwnd)
             except Exception:
                 pass  # 任何异常不崩溃主循环
             self._stop_event.wait(timeout=0.5)
@@ -294,159 +450,203 @@ class OverlayApp:
     特性：
       - WS_EX_NOACTIVATE：不抢焦点（Windows）
       - --probe 模式：2s 内建窗即退，exit_code=0（CI 探针）
-      - HTML 模板：动态流 UI，温和文案（BEHAVIOR-12）
+      - HTML v2 模板：深色玻璃，呼吸灯+时钟+今日已回复+工作记录卡片（BEHAVIOR-12）
     """
 
-    # HTML 模板：温和文案，动态流 UI，不含对抗性词汇（BEHAVIOR-12）
+    # v2 HTML 模板（2026-07-12 xian-rog 真机视觉验收）：深色玻璃圆角 + 呼吸灯 +
+    # 实时日期时钟 + 今日已回复N + 思考中动画 + 工作记录卡片（阶段彩徽+时间戳+已送达角标）
     HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI 思考中</title>
+<title>AI 客服助手</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Microsoft YaHei", sans-serif;
-    background: rgba(15, 15, 15, 0.92);
-    color: #e8e8e8;
-    border-radius: 12px;
+    font-family: "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
+    background: rgba(10, 12, 18, 0.90);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    color: #e2e8f0;
+    border-radius: 14px;
     overflow: hidden;
     height: 100vh;
     display: flex;
     flex-direction: column;
+    border: 1px solid rgba(255,255,255,0.07);
   }
-  .header {
-    padding: 10px 14px 6px;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
+
+  /* 顶部状态栏：呼吸灯 + 日期时钟 + 今日已回复 + 关闭 */
+  .topbar {
+    padding: 8px 12px;
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
-    color: #888;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    min-height: 36px;
+    flex-shrink: 0;
   }
-  .dot {
-    width: 6px; height: 6px;
+  .breathe {
+    width: 8px; height: 8px;
     border-radius: 50%;
     background: #4ade80;
-    animation: pulse 2s infinite;
+    box-shadow: 0 0 6px rgba(74,222,128,0.6);
+    animation: breathe 2.4s ease-in-out infinite;
+    flex-shrink: 0;
   }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+  @keyframes breathe {
+    0%,100% { opacity:1; box-shadow:0 0 6px rgba(74,222,128,0.6); }
+    50%      { opacity:0.3; box-shadow:0 0 2px rgba(74,222,128,0.2); }
   }
-  .stream {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .stream::-webkit-scrollbar { width: 3px; }
-  .stream::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
-  .card {
-    background: rgba(255,255,255,0.05);
-    border-radius: 8px;
-    padding: 8px 10px;
-    font-size: 12px;
-    line-height: 1.5;
-    border-left: 2px solid transparent;
-    transition: border-color 0.2s;
-  }
-  .card.thinking { border-left-color: #60a5fa; }
-  .card.reply { border-left-color: #4ade80; }
-  .card.stage { border-left-color: #f59e0b; }
-  .card.waiting { border-left-color: rgba(255,255,255,0.1); color: #555; }
-  .card.rest { border-left-color: rgba(255,255,255,0.1); color: #666; font-style: italic; }
-  .label {
-    font-size: 10px;
-    color: #555;
-    margin-bottom: 3px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+  .clock { font-size: 11px; color: #64748b; flex: 1; letter-spacing: 0.4px; }
+  .reply-count {
+    font-size: 10px; color: #4ade80; font-weight: 700;
+    background: rgba(74,222,128,0.08);
+    padding: 2px 7px; border-radius: 10px;
+    border: 1px solid rgba(74,222,128,0.2);
+    flex-shrink: 0;
   }
   .close-btn {
-    cursor: pointer;
-    color: #555;
-    font-size: 11px;
-    padding: 2px 6px;
-    border-radius: 4px;
-    margin-left: auto;
-    transition: color 0.2s;
+    cursor: pointer; color: #475569; font-size: 14px;
+    width: 18px; height: 18px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; transition: background 0.2s; flex-shrink: 0;
   }
-  .close-btn:hover { color: #aaa; }
+  .close-btn:hover { background: rgba(255,255,255,0.08); color: #94a3b8; }
+
+  /* 思考中动画区 */
+  .thinking-area {
+    padding: 7px 12px 5px;
+    display: flex; align-items: center; gap: 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    min-height: 30px; flex-shrink: 0;
+  }
+  .thinking-label { font-size: 10px; color: #475569; text-transform: uppercase; letter-spacing: 0.8px; flex-shrink: 0; }
+  .thinking-text { font-size: 11px; color: #93c5fd; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dots { display: flex; gap: 3px; flex-shrink: 0; }
+  .dots span {
+    width: 4px; height: 4px; border-radius: 50%; background: #60a5fa;
+    animation: dot 1.4s ease-in-out infinite both;
+  }
+  .dots span:nth-child(2) { animation-delay:.2s; }
+  .dots span:nth-child(3) { animation-delay:.4s; }
+  @keyframes dot { 0%,80%,100%{opacity:.2;transform:scale(.7)} 40%{opacity:1;transform:scale(1)} }
+  .thinking-area.idle .dots { display: none; }
+  .thinking-area.idle .thinking-text { color: #475569; }
+
+  /* 工作记录流 */
+  .stream {
+    flex: 1; overflow-y: auto;
+    padding: 8px 10px;
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .stream::-webkit-scrollbar { width: 2px; }
+  .stream::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 1px; }
+
+  /* 工作记录卡片 */
+  .card {
+    background: rgba(255,255,255,0.04);
+    border-radius: 8px; padding: 6px 9px;
+    font-size: 11.5px; line-height: 1.45;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  .card-header { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; }
+  .badge {
+    font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 0.3px; flex-shrink: 0;
+  }
+  .b-think  { background:rgba(96,165,250,.14); color:#60a5fa; border:1px solid rgba(96,165,250,.3); }
+  .b-reply  { background:rgba(74,222,128,.11); color:#4ade80; border:1px solid rgba(74,222,128,.25); }
+  .b-stage  { background:rgba(245,158,11,.11); color:#fbbf24; border:1px solid rgba(245,158,11,.25); }
+  .b-rest   { background:rgba(148,163,184,.07); color:#64748b; border:1px solid rgba(148,163,184,.14); }
+  .card-ts { font-size: 9px; color: #475569; margin-left: auto; flex-shrink: 0; }
+  .card-body { color: #cbd5e1; }
+  .card-body.dim { color: #475569; font-style: italic; }
+  .delivered { display:inline-block; font-size:9px; color:#4ade80;
+    background:rgba(74,222,128,.10); border:1px solid rgba(74,222,128,.2);
+    border-radius:4px; padding:0 4px; margin-left:4px; vertical-align:middle; }
 </style>
 </head>
 <body>
-<div class="header">
-  <div class="dot"></div>
-  <span>AI 客服助手</span>
-  <span class="close-btn" onclick="window.pywebview && window.pywebview.api.close_window()">关闭</span>
+<div class="topbar">
+  <div class="breathe"></div>
+  <div class="clock" id="clock">--</div>
+  <div class="reply-count" id="reply-count">今日已回复 0</div>
+  <div class="close-btn" onclick="window.pywebview && window.pywebview.api.close_window()">✕</div>
 </div>
-<div class="stream" id="stream">
-  <div class="card waiting">
-    <div class="label">状态</div>
-    <div>正在连接 AI 客服...</div>
-  </div>
+<div class="thinking-area idle" id="ta">
+  <span class="thinking-label">状态</span>
+  <span class="thinking-text" id="tt">待机中</span>
+  <div class="dots"><span></span><span></span><span></span></div>
 </div>
+<div class="stream" id="stream"></div>
 <script>
-const MAX_NODES = 30;
+const MAX_CARDS = 25;
+let replyCount = 0;
 const stream = document.getElementById('stream');
+const ta = document.getElementById('ta');
+const tt = document.getElementById('tt');
+const replyEl = document.getElementById('reply-count');
 
-function addCard(type, label, text) {
-  const card = document.createElement('div');
-  card.className = 'card ' + type;
-  card.innerHTML = '<div class="label">' + label + '</div><div>' + text + '</div>';
-  stream.appendChild(card);
-  // FIFO：超出 30 节点时移除最旧的
-  while (stream.children.length > MAX_NODES) {
-    stream.removeChild(stream.firstChild);
-  }
+function updateClock() {
+  const n = new Date();
+  const p = x => String(x).padStart(2,'0');
+  document.getElementById('clock').textContent =
+    (n.getMonth()+1) + '/' + p(n.getDate()) + ' ' + p(n.getHours()) + ':' + p(n.getMinutes());
+}
+updateClock();
+setInterval(updateClock, 15000);
+
+function nowTs() {
+  const n = new Date();
+  const p = x => String(x).padStart(2,'0');
+  return p(n.getHours()) + ':' + p(n.getMinutes()) + ':' + p(n.getSeconds());
+}
+
+function addCard(badgeCls, badgeTxt, bodyHtml) {
+  const d = document.createElement('div');
+  d.className = 'card';
+  d.innerHTML = '<div class="card-header"><span class="badge ' + badgeCls + '">' + badgeTxt +
+    '</span><span class="card-ts">' + nowTs() + '</span></div>' +
+    '<div class="card-body">' + bodyHtml + '</div>';
+  stream.appendChild(d);
+  while (stream.children.length > MAX_CARDS) stream.removeChild(stream.firstChild);
   stream.scrollTop = stream.scrollHeight;
 }
 
+function setThinking(text) { ta.classList.remove('idle'); tt.textContent = text || '思考中...'; }
+function setIdle(text)     { ta.classList.add('idle');    tt.textContent = text || '待机中'; }
+
 function renderEvent(ev) {
-  if (ev.type === 'degraded') {
-    addCard('rest', '提示', ev.msg || 'AI 客服暂时休息中');
-    return;
-  }
-  if (ev.type === 'thinking') {
-    addCard('thinking', '思考中', ev.text || '');
-    return;
-  }
+  if (ev.type === 'degraded') { setIdle(ev.msg || 'AI 客服暂时休息中'); return; }
+  if (ev.type === 'thinking') { setThinking(ev.text || '思考中...'); return; }
   if (ev.type === 'reply_sent') {
+    setIdle('已回复');
+    replyCount++;
+    replyEl.textContent = '今日已回复 ' + replyCount;
     const reasoning = ev.reasoning || '';
     const stage = ev.tags && ev.tags.stage ? ev.tags.stage : '';
-    if (reasoning) addCard('thinking', '推理', reasoning);
-    if (stage) addCard('stage', '阶段', stage);
-    addCard('reply', '已回复', '');
+    if (reasoning) addCard('b-think', '推理', reasoning);
+    if (stage)     addCard('b-stage', stage, '');
+    addCard('b-reply', '回复', '<span class="delivered">✓ 已送达</span>');
     return;
   }
-  if (ev.type === 'heartbeat') {
-    return;  // 心跳不渲染
-  }
+  if (ev.type === 'heartbeat') return;
 }
 
-// 轮询事件（每 500ms 向 Python 侧拉取新事件）
 let polling = false;
 async function poll() {
   if (polling) return;
   polling = true;
   try {
     if (window.pywebview && window.pywebview.api) {
-      const events = await window.pywebview.api.get_events();
-      if (events && events.length) {
-        events.forEach(renderEvent);
-      }
+      const evs = await window.pywebview.api.get_events();
+      if (evs && evs.length) evs.forEach(renderEvent);
     }
-  } catch(e) {
-    // 静默处理连接异常
-  } finally {
-    polling = false;
-  }
+  } catch(e) {}
+  finally { polling = false; }
 }
-
 setInterval(poll, 500);
 </script>
 </body>
@@ -523,18 +723,19 @@ setInterval(poll, 500);
             webview.start()
             return
 
-        # 生产模式：创建浮窗
+        # 生产模式：创建浮窗（Bug ② 修复：加 js_api=self）
         window = webview.create_window(
             title="AI 客服助手",
             html=self.HTML_TEMPLATE,
-            width=280,
-            height=400,
+            width=300,
+            height=680,
             x=100,
             y=100,
             frameless=True,
             on_top=True,
             transparent=True,
             resizable=False,
+            js_api=self,  # Bug ② 修复：JS 端需要此参数才能调用 pywebview.api.get_events()
         )
         self._window = window
 
