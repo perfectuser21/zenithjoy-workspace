@@ -37,6 +37,7 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
 
   // —— LLM / AI 供应商（feature 级，缺则对应模型路径不可用）——
   { name: 'TOAPI_BASE_URL', reason: 'toapi 网关地址，缺则用默认 base url' },
+  { name: 'TOAPIS_BASE_URL', reason: 'ToAPIs 网关地址（content-judgment），缺则用默认 https://toapis.com/v1（api. 子域 2026-07-14 实测挂起后切主域）' },
   { name: 'TOAPIS_API_KEY', reason: 'ToAPIs 代理 Gemini API key，缺则 content-judgment 跳过 Gemini 调用，标 pending（target_profile_desc 为空时不调用 API）' },
   { name: 'OPENROUTER_API_KEY', reason: 'OpenRouter 凭据，缺则不走 OpenRouter 路径' },
   { name: 'OPENROUTER_BASE_URL', reason: 'OpenRouter 网关地址，缺则用默认' },
