@@ -3,6 +3,7 @@ import { dirname, resolve, sep } from 'path';
 import pool from '../db/connection';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const BRAIN_URL = process.env.CECELIA_BRAIN_URL || 'http://localhost:5221';
 const DOCKER_ROOT = '/home/cecelia/content-output';
 const HOST_ROOT = `${process.env.HOME}/content-output`;
 
@@ -65,27 +66,29 @@ export interface PipelineEvent {
 }
 
 export async function fetchLangGraphEvents(ceceliaTaskId: string): Promise<PipelineEvent[]> {
-  const { rows } = await pool.query<PipelineEvent>(
-    `SELECT id, payload, created_at
-     FROM cecelia_events
-     WHERE event_type = 'content_pipeline_step' AND task_id = $1
-     ORDER BY id`,
-    [ceceliaTaskId]
-  );
-  return rows;
+  try {
+    const res = await fetch(`${BRAIN_URL}/api/brain/pipelines/${ceceliaTaskId}/events`);
+    if (!res.ok) return [];
+    return (await res.json()) as PipelineEvent[];
+  } catch {
+    return [];
+  }
 }
 
 /**
- * 任务存在性探针：查 tasks 表确认 :id 是已派发的 content-pipeline 任务。
+ * 任务存在性探针：调 Brain API 确认 :id 是已派发的 content-pipeline 任务。
  * 用于 /output /stages 区分"LangGraph 任务刚触发无事件"（→ pending）
  * 与"任意 UUID 乱输"（→ 404）。
  */
 export async function existsLangGraphTask(taskId: string): Promise<boolean> {
-  const { rows } = await pool.query(
-    `SELECT 1 FROM tasks WHERE id = $1 AND task_type = 'content-pipeline' LIMIT 1`,
-    [taskId]
-  );
-  return rows.length > 0;
+  try {
+    const res = await fetch(`${BRAIN_URL}/api/brain/tasks/${taskId}`);
+    if (!res.ok) return false;
+    const task = (await res.json()) as { task_type?: string };
+    return task.task_type === 'content-pipeline';
+  } catch {
+    return false;
+  }
 }
 
 export interface LangGraphListRow {
@@ -106,69 +109,55 @@ export interface LangGraphListRow {
 
 // 列出"只走 LangGraph、没写 zenithjoy.pipeline_runs"的任务
 export async function listLangGraphOnlyRuns(limit = 50): Promise<LangGraphListRow[]> {
-  // tasks/cecelia_events tables live in the Brain DB schema and may not exist in all environments
-  let rows: {
-    id: string;
-    title: string | null;
-    created_at: string;
-    updated_at: string;
-    last_node: string | null;
-    last_error: string | null;
-  }[];
   try {
-    const result = await pool.query<{
+    // 1. Brain API：取 content-pipeline tasks + 最后一个 cecelia_event（跨库依赖消除）
+    const res = await fetch(`${BRAIN_URL}/api/brain/pipelines?with_last_event=1&limit=${limit}`);
+    if (!res.ok) return [];
+    const allRows = (await res.json()) as Array<{
       id: string;
       title: string | null;
       created_at: string;
       updated_at: string;
       last_node: string | null;
       last_error: string | null;
-    }>(
-      `SELECT t.id::text AS id,
-              t.title,
-              t.created_at,
-              COALESCE(t.updated_at, t.created_at) AS updated_at,
-              last_e.payload->>'node' AS last_node,
-              last_e.payload->>'error' AS last_error
-       FROM tasks t
-       JOIN LATERAL (
-         SELECT payload FROM cecelia_events
-         WHERE task_id = t.id AND event_type = 'content_pipeline_step'
-         ORDER BY id DESC LIMIT 1
-       ) last_e ON TRUE
-       WHERE t.task_type = 'content-pipeline'
-         AND NOT EXISTS (
-           SELECT 1 FROM zenithjoy.pipeline_runs pr
-           WHERE pr.cecelia_task_id::uuid = t.id
-         )
-       ORDER BY t.created_at DESC
-       LIMIT $1`,
-      [limit]
+    }>;
+
+    // 只保留有事件的任务（与原 JOIN LATERAL 语义一致）
+    const withEvent = allRows.filter((r) => r.last_node !== null || r.last_error !== null);
+    if (withEvent.length === 0) return [];
+
+    // 2. 本地查 zenithjoy.pipeline_runs（ZenithJoy 自有 schema，非跨库）
+    const { rows: prRows } = await pool.query<{ cecelia_task_id: string }>(
+      `SELECT cecelia_task_id::text FROM zenithjoy.pipeline_runs
+       WHERE cecelia_task_id = ANY($1::uuid[])`,
+      [withEvent.map((r) => r.id)]
     );
-    rows = result.rows;
+    const withPR = new Set(prRows.map((r) => r.cecelia_task_id));
+
+    return withEvent
+      .filter((r) => !withPR.has(r.id))
+      .map((r) => ({
+        id: r.id,
+        cecelia_task_id: r.id,
+        topic: (r.title || '').replace(/^\[.*?\]\s*/, ''),
+        status: r.last_error
+          ? 'failed'
+          : r.last_node === 'export'
+          ? 'completed'
+          : 'running',
+        content_type: 'content-pipeline',
+        output_dir: null,
+        output_manifest: null,
+        triggered_by: 'langgraph',
+        topic_id: null,
+        notebook_id: null,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+        source: 'langgraph',
+      }));
   } catch {
     return [];
   }
-
-  return rows.map((r) => ({
-    id: r.id,
-    cecelia_task_id: r.id,
-    topic: (r.title || '').replace(/^\[.*?\]\s*/, ''), // 剥掉 "[内容流水线] " 前缀
-    status: r.last_error
-      ? 'failed'
-      : r.last_node === 'export'
-      ? 'completed'
-      : 'running',
-    content_type: 'content-pipeline',
-    output_dir: null,
-    output_manifest: null,
-    triggered_by: 'langgraph',
-    topic_id: null,
-    notebook_id: null,
-    created_at: r.created_at,
-    updated_at: r.updated_at,
-    source: 'langgraph',
-  }));
 }
 
 const NODE_TO_STAGE: Record<string, string> = {
