@@ -67,7 +67,7 @@ class ScreenCaptureRealTest {
             "captured"
         })
 
-        var secondResult: String? = "not-set"
+        val secondResult: String?
         val t1 = Thread { service.captureToBase64() }
         t1.start()
         started.await()
