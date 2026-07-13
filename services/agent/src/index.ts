@@ -22,6 +22,7 @@ import { handleToutiaoPublish } from './handlers/toutiao-publish';
 import { handleWeiboPublish } from './handlers/weibo-publish';
 import { handleShipinhaoPublish } from './handlers/shipinhao-publish';
 import { handleZhihuPublish } from './handlers/zhihu-publish';
+import { handleDevQuickVerify, isDevMachineFromEnv, runRegisteredAction } from './handlers/dev-quick-verify';
 import { registerLeaseBrokerRoutes } from './handlers/wechat-rpa';
 import { startTray, updateTrayStatus, updateTrayModules, showModuleError, destroyTray } from './tray';
 // Walking Skeleton #1 — HTTP heartbeat 链路（与上面 WS 链路并存）
@@ -446,6 +447,18 @@ function connect(cfg: AgentConfig): void {
         } else {
           console.warn('[agent] unsupported platform:', platform);
         }
+      } else if (msg.type === 'dev_quick_verify') {
+        // T1 RPA 开发快验通道：仅研发机（ZENITHJOY_DEV_MACHINE=1）受理，
+        // 白名单红线 + 超时在 handler 内 enforce。生产机默认不设 env → 一律拒绝。
+        const result = await handleDevQuickVerify(
+          { type: 'dev_quick_verify', payload: msg.payload ?? { action: '', params: {} } },
+          {
+            isDevMachine: isDevMachineFromEnv(),
+            runAction: runRegisteredAction,
+            timeoutMs: typeof msg.payload?.timeout_ms === 'number' ? msg.payload.timeout_ms : undefined,
+          },
+        );
+        emit(makeMsg('dev_quick_verify_result', result, msg.taskId));
       }
     } catch (err) {
       console.warn('[agent] invalid message:', err);
