@@ -1,0 +1,237 @@
+name: E2E Orphan Specs Consolidation (Windows)
+
+# ci-patrol 2026-07-12 巡检发现 12 个 spec 零 workflow 引用，此 workflow 收编。
+# 覆盖 spec：
+#   acquisition-android-entry / content-judgment-gate / crm-config /
+#   customer-admin-backend / customer-management / line04-preflight-card /
+#   module-health / module-health-access / path-2-sprint-a /
+#   video-remake / wechat-bind-button / wechat-cs-config
+#
+# 全 API stub（page.route），不依赖外部服务。
+# continue-on-error: true 分隔每个 spec，最终 Gate 汇总结果。
+# 初始作为「smoke 债」可观测——各 spec 绿了之后可升为 required check。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/e2e/acquisition-android-entry.spec.ts'
+      - 'apps/dashboard/e2e/content-judgment-gate.spec.ts'
+      - 'apps/dashboard/e2e/crm-config.spec.ts'
+      - 'apps/dashboard/e2e/customer-admin-backend.spec.ts'
+      - 'apps/dashboard/e2e/customer-management.spec.ts'
+      - 'apps/dashboard/e2e/line04-preflight-card.spec.ts'
+      - 'apps/dashboard/e2e/module-health.spec.ts'
+      - 'apps/dashboard/e2e/module-health-access.spec.ts'
+      - 'apps/dashboard/e2e/path-2-sprint-a.spec.ts'
+      - 'apps/dashboard/e2e/video-remake.spec.ts'
+      - 'apps/dashboard/e2e/wechat-bind-button.spec.ts'
+      - 'apps/dashboard/e2e/wechat-cs-config.spec.ts'
+      - '.github/workflows/e2e-orphan-consolidation-windows.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/e2e/acquisition-android-entry.spec.ts'
+      - 'apps/dashboard/e2e/content-judgment-gate.spec.ts'
+      - 'apps/dashboard/e2e/crm-config.spec.ts'
+      - 'apps/dashboard/e2e/customer-admin-backend.spec.ts'
+      - 'apps/dashboard/e2e/customer-management.spec.ts'
+      - 'apps/dashboard/e2e/line04-preflight-card.spec.ts'
+      - 'apps/dashboard/e2e/module-health.spec.ts'
+      - 'apps/dashboard/e2e/module-health-access.spec.ts'
+      - 'apps/dashboard/e2e/path-2-sprint-a.spec.ts'
+      - 'apps/dashboard/e2e/video-remake.spec.ts'
+      - 'apps/dashboard/e2e/wechat-bind-button.spec.ts'
+      - 'apps/dashboard/e2e/wechat-cs-config.spec.ts'
+      - '.github/workflows/e2e-orphan-consolidation-windows.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-orphan-consolidation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright-orphan-consolidation:
+    name: Playwright — Orphan Specs Consolidation (Windows Chrome)
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Install Windows rollup native binding
+        # package-lock.json 由 macOS/Linux 生成，不含 @rollup/rollup-win32-x64-msvc。
+        run: npm install @rollup/rollup-win32-x64-msvc --no-save
+
+      - name: Install Playwright Chromium
+        working-directory: apps/dashboard
+        run: npx playwright install chromium --with-deps
+
+      - name: Start Vite dev server (VITE_SKIP_AUTH=true)
+        working-directory: apps/dashboard
+        env:
+          VITE_SKIP_AUTH: 'true'
+          VITE_MOCK_USER_ID: 'dev-user-001'
+          VITE_MOCK_USER_NAME: '测试用户'
+          VITE_SUPER_ADMIN_EMAILS: 'xuxiao21xx@icloud.com'
+        run: |
+          npx vite --port 5174 &
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5174 >/dev/null 2>&1; then
+              echo "Vite ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:5174 || (echo "Vite failed to start"; exit 1)
+
+      # ── 逐个 spec 运行，continue-on-error 分隔失败 ───────────────────────────
+
+      - name: Run — acquisition-android-entry
+        id: acq_android
+        continue-on-error: true
+        working-directory: apps/dashboard
+        env:
+          E2E_BASE_URL: 'http://localhost:5174'
+        run: npx playwright test e2e/acquisition-android-entry.spec.ts --reporter=list
+
+      - name: Run — content-judgment-gate
+        id: content_judgment
+        continue-on-error: true
+        working-directory: apps/dashboard
+        run: npx playwright test e2e/content-judgment-gate.spec.ts --reporter=list
+
+      - name: Run — crm-config
+        id: crm_config
+        continue-on-error: true
+        working-directory: apps/dashboard
+        env:
+          BASE_URL: 'http://localhost:5174'
+        run: npx playwright test e2e/crm-config.spec.ts --reporter=list
+
+      - name: Run — customer-admin-backend
+        id: customer_admin
+        continue-on-error: true
+        working-directory: apps/dashboard
+        run: npx playwright test e2e/customer-admin-backend.spec.ts --reporter=list
+
+      - name: Run — customer-management
+        id: customer_mgmt
+        continue-on-error: true
+        working-directory: apps/dashboard
+        run: npx playwright test e2e/customer-management.spec.ts --reporter=list
+
+      - name: Run — line04-preflight-card
+        id: preflight_card
+        continue-on-error: true
+        working-directory: apps/dashboard
+        env:
+          PLAYWRIGHT_BASE_URL: 'http://localhost:5174'
+        run: npx playwright test e2e/line04-preflight-card.spec.ts --reporter=list
+
+      - name: Run — module-health
+        id: module_health
+        continue-on-error: true
+        working-directory: apps/dashboard
+        run: npx playwright test e2e/module-health.spec.ts --reporter=list
+
+      - name: Run — module-health-access
+        id: module_health_access
+        continue-on-error: true
+        working-directory: apps/dashboard
+        env:
+          PLAYWRIGHT_BASE_URL: 'http://localhost:5174'
+        run: npx playwright test e2e/module-health-access.spec.ts --reporter=list
+
+      - name: Run — path-2-sprint-a
+        id: path2_sprint_a
+        continue-on-error: true
+        working-directory: apps/dashboard
+        run: npx playwright test e2e/path-2-sprint-a.spec.ts --reporter=list
+
+      - name: Run — video-remake
+        id: video_remake
+        continue-on-error: true
+        working-directory: apps/dashboard
+        run: npx playwright test e2e/video-remake.spec.ts --reporter=list
+
+      - name: Run — wechat-bind-button
+        id: wechat_bind
+        continue-on-error: true
+        working-directory: apps/dashboard
+        run: npx playwright test e2e/wechat-bind-button.spec.ts --reporter=list
+
+      - name: Run — wechat-cs-config
+        id: wechat_cs
+        continue-on-error: true
+        working-directory: apps/dashboard
+        env:
+          BASE_URL: 'http://localhost:5174'
+        run: npx playwright test e2e/wechat-cs-config.spec.ts --reporter=list
+
+      # ── 汇总 gate ────────────────────────────────────────────────────────────
+
+      - name: Gate — Orphan Specs Summary（棘轮基线制）
+        if: always()
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  Orphan Specs Consolidation Results"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          # 基线 = 收编时（2026-07-12 run 29204161922）实测已绿的 spec，必须保绿（阻塞）。
+          # 基线外 = 存量债，warning 可观测不阻塞；修绿一个加基线一个，只进不退。
+          BASELINE="acquisition-android-entry video-remake wechat-cs-config"
+          GATE_FAIL=0; DEBT_FAIL=0
+          for pair in \
+            "acquisition-android-entry:${{ steps.acq_android.outcome }}" \
+            "content-judgment-gate:${{ steps.content_judgment.outcome }}" \
+            "crm-config:${{ steps.crm_config.outcome }}" \
+            "customer-admin-backend:${{ steps.customer_admin.outcome }}" \
+            "customer-management:${{ steps.customer_mgmt.outcome }}" \
+            "line04-preflight-card:${{ steps.preflight_card.outcome }}" \
+            "module-health:${{ steps.module_health.outcome }}" \
+            "module-health-access:${{ steps.module_health_access.outcome }}" \
+            "path-2-sprint-a:${{ steps.path2_sprint_a.outcome }}" \
+            "video-remake:${{ steps.video_remake.outcome }}" \
+            "wechat-bind-button:${{ steps.wechat_bind.outcome }}" \
+            "wechat-cs-config:${{ steps.wechat_cs.outcome }}"; do
+            NAME="${pair%%:*}"
+            RESULT="${pair##*:}"
+            if [ "$RESULT" = "success" ]; then
+              echo "  PASS: $NAME"
+            elif echo " $BASELINE " | grep -q " $NAME "; then
+              echo "::error::基线 spec $NAME FAIL（$RESULT）——收编时是绿的，不许回退"
+              GATE_FAIL=$((GATE_FAIL+1))
+            else
+              echo "::warning::存量债 spec $NAME FAIL（$RESULT，不阻塞；修绿后加入 BASELINE）"
+              DEBT_FAIL=$((DEBT_FAIL+1))
+            fi
+          done
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  GATE_FAIL=$GATE_FAIL DEBT_FAIL=$DEBT_FAIL"
+          if [ "$GATE_FAIL" -gt 0 ]; then
+            echo "  基线 spec 回退，阻塞合并"
+            exit 1
+          fi
+          echo "  基线全绿（存量债 $DEBT_FAIL 个待清偿）"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-orphan-consolidation-artifacts
+          path: |
+            apps/dashboard/test-results/
+            apps/dashboard/playwright-report/
+          retention-days: 7
