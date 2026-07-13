@@ -17,7 +17,7 @@
 #   e2e         — full workflow from external perspective. Runs in L4.
 
 version: "1.0.0"
-updated: "2026-04-02"
+updated: "2026-07-12"
 
 # ─── Suite-level (managed by vitest configs) ──────────────────────────────────
 
@@ -1651,10 +1651,10 @@ tests:
   - id: p2-sprint-a-e2e
     path: apps/dashboard/e2e/path-2-sprint-a.spec.ts
     type: e2e
-    ci: L4
+    ci: windows_cloud
     status: active
     product: 私域运营
-    note: "Path 2 Sprint A — Playwright E2E 走绑飞书 + 自动建表 + 填画像/对标视频全链"
+    note: "Path 2 Sprint A — Playwright E2E 走绑飞书 + 自动建表 + 填画像/对标视频全链。收编入 e2e-orphan-consolidation-windows.yml（2026-07-12 ci-patrol 巡检）"
 
   - id: p2-sprint-a-contract-ws1-migration
     path: sprints/path-2-sprint-a-feishu/tests/ws1/migration.test.ts
@@ -2689,7 +2689,7 @@ tests:
     ci: windows_cloud
     status: active
     product: 新媒体运营
-    note: "ZJ10 Customer Mgmt WS4 — Playwright E2E 走客户概览/platform-sessions/publish-logs/403 全链（page.route stub，windows_cloud）"
+    note: "ZJ10 Customer Mgmt WS4 — Playwright E2E 走客户概览/platform-sessions/publish-logs/403 全链（page.route stub，windows_cloud）。收编入 e2e-orphan-consolidation-windows.yml（2026-07-12 ci-patrol 巡检）"
 
 agent_suite:
   managed_by: services/agent/src/__tests__ + services/agent/publishers
@@ -2731,8 +2731,10 @@ agent_suite:
   - id: path4-sprint-1-ws2-wechat-bind-e2e
     path: apps/dashboard/e2e/wechat-bind-button.spec.ts
     type: e2e
-    ci: L4
-    note: "Path 4 Sprint 1 ws2 — Dashboard 绑微信按钮 Playwright e2e（visible/happy/disabled 3 case）"
+    ci: windows_cloud
+    status: active
+    product: 客户私域AI接管
+    note: "Path 4 Sprint 1 ws2 — Dashboard 绑微信按钮 Playwright e2e（visible/happy/disabled 3 case）。收编入 e2e-orphan-consolidation-windows.yml（2026-07-12 ci-patrol 巡检）"
 
   # ── Path 4 Sprint 1 ws3 — DeepSeek 私聊草稿 + listen_chat + A 路线护栏 ──────────
   - id: path4-sprint-1-ws3-wechat-draft-service
@@ -3238,10 +3240,10 @@ agent_suite:
   - id: path4-wechat-cs-config-page-e2e
     path: apps/dashboard/e2e/wechat-cs-config.spec.ts
     type: e2e
-    ci: L4
+    ci: windows_cloud
     status: active
     product: 客户私域AI接管
-    note: "Path 4 Step 3 Sprint B — 中台配置页 Playwright（加载/编辑/保存/AI帮填，windows_cloud runner）"
+    note: "Path 4 Step 3 Sprint B — 中台配置页 Playwright（加载/编辑/保存/AI帮填，windows_cloud runner）。收编入 e2e-orphan-consolidation-windows.yml（2026-07-12 ci-patrol 巡检）"
 
   - id: path4-wechat-cs-config-route-unit
     path: apps/api/src/routes/__tests__/wechat-config.test.ts
@@ -3345,7 +3347,7 @@ agent_suite:
     ci: windows_cloud
     status: active
     product: 客户私域AI接管
-    note: "Path 4 Step 2 CRM 配置页 Playwright E2E — 微信联系人匹配 + 5条精确卡"
+    note: "Path 4 Step 2 CRM 配置页 Playwright E2E — 微信联系人匹配 + 5条精确卡。收编入 e2e-orphan-consolidation-windows.yml（2026-07-12 ci-patrol 巡检）"
 
   - id: agent-wechat-rpa-real-v1177
     path: .github/workflows/scripts/smoke/wechat-rpa-real-agent-smoke.sh
@@ -3523,7 +3525,7 @@ agent_suite:
     ci: windows_cloud
     status: active
     product: 客户私域AI接管
-    note: "Sprint 06081603 — 模块健康看板 Playwright（stub 超管 + module-health API，三态渲染 + 错误态）"
+    note: "Sprint 06081603 — 模块健康看板 Playwright（stub 超管 + module-health API，三态渲染 + 错误态）。收编入 e2e-orphan-consolidation-windows.yml（2026-07-12 ci-patrol 巡检）"
 
   - id: agent-module-e2e-verify-preflight
     path: sprints/06081800-agent-module-e2e-verify/tests/agent-module-e2e.test.ts
@@ -3539,7 +3541,7 @@ agent_suite:
     ci: windows_cloud
     status: active
     product: 客户私域AI接管
-    note: "Sprint 06091001 — Line04PreflightCard Playwright E2E（preflight 状态卡片渲染 + ok/reason 展示）"
+    note: "Sprint 06091001 — Line04PreflightCard Playwright E2E（preflight 状态卡片渲染 + ok/reason 展示）。收编入 e2e-orphan-consolidation-windows.yml（2026-07-12 ci-patrol 巡检）"
 
   - id: module-health-access-e2e
     path: apps/dashboard/e2e/module-health-access.spec.ts
@@ -3547,7 +3549,7 @@ agent_suite:
     ci: windows_cloud
     status: active
     product: 客户私域AI接管
-    note: "Sprint 06091001 — /module-health 权限开放 E2E（普通账号可访问，不跳 403）"
+    note: "Sprint 06091001 — /module-health 权限开放 E2E（普通账号可访问，不跳 403）。收编入 e2e-orphan-consolidation-windows.yml（2026-07-12 ci-patrol 巡检）"
 
   - id: line04-preflight-card-unit
     path: sprints/06091001-agent-module-preflight-blocking/tests/line04-preflight-card.test.tsx
@@ -3579,7 +3581,7 @@ agent_suite:
     ci: windows_cloud
     status: active
     product: AI爆款视频翻拍
-    note: "Sprint 06100919 — Line07 Dashboard /video-remake 9节点流水线 Playwright E2E（N03/N04/N05/N09 + 100MB拒绝）"
+    note: "Sprint 06100919 — Line07 Dashboard /video-remake 9节点流水线 Playwright E2E（N03/N04/N05/N09 + 100MB拒绝）。收编入 e2e-orphan-consolidation-windows.yml（2026-07-12 ci-patrol 巡检）"
 
   - id: p2-dm-outreach-contract-handler
     path: sprints/06131229-path2-douyin-dm-outreach/tests/dm-outreach.test.ts
@@ -3728,10 +3730,10 @@ agent_suite:
   - id: customer-admin-backend-e2e
     path: apps/dashboard/e2e/customer-admin-backend.spec.ts
     type: e2e
-    ci: L4
+    ci: windows_cloud
     status: active
     product: 客户管理
-    note: "#816 合并: 客户管理后台 Golden Path Playwright（公司名→成员→绑 1 成员 1 PC→诊断）+ 截图（windows_cloud）。"
+    note: "#816 合并: 客户管理后台 Golden Path Playwright（公司名→成员→绑 1 成员 1 PC→诊断）+ 截图（windows_cloud）。收编入 e2e-orphan-consolidation-windows.yml（2026-07-12 ci-patrol 巡检）"
 
   - id: agent-client-encapsulation-contract
     path: sprints/06220836-agent-client-encapsulation/tests/agent-client-encapsulation.test.ts
@@ -4639,10 +4641,10 @@ agent_suite:
 - id: line02-acquisition-hub-android-entry-e2e
   path: apps/dashboard/e2e/acquisition-android-entry.spec.ts
   type: e2e
-  ci: L4
+  ci: windows_cloud
   status: active
   product: AI员工
-  note: "sprint(07091703): 智能获客Hub补下载安卓客户端入口——Playwright E2E 断言 /area/acquisition 页面可见「下载安卓客户端」卡片、点击跳转 /dashboard/android"
+  note: "sprint(07091703): 智能获客Hub补下载安卓客户端入口——Playwright E2E 断言 /area/acquisition 页面可见「下载安卓客户端」卡片、点击跳转 /dashboard/android。收编入 e2e-orphan-consolidation-windows.yml（2026-07-12 ci-patrol 巡检）"
 
 - id: line04-ai-overlay-wechat-draft-reasoning
   path: sprints/07121132-line04-ai-thinking-overlay/tests/wechat-draft-reasoning.test.ts
@@ -4667,7 +4669,7 @@ agent_suite:
   ci: windows_cloud
   status: active
   product: AI员工
-  note: "sprint(07120952): Line02 内容判定门槛 E2E Playwright——获客配置画像描述填写、线索outreach_eligible状态列展示"
+  note: "sprint(07120952): Line02 内容判定门槛 E2E Playwright——获客配置画像描述填写、线索outreach_eligible状态列展示。收编入 e2e-orphan-consolidation-windows.yml（2026-07-12 ci-patrol 巡检；原为 TDD commit-1 Red，UI 实现后回验确认绿态）"
 
 - id: line04-overlay-handler-unit
   path: services/agent/modules/line04/__tests__/overlay-handler.test.ts
