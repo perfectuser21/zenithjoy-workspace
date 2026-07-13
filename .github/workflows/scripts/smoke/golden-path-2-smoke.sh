@@ -86,7 +86,7 @@ python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d.get('ok') 
   || fail "Step 2 register 响应无 ok/success: $(cat "$S2_TMP")" 2
 AGENT_PK=$(psq "SELECT id FROM zenithjoy.agents WHERE tenant_id='$TENANT_ID' ORDER BY created_at DESC LIMIT 1")
 [ -n "$AGENT_PK" ] || fail "Step 2 agents 表无该 tenant 的 agent 行" 2
-ok "Step 2 ✅ agent 注册 → agents.id=$AGENT_PK（tenant 已关联）"
+ok "Step 2 ✅ agent 注册 → agents.id=${AGENT_PK}（tenant 已关联）"
 
 # ───────────────────────────────────────────────────────────────────
 # Step 3：Android 端 Agent 连中台 — 真实调用方 shape 等价断言（#1267 路径）
@@ -98,11 +98,13 @@ S3_TMP=$(mktemp)
 S3_HTTP=$(curl -s -o "$S3_TMP" -w "%{http_code}" --max-time 15 \
   -H "x-agent-id: $AGENT_PK" "$API_BASE/api/acquisition/pending-collect-tasks")
 [ "$S3_HTTP" = "200" ] || fail "Step 3 pending-collect-tasks（带 x-agent-id）expected 200, got $S3_HTTP: $(cat "$S3_TMP")" 3
-python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d.get('success') is True" "$S3_TMP" 2>/dev/null \
-  || fail "Step 3 响应 success!=true: $(cat "$S3_TMP")" 3
-# 反向：不带 x-agent-id 必须 401（防两条代码路径分叉——#1267 的病根）
-S3_NEG=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$API_BASE/api/acquisition/pending-collect-tasks")
-[ "$S3_NEG" = "401" ] || fail "Step 3 无 x-agent-id 应 401，got $S3_NEG（调用方 shape 校验被绕过）" 3
+python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert isinstance(d.get('tasks'), list)" "$S3_TMP" 2>/dev/null \
+  || fail "Step 3 响应无 tasks 数组: $(cat "$S3_TMP")" 3
+# 反向：judge-video 不带 x-agent-id 必须 401 MISSING_AGENT_ID（防两条代码路径分叉——#1267 的病根；
+# pending-collect-tasks 无 header 按设计软返回空列表，不作反向断言对象）
+S3_NEG=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/judge-video" -H "Content-Type: application/json" -d '{}')
+[ "$S3_NEG" = "401" ] || fail "Step 3 judge-video 无 x-agent-id 应 401，got ${S3_NEG}（调用方 shape 校验被绕过）" 3
 ok "Step 3 ✅ x-agent-id 真实调用方 shape 通 + 无 header 401"
 
 # ───────────────────────────────────────────────────────────────────
@@ -195,7 +197,7 @@ JUDGE_STATUS=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['
 JUDGE_REASON=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data'].get('judgment_reason') or '')" "$S8_TMP" 2>/dev/null)
 case "$JUDGE_STATUS" in
   matched|rejected) : ;;
-  *) fail "Step 8c 真调判定未出结果：status=$JUDGE_STATUS reason=$JUDGE_REASON（no_api_key=API 进程缺 TOAPIS_API_KEY；pending=上游超时）" 8 ;;
+  *) fail "Step 8c 真调判定未出结果：status=$JUDGE_STATUS reason=${JUDGE_REASON}（no_api_key=API 进程缺 TOAPIS_API_KEY；pending=上游超时）" 8 ;;
 esac
 case "$JUDGE_REASON" in
   force_result|no_api_key) fail "Step 8c reason=$JUDGE_REASON 不是真调（禁止 mock 顶替）" 8 ;;
