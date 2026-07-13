@@ -231,6 +231,11 @@ class AgentService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        // 用户可能在服务已运行期间才在 MainActivity 完成 MediaProjection 授权（先「启动
+        // Agent」跳过截屏授权，后来又点「授权截屏」）。startForeground 可重复调用以更新
+        // type，这里重跑一次把已授权的服务从纯 DATA_SYNC 升级到 DATA_SYNC|MEDIA_PROJECTION，
+        // 不需要重启整个服务。
+        startForegroundCompat()
         // 真机复现(2026-07-10)：lastStartId=3 → initAgent 跑了 3 次，泄漏 3 套轮询
         // loop（旧 loop 只在 onDestroy 停），同一任务每周期被投递 N 次。只初始化一次。
         if (shouldRunInitAgent(agentInitialized)) {
@@ -501,6 +506,10 @@ class AgentService : Service() {
      * 传入本次要用到的 type 组合，否则截图相关调用会抛 MissingForegroundServiceTypeException/
      * SecurityException。API 29 以下没有这个重载，走旧的双参数 startForeground。
      * ServiceCompat.startForeground 内部按 SDK 版本自动分派，minSdk 26 兼容安全。
+     *
+     * 真机复现(2026-07-13 Honor xian-rog)：MEDIA_PROJECTION type 必须已持有有效授权令牌，
+     * 否则系统直接 SecurityException 杀死整个服务——不能无条件声明两种 type，必须按
+     * MediaProjectionHolder.hasAuthorization() 动态决定（见 foregroundServiceTypeFlags）。
      */
     private fun startForegroundCompat() {
         // ServiceCompat.startForeground 内部按 SDK 版本自动分派（<29 直接忽略 type 参数走
@@ -509,7 +518,7 @@ class AgentService : Service() {
             this,
             NOTIFICATION_ID,
             buildNotification(),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION,
+            foregroundServiceTypeFlags(MediaProjectionHolder.hasAuthorization()),
         )
     }
 
@@ -794,6 +803,17 @@ class AgentService : Service() {
         // initAgent 单次守卫：onStartCommand 会被多次调用（开机广播 + MainActivity +
         // START_STICKY 重启），每次都 initAgent 会泄漏多套并行轮询 loop。
         internal fun shouldRunInitAgent(alreadyInitialized: Boolean): Boolean = !alreadyInitialized
+
+        // 真机复现(2026-07-13 Honor xian-rog)：MEDIA_PROJECTION type 必须已持有有效
+        // MediaProjection 授权令牌，未授权时声明该 type 会被系统 SecurityException 杀死整个
+        // 服务。未授权 → 只用 DATA_SYNC（不阻塞 Agent 主链路，内容判定门槛这一刀持续
+        // pending）；已授权 → 加上 MEDIA_PROJECTION（真正能截图）。
+        internal fun foregroundServiceTypeFlags(hasMediaProjectionAuthorization: Boolean): Int =
+            if (hasMediaProjectionAuthorization) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            } else {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            }
 
         // busy 拒绝后的 dispatch 重试参数：覆盖一个最长 Stage 任务的执行时间窗
         private const val DISPATCH_RETRY_DELAY_MS = 30_000L
