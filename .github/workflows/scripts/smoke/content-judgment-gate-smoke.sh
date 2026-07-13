@@ -18,6 +18,8 @@ DB="${DB:-}"
 # 内部 SELECT/UPDATE 都会做 uuid 类型转换——tenant_id 必须是合法 UUID 格式，
 # 非 uuid 字符串会直接触发 500（invalid input syntax for type uuid）。
 TENANT_ID=$(node -e "console.log(require('crypto').randomUUID())")
+# judge-video 改为按 x-agent-id 反查真 tenant（设备不持有真 tenant），smoke 须建绑该 tenant 的 agent
+AGENT_ID="smoke-agent-${TENANT_ID}"
 VIDEO_ID="smoke-vid-$(date +%s)"
 
 pass() { echo "  [PASS] $*"; }
@@ -36,11 +38,15 @@ if [ -n "$DB" ]; then
   COLLECT_TASK_ID=$(psql "$DB" -tA -c \
     "INSERT INTO zenithjoy.acquisition_collect_tasks (tenant_id, keywords, status) VALUES ('${TENANT_ID}', '[]', 'running') RETURNING id" \
     2>/dev/null | head -1 | tr -d ' \n' || echo "")
+  psql "$DB" -tA -c \
+    "INSERT INTO zenithjoy.agents (tenant_id, agent_id, status) VALUES ('${TENANT_ID}', '${AGENT_ID}', 'online')" \
+    > /dev/null 2>&1 || echo "  [INFO] 插入 agent 失败（可能已存在），继续"
 fi
 
 cleanup() {
   if [ -n "$DB" ] && [ -n "$COLLECT_TASK_ID" ]; then
     psql "$DB" -c "DELETE FROM zenithjoy.tenants WHERE id='${TENANT_ID}'" > /dev/null 2>&1 || true
+    psql "$DB" -c "DELETE FROM zenithjoy.tenants WHERE id='${EMPTY_DESC_TENANT:-}'" > /dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
@@ -61,6 +67,7 @@ seed_video() {
 curl -sf -X PATCH "${BASE_URL}/api/acquisition/config" \
   -H "Content-Type: application/json" \
   -H "X-Tenant-Id: ${TENANT_ID}" \
+  -H "x-agent-id: ${AGENT_ID}" \
   -d "{\"tenant_id\": \"${TENANT_ID}\", \"target_profile_desc\": \"中小企业主，关注降本增效\"}" > /dev/null \
   || fail "预置 target_profile_desc 失败（PATCH /api/acquisition/config）"
 
@@ -69,6 +76,7 @@ seed_video "${VIDEO_ID}"
 JUDGE_RESP=$(curl -sf -X POST "${BASE_URL}/api/acquisition/judge-video" \
   -H "Content-Type: application/json" \
   -H "X-Tenant-Id: ${TENANT_ID}" \
+  -H "x-agent-id: ${AGENT_ID}" \
   -d "{
     \"tenant_id\": \"${TENANT_ID}\",
     \"video_id\": \"${VIDEO_ID}\",
@@ -89,6 +97,7 @@ START_TS=$(date +%s)
 TIMEOUT_RESP=$(curl -sf -X POST "${BASE_URL}/api/acquisition/judge-video" \
   -H "Content-Type: application/json" \
   -H "X-Tenant-Id: ${TENANT_ID}" \
+  -H "x-agent-id: ${AGENT_ID}" \
   -d "{
     \"tenant_id\": \"${TENANT_ID}\",
     \"video_id\": \"${TIMEOUT_VIDEO_ID}\",
@@ -113,6 +122,7 @@ fi
 curl -sf -X POST "${BASE_URL}/api/acquisition/judge-video" \
   -H "Content-Type: application/json" \
   -H "X-Tenant-Id: ${TENANT_ID}" \
+  -H "x-agent-id: ${AGENT_ID}" \
   -d "{
     \"tenant_id\": \"${TENANT_ID}\",
     \"video_id\": \"${CACHE_VIDEO_ID}\",
@@ -125,6 +135,7 @@ curl -sf -X POST "${BASE_URL}/api/acquisition/judge-video" \
 CACHE_RESP=$(curl -sf -X POST "${BASE_URL}/api/acquisition/judge-video" \
   -H "Content-Type: application/json" \
   -H "X-Tenant-Id: ${TENANT_ID}" \
+  -H "x-agent-id: ${AGENT_ID}" \
   -d "{
     \"tenant_id\": \"${TENANT_ID}\",
     \"video_id\": \"${CACHE_VIDEO_ID}\",
@@ -142,17 +153,24 @@ fi
 
 section "§4 empty target_profile_desc → matched（不调 Gemini）"
 EMPTY_DESC_TENANT=$(node -e "console.log(require('crypto').randomUUID())")
+EMPTY_AGENT_ID="smoke-agent-${EMPTY_DESC_TENANT}"
+if [ -n "$DB" ]; then
+  psql "$DB" -tA -c "INSERT INTO zenithjoy.tenants (id, name, license_key) VALUES ('${EMPTY_DESC_TENANT}', 'smoke-empty-desc', 'smoke-lic-${EMPTY_DESC_TENANT}')" > /dev/null 2>&1 || true
+  psql "$DB" -tA -c "INSERT INTO zenithjoy.agents (tenant_id, agent_id, status) VALUES ('${EMPTY_DESC_TENANT}', '${EMPTY_AGENT_ID}', 'online')" > /dev/null 2>&1 || true
+fi
 EMPTY_DESC_VIDEO="smoke-empty-vid-$(date +%s)"
 # 先设置空 target_profile_desc
 curl -sf -X PATCH "${BASE_URL}/api/acquisition/config" \
   -H "Content-Type: application/json" \
   -H "X-Tenant-Id: ${EMPTY_DESC_TENANT}" \
+  -H "x-agent-id: ${EMPTY_AGENT_ID}" \
   -d "{\"tenant_id\": \"${EMPTY_DESC_TENANT}\", \"target_profile_desc\": \"\"}" > /dev/null \
   || echo "  [INFO] PATCH config 返回非 2xx（可能端点尚未实现，跳过设置）"
 
 EMPTY_RESP=$(curl -sf -X POST "${BASE_URL}/api/acquisition/judge-video" \
   -H "Content-Type: application/json" \
   -H "X-Tenant-Id: ${EMPTY_DESC_TENANT}" \
+  -H "x-agent-id: ${EMPTY_AGENT_ID}" \
   -d "{
     \"tenant_id\": \"${EMPTY_DESC_TENANT}\",
     \"video_id\": \"${EMPTY_DESC_VIDEO}\",
@@ -169,6 +187,7 @@ RESCORE_LEAD_ID=$(node -e "console.log(require('crypto').randomUUID())")
 RESCORE_RESP=$(curl -sf -X POST "${BASE_URL}/api/acquisition/rescore-lead" \
   -H "Content-Type: application/json" \
   -H "X-Tenant-Id: ${TENANT_ID}" \
+  -H "x-agent-id: ${AGENT_ID}" \
   -d "{
     \"tenant_id\": \"${TENANT_ID}\",
     \"lead_id\": \"${RESCORE_LEAD_ID}\"
@@ -181,6 +200,7 @@ section "§6 Dashboard target_profile_desc 字段（API 层可接受该字段）
 CONFIG_RESP=$(curl -sf -X PATCH "${BASE_URL}/api/acquisition/config" \
   -H "Content-Type: application/json" \
   -H "X-Tenant-Id: ${TENANT_ID}" \
+  -H "x-agent-id: ${AGENT_ID}" \
   -d "{
     \"tenant_id\": \"${TENANT_ID}\",
     \"target_profile_desc\": \"中小企业主，关注降本增效，有数字化转型需求\"
