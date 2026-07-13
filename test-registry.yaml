@@ -2094,6 +2094,14 @@ tests:
     product: 私域运营
     note: "P4 WS1 — Agent wechat-rpa handler spawn python3 + JSON stdio receipt"
 
+  - id: agent-dev-quick-verify-handler
+    path: services/agent/src/handlers/__tests__/dev-quick-verify.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: RPA开发快验通道
+    note: "T1 dev_quick_verify handler — 白名单红线+研发机闸+同步超时(合同点 Alex 07-13 拍板)"
+
   - id: agent-module-preflight
     path: services/agent/src/preflight/__tests__/preflight.test.ts
     type: unit
