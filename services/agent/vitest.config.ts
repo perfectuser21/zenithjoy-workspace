@@ -27,16 +27,8 @@ export default defineConfig({
       // Line04 DesktopLeaseBroker 状态机 sprint 合约测试
       '../../sprints/0703-line04-desktop-lease-broker/tests/**/*.test.ts',
     ],
-    exclude: [
-      'node_modules/**',
-      'dist/**',
-      'dist-pkg/**',
-      // node:test runner 写的 CJS 测试，与 vitest runner 不兼容（require('node:test') 断言不被 vitest 收集）
-      // 巡检 2026-07-12 收编时登记为债：应迁移到 vitest，迁移前由各 publisher 的独立跑法负责
-      'publishers/kuaishou-publisher/**/*.test.cjs',
-      'publishers/weibo-publisher/**/*.test.cjs',
-      'publishers/zhihu-publisher/**/*.test.cjs',
-      'publishers/xiaohongshu-publisher/**/*.test.cjs',
-    ],
+    // 巡检 2026-07-12 收编债已清偿：4 个 publisher 的 node:test CJS 测试已迁移到 vitest globals，
+    // 不再需要排除，随 publishers/**/__tests__/**/*.test.cjs 的 include 正常跑。
+    exclude: ['node_modules/**', 'dist/**', 'dist-pkg/**'],
   },
 });

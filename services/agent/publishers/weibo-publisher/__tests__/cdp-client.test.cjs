@@ -2,14 +2,10 @@
 /**
  * CDPClient 单元测试
  *
- * 使用 Node.js 内置 test runner（无额外依赖，Node 18+）
- * 通过依赖注入 MockWs 替代真实 WebSocket，无需浏览器连接
+ * 使用 vitest（globals:true），通过依赖注入 MockWs 替代真实 WebSocket，无需浏览器连接
  *
- * 运行：node --test packages/workflows/skills/weibo-publisher/scripts/__tests__/cdp-client.test.cjs
+ * 运行：npx vitest run publishers/weibo-publisher
  */
-
-const { test, describe } = require('node:test');
-const assert = require('node:assert/strict');
 
 const { CDPClient } = require('../cdp-client.cjs');
 
@@ -47,19 +43,19 @@ function createMockWsClass(ws) {
 describe('CDPClient 构造器', () => {
   test('正确保存 wsUrl', () => {
     const client = new CDPClient('ws://localhost:9222', () => {});
-    assert.equal(client.wsUrl, 'ws://localhost:9222');
+    expect(client.wsUrl).toBe('ws://localhost:9222');
   });
 
   test('初始状态：ws 为 null，msgId 为 0', () => {
     const client = new CDPClient('ws://test', () => {});
-    assert.equal(client.ws, null);
-    assert.equal(client.msgId, 0);
+    expect(client.ws).toBe(null);
+    expect(client.msgId).toBe(0);
   });
 
   test('初始状态：callbacks 和 events 为空对象', () => {
     const client = new CDPClient('ws://test', () => {});
-    assert.deepEqual(client.callbacks, {});
-    assert.deepEqual(client.events, {});
+    expect(client.callbacks).toEqual({});
+    expect(client.events).toEqual({});
   });
 });
 
@@ -78,8 +74,8 @@ describe('connect()', () => {
     mockWs.emit('open');
     await connectPromise;
 
-    assert.equal(MockWsClass.lastUrl, 'ws://localhost:19227');
-    assert.equal(client.ws, mockWs);
+    expect(MockWsClass.lastUrl).toBe('ws://localhost:19227');
+    expect(client.ws).toBe(mockWs);
   });
 
   test('open 事件触发时 Promise resolve', async () => {
@@ -89,7 +85,7 @@ describe('connect()', () => {
     const connectPromise = client.connect();
     mockWs.emit('open');
 
-    await assert.doesNotReject(connectPromise);
+    await expect(connectPromise).resolves.not.toThrow();
   });
 
   test('error 事件触发时 Promise reject', async () => {
@@ -99,7 +95,7 @@ describe('connect()', () => {
     const connectPromise = client.connect();
     mockWs.emit('error', new Error('connection refused'));
 
-    await assert.rejects(connectPromise, /connection refused/);
+    await expect(connectPromise).rejects.toThrow(/connection refused/);
   });
 });
 
@@ -121,12 +117,12 @@ describe('send()', () => {
     mockWs.emit('message', JSON.stringify({ id: sentMsg.id, result: { ok: true } }));
 
     const result = await sendPromise;
-    assert.deepEqual(result, { ok: true });
+    expect(result).toEqual({ ok: true });
 
     // 验证发送的格式
-    assert.equal(sentMsg.method, 'Page.enable');
-    assert.deepEqual(sentMsg.params, { key: 'val' });
-    assert.ok(sentMsg.id > 0);
+    expect(sentMsg.method).toBe('Page.enable');
+    expect(sentMsg.params).toEqual({ key: 'val' });
+    expect(sentMsg.id > 0).toBeTruthy();
   });
 
   test('CDP 错误响应触发 reject', async () => {
@@ -143,7 +139,7 @@ describe('send()', () => {
       error: { message: 'DOM not enabled' }
     }));
 
-    await assert.rejects(sendPromise, /DOM not enabled/);
+    await expect(sendPromise).rejects.toThrow(/DOM not enabled/);
   });
 
   test('msgId 每次调用递增', async () => {
@@ -157,8 +153,8 @@ describe('send()', () => {
     const p2 = client.send('Runtime.enable');
 
     const msgs = mockWs.sent.map(s => JSON.parse(s));
-    assert.equal(msgs[0].id, 1);
-    assert.equal(msgs[1].id, 2);
+    expect(msgs[0].id).toBe(1);
+    expect(msgs[1].id).toBe(2);
 
     // 响应两个请求，取消 60s 超时计时器，避免测试结束后产生孤儿 Promise
     mockWs.emit('message', JSON.stringify({ id: msgs[0].id, result: {} }));
@@ -179,7 +175,7 @@ describe('send()', () => {
     await sendPromise;
 
     // 回调已被消费并删除
-    assert.equal(Object.keys(client.callbacks).length, 0);
+    expect(Object.keys(client.callbacks).length).toBe(0);
   });
 });
 
@@ -203,8 +199,8 @@ describe('on()', () => {
       params: { timestamp: 12345 }
     }));
 
-    assert.equal(receivedParams.length, 1);
-    assert.deepEqual(receivedParams[0], { timestamp: 12345 });
+    expect(receivedParams.length).toBe(1);
+    expect(receivedParams[0]).toEqual({ timestamp: 12345 });
   });
 
   test('同一事件可注册多个处理器', async () => {
@@ -223,7 +219,7 @@ describe('on()', () => {
       params: {}
     }));
 
-    assert.equal(calls.length, 2);
+    expect(calls.length).toBe(2);
   });
 });
 
@@ -240,11 +236,11 @@ describe('close()', () => {
 
     client.close();
 
-    assert.ok(mockWs.closed);
+    expect(mockWs.closed).toBeTruthy();
   });
 
   test('ws 为 null 时 close() 不抛出错误', () => {
     const client = new CDPClient('ws://test', () => {});
-    assert.doesNotThrow(() => client.close());
+    expect(() => client.close()).not.toThrow();
   });
 });

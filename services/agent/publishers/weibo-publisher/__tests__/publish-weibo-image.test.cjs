@@ -5,12 +5,9 @@
  * 测试策略：不启动真实浏览器，通过提取可测试的纯函数逻辑进行验证。
  * 覆盖：MAX_IMAGES 截断、日志格式、Windows 路径转换、内容读取。
  *
- * 运行：
- *   node --test packages/workflows/skills/weibo-publisher/scripts/__tests__/publish-weibo-image.test.cjs
+ * 运行：npx vitest run publishers/weibo-publisher
  */
 
-const { test, describe } = require('node:test');
-const assert = require('node:assert/strict');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -34,9 +31,9 @@ describe('图片数量限制 (MAX_IMAGES = 9)', () => {
     const localImages = allImages.length > MAX_IMAGES
       ? allImages.slice(0, MAX_IMAGES)
       : allImages;
-    assert.equal(localImages.length, 9);
-    assert.ok(localImages[0].endsWith('image1.jpg'));
-    assert.ok(localImages[8].endsWith('image9.jpg'));
+    expect(localImages.length).toBe(9);
+    expect(localImages[0].endsWith('image1.jpg')).toBeTruthy();
+    expect(localImages[8].endsWith('image9.jpg')).toBeTruthy();
   });
 
   test('恰好 9 张不截断', () => {
@@ -44,7 +41,7 @@ describe('图片数量限制 (MAX_IMAGES = 9)', () => {
     const localImages = allImages.length > MAX_IMAGES
       ? allImages.slice(0, MAX_IMAGES)
       : allImages;
-    assert.equal(localImages.length, 9);
+    expect(localImages.length).toBe(9);
   });
 
   test('少于 9 张全部保留', () => {
@@ -52,17 +49,17 @@ describe('图片数量限制 (MAX_IMAGES = 9)', () => {
     const localImages = allImages.length > MAX_IMAGES
       ? allImages.slice(0, MAX_IMAGES)
       : allImages;
-    assert.equal(localImages.length, 3);
+    expect(localImages.length).toBe(3);
   });
 
   test('截断时 allImages.length > MAX_IMAGES 为真', () => {
     const allImages = Array.from({ length: 10 }, (_, i) => `/tmp/image${i + 1}.jpg`);
-    assert.ok(allImages.length > MAX_IMAGES);
+    expect(allImages.length > MAX_IMAGES).toBeTruthy();
   });
 
   test('不截断时 allImages.length > MAX_IMAGES 为假', () => {
     const allImages = Array.from({ length: 9 }, (_, i) => `/tmp/image${i + 1}.jpg`);
-    assert.ok(!(allImages.length > MAX_IMAGES));
+    expect(!(allImages.length > MAX_IMAGES)).toBeTruthy();
   });
 });
 
@@ -75,14 +72,14 @@ describe('Windows 路径转换 (weibo-media)', () => {
   test('生成正确的微博 Windows 路径', () => {
     const localImages = ['/Users/admin/.weibo-queue/2026-03-08/image-1/photo.jpg'];
     const result = convertToWindowsPaths(localImages, WINDOWS_BASE_DIR, '2026-03-08', 'image-1');
-    assert.equal(result[0], 'C:\\Users\\xuxia\\weibo-media\\2026-03-08\\image-1\\photo.jpg');
+    expect(result[0]).toBe('C:\\Users\\xuxia\\weibo-media\\2026-03-08\\image-1\\photo.jpg');
   });
 
   test('路径使用反斜杠，无正斜杠', () => {
     const localImages = ['/tmp/queue/2026-03-08/image-2/cover.png'];
     const result = convertToWindowsPaths(localImages, WINDOWS_BASE_DIR, '2026-03-08', 'image-2');
-    assert.ok(!result[0].includes('/'));
-    assert.ok(result[0].includes('\\'));
+    expect(!result[0].includes('/')).toBeTruthy();
+    expect(result[0].includes('\\')).toBeTruthy();
   });
 
   test('多张图片路径转换', () => {
@@ -91,9 +88,9 @@ describe('Windows 路径转换 (weibo-media)', () => {
       '/tmp/.weibo-queue/2026-03-08/image-3/img2.jpg',
     ];
     const result = convertToWindowsPaths(localImages, WINDOWS_BASE_DIR, '2026-03-08', 'image-3');
-    assert.equal(result.length, 2);
-    assert.ok(result[0].endsWith('\\img1.jpg'));
-    assert.ok(result[1].endsWith('\\img2.jpg'));
+    expect(result.length).toBe(2);
+    expect(result[0].endsWith('\\img1.jpg')).toBeTruthy();
+    expect(result[1].endsWith('\\img2.jpg')).toBeTruthy();
   });
 });
 
@@ -103,8 +100,8 @@ describe('Windows 路径转换 (weibo-media)', () => {
 describe('extractDirNames（微博队列路径）', () => {
   test('标准微博队列路径', () => {
     const result = extractDirNames('/Users/admin/.weibo-queue/2026-03-08/image-1');
-    assert.equal(result.dateDir, '2026-03-08');
-    assert.equal(result.contentDirName, 'image-1');
+    expect(result.dateDir).toBe('2026-03-08');
+    expect(result.contentDirName).toBe('image-1');
   });
 });
 
@@ -119,21 +116,21 @@ describe('内容读取（微博文案）', () => {
     const content = '今日分享 #AI# #效率# 好好工作！';
     fs.writeFileSync(path.join(tmpDir, 'content.txt'), content);
     const result = readContent(tmpDir);
-    assert.equal(result, content);
+    expect(result).toBe(content);
     fs.rmSync(tmpDir, { recursive: true });
   });
 
   test('无 content.txt 时返回空字符串', () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'weibo-content-'));
     const result = readContent(tmpDir);
-    assert.equal(result, '');
+    expect(result).toBe('');
     fs.rmSync(tmpDir, { recursive: true });
   });
 
   test('文案不超过 2000 字符（微博字符限制）', () => {
     // 微博正文限制 2000 字，内容文件应遵守此限制
     const longText = '好'.repeat(1999);
-    assert.ok(longText.length <= 2000, '微博文案不超过 2000 字');
+    expect(longText.length <= 2000).toBeTruthy();
   });
 });
 
@@ -143,19 +140,19 @@ describe('内容读取（微博文案）', () => {
 describe('escapeForJS（微博文案注入安全）', () => {
   test('话题标签 # 不被转义', () => {
     const result = escapeForJS('#AI工具# 今天的分享');
-    assert.ok(result.includes('#'));
+    expect(result.includes('#')).toBeTruthy();
   });
 
   test('换行符正确转义', () => {
     const result = escapeForJS('第一段\n第二段');
-    assert.ok(result.includes('\\n'));
-    assert.ok(!result.includes('\n'));
+    expect(result.includes('\\n')).toBeTruthy();
+    expect(!result.includes('\n')).toBeTruthy();
   });
 
   test('中文内容不被破坏', () => {
     const text = '微博发布测试，中文正常';
     const result = escapeForJS(text);
-    assert.equal(result, text);
+    expect(result).toBe(text);
   });
 });
 
@@ -205,8 +202,8 @@ describe('批量发布队列（~/.weibo-queue）', () => {
     const isDone = (dir) => fs.existsSync(path.join(dir, 'done.txt'));
 
     const toPublish = dirs.filter(d => hasImage(d) && !isDone(d));
-    assert.equal(toPublish.length, 1);
-    assert.ok(toPublish[0].includes('image-1'));
+    expect(toPublish.length).toBe(1);
+    expect(toPublish[0].includes('image-1')).toBeTruthy();
 
     fs.rmSync(queueDir, { recursive: true });
   });
@@ -215,7 +212,7 @@ describe('批量发布队列（~/.weibo-queue）', () => {
     const { img1 } = setupQueue();
     const doneFile = path.join(img1, 'done.txt');
     fs.writeFileSync(doneFile, new Date().toISOString());
-    assert.ok(fs.existsSync(doneFile));
+    expect(fs.existsSync(doneFile)).toBeTruthy();
     fs.rmSync(queueDir, { recursive: true });
   });
 
@@ -230,9 +227,9 @@ describe('批量发布队列（~/.weibo-queue）', () => {
     };
     const json = JSON.stringify(stats, null, 2);
     const parsed = JSON.parse(json);
-    assert.equal(parsed.date, '2026-03-08');
-    assert.equal(parsed.total, 3);
-    assert.equal(parsed.success, 1);
-    assert.equal(parsed.skipped, 2);
+    expect(parsed.date).toBe('2026-03-08');
+    expect(parsed.total).toBe(3);
+    expect(parsed.success).toBe(1);
+    expect(parsed.skipped).toBe(2);
   });
 });

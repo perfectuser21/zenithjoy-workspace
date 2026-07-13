@@ -10,8 +10,6 @@
  *   node --test packages/workflows/skills/zhihu-publisher/scripts/__tests__/publish-zhihu-article.test.cjs
  */
 
-const { test, describe } = require('node:test');
-const assert = require('node:assert/strict');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
@@ -29,22 +27,22 @@ const {
 
 describe('isLoginError', () => {
   test('空/非字符串 → false', () => {
-    assert.equal(isLoginError(null), false);
-    assert.equal(isLoginError(undefined), false);
-    assert.equal(isLoginError(123), false);
-    assert.equal(isLoginError(''), false);
+    expect(isLoginError(null)).toBe(false);
+    expect(isLoginError(undefined)).toBe(false);
+    expect(isLoginError(123)).toBe(false);
+    expect(isLoginError('')).toBe(false);
   });
 
   test('知乎登录页 URL → true', () => {
-    assert.equal(isLoginError('https://www.zhihu.com/signin'), true);
-    assert.equal(isLoginError('https://www.zhihu.com/signup?next=/'), true);
-    assert.equal(isLoginError('https://passport.zhihu.com/login'), true);
+    expect(isLoginError('https://www.zhihu.com/signin')).toBe(true);
+    expect(isLoginError('https://www.zhihu.com/signup?next=/')).toBe(true);
+    expect(isLoginError('https://passport.zhihu.com/login')).toBe(true);
   });
 
   test('正常知乎页面 → false', () => {
-    assert.equal(isLoginError('https://zhuanlan.zhihu.com/write'), false);
-    assert.equal(isLoginError('https://zhuanlan.zhihu.com/p/12345678'), false);
-    assert.equal(isLoginError('https://www.zhihu.com/'), false);
+    expect(isLoginError('https://zhuanlan.zhihu.com/write')).toBe(false);
+    expect(isLoginError('https://zhuanlan.zhihu.com/p/12345678')).toBe(false);
+    expect(isLoginError('https://www.zhihu.com/')).toBe(false);
   });
 });
 
@@ -54,24 +52,24 @@ describe('isLoginError', () => {
 
 describe('isPublishSuccess', () => {
   test('空/非字符串 → false', () => {
-    assert.equal(isPublishSuccess(null, ''), false);
-    assert.equal(isPublishSuccess(undefined, ''), false);
-    assert.equal(isPublishSuccess('', ''), false);
+    expect(isPublishSuccess(null, '')).toBe(false);
+    expect(isPublishSuccess(undefined, '')).toBe(false);
+    expect(isPublishSuccess('', '')).toBe(false);
   });
 
   test('跳转到文章页（/p/数字）→ true', () => {
-    assert.equal(isPublishSuccess('https://zhuanlan.zhihu.com/p/12345678', ''), true);
-    assert.equal(isPublishSuccess('https://zhuanlan.zhihu.com/p/9876543210', ''), true);
+    expect(isPublishSuccess('https://zhuanlan.zhihu.com/p/12345678', '')).toBe(true);
+    expect(isPublishSuccess('https://zhuanlan.zhihu.com/p/9876543210', '')).toBe(true);
   });
 
   test('页面包含"发布成功" → true', () => {
-    assert.equal(isPublishSuccess('https://zhuanlan.zhihu.com/write', '发布成功，请查看'), true);
-    assert.equal(isPublishSuccess('https://zhuanlan.zhihu.com/write', '文章已发布'), true);
+    expect(isPublishSuccess('https://zhuanlan.zhihu.com/write', '发布成功，请查看')).toBe(true);
+    expect(isPublishSuccess('https://zhuanlan.zhihu.com/write', '文章已发布')).toBe(true);
   });
 
   test('仍在发布页且无成功提示 → false', () => {
-    assert.equal(isPublishSuccess('https://zhuanlan.zhihu.com/write', '请填写标题'), false);
-    assert.equal(isPublishSuccess('https://zhuanlan.zhihu.com/', ''), false);
+    expect(isPublishSuccess('https://zhuanlan.zhihu.com/write', '请填写标题')).toBe(false);
+    expect(isPublishSuccess('https://zhuanlan.zhihu.com/', '')).toBe(false);
   });
 });
 
@@ -84,7 +82,7 @@ describe('findCoverImage', () => {
     const mockFs = {
       existsSync: () => false,
     };
-    assert.equal(findCoverImage('/some/dir', mockFs), null);
+    expect(findCoverImage('/some/dir', mockFs)).toBe(null);
   });
 
   test('找到 cover.jpg → 返回路径', () => {
@@ -92,7 +90,7 @@ describe('findCoverImage', () => {
       existsSync: p => p.endsWith('cover.jpg'),
     };
     const result = findCoverImage('/some/dir', mockFs);
-    assert.equal(result, path.join('/some/dir', 'cover.jpg'));
+    expect(result).toBe(path.join('/some/dir', 'cover.jpg'));
   });
 
   test('找到 cover.jpeg（jpg 不存在）→ 返回路径', () => {
@@ -100,7 +98,7 @@ describe('findCoverImage', () => {
       existsSync: p => p.endsWith('cover.jpeg'),
     };
     const result = findCoverImage('/some/dir', mockFs);
-    assert.equal(result, path.join('/some/dir', 'cover.jpeg'));
+    expect(result).toBe(path.join('/some/dir', 'cover.jpeg'));
   });
 
   test('找到 cover.png（jpg/jpeg 不存在）→ 返回路径', () => {
@@ -108,7 +106,7 @@ describe('findCoverImage', () => {
       existsSync: p => p.endsWith('cover.png'),
     };
     const result = findCoverImage('/some/dir', mockFs);
-    assert.equal(result, path.join('/some/dir', 'cover.png'));
+    expect(result).toBe(path.join('/some/dir', 'cover.png'));
   });
 });
 
@@ -124,7 +122,7 @@ describe('toWindowsCoverPath', () => {
       '2026-03-10',
       'article-1'
     );
-    assert.equal(result, 'C:\\Users\\xuxia\\zhihu-media\\2026-03-10\\article-1\\cover.jpg');
+    expect(result).toBe('C:\\Users\\xuxia\\zhihu-media\\2026-03-10\\article-1\\cover.jpg');
   });
 
   test('支持 .png 扩展名', () => {
@@ -134,6 +132,6 @@ describe('toWindowsCoverPath', () => {
       '2026-03-10',
       'art-2'
     );
-    assert.equal(result, 'C:\\media\\2026-03-10\\art-2\\cover.png');
+    expect(result).toBe('C:\\media\\2026-03-10\\art-2\\cover.png');
   });
 });

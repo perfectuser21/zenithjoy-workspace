@@ -5,12 +5,9 @@
  * 测试范围：纯函数逻辑（无网络、无 CDP 依赖）
  * 覆盖内容：参数解析、内容读取、封面图查找
  *
- * 运行：
- *   node --test services/creator/scripts/publishers/weibo-publisher/__tests__/publish-weibo-article.test.cjs
+ * 运行：npx vitest run publishers/weibo-publisher
  */
 
-const { test, describe } = require('node:test');
-const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -25,7 +22,7 @@ describe('publish-weibo-article.cjs 文件存在', () => {
       '..',
       'publish-weibo-article.cjs'
     );
-    assert.ok(fs.existsSync(scriptPath), `文件不存在: ${scriptPath}`);
+    expect(fs.existsSync(scriptPath)).toBeTruthy();
   });
 });
 
@@ -37,43 +34,37 @@ describe('publish-weibo-article.cjs 静态检查', () => {
   test('读取源码', () => {
     const scriptPath = path.join(__dirname, '..', 'publish-weibo-article.cjs');
     src = fs.readFileSync(scriptPath, 'utf8');
-    assert.ok(src.length > 0);
+    expect(src.length > 0).toBeTruthy();
   });
 
   test('使用 connectOverCDP 连接远程 CDP', () => {
     const scriptPath = path.join(__dirname, '..', 'publish-weibo-article.cjs');
     const source = fs.readFileSync(scriptPath, 'utf8');
-    assert.ok(
-      source.includes('connectOverCDP'),
-      '脚本必须使用 playwright connectOverCDP'
-    );
+    expect(source.includes('connectOverCDP')).toBeTruthy();
   });
 
   test('包含 ttarticle 目标 URL', () => {
     const scriptPath = path.join(__dirname, '..', 'publish-weibo-article.cjs');
     const source = fs.readFileSync(scriptPath, 'utf8');
-    assert.ok(
-      source.includes('ttarticle'),
-      '脚本必须导航到 weibo.com/ttarticle/editor'
-    );
+    expect(source.includes('ttarticle')).toBeTruthy();
   });
 
   test('包含 CDP_URL 配置常量', () => {
     const scriptPath = path.join(__dirname, '..', 'publish-weibo-article.cjs');
     const source = fs.readFileSync(scriptPath, 'utf8');
-    assert.ok(source.includes('CDP_URL'), '脚本必须定义 CDP_URL 常量');
+    expect(source.includes('CDP_URL')).toBeTruthy();
   });
 
   test('包含 page.screenshot 截图机制', () => {
     const scriptPath = path.join(__dirname, '..', 'publish-weibo-article.cjs');
     const source = fs.readFileSync(scriptPath, 'utf8');
-    assert.ok(source.includes('page.screenshot'), '脚本必须包含截图机制');
+    expect(source.includes('page.screenshot')).toBeTruthy();
   });
 
   test('包含 catch 错误处理', () => {
     const scriptPath = path.join(__dirname, '..', 'publish-weibo-article.cjs');
     const source = fs.readFileSync(scriptPath, 'utf8');
-    assert.ok(source.includes('catch'), '脚本必须包含错误处理');
+    expect(source.includes('catch')).toBeTruthy();
   });
 });
 
@@ -86,7 +77,7 @@ describe('现有脚本完整性（PRESERVE）', () => {
   for (const script of existingScripts) {
     test(`${script} 仍然存在`, () => {
       const scriptPath = path.join(__dirname, '..', script);
-      assert.ok(fs.existsSync(scriptPath), `${script} 不应该被删除`);
+      expect(fs.existsSync(scriptPath)).toBeTruthy();
     });
   }
 });
