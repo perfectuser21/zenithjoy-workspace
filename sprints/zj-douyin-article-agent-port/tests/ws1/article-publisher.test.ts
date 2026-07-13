@@ -2,8 +2,11 @@
 // Red state: publish-douyin-article.cjs 尚未创建 — require 抛 MODULE_NOT_FOUND → 6+ failures
 // Round 2: ws4 测试职责并入 ws1（test_is_red 修复）
 
-const ARTICLE_CJS = '/workspace/services/agent/publishers/douyin-publisher/publish-douyin-article.cjs';
-const DRYRUN_CJS = '/workspace/services/agent/publishers/douyin-publisher/publish-douyin-article-dryrun.cjs';
+// 路径相对 repo 根解析（原写死 harness 容器 /workspace/ 绝对路径，出容器必挂——巡检 2026-07-12 收编时修正）
+import * as path from 'node:path';
+const REPO_ROOT = path.resolve(__dirname, '../../../..');
+const ARTICLE_CJS = path.join(REPO_ROOT, 'services/agent/publishers/douyin-publisher/publish-douyin-article.cjs');
+const DRYRUN_CJS = path.join(REPO_ROOT, 'services/agent/publishers/douyin-publisher/publish-douyin-article-dryrun.cjs');
 
 let articleModule: Record<string, unknown> | undefined;
 let dryrunModule: Record<string, unknown> | undefined;
@@ -72,7 +75,7 @@ describe('publish-douyin-article-dryrun.cjs [BEHAVIOR]', () => {
 
 // ws4 并入 ws1 — TDD commit-1 产出：测试文件须在 commit-1 写好，commit-2 写 cjs 实现后变绿
 // Red: 文件不存在 → 2 failures
-const TEST_CJS = '/workspace/services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs';
+const TEST_CJS = path.join(REPO_ROOT, 'services/agent/publishers/douyin-publisher/__tests__/publish-douyin-article.test.cjs');
 
 describe('publish-douyin-article.test.cjs 存在性 [BEHAVIOR]（ws4 内化）', () => {
   it('TDD commit-1 产出 — 测试文件存在于 vitest include 路径下', () => {

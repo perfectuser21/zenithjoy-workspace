@@ -14,13 +14,12 @@ describe('agent-python-embedded [BEHAVIOR] — TDD Red Phase', () => {
     expect(script).toMatch(/embeddable/i);
   });
 
-  it('start.bat 含讲述人解锁命令 Start-Process Narrator', () => {
+  it('start.bat 含微信 UIA 解锁（SPI_SETSCREENREADER；原 Narrator 方案已被直接置标志替代，巡检 2026-07-12 收编更新断言）', () => {
     const bat = readFileSync(
       resolve(REPO_ROOT, 'services/agent/install-pack/start.bat'),
       'utf8'
     );
-    expect(bat).toMatch(/Start-Process Narrator/i);
-    expect(bat).toMatch(/Stop-Process/i);
+    expect(bat).toMatch(/SPI_SETSCREENREADER|SystemParametersInfo\(0x47/i);
   });
 
   it('wechat-rpa.ts handler 含 python-embedded 路径优先 + python3 回退', () => {
@@ -57,11 +56,12 @@ describe('agent-python-embedded [BEHAVIOR] — TDD Red Phase', () => {
     expect(content).toMatch(/python-embedded/);
   });
 
-  it('services/agent/package.json 版本号为 1.1.79', () => {
+  it('services/agent/package.json 版本号 ≥ 1.1.79（sprint 时点钉死，收编改为语义化下界）', () => {
     const pkg = JSON.parse(
       readFileSync(resolve(REPO_ROOT, 'services/agent/package.json'), 'utf8')
     );
-    expect(pkg.version).toBe('1.1.79');
+    const [maj, min, pat] = String(pkg.version).split('.').map(Number);
+    expect(maj * 1e6 + min * 1e3 + pat).toBeGreaterThanOrEqual(1 * 1e6 + 1 * 1e3 + 79);
   });
 
   it('e2e-verify.ps1 存在（windows_cloud 验收脚本）', () => {

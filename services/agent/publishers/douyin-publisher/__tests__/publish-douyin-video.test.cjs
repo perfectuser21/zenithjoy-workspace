@@ -14,18 +14,30 @@ const {
 
 describe('publish-douyin-video selector 通用化契约', () => {
   describe('uploadVideoFile', () => {
-    it('用 input[type="file"] selector + 传 queueData.video_path', async () => {
-      const setInputFiles = vi.fn().mockResolvedValue(undefined);
-      const fakePage = { setInputFiles };
-      await uploadVideoFile(fakePage, '/local/path/test.mp4');
-      expect(setInputFiles).toHaveBeenCalledTimes(1);
-      expect(setInputFiles).toHaveBeenCalledWith('input[type="file"]', '/local/path/test.mp4');
+    // 实现已进化为三策略容错（FileChooser → CDP shadow DOM → setInputFiles 兜底），签名加了 context。
+    // 契约不变量：策略全链最终仍以 input[type="file"] + video_path 落地，selector 无机器特化。
+    // （巡检 2026-07-12 收编时随实现签名更新 mock）
+    const makeFakePage = () => ({
+      waitForTimeout: vi.fn().mockResolvedValue(undefined),
+      evaluate: vi.fn().mockResolvedValue({ fileInputCount: 0 }),
+      waitForEvent: vi.fn().mockRejectedValue(new Error('no filechooser in unit test')),
+      click: vi.fn().mockRejectedValue(new Error('no dom in unit test')),
+      setInputFiles: vi.fn().mockResolvedValue(undefined),
+    });
+
+    it('兜底策略用 input[type="file"] selector + 传 queueData.video_path', async () => {
+      const fakePage = makeFakePage();
+      await uploadVideoFile(fakePage, undefined, '/local/path/test.mp4');
+      expect(fakePage.setInputFiles).toHaveBeenCalledTimes(1);
+      const [selector, filePath] = fakePage.setInputFiles.mock.calls[0];
+      expect(selector).toBe('input[type="file"]');
+      expect(filePath).toBe('/local/path/test.mp4');
     });
 
     it('selector 不含任何 xian-pc 特化字符串', async () => {
-      const setInputFiles = vi.fn().mockResolvedValue(undefined);
-      await uploadVideoFile({ setInputFiles }, '/x.mp4');
-      const calledSelector = setInputFiles.mock.calls[0][0];
+      const fakePage = makeFakePage();
+      await uploadVideoFile(fakePage, undefined, '/x.mp4');
+      const calledSelector = fakePage.setInputFiles.mock.calls[0][0];
       expect(calledSelector).not.toMatch(/xian-pc|xuxia|100\.97\.|WINDOWS_BASE_DIR/);
     });
   });

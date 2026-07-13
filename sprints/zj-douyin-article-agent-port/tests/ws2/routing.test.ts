@@ -1,7 +1,9 @@
 // vitest globals injected
 // Red state: 'article' 尚未加入 SUPPORTED_DOUYIN_TYPES → resolveDouyinScriptPath({type:'article'}) 仍 throw
 
-const HANDLER_SRC = '/workspace/services/agent/src/handlers/douyin-publish.ts';
+// 路径相对 repo 根解析（原写死 harness 容器 /workspace/ 绝对路径，出容器必挂——巡检 2026-07-12 收编时修正）
+import * as path from 'node:path';
+const HANDLER_SRC = path.resolve(__dirname, '../../../..', 'services/agent/src/handlers/douyin-publish.ts');
 
 describe('douyin-publish.ts article 路由 [BEHAVIOR]', () => {
   it('SUPPORTED_DOUYIN_TYPES 源码包含字面字符串 article', () => {

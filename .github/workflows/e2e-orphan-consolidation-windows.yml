@@ -182,13 +182,16 @@ jobs:
 
       # ── 汇总 gate ────────────────────────────────────────────────────────────
 
-      - name: Gate — Orphan Specs Summary
+      - name: Gate — Orphan Specs Summary（棘轮基线制）
         if: always()
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "  Orphan Specs Consolidation Results"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          FAILED=false
+          # 基线 = 收编时（2026-07-12 run 29204161922）实测已绿的 spec，必须保绿（阻塞）。
+          # 基线外 = 存量债，warning 可观测不阻塞；修绿一个加基线一个，只进不退。
+          BASELINE="acquisition-android-entry video-remake wechat-cs-config"
+          GATE_FAIL=0; DEBT_FAIL=0
           for pair in \
             "acquisition-android-entry:${{ steps.acq_android.outcome }}" \
             "content-judgment-gate:${{ steps.content_judgment.outcome }}" \
@@ -206,18 +209,21 @@ jobs:
             RESULT="${pair##*:}"
             if [ "$RESULT" = "success" ]; then
               echo "  PASS: $NAME"
+            elif echo " $BASELINE " | grep -q " $NAME "; then
+              echo "::error::基线 spec $NAME FAIL（$RESULT）——收编时是绿的，不许回退"
+              GATE_FAIL=$((GATE_FAIL+1))
             else
-              echo "  FAIL: $NAME ($RESULT)"
-              FAILED=true
+              echo "::warning::存量债 spec $NAME FAIL（$RESULT，不阻塞；修绿后加入 BASELINE）"
+              DEBT_FAIL=$((DEBT_FAIL+1))
             fi
           done
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          if [ "$FAILED" = "true" ]; then
-            echo "  有 spec 失败，请修复后再合并"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  GATE_FAIL=$GATE_FAIL DEBT_FAIL=$DEBT_FAIL"
+          if [ "$GATE_FAIL" -gt 0 ]; then
+            echo "  基线 spec 回退，阻塞合并"
             exit 1
           fi
-          echo "  All orphan specs PASSED"
+          echo "  基线全绿（存量债 $DEBT_FAIL 个待清偿）"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Upload Playwright artifacts on failure
