@@ -1,0 +1,71 @@
+name: E2E Line02 Android Collect (ROG 真机 nightly)
+
+# agent-android(Kotlin)抖音采集的真机端到端守卫。
+#
+# 为什么是 nightly + 手动、暂不挂 PR 硬 gate：
+#   抖音采集(services/agent-android/DouyinCollectService.kt)当前尚未稳定——真机随手一派可能
+#   撞广告 abort / 多卡 STEP1_no_card / SEARCH_TIMEOUT 各种间歇失败(2026-07-13 实测复现)。
+#   若现在就挂 services/agent-android/** 的 PR required 硬 gate,会把所有改采集的 PR(含修复 PR)
+#   一起挡死,反而阻碍修复。所以第一步先用 nightly 每晚自动巡一遍 + 手动可触发,把"采集稳不稳"
+#   变成每晚可见的信号(红了 GitHub 通知)。等采集修稳(复位+tab 时序做完、连续数晚绿),再把
+#   下面注释掉的 push/pull_request paths 打开、升级为 required 硬 gate,锁死不退化。
+#
+# 背景(为何非建不可)：抖音采集有两套实现,Windows Node 版(services/agent/*.cjs)早有真机 E2E
+# (e2e-line02-keyword-comment.yml),Android Kotlin 版是"双重真空区"(harness target 无 android +
+# 只有 ubuntu 单测),19 个采集 PR 手动打地鼠、几乎不留 gate。本 workflow 是 Kotlin 版第一个真机守卫。
+
+on:
+  workflow_dispatch:
+    inputs:
+      smoke_kw:
+        description: '测试关键词(默认装修——商业词广告密度最高,最压得出采集稳定性)'
+        default: '装修'
+  schedule:
+    - cron: '0 20 * * *'   # 每天 UTC 20:00 = 北京 04:00(避开白天真机占用)
+  # ── 采集修稳后打开下面,升级为 PR required 硬 gate ──
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'services/agent-android/**'
+  #     - '.github/workflows/e2e-line02-android-collect.yml'
+  #     - '.github/workflows/scripts/smoke/line02-android-collect-realmachine-smoke.sh'
+  # pull_request:
+  #   paths:
+  #     - 'services/agent-android/**'
+  #     - '.github/workflows/e2e-line02-android-collect.yml'
+  #     - '.github/workflows/scripts/smoke/line02-android-collect-realmachine-smoke.sh'
+
+concurrency:
+  group: e2e-line02-android-collect
+  cancel-in-progress: false
+
+jobs:
+  android-collect-smoke:
+    name: agent-android 采集真机 smoke（xian-rog）
+    # 复用微信真机 runner(Android 设备连在同一台 xian-rog 上)。语义上可后续加 android-capable label。
+    runs-on: [self-hosted, wechat-capable]
+    timeout-minutes: 12
+    # 硬 gate：采集失败即红。不用 continue-on-error(那正是 cjs 版软守卫的教训)。
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      API_BASE: https://staging-autopilot.zenjoymedia.media
+      SMOKE_KW: ${{ github.event.inputs.smoke_kw || '装修' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 定位 adb（WinGet scrcpy 版）
+        run: |
+          ADB=$(ls "/c/Users/asus/AppData/Local/Microsoft/WinGet/Packages/Genymobile.scrcpy_"*/scrcpy-*/adb.exe 2>/dev/null | head -1)
+          [ -n "$ADB" ] || ADB=$(command -v adb 2>/dev/null || true)
+          [ -n "$ADB" ] || { echo "🟠 环境未就绪: runner 上找不到 adb"; exit 3; }
+          echo "ADB=$ADB" >> "$GITHUB_ENV"
+          echo "adb: $ADB"
+
+      - name: agent-android 采集真机端到端 smoke
+        run: |
+          chmod +x .github/workflows/scripts/smoke/line02-android-collect-realmachine-smoke.sh
+          bash .github/workflows/scripts/smoke/line02-android-collect-realmachine-smoke.sh
