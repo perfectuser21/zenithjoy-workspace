@@ -34,9 +34,14 @@ export interface DevQuickVerifyDeps {
   timeoutMs?: number;
 }
 
-export type DevQuickVerifyResult =
-  | { ok: true; stdout: string; stderr: string; exitCode: number; durationMs: number }
-  | { ok: false; rejected: 'not_dev_machine' | 'not_whitelisted' | 'timeout'; durationMs: number };
+export interface DevQuickVerifyResult {
+  ok: boolean;
+  rejected?: 'not_dev_machine' | 'not_whitelisted' | 'timeout';
+  stdout?: string;
+  stderr?: string;
+  exitCode?: number;
+  durationMs: number;
+}
 
 export async function handleDevQuickVerify(
   msg: DevQuickVerifyMsg,
@@ -77,4 +82,61 @@ export async function handleDevQuickVerify(
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+// ── 默认接线件（index.ts 使用）────────────────────────────────────────────────
+
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+import fs from 'node:fs';
+
+// 合同点②:研发机唯一开关。默认 false → 生产机（xian-pc 等）不设即安全拒绝。
+export function isDevMachineFromEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.ZENITHJOY_DEV_MACHINE === '1';
+}
+
+function getPythonExe(): string {
+  const embedded = path.join(path.dirname(process.execPath), 'python-embedded/python.exe');
+  return fs.existsSync(embedded) ? embedded : 'python3';
+}
+
+// 与 wechat-rpa 同款路径约定（pkg 打包后脚本在 exe 同级 wechat-rpa/ 目录）。
+// 不 import wechat-rpa.ts —— 该文件已 @deprecated，禁止 core 新代码引用。
+function resolveActionScript(action: string): string | null {
+  const rpaDir = path.join(path.dirname(process.execPath), 'wechat-rpa');
+  switch (action) {
+    case 'wechat_private_chat_send': return path.join(rpaDir, 'send_chat.py');
+    case 'wechat_moments_send':      return path.join(rpaDir, 'send_moment.py');
+    case 'wechat_qr_bind':           return path.join(rpaDir, 'qr_bind.py');
+    default:                         return null;
+  }
+}
+
+// 白名单动作的真实执行体：execFile/spawn 拉起已注册受控脚本，同步回收 stdout/exitCode。
+export async function runRegisteredAction(
+  action: string,
+  params: Record<string, unknown>,
+): Promise<ActionRunResult> {
+  if (action === 'health_check') {
+    return { stdout: JSON.stringify({ ok: true, ts: Date.now() }), stderr: '', exitCode: 0 };
+  }
+  const script = resolveActionScript(action);
+  if (!script) {
+    // 白名单闸在 handleDevQuickVerify 已挡住未注册动作；此处兜底防白名单与映射表脱节。
+    return { stdout: '', stderr: `no script mapping for action: ${action}`, exitCode: 1 };
+  }
+  return new Promise((resolve) => {
+    const py = spawn(getPythonExe(), [script], {
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    py.stdout.on('data', (d) => { stdout += d.toString(); });
+    py.stderr.on('data', (d) => { stderr += d.toString(); });
+    py.stdin.write(JSON.stringify({ type: action, payload: params }) + '\n');
+    py.stdin.end();
+    py.on('close', (code) => resolve({ stdout, stderr, exitCode: code ?? 1 }));
+    py.on('error', (e) => resolve({ stdout: '', stderr: `spawn fail: ${e.message}`, exitCode: 1 }));
+  });
 }
