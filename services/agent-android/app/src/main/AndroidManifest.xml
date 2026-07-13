@@ -61,7 +61,7 @@
             android:name=".AgentService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="dataSync|mediaProjection" />
 
         <receiver
             android:name=".BootReceiver"

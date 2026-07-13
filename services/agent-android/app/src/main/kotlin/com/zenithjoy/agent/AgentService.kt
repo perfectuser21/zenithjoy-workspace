@@ -8,7 +8,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ServiceInfo
 import android.os.IBinder
+import androidx.core.app.ServiceCompat
 import com.google.gson.Gson
 import com.zenithjoy.agent.account.DeviceAccountModel
 import com.zenithjoy.agent.account.DeviceAccountRegistry
@@ -149,7 +151,7 @@ class AgentService : Service() {
             httpBase = config.deriveHttpBase(),
             agentId = { config.agentId },
         )
-        startForeground(NOTIFICATION_ID, buildNotification())
+        startForegroundCompat()
         registerReceiver(collectResultReceiver,
             IntentFilter(DouyinCollectService.ACTION_COLLECT_RESULT),
             RECEIVER_NOT_EXPORTED)
@@ -352,7 +354,20 @@ class AgentService : Service() {
 
         // 两阶段采集任务轮询（Path 2 Step 5）
         // 与 keywordPollLoop 并行双跑，通过 collectTaskIds Set 在 onCollectResult 中区分路由
-        val screenCaptureService = ScreenCaptureService()
+        // 真实截图实现：用 MediaProjectionHolder 换出的 MediaProjection 实例构造
+        // captureImpl（VirtualDisplay + ImageReader，见 ScreenCaptureReal）。若用户还
+        // 没在 MainActivity 里授权过（hasAuthorization()==false），换出结果恒为 null，
+        // ScreenCaptureService.captureToBase64() 相应恒返回 null——ContentJudgmentService
+        // 会标 pending/skipped_capture_failed，不阻塞采集主链路，只是内容判定这一刀空转。
+        // 状态自检：授权状态可在 MainActivity 状态页里看到（"截图未授权"横幅）。
+        if (!MediaProjectionHolder.hasAuthorization()) {
+            android.util.Log.w(TAG, "MediaProjection not authorized yet — content judgment will stay pending until user authorizes in app UI")
+        }
+        val screenCaptureService = ScreenCaptureService(
+            captureImpl = ScreenCaptureReal.buildCaptureImpl(this) {
+                MediaProjectionHolder.getOrCreateProjection(this)
+            },
+        )
         val judgmentService = ContentJudgmentService(
             agentId = { config.agentId },
             httpBase = config.deriveHttpBase(),
@@ -479,6 +494,24 @@ class AgentService : Service() {
     }
 
     private fun sampleAccountScanIntervalMs(): Long = Random.nextLong(30 * 60_000L, 60 * 60_000L + 1)
+
+    /**
+     * Android 14（API 34）要求：foreground service 若声明多个 type（本服务是
+     * dataSync|mediaProjection，见 AndroidManifest.xml），startForeground() 必须显式
+     * 传入本次要用到的 type 组合，否则截图相关调用会抛 MissingForegroundServiceTypeException/
+     * SecurityException。API 29 以下没有这个重载，走旧的双参数 startForeground。
+     * ServiceCompat.startForeground 内部按 SDK 版本自动分派，minSdk 26 兼容安全。
+     */
+    private fun startForegroundCompat() {
+        // ServiceCompat.startForeground 内部按 SDK 版本自动分派（<29 直接忽略 type 参数走
+        // 双参数 startForeground；29-33 部分强制 type 校验；34+ 完整校验），不用手动分支。
+        ServiceCompat.startForeground(
+            this,
+            NOTIFICATION_ID,
+            buildNotification(),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION,
+        )
+    }
 
     private fun buildNotification(): Notification {
         val channelId = "agent_service"
