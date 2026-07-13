@@ -528,6 +528,14 @@ class DouyinCollectService : AccessibilityService() {
         val collected = mutableListOf<VideoCardInfo>()
         var consecutiveFailures = 0
         for (index in 0 until targetCount) {
+            // 二次防线（真机根因 2026-07-13）：点开前先分类。广告/直播卡点开抓不到 v.douyin.com
+            // 分享链，旧逻辑把它们计入 consecutiveFailures → 连续 2 张广告就 abort 整轮。改为
+            // AD/LIVE 直接跳过、不点开、绝不计 failure（专门 tab 已天然过滤，这里兜偶入的广告）。
+            val kind = classifyCardAtIndex(index)
+            if (CardClassifier.shouldSkip(kind)) {
+                android.util.Log.i(TAG, "Stage1 card#$index classified=$kind — skip（不点开/不计failure）")
+                continue
+            }
             val shareUrl = captureShareUrlForCard(index)
             pendingShareCapture = null
             pendingClearDone = null
@@ -536,11 +544,11 @@ class DouyinCollectService : AccessibilityService() {
                 seenShareUrls.add(shareUrl)
                 consecutiveFailures = 0
                 android.util.Log.i(TAG, "Stage1 card#$index share_url captured: $shareUrl")
-            } else {
+            } else if (CardClassifier.shouldCountAsCollectFailure(kind, captureSucceeded = false)) {
                 consecutiveFailures++
-                android.util.Log.w(TAG, "Stage1 card#$index share_url capture failed — skip ($consecutiveFailures)")
-                if (consecutiveFailures >= 2) {
-                    android.util.Log.w(TAG, "Stage1 aborting: 2 consecutive failures")
+                android.util.Log.w(TAG, "Stage1 card#$index($kind) share_url capture failed ($consecutiveFailures)")
+                if (consecutiveFailures >= MAX_CONSECUTIVE_CONTENT_FAILURES) {
+                    android.util.Log.w(TAG, "Stage1 aborting: $consecutiveFailures 连续内容卡取链失败")
                     break
                 }
             }
@@ -553,6 +561,16 @@ class DouyinCollectService : AccessibilityService() {
         } else {
             reportVideoCards(collected, error = "")
         }
+    }
+
+    // 点开前给第 index 张卡分类（读其子树 text/desc → CardClassifier）。广告/直播卡不点开、
+    // 不取链、不计 failure，根治"连续广告 → consecutiveFailures>=2 → abort 整轮"（真机 2026-07-13）。
+    // 抓不到卡时防御性返回 CONTENT（交给 captureShareUrlForCard 走正常失败路径，不误吞）。
+    private fun classifyCardAtIndex(index: Int): CardClassifier.CardKind {
+        val root = rootInActiveWindow ?: return CardClassifier.CardKind.CONTENT
+        val card = findVideoCards(root, MAX_VIDEOS_PER_SEARCH).getOrNull(index)
+            ?: return CardClassifier.CardKind.CONTENT
+        return CardClassifier.classify(collectNodeTexts(card), emptyList())
     }
 
     // 单张卡片的剪贴板取链：点开视频 → 点分享 → 面板点「分享链接」→ 透明 Activity 读剪贴板。
@@ -1145,6 +1163,8 @@ class DouyinCollectService : AccessibilityService() {
         private const val EXTRACTION_TIMEOUT_MS = 20_000L
         private const val MAX_FLATTEN_NODES = 3_000
         const val MAX_VIDEOS_PER_SEARCH = 3  // Stage1 每关键词最多收集视频卡数量
+        // abort 阈值：连续多少张【内容卡】取链失败才放弃整轮。广告/直播跳过不计入（真机 2026-07-13）。
+        private const val MAX_CONSECUTIVE_CONTENT_FAILURES = 2
         // Bug C 剪贴板取链：单张卡片全程硬超时 + 各阶段等待预算
         private const val PER_CARD_TIMEOUT_MS = 25_000L
         private const val CLEAR_WAIT_MS = 2_000L
