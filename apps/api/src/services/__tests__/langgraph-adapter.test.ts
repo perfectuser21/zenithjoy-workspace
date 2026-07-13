@@ -11,10 +11,7 @@ vi.mock('../../db/connection', () => ({
   default: { query: vi.fn() },
 }));
 
-import pool from '../../db/connection';
 import { existsLangGraphTask } from '../langgraph-adapter';
-
-const mockQuery = pool.query as unknown as ReturnType<typeof vi.fn>;
 
 function mkEvent(id: number, node: string, extra: Record<string, unknown> = {}): PipelineEvent {
   return {
@@ -253,24 +250,38 @@ describe('manifest schema 三版兼容（extractArticlePath/extractCopyPath/extr
   });
 });
 
-describe('existsLangGraphTask', () => {
+describe('existsLangGraphTask — via Brain HTTP API', () => {
   beforeEach(() => {
-    mockQuery.mockReset();
+    vi.restoreAllMocks();
   });
 
-  it('returns true when tasks 表有匹配行', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });
+  it('returns true when Brain API returns a content-pipeline task', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', task_type: 'content-pipeline' }),
+    }));
     const ok = await existsLangGraphTask('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
     expect(ok).toBe(true);
-    const call = mockQuery.mock.calls[0];
-    expect(call[0]).toContain('tasks');
-    expect(call[0]).toContain("task_type = 'content-pipeline'");
-    expect(call[1]).toEqual(['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa']);
   });
 
-  it('returns false when tasks 表无匹配行', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] });
+  it('returns false when Brain API returns a non-content-pipeline task', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: '00000000-0000-0000-0000-000000000000', task_type: 'dev' }),
+    }));
     const ok = await existsLangGraphTask('00000000-0000-0000-0000-000000000000');
+    expect(ok).toBe(false);
+  });
+
+  it('returns false when Brain API returns 404', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: false, status: 404 }));
+    const ok = await existsLangGraphTask('nonexistent-id');
+    expect(ok).toBe(false);
+  });
+
+  it('returns false when Brain API call throws', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValueOnce(new Error('ECONNREFUSED')));
+    const ok = await existsLangGraphTask('any-id');
     expect(ok).toBe(false);
   });
 });
