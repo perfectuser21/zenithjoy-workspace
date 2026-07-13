@@ -36,6 +36,11 @@ vi.mock('../middleware/tenant-context', () => ({
   },
 }));
 
+const mockJudgeVideo = vi.fn();
+vi.mock('../services/content-judgment', () => ({
+  judgeVideo: (...a: any[]) => mockJudgeVideo(...a),
+}));
+
 vi.mock('../services/keyword-expander', () => ({
   expandKeywords: vi.fn().mockResolvedValue(['装修', '装修公司', '室内装修', '家装', '装修报价']),
 }));
@@ -1742,5 +1747,64 @@ describe('GET /api/acquisition/pending-collect-tasks — note 类型 URL 分流 
       .find((t) => t.task_id === 'task-note');
     expect(dispatched?.video_urls).toContain('https://www.douyin.com/note/7411111111111111111');
     expect(dispatched?.video_urls).toContain('https://www.douyin.com/video/7422222222222222222');
+  });
+});
+// ============================================================================
+// POST /api/acquisition/judge-video — 从 x-agent-id 反查真 tenant [REGRESSION]
+// 背景：安卓 agent 按设计发 X-Tenant-Id = agentId（设备不持有真 tenant）。
+// 服务端必须像 pending-collect-tasks / report-videos 一样用 x-agent-id 反查
+// zenithjoy.agents 拿真 tenant_id，而不是信 header 里的假值 → 否则查空画像
+// 只返回 matched 不写库，judgment_status 永远 pending。
+// ============================================================================
+describe('POST /api/acquisition/judge-video — x-agent-id 反查 tenant [REGRESSION]', () => {
+  const REAL_TENANT = 'a7a7b36c-1111-2222-3333-444455556666';
+  const AGENT_ID = 'agent-maa-an00-xxx';
+
+  beforeEach(() => {
+    vi.mocked(db.query).mockReset();
+    mockJudgeVideo.mockReset().mockResolvedValue({ status: 'matched', reason: 'ok' });
+  });
+
+  it('用 x-agent-id 反查出的真 tenant 调 judgeVideo（忽略 X-Tenant-Id header 假值）', async () => {
+    vi.mocked(db.query).mockResolvedValue({ rows: [{ tenant_id: REAL_TENANT }] } as any);
+    const res = await request(app)
+      .post('/api/acquisition/judge-video')
+      .set('x-agent-id', AGENT_ID)
+      .set('X-Tenant-Id', 'fake-tenant-from-agent') // agent 发的假值，服务端不能信
+      .send({ video_id: '7412345678901234567', capture_type: 'screenshot', data_b64: 'AAAA' });
+
+    expect(res.status).toBe(200);
+
+    // 反查走 zenithjoy.agents 表，参数 = x-agent-id
+    const lookup = vi.mocked(db.query).mock.calls.find((c) => /FROM zenithjoy\.agents/.test(String(c[0])));
+    expect(lookup).toBeTruthy();
+    expect(lookup?.[1]).toEqual([AGENT_ID]);
+
+    // judgeVideo 用反查出的真 tenant，而不是 header 里的假值
+    expect(mockJudgeVideo).toHaveBeenCalledTimes(1);
+    expect(mockJudgeVideo.mock.calls[0][1]).toBe(REAL_TENANT);
+    expect(mockJudgeVideo.mock.calls[0][1]).not.toBe('fake-tenant-from-agent');
+  });
+
+  it('缺 x-agent-id → 401 MISSING_AGENT_ID，不调 judgeVideo', async () => {
+    const res = await request(app)
+      .post('/api/acquisition/judge-video')
+      .send({ video_id: '7412345678901234567', capture_type: 'screenshot', data_b64: 'AAAA' });
+
+    expect(res.status).toBe(401);
+    expect(res.body?.error?.code).toBe('MISSING_AGENT_ID');
+    expect(mockJudgeVideo).not.toHaveBeenCalled();
+  });
+
+  it('x-agent-id 查不到 agent → 403 AGENT_NOT_FOUND，不调 judgeVideo', async () => {
+    vi.mocked(db.query).mockResolvedValue({ rows: [] } as any);
+    const res = await request(app)
+      .post('/api/acquisition/judge-video')
+      .set('x-agent-id', 'agent-unknown')
+      .send({ video_id: '7412345678901234567', capture_type: 'screenshot', data_b64: 'AAAA' });
+
+    expect(res.status).toBe(403);
+    expect(res.body?.error?.code).toBe('AGENT_NOT_FOUND');
+    expect(mockJudgeVideo).not.toHaveBeenCalled();
   });
 });
