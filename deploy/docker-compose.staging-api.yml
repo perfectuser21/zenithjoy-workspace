@@ -19,6 +19,8 @@ services:
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
+      args:
+        BUILD_SHA: ${BUILD_SHA:-unknown}   # deploy-staging-hk.yml 传入，/version 断言用
     image: zenithjoy-api-staging:latest
     container_name: zenithjoy-api-staging
     restart: unless-stopped
