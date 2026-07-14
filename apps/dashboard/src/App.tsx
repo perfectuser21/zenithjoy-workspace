@@ -20,11 +20,6 @@ import { InstanceProvider, useInstance } from './contexts/InstanceContext';
 import EnvBadge from './components/EnvBadge';
 // 方案C：顶栏常驻机器感知（任务默认绑定选中机器，多机时才弹选）
 import MachineSelector from './components/MachineSelector';
-// Path 2 Sprint A: FeishuBindTenant 通过 navigation.config 'feishu-bind' 路径懒加载（DynamicRouter 注册）
-// 静态引用避免 tree-shake 误删懒加载入口
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import type { default as _FeishuBindTenant } from './pages/FeishuBindTenant';
-
 // 只有登录页需要静态导入
 import SignIn from './pages/SignIn';
 import SignUp from './pages/SignUp';
