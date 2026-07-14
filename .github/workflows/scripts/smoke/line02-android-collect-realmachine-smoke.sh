@@ -53,6 +53,19 @@ curl -fsSk -m 10 "$API_BASE/api/acquisition/overview" -H "X-Tenant-Id: $TENANT" 
   || envfail "staging API 不可达: $API_BASE"
 ok "staging API 可达"
 
+# ── 0. 自愈: 幂等 seed 固定测试租户(抗 staging DB 重置) ─────────────────
+# 真机 smoke 硬编码固定租户/agent,环境隔离重置 zenithjoy_test 会冲掉→collect/start 外键 500。
+# 派任务前先幂等补齐,DB 重置后自动恢复,不再靠人工 seed。seed 失败=服务端/环境问题,非采集红。
+SMOKE_TOKEN="${SMOKE_TOKEN:-smoke-secret-2026}"
+SEED=$(curl -sSk -m 15 -X POST "$API_BASE/api/_smoke/acquisition-seed" \
+  -H "Content-Type: application/json" -H "X-Smoke-Token: $SMOKE_TOKEN" \
+  -d "{\"tenant_id\":\"$TENANT\",\"agent_id\":\"$AGENT_ID\"}" \
+  -w $'\n%{http_code}' 2>&1)
+SEED_CODE=$(printf '%s' "$SEED" | tail -n1)
+[ "$SEED_CODE" = "200" ] \
+  || envfail "seed 自愈失败(http=$SEED_CODE): $(printf '%s' "$SEED" | head -c 300)"
+ok "seed 自愈 OK (tenant=$TENANT)"
+
 # 覆盖安装 / 息屏后 agent 进程可能是空壳(无采集轮询)——今天真机踩过的坑,主动拉起。
 # 无障碍权限覆盖安装后保留,无需重新授权采集(截图授权是判定链的事,不影响采集)。
 "$ADB" shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
