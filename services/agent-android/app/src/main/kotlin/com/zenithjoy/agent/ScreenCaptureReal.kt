@@ -14,18 +14,18 @@ import java.io.ByteArrayOutputStream
  * ScreenCaptureReal — 生产环境真实截图实现（VirtualDisplay + ImageReader 单帧捕获）。
  *
  * 不在纯 JVM 单测里跑（依赖真实 Android SDK：MediaProjection/VirtualDisplay/ImageReader/
- * Bitmap 全部是 Android 运行时类），真机验证走 xian-rog（见 ScreenCaptureRealTest.kt 头部
- * 注释：可测的部分已抽成 ScreenCaptureService.isBlankImage 等纯函数）。
+ * Bitmap 全部是 Android 运行时类），真机验证走 xian-rog。可测的部分已抽成
+ * ScreenCaptureService.isBlankImage / CaptureSessionManager 等纯逻辑单测。
  *
- * 流程：
- *   1. 用 MediaProjectionHolder 换出的 MediaProjection 建一个离屏 VirtualDisplay，
- *      surface 指向 ImageReader。
- *   2. acquireLatestImage() 取一帧（带短重试，MediaProjection 刚建立时首帧常常还没到）。
- *   3. image.close() 立即释放（合同要求：不持有超过一帧）。
- *   4. 采样像素校验非全黑非全零（isBlankImage）—— DRM/SECURE flag 会让某些 App 界面
- *      静默返回黑屏，此时判定截图无效，直接返回 null 让上层标 pending。
- *   5. 缩放到最长边 ≤720p，压缩 JPEG quality=70，Base64 编码。
- *   6. finally 里释放 VirtualDisplay + ImageReader（重量级系统资源，绝不能泄漏）。
+ * ⚠️ Android 14 约束（真机 logcat 实锤）：**禁止在同一 MediaProjection 实例上多次
+ * createVirtualDisplay**——旧实现每次截图都新建+释放 VirtualDisplay，第二次即崩
+ * （"Don't take multiple captures by invoking createVirtualDisplay multiple times on the
+ * same instance"）并把 projection stop 掉 → 之后全部判定截图 no MediaProjection instance
+ * → judgment_status 恒 pending。
+ *
+ * 修复：VirtualDisplay + ImageReader 按 projection **只建一次、常驻复用**（[CaptureSessionManager]
+ * 守纪律），每次截图只从常驻 ImageReader acquireLatestImage 抓一帧；projection 变了
+ * (重新授权换出新实例)或 [releaseSession] 才拆掉重量级资源。
  */
 object ScreenCaptureReal {
     private const val TAG = "ScreenCaptureReal"
@@ -34,59 +34,104 @@ object ScreenCaptureReal {
     private const val ACQUIRE_RETRY_COUNT = 5
     private const val ACQUIRE_RETRY_DELAY_MS = 80L
 
+    /** 常驻截图会话：一个 projection 对应一个 VirtualDisplay + ImageReader，反复抓帧不重建。 */
+    private class Session(
+        val virtualDisplay: VirtualDisplay,
+        val imageReader: ImageReader,
+        val width: Int,
+        val height: Int,
+    ) {
+        fun release() {
+            try { virtualDisplay.release() } catch (_: Exception) {}
+            try { imageReader.close() } catch (_: Exception) {}
+        }
+    }
+
+    @Volatile private var manager: CaptureSessionManager<Session>? = null
+
     /**
      * 构造真正会截屏的 captureImpl，供 [ScreenCaptureService] 生产环境使用。
      * mediaProjectionProvider 每次调用都重新取（懒创建/复用同一实例，见 MediaProjectionHolder）。
+     * 内部用 [CaptureSessionManager] 按 projection 复用 VirtualDisplay/ImageReader（A14 纪律）。
      */
-    fun buildCaptureImpl(context: Context, mediaProjectionProvider: () -> MediaProjection?): () -> String? = {
-        captureOnce(context, mediaProjectionProvider())
+    fun buildCaptureImpl(context: Context, mediaProjectionProvider: () -> MediaProjection?): () -> String? {
+        val mgr = CaptureSessionManager<Session>(
+            factory = { token -> createSession(context, token as MediaProjection) },
+            releaser = { it.release() },
+        )
+        manager = mgr
+        return { captureFrame(context, mgr, mediaProjectionProvider()) }
     }
 
-    private fun captureOnce(context: Context, projection: MediaProjection?): String? {
+    /** projection 停止 / 用户重置授权时调，拆掉常驻 VirtualDisplay/ImageReader（由 MediaProjectionHolder 触发）。 */
+    fun releaseSession() {
+        manager?.release()
+    }
+
+    private fun captureFrame(
+        context: Context,
+        mgr: CaptureSessionManager<Session>,
+        projection: MediaProjection?,
+    ): String? {
         if (projection == null) {
             android.util.Log.w(TAG, "no MediaProjection instance — not authorized yet")
             return null
         }
-        val metrics = DisplayMetrics()
-        val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as? android.view.WindowManager
-        windowManager?.defaultDisplay?.getRealMetrics(metrics)
-        val width = metrics.widthPixels.takeIf { it > 0 } ?: 1080
-        val height = metrics.heightPixels.takeIf { it > 0 } ?: 1920
-        val density = metrics.densityDpi.takeIf { it > 0 } ?: DisplayMetrics.DENSITY_DEFAULT
-
-        var virtualDisplay: VirtualDisplay? = null
-        val imageReader = ImageReader.newInstance(width, height, android.graphics.PixelFormat.RGBA_8888, 2)
-        try {
-            virtualDisplay = projection.createVirtualDisplay(
-                "zj-content-judgment-capture",
-                width, height, density,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                imageReader.surface, null, null,
-            )
-
-            val image = acquireImageWithRetry(imageReader) ?: run {
+        // 关键：同一 projection 复用会话（只 createVirtualDisplay 一次，满足 A14）
+        val session = mgr.sessionFor(projection) ?: run {
+            android.util.Log.w(TAG, "createVirtualDisplay session unavailable")
+            return null
+        }
+        return try {
+            val image = acquireImageWithRetry(session.imageReader) ?: run {
                 android.util.Log.w(TAG, "acquireLatestImage returned null after retries")
                 return null
             }
             val bitmap = try {
-                imageToBitmap(image, width, height)
+                imageToBitmap(image, session.width, session.height)
             } finally {
-                image.close() // 合同要求：不持有超过一帧，取完立即释放
+                image.close() // 合同要求：不持有超过一帧，取完立即释放（但不拆 VirtualDisplay）
             }
-
             if (bitmap == null) return null
             if (isBitmapBlank(bitmap)) {
                 android.util.Log.w(TAG, "captured frame is blank/black — likely DRM/SECURE flag, discarding")
                 return null
             }
-
-            return compressToBase64(bitmap)
+            compressToBase64(bitmap)
         } catch (e: Exception) {
-            android.util.Log.w(TAG, "captureOnce failed: ${e.message}")
-            return null
-        } finally {
-            virtualDisplay?.release()
-            imageReader.close()
+            android.util.Log.w(TAG, "captureFrame failed: ${e.message}")
+            // 抓帧异常(如 VirtualDisplay 已失效) → 拆会话,下次换出新 projection 时重建
+            mgr.release()
+            null
+        }
+    }
+
+    /** 为给定 projection 建常驻 VirtualDisplay + ImageReader（每 projection 只调一次）。 */
+    private fun createSession(context: Context, projection: MediaProjection): Session? {
+        val metrics = DisplayMetrics()
+        val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as? android.view.WindowManager
+        @Suppress("DEPRECATION")
+        windowManager?.defaultDisplay?.getRealMetrics(metrics)
+        val width = metrics.widthPixels.takeIf { it > 0 } ?: 1080
+        val height = metrics.heightPixels.takeIf { it > 0 } ?: 1920
+        val density = metrics.densityDpi.takeIf { it > 0 } ?: DisplayMetrics.DENSITY_DEFAULT
+
+        val imageReader = ImageReader.newInstance(width, height, android.graphics.PixelFormat.RGBA_8888, 2)
+        return try {
+            val virtualDisplay = projection.createVirtualDisplay(
+                "zj-content-judgment-capture",
+                width, height, density,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                imageReader.surface, null, null,
+            ) ?: run {
+                imageReader.close()
+                return null
+            }
+            Session(virtualDisplay, imageReader, width, height)
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "createSession failed: ${e.message}")
+            try { imageReader.close() } catch (_: Exception) {}
+            null
         }
     }
 
