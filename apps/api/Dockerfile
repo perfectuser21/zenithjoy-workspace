@@ -23,6 +23,8 @@ RUN mkdir -p dist/templates && cp src/templates/*.jsx dist/templates/
 
 # Production stage
 FROM node:20-alpine
+# tzdata：TZ=Asia/Shanghai 生效依赖（无 tzdata 时 date 恒 UTC，日志/调度时区全错）
+RUN apk add --no-cache tzdata
 WORKDIR /app
 COPY --from=builder /repo/apps/api/package*.json ./
 RUN npm install --production
