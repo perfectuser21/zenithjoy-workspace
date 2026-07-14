@@ -257,7 +257,7 @@ wechatRouter.post('/scheduler-tick', async (req: Request, res: Response) => {
 
   for (const c of customers) {
     try {
-      const result = await generateMomentDraft({ customer: c });
+      const result = await generateMomentDraft({ tenant_id: tenantId, customer: c });
       if (result.ok) {
         generated += 1;
       } else {
