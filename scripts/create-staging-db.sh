@@ -22,6 +22,16 @@ PLIST_LABEL="com.zenithjoy.api.staging"
 HEALTH_URL="http://localhost:5201/health"
 API_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/apps/api"
 
+# rollback_plist：把plist恢复到迁移前备份并重启服务。
+# 依赖全局变量 BACKUP_PLIST（Step 4 生成）与 PLIST；调用时必须确保 BACKUP_PLIST 已赋值。
+rollback_plist() {
+  cp "$BACKUP_PLIST" "$PLIST"
+  launchctl unload "$PLIST" 2>/dev/null || true
+  sleep 1
+  launchctl load "$PLIST"
+  echo "  已回滚并重启，staging应恢复到旧库(zenithjoy_test)状态，请人工排查${DB_NAME}问题"
+}
+
 echo "=== Step 1: 建库 $DB_NAME（幂等） ==="
 EXISTS=$(psql -h localhost -U cecelia -tc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME';" -d postgres | tr -d ' ')
 if [ "$EXISTS" = "1" ]; then
@@ -35,6 +45,7 @@ echo ""
 echo "=== Step 2: 跑全量migration（显式传DATABASE_*，避免落到run-migration.ts默认值cecelia库） ==="
 (
   cd "$API_DIR"
+  unset DATABASE_URL
   DATABASE_HOST=localhost \
   DATABASE_PORT=5432 \
   DATABASE_NAME="$DB_NAME" \
@@ -68,7 +79,7 @@ echo ""
 echo "=== Step 6: 重启staging服务 ==="
 launchctl unload "$PLIST" 2>/dev/null || true
 sleep 1
-launchctl load "$PLIST"
+launchctl load "$PLIST" || { echo "  ❌ launchctl load失败，立即回滚"; rollback_plist; exit 1; }
 echo "  ✅ 服务已重启"
 
 echo ""
@@ -92,10 +103,6 @@ if [ "$HEALTHY" = "true" ]; then
 else
   echo ""
   echo "❌ health check失败，自动回滚plist到迁移前状态"
-  cp "$BACKUP_PLIST" "$PLIST"
-  launchctl unload "$PLIST" 2>/dev/null || true
-  sleep 1
-  launchctl load "$PLIST"
-  echo "  已回滚并重启，staging应恢复到旧库(zenithjoy_test)状态，请人工排查${DB_NAME}问题"
+  rollback_plist
   exit 1
 fi
