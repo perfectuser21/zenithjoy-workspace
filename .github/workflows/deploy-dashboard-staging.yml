@@ -3,7 +3,7 @@ name: Deploy Dashboard to STAGING (staging-autopilot, API :5201)
 # ───────────────────────────────────────────────────────────────────────────
 # Dashboard STAGING 实例（PrepPRD 2026-06-25）
 #   背景：API 已有蓝绿常驻 staging :5201（deploy-us-vps.yml 把 main 候选发 :5201 连
-#         zenithjoy_test 库）。dashboard 现也走 staging 优先：合 main → 本 workflow 上 staging；
+#         zenithjoy_staging 库）。dashboard 现也走 staging 优先：合 main → 本 workflow 上 staging；
 #         生产 autopilot 由用户手点 promote-dashboard-prod.yml 放行（不再合 main 就上生产）。
 #
 #   做什么：把 dashboard 用 STAGING build env build 出来，发到 HK 上独立的

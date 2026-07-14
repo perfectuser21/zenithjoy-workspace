@@ -26,7 +26,7 @@
 		<string>/Users/administrator/zenithjoy-releases/current/dist/index.js</string>
 	</array>
 	<!--
-	  EnvironmentVariables：真实生产 plist 含全部密钥（PORT=5200 / DATABASE_NAME=cecelia /
+	  EnvironmentVariables：真实生产 plist 含全部密钥（PORT=5200 / DATABASE_NAME=zenithjoy /
 	  NODE_ENV=production / ANTHROPIC_API_KEY / BETTER_AUTH_SECRET / FEISHU_* / ... ）。
 	  模板不写密钥；cutover 时保留真实 plist 的这一段不动，只改上面的 ProgramArguments[1] 与
 	  下面的 WorkingDirectory 两处路径。
@@ -36,7 +36,7 @@
 		<key>PORT</key>
 		<string>5200</string>
 		<key>DATABASE_NAME</key>
-		<string>cecelia</string>
+		<string>zenithjoy</string>
 		<key>NODE_ENV</key>
 		<string>production</string>
 	</dict>

@@ -88,10 +88,10 @@ jobs:
           export ZJ_STAGING_PORT=5201
           export ZJ_PROD_LABEL=com.zenithjoy.api
           export ZJ_STAGING_LABEL=com.zenithjoy.api.staging
-          export ZJ_STAGING_DB="${{ vars.ZJ_STAGING_DB || 'zenithjoy_test' }}"
+          export ZJ_STAGING_DB="${{ vars.ZJ_STAGING_DB || 'zenithjoy_staging' }}"
           # 拆库刀1（决策 0710）：生产库名由 GitHub repo variable ZJ_PROD_DB 控制。
-          # 未设 → cecelia（现状）；切换日翻这个变量为 zenithjoy（与生产 plist DATABASE_NAME 同日同翻），回滚=翻回。
-          export ZJ_PROD_DB="${{ vars.ZJ_PROD_DB || 'cecelia' }}"
+          # 未设 → zenithjoy（07-14 切换日已翻，与生产 plist DATABASE_NAME 同日同翻，decision d8366ef1）。
+          export ZJ_PROD_DB="${{ vars.ZJ_PROD_DB || 'zenithjoy' }}"
           export ZJ_PROD_PLIST="$HOME/Library/LaunchAgents/com.zenithjoy.api.plist"
           export ZJ_NODE=/opt/homebrew/bin/node
           export ZJ_RELEASES_DIR="${ZJ_RELEASES_DIR:-/Users/administrator/zenithjoy-releases}"

@@ -773,6 +773,51 @@ PY
 expect_eq "$(_tread UserName)" "administrator" "T ensure_staging_plist 写入 UserName=administrator（LaunchDaemon 必须显式指定运行用户）"
 rm -rf "$TBOX"
 
+# ── 默认值回归（2026-07-14 拆库切换日，decision d8366ef1）─────────────────
+# 铁律 be038f9e：持久化默认值必须与独立库格局一致。未显式传 ZJ_STAGING_DB 时
+# 必须落 zenithjoy_staging（不是废弃的 zenithjoy_test）；promote/rollback 的
+# ZJ_PROD_DB 兜底必须是 zenithjoy（不是拆库前的 cecelia）。
+DBOX="$(mktemp -d)"
+mkdir -p "$DBOX/logs"
+cat > "$DBOX/prod.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.zenithjoy.api</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PORT</key><string>5200</string>
+    <key>DATABASE_NAME</key><string>zenithjoy</string>
+    <key>NODE_ENV</key><string>production</string>
+  </dict>
+  <key>ProgramArguments</key>
+  <array><string>/opt/homebrew/bin/node</string><string>/repo/apps/api/dist/index.js</string></array>
+  <key>WorkingDirectory</key><string>/repo/apps/api</string>
+  <key>KeepAlive</key><true/>
+</dict>
+</plist>
+PLIST
+D_OUT="$DBOX/com.zenithjoy.api.staging.plist"
+ZJ_PROD_PLIST="$DBOX/prod.plist" ZJ_STAGING_PLIST="$D_OUT" ZJ_STAGING_PORT=5201 ZJ_STAGING_LABEL=com.zenithjoy.api.staging ZJ_RELEASES_DIR=/fake/releases ZJ_NODE=/opt/homebrew/bin/node ZJ_STAGING_LOG_DIR="$DBOX/logs"   ensure_staging_plist >/dev/null 2>&1
+_dread() { /usr/bin/python3 - "$D_OUT" "$1" <<'PY'
+import plistlib,sys
+d=plistlib.load(open(sys.argv[1],'rb'))
+key=sys.argv[2]
+print(d.get("EnvironmentVariables",{}).get(key,""))
+PY
+}
+expect_eq "$(_dread DATABASE_NAME)" "zenithjoy_staging" "D 未传 ZJ_STAGING_DB 时默认必须 zenithjoy_staging（拆库回归）"
+rm -rf "$DBOX"
+
+# 源码层兜底断言：deploy-lib 里不允许再出现 cecelia/zenithjoy_test 的库名默认值
+if grep -qE ':-cecelia\}|:-zenithjoy_test\}' "$SCRIPT_DIR/deploy-lib.sh"; then
+  bad "D deploy-lib.sh 仍存在 cecelia/zenithjoy_test 库名默认值（拆库回归）"
+else
+  ok "D deploy-lib.sh 无 cecelia/zenithjoy_test 库名默认值残留"
+fi
+
+
 echo ""
 echo "deploy-lib.test.sh: PASSED=$PASSED FAILED=$FAILED"
 [ "$FAILED" -eq 0 ]

@@ -6,7 +6,7 @@ name: Rollback Production :5200 (人工回滚闸)
 #   留存 release】。现状只有 blue_green_deploy 内部 promote 失败时的【自动】回滚，没有给人手点的
 #   独立回滚入口——本 workflow 补这个缺口。
 #
-#   拓扑（按 repo 真相）：API 生产 = mmv:5200（美国 Mac mini 本机，连生产 cecelia 库），不是 HK。
+#   拓扑（按 repo 真相）：API 生产 = mmv:5200（美国 Mac mini 本机，连生产 zenithjoy 库），不是 HK。
 #   本 workflow 只回拨 API（mmv:5200）。Dashboard 生产在 HK，回滚走另一个 workflow：
 #   rollback-dashboard-prod.yml（2026-06-25 起 dashboard 也上了 sha-keyed release 隔离 + 软链回拨）。
 #
@@ -66,8 +66,8 @@ jobs:
             export ZJ_REPO="$REPO"
             export ZJ_API_DIR="$REPO/apps/api"
             export ZJ_PROD_PORT=5200
-            # 拆库刀1（决策 0710）：与 promote 同源——repo variable ZJ_PROD_DB，未设=cecelia
-            export ZJ_PROD_DB="${{ vars.ZJ_PROD_DB || 'cecelia' }}"
+            # 拆库刀1（决策 0710）：与 promote 同源——repo variable ZJ_PROD_DB，未设=zenithjoy（拆库后默认独立库）
+            export ZJ_PROD_DB="${{ vars.ZJ_PROD_DB || 'zenithjoy' }}"
             export ZJ_PROD_LABEL=com.zenithjoy.api
             export ZJ_PROD_PLIST="$HOME/Library/LaunchAgents/com.zenithjoy.api.plist"
             export ZJ_NODE=/opt/homebrew/bin/node
