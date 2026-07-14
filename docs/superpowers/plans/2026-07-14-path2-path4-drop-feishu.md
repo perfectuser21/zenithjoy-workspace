@@ -324,11 +324,9 @@ git commit -m "feat(line04): generateMomentDraft 改读本地 wechat_marketing_p
 
 ### Task 3: 删除 Path2 已死的飞书 Bitable 服务与路由
 
+> **范围修正（2026-07-14，Task 3 首次实施时发现）**：`feishu-bitable-multitenant.ts`/`feishu-docx.ts` **不在删除范围内**——typecheck 实测发现它俩仍被 `feishu-oauth.ts`（`/api/feishu/oauth` 路由的 `provisionBitable`）和 `lead-writer.ts`（`writeDmOutreachStatus`→`writeRecord`，这个函数本计划已明确要保留）依赖，删除会破坏这两条活代码路径。详见设计文档"不动"清单。以下 Files/Steps 已按修正后的范围更新。
+
 **Files:**
-- Delete: `apps/api/src/services/feishu-bitable-multitenant.ts`
-- Delete: `apps/api/src/services/feishu-bitable-multitenant.test.ts`
-- Delete: `apps/api/src/services/feishu-docx.ts`
-- Delete: `apps/api/src/services/feishu-docx.test.ts`
 - Delete: `apps/api/src/routes/lead-config.ts`
 - Delete: `apps/api/src/routes/lead-config.test.ts`
 - Delete: `apps/api/src/routes/feishu-customer-list.ts`
@@ -381,10 +379,6 @@ Expected: FAIL（这几条路由现在返回 200/400，不是 404）
 - [ ] **Step 3: 删除文件**
 
 ```bash
-git rm apps/api/src/services/feishu-bitable-multitenant.ts
-git rm apps/api/src/services/feishu-bitable-multitenant.test.ts
-git rm apps/api/src/services/feishu-docx.ts
-git rm apps/api/src/services/feishu-docx.test.ts
 git rm apps/api/src/routes/lead-config.ts
 git rm apps/api/src/routes/lead-config.test.ts
 git rm apps/api/src/routes/feishu-customer-list.ts

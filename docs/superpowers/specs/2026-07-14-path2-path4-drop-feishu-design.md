@@ -15,11 +15,11 @@
 
 ### B. Path2：删除已死的飞书 Bitable 代码
 确认死代码（无生产调用方，已被 `acquisition.ts` / `AcquisitionHubPage` 本地实现取代）：
-- `apps/api/src/services/feishu-bitable-multitenant.ts` + `.test.ts`
 - `apps/api/src/routes/lead-config.ts` + `.test.ts`（从 `app.ts` 摘除挂载）
 - `apps/api/src/routes/_smoke-feishu-seed.ts`（从 `app.ts` 摘除挂载，若有）
 - `apps/api/src/routes/feishu-customer-list.ts` + `.test.ts`，`apps/api/src/services/feishu-customer-list.ts` + `.test.ts`（从 `app.ts` 摘除挂载）
-- `apps/api/src/services/feishu-docx.ts` + `.test.ts`（仅被 `feishu-bitable-multitenant.ts` 引用，随其一起删）
+
+**范围修正（Task 3 实施中发现，2026-07-14）**：`feishu-bitable-multitenant.ts` + `feishu-docx.ts` **不能删**——实施时 typecheck 发现它俩仍被两条活路由依赖：① `feishu-oauth.ts` 的 `/api/feishu/oauth` 路由用它的 `provisionBitable`/`ProvisionFailedError` 做 OAuth 绑定后自动建表；② `lead-writer.ts` 的 `writeDmOutreachStatus`（本设计文档"不动"清单里已明确保留的活函数）用它的 `writeRecord` 写飞书 Lead 表。这两条依赖链本刀都不动，因此这两个文件整体移出删除范围，移进下面"不动"清单。
 - `apps/dashboard/src/pages/FeishuBindTenant.tsx`，`apps/dashboard/src/config/navigation.config.ts` 里的 `feishu-bind` 路由条目，`apps/dashboard/src/App.tsx` 里的懒加载引用
 - `apps/api/src/routes/agent-burner.ts`：删掉未使用的 `writeLeadsFromComments` import（`writeDmOutreachStatus` 保留，见下方"不动"）
 - `apps/api/src/services/lead-writer.ts`：删除 `writeLeadsFromComments` 函数本体（连带其专属 helper，若有独占的），保留 `writeDmOutreachStatus`
@@ -27,6 +27,7 @@
 ### 不动（明确排除，附理由）
 - `feishu-oauth.ts` / `feishu-token.ts` / `tenant-context.ts` 里 `feishu_user_id` 反查——这是登录身份识别机制，跟 Bitable 数据表无关，删除会破坏登录
 - `lead-writer.ts` 的 `writeDmOutreachStatus` + 其在 `agent-burner.ts` 的调用点——仍是活代码（DM触达状态回写），只在租户存量 `table_id_leads` 绑定时触发；`FeishuBindTenant` 删除后不会再产生新绑定，老绑定的租户这段代码继续优雅降级（失败不 crash），本刀不额外处理
+- `apps/api/src/services/feishu-bitable-multitenant.ts` + `apps/api/src/services/feishu-docx.ts`（范围修正，见上）——仍被 `feishu-oauth.ts`（`/api/feishu/oauth` 路由 `provisionBitable`）和 `lead-writer.ts`（`writeDmOutreachStatus`→`writeRecord`）两条活路径依赖，删不掉；`feishu-oauth.ts` 这条 OAuth 绑定+自动建表流程本身是否也是死代码有待后续单独核实，本刀不处理
 - `apps/api/src/services/feishu-bitable.ts`（单租户版，`FEISHU_COMPETITOR_APP_TOKEN`/`FEISHU_COMPETITOR_TABLE_ID` 对标视频表）——未在本次范围内核实完，留后续小刀单独处理
 - `FEISHU_ALERT_WEBHOOK`/`FEISHU_NOTIFY_WEBHOOK`/`FEISHU_STATE_SECRET` 等告警/OAuth 相关 env——与 Bitable 数据表无关
 
