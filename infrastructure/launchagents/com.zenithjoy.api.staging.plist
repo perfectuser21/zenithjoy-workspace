@@ -26,6 +26,11 @@
   注意：本文件不含任何密钥。staging 实例起进程时，deploy-lib.sh 的 staging_deploy_slot()
   会从生产 plist 解析非密钥安全 env + 必要密钥，覆写 PORT/DATABASE_NAME/NODE_ENV 后注入。
   releases 根目录如不同于下面默认值，安装本 plist 时按实际路径替换 ProgramArguments。
+
+  部署落点 + UserName（2026-07-14 治根，见 decision 9258b2b6）：ensure_staging_plist() 默认把
+  本文件派生结果落到 /Library/LaunchDaemons/（系统域，ZJ_STAGING_USER 默认 administrator 写进
+  UserName 键，无条件覆盖——运行用户由部署环境决定，不该由本 committed 模板固化）。绝不能落
+  ~/Library/LaunchAgents（gui/501 域，mmv 本机从不加载，2026-07-11 prod :5200 502 三天同根因）。
 -->
 <plist version="1.0">
 <dict>

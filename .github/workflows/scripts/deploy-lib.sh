@@ -433,12 +433,25 @@ PY
 # 约定环境变量（调用方/单测注入）：
 #   ZJ_PROD_PLIST       生产 plist 路径（密钥来源，只读）
 #   ZJ_STAGING_TEMPLATE committed 模板路径（默认 $ZJ_REPO/infrastructure/launchagents/com.zenithjoy.api.staging.plist）
-#   ZJ_STAGING_PLIST    写出的 staging plist 路径（默认 ~/Library/LaunchAgents/com.zenithjoy.api.staging.plist）
+#   ZJ_STAGING_PLIST    写出的 staging plist 路径（默认 default_staging_plist_path 算出的系统域 LaunchDaemon 路径）
 #   ZJ_STAGING_PORT/ZJ_STAGING_DB/ZJ_STAGING_LABEL/ZJ_RELEASES_DIR/ZJ_NODE/ZJ_STAGING_LOG_DIR  覆写/派生值
+#   ZJ_STAGING_USER     staging 进程运行用户（默认 administrator，写进 plist 的 UserName）
+
+# default_staging_plist_path <label> —— staging plist 默认落点（纯函数，便于单测，不碰真文件系统）。
+# 治根（2026-07-14 真实事故）：旧默认落在 ~/Library/LaunchAgents（gui/501 域），mmv 本机该域从不
+# 加载，staging 起来的进程完全靠 staging_deploy_slot 的直接 spawn 撑着，一旦崩溃/重启没有 launchd
+# KeepAlive 兜底——与 2026-07-11 prod :5200 502 三天同根因（prod 已迁系统域 LaunchDaemon 修复，
+# staging 当时漏迁）。系统域 LaunchDaemon 才是本机唯一真正会被加载的位置。
+default_staging_plist_path() {
+  local label="${1:-com.zenithjoy.api.staging}"
+  echo "/Library/LaunchDaemons/${label}.plist"
+}
+
 ensure_staging_plist() {
   local prod_plist="${ZJ_PROD_PLIST:-}"
   local template="${ZJ_STAGING_TEMPLATE:-${ZJ_REPO:-}/infrastructure/launchagents/com.zenithjoy.api.staging.plist}"
-  local out_plist="${ZJ_STAGING_PLIST:-$HOME/Library/LaunchAgents/com.zenithjoy.api.staging.plist}"
+  local label_for_default="${ZJ_STAGING_LABEL:-com.zenithjoy.api.staging}"
+  local out_plist="${ZJ_STAGING_PLIST:-$(default_staging_plist_path "$label_for_default")}"
   local port="${ZJ_STAGING_PORT:-5201}"
   local db="${ZJ_STAGING_DB:-zenithjoy_test}"
   local label="${ZJ_STAGING_LABEL:-com.zenithjoy.api.staging}"
@@ -459,22 +472,28 @@ ensure_staging_plist() {
     fi
   fi
 
-  mkdir -p "$(dirname "$out_plist")" "$logdir" 2>/dev/null || true
+  local staging_user="${ZJ_STAGING_USER:-administrator}"
+  # out_plist 可能落在系统目录（/Library/LaunchDaemons，root:wheel 755，非 root 不可写）——
+  # python 先写到本地临时文件（当前用户总有权限），落地到 out_plist 交给下面的 bash 分支处理
+  # （系统路径走 sudo cp+chown+chmod，非系统路径直接 mv，保持既有单测行为不变）。
+  local tmp_out; tmp_out="$(mktemp "${TMPDIR:-/tmp}/zj-staging-plist.XXXXXX")"
+  mkdir -p "$logdir" 2>/dev/null || true
 
-  PROD_PLIST="$prod_plist" TEMPLATE="$template" OUT_PLIST="$out_plist" \
+  PROD_PLIST="$prod_plist" TEMPLATE="$template" TMP_OUT="$tmp_out" \
   STAGING_PORT="$port" STAGING_DB="$db" STAGING_LABEL="$label" RELEASES_DIR="$releases" \
-  NODE_BIN="$node" LOG_DIR="$logdir" \
+  NODE_BIN="$node" LOG_DIR="$logdir" STAGING_USER="$staging_user" \
   /usr/bin/python3 - <<'PY'
 import plistlib, os, sys
 prod     = os.environ["PROD_PLIST"]
 template = os.environ["TEMPLATE"]
-out      = os.environ["OUT_PLIST"]
+out      = os.environ["TMP_OUT"]
 port     = os.environ["STAGING_PORT"]
 db       = os.environ["STAGING_DB"]
 label    = os.environ["STAGING_LABEL"]
 rels     = os.environ["RELEASES_DIR"]
 node     = os.environ["NODE_BIN"]
 logdir   = os.environ["LOG_DIR"]
+staging_user = os.environ["STAGING_USER"]
 
 with open(prod, "rb") as f:
     prod_data = plistlib.load(f)
@@ -537,6 +556,11 @@ else:
     data["RunAtLoad"] = True
     src = "生产 plist 派生（仓库无模板）"
 
+# LaunchDaemon（系统域）必须显式 UserName，否则以 root 身份起，文件归属/权限全错
+# （2026-07-14 事故治根：这条覆盖模板里可能声明的值——UserName 由部署环境决定，不该由 committed
+# 模板固化）。
+data["UserName"] = staging_user
+
 with open(out, "wb") as f:
     plistlib.dump(data, f)
 
@@ -545,7 +569,30 @@ n = len(data.get("EnvironmentVariables", {}))
 sys.stderr.write(f"✅ staging plist 就绪（{src}）: {out} (Label={data.get('Label')} PORT={port} DB={db} env_keys={n})\n")
 PY
   local rc=$?
-  [ "$rc" -eq 0 ] || { echo "❌ ensure_staging_plist：写出失败（rc=$rc）" >&2; return 1; }
+  if [ "$rc" -ne 0 ]; then
+    rm -f "$tmp_out"
+    echo "❌ ensure_staging_plist：写出失败（rc=$rc）" >&2
+    return 1
+  fi
+
+  # 落地：系统目录（/Library/...，root:wheel 755）非 root 不可写 → sudo 搬运+校正归属；
+  # 其余路径（单测用的沙盒临时目录等）直接 mv，保持既有行为不变。
+  if [[ "$out_plist" == /Library/* ]]; then
+    if ! sudo mkdir -p "$(dirname "$out_plist")" 2>/dev/null \
+      || ! sudo cp "$tmp_out" "$out_plist" 2>/dev/null \
+      || ! sudo chown root:wheel "$out_plist" 2>/dev/null \
+      || ! sudo chmod 644 "$out_plist" 2>/dev/null; then
+      rm -f "$tmp_out"
+      echo "❌ ensure_staging_plist：sudo 落地系统目录失败（${out_plist}，需要 administrator 免密 sudo）" >&2
+      return 1
+    fi
+    rm -f "$tmp_out"
+    # 幂等装载：未加载则装载，已加载则忽略报错（bootstrap 对已加载 label 返非0是预期，不当失败处理）
+    sudo launchctl bootstrap system "$out_plist" >/dev/null 2>&1 || true
+  else
+    mkdir -p "$(dirname "$out_plist")" 2>/dev/null || true
+    mv "$tmp_out" "$out_plist"
+  fi
   return 0
 }
 
@@ -737,7 +784,7 @@ staging_deploy_slot() {
   # 无模板才从生产 plist 派生；幂等每轮重生）。治根：部署机只有生产 plist、staging label 没注册，
   # launchctl start 不存在的 label 是静默空操作（那行还带 ||true）→ :5201 永不起。
   local staging_label="${ZJ_STAGING_LABEL:-com.zenithjoy.api.staging}"
-  local staging_plist="${ZJ_STAGING_PLIST:-$HOME/Library/LaunchAgents/${staging_label}.plist}"
+  local staging_plist="${ZJ_STAGING_PLIST:-$(default_staging_plist_path "$staging_label")}"
   export ZJ_PROD_PLIST ZJ_STAGING_PLIST="${staging_plist}" ZJ_STAGING_PORT ZJ_STAGING_DB \
          ZJ_STAGING_LABEL="${staging_label}" ZJ_RELEASES_DIR ZJ_NODE ZJ_REPO
   if ! ensure_staging_plist; then
