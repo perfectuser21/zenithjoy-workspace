@@ -413,17 +413,8 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/golden-path-2-dm-smoke.sh
           bash .github/workflows/scripts/smoke/golden-path-2-dm-smoke.sh
 
-      # ─── Line04 飞书「客户列表」表 + 飞书→本地单向同步（S5 第一刀）smoke ──────
-      - name: Smoke — Line04 飞书客户列表 + 单向同步 (Path 4 S5)
-        env:
-          API_BASE: http://localhost:5200
-          DB: postgresql://cecelia:cecelia@localhost:5432/cecelia
-          FEISHU_API_BASE: http://localhost:3099
-          SMOKE_TOKEN: smoke-secret-2026
-        run: |
-          curl -fsS -X POST "$FEISHU_API_BASE/__test/reset" || true
-          chmod +x .github/workflows/scripts/smoke/line04-feishu-customer-list-smoke.sh
-          bash .github/workflows/scripts/smoke/line04-feishu-customer-list-smoke.sh
+      # Line04 飞书「客户列表」表 + 飞书→本地单向同步（S5 第一刀）smoke 已删除
+      # （决策19e6480c，2026-07-14：该路由/服务已被本地 CRM 实现取代，确认无生产调用方）
 
       # ─── Line04 去飞书 + 个人私聊 AI 自动直发（第一刀）smoke：群/标黑不回 + 去飞书不落 pending_review ──
       - name: Smoke — Line04 去飞书自动直发 (Path 4 第一刀)
