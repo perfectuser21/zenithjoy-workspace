@@ -1016,6 +1016,31 @@ describe('GET /api/acquisition/collect-tasks/:id/videos [BEHAVIOR]', () => {
     expect(res.body.data).not.toHaveProperty('items');
   });
 
+  it('videos[] 含 judgment_status/judgment_reason（Seg2 判定字段，供 smoke 断言）', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: VALID_TASK_ID, status: 'done', error_code: null, video_count: 1 }] })
+      .mockResolvedValueOnce({
+        rows: [{
+          video_id: '7123456789',
+          task_id: VALID_TASK_ID,
+          title: null,
+          thumbnail_url: null,
+          publish_date: null,
+          comment_count: 3,
+          judgment_status: 'matched',
+          judgment_reason: '目标画像命中',
+        }],
+      });
+    const res = await request(app)
+      .get(`/api/acquisition/collect-tasks/${VALID_TASK_ID}/videos`)
+      .set('x-test-tenant-id', 'tenant-a');
+    expect(res.status).toBe(200);
+    const v = res.body.data.videos[0];
+    expect(v).toHaveProperty('judgment_status', 'matched');
+    expect(v).toHaveProperty('judgment_reason', '目标画像命中');
+  });
+
   // regression(2026-07-04): 空状态需按任务真实状态判断，不能无条件显示"采集中"
   it('响应含 task.status/error_code/video_count，供前端区分进行中/失败/真的没抓到 [REGRESSION]', async () => {
     const mod = await import('../db/connection');

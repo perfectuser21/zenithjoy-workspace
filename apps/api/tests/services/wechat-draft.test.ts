@@ -40,10 +40,7 @@ vi.mock('axios', () => ({
   },
 }));
 
-import axios from 'axios';
 import { generateChatDraft } from '../../src/services/wechat-draft';
-
-const mockedAxios = vi.mocked(axios, true);
 
 describe('generateChatDraft — 个人未标黑 → 自动直发（去飞书）', () => {
   beforeEach(() => {
@@ -67,11 +64,7 @@ describe('generateChatDraft — 个人未标黑 → 自动直发（去飞书）'
     expect(result.status).toBe('sent');
     expect(result.reply).toBe('收到，您好。');
 
-    // 去飞书：绝不调飞书 /records 写入
-    const recordsCalls = (mockedAxios.post as ReturnType<typeof vi.fn>).mock.calls.filter(
-      (c) => typeof c[0] === 'string' && /\/records$/.test(c[0]),
-    );
-    expect(recordsCalls.length).toBe(0);
+    // 去飞书：axios 已从 wechat-draft.ts 移除，无 Feishu /records 调用（静态保证）
 
     // 不落 wechat_publish_task pending_review（去飞书后 chat 不再写审核台）
     const insertCall = mockQuery.mock.calls.find(
@@ -178,9 +171,177 @@ describe('generateChatDraft — AI 生成失败 → 报红不返回 reply', () =
   });
 });
 
-// ws4 generateMomentDraft（朋友圈文案草稿）已改本地表 zenithjoy.wechat_marketing_profile
-// （决策19e6480c，2026-07-14 去飞书），原基于飞书 Bitable mock 的用例已删除，
-// 覆盖见 apps/api/src/services/__tests__/wechat-draft-schema-prefix.test.ts 「本地表驱动」describe 块。
+// ─── ws4: generateMomentDraft（朋友圈文案草稿）────────────────────────────────
+
+import { generateMomentDraft } from '../../src/services/wechat-draft';
+
+describe('ws4 generateMomentDraft — 画像齐全（本地 DB）→ DB INSERT type=moment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockQuery.mockReset();
+    delete process.env.OPENROUTER_FORCE_5XX;
+    process.env.NODE_ENV = 'test';
+    mockCallOpenRouter.mockReset();
+    mockCallOpenRouter.mockResolvedValue({
+      content: '美妆代购正品保障，免税价直供，25-35女性白领专享。',
+      model: 'deepseek/deepseek-chat',
+      prompt_tokens: 12,
+      completion_tokens: 8,
+      cost: 0.000004,
+    });
+  });
+
+  it('画像齐全 + 当日未生成过 → DB INSERT (type=moment, pending_review, approval_source NULL)', async () => {
+    // DB 调用顺序（去飞书后）：
+    //   1) SELECT wechat_marketing_profile → 命中 1 行（行业/受众/钩子文案 三字段齐）
+    //   2) SELECT 当日是否已生成 → rowCount 0
+    //   3) INSERT wechat_publish_task → rowCount 1
+    mockQuery
+      .mockResolvedValueOnce({
+        rows: [{ industry: '美妆代购', audience: '25-35女性白领', hook: '正品保障+免税价' }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValue({ rows: [], rowCount: 1 });
+
+    const result = await generateMomentDraft({ customer: '客户A', tenant_id: 'tenant-test' });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.status).toBe('pending_review');
+      expect(typeof result.task_id).toBe('string');
+      expect(result.task_id).toMatch(/^[0-9a-f-]{36}$/i);
+    }
+
+    // DB INSERT 含 type='moment' + pending_review + approval_source=NULL
+    const dbCalls = mockQuery.mock.calls;
+    const insertCall = dbCalls.find(
+      (c) => typeof c[0] === 'string' && c[0].includes('INSERT INTO zenithjoy.wechat_publish_task'),
+    );
+    expect(insertCall).toBeTruthy();
+    const params = insertCall![1] as unknown[];
+    expect(params).toEqual(expect.arrayContaining(['moment']));
+    expect(params).toEqual(expect.arrayContaining(['pending_review']));
+    expect(params).toEqual(expect.arrayContaining([null]));
+
+    // 去飞书验证：不调飞书 records.create
+    // (axios mock 不再设置，保证没有飞书 call 即可)
+  });
+});
+
+describe('ws4 generateMomentDraft — 画像缺失字段 → profile_missing 跳过', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockQuery.mockReset();
+    process.env.NODE_ENV = 'test';
+    mockCallOpenRouter.mockReset();
+  });
+
+  it('画像表无对应行 → {ok:false, reason:"profile_missing"}，不调 LLM', async () => {
+    // 本地 DB 查 wechat_marketing_profile → 空行
+    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const result = await generateMomentDraft({ customer: '客户B', tenant_id: 'tenant-test' });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('profile_missing');
+    }
+    expect(mockCallOpenRouter).not.toHaveBeenCalled();
+  });
+
+  it('画像 3 字段中缺一个（钩子文案为空）→ {ok:false, reason:"profile_missing"}', async () => {
+    // 本地 DB 返回有行但 hook 为空
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ industry: '美妆代购', audience: '25-35女性白领', hook: '' }],
+      rowCount: 1,
+    });
+
+    const result = await generateMomentDraft({ customer: '客户B', tenant_id: 'tenant-test' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('profile_missing');
+    }
+    expect(mockCallOpenRouter).not.toHaveBeenCalled();
+  });
+});
+
+describe('ws4 generateMomentDraft — 同日重复触发跳过', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockQuery.mockReset();
+    process.env.NODE_ENV = 'test';
+    mockCallOpenRouter.mockReset();
+  });
+
+  it('当日已生成 → {ok:false, reason:"already_generated_today"}，不调 LLM', async () => {
+    // DB 调用顺序：
+    //   1) SELECT wechat_marketing_profile → 命中（画像齐全）
+    //   2) SELECT 当日去重 → 已有行
+    mockQuery
+      .mockResolvedValueOnce({
+        rows: [{ industry: '美妆代购', audience: '25-35女性白领', hook: '正品保障+免税价' }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [{ task_id: 'existing-1' }],
+        rowCount: 1,
+      });
+
+    const result = await generateMomentDraft({ customer: '客户A', tenant_id: 'tenant-test' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('already_generated_today');
+    }
+    expect(mockCallOpenRouter).not.toHaveBeenCalled();
+
+    // 不再 INSERT
+    const insertCalls = mockQuery.mock.calls.filter(
+      (c) => typeof c[0] === 'string' && c[0].includes('INSERT INTO zenithjoy.wechat_publish_task'),
+    );
+    expect(insertCalls.length).toBe(0);
+  });
+});
+
+describe('ws4 generateMomentDraft — OpenRouter 5xx fallback 占位', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockQuery.mockReset();
+    process.env.NODE_ENV = 'test';
+    mockCallOpenRouter.mockReset();
+    mockCallOpenRouter.mockRejectedValue(new Error('OpenRouter 5xx simulated'));
+  });
+
+  it('OpenRouter 抛错 → DB INSERT payload 含 "AI 生成失败"，状态仍 pending_review', async () => {
+    // DB 调用顺序：
+    //   1) SELECT wechat_marketing_profile → 命中（画像齐全）
+    //   2) SELECT 当日去重 → 未生成
+    //   3) INSERT wechat_publish_task（payload 含占位文案）
+    mockQuery
+      .mockResolvedValueOnce({
+        rows: [{ industry: '美妆代购', audience: '25-35女性白领', hook: '正品保障+免税价' }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValue({ rows: [], rowCount: 1 });
+
+    const result = await generateMomentDraft({ customer: '客户A', tenant_id: 'tenant-test' });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.status).toBe('pending_review');
+    }
+
+    const insertCall = mockQuery.mock.calls.find(
+      (c) => typeof c[0] === 'string' && c[0].includes('INSERT INTO zenithjoy.wechat_publish_task'),
+    );
+    expect(insertCall).toBeTruthy();
+    const params = insertCall![1] as unknown[];
+    const hasFail = params.some(
+      (p) => typeof p === 'string' && p.includes('AI 生成失败'),
+    );
+    expect(hasFail).toBe(true);
+  });
+});
 
 // ─── [BEHAVIOR] B-1 正常对话解析 ─────────────────────────────────────────────
 

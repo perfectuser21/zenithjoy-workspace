@@ -21,7 +21,9 @@ import axios from 'axios';
 const mockedAxios = vi.mocked(axios, true);
 
 import pool from '../../../src/db/connection';
-import { generateChatDraft } from '../../../src/services/wechat-draft';
+import {
+  generateChatDraft,
+} from '../../../src/services/wechat-draft';
 import {
   consolidate,
   getContactMemory,
@@ -66,6 +68,12 @@ function installFetchMock(): void {
 }
 
 beforeAll(async () => {
+  process.env.FEISHU_APP_ID = 'test_app_id';
+  process.env.FEISHU_APP_SECRET = 'test_secret';
+  process.env.FEISHU_TEST_APP_TOKEN = 'mock_app_token';
+  process.env.FEISHU_CUSTOMER_TABLE_ID = 'tbl_customer';
+  process.env.FEISHU_INTERACTION_TABLE_ID = 'tbl_interaction';
+  delete process.env.FEISHU_PROFILE_TABLE_ID;
   process.env.OPENROUTER_API_KEY = 'sk-test-mock';
   // 客服回复走 ToAPI（CS_LLM.apiKey=TOAPI_API_KEY）；fetch 已全局 mock，任意 key 都行，
   // 但 callOpenRouter 在自定义端点下会校验 apiKey 非空，故测试也要给个占位 key。

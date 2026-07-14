@@ -257,7 +257,7 @@ wechatRouter.post('/scheduler-tick', async (req: Request, res: Response) => {
 
   for (const c of customers) {
     try {
-      const result = await generateMomentDraft({ tenant_id: tenantId, customer: c });
+      const result = await generateMomentDraft({ customer: c, tenant_id: tenantId });
       if (result.ok) {
         generated += 1;
       } else {
@@ -450,5 +450,128 @@ wechatRouter.get('/cs/daily-report', async (req: Request, res: Response) => {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error('[wechat/cs/daily-report] 查询失败:', errMsg);
     return res.status(500).json({ error: 'DAILY_REPORT_QUERY_FAILED', message: errMsg });
+  }
+});
+
+// ─── Path4 去飞书：营销画像 + 朋友圈草稿审核台（本地 DB）─────────────────────────
+
+// GET /api/wechat/marketing-profile — 当前租户的营销画像列表
+wechatRouter.get('/marketing-profile', async (req: Request, res: Response) => {
+  try {
+    const tenantId = await resolveTenantId(req);
+    if (!tenantId) {
+      return res.status(400).json({ error: 'NO_TENANT_CONTEXT', message: '缺租户上下文' });
+    }
+    const result = await pool.query(
+      'SELECT id, customer, industry, audience, hook, created_at, updated_at FROM zenithjoy.wechat_marketing_profile WHERE tenant_id = $1 ORDER BY customer',
+      [tenantId]
+    );
+    return res.json({ profiles: result.rows });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/marketing-profile] 查询失败:', errMsg);
+    return res.status(500).json({ error: 'MARKETING_PROFILE_QUERY_FAILED', message: errMsg });
+  }
+});
+
+// POST /api/wechat/marketing-profile — upsert 一个客户的营销画像
+wechatRouter.post('/marketing-profile', async (req: Request, res: Response) => {
+  try {
+    const tenantId = await resolveTenantId(req);
+    if (!tenantId) {
+      return res.status(400).json({ error: 'NO_TENANT_CONTEXT', message: '缺租户上下文' });
+    }
+    const { customer, industry = '', audience = '', hook = '' } = req.body;
+    if (!customer) {
+      return res.status(400).json({ error: 'MISSING_CUSTOMER', message: 'customer is required' });
+    }
+    const result = await pool.query(
+      `INSERT INTO zenithjoy.wechat_marketing_profile (tenant_id, customer, industry, audience, hook)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT ON CONSTRAINT uq_wmp_tenant_customer
+       DO UPDATE SET industry = $3, audience = $4, hook = $5, updated_at = now()
+       RETURNING *`,
+      [tenantId, customer, industry, audience, hook]
+    );
+    return res.json({ profile: result.rows[0] });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/marketing-profile] upsert 失败:', errMsg);
+    return res.status(500).json({ error: 'MARKETING_PROFILE_UPSERT_FAILED', message: errMsg });
+  }
+});
+
+// GET /api/wechat/moment-drafts — 当前租户待审核朋友圈草稿
+wechatRouter.get('/moment-drafts', async (req: Request, res: Response) => {
+  try {
+    const tenantId = await resolveTenantId(req);
+    if (!tenantId) {
+      return res.status(400).json({ error: 'NO_TENANT_CONTEXT', message: '缺租户上下文' });
+    }
+    const result = await pool.query(
+      `SELECT id, task_id, target_user AS customer, content_draft AS content, approval_status, approval_source, scheduled_at, created_at
+       FROM zenithjoy.wechat_publish_task
+       WHERE tenant_id = $1 AND type = 'moment'
+       ORDER BY created_at DESC
+       LIMIT 50`,
+      [tenantId]
+    );
+    return res.json({ drafts: result.rows });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/moment-drafts] 查询失败:', errMsg);
+    return res.status(500).json({ error: 'MOMENT_DRAFTS_QUERY_FAILED', message: errMsg });
+  }
+});
+
+// POST /api/wechat/moment-drafts/:taskId/approve
+wechatRouter.post('/moment-drafts/:taskId/approve', async (req: Request, res: Response) => {
+  try {
+    const tenantId = await resolveTenantId(req);
+    if (!tenantId) {
+      return res.status(400).json({ error: 'NO_TENANT_CONTEXT', message: '缺租户上下文' });
+    }
+    const { taskId } = req.params;
+    const result = await pool.query(
+      `UPDATE zenithjoy.wechat_publish_task
+       SET approval_status = 'approved', approval_source = 'dashboard', updated_at = now()
+       WHERE task_id = $1 AND tenant_id = $2
+       RETURNING *`,
+      [taskId, tenantId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'TASK_NOT_FOUND', message: 'Task not found' });
+    }
+    return res.json({ task: result.rows[0] });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/moment-drafts/approve] 失败:', errMsg);
+    return res.status(500).json({ error: 'APPROVE_FAILED', message: errMsg });
+  }
+});
+
+// POST /api/wechat/moment-drafts/:taskId/reject
+wechatRouter.post('/moment-drafts/:taskId/reject', async (req: Request, res: Response) => {
+  try {
+    const tenantId = await resolveTenantId(req);
+    if (!tenantId) {
+      return res.status(400).json({ error: 'NO_TENANT_CONTEXT', message: '缺租户上下文' });
+    }
+    const { taskId } = req.params;
+    const result = await pool.query(
+      `UPDATE zenithjoy.wechat_publish_task
+       SET approval_status = 'rejected', approval_source = 'dashboard', updated_at = now()
+       WHERE task_id = $1 AND tenant_id = $2
+       RETURNING *`,
+      [taskId, tenantId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'TASK_NOT_FOUND', message: 'Task not found' });
+    }
+    return res.json({ task: result.rows[0] });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/moment-drafts/reject] 失败:', errMsg);
+    return res.status(500).json({ error: 'REJECT_FAILED', message: errMsg });
   }
 });

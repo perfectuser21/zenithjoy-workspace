@@ -100,4 +100,68 @@ REAL=$(echo "$VIDEOS" | jq -r '.data.videos[].video_id // empty' 2>/dev/null | g
   || fail "真实 video_id 数=$REAL < 2 —— share_url 取链/服务端 302 解析退化(造假 id?)"
 
 ok "采集 $COUNT 个、$REAL 个真实 video_id 落库 —— agent-android 采集健康"
-echo "🎉 PASS: agent-android 抖音采集真机端到端通过(task=$TASK)"
+
+# ── 5. Seg2 判定：轮询等判定跑起来(judged≥1)，不等"全部非pending" ──
+# 判定 = agent 逐视频截图→POST /judge-video→Gemini 异步触发，依赖 MediaProjection 授权。
+# 授权失效→capture_type=skipped_capture_failed→judgment_status 恒 pending(handoff 风险①:判定虚过)。
+# 注意:合法留 pending 的分支不止授权失效(force_timeout/no_api_key/Gemini error),故用 judged≥1
+# 且 pending 数稳定作退出,不等全部非 pending(否则某视频永久 pending 会白烧满窗口)。
+JUDGED=0; MATCHED=0; LAST_PENDING=-1; STABLE=0; CURLFAIL=0
+for i in $(seq 1 18); do   # 18×10s = 3min 上限
+  VJ=$(curl -fsSk -m 10 "$API_BASE/api/acquisition/collect-tasks/$TASK/videos" -H "X-Tenant-Id: $TENANT" 2>/dev/null)
+  # 判定轮询途中 API 连续不可达 = 环境噪音,走 envfail 分级(exit 3),不误报成判定bug硬红
+  if [ -z "$VJ" ]; then
+    CURLFAIL=$((CURLFAIL+1))
+    echo "  [判定 $i/18] videos 端点无响应(连续第 $CURLFAIL 次)"
+    [ "$CURLFAIL" -ge 3 ] && envfail "判定轮询期间 staging API 连续 $CURLFAIL 次不可达(环境噪音,非判定bug)"
+    sleep 10; continue
+  fi
+  CURLFAIL=0
+  PENDING=$(echo "$VJ" | jq '[.data.videos[]|select(.judgment_status=="pending")]|length' 2>/dev/null || echo "$COUNT")
+  NEWMATCHED=$(echo "$VJ" | jq '[.data.videos[]|select(.judgment_status=="matched")]|length' 2>/dev/null || echo 0)
+  NEWJUDGED=$(echo "$VJ" | jq '[.data.videos[]|select(.judgment_status!="pending")]|length' 2>/dev/null || echo 0)
+  # 判定单调(pending→matched/rejected 不回退),MATCHED/JUDGED 保留峰值,防末轮 jq 瞬断归零→误判全rejected假绿
+  [ "${NEWMATCHED:-0}" -gt "${MATCHED:-0}" ] && MATCHED=$NEWMATCHED
+  [ "${NEWJUDGED:-0}" -gt "${JUDGED:-0}" ] && JUDGED=$NEWJUDGED
+  echo "  [判定 $i/18] judged=$JUDGED matched=$MATCHED pending=$PENDING"
+  [ "${PENDING:-1}" -eq 0 ] && break
+  if [ "${JUDGED:-0}" -ge 1 ]; then
+    if [ "${PENDING:-1}" -eq "${LAST_PENDING:--1}" ]; then STABLE=$((STABLE+1)); else STABLE=0; fi
+    [ "$STABLE" -ge 2 ] && break
+  fi
+  LAST_PENDING=$PENDING
+  sleep 10
+done
+[ "${JUDGED:-0}" -ge 1 ] \
+  || fail "判定链未跑:$COUNT 视频全 pending ——疑 MediaProjection 授权失效/agent 未上报 /judge-video(handoff 风险①,判定虚过)"
+ok "Seg2 判定完成 judged=$JUDGED matched=$MATCHED"
+
+# ── 6. Seg3 抓评论者→acquisition_leads(仅当有 matched,判定放行才进 Stage2) ──
+if [ "${MATCHED:-0}" -ge 1 ]; then
+  LEADS=0
+  for i in $(seq 1 18); do   # 3min
+    LC=$(curl -fsSk -m 10 "$API_BASE/api/acquisition/collect/$TASK" -H "X-Tenant-Id: $TENANT" 2>/dev/null | jq -r '.data.lead_count_raw // 0' 2>/dev/null)
+    echo "  [抓评论 $i/18] lead_count_raw=$LC"
+    [ "${LC:-0}" -gt 0 ] && { LEADS=$LC; break; }
+    sleep 10
+  done
+  [ "${LEADS:-0}" -gt 0 ] \
+    || fail "有 $MATCHED 个 matched 但 lead_count_raw=0 ——Seg2→Seg3 接线断(Stage2 抓评论未触发/未落 acquisition_leads)"
+  ok "Seg3 抓评论者 lead_count_raw=$LEADS"
+
+  # ── 7. Seg4 私信派单→dm_assignments ──
+  DISP=0
+  for i in $(seq 1 12); do   # 2min
+    DP=$(curl -fsSk -m 10 "$API_BASE/api/acquisition/dispatch/plan" -H "X-Tenant-Id: $TENANT" 2>/dev/null | jq -r '.data.total // 0' 2>/dev/null)
+    echo "  [私信派单 $i/12] dispatch_plan_total=$DP"
+    [ "${DP:-0}" -gt 0 ] && { DISP=$DP; break; }
+    sleep 10
+  done
+  [ "${DISP:-0}" -gt 0 ] \
+    || fail "有 leads 但 dispatch/plan.total=0 ——Seg3→Seg4 接线断(buildAssignments/dispatchDue 未建私信单)"
+  ok "Seg4 私信单已建 dispatch_plan_total=$DISP"
+else
+  echo "🟡 无 matched 视频(全 rejected 或仍有 pending)——Seg3/4 无匹配可验:判定链正常工作但无命中(非 bug,非红)"
+fi
+
+echo "🎉 PASS: agent-android 挖客链路 Seg1-4 端到端接线全通过(task=$TASK)"

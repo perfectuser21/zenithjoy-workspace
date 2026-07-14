@@ -13,7 +13,8 @@
  * 失败处理：AI 生成失败 → 中台 console.error 报红 + 结构化告警日志，**不返回 reply**
  * （绝不把"AI 生成失败"占位文案发给客户）；关键人微信通知留第二刀。
  *
- * 朋友圈（generateMomentDraft）营销画像已改本地表 zenithjoy.wechat_marketing_profile（决策 19e6480c，2026-07-14 去飞书）。
+ * 朋友圈（generateMomentDraft）：营销画像/内容排期已迁移本地 DB（decision 19e6480c），
+ * 审核台改本地 dashboard /wechat/moment-drafts。
  */
 
 import crypto from 'node:crypto';
@@ -580,15 +581,17 @@ export async function generateChatDraft(
 // ─── ws4: generateMomentDraft（朋友圈文案草稿）────────────────────────────────
 
 export interface GenerateMomentDraftParams {
-  tenant_id: string;
   customer: string;
+  /** 多租户隔离：查 wechat_marketing_profile 必须有 tenant_id */
+  tenant_id: string;
 }
 
 export interface GenerateMomentDraftSuccess {
   ok: true;
   status: 'pending_review';
   task_id: string;
-  draft_id: string;
+  /** 去飞书后恒为空串（保留字段向后兼容，feishu_record_id 传 null）*/
+  draft_id?: string;
 }
 
 export interface GenerateMomentDraftSkipped {
@@ -617,22 +620,21 @@ function buildMomentPrompt(profile: {
 }
 
 /**
- * 朋友圈文案草稿生成（thin 阶段 A 路线护栏起点）：
- *   1) 校验本地"营销画像"表（zenithjoy.wechat_marketing_profile）对应客户 3 字段
- *      （行业 / 受众 / 钩子文案）齐全；任一缺失 → profile_missing
+ * 朋友圈文案草稿生成（Path4 去飞书，decision 19e6480c）：
+ *   1) 从本地 DB zenithjoy.wechat_marketing_profile 查 3 字段（行业/受众/钩子文案）；缺 → profile_missing
  *   2) 校验 DB wechat_publish_task type='moment' 当日（CURRENT_DATE）该客户是否已生成过 → already_generated_today
  *   3) 拼营销画像 3 字段 + 硬编码 prompt → 调 OpenRouter DeepSeek
  *   4) 写 DB wechat_publish_task（type='moment', approval_status='pending_review',
- *      approval_source NULL — 不允许 system 自批）
+ *      approval_source NULL — 不允许 system 自批；feishu_record_id 传 null）
  *
- * 失败处理：OpenRouter 5xx → 占位文案，状态仍 pending_review（人审决定重试）。
+ * 失败处理：OpenRouter 5xx → DB 写"AI 生成失败"占位，状态仍 pending_review（人审决定重试）。
  */
 export async function generateMomentDraft(
   params: GenerateMomentDraftParams,
 ): Promise<GenerateMomentDraftResult> {
-  const { tenant_id, customer } = params;
+  const { customer, tenant_id } = params;
 
-  // 1) 本地"营销画像"表查 3 字段
+  // 1) 本地 DB 查营销画像 3 字段
   let industry = '';
   let audience = '';
   let hook = '';
@@ -646,13 +648,15 @@ export async function generateMomentDraft(
     if (!profileResult.rows || profileResult.rows.length === 0) {
       return { ok: false, reason: 'profile_missing' };
     }
-    industry = String(profileResult.rows[0].industry ?? '').trim();
-    audience = String(profileResult.rows[0].audience ?? '').trim();
-    hook = String(profileResult.rows[0].hook ?? '').trim();
+    const row = profileResult.rows[0];
+    industry = String(row.industry ?? '').trim();
+    audience = String(row.audience ?? '').trim();
+    hook = String(row.hook ?? '').trim();
   } catch (err) {
-    console.warn('[wechat-draft] 营销画像 SELECT 失败，按 profile_missing 处理:', err);
+    console.warn('[wechat-draft] 营销画像 DB 查询失败，按 profile_missing 处理:', err);
     return { ok: false, reason: 'profile_missing' };
   }
+
   if (!industry || !audience || !hook) {
     return { ok: false, reason: 'profile_missing' };
   }
@@ -663,16 +667,15 @@ export async function generateMomentDraft(
       `SELECT task_id FROM zenithjoy.wechat_publish_task
         WHERE type = $1
           AND target_user = $2
-          AND tenant_id = $3
           AND created_at::date = CURRENT_DATE
         LIMIT 1`,
-      ['moment', customer, tenant_id],
+      ['moment', customer],
     );
     if (dupResult.rows && dupResult.rows.length > 0) {
       return { ok: false, reason: 'already_generated_today' };
     }
   } catch (err) {
-    // 当日去重 SELECT 失败时按"未生成过"放行（fail-open，避免飞书读完了卡住）
+    // 当日去重 SELECT 失败时按"未生成过"放行（fail-open）
     console.warn('[wechat-draft] 当日去重 SELECT 失败，放行生成:', err);
   }
 
@@ -701,13 +704,24 @@ export async function generateMomentDraft(
   }
 
   // 4) 写 DB wechat_publish_task：type='moment'，approval_status='pending_review'，approval_source NULL
+  //    feishu_record_id 传 null（去飞书后不再写飞书"内容排期"表）
   const taskId = crypto.randomUUID();
   try {
     await pool.query(
       `INSERT INTO zenithjoy.wechat_publish_task
-        (task_id, platform, type, target_user, content_draft, approval_status, approval_source, tenant_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [taskId, 'wechat_personal', 'moment', customer, aiContent, 'pending_review', null, tenant_id],
+        (task_id, platform, type, target_user, content_draft, approval_status, approval_source, feishu_record_id, tenant_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        taskId,
+        'wechat_personal',
+        'moment',
+        customer,
+        aiContent,
+        'pending_review',
+        null, // approval_source NULL — A 路线护栏，不允许 system 自批
+        null, // feishu_record_id — 去飞书后恒为 null
+        tenant_id,
+      ],
     );
   } catch (err) {
     console.warn('[wechat-draft] DB INSERT wechat_publish_task (moment) 失败:', err);
@@ -717,5 +731,9 @@ export async function generateMomentDraft(
     console.warn('[wechat-draft] AI 朋友圈草稿生成失败 fallback 占位:', aiError);
   }
 
-  return { ok: true, status: 'pending_review', task_id: taskId, draft_id: '' };
+  return {
+    ok: true,
+    status: 'pending_review',
+    task_id: taskId,
+  };
 }

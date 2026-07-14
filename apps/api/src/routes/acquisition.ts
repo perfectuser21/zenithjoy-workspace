@@ -258,8 +258,10 @@ acquisitionRouter.get('/collect-tasks/:id/videos', tenantContextOptional, async 
       thumbnail_url: string | null;
       publish_date: Date | null;
       comment_count: number;
+      judgment_status: string;
+      judgment_reason: string | null;
     }>(
-      `SELECT video_id, task_id, title, thumbnail_url, publish_date, comment_count
+      `SELECT video_id, task_id, title, thumbnail_url, publish_date, comment_count, judgment_status, judgment_reason
          FROM zenithjoy.acquisition_collect_videos
         WHERE task_id = $1 AND tenant_id = $2
         ORDER BY created_at ASC`,
@@ -273,6 +275,8 @@ acquisitionRouter.get('/collect-tasks/:id/videos', tenantContextOptional, async 
       thumbnail_url: r.thumbnail_url,
       publish_date: r.publish_date ? new Date(r.publish_date).toISOString() : null,
       comment_count: r.comment_count ?? 0,
+      judgment_status: r.judgment_status,
+      judgment_reason: r.judgment_reason,
     }));
 
     return ok(res, {

@@ -70,7 +70,8 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'FEISHU_COMPETITOR_APP_TOKEN', reason: '对标视频表 app token，缺则该表不可用' },
   { name: 'FEISHU_COMPETITOR_TABLE_ID', reason: '对标视频表 ID，缺则该表不可用' },
   // 去飞书（2026-06-30 / 2026-07-14 决策19e6480c）：Line04 私聊已不查飞书"客户档案"/不写"互动记录"，
-  // 朋友圈 generateMomentDraft 已改读写本地表 zenithjoy.wechat_marketing_profile；
+  // 朋友圈 generateMomentDraft 已改读写本地表 zenithjoy.wechat_marketing_profile（PR#1289）；
+  // Path2 的 lead-config.ts/feishu-customer-list.ts/FeishuBindTenant 已确认死代码删除（本PR）。
   // FEISHU_CUSTOMER_TABLE_ID / FEISHU_INTERACTION_TABLE_ID / FEISHU_PROFILE_TABLE_ID /
   // FEISHU_SCHEDULE_TABLE_ID / FEISHU_TABLE_ID_LEADS / FEISHU_PATH4_APP_TOKEN /
   // FEISHU_TEST_APP_TOKEN 不再被任何 src 读取，已下线。

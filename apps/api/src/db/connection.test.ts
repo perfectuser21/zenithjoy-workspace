@@ -39,3 +39,20 @@ describe('db/connection — 日志去重 [BEHAVIOR]', () => {
     await expect(import('./connection')).resolves.toBeDefined();
   });
 });
+
+// 2026-07-14 根因回归守卫：
+// connectionTimeoutMillis 2000 太短——staging/生产低流量时 idleTimeout 回收空闲连接、池常空，
+// 每请求新建连接偶尔 >2s → pg pool 抛 "Connection terminated due to connection timeout" →
+// collect/start(写DB建task) / pending-collect-tasks 间歇 500 → 安卓 agent 拿不到/派不成任务、
+// 采集卡 running/video_count=0。生产+staging error log 各报 28/18 次同款超时（共享 connection.ts）。
+describe('db/connection — pool 超时配置 [REGRESSION]', () => {
+  it('connectionTimeoutMillis >= 10000（新建连接给足时间，防低流量间歇超时→采集500）', async () => {
+    const pool = (await import('./connection')).default;
+    expect((pool.options as { connectionTimeoutMillis?: number }).connectionTimeoutMillis).toBeGreaterThanOrEqual(10000);
+  });
+
+  it('idleTimeoutMillis >= 60000（连接常驻更久，减少低流量频繁新建连接）', async () => {
+    const pool = (await import('./connection')).default;
+    expect((pool.options as { idleTimeoutMillis?: number }).idleTimeoutMillis).toBeGreaterThanOrEqual(60000);
+  });
+});
