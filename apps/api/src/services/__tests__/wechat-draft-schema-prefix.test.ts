@@ -152,4 +152,55 @@ describe('generateMomentDraft — 本地表驱动', () => {
 
     expect(result).toEqual({ ok: false, reason: 'profile_missing' });
   });
+
+  it('当日去重 SELECT 带 tenant_id，避免跨租户同名客户误判 already_generated_today', async () => {
+    let dupSql = '';
+    let dupParams: unknown[] = [];
+    queryMock.mockImplementation((sql: string, params?: unknown[]) => {
+      if (sql.includes('FROM zenithjoy.wechat_marketing_profile')) {
+        return Promise.resolve({
+          rows: [{ industry: '教育', audience: '家长', hook: '不打骂也能让孩子主动写作业' }],
+        }) as any;
+      }
+      if (sql.includes('SELECT task_id FROM zenithjoy.wechat_publish_task')) {
+        dupSql = sql;
+        dupParams = params ?? [];
+        return Promise.resolve({ rows: [] }) as any;
+      }
+      return Promise.resolve({ rows: [] }) as any;
+    });
+
+    const mod = await import('../wechat-draft');
+    await mod.generateMomentDraft({ tenant_id: 'tenant-2', customer: '同名客户' });
+
+    expect(dupSql).toMatch(/tenant_id\s*=\s*\$3/);
+    expect(dupParams).toEqual(['moment', '同名客户', 'tenant-2']);
+  });
+
+  it('INSERT wechat_publish_task 携带 tenant_id，不落 NULL', async () => {
+    let insertSql = '';
+    let insertParams: unknown[] = [];
+    queryMock.mockImplementation((sql: string, params?: unknown[]) => {
+      if (sql.includes('FROM zenithjoy.wechat_marketing_profile')) {
+        return Promise.resolve({
+          rows: [{ industry: '教育', audience: '家长', hook: '不打骂也能让孩子主动写作业' }],
+        }) as any;
+      }
+      if (sql.includes('SELECT task_id FROM zenithjoy.wechat_publish_task')) {
+        return Promise.resolve({ rows: [] }) as any;
+      }
+      if (sql.includes('INSERT INTO zenithjoy.wechat_publish_task')) {
+        insertSql = sql;
+        insertParams = params ?? [];
+        return Promise.resolve({ rows: [] }) as any;
+      }
+      return Promise.resolve({ rows: [] }) as any;
+    });
+
+    const mod = await import('../wechat-draft');
+    await mod.generateMomentDraft({ tenant_id: 'tenant-3', customer: '客户X' });
+
+    expect(insertSql).toMatch(/tenant_id/);
+    expect(insertParams).toContain('tenant-3');
+  });
 });

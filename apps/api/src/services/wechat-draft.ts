@@ -663,9 +663,10 @@ export async function generateMomentDraft(
       `SELECT task_id FROM zenithjoy.wechat_publish_task
         WHERE type = $1
           AND target_user = $2
+          AND tenant_id = $3
           AND created_at::date = CURRENT_DATE
         LIMIT 1`,
-      ['moment', customer],
+      ['moment', customer, tenant_id],
     );
     if (dupResult.rows && dupResult.rows.length > 0) {
       return { ok: false, reason: 'already_generated_today' };
@@ -704,9 +705,9 @@ export async function generateMomentDraft(
   try {
     await pool.query(
       `INSERT INTO zenithjoy.wechat_publish_task
-        (task_id, platform, type, target_user, content_draft, approval_status, approval_source)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [taskId, 'wechat_personal', 'moment', customer, aiContent, 'pending_review', null],
+        (task_id, platform, type, target_user, content_draft, approval_status, approval_source, tenant_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [taskId, 'wechat_personal', 'moment', customer, aiContent, 'pending_review', null, tenant_id],
     );
   } catch (err) {
     console.warn('[wechat-draft] DB INSERT wechat_publish_task (moment) 失败:', err);
