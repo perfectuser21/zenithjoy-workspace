@@ -37,8 +37,9 @@ describe('DB connection — search_path 隔离到 ZenithJoy 自己的连接', ()
     const config = PoolMock.mock.calls[0][0];
     expect(config).toMatchObject({
       max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+      // 2026-07-14 调大：低流量间歇连接超时→采集500根因修复（见 ../connection.test.ts REGRESSION）
+      idleTimeoutMillis: 60000,
+      connectionTimeoutMillis: 10000,
     });
   });
 });
