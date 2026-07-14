@@ -32,12 +32,8 @@ import { skillsRouter } from './routes/skills';
 import { creditsRouter } from './routes/credits';
 import { agentCreditRouter } from './routes/agent-credit';
 import feishuOauthRouter from './routes/feishu-oauth';
-import feishuCustomerListRouter from './routes/feishu-customer-list';
-import leadConfigRouter from './routes/lead-config';
 import crmRouter from './routes/crm';
-import smokeFeishuSeedRouter from './routes/_smoke-feishu-seed';
-// Path 2 Step4 — DEV-only fake-feishu / fake-LLM 替身（根路径自托管，仅非生产挂载）
-import { fakeFeishuRouter } from './routes/_smoke-feishu-seed';
+// Path 2 Step4 — DEV-only fake-LLM 替身（根路径自托管，仅非生产挂载）
 import { fakeLlmRouter } from './routes/_smoke-fake-llm';
 // Path 2 Sprint B-1 — 抖音小号绑定 + 评论抓取
 import agentBurnerRouter from './routes/agent-burner';
@@ -111,12 +107,11 @@ app.get('/version', (req, res) => {
   res.json(getBuildInfo());
 });
 
-// Path 2 Step4 — fake-feishu / fake-LLM 替身：仅非生产挂载于根路径，
-// 供 evaluator/CI 把 FEISHU_API_BASE / OPENROUTER_BASE_URL 指向 apps/api 自身做端到端验证。
-// 生产不挂载 → 真飞书 / 真 OpenRouter 链路不受影响。两 router 对未匹配路径会 next() 透传。
+// Path 2 Step4 — fake-LLM 替身：仅非生产挂载于根路径，
+// 供 evaluator/CI 把 OPENROUTER_BASE_URL 指向 apps/api 自身做端到端验证。
+// 生产不挂载 → 真 OpenRouter 链路不受影响。router 对未匹配路径会 next() 透传。
 if (process.env.NODE_ENV !== 'production') {
   app.use(fakeLlmRouter);
-  app.use(fakeFeishuRouter);
 }
 
 // API routes
@@ -173,13 +168,8 @@ app.use('/api/skills', skillsRouter);
 app.use('/api/credits', creditsRouter);
 // Path 2 Sprint A — 多租户飞书集成
 app.use('/api/feishu/oauth', feishuOauthRouter);
-app.use('/api/lead-config', leadConfigRouter);
-// Path 4 S5 — Line04 飞书「客户列表」表 + 飞书→本地单向同步
-app.use('/api/feishu/customer-list', feishuCustomerListRouter);
 // Line04 中台 AI-native CRM·客户列表页（/customers 读名册租户闸 + manage/status/POST 写接口）
 app.use('/api/crm', crmRouter);
-// Path 2 Sprint A WS5 — DEV-only 飞书 seed helper（生产 NODE_ENV=production 必返 404）
-app.use('/api/_smoke', smokeFeishuSeedRouter);
 // Path 2 Sprint B-1 — 抖音小号绑定 6 路由 + smoke fake-agent helper
 app.use('/api/agent/burner', agentBurnerRouter);
 app.use('/api/_smoke', smokeFakeAgentBurnerRouter);
