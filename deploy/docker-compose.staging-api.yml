@@ -1,0 +1,39 @@
+# ───────────────────────────────────────────────────────────────────────────
+# ZenithJoy staging API — HK 容器实例（拆库刀3-T3，2026-07-14）
+#   取代美国本机 launchd com.zenithjoy.api.staging（:5201，已 bootout 归档）。
+#   方案 SSOT：cecelia repo docs/architecture/2026-07-14-zj-migrate-hk/architecture.md §2/§3/§4
+#
+#   连库：同 zenithjoy-net 内按容器名连 zenithjoy-db-postgres:5432（T2 起的独立栈）
+#   Brain 回连：host.docker.internal:5221 = HK 宿主 socat → 美国 Brain（Linux 必须 extra_hosts）
+#   env：/opt/zenithjoy/staging-api/.env（chmod 600，从美国 staging plist 迁移，密钥不落 git）
+#
+#   死规矩：本 compose 只管 staging，绝不定义/触碰生产（:5200 / autopilot-dashboard）。
+# ───────────────────────────────────────────────────────────────────────────
+networks:
+  zenithjoy-net:
+    name: zenithjoy-net
+    external: true
+
+services:
+  zenithjoy-api-staging:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    image: zenithjoy-api-staging:latest
+    container_name: zenithjoy-api-staging
+    restart: unless-stopped
+    networks:
+      - zenithjoy-net
+    ports:
+      - "127.0.0.1:5201:5200"   # 宿主 5201 仅本机调试用；域名流量走 nginx→容器名:5200
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # Linux 不自带此解析；Brain socat 5221 / eval 9100 依赖
+    env_file:
+      - /opt/zenithjoy/staging-api/.env
+    environment:
+      TZ: Asia/Shanghai
+      PORT: "5200"              # 容器内固定 5200（Dockerfile EXPOSE/HEALTHCHECK 对齐），覆盖 .env 里的旧值
+    volumes:
+      - /opt/zenithjoy/staging-api/content-output:/data/content-output
+      - /opt/zenithjoy/staging-api/install-pack:/data/install-pack:ro
+    mem_limit: 1g

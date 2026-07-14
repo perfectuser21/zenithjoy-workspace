@@ -1,0 +1,85 @@
+name: Deploy API to HK VPS (常驻 staging :5201)
+
+# ───────────────────────────────────────────────────────────────────────────
+# 拆库刀3-T3（2026-07-14）：staging API 从美国本机 launchd 迁至 hk-vps docker。
+#   本 workflow 取代 deploy-us-vps.yml（已降级 workflow_dispatch-only）：
+#   main 合并（apps/api/** 变更）→ ssh HK → git 同步到本次 SHA → docker build
+#   → compose up zenithjoy-api-staging → 容器 /health 冒烟。**绝不碰生产 :5200**。
+#
+#   生产 promote 仍是人手点的 promote workflow，人工卡点不变。
+#   方案 SSOT：cecelia repo docs/architecture/2026-07-14-zj-migrate-hk/architecture.md
+#   HK 访问：Tailscale（HK_VPS_TAILSCALE_IP=100.86.118.99），复用 TS_OAUTH secrets。
+# ───────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'deploy/docker-compose.staging-api.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-staging-hk
+  cancel-in-progress: false
+
+jobs:
+  deploy-staging-hk:
+    name: 部署候选到 HK 常驻 staging :5201（不碰生产 :5200）
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: 接入 Tailscale（走内网）
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Deploy via SSH（HK docker build + up + 冒烟）
+        env:
+          SSH_KEY: ${{ secrets.HK_VPS_SSH_KEY }}
+          SSH_HOST: ${{ vars.HK_VPS_TAILSCALE_IP || '100.86.118.99' }}
+          DEPLOY_SHA: ${{ github.sha }}
+        timeout-minutes: 25
+        run: |
+          KEY_FILE=$(mktemp)
+          printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+
+          ssh -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=30 \
+              -o ServerAliveInterval=60 \
+              -i "$KEY_FILE" \
+              "root@${SSH_HOST}" \
+              bash -s -- "$DEPLOY_SHA" << 'REMOTE_EOF'
+          set -euo pipefail
+          DEPLOY_SHA="$1"
+          REPO=/opt/zenithjoy/repo
+
+          echo "=== [1/3] git sync → ${DEPLOY_SHA} ==="
+          git -C "$REPO" fetch --force --prune origin main
+          git -C "$REPO" reset --hard "$DEPLOY_SHA"
+
+          echo "=== [2/3] docker build + up（仅 staging，绝不碰生产容器）==="
+          cd "$REPO"
+          docker compose -f deploy/docker-compose.staging-api.yml build zenithjoy-api-staging
+          docker compose -f deploy/docker-compose.staging-api.yml up -d zenithjoy-api-staging
+
+          echo "=== [3/3] 冒烟：容器 /health（等 healthcheck 过）==="
+          STATUS=none
+          for i in $(seq 1 20); do
+            STATUS=$(docker inspect zenithjoy-api-staging --format '{{.State.Health.Status}}' 2>/dev/null || echo none)
+            [ "$STATUS" = "healthy" ] && break
+            sleep 5
+          done
+          [ "$STATUS" = "healthy" ] || { echo "❌ 容器未 healthy: $STATUS"; docker logs --tail 50 zenithjoy-api-staging; exit 1; }
+          curl -fsS http://127.0.0.1:5201/health >/dev/null && echo "✅ staging :5201 /health OK"
+          REMOTE_EOF
+
+      - name: Notify Brain on failure
+        if: failure()
+        run: |
+          curl -s -X POST "${{ vars.BRAIN_PUBLIC_URL || 'http://localhost:5221' }}/api/brain/alerts" \
+            -H "Content-Type: application/json" \
+            -d '{"level":"P1","source":"deploy-staging-hk","message":"HK staging 部署失败 sha=${{ github.sha }}"}' || true
