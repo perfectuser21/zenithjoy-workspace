@@ -182,3 +182,48 @@ git commit -m "chore: 执行ZenithJoy staging独立库切换" --allow-empty
 - **Placeholder scan**：无TBD，脚本内容完整
 - **命名一致性**：`DB_NAME`/`REF_DB`/`PLIST`/`BACKUP_PLIST` 在Task1脚本内自洽，Task2步骤引用同名变量语义一致
 - **范围**：单一sprint，无需再拆
+
+---
+
+### Task 3: 3个workflow文件改用可配置的ZJ_STAGING_DB（范围扩大，用户已拍板）
+
+**Files:**
+- Modify: `.github/workflows/deploy-us-vps.yml:98`
+- Modify: `.github/workflows/promote-prod.yml:91`
+- Modify: `.github/workflows/promote-all-prod.yml:153`
+
+- [ ] **Step 1: 三处替换**
+
+在三个文件里，把：
+```yaml
+          export ZJ_STAGING_DB=zenithjoy_test
+```
+（`promote-all-prod.yml`是12空格缩进，另两个是10空格缩进，按各文件原缩进不变）改成：
+```yaml
+          export ZJ_STAGING_DB="${{ vars.ZJ_STAGING_DB || 'zenithjoy_test' }}"
+```
+
+- [ ] **Step 2: yaml语法检查**
+
+Run: `python3 -c "import yaml; yaml.safe_load(open('.github/workflows/deploy-us-vps.yml'))" && python3 -c "import yaml; yaml.safe_load(open('.github/workflows/promote-prod.yml'))" && python3 -c "import yaml; yaml.safe_load(open('.github/workflows/promote-all-prod.yml'))"`
+Expected: 无输出无报错（三个文件都是合法yaml）
+
+- [ ] **Step 3: 确认没有改到其他行**
+
+Run: `git diff .github/workflows/deploy-us-vps.yml .github/workflows/promote-prod.yml .github/workflows/promote-all-prod.yml`
+Expected: 每个文件只有1行改动（`-export ZJ_STAGING_DB=zenithjoy_test` / `+export ZJ_STAGING_DB="${{ vars.ZJ_STAGING_DB || 'zenithjoy_test' }}"`）
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add .github/workflows/deploy-us-vps.yml .github/workflows/promote-prod.yml .github/workflows/promote-all-prod.yml
+git commit -m "feat: ZJ_STAGING_DB改用vars可配置模式(照ZJ_PROD_DB决策0710先例)，默认值不变零风险"
+```
+
+---
+
+### Task 4: 合并后翻开关（不在PR里，PR merge后单独执行）
+
+- [ ] **Step 1**: PR merge后执行 `gh variable set ZJ_STAGING_DB --repo perfectuser21/zenithjoy-workspace --body zenithjoy_staging`
+- [ ] **Step 2**: 触发一次部署（或等下一次自然部署），确认 `plutil -extract EnvironmentVariables.DATABASE_NAME raw ~/Library/LaunchAgents/com.zenithjoy.api.staging.plist` 变成 `zenithjoy_staging`
+- [ ] **Step 3**: `curl -s localhost:5201/health` 200
