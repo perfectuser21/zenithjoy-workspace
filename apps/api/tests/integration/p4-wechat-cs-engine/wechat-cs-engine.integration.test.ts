@@ -23,7 +23,6 @@ const mockedAxios = vi.mocked(axios, true);
 import pool from '../../../src/db/connection';
 import {
   generateChatDraft,
-  _resetFeishuTokenCache,
 } from '../../../src/services/wechat-draft';
 import {
   consolidate,
@@ -92,7 +91,6 @@ afterAll(async () => {
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  _resetFeishuTokenCache();
   installFetchMock();
   // 每个 it 从干净记忆起步
   await pool.query('DELETE FROM zenithjoy.wechat_messages WHERE contact_key = $1', [CONTACT_KEY]);

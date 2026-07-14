@@ -22,7 +22,7 @@ export default function MomentDraftReviewPage() {
       const res = await fetch('/api/wechat/moment-drafts');
       const data = await res.json();
       setDrafts(data.drafts || []);
-    } catch (e) {
+    } catch {
       setError('加载失败');
     } finally {
       setLoading(false);
