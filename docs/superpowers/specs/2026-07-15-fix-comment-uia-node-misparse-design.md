@@ -24,7 +24,8 @@
    - 排序 tab 词表：`{"热门","最新","查看更多回复","展开更多回复","IP属地"}` 及 `^IP属地[:：]` 前缀
    - 在 `looksLikeNickname`/`looksLikeContent` 判断中调用该函数做拦截
 2. **`DouyinCollectService.kt` 的 `flattenNodes`**：BFS 改 DFS 前序遍历，保证同一评论 item 内部子节点在展开列表里保持视觉上下相邻。
-3. **`NodeInfo` 结构扩展**：补充 `boundsInScreen`（至少 top 坐标），`extractByStructure` 里要求候选昵称/正文节点的 top 接近（同一 item 高度范围内），排除跨层级误配对（比如标题栏文本对列表第一条内容）。
+
+**范围收窄（YAGNI）**：原计划中"给 `NodeInfo` 补 `boundsInScreen` 做几何锚点二次筛选"的第三点本次不做——三条已确认的 regression case（标题栏/点赞数/日期误判）靠黑名单正则 + DFS 顺序修正已经能全部拦住，没有测试逼着要一个没法验证的几何匹配层。真机验证如果发现黑名单覆盖不到的新误判模式（比如同层级但视觉不相邻的干扰文本），再补 bounds 锚点，到时候有真实失败样本能写成测试，比现在凭空加一层没有失败用例驱动的结构判断更扎实。
 
 ## 测试计划
 
