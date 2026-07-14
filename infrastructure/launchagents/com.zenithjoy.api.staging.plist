@@ -5,7 +5,7 @@
 
   蓝绿加固解耦后（2026-06-25，Line B）：staging 不再是「验完即销毁的临时 slot」，而是
   ★常驻实例★——main 合并 → CD 把候选 build 进 release 隔离目录、原子重指 releases/staging
-  软链、重启本实例（连 zenithjoy_test 库、无客户流量），在它上面跑 golden-path 出 report，
+  软链、重启本实例（连 zenithjoy_staging 库、无客户流量），在它上面跑 golden-path 出 report，
   并保持常驻供人工打开看（SSH 隧道 / Cloudflare Access，见 docs/staging-access.md）。
   确认 OK 后人手点 promote-prod.yml 才切生产 :5200。
 
@@ -15,7 +15,7 @@
   与生产 com.zenithjoy.api.plist 的差异（其余 env 由 deploy 脚本从生产 plist 继承注入，不在此硬编码密钥）：
     · Label            = com.zenithjoy.api.staging（独立 launchd 实例）
     · PORT             = 5201（生产 5200）
-    · DATABASE_NAME    = zenithjoy_test（生产 cecelia，物理隔离，部署验证绝不写生产库）
+    · DATABASE_NAME    = zenithjoy_staging（生产 zenithjoy，物理隔离，部署验证绝不写生产库）
     · NODE_ENV         = staging
     · BETTER_AUTH_URL / BETTER_AUTH_TRUSTED_ORIGINS = staging-autopilot.zenjoymedia.media
       （生产是 autopilot.zenjoymedia.media；不收口则 staging 登录被判 invalid origin）
@@ -46,7 +46,7 @@
 		<key>PORT</key>
 		<string>5201</string>
 		<key>DATABASE_NAME</key>
-		<string>zenithjoy_test</string>
+		<string>zenithjoy_staging</string>
 		<key>DATABASE_HOST</key>
 		<string>localhost</string>
 		<key>DATABASE_PORT</key>

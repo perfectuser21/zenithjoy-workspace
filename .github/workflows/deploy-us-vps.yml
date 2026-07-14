@@ -3,7 +3,7 @@ name: Deploy API to US Mac (常驻 staging :5201)
 # ───────────────────────────────────────────────────────────────────────────
 # 蓝绿加固解耦（PrepPRD 2026-06-25，Line B/E）：
 #   main 合并 = 候选，★不再是生产★。本 workflow 只把候选 build 进 release 隔离目录、
-#   切到【常驻 staging 实例 :5201】（连 zenithjoy_test 库、无客户流量）并在上面跑
+#   切到【常驻 staging 实例 :5201】（连 zenithjoy_staging 库、无客户流量）并在上面跑
 #   golden-path（最严酷版）出 report。**绝不碰生产 :5200**。
 #
 #   切生产 :5200 由独立的、人手点的 promote workflow（promote-prod.yml，workflow_dispatch）
@@ -95,7 +95,7 @@ jobs:
           export ZJ_STAGING_PORT=5201
           export ZJ_PROD_LABEL=com.zenithjoy.api
           export ZJ_STAGING_LABEL=com.zenithjoy.api.staging
-          export ZJ_STAGING_DB="${{ vars.ZJ_STAGING_DB || 'zenithjoy_test' }}"
+          export ZJ_STAGING_DB="${{ vars.ZJ_STAGING_DB || 'zenithjoy_staging' }}"
           export ZJ_PROD_PLIST="/Library/LaunchDaemons/com.zenithjoy.api.plist"
           export ZJ_NODE=/opt/homebrew/bin/node
           export ZJ_RELEASES_DIR="${ZJ_RELEASES_DIR:-/Users/administrator/zenithjoy-releases}"

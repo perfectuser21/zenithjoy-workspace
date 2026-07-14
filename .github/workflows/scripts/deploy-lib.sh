@@ -388,7 +388,7 @@ blue_green_deploy() {
 #   ZJ_PROD_PORT     生产端口（5200）
 #   ZJ_STAGING_PORT  staging 端口（5201）
 #   ZJ_PROD_LABEL    生产 launchd label（com.zenithjoy.api）
-#   ZJ_STAGING_DB    staging 库名（zenithjoy_test）
+#   ZJ_STAGING_DB    staging 库名（zenithjoy_staging）
 #   ZJ_PROD_PLIST    生产 plist 路径（用来继承运行时 env）
 #   ZJ_NODE          node 可执行（/opt/homebrew/bin/node）
 #   ZJ_RELEASES_DIR  release 隔离根（如 /Users/administrator/zenithjoy-releases）
@@ -453,7 +453,7 @@ ensure_staging_plist() {
   local label_for_default="${ZJ_STAGING_LABEL:-com.zenithjoy.api.staging}"
   local out_plist="${ZJ_STAGING_PLIST:-$(default_staging_plist_path "$label_for_default")}"
   local port="${ZJ_STAGING_PORT:-5201}"
-  local db="${ZJ_STAGING_DB:-zenithjoy_test}"
+  local db="${ZJ_STAGING_DB:-zenithjoy_staging}"
   local label="${ZJ_STAGING_LABEL:-com.zenithjoy.api.staging}"
   local releases="${ZJ_RELEASES_DIR:?ZJ_RELEASES_DIR 未设}"
   local node="${ZJ_NODE:-/opt/homebrew/bin/node}"
@@ -766,7 +766,7 @@ build_release() {
 # 治根（B）：main 合并只动常驻 staging，绝不碰生产 :5200。
 # 常驻 staging launchd（com.zenithjoy.api.staging）从 releases/staging 软链跑——这里：
 #   ① build release  ② 原子重指 releases/staging 软链 → 新 release  ③ kunload/load 重启常驻 staging
-# staging 进程 env（PORT=5201 / DATABASE_NAME=zenithjoy_test / NODE_ENV=staging）在 plist 里定义。
+# staging 进程 env（PORT=5201 / DATABASE_NAME=zenithjoy_staging / NODE_ENV=staging）在 plist 里定义。
 staging_deploy_slot() {
   local sha="$1"
   echo "起常驻 staging :${ZJ_STAGING_PORT}（DB=${ZJ_STAGING_DB}）→ release ${sha} ..."
