@@ -27,6 +27,7 @@ vi.mock('../../llm/openrouter', () => ({
 vi.mock('axios', () => ({
   default: { post: vi.fn(), get: vi.fn() },
 }));
+// 注：去飞书后 axios 不再被 wechat-draft.ts 使用，mock 保留向后兼容（其他测试复用此文件）
 
 vi.mock('../wechat/cs-config-store', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -84,15 +85,6 @@ async function collectPublishTaskSql(): Promise<string[]> {
 describe('wechat-draft schema 前缀回归 [BEHAVIOR]', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    const mod = await import('../wechat-draft');
-    mod._resetFeishuTokenCache?.();
-    process.env.FEISHU_APP_ID = 'mock_app_id';
-    process.env.FEISHU_APP_SECRET = 'mock_app_secret';
-    process.env.FEISHU_TEST_APP_TOKEN = 'mock_app_token';
-    process.env.FEISHU_CUSTOMER_TABLE_ID = 'tbl_customer';
-    process.env.FEISHU_INTERACTION_TABLE_ID = 'tbl_interaction';
-    process.env.FEISHU_SCHEDULE_TABLE_ID = 'tbl_schedule';
-    process.env.FEISHU_PROFILE_TABLE_ID = 'tbl_profile';
   });
 
   it('generateChatDraft 去飞书后不再落 wechat_publish_task（个人私聊自动直发，无审核台）', async () => {
@@ -116,39 +108,26 @@ describe('wechat-draft schema 前缀回归 [BEHAVIOR]', () => {
     expect(insertSql, 'chat 去飞书后不应再写 wechat_publish_task').toBeUndefined();
   });
 
-  it('generateMomentDraft 的当日去重 SELECT 与 INSERT 均须带 zenithjoy. 前缀', async () => {
-    // 营销画像 3 字段齐全 → 进入去重 SELECT + INSERT 路径
-    mockedPost.mockReset();
-    mockedPost.mockImplementation((url: any) => {
-      const u = String(url);
-      if (u.includes('/auth/v3/tenant_access_token/internal')) {
-        return Promise.resolve({
-          data: { code: 0, tenant_access_token: 'mock_token', expire: 7200 },
-        }) as any;
-      }
-      if (u.includes('/records/search')) {
-        return Promise.resolve({
-          data: {
-            code: 0,
-            data: {
-              items: [
-                { record_id: 'p1', fields: { 行业: '美业', 受众: '宝妈', 钩子文案: '限时优惠' } },
-              ],
-            },
-          },
-        }) as any;
-      }
-      if (u.includes('/records')) {
-        return Promise.resolve({
-          data: { code: 0, data: { record: { record_id: 'rec_mock_456' } } },
-        }) as any;
-      }
-      return Promise.resolve({ data: { code: 0 } }) as any;
-    });
+  it('generateMomentDraft 的当日去重 SELECT 与 INSERT 均须带 zenithjoy. 前缀（本地 DB 版）', async () => {
+    // 去飞书后：DB 调用顺序
+    //   1) SELECT zenithjoy.wechat_marketing_profile → 画像 3 字段齐全
+    //   2) SELECT zenithjoy.wechat_publish_task 当日去重 → 未生成
+    //   3) INSERT zenithjoy.wechat_publish_task → 成功
+    const conn: any = await import('../../db/connection');
+    const queryMock = conn.default.query as ReturnType<typeof vi.fn>;
+    queryMock.mockReset();
+    queryMock
+      .mockResolvedValueOnce({
+        rows: [{ industry: '美业', audience: '宝妈', hook: '限时优惠' }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValue({ rows: [], rowCount: 1 });
+
     vi.mocked(callOpenRouter).mockResolvedValue({ content: '今天也要元气满满～' } as any);
 
     const mod = await import('../wechat-draft');
-    await mod.generateMomentDraft({ customer: '于瑾' } as any);
+    await mod.generateMomentDraft({ customer: '于瑾', tenant_id: 'tenant-test' } as any);
 
     const sqls = await collectPublishTaskSql();
     expect(sqls.length, 'moment 路径应至少有去重 SELECT + INSERT').toBeGreaterThanOrEqual(2);
@@ -160,5 +139,13 @@ describe('wechat-draft schema 前缀回归 [BEHAVIOR]', () => {
         /(?<!zenithjoy\.)\bwechat_publish_task\b/i,
       );
     }
+
+    // 新增：wechat_marketing_profile 查询也须带 zenithjoy. 前缀
+    const allSqls = queryMock.mock.calls.map((c: any[]) => String(c[0]));
+    const profileSql = allSqls.find((s: string) => /wechat_marketing_profile/.test(s));
+    expect(profileSql, 'wechat_marketing_profile 查询应存在').toBeTruthy();
+    expect(profileSql, 'wechat_marketing_profile 必须带 zenithjoy. 前缀').toMatch(
+      /zenithjoy\.wechat_marketing_profile/i,
+    );
   });
 });
