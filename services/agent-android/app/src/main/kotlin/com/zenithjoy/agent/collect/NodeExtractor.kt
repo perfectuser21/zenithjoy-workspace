@@ -65,7 +65,10 @@ object NodeExtractor {
     private val NICKNAME_LEN_RANGE = 1..20
     private val CONTENT_MIN_LEN = 1
 
-    // 数字/数字+单位（点赞数，如 "1.2万" "128" "3k"）
+    // 数字/数字+单位（点赞数，如 "1.2万" "128" "3k"）。
+    // 已知取舍：会连带拦掉纯数字的真实评论正文/昵称（如"666"这类数字梗），
+    // 目前没有节点位置信息区分"点赞数"和"数字梗评论"，先接受这个假阴性；
+    // 若真机验证发现命中率明显，再引入 resourceId/bounds 辅助判定收窄。
     private val LIKE_COUNT_RE = Regex("""^\d+(\.\d+)?[万kK]?\+?$""")
     // "7889条评论" / "共7889条评论"（评论区标题栏）
     private val COMMENT_COUNT_TITLE_RE = Regex("""^(共)?\d+条评论$""")
