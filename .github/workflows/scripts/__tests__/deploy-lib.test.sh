@@ -729,6 +729,50 @@ else
   bad "S staging startup wait 配置不正确（loop=seq_1_30_count:${S_LOOP} sleep3_count:${S_SLEEP}，期望各 ≥1）"
 fi
 
+# ════════════════════════════════════════════════════════════════════════════
+# Case T: ensure_staging_plist 默认落点必须是系统域 LaunchDaemon（非 gui/501 LaunchAgent）+ UserName
+# 治根（2026-07-14 真实事故）：staging plist 一直落在 ~/Library/LaunchAgents，mmv 本机 gui/501 域
+# 从不加载（与 2026-07-11 prod 502 三天同根因）。default_staging_plist_path 是纯函数，
+# 断言默认路径值本身，不落地真文件、不碰真系统目录（CI 无 sudo 权限）。
+# ════════════════════════════════════════════════════════════════════════════
+T_DEFAULT="$(default_staging_plist_path com.zenithjoy.api.staging)"
+expect_eq "$T_DEFAULT" "/Library/LaunchDaemons/com.zenithjoy.api.staging.plist" \
+  "T default_staging_plist_path→系统域 LaunchDaemon（不落 ~/Library/LaunchAgents）"
+
+# ensure_staging_plist 生成的 plist 必须含 UserName（LaunchDaemon 以 root 起需显式指定运行用户，
+# 否则进程会以 root 身份跑，权限/文件归属全错）。仍用 ZJ_STAGING_PLIST 注入沙盒路径，不碰真系统目录。
+TBOX="$(mktemp -d)"
+cat > "$TBOX/prod.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>EnvironmentVariables</key>
+  <dict><key>PORT</key><string>5200</string><key>DATABASE_NAME</key><string>cecelia</string></dict>
+  <key>Label</key><string>com.zenithjoy.api</string>
+  <key>ProgramArguments</key>
+  <array><string>/opt/homebrew/bin/node</string><string>/repo/apps/api/dist/index.js</string></array>
+  <key>WorkingDirectory</key><string>/repo/apps/api</string>
+  <key>KeepAlive</key><true/>
+  <key>RunAtLoad</key><true/>
+</dict>
+</plist>
+PLIST
+T_OUT="$TBOX/com.zenithjoy.api.staging.plist"
+ZJ_PROD_PLIST="$TBOX/prod.plist" ZJ_STAGING_TEMPLATE="/nonexistent-template.plist" \
+ZJ_STAGING_PLIST="$T_OUT" ZJ_STAGING_PORT=5201 ZJ_STAGING_DB=zenithjoy_test \
+ZJ_STAGING_LABEL=com.zenithjoy.api.staging ZJ_RELEASES_DIR=/fake/releases \
+ZJ_NODE=/opt/homebrew/bin/node ZJ_STAGING_LOG_DIR="$TBOX/logs" \
+  ensure_staging_plist >/dev/null 2>&1
+_tread() { /usr/bin/python3 - "$T_OUT" "$1" <<'PY'
+import plistlib,sys
+d=plistlib.load(open(sys.argv[1],'rb'))
+print(d.get(sys.argv[2],""))
+PY
+}
+expect_eq "$(_tread UserName)" "administrator" "T ensure_staging_plist 写入 UserName=administrator（LaunchDaemon 必须显式指定运行用户）"
+rm -rf "$TBOX"
+
 echo ""
 echo "deploy-lib.test.sh: PASSED=$PASSED FAILED=$FAILED"
 [ "$FAILED" -eq 0 ]
