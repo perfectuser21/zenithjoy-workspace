@@ -1867,6 +1867,14 @@ tests:
     product: 私域运营
     note: "Path 2 Sprint B-1 lint-test-pairing 占位 — 真行为测试在 apps/api/tests/integration/p2-sprint-b1-ws3/smoke-fake-agent-burner.test.ts"
 
+  - id: line02-android-collect-smoke-selfheal-seed
+    path: apps/api/src/routes/_smoke-acquisition-seed.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "安卓真机采集 smoke 自愈 seed 端点行为测试(双门禁+幂等 upsert，mock pool)；配套 smoke line02-android-collect-realmachine-smoke.sh step0"
+
   - id: p2-sprint-b1-pairing-lead-writer
     path: apps/api/src/services/lead-writer.test.ts
     type: unit

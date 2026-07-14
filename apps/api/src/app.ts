@@ -42,6 +42,8 @@ import agentEventsRouter from './routes/agent-events';
 import smokeFakeAgentBurnerRouter from './routes/_smoke-fake-agent-burner';
 // Path 2 Sprint B-1 architecture hotfix — DEV-only mock-agent helper
 import smokeMockAgentRouter from './routes/_smoke-mock-agent';
+// Line02 安卓真机采集 smoke 自愈 — DEV-only 幂等 seed 固定测试租户（抗 DB 重置）
+import smokeAcquisitionSeedRouter from './routes/_smoke-acquisition-seed';
 // Path 4 Sprint 1 WS1 — wechat 3 endpoints (thin stub)
 import { wechatRouter } from './routes/wechat';
 // Path 4 Sprint B — 微信客服中台配置（人设/企业知识库 CRUD + AI 帮填 A1-A5）
@@ -175,6 +177,8 @@ app.use('/api/agent/burner', agentBurnerRouter);
 app.use('/api/_smoke', smokeFakeAgentBurnerRouter);
 // Path 2 Sprint B-1 architecture hotfix — DEV-only mock-agent helper（lead 自验用）
 app.use('/api/_smoke', smokeMockAgentRouter);
+// Line02 安卓真机采集 smoke 自愈 seed helper（生产 NODE_ENV=production 必返 404）
+app.use('/api/_smoke', smokeAcquisitionSeedRouter);
 // Path 4 — wechat endpoints (qr-bind / scheduler-tick / draft-generate 去飞书自动直发)
 app.use('/api/wechat', wechatRouter);
 // Path 4 Sprint B — 微信客服配置 CRUD（/persona, /business-kb, /business-kb/suggest-audience）
