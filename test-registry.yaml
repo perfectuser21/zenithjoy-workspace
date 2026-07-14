@@ -3717,6 +3717,14 @@ agent_suite:
     product: 中台认证
     note: "env 接缝通用闸门 — 全 src 扫描每个 process.env.X 强制分类(REQUIRED/OPTIONAL+reason/FRAMEWORK)，未分类即红；含 proven-to-fire(findUnclassifiedEnv 拦 ZZ_FAKE_UNCLASSIFIED)。升级 #800 只查 2 文件的完整性闸门为全扫描。"
 
+  - id: dropped-feishu-routes
+    path: apps/api/src/__tests__/dropped-feishu-routes.test.ts
+    type: integration
+    ci: L3
+    status: active
+    product: 私域客服
+    note: "决策19e6480c——断言已删除的飞书Bitable路由(/api/lead-config、/api/feishu/customer-list、/api/_smoke/feishu-seed)404，Path2去飞书改本地死代码清理的回归守卫。"
+
   # ─── Line 10 客户管理后台（Sprint 06220836 → #816 合并去重）──────────────────
   # 注：#816 废 tenant_sub_accounts，统一到 better-auth user + tenant_members。
   # 已删测试：sub-account-quota / customer-admin-rules（角色/绑定守卫概念随子账号一并废）
