@@ -44,6 +44,7 @@ if [ ! -f "$PROD_PLIST" ]; then
 fi
 
 TMP_PLIST="/tmp/com.zenithjoy.api.dev.plist.$$"
+trap 'rm -f "$TMP_PLIST"' EXIT
 PROD_PLIST="$PROD_PLIST" TEMPLATE="$TEMPLATE" OUT_PLIST="$TMP_PLIST" \
 /usr/bin/python3 - <<'PY'
 import plistlib, os
@@ -64,7 +65,8 @@ merged.update(prod_env)   # 生产密钥打底
 merged.update(tmpl_env)   # 模板的PORT/DATABASE_NAME/NODE_ENV等dev安全值盖回
 data["EnvironmentVariables"] = merged
 
-with open(out, "wb") as f:
+fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+with os.fdopen(fd, "wb") as f:
     plistlib.dump(data, f)
 
 n = len(merged)
@@ -77,14 +79,13 @@ echo "=== Step 4: 安装到系统域LaunchDaemon ==="
 sudo cp "$TMP_PLIST" "$OUT_PLIST"
 sudo chown root:wheel "$OUT_PLIST"
 sudo chmod 644 "$OUT_PLIST"
-rm -f "$TMP_PLIST"
 echo "  ✅ 已安装到 ${OUT_PLIST}"
 
 echo ""
 echo "=== Step 5: 重启dev daemon ==="
 sudo launchctl bootout system/"$LABEL" 2>/dev/null || true
 sleep 1
-sudo launchctl bootstrap system "$OUT_PLIST"
+sudo launchctl bootstrap system "$OUT_PLIST" || { echo "  ❌ launchctl bootstrap失败，请查看: /Users/administrator/Library/Logs/zenithjoy-api.dev.error.log" >&2; exit 1; }
 echo "  ✅ daemon已启动"
 
 echo ""
