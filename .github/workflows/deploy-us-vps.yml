@@ -1,5 +1,9 @@
-name: Deploy API to US Mac (常驻 staging :5201)
+name: Deploy API to US Mac (已弃用——staging 已迁 HK)
 
+# ───────────────────────────────────────────────────────────────────────────
+# ⚠️ 弃用（拆库刀3-T3，2026-07-14）：staging 已整体迁 hk-vps docker，
+#   常规 staging 部署走 deploy-staging-hk.yml。本 workflow 仅保留 workflow_dispatch
+#   作为回滚期应急通道（美国侧 launchd 在刀3-T6 前保活不卸载）；T6 后删除本文件。
 # ───────────────────────────────────────────────────────────────────────────
 # 蓝绿加固解耦（PrepPRD 2026-06-25，Line B/E）：
 #   main 合并 = 候选，★不再是生产★。本 workflow 只把候选 build 进 release 隔离目录、
@@ -15,10 +19,7 @@ name: Deploy API to US Mac (常驻 staging :5201)
 # ───────────────────────────────────────────────────────────────────────────
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/api/**'
+  # push 触发已移除（刀3-T3）：staging 部署走 deploy-staging-hk.yml
   workflow_dispatch: {}
 
 jobs:
