@@ -25,7 +25,7 @@ set -euo pipefail
 # ─── Cecelia DB（zenithjoy schema）────────────────────────────
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-5432}"
-PGDATABASE="${PGDATABASE:-cecelia}"
+PGDATABASE="${PGDATABASE:-zenithjoy}"
 PGUSER="${PGUSER:-postgres}"
 
 # ─── Social Media DB（scraper 数据）──────────────────────────
