@@ -73,8 +73,8 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'FEISHU_COMPETITOR_TABLE_ID', reason: '对标视频表 ID，缺则该表不可用' },
   // 去飞书（2026-06-30）：Line04 私聊已不查飞书"客户档案"/不写"互动记录"，
   // FEISHU_CUSTOMER_TABLE_ID / FEISHU_INTERACTION_TABLE_ID 不再被任何 src 读取，已下线。
-  { name: 'FEISHU_PROFILE_TABLE_ID', reason: '营销画像表 ID（朋友圈 generateMomentDraft 读），缺则该表不可用' },
-  { name: 'FEISHU_SCHEDULE_TABLE_ID', reason: '内容排期表 ID（朋友圈 generateMomentDraft 写），缺则该表不可用' },
+  // 去飞书（decision 19e6480c）：FEISHU_PROFILE_TABLE_ID / FEISHU_SCHEDULE_TABLE_ID 已下线
+  // wechat-draft.ts generateMomentDraft 改查本地 zenithjoy.wechat_marketing_profile 表
   { name: 'FEISHU_TABLE_ID_LEADS', reason: 'Lead 表 ID，缺则 Lead 写入不可用' },
 
   // —— 抖音 / 平台对接 ——

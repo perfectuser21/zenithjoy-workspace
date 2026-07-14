@@ -13,11 +13,11 @@
  * 失败处理：AI 生成失败 → 中台 console.error 报红 + 结构化告警日志，**不返回 reply**
  * （绝不把"AI 生成失败"占位文案发给客户）；关键人微信通知留第二刀。
  *
- * 朋友圈（generateMomentDraft）仍在飞书"营销画像/内容排期"路径（Path4 Step4-5，本刀不动）。
+ * 朋友圈（generateMomentDraft）：营销画像/内容排期已迁移本地 DB（decision 19e6480c），
+ * 审核台改本地 dashboard /wechat/moment-drafts。
  */
 
 import crypto from 'node:crypto';
-import axios from 'axios';
 import pool from '../db/connection';
 import { callOpenRouter } from '../llm/openrouter';
 import type { BusinessKB, ChatMessage, ContactFact, ContactMemory, Persona } from './wechat/types';
@@ -57,129 +57,6 @@ function csLlm() {
     apiKey: process.env.TOAPI_API_KEY,
     maxTokens: Number(process.env.WECHAT_CS_MAX_TOKENS) || 2000,
   };
-}
-
-// ─── 飞书 Bitable 配置（从 ENV 读，CI 用占位值 mock）────────────────────────────
-
-const FEISHU_API_BASE = 'https://open.feishu.cn/open-apis';
-
-function getFeishuAppId(): string {
-  return process.env.FEISHU_APP_ID || '';
-}
-function getFeishuAppSecret(): string {
-  return process.env.FEISHU_APP_SECRET || '';
-}
-function getAppToken(): string {
-  return (
-    process.env.FEISHU_TEST_APP_TOKEN ||
-    process.env.FEISHU_PATH4_APP_TOKEN ||
-    ''
-  );
-}
-function getProfileTableId(): string {
-  return process.env.FEISHU_PROFILE_TABLE_ID || '';
-}
-function getScheduleTableId(): string {
-  return process.env.FEISHU_SCHEDULE_TABLE_ID || '';
-}
-
-// ─── 飞书 Token 缓存（5 分钟内复用，单调用链内只取一次）────────────────────────
-
-let cachedToken: { value: string; expireAt: number } | null = null;
-
-/** 测试用：清掉 token 缓存，让每个 it 块从干净状态起 */
-export function _resetFeishuTokenCache(): void {
-  cachedToken = null;
-}
-
-async function getFeishuTenantToken(): Promise<string> {
-  const now = Date.now();
-  if (cachedToken && cachedToken.expireAt > now + 60_000) {
-    return cachedToken.value;
-  }
-  const resp = await axios.post<{
-    code: number;
-    msg?: string;
-    tenant_access_token?: string;
-    expire?: number;
-  }>(`${FEISHU_API_BASE}/auth/v3/tenant_access_token/internal`, {
-    app_id: getFeishuAppId(),
-    app_secret: getFeishuAppSecret(),
-  });
-  if (resp.data.code !== 0 || !resp.data.tenant_access_token) {
-    throw new Error(
-      `飞书获取 Token 失败: code=${resp.data.code} msg=${resp.data.msg ?? ''}`,
-    );
-  }
-  cachedToken = {
-    value: resp.data.tenant_access_token,
-    expireAt: now + (resp.data.expire ?? 7000) * 1000,
-  };
-  return resp.data.tenant_access_token;
-}
-
-// ─── 飞书 Bitable 通用调用 ────────────────────────────────────────────────────
-
-interface FeishuRecord {
-  record_id: string;
-  fields: Record<string, unknown>;
-}
-
-interface FeishuSearchResp {
-  code: number;
-  msg?: string;
-  data?: { items?: FeishuRecord[]; has_more?: boolean };
-}
-
-interface FeishuCreateRecordResp {
-  code: number;
-  msg?: string;
-  data?: { record?: FeishuRecord };
-}
-
-async function searchTable(
-  tableId: string,
-  customerName?: string,
-  pageSize = 50,
-): Promise<FeishuRecord[]> {
-  const token = await getFeishuTenantToken();
-  const url = `${FEISHU_API_BASE}/bitable/v1/apps/${getAppToken()}/tables/${tableId}/records/search`;
-  const conditions: Array<Record<string, unknown>> = [];
-  if (customerName) {
-    conditions.push({ field_name: '客户名', operator: 'is', value: [customerName] });
-  }
-  const body: Record<string, unknown> = { page_size: pageSize };
-  if (conditions.length > 0) {
-    body.filter = { conjunction: 'and', conditions };
-  }
-  const resp = await axios.post<FeishuSearchResp>(url, body, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (resp.data.code !== 0) {
-    throw new Error(
-      `飞书 search ${tableId} 失败: code=${resp.data.code} msg=${resp.data.msg ?? ''}`,
-    );
-  }
-  return resp.data.data?.items ?? [];
-}
-
-async function createRecord(
-  tableId: string,
-  fields: Record<string, unknown>,
-): Promise<string> {
-  const token = await getFeishuTenantToken();
-  const url = `${FEISHU_API_BASE}/bitable/v1/apps/${getAppToken()}/tables/${tableId}/records`;
-  const resp = await axios.post<FeishuCreateRecordResp>(
-    url,
-    { fields },
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
-  if (resp.data.code !== 0) {
-    throw new Error(
-      `飞书 create ${tableId} 失败: code=${resp.data.code} msg=${resp.data.msg ?? ''}`,
-    );
-  }
-  return resp.data.data?.record?.record_id ?? '';
 }
 
 // ─── wechat-cs-reply 内核系统 prompt 段 ───────────────────────────────────────
@@ -705,13 +582,16 @@ export async function generateChatDraft(
 
 export interface GenerateMomentDraftParams {
   customer: string;
+  /** 多租户隔离：查 wechat_marketing_profile 必须有 tenant_id */
+  tenant_id: string;
 }
 
 export interface GenerateMomentDraftSuccess {
   ok: true;
   status: 'pending_review';
   task_id: string;
-  draft_id: string;
+  /** 去飞书后恒为空串（保留字段向后兼容，feishu_record_id 传 null）*/
+  draft_id?: string;
 }
 
 export interface GenerateMomentDraftSkipped {
@@ -740,38 +620,43 @@ function buildMomentPrompt(profile: {
 }
 
 /**
- * 朋友圈文案草稿生成（thin 阶段 A 路线护栏起点）：
- *   1) 校验飞书"营销画像"对应客户 3 字段（行业 / 受众 / 钩子文案）齐全；任一缺失 → profile_missing
+ * 朋友圈文案草稿生成（Path4 去飞书，decision 19e6480c）：
+ *   1) 从本地 DB zenithjoy.wechat_marketing_profile 查 3 字段（行业/受众/钩子文案）；缺 → profile_missing
  *   2) 校验 DB wechat_publish_task type='moment' 当日（CURRENT_DATE）该客户是否已生成过 → already_generated_today
  *   3) 拼营销画像 3 字段 + 硬编码 prompt → 调 OpenRouter DeepSeek
- *   4) 写飞书"内容排期"表（status='pending_review'，approval_source 不写）
- *   5) 写 DB wechat_publish_task（type='moment', approval_status='pending_review',
- *      approval_source NULL — 不允许 system 自批）
+ *   4) 写 DB wechat_publish_task（type='moment', approval_status='pending_review',
+ *      approval_source NULL — 不允许 system 自批；feishu_record_id 传 null）
  *
- * 失败处理：OpenRouter 5xx → 飞书排期写"AI 生成失败"占位，状态仍 pending_review（人审决定重试）。
+ * 失败处理：OpenRouter 5xx → DB 写"AI 生成失败"占位，状态仍 pending_review（人审决定重试）。
  */
 export async function generateMomentDraft(
   params: GenerateMomentDraftParams,
 ): Promise<GenerateMomentDraftResult> {
-  const { customer } = params;
+  const { customer, tenant_id } = params;
 
-  // 1) 飞书"营销画像"表查 3 字段
-  let profileRows: FeishuRecord[] = [];
+  // 1) 本地 DB 查营销画像 3 字段
+  let industry = '';
+  let audience = '';
+  let hook = '';
   try {
-    profileRows = await searchTable(getProfileTableId(), customer);
+    const profileResult = await pool.query(
+      `SELECT industry, audience, hook FROM zenithjoy.wechat_marketing_profile
+        WHERE tenant_id = $1 AND customer = $2
+        LIMIT 1`,
+      [tenant_id, customer],
+    );
+    if (!profileResult.rows || profileResult.rows.length === 0) {
+      return { ok: false, reason: 'profile_missing' };
+    }
+    const row = profileResult.rows[0];
+    industry = String(row.industry ?? '').trim();
+    audience = String(row.audience ?? '').trim();
+    hook = String(row.hook ?? '').trim();
   } catch (err) {
-    console.warn('[wechat-draft] 营销画像 search 失败，按 profile_missing 处理:', err);
+    console.warn('[wechat-draft] 营销画像 DB 查询失败，按 profile_missing 处理:', err);
     return { ok: false, reason: 'profile_missing' };
   }
 
-  if (!profileRows || profileRows.length === 0) {
-    return { ok: false, reason: 'profile_missing' };
-  }
-
-  const profileFields = profileRows[0].fields ?? {};
-  const industry = String(profileFields['行业'] ?? '').trim();
-  const audience = String(profileFields['受众'] ?? '').trim();
-  const hook = String(profileFields['钩子文案'] ?? '').trim();
   if (!industry || !audience || !hook) {
     return { ok: false, reason: 'profile_missing' };
   }
@@ -790,7 +675,7 @@ export async function generateMomentDraft(
       return { ok: false, reason: 'already_generated_today' };
     }
   } catch (err) {
-    // 当日去重 SELECT 失败时按"未生成过"放行（fail-open，避免飞书读完了卡住）
+    // 当日去重 SELECT 失败时按"未生成过"放行（fail-open）
     console.warn('[wechat-draft] 当日去重 SELECT 失败，放行生成:', err);
   }
 
@@ -818,27 +703,14 @@ export async function generateMomentDraft(
     aiContent = FAIL_PLACEHOLDER;
   }
 
-  // 4) 写飞书"内容排期"表（pending_review，不写 approval_source — A 路线护栏起点）
-  const generatedAt = Date.now();
-  let draftId = '';
-  try {
-    draftId = await createRecord(getScheduleTableId(), {
-      客户名: customer,
-      文案: aiContent,
-      生成时间: generatedAt,
-      状态: 'pending_review',
-    });
-  } catch (err) {
-    console.warn('[wechat-draft] 写飞书"内容排期"失败:', err);
-  }
-
-  // 5) 写 DB wechat_publish_task：type='moment'，approval_status='pending_review'，approval_source NULL
+  // 4) 写 DB wechat_publish_task：type='moment'，approval_status='pending_review'，approval_source NULL
+  //    feishu_record_id 传 null（去飞书后不再写飞书"内容排期"表）
   const taskId = crypto.randomUUID();
   try {
     await pool.query(
       `INSERT INTO zenithjoy.wechat_publish_task
-        (task_id, platform, type, target_user, content_draft, approval_status, approval_source, feishu_record_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        (task_id, platform, type, target_user, content_draft, approval_status, approval_source, feishu_record_id, tenant_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
         taskId,
         'wechat_personal',
@@ -846,8 +718,9 @@ export async function generateMomentDraft(
         customer,
         aiContent,
         'pending_review',
-        null, // ws4 阶段 approval_source 必须 NULL
-        draftId || null,
+        null, // approval_source NULL — A 路线护栏，不允许 system 自批
+        null, // feishu_record_id — 去飞书后恒为 null
+        tenant_id,
       ],
     );
   } catch (err) {
@@ -862,6 +735,5 @@ export async function generateMomentDraft(
     ok: true,
     status: 'pending_review',
     task_id: taskId,
-    draft_id: draftId,
   };
 }

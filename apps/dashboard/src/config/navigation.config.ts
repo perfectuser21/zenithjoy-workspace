@@ -139,6 +139,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'CsAccountWorkbenchPage': () => import('../pages/CsAccountWorkbenchPage'),
   // Line 00 运营中枢 — 员工工具中心（staff only）
   'SkillEvalPage': () => import('../pages/SkillEvalPage'),
+  // Path4 去飞书 — 朋友圈草稿本地审核台
+  'MomentDraftReviewPage': () => import('../pages/MomentDraftReviewPage'),
 };
 
 export const pageComponents = autopilotPageComponents;
@@ -263,6 +265,9 @@ export const additionalRoutes: RouteConfig[] = [
 
     // === AI 视频相关路由 ===
   { path: '/ai-video/history', component: 'AiVideoHistoryPage', requireAuth: true },
+
+  // Path4 去飞书 — 朋友圈草稿本地审核台
+  { path: '/wechat/moment-drafts', component: 'MomentDraftReviewPage', requireAuth: true },
 
   // === 旧路由重定向（兼容） ===
   { path: '/content', redirect: '/media/content' },
