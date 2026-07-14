@@ -4,18 +4,20 @@ name: E2E Orphan Specs Consolidation (Windows)
 # triage 后:3 个已过时删除(crm-config/customer-management/wechat-bind-button),
 # 9 个修绿并纳入本 workflow。
 #
-# 覆盖 9 spec(全 API stub / page.route,不依赖外部服务):
+# 覆盖 8 spec(全 API stub / page.route,不依赖外部服务):
 #   acquisition-android-entry / content-judgment-gate / customer-admin-backend /
 #   line04-preflight-card / module-health / module-health-access /
-#   path-2-sprint-a / video-remake / wechat-cs-config
+#   video-remake / wechat-cs-config
+# （path-2-sprint-a 已删除，决策19e6480c 2026-07-14：测的 /dashboard/feishu-bind
+#   页面已随 FeishuBindTenant 一起下线，Path2 改本地不再需要飞书绑定这条流程）
 #
-# 门禁哲学(用户 2026-07-12 拍板「不留红」):9 个 spec 全绿才过,无棘轮债名单、
+# 门禁哲学(用户 2026-07-12 拍板「不留红」):8 个 spec 全绿才过,无棘轮债名单、
 # 无 continue-on-error 兜底掩红。任一 spec 红 → job 红 → 阻塞合并。
 #
 # ── gate 模式(用户 2026-07-13 拍板「焊死进 required」)────────────────────────
 # 本 workflow【无条件触发】(on 无 paths 过滤),内部 changes job 用 git diff 决定
 # 是否真跑重活(windows playwright)。不碰 dashboard 的 PR → changes 短路 → 重 job skip
-# → orphan-e2e-gate 秒过 N/A,不烧 windows runner。碰了 → 9 spec 全绿才让 gate 过。
+# → orphan-e2e-gate 秒过 N/A,不烧 windows runner。碰了 → 8 spec 全绿才让 gate 过。
 # gate job(Orphan E2E Gate Passed)因 always() 恒上报状态,故可安全加进 main required checks
 # 而不会让非 dashboard PR 永久 pending(避开「required + paths 冲突」陷阱)。
 # 回归守卫 lint-orphan-gate-alwayson.sh 在 gate job 里跑,防有人塞回 paths 过滤。
@@ -65,19 +67,19 @@ jobs:
           echo "── changed files ──"
           echo "$CHANGED"
           echo "───────────────────"
-          # 触发重活的条件：9 个 orphan spec 之一 / dashboard src / 本 workflow / 守卫脚本
-          if echo "$CHANGED" | grep -qE '^apps/dashboard/e2e/(acquisition-android-entry|content-judgment-gate|customer-admin-backend|line04-preflight-card|module-health|module-health-access|path-2-sprint-a|video-remake|wechat-cs-config)\.spec\.ts$' \
+          # 触发重活的条件：8 个 orphan spec 之一 / dashboard src / 本 workflow / 守卫脚本
+          if echo "$CHANGED" | grep -qE '^apps/dashboard/e2e/(acquisition-android-entry|content-judgment-gate|customer-admin-backend|line04-preflight-card|module-health|module-health-access|video-remake|wechat-cs-config)\.spec\.ts$' \
              || echo "$CHANGED" | grep -qE '^apps/dashboard/src/' \
              || echo "$CHANGED" | grep -qxF '.github/workflows/e2e-orphan-consolidation-windows.yml' \
              || echo "$CHANGED" | grep -qxF '.github/workflows/scripts/lint-orphan-gate-alwayson.sh'; then
             echo "orphan=true" >> $GITHUB_OUTPUT
-            echo "→ orphan=true(运行 9 spec)"
+            echo "→ orphan=true(运行 8 spec)"
           else
             echo "orphan=false" >> $GITHUB_OUTPUT
             echo "→ orphan=false(gate 直接 N/A 通过,不烧 windows runner)"
           fi
 
-  # ── 重活:9 spec 全绿(仅在 orphan=true 时跑)────────────────────────────────
+  # ── 重活:8 spec 全绿(仅在 orphan=true 时跑)────────────────────────────────
   playwright-orphan-consolidation:
     name: Playwright — Orphan Specs Consolidation (Windows Chrome)
     needs: changes
@@ -172,12 +174,6 @@ jobs:
         working-directory: apps/dashboard
         run: npx playwright test e2e/module-health-access.spec.ts --reporter=list
 
-      - name: Run — path-2-sprint-a
-        id: path2_sprint_a
-        continue-on-error: true
-        working-directory: apps/dashboard
-        run: npx playwright test e2e/path-2-sprint-a.spec.ts --reporter=list
-
       - name: Run — video-remake
         id: video_remake
         continue-on-error: true
@@ -190,7 +186,7 @@ jobs:
         working-directory: apps/dashboard
         run: npx playwright test e2e/wechat-cs-config.spec.ts --reporter=list
 
-      # ── 汇总:9 个全绿才让本 job 绿，不留红（无债名单、无兜底掩红）──────────────
+      # ── 汇总:8 个全绿才让本 job 绿，不留红（无债名单、无兜底掩红）──────────────
       - name: 汇总 — 全部 orphan spec 必须绿
         if: always()
         run: |
@@ -205,7 +201,6 @@ jobs:
             "line04-preflight-card:${{ steps.preflight_card.outcome }}" \
             "module-health:${{ steps.module_health.outcome }}" \
             "module-health-access:${{ steps.module_health_access.outcome }}" \
-            "path-2-sprint-a:${{ steps.path2_sprint_a.outcome }}" \
             "video-remake:${{ steps.video_remake.outcome }}" \
             "wechat-cs-config:${{ steps.wechat_cs.outcome }}"; do
             NAME="${pair%%:*}"
@@ -223,7 +218,7 @@ jobs:
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             exit 1
           fi
-          echo "  全部 9 个 orphan spec 绿 ✓"
+          echo "  全部 8 个 orphan spec 绿 ✓"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Upload Playwright artifacts on failure
@@ -264,7 +259,7 @@ jobs:
             exit 0
           fi
           if [ "$RESULT" = "success" ]; then
-            echo "  9 个 orphan spec 全绿 → Gate PASS"
+            echo "  8 个 orphan spec 全绿 → Gate PASS"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             exit 0
           fi

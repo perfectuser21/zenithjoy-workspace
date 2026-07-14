@@ -1414,14 +1414,6 @@ tests:
     path: services/agent/src/handlers/__tests__/health-server.test.ts
   # ─── Path 2 Sprint A — 飞书集成 ───────────────────────────────────────────────
 
-  - id: p2-sprint-a-route-smoke-feishu-seed
-    path: apps/api/src/routes/_smoke-feishu-seed.test.ts
-    type: unit
-    ci: L3
-    status: pending-ci
-    product: 私域运营
-    note: "Path 2 Sprint A — lint-test-pairing 占位，扩展 unit 加厚阶段补"
-
   - id: p2-sprint-a-route-feishu-oauth
     path: apps/api/src/routes/feishu-oauth.test.ts
     type: unit
@@ -1616,14 +1608,6 @@ tests:
     product: 私域运营
     note: "Path 2 Sprint A WS3 — provisionBitable 多租户自动建 3 张表 BEHAVIOR 测试"
 
-  - id: p2-sprint-a-ws3-lead-config-unit
-    path: apps/api/tests/ws3/lead-config.test.ts
-    type: unit
-    ci: L3
-    status: active
-    product: 私域运营
-    note: "Path 2 Sprint A WS3 — fetchLeadConfig 拉飞书 Bitable 数据 BEHAVIOR 测试"
-
   - id: p2-sprint-a-ws1-migration-int
     path: apps/api/tests/integration/ws1/migration.test.ts
     type: integration
@@ -1639,22 +1623,6 @@ tests:
     status: active
     product: 中台认证
     note: "Path 2 Sprint A WS5 — Path 1 隔离断言（agent_platform_sessions / qr-bind-douyin / 账号绑定 UI 不动）"
-
-  - id: p2-sprint-a-ws4-feishu-bind-page-unit
-    path: apps/dashboard/tests/ws4/feishu-bind-page.test.tsx
-    type: unit
-    ci: L3
-    status: active
-    product: 私域运营
-    note: "Path 2 Sprint A WS4 — FeishuBindTenant 组件单测（含 R1/R3/R4/R5 错误路径渲染）"
-
-  - id: p2-sprint-a-e2e
-    path: apps/dashboard/e2e/path-2-sprint-a.spec.ts
-    type: e2e
-    ci: windows_cloud
-    status: active
-    product: 私域运营
-    note: "Path 2 Sprint A — Playwright E2E 走绑飞书 + 自动建表 + 填画像/对标视频全链。收编入 e2e-orphan-consolidation-windows.yml（2026-07-12 ci-patrol 巡检）"
 
   - id: p2-sprint-a-contract-ws1-migration
     path: sprints/path-2-sprint-a-feishu/tests/ws1/migration.test.ts
@@ -3716,6 +3684,14 @@ agent_suite:
     status: active
     product: 中台认证
     note: "env 接缝通用闸门 — 全 src 扫描每个 process.env.X 强制分类(REQUIRED/OPTIONAL+reason/FRAMEWORK)，未分类即红；含 proven-to-fire(findUnclassifiedEnv 拦 ZZ_FAKE_UNCLASSIFIED)。升级 #800 只查 2 文件的完整性闸门为全扫描。"
+
+  - id: dropped-feishu-routes
+    path: apps/api/src/__tests__/dropped-feishu-routes.test.ts
+    type: integration
+    ci: L3
+    status: active
+    product: 私域客服
+    note: "决策19e6480c——断言已删除的飞书Bitable路由(/api/lead-config、/api/feishu/customer-list、/api/_smoke/feishu-seed)404，Path2去飞书改本地死代码清理的回归守卫。"
 
   # ─── Line 10 客户管理后台（Sprint 06220836 → #816 合并去重）──────────────────
   # 注：#816 废 tenant_sub_accounts，统一到 better-auth user + tenant_members。

@@ -32,6 +32,7 @@ notion-sync-smoke.sh
 offscreen-version-gate-smoke.sh
 operator-page-medium-smoke.sh
 p4-ws2-feishu-bitable-smoke.sh
+path2-drop-feishu-dead-routes-smoke.sh
 path4-sprint-1-ws1-smoke.sh
 path4-sprint-1-ws2-smoke.sh
 path4-sprint-1-ws3-smoke.sh

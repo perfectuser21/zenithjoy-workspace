@@ -6,12 +6,16 @@
  *
  * 核心 API：
  *  - provisionBitable(tenantId)  — 自动建 1 文档 + 3 张表，4 个 ID 写回 tenant_feishu_bindings
- *  - fetchLeadConfig(tenantId)   — 拉「获客画像」+「对标视频」两表数据，返 {profile, target_videos[]}
- *  - writeRecord(tenantId, tableId, fields) — 通用写入（_smoke-feishu-seed helper 复用）
+ *    （仍被 feishu-oauth.ts 的 OAuth 绑表流程使用）
+ *  - writeRecord(tenantId, tableId, fields) — 通用写入（被 lead-writer.ts 的 writeDmOutreachStatus 使用）
+ *
+ * fetchLeadConfig（Path2 获客画像/对标视频读取）+ listRecords 已删除（决策19e6480c，
+ * 2026-07-14）：唯一调用方 lead-config.ts 路由已确认死代码一并删除，Path2 现走
+ * acquisition.ts 本地实现。
  *
  * 错误抛出：
  *  - ProvisionFailedError  — R2: 建表中途失败 → 写 needs_retry=true + provision_error
- *  - BitableNotFoundError  — R3: 客户在飞书侧删了 Bitable → list_records 91402
+ *  - BitableNotFoundError  — R3: 客户在飞书侧删了 Bitable → list_records 91402（provisionBitable 路径仍可能抛）
  */
 import axios from 'axios';
 import pool from '../db/connection';
@@ -267,71 +271,6 @@ async function ensureEnterpriseDoc(tenantId: string): Promise<void> {
   );
   if (r.rows?.[0]?.enterprise_doc_token) return;
   await createEnterpriseDoc(tenantId);
-}
-
-interface FeishuListRecordsResp {
-  code: number;
-  msg?: string;
-  data?: { items?: Array<{ fields: Record<string, unknown> }> };
-}
-
-async function listRecords(
-  token: string,
-  appToken: string,
-  tableId: string
-): Promise<Array<Record<string, unknown>>> {
-  const url = `${FEISHU_BASE}/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records`;
-  let resp;
-  try {
-    resp = await axios.get<FeishuListRecordsResp>(url, {
-      headers: authHeader(token),
-      timeout: 10000,
-    });
-  } catch (e) {
-    throw new BitableNotFoundError(`list_records HTTP error: ${(e as Error).message}`);
-  }
-  const data = resp.data || ({} as FeishuListRecordsResp);
-  if (data.code === 91402 || data.code === 91403) {
-    throw new BitableNotFoundError(`Bitable ${appToken}/${tableId} 不存在 (code ${data.code})`);
-  }
-  if (data.code !== 0) {
-    throw new Error(`FEISHU_LIST_RECORDS_ERROR: code=${data.code} msg=${data.msg || ''}`);
-  }
-  const items = data.data?.items || [];
-  return items.map((it) => it.fields || {});
-}
-
-export interface LeadConfig {
-  profile: { industry: string; keyword: string; hook: string };
-  target_videos: Array<{ url: string; note: string }>;
-}
-
-export async function fetchLeadConfig(tenantId: string): Promise<LeadConfig> {
-  const binding = await loadBinding(tenantId);
-  if (!binding || !binding.app_token || !binding.table_id_lead_profile) {
-    throw new Error('FEISHU_NOT_BOUND');
-  }
-
-  const token = await getValidToken(tenantId);
-
-  const profileFields = await listRecords(token, binding.app_token, binding.table_id_lead_profile);
-  const videoFields = binding.table_id_target_videos
-    ? await listRecords(token, binding.app_token, binding.table_id_target_videos)
-    : [];
-
-  const first = (profileFields[0] || {}) as Record<string, unknown>;
-  const profile = {
-    industry: String(first['行业'] ?? ''),
-    keyword: String(first['关键词'] ?? ''),
-    hook: String(first['钩子文案'] ?? ''),
-  };
-
-  const target_videos = videoFields.map((row) => ({
-    url: String((row as Record<string, unknown>)['视频 URL'] ?? ''),
-    note: String((row as Record<string, unknown>)['备注'] ?? ''),
-  }));
-
-  return { profile, target_videos };
 }
 
 export async function writeRecord(

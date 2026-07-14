@@ -88,8 +88,6 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'DouyinBindPage': () => import('../pages/DouyinBindPage'),
   // Line02 Path2 Step3 — 安卓客户端自助装机绑定（下载页 + 深链二维码）
   'AndroidDownloadPage': () => import('../pages/AndroidDownloadPage'),
-  // Path 2 Sprint A — 飞书集成
-  'FeishuBindTenant': () => import('../pages/FeishuBindTenant'),
   // zj2 Smart Acquisition — 获客 Leads
   'LeadsPage': () => import('../pages/LeadsPage'),
   // Path 2 Sprint B-1 — 评论抓取（绑号功能已并入 AcquisitionAccountsPage）
@@ -215,7 +213,6 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/dashboard/machines', component: 'MachineManagementPage', requireAuth: true },
   { path: '/dashboard/acquisition-config', component: 'AcquisitionConfigPage', requireAuth: true },
   { path: '/company-profile', component: 'CompanyProfilePage', requireAuth: true },
-  { path: '/dashboard/feishu-bind', component: 'FeishuBindTenant', requireAuth: true },
   // 以号为中心 IA 重设计刀2：客服号总览 + 单号工作台（5 Tab 容器）。
   //   /wechat/accounts 总览（超管/多号）；/wechat/account/:machineId 单号工作台。
   { path: '/wechat/accounts', component: 'CsAccountOverviewPage', requireAuth: true },

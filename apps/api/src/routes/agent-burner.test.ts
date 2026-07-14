@@ -56,7 +56,6 @@ vi.mock('../middleware/agent-context', () => ({
 
 // Mock services
 vi.mock('../services/lead-writer', () => ({
-  writeLeadsFromComments: vi.fn().mockResolvedValue({ lead_write_status: 'success' }),
   writeDmOutreachStatus: vi.fn().mockResolvedValue({ lead_write_status: 'success' }),
 }));
 

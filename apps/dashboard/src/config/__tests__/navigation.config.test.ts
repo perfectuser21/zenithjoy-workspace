@@ -176,3 +176,15 @@ describe('config/navigation — 孤儿页已删', () => {
     expect(legacy?.component).toBeUndefined();
   });
 });
+
+// 飞书绑定页面已下线（决策19e6480c，2026-07-14）：Path2 已本地化，FeishuBindTenant 整页删除
+describe('config/navigation — 飞书绑定页面已下线（决策19e6480c）', () => {
+  it('additionalRoutes 不再含 /dashboard/feishu-bind', () => {
+    const paths = routePaths();
+    expect(paths).not.toContain('/dashboard/feishu-bind');
+  });
+
+  it('autopilotPageComponents 不再含 FeishuBindTenant 懒加载映射', () => {
+    expect(autopilotPageComponents['FeishuBindTenant']).toBeUndefined();
+  });
+});
