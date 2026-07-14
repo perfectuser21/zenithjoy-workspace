@@ -41,14 +41,13 @@ vi.mock('axios', () => ({
 }));
 
 import axios from 'axios';
-import { generateChatDraft, _resetFeishuTokenCache } from '../../src/services/wechat-draft';
+import { generateChatDraft } from '../../src/services/wechat-draft';
 
 const mockedAxios = vi.mocked(axios, true);
 
 describe('generateChatDraft — 个人未标黑 → 自动直发（去飞书）', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    _resetFeishuTokenCache();
     mockQuery.mockReset();
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     process.env.NODE_ENV = 'test';
@@ -85,7 +84,6 @@ describe('generateChatDraft — 个人未标黑 → 自动直发（去飞书）'
 describe('generateChatDraft — 标黑 / 群 → 不回（gating）', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    _resetFeishuTokenCache();
     mockQuery.mockReset();
     process.env.NODE_ENV = 'test';
     mockCallOpenRouter.mockReset();
@@ -147,7 +145,6 @@ describe('generateChatDraft — AI 生成失败 → 报红不返回 reply', () =
     vi.clearAllMocks();
     // vi.clearAllMocks() 会重置 spy 的 mockImplementation，需要重新设置
     errSpy.mockImplementation(() => {});
-    _resetFeishuTokenCache();
     mockQuery.mockReset();
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     process.env.NODE_ENV = 'test';
@@ -181,299 +178,15 @@ describe('generateChatDraft — AI 生成失败 → 报红不返回 reply', () =
   });
 });
 
-// ─── ws4: generateMomentDraft（朋友圈文案草稿）────────────────────────────────
-
-import { generateMomentDraft } from '../../src/services/wechat-draft';
-
-describe('ws4 generateMomentDraft — 画像齐全 → 飞书内容排期 +1 + DB +1', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    _resetFeishuTokenCache();
-    mockQuery.mockReset();
-    process.env.FEISHU_APP_ID = 'test_app_id';
-    process.env.FEISHU_APP_SECRET = 'test_secret';
-    process.env.FEISHU_TEST_APP_TOKEN = 'mock_app_token';
-    process.env.FEISHU_PROFILE_TABLE_ID = 'tbl_profile';
-    process.env.FEISHU_SCHEDULE_TABLE_ID = 'tbl_schedule';
-    delete process.env.OPENROUTER_FORCE_5XX;
-    process.env.NODE_ENV = 'test';
-    mockCallOpenRouter.mockReset();
-    mockCallOpenRouter.mockResolvedValue({
-      content: '美妆代购正品保障，免税价直供，25-35女性白领专享。',
-      model: 'deepseek/deepseek-chat',
-      prompt_tokens: 12,
-      completion_tokens: 8,
-      cost: 0.000004,
-    });
-  });
-
-  it('画像齐全 + 当日未生成过 → 飞书 records.create + DB INSERT (type=moment, pending_review, approval_source NULL)', async () => {
-    // axios 调用顺序：
-    //   1) 飞书 token
-    //   2) 飞书"营销画像"表 search → 命中 1 行（行业 / 受众 / 钩子文案 三字段齐）
-    //   3) 飞书"内容排期" records.create → 成功
-    (mockedAxios.post as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ data: { code: 0, tenant_access_token: 'mock_token' } })
-      .mockResolvedValueOnce({
-        data: {
-          code: 0,
-          data: {
-            items: [
-              {
-                record_id: 'rec_profile_a',
-                fields: {
-                  客户名: '客户A',
-                  行业: '美妆代购',
-                  受众: '25-35女性白领',
-                  钩子文案: '正品保障+免税价',
-                },
-              },
-            ],
-          },
-        },
-      })
-      .mockResolvedValueOnce({
-        data: { code: 0, data: { record: { record_id: 'rec_schedule_1' } } },
-      });
-
-    // DB 调用顺序：
-    //   1) SELECT 当日是否已生成 → rowCount 0
-    //   2) INSERT wechat_publish_task → rowCount 1
-    mockQuery
-      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
-      .mockResolvedValue({ rows: [], rowCount: 1 });
-
-    const result = await generateMomentDraft({ customer: '客户A' });
-
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.status).toBe('pending_review');
-      expect(typeof result.task_id).toBe('string');
-      expect(result.task_id).toMatch(/^[0-9a-f-]{36}$/i);
-    }
-
-    // DB INSERT 含 type='moment' + pending_review + approval_source=NULL
-    const dbCalls = mockQuery.mock.calls;
-    const insertCall = dbCalls.find(
-      (c) => typeof c[0] === 'string' && c[0].includes('INSERT INTO zenithjoy.wechat_publish_task'),
-    );
-    expect(insertCall).toBeTruthy();
-    const params = insertCall![1] as unknown[];
-    expect(params).toEqual(expect.arrayContaining(['moment']));
-    expect(params).toEqual(expect.arrayContaining(['pending_review']));
-    expect(params).toEqual(expect.arrayContaining([null]));
-
-    // 飞书 records.create 至少调用 1 次（内容排期表）
-    const createCall = (mockedAxios.post as ReturnType<typeof vi.fn>).mock.calls.find(
-      (c) =>
-        typeof c[0] === 'string' &&
-        /\/records$/.test(c[0]) &&
-        !/search/.test(c[0]),
-    );
-    expect(createCall).toBeTruthy();
-
-    // 草稿包含画像 3 字段中至少 1 个 token (LLM-as-judge 简化版)
-    const draftPayload = JSON.stringify(createCall![1]);
-    expect(/美妆代购|25-35|女性白领|正品保障|免税价/.test(draftPayload)).toBe(true);
-  });
-});
-
-describe('ws4 generateMomentDraft — 画像缺失字段 → profile_missing 跳过', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    _resetFeishuTokenCache();
-    mockQuery.mockReset();
-    process.env.FEISHU_APP_ID = 'test_app_id';
-    process.env.FEISHU_APP_SECRET = 'test_secret';
-    process.env.FEISHU_TEST_APP_TOKEN = 'mock_app_token';
-    process.env.FEISHU_PROFILE_TABLE_ID = 'tbl_profile';
-    process.env.FEISHU_SCHEDULE_TABLE_ID = 'tbl_schedule';
-    process.env.NODE_ENV = 'test';
-    mockCallOpenRouter.mockReset();
-  });
-
-  it('画像表无对应行 → {ok:false, reason:"profile_missing"}，不调 LLM，不写飞书排期表', async () => {
-    (mockedAxios.post as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ data: { code: 0, tenant_access_token: 'mock_token' } })
-      .mockResolvedValueOnce({ data: { code: 0, data: { items: [] } } });
-
-    const result = await generateMomentDraft({ customer: '客户B' });
-
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.reason).toBe('profile_missing');
-    }
-    expect(mockCallOpenRouter).not.toHaveBeenCalled();
-    const createCalls = (mockedAxios.post as ReturnType<typeof vi.fn>).mock.calls.filter(
-      (c) => typeof c[0] === 'string' && /\/records$/.test(c[0]) && !/search/.test(c[0]),
-    );
-    expect(createCalls.length).toBe(0);
-  });
-
-  it('画像 3 字段中缺一个（钩子文案为空）→ {ok:false, reason:"profile_missing"}', async () => {
-    (mockedAxios.post as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ data: { code: 0, tenant_access_token: 'mock_token' } })
-      .mockResolvedValueOnce({
-        data: {
-          code: 0,
-          data: {
-            items: [
-              {
-                record_id: 'rec_profile_b',
-                fields: {
-                  客户名: '客户B',
-                  行业: '美妆代购',
-                  受众: '25-35女性白领',
-                  钩子文案: '',
-                },
-              },
-            ],
-          },
-        },
-      });
-
-    const result = await generateMomentDraft({ customer: '客户B' });
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.reason).toBe('profile_missing');
-    }
-    expect(mockCallOpenRouter).not.toHaveBeenCalled();
-  });
-});
-
-describe('ws4 generateMomentDraft — 同日重复触发跳过', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    _resetFeishuTokenCache();
-    mockQuery.mockReset();
-    process.env.FEISHU_APP_ID = 'test_app_id';
-    process.env.FEISHU_APP_SECRET = 'test_secret';
-    process.env.FEISHU_TEST_APP_TOKEN = 'mock_app_token';
-    process.env.FEISHU_PROFILE_TABLE_ID = 'tbl_profile';
-    process.env.FEISHU_SCHEDULE_TABLE_ID = 'tbl_schedule';
-    process.env.NODE_ENV = 'test';
-    mockCallOpenRouter.mockReset();
-  });
-
-  it('当日已生成 → {ok:false, reason:"already_generated_today"}，不调 LLM', async () => {
-    (mockedAxios.post as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ data: { code: 0, tenant_access_token: 'mock_token' } })
-      .mockResolvedValueOnce({
-        data: {
-          code: 0,
-          data: {
-            items: [
-              {
-                record_id: 'rec_profile_c',
-                fields: {
-                  客户名: '客户A',
-                  行业: '美妆代购',
-                  受众: '25-35女性白领',
-                  钩子文案: '正品保障+免税价',
-                },
-              },
-            ],
-          },
-        },
-      });
-
-    // SELECT 同日存在已生成行 → rows = [{...}]
-    mockQuery.mockResolvedValueOnce({
-      rows: [{ task_id: 'existing-1' }],
-      rowCount: 1,
-    });
-
-    const result = await generateMomentDraft({ customer: '客户A' });
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.reason).toBe('already_generated_today');
-    }
-    expect(mockCallOpenRouter).not.toHaveBeenCalled();
-
-    // 不再 INSERT
-    const insertCalls = mockQuery.mock.calls.filter(
-      (c) => typeof c[0] === 'string' && c[0].includes('INSERT INTO zenithjoy.wechat_publish_task'),
-    );
-    expect(insertCalls.length).toBe(0);
-  });
-});
-
-describe('ws4 generateMomentDraft — OpenRouter 5xx fallback 占位', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    _resetFeishuTokenCache();
-    mockQuery.mockReset();
-    process.env.FEISHU_APP_ID = 'test_app_id';
-    process.env.FEISHU_APP_SECRET = 'test_secret';
-    process.env.FEISHU_TEST_APP_TOKEN = 'mock_app_token';
-    process.env.FEISHU_PROFILE_TABLE_ID = 'tbl_profile';
-    process.env.FEISHU_SCHEDULE_TABLE_ID = 'tbl_schedule';
-    process.env.NODE_ENV = 'test';
-    mockCallOpenRouter.mockReset();
-    mockCallOpenRouter.mockRejectedValue(new Error('OpenRouter 5xx simulated'));
-  });
-
-  it('OpenRouter 抛错 → 飞书排期 records.create payload 含 "AI 生成失败"，状态仍 pending_review', async () => {
-
-    (mockedAxios.post as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ data: { code: 0, tenant_access_token: 'mock_token' } })
-      .mockResolvedValueOnce({
-        data: {
-          code: 0,
-          data: {
-            items: [
-              {
-                record_id: 'rec_profile_a',
-                fields: {
-                  客户名: '客户A',
-                  行业: '美妆代购',
-                  受众: '25-35女性白领',
-                  钩子文案: '正品保障+免税价',
-                },
-              },
-            ],
-          },
-        },
-      })
-      .mockResolvedValueOnce({
-        data: { code: 0, data: { record: { record_id: 'rec_schedule_2' } } },
-      });
-
-    mockQuery
-      .mockResolvedValueOnce({ rows: [], rowCount: 0 }) // 当日未生成
-      .mockResolvedValue({ rows: [], rowCount: 1 }); // INSERT
-
-    const result = await generateMomentDraft({ customer: '客户A' });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.status).toBe('pending_review');
-    }
-
-    const createCall = (mockedAxios.post as ReturnType<typeof vi.fn>).mock.calls.find(
-      (c) => typeof c[0] === 'string' && /\/records$/.test(c[0]) && !/search/.test(c[0]),
-    );
-    expect(createCall).toBeTruthy();
-    const payload = JSON.stringify(createCall![1]);
-    expect(payload).toMatch(/AI 生成失败/);
-
-    const insertCall = mockQuery.mock.calls.find(
-      (c) => typeof c[0] === 'string' && c[0].includes('INSERT INTO zenithjoy.wechat_publish_task'),
-    );
-    expect(insertCall).toBeTruthy();
-    const params = insertCall![1] as unknown[];
-    const hasFail = params.some(
-      (p) => typeof p === 'string' && p.includes('AI 生成失败'),
-    );
-    expect(hasFail).toBe(true);
-  });
-});
+// ws4 generateMomentDraft（朋友圈文案草稿）已改本地表 zenithjoy.wechat_marketing_profile
+// （决策19e6480c，2026-07-14 去飞书），原基于飞书 Bitable mock 的用例已删除，
+// 覆盖见 apps/api/src/services/__tests__/wechat-draft-schema-prefix.test.ts 「本地表驱动」describe 块。
 
 // ─── [BEHAVIOR] B-1 正常对话解析 ─────────────────────────────────────────────
 
 describe('[B-1] cs-reply 内核接入：正常对话 → JSON 解析成功', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    _resetFeishuTokenCache();
     mockQuery.mockReset();
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     process.env.NODE_ENV = 'test';
@@ -510,7 +223,6 @@ describe('[B-1] cs-reply 内核接入：正常对话 → JSON 解析成功', () 
 describe('[B-2] cs-reply 内核接入：JSON 缺失 → 重试一次 + 正则兜底', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    _resetFeishuTokenCache();
     mockQuery.mockReset();
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     process.env.NODE_ENV = 'test';
@@ -547,7 +259,6 @@ describe('[B-2] cs-reply 内核接入：JSON 缺失 → 重试一次 + 正则兜
 describe('[B-3] cs-reply 内核接入：tags.escalate=true → 客户收到安抚 reply + DB 写入 cs_escalate 行', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    _resetFeishuTokenCache();
     mockQuery.mockReset();
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     process.env.NODE_ENV = 'test';
@@ -593,7 +304,6 @@ describe('[B-3] cs-reply 内核接入：tags.escalate=true → 客户收到安�
 describe('[B-4] cs-reply 内核接入：tags.stage=A2 → CRM 状态更新 + history 行 changed_by=ai_inferred', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    _resetFeishuTokenCache();
     mockQuery.mockReset();
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     process.env.NODE_ENV = 'test';
@@ -639,7 +349,6 @@ describe('[B-5] cs-reply 内核接入：reply 含编造词 → ai_failed，不�
   beforeEach(() => {
     vi.clearAllMocks();
     errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    _resetFeishuTokenCache();
     mockQuery.mockReset();
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     process.env.NODE_ENV = 'test';
@@ -713,7 +422,6 @@ describe('[B-6] cs-reply 内核接入：escalate DB 写入失败 → console.war
   beforeEach(() => {
     vi.clearAllMocks();
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    _resetFeishuTokenCache();
     mockQuery.mockReset();
     process.env.NODE_ENV = 'test';
     mockCallOpenRouter.mockReset();
@@ -758,7 +466,6 @@ describe('[B-6] cs-reply 内核接入：escalate DB 写入失败 → console.war
 describe('[B-8] cs-reply 内核接入：stage 回写携带正确 tenant_id，不写入其他租户行', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    _resetFeishuTokenCache();
     mockQuery.mockReset();
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     process.env.NODE_ENV = 'test';
@@ -803,7 +510,6 @@ describe('[B-8] cs-reply 内核接入：stage 回写携带正确 tenant_id，不
 describe('[B-9] cs-reply 内核接入：callOpenRouter 返回含 reasoning_content → result.reply 不含思考链内容', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    _resetFeishuTokenCache();
     mockQuery.mockReset();
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     process.env.NODE_ENV = 'test';
