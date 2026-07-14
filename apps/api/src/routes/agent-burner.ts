@@ -15,7 +15,7 @@
  */
 import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
-import { writeLeadsFromComments, writeDmOutreachStatus, type DmStatus } from '../services/lead-writer';
+import { writeDmOutreachStatus, type DmStatus } from '../services/lead-writer';
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { agentContext } from '../middleware/agent-context';
 import { isDuplicateDmOutreachResult } from '../services/device-platform';

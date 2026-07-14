@@ -47,9 +47,6 @@ vi.mock('../services/keyword-expander', () => ({
 vi.mock('../services/comment-grader', () => ({
   gradeComment: vi.fn().mockResolvedValue('感兴趣'),
 }));
-vi.mock('../services/lead-writer', () => ({
-  writeLeadsFromComments: vi.fn().mockResolvedValue({ written_count: 1, lead_write_status: 'success' }),
-}));
 vi.mock('../services/acquisition-dispatch', () => ({
   scoreLeads: vi.fn().mockResolvedValue({ scored: 1 }),
   buildAssignments: vi.fn().mockResolvedValue({ assigned: 1 }),

@@ -18,7 +18,7 @@ vi.mock('../middleware/tenant-context', () => ({
   tenantContextOptional: (req: any, _r: any, n: any) => { const t = req.headers['x-test-tenant-id'] || req.body?.tenant_id; if (t) req.tenantId = t; n(); },
 }));
 vi.mock('../middleware/agent-context', () => ({ agentContext: (_req: any, _r: any, n: any) => n() }));
-vi.mock('../services/lead-writer', () => ({ writeLeadsFromComments: vi.fn(), writeDmOutreachStatus: vi.fn() }));
+vi.mock('../services/lead-writer', () => ({ writeDmOutreachStatus: vi.fn() }));
 vi.mock('../services/device-platform', () => ({ isDuplicateDmOutreachResult: vi.fn(() => false) }));
 
 import pool from '../db/connection';
