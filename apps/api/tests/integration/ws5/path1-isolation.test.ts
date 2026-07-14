@@ -76,17 +76,8 @@ describe('Workstream 5 — Path 1 隔离 + smoke 脚本 [BEHAVIOR]', () => {
     }
   });
 
-  it('DEV helper _smoke-feishu-seed.ts 存在 + 含 NODE_ENV + X-Smoke-Token 双门禁', () => {
-    const helperPath = path.join(
-      REPO_ROOT,
-      'apps/api/src/routes/_smoke-feishu-seed.ts'
-    );
-    expect(fs.existsSync(helperPath)).toBe(true);
-    const c = fs.readFileSync(helperPath, 'utf8');
-    expect(c).toMatch(/NODE_ENV/);
-    expect(c).toMatch(/production/);
-    expect(c).toMatch(/X-Smoke-Token/i);
-  });
+  // DEV helper _smoke-feishu-seed.ts 已删除（决策19e6480c，2026-07-14 Path2去飞书改本地，
+  // 该飞书 Bitable seed helper 已被 acquisition.ts 本地实现取代，不再需要）。
 
   it('Lead 自验证据 .agent-knowledge/path-2/lead-acceptance-sprint-a.md 存在 + 1KB+ + PASS', () => {
     const evidencePath = path.join(
