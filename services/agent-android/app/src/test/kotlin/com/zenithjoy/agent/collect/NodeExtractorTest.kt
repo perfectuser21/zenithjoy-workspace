@@ -77,6 +77,50 @@ class NodeExtractorTest {
     }
 
     @Test
+    fun `structural heuristic skips comment count title bar`() {
+        val nodes = listOf(
+            node(text = "7889条评论"),
+            node(text = "最新"),
+            node(text = "小赵"),
+            node(text = "太贵了吧"),
+        )
+        val result = NodeExtractor.extractComments(nodes)
+        assertEquals(1, result.size)
+        assertEquals("小赵", result[0].commenterId)
+        assertEquals("太贵了吧", result[0].text)
+    }
+
+    @Test
+    fun `structural heuristic does not leak like-count into comment text or next nickname`() {
+        val nodes = listOf(
+            node(text = "小赵"),
+            node(text = "太贵了吧"),
+            node(text = "1.2万"),
+            node(text = "小钱"),
+            node(text = "确实贵"),
+        )
+        val result = NodeExtractor.extractComments(nodes)
+        assertEquals(2, result.size)
+        assertEquals("小赵", result[0].commenterId)
+        assertEquals("太贵了吧", result[0].text)
+        assertEquals("小钱", result[1].commenterId)
+        assertEquals("确实贵", result[1].text)
+    }
+
+    @Test
+    fun `structural heuristic does not mispair date with following real nickname`() {
+        val nodes = listOf(
+            node(text = "07-15"),
+            node(text = "小孙"),
+            node(text = "这个多少钱"),
+        )
+        val result = NodeExtractor.extractComments(nodes)
+        assertEquals(1, result.size)
+        assertEquals("小孙", result[0].commenterId)
+        assertEquals("这个多少钱", result[0].text)
+    }
+
+    @Test
     fun `structural heuristic rejects overly long nickname candidate`() {
         val nodes = listOf(
             node(text = "这是一段非常非常非常非常非常非常非常非常长的不像昵称的文本"),
