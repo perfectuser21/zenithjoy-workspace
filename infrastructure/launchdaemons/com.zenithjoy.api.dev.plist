@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  com.zenithjoy.api.dev.plist — ZenithJoy dev环境常驻后端 launchd定义
+
+  系统域LaunchDaemon（非LaunchAgent）：staging任务(cecelia PR#3865)实测发现自动化会话
+  访问不了launchd的gui/501域，sudo也不行；系统域可被sudo正常管理。dev从一开始就走
+  LaunchDaemon，不重蹈坑。
+
+  与生产com.zenithjoy.api.plist的差异（其余env由provision-dev-daemon.sh从生产plist
+  程序化继承注入密钥，不在此硬编码密钥）：
+    · Label         = com.zenithjoy.api.dev
+    · PORT          = 5202（生产5200，staging5201）
+    · DATABASE_NAME = zenithjoy_dev（物理隔离独立库）
+    · NODE_ENV      = development
+    · 从releases/current跑（不建独立dev发布流水线，复用当前生产同一份build）
+    · 日志          = zenithjoy-api.dev.{log,error.log}
+    · BETTER_AUTH_URL/AGENT_PUBLIC_*收口到本地占位值（dev不对外，不指向真实域名）
+
+  注意：本文件不含任何密钥。provision-dev-daemon.sh起进程时会从生产plist解析并注入
+  必要密钥，覆写PORT/DATABASE_NAME/NODE_ENV等后写到/Library/LaunchDaemons/。
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.zenithjoy.api.dev</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/opt/homebrew/bin/node</string>
+		<string>/Users/administrator/zenithjoy-releases/current/dist/index.js</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PORT</key>
+		<string>5202</string>
+		<key>DATABASE_NAME</key>
+		<string>zenithjoy_dev</string>
+		<key>NODE_ENV</key>
+		<string>development</string>
+		<key>ZENITHJOY_API_URL</key>
+		<string>http://localhost:5202</string>
+		<key>BETTER_AUTH_URL</key>
+		<string>http://localhost:5202</string>
+		<key>BETTER_AUTH_TRUSTED_ORIGINS</key>
+		<string>http://localhost:5202,http://localhost:5173</string>
+		<key>AGENT_PUBLIC_WS_URL</key>
+		<string>ws://localhost:5202/agent-ws</string>
+		<key>AGENT_PUBLIC_BASE_URL</key>
+		<string>http://localhost:5202</string>
+	</dict>
+	<key>UserName</key>
+	<string>administrator</string>
+	<key>WorkingDirectory</key>
+	<string>/Users/administrator/zenithjoy-releases/current</string>
+	<key>StandardOutPath</key>
+	<string>/Users/administrator/Library/Logs/zenithjoy-api.dev.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/administrator/Library/Logs/zenithjoy-api.dev.error.log</string>
+	<key>KeepAlive</key>
+	<true/>
+	<key>RunAtLoad</key>
+	<true/>
+</dict>
+</plist>
