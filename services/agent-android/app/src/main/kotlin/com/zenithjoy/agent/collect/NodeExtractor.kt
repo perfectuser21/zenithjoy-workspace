@@ -58,9 +58,35 @@ object NodeExtractor {
     // 不含标点) → 正文(较长文本) → 元信息(如 "3天前"/"回复"/点赞数)。
     // 用"短文本后紧跟一个较长文本"的相邻关系配对，比强行猜 resourceId 更稳。
 
-    private val META_WORDS = setOf("回复", "赞", "展开", "点赞", "更多回复")
+    private val META_WORDS = setOf(
+        "回复", "赞", "展开", "点赞", "更多回复",
+        "热门", "最新", "查看更多回复", "展开更多回复", "IP属地",
+    )
     private val NICKNAME_LEN_RANGE = 1..20
     private val CONTENT_MIN_LEN = 1
+
+    // 数字/数字+单位（点赞数，如 "1.2万" "128" "3k"）。
+    // 已知取舍：会连带拦掉纯数字的真实评论正文/昵称（如"666"这类数字梗），
+    // 目前没有节点位置信息区分"点赞数"和"数字梗评论"，先接受这个假阴性；
+    // 若真机验证发现命中率明显，再引入 resourceId/bounds 辅助判定收窄。
+    private val LIKE_COUNT_RE = Regex("""^\d+(\.\d+)?[万kK]?\+?$""")
+    // "7889条评论" / "共7889条评论"（评论区标题栏）
+    private val COMMENT_COUNT_TITLE_RE = Regex("""^(共)?\d+条评论$""")
+    // "07-15" / "2026-07-15"（日期）
+    private val DATE_RE = Regex("""^\d{1,4}-\d{1,2}(-\d{1,2})?$""")
+    // "N天/小时/分钟/秒前"（相对时间，已有逻辑）
+    private val RELATIVE_TIME_RE = Regex("""^\d+[天小时分钟秒]前$""")
+    // "IP属地: XX" / "IP属地：XX"
+    private val IP_LOCATION_RE = Regex("""^IP属地[:：].*""")
+
+    /** 判断一段 UIA 节点文本是不是已知的"评论区元数据"标签，而不是真实昵称/正文。 */
+    private fun looksLikeMetaLabel(text: String): Boolean =
+        text in META_WORDS ||
+            LIKE_COUNT_RE.matches(text) ||
+            COMMENT_COUNT_TITLE_RE.matches(text) ||
+            DATE_RE.matches(text) ||
+            RELATIVE_TIME_RE.matches(text) ||
+            IP_LOCATION_RE.matches(text)
 
     private fun extractByStructure(nodes: List<NodeInfo>): List<CommentEntry> {
         val entries = mutableListOf<CommentEntry>()
@@ -74,11 +100,10 @@ object NodeExtractor {
             val looksLikeNickname = nickname.isNotBlank() &&
                 nickname.length in NICKNAME_LEN_RANGE &&
                 !nickname.contains("：") && !nickname.contains(":") &&
-                nickname !in META_WORDS
+                !looksLikeMetaLabel(nickname)
 
             val looksLikeContent = content.length >= CONTENT_MIN_LEN &&
-                content !in META_WORDS &&
-                !content.matches(Regex("""^\d+[天小时分钟秒]前$"""))
+                !looksLikeMetaLabel(content)
 
             if (looksLikeNickname && looksLikeContent) {
                 entries.add(CommentEntry(commenterId = nickname, text = content))
