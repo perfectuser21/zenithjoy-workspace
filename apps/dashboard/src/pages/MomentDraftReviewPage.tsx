@@ -34,12 +34,12 @@ export default function MomentDraftReviewPage() {
   }, []);
 
   const handleApprove = async (taskId: string) => {
-    await fetch(`/api/wechat/moment-drafts/${taskId}/approve`, { method: 'POST' });
+    await fetch(`/api/wechat/moment-drafts/${taskId}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
     fetchDrafts();
   };
 
   const handleReject = async (taskId: string) => {
-    await fetch(`/api/wechat/moment-drafts/${taskId}/reject`, { method: 'POST' });
+    await fetch(`/api/wechat/moment-drafts/${taskId}/reject`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
     fetchDrafts();
   };
 
@@ -61,10 +61,10 @@ export default function MomentDraftReviewPage() {
               <div><strong>生成时间：</strong>{new Date(draft.created_at).toLocaleString('zh-CN')}</div>
               {draft.approval_status === 'pending_review' && (
                 <div style={{ marginTop: '12px' }}>
-                  <button onClick={() => handleApprove(draft.id)} style={{ marginRight: '8px', padding: '6px 16px', background: '#52c41a', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                  <button onClick={() => handleApprove(draft.task_id)} style={{ marginRight: '8px', padding: '6px 16px', background: '#52c41a', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                     批准
                   </button>
-                  <button onClick={() => handleReject(draft.id)} style={{ padding: '6px 16px', background: '#ff4d4f', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                  <button onClick={() => handleReject(draft.task_id)} style={{ padding: '6px 16px', background: '#ff4d4f', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                     拒绝
                   </button>
                 </div>
