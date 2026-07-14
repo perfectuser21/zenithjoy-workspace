@@ -45,3 +45,31 @@ Step 7: 轮询 curl localhost:5201/health 直到 200 或超时（12次*10秒，�
 - 不删除 `zenithjoy_test` 库
 - 不处理 launchd LaunchAgents→LaunchDaemon 系统域迁移（已知问题，另立任务）
 - 不涉及 Cecelia 侧任何代码
+
+## 范围扩大（用户拍板，2026-07-14）
+
+执行中发现两个问题导致 Task2 的手动 plist 切换无法长期生效：
+
+1. 本机自动化会话（本次任务的 bash 环境）碰不到 launchd `gui/501` 域（`launchctl bootstrap/asuser` 均报 `125: Domain does not support specified action`），无法从这里重启 LaunchAgent。但 CI/CD 自持 runner 显然有权限（观察到 staging 服务在任务执行期间被正常部署流水线重启过一次，release symlink 正常轮转），说明**真正的重启必须交给现有部署流水线**，不在本地手动补。
+2. `.github/workflows/{deploy-us-vps,promote-prod,promote-all-prod}.yml` 三处硬编码 `export ZJ_STAGING_DB=zenithjoy_test`，每次自动部署都会用这个值重新生成 staging plist（`deploy-lib.sh` 的 `ensure_staging_plist()`），手动改的 plist 撑不过下一次部署。
+
+用户拍板：扩大范围，一并改这3个 workflow 文件。
+
+### 方案：复用已有的"决策0710" repo variable 模式
+
+`promote-prod.yml`/`promote-all-prod.yml` 里生产库名已经是这个模式：
+```yaml
+export ZJ_PROD_DB="${{ vars.ZJ_PROD_DB || 'cecelia' }}"
+```
+（"切换日翻这个变量为 zenithjoy...回滚=翻回"）
+
+照此把三处 `export ZJ_STAGING_DB=zenithjoy_test` 改成：
+```yaml
+export ZJ_STAGING_DB="${{ vars.ZJ_STAGING_DB || 'zenithjoy_test' }}"
+```
+不设 repo variable 时行为不变（默认还是 zenithjoy_test，向后兼容零风险）；PR 合并后用 `gh variable set ZJ_STAGING_DB --body zenithjoy_staging` 翻开关，下一次任意一个部署 workflow 跑起来就会自然把 staging 切到独立库并重启（走 CI/CD 自己有权限的重启路径，不需要本地 launchctl）。
+
+### 不在本次范围
+- 不改 `ZJ_PROD_DB`（生产库切换是另一件事，仍在双写验证期，截止 07-16）
+- 不修 `deploy-lib.test.sh`（测试里的 `ZJ_STAGING_DB=zenithjoy_test` 是显式传参测试通用机制，与生产默认值无关，不用改）
+- 不在本地尝试任何 launchctl 重启（已确认此路不通，交给CI/CD）
