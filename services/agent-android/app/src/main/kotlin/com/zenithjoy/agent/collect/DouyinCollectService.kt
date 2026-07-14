@@ -598,12 +598,12 @@ class DouyinCollectService : AccessibilityService() {
             // 详情页树全景：定位分享按钮实际 desc / 是否折叠
             dumpNodeDescs(detailRoot, "detail")
 
-            // 2. 点分享
-            val shareBtn = findNodeByContentDescPrefix(detailRoot, "分享")
-                ?: findNodeByContentDescPrefix(detailRoot, "转发")
+            // 2. 点分享（只取在屏可见的分享按钮，避开翻页器里相邻视频屏幕外的同名按钮）
+            val shareBtn = findVisibleNodeByContentDescPrefix(detailRoot, "分享")
+                ?: findVisibleNodeByContentDescPrefix(detailRoot, "转发")
                 ?: run {
                     android.util.Log.w(TAG,
-                        "capture abort card#$index: STEP2_no_share_btn (detailChild=${detailRoot.childCount})")
+                        "capture abort card#$index: STEP2_no_visible_share_btn (detailChild=${detailRoot.childCount})")
                     return@withTimeoutOrNull null
                 }
             tapNodeCenter(shareBtn)
@@ -1030,6 +1030,34 @@ class DouyinCollectService : AccessibilityService() {
             for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
         }
         return null
+    }
+
+    /**
+     * 按 contentDesc 前缀找节点，但只返回【在屏可见】的那个（真机根因 2026-07-14）：
+     * 抖音详情页竖向翻页器的无障碍树含相邻视频（屏幕外）的同名按钮，其 bounds 为空矩形
+     * (bottom<top) 或超屏。BFS 取首个会命中屏幕外节点 → tapNodeCenter 因 bounds.isEmpty
+     * 静默跳过 → 分享面板不弹 → 取链失败。这里收集全部候选，交由纯逻辑 pickVisibleShareButtonIndex
+     * 选在屏那个；全不在屏返回 null（不点，避免空点白耗一张卡）。
+     */
+    private fun findVisibleNodeByContentDescPrefix(root: AccessibilityNodeInfo, prefix: String): AccessibilityNodeInfo? {
+        val matches = ArrayList<AccessibilityNodeInfo>()
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            if (node.contentDescription?.toString()?.startsWith(prefix) == true) matches.add(node)
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        if (matches.isEmpty()) return null
+        val rect = Rect()
+        val boxes = matches.map {
+            it.getBoundsInScreen(rect)
+            ClipboardCaptureGate.NodeBox(rect.left, rect.top, rect.right, rect.bottom)
+        }
+        val idx = ClipboardCaptureGate.pickVisibleShareButtonIndex(
+            boxes, resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels
+        )
+        return if (idx >= 0) matches[idx] else null
     }
 
     /**

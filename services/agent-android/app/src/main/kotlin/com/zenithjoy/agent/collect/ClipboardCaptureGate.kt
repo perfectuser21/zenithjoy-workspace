@@ -45,4 +45,28 @@ object ClipboardCaptureGate {
 
     fun acceptDelivery(deliveryToken: Long, expectedToken: Long): Boolean =
         deliveryToken == expectedToken || deliveryToken == LEGACY_ACTION_SEND_TOKEN
+
+    /** 节点在屏坐标（纯数据，供选择逻辑单测，不碰 android.graphics.Rect）。 */
+    data class NodeBox(val left: Int, val top: Int, val right: Int, val bottom: Int) {
+        val isEmpty: Boolean get() = left >= right || top >= bottom
+        val centerX: Int get() = (left + right) / 2
+        val centerY: Int get() = (top + bottom) / 2
+    }
+
+    /**
+     * 从同名候选按钮里选【在屏可见】的那个的下标。
+     *
+     * 真机根因(2026-07-14)：抖音详情页竖向翻页器的无障碍树含相邻视频（屏幕外）的同名
+     * 「分享」按钮，其 bounds 为空矩形(bottom<top，dump 里 b=197x-193)或超出屏幕。
+     * BFS 取首个会命中屏幕外节点，tapNodeCenter 因 bounds.isEmpty 静默跳过不点 → 面板不弹。
+     *
+     * 选择顺序：首个「非空 bounds 且中心落在屏内」的候选；全不在屏 → -1（不点，避免空点浪费一次卡）。
+     */
+    fun pickVisibleShareButtonIndex(boxes: List<NodeBox>, screenW: Int, screenH: Int): Int {
+        for (i in boxes.indices) {
+            val b = boxes[i]
+            if (!b.isEmpty && b.centerX in 0..screenW && b.centerY in 0..screenH) return i
+        }
+        return -1
+    }
 }
