@@ -24,7 +24,7 @@ set -euo pipefail
 # ─── DB 连接 ─────────────────────────────────────────────────
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-5432}"
-PGDATABASE="${PGDATABASE:-cecelia}"
+PGDATABASE="${PGDATABASE:-zenithjoy}"
 PGUSER="${PGUSER:-postgres}"
 
 # ─── NAS 连接 ─────────────────────────────────────────────────
