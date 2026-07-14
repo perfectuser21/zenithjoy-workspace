@@ -23,8 +23,10 @@ import android.os.Looper
  *   - 实例被 stop → onStopped 丢弃同意凭据进 REVOKED，此后绝不再拿旧 resultData 重换，
  *     只能等 MainActivity 重新弹授权框（hasAuthorization()==false 触发）。
  *
- * 换出后的 MediaProjection 实例本身可反复用于多次 createVirtualDisplay()（release
- * VirtualDisplay ≠ stop MediaProjection），见 ScreenCaptureReal。
+ * ⚠️ A14 补充纠正（真机实锤）：换出后的 MediaProjection **不能**反复 createVirtualDisplay
+ * ——同一实例多次 create 会崩并把 projection stop 掉。ScreenCaptureReal 已改为按 projection
+ * 只建一个常驻 VirtualDisplay + ImageReader 反复抓帧（见 [CaptureSessionManager]）；
+ * projection 停止时经 onProjectionStopped → ScreenCaptureReal.releaseSession() 拆掉。
  */
 object MediaProjectionHolder {
     private const val TAG = "MediaProjectionHolder"
@@ -107,6 +109,8 @@ object MediaProjectionHolder {
         projection = null
         resultCode = null
         data = null
+        // projection 已停 → 拆掉常驻 VirtualDisplay/ImageReader，等重新授权换出新 projection 时重建
+        ScreenCaptureReal.releaseSession()
     }
 
     /** 清空缓存的授权与实例（用户主动重置 License 时调用）。 */
@@ -121,6 +125,8 @@ object MediaProjectionHolder {
         resultCode = null
         data = null
         authState.onCleared()
+        // 拆掉常驻 VirtualDisplay/ImageReader（用户主动重置授权）
+        ScreenCaptureReal.releaseSession()
     }
 
     private fun logW(message: String) {
