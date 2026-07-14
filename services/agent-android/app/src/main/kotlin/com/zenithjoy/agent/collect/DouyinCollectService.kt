@@ -981,23 +981,20 @@ class DouyinCollectService : AccessibilityService() {
         // 真机复现：热门视频(1.1万条评论)的评论区节点树遍历会异常耗时/疑似卡死，
         // 加节点数上限防止在这类大树上无限期占用主线程(与 startExtractionWatchdog
         // 互为兜底：这里防真卡死，watchdog 防"卡住但没完全死"这类情况)。
-        val result = mutableListOf<NodeExtractor.NodeInfo>()
-        val queue = ArrayDeque<AccessibilityNodeInfo>()
-        queue.add(root)
-        var visited = 0
-        while (queue.isNotEmpty() && visited < MAX_FLATTEN_NODES) {
-            val node = queue.removeFirst()
-            visited++
-            result.add(NodeExtractor.NodeInfo(
+        //
+        // DFS 前序而非 BFS：同一条评论的"昵称→正文→元信息"是同一容器节点的连续
+        // 子节点，BFS 按层展开会把它们和其他评论的同层节点交错，打乱
+        // NodeExtractor.extractByStructure 依赖的"相邻文本配对"假设（见 NodeTreeFlattener 注释）。
+        val accessibilityNodes = NodeTreeFlattener.flattenDfs(root, MAX_FLATTEN_NODES) { node ->
+            (0 until node.childCount).mapNotNull { node.getChild(it) }
+        }
+        return accessibilityNodes.map { node ->
+            NodeExtractor.NodeInfo(
                 text = node.text?.toString() ?: "",
                 contentDescription = node.contentDescription?.toString() ?: "",
                 resourceId = node.viewIdResourceName ?: "",
-            ))
-            for (i in 0 until node.childCount) {
-                node.getChild(i)?.let { queue.add(it) }
-            }
+            )
         }
-        return result
     }
 
     private fun findNodeByIds(root: AccessibilityNodeInfo, vararg ids: String): AccessibilityNodeInfo? {
