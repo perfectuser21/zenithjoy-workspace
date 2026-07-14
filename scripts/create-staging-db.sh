@@ -32,7 +32,7 @@ rollback_plist() {
   echo "  已回滚并重启，staging应恢复到旧库(zenithjoy_test)状态，请人工排查${DB_NAME}问题"
 }
 
-echo "=== Step 1: 建库 $DB_NAME（幂等） ==="
+echo "=== Step 1: 建库 ${DB_NAME}（幂等） ==="
 EXISTS=$(psql -h localhost -U cecelia -tc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME';" -d postgres | tr -d ' ')
 if [ "$EXISTS" = "1" ]; then
   echo "  ℹ️  $DB_NAME 已存在，跳过建库"
