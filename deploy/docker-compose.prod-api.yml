@@ -1,0 +1,42 @@
+# ───────────────────────────────────────────────────────────────────────────
+# ZenithJoy 生产 API — HK 容器实例（拆库刀3-T5，2026-07-15）
+#   取代美国本机 launchd com.zenithjoy.api（:5200）。用户在场拍板切换（decision 07-15 01:15）。
+#   方案 SSOT：cecelia repo docs/architecture/2026-07-14-zj-migrate-hk/architecture.md
+#
+#   连库：zenithjoy-net 内按容器名连 zenithjoy-db-postgres:5432（zenithjoy 库）
+#   Brain 回连：host.docker.internal:5221 = HK 宿主 socat → 美国 Brain
+#   env：/opt/zenithjoy/prod-api/.env（chmod 600，密钥不落 git）
+#
+#   死规矩：生产 promote 保持人工卡点——本容器只由 promote-prod-hk.yml（workflow_dispatch）
+#   或用户在场的手动操作更新，任何 push 触发的 workflow 不得碰它。
+# ───────────────────────────────────────────────────────────────────────────
+networks:
+  zenithjoy-net:
+    name: zenithjoy-net
+    external: true
+
+services:
+  zenithjoy-api-prod:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+      args:
+        BUILD_SHA: ${BUILD_SHA:-unknown}
+    image: zenithjoy-api-prod:latest
+    container_name: zenithjoy-api-prod
+    restart: unless-stopped
+    networks:
+      - zenithjoy-net
+    ports:
+      - "127.0.0.1:5200:5200"   # 宿主 5200 仅本机调试；域名流量走 nginx→容器名:5200
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - /opt/zenithjoy/prod-api/.env
+    environment:
+      TZ: Asia/Shanghai
+      PORT: "5200"
+    volumes:
+      - /opt/zenithjoy/prod-api/content-output:/data/content-output
+      - /opt/zenithjoy/prod-api/install-pack:/data/install-pack:ro
+    mem_limit: 1g
