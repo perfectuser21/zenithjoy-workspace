@@ -378,8 +378,8 @@ jobs:
           grep -q 'topic_id.*uuid' /tmp/schema.txt || (echo "FAIL: topic_id not UUID"; exit 1)
           grep -q 'fk_pipeline_runs_topic_id' /tmp/schema.txt || (echo "FAIL: FK constraint missing"; exit 1)
 
-      # ─── Path 2 Golden Path 8步本地版 smoke（去飞书——decision 431acd2c；真调判定，禁 force_*）───
-      - name: Smoke — Path 2 Golden Path 8步本地版 (Step 1-8)
+      # ─── Path 2 Golden Path 9步本地版 smoke（去飞书——decision 431acd2c；真调判定，禁 force_*）───
+      - name: Smoke — Path 2 Golden Path 9步本地版 (Step 1-9)
         env:
           API_BASE: http://localhost:5200
           DB_URL: postgresql://cecelia:cecelia@localhost:5432/cecelia

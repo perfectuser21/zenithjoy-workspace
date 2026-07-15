@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # golden-path-2-smoke.sh
-# ZenithJoy Walking Skeleton — Path 2 客户智能获客路径（8 步本地版）
+# ZenithJoy Walking Skeleton — Path 2 客户智能获客路径（9 步本地版）
 # Notion Journey: https://www.notion.so/35ac40c2ba6381ed8df4f3fa0b64f5bf
 #
 # 2026-07-07 用户更正（decision 431acd2c）：整条去飞书、改本地中台。
@@ -16,6 +16,7 @@
 #   Step 6 手机端登录抖音小号（服务端等价断言：account-scan-result 写回 role=burner）
 #   Step 7 中台检测登录态（真链路：GET /api/agent/burner/sessions）
 #   Step 8 评论区挖客闭环·采集+判定段（真链路：collect/start → report-videos → judge-video 真调判定）
+#   Step 9 抓评论回填真实抖音号 → Lead 落库带号（真链路：comment-score-result → acquisition_leads.douyin_id）
 #
 # ⚠️ 真机段等价断言说明（铁律 5）：
 #   Step 3/6 的真机执行段（Android 真机装 APK、真机登录抖音小号）与 Step 8 的真机截图上报段
@@ -26,12 +27,14 @@
 #
 # 未覆盖真实链路清单（规则 C，proposer 9.10.0）：
 #   - 对标视频手填 URL 的 dashboard 端点（Path2 Step 5 后半）尚未建设 → 本 smoke 未覆盖
-#   - Step 8 评论抓取→回评+私信→企微 webhook→Lead 落表（采集之后的触达段）尚未接入本 smoke
+#   - 回评+私信真发 → 企微 webhook（Lead 落表之后的触达段）尚未接入本 smoke
+#     （Step 9 已覆盖到「抓评论 → 抖音号回填 Lead」为止；派单发号由
+#      acquisition-dispatch-douyin-id.test.ts 的 dispatchDue payload 断言守）
 #
 # 用法：
 #   API_BASE=http://localhost:5200 DB_URL=postgresql://... \
 #     bash .github/workflows/scripts/smoke/golden-path-2-smoke.sh
-#   退出码 0 = 8 步服务端段全通；非零 = 第 EXIT_CODE 步红
+#   退出码 0 = 9 步服务端段全通；非零 = 第 EXIT_CODE 步红
 #
 # 真调判定依赖：API server 进程需带 TOAPIS_API_KEY（CI: secrets.TOAPIS_API_KEY 注入 job env）。
 # 无 key 时 judge-video 落 pending/no_api_key → Step 8 真红（这是设计：#1269/#1271 就是全 mock 漏过的）。
@@ -216,10 +219,71 @@ S8_ROW=$(psq "SELECT count(*) FROM zenithjoy.acquisition_collect_videos WHERE te
 ok "Step 8c judge-video 真调 → judgment_status=$JUDGE_STATUS 已落库（LLM 真请求真响应）"
 ok "Step 8 ✅ 采集+判定服务端链路全通"
 
-rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" 2>/dev/null
+# ───────────────────────────────────────────────────────────────────
+# Step 9：抓评论回填真实抖音号 → Lead 落库带号（铁律 5 回流：Seg3 私信 0 送达 bug）
+#
+# 复现的真 bug（2026-07-15 staging）：acquisition_leads 根本没有 douyin_id 列，
+# 派单侧只能发 profile_url，而 Android 端 DouyinDmOutreachService:151-153 把收到的字段
+# 【当抖音号往搜索框里搜】→ 拿 URL 搜必然 NO_MATCH → 私信段 0 送达。
+#
+# ⚠️ 真机段等价断言说明（铁律 5）：
+#   「点评论人头像进主页读出抖音号」是 Android 真机 UIA 动作，本 smoke 不可及，
+#   由 DouyinIdEnrichTest（extractDouyinId/enrichEntries/isBackAtCommentPanel/看门狗预算）
+#   在 JVM 单测层守。此处守【真机之后的整条服务端链】：设备把号 POST 上来 → 落库 → 可派。
+#   TODO(android-evaluator-channel): Android 真机通道落地后，由 xian-rog
+#   e2e-line02-android-collect.yml（nightly 04:00）复跑「真机读号 → 上报」全链路。
+#
+# 注：本步显式传 grade，把 LLM 评级（gradeComment → OpenRouter）隔离在外——评级失败会
+# 让 lead 整行不写入，掩盖本步真正要守的 douyin_id 判据。评级真调链由 Step 8c 覆盖。
+# 显式 grade 是路由本就支持的入参（routes/acquisition.ts `c.grade || await gradeComment(...)`），
+# 不改变 lead 落库路径本身。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 9: 抓评论回填抖音号 → Lead 落库带号"
+
+# 9a：列必须真实存在（这正是生产缺的东西——读出号也无处可落）
+S9_COL=$(psq "SELECT 1 FROM information_schema.columns WHERE table_schema='zenithjoy' AND table_name='acquisition_leads' AND column_name='douyin_id' LIMIT 1")
+[ "$S9_COL" = "1" ] || fail "Step 9a zenithjoy.acquisition_leads.douyin_id 列不存在（迁移未跑）——读出抖音号也无处可落，私信段必然 NO_MATCH" 9
+ok "Step 9a ✅ acquisition_leads.douyin_id 列在库"
+
+# 9b：拿真实 keyword_task_id（comment-score-result 按它反查租户）
+S9_TMP=$(mktemp)
+S9_HTTP=$(curl -s -o "$S9_TMP" -w "%{http_code}" --max-time 20 \
+  -X POST "$API_BASE/api/acquisition/keyword-search" \
+  -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" \
+  -d '{"keyword":"p2-smoke-装修"}')
+[ "$S9_HTTP" = "200" ] || fail "Step 9b keyword-search expected 200, got $S9_HTTP: $(cat "$S9_TMP")" 9
+KW_TASK_ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['task_id'])" "$S9_TMP" 2>/dev/null)
+[ -n "$KW_TASK_ID" ] || fail "Step 9b 无 task_id: $(cat "$S9_TMP")" 9
+ok "Step 9b keyword-search → keyword_task_id=$KW_TASK_ID"
+
+# 9c：设备上报「读到号」的评论 → lead 必须带号落库
+S9_NICK="p2smokelead${RND//-/}"
+S9_DYID="1689${RANDOM}${RANDOM}"
+S9_HTTP=$(curl -s -o "$S9_TMP" -w "%{http_code}" --max-time 20 \
+  -X POST "$API_BASE/api/acquisition/comment-score-result" \
+  -H "Content-Type: application/json" \
+  -d "{\"keyword_task_id\":\"$KW_TASK_ID\",\"video_url\":\"https://www.douyin.com/video/$VIDEO_ID\",\"comments\":[{\"commenter_id\":\"$S9_NICK\",\"text\":\"怎么联系你们\",\"grade\":\"高意向\",\"douyin_id\":\"$S9_DYID\"}]}")
+[ "$S9_HTTP" = "200" ] || fail "Step 9c comment-score-result expected 200, got $S9_HTTP: $(cat "$S9_TMP")" 9
+S9_LEAD_DYID=$(psq "SELECT COALESCE(douyin_id,'<NULL>') FROM zenithjoy.acquisition_leads WHERE tenant_id='$TENANT_ID' AND nickname='$S9_NICK' LIMIT 1")
+[ "$S9_LEAD_DYID" = "$S9_DYID" ] || fail "Step 9c lead 未带真实抖音号落库：期望 '$S9_DYID' 实得 '$S9_LEAD_DYID'（派单将无号可发 → 设备 NO_MATCH）" 9
+ok "Step 9c ✅ 设备上报 douyin_id=$S9_DYID → lead 带号落库"
+
+# 9d 反向（宁可空，不可猜 — #1306）：没读到号的评论，绝不许编一个号出来
+S9_NICK2="p2smokenull${RND//-/}"
+S9_HTTP=$(curl -s -o "$S9_TMP" -w "%{http_code}" --max-time 20 \
+  -X POST "$API_BASE/api/acquisition/comment-score-result" \
+  -H "Content-Type: application/json" \
+  -d "{\"keyword_task_id\":\"$KW_TASK_ID\",\"video_url\":\"https://www.douyin.com/video/$VIDEO_ID\",\"comments\":[{\"commenter_id\":\"$S9_NICK2\",\"text\":\"多少钱一平\",\"grade\":\"高意向\"}]}")
+[ "$S9_HTTP" = "200" ] || fail "Step 9d comment-score-result expected 200, got $S9_HTTP: $(cat "$S9_TMP")" 9
+S9_LEAD2=$(psq "SELECT COALESCE(douyin_id,'<NULL>') FROM zenithjoy.acquisition_leads WHERE tenant_id='$TENANT_ID' AND nickname='$S9_NICK2' LIMIT 1")
+[ "$S9_LEAD2" = "<NULL>" ] || fail "Step 9d 设备没读到号，服务端却编了 douyin_id='$S9_LEAD2'（宁可空不可猜被破坏——猜出来的号会静默污染 Lead 表，正是 #1306 的病）" 9
+ok "Step 9d ✅ 没读到号 → douyin_id 留空，未造假"
+ok "Step 9 ✅ 抓评论 → 抖音号回填 Lead 服务端链路全通"
+
+rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" 2>/dev/null
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Path 2 8 步本地版 smoke 全绿（服务端段）"
+echo "  ✅ Path 2 9 步本地版 smoke 全绿（服务端段）"
 echo "  真机段：等 Android evaluator 通道（xian-rog nightly）接管复跑"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 exit 0

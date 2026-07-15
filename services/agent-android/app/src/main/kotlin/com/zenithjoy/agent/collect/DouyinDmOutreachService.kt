@@ -802,19 +802,42 @@ class DouyinDmOutreachService : AccessibilityService() {
          * 真实主页 id 行永远带"抖音号："前缀，据此天然排除搜索框陷阱。全角/半角冒号都认。
          */
         internal fun verifyProfileMatchesDouyinId(profileTexts: List<String>, targetDouyinId: String): Boolean {
-            // Primary: exact 抖音号 match ("抖音号：{id}" only appears on real profile pages,
-            // never in the search box — this guards against the search box echo trap).
+            // 只认「抖音号：<id>」这一条判据。**绝不加昵称 fallback**。
+            //
+            // #1308 曾加过一个「targetDouyinId 含非 ASCII 时改比昵称字面相等」的 fallback，
+            // 其注释声称由 locateProfileBySearch 的 AMBIGUOUS 分支兜底非唯一结果 ——
+            // **该兜底不存在**：产出 AMBIGUOUS 的 matchProfileByDouyinId 生产零调用
+            // （只有 :393 注释 + :788 定义，注释原文自称「老 matchProfileByDouyinId」）。
+            //
+            // 真实流程见 locateProfileBySearch :390-396：搜索结果**不进无障碍树**，只能
+            // **坐标盲点顶部结果**，落地后全靠本函数判断点没点对。昵称字面相等在同名同姓时
+            // 必然误判 → **私信发给陌生人**（回归测试 `same nickname different person must NOT
+            // verify` 钉死此点）。
+            //
+            // 定位键由 Seg3 方案 B′ 保证是**真实抖音号**（点评论头像进主页读 "抖音号：xxx"），
+            // 故本函数无需也不得退让。前缀是排除搜索框裸 id 回显陷阱的唯一手段。
             val idRegex = Regex("""^抖音号[:：]\s*${Regex.escape(targetDouyinId)}$""")
-            if (profileTexts.any { idRegex.matches(it.trim()) }) return true
-            // Nickname-mode fallback (方案A): when targetDouyinId is a display nickname
-            // (contains CJK or non-ASCII — 抖音号 is always ASCII-only), verify by checking
-            // if the profile page shows the nickname verbatim as a text node.
-            // Risk: common nicknames may match unrelated profiles; AMBIGUOUS branch in
-            // locateProfileBySearch already rejects non-unique search results.
-            if (targetDouyinId.any { c -> c.code > 0xFF }) {
-                return profileTexts.any { it.trim() == targetDouyinId }
+            return profileTexts.any { idRegex.matches(it.trim()) }
+        }
+
+        /**
+         * [verifyProfileMatchesDouyinId] 的孪生函数：不"验证是不是这个号"，而是"读出这是几号"。
+         * Seg3 抓评论点头像进主页后用它把真实抖音号读出来回填 lead（真机 2026-07-15 xian-rog：
+         * 主页一次 dump 即含 resource-id=.../5mt、text="抖音号：1689210742"）。
+         *
+         * 判别与孪生函数【完全一致】，故意共用同一条正则骨架：必须整行匹配 "抖音号：<id>"。
+         * 前缀是关键判别——搜索框回显的是裸 id（无前缀），真实主页 id 行永远带前缀，据此天然
+         * 排除搜索框陷阱；整行锚定（^...$）额外排除 "他的抖音号：123 是假的" 这类叙述句。
+         * 全角/半角冒号都认。读不到返回 null——宁可空，不可猜（PR #1306 教训：猜出来的垃圾
+         * 会静默污染 Lead 表，空会硬失败并告警）。
+         */
+        internal fun extractDouyinId(profileTexts: List<String>): String? {
+            val regex = Regex("""^抖音号[:：]\s*(\S+)$""")
+            for (t in profileTexts) {
+                val m = regex.find(t.trim()) ?: continue
+                return m.groupValues[1]
             }
-            return false
+            return null
         }
 
         /**

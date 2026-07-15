@@ -30,6 +30,40 @@ class CollectResultTest {
         assertEquals("怎么联系你们", comments[0]["text"])
     }
 
+    // Seg3 方案 B′：抓评论时点头像进主页读出的真实抖音号必须随 payload 上行，
+    // 否则派单侧永远拿不到号，只能退回发 profile_url → 设备当抖音号搜 → 必然 NO_MATCH。
+    @Test
+    fun `comment-score-result payload 带 douyin_id（Seg3 回填的真实抖音号）`() {
+        val result = CollectResult(
+            ok = true,
+            keyword = "花架",
+            videoUrl = "https://www.douyin.com/video/123",
+            comments = listOf(
+                CommentEntry(commenterId = "小叶子", text = "怎么联系你们", douyinId = "1689210742"),
+            ),
+        )
+
+        @Suppress("UNCHECKED_CAST")
+        val comments = result.toCommentScoreResultPayload("kw-task-uuid-3")["comments"] as List<Map<String, Any?>>
+        assertEquals("1689210742", comments[0]["douyin_id"])
+        assertEquals("小叶子", comments[0]["commenter_id"])
+    }
+
+    @Test
+    fun `douyin_id 读不到时 payload 里是 null 且字段仍在（宁可空不可猜，绝不省略字段）`() {
+        // 字段必须在：省略会让服务端分不清"没读到"和"老版本 agent 没这个能力"。
+        val result = CollectResult(
+            ok = true,
+            keyword = "花架",
+            comments = listOf(CommentEntry(commenterId = "小叶子", text = "怎么联系你们")),
+        )
+
+        @Suppress("UNCHECKED_CAST")
+        val comments = result.toCommentScoreResultPayload("kw-task-uuid-4")["comments"] as List<Map<String, Any?>>
+        assertTrue("douyin_id 字段必须存在", comments[0].containsKey("douyin_id"))
+        assertNull("读不到就得是 null，绝不能造假/回退成昵称或 URL", comments[0]["douyin_id"])
+    }
+
     @Test
     fun `comment-score-result payload with empty comments still includes keyword_task_id`() {
         val result = CollectResult(ok = false, keyword = "麻婆豆腐", error = "SEARCH_TIMEOUT")

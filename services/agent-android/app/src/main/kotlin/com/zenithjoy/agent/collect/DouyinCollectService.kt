@@ -51,6 +51,9 @@ class DouyinCollectService : AccessibilityService() {
     private var currentKeyword = ""
     private var currentTaskId = ""
     private var searchTriggeredAtMs = 0L
+    // 快照纪律 token（SnapshotDiscipline）：每次跨窗口点击后必须推进，禁止复用点击前的 root。
+    // Seg3 抖音号回填（点头像进主页→BACK 回面板）逐条跨窗口，是该纪律的重灾区。
+    private var fetchToken = 0
     // A2 重入闸：评论面板每个无障碍事件都会 launch 一个提取协程，state 切走前已排队多个，
     // 导致 reportResult 被调 7~12 次、onResult 重复上报。用一次性闩保证一个任务只上报一次。
     @Volatile private var resultReported = false
@@ -918,12 +921,112 @@ class DouyinCollectService : AccessibilityService() {
                     finishWithError("RETRY_NO_WINDOW"); return@launch
                 }
                 val retryComments = NodeExtractor.extractComments(flattenNodes(retryRoot))
-                reportResult(retryComments)
+                reportResult(enrichCommentsWithDouyinId(retryComments))
             }
         } else {
-            reportResult(comments)
+            scope.launch { reportResult(enrichCommentsWithDouyinId(comments)) }
         }
     }
+
+    // ── 7.5 抖音号回填（Seg3 方案 B′）─────────────────────────────────────────
+    //
+    // 光有昵称没用：派单段要把【抖音号】发给设备做精确搜索定位（DouyinDmOutreachService
+    // 拿到的字段就是当抖音号搜的）。这里逐条点评论人头像进主页，把真实抖音号读出来回填。
+    //
+    // 真机证据（2026-07-15 xian-rog，2/2 评论人复现）：
+    //   avatar content-desc="<昵称>的头像"、clickable=true → 点它进全屏 UserProfileActivity
+    //   → 该页一次 dump 即含 text="抖音号：1689210742" → BACK ×1 回评论面板且滚动位置保留。
+
+    /**
+     * 只 enrich 前 [MAX_ENRICH_LEADS] 条（第一刀口径），其余原样保留 douyinId=null——
+     * 不丢条：读不到号的评论仍是有效 lead 素材，只是暂时派不出私信。
+     */
+    private suspend fun enrichCommentsWithDouyinId(comments: List<CommentEntry>): List<CommentEntry> {
+        if (comments.isEmpty()) return comments
+        val head = comments.take(MAX_ENRICH_LEADS)
+        val tail = comments.drop(MAX_ENRICH_LEADS)
+        val enriched = enrichEntries(
+            head,
+            onError = { nickname, e ->
+                android.util.Log.w(TAG, "enrich douyinId failed for $nickname: ${e.message}")
+            },
+        ) { nickname ->
+            // per-lead 硬超时：卡住就跳过该条（douyinId=null），绝不拖垮整轮。
+            withTimeoutOrNull(PER_LEAD_ENRICH_TIMEOUT_MS) { resolveDouyinIdForCommenter(nickname) }
+        }
+        android.util.Log.i(
+            TAG,
+            "enriched douyinId ${enriched.count { it.douyinId != null }}/${head.size} leads",
+        )
+        return enriched + tail
+    }
+
+    /**
+     * 单条：点头像 → 等主页 → 读抖音号 → BACK 回评论面板。
+     *
+     * **每次都重抓 root、按 content-desc 重新定位 avatar**，绝不复用上一轮的节点句柄：
+     * 跨窗口（面板→主页→面板）后旧 AccessibilityNodeInfo 必 stale，遍历它只会得到空
+     * （captureShareUrlForCard 血泪注释，见本文件 :625-632）；重新定位同时顺带绕开
+     * 评论列表虚拟化回收后的 index 漂移。
+     */
+    private suspend fun resolveDouyinIdForCommenter(nickname: String): String? {
+        val panelRoot = awaitRootInActiveWindow() ?: return null
+        val avatar = findNodeByContentDesc(panelRoot, avatarContentDesc(nickname)) ?: run {
+            android.util.Log.d(TAG, "avatar not found for $nickname (可能已滚出可视区)")
+            return null
+        }
+
+        val beforeTapToken = fetchToken
+        tapNodeCenter(avatar)
+        delay(RandomDelay.sample(RandomDelay.CLICK_MS))
+        // 快照纪律：点击跨窗口后必须重新抓取，禁止复用点击前的 root。
+        fetchToken = SnapshotDiscipline.nextFetchToken(beforeTapToken)
+        SnapshotDiscipline.requireFresh(beforeTapToken, fetchToken)
+
+        val id = awaitDouyinIdOnProfile()
+        // 无论读没读到都必须回面板，否则下一条定位不到 avatar，整轮连环失败。
+        navigateBackToComments()
+        return id
+    }
+
+    /** 轮询等主页渲染出 "抖音号：" 行（首屏懒加载，未必在落地瞬间就进无障碍树）。 */
+    private suspend fun awaitDouyinIdOnProfile(
+        attempts: Int = PROFILE_ID_ATTEMPTS,
+        intervalMs: Long = PROFILE_ID_POLL_MS,
+    ): String? {
+        repeat(attempts) {
+            rootInActiveWindow?.let { root ->
+                DouyinDmOutreachService.extractDouyinId(collectNodeTexts(root))?.let { return it }
+            }
+            delay(intervalMs)
+        }
+        return null
+    }
+
+    /**
+     * 从主页 BACK 回评论面板。判据照 [navigateBackToResults] 的模式——用【只有目标页才有】
+     * 的内容锚点确认真落地，不是按一下就假设到了。见 [isBackAtCommentPanel] 注释。
+     */
+    private suspend fun navigateBackToComments() {
+        repeat(MAX_BACK_TO_COMMENTS) {
+            val root = rootInActiveWindow
+            if (root != null && root.packageName == DOUYIN_PKG &&
+                isBackAtCommentPanel(countAvatarNodes(root), hasDouyinIdLine(root))
+            ) {
+                return
+            }
+            performGlobalAction(GLOBAL_ACTION_BACK)
+            delay(RandomDelay.sample(RandomDelay.NAV_MS))
+        }
+        android.util.Log.w(TAG, "navigateBackToComments: 按满 $MAX_BACK_TO_COMMENTS 次仍未确认回到评论面板")
+    }
+
+    private fun countAvatarNodes(root: AccessibilityNodeInfo): Int =
+        root.findAccessibilityNodeInfosByViewId("$DOUYIN_PKG:id/avatar")?.size ?: 0
+
+    /** 主页独有的 "抖音号：" 行是否还在树上（在 = 还没退出主页）。 */
+    private fun hasDouyinIdLine(root: AccessibilityNodeInfo): Boolean =
+        DouyinDmOutreachService.extractDouyinId(collectNodeTexts(root)) != null
 
     private fun reportResult(comments: List<CommentEntry>) {
         if (resultReported) return // A2：一个任务只上报一次
@@ -1190,15 +1293,100 @@ class DouyinCollectService : AccessibilityService() {
         private const val DOUYIN_PKG = "com.ss.android.ugc.aweme"
         private const val RESULTS_SETTLE_MS = 400L
         // state 停留超过该阈值视为流程已死：busy-guard 强制复位而不是拒绝新任务
-        private const val STUCK_STATE_RESET_MS = 180_000L
+        // （internal：computeExtractionTimeoutMs 的上界守卫要断言看门狗早于它触发）
+        internal const val STUCK_STATE_RESET_MS = 180_000L
         private const val VIDEO_OPEN_TIMEOUT_MS = 15_000L
-        private const val EXTRACTION_TIMEOUT_MS = 20_000L
+
+        // ── Seg3 抖音号回填（enrich）预算 ─────────────────────────────────────
+        //
+        // 单条 lead 的往返 = 点头像 → 等 UserProfileActivity 渲染 → 读 "抖音号：" 行 → BACK 回面板。
+        // 真机(2026-07-15 xian-rog)单条顺畅时约 3-5s；20s 是【硬超时上界】不是期望值，留足
+        // 主页首屏懒加载 + BACK 多跳的余量。取 20s 的依据：单卡取链 PER_CARD_TIMEOUT_MS=25s
+        // 是"分享面板→剪贴板→回列表"的预算，enrich 往返比它轻（不碰剪贴板/不等 ShareIngest），
+        // 故取比它小一档；withTimeoutOrNull 到点即跳过该条（douyinId=null），不阻塞整轮。
+        internal const val PER_LEAD_ENRICH_TIMEOUT_MS = 20_000L
+        // 每轮最多 enrich 几条 lead（对齐 Seg3 每视频抓 5 条评论的第一刀口径）。
+        internal const val MAX_ENRICH_LEADS = 5
+        // 原提取预算（点评论按钮→评论面板渲染→遍历节点树上报），enrich 之外的部分。
+        private const val BASE_EXTRACTION_TIMEOUT_MS = 20_000L
+
+        /**
+         * 提取阶段看门狗预算。**必须随 enrich 一起调大，否则 enrich 一上线就整轮假失败**：
+         * 旧值恒为 20s（只够裸提取），而 5 条 lead 的进主页往返最坏 5×20s=100s，
+         * startExtractionWatchdog 会在 enrich 还没跑完时就 finishWithError("EXTRACTION_TIMEOUT")。
+         *
+         * = 基础提取预算 + maxLeads × 单条 lead 硬超时上界。默认 20s + 5×20s = 120s。
+         * 上界约束：必须 < STUCK_STATE_RESET_MS(180s)，否则 busy-guard 先把 state 强制复位，
+         * 看门狗的 finishWithError 落空 → 任务永远收不到终态（老坑，见 startVideoOpenTimeout 注释）。
+         * 120s < 180s，留 60s 余量。
+         */
+        internal fun computeExtractionTimeoutMs(
+            maxLeads: Int = MAX_ENRICH_LEADS,
+            perLeadMs: Long = PER_LEAD_ENRICH_TIMEOUT_MS,
+            baseMs: Long = BASE_EXTRACTION_TIMEOUT_MS,
+        ): Long = baseMs + maxLeads * perLeadMs
+
+        private val EXTRACTION_TIMEOUT_MS = computeExtractionTimeoutMs()
+
+        /**
+         * 评论 avatar 的 content-desc 拼法（真机 2026-07-15 xian-rog 实证：
+         * resource-id=".../avatar"、content-desc="<昵称>的头像"、clickable=true、有 bounds）。
+         * 每条 lead 都按昵称【重新】定位 avatar——绝不跨 BACK 复用旧 handle（见 enrichEntries 注释）。
+         */
+        internal fun avatarContentDesc(nickname: String): String = "${nickname}的头像"
+
+        /**
+         * enrich 后 BACK 的落点判据（照 [isBackAtResultList] 的模式：用【只有目标页才有】的内容锚点）。
+         *
+         * 教训同源：navigateBackToResults 旧判据"抖音包内有一张卡"太弱，全屏播放页也满足 → 误判
+         * "已回列表"→ 停止 BACK → 后续全错位。这里同理：主页自己也有 avatar 节点，光看 avatar 会
+         * 误判"已回面板"。"抖音号：" 行是主页【独有】的强判别（评论面板永远没有），必须它消失
+         * 且树上有 avatar 才算真回到评论面板。
+         */
+        internal fun isBackAtCommentPanel(avatarCount: Int, hasDouyinIdLine: Boolean): Boolean =
+            avatarCount >= 1 && !hasDouyinIdLine
+
+        /**
+         * enrich 编排核心（与 UIA 解耦，便于单测锁死铁律；真机动作由 [resolve] 注入）。
+         *
+         * [resolve] 入参【只有昵称】——这是"avatar handle 绝不跨 BACK 复用"在契约层面的体现：
+         * 每条都必须重抓 root、按 content-desc 重新定位。跨窗口后旧节点 stale → 遍历为空 →
+         * 整任务假失败（captureShareUrlForCard 血泪注释，见本文件 :625-632）；重新定位同时
+         * 顺带绕开列表虚拟化后的 index 漂移。
+         *
+         * 铁律：单条取不到（null/空白/抛异常）→ 该条 douyinId=null，**绝不造假 id**，
+         * 且不丢条、不牵连其它条、不炸整轮（#1306「宁可空，不可猜」）。
+         *
+         * [onError] 由调用方注入（生产侧传 android.util.Log.w）——本函数刻意不直接碰
+         * android.util.Log，好让它在 JVM 单测里可跑（本模块没开 unitTests.returnDefaultValues，
+         * 直接调 Log 会抛 "not mocked" RuntimeException）。吞异常必须留痕，不许静默。
+         */
+        internal suspend fun enrichEntries(
+            entries: List<CommentEntry>,
+            onError: (nickname: String, e: Exception) -> Unit = { _, _ -> },
+            resolve: suspend (nickname: String) -> String?,
+        ): List<CommentEntry> = entries.map { entry ->
+            val id = try {
+                resolve(entry.commenterId)?.trim()?.takeIf { it.isNotEmpty() }
+            } catch (e: Exception) {
+                // 单条炸不许炸整轮——留痕、该条留 null、继续下一条。
+                onError(entry.commenterId, e)
+                null
+            }
+            entry.copy(douyinId = id)
+        }
         private const val MAX_FLATTEN_NODES = 3_000
         const val MAX_VIDEOS_PER_SEARCH = 3  // Stage1 每关键词最多收集视频卡数量
         // abort 阈值：连续多少张【内容卡】取链失败才放弃整轮。广告/直播跳过不计入（真机 2026-07-13）。
         private const val MAX_CONSECUTIVE_CONTENT_FAILURES = 2
         // navigateBackToResults 最多按几次 BACK 回搜索结果列表（真机：分享面板→播放页→列表可能 ≥2 跳）。
         private const val MAX_BACK_TO_RESULTS = 5
+        // navigateBackToComments 最多按几次 BACK 回评论面板。真机实证 BACK ×1 即回（主页是单层全屏
+        // Activity），留 3 次余量应对主页上误触开的二级页（如作品详情），比回搜索列表那条路浅。
+        private const val MAX_BACK_TO_COMMENTS = 3
+        // 主页 "抖音号：" 行轮询预算：8 × 400ms = 3.2s，落在单条 lead 20s 硬超时之内。
+        private const val PROFILE_ID_ATTEMPTS = 8
+        private const val PROFILE_ID_POLL_MS = 400L
 
         /**
          * navigateBackToResults 判据（真机 2026-07-13 19:52 xian-rog，广告 abort 修复后浮现的下一层）：
@@ -1210,7 +1398,8 @@ class DouyinCollectService : AccessibilityService() {
         internal fun isBackAtResultList(cardCount: Int, hasSearchTabBar: Boolean): Boolean =
             cardCount >= 2 || hasSearchTabBar
         // Bug C 剪贴板取链：单张卡片全程硬超时 + 各阶段等待预算
-        private const val PER_CARD_TIMEOUT_MS = 25_000L
+        // （internal：PER_LEAD_ENRICH_TIMEOUT_MS 的量级守卫要拿它当参照上界）
+        internal const val PER_CARD_TIMEOUT_MS = 25_000L
         private const val CLEAR_WAIT_MS = 2_000L
         private const val READ_DELIVER_MS = 4_000L
         private const val LAUNCH_ECHO_TIMEOUT_MS = 1_000L

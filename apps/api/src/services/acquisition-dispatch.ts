@@ -11,7 +11,7 @@
  *   - cookieHealth    按 status + 陈旧度算 healthy|stale|expired（真 cookie 校验留刀2）
  */
 
-import { resolveDevicePlatform } from './device-platform';
+import { resolveDevicePlatform, type DevicePlatform } from './device-platform';
 
 // 最小 pool 抽象（只用到 query），便于注入 mock
 export interface QueryablePool {
@@ -584,6 +584,28 @@ export interface DispatchResult {
   skipped_limit: number;
 }
 
+/**
+ * 按执行通道判定这条 lead 能不能派 —— 两个通道要的字段【语义相反】，不能共用一个闸。
+ *
+ *  - android : DouyinDmOutreachService.startOutreach() 把收到的字段【当抖音号搜索】
+ *              （agent-android/.../DouyinDmOutreachService.kt:151-153
+ *               `val targetDouyinId = profileUrl`）→ 必须有【裸抖音号】。
+ *              没号还派 = 设备拿 URL 去搜 → matchProfileByDouyinId 零匹配 → NO_MATCH，
+ *              白烧一次频控额度还污染 dm_outreach_log。宁可标 limited 等 Seg3 回填到号。
+ *  - windows : douyin-dm-outreach.cjs:80 `page.goto(profileUrl)` → 必须有【真 URL】，
+ *              喂裸 id 会直接炸。
+ */
+export function isDmDispatchable(
+  devicePlatform: DevicePlatform,
+  lead: { profileUrl: string | null; douyinId: string | null },
+  agentId: string | null
+): boolean {
+  if (!agentId) return false;
+  return devicePlatform === 'android'
+    ? Boolean(lead.douyinId && lead.douyinId.trim())
+    : Boolean(lead.profileUrl && lead.profileUrl.trim());
+}
+
 export async function dispatchDue(
   pool: QueryablePool,
   tenantId: string,
@@ -640,11 +662,12 @@ export async function dispatchDue(
       continue;
     }
 
-    // 取 lead profile_url、agent_id（burner session 为本号绑定的 agent）、agent capabilities
-    // （用于判定 device_platform——按 agents.capabilities 独立判定，不派生自 agents.os_type，
-    //  见 contract-draft.md "device_platform 与既有 agents.os_type 关系澄清" 段）
+    // 取 lead profile_url / douyin_id、agent_id（burner session 为本号绑定的 agent）、
+    // agent capabilities（用于判定 device_platform——按 agents.capabilities 独立判定，
+    // 不派生自 agents.os_type，见 contract-draft.md "device_platform 与既有 agents.os_type
+    // 关系澄清" 段）。douyin_id 是 Seg3 点头像进主页读出的真实抖音号，Android 通道必需。
     const leadRes = await pool.query(
-      `SELECT l.profile_url, s.agent_id, ag.capabilities
+      `SELECT l.profile_url, l.douyin_id, s.agent_id, ag.capabilities
          FROM zenithjoy.acquisition_leads l
          LEFT JOIN zenithjoy.agent_platform_sessions s
            ON s.account_label = $2 AND s.platform = 'douyin' AND s.role = 'burner' AND s.status = 'active'
@@ -654,11 +677,13 @@ export async function dispatchDue(
       [row.lead_id, label]
     );
     const profileUrl = leadRes.rows[0]?.profile_url ?? null;
+    const douyinId = leadRes.rows[0]?.douyin_id ?? null;
     const agentId = leadRes.rows[0]?.agent_id ?? null;
     const devicePlatform = resolveDevicePlatform(leadRes.rows[0]?.capabilities ?? null);
 
-    if (!profileUrl || !agentId) {
-      // profile_url 缺失（lead 无主页）或该号无 active agent → 跳过，标 limited
+    if (!isDmDispatchable(devicePlatform, { profileUrl, douyinId }, agentId)) {
+      // 该号无 active agent，或本通道要的定位字段缺失（android 缺抖音号 / windows 缺主页 URL）
+      // → 跳过，标 limited。派出去必然失败，不如留着等 Seg3 回填到号后下一轮再派。
       await pool.query(
         `UPDATE zenithjoy.dm_assignments SET status = 'limited', updated_at = now() WHERE id = $1`,
         [row.id]
@@ -677,7 +702,12 @@ export async function dispatchDue(
         JSON.stringify({
           agent_id: agentId,
           account_label: label,
+          // 两个字段各喂一个通道，语义不同不可互换：
+          //   profile_url : 真主页 URL —— Windows 的 douyin-dm-outreach.cjs `page.goto()` 用
+          //   douyin_id   : 裸抖音号 —— Android 的 DouyinDmOutreachService 拿去搜索框精确定位
+          // 历史 bug：只发 profile_url，Android 把 URL 当抖音号搜 → 必然 NO_MATCH。
           profile_url: profileUrl,
+          douyin_id: douyinId,
           message: cfg.dm_message,
           tenant_id: tenantId,
           task_type: 'dm_outreach',

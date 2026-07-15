@@ -552,12 +552,15 @@ class AgentService : Service() {
     // 10 分钟窗口 ≤3 条），超限直接构造 limited 结果广播上报，不启动无障碍执行流程；
     // 未超限才真正 dispatchTask 给 DouyinDmOutreachService 走无障碍打开主页→点私信→发送流程。
     private fun routeDmOutreachTask(task: HttpHeartbeatLoop.HeartbeatTask) {
-        val profileUrl = task.payload["profile_url"] as? String ?: ""
+        // Seg3 方案 B′：搜索目标取 douyin_id（裸抖音号），不是 profile_url。
+        // DouyinDmOutreachService 把收到的字段当抖音号往搜索框里搜——喂 URL 必然 NO_MATCH。
+        // payload 里的 profile_url 是给 Windows 通道 page.goto 用的，语义相反，不可混用。
+        val targetDouyinId = extractDmTargetDouyinId(task.payload)
         val message = task.payload["message"] as? String ?: ""
         val accountLabel = task.payload["account_label"] as? String ?: ""
         val dmAssignmentId = task.payload["dm_assignment_id"] as? String ?: ""
-        if (profileUrl.isBlank() || message.isBlank()) {
-            android.util.Log.w(TAG, "dm_outreach task ${task.task_id} missing profile_url/message — skip")
+        if (targetDouyinId == null || message.isBlank()) {
+            android.util.Log.w(TAG, "dm_outreach task ${task.task_id} missing douyin_id/message — skip")
             return
         }
 
@@ -580,7 +583,7 @@ class AgentService : Service() {
         if (dispatchDecision == DeviceAccountModel.DispatchAccountDecision.TRIGGER_RESCAN_AND_FAIL) {
             android.util.Log.w(TAG, "dm_outreach task ${task.task_id} account=$accountLabel recorded offline at dispatch — triggering rescan, failing task")
             DeviceAccountScanService.dispatchTask(this, "rescan-${task.task_id}", tenantId = "", thisDeviceId = config.machineId)
-            reportDmOutreachResult(task.task_id, "failed", dmAssignmentId, accountLabel, profileUrl, "ACCOUNT_OFFLINE_AT_DISPATCH")
+            reportDmOutreachResult(task.task_id, "failed", dmAssignmentId, accountLabel, targetDouyinId, "ACCOUNT_OFFLINE_AT_DISPATCH")
             return
         }
 
@@ -589,13 +592,13 @@ class AgentService : Service() {
         if (!withinLimit) {
             android.util.Log.w(TAG, "dm_outreach task ${task.task_id} rate-limited — reporting limited without dispatch")
             DouyinDmOutreachService.dispatchRateLimited(
-                this, task.task_id, dmAssignmentId, accountLabel, profileUrl,
+                this, task.task_id, dmAssignmentId, accountLabel, targetDouyinId,
             )
             return
         }
         dmSentTimestamps.add(now)
         DouyinDmOutreachService.dispatchTask(
-            this, profileUrl, message, task.task_id, dmAssignmentId, accountLabel,
+            this, targetDouyinId, message, task.task_id, dmAssignmentId, accountLabel,
         )
     }
 
@@ -799,6 +802,21 @@ class AgentService : Service() {
         // 经心跳 ...realPayload 透传到 agent。不能靠 task.type（getQueuedTasks 只 select
         // publish 类型列 type，无 task_type 列），必须走 payload.task_type。
         fun shouldRouteWarmup(payloadTaskType: String?): Boolean = payloadTaskType == "warmup"
+
+        /**
+         * dm_outreach 派单 payload → 搜索目标抖音号（Seg3 方案 B′）。
+         *
+         * DouyinDmOutreachService.startOutreach() 收到的字段是【当抖音号往搜索框里搜】的
+         * （:151-153 `val targetDouyinId = ...`），所以这里只能取 douyin_id：
+         * 服务端 acquisition-dispatch.ts 的 payload 里 profile_url 是给 Windows 通道
+         * （douyin-dm-outreach.cjs `page.goto`）用的真 URL，语义完全相反。
+         *
+         * 取不到就是 null → 调用方跳过不派。**绝不回退成 profile_url**：拿 URL 去搜必然
+         * NO_MATCH，白烧一次频控额度，还在 dm_outreach_log 里留下"派了但没送达"的假象，
+         * 把"根本没读到号"这个真问题掩盖掉（#1306 宁可空，不可猜）。
+         */
+        internal fun extractDmTargetDouyinId(payload: Map<String, Any?>): String? =
+            (payload["douyin_id"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
 
         // initAgent 单次守卫：onStartCommand 会被多次调用（开机广播 + MainActivity +
         // START_STICKY 重启），每次都 initAgent 会泄漏多套并行轮询 loop。

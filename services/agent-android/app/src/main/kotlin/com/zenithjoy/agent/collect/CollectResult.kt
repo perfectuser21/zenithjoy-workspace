@@ -9,13 +9,23 @@ package com.zenithjoy.agent.collect
  * 字段对齐服务端已有接口 POST /api/acquisition/comment-score-result
  * （commenter_id / text），复用同一份 keyword_task_id 语义。
  */
+/**
+ * @property commenterId 评论人昵称（评论面板 resource-id=.../title 的文本）。
+ * @property douyinId 评论人的【真实抖音号】，由 DouyinCollectService.enrichCommentsWithDouyinId
+ *   点头像进主页读出（Seg3 方案 B′）。读不到就是 null——绝不回退成昵称/URL 顶替。
+ *   派单段（acquisition-dispatch.ts）拿它发给设备做精确搜索定位；发 profile_url 的老做法
+ *   会让设备把 URL 当抖音号搜 → 必然 NO_MATCH。
+ */
 data class CommentEntry(
     val commenterId: String,
     val text: String,
+    val douyinId: String? = null,
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
         "commenter_id" to commenterId,
         "text" to text,
+        // 字段恒在（读不到时为 null）：省略会让服务端分不清"没读到"和"老版本 agent 没这能力"。
+        "douyin_id" to douyinId,
     )
 }
 

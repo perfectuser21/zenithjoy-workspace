@@ -21,6 +21,42 @@ export const acquisitionRouter = Router();
 
 const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
 
+/** 一条评论上报映射出的 lead 字段。 */
+export interface LeadFieldsFromComment {
+  secUid: string | null;
+  nickname: string;
+  profileUrl: string | null;
+  /** 评论人真实抖音号（Seg3 设备点头像进主页读出）。读不到 = null。 */
+  douyinId: string | null;
+  commentText: string | null;
+}
+
+/**
+ * 评论上报 → lead 字段映射（纯函数，落库 SQL 之外的全部归一规则都在这）。
+ *
+ * 「宁可空，不可猜」（PR #1306）：douyin_id 读不到 / 是空白 → null，**绝不**回退成
+ * nickname 或 profile_url 顶替。回退正是设备端 NO_MATCH 的根源——设备把拿到的字段
+ * 当抖音号往搜索框里搜，塞个昵称或 URL 进去只会零匹配，还会让"没读到号"这个真问题
+ * 被伪装成"派了但没送达"。
+ */
+export function buildLeadFieldsFromComment(c: {
+  commenter_id?: string;
+  text?: string;
+  douyin_id?: string | null;
+}): LeadFieldsFromComment {
+  const rawId = String(c.commenter_id || '').trim();
+  const secUidMatch = rawId.match(/\/user\/([^/?#]+)/);
+  const secUid = secUidMatch ? secUidMatch[1] : null;
+  const douyinId = String(c.douyin_id ?? '').trim() || null;
+  return {
+    secUid,
+    nickname: rawId || '未知',
+    profileUrl: secUid ? `https://www.douyin.com/user/${secUid}` : null,
+    douyinId,
+    commentText: String(c.text || '').trim() || null,
+  };
+}
+
 // Stage2 每个视频最多派发次数：超限视为该视频不可采（下架/打不开），强制落章跳过
 const MAX_STAGE2_DISPATCHES_PER_VIDEO = 10;
 type Grade = (typeof VALID_GRADES)[number];
@@ -552,7 +588,7 @@ acquisitionRouter.post('/comment-score-result', async (req: Request, res: Respon
 
       if (resolved_tenant_id) {
         const gradedComments = await Promise.all(
-          commentList.map(async (c: { commenter_id?: string; text?: string; publish_time?: string; keyword?: string; grade?: string }) => {
+          commentList.map(async (c: { commenter_id?: string; text?: string; publish_time?: string; keyword?: string; grade?: string; douyin_id?: string | null }) => {
             const grade = c.grade || await gradeComment(c.text ?? '');
             if (!grade) return null;
             return { ...c, grade };
@@ -560,11 +596,8 @@ acquisitionRouter.post('/comment-score-result', async (req: Request, res: Respon
         );
         for (const c of gradedComments) {
           if (!c) continue;
-          const rawId = String(c.commenter_id || '').trim();
-          const secUidMatch = rawId.match(/\/user\/([^/?#]+)/);
-          const secUid = secUidMatch ? secUidMatch[1] : null;
-          const nickname = rawId || '未知';
-          const commentText = String(c.text || '').trim() || null;
+          const { secUid, nickname, profileUrl, douyinId, commentText } =
+            buildLeadFieldsFromComment(c);
           const grade = c.grade || null;
           const videoRef = video_url ?? '';
           try {
@@ -583,25 +616,30 @@ acquisitionRouter.post('/comment-score-result', async (req: Request, res: Respon
             let leadId: string;
             if (existing.rows.length > 0) {
               leadId = existing.rows[0].id as string;
+              // douyin_id 用 COALESCE 回填：存量 lead 是在没这列的年代采的，全 NULL——
+              // 只在 INSERT 写号的话它们永远补不上号 → 永远派不出私信。反向也要防住：
+              // 本次没读到号（$3 = NULL）时绝不能把已存的号覆盖掉，故 COALESCE(douyin_id, $3)
+              // 以【库里已有的】为先。
               await pool.query(
                 `UPDATE zenithjoy.acquisition_leads
                     SET source_video_ids = CASE
                           WHEN source_video_ids ? $2 THEN source_video_ids
                           ELSE source_video_ids || to_jsonb($2::text)
                         END,
+                        douyin_id = COALESCE(douyin_id, $3),
                         updated_at = NOW()
                   WHERE id = $1`,
-                [leadId, videoRef]
+                [leadId, videoRef, douyinId]
               );
             } else {
               const ins = await pool.query(
                 `INSERT INTO zenithjoy.acquisition_leads
                    (tenant_id, sec_uid, nickname, profile_url, source_video_ids,
-                    comment_text, grade, keyword, feishu_write_status)
-                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, 'local_only')
+                    comment_text, grade, keyword, douyin_id, feishu_write_status)
+                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, 'local_only')
                  RETURNING id`,
-                [resolved_tenant_id, secUid, nickname, secUid ? `https://www.douyin.com/user/${secUid}` : null,
-                 JSON.stringify([videoRef]), commentText, grade, c.keyword || null],
+                [resolved_tenant_id, secUid, nickname, profileUrl,
+                 JSON.stringify([videoRef]), commentText, grade, c.keyword || null, douyinId],
               );
               leadId = ins.rows[0].id as string;
             }

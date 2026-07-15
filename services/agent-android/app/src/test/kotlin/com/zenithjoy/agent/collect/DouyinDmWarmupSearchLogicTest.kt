@@ -111,6 +111,46 @@ class DouyinDmWarmupSearchLogicTest {
         assertFalse(DouyinDmOutreachService.verifyProfileMatchesDouyinId(listOf("133643315", "搜索"), "133643315"))
     }
 
+    // ── 同名同姓必须拒发（撤销 #1308 的昵称 fallback）────────────────────────
+    //
+    // #1308（方案A）加了个 fallback：targetDouyinId 含非 ASCII 时，只要主页有一个文本节点
+    // 字面等于它就算验证通过。其注释声称的安全兜底 ——
+    //     "AMBIGUOUS branch in locateProfileBySearch already rejects non-unique search results"
+    // —— **不成立**：产出 AMBIGUOUS 的 matchProfileByDouyinId 在生产**零调用**
+    // （main 上只有 :393 注释 + :788 定义，注释原文自称「**老** matchProfileByDouyinId」）。
+    //
+    // 真实流程（见 locateProfileBySearch :390-396 注释）：搜索结果**不进无障碍树** →
+    // 只能**坐标盲点顶部结果** → 进主页校验。于是同名同姓时：盲点到的是**另一个人**的主页，
+    // 昵称字面一致 → fallback 判定通过 → **私信发给陌生人**。
+    //
+    // 用户 2026-07-15 拍板方案 B′（点头像取真抖音号）正是为了避免这个：
+    //   「同名同姓的人太多了呀，不是搞笑了吗？」
+    // B′ 落地后 targetDouyinId 恒为真实抖音号（ASCII），此 fallback 既不安全也不再需要。
+
+    @Test
+    fun `same nickname different person must NOT verify (同名同姓不得误发)`() {
+        // 真机实证数据：评论人「小叶子」真实抖音号 1689210742。
+        // 搜索昵称「小叶子」→ 坐标盲点顶部结果 → 落到另一个也叫「小叶子」的人（抖音号 5566778899）。
+        // 主页上「小叶子」这个文本节点确实存在 —— 但这不是我们要找的人，必须拒发。
+        val wrongPersonProfile = listOf("小叶子", "抖音号：5566778899", "获赞", "发私信")
+        assertFalse(
+            "同名同姓：盲点到别人主页，昵称字面一致也绝不能通过校验（会把私信发给陌生人）",
+            DouyinDmOutreachService.verifyProfileMatchesDouyinId(wrongPersonProfile, "小叶子")
+        )
+    }
+
+    @Test
+    fun `nickname never verifies even on the right person's profile (只认抖音号)`() {
+        // 即使真的点对了人，也只认「抖音号：<id>」这一条判据 —— 昵称不是身份。
+        val rightPersonProfile = listOf("小叶子", "抖音号：1689210742", "获赞", "发私信")
+        assertFalse(
+            "昵称不得作为身份判据（前缀是排除搜索框回显陷阱的唯一手段）",
+            DouyinDmOutreachService.verifyProfileMatchesDouyinId(rightPersonProfile, "小叶子")
+        )
+        // 用真抖音号则必须通过 —— B′ 采到的正是它
+        assertTrue(DouyinDmOutreachService.verifyProfileMatchesDouyinId(rightPersonProfile, "1689210742"))
+    }
+
     @Test
     fun `empty profile texts fail verification`() {
         assertFalse(DouyinDmOutreachService.verifyProfileMatchesDouyinId(emptyList(), "133643315"))
