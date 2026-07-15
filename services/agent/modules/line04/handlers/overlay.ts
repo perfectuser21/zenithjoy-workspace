@@ -32,12 +32,19 @@ const OVERLAY_SCRIPT = path.join(
   '../wechat-rpa/overlay/overlay_window.py',
 );
 
+// Windows 路径反斜杠塞进 python -c 字符串字面量前必须转义，否则 `\U`/`\u`/`\n` 等会被
+// Python 当成 unicode/转义序列解析（真机实测：`\Users` 触发
+// "SyntaxError: (unicode error) 'unicodeescape' codec ... truncated \UXXXXXXXX escape"）。
+function escapePyStrLiteral(p: string): string {
+  return p.replace(/\\/g, '\\\\');
+}
+
 // 供测试直接验证 -c 命令字符串本身语法合法（不依赖真实 preflight 模块可 import）。
 export function buildPreflightCommand(preflightScript: string, stateDir: string): string {
   return (
-    `import sys; sys.path.insert(0, '${path.dirname(preflightScript)}');` +
+    `import sys; sys.path.insert(0, '${escapePyStrLiteral(path.dirname(preflightScript))}');` +
     `from preflight import check_preflight; import json; ` +
-    `r = check_preflight('${stateDir.replace(/\\/g, '\\\\')}'); ` +
+    `r = check_preflight('${escapePyStrLiteral(stateDir)}'); ` +
     `print(json.dumps(r))`
   );
 }
