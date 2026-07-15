@@ -72,3 +72,4 @@ content-judgment-client-wiring-smoke.sh
 dev-quick-verify-smoke.sh
 dao1e-langgraph-brain-api-smoke.sh
 path4-ws4-local-profile-smoke.sh
+line04-customer-profile-smoke.sh
