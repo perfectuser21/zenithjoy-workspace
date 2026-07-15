@@ -77,6 +77,43 @@ sleep 6
 ACC=$("$ADB" shell settings get secure enabled_accessibility_services 2>/dev/null)
 case "$ACC" in *com.zenithjoy.agent*) ok "无障碍已开";; *) envfail "无障碍未开(采集依赖):$ACC";; esac
 
+# ── 1.5 MediaProjection 自动授权（Seg2 判定截图前提）──────────────────
+# MediaProjection 在进程重启后会丢失，agent app MainActivity 会显示"授权截屏"按钮。
+# 自动点击该按钮并在系统弹框点"允许"，授权后 screenshot→Gemini 判定链才能工作。
+# 失败只打印警告，不 envfail：采集主链路仍可运行，只是判定 gate 会抓到未授权。
+"$ADB" shell uiautomator dump /sdcard/zj_ui.xml >/dev/null 2>&1 || true
+UI_XML=$("$ADB" shell cat /sdcard/zj_ui.xml 2>/dev/null || echo "")
+if echo "$UI_XML" | grep -q "授权截屏"; then
+  # 解析"授权截屏"按钮坐标（bounds="[x1,y1][x2,y2]"）
+  BTN_BOUNDS=$(echo "$UI_XML" | tr '<' '\n' | grep "授权截屏" | head -1 | grep -oE 'bounds="[^"]+"' | head -1)
+  BNUMS=$(echo "$BTN_BOUNDS" | grep -oE '[0-9]+')
+  read -r BX1 BY1 BX2 BY2 <<< "$(echo "$BNUMS")"
+  BCX=$(( (${BX1:-0} + ${BX2:-200}) / 2 ))
+  BCY=$(( (${BY1:-0} + ${BY2:-100}) / 2 ))
+  echo "  [MediaProjection] 点击'授权截屏' at ($BCX,$BCY)"
+  "$ADB" shell input tap "$BCX" "$BCY" >/dev/null 2>&1 || true
+  sleep 2
+  # 系统截屏授权弹框 → 点"立即开始"/"允许"/"Allow"
+  "$ADB" shell uiautomator dump /sdcard/zj_allow.xml >/dev/null 2>&1 || true
+  ALLOW_XML=$("$ADB" shell cat /sdcard/zj_allow.xml 2>/dev/null || echo "")
+  for AWORD in "立即开始" "允许" "Allow" "Start now"; do
+    if echo "$ALLOW_XML" | grep -q "$AWORD"; then
+      ABL=$(echo "$ALLOW_XML" | tr '<' '\n' | grep "$AWORD" | head -1 | grep -oE 'bounds="[^"]+"' | head -1)
+      ANUMS=$(echo "$ABL" | grep -oE '[0-9]+')
+      read -r AX1 AY1 AX2 AY2 <<< "$(echo "$ANUMS")"
+      ACX=$(( (${AX1:-0} + ${AX2:-200}) / 2 ))
+      ACY=$(( (${AY1:-0} + ${AY2:-100}) / 2 ))
+      echo "  [MediaProjection] 点击'$AWORD' at ($ACX,$ACY)"
+      "$ADB" shell input tap "$ACX" "$ACY" >/dev/null 2>&1 || true
+      sleep 2
+      break
+    fi
+  done
+  ok "MediaProjection 授权流程已触发（如 judged>0 则授权成功）"
+else
+  echo "  [MediaProjection] 未检测到'授权截屏'按钮（可能已授权或界面不符）"
+fi
+
 # ── 2. 派"装修"任务(collect/start) ───────────────────────────────────
 RESP=$(curl -fsSk -m 15 -X POST "$API_BASE/api/acquisition/collect/start" \
   -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT" \
