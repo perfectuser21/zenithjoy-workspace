@@ -138,6 +138,11 @@ _saved_normal_pos: dict = {}
 _saved_visible_pos: dict = {}
 _saved_normal_pos_lock = threading.Lock()  # 保护两个字典的并发访问
 
+# wxid 缓存：好友扫描建档后 name → wechat_id，消息热路径查此缓存传 sender_wxid。
+# 只在 run_friend_scan 完成后写入（BEHAVIOR-3：_read_contact_wechat_id 不进消息热路径）。
+# name 改备注后缓存失效 → 降级显示名匹配（旧行为），下次扫描自动用新 name 更新。
+_sender_wxid_cache: Dict[str, str] = {}
+
 # 会话列表里要过滤掉的系统/非客户账号（按 element_info.name 首行匹配）。
 SKIP_SENDERS = (
     "公众号",
@@ -3437,6 +3442,12 @@ def run_friend_scan(
         contacts = enrich_contacts_with_details(mw, contacts)
         res = post_friend_scan(middleware_url, cs_wechat_id, contacts)
         if res.get("ok"):
+            # 建档成功：把 name→wechat_id 写入内存缓存，消息热路径可查 sender_wxid（BEHAVIOR-4）
+            for c in contacts:
+                cname = c.get("name") or ""
+                cwid = c.get("wechat_id") or ""
+                if cname and cwid:
+                    _sender_wxid_cache[cname] = cwid
             return {"ok": True, "count": len(contacts), "ingested": res.get("ingested")}
         return {"ok": False, "count": len(contacts), "error": res.get("error")}
     except Exception as exc:
@@ -4529,7 +4540,8 @@ def run_real_listen(args: argparse.Namespace) -> int:
             # 开窗会清掉操作者本人的未读角标 + 烧光 SCAN_OPEN_BUDGET（对抗审查 ISSUE-2）。
             # v1.0.96：冷却也前置到这里（撞冷却不开窗，触发态保留冷却后重试）。
             _should_open = _build_should_open(
-                roster_pred=((lambda s: cs_config_gate.should_reply(_cs_cfg, s))
+                roster_pred=((lambda s: cs_config_gate.should_reply(
+                    _cs_cfg, s, sender_wxid=_sender_wxid_cache.get(s)))
                              if _roster_gate_on else None),
                 cooldown_map=sender_reply_cooldown,
                 cooldown_seconds=SENDER_COOLDOWN,
@@ -4666,7 +4678,9 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     _reason, _next_at = classify_unread(
                         roster_gate_on=_roster_gate_on,
                         roster_should_reply=(not _roster_gate_on)
-                        or cs_config_gate.should_reply(_cs_cfg, m["sender"]),
+                        or cs_config_gate.should_reply(
+                            _cs_cfg, m["sender"],
+                            sender_wxid=_sender_wxid_cache.get(m["sender"])),
                         in_sender_cooldown=(now - sender_reply_cooldown.get(m["sender"], 0) < SENDER_COOLDOWN),
                         already_replied=(key in replied) and not m.get("_anchor"),
                         in_fail_cooldown=(
