@@ -606,8 +606,8 @@ wechatRouter.get('/customer-profile', async (req: Request, res: Response) => {
          COALESCE(c.source, '')   AS source,
          (SELECT count(*)::int
             FROM zenithjoy.cs_memory_messages m
-           WHERE m.sender_name = c.contact
-             AND m.tenant_id   = c.tenant_id
+           WHERE m.contact   = c.contact
+             AND m.tenant_id = c.tenant_id::text
          )::text                  AS contact_count
        FROM zenithjoy.crm_customers c
        WHERE (c.wechat_id = $1 OR c.contact = $1)
@@ -622,9 +622,9 @@ wechatRouter.get('/customer-profile', async (req: Request, res: Response) => {
     let recent_actions: string[] = [];
     try {
       const recentResult = await pool.query<{ content: string; created_at: string }>(
-        `SELECT content, created_at
+        `SELECT text AS content, created_at
            FROM zenithjoy.cs_memory_messages
-          WHERE sender_name = $1
+          WHERE contact = $1
           ORDER BY created_at DESC
           LIMIT 2`,
         [row?.nickname ?? wid]
