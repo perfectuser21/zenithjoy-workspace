@@ -74,3 +74,4 @@ dao1e-langgraph-brain-api-smoke.sh
 path4-ws4-local-profile-smoke.sh
 line04-customer-profile-smoke.sh
 line04-wxid-whitelist-smoke.sh
+line04-events-writer-smoke.sh
