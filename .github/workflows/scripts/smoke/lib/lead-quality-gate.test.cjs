@@ -207,6 +207,40 @@ test('回归: ip_location 仍须抓住真机实际格式「· 湖北」与「IP�
   );
 });
 
+// ── 回流：2026-07-15 真机实测垃圾（铁律 5 复现判据）─────────────────────────
+//
+// 这两条是 Seg3 抓评论 bug 真机 dump 里 extractByStructure 实际产出的垃圾
+// （fixture: services/agent-android/app/src/test/resources/fixtures/
+//   douyin-comment-panel-20260715.xml）：
+//   - 商品卡：nickname='客厅多层花架' / comment_text='已售200+'
+//   - 博主角标：nickname='波本气泡水' / comment_text='作者'
+// 修 ip_location（前缀改必需）之前，「已售200+」是被那条**过宽**规则误打误撞
+// 拦下的（reason 竟写"IP属地"）。前缀收紧后它就没规则管了 —— 必须显式建规则，
+// 否则闸对本 bug 的真实垃圾反而变松。
+test('回流: 商品卡垃圾 nickname="客厅多层花架" comment_text="已售200+" → passed=false', () => {
+  const result = checkLeadQuality([
+    { nickname: '客厅多层花架', comment_text: '已售200+', sec_uid: null },
+  ]);
+  assert.strictEqual(result.passed, false, `商品卡必须被拦，实际 passed=${result.passed}`);
+  const reason = result.violations[0].reason;
+  assert.ok(
+    reason.includes('商品卡'),
+    `violations[0].reason 应含"商品卡"，实际: "${reason}"`
+  );
+});
+
+test('回流: 博主角标 comment_text="作者" → passed=false', () => {
+  const result = checkLeadQuality([
+    { nickname: '波本气泡水', comment_text: '作者', sec_uid: null },
+  ]);
+  assert.strictEqual(result.passed, false, `博主角标必须被拦，实际 passed=${result.passed}`);
+  const reason = result.violations[0].reason;
+  assert.ok(
+    reason.includes('作者角标'),
+    `violations[0].reason 应含"作者角标"，实际: "${reason}"`
+  );
+});
+
 // ── 额外：日期格式（无零宽字符版）→ FAIL ───────────────────────────────────
 test('额外: comment_text="04-07" → passed=false，reason 含"日期格式"', () => {
   const result = checkLeadQuality([
