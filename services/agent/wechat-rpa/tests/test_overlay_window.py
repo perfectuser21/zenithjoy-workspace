@@ -182,3 +182,75 @@ def test_calc_dock_fallback_inside_when_no_space(tmp_path):
         overlay_width=300,
     )
     assert x == 1700 - 314, f"期望 x=1386（内缘 right-314），实际 x={x}"
+
+
+# ─── BEHAVIOR-4 回归：switch_customer 画像卡切换（mock 模式，非 Windows CI 可跑）────
+
+def test_switch_customer_fallback_on_api_error(tmp_path, monkeypatch):
+    """BEHAVIOR-4：API 不可达时 switch_customer 返回降级占位数据，不抛出异常。"""
+    import sys
+    import unittest.mock as mock
+
+    # mock pywebview 避免真实窗口
+    fake_webview = mock.MagicMock()
+    fake_webview.create_window.return_value = mock.MagicMock()
+    monkeypatch.setitem(sys.modules, "webview", fake_webview)
+
+    from overlay.overlay_window import OverlayApp
+    app = OverlayApp(state_dir=str(tmp_path))
+
+    # 强制 API 不可达（URL 无法连接）
+    monkeypatch.setenv("ZJ_API", "http://127.0.0.1:19999")
+    profile = app.switch_customer("test_wechat_id_A")
+
+    assert profile["nickname"] == "test_wechat_id_A", "降级时 nickname 应为 wechat_id"
+    assert "level" in profile
+    assert app.current_customer == "test_wechat_id_A", "switch_customer 应更新 current_customer"
+
+
+def test_switch_customer_two_customers_updates_state(tmp_path, monkeypatch):
+    """BEHAVIOR-4：切换两个不同客户时，current_customer 跟随变化（mock API 响应）。"""
+    import sys
+    import unittest.mock as mock
+    import urllib.request as _urllib_req
+
+    fake_webview = mock.MagicMock()
+    fake_webview.create_window.return_value = None
+    monkeypatch.setitem(sys.modules, "webview", fake_webview)
+
+    # mock urllib.request.urlopen 返回两个不同画像
+    profiles = {
+        "wxid_A": {"level": "VIP", "nickname": "客户A", "source": "抖音",
+                   "contact_count": 5, "recent_actions": [], "ai_profile": "高价值"},
+        "wxid_B": {"level": "standard", "nickname": "客户B", "source": "微信",
+                   "contact_count": 1, "recent_actions": [], "ai_profile": ""},
+    }
+
+    def fake_urlopen(url, timeout=3):
+        import json as _json
+        for wid, prof in profiles.items():
+            if wid in url:
+                resp = mock.MagicMock()
+                resp.read.return_value = _json.dumps(prof).encode()
+                resp.__enter__ = lambda s: s
+                resp.__exit__ = mock.MagicMock(return_value=False)
+                return resp
+        raise ConnectionError("not found")
+
+    monkeypatch.setattr(_urllib_req, "urlopen", fake_urlopen)
+
+    from overlay.overlay_window import OverlayApp
+    importlib = __import__("importlib")
+    import overlay.overlay_window as _ow_mod
+    importlib.reload(_ow_mod)
+    OverlayApp2 = _ow_mod.OverlayApp
+
+    app = OverlayApp2(state_dir=str(tmp_path))
+    p_a = app.switch_customer("wxid_A")
+    assert app.current_customer == "wxid_A"
+    assert p_a["nickname"] == "客户A"
+
+    p_b = app.switch_customer("wxid_B")
+    assert app.current_customer == "wxid_B"
+    assert p_b["nickname"] == "客户B"
+    assert p_a["nickname"] != p_b["nickname"], "切换后两客户画像应不同"

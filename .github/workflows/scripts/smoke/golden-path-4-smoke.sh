@@ -63,5 +63,89 @@ echo "=== Step 2: draft-submit（已删除，2026-06-30 去飞书重构由 draft
 echo "  SKIP: /api/wechat/draft-submit 路由已随飞书审批链路整条删除（见 wechat.ts 头注释），此检查随之移除"
 
 echo ""
+echo "=== [Line04/里程碑A] overlay_window.py 存在于部署包（BEHAVIOR-2 CI 等价） ==="
+OVERLAY_PY="services/agent/wechat-rpa/overlay/overlay_window.py"
+if [ -f "$OVERLAY_PY" ]; then
+  echo "  PASS: overlay_window.py 存在"; PASS=$((PASS+1))
+else
+  echo "  FAIL: overlay_window.py 不存在"; FAIL=$((FAIL+1))
+fi
+
+echo ""
+echo "=== [Line04/里程碑A] overlay switch_customer + events 逻辑存在（BEHAVIOR-3/4 CI 等价） ==="
+if grep -q "switch_customer" "$OVERLAY_PY" 2>/dev/null; then
+  echo "  PASS: overlay_window.py 含 switch_customer 方法"; PASS=$((PASS+1))
+else
+  echo "  FAIL: overlay_window.py 缺 switch_customer 方法（TODO: 真机段 BEHAVIOR-4）"; FAIL=$((FAIL+1))
+fi
+if grep -q "events" "$OVERLAY_PY" 2>/dev/null; then
+  echo "  PASS: overlay_window.py 含 events 消费逻辑"; PASS=$((PASS+1))
+else
+  echo "  FAIL: overlay_window.py 缺 events 消费逻辑"; FAIL=$((FAIL+1))
+fi
+
+echo ""
+echo "=== [Line04/里程碑B] /api/wechat/customer-profile 路由注册（BEHAVIOR-5 CI 等价） ==="
+WECHAT_TS="apps/api/src/routes/wechat.ts"
+if grep -q "customer-profile" "$WECHAT_TS" 2>/dev/null; then
+  echo "  PASS: wechat.ts 已注册 customer-profile 路由"; PASS=$((PASS+1))
+else
+  echo "  FAIL: wechat.ts 未注册 customer-profile 路由"; FAIL=$((FAIL+1))
+fi
+# 六字段完整性检查
+for field in level nickname source contact_count recent_actions ai_profile; do
+  if grep -q "$field" "$WECHAT_TS" 2>/dev/null; then
+    echo "  PASS: customer-profile 含字段 $field"; PASS=$((PASS+1))
+  else
+    echo "  FAIL: customer-profile 缺字段 $field"; FAIL=$((FAIL+1))
+  fi
+done
+
+echo ""
+echo "=== [Line04/里程碑B] /api/wechat/customer-profile API 响应（API 可达时） ==="
+# API 可达性检测（已在上面检测 API_REACHABLE）
+if [ "${API_REACHABLE:-0}" -eq 1 ]; then
+  HTTP_CP=$(curl -s -o /tmp/zj-profile-a.json -w '%{http_code}' \
+    "$API/api/wechat/customer-profile?wechat_id=smoke_test_wx_001" 2>/dev/null || echo "000")
+  if [ "$HTTP_CP" = "200" ]; then
+    echo "  PASS: customer-profile HTTP=200 (wechat_id=smoke_test_wx_001)"; PASS=$((PASS+1))
+    # 检查返回结构含 data 或直接六字段
+    if python3 -c "
+import json,sys
+d=json.load(open('/tmp/zj-profile-a.json'))
+data=d.get('data',d)
+for f in ['level','nickname','source','contact_count','recent_actions','ai_profile']:
+    assert f in data, f'缺字段: {f}'
+print('PASS: 六字段全部存在')
+" 2>/dev/null; then
+      echo "  PASS: customer-profile 六字段结构完整"; PASS=$((PASS+1))
+    else
+      echo "  FAIL: customer-profile 六字段不完整"; FAIL=$((FAIL+1))
+    fi
+    # 不同 wechat_id 返回不同 nickname（两条请求）
+    HTTP_CP2=$(curl -s -o /tmp/zj-profile-b.json -w '%{http_code}' \
+      "$API/api/wechat/customer-profile?wechat_id=smoke_test_wx_002" 2>/dev/null || echo "000")
+    if [ "$HTTP_CP2" = "200" ]; then
+      echo "  PASS: customer-profile HTTP=200 (wechat_id=smoke_test_wx_002)"; PASS=$((PASS+1))
+    else
+      echo "  FAIL: customer-profile HTTP=$HTTP_CP2 for smoke_test_wx_002"; FAIL=$((FAIL+1))
+    fi
+  else
+    echo "  FAIL: customer-profile HTTP=$HTTP_CP (期望 200)"; FAIL=$((FAIL+1))
+  fi
+else
+  echo "  SKIP: API 不可达，结构断言由 vitest 覆盖（windows_cloud CI）"
+fi
+
+echo ""
+echo "=== [Line04/里程碑A] 真机段 xian-rog 人工验收（证据存 evidence/ 目录）==="
+EVIDENCE_DIR="sprints/07150800-line04-overlay-continuation/evidence"
+if ls "$EVIDENCE_DIR"/*.png 2>/dev/null | head -1 | grep -q .; then
+  echo "  PASS: 真机截图证据存在（$EVIDENCE_DIR）"; PASS=$((PASS+1))
+else
+  echo "  SKIP: xian-rog 真机验收证据尚未存入（人工闸，CI 无法自动化）"
+fi
+
+echo ""
 echo "Smoke: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

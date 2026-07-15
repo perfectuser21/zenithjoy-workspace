@@ -5,6 +5,7 @@
  *   - POST /api/wechat/qr-bind         {platform, agent_id} → {task_id, status}
  *   - POST /api/wechat/scheduler-tick  {force?, customer?} → {generated, skipped}
  *   - POST /api/wechat/draft-generate  {sender, wechat_id, content, is_group?} → {status, reply?}
+ *   - GET  /api/wechat/customer-profile?wechat_id=<id> → {level,nickname,source,contact_count,recent_actions,ai_profile}
  *
  * 去飞书（2026-06-30）：旧飞书审批轮询端点 draft-review-poll 已删（feishu-poll 整条删除）；
  * draft-generate 现为去飞书 + 自动直发（个人未标黑 → 直接返回 reply，群/标黑 → skipped）。
@@ -573,5 +574,95 @@ wechatRouter.post('/moment-drafts/:taskId/reject', async (req: Request, res: Res
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error('[wechat/moment-drafts/reject] 失败:', errMsg);
     return res.status(500).json({ error: 'REJECT_FAILED', message: errMsg });
+  }
+});
+
+// ─── GET /api/wechat/customer-profile — 客户画像卡（BEHAVIOR-5, Line04 里程碑B）───────────────
+// 从既有 CRM 表（crm_customers + wechat_cs_account_config）组装六字段，禁新建表。
+// 六字段：level / nickname / source / contact_count / recent_actions / ai_profile
+// 路由作用：overlay switch_customer() 调用此接口拉取画像卡数据（FR-B1）
+wechatRouter.get('/customer-profile', async (req: Request, res: Response) => {
+  const { wechat_id } = req.query;
+  if (!wechat_id || typeof wechat_id !== 'string' || !wechat_id.trim()) {
+    return res.status(400).json({
+      error: 'MISSING_WECHAT_ID',
+      message: 'wechat_id 参数必填',
+    });
+  }
+  const wid = wechat_id.trim();
+
+  try {
+    // 从 crm_customers 查询客户基础信息（level/source/contact/wechat_id）
+    // 禁新建表：复用 zenithjoy.crm_customers（status=A1-A5 即 level）
+    const profileResult = await pool.query<{
+      level: string;
+      nickname: string;
+      source: string;
+      contact_count: string;
+    }>(
+      `SELECT
+         COALESCE(c.status, 'A1') AS level,
+         COALESCE(c.contact, $1)  AS nickname,
+         COALESCE(c.source, '')   AS source,
+         (SELECT count(*)::int
+            FROM zenithjoy.cs_memory_messages m
+           WHERE m.contact   = c.contact
+             AND m.tenant_id = c.tenant_id::text
+         )::text                  AS contact_count
+       FROM zenithjoy.crm_customers c
+       WHERE (c.wechat_id = $1 OR c.contact = $1)
+       ORDER BY c.updated_at DESC
+       LIMIT 1`,
+      [wid]
+    );
+
+    const row = profileResult.rows[0];
+
+    // 近期动态：取最近 2 条消息摘要
+    let recent_actions: string[] = [];
+    try {
+      const recentResult = await pool.query<{ content: string; created_at: string }>(
+        `SELECT text AS content, created_at
+           FROM zenithjoy.cs_memory_messages
+          WHERE contact = $1
+          ORDER BY created_at DESC
+          LIMIT 2`,
+        [row?.nickname ?? wid]
+      );
+      recent_actions = recentResult.rows.map(
+        (r) => `${new Date(r.created_at).toLocaleDateString('zh-CN')}: ${r.content.slice(0, 20)}`
+      );
+    } catch {
+      // cs_memory_messages 查询失败时降级为空列表
+      recent_actions = [];
+    }
+
+    // ai_profile：暂无独立字段，thin 实现返回空字符串（加厚阶段聚合 reasoning）
+    const ai_profile = '';
+
+    const data = row
+      ? {
+          level: row.level,
+          nickname: row.nickname,
+          source: row.source,
+          contact_count: Number(row.contact_count) || 0,
+          recent_actions,
+          ai_profile,
+        }
+      : {
+          // 占位：CRM 中无记录时返回 wechat_id 作为 nickname
+          level: 'unknown',
+          nickname: wid,
+          source: '',
+          contact_count: 0,
+          recent_actions: [],
+          ai_profile: '',
+        };
+
+    return res.json({ data });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/customer-profile] 查询失败:', errMsg);
+    return res.status(500).json({ error: 'CUSTOMER_PROFILE_QUERY_FAILED', message: errMsg });
   }
 });
