@@ -75,3 +75,4 @@ path4-ws4-local-profile-smoke.sh
 line04-customer-profile-smoke.sh
 line04-wxid-whitelist-smoke.sh
 line04-events-writer-smoke.sh
+line04-startup-selfcheck-smoke.sh
