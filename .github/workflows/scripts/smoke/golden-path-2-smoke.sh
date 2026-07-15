@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # golden-path-2-smoke.sh
-# ZenithJoy Walking Skeleton — Path 2 客户智能获客路径（9 步本地版）
+# ZenithJoy Walking Skeleton — Path 2 客户智能获客路径（11 步本地版）
 # Notion Journey: https://www.notion.so/35ac40c2ba6381ed8df4f3fa0b64f5bf
 #
 # 2026-07-07 用户更正（decision 431acd2c）：整条去飞书、改本地中台。
 # 本 smoke 2026-07-14 重写（handoff 0714 刀1），替换旧版「Sprint A 飞书集成」（停在 05-26，
 # 测已删除的飞书流程 + fake-feishu-server stub）。
 #
-# 8 步（CLAUDE.md Path 2 权威模型）与断言层级：
+# 11 步（CLAUDE.md Path 2 权威模型 8 步 + Seg2/Seg4 回归 2 步）与断言层级：
 #   Step 1 注册客户端自动（真链路：sign-up → free license → 自动建 tenant）
 #   Step 2 装客户端（真链路：POST /api/agent/register）
 #   Step 3 Android 端 Agent 连中台（服务端等价断言：x-agent-id 真实调用方 shape，#1267 路径）
@@ -17,6 +17,11 @@
 #   Step 7 中台检测登录态（真链路：GET /api/agent/burner/sessions）
 #   Step 8 评论区挖客闭环·采集+判定段（真链路：collect/start → report-videos → judge-video 真调判定）
 #   Step 9 抓评论回填真实抖音号 → Lead 落库带号（真链路：comment-score-result → acquisition_leads.douyin_id）
+#   Step 10 判定门 Seg2 回归：空画像短路必须落库（新 tenant，从未 PATCH acquisition_config）
+#   Step 11 capabilities 随 os_type 心跳同步：Seg4 私信设备路由回归（心跳 os_type=android → capabilities 含 android）
+#
+# 2026-07-15（handoff 0715）：铺到 11 步，回流两个真根因（铁律5）——
+#   Seg2 judgeVideo INV-6 短路不写库 / Seg4 心跳从不按 os_type 刷新 capabilities。
 #
 # ⚠️ 真机段等价断言说明（铁律 5）：
 #   Step 3/6 的真机执行段（Android 真机装 APK、真机登录抖音小号）与 Step 8 的真机截图上报段
@@ -34,7 +39,7 @@
 # 用法：
 #   API_BASE=http://localhost:5200 DB_URL=postgresql://... \
 #     bash .github/workflows/scripts/smoke/golden-path-2-smoke.sh
-#   退出码 0 = 9 步服务端段全通；非零 = 第 EXIT_CODE 步红
+#   退出码 0 = 11 步服务端段全通；非零 = 第 EXIT_CODE 步红
 #
 # 真调判定依赖：API server 进程需带 TOAPIS_API_KEY（CI: secrets.TOAPIS_API_KEY 注入 job env）。
 # 无 key 时 judge-video 落 pending/no_api_key → Step 8 真红（这是设计：#1269/#1271 就是全 mock 漏过的）。
@@ -55,7 +60,7 @@ fail() { echo "❌ $1"; exit "$2"; }
 psq() { psql "$DB_URL" -At -c "$1"; }
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ZenithJoy Path 2 Walking Skeleton — 客户智能获客路径（8 步本地版）"
+echo "  ZenithJoy Path 2 Walking Skeleton — 客户智能获客路径（11 步本地版）"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # ───────────────────────────────────────────────────────────────────
@@ -280,10 +285,96 @@ S9_LEAD2=$(psq "SELECT COALESCE(douyin_id,'<NULL>') FROM zenithjoy.acquisition_l
 ok "Step 9d ✅ 没读到号 → douyin_id 留空，未造假"
 ok "Step 9 ✅ 抓评论 → 抖音号回填 Lead 服务端链路全通"
 
-rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" 2>/dev/null
+# ───────────────────────────────────────────────────────────────────
+# Step 10：判定门 Seg2 回归——空画像短路必须落库（handoff 0715 真根因）
+#
+# 复现的真 bug：judgeVideo INV-6 分支（target_profile_desc 为空）此前只
+# return matched，从不 writeJudgment。API 响应说 matched，但
+# acquisition_collect_videos.judgment_status 停在旧值/NULL——下游任何读库
+# 判断（派单/看板）永远读不到这次"匹配"。
+#
+# 用全新 tenant（本步专属 sign-up，从未 PATCH 过 acquisition_config）
+# 复现"空画像"场景，不污染 Step 5-9 已写画像的主 tenant。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 10: 判定门 Seg2 回归——空画像短路必须落库"
+S10_TMP=$(mktemp); S10_COOKIES=$(mktemp)
+S10_EMAIL="p2-smoke-noprofile-${RND}@zenithjoy.test"
+S10_HTTP=$(curl -s -o "$S10_TMP" -w "%{http_code}" --max-time 30 -c "$S10_COOKIES" \
+  -X POST "$API_BASE/api/auth/sign-up/email" -H "Content-Type: application/json" \
+  -d "{\"email\":\"$S10_EMAIL\",\"password\":\"$TEST_PASSWORD\",\"name\":\"p2smokenp\"}")
+[ "$S10_HTTP" = "200" ] || fail "Step 10a sign-up expected 200, got $S10_HTTP" 10
+curl -s -o "$S10_TMP" -b "$S10_COOKIES" "$API_BASE/api/account/me" >/dev/null
+S10_LICENSE=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d['license']['license_key'])" "$S10_TMP" 2>/dev/null)
+S10_TENANT=$(psq "SELECT tenant_id FROM zenithjoy.licenses WHERE license_key='$S10_LICENSE' AND tenant_id IS NOT NULL LIMIT 1")
+[ -n "$S10_TENANT" ] || fail "Step 10a 新 tenant 未建" 10
+
+S10_HTTP=$(curl -s -o "$S10_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/agent/register" -H "Content-Type: application/json" \
+  -d "{\"license_key\":\"$S10_LICENSE\",\"machine_id\":\"p2-smoke-np-${RND}\",\"hostname\":\"p2-smoke-np-host\"}")
+[ "$S10_HTTP" = "200" ] || fail "Step 10a agent/register expected 200, got $S10_HTTP" 10
+S10_AGENT=$(psq "SELECT id FROM zenithjoy.agents WHERE tenant_id='$S10_TENANT' ORDER BY created_at DESC LIMIT 1")
+[ -n "$S10_AGENT" ] || fail "Step 10a agents 无该 tenant 的 agent 行" 10
+
+# ⚠️ 关键：不调用 PATCH /api/acquisition/config——acquisition_config 对这个
+# tenant 无行，judgeVideo 读到 target_profile_desc='' → 触发 INV-6 短路。
+S10_VIDEO="p2smokenp${RND//-/}"
+S10_HTTP=$(curl -s -o "$S10_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/collect/start" \
+  -H "Content-Type: application/json" -H "X-Tenant-Id: $S10_TENANT" \
+  -d '{"keywords":["p2-smoke-np"]}')
+[ "$S10_HTTP" = "200" ] || fail "Step 10b collect/start expected 200, got $S10_HTTP" 10
+S10_TASK_ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S10_TMP" 2>/dev/null)
+[ -n "$S10_TASK_ID" ] || fail "Step 10b 无 task_id" 10
+
+S10_HTTP=$(curl -s -o "$S10_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/collect/report-videos" \
+  -H "Content-Type: application/json" -H "x-agent-id: $S10_AGENT" \
+  -d "{\"task_id\":\"$S10_TASK_ID\",\"videos\":[{\"video_id\":\"$S10_VIDEO\",\"title\":\"p2 smoke 空画像回归\"}]}")
+[ "$S10_HTTP" = "200" ] || fail "Step 10b report-videos expected 200, got $S10_HTTP" 10
+ok "Step 10b 空画像 tenant → 视频行落库（未 PATCH 过 acquisition_config）"
+
+PNG_B64_10="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+S10_HTTP=$(curl -s -o "$S10_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/judge-video" \
+  -H "Content-Type: application/json" -H "x-agent-id: $S10_AGENT" \
+  -d "{\"video_id\":\"$S10_VIDEO\",\"capture_type\":\"screenshot\",\"data_b64\":\"$PNG_B64_10\"}")
+[ "$S10_HTTP" = "200" ] || fail "Step 10c judge-video expected 200, got $S10_HTTP" 10
+S10_STATUS=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['judgment_status'])" "$S10_TMP" 2>/dev/null)
+[ "$S10_STATUS" = "matched" ] || fail "Step 10c API 响应 judgment_status='$S10_STATUS' 期望 matched" 10
+
+# 核心回归断言：DB 必须真的落了 matched，不能只是 API 响应说了但没写库
+S10_DB_STATUS=$(psq "SELECT COALESCE(judgment_status,'<NULL>') FROM zenithjoy.acquisition_collect_videos WHERE tenant_id='$S10_TENANT' AND video_id='$S10_VIDEO'")
+[ "$S10_DB_STATUS" = "matched" ] || fail "Step 10c 空画像短路未落库：DB judgment_status='$S10_DB_STATUS' 期望 'matched'（judgeVideo INV-6 分支不写库的回归）" 10
+ok "Step 10c ✅ 空画像短路真落库 judgment_status=matched（Seg2 根因已修）"
+ok "Step 10 ✅ 判定门 Seg2 回归通过"
+
+# ───────────────────────────────────────────────────────────────────
+# Step 11：capabilities 随 os_type 心跳同步——Seg4 私信设备路由回归（handoff 0715 真根因）
+#
+# 复现的真 bug：upsertAgentByHeartbeat 只在首次 INSERT 硬编码
+# capabilities=ARRAY['douyin']，此后所有 UPDATE 分支完全不碰这一列。
+# 真实 Android 设备心跳上报 os_type=android，capabilities 却永远不含
+# 'android'。resolveDevicePlatform（capabilities.includes('android')）
+# 因此恒定判 'windows'，私信任务永远派不到真机。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 11: capabilities 随 os_type 心跳同步（Seg4 私信设备路由）"
+S11_TMP=$(mktemp)
+S11_HTTP=$(curl -s -o "$S11_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/agent/heartbeat" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $LICENSE_KEY" \
+  -d "{\"version\":\"2.0.99\",\"hostname\":\"p2-smoke-host\",\"os_type\":\"android\",\"agent_uuid\":\"$AGENT_PK\"}")
+[ "$S11_HTTP" = "200" ] || fail "Step 11a heartbeat os_type=android expected 200, got $S11_HTTP: $(cat "$S11_TMP")" 11
+
+S11_CAPS=$(psq "SELECT capabilities::text FROM zenithjoy.agents WHERE id='$AGENT_PK'")
+echo "$S11_CAPS" | grep -q "android" || fail "Step 11b capabilities='$S11_CAPS' 不含 'android'（心跳未把 os_type 同步进 capabilities，resolveDevicePlatform 会恒定判 windows）" 11
+ok "Step 11b ✅ capabilities=$S11_CAPS 含 android（Seg4 根因已修）"
+ok "Step 11 ✅ capabilities 随 os_type 心跳同步回归通过"
+
+rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
+      "$S10_TMP" "$S10_COOKIES" "$S11_TMP" 2>/dev/null
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Path 2 9 步本地版 smoke 全绿（服务端段）"
+echo "  ✅ Path 2 11 步本地版 smoke 全绿（服务端段）"
 echo "  真机段：等 Android evaluator 通道（xian-rog nightly）接管复跑"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 exit 0

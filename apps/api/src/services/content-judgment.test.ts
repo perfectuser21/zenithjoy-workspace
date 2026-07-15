@@ -120,6 +120,17 @@ describe('content-judgment judgeVideo', () => {
     expect(result.judgment_status).toBe('matched');
     // 空画像时不应是缓存命中（是主动跳过 Gemini 的逻辑）
     expect(result.cache_hit).toBeUndefined();
+
+    // 回归（handoff 0715 Seg2 根因）：空画像短路必须把 matched 落库，
+    // 否则 API 响应说 matched，但 acquisition_collect_videos.judgment_status
+    // 停在旧值/NULL——下游任何读库判断（派单/看板）永远读不到这次"匹配"。
+    const mockQuery = pool.query as ReturnType<typeof vi.fn>;
+    const updateCalls = mockQuery.mock.calls.filter(([text]: [string]) =>
+      /UPDATE.*collect_videos/i.test(text)
+    );
+    expect(updateCalls.length).toBeGreaterThanOrEqual(1);
+    const [, params] = updateCalls[0] as [string, unknown[]];
+    expect(params).toContain('matched');
   });
 
   /**

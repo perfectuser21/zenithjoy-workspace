@@ -103,6 +103,33 @@ function isLicenseMachineInsert(c: unknown[]): boolean {
   return typeof c[0] === 'string' && /INSERT INTO zenithjoy\.license_machines/i.test(c[0] as string);
 }
 
+/**
+ * 回归（handoff 0715 Seg4 根因）：心跳只在首次 INSERT 硬编码
+ * capabilities = ARRAY['douyin']，此后所有 UPDATE 分支完全不碰这一列——
+ * 真实 Android 设备每次心跳上报 os_type=android，capabilities 却永远不含
+ * 'android'。resolveDevicePlatform 因此恒定判 'windows'，私信任务永远
+ * 派不到真机。心跳必须按 osType 把 capabilities 也带上，UPDATE 分支同样要写。
+ */
+describe('upsertAgentByHeartbeat — capabilities 必须随 os_type 心跳同步（Seg4 私信路由）', () => {
+  beforeEach(() => {
+    vi.mocked(pool.query).mockReset();
+  });
+
+  it('精确 UPDATE 命中路径：osType=android 心跳 → capabilities 参数须含 android', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [AGENT_ROW] } as any); // 精确 UPDATE
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any); // pinned_agent UPDATE
+
+    await upsertAgentByHeartbeat({ ...BASE_ARGS, osType: 'android' });
+
+    const calls = vi.mocked(pool.query).mock.calls;
+    const firstSql = calls[0][0] as string;
+    expect(firstSql).toMatch(/UPDATE zenithjoy\.agents/i);
+    expect(firstSql).toMatch(/capabilities/i);
+    const firstParams = calls[0][1] as unknown[];
+    expect(firstParams).toContainEqual(expect.arrayContaining(['android']));
+  });
+});
+
 describe('upsertAgentByHeartbeat — license_machines 配额门（心跳旁路补齐）', () => {
   const QUOTA_ARGS = { ...BASE_ARGS, machineId: 'mid-xyz' };
 
