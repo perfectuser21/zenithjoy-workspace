@@ -25,12 +25,37 @@ echo ""
 
 # ─── 节 ①：pytest test_events_writer.py 全绿 ──────────────────────────────
 
-echo "--- 节① pytest test_events_writer.py ---"
+echo "--- 节① _write_event 纯函数等价断言（Smoke Glob Runner 环境无 pytest，完整 8 条单测见 CI Agent Test job） ---"
 
-if python3 -m pytest services/agent/wechat-rpa/tests/test_events_writer.py -v --tb=short 2>&1; then
-  pass "test_events_writer.py 全绿"
+if python3 -c "
+import sys, os, json, tempfile
+sys.path.insert(0, 'services/agent/wechat-rpa')
+import listen_chat
+
+state_dir = tempfile.mkdtemp(prefix='zj-smoke-events-')
+os.environ['ZJ_STATE_DIR'] = state_dir
+
+listen_chat._write_event('reply_sent', '张三', '客户询问价格，已推送优惠', None)
+with open(os.path.join(state_dir, 'events.jsonl'), encoding='utf-8') as f:
+    row = json.loads(f.readline())
+required = {'v', 'event_id', 'date', 'type', 'contact', 'stage', 'reasoning', 'ts'}
+assert required <= row.keys(), f'缺字段: {required - row.keys()}'
+assert row['type'] == 'reply_sent'
+
+# PII 过滤 + 截断
+long_reasoning = '这是一段超过三十个字符的推理文案，客户询问了价格并表示非常感兴趣，我们推送了最新的限时优惠活动含手机13812345678'
+listen_chat._write_event('reply_sent', '李四', long_reasoning, None)
+content = open(os.path.join(state_dir, 'events.jsonl'), encoding='utf-8').read()
+assert '13812345678' not in content, 'PII 手机号未过滤'
+
+# 软失败：不可写目录不抛异常
+os.environ['ZJ_STATE_DIR'] = '/nonexistent_zj_state_dir_for_smoke'
+listen_chat._write_event('reply_sent', '王五', '测试软失败', None)
+print('PASS')
+" 2>&1; then
+  pass "_write_event 合规写入 + PII过滤 + 软失败 全过（8 条完整单测见 services/agent/wechat-rpa/tests/test_events_writer.py）"
 else
-  fail "test_events_writer.py 存在失败用例"
+  fail "_write_event 纯函数等价断言失败"
 fi
 
 echo ""
