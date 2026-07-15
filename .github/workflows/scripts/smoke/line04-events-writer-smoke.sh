@@ -27,7 +27,7 @@ echo ""
 
 echo "--- 节① pytest test_events_writer.py ---"
 
-if pytest sprints/07152230-line04-events-writer/tests/test_events_writer.py -v --tb=short 2>&1; then
+if python3 -m pytest services/agent/wechat-rpa/tests/test_events_writer.py -v --tb=short 2>&1; then
   pass "test_events_writer.py 全绿"
 else
   fail "test_events_writer.py 存在失败用例"
