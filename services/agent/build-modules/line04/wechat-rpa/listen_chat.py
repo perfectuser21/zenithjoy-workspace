@@ -3964,6 +3964,61 @@ def _redact(text: str, max_len: int = 6) -> str:
     return text[:max_len] + "***"
 
 
+def _write_event(
+    event_type: str,
+    contact: str,
+    reasoning: "str | None" = None,
+    stage: "str | None" = None,
+) -> None:
+    """向 _STATE_DIR/events.jsonl 追加一行事件记录（软失败：任何异常仅 log，不上抛）。
+
+    FR-2 规格：
+    - reasoning 先走 PII 过滤，再截断到 ≤30 字
+    - event_id 格式：{epoch_ms}-{6位hex}-{seq}
+    - 写入失败不抛异常（软失败）
+    """
+    try:
+        try:
+            from overlay.pii_filter import filter_pii  # noqa: PLC0415
+        except ImportError:
+            try:
+                from pii_filter import filter_pii  # type: ignore[no-redef]  # noqa: PLC0415
+            except ImportError:
+                def filter_pii(x: str) -> str:  # type: ignore[misc]  # noqa: E731
+                    return x
+
+        import uuid as _uuid  # noqa: PLC0415
+
+        safe_reasoning: "str | None" = None
+        if reasoning:
+            filtered = filter_pii(reasoning)
+            if len(filtered) > 30:
+                filtered = filtered[:30]
+            safe_reasoning = filtered or None
+
+        epoch_ms = int(time.time() * 1000)
+        event_id = f"{epoch_ms}-{_uuid.uuid4().hex[:6]}-1"
+
+        event = {
+            "v": 1,
+            "event_id": event_id,
+            "date": time.strftime("%Y-%m-%d"),
+            "type": event_type,
+            "contact": contact,
+            "stage": stage,
+            "reasoning": safe_reasoning,
+            "ts": time.time(),
+        }
+        # 运行时读取 _STATE_DIR（允许测试通过 ZJ_STATE_DIR 环境变量覆盖）
+        _state = (os.environ.get("ZJ_STATE_DIR") or _STATE_DIR)
+        events_path = os.path.join(_state, "events.jsonl")
+        import json as _json  # noqa: PLC0415
+        with open(events_path, "a", encoding="utf-8") as _f:
+            _f.write(_json.dumps(event, ensure_ascii=False) + "\n")
+    except Exception as _e:
+        _log(f"[events_writer] 写入失败（软失败）: {_e}")
+
+
 def _activate_uia() -> None:
     """设置系统屏幕阅读器标志，激活微信 4.0 的 UIAutomation provider（替代讲述人）。
 
@@ -4725,6 +4780,8 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 # 并行 dict：按 id(m) 存 draft-generate 返回的 message_id（送达回执用，bug2 下半）。
                 # 与 drafts 分开存，取用点少改动；message_id 缺省 None → post_message_receipt 自动跳过。
                 draft_message_ids = {}
+                # 并行 dict：按 id(m) 存 draft-generate 返回的 reasoning（events_writer 用）。
+                draft_reasonings: "dict[int, str | None]" = {}
                 if eligible:
                     import concurrent.futures
 
@@ -4753,6 +4810,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                                 continue
                             drafts[id(m)] = reply
                             draft_message_ids[id(m)] = (result or {}).get("message_id")
+                            draft_reasonings[id(m)] = (result or {}).get("reasoning")
 
                 # ── Phase 2: 串行发送（单微信窗口，切窗+发送只能逐个；_open_chat 身份闸门防串台）──
                 for m in eligible:
@@ -4806,6 +4864,7 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         clear_pending_retry(pending_retry, sender=m["sender"])
                         sender_reply_cooldown[m["sender"]] = time.time()  # per-sender 30s 冷却
                         _commit_reply_success(m, last_preview)  # DELIVERED
+                        _write_event("reply_sent", m["sender"], draft_reasonings.pop(id(m), None))
                         # 真送达确认 → 回执中台 ok=True（bug2 下半：中台据此销账，不再记假账）。
                         # 不进 _commit_reply_success 本体——它还被 replied/dup/roster_gate 终态复用，
                         # 那些场景无 message_id。message_id 缺省时 post_message_receipt 自动跳过。

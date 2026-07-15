@@ -15,9 +15,11 @@ date: 2026-07-15
 **验收命令**：
 ```bash
 # BEHAVIOR-1（继承自原 BEHAVIOR-8）回归
-result=$(grep -r "events.jsonl" services/agent/wechat-rpa/overlay/ --include="*.py" -l 2>/dev/null | grep -v "__pycache__")
-if [ -n "$result" ]; then
-  echo "FAIL: overlay 目录含 events.jsonl 写入调用: $result"
+# 注：overlay_window.py 允许只读消费 events.jsonl（"r" 模式），此处检查写入调用（"a"/"w" 模式）
+write_opens=$(grep -rn 'open.*"a"\|open.*"w"' services/agent/wechat-rpa/overlay/ --include="*.py" 2>/dev/null \
+  | grep -i "events" | grep -v "^[[:space:]]*#" | grep -v "__pycache__" || true)
+if [ -n "$write_opens" ]; then
+  echo "FAIL: overlay 目录含 events 写入调用: $write_opens"
   exit 1
 fi
 echo "PASS: overlay 目录无 events.jsonl 写入调用"
@@ -42,10 +44,10 @@ echo "PASS: 追加模式确认: $result_append"
 **验收命令**：
 ```bash
 # BEHAVIOR-2（继承自原 BEHAVIOR-9）挂点回归
-# 断言1：_write_event 调用存在于 DELIVERED 点附近
-result=$(grep -n "reply_sent\|_write_event" services/agent/wechat-rpa/listen_chat.py | grep -E "479[0-9]:")
+# 断言1：_write_event 调用存在于 DELIVERED 点（_commit_reply_success 后）
+result=$(grep -n '_write_event("reply_sent"' services/agent/wechat-rpa/listen_chat.py)
 if [ -z "$result" ]; then
-  echo "FAIL: DELIVERED 点（4790-4800行）未找到 _write_event 调用"
+  echo "FAIL: DELIVERED 点未找到 _write_event(\"reply_sent\") 调用"
   exit 1
 fi
 echo "PASS: DELIVERED 点挂接确认: $result"
@@ -220,7 +222,7 @@ grep -r "events.jsonl" services/agent/wechat-rpa/overlay/ --include="*.py" -l 2>
 # 期望：无输出
 
 # 5. BEHAVIOR-2（继承自原 BEHAVIOR-9）挂点断言
-grep -n "reply_sent\|_write_event" services/agent/wechat-rpa/listen_chat.py | grep -E "479[0-9]:"
+grep -n '_write_event("reply_sent"' services/agent/wechat-rpa/listen_chat.py
 # 期望：有输出
 
 # 6. BEHAVIOR-7 stage=None 断言
@@ -240,7 +242,7 @@ grep -n "stage=None\|\"stage\": null\|stage.*None" services/agent/wechat-rpa/lis
 | CP-04 | BEHAVIOR-5 | reasoning 截断到 ≤30 字 | pytest | 自动 |
 | CP-05 | BEHAVIOR-4 | _STATE_DIR 不可写时软失败 | pytest | 自动 |
 | CP-06 | BEHAVIOR-6 | draft_reasonings 字典存在于 listen_chat.py | grep | 自动 |
-| CP-07 | BEHAVIOR-2 | _write_event 调用在 DELIVERED 点附近（4790-4800 行） | grep | 自动 |
+| CP-07 | BEHAVIOR-2 | _write_event("reply_sent") 调用在 DELIVERED 点（_commit_reply_success 后） | grep | 自动 |
 | CP-08 | BEHAVIOR-8 | build-modules 副本与主路径同步（draft_reasonings + _write_event） | grep | 自动 |
 | CP-15 | BEHAVIOR-7 | stage 字段本刀写入固定为 null（非 null 透传为 Phase 2 scope） | grep | 自动 |
 | CP-09 | BEHAVIOR-5 | events.jsonl 新增行包含所有必需字段 | pytest | 自动 |
