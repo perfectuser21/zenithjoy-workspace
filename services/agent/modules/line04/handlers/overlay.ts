@@ -25,9 +25,11 @@ const CIRCUIT_WINDOW_SEC = 3600;    // 60min 熔断窗口
 const CIRCUIT_THRESHOLD = 8;        // 8 次快速崩溃 → 熔断
 const FAST_CRASH_SEC = 60;          // 存活 <60s → 算快速崩溃
 const RESPAWN_DELAY_MS = 30_000;    // 正常退出重拉延迟
+// 打包进 install pack 后 handlers/ 与 wechat-rpa/ 是 <module-root>/ 下的同级目录，从
+// handlers/ 只需上 1 层（不是 repo 源码树里共享 services/agent/wechat-rpa/ 那 3 层）。
 const OVERLAY_SCRIPT = path.join(
   __dirname,
-  '../../../wechat-rpa/overlay/overlay_window.py',
+  '../wechat-rpa/overlay/overlay_window.py',
 );
 
 // ─── 诊断 JSON 模板 ──────────────────────────────────────────────────────────
@@ -156,7 +158,7 @@ export class OverlayHandler {
       const pyExe = getPythonExe();
       const preflightScript = path.join(
         __dirname,
-        '../../../wechat-rpa/overlay/preflight.py',
+        '../wechat-rpa/overlay/preflight.py',
       );
 
       if (!fs.existsSync(preflightScript)) {
