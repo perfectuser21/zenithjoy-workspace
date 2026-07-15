@@ -45,7 +45,7 @@ status: PROPOSED
 
 ---
 
-## 三、E2E 验收
+## E2E 验收
 
 ### 里程碑A 验收断言
 
