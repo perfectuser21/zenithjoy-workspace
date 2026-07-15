@@ -802,8 +802,19 @@ class DouyinDmOutreachService : AccessibilityService() {
          * 真实主页 id 行永远带"抖音号："前缀，据此天然排除搜索框陷阱。全角/半角冒号都认。
          */
         internal fun verifyProfileMatchesDouyinId(profileTexts: List<String>, targetDouyinId: String): Boolean {
-            val regex = Regex("""^抖音号[:：]\s*${Regex.escape(targetDouyinId)}$""")
-            return profileTexts.any { regex.matches(it.trim()) }
+            // Primary: exact 抖音号 match ("抖音号：{id}" only appears on real profile pages,
+            // never in the search box — this guards against the search box echo trap).
+            val idRegex = Regex("""^抖音号[:：]\s*${Regex.escape(targetDouyinId)}$""")
+            if (profileTexts.any { idRegex.matches(it.trim()) }) return true
+            // Nickname-mode fallback (方案A): when targetDouyinId is a display nickname
+            // (contains CJK or non-ASCII — 抖音号 is always ASCII-only), verify by checking
+            // if the profile page shows the nickname verbatim as a text node.
+            // Risk: common nicknames may match unrelated profiles; AMBIGUOUS branch in
+            // locateProfileBySearch already rejects non-unique search results.
+            if (targetDouyinId.any { c -> c.code > 0xFF }) {
+                return profileTexts.any { it.trim() == targetDouyinId }
+            }
+            return false
         }
 
         /**

@@ -164,8 +164,8 @@ if [ "${MATCHED:-0}" -ge 1 ]; then
 
   # ── Seg3 语义质量零容忍闸门 ──
   LEADS_JSON=$(ssh hk-vps "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -t -c \
-    \"SELECT json_agg(json_build_object('nickname', nickname, 'comment_text', comment_text, 'sec_uid', sec_uid)) \
-      FROM acquisition_leads WHERE collect_task_id = '$TASK' AND tenant_id = '$TENANT'\"" | tr -d '\n' | xargs)
+    \"SELECT json_agg(json_build_object('nickname', nickname, 'comment_text', comment_text, 'sec_uid', sec_uid, 'profile_url', profile_url)) \
+      FROM zenithjoy.acquisition_leads WHERE collect_task_id = '$TASK' AND tenant_id = '$TENANT'\"" | tr -d '\n' | xargs)
 
   QUALITY_RESULT=$(echo "$LEADS_JSON" | node -e "
 const {checkLeadQuality} = require('./.github/workflows/scripts/smoke/lib/lead-quality-gate.cjs');
@@ -183,8 +183,13 @@ process.stdin.on('end', () => {
     echo "$QUALITY_RESULT" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>JSON.parse(d.trim()).violations.forEach(v=>console.log('  命中: '+v.field+'='+v.value+' 原因: '+v.reason)))"
     fail "Seg3 语义质量零容忍——acquisition_leads 含 UIA 元数据（详见上方命中列表）"
   fi
-  SEC_UID_COV=$(echo "$QUALITY_RESULT" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>console.log(JSON.parse(d.trim()).sec_uid_coverage))")
-  ok "Seg3 语义质量检查通过（sec_uid覆盖率: $SEC_UID_COV）"
+  # profile_url 覆盖率硬闸：方案A 下无 sec_uid 时 profile_url=昵称，覆盖率须 100%。
+  # 若 < 100% = 后端未落 Fix4（无 sec_uid 时 profile_url 仍 null），私信链仍死。
+  PROFILE_URL_COV=$(echo "$QUALITY_RESULT" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>console.log(JSON.parse(d.trim()).profile_url_coverage))")
+  PROFILE_URL_PASS=$(node -e "process.exit(parseFloat('${PROFILE_URL_COV}')>=1.0?0:1)" 2>/dev/null && echo "ok" || echo "fail")
+  [ "$PROFILE_URL_PASS" = "ok" ] \
+    || fail "Seg3 profile_url 覆盖率 ${PROFILE_URL_COV} < 100%——方案A 未落地（无 sec_uid 时 profile_url 应=昵称，当前仍 null → dispatchDue 跳过 → 私信链死）"
+  ok "Seg3 语义质量+profile_url 覆盖率检查通过（profile_url_coverage=${PROFILE_URL_COV}=100%）"
 
   # ── 7. Seg4 私信派单→dm_assignments ──
   DISP=0

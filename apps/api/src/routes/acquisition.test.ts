@@ -947,6 +947,52 @@ describe('POST /api/acquisition/collect/report — 评论历史 + rescore [REGRE
   });
 });
 
+// ────── 方案A Fix4：sec_uid=null → profile_url=昵称，partial=false [REGRESSION] ──────
+// 根因：UIA 树里不含 sec_uid（真机 dump 235 节点 MS4w 零命中），
+// profileUrlForSecUid(null)=null → profile_url=null → dispatchDue 跳过 → 私信链死。
+// 方案A：profile_url 回退为昵称，dispatchDue 用昵称走 locateProfileBySearch 搜索。
+describe('POST /api/acquisition/collect/report — 方案A: sec_uid=null 时 profile_url=昵称 [REGRESSION]', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockClientQuery.mockReset();
+    mockClientRelease.mockReset();
+  });
+
+  it('[方案A] sec_uid=null → profile_url 应为昵称（非 null），partial 应为 false', async () => {
+    mockClientQuery.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) {
+        return { rows: [{ id: 'task-fa', tenant_id: 't-fa', status: 'running', error_code: null, video_count: 0, lead_count_raw: 0, keywords: ['k1'] }] };
+      }
+      if (s.includes('SELECT id FROM zenithjoy.acquisition_leads')) return { rows: [] };
+      if (s.includes('INSERT INTO zenithjoy.acquisition_leads') && s.includes('RETURNING')) return { rows: [{ id: 'lead-fa1' }] };
+      if (s.includes('count(*)')) return { rows: [{ total: 1, done: 1 }] };
+      return { rows: [] };
+    });
+
+    const res = await request(app)
+      .post('/api/acquisition/collect/report')
+      .send({
+        task_id: 'task-fa',
+        video_id: '7000000000001',
+        commenters: [{ sec_uid: null, nickname: '小叶子', comment_text: '好看', grade: '感兴趣' }],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.inserted).toBe(1);
+
+    const calls = mockClientQuery.mock.calls;
+    const leadInsert = calls.find((c: any[]) =>
+      /INSERT INTO zenithjoy\.acquisition_leads/.test(String(c[0])) && String(c[0]).includes('RETURNING')
+    );
+    expect(leadInsert).toBeTruthy();
+    // $5 (index 4) = profile_url: 无 sec_uid → 回退昵称，供 locateProfileBySearch 搜索
+    expect(leadInsert![1][4]).toBe('小叶子');
+    // $6 (index 5) = partial: 有昵称可派单，不应标 partial
+    expect(leadInsert![1][5]).toBe(false);
+  });
+});
+
 // ────── Line02 IA 重设计 Track A — collect-tasks/:id/videos + videos/:videoId/leads ──────
 describe('GET /api/acquisition/collect-tasks/:id/videos [BEHAVIOR]', () => {
   beforeEach(() => { vi.clearAllMocks(); });
