@@ -32,6 +32,16 @@ const OVERLAY_SCRIPT = path.join(
   '../wechat-rpa/overlay/overlay_window.py',
 );
 
+// 供测试直接验证 -c 命令字符串本身语法合法（不依赖真实 preflight 模块可 import）。
+export function buildPreflightCommand(preflightScript: string, stateDir: string): string {
+  return (
+    `import sys; sys.path.insert(0, '${path.dirname(preflightScript)}');` +
+    `from preflight import check_preflight; import json; ` +
+    `r = check_preflight('${stateDir.replace(/\\/g, '\\\\')}'); ` +
+    `print(json.dumps(r))`
+  );
+}
+
 // ─── 诊断 JSON 模板 ──────────────────────────────────────────────────────────
 
 function makeDiag(stateDir: string, opts: {
@@ -168,10 +178,7 @@ export class OverlayHandler {
 
       const proc = spawn(pyExe, [
         '-c',
-        `import sys; sys.path.insert(0, '${path.dirname(preflightScript)}');` +
-        `from preflight import check_preflight; import json; ` +
-        `r = check_preflight('${this.stateDir.replace(/\\/g, '\\\\')}'); ` +
-        `print(json.dumps(r))`,
+        buildPreflightCommand(preflightScript, this.stateDir),
       ], { timeout: 10_000 });
 
       let stdout = '';

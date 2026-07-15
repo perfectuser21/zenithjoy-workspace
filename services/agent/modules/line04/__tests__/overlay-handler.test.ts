@@ -13,6 +13,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+import { execFileSync } from 'node:child_process';
+import { buildPreflightCommand } from '../handlers/overlay';
 
 // ─── OverlayHandler 导入（第二刀实现后解注释）────────────────────────────────
 // import { OverlayHandler } from '../handlers/overlay';
@@ -249,5 +251,32 @@ describe('overlay 脚本路径 — 打包后真实目录结构回归（真机 pr
     const rel = extractRelativePath('preflightScript');
     const resolved = path.resolve(packagedHandlersDir, rel);
     expect(fs.existsSync(resolved)).toBe(true);
+  });
+});
+
+// ─── 真机回归：Windows 路径反斜杠塞进 python -c 字符串前必须转义 ──────────────────
+//
+// 根因（2026-07-15 xian-rog 真机复验实测，与上面的路径深度 bug 是两个独立坑）：修完路径
+// 深度 bug 后 preflight.py 终于被找到，但 spawn 出来的 python -c 命令里 sys.path.insert
+// 那一段用的是 Windows 路径（如 C:\Users\asus\...\overlay），backslash 没转义直接塞进单引号
+// 字符串字面量，Python 把 `\U`/`\u` 当成 unicode 转义序列开头解析，报
+// "SyntaxError: (unicode error) 'unicodeescape' codec ... truncated \UXXXXXXXX escape"。
+// overlay.ts 里另一处（stateDir）本来就有 .replace(/\\/g, '\\\\') 转义，这处 dirname 漏转义了。
+describe('overlay preflight python 命令字符串 — Windows 路径转义回归（真机 SyntaxError 根因）', () => {
+  it('buildPreflightCommand 对含反斜杠的真实 Windows 路径生成的 -c 命令必须是合法 python 语法', () => {
+    const winPreflightScript =
+      'C:\\Users\\asus\\AppData\\Roaming\\zenithjoy\\modules\\line04-wechat-cs-1.0.118\\wechat-rpa\\overlay\\preflight.py';
+    const winStateDir = 'C:\\Temp\\zj-douyin-burner-v1\\测试 1';
+    const cmd = buildPreflightCommand(winPreflightScript, winStateDir);
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zj-preflight-cmd-check-'));
+    const tmpFile = path.join(tmpDir, 'cmd.py');
+    fs.writeFileSync(tmpFile, cmd, 'utf-8');
+    try {
+      // py_compile 只做语法检查，不实际 import（preflight 模块在测试环境里不存在也没关系）
+      execFileSync('python3', ['-m', 'py_compile', tmpFile], { stdio: 'pipe' });
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });
