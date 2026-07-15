@@ -209,3 +209,45 @@ describe('[BEHAVIOR-6] overlay handler — spawn/preflight/watchdog', () => {
     expect(result.spawned).toBe(true);
   });
 });
+
+// ─── 真机回归：OVERLAY_SCRIPT/preflightScript 相对路径必须指向打包后真实位置 ──────
+//
+// 根因（2026-07-15 xian-rog 真机复验实测）：overlay.ts 里两处 path.join(__dirname, '../../../wechat-rpa/...')
+// 是按 repo 源码树算的（modules/line04/handlers → 上 3 层到 services/agent/wechat-rpa/ 共享目录），
+// 但打包进 install pack 后目录被拍平成 build-modules/line04/{handlers,wechat-rpa}/ 两个同级目录，
+// 从 handlers/ 只需上 1 层就能到 wechat-rpa/，多算的两层导致真机上 preflight 恒
+// reason=preflight_script_missing、overlay 永远不 spawn——CI 测不出（跑的是 stub，
+// 也没有真实 build-modules 目录结构可比对），只有真机复验才暴露。
+describe('overlay 脚本路径 — 打包后真实目录结构回归（真机 preflight_script_missing 根因）', () => {
+  const overlaySourcePath = path.join(__dirname, '../handlers/overlay.ts');
+  const source = fs.readFileSync(overlaySourcePath, 'utf-8');
+  // repo 里 build-modules/line04/ 同时有共享 services/agent/wechat-rpa/ 逃逸口，直接在 repo
+  // 内解析会因为多上几层照样撞见那份共享文件、掩盖 bug；复制到隔离临时目录才是真机装机后的真实形态
+  // （只有 <module-root>/{handlers,wechat-rpa}/ 两个同级目录，没有别的路径可逃逸命中）。
+  const isolatedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'zj-overlay-pkg-'));
+  fs.cpSync(
+    path.join(__dirname, '../../../build-modules/line04'),
+    path.join(isolatedRoot, 'line04-wechat-cs-1.0.118'),
+    { recursive: true },
+  );
+  const packagedHandlersDir = path.join(isolatedRoot, 'line04-wechat-cs-1.0.118', 'handlers');
+
+  function extractRelativePath(varName: string): string {
+    const re = new RegExp(`${varName}[\\s\\S]*?path\\.join\\(\\s*__dirname,\\s*'([^']+)'`);
+    const m = source.match(re);
+    if (!m) throw new Error(`未找到 ${varName} 的 path.join(__dirname, ...) 定义`);
+    return m[1];
+  }
+
+  it('OVERLAY_SCRIPT 相对路径解析后必须命中打包目录里真实存在的 overlay_window.py', () => {
+    const rel = extractRelativePath('OVERLAY_SCRIPT');
+    const resolved = path.resolve(packagedHandlersDir, rel);
+    expect(fs.existsSync(resolved)).toBe(true);
+  });
+
+  it('preflightScript 相对路径解析后必须命中打包目录里真实存在的 preflight.py', () => {
+    const rel = extractRelativePath('preflightScript');
+    const resolved = path.resolve(packagedHandlersDir, rel);
+    expect(fs.existsSync(resolved)).toBe(true);
+  });
+});
