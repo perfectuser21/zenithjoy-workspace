@@ -36,6 +36,9 @@ class AcquisitionCollectPollLoop(
     private val httpClient: OkHttpClient = defaultClient(),
     // content-judgment-gate: 判决服务注入（null=跳过判决，所有视频直接进 Stage2）
     private val contentJudgmentService: ContentJudgmentService? = null,
+    // 判决门截图前置动作（Brain issue 2b85b616）：截图判决前必须先把这个视频"打开"，
+    // 否则截的是当前屏幕（搜索结果页），不是目标视频。null=跳过（旧行为不变，向后兼容）。
+    private val videoOpener: ((videoId: String) -> Unit)? = null,
 ) {
     private val gson = Gson()
     private var job: Job? = null
@@ -123,6 +126,8 @@ class AcquisitionCollectPollLoop(
                     val eligibleUrls = if (contentJudgmentService != null) {
                         videoUrls.filter { videoUrl ->
                             val videoId = videoUrl.substringAfterLast("/")
+                            // 先打开这张视频卡片，截图判决时屏幕上必须是它，不是搜索结果页
+                            videoOpener?.invoke(videoId)
                             val result = contentJudgmentService.judge(
                                 videoId = videoId,
                                 captureType = "screenshot",

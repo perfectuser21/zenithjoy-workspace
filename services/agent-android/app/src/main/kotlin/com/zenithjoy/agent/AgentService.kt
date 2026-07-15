@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.net.Uri
 import android.os.IBinder
 import androidx.core.app.ServiceCompat
 import com.google.gson.Gson
@@ -23,6 +24,7 @@ import com.zenithjoy.agent.collect.CommentEntry
 import com.zenithjoy.agent.collect.DmOutreachRateLimiter
 import com.zenithjoy.agent.collect.DouyinCollectService
 import com.zenithjoy.agent.collect.DouyinDmOutreachService
+import com.zenithjoy.agent.collect.RandomDelay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -385,6 +387,22 @@ class AgentService : Service() {
             httpBase = config.deriveHttpBase(),
             scope = scope,
             contentJudgmentService = judgmentService,
+            // 判决门截图前打开视频（Brain issue 2b85b616 修复）：深链打开目标视频 +
+            // 固定导航等待，保证 judgmentService 截图时屏幕上是这个视频，不是搜索结果页。
+            // 复用与 DouyinCollectService.launchVideoByDeepLink 相同的 URI scheme。
+            // pollOnce() 跑在 Dispatchers.IO 协程里，Thread.sleep 不阻塞主线程。
+            videoOpener = { videoId ->
+                try {
+                    val uri = Uri.parse("snssdk1128://aweme/detail/$videoId")
+                    val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    applicationContext.startActivity(intent)
+                    Thread.sleep(RandomDelay.sample(RandomDelay.NAV_MS))
+                } catch (e: Exception) {
+                    android.util.Log.e(TAG, "judgment videoOpener deeplink failed videoId=$videoId: ${e.message}")
+                }
+            },
             onStage1Task = { taskId, keyword ->
                 android.util.Log.i(TAG, "collect stage_1 task: id=$taskId keyword=$keyword")
                 // 追踪该 taskId 的关键词，入队 Stage1 Job
