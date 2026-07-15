@@ -162,6 +162,30 @@ if [ "${MATCHED:-0}" -ge 1 ]; then
     || fail "有 $MATCHED 个 matched 但 lead_count_raw=0 ——Seg2→Seg3 接线断(Stage2 抓评论未触发/未落 acquisition_leads)"
   ok "Seg3 抓评论者 lead_count_raw=$LEADS"
 
+  # ── Seg3 语义质量零容忍闸门 ──
+  LEADS_JSON=$(ssh hk-vps "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -t -c \
+    \"SELECT json_agg(json_build_object('nickname', nickname, 'comment_text', comment_text, 'sec_uid', sec_uid)) \
+      FROM acquisition_leads WHERE collect_task_id = '$TASK' AND tenant_id = '$TENANT'\"" | tr -d '\n' | xargs)
+
+  QUALITY_RESULT=$(echo "$LEADS_JSON" | node -e "
+const {checkLeadQuality} = require('./.github/workflows/scripts/smoke/lib/lead-quality-gate.cjs');
+let data = ''; process.stdin.on('data', d => data += d);
+process.stdin.on('end', () => {
+  const leads = JSON.parse(data.trim() || '[]');
+  const result = checkLeadQuality(leads || []);
+  console.log(JSON.stringify(result));
+});
+")
+
+  QUALITY_PASSED=$(echo "$QUALITY_RESULT" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>console.log(JSON.parse(d.trim()).passed))")
+  if [ "$QUALITY_PASSED" != "true" ]; then
+    echo "[FAIL] Seg3 语义质量检查失败，命中垃圾特征："
+    echo "$QUALITY_RESULT" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>JSON.parse(d.trim()).violations.forEach(v=>console.log('  命中: '+v.field+'='+v.value+' 原因: '+v.reason)))"
+    fail "Seg3 语义质量零容忍——acquisition_leads 含 UIA 元数据（详见上方命中列表）"
+  fi
+  SEC_UID_COV=$(echo "$QUALITY_RESULT" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>console.log(JSON.parse(d.trim()).sec_uid_coverage))")
+  ok "Seg3 语义质量检查通过（sec_uid覆盖率: $SEC_UID_COV）"
+
   # ── 7. Seg4 私信派单→dm_assignments ──
   DISP=0
   for i in $(seq 1 12); do   # 2min
