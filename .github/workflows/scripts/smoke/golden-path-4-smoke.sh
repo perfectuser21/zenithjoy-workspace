@@ -49,7 +49,7 @@ RND=$(uniq_token)
 ok()   { echo "✅ $1"; }
 fail() { echo "❌ $1"; exit "$2"; }
 
-psq() { psql "$DB_URL" -At -c "$1"; }
+psq() { psql "$DB_URL" -Atq -c "$1"; }
 
 DB_REACHABLE=0
 if psql "$DB_URL" -c '\q' 2>/dev/null; then DB_REACHABLE=1; fi
