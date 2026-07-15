@@ -321,3 +321,58 @@ def test_get_events_switches_customer_on_contact_change(tmp_path, monkeypatch):
 
     app.get_events()
     assert called == ["李四"]
+
+
+# ─── evaluator 发现的真渲染缺口回归：switch_customer 必须真传六字段 + JS 侧必须真定义渲染函数 ───
+
+def test_html_template_defines_customer_card_renderer():
+    """HTML_TEMPLATE 必须真定义 window.__updateCustomerCard，且含画像卡 DOM 容器。
+
+    回归背景：evaluator 独立评审发现 switch_customer() 调用 window.__updateCustomerCard，
+    但 HTML_TEMPLATE 里从未定义这个函数、也没有画像卡 DOM——JS 侧 `fn && fn(...)` 静默短路，
+    浮窗上什么都不会显示（调用链接上了，但落地效果不存在，孤儿代码的另一种变体）。
+    """
+    from overlay.overlay_window import OverlayApp
+
+    html = OverlayApp.HTML_TEMPLATE
+    assert "window.__updateCustomerCard = function" in html or "function __updateCustomerCard" in html, \
+        "HTML_TEMPLATE 必须真定义 window.__updateCustomerCard（不能只有调用点没有定义）"
+    # 画像卡 DOM 容器 id（六字段各自的渲染目标）必须存在
+    for dom_id in ["profile-nickname", "profile-level", "profile-source",
+                   "profile-contact-count", "profile-actions", "profile-ai"]:
+        assert dom_id in html, f"HTML_TEMPLATE 缺画像卡 DOM 容器 id={dom_id}"
+
+
+def test_switch_customer_passes_all_six_fields_to_js(tmp_path, monkeypatch):
+    """switch_customer 调 evaluate_js 时必须传完整六字段，不能只传 nickname/level。"""
+    from overlay.overlay_window import OverlayApp
+    import urllib.request as _urllib_req
+    import unittest.mock as mock
+
+    full_profile = {
+        "level": "VIP", "nickname": "客户A", "source": "抖音",
+        "contact_count": 7, "recent_actions": ["咨询价格", "预约到店"],
+        "ai_profile": "高价值意向客户",
+    }
+
+    def fake_urlopen(url, timeout=3):
+        resp = mock.MagicMock()
+        resp.read.return_value = json.dumps(full_profile).encode()
+        resp.__enter__ = lambda s: s
+        resp.__exit__ = mock.MagicMock(return_value=False)
+        return resp
+
+    monkeypatch.setattr(_urllib_req, "urlopen", fake_urlopen)
+
+    app = OverlayApp(state_dir=str(tmp_path))
+    fake_window = mock.MagicMock()
+    app._window = fake_window
+
+    app.switch_customer("wxid_full_test")
+
+    assert fake_window.evaluate_js.called, "evaluate_js 未被调用"
+    js_call_arg = fake_window.evaluate_js.call_args[0][0]
+    for key, val in full_profile.items():
+        val_str = json.dumps(val, ensure_ascii=False) if not isinstance(val, str) else val
+        assert (val if isinstance(val, str) else str(val)) in js_call_arg or val_str in js_call_arg, \
+            f"字段 {key}={val!r} 未真传给 JS（evaluate_js 调用内容: {js_call_arg[:300]}）"
