@@ -277,6 +277,14 @@ def strip_system_bubbles(bubbles: List[Dict[str, str]]) -> List[Dict[str, str]]:
 # 测试垃圾覆盖 sent_texts/anchor → 判向失灵自回自话 + 锚点切错丢消息）。
 _STATE_DIR: str = (os.environ.get("ZJ_STATE_DIR")
                    or os.environ.get("PUBLIC", r"C:\Users\Public"))
+
+# 启动自检消息（Step6，decision 05871b00）：Agent 每次启动发一条给固定测试联系人，
+# 验证整条后台静默发送链路真的通了（不是每天定时，是每次进程启动一次）。
+# 收件人为空 = 功能关闭（deny by default，绝不误发给未配置的联系人）。
+_STARTUP_SELFCHECK_CONTACT: str = os.environ.get("ZJ_STARTUP_SELFCHECK_CONTACT", "").strip()
+_STARTUP_SELFCHECK_MESSAGE: str = os.environ.get(
+    "ZJ_STARTUP_SELFCHECK_MESSAGE", "🟢 智能客服 Agent 已启动，链路自检"
+)
 _SENT_TEXTS_FILE: str = os.path.join(_STATE_DIR, "zj-sent-texts.json")
 _REPLY_ANCHOR_FILE: str = os.path.join(_STATE_DIR, "zj-reply-anchor.json")
 _SENT_TEXTS: List[str] = []
@@ -2929,6 +2937,45 @@ def reply_in_chat_with_lease(
         desktop_lease_release()
 
 
+def _should_send_startup_selfcheck(done: bool, contact: "str | None") -> bool:
+    """纯函数：是否该发启动自检消息（Step6）。收件人未配置 / 本进程已发过 → deny by default。"""
+    return bool(contact) and not done
+
+
+def _find_session_item(mw: Any, target: str) -> Any:
+    """按显示名找会话列表里的 ListItem（同 run_verify_silent 的查找逻辑）。找不到返回 None，不抛异常。"""
+    try:
+        for it in mw.descendants(control_type="ListItem"):
+            first = (it.element_info.name or "").split("\n")[0].strip()
+            if first == target:
+                return it
+    except Exception:
+        pass
+    return None
+
+
+def send_startup_selfcheck(mw: Any, middleware_url: str) -> bool:
+    """启动自检消息（Step6）：给固定测试联系人发一条消息，确认整条后台静默发送链路真通。
+
+    收件人来自 ZJ_STARTUP_SELFCHECK_CONTACT 环境变量，未配置则不发（deny by default）。
+    找不到目标会话 / 发送异常 → 软失败，返回 False，不抛出、不影响主循环。
+    """
+    contact = _STARTUP_SELFCHECK_CONTACT
+    if not contact:
+        return False
+    item = _find_session_item(mw, contact)
+    if item is None:
+        _log(f"[启动自检] 找不到固定测试联系人会话: {contact!r}，跳过（不影响主循环）")
+        return False
+    try:
+        return reply_in_chat_with_lease(
+            mw, item, _STARTUP_SELFCHECK_MESSAGE, sender=contact, middleware_url=middleware_url
+        )
+    except Exception as exc:
+        _log(f"[启动自检] 发送异常（已吞）: {exc}")
+        return False
+
+
 def _pywinauto_available() -> bool:
     try:
         import pywinauto  # noqa: F401  仅检测可用性
@@ -4323,6 +4370,9 @@ def run_real_listen(args: argparse.Namespace) -> int:
     last_friend_scan = 0.0
     friend_scan_done_once = False
     FRIEND_SCAN_INTERVAL = 24 * 3600  # 每日一次
+    # 启动自检消息（Step6，decision 05871b00）：每次进程启动、微信主窗口首次就绪后发一次，
+    # 不是每天定时；本进程生命周期内只发一次（对齐 friend_scan_done_once 同款 do-once 模式）。
+    startup_selfcheck_done_once = False
     # 「立即扫好友」强制标志（运营在 Dashboard 点按钮 → 中台置 force_scan_requested_at）。
     # 主循环每轮 poll 太频（~3s），按 FORCE_SCAN_POLL_INTERVAL 节流拉 pending，
     # force=true 时本轮无视 24h 间隔立刻扫一遍；ingest 成功后由后端清标志。
@@ -4417,6 +4467,19 @@ def run_real_listen(args: argparse.Namespace) -> int:
                             )
             elif mw is not None:
                 welcome_click_attempts = 0
+
+            # 启动自检消息（Step6）：主窗口首次就绪后发一次，验证后台静默发送链路真通。
+            # 软失败（找不到会话/发送异常都不上抛），不影响主循环；未配置收件人则永远不发。
+            if mw is not None and _should_send_startup_selfcheck(
+                startup_selfcheck_done_once, _STARTUP_SELFCHECK_CONTACT
+            ):
+                try:
+                    if send_startup_selfcheck(mw, args.middleware_url):
+                        _log(f"[启动自检] 已发送给 {_STARTUP_SELFCHECK_CONTACT!r}，链路自检通过")
+                    startup_selfcheck_done_once = True
+                except Exception as _sscexc:
+                    _log(f"[启动自检] 处理异常（已吞，下轮不重试）: {_sscexc}")
+                    startup_selfcheck_done_once = True
 
             # 心跳 + 扫描诊断上报中台（运营在 Dashboard「监听健康」看板一眼定位卡在哪）
             if now - last_heartbeat >= heartbeat_interval:

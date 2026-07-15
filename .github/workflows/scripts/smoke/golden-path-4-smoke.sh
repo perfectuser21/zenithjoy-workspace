@@ -7,7 +7,7 @@
 #   Step 1  客户扫码绑定个人微信号 → Agent 建立后台 UIA 监听（不弹前台窗口）
 #   Step 2  客户装客户端 → Agent 注册连中台
 #   Step 3  Agent 检测到微信已登录、找到主窗口 → 开始后台静默监听（服务端等价断言：dryrun + overlay 存在）
-#   Step 6  上线自检消息——每次启动发一条给固定测试联系人（用户 2026-07-15 拍板要做，功能尚未实现）
+#   Step 6  上线自检消息——每次启动发一条给固定测试联系人（task 7be2842d，纯函数等价断言）
 #   Step 7  客户触发好友扫描 / 联系人首次发消息 → 系统建立该联系人 CRM 档案（真链路：friend-scan/trigger+ingest）
 #   Step 8  客户在中台 CRM 客户列表页，给联系人打 A1-A5 状态（真链路：customer-profile 六字段）
 #   Step 9  设置白名单/接管模式（真链路：PUT/GET /api/wechat/cs/config/:wechatId）
@@ -27,8 +27,8 @@
 #   TODO(line04-realmachine-evidence): 真机验收证据见 sprints/07150800-line04-overlay-continuation/evidence/。
 #
 # 未覆盖真实链路清单（规则 C）：
-#   - Step 6：功能未实现（task 7be2842d，blocked on events_writer PR 已合并后点火），本步诚实 FAIL
-#   - Step 16：customer-profile 数据源已有，但"浮窗联动画像面板"这个动作本身未开发，本步诚实 FAIL/TODO
+#   - Step 6：真机段（真实微信真发送给固定测试联系人）见 xian-rog 真机通道，本 smoke 纯函数等价断言
+#   - Step 16：customer-profile 数据源已有，但"浮窗联动画像面板"这个动作本身未开发，本步诚实 SKIP
 #   - Step 13 回复判断内核内部质量：用户 2026-07-15 拍板不重新审计，本步只做一次真调 + 响应结构断言
 #
 # 用法：
@@ -93,20 +93,59 @@ grep -q "events" "$OVERLAY_PY" || fail "Step 3 overlay_window.py 缺 events 消�
 ok "Step 3 ✅ Agent 后台静默监听部署包存在（overlay_window.py 含 switch_customer + events 消费）"
 
 # ───────────────────────────────────────────────────────────────────
-# Step 6：上线自检消息——每次启动发一条给固定测试联系人
-# 用户 2026-07-15 拍板要做，但功能尚未实现（task 7be2842d，blocked on events_writer PR 已合并）。
-# 诚实 FAIL：不伪装成 PASS，直到 7be2842d 点火实现。
+# Step 6：上线自检消息——每次启动发一条给固定测试联系人（task 7be2842d，已实现）
+# 纯函数等价断言：_should_send_startup_selfcheck deny-by-default + send_startup_selfcheck
+# 找到目标会话真调 reply_in_chat_with_lease。真机段（真实微信真发送）见 xian-rog 真机通道。
 # ───────────────────────────────────────────────────────────────────
 echo "▶ Step 6: 上线自检消息（每次启动发一条给固定测试联系人）"
-STARTUP_CHECK=$(grep -rn "启动.*自检\|startup.*selfcheck\|startup.*broadcast" services/agent/wechat-rpa/listen_chat.py 2>/dev/null || true)
-if [ -n "$STARTUP_CHECK" ]; then
-  ok "Step 6 ✅ 启动自检消息逻辑已实现: $STARTUP_CHECK"
+
+if python3 -c "
+import sys
+sys.path.insert(0, 'services/agent/wechat-rpa')
+import listen_chat
+
+# deny-by-default：未配置收件人 / 本进程已发过 → 不发
+assert listen_chat._should_send_startup_selfcheck(done=False, contact='') is False
+assert listen_chat._should_send_startup_selfcheck(done=True, contact='固定测试联系人') is False
+assert listen_chat._should_send_startup_selfcheck(done=False, contact='固定测试联系人') is True
+
+class _FakeElementInfo:
+    def __init__(self, name): self.name = name
+
+class _FakeItem:
+    def __init__(self, name): self.element_info = _FakeElementInfo(name)
+
+class _FakeMainWindow:
+    def __init__(self, names): self._names = names
+    def descendants(self, control_type=None): return [_FakeItem(n) for n in self._names]
+
+# 找到目标会话 → 真调 reply_in_chat_with_lease（monkeypatch 断言调用参数）
+called = {}
+def _fake_reply_with_lease(mw, item, text, sender, middleware_url):
+    called['sender'] = sender
+    return True
+listen_chat.reply_in_chat_with_lease = _fake_reply_with_lease
+listen_chat._STARTUP_SELFCHECK_CONTACT = '固定测试联系人'
+mw = _FakeMainWindow(['固定测试联系人'])
+result = listen_chat.send_startup_selfcheck(mw, middleware_url='http://mw')
+assert result is True, f'send_startup_selfcheck 应返回 True，实际 {result}'
+assert called.get('sender') == '固定测试联系人', f'未真调 reply_in_chat_with_lease，实际 {called}'
+
+# 找不到目标会话 → 软失败返回 False，不抛异常
+mw2 = _FakeMainWindow(['别的联系人'])
+result2 = listen_chat.send_startup_selfcheck(mw2, middleware_url='http://mw')
+assert result2 is False, f'找不到会话应软失败返回 False，实际 {result2}'
+print('PASS')
+" 2>&1 | tail -1 | grep -q "PASS"; then
+  ok "Step 6a ✅ 启动自检 deny-by-default + 真调 reply_in_chat_with_lease + 软失败路径全过"
 else
-  # 诚实记账，不是硬 FAIL：本文件在 smoke-baseline.txt 棘轮闸内，硬 FAIL 会阻断
-  # 所有 Path4 PR 合并，直到 7be2842d 点火完成。TODO(7be2842d)：功能落地后把这里
-  # 改回真断言（PASS/FAIL），这才是「多过一关」的证据，不能提前伪造成红或绿。
-  echo "  SKIP: 功能未实现（task 7be2842d 待点火）——每次启动发一条自检消息给固定测试联系人"
+  fail "Step 6 启动自检消息断言失败" 6
 fi
+
+LISTEN_CHAT_MAIN_S6="services/agent/wechat-rpa/listen_chat.py"
+grep -q "startup_selfcheck_done_once" "$LISTEN_CHAT_MAIN_S6" || fail "Step 6b 主循环未接线 startup_selfcheck_done_once（只有辅助函数没被真正调用）" 6
+ok "Step 6b ✅ 主循环已接线（每进程只发一次，非每天定时）"
+ok "Step 6 ✅ 上线自检消息链路通"
 
 # ───────────────────────────────────────────────────────────────────
 # Step 7：客户触发好友扫描 / 联系人首次发消息 → 系统建立 CRM 档案
