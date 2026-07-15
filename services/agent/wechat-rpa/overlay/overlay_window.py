@@ -715,10 +715,19 @@ setInterval(poll, 500);
         return profile
 
     def get_events(self) -> list:
-        """暴露给 pywebview JS 侧的 API：获取新事件。"""
+        """暴露给 pywebview JS 侧的 API：获取新事件，并联动切换画像卡（Step16 会话跟随）。
+
+        事件带 contact 字段且与当前显示客户不同 → 调 switch_customer 切换画像卡。
+        switch_customer 内部异常已自行降级（不抛出），此处不重复吞异常。
+        """
         if self._event_consumer is None:
             return []
-        return self._event_consumer.get_events()
+        events = self._event_consumer.get_events()
+        for ev in events:
+            contact = ev.get("contact")
+            if contact and contact != self.current_customer:
+                self.switch_customer(contact)
+        return events
 
     def close_window(self) -> None:
         """用户点击关闭按钮 → 记录 user_closed + 关窗。"""

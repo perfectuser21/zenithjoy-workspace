@@ -315,6 +315,7 @@ def test_get_events_switches_customer_on_contact_change(tmp_path, monkeypatch):
 
     now = time.time()
     _write_events_jsonl(os.path.join(str(tmp_path), "events.jsonl"), [
+        {"type": "heartbeat", "ts": now, "event_id": "h-1"},
         {"type": "reply_sent", "event_id": "e-1", "contact": "李四", "ts": now},
     ])
 
