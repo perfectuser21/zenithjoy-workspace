@@ -67,6 +67,23 @@ const BLACKLIST_RULES = [
     fields: 'both',
     re: /(详情|橱窗|同款|更多好物|在橱窗里|立即购买|点击购买)/,
   },
+  {
+    id: 'product_card',
+    reason: '商品卡',
+    fields: 'both',
+    // 2026-07-15 真机 dump 实测：商品卡被 extractByStructure 配成
+    // nickname='客厅多层花架' / comment_text='已售200+' 写进 Lead 表。
+    // 「已售N+」是商品卡销量标签，绝不可能是真评论正文。
+    re: /^已售\d+(\.\d+)?[万kK]?\+?$/,
+  },
+  {
+    id: 'author_badge',
+    reason: '作者角标',
+    fields: 'both',
+    // 抖音评论区博主本人的「作者」角标（UIA id=eyo）。被相邻配对捞成
+    // comment_text='作者' 写进库。真评论正文不会恰好只有「作者」二字。
+    re: /^作者$/,
+  },
 ];
 
 /**
