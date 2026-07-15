@@ -16,7 +16,8 @@ const assert = require('assert');
 const path = require('path');
 
 // 尝试引入判定函数（commit-1 时不存在，报错是预期的 Red 状态）
-const gatePath = path.resolve(__dirname, '../../../.github/workflows/scripts/smoke/lib/lead-quality-gate.cjs');
+// 文件被复制到 smoke/lib/ 后，实现文件在同目录；原 sprint 路径已替换为同目录相对路径
+const gatePath = path.resolve(__dirname, './lead-quality-gate.cjs');
 let checkLeadQuality;
 try {
   ({ checkLeadQuality } = require(gatePath));
