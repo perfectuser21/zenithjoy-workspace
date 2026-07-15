@@ -26,16 +26,16 @@ if curl -s --max-time 3 -o /tmp/zj-staging-health.json "$STAGING/health" 2>/dev/
   HTTP=$(curl -s -o /tmp/zj-staging-health.json -w '%{http_code}' --max-time 5 "$STAGING/health")
   if [ "$HTTP" = "200" ]; then
     VERSION=$(jq -r '.version // .data.version // empty' /tmp/zj-staging-health.json 2>/dev/null || true)
-    if [ "$VERSION" = "1.0.117" ]; then
-      pass "staging version=1.0.117"
+    if [ "$VERSION" = "1.0.118" ]; then
+      pass "staging version=1.0.118"
     else
-      fail "staging version=$VERSION (期望 1.0.117)"
+      fail "staging version=$VERSION (期望 1.0.118)"
     fi
   else
     fail "staging health HTTP=$HTTP (期望 200)"
   fi
 else
-  skip "staging 不可达（手动验收阶段，人工确认 staging 已部署 1.0.117）"
+  skip "staging 不可达（手动验收阶段，人工确认 staging 已部署 1.0.118）"
 fi
 
 # ── 里程碑A：overlay 文件存在性（部署包含 overlay）──────────────────────
