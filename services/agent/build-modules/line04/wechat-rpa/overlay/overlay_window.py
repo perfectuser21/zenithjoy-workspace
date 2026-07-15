@@ -658,10 +658,61 @@ setInterval(poll, 500);
         self._event_consumer: Optional[EventTailConsumer] = None
         self._position_loop: Optional[PositionLoop] = None
         self._window = None
+        # 里程碑B：会话跟随画像卡（BEHAVIOR-4）
+        self.current_customer: Optional[str] = None
+        self._current_profile: dict = {}
 
         if state_dir:
             self._event_consumer = EventTailConsumer(state_dir)
             self._position_loop = PositionLoop(state_dir)
+
+    def _fetch_customer_profile(self, wechat_id: str) -> dict:
+        """
+        从中台拉取客户画像卡（BEHAVIOR-5 六字段）。
+        降级：API 不可达时返回最小占位数据，不抛出异常。
+        """
+        try:
+            import urllib.request
+            api_base = os.environ.get("ZJ_API", "http://localhost:5200")
+            url = f"{api_base}/api/wechat/customer-profile?wechat_id={wechat_id}"
+            with urllib.request.urlopen(url, timeout=3) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            # 兼容 { data: {...} } 和直接 {...} 两种响应结构
+            if isinstance(data, dict) and "data" in data:
+                return data["data"]
+            return data
+        except Exception:
+            # 降级：返回 wechat_id 作为 nickname，其余字段空值
+            return {
+                "level": "unknown",
+                "nickname": wechat_id,
+                "source": "",
+                "contact_count": 0,
+                "recent_actions": [],
+                "ai_profile": "",
+            }
+
+    def switch_customer(self, wechat_id: str) -> dict:
+        """
+        切换当前显示的客户画像卡（BEHAVIOR-4）。
+        wechat_id: 微信对话方标识（与 crm_customers.contact / wechat_id 对应）
+        返回: 画像卡数据字典（level/nickname/source/contact_count/recent_actions/ai_profile）
+        """
+        profile = self._fetch_customer_profile(wechat_id)
+        self.current_customer = wechat_id
+        self._current_profile = profile
+        # 如果浮窗已开启，通过 JS 更新画像卡 DOM
+        if self._window is not None:
+            try:
+                nickname = profile.get("nickname", wechat_id)
+                level = profile.get("level", "")
+                self._window.evaluate_js(
+                    f"window.__updateCustomerCard && window.__updateCustomerCard("
+                    f"{json.dumps({'nickname': nickname, 'level': level}, ensure_ascii=False)})"
+                )
+            except Exception:
+                pass  # JS 调用失败不影响状态更新
+        return profile
 
     def get_events(self) -> list:
         """暴露给 pywebview JS 侧的 API：获取新事件。"""
