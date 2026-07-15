@@ -982,9 +982,9 @@ class DouyinCollectService : AccessibilityService() {
         // 加节点数上限防止在这类大树上无限期占用主线程(与 startExtractionWatchdog
         // 互为兜底：这里防真卡死，watchdog 防"卡住但没完全死"这类情况)。
         //
-        // DFS 前序而非 BFS：同一条评论的"昵称→正文→元信息"是同一容器节点的连续
-        // 子节点，BFS 按层展开会把它们和其他评论的同层节点交错，打乱
-        // NodeExtractor.extractByStructure 依赖的"相邻文本配对"假设（见 NodeTreeFlattener 注释）。
+        // DFS 前序而非 BFS：同一条评论 item 的 avatar→title→[eyo]→content 是同一容器节点
+        // 的连续子节点，BFS 按层展开会把它们和其他评论的同层节点交错，打乱
+        // NodeExtractor.extractComments 依赖的 avatar 锚定切段（见 NodeTreeFlattener 注释）。
         val accessibilityNodes = NodeTreeFlattener.flattenDfs(root, MAX_FLATTEN_NODES) { node ->
             (0 until node.childCount).mapNotNull { node.getChild(it) }
         }

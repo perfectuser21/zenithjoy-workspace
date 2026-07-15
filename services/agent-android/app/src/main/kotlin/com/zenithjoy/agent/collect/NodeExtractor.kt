@@ -6,9 +6,20 @@ package com.zenithjoy.agent.collect
  * 设计原则：
  *   - 纯函数，不持有 Android 框架依赖，可在 JVM 单测中覆盖。
  *   - 对齐 uiautomator dump 文本提取方案：dump 节点同样暴露 text / contentDescription / resourceId。
- *   - 优先用 resourceId 精确匹配；resourceId 候选值未经真机验证（今天调试时系统权限弹窗
- *     挡住了评论区节点树的现场抓取），上线前必须用真机 uiautomator dump 核实实际 id，
- *     这里同时保留结构启发式 fallback（昵称节点后紧跟的正文节点）兜底。
+ *   - resourceId 已于 2026-07-15 用真机 uiautomator dump 核实（fixture 在
+ *     app/src/test/resources/fixtures/douyin-comment-panel-20260715.xml）：
+ *     真机 id 为 avatar / title / content / eyo。
+ *
+ * 提取策略——**只按 avatar 锚定切段，没有启发式 fallback**：
+ *   评论 item 在 DFS 前序里恒为 `avatar → title → [eyo] → content` 连续排列，
+ *   因此用 avatar 当分隔符切段即可，不需要父子信息。
+ *   容器 id（fgd/k4x）会随楼中楼互换嵌套，**不可用来认评论**。
+ *
+ *   锚定不到 → 返回空列表（调用方 DouyinCollectService 已有"空即失败"的重试/上报路径）。
+ *   **绝不猜**：历史上这里有个"相邻短文本+长文本配对"的结构启发式 fallback，
+ *   因 nicknameIds 猜错（真机是 title，候选集里一个都没有）而被恒定触发，
+ *   把商品卡（"客厅多层花架"/"已售200+"）、tab 栏、博主置顶广告全配成 lead 写进库。
+ *   宁可空，不可猜——空会硬失败并告警，猜出来的垃圾会静默污染 Lead 表。
  *
  * 节点模型抽象为 [NodeInfo]，生产侧由 DouyinCollectService 从真实 AccessibilityNodeInfo 适配。
  */
@@ -20,98 +31,64 @@ object NodeExtractor {
         val resourceId: String,
     )
 
-    fun extractComments(nodes: List<NodeInfo>): List<CommentEntry> {
-        val byId = extractByResourceId(nodes)
-        if (byId.isNotEmpty()) return byId
-        return extractByStructure(nodes)
-    }
+    // 真机核实过的 resourceId 尾段（2026-07-15 dump）。
+    private const val ID_AVATAR = "avatar"
+    private const val ID_TITLE = "title"
+    private const val ID_CONTENT = "content"
+    private const val ID_AUTHOR_BADGE = "eyo"
 
-    // ── 方案一：resourceId 精确匹配（候选值待真机核实） ─────────────────────────
+    /** 「作者」角标文案：标记该条评论出自博主本人，不是 lead。 */
+    private const val AUTHOR_BADGE_TEXT = "作者"
 
-    private fun extractByResourceId(nodes: List<NodeInfo>): List<CommentEntry> {
-        val nicknameIds = setOf(
-            "tv_username", "tv_user_name", "comment_user_name", "nick_name",
-        )
-        val contentIds = setOf(
-            "tv_comment_content", "comment_content", "tv_content", "content",
-        )
-
-        val entries = mutableListOf<CommentEntry>()
-        var pendingNickname: String? = null
-        for (n in nodes) {
-            val idTail = n.resourceId.substringAfterLast("/")
-            if (idTail in nicknameIds && n.text.isNotBlank()) {
-                pendingNickname = n.text.trim()
-                continue
-            }
-            if (idTail in contentIds && n.text.isNotBlank() && pendingNickname != null) {
-                entries.add(CommentEntry(commenterId = pendingNickname, text = n.text.trim()))
-                pendingNickname = null
-            }
-        }
-        return entries
-    }
-
-    // ── 方案二：结构启发式 fallback（没有可靠 resourceId 时） ───────────────────
-    //
-    // 抖音评论列表项通常渲染顺序为：头像(无文字) → 昵称(短文本,常以数字/字母/中文名开头,
-    // 不含标点) → 正文(较长文本) → 元信息(如 "3天前"/"回复"/点赞数)。
-    // 用"短文本后紧跟一个较长文本"的相邻关系配对，比强行猜 resourceId 更稳。
-
-    private val META_WORDS = setOf(
-        "回复", "赞", "展开", "点赞", "更多回复",
-        "热门", "最新", "查看更多回复", "展开更多回复", "IP属地",
+    /** 累积中的一条评论 item（从一个 avatar 开始，到下一个 avatar 结束）。 */
+    private data class PendingItem(
+        var nickname: String? = null,
+        var content: String? = null,
+        var isAuthor: Boolean = false,
     )
-    private val NICKNAME_LEN_RANGE = 1..20
-    private val CONTENT_MIN_LEN = 1
 
-    // 数字/数字+单位（点赞数，如 "1.2万" "128" "3k"）。
-    // 已知取舍：会连带拦掉纯数字的真实评论正文/昵称（如"666"这类数字梗），
-    // 目前没有节点位置信息区分"点赞数"和"数字梗评论"，先接受这个假阴性；
-    // 若真机验证发现命中率明显，再引入 resourceId/bounds 辅助判定收窄。
-    private val LIKE_COUNT_RE = Regex("""^\d+(\.\d+)?[万kK]?\+?$""")
-    // "7889条评论" / "共7889条评论"（评论区标题栏）
-    private val COMMENT_COUNT_TITLE_RE = Regex("""^(共)?\d+条评论$""")
-    // "07-15" / "2026-07-15"（日期）
-    private val DATE_RE = Regex("""^\d{1,4}-\d{1,2}(-\d{1,2})?$""")
-    // "N天/小时/分钟/秒前"（相对时间，已有逻辑）
-    private val RELATIVE_TIME_RE = Regex("""^\d+[天小时分钟秒]前$""")
-    // "IP属地: XX" / "IP属地：XX"
-    private val IP_LOCATION_RE = Regex("""^IP属地[:：].*""")
-
-    /** 判断一段 UIA 节点文本是不是已知的"评论区元数据"标签，而不是真实昵称/正文。 */
-    private fun looksLikeMetaLabel(text: String): Boolean =
-        text in META_WORDS ||
-            LIKE_COUNT_RE.matches(text) ||
-            COMMENT_COUNT_TITLE_RE.matches(text) ||
-            DATE_RE.matches(text) ||
-            RELATIVE_TIME_RE.matches(text) ||
-            IP_LOCATION_RE.matches(text)
-
-    private fun extractByStructure(nodes: List<NodeInfo>): List<CommentEntry> {
+    fun extractComments(nodes: List<NodeInfo>): List<CommentEntry> {
         val entries = mutableListOf<CommentEntry>()
-        var i = 0
-        while (i < nodes.size - 1) {
-            val candidate = nodes[i]
-            val nextText = nodes[i + 1]
-            val nickname = candidate.text.trim()
-            val content = nextText.text.trim()
+        // null = 还没遇到第一个 avatar，此前的节点（孤儿 content / 标题栏 / 商品卡）全部忽略。
+        var current: PendingItem? = null
 
-            val looksLikeNickname = nickname.isNotBlank() &&
-                nickname.length in NICKNAME_LEN_RANGE &&
-                !nickname.contains("：") && !nickname.contains(":") &&
-                !looksLikeMetaLabel(nickname)
-
-            val looksLikeContent = content.length >= CONTENT_MIN_LEN &&
-                !looksLikeMetaLabel(content)
-
-            if (looksLikeNickname && looksLikeContent) {
+        fun flush(item: PendingItem?) {
+            if (item == null) return
+            val nickname = item.nickname?.trim().orEmpty()
+            val content = item.content?.trim().orEmpty()
+            // 产出条件：有昵称 && 正文非空 && 非博主本人。
+            if (nickname.isNotEmpty() && content.isNotEmpty() && !item.isAuthor) {
                 entries.add(CommentEntry(commenterId = nickname, text = content))
-                i += 2
-            } else {
-                i += 1
             }
         }
+
+        for (n in nodes) {
+            when (n.resourceId.substringAfterLast("/")) {
+                ID_AVATAR -> {
+                    flush(current)
+                    current = PendingItem()
+                }
+                ID_TITLE -> {
+                    val item = current ?: continue
+                    if (item.nickname == null && n.text.isNotBlank()) {
+                        item.nickname = n.text
+                    }
+                }
+                ID_CONTENT -> {
+                    val item = current ?: continue
+                    if (item.content == null && n.text.isNotBlank()) {
+                        item.content = n.text
+                    }
+                }
+                ID_AUTHOR_BADGE -> {
+                    val item = current ?: continue
+                    if (n.text.trim() == AUTHOR_BADGE_TEXT) {
+                        item.isAuthor = true
+                    }
+                }
+            }
+        }
+        flush(current)
         return entries
     }
 }
