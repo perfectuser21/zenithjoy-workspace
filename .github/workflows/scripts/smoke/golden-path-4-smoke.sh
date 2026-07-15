@@ -194,16 +194,16 @@ if [ "$API_REACHABLE" -eq 1 ]; then
   S9_HTTP=$(curl -s -o "$S9_TMP" -w '%{http_code}' --max-time 15 \
     -X PUT "$API_BASE/api/wechat/cs/config/$S9_WECHAT" \
     -H "Content-Type: application/json" -H "X-Internal-Token: $INT_TOKEN" \
-    -d '{"auto_agent_enabled":true,"takeover_mode":"blacklist","whitelist":["gp4-smoke-whitelist-name"]}')
+    -d '{"persona":{"self_name":"gp4-smoke客服"},"auto_agent_enabled":true,"whitelist":["gp4-smoke-whitelist-name"]}')
   [ "$S9_HTTP" = "200" ] || fail "Step 9a PUT cs/config expected 200, got $S9_HTTP: $(cat "$S9_TMP")" 9
-  ok "Step 9a ✅ 接管模式写入成功（takeover_mode=blacklist）"
+  ok "Step 9a ✅ 白名单/接管配置写入成功（whitelist=[gp4-smoke-whitelist-name]）"
 
   S9_HTTP=$(curl -s -o "$S9_TMP" -w '%{http_code}' --max-time 15 "$API_BASE/api/wechat/cs/config/$S9_WECHAT")
   [ "$S9_HTTP" = "200" ] || fail "Step 9b GET cs/config expected 200, got $S9_HTTP: $(cat "$S9_TMP")" 9
-  python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d.get('takeover_mode')=='blacklist'" "$S9_TMP" 2>/dev/null \
-    || fail "Step 9b 回读 takeover_mode 不一致: $(cat "$S9_TMP")" 9
+  python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert 'gp4-smoke-whitelist-name' in (d.get('whitelist') or [])" "$S9_TMP" 2>/dev/null \
+    || fail "Step 9b 回读 whitelist 不一致: $(cat "$S9_TMP")" 9
   rm -f "$S9_TMP"
-  ok "Step 9b ✅ 回读一致（takeover_mode=blacklist）"
+  ok "Step 9b ✅ 回读一致（whitelist 含 gp4-smoke-whitelist-name）"
   ok "Step 9 ✅ 白名单/接管模式配置链路通"
 else
   echo "  SKIP: API 不可达"
