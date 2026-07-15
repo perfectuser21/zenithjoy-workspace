@@ -10,20 +10,28 @@ date: 2026-07-15
 
 ### BEHAVIOR-1：唯一写者断言（Invariant I1）
 
-**描述**：events.jsonl 唯一写者为 listen_chat.py，overlay 目录下任何文件均不得包含写入 events.jsonl 的调用。
+**描述**：events.jsonl 唯一写者为 listen_chat.py，overlay 目录下任何文件均不得包含写入 events.jsonl 的调用。写入必须使用追加模式（`open(..., "a")`），禁止覆盖模式。
 
 **验收命令**：
 ```bash
-# BEHAVIOR-8 回归（继承前三刀断言）
+# BEHAVIOR-1（继承自原 BEHAVIOR-8）回归
 result=$(grep -r "events.jsonl" services/agent/wechat-rpa/overlay/ --include="*.py" -l 2>/dev/null | grep -v "__pycache__")
 if [ -n "$result" ]; then
   echo "FAIL: overlay 目录含 events.jsonl 写入调用: $result"
   exit 1
 fi
 echo "PASS: overlay 目录无 events.jsonl 写入调用"
+
+# O_APPEND 追加模式断言：确认使用追加模式而非覆盖模式
+result_append=$(grep -n 'open.*"a"' services/agent/wechat-rpa/listen_chat.py | grep -i "events")
+if [ -z "$result_append" ]; then
+  echo "FAIL: listen_chat.py 中未找到 events 文件的追加模式 open(\"a\") 调用"
+  exit 1
+fi
+echo "PASS: 追加模式确认: $result_append"
 ```
 
-**失败判定**：grep 有任何输出 → FAIL
+**失败判定**：overlay grep 有任何输出，或 O_APPEND grep 无输出 → FAIL
 
 ---
 
@@ -33,7 +41,7 @@ echo "PASS: overlay 目录无 events.jsonl 写入调用"
 
 **验收命令**：
 ```bash
-# BEHAVIOR-9 挂点回归
+# BEHAVIOR-2（继承自原 BEHAVIOR-9）挂点回归
 # 断言1：_write_event 调用存在于 DELIVERED 点附近
 result=$(grep -n "reply_sent\|_write_event" services/agent/wechat-rpa/listen_chat.py | grep -E "479[0-9]:")
 if [ -z "$result" ]; then
@@ -138,14 +146,52 @@ if [ -z "$result" ]; then
   exit 1
 fi
 echo "PASS: draft_reasonings 存在: $(echo "$result" | head -3)"
+```
 
-# grep 验证 build-modules 同步
+**失败判定**：grep 无输出 → FAIL
+
+---
+
+### BEHAVIOR-7：stage 取值域断言（Invariant I4）
+
+**描述**：本刀 `_write_event` 写入的 `stage` 字段固定为 `null`。非 null 透传（从 API 返回的 `tags.stage` 字段透传 A1/A2/A3/A4）为 Phase 2 scope，本刀不实现。
+
+**验收命令**：
+```bash
+# 确认 DELIVERED 点挂接处 stage=None（即写入 null）
+result=$(grep -n "stage=None\|\"stage\": null\|stage.*None" services/agent/wechat-rpa/listen_chat.py)
+if [ -z "$result" ]; then
+  echo "FAIL: listen_chat.py 未找到 stage=None 写入（本刀要求 stage 固定为 null）"
+  exit 1
+fi
+echo "PASS: stage=None 确认: $result"
+```
+
+**失败判定**：grep 无输出 → FAIL
+
+---
+
+### BEHAVIOR-8：build-modules 双路同步（CP-08）
+
+**描述**：`services/agent/build-modules/line04/wechat-rpa/listen_chat.py` 必须与主路径 `services/agent/wechat-rpa/listen_chat.py` 保持 diff 为零（draft_reasonings + _write_event + DELIVERED 挂接三处同步）。打包版本与测试版本行为一致。
+
+**验收命令**：
+```bash
+# grep 验证 build-modules 含 draft_reasonings
 result_bm=$(grep -n "draft_reasonings" services/agent/build-modules/line04/wechat-rpa/listen_chat.py 2>/dev/null)
 if [ -z "$result_bm" ]; then
   echo "FAIL: build-modules/listen_chat.py 未同步 draft_reasonings"
   exit 1
 fi
-echo "PASS: build-modules 同步确认"
+echo "PASS: build-modules draft_reasonings 同步确认"
+
+# grep 验证 build-modules 含 _write_event
+result_bm2=$(grep -n "_write_event" services/agent/build-modules/line04/wechat-rpa/listen_chat.py 2>/dev/null)
+if [ -z "$result_bm2" ]; then
+  echo "FAIL: build-modules/listen_chat.py 未同步 _write_event"
+  exit 1
+fi
+echo "PASS: build-modules _write_event 同步确认"
 ```
 
 **失败判定**：任一 grep 无输出 → FAIL
@@ -173,8 +219,12 @@ bash .github/workflows/scripts/smoke/line04-events-writer-smoke.sh
 grep -r "events.jsonl" services/agent/wechat-rpa/overlay/ --include="*.py" -l 2>/dev/null | grep -v "__pycache__"
 # 期望：无输出
 
-# 5. BEHAVIOR-9 挂点断言
+# 5. BEHAVIOR-2（继承自原 BEHAVIOR-9）挂点断言
 grep -n "reply_sent\|_write_event" services/agent/wechat-rpa/listen_chat.py | grep -E "479[0-9]:"
+# 期望：有输出
+
+# 6. BEHAVIOR-7 stage=None 断言
+grep -n "stage=None\|\"stage\": null\|stage.*None" services/agent/wechat-rpa/listen_chat.py
 # 期望：有输出
 ```
 
@@ -191,7 +241,8 @@ grep -n "reply_sent\|_write_event" services/agent/wechat-rpa/listen_chat.py | gr
 | CP-05 | BEHAVIOR-4 | _STATE_DIR 不可写时软失败 | pytest | 自动 |
 | CP-06 | BEHAVIOR-6 | draft_reasonings 字典存在于 listen_chat.py | grep | 自动 |
 | CP-07 | BEHAVIOR-2 | _write_event 调用在 DELIVERED 点附近（4790-4800 行） | grep | 自动 |
-| CP-08 | BEHAVIOR-6 | build-modules 副本与主路径同步 | grep | 自动 |
+| CP-08 | BEHAVIOR-8 | build-modules 副本与主路径同步（draft_reasonings + _write_event） | grep | 自动 |
+| CP-15 | BEHAVIOR-7 | stage 字段本刀写入固定为 null（非 null 透传为 Phase 2 scope） | grep | 自动 |
 | CP-09 | BEHAVIOR-5 | events.jsonl 新增行包含所有必需字段 | pytest | 自动 |
 | CP-10 | BEHAVIOR-5 | reasoning=None 时 reasoning 字段为 null（不崩溃） | pytest | 自动 |
 | CP-11 | BEHAVIOR-3 | pii_filter 导入失败时兜底（lambda x: x）不崩溃 | 代码审查 | 人工 |

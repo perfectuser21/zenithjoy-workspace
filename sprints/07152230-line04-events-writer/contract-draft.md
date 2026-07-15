@@ -50,8 +50,6 @@ Path 4「AI 思考浮窗」前三刀已建立基础设施（overlay_window.py / 
 |---|---|
 | `sprints/07152230-line04-events-writer/tests/test_events_writer.py` | 4 个 pytest 用例（failing first） |
 | `.github/workflows/scripts/smoke/line04-events-writer-smoke.sh` | 第三刀 smoke（6 节） |
-| `sprints/07152230-line04-events-writer/contract-draft.md` | 本文件 |
-| `sprints/07152230-line04-events-writer/contract-dod.md` | DoD 文件 |
 
 ### 禁止重做的地基文件
 
@@ -161,7 +159,7 @@ _write_event(
 
 # 步骤 2：检查 events.jsonl 是否新增 reply_sent 行
 $env_file = "$env:ZJ_STATE_DIR\events.jsonl"
-if (-not $env_file) { $env_file = "C:\Users\Public\events.jsonl" }
+if (-not $env:ZJ_STATE_DIR) { $env_file = "C:\Users\Public\events.jsonl" }
 Get-Content $env_file | Select-Object -Last 5
 
 # 期望输出含：
