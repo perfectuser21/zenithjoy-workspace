@@ -1210,7 +1210,7 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
             comment_text, grade, keyword, feishu_write_status)
          VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, 'local_only')
          RETURNING id`,
-        [tenantId, taskId, secUid, c.nickname, profileUrlForSecUid(secUid), !secUid,
+        [tenantId, taskId, secUid, c.nickname, secUid ? profileUrlForSecUid(secUid) : c.nickname, false,
          JSON.stringify([videoId]), c.comment_text ?? null, c.grade ?? null, c.keyword ?? keyword ?? null]
       );
       const newLeadId = insRes.rows[0].id as string;

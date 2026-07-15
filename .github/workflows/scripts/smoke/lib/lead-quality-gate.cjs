@@ -102,23 +102,26 @@ function matchesRule(value, rule, fieldName) {
 /**
  * 检查 lead 批次的语义质量
  *
- * @param {Array<{nickname: string, comment_text: string, sec_uid?: string|null}>} leads
- * @returns {{ passed: boolean, violations: Array<{field: string, value: string, reason: string, comment_text?: string}>, sec_uid_coverage: number }}
+ * @param {Array<{nickname: string, comment_text: string, sec_uid?: string|null, profile_url?: string|null}>} leads
+ * @returns {{ passed: boolean, violations: Array<{field: string, value: string, reason: string, comment_text?: string}>, sec_uid_coverage: number, profile_url_coverage: number }}
  */
 function checkLeadQuality(leads) {
   if (!Array.isArray(leads) || leads.length === 0) {
-    return { passed: true, violations: [], sec_uid_coverage: 0 };
+    return { passed: true, violations: [], sec_uid_coverage: 0, profile_url_coverage: 0 };
   }
 
   const violations = [];
   let secUidCount = 0;
+  let profileUrlCount = 0;
 
   for (const lead of leads) {
     const nickname = typeof lead.nickname === 'string' ? lead.nickname : '';
     const commentText = typeof lead.comment_text === 'string' ? lead.comment_text : '';
 
-    // sec_uid 统计
+    // sec_uid 统计（UIA 树不含 sec_uid，预期恒为 0，仅供诊断）
     if (lead.sec_uid) secUidCount++;
+    // profile_url 统计：方案A 下无 sec_uid 时应回退为昵称，覆盖率应为 100%
+    if (lead.profile_url) profileUrlCount++;
 
     const normalizedNickname = stripZeroWidth(nickname);
     const normalizedComment = stripZeroWidth(commentText);
@@ -155,11 +158,13 @@ function checkLeadQuality(leads) {
   }
 
   const secUidCoverage = leads.length > 0 ? secUidCount / leads.length : 0;
+  const profileUrlCoverage = leads.length > 0 ? profileUrlCount / leads.length : 0;
 
   return {
     passed: violations.length === 0,
     violations,
     sec_uid_coverage: secUidCoverage,
+    profile_url_coverage: profileUrlCoverage,
   };
 }
 
