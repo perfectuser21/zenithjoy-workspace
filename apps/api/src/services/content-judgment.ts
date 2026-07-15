@@ -74,7 +74,10 @@ export async function judgeVideo(
   );
   const targetProfileDesc: string = configRes.rows[0]?.target_profile_desc ?? '';
   if (!targetProfileDesc || targetProfileDesc.trim() === '') {
-    // 空画像 → 所有视频默认匹配（不写库，下次调用时仍走此逻辑）
+    // 空画像 → 所有视频默认匹配。必须落库（此前只返回不写库，
+    // API 说 matched 但 acquisition_collect_videos.judgment_status 停在旧值/NULL，
+    // 下游任何读库判断——派单/看板——永远读不到这次"匹配"）。
+    await writeJudgment(pool, tenantId, videoId, captureType, 'matched', 'empty_profile');
     return { judgment_status: 'matched' };
   }
 

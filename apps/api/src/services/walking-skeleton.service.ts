@@ -224,6 +224,12 @@ export async function upsertAgentByHeartbeat(args: {
   machineId?: string;
 }): Promise<AgentRow> {
   const { licenseId, tenantId, hostname, version, osType, agentUuid, machineId } = args;
+  // capabilities 必须随每次心跳的 os_type 同步刷新——此前只在首次 INSERT 硬编码
+  // ARRAY['douyin']，此后所有 UPDATE 分支完全不碰这一列。真实 Android 设备心跳
+  // 上报 os_type=android，capabilities 却永远不含 'android'，resolveDevicePlatform
+  // 因此恒定判 'windows'，私信任务永远派不到真机（handoff 0715 Seg4 根因）。
+  // osType='android' → 覆盖为 ['android']；其余 osType（含 null）不改变既有 capabilities。
+  const capabilitiesOverride: string[] | null = osType === 'android' ? ['android'] : null;
 
   // 防线1配套：心跳带 machine_id → 幂等刷新 license_machines（machine_id ↔ license ↔ tenant 通路），
   // 即便 register 从没成功过，中台也能按 machine_id 反查到租户。best-effort：失败不阻塞心跳主流程。
@@ -283,6 +289,7 @@ export async function upsertAgentByHeartbeat(args: {
           SET version          = COALESCE($1, version),
               hostname         = COALESCE($2, hostname),
               os_type          = COALESCE($4, os_type),
+              capabilities     = COALESCE($6, capabilities),
               last_heartbeat_at = now(),
               last_seen        = now(),
               status           = 'online',
@@ -291,7 +298,7 @@ export async function upsertAgentByHeartbeat(args: {
           AND license_id = $5
         RETURNING id, tenant_id, agent_id, hostname, version, license_id,
                   bound_folder_path, last_heartbeat_at, status, last_seen`,
-      [version, hostname, agentUuid, osType ?? null, licenseId],
+      [version, hostname, agentUuid, osType ?? null, licenseId, capabilitiesOverride],
     );
     if (precise.rows[0]) {
       // 如果 license 还没有 pinned_agent，把这台设为 pinned
@@ -323,6 +330,7 @@ export async function upsertAgentByHeartbeat(args: {
       `UPDATE zenithjoy.agents
           SET version = COALESCE($1, version),
               os_type = COALESCE($3, os_type),
+              capabilities = COALESCE($4, capabilities),
               last_heartbeat_at = now(),
               last_seen = now(),
               status = 'online',
@@ -330,7 +338,7 @@ export async function upsertAgentByHeartbeat(args: {
         WHERE id = $2
         RETURNING id, tenant_id, agent_id, hostname, version, license_id,
                   bound_folder_path, last_heartbeat_at, status, last_seen`,
-      [version, row.id, osType ?? null]
+      [version, row.id, osType ?? null, capabilitiesOverride]
     );
     // 如果 license 还没有 pinned_agent，把这台设为 pinned
     await pool.query(
@@ -347,10 +355,10 @@ export async function upsertAgentByHeartbeat(args: {
     `INSERT INTO zenithjoy.agents
        (tenant_id, license_id, agent_id, hostname, version, os_type, capabilities, status,
         last_heartbeat_at, last_seen)
-     VALUES ($1, $2, $3, $4, $5, $6, ARRAY['douyin']::text[], 'online', now(), now())
+     VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, ARRAY['douyin']::text[]), 'online', now(), now())
      RETURNING id, tenant_id, agent_id, hostname, version, license_id,
                bound_folder_path, last_heartbeat_at, status, last_seen`,
-    [tenantId, licenseId, agentText, hostname, version, osType ?? null]
+    [tenantId, licenseId, agentText, hostname, version, osType ?? null, capabilitiesOverride]
   );
   // 新机器首次连接，如果 license 还没有 pinned_agent，自动 pin 这台
   await pool.query(
