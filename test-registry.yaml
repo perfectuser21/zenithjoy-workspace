@@ -1875,6 +1875,30 @@ tests:
     product: 私域运营
     note: "安卓真机采集 smoke 自愈 seed 端点行为测试(双门禁+幂等 upsert，mock pool)；配套 smoke line02-android-collect-realmachine-smoke.sh step0"
 
+  - id: seg3-acquisition-leads-douyin-id-migration
+    path: apps/api/src/__tests__/acquisition-leads-douyin-id-migration.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "方案 B′：acquisition_leads.douyin_id 迁移守卫（列存在、可空、幂等）。变异加 NOT NULL 即报红"
+
+  - id: seg3-acquisition-lead-douyin-id-route
+    path: apps/api/src/routes/acquisition-lead-douyin-id.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "方案 B′：抓评论上报 douyin_id 落库（COALESCE 回填，绝不拿昵称/URL 冒充）。真机实证 sec_uid 不在 UIA 树，改从主页读 抖音号：xxx"
+
+  - id: seg3-acquisition-dispatch-douyin-id
+    path: apps/api/src/services/acquisition-dispatch-douyin-id.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "方案 B′：派单按通道发定位字段（android 发 douyin_id / windows 发 profile_url）。变异把闸改回 !profileUrl 即复现 私信=0 的 bug 本体"
+
   - id: p2-sprint-b1-pairing-lead-writer
     path: apps/api/src/services/lead-writer.test.ts
     type: unit
