@@ -53,13 +53,36 @@ const BLACKLIST_RULES = [
     id: 'ip_location',
     reason: 'IP属地',
     fields: 'comment_text',
-    re: /^(IP属地[:：])?\S{2,6}省?$/,
+    // 前缀**必需**。原实现把 `IP属地[:：]` 写成可选（`(...)?`），使该规则退化成
+    // 「任何 2-6 个非空白字符的评论正文」，把真人短评论（「超赞」「好看」——「超赞」
+    // 是 acquisition_leads 里 胡**v 的真实评论）全判违规：抓评论修好后闸会在
+    // **正确数据**上报红，比没有守卫更糟。
+    // 同时补真机实际格式：UIA dump 里 IP 节点（id=eu6）文本是 ' · 湖北'，
+    // 带前导「· 」且含空格，原 `\S{2,6}` 匹配不了整串 —— 该规则连目标都抓不住。
+    re: /^(IP属地[:：]\s*|·\s*)\S{2,6}省?$/,
   },
   {
     id: 'shopping_ui',
     reason: '购物车/推广UI',
     fields: 'both',
     re: /(详情|橱窗|同款|更多好物|在橱窗里|立即购买|点击购买)/,
+  },
+  {
+    id: 'product_card',
+    reason: '商品卡',
+    fields: 'both',
+    // 2026-07-15 真机 dump 实测：商品卡被 extractByStructure 配成
+    // nickname='客厅多层花架' / comment_text='已售200+' 写进 Lead 表。
+    // 「已售N+」是商品卡销量标签，绝不可能是真评论正文。
+    re: /^已售\d+(\.\d+)?[万kK]?\+?$/,
+  },
+  {
+    id: 'author_badge',
+    reason: '作者角标',
+    fields: 'both',
+    // 抖音评论区博主本人的「作者」角标（UIA id=eyo）。被相邻配对捞成
+    // comment_text='作者' 写进库。真评论正文不会恰好只有「作者」二字。
+    re: /^作者$/,
   },
 ];
 

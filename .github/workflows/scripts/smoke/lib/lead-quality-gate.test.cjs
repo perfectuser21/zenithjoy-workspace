@@ -171,6 +171,76 @@ test('额外: comment_text="IP属地：北京" → passed=false，reason 含"IP�
   );
 });
 
+// ── 回归：ip_location 规则不得误杀真人短评论 ─────────────────────────────────
+//
+// 2026-07-15 实测：原 re 为 /^(IP属地[:：])?\S{2,6}省?$/ —— `IP属地[:：]` 前缀**可选**，
+// 于是该规则实际等于「任何 2-6 个非空白字符的评论正文」，把真人短评论全判违规。
+// 「超赞」是库里 胡**v 的**真实评论**（zenithjoy.acquisition_leads 实存）。
+// 后果：抓评论修好、lead 全是真人之后，只要有人写句短评论，闸就在**正确数据**上报红 ——
+// 守卫在正确数据上报红比没有守卫更糟。
+//
+// 同时该规则连自己的目标都抓不住：真机 IP 节点文本是 ' · 湖北'（中间有空格，
+// 且是独立节点 id=eu6，不在 content 里），`\S{2,6}` 匹配不了整串。
+test('回归: 真人短评论「超赞」「好看」不得被 ip_location 误杀', () => {
+  const result = checkLeadQuality([
+    { nickname: '胡**v', comment_text: '超赞', sec_uid: 'MS4wLjABAAAAxxx' },
+    { nickname: '某人', comment_text: '好看', sec_uid: 'MS4wLjABAAAAyyy' },
+    { nickname: '小叶子', comment_text: '你这个地上铺的是复合地板吗', sec_uid: 'MS4wLjABAAAAzzz' },
+  ]);
+  assert.strictEqual(
+    result.passed,
+    true,
+    `全真人 lead 必须放行，实际 passed=${result.passed}，误杀: ${JSON.stringify(
+      result.violations.map((v) => ({ value: v.value, reason: v.reason }))
+    )}`
+  );
+});
+
+test('回归: ip_location 仍须抓住真机实际格式「· 湖北」与「IP属地：北京」', () => {
+  const withDot = checkLeadQuality([
+    { nickname: '用户G', comment_text: '· 湖北', sec_uid: null },
+  ]);
+  assert.strictEqual(withDot.passed, false, '真机格式「· 湖北」应被判违规');
+  assert.ok(
+    withDot.violations[0].reason.includes('IP属地'),
+    `reason 应含"IP属地"，实际: "${withDot.violations[0].reason}"`
+  );
+});
+
+// ── 回流：2026-07-15 真机实测垃圾（铁律 5 复现判据）─────────────────────────
+//
+// 这两条是 Seg3 抓评论 bug 真机 dump 里 extractByStructure 实际产出的垃圾
+// （fixture: services/agent-android/app/src/test/resources/fixtures/
+//   douyin-comment-panel-20260715.xml）：
+//   - 商品卡：nickname='客厅多层花架' / comment_text='已售200+'
+//   - 博主角标：nickname='波本气泡水' / comment_text='作者'
+// 修 ip_location（前缀改必需）之前，「已售200+」是被那条**过宽**规则误打误撞
+// 拦下的（reason 竟写"IP属地"）。前缀收紧后它就没规则管了 —— 必须显式建规则，
+// 否则闸对本 bug 的真实垃圾反而变松。
+test('回流: 商品卡垃圾 nickname="客厅多层花架" comment_text="已售200+" → passed=false', () => {
+  const result = checkLeadQuality([
+    { nickname: '客厅多层花架', comment_text: '已售200+', sec_uid: null },
+  ]);
+  assert.strictEqual(result.passed, false, `商品卡必须被拦，实际 passed=${result.passed}`);
+  const reason = result.violations[0].reason;
+  assert.ok(
+    reason.includes('商品卡'),
+    `violations[0].reason 应含"商品卡"，实际: "${reason}"`
+  );
+});
+
+test('回流: 博主角标 comment_text="作者" → passed=false', () => {
+  const result = checkLeadQuality([
+    { nickname: '波本气泡水', comment_text: '作者', sec_uid: null },
+  ]);
+  assert.strictEqual(result.passed, false, `博主角标必须被拦，实际 passed=${result.passed}`);
+  const reason = result.violations[0].reason;
+  assert.ok(
+    reason.includes('作者角标'),
+    `violations[0].reason 应含"作者角标"，实际: "${reason}"`
+  );
+});
+
 // ── 额外：日期格式（无零宽字符版）→ FAIL ───────────────────────────────────
 test('额外: comment_text="04-07" → passed=false，reason 含"日期格式"', () => {
   const result = checkLeadQuality([

@@ -1,34 +1,121 @@
 package com.zenithjoy.agent.collect
 
+import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.*
 import org.junit.Test
+import org.w3c.dom.Element
 
 class NodeExtractorTest {
 
     private fun node(text: String = "", cd: String = "", id: String = "") =
         NodeExtractor.NodeInfo(text, cd, id)
 
-    // ── resource-id 精确匹配 ──────────────────────────────────────────────────
+    private val pkg = "com.ss.android.ugc.aweme:id"
+
+    private fun avatar(nick: String) = node(cd = "${nick}的头像", id = "$pkg/avatar")
+    private fun title(nick: String) = node(text = nick, id = "$pkg/title")
+    private fun content(text: String) = node(text = text, id = "$pkg/content")
+    private fun authorBadge() = node(text = "作者", id = "$pkg/eyo")
+
+    /**
+     * 解析真机 uiautomator dump，按文档序（== DFS 前序，与生产
+     * NodeTreeFlattener.flattenDfs 喂给 extractComments 的顺序一致）摊平成 NodeInfo 列表。
+     */
+    private fun loadFixtureNodes(name: String): List<NodeExtractor.NodeInfo> {
+        val stream = requireNotNull(javaClass.getResourceAsStream("/fixtures/$name")) {
+            "fixture not found on test classpath: /fixtures/$name"
+        }
+        val doc = stream.use {
+            DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(it)
+        }
+        val out = mutableListOf<NodeExtractor.NodeInfo>()
+        fun walk(el: Element) {
+            if (el.tagName == "node") {
+                out.add(
+                    NodeExtractor.NodeInfo(
+                        text = el.getAttribute("text"),
+                        contentDescription = el.getAttribute("content-desc"),
+                        resourceId = el.getAttribute("resource-id"),
+                    ),
+                )
+            }
+            val kids = el.childNodes
+            for (i in 0 until kids.length) {
+                val k = kids.item(i)
+                if (k is Element) walk(k)
+            }
+        }
+        walk(doc.documentElement)
+        return out
+    }
+
+    // ── 真机 fixture 钉死（2026-07-15 dump，235 节点） ──────────────────────────
+    //
+    // 真机 id = avatar / title / content / eyo。item 结构 = avatar → title → [eyo] → content，
+    // 在 DFS 前序里天然连续，用 avatar 当分隔符切段即可。
 
     @Test
-    fun `extracts comment by resource-id pairing`() {
-        val nodes = listOf(
-            node(text = "美食博主小李", id = "com.ss.android.ugc.aweme:id/tv_username"),
-            node(text = "求推荐几个靠谱的经纪公司", id = "com.ss.android.ugc.aweme:id/tv_comment_content"),
-        )
+    fun `extracts exactly the two real comments from real-machine dump`() {
+        val nodes = loadFixtureNodes("douyin-comment-panel-20260715.xml")
         val result = NodeExtractor.extractComments(nodes)
-        assertEquals(1, result.size)
-        assertEquals("美食博主小李", result[0].commenterId)
-        assertEquals("求推荐几个靠谱的经纪公司", result[0].text)
+
+        assertEquals("真机 dump 里只有 2 条真实网友评论，实际=$result", 2, result.size)
+        assertEquals("小叶子", result[0].commenterId)
+        assertEquals("你这个地上铺的是复合地板吗", result[0].text)
+        assertEquals("LENTER心疼姑舅", result[1].commenterId)
+        assertEquals("预算10万求推荐", result[1].text)
     }
 
     @Test
-    fun `extracts multiple comments by resource-id in sequence`() {
+    fun `real-machine dump extraction contains no metadata garbage`() {
+        val nodes = loadFixtureNodes("douyin-comment-panel-20260715.xml")
+        val result = NodeExtractor.extractComments(nodes)
+        val allText = result.flatMap { listOf(it.commenterId, it.text) }
+
+        // 线上事故实录：这些元数据 / 商品卡 / tab 栏文本曾被当成 lead 抓进库。
+        val garbage = listOf(
+            "已售200+",
+            "作者",
+            "购物",
+            "评论 94",
+            "客厅多层花架",
+            "视频同款及更多好物在橱窗里 详情",
+        )
+        for (g in garbage) {
+            assertFalse(
+                "垃圾文本不该出现在抓取结果里: $g，实际=$result",
+                allText.any { it.contains(g) },
+            )
+        }
+        // 胡**v 的 item 不完整（正文滚出屏幕）：宁可丢，不能瞎配。
+        assertFalse("不完整 item 不该产出，实际=$result", allText.any { it.contains("胡**v") })
+    }
+
+    // ── 宁可空，不可猜：锚定不到就返回空，不许启发式配对 ───────────────────────────
+
+    @Test
+    fun `returns empty rather than guessing when no avatar or title anchors present`() {
+        // 模拟抖音改版 / id 猜错：全是"看起来像昵称 + 像正文"的相邻文本，但没有锚点。
         val nodes = listOf(
-            node(text = "小王", id = "com.ss.android.ugc.aweme:id/tv_username"),
-            node(text = "怎么联系你们", id = "com.ss.android.ugc.aweme:id/tv_comment_content"),
-            node(text = "小张", id = "com.ss.android.ugc.aweme:id/tv_username"),
-            node(text = "有没有官网", id = "com.ss.android.ugc.aweme:id/tv_comment_content"),
+            node(text = "小叶子"),
+            node(text = "你这个地上铺的是复合地板吗"),
+            node(text = "客厅多层花架"),
+            node(text = "已售200+"),
+        )
+        val result = NodeExtractor.extractComments(nodes)
+        assertTrue(
+            "没有 avatar/title 锚点时必须返回空（宁可空，不可猜），实际=$result",
+            result.isEmpty(),
+        )
+    }
+
+    // ── avatar 锚定的基本行为 ──────────────────────────────────────────────────
+
+    @Test
+    fun `extracts multiple comments anchored by avatar`() {
+        val nodes = listOf(
+            avatar("小王"), title("小王"), content("怎么联系你们"),
+            avatar("小张"), title("小张"), content("有没有官网"),
         )
         val result = NodeExtractor.extractComments(nodes)
         assertEquals(2, result.size)
@@ -39,92 +126,44 @@ class NodeExtractorTest {
     }
 
     @Test
-    fun `resource-id match ignores nickname with blank content`() {
+    fun `skips author own comment marked by eyo badge`() {
         val nodes = listOf(
-            node(text = "小王", id = "com.ss.android.ugc.aweme:id/tv_username"),
-            node(text = "", id = "com.ss.android.ugc.aweme:id/tv_comment_content"),
+            avatar("波本气泡水"), title("波本气泡水"), authorBadge(), content("推荐啥子[捂脸]"),
+            avatar("小叶子"), title("小叶子"), content("你这个地上铺的是复合地板吗"),
         )
         val result = NodeExtractor.extractComments(nodes)
-        assertTrue(result.isEmpty())
-    }
-
-    // ── 结构启发式 fallback（resource-id 未命中时） ───────────────────────────
-
-    @Test
-    fun `falls back to structural heuristic when no resource-id matches`() {
-        val nodes = listOf(
-            node(text = "抖音用户9527"),
-            node(text = "求问这家公司靠谱吗"),
-        )
-        val result = NodeExtractor.extractComments(nodes)
-        assertEquals(1, result.size)
-        assertEquals("抖音用户9527", result[0].commenterId)
-        assertEquals("求问这家公司靠谱吗", result[0].text)
+        assertEquals("博主自己的评论不是 lead，实际=$result", 1, result.size)
+        assertEquals("小叶子", result[0].commenterId)
     }
 
     @Test
-    fun `structural heuristic skips meta words like reply and time`() {
+    fun `ignores incomplete item without content`() {
         val nodes = listOf(
-            node(text = "小赵"),
-            node(text = "太贵了吧"),
-            node(text = "3天前"),
-            node(text = "回复"),
+            avatar("小王"), title("小王"), content("怎么联系你们"),
+            avatar("胡**v"), title("胡**v"), // 正文滚出屏幕
         )
         val result = NodeExtractor.extractComments(nodes)
         assertEquals(1, result.size)
-        assertEquals("小赵", result[0].commenterId)
-        assertEquals("太贵了吧", result[0].text)
+        assertEquals("小王", result[0].commenterId)
     }
 
     @Test
-    fun `structural heuristic skips comment count title bar`() {
+    fun `ignores orphan nodes before first avatar`() {
         val nodes = listOf(
+            content(""), // 孤儿 content，真机 dump 里确实存在
             node(text = "7889条评论"),
-            node(text = "最新"),
-            node(text = "小赵"),
-            node(text = "太贵了吧"),
+            avatar("小王"), title("小王"), content("怎么联系你们"),
         )
         val result = NodeExtractor.extractComments(nodes)
         assertEquals(1, result.size)
-        assertEquals("小赵", result[0].commenterId)
-        assertEquals("太贵了吧", result[0].text)
+        assertEquals("小王", result[0].commenterId)
+        assertEquals("怎么联系你们", result[0].text)
     }
 
     @Test
-    fun `structural heuristic does not leak like-count into comment text or next nickname`() {
+    fun `ignores item whose content is blank`() {
         val nodes = listOf(
-            node(text = "小赵"),
-            node(text = "太贵了吧"),
-            node(text = "1.2万"),
-            node(text = "小钱"),
-            node(text = "确实贵"),
-        )
-        val result = NodeExtractor.extractComments(nodes)
-        assertEquals(2, result.size)
-        assertEquals("小赵", result[0].commenterId)
-        assertEquals("太贵了吧", result[0].text)
-        assertEquals("小钱", result[1].commenterId)
-        assertEquals("确实贵", result[1].text)
-    }
-
-    @Test
-    fun `structural heuristic does not mispair date with following real nickname`() {
-        val nodes = listOf(
-            node(text = "07-15"),
-            node(text = "小孙"),
-            node(text = "这个多少钱"),
-        )
-        val result = NodeExtractor.extractComments(nodes)
-        assertEquals(1, result.size)
-        assertEquals("小孙", result[0].commenterId)
-        assertEquals("这个多少钱", result[0].text)
-    }
-
-    @Test
-    fun `structural heuristic rejects overly long nickname candidate`() {
-        val nodes = listOf(
-            node(text = "这是一段非常非常非常非常非常非常非常非常长的不像昵称的文本"),
-            node(text = "正文"),
+            avatar("小王"), title("小王"), content("   "),
         )
         val result = NodeExtractor.extractComments(nodes)
         assertTrue(result.isEmpty())
