@@ -254,3 +254,70 @@ def test_switch_customer_two_customers_updates_state(tmp_path, monkeypatch):
     assert app.current_customer == "wxid_B"
     assert p_b["nickname"] == "客户B"
     assert p_a["nickname"] != p_b["nickname"], "切换后两客户画像应不同"
+
+
+def _write_events_jsonl(path, events):
+    with open(path, "w", encoding="utf-8") as f:
+        for ev in events:
+            f.write(json.dumps(ev, ensure_ascii=False) + "\n")
+
+
+def test_get_events_switches_customer_when_new_contact_seen(tmp_path, monkeypatch):
+    """Step16：get_events() 消费到带 contact 的新事件时，真的调用 switch_customer 联动画像卡
+    （里程碑B 遗留：switch_customer/_fetch_customer_profile 曾是孤儿代码，从未被事件循环调用）。
+    """
+    from overlay.overlay_window import OverlayApp
+
+    app = OverlayApp(state_dir=str(tmp_path))
+
+    called = []
+    monkeypatch.setattr(app, "switch_customer", lambda wechat_id: called.append(wechat_id))
+
+    now = time.time()
+    _write_events_jsonl(os.path.join(str(tmp_path), "events.jsonl"), [
+        {"type": "heartbeat", "ts": now, "event_id": "h-1"},
+        {"type": "reply_sent", "event_id": "e-1", "contact": "张三", "ts": now},
+    ])
+
+    app.get_events()
+    assert called == ["张三"], f"应联动切换到张三，实际调用: {called}"
+
+
+def test_get_events_does_not_resend_switch_for_same_contact(tmp_path, monkeypatch):
+    """同一联系人连续事件 → 只切换一次，不重复调用（current_customer 已相同则跳过）。"""
+    from overlay.overlay_window import OverlayApp
+
+    app = OverlayApp(state_dir=str(tmp_path))
+    app.current_customer = "张三"
+
+    called = []
+    monkeypatch.setattr(app, "switch_customer", lambda wechat_id: called.append(wechat_id))
+
+    now = time.time()
+    _write_events_jsonl(os.path.join(str(tmp_path), "events.jsonl"), [
+        {"type": "heartbeat", "ts": now, "event_id": "h-1"},
+        {"type": "reply_sent", "event_id": "e-1", "contact": "张三", "ts": now},
+    ])
+
+    app.get_events()
+    assert called == [], "current_customer 已是张三，不应重复切换"
+
+
+def test_get_events_switches_customer_on_contact_change(tmp_path, monkeypatch):
+    """联系人从 A 切到 B → switch_customer 调用一次，参数为 B。"""
+    from overlay.overlay_window import OverlayApp
+
+    app = OverlayApp(state_dir=str(tmp_path))
+    app.current_customer = "张三"
+
+    called = []
+    monkeypatch.setattr(app, "switch_customer", lambda wechat_id: called.append(wechat_id))
+
+    now = time.time()
+    _write_events_jsonl(os.path.join(str(tmp_path), "events.jsonl"), [
+        {"type": "heartbeat", "ts": now, "event_id": "h-1"},
+        {"type": "reply_sent", "event_id": "e-1", "contact": "李四", "ts": now},
+    ])
+
+    app.get_events()
+    assert called == ["李四"]

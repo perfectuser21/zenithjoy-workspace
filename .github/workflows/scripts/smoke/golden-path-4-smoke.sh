@@ -17,7 +17,7 @@
 #   Step 13 生成回复草稿，判断是否转人工（真链路：POST /api/wechat/draft-generate）
 #   Step 14 后台把回复真实发送出去，气泡刷新确认才算成功（真链路：cs/outbound → receipt → DB 翻状态）
 #   Step 15 客户桌面浮窗实时看到"正在回复谁+推理摘要+发送中→已送达"（events.jsonl 单写者，PR#1315）
-#   Step 16 〔未达成〕浮窗切换显示当前回复客户的画像面板（customer-profile 六字段已有，联动未做）
+#   Step 16 浮窗切换显示当前回复客户的画像面板（events 消费循环真调用 switch_customer，已接线）
 #
 # Step 4/5 是共享前门（注册/装机，Path1/2/4 复用），断言见 golden-path-2-smoke.sh Step1-2，本 smoke 不复测。
 #
@@ -28,7 +28,7 @@
 #
 # 未覆盖真实链路清单（规则 C）：
 #   - Step 6：真机段（真实微信真发送给固定测试联系人）见 xian-rog 真机通道，本 smoke 纯函数等价断言
-#   - Step 16：customer-profile 数据源已有，但"浮窗联动画像面板"这个动作本身未开发，本步诚实 SKIP
+#   - Step 16：真机段（真实浮窗 DOM 渲染验证）见 xian-rog 真机通道，本 smoke 端到端功能断言到 get_events()/switch_customer 调用层
 #   - Step 13 回复判断内核内部质量：用户 2026-07-15 拍板不重新审计，本步只做一次真调 + 响应结构断言
 #
 # 用法：
@@ -406,22 +406,45 @@ ok "Step 15c ✅ overlay 只读消费 events.jsonl（单写者约束）"
 ok "Step 15 ✅ AI 思考浮窗动态流通（golden path 当前终点）"
 
 # ───────────────────────────────────────────────────────────────────
-# Step 16：〔未达成〕浮窗切换显示当前回复客户的画像面板
-# customer-profile 数据源已具备（Step 8），fetch 画像的辅助方法 switch_customer()/
-# _fetch_customer_profile() 也已存在（里程碑B遗留），但真正的缺口是：events 消费循环
-# （EventTailConsumer 的分发点）从不在收到 switch_customer 类型事件时真的调用它——
-# 只是孤儿代码，没有被接线。诚实记账（SKIP），不是硬 FAIL：本文件在 smoke-baseline.txt
-# 棘轮闸内，硬 FAIL 会阻断所有 Path4 PR 合并。TODO：接线立项点火后把这里改回真断言。
+# Step 16：浮窗切换显示当前回复客户的画像面板（已接线）
+# get_events() 消费到带 contact 的新事件、且与当前显示客户不同时，真调 switch_customer
+# 联动画像卡（此前 switch_customer()/_fetch_customer_profile() 是里程碑B 遗留孤儿代码，
+# events 消费循环从不调用它——本 smoke 曾用过太松的 grep 断言误判成 PASS，现改为
+# 端到端功能断言：真写 events.jsonl → 真调 get_events() → 验证 switch_customer 真被调用）。
 # ───────────────────────────────────────────────────────────────────
-echo "▶ Step 16: 〔未达成〕会话跟随客户画像面板"
+echo "▶ Step 16: 会话跟随客户画像面板"
 
-# 只认「事件分发点真的调用 switch_customer(」，不认孤儿的 fetch 辅助方法存在
+# 16a：精确接线检查（真调用点，不认孤儿的 fetch 辅助方法存在）
 PANEL_WIRED=$(grep -n "\.switch_customer(" "$OVERLAY_DIR"/*.py 2>/dev/null | grep -v "def switch_customer" | grep -v "__pycache__" || true)
-if [ -n "$PANEL_WIRED" ]; then
-  ok "Step 16 ✅ 浮窗已联动画像面板（事件分发点真调用 switch_customer）: $PANEL_WIRED"
+[ -n "$PANEL_WIRED" ] || fail "Step 16a 事件分发点未找到真调用 switch_customer(（只有孤儿辅助方法）" 16
+ok "Step 16a ✅ 事件分发点真调用 switch_customer: $PANEL_WIRED"
+
+# 16b：端到端功能断言——真写 events.jsonl，真调 OverlayApp.get_events()，验证联动切换
+if python3 -c "
+import sys, os, json, tempfile
+sys.path.insert(0, 'services/agent/wechat-rpa')
+sys.path.insert(0, 'services/agent/wechat-rpa/overlay')
+from overlay.overlay_window import OverlayApp
+
+state_dir = tempfile.mkdtemp(prefix='zj-gp4-smoke-panel-')
+app = OverlayApp(state_dir=state_dir)
+
+called = []
+app.switch_customer = lambda wechat_id: called.append(wechat_id)
+
+with open(os.path.join(state_dir, 'events.jsonl'), 'a', encoding='utf-8') as f:
+    f.write(json.dumps({'type': 'heartbeat', 'ts': __import__('time').time(), 'event_id': 'h-1'}, ensure_ascii=False) + '\n')
+    f.write(json.dumps({'type': 'reply_sent', 'event_id': 'e-1', 'contact': 'gp4smoke联系人'}, ensure_ascii=False) + '\n')
+
+app.get_events()
+assert called == ['gp4smoke联系人'], f'联动切换未真触发，实际: {called}'
+print('PASS')
+" 2>&1 | tail -1 | grep -q "PASS"; then
+  ok "Step 16b ✅ 端到端联动：真写 events.jsonl → get_events() → switch_customer 真被调用"
 else
-  echo "  SKIP: 未达成——switch_customer()/_fetch_customer_profile() 辅助方法已存在（里程碑B遗留），但 events 消费循环从不调用它，是孤儿代码未接线（数据源已具备见 Step 8）"
+  fail "Step 16b 画像面板联动端到端断言失败" 16
 fi
+ok "Step 16 ✅ 会话跟随客户画像面板联动通"
 
 echo ""
 # Step 3 补充：扫描前守卫纯函数等价断言（v1.0.120，issue 99741ff9 补丁）
