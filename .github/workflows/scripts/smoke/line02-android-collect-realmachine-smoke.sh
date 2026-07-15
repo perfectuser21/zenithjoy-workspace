@@ -33,7 +33,7 @@ envfail() { echo "🟠 环境未就绪(非采集 bug,查设备/staging/agent): $
 ADB="${ADB:-adb}"
 API_BASE="${API_BASE:-https://staging-autopilot.zenjoymedia.media}"
 TENANT="${SMOKE_TENANT:-455a8ca9-5f63-4286-83ce-c5cca04cfd58}"
-AGENT_ID="${SMOKE_AGENT:-a7a7b36c-6d05-4653-8ba1-83c1553ef5c7}"
+AGENT_ID="${SMOKE_AGENT:-e017953c-bc65-47e0-913e-a2ed5eb54993}"
 KW="${SMOKE_KW:-装修}"
 POLL_MAX="${POLL_MAX:-30}"
 
