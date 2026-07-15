@@ -818,6 +818,26 @@ class DouyinDmOutreachService : AccessibilityService() {
         }
 
         /**
+         * [verifyProfileMatchesDouyinId] 的孪生函数：不"验证是不是这个号"，而是"读出这是几号"。
+         * Seg3 抓评论点头像进主页后用它把真实抖音号读出来回填 lead（真机 2026-07-15 xian-rog：
+         * 主页一次 dump 即含 resource-id=.../5mt、text="抖音号：1689210742"）。
+         *
+         * 判别与孪生函数【完全一致】，故意共用同一条正则骨架：必须整行匹配 "抖音号：<id>"。
+         * 前缀是关键判别——搜索框回显的是裸 id（无前缀），真实主页 id 行永远带前缀，据此天然
+         * 排除搜索框陷阱；整行锚定（^...$）额外排除 "他的抖音号：123 是假的" 这类叙述句。
+         * 全角/半角冒号都认。读不到返回 null——宁可空，不可猜（PR #1306 教训：猜出来的垃圾
+         * 会静默污染 Lead 表，空会硬失败并告警）。
+         */
+        internal fun extractDouyinId(profileTexts: List<String>): String? {
+            val regex = Regex("""^抖音号[:：]\s*(\S+)$""")
+            for (t in profileTexts) {
+                val m = regex.find(t.trim()) ?: continue
+                return m.groupValues[1]
+            }
+            return null
+        }
+
+        /**
          * 关注按钮态判断：文本为"关注"或"回关"才需要点击。
          * - "关注"：陌生人主页，未关注 → 点关注。
          * - "回关"：对方已关注你、你尚未关注对方（真机39.4.0实测按钮文案是"回关"不是"关注"），
