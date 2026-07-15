@@ -385,6 +385,18 @@ else
 fi
 
 echo ""
+# Step 3 补充：扫描前守卫纯函数等价断言（v1.0.120，issue 99741ff9 补丁）
+# 真机段 TODO：xian-rog 630x622 小窗验证 [扫描守卫] 日志出现且下轮 sessions>0
+python3 -c "
+import sys; sys.path.insert(0, 'services/agent/wechat-rpa')
+import listen_chat
+assert listen_chat.window_needs_maximize(is_zoomed=False, is_iconic=False) is True
+assert listen_chat.window_needs_maximize(is_zoomed=True, is_iconic=False) is False
+assert listen_chat.window_needs_maximize(is_zoomed=False, is_iconic=True) is False
+print('PASS')
+" 2>/dev/null && ok "Step 3b ✅ 扫描前守卫三路径逻辑正确（非最大化→触发/最大化→放行/iconic→放行）" \
+               || fail "Step 3b 扫描前守卫逻辑异常" 3
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ✅ Path 4 16 步 golden path smoke 服务端段全通"
 echo "  真机段：xian-rog 真机验收证据见 sprints/07150800-line04-overlay-continuation/evidence/"

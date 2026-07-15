@@ -4581,6 +4581,23 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     time.sleep(args.interval)
                     continue
 
+            # 扫描前守卫（issue 99741ff9 补丁 v1.0.120）：可见+非最大化=单栏布局→先 SW_MAXIMIZE，
+            # 跳过本轮扫描等 UIA 树重建。心跳 maximize 后同轮立即 scan 仍读旧单栏树的竞态根治。
+            if mw is not None and platform.system() == "Windows":
+                try:
+                    import ctypes as _ctg
+                    _mh_scan = _safe_hwnd(mw)
+                    if _mh_scan and window_needs_maximize(
+                        bool(_ctg.windll.user32.IsZoomed(_mh_scan)),
+                        bool(_ctg.windll.user32.IsIconic(_mh_scan)),
+                    ):
+                        _ctg.windll.user32.ShowWindow(_mh_scan, 3)  # SW_MAXIMIZE
+                        _log("[扫描守卫] 非最大化(单栏布局)→已 SW_MAXIMIZE，跳过本轮扫描等 UIA 树重建")
+                        time.sleep(args.interval)
+                        continue
+                except Exception:
+                    pass
+
             # 接管名单门（CRM 重做：黑名单主模型 + whitelist 兼容回退，见 cs_config_gate.should_reply）：
             # - blacklist 模式（takeover_mode='blacklist'）：默认全接管，sender∈blacklist 才跳过。
             # - whitelist 模式 / 无 takeover_mode 存量配置：配了 whitelist 则只回名单内；没配（空）→ 不限，保持现状。

@@ -1,10 +1,11 @@
-"""回归测试（2026-07-08 真机取证，issue 99741ff9 / skill §2.K）：
+"""回归测试（2026-07-08 真机取证，issue 99741ff9 / skill §2.K；v1.0.120 扫描前守卫）：
 
 真机现象：主窗口 630x622 非最大化时微信进【单栏布局】，会话列表整个不在 UIA 树，
 scan_unread 读到的是聊天气泡（sessions=4 假象），新消息 20 分钟无反应且日志"一切正常"。
 SW_MAXIMIZE 后 sessions 4→26 立即恢复。微信重启后默认非最大化 → 每次自愈重启都掉坑。
-修法：心跳检测 可见+非最大化 → 自动 SW_MAXIMIZE 自愈；iconic（托盘/最小化）是合法
-运行态不动（强行弹窗打扰客户机操作者）。
+修法1 (bc7ce517)：心跳检测 可见+非最大化 → 自动 SW_MAXIMIZE 自愈。
+修法2 (v1.0.120)：扫描前守卫——心跳 maximize 后同轮立即扫描仍读旧单栏树的竞态根治；
+    可见+非最大化时 SW_MAXIMIZE 并跳过本轮 scan_unread，等下轮 UIA 树重建后再扫。
 
 本文件是永久 regression test，禁止删除。
 """
@@ -75,3 +76,24 @@ def test_build_diag_backward_compatible_without_new_args():
     )
     assert diag["window_state"] == {}
     assert diag["welcome_click_fails"] == 0
+
+
+def test_pre_scan_guard_logic_visible_not_maximized():
+    """v1.0.120 扫描前守卫逻辑（CI等价断言）：可见+非最大化 → window_needs_maximize 返 True
+    → 守卫触发 SW_MAXIMIZE 并 continue 跳过 scan_unread（真机段：下轮 UIA 树重建后才扫）。
+    本测验证纯函数判定正确，守卫的 ctypes 调用在 Windows 真机运行（真机段 TODO）。
+    """
+    assert listen_chat.window_needs_maximize(is_zoomed=False, is_iconic=False) is True, \
+        "visible+non-maximized 必须触发扫描前守卫"
+
+
+def test_pre_scan_guard_no_skip_after_maximize():
+    """最大化完成后（is_zoomed=True）守卫不再跳过，scan_unread 正常运行。"""
+    assert listen_chat.window_needs_maximize(is_zoomed=True, is_iconic=False) is False, \
+        "已最大化状态守卫不应触发（避免无限 skip 循环）"
+
+
+def test_pre_scan_guard_iconic_passthrough():
+    """托盘/最小化（iconic=True）守卫放行——微信最小化合法运行态，不弹窗不阻扫。"""
+    assert listen_chat.window_needs_maximize(is_zoomed=False, is_iconic=True) is False, \
+        "iconic 状态守卫不应触发（强行弹最大化会打扰操作者）"
