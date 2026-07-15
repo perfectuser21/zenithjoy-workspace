@@ -171,6 +171,42 @@ test('额外: comment_text="IP属地：北京" → passed=false，reason 含"IP�
   );
 });
 
+// ── 回归：ip_location 规则不得误杀真人短评论 ─────────────────────────────────
+//
+// 2026-07-15 实测：原 re 为 /^(IP属地[:：])?\S{2,6}省?$/ —— `IP属地[:：]` 前缀**可选**，
+// 于是该规则实际等于「任何 2-6 个非空白字符的评论正文」，把真人短评论全判违规。
+// 「超赞」是库里 胡**v 的**真实评论**（zenithjoy.acquisition_leads 实存）。
+// 后果：抓评论修好、lead 全是真人之后，只要有人写句短评论，闸就在**正确数据**上报红 ——
+// 守卫在正确数据上报红比没有守卫更糟。
+//
+// 同时该规则连自己的目标都抓不住：真机 IP 节点文本是 ' · 湖北'（中间有空格，
+// 且是独立节点 id=eu6，不在 content 里），`\S{2,6}` 匹配不了整串。
+test('回归: 真人短评论「超赞」「好看」不得被 ip_location 误杀', () => {
+  const result = checkLeadQuality([
+    { nickname: '胡**v', comment_text: '超赞', sec_uid: 'MS4wLjABAAAAxxx' },
+    { nickname: '某人', comment_text: '好看', sec_uid: 'MS4wLjABAAAAyyy' },
+    { nickname: '小叶子', comment_text: '你这个地上铺的是复合地板吗', sec_uid: 'MS4wLjABAAAAzzz' },
+  ]);
+  assert.strictEqual(
+    result.passed,
+    true,
+    `全真人 lead 必须放行，实际 passed=${result.passed}，误杀: ${JSON.stringify(
+      result.violations.map((v) => ({ value: v.value, reason: v.reason }))
+    )}`
+  );
+});
+
+test('回归: ip_location 仍须抓住真机实际格式「· 湖北」与「IP属地：北京」', () => {
+  const withDot = checkLeadQuality([
+    { nickname: '用户G', comment_text: '· 湖北', sec_uid: null },
+  ]);
+  assert.strictEqual(withDot.passed, false, '真机格式「· 湖北」应被判违规');
+  assert.ok(
+    withDot.violations[0].reason.includes('IP属地'),
+    `reason 应含"IP属地"，实际: "${withDot.violations[0].reason}"`
+  );
+});
+
 // ── 额外：日期格式（无零宽字符版）→ FAIL ───────────────────────────────────
 test('额外: comment_text="04-07" → passed=false，reason 含"日期格式"', () => {
   const result = checkLeadQuality([
