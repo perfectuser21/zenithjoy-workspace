@@ -94,8 +94,16 @@ function makePool(opts: {
   };
 }
 
-/** defaultConfig 的 dm_active 时段内的一个时刻（避免时段闸把用例挡掉）。 */
-const NOON = new Date('2026-07-15T04:00:00Z'); // 12:00 Asia/Shanghai
+/**
+ * defaultConfig 的 dm_active 时段（09:00–21:00）内的一个时刻，避免时段闸把用例挡掉。
+ *
+ * ⚠️ 必须在 **UTC 和 Asia/Shanghai 两个时区下都落在窗内** —— `withinActiveWindow`
+ * 用的是 `now.getHours()`（进程本地时区，见 acquisition-dispatch.ts:315 注释）：
+ *   - 12:00Z → UTC 12 点 ✅ / 上海 20 点 ✅  ← 本地与 CI 都绿
+ *   - 04:00Z → 上海 12 点 ✅ / UTC 4 点 ❌   ← 本地绿、CI 红（曾踩：PR #1310）
+ * 与既有 acquisition-dispatch.test.ts:39 的 `2026-07-04T12:00:00Z` 取同一 pattern。
+ */
+const NOON = new Date('2026-07-15T12:00:00Z'); // UTC 12:00 / 上海 20:00 —— 两边都在窗内
 
 function findPublishTaskPayload(captured: { sql: string; params: unknown[] }[]) {
   const insert = captured.find((c) => /INSERT INTO zenithjoy\.publish_tasks/i.test(c.sql));
