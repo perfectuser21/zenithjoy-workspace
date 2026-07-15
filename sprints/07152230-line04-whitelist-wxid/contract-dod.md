@@ -10,7 +10,7 @@ target_environment: windows_cloud
 
 ## BEHAVIOR 条目
 
-### BEHAVIOR-1：wxid 非空时优先匹配，不走显示名
+### [BEHAVIOR] BEHAVIOR-1：wxid 非空时优先匹配，不走显示名
 
 **铁律来源**：I-1（wxid 优先匹配）
 
@@ -44,7 +44,7 @@ print('BEHAVIOR-1 PASS: wxid 优先匹配正常')
 
 ---
 
-### BEHAVIOR-2：wxid 为空/None 时降级走显示名逻辑
+### [BEHAVIOR] BEHAVIOR-2：wxid 为空/None 时降级走显示名逻辑
 
 **铁律来源**：I-2（降级兼容），I-4（存量数据不受影响）
 
@@ -79,7 +79,7 @@ print('BEHAVIOR-2 PASS: wxid=None 时正常降级显示名')
 
 ---
 
-### BEHAVIOR-3：`_read_contact_wechat_id` 只在建档时调用一次
+### [BEHAVIOR] BEHAVIOR-3：`_read_contact_wechat_id` 只在建档时调用一次
 
 **铁律来源**：I-3（建档时机）
 
@@ -103,7 +103,7 @@ fi
 
 ---
 
-### BEHAVIOR-4：建档时 `crm_customers.wechat_id` 写入非空值
+### [BEHAVIOR] BEHAVIOR-4：建档时 `crm_customers.wechat_id` 写入非空值
 
 **铁律来源**：FR-01（crm_customers.wechat_id 写入）
 
@@ -134,7 +134,7 @@ fi
 
 ---
 
-### BEHAVIOR-5：存量 wechat_id=NULL 的旧记录不因本次改动全量失配
+### [BEHAVIOR] BEHAVIOR-5：存量 wechat_id=NULL 的旧记录不因本次改动全量失配
 
 **铁律来源**：I-4（存量数据保护）
 
