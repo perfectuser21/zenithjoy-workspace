@@ -38,7 +38,33 @@ def resolve_active_config(fresh, cached, pull_ok):
     return fresh if pull_ok else cached
 
 
-def should_reply(config, sender_name):
+def _entry_matches(entry, sender_name: str, sender_wxid) -> bool:
+    """判断名单条目是否与发送者匹配。
+
+    支持两种条目格式：
+    - 纯字符串（旧格式）：按 sender_name 匹配
+    - dict {name, wxid?}（新格式）：sender_wxid 非空时优先按 wxid 匹配；
+      wxid 为空/None 或条目无 wxid 字段时降级按 name 匹配
+
+    Args:
+        entry: 名单条目（str 或 dict）
+        sender_name: 消息发送者的显示名
+        sender_wxid: 消息发送者的微信唯一 ID（None/"" 时降级显示名）
+    """
+    if isinstance(entry, str):
+        # 旧格式纯字符串：只能按显示名匹配（存量兼容，sender_wxid 忽略）
+        return entry == sender_name
+    if not isinstance(entry, dict):
+        return False
+    entry_wxid = entry.get("wxid")
+    if sender_wxid and entry_wxid:
+        # 双方都有 wxid → 优先 wxid 匹配，不看 name（改名后仍命中）
+        return entry_wxid == sender_wxid
+    # sender_wxid 为空 或 条目无 wxid → 降级显示名匹配
+    return entry.get("name") == sender_name
+
+
+def should_reply(config, sender_name: str, sender_wxid=None) -> bool:
     """接管判定（CRM 重做：黑名单主模型 + whitelist 兼容回退）。
 
     takeover_mode 决定语义（决策 1，lead 拍板）：
@@ -47,6 +73,10 @@ def should_reply(config, sender_name):
       → 当空处理 → 全员回。
     - 'whitelist'（存量客服机 / 小众）或**无 takeover_mode 字段（存量旧配置）**：
       回退旧逻辑——sender ∈ whitelist 才回。绝不让存量客服机一升级就突变成全接管误发。
+
+    sender_wxid 升级路径（I-1 / I-2 / I-4）：
+    - sender_wxid 非空时：名单条目有 wxid 字段则优先用 wxid 匹配（改名后不断）
+    - sender_wxid 为空/None：完全降级为旧显示名匹配逻辑（存量兼容）
 
     注意：本函数只决定"该不该回这个人"，不决定"真发还是 dryrun"——真发由
     resolve_send_mode（跟随 auto_agent_enabled + pull_ok）控制，双重护栏。
@@ -58,12 +88,13 @@ def should_reply(config, sender_name):
         bl = config.get("blacklist")
         if not isinstance(bl, list):
             bl = []  # 脏数据/缺失 → 当空黑名单，默认全接管
-        return sender_name not in bl
+        # blacklist 模式：匹配任一条目 → 不回（排除），否则回
+        return not any(_entry_matches(entry, sender_name, sender_wxid) for entry in bl)
     # whitelist 模式 + 无 takeover_mode 的存量配置 → 旧白名单逻辑（零误发兜底）
     wl = config.get("whitelist")
     if not isinstance(wl, list):
         return False
-    return sender_name in wl
+    return any(_entry_matches(entry, sender_name, sender_wxid) for entry in wl)
 
 
 def fetch_cs_config(middleware_url, machine_id, timeout=10):

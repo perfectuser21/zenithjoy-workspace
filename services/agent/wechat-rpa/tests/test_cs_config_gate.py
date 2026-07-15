@@ -127,3 +127,52 @@ def test_fetch_cs_config_network_error_returns_none_not_ok(monkeypatch):
 def test_fetch_cs_config_empty_machine_id_returns_none_not_ok():
     cfg, ok = gate.fetch_cs_config("http://mw", "")
     assert cfg is None and ok is False
+
+
+# ─── wxid 优先匹配（BEHAVIOR-1 ~ BEHAVIOR-5）───────────────────────────────────
+
+
+def test_should_reply_wxid_match_whitelist():
+    """BEHAVIOR-1：wxid 命中白名单，即使 sender_name 已改 → True（核心场景）。"""
+    cfg = {"whitelist": [{"name": "旧备注", "wxid": "wxid_abc"}]}
+    assert gate.should_reply(cfg, "新备注改后", sender_wxid="wxid_abc") is True
+
+
+def test_should_reply_wxid_overrides_name_change():
+    """BEHAVIOR-1 补充：wxid 命中，显示名不一致不影响结果。"""
+    cfg = {"whitelist": [{"name": "旧备注", "wxid": "wxid_abc"}]}
+    # wxid 命中 → True，无论 name 是否匹配
+    assert gate.should_reply(cfg, "完全不同的名字", sender_wxid="wxid_abc") is True
+    # wxid 不在名单 → False
+    assert gate.should_reply(cfg, "旧备注", sender_wxid="wxid_other") is False
+
+
+def test_should_reply_wxid_fallback_to_name():
+    """BEHAVIOR-2：wxid=None 时降级走显示名逻辑 → 名在白名单 True，不在 False。"""
+    cfg = {"whitelist": [{"name": "客户甲", "wxid": None}]}
+    assert gate.should_reply(cfg, "客户甲", sender_wxid=None) is True
+    assert gate.should_reply(cfg, "路人乙", sender_wxid=None) is False
+
+
+def test_should_reply_wxid_none_no_match():
+    """BEHAVIOR-2 补充：wxid="" 也触发降级，不因 wxid 缺失直接 False。"""
+    cfg = {"whitelist": [{"name": "客户甲", "wxid": "wxid_real"}]}
+    # sender_wxid="" → 无法匹配 wxid；降级走显示名，名也不在 → False
+    assert gate.should_reply(cfg, "路人", sender_wxid="") is False
+    # 显示名在 → True（降级路径）
+    cfg2 = {"whitelist": [{"name": "客户甲", "wxid": None}]}
+    assert gate.should_reply(cfg2, "客户甲", sender_wxid="") is True
+
+
+def test_should_reply_old_format_compat():
+    """BEHAVIOR-5：纯字符串旧格式白名单 + wxid=None → 存量逻辑不失配。"""
+    cfg_old = {"whitelist": ["老客户甲", "老客户乙"]}
+    assert gate.should_reply(cfg_old, "老客户甲", sender_wxid=None) is True
+    assert gate.should_reply(cfg_old, "路人", sender_wxid=None) is False
+
+
+def test_should_reply_wxid_blacklist_exclude():
+    """BEHAVIOR-1 黑名单模式：wxid 命中黑名单 → False，不受 sender_name 影响。"""
+    cfg = {"takeover_mode": "blacklist", "blacklist": [{"name": "小号备注", "wxid": "wxid_blocked"}]}
+    assert gate.should_reply(cfg, "随意显示名", sender_wxid="wxid_blocked") is False
+    assert gate.should_reply(cfg, "真客户", sender_wxid="wxid_legit") is True

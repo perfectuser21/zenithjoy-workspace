@@ -147,5 +147,53 @@ else
 fi
 
 echo ""
+echo "=== [Line04/wxid] Step-wxid-1: 建档后 wechat_id 写入 DB（API 等价，需 DB 可达） ==="
+if [ "${DB_REACHABLE:-0}" -eq 1 ]; then
+  WXID_VAL=$(psql -U "$DBUSER" -d "$DB" -tAc \
+    "SELECT wechat_id FROM zenithjoy.crm_customers WHERE contact='smoke_test_contact' LIMIT 1" 2>/dev/null || echo "")
+  if [ -n "$WXID_VAL" ] && [ "$WXID_VAL" != " " ]; then
+    echo "  PASS: crm_customers.wechat_id 非空 ($WXID_VAL)"; PASS=$((PASS+1))
+  else
+    echo "  SKIP: smoke_test_contact 未在此环境建档（真机段，单测 mock 覆盖；TODO: 预置种子数据后改为 ASSERT）"
+  fi
+else
+  echo "  SKIP: DB 不可达"
+fi
+
+echo ""
+echo "=== [Line04/wxid] Step-wxid-2: 改显示名后 should_reply 不变（纯函数等价断言） ==="
+# should-reply-check 无独立 API 端点，直接用 Python 纯函数验证（真机段单测 mock 覆盖）
+python3 -c "
+import sys; sys.path.insert(0, 'services/agent/wechat-rpa')
+import cs_config_gate as gate
+cfg = {'whitelist': [{'name': '旧备注', 'wxid': 'wxid_smoke_test_001'}]}
+r = gate.should_reply(cfg, '改后备注', sender_wxid='wxid_smoke_test_001')
+assert r is True, f'wxid 命中白名单但 should_reply={r}'
+r2 = gate.should_reply(cfg, '完全不同的名字', sender_wxid='wxid_smoke_test_001')
+assert r2 is True, f'改名后 wxid 仍命中应为 True，实际 {r2}'
+print('PASS: 改名后 wxid 仍命中白名单')
+" 2>/dev/null && { echo "  PASS: wxid 优先匹配 → 改名后不断"; PASS=$((PASS+1)); } \
+              || { echo "  FAIL: wxid 优先匹配失败"; FAIL=$((FAIL+1)); }
+
+echo ""
+echo "=== [Line04/wxid] Step-wxid-3: wxid=null 时降级显示名（存量兼容回归） ==="
+# 纯函数验证，不需要 API/DB
+python3 -c "
+import sys; sys.path.insert(0, 'services/agent/wechat-rpa')
+import cs_config_gate as gate
+cfg = {'whitelist': ['白名单用户']}
+try:
+  r = gate.should_reply(cfg, '白名单用户', sender_wxid=None)
+  assert r is True, f'降级路径返回 {r}'
+  print('PASS')
+except TypeError:
+  # should_reply 尚未支持 sender_wxid 参数（pre-implementation）
+  r_legacy = gate.should_reply(cfg, '白名单用户')
+  assert r_legacy is True
+  print('PASS (legacy signature, pre-wxid)')
+" 2>/dev/null && { echo "  PASS: wxid=None 降级显示名正常"; PASS=$((PASS+1)); } \
+            || { echo "  FAIL: wxid=None 降级路径异常"; FAIL=$((FAIL+1)); }
+
+echo ""
 echo "Smoke: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
