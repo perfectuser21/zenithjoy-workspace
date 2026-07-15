@@ -310,4 +310,39 @@ class DouyinCollectServiceStateTest {
             DouyinCollectService.isBackAtResultList(cardCount = 0, hasSearchTabBar = false)
         )
     }
+
+    // ── extractDouyinIdFromTexts（主页「抖音号」提取） ──────────────────────
+
+    @Test
+    fun `extracts douyin id with full-width colon`() {
+        assertEquals("abc123",
+            DouyinCollectService.extractDouyinIdFromTexts(listOf("某昵称", "抖音号：abc123", "作品 50")))
+    }
+
+    @Test
+    fun `extracts douyin id with half-width colon`() {
+        assertEquals("xyz_789",
+            DouyinCollectService.extractDouyinIdFromTexts(listOf("抖音号:xyz_789")))
+    }
+
+    @Test
+    fun `extracts douyin id ignoring leading whitespace after colon`() {
+        assertEquals("hk88",
+            DouyinCollectService.extractDouyinIdFromTexts(listOf("抖音号：  hk88")))
+    }
+
+    @Test
+    fun `returns null when no douyin id in texts`() {
+        assertNull(DouyinCollectService.extractDouyinIdFromTexts(listOf("某昵称", "正在加载...")))
+    }
+
+    @Test
+    fun `returns null for empty list`() {
+        assertNull(DouyinCollectService.extractDouyinIdFromTexts(emptyList()))
+    }
+
+    @Test
+    fun `does not match partial prefix without colon`() {
+        assertNull(DouyinCollectService.extractDouyinIdFromTexts(listOf("抖音号abc123")))
+    }
 }

@@ -29,10 +29,17 @@ export const COLLECT_STATUSES = [
 ] as const;
 export type CollectStatus = (typeof COLLECT_STATUSES)[number];
 
-/** sec_uid → 抖音主页链接；残缺号（sec_uid 缺失）→ null。 */
+/**
+ * sec_uid（抖音号）→ profile_url；残缺号 → null。
+ *
+ * profile_url 在 dm_assignments 里直接充当「搜索关键词」传给 DM 服务（DouyinDmOutreachService），
+ * DM 服务在抖音搜索栏输入该值定位用户主页（verifyProfileMatchesDouyinId 检验「抖音号：<id>」）。
+ * 因此 profile_url 必须是用户可搜索的抖音号字符串，而非 URL 形式；
+ * 这里直接透传 secUid，省去 URL 前缀。
+ */
 export function profileUrlForSecUid(secUid: string | null | undefined): string | null {
   if (!secUid) return null;
-  return `https://www.douyin.com/user/${secUid}`;
+  return secUid;
 }
 
 export interface CommenterInput {

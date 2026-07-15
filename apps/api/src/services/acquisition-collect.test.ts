@@ -12,7 +12,7 @@ import {
 describe('acquisition-collect 去重落库', () => {
   it('同 sec_uid 跨视频去重：仅累加 source_video_ids', () => {
     const existing = [
-      { sec_uid: 'MS4wA', nickname: '甲', profile_url: profileUrlForSecUid('MS4wA'), partial: false, source_video_ids: ['vA'] },
+      { sec_uid: 'MS4wA', nickname: '甲', profile_url: 'MS4wA', partial: false, source_video_ids: ['vA'] },
     ];
     const r = dedupCommenters(existing, [{ sec_uid: 'MS4wA', nickname: '甲' }], 'vB');
     expect(r.inserted).toBe(0);
@@ -31,8 +31,9 @@ describe('acquisition-collect 去重落库', () => {
     expect(r2.deduped).toBe(1);
   });
 
-  it('profile_url：sec_uid→主页链接，残缺号→null', () => {
-    expect(profileUrlForSecUid('MS4wX')).toBe('https://www.douyin.com/user/MS4wX');
+  it('profile_url：sec_uid（抖音号）直接透传，残缺号→null', () => {
+    // profile_url 是 DM 服务在抖音搜索栏输入的关键词（抖音号），不是 URL
+    expect(profileUrlForSecUid('MS4wX')).toBe('MS4wX');
     expect(profileUrlForSecUid(null)).toBeNull();
   });
 });

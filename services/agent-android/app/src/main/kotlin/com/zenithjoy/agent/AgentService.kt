@@ -734,6 +734,7 @@ class AgentService : Service() {
                     buildMap<String, Any?> {
                         put("nickname", c.commenterId)
                         put("comment_text", c.text)
+                        if (c.douyinId != null) put("sec_uid", c.douyinId)
                     }
                 }
                 scope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -777,6 +778,7 @@ class AgentService : Service() {
             buildMap<String, Any?> {
                 put("nickname", c.commenterId)
                 put("comment_text", c.text)
+                if (c.douyinId != null) put("sec_uid", c.douyinId)
             }
         }
         val videoId = taskId + "_" + System.currentTimeMillis().toString(36)

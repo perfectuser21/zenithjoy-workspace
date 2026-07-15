@@ -31,6 +31,20 @@ class CollectResultTest {
     }
 
     @Test
+    fun `CommentEntry toMap includes sec_uid when douyinId is set`() {
+        val entry = CommentEntry(commenterId = "小王", text = "怎么联系", douyinId = "xiaoabc123")
+        val map = entry.toMap()
+        assertEquals("xiaoabc123", map["sec_uid"])
+        assertEquals("小王", map["commenter_id"])
+    }
+
+    @Test
+    fun `CommentEntry toMap sec_uid is null when douyinId not set`() {
+        val entry = CommentEntry(commenterId = "小王", text = "怎么联系")
+        assertNull(entry.toMap()["sec_uid"])
+    }
+
+    @Test
     fun `comment-score-result payload with empty comments still includes keyword_task_id`() {
         val result = CollectResult(ok = false, keyword = "麻婆豆腐", error = "SEARCH_TIMEOUT")
         val payload = result.toCommentScoreResultPayload("kw-task-uuid-2")

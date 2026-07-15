@@ -12,10 +12,12 @@ package com.zenithjoy.agent.collect
 data class CommentEntry(
     val commenterId: String,
     val text: String,
+    val douyinId: String? = null,
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
         "commenter_id" to commenterId,
         "text" to text,
+        "sec_uid" to douyinId,
     )
 }
 

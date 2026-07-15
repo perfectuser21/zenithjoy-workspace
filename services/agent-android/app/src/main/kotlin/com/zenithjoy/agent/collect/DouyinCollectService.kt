@@ -89,6 +89,7 @@ class DouyinCollectService : AccessibilityService() {
         OPENING_FIRST_VIDEO,
         OPENING_COMMENTS,
         EXTRACTING_COMMENTS,
+        VISITING_PROFILES,       // 逐一点入评论者主页提取抖音号（sec_uid 来源）
         OPENING_VIDEO_URL,       // Stage2：通过深链打开指定视频
     }
 
@@ -155,6 +156,7 @@ class DouyinCollectService : AccessibilityService() {
             State.OPENING_FIRST_VIDEO -> handleVideoOpened(event)
             State.OPENING_COMMENTS -> handleCommentsOpened(event)
             State.EXTRACTING_COMMENTS -> Unit
+            State.VISITING_PROFILES -> Unit   // 在协程内驱动，不需事件路由
             State.OPENING_VIDEO_URL -> handleVideoUrlOpened(event)
             else -> Unit
         }
@@ -918,11 +920,86 @@ class DouyinCollectService : AccessibilityService() {
                     finishWithError("RETRY_NO_WINDOW"); return@launch
                 }
                 val retryComments = NodeExtractor.extractComments(flattenNodes(retryRoot))
-                reportResult(retryComments)
+                visitProfilesAndReport(retryComments)
             }
         } else {
-            reportResult(comments)
+            scope.launch { visitProfilesAndReport(comments) }
         }
+    }
+
+    // ── 主页访问：点入评论者主页提取抖音号，逐一 BACK 回评论区 ─────────────────
+
+    /**
+     * 对前 [MAX_PROFILE_VISITS] 条评论访问对应评论者主页，补全 [CommentEntry.douyinId]。
+     * 提取失败（找不到头像节点 / 主页未加载）的条目 douyinId 保持 null，不阻塞后续流程。
+     * 全部访问完（或结果已被 watchdog 抢报）后调用 [reportResult]。
+     */
+    private suspend fun visitProfilesAndReport(comments: List<CommentEntry>) {
+        if (resultReported) return
+        state = State.VISITING_PROFILES
+        val enriched = ArrayList<CommentEntry>(comments.size)
+        for ((index, c) in comments.withIndex()) {
+            if (resultReported) return  // watchdog 已抢报，静默退出
+            val douyinId = if (index < MAX_PROFILE_VISITS) tryGetDouyinId(c.commenterId) else null
+            enriched.add(c.copy(douyinId = douyinId))
+            android.util.Log.i(TAG, "profile[$index] nick=${c.commenterId} douyinId=$douyinId")
+        }
+        reportResult(enriched)
+    }
+
+    /**
+     * 对单条评论者：找其 avatar 节点 → 点击进主页 → 等待「抖音号：」出现 → BACK。
+     * 任何步骤失败返回 null（不阻塞整轮，调用方继续处理下一条）。
+     */
+    private suspend fun tryGetDouyinId(nickname: String): String? {
+        val root = rootInActiveWindow ?: return null
+        val avatarNode = findAvatarForNickname(root, nickname) ?: run {
+            android.util.Log.w(TAG, "tryGetDouyinId: no avatar for '$nickname'")
+            return null
+        }
+        clickNodeRobustly(avatarNode)
+        delay(RandomDelay.sample(RandomDelay.NAV_MS))
+        val douyinId = awaitDouyinIdOnProfilePage()
+        performGlobalAction(GLOBAL_ACTION_BACK)
+        delay(RandomDelay.sample(RandomDelay.NAV_MS))
+        return douyinId
+    }
+
+    /** 轮询等待主页加载并返回「抖音号」值；超出重试次数返回 null。 */
+    private suspend fun awaitDouyinIdOnProfilePage(): String? {
+        repeat(PROFILE_LOAD_MAX_ATTEMPTS) {
+            delay(PROFILE_LOAD_POLL_MS)
+            val root = rootInActiveWindow ?: return null
+            val id = extractDouyinIdFromTexts(collectNodeTexts(root))
+            if (id != null) return id
+        }
+        android.util.Log.w(TAG, "awaitDouyinIdOnProfilePage: timed out")
+        return null
+    }
+
+    /**
+     * 在评论区节点树里找 [nickname] 对应的 avatar 节点。
+     * 策略：BFS 找到 resource-id 尾为「title」且 text == nickname 的节点，
+     * 再从其父容器里找兄弟「avatar」节点。
+     * Douyin 评论 item 结构（DFS 连续）：avatar → title → [eyo] → content，
+     * 所有 item 共享同一父容器层级（实测 fixture 2026-07-15 核实）。
+     */
+    private fun findAvatarForNickname(root: AccessibilityNodeInfo, nickname: String): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            val rid = node.viewIdResourceName?.substringAfterLast("/")
+            if (rid == "title" && node.text?.toString() == nickname) {
+                val parent = node.parent ?: continue
+                for (i in 0 until parent.childCount) {
+                    val child = parent.getChild(i) ?: continue
+                    if (child.viewIdResourceName?.substringAfterLast("/") == "avatar") return child
+                }
+            }
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return null
     }
 
     private fun reportResult(comments: List<CommentEntry>) {
@@ -1192,8 +1269,13 @@ class DouyinCollectService : AccessibilityService() {
         // state 停留超过该阈值视为流程已死：busy-guard 强制复位而不是拒绝新任务
         private const val STUCK_STATE_RESET_MS = 180_000L
         private const val VIDEO_OPEN_TIMEOUT_MS = 15_000L
-        private const val EXTRACTION_TIMEOUT_MS = 20_000L
+        // 含主页访问阶段（MAX_PROFILE_VISITS 次，每次最多约 12s），总预算 90s
+        private const val EXTRACTION_TIMEOUT_MS = 90_000L
         private const val MAX_FLATTEN_NODES = 3_000
+        // 每轮最多访问几位评论者主页（超出的 douyinId 保持 null）
+        private const val MAX_PROFILE_VISITS = 5
+        private const val PROFILE_LOAD_POLL_MS = 600L
+        private const val PROFILE_LOAD_MAX_ATTEMPTS = 10  // 6s 上限
         const val MAX_VIDEOS_PER_SEARCH = 3  // Stage1 每关键词最多收集视频卡数量
         // abort 阈值：连续多少张【内容卡】取链失败才放弃整轮。广告/直播跳过不计入（真机 2026-07-13）。
         private const val MAX_CONSECUTIVE_CONTENT_FAILURES = 2
@@ -1380,6 +1462,21 @@ class DouyinCollectService : AccessibilityService() {
          */
         internal fun mustGestureTap(clickableChain: List<Boolean>): Boolean =
             clickableChain.firstOrNull() != true
+
+        /**
+         * 从主页节点文本列表提取「抖音号」值。
+         * 主页会显示 "抖音号：abc123" 或 "抖音号:abc123"（全角/半角冒号均可）。
+         * 找到第一个匹配即返回；无匹配返回 null（主页未加载 / 节点树未含该字段）。
+         */
+        internal fun extractDouyinIdFromTexts(texts: List<String>): String? {
+            val regex = Regex("""^抖音号[:：]\s*(.+)$""")
+            for (text in texts) {
+                val match = regex.find(text.trim()) ?: continue
+                val id = match.groupValues[1].trim()
+                if (id.isNotEmpty()) return id
+            }
+            return null
+        }
 
         /**
          * Stage1 启动抖音的 Intent flags。
