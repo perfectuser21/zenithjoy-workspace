@@ -31,12 +31,17 @@ const ENV_KEYS = [
 describe('start.bat — .env 幂等追加检查显式指定编码（防重复追加）', () => {
   for (const key of ENV_KEYS) {
     it(`${key} 的 Select-String 检查显式指定 -Encoding utf8`, () => {
-      const lineIdx = START_BAT.search(
+      // 精确截到本条 Select-String 子句自己的 -Quiet 收尾，不能只看"这一行有没有
+      // 出现 -Encoding utf8"——Select-String 和 Add-Content 共享同一物理行，只看
+      // 整行会被"只改 Add-Content 那半、Select-String 仍缺失"这种部分修复骗过。
+      const idx = START_BAT.search(
         new RegExp(`Select-String[^\\n]*Pattern '${key}'`),
       );
-      expect(lineIdx).toBeGreaterThan(-1);
-      const line = START_BAT.slice(lineIdx, START_BAT.indexOf('\n', lineIdx));
-      expect(line).toMatch(/-Encoding\s+[Uu][Tt][Ff]8/);
+      expect(idx).toBeGreaterThan(-1);
+      const quietIdx = START_BAT.indexOf('-Quiet', idx);
+      expect(quietIdx).toBeGreaterThan(idx);
+      const clause = START_BAT.slice(idx, quietIdx + '-Quiet'.length);
+      expect(clause).toMatch(/-Encoding\s+[Uu][Tt][Ff]8/);
     });
 
     it(`${key} 的 Add-Content 追加显式指定 -Encoding utf8`, () => {

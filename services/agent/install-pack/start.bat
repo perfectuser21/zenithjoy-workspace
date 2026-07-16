@@ -43,10 +43,18 @@ if not exist .env (
 )
 
 REM Step 1.5: Append missing new keys to .env (upgrade-compatible, never overwrite user values)
-powershell -NoProfile -Command "if (!(Select-String -Path '.env' -Pattern 'ZENITHJOY_AGENT_DRYRUN_BROWSER' -Quiet)) { Add-Content -Path '.env' -Value 'ZENITHJOY_AGENT_DRYRUN_BROWSER=mock'; Write-Host '[setup] ZENITHJOY_AGENT_DRYRUN_BROWSER=mock appended to .env' }"
-powershell -NoProfile -Command "if (!(Select-String -Path '.env' -Pattern 'ZENITHJOY_AGENT_REAL_PUBLISH' -Quiet)) { Add-Content -Path '.env' -Value 'ZENITHJOY_AGENT_REAL_PUBLISH=1'; Write-Host '[setup] ZENITHJOY_AGENT_REAL_PUBLISH=1 appended to .env' }"
+REM 2026-07-16 root fix: multiple real customer machines reproduced these idempotency
+REM checks failing silently, re-appending the same key on every launch (e.g. ZENITHJOY_ENV=prod
+REM appended 9x). Working directory was already ruled out (cd /d above). Same root-cause class
+REM as prior GBK/UTF8 encoding bugs in this codebase: PowerShell 5.1's Select-String/Add-Content
+REM default encoding auto-detection can mis-parse a .env containing non-ASCII content (e.g.
+REM ZJ_MAIN_DATA_DIR with Chinese path segments), causing the "already exists" check to silently
+REM read garbled bytes and never match. Fix: pin -Encoding utf8 explicitly on every call so both
+REM sides agree, removing the ambiguity outright.
+powershell -NoProfile -Command "if (!(Select-String -Path '.env' -Pattern 'ZENITHJOY_AGENT_DRYRUN_BROWSER' -Encoding utf8 -Quiet)) { Add-Content -Path '.env' -Value 'ZENITHJOY_AGENT_DRYRUN_BROWSER=mock' -Encoding utf8; Write-Host '[setup] ZENITHJOY_AGENT_DRYRUN_BROWSER=mock appended to .env' }"
+powershell -NoProfile -Command "if (!(Select-String -Path '.env' -Pattern 'ZENITHJOY_AGENT_REAL_PUBLISH' -Encoding utf8 -Quiet)) { Add-Content -Path '.env' -Value 'ZENITHJOY_AGENT_REAL_PUBLISH=1' -Encoding utf8; Write-Host '[setup] ZENITHJOY_AGENT_REAL_PUBLISH=1 appended to .env' }"
 REM F: environment selector - prod by default; set ZENITHJOY_ENV=staging in .env to point the agent at staging middleware
-powershell -NoProfile -Command "if (!(Select-String -Path '.env' -Pattern 'ZENITHJOY_ENV' -Quiet)) { Add-Content -Path '.env' -Value 'ZENITHJOY_ENV=prod'; Write-Host '[setup] ZENITHJOY_ENV=prod appended to .env (set to staging to target staging-autopilot)' }"
+powershell -NoProfile -Command "if (!(Select-String -Path '.env' -Pattern 'ZENITHJOY_ENV' -Encoding utf8 -Quiet)) { Add-Content -Path '.env' -Value 'ZENITHJOY_ENV=prod' -Encoding utf8; Write-Host '[setup] ZENITHJOY_ENV=prod appended to .env (set to staging to target staging-autopilot)' }"
 
 REM Step 1.8: Normalize .env line endings - strip \r so CRLF files don't pollute env vars
 REM for/f keeps \r from Windows CRLF files, causing URL parse errors ("https://api.com\r/api/...")
