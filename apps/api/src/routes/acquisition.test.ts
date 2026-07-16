@@ -993,6 +993,80 @@ describe('POST /api/acquisition/collect/report — 方案A: sec_uid=null 时 pro
   });
 });
 
+describe('POST /api/acquisition/collect/report — douyin_id 落库 [REGRESSION: Seg3→Seg4 断链]', () => {
+  // 真机根因(2026-07-16)：设备端 Seg3 点评论人头像进主页读出真实抖音号（CommentEntry.douyinId），
+  // 但 AgentService.kt 上报 /collect/report 时构建 commenters payload 只塞了 nickname/comment_text，
+  // 服务端这个handler也从未读过 douyin_id 字段——即便设备真读到了号，也在这两层各自被吃掉一次。
+  // 后果：acquisition_leads.douyin_id 永远 NULL，Seg4 派单（acquisition-dispatch.ts）读不到号，
+  // Android 私信通道退化回旧 bug（把 profile_url 当抖音号搜 → NO_MATCH，迁移文件
+  // 20260715_150000_acquisition_leads_douyin_id.sql 已建列但从未有人写过它）。
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockClientQuery.mockReset();
+    mockClientRelease.mockReset();
+  });
+
+  it('commenters[].douyin_id 必须落进 acquisition_leads.douyin_id（新建 lead），否则派单侧永远拿不到号', async () => {
+    mockClientQuery.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) {
+        return { rows: [{ id: 'task-did', tenant_id: 't-did', status: 'running', error_code: null, video_count: 0, lead_count_raw: 0, keywords: ['k1'] }] };
+      }
+      if (s.includes('SELECT id FROM zenithjoy.acquisition_leads')) return { rows: [] };
+      if (s.includes('INSERT INTO zenithjoy.acquisition_leads') && s.includes('RETURNING')) return { rows: [{ id: 'lead-did1' }] };
+      if (s.includes('count(*)')) return { rows: [{ total: 1, done: 1 }] };
+      return { rows: [] };
+    });
+
+    const res = await request(app)
+      .post('/api/acquisition/collect/report')
+      .send({
+        task_id: 'task-did',
+        video_id: '7000000000002',
+        commenters: [{ nickname: '小叶子', comment_text: '求联系方式', douyin_id: '1689210742' }],
+      });
+
+    expect(res.status).toBe(200);
+    const calls = mockClientQuery.mock.calls;
+    const leadInsert = calls.find((c: any[]) =>
+      /INSERT INTO zenithjoy\.acquisition_leads/.test(String(c[0])) && String(c[0]).includes('RETURNING')
+    );
+    expect(leadInsert).toBeTruthy();
+    expect(String(leadInsert![0])).toMatch(/douyin_id/i);
+    expect(leadInsert![1]).toContain('1689210742');
+  });
+
+  it('已存在 lead 再次命中带 douyin_id 的评论 → UPDATE 必须 COALESCE 回填号（老 lead 补号，不覆盖已有值）', async () => {
+    mockClientQuery.mockImplementation(async (sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('FOR UPDATE')) {
+        return { rows: [{ id: 'task-did2', tenant_id: 't-did2', status: 'running', error_code: null, video_count: 0, lead_count_raw: 1, keywords: ['k1'] }] };
+      }
+      if (s.includes('SELECT id FROM zenithjoy.acquisition_leads')) return { rows: [{ id: 'lead-existing' }] };
+      if (s.includes('count(*)')) return { rows: [{ total: 1, done: 1 }] };
+      return { rows: [] };
+    });
+
+    const res = await request(app)
+      .post('/api/acquisition/collect/report')
+      .send({
+        task_id: 'task-did2',
+        video_id: '7000000000003',
+        commenters: [{ sec_uid: 'MS4wLjABAAAA', nickname: '小叶子', comment_text: '还联系吗', douyin_id: '1689210742' }],
+      });
+
+    expect(res.status).toBe(200);
+    const calls = mockClientQuery.mock.calls;
+    const leadUpdate = calls.find((c: any[]) =>
+      /UPDATE zenithjoy\.acquisition_leads/.test(String(c[0])) && /source_video_ids/.test(String(c[0]))
+    );
+    expect(leadUpdate).toBeTruthy();
+    expect(String(leadUpdate![0])).toMatch(/douyin_id/i);
+    expect(String(leadUpdate![0])).toMatch(/COALESCE/i);
+    expect(leadUpdate![1]).toContain('1689210742');
+  });
+});
+
 // ────── Line02 IA 重设计 Track A — collect-tasks/:id/videos + videos/:videoId/leads ──────
 describe('GET /api/acquisition/collect-tasks/:id/videos [BEHAVIOR]', () => {
   beforeEach(() => { vi.clearAllMocks(); });
