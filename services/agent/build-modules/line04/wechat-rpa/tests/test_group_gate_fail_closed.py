@@ -105,7 +105,9 @@ def test_reply_in_chat_calls_header_confirms_not_group():
 # ★ 2026-07-16 真机根治：切会话标题面板渲染滞后，私聊被误判成群
 # 于瑾机器实证：私聊联系人❤柚子挖小样C598 切入后面板仍停在上一个群(321人)，
 # _header_confirms_not_group 读到(321人) → 直接判群跳过，无重试机会。
-# 修法：加 title_ok_fn 归属校验——归属不过 → 重试等面板刷新，不立刻 fail-closed。
+# 修法：title_matches_fn 归属校验——归属不过 → 重试等面板刷新，不立刻 fail-closed
+# （同一个 bug 曾被两个独立 session 分别修过：PR#1335 的 title_matches_fn 已接线到
+# reply_in_chat；PR#1336 后加的 title_ok_fn 是从未接线的重复死代码，已清理删除）。
 
 def test_fail_closed_when_stale_group_header_never_clears():
     """归属校验持续不过（标题始终停在上一个群）→ 重试耗尽后 fail-closed。
@@ -163,7 +165,7 @@ def test_title_matches_fn_not_called_does_not_block_without_it():
 
 
 def test_reply_in_chat_passes_title_matches_fn():
-    """reply_in_chat 调用 _header_confirms_not_group 时必须传归属校验参数（title_matches_fn 或 title_ok_fn）。"""
+    """reply_in_chat 调用 _header_confirms_not_group 时必须传 title_matches_fn 做归属校验。"""
     import ast
 
     src_path = os.path.join(_WECHAT, "listen_chat.py")
@@ -176,11 +178,9 @@ def test_reply_in_chat_passes_title_matches_fn():
                         and isinstance(n.func, ast.Name)
                         and n.func.id == "_header_confirms_not_group"):
                     kw_names = {kw.arg for kw in n.keywords}
-                    has_attribution = "title_matches_fn" in kw_names or "title_ok_fn" in kw_names
-                    assert has_attribution, (
-                        "reply_in_chat 调用 _header_confirms_not_group 必须传归属校验参数 "
-                        "（title_matches_fn 或 title_ok_fn，防切会话渲染滞后误判群）；"
-                        f"实际 kwargs={sorted(kw_names)}"
+                    assert "title_matches_fn" in kw_names, (
+                        "reply_in_chat 调用 _header_confirms_not_group 必须传 title_matches_fn "
+                        f"做归属校验（防切会话渲染滞后误判群）；实际 kwargs={sorted(kw_names)}"
                     )
                     return
     raise AssertionError("未找到 reply_in_chat → _header_confirms_not_group 的调用")

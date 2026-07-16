@@ -1269,7 +1269,7 @@ _HEADER_READ_RETRIES = 3          # 判群标题读空重试轮数（同 _BUBBLE
 _HEADER_READ_RETRY_SLEEP = 0.3
 
 
-def _header_confirms_not_group(read_fn: Any, title_ok_fn: Any = None,
+def _header_confirms_not_group(read_fn: Any,
                                 retries: int = _HEADER_READ_RETRIES,
                                 retry_delay_s: float = _HEADER_READ_RETRY_SLEEP,
                                 sleep_fn: Any = time.sleep,
@@ -1291,7 +1291,7 @@ def _header_confirms_not_group(read_fn: Any, title_ok_fn: Any = None,
     不做归属校验。
 
     返回 True = 确认标题非群（可以发送）；False = 确认是群，或重试后仍无法判定。
-    纯逻辑（CI 可测，read_fn/title_matches_fn/title_ok_fn/sleep_fn 全部注入）。
+    纯逻辑（CI 可测，read_fn/title_matches_fn/sleep_fn 全部注入）。
     """
     for i in range(retries):
         if title_matches_fn is not None and title_matches_fn() is False:
@@ -1301,12 +1301,6 @@ def _header_confirms_not_group(read_fn: Any, title_ok_fn: Any = None,
             continue
         texts = read_fn()
         if texts:
-            if title_ok_fn is not None and not title_ok_fn():
-                # 标题未归属当前 sender（可能是上一个会话残留）→ 继续重试
-                if i < retries - 1:
-                    sleep_fn(retry_delay_s)
-                    continue
-                return False  # 重试耗尽归属仍不过 → fail-closed
             return _is_group_by_header(texts) is None
         if i < retries - 1:
             sleep_fn(retry_delay_s)
