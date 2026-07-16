@@ -91,6 +91,54 @@ class NodeExtractorTest {
         assertFalse("不完整 item 不该产出，实际=$result", allText.any { it.contains("胡**v") })
     }
 
+    // ── 真机 fixture 钉死（2026-07-16 dump，resource-id 已轮换/混淆） ──────────────
+    //
+    // 真机复现(2026-07-16，Path2 全链路真机验证撞到)：同一台设备、同一个抖音账号，
+    // 隔一天 resource-id 就从 avatar/title/content/eyo 变成了 goy/go2/c=z/c=2/fgd 之类
+    // 完全不同的混淆串——按 resourceId 锚定的策略对这次 dump 全线失效，三条视频
+    // 抓评论全部"extracted 0 comments"，Seg3 抓评论产出永远是空的真根因之一。
+    //
+    // content-desc 是抖音自己给读屏无障碍用的结构化文案，格式恒定：
+    //   "<昵称>,<正文>,<日期>[, · <地区>],回复 按钮,[<其它标记>]"
+    // 这份文案面向真实盲人用户朗读，不太可能像 resourceId 一样被当反爬手段轮换混淆。
+    // 用它做第二重锚点，resourceId 命中就用 resourceId，命中不了就退回 content-desc 解析。
+
+    @Test
+    fun `extracts real comments from 2026-07-16 dump despite resource-id rotation`() {
+        val nodes = loadFixtureNodes("douyin-comment-panel-20260716-idrotated.xml")
+        val result = NodeExtractor.extractComments(nodes)
+
+        val byNick = result.associateBy { it.commenterId }
+        assertTrue(
+            "resource-id 轮换后应仍能靠 content-desc 抓到「含含」这条评论，实际=$result",
+            byNick.containsKey("含含"),
+        )
+        assertEquals("都挺好 就是感觉沙发位置有点奇怪", byNick["含含"]?.text)
+        assertTrue(
+            "resource-id 轮换后应仍能靠 content-desc 抓到「LENTER心疼姑舅」这条评论，实际=$result",
+            byNick.containsKey("LENTER心疼姑舅"),
+        )
+        assertEquals("预算10万求推荐", byNick["LENTER心疼姑舅"]?.text)
+    }
+
+    @Test
+    fun `2026-07-16 dump extraction skips author reply and purchase review despite id rotation`() {
+        val nodes = loadFixtureNodes("douyin-comment-panel-20260716-idrotated.xml")
+        val result = NodeExtractor.extractComments(nodes)
+        val nicks = result.map { it.commenterId }
+
+        // "波本气泡水" 在这份 dump 里两条都是作者本人发言（含"作者"角标）——不是 lead。
+        assertFalse(
+            "作者本人的回复不该当成 lead 抓进来，实际=$result",
+            result.any { it.commenterId == "波本气泡水" },
+        )
+        // "胡**v" 那条是商品购后评价（content-desc 带"购后评价"标记），不是视频评论。
+        assertFalse(
+            "购后评价不是视频评论，不该当成 lead 抓进来，实际=$result",
+            nicks.contains("胡**v"),
+        )
+    }
+
     // ── 宁可空，不可猜：锚定不到就返回空，不许启发式配对 ───────────────────────────
 
     @Test
