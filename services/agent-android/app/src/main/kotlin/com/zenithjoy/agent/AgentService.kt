@@ -321,7 +321,7 @@ class AgentService : Service() {
                     if (keyword.isNotBlank()) {
                         DouyinCollectService.dispatchTask(this@AgentService, keyword, task.task_id)
                     }
-                } else if (task.type == "dm_outreach") {
+                } else if (shouldRouteDmOutreach(payloadTaskType)) {
                     routeDmOutreachTask(task)
                 }
             },
@@ -807,6 +807,19 @@ class AgentService : Service() {
         // 经心跳 ...realPayload 透传到 agent。不能靠 task.type（getQueuedTasks 只 select
         // publish 类型列 type，无 task_type 列），必须走 payload.task_type。
         fun shouldRouteWarmup(payloadTaskType: String?): Boolean = payloadTaskType == "warmup"
+
+        // dm_outreach 判别符——同上一条注释踩过的同一个坑，只是这次是踩了没绕开：
+        // 真机复现(2026-07-16，Path2 全链路真机验证 Seg4 时撞到)：acquisition-dispatch.ts
+        // dispatchDue() INSERT publish_tasks 时只设置了 task_type 列 = 'dm_outreach'，
+        // 从没设置 type 列（默认落 'image'，且 CHECK 约束 publish_tasks_type_check 根本不
+        // 允许 'dm_outreach' 这个值，服务端也不可能设成这个值）。getQueuedTasks 只 SELECT
+        // type 列（PublishTaskRow.type 类型是 'video'|'image'|'article'，压根没有
+        // task_type 字段），queued_tasks.map 把它原样透传成 task.type 下发给设备。
+        // 旧判据 `task.type == "dm_outreach"` 因此【永远为 false】——不是间歇失败，是
+        // Seg4 私信任务在生产环境从一开始就没有任何一条真的路由到过
+        // routeDmOutreachTask()。真正的判别符跟 warmup 一样得走 payload.task_type
+        // （dispatchDue 把它塞进了 payload JSON 里，经心跳 realPayload 透传到 agent）。
+        fun shouldRouteDmOutreach(payloadTaskType: String?): Boolean = payloadTaskType == "dm_outreach"
 
         /**
          * dm_outreach 派单 payload → 搜索目标抖音号（Seg3 方案 B′）。
