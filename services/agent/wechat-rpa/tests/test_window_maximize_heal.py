@@ -97,3 +97,41 @@ def test_pre_scan_guard_iconic_passthrough():
     """托盘/最小化（iconic=True）守卫放行——微信最小化合法运行态，不弹窗不阻扫。"""
     assert listen_chat.window_needs_maximize(is_zoomed=False, is_iconic=True) is False, \
         "iconic 状态守卫不应触发（强行弹最大化会打扰操作者）"
+
+
+# ★ 2026-07-16 真机反馈根治：窗口自愈从 SW_MAXIMIZE 改 SW_MINIMIZE，不再抢用户屏幕
+#
+# 用户实测反馈：微信主窗口被自愈逻辑强制全屏，且从不还原——一旦触发就永久霸占屏幕，
+# 用户没法正常用自己的电脑。根因：两处 ShowWindow 调用（心跳自愈 + 扫描前守卫）都用
+# SW_MAXIMIZE(3)，且没有配套"还原"逻辑。
+#
+# 但本文件自己的 test_iconic_tray_state_untouched 早已证明：iconic（托盘/最小化）是
+# 已被验证过的合法运行态（"微信最小化也能跑"），_ensure_tray_visible/_uia_send 等既有
+# 代码全程假设微信常态是最小化、需要操作时临时 restore 再收回。既然可见+非最大化的
+# 单栏布局问题只需要"脱离这个坏态"，落到 iconic（已知安全、不打扰用户）比落到
+# maximize（抢占整个屏幕）更合理——同样解决单栏布局问题，代价小得多。
+
+def test_heartbeat_self_heal_uses_minimize_not_maximize():
+    """心跳自愈调用点：ShowWindow 必须传 SW_MINIMIZE(6)，不能再是 SW_MAXIMIZE(3)。"""
+    import ast
+
+    src_path = os.path.join(WECHAT_RPA_DIR, "listen_chat.py")
+    with open(src_path, encoding="utf-8") as f:
+        tree = ast.parse(f.read())
+    showwindow_args = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "run_real_listen":
+            for n in ast.walk(node):
+                if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                        and n.func.attr == "ShowWindow" and len(n.args) >= 2
+                        and isinstance(n.args[1], ast.Constant)):
+                    showwindow_args.append(n.args[1].value)
+            break
+    assert showwindow_args, "run_real_listen 里没找到任何 ShowWindow 调用"
+    assert 3 not in showwindow_args, (
+        f"窗口自愈仍在用 SW_MAXIMIZE(3) 强制全屏——应改用 SW_MINIMIZE(6)。"
+        f"实际所有 ShowWindow 调用的第二参数: {showwindow_args}"
+    )
+    assert 6 in showwindow_args, (
+        f"窗口自愈必须用 SW_MINIMIZE(6) 替代强制全屏；实际值: {showwindow_args}"
+    )
