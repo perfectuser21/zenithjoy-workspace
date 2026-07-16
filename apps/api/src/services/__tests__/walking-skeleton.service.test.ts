@@ -85,10 +85,10 @@ describe('upsertAgentByHeartbeat — 精确 UPDATE + license_id fall-through', (
     // fall-through 后至少 3 次（精确 UPDATE + SELECT + UPDATE/INSERT）
     expect(calls.length).toBeGreaterThanOrEqual(3);
 
-    // 第二次调用应为 SELECT（按 license_id 隔离的原有路径）
+    // 第二次调用应为 SELECT（按 tenant_id 隔离——与 DB 唯一约束 uq_agents_tenant_hostname 对齐）
     const secondSql = calls[1][0] as string;
     expect(secondSql).toMatch(/SELECT[\s\S]*FROM zenithjoy\.agents/i);
-    expect(secondSql).toMatch(/WHERE license_id = \$1/i);
+    expect(secondSql).toMatch(/WHERE tenant_id = \$1/i);
 
     // 整条调用链中应出现第二次 UPDATE（原有路径更新心跳）
     const hasSecondUpdate = calls.slice(2).some(
@@ -162,8 +162,48 @@ describe('upsertAgentByHeartbeat — agentUuid 非 UUID 格式 → fall-through 
     // 第一次调用必须直接是 SELECT（证明非法格式的 agentUuid 从未被塞进 `WHERE id = $3` 的 UPDATE）
     const firstSql = calls[0][0] as string;
     expect(firstSql).toMatch(/SELECT[\s\S]*FROM zenithjoy\.agents/i);
-    expect(firstSql).toMatch(/WHERE license_id = \$1/i);
+    expect(firstSql).toMatch(/WHERE tenant_id = \$1/i);
     expect(calls.some((c) => typeof c[0] === 'string' && /WHERE id = \$3/.test(c[0] as string))).toBe(false);
+  });
+});
+
+/**
+ * 回归（真机验证 2026-07-16，紧接上一条 UUID 修复后同一真机撞到的第二个真根因）：
+ * DB 唯一约束 `uq_agents_tenant_hostname` 是 (tenant_id, hostname)，但 fall-through
+ * 去重 SELECT 之前按 (license_id, hostname) 查——同一 tenant 下有 2 个 license
+ * （常见于测试租户 / 客户先领 free 再买正式）、同一台设备曾经用另一个 license 心跳过，
+ * 现在换一个 license 心跳 → SELECT 用新 license_id 查不到旧行 → 误判"新机器" →
+ * 走 INSERT → 撞 (tenant_id, hostname) 唯一约束 → 未捕获异常冒泡成路由层裸 500
+ * （duplicate key value violates unique constraint "uq_agents_tenant_hostname"）。
+ * 期望行为：去重 SELECT 按 tenant_id（DB 约束的真实维度）查，而不是 license_id。
+ */
+describe('upsertAgentByHeartbeat — 去重 SELECT 必须按 tenant_id（对齐 DB 唯一约束），不能按 license_id', () => {
+  beforeEach(() => {
+    vi.mocked(pool.query).mockReset();
+  });
+
+  it('同一 tenant 换一个 license 心跳同 hostname → 必须命中旧行 UPDATE，不能误判新机器走 INSERT', async () => {
+    // call 1: SELECT by tenant_id → 命中旧行（虽然是用另一个 license 建的）
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [AGENT_ROW] } as any);
+    // call 2: UPDATE agents by id（原有路径更新心跳）
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [AGENT_ROW] } as any);
+    // call 3: pinned_agent UPDATE
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any);
+
+    const result = await upsertAgentByHeartbeat({
+      ...BASE_ARGS,
+      licenseId: 'lic-002-different-license-same-tenant',
+      agentUuid: undefined,
+    });
+
+    expect(result.id).toBe('11111111-1111-1111-1111-111111111111');
+
+    const calls = vi.mocked(pool.query).mock.calls;
+    // 第一次调用必须按 tenant_id 查（不是 license_id），才能跨 license 命中同一台机器
+    const firstSql = calls[0][0] as string;
+    expect(firstSql).toMatch(/WHERE tenant_id = \$1/i);
+    // 全链路不能出现 INSERT（命中旧行就不该走新建，否则撞 DB 唯一约束）
+    expect(calls.some((c) => typeof c[0] === 'string' && /INSERT INTO zenithjoy\.agents/i.test(c[0] as string))).toBe(false);
   });
 });
 
