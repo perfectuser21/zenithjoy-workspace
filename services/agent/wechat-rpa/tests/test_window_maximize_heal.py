@@ -99,39 +99,62 @@ def test_pre_scan_guard_iconic_passthrough():
         "iconic 状态守卫不应触发（强行弹最大化会打扰操作者）"
 
 
-# ★ 2026-07-16 真机反馈根治：窗口自愈从 SW_MAXIMIZE 改 SW_MINIMIZE，不再抢用户屏幕
+# ★ 2026-07-16 真机反馈根治：窗口自愈"闪一下最大化触发排版→立刻收回最小化"，
+# 不再让微信永久霸占用户屏幕
 #
 # 用户实测反馈：微信主窗口被自愈逻辑强制全屏，且从不还原——一旦触发就永久霸占屏幕，
-# 用户没法正常用自己的电脑。根因：两处 ShowWindow 调用（心跳自愈 + 扫描前守卫）都用
-# SW_MAXIMIZE(3)，且没有配套"还原"逻辑。
+# 用户没法正常用自己的电脑。
 #
-# 但本文件自己的 test_iconic_tray_state_untouched 早已证明：iconic（托盘/最小化）是
-# 已被验证过的合法运行态（"微信最小化也能跑"），_ensure_tray_visible/_uia_send 等既有
-# 代码全程假设微信常态是最小化、需要操作时临时 restore 再收回。既然可见+非最大化的
-# 单栏布局问题只需要"脱离这个坏态"，落到 iconic（已知安全、不打扰用户）比落到
-# maximize（抢占整个屏幕）更合理——同样解决单栏布局问题，代价小得多。
+# 真机验证过程（xian-rog，PsExec 真实操作，非 mock）：
+#   1. 先测试"直接改成只 SW_MINIMIZE"这个最初想法——把窗口缩到问题尺寸(630x622,
+#      单栏布局复现，sessions=5)后直接 SW_MINIMIZE：sessions 仍是 5，**没有修复，
+#      只是把坏状态藏起来**（此路不通，已放弃）。
+#   2. 对照组：从同样的小窗口状态 SW_MAXIMIZE（已知有效的旧修法）：sessions=32，
+#      证实必须真的触发一次最大化的 resize 事件，微信才会把内部布局从单栏重排回
+#      多栏，会话列表才重新出现在 UIA 树里。
+#   3. 组合验证：SW_MAXIMIZE 触发排版后，紧接着 SW_MINIMIZE 收起来：sessions
+#      仍保持 32（不会退回单栏坏态）。
+#
+# 结论：正确修法 = 先 SW_MAXIMIZE（真触发排版，不能省）→ 短暂停留 → 再 SW_MINIMIZE
+# 收回（不占用户屏幕），不是简单把 SW_MAXIMIZE 换成 SW_MINIMIZE。
 
-def test_heartbeat_self_heal_uses_minimize_not_maximize():
-    """心跳自愈调用点：ShowWindow 必须传 SW_MINIMIZE(6)，不能再是 SW_MAXIMIZE(3)。"""
-    import ast
+def test_heartbeat_self_heal_maximizes_then_minimizes():
+    """两处窗口自愈调用点（心跳自愈 + 扫描前守卫）**各自**都必须是
+    ShowWindow(SW_MAXIMIZE=3) → sleep(_WINDOW_HEAL_SETTLE_SLEEP) → ShowWindow(SW_MINIMIZE=6)
+    紧邻序列，缺一不可——不能只改其中一处、留另一处仍是"只 maximize 从不收回"或
+    "直接 minimize 不触发排版"（真机实测：跳过 maximize 直接 minimize 无法修复单栏
+    布局，只是藏起坏状态；只 maximize 不 minimize 则永久霸占用户屏幕）。
 
+    按源码逐行扫描而非聚合计数——聚合计数会被"只改一处、另一处不变"的部分修复
+    骗过（两处调用合并统计时，未改的那处单独就能凑出 3 和 6 各至少一次）。
+    """
     src_path = os.path.join(WECHAT_RPA_DIR, "listen_chat.py")
     with open(src_path, encoding="utf-8") as f:
-        tree = ast.parse(f.read())
-    showwindow_args = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and node.name == "run_real_listen":
-            for n in ast.walk(node):
-                if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
-                        and n.func.attr == "ShowWindow" and len(n.args) >= 2
-                        and isinstance(n.args[1], ast.Constant)):
-                    showwindow_args.append(n.args[1].value)
+        lines = f.readlines()
+
+    # 找 run_real_listen 函数体范围（简单按下一个顶层 def 或 EOF 截断）
+    start = next(i for i, l in enumerate(lines) if l.startswith("def run_real_listen"))
+    end = len(lines)
+    for i in range(start + 1, len(lines)):
+        if lines[i].startswith("def "):
+            end = i
             break
-    assert showwindow_args, "run_real_listen 里没找到任何 ShowWindow 调用"
-    assert 3 not in showwindow_args, (
-        f"窗口自愈仍在用 SW_MAXIMIZE(3) 强制全屏——应改用 SW_MINIMIZE(6)。"
-        f"实际所有 ShowWindow 调用的第二参数: {showwindow_args}"
-    )
-    assert 6 in showwindow_args, (
-        f"窗口自愈必须用 SW_MINIMIZE(6) 替代强制全屏；实际值: {showwindow_args}"
+    body = lines[start:end]
+
+    sites = 0
+    for i, line in enumerate(body):
+        if "ShowWindow(" in line and ", 3)" in line:
+            # 紧接着几行内必须出现 settle sleep，再出现同一变量的 ShowWindow(..., 6)
+            window = body[i + 1:i + 4]
+            has_settle = any("_WINDOW_HEAL_SETTLE_SLEEP" in l for l in window)
+            has_minimize = any("ShowWindow(" in l and ", 6)" in l for l in window)
+            assert has_settle and has_minimize, (
+                f"第 {start + i + 1} 行的 SW_MAXIMIZE 调用后 3 行内必须有 "
+                f"sleep(_WINDOW_HEAL_SETTLE_SLEEP) 再 ShowWindow(..., 6) 收回，"
+                f"实际后续: {window}"
+            )
+            sites += 1
+    assert sites == 2, (
+        f"应有 2 处窗口自愈调用点（心跳自愈 + 扫描前守卫）都遵循 "
+        f"maximize→settle→minimize 序列，实际找到 {sites} 处"
     )

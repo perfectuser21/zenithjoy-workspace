@@ -634,6 +634,35 @@ print('PASS')
 " 2>/dev/null && ok "Step 3b ✅ 扫描前守卫三路径逻辑正确（非最大化→触发/最大化→放行/iconic→放行）" \
                || fail "Step 3b 扫描前守卫逻辑异常" 3
 
+# Step 3c：窗口自愈须"MAXIMIZE 触发排版→settle→MINIMIZE 收回"，不能永久全屏
+# （2026-07-16 用户真机反馈：微信被强制全屏且从不还原，霸占屏幕。xian-rog 真机验证过
+# 直接改 minimize 无法修复单栏布局，只是藏起坏状态——必须先 maximize 真触发排版）。
+# 真机段 TODO：真机验证 SW_MAXIMIZE 后窗口最终确实回到最小化/托盘态，不停留全屏。
+LISTEN_CHAT_MAIN_WH="services/agent/wechat-rpa/listen_chat.py"
+python3 -c "
+with open('$LISTEN_CHAT_MAIN_WH', encoding='utf-8') as f:
+    lines = f.readlines()
+start = next(i for i, l in enumerate(lines) if l.startswith('def run_real_listen'))
+end = len(lines)
+for i in range(start + 1, len(lines)):
+    if lines[i].startswith('def '):
+        end = i
+        break
+body = lines[start:end]
+sites = 0
+for i, line in enumerate(body):
+    if 'ShowWindow(' in line and ', 3)' in line:
+        window = body[i + 1:i + 4]
+        has_settle = any('_WINDOW_HEAL_SETTLE_SLEEP' in l for l in window)
+        has_minimize = any('ShowWindow(' in l and ', 6)' in l for l in window)
+        assert has_settle and has_minimize, f'第{start+i+1}行MAXIMIZE后未跟settle+MINIMIZE: {window}'
+        sites += 1
+assert sites == 2, f'应有2处窗口自愈遵循maximize→settle→minimize，实际{sites}处'
+print('PASS')
+" 2>&1 | tail -1 | grep -q "PASS" \
+  && ok "Step 3c ✅ 窗口自愈 maximize→settle→minimize 序列正确（不再永久霸占用户屏幕）" \
+  || fail "Step 3c 窗口自愈回归——微信可能被强制全屏且不还原" 3
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ✅ Path 4 16 步 golden path smoke 服务端段全通"
 echo "  真机段：xian-rog 真机验收证据见 sprints/07150800-line04-overlay-continuation/evidence/"

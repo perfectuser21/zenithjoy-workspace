@@ -4030,6 +4030,11 @@ _MODULE_VERSION = os.environ.get("ZENITHJOY_MODULE_VERSION", "unknown")
 # 窗口自愈冷却（issue 99741ff9）：可见非最大化 → SW_MAXIMIZE，300s 冷却防与操作者拉锯
 _WINDOW_MAXIMIZE_COOLDOWN = 300
 
+# 窗口自愈排版停留时长（2026-07-16 xian-rog 真机验证）：SW_MAXIMIZE 后需要停留这么久
+# 让微信真正完成单栏→多栏排版重建，才能 SW_MINIMIZE 收回而不退回坏态（真机验证过
+# 1.5s 内 sessions 已从 5 恢复到 32 且收回后保持住，不可再缩短，未在更短值上验证过）。
+_WINDOW_HEAL_SETTLE_SLEEP = 1.5
+
 # 欢迎屏自愈节流（issue e78d98bc）：最多 3 次、每次间隔 120s；超限转人工告警绝不无限点击
 _WELCOME_CLICK_MAX_ATTEMPTS = 3
 _WELCOME_CLICK_COOLDOWN = 120.0
@@ -4601,13 +4606,20 @@ def run_real_listen(args: argparse.Namespace) -> int:
                                         "w": _w, "h": _h, "maximize_heals": maximize_heals}
                         if (window_needs_maximize(_zoomed, _iconic)
                                 and now - last_window_maximize >= _WINDOW_MAXIMIZE_COOLDOWN):
-                            _ctm.windll.user32.ShowWindow(_mh, 3)  # SW_MAXIMIZE
+                            # 2026-07-16 根治（xian-rog 真机验证）：用户反馈微信被强制全屏
+                            # 且从不还原，永久霸占屏幕。真机测过"直接改 SW_MINIMIZE"这条路——
+                            # 不行，直接最小化不会触发排版，sessions 仍卡在单栏坏态(5)。
+                            # 真正有效的是"先 SW_MAXIMIZE 真触发一次排版 → 短暂停留让树重建 →
+                            # 再 SW_MINIMIZE 收回"，真机验证过 sessions 32 不会退回坏态。
+                            _ctm.windll.user32.ShowWindow(_mh, 3)  # SW_MAXIMIZE：触发排版，不可省
+                            time.sleep(_WINDOW_HEAL_SETTLE_SLEEP)
+                            _ctm.windll.user32.ShowWindow(_mh, 6)  # SW_MINIMIZE：收回，不占用户屏幕
                             last_window_maximize = now
                             maximize_heals += 1
                             window_state["maximize_heals"] = maximize_heals
-                            _log(f"[窗口自愈] 主窗口非最大化({_w}x{_h}，单栏布局漏检测风险)→已 SW_MAXIMIZE")
+                            _log(f"[窗口自愈] 主窗口非最大化({_w}x{_h}，单栏布局漏检测风险)→已 MAXIMIZE 触发排版后 MINIMIZE 收回（不抢用户屏幕）")
                     except Exception as exc:
-                        _log(f"[窗口自愈] 检测/最大化异常（已吞）: {exc}")
+                        _log(f"[窗口自愈] 检测/最大化-最小化异常（已吞）: {exc}")
 
                 diag = build_diag(
                     main_window_found=mw is not None,
@@ -4739,6 +4751,8 @@ def run_real_listen(args: argparse.Namespace) -> int:
 
             # 扫描前守卫（issue 99741ff9 补丁 v1.0.120）：可见+非最大化=单栏布局→先 SW_MAXIMIZE，
             # 跳过本轮扫描等 UIA 树重建。心跳 maximize 后同轮立即 scan 仍读旧单栏树的竞态根治。
+            # 2026-07-16 根治（xian-rog 真机验证同上）：MAXIMIZE 触发排版后须 MINIMIZE 收回，
+            # 不能让这里也把窗口永久留在全屏（真机测过直接 minimize 不触发排版，此步不可省）。
             if mw is not None and platform.system() == "Windows":
                 try:
                     import ctypes as _ctg
@@ -4747,8 +4761,10 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         bool(_ctg.windll.user32.IsZoomed(_mh_scan)),
                         bool(_ctg.windll.user32.IsIconic(_mh_scan)),
                     ):
-                        _ctg.windll.user32.ShowWindow(_mh_scan, 3)  # SW_MAXIMIZE
-                        _log("[扫描守卫] 非最大化(单栏布局)→已 SW_MAXIMIZE，跳过本轮扫描等 UIA 树重建")
+                        _ctg.windll.user32.ShowWindow(_mh_scan, 3)  # SW_MAXIMIZE：触发排版，不可省
+                        time.sleep(_WINDOW_HEAL_SETTLE_SLEEP)
+                        _ctg.windll.user32.ShowWindow(_mh_scan, 6)  # SW_MINIMIZE：收回，不占用户屏幕
+                        _log("[扫描守卫] 非最大化(单栏布局)→已 MAXIMIZE 触发排版后 MINIMIZE 收回，跳过本轮扫描等 UIA 树重建")
                         time.sleep(args.interval)
                         continue
                 except Exception:
