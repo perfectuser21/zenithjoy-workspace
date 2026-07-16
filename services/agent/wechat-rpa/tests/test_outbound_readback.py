@@ -29,13 +29,37 @@ class _PreviewListItem:
         self.element_info.name = name
 
 
+class _Rect:
+    def __init__(self, l, t, r, b):
+        self.left, self.top, self.right, self.bottom = l, t, r, b
+
+
+class _HeaderText:
+    """判群闸 fail-closed（2026-07-16）后，reply_in_chat 需要读到私聊标题（无括号）才放行。"""
+
+    def __init__(self, name: str):
+        class _EI:
+            pass
+        self.element_info = _EI()
+        self.element_info.name = name
+
+    def rectangle(self):
+        return _Rect(400, 50, 600, 70)  # 相对窗口(0,0)属于标题区（top<150 且 left>width//4）
+
+
 class _PreviewMW:
-    def __init__(self, items):
+    def __init__(self, items, header_name: str = "默忆"):
         self._items = items
+        self._header = _HeaderText(header_name)
+
+    def rectangle(self):
+        return _Rect(0, 0, 800, 900)
 
     def descendants(self, control_type=None):
         if control_type == "ListItem":
             return self._items
+        if control_type == "Text":
+            return [self._header]
         return []
 
 

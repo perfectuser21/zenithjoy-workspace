@@ -654,6 +654,32 @@ def _restore_tray(mw: Any) -> None:
 
 # ─── 锚点气泡扫描：模块级状态 ─────────────────────────────────────────────────
 _KNOWN_GROUPS: set = set()        # _is_group_by_header 判过的群 sender：发现层直接跳过
+_KNOWN_GROUPS_FILE: str = os.path.join(_STATE_DIR, "zj-known-groups.json")
+
+
+def _load_known_groups() -> set:
+    """从磁盘加载已知群集合（2026-07-16 根治：纯内存重启清零，重启后第一个群前科丢失）。
+
+    文件不存在（全新机器）/ 损坏（非法 JSON）→ fail-safe 返回空集合，不抛异常
+    （同 _load_replied 容错约定）。
+    """
+    try:
+        with open(_KNOWN_GROUPS_FILE, "r", encoding="utf-8-sig") as f:
+            data = json.load(f)
+        return set(data) if isinstance(data, list) else set()
+    except Exception:
+        return set()
+
+
+def _save_known_groups(s: set) -> None:
+    """把已知群集合持久化到磁盘（同 _save_replied 容错约定：失败不抛出）。"""
+    try:
+        with open(_KNOWN_GROUPS_FILE, "w", encoding="utf-8") as f:
+            json.dump(sorted(s), f, ensure_ascii=False)
+    except Exception:
+        pass
+
+
 _ANCHOR_STALL: Dict[str, int] = {}  # sender → 连续 emit 未走到 DELIVERED 的轮数（熔断告警）
 SCAN_OPEN_BUDGET = 3              # 每轮最多开窗读气泡的会话数（#984 延迟教训机制化）
 _BUBBLE_READ_POLLS = 3            # 气泡读空重试轮数（同 _confirm_delivery 轮询模式）
@@ -777,6 +803,7 @@ def _read_trailing_for(mw: Any, cand: Dict[str, Any],
             cand["_is_group"] = True
             if _should_cache_known_group(cand["sender"], header_texts, title_ok):
                 _KNOWN_GROUPS.add(cand["sender"])
+                _save_known_groups(_KNOWN_GROUPS)  # 立即落盘，重启不丢前科（2026-07-16 根治）
                 if title_ok:
                     _log(f"known_group cached sender={cand['sender']}")
                 else:
@@ -1238,6 +1265,32 @@ def _is_group_by_header(texts: List[Optional[str]]) -> Optional[int]:
     return None
 
 
+_HEADER_READ_RETRIES = 3          # 判群标题读空重试轮数（同 _BUBBLE_READ_POLLS 模式）
+_HEADER_READ_RETRY_SLEEP = 0.3
+
+
+def _header_confirms_not_group(read_fn: Any, retries: int = _HEADER_READ_RETRIES,
+                                retry_delay_s: float = _HEADER_READ_RETRY_SLEEP,
+                                sleep_fn: Any = time.sleep) -> bool:
+    """fail-closed 判群闸（2026-07-16 真机事故根治：招商雍澜湾业主群被自动回复）。
+
+    read_fn() -> List[str]：读一次标题文本（通常是 `lambda: _read_chat_header_texts(mw)`）。
+    有界重试覆盖 UIA 瞬态；**重试耗尽后标题仍读空 → 视为"无法判定"，按不安全处理，
+    返回 False（不允许发送）**——群一旦误发不可逆，语义必须是"读不清就不发"，
+    不能像旧逻辑那样"读不清就当私聊放行"（fail-open，是本次事故根因）。
+
+    返回 True = 确认标题非群（可以发送）；False = 确认是群，或重试后仍无法判定。
+    纯逻辑（CI 可测，read_fn/sleep_fn 全部注入）。
+    """
+    for i in range(retries):
+        texts = read_fn()
+        if texts:
+            return _is_group_by_header(texts) is None
+        if i < retries - 1:
+            sleep_fn(retry_delay_s)
+    return False  # 重试耗尽仍读空 → fail-closed
+
+
 def _should_cache_known_group(sender: str,
                               header_texts: List[Optional[str]],
                               title_ok: bool) -> bool:
@@ -1506,18 +1559,27 @@ def _read_contact_earliest_date(mw: Any) -> Optional[str]:
         return None
 
 
-# 标题区判定参数：聊天面板标题在窗口右侧上方（会话列表在左列，标题在其右）。
-_HEADER_TOP_MAX = 210     # 标题 Text 控件 rect.top 上限（顶部标题栏）
-_HEADER_LEFT_MIN = 460    # 标题 Text 控件 rect.left 下限（会话列表右侧）
+# 标题区判定参数：聊天面板标题在窗口顶部、会话列表右侧（相对窗口自身几何，不是绝对屏幕坐标——
+# 2026-07-16 真机事故：微信窗口不在屏幕左上角时绝对坐标把标题区整块滤空，判群三道闸全瞎）。
+_HEADER_TOP_OFFSET_MAX = 150   # 标题 Text 控件相对窗口顶部的 top 偏移上限（同 _chat_title_matches 约定）
+_HEADER_LEFT_WIDTH_FRACTION = 4  # 标题 Text 控件 left 须超过窗口左侧 + 宽度/N（排除左侧会话列表）
 
 
 def _read_chat_header_texts(mw: Any) -> List[str]:
     """读当前打开会话右上角标题区的 Text 文本（供 _is_group_by_header 判群）。
 
-    真机：标题在聊天面板顶部、会话列表右侧 → 过滤 rect.top<_HEADER_TOP_MAX 且 left>=_HEADER_LEFT_MIN
-    的 Text 控件名。拿不到 rect 的也收（宽松，纯函数那层只认 "(N)"）。任何异常吞掉返回 []。
+    真机：标题在聊天面板顶部、会话列表右侧 → 过滤 rect.top < wr.top+150 且
+    rect.left > wr.left + width//4 的 Text 控件名（**相对窗口自身几何**，对齐
+    `_chat_title_matches` 的区域约定——绝对屏幕坐标会在窗口不在左上角时把标题区整块滤空）。
+    读不到窗口 rect 时退化为不过滤（宽松，纯函数那层只认 "(N)"）。任何异常吞掉返回 []。
     """
     out: List[str] = []
+    try:
+        wr = mw.rectangle()
+        width = wr.right - wr.left
+    except Exception:
+        wr = None
+        width = None
     try:
         for c in _iter_all_controls(mw, "Text"):
             try:
@@ -1528,8 +1590,10 @@ def _read_chat_header_texts(mw: Any) -> List[str]:
                 continue
             try:
                 r = c.rectangle()
-                if r.top >= _HEADER_TOP_MAX or r.left < _HEADER_LEFT_MIN:
-                    continue
+                if wr is not None:
+                    if not (r.left > wr.left + width // _HEADER_LEFT_WIDTH_FRACTION
+                            and r.top < wr.top + _HEADER_TOP_OFFSET_MAX):
+                        continue
             except Exception:
                 pass  # 拿不到坐标 → 仍纳入候选（_is_group_by_header 只认 "(N)"）
             out.append(txt)
@@ -2847,8 +2911,11 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
             # 群一律不回（用户拍板：只回一对一私聊）。开会话后读右上角标题，带"(人数)"=群 → 跳过。
             # 根因(2026-07-01)：回复路径此前从不判群、也不给中台传 is_group → 中台默认 is_group=false
             # → decideAutoSendRoute 落 send → 群被自动回。判群唯一可靠信号 = 标题人数（同 enrich 层）。
-            if _is_group_by_header(_read_chat_header_texts(fmw)) is not None:
-                _log(f"reply_in_chat: {sender!r} 是群聊（标题带人数）→ 跳过不回（skip_group）")
+            # fail-closed（2026-07-16 根治）：标题读空≠私聊——重试耗尽仍读不到才允许发送这条
+            # 判断本身必须反过来，读不清就不发（_header_confirms_not_group），不能像旧逻辑
+            # 那样把"读不到"和"确认是私聊"混为一谈。
+            if not _header_confirms_not_group(lambda: _read_chat_header_texts(fmw)):
+                _log(f"reply_in_chat: {sender!r} 判群不通过（是群，或标题读不到=fail-closed）→ 跳过不回（skip_group）")
                 return False
         else:
             # 无 sender 信息：退回旧行为（仅 Invoke），不阻塞
@@ -4310,6 +4377,9 @@ def run_real_listen(args: argparse.Namespace) -> int:
     _SENT_TEXTS[:] = _load_sent_texts()
     _REPLY_ANCHOR.update(_load_reply_anchor())
     _log(f"已加载 sent_texts: {len(_SENT_TEXTS)} 条 / reply_anchor: {len(_REPLY_ANCHOR)} 会话")
+    # 2026-07-16 根治：_KNOWN_GROUPS 纯内存重启清零 → 升级/重启后第一个群前科丢失被误回。
+    _KNOWN_GROUPS.update(_load_known_groups())
+    _log(f"已加载 known_groups: {len(_KNOWN_GROUPS)} 个")
     reply_failed_at: dict[tuple[str, str], float] = {}
     REPLY_FAIL_COOLDOWN = _REPLY_FAIL_COOLDOWN
     # issue（2026-07-08）：独立于 unread 角标检测的待重试队列——见 record_reply_failure/
