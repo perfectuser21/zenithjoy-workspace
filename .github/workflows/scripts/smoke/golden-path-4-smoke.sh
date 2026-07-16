@@ -370,6 +370,72 @@ else
 fi
 
 # ───────────────────────────────────────────────────────────────────
+# Step 14c：群一律不回——判群闸 fail-closed（2026-07-16 真机事故：招商雍澜湾业主群被自动回复）
+# 根因：_read_chat_header_texts 用绝对屏幕坐标过滤标题，微信窗口不在屏幕左上角时标题区
+# 被整块滤空 + 回复闸读空即误判"非群"放行（fail-open）。纯函数等价断言：相对坐标读取 +
+# fail-closed 语义（重试耗尽仍读空 → 不允许发送）。真机段（真实微信窗口偏移场景）见
+# xian-rog 真机通道。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 14c: 群一律不回——判群闸 fail-closed（真机事故根治）"
+
+if python3 -c "
+import sys
+sys.path.insert(0, 'services/agent/wechat-rpa')
+import listen_chat
+
+
+class _Rect:
+    def __init__(self, l, t, r, b):
+        self.left, self.top, self.right, self.bottom = l, t, r, b
+
+
+class _EI:
+    def __init__(self, name=''):
+        self.name = name
+
+
+class _Text:
+    def __init__(self, name, rect):
+        self.element_info = _EI(name=name)
+        self._rect = rect
+
+    def rectangle(self):
+        return self._rect
+
+
+class _MW:
+    def __init__(self, win_rect, texts):
+        self._rect = win_rect
+        self._texts = texts
+
+    def rectangle(self):
+        return self._rect
+
+    def descendants(self, control_type=None):
+        return list(self._texts) if control_type == 'Text' else []
+
+
+# 真机实测坐标：微信窗口偏移到屏幕中部（非左上角），标题绝对 top 远超旧的 210 上限
+win_rect = _Rect(1069, 478, 1489, 1048)
+header = _Text('招商雍澜湾业主群(497)', _Rect(1200, 520, 1450, 545))
+mw = _MW(win_rect, [header])
+
+texts = listen_chat._read_chat_header_texts(mw)
+assert texts, 'relative-coord fix regressed: header text should be readable when window is offscreen'
+assert listen_chat._is_group_by_header(texts) == 497
+
+# fail-closed：标题重试耗尽仍读空 → 不允许发送（不能读不到就当私聊放行）
+assert listen_chat._header_confirms_not_group(lambda: [], retries=2, retry_delay_s=0.0, sleep_fn=lambda s: None) is False
+assert listen_chat._header_confirms_not_group(lambda: ['某群(5)'], retries=2, retry_delay_s=0.0, sleep_fn=lambda s: None) is False
+assert listen_chat._header_confirms_not_group(lambda: ['李先生'], retries=2, retry_delay_s=0.0, sleep_fn=lambda s: None) is True
+print('OK')
+" 2>&1 | grep -q '^OK$'; then
+  ok "Step 14c ✅ 判群闸相对坐标读取 + fail-closed 语义正确（真机偏移窗口场景已覆盖）"
+else
+  fail "Step 14c 判群闸回归——群可能被自动回复（真机事故 2026-07-16 招商雍澜湾业主群复发风险）" 14
+fi
+
+# ───────────────────────────────────────────────────────────────────
 # Step 15：客户桌面浮窗实时看到"正在回复谁+推理摘要+发送中→已送达"
 # events.jsonl 单写者（listen_chat），PR#1315 已合并——纯函数等价断言 + DELIVERED 挂接回归
 # ───────────────────────────────────────────────────────────────────
