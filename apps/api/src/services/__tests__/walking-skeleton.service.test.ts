@@ -16,7 +16,7 @@ import pool from '../../db/connection';
 import { upsertAgentByHeartbeat } from '../walking-skeleton.service';
 
 const AGENT_ROW = {
-  id: 'uuid-agent-001',
+  id: '11111111-1111-1111-1111-111111111111',
   tenant_id: 'tenant-001',
   agent_id: 'ws1-aabbccddeeff0011',
   hostname: 'my-pc',
@@ -33,7 +33,7 @@ const BASE_ARGS = {
   tenantId: 'tenant-001',
   hostname: 'my-pc',
   version: '2.0.32',
-  agentUuid: 'uuid-agent-001',
+  agentUuid: '11111111-1111-1111-1111-111111111111',
 };
 
 describe('upsertAgentByHeartbeat — 精确 UPDATE + license_id fall-through', () => {
@@ -49,7 +49,7 @@ describe('upsertAgentByHeartbeat — 精确 UPDATE + license_id fall-through', (
 
     const result = await upsertAgentByHeartbeat(BASE_ARGS);
 
-    expect(result.id).toBe('uuid-agent-001');
+    expect(result.id).toBe('11111111-1111-1111-1111-111111111111');
     expect(result.status).toBe('online');
 
     const calls = vi.mocked(pool.query).mock.calls;
@@ -79,7 +79,7 @@ describe('upsertAgentByHeartbeat — 精确 UPDATE + license_id fall-through', (
 
     const result = await upsertAgentByHeartbeat(BASE_ARGS);
 
-    expect(result.id).toBe('uuid-agent-001');
+    expect(result.id).toBe('11111111-1111-1111-1111-111111111111');
 
     const calls = vi.mocked(pool.query).mock.calls;
     // fall-through 后至少 3 次（精确 UPDATE + SELECT + UPDATE/INSERT）
@@ -130,6 +130,43 @@ describe('upsertAgentByHeartbeat — capabilities 必须随 os_type 心跳同步
   });
 });
 
+/**
+ * 回归（真机验证 2026-07-16，安卓 Path2 golden path 复跑撞到）：Android agent 自
+ * 生成的 agent_uuid 是可读 slug（如 "agent-maa-an00-mrmt6yaa"），不是真 UUID。
+ * 精确路径 `WHERE id = $3` 若直接把它塞进 uuid 列，Postgres 类型校验层面会拒绝
+ * （错误码 22P02 "invalid input syntax for type uuid"），此前这个异常没有被
+ * 捕获，直接冒泡到路由层变成裸 500（HEARTBEAT_FAILED），安卓真机永远注册不上。
+ * 期望行为：非法格式的 agentUuid 在发起 SQL 前就被识别、视同"未命中"，直接走
+ * (license_id, hostname) 原有路径——根本不该拿一个格式错误的自报 ID 去查 uuid 列。
+ */
+describe('upsertAgentByHeartbeat — agentUuid 非 UUID 格式 → fall-through 而非抛出 500', () => {
+  beforeEach(() => {
+    vi.mocked(pool.query).mockReset();
+  });
+
+  it('非 UUID 格式 agentUuid（安卓 slug）→ 跳过精确 UPDATE，直接走 (license_id, hostname) 路径', async () => {
+    // call 1: SELECT by (license_id, hostname) → 找到既有 agent（跳过精确路径直达 fall-through）
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [AGENT_ROW] } as any);
+    // call 2: UPDATE agents by id（原有路径更新心跳）
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [AGENT_ROW] } as any);
+
+    const result = await upsertAgentByHeartbeat({
+      ...BASE_ARGS,
+      agentUuid: 'agent-maa-an00-mrmt6yaa',
+    });
+
+    // 不抛出、返回正常心跳结果——真机心跳必须能成功，而不是收到 HEARTBEAT_FAILED 500
+    expect(result.id).toBe('11111111-1111-1111-1111-111111111111');
+
+    const calls = vi.mocked(pool.query).mock.calls;
+    // 第一次调用必须直接是 SELECT（证明非法格式的 agentUuid 从未被塞进 `WHERE id = $3` 的 UPDATE）
+    const firstSql = calls[0][0] as string;
+    expect(firstSql).toMatch(/SELECT[\s\S]*FROM zenithjoy\.agents/i);
+    expect(firstSql).toMatch(/WHERE license_id = \$1/i);
+    expect(calls.some((c) => typeof c[0] === 'string' && /WHERE id = \$3/.test(c[0] as string))).toBe(false);
+  });
+});
+
 describe('upsertAgentByHeartbeat — license_machines 配额门（心跳旁路补齐）', () => {
   const QUOTA_ARGS = { ...BASE_ARGS, machineId: 'mid-xyz' };
 
@@ -149,7 +186,7 @@ describe('upsertAgentByHeartbeat — license_machines 配额门（心跳旁路�
     vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any);
 
     const result = await upsertAgentByHeartbeat(QUOTA_ARGS);
-    expect(result.id).toBe('uuid-agent-001');
+    expect(result.id).toBe('11111111-1111-1111-1111-111111111111');
 
     const calls = vi.mocked(pool.query).mock.calls;
     // 全链路不得出现 license_machines INSERT（配额门拦下新机器）
