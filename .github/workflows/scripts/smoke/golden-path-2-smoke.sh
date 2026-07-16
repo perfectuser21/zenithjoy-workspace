@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # golden-path-2-smoke.sh
-# ZenithJoy Walking Skeleton — Path 2 客户智能获客路径（11 步本地版）
+# ZenithJoy Walking Skeleton — Path 2 客户智能获客路径（12 步本地版）
 # Notion Journey: https://www.notion.so/35ac40c2ba6381ed8df4f3fa0b64f5bf
 #
 # 2026-07-07 用户更正（decision 431acd2c）：整条去飞书、改本地中台。
 # 本 smoke 2026-07-14 重写（handoff 0714 刀1），替换旧版「Sprint A 飞书集成」（停在 05-26，
 # 测已删除的飞书流程 + fake-feishu-server stub）。
 #
-# 11 步（CLAUDE.md Path 2 权威模型 8 步 + Seg2/Seg4 回归 2 步）与断言层级：
+# 12 步（CLAUDE.md Path 2 权威模型 8 步 + Seg2/Seg4/心跳-UUID 回归 3 步）与断言层级：
 #   Step 1 注册客户端自动（真链路：sign-up → free license → 自动建 tenant）
 #   Step 2 装客户端（真链路：POST /api/agent/register）
 #   Step 3 Android 端 Agent 连中台（服务端等价断言：x-agent-id 真实调用方 shape，#1267 路径）
@@ -19,9 +19,12 @@
 #   Step 9 抓评论回填真实抖音号 → Lead 落库带号（真链路：comment-score-result → acquisition_leads.douyin_id）
 #   Step 10 判定门 Seg2 回归：空画像短路必须落库（新 tenant，从未 PATCH acquisition_config）
 #   Step 11 capabilities 随 os_type 心跳同步：Seg4 私信设备路由回归（心跳 os_type=android → capabilities 含 android）
+#   Step 12 心跳 agent_uuid 非 UUID 格式必须优雅降级：安卓真机自报 slug 不能裸 500（真机复现 2026-07-16）
 #
 # 2026-07-15（handoff 0715）：铺到 11 步，回流两个真根因（铁律5）——
 #   Seg2 judgeVideo INV-6 短路不写库 / Seg4 心跳从不按 os_type 刷新 capabilities。
+# 2026-07-16：铺到 12 步——安卓 Path2 真机链路首次真跑撞到心跳 agent_uuid 非 UUID
+#   格式裸 500（walking-skeleton.service.ts 精确路径未校验格式），回流本 Step 12。
 #
 # ⚠️ 真机段等价断言说明（铁律 5）：
 #   Step 3/6 的真机执行段（Android 真机装 APK、真机登录抖音小号）与 Step 8 的真机截图上报段
@@ -39,7 +42,7 @@
 # 用法：
 #   API_BASE=http://localhost:5200 DB_URL=postgresql://... \
 #     bash .github/workflows/scripts/smoke/golden-path-2-smoke.sh
-#   退出码 0 = 11 步服务端段全通；非零 = 第 EXIT_CODE 步红
+#   退出码 0 = 12 步服务端段全通；非零 = 第 EXIT_CODE 步红
 #
 # 真调判定依赖：API server 进程需带 TOAPIS_API_KEY（CI: secrets.TOAPIS_API_KEY 注入 job env）。
 # 无 key 时 judge-video 落 pending/no_api_key → Step 8 真红（这是设计：#1269/#1271 就是全 mock 漏过的）。
@@ -60,7 +63,7 @@ fail() { echo "❌ $1"; exit "$2"; }
 psq() { psql "$DB_URL" -At -c "$1"; }
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ZenithJoy Path 2 Walking Skeleton — 客户智能获客路径（11 步本地版）"
+echo "  ZenithJoy Path 2 Walking Skeleton — 客户智能获客路径（12 步本地版）"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # ───────────────────────────────────────────────────────────────────
@@ -370,11 +373,31 @@ echo "$S11_CAPS" | grep -q "android" || fail "Step 11b capabilities='$S11_CAPS' 
 ok "Step 11b ✅ capabilities=$S11_CAPS 含 android（Seg4 根因已修）"
 ok "Step 11 ✅ capabilities 随 os_type 心跳同步回归通过"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 12：心跳 agent_uuid 非 UUID 格式必须优雅降级，不能裸 500（真机复现 2026-07-16）
+#
+# 复现的真 bug：安卓 Agent 自生成的 agent_uuid 是可读 slug（如
+# "agent-maa-an00-mrmt6yaa"），不是真 UUID。walking-skeleton.service.ts
+# 精确路径此前不校验格式，直接把它塞进 `WHERE id = $3`（agents.id 是 uuid
+# 列），被 Postgres 类型校验拒绝（22P02 invalid input syntax for type
+# uuid），异常未捕获冒泡成路由层裸 500（HEARTBEAT_FAILED）——安卓真机永远
+# 注册不上中台，真机 golden path 第一步就卡死。上面 Step 11 用的是服务端
+# 真实 UUID（$AGENT_PK），从未走到这条真根因，必须单独用非 UUID 格式复现。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 12: 心跳 agent_uuid 非 UUID 格式（安卓真机自报 slug）不能裸 500"
+S12_TMP=$(mktemp)
+S12_HTTP=$(curl -s -o "$S12_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/agent/heartbeat" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $LICENSE_KEY" \
+  -d '{"version":"2.0.99","hostname":"p2-smoke-android-slug-host","os_type":"android","agent_uuid":"agent-maa-an00-p2smoke"}')
+[ "$S12_HTTP" = "200" ] || fail "Step 12 心跳 agent_uuid=非UUID格式 expected 200, got $S12_HTTP: $(cat "$S12_TMP")（安卓真机自报 slug 会导致心跳裸 500，真机永远注册不上）" 12
+ok "Step 12 ✅ 非 UUID 格式 agent_uuid 心跳正常降级（HTTP 200），未裸 500"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
-      "$S10_TMP" "$S10_COOKIES" "$S11_TMP" 2>/dev/null
+      "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" 2>/dev/null
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Path 2 11 步本地版 smoke 全绿（服务端段）"
+echo "  ✅ Path 2 12 步本地版 smoke 全绿（服务端段）"
 echo "  真机段：等 Android evaluator 通道（xian-rog nightly）接管复跑"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 exit 0
