@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # golden-path-2-smoke.sh
-# ZenithJoy Walking Skeleton — Path 2 客户智能获客路径（12 步本地版）
+# ZenithJoy Walking Skeleton — Path 2 客户智能获客路径（13 步本地版）
 # Notion Journey: https://www.notion.so/35ac40c2ba6381ed8df4f3fa0b64f5bf
 #
 # 2026-07-07 用户更正（decision 431acd2c）：整条去飞书、改本地中台。
 # 本 smoke 2026-07-14 重写（handoff 0714 刀1），替换旧版「Sprint A 飞书集成」（停在 05-26，
 # 测已删除的飞书流程 + fake-feishu-server stub）。
 #
-# 12 步（CLAUDE.md Path 2 权威模型 8 步 + Seg2/Seg4/心跳-UUID 回归 3 步）与断言层级：
+# 13 步（CLAUDE.md Path 2 权威模型 8 步 + Seg2/Seg4/心跳-UUID/心跳-去重维度 回归 4 步）与断言层级：
 #   Step 1 注册客户端自动（真链路：sign-up → free license → 自动建 tenant）
 #   Step 2 装客户端（真链路：POST /api/agent/register）
 #   Step 3 Android 端 Agent 连中台（服务端等价断言：x-agent-id 真实调用方 shape，#1267 路径）
@@ -20,11 +20,13 @@
 #   Step 10 判定门 Seg2 回归：空画像短路必须落库（新 tenant，从未 PATCH acquisition_config）
 #   Step 11 capabilities 随 os_type 心跳同步：Seg4 私信设备路由回归（心跳 os_type=android → capabilities 含 android）
 #   Step 12 心跳 agent_uuid 非 UUID 格式必须优雅降级：安卓真机自报 slug 不能裸 500（真机复现 2026-07-16）
+#   Step 13 心跳去重必须按 tenant_id 查：跨 license 同机不能撞 DB 唯一约束裸 500（真机复现 2026-07-16）
 #
 # 2026-07-15（handoff 0715）：铺到 11 步，回流两个真根因（铁律5）——
 #   Seg2 judgeVideo INV-6 短路不写库 / Seg4 心跳从不按 os_type 刷新 capabilities。
-# 2026-07-16：铺到 12 步——安卓 Path2 真机链路首次真跑撞到心跳 agent_uuid 非 UUID
-#   格式裸 500（walking-skeleton.service.ts 精确路径未校验格式），回流本 Step 12。
+# 2026-07-16：铺到 13 步——安卓 Path2 真机链路首次真跑连续撞到心跳两个真根因：
+#   Step 12 agent_uuid 非 UUID 格式裸 500 / Step 13 去重按 license_id 查跨 license
+#   撞 DB 唯一约束裸 500（均为 walking-skeleton.service.ts 同一函数内的问题）。
 #
 # ⚠️ 真机段等价断言说明（铁律 5）：
 #   Step 3/6 的真机执行段（Android 真机装 APK、真机登录抖音小号）与 Step 8 的真机截图上报段
@@ -42,7 +44,7 @@
 # 用法：
 #   API_BASE=http://localhost:5200 DB_URL=postgresql://... \
 #     bash .github/workflows/scripts/smoke/golden-path-2-smoke.sh
-#   退出码 0 = 12 步服务端段全通；非零 = 第 EXIT_CODE 步红
+#   退出码 0 = 13 步服务端段全通；非零 = 第 EXIT_CODE 步红
 #
 # 真调判定依赖：API server 进程需带 TOAPIS_API_KEY（CI: secrets.TOAPIS_API_KEY 注入 job env）。
 # 无 key 时 judge-video 落 pending/no_api_key → Step 8 真红（这是设计：#1269/#1271 就是全 mock 漏过的）。
@@ -63,7 +65,7 @@ fail() { echo "❌ $1"; exit "$2"; }
 psq() { psql "$DB_URL" -At -c "$1"; }
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ZenithJoy Path 2 Walking Skeleton — 客户智能获客路径（12 步本地版）"
+echo "  ZenithJoy Path 2 Walking Skeleton — 客户智能获客路径（13 步本地版）"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # ───────────────────────────────────────────────────────────────────
@@ -393,11 +395,61 @@ S12_HTTP=$(curl -s -o "$S12_TMP" -w "%{http_code}" --max-time 15 \
 [ "$S12_HTTP" = "200" ] || fail "Step 12 心跳 agent_uuid=非UUID格式 expected 200, got $S12_HTTP: $(cat "$S12_TMP")（安卓真机自报 slug 会导致心跳裸 500，真机永远注册不上）" 12
 ok "Step 12 ✅ 非 UUID 格式 agent_uuid 心跳正常降级（HTTP 200），未裸 500"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 13：心跳去重必须按 tenant_id 查，跨 license 同机不能撞 DB 唯一约束裸 500
+# （真机复现 2026-07-16，紧接 Step 12 修复后同一 xian-rog 真机撞到的第二个真根因）
+#
+# 复现的真 bug：DB 唯一约束 uq_agents_tenant_hostname 是 (tenant_id, hostname)，
+# 但 fall-through 去重 SELECT 之前按 (license_id, hostname) 查——本 tenant 挂
+# 2 个 license（测试租户常见形态：先注册 free 再买正式/测试专用 license），
+# 同一台设备用 license A 心跳建过行后，换 license B 心跳同一 hostname 时，
+# SELECT 用 license B 的 id 查不到 license A 建的行，误判"新机器"走 INSERT，
+# 直接撞 (tenant_id, hostname) 唯一约束抛出未捕获异常，冒泡成路由层裸 500。
+# 用本 tenant 已有的第二个 license（Step 1 的 free license）复现："先用它心跳
+# 建一行同 hostname，再用 $LICENSE_KEY 心跳同 hostname" 顺序反过来更贴近真实
+# 时序，这里直接用两个不同 license_key 对同一 hostname 心跳两次验证。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 13: 心跳去重按 tenant_id 查——跨 license 同机不能撞唯一约束裸 500"
+S13_TMP=$(mktemp); S13_COOKIES=$(mktemp)
+S13_HOST="p2-smoke-dedup-host-${RND}"
+# 第二个 license：本轮专属 sign-up 一个新账号，再手动把它的 tenant 改成和 $TENANT_ID 一致，
+# 模拟"同一 tenant 挂 2 个 license"（比真实业务流程更直接，但对复现本 bug 已足够等价）。
+S13_EMAIL="p2-smoke-dedup-${RND}@zenithjoy.test"
+S13_HTTP=$(curl -s -o "$S13_TMP" -w "%{http_code}" --max-time 30 -c "$S13_COOKIES" \
+  -X POST "$API_BASE/api/auth/sign-up/email" -H "Content-Type: application/json" \
+  -d "{\"email\":\"$S13_EMAIL\",\"password\":\"$TEST_PASSWORD\",\"name\":\"p2smokededup\"}")
+[ "$S13_HTTP" = "200" ] || fail "Step 13a sign-up expected 200, got $S13_HTTP" 13
+curl -s -o "$S13_TMP" -b "$S13_COOKIES" "$API_BASE/api/account/me" >/dev/null
+S13_LICENSE_KEY=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d['license']['license_key'])" "$S13_TMP" 2>/dev/null)
+[ -n "$S13_LICENSE_KEY" ] || fail "Step 13a 未拿到第二个 license_key" 13
+# 把第二个 license 强制挂到本轮主 tenant 下，模拟同一 tenant 多 license 场景
+psq "UPDATE zenithjoy.licenses SET tenant_id='$TENANT_ID' WHERE license_key='$S13_LICENSE_KEY'" >/dev/null
+
+# 先用第二个 license 对该 hostname 心跳一次（建行）
+S13_HTTP=$(curl -s -o "$S13_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/agent/heartbeat" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $S13_LICENSE_KEY" \
+  -d "{\"version\":\"2.0.99\",\"hostname\":\"$S13_HOST\",\"os_type\":\"windows\"}")
+[ "$S13_HTTP" = "200" ] || fail "Step 13b 第二个 license 心跳（建行）expected 200, got $S13_HTTP: $(cat "$S13_TMP")" 13
+
+# 再用主 license（$LICENSE_KEY）对同一 hostname 心跳——这一步此前会裸 500
+S13_HTTP=$(curl -s -o "$S13_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/agent/heartbeat" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $LICENSE_KEY" \
+  -d "{\"version\":\"2.0.99\",\"hostname\":\"$S13_HOST\",\"os_type\":\"windows\"}")
+[ "$S13_HTTP" = "200" ] || fail "Step 13c 跨 license 同 hostname 心跳 expected 200, got $S13_HTTP: $(cat "$S13_TMP")（去重 SELECT 按 license_id 查会跨 license 误判新机器，撞 DB 唯一约束裸 500）" 13
+ok "Step 13c ✅ 跨 license 同 hostname 心跳正常（HTTP 200），未撞 uq_agents_tenant_hostname"
+
+# 核心回归断言：该 tenant+hostname 组合在库里只有一行（去重真的按 tenant_id 命中了旧行，不是意外没撞上约束）
+S13_ROW_COUNT=$(psq "SELECT count(*) FROM zenithjoy.agents WHERE tenant_id='$TENANT_ID' AND hostname='$S13_HOST'")
+[ "$S13_ROW_COUNT" = "1" ] || fail "Step 13d agents 表该 tenant+hostname 应恰好 1 行，实际 $S13_ROW_COUNT（去重未按 tenant_id 正确命中旧行）" 13
+ok "Step 13 ✅ 心跳去重按 tenant_id 查，跨 license 同机正确命中旧行（DB 唯一约束真根因已修）"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
-      "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" 2>/dev/null
+      "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" 2>/dev/null
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Path 2 12 步本地版 smoke 全绿（服务端段）"
+echo "  ✅ Path 2 13 步本地版 smoke 全绿（服务端段）"
 echo "  真机段：等 Android evaluator 通道（xian-rog nightly）接管复跑"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 exit 0
