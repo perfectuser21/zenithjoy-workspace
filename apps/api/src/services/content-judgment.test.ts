@@ -94,13 +94,39 @@ describe('content-judgment judgeVideo', () => {
 
     expect(result.judgment_status).toBe('matched');
     expect(result.cache_hit).toBe(true);
+  });
 
-    // 验证没有调用 UPDATE（不应重新写库）
+  /**
+   * 回归（真机复现 2026-07-16，Path2 安卓真机链路验证时撞到）：缓存命中分支只把结果
+   * 返回给调用方，从不写库。writeJudgment/markPending 都是按 (tenant_id, video_id)
+   * UPDATE，不分 task_id——同一热门视频被多个采集任务重复抓到时（真机复现常态：同一
+   * 关键词反复搜出同一批热门卡片），新任务里刚 INSERT 的那一行 judgment_status 仍是
+   * Stage1 落库时的初始值 'pending'，缓存命中直接 return 从不碰这一行，于是这一行永远
+   * 卡在 pending——即使 API 响应明明说 cache_hit=true/judgment_status=matched。
+   * 期望行为：缓存命中也要执行一次 UPDATE，把缓存到的判决结果写回，这样任何共享该
+   * (tenant_id, video_id) 的行（不论来自哪个 task）都能收敛到正确状态。
+   */
+  it('回归：缓存命中必须把结果写回 DB，否则新任务里刚插入的行永远卡 pending', async () => {
+    const pool = makePool({
+      existingJudgment: { judgment_status: 'matched', judgment_reason: '符合目标画像' },
+    });
+
+    await judgeVideo(
+      pool,
+      'tenant-test',
+      'video-cached-001',
+      'screenshot',
+      btoa('fake-data'),
+    );
+
     const mockQuery = pool.query as ReturnType<typeof vi.fn>;
     const updateCalls = mockQuery.mock.calls.filter(([text]: [string]) =>
-      /UPDATE/i.test(text)
+      /UPDATE.*collect_videos/i.test(text)
     );
-    expect(updateCalls).toHaveLength(0);
+    expect(updateCalls.length).toBeGreaterThanOrEqual(1);
+    // 写回的必须是缓存到的那个结果，不能写错值
+    const [, params] = updateCalls[0] as [string, unknown[]];
+    expect(params).toContain('matched');
   });
 
   /**
