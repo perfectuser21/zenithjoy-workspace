@@ -1141,7 +1141,7 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
   if (!taskId) return fail(res, 400, 'MISSING_TASK_ID', '缺 task_id');
   if (!videoId) return fail(res, 400, 'MISSING_VIDEO_ID', '缺 video_id');
 
-  const batch: Array<{ sec_uid?: string | null; nickname: string; comment_text?: string; grade?: string; keyword?: string }> =
+  const batch: Array<{ sec_uid?: string | null; nickname: string; comment_text?: string; grade?: string; keyword?: string; douyin_id?: string | null }> =
     Array.isArray(commenters) ? commenters : [];
 
   const client = await pool.connect();
@@ -1192,6 +1192,8 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
 
     for (const c of batch) {
       const secUid = c.sec_uid ?? null;
+      // 「宁可空，不可猜」（PR #1306 同款规则）：读不到号 / 空白 → null，绝不用昵称/URL 顶替。
+      const douyinId = String(c.douyin_id ?? '').trim() || null;
       let matchId: string | null = null;
       if (secUid) {
         if (seenSec.has(secUid)) matchId = 'batch';
@@ -1217,16 +1219,19 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
       if (matchId) {
         deduped += 1;
         if (matchId !== 'batch') {
-          // 重复仅累加来源 video_id（不重复建 lead 行）——但评论内容/grade 仍进历史表，不再丢
+          // 重复仅累加来源 video_id（不重复建 lead 行）——但评论内容/grade 仍进历史表，不再丢。
+          // douyin_id 用 COALESCE 回填：存量 lead（没有列的年代采的）再次被采到时补号，
+          // 但绝不能把已有的号覆盖成 NULL（本次批次没读到号是常态，不是"号被撤销"）。
           await client.query(
             `UPDATE zenithjoy.acquisition_leads
                 SET source_video_ids = CASE
                       WHEN source_video_ids ? $2 THEN source_video_ids
                       ELSE source_video_ids || to_jsonb($2::text)
                     END,
+                    douyin_id = COALESCE(douyin_id, $3),
                     updated_at = NOW()
               WHERE id = $1`,
-            [matchId, videoId]
+            [matchId, videoId, douyinId]
           );
           await client.query(
             `INSERT INTO zenithjoy.acquisition_lead_comments
@@ -1245,11 +1250,11 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
       const insRes = await client.query(
         `INSERT INTO zenithjoy.acquisition_leads
            (tenant_id, collect_task_id, sec_uid, nickname, profile_url, partial, source_video_ids,
-            comment_text, grade, keyword, feishu_write_status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, 'local_only')
+            comment_text, grade, keyword, douyin_id, feishu_write_status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, 'local_only')
          RETURNING id`,
         [tenantId, taskId, secUid, c.nickname, secUid ? profileUrlForSecUid(secUid) : c.nickname, false,
-         JSON.stringify([videoId]), c.comment_text ?? null, c.grade ?? null, c.keyword ?? keyword ?? null]
+         JSON.stringify([videoId]), c.comment_text ?? null, c.grade ?? null, c.keyword ?? keyword ?? null, douyinId]
       );
       const newLeadId = insRes.rows[0].id as string;
       // 首条留言也进历史表（不只老用户才进），再 rescore 汇总

@@ -27,6 +27,22 @@ data class CommentEntry(
         // 字段恒在（读不到时为 null）：省略会让服务端分不清"没读到"和"老版本 agent 没这能力"。
         "douyin_id" to douyinId,
     )
+
+    /**
+     * POST /api/acquisition/collect/report 的 commenters[] 字段名（nickname/comment_text）
+     * 跟 toMap() 对齐的 /comment-score-result 老协议（commenter_id/text）不是同一套命名。
+     *
+     * 真机复现(2026-07-16)：Stage2 上报旧实现只塞了 nickname/comment_text，douyinId 从没
+     * 进过这个 map——即使 Seg3 点头像进主页真读到了号，也在这一步被吃掉，落库侧
+     * acquisition_leads.douyin_id 永远 NULL，Seg4 派单永远无号可发只能退回旧 bug
+     * （把 profile_url 当抖音号搜 → NO_MATCH）。douyin_id 字段恒在（读不到为 null），
+     * 理由同 toMap()。
+     */
+    fun toCollectReportMap(): Map<String, Any?> = mapOf(
+        "nickname" to commenterId,
+        "comment_text" to text,
+        "douyin_id" to douyinId,
+    )
 }
 
 data class CollectResult(

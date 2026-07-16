@@ -751,12 +751,7 @@ class AgentService : Service() {
                 }
             } else if (currentJob is CollectJob.Stage2) {
                 // Stage2：评论抓取完成，上报 report
-                val commenters = result.comments.map { c ->
-                    buildMap<String, Any?> {
-                        put("nickname", c.commenterId)
-                        put("comment_text", c.text)
-                    }
-                }
+                val commenters = result.comments.map { it.toCollectReportMap() }
                 scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                     reporter?.reportCollect(
                         taskId = taskId,
@@ -794,12 +789,7 @@ class AgentService : Service() {
     // 新协议上报（兼容旧调用路径，不带 reporter）：POST /api/acquisition/collect/report
     private fun reportCollectReportNew(taskId: String, result: CollectResult, terminal: Boolean = false, partialReason: String? = null) {
         if (taskId.isEmpty()) return
-        val commenters = result.comments.map { c ->
-            buildMap<String, Any?> {
-                put("nickname", c.commenterId)
-                put("comment_text", c.text)
-            }
-        }
+        val commenters = result.comments.map { it.toCollectReportMap() }
         val videoId = taskId + "_" + System.currentTimeMillis().toString(36)
         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
             reporter?.reportCollect(

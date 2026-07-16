@@ -74,4 +74,38 @@ class CollectResultTest {
         val comments = payload["comments"] as List<Map<String, Any?>>
         assertTrue(comments.isEmpty())
     }
+
+    // ── toCollectReportMap（真机复现 2026-07-16，Seg3→Seg4 断链根因）───────────
+    // AgentService Stage2 上报 POST /api/acquisition/collect/report 走的是不同字段名
+    // （nickname/comment_text），旧实现手写 buildMap 时漏了 douyin_id：即使 Seg3 真读到了
+    // 抖音号，也在这一步被吃掉，acquisition_leads.douyin_id 永远 NULL，Seg4 派单永远
+    // 无号可发，只能退回旧 bug（发 profile_url 当抖音号搜 → NO_MATCH）。
+
+    @Test
+    fun `collect-report map 用 nickname_comment_text 字段名（跟 comment-score-result 不同协议）`() {
+        val entry = CommentEntry(commenterId = "小叶子", text = "怎么联系你们")
+        val map = entry.toCollectReportMap()
+
+        assertEquals("小叶子", map["nickname"])
+        assertEquals("怎么联系你们", map["comment_text"])
+        assertFalse("这个协议没有 commenter_id 字段", map.containsKey("commenter_id"))
+        assertFalse("这个协议没有 text 字段", map.containsKey("text"))
+    }
+
+    @Test
+    fun `collect-report map 必须带 douyin_id，否则 Seg4 派单永远无号可发`() {
+        val entry = CommentEntry(commenterId = "小叶子", text = "怎么联系你们", douyinId = "1689210742")
+        val map = entry.toCollectReportMap()
+
+        assertEquals("1689210742", map["douyin_id"])
+    }
+
+    @Test
+    fun `collect-report map 读不到号时字段仍在但为 null（宁可空不可猜）`() {
+        val entry = CommentEntry(commenterId = "小叶子", text = "怎么联系你们")
+        val map = entry.toCollectReportMap()
+
+        assertTrue("douyin_id 字段必须存在", map.containsKey("douyin_id"))
+        assertNull(map["douyin_id"])
+    }
 }

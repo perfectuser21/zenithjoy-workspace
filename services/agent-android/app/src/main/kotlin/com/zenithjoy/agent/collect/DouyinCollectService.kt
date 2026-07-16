@@ -866,7 +866,10 @@ class DouyinCollectService : AccessibilityService() {
     private fun startCommentsTimeout() {
         scope.launch {
             delay(RandomDelay.sample(RandomDelay.PROFILE_MS))
-            if (state == State.OPENING_COMMENTS) {
+            // 检查和转移必须在同一次协程恢复内同步完成（中间不能有 suspend 点），
+            // 否则 handleCommentsOpened 的事件驱动路径可能在两者之间插入执行。
+            if (mayScheduleCommentExtraction(state)) {
+                state = State.EXTRACTING_COMMENTS
                 attemptExtractComments()
             }
         }
@@ -890,11 +893,19 @@ class DouyinCollectService : AccessibilityService() {
     // ── 7. 提取评论区留言人+留言内容 ─────────────────────────────────────────
 
     private fun handleCommentsOpened(event: AccessibilityEvent) {
-        if (state != State.OPENING_COMMENTS) return
+        if (!mayScheduleCommentExtraction(state)) return
         if (event.packageName != DOUYIN_PKG) return
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
             event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
         ) return
+        // 真机复现：评论面板展开期间会连续打出多条 WINDOW_STATE_CHANGED/
+        // WINDOW_CONTENT_CHANGED 事件。真正的状态转移必须在这里同步完成（检查和
+        // 转移之间不能有 suspend 点），否则每一条事件都会在第一个协程真正执行
+        // 到 attemptExtractComments() 之前各自通过 state == OPENING_COMMENTS
+        // 的判断，各自 schedule 一次 attemptExtractComments()，最终并发跑出
+        // 15+ 次重复评论提取（真机 logcat："enriched douyinId 0/1 leads" 3 秒内
+        // 重复 15+ 次），互相 recycle 对方的 AccessibilityNodeInfo 树。
+        state = State.EXTRACTING_COMMENTS
         scope.launch {
             delay(RandomDelay.sample(RandomDelay.PROFILE_MS))
             attemptExtractComments()
@@ -1397,6 +1408,20 @@ class DouyinCollectService : AccessibilityService() {
          */
         internal fun isBackAtResultList(cardCount: Int, hasSearchTabBar: Boolean): Boolean =
             cardCount >= 2 || hasSearchTabBar
+
+        /**
+         * 评论提取调度闩（真机复现 2026-07-16）：评论面板展开期间会连续打出多条
+         * WINDOW_STATE_CHANGED/WINDOW_CONTENT_CHANGED 事件，handleCommentsOpened 和
+         * startCommentsTimeout 两条路径都会在看到 state == OPENING_COMMENTS 时各自
+         * 调度一次 attemptExtractComments()。只有第一个通过此闸的调用才应该真正调度；
+         * 调用方必须在通过闸门后【同步】把 state 转成 EXTRACTING_COMMENTS（不能等
+         * delay() 之后才转），否则后续事件在第一次调度真正执行前依然会读到旧状态，
+         * 重复调度出多个并发 attemptExtractComments()，互相 recycle 对方的
+         * AccessibilityNodeInfo 树（真机 logcat："enriched douyinId 0/1 leads" 3 秒内
+         * 重复 15+ 次）。
+         */
+        internal fun mayScheduleCommentExtraction(state: State): Boolean =
+            state == State.OPENING_COMMENTS
         // Bug C 剪贴板取链：单张卡片全程硬超时 + 各阶段等待预算
         // （internal：PER_LEAD_ENRICH_TIMEOUT_MS 的量级守卫要拿它当参照上界）
         internal const val PER_CARD_TIMEOUT_MS = 25_000L
