@@ -915,28 +915,37 @@ class DouyinCollectService : AccessibilityService() {
     private fun attemptExtractComments() {
         if (resultReported) return // A2：已上报则不再重复提取/上报
         state = State.EXTRACTING_COMMENTS
-        val root = rootInActiveWindow
-        if (root == null) {
-            finishWithError("NO_COMMENTS_WINDOW")
-            return
-        }
-
-        val nodes = flattenNodes(root)
-        val comments = NodeExtractor.extractComments(nodes)
-
-        if (comments.isEmpty()) {
-            // 评论面板可能还未渲染完，稍候重试一次
-            scope.launch {
-                delay(RandomDelay.sample(RandomDelay.CLICK_MS))
-                val retryRoot = rootInActiveWindow ?: run {
-                    finishWithError("RETRY_NO_WINDOW"); return@launch
-                }
-                val retryComments = NodeExtractor.extractComments(flattenNodes(retryRoot))
-                reportResult(enrichCommentsWithDouyinId(retryComments))
+        scope.launch {
+            val (sawWindow, comments) = pollForComments()
+            if (!sawWindow) {
+                finishWithError("NO_COMMENTS_WINDOW")
+                return@launch
             }
-        } else {
-            scope.launch { reportResult(enrichCommentsWithDouyinId(comments)) }
+            reportResult(enrichCommentsWithDouyinId(comments))
         }
+    }
+
+    /**
+     * 评论列表懒加载/虚拟化轮询（真机复现 2026-07-16）：评论面板刚打开时常只有容器，
+     * 评论 item 要再等一拍才渲染出来。旧实现只重试一次、间隔仅 CLICK_MS(0.8-1.8s)，
+     * 三条真机视频（各自几十上百条真实评论）连续复现 extracted 0 comments——面板明明
+     * 秒开有内容，只是自动化抓取的那一刻还没渲染够。轮询到有结果就立即返回，不占满
+     * 全部预算；全程拿不到窗口才是真的 NO_COMMENTS_WINDOW。
+     */
+    private suspend fun pollForComments(): Pair<Boolean, List<CommentEntry>> {
+        var sawWindow = false
+        repeat(COMMENT_LIST_POLL_ATTEMPTS) { attempt ->
+            val root = rootInActiveWindow
+            if (root != null) {
+                sawWindow = true
+                val comments = NodeExtractor.extractComments(flattenNodes(root))
+                if (comments.isNotEmpty()) return true to comments
+            }
+            if (!isFinalCommentPollAttempt(attempt, COMMENT_LIST_POLL_ATTEMPTS)) {
+                delay(COMMENT_LIST_POLL_MS)
+            }
+        }
+        return sawWindow to emptyList()
     }
 
     // ── 7.5 抖音号回填（Seg3 方案 B′）─────────────────────────────────────────
@@ -1399,6 +1408,14 @@ class DouyinCollectService : AccessibilityService() {
         private const val PROFILE_ID_ATTEMPTS = 8
         private const val PROFILE_ID_POLL_MS = 400L
 
+        // 评论列表轮询预算：真机复现(2026-07-16)——评论面板打开后列表项是懒加载/虚拟化的，
+        // 首次到达 EXTRACTING_COMMENTS 时常只有面板容器、评论 item 还没渲染出来，旧实现"只重试
+        // 一次、间隔 CLICK_MS(0.8-1.8s)"budget 太紧，三条真机视频（各自 99/多条真实评论）连续
+        // 复现 extracted 0 comments。6 × 700ms = 4.2s 额外轮询预算，叠加在 EXTRACTION_TIMEOUT_MS
+        // (≈120s) 硬顶内完全负担得起。
+        internal const val COMMENT_LIST_POLL_ATTEMPTS = 6
+        private const val COMMENT_LIST_POLL_MS = 700L
+
         /**
          * navigateBackToResults 判据（真机 2026-07-13 19:52 xian-rog，广告 abort 修复后浮现的下一层）：
          * 采完 card#0 点开进全屏视频播放页，旧判据"抖音包内有 1 张卡"太弱——全屏视频那张大卡
@@ -1408,6 +1425,13 @@ class DouyinCollectService : AccessibilityService() {
          */
         internal fun isBackAtResultList(cardCount: Int, hasSearchTabBar: Boolean): Boolean =
             cardCount >= 2 || hasSearchTabBar
+
+        /**
+         * 评论列表轮询预算是否已耗尽（0-indexed attempt）。抽成纯函数只是为了把这个
+         * 容易写错的边界判断单独钉死——真机复现过"重试预算算错一格，少轮询一次"的坑。
+         */
+        internal fun isFinalCommentPollAttempt(attempt: Int, maxAttempts: Int): Boolean =
+            attempt >= maxAttempts - 1
 
         /**
          * 评论提取调度闩（真机复现 2026-07-16）：评论面板展开期间会连续打出多条

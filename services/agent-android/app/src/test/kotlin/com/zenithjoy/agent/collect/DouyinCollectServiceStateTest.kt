@@ -338,6 +338,29 @@ class DouyinCollectServiceStateTest {
         )
     }
 
+    // ── isFinalCommentPollAttempt（评论列表轮询预算边界） ──────────────────────
+    // 真机复现(2026-07-16)：评论面板列表项懒加载/虚拟化，旧实现只重试一次、间隔太短，
+    // 三条真机视频连续 extracted 0 comments——面板明明秒开有内容。改成有限轮询，这个
+    // 边界判断（第几次是最后一次）容易差一格，单独钉死。
+
+    @Test
+    fun `attempt before the last one is not final`() {
+        assertFalse(
+            DouyinCollectService.isFinalCommentPollAttempt(attempt = 0, maxAttempts = 6)
+        )
+        assertFalse(
+            DouyinCollectService.isFinalCommentPollAttempt(attempt = 4, maxAttempts = 6)
+        )
+    }
+
+    @Test
+    fun `last 0-indexed attempt is final (真机差一格坑)`() {
+        assertTrue(
+            "maxAttempts=6 时第 6 次（index=5）才是最后一次，不能提前判 final",
+            DouyinCollectService.isFinalCommentPollAttempt(attempt = 5, maxAttempts = 6)
+        )
+    }
+
     @Test
     fun `unrelated states must also reject scheduling`() {
         assertFalse(
