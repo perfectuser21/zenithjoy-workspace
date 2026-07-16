@@ -514,11 +514,52 @@ S14_DB_STATUS=$(psq "SELECT COALESCE(judgment_status,'<NULL>') FROM zenithjoy.ac
 ok "Step 14d ✅ 任务B 视频行真的写成 matched（缓存命中补写库根因已修）"
 ok "Step 14 ✅ 判定缓存命中写库回归通过"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 15：抓评论上报必须把 douyin_id 落进 lead，否则 Seg4 私信派单永远无号可发
+# （真机复现 2026-07-16，深挖 Seg3→Seg4 断链的两个真根因之一）
+#
+# 真机段等价断言 + TODO：真机侧根因是 DouyinCollectService.kt 事件驱动竞态
+# （评论面板连续多条 accessibility 事件各自调度出并发 attemptExtractComments()，
+# 已在本 PR 用 mayScheduleCommentExtraction 闸门修复，纯逻辑无法用 curl smoke
+# 复现，靠 Kotlin 单测 DouyinCollectServiceStateTest.kt 锁定）。这一步覆盖的是
+# 与之配对的服务端断链：即便设备真读到了号，/collect/report 此前从不接收/落库
+# douyin_id——本 Step 直接验证服务端这一半，设备侧竞态修复见上方 PR 描述。
+# TODO(Android evaluator 通道)：接管后应把"设备真机点评论人头像→读到号→
+# /collect/report 带号"这段也纳入真机 nightly 复跑。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 15: 抓评论上报补写 douyin_id——Seg4 派单精确定位号的唯一来源"
+S15_TMP=$(mktemp)
+S15_VIDEO="p2smokedouyinid${RND//-/}"
+S15_DOUYIN_ID="douyinid${RND//-/}"
+
+S15_HTTP=$(curl -s -o "$S15_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/collect/start" \
+  -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" \
+  -d '{"keywords":["p2-smoke-douyinid"]}')
+[ "$S15_HTTP" = "200" ] || fail "Step 15a collect/start expected 200, got $S15_HTTP" 15
+S15_TASK=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S15_TMP" 2>/dev/null)
+[ -n "$S15_TASK" ] || fail "Step 15a 无 task_id" 15
+
+S15_HTTP=$(curl -s -o "$S15_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/collect/report" \
+  -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
+  -d "{\"task_id\":\"$S15_TASK\",\"video_id\":\"$S15_VIDEO\",\"commenters\":[{\"nickname\":\"p2smoke昵称${RND}\",\"comment_text\":\"求联系方式\",\"douyin_id\":\"$S15_DOUYIN_ID\"}],\"terminal\":true}")
+[ "$S15_HTTP" = "200" ] || fail "Step 15b collect/report expected 200, got $S15_HTTP: $(cat "$S15_TMP")" 15
+S15_INSERTED=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data'].get('inserted', 0))" "$S15_TMP" 2>/dev/null)
+[ "$S15_INSERTED" = "1" ] || fail "Step 15b 应新建 1 条 lead，实际 inserted=$S15_INSERTED" 15
+ok "Step 15b ✅ collect/report 接受 douyin_id 字段（不 400）"
+
+# 核心回归断言：acquisition_leads.douyin_id 真的落库了，不是被吃掉变成 NULL
+S15_DB_DOUYIN_ID=$(psq "SELECT COALESCE(douyin_id,'<NULL>') FROM zenithjoy.acquisition_leads WHERE tenant_id='$TENANT_ID' AND collect_task_id='$S15_TASK' LIMIT 1")
+[ "$S15_DB_DOUYIN_ID" = "$S15_DOUYIN_ID" ] || fail "Step 15c acquisition_leads.douyin_id='$S15_DB_DOUYIN_ID' 期望 '$S15_DOUYIN_ID'——douyin_id 未落库，Seg4 派单会永远无号可发（NO_MATCH 老 bug 复发）" 15
+ok "Step 15c ✅ douyin_id 真的落进 acquisition_leads，Seg4 派单有号可发"
+ok "Step 15 ✅ 抓评论 douyin_id 落库回归通过"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
-      "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" 2>/dev/null
+      "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" 2>/dev/null
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Path 2 14 步本地版 smoke 全绿（服务端段）"
+echo "  ✅ Path 2 15 步本地版 smoke 全绿（服务端段）"
 echo "  真机段：等 Android evaluator 通道（xian-rog nightly）接管复跑"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 exit 0
