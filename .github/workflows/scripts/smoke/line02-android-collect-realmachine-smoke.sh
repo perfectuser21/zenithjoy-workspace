@@ -53,6 +53,23 @@ curl -fsSk -m 10 "$API_BASE/api/acquisition/overview" -H "X-Tenant-Id: $TENANT" 
   || envfail "staging API 不可达: $API_BASE"
 ok "staging API 可达"
 
+# 设备重装/重新注册后 agent_id(UUID)会变,SMOKE_AGENT 硬编码默认值必然漂移过期
+# (2026-07-09/2026-07-16 两次真机复现同一坑:任务/seed 派给一个设备早已不再轮询的旧
+# agent_id,采集永远 status=pending 卡死,表面像"采集坏了"实则是派错对象——必须在下面
+# seed 之前拿到真实值,否则 seed 把错的 agent_id 绑进 license,collect/start 照样派错)。
+# 设备完整跑完一次 initAgent() 后一定会打印"agent started — agentId=<uuid>"
+# (AgentService.kt 收尾日志),从这里动态取当前真实身份;只有显式传了 SMOKE_AGENT 才用
+# 固定值(供调试锁定某台设备用)。
+if [ -z "${SMOKE_AGENT:-}" ]; then
+  LIVE_AGENT=$("$ADB" logcat -d 2>/dev/null | grep -oE 'agent started — agentId=[a-f0-9-]{36}' | tail -1 | sed -E 's/.*agentId=//')
+  if [ -n "$LIVE_AGENT" ]; then
+    AGENT_ID="$LIVE_AGENT"
+    ok "动态取到设备当前真实 agent_id=$AGENT_ID（非硬编码默认值）"
+  else
+    envfail "logcat 里找不到 'agent started — agentId=' 记录，设备可能从没跑完 initAgent（无障碍/截图授权后需强杀重启 App 让 initAgent 冷启动跑一遍，重启AGENT服务按钮在进程存活时不会重跑已初始化的轮询循环）"
+  fi
+fi
+
 # ── 0. 自愈: 幂等 seed 固定测试租户(抗 staging DB 重置) ─────────────────
 # 真机 smoke 硬编码固定租户/agent,环境隔离重置 zenithjoy_test 会冲掉→collect/start 外键 500。
 # 派任务前先幂等补齐,DB 重置后自动恢复,不再靠人工 seed。seed 失败=服务端/环境问题,非采集红。
