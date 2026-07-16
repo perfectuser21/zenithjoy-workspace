@@ -66,10 +66,13 @@ jobs:
           # `npm run migrate`，新 docker 化流程从没补上，导致 migration 文件合并进 main 后
           # 从未真正应用到 staging 库，直到 Path2 真机验证时才在 acquisition_leads.douyin_id
           # 上撞出来（2026-07-16 真机复现：查询该列报 column does not exist）。
+          # apps/api/tsconfig.json 继承 monorepo 根 tsconfig.base.json——只挂 apps/api 目录
+          # ts-node 解析不到父级 tsconfig 会报 TS5083 Cannot read file '/tsconfig.base.json'，
+          # 必须把整个仓库挂进去，workdir 落在 apps/api 子目录。
           docker run --rm \
             --network zenithjoy-net \
             --env-file /opt/zenithjoy/staging-api/.env \
-            -v "$REPO/apps/api":/app -w /app \
+            -v "$REPO":/repo -w /repo/apps/api \
             node:20-alpine sh -c "npm install --silent && npx ts-node db/migrations/run-migration.ts"
 
           echo "=== [3/4] docker build + up（仅 staging，绝不碰生产容器）==="
