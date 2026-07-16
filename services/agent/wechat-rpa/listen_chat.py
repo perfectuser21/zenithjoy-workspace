@@ -1271,7 +1271,8 @@ _HEADER_READ_RETRY_SLEEP = 0.3
 
 def _header_confirms_not_group(read_fn: Any, retries: int = _HEADER_READ_RETRIES,
                                 retry_delay_s: float = _HEADER_READ_RETRY_SLEEP,
-                                sleep_fn: Any = time.sleep) -> bool:
+                                sleep_fn: Any = time.sleep,
+                                title_matches_fn: Optional[Any] = None) -> bool:
     """fail-closed 判群闸（2026-07-16 真机事故根治：招商雍澜湾业主群被自动回复）。
 
     read_fn() -> List[str]：读一次标题文本（通常是 `lambda: _read_chat_header_texts(mw)`）。
@@ -1279,16 +1280,30 @@ def _header_confirms_not_group(read_fn: Any, retries: int = _HEADER_READ_RETRIES
     返回 False（不允许发送）**——群一旦误发不可逆，语义必须是"读不清就不发"，
     不能像旧逻辑那样"读不清就当私聊放行"（fail-open，是本次事故根因）。
 
+    title_matches_fn() -> Optional[bool]（同 `_read_trailing_for` 的 F3 同款面板归属校验，
+    通常是 `lambda: _chat_title_matches(mw, sender)`）：2026-07-16 真机回归——连续切换会话
+    时标题面板渲染滞后，读到**上一个会话**残留的标题（如上一个是群，这一个是私聊），旧版
+    只看"有没有 (N) 人数模式"会把残留的群标题误判成当前联系人是群。`title_matches_fn`
+    明确返回 False（读到标题但确定不属于当前联系人）时本轮不可信，重试等面板追上；
+    True/None 不拦截（群聊标题本身不会跟纯联系人名精确匹配，`_chat_title_matches` 对
+    真群天然返回 False，最终仍会走到 fail-closed，结果不变）。不传（None）=向后兼容，
+    不做归属校验。
+
     返回 True = 确认标题非群（可以发送）；False = 确认是群，或重试后仍无法判定。
-    纯逻辑（CI 可测，read_fn/sleep_fn 全部注入）。
+    纯逻辑（CI 可测，read_fn/title_matches_fn/sleep_fn 全部注入）。
     """
     for i in range(retries):
+        if title_matches_fn is not None and title_matches_fn() is False:
+            # 读到的标题存在但确定不属于当前联系人（很可能是上一个会话残留）→ 不采信
+            if i < retries - 1:
+                sleep_fn(retry_delay_s)
+            continue
         texts = read_fn()
         if texts:
             return _is_group_by_header(texts) is None
         if i < retries - 1:
             sleep_fn(retry_delay_s)
-    return False  # 重试耗尽仍读空 → fail-closed
+    return False  # 重试耗尽仍读空/仍未确认归属 → fail-closed
 
 
 def _should_cache_known_group(sender: str,
@@ -2914,7 +2929,10 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
             # fail-closed（2026-07-16 根治）：标题读空≠私聊——重试耗尽仍读不到才允许发送这条
             # 判断本身必须反过来，读不清就不发（_header_confirms_not_group），不能像旧逻辑
             # 那样把"读不到"和"确认是私聊"混为一谈。
-            if not _header_confirms_not_group(lambda: _read_chat_header_texts(fmw)):
+            if not _header_confirms_not_group(
+                lambda: _read_chat_header_texts(fmw),
+                title_matches_fn=lambda: _chat_title_matches(fmw, sender),
+            ):
                 _log(f"reply_in_chat: {sender!r} 判群不通过（是群，或标题读不到=fail-closed）→ 跳过不回（skip_group）")
                 return False
         else:

@@ -436,6 +436,51 @@ else
 fi
 
 # ───────────────────────────────────────────────────────────────────
+# Step 14d：私聊不能被上一个会话残留的群标题误判（2026-07-16 17:51 真机回归：
+# 「❤柚子挖小样C598」这类真实私聊联系人被 fail-closed 闸误判成群跳过不回）。
+# 根因：连续切换会话时标题面板渲染滞后，读到上一个会话（群）残留的标题——
+# _header_confirms_not_group 只看有没有"(N)"人数模式，不看标题是否属于当前联系人。
+# 纯函数等价断言：title_matches_fn 归属校验（同 _read_trailing_for 的 F3 同款模式）。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 14d: 私聊不被上一会话残留群标题误判（真机回归根治）"
+
+if python3 -c "
+import sys
+sys.path.insert(0, 'services/agent/wechat-rpa')
+import listen_chat
+
+panel_state = {'rendered': 0}
+
+def read_fn():
+    if panel_state['rendered'] < 2:
+        return ['(321)']  # 残留上一个群(321人)的标题
+    return ['❤柚子挖小样C598']  # 面板真正切过来后的私聊标题（无括号）
+
+def title_matches_fn():
+    return panel_state['rendered'] >= 2
+
+def sleep_fn(_delay):
+    panel_state['rendered'] += 1
+
+ok1 = listen_chat._header_confirms_not_group(
+    read_fn, retries=4, retry_delay_s=0.0, sleep_fn=sleep_fn, title_matches_fn=title_matches_fn,
+)
+assert ok1 is True, 'stale-header regression: private contact wrongly blocked as group'
+
+# 真群：title_matches_fn 对纯群名从不精确匹配，最终仍应 fail-closed（结果不变）
+ok2 = listen_chat._header_confirms_not_group(
+    lambda: ['招商雍澜湾业主群(497)'], retries=2, retry_delay_s=0.0,
+    sleep_fn=lambda s: None, title_matches_fn=lambda: False,
+)
+assert ok2 is False
+print('OK')
+" 2>&1 | grep -q '^OK$'; then
+  ok "Step 14d ✅ 标题归属校验正确（残留群标题不再误伤私聊，真群仍正确拦截）"
+else
+  fail "Step 14d 私聊被上一会话残留群标题误判回归（真机事故 2026-07-16 17:51 复发风险）" 14
+fi
+
+# ───────────────────────────────────────────────────────────────────
 # Step 15：客户桌面浮窗实时看到"正在回复谁+推理摘要+发送中→已送达"
 # events.jsonl 单写者（listen_chat），PR#1315 已合并——纯函数等价断言 + DELIVERED 挂接回归
 # ───────────────────────────────────────────────────────────────────
