@@ -444,7 +444,45 @@ print('PASS')
 else
   fail "Step 16b 画像面板联动端到端断言失败" 16
 fi
-ok "Step 16 ✅ 会话跟随客户画像面板联动通"
+
+# 16c：真渲染断言——evaluator 独立评审发现的缺口回归：调用链接上不等于用户能看到画像卡。
+# 验证 HTML 模板真定义了 window.__updateCustomerCard + 画像卡 DOM 容器，且 switch_customer
+# 真把完整六字段传给 evaluate_js（不能只传 nickname/level 两个字段）。
+if python3 -c "
+import sys, json
+sys.path.insert(0, 'services/agent/wechat-rpa')
+from overlay.overlay_window import OverlayApp
+
+html = OverlayApp.HTML_TEMPLATE
+assert 'window.__updateCustomerCard = function' in html or 'function __updateCustomerCard' in html, \
+    'HTML_TEMPLATE 未真定义 window.__updateCustomerCard（只有调用点没有定义）'
+for dom_id in ['profile-nickname', 'profile-level', 'profile-source',
+               'profile-contact-count', 'profile-actions', 'profile-ai']:
+    assert dom_id in html, f'HTML_TEMPLATE 缺画像卡 DOM 容器 id={dom_id}'
+
+class _FakeWindow:
+    def __init__(self):
+        self.last_call = None
+    def evaluate_js(self, js):
+        self.last_call = js
+
+app = OverlayApp(state_dir='/tmp')
+app._window = _FakeWindow()
+app._fetch_customer_profile = lambda wid: {
+    'level': 'VIP', 'nickname': '客户甲', 'source': '抖音',
+    'contact_count': 3, 'recent_actions': ['咨询价格'], 'ai_profile': '高意向',
+}
+app.switch_customer('wxid_smoke_test')
+call = app._window.last_call or ''
+for val in ['客户甲', 'VIP', '抖音', '咨询价格', '高意向']:
+    assert val in call, f'evaluate_js 调用未含字段值 {val!r}（六字段未真传全）: {call[:200]}'
+print('PASS')
+" 2>&1 | tail -1 | grep -q "PASS"; then
+  ok "Step 16c ✅ 真渲染断言：HTML 真定义渲染函数+DOM 容器，switch_customer 真传完整六字段"
+else
+  fail "Step 16c 画像卡真渲染断言失败（evaluator 发现的缺口：调用链接上但渲染落地不存在）" 16
+fi
+ok "Step 16 ✅ 会话跟随客户画像面板联动通（含真渲染验证）"
 
 echo ""
 # Step 3 补充：扫描前守卫纯函数等价断言（v1.0.120，issue 99741ff9 补丁）

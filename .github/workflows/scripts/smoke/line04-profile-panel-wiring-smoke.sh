@@ -65,6 +65,41 @@ assert called == [], f'current_customer 已相同不应重复切换，实际: {c
 print('PASS: 不重复切换正常')
 "
 
+# Step-panel-3b: 真渲染断言——evaluator 独立评审发现的缺口回归：调用链接上不等于用户能看到画像卡。
+# HTML 模板必须真定义 window.__updateCustomerCard + 画像卡 DOM 容器；switch_customer 必须
+# 真把完整六字段传给 evaluate_js（此前只传了 nickname/level 两个字段，其余四个从未离开 Python）。
+echo "[Step-panel-3b] 画像卡真渲染（HTML定义+DOM容器+完整六字段传递）..."
+$PYTHON -c "
+import sys
+sys.path.insert(0, 'services/agent/wechat-rpa')
+from overlay.overlay_window import OverlayApp
+
+html = OverlayApp.HTML_TEMPLATE
+assert 'window.__updateCustomerCard = function' in html or 'function __updateCustomerCard' in html, \
+    'FAIL: HTML_TEMPLATE 未真定义 window.__updateCustomerCard（只有调用点没有定义）'
+for dom_id in ['profile-nickname', 'profile-level', 'profile-source',
+               'profile-contact-count', 'profile-actions', 'profile-ai']:
+    assert dom_id in html, f'FAIL: HTML_TEMPLATE 缺画像卡 DOM 容器 id={dom_id}'
+
+class _FakeWindow:
+    def __init__(self):
+        self.last_call = None
+    def evaluate_js(self, js):
+        self.last_call = js
+
+app = OverlayApp(state_dir='/tmp')
+app._window = _FakeWindow()
+app._fetch_customer_profile = lambda wid: {
+    'level': 'VIP', 'nickname': '客户甲', 'source': '抖音',
+    'contact_count': 3, 'recent_actions': ['咨询价格'], 'ai_profile': '高意向',
+}
+app.switch_customer('wxid_smoke_test')
+call = app._window.last_call or ''
+for val in ['客户甲', 'VIP', '抖音', '咨询价格', '高意向']:
+    assert val in call, f'FAIL: evaluate_js 调用未含字段值 {val!r}（六字段未真传全）: {call[:200]}'
+print('PASS: HTML 真定义渲染函数+DOM 容器，switch_customer 真传完整六字段')
+"
+
 # Step-panel-4: 三版本面一致性（walking-skeleton heartbeat = modules = build-modules）
 echo "[Step-panel-4] line04 三版本面一致性..."
 V_MOD=$(node -e "process.stdout.write(require('./services/agent/modules/line04/manifest.json').version)")

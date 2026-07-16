@@ -566,6 +566,25 @@ class OverlayApp:
   .delivered { display:inline-block; font-size:9px; color:#4ade80;
     background:rgba(74,222,128,.10); border:1px solid rgba(74,222,128,.2);
     border-radius:4px; padding:0 4px; margin-left:4px; vertical-align:middle; }
+
+  /* Step16：会话跟随客户画像卡 */
+  .profile-card {
+    display: none;
+    flex-direction: column; gap: 3px;
+    padding: 7px 12px; margin: 0 10px 6px;
+    background: rgba(96,165,250,.06); border: 1px solid rgba(96,165,250,.14);
+    border-radius: 8px; flex-shrink: 0;
+  }
+  .profile-row { display: flex; align-items: center; gap: 6px; }
+  .profile-nickname { font-size: 12px; font-weight: 700; color: #e2e8f0; }
+  .profile-level {
+    font-size: 9px; font-weight: 700; color: #fbbf24;
+    background: rgba(245,158,11,.11); border: 1px solid rgba(245,158,11,.25);
+    border-radius: 4px; padding: 0 5px;
+  }
+  .profile-meta { font-size: 10px; color: #94a3b8; display: flex; gap: 10px; }
+  .profile-actions { font-size: 10px; color: #93c5fd; }
+  .profile-ai { font-size: 10px; color: #64748b; font-style: italic; }
 </style>
 </head>
 <body>
@@ -574,6 +593,18 @@ class OverlayApp:
   <div class="clock" id="clock">--</div>
   <div class="reply-count" id="reply-count">今日已回复 0</div>
   <div class="close-btn" onclick="window.pywebview && window.pywebview.api.close_window()">✕</div>
+</div>
+<div class="profile-card" id="profile-card">
+  <div class="profile-row">
+    <span class="profile-nickname" id="profile-nickname"></span>
+    <span class="profile-level" id="profile-level"></span>
+  </div>
+  <div class="profile-meta">
+    <span id="profile-source"></span>
+    <span id="profile-contact-count"></span>
+  </div>
+  <div class="profile-actions" id="profile-actions"></div>
+  <div class="profile-ai" id="profile-ai"></div>
 </div>
 <div class="thinking-area idle" id="ta">
   <span class="thinking-label">状态</span>
@@ -617,6 +648,22 @@ function addCard(badgeCls, badgeTxt, bodyHtml) {
 
 function setThinking(text) { ta.classList.remove('idle'); tt.textContent = text || '思考中...'; }
 function setIdle(text)     { ta.classList.add('idle');    tt.textContent = text || '待机中'; }
+
+// Step16：会话跟随客户画像卡——真渲染六字段（level/nickname/source/contact_count/recent_actions/ai_profile）
+window.__updateCustomerCard = function(profile) {
+  const card = document.getElementById('profile-card');
+  if (!card || !profile) return;
+  card.style.display = 'flex';
+  document.getElementById('profile-nickname').textContent = profile.nickname || '';
+  document.getElementById('profile-level').textContent = profile.level || '';
+  document.getElementById('profile-source').textContent = profile.source ? ('来源: ' + profile.source) : '';
+  document.getElementById('profile-contact-count').textContent =
+    (profile.contact_count !== undefined && profile.contact_count !== null)
+      ? ('联系次数: ' + profile.contact_count) : '';
+  const actions = Array.isArray(profile.recent_actions) ? profile.recent_actions.join('、') : '';
+  document.getElementById('profile-actions').textContent = actions ? ('近期动态: ' + actions) : '';
+  document.getElementById('profile-ai').textContent = profile.ai_profile || '';
+};
 
 function renderEvent(ev) {
   if (ev.type === 'degraded') { setIdle(ev.msg || 'AI 客服暂时休息中'); return; }
@@ -701,14 +748,12 @@ setInterval(poll, 500);
         profile = self._fetch_customer_profile(wechat_id)
         self.current_customer = wechat_id
         self._current_profile = profile
-        # 如果浮窗已开启，通过 JS 更新画像卡 DOM
+        # 如果浮窗已开启，通过 JS 更新画像卡 DOM（传完整六字段，不是只挑 nickname/level）
         if self._window is not None:
             try:
-                nickname = profile.get("nickname", wechat_id)
-                level = profile.get("level", "")
                 self._window.evaluate_js(
                     f"window.__updateCustomerCard && window.__updateCustomerCard("
-                    f"{json.dumps({'nickname': nickname, 'level': level}, ensure_ascii=False)})"
+                    f"{json.dumps(profile, ensure_ascii=False)})"
                 )
             except Exception:
                 pass  # JS 调用失败不影响状态更新
