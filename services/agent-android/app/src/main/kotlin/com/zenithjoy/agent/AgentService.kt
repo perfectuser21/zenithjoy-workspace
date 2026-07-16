@@ -53,10 +53,10 @@ class AgentService : Service() {
     private val serviceJob = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + serviceJob)
     private val gson = Gson()
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .build()
+    // 真机复现(2026-07-17)：这个客户端只服务极低频调用(报告类端点数分钟一次)，长时间
+    // 空闲后 OkHttp 默认连接池里的连接会被网络切换/NAT 超时静默弄坏——复用时写入成功但
+    // 读永远拿不到响应，直到 connectTimeout 才报错(见 buildReportHttpClient 注释)。
+    private val httpClient = buildReportHttpClient()
 
     private lateinit var config: AgentConfig
     private var wsClient: WsClient? = null
@@ -802,6 +802,23 @@ class AgentService : Service() {
     companion object {
         private const val TAG = "AgentService"
         private const val NOTIFICATION_ID = 1001
+
+        /**
+         * 构造供 dm-outreach-result / warmup-result 等低频报告类端点使用的 OkHttpClient。
+         * 真机复现(2026-07-17 xian-rog)：这类调用数分钟才发生一次，OkHttp 默认连接池
+         * （最多 5 条空闲连接、保留 5 分钟）会在这段空闲期间遇到网络切换/NAT 超时，
+         * 静默弄坏池里的连接——下次复用时写入成功但读永远拿不到响应，直到 connectTimeout
+         * 才报错（而非快速失败重连）。HttpHeartbeatLoop 用的是【独立的】OkHttpClient 实例，
+         * 靠自己每 30s 一次的高频调用让连接保持常新，从不复用到静默失效的连接——这正是
+         * "心跳一直正常、回执一直 timeout"的原因。maxIdleConnections=0 让这个低频客户端
+         * 每次调用都开新连接，不留旧连接可复用，从根上消除这整类"复用僵尸连接"的问题；
+         * 调用频率本身极低，多付的一次握手开销可忽略。
+         */
+        internal fun buildReportHttpClient(): OkHttpClient = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .connectionPool(okhttp3.ConnectionPool(0, 1, TimeUnit.SECONDS))
+            .build()
 
         // Line02 warmup 判别符：中台 INSERT publish_tasks 时把 task_type 放进 payload，
         // 经心跳 ...realPayload 透传到 agent。不能靠 task.type（getQueuedTasks 只 select
