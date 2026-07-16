@@ -4287,6 +4287,14 @@ agent_suite:
     product: 客户私域AI接管
     note: "regression(2026-07-04, decision 72740815 根因③): start.bat launcher 级 .launcher.lock last-writer-wins 互斥+每轮 owner 重验+ZJ_SUPERVISED=1——治多版本 supervise 循环并存互杀 core（v2.0.52/v2.0.69×3 僵尸实锤）。"
 
+  - id: agent-start-bat-env-append-encoding
+    path: services/agent/src/__tests__/start-bat-env-append-encoding.test.ts
+    type: unit
+    ci: L1
+    status: active
+    product: 客户私域AI接管
+    note: "regression(2026-07-16, 多台真实客户机复现): start.bat 三处 .env 幂等追加检查(ZENITHJOY_AGENT_DRYRUN_BROWSER/ZENITHJOY_AGENT_REAL_PUBLISH/ZENITHJOY_ENV)显式指定 -Encoding utf8——治 PowerShell 5.1 编码探测歧义导致同一字段被反复追加（真机实锤 ZENITHJOY_ENV=prod 追加 9 次）。"
+
   - id: agent-core-upgrader-unsupervised-handoff
     path: services/agent/src/__tests__/core-upgrader-unsupervised-handoff.test.ts
     type: unit
