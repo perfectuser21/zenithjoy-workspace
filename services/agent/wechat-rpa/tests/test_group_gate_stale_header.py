@@ -35,23 +35,23 @@ def test_stale_group_header_from_previous_chat_does_not_block_private_reply():
     （False）→ 不采信、重试；面板追上后 title 匹配（True）+ 读到真实私聊标题（非群）
     → 必须允许发送（True）。
     """
-    read_calls = {"n": 0}
+    # 面板渲染进度用共享状态模拟：真实世界里面板是随时间推进（重试之间的 sleep）
+    # 才追上的，不是随读取次数推进——sleep_fn 每被调一次代表面板往前渲染了一步。
+    panel_state = {"rendered": 0}
 
     def read_fn():
-        read_calls["n"] += 1
-        if read_calls["n"] <= 2:
+        if panel_state["rendered"] < 2:
             return ["(321)"]  # 残留上一个群的标题
         return ["❤柚子挖小样C598"]  # 面板真正切过来后的私聊标题（无括号）
 
-    title_match_calls = {"n": 0}
-
     def title_matches_fn():
-        title_match_calls["n"] += 1
-        # 前两次面板还没切过来（残留群标题），第三次真正切到目标联系人
-        return title_match_calls["n"] >= 3
+        return panel_state["rendered"] >= 2
+
+    def sleep_fn(_delay):
+        panel_state["rendered"] += 1
 
     ok = listen_chat._header_confirms_not_group(
-        read_fn, retries=3, retry_delay_s=0.0, sleep_fn=lambda s: None,
+        read_fn, retries=4, retry_delay_s=0.0, sleep_fn=sleep_fn,
         title_matches_fn=title_matches_fn,
     )
     assert ok is True, (
