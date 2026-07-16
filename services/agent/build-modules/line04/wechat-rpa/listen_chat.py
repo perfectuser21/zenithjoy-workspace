@@ -1722,6 +1722,42 @@ def _session_list_center_point(mw: Any) -> Optional[tuple]:
 # 真硬件滚轮档数：clicks 负=下滚，每 click=120（一档）。-3 ≈ 旧 _WHEEL_DELTA -360。
 _WHEEL_CLICKS = -3
 
+# 滚轮避让阈值（2026-07-16 用户真机反馈：抢键盘鼠标，人没法用）：真实硬件滚轮扫描
+# 前先查用户最近一次真实输入距今多久，低于此阈值视为"正在活跃使用"，本轮跳过滚动
+# 扫描避免打断，下一轮再试（不影响已排队回复的发送时效）。
+_SCROLL_DEFER_IDLE_THRESHOLD_MS = 1500
+
+
+def should_defer_scroll_for_active_user(idle_ms: int) -> bool:
+    """纯函数（CI 可测）：用户最近 idle_ms 毫秒内有过真实输入 → 本轮该不该避让滚动扫描。
+
+    idle_ms < 阈值 → True（避让，跳过本次真实鼠标滚轮扫描）；
+    idle_ms >= 阈值（含等于）→ False（用户已经够久没操作，可以安全滚动）。
+    """
+    return idle_ms < _SCROLL_DEFER_IDLE_THRESHOLD_MS
+
+
+def _get_system_idle_ms() -> Optional[int]:
+    """读系统级"距上次真实鼠标/键盘输入过去多少毫秒"（GetLastInputInfo，跨进程/跨窗口）。
+
+    读不到（非 Windows / API 失败）→ None，调用方应视为"无法判断，按不打扰处理"
+    （即不做滚动避让判断本身失败时的降级不属于本函数职责，由调用方决定兜底）。
+    """
+    try:
+        import ctypes as _ct
+
+        class _LASTINPUTINFO(_ct.Structure):
+            _fields_ = [("cbSize", _ct.c_uint), ("dwTime", _ct.c_uint)]
+
+        lii = _LASTINPUTINFO()
+        lii.cbSize = _ct.sizeof(_LASTINPUTINFO)
+        if not _ct.windll.user32.GetLastInputInfo(_ct.byref(lii)):
+            return None
+        tick_count = _ct.windll.kernel32.GetTickCount()
+        return max(0, tick_count - lii.dwTime)
+    except Exception:
+        return None
+
 
 def _scroll_session_list_wheel(mw: Any) -> None:
     """滚动会话列表翻屏（不抢前台焦点）。
@@ -1737,7 +1773,15 @@ def _scroll_session_list_wheel(mw: Any) -> None:
     （WM_MOUSEMOVE 建悬停 + WM_MOUSEWHEEL），别硬崩。
 
     每屏滚 _WHEEL_PULSES_PER_PAGE 次（单次不够一屏）。失败吞掉（滚不动 = 累计按无新增自然终止）。
+
+    2026-07-16 根治（用户真机反馈：抢键盘鼠标，人没法用）：真实硬件滚轮会挪动客户机
+    操作者的真实光标——扫描前先查系统级空闲时间，用户刚操作过（默认 1.5s 内）就
+    跳过本轮滚动，下一轮再试，避免打断正在使用电脑的人。
     """
+    idle_ms = _get_system_idle_ms()
+    if idle_ms is not None and should_defer_scroll_for_active_user(idle_ms):
+        _log(f"_scroll_session_list_wheel: 用户 {idle_ms}ms 前刚操作过，本轮避让跳过滚动扫描")
+        return
     try:
         import ctypes as _ct
         main_hwnd = mw.element_info.handle
