@@ -60,6 +60,11 @@ export async function judgeVideo(
   );
   if (existing.rows.length > 0) {
     const row = existing.rows[0] as { judgment_status: string; judgment_reason: string | null };
+    // 缓存命中也必须写库：writeJudgment/markPending 都按 (tenant_id, video_id) UPDATE，
+    // 不分 task_id——同一热门视频被多个采集任务重复抓到时，新任务 Stage1 刚 INSERT 的
+    // 那一行 judgment_status 仍是初始值 'pending'，不写这一步就永远没人碰它，卡死 pending
+    // （真机复现 2026-07-16：API 明明返回 cache_hit=true/matched，DB 行却永远 pending）。
+    await writeJudgment(pool, tenantId, videoId, captureType, row.judgment_status, row.judgment_reason);
     return {
       judgment_status: row.judgment_status as JudgeVideoResult['judgment_status'],
       judgment_reason: row.judgment_reason,
