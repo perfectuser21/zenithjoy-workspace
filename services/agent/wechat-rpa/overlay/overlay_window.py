@@ -422,10 +422,13 @@ class EventTailConsumer:
                     if self._last_heartbeat_ts is None or ts > self._last_heartbeat_ts:
                         self._last_heartbeat_ts = ts
 
-        # heartbeat 超时降级（BEHAVIOR-4）
+        # heartbeat 超时降级（BEHAVIOR-4）——2026-07-16 根治：degraded 状态只是
+        # UI 顶部"休息中"提示，不能拿它短路掉同批真实事件（真机上 listen_chat.py
+        # 从未写过 "heartbeat" 类型事件，此条件因此永远成立，旧逻辑会把
+        # reply_sent 等真实事件永久吞掉，画像卡因此永远没有数据可显示）。
         now = time.time()
-        if self._last_heartbeat_ts is None or (now - self._last_heartbeat_ts) > self.HEARTBEAT_TIMEOUT_SEC:
-            return [dict(self.DEGRADED_EVENT)]
+        degraded = (self._last_heartbeat_ts is None
+                    or (now - self._last_heartbeat_ts) > self.HEARTBEAT_TIMEOUT_SEC)
 
         # 幂等去重（精确 event_id 匹配）
         new_events = []
@@ -437,6 +440,8 @@ class EventTailConsumer:
                 self._seen_ids.add(eid)
             new_events.append(ev)
 
+        if degraded:
+            return [dict(self.DEGRADED_EVENT)] + new_events
         return new_events
 
 

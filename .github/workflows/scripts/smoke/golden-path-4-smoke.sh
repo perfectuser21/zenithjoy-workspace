@@ -514,6 +514,32 @@ OVERLAY_DIR="services/agent/wechat-rpa/overlay"
 WRITE_OPENS=$(grep -rn 'open.*"a"\|open.*"w"' "$OVERLAY_DIR" --include="*.py" 2>/dev/null | grep -i "events" | grep -v "^[[:space:]]*#" | grep -v "__pycache__" || true)
 [ -z "$WRITE_OPENS" ] || fail "Step 15c overlay 目录含 events 写入调用（违反单写者约束）: $WRITE_OPENS" 15
 ok "Step 15c ✅ overlay 只读消费 events.jsonl（单写者约束）"
+
+# Step 15d：心跳超时 degraded 状态不能吞掉同批真实事件（2026-07-16 真机回归：
+# listen_chat.py 全文件从未写过 heartbeat 类型事件，EventTailConsumer 的
+# _last_heartbeat_ts 永远是 None，旧逻辑 `return [DEGRADED_EVENT]` 短路掉所有
+# 真实 reply_sent 事件，画像卡因此永远显示不出内容）。
+grep -qn '_write_event("heartbeat"' "$LISTEN_CHAT_MAIN" || fail "Step 15d run_real_listen 未找到 _write_event(\"heartbeat\") 调用" 15
+if python3 -c "
+import sys, os, json, tempfile
+sys.path.insert(0, 'services/agent/wechat-rpa')
+from overlay.overlay_window import EventTailConsumer
+
+state_dir = tempfile.mkdtemp(prefix='zj-gp4-smoke-heartbeat-')
+with open(os.path.join(state_dir, 'events.jsonl'), 'w', encoding='utf-8') as f:
+    f.write(json.dumps({'type': 'reply_sent', 'event_id': 'e-1', 'contact': 'gp4smoke联系人'}, ensure_ascii=False) + '\n')
+
+consumer = EventTailConsumer(state_dir)
+events = consumer.get_events()
+types = [e.get('type') for e in events]
+assert 'reply_sent' in types, f'真实事件被吞: {events}'
+print('PASS')
+" 2>&1 | tail -1 | grep -q "PASS"; then
+  ok "Step 15d ✅ 心跳短路不再吞真实事件（画像卡永空白根因已修）"
+else
+  fail "Step 15d overlay 心跳短路回归——画像卡可能永远显示不出内容" 15
+fi
+
 ok "Step 15 ✅ AI 思考浮窗动态流通（golden path 当前终点）"
 
 # ───────────────────────────────────────────────────────────────────

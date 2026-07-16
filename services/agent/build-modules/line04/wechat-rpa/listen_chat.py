@@ -4634,6 +4634,10 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 )
                 # 自愈件4：写本地健康文件（line04 模块读它合成真实健康 → IPC 上报 core）
                 write_health_file(diag, last_delivery_ts)
+                # 2026-07-16 根治：同步写一条 heartbeat 事件到 events.jsonl，overlay 的
+                # EventTailConsumer 才能真实判定"AI 客服在线"（此前从未写过，degraded
+                # 状态因此永久成立，跟真实运行状态无关）。
+                _write_event("heartbeat", "")
                 last_heartbeat = now
                 if not hb.get("ok"):
                     _log(f"心跳上报失败: {hb.get('error')}")

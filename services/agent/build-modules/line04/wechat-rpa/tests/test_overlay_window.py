@@ -68,6 +68,11 @@ def test_tail_consumer_skips_bad_lines_and_dedups(tmp_path):
 
 
 def test_tail_consumer_stale_heartbeat_degrades(tmp_path):
+    """心跳过期 → degraded 事件必须出现（供浮窗顶部状态展示"休息中"），
+    但**不能吞掉同批真实事件**（2026-07-16 真机回归：画像卡永远显示不出内容，
+    根因是这里曾经 `return [DEGRADED_EVENT]` 直接短路，真实 reply_sent 被整批丢弃，
+    switch_customer 永远不会被下游调用）。
+    """
     consumer = EventTailConsumer(str(tmp_path))
     stale_ts = time.time() - 3600  # 1 小时前
     _write_events(os.path.join(str(tmp_path), "events.jsonl"), [
@@ -75,9 +80,32 @@ def test_tail_consumer_stale_heartbeat_degrades(tmp_path):
         {"type": "reply_sent", "event_id": "e-9", "contact": "李四"},
     ])
     events = consumer.get_events()
-    assert len(events) == 1
-    assert events[0]["type"] == "degraded"
-    assert "休息中" in events[0]["msg"]
+    types = [e["type"] for e in events]
+    assert "degraded" in types, "心跳过期必须仍然展示 degraded 状态"
+    assert "reply_sent" in types, (
+        "心跳过期不能吞掉同批真实事件——真机上 heartbeat 类型事件从未被写入过 "
+        "events.jsonl，此条件永远成立，真实事件因此被永久丢弃"
+    )
+    reply_events = [e for e in events if e["type"] == "reply_sent"]
+    assert reply_events[0]["contact"] == "李四"
+
+
+def test_tail_consumer_never_seen_heartbeat_still_returns_real_events(tmp_path):
+    """★核心回归点：events.jsonl 里从头到尾都没有 heartbeat 类型事件（真机现状——
+    listen_chat.py 全文件从未写过 heartbeat 事件）→ `_last_heartbeat_ts` 永远是
+    None → 旧逻辑永远判定 degraded 并短路返回，真实 contact 事件永远传不到
+    switch_customer。修复后必须仍能拿到真实事件，画像卡才有数据可用。
+    """
+    consumer = EventTailConsumer(str(tmp_path))
+    _write_events(os.path.join(str(tmp_path), "events.jsonl"), [
+        {"type": "reply_sent", "event_id": "e-1", "contact": "小美同学"},
+    ])
+    events = consumer.get_events()
+    contacts = [e.get("contact") for e in events if e.get("type") == "reply_sent"]
+    assert "小美同学" in contacts, (
+        "真机现状（从无 heartbeat 事件）下，真实事件必须仍能被消费到——"
+        "这是画像卡永远空白的根本 bug"
+    )
 
 
 def test_tail_consumer_missing_file_degrades_not_crash(tmp_path):

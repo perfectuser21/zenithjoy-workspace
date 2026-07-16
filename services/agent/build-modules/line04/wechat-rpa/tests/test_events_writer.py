@@ -96,3 +96,32 @@ def test_write_event_soft_fail_on_readonly_dir(tmp_path):
             listen_chat._write_event("reply_sent", "郑十", "只读目录测试", None)
     finally:
         readonly_dir.chmod(0o755)
+
+
+def test_run_real_listen_writes_heartbeat_event():
+    """★2026-07-16 画像卡永远空白根治：run_real_listen 主循环必须调用
+    _write_event("heartbeat", ...) 写进 events.jsonl，overlay 的 EventTailConsumer
+    才能真正判定"AI 客服在线"（否则 _last_heartbeat_ts 永远是 None，degraded
+    状态永久成立——纯 UI 提示层面的问题，但也是本次真机复盘该顺手治好的部分）。
+    """
+    import ast
+
+    src_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "listen_chat.py")
+    with open(src_path, encoding="utf-8") as f:
+        tree = ast.parse(f.read())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "run_real_listen":
+            writes_heartbeat = False
+            for n in ast.walk(node):
+                if (isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                        and n.func.id == "_write_event" and n.args
+                        and isinstance(n.args[0], ast.Constant)
+                        and n.args[0].value == "heartbeat"):
+                    writes_heartbeat = True
+                    break
+            assert writes_heartbeat, (
+                "run_real_listen 必须调用 _write_event(\"heartbeat\", ...) 写心跳事件到 "
+                "events.jsonl，否则 overlay 的 EventTailConsumer 永远判定不在线"
+            )
+            return
+    raise AssertionError("未找到 run_real_listen 函数")
