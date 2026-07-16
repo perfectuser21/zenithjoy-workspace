@@ -17,6 +17,9 @@ import crypto from 'node:crypto';
 import pool from '../db/connection';
 import { readInstallPackManifest } from './install-pack-manifest';
 
+/** 标准 UUID（含 nil UUID）格式校验——心跳 agentUuid 精确路径入库前必须先过这一关。 */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export interface LicenseRowMin {
   id: string;
   license_key: string;
@@ -283,7 +286,12 @@ export async function upsertAgentByHeartbeat(args: {
   }
 
   // ── 精确路径：按 agentUuid 直接 UPDATE（跳过 hostname 去重，防幽灵行） ──
-  if (agentUuid) {
+  // agentUuid 必须先过 UUID 格式校验才能塞进 `WHERE id = $3`（agents.id 是 uuid 列）。
+  // Android agent 自生成的标识是可读 slug（如 "agent-maa-an00-mrmt6yaa"），不是真
+  // UUID——不校验直接查会被 Postgres 类型层拒绝（22P02 invalid input syntax for
+  // type uuid），此前这个异常未捕获，直接冒泡成路由层裸 500，安卓真机永远注册不上
+  // （真机验证 2026-07-16 复现）。格式非法视同"未命中"，走下面 fall-through。
+  if (agentUuid && UUID_RE.test(agentUuid)) {
     const precise = await pool.query<AgentRow>(
       `UPDATE zenithjoy.agents
           SET version          = COALESCE($1, version),
