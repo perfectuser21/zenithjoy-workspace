@@ -133,9 +133,8 @@ class AgentService : Service() {
             val ok = intent.getBooleanExtra(DouyinCollectService.EXTRA_RESULT_OK, false)
             val commenterIds = intent.getStringArrayExtra(DouyinCollectService.EXTRA_RESULT_COMMENT_IDS) ?: emptyArray()
             val commentTexts = intent.getStringArrayExtra(DouyinCollectService.EXTRA_RESULT_COMMENT_TEXTS) ?: emptyArray()
-            val comments = commenterIds.indices.map { i ->
-                CommentEntry(commenterId = commenterIds[i], text = commentTexts.getOrElse(i) { "" })
-            }
+            val douyinIds = intent.getStringArrayExtra(DouyinCollectService.EXTRA_RESULT_DOUYIN_IDS) ?: emptyArray()
+            val comments = zipCommentEntries(commenterIds.toList(), commentTexts.toList(), douyinIds.toList())
             val result = CollectResult(
                 ok = ok,
                 keyword = "",
@@ -171,10 +170,8 @@ class AgentService : Service() {
         // 广播在这台荣耀真机上发得出去(sendBroadcast 正常返回)，但 collectResultReceiver
         // 从未收到——广播这条路不可靠，原因未查清(疑似 MagicOS 后台广播限流)。改用
         // 同进程直接回调作为主路径，broadcast 只留兜底。
-        DouyinCollectService.onCollectResult = { taskId, ok, commentIds, commentTexts, error ->
-            val comments = commentIds.indices.map { i ->
-                CommentEntry(commenterId = commentIds[i], text = commentTexts.getOrElse(i) { "" })
-            }
+        DouyinCollectService.onCollectResult = { taskId, ok, commentIds, commentTexts, douyinIds, error ->
+            val comments = zipCommentEntries(commentIds, commentTexts, douyinIds)
             val result = CollectResult(ok = ok, keyword = "", comments = comments, error = error)
             scope.launch { reportCollectResult(taskId, result) }
         }
@@ -825,6 +822,31 @@ class AgentService : Service() {
          */
         internal fun extractDmTargetDouyinId(payload: Map<String, Any?>): String? =
             (payload["douyin_id"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
+
+        /**
+         * DouyinCollectService.onCollectResult / collectResultReceiver 两条回调路径都把
+         * CommentEntry 拆成平行数组（IPC/Intent extras 只能带原始类型数组）重建回来。
+         *
+         * 真机复现(2026-07-16)：这里此前只重建 commenterId/text 两个字段，douyinId 参数
+         * 加入回调签名之前压根没地方接——Seg3 enrichCommentsWithDouyinId() 辛苦点头像
+         * 读出的真实抖音号，一过这个回调边界就被彻底丢弃，跟服务端 /collect/report
+         * 收不收 douyin_id 字段完全无关，根本没发出去过（真机验证：logcat 明明打出
+         * "enriched douyinId 2/3 leads"，落库的 lead 却全是 douyin_id=NULL）。
+         *
+         * douyinIds 数组用空串 "" 当"没读到号"的哨兵值（不是 null——Intent 平行数组走
+         * List<String> 省事），这里统一解回 null，绝不当真号使。
+         */
+        internal fun zipCommentEntries(
+            commenterIds: List<String>,
+            commentTexts: List<String>,
+            douyinIds: List<String>,
+        ): List<CommentEntry> = commenterIds.indices.map { i ->
+            CommentEntry(
+                commenterId = commenterIds[i],
+                text = commentTexts.getOrElse(i) { "" },
+                douyinId = douyinIds.getOrElse(i) { "" }.ifEmpty { null },
+            )
+        }
 
         // initAgent 单次守卫：onStartCommand 会被多次调用（开机广播 + MainActivity +
         // START_STICKY 重启），每次都 initAgent 会泄漏多套并行轮询 loop。

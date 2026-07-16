@@ -1082,6 +1082,7 @@ class DouyinCollectService : AccessibilityService() {
             result.ok,
             result.comments.map { it.commenterId },
             result.comments.map { it.text },
+            result.comments.map { it.douyinId ?: "" },
             result.error,
         )
         // 兜底广播只在回调缺席时才发：AgentService 引入队列状态机后（CollectTaskQueue），
@@ -1093,6 +1094,7 @@ class DouyinCollectService : AccessibilityService() {
             putExtra(EXTRA_RESULT_OK, result.ok)
             putExtra(EXTRA_RESULT_COMMENT_IDS, result.comments.map { it.commenterId }.toTypedArray())
             putExtra(EXTRA_RESULT_COMMENT_TEXTS, result.comments.map { it.text }.toTypedArray())
+            putExtra(EXTRA_RESULT_DOUYIN_IDS, result.comments.map { it.douyinId ?: "" }.toTypedArray())
             putExtra(EXTRA_RESULT_ERROR, result.error)
         }
         sendBroadcast(intent)
@@ -1511,8 +1513,14 @@ class DouyinCollectService : AccessibilityService() {
         @Volatile
         var onVideoCardResult: ((taskId: String, keyword: String, videos: List<VideoCardInfo>, error: String) -> Unit)? = null
 
+        // douyinIds 跟 commentIds/commentTexts 同下标对齐；某条没读到号就是空串""（不是
+        // null——List<String> 走这条回调签名图省事，空串当"没有"的哨兵值，调用方 ifEmpty{null}
+        // 解回来）。真机复现(2026-07-16)：这个回调签名此前只带 commentIds/commentTexts 两个
+        // 平行数组，Seg3 enrichCommentsWithDouyinId() 辛苦点头像读出的真实抖音号，一过这个
+        // 回调边界就被丢在原地——AgentService 收到的 CommentEntry 永远 douyinId=null，
+        // 不管服务端 /collect/report 收不收这个字段都没用，根本没发出去。
         @Volatile
-        var onCollectResult: ((taskId: String, ok: Boolean, commentIds: List<String>, commentTexts: List<String>, error: String) -> Unit)? = null
+        var onCollectResult: ((taskId: String, ok: Boolean, commentIds: List<String>, commentTexts: List<String>, douyinIds: List<String>, error: String) -> Unit)? = null
 
         // busy 拒绝回执（同进程直接调用）：真机复现(2026-07-10) busy 静默丢广播会让
         // AgentService 队列的 currentJob 永不清除 → 永久死锁。拒绝必须显式通知派发方重试。
@@ -1529,6 +1537,7 @@ class DouyinCollectService : AccessibilityService() {
         const val EXTRA_RESULT_OK = "ok"
         const val EXTRA_RESULT_COMMENT_IDS = "comment_ids"
         const val EXTRA_RESULT_COMMENT_TEXTS = "comment_texts"
+        const val EXTRA_RESULT_DOUYIN_IDS = "douyin_ids"
         const val EXTRA_RESULT_ERROR = "error"
 
         internal fun isResultEventDebounced(triggeredAtMs: Long, nowMs: Long, settleMs: Long): Boolean {
