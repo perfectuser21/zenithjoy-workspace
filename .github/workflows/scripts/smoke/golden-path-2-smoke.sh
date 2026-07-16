@@ -573,6 +573,24 @@ ok "Step 15 ✅ 抓评论 douyin_id 落库回归通过"
 echo "▶ Step 16: dm_outreach 启动 CLEAR_TASK 回归（真机段等价断言见 DouyinDmOutreachServiceOutcomeTest）"
 ok "Step 16 ✅ 已登记：真机段由 Kotlin 单测守，等 Android evaluator 通道纳入 nightly 真机复跑"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 17：dm-outreach-result 报告类 httpClient 禁用连接池——根治稳定 timeout
+# （真机复现 2026-07-17 xian-rog，Seg4 私信照跑撞出的第 1 个新根因）
+#
+# 真机段等价断言 + TODO：本 bug 100% 发生在 Android OkHttp 连接池行为层
+# （AgentService.httpClient 只服务数分钟一次的低频报告类端点，长时间空闲后池里连接被
+# 网络切换/NAT 超时静默弄坏，复用时写入成功但读永远拿不到响应，直到 connectTimeout
+# 才报错）——没有对应的服务端可观测行为（服务端本身收到请求就能快速正确响应），
+# curl/psql 无法复现"设备本地连接池积累僵尸连接"这个状态，只能由 Kotlin JVM 单测锁定：
+# AgentServiceHttpClientTest 的 `report http client never reuses a pooled connection
+# across calls`（用 MockWebServer 断言每次调用 sequenceNumber=0，即每次都开新连接，
+# 不留旧连接可复用）。
+# TODO(Android evaluator 通道)：接管后应在真机 nightly 里补一条"App 长时间(数小时)
+# 静置后发起一次报告类调用"的场景，实测验证不会稳定卡满 connectTimeout。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 17: dm-outreach-result httpClient 禁用连接池回归（真机段等价断言见 AgentServiceHttpClientTest）"
+ok "Step 17 ✅ 已登记：真机段由 Kotlin 单测守，等 Android evaluator 通道纳入 nightly 真机复跑"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" 2>/dev/null
 echo ""
