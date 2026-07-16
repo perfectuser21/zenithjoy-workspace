@@ -1,6 +1,8 @@
 package com.zenithjoy.agent.collect
 
+import android.content.Intent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -58,5 +60,37 @@ class DouyinDmOutreachServiceOutcomeTest {
         assertEquals("sent", DouyinDmOutreachService.Outcome.SENT.toStatusString())
         assertEquals("limited", DouyinDmOutreachService.Outcome.LIMITED.toStatusString())
         assertEquals("failed", DouyinDmOutreachService.Outcome.FAILED.toStatusString())
+    }
+
+    // ── dmOutreachLaunchFlags ────────────────────────────────────────────────
+    // 真机复现(2026-07-17 xian-rog)：上一次 dm_outreach 任务发送后设备停留在与 Zenithjoyai
+    // 的私信会话页；下一次任务 launchDouyinApp 仅用 NEW_TASK 会 resume 到该遗留会话页而非
+    // 首页，导致 locateProfileBySearch 的 findNodeByContentDesc(root,"搜索") 命中了会话内
+    // 搜索图标而非首页全局搜索入口，把目标抖音号打进消息搜索框，最终 NO_MATCH。
+    // DouyinCollectService 的 Stage1 采集链路已用同款 CLEAR_TASK 修过同类根因
+    // （stage1LaunchFlags，见 DouyinCollectServiceStateTest 2026-07-11 真机复现记录）——
+    // dm_outreach 执行路径必须叠加同一 flag，否则换台机器/换个任务必复发。
+
+    @Test
+    fun `dm outreach launch flags must include CLEAR_TASK to escape stale conversation screen`() {
+        val flags = DouyinDmOutreachService.dmOutreachLaunchFlags(base = 0)
+        assertTrue(
+            "dm_outreach 启动必须带 CLEAR_TASK 清空残留会话页栈，否则 resume 到会话页 → 会话内搜索代替全局搜索 → NO_MATCH",
+            (flags and Intent.FLAG_ACTIVITY_CLEAR_TASK) != 0
+        )
+    }
+
+    @Test
+    fun `dm outreach launch flags must include NEW_TASK`() {
+        // CLEAR_TASK 必须与 NEW_TASK 同用才生效（Android 契约，同 stage1LaunchFlags）。
+        val flags = DouyinDmOutreachService.dmOutreachLaunchFlags(base = 0)
+        assertTrue((flags and Intent.FLAG_ACTIVITY_NEW_TASK) != 0)
+    }
+
+    @Test
+    fun `dm outreach launch flags preserve existing base flags`() {
+        val base = 0x00100000 // 任意已有 flag 位
+        val flags = DouyinDmOutreachService.dmOutreachLaunchFlags(base = base)
+        assertTrue((flags and base) == base)
     }
 }
