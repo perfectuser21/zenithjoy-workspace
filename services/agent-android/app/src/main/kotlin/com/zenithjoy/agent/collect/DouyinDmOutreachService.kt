@@ -271,7 +271,12 @@ class DouyinDmOutreachService : AccessibilityService() {
         return try {
             val pm = applicationContext.packageManager
             val launchIntent = pm.getLaunchIntentForPackage(DOUYIN_PKG) ?: return false
-            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // 必须叠加 CLEAR_TASK：仅 NEW_TASK 会 resume 到上一次 dm_outreach 遗留的私信
+            // 会话页（真机复现 2026-07-17 xian-rog）——locateProfileBySearch 的通用"搜索"
+            // 图标查找在会话页里命中的是会话内搜索而非首页全局搜索，把目标抖音号打进消息
+            // 搜索框导致 NO_MATCH。CLEAR_TASK 强制清栈回干净首页（同 DouyinCollectService
+            // 的 stage1LaunchFlags 已验证过的同款模式，不动登录态）。
+            launchIntent.flags = dmOutreachLaunchFlags(launchIntent.flags)
             applicationContext.startActivity(launchIntent)
             true
         } catch (e: Exception) {
@@ -777,6 +782,14 @@ class DouyinDmOutreachService : AccessibilityService() {
                 else -> Outcome.SENT
             }
         }
+
+        /**
+         * dm_outreach 启动抖音的 Intent flags：必须叠加 [Intent.FLAG_ACTIVITY_CLEAR_TASK]，
+         * 否则仅 NEW_TASK 会 resume 到上一次任务遗留的私信会话页而非首页（真机复现见
+         * [launchDouyinApp] 注释）。与 DouyinCollectService.stage1LaunchFlags 同款模式。
+         */
+        internal fun dmOutreachLaunchFlags(base: Int): Int =
+            base or Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
 
         // ── Sprint 07060927 — 抖音号搜索定位 + 关注点赞热身互动纯函数 ─────────────
 

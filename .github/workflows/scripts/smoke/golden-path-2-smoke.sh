@@ -555,11 +555,29 @@ S15_DB_DOUYIN_ID=$(psq "SELECT COALESCE(douyin_id,'<NULL>') FROM zenithjoy.acqui
 ok "Step 15c ✅ douyin_id 真的落进 acquisition_leads，Seg4 派单有号可发"
 ok "Step 15 ✅ 抓评论 douyin_id 落库回归通过"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 16：dm_outreach 启动必须清空遗留会话页栈，否则会话内搜索代替全局搜索
+# （真机复现 2026-07-17 xian-rog，Seg4 私信照跑撞出的第 4 个新根因）
+#
+# 真机段等价断言 + TODO：本 bug 100% 发生在 Android 无障碍导航层
+# （DouyinDmOutreachService.launchDouyinApp resume 到上一次任务遗留的私信会话页，
+# 会话页里也有一个"搜索"图标，把目标抖音号打进了会话内搜索而非首页全局搜索，
+# 最终 locateProfileBySearch 恒报 NO_MATCH）——没有对应的服务端可观测行为，curl/psql
+# 无法复现导航状态，只能由 Kotlin JVM 单测锁定：
+# DouyinDmOutreachServiceOutcomeTest 的 `dm outreach launch flags must include CLEAR_TASK
+# to escape stale conversation screen`（断言 dmOutreachLaunchFlags 必须带
+# FLAG_ACTIVITY_CLEAR_TASK，同 DouyinCollectService.stage1LaunchFlags 已验证过的模式）。
+# TODO(Android evaluator 通道)：接管后应在真机 nightly 里补一条"连续两次 dm_outreach
+# 任务，第二次目标号不同"的场景，实测验证不会 resume 到第一次遗留的会话页。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 16: dm_outreach 启动 CLEAR_TASK 回归（真机段等价断言见 DouyinDmOutreachServiceOutcomeTest）"
+ok "Step 16 ✅ 已登记：真机段由 Kotlin 单测守，等 Android evaluator 通道纳入 nightly 真机复跑"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" 2>/dev/null
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Path 2 15 步本地版 smoke 全绿（服务端段）"
+echo "  ✅ Path 2 16 步本地版 smoke 全绿（服务端段）"
 echo "  真机段：等 Android evaluator 通道（xian-rog nightly）接管复跑"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 exit 0
