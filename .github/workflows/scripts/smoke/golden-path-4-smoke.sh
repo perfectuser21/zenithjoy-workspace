@@ -663,6 +663,18 @@ print('PASS')
   && ok "Step 3c ✅ 窗口自愈 maximize→settle→minimize 序列正确（不再永久霸占用户屏幕）" \
   || fail "Step 3c 窗口自愈回归——微信可能被强制全屏且不还原" 3
 
+# Step 3d：滚轮扫描须避让活跃用户（2026-07-16 用户真机反馈：抢键盘鼠标，人没法用）
+# 真机段 TODO：xian-rog 验证用户操作鼠标期间扫描确实跳过、日志出现"本轮避让"字样
+python3 -c "
+import sys; sys.path.insert(0, 'services/agent/wechat-rpa')
+import listen_chat
+assert listen_chat.should_defer_scroll_for_active_user(idle_ms=500) is True
+assert listen_chat.should_defer_scroll_for_active_user(idle_ms=3000) is False
+assert listen_chat.should_defer_scroll_for_active_user(idle_ms=1500) is False
+print('PASS')
+" 2>/dev/null && ok "Step 3d ✅ 滚轮避让活跃用户判定逻辑正确" \
+             || fail "Step 3d 滚轮避让逻辑异常——真实鼠标可能又会打断用户" 3
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ✅ Path 4 16 步 golden path smoke 服务端段全通"
 echo "  真机段：xian-rog 真机验收证据见 sprints/07150800-line04-overlay-continuation/evidence/"
