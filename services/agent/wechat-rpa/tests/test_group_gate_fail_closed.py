@@ -100,3 +100,87 @@ def test_reply_in_chat_calls_header_confirms_not_group():
         f"reply_in_chat 必须调用 _header_confirms_not_group 做 fail-closed 判群，"
         f"实际调用: {sorted(calls)}"
     )
+
+
+# ★ 2026-07-16 真机根治：切会话标题面板渲染滞后，私聊被误判成群
+# 于瑾机器实证：私聊联系人❤柚子挖小样C598 切入后面板仍停在上一个群(321人)，
+# _header_confirms_not_group 读到(321人) → 直接判群跳过，无重试机会。
+# 修法：加 title_ok_fn 归属校验——归属不过 → 重试等面板刷新，不立刻 fail-closed。
+
+def test_fail_closed_when_stale_group_header_never_clears():
+    """归属校验持续不过（标题始终停在上一个群）→ 重试耗尽后 fail-closed。
+    真机场景：上一个群标题 "招商雍澜湾业主群(321)" 一直留在面板，
+    title_matches_fn 持续返回 False → 重试耗尽 → fail-closed（不发送）。
+    """
+    calls = {"title": 0}
+
+    def title_matches_fn():
+        calls["title"] += 1
+        return False  # 归属始终不匹配（上一个群的标题）
+
+    ok = listen_chat._header_confirms_not_group(
+        lambda: ["招商雍澜湾业主群(321)"],
+        title_matches_fn=title_matches_fn,
+        retries=3, retry_delay_s=0.0, sleep_fn=lambda s: None,
+    )
+    assert ok is False
+    assert calls["title"] == 3   # 每轮都做归属校验，用完所有重试
+
+
+def test_recovers_when_panel_renders_after_lag():
+    """切会话后面板渲染追上来（第2次归属校验通过）→ 确认私聊可发送。
+    2026-07-16 真机修复路径：
+    第1次：title_matches_fn() = False（上一个群残留） → 不调 read_fn，重试
+    第2次：title_matches_fn() = True（面板已刷新为私聊） → 调 read_fn → 确认非群 → True
+    """
+    calls = {"title": 0, "read": 0}
+
+    def title_matches_fn():
+        calls["title"] += 1
+        return calls["title"] >= 2  # 第1次False，第2次True
+
+    def read_fn():
+        calls["read"] += 1
+        return ["❤柚子挖小样C598"]  # 私聊标题，不含人数
+
+    ok = listen_chat._header_confirms_not_group(
+        read_fn,
+        title_matches_fn=title_matches_fn,
+        retries=3, retry_delay_s=0.0, sleep_fn=lambda s: None,
+    )
+    assert ok is True    # 面板刷新后确认私聊，允许发送
+    assert calls["title"] == 2   # 第1次False跳过，第2次True通过
+    assert calls["read"] == 1    # read_fn 只在归属通过时才调用
+
+
+def test_title_matches_fn_not_called_does_not_block_without_it():
+    """不传 title_matches_fn（向后兼容）→ 直接读文本判群，不做归属校验。"""
+    ok = listen_chat._header_confirms_not_group(
+        lambda: ["❤柚子挖小样C598"],
+        retries=2, retry_delay_s=0.0, sleep_fn=lambda s: None,
+    )
+    assert ok is True  # 私聊标题，不含人数，无 title_matches_fn 也能正确放行
+
+
+def test_reply_in_chat_passes_title_matches_fn():
+    """reply_in_chat 调用 _header_confirms_not_group 时必须传归属校验参数（title_matches_fn 或 title_ok_fn）。"""
+    import ast
+
+    src_path = os.path.join(_WECHAT, "listen_chat.py")
+    with open(src_path, encoding="utf-8") as f:
+        tree = ast.parse(f.read())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "reply_in_chat":
+            for n in ast.walk(node):
+                if (isinstance(n, ast.Call)
+                        and isinstance(n.func, ast.Name)
+                        and n.func.id == "_header_confirms_not_group"):
+                    kw_names = {kw.arg for kw in n.keywords}
+                    has_attribution = "title_matches_fn" in kw_names or "title_ok_fn" in kw_names
+                    assert has_attribution, (
+                        "reply_in_chat 调用 _header_confirms_not_group 必须传归属校验参数 "
+                        "（title_matches_fn 或 title_ok_fn，防切会话渲染滞后误判群）；"
+                        f"实际 kwargs={sorted(kw_names)}"
+                    )
+                    return
+    raise AssertionError("未找到 reply_in_chat → _header_confirms_not_group 的调用")
