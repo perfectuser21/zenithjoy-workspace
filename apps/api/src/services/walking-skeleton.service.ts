@@ -320,16 +320,21 @@ export async function upsertAgentByHeartbeat(args: {
     // agentUuid 未命中（极少情况：UUID 错或行被删）→ 退化到 (license_id, hostname) 逻辑
   }
 
-  // ── 原有路径：按 (license_id, hostname) 去重 ──
+  // ── 原有路径：按 (tenant_id, hostname) 去重 ──
+  // DB 唯一约束 uq_agents_tenant_hostname 是 (tenant_id, hostname)，去重查询必须
+  // 按同一维度查，否则同一 tenant 下换一个 license 心跳同一台机器时，用旧 license_id
+  // 查不到已存在的行，误判"新机器"走 INSERT，直接撞唯一约束抛出未捕获异常，冒泡成
+  // 路由层裸 500（真机验证 2026-07-16 复现：测试租户挂 2 个 license，同一 xian-rog
+  // 真机换 license 后心跳报 duplicate key value violates unique constraint）。
   const existing = await pool.query<AgentRow>(
     `SELECT id, tenant_id, agent_id, hostname, version, license_id,
             bound_folder_path, last_heartbeat_at, status, last_seen
        FROM zenithjoy.agents
-      WHERE license_id = $1
+      WHERE tenant_id = $1
         AND ((hostname IS NULL AND $2::text IS NULL) OR hostname = $2)
       ORDER BY created_at ASC
       LIMIT 1`,
-    [licenseId, hostname]
+    [tenantId, hostname]
   );
 
   if (existing.rows[0]) {
