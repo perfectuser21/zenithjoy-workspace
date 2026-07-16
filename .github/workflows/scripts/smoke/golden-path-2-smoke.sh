@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # golden-path-2-smoke.sh
-# ZenithJoy Walking Skeleton — Path 2 客户智能获客路径（13 步本地版）
+# ZenithJoy Walking Skeleton — Path 2 客户智能获客路径（14 步本地版）
 # Notion Journey: https://www.notion.so/35ac40c2ba6381ed8df4f3fa0b64f5bf
 #
 # 2026-07-07 用户更正（decision 431acd2c）：整条去飞书、改本地中台。
 # 本 smoke 2026-07-14 重写（handoff 0714 刀1），替换旧版「Sprint A 飞书集成」（停在 05-26，
 # 测已删除的飞书流程 + fake-feishu-server stub）。
 #
-# 13 步（CLAUDE.md Path 2 权威模型 8 步 + Seg2/Seg4/心跳-UUID/心跳-去重维度 回归 4 步）与断言层级：
+# 14 步（CLAUDE.md Path 2 权威模型 8 步 + Seg2/Seg4/心跳-UUID/心跳-去重维度/判定缓存写库 回归 5 步）与断言层级：
 #   Step 1 注册客户端自动（真链路：sign-up → free license → 自动建 tenant）
 #   Step 2 装客户端（真链路：POST /api/agent/register）
 #   Step 3 Android 端 Agent 连中台（服务端等价断言：x-agent-id 真实调用方 shape，#1267 路径）
@@ -21,12 +21,14 @@
 #   Step 11 capabilities 随 os_type 心跳同步：Seg4 私信设备路由回归（心跳 os_type=android → capabilities 含 android）
 #   Step 12 心跳 agent_uuid 非 UUID 格式必须优雅降级：安卓真机自报 slug 不能裸 500（真机复现 2026-07-16）
 #   Step 13 心跳去重必须按 tenant_id 查：跨 license 同机不能撞 DB 唯一约束裸 500（真机复现 2026-07-16）
+#   Step 14 判定缓存命中必须写库：同一 video_id 跨任务复用判决时新任务的行不能永远卡 pending（真机复现 2026-07-16）
 #
 # 2026-07-15（handoff 0715）：铺到 11 步，回流两个真根因（铁律5）——
 #   Seg2 judgeVideo INV-6 短路不写库 / Seg4 心跳从不按 os_type 刷新 capabilities。
-# 2026-07-16：铺到 13 步——安卓 Path2 真机链路首次真跑连续撞到心跳两个真根因：
+# 2026-07-16：铺到 14 步——安卓 Path2 真机链路首次真跑连续撞到三个真根因：
 #   Step 12 agent_uuid 非 UUID 格式裸 500 / Step 13 去重按 license_id 查跨 license
-#   撞 DB 唯一约束裸 500（均为 walking-skeleton.service.ts 同一函数内的问题）。
+#   撞 DB 唯一约束裸 500（均为 walking-skeleton.service.ts 同一函数内的问题）/
+#   Step 14 判定缓存命中不写库导致同一热门视频重复出现时新任务行永远卡 pending。
 #
 # ⚠️ 真机段等价断言说明（铁律 5）：
 #   Step 3/6 的真机执行段（Android 真机装 APK、真机登录抖音小号）与 Step 8 的真机截图上报段
@@ -44,7 +46,7 @@
 # 用法：
 #   API_BASE=http://localhost:5200 DB_URL=postgresql://... \
 #     bash .github/workflows/scripts/smoke/golden-path-2-smoke.sh
-#   退出码 0 = 13 步服务端段全通；非零 = 第 EXIT_CODE 步红
+#   退出码 0 = 14 步服务端段全通；非零 = 第 EXIT_CODE 步红
 #
 # 真调判定依赖：API server 进程需带 TOAPIS_API_KEY（CI: secrets.TOAPIS_API_KEY 注入 job env）。
 # 无 key 时 judge-video 落 pending/no_api_key → Step 8 真红（这是设计：#1269/#1271 就是全 mock 漏过的）。
@@ -65,7 +67,7 @@ fail() { echo "❌ $1"; exit "$2"; }
 psq() { psql "$DB_URL" -At -c "$1"; }
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ZenithJoy Path 2 Walking Skeleton — 客户智能获客路径（13 步本地版）"
+echo "  ZenithJoy Path 2 Walking Skeleton — 客户智能获客路径（14 步本地版）"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # ───────────────────────────────────────────────────────────────────
@@ -445,11 +447,78 @@ S13_ROW_COUNT=$(psq "SELECT count(*) FROM zenithjoy.agents WHERE tenant_id='$TEN
 [ "$S13_ROW_COUNT" = "1" ] || fail "Step 13d agents 表该 tenant+hostname 应恰好 1 行，实际 $S13_ROW_COUNT（去重未按 tenant_id 正确命中旧行）" 13
 ok "Step 13 ✅ 心跳去重按 tenant_id 查，跨 license 同机正确命中旧行（DB 唯一约束真根因已修）"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 14：判定缓存命中必须写库，防新任务视频行永远卡 pending
+# （真机复现 2026-07-16，Path2 安卓真机链路验证时撞到）
+#
+# 复现的真 bug：同一热门视频被多个采集任务重复抓到是真机常态（同关键词反复
+# 搜出同一批热门卡片）。writeJudgment/markPending 按 (tenant_id, video_id)
+# UPDATE 不分 task_id，本来任何共享该 video_id 的行都该收敛；但缓存命中
+# 分支此前只 return 给调用方从不写库，新任务 Stage1 刚 INSERT 的那一行
+# 永远没被这条路径碰过，卡死 pending——即使 API 响应明明说
+# cache_hit=true/judgment_status=matched。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 14: 判定缓存命中补写库——同一 video_id 跨任务复用判决结果"
+S14_TMP=$(mktemp)
+S14_VIDEO="p2smokecache${RND//-/}"
+
+# 任务 A：真实走一遍 collect/start → report-videos → judge-video(force_result=matched)，制造缓存
+S14_HTTP=$(curl -s -o "$S14_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/collect/start" \
+  -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" \
+  -d '{"keywords":["p2-smoke-cache-a"]}')
+[ "$S14_HTTP" = "200" ] || fail "Step 14a 任务A collect/start expected 200, got $S14_HTTP" 14
+S14_TASK_A=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S14_TMP" 2>/dev/null)
+[ -n "$S14_TASK_A" ] || fail "Step 14a 任务A 无 task_id" 14
+
+curl -s -o "$S14_TMP" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/collect/report-videos" \
+  -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
+  -d "{\"task_id\":\"$S14_TASK_A\",\"videos\":[{\"video_id\":\"$S14_VIDEO\",\"title\":\"p2 smoke 缓存回归\"}]}" >/dev/null
+
+S14_HTTP=$(curl -s -o "$S14_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/judge-video" \
+  -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
+  -d "{\"video_id\":\"$S14_VIDEO\",\"capture_type\":\"screenshot\",\"data_b64\":\"x\",\"force_result\":\"matched\"}")
+[ "$S14_HTTP" = "200" ] || fail "Step 14a judge-video(任务A) expected 200, got $S14_HTTP" 14
+ok "Step 14a ✅ 任务A 判定 matched，落下缓存"
+
+# 任务 B：全新任务抓到同一个 video_id（真机常态：同关键词反复搜出同一批热门卡片）
+S14_HTTP=$(curl -s -o "$S14_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/collect/start" \
+  -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" \
+  -d '{"keywords":["p2-smoke-cache-b"]}')
+[ "$S14_HTTP" = "200" ] || fail "Step 14b 任务B collect/start expected 200, got $S14_HTTP" 14
+S14_TASK_B=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S14_TMP" 2>/dev/null)
+[ -n "$S14_TASK_B" ] || fail "Step 14b 任务B 无 task_id" 14
+
+curl -s -o "$S14_TMP" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/collect/report-videos" \
+  -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
+  -d "{\"task_id\":\"$S14_TASK_B\",\"videos\":[{\"video_id\":\"$S14_VIDEO\",\"title\":\"p2 smoke 缓存回归\"}]}" >/dev/null
+
+# 任务B 对同一 video_id 再判一次——这次必须命中缓存（force_result 故意传 rejected，
+# 如果真的重新真判会写成 rejected，命中缓存则应该保持 matched，用来交叉验证缓存真生效）
+S14_HTTP=$(curl -s -o "$S14_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/judge-video" \
+  -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
+  -d "{\"video_id\":\"$S14_VIDEO\",\"capture_type\":\"screenshot\",\"data_b64\":\"x\",\"force_result\":\"rejected\"}")
+[ "$S14_HTTP" = "200" ] || fail "Step 14c judge-video(任务B) expected 200, got $S14_HTTP" 14
+S14_CACHE_HIT=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data'].get('cache_hit', False))" "$S14_TMP" 2>/dev/null)
+[ "$S14_CACHE_HIT" = "True" ] || fail "Step 14c judge-video(任务B) 未命中缓存（cache_hit=$S14_CACHE_HIT），复现条件不成立" 14
+ok "Step 14c ✅ 任务B 命中缓存（force_result=rejected 被忽略，证明真的是缓存生效不是重新真判）"
+
+# 核心回归断言：任务B 自己那一行必须真的被写成 matched（不能停在 report-videos 时的初始 pending）
+S14_DB_STATUS=$(psq "SELECT COALESCE(judgment_status,'<NULL>') FROM zenithjoy.acquisition_collect_videos WHERE task_id='$S14_TASK_B' AND video_id='$S14_VIDEO'")
+[ "$S14_DB_STATUS" = "matched" ] || fail "Step 14d 任务B 视频行 judgment_status='$S14_DB_STATUS' 期望 'matched'——缓存命中未写回 DB（新任务的行永远卡 pending 的真根因未修）" 14
+ok "Step 14d ✅ 任务B 视频行真的写成 matched（缓存命中补写库根因已修）"
+ok "Step 14 ✅ 判定缓存命中写库回归通过"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
-      "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" 2>/dev/null
+      "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" 2>/dev/null
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Path 2 13 步本地版 smoke 全绿（服务端段）"
+echo "  ✅ Path 2 14 步本地版 smoke 全绿（服务端段）"
 echo "  真机段：等 Android evaluator 通道（xian-rog nightly）接管复跑"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 exit 0
