@@ -310,4 +310,41 @@ class DouyinCollectServiceStateTest {
             DouyinCollectService.isBackAtResultList(cardCount = 0, hasSearchTabBar = false)
         )
     }
+
+    // ── mayScheduleCommentExtraction（评论提取重复调度根治） ───────────────────
+    // 真机复现(2026-07-16)：评论面板展开期间连续打出多条 WINDOW_STATE_CHANGED/
+    // WINDOW_CONTENT_CHANGED 事件，handleCommentsOpened 旧实现在事件触发的那一刻
+    // 同步检查 state == OPENING_COMMENTS，但真正的状态转移（转到 EXTRACTING_COMMENTS）
+    // 被推迟到 delay() 之后的 attemptExtractComments() 内部才执行——检查和转移之间
+    // 隔着一个 suspend 点，导致每一条事件都各自通过判断、各自调度一次
+    // attemptExtractComments()，最终 3 秒内并发跑出 15+ 次重复提取，互相 recycle
+    // 对方的 AccessibilityNodeInfo 树。修复：调用方在通过闸门后必须同步（不经过
+    // delay）把 state 转成 EXTRACTING_COMMENTS，本测试锁定"只有 OPENING_COMMENTS
+    // 才允许调度、EXTRACTING_COMMENTS 必须拒绝"这条契约本身。
+
+    @Test
+    fun `first event while opening comments is allowed to schedule extraction`() {
+        assertTrue(
+            DouyinCollectService.mayScheduleCommentExtraction(DouyinCollectService.State.OPENING_COMMENTS)
+        )
+    }
+
+    @Test
+    fun `once already extracting a second scheduling attempt must be rejected (真机重复提取根因)`() {
+        assertFalse(
+            "state 已同步转到 EXTRACTING_COMMENTS 后，后续事件必须被拒绝，" +
+                "否则评论面板连续多条事件会各自调度出并发的 attemptExtractComments()",
+            DouyinCollectService.mayScheduleCommentExtraction(DouyinCollectService.State.EXTRACTING_COMMENTS)
+        )
+    }
+
+    @Test
+    fun `unrelated states must also reject scheduling`() {
+        assertFalse(
+            DouyinCollectService.mayScheduleCommentExtraction(DouyinCollectService.State.IDLE)
+        )
+        assertFalse(
+            DouyinCollectService.mayScheduleCommentExtraction(DouyinCollectService.State.OPENING_FIRST_VIDEO)
+        )
+    }
 }
