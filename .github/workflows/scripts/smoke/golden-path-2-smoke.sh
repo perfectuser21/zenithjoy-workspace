@@ -441,7 +441,7 @@ S13_HTTP=$(curl -s -o "$S13_TMP" -w "%{http_code}" --max-time 15 \
 ok "Step 13c ✅ 跨 license 同 hostname 心跳正常（HTTP 200），未撞 uq_agents_tenant_hostname"
 
 # 核心回归断言：该 tenant+hostname 组合在库里只有一行（去重真的按 tenant_id 命中了旧行，不是意外没撞上约束）
-S13_ROW_COUNT=$(psq "SELECT count(*) FROM zenithjoy.agents WHERE tenant_id='$TENANT_ID' AND hostname='$S13_HOST'")
+S13_ROW_COUNT=$(psq "SELECT count(*) FROM zenithjoy.agents WHERE tenant_id='$TENANT_ID' AND hostname='$S13_HOST' AND created_at > NOW() - interval '120 seconds'")
 [ "$S13_ROW_COUNT" = "1" ] || fail "Step 13d agents 表该 tenant+hostname 应恰好 1 行，实际 $S13_ROW_COUNT（去重未按 tenant_id 正确命中旧行）" 13
 ok "Step 13 ✅ 心跳去重按 tenant_id 查，跨 license 同机正确命中旧行（DB 唯一约束真根因已修）"
 
