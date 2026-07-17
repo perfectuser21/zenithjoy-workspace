@@ -89,25 +89,39 @@ def test_ensure_tray_visible_hidden_calls_showna():
     user32.ShowWindow.assert_called_with(99, 8)
 
 
-def test_ensure_tray_visible_visible_no_call():
-    """窗口可见且非最小化时 _ensure_tray_visible 不移动、不抢焦点。
-
-    B 方案默认（OFFSCREEN_REPLY=False，PrepPRD 06211342）：可见窗口返回 ''，完全不动
-    （不移屏外、不调 ShowWindow/SetWindowPos）。窗口留屏上用户能看。
-    （旧 OFFSCREEN_REPLY=True 离屏路径返回 'visible' 的行为由 test_visible_bg_fix.py 显式 patch 覆盖。）
-    """
+def test_ensure_tray_visible_visible_scan_state_cloaks_but_no_move():
+    """扫描态(for_reply=False,默认)：可见非最小化窗口，OFFSCREEN_REPLY=False 时必须 cloak
+    但不挪坐标——真机反馈闪烁修复(for_reply 参数引入，2026-07-17)。取代旧版
+    test_ensure_tray_visible_visible_no_call（旧版断言完全不动，是本次要修的 bug 本身）。"""
     mw = _make_mock_mw(hwnd=99)
     user32 = MagicMock()
     user32.IsWindowVisible.return_value = True
     user32.IsIconic.return_value = 0  # 非最小化
 
-    with _mock_windll(user32), patch("time.sleep"):
+    with _mock_windll(user32) as windll_mock, patch("time.sleep"):
         result = listen_chat._ensure_tray_visible(mw)
 
-    # B 方案默认可见模式：可见非最小化窗口 → 返回 ''，不移动
-    assert result == ''
+    assert result == 'visible', f"扫描态可见非最小化窗口必须返回 'visible'(cloak发生过)，实际 {result!r}"
     user32.ShowWindow.assert_not_called()
     user32.SetWindowPos.assert_not_called()
+    windll_mock.dwmapi.DwmSetWindowAttribute.assert_called()
+
+
+def test_ensure_tray_visible_visible_reply_state_untouched_when_offscreen_off():
+    """回复态(for_reply=True)：可见非最小化窗口 OFFSCREEN_REPLY=False 时保持今天的完全不动
+    行为（不 cloak、不挪坐标）——6 月 B 方案的送达确认+焦点安全场景，对照组。"""
+    mw = _make_mock_mw(hwnd=100)
+    user32 = MagicMock()
+    user32.IsWindowVisible.return_value = True
+    user32.IsIconic.return_value = 0
+
+    with _mock_windll(user32) as windll_mock, patch("time.sleep"):
+        result = listen_chat._ensure_tray_visible(mw, for_reply=True)
+
+    assert result == '', f"回复态 OFFSCREEN_REPLY=False 必须返回 ''，实际 {result!r}"
+    user32.ShowWindow.assert_not_called()
+    user32.SetWindowPos.assert_not_called()
+    windll_mock.dwmapi.DwmSetWindowAttribute.assert_not_called()
 
 
 def test_restore_tray_calls_sw_hide():

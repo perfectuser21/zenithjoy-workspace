@@ -592,6 +592,16 @@ def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
                     _ct.windll.user32.SetWindowPos(_hwnd, 0, _OFFSCREEN_X, _OFFSCREEN_Y, 0, 0, _SWP)
                     time.sleep(_VISIBLE_MOVE_SLEEP)
                     return 'visible'
+            elif not for_reply:
+                # 扫描态（for_reply=False，新默认）：不挪坐标，只 cloak 让用户看不见（真机反馈
+                # 闪烁根因——B 方案默认 OFFSCREEN_REPLY=False 后这个分支之前整体跳过，
+                # 纯扫描真实可见弹出，2026-07-17）
+                try:
+                    _cv = _ct.c_int(1)
+                    _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
+                except Exception:
+                    pass
+                return 'visible'
     except Exception:
         pass
     return ''
