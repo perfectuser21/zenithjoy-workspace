@@ -75,7 +75,8 @@ fi
 echo "  PASS"
 
 echo "▶ [3/4] WebSocket /ws/domestic 握手 + start 事件（无凭据时应报错不崩溃）"
-node -e "
+(cd "$APP_DIR" && node -e "
+const { WebSocket } = require('ws');
 const ws = new WebSocket('ws://localhost:${PORT}/ws/domestic');
 const timer = setTimeout(() => { console.log('FAIL: 超时未收到 error 消息'); process.exit(1); }, 8000);
 ws.addEventListener('open', () => ws.send(JSON.stringify({type:'start'})));
@@ -90,7 +91,7 @@ ws.addEventListener('message', (e) => {
   }
 });
 ws.addEventListener('error', () => { console.log('FAIL: WebSocket 连接错误'); process.exit(1); });
-" || { echo "  FAIL: WebSocket 交互不符合预期"; cat "$LOG_FILE"; exit 4; }
+") || { echo "  FAIL: WebSocket 交互不符合预期"; cat "$LOG_FILE"; exit 4; }
 echo "  PASS"
 
 echo "▶ [4/4] 服务进程未崩溃"
