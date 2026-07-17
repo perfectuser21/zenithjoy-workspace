@@ -166,9 +166,12 @@ def test_ensure_tray_visible_cloaks_offscreen_true_unchanged():
 
 
 def test_tray_no_setwindowpos_when_offscreen_false():
-    """OFFSCREEN_REPLY=False 时 tray 分支加了 cloak 后仍然不调 SetWindowPos（只隐藏不移位）。
+    """回复态(for_reply=True) OFFSCREEN_REPLY=False 时 tray 分支加了 cloak 后仍然不调
+    SetWindowPos（只隐藏不移位）。
 
     B方案语义：窗口保持原坐标，只是 DWM 层不渲染；不应把窗口移到 -2600。
+    扫描态(for_reply=False，默认)已在 decision 7b8857f7 改为无论 OFFSCREEN_REPLY 都挪
+    坐标，本测试显式传 for_reply=True 锚定回复态语义（2026-07-17）。
     """
     mw = _make_mock_mw(hwnd=304)
     user32 = MagicMock()
@@ -178,7 +181,7 @@ def test_tray_no_setwindowpos_when_offscreen_false():
     try:
         listen_chat._OFFSCREEN_REPLY = False
         with _mock_windll(user32), patch("time.sleep"):
-            listen_chat._ensure_tray_visible(mw)
+            listen_chat._ensure_tray_visible(mw, for_reply=True)
         user32.SetWindowPos.assert_not_called()
     finally:
         listen_chat._OFFSCREEN_REPLY = original_offscreen

@@ -89,22 +89,28 @@ def test_ensure_tray_visible_hidden_calls_showna():
     user32.ShowWindow.assert_called_with(99, 8)
 
 
-def test_ensure_tray_visible_visible_scan_state_cloaks_but_no_move():
-    """扫描态(for_reply=False,默认)：可见非最小化窗口，OFFSCREEN_REPLY=False 时必须 cloak
-    但不挪坐标——真机反馈闪烁修复(for_reply 参数引入，2026-07-17)。取代旧版
-    test_ensure_tray_visible_visible_no_call（旧版断言完全不动，是本次要修的 bug 本身）。"""
+def test_ensure_tray_visible_visible_scan_state_moves_no_cloak():
+    """扫描态(for_reply=False,默认)：可见非最小化窗口必须挪坐标屏外，不再 cloak——
+    cloak 跨进程 E_ACCESSDENIED 从不生效（真机铁证 ee2890bb），挪坐标才是唯一真正
+    生效的隐藏手段（decision 7b8857f7，2026-07-17）。取代旧版
+    test_ensure_tray_visible_visible_scan_state_cloaks_but_no_move（旧版断言
+    cloak-only 不挪坐标，正是真机弹闪的 bug 本身）。"""
     mw = _make_mock_mw(hwnd=99)
     user32 = MagicMock()
     user32.IsWindowVisible.return_value = True
     user32.IsIconic.return_value = 0  # 非最小化
 
-    with _mock_windll(user32) as windll_mock, patch("time.sleep"):
-        result = listen_chat._ensure_tray_visible(mw)
+    original_offscreen = listen_chat._OFFSCREEN_REPLY
+    try:
+        listen_chat._OFFSCREEN_REPLY = False
+        with _mock_windll(user32) as windll_mock, patch("time.sleep"):
+            result = listen_chat._ensure_tray_visible(mw)
+    finally:
+        listen_chat._OFFSCREEN_REPLY = original_offscreen
 
-    assert result == 'visible', f"扫描态可见非最小化窗口必须返回 'visible'(cloak发生过)，实际 {result!r}"
-    user32.ShowWindow.assert_not_called()
-    user32.SetWindowPos.assert_not_called()
-    windll_mock.dwmapi.DwmSetWindowAttribute.assert_called()
+    assert result == 'visible', f"扫描态可见非最小化窗口必须返回 'visible'，实际 {result!r}"
+    user32.SetWindowPos.assert_called()
+    windll_mock.dwmapi.DwmSetWindowAttribute.assert_not_called()
 
 
 def test_ensure_tray_visible_visible_reply_state_untouched_when_offscreen_off():
@@ -264,7 +270,10 @@ def test_ensure_tray_visible_moves_offscreen_when_offscreen_mode():
 
 
 def test_ensure_tray_visible_no_setwindowpos_when_offscreen_mode_off():
-    """_OFFSCREEN_REPLY=False 时 _ensure_tray_visible 只调 ShowWindow(8)，不移出屏幕（保留弹窗模式）。"""
+    """回复态(for_reply=True) OFFSCREEN_REPLY=False 时 _ensure_tray_visible 只调 ShowWindow(8)，
+    不移出屏幕（保留弹窗模式，B 方案可见+送达确认）。扫描态(for_reply=False，默认)已在
+    decision 7b8857f7 改为无论 OFFSCREEN_REPLY 都挪坐标，本测试显式传 for_reply=True
+    锚定回复态语义（2026-07-17）。"""
     mw = _make_mock_mw(hwnd=89)
     user32 = MagicMock()
     user32.IsWindowVisible.return_value = False
@@ -273,7 +282,7 @@ def test_ensure_tray_visible_no_setwindowpos_when_offscreen_mode_off():
     try:
         listen_chat._OFFSCREEN_REPLY = False
         with _mock_windll(user32), patch("time.sleep"):
-            listen_chat._ensure_tray_visible(mw)
+            listen_chat._ensure_tray_visible(mw, for_reply=True)
     finally:
         listen_chat._OFFSCREEN_REPLY = original_offscreen
 
@@ -511,13 +520,16 @@ def test_restore_window_state_minimized_restores_rcnormalposition():
     assert 224 not in listen_chat._saved_normal_pos, "_saved_normal_pos 应在还原后清除 hwnd=224"
 
 
-def test_ensure_tray_visible_minimized_scan_state_cloaks_when_offscreen_off():
-    """扫描态(for_reply=False,默认)：最小化窗口即使 OFFSCREEN_REPLY=False 也必须 DWM cloak，
-    防止纯扫描把窗口真实弹出可见（真机反馈闪烁根因，for_reply 参数引入）。"""
+def test_ensure_tray_visible_minimized_scan_state_moves_no_cloak_when_offscreen_off():
+    """扫描态(for_reply=False,默认)：最小化窗口即使 OFFSCREEN_REPLY=False 也必须挪坐标屏外，
+    不再 cloak——cloak 跨进程 E_ACCESSDENIED 从不生效（真机铁证 ee2890bb），挪坐标才是
+    唯一真正生效的隐藏手段（decision 7b8857f7，2026-07-17）。取代旧版
+    test_ensure_tray_visible_minimized_scan_state_cloaks_when_offscreen_off。"""
     mw = _make_mock_mw(hwnd=131)
     user32 = MagicMock()
     user32.IsWindowVisible.return_value = True
     user32.IsIconic.return_value = 1
+    user32.GetWindowPlacement.return_value = 1
 
     original_offscreen = listen_chat._OFFSCREEN_REPLY
     try:
@@ -537,7 +549,8 @@ def test_ensure_tray_visible_minimized_scan_state_cloaks_when_offscreen_off():
     finally:
         listen_chat._OFFSCREEN_REPLY = original_offscreen
 
-    windll_mock.dwmapi.DwmSetWindowAttribute.assert_called()
+    user32.SetWindowPlacement.assert_called()
+    windll_mock.dwmapi.DwmSetWindowAttribute.assert_not_called()
 
 
 def test_ensure_tray_visible_minimized_reply_state_no_cloak_when_offscreen_off():
@@ -569,9 +582,12 @@ def test_ensure_tray_visible_minimized_reply_state_no_cloak_when_offscreen_off()
     windll_mock.dwmapi.DwmSetWindowAttribute.assert_not_called()
 
 
-def test_restore_window_state_scan_state_uncloaks_minimized_no_coord_restore():
-    """扫描态(for_reply=False,默认)cloak 过的 minimized 状态，_restore_window_state 必须
-    uncloak，且不触碰 SetWindowPlacement（没挪过坐标，没什么好还原的）。"""
+def test_restore_window_state_scan_state_no_uncloak_minimized_no_coord_restore():
+    """扫描态(for_reply=False,默认)最小化状态还原：cloak 已从 minimized 分支移除
+    （cloak 跨进程 E_ACCESSDENIED 从不生效，真机铁证 ee2890bb），_restore_window_state
+    不应再触发 uncloak；没存过坐标（_saved_normal_pos 无此 hwnd）也不触碰
+    SetWindowPlacement，只需 SW_MINIMIZE(6) 把窗口还原到任务栏（decision 7b8857f7，
+    2026-07-17）。取代旧版 test_restore_window_state_scan_state_uncloaks_minimized_no_coord_restore。"""
     mw = _make_mock_mw(hwnd=141)
     user32 = MagicMock()
 
@@ -587,9 +603,9 @@ def test_restore_window_state_scan_state_uncloaks_minimized_no_coord_restore():
         else:
             delattr(ctypes, "windll")
 
-    windll_mock.dwmapi.DwmSetWindowAttribute.assert_called()
-    uncloak_call = windll_mock.dwmapi.DwmSetWindowAttribute.call_args_list[-1][0]
-    assert uncloak_call[1] == 13 and uncloak_call[2]._obj.value == 0, "最后一次调用必须是 uncloak(cv=0)"
+    user32.ShowWindow.assert_called_with(141, 6)
+    windll_mock.dwmapi.DwmSetWindowAttribute.assert_not_called()
+    user32.SetWindowPlacement.assert_not_called()
 
 
 def test_restore_window_state_reply_state_no_uncloak_when_offscreen_off():
