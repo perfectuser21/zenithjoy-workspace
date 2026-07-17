@@ -225,17 +225,17 @@ jobs:
         shell: powershell
         run: |
           $log = Join-Path $env:RUNNER_TEMP 'agent-out.log'
-          $content = Get-Content $log -Raw
-          if ($content -notmatch '\[bootstrap\]\[plan-only\] 将执行: delete_stale_task ZJTestOnce') {
-            Write-Error "startup-reset 未识别预埋 ZJTestOnce 任务（plan-only 行缺失）"; exit 1
+          $content = Get-Content $log -Raw -Encoding utf8
+          if ($content -notmatch '\[bootstrap\]\[plan-only\].*delete_stale_task ZJTestOnce') {
+            Write-Error "startup-reset did not plan seeded ZJTestOnce task (plan-only line missing)"; exit 1
           }
-          if ($content -notmatch '\[bootstrap\]\[plan-only\] 将执行: delete_debris .*zj-e2e-debris\.txt') {
-            Write-Error "startup-reset 未识别预埋残骸文件"; exit 1
+          if ($content -notmatch '\[bootstrap\]\[plan-only\].*delete_debris .*zj-e2e-debris\.txt') {
+            Write-Error "startup-reset did not plan seeded debris file"; exit 1
           }
           if ($content -notmatch '\[bootstrap\] startup-reset checklist: ok=') {
-            Write-Error "startup-reset checklist 汇总行缺失"; exit 1
+            Write-Error "startup-reset checklist summary line missing"; exit 1
           }
-          Write-Host "startup-reset plan-only 断言全过 ✅"
+          Write-Host "startup-reset plan-only assertions passed"
 
       - name: Install Playwright
         shell: powershell
