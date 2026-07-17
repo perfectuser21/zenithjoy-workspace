@@ -591,11 +591,29 @@ ok "Step 16 ✅ 已登记：真机段由 Kotlin 单测守，等 Android evaluato
 echo "▶ Step 17: dm-outreach-result httpClient 禁用连接池回归（真机段等价断言见 AgentServiceHttpClientTest）"
 ok "Step 17 ✅ 已登记：真机段由 Kotlin 单测守，等 Android evaluator 通道纳入 nightly 真机复跑"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 18：dm_outreach 同一 task_id 重投递去重——根治幽灵派单吃频控
+# （真机复现 2026-07-17 xian-rog，Seg4 私信照跑撞出的第 2 个新根因）
+#
+# 真机段等价断言 + TODO：本 bug 100% 发生在 Android 心跳重投递+本地频控计数交互层
+# （回执上报未确认前，心跳每~30s 原样重投递同一 task_id，routeDmOutreachTask 此前
+# 对每次投递都重新计频控，几次幽灵重投递就能占满整个 10 分钟窗口，连累完全无关的
+# 新任务被误判 rate-limited）——没有对应的服务端可观测行为（服务端只是老实按心跳
+# 协议重复下发同一条 queued 任务，这是协议本身允许的正常重试），curl/psql 无法复现
+# "设备本地进程内已处理过的 task_id 集合"这个状态，只能由 Kotlin JVM 单测锁定：
+# AgentServiceDmDedupTest 断言 shouldSkipDuplicateDmTask 对已见过的 task_id 返回
+# true、对未见过的返回 false。
+# TODO(Android evaluator 通道)：接管后应在真机 nightly 里补一条"人为让回执上报失败
+# 3 次以上，确认同一 task_id 被心跳重投递时不会二次消耗频控名额"的场景。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 18: dm_outreach task_id 重投递去重回归（真机段等价断言见 AgentServiceDmDedupTest）"
+ok "Step 18 ✅ 已登记：真机段由 Kotlin 单测守，等 Android evaluator 通道纳入 nightly 真机复跑"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" 2>/dev/null
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Path 2 16 步本地版 smoke 全绿（服务端段）"
+echo "  ✅ Path 2 18 步本地版 smoke 全绿（服务端段）"
 echo "  真机段：等 Android evaluator 通道（xian-rog nightly）接管复跑"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 exit 0
