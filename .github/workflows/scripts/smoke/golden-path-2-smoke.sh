@@ -609,11 +609,28 @@ ok "Step 17 ✅ 已登记：真机段由 Kotlin 单测守，等 Android evaluato
 echo "▶ Step 18: dm_outreach task_id 重投递去重回归（真机段等价断言见 AgentServiceDmDedupTest）"
 ok "Step 18 ✅ 已登记：真机段由 Kotlin 单测守，等 Android evaluator 通道纳入 nightly 真机复跑"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 19：无障碍服务启动健康自检——force-stop 关闭无障碍不再静默失效
+# （真机复现 2026-07-17 xian-rog，Seg4 私信照跑撞出的第 3 个新根因）
+#
+# 真机段等价断言 + TODO：本 bug 100% 发生在 Android 系统级无障碍服务生命周期层
+# （force-stop 重启 App 会被系统整体关闭无障碍服务，且无任何显式报错，采集/私信/
+# 账号扫描静默全部失效）——App 本身无 WRITE_SECURE_SETTINGS 权限无法自动恢复，
+# 只能让失效可观测，没有对应的服务端可观测行为，curl/psql 无法复现"系统级无障碍
+# 开关状态"，只能由 Kotlin JVM 单测锁定：AgentServiceAccessibilityHealthTest 断言
+# missingAccessibilityServices 对 force-stop 后典型的 null/部分启用状态能正确报出
+# 缺失的服务列表。
+# TODO(Android evaluator 通道)：接管后应在真机 nightly 里补一条"force-stop 重启后
+# 检查 logcat 出现无障碍服务缺失的错误日志"的场景，确认失效不再是纯静默现象。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 19: 无障碍服务启动健康自检回归（真机段等价断言见 AgentServiceAccessibilityHealthTest）"
+ok "Step 19 ✅ 已登记：真机段由 Kotlin 单测守，等 Android evaluator 通道纳入 nightly 真机复跑"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" 2>/dev/null
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Path 2 18 步本地版 smoke 全绿（服务端段）"
+echo "  ✅ Path 2 19 步本地版 smoke 全绿（服务端段）"
 echo "  真机段：等 Android evaluator 通道（xian-rog nightly）接管复跑"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 exit 0
