@@ -3,6 +3,8 @@ import https from 'https';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { WebSocketServer, WebSocket } from 'ws';
+import { buildJsonFrame, buildAudioFrame, parseFrame, EventSend } from './doubao-protocol.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -11,6 +13,13 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const REALTIME_MODEL = process.env.REALTIME_MODEL || 'gpt-realtime-2.1-mini';
 const REALTIME_VOICE = process.env.REALTIME_VOICE || 'marin';
 const INSTRUCTIONS = '你是一位中文AI助手。所有回答使用普通话。回答保持自然。不要太长。控制在20秒以内。';
+
+const VOLC_APP_ID = process.env.VOLC_APP_ID;
+const VOLC_ACCESS_KEY = process.env.VOLC_ACCESS_KEY;
+const VOLC_APP_KEY = 'PlgvMymc7f3tQnJ6'; // 火山引擎固定值，非密钥
+const VOLC_RESOURCE_ID = 'volc.speech.dialog';
+const VOLC_WS_URL = 'wss://openspeech.bytedance.com/api/v3/realtime/dialogue';
+const VOLC_VOICE = process.env.VOLC_VOICE || 'zh_female_vv_jupiter_bigtts';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 
@@ -47,6 +56,132 @@ function createRealtimeSession() {
     req.on('error', reject);
     req.write(body);
     req.end();
+  });
+}
+
+/**
+ * 国内版语音管线：浏览器 WS ⇄ 服务器 ⇄ 豆包 Realtime Dialogue WS
+ * 浏览器发 JSON 控制消息（start/stop）+ 二进制 PCM16 16kHz 单声道音频块
+ * 服务器发 JSON 状态/日志消息 + 二进制 PCM16 24kHz 单声道音频块（AI 回复语音）
+ */
+function handleDomesticConnection(browserWs) {
+  let doubaoWs = null;
+  let sessionId = null;
+
+  const send = (obj) => {
+    if (browserWs.readyState === WebSocket.OPEN) browserWs.send(JSON.stringify(obj));
+  };
+  const log = (message) => send({ type: 'log', message });
+  const status = (state) => send({ type: 'status', state });
+
+  function startDoubaoSession() {
+    if (!VOLC_APP_ID || !VOLC_ACCESS_KEY) {
+      send({ type: 'error', message: 'VOLC_APP_ID/VOLC_ACCESS_KEY not configured' });
+      return;
+    }
+    sessionId = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    status('connecting');
+    log('连接豆包 Realtime Dialogue...');
+
+    doubaoWs = new WebSocket(VOLC_WS_URL, {
+      headers: {
+        'X-Api-App-ID': VOLC_APP_ID,
+        'X-Api-Access-Key': VOLC_ACCESS_KEY,
+        'X-Api-Resource-Id': VOLC_RESOURCE_ID,
+        'X-Api-App-Key': VOLC_APP_KEY,
+      },
+    });
+
+    doubaoWs.on('open', () => {
+      doubaoWs.send(buildJsonFrame(EventSend.StartConnection, null, {}));
+    });
+
+    doubaoWs.on('message', (data) => {
+      const parsed = parseFrame(Buffer.isBuffer(data) ? data : Buffer.from(data));
+      switch (parsed.eventName) {
+        case 'ConnectionStarted':
+          doubaoWs.send(
+            buildJsonFrame(EventSend.StartSession, sessionId, {
+              dialog: { bot_name: '豆包', system_role: INSTRUCTIONS },
+              tts: {
+                speaker: VOLC_VOICE,
+                audio_config: { channel: 1, format: 'pcm_s16le', sample_rate: 24000 },
+              },
+              asr: { audio_info: { format: 'pcm', sample_rate: 16000, channel: 1 } },
+            })
+          );
+          break;
+        case 'SessionStarted':
+          log(`Session 建立成功，dialog_id=${parsed.payload.dialog_id || ''}`);
+          status('connected');
+          break;
+        case 'ASRInfo':
+          status('listening');
+          log('检测到用户开始说话');
+          break;
+        case 'ASRResponse': {
+          const text = (parsed.payload.results || []).map((r) => r.text).join('');
+          if (text) log(`识别中: ${text}`);
+          break;
+        }
+        case 'ChatResponse':
+          status('speaking');
+          break;
+        case 'TTSResponse':
+          if (parsed.audio && parsed.audio.length && browserWs.readyState === WebSocket.OPEN) {
+            browserWs.send(parsed.audio, { binary: true });
+          }
+          break;
+        case 'ChatEnded':
+          status('connected');
+          log('AI 回复结束');
+          break;
+        case 'DialogCommonError':
+          send({ type: 'error', message: JSON.stringify(parsed.payload) });
+          break;
+        default:
+          break;
+      }
+      if (parsed.messageType === 0b1111 && parsed.eventName !== 'DialogCommonError') {
+        send({ type: 'error', message: `豆包错误: ${JSON.stringify(parsed.payload)}` });
+      }
+    });
+
+    doubaoWs.on('error', (err) => {
+      log(`豆包连接错误: ${err.message}`);
+      send({ type: 'error', message: err.message });
+    });
+
+    doubaoWs.on('close', () => {
+      status('');
+      log('豆包连接已关闭');
+    });
+  }
+
+  browserWs.on('message', (data, isBinary) => {
+    if (isBinary) {
+      if (doubaoWs && doubaoWs.readyState === WebSocket.OPEN && sessionId) {
+        doubaoWs.send(buildAudioFrame(sessionId, Buffer.isBuffer(data) ? data : Buffer.from(data)));
+      }
+      return;
+    }
+    let msg;
+    try {
+      msg = JSON.parse(data.toString('utf8'));
+    } catch {
+      return;
+    }
+    if (msg.type === 'start') startDoubaoSession();
+    else if (msg.type === 'stop') {
+      if (doubaoWs && doubaoWs.readyState === WebSocket.OPEN && sessionId) {
+        doubaoWs.send(buildJsonFrame(EventSend.FinishSession, sessionId, {}));
+      }
+      doubaoWs?.close();
+    }
+  });
+
+  browserWs.on('close', () => {
+    doubaoWs?.close();
   });
 }
 
@@ -96,9 +231,24 @@ function createServer() {
   });
 }
 
-const isMain = process.argv[1] === fileURLToPath(import.meta.url);
-if (isMain) {
-  createServer().listen(PORT, () => console.log(`realtime-mvp listening on :${PORT}, model=${REALTIME_MODEL}`));
+function attachDomesticWebSocket(server) {
+  const wss = new WebSocketServer({ noServer: true });
+  wss.on('connection', handleDomesticConnection);
+  server.on('upgrade', (req, socket, head) => {
+    if (req.url === '/ws/domestic') {
+      wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws));
+    } else {
+      socket.destroy();
+    }
+  });
+  return wss;
 }
 
-export { createServer, createRealtimeSession };
+const isMain = process.argv[1] === fileURLToPath(import.meta.url);
+if (isMain) {
+  const server = createServer();
+  attachDomesticWebSocket(server);
+  server.listen(PORT, () => console.log(`realtime-mvp listening on :${PORT}, model=${REALTIME_MODEL}`));
+}
+
+export { createServer, createRealtimeSession, attachDomesticWebSocket };
