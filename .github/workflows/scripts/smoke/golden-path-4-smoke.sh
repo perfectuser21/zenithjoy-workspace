@@ -7,7 +7,8 @@
 #   Step 1  客户扫码绑定个人微信号 → Agent 建立后台 UIA 监听（不弹前台窗口）
 #   Step 2  客户装客户端 → Agent 注册连中台（Step 2c：config.json 的 apiUrl 缓存跟随 live env 刷新，2026-07-17 真机根治）
 #   Step 3  Agent 检测到微信已登录、找到主窗口 → 开始后台静默监听（服务端等价断言：dryrun + overlay 存在；
-#           Step 3e：scan_unread 扫描期间开窗读消息不再永久抢走用户前台键鼠焦点，2026-07-17 真机根治）
+#           Step 3e：scan_unread 扫描期间开窗读消息不再永久抢走用户前台键鼠焦点；
+#           Step 3f：扫描前守卫窗口最大化自愈接入 cooldown，不再反复 maximize/minimize，2026-07-17 真机根治）
 #   Step 6  上线自检消息——每次启动发一条给固定测试联系人（task 7be2842d，纯函数等价断言）
 #   Step 7  客户触发好友扫描 / 联系人首次发消息 → 系统建立该联系人 CRM 档案（真链路：friend-scan/trigger+ingest）
 #   Step 8  客户在中台 CRM 客户列表页，给联系人打 A1-A5 状态（真链路：customer-profile 六字段）
@@ -704,6 +705,21 @@ assert '_set_foreground_window(prev_fg)' in src, 'scan_unread 未真正还焦点
 print('PASS')
 " 2>/dev/null && ok "Step 3e ✅ scan_unread 已接入前台焦点归还机制（不再永久抢键鼠焦点）" \
              || fail "Step 3e scan_unread 前台焦点归还回归——真机可能又会抢键盘鼠标" 3
+
+# Step 3f：扫描前守卫窗口最大化自愈须有 cooldown，不能每个 scan interval 都反复触发
+# （2026-07-17 用户真机反馈：微信窗口每隔几秒最大化一次然后最小化，反复循环）
+python3 -c "
+with open('services/agent/wechat-rpa/listen_chat.py', encoding='utf-8') as f:
+    lines = f.readlines()
+anchor_idx = next(i for i, l in enumerate(lines) if '扫描前守卫（issue 99741ff9 补丁' in l)
+window = [l for l in lines[anchor_idx:anchor_idx + 25] if not l.strip().startswith('#')]
+assert any('now - last_window_maximize >= _WINDOW_MAXIMIZE_COOLDOWN' in l for l in window), \
+    '扫描前守卫缺 cooldown 检查'
+assert any('last_window_maximize = now' in l for l in window), \
+    '扫描前守卫缺 cooldown 更新'
+print('PASS')
+" 2>/dev/null && ok "Step 3f ✅ 扫描前守卫已接入 cooldown 节流（不再每个 scan interval 反复触发）" \
+             || fail "Step 3f 扫描前守卫 cooldown 回归——真机可能又会反复 maximize/minimize" 3
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ✅ Path 4 16 步 golden path smoke 服务端段全通"
