@@ -721,6 +721,24 @@ print('PASS')
 " 2>/dev/null && ok "Step 3f ✅ 扫描前守卫已接入 cooldown 节流（不再每个 scan interval 反复触发）" \
              || fail "Step 3f 扫描前守卫 cooldown 回归——真机可能又会反复 maximize/minimize" 3
 
+# Step 3g：扫描态/回复态窗口可见性拆分——纯扫描 cloak 静默，回复态保留可见+送达确认
+# （2026-07-17 用户真机反馈：微信窗口每隔十几秒弹出来又缩回去，根因=scan_unread每轮
+# 都真实弹窗；修法=_ensure_tray_visible/_restore_window_state 加 for_reply 参数）
+# 真机段 TODO：xian-rog 验证窗口不再每隔十几秒弹出/缩回，同时确认真有消息时依然可见+能正常回复送达
+python3 -c "
+import sys; sys.path.insert(0, 'services/agent/wechat-rpa')
+import listen_chat, inspect
+ensure_src = inspect.getsource(listen_chat._ensure_tray_visible)
+restore_src = inspect.getsource(listen_chat._restore_window_state)
+reply_src = inspect.getsource(listen_chat.reply_in_chat)
+assert 'for_reply: bool = False' in ensure_src, '_ensure_tray_visible 缺 for_reply 参数'
+assert 'for_reply: bool = False' in restore_src, '_restore_window_state 缺 for_reply 参数'
+assert '_ensure_tray_visible(mw, for_reply=True)' in reply_src, 'reply_in_chat 未显式传 for_reply=True'
+assert '_restore_window_state(mw, orig_state, for_reply=True)' in reply_src, 'reply_in_chat 还原调用未显式传 for_reply=True'
+print('PASS')
+" 2>/dev/null && ok "Step 3g ✅ 扫描态/回复态窗口可见性已拆分（for_reply参数+3处调用点正确传参）" \
+             || fail "Step 3g 扫描态/回复态可见性拆分回归——真机可能又会每隔几秒弹出/缩回" 3
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ✅ Path 4 16 步 golden path smoke 服务端段全通"
 echo "  真机段：xian-rog 真机验收证据见 sprints/07150800-line04-overlay-continuation/evidence/"
