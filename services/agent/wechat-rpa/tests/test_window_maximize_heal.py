@@ -158,3 +158,46 @@ def test_heartbeat_self_heal_maximizes_then_minimizes():
         f"应有 2 处窗口自愈调用点（心跳自愈 + 扫描前守卫）都遵循 "
         f"maximize→settle→minimize 序列，实际找到 {sites} 处"
     )
+
+
+# ★ 2026-07-17 真机反馈根治：扫描前守卫无 cooldown，反复 maximize→minimize
+#
+# 用户实测反馈：微信窗口每隔几秒最大化一次然后最小化，反复循环，肉眼可见的窗口闪烁。
+#
+# 根因排查：心跳自愈调用点有 `now - last_window_maximize >= _WINDOW_MAXIMIZE_COOLDOWN`
+# （300s）节流；但扫描前守卫调用点（v1.0.120，2026-07-16 改成 maximize→settle→minimize
+# 后）从未接入这套节流——只要 window_needs_maximize() 为 True 就无条件触发。窗口
+# minimize 后若 rcNormalPosition 本身仍是非最大化小窗（_ensure_tray_visible 用
+# ShowWindow(4) 恢复到的正是这个尺寸），下一次 scan interval（几秒一次）再次判定
+# needs_maximize=True，导致每个 scan 周期都重新触发一次完整的
+# maximize→settle(1.5s)→minimize 序列——这才是用户看到"反复全屏又缩小"的真正原因。
+#
+# 修法：扫描前守卫接入与心跳自愈**共享同一个** last_window_maximize 时间戳 +
+# _WINDOW_MAXIMIZE_COOLDOWN 节流，两处调用点合并成一套节流窗口，不再各自为战。
+def test_pre_scan_guard_has_cooldown_gate():
+    """扫描前守卫必须像心跳自愈一样接入 cooldown 节流，否则每个 scan interval
+    都会重新触发一次 maximize→settle→minimize（真机反馈：反复全屏又缩小）。
+    """
+    src_path = os.path.join(WECHAT_RPA_DIR, "listen_chat.py")
+    with open(src_path, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    anchor_idx = next(
+        i for i, l in enumerate(lines) if "扫描前守卫（issue 99741ff9 补丁" in l
+    )
+    window = lines[anchor_idx:anchor_idx + 25]
+    has_cooldown_check = any(
+        "last_window_maximize" in l and "_WINDOW_MAXIMIZE_COOLDOWN" in l for l in window
+    )
+    has_cooldown_update = any(
+        "last_window_maximize = now" in l or "last_window_maximize=now" in l
+        for l in window
+    )
+    assert has_cooldown_check, (
+        "扫描前守卫必须检查 now - last_window_maximize >= _WINDOW_MAXIMIZE_COOLDOWN，"
+        "否则每个 scan interval 都会反复触发 maximize→minimize（真机反馈：窗口反复闪烁）"
+    )
+    assert has_cooldown_update, (
+        "扫描前守卫触发后必须更新 last_window_maximize = now，"
+        "否则 cooldown 检查形同虚设（下一轮判定仍会用陈旧时间戳）"
+    )
