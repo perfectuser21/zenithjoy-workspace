@@ -79,6 +79,11 @@ class AgentService : Service() {
     // 跨进程重启持久化频控窗口留作后续加厚项（不影响 10 分钟窗口本身的正确性判定）。
     private val dmSentTimestamps = java.util.Collections.synchronizedList(mutableListOf<Long>())
 
+    // 真机复现(2026-07-17)：回执上报若迟迟未被确认，心跳会把同一个 task_id 原样重投递
+    // 多次——本集合记录本进程生命周期内已经处理过的 dm_outreach task_id，防止重投递
+    // 重复消耗频控名额、重复触发无障碍执行（见 shouldSkipDuplicateDmTask）。
+    private val dmSeenTaskIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
     private val dmOutreachResultReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != DouyinDmOutreachService.ACTION_DM_OUTREACH_RESULT) return
@@ -567,6 +572,16 @@ class AgentService : Service() {
     // 10 分钟窗口 ≤3 条），超限直接构造 limited 结果广播上报，不启动无障碍执行流程；
     // 未超限才真正 dispatchTask 给 DouyinDmOutreachService 走无障碍打开主页→点私信→发送流程。
     private fun routeDmOutreachTask(task: HttpHeartbeatLoop.HeartbeatTask) {
+        // 真机复现(2026-07-17)：回执上报若迟迟未被服务端确认(如连接池超时)，任务会永远
+        // 停在 queued，心跳每~30s 就把同一个 task_id 原样重投递——不去重的话每次投递都
+        // 会重新消耗频控名额，几次幽灵重投递就能占满整个窗口，连累完全无关的新任务被
+        // 误判 rate-limited。本进程生命周期内已处理过的 task_id 直接跳过。
+        if (shouldSkipDuplicateDmTask(task.task_id, dmSeenTaskIds)) {
+            android.util.Log.i(TAG, "dm_outreach task ${task.task_id} already seen this session — skip duplicate redelivery")
+            return
+        }
+        dmSeenTaskIds.add(task.task_id)
+
         // Seg3 方案 B′：搜索目标取 douyin_id（裸抖音号），不是 profile_url。
         // DouyinDmOutreachService 把收到的字段当抖音号往搜索框里搜——喂 URL 必然 NO_MATCH。
         // payload 里的 profile_url 是给 Windows 通道 page.goto 用的，语义相反，不可混用。
@@ -837,6 +852,14 @@ class AgentService : Service() {
         // routeDmOutreachTask()。真正的判别符跟 warmup 一样得走 payload.task_type
         // （dispatchDue 把它塞进了 payload JSON 里，经心跳 realPayload 透传到 agent）。
         fun shouldRouteDmOutreach(payloadTaskType: String?): Boolean = payloadTaskType == "dm_outreach"
+
+        /**
+         * 判定某个 dm_outreach task_id 是否是本进程生命周期内已经处理过的重投递。
+         * 真机复现(2026-07-17)：回执上报未确认前，心跳会把同一个 task_id 原样重投递多次
+         * ——已见过就跳过，不再重复消耗频控名额、不再重复触发无障碍执行。
+         */
+        internal fun shouldSkipDuplicateDmTask(taskId: String, alreadySeenTaskIds: Set<String>): Boolean =
+            taskId in alreadySeenTaskIds
 
         /**
          * dm_outreach 派单 payload → 搜索目标抖音号（Seg3 方案 B′）。
