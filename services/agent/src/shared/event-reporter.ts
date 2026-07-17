@@ -8,7 +8,7 @@
 // 死规矩：失败必须静默吞（try/catch），绝不抛、绝不崩 agent。观测是旁路，挂了不影响主流程。
 
 export interface EventReporterConfig {
-  apiBase: string; // 中台基址，例 https://api.zenithjoy.com
+  apiBase: string; // 中台基址，例 https://autopilot.zenjoymedia.media
   license: string; // license key → x-license-key 头
   agentId?: string; // 本机 agent_id（随 body 上报）
 }
