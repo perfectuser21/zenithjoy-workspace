@@ -4743,3 +4743,10 @@ agent_suite:
   status: active
   product: AI员工
   note: "PR#1243: 真机验收复现——dm_assignments chk_dm_assign_status 约束缺 'cancelled'，rescoreLead() FR-8 降级取消直接违反 CHECK 约束；真 Postgres 校验 pg_get_constraintdef 含 'cancelled'"
+- id: realtime-voice-mvp-doubao-protocol
+  path: apps/realtime-voice-mvp/doubao-protocol.test.js
+  type: unit
+  ci: L3
+  status: active
+  product: 其他
+  note: "PR#1366: 豆包 Realtime Dialogue 二进制协议编解码单元测试，含真实抓包字节的回归用例"

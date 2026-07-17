@@ -40,7 +40,8 @@ echo "  realtime-voice-mvp-domestic smoke"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 echo "▶ [1/4] 单元测试：doubao-protocol.js"
-(cd "$APP_DIR" && npm install --no-audit --no-fund --silent 2>&1 | tail -5 && node --test doubao-protocol.test.js) || {
+npm install --no-audit --no-fund --silent 2>&1 | tail -5
+(cd "$APP_DIR" && npx vitest run) || {
   echo "  FAIL: 单元测试失败"
   exit 1
 }

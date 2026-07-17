@@ -16,7 +16,8 @@ const INSTRUCTIONS = '你是一位中文AI助手。所有回答使用普通话�
 
 const VOLC_APP_ID = process.env.VOLC_APP_ID;
 const VOLC_ACCESS_KEY = process.env.VOLC_ACCESS_KEY;
-const VOLC_APP_KEY = 'PlgvMymc7f3tQnJ6'; // 火山引擎固定值，非密钥
+// 火山引擎公开文档固定值（非密钥，所有开发者共用，写在部署 .env 里）
+const VOLC_APP_KEY = process.env.VOLC_APP_KEY;
 const VOLC_RESOURCE_ID = 'volc.speech.dialog';
 const VOLC_WS_URL = 'wss://openspeech.bytedance.com/api/v3/realtime/dialogue';
 const VOLC_VOICE = process.env.VOLC_VOICE || 'zh_female_vv_jupiter_bigtts';
@@ -75,8 +76,8 @@ function handleDomesticConnection(browserWs) {
   const status = (state) => send({ type: 'status', state });
 
   function startDoubaoSession() {
-    if (!VOLC_APP_ID || !VOLC_ACCESS_KEY) {
-      send({ type: 'error', message: 'VOLC_APP_ID/VOLC_ACCESS_KEY not configured' });
+    if (!VOLC_APP_ID || !VOLC_ACCESS_KEY || !VOLC_APP_KEY) {
+      send({ type: 'error', message: 'VOLC_APP_ID/VOLC_ACCESS_KEY/VOLC_APP_KEY not configured' });
       return;
     }
     sessionId = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
