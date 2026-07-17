@@ -2993,7 +2993,7 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
     prev_fg = _get_foreground_window()
     wechat_hwnd = _safe_hwnd(mw)
     # 确保窗口可见，UIA 坐标才有效（_open_chat PostMessage 点击依赖有效坐标）
-    orig_state = _ensure_tray_visible(mw)
+    orig_state = _ensure_tray_visible(mw, for_reply=True)
     try:
         fmw = _fresh_mw()
         if sender:
@@ -3063,7 +3063,7 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
     except Exception as exc:
         _log(f"reply_in_chat: 失败: {exc}")
     finally:
-        _restore_window_state(mw, orig_state)
+        _restore_window_state(mw, orig_state, for_reply=True)
         # Qt 上切会话 Select() 会短暂抢前台 ~2s → 操作完把焦点还给操作前的窗口，不抢用户键鼠焦点
         if _should_restore_foreground(prev_fg, wechat_hwnd):
             # 等切会话 / _navigate_away 的前台激活落定，再还焦点（否则被晚到的激活覆盖，焦点留在微信）

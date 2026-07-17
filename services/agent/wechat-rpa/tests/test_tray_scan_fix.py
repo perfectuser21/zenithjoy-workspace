@@ -614,3 +614,15 @@ def test_restore_window_state_reply_state_no_uncloak_when_offscreen_off():
             delattr(ctypes, "windll")
 
     windll_mock.dwmapi.DwmSetWindowAttribute.assert_not_called()
+
+
+def test_reply_in_chat_source_passes_for_reply_true():
+    """回归锚点：reply_in_chat 对 _ensure_tray_visible/_restore_window_state 的调用必须
+    显式传 for_reply=True，防止以后被误改回默认值（扫描态的 cloak-only 行为混进回复态
+    会导致回复时窗口被隐身，UIA 坐标失效/送达确认读不到）。"""
+    import inspect
+    src = inspect.getsource(listen_chat.reply_in_chat)
+    assert '_ensure_tray_visible(mw, for_reply=True)' in src, \
+        "reply_in_chat 必须显式 _ensure_tray_visible(mw, for_reply=True)"
+    assert '_restore_window_state(mw, orig_state, for_reply=True)' in src, \
+        "reply_in_chat 必须显式 _restore_window_state(mw, orig_state, for_reply=True)"
