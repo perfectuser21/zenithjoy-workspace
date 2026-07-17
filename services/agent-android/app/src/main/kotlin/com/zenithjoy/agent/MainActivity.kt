@@ -108,7 +108,7 @@ class MainActivity : AppCompatActivity() {
             orientation = android.widget.LinearLayout.VERTICAL
             setPadding(48, 48, 48, 48)
         }
-        val input = EditText(this).apply { hint = "License Key (ZJ-XXXX)" }
+        val input = EditText(this).apply { hint = "License Key（格式 ZJ-X-XXXXXXXX，如 ZJ-F-A1B2C3D4）" }
         val apiInput = EditText(this).apply {
             hint = "API URL (留空用默认)"
             setText(AgentConfig.DEFAULT_WS_URL)
@@ -118,6 +118,14 @@ class MainActivity : AppCompatActivity() {
             val license = input.text.toString().trim()
             if (license.isEmpty()) {
                 Toast.makeText(this, "请输入 License Key", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            if (!AgentConfig.isValidLicenseKeyFormat(license)) {
+                Toast.makeText(
+                    this,
+                    "License Key 格式不对，应为 ZJ-X-XXXXXXXX（例如 ZJ-F-A1B2C3D4），请检查后重新输入",
+                    Toast.LENGTH_LONG,
+                ).show()
                 return@setOnClickListener
             }
             config.licenseKey = license
@@ -145,7 +153,13 @@ class MainActivity : AppCompatActivity() {
                 appendLine()
                 appendLine("Agent ID: ${config.agentId.ifEmpty { "未注册" }}")
                 appendLine("Machine ID: ${config.machineId.ifEmpty { "未计算" }}")
-                appendLine("注册状态: ${if (config.isRegistered) "已注册 (tier=${config.tier})" else "未注册"}")
+                val registerStatus = if (config.isRegistered) {
+                    "已注册 (tier=${config.tier})"
+                } else {
+                    val reason = config.lastRegisterError
+                    if (reason.isNotEmpty()) "未注册（原因：$reason）" else "未注册"
+                }
+                appendLine("注册状态: $registerStatus")
                 appendLine("API: ${config.apiUrl}")
                 appendLine("无障碍: ${if (collectServiceEnabled(this@MainActivity)) "已开启" else "未开启"}")
             }
@@ -156,6 +170,7 @@ class MainActivity : AppCompatActivity() {
         resetBtn.setOnClickListener {
             config.licenseKey = ""
             config.wsToken = ""
+            config.lastRegisterError = ""
             MediaProjectionHolder.clear()
             showLicenseInput()
         }

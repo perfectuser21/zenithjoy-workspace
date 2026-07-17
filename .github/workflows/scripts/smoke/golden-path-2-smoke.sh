@@ -103,6 +103,22 @@ AGENT_PK=$(psq "SELECT id FROM zenithjoy.agents WHERE tenant_id='$TENANT_ID' ORD
 [ -n "$AGENT_PK" ] || fail "Step 2 agents 表无该 tenant 的 agent 行" 2
 ok "Step 2 ✅ agent 注册 → agents.id=${AGENT_PK}（tenant 已关联）"
 
+# Step 2b：register 失败必须带 message 字段（真机段等价断言，Android App 状态页
+# "未注册"旁展示的原因文案就是原样透传这个 message——2026-07-16 真机排障发现 App
+# 端 register() 失败一律吞成 null，用户完全看不出到底哪一步出的问题；本 smoke 断言
+# 服务端契约没有回归，Android 端消费逻辑走 Kotlin 单测覆盖，见
+# services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/AgentRegistrarFailureReasonTest.kt
+# TODO(android-evaluator-channel): 真机 App 状态页展示效果由 Android 通道接管后在真机 workflow 复跑。
+echo "▶ Step 2b: register 配额超限（QUOTA_EXCEEDED）必须带 message"
+S2B_TMP=$(mktemp)
+S2B_HTTP=$(curl -s -o "$S2B_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/agent/register" -H "Content-Type: application/json" \
+  -d "{\"license_key\":\"$LICENSE_KEY\",\"machine_id\":\"p2-smoke-${RND}-second\",\"hostname\":\"p2-smoke-host-2\"}")
+[ "$S2B_HTTP" = "403" ] || fail "Step 2b free tier 第二台机器 register 应 403 QUOTA_EXCEEDED，got $S2B_HTTP: $(cat "$S2B_TMP")" 2
+python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d.get('code')=='QUOTA_EXCEEDED'; assert isinstance(d.get('message'), str) and d['message']" "$S2B_TMP" 2>/dev/null \
+  || fail "Step 2b QUOTA_EXCEEDED 响应必须带非空 message 字段（Android 状态页靠它显示原因）: $(cat "$S2B_TMP")" 2
+ok "Step 2b ✅ register 失败响应带 message，App 端可透传展示"
+
 # ───────────────────────────────────────────────────────────────────
 # Step 3：Android 端 Agent 连中台 — 真实调用方 shape 等价断言（#1267 路径）
 # 生产 Android agent 用 x-agent-id header（服务端反查真 tenant），不是 body/X-Tenant-Id。

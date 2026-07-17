@@ -38,6 +38,11 @@ class AgentConfig(context: Context) {
         get() = prefs.getString(KEY_TIER, "") ?: ""
         set(v) = prefs.edit().putString(KEY_TIER, v).apply()
 
+    /** register() 最近一次失败原因（中文），成功后清空。状态页"未注册"旁展示，免得用户抓 adb。 */
+    var lastRegisterError: String
+        get() = prefs.getString(KEY_LAST_REGISTER_ERROR, "") ?: ""
+        set(v) = prefs.edit().putString(KEY_LAST_REGISTER_ERROR, v).apply()
+
     /** apiUrl: wss://api.zenithjoy.com/agent-ws */
     var apiUrl: String
         get() = prefs.getString(KEY_API_URL, DEFAULT_WS_URL) ?: DEFAULT_WS_URL
@@ -71,7 +76,14 @@ class AgentConfig(context: Context) {
         private const val KEY_TIER = "tier"
         private const val KEY_API_URL = "api_url"
         private const val KEY_REGISTER_API_URL = "register_api_url"
+        private const val KEY_LAST_REGISTER_ERROR = "last_register_error"
 
         const val DEFAULT_WS_URL = "wss://api.zenithjoy.com/agent-ws"
+
+        // 与后端 apps/api/src/services/license.service.ts 的 LICENSE_KEY_PATTERN 保持一致，
+        // 客户端先校验一次，避免格式错误的 key 绕一圈网络才在服务端 400。
+        private val LICENSE_KEY_PATTERN = Regex("^ZJ-[FBMSE]-[A-Z0-9]{8}$")
+
+        fun isValidLicenseKeyFormat(key: String): Boolean = LICENSE_KEY_PATTERN.matches(key)
     }
 }
