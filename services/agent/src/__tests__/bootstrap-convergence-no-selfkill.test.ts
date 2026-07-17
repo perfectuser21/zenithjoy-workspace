@@ -20,6 +20,15 @@ const BASE: EnvState = {
   activeCoreName: 'zenithjoy-agent-v2.0.75',
   scheduledTask: { exists: true, targetPath: 'C:\\u\\v2.0.75\\start.vbs', targetExists: true },
   licensePresent: true,
+  // ── startup-reset 字段
+  orphanRpaPythons: [],
+  weixinTopLevelPids: [500],
+  coreDirEnv: { expectedDir: 'C:\\u\\Desktop\\zenithjoy-agent-v2.0.75', persisted: true },
+  pythonEmbeddedPresent: true,
+  envConfigConsistent: true,
+  debrisFiles: [],
+  staleOnceZjTasks: [],
+  staleLockFiles: [],
 };
 
 describe('planConvergence — 绝不杀自己的祖先启动链（2.0.75 自杀回归）', () => {
