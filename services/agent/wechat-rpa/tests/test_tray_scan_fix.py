@@ -567,3 +567,50 @@ def test_ensure_tray_visible_minimized_reply_state_no_cloak_when_offscreen_off()
         listen_chat._OFFSCREEN_REPLY = original_offscreen
 
     windll_mock.dwmapi.DwmSetWindowAttribute.assert_not_called()
+
+
+def test_restore_window_state_scan_state_uncloaks_minimized_no_coord_restore():
+    """扫描态(for_reply=False,默认)cloak 过的 minimized 状态，_restore_window_state 必须
+    uncloak，且不触碰 SetWindowPlacement（没挪过坐标，没什么好还原的）。"""
+    mw = _make_mock_mw(hwnd=141)
+    user32 = MagicMock()
+
+    windll_mock = MagicMock(user32=user32, kernel32=MagicMock(), dwmapi=MagicMock())
+    had_windll = hasattr(ctypes, "windll")
+    original_windll = getattr(ctypes, "windll", None)
+    ctypes.windll = windll_mock
+    try:
+        listen_chat._restore_window_state(mw, 'minimized')
+    finally:
+        if had_windll:
+            ctypes.windll = original_windll
+        else:
+            delattr(ctypes, "windll")
+
+    windll_mock.dwmapi.DwmSetWindowAttribute.assert_called()
+    uncloak_call = windll_mock.dwmapi.DwmSetWindowAttribute.call_args_list[-1][0]
+    assert uncloak_call[1] == 13 and uncloak_call[2]._obj.value == 0, "最后一次调用必须是 uncloak(cv=0)"
+
+
+def test_restore_window_state_reply_state_no_uncloak_when_offscreen_off():
+    """回复态(for_reply=True)且 OFFSCREEN_REPLY=False 时，_restore_window_state('minimized')
+    不应触发 uncloak（因为 ensure 阶段本来就没 cloak 过，对照组）。"""
+    mw = _make_mock_mw(hwnd=142)
+    user32 = MagicMock()
+
+    windll_mock = MagicMock(user32=user32, kernel32=MagicMock(), dwmapi=MagicMock())
+    had_windll = hasattr(ctypes, "windll")
+    original_windll = getattr(ctypes, "windll", None)
+    ctypes.windll = windll_mock
+    original_offscreen = listen_chat._OFFSCREEN_REPLY
+    try:
+        listen_chat._OFFSCREEN_REPLY = False
+        listen_chat._restore_window_state(mw, 'minimized', for_reply=True)
+    finally:
+        listen_chat._OFFSCREEN_REPLY = original_offscreen
+        if had_windll:
+            ctypes.windll = original_windll
+        else:
+            delattr(ctypes, "windll")
+
+    windll_mock.dwmapi.DwmSetWindowAttribute.assert_not_called()

@@ -607,7 +607,7 @@ def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
     return ''
 
 
-def _restore_window_state(mw: Any, original_state: str) -> None:
+def _restore_window_state(mw: Any, original_state: str, for_reply: bool = False) -> None:
     """将微信还原到 original_state 指定的状态，须与 _ensure_tray_visible 配对使用。
 
     'tray'      → SW_HIDE(0) 送回系统托盘
@@ -653,9 +653,11 @@ def _restore_window_state(mw: Any, original_state: str) -> None:
                         _ct.windll.user32.SetWindowPos(_hwnd, 0, _orig[0], _orig[1], 0, 0, _SWP)
                     except Exception:
                         pass
-        # DWM uncloak（与 _ensure_tray_visible 中的 cloak 配对，v1.0.93）
-        # tray 分支无论 OFFSCREEN_REPLY 都 cloak，其他分支仅 OFFSCREEN_REPLY=True cloak
-        if original_state == 'tray' or (original_state and _OFFSCREEN_REPLY):
+        # DWM uncloak（与 _ensure_tray_visible 中的 cloak 配对，v1.0.93；for_reply 解耦 2026-07-17）
+        # tray 分支无论 OFFSCREEN_REPLY 都 cloak；minimized/visible 分支：OFFSCREEN_REPLY=True
+        # 时走legacy挪坐标+cloak路径，for_reply=False（扫描态）时走新的cloak-only路径——
+        # 两条路径任一发生过 cloak，这里都要 uncloak
+        if original_state == 'tray' or (original_state and (_OFFSCREEN_REPLY or not for_reply)):
             try:
                 _cv = _ct.c_int(0)
                 _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
