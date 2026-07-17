@@ -20,6 +20,7 @@
 #   2  服务未能在超时内启动
 #   3  GET /domestic.html 不符合预期
 #   4  WebSocket 握手或错误处理不符合预期
+#   5  前端 WebSocket 用了绝对根路径（子路径部署会跳出前缀，真机测试实锤过一次）
 
 set -uo pipefail
 
@@ -94,11 +95,18 @@ ws.addEventListener('error', () => { console.log('FAIL: WebSocket 连接错误')
 ") || { echo "  FAIL: WebSocket 交互不符合预期"; cat "$LOG_FILE"; exit 4; }
 echo "  PASS"
 
-echo "▶ [4/4] 服务进程未崩溃"
+echo "▶ [4/5] 服务进程未崩溃"
 if ! kill -0 "$SERVER_PID" 2>/dev/null; then
   echo "  FAIL: 服务进程已退出（可能崩溃）"
   cat "$LOG_FILE"
   exit 4
+fi
+echo "  PASS"
+
+echo "▶ [5/5] 前端 WebSocket 必须是相对当前页面路径构造（子路径部署兼容性）"
+if grep -qE "WebSocket\(\`\\\$\{proto\}//\\\$\{location\.host\}/ws/domestic" "$APP_DIR/public/domestic.html"; then
+  echo "  FAIL: domestic.html 用 location.host + 绝对根路径拼 WebSocket URL，子路径部署（如 /realtime-mvp/）下会连到错误路径"
+  exit 5
 fi
 echo "  PASS"
 
