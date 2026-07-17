@@ -974,6 +974,13 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
     if operator_fg and _CLOAK_OWNED:
         _uncloak_window(mw)
         _CLOAK_OWNED = False
+    # 不抢前台焦点（真机反馈 2026-07-17：抢键盘鼠标，人没法用）：本轮读取层若真的
+    # 打开过候选会话（_open_chat 的 Select() 会短暂抢前台 ~2s），扫完必须把焦点还给
+    # 操作前的前台窗口——同 reply_in_chat 已验证的 _should_restore_foreground 机制
+    # （PrepPRD 需求 2）。之前只有回复路径接了这套归还，扫描路径（每 6-10s 一轮，
+    # 比回复频繁得多）从未接入，是用户感知"抢键盘鼠标"的真正主因。
+    prev_fg = _get_foreground_window()
+    wechat_hwnd = _safe_hwnd(mw)
     orig_state = _ensure_tray_visible(mw)
     # 记录【可见态】整树大小(窗口此刻已 ensure_visible，与 _is_uia_tree_collapsed 同口径)：主循环据此
     # 更新 last_readable_scan_at——心跳块裸读处于隐藏态恒报塌缩假象，读到健康树=微信能读会话=没塌缩。
@@ -1158,6 +1165,11 @@ def scan_unread(mw: Any, last_preview: Optional[Dict[str, str]] = None,
         pass  # 常驻隐身：不 SW_HIDE 不 uncloak，下一轮 ensure 直接 no-op
     else:
         _restore_window_state(mw, orig_state)
+    # 还前台焦点（真机反馈 2026-07-17）：本轮真打开过候选会话才可能偷过焦点，
+    # 没开过（opened==0）则什么都没偷，不触发任何前台操作。
+    if opened > 0 and _should_restore_foreground(prev_fg, wechat_hwnd):
+        _set_foreground_window(prev_fg)
+        _log(f"scan_unread: 焦点已归还操作前前台窗口(hwnd={prev_fg})")
     return out
 
 

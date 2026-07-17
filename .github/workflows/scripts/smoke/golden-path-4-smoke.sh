@@ -6,7 +6,8 @@
 # 16 步与断言层级：
 #   Step 1  客户扫码绑定个人微信号 → Agent 建立后台 UIA 监听（不弹前台窗口）
 #   Step 2  客户装客户端 → Agent 注册连中台（Step 2c：config.json 的 apiUrl 缓存跟随 live env 刷新，2026-07-17 真机根治）
-#   Step 3  Agent 检测到微信已登录、找到主窗口 → 开始后台静默监听（服务端等价断言：dryrun + overlay 存在）
+#   Step 3  Agent 检测到微信已登录、找到主窗口 → 开始后台静默监听（服务端等价断言：dryrun + overlay 存在；
+#           Step 3e：scan_unread 扫描期间开窗读消息不再永久抢走用户前台键鼠焦点，2026-07-17 真机根治）
 #   Step 6  上线自检消息——每次启动发一条给固定测试联系人（task 7be2842d，纯函数等价断言）
 #   Step 7  客户触发好友扫描 / 联系人首次发消息 → 系统建立该联系人 CRM 档案（真链路：friend-scan/trigger+ingest）
 #   Step 8  客户在中台 CRM 客户列表页，给联系人打 A1-A5 状态（真链路：customer-profile 六字段）
@@ -689,6 +690,20 @@ assert listen_chat.should_defer_scroll_for_active_user(idle_ms=1500) is False
 print('PASS')
 " 2>/dev/null && ok "Step 3d ✅ 滚轮避让活跃用户判定逻辑正确" \
              || fail "Step 3d 滚轮避让逻辑异常——真实鼠标可能又会打断用户" 3
+
+# Step 3e：scan_unread 扫描期间开窗读消息不能永久抢走用户前台键鼠焦点
+# （2026-07-17 用户真机反馈：抢键盘鼠标，人没法用——根因是 reply_in_chat 早已还焦点，
+# scan_unread 的读取层 _open_chat 调用从未接入这套归还机制，而扫描比回复频繁得多）
+python3 -c "
+import sys; sys.path.insert(0, 'services/agent/wechat-rpa')
+import listen_chat, inspect
+src = inspect.getsource(listen_chat.scan_unread)
+assert '_get_foreground_window()' in src, 'scan_unread 未采集操作前前台窗口'
+assert '_should_restore_foreground(prev_fg, wechat_hwnd)' in src, 'scan_unread 未接入归还判定'
+assert '_set_foreground_window(prev_fg)' in src, 'scan_unread 未真正还焦点'
+print('PASS')
+" 2>/dev/null && ok "Step 3e ✅ scan_unread 已接入前台焦点归还机制（不再永久抢键鼠焦点）" \
+             || fail "Step 3e scan_unread 前台焦点归还回归——真机可能又会抢键盘鼠标" 3
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ✅ Path 4 16 步 golden path smoke 服务端段全通"
