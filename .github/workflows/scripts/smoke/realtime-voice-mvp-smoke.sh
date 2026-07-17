@@ -10,12 +10,16 @@
 #   1. 服务能正常启动
 #   2. GET  /          返回 200，页面包含预期标题
 #   3. POST /session   缺 OPENAI_API_KEY 时返回 500 + 明确错误信息（不崩溃、不裸露堆栈）
+#   4. 前端不得用绝对根路径 fetch('/session')（regression：部署在 /realtime-mvp/ 子路径
+#      下时，绝对路径会跳出前缀打到 https://host/session，落进反代默认兜底站点被拒
+#      405——2026-07-17 真机测试实锤过一次，必须用相对路径 fetch('session')）
 #
 # 退出码：
 #   0  全过
 #   1  服务未能在超时内启动
 #   2  GET / 不符合预期
 #   3  POST /session 错误处理不符合预期
+#   4  前端 fetch 用了绝对根路径（子路径部署会跳出前缀）
 
 set -uo pipefail
 
@@ -73,6 +77,13 @@ if ! grep -q "OPENAI_API_KEY" /tmp/rtm-session-resp.json; then
   echo "  FAIL: 错误信息未指明缺少 OPENAI_API_KEY"
   cat /tmp/rtm-session-resp.json
   exit 3
+fi
+echo "  PASS"
+
+echo "▶ [3/3] 前端 fetch 路径必须是相对路径（子路径部署兼容性）"
+if grep -qE "fetch\(['\"]\/session" "$APP_DIR/public/index.html"; then
+  echo "  FAIL: index.html 用了绝对根路径 fetch('/session')，子路径部署（如 /realtime-mvp/）下会 404/405"
+  exit 4
 fi
 echo "  PASS"
 

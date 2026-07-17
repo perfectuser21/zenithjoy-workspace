@@ -97,7 +97,7 @@
       log('麦克风权限获取成功');
 
       log('调用 /session 换取临时密钥...');
-      const sessionResp = await fetch('/session', { method: 'POST' });
+      const sessionResp = await fetch('session', { method: 'POST' });
       if (!sessionResp.ok) {
         const errBody = await sessionResp.text();
         throw new Error(`/session 失败: ${sessionResp.status} ${errBody}`);
