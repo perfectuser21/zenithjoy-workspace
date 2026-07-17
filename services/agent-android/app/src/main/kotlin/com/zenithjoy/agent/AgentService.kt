@@ -306,15 +306,28 @@ class AgentService : Service() {
         if (!config.isRegistered) {
             android.util.Log.i(TAG, "registering with license...")
             val registrar = AgentRegistrar()
-            val result = withContext(Dispatchers.IO) { registrar.register(config) }
-            if (result != null) {
-                config.wsToken = result.wsToken
-                config.machineId = result.machineId
-                if (!result.tier.isNullOrEmpty()) config.tier = result.tier
-                if (!result.agentUuid.isNullOrEmpty()) config.agentUuid = result.agentUuid
-                android.util.Log.i(TAG, "registered — tier=${config.tier} uuid=${config.agentUuid}")
-            } else {
-                android.util.Log.w(TAG, "registration failed — continuing with license key fallback")
+            val registerRequest = AgentRegistrar.RegisterRequest(
+                licenseKey = config.licenseKey,
+                machineId = config.machineId,
+                hostname = android.os.Build.MODEL,
+                agentId = config.agentId,
+                version = BuildConfig.VERSION_NAME,
+                httpBase = config.deriveHttpBase(),
+            )
+            when (val outcome = withContext(Dispatchers.IO) { registrar.register(registerRequest) }) {
+                is AgentRegistrar.RegisterOutcome.Success -> {
+                    val result = outcome.result
+                    config.wsToken = result.wsToken
+                    config.machineId = result.machineId
+                    if (!result.tier.isNullOrEmpty()) config.tier = result.tier
+                    if (!result.agentUuid.isNullOrEmpty()) config.agentUuid = result.agentUuid
+                    config.lastRegisterError = ""
+                    android.util.Log.i(TAG, "registered — tier=${config.tier} uuid=${config.agentUuid}")
+                }
+                is AgentRegistrar.RegisterOutcome.Failure -> {
+                    config.lastRegisterError = outcome.reason
+                    android.util.Log.w(TAG, "registration failed: ${outcome.reason} — continuing with license key fallback")
+                }
             }
         } else {
             android.util.Log.i(TAG, "already registered, skipping")

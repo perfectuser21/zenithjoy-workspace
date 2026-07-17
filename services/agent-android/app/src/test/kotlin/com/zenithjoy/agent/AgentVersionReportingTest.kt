@@ -27,10 +27,10 @@ class AgentVersionReportingTest {
         )
     )
 
-    private fun agentRegistrarSource() = readSource(
+    private fun agentServiceSource() = readSource(
         listOf(
-            "src/main/kotlin/com/zenithjoy/agent/AgentRegistrar.kt",
-            "app/src/main/kotlin/com/zenithjoy/agent/AgentRegistrar.kt",
+            "src/main/kotlin/com/zenithjoy/agent/AgentService.kt",
+            "app/src/main/kotlin/com/zenithjoy/agent/AgentService.kt",
         )
     )
 
@@ -50,10 +50,10 @@ class AgentVersionReportingTest {
     }
 
     @Test
-    fun `AgentRegistrar reports BuildConfig VERSION_NAME not a stale constant`() {
+    fun `AgentService builds the register request version from BuildConfig VERSION_NAME not a stale constant`() {
         assertTrue(
-            "AgentRegistrar 上报的 version 字段必须来自 BuildConfig.VERSION_NAME",
-            agentRegistrarSource().contains("BuildConfig.VERSION_NAME"),
+            "AgentService 组装 RegisterRequest.version 字段必须来自 BuildConfig.VERSION_NAME",
+            agentServiceSource().contains("BuildConfig.VERSION_NAME"),
         )
     }
 
