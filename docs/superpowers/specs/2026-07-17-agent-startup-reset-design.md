@@ -24,7 +24,7 @@ staleOnceZjTasks: string[];                            // 计划任务：名匹�
 staleLockFiles: string[];                              // %PUBLIC%/zj-*.lock 且 mtime>10分钟（两把锁持有时长均为秒级）
 ```
 
-进程父子关系复用现有 `Win32_Process` ParentProcessId 一次采集（已为祖先链采集过，同一份 map 复用，不加第二次全表查询）。
+进程父子关系复用现有 `Win32_Process` ParentProcessId 一次采集（已为祖先链采集过，同一份 map 复用，不加第二次全表查询；`parentOf` 需从 try 块局部提升到函数作用域。孤儿判据=父 PID 不在存活进程 keys 里；weixinTopLevelPids 用定向 Weixin.exe PID 查询 + parentOf 查 ppid）。
 
 ### 2. ConvergenceAction 新增类型（planConvergence 纯函数分支）
 
@@ -53,7 +53,7 @@ interface StartupResetReport { ok: boolean; reason?: string }   // 与 ModuleSta
 
 - 5 项各自 pass/fail/skipped(plan-only) 汇总：任一 fail → ok=false，reason 列缺项（服务端截 500 字符内自行压缩）。
 - 落点：`module_status.startup_reset`。Research 实证服务端无 key 白名单，AdminCustomersPage 遍历展示（红行）；ModuleHealthPage 固定列不显示（可接受，诊断表可见即达标）。
-- **覆盖式快照坑**：`saveModuleStatus` 整列覆盖 → index.ts 持有 `startupResetReport` 常量，在 `syncModulesFromHeartbeat` 的 `loop.setModuleStatus(report)` 处合并 `{ ...report, startup_reset: startupResetReport }`；且 heartbeat loop 启动后立即 `setModuleStatus({ startup_reset })` 一次，模块未同步前也可见。
+- **覆盖式快照坑**：`saveModuleStatus` 整列覆盖 → index.ts 持有模块级 `startupResetReport`，在 `syncModulesFromHeartbeat` 的 `loop.setModuleStatus(report)` 处合并 `{ ...report, startup_reset: startupResetReport }`；且在 `loop.start()` **之前** `setModuleStatus({ startup_reset })` 一次（start() 同步 sendOnce 在首个 await 前就读 moduleStatus——放 start 前首拍心跳即带上）。
 - 心跳不通时：结果驻留 loop 内存，下次成功心跳自然带上；本地日志始终先行。
 
 ### 5. 启动序列接线（index.ts 第零步现址扩展）
