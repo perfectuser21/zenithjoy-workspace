@@ -678,6 +678,14 @@ tests:
     product: 中台认证
     note: "Sprint 06222100 — 心跳响应下发 required_agent_version(version/sha256/size)，核心自升级单一信号；单一来源 getRequiredAgentVersion=install pack manifest.version，回退 DEFAULT_REQUIRED_AGENT_VERSION。"
 
+  - id: agent-startup-reset-smoke
+    path: .github/workflows/scripts/smoke/agent-startup-reset-smoke.sh
+    type: e2e
+    ci: L4
+    status: active
+    product: AI员工
+    note: "startup-reset 启动归零 smoke（decision 0f0368cf，2026-07-17）——5步 checklist API层断言：planStartupReset 幂等/孤儿RPA/微信归一/残骸清理/proven-to-fire（python-embedded缺失→env_check报红、config不一致→报红）、CI护栏（plan-only actionsExecuted=0）。真机操作用 injected deps 等价断言。"
+
   - id: agent-core-self-upgrade-smoke
     path: .github/workflows/scripts/smoke/agent-core-self-upgrade-smoke.sh
     type: e2e
