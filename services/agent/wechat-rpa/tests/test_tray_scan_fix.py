@@ -495,3 +495,61 @@ def test_restore_window_state_minimized_restores_rcnormalposition():
 
     user32.SetWindowPlacement.assert_called()
     assert 224 not in listen_chat._saved_normal_pos, "_saved_normal_pos 应在还原后清除 hwnd=224"
+
+
+def test_ensure_tray_visible_minimized_scan_state_cloaks_when_offscreen_off():
+    """扫描态(for_reply=False,默认)：最小化窗口即使 OFFSCREEN_REPLY=False 也必须 DWM cloak，
+    防止纯扫描把窗口真实弹出可见（真机反馈闪烁根因，for_reply 参数引入）。"""
+    mw = _make_mock_mw(hwnd=131)
+    user32 = MagicMock()
+    user32.IsWindowVisible.return_value = True
+    user32.IsIconic.return_value = 1
+
+    original_offscreen = listen_chat._OFFSCREEN_REPLY
+    try:
+        listen_chat._OFFSCREEN_REPLY = False
+        windll_mock = MagicMock(user32=user32, kernel32=MagicMock(), dwmapi=MagicMock())
+        had_windll = hasattr(ctypes, "windll")
+        original_windll = getattr(ctypes, "windll", None)
+        ctypes.windll = windll_mock
+        try:
+            with patch("time.sleep"):
+                listen_chat._ensure_tray_visible(mw)
+        finally:
+            if had_windll:
+                ctypes.windll = original_windll
+            else:
+                delattr(ctypes, "windll")
+    finally:
+        listen_chat._OFFSCREEN_REPLY = original_offscreen
+
+    windll_mock.dwmapi.DwmSetWindowAttribute.assert_called()
+
+
+def test_ensure_tray_visible_minimized_reply_state_no_cloak_when_offscreen_off():
+    """回复态(for_reply=True)：最小化窗口 OFFSCREEN_REPLY=False 时不 cloak——保持 6 月 B 方案
+    可见+送达确认+焦点安全行为不变（对照组）。"""
+    mw = _make_mock_mw(hwnd=132)
+    user32 = MagicMock()
+    user32.IsWindowVisible.return_value = True
+    user32.IsIconic.return_value = 1
+
+    original_offscreen = listen_chat._OFFSCREEN_REPLY
+    try:
+        listen_chat._OFFSCREEN_REPLY = False
+        windll_mock = MagicMock(user32=user32, kernel32=MagicMock(), dwmapi=MagicMock())
+        had_windll = hasattr(ctypes, "windll")
+        original_windll = getattr(ctypes, "windll", None)
+        ctypes.windll = windll_mock
+        try:
+            with patch("time.sleep"):
+                listen_chat._ensure_tray_visible(mw, for_reply=True)
+        finally:
+            if had_windll:
+                ctypes.windll = original_windll
+            else:
+                delattr(ctypes, "windll")
+    finally:
+        listen_chat._OFFSCREEN_REPLY = original_offscreen
+
+    windll_mock.dwmapi.DwmSetWindowAttribute.assert_not_called()

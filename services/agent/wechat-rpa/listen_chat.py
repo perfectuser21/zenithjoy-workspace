@@ -487,7 +487,7 @@ def _parse_item_name(name: str, require_unread: bool = True) -> Optional[Dict[st
 # ─── pywinauto 真模式：扫未读 + 自动回（函数体内 import）─────────────────────────
 
 
-def _ensure_tray_visible(mw: Any) -> str:
+def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
     """若微信在托盘或最小化，将其移到离屏可操作位置。
 
     返回原始状态字符串（调用方须持有，操作完成后调 _restore_window_state 还原）：
@@ -561,6 +561,14 @@ def _ensure_tray_visible(mw: Any) -> str:
                         _wp.rcLeft, _wp.rcTop = _OFFSCREEN_X, _OFFSCREEN_Y
                         _wp.rcRight, _wp.rcBottom = _OFFSCREEN_X + _w, _OFFSCREEN_Y + _h
                         _ct.windll.user32.SetWindowPlacement(_hwnd, _ct.byref(_wp))
+                except Exception:
+                    pass
+            elif not for_reply:
+                # 扫描态（for_reply=False，新默认）：即使 OFFSCREEN_REPLY=False 也要 cloak，
+                # 只隐身不挪坐标——纯扫描不该让用户看到窗口弹出（真机反馈闪烁根因，2026-07-17）
+                try:
+                    _cv = _ct.c_int(1)
+                    _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
                 except Exception:
                     pass
             _ct.windll.user32.ShowWindow(_hwnd, 4)  # SW_SHOWNOACTIVATE = 4：恢复到 rcNormalPosition（已改为离屏）
