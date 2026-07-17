@@ -185,9 +185,11 @@ def test_pre_scan_guard_has_cooldown_gate():
     anchor_idx = next(
         i for i, l in enumerate(lines) if "扫描前守卫（issue 99741ff9 补丁" in l
     )
-    window = lines[anchor_idx:anchor_idx + 25]
+    # 只看可执行代码行，剔除注释行——否则解释性注释里恰好同时出现两个关键词
+    # 就能骗过检查（本测试自身踩过这个坑：commit 历史里曾发生过一次）。
+    window = [l for l in lines[anchor_idx:anchor_idx + 25] if not l.strip().startswith("#")]
     has_cooldown_check = any(
-        "last_window_maximize" in l and "_WINDOW_MAXIMIZE_COOLDOWN" in l for l in window
+        "now - last_window_maximize >= _WINDOW_MAXIMIZE_COOLDOWN" in l for l in window
     )
     has_cooldown_update = any(
         "last_window_maximize = now" in l or "last_window_maximize=now" in l

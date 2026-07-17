@@ -4809,17 +4809,23 @@ def run_real_listen(args: argparse.Namespace) -> int:
             # 跳过本轮扫描等 UIA 树重建。心跳 maximize 后同轮立即 scan 仍读旧单栏树的竞态根治。
             # 2026-07-16 根治（xian-rog 真机验证同上）：MAXIMIZE 触发排版后须 MINIMIZE 收回，
             # 不能让这里也把窗口永久留在全屏（真机测过直接 minimize 不触发排版，此步不可省）。
+            # 2026-07-17 根治（真机反馈：窗口每隔几秒反复 maximize→minimize）：minimize 后
+            # _ensure_tray_visible 恢复到的 rcNormalPosition 若本身仍是非最大化小窗，
+            # 下一个 scan interval 会再次判定 needs_maximize=True 无限重触发——必须与心跳
+            # 自愈共享同一个 last_window_maximize + _WINDOW_MAXIMIZE_COOLDOWN 节流窗口。
             if mw is not None and platform.system() == "Windows":
                 try:
                     import ctypes as _ctg
                     _mh_scan = _safe_hwnd(mw)
-                    if _mh_scan and window_needs_maximize(
+                    if (_mh_scan and window_needs_maximize(
                         bool(_ctg.windll.user32.IsZoomed(_mh_scan)),
                         bool(_ctg.windll.user32.IsIconic(_mh_scan)),
-                    ):
+                    ) and now - last_window_maximize >= _WINDOW_MAXIMIZE_COOLDOWN):
                         _ctg.windll.user32.ShowWindow(_mh_scan, 3)  # SW_MAXIMIZE：触发排版，不可省
                         time.sleep(_WINDOW_HEAL_SETTLE_SLEEP)
                         _ctg.windll.user32.ShowWindow(_mh_scan, 6)  # SW_MINIMIZE：收回，不占用户屏幕
+                        last_window_maximize = now
+                        maximize_heals += 1
                         _log("[扫描守卫] 非最大化(单栏布局)→已 MAXIMIZE 触发排版后 MINIMIZE 收回，跳过本轮扫描等 UIA 树重建")
                         time.sleep(args.interval)
                         continue
