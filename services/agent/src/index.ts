@@ -143,7 +143,7 @@ function loadOrInitConfig(): AgentConfig {
       apiUrl:
         process.env.ZENITHJOY_API_URL ||
         existing?.apiUrl ||
-        'wss://api.zenithjoy.com/agent-ws',
+        'wss://autopilot.zenjoymedia.media/agent-ws',
       loggedInAt: Date.now(),
     };
     writeConfig(cfg);

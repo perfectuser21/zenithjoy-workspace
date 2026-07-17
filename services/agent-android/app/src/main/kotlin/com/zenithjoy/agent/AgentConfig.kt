@@ -43,7 +43,7 @@ class AgentConfig(context: Context) {
         get() = prefs.getString(KEY_LAST_REGISTER_ERROR, "") ?: ""
         set(v) = prefs.edit().putString(KEY_LAST_REGISTER_ERROR, v).apply()
 
-    /** apiUrl: wss://api.zenithjoy.com/agent-ws */
+    /** apiUrl: wss://autopilot.zenjoymedia.media/agent-ws */
     var apiUrl: String
         get() = prefs.getString(KEY_API_URL, DEFAULT_WS_URL) ?: DEFAULT_WS_URL
         set(v) = prefs.edit().putString(KEY_API_URL, v).apply()
@@ -78,7 +78,7 @@ class AgentConfig(context: Context) {
         private const val KEY_REGISTER_API_URL = "register_api_url"
         private const val KEY_LAST_REGISTER_ERROR = "last_register_error"
 
-        const val DEFAULT_WS_URL = "wss://api.zenithjoy.com/agent-ws"
+        const val DEFAULT_WS_URL = "wss://autopilot.zenjoymedia.media/agent-ws"
 
         // 与后端 apps/api/src/services/license.service.ts 的 LICENSE_KEY_PATTERN 保持一致，
         // 客户端先校验一次，避免格式错误的 key 绕一圈网络才在服务端 400。

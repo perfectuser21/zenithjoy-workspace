@@ -34,7 +34,7 @@ class HttpHeartbeatLoop(
 
     /** 心跳请求所需的最小参数集（纯 data class，无 Android 框架依赖，方便单测）。 */
     data class Params(
-        val httpBase: String,           // https://api.zenithjoy.com
+        val httpBase: String,           // https://autopilot.zenjoymedia.media
         val licenseKey: String,
         val agentId: String,            // 当前运行期 agentId
         val agentUuid: String,          // register 返的 UUID（可空）
