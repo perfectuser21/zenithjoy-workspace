@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from typing import Any, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -374,30 +375,92 @@ def discover_weixin_exe() -> Optional[str]:
     return None
 
 
-def launch_weixin(exe_path: Optional[str] = None) -> bool:
+_LAUNCH_LOCK_STALE_SECONDS = 30
+_DEFAULT_LAUNCH_LOCK_PATH = os.path.join(
+    os.environ.get("PUBLIC", r"C:\Users\Public"), "zj-launch-weixin.lock"
+)
+
+
+def acquire_launch_lock(
+    lock_path: Optional[str] = None, stale_after: float = _LAUNCH_LOCK_STALE_SECONDS
+) -> bool:
+    """跨进程互斥锁（原子文件创建，os.open O_CREAT|O_EXCL 在 Windows/POSIX 语义一致）。
+
+    xian-rog 按既定设计同时兼任 CI self-hosted runner（job2/job3）和常驻 staging Line04
+    agent，两者独立判断"要不要启动微信"时若无协调，会同时 Popen 出多个 Weixin.exe（2026-07-17
+    实锤：4 个 Weixin.exe + 8 个 WeChatAppEx.exe 几乎同时诞生，其一卡进幽灵坐标）。本锁包住
+    "检查是否运行→决定要不要启动"整个临界区，确保同一时刻只有一个调用方能真正启动。
+
+    锁文件超过 stale_after 秒未更新（持有者大概率已崩溃/异常退出，从未释放）→ 视为陈旧锁，
+    自动清理后重新获取一次，防止一个崩溃的持锁进程永久卡死后续所有启动。
+    """
+    lock_path = lock_path or _DEFAULT_LAUNCH_LOCK_PATH
+    try:
+        fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+        return True
+    except FileExistsError:
+        try:
+            age = time.time() - os.path.getmtime(lock_path)
+        except OSError:
+            return False
+        if age > stale_after:
+            try:
+                os.remove(lock_path)
+            except OSError:
+                return False
+            return acquire_launch_lock(lock_path, stale_after)
+        return False
+    except OSError:
+        return False
+
+
+def release_launch_lock(lock_path: Optional[str] = None) -> None:
+    """释放跨进程启动锁。锁文件不存在（已被释放/从未获取）时静默忽略，不抛异常。"""
+    lock_path = lock_path or _DEFAULT_LAUNCH_LOCK_PATH
+    try:
+        os.remove(lock_path)
+    except OSError:
+        pass
+
+
+def launch_weixin(exe_path: Optional[str] = None, lock_path: Optional[str] = None) -> bool:
     """
     启动 Weixin.exe（微信 4.x 客户端）。
 
     - exe_path 未指定时自动探测（discover_weixin_exe），适配任意机器无需手动配置。
     - 成功启动返回 True；文件不存在 / 非 Windows / spawn 异常返回 False。
-    - 已在运行时也返回 True（幂等）。
+    - 已在运行时也返回 True（幂等——2026-07-17 前实现只在文档里承诺过这一点，从未真正检查，
+      是 xian-rog CI+常驻staging并发启动微信、堆积僵尸进程的根因之一，现已补上真实检查）。
+    - 跨进程互斥（acquire_launch_lock）：拿不到锁（另一调用方正在检查/启动）→ 不重试等待，
+      直接返回当前 is_weixin_running() 的结果，交给下一轮循环。
     """
     import subprocess  # noqa: PLC0415
-    path = exe_path or discover_weixin_exe()
-    if not path or not os.path.isfile(path):
-        logger.warning("找不到 Weixin.exe（已自动探测所有路径），无法自动启动微信。")
-        return False
+    if not acquire_launch_lock(lock_path):
+        logger.info("launch_weixin: 另一调用方持有启动锁，跳过本次（跨进程互斥，防重复启动）")
+        return is_weixin_running()
     try:
-        CREATE_NO_WINDOW = 0x08000000
-        subprocess.Popen(
-            [path],
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", CREATE_NO_WINDOW),
-        )
-        logger.info("已 Popen 启动 Weixin.exe（path=%r）", path)
-        return True
-    except Exception as exc:
-        logger.warning("启动 Weixin.exe 失败（path=%r）：%s", path, exc)
-        return False
+        if is_weixin_running():
+            logger.info("launch_weixin: 微信已在运行，跳过启动（幂等）")
+            return True
+        path = exe_path or discover_weixin_exe()
+        if not path or not os.path.isfile(path):
+            logger.warning("找不到 Weixin.exe（已自动探测所有路径），无法自动启动微信。")
+            return False
+        try:
+            CREATE_NO_WINDOW = 0x08000000
+            subprocess.Popen(
+                [path],
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", CREATE_NO_WINDOW),
+            )
+            logger.info("已 Popen 启动 Weixin.exe（path=%r）", path)
+            return True
+        except Exception as exc:
+            logger.warning("启动 Weixin.exe 失败（path=%r）：%s", path, exc)
+            return False
+    finally:
+        release_launch_lock(lock_path)
 
 
 def get_main_window() -> Optional[Any]:
