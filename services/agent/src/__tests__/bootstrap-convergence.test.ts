@@ -13,7 +13,8 @@ import { describe, it, expect } from 'vitest';
 import {
   planConvergence, classifyOrphanRpaPythons, listTopLevelWeixinPids,
   isDebrisFile, isStaleLockFile, isStaleOnceZjTask, apiPointingConsistent,
-  type EnvState, type ProcRow,
+  executeConvergence, describeAction,
+  type EnvState, type ProcRow, type ConvergenceAction,
 } from '../bootstrap-convergence';
 
 const CLEAN: EnvState = {
@@ -244,5 +245,57 @@ describe('planConvergence — startup-reset 新分支', () => {
   });
   it('干净状态仍是空清单（幂等不回归）', () => {
     expect(planConvergence(CLEAN)).toEqual([]);
+  });
+});
+
+describe('executeConvergence — planOnly 护栏 + 结果返回', () => {
+  const calls: string[] = [];
+  const deps = {
+    killPid: (pid: number) => { calls.push(`kill:${pid}`); },
+    deleteFile: (p: string) => { calls.push(`rm:${p}`); },
+    deleteTask: (t: string) => { calls.push(`deltask:${t}`); },
+    persistEnv: (n: string, v: string) => { calls.push(`setx:${n}=${v}`); },
+    reregisterAutostart: () => { calls.push('rereg'); },
+    reportGap: (d: string) => { calls.push(`gap:${d}`); },
+    log: () => {},
+  };
+  const ALL: ConvergenceAction[] = [
+    { type: 'kill_orphan_python', pid: 7, script: 'listen_chat.py' },
+    { type: 'converge_wechat', pids: [2, 4] },
+    { type: 'persist_core_dir_env', dir: 'C:\\core' },
+    { type: 'delete_debris', path: 'C:\\p\\zj-x.png' },
+    { type: 'delete_stale_task', taskName: 'ZJDbg1' },
+    { type: 'delete_stale_lock', path: 'C:\\p\\zj-a.lock' },
+    { type: 'report_config_gap', detail: 'python-embedded 缺失' },
+  ];
+
+  it('正常模式全执行，逐条返回 executed=true ok=true', () => {
+    calls.length = 0;
+    const rs = executeConvergence(ALL, deps);
+    expect(rs.every(r => r.executed && r.ok)).toBe(true);
+    expect(calls).toEqual(['kill:7', 'kill:2', 'kill:4', 'setx:ZENITHJOY_CORE_DIR=C:\\core',
+      'rm:C:\\p\\zj-x.png', 'deltask:ZJDbg1', 'rm:C:\\p\\zj-a.lock', 'gap:python-embedded 缺失']);
+  });
+
+  it('planOnly：破坏性动作零调用（executed=false ok=true），report_config_gap 照常', () => {
+    calls.length = 0;
+    const logs: string[] = [];
+    const rs = executeConvergence(ALL, { ...deps, log: (m: string) => logs.push(m) }, { planOnly: true });
+    expect(calls).toEqual(['gap:python-embedded 缺失']);
+    expect(rs.filter(r => !r.executed).length).toBe(ALL.length - 1);
+    expect(rs.every(r => r.ok)).toBe(true);
+    expect(logs.some(l => l.includes('[plan-only] 将执行: delete_stale_task ZJDbg1'))).toBe(true);
+  });
+
+  it('单动作抛错 → 该条 ok=false 带 error，其余继续（不阻断）', () => {
+    const rs = executeConvergence(ALL, { ...deps, killPid: () => { throw new Error('拒绝访问'); } });
+    expect(rs[0]).toMatchObject({ executed: true, ok: false });
+    expect(rs[0].error).toContain('拒绝访问');
+    expect(rs[rs.length - 1].ok).toBe(true);
+  });
+
+  it('describeAction 稳定可 grep', () => {
+    expect(describeAction({ type: 'delete_stale_task', taskName: 'ZJTestOnce' })).toBe('delete_stale_task ZJTestOnce');
+    expect(describeAction({ type: 'converge_wechat', pids: [2, 4] })).toBe('converge_wechat pids=2,4');
   });
 });
