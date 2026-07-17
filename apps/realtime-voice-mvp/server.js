@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { WebSocketServer, WebSocket } from 'ws';
+import { randomUUID } from 'crypto';
 import { buildJsonFrame, buildAudioFrame, parseFrame, EventSend } from './doubao-protocol.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -80,7 +81,7 @@ function handleDomesticConnection(browserWs) {
       send({ type: 'error', message: 'VOLC_APP_ID/VOLC_ACCESS_KEY/VOLC_APP_KEY not configured' });
       return;
     }
-    sessionId = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    sessionId = `sess-${randomUUID()}`;
     status('connecting');
     log('连接豆包 Realtime Dialogue...');
 
