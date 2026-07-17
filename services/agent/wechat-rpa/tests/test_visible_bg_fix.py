@@ -183,8 +183,11 @@ def test_ensure_tray_visible_visible_saves_original_pos():
     assert orig == (150, 250), f"保存的坐标应是 (150, 250)，实际是 {orig}"
 
 
-def test_ensure_tray_visible_visible_noop_when_offscreen_false():
-    """_OFFSCREEN_REPLY=False 时，可见窗口必须返回 ''（不移动）。"""
+def test_ensure_tray_visible_visible_scan_state_cloaks_when_offscreen_false():
+    """扫描态(for_reply=False,默认)：_OFFSCREEN_REPLY=False 时可见窗口不移动坐标，
+    但必须返回 'visible'（cloak-only 路径已触发）——for_reply 参数引入后的新默认行为
+    （2026-07-17，真机反馈闪烁修复）。取代旧版
+    test_ensure_tray_visible_visible_noop_when_offscreen_false（旧版断言完全不动，是本次要修的 bug 本身）。"""
     mw = _make_mock_mw(hwnd=204)
     user32 = MagicMock()
     user32.IsWindowVisible.return_value = 1
@@ -198,7 +201,27 @@ def test_ensure_tray_visible_visible_noop_when_offscreen_false():
     finally:
         listen_chat._OFFSCREEN_REPLY = original_offscreen
 
-    assert result == '', f"_OFFSCREEN_REPLY=False 时必须返回 ''，实际返回 {result!r}"
+    assert result == 'visible', f"扫描态默认 _OFFSCREEN_REPLY=False 时必须返回 'visible'，实际返回 {result!r}"
+    user32.SetWindowPos.assert_not_called()
+
+
+def test_ensure_tray_visible_visible_reply_state_noop_when_offscreen_false():
+    """回复态(for_reply=True)：_OFFSCREEN_REPLY=False 时可见窗口必须返回 ''（不移动，不 cloak）——
+    保持 6 月 B 方案行为不变，对照组。"""
+    mw = _make_mock_mw(hwnd=206)
+    user32 = MagicMock()
+    user32.IsWindowVisible.return_value = 1
+    user32.IsIconic.return_value = 0
+
+    original_offscreen = listen_chat._OFFSCREEN_REPLY
+    try:
+        listen_chat._OFFSCREEN_REPLY = False
+        with _mock_windll(user32), patch("time.sleep"):
+            result = listen_chat._ensure_tray_visible(mw, for_reply=True)
+    finally:
+        listen_chat._OFFSCREEN_REPLY = original_offscreen
+
+    assert result == '', f"回复态 _OFFSCREEN_REPLY=False 时必须返回 ''，实际返回 {result!r}"
     user32.SetWindowPos.assert_not_called()
 
 
