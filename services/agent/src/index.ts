@@ -39,6 +39,7 @@ import { mapRawCommenters } from './utils/comment-mapper';
 import { CoreUpgrader } from './core-upgrader';
 import { acquireSingleInstanceLock } from './single-instance-lock';
 import { gatherEnvState, planConvergence, executeConvergence, buildStartupResetReport, mergeStartupReset, type StartupResetReport } from './bootstrap-convergence';
+import { gatherStartupResetState, executeStartupReset, type StartupChecklistResult } from './startup-reset';
 // Sprint cp-06262240 — 任务观测上报：把 handler 开始/失败/成功接进 reportEvent 管子
 import {
   reportTaskStart,
@@ -503,6 +504,32 @@ async function main(): Promise<void> {
   const cfg = loadOrInitConfig();
   console.log(`[agent] starting agent ${cfg.agentId} (v${VERSION})`);
 
+  // === 启动前置：归零复位（startup-reset，decision 0f0368cf，2026-07-17）===
+  // 5 步 checklist：孤儿 RPA 进程归零 / 微信归一 / 环境自检 / 残骸清理
+  // checklist 结果随首次心跳 diag 上报中台，缺项报红（proven-to-fire）。
+  // 全 best-effort，归零失败不阻断启动。
+  let startupChecklistResult: StartupChecklistResult | null = null;
+  try {
+    const resetState = gatherStartupResetState({
+      selfPid: process.pid,
+      coreDir: path.dirname(process.execPath),
+    });
+    startupChecklistResult = executeStartupReset(resetState);
+    const failItems = startupChecklistResult.items.filter((i) => i.status === 'fail');
+    if (failItems.length > 0) {
+      console.warn(
+        `[startup-reset] checklist 完成，${failItems.length} 项报红：`,
+        failItems.map((i) => `${i.step}:${i.detail || '失败'}`).join('; '),
+      );
+    } else {
+      console.log(
+        `[startup-reset] checklist 全 pass（${startupChecklistResult.durationMs}ms，CI模式=${startupChecklistResult.ciMode}）`,
+      );
+    }
+  } catch (e) {
+    console.warn('[startup-reset] 归零复位失败（non-fatal，继续启动）:', e);
+  }
+
   // === 启动第零阶段：幂等环境收敛（decision 72740815）===
   // 在连中台/下载/拉模块之前先把机器收敛回干净状态：杀重复实例与僵尸启动循环、
   // 修计划任务指向、报配置缺口。全 best-effort，收敛失败绝不阻断启动。
@@ -606,7 +633,7 @@ async function main(): Promise<void> {
     cfg.machineId || computeMachineId(),
   );
 
-  startWs1HeartbeatLoop(cfg);
+  startWs1HeartbeatLoop(cfg, startupChecklistResult);
 
   // Path 4 微信监听已下沉到 line04 模块（按需下载 + fork），core 不再直接启动。
 
@@ -856,7 +883,7 @@ function buildTrayModules(
   return out;
 }
 
-function startWs1HeartbeatLoop(cfg: AgentConfig): void {
+function startWs1HeartbeatLoop(cfg: AgentConfig, startupChecklist?: StartupChecklistResult | null): void {
   const apiBase = deriveHttpApiBase(cfg);
   if (!apiBase) {
     console.log('[ws1] 无法推导 HTTP apiBase，跳过 heartbeat-loop');
@@ -1085,6 +1112,7 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
     onError: (err) => console.warn('[ws1:heartbeat] error:', err),
   });
   loop.setModuleStatus(mergeStartupReset({}, startupResetReport));
+  if (startupChecklist) loop.setStartupChecklist(startupChecklist);
   loop.start();
   console.log(`[ws1] heartbeat-loop started → ${apiBase}/api/agent/heartbeat`);
 

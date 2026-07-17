@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>OpenAI Realtime 语音验证</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px 48px;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #0b0e14; color: #e6e6e6; min-height: 100vh;
+  }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: #8a8f98; font-size: 13px; margin-bottom: 24px; }
+  .status {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 500;
+    background: #1a1d26; border: 1px solid #2a2f3a; margin-bottom: 20px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #666; }
+  .status.connected .dot { background: #3ddc84; }
+  .status.listening .dot, .status.speaking .dot { background: #4f9bff; animation: pulse 1s infinite; }
+  .status.error .dot { background: #ff5c5c; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .btns { display: flex; gap: 12px; margin-bottom: 24px; }
+  button {
+    flex: 1; padding: 14px; border-radius: 12px; border: none;
+    font-size: 15px; font-weight: 600; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  #startBtn { background: #4f9bff; color: #fff; }
+  #startBtn:disabled { background: #2a2f3a; color: #666; }
+  #stopBtn { background: #23262f; color: #e6e6e6; border: 1px solid #33384a; }
+  #stopBtn:disabled { background: #1a1d26; color: #555; }
+  .log-title { font-size: 13px; color: #8a8f98; margin-bottom: 8px; }
+  #log {
+    background: #12151c; border: 1px solid #232733; border-radius: 12px;
+    padding: 12px; height: 40vh; overflow-y: auto; font-size: 12px; line-height: 1.7;
+    font-family: "SF Mono", Menlo, monospace; color: #9fa8b8;
+  }
+  #log div { border-bottom: 1px solid #1c2029; padding: 4px 0; }
+  #log .err { color: #ff7a7a; }
+  #log .evt { color: #4f9bff; }
+</style>
+</head>
+<body>
+  <h1>OpenAI Realtime 语音验证</h1>
+  <div class="sub">点击开始，允许麦克风权限，说话后 AI 会用中文语音回复</div>
+
+  <div id="status" class="status"><span class="dot"></span><span id="statusText">Disconnected</span></div>
+
+  <div class="btns">
+    <button id="startBtn">开始</button>
+    <button id="stopBtn" disabled>停止</button>
+  </div>
+
+  <div class="log-title">事件日志</div>
+  <div id="log"></div>
+
+  <audio id="remoteAudio" autoplay playsinline></audio>
+
+<script>
+(function () {
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const statusEl = document.getElementById('status');
+  const statusText = document.getElementById('statusText');
+  const logEl = document.getElementById('log');
+  const remoteAudio = document.getElementById('remoteAudio');
+
+  let pc = null;
+  let localStream = null;
+  let dataChannel = null;
+
+  function log(msg, cls) {
+    const line = document.createElement('div');
+    if (cls) line.className = cls;
+    const t = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    line.textContent = `[${t}] ${msg}`;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+    console.log(`[realtime-mvp] ${msg}`);
+  }
+
+  function setStatus(state, text) {
+    statusEl.className = 'status ' + state;
+    statusText.textContent = text;
+  }
+
+  async function start() {
+    startBtn.disabled = true;
+    setStatus('connecting', 'Connecting');
+    log('请求麦克风权限...');
+
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      log('麦克风权限获取成功');
+
+      log('调用 /session 换取临时密钥...');
+      const sessionResp = await fetch('/session', { method: 'POST' });
+      if (!sessionResp.ok) {
+        const errBody = await sessionResp.text();
+        throw new Error(`/session 失败: ${sessionResp.status} ${errBody}`);
+      }
+      const { client_secret, model } = await sessionResp.json();
+      log(`Session 建立成功，model=${model}`, 'evt');
+
+      pc = new RTCPeerConnection();
+
+      pc.ontrack = (e) => {
+        remoteAudio.srcObject = e.streams[0];
+        log('收到 AI 音频流', 'evt');
+      };
+
+      localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+
+      dataChannel = pc.createDataChannel('oai-events');
+      dataChannel.addEventListener('message', (e) => {
+        try {
+          const evt = JSON.parse(e.data);
+          handleServerEvent(evt);
+        } catch (err) {
+          // 忽略无法解析的事件
+        }
+      });
+
+      pc.onconnectionstatechange = () => {
+        log(`WebRTC 连接状态: ${pc.connectionState}`);
+        if (pc.connectionState === 'connected') {
+          setStatus('connected', 'Connected');
+          stopBtn.disabled = false;
+        } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+          setStatus('error', 'Disconnected');
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      log('发送 SDP offer 到 OpenAI Realtime...');
+      const sdpResp = await fetch(`https://api.openai.com/v1/realtime/calls?model=${encodeURIComponent(model)}`, {
+        method: 'POST',
+        body: offer.sdp,
+        headers: {
+          Authorization: `Bearer ${client_secret}`,
+          'Content-Type': 'application/sdp',
+        },
+      });
+      if (!sdpResp.ok) {
+        const errBody = await sdpResp.text();
+        throw new Error(`WebRTC 信令失败: ${sdpResp.status} ${errBody}`);
+      }
+      const answerSdp = await sdpResp.text();
+      await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+      log('WebRTC SDP 协商完成', 'evt');
+    } catch (err) {
+      log(`错误: ${err.message}`, 'err');
+      setStatus('error', 'Error');
+      startBtn.disabled = false;
+      cleanup();
+    }
+  }
+
+  function handleServerEvent(evt) {
+    switch (evt.type) {
+      case 'input_audio_buffer.speech_started':
+        setStatus('listening', 'Listening');
+        log('用户开始说话');
+        break;
+      case 'input_audio_buffer.speech_stopped':
+        log('用户结束说话');
+        break;
+      case 'response.created':
+        setStatus('speaking', 'Speaking');
+        log('AI 开始回复', 'evt');
+        break;
+      case 'response.done':
+        setStatus('connected', 'Connected');
+        log('AI 回复结束', 'evt');
+        break;
+      case 'error':
+        log(`服务端错误: ${JSON.stringify(evt.error || evt)}`, 'err');
+        break;
+      default:
+        break;
+    }
+  }
+
+  function cleanup() {
+    if (dataChannel) { dataChannel.close(); dataChannel = null; }
+    if (pc) { pc.close(); pc = null; }
+    if (localStream) { localStream.getTracks().forEach((t) => t.stop()); localStream = null; }
+  }
+
+  function stop() {
+    cleanup();
+    setStatus('', 'Disconnected');
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    log('已断开连接');
+  }
+
+  startBtn.addEventListener('click', start);
+  stopBtn.addEventListener('click', stop);
+})();
+</script>
+</body>
+</html>
