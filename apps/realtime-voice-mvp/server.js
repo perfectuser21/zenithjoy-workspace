@@ -12,6 +12,12 @@ const REALTIME_MODEL = process.env.REALTIME_MODEL || 'gpt-realtime-2.1-mini';
 const REALTIME_VOICE = process.env.REALTIME_VOICE || 'marin';
 const INSTRUCTIONS = '你是一位中文AI助手。所有回答使用普通话。回答保持自然。不要太长。控制在20秒以内。';
 
+// 部分出口 IP（如香港）被 OpenAI 判定 unsupported_country_region_territory，
+// 用 OPENAI_PROXY_HOST/PORT 把 TCP 连接转走美国出口；SNI/Host 仍指向 api.openai.com，
+// TLS 证书校验不受影响（隧道只做透明字节转发）。
+const OPENAI_PROXY_HOST = process.env.OPENAI_PROXY_HOST || '';
+const OPENAI_PROXY_PORT = process.env.OPENAI_PROXY_PORT || '';
+
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 
 function createRealtimeSession() {
@@ -26,10 +32,13 @@ function createRealtimeSession() {
     });
     const req = https.request(
       {
-        hostname: 'api.openai.com',
+        hostname: OPENAI_PROXY_HOST || 'api.openai.com',
+        port: OPENAI_PROXY_PORT || 443,
+        servername: 'api.openai.com',
         path: '/v1/realtime/client_secrets',
         method: 'POST',
         headers: {
+          Host: 'api.openai.com',
           Authorization: `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(body),
