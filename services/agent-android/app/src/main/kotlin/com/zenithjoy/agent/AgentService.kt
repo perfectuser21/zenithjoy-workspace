@@ -157,6 +157,30 @@ class AgentService : Service() {
             httpBase = config.deriveHttpBase(),
             agentId = { config.agentId },
         )
+
+        // 真机复现(2026-07-17 xian-rog)：force-stop 重启 App 会被 Android 系统级整体关闭
+        // 无障碍服务(accessibility_enabled=0)，且没有任何显式报错——DouyinCollectService/
+        // DouyinDmOutreachService/DeviceAccountScanService 的任务广播照常发得出去，只是
+        // 没有任何服务在监听，agent 心跳仍报 online，采集/私信/账号扫描却静默全部失效。
+        // App 本身无法在不越权(WRITE_SECURE_SETTINGS 是系统权限)的情况下自动重新开启无障碍
+        // 服务，能做的是让这个状态从"静默"变成"显式可观测"：启动时检查系统已启用的无障碍
+        // 服务列表，缺哪个就把哪个记进错误日志，附带手动恢复命令，不再靠"广播发了没人收"
+        // 这种隐蔽现象倒推排查。
+        val enabledAccessibilityRaw = android.provider.Settings.Secure.getString(
+            contentResolver, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        )
+        val missingServices = missingAccessibilityServices(enabledAccessibilityRaw, REQUIRED_ACCESSIBILITY_SERVICES)
+        if (missingServices.isNotEmpty()) {
+            android.util.Log.e(
+                TAG,
+                "无障碍服务未全部启用(force-stop 重启后常见现象)——以下服务不在系统已启用列表，" +
+                    "对应功能(采集/私信/账号扫描)将静默失效直到手动或 adb 重新开启: $missingServices\n" +
+                    "恢复命令: adb shell settings put secure enabled_accessibility_services " +
+                    "${REQUIRED_ACCESSIBILITY_SERVICES.joinToString(":")} " +
+                    "&& adb shell settings put secure accessibility_enabled 1",
+            )
+        }
+
         startForegroundCompat()
         registerReceiver(collectResultReceiver,
             IntentFilter(DouyinCollectService.ACTION_COLLECT_RESULT),
@@ -860,6 +884,26 @@ class AgentService : Service() {
          */
         internal fun shouldSkipDuplicateDmTask(taskId: String, alreadySeenTaskIds: Set<String>): Boolean =
             taskId in alreadySeenTaskIds
+
+        /**
+         * 三个无障碍服务在 `Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES` 里的组件标识
+         * （`pkg/.ClassName` 格式，真机实测格式，见 AndroidManifest.xml 对应 `<service>` 声明）。
+         */
+        val REQUIRED_ACCESSIBILITY_SERVICES = listOf(
+            "com.zenithjoy.agent/.collect.DouyinCollectService",
+            "com.zenithjoy.agent/.collect.DouyinDmOutreachService",
+            "com.zenithjoy.agent/.account.DeviceAccountScanService",
+        )
+
+        /**
+         * 判定哪些必需的无障碍服务不在系统已启用列表里。
+         * 真机复现(2026-07-17)：force-stop 重启后 `enabledServicesRaw` 会变成 null
+         * （系统级整体关闭），此时全部必需服务都算缺失。
+         */
+        internal fun missingAccessibilityServices(enabledServicesRaw: String?, requiredServices: List<String>): List<String> {
+            val enabled = enabledServicesRaw?.split(":")?.toSet() ?: emptySet()
+            return requiredServices.filterNot { it in enabled }
+        }
 
         /**
          * dm_outreach 派单 payload → 搜索目标抖音号（Seg3 方案 B′）。
