@@ -190,13 +190,33 @@ function psList(query: string): string {
   });
 }
 
+// PowerShell "a,b,c..." 逐行输出按前两个逗号切三段：pid/ppid 必不含逗号，第三段（name 或
+// CommandLine）可能本身含逗号，因此整体保留不再拆分。空行返回 null。
+function splitCsv3(line: string): [string, string, string] | null {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+  const c1 = trimmed.indexOf(',');
+  const c2 = trimmed.indexOf(',', c1 + 1);
+  if (c1 < 0 || c2 < 0) return null;
+  return [trimmed.slice(0, c1), trimmed.slice(c1 + 1, c2), trimmed.slice(c2 + 1)];
+}
+
 export function gatherEnvState(opts: {
   selfPid: number;
   activeCorePointerPath: string;
   taskName?: string;
   licensePresent: boolean;
+  // ── startup-reset 新增（全部可选，默认见下方）──
+  envApiBase?: string | null;    // 调用方传 process.env.ZENITHJOY_API_URL || ZENITHJOY_API_BASE
+  configApiUrl?: string | null;  // 调用方传 cfg.apiUrl
+  publicDir?: string;
+  coreDir?: string;
+  nowMs?: number;
 }): EnvState {
   const taskName = opts.taskName ?? 'ZenithJoyAgent';
+  const publicDir = opts.publicDir ?? (process.env.PUBLIC || 'C:\\Users\\Public');
+  const coreDir = opts.coreDir ?? path.dirname(process.execPath);
+  const nowMs = opts.nowMs ?? Date.now();
   const state: EnvState = {
     selfPid: opts.selfPid,
     selfAncestorPids: [],
@@ -217,19 +237,29 @@ export function gatherEnvState(opts: {
   };
   if (process.platform !== 'win32') return { ...state, scheduledTask: { exists: true, targetPath: null, targetExists: true } };
 
-  // 祖先进程链：沿 ParentProcessId 一路向上（拉起本核心的启动循环必在链上，绝不能杀）。
-  // 采集失败留空 [] → planConvergence 保守不杀任何循环。防父子环/PID 复用死循环：上限 32 层。
+  // procTable：全进程表（pid/ppid/name），一次查询供祖先链 + 孤儿 python 判父死 + 微信顶层
+  // 三处复用，避免重复起 PowerShell 进程。采集失败留空 [] → 三处下游各自回落到"干净"
+  // （保守不杀/无孤儿/无顶层）。防父子环/PID 复用死循环：祖先链上限 32 层。
+  let procTable: ProcRow[] = [];
+  let livePids: Set<number> = new Set();
   try {
     const parentOf = new Map<number, number>();
     const out = psList(
-      'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId),$($_.ParentProcessId)" }',
+      'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId),$($_.ParentProcessId),$($_.Name)" }',
     );
+    const rows: ProcRow[] = [];
     for (const line of out.split(/\r?\n/)) {
-      const [pidStr, ppidStr] = line.trim().split(',');
-      const pid = parseInt(pidStr, 10);
-      const ppid = parseInt(ppidStr, 10);
-      if (!isNaN(pid) && !isNaN(ppid)) parentOf.set(pid, ppid);
+      const parts = splitCsv3(line);
+      if (!parts) continue;
+      const pid = parseInt(parts[0], 10);
+      const ppid = parseInt(parts[1], 10);
+      if (isNaN(pid) || isNaN(ppid)) continue;
+      rows.push({ pid, ppid, name: parts[2] });
+      parentOf.set(pid, ppid);
     }
+    procTable = rows;
+    livePids = new Set(rows.map((r) => r.pid));
+
     const chain: number[] = [];
     let cur = parentOf.get(opts.selfPid);
     for (let depth = 0; depth < 32 && cur !== undefined && cur > 0 && !chain.includes(cur); depth++) {
@@ -237,7 +267,7 @@ export function gatherEnvState(opts: {
       cur = parentOf.get(cur);
     }
     state.selfAncestorPids = chain;
-  } catch { /* ignore → 保守不杀 */ }
+  } catch { /* ignore → 保守不杀；procTable/livePids 留空，下游自然按干净处理 */ }
 
   try {
     const raw = fs.readFileSync(opts.activeCorePointerPath, 'utf8').trim().split(/\r?\n/)[0];
@@ -283,6 +313,83 @@ export function gatherEnvState(opts: {
   } catch {
     state.scheduledTask = { exists: false, targetPath: null, targetExists: false };
   }
+
+  // 孤儿 RPA python：定向查 python.exe/pythonw.exe 带 CommandLine，用 procTable 的存活 pid 判父死。
+  // CommandLine 为 $null 时 PowerShell 插值转空串，classifyOrphanRpaPythons 内部按空串安全处理。
+  try {
+    const out = psList(
+      "Get-CimInstance Win32_Process -Filter \"Name='python.exe' OR Name='pythonw.exe'\" | ForEach-Object { \"$($_.ProcessId),$($_.ParentProcessId),$($_.CommandLine)\" }",
+    );
+    const pyProcs: { pid: number; ppid: number; cmd: string }[] = [];
+    for (const line of out.split(/\r?\n/)) {
+      const parts = splitCsv3(line);
+      if (!parts) continue;
+      const pid = parseInt(parts[0], 10);
+      const ppid = parseInt(parts[1], 10);
+      if (isNaN(pid) || isNaN(ppid)) continue;
+      pyProcs.push({ pid, ppid, cmd: parts[2] });
+    }
+    state.orphanRpaPythons = classifyOrphanRpaPythons(pyProcs, livePids);
+  } catch { /* ignore → 干净默认值 [] 已在初始化中 */ }
+
+  // 微信顶层：procTable 已含全进程，直接复用，不加查询（纯函数，procTable 为空时自然返回 []）
+  state.weixinTopLevelPids = listTopLevelWeixinPids(procTable);
+
+  // coreDirEnv：OS 级 User 环境变量是否已收敛到当前活跃核心目录（根治裸 python 弹 MS Store，A2 病灶）
+  {
+    const expectedDir = coreDir;
+    let persisted = true; // 读不到时保守当已持久化，不误触发 setx 覆盖一个实际正常的值
+    try {
+      const stored = psList("[Environment]::GetEnvironmentVariable('ZENITHJOY_CORE_DIR','User')").trim();
+      persisted = !!stored && stored.toLowerCase() === expectedDir.toLowerCase();
+    } catch { /* 读不到 → 保守 persisted=true */ }
+    state.coreDirEnv = { expectedDir, persisted };
+  }
+
+  // pythonEmbeddedPresent：core 目录下内嵌 python 是否存在（缺失会导致 RPA 掉裸 python 弹 MS Store）
+  try {
+    state.pythonEmbeddedPresent = fs.existsSync(path.join(coreDir, 'python-embedded', 'python.exe'));
+  } catch { /* 目录不可读 → 保守当作存在，不误报 */ }
+
+  // envConfigConsistent：.env 与 config.json 的 API 指向是否一致（同类病 56cacd23）
+  try {
+    state.envConfigConsistent = apiPointingConsistent(opts.envApiBase ?? null, opts.configApiUrl ?? null);
+  } catch { /* ignore → null（判不了，不产生动作） */ }
+
+  // 残骸文件 + 陈旧锁：扫描 publicDir，单文件 stat 失败跳过（不因单个坏文件拖垮整体扫描）
+  try {
+    const debris: string[] = [];
+    const staleLocks: string[] = [];
+    for (const name of fs.readdirSync(publicDir)) {
+      const full = path.join(publicDir, name);
+      try {
+        const st = fs.statSync(full);
+        if (!st.isFile()) continue;
+        if (isDebrisFile(name, st.mtimeMs, nowMs)) debris.push(full);
+        if (isStaleLockFile(name, st.mtimeMs, nowMs)) staleLocks.push(full);
+      } catch { /* 单文件 stat 失败 → 跳过，不影响其余文件 */ }
+    }
+    state.debrisFiles = debris;
+    state.staleLockFiles = staleLocks;
+  } catch { /* 目录不存在等 → 干净默认值 [] 已在初始化中 */ }
+
+  // 一次性 ZJ 计划任务：ZJ 前缀 + 全部触发器为一次性 TimeTrigger + 非正式任务名 → 可删
+  try {
+    const out = psList(
+      "Get-ScheduledTask | Where-Object { $_.TaskName -like 'ZJ*' } | ForEach-Object { \"$($_.TaskName)|$(($_.Triggers | ForEach-Object { $_.CimClass.CimClassName }) -join ',')\" }",
+    );
+    const stale: string[] = [];
+    for (const line of out.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const idx = trimmed.indexOf('|');
+      if (idx < 0) continue;
+      const name = trimmed.slice(0, idx);
+      const classes = trimmed.slice(idx + 1).split(',').filter(Boolean);
+      if (isStaleOnceZjTask(name, classes)) stale.push(name);
+    }
+    state.staleOnceZjTasks = stale;
+  } catch { /* 读不到/空输出 → 干净默认值 [] 已在初始化中 */ }
 
   return state;
 }

@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest';
 import {
   planConvergence, classifyOrphanRpaPythons, listTopLevelWeixinPids,
   isDebrisFile, isStaleLockFile, isStaleOnceZjTask, apiPointingConsistent,
-  executeConvergence, describeAction,
+  executeConvergence, describeAction, gatherEnvState,
   type EnvState, type ProcRow, type ConvergenceAction,
 } from '../bootstrap-convergence';
 
@@ -297,5 +297,21 @@ describe('executeConvergence — planOnly 护栏 + 结果返回', () => {
   it('describeAction 稳定可 grep', () => {
     expect(describeAction({ type: 'delete_stale_task', taskName: 'ZJTestOnce' })).toBe('delete_stale_task ZJTestOnce');
     expect(describeAction({ type: 'converge_wechat', pids: [2, 4] })).toBe('converge_wechat pids=2,4');
+  });
+});
+
+describe('gatherEnvState — non-win 早退带齐 startup-reset 干净默认值', () => {
+  it('非 Windows 返回全干净（不产生任何动作）', () => {
+    if (process.platform === 'win32') return; // 真 Windows CI 上跳过
+    const s = gatherEnvState({ selfPid: 1, activeCorePointerPath: '/nope', licensePresent: true });
+    expect(s.orphanRpaPythons).toEqual([]);
+    expect(s.weixinTopLevelPids).toEqual([]);
+    expect(s.coreDirEnv.persisted).toBe(true);
+    expect(s.pythonEmbeddedPresent).toBe(true);
+    expect(s.envConfigConsistent).toBeNull();
+    expect(s.debrisFiles).toEqual([]);
+    expect(s.staleOnceZjTasks).toEqual([]);
+    expect(s.staleLockFiles).toEqual([]);
+    expect(planConvergence(s)).toEqual([]);
   });
 });
