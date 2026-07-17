@@ -192,6 +192,9 @@ describe('isStaleOnceZjTask — ZJ 前缀 + 仅 TimeTrigger + ≠ZenithJoyAgent 
     expect(isStaleOnceZjTask('ZJAgent', ['MSFT_TaskLogonTrigger'])).toBe(false);
     expect(isStaleOnceZjTask('ZJDbg0708', [])).toBe(false);
   });
+  it('混合触发器（TimeTrigger + LogonTrigger）→ 非纯一次性，保守不删', () => {
+    expect(isStaleOnceZjTask('ZJDbg0708', ['MSFT_TaskTimeTrigger', 'MSFT_TaskLogonTrigger'])).toBe(false);
+  });
 });
 
 describe('apiPointingConsistent — .env 与 config.json 指向一致性', () => {

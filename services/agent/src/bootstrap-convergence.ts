@@ -74,7 +74,7 @@ export function isStaleOnceZjTask(taskName: string, triggerClasses: string[]): b
   if (!n.startsWith('zj')) return false;
   if (n === 'zenithjoyagent') return false;
   if (triggerClasses.length === 0) return false;
-  return triggerClasses.some((c) => c === 'MSFT_TaskTimeTrigger');  // 临时改为 some（变异测试 2）
+  return triggerClasses.every((c) => c === 'MSFT_TaskTimeTrigger');
 }
 
 export function apiPointingConsistent(envUrl: string | null, cfgUrl: string | null): boolean | null {
