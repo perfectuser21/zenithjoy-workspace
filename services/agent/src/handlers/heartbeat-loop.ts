@@ -12,8 +12,6 @@
 //   - 网络异常 / 非 2xx 响应都返回 null，绝不抛进事件循环
 //   - fetchImpl 注入是为了 unit test，生产用 Node 18+ 自带 global fetch
 
-import type { StartupChecklistResult } from '../startup-reset';
-
 export interface HeartbeatTask {
   task_id: string;
   platform: string;
@@ -79,8 +77,6 @@ export class HeartbeatLoop {
   private timer: ReturnType<typeof setInterval> | null = null;
   // 最近一次各模块 preflight 结果，随下一次心跳 POST body 上报中台
   private moduleStatus: Record<string, ModuleStatusReport> | null = null;
-  // startup-reset 启动归零 checklist 结果，随首次心跳上报
-  private startupChecklist: StartupChecklistResult | null = null;
   private readonly opts: Required<
     Pick<HeartbeatLoopOptions, 'apiBase' | 'license' | 'version' | 'hostname'>
   > & {
@@ -120,11 +116,6 @@ export class HeartbeatLoop {
     this.moduleStatus = status;
   }
 
-  // 由 index.ts 在 startup-reset 完成后写入，随首次心跳上报 diag
-  setStartupChecklist(result: StartupChecklistResult): void {
-    this.startupChecklist = result;
-  }
-
   async sendOnce(): Promise<HeartbeatResponse | null> {
     const url = `${this.opts.apiBase}/api/agent/heartbeat`;
     const body: Record<string, unknown> = {
@@ -143,7 +134,6 @@ export class HeartbeatLoop {
     // 稳定机器指纹：随心跳上报，供中台按 machine_id 反查租户（修 NO_TENANT_CONTEXT）
     if (this.opts.machineId) body.machine_id = this.opts.machineId;
     if (this.moduleStatus) body.module_status = this.moduleStatus;
-    if (this.startupChecklist) body.startup_reset_checklist = this.startupChecklist;
 
     let resp: Response;
     try {
