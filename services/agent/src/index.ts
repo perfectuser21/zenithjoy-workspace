@@ -38,7 +38,7 @@ import { mapRawCommenters } from './utils/comment-mapper';
 // Sprint 06222100 — 核心运行时本体自升级（下载新核心包→解压→写 .active-core 指针→优雅退出）。
 import { CoreUpgrader } from './core-upgrader';
 import { acquireSingleInstanceLock } from './single-instance-lock';
-import { gatherEnvState, planConvergence, executeConvergence } from './bootstrap-convergence';
+import { gatherEnvState, planConvergence, executeConvergence, buildStartupResetReport, mergeStartupReset, type StartupResetReport } from './bootstrap-convergence';
 // Sprint cp-06262240 — 任务观测上报：把 handler 开始/失败/成功接进 reportEvent 管子
 import {
   reportTaskStart,
@@ -174,6 +174,9 @@ const VERSION: string = (require('../package.json') as { version: string }).vers
 const startTime = Date.now();
 let backoff = 1000;
 const MAX_BACKOFF = 30000;
+
+// startup-reset checklist（decision 391063ef）：bootstrap 块填充，随心跳 module_status.startup_reset 上报
+let startupResetReport: StartupResetReport = { ok: true, reason: 'startup-reset 未执行' };
 
 // Sprint 06081700 — Core 模块管理器单例。
 // 收到心跳 modules 响应后按需下载/解压/preflight/fork Line 模块；
@@ -505,20 +508,24 @@ async function main(): Promise<void> {
   // 修计划任务指向、报配置缺口。全 best-effort，收敛失败绝不阻断启动。
   try {
     const rootDir = path.dirname(path.dirname(path.dirname(process.execPath)));
+    // CI 护栏：GHA/CI 里破坏性动作 plan-only（纵深防御，windows-latest E2E 断言确定性）
+    const planOnly = process.env.GITHUB_ACTIONS === 'true' || process.env.CI === 'true';
     const envState = gatherEnvState({
       selfPid: process.pid,
       activeCorePointerPath: path.join(rootDir, '.active-core'),
       licensePresent: Boolean(cfg.licenseKey || process.env.ZENITHJOY_LICENSE),
+      envApiBase: process.env.ZENITHJOY_API_URL || process.env.ZENITHJOY_API_BASE || null,
+      configApiUrl: cfg.apiUrl || null,
     });
     const actions = planConvergence(envState);
-    if (actions.length) {
-      console.log(`[bootstrap] 环境收敛：${actions.length} 项脏状态待处理`);
-      executeConvergence(actions);
-    } else {
-      console.log('[bootstrap] 环境收敛：干净，无需处理');
-    }
+    if (actions.length) console.log(`[bootstrap] 环境收敛：${actions.length} 项脏状态待处理${planOnly ? '（plan-only）' : ''}`);
+    else console.log('[bootstrap] 环境收敛：干净，无需处理');
+    const results = executeConvergence(actions, {}, { planOnly });
+    startupResetReport = buildStartupResetReport(envState, results, planOnly);
+    console.log(`[bootstrap] startup-reset checklist: ok=${startupResetReport.ok} ${startupResetReport.reason ?? ''}`);
   } catch (e) {
     console.warn('[bootstrap] 环境收敛失败（non-fatal，继续启动）:', e);
+    startupResetReport = { ok: false, reason: `startup-reset 异常: ${(e as Error).message}`.slice(0, 400) };
   }
 
   // v1.2 Day 1-2: License 注册流程
@@ -807,9 +814,7 @@ async function syncModulesFromHeartbeat(
   if (!modules) return;
   await moduleManager.syncModules(modules);
   const report = moduleManager.getModuleStatusReport();
-  if (Object.keys(report).length > 0) {
-    loop.setModuleStatus(report);
-  }
+  loop.setModuleStatus(mergeStartupReset(report, startupResetReport));
   updateTrayModules(buildTrayModules(modules));
 }
 
@@ -1079,6 +1084,7 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
     },
     onError: (err) => console.warn('[ws1:heartbeat] error:', err),
   });
+  loop.setModuleStatus(mergeStartupReset({}, startupResetReport));
   loop.start();
   console.log(`[ws1] heartbeat-loop started → ${apiBase}/api/agent/heartbeat`);
 
