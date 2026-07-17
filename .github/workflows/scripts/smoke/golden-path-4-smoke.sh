@@ -739,6 +739,23 @@ print('PASS')
 " 2>/dev/null && ok "Step 3g ✅ 扫描态/回复态窗口可见性已拆分（for_reply参数+3处调用点正确传参）" \
              || fail "Step 3g 扫描态/回复态可见性拆分回归——真机可能又会每隔几秒弹出/缩回" 3
 
+# Step 3h：launch_weixin 跨进程互斥锁——防 CI job 和常驻 staging agent 并发启动微信堆积僵尸进程
+# （2026-07-17 xian-rog 实锤：4个Weixin.exe+8个WeChatAppEx.exe几乎同时诞生，其一卡进幽灵坐标
+# (-32000,-32000)，导致真机气泡 gate reply_in_chat fail-closed。根因=launch_weixin()文档
+# 承诺幂等但从不检查is_weixin_running()、无跨进程锁，CI job与常驻agent各自独立判断都会启动）
+# 真机段 TODO：xian-rog 反复触发 CI job2/job3 + 常驻agent 并发场景，确认不再堆积多个 Weixin.exe
+python3 -c "
+import sys; sys.path.insert(0, 'services/agent/wechat-rpa')
+import find_weixin, inspect
+launch_src = inspect.getsource(find_weixin.launch_weixin)
+assert 'acquire_launch_lock' in launch_src, 'launch_weixin 未接入跨进程锁'
+assert 'is_weixin_running()' in launch_src, 'launch_weixin 未真正检查是否已运行(幂等)'
+assert hasattr(find_weixin, 'acquire_launch_lock'), '缺 acquire_launch_lock'
+assert hasattr(find_weixin, 'release_launch_lock'), '缺 release_launch_lock'
+print('PASS')
+" 2>/dev/null && ok "Step 3h ✅ launch_weixin 已接入跨进程互斥锁+真实幂等检查（不再并发堆积僵尸进程）" \
+             || fail "Step 3h launch_weixin 跨进程锁回归——CI与常驻agent可能又会并发堆积微信进程" 3
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ✅ Path 4 16 步 golden path smoke 服务端段全通"
 echo "  真机段：xian-rog 真机验收证据见 sprints/07150800-line04-overlay-continuation/evidence/"
