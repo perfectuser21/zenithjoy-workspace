@@ -10,6 +10,7 @@ import android.graphics.Path
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Bundle
+import android.os.PowerManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlinx.coroutines.CompletableDeferred
@@ -39,6 +40,24 @@ class DouyinCollectService : AccessibilityService() {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var onResult: ((CollectResult) -> Unit)? = null
+
+    // 真机复现 2026-07-17（MAA-AN00 华为机型）：采集任务驱动抖音 UI 期间屏幕黑掉/被系统
+    // 冻结，正在跑的协程直接卡死不醒——之前的测试都是接 USB 线/开着"保持唤醒状态"测的，
+    // 从没验证过手机无人值守的真实场景。任务执行期间持有 WakeLock 防止 CPU 休眠，
+    // acquire/release 见 startCollect/startStage2Collect 与三处终态收尾函数
+    // （finishWithError/reportResult/reportVideoCards）。
+    private val wakeLock: PowerManager.WakeLock by lazy {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$TAG:collect")
+    }
+
+    private fun acquireCollectWakeLock() {
+        if (!wakeLock.isHeld) wakeLock.acquire(MAX_WAKE_LOCK_MS)
+    }
+
+    private fun releaseCollectWakeLock() {
+        if (wakeLock.isHeld) wakeLock.release()
+    }
 
     // 每次状态变化刷新时间戳：busy-guard 用它判断"非 IDLE 是真忙还是流程已死"
     // （真机复现 2026-07-10：state 卡非 IDLE 且无看门狗覆盖时新任务被永久拒绝）。
@@ -144,6 +163,7 @@ class DouyinCollectService : AccessibilityService() {
 
     override fun onDestroy() {
         if (activeInstance === this) activeInstance = null
+        releaseCollectWakeLock()
         scope.cancel()
         unregisterReceiver(taskReceiver)
         super.onDestroy()
@@ -179,6 +199,7 @@ class DouyinCollectService : AccessibilityService() {
         triedTabSwitch = false
         state = State.OPENING_DOUYIN
         ScanMutex.busy = true
+        acquireCollectWakeLock()
 
         scope.launch {
             val launched = launchDouyin()
@@ -201,6 +222,7 @@ class DouyinCollectService : AccessibilityService() {
         triedTabSwitch = false
         state = State.OPENING_VIDEO_URL
         ScanMutex.busy = true
+        acquireCollectWakeLock()
 
         scope.launch {
             val launched = launchVideoByDeepLink(videoId)
@@ -356,23 +378,33 @@ class DouyinCollectService : AccessibilityService() {
         searchInput.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
 
         scope.launch {
-            delay(RandomDelay.sample(RandomDelay.SEARCH_MS))
-            // 真机实测确认(2026-07-09)：这里之前有 performGlobalAction(GLOBAL_ACTION_BACK)
-            // 想收起键盘，但抖音搜索输入页把"返回"当成"清空/退出搜索"处理——手动复现过，
-            // 打字确认输入框有内容后按一次返回，输入框会清空回到占位文案，导致后面提交的
-            // 是首页热搜占位词而不是真实关键词。键盘不收起不影响后续点"搜索"按钮（按钮在
-            // 输入框同一行，不会被键盘遮挡），故直接去掉这步，不再按返回。
-            // 之前这里拿不到根节点就静默 return@launch：triggerSearch() 从未被调用，
-            // 唯一的看门狗 startSearchResultTimeout() 只在 triggerSearch() 内部启动，
-            // 导致服务永久卡死在 SUBMITTING_SEARCH，后续任务全被 busy-guard 拒绝，
-            // 只能重启进程恢复。改为显式判空并调用 finishWithError 上报错误、把
-            // state 复位回 IDLE。
-            val submitRoot = rootInActiveWindow
-            if (submitRoot == null) {
-                finishWithError("NO_WINDOW_BEFORE_SUBMIT")
-                return@launch
+            // 真机复现 2026-07-17：这段 delay 期间如果屏幕黑掉/系统冻结进程，协程可能
+            // 永远不醒——triggerSearch() 从未被调用，唯一的看门狗 startSearchResultTimeout()
+            // 只在 triggerSearch() 内部才启动，导致任务永久卡死收不到终态。WakeLock
+            // （见 acquireCollectWakeLock）从源头防止这种冻结；这里再包一层独立超时兜底，
+            // 覆盖 WakeLock 之外的其它卡死可能（如 rootInActiveWindow 迟迟拿不到）。
+            val completed = withTimeoutOrNull(SUBMIT_SEARCH_TIMEOUT_MS) {
+                delay(RandomDelay.sample(RandomDelay.SEARCH_MS))
+                // 真机实测确认(2026-07-09)：这里之前有 performGlobalAction(GLOBAL_ACTION_BACK)
+                // 想收起键盘，但抖音搜索输入页把"返回"当成"清空/退出搜索"处理——手动复现过，
+                // 打字确认输入框有内容后按一次返回，输入框会清空回到占位文案，导致后面提交的
+                // 是首页热搜占位词而不是真实关键词。键盘不收起不影响后续点"搜索"按钮（按钮在
+                // 输入框同一行，不会被键盘遮挡），故直接去掉这步，不再按返回。
+                // 之前这里拿不到根节点就静默 return：triggerSearch() 从未被调用，
+                // 唯一的看门狗 startSearchResultTimeout() 只在 triggerSearch() 内部启动，
+                // 导致服务永久卡死在 SUBMITTING_SEARCH，后续任务全被 busy-guard 拒绝，
+                // 只能重启进程恢复。改为显式判空并调用 finishWithError 上报错误、把
+                // state 复位回 IDLE。
+                val submitRoot = rootInActiveWindow
+                if (submitRoot == null) {
+                    finishWithError("NO_WINDOW_BEFORE_SUBMIT")
+                    return@withTimeoutOrNull
+                }
+                triggerSearch(submitRoot)
             }
-            triggerSearch(submitRoot)
+            if (completed == null) {
+                finishWithError("SUBMIT_SEARCH_TIMEOUT")
+            }
         }
     }
 
@@ -790,6 +822,7 @@ class DouyinCollectService : AccessibilityService() {
         resultReported = true
         state = State.IDLE
         ScanMutex.busy = false
+        releaseCollectWakeLock()
         onVideoCardResult?.invoke(currentTaskId, currentKeyword, videos, error)
         // AgentService 的队列状态机对同一结果不幂等：回调+广播双投递会把下一个
         // 在跑的 job 提前 markCurrentDone，重新引入 busy 静默丢任务。
@@ -1059,6 +1092,7 @@ class DouyinCollectService : AccessibilityService() {
         android.util.Log.i(TAG, "extracted ${comments.size} comments for keyword=$currentKeyword")
         state = State.IDLE
         ScanMutex.busy = false
+        releaseCollectWakeLock()
         onResult?.invoke(result)
         sendResultBroadcast(result)
     }
@@ -1070,6 +1104,7 @@ class DouyinCollectService : AccessibilityService() {
         val result = CollectResult(ok = false, keyword = currentKeyword, error = code)
         state = State.IDLE
         ScanMutex.busy = false
+        releaseCollectWakeLock()
         onResult?.invoke(result)
         sendResultBroadcast(result)
     }
@@ -1318,6 +1353,14 @@ class DouyinCollectService : AccessibilityService() {
         // （internal：computeExtractionTimeoutMs 的上界守卫要断言看门狗早于它触发）
         internal const val STUCK_STATE_RESET_MS = 180_000L
         private const val VIDEO_OPEN_TIMEOUT_MS = 15_000L
+        // 打字确认后到提交搜索之间那段 delay 的独立看门狗预算——真机复现 2026-07-17：
+        // 唯一的看门狗 startSearchResultTimeout() 是在 triggerSearch() 内部才启动的，
+        // 如果这段 delay 期间协程被冻结（屏幕黑/系统 Doze），triggerSearch() 从未被调用，
+        // 该看门狗压根没机会启动，任务永久卡死。这层超时独立兜底，配合 WakeLock 双保险。
+        internal const val SUBMIT_SEARCH_TIMEOUT_MS = 15_000L
+        // 采集任务最坏情况全程预算上界（远小于 STUCK_STATE_RESET_MS 180s），超过这个时长
+        // 还没释放锁大概率是流程真死了，交给系统兜底回收，避免锁泄漏耗电。
+        private const val MAX_WAKE_LOCK_MS = 120_000L
 
         // ── Seg3 抖音号回填（enrich）预算 ─────────────────────────────────────
         //

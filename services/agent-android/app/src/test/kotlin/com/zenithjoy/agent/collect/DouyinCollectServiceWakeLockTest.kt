@@ -49,7 +49,7 @@ class DouyinCollectServiceWakeLockTest {
         val src = serviceSource()
         assertTrue(
             "startCollect（Stage1 关键词搜索入口）必须在启动采集前拿到 wakeLock，否则屏幕一黑协程就可能冻结",
-            Regex("private fun startCollect\\([^)]*\\)[\\s\\S]{0,400}wakeLock").containsMatchIn(src),
+            Regex("private fun startCollect\\([^)]*\\)[\\s\\S]{0,400}acquireCollectWakeLock").containsMatchIn(src),
         )
     }
 
@@ -58,7 +58,7 @@ class DouyinCollectServiceWakeLockTest {
         val src = serviceSource()
         assertTrue(
             "startStage2Collect（Stage2 视频URL评论采集入口）同样需要 wakeLock，跟 Stage1 一样会被冻结",
-            Regex("private fun startStage2Collect\\([^)]*\\)[\\s\\S]{0,400}wakeLock").containsMatchIn(src),
+            Regex("private fun startStage2Collect\\([^)]*\\)[\\s\\S]{0,400}acquireCollectWakeLock").containsMatchIn(src),
         )
     }
 
@@ -71,7 +71,7 @@ class DouyinCollectServiceWakeLockTest {
                 ?: error("$fn 函数体没找到")
             assertTrue(
                 "$fn 是任务终态收尾函数之一，必须释放 wakeLock，否则锁会一直占着耗电/漏释放",
-                body.contains("wakeLock"),
+                body.contains("releaseCollectWakeLock"),
             )
         }
     }
