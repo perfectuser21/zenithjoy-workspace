@@ -401,12 +401,22 @@ class AgentService : Service() {
                 MediaProjectionHolder.getOrCreateProjection(this)
             },
         )
+        // 用户2026-07-17拍板（判定点1d078987）：视频类内容判定改用真实音频转写，固定录制
+        // 开头20秒系统音频（AudioRecordService.RECORD_DURATION_MS）。复用同一个 MediaProjection
+        // 授权换出实例，不额外弹权限框。
+        val audioCaptureService = AudioCaptureService(
+            captureImpl = {
+                MediaProjectionHolder.getOrCreateProjection(this)
+                    ?.let { AudioRecordService(it).captureAudioSnippet() }
+            },
+        )
         val judgmentService = ContentJudgmentService(
             agentId = { config.agentId },
             httpBase = config.deriveHttpBase(),
             // tenantId 由服务端按 agent_id 反查，设备端不持有；/judge-video 服务端兼容 header 反查
             tenantId = { config.agentId },
             screenCaptureService = screenCaptureService,
+            audioCaptureService = audioCaptureService,
         )
         collectPollLoop = AcquisitionCollectPollLoop(
             agentId = { config.agentId },

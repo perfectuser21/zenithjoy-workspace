@@ -642,11 +642,29 @@ ok "Step 19 ✅ 已登记：真机段由 Kotlin 单测守，等 Android evaluato
 echo "▶ Step 20: 5个低频httpClient连接池回归（真机段等价断言见 InfrequentHttpClientsNoPoolTest）"
 ok "Step 20 ✅ 已登记：真机段由 Kotlin 单测守，等 Android evaluator 通道纳入 nightly 真机复跑"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 21：视频内容判定改真实音频转写——固定录制开头20秒替代单帧截图
+# （用户2026-07-17拍板，判定点1d078987；decision f3dbc2ce 视频/图文两条判定路径分工）
+#
+# 真机段等价断言 + TODO：本功能 100% 发生在 Android 系统音频采集
+# （AudioPlaybackCaptureConfiguration）+ 判定路由分流层，没有对应的服务端可观测行为
+# （服务端 pending-collect-tasks 早已按 media_kinds 拼出 /note/ vs /video/ 深链，
+# 本次只是设备端第一次真正读这个信息做分流，服务端逻辑本身未变），curl/psql 无法
+# 复现"设备真实录了20秒系统音频"这个状态，只能由 Kotlin JVM 单测锁定：
+# AudioJudgmentTest 断言 ①录制时长=20秒 ②note→screenshot/video→audio 路由正确
+# ③ContentJudgmentService 按 captureType 选对应采集源不串线 ④stage_2 对两类 URL
+# 真实上报的 capture_type 字段符合预期。
+# TODO(Android evaluator 通道)：接管后应在真机 nightly 里补一条"真实视频判定命中
+# audio 路径、真实图文判定命中 screenshot 路径"的场景，核对 logcat 采集耗时约20秒。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 21: 视频内容判定音频转写回归（真机段等价断言见 AudioJudgmentTest）"
+ok "Step 21 ✅ 已登记：真机段由 Kotlin 单测守，等 Android evaluator 通道纳入 nightly 真机复跑"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" 2>/dev/null
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Path 2 20 步本地版 smoke 全绿（服务端段）"
+echo "  ✅ Path 2 21 步本地版 smoke 全绿（服务端段）"
 echo "  真机段：等 Android evaluator 通道（xian-rog nightly）接管复跑"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 exit 0
