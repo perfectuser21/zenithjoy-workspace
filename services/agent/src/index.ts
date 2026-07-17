@@ -38,8 +38,7 @@ import { mapRawCommenters } from './utils/comment-mapper';
 // Sprint 06222100 — 核心运行时本体自升级（下载新核心包→解压→写 .active-core 指针→优雅退出）。
 import { CoreUpgrader } from './core-upgrader';
 import { acquireSingleInstanceLock } from './single-instance-lock';
-import { gatherEnvState, planConvergence, executeConvergence } from './bootstrap-convergence';
-import { gatherStartupResetState, executeStartupReset, type StartupChecklistResult } from './startup-reset';
+import { gatherEnvState, planConvergence, executeConvergence, buildStartupResetReport, mergeStartupReset, type StartupResetReport } from './bootstrap-convergence';
 // Sprint cp-06262240 — 任务观测上报：把 handler 开始/失败/成功接进 reportEvent 管子
 import {
   reportTaskStart,
@@ -175,6 +174,9 @@ const VERSION: string = (require('../package.json') as { version: string }).vers
 const startTime = Date.now();
 let backoff = 1000;
 const MAX_BACKOFF = 30000;
+
+// startup-reset checklist（decision 391063ef）：bootstrap 块填充，随心跳 module_status.startup_reset 上报
+let startupResetReport: StartupResetReport = { ok: true, reason: 'startup-reset 未执行' };
 
 // Sprint 06081700 — Core 模块管理器单例。
 // 收到心跳 modules 响应后按需下载/解压/preflight/fork Line 模块；
@@ -501,51 +503,29 @@ async function main(): Promise<void> {
   const cfg = loadOrInitConfig();
   console.log(`[agent] starting agent ${cfg.agentId} (v${VERSION})`);
 
-  // === 启动前置：归零复位（startup-reset，decision 0f0368cf，2026-07-17）===
-  // 5 步 checklist：孤儿 RPA 进程归零 / 微信归一 / 环境自检 / 残骸清理
-  // checklist 结果随首次心跳 diag 上报中台，缺项报红（proven-to-fire）。
-  // 全 best-effort，归零失败不阻断启动。
-  let startupChecklistResult: StartupChecklistResult | null = null;
-  try {
-    const resetState = gatherStartupResetState({
-      selfPid: process.pid,
-      coreDir: path.dirname(process.execPath),
-    });
-    startupChecklistResult = executeStartupReset(resetState);
-    const failItems = startupChecklistResult.items.filter((i) => i.status === 'fail');
-    if (failItems.length > 0) {
-      console.warn(
-        `[startup-reset] checklist 完成，${failItems.length} 项报红：`,
-        failItems.map((i) => `${i.step}:${i.detail || '失败'}`).join('; '),
-      );
-    } else {
-      console.log(
-        `[startup-reset] checklist 全 pass（${startupChecklistResult.durationMs}ms，CI模式=${startupChecklistResult.ciMode}）`,
-      );
-    }
-  } catch (e) {
-    console.warn('[startup-reset] 归零复位失败（non-fatal，继续启动）:', e);
-  }
-
   // === 启动第零阶段：幂等环境收敛（decision 72740815）===
   // 在连中台/下载/拉模块之前先把机器收敛回干净状态：杀重复实例与僵尸启动循环、
   // 修计划任务指向、报配置缺口。全 best-effort，收敛失败绝不阻断启动。
   try {
     const rootDir = path.dirname(path.dirname(path.dirname(process.execPath)));
+    // CI 护栏：GHA/CI 里破坏性动作 plan-only（纵深防御，windows-latest E2E 断言确定性）
+    const planOnly = process.env.GITHUB_ACTIONS === 'true' || process.env.CI === 'true';
     const envState = gatherEnvState({
       selfPid: process.pid,
       activeCorePointerPath: path.join(rootDir, '.active-core'),
       licensePresent: Boolean(cfg.licenseKey || process.env.ZENITHJOY_LICENSE),
+      envApiBase: process.env.ZENITHJOY_API_URL || process.env.ZENITHJOY_API_BASE || null,
+      configApiUrl: cfg.apiUrl || null,
     });
     const actions = planConvergence(envState);
-    if (actions.length) {
-      console.log(`[bootstrap] 环境收敛：${actions.length} 项脏状态待处理`);
-      executeConvergence(actions);
-    } else {
-      console.log('[bootstrap] 环境收敛：干净，无需处理');
-    }
+    if (actions.length) console.log(`[bootstrap] 环境收敛：${actions.length} 项脏状态待处理${planOnly ? '（plan-only）' : ''}`);
+    else console.log('[bootstrap] 环境收敛：干净，无需处理');
+    const results = executeConvergence(actions, {}, { planOnly });
+    startupResetReport = buildStartupResetReport(envState, results, planOnly);
+    console.log(`[bootstrap] startup-reset checklist: ok=${startupResetReport.ok} ${startupResetReport.reason ?? ''}`);
   } catch (e) {
     console.warn('[bootstrap] 环境收敛失败（non-fatal，继续启动）:', e);
+    startupResetReport = { ok: false, reason: `startup-reset 异常: ${(e as Error).message}`.slice(0, 400) };
   }
 
   // v1.2 Day 1-2: License 注册流程
@@ -626,7 +606,7 @@ async function main(): Promise<void> {
     cfg.machineId || computeMachineId(),
   );
 
-  startWs1HeartbeatLoop(cfg, startupChecklistResult);
+  startWs1HeartbeatLoop(cfg);
 
   // Path 4 微信监听已下沉到 line04 模块（按需下载 + fork），core 不再直接启动。
 
@@ -834,9 +814,7 @@ async function syncModulesFromHeartbeat(
   if (!modules) return;
   await moduleManager.syncModules(modules);
   const report = moduleManager.getModuleStatusReport();
-  if (Object.keys(report).length > 0) {
-    loop.setModuleStatus(report);
-  }
+  loop.setModuleStatus(mergeStartupReset(report, startupResetReport));
   updateTrayModules(buildTrayModules(modules));
 }
 
@@ -878,7 +856,7 @@ function buildTrayModules(
   return out;
 }
 
-function startWs1HeartbeatLoop(cfg: AgentConfig, startupChecklist?: StartupChecklistResult | null): void {
+function startWs1HeartbeatLoop(cfg: AgentConfig): void {
   const apiBase = deriveHttpApiBase(cfg);
   if (!apiBase) {
     console.log('[ws1] 无法推导 HTTP apiBase，跳过 heartbeat-loop');
@@ -1106,7 +1084,7 @@ function startWs1HeartbeatLoop(cfg: AgentConfig, startupChecklist?: StartupCheck
     },
     onError: (err) => console.warn('[ws1:heartbeat] error:', err),
   });
-  if (startupChecklist) loop.setStartupChecklist(startupChecklist);
+  loop.setModuleStatus(mergeStartupReset({}, startupResetReport));
   loop.start();
   console.log(`[ws1] heartbeat-loop started → ${apiBase}/api/agent/heartbeat`);
 

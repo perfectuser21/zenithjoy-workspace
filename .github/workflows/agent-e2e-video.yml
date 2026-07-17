@@ -157,6 +157,17 @@ jobs:
             Get-ChildItem $ffmpegDir | Select-Object -First 10 | % { Write-Host "  $_" }
           }
 
+      # startup-reset E2E（decision 391063ef）：预埋脏状态，断言 agent 启动第零阶段在 CI 里 plan-only 识别
+      # 真机段等价断言：真删除/真 setx/微信收敛在 windows-latest 不可及，
+      # TODO 部署 rog 后人工 proven-to-fire（藏 python-embedded → AdminCustomersPage startup_reset 红行）
+      - name: Seed dirty state for startup-reset assertion
+        shell: powershell
+        run: |
+          schtasks /create /tn ZJTestOnce /sc once /st 23:59 /tr "cmd /c echo zj-e2e" /f
+          $debris = Join-Path $env:PUBLIC 'zj-e2e-debris.txt'
+          Set-Content -Path $debris -Value 'e2e'
+          (Get-Item $debris).LastWriteTime = (Get-Date).AddDays(-8)
+
       - name: Start Agent (background)
         shell: powershell
         run: |
@@ -209,6 +220,22 @@ jobs:
           Get-Content "$env:RUNNER_TEMP\agent-out.log" -EA SilentlyContinue | Select-Object -Last 40
           Get-Content "$env:RUNNER_TEMP\agent-err.log" -EA SilentlyContinue | Select-Object -Last 20
           exit 1
+
+      - name: Assert startup-reset plan-only fired
+        shell: powershell
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'agent-out.log'
+          $content = Get-Content $log -Raw -Encoding utf8
+          if ($content -notmatch '\[bootstrap\]\[plan-only\].*delete_stale_task ZJTestOnce') {
+            Write-Error "startup-reset did not plan seeded ZJTestOnce task (plan-only line missing)"; exit 1
+          }
+          if ($content -notmatch '\[bootstrap\]\[plan-only\].*delete_debris .*zj-e2e-debris\.txt') {
+            Write-Error "startup-reset did not plan seeded debris file"; exit 1
+          }
+          if ($content -notmatch '\[bootstrap\] startup-reset checklist: ok=') {
+            Write-Error "startup-reset checklist summary line missing"; exit 1
+          }
+          Write-Host "startup-reset plan-only assertions passed"
 
       - name: Install Playwright
         shell: powershell

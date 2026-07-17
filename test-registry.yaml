@@ -684,7 +684,7 @@ tests:
     ci: L4
     status: active
     product: AI员工
-    note: "startup-reset 启动归零 smoke（decision 0f0368cf，2026-07-17）——5步 checklist API层断言：planStartupReset 幂等/孤儿RPA/微信归一/残骸清理/proven-to-fire（python-embedded缺失→env_check报红、config不一致→报红）、CI护栏（plan-only actionsExecuted=0）。真机操作用 injected deps 等价断言。"
+    note: "startup-reset 启动归零 smoke（decision 0f0368cf/391063ef，2026-07-17）——实现归一 bootstrap-convergence.ts（#1364/#1365 并发实现整合后唯一正宗）。API层断言：planConvergence 幂等/孤儿RPA（父死判据 9edc14f2，父活不杀）/微信归一/残骸+一次性ZJ任务三重判定/proven-to-fire（python-embedded缺失→报红、config不一致→报红）/CI护栏（planOnly 零副作用+plan-only(ci) 前缀）。真机操作用 injected deps 等价断言。"
 
   - id: agent-core-self-upgrade-smoke
     path: .github/workflows/scripts/smoke/agent-core-self-upgrade-smoke.sh
