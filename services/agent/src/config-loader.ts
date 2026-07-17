@@ -63,8 +63,8 @@ export function loadOrInitConfig(): AgentConfig {
     }
 
     // apiUrl 优先级：env → 同 license 的 config.json → 报错（绝不默默连生产）
-    const apiUrl =
-      process.env.ZENITHJOY_API_URL || process.env.ZENITHJOY_API_BASE || cachedApiUrl;
+    const liveApiUrl = process.env.ZENITHJOY_API_URL || process.env.ZENITHJOY_API_BASE;
+    const apiUrl = liveApiUrl || cachedApiUrl;
     if (!apiUrl || !apiUrl.trim()) {
       throw new Error(
         '未找到 apiUrl（ZENITHJOY_API_URL / ZENITHJOY_API_BASE / config.json 均无）。' +
@@ -74,8 +74,13 @@ export function loadOrInitConfig(): AgentConfig {
 
     const agentId = stableAgentId ?? `agent-env-${Date.now().toString(36)}`;
 
-    // 首次启动（或 license 变更）时持久化 agentId，供下次重启复用
-    if (!stableAgentId) {
+    // 持久化时机：①首次启动/license 变更（生成新 agentId）；②live env 提供了跟缓存不同
+    // 的 apiUrl（2026-07-16 根治：真机实证——config.json 的 apiUrl 曾经写死后永不刷新，
+    // .env 改成 staging 后，核心某次读不到 env 变量时会捡回缓存里那个更早写死的生产
+    // 地址，且从此永久卡死，没有任何自愈路径。只要本次能拿到 live env 值，就该让缓存
+    // 跟着刷新，缓存只应该在"这次真的读不到 env"时才当兜底，不能长期悄悄覆盖新配置）。
+    const shouldPersist = !stableAgentId || (!!liveApiUrl && liveApiUrl !== cachedApiUrl);
+    if (shouldPersist) {
       try {
         fs.mkdirSync(getConfigDir(), { recursive: true });
         fs.writeFileSync(
@@ -83,7 +88,7 @@ export function loadOrInitConfig(): AgentConfig {
           JSON.stringify({ licenseKey: envLicense.trim(), agentId, apiUrl, loggedInAt: Date.now() }, null, 2)
         );
       } catch {
-        // non-fatal — ID 本次仍可用，只是下次重启会再生成新 ID
+        // non-fatal — 本次仍可用，只是下次重启缓存可能还没刷新成功
       }
     }
 
