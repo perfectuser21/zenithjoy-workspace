@@ -5,7 +5,7 @@
 #
 # 16 步与断言层级：
 #   Step 1  客户扫码绑定个人微信号 → Agent 建立后台 UIA 监听（不弹前台窗口）
-#   Step 2  客户装客户端 → Agent 注册连中台
+#   Step 2  客户装客户端 → Agent 注册连中台（Step 2c：config.json 的 apiUrl 缓存跟随 live env 刷新，2026-07-17 真机根治）
 #   Step 3  Agent 检测到微信已登录、找到主窗口 → 开始后台静默监听（服务端等价断言：dryrun + overlay 存在）
 #   Step 6  上线自检消息——每次启动发一条给固定测试联系人（task 7be2842d，纯函数等价断言）
 #   Step 7  客户触发好友扫描 / 联系人首次发消息 → 系统建立该联系人 CRM 档案（真链路：friend-scan/trigger+ingest）
@@ -85,6 +85,21 @@ DRYRUN_EC=$?
 echo "$DRYRUN_OUT" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d.get("wechat_id","").startswith("mock_wx_")' 2>/dev/null \
   || fail "Step 2 dryrun receipt 不含 wechat_id" 2
 ok "Step 2 ✅ 装客户端 dryrun 回执含 wechat_id（Agent 注册链路真跑）"
+
+# ───────────────────────────────────────────────────────────────────
+# Step 2c：config.json 的 apiUrl 缓存不能永久卡死（2026-07-16/17 真机实证：
+# 孙燕青/于瑾两台机器 .env 明明配的 staging，zj-listener 日志却 100% 连着生产。
+# 根因：loadOrInitConfig() 只在首次启动（!stableAgentId）时写 config.json，
+# 之后即使 live env 提供了新 apiUrl，缓存也永不刷新，下次读不到 env 时
+# 就会捡回那条更早写死的旧地址且永久卡死。纯函数等价断言：源码里
+# shouldPersist 的判断必须同时覆盖"live env 提供了不同于缓存的 apiUrl"这一支，
+# 不能只有 !stableAgentId 一支。
+# ───────────────────────────────────────────────────────────────────
+CONFIG_LOADER_TS="services/agent/src/config-loader.ts"
+[ -f "$CONFIG_LOADER_TS" ] || fail "Step 2c config-loader.ts 不存在: $CONFIG_LOADER_TS" 2
+grep -qE 'shouldPersist\s*=\s*!stableAgentId\s*\|\|\s*\(.*liveApiUrl.*!==\s*cachedApiUrl' "$CONFIG_LOADER_TS" \
+  || fail "Step 2c config.json apiUrl 缓存刷新回归——live env 换了地址但缓存可能永久卡死（真机事故 2026-07-16/17 复发风险）" 2
+ok "Step 2c ✅ apiUrl 缓存跟随 live env 刷新（不再只在首次启动写一次）"
 
 OVERLAY_PY="services/agent/wechat-rpa/overlay/overlay_window.py"
 [ -f "$OVERLAY_PY" ] || fail "Step 3 overlay_window.py 不存在: $OVERLAY_PY" 3
