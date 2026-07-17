@@ -626,11 +626,27 @@ ok "Step 18 ✅ 已登记：真机段由 Kotlin 单测守，等 Android evaluato
 echo "▶ Step 19: 无障碍服务启动健康自检回归（真机段等价断言见 AgentServiceAccessibilityHealthTest）"
 ok "Step 19 ✅ 已登记：真机段由 Kotlin 单测守，等 Android evaluator 通道纳入 nightly 真机复跑"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 20：5个低频httpClient统一禁用连接池——根治Path2全链路report-videos静默卡死
+# （真实全链路压测复现 2026-07-17 xian-rog，真实关键词搜索→采集完成后report-videos
+# 静默卡死，属于Bug1同根因在5个独立客户端实例里各自复现的系统性问题）
+#
+# 真机段等价断言 + TODO：本 bug 100% 发生在 Android OkHttp 连接池行为层，同 Step17
+# 一样没有服务端可观测行为，curl/psql 无法复现"设备本地连接池积累僵尸连接"这个状态，
+# 只能由 Kotlin JVM 单测锁定：InfrequentHttpClientsNoPoolTest 用 MockWebServer 逐一
+# 断言 CollectReporter/AcquisitionCollectPollLoop/AcquisitionKeywordPollLoop/
+# AgentRegistrar/ContentJudgmentService 的 defaultClient() 都不复用连接。
+# TODO(Android evaluator 通道)：接管后应在真机 nightly 里补一条"App 长时间静置后
+# 触发一次真实关键词搜索，确认 report-videos 不再静默卡死"的场景。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 20: 5个低频httpClient连接池回归（真机段等价断言见 InfrequentHttpClientsNoPoolTest）"
+ok "Step 20 ✅ 已登记：真机段由 Kotlin 单测守，等 Android evaluator 通道纳入 nightly 真机复跑"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" 2>/dev/null
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Path 2 19 步本地版 smoke 全绿（服务端段）"
+echo "  ✅ Path 2 20 步本地版 smoke 全绿（服务端段）"
 echo "  真机段：等 Android evaluator 通道（xian-rog nightly）接管复跑"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 exit 0

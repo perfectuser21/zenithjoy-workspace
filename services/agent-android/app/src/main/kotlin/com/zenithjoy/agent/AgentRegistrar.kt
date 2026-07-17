@@ -84,9 +84,12 @@ class AgentRegistrar(private val httpClient: OkHttpClient = defaultClient()) {
     companion object {
         private const val TAG = "AgentRegistrar"
 
-        private fun defaultClient() = OkHttpClient.Builder()
+        // 统一到 AgentService.buildReportHttpClient 同款连接池配置（见 #1345），
+        // 避免与其它低频调用客户端不一致造成的排查混乱。
+        internal fun defaultClient() = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
+            .connectionPool(okhttp3.ConnectionPool(0, 1, TimeUnit.SECONDS))
             .build()
     }
 }

@@ -133,9 +133,14 @@ class CollectReporter(
     }
 
     companion object {
-        private fun defaultClient() = OkHttpClient.Builder()
+        // 真机复现(2026-07-17)：这个客户端调用频率低(数分钟一次)，长时间空闲后 OkHttp
+        // 默认连接池里的连接会被网络切换/NAT 超时静默弄坏——复用时写入成功但读永远拿不到
+        // 响应，直到 connectTimeout 才报错（同 AgentService.buildReportHttpClient 已验证
+        // 过的根因，见 #1345）。maxIdleConnections=0 让每次调用都开新连接，从根上消除。
+        internal fun defaultClient() = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
+            .connectionPool(okhttp3.ConnectionPool(0, 1, TimeUnit.SECONDS))
             .build()
     }
 }
