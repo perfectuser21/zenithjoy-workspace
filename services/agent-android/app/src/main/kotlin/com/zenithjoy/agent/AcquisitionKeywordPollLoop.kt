@@ -98,9 +98,12 @@ class AcquisitionKeywordPollLoop(
     companion object {
         private const val TAG = "AcquisitionKeywordPollLoop"
 
-        private fun defaultClient() = OkHttpClient.Builder()
+        // 真机复现(2026-07-17)：低频调用客户端长时间空闲后连接会被静默弄坏，同
+        // AgentService.buildReportHttpClient 已验证过的根因（见 #1345）。
+        internal fun defaultClient() = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
+            .connectionPool(okhttp3.ConnectionPool(0, 1, TimeUnit.SECONDS))
             .build()
     }
 }
