@@ -4451,6 +4451,16 @@ def run_real_listen(args: argparse.Namespace) -> int:
     from find_weixin import assert_supported_version
     assert_supported_version()
 
+    # 启动前置幂等复位（2026-07-17 用户拍板：agent 一启动必须归零到零状态再启动所有东西）
+    try:
+        import startup_reset  # type: ignore
+        startup_reset.run_startup_reset(
+            middleware_url=getattr(args, "middleware_url", ""),
+            dry_run=False,
+        )
+    except Exception as _sr_exc:
+        _log(f"[startup_reset] 前置复位异常（已吞，不拖垮启动）: {_sr_exc}")
+
     if not _pywinauto_available():
         emit_json(
             {
