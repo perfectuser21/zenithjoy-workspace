@@ -611,7 +611,10 @@ describe('GET /api/acquisition/pending-collect-tasks — tenant + agent 隔离 [
     const [sql, params] = selectCall;
     expect(sql).toMatch(/tenant_id\s*=\s*\$1/);
     expect(sql).toMatch(/agent_id/);
-    expect(params).toEqual(['tenant-A', 'agent-A']);
+    // 真机复现(2026-07-17)：任务表过滤须同时认 UUID/文本两种 agent_id 形式（见下方
+    // "任务表 agent_id 过滤也要认 UUID/文本双形式"[REGRESSION]），mock 里 agents 表
+    // 未区分两种形式时两者都退化成同一个 xAgentId 值，参数变 3 个但值相同。
+    expect(params).toEqual(['tenant-A', 'agent-A', 'agent-A']);
   });
 
   it('tenant-A 的 agent 轮询时，只能捞到 tenant-A 自己的任务（不是全平台任务）', async () => {
