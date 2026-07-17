@@ -487,7 +487,7 @@ def _parse_item_name(name: str, require_unread: bool = True) -> Optional[Dict[st
 # ─── pywinauto 真模式：扫未读 + 自动回（函数体内 import）─────────────────────────
 
 
-def _ensure_tray_visible(mw: Any) -> str:
+def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
     """若微信在托盘或最小化，将其移到离屏可操作位置。
 
     返回原始状态字符串（调用方须持有，操作完成后调 _restore_window_state 还原）：
@@ -563,6 +563,14 @@ def _ensure_tray_visible(mw: Any) -> str:
                         _ct.windll.user32.SetWindowPlacement(_hwnd, _ct.byref(_wp))
                 except Exception:
                     pass
+            elif not for_reply:
+                # 扫描态（for_reply=False，新默认）：即使 OFFSCREEN_REPLY=False 也要 cloak，
+                # 只隐身不挪坐标——纯扫描不该让用户看到窗口弹出（真机反馈闪烁根因，2026-07-17）
+                try:
+                    _cv = _ct.c_int(1)
+                    _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
+                except Exception:
+                    pass
             _ct.windll.user32.ShowWindow(_hwnd, 4)  # SW_SHOWNOACTIVATE = 4：恢复到 rcNormalPosition（已改为离屏）
             time.sleep(_MINIMIZED_RESTORE_SLEEP)  # 最小化恢复比托盘需要更长 UIA 树重建时间
             return 'minimized'
@@ -584,12 +592,22 @@ def _ensure_tray_visible(mw: Any) -> str:
                     _ct.windll.user32.SetWindowPos(_hwnd, 0, _OFFSCREEN_X, _OFFSCREEN_Y, 0, 0, _SWP)
                     time.sleep(_VISIBLE_MOVE_SLEEP)
                     return 'visible'
+            elif not for_reply:
+                # 扫描态（for_reply=False，新默认）：不挪坐标，只 cloak 让用户看不见（真机反馈
+                # 闪烁根因——B 方案默认 OFFSCREEN_REPLY=False 后这个分支之前整体跳过，
+                # 纯扫描真实可见弹出，2026-07-17）
+                try:
+                    _cv = _ct.c_int(1)
+                    _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
+                except Exception:
+                    pass
+                return 'visible'
     except Exception:
         pass
     return ''
 
 
-def _restore_window_state(mw: Any, original_state: str) -> None:
+def _restore_window_state(mw: Any, original_state: str, for_reply: bool = False) -> None:
     """将微信还原到 original_state 指定的状态，须与 _ensure_tray_visible 配对使用。
 
     'tray'      → SW_HIDE(0) 送回系统托盘
@@ -635,9 +653,11 @@ def _restore_window_state(mw: Any, original_state: str) -> None:
                         _ct.windll.user32.SetWindowPos(_hwnd, 0, _orig[0], _orig[1], 0, 0, _SWP)
                     except Exception:
                         pass
-        # DWM uncloak（与 _ensure_tray_visible 中的 cloak 配对，v1.0.93）
-        # tray 分支无论 OFFSCREEN_REPLY 都 cloak，其他分支仅 OFFSCREEN_REPLY=True cloak
-        if original_state == 'tray' or (original_state and _OFFSCREEN_REPLY):
+        # DWM uncloak（与 _ensure_tray_visible 中的 cloak 配对，v1.0.93；for_reply 解耦 2026-07-17）
+        # tray 分支无论 OFFSCREEN_REPLY 都 cloak；minimized/visible 分支：OFFSCREEN_REPLY=True
+        # 时走legacy挪坐标+cloak路径，for_reply=False（扫描态）时走新的cloak-only路径——
+        # 两条路径任一发生过 cloak，这里都要 uncloak
+        if original_state == 'tray' or (original_state and (_OFFSCREEN_REPLY or not for_reply)):
             try:
                 _cv = _ct.c_int(0)
                 _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
@@ -2973,7 +2993,7 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
     prev_fg = _get_foreground_window()
     wechat_hwnd = _safe_hwnd(mw)
     # 确保窗口可见，UIA 坐标才有效（_open_chat PostMessage 点击依赖有效坐标）
-    orig_state = _ensure_tray_visible(mw)
+    orig_state = _ensure_tray_visible(mw, for_reply=True)
     try:
         fmw = _fresh_mw()
         if sender:
@@ -3043,7 +3063,7 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
     except Exception as exc:
         _log(f"reply_in_chat: 失败: {exc}")
     finally:
-        _restore_window_state(mw, orig_state)
+        _restore_window_state(mw, orig_state, for_reply=True)
         # Qt 上切会话 Select() 会短暂抢前台 ~2s → 操作完把焦点还给操作前的窗口，不抢用户键鼠焦点
         if _should_restore_foreground(prev_fg, wechat_hwnd):
             # 等切会话 / _navigate_away 的前台激活落定，再还焦点（否则被晚到的激活覆盖，焦点留在微信）
