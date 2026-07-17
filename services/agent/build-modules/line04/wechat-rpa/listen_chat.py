@@ -534,35 +534,38 @@ def _ensure_tray_visible(mw: Any) -> str:
             _CLOAK_OWNED = True
             return 'tray'
         elif _is_iconic:
-            # 最小化：v1.0.33 先 DWM cloak（防 WeChat 自身 activate 时移回可视区域被用户看到）
+            # 最小化：v1.0.108 纯扫描静默——无论 OFFSCREEN_REPLY，始终 DWM cloak + 移屏外。
+            # 根因（用户真机反馈）：OFFSCREEN_REPLY=False 时旧逻辑无 cloak、直接 SW_SHOWNOACTIVATE(4)
+            # 弹到屏幕原始位置，扫完 SW_MINIMIZE(6) 收回，用户每 ~10s 看到一次弹/收频闪。
+            # B方案（PR#811/#812）送达确认+焦点安全收益不受影响：UIA 在离屏 shown 态下同样有效，
+            # 焦点逻辑由 reply_in_chat 独立保证。
             # v1.0.29 SetWindowPlacement 预改 rcNormalPosition → ShowWindow(4) 直接恢复到屏外
             # （v1.0.28 遗留 bug：ShowWindow(4) 先在原始坐标出现 ~50ms 再 SetWindowPos 移走，用户看到弹跳）
-            if _OFFSCREEN_REPLY:
-                try:
-                    _cv = _ct.c_int(1)
-                    _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
-                except Exception:
-                    pass
-                try:
-                    class _WP(_ct.Structure):
-                        _fields_ = [
-                            ("length", _ct.c_uint), ("flags", _ct.c_uint), ("showCmd", _ct.c_uint),
-                            ("ptMinX", _ct.c_long), ("ptMinY", _ct.c_long),
-                            ("ptMaxX", _ct.c_long), ("ptMaxY", _ct.c_long),
-                            ("rcLeft", _ct.c_long), ("rcTop", _ct.c_long),
-                            ("rcRight", _ct.c_long), ("rcBottom", _ct.c_long),
-                        ]
-                    _wp = _WP()
-                    _wp.length = _ct.sizeof(_WP)
-                    if _ct.windll.user32.GetWindowPlacement(_hwnd, _ct.byref(_wp)):
-                        _w = max(_wp.rcRight - _wp.rcLeft, 400)
-                        _h = max(_wp.rcBottom - _wp.rcTop, 300)
-                        _saved_normal_pos[_hwnd] = (_wp.rcLeft, _wp.rcTop, _wp.rcRight, _wp.rcBottom)
-                        _wp.rcLeft, _wp.rcTop = _OFFSCREEN_X, _OFFSCREEN_Y
-                        _wp.rcRight, _wp.rcBottom = _OFFSCREEN_X + _w, _OFFSCREEN_Y + _h
-                        _ct.windll.user32.SetWindowPlacement(_hwnd, _ct.byref(_wp))
-                except Exception:
-                    pass
+            try:
+                _cv = _ct.c_int(1)
+                _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
+            except Exception:
+                pass
+            try:
+                class _WP(_ct.Structure):
+                    _fields_ = [
+                        ("length", _ct.c_uint), ("flags", _ct.c_uint), ("showCmd", _ct.c_uint),
+                        ("ptMinX", _ct.c_long), ("ptMinY", _ct.c_long),
+                        ("ptMaxX", _ct.c_long), ("ptMaxY", _ct.c_long),
+                        ("rcLeft", _ct.c_long), ("rcTop", _ct.c_long),
+                        ("rcRight", _ct.c_long), ("rcBottom", _ct.c_long),
+                    ]
+                _wp = _WP()
+                _wp.length = _ct.sizeof(_WP)
+                if _ct.windll.user32.GetWindowPlacement(_hwnd, _ct.byref(_wp)):
+                    _w = max(_wp.rcRight - _wp.rcLeft, 400)
+                    _h = max(_wp.rcBottom - _wp.rcTop, 300)
+                    _saved_normal_pos[_hwnd] = (_wp.rcLeft, _wp.rcTop, _wp.rcRight, _wp.rcBottom)
+                    _wp.rcLeft, _wp.rcTop = _OFFSCREEN_X, _OFFSCREEN_Y
+                    _wp.rcRight, _wp.rcBottom = _OFFSCREEN_X + _w, _OFFSCREEN_Y + _h
+                    _ct.windll.user32.SetWindowPlacement(_hwnd, _ct.byref(_wp))
+            except Exception:
+                pass
             _ct.windll.user32.ShowWindow(_hwnd, 4)  # SW_SHOWNOACTIVATE = 4：恢复到 rcNormalPosition（已改为离屏）
             time.sleep(_MINIMIZED_RESTORE_SLEEP)  # 最小化恢复比托盘需要更长 UIA 树重建时间
             return 'minimized'
@@ -605,8 +608,9 @@ def _restore_window_state(mw: Any, original_state: str) -> None:
             _ct.windll.user32.ShowWindow(_hwnd, 0)  # SW_HIDE = 0
         elif original_state == 'minimized':
             _ct.windll.user32.ShowWindow(_hwnd, 6)  # SW_MINIMIZE = 6
-            # 还原 rcNormalPosition（v1.0.29）：确保用户手动从任务栏恢复时窗口在原始屏幕位置
-            if _OFFSCREEN_REPLY and _hwnd in _saved_normal_pos:
+            # 还原 rcNormalPosition：确保用户手动从任务栏恢复时窗口在原始屏幕位置
+            # v1.0.108：去掉 _OFFSCREEN_REPLY 门控（扫描态始终存 _saved_normal_pos）
+            if _hwnd in _saved_normal_pos:
                 try:
                     _orig = _saved_normal_pos.pop(_hwnd)
                     class _WP(_ct.Structure):
@@ -636,8 +640,9 @@ def _restore_window_state(mw: Any, original_state: str) -> None:
                     except Exception:
                         pass
         # DWM uncloak（与 _ensure_tray_visible 中的 cloak 配对，v1.0.93）
-        # tray 分支无论 OFFSCREEN_REPLY 都 cloak，其他分支仅 OFFSCREEN_REPLY=True cloak
-        if original_state == 'tray' or (original_state and _OFFSCREEN_REPLY):
+        # v1.0.108：tray/minimized 无论 OFFSCREEN_REPLY 都 cloak → 无论 OFFSCREEN_REPLY 都 uncloak；
+        # visible 分支仍受 OFFSCREEN_REPLY 控制
+        if original_state in ('tray', 'minimized') or (original_state == 'visible' and _OFFSCREEN_REPLY):
             try:
                 _cv = _ct.c_int(0)
                 _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)

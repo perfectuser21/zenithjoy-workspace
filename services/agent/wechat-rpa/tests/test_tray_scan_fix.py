@@ -495,3 +495,93 @@ def test_restore_window_state_minimized_restores_rcnormalposition():
 
     user32.SetWindowPlacement.assert_called()
     assert 224 not in listen_chat._saved_normal_pos, "_saved_normal_pos 应在还原后清除 hwnd=224"
+
+
+# ── v1.0.108 regression：最小化窗口无论 OFFSCREEN_REPLY 始终屏外扫描（修复每 ~10s 频闪） ──
+
+
+def test_ensure_tray_visible_minimized_always_moves_offscreen_regardless_of_flag():
+    """最小化窗口无论 OFFSCREEN_REPLY=False，_ensure_tray_visible 始终 DWM cloak + SetWindowPlacement 移屏外。
+
+    v1.0.107 及之前：OFFSCREEN_REPLY=False 时最小化分支无 cloak + 无 SetWindowPlacement，
+    SW_SHOWNOACTIVATE(4) 直接把窗口弹到屏幕原始位置，扫完 SW_MINIMIZE(6) 收回
+    → 用户每 ~10s 看到一次弹/收频闪（2026-07-17 真机实证）。
+    v1.0.108 fix：去掉 if _OFFSCREEN_REPLY: 门控，始终走 cloak+SetWindowPlacement 路径。
+    B方案送达确认+焦点安全收益不受影响（UIA 在离屏 shown 态下同样有效）。
+    """
+    mw = _make_mock_mw(hwnd=333)
+    user32 = MagicMock()
+    user32.IsWindowVisible.return_value = True
+    user32.IsIconic.return_value = 1
+    user32.GetWindowPlacement.return_value = 1
+
+    original_offscreen = listen_chat._OFFSCREEN_REPLY
+    try:
+        listen_chat._OFFSCREEN_REPLY = False  # B方案：OFFSCREEN_REPLY=False
+        with _mock_windll(user32), patch("time.sleep"):
+            result = listen_chat._ensure_tray_visible(mw)
+    finally:
+        listen_chat._OFFSCREEN_REPLY = original_offscreen
+
+    assert result == 'minimized', "_ensure_tray_visible 返回 'minimized'"
+    user32.ShowWindow.assert_called_with(333, 4), "仍须 SW_SHOWNOACTIVATE(4) 恢复窗口"
+    user32.GetWindowPlacement.assert_called(), "必须 GetWindowPlacement 保存原始坐标"
+    user32.SetWindowPlacement.assert_called(), "OFFSCREEN_REPLY=False 时也必须 SetWindowPlacement 移屏外（修复频闪）"
+
+
+def test_scan_unread_minimized_no_visible_flash():
+    """最小化场景 scan_unread：SetWindowPlacement 必须在 ShowWindow(4) 之前（屏外预定位消除弹屏）。
+
+    修复前：OFFSCREEN_REPLY=False → SW_SHOWNOACTIVATE(4) 直接弹到屏幕原始位置再扫描
+    → 用户每轮都看到窗口出现又消失（约 10s 一次）。
+    修复后：先 SetWindowPlacement 移到 OFFSCREEN_X/Y，再 ShowWindow(4) 直接恢复到屏外位置
+    → 用户完全看不到弹出。
+    """
+    mw = _make_mock_mw(hwnd=444)
+    user32 = MagicMock()
+    user32.IsWindowVisible.return_value = True
+    user32.IsIconic.return_value = 1
+    user32.GetWindowPlacement.return_value = 1
+    call_order: list = []
+
+    user32.GetWindowPlacement.side_effect = lambda *a, **kw: call_order.append("GetWindowPlacement") or 1
+    user32.SetWindowPlacement.side_effect = lambda *a, **kw: call_order.append("SetWindowPlacement") or 1
+    user32.ShowWindow.side_effect = lambda hwnd, cmd: call_order.append(f"ShowWindow({cmd})")
+
+    original_offscreen = listen_chat._OFFSCREEN_REPLY
+    try:
+        listen_chat._OFFSCREEN_REPLY = False  # B方案
+        with _mock_windll(user32), patch("time.sleep"):
+            listen_chat.scan_unread(mw)
+    finally:
+        listen_chat._OFFSCREEN_REPLY = original_offscreen
+
+    assert "SetWindowPlacement" in call_order, "必须 SetWindowPlacement 到屏外（修复频闪）"
+    assert "ShowWindow(4)" in call_order, "仍须 ShowWindow(4) 恢复窗口（UIA 需要 shown 态）"
+    assert call_order.index("SetWindowPlacement") < call_order.index("ShowWindow(4)"), \
+        "SetWindowPlacement 必须在 ShowWindow(4) 之前——先预定位屏外再恢复，防弹屏"
+    assert "ShowWindow(6)" in call_order, "扫完无 emit 须 SW_MINIMIZE(6) 还原到任务栏"
+
+
+def test_restore_window_state_minimized_restores_rcnormalposition_without_offscreen_flag():
+    """_restore_window_state('minimized') 在 OFFSCREEN_REPLY=False 时同样须还原 rcNormalPosition。
+
+    v1.0.108 fix：去掉 if _OFFSCREEN_REPLY and 门控——扫描态始终存 _saved_normal_pos，
+    还原时也始终取回，防用户手动从任务栏点开时窗口出现在离屏位置。
+    """
+    mw = _make_mock_mw(hwnd=225)
+    user32 = MagicMock()
+    user32.GetWindowPlacement.return_value = 1
+
+    listen_chat._saved_normal_pos[225] = (200, 150, 1000, 750)
+
+    original_offscreen = listen_chat._OFFSCREEN_REPLY
+    try:
+        listen_chat._OFFSCREEN_REPLY = False  # B方案：OFFSCREEN_REPLY=False
+        with _mock_windll(user32):
+            listen_chat._restore_window_state(mw, 'minimized')
+    finally:
+        listen_chat._OFFSCREEN_REPLY = original_offscreen
+
+    user32.SetWindowPlacement.assert_called(), "OFFSCREEN_REPLY=False 时也必须还原 rcNormalPosition"
+    assert 225 not in listen_chat._saved_normal_pos, "_saved_normal_pos 还原后应清除 hwnd=225"
