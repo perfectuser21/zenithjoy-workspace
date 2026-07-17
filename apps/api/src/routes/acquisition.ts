@@ -382,14 +382,20 @@ acquisitionRouter.get('/pending-collect-tasks', async (req: Request, res: Respon
       return res.status(200).json({ tasks: [], total: 0 });
     }
 
-    const agentRes = await pool.query<{ tenant_id: string }>(
-      `SELECT tenant_id FROM zenithjoy.agents WHERE agent_id = $1 OR id::text = $1 LIMIT 1`,
+    const agentRes = await pool.query<{ tenant_id: string; agent_id: string | null; id: string }>(
+      `SELECT tenant_id, agent_id, id::text AS id FROM zenithjoy.agents WHERE agent_id = $1 OR id::text = $1 LIMIT 1`,
       [xAgentId]
     );
     const tenantId = agentRes.rows[0]?.tenant_id;
     if (!tenantId) {
       return res.status(200).json({ tasks: [], total: 0 });
     }
+    // 真机复现(2026-07-17)：/collect/start 用 account_label 绑定小号时把 agents.agent_id
+    // (文本slug) 写进 acquisition_collect_tasks.agent_id 列，但设备轮询这里发的是
+    // agents.id(UUID)。任务表过滤必须同时认这两种形式，否则文本形式的 agent_id 列永远
+    // 匹配不上 UUID header，接口静默返回空、真机采集任务永远卡在 pending。
+    const canonicalTextAgentId = agentRes.rows[0]?.agent_id ?? xAgentId;
+    const canonicalUuidId = agentRes.rows[0]?.id ?? xAgentId;
 
     const { rows } = await pool.query<{
       id: string;
@@ -405,10 +411,10 @@ acquisitionRouter.get('/pending-collect-tasks', async (req: Request, res: Respon
          FROM zenithjoy.acquisition_collect_tasks
         WHERE status IN ('pending', 'stage_1_done')
           AND tenant_id = $1
-          AND (agent_id IS NULL OR agent_id = $2)
+          AND (agent_id IS NULL OR agent_id = $2 OR agent_id = $3)
         ORDER BY created_at ASC
         LIMIT 5`,
-      [tenantId, xAgentId]
+      [tenantId, canonicalTextAgentId, canonicalUuidId]
     );
 
     // 只把 pending 任务标为 running；stage_1_done 保持不动（等 Stage 2 回报 terminal=done 后才转 done）

@@ -611,7 +611,10 @@ describe('GET /api/acquisition/pending-collect-tasks — tenant + agent 隔离 [
     const [sql, params] = selectCall;
     expect(sql).toMatch(/tenant_id\s*=\s*\$1/);
     expect(sql).toMatch(/agent_id/);
-    expect(params).toEqual(['tenant-A', 'agent-A']);
+    // 真机复现(2026-07-17)：任务表过滤须同时认 UUID/文本两种 agent_id 形式（见下方
+    // "任务表 agent_id 过滤也要认 UUID/文本双形式"[REGRESSION]），mock 里 agents 表
+    // 未区分两种形式时两者都退化成同一个 xAgentId 值，参数变 3 个但值相同。
+    expect(params).toEqual(['tenant-A', 'agent-A', 'agent-A']);
   });
 
   it('tenant-A 的 agent 轮询时，只能捞到 tenant-A 自己的任务（不是全平台任务）', async () => {
@@ -663,6 +666,41 @@ describe('GET /api/acquisition/pending-collect-tasks — x-agent-id 传 UUID 也
     expect(agentsLookupCall[0]).toMatch(/agent_id\s*=\s*\$1\s*OR\s*id::text\s*=\s*\$1/i);
     // 走到了任务表查询这一步，说明 tenant_id 解析成功了（没有在 agents 表这步就短路）
     expect(mod.default.query).toHaveBeenCalledTimes(2);
+  });
+});
+
+// 真机复现(2026-07-17 xian-rog)：/collect/start 用 account_label 绑定小号时，把
+// agents.agent_id(文本形式，如 agent-maa-an00-xxx) 写进 acquisition_collect_tasks.agent_id
+// 列；但设备轮询 /pending-collect-tasks 时 x-agent-id 头发的是 agents.id(UUID)——上面这条
+// [REGRESSION] 只修了"查 tenant_id"这一步的双形式匹配，任务表过滤 `agent_id = $2` 仍然
+// 裸比较原始 header 值，UUID 永远匹配不上文本形式的 agent_id 列，接口静默返回空、真机采集
+// 任务永远卡在 pending——跟上条同一根因、同一修法模式，只是漏了任务过滤这一步没对齐。
+describe('GET /api/acquisition/pending-collect-tasks — 任务表 agent_id 过滤也要认 UUID/文本双形式 [REGRESSION]', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('任务的agent_id存的是文本slug，设备用UUID轮询——仍必须捞到该任务', async () => {
+    const mod = await import('../db/connection');
+    const agentUuid = 'e017953c-bc65-47e0-913e-a2ed5eb54993';
+    const agentTextSlug = 'agent-maa-an00-mrn5fxt5';
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ tenant_id: 'tenant-A', agent_id: agentTextSlug, id: agentUuid }] }) // agents 表按 UUID 命中，同时带出文本形式
+      .mockResolvedValueOnce({
+        rows: [{ id: 'task-1', keywords: ['装修'], tenant_id: 'tenant-A', status: 'pending' }],
+      }) // 任务表：该任务 agent_id 列存的是文本 slug
+      .mockResolvedValueOnce({ rows: [] }); // UPDATE running
+
+    const res = await request(app)
+      .get('/api/acquisition/pending-collect-tasks')
+      .set('x-agent-id', agentUuid);
+
+    expect(res.body.tasks).toEqual([
+      { task_id: 'task-1', tenant_id: 'tenant-A', keywords: ['装修'], stage: 'stage_1', video_urls: undefined },
+    ]);
+    // 关键回归点：任务表查询的 SQL 参数必须同时带文本 slug 和 UUID 两种形式，
+    // 不能只拿原始 header 值($2)去裸比较——否则文本形式的 agent_id 列永远匹配不上 UUID header。
+    const taskSelectCall = (mod.default.query as any).mock.calls[1];
+    expect(taskSelectCall[1]).toContain(agentTextSlug);
+    expect(taskSelectCall[1]).toContain(agentUuid);
   });
 });
 
