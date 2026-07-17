@@ -13,8 +13,8 @@ import { describe, it, expect } from 'vitest';
 import {
   planConvergence, classifyOrphanRpaPythons, listTopLevelWeixinPids,
   isDebrisFile, isStaleLockFile, isStaleOnceZjTask, apiPointingConsistent,
-  executeConvergence, describeAction, gatherEnvState,
-  type EnvState, type ProcRow, type ConvergenceAction,
+  executeConvergence, describeAction, gatherEnvState, buildStartupResetReport, mergeStartupReset,
+  type EnvState, type ProcRow, type ConvergenceAction, type ConvergenceResult,
 } from '../bootstrap-convergence';
 
 const CLEAN: EnvState = {
@@ -313,5 +313,49 @@ describe('gatherEnvState — non-win 早退带齐 startup-reset 干净默认值'
     expect(s.staleOnceZjTasks).toEqual([]);
     expect(s.staleLockFiles).toEqual([]);
     expect(planConvergence(s)).toEqual([]);
+  });
+});
+
+describe('buildStartupResetReport — 5 项 checklist 汇总', () => {
+  it('干净 + 零动作 → ok=true reason=干净', () => {
+    const r = buildStartupResetReport(CLEAN, [], false);
+    expect(r.ok).toBe(true);
+    expect(r.reason).toContain('干净');
+  });
+  it('动作全成功 → ok=true reason 带动作数', () => {
+    const rs: ConvergenceResult[] = [{ action: { type: 'delete_debris', path: 'x' } as const, executed: true, ok: true }];
+    expect(buildStartupResetReport(CLEAN, rs, false)).toMatchObject({ ok: true });
+  });
+  it('任一动作失败 → ok=false reason 点名 describeAction + 错误', () => {
+    const rs: ConvergenceResult[] = [{ action: { type: 'kill_orphan_python', pid: 7, script: 'listen_chat.py' } as const, executed: true, ok: false, error: '拒绝访问' }];
+    const r = buildStartupResetReport(CLEAN, rs, false);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toContain('kill_orphan_python');
+    expect(r.reason).toContain('拒绝访问');
+  });
+  it('python-embedded 缺失 / env 不一致 → ok=false（缺项报红，即使无动作失败）', () => {
+    expect(buildStartupResetReport({ ...CLEAN, pythonEmbeddedPresent: false }, [], false).ok).toBe(false);
+    expect(buildStartupResetReport({ ...CLEAN, envConfigConsistent: false }, [], false).ok).toBe(false);
+  });
+  it('planOnly → ok=true reason 前缀 plan-only(ci) 且带计划动作数', () => {
+    const rs: ConvergenceResult[] = [{ action: { type: 'delete_stale_task', taskName: 'ZJTestOnce' } as const, executed: false, ok: true }];
+    const r = buildStartupResetReport(CLEAN, rs, true);
+    expect(r.ok).toBe(true);
+    expect(r.reason).toMatch(/^plan-only\(ci\)/);
+  });
+  it('reason 超长截断到 400 字符内（服务端 500 上限留余量）', () => {
+    const rs: ConvergenceResult[] = Array.from({ length: 50 }, (_, i) => ({
+      action: { type: 'delete_debris', path: `C:\\很长的路径\\zj-file-${i}.png` } as const,
+      executed: true, ok: false, error: '占用',
+    }));
+    expect(buildStartupResetReport(CLEAN, rs, false).reason!.length).toBeLessThanOrEqual(400);
+  });
+});
+
+describe('mergeStartupReset — 合并不丢真模块 key（覆盖式快照坑）', () => {
+  it('真模块 key 原样保留 + startup_reset 注入', () => {
+    const merged = mergeStartupReset({ 'line04-wechat-cs': { ok: true } }, { ok: false, reason: 'x' });
+    expect(merged['line04-wechat-cs']).toEqual({ ok: true });
+    expect(merged.startup_reset).toEqual({ ok: false, reason: 'x' });
   });
 });
