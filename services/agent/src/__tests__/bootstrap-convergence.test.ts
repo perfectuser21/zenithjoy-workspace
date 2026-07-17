@@ -144,6 +144,11 @@ describe('classifyOrphanRpaPythons — 孤儿判据=父 PID 已死（decision 9e
   it('非常驻脚本（send_chat 等短命）永不入列', () => {
     expect(classifyOrphanRpaPythons([{ pid: 20, ppid: 1, cmd: 'python.exe send_chat.py' }], new Set())).toEqual([]);
   });
+  it('livePids 为空集（全表快照失败）→ 采集层保守不杀：纯函数会全判孤儿，调用方必须先判 size', () => {
+    // 纯函数语义：空集下父 PID 必然"不在存活表"→ 全部入列（这是 gather 层必须加 size 守卫的原因）
+    const procs = [{ pid: 10, ppid: 1000, cmd: 'python.exe C:\\mod\\wechat-rpa\\listen_chat.py' }];
+    expect(classifyOrphanRpaPythons(procs, new Set()).length).toBe(1);
+  });
 });
 
 describe('listTopLevelWeixinPids — 顶层树口径（#1358 真机验证）', () => {

@@ -329,7 +329,8 @@ export function gatherEnvState(opts: {
       if (isNaN(pid) || isNaN(ppid)) continue;
       pyProcs.push({ pid, ppid, cmd: parts[2] });
     }
-    state.orphanRpaPythons = classifyOrphanRpaPythons(pyProcs, livePids);
+    // livePids 空 = 全表快照采集失败，此时无法判定父死活——保守不杀（宁可漏杀不误杀）
+    state.orphanRpaPythons = livePids.size > 0 ? classifyOrphanRpaPythons(pyProcs, livePids) : [];
   } catch { /* ignore → 干净默认值 [] 已在初始化中 */ }
 
   // 微信顶层：procTable 已含全进程，直接复用，不加查询（纯函数，procTable 为空时自然返回 []）
@@ -500,7 +501,7 @@ export function buildStartupResetReport(
     ? (results.length === 0 ? '干净' : `归零完成:${results.length}项动作`)
     : parts.join('｜');
   const reason = (prefix + summary).slice(0, 400);
-  return ok ? { ok, reason } : { ok, reason };
+  return { ok, reason };
 }
 
 export function mergeStartupReset<T extends Record<string, unknown>>(
