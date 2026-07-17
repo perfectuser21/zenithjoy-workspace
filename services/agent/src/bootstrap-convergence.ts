@@ -477,3 +477,35 @@ export function executeConvergence(
   }
   return results;
 }
+
+// ────────────────────────────────────── startup-reset 汇总上报 ──────────────────────────────────────
+
+export interface StartupResetReport { ok: boolean; reason?: string }
+
+// 5 项 checklist：①进程归零(kill_*) ②微信归一(converge_wechat) ③环境自检(persist/gap)
+// ④残骸清理(delete_*) ⑤上报（本函数产物随心跳走）。缺项报红（proven-to-fire）。
+export function buildStartupResetReport(
+  state: EnvState,
+  results: ConvergenceResult[],
+  planOnly: boolean,
+): StartupResetReport {
+  const parts: string[] = [];
+  const failures = results.filter((r) => !r.ok);
+  for (const f of failures) parts.push(`${describeAction(f.action)} 失败:${f.error ?? '?'}`);
+  if (!state.pythonEmbeddedPresent) parts.push('python-embedded 缺失');
+  if (state.envConfigConsistent === false) parts.push('.env/config.json API 指向不一致');
+  const ok = parts.length === 0;
+  const prefix = planOnly ? 'plan-only(ci)｜' : '';
+  const summary = ok
+    ? (results.length === 0 ? '干净' : `归零完成:${results.length}项动作`)
+    : parts.join('｜');
+  const reason = (prefix + summary).slice(0, 400);
+  return ok ? { ok, reason } : { ok, reason };
+}
+
+export function mergeStartupReset<T extends Record<string, unknown>>(
+  moduleReport: T,
+  startupReset: StartupResetReport,
+): T & { startup_reset: StartupResetReport } {
+  return { ...moduleReport, startup_reset: startupReset };
+}
