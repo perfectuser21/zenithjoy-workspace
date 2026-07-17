@@ -289,14 +289,38 @@ export function gatherEnvState(opts: {
 
 // ---------- 执行层（逐条执行，单条失败不阻断其余 / 不阻断启动） ----------
 
+export interface ConvergenceResult { action: ConvergenceAction; executed: boolean; ok: boolean; error?: string }
+
 export interface ConvergenceDeps {
   killPid?: (pid: number) => void;
   reregisterAutostart?: () => void;
   reportGap?: (detail: string) => void;
   log?: (msg: string) => void;
+  deleteFile?: (path: string) => void;
+  deleteTask?: (taskName: string) => void;
+  persistEnv?: (name: string, value: string) => void;
 }
 
-export function executeConvergence(actions: ConvergenceAction[], deps: ConvergenceDeps = {}): void {
+export function describeAction(a: ConvergenceAction): string {
+  switch (a.type) {
+    case 'kill_duplicate_agent': return `kill_duplicate_agent pid=${a.pid}`;
+    case 'kill_stale_launcher':  return `kill_stale_launcher pid=${a.pid}`;
+    case 'reregister_autostart': return 'reregister_autostart';
+    case 'report_config_gap':    return `report_config_gap ${a.detail}`;
+    case 'kill_orphan_python':   return `kill_orphan_python pid=${a.pid} ${a.script}`;
+    case 'converge_wechat':      return `converge_wechat pids=${a.pids.join(',')}`;
+    case 'persist_core_dir_env': return `persist_core_dir_env ${a.dir}`;
+    case 'delete_debris':        return `delete_debris ${a.path}`;
+    case 'delete_stale_task':    return `delete_stale_task ${a.taskName}`;
+    case 'delete_stale_lock':    return `delete_stale_lock ${a.path}`;
+  }
+}
+
+export function executeConvergence(
+  actions: ConvergenceAction[],
+  deps: ConvergenceDeps = {},
+  opts: { planOnly?: boolean } = {},
+): ConvergenceResult[] {
   const log = deps.log ?? console.log;
   const killPid = deps.killPid ?? ((pid: number) => {
     execFileSync('taskkill', ['/f', '/t', '/pid', String(pid)], { windowsHide: true, timeout: 15_000 });
@@ -308,23 +332,41 @@ export function executeConvergence(actions: ConvergenceAction[], deps: Convergen
     execFile('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script],
       { windowsHide: true, timeout: 30_000 }, () => { /* best-effort */ });
   });
+  const deleteFile = deps.deleteFile ?? ((p: string) => fs.unlinkSync(p));
+  const deleteTask = deps.deleteTask ?? ((t: string) => {
+    execFileSync('schtasks', ['/delete', '/tn', t, '/f'], { windowsHide: true, timeout: 15_000 });
+  });
+  const persistEnv = deps.persistEnv ?? ((name: string, value: string) => {
+    execFileSync('setx', [name, value], { windowsHide: true, timeout: 15_000 });
+  });
+
+  const results: ConvergenceResult[] = [];
   for (const a of actions) {
+    // report_config_gap 是唯一非破坏性动作，plan-only 也照常上报
+    if (opts.planOnly && a.type !== 'report_config_gap') {
+      log(`[bootstrap][plan-only] 将执行: ${describeAction(a)}`);
+      results.push({ action: a, executed: false, ok: true });
+      continue;
+    }
     try {
-      if (a.type === 'kill_duplicate_agent') {
-        log(`[bootstrap] 收敛：杀重复 agent 实例 PID ${a.pid}`);
-        killPid(a.pid);
-      } else if (a.type === 'kill_stale_launcher') {
-        log(`[bootstrap] 收敛：杀僵尸启动循环 PID ${a.pid}（${a.batPath}）`);
-        killPid(a.pid);
-      } else if (a.type === 'reregister_autostart') {
-        log('[bootstrap] 收敛：计划任务缺失/指向已删目录，重注册开机自启');
-        reregister();
-      } else if (a.type === 'report_config_gap') {
-        log(`[bootstrap] 配置缺口：${a.detail}`);
-        deps.reportGap?.(a.detail);
+      log(`[bootstrap] 收敛：${describeAction(a)}`);
+      switch (a.type) {
+        case 'kill_duplicate_agent':
+        case 'kill_stale_launcher':
+        case 'kill_orphan_python':  killPid(a.pid); break;
+        case 'converge_wechat':     for (const pid of a.pids) killPid(pid); break;
+        case 'reregister_autostart': reregister(); break;
+        case 'report_config_gap':   deps.reportGap?.(a.detail); break;
+        case 'persist_core_dir_env': persistEnv('ZENITHJOY_CORE_DIR', a.dir); break;
+        case 'delete_debris':
+        case 'delete_stale_lock':   deleteFile(a.path); break;
+        case 'delete_stale_task':   deleteTask(a.taskName); break;
       }
+      results.push({ action: a, executed: true, ok: true });
     } catch (e) {
-      log(`[bootstrap] 收敛动作失败（继续其余）：${a.type} ${(e as Error).message}`);
+      log(`[bootstrap] 收敛动作失败（继续其余）：${describeAction(a)} ${(e as Error).message}`);
+      results.push({ action: a, executed: true, ok: false, error: (e as Error).message });
     }
   }
+  return results;
 }
