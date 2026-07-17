@@ -551,13 +551,9 @@ def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
             # v1.0.29 SetWindowPlacement 预改 rcNormalPosition → ShowWindow(4) 直接恢复到屏外
             # （v1.0.28 遗留 bug：ShowWindow(4) 先在原始坐标出现 ~50ms 再 SetWindowPos 移走，用户看到弹跳）
             # 挪坐标（SetWindowPlacement 预改 rcNormalPosition → 屏外）是唯一真正生效的隐藏；
-            # cloak 保留但跨进程无效（ee2890bb）。扫描态无论 OFFSCREEN_REPLY 都挪（根治闪烁）。
+            # cloak 跨进程 E_ACCESSDENIED 从不生效（真机铁证 ee2890bb），已移除。
+            # 扫描态无论 OFFSCREEN_REPLY 都挪（根治闪烁）。
             if _should_move_offscreen(_OFFSCREEN_REPLY, for_reply):
-                try:
-                    _cv = _ct.c_int(1)
-                    _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
-                except Exception:
-                    pass
                 try:
                     class _WP(_ct.Structure):
                         _fields_ = [
@@ -582,18 +578,13 @@ def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
             time.sleep(_MINIMIZED_RESTORE_SLEEP)  # 最小化恢复比托盘需要更长 UIA 树重建时间
             return 'minimized'
         else:
-            # 可见非最小化（SPI 激活后常见后台状态）：v1.0.33 cloak 仅在确认需要移动时才执行
-            # （避免 already-offscreen 时 cloak 无配对 uncloak）
-            # 扫描态无论 OFFSCREEN_REPLY 都挪坐标屏外（唯一真正生效的隐藏，cloak 无效 ee2890bb）。
+            # 可见非最小化（SPI 激活后常见后台状态）：cloak 跨进程 E_ACCESSDENIED 从不生效
+            # （真机铁证 ee2890bb），已移除，只保留挪坐标屏外（唯一真正生效的隐藏）。
+            # 扫描态无论 OFFSCREEN_REPLY 都挪。
             if _should_move_offscreen(_OFFSCREEN_REPLY, for_reply):
                 _rc = _wt.RECT()
                 _ct.windll.user32.GetWindowRect(_hwnd, _ct.byref(_rc))
                 if _rc.left > -2000:
-                    try:
-                        _cv = _ct.c_int(1)
-                        _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
-                    except Exception:
-                        pass
                     _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
                     with _saved_normal_pos_lock:
                         _saved_visible_pos[_hwnd] = (_rc.left, _rc.top)
@@ -654,11 +645,10 @@ def _restore_window_state(mw: Any, original_state: str, for_reply: bool = False)
                     _ct.windll.user32.SetWindowPos(_hwnd, 0, _orig[0], _orig[1], 0, 0, _SWP)
                 except Exception:
                     pass
-        # DWM uncloak（与 _ensure_tray_visible 中的 cloak 配对，v1.0.93；for_reply 解耦 2026-07-17）
-        # tray 分支无论 OFFSCREEN_REPLY 都 cloak；minimized/visible 分支：OFFSCREEN_REPLY=True
-        # 时走legacy挪坐标+cloak路径，for_reply=False（扫描态）时走新的cloak-only路径——
-        # 两条路径任一发生过 cloak，这里都要 uncloak
-        if original_state == 'tray' or (original_state and (_OFFSCREEN_REPLY or not for_reply)):
+        # DWM uncloak（与 _ensure_tray_visible 中的 cloak 配对，v1.0.93）——minimized/visible
+        # 分支的 cloak 已移除（跨进程 E_ACCESSDENIED 从不生效，真机铁证 ee2890bb，2026-07-17），
+        # 只剩 tray 分支仍 cloak，故只在 tray 时才需要 uncloak。
+        if original_state == 'tray':
             try:
                 _cv = _ct.c_int(0)
                 _ct.windll.dwmapi.DwmSetWindowAttribute(_hwnd, 13, _ct.byref(_cv), 4)
