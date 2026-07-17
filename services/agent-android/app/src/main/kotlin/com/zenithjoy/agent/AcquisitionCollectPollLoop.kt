@@ -12,6 +12,16 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
+ * Stage2 判决门该走哪条采集路径：note(图文) → screenshot(截图判定)，其余(video) →
+ * audio(音频转写判定)。用户2026-07-17拍板（判定点1d078987），decision f3dbc2ce
+ * 两条路径分工：OCR 走图文、转写走视频。服务端 pending-collect-tasks 已经按
+ * media_kinds 把 note 类型 URL 拼成 `/note/{id}`，其余默认 `/video/{id}`（见
+ * apps/api/src/routes/acquisition.ts "Bug C：note 图文类型走 /note/ 深链"注释）。
+ */
+internal fun captureTypeForVideoUrl(videoUrl: String): String =
+    if (videoUrl.contains("/note/")) "screenshot" else "audio"
+
+/**
  * 采集任务两阶段轮询（Path 2 Step 5）。
  *
  * 每 30s 轮询 GET /api/acquisition/pending-collect-tasks（鉴权头 x-agent-id），
@@ -126,12 +136,14 @@ class AcquisitionCollectPollLoop(
                     val eligibleUrls = if (contentJudgmentService != null) {
                         videoUrls.filter { videoUrl ->
                             val videoId = videoUrl.substringAfterLast("/")
-                            // 先打开这张视频卡片，截图判决时屏幕上必须是它，不是搜索结果页
+                            // 先打开这张视频卡片，采集判决时屏幕上必须是它，不是搜索结果页
                             videoOpener?.invoke(videoId)
                             val result = contentJudgmentService.judge(
                                 videoId = videoId,
-                                captureType = "screenshot",
-                                dataB64 = "", // 实际截图由 ContentJudgmentService 内部采集
+                                // 用户2026-07-17拍板（判定点1d078987）：video 类型走音频转写判定，
+                                // note(图文) 类型仍走截图判定（decision f3dbc2ce 两条路径分工不同）。
+                                captureType = captureTypeForVideoUrl(videoUrl),
+                                dataB64 = "", // 实际截图/录音由 ContentJudgmentService 内部采集
                             )
                             // rejected → 不进评论抓取；matched 或 pending（超时兜底）→ 继续
                             result.judgmentStatus != "rejected"

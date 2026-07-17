@@ -32,7 +32,11 @@ class AudioRecordService(
         private const val SAMPLE_RATE = 16_000       // 16kHz
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
-        private const val RECORD_DURATION_MS = 3_000 // 录 3 秒
+
+        // 用户2026-07-17拍板（判定点1d078987）：固定只录开头20秒，不管视频总长多少——
+        // 短视频/带货类内容创作者被平台算法逼着把钩子放在开头3-15秒，20秒足够覆盖内容
+        // 主旨判断相关性；成本时间恒定不受视频总长影响（1分钟和1小时视频耗时一样）。
+        internal const val RECORD_DURATION_MS = 20_000L
     }
 
     /**

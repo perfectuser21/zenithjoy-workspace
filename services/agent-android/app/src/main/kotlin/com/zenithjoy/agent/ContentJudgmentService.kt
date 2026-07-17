@@ -27,6 +27,9 @@ class ContentJudgmentService(
     private val tenantId: () -> String,
     private val httpClient: OkHttpClient = defaultClient(),
     private val screenCaptureService: ScreenCaptureService? = null,
+    // 用户2026-07-17拍板（判定点1d078987）：视频类内容判定改用真实音频转写，captureType=
+    // "audio" 时走这条采集源（图文/note 类型仍走 screenCaptureService，两条路径分工不同）。
+    private val audioCaptureService: AudioCaptureService? = null,
 ) {
     companion object {
         private const val TAG = "ContentJudgmentService"
@@ -71,17 +74,23 @@ class ContentJudgmentService(
             return JudgmentResult(judgmentStatus = "pending", judgmentReason = "no_tenant")
         }
 
-        // FR-C: dataB64 为空时，尝试通过 screenCaptureService 截图
+        // FR-C: dataB64 为空时，按 captureType 选对应的采集源（audio → audioCaptureService，
+        // 其余 → screenCaptureService，图文/note 走截图、视频走音频转写两条路径分工不同）。
+        val hasCaptureSource = if (captureType == "audio") audioCaptureService != null else screenCaptureService != null
         val actualDataB64: String
         val actualCaptureType: String
-        if (dataB64.isEmpty() && screenCaptureService != null) {
-            val captured = screenCaptureService.captureToBase64()
+        if (dataB64.isEmpty() && hasCaptureSource) {
+            val captured = if (captureType == "audio") {
+                audioCaptureService?.captureToBase64()
+            } else {
+                screenCaptureService?.captureToBase64()
+            }
             if (captured == null) {
-                // 截图失败不再本地短路返回（旧行为：直接 return pending 且从不 POST，
+                // 采集失败不再本地短路返回（旧行为：直接 return pending 且从不 POST，
                 // 导致服务端 judgment_reason 永远为空、DB 里 pending 空转查无原因）。
                 // 改为：带 capture_type=skipped_capture_failed 继续回报，让服务端把原因落到
-                // acquisition_collect_videos.judgment_reason —— 环境守卫：DB 一眼可辨截图失败。
-                logW("截图失败，改以 skipped_capture_failed 回报 videoId=$videoId")
+                // acquisition_collect_videos.judgment_reason —— 环境守卫：DB 一眼可辨采集失败。
+                logW("采集失败，改以 skipped_capture_failed 回报 videoId=$videoId captureType=$captureType")
                 actualDataB64 = ""
                 actualCaptureType = "skipped_capture_failed"
             } else {
