@@ -183,11 +183,12 @@ def test_ensure_tray_visible_visible_saves_original_pos():
     assert orig == (150, 250), f"保存的坐标应是 (150, 250)，实际是 {orig}"
 
 
-def test_ensure_tray_visible_visible_scan_state_cloaks_when_offscreen_false():
-    """扫描态(for_reply=False,默认)：_OFFSCREEN_REPLY=False 时可见窗口不移动坐标，
-    但必须返回 'visible'（cloak-only 路径已触发）——for_reply 参数引入后的新默认行为
-    （2026-07-17，真机反馈闪烁修复）。取代旧版
-    test_ensure_tray_visible_visible_noop_when_offscreen_false（旧版断言完全不动，是本次要修的 bug 本身）。"""
+def test_ensure_tray_visible_visible_scan_state_moves_no_cloak_when_offscreen_false():
+    """扫描态(for_reply=False,默认)：_OFFSCREEN_REPLY=False 时可见窗口也必须挪坐标屏外，
+    不再 cloak-only——cloak 跨进程 E_ACCESSDENIED 从不生效（真机铁证 ee2890bb），挪坐标
+    才是唯一真正生效的隐藏手段（decision 7b8857f7，2026-07-17）。取代旧版
+    test_ensure_tray_visible_visible_scan_state_cloaks_when_offscreen_false（旧版断言
+    cloak-only 不挪坐标，正是真机弹闪的 bug 本身）。"""
     mw = _make_mock_mw(hwnd=204)
     user32 = MagicMock()
     user32.IsWindowVisible.return_value = 1
@@ -202,7 +203,7 @@ def test_ensure_tray_visible_visible_scan_state_cloaks_when_offscreen_false():
         listen_chat._OFFSCREEN_REPLY = original_offscreen
 
     assert result == 'visible', f"扫描态默认 _OFFSCREEN_REPLY=False 时必须返回 'visible'，实际返回 {result!r}"
-    user32.SetWindowPos.assert_not_called()
+    user32.SetWindowPos.assert_called()
 
 
 def test_ensure_tray_visible_visible_reply_state_noop_when_offscreen_false():
@@ -351,10 +352,12 @@ def test_version_is_1036():
     )
 
 
-def test_ensure_tray_visible_visible_calls_dwm_cloak():
-    """可见非最小化窗口 + _OFFSCREEN_REPLY=True 时，必须调 DwmSetWindowAttribute(DWMWA_CLOAK=13, 1)。
-
-    v1.0.32 新增：DWM compositor 层 cloak，防止 WeChat 自身响应 UIA activate 时移回可视区域。
+def test_ensure_tray_visible_visible_no_dwm_cloak():
+    """可见非最小化窗口挪坐标屏外后不应再调 DwmSetWindowAttribute——cloak 跨进程
+    E_ACCESSDENIED 从不生效（真机铁证 ee2890bb），已从 visible 分支移除，只保留挪坐标
+    （唯一真正生效的隐藏，decision 7b8857f7，2026-07-17）。取代旧版
+    test_ensure_tray_visible_visible_calls_dwm_cloak（v1.0.32 引入的 cloak 调用已确认
+    从未真正生效，属于误导性防御式代码，予以移除）。
     """
     mw = _make_mock_mw(hwnd=210)
     user32 = MagicMock()
@@ -392,7 +395,5 @@ def test_ensure_tray_visible_visible_calls_dwm_cloak():
         listen_chat._OFFSCREEN_REPLY = original_offscreen
         listen_chat._saved_visible_pos.pop(210, None)
 
-    dwmapi.DwmSetWindowAttribute.assert_called()
-    # 第一个调用必须是 cloak（第二个参数=13, 调用参数含1）
-    first_call_args = dwmapi.DwmSetWindowAttribute.call_args_list[0][0]
-    assert first_call_args[1] == 13, f"DWMWA_CLOAK 属性 ID 必须是 13，实际是 {first_call_args[1]}"
+    dwmapi.DwmSetWindowAttribute.assert_not_called()
+    user32.SetWindowPos.assert_called()
