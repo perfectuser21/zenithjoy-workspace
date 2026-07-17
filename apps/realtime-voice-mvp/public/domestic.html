@@ -132,7 +132,8 @@
       log('麦克风权限获取成功');
 
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(`${proto}//${location.host}/ws/domestic`);
+      const basePath = location.pathname.replace(/[^/]*$/, ''); // 去掉文件名，保留子路径前缀
+      ws = new WebSocket(`${proto}//${location.host}${basePath}ws/domestic`);
       ws.binaryType = 'arraybuffer';
 
       ws.onopen = () => {
