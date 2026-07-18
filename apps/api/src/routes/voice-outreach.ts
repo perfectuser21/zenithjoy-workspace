@@ -66,8 +66,8 @@ interface VoiceCallResponse {
 
 voiceOutreachRouter.post(
   '/call',
-  tenantContext,
   callRateLimit,
+  tenantContext,
   requireCsWriteAccess('wechatId'),
   async (req: Request, res: Response) => {
     const body = req.body as Partial<VoiceCallRequest>;
@@ -127,8 +127,8 @@ voiceOutreachRouter.post(
 
 voiceOutreachRouter.get(
   '/records',
-  tenantContext,
   recordsRateLimit,
+  tenantContext,
   async (req: Request, res: Response) => {
     const tenant_id: string | undefined =
       req.tenantId || (req.query.tenant_id as string | undefined);
@@ -189,8 +189,8 @@ voiceOutreachRouter.get(
 
 voiceOutreachRouter.post(
   '/records',
-  tenantContext,
   recordsRateLimit,
+  tenantContext,
   async (req: Request, res: Response) => {
     const body = req.body as Partial<VoiceCallRecord & { call_id: string }>;
     const tenant_id: string | undefined = req.tenantId || body.tenant_id;
