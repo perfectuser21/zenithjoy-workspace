@@ -19,8 +19,6 @@ import org.junit.Test
  *
  * 目标文件路径（commit-2 实现时放置位置）：
  *   services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/AcquisitionCollectPollLoopTest.kt
- *
- * 参照：AcquisitionKeywordPollLoopTest.kt（同包，同 MockWebServer 风格）
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AcquisitionCollectPollLoopTest {

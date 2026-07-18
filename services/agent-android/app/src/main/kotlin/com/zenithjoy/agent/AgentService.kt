@@ -63,7 +63,6 @@ class AgentService : Service() {
     private var heartbeatLoop: HttpHeartbeatLoop? = null
     // initAgent 只允许执行一次（真机复现 2026-07-10：多次 onStartCommand 泄漏多套轮询 loop）
     @Volatile private var agentInitialized = false
-    private var keywordPollLoop: AcquisitionKeywordPollLoop? = null
     private var collectPollLoop: AcquisitionCollectPollLoop? = null
     private var accountScanLoopJob: kotlinx.coroutines.Job? = null
 
@@ -276,7 +275,6 @@ class AgentService : Service() {
     override fun onDestroy() {
         wsClient?.stop()
         heartbeatLoop?.stop()
-        keywordPollLoop?.stop()
         collectPollLoop?.stop()
         accountScanLoopJob?.cancel()
         serviceJob.cancel()
@@ -378,20 +376,6 @@ class AgentService : Service() {
         )
         heartbeatLoop?.start()
 
-        // 关键词采集任务轮询（真实任务源 — 见 AcquisitionKeywordPollLoop 头部注释）
-        keywordPollLoop = AcquisitionKeywordPollLoop(
-            params = AcquisitionKeywordPollLoop.Params(
-                httpBase = config.deriveHttpBase(),
-                licenseKey = config.licenseKey,
-            ),
-            scope = scope,
-            onTask = { task ->
-                android.util.Log.i(TAG, "keyword task: id=${task.task_id} keyword=${task.keyword}")
-                DouyinCollectService.dispatchTask(this@AgentService, task.keyword, task.task_id)
-            },
-        )
-        keywordPollLoop?.start()
-
         // reporter 使用最新 agentId（initAgent 之后才确定）
         reporter = CollectReporter(
             httpBase = config.deriveHttpBase(),
@@ -399,7 +383,6 @@ class AgentService : Service() {
         )
 
         // 两阶段采集任务轮询（Path 2 Step 5）
-        // 与 keywordPollLoop 并行双跑，通过 collectTaskIds Set 在 onCollectResult 中区分路由
         // 真实截图实现：用 MediaProjectionHolder 换出的 MediaProjection 实例构造
         // captureImpl（VirtualDisplay + ImageReader，见 ScreenCaptureReal）。若用户还
         // 没在 MainActivity 里授权过（hasAuthorization()==false），换出结果恒为 null，
