@@ -560,6 +560,9 @@ def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
       禁止直接 SW_SHOWNA(8)：留在幽灵坐标 (-32000,-32000)，UIA 事件无订阅者。
       v1.0.135：曾被最大化过的窗口必须先清 WPF_RESTORETOMAXIMIZED，否则 ShowWindow(4)
       无视离屏坐标直接按最大化展开（decision 433b117c），还原后再用 SetWindowPos 兜底。
+      v1.0.136：① 操作者正在前台使用微信时整个函数直接 no-op（不挪窗口，原地读，
+      真机反馈每 1-3 秒闪一次)；② 恢复到离屏坐标这一步同样临时关最小化动画，避免
+      任务栏→离屏路径经过屏内可见区域（与 _restore_window_state 的反向处理对称）。
     """
     import ctypes as _ct
     import ctypes.wintypes as _wt
@@ -569,6 +572,14 @@ def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
             return ''
         _is_visible = bool(_ct.windll.user32.IsWindowVisible(_hwnd))
         _is_iconic = bool(_ct.windll.user32.IsIconic(_hwnd))
+        # v1.0.136 真机反馈（2026-07-18）：操作者正在前台使用微信时，"可见非最小化"
+        # 分支仍无条件挪窗口屏外再挪回——UIA 读取本不需要挪动一个已经可见的窗口
+        # （挪坐标只对救活 tray/minimized 这种真正隐藏、读不到内容的窗口有意义），
+        # 结果操作者每次扫描周期（1-3 秒一次）都看到窗口消失又跳回来，肉眼可见的
+        # 持续闪烁。托盘/最小化窗口不可能同时是前台窗口（操作系统语义），故这个
+        # 判断只在"可见非最小化"场景生效，不影响另外两个分支的挪窗口逻辑。
+        if _wechat_is_foreground(mw):
+            return ''
         if not _is_visible:
             # 托盘：v1.0.93 无论 OFFSCREEN_REPLY=True/False 都先 DWM cloak 再 ShowWindow，
             # compositor 层不渲染（用户不可见）。OFFSCREEN_REPLY 只控制"是否移出屏幕坐标"，
@@ -633,7 +644,16 @@ def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
                         _ct.windll.user32.SetWindowPlacement(_hwnd, _ct.byref(_wp))
                 except Exception:
                     pass
-            _ct.windll.user32.ShowWindow(_hwnd, 4)  # SW_SHOWNOACTIVATE = 4：恢复到 rcNormalPosition（已改为离屏）
+            # v1.0.136：从最小化恢复到离屏坐标这一步，动画方向是"任务栏（屏内）→
+            # 离屏目标"，路径同样必然经过屏内可见区域（与 _restore_window_state 的
+            # 反向"离屏→再最小化"是对称问题）——临时关掉最小化/还原动画让这一步
+            # 瞬间切换，不产生任何可渲染的过渡帧。
+            _prev_anim_restore = _set_min_animate(0)
+            try:
+                _ct.windll.user32.ShowWindow(_hwnd, 4)  # SW_SHOWNOACTIVATE = 4：恢复到 rcNormalPosition（已改为离屏）
+            finally:
+                if _prev_anim_restore is not None:
+                    _set_min_animate(_prev_anim_restore)
             if _should_move_offscreen(_OFFSCREEN_REPLY, for_reply):
                 try:
                     _rc2 = _wt.RECT()
