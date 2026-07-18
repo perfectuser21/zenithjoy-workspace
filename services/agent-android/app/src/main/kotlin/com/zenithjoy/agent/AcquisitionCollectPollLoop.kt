@@ -30,7 +30,7 @@ internal fun captureTypeForVideoUrl(videoUrl: String): String =
  *   - stage_2 → 调 onStage2Task（评论抓取 + checkpoint 上报）
  *   - status=cancelling → 调 onCancel（agent 端上报 terminal=true + partial_reason=user_cancelled）
  *
- * 与 AcquisitionKeywordPollLoop 并行双跑，通过 collectTaskIds Set 在
+ * 通过 collectTaskIds Set 在
  * AgentService.onCollectResult 中区分路由：命中 → /collect/report，否则 → /comment-score-result。
  */
 class AcquisitionCollectPollLoop(
@@ -72,8 +72,8 @@ class AcquisitionCollectPollLoop(
 
     fun start() {
         // 首次 poll 同步执行（不等协程调度），保证 start() 返回时第一轮回调已触发，
-        // 与 AcquisitionKeywordPollLoop 在真实 TestScope 下的确定性行为对齐；
-        // GlobalScope 场景下（生产用）不依赖协程调度器真跑一轮才能验证副作用。
+        // 在真实 TestScope 下行为确定；GlobalScope 场景下（生产用）不依赖协程调度器
+        // 真跑一轮才能验证副作用。
         pollOnce()
         job = scope.launch { loop() }
     }
@@ -89,7 +89,7 @@ class AcquisitionCollectPollLoop(
         }
     }
 
-    /** 单次轮询，供测试直接调用。注意：此函数是同步的（非 suspend），保持与 AcquisitionKeywordPollLoop 一致的接口风格。 */
+    /** 单次轮询，供测试直接调用。注意：此函数是同步的（非 suspend）。 */
     fun pollOnce() {
         val currentAgentId = agentId()
         if (currentAgentId.isEmpty()) return
@@ -161,8 +161,8 @@ class AcquisitionCollectPollLoop(
     }
 
     /**
-     * 单次 HTTP 执行，不重试（与 AcquisitionKeywordPollLoop.pollOnce() 一致：
-     * 失败/非 2xx 只记日志返回 null，下一轮 30s 轮询自然重试，不在单次 poll 内阻塞重试）。
+     * 单次 HTTP 执行，不重试（失败/非 2xx 只记日志返回 null，下一轮 30s 轮询
+     * 自然重试，不在单次 poll 内阻塞重试）。
      * @return 响应体字符串，或 null（失败/HTTP 错误）
      */
     private fun executeOnce(request: Request): String? {

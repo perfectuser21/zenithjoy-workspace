@@ -13,7 +13,7 @@ import org.junit.Test
  * Path2 全链路真实压测复现(2026-07-17 xian-rog)：Stage1 采集完成后 report-videos 静默
  * 卡死失败——CollectReporter.defaultClient() 还停留在 Bug1(#1345) 修复前的旧配置
  * （长时间空闲后 OkHttp 默认连接池里的连接被网络切换/NAT 超时静默弄坏，复用时写入
- * 成功但读永远拿不到响应），全仓库还有 4 处同款未修客户端——是系统性问题，不是
+ * 成功但读永远拿不到响应），全仓库还有 3 处同款未修客户端——是系统性问题，不是
  * CollectReporter 一处孤立个案。本测试逐一锁定这几个低频调用客户端都不留旧连接可复用
  * （同 AgentServiceHttpClientTest 的验证方式：MockWebServer 断言 sequenceNumber=0）。
  */
@@ -58,11 +58,6 @@ class InfrequentHttpClientsNoPoolTest {
     @Test
     fun `AcquisitionCollectPollLoop 默认客户端不复用连接`() {
         assertNeverReusesConnection(AcquisitionCollectPollLoop.defaultClient())
-    }
-
-    @Test
-    fun `AcquisitionKeywordPollLoop 默认客户端不复用连接`() {
-        assertNeverReusesConnection(AcquisitionKeywordPollLoop.defaultClient())
     }
 
     @Test

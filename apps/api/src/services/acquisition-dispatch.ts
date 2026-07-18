@@ -177,7 +177,7 @@ function sanitizePatch(patch: Record<string, unknown>): Partial<AcquisitionConfi
 }
 
 // ── scoreLeads：给未评分 leads 打 relevance_score（thin 启发式）─────────────
-// TODO(刀2)：接真 AI comment-score（acquisition.ts /comment-score-result 已有 gradeComment DeepSeek）。
+// TODO(刀2)：接真 AI comment-score。
 //   thin 启发式：有 sec_uid + 有 profile_url → 80；只有其一 → 50；partial/都缺 → 20。
 export function heuristicScore(lead: { sec_uid?: string | null; profile_url?: string | null; partial?: boolean }): number {
   const hasSec = !!(lead.sec_uid && String(lead.sec_uid).trim());

@@ -34,7 +34,6 @@ import {
 // Sprint 06081700 — Core 模块管理器（下载/解压/preflight/fork）。
 // Line 特有逻辑（wechat-rpa / preflight）下沉到按需下载的 Line 模块包，core 不再直接引用。
 import { ModuleManager } from './module-manager';
-import { mapRawCommenters } from './utils/comment-mapper';
 // Sprint 06222100 — 核心运行时本体自升级（下载新核心包→解压→写 .active-core 指针→优雅退出）。
 import { CoreUpgrader } from './core-upgrader';
 import { acquireSingleInstanceLock } from './single-instance-lock';
@@ -57,7 +56,6 @@ import { handleQrBindOperator } from './handlers/qr-bind-operator';
 import { createFolderWatchManager } from './handlers/folder-watch';
 import { startHealthServer, setWsState } from './handlers/health-server';
 import { startVideoPipelineLoop } from './handlers/video-pipeline';
-import { searchDouyinVideosByKeyword } from './handlers/keyword-search-douyin';
 import { ensureChromeHeadlessShell, ensureChromiumHeadful } from './handlers/ensure-chrome';
 import { ensureFfmpeg } from './handlers/ensure-ffmpeg';
 import { ensureHyperframes } from './handlers/ensure-hyperframes';
@@ -610,11 +608,6 @@ async function main(): Promise<void> {
 
   // Path 4 微信监听已下沉到 line04 模块（按需下载 + fork），core 不再直接启动。
 
-  // 智能获客：关键词任务轮询 + 抖音视频搜索（collect 轨已下沉到 line02 模块）
-  if (process.env.ZENITHJOY_DISABLE_ACQUISITION !== '1') {
-    startAcquisitionKeywordLoop(cfg);
-  }
-
   const _hbApiBase = sanitizeApiBase(process.env.ZENITHJOY_API_BASE);
   if (_hbApiBase) {
     startVideoPipelineLoop(_hbApiBase, cfg.licenseKey);
@@ -1148,115 +1141,6 @@ function startLocalDiscoveryServer(loop: HeartbeatLoop): void {
   server.listen(port, '127.0.0.1', () => {
     console.log(`[local-discovery] listening on http://127.0.0.1:${port}/agent-id`);
   });
-}
-
-// ────── 智能获客：关键词任务轮询 ──────
-function startAcquisitionKeywordLoop(cfg: AgentConfig): void {
-  const apiBase = deriveHttpApiBase(cfg);
-  if (!apiBase) {
-    console.log('[acquisition] 无法推导 apiBase，跳过 keyword 轮询');
-    return;
-  }
-
-  const POLL_INTERVAL_MS = 30_000;
-
-  // Sprint cp-06262240 — 观测上报 cfg（与 ws1 heartbeat 同源）。
-  // 身份统一（cp-06270030）：agentId 用 register 返的 agentUuid。
-  const eventCfg: EventReporterConfig = buildEventReporterConfig(cfg, apiBase);
-
-  async function pollAndProcess(): Promise<void> {
-    try {
-      const resp = await fetch(`${apiBase}/api/acquisition/pending-keyword-tasks`, {
-        headers: { 'x-agent-license': cfg.licenseKey },
-      });
-      if (!resp.ok) return;
-      const data = await resp.json() as { tasks?: Array<{ task_id: string; keyword: string; keywords: string[]; max_videos_per_keyword?: number }>; total?: number };
-      const tasks = data.tasks ?? [];
-      if (tasks.length === 0) return;
-
-      console.log(`[acquisition] 发现 ${tasks.length} 个关键词任务`);
-
-      for (const task of tasks) {
-        const { task_id, keywords } = task;
-        const allVideoUrls: string[] = [];
-
-        void reportTaskStart(eventCfg, { platform: 'keyword_search_douyin', taskId: task_id });
-
-        // 逐词搜索热门视频
-        for (const kw of keywords) {
-          const result = await searchDouyinVideosByKeyword(kw, { maxVideosPerKeyword: task.max_videos_per_keyword ?? 5 });
-          if (result.ok && result.video_urls.length > 0) {
-            allVideoUrls.push(...result.video_urls);
-          } else if (!result.ok) {
-            void reportTaskFail(eventCfg, {
-              platform: 'keyword_search_douyin',
-              taskId: task_id,
-              error: `关键词「${kw}」搜索失败: ${(result as { error?: string }).error ?? 'unknown'}`,
-            });
-          }
-        }
-
-        if (allVideoUrls.length > 0) {
-          // 上报视频搜索结果
-          await fetch(`${apiBase}/api/acquisition/video-search-result`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              keyword_task_id: task_id,
-              keyword: task.keyword,
-              videos: allVideoUrls.map((url) => ({ video_url: url })),
-            }),
-          }).catch((e) => console.warn('[acquisition] video-search-result POST failed:', e.message));
-
-          // 逐视频抓评论（复用 burner 评论抓取逻辑）
-          for (const videoUrl of allVideoUrls.slice(0, 10)) {
-            const crawlResult = await handleCrawlCommentsBurner({
-              account_label: 'main',
-              video_url: videoUrl,
-              max_comments: 50,
-            });
-            // crawl-comments-douyin.cjs --stdout-only 返回 {commenters:[{sec_uid,nickname}]}
-            // 映射成 comment-score-result 期望的 {commenter_id, text} 格式
-            const rawCommenters = Array.isArray((crawlResult as Record<string, unknown>).commenters)
-              ? (crawlResult as Record<string, unknown>).commenters as Array<{ sec_uid?: string | null; nickname?: string; comment_text?: string }>
-              : [];
-            if (crawlResult.ok && rawCommenters.length > 0) {
-              const comments = mapRawCommenters(rawCommenters);
-              await fetch(`${apiBase}/api/acquisition/comment-score-result`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  keyword_task_id: task_id,
-                  video_url: videoUrl,
-                  comments,
-                }),
-              }).catch((e) => console.warn('[acquisition] comment-score-result POST failed:', e.message));
-            }
-          }
-        }
-
-        // 标记任务完成
-        await fetch(`${apiBase}/api/acquisition/video-search-result`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            keyword_task_id: task_id,
-            keyword: task.keyword,
-            videos: [],
-          }),
-        }).catch(() => null);
-      }
-    } catch (err) {
-      console.warn('[acquisition] poll error:', (err as Error).message);
-    }
-  }
-
-  // 首次立即执行，然后每 30 秒轮询
-  pollAndProcess();
-  const timer = setInterval(pollAndProcess, POLL_INTERVAL_MS);
-  console.log(`[acquisition] keyword 轮询已启动，间隔 ${POLL_INTERVAL_MS / 1000}s`);
-  // 防止 timer 阻止进程退出
-  if (timer.unref) timer.unref();
 }
 
 // H-2 Bug 9: 仅作为入口脚本时运行 main()。test import 不触发 main()，让 buildHelloPayload 等纯函数可单测。

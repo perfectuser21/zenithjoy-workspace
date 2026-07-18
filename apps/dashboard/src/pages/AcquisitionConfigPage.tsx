@@ -3,7 +3,7 @@
  *
  * 只含获客参数配置表单（采集 / 触达 / 养号 / Cookie 四组）+ 保存按钮。
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getCompanyProfile, type CompanyProfile } from '../api/company-profile.api';
 import { buildRecommendedKeywords } from '../utils/keywords';
 import {
@@ -347,144 +347,6 @@ function KeywordsAndOpeningBlock() {
   );
 }
 
-// ============ 采集任务块 ============
-
-interface CollectTask {
-  id: string;
-  keyword: string;
-  status: string;
-  created_at: string;
-}
-
-const COLLECT_STATUS_LABEL: Record<string, string> = {
-  pending: '待处理',
-  running: '采集中',
-  done: '完成',
-  partial: '部分完成',
-  failed: '失败',
-  cancelled: '已取消',
-  cancelling: '取消中',
-};
-
-function CollectTasksBlock() {
-  const [tasks, setTasks] = useState<CollectTask[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [keyword, setKeyword] = useState('');
-  const [starting, setStarting] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/acquisition/keyword-tasks');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as { success: boolean; data?: { tasks: CollectTask[] }; tasks?: CollectTask[] };
-      const list = json.data?.tasks ?? (json as unknown as { tasks: CollectTask[] }).tasks ?? [];
-      setTasks(list);
-      setErr(null);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : '加载采集任务失败');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const onStart = async () => {
-    const kw = keyword.trim();
-    if (!kw) {
-      setErr('请输入关键词');
-      inputRef.current?.focus();
-      return;
-    }
-    setStarting(true);
-    setErr(null);
-    setMsg(null);
-    try {
-      const res = await fetch('/api/acquisition/keyword-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyword: kw }),
-      });
-      const json = (await res.json()) as { task_id?: string; error?: string };
-      if (!res.ok) {
-        throw new Error(json.error ?? `HTTP ${res.status}`);
-      }
-      setMsg(`✓ 已派发给 Agent，正在进视频评论区抓评论者，约 1-2 分钟后到「名单」页刷新查看`);
-      setKeyword('');
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : '提交失败');
-    } finally {
-      setStarting(false);
-    }
-  };
-
-  return (
-    <section className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-700">
-      <h3 className="font-medium text-gray-900 dark:text-white mb-4">关键词采集任务</h3>
-
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        <input
-          ref={inputRef}
-          type="text"
-          placeholder="输入关键词，例如：装修公司"
-          value={keyword}
-          onChange={(e) => { setKeyword(e.target.value); setErr(null); }}
-          onKeyDown={(e) => { if (e.key === 'Enter') void onStart(); }}
-          className="flex-1 min-w-[200px] rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white px-3 py-1.5 text-sm"
-        />
-        <button
-          type="button"
-          onClick={() => void onStart()}
-          disabled={starting}
-          className="rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-1.5 text-sm whitespace-nowrap"
-        >
-          {starting ? '提交中…' : '开始采集'}
-        </button>
-      </div>
-
-      {msg && <p className="text-sm text-green-600 mb-3">{msg}</p>}
-      {err && <p className="text-sm text-red-500 mb-3">{err}</p>}
-
-      {loading ? (
-        <p className="text-sm text-gray-500">加载采集任务中…</p>
-      ) : tasks.length === 0 ? (
-        <p className="text-sm text-gray-500">暂无采集任务。输入关键词点「开始采集」发起第一个任务。</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-500 dark:text-gray-400 border-b border-slate-200 dark:border-slate-700">
-                <th className="py-2 pr-4">关键词</th>
-                <th className="py-2 pr-4">状态</th>
-                <th className="py-2 pr-4">创建时间</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.map((t) => (
-                <tr key={t.id} className="border-b border-slate-100 dark:border-slate-700/50">
-                  <td className="py-2 pr-4 text-gray-900 dark:text-white max-w-[200px] truncate">
-                    {t.keyword}
-                  </td>
-                  <td className="py-2 pr-4">{COLLECT_STATUS_LABEL[t.status] ?? t.status}</td>
-                  <td className="py-2 pr-4 text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                    {t.created_at ? new Date(t.created_at).toLocaleString('zh-CN', { hour12: false }) : '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  );
-}
-
 // ============ 页面 ============
 export default function AcquisitionConfigPage() {
   return (
@@ -492,12 +354,11 @@ export default function AcquisitionConfigPage() {
       <div>
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white">设置</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          调整采集/触达/养号/Cookie 参数，管理采集关键词任务。
+          调整采集/触达/养号/Cookie 参数。
         </p>
       </div>
       <TargetProfileDescBlock />
       <KeywordsAndOpeningBlock />
-      <CollectTasksBlock />
       <ConfigForm />
     </div>
   );
