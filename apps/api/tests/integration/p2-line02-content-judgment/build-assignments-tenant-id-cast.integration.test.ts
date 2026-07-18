@@ -13,31 +13,18 @@
  * commit-1 时 RED（未加 cast，真连 Postgres 执行会报 42883）；commit-2 GREEN。
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { Pool } from 'pg';
 import { buildAssignments } from '../../../src/services/acquisition-dispatch';
+import { testPool, createTestTenant } from '../helpers';
 
-let pool: Pool;
 let tenantId: string;
 let agentId: string;
 const RND = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
 beforeAll(async () => {
-  pool = new Pool({
-    host: process.env.DATABASE_HOST || 'localhost',
-    port: parseInt(process.env.DATABASE_PORT || '5432'),
-    database: process.env.DATABASE_NAME || 'cecelia',
-    user: process.env.DATABASE_USER || 'postgres',
-    password: process.env.DATABASE_PASSWORD,
-  });
+  const tenant = await createTestTenant(`build-assign-cast-test-${RND}`);
+  tenantId = tenant.id;
 
-  const tRes = await pool.query(
-    `INSERT INTO zenithjoy.tenants (name, license_key, plan)
-     VALUES ($1, $2, 'free') RETURNING id`,
-    [`build-assign-cast-test-${RND}`, `build-assign-cast-key-${RND}`],
-  );
-  tenantId = tRes.rows[0].id;
-
-  const aRes = await pool.query(
+  const aRes = await testPool.query(
     `INSERT INTO zenithjoy.agents (tenant_id, agent_id, hostname, status, os_type, capabilities, last_heartbeat_at)
      VALUES ($1, $2, 'build-assign-cast-host', 'online', 'android', ARRAY['android'], NOW())
      RETURNING id`,
@@ -46,14 +33,14 @@ beforeAll(async () => {
   agentId = aRes.rows[0].id;
 
   // 在线 burner session（触发 buildAssignments 里那条 JOIN agents 的 SQL）
-  await pool.query(
+  await testPool.query(
     `INSERT INTO zenithjoy.agent_platform_sessions (agent_id, platform, account_label, role, status, device_type)
      VALUES ($1, 'douyin', $2, 'burner', 'active', 'android')`,
     [agentId, `build-assign-cast-burner-${RND}`],
   );
 
   // 一条已评分、outreach_eligible=true 的 lead，让 buildAssignments 真的走到派单分支
-  await pool.query(
+  await testPool.query(
     `INSERT INTO zenithjoy.acquisition_leads
        (tenant_id, nickname, douyin_id, relevance_score, outreach_eligible, source_video_ids)
      VALUES ($1, $2, $3, 90, true, '[]'::jsonb)`,
@@ -62,15 +49,21 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await pool?.end();
+  // dm_assignments/acquisition_leads/agent_platform_sessions/agents 的 tenant_id 均无
+  // FK CASCADE 指向 tenants，必须逐表显式清理，光 TRUNCATE tenants CASCADE 清不掉它们。
+  await testPool.query('DELETE FROM zenithjoy.dm_assignments WHERE tenant_id = $1', [tenantId]);
+  await testPool.query('DELETE FROM zenithjoy.acquisition_leads WHERE tenant_id = $1', [tenantId]);
+  await testPool.query('DELETE FROM zenithjoy.agent_platform_sessions WHERE agent_id = $1', [agentId]);
+  await testPool.query('DELETE FROM zenithjoy.agents WHERE id = $1', [agentId]);
+  await testPool.query('DELETE FROM zenithjoy.tenants WHERE id = $1', [tenantId]);
 });
 
 describe('buildAssignments 在线 burner 查询 [REGRESSION]', () => {
   it('有在线 burner + 已评分 lead 时不抛 text=uuid 类型错误，真实生成 assignment', async () => {
-    const result = await buildAssignments(pool, tenantId);
+    const result = await buildAssignments(testPool, tenantId);
     expect(result.assigned).toBeGreaterThanOrEqual(1);
 
-    const { rows } = await pool.query(
+    const { rows } = await testPool.query(
       `SELECT count(*) AS cnt FROM zenithjoy.dm_assignments WHERE tenant_id = $1`,
       [tenantId],
     );

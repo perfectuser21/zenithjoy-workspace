@@ -706,27 +706,25 @@ S22_HTTP=$(curl -s -o "$S22_TMP" -w "%{http_code}" --max-time 15 \
 [ "$S22_HTTP" = "200" ] || fail "Step 22a PATCH dm_active window expected 200, got $S22_HTTP: $(cat "$S22_TMP")" 22
 ok "Step 22a ✅ dm_active_start/end 撑满全天 + dm_interval 压到 1 秒（避免时段闸/排期间隔导致断言随机失败）"
 
-# 22b：真调 dispatch/build（scoreLeads + buildAssignments）
-S22B_TMP=$(mktemp)
-S22B_HTTP=$(curl -s -o "$S22B_TMP" -w "%{http_code}" --max-time 15 \
+# 22b：真调 dispatch/build（scoreLeads + buildAssignments），复用 S22_TMP（前值已读完，覆盖写入）
+S22_HTTP=$(curl -s -o "$S22_TMP" -w "%{http_code}" --max-time 15 \
   -X POST "$API_BASE/api/acquisition/dispatch/build" \
   -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" -d '{}')
-[ "$S22B_HTTP" = "200" ] || fail "Step 22b POST dispatch/build expected 200, got $S22B_HTTP: $(cat "$S22B_TMP")" 22
-S22_ASSIGNED=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['assigned'])" "$S22B_TMP" 2>/dev/null || echo 0)
-[ "$S22_ASSIGNED" -ge 1 ] 2>/dev/null || fail "Step 22b assigned=$S22_ASSIGNED ，期望 >=1（Step15 产出的 lead 没被真实挑中派单）: $(cat "$S22B_TMP")" 22
+[ "$S22_HTTP" = "200" ] || fail "Step 22b POST dispatch/build expected 200, got $S22_HTTP: $(cat "$S22_TMP")" 22
+S22_ASSIGNED=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['assigned'])" "$S22_TMP" 2>/dev/null || echo 0)
+[ "$S22_ASSIGNED" -ge 1 ] 2>/dev/null || fail "Step 22b assigned=$S22_ASSIGNED ，期望 >=1（Step15 产出的 lead 没被真实挑中派单）: $(cat "$S22_TMP")" 22
 ok "Step 22b ✅ dispatch/build assigned=$S22_ASSIGNED （Step15 lead 被真实挑中）"
 
-# 22c：真调 dispatch/run（dispatchDue）
+# 22c：真调 dispatch/run（dispatchDue），继续复用 S22_TMP
 # scheduled_for = build 时刻 + dm_interval_min_sec（已压到1秒）——build→run 两次 curl
 # 间隔通常 <1 秒，不 sleep 会因"还没到期"误判为断言失败（非 bug，是排期时间还没走到）
 sleep 2
-S22C_TMP=$(mktemp)
-S22C_HTTP=$(curl -s -o "$S22C_TMP" -w "%{http_code}" --max-time 15 \
+S22_HTTP=$(curl -s -o "$S22_TMP" -w "%{http_code}" --max-time 15 \
   -X POST "$API_BASE/api/acquisition/dispatch/run" \
   -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" -d '{}')
-[ "$S22C_HTTP" = "200" ] || fail "Step 22c POST dispatch/run expected 200, got $S22C_HTTP: $(cat "$S22C_TMP")" 22
-S22_DISPATCHED=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['dispatched'])" "$S22C_TMP" 2>/dev/null || echo 0)
-[ "$S22_DISPATCHED" -ge 1 ] 2>/dev/null || fail "Step 22c dispatched=$S22_DISPATCHED ，期望 >=1: $(cat "$S22C_TMP")" 22
+[ "$S22_HTTP" = "200" ] || fail "Step 22c POST dispatch/run expected 200, got $S22_HTTP: $(cat "$S22_TMP")" 22
+S22_DISPATCHED=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['dispatched'])" "$S22_TMP" 2>/dev/null || echo 0)
+[ "$S22_DISPATCHED" -ge 1 ] 2>/dev/null || fail "Step 22c dispatched=$S22_DISPATCHED ，期望 >=1: $(cat "$S22_TMP")" 22
 ok "Step 22c ✅ dispatch/run dispatched=$S22_DISPATCHED"
 
 # 22d：断言真实产出的 publish_task 携带 Step15 那个真实 douyin_id + device_platform=android
@@ -754,10 +752,9 @@ S22_ASSIGN_REAL=$(psq "SELECT count(*) FROM zenithjoy.dm_assignments WHERE id='$
 ok "Step 22d ✅ publish_task 真实携带 Step15 douyin_id=$S22_DOUYIN + device_platform=android + dm_assignment_id 回联真实行"
 ok "Step 22 ✅ Seg4 真实派单串联通过——数据从采集/判定/抓评论真实流到私信派单"
 
-rm -f "$S22_TMP" "$S22B_TMP" "$S22C_TMP" 2>/dev/null
-
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
-      "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" 2>/dev/null
+      "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" \
+      "$S22_TMP" 2>/dev/null
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ✅ Path 2 22 步本地版 smoke 全绿（服务端段）"
