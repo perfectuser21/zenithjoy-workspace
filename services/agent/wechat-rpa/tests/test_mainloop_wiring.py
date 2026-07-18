@@ -74,6 +74,38 @@ def test_roster_gate_computed_before_scan():
     )
 
 
+def test_fast_heal_wired_into_scan_loop_not_heartbeat():
+    """真塌快速自愈必须接在 scan 主循环（1-3s 周期，~15s 恢复），不能只留在 60s 心跳块。
+
+    背景（2026-07-18 用户反馈"检测到坍塌→重启很慢"）：#950 的树塌自愈原先只在心跳块
+    （每 60s 一轮）触发，最坏要等一整个心跳周期才开始召唤。挪进 scan 主循环后，塌缩后
+    ~15s（_HIDDEN_COLLAPSED_SUSTAIN_SECONDS）就召唤恢复。任何人把这段接线删回心跳块/删掉
+    → scan_collapse_since 失去用武之地 → 恢复退回 ~60s → 本测试红 → CI 拦截。
+    """
+    src = _source()
+    # 1) scan 块必须用 scan_collapse_since 作为 collapsed_since 实参调用快速自愈判定
+    m = re.search(
+        r"_should_fast_heal_hidden_collapsed\(\s*\n?\s*now,\s*scan_collapse_since,",
+        src,
+    )
+    assert m is not None, (
+        "找不到 scan 主循环的 _should_fast_heal_hidden_collapsed(now, scan_collapse_since, ...) 调用 —— "
+        "快速自愈没接进 scan 主循环，恢复会退回 ~60s 心跳周期"
+    )
+    # 2) 该调用必须出现在 scan 块 last_readable_scan_at = now 之后（证明在 scan 循环内，不是心跳块）
+    readable_idx = src.find("last_readable_scan_at = now")
+    heal_idx = m.start()
+    assert readable_idx != -1 and readable_idx < heal_idx, (
+        "scan 快速自愈调用必须紧跟 scan 块的 last_readable_scan_at = now —— "
+        "位置错了说明没接在 scan 循环里"
+    )
+    # 3) 命中真塌先走托盘召唤（不重启），失败才退回重启兜底
+    window = src[heal_idx: heal_idx + 700]
+    assert "_summon_wechat_from_tray()" in window, (
+        "scan 快速自愈没先试 _summon_wechat_from_tray() —— 用户要求塌了先召唤不要直接重启微信"
+    )
+
+
 def test_classify_already_replied_bypasses_anchor():
     """classify_unread 调用里 already_replied 必须带 'and not m.get(\"_anchor\")' 旁路。
 
