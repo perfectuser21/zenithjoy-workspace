@@ -586,6 +586,10 @@ def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
       v1.0.136：① 操作者正在前台使用微信时整个函数直接 no-op（不挪窗口，原地读，
       真机反馈每 1-3 秒闪一次)；② 恢复到离屏坐标这一步同样临时关最小化动画，避免
       任务栏→离屏路径经过屏内可见区域（与 _restore_window_state 的反向处理对称）。
+      v1.0.138：托盘分支回复态（for_reply=True 且 OFFSCREEN_REPLY=False）之前只是
+      "跳过继续挪到离屏"，没有把已经因扫描态常驻隐身停在离屏坐标的窗口挑回屏内——
+      真机反馈"回复静默发生，窗口没弹出来"。现在显式检测仍在离屏坐标就挪回最近一次
+      真实可见的位置。
     """
     import ctypes as _ct
     import ctypes.wintypes as _wt
@@ -614,13 +618,28 @@ def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
                 pass
             _ct.windll.user32.ShowWindow(_hwnd, 8)  # SW_SHOWNA = 8：还原但不激活
             time.sleep(0.05)
+            _rc = _wt.RECT()
+            _ct.windll.user32.GetWindowRect(_hwnd, _ct.byref(_rc))
             if _should_move_offscreen(_OFFSCREEN_REPLY, for_reply):
-                _rc = _wt.RECT()
-                _ct.windll.user32.GetWindowRect(_hwnd, _ct.byref(_rc))
                 if _rc.left > -2000:
                     _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
+                    with _saved_normal_pos_lock:
+                        _saved_visible_pos[_hwnd] = (_rc.left, _rc.top)
                     _safe_x = _safe_offscreen_x(_rc.right - _rc.left)
                     _ct.windll.user32.SetWindowPos(_hwnd, 0, _safe_x, _OFFSCREEN_Y, 0, 0, _SWP)
+            else:
+                # v1.0.138 真机反馈（2026-07-18）："回复时窗口没弹出来，静默回复了"——
+                # 扫描态的常驻隐身（_CLOAK_OWNED）会把窗口留在上一轮挪到的离屏坐标上；
+                # 回复态虽然正确跳过了"继续挪到离屏"，但从没把已经在离屏坐标的窗口挑
+                # 回屏内，导致真送达确认全程发生在离屏、用户看不见。这里显式检测当前
+                # 是否仍在离屏坐标，若是则挪回上次真实可见坐标（_saved_visible_pos 记录
+                # 的即最近一次挪出去之前的位置；无记录时退回一个安全的屏内默认位置）。
+                if _rc.left <= -2000:
+                    with _saved_normal_pos_lock:
+                        _orig = _saved_visible_pos.get(_hwnd)
+                    _restore_x, _restore_y = _orig if _orig is not None else (100, 100)
+                    _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
+                    _ct.windll.user32.SetWindowPos(_hwnd, 0, _restore_x, _restore_y, 0, 0, _SWP)
             time.sleep(_TRAY_RESTORE_SLEEP)  # 等 Qt 重建 UIA 虚拟列表渲染
             # v1.0.105 常驻隐身：托盘弹出后保持 cloak+shown 跨轮常驻（调用方看到
             # _CLOAK_OWNED=True 就不再收窗）——1s 扫描周期下每轮弹/收的漏帧会聚合成
