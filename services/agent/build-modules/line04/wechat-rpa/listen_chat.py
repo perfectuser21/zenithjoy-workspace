@@ -4665,6 +4665,140 @@ def track_window_lost_since(
     return lost_since if lost_since is not None else now
 
 
+def _rect_center(rect: Any) -> tuple:
+    """UIA rectangle → (cx, cy) 屏幕坐标中心。纯函数(CI可测)。"""
+    return ((rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2)
+
+
+def _is_tray_overflow_host(class_name: str) -> bool:
+    """是否 Win11 通知区"隐藏图标"溢出浮层宿主窗口类名。纯函数(CI可测)。
+
+    真机实测(rog Win11 Build 26100，2026-07-18)：点通知区 ^ chevron 展开后，
+    微信托盘图标落在 class=TopLevelWindowForOverflowXamlIsland 的浮层里；早期版本
+    /其它形态一并宽松匹配，找不到 → 上层退回重启兜底。
+    """
+    c = class_name or ""
+    return (c == "TopLevelWindowForOverflowXamlIsland"
+            or "Overflow" in c or "SystemTray" in c)
+
+
+def _summon_wechat_from_tray() -> bool:
+    """真实双击通知区微信托盘图标，触发微信自身"从托盘恢复"→ 重建内容树(不重启)。
+
+    真机 9+3 轮实验实锤(2026-07-18，decision 待补)：用户 ✕ 关闭微信到托盘 = 主窗口
+    SW_HIDE + 微信自身撕掉 UI 内容树(会话列表读不到)。SW_SHOWNA/最大化/滚轮/任务栏
+    按钮点击/UIA Invoke 均救不回内容——唯有【真实鼠标双击通知区那个微信托盘图标】
+    触发微信自己的恢复逻辑才重建内容(真机双击后 content 0→12 会话，~5s)。
+
+    步骤(每次尝试都重新展开溢出，防浮层自动收起)：
+      ① 找通知区"显示隐藏的图标"chevron，真实点击展开溢出浮层；
+      ② 浮层里找微信图标(轮询等浮层稳定)；
+      ③ 真实鼠标双击图标中心(SetCursorPos+mouse_event，非 UIA Invoke——Invoke 触发
+         不了托盘图标的鼠标消息转发，实测无效)；
+      ④ 轮询 get_main_window().descendants(ListItem) 确认内容重建(>0)。
+    成功返回 True(内容已重建，无需重启)；重试耗尽仍失败返回 False(上层退回重启兜底)。
+    非 Windows / 无 windll / pywinauto 缺失 → False。全程 fail-open，不抛。
+
+    副作用：真实移动鼠标光标(测完还原到原位)。仅在 ✕关闭恢复路径调用(罕见)，不在
+    常规扫描路径，不影响静默后台运行。
+    """
+    if platform.system() != "Windows":
+        return False
+    import ctypes as _ct
+    try:
+        import ctypes.wintypes as _wt
+        from pywinauto import Desktop
+        from find_weixin import get_main_window
+    except Exception:
+        return False
+
+    _u32 = _ct.windll.user32
+
+    def _real_click(x: int, y: int, double: bool = False) -> None:
+        _u32.SetCursorPos(int(x), int(y))
+        time.sleep(0.15)
+        for _i in range(2 if double else 1):
+            _u32.mouse_event(0x0002, 0, 0, 0, 0)  # LEFTDOWN
+            _u32.mouse_event(0x0004, 0, 0, 0, 0)  # LEFTUP
+            if double:
+                time.sleep(0.08)
+
+    def _find_chevron_center():
+        for w in Desktop(backend="uia").windows(visible_only=False):
+            try:
+                if (w.element_info.class_name or "") == "Shell_TrayWnd":
+                    for b in w.descendants(control_type="Button"):
+                        if "显示隐藏的图标" in (b.element_info.name or ""):
+                            return _rect_center(b.rectangle())
+            except Exception:
+                continue
+        return None
+
+    def _find_wx_icon_center():
+        for w in Desktop(backend="uia").windows(visible_only=False):
+            try:
+                if _is_tray_overflow_host(w.element_info.class_name):
+                    for b in w.descendants(control_type="Button"):
+                        if "微信" in (b.element_info.name or ""):
+                            return _rect_center(b.rectangle())
+            except Exception:
+                continue
+        return None
+
+    def _content_ready() -> bool:
+        try:
+            mw = get_main_window()
+            if mw is None:
+                return False
+            return len(mw.descendants(control_type="ListItem")) > 0
+        except Exception:
+            return False
+
+    # 记录光标原位，测完还原（不永久抢用户鼠标）
+    _p0 = _wt.POINT()
+    try:
+        _u32.GetCursorPos(_ct.byref(_p0))
+    except Exception:
+        _p0 = None
+
+    ok = False
+    try:
+        for _attempt in range(3):
+            _cc = _find_chevron_center()
+            if _cc is None:
+                continue
+            _real_click(_cc[0], _cc[1])
+            # 轮询等溢出浮层里微信图标稳定出现（round0 失败根因=浮层未稳就找）
+            _ic = None
+            for _p in range(6):
+                time.sleep(0.35)
+                _ic = _find_wx_icon_center()
+                if _ic is not None:
+                    break
+            if _ic is None:
+                continue
+            _real_click(_ic[0], _ic[1], double=True)
+            # 轮询内容重建（微信恢复重建树需 1-3s）
+            for _p in range(8):
+                time.sleep(0.4)
+                if _content_ready():
+                    ok = True
+                    break
+            if ok:
+                _log(f"✕关闭托盘召唤成功：双击托盘图标重建内容树(attempt={_attempt})，无需重启")
+                break
+    except Exception as exc:
+        _log(f"托盘召唤异常: {exc}")
+        ok = False
+    finally:
+        if _p0 is not None:
+            try:
+                _u32.SetCursorPos(_p0.x, _p0.y)
+            except Exception:
+                pass
+    return ok
+
+
 def _restart_wechat_for_uia() -> bool:
     """微信进程在跑但 mmui 无障碍树塌缩(UIA 读不到会话)时，重启微信以重建 a11y 树。
 
@@ -5020,10 +5154,15 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     now, _LAST_TRAY_RESTORE_AT, collapsed_tree_since,
                     last_wechat_restart, wechat_restart_count, _WECHAT_RESTART_MAX,
                 ):
-                    _log(
-                        "✕关闭快速自愈：主窗口隐藏+树塌缩(内容已被微信撕毁,确定性)，"
-                        "跳过90s宽限立即重启微信重建树"
-                    )
+                    # ⭐ 优先：真实双击通知区托盘图标召唤微信自恢复（用户拍板正解，2026-07-18
+                    # 真机实证 content 0→12 会话，~5s，不杀进程）。召唤成功 = 内容树已重建，
+                    # 完全不重启；只有召唤失败(找不到图标/内容没回来)才退回重启兜底。
+                    _log("✕关闭快速自愈：先试托盘召唤(双击托盘图标触发微信自恢复，不重启)")
+                    if _summon_wechat_from_tray():
+                        collapsed_tree_since = None
+                        time.sleep(args.interval)
+                        continue
+                    _log("✕关闭托盘召唤失败(找不到图标/内容未重建)，退回重启兜底")
                     if _restart_wechat_for_uia():
                         last_wechat_restart = now
                         last_wechat_launch = now
