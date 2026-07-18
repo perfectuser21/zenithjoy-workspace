@@ -340,7 +340,21 @@ class DouyinCollectService : AccessibilityService() {
             } else {
                 root
             }
-            typeKeyword(postClickRoot)
+            // 真机复现（NO_SEARCH_INPUT 偶发）：上面这段 delay+awaitRootInActiveWindow 期间，
+            // TYPE_WINDOW_STATE_CHANGED 事件驱动的 handleTypingKeyword() 常常已经抢先完成打字、
+            // 把 state 推进到 SUBMITTING_SEARCH。这里如果不做同样的判断就无条件调用 typeKeyword，
+            // 等于用一份可能过期的快照（awaitRootInActiveWindow 超时兜底甚至会退回点击前、
+            // 必然没有搜索框的旧 root）对一个其实已经在正常推进的任务二次判空，把
+            // finishWithError("NO_SEARCH_INPUT") 错误地打在一个本该成功的任务头上。
+            // 与 triggerSearch() 的单飞闩（mayStartStage1Work）同一治法：调用前用
+            // shouldEnterSubmitting 确认状态仍停在 TYPING_KEYWORD 并抢先切走，让事件驱动路径
+            // 和这条直调路径互斥，谁先到谁处理。
+            if (shouldEnterSubmitting(state)) {
+                state = State.SUBMITTING_SEARCH
+                typeKeyword(postClickRoot)
+            } else {
+                android.util.Log.i(TAG, "openSearchBar: 跳过直调 typeKeyword，state=$state 已被事件驱动路径推进")
+            }
         }
     }
 
