@@ -379,6 +379,23 @@ describe('GET /sessions — tenant 从 session 解析，不信 query [BEHAVIOR]'
     expect(sql).toMatch(/a\.hostname/);
     expect(sql).toMatch(/a\.nickname/);
   });
+
+  it('返回结构带 device_type（区分Web小号/安卓设备账号 — decision 8dbe91ee）', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({
+      rows: [{
+        account_label: 'live101942', role: 'burner', status: 'active',
+        bound_at: null, created_at: null, account_nickname: null,
+        hostname: 'ROG-PC', nickname: '西安ROG', device_type: 'android',
+      }],
+    } as any);
+    const app = buildApp();
+    const res = await request(app)
+      .get('/api/agent/burner/sessions')
+      .set('x-test-tenant-id', '4807edc7-da2a-4e8d-9223-31f4d25c12c6');
+    expect(res.body?.data?.sessions?.[0]?.device_type).toBe('android');
+    const sql = vi.mocked(pool.query).mock.calls[0][0] as string;
+    expect(sql).toMatch(/s\.device_type/);
+  });
 });
 
 // ── Regression: qr-bind-result agent_id=null crash (#1004) ──
