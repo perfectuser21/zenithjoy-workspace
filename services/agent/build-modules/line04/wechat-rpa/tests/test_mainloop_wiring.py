@@ -106,6 +106,35 @@ def test_fast_heal_wired_into_scan_loop_not_heartbeat():
     )
 
 
+def test_desktop_mutex_yield_wired_at_loop_top():
+    """桌面互斥让位必须接在主循环最顶部（早于心跳/扫描/发送/UIA 标志），CI 持租时整轮让位。
+
+    背景（2026-07-18 实证）：rog 持续真塌只在 CI 抢占 session-1 交互桌面把监听饿死时发生。
+    CI 抢桌面前 acquire 高优先级租约；监听主循环顶部查 `_should_yield_desktop(desktop_lease_status())`，
+    他人持更高优先级租约 → `continue` 整轮让位。任何人把这段删掉/挪到扫描之后 → 让位失效 → 与 CI
+    硬撞 → 本测试红。
+    """
+    src = _source()
+    m = re.search(r"_should_yield_desktop\(\s*desktop_lease_status\(\)", src)
+    assert m is not None, (
+        "主循环缺 _should_yield_desktop(desktop_lease_status(), ...) 让位检查 —— "
+        "CI 抢桌面时监听不会让位，回到硬撞真塌"
+    )
+    # 必须在心跳块（tree_size = ... descendants）之前，证明"整轮让位"而非只跳发送
+    yield_idx = m.start()
+    heartbeat_idx = src.find("_really_collapsed")
+    scan_idx = src.find("unread = scan_unread(")
+    assert heartbeat_idx == -1 or yield_idx < heartbeat_idx, (
+        "让位检查必须在心跳塌缩判定之前（loop 顶），否则 CI 持租时监听仍跑心跳读树抢桌面"
+    )
+    assert scan_idx == -1 or yield_idx < scan_idx, (
+        "让位检查必须在 scan_unread 之前（loop 顶），否则 CI 持租时监听仍扫描抢前台"
+    )
+    # 让位分支必须 continue 跳过本轮（不是只 log）
+    window = src[yield_idx: yield_idx + 400]
+    assert "continue" in window, "让位分支必须 continue 整轮跳过"
+
+
 def test_classify_already_replied_bypasses_anchor():
     """classify_unread 调用里 already_replied 必须带 'and not m.get(\"_anchor\")' 旁路。
 

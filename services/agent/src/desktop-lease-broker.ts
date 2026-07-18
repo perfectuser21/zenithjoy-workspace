@@ -33,6 +33,13 @@ export interface ReleaseResult {
   ok: boolean;
 }
 
+export interface StatusResult {
+  held: boolean;
+  client_id?: string;
+  priority?: number;
+  expires_at?: number;
+}
+
 export interface BrainLogPayload {
   message: string;
   module: string;
@@ -178,6 +185,23 @@ export class DesktopLeaseBroker {
     }
 
     return { ok: true };
+  }
+
+  /**
+   * 只读窥视当前租约状态（不占租、不改状态）。供常驻监听主循环顶部判断"是否有他人
+   * 持有更高优先级桌面租约（CI 抢桌面）"→ 整轮让位。已过期（未及 watchdog 清）视为未持有。
+   */
+  status(): StatusResult {
+    const held = this.currentLease;
+    if (!held || held.expiresAt < Date.now()) {
+      return { held: false };
+    }
+    return {
+      held: true,
+      client_id: held.clientId,
+      priority: held.priority,
+      expires_at: held.expiresAt,
+    };
   }
 
   private _runWatchdog(): void {

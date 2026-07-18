@@ -3684,6 +3684,47 @@ def desktop_lease_renew() -> bool:
         return False
 
 
+def desktop_lease_status() -> Optional[dict]:
+    """只读窥视本机 Broker 当前桌面租约（GET /status，不申请/不占用）。
+
+    返回 broker 的 {held, client_id, priority, expires_at} 字典；
+    Broker 不可达（老 core 无此路由 / core 未起）→ 返回 None（调用方据此降级=不暂停，
+    对齐 f26e099c：core 没起就没 CI 争用，绝不因 Broker 缺席误暂停监听）。
+    超时设 2s，绝不拖慢主循环。
+    """
+    url = _get_local_discovery_base() + "/api/agent/desktop-lease-broker/status"
+    try:
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return None
+
+
+def _should_yield_desktop(status: Optional[dict], my_client_id: str, my_priority: int) -> bool:
+    """纯函数（CI 可测）：给定 broker /status 响应，判断监听本轮是否应整轮让位。
+
+    桌面互斥（CI×常驻监听，rog）——CI self-hosted runner 抢 session-1 交互桌面前会 acquire
+    priority<50 的全局桌面租约。监听主循环顶部据本函数判定：
+      - status is None（Broker 不可达）→ False（降级不暂停，core 没起=无 CI 争用）
+      - 未持有 → False
+      - 自己持有（发送路径临时租约）→ False（绝不因自己持租饿死自己）
+      - 他人持有 且 优先级更高（数字 < 自己）→ True（让位）
+      - 他人持有 但 优先级同级/更低 → False（不该发生，CI 用更高优先级；防被低优先级 client 拖死）
+      - 他人持有 但 优先级字段缺失/非法 → True（保守让位，宁可暂停也别撞 CI）
+    """
+    if not status or not status.get("held"):
+        return False
+    holder = status.get("client_id")
+    if holder == my_client_id:
+        return False
+    priority = status.get("priority")
+    try:
+        return int(priority) < my_priority
+    except (TypeError, ValueError):
+        return True
+
+
 # ─── 进程守护：监听心跳上报（每分钟一次，失败不影响监听）────────────────────────
 
 
@@ -4954,6 +4995,18 @@ def run_real_listen(args: argparse.Namespace) -> int:
     try:
         while time.time() < deadline:
             now = time.time()
+
+            # ⭐ 桌面互斥（CI×常驻监听，rog；2026-07-18 实证=持续真塌根因）：CI self-hosted runner
+            # 抢 session-1 交互桌面前 acquire priority<50 全局桌面租约。本轮若查到他人持更高优先级
+            # 租约 → 整轮让位（不碰心跳/扫描/发送/UIA 标志），CI 释放后下一轮自动恢复；期间不扫描=
+            # last_readable_scan_at 不推进但扫描块也不跑，不会误触发 scan 自愈（#1402）。CI 弄乱微信
+            # 由 #1402 的 ~15s scan 自愈在恢复后接管。Broker 不可达 → 不暂停（降级，对齐 f26e099c）。
+            if _should_yield_desktop(
+                desktop_lease_status(), _DESKTOP_LEASE_CLIENT_ID, _DESKTOP_LEASE_PRIORITY
+            ):
+                _log("桌面租约被他人(CI)持有，本轮整轮让位暂停（不扫描/不发送/不动 UIA 标志）")
+                time.sleep(args.interval)
+                continue
 
             # 每客服 gate：machine_id 在册 → 周期拉自己那份 → 真发跟随中台 auto_agent 开关；
             # 不在册 → 回落旧 env 真发判定（向后兼容）。拉失败 resolve_send_mode 强制 dryrun，绝不误真发。
