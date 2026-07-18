@@ -760,7 +760,7 @@ S22_PLATFORM=$(psq "SELECT payload->>'device_platform' FROM zenithjoy.publish_ta
 S22_ASSIGN_ID=$(psq "SELECT payload->>'dm_assignment_id' FROM zenithjoy.publish_tasks
   WHERE agent_id='$AGENT_PK' AND task_type='dm_outreach' AND payload->>'douyin_id'='$S15_DOUYIN_ID'
   ORDER BY created_at DESC LIMIT 1")
-S22_ASSIGN_REAL=$(psq "SELECT count(*) FROM zenithjoy.dm_assignments WHERE id='$S22_ASSIGN_ID'::uuid")
+S22_ASSIGN_REAL=$(psq "SELECT count(*) FROM zenithjoy.dm_assignments WHERE id='$S22_ASSIGN_ID'::uuid AND created_at > NOW() - interval '120 seconds'")
 [ "$S22_ASSIGN_REAL" = "1" ] || fail "Step 22d dm_assignment_id='$S22_ASSIGN_ID' 在 dm_assignments 表里查不到真实行（疑似硬编码值而非 dispatch/build 真实产出）" 22
 
 ok "Step 22d ✅ publish_task 真实携带 Step15 douyin_id=$S22_DOUYIN + device_platform=android + dm_assignment_id 回联真实行"
