@@ -135,6 +135,19 @@ describe('GET /api/agent/machines/:id', () => {
     expect(res.body.success).toBe(false);
     expect(res.body.error.code).toBe('MACHINE_NOT_FOUND');
   });
+
+  it('详情返回体含 os_type（回归守卫 — 之前详情端点漏选此列，被列表合并覆盖成 null，导致设备类型徽标消失）', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [machineRow({ os_type: 'android' })] })
+      .mockResolvedValueOnce({ rows: [sessionRow()] });
+
+    const res = await request(app).get(`/api/agent/machines/${AGENT_UUID}`).set(AUTH);
+    expect(res.status).toBe(200);
+    expect(res.body.data.machine.os_type).toBe('android');
+
+    const sql = mockQuery.mock.calls[0][0] as string;
+    expect(sql).toMatch(/a\.os_type/);
+  });
 });
 
 describe('PUT /api/agent/machines/:id', () => {
@@ -155,6 +168,20 @@ describe('PUT /api/agent/machines/:id', () => {
     expect(res.body.data.machine_role).toBe('sub');
     // UPDATE 必须带租户隔离参数
     expect(mockQuery.mock.calls[0][1]).toContain(TENANT);
+  });
+
+  it('PUT 返回体含 os_type（回归守卫 — RETURNING 漏选此列导致前端 list 合并时把徽标覆盖成 null）', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [machineRow({ os_type: 'android', nickname: '新名字' })] });
+
+    const res = await request(app)
+      .put(`/api/agent/machines/${AGENT_UUID}`)
+      .set(AUTH)
+      .send({ nickname: '新名字' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.os_type).toBe('android');
+
+    const sql = mockQuery.mock.calls[0][0] as string;
+    expect(sql).toMatch(/os_type/);
   });
 
   it('非法 machine_role → 400', async () => {

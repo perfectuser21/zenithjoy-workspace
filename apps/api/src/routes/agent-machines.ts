@@ -82,6 +82,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 
   const m = await pool.query(
     `SELECT a.id, a.agent_id, a.hostname, a.nickname, a.machine_role,
+            a.os_type,
             a.status, a.version, a.last_seen,
             COUNT(s.id) AS session_count
        FROM zenithjoy.agents a
@@ -151,7 +152,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     `UPDATE zenithjoy.agents
         SET ${sets.join(', ')}
       WHERE id = $${idParam} AND tenant_id = $${tenantParam}
-      RETURNING id, agent_id, hostname, nickname, machine_role, status, version, last_seen`,
+      RETURNING id, agent_id, hostname, nickname, machine_role, os_type, status, version, last_seen`,
     params,
   );
   if (upd.rows.length === 0) {
