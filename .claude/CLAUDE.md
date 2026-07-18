@@ -59,16 +59,19 @@
 4. **加厚是"先减肥再增肌"**：升级 thickness 必须两段式 commit：`commit 1 删旧 mock/hardcode` → `commit 2 写新实现`。改名 `_legacy` / TODO 注释不算删除。
 5. **真机 bug 修复 PR 必须回流 smoke**：除 vitest regression test 外，必须把复现判据回流进对应 `golden-path-N-smoke.sh`（真机不可及的步骤允许 API 层等价断言，但须在 smoke 内注明「真机段等价断言」+ TODO 标记）。只进 vitest 不进 smoke = 同一坑必然摔第二次（UIA 死区 #1136→#1163 两天两修实证）。
 
-### 调用 harness-planner 前必填 4 问
+### 调用 harness-planner 前必填 5 问
 
 ```
 □ 1. 本 sprint 推进哪条 Journey？（名 + Notion URL + 当前 Maturity）
 □ 2. 涉及几个角色？多角色必须拆多个 sprint，CI/部署 = 独立 dev_pipeline Journey
 □ 3. 推进哪些 Feature？(每个 Feature 标 Journey Step N + thickness from→to)
 □ 4. Feature 0 端到端 smoke = golden-path-1-smoke.sh 跑到 Step <K>，FAIL = 整 sprint FAIL
+□ 5. 涉及几种设备/操作系统类型（Windows/Android/其他）？每种是否都有对应的展示层区分（列表/图标/筛选），
+     还是会被现有通用组件悄悄合并成一种？（decision 8dbe91ee：机器管理页/账号管理页曾因未过这一问，
+     长期不区分安卓与Windows设备，字段 os_type/device_platform 有但UI从未接线）
 ```
 
-不填齐 4 问，**禁止启动 harness-planner**。
+不填齐 5 问，**禁止启动 harness-planner**。第2问的"角色"指系统组件（中台/Agent/CI/dashboard），不能替代第5问的设备类型检查，两者不互相包含。
 
 ### 触发 /dev 路径C 的场景
 
