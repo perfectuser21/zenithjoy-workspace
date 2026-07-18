@@ -644,8 +644,13 @@ def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
             # v1.0.105 常驻隐身：托盘弹出后保持 cloak+shown 跨轮常驻（调用方看到
             # _CLOAK_OWNED=True 就不再收窗）——1s 扫描周期下每轮弹/收的漏帧会聚合成
             # 肉眼频闪。操作者激活微信时 scan_unread 开头会 _uncloak_window 归还。
-            global _CLOAK_OWNED
+            global _CLOAK_OWNED, _LAST_TRAY_RESTORE_AT
             _CLOAK_OWNED = True
+            # ✕关闭快速自愈信号（2026-07-18）：托盘唤回动作本身就是"窗口曾处于隐藏态"
+            # 的可靠证据（✕关闭被 get_main_window fallback 接住后的必经点）。塌缩若发生
+            # 在此时间戳附近 → 判定 ✕关闭撕树，走快速重启通道（不能用"此刻是否隐藏"
+            # 判定——本分支马上就把窗口弄可见了，首版设计错误真机实锤）。
+            _LAST_TRAY_RESTORE_AT = time.time()
             return 'tray'
         elif _is_iconic:
             # 最小化：v1.0.33 先 DWM cloak（防 WeChat 自身 activate 时移回可视区域被用户看到）
@@ -1064,6 +1069,7 @@ def _operator_takeover(sender: str, content: str, name: str,
 
 _SCAN_WINDOW_STATE: str = ""  # 有 emit 时暂存 orig_state，主循环回复完统一收窗
 _CLOAK_OWNED: bool = False  # v1.0.105：托盘常驻隐身中（弹出后不再每轮收窗，防 1Hz 频闪）
+_LAST_TRAY_RESTORE_AT: float = 0.0  # 最近一次托盘唤回时刻（✕关闭快速自愈信号，2026-07-18）
 
 
 def _uncloak_window(mw: Any) -> None:
@@ -4517,6 +4523,13 @@ def _ensure_uia_flag() -> bool:
 # 在 screenreader 激活态下重建完整树（实测 descendants 1→71、ListItem 0→6、默忆[5条] 读出）。
 _COLLAPSED_TREE_MAX_DESCENDANTS = 2      # 整树 descendants ≤ 此值 = 塌缩(仅 render pane);树建好即便0会话也有几十控件
 _COLLAPSED_SUSTAIN_SECONDS = 90         # 树持续塌缩 ≥ 此时长才重启(避开启动过渡/瞬时态)
+# ✕关闭快速自愈（2026-07-18 真机实测）：用户 ✕ 关闭到托盘 = 主窗口隐藏态 + 微信自身
+# 撕掉 UI 内容树（确定性，SHOWNA/maximize/jiggle 均救不回，多轮真机证实）。走通用
+# 90s 宽限毫无意义（树不可能自己恢复），600s 冷却还会饿死（18:24 重启后 18:34 ✕关闭
+# 被卡 2 分多钟才恢复，期间客户消息无人回）——隐藏态+塌缩给独立短防抖+短冷却。
+_HIDDEN_COLLAPSED_SUSTAIN_SECONDS = 15  # ✕关闭撕树是确定性的，只留短防抖（防瞬时态误杀）
+_HIDDEN_HEAL_COOLDOWN_SECONDS = 120     # 独立短冷却（不与树塌 600s 共享，防饿死）
+_TRAY_RESTORE_RELEVANCE_SECONDS = 120   # 塌缩与托盘唤回相隔 ≤ 此时长才判定为 ✕关闭撕树
 _WECHAT_RESTART_COOLDOWN_SECONDS = 600  # 两次重启间隔 ≥ 10min(重启重而慢,防抖)
 _WECHAT_RESTART_MAX = 5                 # 单 listener 进程生命周期内最多重启 5 次(防无限重启 loop)
 
@@ -4551,6 +4564,42 @@ def _is_uia_tree_collapsed(descendants_count: int) -> bool:
     所以不能只靠 ListItem==0 判定(会误伤刚开机/真无会话的正常态)。
     """
     return descendants_count <= _COLLAPSED_TREE_MAX_DESCENDANTS
+
+
+def _should_fast_heal_hidden_collapsed(
+    now: float, recent_tray_restore_at: float, collapsed_since: Optional[float],
+    last_restart_at: float, restarts_done: int, max_restarts: int,
+) -> bool:
+    """纯函数(CI可测)：✕关闭快速自愈判定——最近经历过托盘唤回 + 树塌缩短暂持续即重启。
+
+    ✕关闭特征信号（2026-07-18 首版设计错误的真机教训）：不能用"此刻 IsWindowVisible
+    =False"判定——监听自己的托盘分支会在 1-3 秒内把隐藏窗口 SW_SHOWNA 唤回成可见
+    （挪屏外+常驻隐身），塌缩检测跑起来时窗口早已"可见"，该条件在真实流水线里永远
+    False（首版真机端到端验证快速通道 0 触发实锤）。正确信号 = 托盘分支唤回动作本身
+    （✕关闭被 get_main_window fallback 接住后的必经点）记录时间戳，塌缩发生在
+    "唤回后 _TRAY_RESTORE_RELEVANCE_SECONDS 内"→ 判定 ✕关闭撕树。
+
+    与通用 _should_restart_for_collapsed_tree 的三点差异（都有真机实证支撑）：
+    1. 防抖 15s 而非 90s——✕关闭撕内容树是确定性的，树不可能自己恢复，等 90s 纯浪费
+       （客户消息无人回的窗口期）。
+    2. 独立 120s 短冷却而非共享 600s——18:24 树塌重启后 18:34 用户 ✕关闭被 600s
+       冷却卡住 2 分多钟才恢复（真机日志实锤）。
+    3. 不设可读守卫——✕关闭前 scan 一直健康（last_readable 很新），通用守卫会再挡
+       一道，但"刚才读得好"对"用户已经把窗口关了"毫无意义。
+    全局重启上限（max_restarts）仍然生效——防无限重启 loop 的最后防线不放松。
+    """
+    if collapsed_since is None or recent_tray_restore_at <= 0:
+        return False
+    # 塌缩必须发生在托盘唤回的关联窗口内（唤回前后皆可：唤回常在塌缩被检测到之前发生）
+    if abs(collapsed_since - recent_tray_restore_at) > _TRAY_RESTORE_RELEVANCE_SECONDS:
+        return False
+    if now - collapsed_since < _HIDDEN_COLLAPSED_SUSTAIN_SECONDS:
+        return False
+    if restarts_done >= max_restarts:
+        return False
+    if now - last_restart_at < _HIDDEN_HEAL_COOLDOWN_SECONDS:
+        return False
+    return True
 
 
 def _should_restart_for_collapsed_tree(
@@ -4963,6 +5012,25 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         )
                 else:
                     collapsed_tree_since = None
+                # ✕关闭快速自愈通道（2026-07-18 真机实测）：塌缩发生在托盘唤回时间戳
+                # 附近（✕关闭被 fallback 接住 → tray 分支唤回 → 内容树已被微信撕毁，
+                # 确定性）→ 跳过 90s 宽限/600s 冷却/可读守卫，短防抖后立即重启。
+                # 普通可见态塌缩（无近期托盘唤回）不受影响，走下方通用自愈。
+                if _should_fast_heal_hidden_collapsed(
+                    now, _LAST_TRAY_RESTORE_AT, collapsed_tree_since,
+                    last_wechat_restart, wechat_restart_count, _WECHAT_RESTART_MAX,
+                ):
+                    _log(
+                        "✕关闭快速自愈：主窗口隐藏+树塌缩(内容已被微信撕毁,确定性)，"
+                        "跳过90s宽限立即重启微信重建树"
+                    )
+                    if _restart_wechat_for_uia():
+                        last_wechat_restart = now
+                        last_wechat_launch = now
+                        wechat_restart_count += 1
+                    collapsed_tree_since = None
+                    time.sleep(args.interval)
+                    continue
                 if (
                     collapsed_tree_since is not None
                     and now - collapsed_tree_since >= _COLLAPSED_SUSTAIN_SECONDS
