@@ -1,32 +1,24 @@
 # -*- coding: utf-8 -*-
 """
-Regression test —— ✕关闭后恢复慢/被冷却饿死：隐藏态+树塌缩快速自愈通道
-（真机实测反馈，2026-07-18）。
+Regression test —— 树塌自愈的【可读时效守卫】：真塌才自愈、假塌绝不误触发
+（真机日志实锤 2 次迭代，2026-07-18）。
 
-## 现象（用户原话 + 日志实锤）
+## 迭代史（都有真机证据，全写进来防重犯）
 
-"我把微信一关…再发消息，你什么都听不到了…也不见重启"。日志：18:34:43 ✕关闭
-（fallback 生效 found_window=True）→ 18:34:46 塌缩检测启动 90s 宽限 → 直到
-18:36:54 才重启（约 2 分 10 秒），期间用户消息无人回。更糟：树塌自愈有 600s
-冷却 + 可读守卫，连续触发时会"喊了要重启却迟迟不动"。
+一版（信号=IsWindowVisible）：真机端到端 0 触发——监听自己的托盘分支 1-3s 内就把
+隐藏窗口唤回可见，塌缩检测跑起来时窗口早已可见，该条件永远 False。
 
-## 根因
+二版（信号=最近托盘唤回时间戳）：真机日志实锤误触发——22:02:16 刚成功 DELIVERED
+一条给默忆(树是好的)、22:02:28 心跳裸读却报塌缩、22:03:32 快速自愈就去召唤了一个
+其实好好的微信。根因：托盘唤回每轮扫描都发生=恒命中，把 agent 自己挪屏外造成的
+【假塌】也当真塌。
 
-✕关闭撕掉 UI 内容树是**确定性**的（真机多轮证实，SHOWNA/maximize/jiggle 均
-救不回）——但它走的是为"树可能自己恢复"设计的通用塌缩自愈：90s 宽限没意义、
-600s 冷却会饿死、可读守卫（✕关闭前 scan 一直健康→last_readable 很新）还会
-再挡一道。
+三版（本文件，信号=可读时效守卫）：判"微信是不是真坏"的唯一真相 = scan 最近还能不
+能读到会话。scan 每 1-3s 挪屏外读一次、读到健康树就刷新 last_readable_scan_at。心跳
+每 60s 裸读会撞上 agent 自己挪屏外的隐身瞬间(假塌)；只有 scan 连续超过
+_HEAL_READABLE_GRACE_SECONDS 真读不到，才认定真坏(✕关闭撕树 / 标志丢)。
 
-## 修法（首版设计错误的教训已并入）
-
-首版用"此刻 IsWindowVisible=False"当 ✕关闭特征——真机端到端验证 0 触发：监听
-自己的托盘分支 1-3 秒内就把隐藏窗口唤回成可见（挪屏外），塌缩检测跑起来时窗口
-早已"可见"。正确信号 = **托盘唤回动作本身**（`_ensure_tray_visible` tray 分支
-记录 `_LAST_TRAY_RESTORE_AT`），塌缩发生在唤回时间戳附近（±120s 关联窗口）→
-判定 ✕关闭撕树 → 短防抖 15s 后立即重启。独立 120s 短冷却（不与树塌 600s 共享），
-绕过可读守卫，重启计数仍并入全局上限（防无限 loop）。
-
-本文件是这个 bug 的永久 regression test，禁止删除。
+本文件是"假塌误重启"的永久 regression test，禁止删除。
 """
 from __future__ import annotations
 
@@ -64,60 +56,59 @@ import listen_chat  # noqa: E402
 NOW = 10_000.0
 
 
-def _call(recent_tray_restore_at=NOW - 25.0, collapsed_since=NOW - 20.0,
+def _call(collapsed_since=NOW - 20.0, last_readable_scan_at=NOW - 100.0,
           last_restart_at=0.0, restarts_done=0):
     return listen_chat._should_fast_heal_hidden_collapsed(
-        NOW, recent_tray_restore_at, collapsed_since,
+        NOW, collapsed_since, last_readable_scan_at,
         last_restart_at, restarts_done, listen_chat._WECHAT_RESTART_MAX,
     )
 
 
-def test_fast_heal_fires_for_tray_restore_then_collapse():
-    """✕关闭特征齐备（塌缩紧跟托盘唤回 + 持续超短防抖）→ 立即放行重启，不等 90s。"""
-    assert _call() is True
+def test_heal_fires_when_scan_cannot_read_for_grace():
+    """真坏（scan 连续读不到会话超过 grace）+ 塌缩短暂持续 → 放行自愈。"""
+    assert _call(last_readable_scan_at=NOW - 100.0) is True
 
 
-def test_fast_heal_requires_recent_tray_restore():
-    """从未托盘唤回（=0）或唤回久远（与塌缩不关联）→ 不走快速通道（交还通用自愈）。
-
-    首版设计错误教训：不能用"此刻 IsWindowVisible"判定——监听托盘分支 1-3s 内就把
-    隐藏窗口唤回可见，塌缩检测时该条件永远 False（真机端到端 0 触发实锤）。"""
-    assert _call(recent_tray_restore_at=0.0) is False
-    assert _call(recent_tray_restore_at=NOW - 20.0 - listen_chat._TRAY_RESTORE_RELEVANCE_SECONDS - 10) is False
-
-
-def test_fast_heal_relevance_window_both_directions():
-    """唤回可发生在塌缩检测之前或之后（心跳周期错位），±关联窗口内都算。"""
-    assert _call(recent_tray_restore_at=NOW - 20.0 - 60) is True   # 唤回早于塌缩 60s
-    assert _call(recent_tray_restore_at=NOW - 20.0 + 60) is True   # 唤回晚于塌缩 60s
+def test_no_heal_when_scan_recently_read_healthy_FALSE_COLLAPSE():
+    """⭐核心回归：scan 最近还读到过健康会话（微信在正常工作，心跳裸读是假塌）
+    → 绝不自愈。根治真机 22:02 "刚成功发消息、心跳报塌、误召唤" 那个 bug。"""
+    grace = listen_chat._HEAL_READABLE_GRACE_SECONDS
+    assert _call(last_readable_scan_at=NOW - 1.0) is False          # 1s 前刚读到健康
+    assert _call(last_readable_scan_at=NOW - (grace - 1)) is False  # 仍在守卫窗口内
 
 
-def test_fast_heal_requires_collapse_started():
+def test_heal_boundary_at_grace():
+    """恰好达到 grace 才算真坏（边界）。"""
+    grace = listen_chat._HEAL_READABLE_GRACE_SECONDS
+    assert _call(last_readable_scan_at=NOW - grace) is True
+    assert _call(last_readable_scan_at=NOW - (grace + 5)) is True
+
+
+def test_no_heal_before_collapse_started():
     """未进入塌缩态（collapsed_since=None）→ 不触发。"""
     assert _call(collapsed_since=None) is False
 
 
-def test_fast_heal_short_sustain_debounce():
-    """塌缩持续时长 < 短防抖阈值（15s）→ 暂不触发（防瞬时态误杀）。"""
+def test_short_sustain_debounce():
+    """塌缩持续 < 短防抖（15s）→ 暂不触发（防瞬时态误杀）。"""
     assert _call(collapsed_since=NOW - 5.0) is False
     assert _call(collapsed_since=NOW - listen_chat._HIDDEN_COLLAPSED_SUSTAIN_SECONDS + 1) is False
+    assert _call(collapsed_since=NOW - listen_chat._HIDDEN_COLLAPSED_SUSTAIN_SECONDS - 1) is True
 
 
-def test_fast_heal_sustain_is_much_shorter_than_generic_90s():
-    """快速通道防抖必须显著短于通用 90s 宽限——这是本修复的意义所在。"""
-    assert listen_chat._HIDDEN_COLLAPSED_SUSTAIN_SECONDS <= 30
-    assert _call(collapsed_since=NOW - 31.0) is True
-
-
-def test_fast_heal_independent_short_cooldown():
-    """独立短冷却（120s）：刚重启过 → 挡；过了短冷却 → 放行。
-    关键：不受树塌自愈 600s 冷却饿死（真机 18:24 重启后 18:34 ✕关闭被 600s 卡住实锤）。"""
+def test_independent_short_cooldown_not_starved_by_600s():
+    """独立 120s 短冷却：刚自愈过 → 挡；过了短冷却 → 放行。绝不被树塌 600s 饿死。"""
     assert _call(last_restart_at=NOW - 60.0) is False
     assert _call(last_restart_at=NOW - listen_chat._HIDDEN_HEAL_COOLDOWN_SECONDS - 1) is True
-    assert listen_chat._HIDDEN_HEAL_COOLDOWN_SECONDS < 600, "独立冷却必须短于树塌自愈的 600s"
+    assert listen_chat._HIDDEN_HEAL_COOLDOWN_SECONDS < 600
 
 
-def test_fast_heal_respects_global_restart_max():
-    """全局重启上限仍然生效（防无限重启 loop 的最后防线不放松）。"""
+def test_respects_global_restart_max():
+    """全局重启上限仍生效（防无限 loop 的最后防线不放松）。"""
     assert _call(restarts_done=listen_chat._WECHAT_RESTART_MAX) is False
     assert _call(restarts_done=listen_chat._WECHAT_RESTART_MAX + 3) is False
+
+
+def test_grace_is_short_for_fast_real_recovery():
+    """守卫窗口必须短（≤30s）——真坏后 scan 几轮读不到就该放行，不能太久卡住恢复。"""
+    assert listen_chat._HEAL_READABLE_GRACE_SECONDS <= 30
