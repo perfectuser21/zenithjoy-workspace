@@ -20,8 +20,14 @@ import { randomUUID } from 'crypto';
 import pool from '../db/connection';
 import { tenantContext } from '../middleware/tenant-context';
 import { requireCsWriteAccess } from '../middleware/cs-config-guard';
+import { simpleRateLimit, tenantKeyFn } from '../middleware/simple-rate-limit';
 
 export const voiceOutreachRouter = Router();
+
+// 发起真实拨号：最敏感操作，限 10 次/分钟/租户（防误触发批量骚扰拨打）
+const callRateLimit = simpleRateLimit({ windowMs: 60_000, max: 10, keyFn: tenantKeyFn });
+// 查询/回写：读多写少，限 60 次/分钟/租户
+const recordsRateLimit = simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: tenantKeyFn });
 
 // ─── 类型定义 ──────────────────────────────────────────────────────────────
 
@@ -61,6 +67,7 @@ interface VoiceCallResponse {
 voiceOutreachRouter.post(
   '/call',
   tenantContext,
+  callRateLimit,
   requireCsWriteAccess('wechatId'),
   async (req: Request, res: Response) => {
     const body = req.body as Partial<VoiceCallRequest>;
@@ -121,6 +128,7 @@ voiceOutreachRouter.post(
 voiceOutreachRouter.get(
   '/records',
   tenantContext,
+  recordsRateLimit,
   async (req: Request, res: Response) => {
     const tenant_id: string | undefined =
       req.tenantId || (req.query.tenant_id as string | undefined);
@@ -182,6 +190,7 @@ voiceOutreachRouter.get(
 voiceOutreachRouter.post(
   '/records',
   tenantContext,
+  recordsRateLimit,
   async (req: Request, res: Response) => {
     const body = req.body as Partial<VoiceCallRecord & { call_id: string }>;
     const tenant_id: string | undefined = req.tenantId || body.tenant_id;

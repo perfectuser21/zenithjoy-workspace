@@ -4758,3 +4758,11 @@ agent_suite:
   status: active
   product: 微信AI客服
   note: "sprint(07182017): GP-A主动语音触达——voice-outreach路由单测（POST /call、GET /records、POST /records回写，含tenant_id校验+status校验）"
+
+- id: gpa-voice-simple-rate-limit-unit
+  path: apps/api/src/middleware/simple-rate-limit.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 微信AI客服
+  note: "sprint(07182017): GP-A主动语音触达——CodeQL missing-rate-limiting要求，voice-outreach三条路由自建进程内滑动窗口限流的单测"
