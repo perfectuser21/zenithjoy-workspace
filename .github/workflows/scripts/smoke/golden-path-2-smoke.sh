@@ -261,10 +261,13 @@ ok "Step 8 ✅ 采集+判定服务端链路全通"
 #   TODO(android-evaluator-channel): Android 真机通道落地后，由 xian-rog
 #   e2e-line02-android-collect.yml（nightly 04:00）复跑「真机读号 → 上报」全链路。
 #
-# 注：本步显式传 grade，把 LLM 评级（gradeComment → OpenRouter）隔离在外——评级失败会
-# 让 lead 整行不写入，掩盖本步真正要守的 douyin_id 判据。评级真调链由 Step 8c 覆盖。
-# 显式 grade 是路由本就支持的入参（routes/acquisition.ts `c.grade || await gradeComment(...)`），
-# 不改变 lead 落库路径本身。
+# 2026-07-18（孤岛清理 PR）：本步原借道已下线的 /keyword-search + /comment-score-result
+# 旧接口当"造 task_id 的简便方式"，两个旧接口已被删除，改走现役 /collect/start +
+# /collect/report（与 Step 15 同款调用范式，Step 15 已验证过这套请求 shape 真实可用）。
+# 9c 正例与 Step 15 覆盖的场景有重叠（都验证 douyin_id 落库），保留是因为要跟 9d 反例
+# 共用同一套上下文，二者合起来才是完整的"宁可空不可猜"（#1306）正反对照，不能只留一半。
+# 显式传 grade：/collect/report 直接采纳 c.grade 入库（不像旧 /comment-score-result 那样
+# 在缺 grade 时才 fallback 调 gradeComment/OpenRouter），本身就不依赖评级真调链。
 # ───────────────────────────────────────────────────────────────────
 echo "▶ Step 9: 抓评论回填抖音号 → Lead 落库带号"
 
@@ -273,36 +276,38 @@ S9_COL=$(psq "SELECT 1 FROM information_schema.columns WHERE table_schema='zenit
 [ "$S9_COL" = "1" ] || fail "Step 9a zenithjoy.acquisition_leads.douyin_id 列不存在（迁移未跑）——读出抖音号也无处可落，私信段必然 NO_MATCH" 9
 ok "Step 9a ✅ acquisition_leads.douyin_id 列在库"
 
-# 9b：拿真实 keyword_task_id（comment-score-result 按它反查租户）
+# 9b：拿真实 task_id（collect/report 按它反查租户）
 S9_TMP=$(mktemp)
 S9_HTTP=$(curl -s -o "$S9_TMP" -w "%{http_code}" --max-time 20 \
-  -X POST "$API_BASE/api/acquisition/keyword-search" \
+  -X POST "$API_BASE/api/acquisition/collect/start" \
   -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" \
-  -d '{"keyword":"p2-smoke-装修"}')
-[ "$S9_HTTP" = "200" ] || fail "Step 9b keyword-search expected 200, got $S9_HTTP: $(cat "$S9_TMP")" 9
-KW_TASK_ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['task_id'])" "$S9_TMP" 2>/dev/null)
-[ -n "$KW_TASK_ID" ] || fail "Step 9b 无 task_id: $(cat "$S9_TMP")" 9
-ok "Step 9b keyword-search → keyword_task_id=$KW_TASK_ID"
+  -d '{"keywords":["p2-smoke-装修"]}')
+[ "$S9_HTTP" = "200" ] || fail "Step 9b collect/start expected 200, got $S9_HTTP: $(cat "$S9_TMP")" 9
+S9_TASK_ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S9_TMP" 2>/dev/null)
+[ -n "$S9_TASK_ID" ] || fail "Step 9b 无 task_id: $(cat "$S9_TMP")" 9
+ok "Step 9b collect/start → task_id=$S9_TASK_ID"
 
 # 9c：设备上报「读到号」的评论 → lead 必须带号落库
+S9_VIDEO="p2smokelead${RND//-/}"
 S9_NICK="p2smokelead${RND//-/}"
 S9_DYID="1689${RANDOM}${RANDOM}"
 S9_HTTP=$(curl -s -o "$S9_TMP" -w "%{http_code}" --max-time 20 \
-  -X POST "$API_BASE/api/acquisition/comment-score-result" \
-  -H "Content-Type: application/json" \
-  -d "{\"keyword_task_id\":\"$KW_TASK_ID\",\"video_url\":\"https://www.douyin.com/video/$VIDEO_ID\",\"comments\":[{\"commenter_id\":\"$S9_NICK\",\"text\":\"怎么联系你们\",\"grade\":\"高意向\",\"douyin_id\":\"$S9_DYID\"}]}")
-[ "$S9_HTTP" = "200" ] || fail "Step 9c comment-score-result expected 200, got $S9_HTTP: $(cat "$S9_TMP")" 9
+  -X POST "$API_BASE/api/acquisition/collect/report" \
+  -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
+  -d "{\"task_id\":\"$S9_TASK_ID\",\"video_id\":\"$S9_VIDEO\",\"commenters\":[{\"nickname\":\"$S9_NICK\",\"comment_text\":\"怎么联系你们\",\"grade\":\"高意向\",\"douyin_id\":\"$S9_DYID\"}]}")
+[ "$S9_HTTP" = "200" ] || fail "Step 9c collect/report expected 200, got $S9_HTTP: $(cat "$S9_TMP")" 9
 S9_LEAD_DYID=$(psq "SELECT COALESCE(douyin_id,'<NULL>') FROM zenithjoy.acquisition_leads WHERE tenant_id='$TENANT_ID' AND nickname='$S9_NICK' LIMIT 1")
 [ "$S9_LEAD_DYID" = "$S9_DYID" ] || fail "Step 9c lead 未带真实抖音号落库：期望 '$S9_DYID' 实得 '$S9_LEAD_DYID'（派单将无号可发 → 设备 NO_MATCH）" 9
 ok "Step 9c ✅ 设备上报 douyin_id=$S9_DYID → lead 带号落库"
 
 # 9d 反向（宁可空，不可猜 — #1306）：没读到号的评论，绝不许编一个号出来
+S9_VIDEO2="p2smokenull${RND//-/}"
 S9_NICK2="p2smokenull${RND//-/}"
 S9_HTTP=$(curl -s -o "$S9_TMP" -w "%{http_code}" --max-time 20 \
-  -X POST "$API_BASE/api/acquisition/comment-score-result" \
-  -H "Content-Type: application/json" \
-  -d "{\"keyword_task_id\":\"$KW_TASK_ID\",\"video_url\":\"https://www.douyin.com/video/$VIDEO_ID\",\"comments\":[{\"commenter_id\":\"$S9_NICK2\",\"text\":\"多少钱一平\",\"grade\":\"高意向\"}]}")
-[ "$S9_HTTP" = "200" ] || fail "Step 9d comment-score-result expected 200, got $S9_HTTP: $(cat "$S9_TMP")" 9
+  -X POST "$API_BASE/api/acquisition/collect/report" \
+  -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
+  -d "{\"task_id\":\"$S9_TASK_ID\",\"video_id\":\"$S9_VIDEO2\",\"commenters\":[{\"nickname\":\"$S9_NICK2\",\"comment_text\":\"多少钱一平\",\"grade\":\"高意向\"}]}")
+[ "$S9_HTTP" = "200" ] || fail "Step 9d collect/report expected 200, got $S9_HTTP: $(cat "$S9_TMP")" 9
 S9_LEAD2=$(psq "SELECT COALESCE(douyin_id,'<NULL>') FROM zenithjoy.acquisition_leads WHERE tenant_id='$TENANT_ID' AND nickname='$S9_NICK2' LIMIT 1")
 [ "$S9_LEAD2" = "<NULL>" ] || fail "Step 9d 设备没读到号，服务端却编了 douyin_id='$S9_LEAD2'（宁可空不可猜被破坏——猜出来的号会静默污染 Lead 表，正是 #1306 的病）" 9
 ok "Step 9d ✅ 没读到号 → douyin_id 留空，未造假"

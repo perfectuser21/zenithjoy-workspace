@@ -35,7 +35,7 @@ if ! curl -fs "$API_BASE/health" >/dev/null 2>&1; then
   exit 0
 fi
 
-echo "== [1/5] 种子：租户 A/B + 成员 + 客服机 + 关键词任务 =="
+echo "== [1/5] 种子：租户 A/B + 成员 + 客服机 + 采集任务 =="
 TENANT_A=$(psql_q "INSERT INTO zenithjoy.tenants (name, license_key) VALUES ('ci-cross-a-$RUN_ID','lk_cross_a_$RUN_ID') RETURNING id")
 TENANT_B=$(psql_q "INSERT INTO zenithjoy.tenants (name, license_key) VALUES ('ci-cross-b-$RUN_ID','lk_cross_b_$RUN_ID') RETURNING id")
 USER_A="ci-cross-a-$RUN_ID"
@@ -43,22 +43,33 @@ USER_B="ci-cross-b-$RUN_ID"
 psql_q "INSERT INTO zenithjoy.tenant_members (tenant_id, feishu_user_id, role) VALUES ('$TENANT_A','$USER_A','admin'),('$TENANT_B','$USER_B','admin')" >/dev/null
 CS_WX="wx_cs_ci_$RUN_ID"
 psql_q "INSERT INTO zenithjoy.service_agents (tenant_id, machine_id, wechat_id) VALUES ('$TENANT_A','ci-machine-$RUN_ID','$CS_WX')" >/dev/null
-KT_ID=$(psql_q "INSERT INTO zenithjoy.acquisition_keyword_tasks (keyword, tenant_id) VALUES ('护肤','$TENANT_A') RETURNING id")
-[ -n "$TENANT_A" ] && [ -n "$TENANT_B" ] && [ -n "$KT_ID" ] || fail "种子失败"
-ok "tenant A=$TENANT_A / B=$TENANT_B / keyword_task=$KT_ID"
+# 2026-07-18（孤岛清理 PR）：种子任务改走现役 /collect/start（写 acquisition_collect_tasks），
+# 已下线的 /comment-score-result 曾用的 acquisition_keyword_tasks 直插种子法一并淘汰。
+CS_TMP=$(mktemp)
+CS_HTTP=$(curl -s -o "$CS_TMP" -w "%{http_code}" \
+  -X POST "$API_BASE/api/acquisition/collect/start" \
+  -H 'Content-Type: application/json' -H "X-Tenant-Id: $TENANT_A" \
+  -d '{"keywords":["护肤"]}')
+[ "$CS_HTTP" = "200" ] || fail "collect/start 种子失败: $(cat "$CS_TMP")"
+CT_ID=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$CS_TMP','utf8')).data.task_id)" 2>/dev/null)
+rm -f "$CS_TMP"
+[ -n "$TENANT_A" ] && [ -n "$TENANT_B" ] && [ -n "$CT_ID" ] || fail "种子失败"
+ok "tenant A=$TENANT_A / B=$TENANT_B / collect_task=$CT_ID"
 
 echo "== [2/5] Line02 写侧：真 API 上报评论 → acquisition_leads =="
 SEC_UID="SECCROSS$RUN_ID"
-HTTP_BODY=$(curl -sf -X POST "$API_BASE/api/acquisition/comment-score-result" \
+HTTP_BODY=$(curl -sf -X POST "$API_BASE/api/acquisition/collect/report" \
   -H 'Content-Type: application/json' \
-  -d "{\"keyword_task_id\":\"$KT_ID\",\"video_url\":\"https://www.douyin.com/video/ci-cross-$RUN_ID\",\"comments\":[{\"commenter_id\":\"/user/$SEC_UID\",\"text\":\"求链接，怎么买\",\"grade\":\"A\",\"keyword\":\"护肤\"}]}") \
+  -d "{\"task_id\":\"$CT_ID\",\"video_id\":\"ci-cross-$RUN_ID\",\"commenters\":[{\"sec_uid\":\"$SEC_UID\",\"nickname\":\"cross-lead-$RUN_ID\",\"comment_text\":\"求链接，怎么买\",\"grade\":\"A\",\"keyword\":\"护肤\"}]}") \
   || fail "写侧 API 调用失败"
-echo "$HTTP_BODY" | grep -q '"written_count":1' || fail "written_count != 1: $HTTP_BODY"
+echo "$HTTP_BODY" | grep -q '"inserted":1' || fail "inserted != 1: $HTTP_BODY"
 LEAD_TENANT=$(psql_q "SELECT tenant_id FROM zenithjoy.acquisition_leads WHERE sec_uid='$SEC_UID'")
 [ "$LEAD_TENANT" = "$TENANT_A" ] || fail "lead 未落库或租户错: '$LEAD_TENANT'"
-KT_STATUS=$(psql_q "SELECT status FROM zenithjoy.acquisition_keyword_tasks WHERE id='$KT_ID'")
-[ "$KT_STATUS" = "done" ] || fail "keyword_task 未标 done（回归 PR#1186 类）: '$KT_STATUS'"
-ok "lead 落库 tenant=A，keyword_task=done"
+# 新链路 status 机制与旧表不同（'done' 需配套 report-videos 补齐视频计数，不是本闸要守的东西）；
+# 本闸只守"写侧调用后任务状态确实从 pending 推进了"，等价替代旧版"keyword_task 未标 done"回归（PR#1186 类）。
+CT_STATUS=$(psql_q "SELECT status FROM zenithjoy.acquisition_collect_tasks WHERE id='$CT_ID'")
+[ "$CT_STATUS" != "pending" ] || fail "collect_task 状态卡在 pending 未推进（回归 PR#1186 类新链路等价）: '$CT_STATUS'"
+ok "lead 落库 tenant=A，collect_task 状态=$CT_STATUS（已从 pending 推进）"
 
 echo "== [3/5] [SIMULATED-JOIN] ⚠️ 模拟人工加微链路（私信引导加企微→真人加好友→agent 扫好友入册），非真实 RPA 接缝 =="
 CONTACT="crossline-customer-$RUN_ID"
