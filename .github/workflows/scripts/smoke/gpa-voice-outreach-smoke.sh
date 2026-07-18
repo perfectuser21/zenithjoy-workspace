@@ -90,8 +90,8 @@ if [ ! -f "$MIGRATION_FILE" ]; then
 else
   log_pass "20260718_voice_call_records.sql 文件存在"
 
-  node -e "
-const c = require('fs').readFileSync('$MIGRATION_FILE', 'utf8');
+  MIGRATION_FILE="$MIGRATION_FILE" node -e "
+const c = require('fs').readFileSync(process.env.MIGRATION_FILE, 'utf8');
 const checks = [
   ['voice_call_records', '缺表名 voice_call_records'],
   ['IF NOT EXISTS',      '缺 IF NOT EXISTS（N-4 幂等）'],
