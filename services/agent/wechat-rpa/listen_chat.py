@@ -3085,8 +3085,12 @@ def _refresh_ghost_item(mw: Any, item: Any, sender: str, main_hwnd: int) -> Any:
     返回（可能已更新的）item。fail-open：任何异常返回原 item。
     """
     import ctypes as _ct
+    # 单测护栏（2026-07-18 CI 栈溢出实锤）：老测试用裸 MagicMock 当 mw/item，
+    # abs(MagicMock)>20000 恒 truthy、Mock 句柄还会被送进【真】Windows API
+    # （self-hosted CI 的 ctypes.windll 是真的）→ 假对象一律短路成"非幽灵"。
+    # 生产路径 handle/rect 全是真 int，不受影响。
     try:
-        if main_hwnd and _ct.windll.user32.IsIconic(main_hwnd):
+        if isinstance(main_hwnd, int) and main_hwnd and _ct.windll.user32.IsIconic(main_hwnd):
             _log("_open_chat: 窗口中途被最小化(幽灵态)，还原后重试")
             _prev = _set_min_animate(0)
             try:
@@ -3099,7 +3103,8 @@ def _refresh_ghost_item(mw: Any, item: Any, sender: str, main_hwnd: int) -> Any:
         pass
     try:
         r = item.rectangle()
-        if abs(r.left) > 20000 or abs(r.top) > 20000:
+        _l, _t = int(r.left), int(r.top)  # 非数值（单测 Mock）→ 异常 → 视为非幽灵
+        if abs(_l) > 20000 or abs(_t) > 20000:
             _log(f"_open_chat: {sender!r} item 坐标离屏 ({r.left},{r.top})，Select() 激活后重扫…")
             # Qt 虚拟列表只渲染可视区，离屏 item 不在 descendants 里。
             # 先 Select() 强制虚拟列表把目标项滚进可视区渲染出有效坐标，再重扫。
