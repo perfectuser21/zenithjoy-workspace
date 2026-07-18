@@ -53,8 +53,9 @@ function RoleBadge({ role }: { role: Machine['machine_role'] }) {
 }
 
 function OsBadge({ osType }: { osType: Machine['os_type'] }) {
-  const label = osType === 'android' ? '📱 安卓' : osType === 'win32' ? '🖥️ Windows' : '💻 其他';
-  return <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>;
+  if (osType == null) return null;
+  const label = osType === 'android' ? '📱 安卓' : osType === 'win32' ? '🖥️ Windows' : `💻 ${osType}`;
+  return <span className="text-xs text-gray-500 dark:text-gray-400" aria-hidden={false}>{label}</span>;
 }
 
 function formatTime(iso?: string): string {
