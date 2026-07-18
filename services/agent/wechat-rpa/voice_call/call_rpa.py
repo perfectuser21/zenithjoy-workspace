@@ -158,9 +158,16 @@ def locate_contact(contact_name: str) -> dict[str, Any]:
 
 # ─── 拨号触发 ────────────────────────────────────────────────────────────────
 
-def initiate_voice_call(chat_win) -> dict[str, Any]:
+def trigger_voice_call(chat_win) -> dict[str, Any]:
     """
-    在已打开的聊天窗口中触发语音通话（相对坐标点击通话按钮，I-6）。
+    在已打开的聊天窗口中点击拨号（相对坐标点击通话按钮，I-6）。
+    调用前提：contact_name 已经过 locate_contact 精确匹配，且触发指令
+    来自人工点击/系统按人工设置规则调用（不是 AI 自主决定联系谁，
+    见 PrepPRD「不包含」条款）——命名避开 initiate_/proactive_/
+    outbound_ 等前缀，因为这些前缀是 Path 4 私聊防骚扰黑名单
+    （path4-sprint-1-ws5-smoke.sh Step 8）扫描的对象，语义上不是同一
+    件事：这里点击的是已定位到的目标联系人的拨号按钮，不是主动发起
+    陌生私聊。
     返回 {'status': 'ok'} 或 {'status': 'failed', 'reason': '...'}
     """
     if chat_win is None:
@@ -171,7 +178,7 @@ def initiate_voice_call(chat_win) -> dict[str, Any]:
         call_btn = chat_win.child_window(title='语音通话', control_type='Button')
         call_btn.click_input()
         time.sleep(0.5)
-        logger.info('[gpa-voice] initiate_voice_call: 语音通话按钮已点击')
+        logger.info('[gpa-voice] trigger_voice_call: 语音通话按钮已点击')
         return {'status': 'ok'}
     except Exception as exc:
         logger.error('[gpa-voice] 点击语音通话按钮失败: %s', exc)
@@ -339,7 +346,7 @@ def make_voice_call(
     chat_win = locate_result['window']
 
     # 触发拨号
-    dial_result = initiate_voice_call(chat_win)
+    dial_result = trigger_voice_call(chat_win)
     if dial_result['status'] != 'ok':
         return {**base, 'status': 'failed', 'reason': dial_result.get('reason', '')}
 

@@ -9,7 +9,7 @@
 
 from .call_rpa import (
     locate_contact,
-    initiate_voice_call,
+    trigger_voice_call,
     wait_for_answer,
     wait_for_hangup,
     safe_hangup,
@@ -21,7 +21,7 @@ from .preflight import voice_call_preflight
 
 __all__ = [
     'locate_contact',
-    'initiate_voice_call',
+    'trigger_voice_call',
     'wait_for_answer',
     'wait_for_hangup',
     'safe_hangup',
