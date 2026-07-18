@@ -4750,3 +4750,11 @@ agent_suite:
   status: active
   product: 其他
   note: "PR#1366: 豆包 Realtime Dialogue 二进制协议编解码单元测试，含真实抓包字节的回归用例"
+
+- id: gpa-voice-outreach-api-unit
+  path: apps/api/src/routes/voice-outreach.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 微信AI客服
+  note: "sprint(07182017): GP-A主动语音触达——voice-outreach路由单测（POST /call、GET /records、POST /records回写，含tenant_id校验+status校验）"
