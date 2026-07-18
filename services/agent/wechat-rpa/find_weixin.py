@@ -463,6 +463,71 @@ def launch_weixin(exe_path: Optional[str] = None, lock_path: Optional[str] = Non
         release_launch_lock(lock_path)
 
 
+def _is_main_window_candidate(cls: str, title: str) -> bool:
+    """win32 层主窗口候选初筛（纯函数，CI 可测）。
+
+    只做宽初筛：类名命中 mmui::MainWindow / Qt5 外框，标题含"微信"或=="Weixin"。
+    终审在 UIA 类名层（_build_uia_wrapper_from_hwnd 后复核）——win32 外框类名/标题
+    区分不了主窗口和登录窗（第二实例登录窗外框与主窗口完全同名同类，2026-07-18
+    真机 9 轮实验中 3 轮打错窗口实锤）。
+    """
+    if cls == MAIN_WINDOW_CLASS:
+        return True
+    if cls == QT5_WINDOW_CLASS and ("微信" in (title or "") or title == "Weixin"):
+        return True
+    return False
+
+
+def _enum_hidden_main_hwnds() -> list:
+    """raw Win32 EnumWindows 找【不可见】的主窗口候选 hwnd（含被 ✕ 关闭到托盘的）。
+
+    pywinauto Desktop.windows() 只枚举可见窗口——用户点 ✕ 关闭到托盘后主窗口被
+    SW_HIDE（窗口对象仍存活，真机证实非销毁），可见枚举永远 miss。此处用 raw
+    EnumWindows 补盲区。非 Windows / 无 windll → 返回 []（fail-safe）。
+    """
+    import ctypes as _ct
+    wd = getattr(_ct, "windll", None)
+    if wd is None:
+        return []
+    u32 = wd.user32
+    found: list = []
+    try:
+        WNDENUMPROC = _ct.WINFUNCTYPE(_ct.c_bool, _ct.c_void_p, _ct.c_void_p)
+
+        def _cb(hwnd, _lparam):
+            try:
+                buf = _ct.create_unicode_buffer(256)
+                u32.GetClassNameW(hwnd, buf, 256)
+                tbuf = _ct.create_unicode_buffer(256)
+                u32.GetWindowTextW(hwnd, tbuf, 256)
+                if _is_main_window_candidate(buf.value or "", tbuf.value or ""):
+                    if not u32.IsWindowVisible(hwnd):
+                        found.append(int(hwnd) if hwnd else 0)
+            except Exception:
+                pass
+            return True
+
+        u32.EnumWindows(WNDENUMPROC(_cb), 0)
+    except Exception:
+        return []
+    return [h for h in found if h]
+
+
+def _build_uia_wrapper_from_hwnd(hwnd: int) -> Any:
+    """从 win32 hwnd 直接构造 UIA 元素+wrapper（绕开可见性枚举限制）。
+
+    真机验证（2026-07-18）：✕ 关闭隐藏态的主窗口可以这样构造，且 UIA 层类名
+    正是 mmui::MainWindow（与 win32 外框类名 Qt51514QWindowIcon 不同——UIA 层
+    类名才能区分主窗口/登录窗/空壳）。返回 (element_info, wrapper)；失败抛异常
+    由调用方兜。
+    """
+    from pywinauto.uia_element_info import UIAElementInfo
+    from pywinauto.controls.uiawrapper import UIAWrapper
+
+    ei = UIAElementInfo(hwnd)
+    return ei, UIAWrapper(ei)
+
+
 def get_main_window() -> Optional[Any]:
     """
     返回微信主窗口（mmui::MainWindow 或 Qt51514QWindowIcon/微信）。
@@ -470,6 +535,14 @@ def get_main_window() -> Optional[Any]:
     - mmui::MainWindow：UIA 控件树完整，可 RPA 操作
     - Qt51514QWindowIcon（title 含"微信"）：xwechat 4.1.10+ 框架，UIA 子树可能为空
     - UI 自动化必须在微信登录的交互桌面会话里运行，否则读不到元素。
+
+    ✕ 关闭到托盘 fallback（2026-07-18 真机 9 轮实验实锤）：用户点右上角 ✕
+    （关闭到托盘设置）→ 主窗口被 SW_HIDE → 可见枚举永远 miss → 旧代码返回 None
+    → 主循环卡"跳过重复启动"，唯一出路是重量级重启微信（用户明确否定）。
+    现在可见枚举 miss 后，raw EnumWindows 找隐藏候选 → UIAElementInfo 直接构造
+    → UIA 类名终审（mmui::MainWindow / Qt5+中文微信 命中；mmui::LoginWindow
+    第二实例登录窗、title=Weixin 空壳排除）→ 返回 wrapper。此后调用方的托盘
+    分支（SW_SHOWNA 唤回+挪屏外）与扫描守卫自动接管，不重启微信。
     """
     from pywinauto import Desktop  # 仅 Windows 运行时需要，顶层不 import
 
@@ -484,6 +557,25 @@ def get_main_window() -> Optional[Any]:
                 return w
         except Exception:
             continue
+
+    # 可见枚举 miss → 隐藏窗口 fallback（✕ 关闭到托盘）
+    try:
+        for hwnd in _enum_hidden_main_hwnds():
+            try:
+                ei, wrapper = _build_uia_wrapper_from_hwnd(hwnd)
+                uia_cls = ei.class_name or ""
+                uia_name = ei.name or ""
+            except Exception:
+                continue
+            if uia_cls == MAIN_WINDOW_CLASS:
+                logger.info("get_main_window: 可见枚举 miss，经隐藏窗口 fallback 找到主窗口 hwnd=%s", hwnd)
+                return wrapper
+            if uia_cls == QT5_WINDOW_CLASS and "微信" in uia_name:
+                logger.info("get_main_window: 可见枚举 miss，经隐藏窗口 fallback 找到 Qt5 主窗口 hwnd=%s", hwnd)
+                return wrapper
+            # mmui::LoginWindow（第二实例登录窗）/ title=Weixin 空壳 → 排除，继续找
+    except Exception:
+        pass
     return None
 
 
