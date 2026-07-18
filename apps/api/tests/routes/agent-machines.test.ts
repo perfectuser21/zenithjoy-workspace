@@ -82,6 +82,17 @@ describe('GET /api/agent/machines', () => {
     expect(res.status).toBe(401);
     expect(mockQuery).not.toHaveBeenCalled();
   });
+
+  it('返回体含 os_type（区分安卓/Windows设备 — decision 8dbe91ee）', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [machineRow({ os_type: 'android' })] });
+
+    const res = await request(app).get('/api/agent/machines').set(AUTH);
+    expect(res.status).toBe(200);
+    expect(res.body.data[0].os_type).toBe('android');
+
+    const sql = mockQuery.mock.calls[0][0] as string;
+    expect(sql).toMatch(/a\.os_type/);
+  });
 });
 
 describe('GET /api/agent/machines/:id', () => {

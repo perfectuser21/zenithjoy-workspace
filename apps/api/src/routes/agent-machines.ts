@@ -42,6 +42,7 @@ function normMachine(row: Record<string, unknown>) {
     hostname: row.hostname,
     nickname: row.nickname,
     machine_role: row.machine_role,
+    os_type: row.os_type ?? null,
     status: row.status,
     version: row.version,
     last_seen: row.last_seen,
@@ -58,6 +59,7 @@ router.get('/', async (req: Request, res: Response) => {
 
   const r = await pool.query(
     `SELECT a.id, a.agent_id, a.hostname, a.nickname, a.machine_role,
+            a.os_type,
             CASE WHEN a.last_seen > NOW() - INTERVAL '3 minutes'
                  THEN 'online' ELSE 'offline' END AS status,
             a.version, a.last_seen,
