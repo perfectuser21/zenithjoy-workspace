@@ -52,6 +52,11 @@ function RoleBadge({ role }: { role: Machine['machine_role'] }) {
   );
 }
 
+function OsBadge({ osType }: { osType: Machine['os_type'] }) {
+  const label = osType === 'android' ? '📱 安卓' : osType === 'win32' ? '🖥️ Windows' : '💻 其他';
+  return <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>;
+}
+
 function formatTime(iso?: string): string {
   if (!iso) return '—';
   const t = new Date(iso);
@@ -97,6 +102,7 @@ function MachineList({
               <td className="border border-gray-200 px-4 py-3">
                 <div className="font-medium">{m.nickname || m.hostname}</div>
                 <div className="text-xs text-gray-400">{m.hostname}</div>
+                <OsBadge osType={m.os_type} />
               </td>
               <td className="border border-gray-200 px-4 py-3">
                 <StatusBadge status={m.status} />
