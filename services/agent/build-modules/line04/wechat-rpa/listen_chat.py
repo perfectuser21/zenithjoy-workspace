@@ -132,7 +132,9 @@ except ImportError:
     def _print_config(): pass
 
 # 最小化/可见场景：保存 hwnd → 原始坐标，让 _restore_window_state 还原（v1.0.29）
-# _saved_normal_pos: (left, top, right, bottom) —— WINDOWPLACEMENT.rcNormalPosition
+# _saved_normal_pos: (left, top, right, bottom, flags, showCmd) —— WINDOWPLACEMENT
+#   原始 rcNormalPosition + flags/showCmd（v1.0.135 扩展保存 flags/showCmd，
+#   确保清掉的 WPF_RESTORETOMAXIMIZED 真还给用户，不是永久改动）
 # _saved_visible_pos: (left, top) —— GetWindowRect 屏幕实时坐标
 _saved_normal_pos: dict = {}
 _saved_visible_pos: dict = {}
@@ -500,6 +502,49 @@ def _should_move_offscreen(offscreen_reply: bool, for_reply: bool) -> bool:
     return offscreen_reply or not for_reply
 
 
+def _neutralize_maximize_restore(flags: int, show_cmd: int) -> tuple:
+    """清掉 WINDOWPLACEMENT.flags 里的 WPF_RESTORETOMAXIMIZED，强制 showCmd=SW_SHOWNORMAL。
+
+    真机铁证（decision 433b117c，2026-07-18 xian-rog）：微信窗口一旦被最大化过，
+    WINDOWPLACEMENT.flags 就带 WPF_RESTORETOMAXIMIZED——此时 ShowWindow(SW_SHOWNOACTIVATE)
+    还原会直接按最大化展开，完全无视调用方刚用 SetWindowPlacement 设的离屏 rcNormalPosition，
+    窗口整屏可见（真机 20 秒内复现 2 次，rect 与显示器 work area 吻合）。清掉这个 flag
+    才能让 rcNormalPosition 真正生效。纯函数：不碰 ctypes，CI 可单测。
+    """
+    WPF_RESTORETOMAXIMIZED = 0x0002
+    SW_SHOWNORMAL = 1
+    return (flags & ~WPF_RESTORETOMAXIMIZED, SW_SHOWNORMAL)
+
+
+def _set_min_animate(value: int) -> Optional[int]:
+    """临时设置系统级最小化/还原动画开关（SPI_SETANIMATION=0x0049），返回旧值供调用方还原。
+
+    用途：从离屏坐标直接 ShowWindow(SW_MINIMIZE) 时，Windows 的最小化动画会从当前
+    （离屏）位置动画到任务栏（屏内）——轨迹必然经过屏内可见区域，与目标坐标是否离屏
+    无关。调用方应在动画敏感的 ShowWindow 调用前后配对调用本函数（关→操作→用返回值还原），
+    避免长期篡改用户桌面动画偏好。fail-open：任何异常返回 None，调用方据此跳过还原。
+    """
+    import ctypes as _ct
+
+    class _ANIMATIONINFO(_ct.Structure):
+        _fields_ = [("cbSize", _ct.c_uint), ("iMinAnimate", _ct.c_int)]
+
+    SPI_GETANIMATION, SPI_SETANIMATION, SPIF_SENDCHANGE = 0x0048, 0x0049, 0x0002
+    try:
+        _ai = _ANIMATIONINFO()
+        _ai.cbSize = _ct.sizeof(_ANIMATIONINFO)
+        if not _ct.windll.user32.SystemParametersInfoW(
+                SPI_GETANIMATION, _ct.sizeof(_ANIMATIONINFO), _ct.byref(_ai), 0):
+            return None
+        _prev = _ai.iMinAnimate
+        _ai.iMinAnimate = value
+        _ct.windll.user32.SystemParametersInfoW(
+            SPI_SETANIMATION, _ct.sizeof(_ANIMATIONINFO), _ct.byref(_ai), SPIF_SENDCHANGE)
+        return _prev
+    except Exception:
+        return None
+
+
 def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
     """若微信在托盘或最小化，将其移到离屏可操作位置。
 
@@ -513,6 +558,8 @@ def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
     - 最小化：先用 SetWindowPlacement 把 rcNormalPosition 改到 (-2600,60)，再
       SW_SHOWNOACTIVATE(4) 还原——窗口直接出现在屏外，无任何可见闪烁（v1.0.29）。
       禁止直接 SW_SHOWNA(8)：留在幽灵坐标 (-32000,-32000)，UIA 事件无订阅者。
+      v1.0.135：曾被最大化过的窗口必须先清 WPF_RESTORETOMAXIMIZED，否则 ShowWindow(4)
+      无视离屏坐标直接按最大化展开（decision 433b117c），还原后再用 SetWindowPos 兜底。
     """
     import ctypes as _ct
     import ctypes.wintypes as _wt
@@ -553,6 +600,14 @@ def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
             # 挪坐标（SetWindowPlacement 预改 rcNormalPosition → 屏外）是唯一真正生效的隐藏；
             # cloak 跨进程 E_ACCESSDENIED 从不生效（真机铁证 ee2890bb），已移除。
             # 扫描态无论 OFFSCREEN_REPLY 都挪（根治闪烁）。
+            # v1.0.135 真机铁证（decision 433b117c）：WeChat 窗口若曾被最大化，
+            # WINDOWPLACEMENT.flags 带 WPF_RESTORETOMAXIMIZED——此时下面 ShowWindow(4)
+            # 完全无视刚设的离屏 rcNormalPosition，直接按最大化还原、窗口整屏可见
+            # （rog 真机 20 秒内复现 2 次）。清掉该 flag + 强制 showCmd=SW_SHOWNORMAL
+            # 才让 rcNormalPosition 真正生效；即便清了，SetWindowPlacement 对 rcLeft
+            # 仍可能被 Windows 钳制贴边（真机实测 X 被夹到 0，只有 Y 生效）——还原后
+            # 必须像 tray/visible 分支一样读 GetWindowRect 校验，仍在屏内就补一次
+            # SetWindowPos（不受钳制）强制挪走，双保险。
             if _should_move_offscreen(_OFFSCREEN_REPLY, for_reply):
                 try:
                     class _WP(_ct.Structure):
@@ -568,13 +623,26 @@ def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
                     if _ct.windll.user32.GetWindowPlacement(_hwnd, _ct.byref(_wp)):
                         _w = max(_wp.rcRight - _wp.rcLeft, 400)
                         _h = max(_wp.rcBottom - _wp.rcTop, 300)
-                        _saved_normal_pos[_hwnd] = (_wp.rcLeft, _wp.rcTop, _wp.rcRight, _wp.rcBottom)
+                        _saved_normal_pos[_hwnd] = (
+                            _wp.rcLeft, _wp.rcTop, _wp.rcRight, _wp.rcBottom,
+                            _wp.flags, _wp.showCmd,
+                        )
+                        _wp.flags, _wp.showCmd = _neutralize_maximize_restore(_wp.flags, _wp.showCmd)
                         _wp.rcLeft, _wp.rcTop = _OFFSCREEN_X, _OFFSCREEN_Y
                         _wp.rcRight, _wp.rcBottom = _OFFSCREEN_X + _w, _OFFSCREEN_Y + _h
                         _ct.windll.user32.SetWindowPlacement(_hwnd, _ct.byref(_wp))
                 except Exception:
                     pass
             _ct.windll.user32.ShowWindow(_hwnd, 4)  # SW_SHOWNOACTIVATE = 4：恢复到 rcNormalPosition（已改为离屏）
+            if _should_move_offscreen(_OFFSCREEN_REPLY, for_reply):
+                try:
+                    _rc2 = _wt.RECT()
+                    _ct.windll.user32.GetWindowRect(_hwnd, _ct.byref(_rc2))
+                    if _rc2.left > -2000:
+                        _SWP2 = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
+                        _ct.windll.user32.SetWindowPos(_hwnd, 0, _OFFSCREEN_X, _OFFSCREEN_Y, 0, 0, _SWP2)
+                except Exception:
+                    pass
             time.sleep(_MINIMIZED_RESTORE_SLEEP)  # 最小化恢复比托盘需要更长 UIA 树重建时间
             return 'minimized'
         else:
@@ -611,8 +679,20 @@ def _restore_window_state(mw: Any, original_state: str, for_reply: bool = False)
         if original_state == 'tray':
             _ct.windll.user32.ShowWindow(_hwnd, 0)  # SW_HIDE = 0
         elif original_state == 'minimized':
-            _ct.windll.user32.ShowWindow(_hwnd, 6)  # SW_MINIMIZE = 6
-            # 还原 rcNormalPosition（v1.0.29）：确保用户手动从任务栏恢复时窗口在原始屏幕位置。
+            # v1.0.135 真机铁证（decision 433b117c）：从离屏坐标直接 ShowWindow(6) 再最小化，
+            # Windows 最小化动画会从当前（离屏）位置动画到任务栏（屏内）——轨迹必然经过
+            # 屏内可见区域，与目标是否离屏无关。临时关掉系统级最小化/还原动画让这一步
+            # 瞬间切换、不经过任何中间可见帧，操作完立即恢复用户原有动画偏好。
+            _prev_anim = _set_min_animate(0)
+            try:
+                _ct.windll.user32.ShowWindow(_hwnd, 6)  # SW_MINIMIZE = 6
+            finally:
+                if _prev_anim is not None:
+                    _set_min_animate(_prev_anim)
+            # 还原 rcNormalPosition + flags/showCmd（v1.0.29，v1.0.135 扩展保存 flags/showCmd）：
+            # 确保用户手动从任务栏恢复时窗口回到原始屏幕位置 **和** 原始最大化还原偏好——
+            # _ensure_tray_visible 为了让离屏坐标生效清过 WPF_RESTORETOMAXIMIZED，此处必须
+            # 还给用户真实原状，不能让"为隐藏做的临时调整"变成永久改动。
             # 门控从 OFFSCREEN_REPLY 放宽为"存过坐标就还原"——扫描态也挪坐标了（decision 7b8857f7），
             # 与 _ensure_tray_visible 的 _should_move_offscreen 挪坐标对称。
             if _hwnd in _saved_normal_pos:
@@ -629,7 +709,9 @@ def _restore_window_state(mw: Any, original_state: str, for_reply: bool = False)
                     _wp = _WP()
                     _wp.length = _ct.sizeof(_WP)
                     if _ct.windll.user32.GetWindowPlacement(_hwnd, _ct.byref(_wp)):
-                        _wp.rcLeft, _wp.rcTop, _wp.rcRight, _wp.rcBottom = _orig
+                        _wp.rcLeft, _wp.rcTop, _wp.rcRight, _wp.rcBottom = _orig[0:4]
+                        if len(_orig) >= 6:
+                            _wp.flags, _wp.showCmd = _orig[4], _orig[5]
                         _ct.windll.user32.SetWindowPlacement(_hwnd, _ct.byref(_wp))
                 except Exception:
                     pass
