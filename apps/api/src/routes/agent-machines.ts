@@ -42,6 +42,7 @@ function normMachine(row: Record<string, unknown>) {
     hostname: row.hostname,
     nickname: row.nickname,
     machine_role: row.machine_role,
+    os_type: row.os_type ?? null,
     status: row.status,
     version: row.version,
     last_seen: row.last_seen,
@@ -58,6 +59,7 @@ router.get('/', async (req: Request, res: Response) => {
 
   const r = await pool.query(
     `SELECT a.id, a.agent_id, a.hostname, a.nickname, a.machine_role,
+            a.os_type,
             CASE WHEN a.last_seen > NOW() - INTERVAL '3 minutes'
                  THEN 'online' ELSE 'offline' END AS status,
             a.version, a.last_seen,
@@ -80,6 +82,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 
   const m = await pool.query(
     `SELECT a.id, a.agent_id, a.hostname, a.nickname, a.machine_role,
+            a.os_type,
             a.status, a.version, a.last_seen,
             COUNT(s.id) AS session_count
        FROM zenithjoy.agents a
@@ -93,8 +96,13 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 
   const s = await pool.query(
-    `SELECT s.account_label, s.role, s.status, s.platform,
-            s.account_nickname, s.bound_at
+    `SELECT s.account_label, s.role, s.status, s.platform, s.bound_at,
+            (SELECT response->>'account_nickname'
+               FROM zenithjoy.publish_tasks
+              WHERE agent_id=s.agent_id
+                AND task_type='qr_bind/douyin_burner'
+                AND payload->>'account_label' = s.account_label
+              ORDER BY created_at DESC LIMIT 1) AS account_nickname
        FROM zenithjoy.agent_platform_sessions s
       WHERE s.agent_id = $1
       ORDER BY s.bound_at DESC NULLS LAST, s.account_label ASC`,
@@ -149,7 +157,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     `UPDATE zenithjoy.agents
         SET ${sets.join(', ')}
       WHERE id = $${idParam} AND tenant_id = $${tenantParam}
-      RETURNING id, agent_id, hostname, nickname, machine_role, status, version, last_seen`,
+      RETURNING id, agent_id, hostname, nickname, machine_role, os_type, status, version, last_seen`,
     params,
   );
   if (upd.rows.length === 0) {

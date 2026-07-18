@@ -80,3 +80,4 @@ line04-profile-panel-wiring-smoke.sh
 realtime-voice-mvp-smoke.sh
 agent-startup-reset-smoke.sh
 realtime-voice-mvp-domestic-smoke.sh
+device-type-ui-gate-smoke.sh
