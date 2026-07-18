@@ -706,6 +706,20 @@ S22_HTTP=$(curl -s -o "$S22_TMP" -w "%{http_code}" --max-time 15 \
 [ "$S22_HTTP" = "200" ] || fail "Step 22a PATCH dm_active window expected 200, got $S22_HTTP: $(cat "$S22_TMP")" 22
 ok "Step 22a ✅ dm_active_start/end 撑满全天 + dm_interval 压到 1 秒（避免时段闸/排期间隔导致断言随机失败）"
 
+# 22a2：把本租户其它 lead（Step9 造的、也满足 outreach_eligible=true 条件）标不可触达，
+# 只留 Step15 这条参与本轮派单——CI 真机实测复现过：同一租户多条 lead 同时 eligible 时，
+# buildAssignments 会全部 assigned，但 dispatchDue 只有真带抖音号的那条能通过
+# isDmDispatchable 真正 dispatched，谁被选中不确定（真派单频控/去重逻辑决定，不是 bug），
+# 靠"运气选中 Step15 那条"断言必然偶发失败。显式隔离掉其它 lead 才能让本 Step 确定性验证
+# "Step15 这条真实产出的 lead"，而不是"随便哪条 lead"。
+psq "UPDATE zenithjoy.acquisition_leads SET outreach_eligible=false, updated_at=now()
+     WHERE tenant_id='$TENANT_ID' AND douyin_id IS DISTINCT FROM '$S15_DOUYIN_ID'" >/dev/null
+psq "UPDATE zenithjoy.dm_assignments SET status='cancelled', updated_at=now()
+     WHERE tenant_id='$TENANT_ID' AND status IN ('queued','limited')
+       AND lead_id NOT IN (SELECT id FROM zenithjoy.acquisition_leads
+                            WHERE tenant_id='$TENANT_ID' AND douyin_id='$S15_DOUYIN_ID')" >/dev/null
+ok "Step 22a2 ✅ 本轮派单隔离到 Step15 那条 lead（其它 lead 标不可触达，防止选中哪条不确定）"
+
 # 22b：真调 dispatch/build（scoreLeads + buildAssignments），复用 S22_TMP（前值已读完，覆盖写入）
 S22_HTTP=$(curl -s -o "$S22_TMP" -w "%{http_code}" --max-time 15 \
   -X POST "$API_BASE/api/acquisition/dispatch/build" \
