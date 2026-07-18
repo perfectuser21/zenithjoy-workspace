@@ -67,6 +67,7 @@ try:
         OFFSCREEN_REPLY as _OFFSCREEN_REPLY,
         OFFSCREEN_X as _OFFSCREEN_X,
         OFFSCREEN_Y as _OFFSCREEN_Y,
+        compute_offscreen_x as _compute_offscreen_x,
         SENDER_COOLDOWN_SECONDS as _SENDER_COOLDOWN,
         REPLIED_TTL_SECONDS as _REPLIED_TTL,
         REPLY_FAILURE_COOLDOWN_SECONDS as _REPLY_FAIL_COOLDOWN,
@@ -104,6 +105,8 @@ except ImportError:
     _OFFSCREEN_REPLY = True
     _OFFSCREEN_X = -2600
     _OFFSCREEN_Y = 60
+    def _compute_offscreen_x(win_width: int = 1200) -> int:
+        return -2600
     _SENDER_COOLDOWN = 30.0
     _REPLIED_TTL = 120
     _REPLY_FAIL_COOLDOWN = 60
@@ -489,6 +492,26 @@ def _parse_item_name(name: str, require_unread: bool = True) -> Optional[Dict[st
 # ─── pywinauto 真模式：扫未读 + 自动回（函数体内 import）─────────────────────────
 
 
+def _safe_offscreen_x(width: int) -> int:
+    """按窗口实际宽度现算一个真正安全的离屏 X（真机铁证，2026-07-18 用户实时反馈）。
+
+    根因：模块级 _OFFSCREEN_X 是启动时算好的固定常量，假设窗口宽度=1200px 推导
+    （`compute_offscreen_x(win_width=1200)`，ROG 单屏上算出 -1400）。但窗口若处于
+    最大化态（真机实测宽度约 1707px），用这个固定值挪窗口后，右边缘落在
+    -1400+1707=307——屏幕左侧 307px 那一块露出来了，肉眼可见（用户原话"过两秒
+    它在左边"）。窗口越宽，固定偏移量越不够。
+
+    修法：每次挪窗口前，用**这一次实际的窗口宽度**重新推导安全偏移量（`_compute_offscreen_x`
+    本就支持 win_width 参数，只是模块级常量从没传实际宽度）。取现算值和模块级常量中更靠左
+    （更负）的一个，双保险——现算值理论上总是够用，但保留常量兜底以防现算异常。
+    """
+    try:
+        derived = _compute_offscreen_x(win_width=max(int(width), 1))
+        return min(derived, _OFFSCREEN_X)
+    except Exception:
+        return _OFFSCREEN_X
+
+
 def _should_move_offscreen(offscreen_reply: bool, for_reply: bool) -> bool:
     """是否把窗口挪到屏幕外坐标——唯一真正生效的隐藏手段（cloak 跨进程永久 E_ACCESSDENIED
     从不生效，真机铁证 decision ee2890bb）。
@@ -596,7 +619,8 @@ def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
                 _ct.windll.user32.GetWindowRect(_hwnd, _ct.byref(_rc))
                 if _rc.left > -2000:
                     _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
-                    _ct.windll.user32.SetWindowPos(_hwnd, 0, _OFFSCREEN_X, _OFFSCREEN_Y, 0, 0, _SWP)
+                    _safe_x = _safe_offscreen_x(_rc.right - _rc.left)
+                    _ct.windll.user32.SetWindowPos(_hwnd, 0, _safe_x, _OFFSCREEN_Y, 0, 0, _SWP)
             time.sleep(_TRAY_RESTORE_SLEEP)  # 等 Qt 重建 UIA 虚拟列表渲染
             # v1.0.105 常驻隐身：托盘弹出后保持 cloak+shown 跨轮常驻（调用方看到
             # _CLOAK_OWNED=True 就不再收窗）——1s 扫描周期下每轮弹/收的漏帧会聚合成
@@ -639,8 +663,9 @@ def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
                             _wp.flags, _wp.showCmd,
                         )
                         _wp.flags, _wp.showCmd = _neutralize_maximize_restore(_wp.flags, _wp.showCmd)
-                        _wp.rcLeft, _wp.rcTop = _OFFSCREEN_X, _OFFSCREEN_Y
-                        _wp.rcRight, _wp.rcBottom = _OFFSCREEN_X + _w, _OFFSCREEN_Y + _h
+                        _safe_x = _safe_offscreen_x(_w)
+                        _wp.rcLeft, _wp.rcTop = _safe_x, _OFFSCREEN_Y
+                        _wp.rcRight, _wp.rcBottom = _safe_x + _w, _OFFSCREEN_Y + _h
                         _ct.windll.user32.SetWindowPlacement(_hwnd, _ct.byref(_wp))
                 except Exception:
                     pass
@@ -660,7 +685,8 @@ def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
                     _ct.windll.user32.GetWindowRect(_hwnd, _ct.byref(_rc2))
                     if _rc2.left > -2000:
                         _SWP2 = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
-                        _ct.windll.user32.SetWindowPos(_hwnd, 0, _OFFSCREEN_X, _OFFSCREEN_Y, 0, 0, _SWP2)
+                        _safe_x2 = _safe_offscreen_x(_rc2.right - _rc2.left)
+                        _ct.windll.user32.SetWindowPos(_hwnd, 0, _safe_x2, _OFFSCREEN_Y, 0, 0, _SWP2)
                 except Exception:
                     pass
             time.sleep(_MINIMIZED_RESTORE_SLEEP)  # 最小化恢复比托盘需要更长 UIA 树重建时间
@@ -676,7 +702,8 @@ def _ensure_tray_visible(mw: Any, for_reply: bool = False) -> str:
                     _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
                     with _saved_normal_pos_lock:
                         _saved_visible_pos[_hwnd] = (_rc.left, _rc.top)
-                    _ct.windll.user32.SetWindowPos(_hwnd, 0, _OFFSCREEN_X, _OFFSCREEN_Y, 0, 0, _SWP)
+                    _safe_x = _safe_offscreen_x(_rc.right - _rc.left)
+                    _ct.windll.user32.SetWindowPos(_hwnd, 0, _safe_x, _OFFSCREEN_Y, 0, 0, _SWP)
                     time.sleep(_VISIBLE_MOVE_SLEEP)
                     return 'visible'
     except Exception:
@@ -2452,7 +2479,8 @@ def _uia_send(uia_edit: Any, mw: Any, reply_text: str) -> bool:
                 _u32.GetWindowRect(main_hwnd, _ct.byref(_rc))
                 if _rc.left > -2000:
                     _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
-                    _u32.SetWindowPos(main_hwnd, 0, _OFFSCREEN_X, _OFFSCREEN_Y, 0, 0, _SWP)
+                    _safe_x = _safe_offscreen_x(_rc.right - _rc.left)
+                    _u32.SetWindowPos(main_hwnd, 0, _safe_x, _OFFSCREEN_Y, 0, 0, _SWP)
                 time.sleep(_OFFSCREEN_MOVE_SLEEP)
             else:
                 _u32.ShowWindow(main_hwnd, 9)  # SW_RESTORE=9（弹窗模式保留原始行为）
