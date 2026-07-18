@@ -4912,6 +4912,9 @@ def run_real_listen(args: argparse.Namespace) -> int:
     # UIA 树塌缩自愈（decision 4ab9b6f7）：微信在跑+主窗口找到但 a11y 树未构建(descendants≤2)→
     # 会话永远扫不到。持续 _COLLAPSED_SUSTAIN_SECONDS 后重启微信重建树（冷却+上限保护）。
     collapsed_tree_since: Optional[float] = None
+    # scan 主循环快速自愈计时（2026-07-18）：用每轮 scan 的可见态读判塌，塌缩后 ~15s 就自愈，
+    # 不用等 60s 心跳块（用户反馈"很慢"根治）。与 collapsed_tree_since(心跳块，慢备份)分开。
+    scan_collapse_since: Optional[float] = None
     last_wechat_restart = 0.0
     wechat_restart_count = 0
     # UIA 死区自愈（issue e6203ac4）：「进程在+mw=None」状态的起始时刻；mw 找到/进程不在即清零。
@@ -5150,28 +5153,9 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         )
                 else:
                     collapsed_tree_since = None
-                # 快速自愈通道：真塌（scan 连续读不到）短暂持续后，先托盘召唤、失败才重启。
-                # collapsed_tree_since 已被上面的可读守卫把关=只在真塌时置位，此处不会误触发。
-                if _should_fast_heal_hidden_collapsed(
-                    now, collapsed_tree_since, last_readable_scan_at,
-                    last_wechat_restart, wechat_restart_count, _WECHAT_RESTART_MAX,
-                ):
-                    # ⭐ 优先：真实双击通知区托盘图标召唤微信自恢复（用户拍板正解，2026-07-18
-                    # 真机实证 content 0→12 会话，~5s，不杀进程）。召唤成功 = 内容树已重建，
-                    # 完全不重启；只有召唤失败(找不到图标/内容没回来)才退回重启兜底。
-                    _log("真塌自愈：先试托盘召唤(双击托盘图标触发微信自恢复，不重启)")
-                    if _summon_wechat_from_tray():
-                        collapsed_tree_since = None
-                        time.sleep(args.interval)
-                        continue
-                    _log("托盘召唤失败(找不到图标/内容未重建)，退回重启兜底")
-                    if _restart_wechat_for_uia():
-                        last_wechat_restart = now
-                        last_wechat_launch = now
-                        wechat_restart_count += 1
-                    collapsed_tree_since = None
-                    time.sleep(args.interval)
-                    continue
+                # 快速自愈已挪到 scan 主循环（1-3s 周期，~15s 响应，见下方 scan 块），此处
+                # 心跳块只保留【慢备份】：collapsed_tree_since 持续满 _COLLAPSED_SUSTAIN_SECONDS
+                # 且 scan 快速通道没救回（罕见）才走通用重启兜底。
                 if (
                     collapsed_tree_since is not None
                     and now - collapsed_tree_since >= _COLLAPSED_SUSTAIN_SECONDS
@@ -5315,6 +5299,35 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 # scan_unread 可见态读到健康树(非塌缩)=微信能读会话→记录时刻供塌缩自愈守卫(绝不误重启)
                 if _LAST_VISIBLE_TREE_SIZE is not None and not _is_uia_tree_collapsed(_LAST_VISIBLE_TREE_SIZE):
                     last_readable_scan_at = now
+
+                # ⭐ 真塌快速自愈（2026-07-18，从心跳块 60s 周期挪进 scan 主循环 1-3s，恢复 ~60s→~15s）：
+                # 用本轮 scan 的可见态读(_LAST_VISIBLE_TREE_SIZE，最新最准)判塌，配可读时效守卫短防抖，
+                # 塌缩后 ~15s 就优先托盘召唤、失败重启。不用等下一个 60s 心跳（用户反馈"很慢"根治）。
+                # 可读守卫已保证：scan 最近读到过健康(last_readable 新)时绝不触发=假塌不误动。
+                if _LAST_VISIBLE_TREE_SIZE is not None and _is_uia_tree_collapsed(_LAST_VISIBLE_TREE_SIZE):
+                    if scan_collapse_since is None:
+                        scan_collapse_since = now
+                else:
+                    scan_collapse_since = None
+                if _should_fast_heal_hidden_collapsed(
+                    now, scan_collapse_since, last_readable_scan_at,
+                    last_wechat_restart, wechat_restart_count, _WECHAT_RESTART_MAX,
+                ):
+                    _log("真塌自愈(scan快速通道~15s)：先试托盘召唤(不重启)")
+                    if _summon_wechat_from_tray():
+                        scan_collapse_since = None
+                        collapsed_tree_since = None
+                        time.sleep(args.interval)
+                        continue
+                    _log("scan快速通道托盘召唤失败，退回重启兜底")
+                    if _restart_wechat_for_uia():
+                        last_wechat_restart = now
+                        last_wechat_launch = now
+                        wechat_restart_count += 1
+                    scan_collapse_since = None
+                    collapsed_tree_since = None
+                    time.sleep(args.interval)
+                    continue
 
                 # CRM 好友采集（Ability B）：【只】由中台显式「立即扫好友」触发，绝不开机自动 / 周期自动。
                 # 决策 bug-fix 4062a5af（做法二 PR1）：B 与客服回复(Ability A)共用同一微信窗口/UIA/焦点，
