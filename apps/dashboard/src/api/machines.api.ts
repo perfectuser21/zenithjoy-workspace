@@ -39,6 +39,7 @@ export interface Machine {
   version: string;
   last_seen: string;
   session_count: number;
+  os_type: string | null;
 }
 
 /** 机器下绑定的一个抖音号 */
@@ -61,6 +62,7 @@ export interface BurnerSession {
   account_nickname: string | null;
   hostname: string | null;
   nickname: string | null;
+  device_type: 'web' | 'android' | null;
 }
 
 export interface MachineDetail {

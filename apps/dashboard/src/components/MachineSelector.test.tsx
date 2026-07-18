@@ -6,14 +6,17 @@ import * as machinesApi from '../api/machines.api';
 const ONLINE_A = {
   id: 'm-a', agent_id: 'agent-a', hostname: 'ROG-PC', nickname: '西安ROG',
   machine_role: 'main' as const, status: 'online' as const, version: '1.0', last_seen: '', session_count: 0,
+  os_type: null,
 };
 const ONLINE_B = {
   id: 'm-b', agent_id: 'agent-b', hostname: 'XIAN-PC', nickname: null,
   machine_role: 'sub' as const, status: 'online' as const, version: '1.0', last_seen: '', session_count: 0,
+  os_type: null,
 };
 const OFFLINE_C = {
   id: 'm-c', agent_id: 'agent-c', hostname: 'MAC-M4', nickname: null,
   machine_role: 'sub' as const, status: 'offline' as const, version: '1.0', last_seen: '', session_count: 0,
+  os_type: null,
 };
 
 afterEach(() => {
