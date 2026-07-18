@@ -360,7 +360,7 @@ export async function buildAssignments(
             AND date_trunc('day', da2.scheduled_for) = date_trunc('day', $3::timestamptz)
        ), 0) AS day_count
        FROM zenithjoy.agent_platform_sessions s
-       JOIN zenithjoy.agents a ON a.id = s.agent_id AND a.tenant_id = $1
+       JOIN zenithjoy.agents a ON a.id = s.agent_id AND a.tenant_id::text = $1
       WHERE s.role = 'burner'
         AND s.status = 'active'
         AND a.last_heartbeat_at > $3::timestamptz - INTERVAL '2 minutes'
