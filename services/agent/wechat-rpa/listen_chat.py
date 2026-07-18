@@ -3029,6 +3029,98 @@ def _find_render_subwindow(main_hwnd: int) -> int:
     return found["hwnd"]
 
 
+def _ensure_onscreen_for_reply(hwnd: int) -> None:
+    """回复态屏内可见不变量（2026-07-18 结构性修复，替代此前五个分支补丁的打法）。
+
+    结构性根因：主循环每轮先跑扫描态 _ensure_tray_visible()，把托盘/最小化窗口
+    弹出并挪到屏外、常驻隐身；随后同轮的 reply_in_chat 再调 for_reply=True 的
+    ensure 时，窗口已处于"可见但在屏外"状态 → 落入"可见"分支（对回复态是空操作）
+    → 回复全程发生在屏外，用户看不见（"最小化了它还静默回复"）。PR #1383 修的
+    托盘分支在这条真实路径上根本执行不到。
+
+    不变量：OFFSCREEN_REPLY=False 时，本函数返回后窗口必须屏内可见——不管进入
+    时是最小化/幽灵(-32000)/扫描态屏外(-2600)/隐藏，统一收口在这一个函数，
+    在 reply_in_chat 里 _ensure_tray_visible 之后调用，不再依赖各分支副作用。
+    fail-open：任何异常静默返回（发送链路上游还有 _open_chat 验证兜底）。
+    """
+    import ctypes as _ct
+    import ctypes.wintypes as _wt
+    try:
+        if not hwnd:
+            return
+        _u32 = _ct.windll.user32
+        if _u32.IsIconic(hwnd) or not _u32.IsWindowVisible(hwnd):
+            # 最小化/隐藏 → 先还原（不激活、临时关动画，同 v1.0.136 处理）
+            _prev = _set_min_animate(0)
+            try:
+                _u32.ShowWindow(hwnd, 4)  # SW_SHOWNOACTIVATE
+            finally:
+                if _prev is not None:
+                    _set_min_animate(_prev)
+            time.sleep(0.3)
+        _rc = _wt.RECT()
+        _u32.GetWindowRect(hwnd, _ct.byref(_rc))
+        if _rc.left <= -2000 or abs(_rc.left) > 20000 or abs(_rc.top) > 20000:
+            with _saved_normal_pos_lock:
+                _orig = _saved_visible_pos.get(hwnd)
+            _x, _y = _orig if _orig is not None else (100, 100)
+            _SWP = 0x0001 | 0x0004 | 0x0010  # NOSIZE | NOZORDER | NOACTIVATE
+            _u32.SetWindowPos(hwnd, 0, _x, _y, 0, 0, _SWP)
+            time.sleep(_VISIBLE_MOVE_SLEEP)
+    except Exception:
+        pass
+
+
+def _refresh_ghost_item(mw: Any, item: Any, sender: str, main_hwnd: int) -> Any:
+    """每次切换尝试前的幽灵态复查（2026-07-18 真机实锤，decision 见 PR）。
+
+    真实故障签名：回复中途窗口被上一轮收窗竞态收回最小化（本体停在幽灵坐标
+    -32000），item 坐标缓存旧值 → ScreenToClient 算出 client=(3xxxx,3xxxx) 幽灵
+    点击坐标（真机日志 (30153,32228)，复现实测 (32352,32168)）→ PostMessage 全部
+    点在虚空。旧代码的幽灵检查只在 _open_chat 循环开头查一次，重试中状态再变
+    就没人管了——本函数改为每次 attempt 前都调。
+
+    ① 窗口本体最小化/幽灵 → ShowWindow(4) 还原（临时关动画，同 v1.0.136 处理）；
+    ② item 坐标幽灵(|坐标|>20000) → Select() 激活滚入可视区 + 重扫拿新引用。
+    返回（可能已更新的）item。fail-open：任何异常返回原 item。
+    """
+    import ctypes as _ct
+    try:
+        if main_hwnd and _ct.windll.user32.IsIconic(main_hwnd):
+            _log("_open_chat: 窗口中途被最小化(幽灵态)，还原后重试")
+            _prev = _set_min_animate(0)
+            try:
+                _ct.windll.user32.ShowWindow(main_hwnd, 4)  # SW_SHOWNOACTIVATE
+            finally:
+                if _prev is not None:
+                    _set_min_animate(_prev)
+            time.sleep(0.3)
+    except Exception:
+        pass
+    try:
+        r = item.rectangle()
+        if abs(r.left) > 20000 or abs(r.top) > 20000:
+            _log(f"_open_chat: {sender!r} item 坐标离屏 ({r.left},{r.top})，Select() 激活后重扫…")
+            # Qt 虚拟列表只渲染可视区，离屏 item 不在 descendants 里。
+            # 先 Select() 强制虚拟列表把目标项滚进可视区渲染出有效坐标，再重扫。
+            try:
+                item.iface_selection_item.Select()
+                time.sleep(0.3)
+            except Exception:
+                pass
+            for _new_it in mw.descendants(control_type="ListItem"):
+                try:
+                    _first_line = (_new_it.element_info.name or "").split("\n")[0].strip()
+                    if _first_line == sender:
+                        _log(f"_open_chat: 重扫找到 {sender!r} 新 item")
+                        return _new_it
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return item
+
+
 def _open_chat(mw: Any, item: Any, sender: str, expect_content: str = "") -> bool:
     """切到 sender 的会话并验证归属（防串台核心）。三策略切换 × 标题/选中验证，全失败返回 False。
 
@@ -3038,6 +3130,8 @@ def _open_chat(mw: Any, item: Any, sender: str, expect_content: str = "") -> boo
       attempt 1：PostMessage 点击 MMUIRenderSubWindowHW 渲染子窗口
       attempt 2：PostMessage 点击主窗口
     每次切换后等 2s，再用 标题==sender / 会话项处于选中态 任一验证；命中即返回 True。
+    幽灵态复查（2026-07-18）：每次 attempt 前调 _refresh_ghost_item——窗口/item
+    状态在重试间隙可能被收窗竞态改变，只在循环开头查一次不够（24 秒三连灭实锤）。
     """
     import ctypes as _ct
     try:
@@ -3057,32 +3151,8 @@ def _open_chat(mw: Any, item: Any, sender: str, expect_content: str = "") -> boo
             pass
         return False
 
-    # tray 恢复后 UIA 坐标可能仍停在离屏占位值（~31989,32000），PostMessage 打不到真实位置。
-    # 检测到离屏则重新扫描列表找到新 item 引用，避免后续三次 PostMessage 全部打空。
-    try:
-        r = item.rectangle()
-        if abs(r.left) > 20000 or abs(r.top) > 20000:
-            _log(f"_open_chat: {sender!r} item 坐标离屏 ({r.left},{r.top})，Select() 激活后重扫…")
-            # Qt 虚拟列表只渲染可视区，离屏 item 不在 descendants 里。
-            # 先 Select() 强制虚拟列表把目标项滚进可视区渲染出有效坐标，再重扫。
-            try:
-                item.iface_selection_item.Select()
-                time.sleep(0.3)
-            except Exception:
-                pass
-            for _new_it in mw.descendants(control_type="ListItem"):
-                try:
-                    _first_line = (_new_it.element_info.name or "").split("\n")[0].strip()
-                    if _first_line == sender:
-                        item = _new_it
-                        _log(f"_open_chat: 重扫找到 {sender!r} 新 item")
-                        break
-                except Exception:
-                    continue
-    except Exception:
-        pass
-
     for attempt in range(_OPEN_CHAT_MAX_ATTEMPTS):
+        item = _refresh_ghost_item(mw, item, sender, main_hwnd)
         try:
             if attempt == 0:
                 try:
@@ -3134,6 +3204,11 @@ def reply_in_chat(mw: Any, item: Any, reply_text: str, sender: str = "") -> bool
     wechat_hwnd = _safe_hwnd(mw)
     # 确保窗口可见，UIA 坐标才有效（_open_chat PostMessage 点击依赖有效坐标）
     orig_state = _ensure_tray_visible(mw, for_reply=True)
+    # 回复态屏内可见不变量（2026-07-18）：扫描态常驻隐身会把窗口留在屏外可见态，
+    # 上面的 ensure 落入"可见"分支时对回复态是空操作——统一在这里收口保证屏内可见，
+    # 用户能亲眼看到回复发生（B 方案核心语义），不再依赖各分支副作用。
+    if not _OFFSCREEN_REPLY:
+        _ensure_onscreen_for_reply(wechat_hwnd)
     try:
         fmw = _fresh_mw()
         if sender:
