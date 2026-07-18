@@ -96,8 +96,13 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 
   const s = await pool.query(
-    `SELECT s.account_label, s.role, s.status, s.platform,
-            s.account_nickname, s.bound_at
+    `SELECT s.account_label, s.role, s.status, s.platform, s.bound_at,
+            (SELECT response->>'account_nickname'
+               FROM zenithjoy.publish_tasks
+              WHERE agent_id=s.agent_id
+                AND task_type='qr_bind/douyin_burner'
+                AND payload->>'account_label' = s.account_label
+              ORDER BY created_at DESC LIMIT 1) AS account_nickname
        FROM zenithjoy.agent_platform_sessions s
       WHERE s.agent_id = $1
       ORDER BY s.bound_at DESC NULLS LAST, s.account_label ASC`,
