@@ -58,20 +58,45 @@ jobs:
             ('"' + $py + '" "' + $script + '" > "' + $outLog + '" 2>&1')
           )
           Set-Content -Path $bat -Value $lines -Encoding ascii
-          & C:\Users\asus\PSTools\PsExec64.exe -i 1 -accepteula -w C:\Users\Public $bat
-          if (-not (Test-Path $outJson)) {
-            if (Test-Path $outLog) { Get-Content $outLog }
-            Write-Error 'bubble gate produced no result JSON (script crash or PsExec failure)'
-            exit 1
+          # desktop mutex (CI x resident line04 listener, rog): acquire high-priority
+          # (priority=10 < listener 50) global desktop lease BEFORE PsExec grabs session-1,
+          # so the resident listener yields via its loop-top /status check. Wide TTL 180s +
+          # always-release in finally; if this job dies, broker watchdog clears it in <=180s.
+          $port = if ($env:ZENITHJOY_LOCAL_PORT) { $env:ZENITHJOY_LOCAL_PORT } else { '58432' }
+          $leaseBase = "http://127.0.0.1:$port/api/agent/desktop-lease-broker"
+          $leaseId = $null
+          try {
+            $acqBody = @{ clientId = 'ci/wechat-bubble'; priority = 10; ttlMs = 180000 } | ConvertTo-Json -Compress
+            $acq = Invoke-RestMethod -Uri "$leaseBase/acquire" -Method Post -Body $acqBody -ContentType 'application/json' -TimeoutSec 5 -ErrorAction Stop
+            if ($acq.granted) { $leaseId = $acq.lease_id; Write-Host "desktop-lease acquired lease_id=$leaseId" }
+            else { Write-Host "desktop-lease NOT granted (proceeding anyway)" }
+          } catch {
+            Write-Host "desktop-lease broker unreachable (proceeding anyway): $_"
           }
-          $j = Get-Content $outJson -Raw -Encoding utf8 | ConvertFrom-Json
-          Write-Host ("bubbles=" + $j.bubble_count + " marker_found=" + $j.marker_found + " marker_outgoing=" + $j.marker_outgoing)
-          if (-not $j.ok) {
-            if (Test-Path $outLog) { Get-Content $outLog }
-            Write-Error ("bubble gate FAILED: " + $j.err)
-            exit 1
+          try {
+            & C:\Users\asus\PSTools\PsExec64.exe -i 1 -accepteula -w C:\Users\Public $bat
+            if (-not (Test-Path $outJson)) {
+              if (Test-Path $outLog) { Get-Content $outLog }
+              Write-Error 'bubble gate produced no result JSON (script crash or PsExec failure)'
+              exit 1
+            }
+            $j = Get-Content $outJson -Raw -Encoding utf8 | ConvertFrom-Json
+            Write-Host ("bubbles=" + $j.bubble_count + " marker_found=" + $j.marker_found + " marker_outgoing=" + $j.marker_outgoing)
+            if (-not $j.ok) {
+              if (Test-Path $outLog) { Get-Content $outLog }
+              Write-Error ("bubble gate FAILED: " + $j.err)
+              exit 1
+            }
+            Write-Host "bubble gate PASS"
+          } finally {
+            if ($leaseId) {
+              try {
+                $relBody = @{ leaseId = $leaseId; clientId = 'ci/wechat-bubble' } | ConvertTo-Json -Compress
+                Invoke-RestMethod -Uri "$leaseBase/release" -Method Post -Body $relBody -ContentType 'application/json' -TimeoutSec 5 -ErrorAction SilentlyContinue | Out-Null
+                Write-Host "desktop-lease released lease_id=$leaseId"
+              } catch { Write-Host "desktop-lease release failed (ignored, TTL will expire): $_" }
+            }
           }
-          Write-Host "bubble gate PASS"
 
   # ─── 真抖音·读侧 full check：复用 line02 keyword→comment smoke（DPAPI 真 session）───
   # 同一台 ROG，串行跑（needs）避免桌面/窗口争用；前一个红了也照跑（if always）。

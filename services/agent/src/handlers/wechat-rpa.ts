@@ -167,6 +167,14 @@ export function registerLeaseBrokerRoutes(server: http.Server, tenantId?: string
   server.on('request', async (req, res) => {
     const url = req.url ?? '';
 
+    // 只读窥视端点（GET）：常驻监听主循环顶部靠它判断 CI 是否正持有更高优先级桌面租约 → 让位。
+    if (req.method === 'GET' && url === '/api/agent/desktop-lease-broker/status') {
+      const s = leaseBroker.status();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(s));
+      return;
+    }
+
     if (req.method === 'POST' && url.startsWith('/api/agent/desktop-lease-broker/')) {
       let body = '';
       req.on('data', (d: Buffer) => { body += d.toString(); });
