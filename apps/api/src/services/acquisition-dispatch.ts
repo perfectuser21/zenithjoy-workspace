@@ -360,6 +360,12 @@ export async function buildAssignments(
             AND date_trunc('day', da2.scheduled_for) = date_trunc('day', $3::timestamptz)
        ), 0) AS day_count
        FROM zenithjoy.agent_platform_sessions s
+       -- a.tenant_id::text（不是 $1::uuid）：PostgreSQL 对同一个 $1 在整条语句里只推断一种
+       -- 类型；da2.tenant_id 是 text 迫使 $1 定型为 text，若改成 a.tenant_id = $1::uuid，
+       -- 报错只会挪到 da2.tenant_id=$1 那一行（实测验证过），必须转的是 uuid 这一侧。
+       -- 代价：agents 表放弃 idx_agents_tenant_status 索引，可接受——本查询驱动表是
+       -- agent_platform_sessions（先按 role/status 过滤出小候选集），agents 由主键 join，
+       -- 这个 cast 只是 join 到那一行后的后置 filter，不在索引命中路径上。
        JOIN zenithjoy.agents a ON a.id = s.agent_id AND a.tenant_id::text = $1
       WHERE s.role = 'burner'
         AND s.status = 'active'
