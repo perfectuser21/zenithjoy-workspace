@@ -4743,6 +4743,13 @@ agent_suite:
   status: active
   product: AI员工
   note: "PR#1243: 真机验收复现——dm_assignments chk_dm_assign_status 约束缺 'cancelled'，rescoreLead() FR-8 降级取消直接违反 CHECK 约束；真 Postgres 校验 pg_get_constraintdef 含 'cancelled'"
+- id: line02-content-judgment-build-assignments-tenant-id-cast
+  path: apps/api/tests/integration/p2-line02-content-judgment/build-assignments-tenant-id-cast.integration.test.ts
+  type: integration
+  ci: L4-INT
+  status: active
+  product: AI员工
+  note: "decision d996b4c7: golden-path-2-smoke Step22首次真调dispatch/build发现——buildAssignments在线burner查询同一个$1既比较dm_assignments.tenant_id(text)又比较agents.tenant_id(uuid)，此前该函数全部单测mock pool从未真连Postgres执行过；真Postgres proven-to-fire验证过还原cast会报'operator does not exist: text = uuid'"
 - id: realtime-voice-mvp-doubao-protocol
   path: apps/realtime-voice-mvp/doubao-protocol.test.js
   type: unit

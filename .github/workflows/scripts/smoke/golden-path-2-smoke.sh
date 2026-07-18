@@ -22,6 +22,8 @@
 #   Step 12 心跳 agent_uuid 非 UUID 格式必须优雅降级：安卓真机自报 slug 不能裸 500（真机复现 2026-07-16）
 #   Step 13 心跳去重必须按 tenant_id 查：跨 license 同机不能撞 DB 唯一约束裸 500（真机复现 2026-07-16）
 #   Step 14 判定缓存命中必须写库：同一 video_id 跨任务复用判决时新任务的行不能永远卡 pending（真机复现 2026-07-16）
+#   Step 22 Seg4 真实派单串联：Step15 真实产出的 lead 走真实 dispatch/build+run，
+#           验证数据从采集/判定/抓评论真实流到私信派单（非独立造数据测试）
 #
 # 2026-07-15（handoff 0715）：铺到 11 步，回流两个真根因（铁律5）——
 #   Seg2 judgeVideo INV-6 短路不写库 / Seg4 心跳从不按 os_type 刷新 capabilities。
@@ -564,7 +566,7 @@ S15_TASK=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data
 S15_HTTP=$(curl -s -o "$S15_TMP" -w "%{http_code}" --max-time 15 \
   -X POST "$API_BASE/api/acquisition/collect/report" \
   -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
-  -d "{\"task_id\":\"$S15_TASK\",\"video_id\":\"$S15_VIDEO\",\"commenters\":[{\"nickname\":\"p2smoke昵称${RND}\",\"comment_text\":\"求联系方式\",\"douyin_id\":\"$S15_DOUYIN_ID\"}],\"terminal\":true}")
+  -d "{\"task_id\":\"$S15_TASK\",\"video_id\":\"$S15_VIDEO\",\"commenters\":[{\"nickname\":\"p2smoke昵称${RND}\",\"comment_text\":\"求联系方式\",\"grade\":\"高意向\",\"douyin_id\":\"$S15_DOUYIN_ID\"}],\"terminal\":true}")
 [ "$S15_HTTP" = "200" ] || fail "Step 15b collect/report expected 200, got $S15_HTTP: $(cat "$S15_TMP")" 15
 S15_INSERTED=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data'].get('inserted', 0))" "$S15_TMP" 2>/dev/null)
 [ "$S15_INSERTED" = "1" ] || fail "Step 15b 应新建 1 条 lead，实际 inserted=$S15_INSERTED" 15
@@ -681,11 +683,95 @@ ok "Step 20 ✅ 已登记：真机段由 Kotlin 单测守，等 Android evaluato
 echo "▶ Step 21: 视频内容判定音频转写回归（真机段等价断言见 AudioJudgmentTest）"
 ok "Step 21 ✅ 已登记：真机段由 Kotlin 单测守，等 Android evaluator 通道纳入 nightly 真机复跑"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 22：Seg4 真实派单串联——Step15 真实产出的 lead 走真实 dispatch/build+run
+# （2026-07-18 根因排查：私信段此前测试全靠人工构造 dm_assignment 反复重发同一个
+# 固定测试 lead，staging 实测 account_label='manual-test'/'manual-burner-test'，
+# 跟 Seg1-3 产出完全脱节。本 Step 首次证明数据能从 Step15 真实产出的 lead 真实流到
+# dm_outreach publish_task，不新增生产代码，只是把已有真实端点接线验证。）
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 22: Seg4 真实派单串联（Step15 lead → dispatch/build → dispatch/run）"
+
+# 22a：撑满全天时段闸，避免 CI 运行时刻撞上生产默认 09:00-22:00 窗口导致断言随机失败；
+#      同时把 dm_interval_min/max_sec 压到 1 秒——buildAssignments 按
+#      randInt(dm_interval_min_sec, dm_interval_max_sec) 排 scheduled_for，
+#      默认 300~900 秒会把新 assignment 排到 5~15 分钟之后，dispatch/run 紧跟着调
+#      永远找不到到期行（真机实测复现：默认间隔下 22c dispatched 恒为 0，非 bug，是
+#      本 smoke 断言需要真实反映"立即触发一轮"场景，需要把频控间隔本地测试值调到最小）
+S22_TMP=$(mktemp)
+S22_HTTP=$(curl -s -o "$S22_TMP" -w "%{http_code}" --max-time 15 \
+  -X PATCH "$API_BASE/api/acquisition/config" \
+  -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" \
+  -d '{"dm_active_start":"00:00","dm_active_end":"23:59","dm_interval_min_sec":1,"dm_interval_max_sec":1}')
+[ "$S22_HTTP" = "200" ] || fail "Step 22a PATCH dm_active window expected 200, got $S22_HTTP: $(cat "$S22_TMP")" 22
+ok "Step 22a ✅ dm_active_start/end 撑满全天 + dm_interval 压到 1 秒（避免时段闸/排期间隔导致断言随机失败）"
+
+# 22a2：把本租户其它 lead（Step9 造的、也满足 outreach_eligible=true 条件）标不可触达，
+# 只留 Step15 这条参与本轮派单——CI 真机实测复现过：同一租户多条 lead 同时 eligible 时，
+# buildAssignments 会全部 assigned，但 dispatchDue 只有真带抖音号的那条能通过
+# isDmDispatchable 真正 dispatched，谁被选中不确定（真派单频控/去重逻辑决定，不是 bug），
+# 靠"运气选中 Step15 那条"断言必然偶发失败。显式隔离掉其它 lead 才能让本 Step 确定性验证
+# "Step15 这条真实产出的 lead"，而不是"随便哪条 lead"。
+psq "UPDATE zenithjoy.acquisition_leads SET outreach_eligible=false, updated_at=now()
+     WHERE tenant_id='$TENANT_ID' AND douyin_id IS DISTINCT FROM '$S15_DOUYIN_ID'" >/dev/null
+psq "UPDATE zenithjoy.dm_assignments SET status='cancelled', updated_at=now()
+     WHERE tenant_id='$TENANT_ID' AND status IN ('queued','limited')
+       AND lead_id NOT IN (SELECT id FROM zenithjoy.acquisition_leads
+                            WHERE tenant_id='$TENANT_ID' AND douyin_id='$S15_DOUYIN_ID')" >/dev/null
+ok "Step 22a2 ✅ 本轮派单隔离到 Step15 那条 lead（其它 lead 标不可触达，防止选中哪条不确定）"
+
+# 22b：真调 dispatch/build（scoreLeads + buildAssignments），复用 S22_TMP（前值已读完，覆盖写入）
+S22_HTTP=$(curl -s -o "$S22_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/dispatch/build" \
+  -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" -d '{}')
+[ "$S22_HTTP" = "200" ] || fail "Step 22b POST dispatch/build expected 200, got $S22_HTTP: $(cat "$S22_TMP")" 22
+S22_ASSIGNED=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['assigned'])" "$S22_TMP" 2>/dev/null || echo 0)
+[ "$S22_ASSIGNED" -ge 1 ] 2>/dev/null || fail "Step 22b assigned=$S22_ASSIGNED ，期望 >=1（Step15 产出的 lead 没被真实挑中派单）: $(cat "$S22_TMP")" 22
+ok "Step 22b ✅ dispatch/build assigned=$S22_ASSIGNED （Step15 lead 被真实挑中）"
+
+# 22c：真调 dispatch/run（dispatchDue），继续复用 S22_TMP
+# scheduled_for = build 时刻 + dm_interval_min_sec（已压到1秒）——build→run 两次 curl
+# 间隔通常 <1 秒，不 sleep 会因"还没到期"误判为断言失败（非 bug，是排期时间还没走到）
+sleep 2
+S22_HTTP=$(curl -s -o "$S22_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/dispatch/run" \
+  -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" -d '{}')
+[ "$S22_HTTP" = "200" ] || fail "Step 22c POST dispatch/run expected 200, got $S22_HTTP: $(cat "$S22_TMP")" 22
+S22_DISPATCHED=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['dispatched'])" "$S22_TMP" 2>/dev/null || echo 0)
+[ "$S22_DISPATCHED" -ge 1 ] 2>/dev/null || fail "Step 22c dispatched=$S22_DISPATCHED ，期望 >=1: $(cat "$S22_TMP")" 22
+ok "Step 22c ✅ dispatch/run dispatched=$S22_DISPATCHED"
+
+# 22d：断言真实产出的 publish_task 携带 Step15 那个真实 douyin_id + device_platform=android
+#      + dm_assignment_id 回联到真实 dm_assignments 行（非硬编码）
+#      ⚠️ 用 payload->>'douyin_id' 精确匹配 S15_DOUYIN_ID 定位行，不用
+#      「ORDER BY created_at DESC LIMIT 1」——Step9 也会产出 outreach_eligible 的
+#      lead 并可能同轮被真实派单，谁的 publish_task 后落库不确定，靠"最新一条"
+#      断言会随机测错 lead，精确按 douyin_id 命中才是真的验证 Step15→Seg4 串联。
+S22_DOUYIN=$(psq "SELECT payload->>'douyin_id' FROM zenithjoy.publish_tasks
+  WHERE agent_id='$AGENT_PK' AND task_type='dm_outreach' AND payload->>'douyin_id'='$S15_DOUYIN_ID'
+  ORDER BY created_at DESC LIMIT 1")
+[ "$S22_DOUYIN" = "$S15_DOUYIN_ID" ] || fail "Step 22d publish_task.douyin_id='$S22_DOUYIN' 期望等于 Step15 真实产出的 '$S15_DOUYIN_ID'（Seg3→Seg4 数据未真实串联）" 22
+
+S22_PLATFORM=$(psq "SELECT payload->>'device_platform' FROM zenithjoy.publish_tasks
+  WHERE agent_id='$AGENT_PK' AND task_type='dm_outreach' AND payload->>'douyin_id'='$S15_DOUYIN_ID'
+  ORDER BY created_at DESC LIMIT 1")
+[ "$S22_PLATFORM" = "android" ] || fail "Step 22d device_platform='$S22_PLATFORM' 期望 'android'（Step11 capabilities 同步未生效或未复用）" 22
+
+S22_ASSIGN_ID=$(psq "SELECT payload->>'dm_assignment_id' FROM zenithjoy.publish_tasks
+  WHERE agent_id='$AGENT_PK' AND task_type='dm_outreach' AND payload->>'douyin_id'='$S15_DOUYIN_ID'
+  ORDER BY created_at DESC LIMIT 1")
+S22_ASSIGN_REAL=$(psq "SELECT count(*) FROM zenithjoy.dm_assignments WHERE id='$S22_ASSIGN_ID'::uuid AND created_at > NOW() - interval '120 seconds'")
+[ "$S22_ASSIGN_REAL" = "1" ] || fail "Step 22d dm_assignment_id='$S22_ASSIGN_ID' 在 dm_assignments 表里查不到真实行（疑似硬编码值而非 dispatch/build 真实产出）" 22
+
+ok "Step 22d ✅ publish_task 真实携带 Step15 douyin_id=$S22_DOUYIN + device_platform=android + dm_assignment_id 回联真实行"
+ok "Step 22 ✅ Seg4 真实派单串联通过——数据从采集/判定/抓评论真实流到私信派单"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
-      "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" 2>/dev/null
+      "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" \
+      "$S22_TMP" 2>/dev/null
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Path 2 21 步本地版 smoke 全绿（服务端段）"
+echo "  ✅ Path 2 22 步本地版 smoke 全绿（服务端段）"
 echo "  真机段：等 Android evaluator 通道（xian-rog nightly）接管复跑"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 exit 0
