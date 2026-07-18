@@ -64,8 +64,7 @@ voiceOutreachRouter.post(
   requireCsWriteAccess('wechatId'),
   async (req: Request, res: Response) => {
     const body = req.body as Partial<VoiceCallRequest>;
-    const tenant_id: string | undefined =
-      (req as any).tenantId || body.tenant_id;
+    const tenant_id: string | undefined = req.tenantId || body.tenant_id;
 
     if (!tenant_id) {
       return res.status(400).json({
@@ -124,7 +123,7 @@ voiceOutreachRouter.get(
   tenantContext,
   async (req: Request, res: Response) => {
     const tenant_id: string | undefined =
-      (req as any).tenantId || (req.query.tenant_id as string | undefined);
+      req.tenantId || (req.query.tenant_id as string | undefined);
 
     if (!tenant_id) {
       return res.status(400).json({
@@ -185,8 +184,7 @@ voiceOutreachRouter.post(
   tenantContext,
   async (req: Request, res: Response) => {
     const body = req.body as Partial<VoiceCallRecord & { call_id: string }>;
-    const tenant_id: string | undefined =
-      (req as any).tenantId || body.tenant_id;
+    const tenant_id: string | undefined = req.tenantId || body.tenant_id;
 
     if (!tenant_id) {
       return res.status(400).json({

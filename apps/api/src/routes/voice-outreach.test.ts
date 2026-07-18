@@ -22,16 +22,16 @@ vi.mock('../db/connection', () => ({
 vi.mock('../middleware/tenant-context', () => ({
   tenantContext: (req: express.Request, _res: express.Response, next: express.NextFunction) => {
     const tenantId = req.headers['x-tenant-id'] as string | undefined;
-    if (tenantId) (req as any).tenantId = tenantId;
+    if (tenantId) req.tenantId = tenantId;
     next();
   },
 }));
 
-// mock requireCsWriteAccess：只验证 x-tenant-id header 存在（单元测试简化）
+// mock requireCsWriteAccess：只验证 x-tenant-id header 存在（单元测试简化，不需要区分 kind）
 vi.mock('../middleware/cs-config-guard', () => ({
-  requireCsWriteAccess: (_kind: string) =>
+  requireCsWriteAccess: () =>
     (req: express.Request, res: express.Response, next: express.NextFunction) => {
-      const tenantId = (req as any).tenantId || req.headers['x-tenant-id'];
+      const tenantId = req.tenantId || req.headers['x-tenant-id'];
       if (!tenantId) {
         return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'missing tenant' } });
       }

@@ -17,7 +17,9 @@ set -euo pipefail
 
 PASS_COUNT=0
 FAIL_COUNT=0
-WORKSPACE="${WORKSPACE:-/workspace}"
+# CI 的 run: 步骤 CWD 已经是 $GITHUB_WORKSPACE（repo 根），用相对路径，
+# 不要假设一个不存在的 /workspace（此前误用绝对前缀导致所有文件被误判"不存在"）。
+WORKSPACE="."
 
 log_pass() { echo "  ✓ $1"; PASS_COUNT=$((PASS_COUNT + 1)); }
 log_fail() { echo "  ✗ FAIL: $1"; FAIL_COUNT=$((FAIL_COUNT + 1)); }
