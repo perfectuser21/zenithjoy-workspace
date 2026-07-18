@@ -19,6 +19,7 @@ interface BurnerSession {
   agent_hostname?: string | null;
   agent_nickname?: string | null;
   agent_status?: string | null;
+  device_type?: 'web' | 'android' | null;
 }
 
 interface WarmupLiveness {
@@ -199,6 +200,9 @@ export default function AcquisitionAccountsPage() {
                       {s.agent_status === 'offline' && (
                         <span data-testid="machine-status-offline" className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-700 text-gray-300">离线</span>
                       )}
+                      <span className="ml-1 text-xs text-gray-400">
+                        {s.device_type === 'android' ? '📱' : s.device_type === 'web' ? '🖥️' : ''}
+                      </span>
                     </td>
                     <td className="py-2 text-gray-500 dark:text-gray-400">{s.bound_at || '—'}</td>
                     <td className="py-2"><StatusBadge status={s.status} /></td>
