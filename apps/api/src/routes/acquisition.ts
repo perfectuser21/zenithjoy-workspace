@@ -1175,6 +1175,7 @@ acquisitionRouter.post('/judge-video', async (req: Request, res: Response) => {
     data_b64: dataB64,
     force_result: forceResult,
     force_timeout: forceTimeout,
+    title,
   } = req.body ?? {};
 
   if (!videoId || typeof videoId !== 'string') {
@@ -1196,6 +1197,7 @@ acquisitionRouter.post('/judge-video', async (req: Request, res: Response) => {
       dataB64,
       forceResult,
       forceTimeout === true,
+      typeof title === 'string' ? title : undefined,
     );
     return ok(res, result);
   } catch (err) {
