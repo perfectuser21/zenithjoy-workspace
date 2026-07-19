@@ -4720,6 +4720,95 @@ def _is_tray_overflow_host(class_name: str) -> bool:
             or "Overflow" in c or "SystemTray" in c)
 
 
+_HOTKEY_SUMMON_MAX_ATTEMPTS = 3  # 处理奇偶次数(toggle)：最多重发这么多次仍未恢复才降级
+_HOTKEY_SUMMON_POLL_INTERVAL = 0.4
+_HOTKEY_SUMMON_POLL_ROUNDS = 8  # 每次发送后轮询等 UIA 树重建的最长时间 ≈ POLL_ROUNDS * POLL_INTERVAL
+
+
+def _should_continue_hotkey_retry(attempt: int, max_attempts: int, tree_ready: bool) -> bool:
+    """纯函数(CI可测)：热键召唤重试循环是否该再发一次 Ctrl+Alt+W。
+
+    verify 驱动守卫（关键安全性）：Ctrl+Alt+W 是显示/隐藏 toggle，树已恢复(tree_ready=True)
+    时绝不再发——否则会把刚救活的窗口重新藏回去。只有仍未恢复且重试预算未耗尽才继续。
+    """
+    if tree_ready:
+        return False
+    return attempt < max_attempts
+
+
+def _send_hotkey_ctrl_alt_w() -> None:
+    """发送全局热键 Ctrl+Alt+W（微信设置里「显示/隐藏窗口」快捷键，范围需设「所有窗口」）。
+
+    用 keybd_event 模拟真实物理按键，不用 PostMessage 发到微信窗口——全局热键走系统级
+    RegisterHotKey/WM_HOTKEY 分发，只有真实按键才能触发，PostMessage 打不中（与
+    _summon_wechat_from_tray 里托盘图标必须真实鼠标点击同理）。
+    """
+    import ctypes as _ct
+    _u32 = _ct.windll.user32
+    _VK_CONTROL, _VK_MENU, _VK_W = 0x11, 0x12, 0x57
+    _KEYEVENTF_KEYUP = 0x0002
+    _u32.keybd_event(_VK_CONTROL, 0, 0, 0)
+    _u32.keybd_event(_VK_MENU, 0, 0, 0)
+    _u32.keybd_event(_VK_W, 0, 0, 0)
+    time.sleep(0.05)
+    _u32.keybd_event(_VK_W, 0, _KEYEVENTF_KEYUP, 0)
+    _u32.keybd_event(_VK_MENU, 0, _KEYEVENTF_KEYUP, 0)
+    _u32.keybd_event(_VK_CONTROL, 0, _KEYEVENTF_KEYUP, 0)
+
+
+def _summon_wechat_via_hotkey() -> bool:
+    """发微信全局热键 Ctrl+Alt+W 召唤窗口，触发微信自身"显示/隐藏"→ 重建内容树(不重启)。
+
+    handoff 0719 发现1（真机 rog 验证）：原召唤主路 _summon_wechat_from_tray() 要去系统
+    托盘溢出区(XamlIsland)真实鼠标双击微信图标，图标位置/DPI/Win11 UWP 化跨机器不稳定，
+    换台机器必翻车。微信自带全局热键不依赖任何坐标/图标识别——用户在微信设置里把
+    「显示/隐藏窗口」设为 Ctrl+Alt+W、范围「所有窗口」后，发这个热键即可唤回。真机验证：
+    关进托盘→发 Ctrl+Alt+W→窗口弹回前台+UIA 树重建(descendants 100)。
+
+    Ctrl+Alt+W 是 toggle，因此每次发送前都用 _should_continue_hotkey_retry 做 verify
+    驱动判断（树已恢复就不再发，防止把刚救活的窗口重新藏起来），最多重试
+    _HOTKEY_SUMMON_MAX_ATTEMPTS 次处理奇偶次数，仍未恢复则返回 False 交给上层降级
+    （托盘双击 _summon_wechat_from_tray() / 重启）。
+
+    非 Windows / 无 windll / find_weixin 缺失 → False。全程 fail-open，不抛。
+    """
+    if platform.system() != "Windows":
+        return False
+    import ctypes as _ct
+    try:
+        from find_weixin import get_main_window
+    except Exception:
+        return False
+
+    def _tree_ready() -> bool:
+        try:
+            mw = get_main_window()
+            if mw is None:
+                return False
+            return not _is_uia_tree_collapsed(len(mw.descendants()))
+        except Exception:
+            return False
+
+    attempt = 0
+    while _should_continue_hotkey_retry(attempt, _HOTKEY_SUMMON_MAX_ATTEMPTS, _tree_ready()):
+        try:
+            _send_hotkey_ctrl_alt_w()
+        except Exception as exc:
+            _log(f"热键召唤发送异常: {exc}")
+            return False
+        for _p in range(_HOTKEY_SUMMON_POLL_ROUNDS):
+            time.sleep(_HOTKEY_SUMMON_POLL_INTERVAL)
+            if _tree_ready():
+                break
+        attempt += 1
+
+    if _tree_ready():
+        _log(f"热键召唤成功(attempt={attempt}): Ctrl+Alt+W 唤回窗口+UIA树重建，无需重启")
+        return True
+    _log(f"热键召唤耗尽{_HOTKEY_SUMMON_MAX_ATTEMPTS}次仍未恢复，退回托盘双击召唤")
+    return False
+
+
 def _summon_wechat_from_tray() -> bool:
     """真实双击通知区微信托盘图标，触发微信自身"从托盘恢复"→ 重建内容树(不重启)。
 
@@ -5366,13 +5455,19 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     now, scan_collapse_since, last_readable_scan_at,
                     last_wechat_restart, wechat_restart_count, _WECHAT_RESTART_MAX,
                 ):
-                    _log("真塌自愈(scan快速通道~15s)：先试托盘召唤(不重启)")
+                    _log("真塌自愈(scan快速通道~15s)：先试热键召唤 Ctrl+Alt+W(不重启)")
+                    if _summon_wechat_via_hotkey():
+                        scan_collapse_since = None
+                        collapsed_tree_since = None
+                        time.sleep(args.interval)
+                        continue
+                    _log("热键召唤失败，退回托盘双击召唤")
                     if _summon_wechat_from_tray():
                         scan_collapse_since = None
                         collapsed_tree_since = None
                         time.sleep(args.interval)
                         continue
-                    _log("scan快速通道托盘召唤失败，退回重启兜底")
+                    _log("scan快速通道托盘召唤也失败，退回重启兜底")
                     if _restart_wechat_for_uia():
                         last_wechat_restart = now
                         last_wechat_launch = now
