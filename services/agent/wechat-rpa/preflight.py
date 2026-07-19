@@ -98,6 +98,7 @@ CHECK_NAMES = (
     "uia_narrator",
     "middleware_health",
     "elevation",
+    "hotkey_summon",
 )
 
 
