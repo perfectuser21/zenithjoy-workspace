@@ -4757,6 +4757,13 @@ agent_suite:
   status: active
   product: AI员工
   note: "2026-07-19 根因排查：acquisition_collect_videos.title 列早已存在且 report-videos 已支持写入，但 GET /pending-collect-tasks 的 stage_2 响应体只回传纯 URL 字符串数组(video_urls)，没有字段把 title 带回 Android——Stage2 判定时title信号在这一步断链；新增并列字段 video_titles(Record<videoId,title>)，真连Postgres经HTTP路由层验证"
+- id: line02-content-judgment-judge-video-large-audio-payload
+  path: apps/api/tests/integration/p2-line02-content-judgment/judge-video-large-audio-payload.integration.test.ts
+  type: integration
+  ci: L4-INT
+  status: active
+  product: AI员工
+  note: "2026-07-19 真机验证PR#1404时发现：RECORD_AUDIO权限修好后真机首次真实产出约870KB音频payload，express.json()默认100KB body限制导致/judge-video全部500(docker logs抓到PayloadTooLargeError)；改limit:1mb（受限于hk-vps nginx反代默认1MB上限，未改生产nginx配置）"
 - id: realtime-voice-mvp-doubao-protocol
   path: apps/realtime-voice-mvp/doubao-protocol.test.js
   type: unit
