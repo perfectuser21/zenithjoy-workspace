@@ -29,6 +29,18 @@ const pendingCollectTasksRateLimit = simpleRateLimit({
   keyFn: (req) => req.header('x-agent-id') || 'anonymous',
 });
 
+// CodeQL js/missing-rate-limiting：/collect/report 碰鉴权(按 task_id 反查 tenant)+DB 查询，
+// 本次PR接入 gradeComments（新增2条DB查询：videoInfoRes/gradingConfigRes）触发静态分析对
+// "改动过的代码"重新计入告警（同 pendingCollectTasksRateLimit 的既往修法）。按 task_id 限流
+// （不是 tenantId——这条路由不走 tenantContext，鉴权发生在 handler 内部按 task_id 反查）。
+// Stage2 单个视频多条评论仍是同一次 report 调用，一个采集任务生命周期内可能有多个视频轮流
+// report，180次/60s 留足并发余量。
+const collectReportRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 180,
+  keyFn: (req) => (req.body && req.body.task_id) || 'anonymous',
+});
+
 const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
 
 /** 一条评论上报映射出的 lead 字段。 */
@@ -808,7 +820,7 @@ acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Respo
 
 // POST /api/acquisition/collect/report — 客户机 Agent 增量回报（无需 smoke token，agent 直接调用；
 // 不加鉴权：在网旧 agent 会断。终态守卫返回 200+ignored（非 409，防旧 agent 对非 200 死循环重试）。
-acquisitionRouter.post('/collect/report', async (req: Request, res: Response) => {
+acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Request, res: Response) => {
   const {
     task_id: taskId,
     keyword,
