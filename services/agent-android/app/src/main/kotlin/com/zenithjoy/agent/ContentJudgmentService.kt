@@ -67,6 +67,7 @@ class ContentJudgmentService(
         dataB64: String,
         forceResult: String? = null,
         forceTimeout: Boolean = false,
+        title: String? = null,
     ): JudgmentResult {
         val currentTenantId = tenantId()
         if (currentTenantId.isEmpty()) {
@@ -109,6 +110,7 @@ class ContentJudgmentService(
             dataB64 = actualDataB64,
             forceResult = forceResult,
             forceTimeout = forceTimeout,
+            title = title,
         )
 
         val url = "${httpBase.trimEnd('/')}/api/acquisition/judge-video"
@@ -146,6 +148,7 @@ class ContentJudgmentService(
         dataB64: String,
         forceResult: String?,
         forceTimeout: Boolean,
+        title: String?,
     ): String {
         val obj = JSONObject().apply {
             put("tenant_id", tenantId)
@@ -154,6 +157,7 @@ class ContentJudgmentService(
             put("data_b64", dataB64)
             if (forceResult != null) put("force_result", forceResult)
             if (forceTimeout) put("force_timeout", true)
+            if (title != null) put("title", title)
         }
         return obj.toString()
     }

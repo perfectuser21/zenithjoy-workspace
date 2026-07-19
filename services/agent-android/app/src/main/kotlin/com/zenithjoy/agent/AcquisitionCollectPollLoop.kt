@@ -62,6 +62,7 @@ class AcquisitionCollectPollLoop(
         val status: String = "",
         val keywords: List<String>? = null,
         val video_urls: List<String>? = null,
+        val video_titles: Map<String, String>? = null,
         val checkpoint: Map<String, Any>? = null,
     )
 
@@ -144,6 +145,9 @@ class AcquisitionCollectPollLoop(
                                 // note(图文) 类型仍走截图判定（decision f3dbc2ce 两条路径分工不同）。
                                 captureType = captureTypeForVideoUrl(videoUrl),
                                 dataB64 = "", // 实际截图/录音由 ContentJudgmentService 内部采集
+                                // title 随 pending-collect-tasks 响应体的 video_titles 一起回传，
+                                // 缺失时为 null（判定 prompt 退化为无 title 版文案，不强行拼接）。
+                                title = task.video_titles?.get(videoId),
                             )
                             // rejected → 不进评论抓取；matched 或 pending（超时兜底）→ 继续
                             result.judgmentStatus != "rejected"
