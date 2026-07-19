@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { randomUUID } from 'crypto';
 import { buildJsonFrame, buildAudioFrame, parseFrame, EventSend } from './doubao-protocol.js';
+import { computeTurnLatency } from './latency-tracker.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -69,6 +70,10 @@ function createRealtimeSession() {
 function handleDomesticConnection(browserWs) {
   let doubaoWs = null;
   let sessionId = null;
+  let lastAsrAt = null;
+  let chatStartAt = null;
+  let firstTtsAt = null;
+  let turnIndex = 0;
 
   const send = (obj) => {
     if (browserWs.readyState === WebSocket.OPEN) browserWs.send(JSON.stringify(obj));
@@ -123,21 +128,40 @@ function handleDomesticConnection(browserWs) {
           break;
         case 'ASRResponse': {
           const text = (parsed.payload.results || []).map((r) => r.text).join('');
-          if (text) log(`识别中: ${text}`);
+          if (text) {
+            log(`识别中: ${text}`);
+            lastAsrAt = Date.now();
+          }
           break;
         }
         case 'ChatResponse':
           status('speaking');
+          if (chatStartAt === null) chatStartAt = Date.now();
           break;
         case 'TTSResponse':
           if (parsed.audio && parsed.audio.length && browserWs.readyState === WebSocket.OPEN) {
+            if (firstTtsAt === null) firstTtsAt = Date.now();
             browserWs.send(parsed.audio, { binary: true });
           }
           break;
-        case 'ChatEnded':
+        case 'ChatEnded': {
           status('connected');
           log('AI 回复结束');
+          if (lastAsrAt !== null) {
+            turnIndex += 1;
+            const latency = computeTurnLatency({
+              lastAsrAt,
+              chatStartAt,
+              firstTtsAt,
+              chatEndedAt: Date.now(),
+            });
+            console.log(JSON.stringify({ event: 'voice_latency', sessionId, turn: turnIndex, ...latency }));
+          }
+          lastAsrAt = null;
+          chatStartAt = null;
+          firstTtsAt = null;
           break;
+        }
         case 'DialogCommonError':
           send({ type: 'error', message: JSON.stringify(parsed.payload) });
           break;
