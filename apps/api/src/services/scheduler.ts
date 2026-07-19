@@ -135,6 +135,12 @@ export async function triggerWarmupEnqueue(): Promise<void> {
   }
 }
 
+// 再入守卫：一轮 sweep（含内部 DB 查询 + 多租户 dispatchDue 遍历）跑不完 60s 时，
+// 防止下一次 setInterval tick 再起一轮重叠 sweep——dispatchDue 内部无行锁，
+// 两轮重叠可能同时读到同一条 status='queued' 的 dm_assignments 并各自派单一次，
+// 造成同一 lead 被重复私信（获客场景下是真实的重复发送/封号风险）。
+let sweepInFlight = false;
+
 /**
  * Path2 Seg4 DM 派单周期扫描：每次 tick（每分钟）都执行，不按时刻门控——
  * dm_assignments.scheduled_for 是当天随机分散的具体时间点，必须随时检查是否有新到期的。
@@ -142,26 +148,36 @@ export async function triggerWarmupEnqueue(): Promise<void> {
  * afterCommit 链里同步调用一次，此时 scheduled_for 通常还没到，之后没有任何周期
  * 任务回头检查——queued 的 assignment 会永远卡住，只能靠人工手动 POST /dispatch/run。
  * 全程容错：单租户 dispatchDue 失败只 warn，不影响其它租户 / 不拖垮 scheduler 主循环。
+ * 再入守卫：上一轮未完成时本次 tick 直接跳过（见 sweepInFlight 注释）。
  */
 export async function triggerDmDispatchSweep(): Promise<void> {
-  let dueTenants: string[] = [];
-  try {
-    const res = await pool.query(
-      `SELECT DISTINCT tenant_id FROM zenithjoy.dm_assignments
-        WHERE status = 'queued' AND scheduled_for <= now()`,
-    );
-    dueTenants = (res.rows as Array<{ tenant_id: string }>).map((r) => r.tenant_id);
-  } catch (err) {
-    console.warn('[scheduler] dm-dispatch-sweep 查询到期租户失败:', err);
+  if (sweepInFlight) {
+    console.warn('[scheduler] dm-dispatch-sweep 上一轮尚未完成，本次 tick 跳过（防止重叠派单）');
     return;
   }
-  for (const tenantId of dueTenants) {
+  sweepInFlight = true;
+  try {
+    let dueTenants: string[] = [];
     try {
-      const r = await dispatchDue(pool, tenantId);
-      console.log(`[scheduler] dm-dispatch-sweep fired for tenant=${tenantId}: dispatched=${r.dispatched}`);
+      const res = await pool.query(
+        `SELECT DISTINCT tenant_id FROM zenithjoy.dm_assignments
+          WHERE status = 'queued' AND scheduled_for <= now()`,
+      );
+      dueTenants = (res.rows as Array<{ tenant_id: string }>).map((r) => r.tenant_id);
     } catch (err) {
-      console.warn(`[scheduler] dm-dispatch-sweep tenant=${tenantId} 失败:`, err);
+      console.warn('[scheduler] dm-dispatch-sweep 查询到期租户失败:', err);
+      return;
     }
+    for (const tenantId of dueTenants) {
+      try {
+        const r = await dispatchDue(pool, tenantId);
+        console.log(`[scheduler] dm-dispatch-sweep fired for tenant=${tenantId}: dispatched=${r.dispatched}`);
+      } catch (err) {
+        console.warn(`[scheduler] dm-dispatch-sweep tenant=${tenantId} 失败:`, err);
+      }
+    }
+  } finally {
+    sweepInFlight = false;
   }
 }
 

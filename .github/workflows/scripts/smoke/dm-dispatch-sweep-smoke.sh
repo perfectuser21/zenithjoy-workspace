@@ -20,7 +20,13 @@ if ! grep -qE 'export\s+(async\s+)?function\s+triggerDmDispatchSweep\b' apps/api
   echo "FAIL: triggerDmDispatchSweep 未导出"
   exit 1
 fi
-if ! grep -q 'triggerDmDispatchSweep()' apps/api/src/services/scheduler.ts; then
+# 注：不能只用 `grep -q 'triggerDmDispatchSweep()'`——函数定义行
+# `export async function triggerDmDispatchSweep(): Promise<void>` 本身就含
+# 字面量子串 `triggerDmDispatchSweep()`（无参数，`(` 后紧跟 `)`），
+# 单次 grep -q 会被定义行"假阳性"命中，即使真正的调用点被删掉也测不出来。
+# 改为要求 `triggerDmDispatchSweep().catch(` ——这是 setInterval 回调里调用点独有的写法
+# （fire-and-forget + .catch 兜底，见 startScheduler 内的调用），定义行不会产生这个子串。
+if ! grep -q 'triggerDmDispatchSweep()\.catch(' apps/api/src/services/scheduler.ts; then
   echo "FAIL: triggerDmDispatchSweep 未在 startScheduler 循环内被调用"
   exit 1
 fi

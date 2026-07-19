@@ -201,4 +201,40 @@ describe('ws4 services/scheduler.ts — triggerDmDispatchSweep（Path2 Seg4 DM�
       vi.useRealTimers();
     }
   });
+
+  it('并发场景：上一轮 sweep 尚未完成时，本次 tick 应立即跳过（不重复调用 dispatchDue，且 warn 一次）', async () => {
+    const poolModule = await import('../../src/db/connection');
+    const mockPool = poolModule.default as unknown as { query: ReturnType<typeof vi.fn> };
+
+    // 用可手动控制的 deferred promise 模拟"上一轮 query 还没返回"（DB 慢 / 大量待处理租户）
+    let resolveQuery!: (value: { rows: Array<{ tenant_id: string }> }) => void;
+    const deferred = new Promise<{ rows: Array<{ tenant_id: string }> }>((resolve) => {
+      resolveQuery = resolve;
+    });
+    mockPool.query.mockReturnValue(deferred);
+
+    const dispatchModule = await import('../../src/services/acquisition-dispatch');
+    const dispatchDueMock = dispatchModule.dispatchDue as unknown as ReturnType<typeof vi.fn>;
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { triggerDmDispatchSweep } = await import('../../src/services/scheduler');
+
+    // 第一次调用：同步执行到 `await pool.query(...)` 后挂起（query 尚未 resolve）
+    const firstCall = triggerDmDispatchSweep();
+    // 第二次调用：此时 sweepInFlight 应已为 true，应立即跳过返回
+    const secondCall = triggerDmDispatchSweep();
+    await secondCall;
+
+    expect(dispatchDueMock).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('上一轮尚未完成'),
+    );
+
+    // 收尾：放行第一次调用的 query，避免 in-flight 状态泄漏到下一个用例
+    resolveQuery({ rows: [] });
+    await firstCall;
+
+    warnSpy.mockRestore();
+  });
 });
