@@ -252,4 +252,57 @@ describe('content-judgment judgeVideo', () => {
     expect(promptText).not.toContain('《null》');
   });
 
+  /**
+   * 回归（2026-07-19，decision 4e421ae8）：audio分支判定matched时，Gemini响应里的
+   * "转写：..."那一行必须被解析出来，作为transcript参数传给写库（UPDATE语句参数列表里
+   * 能找到这段转写文字）——供后续新增的评论意向分档判定使用完整视频文案。
+   */
+  it('回归: audio分支判定matched时转写文案被解析并传入UPDATE写库', async () => {
+    process.env.TOAPIS_API_KEY = 'test-toapis-key';
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost.mockResolvedValue({
+      data: { choices: [{ message: { content: 'MATCHED\n转写：这是测试转写文案内容' } }] },
+    } as never);
+
+    const pool = makePool({ targetProfileDesc: '家装/室内设计目标客户' });
+    await judgeVideo(
+      pool,
+      'tenant-transcript-001',
+      'video-transcript-001',
+      'audio',
+      btoa('fake-pcm-wav-data'),
+      undefined,
+      undefined,
+      '装修视频标题',
+    );
+
+    const mockQuery = pool.query as ReturnType<typeof vi.fn>;
+    const updateCalls = mockQuery.mock.calls.filter(([text]: [string]) => /UPDATE.*collect_videos/i.test(text));
+    expect(updateCalls.length).toBeGreaterThanOrEqual(1);
+    const [, params] = updateCalls[updateCalls.length - 1] as [string, unknown[]];
+    expect(params).toContain('这是测试转写文案内容');
+  });
+
+  it('回归: screenshot分支不要求转写，UPDATE参数里transcript传null', async () => {
+    process.env.TOAPIS_API_KEY = 'test-toapis-key';
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost.mockResolvedValue({
+      data: { choices: [{ message: { content: 'MATCHED' } }] },
+    } as never);
+
+    const pool = makePool({ targetProfileDesc: '家装/室内设计目标客户' });
+    await judgeVideo(
+      pool,
+      'tenant-transcript-002',
+      'video-transcript-002',
+      'screenshot',
+      btoa('fake-screenshot'),
+    );
+
+    const mockQuery = pool.query as ReturnType<typeof vi.fn>;
+    const updateCalls = mockQuery.mock.calls.filter(([text]: [string]) => /UPDATE.*collect_videos/i.test(text));
+    expect(updateCalls.length).toBeGreaterThanOrEqual(1);
+    const [, params] = updateCalls[updateCalls.length - 1] as [string, unknown[]];
+    expect(params).not.toContain('这是测试转写文案内容');
+  });
 });
