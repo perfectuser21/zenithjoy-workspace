@@ -78,3 +78,22 @@ def test_retry_stops_at_max_attempts():
         attempt=3, max_attempts=3, tree_ready=False) is False
     assert listen_chat._should_continue_hotkey_retry(
         attempt=5, max_attempts=3, tree_ready=False) is False
+
+
+def test_input_struct_size_is_40_on_x64():
+    """x64 铁坑守卫（2026-07-19 真机根因）：SendInput 的 INPUT 结构体 union 必须含最大成员
+    MOUSEINPUT，sizeof 必须 = 40。若 union 只放 KEYBDINPUT → sizeof=32 → SendInput 每次
+    返回 0 + GetLastError=87(ERROR_INVALID_PARAMETER)，一个键都发不出（曾误判"热键路线不通"）。
+    改回小 union 让本测试报红。全部生产/CI 环境均 x64（指针 8 字节）。"""
+    import ctypes
+    assert ctypes.sizeof(listen_chat.INPUT) == 40
+
+
+def test_make_kb_input_keydown_and_keyup():
+    """键盘 INPUT 纯构造：type=INPUT_KEYBOARD、vk 正确、up 标志正确。"""
+    down = listen_chat._make_kb_input(0x57)  # 'W'
+    assert down.type == 1                     # INPUT_KEYBOARD
+    assert down.u.ki.wVk == 0x57
+    assert down.u.ki.dwFlags == 0             # keydown
+    up = listen_chat._make_kb_input(0x57, up=True)
+    assert up.u.ki.dwFlags == 0x0002          # KEYEVENTF_KEYUP

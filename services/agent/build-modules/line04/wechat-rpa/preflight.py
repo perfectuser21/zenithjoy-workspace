@@ -644,11 +644,18 @@ def check_hotkey_summon(dry_run: bool = False) -> Dict[str, str]:
     handoff 0719 发现1 onboarding 前置：微信 4.x 设置存在数据目录加密二进制配置文件
     （xwechat_files\\...\\config，可打印率 0.38、零可读字段名）+ crc 校验 + 运行时被
     微信独占锁，程序**读不了**「显示/隐藏窗口」快捷键有没有配成 Ctrl+Alt+W。唯一能验证
-    的办法是功能探针：实际发一次 Ctrl+Alt+W，观察微信窗口 IsWindowVisible 是否翻转。
+    的办法是功能探针：实际发一次 Ctrl+Alt+W，观察微信窗口状态是否变化。
+
+    ⭐判据（2026-07-19 真机 rog 铁证修正）：微信响应 Ctrl+Alt+W 的动作是**「被拉到前台」**
+    （后台可见时置顶），而不是隐藏——若只看 IsWindowVisible 翻转，微信 onboarding 时本来就
+    可见、置顶不改变可见性，会在热键明明好用的机器上必现误报 failed。改为看 **(前台是否变
+    成微信 / 可见性 / 是否最小化) 三元组任一变化**：置顶(前台变)、隐藏(可见性变)、从最小化
+    恢复(iconic 变)——微信对该热键的任何响应都会命中其一；三者全不变才判 failed（热键没配
+    对，或被别的开机自启软件抢注了 Ctrl+Alt+W 导致微信注册失败）。
 
     绑号引导页 UI 图文教用户去微信设置手动配这三项（热键/提示音/免打扰）；本检测只负责
-    验证"热键这一项配对没"，不读取/不写入任何配置文件。探针必须幂等——翻转后立即再发
-    一次热键把窗口显隐状态还原回探测前，不留副作用（客户可能正在用微信，不能替他关/开）。
+    验证"热键这一项配对没"，不读取/不写入任何配置文件。探针必须幂等——检测到变化后立即再
+    发一次热键把状态 toggle 回探测前，不留副作用（客户可能正在用微信，不能替他关/开）。
     """
     name = CHECK_NAMES[8]
     if dry_run or not _is_windows():
@@ -674,33 +681,43 @@ def check_hotkey_summon(dry_run: bool = False) -> Dict[str, str]:
             return make_check(name, "warn", "拿不到微信窗口句柄，跳过热键自检。")
 
         _u32 = ctypes.windll.user32
-        before = bool(_u32.IsWindowVisible(hwnd))
-        _send_hotkey_ctrl_alt_w()
 
-        flipped = False
-        for _ in range(8):
-            time.sleep(0.4)
-            if bool(_u32.IsWindowVisible(hwnd)) != before:
-                flipped = True
-                break
-
-        if not flipped:
-            return make_check(
-                name, "failed",
-                "发送 Ctrl+Alt+W 后微信窗口显隐无变化——请去微信设置→快捷键，"
-                "把「显示/隐藏窗口」设为 Ctrl+Alt+W、范围「所有窗口」。",
+        def _wx_state():
+            # (前台是否为微信, 是否可见, 是否最小化)——微信对 Ctrl+Alt+W 的任何响应都会改其一
+            return (
+                _u32.GetForegroundWindow() == hwnd,
+                bool(_u32.IsWindowVisible(hwnd)),
+                bool(_u32.IsIconic(hwnd)),
             )
 
-        # 探针必须幂等：把窗口显隐状态还原回探测前，不留副作用
+        before = _wx_state()
+        _send_hotkey_ctrl_alt_w()
+
+        changed = False
+        for _ in range(8):
+            time.sleep(0.4)
+            if _wx_state() != before:
+                changed = True
+                break
+
+        if not changed:
+            return make_check(
+                name, "failed",
+                "发送 Ctrl+Alt+W 后微信窗口状态(前台/显隐/最小化)无任何变化——请去微信设置→"
+                "快捷键，把「显示/隐藏窗口」设为 Ctrl+Alt+W、范围「所有窗口」；若已设对，"
+                "可能被别的开机自启软件抢注了 Ctrl+Alt+W，换一个不冲突的组合键。",
+            )
+
+        # 探针必须幂等：再发一次 toggle 回探测前状态，不留副作用（best-effort）
         _send_hotkey_ctrl_alt_w()
         for _ in range(8):
             time.sleep(0.4)
-            if bool(_u32.IsWindowVisible(hwnd)) == before:
+            if _wx_state() == before:
                 break
 
         return make_check(
             name, "ok",
-            "Ctrl+Alt+W 已生效：微信窗口显隐响应正常，塌缩自愈可用热键召唤(不依赖托盘坐标)。",
+            "Ctrl+Alt+W 已生效：微信窗口响应正常(前台/显隐切换)，塌缩自愈可用热键召唤(不依赖托盘坐标)。",
         )
     except Exception as exc:  # noqa: BLE001
         return make_check(name, "warn", f"热键自检异常（{exc}），跳过。")

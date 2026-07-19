@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # line04-hotkey-summon-smoke.sh
 # handoff_0719_line04_2findings_ready_to_ship 发现1 —— 热键召唤 Ctrl+Alt+W 替代托盘召唤
-# + onboarding 功能自检探针(check_hotkey_summon) + 模块版本 1.0.146 三面一致 smoke。
+# + onboarding 功能自检探针(check_hotkey_summon) + 模块版本 1.0.147 三面一致 smoke。
 #
 # 验证链路（不依赖运行中的服务/真机微信，纯仓内真链路调用）：
 #   1. node 解析 modules/build-modules manifest.json + grep walking-skeleton.service.ts
@@ -15,7 +15,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
-EXPECTED="1.0.146"
+EXPECTED="1.0.147"
 echo "line04-hotkey-summon-smoke: 期望 line04 版本 = $EXPECTED (repo=$REPO_ROOT)"
 
 command -v node >/dev/null 2>&1    || { echo "FAIL: 缺 node"; exit 6; }
@@ -70,6 +70,29 @@ if hk_idx == -1 or tray_idx == -1 or hk_idx >= tray_idx:
     raise SystemExit(1)
 print('  OK: scan 快速自愈先试热键召唤，再降级托盘召唤')
 " || exit 4
+
+# ─── Step 4：本 bug 修复的回流判据（2026-07-19 真机 rog 铁证）──────────────
+# 真机段等价断言：微信响应 Ctrl+Alt+W 是"被拉到前台"而非隐藏，真实 GetForegroundWindow
+# 观测走真机（CI 无微信）。CI 层守卫两条源码/结构不变量，防这两个真机根因回归：
+#   ① check_hotkey_summon 判据必须读 GetForegroundWindow（不能退回只看 IsWindowVisible）
+#   ② SendInput 的 INPUT 结构体 sizeof 必须=40（union 缺 MOUSEINPUT→32→SendInput返回0发不出键）
+# TODO(真机)：rog 上跑 preflight check_hotkey_summon 应报 ok（fg 变微信 hwnd），已手工验证过。
+python3 -c "
+import ctypes, sys, os
+sys.path.insert(0, os.path.join('$REPO_ROOT', 'services/agent/wechat-rpa'))
+with open(os.path.join('$REPO_ROOT','services/agent/wechat-rpa/preflight.py'), encoding='utf-8') as f:
+    pf = f.read()
+if 'GetForegroundWindow' not in pf:
+    print('FAIL: check_hotkey_summon 判据未读 GetForegroundWindow（退回只看可见性会必现误报 failed）')
+    raise SystemExit(1)
+print('  OK: check_hotkey_summon 判据含 GetForegroundWindow（前台变化=真机响应信号）')
+import listen_chat
+sz = ctypes.sizeof(listen_chat.INPUT)
+if sz != 40:
+    print(f'FAIL: INPUT sizeof={sz}!=40，SendInput 会返回0一个键都发不出')
+    raise SystemExit(1)
+print('  OK: SendInput INPUT 结构体 sizeof=40（x64 布局正确）')
+" || exit 5
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
