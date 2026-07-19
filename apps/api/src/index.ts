@@ -3,6 +3,7 @@ import http from 'http';
 import app from './app';
 import { attachAgentWS } from './services/agent-ws';
 import { startStaleListenerMonitor } from './services/wechat-heartbeat';
+import { startScheduler } from './services/scheduler';
 import { runStartupConfigCheck } from './startup-check';
 
 dotenv.config();
@@ -34,4 +35,7 @@ server.listen(PORT, () => {
   // 选题池 v1 阶段2：老 pipeline-scheduler 已废除，改由 topic-worker.py LaunchAgent 每日 09:00 触发
   // 进程守护：每分钟检查微信监听心跳，断 3 分钟无心跳 → 飞书告警（FEISHU_ALERT_WEBHOOK）
   startStaleListenerMonitor();
+  // 中台定时调度器：日报结算(23:55北京)/朋友圈草稿(09:00)/warmup养号(10:00北京)/DM派单sweep(每分钟)。
+  // 治根 2026-07-19：startScheduler() 建库以来从未被服务器进程调用过，四个周期任务全部静默不跑。
+  startScheduler();
 });
