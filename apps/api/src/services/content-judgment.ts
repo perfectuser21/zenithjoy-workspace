@@ -178,12 +178,15 @@ function buildPrompt(targetProfileDesc: string, captureType: string, title?: str
   // 用户2026-07-17拍板（判定点1d078987，decision f3dbc2ce）：video 类型走音频转写判定——
   // 先转写这段音频内容，再结合视频标题和转写文案共同判断，单次多模态调用内完成
   // 转写+判定两步，不新增独立转写API调用（避免过度设计成两阶段架构）。
+  // 2026-07-19（decision 4e421ae8）：转写文字现在要求 Gemini 明确输出（不再只在"心里"转写），
+  // 落库供 Seg3→Seg4 之间新增的评论意向分档判定使用完整视频文案。
   const mediaInstruction =
     captureType === 'audio'
       ? title
-        ? `这是一段视频开头20秒的音频片段，视频标题是《${title}》。请先在心里转写这段音频的内容，再结合标题和转写内容共同判断`
-        : `这是一段视频开头20秒的音频片段。请先在心里转写这段音频的内容，再结合转写内容判断`
+        ? `这是一段视频开头20秒的音频片段，视频标题是《${title}》。请先转写这段音频的内容，再结合标题和转写内容共同判断`
+        : `这是一段视频开头20秒的音频片段。请先转写这段音频的内容，再结合转写内容判断`
       : '判断这段屏幕截图中的内容';
+  const transcriptInstruction = captureType === 'audio' ? '\n最后一行：转写：<音频转写出的完整文字内容>' : '';
   return `你是一个内容判决助手。根据以下目标客户画像，${mediaInstruction}是否匹配目标客户群体。
 
 目标客户画像：
@@ -194,11 +197,16 @@ ${targetProfileDesc}
 2. 如果视频内容与目标客户画像明显不相关，回复：REJECTED，并简短说明原因（不超过 30 字）
 3. 如果无法判断，回复：MATCHED（保守策略，不漏过潜在客户）
 
-请严格按格式回复，第一行必须是 MATCHED 或 REJECTED，如果是 REJECTED 则第二行说明原因：
-MATCHED
-或
-REJECTED
-原因：...`;
+请严格按格式回复：
+第一行：MATCHED 或 REJECTED
+如果是 REJECTED，第二行：原因：...${transcriptInstruction}`;
+}
+
+function extractTranscript(text: string): string | null {
+  const lines = text.trim().split('\n');
+  const transcriptLine = lines.find(l => l.includes('转写：') || l.includes('转写:'));
+  const extracted = transcriptLine?.replace(/^转写[：:]/, '').trim();
+  return extracted || null;
 }
 
 function parseGeminiResponse(
@@ -209,8 +217,9 @@ function parseGeminiResponse(
   text: string,
 ): Promise<JudgeVideoResult> {
   const upper = text.trim().toUpperCase();
+  const transcript = extractTranscript(text);
   if (upper.startsWith('MATCHED')) {
-    return writeJudgment(pool, tenantId, videoId, captureType, 'matched', null).then(() => ({
+    return writeJudgment(pool, tenantId, videoId, captureType, 'matched', null, transcript).then(() => ({
       judgment_status: 'matched' as const,
     }));
   }
@@ -219,13 +228,13 @@ function parseGeminiResponse(
     const lines = text.trim().split('\n');
     const reasonLine = lines.find(l => l.includes('原因：') || l.includes('原因:'));
     const reason = reasonLine?.replace(/^原因[：:]/, '').trim() ?? null;
-    return writeJudgment(pool, tenantId, videoId, captureType, 'rejected', reason).then(() => ({
+    return writeJudgment(pool, tenantId, videoId, captureType, 'rejected', reason, transcript).then(() => ({
       judgment_status: 'rejected' as const,
       judgment_reason: reason,
     }));
   }
   // 无法解析 → 保守 matched
-  return writeJudgment(pool, tenantId, videoId, captureType, 'matched', 'parse_fallback').then(() => ({
+  return writeJudgment(pool, tenantId, videoId, captureType, 'matched', 'parse_fallback', transcript).then(() => ({
     judgment_status: 'matched' as const,
     judgment_reason: 'parse_fallback',
   }));
@@ -254,11 +263,13 @@ async function writeJudgment(
   captureType: string,
   status: string,
   reason: string | null,
+  transcript?: string | null,
 ): Promise<void> {
   await pool.query(
     `UPDATE zenithjoy.acquisition_collect_videos
-        SET judgment_status = $3, judgment_reason = $4, capture_type = $5, updated_at = now()
+        SET judgment_status = $3, judgment_reason = $4, capture_type = $5,
+            transcript = COALESCE($6, transcript), updated_at = now()
       WHERE tenant_id = $1 AND video_id = $2`,
-    [tenantId, videoId, status, reason, captureType]
+    [tenantId, videoId, status, reason, captureType, transcript ?? null]
   );
 }
