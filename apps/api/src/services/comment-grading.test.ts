@@ -94,4 +94,55 @@ describe('comment-grading gradeComments', () => {
     expect(messages[0].content).toContain('预算10万求推荐');
     expect(messages[0].content).toContain('标题');
   });
+
+  /**
+   * 回归（2026-07-19，decision 26d518fc）：真机验证 PR#1412 时发现，Gemini 用全角标点
+   * （。/、）回复时，parseGrades 的正则只认半角句号，整批解析全部失败——13条真实留言里
+   * 2/3视频批次的Gemini响应全军覆没返回null，含明显高意向留言"预算20w内能不能包入住？
+   * 能不能给我做一下预算？"也被漏判。真机复现证实这是高频问题，不是理论边界情况。
+   */
+  it('回归: Gemini响应整体使用全角句号，仍须正确解析（真机实测复现格式）', async () => {
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost.mockResolvedValue({
+      data: { choices: [{ message: { content: '1。高意向\n2。精准' } }] },
+    } as never);
+
+    const result = await gradeComments('家装目标客户', '标题', null, [
+      { commentText: '预算20w内能不能包入住？能不能给我做一下预算？' },
+      { commentText: '这个多少钱' },
+    ]);
+    expect(result).toEqual(['高意向', '精准']);
+  });
+
+  it('回归: Gemini响应混用全角句号/顿号/半角句号，全部须正确解析', async () => {
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost.mockResolvedValue({
+      data: { choices: [{ message: { content: '1. 高意向\n2、精准\n3。感兴趣' } }] },
+    } as never);
+
+    const result = await gradeComments('家装目标客户', '标题', null, [
+      { commentText: 'a' },
+      { commentText: 'b' },
+      { commentText: 'c' },
+    ]);
+    expect(result).toEqual(['高意向', '精准', '感兴趣']);
+  });
+
+  it('回归: 部分解析失败时须打印诊断日志带上原始响应文本', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost.mockResolvedValue({
+      data: { choices: [{ message: { content: '1. 高意向\n乱七八糟' } }] },
+    } as never);
+
+    await gradeComments('家装目标客户', '标题', null, [
+      { commentText: 'a' },
+      { commentText: 'b' },
+    ]);
+
+    expect(warnSpy).toHaveBeenCalled();
+    const loggedText = warnSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(loggedText).toContain('乱七八糟');
+    warnSpy.mockRestore();
+  });
 });
