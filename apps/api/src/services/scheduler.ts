@@ -20,6 +20,8 @@
  */
 
 import { enqueueWarmupTasks } from './warmup-dispatch';
+import { dispatchDue } from './acquisition-dispatch';
+import pool from '../db/connection';
 
 const CRON_EXPRESSION = '0 9 * * *'; // cron: '0 9 * * *' — 每日 09:00（server 时区）
 const POLL_INTERVAL_MS = 60_000; // 每分钟检查一次
@@ -134,6 +136,36 @@ export async function triggerWarmupEnqueue(): Promise<void> {
 }
 
 /**
+ * Path2 Seg4 DM 派单周期扫描：每次 tick（每分钟）都执行，不按时刻门控——
+ * dm_assignments.scheduled_for 是当天随机分散的具体时间点，必须随时检查是否有新到期的。
+ * 治根 2026-07-19：buildAssignments/dispatchDue 之前只在 /collect/report 的
+ * afterCommit 链里同步调用一次，此时 scheduled_for 通常还没到，之后没有任何周期
+ * 任务回头检查——queued 的 assignment 会永远卡住，只能靠人工手动 POST /dispatch/run。
+ * 全程容错：单租户 dispatchDue 失败只 warn，不影响其它租户 / 不拖垮 scheduler 主循环。
+ */
+export async function triggerDmDispatchSweep(): Promise<void> {
+  let dueTenants: string[] = [];
+  try {
+    const res = await pool.query(
+      `SELECT DISTINCT tenant_id FROM zenithjoy.dm_assignments
+        WHERE status = 'queued' AND scheduled_for <= now()`,
+    );
+    dueTenants = (res.rows as Array<{ tenant_id: string }>).map((r) => r.tenant_id);
+  } catch (err) {
+    console.warn('[scheduler] dm-dispatch-sweep 查询到期租户失败:', err);
+    return;
+  }
+  for (const tenantId of dueTenants) {
+    try {
+      const r = await dispatchDue(pool, tenantId);
+      console.log(`[scheduler] dm-dispatch-sweep fired for tenant=${tenantId}: dispatched=${r.dispatched}`);
+    } catch (err) {
+      console.warn(`[scheduler] dm-dispatch-sweep tenant=${tenantId} 失败:`, err);
+    }
+  }
+}
+
+/**
  * 启动 cron 轮询：每分钟检查 server 时间是否进入 09:00 那一分钟，进入则 fire。
  * 同一日同一 09:00 分钟只 fire 一次（lastFiredYmd 防抖）。
  * 同一 interval 内还检查「北京 23:55」→ 触发 S4 客服日报结算（lastReportYmd 防抖，按北京自然日去重）。
@@ -176,6 +208,10 @@ export function startScheduler(): SchedulerHandle {
           });
         }
       }
+      // Path2 Seg4 DM 派单：每次 tick 都扫（不按时刻门控，随时检查到期的 queued assignment）
+      triggerDmDispatchSweep().catch((err) => {
+        console.warn('[scheduler] interval-fired dm-dispatch-sweep 异常:', err);
+      });
     }, POLL_INTERVAL_MS),
     lastFiredYmd: null,
     lastReportYmd: null,
