@@ -41,6 +41,13 @@ const collectReportRateLimit = simpleRateLimit({
   keyFn: (req) => (req.body && req.body.task_id) || 'anonymous',
 });
 
+// Path2 账号扫描手动触发限流：同租户 60 秒内只允许触发一次，防止连点把
+// DeviceAccountScanService（无障碍面板读取）打崩（sprint 07192358）。
+const accountScanTriggerRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 1,
+});
+
 const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
 
 /** 一条评论上报映射出的 lead 字段。 */
@@ -639,6 +646,44 @@ acquisitionRouter.post('/collect/start', tenantContextOptional, async (req: Requ
     return fail(res, 500, 'START_FAILED', msg);
   }
 });
+
+// POST /api/acquisition/account-scan/trigger — 手动触发账号扫描（sprint 07192358）
+// 治根：DeviceAccountScanService 唯一触发路径是客户端 30-60 分钟随机被动定时器，
+// 服务端此前完全没有主动催促通道。照抄 dispatchDue 的"写 publish_task + ws1 心跳
+// 拉取"机制，延迟从最长一小时降到最坏约30秒。
+acquisitionRouter.post(
+  '/account-scan/trigger',
+  tenantContextOptional,
+  accountScanTriggerRateLimit,
+  async (req: Request, res: Response) => {
+    const tenantId = tenantOf(req, res);
+    if (!tenantId) return;
+
+    const agentRes = await pool.query<{ id: string }>(
+      `SELECT id FROM zenithjoy.agents
+        WHERE tenant_id = $1
+          AND capabilities @> ARRAY['android']::text[]
+          AND last_heartbeat_at > now() - interval '2 minutes'
+        ORDER BY last_heartbeat_at DESC
+        LIMIT 1`,
+      [tenantId]
+    );
+    const agentId = agentRes.rows[0]?.id;
+    if (!agentId) {
+      return fail(res, 400, 'NO_ONLINE_ANDROID_AGENT', '未检测到在线的安卓设备，请先确认手机 App 在运行');
+    }
+
+    const taskRes = await pool.query<{ id: string }>(
+      `INSERT INTO zenithjoy.publish_tasks
+         (agent_id, platform, status, task_type, payload, tenant_id, created_at, updated_at)
+       VALUES ($1, 'douyin', 'queued', 'account_scan', '{}'::jsonb, $2, NOW(), NOW())
+       RETURNING id`,
+      [agentId, tenantId]
+    );
+
+    return ok(res, { task_id: taskRes.rows[0].id });
+  }
+);
 
 // POST /api/acquisition/collect/cancel
 acquisitionRouter.post('/collect/cancel', async (req: Request, res: Response) => {
