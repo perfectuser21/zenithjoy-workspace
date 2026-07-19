@@ -8,7 +8,9 @@
 #   Step 2  客户装客户端 → Agent 注册连中台（Step 2c：config.json 的 apiUrl 缓存跟随 live env 刷新，2026-07-17 真机根治）
 #   Step 3  Agent 检测到微信已登录、找到主窗口 → 开始后台静默监听（服务端等价断言：dryrun + overlay 存在；
 #           Step 3e：scan_unread 扫描期间开窗读消息不再永久抢走用户前台键鼠焦点；
-#           Step 3f：扫描前守卫窗口最大化自愈接入 cooldown，不再反复 maximize/minimize，2026-07-17 真机根治）
+#           Step 3f：扫描前守卫窗口最大化自愈接入 cooldown，不再反复 maximize/minimize，2026-07-17 真机根治）；
+#           Step 3i：热键召唤主路（preflight hotkey_summon 自检 + 塌缩自愈先热键再降级托盘，2026-07-19 折入）；
+#           Step 3j：热键真机根因守卫（GetForegroundWindow 判据 + SendInput INPUT sizeof=40）
 #   Step 6  上线自检消息——每次启动发一条给固定测试联系人（task 7be2842d，纯函数等价断言）
 #   Step 7  客户触发好友扫描 / 联系人首次发消息 → 系统建立该联系人 CRM 档案（真链路：friend-scan/trigger+ingest）
 #   Step 8  客户在中台 CRM 客户列表页，给联系人打 A1-A5 状态（真链路：customer-profile 六字段）
@@ -755,6 +757,43 @@ assert hasattr(find_weixin, 'release_launch_lock'), '缺 release_launch_lock'
 print('PASS')
 " 2>/dev/null && ok "Step 3h ✅ launch_weixin 已接入跨进程互斥锁+真实幂等检查（不再并发堆积僵尸进程）" \
              || fail "Step 3h launch_weixin 跨进程锁回归——CI与常驻agent可能又会并发堆积微信进程" 3
+
+# Step 3i：热键召唤主路——preflight 自检含 hotkey_summon，scan 真塌快速自愈先热键再降级托盘
+# （2026-07-19 折入自散装 line04-hotkey-summon-smoke.sh，decision fc17d9eb；PR #1410/#1420 真机验证）
+python3 -c "
+import sys, re
+sys.path.insert(0, 'services/agent/wechat-rpa')
+from preflight import run_all_checks, CHECK_NAMES
+assert 'hotkey_summon' in CHECK_NAMES, 'preflight CHECK_NAMES 缺 hotkey_summon'
+checks = run_all_checks('http://localhost:9', dry_run=True)
+hk = next(c for c in checks if c['name'] == 'hotkey_summon')
+assert hk['status'] == 'warn', 'dry-run 下 hotkey_summon 应为 warn，实际=' + hk['status']
+with open('services/agent/wechat-rpa/listen_chat.py', encoding='utf-8') as f:
+    src = f.read()
+m = re.search(r'_should_fast_heal_hidden_collapsed\(\s*\n?\s*now,\s*scan_collapse_since,', src)
+assert m is not None, '找不到 scan 快速自愈调用'
+window = src[m.start(): m.start() + 900]
+hk_idx = window.find('_summon_wechat_via_hotkey()')
+tray_idx = window.find('_summon_wechat_from_tray()')
+assert hk_idx != -1 and tray_idx != -1 and hk_idx < tray_idx, '召唤主路未接线: hotkey=%d tray=%d' % (hk_idx, tray_idx)
+print('PASS')
+" 2>/dev/null && ok "Step 3i ✅ 热键召唤主路已接线（preflight 含 hotkey_summon + 快速自愈先热键再降级托盘）" \
+             || fail "Step 3i 热键召唤主路回归——塌缩自愈可能退回脆弱托盘召唤" 3
+
+# Step 3j：热键真机根因守卫——check_hotkey_summon 判据必须读 GetForegroundWindow + INPUT 结构体 sizeof=40
+# （2026-07-19 rog 真机铁证：微信响应 Ctrl+Alt+W 是被拉到前台而非隐藏；union 缺 MOUSEINPUT→sizeof 32→SendInput 返回0）
+python3 -c "
+import sys, ctypes
+sys.path.insert(0, 'services/agent/wechat-rpa')
+with open('services/agent/wechat-rpa/preflight.py', encoding='utf-8') as f:
+    pf = f.read()
+assert 'GetForegroundWindow' in pf, 'check_hotkey_summon 判据未读 GetForegroundWindow（退回只看可见性会必现误报）'
+import listen_chat
+sz = ctypes.sizeof(listen_chat.INPUT)
+assert sz == 40, 'INPUT sizeof=%d != 40，SendInput 会返回0发不出键' % sz
+print('PASS')
+" 2>/dev/null && ok "Step 3j ✅ 热键真机根因守卫在位（GetForegroundWindow 判据 + INPUT sizeof=40）" \
+             || fail "Step 3j 热键真机根因回归——自检误报或 SendInput 发不出键" 3
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ✅ Path 4 16 步 golden path smoke 服务端段全通"
