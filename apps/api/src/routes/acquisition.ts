@@ -673,12 +673,16 @@ acquisitionRouter.post(
       return fail(res, 400, 'NO_ONLINE_ANDROID_AGENT', '未检测到在线的安卓设备，请先确认手机 App 在运行');
     }
 
+    // payload JSON 必须自带 task_type：walking-skeleton.ts 心跳拉取端点下发给设备的
+    // task.payload 只来自本列，DB COLUMN task_type 从不透传给设备（对照 agent-burner.ts
+    // 的 dm_outreach 写法）。只设 COLUMN 不设 payload 会导致任务写进库但设备永远读不到、
+    // 静默不执行。
     const taskRes = await pool.query<{ id: string }>(
       `INSERT INTO zenithjoy.publish_tasks
          (agent_id, platform, status, task_type, payload, tenant_id, created_at, updated_at)
-       VALUES ($1, 'douyin', 'queued', 'account_scan', '{}'::jsonb, $2, NOW(), NOW())
+       VALUES ($1, 'douyin', 'queued', 'account_scan', $2, $3, NOW(), NOW())
        RETURNING id`,
-      [agentId, tenantId]
+      [agentId, JSON.stringify({ task_type: 'account_scan' }), tenantId]
     );
 
     return ok(res, { task_id: taskRes.rows[0].id });

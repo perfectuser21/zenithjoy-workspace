@@ -1469,6 +1469,16 @@ describe('POST /api/acquisition/account-scan/trigger', () => {
     const insertCall = (db.query as any).mock.calls[1];
     expect(insertCall[0]).toContain('publish_tasks');
     expect(insertCall[0]).toContain('account_scan');
+
+    // 真机链路关键点：walking-skeleton.ts 心跳拉取端点只把 payload JSON 列内容
+    // 透传给设备，DB COLUMN task_type 从不下发。payload 里必须自带 task_type，
+    // 否则设备端 AgentService.kt 读不到 task.payload["task_type"]，任务写进库
+    // 但设备永远不会识别执行（对照 agent-burner.ts dm_outreach 的写法）。
+    const payloadParam = insertCall[1].find(
+      (p: unknown) => typeof p === 'string' && p.includes('task_type'),
+    );
+    expect(payloadParam).toBeDefined();
+    expect(JSON.parse(payloadParam)).toMatchObject({ task_type: 'account_scan' });
   });
 
   it('缺租户上下文 → 401 NO_TENANT', async () => {
