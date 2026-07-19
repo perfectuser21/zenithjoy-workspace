@@ -86,7 +86,11 @@ if (!process.env.VITEST) {
 }
 
 // 之后才挂 body parser
-app.use(express.json());
+// limit: '1mb' —— 真机排查 2026-07-19：/judge-video 的音频判定(capture_type=audio)真实
+// payload 约 870-880KB（20秒16kHz单声道16bit PCM base64后），默认100KB早期就被拒
+// (PayloadTooLargeError)。1mb 是 hk-vps nginx 反代 /api/ 通用路径未覆盖 client_max_body_size
+// 时的默认上限——设更大在 nginx 那层就先被截断，1mb 是不碰生产nginx配置前提下的安全上限。
+app.use(express.json({ limit: '1mb' }));
 
 // 截图静态服务（Sprint E2E 截图托管）
 const screenshotsDir = process.env.SCREENSHOTS_DIR || '/opt/zenithjoy/screenshots';
