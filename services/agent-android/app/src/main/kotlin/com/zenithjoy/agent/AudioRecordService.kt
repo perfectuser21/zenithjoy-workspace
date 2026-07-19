@@ -81,7 +81,13 @@ class AudioRecordService(
                 audioRecord.release()
             }
 
-            Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+            val wavBytes = WavHeader.wrapPcmAsWav(
+                pcm = outputStream.toByteArray(),
+                sampleRate = SAMPLE_RATE,
+                channels = 1,
+                bitsPerSample = 16,
+            )
+            Base64.encodeToString(wavBytes, Base64.NO_WRAP)
         } catch (e: Exception) {
             logW("captureAudioSnippet failed: ${e.message}")
             null

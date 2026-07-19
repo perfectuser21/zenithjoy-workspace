@@ -585,11 +585,12 @@ class DouyinCollectService : AccessibilityService() {
                 android.util.Log.i(TAG, "Stage1 card#$index classified=$kind — skip（不点开/不计failure）")
                 continue
             }
+            val title = extractTitleAtIndex(index)
             val shareUrl = captureShareUrlForCard(index)
             pendingShareCapture = null
             pendingClearDone = null
             if (shareUrl != null) {
-                collected.add(VideoCardInfo(videoId = "", keyword = currentKeyword, shareUrl = shareUrl))
+                collected.add(VideoCardInfo(videoId = "", keyword = currentKeyword, title = title, shareUrl = shareUrl))
                 seenShareUrls.add(shareUrl)
                 consecutiveFailures = 0
                 android.util.Log.i(TAG, "Stage1 card#$index share_url captured: $shareUrl")
@@ -620,6 +621,15 @@ class DouyinCollectService : AccessibilityService() {
         val card = findVideoCards(root, MAX_VIDEOS_PER_SEARCH).getOrNull(index)
             ?: return CardClassifier.CardKind.CONTENT
         return CardClassifier.classify(collectNodeTexts(card), emptyList())
+    }
+
+    // 与 classifyCardAtIndex 同样的卡片定位方式，取该卡子树文本列表中最长的一条作为
+    // best-effort title（CardTitleExtractor 纯函数，真机 dump 样本验证过启发式有效）。
+    // 找不到卡/root 时返回 null——title 是辅助信号，缺失不影响主链路。
+    private fun extractTitleAtIndex(index: Int): String? {
+        val root = rootInActiveWindow ?: return null
+        val card = findVideoCards(root, MAX_VIDEOS_PER_SEARCH).getOrNull(index) ?: return null
+        return CardTitleExtractor.pickTitle(collectNodeTexts(card))
     }
 
     // 单张卡片的剪贴板取链：点开视频 → 点分享 → 面板点「分享链接」→ 透明 Activity 读剪贴板。

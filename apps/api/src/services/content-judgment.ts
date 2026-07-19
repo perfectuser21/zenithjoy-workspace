@@ -52,6 +52,7 @@ export async function judgeVideo(
   dataB64: string,
   forceResult?: 'matched' | 'rejected' | 'pending',
   forceTimeout?: boolean,
+  title?: string,
 ): Promise<JudgeVideoResult> {
   // § 幂等检查：非 pending 结果已存在 → 直接返回 cache_hit: true
   const existing = await pool.query(
@@ -109,7 +110,7 @@ export async function judgeVideo(
   }
 
   // § 调 Gemini 判决
-  return await callGemini(pool, tenantId, videoId, captureType, dataB64, targetProfileDesc);
+  return await callGemini(pool, tenantId, videoId, captureType, dataB64, targetProfileDesc, title);
 }
 
 // ── 内部：调 Gemini ──────────────────────────────────────────────────────────
@@ -120,6 +121,7 @@ async function callGemini(
   captureType: string,
   dataB64: string,
   targetProfileDesc: string,
+  title?: string,
 ): Promise<JudgeVideoResult> {
   const apiKey = process.env.TOAPIS_API_KEY;
   if (!apiKey) {
@@ -128,7 +130,7 @@ async function callGemini(
     return { judgment_status: 'pending', judgment_reason: 'no_api_key' };
   }
 
-  const prompt = buildPrompt(targetProfileDesc, captureType);
+  const prompt = buildPrompt(targetProfileDesc, captureType, title);
   const mimeType = captureType === 'audio' ? 'audio/pcm' : 'image/jpeg';
   // TOAPIS 是 OpenAI 兼容代理：多模态必须走 /chat/completions + image_url / input_audio。
   // Gemini 原生 generateContent + inline_data 在 TOAPIS 上会挂起（2026-07-13 真机排查坐实：
@@ -172,9 +174,17 @@ async function callGemini(
   }
 }
 
-function buildPrompt(targetProfileDesc: string, captureType: string): string {
-  const mediaDesc = captureType === 'audio' ? '音频片段' : '屏幕截图';
-  return `你是一个内容判决助手。根据以下目标客户画像，判断这段${mediaDesc}中的内容是否匹配目标客户群体。
+function buildPrompt(targetProfileDesc: string, captureType: string, title?: string): string {
+  // 用户2026-07-17拍板（判定点1d078987，decision f3dbc2ce）：video 类型走音频转写判定——
+  // 先转写这段音频内容，再结合视频标题和转写文案共同判断，单次多模态调用内完成
+  // 转写+判定两步，不新增独立转写API调用（避免过度设计成两阶段架构）。
+  const mediaInstruction =
+    captureType === 'audio'
+      ? title
+        ? `这是一段视频开头20秒的音频片段，视频标题是《${title}》。请先在心里转写这段音频的内容，再结合标题和转写内容共同判断`
+        : `这是一段视频开头20秒的音频片段。请先在心里转写这段音频的内容，再结合转写内容判断`
+      : '判断这段屏幕截图中的内容';
+  return `你是一个内容判决助手。根据以下目标客户画像，${mediaInstruction}是否匹配目标客户群体。
 
 目标客户画像：
 ${targetProfileDesc}

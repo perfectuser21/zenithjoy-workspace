@@ -10,12 +10,23 @@ import {
 } from '../services/acquisition-collect';
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { licenseAuth } from '../middleware/license-auth';
+import { simpleRateLimit } from '../middleware/simple-rate-limit';
 import { sseService } from '../services/sse.service';
 import { scoreLeads, buildAssignments, dispatchDue, rescoreLead, upsertConfig } from '../services/acquisition-dispatch';
 import { resolveShareToMedia, type MediaKind } from '../services/douyin-share-resolver';
 import { judgeVideo } from '../services/content-judgment';
 
 export const acquisitionRouter = Router();
+
+// CodeQL js/missing-rate-limiting：/pending-collect-tasks 碰鉴权(x-agent-id反查tenant)+DB
+// 查询，且本次PR改动了这条路由（新增title查询）触发静态分析对"改动过的代码"重新计入告警。
+// 按 x-agent-id 限流（不是 tenantId——这条路由用 header 反查 tenant，tenantContext 中间件
+// 未接入，鉴权发生在 handler 内部）。轮询正常节奏是30s一次，60次/60s 留足重试余量。
+const pendingCollectTasksRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 60,
+  keyFn: (req) => req.header('x-agent-id') || 'anonymous',
+});
 
 const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
 
@@ -220,7 +231,7 @@ acquisitionRouter.get('/videos/:videoId/leads', tenantContextOptional, async (re
 // stage_1_done 任务也返回（Stage 2 重试，含视频 URL 列表）
 // 用 x-agent-id 解析出请求方自己的 tenant_id + agent_id，只返回本租户内、
 // 未绑机器或绑给自己的任务，防跨租户/跨机器抢占。
-acquisitionRouter.get('/pending-collect-tasks', async (req: Request, res: Response) => {
+acquisitionRouter.get('/pending-collect-tasks', pendingCollectTasksRateLimit, async (req: Request, res: Response) => {
   try {
     const pool = (await import('../db/connection')).default;
 
@@ -280,12 +291,13 @@ acquisitionRouter.get('/pending-collect-tasks', async (req: Request, res: Respon
     // 全部耗尽 → 任务诚实结算 partial（防单个打不开的视频把任务拖进无限重发风暴）。
     const stage1DoneRows = rows.filter((r) => r.status === 'stage_1_done');
     const videoMap: Record<string, string[]> = {};
+    const videoTitlesMap: Record<string, Record<string, string>> = {};
     const exhaustedTaskIds = new Set<string>();
     if (stage1DoneRows.length > 0) {
       // 只排除已明确 rejected 的视频；pending（默认值，client 尚未调 judge-video 前的
       // 常态）仍放行，避免在判决闸客户端接线完成前把 Stage2 主链路整体打断。
-      const vRes = await pool.query<{ task_id: string; video_id: string }>(
-        `SELECT task_id, video_id FROM zenithjoy.acquisition_collect_videos
+      const vRes = await pool.query<{ task_id: string; video_id: string; title: string | null }>(
+        `SELECT task_id, video_id, title FROM zenithjoy.acquisition_collect_videos
           WHERE task_id = ANY($1::uuid[])
             AND comments_reported_at IS NULL
             AND judgment_status != 'rejected'
@@ -293,8 +305,13 @@ acquisitionRouter.get('/pending-collect-tasks', async (req: Request, res: Respon
         [stage1DoneRows.map((r) => r.id)]
       );
       const pendingByTask: Record<string, string[]> = {};
+      // 表主键是 (task_id, video_id)（2026-07-10 迁移改的，同一 video_id 可能出现在不同
+      // task 里且 title 不同）——titleByTaskAndVideo 必须按 task_id 分桶，不能用全局
+      // Record<videoId, title> 扁平存（会导致跨任务串 title）。
+      const titleByTaskAndVideo: Record<string, Record<string, string>> = {};
       for (const v of vRes.rows) {
         (pendingByTask[v.task_id] ??= []).push(v.video_id);
+        if (v.title) (titleByTaskAndVideo[v.task_id] ??= {})[v.video_id] = v.title;
       }
       for (const r of stage1DoneRows) {
         const pending = pendingByTask[r.id] ?? [];
@@ -337,6 +354,15 @@ acquisitionRouter.get('/pending-collect-tasks', async (req: Request, res: Respon
             ? `https://www.douyin.com/note/${vid}`
             : `https://www.douyin.com/video/${vid}`,
         );
+        // title 随 URL 并列回传（videoId → title），Android AcquisitionCollectPollLoop
+        // 靠它把 title 透传进 /judge-video——title 是"转写文案+title判定"(判定点1d078987)
+        // 的第二个信号，2026-07-19 前 Stage2 判定时 Android 完全拿不到这个字段。
+        const taskTitles = titleByTaskAndVideo[r.id] ?? {};
+        const titles: Record<string, string> = {};
+        for (const vid of dispatchable) {
+          if (taskTitles[vid]) titles[vid] = taskTitles[vid];
+        }
+        videoTitlesMap[r.id] = titles;
       }
     }
 
@@ -346,6 +372,7 @@ acquisitionRouter.get('/pending-collect-tasks', async (req: Request, res: Respon
       keywords: Array.isArray(r.keywords) ? r.keywords : [],
       stage: r.status === 'stage_1_done' ? ('stage_2' as const) : ('stage_1' as const),
       video_urls: r.status === 'stage_1_done' ? (videoMap[r.id] ?? []) : undefined,
+      video_titles: r.status === 'stage_1_done' ? (videoTitlesMap[r.id] ?? {}) : undefined,
     }));
 
     return res.status(200).json({ tasks, total: tasks.length });
@@ -1159,6 +1186,7 @@ acquisitionRouter.post('/judge-video', async (req: Request, res: Response) => {
     data_b64: dataB64,
     force_result: forceResult,
     force_timeout: forceTimeout,
+    title,
   } = req.body ?? {};
 
   if (!videoId || typeof videoId !== 'string') {
@@ -1180,6 +1208,7 @@ acquisitionRouter.post('/judge-video', async (req: Request, res: Response) => {
       dataB64,
       forceResult,
       forceTimeout === true,
+      typeof title === 'string' ? title : undefined,
     );
     return ok(res, result);
   } catch (err) {

@@ -198,4 +198,106 @@ class AudioJudgmentTest {
             capturedBodies[1].contains("\"capture_type\":\"screenshot\""),
         )
     }
+
+    @Test
+    fun `stage_2响应体带video_titles时judge-video请求体透传对应title`() {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"tasks":[{"task_id":"t2","stage":"stage_2","status":"pending",
+                    "video_urls":["https://www.douyin.com/video/v002"],
+                    "video_titles":{"v002":"真实标题测试样本"}}]}"""
+            )
+        )
+        val capturedBodies = mutableListOf<String>()
+        val judgeClient = OkHttpClient.Builder()
+            .addInterceptor(Interceptor { chain ->
+                val req = chain.request()
+                val buffer = Buffer()
+                req.body?.writeTo(buffer)
+                capturedBodies.add(buffer.readUtf8())
+                Response.Builder()
+                    .request(req)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body("""{"judgment_status":"matched"}""".toResponseBody("application/json".toMediaType()))
+                    .build()
+            })
+            .build()
+        val judgmentService = ContentJudgmentService(
+            agentId = { "AG-TEST-002" },
+            httpBase = "http://localhost:9",
+            tenantId = { "tenant-1" },
+            httpClient = judgeClient,
+            screenCaptureService = ScreenCaptureService(captureImpl = { "fakeScreenshotBase64" }),
+            audioCaptureService = AudioCaptureService(captureImpl = { "fakeAudioBase64" }),
+        )
+        val loop = AcquisitionCollectPollLoop(
+            agentId = { "AG-TEST-002" },
+            httpBase = server.url("/").toString().trimEnd('/'),
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            intervalMs = Long.MAX_VALUE,
+            httpClient = OkHttpClient(),
+            contentJudgmentService = judgmentService,
+            videoOpener = { },
+        )
+        loop.pollOnce()
+
+        assertEquals(1, capturedBodies.size)
+        assertTrue(
+            "video_titles里对应videoId的title必须透传进judge-video请求体: ${capturedBodies[0]}",
+            capturedBodies[0].contains("\"title\":\"真实标题测试样本\""),
+        )
+    }
+
+    @Test
+    fun `video_titles缺少某videoId时不报错也不带title字段`() {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"tasks":[{"task_id":"t3","stage":"stage_2","status":"pending",
+                    "video_urls":["https://www.douyin.com/video/v003"],
+                    "video_titles":{}}]}"""
+            )
+        )
+        val capturedBodies = mutableListOf<String>()
+        val judgeClient = OkHttpClient.Builder()
+            .addInterceptor(Interceptor { chain ->
+                val req = chain.request()
+                val buffer = Buffer()
+                req.body?.writeTo(buffer)
+                capturedBodies.add(buffer.readUtf8())
+                Response.Builder()
+                    .request(req)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body("""{"judgment_status":"matched"}""".toResponseBody("application/json".toMediaType()))
+                    .build()
+            })
+            .build()
+        val judgmentService = ContentJudgmentService(
+            agentId = { "AG-TEST-003" },
+            httpBase = "http://localhost:9",
+            tenantId = { "tenant-1" },
+            httpClient = judgeClient,
+            screenCaptureService = ScreenCaptureService(captureImpl = { "fakeScreenshotBase64" }),
+            audioCaptureService = AudioCaptureService(captureImpl = { "fakeAudioBase64" }),
+        )
+        val loop = AcquisitionCollectPollLoop(
+            agentId = { "AG-TEST-003" },
+            httpBase = server.url("/").toString().trimEnd('/'),
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            intervalMs = Long.MAX_VALUE,
+            httpClient = OkHttpClient(),
+            contentJudgmentService = judgmentService,
+            videoOpener = { },
+        )
+        loop.pollOnce()
+
+        assertEquals(1, capturedBodies.size)
+        assertFalse(
+            "video_titles里没有的videoId不应该带title字段: ${capturedBodies[0]}",
+            capturedBodies[0].contains("\"title\""),
+        )
+    }
 }
