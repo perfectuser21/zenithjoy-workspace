@@ -4737,6 +4737,14 @@ agent_suite:
   product: 微信AI客服
   note: "sprint(07121132): 第二刀 node OverlayHandler——preflight 软检测/熔断/用户关闭不重拉/diag 落盘"
 
+- id: line02-comment-grading-unit
+  path: apps/api/src/services/comment-grading.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "sprint(07191822): 评论区留言AI意向分档判定gradeComments（decision 4e421ae8）——补齐Path2 Seg3→Seg4之间缺失的判定环节，空画像/空评论/未配置key跳过调用、批量解析、解析失败单行降级null、调用异常整批降级null"
+
 - id: line04-wechat-draft-reasoning-r2
   path: sprints/07121132-line04-ai-thinking-overlay/tests/wechat-draft-reasoning-r2.test.ts
   type: unit
