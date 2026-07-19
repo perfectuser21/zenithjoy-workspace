@@ -1,7 +1,9 @@
 package com.zenithjoy.agent
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.provider.Settings
@@ -12,6 +14,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.zenithjoy.agent.onboarding.collectServiceEnabled
 import com.zenithjoy.agent.onboarding.parseBindDeepLink
 
@@ -45,6 +48,18 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "截屏授权被拒绝，内容判定功能将持续 pending", Toast.LENGTH_LONG).show()
         }
         startAgentServiceReal()
+        showStatus()
+    }
+
+    private val recordAudioPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            android.util.Log.i(TAG, "RECORD_AUDIO authorized")
+        } else {
+            android.util.Log.w(TAG, "RECORD_AUDIO denied — audio-based content judgment stays pending")
+            Toast.makeText(this, "录音授权被拒绝，音频转写判定功能将持续 pending", Toast.LENGTH_LONG).show()
+        }
         showStatus()
     }
 
@@ -98,6 +113,24 @@ class MainActivity : AppCompatActivity() {
             box.addView(Button(this).apply {
                 text = "授权截屏"
                 setOnClickListener { requestMediaProjectionThenStart() }
+            })
+            box
+        }
+    }
+
+    /** 状态自检：RECORD_AUDIO 权限是否就绪，方便真机巡检定位"音频判定恒 pending"问题。 */
+    private fun recordAudioBanner(): android.view.View {
+        val granted = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.RECORD_AUDIO,
+        ) == PackageManager.PERMISSION_GRANTED
+        return if (granted) {
+            TextView(this).apply { text = "录音授权 ✅ 已授权（音频判定可用）" }
+        } else {
+            val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            box.addView(TextView(this).apply { text = "⚠️ 录音未授权，视频类内容判定将持续 pending" })
+            box.addView(Button(this).apply {
+                text = "授权录音"
+                setOnClickListener { recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) }
             })
             box
         }
@@ -176,6 +209,7 @@ class MainActivity : AppCompatActivity() {
         }
         layout.addView(accessibilityBanner())
         layout.addView(mediaProjectionBanner())
+        layout.addView(recordAudioBanner())
         layout.addView(status)
         layout.addView(startBtn)
         layout.addView(resetBtn)
