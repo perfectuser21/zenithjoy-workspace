@@ -107,7 +107,10 @@ ${commentLines}`;
 function parseGrades(text: string, count: number): (string | null)[] {
   const grades: (string | null)[] = new Array(count).fill(null);
   const lines = text.trim().split('\n');
-  const lineRe = /^\s*(\d+)\.\s*(高意向|精准|感兴趣|其他)/;
+  // 真机验证 2026-07-19（decision 26d518fc）：Gemini 中文回复经常用全角句号"。"/顿号"、"
+  // 而不是半角句号，只认半角会整批解析失败——13条真实留言里2/3视频批次全军覆没返回null。
+  const lineRe = /^\s*(\d+)[.。、]\s*(高意向|精准|感兴趣|其他)/;
+  let matched = 0;
   for (const line of lines) {
     const m = line.match(lineRe);
     if (!m) continue;
@@ -115,7 +118,14 @@ function parseGrades(text: string, count: number): (string | null)[] {
     const grade = m[2];
     if (idx >= 0 && idx < count && (VALID_GRADES as readonly string[]).includes(grade)) {
       grades[idx] = grade;
+      matched += 1;
     }
+  }
+  if (matched < count) {
+    console.warn(
+      `[comment-grading] 解析不完整：${count}条留言只解析出${matched}条档位，原始响应：`,
+      text.slice(0, 500),
+    );
   }
   return grades;
 }
