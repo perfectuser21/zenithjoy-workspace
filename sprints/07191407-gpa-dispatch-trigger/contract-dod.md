@@ -171,10 +171,17 @@ print('PASS: machine 熔断触发有效')
 **验证命令（manual:bash）**：
 ```bash
 API_BASE="${API_BASE:-http://localhost:5200}"
-# 假设已有 rule_id（需先 POST /auto-rules 创建）
-RULE_ID="test-rule-id"
+TENANT_ID="${TENANT_ID:-test-tenant-$(date +%s)}"
 
-# 尝试直接切换到非 dry-run 模式（应被拒绝）
+# 前置步骤：先 POST /auto-rules 创建规则，取得真实 ID
+CREATE_RESP=$(curl -s -X POST "$API_BASE/api/cs/voice-outreach/auto-rules" \
+  -H "Content-Type: application/json" \
+  -H "X-Internal-Token: ${ZENITHJOY_INTERNAL_TOKEN:-}" \
+  -d "{\"tenant_id\":\"$TENANT_ID\",\"name\":\"test-dry-run-rule\",\"condition_expr\":\"1=1\"}")
+RULE_ID=$(echo "$CREATE_RESP" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['id'])")
+echo "RULE_ID: $RULE_ID"
+
+# 尝试直接切换到非 dry-run 模式（应被拒绝，dry_run_confirmed_at IS NULL）
 HTTP=$(curl -s -o /dev/null -w '%{http_code}' \
   -X PUT "$API_BASE/api/cs/voice-outreach/auto-rules/$RULE_ID" \
   -H "Content-Type: application/json" \
@@ -199,24 +206,28 @@ DB_URL="${DB_URL:-${DATABASE_URL:-postgresql://cecelia:cecelia@localhost:5432/ce
 TENANT="tenant-lease-$(date +%s)"
 MACHINE_NEW="machine-new-$(date +%s)"
 
-# 构造一个 claimed 但 lease_until 已过期的任务
+# 构造一个 call_phase='queued' 且 lease_until 已过期的任务
+# （方案①：GET /pending 返回 queued + lease_until < NOW() 的记录，使 lease 过期的 queued 任务重新可见）
 CALL_ID=$(psql "$DB_URL" -Atq -c "INSERT INTO zenithjoy.voice_call_records \
   (id, tenant_id, contact_name, status, call_phase, machine_id, lease_until, called_at) VALUES \
-  (gen_random_uuid(), '$TENANT'::uuid, 'lease-test-contact', 'failed', 'claimed', \
+  (gen_random_uuid(), '$TENANT'::uuid, 'lease-test-contact', 'failed', 'queued', \
   'old-machine', NOW()-interval '5 minutes', NOW()) RETURNING id::text")
+echo "CALL_ID: $CALL_ID"
 
-# 查询 pending，应返回 lease 过期的任务
+# 查询 pending，应返回 lease 过期的 queued 任务（lease 过期后重新可认领）
 PENDING=$(curl -s "$API_BASE/api/cs/voice-outreach/pending?machine_id=$MACHINE_NEW&tenant_id=$TENANT")
 echo "Pending 响应: $PENDING"
 echo "$PENDING" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
-assert d.get('data') is not None, 'lease 过期任务未出现在 pending 列表中'
-print('PASS: lease 超时回收正常')
-" || echo "FAIL: lease 超时回收失败"
+data=d.get('data')
+assert data is not None, 'lease 过期的 queued 任务未出现在 pending 列表中'
+assert data.get('call_id') == sys.argv[1], f'call_id 不匹配: {data.get(\"call_id\")} != {sys.argv[1]}'
+print('PASS: lease 超时回收正常，queued+lease过期任务重新可见')
+" "$CALL_ID" || echo "FAIL: lease 超时回收失败"
 ```
 
-**断言**：`data` 字段非 null，且 `call_id` 匹配 lease 过期的任务
+**断言**：`data` 字段非 null，且 `call_id` 匹配 lease 过期的 queued 任务
 
 ---
 

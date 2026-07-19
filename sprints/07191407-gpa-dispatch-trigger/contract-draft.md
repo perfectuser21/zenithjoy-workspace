@@ -81,6 +81,24 @@ HTTP_CLAIM2=$(curl -s -o /dev/null -w '%{http_code}' \
 [ "$HTTP_CLAIM2" = "409" ] || fail "GP-A Step3 二次认领期望 409 CLAIM_CONFLICT, got $HTTP_CLAIM2" 103
 ```
 
+**Step GP-A-3b：dialing 前乐观锁等价断言（I-9 API 层等价）**
+```bash
+# 等价断言：advance-phase API（拨号前乐观锁，claimed→dialing 仅允许执行一次）
+# TODO(gpa-realmachine): 真机段等价断言 — audio_bridge 接通需 xian-rog 手工执行，
+#   此处以 API 调用代替 RPA 实际拨号，验证 dialing 乐观锁 DB UPDATE 路径
+HTTP_DIAL=$(curl -s -o "$TMP" -w '%{http_code}' \
+  -X POST "$API_BASE/api/cs/voice-outreach/advance-phase" \
+  -H "Content-Type: application/json" \
+  -d "{\"call_id\":\"$CALL_ID\",\"from_phase\":\"claimed\",\"to_phase\":\"dialing\"}")
+[ "$HTTP_DIAL" = "200" ] || fail "GP-A Step3b dialing 乐观锁等价断言 got $HTTP_DIAL" 103
+# 第二次 advance-phase（重复 dialing 锁）应返回 409（rowCount=0）
+HTTP_DIAL2=$(curl -s -o /dev/null -w '%{http_code}' \
+  -X POST "$API_BASE/api/cs/voice-outreach/advance-phase" \
+  -H "Content-Type: application/json" \
+  -d "{\"call_id\":\"$CALL_ID\",\"from_phase\":\"claimed\",\"to_phase\":\"dialing\"}")
+[ "$HTTP_DIAL2" = "409" ] || fail "GP-A Step3b 重复 dialing 锁期望 409, got $HTTP_DIAL2" 103
+```
+
 **Step GP-A-4：通话记录回写 + ASR 转写存储**
 ```bash
 # 断言：POST /records { call_id, status:'answered', asr_transcript } 写入成功
@@ -158,10 +176,10 @@ echo "$(cat "$TMP")" | python3 -c "import json,sys; d=json.load(sys.stdin); asse
 | I-9 防重复拨打（乐观锁 dialing UPDATE） | ✅ 已覆盖 | C-05 |
 | I-10 10 分钟技术去重窗口 | ✅ 已覆盖 | C-02，GP-A Step5 |
 | I-11 3 天业务冷却期 | ✅ 已覆盖 | C-03，GP-A Step8 |
-| I-12 联系人精确匹配（搜索框定位+标题核对） | ✅ 前置 sprint 已覆盖（I-1），本次 C-06 熔断覆盖机器快速失败场景 | C-06 |
-| I-13 乐观锁认领原子性 | ✅ 已覆盖 | C-04，GP-A Step3 |
-| I-14 machine 熔断阈值 | ✅ 已覆盖 | C-06，C-15，GP-A Step7 |
-| I-15 lease 回收（watchdog 按 call_phase 倒推终态） | ✅ 已覆盖 | C-08 |
+| I-12 machine 熔断阈值（60min 5次快速失败→熔断+告警） | ✅ 已覆盖 | C-06, C-15, C-17, GP-A Step7 |
+| I-13 子进程不重复启动（PID 存活则禁止 respawn） | ✅ 已覆盖 | C-07 |
+| I-14 dry-run 必须先人工确认才能切自动执行 | ✅ 已覆盖 | C-09, C-10, C-18 |
+| I-15 鉴权修复必须先于 CRM 入口上线 | ✅ 已覆盖 | C-01, C-14 |
 
 > 注：I-12 在 PRD 中编号为「联系人精确匹配」，与 sprint-prd.md Invariant 表中的 I-1 对应；
 > 本 sprint 新增 I-9～I-15 均已有判定点覆盖。
