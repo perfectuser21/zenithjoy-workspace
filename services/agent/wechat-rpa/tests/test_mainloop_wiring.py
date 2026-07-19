@@ -99,10 +99,20 @@ def test_fast_heal_wired_into_scan_loop_not_heartbeat():
         "scan 快速自愈调用必须紧跟 scan 块的 last_readable_scan_at = now —— "
         "位置错了说明没接在 scan 循环里"
     )
-    # 3) 命中真塌先走托盘召唤（不重启），失败才退回重启兜底
-    window = src[heal_idx: heal_idx + 700]
-    assert "_summon_wechat_from_tray()" in window, (
-        "scan 快速自愈没先试 _summon_wechat_from_tray() —— 用户要求塌了先召唤不要直接重启微信"
+    # 3) 命中真塌先走热键召唤（Ctrl+Alt+W，handoff 0719 发现1：托盘图标坐标跨机器不稳定），
+    #    失败才退回托盘双击召唤，再失败才退回重启兜底
+    window = src[heal_idx: heal_idx + 900]
+    hotkey_idx = window.find("_summon_wechat_via_hotkey()")
+    tray_idx = window.find("_summon_wechat_from_tray()")
+    assert hotkey_idx != -1, (
+        "scan 快速自愈没先试 _summon_wechat_via_hotkey() —— "
+        "handoff 0719 发现1(热键召唤)未接进主循环，召唤主路仍是跨机器不稳定的托盘坐标识别"
+    )
+    assert tray_idx != -1, (
+        "scan 快速自愈缺 _summon_wechat_from_tray() 兜底 —— 热键召唤失败后应降级托盘双击，不能直接跳重启"
+    )
+    assert hotkey_idx < tray_idx, (
+        "热键召唤必须先于托盘召唤尝试（召唤主路=热键，托盘降级为兜底）"
     )
 
 

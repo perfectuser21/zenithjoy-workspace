@@ -48,15 +48,15 @@ class TestVersionDowngradePath(unittest.TestCase):
 
 
 class TestCheckNamesNoLockUpdate(unittest.TestCase):
-    """锁版本动作已删：CHECK_NAMES 不再含 lock_update，共 8 项。"""
+    """锁版本动作已删：CHECK_NAMES 不再含 lock_update，共 9 项（含 hotkey_summon）。"""
 
     def test_lock_update_removed_from_check_names(self):
         self.assertNotIn("lock_update", CHECK_NAMES,
             "lock_update 应已从 CHECK_NAMES 移除（锁版本动作整套删除）")
 
-    def test_check_names_count_is_8(self):
-        self.assertEqual(len(CHECK_NAMES), 8,
-            f"删 lock_update 后应为 8 项，实际: {len(CHECK_NAMES)}")
+    def test_check_names_count_is_9(self):
+        self.assertEqual(len(CHECK_NAMES), 9,
+            f"删 lock_update 后 + hotkey_summon 新增应为 9 项，实际: {len(CHECK_NAMES)}")
 
 
 if __name__ == "__main__":

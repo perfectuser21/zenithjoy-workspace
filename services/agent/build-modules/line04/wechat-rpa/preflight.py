@@ -6,7 +6,7 @@ preflight.py — Agent 开机环境自检 + 自愈层（Path 4 微信 RPA 前置
 修不了的给明确提示**，最后产出报告（打印 + 写本地 JSON + best-effort 上报中台，
 让运营在 Dashboard 远程看，不用 SSH 进客户机）。
 
-8 个检测项（7 项主序 + elevation 追加在末尾；每项 detect → fix → 修不了 prompt）：
+9 个检测项（7 项主序 + elevation/hotkey_summon 追加在末尾；每项 detect → fix → 修不了 prompt）：
   1. OS/交互会话    —— 是 Windows + 有活动桌面会话（不可自愈）
   2. 微信安装        —— Weixin.exe 在不在；不在 → 下载 4.1.8 静默装
   3. 微信版本        —— 锁 4.1.8.x：< 4.1.8 或 >= 4.1.9（含 4.1.10+）→ 卸载 + 装 4.1.8；仅 4.1.8.x → ok
@@ -14,6 +14,8 @@ preflight.py — Agent 开机环境自检 + 自愈层（Path 4 微信 RPA 前置
   5. Python+pywinauto—— import 测试；失败 → 提示重装 agent
   6. UIA 激活        —— 设屏幕阅读器标志后能否读到主窗口
   7. 中台连通        —— GET <middleware>/health；不通 → 提示查网络
+  8. 权限提权        —— 是否有管理员权限（不可自愈，仅提示）
+  9. 热键召唤自检    —— 绑号引导用户手动设 Ctrl+Alt+W 后，实发一次观察窗口显隐响应判定
   （锁更新 check_lock_update 已删——实测锁不住且 4.1.10 UIA 客服照样能发，2026-06-24）
 
 跨平台纪律：pywinauto / windll / subprocess 真实自愈动作全在 **函数体内** import +
@@ -85,10 +87,11 @@ _INSTALLER_TMP = os.path.join(PUBLIC_DIR, "WeChatWin_4.1.8.exe")
 _STATUS_ICON = {"ok": "✅", "fixed": "🔧", "warn": "⚠️", "failed": "❌"}
 
 # 检测项的稳定名称（报告/看板按此对齐）。
-# 注意：elevation 追加在末尾（保证既有按下标引用的检测项不串位），
-# 但在 run_all_checks 的执行序列里排在 os_session 之后靠前（它影响后面 UIA/登录项成败）。
+# 注意：elevation/hotkey_summon 追加在末尾（保证既有按下标引用的检测项不串位），
+# 但在 run_all_checks 的执行序列里 elevation 排在 os_session 之后靠前（它影响后面 UIA/
+# 登录项成败）；hotkey_summon 排在 middleware_health 之后（handoff 0719 onboarding 新增）。
 # 2026-06-24：lock_update（锁微信 4.1.8 + 禁自动更新四层锁）已整套删除——实测锁不住
-# （客户机重启微信自动升 4.1.10），且 4.1.10 UIA 客服照样能发，锁既无效又无必要。共 8 项。
+# （客户机重启微信自动升 4.1.10），且 4.1.10 UIA 客服照样能发，锁既无效又无必要。共 9 项。
 CHECK_NAMES = (
     "os_session",
     "wechat_installed",
@@ -98,6 +101,7 @@ CHECK_NAMES = (
     "uia_narrator",
     "middleware_health",
     "elevation",
+    "hotkey_summon",
 )
 
 
@@ -634,6 +638,74 @@ def check_uia_narrator(dry_run: bool = False) -> Dict[str, str]:
         )
 
 
+def check_hotkey_summon(dry_run: bool = False) -> Dict[str, str]:
+    """9. 热键召唤(Ctrl+Alt+W)：绑号 onboarding 功能自检探针。
+
+    handoff 0719 发现1 onboarding 前置：微信 4.x 设置存在数据目录加密二进制配置文件
+    （xwechat_files\\...\\config，可打印率 0.38、零可读字段名）+ crc 校验 + 运行时被
+    微信独占锁，程序**读不了**「显示/隐藏窗口」快捷键有没有配成 Ctrl+Alt+W。唯一能验证
+    的办法是功能探针：实际发一次 Ctrl+Alt+W，观察微信窗口 IsWindowVisible 是否翻转。
+
+    绑号引导页 UI 图文教用户去微信设置手动配这三项（热键/提示音/免打扰）；本检测只负责
+    验证"热键这一项配对没"，不读取/不写入任何配置文件。探针必须幂等——翻转后立即再发
+    一次热键把窗口显隐状态还原回探测前，不留副作用（客户可能正在用微信，不能替他关/开）。
+    """
+    name = CHECK_NAMES[8]
+    if dry_run or not _is_windows():
+        return make_check(
+            name, "warn", "dry-run/非 Windows 跳过热键召唤自检（仅 Windows 真机有效）。"
+        )
+
+    try:
+        from find_weixin import get_main_window
+        from listen_chat import _safe_hwnd, _send_hotkey_ctrl_alt_w
+    except Exception as exc:  # noqa: BLE001
+        return make_check(name, "warn", f"自检依赖不可用（{exc}），跳过。")
+
+    try:
+        mw = get_main_window()
+        if mw is None:
+            return make_check(
+                name, "warn",
+                "暂未读到微信主窗口（可能未登录/微信未启动），登录后再体检。",
+            )
+        hwnd = _safe_hwnd(mw)
+        if not hwnd:
+            return make_check(name, "warn", "拿不到微信窗口句柄，跳过热键自检。")
+
+        _u32 = ctypes.windll.user32
+        before = bool(_u32.IsWindowVisible(hwnd))
+        _send_hotkey_ctrl_alt_w()
+
+        flipped = False
+        for _ in range(8):
+            time.sleep(0.4)
+            if bool(_u32.IsWindowVisible(hwnd)) != before:
+                flipped = True
+                break
+
+        if not flipped:
+            return make_check(
+                name, "failed",
+                "发送 Ctrl+Alt+W 后微信窗口显隐无变化——请去微信设置→快捷键，"
+                "把「显示/隐藏窗口」设为 Ctrl+Alt+W、范围「所有窗口」。",
+            )
+
+        # 探针必须幂等：把窗口显隐状态还原回探测前，不留副作用
+        _send_hotkey_ctrl_alt_w()
+        for _ in range(8):
+            time.sleep(0.4)
+            if bool(_u32.IsWindowVisible(hwnd)) == before:
+                break
+
+        return make_check(
+            name, "ok",
+            "Ctrl+Alt+W 已生效：微信窗口显隐响应正常，塌缩自愈可用热键召唤(不依赖托盘坐标)。",
+        )
+    except Exception as exc:  # noqa: BLE001
+        return make_check(name, "warn", f"热键自检异常（{exc}），跳过。")
+
+
 def check_middleware_health(middleware_url: str, dry_run: bool = False) -> Dict[str, str]:
     """7. 中台连通：GET <url>/health 或 /api/health（短超时）。"""
     name = CHECK_NAMES[6]
@@ -681,6 +753,7 @@ def run_all_checks(middleware_url: str, dry_run: bool = False) -> List[Dict[str,
         ("python_pywinauto", lambda: check_python_pywinauto(dry_run)),
         ("uia_narrator", lambda: check_uia_narrator(dry_run)),
         ("middleware_health", lambda: check_middleware_health(middleware_url, dry_run)),
+        ("hotkey_summon", lambda: check_hotkey_summon(dry_run)),
     ]
     checks: List[Dict[str, str]] = []
     for cname, run in runners:

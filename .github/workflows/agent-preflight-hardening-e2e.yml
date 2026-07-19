@@ -37,7 +37,7 @@ jobs:
       - name: Install Python test deps
         run: pip install pytest
 
-      - name: E2E-1 preflight.py --dry-run 8项检测（Linux cross-platform，锁版本已删）
+      - name: E2E-1 preflight.py --dry-run 9项检测（Linux cross-platform，锁版本已删+新增热键召唤）
         run: |
           cd services/agent/wechat-rpa
           PUBLIC=/tmp python preflight.py --dry-run || true
@@ -46,9 +46,9 @@ jobs:
           jpath = os.path.join('/tmp', 'zj-preflight.json')
           r = json.load(open(jpath, encoding='utf-8'))
           checks = r['checks']
-          assert len(checks) == 8, f'FAIL: 期望8项，实际{len(checks)}项'
+          assert len(checks) == 9, f'FAIL: 期望9项，实际{len(checks)}项'
           assert not [x for x in checks if x['name'] == 'lock_update'], 'FAIL: lock_update 应已删除'
-          print('OK: 8项检测，无 lock_update')
+          print('OK: 9项检测，无 lock_update')
           "
 
       - name: E2E-1b 版本闸逻辑（锁 4.1.8.x：4.1.9/4.1.10 降级 / 4.1.7 降级 / 4.1.8.x 放行，cross-platform）
@@ -136,7 +136,7 @@ jobs:
       - name: Install Python test deps
         run: pip install pytest
 
-      - name: E2E-1 preflight.py --dry-run 8项检测（Windows，锁版本已删）
+      - name: E2E-1 preflight.py --dry-run 9项检测（Windows，锁版本已删+新增热键召唤）
         shell: pwsh
         run: |
           $env:PUBLIC = $env:TEMP
@@ -149,9 +149,9 @@ jobs:
           jpath = os.path.join(os.environ.get('TEMP', '/tmp'), 'zj-preflight.json')
           r = json.load(open(jpath, encoding='utf-8'))
           checks = r['checks']
-          assert len(checks) == 8, f'FAIL: 期望8项，实际{len(checks)}项'
+          assert len(checks) == 9, f'FAIL: 期望9项，实际{len(checks)}项'
           assert not [x for x in checks if x['name'] == 'lock_update'], 'FAIL: lock_update 应已删除'
-          print('OK: 8项检测，无 lock_update')
+          print('OK: 9项检测，无 lock_update')
           "@
           if ($LASTEXITCODE -ne 0) { throw "E2E-1 FAIL" }
 
