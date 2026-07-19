@@ -10,12 +10,23 @@ import {
 } from '../services/acquisition-collect';
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { licenseAuth } from '../middleware/license-auth';
+import { simpleRateLimit } from '../middleware/simple-rate-limit';
 import { sseService } from '../services/sse.service';
 import { scoreLeads, buildAssignments, dispatchDue, rescoreLead, upsertConfig } from '../services/acquisition-dispatch';
 import { resolveShareToMedia, type MediaKind } from '../services/douyin-share-resolver';
 import { judgeVideo } from '../services/content-judgment';
 
 export const acquisitionRouter = Router();
+
+// CodeQL js/missing-rate-limiting：/pending-collect-tasks 碰鉴权(x-agent-id反查tenant)+DB
+// 查询，且本次PR改动了这条路由（新增title查询）触发静态分析对"改动过的代码"重新计入告警。
+// 按 x-agent-id 限流（不是 tenantId——这条路由用 header 反查 tenant，tenantContext 中间件
+// 未接入，鉴权发生在 handler 内部）。轮询正常节奏是30s一次，60次/60s 留足重试余量。
+const pendingCollectTasksRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 60,
+  keyFn: (req) => req.header('x-agent-id') || 'anonymous',
+});
 
 const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
 
@@ -220,7 +231,7 @@ acquisitionRouter.get('/videos/:videoId/leads', tenantContextOptional, async (re
 // stage_1_done 任务也返回（Stage 2 重试，含视频 URL 列表）
 // 用 x-agent-id 解析出请求方自己的 tenant_id + agent_id，只返回本租户内、
 // 未绑机器或绑给自己的任务，防跨租户/跨机器抢占。
-acquisitionRouter.get('/pending-collect-tasks', async (req: Request, res: Response) => {
+acquisitionRouter.get('/pending-collect-tasks', pendingCollectTasksRateLimit, async (req: Request, res: Response) => {
   try {
     const pool = (await import('../db/connection')).default;
 
