@@ -83,6 +83,5 @@ realtime-voice-mvp-domestic-smoke.sh
 device-type-ui-gate-smoke.sh
 gpa-voice-outreach-smoke.sh
 line04-ci-desktop-mutex-smoke.sh
-line04-hotkey-summon-smoke.sh
 collect-report-comment-grading-smoke.sh
 dm-dispatch-sweep-smoke.sh
