@@ -4450,6 +4450,14 @@ agent_suite:
   product: AI员工
   note: "sprint(07041249): Playwright E2E — Hub 4 卡片可见/无即将上线，账号页无昵称列/有绑定机器列，Leads 路由正确，触达记录页空状态，设置页无指派计划"
 
+- id: acquisition-tasks-collect-start-e2e
+  path: apps/dashboard/e2e/acquisition-tasks-collect-start.spec.ts
+  type: e2e
+  ci: L4
+  status: active
+  product: AI员工
+  note: "2026-07-19: golden-path-2-smoke.sh号称覆盖客户在dashboard发起采集但全程curl从未真点过按钮——首个真实驱动浏览器填关键词+点开始采集按钮的Playwright E2E，断言真调用collect/start且body.keywords正确"
+
 - id: agent-credit-routes
   path: apps/api/src/routes/agent-credit.test.ts
   type: unit
