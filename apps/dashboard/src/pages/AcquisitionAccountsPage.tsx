@@ -237,6 +237,8 @@ export default function AcquisitionAccountsPage() {
           <KeyRound className="w-4 h-4 text-orange-600" />
           绑定新小号
         </h3>
+
+        <div className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">💻 Windows / PC 绑定</div>
         {atCap ? (
           <div className="text-sm text-amber-600 dark:text-amber-400">
             已达 {MAX_BURNER_ACCOUNTS} 个小号上限，联系升级套餐以绑定更多。
@@ -261,6 +263,13 @@ export default function AcquisitionAccountsPage() {
             </button>
           </div>
         )}
+
+        <hr className="my-4 border-slate-200 dark:border-slate-700" />
+
+        <div className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">📱 Android 绑定</div>
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          在手机 ZenithJoy Agent App 里，切换到你要绑定的抖音小号——中台会自动检测到并出现在上方账号列表里，无需在此操作。
+        </p>
       </section>
     </div>
   );
