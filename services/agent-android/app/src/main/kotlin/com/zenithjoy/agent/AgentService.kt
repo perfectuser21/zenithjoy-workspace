@@ -363,6 +363,14 @@ class AgentService : Service() {
                     }
                 } else if (shouldRouteDmOutreach(payloadTaskType)) {
                     routeDmOutreachTask(task)
+                } else if (shouldRouteAccountScan(payloadTaskType)) {
+                    // 手动触发的立即扫描：直接复用既有 dispatchTask，DeviceAccountScanService
+                    // 内部已有 state != State.IDLE 早退判断，与内部 30-60 分钟循环天然互斥，
+                    // 不需要额外去重逻辑（sprint 07192358）。
+                    android.util.Log.i(TAG, "ws1 account_scan task (manual trigger): id=${task.task_id}")
+                    DeviceAccountScanService.dispatchTask(
+                        this@AgentService, task.task_id, tenantId = "", thisDeviceId = config.machineId,
+                    )
                 }
             },
             onHeartbeat = { resp ->
@@ -882,6 +890,10 @@ class AgentService : Service() {
         // routeDmOutreachTask()。真正的判别符跟 warmup 一样得走 payload.task_type
         // （dispatchDue 把它塞进了 payload JSON 里，经心跳 realPayload 透传到 agent）。
         fun shouldRouteDmOutreach(payloadTaskType: String?): Boolean = payloadTaskType == "dm_outreach"
+
+        // account_scan 判别符（sprint 07192358）：手动触发的账号扫描，同 warmup/dm_outreach
+        // 走 payload.task_type 判别，不看 task 顶层 type（服务端恒为默认值 "image"）。
+        fun shouldRouteAccountScan(payloadTaskType: String?): Boolean = payloadTaskType == "account_scan"
 
         /**
          * 判定某个 dm_outreach task_id 是否是本进程生命周期内已经处理过的重投递。
