@@ -4826,3 +4826,19 @@ agent_suite:
   status: active
   product: 其他
   note: "sprint(07191122): 国内豆包语音管线延迟埋点——computeTurnLatency纯函数单测，覆盖三段耗时计算+缺失时间戳边界"
+
+- id: dm-dispatch-sweep-scheduler-wiring-unit
+  path: apps/api/tests/services/scheduler.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 智能获客
+  note: "sprint(07192057): dispatch-due-cron——triggerDmDispatchSweep单测，给dispatchDue挂周期tick，含全租户扫描/单租户失败隔离/setInterval回调触发覆盖"
+
+- id: index-scheduler-wiring-unit
+  path: apps/api/tests/index-scheduler-wiring.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 智能获客
+  note: "sprint(07192057): dispatch-due-cron——静态检查index.ts真的调用了startScheduler()，防止建库以来从未接线的问题在未来重构中再次静默复发"
