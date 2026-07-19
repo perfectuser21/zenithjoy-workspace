@@ -324,18 +324,28 @@ def make_voice_call(
     contact_name: str,
     wechat_account: str | None = None,
     tenant_id: str | None = None,
+    asr_buffer: list | None = None,
 ) -> dict[str, Any]:
     """
     主动语音触达完整流程（Golden Path Step 3-7）：
-      locate_contact → initiate_voice_call → wait_for_answer → wait_for_hangup
+      locate_contact → trigger_voice_call → wait_for_answer
+      → start_audio_bridge（AI 对话真接线 + ASR 收集）→ wait_for_hangup
+
+    参数：
+      asr_buffer — 外部传入的列表，start_audio_bridge 的 asr_callback 将 ASR 文本追加到此列表
+                   （transcript 收集，CI mock 用于验证接线）
 
     返回：
       {'status': 'answered'|'no_answer'|'contact_mismatch'|'failed',
        'duration_seconds': N,
+       'transcript': '...',
        'contact_name': contact_name,
        'tenant_id': tenant_id}
     """
-    base = {'contact_name': contact_name, 'tenant_id': tenant_id, 'duration_seconds': 0}
+    if asr_buffer is None:
+        asr_buffer = []
+
+    base = {'contact_name': contact_name, 'tenant_id': tenant_id, 'duration_seconds': 0, 'transcript': ''}
     app = _get_wechat_app()
 
     # 联系人定位（I-1/I-6）
@@ -355,11 +365,23 @@ def make_voice_call(
     if answer_result['status'] != 'answered':
         return {**base, 'status': answer_result['status']}
 
+    # 接通后启动音频桥接（AI 对话真接线，I-4 合规开场白 + ASR 收集）
+    def _asr_callback(text: str) -> None:
+        asr_buffer.append(text)
+
+    from voice_call.audio_bridge import start_audio_bridge  # 延迟 import，CI mock 可覆盖
+    start_audio_bridge(asr_callback=_asr_callback)  # type: ignore[call-arg]
+
     # 等待通话结束
     hangup_result = wait_for_hangup(app, chat_win)
+
+    # 合并 ASR 收集结果为 transcript
+    transcript = '\n'.join(asr_buffer)
+
     return {
         **base,
         'status': hangup_result['status'],
         'duration_seconds': hangup_result.get('duration_seconds', 0),
         'bubble_text': hangup_result.get('bubble_text', ''),
+        'transcript': transcript,
     }
