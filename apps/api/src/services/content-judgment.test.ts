@@ -195,4 +195,61 @@ describe('content-judgment judgeVideo', () => {
     expect(result.judgment_status).toBe('matched');
   });
 
+  /**
+   * 回归（2026-07-19）：audio 分支必须把 title 塞进 prompt，指示 Gemini "先转写再判断"。
+   * 2026-07-17 决策(判定点1d078987)只完成了客户端路由分流，服务端 buildPrompt 从未
+   * 真正用上 title、也没有"先转写"指令——单次多模态调用内完成转写+判定两步，不新增
+   * 独立转写API调用。
+   */
+  it('回归: audio分支prompt须含title并指示先转写再判定', async () => {
+    process.env.TOAPIS_API_KEY = 'test-toapis-key';
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost.mockResolvedValue({
+      data: { choices: [{ message: { content: 'MATCHED' } }] },
+    } as never);
+
+    const pool = makePool({ targetProfileDesc: '家装/室内设计目标客户' });
+    await judgeVideo(
+      pool,
+      'tenant-title-001',
+      'video-title-001',
+      'audio',
+      btoa('fake-pcm-wav-data'),
+      undefined,
+      undefined,
+      '千呼万唤的一镜到底来啦～黑白灰极简小家装修',
+    );
+
+    expect(mockedPost).toHaveBeenCalledTimes(1);
+    const [, body] = mockedPost.mock.calls[0] as [string, Record<string, unknown>];
+    const messages = body.messages as Array<{ content: Array<{ type: string; text?: string }> }>;
+    const promptText = messages[0].content.find((p) => p.type === 'text')?.text ?? '';
+    expect(promptText).toContain('千呼万唤的一镜到底来啦～黑白灰极简小家装修');
+    expect(promptText).toContain('转写');
+  });
+
+  it('回归: audio分支title为空时不强行拼接空标题', async () => {
+    process.env.TOAPIS_API_KEY = 'test-toapis-key';
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost.mockResolvedValue({
+      data: { choices: [{ message: { content: 'MATCHED' } }] },
+    } as never);
+
+    const pool = makePool({ targetProfileDesc: '家装/室内设计目标客户' });
+    await judgeVideo(
+      pool,
+      'tenant-title-002',
+      'video-title-002',
+      'audio',
+      btoa('fake-pcm-wav-data'),
+    );
+
+    expect(mockedPost).toHaveBeenCalledTimes(1);
+    const [, body] = mockedPost.mock.calls[0] as [string, Record<string, unknown>];
+    const messages = body.messages as Array<{ content: Array<{ type: string; text?: string }> }>;
+    const promptText = messages[0].content.find((p) => p.type === 'text')?.text ?? '';
+    expect(promptText).not.toContain('《undefined》');
+    expect(promptText).not.toContain('《null》');
+  });
+
 });
