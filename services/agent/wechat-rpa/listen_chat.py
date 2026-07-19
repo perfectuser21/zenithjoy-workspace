@@ -4736,24 +4736,75 @@ def _should_continue_hotkey_retry(attempt: int, max_attempts: int, tree_ready: b
     return attempt < max_attempts
 
 
+# ─── SendInput 键盘注入结构（全局热键触发）──────────────────────────────────
+# x64 铁坑（2026-07-19 真机根因，曾误判"热键路线不通"）：INPUT 的 union 必须含最大成员
+# MOUSEINPUT，否则 sizeof(INPUT)=32≠40 → SendInput 每次返回 0 + GetLastError=87
+# (ERROR_INVALID_PARAMETER)，一个键都注入不进系统输入流。
+# ⚠️ 字段必须用定宽类型（c_uint32/c_uint16/c_int32），不能用 c_ulong——Windows(LLP64) 的
+# DWORD 恒 4 字节，但 mac/linux(LP64) 的 c_ulong 是 8 字节，用 c_ulong 会让 CI/单测机上
+# sizeof 算错。dwExtraInfo(ULONG_PTR) 用 c_void_p（指针宽度，x64=8）。这样任何 64 位平台
+# 都算出 40，且跟 Windows x64 真实布局字节一致（只有 SendInput 调用本身是 Windows-only）。
+import ctypes as _ctypes  # noqa: E402
+
+_KB_PTR = _ctypes.c_void_p
+
+
+class _MOUSEINPUT(_ctypes.Structure):
+    _fields_ = [("dx", _ctypes.c_int32), ("dy", _ctypes.c_int32),
+                ("mouseData", _ctypes.c_uint32), ("dwFlags", _ctypes.c_uint32),
+                ("time", _ctypes.c_uint32), ("dwExtraInfo", _KB_PTR)]
+
+
+class _KEYBDINPUT(_ctypes.Structure):
+    _fields_ = [("wVk", _ctypes.c_uint16), ("wScan", _ctypes.c_uint16),
+                ("dwFlags", _ctypes.c_uint32), ("time", _ctypes.c_uint32),
+                ("dwExtraInfo", _KB_PTR)]
+
+
+class _HARDWAREINPUT(_ctypes.Structure):
+    _fields_ = [("uMsg", _ctypes.c_uint32), ("wParamL", _ctypes.c_uint16),
+                ("wParamH", _ctypes.c_uint16)]
+
+
+class _INPUT_UNION(_ctypes.Union):
+    _fields_ = [("mi", _MOUSEINPUT), ("ki", _KEYBDINPUT), ("hi", _HARDWAREINPUT)]
+
+
+class INPUT(_ctypes.Structure):
+    _fields_ = [("type", _ctypes.c_uint32), ("u", _INPUT_UNION)]
+
+
+_INPUT_KEYBOARD = 1
+_KEYEVENTF_KEYUP = 0x0002
+
+
+def _make_kb_input(vk: int, up: bool = False) -> "INPUT":
+    """构造一条键盘 INPUT（纯构造，无副作用，CI 可测 sizeof / vk / up 标志）。"""
+    inp = INPUT()
+    inp.type = _INPUT_KEYBOARD
+    inp.u.ki = _KEYBDINPUT(vk, 0, (_KEYEVENTF_KEYUP if up else 0), 0, None)
+    return inp
+
+
 def _send_hotkey_ctrl_alt_w() -> None:
     """发送全局热键 Ctrl+Alt+W（微信设置里「显示/隐藏窗口」快捷键，范围需设「所有窗口」）。
 
-    用 keybd_event 模拟真实物理按键，不用 PostMessage 发到微信窗口——全局热键走系统级
+    用 SendInput 模拟真实物理按键，不用 PostMessage 发到微信窗口——全局热键走系统级
     RegisterHotKey/WM_HOTKEY 分发，只有真实按键才能触发，PostMessage 打不中（与
     _summon_wechat_from_tray 里托盘图标必须真实鼠标点击同理）。
+
+    2026-07-19 真机改用 SendInput（替换已废弃的 keybd_event）：结构体尺寸走上面修正过的
+    INPUT（sizeof=40），真机验证 SendInput 与 keybd_event 都能把微信从后台拉到前台。
     """
-    import ctypes as _ct
-    _u32 = _ct.windll.user32
+    _u32 = _ctypes.windll.user32
     _VK_CONTROL, _VK_MENU, _VK_W = 0x11, 0x12, 0x57
-    _KEYEVENTF_KEYUP = 0x0002
-    _u32.keybd_event(_VK_CONTROL, 0, 0, 0)
-    _u32.keybd_event(_VK_MENU, 0, 0, 0)
-    _u32.keybd_event(_VK_W, 0, 0, 0)
+    _sz = _ctypes.sizeof(INPUT)
+    for _inp in (_make_kb_input(_VK_CONTROL), _make_kb_input(_VK_MENU), _make_kb_input(_VK_W)):
+        _u32.SendInput(1, _ctypes.byref(_inp), _sz)
     time.sleep(0.05)
-    _u32.keybd_event(_VK_W, 0, _KEYEVENTF_KEYUP, 0)
-    _u32.keybd_event(_VK_MENU, 0, _KEYEVENTF_KEYUP, 0)
-    _u32.keybd_event(_VK_CONTROL, 0, _KEYEVENTF_KEYUP, 0)
+    for _inp in (_make_kb_input(_VK_W, True), _make_kb_input(_VK_MENU, True),
+                 _make_kb_input(_VK_CONTROL, True)):
+        _u32.SendInput(1, _ctypes.byref(_inp), _sz)
 
 
 def _summon_wechat_via_hotkey() -> bool:
