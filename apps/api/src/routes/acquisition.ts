@@ -15,6 +15,7 @@ import { sseService } from '../services/sse.service';
 import { scoreLeads, buildAssignments, dispatchDue, rescoreLead, upsertConfig } from '../services/acquisition-dispatch';
 import { resolveShareToMedia, type MediaKind } from '../services/douyin-share-resolver';
 import { judgeVideo } from '../services/content-judgment';
+import { gradeComments } from '../services/comment-grading';
 
 export const acquisitionRouter = Router();
 
@@ -868,13 +869,33 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
       return ok(res, { task_id: taskId, ignored: true, status: s.status });
     }
 
+    // ── 评论意向分档判定（decision 4e421ae8）：批量对这一批评论调 Gemini 判档，
+    // 结果覆盖 c.grade（客户端从不传这个字段，见 CommentEntry.toCollectReportMap）。
+    const videoInfoRes = await client.query<{ title: string | null; transcript: string | null }>(
+      `SELECT title, transcript FROM zenithjoy.acquisition_collect_videos WHERE task_id = $1 AND video_id = $2`,
+      [taskId, videoId]
+    );
+    const videoTitleForGrading = videoInfoRes.rows[0]?.title ?? videoTitle ?? null;
+    const videoTranscript = videoInfoRes.rows[0]?.transcript ?? null;
+    const gradingConfigRes = await client.query<{ target_profile_desc: string | null }>(
+      `SELECT target_profile_desc FROM zenithjoy.acquisition_config WHERE tenant_id = $1 LIMIT 1`,
+      [tenantId]
+    );
+    const targetProfileDescForGrading = gradingConfigRes.rows[0]?.target_profile_desc ?? '';
+    const grades = await gradeComments(
+      targetProfileDescForGrading,
+      videoTitleForGrading,
+      videoTranscript,
+      batch.map((c) => ({ commentText: c.comment_text })),
+    );
+
     // ── 去重落库：先处理 commenters（已抓先落库不丢，即使本次是终态回报）──
     let inserted = 0;
     let deduped = 0;
     const seenSec = new Set<string>();
     const seenNick = new Set<string>();
 
-    for (const c of batch) {
+    for (const [index, c] of batch.entries()) {
       const secUid = c.sec_uid ?? null;
       // 「宁可空，不可猜」（PR #1306 同款规则）：读不到号 / 空白 → null，绝不用昵称/URL 顶替。
       const douyinId = String(c.douyin_id ?? '').trim() || null;
@@ -921,7 +942,7 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
             `INSERT INTO zenithjoy.acquisition_lead_comments
                (lead_id, video_id, comment_text, grade, commented_at)
              VALUES ($1, $2, $3, $4, NOW())`,
-            [matchId, videoId, c.comment_text ?? null, c.grade ?? null]
+            [matchId, videoId, c.comment_text ?? null, grades[index] ?? c.grade ?? null]
           );
           await rescoreLead(client, tenantId, matchId); // 事务内传 client，别传 pool（读不到未提交数据）
         }
@@ -938,7 +959,7 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
          VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, 'local_only')
          RETURNING id`,
         [tenantId, taskId, secUid, c.nickname, secUid ? profileUrlForSecUid(secUid) : c.nickname, false,
-         JSON.stringify([videoId]), c.comment_text ?? null, c.grade ?? null, c.keyword ?? keyword ?? null, douyinId]
+         JSON.stringify([videoId]), c.comment_text ?? null, grades[index] ?? c.grade ?? null, c.keyword ?? keyword ?? null, douyinId]
       );
       const newLeadId = insRes.rows[0].id as string;
       // 首条留言也进历史表（不只老用户才进），再 rescore 汇总
@@ -946,7 +967,7 @@ acquisitionRouter.post('/collect/report', async (req: Request, res: Response) =>
         `INSERT INTO zenithjoy.acquisition_lead_comments
            (lead_id, video_id, comment_text, grade, commented_at)
          VALUES ($1, $2, $3, $4, NOW())`,
-        [newLeadId, videoId, c.comment_text ?? null, c.grade ?? null]
+        [newLeadId, videoId, c.comment_text ?? null, grades[index] ?? c.grade ?? null]
       );
       await rescoreLead(client, tenantId, newLeadId);
     }
