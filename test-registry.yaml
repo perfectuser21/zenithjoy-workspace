@@ -4781,3 +4781,11 @@ agent_suite:
   status: active
   product: 微信AI客服
   note: "sprint(07190622): CI×常驻监听桌面互斥——DesktopLeaseBroker.status()只读窥视端点单测，供监听主循环顶部判断CI是否持租→让位"
+
+- id: voice-latency-tracker-unit
+  path: apps/realtime-voice-mvp/latency-tracker.test.js
+  type: unit
+  ci: L3
+  status: active
+  product: 其他
+  note: "sprint(07191122): 国内豆包语音管线延迟埋点——computeTurnLatency纯函数单测，覆盖三段耗时计算+缺失时间戳边界"
