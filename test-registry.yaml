@@ -4737,6 +4737,14 @@ agent_suite:
   product: 微信AI客服
   note: "sprint(07121132): 第二刀 node OverlayHandler——preflight 软检测/熔断/用户关闭不重拉/diag 落盘"
 
+- id: line02-comment-grading-unit
+  path: apps/api/src/services/comment-grading.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "sprint(07191822): 评论区留言AI意向分档判定gradeComments（decision 4e421ae8）——补齐Path2 Seg3→Seg4之间缺失的判定环节，空画像/空评论/未配置key跳过调用、批量解析、解析失败单行降级null、调用异常整批降级null"
+
 - id: line04-wechat-draft-reasoning-r2
   path: sprints/07121132-line04-ai-thinking-overlay/tests/wechat-draft-reasoning-r2.test.ts
   type: unit
@@ -4772,6 +4780,13 @@ agent_suite:
   status: active
   product: AI员工
   note: "2026-07-19 真机验证PR#1404时发现：RECORD_AUDIO权限修好后真机首次真实产出约870KB音频payload，express.json()默认100KB body限制导致/judge-video全部500(docker logs抓到PayloadTooLargeError)；改limit:1mb（受限于hk-vps nginx反代默认1MB上限，未改生产nginx配置）"
+- id: line02-content-judgment-collect-report-comment-grading
+  path: apps/api/tests/integration/p2-line02-content-judgment/collect-report-comment-grading.integration.test.ts
+  type: integration
+  ci: L4-INT
+  status: active
+  product: AI员工
+  note: "2026-07-19 真机验证音频判定fix全链路时发现：acquisition_leads.outreach_eligible 永远false，Seg4私信从未真实触发——根因是grade字段从来没有任何地方真正产生过值；接入gradeComments后/collect/report真实落库的grade能驱动rescoreLead算出outreach_eligible=true，真连Postgres经HTTP路由层验证（decision 4e421ae8）"
 - id: realtime-voice-mvp-doubao-protocol
   path: apps/realtime-voice-mvp/doubao-protocol.test.js
   type: unit

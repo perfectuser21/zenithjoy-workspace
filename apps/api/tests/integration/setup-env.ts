@@ -12,4 +12,7 @@ process.env.ZENITHJOY_INTERNAL_TOKEN =
   process.env.ZENITHJOY_INTERNAL_TOKEN ?? 'integration-test-token';
 process.env.ADMIN_FEISHU_OPENIDS =
   process.env.ADMIN_FEISHU_OPENIDS ?? 'ou_admin_integration_001';
+// gradeComments()/judgeVideo() 在没配 key 时会直接短路跳过 Gemini 调用（省钱兜底行为）。
+// 集成测试里 axios 是被 mock 的，真实 key 值不重要，只要非空即可让服务真正走到调用分支。
+process.env.TOAPIS_API_KEY = process.env.TOAPIS_API_KEY ?? 'integration-test-toapis-key';
 process.env.NODE_ENV = 'test';
