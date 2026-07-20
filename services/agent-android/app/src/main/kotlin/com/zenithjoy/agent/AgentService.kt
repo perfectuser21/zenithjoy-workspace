@@ -109,8 +109,10 @@ class AgentService : Service() {
             val stale = intent.getBooleanExtra(DeviceAccountScanService.EXTRA_RESULT_STALE, false)
             val accountIds = intent.getStringArrayExtra(DeviceAccountScanService.EXTRA_RESULT_ACCOUNT_IDS)?.toList() ?: emptyList()
             val errorCode = intent.getStringExtra(DeviceAccountScanService.EXTRA_ERROR) ?: ""
+            val screenshotB64 = intent.getStringExtra(DeviceAccountScanService.EXTRA_SCREENSHOT_B64)
+            val treeDump = intent.getStringExtra(DeviceAccountScanService.EXTRA_TREE_DUMP)
             // 网络请求不能跑主线程(NetworkOnMainThreadException)，跟 warmupResultReceiver 同套路。
-            scope.launch(Dispatchers.IO) { reportAccountScanResult(requestId, ok, stale, accountIds, errorCode) }
+            scope.launch(Dispatchers.IO) { reportAccountScanResult(requestId, ok, stale, accountIds, errorCode, screenshotB64, treeDump) }
         }
     }
 
@@ -284,6 +286,7 @@ class AgentService : Service() {
         unregisterReceiver(warmupResultReceiver)
         DouyinCollectService.onCollectResult = null
         DouyinCollectService.onVideoCardResult = null
+        sharedScreenCaptureService = null
         super.onDestroy()
     }
 
@@ -405,6 +408,12 @@ class AgentService : Service() {
                 MediaProjectionHolder.getOrCreateProjection(this)
             },
         )
+        // 进程内唯一 ScreenCaptureService 共享引用（sprint 07201209 whole-branch review 修复）：
+        // ScreenCaptureReal 是进程级单例 object，manager 字段全局唯一——绝不能有第二个调用点
+        // 各自 new 一个 ScreenCaptureService（会撞上 A14 CaptureSessionManager 单例纪律，重复
+        // createVirtualDisplay 崩溃并殃及本类下面 ContentJudgmentService 的截图能力）。
+        // DeviceAccountScanService.captureFailureDiagnostics() 复用这个共享引用，不再自建实例。
+        sharedScreenCaptureService = screenCaptureService
         // 用户2026-07-17拍板（判定点1d078987）：视频类内容判定改用真实音频转写，固定录制
         // 开头20秒系统音频（AudioRecordService.RECORD_DURATION_MS）。复用同一个 MediaProjection
         // 授权换出实例，不额外弹权限框。
@@ -687,9 +696,11 @@ class AgentService : Service() {
         stale: Boolean,
         accountIds: List<String>,
         errorCode: String,
+        screenshotB64: String? = null,
+        treeDump: String? = null,
     ) {
         val url = "${config.deriveHttpBase()}/api/agent/burner/account-scan-result"
-        val body = buildAccountScanResultBody(requestId, config.agentId, ok, stale, accountIds, errorCode)
+        val body = buildAccountScanResultBody(requestId, config.agentId, ok, stale, accountIds, errorCode, screenshotB64, treeDump)
         try {
             val request = Request.Builder()
                 .url(url)
@@ -857,6 +868,16 @@ class AgentService : Service() {
         private const val NOTIFICATION_ID = 1001
 
         /**
+         * 进程内唯一 ScreenCaptureService 共享引用（sprint 07201209）。onCreate 里构造完唯一实例后
+         * 赋值给这个字段，供 DeviceAccountScanService.captureFailureDiagnostics() 等跨类调用点复用，
+         * 避免各自 new 出第二个 ScreenCaptureService（进而撞上 ScreenCaptureReal 进程级单例
+         * CaptureSessionManager 的"同一 projection 不能二次 createVirtualDisplay"纪律）。
+         * onDestroy 里清空，避免持有已失效底层 MediaProjection/CaptureSessionManager 的陈旧引用。
+         */
+        @Volatile
+        var sharedScreenCaptureService: ScreenCaptureService? = null
+
+        /**
          * 构造供 dm-outreach-result / warmup-result 等低频报告类端点使用的 OkHttpClient。
          * 真机复现(2026-07-17 xian-rog)：这类调用数分钟才发生一次，OkHttp 默认连接池
          * （最多 5 条空闲连接、保留 5 分钟）会在这段空闲期间遇到网络切换/NAT 超时，
@@ -1013,14 +1034,20 @@ class AgentService : Service() {
             stale: Boolean,
             accountIds: List<String>,
             errorCode: String,
+            screenshotB64: String? = null,
+            treeDump: String? = null,
         ): String {
-            fun esc(s: String): String = s.replace("\\", "\\\\").replace("\"", "\\\"")
+            fun esc(s: String): String = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
             val ids = accountIds.joinToString(",") { "\"${esc(it)}\"" }
+            val screenshotField = if (screenshotB64 != null) "\"${esc(screenshotB64)}\"" else "null"
+            val treeDumpField = if (treeDump != null) "\"${esc(treeDump)}\"" else "null"
             return "{\"request_id\":\"${esc(requestId)}\"," +
                 "\"agent_id\":\"${esc(agentId)}\"," +
                 "\"ok\":$ok,\"stale\":$stale," +
                 "\"account_ids\":[$ids]," +
-                "\"error_code\":\"${esc(errorCode)}\"}"
+                "\"error_code\":\"${esc(errorCode)}\"," +
+                "\"screenshot_b64\":$screenshotField," +
+                "\"tree_dump\":$treeDumpField}"
         }
     }
 }

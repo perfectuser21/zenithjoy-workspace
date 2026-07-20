@@ -667,4 +667,45 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
     expect(r.body.error.code).toBe('MISSING_AGENT_ID');
     expect(vi.mocked(pool.query).mock.calls.length).toBe(0);
   });
+
+  it('screenshot_b64/tree_dump 存在 → response 落库带上这两个字段', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ status: 'queued' }] } as any);
+
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/account-scan-result')
+      .send({
+        agent_id: AGENT_UUID,
+        request_id: TASK_UUID,
+        ok: false,
+        account_ids: [],
+        error_code: 'OPEN_PANEL_FAILED',
+        screenshot_b64: 'ZmFrZWJhc2U2NA==',
+        tree_dump: 'line1\nline2',
+      });
+
+    expect(r.status).toBe(200);
+    const calls = vi.mocked(pool.query).mock.calls;
+    const updateCall = calls.find((c) => /UPDATE\s+zenithjoy\.publish_tasks/i.test(String(c[0])));
+    expect(updateCall).toBeTruthy();
+    const responseJson = JSON.parse(updateCall![1][2] as string);
+    expect(responseJson.screenshot_b64).toBe('ZmFrZWJhc2U2NA==');
+    expect(responseJson.tree_dump).toBe('line1\nline2');
+  });
+
+  it('screenshot_b64/tree_dump 缺失时 response 里对应字段为 null，不报错', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ status: 'queued' }] } as any);
+
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/account-scan-result')
+      .send({ agent_id: AGENT_UUID, request_id: TASK_UUID, ok: true, account_ids: ['大湖'] });
+
+    expect(r.status).toBe(200);
+    const calls = vi.mocked(pool.query).mock.calls;
+    const updateCall = calls.find((c) => /UPDATE\s+zenithjoy\.publish_tasks/i.test(String(c[0])));
+    const responseJson = JSON.parse(updateCall![1][2] as string);
+    expect(responseJson.screenshot_b64).toBeNull();
+    expect(responseJson.tree_dump).toBeNull();
+  });
 });

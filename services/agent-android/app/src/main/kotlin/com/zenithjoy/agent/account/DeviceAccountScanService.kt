@@ -11,6 +11,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import com.zenithjoy.agent.AgentService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -148,7 +149,8 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
                 previousKnownIds = DeviceAccountRegistry.snapshot().keys.toList(),
                 freshlyScannedRawIds = emptyList(),
             )
-            sendScanResultBroadcast(requestId, ok = false, stale = resolution.stale, accountIds = resolution.accountIds, errorCode = "OPEN_PANEL_FAILED")
+            val (screenshotB64, treeDump) = captureFailureDiagnostics()
+            sendScanResultBroadcast(requestId, ok = false, stale = resolution.stale, accountIds = resolution.accountIds, errorCode = "OPEN_PANEL_FAILED", screenshotB64 = screenshotB64, treeDump = treeDump)
             return
         }
 
@@ -196,7 +198,8 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         }
 
         // Step 8（出口）：结果广播给 AgentService，由它调用中台接口写回 agent_platform_sessions。
-        sendScanResultBroadcast(requestId, ok = readSucceeded, stale = resolution.stale, accountIds = resolution.accountIds, errorCode = if (readSucceeded) "" else "READ_FAILED")
+        val (screenshotB64, treeDump) = if (readSucceeded) null to null else captureFailureDiagnostics()
+        sendScanResultBroadcast(requestId, ok = readSucceeded, stale = resolution.stale, accountIds = resolution.accountIds, errorCode = if (readSucceeded) "" else "READ_FAILED", screenshotB64 = screenshotB64, treeDump = treeDump)
 
         state = State.CLOSING_SWITCH_ACCOUNT_PANEL
         closeSwitchAccountPanel()
@@ -610,7 +613,10 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
 
     // ── 结果上报 ──────────────────────────────────────────────────────────────
 
-    private fun sendScanResultBroadcast(requestId: String, ok: Boolean, stale: Boolean, accountIds: List<String>, errorCode: String) {
+    private fun sendScanResultBroadcast(
+        requestId: String, ok: Boolean, stale: Boolean, accountIds: List<String>, errorCode: String,
+        screenshotB64: String? = null, treeDump: String? = null,
+    ) {
         val intent = Intent(ACTION_ACCOUNT_SCAN_RESULT).apply {
             setPackage(applicationContext.packageName)
             putExtra(EXTRA_REQUEST_ID, requestId)
@@ -618,9 +624,37 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
             putExtra(EXTRA_RESULT_STALE, stale)
             putExtra(EXTRA_RESULT_ACCOUNT_IDS, accountIds.toTypedArray())
             putExtra(EXTRA_ERROR, errorCode)
+            if (screenshotB64 != null) putExtra(EXTRA_SCREENSHOT_B64, screenshotB64)
+            if (treeDump != null) putExtra(EXTRA_TREE_DUMP, treeDump)
         }
         sendBroadcast(intent)
-        android.util.Log.i(TAG, "account scan result broadcast: requestId=$requestId ok=$ok stale=$stale accounts=${accountIds.size} error=$errorCode")
+        android.util.Log.i(TAG, "account scan result broadcast: requestId=$requestId ok=$ok stale=$stale accounts=${accountIds.size} error=$errorCode hasScreenshot=${screenshotB64 != null}")
+    }
+
+    /**
+     * 失败诊断捕获：截图（未授权/失败则 null，不阻塞上报）+ 当前无障碍树摘要。
+     * 只在 OPEN_PANEL_FAILED/READ_FAILED 路径调用，成功路径不产生额外开销（sprint 07201209）。
+     */
+    private fun captureFailureDiagnostics(): Pair<String?, String?> {
+        // 复用 AgentService 构造的进程内唯一 ScreenCaptureService（sprint 07201209 review 修复）：
+        // 不能在这里自己 new 一个新实例——ScreenCaptureReal 是进程级单例 object，manager 字段
+        // 全局唯一，第二个 ScreenCaptureService 会撞上 A14 "同一 MediaProjection 不能二次
+        // createVirtualDisplay" 纪律并崩溃，殃及 ContentJudgmentService 的截图能力。
+        // AgentService 尚未启动（极端时序）时该引用为 null，captureToBase64() 自然短路为 null，
+        // 与既有"截图不可用"的优雅降级行为一致。
+        val screenshot = try {
+            AgentService.sharedScreenCaptureService?.captureToBase64()
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "failure screenshot capture threw: ${e.message}")
+            null
+        }
+        val tree = try {
+            dumpNodeTreeAsString(rootInActiveWindow)
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "failure tree dump threw: ${e.message}")
+            null
+        }
+        return screenshot to tree
     }
 
     companion object {
@@ -639,6 +673,8 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         const val EXTRA_RESULT_STALE = "result_stale"
         const val EXTRA_RESULT_ACCOUNT_IDS = "result_account_ids"
         const val EXTRA_ERROR = "error"
+        const val EXTRA_SCREENSHOT_B64 = "screenshot_b64"
+        const val EXTRA_TREE_DUMP = "tree_dump"
         const val ACTION_ACCOUNT_WARMUP_TASK = "com.zenithjoy.agent.ACCOUNT_WARMUP_TASK"
         const val ACTION_ACCOUNT_WARMUP_RESULT = "com.zenithjoy.agent.ACCOUNT_WARMUP_RESULT"
         const val EXTRA_OPERATOR_NICKNAME = "operator_nickname"
@@ -805,3 +841,57 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         }
     }
 }
+
+/**
+ * 无障碍树摘要 dump 的纯逻辑核心，对泛型 T 操作，不碰 Android SDK——JVM 单测环境
+ * 无 Mockito/Robolectric，用这个把可测的核心逻辑和真实 AccessibilityNodeInfo 遍历分离
+ * （sprint 07201209，账号扫描失败诊断，同 ScreenCaptureService 的注入 lambda 写法）。
+ *
+ * 顶层函数（非类成员/非 companion 成员）：需要在同包内不加限定符直接调用
+ * （见 [DeviceAccountScanServiceTreeDumpTest]），companion object 成员在 Kotlin 里
+ * 仍需 `DeviceAccountScanService.xxx` 限定调用，不满足这个要求。
+ */
+fun <T> dumpNodesGeneric(
+    root: T?,
+    limit: Int,
+    getClassName: (T) -> String,
+    getText: (T) -> String?,
+    getContentDesc: (T) -> String?,
+    getClickable: (T) -> Boolean,
+    getBoundsWH: (T) -> Pair<Int, Int>,
+    getChildCount: (T) -> Int,
+    getChild: (T, Int) -> T?,
+): String {
+    if (root == null) return "DUMP root=null"
+    val sb = StringBuilder()
+    val queue = ArrayDeque<T>()
+    queue.add(root)
+    var n = 0
+    while (queue.isNotEmpty() && n < limit) {
+        val node = queue.removeFirst()
+        val (w, h) = getBoundsWH(node)
+        val desc = getContentDesc(node)?.take(40)
+        val txt = getText(node)?.take(40)
+        val clickable = getClickable(node)
+        if (!desc.isNullOrBlank() || !txt.isNullOrBlank() || clickable) {
+            sb.appendLine("#$n cls=${getClassName(node)} click=$clickable b=${w}x${h} desc=$desc txt=$txt")
+            n++
+        }
+        for (i in 0 until getChildCount(node)) getChild(node, i)?.let { queue.add(it) }
+    }
+    sb.appendLine("end printed=$n")
+    return sb.toString()
+}
+
+/** 真实 AccessibilityNodeInfo 适配层，调用上面的纯逻辑核心。供 Task 2 在失败路径调用。 */
+fun dumpNodeTreeAsString(root: AccessibilityNodeInfo?, limit: Int = 80): String = dumpNodesGeneric(
+    root = root,
+    limit = limit,
+    getClassName = { it.className?.toString() ?: "" },
+    getText = { it.text?.toString() },
+    getContentDesc = { it.contentDescription?.toString() },
+    getClickable = { it.isClickable },
+    getBoundsWH = { node -> val b = Rect(); node.getBoundsInScreen(b); b.width() to b.height() },
+    getChildCount = { it.childCount },
+    getChild = { node, i -> node.getChild(i) },
+)
