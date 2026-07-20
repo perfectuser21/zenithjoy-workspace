@@ -10,7 +10,7 @@ DM 私信派单同样走"服务端建 publish_task → ws1 心跳(30s周期)拉�
 
 三处联动：
 
-1. **API**：新增 `POST /api/agent/account-scan/trigger`，查在线 android agent（`capabilities @> '{android}'` 且 2 分钟内有心跳）→ 无则 400 明确拒绝；有则 `INSERT publish_tasks(..., task_type='account_scan', ...)`。60 秒内同 agent 重复触发 → 限流 400。
+1. **API**：新增 `POST /api/acquisition/account-scan/trigger`，查在线 android agent（`capabilities @> '{android}'` 且 2 分钟内有心跳）→ 无则 400 明确拒绝；有则 `INSERT publish_tasks(..., task_type='account_scan', ...)`。60 秒内同 agent 重复触发 → 限流 400。
 2. **Android**：`AgentService.kt` heartbeatLoop 的 `onTask` 回调新增 `shouldRouteAccountScan` 判别符分支，命中调用既有 `DeviceAccountScanService.dispatchTask(...)`。不需要新增去重逻辑——`DeviceAccountScanService` 已有 `state != State.IDLE` 早退判断，手动触发和内部循环触发天然互斥。
 3. **Dashboard**：`AcquisitionAccountsPage.tsx` Android 绑定区加"立即扫描"按钮，点击后调用触发端点，成功提示"已发送，最长等待约30秒"，60秒内本地禁用防连点；设备离线时 Toast 明确提示。
 
@@ -18,7 +18,7 @@ DM 私信派单同样走"服务端建 publish_task → ws1 心跳(30s周期)拉�
 
 ```
 Dashboard点"立即扫描"
-  → POST /api/agent/account-scan/trigger（校验在线设备+限流）
+  → POST /api/acquisition/account-scan/trigger（校验在线设备+限流）
     → INSERT publish_tasks(task_type='account_scan')
       → 手机端 ws1 心跳（≤30s周期）拉到这条task
         → AgentService.onTask 命中 shouldRouteAccountScan
