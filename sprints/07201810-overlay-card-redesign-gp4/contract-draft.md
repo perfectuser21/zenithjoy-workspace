@@ -195,6 +195,9 @@ EOF
 # L1-4：cs_memory_longterm 联合索引在数据库存在（psql 断言）
 # HK-VPS 侧
 psql "$DATABASE_URL" -c "SELECT indexname FROM pg_indexes WHERE tablename='cs_memory_longterm' AND indexname='idx_cs_memory_longterm_tenant_contact';" | grep -q "idx_cs_memory_longterm_tenant_contact" && echo "OK: HK-VPS 索引存在" || { echo "FAIL: HK-VPS 缺索引 idx_cs_memory_longterm_tenant_contact"; exit 1; }
+
+# MMV 侧（另一台独立 postgres）
+psql "$DATABASE_URL_MMV" -c "SELECT indexname FROM pg_indexes WHERE tablename='cs_memory_longterm' AND indexname='idx_cs_memory_longterm_tenant_contact';" | grep -q "idx_cs_memory_longterm_tenant_contact" && echo "OK: MMV 索引存在" || { echo "FAIL: MMV 缺索引"; exit 1; }
 ```
 
 **硬阈值**：两台 DB 均找到 `idx_cs_memory_longterm_tenant_contact`。

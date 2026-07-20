@@ -25,6 +25,9 @@ date: 2026-07-20
 - [ ] [ARTIFACT] 中台 API `/api/wechat/customer-profile` 响应扩展含 `portrait.need/budget/concern` 及 `recent_messages`
   Test: `curl -s "http://localhost:5200/api/wechat/customer-profile?wechat_id=test" | python3 -c "import sys,json;d=json.load(sys.stdin);b=d.get('data',d);p=b.get('portrait',{});[__import__('sys').exit(1) for f in ['need','budget','concern'] if f not in p];print('OK portrait fields exist')"`
 
+- [ ] [ARTIFACT] Gate E：`cs_memory_longterm` 索引在 HK-VPS + MMV 两台 postgres 均存在
+  Test: `psql "$DATABASE_URL" -c "SELECT indexname FROM pg_indexes WHERE tablename='cs_memory_longterm' AND indexname='idx_cs_memory_longterm_tenant_contact';" | grep -q "idx_cs_memory_longterm_tenant_contact" && echo "OK: HK-VPS 索引存在" || { echo "FAIL: HK-VPS 缺索引"; exit 1; } && psql "$DATABASE_URL_MMV" -c "SELECT indexname FROM pg_indexes WHERE tablename='cs_memory_longterm' AND indexname='idx_cs_memory_longterm_tenant_contact';" | grep -q "idx_cs_memory_longterm_tenant_contact" && echo "OK: MMV 索引存在" || { echo "FAIL: MMV 缺索引"; exit 1; }`
+
 ---
 
 ## BEHAVIOR 条目（内嵌 manual:bash 验收命令）
@@ -287,6 +290,13 @@ EOF'
 - [ ] [INV-15] open_customer_page 内部 webbrowser.open(url)，不内嵌 iframe，不在浮窗内渲染页面
   Test: manual:bash -c 'python3 -c "src=open('"'"'/workspace/services/agent/wechat-rpa/overlay/overlay_window.py'"'"').read();import re;ctx=src[src.find('"'"'def open_customer_page'"'"'):src.find('"'"'def open_customer_page'"'"')+500] if '"'"'def open_customer_page'"'"' in src else '"'"''"'"';assert '"'"'iframe'"'"' not in ctx.lower(),'"'"'FAIL: open_customer_page 含 iframe（违反 Inv-15）'"'"';assert '"'"'webbrowser.open'"'"' in ctx,'"'"'FAIL: open_customer_page 缺 webbrowser.open'"'"';print('"'"'OK: open_customer_page 无 iframe，只调 webbrowser.open'"'"')"'
   期望: OK: open_customer_page 无 iframe，只调 webbrowser.open
+
+- [ ] [SCOPE-GUARD] thinking 事件写入点不含 stream/chunk/delta 字段
+  Test: manual:bash -c 'python3 -c "src=open(\"/workspace/services/agent/wechat-rpa/listen_chat.py\").read();import re;m=re.findall(r\"thinking.*?(stream|chunk|delta)\",src,re.DOTALL);assert not m,f\"FAIL: thinking 含禁止字段 {m}\";print(\"OK: thinking 无 streaming 字段\")"'
+  期望: OK: thinking 无 streaming 字段
+
+- [ ] [SCOPE-GUARD] thinking 事件覆盖语义（同 contact 新 thinking 覆盖旧值，不排队）
+  说明: 仅文字约束，不需 CI 断言。overlay 端同一 contact 的 thinking 状态以最新写入为准（overlay_window.py setThinking 直接赋值不 append）。
 
 ---
 

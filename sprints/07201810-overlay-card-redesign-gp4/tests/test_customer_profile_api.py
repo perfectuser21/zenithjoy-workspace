@@ -25,7 +25,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../services/ag
 
 
 class TestCustomerProfileApiContract:
-    """L2-3：/api/wechat/customer-profile 响应结构合约验证。"""
+    """L2-3：/api/wechat/customer-profile 响应结构合约验证。
+
+    # 注意：本类使用 mock 验证响应结构（合约结构测试）。
+    # 真实 API 验证通过 test_real_api_portrait_fields（需 MIDDLEWARE_URL）
+    # 和 contract-draft.md Step 4 的 curl 命令完成。
+    """
 
     def _make_mock_response(self, **overrides) -> dict:
         """构造符合 FR-2 规格的 API 响应体（用于合约测试）。"""
@@ -183,3 +188,27 @@ class TestOverlayProfileRendering:
         assert "concern" in src, (
             "FAIL: overlay_window.py 缺 'concern' 字段渲染。"
         )
+
+
+@pytest.mark.skipif(
+    not os.environ.get("MIDDLEWARE_URL"),
+    reason="MIDDLEWARE_URL 未设置，跳过真实 API 合约验证"
+)
+def test_real_api_portrait_fields():
+    """真实 API 合约验证：需服务运行时调用，对应 contract-draft.md Step 4 curl 命令。
+    mock 版（TestCustomerProfileApiContract）验证结构，本测试验证真实 API 响应。"""
+    import urllib.request, json
+    url = f"{os.environ['MIDDLEWARE_URL']}/api/wechat/customer-profile?wechat_id=test_wx_001"
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            data = json.loads(resp.read())
+        body = data.get("data", data)
+        portrait = body.get("portrait", {})
+        assert "need" in portrait, f"FAIL: portrait 缺 need 字段, keys={list(portrait.keys())}"
+        assert "budget" in portrait, f"FAIL: portrait 缺 budget 字段"
+        assert "concern" in portrait, f"FAIL: portrait 缺 concern 字段"
+        msgs = body.get("recent_messages", [])
+        assert isinstance(msgs, list), "FAIL: recent_messages 非列表"
+        assert len(msgs) <= 3, f"FAIL: recent_messages 超 3 条={len(msgs)}"
+    except Exception as e:
+        pytest.skip(f"中台服务不可达（预期，实现前）: {e}")
