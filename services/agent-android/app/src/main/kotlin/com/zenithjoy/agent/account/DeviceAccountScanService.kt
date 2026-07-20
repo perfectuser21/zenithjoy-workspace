@@ -229,12 +229,26 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         val meX = sw * 0.90f  // 我 tab 在最右列: 1084/1200≈0.90
         val meY = sh * 0.979f // 最底行: 2610/2664≈0.979
         android.util.Log.i(TAG, "realScreen=${sw}x${sh} 我tap=($meX,$meY)")
-        // 真机(抖音39.4.0)实测：主页 feed 底部导航"我"tab 是 Lynx 渲染【不进无障碍树】，只能坐标点。
+        // 真机复现(2026-07-20，华为AN00机型)：坐标比例(0.90,0.979)是在别的参考机型上量出来的，
+        // 在这台设备上点空落在信息流上，OPEN_PANEL_FAILED——但真机诊断树摘要证实"我"tab在这台
+        // 设备的无障碍树里其实存在(desc=我，按钮 txt=我)，"Lynx 渲染不进树"这个旧结论不是所有
+        // 机型都成立。改为优先查真实节点点它的中心，只有查不到时才退回坐标猜测兜底，不为单一
+        // 机型写死坐标。
         repeat(3) { attempt ->
             if (attempt > 0) {
                 launchDouyinApp(); awaitDouyinForeground(maxAttempts = 8); delay(2000L)
             }
-            tapAtCoordinate(meX, meY) // 我 tab
+            val preTapRoot = awaitRootInActiveWindow()
+            val meTabNode = preTapRoot?.let {
+                findNodeByContentDescContains(it, "我，按钮") ?: findNodeByText(it, "我")
+            }
+            if (meTabNode != null) {
+                android.util.Log.i(TAG, "我tab命中无障碍树节点，点节点中心")
+                tapNodeCenter(meTabNode)
+            } else {
+                android.util.Log.i(TAG, "我tab未进无障碍树，降级用坐标兜底")
+                tapAtCoordinate(meX, meY) // 我 tab
+            }
             delay(1500L)
             val profileRoot = awaitRootInActiveWindow()
             val switchEntry = profileRoot?.let {
