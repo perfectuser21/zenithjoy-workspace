@@ -4850,3 +4850,11 @@ agent_suite:
   status: active
   product: 客户智能获客
   note: "sprint(07192358): 账号扫描手动触发通道——Dashboard立即扫描按钮真Playwright规格，验证点击后调真实端点+60秒本地禁用+离线态错误提示"
+
+- id: agent-line04-report-health-once-overlay-branch
+  path: services/agent/modules/line04/__tests__/report-health-once.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 微信AI客服
+  note: "sprint(0720101623): 刀A审查发现#4补测——reportHealthOnce（index.ts）win32三元分支零覆盖，直接调用本体验证 overlay 字段只在 win32 上透传（取自 getOverlayHandler().getStatus()），非 win32 必须 undefined 且不读取 overlay handler"
