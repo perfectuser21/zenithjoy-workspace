@@ -51,8 +51,10 @@ fi
 # ─── ③ WS3: overlay 三段论字段渲染静态断言 ──────────────────────────────────
 echo ""
 echo "── ③ WS3: overlay renderProfile 三段论字段渲染（静态断言）──"
-python3 - <<'PYEOF'
-src = open("/workspace/services/agent/wechat-rpa/overlay/overlay_window.py", encoding="utf-8").read()
+OVERLAY_PY="$OVERLAY_PY" python3 - <<'PYEOF'
+import os
+overlay_py = os.environ["OVERLAY_PY"]
+src = open(overlay_py, encoding="utf-8").read()
 for field in ["need", "budget", "concern"]:
     assert field in src, f"FAIL: overlay_window.py 缺 {field!r} 字段渲染"
 print("OK: overlay_window.py 含 need/budget/concern 三段论字段渲染")
@@ -85,13 +87,14 @@ rm -rf "$TMPDIR_L21"
 # ─── ⑥ L2-2: tail_pointer.txt 存在且为整数 ──────────────────────────────────
 echo ""
 echo "── ⑥ L2-2: tail_pointer.txt 存在且为整数（smoke 级）──"
-python3 - <<'PYEOF'
+WECHAT_RPA="$WECHAT_RPA" python3 - <<'PYEOF'
 import sys, os, json, time, tempfile
+wechat_rpa = os.environ["WECHAT_RPA"]
 tmpdir = tempfile.mkdtemp()
 events_path = os.path.join(tmpdir, "events.jsonl")
 with open(events_path, "a") as f:
     f.write(json.dumps({"v":1,"event_id":"l22-smoke-001","type":"heartbeat","contact":"","ts":time.time()}) + "\n")
-sys.path.insert(0, "/workspace/services/agent/wechat-rpa")
+sys.path.insert(0, wechat_rpa)
 from overlay.overlay_window import EventTailConsumer
 c = EventTailConsumer(tmpdir)
 c.get_events()
@@ -105,8 +108,10 @@ PYEOF
 # ─── ⑦ Gate D: _write_event 调用点 ≥3，thinking 调用无字段污染 ───────────────
 echo ""
 echo "── ⑦ Gate D: _write_event 调用点 ≥3，thinking 调用无字段污染──"
-python3 - <<'PYEOF'
-src = open("/workspace/services/agent/wechat-rpa/listen_chat.py", encoding="utf-8").read()
+LISTEN_CHAT="$LISTEN_CHAT" python3 - <<'PYEOF'
+import os
+listen_chat = os.environ["LISTEN_CHAT"]
+src = open(listen_chat, encoding="utf-8").read()
 lines = [(i+1, l.strip()) for i, l in enumerate(src.splitlines()) if "_write_event(" in l and not l.strip().startswith("#")]
 print(f"_write_event 调用点 {len(lines)} 处:")
 for lineno, l in lines:
