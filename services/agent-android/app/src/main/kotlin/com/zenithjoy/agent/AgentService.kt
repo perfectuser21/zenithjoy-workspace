@@ -286,6 +286,7 @@ class AgentService : Service() {
         unregisterReceiver(warmupResultReceiver)
         DouyinCollectService.onCollectResult = null
         DouyinCollectService.onVideoCardResult = null
+        sharedScreenCaptureService = null
         super.onDestroy()
     }
 
@@ -407,6 +408,12 @@ class AgentService : Service() {
                 MediaProjectionHolder.getOrCreateProjection(this)
             },
         )
+        // 进程内唯一 ScreenCaptureService 共享引用（sprint 07201209 whole-branch review 修复）：
+        // ScreenCaptureReal 是进程级单例 object，manager 字段全局唯一——绝不能有第二个调用点
+        // 各自 new 一个 ScreenCaptureService（会撞上 A14 CaptureSessionManager 单例纪律，重复
+        // createVirtualDisplay 崩溃并殃及本类下面 ContentJudgmentService 的截图能力）。
+        // DeviceAccountScanService.captureFailureDiagnostics() 复用这个共享引用，不再自建实例。
+        sharedScreenCaptureService = screenCaptureService
         // 用户2026-07-17拍板（判定点1d078987）：视频类内容判定改用真实音频转写，固定录制
         // 开头20秒系统音频（AudioRecordService.RECORD_DURATION_MS）。复用同一个 MediaProjection
         // 授权换出实例，不额外弹权限框。
@@ -859,6 +866,16 @@ class AgentService : Service() {
     companion object {
         private const val TAG = "AgentService"
         private const val NOTIFICATION_ID = 1001
+
+        /**
+         * 进程内唯一 ScreenCaptureService 共享引用（sprint 07201209）。onCreate 里构造完唯一实例后
+         * 赋值给这个字段，供 DeviceAccountScanService.captureFailureDiagnostics() 等跨类调用点复用，
+         * 避免各自 new 出第二个 ScreenCaptureService（进而撞上 ScreenCaptureReal 进程级单例
+         * CaptureSessionManager 的"同一 projection 不能二次 createVirtualDisplay"纪律）。
+         * onDestroy 里清空，避免持有已失效底层 MediaProjection/CaptureSessionManager 的陈旧引用。
+         */
+        @Volatile
+        var sharedScreenCaptureService: ScreenCaptureService? = null
 
         /**
          * 构造供 dm-outreach-result / warmup-result 等低频报告类端点使用的 OkHttpClient。

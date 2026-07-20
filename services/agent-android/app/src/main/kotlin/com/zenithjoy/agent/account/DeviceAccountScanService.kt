@@ -11,9 +11,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import com.zenithjoy.agent.MediaProjectionHolder
-import com.zenithjoy.agent.ScreenCaptureReal
-import com.zenithjoy.agent.ScreenCaptureService
+import com.zenithjoy.agent.AgentService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -638,10 +636,14 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
      * 只在 OPEN_PANEL_FAILED/READ_FAILED 路径调用，成功路径不产生额外开销（sprint 07201209）。
      */
     private fun captureFailureDiagnostics(): Pair<String?, String?> {
+        // 复用 AgentService 构造的进程内唯一 ScreenCaptureService（sprint 07201209 review 修复）：
+        // 不能在这里自己 new 一个新实例——ScreenCaptureReal 是进程级单例 object，manager 字段
+        // 全局唯一，第二个 ScreenCaptureService 会撞上 A14 "同一 MediaProjection 不能二次
+        // createVirtualDisplay" 纪律并崩溃，殃及 ContentJudgmentService 的截图能力。
+        // AgentService 尚未启动（极端时序）时该引用为 null，captureToBase64() 自然短路为 null，
+        // 与既有"截图不可用"的优雅降级行为一致。
         val screenshot = try {
-            ScreenCaptureService(
-                ScreenCaptureReal.buildCaptureImpl(this) { MediaProjectionHolder.getOrCreateProjection(this) }
-            ).captureToBase64()
+            AgentService.sharedScreenCaptureService?.captureToBase64()
         } catch (e: Exception) {
             android.util.Log.w(TAG, "failure screenshot capture threw: ${e.message}")
             null
