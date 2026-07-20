@@ -17,6 +17,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { getPythonExe } from './wechat-rpa';
+import { _repairFuncs as preflightRepair } from '../preflight';
 
 // ─── 常量 ─────────────────────────────────────────────────────────────────────
 
@@ -94,6 +95,8 @@ export class OverlayHandler {
   private _userClosed = false;
   private _restartCount = 0;
   private _respawnTimer: ReturnType<typeof setTimeout> | null = null;
+  // 刀A（框框断供根治）：对外可查询的最新状态红灯，Task 4 上报用。
+  private _lastStatus: { ok: boolean; reason?: string } = { ok: false, reason: 'not_started' };
 
   constructor(
     private readonly stateDir: string,
@@ -119,14 +122,27 @@ export class OverlayHandler {
     }
 
     // preflight 软检测（调 Python preflight.py）
-    const preflight = await this._runPreflight();
+    let preflight = await this._runPreflight();
+    if (!preflight.ok && preflight.reason === 'pywebview_missing') {
+      // 刀A：依赖缺失先自修复再判死（覆盖 core 换目录场景导致 pywebview 丢失的混沌 P0-1）。
+      // 其他 reason（如 webview2_missing）不触发补装，直接冒泡。
+      const repair = await preflightRepair.installPywebview(
+        getPythonExe(),
+        path.join(os.tmpdir(), 'zenithjoy-setup'),
+      );
+      preflight = repair.ok
+        ? await this._runPreflight()
+        : { ok: false, reason: 'pywebview_install_failed' };
+    }
     if (!preflight.ok) {
+      const reason = preflight.reason ?? 'preflight_failed';
+      this._lastStatus = { ok: false, reason };
       const diag = makeDiag(this.stateDir, {
-        lastError: preflight.reason ?? 'preflight_failed',
+        lastError: reason,
         attachState: 'preflight_failed',
       });
       writeDiag(this.stateDir, diag);
-      return { spawned: false, reason: preflight.reason ?? 'preflight_failed' };
+      return { spawned: false, reason };
     }
 
     // 热更：杀旧进程（互斥体语义）
@@ -135,7 +151,21 @@ export class OverlayHandler {
     // spawn overlay_window.py
     this._spawnOverlay();
 
+    this._lastStatus = { ok: true };
+    // 刀A：成功态无条件覆写 diag，根除旧失败文件误导排查（混沌 P2-7）。
+    writeDiag(this.stateDir, makeDiag(this.stateDir, {
+      attachState: 'spawned',
+      overlayPid: this._proc?.pid ?? null,
+    }));
+
     return { spawned: true };
+  }
+
+  /**
+   * 返回最新一次 start() 的成败状态（供 Task 4 上报用）。
+   */
+  getStatus(): { ok: boolean; reason?: string } {
+    return { ...this._lastStatus };
   }
 
   /**
