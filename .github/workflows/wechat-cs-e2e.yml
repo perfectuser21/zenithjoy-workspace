@@ -203,11 +203,9 @@ jobs:
           ZJ_STATE_DIR: ${{ runner.temp }}/overlay-probe-state
         run: |
           mkdir -p "$ZJ_STATE_DIR"
-          # 尝试安装 pywebview（已装则跳过）
-          python -m pip install --quiet pywebview 2>/dev/null || true
-          # 运行探针：--probe 模式 2s 建窗即退
-          python overlay/overlay_window.py --probe && echo "BEHAVIOR-1 PASS: pywebview 建窗探针 exit_code=0" \
-            || echo "BEHAVIOR-1 SKIP/WARN: pywebview/WebView2 在当前 runner 不可用（非致命）"
+          python -m pip install --quiet pywebview -i https://pypi.tuna.tsinghua.edu.cn/simple
+          python overlay/overlay_window.py --probe
+          echo "BEHAVIOR-1 PASS: pywebview 建窗探针 exit_code=0"
 
       # ─── 第二刀：notepad 替身 NOACTIVATE 断言（BEHAVIOR-7）──────────────────
       # 用 notepad.exe 替代微信验证 WS_EX_NOACTIVATE 不抢焦（无需真实微信窗口）
