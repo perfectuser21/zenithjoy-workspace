@@ -633,11 +633,40 @@ router.get('/dm-tasks/:task_id', async (req: Request, res: Response) => {
 // ── account-scan-result — Line02 Step7 账号扫描结果写回（手机端 DeviceAccountScanService）──
 // 扫描到的抖音账号昵称 upsert 进 agent_platform_sessions(role='burner')，让"账号管理"页
 // (GET /sessions 同表)能看到手机上已登录的小号，跟 qr-bind-result 写同一张表。
+//
+// bugfix（cp-0720073537）：闭环 publish_tasks。account_scan 有两个触发源：
+//   (a) 手机内部 30-60min 定时循环（runAccountScanLoop）——本地生成 requestId
+//       "scan-<ts>"，从未写入 publish_tasks，查无该行是正常情况，必须跳过 update、
+//       不能 404，否则会打断这条一直工作正常的既有上报流程；
+//   (b) Dashboard 手动触发（POST /account-scan/trigger）——真实 publish_tasks 行存在，
+//       必须在这里推进到终态，否则 getQueuedTasks()（status IN pending/queued/dispatched，
+//       无完成过滤）会把同一行永远当"待处理"重复下发，手机每次心跳(~30s)重扫一次账号，
+//       无限循环，battery drain + 抖音风控风险。
+// 幂等：镜像 /warmup-result 的模式——已终态(done/failed)的行直接短路，不重复写。
 router.post('/account-scan-result', async (req: Request, res: Response) => {
-  const { agent_id, ok, account_ids } = req.body || {};
+  const { agent_id, request_id, ok, account_ids } = req.body || {};
   if (!agent_id || typeof agent_id !== 'string') {
     return res.status(400).json(ERR('MISSING_AGENT_ID', 'agent_id 必填'));
   }
+
+  let taskFound = false;
+  if (request_id && typeof request_id === 'string') {
+    const t = await pool.query(
+      `SELECT status FROM zenithjoy.publish_tasks WHERE id=$1`,
+      [request_id],
+    );
+    if (t.rows.length > 0) {
+      taskFound = true;
+      const curStatus: string = t.rows[0].status;
+      // 幂等：已终态 → 短路（防重复回传重复写库），行为镜像 /warmup-result
+      if (curStatus === 'done' || curStatus === 'failed') {
+        return res.json(OK({ idempotent: true }));
+      }
+    }
+    // 查无该行 → 内部定时循环触发的 requestId，本就没入库，属正常情况，继续走下面的
+    // agent_platform_sessions 写入，不 404、不报错。
+  }
+
   const ids = Array.isArray(account_ids) ? account_ids.filter((x) => typeof x === 'string' && x) : [];
   let written = 0;
   if (ok === true && ids.length > 0) {
@@ -653,6 +682,17 @@ router.post('/account-scan-result', async (req: Request, res: Response) => {
       written += 1;
     }
   }
+
+  // 仅当 request_id 对应真实 publish_tasks 行（手动触发场景）才推进其终态，
+  // 关闭 getQueuedTasks() 重复派发的循环。
+  if (taskFound) {
+    const taskStatus = ok === true ? 'done' : 'failed';
+    await pool.query(
+      `UPDATE zenithjoy.publish_tasks SET status=$2, response=$3::jsonb, updated_at=NOW() WHERE id=$1`,
+      [request_id, taskStatus, JSON.stringify({ ok: !!ok, account_ids: ids })],
+    );
+  }
+
   return res.json(OK({ written }));
 });
 

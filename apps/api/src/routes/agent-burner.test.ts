@@ -446,12 +446,21 @@ describe('agent-burner router [qr-bind-result agent_id fallback]', () => {
 });
 
 // ── account-scan-result — Line02 Step7 账号扫描结果写回 agent_platform_sessions ──
+// bugfix（cp-0720073537）：闭环 publish_tasks——手动触发场景(Task 2 新代码路径)request_id
+// 对应真实 queued 行时须推进到 done/failed，否则 getQueuedTasks() 永远重复派发同一行，
+// 手机每 ~30s 重扫一次账号，无限循环。内部定时循环(runAccountScanLoop)生成的 requestId
+// 从未写库，查无该行时必须优雅跳过（不能 404），保持既有上报流程不变。
 describe('POST /account-scan-result — 账号扫描结果写回', () => {
+  const TASK_UUID = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+
   beforeEach(() => {
     vi.mocked(pool.query).mockReset();
   });
 
-  it('ok=true + account_ids 非空 → 每个昵称 upsert 一行 agent_platform_sessions', async () => {
+  it('ok=true + account_ids 非空 + request_id 查无 publish_tasks 行（内部定时循环场景）→ 每个昵称 upsert 一行 agent_platform_sessions，不报错', async () => {
+    // 第一次 query：按 request_id 查 publish_tasks → 查无此行（内部循环 requestId 从未入库）
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any);
+    // 之后每个昵称一次 upsert
     vi.mocked(pool.query).mockResolvedValue({ rows: [] } as any);
 
     const app = buildApp();
@@ -459,7 +468,7 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
       .post('/api/agent/burner/account-scan-result')
       .send({
         agent_id: AGENT_UUID,
-        request_id: 'req-1',
+        request_id: 'scan-abc123', // 内部循环生成的 requestId，未写库
         ok: true,
         stale: false,
         account_ids: ['大湖', '秦军餐饮'],
@@ -468,13 +477,107 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
     expect(r.status).toBe(200);
     expect(r.body.data.written).toBe(2);
     const calls = vi.mocked(pool.query).mock.calls;
-    expect(calls.length).toBe(2);
-    expect(calls[0][0]).toMatch(/agent_platform_sessions/);
-    expect(calls[0][1]).toEqual([AGENT_UUID, '大湖']);
-    expect(calls[1][1]).toEqual([AGENT_UUID, '秦军餐饮']);
+    // 0: SELECT publish_tasks（查无）; 1,2: 两条 upsert（未找到行 → 不再有 UPDATE publish_tasks）
+    expect(calls.length).toBe(3);
+    expect(calls[0][0]).toMatch(/SELECT.*publish_tasks/is);
+    expect(calls[1][0]).toMatch(/agent_platform_sessions/);
+    expect(calls[1][1]).toEqual([AGENT_UUID, '大湖']);
+    expect(calls[2][1]).toEqual([AGENT_UUID, '秦军餐饮']);
   });
 
-  it('ok=false → 不写库，200 返回 written=0', async () => {
+  it('request_id 对应真实 queued publish_tasks 行 + ok:true → 行更新为 status=done', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ status: 'queued' }] } as any); // SELECT publish_tasks
+    vi.mocked(pool.query).mockResolvedValue({ rows: [] } as any); // upsert + UPDATE
+
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/account-scan-result')
+      .send({
+        agent_id: AGENT_UUID,
+        request_id: TASK_UUID,
+        ok: true,
+        account_ids: ['大湖'],
+      });
+
+    expect(r.status).toBe(200);
+    const calls = vi.mocked(pool.query).mock.calls;
+    const updateCall = calls.find((c) => /UPDATE\s+zenithjoy\.publish_tasks/i.test(String(c[0])));
+    expect(updateCall).toBeTruthy();
+    expect(updateCall![1]).toEqual([TASK_UUID, 'done', expect.any(String)]);
+  });
+
+  it('request_id 对应真实 queued publish_tasks 行 + ok:false → 行更新为 status=failed', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ status: 'queued' }] } as any); // SELECT publish_tasks
+
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/account-scan-result')
+      .send({
+        agent_id: AGENT_UUID,
+        request_id: TASK_UUID,
+        ok: false,
+        account_ids: [],
+      });
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.written).toBe(0);
+    const calls = vi.mocked(pool.query).mock.calls;
+    const updateCall = calls.find((c) => /UPDATE\s+zenithjoy\.publish_tasks/i.test(String(c[0])));
+    expect(updateCall).toBeTruthy();
+    expect(updateCall![1]).toEqual([TASK_UUID, 'failed', expect.any(String)]);
+  });
+
+  it('request_id 对应行已是终态 done → 幂等短路，不重复写 agent_platform_sessions / publish_tasks', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ status: 'done' }] } as any); // SELECT publish_tasks
+
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/account-scan-result')
+      .send({
+        agent_id: AGENT_UUID,
+        request_id: TASK_UUID,
+        ok: true,
+        account_ids: ['大湖'],
+      });
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.idempotent).toBe(true);
+    // 仅那一次 SELECT，没有后续 upsert / UPDATE
+    expect(vi.mocked(pool.query).mock.calls.length).toBe(1);
+  });
+
+  it('request_id 对应行已是终态 failed → 幂等短路', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ status: 'failed' }] } as any);
+
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/account-scan-result')
+      .send({ agent_id: AGENT_UUID, request_id: TASK_UUID, ok: true, account_ids: ['大湖'] });
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.idempotent).toBe(true);
+    expect(vi.mocked(pool.query).mock.calls.length).toBe(1);
+  });
+
+  it('request_id 缺失（旧客户端 / 边界场景）→ 不报错，跳过 publish_tasks 查询与更新，agent_platform_sessions 写入照常', async () => {
+    vi.mocked(pool.query).mockResolvedValue({ rows: [] } as any);
+
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/account-scan-result')
+      .send({ agent_id: AGENT_UUID, ok: true, account_ids: ['大湖'] });
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.written).toBe(1);
+    const calls = vi.mocked(pool.query).mock.calls;
+    // 没有 request_id → 不应有任何 SELECT/UPDATE publish_tasks 查询，只有 1 条 upsert
+    expect(calls.length).toBe(1);
+    expect(calls[0][0]).toMatch(/agent_platform_sessions/);
+  });
+
+  it('ok=false → 不写 agent_platform_sessions，200 返回 written=0', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any); // SELECT publish_tasks（查无）
+
     const app = buildApp();
     const r = await request(app)
       .post('/api/agent/burner/account-scan-result')
@@ -482,10 +585,11 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
 
     expect(r.status).toBe(200);
     expect(r.body.data.written).toBe(0);
-    expect(vi.mocked(pool.query).mock.calls.length).toBe(0);
   });
 
-  it('account_ids 为空数组 → 不写库，200 返回 written=0', async () => {
+  it('account_ids 为空数组 → 不写 agent_platform_sessions，200 返回 written=0', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any); // SELECT publish_tasks（查无）
+
     const app = buildApp();
     const r = await request(app)
       .post('/api/agent/burner/account-scan-result')
@@ -493,10 +597,9 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
 
     expect(r.status).toBe(200);
     expect(r.body.data.written).toBe(0);
-    expect(vi.mocked(pool.query).mock.calls.length).toBe(0);
   });
 
-  it('缺 agent_id → 400 MISSING_AGENT_ID', async () => {
+  it('缺 agent_id → 400 MISSING_AGENT_ID，不查询 publish_tasks', async () => {
     const app = buildApp();
     const r = await request(app)
       .post('/api/agent/burner/account-scan-result')
@@ -504,5 +607,6 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
 
     expect(r.status).toBe(400);
     expect(r.body.error.code).toBe('MISSING_AGENT_ID');
+    expect(vi.mocked(pool.query).mock.calls.length).toBe(0);
   });
 });
