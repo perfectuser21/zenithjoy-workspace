@@ -714,6 +714,22 @@ describe('installPywebview — 客机自修复:双源回退+失败冒泡', () =>
     const calls = spawnSyncMock.mock.calls.map((c) => (c[1] ?? []).join(' '));
     expect(calls.some((a) => a.includes('pypi.org'))).toBe(false);
   });
+
+  it('清华源失败,官方源成功 → 回退成功路径 ok:true 且两个 index-url 均被调用', async () => {
+    mockDownload();
+    const spawnSyncMock = vi
+      .spyOn(childProcessModule, 'spawnSync')
+      .mockReturnValueOnce({ status: 1 } as any) // get-pip bootstrap（结果不影响后续判定）
+      .mockReturnValueOnce({ status: 1 } as any) // 清华源 pip install 失败
+      .mockReturnValueOnce({ status: 0 } as any); // 官方源 pip install 成功
+
+    const r = await installPywebview('C:\\py\\python.exe', os.tmpdir());
+
+    expect(r.ok).toBe(true);
+    const calls = spawnSyncMock.mock.calls.map((c) => (c[1] ?? []).join(' '));
+    expect(calls.some((a) => a.includes('tuna.tsinghua.edu.cn'))).toBe(true);
+    expect(calls.some((a) => a.includes('pypi.org'))).toBe(true);
+  });
 });
 
 describe('autoRepair — 按需调用安装函数', () => {

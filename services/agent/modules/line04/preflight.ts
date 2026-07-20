@@ -711,23 +711,33 @@ export async function installPywebview(
   pythonPath: string,
   downloadDir: string,
 ): Promise<{ ok: boolean; reason?: string }> {
-  fs.mkdirSync(downloadDir, { recursive: true });
-  const getPipScript = path.join(downloadDir, 'get-pip.py');
+  // 整个函数体套 try/catch：mkdirSync/pip install 任一环节同步抛出都兜底转成
+  // {ok:false}，保证本函数从不 throw（调用方靠 {ok,reason} 契约判定，不能让
+  // Promise reject 逃出去，否则 autoRepair/runPreflight 会被未捕获异常打断）。
   try {
-    await downloadFile(GET_PIP_URL, getPipScript);
-    spawnSync(pythonPath, [getPipScript, '--quiet'], { windowsHide: true, timeout: 60_000 });
+    fs.mkdirSync(downloadDir, { recursive: true });
+    const getPipScript = path.join(downloadDir, 'get-pip.py');
+    try {
+      await downloadFile(GET_PIP_URL, getPipScript);
+      spawnSync(pythonPath, [getPipScript, '--quiet'], { windowsHide: true, timeout: 60_000 });
+    } catch (e) {
+      // get-pip 拉不下来仍尝试 pip(可能已 bootstrap 过);真失败由下方安装结果冒泡
+      console.warn(`[installPywebview] get-pip bootstrap 失败,继续尝试 pip install: ${(e as Error).message}`);
+    }
+    for (const indexUrl of [PIP_INDEX_URL, PYPI_OFFICIAL_URL]) {
+      // 超时比 installPywinauto 的 120_000 长(180_000)：pywebview 依赖闭包更大
+      // (自带 gui 后端可选依赖 cefpython3/pythonnet 等，冷源下载+编译耗时更久)。
+      const r = spawnSync(
+        pythonPath,
+        ['-m', 'pip', 'install', PYWEBVIEW_PIN, '--quiet', '--index-url', indexUrl],
+        { windowsHide: true, timeout: 180_000 },
+      );
+      if (r.status === 0) return { ok: true };
+    }
+    return { ok: false, reason: 'pywebview_install_failed' };
   } catch {
-    // get-pip 拉不下来仍尝试 pip(可能已 bootstrap 过);真失败由下方安装结果冒泡
+    return { ok: false, reason: 'pywebview_install_failed' };
   }
-  for (const indexUrl of [PIP_INDEX_URL, PYPI_OFFICIAL_URL]) {
-    const r = spawnSync(
-      pythonPath,
-      ['-m', 'pip', 'install', PYWEBVIEW_PIN, '--quiet', '--index-url', indexUrl],
-      { windowsHide: true, timeout: 180_000 },
-    );
-    if (r.status === 0) return { ok: true };
-  }
-  return { ok: false, reason: 'pywebview_install_failed' };
 }
 
 // ---------- 自动修复：按需调用安装函数 ----------
