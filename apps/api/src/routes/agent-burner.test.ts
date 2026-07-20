@@ -457,10 +457,9 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
     vi.mocked(pool.query).mockReset();
   });
 
-  it('ok=true + account_ids 非空 + request_id 查无 publish_tasks 行（内部定时循环场景）→ 每个昵称 upsert 一行 agent_platform_sessions，不报错', async () => {
-    // 第一次 query：按 request_id 查 publish_tasks → 查无此行（内部循环 requestId 从未入库）
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any);
-    // 之后每个昵称一次 upsert
+  it('ok=true + account_ids 非空 + request_id 非 UUID 格式（内部定时循环场景 "scan-abc123"）→ 不查询 publish_tasks，每个昵称 upsert 一行 agent_platform_sessions，不报错', async () => {
+    // 非 UUID 格式的 request_id 应在查库前就被挡下——不再有 SELECT publish_tasks 调用，
+    // 只剩每个昵称一次 upsert。
     vi.mocked(pool.query).mockResolvedValue({ rows: [] } as any);
 
     const app = buildApp();
@@ -468,7 +467,7 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
       .post('/api/agent/burner/account-scan-result')
       .send({
         agent_id: AGENT_UUID,
-        request_id: 'scan-abc123', // 内部循环生成的 requestId，未写库
+        request_id: 'scan-abc123', // 内部循环生成的 requestId，非 UUID，从未写库
         ok: true,
         stale: false,
         account_ids: ['大湖', '秦军餐饮'],
@@ -477,12 +476,44 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
     expect(r.status).toBe(200);
     expect(r.body.data.written).toBe(2);
     const calls = vi.mocked(pool.query).mock.calls;
-    // 0: SELECT publish_tasks（查无）; 1,2: 两条 upsert（未找到行 → 不再有 UPDATE publish_tasks）
-    expect(calls.length).toBe(3);
-    expect(calls[0][0]).toMatch(/SELECT.*publish_tasks/is);
-    expect(calls[1][0]).toMatch(/agent_platform_sessions/);
-    expect(calls[1][1]).toEqual([AGENT_UUID, '大湖']);
-    expect(calls[2][1]).toEqual([AGENT_UUID, '秦军餐饮']);
+    // 只有两条 upsert，没有 publish_tasks 相关查询
+    expect(calls.length).toBe(2);
+    expect(calls.every((c) => !/publish_tasks/i.test(String(c[0])))).toBe(true);
+    expect(calls[0][0]).toMatch(/agent_platform_sessions/);
+    expect(calls[0][1]).toEqual([AGENT_UUID, '大湖']);
+    expect(calls[1][1]).toEqual([AGENT_UUID, '秦军餐饮']);
+  });
+
+  it('非 UUID request_id（真实内部定时循环格式 "scan-<base36>"，AgentService.kt runAccountScanLoop）→ 绝不对 publish_tasks 发起 SELECT（否则真实 Postgres 会因 22P02 invalid UUID syntax 崩溃挂死请求），200 且 session 正常写入', async () => {
+    // 模拟真实 Postgres 行为：id 是 UUID 列，若代码真的拿非 UUID 字符串去查 publish_tasks，
+    // 会抛 22P02，而不是像旧测试那样天真地 mock 成 rows:[]。这个 mock 会让任何触碰
+    // publish_tasks 的查询直接抛错——只有代码在查库前就用 UUID_RE 挡掉非法格式的 request_id，
+    // 这个测试才能通过。
+    vi.mocked(pool.query).mockImplementation(async (sql: any) => {
+      if (/publish_tasks/i.test(String(sql))) {
+        const err: any = new Error('invalid input syntax for type uuid: "scan-1a2b3c4d"');
+        err.code = '22P02';
+        throw err;
+      }
+      return { rows: [] };
+    });
+
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/account-scan-result')
+      .send({
+        agent_id: AGENT_UUID,
+        request_id: 'scan-1a2b3c4d', // AgentService.kt: "scan-${System.currentTimeMillis().toString(36)}"
+        ok: true,
+        account_ids: ['大湖'],
+      });
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.written).toBe(1);
+    const calls = vi.mocked(pool.query).mock.calls;
+    expect(calls.some((c) => /publish_tasks/i.test(String(c[0])))).toBe(false);
+    expect(calls.length).toBe(1);
+    expect(calls[0][0]).toMatch(/agent_platform_sessions/);
   });
 
   it('request_id 对应真实 queued publish_tasks 行 + ok:true → 行更新为 status=done', async () => {
@@ -576,7 +607,8 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
   });
 
   it('ok=false → 不写 agent_platform_sessions，200 返回 written=0', async () => {
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any); // SELECT publish_tasks（查无）
+    // request_id='req-2' 非 UUID 格式 → 不会触发任何 publish_tasks 查询
+    vi.mocked(pool.query).mockResolvedValue({ rows: [] } as any);
 
     const app = buildApp();
     const r = await request(app)
@@ -585,10 +617,12 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
 
     expect(r.status).toBe(200);
     expect(r.body.data.written).toBe(0);
+    expect(vi.mocked(pool.query).mock.calls.length).toBe(0);
   });
 
   it('account_ids 为空数组 → 不写 agent_platform_sessions，200 返回 written=0', async () => {
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any); // SELECT publish_tasks（查无）
+    // request_id='req-3' 非 UUID 格式 → 不会触发任何 publish_tasks 查询
+    vi.mocked(pool.query).mockResolvedValue({ rows: [] } as any);
 
     const app = buildApp();
     const r = await request(app)
@@ -597,6 +631,7 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
 
     expect(r.status).toBe(200);
     expect(r.body.data.written).toBe(0);
+    expect(vi.mocked(pool.query).mock.calls.length).toBe(0);
   });
 
   it('缺 agent_id → 400 MISSING_AGENT_ID，不查询 publish_tasks', async () => {

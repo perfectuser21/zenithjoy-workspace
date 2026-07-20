@@ -22,6 +22,14 @@ import { isDuplicateDmOutreachResult } from '../services/device-platform';
 
 const router = Router();
 
+// 标准 UUID 格式校验——publish_tasks.id 是 UUID 列，用非 UUID 字符串查询会被 Postgres
+// 抛 22P02（invalid input syntax for type uuid），这里没有 try/catch 会变成未处理的 rejection
+// 导致请求挂死。account-scan-result 的 request_id 有三种来源，只有手动触发(b)是真 UUID，
+// 内部定时循环(a)和 DM 补扫(c)都是本地拼的字符串，查库前必须先过这一关。
+// 与 walking-skeleton.service.ts / acquisition.ts 等文件的同名常量保持完全一致的写法
+// （本仓库对这类小型校验正则的既有约定是各文件本地定义，不做跨文件 import）。
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const ERR = (code: string, message: string) => ({
   success: false,
   error: { code, message },
@@ -650,7 +658,10 @@ router.post('/account-scan-result', async (req: Request, res: Response) => {
   }
 
   let taskFound = false;
-  if (request_id && typeof request_id === 'string') {
+  // 只有格式合法的 UUID 才值得查 publish_tasks——id 是 UUID 列，非 UUID 字符串（内部定时
+  // 循环的 "scan-<base36>"、DM 补扫的 "rescan-<task_id>"）直接查会被 Postgres 抛 22P02，
+  // 这里没有 try/catch，未处理的 rejection 会让请求挂死，永远到不了下面的 session 写入。
+  if (request_id && typeof request_id === 'string' && UUID_RE.test(request_id)) {
     const t = await pool.query(
       `SELECT status FROM zenithjoy.publish_tasks WHERE id=$1`,
       [request_id],
@@ -663,9 +674,11 @@ router.post('/account-scan-result', async (req: Request, res: Response) => {
         return res.json(OK({ idempotent: true }));
       }
     }
-    // 查无该行 → 内部定时循环触发的 requestId，本就没入库，属正常情况，继续走下面的
+    // 查无该行（UUID 格式合法但 publish_tasks 里没有）→ 属正常情况，继续走下面的
     // agent_platform_sessions 写入，不 404、不报错。
   }
+  // request_id 不是 UUID 格式（内部定时循环 / DM 补扫场景）→ 跳过 publish_tasks 查询与
+  // 更新，直接走下面的 agent_platform_sessions 写入，不 404、不报错。
 
   const ids = Array.isArray(account_ids) ? account_ids.filter((x) => typeof x === 'string' && x) : [];
   let written = 0;
