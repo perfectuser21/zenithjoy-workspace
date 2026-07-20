@@ -162,6 +162,24 @@ ok "Step 2.3 heartbeat → agent_id=$AGENT_ID ✓"
 
 ok "Step 2 ✅ install-pack 可下载 + Agent 注册中台"
 
+# 2.4 boot-fail endpoint reachable without auth (installer-env-reset M1 GP-1 backflow)
+# Assert: POST /api/agent/boot-fail with no Bearer token returns non-401 and non-404
+S2_BF_TMP=$(mktemp)
+S2_BF_STATUS=$(curl -s -o "$S2_BF_TMP" -w "%{http_code}" --max-time 10 \
+  -X POST "$API_BASE/api/agent/boot-fail" \
+  -H "Content-Type: application/json" \
+  -d '{"machine_id":"gp1-step2-backflow","reason":"test_backflow","timestamp":"2026-07-20T00:00:00Z"}')
+if [ "$S2_BF_STATUS" = "401" ]; then
+  rm -f "$S2_BF_TMP"
+  fail "Step 2.4 boot-fail returned 401 -- endpoint must not require auth (N-2)" 2
+elif [ "$S2_BF_STATUS" = "404" ]; then
+  rm -f "$S2_BF_TMP"
+  fail "Step 2.4 boot-fail returned 404 -- endpoint not implemented" 2
+else
+  rm -f "$S2_BF_TMP"
+  ok "Step 2.4 boot-fail reachable without auth (HTTP $S2_BF_STATUS) ✓"
+fi
+
 # ───────────────────────────────────────────────────────────────────
 # Step 3：填画像诊断（行业 / 受众 / 风格 3 字段）
 # Notion Feature: 358c40c2-ba63-812c-88e8-c1db0d5e31db
