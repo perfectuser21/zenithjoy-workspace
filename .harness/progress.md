@@ -1,0 +1,7 @@
+planner: done (sprint-prd.md@30142aee, invariants=15, fr=5)
+gan: done (contract-draft.md@7817b717 r1, verdict=APPROVED, 铁律覆盖=4/4, judgments_written=33, rubric=.harness/verdicts/gan-92ac6089.json)
+generator: pr_opened (#1442, red=7817b717)
+generator: done (pr=#1442, red=7817b717, green=3591adf)
+evaluator: done (verdict=PASS, sha=3591adf, verdict_file=.harness/verdicts/evaluate-3591adf.json)
+judge: done (verdict=PASS, judged=true, fix_rounds=6, sha=d0965a5b)
+review: pending (review_required=true, waiting for 主理人 sign-off on xian-rog WeChat items 2/3)
