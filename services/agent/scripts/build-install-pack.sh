@@ -165,20 +165,38 @@ fi
 #     --only-binary=:all: --target 把 Windows wheel 下载解压进 site-packages（纯下载解压，不执行 exe）。
 SITE_PKGS="${PYTHON_EMBED_DIR}/Lib/site-packages"
 mkdir -p "$SITE_PKGS"
+# WHEEL_PKGS：完整清单，仅用于 Windows 分支单步装 + 日志/smoke 锚点（GP-4 Step 3k 断言原样匹配此变量名）。
 WHEEL_PKGS="pywinauto pywin32 comtypes six requests pywebview==6.2.1"
+# WHEEL_PKGS_BASE：跨平台(mac/linux)打包机第一步——不含 pywebview，走正常依赖解析。
+WHEEL_PKGS_BASE="pywinauto pywin32 comtypes six requests"
+# PYWEBVIEW_CLOSURE：pywebview win32 运行闭包，跨平台打包机第二步用 --no-deps 显式展开。
+# 见下方 install_embedded_pkgs() 非 Windows 分支注释——code-review Critical①的修法与闭包依据。
+PYWEBVIEW_CLOSURE="pywebview==6.2.1 pythonnet==3.1.0 clr_loader==0.3.1 cffi>=1.17 pycparser proxy_tools==0.1.0 bottle typing_extensions"
 GETPIP_URL="https://bootstrap.pypa.io/get-pip.py"
 HOST_PY="${HOST_PYTHON:-python3}"
 
 install_embedded_pkgs() {
   case "$(uname -s)" in
     *NT*|*MINGW*|*MSYS*|*CYGWIN*)
-      # Windows 打包机：embeddable bootstrap pip 后真装
+      # Windows 打包机：embeddable bootstrap pip 后真装。host==target 平台（win32==win32），
+      # pip 环境标记（sys_platform 等）天然按正确平台求值，$WHEEL_PKGS(含 pywebview) 原样单步装，不动。
       curl -L --retry 3 -o "${PYTHON_EMBED_DIR}/get-pip.py" "$GETPIP_URL" || return 1
       "${PYTHON_EMBED_DIR}/python.exe" "${PYTHON_EMBED_DIR}/get-pip.py" --target "$SITE_PKGS" || return 1
       "${PYTHON_EMBED_DIR}/python.exe" -m pip install --target "$SITE_PKGS" $WHEEL_PKGS || return 1
       ;;
     *)
-      # macOS/Linux 打包机：宿主 pip 跨平台下载 Windows wheel（cp311 / win_amd64）到 target
+      # macOS/Linux 打包机：宿主 pip 跨平台下载 Windows wheel（cp311 / win_amd64）到 target。
+      # ── code-review Critical①修复 ──────────────────────────────────────────────
+      # pip 的环境标记（sys_platform==...等）永远按【宿主】解释器求值，--platform/--python-version
+      # /--implementation 只影响"选哪个 wheel 文件"，不影响 marker 真假判断。若把 pywebview 混进
+      # 普通依赖解析的 $WHEEL_PKGS 装：
+      #   - mac 宿主：sys_platform=="darwin" 为真 → pywebview 的 pyobjc-core 等 mac-only 依赖被激活
+      #     → pip 找 win_amd64 平台的 pyobjc-core wheel（根本不存在）→ 整体确定性失败，打死本地 mac 打包。
+      #   - linux 宿主：sys_platform=="win32" 为假 → pythonnet 依赖被跳过 → site-packages 假完整
+      #     → Windows 客户端运行时 `import webview` 因缺 pythonnet/clr_loader 直接 ImportError。
+      # 修法：拆两步。①非 pywebview 包正常走依赖解析（不涉及上述 marker，行为不变）。②pywebview 连同
+      # 其 windows 运行闭包改用 --no-deps 显式清单装，绕开 marker 求值，闭包边界由人工核实（PyPI
+      # METADATA Requires-Dist 逐层推导 + 本机 mac 实测 exit 0，见 task-1-report.md 补充记录）。
       "$HOST_PY" -m pip install \
         --target "$SITE_PKGS" \
         --platform win_amd64 \
@@ -186,7 +204,28 @@ install_embedded_pkgs() {
         --implementation cp \
         --only-binary=:all: \
         --upgrade \
-        $WHEEL_PKGS || return 1
+        $WHEEL_PKGS_BASE || return 1
+      # pywebview win32 运行闭包，--no-deps 显式展开（每个包名附来源依据）：
+      #   pywebview==6.2.1     主包（no-deps：其余 Requires-Dist 全是 sys_platform 条件 marker，交叉环境
+      #                         下 pip 求值必错，闭包边界必须人工接管——本行以下 7 包即完整边界）
+      #   pythonnet==3.1.0     pywebview windows 后端(EdgeChromium) `import clr` 的运行时绑定
+      #                         （pywebview Requires-Dist: pythonnet; sys_platform=="win32"）
+      #   clr_loader==0.3.1    pythonnet 的加载器依赖（pythonnet Requires-Dist: clr_loader<0.4.0,>=0.3.1）
+      #   cffi>=1.17           clr_loader 依赖（clr_loader Requires-Dist: cffi>=1.17），win_amd64/cp311 有 wheel
+      #   pycparser            cffi 依赖（cffi Requires-Dist: pycparser; implementation_name!="PyPy"）
+      #   proxy_tools==0.1.0   pywebview 无条件依赖（不带 marker），PyPI 只有 sdist 无 wheel——纯 Python
+      #                        无 C 扩展，用 --no-binary=proxy_tools 单独放行本地构建，产物跨平台通用
+      #   bottle / typing_extensions  pywebview 无条件依赖，均有 py3-none-any wheel，正常收
+      "$HOST_PY" -m pip install \
+        --target "$SITE_PKGS" \
+        --platform win_amd64 \
+        --python-version 3.11 \
+        --implementation cp \
+        --only-binary=:all: \
+        --no-binary=proxy_tools \
+        --no-deps \
+        --upgrade \
+        $PYWEBVIEW_CLOSURE || return 1
       ;;
   esac
 }

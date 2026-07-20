@@ -118,7 +118,7 @@ BUILD_PACK_SH="services/agent/scripts/build-install-pack.sh"
 REQ_TXT="services/agent/wechat-rpa/requirements.txt"
 PREFLIGHT_TS="services/agent/modules/line04/preflight.ts"
 OVERLAY_TS="services/agent/modules/line04/handlers/overlay.ts"
-grep -E 'WHEEL_PKGS=.*pywebview==' "$BUILD_PACK_SH" \
+grep -qE 'WHEEL_PKGS=.*pywebview==' "$BUILD_PACK_SH" \
   || fail "Step 3k 打包预装列表 WHEEL_PKGS 缺 pywebview 锁定版（框框断供根因①）" 3
 grep -qE '^pywebview==' "$REQ_TXT" \
   || fail "Step 3k requirements.txt 缺 pywebview 锁定版声明" 3
