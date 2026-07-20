@@ -1,0 +1,24 @@
+{
+  "task_id": "027e6bba-9b00-4b9f-b3b9-33b2e3807717",
+  "sprint": "07201705-agent-offline-alert",
+  "reviewer": "harness-contract-reviewer",
+  "review_date": "2026-07-20",
+  "round": 1,
+  "verdict": "REVISION",
+  "rubric_scores": {
+    "completeness": 8,
+    "testability": 8,
+    "iron_rules": 9,
+    "e2e_coverage": 7,
+    "scope_control": 10,
+    "proven_to_fire": 3,
+    "contract_quality": 9
+  },
+  "total_weighted": 7.7,
+  "revision_points": [
+    "smoke步骤8必须实现真实proven-to-fire断言（不能仅打日志，需有失败判断）",
+    "smoke步骤7去重验证必须有硬断言（CAPTURE_AFTER必须等于CAPTURE_BEFORE否则fail）",
+    "[BEHAVIOR-01] vitest单测需补充DB mock让scanAndAlert能真正测试去重路径",
+    "smoke步骤5补充webhook payload中offline_duration_minutes整数验证"
+  ]
+}

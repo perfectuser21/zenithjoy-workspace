@@ -28,6 +28,8 @@ export default defineConfig({
       '../../sprints/07121132-line04-ai-thinking-overlay/tests/**/*.test.ts',
       // 刀B M1 安装器清环境 + 死路消灭 sprint 合约测试（boot-fail API + setup-reset + start.bat）
       '../../sprints/07201700-installer-env-reset-m1/tests/**/*.test.ts',
+      // Ops Infra — Agent 离线静默告警：scanAndAlert 去重/恢复/webhook 失败路径 vitest 单测
+      '../../sprints/07201705-agent-offline-alert/tests/**/*.test.ts',
     ],
     exclude: ['node_modules/**', 'tests/integration/**', 'tests/ws1/**', 'tests/ws2/**', 'tests/ws3/**', 'tests/ws4/**', 'tests/ws5/**', 'tests/ws6/**'],
     coverage: {

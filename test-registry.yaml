@@ -4898,3 +4898,35 @@ agent_suite:
   status: active
   product: 智能获客
   note: "sprint(07201700): 刀B M1 安装器清环境——POST /api/agent/boot-fail API 实现层测试（apps/api/src/routes/__tests__ 下运行版），与 sprint 合同测试功能相同"
+
+- id: agent-offline-alert-sprint-oracle
+  path: sprints/07201705-agent-offline-alert/tests/agent-offline-monitor.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 微信AI客服
+  note: "sprint(07201705): agent离线静默告警——scanAndAlert去重/恢复/webhook失败路径oracle；vitest通过 apps/api/vitest.config.ts include 收集"
+
+- id: agent-offline-monitor-service-unit
+  path: apps/api/src/services/__tests__/agent-offline-monitor.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 微信AI客服
+  note: "sprint(07201705): agent离线告警服务配对单测——BEHAVIOR-02/03/04/05核心断言；完整oracle在sprint目录，此文件满足lint-test-pairing对services/agent-offline-monitor.ts的配对要求"
+
+- id: agent-offline-scan-route-unit
+  path: apps/api/src/routes/__tests__/agent-offline-scan.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 微信AI客服
+  note: "sprint(07201705): agent-offline-scan POST路由单测——扫描无告警/send_errors非空/scanAndAlert抛异常/threshold_hours透传，vi.mock agent-offline-monitor"
+
+- id: db-index-reexport-unit
+  path: apps/api/src/db/__tests__/index.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 中台认证
+  note: "db/index.ts re-export pool透传验证——default export存在且与connection.ts同对象，供vi.mock('../../../apps/api/src/db')精确mock使用"
