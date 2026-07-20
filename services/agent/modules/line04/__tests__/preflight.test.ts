@@ -33,6 +33,8 @@ import {
   installWeChat,
   installPywinauto,
   installPywebview,
+  PIP_INDEX_URL,
+  PYPI_OFFICIAL_URL,
   autoRepair,
   lockWechatUpdate,
   interpretUpdateLock,
@@ -711,8 +713,9 @@ describe('installPywebview — 客机自修复:双源回退+失败冒泡', () =>
     const r = await installPywebview('C:\\py\\python.exe', os.tmpdir());
 
     expect(r.ok).toBe(true);
-    const calls = spawnSyncMock.mock.calls.map((c) => (c[1] ?? []).join(' '));
-    expect(calls.some((a) => a.includes('pypi.org'))).toBe(false);
+    // 精确比对 --index-url 实参(不用子串匹配,CodeQL js/incomplete-url-substring-sanitization)
+    const indexUrls = spawnSyncMock.mock.calls.flatMap((c) => c[1] ?? []);
+    expect(indexUrls).not.toContain(PYPI_OFFICIAL_URL);
   });
 
   it('清华源失败,官方源成功 → 回退成功路径 ok:true 且两个 index-url 均被调用', async () => {
@@ -726,9 +729,10 @@ describe('installPywebview — 客机自修复:双源回退+失败冒泡', () =>
     const r = await installPywebview('C:\\py\\python.exe', os.tmpdir());
 
     expect(r.ok).toBe(true);
-    const calls = spawnSyncMock.mock.calls.map((c) => (c[1] ?? []).join(' '));
-    expect(calls.some((a) => a.includes('tuna.tsinghua.edu.cn'))).toBe(true);
-    expect(calls.some((a) => a.includes('pypi.org'))).toBe(true);
+    // 精确比对 --index-url 实参(不用子串匹配,CodeQL js/incomplete-url-substring-sanitization)
+    const indexUrls = spawnSyncMock.mock.calls.flatMap((c) => c[1] ?? []);
+    expect(indexUrls).toContain(PIP_INDEX_URL);
+    expect(indexUrls).toContain(PYPI_OFFICIAL_URL);
   });
 });
 
