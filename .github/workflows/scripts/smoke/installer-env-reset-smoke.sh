@@ -150,17 +150,19 @@ PROBE_MARKER="$AGENT_DATA_DIR/probe-marker.txt"
 rm -f "$PROBE_MARKER" 2>/dev/null || true
 
 if [ -f "$INSTALLPACK_DIR/start.bat" ]; then
-  if command -v cmd.exe &>/dev/null 2>&1; then
-    # Write a wrapper batch file that explicitly sets ZJ_LAUNCH_PROBE before calling start.bat.
-    # Passing env via bash export or SET inside cmd /c is unreliable on MSYS2/Git Bash;
-    # a wrapper .bat guarantees the variable is set inside the Windows cmd.exe environment.
-    _WRAP="$INSTALLPACK_DIR/_zj_probe_wrap.bat"
-    printf '@SET ZJ_LAUNCH_PROBE=1\r\n@CALL start.bat\r\n' > "$_WRAP"
-    (
-      cd "$INSTALLPACK_DIR"
-      timeout 30 cmd.exe /c "_zj_probe_wrap.bat" 2>&1 || true
-    )
-    rm -f "$_WRAP" 2>/dev/null || true
+  if command -v powershell.exe &>/dev/null 2>&1 || command -v powershell &>/dev/null 2>&1; then
+    # Use PowerShell to set env var then invoke cmd.exe/start.bat.
+    # Root cause of prior failures: MSYS2/Git Bash converts "/c" in "cmd.exe /c" to "C:\"
+    # (MSYS2 path conversion treats /c as the C: drive mount point), so cmd.exe launches
+    # interactively instead of executing start.bat. Spawning via PowerShell bypasses
+    # MSYS2 path conversion entirely — PowerShell passes /c to cmd.exe as a flag, not a path.
+    PS_A5="powershell"; command -v powershell.exe &>/dev/null 2>&1 && PS_A5="powershell.exe"
+    INSTALLPACK_WIN="$(cd "$INSTALLPACK_DIR" 2>/dev/null && { pwd -W 2>/dev/null || pwd; } || echo "$INSTALLPACK_DIR")"
+    "$PS_A5" -NoProfile -Command "
+      \$env:ZJ_LAUNCH_PROBE = '1'
+      Set-Location '$INSTALLPACK_WIN'
+      cmd.exe /c start.bat 2>&1 | Select-Object -First 5
+    " 2>&1 | head -5 || true
     if [ -f "$PROBE_MARKER" ]; then
       PROBE_CONTENT=$(cat "$PROBE_MARKER")
       ok "probe-marker.txt created: $PROBE_CONTENT"
@@ -168,7 +170,7 @@ if [ -f "$INSTALLPACK_DIR/start.bat" ]; then
       fail "probe-marker.txt NOT created -- start.bat ZJ_LAUNCH_PROBE chain broken"
     fi
   else
-    skip "A-5 start.bat + probe-marker" "cmd.exe not available on this runner -- deferred to windows-latest job"
+    skip "A-5 start.bat + probe-marker" "powershell not available on this runner -- deferred to windows-latest job"
     PASS=$((PASS+1))
   fi
 else
@@ -231,16 +233,18 @@ PYEOF
   fi
 
   # Step 3: Run start.bat with ZJ_BOOT_FAIL_TEST=1 seam
-  if [ -f "$INSTALLPACK_DIR/start.bat" ] && command -v cmd.exe &>/dev/null 2>&1; then
+  if [ -f "$INSTALLPACK_DIR/start.bat" ] && { command -v powershell.exe &>/dev/null 2>&1 || command -v powershell &>/dev/null 2>&1; }; then
     BF_ENDPOINT="http://localhost:18099/api/agent/boot-fail"
-    # Write wrapper batch (same reason as A-5: bash export unreliable for Windows cmd.exe env)
-    _WRAP6="$INSTALLPACK_DIR/_zj_bootfail_wrap.bat"
-    printf '@SET ZJ_BOOT_FAIL_TEST=1\r\n@SET ZENITHJOY_BOOT_FAIL_ENDPOINT=%s\r\n@CALL start.bat\r\n' "$BF_ENDPOINT" > "$_WRAP6"
-    (
-      cd "$INSTALLPACK_DIR"
-      timeout 30 cmd.exe /c "_zj_bootfail_wrap.bat" 2>&1 | tail -10 || true
-    )
-    rm -f "$_WRAP6" 2>/dev/null || true
+    # Use PowerShell to set env vars then invoke cmd.exe/start.bat.
+    # Same MSYS2 /c→C:\ path conversion fix as A-5.
+    PS_A6="powershell"; command -v powershell.exe &>/dev/null 2>&1 && PS_A6="powershell.exe"
+    INSTALLPACK_WIN_A6="$(cd "$INSTALLPACK_DIR" 2>/dev/null && { pwd -W 2>/dev/null || pwd; } || echo "$INSTALLPACK_DIR")"
+    "$PS_A6" -NoProfile -Command "
+      \$env:ZJ_BOOT_FAIL_TEST = '1'
+      \$env:ZENITHJOY_BOOT_FAIL_ENDPOINT = '$BF_ENDPOINT'
+      Set-Location '$INSTALLPACK_WIN_A6'
+      cmd.exe /c start.bat 2>&1 | Select-Object -Last 10
+    " 2>&1 | tail -10 || true
   else
     mkdir -p "$AGENT_DATA_DIR"
     BOOT_TMP="$AGENT_DATA_DIR/.boot-error.json.tmp"
