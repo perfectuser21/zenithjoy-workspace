@@ -109,6 +109,10 @@ export default function AcquisitionAccountsPage() {
   const [accountLabel, setAccountLabel] = useState('');
   const [labelError, setLabelError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [scanTriggering, setScanTriggering] = useState(false);
+  const [scanMessage, setScanMessage] = useState('');
+  const [scanError, setScanError] = useState('');
+  const [scanCooldownUntil, setScanCooldownUntil] = useState(0);
 
   const load = async () => {
     setLoading(true);
@@ -154,6 +158,28 @@ export default function AcquisitionAccountsPage() {
       setSubmitting(false);
     }
   }
+
+  async function handleTriggerScan() {
+    setScanTriggering(true);
+    setScanMessage('');
+    setScanError('');
+    try {
+      const r = await fetch('/api/acquisition/account-scan/trigger', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const j = await r.json();
+      if (!j?.success) {
+        setScanError(j?.error?.message || '触发扫描失败');
+      } else {
+        setScanMessage('已发送扫描请求，最长等待约30秒后刷新本页查看');
+        setScanCooldownUntil(Date.now() + 60_000);
+      }
+    } catch (e) {
+      setScanError(String((e as Error).message || e));
+    } finally {
+      setScanTriggering(false);
+    }
+  }
+
+  const scanOnCooldown = Date.now() < scanCooldownUntil;
 
   return (
     <div className="max-w-3xl mx-auto py-2 space-y-6">
@@ -269,7 +295,18 @@ export default function AcquisitionAccountsPage() {
         <div className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">📱 Android 绑定</div>
         <p className="text-sm text-gray-600 dark:text-gray-400">
           在手机 ZenithJoy Agent App 里，切换到你要绑定的抖音小号——中台会自动检测到并出现在上方账号列表里，无需在此操作。
+          App 内置每 30-60 分钟自动扫描一次；如果不想等，可以点下面的按钮立即触发一次。
         </p>
+        <button
+          type="button"
+          disabled={scanTriggering || scanOnCooldown}
+          onClick={handleTriggerScan}
+          className="mt-2 rounded bg-orange-600 px-4 py-2 text-white text-sm disabled:bg-gray-300 dark:disabled:bg-slate-700"
+        >
+          立即扫描
+        </button>
+        {scanMessage ? <div className="mt-2 text-sm text-green-600 dark:text-green-400">{scanMessage}</div> : null}
+        {scanError ? <div className="mt-2 text-sm text-red-600 dark:text-red-400">{scanError}</div> : null}
       </section>
     </div>
   );
