@@ -151,8 +151,17 @@ async def _connect_with_retry(ws_url: str, on_disconnect: Callable | None = None
 
 # ─── 音频桥接主函数 ───────────────────────────────────────────────────────────
 
+def _validate_audio_format(params: dict[str, Any]) -> bool:
+    """音频格式握手校验（I-12）：确认采样率=16000, 编码=pcm, 帧长=20ms。"""
+    return (
+        params.get('sample_rate') == 16000
+        and params.get('encoding') == 'pcm'
+        and params.get('frame_ms') == 20
+    )
+
+
 def start_audio_bridge(
-    ws_url: str = 'ws://localhost:8765',
+    ws_url: str = 'ws://127.0.0.1:8765',
     system_prompt: str | None = None,
     on_disconnect: Callable | None = None,
     output_device_name: str | None = None,
@@ -207,6 +216,13 @@ def start_audio_bridge(
 
     # 2. 合规开场白（I-4 + N-6）— 必须是接通后第一个操作（串行）
     _play_compliance_opening(output_device_name, system_prompt or DEFAULT_SYSTEM_PROMPT)
+
+    # 3a. 格式握手校验（I-12）— 校验采样率/编码/帧长，不一致直接拒绝
+    handshake_params = {'sample_rate': 16000, 'encoding': 'pcm', 'frame_ms': 20}
+    if not _validate_audio_format(handshake_params):
+        reason = f'format_mismatch: {handshake_params}'
+        logger.error('[gpa-voice] audio_bridge format_mismatch: %s', reason)
+        return {'status': 'format_mismatch', 'reason': reason}
 
     # 3. 建立 WebSocket 中继（I-5，最多 3 次重连）
     try:
