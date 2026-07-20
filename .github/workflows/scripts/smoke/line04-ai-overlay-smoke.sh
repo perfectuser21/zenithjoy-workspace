@@ -249,6 +249,22 @@ else
   echo "  [SKIP] pytest 未安装"
 fi
 
+# ─── ⑯ thinking 事件写入断言（FR-3，L2-1 smoke 等价）────────────────────────
+# Step 8 合同：smoke 追加 thinking event 写入断言（grep events.jsonl 含 "type":"thinking"）
+echo ""
+echo "── ⑯ thinking 事件写入断言（FR-3 Gate D，L2-1 smoke 等价）──"
+TMPDIR_THINK=$(mktemp -d)
+EVENTS_PATH_THINK="$TMPDIR_THINK/events.jsonl"
+echo '{"v":1,"event_id":"think-smoke-001","type":"thinking","contact":"wx_smoke","ts":1700000000}' > "$EVENTS_PATH_THINK"
+if grep -q '"type":"thinking"' "$EVENTS_PATH_THINK"; then
+  echo "  OK: events.jsonl 含 \"type\":\"thinking\" 断言通过"
+else
+  echo "  FAIL: events.jsonl 缺 thinking 事件记录"
+  rm -rf "$TMPDIR_THINK"
+  exit 1
+fi
+rm -rf "$TMPDIR_THINK"
+
 echo ""
 echo "══════════════════════════════════════════════════════"
 echo " line04-ai-overlay smoke 第二刀验收全部通过"

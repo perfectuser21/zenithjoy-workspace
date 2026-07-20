@@ -13,19 +13,19 @@ date: 2026-07-20
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] `services/agent/wechat-rpa/overlay/overlay_window.py` EventTailConsumer 含 `_pointer_path` 字段及 tail_pointer.txt 读写逻辑
+- [x] [ARTIFACT] `services/agent/wechat-rpa/overlay/overlay_window.py` EventTailConsumer 含 `_pointer_path` 字段及 tail_pointer.txt 读写逻辑
   Test: `python3 -c "src=open('/workspace/services/agent/wechat-rpa/overlay/overlay_window.py').read();assert '_pointer_path' in src or 'tail_pointer.txt' in src,'FAIL';print('OK')"`
 
-- [ ] [ARTIFACT] `services/agent/wechat-rpa/listen_chat.py` 在 `_gen_draft` 函数内含 `_write_event("thinking"` 调用
+- [x] [ARTIFACT] `services/agent/wechat-rpa/listen_chat.py` 在 `_gen_draft` 函数内含 `_write_event("thinking"` 调用
   Test: `python3 -c "src=open('/workspace/services/agent/wechat-rpa/listen_chat.py').read();assert '_write_event(\"thinking\"' in src or \"_write_event('thinking'\" in src,'FAIL: 缺 thinking 写入';print('OK')"`
 
-- [ ] [ARTIFACT] `services/agent/wechat-rpa/overlay/overlay_window.py` OverlayApp 含 `open_customer_page` 方法及 `webbrowser.open` 调用
+- [x] [ARTIFACT] `services/agent/wechat-rpa/overlay/overlay_window.py` OverlayApp 含 `open_customer_page` 方法及 `webbrowser.open` 调用
   Test: `python3 -c "src=open('/workspace/services/agent/wechat-rpa/overlay/overlay_window.py').read();assert 'open_customer_page' in src,'FAIL: 缺方法';assert 'webbrowser.open' in src,'FAIL: 缺 webbrowser.open';print('OK')"`
 
-- [ ] [ARTIFACT] 中台 API `/api/wechat/customer-profile` 响应扩展含 `portrait.need/budget/concern` 及 `recent_messages`
+- [x] [ARTIFACT] 中台 API `/api/wechat/customer-profile` 响应扩展含 `portrait.need/budget/concern` 及 `recent_messages`
   Test: `curl -s "http://localhost:5200/api/wechat/customer-profile?wechat_id=test" | python3 -c "import sys,json;d=json.load(sys.stdin);b=d.get('data',d);p=b.get('portrait',{});[__import__('sys').exit(1) for f in ['need','budget','concern'] if f not in p];print('OK portrait fields exist')"`
 
-- [ ] [ARTIFACT] Gate E：`cs_memory_longterm` 索引在 HK-VPS + MMV 两台 postgres 均存在
+- [x] [ARTIFACT] Gate E：`cs_memory_longterm` 索引在 HK-VPS + MMV 两台 postgres 均存在
   Test: `psql "$DATABASE_URL" -c "SELECT indexname FROM pg_indexes WHERE tablename='cs_memory_longterm' AND indexname='idx_cs_memory_longterm_tenant_contact';" | grep -q "idx_cs_memory_longterm_tenant_contact" && echo "OK: HK-VPS 索引存在" || { echo "FAIL: HK-VPS 缺索引"; exit 1; } && psql "$DATABASE_URL_MMV" -c "SELECT indexname FROM pg_indexes WHERE tablename='cs_memory_longterm' AND indexname='idx_cs_memory_longterm_tenant_contact';" | grep -q "idx_cs_memory_longterm_tenant_contact" && echo "OK: MMV 索引存在" || { echo "FAIL: MMV 缺索引"; exit 1; }`
 
 ---
@@ -34,7 +34,7 @@ date: 2026-07-20
 
 ### WS1：tail_pointer.txt 持久化
 
-- [ ] [BEHAVIOR] EventTailConsumer 启动时读取 tail_pointer.txt 中的字节 offset 并 seek 到该位置
+- [x] [BEHAVIOR] EventTailConsumer 启动时读取 tail_pointer.txt 中的字节 offset 并 seek 到该位置
   Test: manual:bash -c 'python3 - <<'"'"'EOF'"'"'
 import sys, os, json, time, tempfile
 tmpdir = tempfile.mkdtemp()
@@ -61,7 +61,7 @@ print("OK: tail_pointer seek 生效，旧事件未重放")
 EOF'
   期望: OK: tail_pointer seek 生效，旧事件未重放
 
-- [ ] [BEHAVIOR] get_events() 调用后 tail_pointer.txt 内容更新为当前字节 offset（整数字符串）
+- [x] [BEHAVIOR] get_events() 调用后 tail_pointer.txt 内容更新为当前字节 offset（整数字符串）
   Test: manual:bash -c 'python3 - <<'"'"'EOF'"'"'
 import sys, os, json, time, tempfile
 tmpdir = tempfile.mkdtemp()
@@ -81,7 +81,7 @@ print(f"OK: tail_pointer.txt 更新为 offset={content}")
 EOF'
   期望: OK: tail_pointer.txt 更新为 offset=<正整数>
 
-- [ ] [BEHAVIOR] tail_pointer.txt 损坏（非整数内容）时 EventTailConsumer 归零不抛异常
+- [x] [BEHAVIOR] tail_pointer.txt 损坏（非整数内容）时 EventTailConsumer 归零不抛异常
   Test: manual:bash -c 'python3 - <<'"'"'EOF'"'"'
 import sys, os, json, time, tempfile
 tmpdir = tempfile.mkdtemp()
@@ -103,7 +103,7 @@ except Exception as e:
 EOF'
   期望: OK: 损坏时不抛异常
 
-- [ ] [BEHAVIOR] tail_pointer.txt 不存在时 EventTailConsumer 从头读取（归零行为）
+- [x] [BEHAVIOR] tail_pointer.txt 不存在时 EventTailConsumer 从头读取（归零行为）
   Test: manual:bash -c 'python3 - <<'"'"'EOF'"'"'
 import sys, os, json, time, tempfile
 tmpdir = tempfile.mkdtemp()
@@ -125,7 +125,7 @@ EOF'
 
 ### WS2：thinking 事件写入
 
-- [ ] [BEHAVIOR] listen_chat.py 在 _gen_draft 函数内 post_draft_generate 调用前存在 _write_event("thinking", ...) 调用点
+- [x] [BEHAVIOR] listen_chat.py 在 _gen_draft 函数内 post_draft_generate 调用前存在 _write_event("thinking", ...) 调用点
   Test: manual:bash -c 'python3 - <<'"'"'EOF'"'"'
 import ast, sys
 src = open("/workspace/services/agent/wechat-rpa/listen_chat.py").read()
@@ -149,7 +149,7 @@ print(f"OK: thinking 写入点在 :{thinking_lineno}，_gen_draft 在 :{gen_draf
 EOF'
   期望: OK: thinking 写入点存在且位于 _gen_draft 附近
 
-- [ ] [BEHAVIOR] thinking 事件写入 events.jsonl 时不含 PII 字段（无 content/reply/wechat_id 真实内容）
+- [x] [BEHAVIOR] thinking 事件写入 events.jsonl 时不含 PII 字段（无 content/reply/wechat_id 真实内容）
   Test: manual:bash -c 'python3 - <<'"'"'EOF'"'"'
 import sys, os, json, time, tempfile, unittest.mock
 tmpdir = tempfile.mkdtemp()
@@ -170,7 +170,7 @@ print(f"OK: thinking 事件无 PII 字段 keys={list(ev.keys())}")
 EOF'
   期望: OK: thinking 事件无 PII 字段
 
-- [ ] [BEHAVIOR] _write_event 在 thinking 调用时 reasoning 参数为 None（不传入推理内容）
+- [x] [BEHAVIOR] _write_event 在 thinking 调用时 reasoning 参数为 None（不传入推理内容）
   Test: manual:bash -c 'python3 - <<'"'"'EOF'"'"'
 import sys, os, json, time, tempfile
 tmpdir = tempfile.mkdtemp()
@@ -190,7 +190,7 @@ print(f"OK: thinking 事件 reasoning=None contact=wx_test_001")
 EOF'
   期望: OK: thinking 事件 reasoning=None
 
-- [ ] [BEHAVIOR] _write_event 三处调用点（heartbeat/thinking/reply_sent）字段无相互污染（静态断言）
+- [x] [BEHAVIOR] _write_event 三处调用点（heartbeat/thinking/reply_sent）字段无相互污染（静态断言）
   Test: manual:bash -c 'python3 - <<'"'"'EOF'"'"'
 src = open("/workspace/services/agent/wechat-rpa/listen_chat.py").read()
 lines = [(i+1, l.strip()) for i, l in enumerate(src.splitlines()) if "_write_event(" in l and not l.strip().startswith("#")]
@@ -210,23 +210,23 @@ EOF'
 
 ### WS3：cs_memory_longterm 三段论接入
 
-- [ ] [BEHAVIOR] GET /api/wechat/customer-profile 响应 JSON 含 portrait.need 字段（来自 cs_memory_longterm.summary）
+- [x] [BEHAVIOR] GET /api/wechat/customer-profile 响应 JSON 含 portrait.need 字段（来自 cs_memory_longterm.summary）
   Test: manual:bash -c 'curl -sf "http://localhost:5200/api/wechat/customer-profile?wechat_id=test_wx_001" | python3 -c "import sys,json;d=json.load(sys.stdin);b=d.get('"'"'data'"'"',d);p=b.get('"'"'portrait'"'"',{});assert '"'"'need'"'"' in p,f'"'"'FAIL: portrait 缺 need 字段 keys={list(p.keys())}'"'"';print(f'"'"'OK portrait.need={p['"'"'need'"'"']!r}'"'"')" || { echo "FAIL: API 请求失败或字段缺失"; exit 1; }'
   期望: OK portrait.need=<值>
 
-- [ ] [BEHAVIOR] GET /api/wechat/customer-profile 响应 JSON 含 portrait.budget 字段
+- [x] [BEHAVIOR] GET /api/wechat/customer-profile 响应 JSON 含 portrait.budget 字段
   Test: manual:bash -c 'curl -sf "http://localhost:5200/api/wechat/customer-profile?wechat_id=test_wx_001" | python3 -c "import sys,json;d=json.load(sys.stdin);b=d.get('"'"'data'"'"',d);p=b.get('"'"'portrait'"'"',{});assert '"'"'budget'"'"' in p,f'"'"'FAIL: portrait 缺 budget 字段'"'"';print(f'"'"'OK portrait.budget={p['"'"'budget'"'"']!r}'"'"')" || { echo "FAIL"; exit 1; }'
   期望: OK portrait.budget=<值>
 
-- [ ] [BEHAVIOR] GET /api/wechat/customer-profile 响应 JSON 含 portrait.concern 字段
+- [x] [BEHAVIOR] GET /api/wechat/customer-profile 响应 JSON 含 portrait.concern 字段
   Test: manual:bash -c 'curl -sf "http://localhost:5200/api/wechat/customer-profile?wechat_id=test_wx_001" | python3 -c "import sys,json;d=json.load(sys.stdin);b=d.get('"'"'data'"'"',d);p=b.get('"'"'portrait'"'"',{});assert '"'"'concern'"'"' in p,f'"'"'FAIL: portrait 缺 concern 字段'"'"';print(f'"'"'OK portrait.concern={p['"'"'concern'"'"']!r}'"'"')" || { echo "FAIL"; exit 1; }'
   期望: OK portrait.concern=<值>
 
-- [ ] [BEHAVIOR] GET /api/wechat/customer-profile 响应含 recent_messages 数组且长度 ≤3
+- [x] [BEHAVIOR] GET /api/wechat/customer-profile 响应含 recent_messages 数组且长度 ≤3
   Test: manual:bash -c 'curl -sf "http://localhost:5200/api/wechat/customer-profile?wechat_id=test_wx_001" | python3 -c "import sys,json;d=json.load(sys.stdin);b=d.get('"'"'data'"'"',d);msgs=b.get('"'"'recent_messages'"'"',[]);assert isinstance(msgs,list),f'"'"'FAIL: recent_messages 非列表'"'"';assert len(msgs)<=3,f'"'"'FAIL: recent_messages 超 3 条={len(msgs)}'"'"';print(f'"'"'OK recent_messages count={len(msgs)}'"'"')" || { echo "FAIL"; exit 1; }'
   期望: OK recent_messages count=<0-3>
 
-- [ ] [BEHAVIOR] overlay_window.py renderProfile 或 __updateCustomerCard 处理三段论字段（need/budget/concern）
+- [x] [BEHAVIOR] overlay_window.py renderProfile 或 __updateCustomerCard 处理三段论字段（need/budget/concern）
   Test: manual:bash -c 'python3 -c "src=open('"'"'/workspace/services/agent/wechat-rpa/overlay/overlay_window.py'"'"').read();assert '"'"'need'"'"' in src and '"'"'budget'"'"' in src and '"'"'concern'"'"' in src,'"'"'FAIL: overlay 未渲染三段论字段'"'"';print('"'"'OK: overlay 含三段论字段渲染'"'"')"'
   期望: OK: overlay 含三段论字段渲染
 
@@ -234,11 +234,11 @@ EOF'
 
 ### WS4：open_customer_page + 「查看画像」按钮
 
-- [ ] [BEHAVIOR] OverlayApp 含 open_customer_page 方法定义（Gate G 前置）
+- [x] [BEHAVIOR] OverlayApp 含 open_customer_page 方法定义（Gate G 前置）
   Test: manual:bash -c 'python3 -c "src=open('"'"'/workspace/services/agent/wechat-rpa/overlay/overlay_window.py'"'"').read();assert '"'"'def open_customer_page'"'"' in src,'"'"'FAIL: 缺 open_customer_page 方法'"'"';print('"'"'OK: open_customer_page 方法存在'"'"')"'
   期望: OK: open_customer_page 方法存在
 
-- [ ] [BEHAVIOR] open_customer_page 调用 webbrowser.open 且 URL 含 /wechat/crm/ 路径（Inv-15 合规）
+- [x] [BEHAVIOR] open_customer_page 调用 webbrowser.open 且 URL 含 /wechat/crm/ 路径（Inv-15 合规）
   Test: manual:bash -c 'python3 - <<'"'"'EOF'"'"'
 import sys, unittest.mock
 sys.path.insert(0, "/workspace/services/agent/wechat-rpa")
@@ -256,11 +256,11 @@ with unittest.mock.patch("webbrowser.open") as mock_open:
 EOF'
   期望: OK: webbrowser.open(http://localhost:5174/wechat/crm/wx_test_001)
 
-- [ ] [BEHAVIOR] overlay HTML 模板含「查看画像」按钮元素（pywebview.api.open_customer_page 绑定）
+- [x] [BEHAVIOR] overlay HTML 模板含「查看画像」按钮元素（pywebview.api.open_customer_page 绑定）
   Test: manual:bash -c 'python3 -c "src=open('"'"'/workspace/services/agent/wechat-rpa/overlay/overlay_window.py'"'"').read();assert '"'"'查看画像'"'"' in src or '"'"'open_customer_page'"'"' in src,'"'"'FAIL: 缺查看画像按钮'"'"';assert '"'"'open_customer_page'"'"' in src,'"'"'FAIL: 缺 open_customer_page 绑定'"'"';print('"'"'OK: 查看画像按钮存在且绑定 open_customer_page'"'"')"'
   期望: OK: 查看画像按钮存在且绑定 open_customer_page
 
-- [ ] [BEHAVIOR] 无当前 session（_current_wechat_id 为 None）时「查看画像」按钮置灰（disabled/灰色）
+- [x] [BEHAVIOR] 无当前 session（_current_wechat_id 为 None）时「查看画像」按钮置灰（disabled/灰色）
   Test: manual:bash -c 'python3 -c "src=open('"'"'/workspace/services/agent/wechat-rpa/overlay/overlay_window.py'"'"').read();# 验证按钮置灰逻辑存在（disabled 或 classList 操作）;has_disabled = '"'"'disabled'"'"' in src and '"'"'open_customer_page'"'"' in src;has_grey = '"'"'grey'"'"' in src or '"'"'gray'"'"' in src or '"'"'disabled'"'"' in src;assert has_disabled or has_grey,'"'"'FAIL: 缺按钮置灰逻辑'"'"';print('"'"'OK: 按钮置灰逻辑存在'"'"')"'
   期望: OK: 按钮置灰逻辑存在
 
@@ -268,11 +268,11 @@ EOF'
 
 ## 不变量自检（Invariant）
 
-- [ ] [INV-13] tail_pointer.txt 只由 EventTailConsumer 读写，单行整数，损坏→归零不崩
+- [x] [INV-13] tail_pointer.txt 只由 EventTailConsumer 读写，单行整数，损坏→归零不崩
   Test: manual:bash -c 'grep -n "tail_pointer" /workspace/services/agent/wechat-rpa/listen_chat.py && echo "WARN: listen_chat.py 含 tail_pointer 读写（违反 Inv-13）" || echo "OK: listen_chat.py 不含 tail_pointer 读写"'
   期望: OK: listen_chat.py 不含 tail_pointer 读写
 
-- [ ] [INV-14] thinking 写入点 = post_draft_generate 调用前，不携带 contact 以外字段（推理字段为 None）
+- [x] [INV-14] thinking 写入点 = post_draft_generate 调用前，不携带 contact 以外字段（推理字段为 None）
   Test: manual:bash -c 'python3 - <<'"'"'EOF'"'"'
 src = open("/workspace/services/agent/wechat-rpa/listen_chat.py").read()
 lines = src.splitlines()
@@ -287,15 +287,15 @@ print(f"OK: thinking 写入点 {len(thinking_lines)} 处，字段检查通过")
 EOF'
   期望: OK: thinking 写入点 N 处，字段检查通过
 
-- [ ] [INV-15] open_customer_page 内部 webbrowser.open(url)，不内嵌 iframe，不在浮窗内渲染页面
+- [x] [INV-15] open_customer_page 内部 webbrowser.open(url)，不内嵌 iframe，不在浮窗内渲染页面
   Test: manual:bash -c 'python3 -c "src=open('"'"'/workspace/services/agent/wechat-rpa/overlay/overlay_window.py'"'"').read();import re;ctx=src[src.find('"'"'def open_customer_page'"'"'):src.find('"'"'def open_customer_page'"'"')+500] if '"'"'def open_customer_page'"'"' in src else '"'"''"'"';assert '"'"'iframe'"'"' not in ctx.lower(),'"'"'FAIL: open_customer_page 含 iframe（违反 Inv-15）'"'"';assert '"'"'webbrowser.open'"'"' in ctx,'"'"'FAIL: open_customer_page 缺 webbrowser.open'"'"';print('"'"'OK: open_customer_page 无 iframe，只调 webbrowser.open'"'"')"'
   期望: OK: open_customer_page 无 iframe，只调 webbrowser.open
 
-- [ ] [SCOPE-GUARD] thinking 事件写入点不含 stream/chunk/delta 字段
+- [x] [SCOPE-GUARD] thinking 事件写入点不含 stream/chunk/delta 字段
   Test: manual:bash -c 'python3 -c "src=open(\"/workspace/services/agent/wechat-rpa/listen_chat.py\").read();import re;m=re.findall(r\"thinking.*?(stream|chunk|delta)\",src,re.DOTALL);assert not m,f\"FAIL: thinking 含禁止字段 {m}\";print(\"OK: thinking 无 streaming 字段\")"'
   期望: OK: thinking 无 streaming 字段
 
-- [ ] [SCOPE-GUARD] thinking 事件覆盖语义（同 contact 新 thinking 覆盖旧值，不排队）
+- [x] [SCOPE-GUARD] thinking 事件覆盖语义（同 contact 新 thinking 覆盖旧值，不排队）
   说明: 仅文字约束，不需 CI 断言。overlay 端同一 contact 的 thinking 状态以最新写入为准（overlay_window.py setThinking 直接赋值不 append）。
 
 ---
