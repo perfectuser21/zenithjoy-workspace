@@ -493,16 +493,16 @@ class AgentService : Service() {
             return
         }
         android.util.Log.i(TAG, "registering with license...")
-        val registrar = AgentRegistrar()
-        val registerRequest = AgentRegistrar.RegisterRequest(
-            licenseKey = config.licenseKey,
-            machineId = config.machineId,
-            hostname = android.os.Build.MODEL,
-            agentId = config.agentId,
-            version = BuildConfig.VERSION_NAME,
-            httpBase = config.deriveHttpBase(),
-        )
         try {
+            val registrar = AgentRegistrar()
+            val registerRequest = AgentRegistrar.RegisterRequest(
+                licenseKey = config.licenseKey,
+                machineId = config.machineId,
+                hostname = android.os.Build.MODEL,
+                agentId = config.agentId,
+                version = BuildConfig.VERSION_NAME,
+                httpBase = config.deriveHttpBase(),
+            )
             when (val outcome = withContext(Dispatchers.IO) { registrar.register(registerRequest) }) {
                 is AgentRegistrar.RegisterOutcome.Success -> {
                     val result = outcome.result
