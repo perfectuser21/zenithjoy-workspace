@@ -99,8 +99,8 @@ def test_main_loop_sweep_in_try_finally():
     src = open(os.path.join(_WECHAT, "listen_chat.py"), encoding="utf-8").read()
     # finally: 之后（隔注释/空白）调用 _sweep_inflight(unread)
     pat = re.compile(
-        r"\n\s*finally:\s*\n"
-        r"(?:\s*#.*\n|\s*\n)*"
-        r"\s*_sweep_inflight\(unread\)",
+        r"\n[ \t]*finally:[ \t]*\n"
+        r"(?:[ \t]*#[^\n]*\n|[ \t]*\n)*"
+        r"[ \t]*_sweep_inflight\(unread\)",
     )
     assert pat.search(src), "主循环轮尾 sweep 必须在 finally 块内调用 _sweep_inflight(unread)"
