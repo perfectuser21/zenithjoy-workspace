@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
 
-const REPO_ROOT = resolve(__dirname, '../../..');
+const REPO_ROOT = resolve(__dirname, '../../../..');
 const SETUP_RESET_PS1 = resolve(REPO_ROOT, 'services/agent/install-pack/setup-reset.ps1');
 const START_BAT = resolve(REPO_ROOT, 'services/agent/install-pack/start.bat');
 

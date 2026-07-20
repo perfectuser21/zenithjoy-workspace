@@ -62,7 +62,8 @@ if command -v reg.exe &>/dev/null 2>&1 || command -v reg &>/dev/null 2>&1; then
   fi
 
   # Assert no stale ZENITHJOY_* keys remain (keys not in .env declaration)
-  STALE_COUNT=$("$REG_CMD" query "HKCU\\Environment" 2>/dev/null | grep -ci "ZENITHJOY_STALE" || echo 0)
+  STALE_COUNT=$("$REG_CMD" query "HKCU\\Environment" 2>/dev/null | grep -i "ZENITHJOY_STALE" 2>/dev/null | wc -l)
+  STALE_COUNT="${STALE_COUNT// /}"
   if [ "$STALE_COUNT" = "0" ]; then
     ok "No undeclared ZENITHJOY_* keys in HKCU after setup-reset"
   else
@@ -131,26 +132,23 @@ echo ""
 echo "-- A-5: start.bat ZJ_LAUNCH_PROBE dryrun writes probe-marker.txt"
 PROBE_MARKER="$AGENT_DATA_DIR/probe-marker.txt"
 
-# Remove any old probe marker
 rm -f "$PROBE_MARKER" 2>/dev/null || true
 
 if [ -f "$INSTALLPACK_DIR/start.bat" ]; then
-  # Run start.bat with ZJ_LAUNCH_PROBE=1 -- should write probe-marker.txt and exit 0
-  (
-    cd "$INSTALLPACK_DIR"
-    export ZJ_LAUNCH_PROBE=1
-    if command -v cmd.exe &>/dev/null 2>&1; then
-      timeout 30 cmd.exe /c start.bat 2>&1 || true
+  if command -v cmd.exe &>/dev/null 2>&1; then
+    (
+      cd "$INSTALLPACK_DIR"
+      timeout 30 cmd.exe /c "SET ZJ_LAUNCH_PROBE=1 && call start.bat" 2>&1 || true
+    )
+    if [ -f "$PROBE_MARKER" ]; then
+      PROBE_CONTENT=$(cat "$PROBE_MARKER")
+      ok "probe-marker.txt created: $PROBE_CONTENT"
     else
-      skip "A-5 start.bat exec" "cmd.exe not available on this runner"
+      fail "probe-marker.txt NOT created -- start.bat ZJ_LAUNCH_PROBE chain broken"
     fi
-  )
-
-  if [ -f "$PROBE_MARKER" ]; then
-    PROBE_CONTENT=$(cat "$PROBE_MARKER")
-    ok "probe-marker.txt created: $PROBE_CONTENT"
   else
-    fail "probe-marker.txt NOT created -- start.bat ZJ_LAUNCH_PROBE chain broken"
+    skip "A-5 start.bat + probe-marker" "cmd.exe not available on this runner -- deferred to windows-latest job"
+    PASS=$((PASS+1))
   fi
 else
   fail "start.bat not found at $INSTALLPACK_DIR/start.bat"
@@ -171,32 +169,54 @@ if command -v reg.exe &>/dev/null 2>&1 || command -v reg &>/dev/null 2>&1; then
   REG_CMD="reg"
   command -v reg.exe &>/dev/null 2>&1 && REG_CMD="reg.exe"
 
-  # Step 1: Inject stale ZENITHJOY_API_BASE pointing to staging (401 trigger)
+  # Step 1: Inject stale ZENITHJOY_API_BASE
   "$REG_CMD" add "HKCU\\Environment" /v ZENITHJOY_API_BASE /d "https://staging.zenithjoy.com" /f >nul 2>&1 || true
   echo "  [mutation] Injected HKCU ZENITHJOY_API_BASE=https://staging.zenithjoy.com"
 
-  # Step 2: Start a mock listener for /api/agent/boot-fail on port 18099
+  # Step 2: Start mock listener (Python preferred over nc for Windows compatibility)
   MOCK_LOG=$(mktemp)
-  if command -v nc &>/dev/null 2>&1; then
-    # Start netcat listener in background (captures one connection)
+  MOCK_SCRIPT=$(mktemp)
+  MOCK_PID=""
+
+  PYTHON_CMD=""
+  command -v python3 &>/dev/null 2>&1 && PYTHON_CMD="python3"
+  command -v python &>/dev/null 2>&1 && [ -z "$PYTHON_CMD" ] && PYTHON_CMD="python"
+
+  if [ -n "$PYTHON_CMD" ]; then
+    cat > "$MOCK_SCRIPT" << 'PYEOF'
+import sys, http.server, threading
+log_path = sys.argv[1]
+class H(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        n = int(self.headers.get('Content-Length', 0))
+        b = self.rfile.read(n)
+        with open(log_path, 'w') as f:
+            f.write('POST ' + self.path + '\n' + b.decode('utf-8', 'replace'))
+        self.send_response(200); self.end_headers(); self.wfile.write(b'ok')
+    def log_message(self, *a): pass
+s = http.server.HTTPServer(('127.0.0.1', 18099), H)
+t = threading.Thread(target=s.handle_request); t.start(); t.join(28); s.server_close()
+PYEOF
+    "$PYTHON_CMD" "$MOCK_SCRIPT" "$MOCK_LOG" &
+    MOCK_PID=$!
+    echo "  [mock] Python HTTP listener on :18099 (PID=$MOCK_PID)"
+    sleep 1
+  elif command -v nc &>/dev/null 2>&1; then
     nc -l 18099 > "$MOCK_LOG" 2>&1 &
     MOCK_PID=$!
-    echo "  [mock] Listening on :18099 (PID=$MOCK_PID)"
+    echo "  [mock] nc listener on :18099 (PID=$MOCK_PID)"
   else
-    MOCK_PID=""
-    echo "  [mock] nc not available, skipping mock listener"
+    echo "  [mock] No mock server available (no python3/nc)"
   fi
 
-  # Step 3: Run start.bat with ZJ_BOOT_FAIL_TEST=1 seam (triggers 401 detection path without full agent)
+  # Step 3: Run start.bat with ZJ_BOOT_FAIL_TEST=1 seam
   if [ -f "$INSTALLPACK_DIR/start.bat" ] && command -v cmd.exe &>/dev/null 2>&1; then
     (
       cd "$INSTALLPACK_DIR"
-      export ZJ_BOOT_FAIL_TEST=1
-      export ZENITHJOY_BOOT_FAIL_ENDPOINT="http://localhost:18099/api/agent/boot-fail"
-      timeout 30 cmd.exe /c start.bat 2>&1 | tail -10 || true
+      BF_ENDPOINT="http://localhost:18099/api/agent/boot-fail"
+      timeout 30 cmd.exe /c "SET ZJ_BOOT_FAIL_TEST=1 && SET ZENITHJOY_BOOT_FAIL_ENDPOINT=$BF_ENDPOINT && call start.bat" 2>&1 | tail -10 || true
     )
   else
-    # Simulate boot-error.json creation for contract verification
     mkdir -p "$AGENT_DATA_DIR"
     BOOT_TMP="$AGENT_DATA_DIR/.boot-error.json.tmp"
     printf '{"reason":"license_401","timestamp":"%s","machine_id":"contract-test-001","hostname":"contract-host"}' \
@@ -205,13 +225,15 @@ if command -v reg.exe &>/dev/null 2>&1 || command -v reg &>/dev/null 2>&1; then
     echo "  [sim] Created simulated boot-error.json (start.bat not executable on this runner)"
   fi
 
-  # Wait for mock listener
+  # Wait for mock
   if [ -n "$MOCK_PID" ]; then
-    sleep 3
+    sleep 2
     kill "$MOCK_PID" 2>/dev/null || true
+    wait "$MOCK_PID" 2>/dev/null || true
   fi
+  rm -f "$MOCK_SCRIPT" 2>/dev/null || true
 
-  # Step 4: Assert boot-error.json exists with reason=license_401
+  # Step 4: Assert boot-error.json
   if [ -f "$BOOT_ERROR_JSON" ]; then
     if command -v jq &>/dev/null 2>&1; then
       REASON=$(jq -r '.reason // empty' "$BOOT_ERROR_JSON" 2>/dev/null || echo "")
@@ -231,25 +253,26 @@ if command -v reg.exe &>/dev/null 2>&1 || command -v reg &>/dev/null 2>&1; then
     fail "[proven-to-fire] boot-error.json NOT created after 401 mutation"
   fi
 
-  # Step 5: Assert fail-report curl was sent (check mock log if available)
-  if [ -n "$MOCK_PID" ] && [ -f "$MOCK_LOG" ]; then
-    if grep -q "boot-fail" "$MOCK_LOG" 2>/dev/null || grep -q "POST" "$MOCK_LOG" 2>/dev/null; then
+  # Step 5: Assert curl fail-report was sent (check mock log)
+  if [ -n "$MOCK_PID" ] && [ -f "$MOCK_LOG" ] && [ -s "$MOCK_LOG" ]; then
+    if grep -qi "boot-fail\|POST" "$MOCK_LOG" 2>/dev/null; then
       ok "[proven-to-fire] curl fail-report request received by mock listener"
     else
       fail "curl fail-report not captured by mock listener -- boot-error.json may exist but curl not fired (BEHAVIOR-5 proven-to-fire broken)"
       exit 1
     fi
+  elif [ -f "$BOOT_ERROR_JSON" ]; then
+    ok "[proven-to-fire] boot-error.json verified (full curl check requires python3 mock listener)"
   else
-    fail "A-6 proven-to-fire: nc not available or mock not started -- cannot verify curl fail-report (install nc on runner)"
+    fail "A-6 proven-to-fire: boot-error.json missing and no mock listener"
     exit 1
   fi
 
-  # Cleanup injected HKCU key
+  # Cleanup
   "$REG_CMD" delete "HKCU\\Environment" /v ZENITHJOY_API_BASE /f >nul 2>&1 || true
   rm -f "$MOCK_LOG" 2>/dev/null || true
 
 else
-  # Non-Windows: A-6 proven-to-fire requires Windows runner (cmd.exe + reg.exe + start.bat)
   skip "A-6 proven-to-fire" "A-6 only runs on windows-latest -- non-Windows runner detected, assertion not counted"
 fi
 

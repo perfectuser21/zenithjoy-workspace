@@ -110,7 +110,10 @@ try {
     $startVbs = Join-Path $scriptDir2 "start.vbs"
 
     # Delete existing task (ignore error if not found)
-    schtasks /delete /tn $taskName /f 2>$null | Out-Null
+    $savedEAP = $ErrorActionPreference
+    $ErrorActionPreference = "SilentlyContinue"
+    schtasks /delete /tn $taskName /f 2>&1 | Out-Null
+    $ErrorActionPreference = $savedEAP
     Write-Host "[setup-reset] deleted scheduled task $taskName (if existed)"
 
     # Re-create with /it (interactive) so it has access to UI sessions

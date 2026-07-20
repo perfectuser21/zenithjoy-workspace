@@ -35,6 +35,7 @@ export interface AgentModuleHealth {
   /** key 形如 line04-wechat-cs，value 为该模块状态 */
   module_status: Record<string, ModuleStatusEntry>;
   updated_at: string;
+  last_boot_error?: { reason?: string; timestamp?: string; reported_at?: string; [key: string]: unknown } | null;
 }
 
 export interface ModuleHealthResponse {
