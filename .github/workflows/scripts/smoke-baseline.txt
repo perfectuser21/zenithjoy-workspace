@@ -87,3 +87,4 @@ collect-report-comment-grading-smoke.sh
 dm-dispatch-sweep-smoke.sh
 account-scan-trigger-smoke.sh
 scan-fail-diagnostic-capture-smoke.sh
+gpa-voice-rtc-smoke.sh
