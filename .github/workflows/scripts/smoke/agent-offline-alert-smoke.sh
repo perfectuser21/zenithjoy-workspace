@@ -261,8 +261,9 @@ RESP2=$(curl -sf -X POST "${API_URL}/api/internal/agent-offline-scan" \
 sleep 1
 
 log "恢复场景 response: ${RESP2:-<empty>}"
+[ -n "$RESP2" ] || fail "恢复场景 POST /api/internal/agent-offline-scan 无响应"
 
-python3 - "${RESP2:-{}}" "$TEST_AGENT_ID" <<'PYEOF'
+python3 - "$RESP2" "$TEST_AGENT_ID" <<'PYEOF'
 import sys, json
 
 resp_str = sys.argv[1]
@@ -390,7 +391,9 @@ log "变异测试 response (invalid webhook): ${MUTATION_RESP:-<empty>}"
 # 明确 FAIL 条件：
 #   - alerted 含该 agent_id 但无任何错误标记 → 静默吞错
 #   - alerted 为空但无任何错误标记 → 无法区分"webhook 失败"与"无 stale 数据"，视为错误未暴露
-python3 - "${MUTATION_RESP:-{}}" "${TEST_AGENT_ID}" <<'PYEOF'
+# 注：${MUTATION_RESP:-{}} 在 bash 中会在值末尾追加 } 字面量，故改用显式空值检查
+[ -n "$MUTATION_RESP" ] || MUTATION_RESP='<no-response>'
+python3 - "$MUTATION_RESP" "${TEST_AGENT_ID}" <<'PYEOF'
 import sys, json
 
 resp_str = sys.argv[1]
