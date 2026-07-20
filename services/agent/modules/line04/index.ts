@@ -39,10 +39,21 @@ const state: {
 // 自愈件4：模块健康自检上报间隔（合成 listen_chat 真实健康 → IPC 上报 core → 随心跳上报中台）。
 const HEALTH_REPORT_INTERVAL_MS = 30_000;
 
+// AI 思考浮窗（overlay）状态文件根目录求值——handleConfig 起 overlay 时与 reportHealthOnce 查询
+// overlay 时必须用同一 stateDir 表达式，否则 getOverlayHandler 单例工厂会因 key 不同"创建"出
+// 另一个（实际上单例只认第一次调用的 stateDir，但语义上两处理应一致，故提取避免各写一份漂移）。
+function resolveOverlayStateDir(): string {
+  return process.env.ZJ_STATE_DIR || process.env.PUBLIC || 'C:\\Users\\Public';
+}
+
 // 自检一次：合成 listen_chat 真实健康（进程在不在 / 微信窗口找到没 / 最近一次成功送达）→ IPC status。
 export function reportHealthOnce(send: Send): void {
   const health = collectListenerHealth({ listenerAlive: isListenerAlive() });
-  send(buildHealthStatusMessage(health));
+  // AI 思考浮窗（第二刀接线）真实状态，仅 Windows 随健康消息一并上报（刀A Task 4）。
+  const overlay = process.platform === 'win32'
+    ? getOverlayHandler(resolveOverlayStateDir(), process.env.ZJ_MODULE_VERSION).getStatus()
+    : undefined;
+  send(buildHealthStatusMessage(health, overlay));
 }
 
 // 收到 config：初始化身份 + 启动微信监听（Windows），回 ready，并启动健康自检上报 loop。
@@ -59,10 +70,7 @@ export function handleConfig(cfg: ModuleConfig, send: Send): void {
   // AI 思考浮窗（第二刀接线）：随 listener 拉起，仅 Windows。
   // preflight 软检测失败/依赖缺失时 handler 内部写 overlay-diag.json 降级，不影响主链。
   if (process.platform === 'win32') {
-    const overlayStateDir = process.env.ZJ_STATE_DIR
-      || process.env.PUBLIC
-      || 'C:\\Users\\Public';
-    getOverlayHandler(overlayStateDir, process.env.ZJ_MODULE_VERSION)
+    getOverlayHandler(resolveOverlayStateDir(), process.env.ZJ_MODULE_VERSION)
       .start()
       .catch(() => { /* 浮窗启动失败不阻塞模块（diag 已落盘） */ });
   }

@@ -410,13 +410,19 @@ export function collectListenerHealth(input: ListenerHealthInput): ListenerHealt
 }
 
 // 把合成健康打包成发给 core 的 IPC status 消息。
-export function buildHealthStatusMessage(h: ListenerHealth): {
+// overlay：AI 思考浮窗（pywebview）真实状态（刀A Task 3 getOverlayHandler().getStatus()），
+// 随健康消息一并透传给 core → module-manager 拆出独立 line04-overlay key 入心跳。
+export function buildHealthStatusMessage(
+  h: ListenerHealth,
+  overlay?: { ok: boolean; reason?: string },
+): {
   type: 'status';
   ok: boolean;
   reason?: string;
   listener_alive: boolean;
   found_window?: boolean;
   last_delivery_ts?: number;
+  overlay?: { ok: boolean; reason?: string };
 } {
   return {
     type: 'status',
@@ -425,5 +431,6 @@ export function buildHealthStatusMessage(h: ListenerHealth): {
     listener_alive: h.listener_alive,
     found_window: h.found_window,
     last_delivery_ts: h.last_delivery_ts,
+    overlay,
   };
 }

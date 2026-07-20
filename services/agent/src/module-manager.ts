@@ -65,6 +65,10 @@ export interface ModuleHealth {
   found_window?: boolean;
   // line04 专有：最近一次出站/回复成功送达的时间戳（ms）
   last_delivery_ts?: number;
+  // line04 专有：AI 思考浮窗（pywebview）真实状态（刀A Task 3 getOverlayHandler().getStatus()）。
+  // 只在健康消息里暂存，captureModuleHealth 会把它拆到独立的 `${lineId}-overlay` key，
+  // 不进 healthReport.get(lineId) 本体（服务端 normalizeModuleStatus 只收 {ok,reason} 形状）。
+  overlay?: { ok: boolean; reason?: string };
 }
 
 export interface ModuleManagerOptions {
@@ -704,6 +708,13 @@ export class ModuleManager {
     this.log(
       `module ${lineId} 健康上报：ok=${health.ok} listener_alive=${health.listener_alive} found_window=${health.found_window}`,
     );
+    // 刀A：overlay（AI 思考浮窗/pywebview）红灯独立 key 上心跳——目前唯一有 overlay 的是 line04，
+    // 固定 'line04-overlay'，不造 `${lineId}-overlay` 通用逻辑（YAGNI，等第二条线要 overlay 再扩）。
+    // 服务端 normalizeModuleStatus 只收 {ok,reason} 形状，这里的形状即终态，不再包 listener_alive 等字段。
+    const overlay = m.overlay;
+    if (overlay && typeof overlay.ok === 'boolean') {
+      this.healthReport.set('line04-overlay', { ok: overlay.ok, reason: overlay.reason });
+    }
     return true;
   }
 
