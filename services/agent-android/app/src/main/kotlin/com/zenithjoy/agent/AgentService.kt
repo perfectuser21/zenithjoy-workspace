@@ -1020,7 +1020,7 @@ class AgentService : Service() {
             screenshotB64: String? = null,
             treeDump: String? = null,
         ): String {
-            fun esc(s: String): String = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
+            fun esc(s: String): String = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
             val ids = accountIds.joinToString(",") { "\"${esc(it)}\"" }
             val screenshotField = if (screenshotB64 != null) "\"${esc(screenshotB64)}\"" else "null"
             val treeDumpField = if (treeDump != null) "\"${esc(treeDump)}\"" else "null"
