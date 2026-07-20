@@ -3,6 +3,10 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     globals: true,
+    // globalSetup: fix path resolution for setup-reset-ps1 contract test
+    // (contract test uses resolve(__dirname, '../../..') which gives /workspace/services,
+    //  then looks for services/agent/install-pack/ under it -- needs a symlink to work)
+    globalSetup: ['./vitest.globalsetup.ts'],
     include: [
       'src/**/__tests__/**/*.test.ts',
       'src/**/*.test.ts',
