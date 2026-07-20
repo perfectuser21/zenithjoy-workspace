@@ -558,6 +558,29 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
     expect(updateCall![1]).toEqual([TASK_UUID, 'failed', expect.any(String)]);
   });
 
+  it('ok:false + error_code 存在 → response 落库带上 error_code（诊断真机失败原因必需字段）', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ status: 'queued' }] } as any); // SELECT publish_tasks
+
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/account-scan-result')
+      .send({
+        agent_id: AGENT_UUID,
+        request_id: TASK_UUID,
+        ok: false,
+        account_ids: [],
+        error_code: 'OPEN_PANEL_FAILED',
+      });
+
+    expect(r.status).toBe(200);
+    const calls = vi.mocked(pool.query).mock.calls;
+    const updateCall = calls.find((c) => /UPDATE\s+zenithjoy\.publish_tasks/i.test(String(c[0])));
+    expect(updateCall).toBeTruthy();
+    const responseJson = JSON.parse(updateCall![1][2] as string);
+    expect(responseJson.error_code).toBe('OPEN_PANEL_FAILED');
+    expect(responseJson.ok).toBe(false);
+  });
+
   it('request_id 对应行已是终态 done → 幂等短路，不重复写 agent_platform_sessions / publish_tasks', async () => {
     vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ status: 'done' }] } as any); // SELECT publish_tasks
 
