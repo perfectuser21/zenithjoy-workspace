@@ -4,10 +4,11 @@
 
 [BEHAVIOR] Migration 文件存在且含 ADD COLUMN IF NOT EXISTS 和全部 6 个延迟字段名
 [BEHAVIOR] rtc-sidecar.js 存在且含 OnUserJoined 事件发送和握手逻辑
-[BEHAVIOR] rtc_voice_manager.py 存在且含 start_voice_chat / stop_voice_chat 函数
+[BEHAVIOR] rtc_voice_manager.py 存在且含 start_voice_chat / stop_voice_chat 函数，timeout=5（I-9）和 timeout=10（I-10）具体数值可验证，并含 OnUserJoined 等待逻辑（I-11）
 [BEHAVIOR] audio_bridge.py 改为连接 ws://127.0.0.1:8765 且含格式握手逻辑
 [BEHAVIOR] smoke 脚本存在且含 ≥5 行实质断言
-[BEHAVIOR] Python 测试（test_rtc_voice_manager.py）存在且全部通过
+[BEHAVIOR] Python 测试（test_rtc_voice_manager.py）存在且含 I-9/I-10 超时场景关键字，全部通过
+[BEHAVIOR] NFR N-3：voice_rtc_latency_log.jsonl 存在且行数 ≥3（核心指标延迟日志必须落盘）
 
 ## DoD 条目
 
@@ -20,10 +21,11 @@
 
 | 铁律 | 覆盖方式 |
 |------|---------|
-| I-9 RTC Token 超时 | rtc_voice_manager.start_voice_chat timeout=5s 断言 |
-| I-10 sidecar 入房超时 | rtc-sidecar.js OnUserJoined 10s 超时逻辑 |
-| I-11 AI Agent 入场验证 | rtc-sidecar.js OnUserJoined 事件等待（非仅 HTTP 200）|
+| I-9 RTC Token 超时 | rtc_voice_manager.py grep `timeout\s*=\s*5` 精确数值断言 |
+| I-10 sidecar 入房超时 | rtc_voice_manager.py grep `timeout\s*=\s*10` 精确数值断言 + rtc-sidecar.js 10s 超时逻辑 |
+| I-11 AI Agent 入场验证 | rtc_voice_manager.py grep `OnUserJoined` 等待逻辑（非仅 HTTP 200）|
 | I-12 音频帧格式握手 | audio_bridge.py 握手校验 + format_mismatch 拒绝启动 |
+| N-3 延迟指标落盘 | voice_rtc_latency_log.jsonl 存在且行数 ≥3 |
 
 ## 判定点登记表
 

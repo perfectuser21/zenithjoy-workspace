@@ -69,9 +69,16 @@ test -f "$FILE" && echo "PASS: test file exists" || echo "FAIL: missing"
 grep -qE "describe|it\(|test\(" "$FILE" && echo "PASS: test structure" || echo "FAIL: no test structure"
 grep -q "OnUserJoined" "$FILE" && echo "PASS: OnUserJoined test" || echo "FAIL: OnUserJoined test missing"
 grep -q "format_mismatch" "$FILE" && echo "PASS: format_mismatch test" || echo "FAIL: format_mismatch test missing"
+
+# Python 测试文件：test_rtc_voice_manager.py 验证
+PYTEST=services/agent/wechat-rpa/voice_call/tests/test_rtc_voice_manager.py
+test -f "$PYTEST" && echo "PASS: test_rtc_voice_manager.py exists" || echo "FAIL: test_rtc_voice_manager.py missing"
+grep -qE "def test_" "$PYTEST" && echo "PASS: test functions exist" || echo "FAIL: no test functions"
+grep -qE "timeout.*5|5.*timeout" "$PYTEST" && echo "PASS: I-9 timeout=5s test scenario" || echo "FAIL: I-9 timeout scenario missing"
+grep -qE "timeout.*10|10.*timeout" "$PYTEST" && echo "PASS: I-10 timeout=10s test scenario" || echo "FAIL: I-10 timeout scenario missing"
 ```
 
-**硬阈值**: `describe`/`it`/`test` 结构存在；`OnUserJoined` 与 `format_mismatch` 两场景均有测试
+**硬阈值**: `describe`/`it`/`test` 结构存在；`OnUserJoined` 与 `format_mismatch` 两场景均有测试；`test_rtc_voice_manager.py` 存在且含 `def test_`；含 I-9（5s）和 I-10（10s）超时场景关键字
 
 ---
 
@@ -84,6 +91,7 @@ grep -q "format_mismatch" "$FILE" && echo "PASS: format_mismatch test" || echo "
 [BEHAVIOR] 文件含 `start_voice_chat` 函数，签名含 `room_id` 和 `token` 参数
 [BEHAVIOR] 文件含 `stop_voice_chat` 函数
 [BEHAVIOR] 文件含超时控制逻辑（含 `timeout` 关键字），对应 I-9（5s）和 I-10（10s）约束
+[BEHAVIOR] 文件含 `OnUserJoined` 等待逻辑（I-11：AI Agent 入场验证非仅 HTTP 200，需等待 OnUserJoined 事件）
 
 **验证命令**:
 ```bash
@@ -92,10 +100,12 @@ test -f "$FILE" && echo "PASS: rtc_voice_manager.py exists" || echo "FAIL: missi
 grep -q "start_voice_chat" "$FILE" && echo "PASS: start_voice_chat" || echo "FAIL: start_voice_chat missing"
 grep -q "stop_voice_chat" "$FILE" && echo "PASS: stop_voice_chat" || echo "FAIL: stop_voice_chat missing"
 grep -qE "room_id|token" "$FILE" && echo "PASS: signature params" || echo "FAIL: signature params missing"
-grep -q "timeout" "$FILE" && echo "PASS: timeout control" || echo "FAIL: timeout control missing"
+grep -qE 'timeout\s*=\s*5' "$FILE" && echo "PASS: I-9 timeout=5s" || echo "FAIL: I-9 timeout=5s missing"
+grep -qE 'timeout\s*=\s*10' "$FILE" && echo "PASS: I-10 timeout=10s" || echo "FAIL: I-10 timeout=10s missing"
+grep -q "OnUserJoined" "$FILE" && echo "PASS: I-11 OnUserJoined" || echo "FAIL: I-11 OnUserJoined missing"
 ```
 
-**硬阈值**: `start_voice_chat`、`stop_voice_chat`、`timeout` 关键字均出现；函数签名含 `room_id` 或 `token`
+**硬阈值**: `start_voice_chat`、`stop_voice_chat` 均出现；`timeout=5`（I-9）和 `timeout=10`（I-10）具体数值均可验证；`OnUserJoined`（I-11）出现；函数签名含 `room_id` 或 `token`
 
 ---
 
@@ -131,6 +141,7 @@ grep -q "16000" "$FILE" && echo "PASS: sample_rate=16000" || echo "FAIL: sample_
 [BEHAVIOR] 脚本含 ≥5 行实质 CI 可验证断言（非 `exit 0` 占位）
 [BEHAVIOR] 脚本含对 `rtc-sidecar.js` 和 `rtc_voice_manager.py` 的文件存在性检查
 [BEHAVIOR] 脚本含对 migration 文件关键字（6 个延迟字段名）的检查
+[BEHAVIOR] NFR N-3：`voice_rtc_latency_log.jsonl` 文件存在且行数 ≥3（核心指标延迟日志必须落盘）
 
 **验证命令**:
 ```bash
@@ -140,9 +151,15 @@ grep -q "set -euo pipefail" "$FILE" && echo "PASS: pipefail" || echo "FAIL: pipe
 grep -qE "rtc-sidecar\.js" "$FILE" && echo "PASS: sidecar check" || echo "FAIL: sidecar check missing"
 grep -q "rtc_voice_manager" "$FILE" && echo "PASS: manager check" || echo "FAIL: manager check missing"
 grep -c "PASS\|assert\|grep\|test -f\|python" "$FILE" | awk '{if ($1>=5) print "PASS: >=5 assertions"; else print "FAIL: too few assertions"}'
+
+# NFR N-3：延迟日志断言
+LATENCY_LOG=voice_rtc_latency_log.jsonl
+test -f "$LATENCY_LOG" && echo "PASS: N-3 latency log exists" || echo "FAIL: N-3 voice_rtc_latency_log.jsonl missing"
+LINE_COUNT=$(wc -l < "$LATENCY_LOG" 2>/dev/null || echo 0)
+[ "$LINE_COUNT" -ge 3 ] && echo "PASS: N-3 latency log >=3 records (got $LINE_COUNT)" || echo "FAIL: N-3 latency log <3 records (got $LINE_COUNT)"
 ```
 
-**硬阈值**: `set -euo pipefail` 存在；sidecar、manager 文件检查均有；实质断言行 ≥5
+**硬阈值**: `set -euo pipefail` 存在；sidecar、manager 文件检查均有；实质断言行 ≥5；`voice_rtc_latency_log.jsonl` 存在且行数 ≥3
 
 ---
 
@@ -156,6 +173,7 @@ grep -c "PASS\|assert\|grep\|test -f\|python" "$FILE" | awk '{if ($1>=5) print "
 2. 模拟 StartVoiceChat 调用 → room_id + token 返回（≤5s）
 3. sidecar 发出 OnUserJoined 事件（≤5s）
 4. 模拟挂断 → StopVoiceChat 调用 + sidecar 退房
+5. NFR N-3：核心指标 latency log 落盘——`voice_rtc_latency_log.jsonl` 文件存在且行数 ≥3（验证命令：`test -f voice_rtc_latency_log.jsonl && [ $(wc -l < voice_rtc_latency_log.jsonl) -ge 3 ]`）
 
 **E2E 验证脚本**：`sprints/07201229-gpa-voice-rtc-migration/e2e-verify.sh`
 
