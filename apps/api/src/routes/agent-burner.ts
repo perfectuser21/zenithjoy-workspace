@@ -652,7 +652,7 @@ router.get('/dm-tasks/:task_id', async (req: Request, res: Response) => {
 //       无限循环，battery drain + 抖音风控风险。
 // 幂等：镜像 /warmup-result 的模式——已终态(done/failed)的行直接短路，不重复写。
 router.post('/account-scan-result', async (req: Request, res: Response) => {
-  const { agent_id, request_id, ok, account_ids } = req.body || {};
+  const { agent_id, request_id, ok, account_ids, error_code } = req.body || {};
   if (!agent_id || typeof agent_id !== 'string') {
     return res.status(400).json(ERR('MISSING_AGENT_ID', 'agent_id 必填'));
   }
@@ -702,7 +702,15 @@ router.post('/account-scan-result', async (req: Request, res: Response) => {
     const taskStatus = ok === true ? 'done' : 'failed';
     await pool.query(
       `UPDATE zenithjoy.publish_tasks SET status=$2, response=$3::jsonb, updated_at=NOW() WHERE id=$1`,
-      [request_id, taskStatus, JSON.stringify({ ok: !!ok, account_ids: ids })],
+      [
+        request_id,
+        taskStatus,
+        JSON.stringify({
+          ok: !!ok,
+          account_ids: ids,
+          error_code: typeof error_code === 'string' ? error_code : null,
+        }),
+      ],
     );
   }
 
