@@ -396,7 +396,8 @@ BOOT_FAIL_RESP=$(curl -s -o /tmp/boot-fail-resp.json -w "%{http_code}" \
   --max-time 10 2>/dev/null || echo "000")
 if [ "$BOOT_FAIL_RESP" = "200" ] || [ "$BOOT_FAIL_RESP" = "201" ]; then
   ok "POST /api/agent/boot-fail returned $BOOT_FAIL_RESP -- last_boot_error write triggered"
-elif [ "$BOOT_FAIL_RESP" = "000" ]; then
+elif echo "$BOOT_FAIL_RESP" | grep -qE '^0+$'; then
+  # Windows git bash: curl connection refused returns "000000" (6 zeros), not "000"
   skip "A-10 boot-fail DB write" "API not running in this CI job -- evidence from vitest contract tests"
   PASS=$((PASS+1))
 else
