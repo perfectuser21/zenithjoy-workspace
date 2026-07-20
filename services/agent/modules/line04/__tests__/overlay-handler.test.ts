@@ -485,8 +485,10 @@ describe('审查回归2：spawn no-op 不再假绿（OVERLAY_SCRIPT 真实缺失
   });
 
   it('OVERLAY_SCRIPT 在真实文件系统上不存在 → start() 返回 spawned:false 且 getStatus 报 overlay_script_missing', async () => {
-    // 刻意不 mock fs.existsSync：源码树里 modules/line04/wechat-rpa/overlay/overlay_window.py
-    // 真实不存在，直接复现审查者实测过的假绿路径。
+    // overlay_window.py 在 2026-07-20 被 rsync 进了 modules/line04/wechat-rpa/overlay/，
+    // 原"刻意不 mock"假设失效（文件现已存在）——改为显式 mock existsSync 返回 false，
+    // 保持测试语义不变（验证 _spawnOverlay 缺文件时 start() 正确报 overlay_script_missing）。
+    vi.spyOn(fs, 'existsSync').mockReturnValue(false);
     vi.spyOn(handler as any, '_runPreflight').mockResolvedValue({ ok: true });
 
     const r = await handler.start();
