@@ -171,7 +171,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "dryrun-print-version failed with exit code $LASTEXITCODE" }
           Write-Host "[verify] dryrun-print-version OK"
           & "$agentDir\python-embedded\python.exe" -c "import webview; print('webview-import-ok')"
-          if ($LASTEXITCODE -ne 0) { throw "packaged python-embedded cannot import webview — overlay supply broken (knife-A gate)" }
+          if ($LASTEXITCODE -ne 0) { throw "packaged python-embedded cannot import webview - overlay supply broken (knife-A gate)" }
           Write-Host "[verify] pywebview import OK"
           Remove-Item -Recurse -Force $verifyDir -ErrorAction SilentlyContinue
 
