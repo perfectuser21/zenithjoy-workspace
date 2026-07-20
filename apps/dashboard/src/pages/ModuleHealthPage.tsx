@@ -22,6 +22,7 @@ const LINES = [
   { key: 'line01-publish', label: 'Line01 智能发布' },
   { key: 'line02-lead-gen', label: 'Line02 智能获客' },
   { key: 'line04-wechat-cs', label: 'Line04 微信AI客服' },
+  { key: 'line04-overlay', label: 'Line04 框框浮窗' },
   { key: 'line05-video', label: 'Line05 视频剪辑' },
 ] as const;
 

@@ -82,7 +82,7 @@ test('渲染机器行（hostname + agent_id）+ 四条 Line 表头', async ({ pa
   await expect(page.getByText('客户机器A').first()).toBeVisible();
   await expect(page.getByText('agent-001').first()).toBeVisible();
 
-  for (const line of ['智能发布', '智能获客', '微信AI客服', '视频剪辑']) {
+  for (const line of ['智能发布', '智能获客', '微信AI客服', '框框浮窗', '视频剪辑']) {
     await expect(page.getByText(line, { exact: false }).first()).toBeVisible();
   }
 });
