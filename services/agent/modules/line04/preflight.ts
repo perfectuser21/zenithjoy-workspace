@@ -702,6 +702,34 @@ export async function installPywinauto(pythonPath: string, downloadDir: string):
   );
 }
 
+export const PYPI_OFFICIAL_URL = 'https://pypi.org/simple/';
+export const PYWEBVIEW_PIN = 'pywebview==6.2.1'; // 与打包链 WHEEL_PKGS 同一锁定版
+
+// 刀A(2026-07-20 框框断供根治):客户机侧 pywebview 自修复。
+// 与 installPywinauto 的区别:①锁版本 ②清华→官方双源回退 ③失败必冒泡(禁静默,混沌P0-2)。
+export async function installPywebview(
+  pythonPath: string,
+  downloadDir: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  fs.mkdirSync(downloadDir, { recursive: true });
+  const getPipScript = path.join(downloadDir, 'get-pip.py');
+  try {
+    await downloadFile(GET_PIP_URL, getPipScript);
+    spawnSync(pythonPath, [getPipScript, '--quiet'], { windowsHide: true, timeout: 60_000 });
+  } catch {
+    // get-pip 拉不下来仍尝试 pip(可能已 bootstrap 过);真失败由下方安装结果冒泡
+  }
+  for (const indexUrl of [PIP_INDEX_URL, PYPI_OFFICIAL_URL]) {
+    const r = spawnSync(
+      pythonPath,
+      ['-m', 'pip', 'install', PYWEBVIEW_PIN, '--quiet', '--index-url', indexUrl],
+      { windowsHide: true, timeout: 180_000 },
+    );
+    if (r.status === 0) return { ok: true };
+  }
+  return { ok: false, reason: 'pywebview_install_failed' };
+}
+
 // ---------- 自动修复：按需调用安装函数 ----------
 
 export interface RepairTargets {
@@ -713,6 +741,7 @@ export interface RepairTargets {
 export const _repairFuncs = {
   installWeChat,
   installPywinauto,
+  installPywebview,
   lockWechatUpdate,
 };
 
