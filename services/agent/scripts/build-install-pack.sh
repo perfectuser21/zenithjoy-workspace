@@ -165,7 +165,7 @@ fi
 #     --only-binary=:all: --target 把 Windows wheel 下载解压进 site-packages（纯下载解压，不执行 exe）。
 SITE_PKGS="${PYTHON_EMBED_DIR}/Lib/site-packages"
 mkdir -p "$SITE_PKGS"
-WHEEL_PKGS="pywinauto pywin32 comtypes six requests"
+WHEEL_PKGS="pywinauto pywin32 comtypes six requests pywebview==6.2.1"
 GETPIP_URL="https://bootstrap.pypa.io/get-pip.py"
 HOST_PY="${HOST_PYTHON:-python3}"
 
@@ -191,18 +191,28 @@ install_embedded_pkgs() {
   esac
 }
 
-if install_embedded_pkgs; then
-  echo "[build] python-embedded site-packages 已装 pywinauto + pywin32 + requests"
+INSTALL_OK=0
+for attempt in 1 2 3; do
+  if install_embedded_pkgs; then INSTALL_OK=1; break; fi
+  echo "[build] pip 预装第 ${attempt} 次失败，$((attempt*10))s 后重试…"
+  sleep $((attempt*10))
+done
+if [ "$INSTALL_OK" = "1" ]; then
+  echo "[build] python-embedded site-packages 已装 ${WHEEL_PKGS}"
 else
-  echo "[build] WARN: pywinauto 预装失败（检查打包机网络/pip）— Windows runner 重打包可补装"
+  echo "[build] FAIL: python 依赖预装失败（3次重试后）— 禁止出无依赖的包（刀A硬红，铁律9202c14e）" >&2
+  exit 1
 fi
 
 # 验证 wheel 真落地 site-packages（跨平台都能查目录，不执行 Windows exe）
-if [ -d "$SITE_PKGS/pywinauto" ]; then
-  echo "[build] verified: site-packages/pywinauto/ 存在"
-else
-  echo "[build] WARN: site-packages/pywinauto/ 缺失 — 客户端 listen_chat 真模式将降级"
-fi
+for must_pkg in pywinauto webview; do
+  if [ -d "$SITE_PKGS/$must_pkg" ]; then
+    echo "[build] verified: site-packages/$must_pkg/ 存在"
+  else
+    echo "[build] FAIL: site-packages/$must_pkg/ 缺失 — 产物残缺禁止出包（刀A硬红）" >&2
+    exit 1
+  fi
+done
 
 # ── wechat-rpa 脚本打包 ──────────────────────────────────────────────────────────
 echo "[build] copying wechat-rpa/*.py scripts..."
