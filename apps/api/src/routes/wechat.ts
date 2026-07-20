@@ -640,6 +640,47 @@ wechatRouter.get('/customer-profile', async (req: Request, res: Response) => {
     // ai_profile：暂无独立字段，thin 实现返回空字符串（加厚阶段聚合 reasoning）
     const ai_profile = '';
 
+    // portrait 三段论：从 cs_memory_longterm.summary 解析 need/budget/concern
+    let portrait = { need: '', budget: '', concern: '' };
+    try {
+      const memResult = await pool.query<{ summary: string }>(
+        `SELECT summary FROM zenithjoy.cs_memory_longterm
+          WHERE contact = $1
+          ORDER BY updated_at DESC
+          LIMIT 1`,
+        [row?.nickname ?? wid]
+      );
+      if (memResult.rows[0]?.summary) {
+        const summary = memResult.rows[0].summary;
+        const needMatch = summary.match(/need[：:]\s*([^\n]+)/i) || summary.match(/需求[：:]\s*([^\n]+)/i);
+        const budgetMatch = summary.match(/budget[：:]\s*([^\n]+)/i) || summary.match(/预算[：:]\s*([^\n]+)/i);
+        const concernMatch = summary.match(/concern[：:]\s*([^\n]+)/i) || summary.match(/顾虑[：:]\s*([^\n]+)/i);
+        portrait = {
+          need: needMatch?.[1]?.trim() ?? summary.slice(0, 50),
+          budget: budgetMatch?.[1]?.trim() ?? '',
+          concern: concernMatch?.[1]?.trim() ?? '',
+        };
+      }
+    } catch { /* 降级：portrait 字段返回空字符串 */ }
+
+    // recent_messages：最近 3 条完整消息
+    let recent_messages: Array<{ role: string; content: string; created_at: string }> = [];
+    try {
+      const msgResult = await pool.query<{ text: string; role: string; created_at: string }>(
+        `SELECT text, role, created_at
+           FROM zenithjoy.cs_memory_messages
+          WHERE contact = $1
+          ORDER BY created_at DESC
+          LIMIT 3`,
+        [row?.nickname ?? wid]
+      );
+      recent_messages = msgResult.rows.map((r) => ({
+        role: r.role || 'user',
+        content: r.text,
+        created_at: r.created_at,
+      }));
+    } catch { recent_messages = []; }
+
     const data = row
       ? {
           level: row.level,
@@ -648,6 +689,8 @@ wechatRouter.get('/customer-profile', async (req: Request, res: Response) => {
           contact_count: Number(row.contact_count) || 0,
           recent_actions,
           ai_profile,
+          portrait,
+          recent_messages,
         }
       : {
           // 占位：CRM 中无记录时返回 wechat_id 作为 nickname
@@ -657,6 +700,8 @@ wechatRouter.get('/customer-profile', async (req: Request, res: Response) => {
           contact_count: 0,
           recent_actions: [],
           ai_profile: '',
+          portrait: { need: '', budget: '', concern: '' },
+          recent_messages: [],
         };
 
     return res.json({ data });
