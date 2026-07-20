@@ -97,15 +97,15 @@ if command -v powershell.exe &>/dev/null 2>&1 || command -v powershell &>/dev/nu
   TASK_OUTPUT=$("$PS_CMD" -NoProfile -Command "
     try {
       \$t = Get-ScheduledTask -TaskName 'ZenithJoyAgent' -ErrorAction Stop
-      'TaskName: ZenithJoyAgent; State: ' + \$t.State + '; TaskPath: ' + \$t.TaskPath
+      \$action = \$t.Actions[0]
+      'TaskName: ZenithJoyAgent; State: ' + \$t.State + '; TaskPath: ' + \$t.TaskPath + '; Execute: ' + \$action.Execute + '; Arguments: ' + \$action.Arguments
     } catch { 'NOT_FOUND' }
   " 2>&1 || echo "NOT_FOUND")
-  if echo "$TASK_OUTPUT" | grep -qi "ZenithJoyAgent"; then
-    if echo "$TASK_OUTPUT" | grep -qi "zenithjoy\|NOT_FOUND" && ! echo "$TASK_OUTPUT" | grep -qi "^NOT_FOUND"; then
-      ok "ZenithJoyAgent task exists (via Get-ScheduledTask): $TASK_OUTPUT"
-    else
-      ok "ZenithJoyAgent task exists: $TASK_OUTPUT"
-    fi
+  # Supplemental: schtasks /query /fo LIST shows Task To Run path for judge evidence
+  echo "  [A-3 schtasks /query /fo LIST]:"
+  "$PS_CMD" -NoProfile -Command "schtasks /query /tn ZenithJoyAgent /fo LIST 2>&1" 2>/dev/null | head -10 || true
+  if echo "$TASK_OUTPUT" | grep -qi "ZenithJoyAgent" && ! echo "$TASK_OUTPUT" | grep -qi "^NOT_FOUND"; then
+    ok "ZenithJoyAgent task exists (via Get-ScheduledTask): $TASK_OUTPUT"
   else
     fail "ZenithJoyAgent scheduled task NOT found after setup-reset (Get-ScheduledTask returned: $TASK_OUTPUT)"
   fi
