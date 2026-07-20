@@ -698,10 +698,10 @@ wechatRouter.get('/customer-profile', async (req: Request, res: Response) => {
           nickname: wid,
           source: '',
           contact_count: 0,
-          recent_actions: [],
+          recent_actions,
           ai_profile: '',
-          portrait: { need: '', budget: '', concern: '' },
-          recent_messages: [],
+          portrait,
+          recent_messages,
         };
 
     return res.json({ data });
