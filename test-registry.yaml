@@ -4827,6 +4827,14 @@ agent_suite:
   product: 其他
   note: "sprint(07191122): 国内豆包语音管线延迟埋点——computeTurnLatency纯函数单测，覆盖三段耗时计算+缺失时间戳边界"
 
+- id: gpa-voice-rtc-sidecar-unit
+  path: apps/realtime-voice-mvp/rtc-sidecar.test.js
+  type: unit
+  ci: L3
+  status: active
+  product: 微信AI客服
+  note: "sprint(07201229): GP-A RTC迁移——RTC sidecar stub合同测试，覆盖WS:8765启动/OnUserJoined事件/format_mismatch格式握手（I-10/I-11/I-12）"
+
 - id: dm-dispatch-sweep-scheduler-wiring-unit
   path: apps/api/tests/services/scheduler.test.ts
   type: unit
