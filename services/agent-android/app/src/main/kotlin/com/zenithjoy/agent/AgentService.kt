@@ -988,6 +988,12 @@ class AgentService : Service() {
         // START_STICKY 重启），每次都 initAgent 会泄漏多套并行轮询 loop。
         internal fun shouldRunInitAgent(alreadyInitialized: Boolean): Boolean = !alreadyInitialized
 
+        // register 重试守卫：与 agentInitialized（只管 WS/心跳轮询 loop 初始化）完全独立。
+        // 只要还没注册成功、且没有另一次重试正在进行中，任何一次 onStartCommand 交付
+        // （按钮点击或系统重启 Service）都应该重试注册——不需要杀进程重开 App。
+        internal fun shouldRetryRegister(isRegistered: Boolean, retryInFlight: Boolean): Boolean =
+            !isRegistered && !retryInFlight
+
         // 真机复现(2026-07-13 Honor xian-rog)：MEDIA_PROJECTION type 必须已持有有效
         // MediaProjection 授权令牌，未授权时声明该 type 会被系统 SecurityException 杀死整个
         // 服务。未授权 → 只用 DATA_SYNC（不阻塞 Agent 主链路，内容判定门槛这一刀持续
