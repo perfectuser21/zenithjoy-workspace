@@ -13,9 +13,38 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { EventEmitter } from 'node:events';
+import type { ChildProcess } from 'node:child_process';
 import { buildPreflightCommand, OverlayHandler } from '../handlers/overlay';
 import { _repairFuncs as preflightRepair } from '../preflight';
+
+// spawn 需要被替换成假进程（不真的拉起 python），execFileSync 仍走真实实现（供下面路径转义
+// 回归测试的 py_compile 语法检查真实调用）——沿用 preflight.test.ts 已验证过的 vi.mock 写法。
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return {
+    ...actual,
+    spawn: vi.fn(actual.spawn),
+  };
+});
+import { execFileSync, spawn } from 'node:child_process';
+
+/**
+ * 造一个假 ChildProcess：具备 overlay.ts `_spawnOverlay` 依赖的最小接口
+ * （pid / stdout·stderr 的 EventEmitter / on('close'|'error')），不真的拉起子进程，
+ * 便于测试主动 emit('close', code, signal) 来驱动 user_closed / 熔断等状态转换。
+ */
+function makeFakeOverlayProcess(pid = 12345): ChildProcess {
+  const proc = new EventEmitter() as unknown as ChildProcess;
+  Object.assign(proc, {
+    pid,
+    stdout: new EventEmitter(),
+    stderr: new EventEmitter(),
+    kill: vi.fn(() => true),
+    killed: false,
+  });
+  return proc;
+}
 
 // ─── OverlayHandler 导入（第二刀实现后解注释）────────────────────────────────
 // import { OverlayHandler } from '../handlers/overlay';
@@ -321,10 +350,13 @@ describe('刀A 供给自愈+红灯', () => {
   });
 
   it('补装成功且复检通过 → 正常 spawn 且 getStatus ok:true', async () => {
-    // OVERLAY_SCRIPT 的 existsSync 检测短路为 false（不真的 spawn python 子进程），其余路径照旧。
+    // OVERLAY_SCRIPT 的 existsSync 检测短路为 true（模拟打包态脚本真实存在），spawn 换成假进程，
+    // 不真的拉起 python 子进程,但 _proc 必须真的被赋值——否则会撞上「spawn no-op 假绿」bug
+    // （_spawnOverlay 静默 return 导致 _proc 仍为 null，start() 却谎报 spawned:true）。
     vi.spyOn(fs, 'existsSync').mockImplementation(
-      (p: fs.PathLike) => !String(p).includes('overlay_window.py'),
+      (p: fs.PathLike) => String(p).includes('overlay_window.py'),
     );
+    vi.mocked(spawn).mockReturnValue(makeFakeOverlayProcess());
     vi.spyOn(handler as any, '_runPreflight')
       .mockResolvedValueOnce({ ok: false, reason: 'pywebview_missing' })
       .mockResolvedValueOnce({ ok: true });
@@ -338,8 +370,9 @@ describe('刀A 供给自愈+红灯', () => {
 
   it('start 成功路径也覆写 diag(旧失败态不残留)', async () => {
     vi.spyOn(fs, 'existsSync').mockImplementation(
-      (p: fs.PathLike) => !String(p).includes('overlay_window.py'),
+      (p: fs.PathLike) => String(p).includes('overlay_window.py'),
     );
+    vi.mocked(spawn).mockReturnValue(makeFakeOverlayProcess());
     vi.spyOn(handler as any, '_runPreflight').mockResolvedValue({ ok: true });
 
     // 先造一份 last_error 非空的旧 diag 文件
@@ -356,5 +389,109 @@ describe('刀A 供给自愈+红灯', () => {
     const diag = JSON.parse(fs.readFileSync(path.join(stateDir, 'overlay-diag.json'), 'utf-8'));
     expect(diag.attach_state).toBe('spawned');
     expect(diag.last_error).toBe('');
+  });
+});
+
+// ─── 审查回归 1（Critical）：getStatus 转换态失真 ────────────────────────────────
+//
+// 根因：_lastStatus 此前只在「preflight 失败」「spawn 成功」两处写，用户关闭浮窗
+// （_userClosed=true，proc close 回调 exit code 0）与熔断触发（_circuitOpen=true，
+// _recordCrash 内）两处置位从不同步写 _lastStatus，start() 顶部两个提前返回分支
+// （_userClosed/_circuitOpen 命中）同样不写——导致这些转换发生后 getStatus() 仍残留
+// 上一次的 {ok:true}，对外谎报健康。Task 4 上报消费方会因此漏报真实故障。
+describe('审查回归1：getStatus 转换态同步（用户关闭/熔断不再谎报 ok:true）', () => {
+  let stateDir: string;
+  let handler: OverlayHandler;
+
+  beforeEach(() => {
+    stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-status-test-'));
+    handler = new OverlayHandler(stateDir, '1.0.0');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('spawn 成功后进程以 exit code 0 关闭（用户关闭）→ getStatus 变 {ok:false, reason:user_closed}', async () => {
+    vi.spyOn(fs, 'existsSync').mockImplementation(
+      (p: fs.PathLike) => String(p).includes('overlay_window.py'),
+    );
+    const fakeProc = makeFakeOverlayProcess();
+    vi.mocked(spawn).mockReturnValue(fakeProc);
+    vi.spyOn(handler as any, '_runPreflight').mockResolvedValue({ ok: true });
+
+    const r = await handler.start();
+    expect(r.spawned).toBe(true);
+    expect(handler.getStatus()).toEqual({ ok: true });
+
+    // 驱动真实 proc.on('close', ...) 回调（overlay.ts 内部注册的那个），
+    // 而不是直接摆弄私有字段——这样才是真实验证「用户关闭」这条转换路径。
+    fakeProc.emit('close', 0, null);
+
+    expect(handler.userClosed).toBe(true);
+    expect(handler.getStatus()).toEqual({ ok: false, reason: 'user_closed' });
+  });
+
+  it('8 次快速崩溃触发熔断 → getStatus 变 {ok:false, reason:circuit_open}', () => {
+    // 直接驱动私有的 _recordCrash（既有 stub 测试对熔断也是用等价的「直接调触发函数」手法，
+    // 见上方 OverlayHandlerStub.simulateFastCrashes），避免为凑够 8 次真实 spawn→close→respawn
+    // 定时器链路而引入不必要的假计时器复杂度。
+    for (let i = 0; i < 8; i++) {
+      (handler as any)._recordCrash(10); // uptime=10s < FAST_CRASH_SEC(60s)
+    }
+
+    expect(handler.circuitOpen).toBe(true);
+    expect(handler.getStatus()).toEqual({ ok: false, reason: 'circuit_open' });
+  });
+
+  it('start() 因 _userClosed 提前返回分支也同步 getStatus（幂等兜底，覆盖“转换发生在本进程重启前”场景）', async () => {
+    // 不经过 close 回调，直接模拟“上次进程生命周期里已经关闭过”的既有状态——
+    // 验证 start() 顶部提前返回分支本身也会写 _lastStatus，不依赖 close 回调曾经跑过。
+    (handler as any)._userClosed = true;
+
+    const r = await handler.start();
+
+    expect(r).toEqual({ spawned: false, reason: 'user_closed' });
+    expect(handler.getStatus()).toEqual({ ok: false, reason: 'user_closed' });
+  });
+
+  it('start() 因 _circuitOpen 提前返回分支也同步 getStatus（幂等兜底）', async () => {
+    (handler as any)._circuitOpen = true;
+
+    const r = await handler.start();
+
+    expect(r).toEqual({ spawned: false, reason: 'circuit_open' });
+    expect(handler.getStatus()).toEqual({ ok: false, reason: 'circuit_open' });
+  });
+});
+
+// ─── 审查回归 2（Important）：spawn no-op 假绿 ───────────────────────────────────
+//
+// 根因：_spawnOverlay() 在 OVERLAY_SCRIPT 缺失时 console.warn 后直接 return（this._proc
+// 仍为 null），但 start() 此前无条件在 _spawnOverlay() 之后宣告 { ok:true }/{ spawned:true }——
+// 即便进程根本没起来。此路径在真实源码树（非打包态）下天然可复现：OVERLAY_SCRIPT 相对路径
+// 指向 modules/line04/wechat-rpa/overlay/overlay_window.py，该目录在源码树里本来就不存在。
+describe('审查回归2：spawn no-op 不再假绿（OVERLAY_SCRIPT 真实缺失场景）', () => {
+  let stateDir: string;
+  let handler: OverlayHandler;
+
+  beforeEach(() => {
+    stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-spawn-noop-test-'));
+    handler = new OverlayHandler(stateDir, '1.0.0');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('OVERLAY_SCRIPT 在真实文件系统上不存在 → start() 返回 spawned:false 且 getStatus 报 overlay_script_missing', async () => {
+    // 刻意不 mock fs.existsSync：源码树里 modules/line04/wechat-rpa/overlay/overlay_window.py
+    // 真实不存在，直接复现审查者实测过的假绿路径。
+    vi.spyOn(handler as any, '_runPreflight').mockResolvedValue({ ok: true });
+
+    const r = await handler.start();
+
+    expect(r).toEqual({ spawned: false, reason: 'overlay_script_missing' });
+    expect(handler.getStatus()).toEqual({ ok: false, reason: 'overlay_script_missing' });
   });
 });
