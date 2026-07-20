@@ -12,7 +12,12 @@
 
 set -euo pipefail
 
-INSTALLPACK_DIR="${INSTALLPACK_DIR:-.}"
+# Default INSTALLPACK_DIR to services/agent/install-pack relative to repo root.
+# When run by Smoke Glob Runner from repo root without INSTALLPACK_DIR set, "." would
+# point to repo root where setup-reset.ps1/start.bat don't live.
+_SMOKE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_REPO_ROOT="$(cd "$_SMOKE_SCRIPT_DIR/../../../../" && pwd)"
+INSTALLPACK_DIR="${INSTALLPACK_DIR:-$_REPO_ROOT/services/agent/install-pack}"
 API_URL="${API_URL:-http://localhost:3001}"
 PASS=0
 FAIL=0
