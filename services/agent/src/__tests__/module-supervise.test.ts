@@ -201,6 +201,76 @@ describe('ModuleManager — 长驻模块保活（supervise）', () => {
     expect(report.reason).toMatch(/重启|restart/i);
   });
 
+  // 审查发现 #3：模块死亡陈旧绿灯——重启超限后模块被判定"修不动了"（人工介入前不会再自愈），
+  // 但此前只覆写 healthReport.get(lineId) 本体，未同步失效独立的 line04-overlay key，
+  // 导致管理员/看板在模块整棵进程树已死的情况下仍看到 overlay ok:true 的假绿。
+  it('崩溃次数超过 restartMaxRetries 时，若已有 line04-overlay 绿灯 → 同步标记为 module_down（消灭陈旧假绿）', async () => {
+    const root = mkRoot();
+    installModule(root);
+
+    const made: Array<{
+      child: import('node:child_process').ChildProcess;
+      emit: (c: number) => void;
+      emitMessage: (m: unknown) => void;
+    }> = [];
+    const forkImpl = vi.fn(() => {
+      const ee = new EventEmitter();
+      const child = {
+        on: (ev: string, cb: (...a: unknown[]) => void) => ee.on(ev, cb),
+        send: vi.fn(),
+        kill: vi.fn(),
+        connected: true,
+      } as unknown as import('node:child_process').ChildProcess;
+      made.push({
+        child,
+        emit: (c: number) => ee.emit('exit', c),
+        emitMessage: (m: unknown) => ee.emit('message', m),
+      });
+      return child;
+    });
+    const setTimeoutImpl = vi.fn((fn: () => void) => {
+      fn();
+      return 0 as unknown as ReturnType<typeof setTimeout>;
+    });
+    const onModuleAlert = vi.fn();
+
+    const mm = new ModuleManager({
+      modulesRoot: root,
+      forkImpl,
+      preflightImpl: async () => ({ ok: true }),
+      superviseLines: ['line04-wechat-cs'],
+      restartBaseDelayMs: 1,
+      restartMaxRetries: 3,
+      setTimeoutImpl,
+      onModuleAlert,
+    });
+
+    await mm.syncModules({ 'line04-wechat-cs': { status: 'active', required_version: '1.0.0' } });
+
+    // 模块曾正常上报过健康 + overlay 绿灯（框框曾经能跑起来）
+    made[0].emitMessage({
+      type: 'status',
+      ok: true,
+      listener_alive: true,
+      overlay: { ok: true },
+    });
+    expect(mm.getModuleStatusReport()['line04-overlay']).toEqual({ ok: true, reason: undefined });
+
+    // 持续崩溃直到超过重启上限（模块被判定"修不动了"，不再自愈）
+    made[0].emit(1);
+    let guard = 0;
+    while (onModuleAlert.mock.calls.length === 0 && guard < 50) {
+      const last = made[made.length - 1];
+      last.emit(1);
+      guard++;
+    }
+    expect(onModuleAlert).toHaveBeenCalled();
+
+    // 模块整棵进程树已死 → overlay 不该继续报绿，必须同步标记为 module_down
+    const report = mm.getModuleStatusReport();
+    expect(report['line04-overlay']).toEqual({ ok: false, reason: 'module_down' });
+  });
+
   it('非受监管模块退出不触发重启（保持原行为）', async () => {
     const root = mkRoot();
     const dir = path.join(root, 'line01-publish-1.0.0');
