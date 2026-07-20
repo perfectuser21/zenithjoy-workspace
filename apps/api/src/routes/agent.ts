@@ -7,6 +7,14 @@ import {
   registerAgent,
   isValidLicenseKeyFormat,
 } from '../services/license.service';
+import { simpleRateLimit } from '../middleware/simple-rate-limit';
+
+// CodeQL js/missing-rate-limiting: /boot-fail 无鉴权但触发 DB 写，按 machine_id 限流防滥发
+const bootFailRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 10,
+  keyFn: (req: Request) => (req.body && typeof req.body.machine_id === 'string' ? req.body.machine_id : 'anonymous'),
+});
 
 export const agentRouter = Router();
 
@@ -169,7 +177,7 @@ for (const { slug, label } of DRY_RUN_PLATFORMS) {
 // POST /api/agent/boot-fail
 // No auth required (N-2): used by start.bat when license is 401 (can't use bearer token)
 // Falls under agentRouter which is mounted at /api/agent
-agentRouter.post('/boot-fail', async (req: Request, res: Response) => {
+agentRouter.post('/boot-fail', bootFailRateLimit, async (req: Request, res: Response) => {
   const { machine_id, hostname, reason, timestamp } = req.body ?? {};
 
   // Validate required fields

@@ -794,6 +794,8 @@ jobs:
     name: Installer Env Reset Smoke (windows-latest)
     runs-on: windows-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Run installer-env-reset smoke
