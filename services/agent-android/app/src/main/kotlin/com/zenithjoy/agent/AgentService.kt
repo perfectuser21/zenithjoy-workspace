@@ -109,8 +109,10 @@ class AgentService : Service() {
             val stale = intent.getBooleanExtra(DeviceAccountScanService.EXTRA_RESULT_STALE, false)
             val accountIds = intent.getStringArrayExtra(DeviceAccountScanService.EXTRA_RESULT_ACCOUNT_IDS)?.toList() ?: emptyList()
             val errorCode = intent.getStringExtra(DeviceAccountScanService.EXTRA_ERROR) ?: ""
+            val screenshotB64 = intent.getStringExtra(DeviceAccountScanService.EXTRA_SCREENSHOT_B64)
+            val treeDump = intent.getStringExtra(DeviceAccountScanService.EXTRA_TREE_DUMP)
             // 网络请求不能跑主线程(NetworkOnMainThreadException)，跟 warmupResultReceiver 同套路。
-            scope.launch(Dispatchers.IO) { reportAccountScanResult(requestId, ok, stale, accountIds, errorCode) }
+            scope.launch(Dispatchers.IO) { reportAccountScanResult(requestId, ok, stale, accountIds, errorCode, screenshotB64, treeDump) }
         }
     }
 
@@ -687,9 +689,11 @@ class AgentService : Service() {
         stale: Boolean,
         accountIds: List<String>,
         errorCode: String,
+        screenshotB64: String? = null,
+        treeDump: String? = null,
     ) {
         val url = "${config.deriveHttpBase()}/api/agent/burner/account-scan-result"
-        val body = buildAccountScanResultBody(requestId, config.agentId, ok, stale, accountIds, errorCode)
+        val body = buildAccountScanResultBody(requestId, config.agentId, ok, stale, accountIds, errorCode, screenshotB64, treeDump)
         try {
             val request = Request.Builder()
                 .url(url)
@@ -1013,14 +1017,20 @@ class AgentService : Service() {
             stale: Boolean,
             accountIds: List<String>,
             errorCode: String,
+            screenshotB64: String? = null,
+            treeDump: String? = null,
         ): String {
-            fun esc(s: String): String = s.replace("\\", "\\\\").replace("\"", "\\\"")
+            fun esc(s: String): String = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
             val ids = accountIds.joinToString(",") { "\"${esc(it)}\"" }
+            val screenshotField = if (screenshotB64 != null) "\"${esc(screenshotB64)}\"" else "null"
+            val treeDumpField = if (treeDump != null) "\"${esc(treeDump)}\"" else "null"
             return "{\"request_id\":\"${esc(requestId)}\"," +
                 "\"agent_id\":\"${esc(agentId)}\"," +
                 "\"ok\":$ok,\"stale\":$stale," +
                 "\"account_ids\":[$ids]," +
-                "\"error_code\":\"${esc(errorCode)}\"}"
+                "\"error_code\":\"${esc(errorCode)}\"," +
+                "\"screenshot_b64\":$screenshotField," +
+                "\"tree_dump\":$treeDumpField}"
         }
     }
 }
