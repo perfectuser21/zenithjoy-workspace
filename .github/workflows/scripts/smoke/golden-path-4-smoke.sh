@@ -10,7 +10,8 @@
 #           Step 3e：scan_unread 扫描期间开窗读消息不再永久抢走用户前台键鼠焦点；
 #           Step 3f：扫描前守卫窗口最大化自愈接入 cooldown，不再反复 maximize/minimize，2026-07-17 真机根治）；
 #           Step 3i：热键召唤主路（preflight hotkey_summon 自检 + 塌缩自愈先热键再降级托盘，2026-07-19 折入）；
-#           Step 3j：热键真机根因守卫（GetForegroundWindow 判据 + SendInput INPUT sizeof=40）
+#           Step 3j：热键真机根因守卫（GetForegroundWindow 判据 + SendInput INPUT sizeof=40）；
+#           Step 3k：overlay pywebview 供给链四处齐备（打包预装/依赖声明/客户机自修复/红灯上报，2026-07-20 刀A）
 #   Step 6  上线自检消息——每次启动发一条给固定测试联系人（task 7be2842d，纯函数等价断言）
 #   Step 7  客户触发好友扫描 / 联系人首次发消息 → 系统建立该联系人 CRM 档案（真链路：friend-scan/trigger+ingest）
 #   Step 8  客户在中台 CRM 客户列表页，给联系人打 A1-A5 状态（真链路：customer-profile 六字段）
@@ -110,6 +111,22 @@ OVERLAY_PY="services/agent/wechat-rpa/overlay/overlay_window.py"
 grep -q "switch_customer" "$OVERLAY_PY" || fail "Step 3 overlay_window.py 缺 switch_customer 方法" 3
 grep -q "events" "$OVERLAY_PY" || fail "Step 3 overlay_window.py 缺 events 消费逻辑" 3
 ok "Step 3 ✅ Agent 后台静默监听部署包存在（overlay_window.py 含 switch_customer + events 消费）"
+
+# Step 3k(刀A 2026-07-20)：overlay pywebview 供给链四处齐备——框框死3天事故的机器守卫。
+# 任何 PR 拆掉任一处（打包预装/依赖声明/客户机自修复/红灯上报接线）本步即红。
+BUILD_PACK_SH="services/agent/scripts/build-install-pack.sh"
+REQ_TXT="services/agent/wechat-rpa/requirements.txt"
+PREFLIGHT_TS="services/agent/modules/line04/preflight.ts"
+OVERLAY_TS="services/agent/modules/line04/handlers/overlay.ts"
+grep -E 'WHEEL_PKGS=.*pywebview==' "$BUILD_PACK_SH" \
+  || fail "Step 3k 打包预装列表 WHEEL_PKGS 缺 pywebview 锁定版（框框断供根因①）" 3
+grep -qE '^pywebview==' "$REQ_TXT" \
+  || fail "Step 3k requirements.txt 缺 pywebview 锁定版声明" 3
+grep -q 'installPywebview' "$PREFLIGHT_TS" \
+  || fail "Step 3k preflight.ts 缺 installPywebview 客户机自修复（存量机换core目录即再断）" 3
+grep -q 'pywebview_install_failed' "$OVERLAY_TS" \
+  || fail "Step 3k overlay.ts 缺补装失败上报（静默降级复辟）" 3
+ok "Step 3k ✅ overlay pywebview 供给链四处齐备（预装/声明/自修复/红灯）"
 
 # ───────────────────────────────────────────────────────────────────
 # Step 6：上线自检消息——每次启动发一条给固定测试联系人（task 7be2842d，已实现）
