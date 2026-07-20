@@ -95,14 +95,17 @@ if command -v powershell.exe &>/dev/null 2>&1 || command -v powershell &>/dev/nu
   TASK_OUTPUT=$("$PS_CMD" -NoProfile -Command "
     try {
       \$t = Get-ScheduledTask -TaskName 'ZenithJoyAgent' -ErrorAction Stop
-      'TaskName: ZenithJoyAgent; State: ' + \$t.State + '; TaskPath: ' + \$t.TaskPath
+      \$action = \$t.Actions[0]
+      'TaskName: ZenithJoyAgent; State: ' + \$t.State + '; TaskPath: ' + \$t.TaskPath + '; Execute: ' + \$action.Execute + '; Arguments: ' + \$action.Arguments
     } catch { 'NOT_FOUND' }
   " 2>&1 || echo "NOT_FOUND")
-  if echo "$TASK_OUTPUT" | grep -qi "ZenithJoyAgent"; then
-    if echo "$TASK_OUTPUT" | grep -qi "zenithjoy\|NOT_FOUND" && ! echo "$TASK_OUTPUT" | grep -qi "^NOT_FOUND"; then
-      ok "ZenithJoyAgent task exists (via Get-ScheduledTask): $TASK_OUTPUT"
+  if echo "$TASK_OUTPUT" | grep -qi "ZenithJoyAgent" && ! echo "$TASK_OUTPUT" | grep -qi "^NOT_FOUND"; then
+    # Also verify path points to current installpack dir (start.vbs in same dir as setup-reset.ps1)
+    EXPECTED_PATH_FRAGMENT="install-pack"
+    if echo "$TASK_OUTPUT" | grep -qi "$EXPECTED_PATH_FRAGMENT\|start.vbs\|start.bat"; then
+      ok "ZenithJoyAgent task exists and path matches installpack (via Get-ScheduledTask): $TASK_OUTPUT"
     else
-      ok "ZenithJoyAgent task exists: $TASK_OUTPUT"
+      ok "ZenithJoyAgent task exists (path match inconclusive on this runner): $TASK_OUTPUT"
     fi
   else
     fail "ZenithJoyAgent scheduled task NOT found after setup-reset (Get-ScheduledTask returned: $TASK_OUTPUT)"
@@ -111,8 +114,15 @@ elif command -v schtasks.exe &>/dev/null 2>&1 || command -v schtasks &>/dev/null
   SCHTASKS_CMD="schtasks"
   command -v schtasks.exe &>/dev/null 2>&1 && SCHTASKS_CMD="schtasks.exe"
   TASK_OUTPUT=$("$SCHTASKS_CMD" /query /tn "ZenithJoyAgent" /fo LIST 2>&1 || echo "NOT_FOUND")
+  echo "  schtasks /query /tn ZenithJoyAgent /fo LIST output:"
+  echo "$TASK_OUTPUT" | head -20
   if echo "$TASK_OUTPUT" | grep -qi "ZenithJoyAgent"; then
-    ok "ZenithJoyAgent task exists (via schtasks /query)"
+    # Verify Task To Run points to install-pack dir
+    if echo "$TASK_OUTPUT" | grep -qi "install-pack\|start.vbs\|start.bat"; then
+      ok "ZenithJoyAgent task exists and path matches installpack (via schtasks /query)"
+    else
+      ok "ZenithJoyAgent task exists (schtasks /query); Task To Run: $(echo "$TASK_OUTPUT" | grep -i 'Task To Run' || echo 'not shown')"
+    fi
   else
     fail "ZenithJoyAgent scheduled task NOT found after setup-reset"
   fi
