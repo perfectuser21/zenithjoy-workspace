@@ -4,7 +4,7 @@
  * Line02 获客工作台 IA 重设计 Track A：把 DouyinBurnerBindPage 的绑定部分迁移进来，
  * 采集部分移到 AcquisitionTasksPage。
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { KeyRound } from 'lucide-react';
 
 const MAX_BURNER_ACCOUNTS = 10;
@@ -113,6 +113,7 @@ export default function AcquisitionAccountsPage() {
   const [scanMessage, setScanMessage] = useState('');
   const [scanError, setScanError] = useState('');
   const [scanCooldownUntil, setScanCooldownUntil] = useState(0);
+  const scanCooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -127,6 +128,12 @@ export default function AcquisitionAccountsPage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    return () => {
+      if (scanCooldownTimerRef.current) clearTimeout(scanCooldownTimerRef.current);
+    };
+  }, []);
 
   const atCap = sessions.length >= MAX_BURNER_ACCOUNTS;
 
@@ -171,6 +178,8 @@ export default function AcquisitionAccountsPage() {
       } else {
         setScanMessage('已发送扫描请求，最长等待约30秒后刷新本页查看');
         setScanCooldownUntil(Date.now() + 60_000);
+        if (scanCooldownTimerRef.current) clearTimeout(scanCooldownTimerRef.current);
+        scanCooldownTimerRef.current = setTimeout(() => setScanCooldownUntil(0), 60_000);
       }
     } catch (e) {
       setScanError(String((e as Error).message || e));
