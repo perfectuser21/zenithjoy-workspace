@@ -31,7 +31,7 @@ features:
       - GET /api/agent/machines (extended with offline_minutes)
     tests:
       unit:
-        - apps/api/src/services/__tests__/agent-offline-monitor.test.ts
+        - sprints/07201705-agent-offline-alert/tests/agent-offline-monitor.test.ts
       integration: []
       e2e:
         - .github/workflows/scripts/smoke/agent-offline-alert-smoke.sh
@@ -47,7 +47,7 @@ features:
         maturity: 1
         tests:
           unit:
-            - apps/api/src/services/__tests__/agent-offline-monitor.test.ts
+            - sprints/07201705-agent-offline-alert/tests/agent-offline-monitor.test.ts
           integration: []
           e2e:
             - .github/workflows/scripts/smoke/agent-offline-alert-smoke.sh
@@ -58,7 +58,7 @@ features:
         maturity: 1
         tests:
           unit:
-            - apps/api/src/services/__tests__/agent-offline-monitor.test.ts
+            - sprints/07201705-agent-offline-alert/tests/agent-offline-monitor.test.ts
           integration: []
           e2e: []
         status: active
@@ -68,7 +68,7 @@ features:
         maturity: 1
         tests:
           unit:
-            - apps/api/src/services/__tests__/agent-offline-monitor.test.ts
+            - sprints/07201705-agent-offline-alert/tests/agent-offline-monitor.test.ts
           integration: []
           e2e: []
         status: active

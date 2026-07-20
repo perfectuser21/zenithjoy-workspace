@@ -63,6 +63,7 @@ import { operatorSessionsRouter } from './routes/operator-sessions';
 import videoRemakeRouter from './routes/video-remake';
 import staffRouter from './routes/staff';
 import { skillDraftsRouter, skillDraftsInternalRouter } from './routes/skill-drafts';
+import { agentOfflineScanRouter } from './routes/agent-offline-scan';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { verifyStartupConfig } from './startup-check';
 import { getBuildInfo } from './build-info';
@@ -203,6 +204,8 @@ app.use('/api/video-remake', videoRemakeRouter);
 app.use('/api/staff/skill-drafts', skillDraftsRouter);
 // 内部回调端点（子进程完成后通知终态，无 staffGuard，无公网暴露）
 app.use('/internal/skill-drafts', skillDraftsInternalRouter);
+// 内部 Agent 离线扫描触发端点（无鉴权，仅内部/smoke 调用）
+app.use('/api/internal/agent-offline-scan', agentOfflineScanRouter);
 // Line 00 运营中枢 — 员工工具（staff only，受 staffGuard 保护）
 app.use('/api/staff', staffRouter);
 // Line 02 — 公司信息页 + 账号状态
