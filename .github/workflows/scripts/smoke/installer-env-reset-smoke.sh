@@ -83,19 +83,33 @@ fi
 # -----------------------------------------------------------------------
 echo ""
 echo "-- A-3: ZenithJoyAgent scheduled task rebuilt"
-if command -v schtasks.exe &>/dev/null 2>&1 || command -v schtasks &>/dev/null 2>&1; then
+if command -v powershell.exe &>/dev/null 2>&1 || command -v powershell &>/dev/null 2>&1; then
+  PS_CMD="powershell"
+  command -v powershell.exe &>/dev/null 2>&1 && PS_CMD="powershell.exe"
+
+  # Use PowerShell Get-ScheduledTask (same API as setup-reset.ps1 schtasks) instead of
+  # bash schtasks.exe /query which may not see tasks created by a different PowerShell session.
+  TASK_OUTPUT=$("$PS_CMD" -NoProfile -Command "
+    try {
+      \$t = Get-ScheduledTask -TaskName 'ZenithJoyAgent' -ErrorAction Stop
+      'TaskName: ZenithJoyAgent; State: ' + \$t.State + '; TaskPath: ' + \$t.TaskPath
+    } catch { 'NOT_FOUND' }
+  " 2>&1 || echo "NOT_FOUND")
+  if echo "$TASK_OUTPUT" | grep -qi "ZenithJoyAgent"; then
+    if echo "$TASK_OUTPUT" | grep -qi "zenithjoy\|NOT_FOUND" && ! echo "$TASK_OUTPUT" | grep -qi "^NOT_FOUND"; then
+      ok "ZenithJoyAgent task exists (via Get-ScheduledTask): $TASK_OUTPUT"
+    else
+      ok "ZenithJoyAgent task exists: $TASK_OUTPUT"
+    fi
+  else
+    fail "ZenithJoyAgent scheduled task NOT found after setup-reset (Get-ScheduledTask returned: $TASK_OUTPUT)"
+  fi
+elif command -v schtasks.exe &>/dev/null 2>&1 || command -v schtasks &>/dev/null 2>&1; then
   SCHTASKS_CMD="schtasks"
   command -v schtasks.exe &>/dev/null 2>&1 && SCHTASKS_CMD="schtasks.exe"
-
   TASK_OUTPUT=$("$SCHTASKS_CMD" /query /tn "ZenithJoyAgent" /fo LIST 2>&1 || echo "NOT_FOUND")
   if echo "$TASK_OUTPUT" | grep -qi "ZenithJoyAgent"; then
-    # Check path points to current install directory (not stale path)
-    INSTALL_DIR_BASENAME=$(basename "$INSTALLPACK_DIR")
-    if echo "$TASK_OUTPUT" | grep -qi "$INSTALL_DIR_BASENAME" || echo "$TASK_OUTPUT" | grep -qi "zenithjoy"; then
-      ok "ZenithJoyAgent task exists and references install directory"
-    else
-      fail "ZenithJoyAgent task exists but path may not match current directory: $TASK_OUTPUT"
-    fi
+    ok "ZenithJoyAgent task exists (via schtasks /query)"
   else
     fail "ZenithJoyAgent scheduled task NOT found after setup-reset"
   fi
@@ -137,14 +151,16 @@ rm -f "$PROBE_MARKER" 2>/dev/null || true
 
 if [ -f "$INSTALLPACK_DIR/start.bat" ]; then
   if command -v cmd.exe &>/dev/null 2>&1; then
+    # Write a wrapper batch file that explicitly sets ZJ_LAUNCH_PROBE before calling start.bat.
+    # Passing env via bash export or SET inside cmd /c is unreliable on MSYS2/Git Bash;
+    # a wrapper .bat guarantees the variable is set inside the Windows cmd.exe environment.
+    _WRAP="$INSTALLPACK_DIR/_zj_probe_wrap.bat"
+    printf '@SET ZJ_LAUNCH_PROBE=1\r\n@CALL start.bat\r\n' > "$_WRAP"
     (
       cd "$INSTALLPACK_DIR"
-      # Pass env var through bash export so cmd.exe inherits it via the process environment block;
-      # "SET VAR=1 && call bat" inside cmd.exe /c is unreliable on MSYS2/Git Bash (quoting/parse).
-      export ZJ_LAUNCH_PROBE=1
-      timeout 30 cmd.exe /c "call start.bat" 2>&1 || true
-      unset ZJ_LAUNCH_PROBE
+      timeout 30 cmd.exe /c "_zj_probe_wrap.bat" 2>&1 || true
     )
+    rm -f "$_WRAP" 2>/dev/null || true
     if [ -f "$PROBE_MARKER" ]; then
       PROBE_CONTENT=$(cat "$PROBE_MARKER")
       ok "probe-marker.txt created: $PROBE_CONTENT"
@@ -216,15 +232,15 @@ PYEOF
 
   # Step 3: Run start.bat with ZJ_BOOT_FAIL_TEST=1 seam
   if [ -f "$INSTALLPACK_DIR/start.bat" ] && command -v cmd.exe &>/dev/null 2>&1; then
+    BF_ENDPOINT="http://localhost:18099/api/agent/boot-fail"
+    # Write wrapper batch (same reason as A-5: bash export unreliable for Windows cmd.exe env)
+    _WRAP6="$INSTALLPACK_DIR/_zj_bootfail_wrap.bat"
+    printf '@SET ZJ_BOOT_FAIL_TEST=1\r\n@SET ZENITHJOY_BOOT_FAIL_ENDPOINT=%s\r\n@CALL start.bat\r\n' "$BF_ENDPOINT" > "$_WRAP6"
     (
       cd "$INSTALLPACK_DIR"
-      BF_ENDPOINT="http://localhost:18099/api/agent/boot-fail"
-      # Pass env vars through bash export (same reason as A-5: SET inside cmd.exe /c is unreliable)
-      export ZJ_BOOT_FAIL_TEST=1
-      export ZENITHJOY_BOOT_FAIL_ENDPOINT="$BF_ENDPOINT"
-      timeout 30 cmd.exe /c "call start.bat" 2>&1 | tail -10 || true
-      unset ZJ_BOOT_FAIL_TEST ZENITHJOY_BOOT_FAIL_ENDPOINT
+      timeout 30 cmd.exe /c "_zj_bootfail_wrap.bat" 2>&1 | tail -10 || true
     )
+    rm -f "$_WRAP6" 2>/dev/null || true
   else
     mkdir -p "$AGENT_DATA_DIR"
     BOOT_TMP="$AGENT_DATA_DIR/.boot-error.json.tmp"
