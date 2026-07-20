@@ -240,7 +240,12 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
             }
             val preTapRoot = awaitRootInActiveWindow()
             val meTabNode = preTapRoot?.let {
-                findNodeByContentDescContains(it, "我，按钮") ?: findNodeByText(it, "我")
+                val candidate = findNodeByContentDescContains(it, "我，按钮") ?: findNodeByText(it, "我")
+                // findNodeByText(it, "我") 是精确文本匹配，但触发这一步时抖音大概率停在信息流
+                // 首页——不受控的 UGC 文案/昵称/评论摘要偶然精确等于"我"的概率不为零。用位置
+                // 兜一层：底部导航栏的节点上边界必然落在屏幕最下方，用比例(不是绝对像素)判断，
+                // 不为单一机型写死数值。位置不对就当没找到，退回坐标兜底。
+                candidate?.takeIf { node -> isInBottomNavArea(node, sh) }
             }
             if (meTabNode != null) {
                 android.util.Log.i(TAG, "我tab命中无障碍树节点，点节点中心")
@@ -329,6 +334,15 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
     private fun tapNodeCenter(node: AccessibilityNodeInfo) {
         val r = Rect(); node.getBoundsInScreen(r)
         tapAtCoordinate(r.exactCenterX(), r.exactCenterY())
+    }
+
+    /**
+     * 粗略判定节点是否落在底部导航栏区域：上边界须在屏幕最下方 15% 内。用比例而非绝对像素，
+     * 不为单一机型写死数值。防止"我"这种单字精确文本匹配到信息流里偶然出现的无关 UGC 内容。
+     */
+    private fun isInBottomNavArea(node: AccessibilityNodeInfo, screenHeight: Int): Boolean {
+        val r = Rect(); node.getBoundsInScreen(r)
+        return r.top >= screenHeight * 0.85f
     }
 
     private fun tapAtCoordinate(x: Float, y: Float) {

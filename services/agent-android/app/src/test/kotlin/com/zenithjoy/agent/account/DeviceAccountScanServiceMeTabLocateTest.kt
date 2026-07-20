@@ -16,40 +16,83 @@ import java.io.File
 class DeviceAccountScanServiceMeTabLocateTest {
     private val SOURCE_PATH = "src/main/kotlin/com/zenithjoy/agent/account/DeviceAccountScanService.kt"
 
+    // 三个锚点把"我"tab 分支精确切成三段：查找表达式 / 命中分支 / 未命中分支。
+    // 用 missingDelimiterValue = "" 让锚点缺失时直接判空——如果有人把 if/else 结构
+    // 改回无条件坐标点、或删掉查找逻辑，锚点会消失，取到的段落变成空字符串，
+    // 后续 contains 断言必然失败，而不是像 substringAfter 默认行为那样"锚点找不到
+    // 就退化成整个文件"，从而被文件里其它地方同名调用（switchEntry 那段也用了
+    // findNodeByContentDescContains/tapNodeCenter）蹭过去。
+    private fun lookupExpr(src: String): String =
+        src.substringAfter("val meTabNode = preTapRoot?.let {", missingDelimiterValue = "")
+            .substringBefore("if (meTabNode != null) {", missingDelimiterValue = "")
+
+    private fun foundBranch(src: String): String =
+        src.substringAfter("if (meTabNode != null) {", missingDelimiterValue = "")
+            .substringBefore("} else {", missingDelimiterValue = "")
+
+    private fun fallbackBranch(src: String): String =
+        src.substringAfter("} else {", missingDelimiterValue = "")
+            .substringBefore("delay(1500L)", missingDelimiterValue = "")
+
     @Test
     fun `openSwitchAccountPanel 点我tab前先按内容描述或文本查找真实节点`() {
         val src = File(SOURCE_PATH).readText()
-        val body = src.substringAfter("override suspend fun openSwitchAccountPanel(): Boolean {")
-            .substringBefore("\n    /**\n     * 拉起抖音并【顶回主页 feed】")
+        val lookup = lookupExpr(src)
+        assertTrue("查找表达式锚点必须存在（结构被改动会导致这里判空）", lookup.isNotEmpty())
         assertTrue(
-            "应在点击我tab前查找内容描述含\"我，按钮\"的节点",
-            body.contains("findNodeByContentDescContains") && body.contains("我，按钮"),
+            "应查找内容描述含\"我，按钮\"的节点",
+            lookup.contains("findNodeByContentDescContains(it, \"我，按钮\")"),
         )
         assertTrue(
             "查内容描述落空时应再按精确文本\"我\"兜底查找",
-            body.contains("findNodeByText(") && body.contains("\"我\""),
+            lookup.contains("findNodeByText(it, \"我\")"),
+        )
+        assertTrue(
+            "精确文本\"我\"命中率高但不受控(信息流UGC内容可能偶然等于单字\"我\")，" +
+                "必须再过一层底部导航区域位置校验，不能直接采信",
+            lookup.contains("isInBottomNavArea("),
         )
     }
 
     @Test
-    fun `找到我tab节点时优先点节点中心，而不是直接坐标点`() {
+    fun `底部导航区域判定用屏幕高度比例而不是写死像素值`() {
         val src = File(SOURCE_PATH).readText()
-        val body = src.substringAfter("override suspend fun openSwitchAccountPanel(): Boolean {")
-            .substringBefore("\n    /**\n     * 拉起抖音并【顶回主页 feed】")
+        val fn = src.substringAfter("private fun isInBottomNavArea(", missingDelimiterValue = "")
+            .substringBefore("\n    }", missingDelimiterValue = "")
+        assertTrue("isInBottomNavArea 函数体锚点必须存在", fn.isNotEmpty())
         assertTrue(
-            "命中真实节点时应调 tapNodeCenter，不能只有坐标兜底这一条路",
-            body.contains("tapNodeCenter("),
+            "必须按 screenHeight 的比例判定，不能为单一机型写死绝对像素阈值",
+            fn.contains("screenHeight *"),
         )
     }
 
     @Test
-    fun `坐标点击仍然保留作为找不到节点时的兜底，不能整段删掉`() {
+    fun `找到我tab节点时点节点中心，而不是直接坐标点`() {
         val src = File(SOURCE_PATH).readText()
-        val body = src.substringAfter("override suspend fun openSwitchAccountPanel(): Boolean {")
-            .substringBefore("\n    /**\n     * 拉起抖音并【顶回主页 feed】")
+        val found = foundBranch(src)
+        assertTrue("命中分支锚点必须存在（if/else 结构被拍平会导致这里判空）", found.isNotEmpty())
         assertTrue(
-            "旧机型上我tab可能确实不进无障碍树，坐标兜底不能删，只能降级为 else 分支",
-            body.contains("tapAtCoordinate(meX, meY)"),
+            "命中真实节点时必须调 tapNodeCenter(meTabNode)，不能落到坐标兜底",
+            found.contains("tapNodeCenter(meTabNode)"),
+        )
+        assertTrue(
+            "命中分支不该再调坐标兜底",
+            !found.contains("tapAtCoordinate(meX, meY)"),
+        )
+    }
+
+    @Test
+    fun `找不到我tab节点时才退回坐标兜底，不能整段删掉`() {
+        val src = File(SOURCE_PATH).readText()
+        val fallback = fallbackBranch(src)
+        assertTrue("兜底分支锚点必须存在（if/else 结构被拍平会导致这里判空）", fallback.isNotEmpty())
+        assertTrue(
+            "旧机型上我tab可能确实不进无障碍树，兜底分支必须保留坐标点击",
+            fallback.contains("tapAtCoordinate(meX, meY)"),
+        )
+        assertTrue(
+            "兜底分支不该调 tapNodeCenter（那是命中分支的行为）",
+            !fallback.contains("tapNodeCenter("),
         )
     }
 }
