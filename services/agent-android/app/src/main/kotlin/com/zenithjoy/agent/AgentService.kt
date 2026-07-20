@@ -502,20 +502,35 @@ class AgentService : Service() {
             version = BuildConfig.VERSION_NAME,
             httpBase = config.deriveHttpBase(),
         )
-        when (val outcome = withContext(Dispatchers.IO) { registrar.register(registerRequest) }) {
-            is AgentRegistrar.RegisterOutcome.Success -> {
-                val result = outcome.result
-                config.wsToken = result.wsToken
-                config.machineId = result.machineId
-                if (!result.tier.isNullOrEmpty()) config.tier = result.tier
-                if (!result.agentUuid.isNullOrEmpty()) config.agentUuid = result.agentUuid
-                config.lastRegisterError = ""
-                android.util.Log.i(TAG, "registered — tier=${config.tier} uuid=${config.agentUuid}")
+        try {
+            when (val outcome = withContext(Dispatchers.IO) { registrar.register(registerRequest) }) {
+                is AgentRegistrar.RegisterOutcome.Success -> {
+                    val result = outcome.result
+                    config.wsToken = result.wsToken
+                    config.machineId = result.machineId
+                    if (!result.tier.isNullOrEmpty()) config.tier = result.tier
+                    if (!result.agentUuid.isNullOrEmpty()) config.agentUuid = result.agentUuid
+                    config.lastRegisterError = ""
+                    android.util.Log.i(TAG, "registered — tier=${config.tier} uuid=${config.agentUuid}")
+                }
+                is AgentRegistrar.RegisterOutcome.Failure -> {
+                    config.lastRegisterError = outcome.reason
+                    android.util.Log.w(TAG, "registration failed: ${outcome.reason} — continuing with license key fallback")
+                }
             }
-            is AgentRegistrar.RegisterOutcome.Failure -> {
-                config.lastRegisterError = outcome.reason
-                android.util.Log.w(TAG, "registration failed: ${outcome.reason} — continuing with license key fallback")
-            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // 协程取消不是"注册失败"，必须原样上抛，否则破坏结构化并发（父作用域/scope 取消
+            // 时子协程应该真正终止，而不是被这里当普通异常吞掉）。
+            throw e
+        } catch (e: Exception) {
+            // 兜底：AgentRegistrar.register() 只 catch IOException，Gson/OkHttp 内部的非
+            // IOException RuntimeException、或 config.deriveHttpBase() 的 NPE 等意外异常
+            // 会从这里逃逸。performRegister() 现在可能被"重启 Agent 服务"按钮反复触发
+            // （见 shouldRetryRegister），调用方 scope 无 CoroutineExceptionHandler——不兜底
+            // 就会变成"点按钮→进程崩溃→再点→再崩溃"的循环，而不是安全地把失败原因写进
+            // lastRegisterError（同 RegisterOutcome.Failure 分支的处理方式一致）。
+            config.lastRegisterError = "注册时发生意外错误：${e.message ?: e::class.simpleName}"
+            android.util.Log.w(TAG, "performRegister unexpected error: ${e.message}", e)
         }
     }
 
