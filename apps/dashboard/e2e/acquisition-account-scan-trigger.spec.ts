@@ -41,4 +41,31 @@ test.describe('账号管理页 — 立即扫描按钮', () => {
 
     await expect(page.getByText('未检测到在线的安卓设备，请先确认手机 App 在运行')).toBeVisible();
   });
+
+  test('60秒冷却期满后按钮自动重新可点，能再次触发', async ({ page }) => {
+    // 本用例真实等待 61 秒（config 全局 timeout 30s 不够用），单独放宽超时。
+    test.setTimeout(90_000);
+
+    await page.route('/api/agent/burner/sessions', (route) =>
+      route.fulfill({ json: { success: true, data: { sessions: [] } } })
+    );
+    let triggerCount = 0;
+    await page.route('/api/acquisition/account-scan/trigger', (route) => {
+      triggerCount += 1;
+      return route.fulfill({ json: { success: true, data: { task_id: `task-${triggerCount}` } } });
+    });
+
+    await page.goto('/area/acquisition/accounts');
+    const btn = page.getByRole('button', { name: '立即扫描' });
+    await btn.click();
+    await expect(btn).toBeDisabled();
+    expect(triggerCount).toBe(1);
+
+    // 真实等待冷却期满（61秒，留1秒余量），不用 page.clock（版本兼容性未知，真实等待更可靠）
+    await page.waitForTimeout(61_000);
+
+    await expect(btn).toBeEnabled();
+    await btn.click();
+    expect(triggerCount).toBe(2);
+  });
 });
