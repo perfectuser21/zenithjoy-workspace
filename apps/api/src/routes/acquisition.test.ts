@@ -1426,3 +1426,85 @@ describe('POST /api/acquisition/judge-video — x-agent-id 反查 tenant [REGRES
     expect(mockJudgeVideo).not.toHaveBeenCalled();
   });
 });
+
+describe('POST /api/acquisition/account-scan/trigger', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('无在线 android 设备 → 400 NO_ONLINE_ANDROID_AGENT', async () => {
+    const { default: db } = await import('../db/connection');
+    (db.query as any).mockResolvedValueOnce({ rows: [] }); // 查在线 android agent 为空
+
+    const res = await request(app)
+      .post('/api/acquisition/account-scan/trigger')
+      .set('x-test-tenant-id', 'tenant-1')
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.code).toBe('NO_ONLINE_ANDROID_AGENT');
+  });
+
+  it('有在线 android 设备 → 200，写入 publish_tasks(task_type=account_scan)', async () => {
+    const { default: db } = await import('../db/connection');
+    (db.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: 'agent-uuid-1' }] }) // 查在线 android agent
+      .mockResolvedValueOnce({ rows: [{ id: 'task-uuid-1' }] }); // INSERT publish_tasks
+
+    // 用独立租户 id（而非上一个用例的 'tenant-1'）：本路由挂了 max=1/60s 的按租户限流
+    // 中间件，express-rate-limit 的计数器是模块级单例、跨同文件内的用例持久存在，且
+    // 默认对所有响应状态码计数（无 skipFailedRequests）。若复用 'tenant-1'，上一个
+    // 用例（400 NO_ONLINE_ANDROID_AGENT）会先占满这个租户 60 秒内仅有的 1 次配额，
+    // 导致本用例被限流命中 429 而非验证到位的 200——用独立租户隔离两个用例互不干扰。
+    const res = await request(app)
+      .post('/api/acquisition/account-scan/trigger')
+      .set('x-test-tenant-id', 'tenant-account-scan-success')
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.task_id).toBe('task-uuid-1');
+
+    const insertCall = (db.query as any).mock.calls[1];
+    expect(insertCall[0]).toContain('publish_tasks');
+    expect(insertCall[0]).toContain('account_scan');
+
+    // 真机链路关键点：walking-skeleton.ts 心跳拉取端点只把 payload JSON 列内容
+    // 透传给设备，DB COLUMN task_type 从不下发。payload 里必须自带 task_type，
+    // 否则设备端 AgentService.kt 读不到 task.payload["task_type"]，任务写进库
+    // 但设备永远不会识别执行（对照 agent-burner.ts dm_outreach 的写法）。
+    const payloadParam = insertCall[1].find(
+      (p: unknown) => typeof p === 'string' && p.includes('task_type'),
+    );
+    expect(payloadParam).toBeDefined();
+    expect(JSON.parse(payloadParam)).toMatchObject({ task_type: 'account_scan' });
+  });
+
+  it('缺租户上下文 → 401 NO_TENANT', async () => {
+    const res = await request(app)
+      .post('/api/acquisition/account-scan/trigger')
+      .send({});
+
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('NO_TENANT');
+  });
+
+  it('60秒内重复触发同一租户 → 第二次 429 RATE_LIMITED', async () => {
+    const { default: db } = await import('../db/connection');
+    (db.query as any).mockResolvedValue({ rows: [{ id: 'agent-uuid-1' }] });
+
+    const first = await request(app)
+      .post('/api/acquisition/account-scan/trigger')
+      .set('x-test-tenant-id', 'tenant-rate-limit-test')
+      .send({});
+    expect(first.status).toBe(200);
+
+    const second = await request(app)
+      .post('/api/acquisition/account-scan/trigger')
+      .set('x-test-tenant-id', 'tenant-rate-limit-test')
+      .send({});
+    expect(second.status).toBe(429);
+    expect(second.body.error.code).toBe('RATE_LIMITED');
+  });
+});

@@ -4842,3 +4842,11 @@ agent_suite:
   status: active
   product: 智能获客
   note: "sprint(07192057): dispatch-due-cron——静态检查index.ts真的调用了startScheduler()，防止建库以来从未接线的问题在未来重构中再次静默复发"
+
+- id: account-scan-trigger-button-e2e
+  path: apps/dashboard/e2e/acquisition-account-scan-trigger.spec.ts
+  type: e2e
+  ci: L4
+  status: active
+  product: 客户智能获客
+  note: "sprint(07192358): 账号扫描手动触发通道——Dashboard立即扫描按钮真Playwright规格，验证点击后调真实端点+60秒本地禁用+离线态错误提示"

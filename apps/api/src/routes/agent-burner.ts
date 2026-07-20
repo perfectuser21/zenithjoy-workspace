@@ -22,6 +22,14 @@ import { isDuplicateDmOutreachResult } from '../services/device-platform';
 
 const router = Router();
 
+// 标准 UUID 格式校验——publish_tasks.id 是 UUID 列，用非 UUID 字符串查询会被 Postgres
+// 抛 22P02（invalid input syntax for type uuid），这里没有 try/catch 会变成未处理的 rejection
+// 导致请求挂死。account-scan-result 的 request_id 有三种来源，只有手动触发(b)是真 UUID，
+// 内部定时循环(a)和 DM 补扫(c)都是本地拼的字符串，查库前必须先过这一关。
+// 与 walking-skeleton.service.ts / acquisition.ts 等文件的同名常量保持完全一致的写法
+// （本仓库对这类小型校验正则的既有约定是各文件本地定义，不做跨文件 import）。
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const ERR = (code: string, message: string) => ({
   success: false,
   error: { code, message },
@@ -633,11 +641,45 @@ router.get('/dm-tasks/:task_id', async (req: Request, res: Response) => {
 // ── account-scan-result — Line02 Step7 账号扫描结果写回（手机端 DeviceAccountScanService）──
 // 扫描到的抖音账号昵称 upsert 进 agent_platform_sessions(role='burner')，让"账号管理"页
 // (GET /sessions 同表)能看到手机上已登录的小号，跟 qr-bind-result 写同一张表。
+//
+// bugfix（cp-0720073537）：闭环 publish_tasks。account_scan 有两个触发源：
+//   (a) 手机内部 30-60min 定时循环（runAccountScanLoop）——本地生成 requestId
+//       "scan-<ts>"，从未写入 publish_tasks，查无该行是正常情况，必须跳过 update、
+//       不能 404，否则会打断这条一直工作正常的既有上报流程；
+//   (b) Dashboard 手动触发（POST /account-scan/trigger）——真实 publish_tasks 行存在，
+//       必须在这里推进到终态，否则 getQueuedTasks()（status IN pending/queued/dispatched，
+//       无完成过滤）会把同一行永远当"待处理"重复下发，手机每次心跳(~30s)重扫一次账号，
+//       无限循环，battery drain + 抖音风控风险。
+// 幂等：镜像 /warmup-result 的模式——已终态(done/failed)的行直接短路，不重复写。
 router.post('/account-scan-result', async (req: Request, res: Response) => {
-  const { agent_id, ok, account_ids } = req.body || {};
+  const { agent_id, request_id, ok, account_ids } = req.body || {};
   if (!agent_id || typeof agent_id !== 'string') {
     return res.status(400).json(ERR('MISSING_AGENT_ID', 'agent_id 必填'));
   }
+
+  let taskFound = false;
+  // 只有格式合法的 UUID 才值得查 publish_tasks——id 是 UUID 列，非 UUID 字符串（内部定时
+  // 循环的 "scan-<base36>"、DM 补扫的 "rescan-<task_id>"）直接查会被 Postgres 抛 22P02，
+  // 这里没有 try/catch，未处理的 rejection 会让请求挂死，永远到不了下面的 session 写入。
+  if (request_id && typeof request_id === 'string' && UUID_RE.test(request_id)) {
+    const t = await pool.query(
+      `SELECT status FROM zenithjoy.publish_tasks WHERE id=$1`,
+      [request_id],
+    );
+    if (t.rows.length > 0) {
+      taskFound = true;
+      const curStatus: string = t.rows[0].status;
+      // 幂等：已终态 → 短路（防重复回传重复写库），行为镜像 /warmup-result
+      if (curStatus === 'done' || curStatus === 'failed') {
+        return res.json(OK({ idempotent: true }));
+      }
+    }
+    // 查无该行（UUID 格式合法但 publish_tasks 里没有）→ 属正常情况，继续走下面的
+    // agent_platform_sessions 写入，不 404、不报错。
+  }
+  // request_id 不是 UUID 格式（内部定时循环 / DM 补扫场景）→ 跳过 publish_tasks 查询与
+  // 更新，直接走下面的 agent_platform_sessions 写入，不 404、不报错。
+
   const ids = Array.isArray(account_ids) ? account_ids.filter((x) => typeof x === 'string' && x) : [];
   let written = 0;
   if (ok === true && ids.length > 0) {
@@ -653,6 +695,17 @@ router.post('/account-scan-result', async (req: Request, res: Response) => {
       written += 1;
     }
   }
+
+  // 仅当 request_id 对应真实 publish_tasks 行（手动触发场景）才推进其终态，
+  // 关闭 getQueuedTasks() 重复派发的循环。
+  if (taskFound) {
+    const taskStatus = ok === true ? 'done' : 'failed';
+    await pool.query(
+      `UPDATE zenithjoy.publish_tasks SET status=$2, response=$3::jsonb, updated_at=NOW() WHERE id=$1`,
+      [request_id, taskStatus, JSON.stringify({ ok: !!ok, account_ids: ids })],
+    );
+  }
+
   return res.json(OK({ written }));
 });
 

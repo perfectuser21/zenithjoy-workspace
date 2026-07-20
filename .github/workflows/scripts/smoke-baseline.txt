@@ -85,3 +85,4 @@ gpa-voice-outreach-smoke.sh
 line04-ci-desktop-mutex-smoke.sh
 collect-report-comment-grading-smoke.sh
 dm-dispatch-sweep-smoke.sh
+account-scan-trigger-smoke.sh
