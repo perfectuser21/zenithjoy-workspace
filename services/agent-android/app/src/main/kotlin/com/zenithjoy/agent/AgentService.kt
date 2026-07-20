@@ -63,6 +63,18 @@ class AgentService : Service() {
     private var heartbeatLoop: HttpHeartbeatLoop? = null
     // initAgent 只允许执行一次（真机复现 2026-07-10：多次 onStartCommand 泄漏多套轮询 loop）
     @Volatile private var agentInitialized = false
+    // register 重试进行中标志：onStartCommand 重试分支用它避免重复 launch 协程
+    // （onStartCommand 可能因系统重启 Service 而短时间内多次交付）。注意：这个标志
+    // 只覆盖"重试"这一条调用路径——真正防止 performRegister() 本身被并发执行（包括
+    // initAgent() 首次调用 与 重试路径 之间的竞争）的锁是下面的 registerCallInFlight。
+    @Volatile private var registerRetryInFlight = false
+    // performRegister() 唯一的互斥锁，覆盖它的全部调用方（initAgent() 首次调用 +
+    // onStartCommand 重试分支）。真机场景：慢网络下 initAgent() 里的首次 register 请求
+    // 还没返回时，用户不耐烦连点"重启 Agent 服务"按钮触发第二次 onStartCommand——若不
+    // 在这里统一加锁，两次 performRegister() 会并发打 /api/agent/register 并非原子地
+    // 写同一份 SharedPreferences（wsToken/machineId/tier/agentUuid），且恰好会让这次
+    // bug 本身的诱因（License 装机配额限制）更容易被触发。
+    private val registerCallInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
     private var collectPollLoop: AcquisitionCollectPollLoop? = null
     private var accountScanLoopJob: kotlinx.coroutines.Job? = null
 
@@ -270,6 +282,19 @@ class AgentService : Service() {
         if (shouldRunInitAgent(agentInitialized)) {
             agentInitialized = true
             scope.launch { initAgent() }
+        } else if (shouldRetryRegister(config.isRegistered, registerRetryInFlight)) {
+            // 真机复现(2026-07-20)：register 失败后（如撞配额上限），agentInitialized 已
+            // 为 true，initAgent() 不会再跑，register() 也就永远没有第二次机会——"重启
+            // Agent 服务"按钮点了等于白点。这里独立于 agentInitialized 重试注册，不重新
+            // 初始化 WS/心跳轮询 loop（避免重新触发 2026-07-10 那个泄漏）。
+            registerRetryInFlight = true
+            scope.launch {
+                try {
+                    performRegister()
+                } finally {
+                    registerRetryInFlight = false
+                }
+            }
         }
         return START_STICKY
     }
@@ -304,35 +329,7 @@ class AgentService : Service() {
         }
 
         // License 注册（复用 POST /api/agent/register）
-        if (!config.isRegistered) {
-            android.util.Log.i(TAG, "registering with license...")
-            val registrar = AgentRegistrar()
-            val registerRequest = AgentRegistrar.RegisterRequest(
-                licenseKey = config.licenseKey,
-                machineId = config.machineId,
-                hostname = android.os.Build.MODEL,
-                agentId = config.agentId,
-                version = BuildConfig.VERSION_NAME,
-                httpBase = config.deriveHttpBase(),
-            )
-            when (val outcome = withContext(Dispatchers.IO) { registrar.register(registerRequest) }) {
-                is AgentRegistrar.RegisterOutcome.Success -> {
-                    val result = outcome.result
-                    config.wsToken = result.wsToken
-                    config.machineId = result.machineId
-                    if (!result.tier.isNullOrEmpty()) config.tier = result.tier
-                    if (!result.agentUuid.isNullOrEmpty()) config.agentUuid = result.agentUuid
-                    config.lastRegisterError = ""
-                    android.util.Log.i(TAG, "registered — tier=${config.tier} uuid=${config.agentUuid}")
-                }
-                is AgentRegistrar.RegisterOutcome.Failure -> {
-                    config.lastRegisterError = outcome.reason
-                    android.util.Log.w(TAG, "registration failed: ${outcome.reason} — continuing with license key fallback")
-                }
-            }
-        } else {
-            android.util.Log.i(TAG, "already registered, skipping")
-        }
+        performRegister()
 
         // WS 客户端（ws0 协议，15s heartbeat）
         wsClient = WsClient(
@@ -492,6 +489,66 @@ class AgentService : Service() {
         accountScanLoopJob = scope.launch { runAccountScanLoop() }
 
         android.util.Log.i(TAG, "agent started — agentId=${config.agentId} machineId=${config.machineId}")
+    }
+
+    /**
+     * 注册一次（复用 POST /api/agent/register）。从 initAgent() 抽出，使其能独立于
+     * agentInitialized 被重复调用——register 失败后（如撞 License 装机配额上限），
+     * 后续 onStartCommand（重启按钮/系统重启 Service）能真正重试，不需要杀进程重开。
+     */
+    private suspend fun performRegister() {
+        if (config.isRegistered) {
+            android.util.Log.i(TAG, "already registered, skipping")
+            return
+        }
+        if (!registerCallInFlight.compareAndSet(false, true)) {
+            android.util.Log.i(TAG, "performRegister already in flight, skipping duplicate call")
+            return
+        }
+        try {
+            android.util.Log.i(TAG, "registering with license...")
+            try {
+                val registrar = AgentRegistrar()
+                val registerRequest = AgentRegistrar.RegisterRequest(
+                    licenseKey = config.licenseKey,
+                    machineId = config.machineId,
+                    hostname = android.os.Build.MODEL,
+                    agentId = config.agentId,
+                    version = BuildConfig.VERSION_NAME,
+                    httpBase = config.deriveHttpBase(),
+                )
+                when (val outcome = withContext(Dispatchers.IO) { registrar.register(registerRequest) }) {
+                    is AgentRegistrar.RegisterOutcome.Success -> {
+                        val result = outcome.result
+                        config.wsToken = result.wsToken
+                        config.machineId = result.machineId
+                        if (!result.tier.isNullOrEmpty()) config.tier = result.tier
+                        if (!result.agentUuid.isNullOrEmpty()) config.agentUuid = result.agentUuid
+                        config.lastRegisterError = ""
+                        android.util.Log.i(TAG, "registered — tier=${config.tier} uuid=${config.agentUuid}")
+                    }
+                    is AgentRegistrar.RegisterOutcome.Failure -> {
+                        config.lastRegisterError = outcome.reason
+                        android.util.Log.w(TAG, "registration failed: ${outcome.reason} — continuing with license key fallback")
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // 协程取消不是"注册失败"，必须原样上抛，否则破坏结构化并发（父作用域/scope 取消
+                // 时子协程应该真正终止，而不是被这里当普通异常吞掉）。
+                throw e
+            } catch (e: Exception) {
+                // 兜底：AgentRegistrar.register() 只 catch IOException，Gson/OkHttp 内部的非
+                // IOException RuntimeException 等意外异常会从这里逃逸。performRegister() 现在
+                // 可能被"重启 Agent 服务"按钮反复触发（见 shouldRetryRegister），调用方 scope
+                // 无 CoroutineExceptionHandler——不兜底就会变成"点按钮→进程崩溃→再点→再崩溃"
+                // 的循环，而不是安全地把失败原因写进 lastRegisterError（同 RegisterOutcome.Failure
+                // 分支的处理方式一致）。
+                config.lastRegisterError = "注册时发生意外错误：${e.message ?: e::class.simpleName}"
+                android.util.Log.w(TAG, "performRegister unexpected error: ${e.message}", e)
+            }
+        } finally {
+            registerCallInFlight.set(false)
+        }
     }
 
     /** 从 Job 队列取下一个任务并派发执行（顺序执行，当前任务完成后才取下一个）。 */
@@ -987,6 +1044,12 @@ class AgentService : Service() {
         // initAgent 单次守卫：onStartCommand 会被多次调用（开机广播 + MainActivity +
         // START_STICKY 重启），每次都 initAgent 会泄漏多套并行轮询 loop。
         internal fun shouldRunInitAgent(alreadyInitialized: Boolean): Boolean = !alreadyInitialized
+
+        // register 重试守卫：与 agentInitialized（只管 WS/心跳轮询 loop 初始化）完全独立。
+        // 只要还没注册成功、且没有另一次重试正在进行中，任何一次 onStartCommand 交付
+        // （按钮点击或系统重启 Service）都应该重试注册——不需要杀进程重开 App。
+        internal fun shouldRetryRegister(isRegistered: Boolean, retryInFlight: Boolean): Boolean =
+            !isRegistered && !retryInFlight
 
         // 真机复现(2026-07-13 Honor xian-rog)：MEDIA_PROJECTION type 必须已持有有效
         // MediaProjection 授权令牌，未授权时声明该 type 会被系统 SecurityException 杀死整个
