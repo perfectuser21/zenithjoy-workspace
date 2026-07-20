@@ -1,0 +1,13 @@
+{
+  "round": 3,
+  "task_id": "027e6bba-9b00-4b9f-b3b9-33b2e3807717",
+  "verdict": "APPROVED",
+  "scores": {
+    "completeness": 9, "testability": 9, "iron_rules": 10,
+    "e2e_coverage": 9, "scope_control": 10, "proven_to_fire": 9, "contract_quality": 9
+  },
+  "total": 65,
+  "max": 70,
+  "blockers": [],
+  "r2_b1_resolved": true
+}

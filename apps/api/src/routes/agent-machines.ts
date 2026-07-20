@@ -35,7 +35,23 @@ const OK = (data: unknown) => ({
 const VALID_ROLES = ['main', 'sub'];
 
 // session_count 由 pg COUNT 返回字符串，统一转 number
+// offline_minutes: 在线时 null，离线时 = Math.floor((now - last_seen_ms) / 60000)
 function normMachine(row: Record<string, unknown>) {
+  const status =
+    typeof row.status === 'string'
+      ? row.status
+      : row.last_seen &&
+          Date.now() - new Date(row.last_seen as string).getTime() <=
+            3 * 60 * 1000
+        ? 'online'
+        : 'offline';
+
+  let offlineMinutes: number | null = null;
+  if (status !== 'online' && row.last_seen) {
+    const lastSeenMs = new Date(row.last_seen as string).getTime();
+    offlineMinutes = Math.floor((Date.now() - lastSeenMs) / 60000);
+  }
+
   return {
     id: row.id,
     agent_id: row.agent_id,
@@ -43,10 +59,11 @@ function normMachine(row: Record<string, unknown>) {
     nickname: row.nickname,
     machine_role: row.machine_role,
     os_type: row.os_type ?? null,
-    status: row.status,
+    status,
     version: row.version,
     last_seen: row.last_seen,
     session_count: Number(row.session_count ?? 0),
+    offline_minutes: offlineMinutes,
   };
 }
 

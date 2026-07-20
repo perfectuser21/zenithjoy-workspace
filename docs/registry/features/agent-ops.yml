@@ -1,0 +1,74 @@
+# Feature Details — agent_ops (Agent 运维监控)
+# 隶属 system: agent_ops
+# 创建时间: 2026-07-20
+# Sprint: 07201705-agent-offline-alert / task_id: 027e6bba-9b00-4b9f-b3b9-33b2e3807717
+
+schema_version: "2.0.0"
+system_id: agent_ops
+system_name: Agent 运维监控
+
+features:
+
+  - feature_id: agent_offline_monitor
+    name: Agent 离线静默告警
+    purpose: 每分钟扫描 Windows Agent 心跳，超阈值未更新时推飞书告警；恢复后推恢复通知；进程内去重，同机不重复推送
+    maturity: 1
+    code:
+      root: apps/api/src/services/
+      entry_files:
+        - agent-offline-monitor.ts
+      language: TypeScript
+      runtime: node
+    docs:
+      prd: sprints/07201705-agent-offline-alert/contract-draft.md
+      dod: sprints/07201705-agent-offline-alert/contract-dod.md
+      adr: null
+      api_doc: null
+      runbook: null
+    skills: []
+    apis:
+      - POST /api/internal/agent-offline-scan
+      - GET /api/agent/machines (extended with offline_minutes)
+    tests:
+      unit:
+        - sprints/07201705-agent-offline-alert/tests/agent-offline-monitor.test.ts
+      integration: []
+      e2e:
+        - .github/workflows/scripts/smoke/agent-offline-alert-smoke.sh
+      regression: []
+    ci:
+      jobs: []
+      layers: []
+    runtime: {}
+    capabilities:
+      - id: agent_offline_monitor.scan_and_alert
+        name: 扫描并发飞书告警
+        entry_file: agent-offline-monitor.ts
+        maturity: 1
+        tests:
+          unit:
+            - sprints/07201705-agent-offline-alert/tests/agent-offline-monitor.test.ts
+          integration: []
+          e2e:
+            - .github/workflows/scripts/smoke/agent-offline-alert-smoke.sh
+        status: active
+      - id: agent_offline_monitor.dedup
+        name: 进程内去重（同机只告警一次）
+        entry_file: agent-offline-monitor.ts
+        maturity: 1
+        tests:
+          unit:
+            - sprints/07201705-agent-offline-alert/tests/agent-offline-monitor.test.ts
+          integration: []
+          e2e: []
+        status: active
+      - id: agent_offline_monitor.recovery
+        name: 恢复通知 + 去重 Map 复位
+        entry_file: agent-offline-monitor.ts
+        maturity: 1
+        tests:
+          unit:
+            - sprints/07201705-agent-offline-alert/tests/agent-offline-monitor.test.ts
+          integration: []
+          e2e: []
+        status: active

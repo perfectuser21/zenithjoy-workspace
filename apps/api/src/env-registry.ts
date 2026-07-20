@@ -131,6 +131,10 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'MMV_CLAUDE_ACCOUNT_DIR', reason: '对话式创建Skill在mmv上跑claude -p时用哪个账号池目录，缺则默认 /Users/administrator/.claude-account1' },
   { name: 'INTERNAL_API_BASE', reason: '内部回调服务基础 URL（detached 子进程通知终态），缺则默认 http://localhost:3001' },
 
+  // —— Agent 离线告警（Sprint 07201705）——
+  { name: 'AGENT_OFFLINE_THRESHOLD_HOURS', reason: 'Agent 离线告警阈值（小时），缺则默认 4 小时' },
+  { name: 'AGENT_SCAN_INTERVAL_MS', reason: 'Agent 离线扫描间隔（毫秒），缺则默认 60000（1 分钟）' },
+
   // —— 测试 / 故障注入钩子（仅测试与冒烟读取，生产不设）——
   { name: 'TEST_MODE', reason: '测试模式开关，仅测试/冒烟读取' },
   { name: 'FORCE_TOAPI_FAIL', reason: '故障注入：强制 toapi 失败，仅测试用' },
