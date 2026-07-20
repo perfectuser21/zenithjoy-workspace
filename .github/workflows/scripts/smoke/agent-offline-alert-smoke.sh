@@ -327,8 +327,9 @@ SCAN2=$(curl -sf -X POST "${API_URL}/api/internal/agent-offline-scan" \
   -d "{\"threshold_hours\": 4, \"webhook_override\": \"http://localhost:${MOCK_PORT}/webhook\"}" || true)
 
 log "去重第二次扫描 response: ${SCAN2:-<empty>}"
+[ -n "$SCAN2" ] || fail "去重验证 POST /api/internal/agent-offline-scan 无响应"
 
-python3 - "${SCAN2:-{}}" "${TEST_AGENT_ID}" <<'PYEOF'
+python3 - "$SCAN2" "${TEST_AGENT_ID}" <<'PYEOF'
 import sys, json
 
 resp_str = sys.argv[1]
