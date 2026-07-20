@@ -2,7 +2,7 @@
  * Module Health E2E — /module-health 客户机器 × Line 模块健康矩阵
  *
  * 覆盖场景：
- *   test 1: 机器行渲染（hostname + agent_id）+ 四条 Line 表头
+ *   test 1: 机器行渲染（hostname + agent_id）+ 五条 Line 表头
  *   test 2: 单元格三态 — 在线 / 失败(reason) / 无数据
  *   test 3: API 失败时显示错误提示
  *
@@ -72,8 +72,8 @@ async function stubModuleHealth(page: Page, body: ModuleHealthBody = HEALTH_DATA
   });
 }
 
-// test 1: 机器行 + 四条 Line 表头
-test('渲染机器行（hostname + agent_id）+ 四条 Line 表头', async ({ page }) => {
+// test 1: 机器行 + 五条 Line 表头
+test('渲染机器行（hostname + agent_id）+ 五条 Line 表头', async ({ page }) => {
   await stubAuthAsSuperAdmin(page);
   await stubModuleHealth(page);
 
@@ -82,7 +82,7 @@ test('渲染机器行（hostname + agent_id）+ 四条 Line 表头', async ({ pa
   await expect(page.getByText('客户机器A').first()).toBeVisible();
   await expect(page.getByText('agent-001').first()).toBeVisible();
 
-  for (const line of ['智能发布', '智能获客', '微信AI客服', '视频剪辑']) {
+  for (const line of ['智能发布', '智能获客', '微信AI客服', '框框浮窗', '视频剪辑']) {
     await expect(page.getByText(line, { exact: false }).first()).toBeVisible();
   }
 });

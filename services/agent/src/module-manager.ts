@@ -65,6 +65,10 @@ export interface ModuleHealth {
   found_window?: boolean;
   // line04 专有：最近一次出站/回复成功送达的时间戳（ms）
   last_delivery_ts?: number;
+  // line04 专有：AI 思考浮窗（pywebview）真实状态（刀A Task 3 getOverlayHandler().getStatus()）。
+  // 只在健康消息里暂存，captureModuleHealth 会把它拆到独立的 `${lineId}-overlay` key，
+  // 不进 healthReport.get(lineId) 本体（服务端 normalizeModuleStatus 只收 {ok,reason} 形状）。
+  overlay?: { ok: boolean; reason?: string };
 }
 
 export interface ModuleManagerOptions {
@@ -704,6 +708,15 @@ export class ModuleManager {
     this.log(
       `module ${lineId} 健康上报：ok=${health.ok} listener_alive=${health.listener_alive} found_window=${health.found_window}`,
     );
+    // 刀A：overlay（AI 思考浮窗/pywebview）红灯独立 key 上心跳——目前唯一有 overlay 的是 line04，
+    // 固定 'line04-overlay'，不造 `${lineId}-overlay` 通用逻辑（YAGNI，等第二条线要 overlay 再扩）。
+    // 服务端 normalizeModuleStatus 只收 {ok,reason} 形状，这里的形状即终态，不再包 listener_alive 等字段。
+    // 审查发现 #2：来源隔离——overlay 是 line04 专有字段，必须门禁只认 lineId===line04-wechat-cs，
+    // 否则别的产线（未来若也带同名 overlay-like 字段）会被误写进同一个 'line04-overlay' key。
+    const overlay = m.overlay;
+    if (lineId === 'line04-wechat-cs' && overlay && typeof overlay.ok === 'boolean') {
+      this.healthReport.set('line04-overlay', { ok: overlay.ok, reason: overlay.reason });
+    }
     return true;
   }
 
@@ -756,6 +769,12 @@ export class ModuleManager {
       this.log(reason);
       // 标记健康为不健康 + 写 module_status，让管理员/诊断页看到"修不动了"
       this.healthReport.set(lineId, { ok: false, reason, listener_alive: false });
+      // 审查发现 #3：模块死亡陈旧绿灯——整棵进程树已被判定"修不动了"（人工介入前不再自愈），
+      // 若此前 overlay 曾报过绿灯，独立的 line04-overlay key 不会随 lineId 本体一起失效，
+      // 会残留假绿（框框其实已经随模块一起死了）。模块死 → overlay 必死，同步标红。
+      if (lineId === 'line04-wechat-cs' && this.healthReport.has('line04-overlay')) {
+        this.healthReport.set('line04-overlay', { ok: false, reason: 'module_down' });
+      }
       this.statusReport.set(lineId, { ok: false, reason });
       this.opts.onModuleAlert?.(lineId, reason);
       return;

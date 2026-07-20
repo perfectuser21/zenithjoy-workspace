@@ -146,4 +146,62 @@ describe('ModuleManager — 模块健康自检上报增强', () => {
     // 健康报告里仍是 preflight 的结果，没被 draft_reply 改写
     expect(mm.getModuleStatusReport()['line04-wechat-cs'].ok).toBe(true);
   });
+
+  // 刀A Task 4：overlay 红灯（pywebview 供给失败等）经健康 IPC 并入心跳 module_status，
+  // 独立 key `line04-overlay`——服务端/看板直接取此 key，形状即终态 {ok, reason}。
+  it('健康消息带 overlay 字段 → statusReport 出现 line04-overlay key', async () => {
+    const root = mkRoot();
+    installModule(root);
+    const c = makeIpcChild();
+    const mm = new ModuleManager({
+      modulesRoot: root,
+      forkImpl: () => c.child,
+      preflightImpl: async () => ({ ok: true }),
+    });
+    await mm.syncModules({ 'line04-wechat-cs': { status: 'active', required_version: '1.0.0' } });
+
+    c.emitMessage({
+      type: 'status',
+      ok: true,
+      listener_alive: true,
+      overlay: { ok: false, reason: 'pywebview_install_failed' },
+    });
+
+    const report = mm.getModuleStatusReport();
+    expect(report['line04-overlay']).toEqual({ ok: false, reason: 'pywebview_install_failed' });
+  });
+
+  // 审查发现 #2：overlay 捕获缺来源隔离——captureModuleHealth 此前不管 lineId 是谁，
+  // 只要消息带 overlay 字段就写死 'line04-overlay'，其它产线（未来 line02/line03 若也上报
+  // overlay-like 字段）会被误当 line04 的浮窗状态污染同一个 key。
+  it('非 line04-wechat-cs 的模块健康消息带 overlay 字段 → 不产生 line04-overlay 条目（来源隔离）', async () => {
+    const root = mkRoot();
+    const otherLineId = 'line02-douyin-dm';
+    const dir = path.join(root, `${otherLineId}-1.0.0`);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'manifest.json'),
+      JSON.stringify({ lineId: otherLineId, version: '1.0.0', entry: 'index.js' }),
+    );
+    fs.writeFileSync(path.join(dir, 'index.js'), '');
+    const c = makeIpcChild();
+    const mm = new ModuleManager({
+      modulesRoot: root,
+      forkImpl: () => c.child,
+      preflightImpl: async () => ({ ok: true }),
+    });
+    await mm.syncModules({ [otherLineId]: { status: 'active', required_version: '1.0.0' } });
+
+    c.emitMessage({
+      type: 'status',
+      ok: true,
+      overlay: { ok: false, reason: 'pywebview_install_failed' },
+    });
+
+    const report = mm.getModuleStatusReport();
+    expect(report['line04-overlay']).toBeUndefined();
+    expect(report[`${otherLineId}-overlay`]).toBeUndefined();
+    // 该产线自身健康状态仍正常写入，不受来源隔离影响
+    expect(report[otherLineId].ok).toBe(true);
+  });
 });

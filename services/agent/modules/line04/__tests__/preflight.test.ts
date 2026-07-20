@@ -32,6 +32,9 @@ import {
   downloadFile,
   installWeChat,
   installPywinauto,
+  installPywebview,
+  PIP_INDEX_URL,
+  PYPI_OFFICIAL_URL,
   autoRepair,
   lockWechatUpdate,
   interpretUpdateLock,
@@ -669,6 +672,67 @@ describe('installPywinauto — get-pip + pip install 清华源', () => {
 
     const pipCall = spawnSyncMock.mock.calls.find((c) => (c[1] ?? []).includes('pywinauto'));
     expect((pipCall?.[1] ?? []).join(' ')).toContain('tuna.tsinghua.edu.cn');
+  });
+});
+
+describe('installPywebview — 客机自修复:双源回退+失败冒泡', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const mockDownload = () => {
+    vi.spyOn(https, 'get').mockImplementation((_url: any, cb: any) => {
+      const fakeRes = {
+        pipe: vi.fn(),
+        on: (ev: string, fn: () => void) => { if (ev === 'end') fn(); return fakeRes; },
+      } as any;
+      setImmediate(() => cb(fakeRes));
+      return { on: vi.fn() } as any;
+    });
+    vi.spyOn(fs, 'createWriteStream').mockReturnValue({
+      on: (_ev: string, fn: () => void) => { fn(); return {}; },
+      close: (fn: () => void) => fn(),
+    } as any);
+  };
+
+  it('清华源失败回退官方源,两源都失败返回 ok:false reason:pywebview_install_failed', async () => {
+    mockDownload();
+    vi.spyOn(childProcessModule, 'spawnSync').mockReturnValue({ status: 1 } as any);
+
+    const r = await installPywebview('C:\\py\\python.exe', os.tmpdir());
+
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe('pywebview_install_failed');
+  });
+
+  it('清华源成功即返回 ok:true 且不再调官方源', async () => {
+    mockDownload();
+    const spawnSyncMock = vi
+      .spyOn(childProcessModule, 'spawnSync')
+      .mockReturnValueOnce({ status: 1 } as any) // get-pip bootstrap（结果不影响后续判定）
+      .mockReturnValueOnce({ status: 0 } as any); // 清华源 pip install 成功
+
+    const r = await installPywebview('C:\\py\\python.exe', os.tmpdir());
+
+    expect(r.ok).toBe(true);
+    // 精确比对 --index-url 实参(不用子串匹配,CodeQL js/incomplete-url-substring-sanitization)
+    const indexUrls = spawnSyncMock.mock.calls.flatMap((c) => c[1] ?? []);
+    expect(indexUrls).not.toContain(PYPI_OFFICIAL_URL);
+  });
+
+  it('清华源失败,官方源成功 → 回退成功路径 ok:true 且两个 index-url 均被调用', async () => {
+    mockDownload();
+    const spawnSyncMock = vi
+      .spyOn(childProcessModule, 'spawnSync')
+      .mockReturnValueOnce({ status: 1 } as any) // get-pip bootstrap（结果不影响后续判定）
+      .mockReturnValueOnce({ status: 1 } as any) // 清华源 pip install 失败
+      .mockReturnValueOnce({ status: 0 } as any); // 官方源 pip install 成功
+
+    const r = await installPywebview('C:\\py\\python.exe', os.tmpdir());
+
+    expect(r.ok).toBe(true);
+    // 精确比对 --index-url 实参(不用子串匹配,CodeQL js/incomplete-url-substring-sanitization)
+    const indexUrls = spawnSyncMock.mock.calls.flatMap((c) => c[1] ?? []);
+    expect(indexUrls).toContain(PIP_INDEX_URL);
+    expect(indexUrls).toContain(PYPI_OFFICIAL_URL);
   });
 });
 

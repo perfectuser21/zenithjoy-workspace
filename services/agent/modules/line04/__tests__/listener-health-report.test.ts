@@ -99,4 +99,13 @@ describe('collectListenerHealth — 合成 listen_chat 真实健康', () => {
     expect(msg.found_window).toBe(true);
     expect(msg.last_delivery_ts).toBe(1750000000000);
   });
+
+  // 刀A Task 4：overlay 红灯经健康 IPC 并入心跳 module_status（line04-overlay key）。
+  it('buildHealthStatusMessage 透传 overlay 状态', () => {
+    const msg = buildHealthStatusMessage(
+      { ok: true, listener_alive: true },
+      { ok: false, reason: 'pywebview_missing' },
+    );
+    expect(msg.overlay).toEqual({ ok: false, reason: 'pywebview_missing' });
+  });
 });

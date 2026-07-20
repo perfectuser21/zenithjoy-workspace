@@ -17,6 +17,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { getPythonExe } from './wechat-rpa';
+import { _repairFuncs as preflightRepair } from '../preflight';
 
 // ─── 常量 ─────────────────────────────────────────────────────────────────────
 
@@ -94,6 +95,8 @@ export class OverlayHandler {
   private _userClosed = false;
   private _restartCount = 0;
   private _respawnTimer: ReturnType<typeof setTimeout> | null = null;
+  // 刀A（框框断供根治）：对外可查询的最新状态红灯，Task 4 上报用。
+  private _lastStatus: { ok: boolean; reason?: string } = { ok: false, reason: 'not_started' };
 
   constructor(
     private readonly stateDir: string,
@@ -109,24 +112,42 @@ export class OverlayHandler {
    */
   async start(): Promise<{ spawned: boolean; reason?: string }> {
     // 用户已关闭 → 不重拉（I8）
+    // 审查回归1：此前该分支不写 _lastStatus，导致 getStatus() 残留上一次 {ok:true}，
+    // 对外谎报健康——此处补写（幂等兜底：即便转换从未经过 proc close 回调也能同步）。
     if (this._userClosed) {
+      this._lastStatus = { ok: false, reason: 'user_closed' };
       return { spawned: false, reason: 'user_closed' };
     }
 
     // 熔断 → 不 spawn（I7）
+    // 审查回归1：同上，补写 _lastStatus。
     if (this._circuitOpen) {
+      this._lastStatus = { ok: false, reason: 'circuit_open' };
       return { spawned: false, reason: 'circuit_open' };
     }
 
     // preflight 软检测（调 Python preflight.py）
-    const preflight = await this._runPreflight();
+    let preflight = await this._runPreflight();
+    if (!preflight.ok && preflight.reason === 'pywebview_missing') {
+      // 刀A：依赖缺失先自修复再判死（覆盖 core 换目录场景导致 pywebview 丢失的混沌 P0-1）。
+      // 其他 reason（如 webview2_missing）不触发补装，直接冒泡。
+      const repair = await preflightRepair.installPywebview(
+        getPythonExe(),
+        path.join(os.tmpdir(), 'zenithjoy-setup'),
+      );
+      preflight = repair.ok
+        ? await this._runPreflight()
+        : { ok: false, reason: 'pywebview_install_failed' };
+    }
     if (!preflight.ok) {
+      const reason = preflight.reason ?? 'preflight_failed';
+      this._lastStatus = { ok: false, reason };
       const diag = makeDiag(this.stateDir, {
-        lastError: preflight.reason ?? 'preflight_failed',
+        lastError: reason,
         attachState: 'preflight_failed',
       });
       writeDiag(this.stateDir, diag);
-      return { spawned: false, reason: preflight.reason ?? 'preflight_failed' };
+      return { spawned: false, reason };
     }
 
     // 热更：杀旧进程（互斥体语义）
@@ -135,7 +156,35 @@ export class OverlayHandler {
     // spawn overlay_window.py
     this._spawnOverlay();
 
+    // 审查回归2：_spawnOverlay() 内部对 OVERLAY_SCRIPT（及其内部其他静默 return 分支）缺失时
+    // 只 console.warn 后 return，this._proc 仍为 null；此前这里无条件宣告成功，造成假绿
+    // （进程根本没起来，start() 却回 spawned:true、getStatus() 回 ok:true）。改为凭 this._proc
+    // 是否真的被赋值来判定，兜住 _spawnOverlay 内任何静默 return 分支。
+    if (!this._proc) {
+      const reason = 'overlay_script_missing';
+      this._lastStatus = { ok: false, reason };
+      writeDiag(this.stateDir, makeDiag(this.stateDir, {
+        lastError: reason,
+        attachState: 'spawn_failed',
+      }));
+      return { spawned: false, reason };
+    }
+
+    this._lastStatus = { ok: true };
+    // 刀A：成功态无条件覆写 diag，根除旧失败文件误导排查（混沌 P2-7）。
+    writeDiag(this.stateDir, makeDiag(this.stateDir, {
+      attachState: 'spawned',
+      overlayPid: this._proc.pid ?? null,
+    }));
+
     return { spawned: true };
+  }
+
+  /**
+   * 返回最新一次 start() 的成败状态（供 Task 4 上报用）。
+   */
+  getStatus(): { ok: boolean; reason?: string } {
+    return { ...this._lastStatus };
   }
 
   /**
@@ -274,6 +323,8 @@ export class OverlayHandler {
       // 用户关闭（exit code 0）→ 不重拉（I8）
       if (code === 0) {
         this._userClosed = true;
+        // 审查回归1：转换态同步写 _lastStatus，避免 getStatus() 残留旧 {ok:true}。
+        this._lastStatus = { ok: false, reason: 'user_closed' };
         // 写 overlay-state.json（供测试读取）
         try {
           fs.mkdirSync(this.stateDir, { recursive: true });
@@ -329,6 +380,8 @@ export class OverlayHandler {
       this._crashTimes = this._crashTimes.filter(t => t >= cutoff);
       if (this._crashTimes.length >= CIRCUIT_THRESHOLD) {
         this._circuitOpen = true;
+        // 审查回归1：转换态同步写 _lastStatus，避免 getStatus() 残留旧 {ok:true}。
+        this._lastStatus = { ok: false, reason: 'circuit_open' };
       }
     }
   }
