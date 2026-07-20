@@ -805,3 +805,57 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         }
     }
 }
+
+/**
+ * 无障碍树摘要 dump 的纯逻辑核心，对泛型 T 操作，不碰 Android SDK——JVM 单测环境
+ * 无 Mockito/Robolectric，用这个把可测的核心逻辑和真实 AccessibilityNodeInfo 遍历分离
+ * （sprint 07201209，账号扫描失败诊断，同 ScreenCaptureService 的注入 lambda 写法）。
+ *
+ * 顶层函数（非类成员/非 companion 成员）：需要在同包内不加限定符直接调用
+ * （见 [DeviceAccountScanServiceTreeDumpTest]），companion object 成员在 Kotlin 里
+ * 仍需 `DeviceAccountScanService.xxx` 限定调用，不满足这个要求。
+ */
+fun <T> dumpNodesGeneric(
+    root: T?,
+    limit: Int,
+    getClassName: (T) -> String,
+    getText: (T) -> String?,
+    getContentDesc: (T) -> String?,
+    getClickable: (T) -> Boolean,
+    getBoundsWH: (T) -> Pair<Int, Int>,
+    getChildCount: (T) -> Int,
+    getChild: (T, Int) -> T?,
+): String {
+    if (root == null) return "DUMP root=null"
+    val sb = StringBuilder()
+    val queue = ArrayDeque<T>()
+    queue.add(root)
+    var n = 0
+    while (queue.isNotEmpty() && n < limit) {
+        val node = queue.removeFirst()
+        val (w, h) = getBoundsWH(node)
+        val desc = getContentDesc(node)?.take(40)
+        val txt = getText(node)?.take(40)
+        val clickable = getClickable(node)
+        if (!desc.isNullOrBlank() || !txt.isNullOrBlank() || clickable) {
+            sb.appendLine("#$n cls=${getClassName(node)} click=$clickable b=${w}x${h} desc=$desc txt=$txt")
+            n++
+        }
+        for (i in 0 until getChildCount(node)) getChild(node, i)?.let { queue.add(it) }
+    }
+    sb.appendLine("end printed=$n")
+    return sb.toString()
+}
+
+/** 真实 AccessibilityNodeInfo 适配层，调用上面的纯逻辑核心。供 Task 2 在失败路径调用。 */
+fun dumpNodeTreeAsString(root: AccessibilityNodeInfo?, limit: Int = 80): String = dumpNodesGeneric(
+    root = root,
+    limit = limit,
+    getClassName = { it.className?.toString() ?: "" },
+    getText = { it.text?.toString() },
+    getContentDesc = { it.contentDescription?.toString() },
+    getClickable = { it.isClickable },
+    getBoundsWH = { node -> val b = Rect(); node.getBoundsInScreen(b); b.width() to b.height() },
+    getChildCount = { it.childCount },
+    getChild = { node, i -> node.getChild(i) },
+)
