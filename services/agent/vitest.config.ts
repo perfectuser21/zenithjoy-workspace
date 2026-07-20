@@ -26,6 +26,8 @@ export default defineConfig({
       '../../sprints/06220836-agent-client-encapsulation/tests/**/*.test.ts',
       // Line04 DesktopLeaseBroker 状态机 sprint 合约测试
       '../../sprints/0703-line04-desktop-lease-broker/tests/**/*.test.ts',
+      // install-pack __tests__（setup-reset-ps1 合约静态断言）
+      'install-pack/**/__tests__/**/*.test.ts',
     ],
     // 巡检 2026-07-12 收编债已清偿：4 个 publisher 的 node:test CJS 测试已迁移到 vitest globals，
     // 不再需要排除，随 publishers/**/__tests__/**/*.test.cjs 的 include 正常跑。

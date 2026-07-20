@@ -26,6 +26,8 @@ export default defineConfig({
       '../../sprints/07052218-douyin-dm-outreach-android/tests/*.test.ts',
       // Line04 AI 思考浮窗：wechat-draft reasoning 三路断言（normal/fallback/PII）
       '../../sprints/07121132-line04-ai-thinking-overlay/tests/**/*.test.ts',
+      // 刀B M1 安装器清环境 + 死路消灭 sprint 合约测试（boot-fail API + setup-reset + start.bat）
+      '../../sprints/07201700-installer-env-reset-m1/tests/**/*.test.ts',
     ],
     exclude: ['node_modules/**', 'tests/integration/**', 'tests/ws1/**', 'tests/ws2/**', 'tests/ws3/**', 'tests/ws4/**', 'tests/ws5/**', 'tests/ws6/**'],
     coverage: {
