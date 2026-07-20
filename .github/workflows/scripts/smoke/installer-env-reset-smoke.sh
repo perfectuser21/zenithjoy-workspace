@@ -62,7 +62,8 @@ if command -v reg.exe &>/dev/null 2>&1 || command -v reg &>/dev/null 2>&1; then
   fi
 
   # Assert no stale ZENITHJOY_* keys remain (keys not in .env declaration)
-  STALE_COUNT=$("$REG_CMD" query "HKCU\\Environment" 2>/dev/null | grep -i "ZENITHJOY_STALE" 2>/dev/null | wc -l)
+  # { ... || true; } prevents pipefail from propagating grep's exit 1 (no match) into set -e
+  STALE_COUNT=$({ "$REG_CMD" query "HKCU\\Environment" 2>/dev/null | grep -i "ZENITHJOY_STALE" 2>/dev/null || true; } | wc -l)
   STALE_COUNT="${STALE_COUNT// /}"
   if [ "$STALE_COUNT" = "0" ]; then
     ok "No undeclared ZENITHJOY_* keys in HKCU after setup-reset"
