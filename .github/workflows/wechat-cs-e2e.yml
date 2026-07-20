@@ -203,7 +203,7 @@ jobs:
           ZJ_STATE_DIR: ${{ runner.temp }}/overlay-probe-state
         run: |
           mkdir -p "$ZJ_STATE_DIR"
-          python -m pip install --quiet pywebview -i https://pypi.tuna.tsinghua.edu.cn/simple
+          python -m pip install --quiet pywebview==6.2.1 -i https://pypi.tuna.tsinghua.edu.cn/simple
           python overlay/overlay_window.py --probe
           echo "BEHAVIOR-1 PASS: pywebview 建窗探针 exit_code=0"
 
