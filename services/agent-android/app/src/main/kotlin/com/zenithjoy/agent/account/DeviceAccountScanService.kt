@@ -11,6 +11,9 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import com.zenithjoy.agent.MediaProjectionHolder
+import com.zenithjoy.agent.ScreenCaptureReal
+import com.zenithjoy.agent.ScreenCaptureService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -148,7 +151,8 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
                 previousKnownIds = DeviceAccountRegistry.snapshot().keys.toList(),
                 freshlyScannedRawIds = emptyList(),
             )
-            sendScanResultBroadcast(requestId, ok = false, stale = resolution.stale, accountIds = resolution.accountIds, errorCode = "OPEN_PANEL_FAILED")
+            val (screenshotB64, treeDump) = captureFailureDiagnostics()
+            sendScanResultBroadcast(requestId, ok = false, stale = resolution.stale, accountIds = resolution.accountIds, errorCode = "OPEN_PANEL_FAILED", screenshotB64 = screenshotB64, treeDump = treeDump)
             return
         }
 
@@ -196,7 +200,8 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         }
 
         // Step 8（出口）：结果广播给 AgentService，由它调用中台接口写回 agent_platform_sessions。
-        sendScanResultBroadcast(requestId, ok = readSucceeded, stale = resolution.stale, accountIds = resolution.accountIds, errorCode = if (readSucceeded) "" else "READ_FAILED")
+        val (screenshotB64, treeDump) = if (readSucceeded) null to null else captureFailureDiagnostics()
+        sendScanResultBroadcast(requestId, ok = readSucceeded, stale = resolution.stale, accountIds = resolution.accountIds, errorCode = if (readSucceeded) "" else "READ_FAILED", screenshotB64 = screenshotB64, treeDump = treeDump)
 
         state = State.CLOSING_SWITCH_ACCOUNT_PANEL
         closeSwitchAccountPanel()
@@ -610,7 +615,10 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
 
     // ── 结果上报 ──────────────────────────────────────────────────────────────
 
-    private fun sendScanResultBroadcast(requestId: String, ok: Boolean, stale: Boolean, accountIds: List<String>, errorCode: String) {
+    private fun sendScanResultBroadcast(
+        requestId: String, ok: Boolean, stale: Boolean, accountIds: List<String>, errorCode: String,
+        screenshotB64: String? = null, treeDump: String? = null,
+    ) {
         val intent = Intent(ACTION_ACCOUNT_SCAN_RESULT).apply {
             setPackage(applicationContext.packageName)
             putExtra(EXTRA_REQUEST_ID, requestId)
@@ -618,9 +626,33 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
             putExtra(EXTRA_RESULT_STALE, stale)
             putExtra(EXTRA_RESULT_ACCOUNT_IDS, accountIds.toTypedArray())
             putExtra(EXTRA_ERROR, errorCode)
+            if (screenshotB64 != null) putExtra(EXTRA_SCREENSHOT_B64, screenshotB64)
+            if (treeDump != null) putExtra(EXTRA_TREE_DUMP, treeDump)
         }
         sendBroadcast(intent)
-        android.util.Log.i(TAG, "account scan result broadcast: requestId=$requestId ok=$ok stale=$stale accounts=${accountIds.size} error=$errorCode")
+        android.util.Log.i(TAG, "account scan result broadcast: requestId=$requestId ok=$ok stale=$stale accounts=${accountIds.size} error=$errorCode hasScreenshot=${screenshotB64 != null}")
+    }
+
+    /**
+     * 失败诊断捕获：截图（未授权/失败则 null，不阻塞上报）+ 当前无障碍树摘要。
+     * 只在 OPEN_PANEL_FAILED/READ_FAILED 路径调用，成功路径不产生额外开销（sprint 07201209）。
+     */
+    private fun captureFailureDiagnostics(): Pair<String?, String?> {
+        val screenshot = try {
+            ScreenCaptureService(
+                ScreenCaptureReal.buildCaptureImpl(this) { MediaProjectionHolder.getOrCreateProjection(this) }
+            ).captureToBase64()
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "failure screenshot capture threw: ${e.message}")
+            null
+        }
+        val tree = try {
+            dumpNodeTreeAsString(rootInActiveWindow)
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "failure tree dump threw: ${e.message}")
+            null
+        }
+        return screenshot to tree
     }
 
     companion object {
@@ -639,6 +671,8 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         const val EXTRA_RESULT_STALE = "result_stale"
         const val EXTRA_RESULT_ACCOUNT_IDS = "result_account_ids"
         const val EXTRA_ERROR = "error"
+        const val EXTRA_SCREENSHOT_B64 = "screenshot_b64"
+        const val EXTRA_TREE_DUMP = "tree_dump"
         const val ACTION_ACCOUNT_WARMUP_TASK = "com.zenithjoy.agent.ACCOUNT_WARMUP_TASK"
         const val ACTION_ACCOUNT_WARMUP_RESULT = "com.zenithjoy.agent.ACCOUNT_WARMUP_RESULT"
         const val EXTRA_OPERATOR_NICKNAME = "operator_nickname"
