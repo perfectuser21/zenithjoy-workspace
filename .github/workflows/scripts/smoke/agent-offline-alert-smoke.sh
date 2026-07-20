@@ -25,6 +25,7 @@ DB_URL="${DATABASE_URL:-}"
 MOCK_PORT="${MOCK_PORT:-19997}"
 TEST_AGENT_ID="e2e-offline-smoke-$(date +%s)"
 TEST_HOSTNAME="e2e-offline-host-$(date +%s)"
+SMOKE_TENANT_ID=""
 MOCK_PID=""
 
 # ── 辅助函数 ──────────────────────────────────────────────────────────────────
@@ -38,6 +39,9 @@ cleanup() {
   fi
   if [ -n "$DB_URL" ]; then
     psql "$DB_URL" -c "DELETE FROM zenithjoy.agents WHERE agent_id='${TEST_AGENT_ID}';" 2>/dev/null || true
+    if [ -n "$SMOKE_TENANT_ID" ]; then
+      psql "$DB_URL" -c "DELETE FROM zenithjoy.tenants WHERE id='${SMOKE_TENANT_ID}';" 2>/dev/null || true
+    fi
   fi
 }
 trap cleanup EXIT
@@ -106,9 +110,15 @@ pass "webhook mock server 已启动（pid=${MOCK_PID}）"
 
 # ── 步骤 2：造 stale Windows agent 行 ────────────────────────────────────────
 log "=== 步骤 2：造 stale Windows agent（updated_at = NOW() - 5h）==="
-TENANT_ID="smoke-tenant-offline-alert"
 
-psql "$DB_URL" <<SQL
+# 先建测试 tenant（agents.tenant_id 是 uuid NOT NULL REFERENCES zenithjoy.tenants(id)）
+SMOKE_TENANT_ID=$(psql "$DB_URL" -At -v ON_ERROR_STOP=1 \
+  -c "INSERT INTO zenithjoy.tenants (name, license_key, plan) VALUES ('offline-smoke-${TEST_AGENT_ID}', 'offline-key-${TEST_AGENT_ID}', 'free') RETURNING id" \
+  | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
+[ -n "$SMOKE_TENANT_ID" ] || fail "建测试 tenant 失败（SMOKE_TENANT_ID 为空）"
+log "测试 tenant 已创建：${SMOKE_TENANT_ID}"
+
+psql "$DB_URL" -v ON_ERROR_STOP=1 <<SQL
 INSERT INTO zenithjoy.agents (agent_id, hostname, platform, status, updated_at, last_seen, tenant_id)
 VALUES (
   '${TEST_AGENT_ID}',
@@ -117,15 +127,16 @@ VALUES (
   'online',
   NOW() - INTERVAL '5 hours',
   NOW() - INTERVAL '5 hours',
-  '${TENANT_ID}'
+  '${SMOKE_TENANT_ID}'
 )
 ON CONFLICT (agent_id) DO UPDATE SET
   updated_at = NOW() - INTERVAL '5 hours',
   last_seen  = NOW() - INTERVAL '5 hours',
   status     = 'online',
-  platform   = 'windows';
+  platform   = 'windows',
+  tenant_id  = EXCLUDED.tenant_id;
 SQL
-pass "stale agent 行已插入（agent_id=${TEST_AGENT_ID}）"
+pass "stale agent 行已插入（agent_id=${TEST_AGENT_ID}, tenant_id=${SMOKE_TENANT_ID}）"
 
 # ── 步骤 3：触发扫描（覆盖 webhook 到 mock）────────────────────────────────
 log "=== 步骤 3：POST /api/internal/agent-offline-scan ==="
