@@ -9,12 +9,13 @@
  * 运行：npx vitest run services/agent/modules/line04/__tests__/overlay-handler.test.ts
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { buildPreflightCommand } from '../handlers/overlay';
+import { buildPreflightCommand, OverlayHandler } from '../handlers/overlay';
+import { _repairFuncs as preflightRepair } from '../preflight';
 
 // ─── OverlayHandler 导入（第二刀实现后解注释）────────────────────────────────
 // import { OverlayHandler } from '../handlers/overlay';
@@ -278,5 +279,82 @@ describe('overlay preflight python 命令字符串 — Windows 路径转义回�
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+});
+
+// ─── 刀A：pywebview 缺失自动补装 + 状态红灯 + diag 成功态覆写 ───────────────────
+//
+// 背景（0720 框框死3天事故）：overlay preflight 报 pywebview_missing 时旧行为只写 diag 不
+// spawn，静默降级（没有对外可查询的红灯状态，只有本地 diag 文件）。刀A 让 OverlayHandler：
+//   1. preflight_reason===pywebview_missing 时先自动补装（Task 2 _repairFuncs.installPywebview）
+//      再复检一次，补装失败则冒泡为 pywebview_install_failed 并写入 getStatus() 供上报（Task 4）。
+//   2. start() 成功 spawn 后无条件覆写 diag（attach_state='spawned'，last_error=''），
+//      根除旧失败文件误导排查（混沌P2-7）。
+//
+// 用真实 OverlayHandler（非 stub）：_runPreflight 是私有方法，用 vi.spyOn(handler as any, ...)
+// 拦截；_spawnOverlay 内部对 OVERLAY_SCRIPT 的 fs.existsSync 检测短路成 false，避免测试真的
+// spawn 一个 python 子进程（start() 的 spawned:true 语义在返回值层面即成立，不依赖子进程真的
+// 跑起来——这与既有「preflight pass spawns overlay」stub 测试的抽象层级一致）。
+describe('刀A 供给自愈+红灯', () => {
+  let stateDir: string;
+  let handler: OverlayHandler;
+
+  beforeEach(() => {
+    stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-repair-test-'));
+    handler = new OverlayHandler(stateDir, '1.0.0');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('preflight 报 pywebview_missing → 自动补装后重试,补装失败 → getStatus 红且 reason=pywebview_install_failed', async () => {
+    vi.spyOn(handler as any, '_runPreflight')
+      .mockResolvedValue({ ok: false, reason: 'pywebview_missing' });
+    vi.spyOn(preflightRepair, 'installPywebview')
+      .mockResolvedValue({ ok: false, reason: 'pywebview_install_failed' });
+
+    const r = await handler.start();
+
+    expect(r.spawned).toBe(false);
+    expect(handler.getStatus()).toEqual({ ok: false, reason: 'pywebview_install_failed' });
+  });
+
+  it('补装成功且复检通过 → 正常 spawn 且 getStatus ok:true', async () => {
+    // OVERLAY_SCRIPT 的 existsSync 检测短路为 false（不真的 spawn python 子进程），其余路径照旧。
+    vi.spyOn(fs, 'existsSync').mockImplementation(
+      (p: fs.PathLike) => !String(p).includes('overlay_window.py'),
+    );
+    vi.spyOn(handler as any, '_runPreflight')
+      .mockResolvedValueOnce({ ok: false, reason: 'pywebview_missing' })
+      .mockResolvedValueOnce({ ok: true });
+    vi.spyOn(preflightRepair, 'installPywebview').mockResolvedValue({ ok: true });
+
+    const r = await handler.start();
+
+    expect(r.spawned).toBe(true);
+    expect(handler.getStatus().ok).toBe(true);
+  });
+
+  it('start 成功路径也覆写 diag(旧失败态不残留)', async () => {
+    vi.spyOn(fs, 'existsSync').mockImplementation(
+      (p: fs.PathLike) => !String(p).includes('overlay_window.py'),
+    );
+    vi.spyOn(handler as any, '_runPreflight').mockResolvedValue({ ok: true });
+
+    // 先造一份 last_error 非空的旧 diag 文件
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, 'overlay-diag.json'),
+      JSON.stringify({ last_error: 'stale_failure', attach_state: 'preflight_failed' }, null, 2),
+      'utf-8',
+    );
+
+    const r = await handler.start();
+    expect(r.spawned).toBe(true);
+
+    const diag = JSON.parse(fs.readFileSync(path.join(stateDir, 'overlay-diag.json'), 'utf-8'));
+    expect(diag.attach_state).toBe('spawned');
+    expect(diag.last_error).toBe('');
   });
 });
