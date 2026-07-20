@@ -128,10 +128,17 @@ try {
     )
     $result = schtasks @createArgs 2>&1
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "[ERROR] schtasks /create failed: $result"
-        throw "schtasks /create ZenithJoyAgent failed (exit $LASTEXITCODE)"
+        # /it (interactive-only) fails on headless CI runners; retry without it
+        $createArgsFallback = $createArgs | Where-Object { $_ -ne "/it" }
+        $result2 = schtasks @createArgsFallback 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "[WARN] schtasks /create failed (exit $LASTEXITCODE): $result2 -- autostart not registered (non-fatal for env cleanup)"
+        } else {
+            Write-Host "[setup-reset] ZenithJoyAgent scheduled task re-created (ONLOGON, LIMITED, no /it)"
+        }
+    } else {
+        Write-Host "[setup-reset] ZenithJoyAgent scheduled task re-created (ONLOGON, LIMITED, /it)"
     }
-    Write-Host "[setup-reset] ZenithJoyAgent scheduled task re-created (ONLOGON, LIMITED, /it)"
 
     Write-Host "[setup-reset] done"
 

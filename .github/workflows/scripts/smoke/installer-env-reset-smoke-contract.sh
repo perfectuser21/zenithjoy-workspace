@@ -139,7 +139,11 @@ if [ -f "$INSTALLPACK_DIR/start.bat" ]; then
   if command -v cmd.exe &>/dev/null 2>&1; then
     (
       cd "$INSTALLPACK_DIR"
-      timeout 30 cmd.exe /c "SET ZJ_LAUNCH_PROBE=1 && call start.bat" 2>&1 || true
+      # Pass env var through bash export so cmd.exe inherits it via the process environment block;
+      # "SET VAR=1 && call bat" inside cmd.exe /c is unreliable on MSYS2/Git Bash (quoting/parse).
+      export ZJ_LAUNCH_PROBE=1
+      timeout 30 cmd.exe /c "call start.bat" 2>&1 || true
+      unset ZJ_LAUNCH_PROBE
     )
     if [ -f "$PROBE_MARKER" ]; then
       PROBE_CONTENT=$(cat "$PROBE_MARKER")
@@ -215,7 +219,11 @@ PYEOF
     (
       cd "$INSTALLPACK_DIR"
       BF_ENDPOINT="http://localhost:18099/api/agent/boot-fail"
-      timeout 30 cmd.exe /c "SET ZJ_BOOT_FAIL_TEST=1 && SET ZENITHJOY_BOOT_FAIL_ENDPOINT=$BF_ENDPOINT && call start.bat" 2>&1 | tail -10 || true
+      # Pass env vars through bash export (same reason as A-5: SET inside cmd.exe /c is unreliable)
+      export ZJ_BOOT_FAIL_TEST=1
+      export ZENITHJOY_BOOT_FAIL_ENDPOINT="$BF_ENDPOINT"
+      timeout 30 cmd.exe /c "call start.bat" 2>&1 | tail -10 || true
+      unset ZJ_BOOT_FAIL_TEST ZENITHJOY_BOOT_FAIL_ENDPOINT
     )
   else
     mkdir -p "$AGENT_DATA_DIR"
