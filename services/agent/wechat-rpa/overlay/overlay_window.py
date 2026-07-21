@@ -20,6 +20,7 @@ import shutil
 import sys
 import threading
 import time
+import webbrowser
 from pathlib import Path
 from typing import Optional
 
@@ -880,7 +881,6 @@ setInterval(poll, 500);
         通过 webbrowser.open 在系统默认浏览器打开中台 URL（Inv-15：外部浏览器，非嵌入渲染）。
         Gate G：xian-rog 真机验证 Windows webbrowser.open 可用性。
         """
-        import webbrowser  # noqa: PLC0415
         if not wechat_id:
             # 无 wechat_id 时尝试使用缓存
             wechat_id = self._current_wechat_id or ""
