@@ -124,6 +124,116 @@ async function fetchLatestSmokeRun(hints: string[]): Promise<GitHubRun | null> {
   return matched ?? null;
 }
 
+// ─── 飞书登录（公开路由，不受 staffGuard 保护 —— 登录前谈不上"已登录"）───────
+const FEISHU_API_BASE = process.env.FEISHU_API_BASE ?? 'https://open.feishu.cn';
+
+function parseStaffEmailsForLogin(): string[] {
+  const raw = process.env.STAFF_EMAILS ?? '';
+  return raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+}
+
+interface FeishuAppAccessTokenResp {
+  code: number;
+  msg?: string;
+  app_access_token?: string;
+  expire?: number;
+}
+
+interface FeishuUserInfoResp {
+  code: number;
+  msg?: string;
+  data?: {
+    open_id?: string;
+    name?: string;
+    email?: string;
+    access_token?: string;
+  };
+}
+
+async function fetchFeishuAppAccessToken(appId: string, appSecret: string): Promise<string> {
+  const resp = await axios.post<FeishuAppAccessTokenResp>(
+    `${FEISHU_API_BASE}/open-apis/auth/v3/app_access_token/internal`,
+    { app_id: appId, app_secret: appSecret },
+    { headers: { 'Content-Type': 'application/json' }, timeout: 10000 }
+  );
+  const data = resp.data || ({} as FeishuAppAccessTokenResp);
+  if (data.code !== 0 || !data.app_access_token) {
+    throw new Error(`FEISHU_APP_TOKEN_ERROR: code=${data.code ?? 'unknown'} msg=${data.msg ?? ''}`);
+  }
+  return data.app_access_token;
+}
+
+async function fetchFeishuUserByCode(
+  appAccessToken: string,
+  code: string
+): Promise<{ openId: string; name: string; email: string; accessToken: string }> {
+  const resp = await axios.post<FeishuUserInfoResp>(
+    `${FEISHU_API_BASE}/open-apis/authen/v1/access_token`,
+    { grant_type: 'authorization_code', code },
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${appAccessToken}`,
+      },
+      timeout: 10000,
+    }
+  );
+  const data = resp.data || ({} as FeishuUserInfoResp);
+  if (data.code !== 0 || !data.data) {
+    throw new Error(`FEISHU_USER_INFO_ERROR: code=${data.code ?? 'unknown'} msg=${data.msg ?? ''}`);
+  }
+  const { open_id, name, email, access_token } = data.data;
+  if (!open_id || !access_token) {
+    throw new Error('FEISHU_USER_INFO_EMPTY: 飞书返回缺少 open_id/access_token');
+  }
+  return { openId: open_id, name: name ?? '', email: (email ?? '').toLowerCase(), accessToken: access_token };
+}
+
+router.post('/feishu-login', async (req, res): Promise<void> => {
+  const code = typeof req.body?.code === 'string' ? req.body.code : '';
+  if (!code) {
+    res.status(400).json({ success: false, error: '缺少飞书授权 code' });
+    return;
+  }
+
+  const appId = process.env.FEISHU_APP_ID;
+  const appSecret = process.env.FEISHU_APP_SECRET;
+  if (!appId || !appSecret) {
+    res.status(500).json({ success: false, error: '服务端未配置 FEISHU_APP_ID/FEISHU_APP_SECRET' });
+    return;
+  }
+
+  try {
+    const appAccessToken = await fetchFeishuAppAccessToken(appId, appSecret);
+    const feishuUser = await fetchFeishuUserByCode(appAccessToken, code);
+
+    if (!feishuUser.email) {
+      res.status(403).json({ success: false, error: '飞书账号未绑定邮箱，无法核对员工白名单' });
+      return;
+    }
+
+    const staffEmails = parseStaffEmailsForLogin();
+    if (!staffEmails.includes(feishuUser.email)) {
+      res.status(403).json({ success: false, error: '该飞书账号邮箱不在员工白名单内' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      user: {
+        id: feishuUser.openId,
+        name: feishuUser.name || feishuUser.email,
+        email: feishuUser.email,
+        feishu_user_id: feishuUser.openId,
+        access_token: feishuUser.accessToken,
+      },
+    });
+  } catch (err) {
+    const message = axios.isAxiosError(err) ? err.message : (err as Error).message;
+    res.status(502).json({ success: false, error: `飞书登录失败：${message}` });
+  }
+});
+
 router.use(staffGuard);
 
 router.post('/skill-eval/upload', upload.single('file'), async (req, res): Promise<void> => {
