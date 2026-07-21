@@ -599,6 +599,11 @@ acquisitionRouter.post('/collect/start', tenantContextOptional, async (req: Requ
 
     // 方案 D：选了抖音小号 → 任务必须派到持有该 session 的机器（物理约束，覆盖手选的 agent_id）
     if (accountLabel) {
+      // TODO(follow-up，见 sprints/07212205-fix-dispatch-dedup-crosstenant)：LIMIT 1 无
+      // ORDER BY，若同租户下同一 account_label 绑了两条 active session，取哪条不确定。
+      // 跟 acquisition-dispatch.ts dispatchDue 那次 P0 修复是同一类问题（那边加了
+      // ORDER BY s.bound_at DESC NULLS LAST 保证确定性），这里租户隔离本身没问题（INNER
+      // JOIN + WHERE 天然排除跨租户），但确定性这半个问题还没堵，留着下次一起处理。
       const sessionRes = await pool.query<{ agent_id: string }>(
         `SELECT a.agent_id AS agent_id
            FROM zenithjoy.agent_platform_sessions s

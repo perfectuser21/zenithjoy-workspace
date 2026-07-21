@@ -399,12 +399,17 @@ export async function buildAssignments(
   const onlineBurnerSet = new Set(burners);
   for (const qRow of queuedRemapRes.rows as { id: string; lead_id: string; account_label: string }[]) {
     if (!onlineBurnerSet.has(qRow.account_label)) {
+      // Fix 3（P0 串台/重复触达附带修复）：dispatch_reason 不再无痕清空成 NULL，
+      // 记录"曾经指派给谁、因为掉线被重标"——这条记录若被 Step D/E 重新指派，
+      // dispatch_reason 会被那时写入的新原因（如 'least_load'）覆盖，属预期行为，
+      // 这里只保住"重标那一刻"的审计轨迹（员工反馈"指派小号与实际触达账号不一致，
+      // 无法排查"的根因就是这里被清空成 NULL）。
       await pool.query(
         `UPDATE zenithjoy.dm_assignments
            SET status = 'pending_dispatch', account_label = '', scheduled_for = NULL,
-               dispatch_reason = NULL, updated_at = now()
+               dispatch_reason = $2, updated_at = now()
          WHERE id = $1 AND status = 'queued'`,
-        [qRow.id]
+        [qRow.id, `offline_reassign_from:${qRow.account_label}`]
       );
     }
   }
@@ -509,12 +514,34 @@ export async function buildAssignments(
   // ★ Step E: 处理已评分且 outreach_eligible=true 的 leads（按分降序）
   // content-judgment-gate FR-8：只对 outreach_eligible=true 的 leads 派发 DM 任务
   // outreach_eligible IS NULL 视为旧数据（未跑 rescoreLead），允许通过（向后兼容）
+  // Fix 1（P0 串台/重复触达根治）：加线索级 NOT EXISTS 排除——一条线索只要已经有
+  // 任何非终态指派（不管是哪个 account_label）或已有真实发送记录，这一轮就不再把它
+  // 当候选。原来的过滤只到 outreach_eligible，不看 dm_assignments/dm_outreach_log，
+  // buildAssignments 每次重跑（采集完成/超时清扫/手动派单都会触发）都会把已经处理过
+  // 的线索重新纳入候选池，只要还有小号槽位空着就会真实二次派单——staging 实锤 7 条
+  // 线索被 2-3 个不同小号各派一次。循环内部 (tenant_id, lead_id, account_label) 粒度
+  // 的去重检查（下面 Step D/E 里的 dup 查询）保留不动，作为并发场景下的次要安全网。
+  // cast 约定同 ~380 行 burnersRes 注释：l.tenant_id 是 uuid，da.tenant_id/dol.tenant_id
+  // 都是 text，Postgres 对同一个 $1 全语句只推断一种类型——outer l.tenant_id = $1 在语句里
+  // 最先出现，$1 会被定型为 uuid，两条 NOT EXISTS 子查询里 text 列再拿 $1 比较就报错
+  // "operator does not exist: text = uuid"（CI 真实 Postgres 实测命中）。必须转的还是
+  // uuid 这一侧：l.tenant_id::text = $1，让 $1 定型为 text，子查询原样 text = $1 即可通过；
+  // 反过来在子查询里改成 da.tenant_id = $1::text 只是把 $1 显式钉死成 uuid，报错原地不动。
   const leadsRes = await pool.query(
-    `SELECT id, profile_url, COALESCE(relevance_score, 0) AS relevance_score
-       FROM zenithjoy.acquisition_leads
-      WHERE tenant_id = $1 AND relevance_score IS NOT NULL
-        AND (outreach_eligible IS NULL OR outreach_eligible = true)
-      ORDER BY relevance_score DESC, created_at ASC`,
+    `SELECT l.id, l.profile_url, COALESCE(l.relevance_score, 0) AS relevance_score
+       FROM zenithjoy.acquisition_leads l
+      WHERE l.tenant_id::text = $1 AND l.relevance_score IS NOT NULL
+        AND (l.outreach_eligible IS NULL OR l.outreach_eligible = true)
+        AND NOT EXISTS (
+          SELECT 1 FROM zenithjoy.dm_assignments da
+           WHERE da.tenant_id = $1 AND da.lead_id = l.id
+             AND da.status IN ('queued', 'dispatched', 'sent', 'pending_dispatch')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM zenithjoy.dm_outreach_log dol
+           WHERE dol.tenant_id = $1 AND dol.lead_id = l.id AND dol.status = 'sent'
+        )
+      ORDER BY l.relevance_score DESC, l.created_at ASC`,
     [tenantId]
   );
 
@@ -683,15 +710,31 @@ export async function dispatchDue(
     // agent capabilities（用于判定 device_platform——按 agents.capabilities 独立判定，
     // 不派生自 agents.os_type，见 contract-draft.md "device_platform 与既有 agents.os_type
     // 关系澄清" 段）。douyin_id 是 Seg3 点头像进主页读出的真实抖音号，Android 通道必需。
+    // Fix 2（P0 附带修复，跨租户串号风险）：原查询的 agent_platform_sessions JOIN
+    // 没有 tenant_id 过滤，若两个不同租户恰好有相同 account_label 的小号，理论上会
+    // 查到别的租户的 session/agent；LIMIT 1 又没有 ORDER BY，多行匹配时结果不确定。
+    // 注意：tenant 过滤必须挂在 s（agent_platform_sessions）的 JOIN 条件上，不能只加在
+    // 后面 agents 的 JOIN 上——否则 s.agent_id 本身就可能已经是别的租户的会话，capabilities
+    // 因为 ag 那层过滤不上而变成 NULL，但 resolveDevicePlatform(null) 会默认落到 'windows'
+    // 通道，agentId 依然非空，isDmDispatchable 照样放行，跨租户串号的口子并没有真正堵上。
+    // 用 EXISTS 把 tenant 过滤前移到 s 的 JOIN 条件里，确保 s（进而 s.agent_id）从一开始
+    // 就只会匹配到当前租户（$3）名下的 session；cast 侧沿用 buildAssignments burnersRes
+    // 同款约定（~380 行注释——agents.tenant_id 是 uuid，转 ::text 去跟 $3 比较）。
+    // + 显式 ORDER BY s.bound_at DESC NULLS LAST 兜底 LIMIT 1 的确定性。
     const leadRes = await pool.query(
       `SELECT l.profile_url, l.douyin_id, s.agent_id, ag.capabilities
          FROM zenithjoy.acquisition_leads l
          LEFT JOIN zenithjoy.agent_platform_sessions s
            ON s.account_label = $2 AND s.platform = 'douyin' AND s.role = 'burner' AND s.status = 'active'
+           AND EXISTS (
+             SELECT 1 FROM zenithjoy.agents a3
+              WHERE a3.id = s.agent_id AND a3.tenant_id::text = $3
+           )
          LEFT JOIN zenithjoy.agents ag ON ag.id = s.agent_id
          WHERE l.id = $1
+         ORDER BY s.bound_at DESC NULLS LAST
          LIMIT 1`,
-      [row.lead_id, label]
+      [row.lead_id, label, tenantId]
     );
     const profileUrl = leadRes.rows[0]?.profile_url ?? null;
     const douyinId = leadRes.rows[0]?.douyin_id ?? null;
