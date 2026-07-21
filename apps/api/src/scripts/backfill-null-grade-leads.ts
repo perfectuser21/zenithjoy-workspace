@@ -6,11 +6,25 @@
  * acquisition_config 没有历史时间戳/版本表，没法准确判断"某条历史评论被判定时画像
  * 是不是空的"——若不加保护，会把当时确实没画像（本该是 null）的记录也补出假意向。
  *
- * 安全边界：只处理 commented_at 晚于该租户 acquisition_config.created_at 的记录
- * （用 created_at 作为"画像最早可能非空"的保守下界）。已知局限：若租户曾经清空画像
- * 又重新填写，created_at 无法反映这段"清空期"，仍可能误纳入——所以本脚本产出结果
- * 不自动联动 outreach_eligible/派发，跑完打印候选名单，必须人工复核后再手动触发
- * /api/acquisition/rescore-lead 或改库。
+ * 安全边界：只处理 commented_at 晚于该租户 acquisition_config.updated_at 的记录
+ * （用 updated_at 而非 created_at 作为"画像最早可能非空"的保守下界——租户常见的
+ * 建库顺序是先 PUT /config 建行填其他运营参数（burner_count/dm_per_hour 等），
+ * 此时画像仍是空的，之后才通过 PATCH /config 真正填入 target_profile_desc，
+ * 后者只会推进 updated_at、不改 created_at。若仍用 created_at 做下界，会把
+ * "config 行已存在但画像其实还空着"这段窗口内的评论误判为可安全 backfill，
+ * 反而伪造出当时并不存在的意向信号。用 updated_at 只会让下界更靠后、纳入更少，
+ * 是严格更保守的方向，符合"宁可漏判不可误判"原则）。已知局限：若租户曾经清空
+ * 画像又重新填写，updated_at 只能反映"最后一次触碰 config"的时间，无法区分
+ * 中间的清空期——但这仍是保守方向（可能漏纳入，不会误纳入），不是危险方向。
+ * 因此本脚本产出结果不自动联动 outreach_eligible/派发，跑完打印候选名单，
+ * 必须人工复核后再手动触发 /api/acquisition/rescore-lead 或改库。
+ *
+ * 已知局限（评分上下文缺失）：本脚本调用 gradeComments 时 title/transcript 固定传 null，
+ * 因为 acquisition_lead_comments 没有廉价可关联到具体视频的字段（video_id 可空，
+ * 且 acquisition_collect_videos 主键是复合的 (task_id, video_id)，评论行上没有）。
+ * 也就是说 backfill 出的 grade 是在没有视频标题/转写上下文的情况下算出来的，
+ * 信号强度弱于生产实时判定路径（/collect/report 会带上视频标题+转写）——
+ * 人工复核候选名单时需要把这点考虑进去。
  *
  * 用法：
  *   npx ts-node src/scripts/backfill-null-grade-leads.ts --dry-run   # 只打印不写库
@@ -25,6 +39,9 @@ export interface CandidateRow {
   tenantId: string;
   commentText: string | null;
   commentedAt: Date;
+  /** 安全下界时间戳——由 main() 用 acquisition_config.updated_at 填充，
+   *  字段名沿用 configCreatedAt 是为了不动既有单测构造的对象形状，
+   *  语义是"该租户 config 行最近一次被写入的时间"，不特指 created_at 列。 */
   configCreatedAt: Date | null;
 }
 
@@ -52,16 +69,20 @@ interface RawRow {
   tenant_id: string;
   comment_text: string | null;
   commented_at: string;
-  config_created_at: string | null;
+  config_updated_at: string | null;
   target_profile_desc: string | null;
 }
 
 async function main() {
-  const dryRun = process.argv.includes('--dry-run');
+  const dryRun = process.argv.some((arg) => arg === '--dry-run' || arg.startsWith('--dry-run='));
+
+  console.log(dryRun
+    ? '模式: DRY RUN（只打印候选，不写库）'
+    : '模式: 真实写库（将实际更新 acquisition_lead_comments.grade）');
 
   const { rows } = await pool.query<RawRow>(`
     SELECT c.id AS comment_id, c.lead_id, l.tenant_id, c.comment_text, c.commented_at,
-           cfg.created_at AS config_created_at, cfg.target_profile_desc
+           cfg.updated_at AS config_updated_at, cfg.target_profile_desc
       FROM zenithjoy.acquisition_lead_comments c
       JOIN zenithjoy.acquisition_leads l ON l.id = c.lead_id
       LEFT JOIN zenithjoy.acquisition_config cfg ON cfg.tenant_id = l.tenant_id::text
@@ -80,7 +101,7 @@ async function main() {
       tenantId: r.tenant_id,
       commentText: r.comment_text,
       commentedAt: new Date(r.commented_at),
-      configCreatedAt: r.config_created_at ? new Date(r.config_created_at) : null,
+      configCreatedAt: r.config_updated_at ? new Date(r.config_updated_at) : null,
     }))
   );
 
