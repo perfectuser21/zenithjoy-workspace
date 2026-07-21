@@ -18,11 +18,26 @@ describe('comment-grading gradeComments', () => {
     process.env.TOAPIS_API_KEY = 'test-toapis-key';
   });
 
-  it('空画像 → 不调用Gemini，全部返回null', async () => {
+  it('空画像 → 不调用Gemini，全部返回null，且打印 warn 日志说明跳过原因', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const mockedPost = vi.mocked(axios.post);
     const result = await gradeComments('', '标题', null, [{ commentText: '预算10万求推荐' }]);
     expect(mockedPost).not.toHaveBeenCalled();
     expect(result).toEqual([null]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('target_profile_desc 为空'));
+    warnSpy.mockRestore();
+  });
+
+  it('判定模型使用 deepseek-v4-flash（经 ToAPIs，成本更低，用户拍板换掉 Gemini）', async () => {
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost.mockResolvedValue({
+      data: { choices: [{ message: { content: '1. 高意向' } }] },
+    } as never);
+
+    await gradeComments('家装目标客户', '标题', null, [{ commentText: '预算10万求推荐' }]);
+
+    const [, body] = mockedPost.mock.calls[0] as [string, Record<string, unknown>];
+    expect(body.model).toBe('deepseek-v4-flash');
   });
 
   it('空评论数组 → 不调用Gemini，返回空数组', async () => {

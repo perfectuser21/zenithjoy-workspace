@@ -126,6 +126,55 @@ describe('rescoreLead', () => {
     expect(updateCall?.params?.[2]).toBe(100);
     expect(updateCall?.params?.[3]).toBe(2);
   });
+
+  it('先对该 lead 行 SELECT...FOR UPDATE 加锁，再读评论历史（防并发上报互相覆盖）', async () => {
+    const calls: { text: string }[] = [];
+    const pool: QueryablePool = {
+      query: vi.fn(async (text: string) => {
+        calls.push({ text });
+        if (/acquisition_lead_comments/.test(text)) {
+          return { rows: [{ grade: '精准', commented_at: new Date('2026-07-04T06:00:00Z') }] };
+        }
+        return { rows: [] };
+      }),
+    };
+
+    await rescoreLead(pool, 'tenant-1', 'lead-lock-test', new Date('2026-07-04T12:00:00Z'));
+
+    const lockIdx = calls.findIndex(
+      (c) => /FROM\s+zenithjoy\.acquisition_leads/i.test(c.text) && /FOR UPDATE/i.test(c.text)
+    );
+    const commentsIdx = calls.findIndex((c) => /acquisition_lead_comments/.test(c.text));
+    expect(lockIdx).toBeGreaterThanOrEqual(0);
+    expect(lockIdx).toBeLessThan(commentsIdx);
+  });
+
+  it('UPDATE acquisition_leads 时同步回写顶层 grade 字段为历史最高档', async () => {
+    const calls: { text: string; params?: unknown[] }[] = [];
+    const pool: QueryablePool = {
+      query: vi.fn(async (text: string, params?: unknown[]) => {
+        calls.push({ text, params });
+        if (/acquisition_lead_comments/.test(text)) {
+          return {
+            rows: [
+              { grade: '感兴趣', commented_at: new Date('2026-07-04T03:00:00Z') },
+              { grade: '精准', commented_at: new Date('2026-07-04T09:00:00Z') },
+            ],
+          };
+        }
+        return { rows: [] };
+      }),
+    };
+
+    await rescoreLead(pool, 'tenant-1', 'lead-grade-test', new Date('2026-07-04T12:00:00Z'));
+
+    const updateCall = calls.find(
+      (c) => /UPDATE\s+zenithjoy\.acquisition_leads/i.test(c.text) && !/FOR UPDATE/i.test(c.text)
+    );
+    expect(updateCall).toBeTruthy();
+    expect(/\bgrade\s*=/.test(updateCall!.text)).toBe(true);
+    expect(updateCall!.params).toContain('精准'); // 两条评论里的最高档
+  });
 });
 
 describe('acquisition-dispatch outreach_eligible gate', () => {

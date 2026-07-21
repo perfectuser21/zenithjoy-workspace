@@ -3,10 +3,13 @@
  *
  * 职责：
  *   1. 批量对一个视频下的评论区留言做意向分档（高意向/精准/感兴趣/其他）
- *   2. 空画像/空评论 → 直接返回全 null，不调用 Gemini（省钱；空画像时无法判断意向，保守不发）
+ *   2. 空画像/空评论 → 直接返回全 null，不调用 LLM（省钱；空画像时无法判断意向，保守不发）
  *   3. 调用失败/超时 → 整批返回全 null，不抛异常（不能拖垮 /collect/report 主流程）
  *
- * Gemini 调用：通过 TOAPIS_API_KEY 走 ToAPIs 代理，与 content-judgment.ts 同一通道。
+ * LLM 调用：deepseek-v4-flash，通过 TOAPIS_API_KEY 走 ToAPIs 代理（与 content-judgment.ts
+ * 同一网关，不同模型——content-judgment.ts 判视频内容仍用 Gemini，未受本次改动影响）。
+ * 2026-07-21 用户拍板从 gemini-2.5-flash-official 换成 deepseek-v4-flash 降低成本
+ * （decision，见本次 bug-fix 记录）；沿用已验证可用的 axios+ToAPIs 通道，不引入 OpenRouter。
  *
  * 判定点（decision 4e421ae8）：解析失败/无法判断时一律归入"其他"档（本函数里体现为 null，
  * 落库后 gradeWeight(null) 也会落进最低档）——宁可漏判高意向客户，不可误判陌生人为高意向
@@ -17,7 +20,7 @@ import axios from 'axios';
 
 const GRADING_TIMEOUT_MS = 20_000;
 const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';
-const GRADING_MODEL = 'gemini-2.5-flash-official';
+const GRADING_MODEL = 'deepseek-v4-flash';
 
 const VALID_GRADES = ['高意向', '精准', '感兴趣', '其他'] as const;
 
@@ -32,6 +35,7 @@ export async function gradeComments(
   comments: GradeCommentsInput[],
 ): Promise<(string | null)[]> {
   if (!targetProfileDesc || targetProfileDesc.trim() === '') {
+    console.warn('[comment-grading] target_profile_desc 为空，跳过判定（保守返回 null，不代表系统故障——请检查该租户是否已在 dashboard 配置获客画像）');
     return comments.map(() => null);
   }
   if (comments.length === 0) {
@@ -65,7 +69,7 @@ export async function gradeComments(
     const text: string = resp.data?.choices?.[0]?.message?.content ?? '';
     return parseGrades(text, comments.length);
   } catch (err) {
-    console.error('[comment-grading] Gemini 调用失败:', (err as Error).message);
+    console.error('[comment-grading] LLM 调用失败:', (err as Error).message);
     return comments.map(() => null);
   }
 }
