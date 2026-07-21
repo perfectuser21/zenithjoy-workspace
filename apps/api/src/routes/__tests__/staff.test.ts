@@ -31,6 +31,13 @@ vi.mock('axios', () => ({
   },
 }));
 
+// feishu-login 挂了按 IP 限流(5次/5分钟)，functional 测试会在同一进程内连续发很多请求，
+// 会互相触发限流导致误判——这里 mock 成直通，限流本身的行为由文件末尾独立一段真实验证。
+vi.mock('../../middleware/simple-rate-limit', () => ({
+  simpleRateLimit: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  tenantKeyFn: () => 'anonymous',
+}));
+
 import app from '../../app';
 
 describe('staff routes — staffGuard 集成', () => {
@@ -167,5 +174,240 @@ describe('staff routes — 下游 Cecelia skill-eval 契约转发', () => {
       expect.stringContaining('/report/real-task-5'),
       expect.objectContaining({ params: { format: 'json' } })
     );
+  });
+});
+
+describe('staff routes — path health 聚合', () => {
+  beforeEach(() => {
+    vi.stubEnv('STAFF_EMAILS', 'staff@test.com');
+    vi.stubEnv('CECELIA_BRAIN_URL', 'http://brain.test');
+    vi.stubEnv('STAFF_HUB_GITHUB_REPO', 'perfectuser21/zenithjoy-workspace');
+    axiosGetMock.mockReset();
+  });
+
+  it('[BEHAVIOR] GET /api/staff/path-health 返回 Path1/2/4 三项，含 features 与 smoke', async () => {
+    axiosGetMock.mockImplementation((url: string, config?: { params?: { journey_id?: string } }) => {
+      if (url.includes('/journey_features')) {
+        const journeyId = config?.params?.journey_id;
+        if (journeyId === 'c019cdeb-d90b-4f8b-a658-ae333663ac35') {
+          return Promise.resolve({
+            data: [{ id: 'f1', name: '发布链路', status: 'done', thickness: 'thin', kind: 'feature', updated_at: '2026-07-21T00:00:00Z' }],
+          });
+        }
+        if (journeyId === 'afa6abca-53c0-4815-8594-b7fb81ca547f') {
+          return Promise.resolve({
+            data: [{ id: 'f2', name: '获客链路', status: 'working', thickness: 'medium', kind: 'ability', updated_at: '2026-07-21T00:00:00Z' }],
+          });
+        }
+        return Promise.resolve({
+          data: [{ id: 'f4', name: '客服链路', status: 'planned', thickness: 'thin', kind: 'feature', updated_at: '2026-07-21T00:00:00Z' }],
+        });
+      }
+
+      return Promise.resolve({
+        data: {
+          workflow_runs: [
+            { id: 11, name: 'golden-path-1-smoke', status: 'completed', conclusion: 'success', html_url: 'https://example.com/1', run_started_at: '2026-07-21T00:00:00Z', updated_at: '2026-07-21T00:03:00Z' },
+            { id: 22, name: 'golden-path-2-smoke', status: 'completed', conclusion: 'failure', html_url: 'https://example.com/2', run_started_at: '2026-07-21T00:00:00Z', updated_at: '2026-07-21T00:04:00Z' },
+            { id: 44, name: 'golden-path-4-smoke', status: 'completed', conclusion: 'success', html_url: 'https://example.com/4', run_started_at: '2026-07-21T00:00:00Z', updated_at: '2026-07-21T00:05:00Z' },
+          ],
+        },
+      });
+    });
+
+    const res = await request(app)
+      .get('/api/staff/path-health')
+      .set('X-User-Email', 'staff@test.com');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data).toHaveLength(3);
+    expect(res.body.data[0].path_key).toBe('path1');
+    expect(res.body.data[0].features[0].name).toBe('发布链路');
+    expect(res.body.data[0].smoke.conclusion).toBe('success');
+    expect(res.body.data[1].path_key).toBe('path2');
+    expect(res.body.data[2].path_key).toBe('path4');
+  });
+
+  it('[BEHAVIOR] 上游部分失败时仍返回 200，并把 path 标记为 degraded', async () => {
+    axiosGetMock
+      .mockRejectedValueOnce(new Error('brain down'))
+      .mockResolvedValueOnce({
+        data: { workflow_runs: [{ id: 11, name: 'golden-path-1-smoke', status: 'completed', conclusion: 'success', html_url: 'https://example.com/1' }] },
+      })
+      .mockResolvedValueOnce({ data: [] })
+      .mockRejectedValueOnce(new Error('github down'))
+      .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce({ data: { workflow_runs: [] } });
+
+    const res = await request(app)
+      .get('/api/staff/path-health')
+      .set('X-User-Email', 'staff@test.com');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data[0].availability).toBe('degraded');
+    expect(res.body.data[0].message).toContain('Brain:');
+    expect(res.body.data[1].availability).toBe('degraded');
+    expect(res.body.data[1].message).toContain('GitHub:');
+  });
+});
+
+describe('staff routes — POST /api/staff/feishu-login（公开路由，不受 staffGuard 保护）', () => {
+  beforeEach(() => {
+    vi.stubEnv('STAFF_EMAILS', 'staff@test.com,boss@zenithjoy.local');
+    vi.stubEnv('FEISHU_APP_ID', 'cli_test_app_id');
+    vi.stubEnv('FEISHU_APP_SECRET', 'test_app_secret');
+    axiosPostMock.mockReset();
+  });
+
+  it('[BEHAVIOR] 不带 X-User-Email 头也能访问（不受 staffGuard 拦截）', async () => {
+    axiosPostMock
+      .mockResolvedValueOnce({ data: { code: 0, app_access_token: 'app-token-abc', expire: 7200 } })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { open_id: 'ou_123', name: '张三', email: 'staff@test.com', access_token: 'user-token-xyz' } },
+      });
+
+    const res = await request(app)
+      .post('/api/staff/feishu-login')
+      .send({ code: 'real-feishu-auth-code' });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('[BEHAVIOR] 白名单内邮箱：交换app_access_token→交换用户信息→返回user对象', async () => {
+    axiosPostMock
+      .mockResolvedValueOnce({ data: { code: 0, app_access_token: 'app-token-abc', expire: 7200 } })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { open_id: 'ou_123', name: '张三', email: 'staff@test.com', access_token: 'user-token-xyz' } },
+      });
+
+    const res = await request(app)
+      .post('/api/staff/feishu-login')
+      .send({ code: 'real-feishu-auth-code' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.user).toEqual({
+      id: 'ou_123',
+      name: '张三',
+      email: 'staff@test.com',
+      feishu_user_id: 'ou_123',
+      access_token: 'user-token-xyz',
+    });
+    expect(axiosPostMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('/open-apis/auth/v3/app_access_token/internal'),
+      { app_id: 'cli_test_app_id', app_secret: 'test_app_secret' },
+      expect.anything()
+    );
+    expect(axiosPostMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('/open-apis/authen/v1/access_token'),
+      { grant_type: 'authorization_code', code: 'real-feishu-auth-code' },
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer app-token-abc' }) })
+    );
+  });
+
+  it('[BEHAVIOR] 邮箱不在白名单 → 403，且不泄露"账号是否存在"细节', async () => {
+    axiosPostMock
+      .mockResolvedValueOnce({ data: { code: 0, app_access_token: 'app-token-abc', expire: 7200 } })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { open_id: 'ou_999', name: '路人', email: 'stranger@gmail.com', access_token: 'tok' } },
+      });
+
+    const res = await request(app)
+      .post('/api/staff/feishu-login')
+      .send({ code: 'real-feishu-auth-code' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.success).toBe(false);
+    expect(res.body.user).toBeUndefined();
+  });
+
+  it('[BEHAVIOR] 飞书账号未绑定邮箱 → 403（无法核对白名单）', async () => {
+    axiosPostMock
+      .mockResolvedValueOnce({ data: { code: 0, app_access_token: 'app-token-abc', expire: 7200 } })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { open_id: 'ou_888', name: '无邮箱用户', email: '', access_token: 'tok' } },
+      });
+
+    const res = await request(app)
+      .post('/api/staff/feishu-login')
+      .send({ code: 'real-feishu-auth-code' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('[BEHAVIOR] 缺少 code 参数 → 400', async () => {
+    const res = await request(app).post('/api/staff/feishu-login').send({});
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(axiosPostMock).not.toHaveBeenCalled();
+  });
+
+  it('[BEHAVIOR] 服务端未配置 FEISHU_APP_ID/SECRET → 500', async () => {
+    vi.stubEnv('FEISHU_APP_ID', '');
+    vi.stubEnv('FEISHU_APP_SECRET', '');
+
+    const res = await request(app)
+      .post('/api/staff/feishu-login')
+      .send({ code: 'real-feishu-auth-code' });
+
+    expect(res.status).toBe(500);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('[BEHAVIOR] 飞书 app_access_token 接口返回错误 → 502，不 500 崩溃', async () => {
+    axiosPostMock.mockResolvedValueOnce({ data: { code: 10003, msg: 'invalid app_secret' } });
+
+    const res = await request(app)
+      .post('/api/staff/feishu-login')
+      .send({ code: 'real-feishu-auth-code' });
+
+    expect(res.status).toBe(502);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('[BEHAVIOR] 飞书用户信息接口返回错误(code非法/过期) → 502', async () => {
+    axiosPostMock
+      .mockResolvedValueOnce({ data: { code: 0, app_access_token: 'app-token-abc', expire: 7200 } })
+      .mockResolvedValueOnce({ data: { code: 20009, msg: 'invalid authorization code' } });
+
+    const res = await request(app)
+      .post('/api/staff/feishu-login')
+      .send({ code: 'expired-or-reused-code' });
+
+    expect(res.status).toBe(502);
+    expect(res.body.success).toBe(false);
+  });
+});
+
+describe('staff routes — feishu-login 真实限流行为（不走上面的passthrough mock）', () => {
+  it('[BEHAVIOR] 同一 IP 超过 5 次/5分钟 → 第 6 次 429（CodeQL missing-rate-limiting 要求的真实mitigation）', async () => {
+    const express = (await import('express')).default;
+    const { ipKeyGenerator } = await import('express-rate-limit');
+    const { simpleRateLimit: realSimpleRateLimit } = await vi.importActual<
+      typeof import('../../middleware/simple-rate-limit')
+    >('../../middleware/simple-rate-limit');
+
+    const testApp = express();
+    const limiter = realSimpleRateLimit({
+      windowMs: 5 * 60_000,
+      max: 5,
+      keyFn: (req) => ipKeyGenerator(req.ip || 'unknown'),
+    });
+    testApp.use(limiter);
+    testApp.get('/probe', (_req, res) => res.json({ ok: true }));
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 6; i += 1) {
+      // supertest 每次新连接默认同一个本地回环地址，落在同一限流桶里
+      const res = await request(testApp).get('/probe');
+      statuses.push(res.status);
+    }
+
+    expect(statuses.slice(0, 5)).toEqual([200, 200, 200, 200, 200]);
+    expect(statuses[5]).toBe(429);
   });
 });

@@ -1,17 +1,15 @@
 /**
  * 全宽独立页面（不渲染 sidebar/header）路由判定
  *
- * Bug/需求：用户反馈"我们做的报告页是全屏的，现在挤在侧边栏旁边显示很别扭"——
- * /staff/skill-eval（Skill 评测上传 + 报告展示）之前跟普通业务页一样套着侧边栏
- * 布局，报告 iframe 被压缩在窄内容区里。改成跟 content-factory 输出页同款的
- * 全宽独立页面模式。
+ * 仅保留仍由 dashboard 承载的全宽页。Staff Hub 拆分后，/staff/skill-eval 已不再属于
+ * dashboard 的 full-bleed 路由集合。
  */
 import { describe, it, expect } from 'vitest';
 import { isFullBleedPath } from '../full-bleed-routes';
 
 describe('isFullBleedPath', () => {
-  it('[BEHAVIOR] /staff/skill-eval 判定为全宽独立页面（不渲染侧边栏）', () => {
-    expect(isFullBleedPath('/staff/skill-eval')).toBe(true);
+  it('[BEHAVIOR] /staff/skill-eval 已迁出 dashboard，不再判定为全宽独立页面', () => {
+    expect(isFullBleedPath('/staff/skill-eval')).toBe(false);
   });
 
   it('/content-factory/:id/output 仍判定为全宽独立页面（既有行为不回归）', () => {
