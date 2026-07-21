@@ -255,6 +255,13 @@ export async function rescoreLead(
   leadId: string,
   now: Date = new Date()
 ): Promise<{ score: number; comment_count: number; outreach_eligible: boolean }> {
+  // 行锁：两个视频的评论并发上报同一 lead 时，后完成的事务不能用旧快照覆盖先完成的结果。
+  // 必须在事务内调用（acquisition.ts /collect/report 传入的是事务 client），锁持续到 COMMIT。
+  await pool.query(
+    `SELECT id FROM zenithjoy.acquisition_leads WHERE tenant_id = $1 AND id = $2 FOR UPDATE`,
+    [tenantId, leadId]
+  );
+
   const r = await pool.query(
     `SELECT c.grade, c.commented_at
        FROM zenithjoy.acquisition_lead_comments c
@@ -284,9 +291,9 @@ export async function rescoreLead(
   await pool.query(
     `UPDATE zenithjoy.acquisition_leads
         SET relevance_score = $3, comment_count = $4, last_commented_at = $5,
-            outreach_eligible = $6, updated_at = now()
+            outreach_eligible = $6, grade = $7, updated_at = now()
       WHERE tenant_id = $1 AND id = $2`,
-    [tenantId, leadId, score, commentCount, lastCommentedAt, outreachEligible]
+    [tenantId, leadId, score, commentCount, lastCommentedAt, outreachEligible, highestGrade]
   );
 
   // FR-8：outreach_eligible 变 false → 取消该 lead 的 pending/queued dm_assignments
