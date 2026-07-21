@@ -256,7 +256,11 @@ export async function rescoreLead(
   now: Date = new Date()
 ): Promise<{ score: number; comment_count: number; outreach_eligible: boolean }> {
   // 行锁：两个视频的评论并发上报同一 lead 时，后完成的事务不能用旧快照覆盖先完成的结果。
-  // 必须在事务内调用（acquisition.ts /collect/report 传入的是事务 client），锁持续到 COMMIT。
+  // 只在调用方传入事务 client 时才真正生效——acquisition.ts /collect/report 的两处调用
+  // （line ~1008/~1033）传的是事务 client，锁持续到 COMMIT，受保护。
+  // POST /api/acquisition/rescore-lead 手动重算端点（acquisition.ts ~1313）传的是裸 pool，
+  // 此时 pool.query() 被 Postgres 当成独立隐式事务，锁在这条 SELECT 执行完立刻释放，
+  // 撑不到后面的 UPDATE——该路径上这把锁形同虚设（不是全函数不变量）。
   await pool.query(
     `SELECT id FROM zenithjoy.acquisition_leads WHERE tenant_id = $1 AND id = $2 FOR UPDATE`,
     [tenantId, leadId]
