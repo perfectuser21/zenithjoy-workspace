@@ -18,14 +18,7 @@ describe('comment-grading gradeComments', () => {
     process.env.TOAPIS_API_KEY = 'test-toapis-key';
   });
 
-  it('空画像 → 不调用Gemini，全部返回null', async () => {
-    const mockedPost = vi.mocked(axios.post);
-    const result = await gradeComments('', '标题', null, [{ commentText: '预算10万求推荐' }]);
-    expect(mockedPost).not.toHaveBeenCalled();
-    expect(result).toEqual([null]);
-  });
-
-  it('画像为空 → 打印 warn 日志说明跳过原因（可观测性，另两个失败分支已有日志）', async () => {
+  it('空画像 → 不调用Gemini，全部返回null，且打印 warn 日志说明跳过原因', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const mockedPost = vi.mocked(axios.post);
     const result = await gradeComments('', '标题', null, [{ commentText: '预算10万求推荐' }]);
