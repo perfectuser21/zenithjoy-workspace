@@ -8,17 +8,20 @@
 #
 # 环境变量：
 #   BASE_URL       API 地址，默认 http://localhost:5200
-#   TENANT         X-Tenant-Id 头，默认 smoke-tenant-fleet
+#   TENANT         X-Tenant-Id 头（必须是合法 UUID，因为 agents.tenant_id 列类型为 uuid）
+#                  默认 00000000-0000-0000-0000-000000000001（CI 空租户，返回空列表）
 #   GITHUB_PAT     GitHub Classic PAT（需 repo admin 权限），用于验证 runner API 可访问
 #   GITHUB_OWNER   仓库 owner，默认 perfectuser21
 #   GITHUB_REPO    仓库名，默认 zenithjoy-workspace
 #
 # 使用：bash xian-runner-fleet-smoke.sh
-# CI 内跑：设 BASE_URL=http://localhost:5200  TENANT=smoke-tenant-fleet  GITHUB_PAT=${{ secrets.GITHUB_PAT_RUNNER }}
+# CI 内跑：设 BASE_URL=http://localhost:5200  GITHUB_PAT=${{ secrets.GITHUB_PAT_RUNNER }}
+# 注意：agents.tenant_id 为 uuid 列，TENANT 必须是合法 UUID，非 UUID 字符串会导致 PostgreSQL 类型错误
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:5200}"
-TENANT="${TENANT:-smoke-tenant-fleet}"
+# 注意：agents.tenant_id 是 uuid 类型，必须传合法 UUID（非 UUID 字符串触发 PostgreSQL 类型错误 → 请求掛死）
+TENANT="${TENANT:-00000000-0000-0000-0000-000000000001}"
 GITHUB_OWNER="${GITHUB_OWNER:-perfectuser21}"
 GITHUB_REPO="${GITHUB_REPO:-zenithjoy-workspace}"
 AUTH=(-H "X-Tenant-Id: $TENANT")

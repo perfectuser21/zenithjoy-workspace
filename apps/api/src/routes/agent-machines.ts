@@ -93,22 +93,26 @@ router.get('/', async (req: Request, res: Response) => {
     ? ` AND a.owner_type = $${params.push(ownerTypeFilter)}`
     : '';
 
-  const r = await pool.query(
-    `SELECT a.id, a.agent_id, a.hostname, a.nickname, a.machine_role,
-            a.os_type, a.owner_type,
-            CASE WHEN a.last_seen > NOW() - INTERVAL '3 minutes'
-                 THEN 'online' ELSE 'offline' END AS status,
-            a.version, a.last_seen,
-            COUNT(s.id) AS session_count
-       FROM zenithjoy.agents a
-       LEFT JOIN zenithjoy.agent_platform_sessions s ON s.agent_id = a.id
-      WHERE a.tenant_id = $1${ownerTypeClause}
-      GROUP BY a.id
-      ORDER BY (a.last_seen > NOW() - INTERVAL '3 minutes') DESC, a.hostname ASC`,
-    params,
-  );
-
-  return res.json(OK(r.rows.map(normMachine)));
+  try {
+    const r = await pool.query(
+      `SELECT a.id, a.agent_id, a.hostname, a.nickname, a.machine_role,
+              a.os_type, a.owner_type,
+              CASE WHEN a.last_seen > NOW() - INTERVAL '3 minutes'
+                   THEN 'online' ELSE 'offline' END AS status,
+              a.version, a.last_seen,
+              COUNT(s.id) AS session_count
+         FROM zenithjoy.agents a
+         LEFT JOIN zenithjoy.agent_platform_sessions s ON s.agent_id = a.id
+        WHERE a.tenant_id = $1${ownerTypeClause}
+        GROUP BY a.id
+        ORDER BY (a.last_seen > NOW() - INTERVAL '3 minutes') DESC, a.hostname ASC`,
+      params,
+    );
+    return res.json(OK(r.rows.map(normMachine)));
+  } catch (e) {
+    console.error('[agent-machines] GET / error:', e);
+    return res.status(500).json(ERR('DB_ERROR', '查询失败'));
+  }
 });
 
 // ── 2. GET /machines/:id — 机器详情 + 抖音号列表 ──
@@ -116,41 +120,46 @@ router.get('/:id', async (req: Request, res: Response) => {
   const tenantId = req.tenantId;
   const machineId = req.params.id;
 
-  const m = await pool.query(
-    `SELECT a.id, a.agent_id, a.hostname, a.nickname, a.machine_role,
-            a.os_type, a.owner_type,
-            a.status, a.version, a.last_seen,
-            COUNT(s.id) AS session_count
-       FROM zenithjoy.agents a
-       LEFT JOIN zenithjoy.agent_platform_sessions s ON s.agent_id = a.id
-      WHERE a.id = $1 AND a.tenant_id = $2
-      GROUP BY a.id`,
-    [machineId, tenantId || null],
-  );
-  if (m.rows.length === 0) {
-    return res.status(404).json(ERR('MACHINE_NOT_FOUND', '机器不存在或不属于本租户'));
+  try {
+    const m = await pool.query(
+      `SELECT a.id, a.agent_id, a.hostname, a.nickname, a.machine_role,
+              a.os_type, a.owner_type,
+              a.status, a.version, a.last_seen,
+              COUNT(s.id) AS session_count
+         FROM zenithjoy.agents a
+         LEFT JOIN zenithjoy.agent_platform_sessions s ON s.agent_id = a.id
+        WHERE a.id = $1 AND a.tenant_id = $2
+        GROUP BY a.id`,
+      [machineId, tenantId || null],
+    );
+    if (m.rows.length === 0) {
+      return res.status(404).json(ERR('MACHINE_NOT_FOUND', '机器不存在或不属于本租户'));
+    }
+
+    const s = await pool.query(
+      `SELECT s.account_label, s.role, s.status, s.platform, s.bound_at,
+              (SELECT response->>'account_nickname'
+                 FROM zenithjoy.publish_tasks
+                WHERE agent_id=s.agent_id
+                  AND task_type='qr_bind/douyin_burner'
+                  AND payload->>'account_label' = s.account_label
+                ORDER BY created_at DESC LIMIT 1) AS account_nickname
+         FROM zenithjoy.agent_platform_sessions s
+        WHERE s.agent_id = $1
+        ORDER BY s.bound_at DESC NULLS LAST, s.account_label ASC`,
+      [machineId],
+    );
+
+    return res.json(
+      OK({
+        machine: normMachine(m.rows[0]),
+        sessions: s.rows,
+      }),
+    );
+  } catch (e) {
+    console.error('[agent-machines] GET /:id error:', e);
+    return res.status(500).json(ERR('DB_ERROR', '查询失败'));
   }
-
-  const s = await pool.query(
-    `SELECT s.account_label, s.role, s.status, s.platform, s.bound_at,
-            (SELECT response->>'account_nickname'
-               FROM zenithjoy.publish_tasks
-              WHERE agent_id=s.agent_id
-                AND task_type='qr_bind/douyin_burner'
-                AND payload->>'account_label' = s.account_label
-              ORDER BY created_at DESC LIMIT 1) AS account_nickname
-       FROM zenithjoy.agent_platform_sessions s
-      WHERE s.agent_id = $1
-      ORDER BY s.bound_at DESC NULLS LAST, s.account_label ASC`,
-    [machineId],
-  );
-
-  return res.json(
-    OK({
-      machine: normMachine(m.rows[0]),
-      sessions: s.rows,
-    }),
-  );
 });
 
 // ── 3. PUT /machines/:id — 改 nickname / machine_role ──
@@ -199,19 +208,24 @@ router.put('/:id', async (req: Request, res: Response) => {
   const tenantParam = i++;
   params.push(machineId, tenantId || null);
 
-  const upd = await pool.query(
-    `UPDATE zenithjoy.agents
-        SET ${sets.join(', ')}
-      WHERE id = $${idParam} AND tenant_id = $${tenantParam}
-      RETURNING id, agent_id, hostname, nickname, machine_role, os_type, owner_type, status, version, last_seen`,
-    params,
-  );
-  if (upd.rows.length === 0) {
-    return res.status(404).json(ERR('MACHINE_NOT_FOUND', '机器不存在或不属于本租户'));
-  }
+  try {
+    const upd = await pool.query(
+      `UPDATE zenithjoy.agents
+          SET ${sets.join(', ')}
+        WHERE id = $${idParam} AND tenant_id = $${tenantParam}
+        RETURNING id, agent_id, hostname, nickname, machine_role, os_type, owner_type, status, version, last_seen`,
+      params,
+    );
+    if (upd.rows.length === 0) {
+      return res.status(404).json(ERR('MACHINE_NOT_FOUND', '机器不存在或不属于本租户'));
+    }
 
-  // 更新后机器对象不带 session_count 列；契约要求返回「更新后机器对象」，补 0 占位由前端重拉刷新
-  return res.json(OK(normMachine(upd.rows[0])));
+    // 更新后机器对象不带 session_count 列；契约要求返回「更新后机器对象」，补 0 占位由前端重拉刷新
+    return res.json(OK(normMachine(upd.rows[0])));
+  } catch (e) {
+    console.error('[agent-machines] PUT /:id error:', e);
+    return res.status(500).json(ERR('DB_ERROR', '更新失败'));
+  }
 });
 
 export default router;
