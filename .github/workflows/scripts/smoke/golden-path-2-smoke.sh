@@ -24,6 +24,11 @@
 #   Step 14 判定缓存命中必须写库：同一 video_id 跨任务复用判决时新任务的行不能永远卡 pending（真机复现 2026-07-16）
 #   Step 22 Seg4 真实派单串联：Step15 真实产出的 lead 走真实 dispatch/build+run，
 #           验证数据从采集/判定/抓评论真实流到私信派单（非独立造数据测试）
+#   Step 23 评论意向判定 comment-grading.ts 回归（铁律5回流 PR#1444）：
+#           23a 全新 tenant（未配置画像）→ /collect/report 不传 grade → grade 落库 NULL
+#               + 服务端日志出现 [comment-grading] target_profile_desc 为空 诊断行（不再静默）；
+#           23b 主 tenant（已配置画像）→ /collect/report 不传 grade，真调 DeepSeek 判定
+#               → lead.grade ∈ {高意向,精准} + outreach_eligible=true
 #
 # 2026-07-15（handoff 0715）：铺到 11 步，回流两个真根因（铁律5）——
 #   Seg2 judgeVideo INV-6 短路不写库 / Seg4 心跳从不按 os_type 刷新 capabilities。
@@ -766,12 +771,127 @@ S22_ASSIGN_REAL=$(psq "SELECT count(*) FROM zenithjoy.dm_assignments WHERE id='$
 ok "Step 22d ✅ publish_task 真实携带 Step15 douyin_id=$S22_DOUYIN + device_platform=android + dm_assignment_id 回联真实行"
 ok "Step 22 ✅ Seg4 真实派单串联通过——数据从采集/判定/抓评论真实流到私信派单"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 23：评论意向判定 comment-grading.ts 回归（铁律5回流 PR#1444）
+#
+# 复现的真 bug（PR#1444，2026-07-21）：苏彦卿真机测试（tenant 6dbea700）22条
+# leads relevance_score有值但grade全空、outreach_eligible全false。根因之一：
+# target_profile_desc 为空时 gradeComments() 静默返回全 null，三个失败分支
+# （画像为空/评论为空/无API key/LLM调用失败）里唯一没日志的，导致同一无声
+# 分支被真机反复撞上（07-20~21 新 tenant 68f2ee9f 再次复现）却无从排查。
+# 同一 PR 把判定引擎从 Gemini 换成 DeepSeek（deepseek-v4-flash，走既有 ToAPIs
+# 通道）。此前跟"判定"沾边的步骤全绕开了这条链路：Step 8 测的是视频内容判定
+# （content-judgment.ts，不同服务）；Step 9/15/22 显式传 grade 字段故意绕开
+# gradeComments() 真调（"本身就不依赖评级真调链"）。comment-grading.ts 的判定
+# 逻辑完全没有机器判据守着，故新增本 Step，不传 grade，逼真实链路跑一遍。
+#
+# 23a（画像为空 → 有日志不再静默）：全新 tenant（仿 Step 10a 模式，从未 PATCH
+#     acquisition_config）→ /collect/report 不传 grade → 断言 ① 落库 grade
+#     为 NULL（走 INV-6 同款保守分支）② 服务端日志出现 PR#1444 补的诊断行
+#     [comment-grading] target_profile_desc 为空（证明不再是静默失败）。
+# 23b（已配置画像 → 真实 DeepSeek 判定驱动 outreach_eligible）：复用主
+#     TENANT_ID/AGENT_PK（Step5 已配置画像）→ /collect/report 不传 grade、
+#     评论文案明确高购买意向 → 断言真调判定产出 高意向/精准 + outreach_eligible=true。
+#     跟 Step 8 一样接受"真调外部 LLM API"输出的合理变动性风险（只认二选一档位，
+#     不锁死单一值）。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 23: 评论意向判定 comment-grading.ts 回归（画像为空日志 + 真实 DeepSeek 判定）"
+SERVER_LOG="${SERVER_LOG:-/tmp/apps-api.log}"
+
+# 23a：全新 tenant，从未 PATCH acquisition_config → target_profile_desc 为空
+echo "  ▶ Step 23a: 画像为空 → grade 落库 NULL + 服务端日志不再静默"
+S23A_TMP=$(mktemp); S23A_COOKIES=$(mktemp)
+S23A_EMAIL="p2-smoke-gradeempty-${RND}@zenithjoy.test"
+S23A_HTTP=$(curl -s -o "$S23A_TMP" -w "%{http_code}" --max-time 30 -c "$S23A_COOKIES" \
+  -X POST "$API_BASE/api/auth/sign-up/email" -H "Content-Type: application/json" \
+  -d "{\"email\":\"$S23A_EMAIL\",\"password\":\"$TEST_PASSWORD\",\"name\":\"p2smokege\"}")
+[ "$S23A_HTTP" = "200" ] || fail "Step 23a sign-up expected 200, got $S23A_HTTP" 23
+curl -s -o "$S23A_TMP" -b "$S23A_COOKIES" "$API_BASE/api/account/me" >/dev/null
+S23A_LICENSE=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d['license']['license_key'])" "$S23A_TMP" 2>/dev/null)
+S23A_TENANT=$(psq "SELECT tenant_id FROM zenithjoy.licenses WHERE license_key='$S23A_LICENSE' AND tenant_id IS NOT NULL LIMIT 1")
+[ -n "$S23A_TENANT" ] || fail "Step 23a 新 tenant 未建" 23
+
+S23A_HTTP=$(curl -s -o "$S23A_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/agent/register" -H "Content-Type: application/json" \
+  -d "{\"license_key\":\"$S23A_LICENSE\",\"machine_id\":\"p2-smoke-ge-${RND}\",\"hostname\":\"p2-smoke-ge-host\"}")
+[ "$S23A_HTTP" = "200" ] || fail "Step 23a agent/register expected 200, got $S23A_HTTP" 23
+S23A_AGENT=$(psq "SELECT id FROM zenithjoy.agents WHERE tenant_id='$S23A_TENANT' ORDER BY created_at DESC LIMIT 1")
+[ -n "$S23A_AGENT" ] || fail "Step 23a agents 无该 tenant 的 agent 行" 23
+ok "Step 23a ✅ 全新 tenant=${S23A_TENANT}（未 PATCH acquisition_config，画像为空）"
+
+# ⚠️ 关键：不调用 PATCH /api/acquisition/config，target_profile_desc 对该
+# tenant 保持未配置状态，触发 comment-grading.ts 的"画像为空"分支。
+S23A_HTTP=$(curl -s -o "$S23A_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/collect/start" \
+  -H "Content-Type: application/json" -H "X-Tenant-Id: $S23A_TENANT" \
+  -d '{"keywords":["p2-smoke-gradeempty"]}')
+[ "$S23A_HTTP" = "200" ] || fail "Step 23a collect/start expected 200, got $S23A_HTTP: $(cat "$S23A_TMP")" 23
+S23A_TASK=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S23A_TMP" 2>/dev/null)
+[ -n "$S23A_TASK" ] || fail "Step 23a 无 task_id" 23
+
+# ⚠️ 关键：不传 grade 字段——不像 Step 9/15/22 显式传 grade 绕开真实判定，
+# 本 Step 就是要逼 /collect/report 走真实 gradeComments() 调用路径。
+S23A_VIDEO="p2smokege${RND//-/}"
+S23A_NICK="p2smokege${RND//-/}"
+S23A_HTTP=$(curl -s -o "$S23A_TMP" -w "%{http_code}" --max-time 20 \
+  -X POST "$API_BASE/api/acquisition/collect/report" \
+  -H "Content-Type: application/json" -H "x-agent-id: $S23A_AGENT" \
+  -d "{\"task_id\":\"$S23A_TASK\",\"video_id\":\"$S23A_VIDEO\",\"commenters\":[{\"nickname\":\"$S23A_NICK\",\"comment_text\":\"求联系方式，多少钱\"}]}")
+[ "$S23A_HTTP" = "200" ] || fail "Step 23a collect/report expected 200, got $S23A_HTTP: $(cat "$S23A_TMP")" 23
+
+# 断言①：acquisition_lead_comments.grade 必须落库为 NULL（宁可空不判定，跟 content-judgment 哲学相反）
+S23A_GRADE=$(psq "SELECT COALESCE(c.grade,'<NULL>') FROM zenithjoy.acquisition_lead_comments c
+  JOIN zenithjoy.acquisition_leads l ON l.id = c.lead_id
+  WHERE l.tenant_id='$S23A_TENANT' AND l.nickname='$S23A_NICK' LIMIT 1")
+[ "$S23A_GRADE" = "<NULL>" ] || fail "Step 23a acquisition_lead_comments.grade='$S23A_GRADE' 期望 '<NULL>'（画像为空理应保守返回 null，不应产出档位）" 23
+ok "Step 23a ✅ 画像为空 → grade 落库 NULL"
+
+# 断言②：服务端日志必须出现 PR#1444 补的诊断行，不再是静默失败
+if [ ! -f "$SERVER_LOG" ]; then
+  fail "Step 23a 服务端日志文件 '$SERVER_LOG' 不存在，无法验证诊断日志（本地跑请设 SERVER_LOG 指向 server stdout 重定向文件）" 23
+fi
+grep -q '\[comment-grading\] target_profile_desc 为空' "$SERVER_LOG" \
+  || fail "Step 23a 服务端日志 '$SERVER_LOG' 未出现 [comment-grading] target_profile_desc 为空（画像为空静默失败的回归——PR#1444 修的诊断日志缺失）" 23
+ok "Step 23a ✅ 服务端日志出现 target_profile_desc 为空 诊断行（不再静默）"
+
+# 23b：复用主 tenant（Step5 已配置画像）→ 不传 grade，逼真实 DeepSeek 判定
+echo "  ▶ Step 23b: 已配置画像 → 真实 DeepSeek 判定驱动 outreach_eligible"
+S23B_TMP=$(mktemp)
+S23B_HTTP=$(curl -s -o "$S23B_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/collect/start" \
+  -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" \
+  -d '{"keywords":["p2-smoke-gradereal"]}')
+[ "$S23B_HTTP" = "200" ] || fail "Step 23b collect/start expected 200, got $S23B_HTTP: $(cat "$S23B_TMP")" 23
+S23B_TASK=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S23B_TMP" 2>/dev/null)
+[ -n "$S23B_TASK" ] || fail "Step 23b 无 task_id" 23
+
+# ⚠️ 关键：不传 grade 字段，评论文案是无歧义高购买意向表达，逼真实判定链跑出结果。
+S23B_VIDEO="p2smokegr${RND//-/}"
+S23B_NICK="p2smokegr${RND//-/}"
+S23B_HTTP=$(curl -s -o "$S23B_TMP" -w "%{http_code}" --max-time 30 \
+  -X POST "$API_BASE/api/acquisition/collect/report" \
+  -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
+  -d "{\"task_id\":\"$S23B_TASK\",\"video_id\":\"$S23B_VIDEO\",\"commenters\":[{\"nickname\":\"$S23B_NICK\",\"comment_text\":\"求报价，多少钱一平，加个微信详细聊\"}]}")
+[ "$S23B_HTTP" = "200" ] || fail "Step 23b collect/report expected 200, got $S23B_HTTP: $(cat "$S23B_TMP")" 23
+
+S23B_GRADE=$(psq "SELECT COALESCE(grade,'<NULL>') FROM zenithjoy.acquisition_leads WHERE tenant_id='$TENANT_ID' AND nickname='$S23B_NICK' LIMIT 1")
+case "$S23B_GRADE" in
+  高意向|精准) : ;;
+  *) fail "Step 23b lead.grade='$S23B_GRADE' 期望 高意向 或 精准（真实 DeepSeek 判定未产出预期档位，明确高购买意向评论理应判高）" 23 ;;
+esac
+ok "Step 23b ✅ 真实 DeepSeek 判定 → lead.grade=$S23B_GRADE"
+
+S23B_ELIGIBLE=$(psq "SELECT COALESCE(outreach_eligible::text,'<NULL>') FROM zenithjoy.acquisition_leads WHERE tenant_id='$TENANT_ID' AND nickname='$S23B_NICK' LIMIT 1")
+[ "$S23B_ELIGIBLE" = "true" ] || fail "Step 23b outreach_eligible='$S23B_ELIGIBLE' 期望 'true'（grade=$S23B_GRADE 理应可触达）" 23
+ok "Step 23b ✅ outreach_eligible=true"
+ok "Step 23 ✅ 评论意向判定 comment-grading.ts 回归通过（画像为空日志 + 真实 DeepSeek 判定链路全通）"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" \
-      "$S22_TMP" 2>/dev/null
+      "$S22_TMP" "$S23A_TMP" "$S23A_COOKIES" "$S23B_TMP" 2>/dev/null
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Path 2 22 步本地版 smoke 全绿（服务端段）"
+echo "  ✅ Path 2 23 步本地版 smoke 全绿（服务端段）"
 echo "  真机段：等 Android evaluator 通道（xian-rog nightly）接管复跑"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 exit 0
