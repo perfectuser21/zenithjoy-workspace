@@ -4620,6 +4620,22 @@ agent_suite:
   product: 员工工具
   note: "sprint(07090821): staff 路由集成测试——staffGuard HTTP 层 403 验证（FR9/FR10/FR11）"
 
+- id: staff-hub-better-auth-api-unit
+  path: apps/staff-hub/src/api/betterAuth.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 员工工具
+  note: "sprint(07211256): Staff Hub betterAuth API 客户端单测——后端 session 返回 null/user 时透传"
+
+- id: staff-hub-admin-fetch-unit
+  path: apps/staff-hub/src/lib/adminFetch.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 员工工具
+  note: "sprint(07211256): Staff Hub adminFetch 单测——附带 X-User-Email 头和 credentials include"
+
 - id: staff-tools-skill-eval-e2e
   path: apps/dashboard/e2e/staff-skill-eval.spec.ts
   type: e2e
