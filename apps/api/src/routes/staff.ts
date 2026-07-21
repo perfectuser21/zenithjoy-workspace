@@ -25,11 +25,103 @@ import { staffGuard } from '../middleware/staff';
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
 
+type PathKey = 'path1' | 'path2' | 'path4';
+
+type JourneyFeature = {
+  id: string;
+  name: string;
+  status?: string | null;
+  thickness?: string | null;
+  kind?: string | null;
+  updated_at?: string | null;
+};
+
+type GitHubRun = {
+  id: number;
+  html_url: string;
+  status: string;
+  conclusion: string | null;
+  name: string;
+  display_title?: string | null;
+  run_started_at?: string | null;
+  updated_at?: string | null;
+};
+
+const PATH_DEFS: Array<{
+  pathKey: PathKey;
+  label: string;
+  journeyId: string;
+  journeyName: string;
+  smokeWorkflowHints: string[];
+}> = [
+  {
+    pathKey: 'path1',
+    label: 'Path 1',
+    journeyId: 'c019cdeb-d90b-4f8b-a658-ae333663ac35',
+    journeyName: '智能发布',
+    smokeWorkflowHints: ['golden-path-1', 'path1', 'publish'],
+  },
+  {
+    pathKey: 'path2',
+    label: 'Path 2',
+    journeyId: 'afa6abca-53c0-4815-8594-b7fb81ca547f',
+    journeyName: '客户智能获客路径',
+    smokeWorkflowHints: ['golden-path-2', 'path2', 'acquisition'],
+  },
+  {
+    pathKey: 'path4',
+    label: 'Path 4',
+    journeyId: 'bfeed805-deed-46c3-8624-87f0028101d4',
+    journeyName: '客户私域 AI 接管',
+    smokeWorkflowHints: ['golden-path-4', 'path4', 'wechat'],
+  },
+];
+
 // 反代地址：CECELIA_SKILL_EVAL_URL env var 优先（含协议+主机+端口+路径前缀），缺省走 9100
 const SKILL_EVAL_BASE = () => process.env.CECELIA_SKILL_EVAL_URL ?? 'http://hk-vps:9100';
+const CECELIA_BRAIN_BASE = () => process.env.CECELIA_BRAIN_URL ?? 'http://host.docker.internal:5221';
+const GITHUB_REPO = process.env.STAFF_HUB_GITHUB_REPO ?? 'perfectuser21/zenithjoy-workspace';
 
 function deriveSkillName(originalname: string): string {
   return originalname.replace(/\.zip$/i, '').trim() || 'unnamed-skill';
+}
+
+function maturityFromCounts(done: number, total: number): 'thin' | 'medium' | 'thick' | 'mature' {
+  if (total <= 0 || done <= 0) return 'thin';
+  const ratio = done / total;
+  if (ratio >= 1) return 'mature';
+  if (ratio >= 0.66) return 'thick';
+  if (ratio >= 0.33) return 'medium';
+  return 'thin';
+}
+
+async function fetchJourneyFeatures(journeyId: string): Promise<JourneyFeature[]> {
+  const upstream = await axios.get(`${CECELIA_BRAIN_BASE()}/api/brain/journey_features`, {
+    params: { journey_id: journeyId },
+    timeout: 20000,
+  });
+  return Array.isArray(upstream.data) ? upstream.data as JourneyFeature[] : [];
+}
+
+async function fetchLatestSmokeRun(hints: string[]): Promise<GitHubRun | null> {
+  const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '';
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'zenithjoy-staff-hub',
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const upstream = await axios.get(`https://api.github.com/repos/${GITHUB_REPO}/actions/runs`, {
+    headers,
+    params: { per_page: 30 },
+    timeout: 20000,
+  });
+  const runs = Array.isArray(upstream.data?.workflow_runs) ? upstream.data.workflow_runs as GitHubRun[] : [];
+  const matched = runs.find((run) => {
+    const hay = `${run.name} ${run.display_title ?? ''}`.toLowerCase();
+    return hints.some((hint) => hay.includes(hint.toLowerCase()));
+  });
+  return matched ?? null;
 }
 
 router.use(staffGuard);
@@ -121,6 +213,70 @@ router.get('/skill-eval/report/:jobId', async (req, res): Promise<void> => {
     }
     res.status(504).json({ success: false, error: { code: 'GATEWAY_TIMEOUT', message: '评测服务暂不可用' } });
   }
+});
+
+router.get('/path-health', async (_req, res): Promise<void> => {
+  const items = await Promise.all(PATH_DEFS.map(async (pathDef) => {
+    let features: JourneyFeature[] = [];
+    let smoke: GitHubRun | null = null;
+    const messages: string[] = [];
+
+    try {
+      features = await fetchJourneyFeatures(pathDef.journeyId);
+    } catch (err) {
+      const message = axios.isAxiosError(err) ? err.message : 'brain unavailable';
+      messages.push(`Brain: ${message}`);
+    }
+
+    try {
+      smoke = await fetchLatestSmokeRun(pathDef.smokeWorkflowHints);
+      if (!smoke) messages.push('GitHub: no recent smoke run matched');
+    } catch (err) {
+      const message = axios.isAxiosError(err) ? err.message : 'github unavailable';
+      messages.push(`GitHub: ${message}`);
+    }
+
+    const doneCount = features.filter((feature) => feature.status === 'done').length;
+    const featureCounts = {
+      total: features.length,
+      done: doneCount,
+      working: features.filter((feature) => feature.status === 'working').length,
+      planned: features.filter((feature) => feature.status === 'planned').length,
+    };
+
+    return {
+      path_key: pathDef.pathKey,
+      label: pathDef.label,
+      journey_id: pathDef.journeyId,
+      journey_name: pathDef.journeyName,
+      maturity: maturityFromCounts(doneCount, features.length),
+      availability: messages.length > 0 ? 'degraded' : 'ready',
+      message: messages.length > 0 ? messages.join('; ') : null,
+      feature_counts: featureCounts,
+      features: features.map((feature) => ({
+        id: feature.id,
+        name: feature.name,
+        status: feature.status ?? 'unknown',
+        thickness: feature.thickness ?? 'unknown',
+        kind: feature.kind ?? 'feature',
+        updated_at: feature.updated_at ?? null,
+      })),
+      smoke: smoke ? {
+        id: smoke.id,
+        name: smoke.name,
+        status: smoke.status,
+        conclusion: smoke.conclusion,
+        html_url: smoke.html_url,
+        started_at: smoke.run_started_at ?? null,
+        updated_at: smoke.updated_at ?? null,
+      } : null,
+    };
+  }));
+
+  res.status(200).json({
+    success: true,
+    data: items,
+  });
 });
 
 export default router;

@@ -169,3 +169,78 @@ describe('staff routes — 下游 Cecelia skill-eval 契约转发', () => {
     );
   });
 });
+
+describe('staff routes — path health 聚合', () => {
+  beforeEach(() => {
+    vi.stubEnv('STAFF_EMAILS', 'staff@test.com');
+    vi.stubEnv('CECELIA_BRAIN_URL', 'http://brain.test');
+    vi.stubEnv('STAFF_HUB_GITHUB_REPO', 'perfectuser21/zenithjoy-workspace');
+    axiosGetMock.mockReset();
+  });
+
+  it('[BEHAVIOR] GET /api/staff/path-health 返回 Path1/2/4 三项，含 features 与 smoke', async () => {
+    axiosGetMock.mockImplementation((url: string, config?: { params?: { journey_id?: string } }) => {
+      if (url.includes('/journey_features')) {
+        const journeyId = config?.params?.journey_id;
+        if (journeyId === 'c019cdeb-d90b-4f8b-a658-ae333663ac35') {
+          return Promise.resolve({
+            data: [{ id: 'f1', name: '发布链路', status: 'done', thickness: 'thin', kind: 'feature', updated_at: '2026-07-21T00:00:00Z' }],
+          });
+        }
+        if (journeyId === 'afa6abca-53c0-4815-8594-b7fb81ca547f') {
+          return Promise.resolve({
+            data: [{ id: 'f2', name: '获客链路', status: 'working', thickness: 'medium', kind: 'ability', updated_at: '2026-07-21T00:00:00Z' }],
+          });
+        }
+        return Promise.resolve({
+          data: [{ id: 'f4', name: '客服链路', status: 'planned', thickness: 'thin', kind: 'feature', updated_at: '2026-07-21T00:00:00Z' }],
+        });
+      }
+
+      return Promise.resolve({
+        data: {
+          workflow_runs: [
+            { id: 11, name: 'golden-path-1-smoke', status: 'completed', conclusion: 'success', html_url: 'https://example.com/1', run_started_at: '2026-07-21T00:00:00Z', updated_at: '2026-07-21T00:03:00Z' },
+            { id: 22, name: 'golden-path-2-smoke', status: 'completed', conclusion: 'failure', html_url: 'https://example.com/2', run_started_at: '2026-07-21T00:00:00Z', updated_at: '2026-07-21T00:04:00Z' },
+            { id: 44, name: 'golden-path-4-smoke', status: 'completed', conclusion: 'success', html_url: 'https://example.com/4', run_started_at: '2026-07-21T00:00:00Z', updated_at: '2026-07-21T00:05:00Z' },
+          ],
+        },
+      });
+    });
+
+    const res = await request(app)
+      .get('/api/staff/path-health')
+      .set('X-User-Email', 'staff@test.com');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data).toHaveLength(3);
+    expect(res.body.data[0].path_key).toBe('path1');
+    expect(res.body.data[0].features[0].name).toBe('发布链路');
+    expect(res.body.data[0].smoke.conclusion).toBe('success');
+    expect(res.body.data[1].path_key).toBe('path2');
+    expect(res.body.data[2].path_key).toBe('path4');
+  });
+
+  it('[BEHAVIOR] 上游部分失败时仍返回 200，并把 path 标记为 degraded', async () => {
+    axiosGetMock
+      .mockRejectedValueOnce(new Error('brain down'))
+      .mockResolvedValueOnce({
+        data: { workflow_runs: [{ id: 11, name: 'golden-path-1-smoke', status: 'completed', conclusion: 'success', html_url: 'https://example.com/1' }] },
+      })
+      .mockResolvedValueOnce({ data: [] })
+      .mockRejectedValueOnce(new Error('github down'))
+      .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce({ data: { workflow_runs: [] } });
+
+    const res = await request(app)
+      .get('/api/staff/path-health')
+      .set('X-User-Email', 'staff@test.com');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data[0].availability).toBe('degraded');
+    expect(res.body.data[0].message).toContain('Brain:');
+    expect(res.body.data[1].availability).toBe('degraded');
+    expect(res.body.data[1].message).toContain('GitHub:');
+  });
+});

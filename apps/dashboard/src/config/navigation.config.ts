@@ -18,7 +18,6 @@ import {
   Building2,
   Briefcase,
   MessageCircle,
-  Wrench,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -135,8 +134,6 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'CsAreaEntryPage': () => import('../pages/CsAreaEntryPage'),
   'CsAccountOverviewPage': () => import('../pages/CsAccountOverviewPage'),
   'CsAccountWorkbenchPage': () => import('../pages/CsAccountWorkbenchPage'),
-  // Line 00 运营中枢 — 员工工具中心（staff only）
-  'SkillEvalPage': () => import('../pages/SkillEvalPage'),
   // Path4 去飞书 — 朋友圈草稿本地审核台
   'MomentDraftReviewPage': () => import('../pages/MomentDraftReviewPage'),
 };
@@ -178,14 +175,6 @@ export const autopilotNavGroups: NavGroup[] = [
     title: '管理',
     items: [
       { path: '/area/admin', icon: Building2, label: '管理后台', featureKey: 'customers-admin', requireSuperAdmin: true, component: 'AreaHubPage' },
-    ]
-  },
-
-  // ─── 员工工具（Line 00 运营中枢内部工具，仅 staff 白名单账号可见）─
-  {
-    title: '员工工具',
-    items: [
-      { path: '/staff/skill-eval', icon: Wrench, label: 'Skill 评测上传', featureKey: 'staff-skill-eval', requireStaff: true, component: 'SkillEvalPage' },
     ]
   },
 ];
@@ -302,7 +291,6 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/admin/customers/publish-logs', component: 'AdminPublishLogsPage', requireAuth: true, requireSuperAdmin: true },
 
   // === 员工工具（staff only）===
-  { path: '/staff/skill-eval', component: 'SkillEvalPage', requireAuth: true, requireStaff: true },
 
 ];
 
