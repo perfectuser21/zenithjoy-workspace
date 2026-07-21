@@ -13,6 +13,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import axios from 'axios';
 import app from '../../../src/app';
+import pool from '../../../src/db/connection';
 import { testPool, createTestTenant } from '../helpers';
 
 vi.mock('axios');
@@ -89,5 +90,40 @@ describe('POST /collect/report 评论意向分档真实落库 [REGRESSION]', () 
       [leadRes.rows[0].id]
     );
     expect(commentRes.rows[0].grade).toBe('精准');
+  });
+
+  it('判定调用发生在 pool.connect()（事务开始）之前，不占事务锁等外部 HTTP', async () => {
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost.mockClear();
+    mockedPost.mockResolvedValue({
+      data: { choices: [{ message: { content: '1. 精准' } }] },
+    } as never);
+
+    const connectSpy = vi.spyOn(pool, 'connect');
+
+    const res = await request(app)
+      .post('/api/acquisition/collect/report')
+      .send({
+        task_id: taskId,
+        video_id: VIDEO_ID,
+        commenters: [
+          { nickname: `grading-order-nick-${RND}`, comment_text: '预算10万求推荐', douyin_id: `grading-order-douyin-${RND}` },
+        ],
+        terminal: false,
+      });
+
+    expect(res.status).toBe(200);
+    expect(mockedPost).toHaveBeenCalled();
+    expect(connectSpy).toHaveBeenCalled();
+    // 注意：pg-pool 的 pool.query() 内部也会调用 pool.connect()（见 node_modules/pg-pool/index.js
+    // `query(...) { this.connect((err, client) => { ... }) }`），所以判定前用 pool.query() 预读
+    // tenant_id/画像等信息本身也会触发若干次 connect —— connectSpy 的"第一次"调用因此测不出
+    // 事务是否延后开启。真正要证明的不变量是：**事务专用的那次 connect（紧跟着 BEGIN 的那次，
+    // 也是本请求生命周期里最后一次 pool.connect() —— BEGIN 之后的所有查询都走 client.query()，
+    // 不再经过 pool.connect()）晚于 axios.post**。用 connectSpy 的最后一次调用顺序来比较。
+    const lastConnectOrder = connectSpy.mock.invocationCallOrder[connectSpy.mock.invocationCallOrder.length - 1];
+    expect(mockedPost.mock.invocationCallOrder[0]).toBeLessThan(lastConnectOrder);
+
+    connectSpy.mockRestore();
   });
 });

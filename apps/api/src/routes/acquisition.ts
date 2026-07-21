@@ -890,6 +890,44 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
   const batch: Array<{ sec_uid?: string | null; nickname: string; comment_text?: string; grade?: string; keyword?: string; douyin_id?: string | null }> =
     Array.isArray(commenters) ? commenters : [];
 
+  // ── 评论意向分档判定（decision 4e421ae8）：批量对这一批评论调 LLM 判档，结果覆盖
+  // c.grade（客户端从不传这个字段，见 CommentEntry.toCollectReportMap）。
+  // ⚠️ 故意放在 pool.connect()/BEGIN 事务之前、用未加锁的 pool 而非事务 client 查询：
+  // gradeComments() 是一次外部 HTTP 调用（ToAPIs/DeepSeek），超时上限 20s。如果放在事务内，
+  // 会在持有 acquisition_collect_tasks 的 FOR UPDATE 行锁期间干等这次网络往返，把同一
+  // collect_task 的并发 /collect/report 请求排队卡最长 20s，还白占一个 DB 连接池连接。
+  // 这里的 tenant_id 预读只是为了拼判定请求，不是权威判断——task 是否存在/终态/cancelling
+  // 仍然全部在下面事务内的 FOR UPDATE 读上做，未加锁的预读结果不参与任何分支决策。
+  let grades: (string | null)[] = batch.map(() => null);
+  if (batch.length > 0) {
+    const preTaskRes = await pool.query<{ tenant_id: string }>(
+      `SELECT tenant_id FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
+      [taskId]
+    );
+    const preTenantId = preTaskRes.rows[0]?.tenant_id ?? null;
+    if (preTenantId) {
+      const videoInfoRes = await pool.query<{ title: string | null; transcript: string | null }>(
+        `SELECT title, transcript FROM zenithjoy.acquisition_collect_videos WHERE task_id = $1 AND video_id = $2`,
+        [taskId, videoId]
+      );
+      const videoTitleForGrading = videoInfoRes.rows[0]?.title ?? videoTitle ?? null;
+      const videoTranscript = videoInfoRes.rows[0]?.transcript ?? null;
+      const gradingConfigRes = await pool.query<{ target_profile_desc: string | null }>(
+        `SELECT target_profile_desc FROM zenithjoy.acquisition_config WHERE tenant_id = $1 LIMIT 1`,
+        [preTenantId]
+      );
+      const targetProfileDescForGrading = gradingConfigRes.rows[0]?.target_profile_desc ?? '';
+      grades = await gradeComments(
+        targetProfileDescForGrading,
+        videoTitleForGrading,
+        videoTranscript,
+        batch.map((c) => ({ commentText: c.comment_text })),
+      );
+    }
+    // preTenantId 为空（任务不存在，或极罕见的竞态）→ 不判定，grades 保持全 null；
+    // 下面事务内的权威 FOR UPDATE 读会照常判断任务是否存在并返回 404，不受影响。
+  }
+
   const client = await pool.connect();
   // COMMIT 后才发的副作用（SSE / dispatch），事务内只记录不执行
   let afterCommit: (() => void) | null = null;
@@ -929,26 +967,6 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
       sseService.close(taskId, { task_id: taskId, status: s.status });
       return ok(res, { task_id: taskId, ignored: true, status: s.status });
     }
-
-    // ── 评论意向分档判定（decision 4e421ae8）：批量对这一批评论调 Gemini 判档，
-    // 结果覆盖 c.grade（客户端从不传这个字段，见 CommentEntry.toCollectReportMap）。
-    const videoInfoRes = await client.query<{ title: string | null; transcript: string | null }>(
-      `SELECT title, transcript FROM zenithjoy.acquisition_collect_videos WHERE task_id = $1 AND video_id = $2`,
-      [taskId, videoId]
-    );
-    const videoTitleForGrading = videoInfoRes.rows[0]?.title ?? videoTitle ?? null;
-    const videoTranscript = videoInfoRes.rows[0]?.transcript ?? null;
-    const gradingConfigRes = await client.query<{ target_profile_desc: string | null }>(
-      `SELECT target_profile_desc FROM zenithjoy.acquisition_config WHERE tenant_id = $1 LIMIT 1`,
-      [tenantId]
-    );
-    const targetProfileDescForGrading = gradingConfigRes.rows[0]?.target_profile_desc ?? '';
-    const grades = await gradeComments(
-      targetProfileDescForGrading,
-      videoTitleForGrading,
-      videoTranscript,
-      batch.map((c) => ({ commentText: c.comment_text })),
-    );
 
     // ── 去重落库：先处理 commenters（已抓先落库不丢，即使本次是终态回报）──
     let inserted = 0;
