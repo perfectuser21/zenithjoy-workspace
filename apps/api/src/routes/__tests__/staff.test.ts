@@ -244,3 +244,134 @@ describe('staff routes — path health 聚合', () => {
     expect(res.body.data[1].message).toContain('GitHub:');
   });
 });
+
+describe('staff routes — POST /api/staff/feishu-login（公开路由，不受 staffGuard 保护）', () => {
+  beforeEach(() => {
+    vi.stubEnv('STAFF_EMAILS', 'staff@test.com,boss@zenithjoy.local');
+    vi.stubEnv('FEISHU_APP_ID', 'cli_test_app_id');
+    vi.stubEnv('FEISHU_APP_SECRET', 'test_app_secret');
+    axiosPostMock.mockReset();
+  });
+
+  it('[BEHAVIOR] 不带 X-User-Email 头也能访问（不受 staffGuard 拦截）', async () => {
+    axiosPostMock
+      .mockResolvedValueOnce({ data: { code: 0, app_access_token: 'app-token-abc', expire: 7200 } })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { open_id: 'ou_123', name: '张三', email: 'staff@test.com', access_token: 'user-token-xyz' } },
+      });
+
+    const res = await request(app)
+      .post('/api/staff/feishu-login')
+      .send({ code: 'real-feishu-auth-code' });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('[BEHAVIOR] 白名单内邮箱：交换app_access_token→交换用户信息→返回user对象', async () => {
+    axiosPostMock
+      .mockResolvedValueOnce({ data: { code: 0, app_access_token: 'app-token-abc', expire: 7200 } })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { open_id: 'ou_123', name: '张三', email: 'staff@test.com', access_token: 'user-token-xyz' } },
+      });
+
+    const res = await request(app)
+      .post('/api/staff/feishu-login')
+      .send({ code: 'real-feishu-auth-code' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.user).toEqual({
+      id: 'ou_123',
+      name: '张三',
+      email: 'staff@test.com',
+      feishu_user_id: 'ou_123',
+      access_token: 'user-token-xyz',
+    });
+    expect(axiosPostMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('/open-apis/auth/v3/app_access_token/internal'),
+      { app_id: 'cli_test_app_id', app_secret: 'test_app_secret' },
+      expect.anything()
+    );
+    expect(axiosPostMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('/open-apis/authen/v1/access_token'),
+      { grant_type: 'authorization_code', code: 'real-feishu-auth-code' },
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer app-token-abc' }) })
+    );
+  });
+
+  it('[BEHAVIOR] 邮箱不在白名单 → 403，且不泄露"账号是否存在"细节', async () => {
+    axiosPostMock
+      .mockResolvedValueOnce({ data: { code: 0, app_access_token: 'app-token-abc', expire: 7200 } })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { open_id: 'ou_999', name: '路人', email: 'stranger@gmail.com', access_token: 'tok' } },
+      });
+
+    const res = await request(app)
+      .post('/api/staff/feishu-login')
+      .send({ code: 'real-feishu-auth-code' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.success).toBe(false);
+    expect(res.body.user).toBeUndefined();
+  });
+
+  it('[BEHAVIOR] 飞书账号未绑定邮箱 → 403（无法核对白名单）', async () => {
+    axiosPostMock
+      .mockResolvedValueOnce({ data: { code: 0, app_access_token: 'app-token-abc', expire: 7200 } })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { open_id: 'ou_888', name: '无邮箱用户', email: '', access_token: 'tok' } },
+      });
+
+    const res = await request(app)
+      .post('/api/staff/feishu-login')
+      .send({ code: 'real-feishu-auth-code' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('[BEHAVIOR] 缺少 code 参数 → 400', async () => {
+    const res = await request(app).post('/api/staff/feishu-login').send({});
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(axiosPostMock).not.toHaveBeenCalled();
+  });
+
+  it('[BEHAVIOR] 服务端未配置 FEISHU_APP_ID/SECRET → 500', async () => {
+    vi.stubEnv('FEISHU_APP_ID', '');
+    vi.stubEnv('FEISHU_APP_SECRET', '');
+
+    const res = await request(app)
+      .post('/api/staff/feishu-login')
+      .send({ code: 'real-feishu-auth-code' });
+
+    expect(res.status).toBe(500);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('[BEHAVIOR] 飞书 app_access_token 接口返回错误 → 502，不 500 崩溃', async () => {
+    axiosPostMock.mockResolvedValueOnce({ data: { code: 10003, msg: 'invalid app_secret' } });
+
+    const res = await request(app)
+      .post('/api/staff/feishu-login')
+      .send({ code: 'real-feishu-auth-code' });
+
+    expect(res.status).toBe(502);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('[BEHAVIOR] 飞书用户信息接口返回错误(code非法/过期) → 502', async () => {
+    axiosPostMock
+      .mockResolvedValueOnce({ data: { code: 0, app_access_token: 'app-token-abc', expire: 7200 } })
+      .mockResolvedValueOnce({ data: { code: 20009, msg: 'invalid authorization code' } });
+
+    const res = await request(app)
+      .post('/api/staff/feishu-login')
+      .send({ code: 'expired-or-reused-code' });
+
+    expect(res.status).toBe(502);
+    expect(res.body.success).toBe(false);
+  });
+});
