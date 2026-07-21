@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { feishuLogin } from '../api/feishuLogin';
 
 declare global {
   interface Window {
@@ -30,12 +31,7 @@ export default function FeishuLogin() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/feishu-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
-      });
-      const data = await response.json();
+      const data = await feishuLogin(code);
       if (data.success && data.user) {
         login(data.user, data.user.access_token);
         navigate('/');
