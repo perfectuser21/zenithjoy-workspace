@@ -40,14 +40,14 @@ echo "=== xian-runner-fleet-smoke: $BASE_URL tenant=$TENANT ==="
 # 1. 租户隔离回归守卫：无认证 → 必须 401
 # ──────────────────────────────────────────────
 echo "[1] 无认证 GET /api/agent/machines → 401"
-CODE=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL/api/agent/machines" 2>/dev/null || echo "000")
+CODE=$(curl -s -m 15 -o /dev/null -w '%{http_code}' "$BASE_URL/api/agent/machines" 2>/dev/null || echo "000")
 check_eq "list(no-auth) HTTP 401" "401" "$CODE"
 
 # ──────────────────────────────────────────────
 # 2. 带认证 GET /api/agent/machines → success=true, data=array
 # ──────────────────────────────────────────────
 echo "[2] 带租户认证 GET /api/agent/machines → success=true, data=array"
-LIST=$(curl -fsS "${AUTH[@]}" "$BASE_URL/api/agent/machines" 2>/dev/null || echo '{"success":false}')
+LIST=$(curl -fsS -m 30 "${AUTH[@]}" "$BASE_URL/api/agent/machines" 2>/dev/null || echo '{"success":false}')
 echo "  response: $LIST"
 
 LIST_OK=$(echo "$LIST" | node -e '
@@ -105,7 +105,7 @@ esac
 # 5. 不存在机器 → 404
 # ──────────────────────────────────────────────
 echo "[5] GET /api/agent/machines/不存在ID → 404"
-CODE=$(curl -s -o /dev/null -w '%{http_code}' "${AUTH[@]}" \
+CODE=$(curl -s -m 15 -o /dev/null -w '%{http_code}' "${AUTH[@]}" \
   "$BASE_URL/api/agent/machines/00000000-0000-0000-0000-000000000000" 2>/dev/null || echo "000")
 check_eq "detail(bogus) HTTP 404" "404" "$CODE"
 
@@ -117,7 +117,7 @@ echo "[6] GitHub PAT 可访问 /repos/{owner}/{repo}/actions/runners"
 if [ -z "${GITHUB_PAT:-}" ]; then
   echo "  SKIP  GITHUB_PAT 未设（CI 中必须设）"
 else
-  GH_CODE=$(curl -s -o /dev/null -w '%{http_code}' \
+  GH_CODE=$(curl -s -m 30 -o /dev/null -w '%{http_code}' \
     -H "Authorization: Bearer $GITHUB_PAT" \
     -H "Accept: application/vnd.github+json" \
     "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/actions/runners" 2>/dev/null || echo "000")
@@ -129,7 +129,7 @@ fi
 #    返回结构合法即可（空列表也 OK，不强依赖 seed 数据）
 # ──────────────────────────────────────────────
 echo "[7] GET /api/agent/machines?owner_type=internal_fleet → success=true"
-FLEET_LIST=$(curl -s "${AUTH[@]}" "$BASE_URL/api/agent/machines?owner_type=internal_fleet" 2>/dev/null || echo '{"success":false}')
+FLEET_LIST=$(curl -s -m 30 "${AUTH[@]}" "$BASE_URL/api/agent/machines?owner_type=internal_fleet" 2>/dev/null || echo '{"success":false}')
 FLEET_OK=$(echo "$FLEET_LIST" | node -e '
   const d=JSON.parse(require("fs").readFileSync(0,"utf8"));
   process.stdout.write(d.success===true&&Array.isArray(d.data)?"ok":"fail")
