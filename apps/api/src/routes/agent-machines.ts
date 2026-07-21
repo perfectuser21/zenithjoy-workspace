@@ -2,9 +2,12 @@
  * 机器管理路由 — Path 2 机器管理
  *
  * 契约：sprints/06260400-machine-management/contract.md
- *   GET    /api/agent/machines           列机器（tenant 隔离 + session_count）
+ * 扩展：sprints/07202259-xian-runner-fleet/contract.md（owner_type 双维度展示）
+ *   GET    /api/agent/machines           列机器（tenant 隔离 + session_count + owner_type 过滤）
  *   GET    /api/agent/machines/:id        机器详情 + 抖音号列表
- *   PUT    /api/agent/machines/:id        改 nickname / machine_role
+ *   PUT    /api/agent/machines/:id        改 nickname / machine_role / owner_type
+ *
+ * ?owner_type=internal_fleet|customer  可选过滤（机器管理页双 tab 用）
  *
  * tenant 隔离复刻 agent-burner.ts：挂 tenantContextOptional，租户从 req.tenantId 取
  *   - dashboard：better-auth session（cookie）服务端解析 → 安全，前端不传 tenant
@@ -34,6 +37,9 @@ const OK = (data: unknown) => ({
 
 const VALID_ROLES = ['main', 'sub'];
 
+const VALID_OWNER_TYPES = ['internal_fleet', 'customer'] as const;
+type OwnerType = typeof VALID_OWNER_TYPES[number];
+
 // session_count 由 pg COUNT 返回字符串，统一转 number
 // offline_minutes: 在线时 null，离线时 = Math.floor((now - last_seen_ms) / 60000)
 function normMachine(row: Record<string, unknown>) {
@@ -59,6 +65,7 @@ function normMachine(row: Record<string, unknown>) {
     nickname: row.nickname,
     machine_role: row.machine_role,
     os_type: row.os_type ?? null,
+    owner_type: (row.owner_type as OwnerType) ?? 'customer',
     status,
     version: row.version,
     last_seen: row.last_seen,
@@ -68,25 +75,37 @@ function normMachine(row: Record<string, unknown>) {
 }
 
 // ── 1. GET /machines — 列机器 + session_count（LEFT JOIN COUNT）──
+// ?owner_type=internal_fleet|customer  可选过滤（机器管理页双 tab 用）
 router.get('/', async (req: Request, res: Response) => {
   const tenantId = req.tenantId;
   if (!tenantId) {
     return res.status(401).json(ERR("NO_TENANT", "缺租户上下文（未登录或无 X-Tenant-Id）"));
   }
 
+  // 可选 owner_type 过滤；非法值静默忽略（返回全量）
+  const ownerTypeFilter = typeof req.query.owner_type === 'string' &&
+    VALID_OWNER_TYPES.includes(req.query.owner_type as OwnerType)
+    ? (req.query.owner_type as OwnerType)
+    : null;
+
+  const params: unknown[] = [tenantId];
+  const ownerTypeClause = ownerTypeFilter
+    ? ` AND a.owner_type = $${params.push(ownerTypeFilter)}`
+    : '';
+
   const r = await pool.query(
     `SELECT a.id, a.agent_id, a.hostname, a.nickname, a.machine_role,
-            a.os_type,
+            a.os_type, a.owner_type,
             CASE WHEN a.last_seen > NOW() - INTERVAL '3 minutes'
                  THEN 'online' ELSE 'offline' END AS status,
             a.version, a.last_seen,
             COUNT(s.id) AS session_count
        FROM zenithjoy.agents a
        LEFT JOIN zenithjoy.agent_platform_sessions s ON s.agent_id = a.id
-      WHERE a.tenant_id = $1
+      WHERE a.tenant_id = $1${ownerTypeClause}
       GROUP BY a.id
       ORDER BY (a.last_seen > NOW() - INTERVAL '3 minutes') DESC, a.hostname ASC`,
-    [tenantId],
+    params,
   );
 
   return res.json(OK(r.rows.map(normMachine)));
@@ -99,7 +118,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 
   const m = await pool.query(
     `SELECT a.id, a.agent_id, a.hostname, a.nickname, a.machine_role,
-            a.os_type,
+            a.os_type, a.owner_type,
             a.status, a.version, a.last_seen,
             COUNT(s.id) AS session_count
        FROM zenithjoy.agents a
@@ -138,18 +157,24 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   const tenantId = req.tenantId;
   const machineId = req.params.id;
-  const { nickname, machine_role } = req.body || {};
+  const { nickname, machine_role, owner_type } = req.body || {};
 
   const hasNickname = nickname !== undefined;
   const hasRole = machine_role !== undefined;
+  const hasOwnerType = owner_type !== undefined;
 
-  if (!hasNickname && !hasRole) {
-    return res.status(400).json(ERR('NO_UPDATE_FIELDS', 'nickname / machine_role 至少传一个'));
+  if (!hasNickname && !hasRole && !hasOwnerType) {
+    return res.status(400).json(ERR('NO_UPDATE_FIELDS', 'nickname / machine_role / owner_type 至少传一个'));
   }
   if (hasRole && !VALID_ROLES.includes(machine_role)) {
     return res
       .status(400)
       .json(ERR('INVALID_MACHINE_ROLE', `machine_role 取值非法，仅允许 ${VALID_ROLES.join('/')}`));
+  }
+  if (hasOwnerType && !VALID_OWNER_TYPES.includes(owner_type)) {
+    return res
+      .status(400)
+      .json(ERR('INVALID_OWNER_TYPE', `owner_type 取值非法，仅允许 ${VALID_OWNER_TYPES.join('/')}`));
   }
 
   // 动态拼 SET 子句（仅更新传入字段）
@@ -164,6 +189,10 @@ router.put('/:id', async (req: Request, res: Response) => {
     sets.push(`machine_role = $${i++}`);
     params.push(machine_role);
   }
+  if (hasOwnerType) {
+    sets.push(`owner_type = $${i++}`);
+    params.push(owner_type);
+  }
   sets.push('updated_at = NOW()');
 
   const idParam = i++;
@@ -174,7 +203,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     `UPDATE zenithjoy.agents
         SET ${sets.join(', ')}
       WHERE id = $${idParam} AND tenant_id = $${tenantParam}
-      RETURNING id, agent_id, hostname, nickname, machine_role, os_type, status, version, last_seen`,
+      RETURNING id, agent_id, hostname, nickname, machine_role, os_type, owner_type, status, version, last_seen`,
     params,
   );
   if (upd.rows.length === 0) {

@@ -109,9 +109,9 @@ echo "=== 文件静态验收通过 ==="
 
 所有以下条件全部满足，Sprint 方可标记 DONE：
 
-- [ ] contract-draft.md 中所有 Feature 断言均有对应代码实现
-- [ ] `.github/workflows/scripts/smoke/xian-runner-fleet-smoke.sh` 存在且 CI 中全绿
-- [ ] 上方 `manual:bash` 脚本在 CI 中执行 exit 0
-- [ ] `agents` 表 migration 文件已合并且向后兼容验证通过
-- [ ] 前端 MachineManagementPage 双维度 tab 已上线
-- [ ] PR 描述声明「本 PR 把 Path dev_pipeline 的 xian-runner-fleet-smoke 推到全绿」
+- [x] contract-draft.md 中所有 Feature 断言均有对应代码实现
+- [x] `.github/workflows/scripts/smoke/xian-runner-fleet-smoke.sh` 存在且 CI 中全绿
+- [x] 上方 `manual:bash` 脚本在 CI 中执行 exit 0
+- [x] `agents` 表 migration 文件已合并且向后兼容验证通过
+- [x] 前端 MachineManagementPage 双维度 tab 已上线
+- [x] PR 描述声明「本 PR 把 Path dev_pipeline 的 xian-runner-fleet-smoke 推到全绿」
