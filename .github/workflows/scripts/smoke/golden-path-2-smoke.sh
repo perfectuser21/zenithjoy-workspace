@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # golden-path-2-smoke.sh
-# ZenithJoy Walking Skeleton — Path 2 客户智能获客路径（14 步本地版）
+# ZenithJoy Walking Skeleton — Path 2 客户智能获客路径（23 步本地版）
 # Notion Journey: https://www.notion.so/35ac40c2ba6381ed8df4f3fa0b64f5bf
 #
 # 2026-07-07 用户更正（decision 431acd2c）：整条去飞书、改本地中台。
@@ -53,7 +53,7 @@
 # 用法：
 #   API_BASE=http://localhost:5200 DB_URL=postgresql://... \
 #     bash .github/workflows/scripts/smoke/golden-path-2-smoke.sh
-#   退出码 0 = 14 步服务端段全通；非零 = 第 EXIT_CODE 步红
+#   退出码 0 = 23 步服务端段全通；非零 = 第 EXIT_CODE 步红
 #
 # 真调判定依赖：API server 进程需带 TOAPIS_API_KEY（CI: secrets.TOAPIS_API_KEY 注入 job env）。
 # 无 key 时 judge-video 落 pending/no_api_key → Step 8 真红（这是设计：#1269/#1271 就是全 mock 漏过的）。
@@ -74,7 +74,7 @@ fail() { echo "❌ $1"; exit "$2"; }
 psq() { psql "$DB_URL" -At -c "$1"; }
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ZenithJoy Path 2 Walking Skeleton — 客户智能获客路径（14 步本地版）"
+echo "  ZenithJoy Path 2 Walking Skeleton — 客户智能获客路径（23 步本地版）"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # ───────────────────────────────────────────────────────────────────
@@ -793,13 +793,21 @@ ok "Step 22 ✅ Seg4 真实派单串联通过——数据从采集/判定/抓评
 #     TENANT_ID/AGENT_PK（Step5 已配置画像）→ /collect/report 不传 grade、
 #     评论文案明确高购买意向 → 断言真调判定产出 高意向/精准 + outreach_eligible=true。
 #     跟 Step 8 一样接受"真调外部 LLM API"输出的合理变动性风险（只认二选一档位，
-#     不锁死单一值）。
+#     不锁死单一值），也跟 Step 8 一样对这次真调加 3 次重试兜底（见 23b 代码内注释）。
+#
+# 跟姊妹 smoke collect-report-comment-grading-smoke.sh（2026-07-19，decision 4e421ae8）
+# 的分工：那份 smoke 覆盖的是"gradeComments() 接入 /collect/report 不崩溃 + 正确落库 +
+# TOAPIS_API_KEY 缺失时优雅降级"三条路径，其自身头注释写明"Gemini 判定精准 → grade+
+# outreach_eligible=true"这条核心业务断言此前只有 mock-axios 集成测试覆盖过，全仓库
+# 没有真调外部 LLM 的验证。本 Step 23 正是补这两个此前全仓库都没测过的洞：
+# (a) 一次真实成功的外部 LLM 调用产出真实 grade+outreach_eligible 联动翻转（23b）；
+# (b) 画像为空时诊断日志不再静默（23a）——两者都不与姊妹 smoke 重复。
 # ───────────────────────────────────────────────────────────────────
 echo "▶ Step 23: 评论意向判定 comment-grading.ts 回归（画像为空日志 + 真实 DeepSeek 判定）"
 SERVER_LOG="${SERVER_LOG:-/tmp/apps-api.log}"
 
 # 23a：全新 tenant，从未 PATCH acquisition_config → target_profile_desc 为空
-echo "  ▶ Step 23a: 画像为空 → grade 落库 NULL + 服务端日志不再静默"
+echo "▶ Step 23a: 画像为空 → grade 落库 NULL + 服务端日志不再静默"
 S23A_TMP=$(mktemp); S23A_COOKIES=$(mktemp)
 S23A_EMAIL="p2-smoke-gradeempty-${RND}@zenithjoy.test"
 S23A_HTTP=$(curl -s -o "$S23A_TMP" -w "%{http_code}" --max-time 30 -c "$S23A_COOKIES" \
@@ -855,7 +863,7 @@ grep -q '\[comment-grading\] target_profile_desc 为空' "$SERVER_LOG" \
 ok "Step 23a ✅ 服务端日志出现 target_profile_desc 为空 诊断行（不再静默）"
 
 # 23b：复用主 tenant（Step5 已配置画像）→ 不传 grade，逼真实 DeepSeek 判定
-echo "  ▶ Step 23b: 已配置画像 → 真实 DeepSeek 判定驱动 outreach_eligible"
+echo "▶ Step 23b: 已配置画像 → 真实 DeepSeek 判定驱动 outreach_eligible"
 S23B_TMP=$(mktemp)
 S23B_HTTP=$(curl -s -o "$S23B_TMP" -w "%{http_code}" --max-time 15 \
   -X POST "$API_BASE/api/acquisition/collect/start" \
@@ -868,16 +876,34 @@ S23B_TASK=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['dat
 # ⚠️ 关键：不传 grade 字段，评论文案是无歧义高购买意向表达，逼真实判定链跑出结果。
 S23B_VIDEO="p2smokegr${RND//-/}"
 S23B_NICK="p2smokegr${RND//-/}"
-S23B_HTTP=$(curl -s -o "$S23B_TMP" -w "%{http_code}" --max-time 30 \
-  -X POST "$API_BASE/api/acquisition/collect/report" \
-  -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
-  -d "{\"task_id\":\"$S23B_TASK\",\"video_id\":\"$S23B_VIDEO\",\"commenters\":[{\"nickname\":\"$S23B_NICK\",\"comment_text\":\"求报价，多少钱一平，加个微信详细聊\"}]}")
-[ "$S23B_HTTP" = "200" ] || fail "Step 23b collect/report expected 200, got $S23B_HTTP: $(cat "$S23B_TMP")" 23
 
-S23B_GRADE=$(psq "SELECT COALESCE(grade,'<NULL>') FROM zenithjoy.acquisition_leads WHERE tenant_id='$TENANT_ID' AND nickname='$S23B_NICK' LIMIT 1")
+# 真调重试（同 Step 8 范式）：gradeComments() 内部 20s 超时，其自身文档化的历史
+# （comment-grading.ts 头注释 + 2026-07-19 真机事故：13条留言批次2/3因 LLM 响应
+# 标点格式漂移解析失败）显示上游偶发返回 null 且在函数内部被静默吞掉、不抛异常、
+# 不重试。跟 Step 8 一样重试的是"同一条请求"，不换 task_id/video_id/nickname——
+# /collect/report 的去重键是 (tenant_id, nickname)（本文件上方 acquisition.ts 读码
+# 确认），命中去重只会给同一 lead 追加一条新的 acquisition_lead_comments 行再
+# rescoreLead()，而 rescoreLead 取的是该 lead 全部历史评论里的最高档位（见
+# acquisition-dispatch.ts computeRelevanceScore/rescoreLead），不是"最新一条"，
+# 所以前面重试留下的 grade=NULL 旧行不会覆盖后面重试真正判出的 高意向/精准——
+# 重试同一请求不会被去重成无操作、也不会被旧的失败结果污染最终判定。
+# --max-time 从 20s 内部超时上留出跟 Step 8 一致的 3 倍余量（60s）。
+S23B_GRADE=""
+for S23B_TRY in 1 2 3; do
+  S23B_HTTP=$(curl -s -o "$S23B_TMP" -w "%{http_code}" --max-time 60 \
+    -X POST "$API_BASE/api/acquisition/collect/report" \
+    -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
+    -d "{\"task_id\":\"$S23B_TASK\",\"video_id\":\"$S23B_VIDEO\",\"commenters\":[{\"nickname\":\"$S23B_NICK\",\"comment_text\":\"求报价，多少钱一平，加个微信详细聊\"}]}")
+  [ "$S23B_HTTP" = "200" ] || fail "Step 23b collect/report expected 200, got $S23B_HTTP: $(cat "$S23B_TMP")" 23
+  S23B_GRADE=$(psq "SELECT COALESCE(grade,'<NULL>') FROM zenithjoy.acquisition_leads WHERE tenant_id='$TENANT_ID' AND nickname='$S23B_NICK' LIMIT 1")
+  case "$S23B_GRADE" in
+    高意向|精准) break ;;
+    *) echo "  ↻ Step 23b 第 ${S23B_TRY} 次真调未出预期档位（grade=$S23B_GRADE），5s 后重试"; sleep 5 ;;
+  esac
+done
 case "$S23B_GRADE" in
   高意向|精准) : ;;
-  *) fail "Step 23b lead.grade='$S23B_GRADE' 期望 高意向 或 精准（真实 DeepSeek 判定未产出预期档位，明确高购买意向评论理应判高）" 23 ;;
+  *) fail "Step 23b lead.grade='$S23B_GRADE' 期望 高意向 或 精准（真实 DeepSeek 判定 3 次重试后仍未产出预期档位，明确高购买意向评论理应判高）" 23 ;;
 esac
 ok "Step 23b ✅ 真实 DeepSeek 判定 → lead.grade=$S23B_GRADE"
 
