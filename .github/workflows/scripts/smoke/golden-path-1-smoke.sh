@@ -169,15 +169,16 @@ S2_BF_STATUS=$(curl -s -o "$S2_BF_TMP" -w "%{http_code}" --max-time 10 \
   -X POST "$API_BASE/api/agent/boot-fail" \
   -H "Content-Type: application/json" \
   -d '{"machine_id":"gp1-step2-backflow","reason":"test_backflow","timestamp":"2026-07-20T00:00:00Z"}')
+S2_BF_BODY=$(cat "$S2_BF_TMP" 2>/dev/null || echo "")
+rm -f "$S2_BF_TMP"
 if [ "$S2_BF_STATUS" = "401" ]; then
-  rm -f "$S2_BF_TMP"
   fail "Step 2.4 boot-fail returned 401 -- endpoint must not require auth (N-2)" 2
 elif [ "$S2_BF_STATUS" = "404" ]; then
-  rm -f "$S2_BF_TMP"
   fail "Step 2.4 boot-fail returned 404 -- endpoint not implemented" 2
+elif echo "$S2_BF_BODY" | grep -q '"ok":true\|"success":true'; then
+  ok "Step 2.4 boot-fail reachable without auth (HTTP $S2_BF_STATUS, ok=true) ✓"
 else
-  rm -f "$S2_BF_TMP"
-  ok "Step 2.4 boot-fail reachable without auth (HTTP $S2_BF_STATUS) ✓"
+  fail "Step 2.4 boot-fail HTTP $S2_BF_STATUS but response missing ok:true -- body: $S2_BF_BODY" 2
 fi
 
 # ───────────────────────────────────────────────────────────────────
