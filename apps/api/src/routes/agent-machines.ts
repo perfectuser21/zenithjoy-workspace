@@ -18,11 +18,14 @@
 import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
 import { tenantContextOptional } from '../middleware/tenant-context';
+import { simpleRateLimit, tenantKeyFn } from '../middleware/simple-rate-limit';
 
 const router = Router();
 
 // 所有机器管理端点统一从已认证上下文解析租户（session / X-Tenant-Id 头）
 router.use(tenantContextOptional);
+// CodeQL js/missing-rate-limiting：机器管理路由碰 DB，按 tenant 限流（60次/分钟）
+router.use(simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: tenantKeyFn }));
 
 const ERR = (code: string, message: string) => ({
   success: false,
