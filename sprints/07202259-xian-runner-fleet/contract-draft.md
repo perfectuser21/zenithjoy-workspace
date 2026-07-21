@@ -81,7 +81,9 @@ GAN_ROUND: 1（首轮，无 reviewer feedback）
 
 ---
 
-## Final E2E（CI 内可跑）
+## E2E 验收
+
+### Final E2E（CI 内可跑）
 
 脚本路径：`.github/workflows/scripts/smoke/xian-runner-fleet-smoke.sh`
 
