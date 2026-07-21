@@ -896,16 +896,22 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
   // gradeComments() 是一次外部 HTTP 调用（ToAPIs/DeepSeek），超时上限 20s。如果放在事务内，
   // 会在持有 acquisition_collect_tasks 的 FOR UPDATE 行锁期间干等这次网络往返，把同一
   // collect_task 的并发 /collect/report 请求排队卡最长 20s，还白占一个 DB 连接池连接。
-  // 这里的 tenant_id 预读只是为了拼判定请求，不是权威判断——task 是否存在/终态/cancelling
-  // 仍然全部在下面事务内的 FOR UPDATE 读上做，未加锁的预读结果不参与任何分支决策。
+  // 这里的 tenant_id/status 预读只是为了拼判定请求 + 省一次白打的 LLM 调用，不是权威判断——
+  // task 是否存在/终态/cancelling 仍然全部在下面事务内的 FOR UPDATE 读上做，未加锁的预读
+  // 结果不参与任何分支决策、不影响客户端最终收到的响应，容忍与 tenant_id 预读同等级的
+  // 良性竞态（预读之后到权威读之前状态发生变化，最坏结果只是多打/少打一次判定调用）。
   let grades: (string | null)[] = batch.map(() => null);
   if (batch.length > 0) {
-    const preTaskRes = await pool.query<{ tenant_id: string }>(
-      `SELECT tenant_id FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
+    const preTaskRes = await pool.query<{ tenant_id: string; status: string }>(
+      `SELECT tenant_id, status FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
       [taskId]
     );
     const preTenantId = preTaskRes.rows[0]?.tenant_id ?? null;
-    if (preTenantId) {
+    const preStatus = preTaskRes.rows[0]?.status ?? null;
+    const preIsTerminalOrCancelling =
+      preStatus !== null &&
+      ((TERMINAL_COLLECT_STATUSES as readonly string[]).includes(preStatus) || preStatus === 'cancelling');
+    if (preTenantId && !preIsTerminalOrCancelling) {
       const videoInfoRes = await pool.query<{ title: string | null; transcript: string | null }>(
         `SELECT title, transcript FROM zenithjoy.acquisition_collect_videos WHERE task_id = $1 AND video_id = $2`,
         [taskId, videoId]
@@ -924,8 +930,10 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
         batch.map((c) => ({ commentText: c.comment_text })),
       );
     }
-    // preTenantId 为空（任务不存在，或极罕见的竞态）→ 不判定，grades 保持全 null；
-    // 下面事务内的权威 FOR UPDATE 读会照常判断任务是否存在并返回 404，不受影响。
+    // preTenantId 为空（任务不存在/竞态）或 preIsTerminalOrCancelling 为真（任务已终态/
+    // cancelling，大概率是旧 agent 对本路由的死循环重试，见路由顶部注释）→ 不判定，grades
+    // 保持全 null；下面事务内的权威 FOR UPDATE 读会照常做终态/cancelling/404 判断并决定
+    // 真正返回给客户端的响应，不受这里跳没跳判定影响。
   }
 
   const client = await pool.connect();

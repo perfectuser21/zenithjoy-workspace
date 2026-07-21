@@ -127,3 +127,83 @@ describe('POST /collect/report 评论意向分档真实落库 [REGRESSION]', () 
     connectSpy.mockRestore();
   });
 });
+
+describe('POST /collect/report 终态/cancelling task 提前跳过 LLM 判定 [REGRESSION]', () => {
+  // 回归背景：commit 86db6626 把 gradeComments() 挪到事务外解决了行锁问题，但引入新代价——
+  // 终态/cancelling 任务的迟到回报（路由自身注释写明是为防旧 agent 死循环重试而设计的常规场景，
+  // 不是边缘 case）此前在事务内的权威 FOR UPDATE 检查处就短路、零成本；现在权威检查挪到判定
+  // 调用之后，导致每次迟到回报都先白打一次真实计费的 LLM 调用，结果再被权威检查丢弃。
+  let terminalTaskId: string;
+  let cancellingTaskId: string;
+
+  beforeAll(async () => {
+    const tRes = await testPool.query(
+      `INSERT INTO zenithjoy.acquisition_collect_tasks (tenant_id, keywords, status)
+       VALUES ($1, $2::jsonb, 'done')
+       RETURNING id`,
+      [tenantId, JSON.stringify(['装修'])]
+    );
+    terminalTaskId = tRes.rows[0].id;
+
+    const cRes = await testPool.query(
+      `INSERT INTO zenithjoy.acquisition_collect_tasks (tenant_id, keywords, status)
+       VALUES ($1, $2::jsonb, 'cancelling')
+       RETURNING id`,
+      [tenantId, JSON.stringify(['装修'])]
+    );
+    cancellingTaskId = cRes.rows[0].id;
+  });
+
+  afterAll(async () => {
+    await testPool.query('DELETE FROM zenithjoy.acquisition_collect_tasks WHERE id = ANY($1::uuid[])', [
+      [terminalTaskId, cancellingTaskId],
+    ]);
+  });
+
+  it('终态(done) task 回报不触发 gradeComments/axios.post', async () => {
+    const mockedPost = vi.mocked(axios.post);
+    vi.clearAllMocks();
+    mockedPost.mockResolvedValue({
+      data: { choices: [{ message: { content: '1. 精准' } }] },
+    } as never);
+
+    const res = await request(app)
+      .post('/api/acquisition/collect/report')
+      .send({
+        task_id: terminalTaskId,
+        video_id: `terminal-vid-${RND}`,
+        commenters: [
+          { nickname: `terminal-nick-${RND}`, comment_text: '预算10万求推荐', douyin_id: `terminal-douyin-${RND}` },
+        ],
+        terminal: false,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.ignored).toBe(true);
+    expect(res.body.data.status).toBe('done');
+    expect(mockedPost).not.toHaveBeenCalled();
+  });
+
+  it('cancelling task 回报不触发 gradeComments/axios.post', async () => {
+    const mockedPost = vi.mocked(axios.post);
+    vi.clearAllMocks();
+    mockedPost.mockResolvedValue({
+      data: { choices: [{ message: { content: '1. 精准' } }] },
+    } as never);
+
+    const res = await request(app)
+      .post('/api/acquisition/collect/report')
+      .send({
+        task_id: cancellingTaskId,
+        video_id: `cancelling-vid-${RND}`,
+        commenters: [
+          { nickname: `cancelling-nick-${RND}`, comment_text: '预算10万求推荐', douyin_id: `cancelling-douyin-${RND}` },
+        ],
+        terminal: false,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.ignored).toBe(true);
+    expect(mockedPost).not.toHaveBeenCalled();
+  });
+});
