@@ -21,8 +21,18 @@ import { Router } from 'express';
 import multer from 'multer';
 import axios from 'axios';
 import { staffGuard } from '../middleware/staff';
+import { simpleRateLimit } from '../middleware/simple-rate-limit';
+import { ipKeyGenerator } from 'express-rate-limit';
 
 const router = Router();
+// 登录端点身份未知，按来源 IP 限流（不能按 tenant/user，此时还没有）：
+// 5次/5分钟/IP，防暴力枚举白名单邮箱 + 防止刷爆真实飞书 API 调用配额
+// 用库自带 ipKeyGenerator 而非裸 req.ip，避免 IPv6 地址被当成互不相同的独立 key 绕过限流
+const feishuLoginRateLimit = simpleRateLimit({
+  windowMs: 5 * 60_000,
+  max: 5,
+  keyFn: (req) => ipKeyGenerator(req.ip || 'unknown'),
+});
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
 
 type PathKey = 'path1' | 'path2' | 'path4';
@@ -189,7 +199,7 @@ async function fetchFeishuUserByCode(
   return { openId: open_id, name: name ?? '', email: (email ?? '').toLowerCase(), accessToken: access_token };
 }
 
-router.post('/feishu-login', async (req, res): Promise<void> => {
+router.post('/feishu-login', feishuLoginRateLimit, async (req, res): Promise<void> => {
   const code = typeof req.body?.code === 'string' ? req.body.code : '';
   if (!code) {
     res.status(400).json({ success: false, error: '缺少飞书授权 code' });

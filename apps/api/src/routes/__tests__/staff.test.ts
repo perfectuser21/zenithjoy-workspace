@@ -31,6 +31,13 @@ vi.mock('axios', () => ({
   },
 }));
 
+// feishu-login 挂了按 IP 限流(5次/5分钟)，functional 测试会在同一进程内连续发很多请求，
+// 会互相触发限流导致误判——这里 mock 成直通，限流本身的行为由文件末尾独立一段真实验证。
+vi.mock('../../middleware/simple-rate-limit', () => ({
+  simpleRateLimit: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  tenantKeyFn: () => 'anonymous',
+}));
+
 import app from '../../app';
 
 describe('staff routes — staffGuard 集成', () => {
@@ -373,5 +380,35 @@ describe('staff routes — POST /api/staff/feishu-login（公开路由，不受 
 
     expect(res.status).toBe(502);
     expect(res.body.success).toBe(false);
+  });
+});
+
+describe('staff routes — feishu-login 真实限流行为（不走上面的passthrough mock）', () => {
+  it('[BEHAVIOR] 同一 IP 超过 5 次/5分钟 → 第 6 次 429（CodeQL missing-rate-limiting 要求的真实mitigation）', async () => {
+    const express = (await import('express')).default;
+    const { ipKeyGenerator } = await import('express-rate-limit');
+    const { simpleRateLimit: realSimpleRateLimit } = await vi.importActual<
+      typeof import('../../middleware/simple-rate-limit')
+    >('../../middleware/simple-rate-limit');
+
+    const testApp = express();
+    const limiter = realSimpleRateLimit({
+      windowMs: 5 * 60_000,
+      max: 5,
+      keyFn: (req) => ipKeyGenerator(req.ip || 'unknown'),
+    });
+    testApp.use(limiter);
+    testApp.get('/probe', (_req, res) => res.json({ ok: true }));
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 6; i += 1) {
+      // supertest 每次新连接默认同一个本地回环地址，落在同一限流桶里
+      // eslint-disable-next-line no-await-in-loop
+      const res = await request(testApp).get('/probe');
+      statuses.push(res.status);
+    }
+
+    expect(statuses.slice(0, 5)).toEqual([200, 200, 200, 200, 200]);
+    expect(statuses[5]).toBe(429);
   });
 });
