@@ -64,7 +64,7 @@ async function main() {
            cfg.created_at AS config_created_at, cfg.target_profile_desc
       FROM zenithjoy.acquisition_lead_comments c
       JOIN zenithjoy.acquisition_leads l ON l.id = c.lead_id
-      LEFT JOIN zenithjoy.acquisition_config cfg ON cfg.tenant_id = l.tenant_id
+      LEFT JOIN zenithjoy.acquisition_config cfg ON cfg.tenant_id = l.tenant_id::text
      WHERE c.grade IS NULL
   `);
 
