@@ -24,8 +24,10 @@ export default function FeishuLogin() {
   const scriptLoadedRef = useRef(false);
 
   const appId = import.meta.env.VITE_FEISHU_APP_ID;
-  const origin = window.location.origin.replace(/^http:/, 'https:');
-  const redirectUri = `${origin}/login/feishu`;
+  // 用实际访问协议(window.location.origin)，不强制转https——服务器现在只提供http，
+  // 硬编码转https会导致发给飞书的redirect_uri和真实回调地址协议不一致，飞书直接拒绝
+  // (Error 20029 Invalid redirect URL)。生产走真HTTPS后这里会自然是https，不用改代码。
+  const redirectUri = `${window.location.origin}/login/feishu`;
 
   const handleFeishuCallback = useCallback(async (code: string) => {
     setLoading(true);
