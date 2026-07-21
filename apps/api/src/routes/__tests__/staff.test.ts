@@ -403,7 +403,6 @@ describe('staff routes — feishu-login 真实限流行为（不走上面的pass
     const statuses: number[] = [];
     for (let i = 0; i < 6; i += 1) {
       // supertest 每次新连接默认同一个本地回环地址，落在同一限流桶里
-      // eslint-disable-next-line no-await-in-loop
       const res = await request(testApp).get('/probe');
       statuses.push(res.status);
     }
