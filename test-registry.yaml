@@ -4636,6 +4636,14 @@ agent_suite:
   product: 员工工具
   note: "sprint(07211256): Staff Hub adminFetch 单测——附带 X-User-Email 头和 credentials include"
 
+- id: staff-hub-feishu-login-endpoint-unit
+  path: apps/staff-hub/src/api/feishuLogin.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 员工工具
+  note: "补记: FeishuLogin.tsx 原打裸 /api/feishu-login 会被 nginx 代理到 hk-vps 上无白名单概念的通用飞书登录服务(任何飞书账号都能登入)，改打 /api/staff/feishu-login 走 STAFF_EMAILS 白名单校验"
+
 - id: staff-tools-skill-eval-e2e
   path: apps/dashboard/e2e/staff-skill-eval.spec.ts
   type: e2e
