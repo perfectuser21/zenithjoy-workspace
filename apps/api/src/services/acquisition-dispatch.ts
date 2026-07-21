@@ -521,10 +521,16 @@ export async function buildAssignments(
   // 的线索重新纳入候选池，只要还有小号槽位空着就会真实二次派单——staging 实锤 7 条
   // 线索被 2-3 个不同小号各派一次。循环内部 (tenant_id, lead_id, account_label) 粒度
   // 的去重检查（下面 Step D/E 里的 dup 查询）保留不动，作为并发场景下的次要安全网。
+  // cast 约定同 ~380 行 burnersRes 注释：l.tenant_id 是 uuid，da.tenant_id/dol.tenant_id
+  // 都是 text，Postgres 对同一个 $1 全语句只推断一种类型——outer l.tenant_id = $1 在语句里
+  // 最先出现，$1 会被定型为 uuid，两条 NOT EXISTS 子查询里 text 列再拿 $1 比较就报错
+  // "operator does not exist: text = uuid"（CI 真实 Postgres 实测命中）。必须转的还是
+  // uuid 这一侧：l.tenant_id::text = $1，让 $1 定型为 text，子查询原样 text = $1 即可通过；
+  // 反过来在子查询里改成 da.tenant_id = $1::text 只是把 $1 显式钉死成 uuid，报错原地不动。
   const leadsRes = await pool.query(
     `SELECT l.id, l.profile_url, COALESCE(l.relevance_score, 0) AS relevance_score
        FROM zenithjoy.acquisition_leads l
-      WHERE l.tenant_id = $1 AND l.relevance_score IS NOT NULL
+      WHERE l.tenant_id::text = $1 AND l.relevance_score IS NOT NULL
         AND (l.outreach_eligible IS NULL OR l.outreach_eligible = true)
         AND NOT EXISTS (
           SELECT 1 FROM zenithjoy.dm_assignments da
