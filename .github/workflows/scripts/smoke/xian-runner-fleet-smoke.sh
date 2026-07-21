@@ -120,11 +120,14 @@ echo "[6] GitHub PAT 可访问 /repos/{owner}/{repo}/actions/runners"
 if [ -z "${GITHUB_PAT:-}" ]; then
   echo "  SKIP  GITHUB_PAT 未设（CI 中必须设）"
 else
-  GH_CODE=$(curl -s -m 30 -o /dev/null -w '%{http_code}' \
+  if ! GH_CODE=$(curl -s -m 30 -o /dev/null -w '%{http_code}' \
     -H "Authorization: Bearer $GITHUB_PAT" \
     -H "Accept: application/vnd.github+json" \
-    "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/actions/runners" 2>/dev/null || echo "000")
-  check_eq "GitHub runner list API 可访问" "200" "$GH_CODE"
+    "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/actions/runners" 2>/dev/null); then
+    fail "GitHub runner list API 请求失败（curl 连接错误，非 HTTP 状态码问题）"
+  else
+    check_eq "GitHub runner list API 可访问" "200" "$GH_CODE"
+  fi
 fi
 
 # ──────────────────────────────────────────────
