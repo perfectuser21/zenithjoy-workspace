@@ -722,7 +722,7 @@ export async function dispatchDue(
     // 同款约定（~380 行注释——agents.tenant_id 是 uuid，转 ::text 去跟 $3 比较）。
     // + 显式 ORDER BY s.bound_at DESC NULLS LAST 兜底 LIMIT 1 的确定性。
     const leadRes = await pool.query(
-      `SELECT l.profile_url, l.douyin_id, s.agent_id, ag.capabilities
+      `SELECT l.profile_url, l.douyin_id, s.agent_id, ag.capabilities, ag.last_heartbeat_at
          FROM zenithjoy.acquisition_leads l
          LEFT JOIN zenithjoy.agent_platform_sessions s
            ON s.account_label = $2 AND s.platform = 'douyin' AND s.role = 'burner' AND s.status = 'active'
@@ -740,6 +740,27 @@ export async function dispatchDue(
     const douyinId = leadRes.rows[0]?.douyin_id ?? null;
     const agentId = leadRes.rows[0]?.agent_id ?? null;
     const devicePlatform = resolveDevicePlatform(leadRes.rows[0]?.capabilities ?? null);
+    const lastHeartbeatAt = leadRes.rows[0]?.last_heartbeat_at ?? null;
+
+    // gap 期间自动 requeue：build 阶段判在线是那一刻的心跳快照，dispatchDue 真正执行
+    // 发送前可能已经过了几小时——这里补上第二次心跳新鲜度检测，跟 buildAssignments
+    // Step B 的 2 分钟阈值保持一致（本文件 ~383 行附近）。离线时回退
+    // pending_dispatch（不是 limited——limited 语义是"配额/字段缺失"，回退到
+    // pending_dispatch 才能让下一轮 buildAssignments 的 Step A/B 重新捡起来正常排期）。
+    const heartbeatFresh = lastHeartbeatAt
+      ? (now.getTime() - new Date(lastHeartbeatAt).getTime()) < 2 * 60 * 1000
+      : false;
+    if (!heartbeatFresh) {
+      await pool.query(
+        `UPDATE zenithjoy.dm_assignments
+            SET status = 'pending_dispatch', account_label = '', scheduled_for = NULL,
+                dispatch_reason = $2, updated_at = now()
+          WHERE id = $1`,
+        [row.id, `offline_reassign_from:${label}`]
+      );
+      skippedLimit += 1;
+      continue;
+    }
 
     if (!isDmDispatchable(devicePlatform, { profileUrl, douyinId }, agentId)) {
       // 该号无 active agent，或本通道要的定位字段缺失（android 缺抖音号 / windows 缺主页 URL）

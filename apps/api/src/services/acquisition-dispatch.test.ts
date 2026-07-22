@@ -331,6 +331,7 @@ describe('acquisition-dispatch dispatchDue 账号会话租户隔离（Fix 2，P0
               douyin_id: '1689210742',
               agent_id: match?.agentId ?? null,
               capabilities: ['windows'],
+              last_heartbeat_at: new Date(DISPATCH_TEST_NOW.getTime() - 30 * 1000),
             }],
           };
         }
@@ -388,5 +389,75 @@ describe('acquisition-dispatch Step A 重标离线小号保留审计轨迹（Fix
     );
     expect(reasonParam, 'dispatch_reason 应携带 offline_reassign_from:<原账号> 而不是被清空成 NULL').toBeTruthy();
     expect(String(reasonParam)).toMatch(/offline_reassign_from:.*burner-offline/);
+  });
+});
+
+describe('dispatchDue — gap 期间账号变离线', () => {
+  it('build 时在线、dispatch 执行时心跳已过期(>2分钟未更新) → 回退 pending_dispatch，不强发', async () => {
+    const staleHeartbeat = new Date(DISPATCH_TEST_NOW.getTime() - 5 * 60 * 1000); // 5 分钟前，超过 2 分钟阈值
+    const calls: { text: string; params?: unknown[] }[] = [];
+    const pool: QueryablePool = {
+      query: vi.fn(async (text: string, params?: unknown[]) => {
+        calls.push({ text, params });
+        if (/FROM\s+zenithjoy\.dm_assignments/i.test(text) && /status = 'queued'/i.test(text)) {
+          return { rows: [{ id: 'assign-1', lead_id: 'lead-1', account_label: 'stale-burner' }] };
+        }
+        if (/dm_outreach_log/i.test(text)) {
+          return { rows: [{ hour: 0, day: 0 }] };
+        }
+        if (/FROM\s+zenithjoy\.acquisition_leads/i.test(text)) {
+          return {
+            rows: [{
+              profile_url: 'https://douyin.com/xxx', douyin_id: 'dy123',
+              agent_id: 'agent-1', capabilities: ['android'],
+              last_heartbeat_at: staleHeartbeat,
+            }],
+          };
+        }
+        return { rows: [] };
+      }),
+    };
+
+    await dispatchDue(pool, 'tenant-1', DISPATCH_TEST_NOW);
+
+    const requeueCall = calls.find((c) =>
+      /UPDATE\s+zenithjoy\.dm_assignments/i.test(c.text) && /pending_dispatch/i.test(c.text)
+    );
+    expect(requeueCall).toBeTruthy();
+    const dispatchedCall = calls.find((c) =>
+      /INSERT INTO\s+zenithjoy\.publish_tasks/i.test(c.text)
+    );
+    expect(dispatchedCall).toBeFalsy(); // 绝不能真派单
+  });
+
+  it('build 时在线、dispatch 执行时心跳仍新鲜(<2分钟) → 正常派单', async () => {
+    const freshHeartbeat = new Date(DISPATCH_TEST_NOW.getTime() - 30 * 1000); // 30 秒前
+    const calls: { text: string; params?: unknown[] }[] = [];
+    const pool: QueryablePool = {
+      query: vi.fn(async (text: string, params?: unknown[]) => {
+        calls.push({ text, params });
+        if (/FROM\s+zenithjoy\.dm_assignments/i.test(text) && /status = 'queued'/i.test(text)) {
+          return { rows: [{ id: 'assign-2', lead_id: 'lead-2', account_label: 'fresh-burner' }] };
+        }
+        if (/dm_outreach_log/i.test(text)) {
+          return { rows: [{ hour: 0, day: 0 }] };
+        }
+        if (/FROM\s+zenithjoy\.acquisition_leads/i.test(text)) {
+          return {
+            rows: [{
+              profile_url: 'https://douyin.com/yyy', douyin_id: 'dy456',
+              agent_id: 'agent-2', capabilities: ['android'],
+              last_heartbeat_at: freshHeartbeat,
+            }],
+          };
+        }
+        return { rows: [] };
+      }),
+    };
+
+    await dispatchDue(pool, 'tenant-1', DISPATCH_TEST_NOW);
+
+    const dispatchedCall = calls.find((c) => /INSERT INTO\s+zenithjoy\.publish_tasks/i.test(c.text));
+    expect(dispatchedCall).toBeTruthy();
   });
 });

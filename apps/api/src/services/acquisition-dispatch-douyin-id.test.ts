@@ -121,6 +121,7 @@ describe('dispatchDue — Android 派单 payload 必须带真实抖音号', () =
         douyin_id: '1689210742',
         agent_id: 'agent-1',
         capabilities: ['android'],
+        last_heartbeat_at: NOON,
       },
     });
 
@@ -180,6 +181,7 @@ describe('dispatchDue — Android 派单 payload 必须带真实抖音号', () =
         douyin_id: null,
         agent_id: 'agent-1',
         capabilities: [], // → windows
+        last_heartbeat_at: NOON,
       },
     });
 
