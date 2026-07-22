@@ -259,18 +259,18 @@ ALTER TABLE zenithjoy.agent_platform_sessions
 ### Smoke 断言要求（golden-path-2-smoke.sh 新增步骤）
 
 ```bash
-# Step 15: UIA 在线信号上报与读取
-# Step 16: 采集失败 error_code 五分类落库验证
-# Step 17: latest_reply 写入路径验证
-# Step 18: dispatch 前二次检测 mock 离线场景（API 层等价断言）
-# Step 19: signal-verify 端点返回三字段完整性断言
+# Step 24: UIA 在线信号上报与读取
+# Step 25: 采集失败 error_code 五分类落库验证
+# Step 26: latest_reply 写入路径验证
+# Step 27: dispatch 前二次检测 mock 离线场景（API 层等价断言）
+# Step 28: signal-verify 端点返回三字段完整性断言
 ```
 
 ---
 
 ## 验收标准（Final E2E）
 
-- [ ] `golden-path-2-smoke.sh` Step 15-19 全绿
+- [ ] `golden-path-2-smoke.sh` Step 24-28 全绿
 - [ ] `GET /api/agent/burner/sessions` 返回 `computed_online_status` 字段，值来自心跳+UIA双信号
 - [ ] 采集失败 `error_code` 落库为 `KEYWORD_NO_RESULT | KEYWORD_BANNED | PLATFORM_LIMIT | NETWORK_ERROR | ACCOUNT_OFFLINE | UNKNOWN` 之一，非枚举值自动降级 `UNKNOWN`
 - [ ] `acquisition_leads.latest_reply / latest_reply_at` 有真实写入路径，旧时间戳不覆盖新值
