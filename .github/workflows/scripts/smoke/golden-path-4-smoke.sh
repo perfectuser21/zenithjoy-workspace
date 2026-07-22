@@ -11,7 +11,8 @@
 #           Step 3f：扫描前守卫窗口最大化自愈接入 cooldown，不再反复 maximize/minimize，2026-07-17 真机根治）；
 #           Step 3i：热键召唤主路（preflight hotkey_summon 自检 + 塌缩自愈先热键再降级托盘，2026-07-19 折入）；
 #           Step 3j：热键真机根因守卫（GetForegroundWindow 判据 + SendInput INPUT sizeof=40）；
-#           Step 3k：overlay pywebview 供给链四处齐备（打包预装/依赖声明/客户机自修复/红灯上报，2026-07-20 刀A）
+#           Step 3k：overlay pywebview 供给链四处齐备（打包预装/依赖声明/客户机自修复/红灯上报，2026-07-20 刀A）；
+#           Step 3l：半死区修复三件套（L1窗口形态不变量/L2梯度自愈/L3 skip细分/L4队列过期，task 5e9d608f，2026-07-20）
 #   Step 6  上线自检消息——每次启动发一条给固定测试联系人（task 7be2842d，纯函数等价断言）
 #   Step 7  客户触发好友扫描 / 联系人首次发消息 → 系统建立该联系人 CRM 档案（真链路：friend-scan/trigger+ingest）
 #   Step 8  客户在中台 CRM 客户列表页，给联系人打 A1-A5 状态（真链路：customer-profile 六字段）
@@ -127,6 +128,74 @@ grep -q 'installPywebview' "$PREFLIGHT_TS" \
 grep -q 'pywebview_install_failed' "$OVERLAY_TS" \
   || fail "Step 3k overlay.ts 缺补装失败上报（静默降级复辟）" 3
 ok "Step 3k ✅ overlay pywebview 供给链四处齐备（预装/声明/自修复/红灯）"
+
+# ───────────────────────────────────────────────────────────────────
+# Step 3l：半死区修复三件套 + 队列过期（task 5e9d608f，2026-07-20 刀A）
+#   L1 判群前窗口形态不变量 / L2 梯度自愈触发函数 / L3 skip reason 细分 / L4 队列过期上限
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 3l: 半死区修复三件套 + 队列过期 纯函数等价断言（task 5e9d608f）"
+
+python3 -c "
+import sys
+sys.path.insert(0, 'services/agent/wechat-rpa')
+import listen_chat
+
+# --- L1：判群前窗口形态不变量纯函数 ---
+fn = getattr(listen_chat, 'assert_window_shape_for_header', None)
+assert fn is not None, 'FAIL: assert_window_shape_for_header 函数不存在'
+
+# --- L2：梯度自愈触发函数 ---
+heal_fn = getattr(listen_chat, 'should_heal_half_deadzone', None)
+assert heal_fn is not None, 'FAIL: should_heal_half_deadzone 函数不存在'
+assert heal_fn({'A': 3, 'B': 3}) is True, 'FAIL: 跨2 sender 应触发自愈'
+assert heal_fn({'A': 3}) is False, 'FAIL: 单 sender 不触发自愈'
+assert heal_fn({'A': 3, 'B': 3, 'C': 3}, threshold=3) is True, 'FAIL: 多 sender 均应触发'
+
+# --- L3：skip reason 细分 ---
+c = listen_chat._SkipCounter()
+c.record('title_unreadable')
+c.record('title_unreadable')
+c.record('is_group')
+snap = c.snapshot()
+assert snap['total'].get('title_unreadable') == 2, 'FAIL: title_unreadable 计数不符，期望 2'
+assert snap['total'].get('is_group') == 1, 'FAIL: is_group 计数不符，期望 1'
+
+# --- L4：待发队列过期上限 ---
+pending = {}
+listen_chat.record_reply_failure(pending, sender='A', content='hi', reply='ok', now=0.0)
+due = listen_chat.select_due_retries(pending, now=1900.0, cooldown_seconds=60, max_age_seconds=1800)
+assert 'A' not in due, 'FAIL: 超过 max_age_seconds 的条目不应出现在重试列表'
+
+print('PASS: Step 3l 全部断言通过')
+" && echo "Step 3l OK" || { echo "FAIL Step 3l"; exit 3; }
+
+# grep 锚验证：关键实现符号必须落地
+grep -q "assert_window_shape_for_header" services/agent/wechat-rpa/listen_chat.py \
+  || { echo "FAIL Step 3l: assert_window_shape_for_header 未落地"; exit 3; }
+grep -q "should_heal_half_deadzone" services/agent/wechat-rpa/listen_chat.py \
+  || { echo "FAIL Step 3l: should_heal_half_deadzone 未落地"; exit 3; }
+grep -q "title_unreadable" services/agent/wechat-rpa/listen_chat.py \
+  || { echo "FAIL Step 3l: title_unreadable 未落地"; exit 3; }
+grep -q "zj-deadzone-dump" services/agent/wechat-rpa/listen_chat.py \
+  || { echo "FAIL Step 3l: zj-deadzone-dump dump 路径未落地"; exit 3; }
+grep -q "enqueued_at" services/agent/wechat-rpa/listen_chat.py \
+  || { echo "FAIL Step 3l: enqueued_at 过期字段未落地"; exit 3; }
+echo "Step 3l grep 锚全部通过"
+
+# rsync 同步校验：源文件与 build-modules 必须一致（L4 Runtime Gate）
+diff -r services/agent/wechat-rpa/ services/agent/build-modules/line04/wechat-rpa/ \
+  --exclude="*.pyc" --exclude="__pycache__" \
+  || { echo "FAIL Step 3l: wechat-rpa rsync 未同步"; exit 3; }
+echo "Step 3l rsync 同步校验通过"
+
+# version bump 校验
+EXPECTED="1.0.150"
+ACTUAL=$(python3 -c "import json; print(json.load(open('services/agent/modules/line04/manifest.json'))['version'])")
+[ "$ACTUAL" = "$EXPECTED" ] \
+  || { echo "FAIL Step 3l: manifest version 期望 $EXPECTED，实际 $ACTUAL"; exit 3; }
+echo "Step 3l version bump 校验通过：$ACTUAL"
+
+ok "Step 3l ✅ 半死区修复三件套 + 队列过期（L1 窗口形态/L2 梯度自愈/L3 skip细分/L4 过期上限）"
 
 # ───────────────────────────────────────────────────────────────────
 # Step 6：上线自检消息——每次启动发一条给固定测试联系人（task 7be2842d，已实现）

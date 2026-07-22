@@ -7,6 +7,14 @@ import {
   registerAgent,
   isValidLicenseKeyFormat,
 } from '../services/license.service';
+import { simpleRateLimit } from '../middleware/simple-rate-limit';
+
+// CodeQL js/missing-rate-limiting: /boot-fail 无鉴权但触发 DB 写，按 machine_id 限流防滥发
+const bootFailRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 10,
+  keyFn: (req: Request) => (req.body && typeof req.body.machine_id === 'string' ? req.body.machine_id : 'anonymous'),
+});
 
 export const agentRouter = Router();
 
@@ -165,3 +173,49 @@ for (const { slug, label } of DRY_RUN_PLATFORMS) {
     res.json({ ok: true, taskId, agentId: agent.agentId });
   });
 }
+
+// POST /api/agent/boot-fail
+// No auth required (N-2): used by start.bat when license is 401 (can't use bearer token)
+// Falls under agentRouter which is mounted at /api/agent
+agentRouter.post('/boot-fail', bootFailRateLimit, async (req: Request, res: Response) => {
+  const { machine_id, hostname, reason, timestamp } = req.body ?? {};
+
+  // Validate required fields
+  if (typeof machine_id !== 'string' || machine_id.length < 1) {
+    return res.status(400).json({ ok: false, success: false, error: 'machine_id required' });
+  }
+  if (typeof reason !== 'string' || reason.length < 1) {
+    return res.status(400).json({ ok: false, success: false, error: 'reason required' });
+  }
+
+  const payload = {
+    machine_id: machine_id.slice(0, 200),
+    hostname: typeof hostname === 'string' ? hostname.slice(0, 200) : null,
+    reason: reason.slice(0, 200),
+    timestamp: typeof timestamp === 'string' ? timestamp : new Date().toISOString(),
+    reported_at: new Date().toISOString(),
+  };
+
+  try {
+    // Try to update the agent's last_boot_error by machine_id
+    // If machine_id not found, return 202 (accepted but not recorded)
+    const pool = (await import('../db/connection')).default;
+    const result = await pool.query(
+      `UPDATE zenithjoy.agents
+         SET last_boot_error = $1::jsonb
+       WHERE machine_id = $2
+       RETURNING id`,
+      [JSON.stringify(payload), payload.machine_id]
+    );
+
+    if (result.rowCount === 0) {
+      // Machine not registered: accept graciously (avoid 401 dead-loop)
+      return res.status(202).json({ ok: true, success: true, recorded: false, message: 'machine not registered' });
+    }
+
+    return res.status(200).json({ ok: true, success: true, recorded: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown';
+    return res.status(500).json({ ok: false, success: false, error: msg });
+  }
+});

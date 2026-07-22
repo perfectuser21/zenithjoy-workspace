@@ -4,6 +4,11 @@ setlocal enabledelayedexpansion
 
 cd /d "%~dp0"
 
+REM === E2E test seam: ZJ_BOOT_FAIL_TEST (proven-to-fire) ===
+REM When ZJ_BOOT_FAIL_TEST=1, skip normal startup and trigger license_401 fail path.
+REM Used by installer-env-reset-smoke A-6 to verify boot-error.json + curl fail-report.
+if "%ZJ_BOOT_FAIL_TEST%"=="1" goto :BOOT_FAIL_TEST_SEAM
+
 REM === E2E test seam: ZJ_LAUNCH_PROBE early-exit guard ===
 REM When ZJ_LAUNCH_PROBE is set (only e2e-verify.ps1 / smoke set it), write a probe marker to
 REM %APPDATA%\zenithjoy-agent\probe-marker.txt then exit immediately, proving the
@@ -37,7 +42,7 @@ if not exist .env (
     ) else (
         echo [ERROR] .env not found. Please re-download install pack from dashboard.
         echo [ERROR] Make sure you EXTRACTED the whole package first, do NOT run start.bat from inside the zip/rar.
-        pause
+        call :WRITE_BOOT_ERROR "missing_env"
         exit /b 1
     )
 )
@@ -87,7 +92,7 @@ if "%_IS_PLACEHOLDER%"=="1" (
     set /p "ZENITHJOY_LICENSE=License Key: "
     if "!ZENITHJOY_LICENSE!"=="" (
         echo [ERROR] No License Key entered, exiting.
-        pause
+        call :WRITE_BOOT_ERROR "missing_license"
         exit /b 1
     )
     REM Persist to .env so it won't prompt next time
@@ -119,17 +124,17 @@ if "%PRECHECK_STATUS%"=="200" (
 )
 if "%PRECHECK_STATUS%"=="401" (
     echo [ERROR] license invalid 401. Please re-download install pack from dashboard.
-    pause
+    call :WRITE_BOOT_ERROR "license_401"
     exit /b 1
 )
 if "%PRECHECK_STATUS%"=="403" (
     echo [ERROR] license rejected 403. Please re-download install pack from dashboard.
-    pause
+    call :WRITE_BOOT_ERROR "license_403"
     exit /b 1
 )
 if "%PRECHECK_STATUS%"=="503" (
-    echo [WARN] backend 503 unavailable. Try again in 5 minutes.
-    pause
+    echo [ERROR] backend 503 unavailable. Fail-reporting and exiting.
+    call :WRITE_BOOT_ERROR "backend_503"
     exit /b 1
 )
 echo [WARN] precheck got status %PRECHECK_STATUS% - proceeding anyway
@@ -147,7 +152,6 @@ if exist "%~dp0ffmpeg.exe" (
             echo [WARN] ffmpeg install failed. Video pipeline will not work. Install ffmpeg manually and add to PATH.
         ) else (
             echo [ffmpeg] installed via winget. Restart start.bat to reload PATH.
-            pause
             exit /b 0
         )
     ) else (
@@ -402,3 +406,47 @@ goto :AGENT_SUPERVISE_LOOP
 :LAUNCHER_LOST_OWNERSHIP
 echo [launcher] a newer launcher took over the mutex - draining this stale loop (no kill, no relaunch)
 exit /b 0
+
+:BOOT_FAIL_TEST_SEAM
+REM Proven-to-fire seam: write boot-error.json for license_401 and curl fail-report
+if not exist "%APPDATA%\zenithjoy-agent" mkdir "%APPDATA%\zenithjoy-agent" >nul 2>&1
+set "_BF_TMP=%APPDATA%\zenithjoy-agent\.boot-error.json.tmp"
+set "_BF_FILE=%APPDATA%\zenithjoy-agent\boot-error.json"
+set "_BF_TS="
+for /f "delims=" %%t in ('powershell -NoProfile -Command "[datetime]::UtcNow.ToString(\"yyyy-MM-ddTHH:mm:ssZ\")"') do set "_BF_TS=%%t"
+set "_BF_MID=test-seam-001"
+set "_BF_HOST=%COMPUTERNAME%"
+if not defined _BF_MID set "_BF_MID=unknown"
+if not defined _BF_HOST set "_BF_HOST=unknown"
+(echo {"reason":"license_401","timestamp":"%_BF_TS%","machine_id":"%_BF_MID%","hostname":"%_BF_HOST%"}) > "%_BF_TMP%"
+move /y "%_BF_TMP%" "%_BF_FILE%" >nul 2>&1
+echo [ERROR] ZJ_BOOT_FAIL_TEST seam triggered: license_401 boot-error written
+set "_BF_ENDPOINT=%ZENITHJOY_BOOT_FAIL_ENDPOINT%"
+if not defined _BF_ENDPOINT set "_BF_ENDPOINT=%ZENITHJOY_API_BASE%/api/agent/boot-fail"
+if not defined _BF_ENDPOINT set "_BF_ENDPOINT=http://localhost:3001/api/agent/boot-fail"
+curl -s -X POST "%_BF_ENDPOINT%" -H "Content-Type: application/json" --data-binary "@%_BF_FILE%" >nul 2>&1
+exit /b 1
+
+:WRITE_BOOT_ERROR
+REM Write boot-error.json atomically and curl fail-report to API
+REM Usage: call :WRITE_BOOT_ERROR "<reason>"
+setlocal
+set "_BFR_REASON=%~1"
+if not defined _BFR_REASON set "_BFR_REASON=unknown"
+if not exist "%APPDATA%\zenithjoy-agent" mkdir "%APPDATA%\zenithjoy-agent" >nul 2>&1
+set "_BFR_TMP=%APPDATA%\zenithjoy-agent\.boot-error.json.tmp"
+set "_BFR_FILE=%APPDATA%\zenithjoy-agent\boot-error.json"
+set "_BFR_TS="
+for /f "delims=" %%t in ('powershell -NoProfile -Command "[datetime]::UtcNow.ToString(\"yyyy-MM-ddTHH:mm:ssZ\")" 2^>nul') do set "_BFR_TS=%%t"
+if not defined _BFR_TS set "_BFR_TS=1970-01-01T00:00:00Z"
+set "_BFR_MID=%ZENITHJOY_MACHINE_ID%"
+if not defined _BFR_MID set "_BFR_MID=unknown"
+set "_BFR_HOST=%COMPUTERNAME%"
+if not defined _BFR_HOST set "_BFR_HOST=unknown"
+(echo {"reason":"%_BFR_REASON%","timestamp":"%_BFR_TS%","machine_id":"%_BFR_MID%","hostname":"%_BFR_HOST%"}) > "%_BFR_TMP%"
+move /y "%_BFR_TMP%" "%_BFR_FILE%" >nul 2>&1
+set "_BFR_EP=%ZENITHJOY_API_BASE%"
+if not defined _BFR_EP set "_BFR_EP=https://autopilot.zenjoymedia.media"
+curl -s -m 10 -X POST "%_BFR_EP%/api/agent/boot-fail" -H "Content-Type: application/json" --data-binary "@%_BFR_FILE%" >nul 2>&1
+endlocal
+goto :EOF

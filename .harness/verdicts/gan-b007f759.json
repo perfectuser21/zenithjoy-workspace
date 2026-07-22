@@ -1,0 +1,23 @@
+{
+  "verdict": "REVISION",
+  "round": 1,
+  "sha": "b007f759",
+  "rubric_scores": {
+    "correctness": 4,
+    "testability": 3,
+    "completeness": 4,
+    "invariant_compliance": 3,
+    "thin_slice": 5,
+    "mechanical_dod": 4,
+    "test_quality": 3
+  },
+  "judgments_written": 5,
+  "concerns": [
+    "CRITICAL: smoke-contract.sh 第239行 [WARN]+PASS 违反 I-1（warning 降级）",
+    "CRITICAL: ZJ_BOOT_FAIL_TEST seam 在 start.bat 中不存在，A-6 proven-to-fire 无效",
+    "HIGH: A-6 非 Windows 路径 HTTP 000 → 静默 PASS，proven-to-fire 被绕过",
+    "HIGH: B3-6 速率限制 console.warn 通过，NFR N-2 形同虚设",
+    "HIGH: GP-1 Step2 回流缺失 + ci-l4-e2e-smoke.yml 未注册 + DoD 第8条无机械断言"
+  ],
+  "revision_feedback": "5条必修：1)删除A-6 [WARN]+PASS降级逻辑改为fail+exit1; 2)SB-7增加ZJ_BOOT_FAIL_TEST seam存在性检测; 3)A-6非Windows分支移除或改为明确skip; 4)B3-6改为expect(lastStatus).toBe(429); 5)DoD增加第9条ci-l4-e2e-smoke.yml注册+grep断言"
+}

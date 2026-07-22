@@ -789,6 +789,22 @@ jobs:
           path: /tmp/apps-api*.log
           retention-days: 3
 
+  # ─── Job: Installer Env Reset Smoke (windows-latest) ──────────────
+  installer-env-reset-smoke:
+    name: Installer Env Reset Smoke (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run installer-env-reset smoke
+        shell: bash
+        env:
+          INSTALLPACK_DIR: ${{ github.workspace }}/services/agent/install-pack
+        run: |
+          bash .github/workflows/scripts/smoke/installer-env-reset-smoke.sh
+
   # ─── L4 Gate ─────────────────────────────────────────────────────
   l4-e2e-passed:
     name: L4 E2E Gate Passed
@@ -796,6 +812,7 @@ jobs:
       - python-creator-tests
       - smoke-api-contract
       - smoke-e2e-worker
+      - installer-env-reset-smoke
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -809,7 +826,8 @@ jobs:
           for pair in \
             "python-creator-tests:${{ needs.python-creator-tests.result }}" \
             "smoke-api-contract:${{ needs.smoke-api-contract.result }}" \
-            "smoke-e2e-worker:${{ needs.smoke-e2e-worker.result }}"; do
+            "smoke-e2e-worker:${{ needs.smoke-e2e-worker.result }}" \
+            "installer-env-reset-smoke:${{ needs.installer-env-reset-smoke.result }}"; do
             NAME="${pair%%:*}"
             RESULT="${pair##*:}"
             if [ "$RESULT" != "success" ]; then
