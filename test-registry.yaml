@@ -4127,6 +4127,15 @@ agent_suite:
   - id: line02-acquisition-dispatch-smoke
     path: .github/workflows/scripts/smoke/acquisition-dispatch-smoke.sh
 
+  # ─── Path2 安卓 Agent 信号上报（2026-07-22 sprint）──────────────────────
+  - id: p2-android-signal-account-label-unification
+    path: apps/api/tests/routes/agent-burner-account-label.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "account_label 语义统一 — 绑号占位(pending:<task_id>)/扫描归一到真实昵称/差集判定标offline 三个纯函数(resolveBindAccountLabel/reconcileAccountLabel/computeOfflineDiff)单测，根治P0串台bug更深层的account_label双写路径语义冲突。"
+
   - id: line02-dispatch-real-scheduling-tdd
     path: sprints/07032333-line02-dispatch-real-scheduling/tests/buildAssignments-dispatch.test.ts
     type: unit
