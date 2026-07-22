@@ -156,6 +156,7 @@ interface FeishuUserInfoResp {
     open_id?: string;
     name?: string;
     email?: string;
+    enterprise_email?: string;
     access_token?: string;
   };
 }
@@ -192,11 +193,12 @@ async function fetchFeishuUserByCode(
   if (data.code !== 0 || !data.data) {
     throw new Error(`FEISHU_USER_INFO_ERROR: code=${data.code ?? 'unknown'} msg=${data.msg ?? ''}`);
   }
-  const { open_id, name, email, access_token } = data.data;
+  const { open_id, name, email, enterprise_email, access_token } = data.data;
   if (!open_id || !access_token) {
     throw new Error('FEISHU_USER_INFO_EMPTY: 飞书返回缺少 open_id/access_token');
   }
-  return { openId: open_id, name: name ?? '', email: (email ?? '').toLowerCase(), accessToken: access_token };
+  const resolvedEmail = email || enterprise_email || '';
+  return { openId: open_id, name: name ?? '', email: resolvedEmail.toLowerCase(), accessToken: access_token };
 }
 
 router.post('/feishu-login', feishuLoginRateLimit, async (req, res): Promise<void> => {
