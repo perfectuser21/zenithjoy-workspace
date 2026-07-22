@@ -458,8 +458,9 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
   });
 
   it('ok=true + account_ids 非空 + request_id 非 UUID 格式（内部定时循环场景 "scan-abc123"）→ 不查询 publish_tasks，每个昵称 upsert 一行 agent_platform_sessions，不报错', async () => {
-    // 非 UUID 格式的 request_id 应在查库前就被挡下——不再有 SELECT publish_tasks 调用，
-    // 只剩每个昵称一次 upsert。
+    // 非 UUID 格式的 request_id 应在查库前就被挡下——不再有 SELECT publish_tasks 调用。
+    // account_label 语义统一（cp-07222121）后新增归一 SELECT + 差集 SELECT，
+    // 总查询数变为：existingRes SELECT + 2 条 upsert + activeRes SELECT。
     vi.mocked(pool.query).mockResolvedValue({ rows: [] } as any);
 
     const app = buildApp();
@@ -476,12 +477,13 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
     expect(r.status).toBe(200);
     expect(r.body.data.written).toBe(2);
     const calls = vi.mocked(pool.query).mock.calls;
-    // 只有两条 upsert，没有 publish_tasks 相关查询
-    expect(calls.length).toBe(2);
+    // existingRes SELECT + 2 条 upsert + activeRes SELECT，没有 publish_tasks 相关查询
+    expect(calls.length).toBe(4);
     expect(calls.every((c) => !/publish_tasks/i.test(String(c[0])))).toBe(true);
-    expect(calls[0][0]).toMatch(/agent_platform_sessions/);
-    expect(calls[0][1]).toEqual([AGENT_UUID, '大湖']);
-    expect(calls[1][1]).toEqual([AGENT_UUID, '秦军餐饮']);
+    expect(calls[0][0]).toMatch(/SELECT account_label FROM zenithjoy\.agent_platform_sessions/);
+    expect(calls[1][0]).toMatch(/INSERT INTO zenithjoy\.agent_platform_sessions/);
+    expect(calls[1][1]).toEqual([AGENT_UUID, '大湖']);
+    expect(calls[2][1]).toEqual([AGENT_UUID, '秦军餐饮']);
   });
 
   it('非 UUID request_id（真实内部定时循环格式 "scan-<base36>"，AgentService.kt runAccountScanLoop）→ 绝不对 publish_tasks 发起 SELECT（否则真实 Postgres 会因 22P02 invalid UUID syntax 崩溃挂死请求），200 且 session 正常写入', async () => {
@@ -512,7 +514,8 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
     expect(r.body.data.written).toBe(1);
     const calls = vi.mocked(pool.query).mock.calls;
     expect(calls.some((c) => /publish_tasks/i.test(String(c[0])))).toBe(false);
-    expect(calls.length).toBe(1);
+    // existingRes SELECT + 1 条 upsert + activeRes SELECT（account_label 语义统一 cp-07222121）
+    expect(calls.length).toBe(3);
     expect(calls[0][0]).toMatch(/agent_platform_sessions/);
   });
 
@@ -624,8 +627,10 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
     expect(r.status).toBe(200);
     expect(r.body.data.written).toBe(1);
     const calls = vi.mocked(pool.query).mock.calls;
-    // 没有 request_id → 不应有任何 SELECT/UPDATE publish_tasks 查询，只有 1 条 upsert
-    expect(calls.length).toBe(1);
+    // 没有 request_id → 不应有任何 SELECT/UPDATE publish_tasks 查询；
+    // existingRes SELECT + 1 条 upsert + activeRes SELECT（account_label 语义统一 cp-07222121）
+    expect(calls.length).toBe(3);
+    expect(calls.every((c) => !/publish_tasks/i.test(String(c[0])))).toBe(true);
     expect(calls[0][0]).toMatch(/agent_platform_sessions/);
   });
 
@@ -695,6 +700,8 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
 
   it('screenshot_b64/tree_dump 缺失时 response 里对应字段为 null，不报错', async () => {
     vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ status: 'queued' }] } as any);
+    // 后续 existingRes/upsert/activeRes 查询（account_label 语义统一 cp-07222121）走默认空结果
+    vi.mocked(pool.query).mockResolvedValue({ rows: [] } as any);
 
     const app = buildApp();
     const r = await request(app)

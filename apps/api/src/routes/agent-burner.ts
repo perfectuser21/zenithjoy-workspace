@@ -41,6 +41,44 @@ const OK = (data: unknown) => ({
   timestamp: new Date().toISOString(),
 });
 
+// ── account_label 语义统一（2026-07-22 Path2 安卓信号上报 sprint）──────────
+// 根因：qr-bind-result（用户绑号）和 account-scan-result（UIA 扫描）曾各自往
+// account_label 塞不同语义的值（用户起的标签名 vs 真实抖音昵称），在
+// (agent_id,platform,account_label) 唯一约束下会为同一台设备的同一个账号产生
+//两条独立行——这正是 P0 串台 bug 那批脏数据的更深根因。
+// 统一方案：account_label 最终只允许是"UIA 扫描读到的真实昵称"，绑号刚完成、
+// 还没有扫描结果时用 pending:<task_id> 占位，等第一次扫描进来后"归一"。
+
+export function resolveBindAccountLabel(input: { task_id: string; payload: Record<string, unknown> }): string {
+  return `pending:${input.task_id}`;
+}
+
+export type ReconcileAction =
+  | { type: 'none' }
+  | { type: 'rename'; from: string; to: string }
+  | { type: 'delete_pending'; label: string };
+
+export function reconcileAccountLabel(input: {
+  agentId: string;
+  existingLabels: string[];
+  realNickname: string;
+}): ReconcileAction {
+  const pendingLabel = input.existingLabels.find((l) => l.startsWith('pending:'));
+  if (!pendingLabel) return { type: 'none' };
+  if (input.existingLabels.includes(input.realNickname)) {
+    return { type: 'delete_pending', label: pendingLabel };
+  }
+  return { type: 'rename', from: pendingLabel, to: input.realNickname };
+}
+
+export function computeOfflineDiff(input: {
+  previouslyActiveLabels: string[];
+  currentlyScannedLabels: string[];
+}): string[] {
+  const currentSet = new Set(input.currentlyScannedLabels);
+  return input.previouslyActiveLabels.filter((label) => !currentSet.has(label));
+}
+
 function tenantOf(req: Request, res: Response): string | null {
   const t = req.tenantId;
   if (!t) {
@@ -134,7 +172,7 @@ router.post('/qr-bind-result', async (req: Request, res: Response) => {
     return res.status(404).json(ERR('TASK_NOT_FOUND', 'task_id 未找到'));
   }
   const payload = t.rows[0].payload || {};
-  const accountLabel = payload.account_label || 'default';
+  const accountLabel = resolveBindAccountLabel({ task_id: task_id, payload });
   // agent_id 优先取 body，兜底取 task payload（agent 回调时可能未传 body.agent_id）
   const resolvedAgentId = agent_id || payload.agent_id;
   if (!resolvedAgentId) {
@@ -683,7 +721,29 @@ router.post('/account-scan-result', async (req: Request, res: Response) => {
   const ids = Array.isArray(account_ids) ? account_ids.filter((x) => typeof x === 'string' && x) : [];
   let written = 0;
   if (ok === true && ids.length > 0) {
+    // 归一：把该 agent 下的 pending 占位行归一到这次扫描到的真实昵称
+    const existingRes = await pool.query(
+      `SELECT account_label FROM zenithjoy.agent_platform_sessions
+        WHERE agent_id = $1 AND platform = 'douyin' AND role = 'burner'`,
+      [agent_id],
+    );
+    const existingLabels: string[] = existingRes.rows.map((r) => r.account_label);
     for (const nickname of ids) {
+      const action = reconcileAccountLabel({ agentId: agent_id, existingLabels, realNickname: nickname });
+      if (action.type === 'rename') {
+        await pool.query(
+          `UPDATE zenithjoy.agent_platform_sessions
+              SET account_label = $3, status = 'active', bound_at = NOW()
+            WHERE agent_id = $1 AND platform = 'douyin' AND account_label = $2`,
+          [agent_id, action.from, action.to],
+        );
+      } else if (action.type === 'delete_pending') {
+        await pool.query(
+          `DELETE FROM zenithjoy.agent_platform_sessions
+            WHERE agent_id = $1 AND platform = 'douyin' AND account_label = $2`,
+          [agent_id, action.label],
+        );
+      }
       await pool.query(
         `INSERT INTO zenithjoy.agent_platform_sessions
            (agent_id, platform, account_label, role, status, bound_at, created_at)
@@ -693,6 +753,25 @@ router.post('/account-scan-result', async (req: Request, res: Response) => {
         [agent_id, nickname],
       );
       written += 1;
+    }
+
+    // 差集标离线：本次扫描仍是权威真相来源，上次 active 但这次没扫到的账号标 offline。
+    // 只在 ok===true（真扫描成功）时执行——扫描失败(ok=false)绝不能拿空列表去把
+    // 所有账号错误地标离线，这条 guard 精确对应 Step 1 测试里最后一条用例的注释。
+    const activeRes = await pool.query(
+      `SELECT account_label FROM zenithjoy.agent_platform_sessions
+        WHERE agent_id = $1 AND platform = 'douyin' AND role = 'burner' AND status = 'active'`,
+      [agent_id],
+    );
+    const previouslyActiveLabels: string[] = activeRes.rows.map((r) => r.account_label);
+    const offlineDiff = computeOfflineDiff({ previouslyActiveLabels, currentlyScannedLabels: ids });
+    for (const label of offlineDiff) {
+      await pool.query(
+        `UPDATE zenithjoy.agent_platform_sessions
+            SET status = 'offline'
+          WHERE agent_id = $1 AND platform = 'douyin' AND account_label = $2`,
+        [agent_id, label],
+      );
     }
   }
 
