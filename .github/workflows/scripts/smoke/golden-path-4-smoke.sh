@@ -189,7 +189,7 @@ diff -r services/agent/wechat-rpa/ services/agent/build-modules/line04/wechat-rp
 echo "Step 3l rsync 同步校验通过"
 
 # version bump 校验
-EXPECTED="1.0.150"
+EXPECTED="1.0.151"
 ACTUAL=$(python3 -c "import json; print(json.load(open('services/agent/modules/line04/manifest.json'))['version'])")
 [ "$ACTUAL" = "$EXPECTED" ] \
   || { echo "FAIL Step 3l: manifest version 期望 $EXPECTED，实际 $ACTUAL"; exit 3; }
