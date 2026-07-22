@@ -216,18 +216,22 @@ router.post('/feishu-login', feishuLoginRateLimit, async (req, res): Promise<voi
   try {
     const appAccessToken = await fetchFeishuAppAccessToken(appId, appSecret);
     const feishuUser = await fetchFeishuUserByCode(appAccessToken, code);
+    console.log(`[feishu-login] 换到用户信息: email=${feishuUser.email || '(空)'} openId=${feishuUser.openId}`);
 
     if (!feishuUser.email) {
+      console.warn('[feishu-login] 拒绝: 飞书账号未绑定邮箱');
       res.status(403).json({ success: false, error: '飞书账号未绑定邮箱，无法核对员工白名单' });
       return;
     }
 
     const staffEmails = parseStaffEmailsForLogin();
     if (!staffEmails.includes(feishuUser.email)) {
+      console.warn(`[feishu-login] 拒绝: ${feishuUser.email} 不在白名单(${staffEmails.join(',')})`);
       res.status(403).json({ success: false, error: '该飞书账号邮箱不在员工白名单内' });
       return;
     }
 
+    console.log(`[feishu-login] 登录成功: ${feishuUser.email}`);
     res.json({
       success: true,
       user: {
@@ -240,6 +244,8 @@ router.post('/feishu-login', feishuLoginRateLimit, async (req, res): Promise<voi
     });
   } catch (err) {
     const message = axios.isAxiosError(err) ? err.message : (err as Error).message;
+    const respBody = axios.isAxiosError(err) ? JSON.stringify(err.response?.data) : '';
+    console.error(`[feishu-login] 失败: ${message} ${respBody}`);
     res.status(502).json({ success: false, error: `飞书登录失败：${message}` });
   }
 });
