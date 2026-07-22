@@ -300,6 +300,7 @@ export async function rescoreLead(
   const outreachEligible = highestGrade === '高意向' || highestGrade === '精准';
 
   await pool.query(
+    // latest_reply_at 复用 $5(last_commented_at)——两者是同一个时间戳，改其中一列的取值时另一列会跟着变，勿拆开单独赋值。
     `UPDATE zenithjoy.acquisition_leads
         SET relevance_score = $3, comment_count = $4, last_commented_at = $5,
             outreach_eligible = $6, grade = $7, latest_reply = $8, latest_reply_at = $5,

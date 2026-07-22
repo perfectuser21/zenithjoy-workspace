@@ -186,8 +186,10 @@ describe('rescoreLead', () => {
         if (/acquisition_lead_comments/.test(text)) {
           return {
             rows: [
-              { grade: '感兴趣', commented_at: new Date('2026-07-20T03:00:00Z'), comment_text: '旧评论' },
+              // 最新评论(按 commented_at)故意放在数组第一位、非最后一位：
+              // 若实现误用"数组最后一条"而非"commented_at 最大的一条"，这里会先露馅。
               { grade: '精准', commented_at: new Date('2026-07-22T09:00:00Z'), comment_text: '这是最新一条评论' },
+              { grade: '感兴趣', commented_at: new Date('2026-07-20T03:00:00Z'), comment_text: '旧评论' },
             ],
           };
         }
@@ -204,6 +206,28 @@ describe('rescoreLead', () => {
     expect(/latest_reply\s*=/.test(updateCall!.text)).toBe(true);
     expect(/latest_reply_at\s*=/.test(updateCall!.text)).toBe(true);
     expect(updateCall!.params).toContain('这是最新一条评论'); // 取 commented_at 最大的那条内容,不是数组顺序最后一条
+  });
+
+  it('rescoreLead 零评论时 latest_reply/latest_reply_at 回填为 null', async () => {
+    const calls: { text: string; params?: unknown[] }[] = [];
+    const pool: QueryablePool = {
+      query: vi.fn(async (text: string, params?: unknown[]) => {
+        calls.push({ text, params });
+        return { rows: [] };
+      }),
+    };
+
+    await rescoreLead(pool, 'tenant-1', 'lead-zero-comments', new Date('2026-07-22T12:00:00Z'));
+
+    const updateCall = calls.find(
+      (c) => /UPDATE\s+zenithjoy\.acquisition_leads/i.test(c.text) && !/FOR UPDATE/i.test(c.text)
+    );
+    expect(updateCall).toBeTruthy();
+    expect(updateCall!.params).toContain(null);
+    const latestReplyParamIndex = 7; // $8 = latestReplyText，params 数组下标从 0 开始
+    expect(updateCall!.params![latestReplyParamIndex]).toBeNull();
+    const lastCommentedAtParamIndex = 4; // $5 = lastCommentedAt，latest_reply_at 复用同一个值
+    expect(updateCall!.params![lastCommentedAtParamIndex]).toBeNull();
   });
 });
 
