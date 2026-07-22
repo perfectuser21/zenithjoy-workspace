@@ -339,6 +339,25 @@ describe('staff routes — POST /api/staff/feishu-login（公开路由，不受 
     expect(res.body.success).toBe(false);
   });
 
+  it('[BEHAVIOR] email 字段为空但 enterprise_email 有值 → 用 enterprise_email 兜底核对白名单', async () => {
+    axiosPostMock
+      .mockResolvedValueOnce({ data: { code: 0, app_access_token: 'app-token-abc', expire: 7200 } })
+      .mockResolvedValueOnce({
+        data: {
+          code: 0,
+          data: { open_id: 'ou_777', name: '企业邮箱用户', email: '', enterprise_email: 'staff@test.com', access_token: 'tok' },
+        },
+      });
+
+    const res = await request(app)
+      .post('/api/staff/feishu-login')
+      .send({ code: 'real-feishu-auth-code' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.user.email).toBe('staff@test.com');
+  });
+
   it('[BEHAVIOR] 缺少 code 参数 → 400', async () => {
     const res = await request(app).post('/api/staff/feishu-login').send({});
     expect(res.status).toBe(400);
