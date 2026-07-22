@@ -149,6 +149,7 @@ export interface ModuleHealthRow {
   hostname: string | null;
   module_status: ModuleStatusMap;
   updated_at: string | null;
+  last_boot_error?: { reason?: string; timestamp?: string; machine_id?: string; hostname?: string; reported_at?: string } | null;
 }
 
 export type LicenseFailureCode =
@@ -549,7 +550,7 @@ export async function saveModuleStatus(
  */
 export async function getAllModuleHealth(): Promise<ModuleHealthRow[]> {
   const { rows } = await pool.query<ModuleHealthRow>(
-    `SELECT id AS agent_id, hostname, module_status, updated_at
+    `SELECT id AS agent_id, hostname, module_status, updated_at, last_boot_error
        FROM zenithjoy.agents
       ORDER BY updated_at DESC NULLS LAST`
   );

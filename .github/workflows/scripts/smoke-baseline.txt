@@ -89,5 +89,6 @@ dm-dispatch-sweep-smoke.sh
 account-scan-trigger-smoke.sh
 scan-fail-diagnostic-capture-smoke.sh
 gpa-voice-rtc-smoke.sh
+installer-env-reset-smoke.sh
 agent-offline-alert-smoke.sh
 xian-runner-fleet-smoke.sh

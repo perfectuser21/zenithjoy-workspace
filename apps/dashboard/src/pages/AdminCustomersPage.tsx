@@ -338,6 +338,32 @@ export default function AdminCustomersPage() {
             </tbody>
           </table>
         )}
+        {/* boot_error 启动错误展示区域 */}
+        {healthRows.filter((h) => (!diagMachine || h.agent_id === diagMachine) && h.last_boot_error).length > 0 && (
+          <div data-testid="boot-error-section" style={{ marginTop: 16 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: '#dc2626', marginBottom: 8 }}>启动错误 (boot_error)</h3>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: '#fef2f2' }}>
+                  <Th>机器</Th>
+                  <Th>错误原因</Th>
+                  <Th>上报时间</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {healthRows
+                  .filter((h) => (!diagMachine || h.agent_id === diagMachine) && h.last_boot_error)
+                  .map((h) => (
+                    <tr key={`boot-err-${h.agent_id}`} data-testid="boot-error-row" style={{ borderTop: '1px solid #fecaca' }}>
+                      <Td>{h.hostname || h.agent_id}</Td>
+                      <Td><span style={{ color: '#dc2626' }}>{h.last_boot_error?.reason ?? '—'}</span></Td>
+                      <Td>{h.last_boot_error?.timestamp ?? h.last_boot_error?.reported_at ?? '—'}</Td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Section>
     </div>
   );

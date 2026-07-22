@@ -757,6 +757,14 @@ build_release() {
   if ! ensure_release_node_modules "${reldir}" "${root_nm}"; then
     echo "❌ release node_modules 自包含填充失败（dotenv 不可解析）"; return 1
   fi
+  # workspace 叠加层（治 npm workspaces 不 hoist 的包）：ensure_release_node_modules 从根
+  # 覆盖后，workspace 特有版本（如 axios@1.18.x）可能被旧根版本覆盖或丢失——再把
+  # apps/api/node_modules 叠加到 release 之上，让 workspace 特有版本优先（CoW 优先）。
+  if [ -d "${ZJ_API_DIR}/node_modules" ] && [ ! -L "${ZJ_API_DIR}/node_modules" ]; then
+    cp -c -R "${ZJ_API_DIR}/node_modules/." "${reldir}/node_modules/" 2>/dev/null \
+      || cp -R "${ZJ_API_DIR}/node_modules/." "${reldir}/node_modules/" 2>/dev/null \
+      || true
+  fi
   [ -f "${reldir}/dist/index.js" ] || { echo "❌ release 产物缺 dist/index.js"; return 1; }
   echo "✅ release ${sha} build 完成"
   return 0

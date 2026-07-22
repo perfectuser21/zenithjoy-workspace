@@ -4899,6 +4899,38 @@ agent_suite:
   product: 微信AI客服
   note: "sprint(0720101623): 刀A审查发现#4补测——reportHealthOnce（index.ts）win32三元分支零覆盖，直接调用本体验证 overlay 字段只在 win32 上透传（取自 getOverlayHandler().getStatus()），非 win32 必须 undefined 且不读取 overlay handler"
 
+- id: installer-env-reset-boot-fail-api-contract
+  path: sprints/07201700-installer-env-reset-m1/tests/boot-fail-api-contract.test.ts
+  type: e2e
+  ci: L4
+  status: active
+  product: 智能获客
+  note: "sprint(07201700): 刀B M1 安装器清环境——POST /api/agent/boot-fail 合同测试，无鉴权可达+输入验证+proven-to-fire（BEHAVIOR-3/4）"
+
+- id: installer-env-reset-setup-reset-ps1-contract
+  path: sprints/07201700-installer-env-reset-m1/tests/setup-reset-ps1-contract.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 智能获客
+  note: "sprint(07201700): 刀B M1 安装器清环境——setup-reset.ps1 静态合同断言（ASCII/无 pause/无 warn 降级/DryRun 切换），含 Windows 真机执行断言（BEHAVIOR-1）"
+
+- id: installer-env-reset-setup-reset-ps1-impl-unit
+  path: services/agent/install-pack/__tests__/setup-reset-ps1-contract.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 智能获客
+  note: "sprint(07201700): 刀B M1 安装器清环境——setup-reset.ps1 实现层单测（services/agent 下运行版），覆盖与 sprint 合同测试相同的静态断言"
+
+- id: installer-env-reset-boot-fail-api-impl-unit
+  path: apps/api/src/routes/__tests__/boot-fail-api-contract.test.ts
+  type: e2e
+  ci: L4
+  status: active
+  product: 智能获客
+  note: "sprint(07201700): 刀B M1 安装器清环境——POST /api/agent/boot-fail API 实现层测试（apps/api/src/routes/__tests__ 下运行版），与 sprint 合同测试功能相同"
+
 - id: agent-offline-alert-sprint-oracle
   path: sprints/07201705-agent-offline-alert/tests/agent-offline-monitor.test.ts
   type: unit
