@@ -44,7 +44,7 @@ export default function SkillEvalPage() {
 
   const fetchReport = useCallback(async (jobId: string) => {
     try {
-      const res = await adminFetch(API_REPORT(jobId), user?.email);
+      const res = await adminFetch(API_REPORT(jobId), user);
       if (!res.ok) {
         setState({ phase: 'error', message: `报告获取失败（${res.status}）` });
         return;
@@ -64,7 +64,7 @@ export default function SkillEvalPage() {
     }
 
     try {
-      const res = await adminFetch(API_STATUS(jobId), user?.email);
+      const res = await adminFetch(API_STATUS(jobId), user);
       if (res.status === 504) {
         stopPolling();
         setState({ phase: 'error', message: '评测服务暂不可用（网关超时 504）' });
@@ -114,7 +114,7 @@ export default function SkillEvalPage() {
     formData.append('journey_id', journeyId);
 
     try {
-      const res = await adminFetch(API_UPLOAD, user?.email, { method: 'POST', body: formData });
+      const res = await adminFetch(API_UPLOAD, user, { method: 'POST', body: formData });
       if (res.status === 504) {
         setState({ phase: 'error', message: '评测服务暂不可用（网关超时 504）' });
         return;

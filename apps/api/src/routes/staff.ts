@@ -5,7 +5,7 @@
  * GET  /api/staff/skill-eval/status/:jobId  — 查询评测状态，转发到同一服务
  * GET  /api/staff/skill-eval/report/:jobId  — 拉取评测报告，转发到同一服务
  *
- * 所有路由受 staffGuard 保护（STAFF_EMAILS 白名单）
+ * 所有路由受 staffGuard 保护（STAFF_EMAILS 或 STAFF_FEISHU_OPENIDS 白名单，任一命中放行）
  *
  * 下游 Cecelia /api/skill-eval/* 契约（packages/brain/src/routes/eval.js）：
  * - upload 必须带 multipart 字段 skill_name（必填）+ file；成功返回 { task_id, queue_position, message }
@@ -142,6 +142,11 @@ function parseStaffEmailsForLogin(): string[] {
   return raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 }
 
+function parseStaffFeishuOpenIdsForLogin(): string[] {
+  const raw = process.env.STAFF_FEISHU_OPENIDS ?? '';
+  return raw.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
 interface FeishuAppAccessTokenResp {
   code: number;
   msg?: string;
@@ -218,27 +223,25 @@ router.post('/feishu-login', feishuLoginRateLimit, async (req, res): Promise<voi
   try {
     const appAccessToken = await fetchFeishuAppAccessToken(appId, appSecret);
     const feishuUser = await fetchFeishuUserByCode(appAccessToken, code);
-    console.log(`[feishu-login] 换到用户信息: email=${feishuUser.email || '(空)'} openId=${feishuUser.openId}`);
+    console.log(`[feishu-login] 换到用户信息: openId=${feishuUser.openId} email=${feishuUser.email || '(空)'}`);
 
-    if (!feishuUser.email) {
-      console.warn('[feishu-login] 拒绝: 飞书账号未绑定邮箱');
-      res.status(403).json({ success: false, error: '飞书账号未绑定邮箱，无法核对员工白名单' });
-      return;
-    }
-
+    const staffOpenIds = parseStaffFeishuOpenIdsForLogin();
     const staffEmails = parseStaffEmailsForLogin();
-    if (!staffEmails.includes(feishuUser.email)) {
-      console.warn(`[feishu-login] 拒绝: ${feishuUser.email} 不在白名单(${staffEmails.join(',')})`);
-      res.status(403).json({ success: false, error: '该飞书账号邮箱不在员工白名单内' });
+    const openIdOk = staffOpenIds.includes(feishuUser.openId);
+    const emailOk = feishuUser.email !== '' && staffEmails.includes(feishuUser.email);
+
+    if (!openIdOk && !emailOk) {
+      console.warn(`[feishu-login] 拒绝: openId=${feishuUser.openId} email=${feishuUser.email || '(空)'} 均不在白名单`);
+      res.status(403).json({ success: false, error: '该飞书账号不在员工白名单内' });
       return;
     }
 
-    console.log(`[feishu-login] 登录成功: ${feishuUser.email}`);
+    console.log(`[feishu-login] 登录成功: openId=${feishuUser.openId}${emailOk ? ` email=${feishuUser.email}` : ''}`);
     res.json({
       success: true,
       user: {
         id: feishuUser.openId,
-        name: feishuUser.name || feishuUser.email,
+        name: feishuUser.name || feishuUser.email || feishuUser.openId,
         email: feishuUser.email,
         feishu_user_id: feishuUser.openId,
         access_token: feishuUser.accessToken,

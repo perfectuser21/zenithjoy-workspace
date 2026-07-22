@@ -324,11 +324,53 @@ describe('staff routes — POST /api/staff/feishu-login（公开路由，不受 
     expect(res.body.user).toBeUndefined();
   });
 
-  it('[BEHAVIOR] 飞书账号未绑定邮箱 → 403（无法核对白名单）', async () => {
+  it('[BEHAVIOR] 飞书账号未绑定邮箱，且 openId 也不在白名单 → 403', async () => {
     axiosPostMock
       .mockResolvedValueOnce({ data: { code: 0, app_access_token: 'app-token-abc', expire: 7200 } })
       .mockResolvedValueOnce({
         data: { code: 0, data: { open_id: 'ou_888', name: '无邮箱用户', email: '', access_token: 'tok' } },
+      });
+
+    const res = await request(app)
+      .post('/api/staff/feishu-login')
+      .send({ code: 'real-feishu-auth-code' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('[BEHAVIOR] 飞书账号未绑定邮箱，但 openId 在 STAFF_FEISHU_OPENIDS 白名单 → 登录成功（真实场景：部分飞书账号从不返回email）', async () => {
+    vi.stubEnv('STAFF_FEISHU_OPENIDS', 'ou_f8fea87de8cc141b1b94914780eed76b');
+    axiosPostMock
+      .mockResolvedValueOnce({ data: { code: 0, app_access_token: 'app-token-abc', expire: 7200 } })
+      .mockResolvedValueOnce({
+        data: {
+          code: 0,
+          data: { open_id: 'ou_f8fea87de8cc141b1b94914780eed76b', name: '', email: '', access_token: 'tok' },
+        },
+      });
+
+    const res = await request(app)
+      .post('/api/staff/feishu-login')
+      .send({ code: 'real-feishu-auth-code' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.user).toEqual({
+      id: 'ou_f8fea87de8cc141b1b94914780eed76b',
+      name: 'ou_f8fea87de8cc141b1b94914780eed76b',
+      email: '',
+      feishu_user_id: 'ou_f8fea87de8cc141b1b94914780eed76b',
+      access_token: 'tok',
+    });
+  });
+
+  it('[BEHAVIOR] openId 不在白名单、email 也不在白名单 → 403（openId 白名单不会误放行陌生账号）', async () => {
+    vi.stubEnv('STAFF_FEISHU_OPENIDS', 'ou_f8fea87de8cc141b1b94914780eed76b');
+    axiosPostMock
+      .mockResolvedValueOnce({ data: { code: 0, app_access_token: 'app-token-abc', expire: 7200 } })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { open_id: 'ou_stranger', name: '路人', email: '', access_token: 'tok' } },
       });
 
     const res = await request(app)

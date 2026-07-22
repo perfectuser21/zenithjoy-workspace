@@ -53,7 +53,7 @@ export default function PathHealthPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await adminFetch('/api/staff/path-health', user?.email);
+      const res = await adminFetch('/api/staff/path-health', user);
       if (!res.ok) {
         setError(`加载失败（${res.status}）`);
         setLoading(false);
