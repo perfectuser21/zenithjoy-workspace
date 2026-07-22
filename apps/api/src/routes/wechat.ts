@@ -18,6 +18,7 @@ import pool from '../db/connection';
 import { resolveTenantForAgent } from '../services/agent-tenant-resolver';
 import { generateChatDraft, generateMomentDraft } from '../services/wechat-draft';
 import { recordHeartbeat, listHeartbeats } from '../services/wechat-heartbeat';
+import { simpleRateLimit } from '../middleware/simple-rate-limit';
 import {
   enqueueFailureAlert,
   listPendingOutbound,
@@ -581,7 +582,16 @@ wechatRouter.post('/moment-drafts/:taskId/reject', async (req: Request, res: Res
 // 从既有 CRM 表（crm_customers + wechat_cs_account_config）组装六字段，禁新建表。
 // 六字段：level / nickname / source / contact_count / recent_actions / ai_profile
 // 路由作用：overlay switch_customer() 调用此接口拉取画像卡数据（FR-B1）
-wechatRouter.get('/customer-profile', async (req: Request, res: Response) => {
+// CodeQL js/missing-rate-limiting：本路由碰 DB 且不走 tenantContext（overlay 按 wechat_id 直查），
+// 按 wechat_id 限流（同 collectReportRateLimit 的 task_id 修法）。overlay 切客户正常节奏是
+// 秒级一次，120次/60s 留足连续切换余量。
+const customerProfileRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 120,
+  keyFn: (req) => (typeof req.query.wechat_id === 'string' && req.query.wechat_id) || 'anonymous',
+});
+
+wechatRouter.get('/customer-profile', customerProfileRateLimit, async (req: Request, res: Response) => {
   const { wechat_id } = req.query;
   if (!wechat_id || typeof wechat_id !== 'string' || !wechat_id.trim()) {
     return res.status(400).json({
