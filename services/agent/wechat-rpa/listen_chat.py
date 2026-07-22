@@ -5815,6 +5815,9 @@ def run_real_listen(args: argparse.Namespace) -> int:
                     import concurrent.futures
 
                     def _gen_draft(mm):
+                        # FR-3（F3.1）：在调 post_draft_generate 前写 thinking 事件，
+                        # 激活 overlay setThinking() 蓝色动画（Gate D，Inv-14）
+                        _write_event("thinking", mm["sender"])
                         return post_draft_generate(
                             args.middleware_url, mm["sender"],
                             mm.get("wxid") or mm.get("sender_wxid") or mm.get("sender", ""),

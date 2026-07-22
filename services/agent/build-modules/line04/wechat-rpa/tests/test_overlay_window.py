@@ -404,3 +404,49 @@ def test_switch_customer_passes_all_six_fields_to_js(tmp_path, monkeypatch):
         val_str = json.dumps(val, ensure_ascii=False) if not isinstance(val, str) else val
         assert (val if isinstance(val, str) else str(val)) in js_call_arg or val_str in js_call_arg, \
             f"字段 {key}={val!r} 未真传给 JS（evaluate_js 调用内容: {js_call_arg[:300]}）"
+
+
+# ─── GP-4 新增：tail_pointer 持久化（Inv-13） ───
+
+def test_tail_consumer_load_pointer_returns_zero_when_missing(tmp_path):
+    """_load_pointer 在 tail_pointer.txt 不存在时归零（Inv-13 软失败）。"""
+    consumer = EventTailConsumer(str(tmp_path))
+    assert consumer._file_offset == 0
+
+
+def test_tail_consumer_save_then_load_pointer_roundtrip(tmp_path):
+    """_save_pointer 写 offset 后 _load_pointer 可恢复（重启不重放旧事件）。"""
+    consumer = EventTailConsumer(str(tmp_path))
+    consumer._save_pointer(1024)
+    # 新建 consumer 从磁盘恢复
+    consumer2 = EventTailConsumer(str(tmp_path))
+    assert consumer2._file_offset == 1024
+
+
+def test_tail_consumer_load_pointer_corrupt_content_returns_zero(tmp_path):
+    """tail_pointer.txt 内容损坏（非整数）→ 归零，不抛异常（Inv-13）。"""
+    pointer_path = tmp_path / "tail_pointer.txt"
+    pointer_path.write_text("not-a-number", encoding="utf-8")
+    consumer = EventTailConsumer(str(tmp_path))
+    assert consumer._file_offset == 0
+
+
+# ─── GP-4 新增：open_customer_page webbrowser（Inv-15，FR-4） ───
+
+def test_open_customer_page_calls_webbrowser_open(tmp_path, monkeypatch):
+    """open_customer_page 必须调 webbrowser.open（Inv-15：外部浏览器非 iframe）。"""
+    from overlay.overlay_window import OverlayApp
+    import overlay.overlay_window as _ow_mod
+
+    opened_urls = []
+
+    def fake_open(url):
+        opened_urls.append(url)
+
+    monkeypatch.setattr(_ow_mod, "webbrowser", type("wb", (), {"open": staticmethod(fake_open)})())
+
+    app = OverlayApp(state_dir=str(tmp_path))
+    app.open_customer_page("wxid_test123")
+
+    assert len(opened_urls) == 1
+    assert "wxid_test123" in opened_urls[0]

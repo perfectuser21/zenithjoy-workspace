@@ -20,6 +20,7 @@ import shutil
 import sys
 import threading
 import time
+import webbrowser
 from pathlib import Path
 from typing import Optional
 
@@ -346,6 +347,7 @@ class EventTailConsumer:
     严禁以写模式打开 events.jsonl（唯一写者 = listen_chat）。
 
     特性：
+      - tail_pointer.txt 持久化：重启后从上次消费字节 offset 恢复，不重放旧 event_id（Gate A）
       - inode 变化（日志轮转）→ 重开句柄，先读 .1 再读当前
       - 坏行（JSON parse error）→ 跳过
       - event_id 幂等去重（精确整串匹配）
@@ -362,15 +364,67 @@ class EventTailConsumer:
         self.state_dir = state_dir
         self._events_path = os.path.join(state_dir, "events.jsonl")
         self._events_path_rotated = self._events_path + ".1"
+        self._pointer_path = os.path.join(state_dir, "tail_pointer.txt")
         self._seen_ids: set = set()
         self._last_inode: Optional[int] = None
         self._last_heartbeat_ts: Optional[float] = None
+        # Gate A：从 tail_pointer.txt 恢复字节 offset（重启不重放旧事件）
+        self._file_offset: int = self._load_pointer()
+
+    def _load_pointer(self) -> int:
+        """读取 tail_pointer.txt 中存储的字节 offset，损坏/不存在时归零不抛异常（Inv-13）。"""
+        try:
+            content = open(self._pointer_path, "r", encoding="utf-8").read().strip()
+            val = int(content)
+            return max(0, val)
+        except (FileNotFoundError, OSError):
+            return 0
+        except (ValueError, TypeError):
+            # 内容损坏（非整数）→ 归零软失败
+            return 0
+
+    def _save_pointer(self, offset: int) -> None:
+        """将字节 offset 写回 tail_pointer.txt（软失败：写失败只 log，不抛异常）。"""
+        try:
+            tmp_path = self._pointer_path + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write(str(offset))
+            os.replace(tmp_path, self._pointer_path)
+        except OSError:
+            pass  # 写失败软失败（Inv-13）
+
+    def _read_lines_from_offset(self, filepath: str, offset: int) -> tuple:
+        """从指定字节 offset 处读取文件行，返回 (events, new_offset)（BEHAVIOR-8：只读）。"""
+        lines = []
+        new_offset = offset
+        try:
+            with open(filepath, "rb") as f:
+                # 检查文件大小，offset 若超出则归零（文件被截断/轮转）
+                f.seek(0, 2)
+                file_size = f.tell()
+                if offset > file_size:
+                    offset = 0
+                f.seek(offset)
+                raw = f.read()
+                new_offset = offset + len(raw)
+            # 解析行（UTF-8，坏行跳过）
+            for line in raw.decode("utf-8", errors="replace").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    ev = json.loads(line)
+                    lines.append(ev)
+                except json.JSONDecodeError:
+                    continue  # 坏行跳过（BEHAVIOR-4）
+        except (FileNotFoundError, OSError):
+            pass
+        return lines, new_offset
 
     def _read_lines_safe(self, filepath: str) -> list:
-        """只读读取文件行，跳过坏行（BEHAVIOR-8：绝不写入）。"""
+        """只读读取文件行（全量），跳过坏行（BEHAVIOR-8：绝不写入）。"""
         lines = []
         try:
-            # 严禁以 'w'/'a' 模式打开 events.jsonl
             with open(filepath, "r", encoding="utf-8", errors="replace") as f:
                 for line in f:
                     line = line.strip()
@@ -398,21 +452,29 @@ class EventTailConsumer:
 
         返回规则：
           - heartbeat 超 180s → 返回 [DEGRADED_EVENT]
-          - 正常 → 返回去重后的新事件列表
+          - 正常 → 返回去重后的新事件列表（从 tail_pointer.txt 记录的 offset 起读取）
         """
         all_events = []
 
         # 检查 inode 变化（轮转检测）
         current_inode = self._get_inode(self._events_path)
         if current_inode != self._last_inode and self._last_inode is not None:
-            # inode 变化 → 先读 .1（轮转前的旧文件）
+            # inode 变化 → 先读 .1（轮转前的旧文件），全量读
             rotated_events = self._read_lines_safe(self._events_path_rotated)
             all_events.extend(rotated_events)
+            # 轮转后重置 offset，从新文件头读
+            self._file_offset = 0
         self._last_inode = current_inode
 
-        # 读当前文件（只读）
-        current_events = self._read_lines_safe(self._events_path)
+        # 从上次 offset 读当前文件（Gate A：重启后不重放旧事件）
+        current_events, new_offset = self._read_lines_from_offset(
+            self._events_path, self._file_offset
+        )
         all_events.extend(current_events)
+        # 更新内存 offset
+        self._file_offset = new_offset
+        # 持久化 offset（Gate A：重启后恢复）
+        self._save_pointer(new_offset)
 
         # 更新 heartbeat 时间戳
         for ev in all_events:
@@ -590,6 +652,19 @@ class OverlayApp:
   .profile-meta { font-size: 10px; color: #94a3b8; display: flex; gap: 10px; }
   .profile-actions { font-size: 10px; color: #93c5fd; }
   .profile-ai { font-size: 10px; color: #64748b; font-style: italic; }
+  /* FR-2：三段论字段（need/budget/concern） */
+  .profile-portrait { font-size: 10px; color: #94a3b8; display: flex; flex-direction: column; gap: 2px; }
+  .profile-portrait-item { display: flex; gap: 4px; }
+  .portrait-label { color: #60a5fa; font-weight: 600; min-width: 28px; flex-shrink: 0; }
+  /* FR-4：查看画像按钮 */
+  .profile-btn-row { display: flex; justify-content: flex-end; margin-top: 2px; }
+  .btn-view-profile {
+    font-size: 9px; color: #60a5fa; border: 1px solid rgba(96,165,250,.3);
+    background: rgba(96,165,250,.06); border-radius: 4px; padding: 1px 7px;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .btn-view-profile:hover { background: rgba(96,165,250,.14); }
+  .btn-view-profile:disabled { opacity: 0.4; cursor: default; }
 </style>
 </head>
 <body>
@@ -610,6 +685,19 @@ class OverlayApp:
   </div>
   <div class="profile-actions" id="profile-actions"></div>
   <div class="profile-ai" id="profile-ai"></div>
+  <!-- FR-2：三段论字段（need/budget/concern）来自 cs_memory_longterm.summary -->
+  <div class="profile-portrait" id="profile-portrait" style="display:none">
+    <div class="profile-portrait-item"><span class="portrait-label">需求</span><span id="portrait-need"></span></div>
+    <div class="profile-portrait-item"><span class="portrait-label">预算</span><span id="portrait-budget"></span></div>
+    <div class="profile-portrait-item"><span class="portrait-label">顾虑</span><span id="portrait-concern"></span></div>
+  </div>
+  <!-- FR-4：查看画像按钮 -->
+  <div class="profile-btn-row">
+    <button class="btn-view-profile" id="btn-view-profile" disabled
+      onclick="window.pywebview && window.pywebview.api.open_customer_page && window.pywebview.api.open_customer_page(window.__currentWechatId || '')">
+      查看画像
+    </button>
+  </div>
 </div>
 <div class="thinking-area idle" id="ta">
   <span class="thinking-label">状态</span>
@@ -654,7 +742,7 @@ function addCard(badgeCls, badgeTxt, bodyHtml) {
 function setThinking(text) { ta.classList.remove('idle'); tt.textContent = text || '思考中...'; }
 function setIdle(text)     { ta.classList.add('idle');    tt.textContent = text || '待机中'; }
 
-// Step16：会话跟随客户画像卡——真渲染六字段（level/nickname/source/contact_count/recent_actions/ai_profile）
+// Step16：会话跟随客户画像卡——渲染六字段 + 三段论（FR-2：need/budget/concern）
 window.__updateCustomerCard = function(profile) {
   const card = document.getElementById('profile-card');
   if (!card || !profile) return;
@@ -668,6 +756,23 @@ window.__updateCustomerCard = function(profile) {
   const actions = Array.isArray(profile.recent_actions) ? profile.recent_actions.join('、') : '';
   document.getElementById('profile-actions').textContent = actions ? ('近期动态: ' + actions) : '';
   document.getElementById('profile-ai').textContent = profile.ai_profile || '';
+  // FR-2：三段论字段渲染（need/budget/concern 来自 cs_memory_longterm.summary）
+  const portrait = profile.portrait || {};
+  const need = portrait.need || '';
+  const budget = portrait.budget || '';
+  const concern = portrait.concern || '';
+  const portraitEl = document.getElementById('profile-portrait');
+  if (portraitEl && (need || budget || concern)) {
+    document.getElementById('portrait-need').textContent = need;
+    document.getElementById('portrait-budget').textContent = budget;
+    document.getElementById('portrait-concern').textContent = concern;
+    portraitEl.style.display = 'flex';
+  }
+  // FR-4：有画像数据时启用「查看画像」按钮
+  const btnViewProfile = document.getElementById('btn-view-profile');
+  if (btnViewProfile && profile.nickname) {
+    btnViewProfile.disabled = false;
+  }
 };
 
 function renderEvent(ev) {
@@ -713,6 +818,10 @@ setInterval(poll, 500);
         # 里程碑B：会话跟随画像卡（BEHAVIOR-4）
         self.current_customer: Optional[str] = None
         self._current_profile: dict = {}
+        # FR-4：中台基础 URL，用于 open_customer_page 生成 CustomerProfilePage URL
+        self._middleware_base_url: str = os.environ.get("ZJ_API", "http://localhost:5174")
+        # FR-4：当前会话 wechat_id 缓存（无 session 时按钮置灰）
+        self._current_wechat_id: Optional[str] = None
 
         if state_dir:
             self._event_consumer = EventTailConsumer(state_dir)
@@ -752,17 +861,31 @@ setInterval(poll, 500);
         """
         profile = self._fetch_customer_profile(wechat_id)
         self.current_customer = wechat_id
+        self._current_wechat_id = wechat_id  # FR-4：更新 wechat_id 缓存
         self._current_profile = profile
-        # 如果浮窗已开启，通过 JS 更新画像卡 DOM（传完整六字段，不是只挑 nickname/level）
+        # 如果浮窗已开启，通过 JS 更新画像卡 DOM（传完整六字段 + 三段论，不是只挑 nickname/level）
         if self._window is not None:
             try:
                 self._window.evaluate_js(
+                    f"window.__currentWechatId = {json.dumps(wechat_id)}; "
                     f"window.__updateCustomerCard && window.__updateCustomerCard("
                     f"{json.dumps(profile, ensure_ascii=False)})"
                 )
             except Exception:
                 pass  # JS 调用失败不影响状态更新
         return profile
+
+    def open_customer_page(self, wechat_id: str) -> None:
+        """
+        FR-4（F4.2）：打开客户画像页（CustomerProfilePage）。
+        通过 webbrowser.open 在系统默认浏览器打开中台 URL（Inv-15：外部浏览器，非嵌入渲染）。
+        Gate G：xian-rog 真机验证 Windows webbrowser.open 可用性。
+        """
+        if not wechat_id:
+            # 无 wechat_id 时尝试使用缓存
+            wechat_id = self._current_wechat_id or ""
+        url = f"{self._middleware_base_url}/wechat/crm/{wechat_id}"
+        webbrowser.open(url)
 
     def get_events(self) -> list:
         """暴露给 pywebview JS 侧的 API：获取新事件，并联动切换画像卡（Step16 会话跟随）。

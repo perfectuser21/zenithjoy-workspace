@@ -18,6 +18,7 @@ import pool from '../db/connection';
 import { resolveTenantForAgent } from '../services/agent-tenant-resolver';
 import { generateChatDraft, generateMomentDraft } from '../services/wechat-draft';
 import { recordHeartbeat, listHeartbeats } from '../services/wechat-heartbeat';
+import { simpleRateLimit } from '../middleware/simple-rate-limit';
 import {
   enqueueFailureAlert,
   listPendingOutbound,
@@ -581,7 +582,16 @@ wechatRouter.post('/moment-drafts/:taskId/reject', async (req: Request, res: Res
 // 从既有 CRM 表（crm_customers + wechat_cs_account_config）组装六字段，禁新建表。
 // 六字段：level / nickname / source / contact_count / recent_actions / ai_profile
 // 路由作用：overlay switch_customer() 调用此接口拉取画像卡数据（FR-B1）
-wechatRouter.get('/customer-profile', async (req: Request, res: Response) => {
+// CodeQL js/missing-rate-limiting：本路由碰 DB 且不走 tenantContext（overlay 按 wechat_id 直查），
+// 按 wechat_id 限流（同 collectReportRateLimit 的 task_id 修法）。overlay 切客户正常节奏是
+// 秒级一次，120次/60s 留足连续切换余量。
+const customerProfileRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 120,
+  keyFn: (req) => (typeof req.query.wechat_id === 'string' && req.query.wechat_id) || 'anonymous',
+});
+
+wechatRouter.get('/customer-profile', customerProfileRateLimit, async (req: Request, res: Response) => {
   const { wechat_id } = req.query;
   if (!wechat_id || typeof wechat_id !== 'string' || !wechat_id.trim()) {
     return res.status(400).json({
@@ -640,6 +650,47 @@ wechatRouter.get('/customer-profile', async (req: Request, res: Response) => {
     // ai_profile：暂无独立字段，thin 实现返回空字符串（加厚阶段聚合 reasoning）
     const ai_profile = '';
 
+    // portrait 三段论：从 cs_memory_longterm.summary 解析 need/budget/concern
+    let portrait = { need: '', budget: '', concern: '' };
+    try {
+      const memResult = await pool.query<{ summary: string }>(
+        `SELECT summary FROM zenithjoy.cs_memory_longterm
+          WHERE contact = $1
+          ORDER BY updated_at DESC
+          LIMIT 1`,
+        [row?.nickname ?? wid]
+      );
+      if (memResult.rows[0]?.summary) {
+        const summary = memResult.rows[0].summary;
+        const needMatch = summary.match(/need[：:]\s*([^\n]+)/i) || summary.match(/需求[：:]\s*([^\n]+)/i);
+        const budgetMatch = summary.match(/budget[：:]\s*([^\n]+)/i) || summary.match(/预算[：:]\s*([^\n]+)/i);
+        const concernMatch = summary.match(/concern[：:]\s*([^\n]+)/i) || summary.match(/顾虑[：:]\s*([^\n]+)/i);
+        portrait = {
+          need: needMatch?.[1]?.trim() ?? summary.slice(0, 50),
+          budget: budgetMatch?.[1]?.trim() ?? '',
+          concern: concernMatch?.[1]?.trim() ?? '',
+        };
+      }
+    } catch { /* 降级：portrait 字段返回空字符串 */ }
+
+    // recent_messages：最近 3 条完整消息
+    let recent_messages: Array<{ role: string; content: string; created_at: string }> = [];
+    try {
+      const msgResult = await pool.query<{ text: string; role: string; created_at: string }>(
+        `SELECT text, role, created_at
+           FROM zenithjoy.cs_memory_messages
+          WHERE contact = $1
+          ORDER BY created_at DESC
+          LIMIT 3`,
+        [row?.nickname ?? wid]
+      );
+      recent_messages = msgResult.rows.map((r) => ({
+        role: r.role || 'user',
+        content: r.text,
+        created_at: r.created_at,
+      }));
+    } catch { recent_messages = []; }
+
     const data = row
       ? {
           level: row.level,
@@ -648,6 +699,8 @@ wechatRouter.get('/customer-profile', async (req: Request, res: Response) => {
           contact_count: Number(row.contact_count) || 0,
           recent_actions,
           ai_profile,
+          portrait,
+          recent_messages,
         }
       : {
           // 占位：CRM 中无记录时返回 wechat_id 作为 nickname
@@ -655,8 +708,10 @@ wechatRouter.get('/customer-profile', async (req: Request, res: Response) => {
           nickname: wid,
           source: '',
           contact_count: 0,
-          recent_actions: [],
+          recent_actions,
           ai_profile: '',
+          portrait,
+          recent_messages,
         };
 
     return res.json({ data });
