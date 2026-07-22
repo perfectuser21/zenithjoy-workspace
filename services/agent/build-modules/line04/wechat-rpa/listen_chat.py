@@ -4003,14 +4003,26 @@ def _build_should_open(*, roster_pred: Optional[Any],
 MAX_REPLY_RETRY_ATTEMPTS = 3  # 连续失败达此值放弃（防无限重试卡死），交由关键人告警兜底
 
 
-def select_due_retries(pending: Dict[str, Dict[str, Any]], now: float, cooldown_seconds: float) -> list:
+def select_due_retries(
+    pending: Dict[str, Dict[str, Any]],
+    now: float,
+    cooldown_seconds: float,
+    max_age_seconds: float = 0,
+) -> list:
     """纯函数：待重试队列里哪些 sender 冷却已到期，该被重新尝试。
 
     不依赖 unread/scan_unread——这是本次修复要证明的核心：即使微信原生角标已经被
     _open_chat 清掉、下轮 scan_unread 完全探测不到这条消息，这个队列依然记得它欠回复。
+
+    max_age_seconds（L4 过期上限）：若 > 0，超过该时长的条目（按 enqueued_at 计）不选中；
+    防止积压 30 分钟以上的旧失败消息被无限重试干扰当前对话。默认 0 = 不过期过滤（向后兼容）。
     """
     due = []
     for sender, info in pending.items():
+        if max_age_seconds > 0:
+            enqueued_at = info.get("enqueued_at", info.get("failed_at", 0))
+            if now - enqueued_at >= max_age_seconds:
+                continue  # 超过最大年龄，跳过（不重试积压旧消息）
         if now - info.get("failed_at", 0) >= cooldown_seconds:
             due.append(sender)
     return due
@@ -4019,17 +4031,24 @@ def select_due_retries(pending: Dict[str, Dict[str, Any]], now: float, cooldown_
 def record_reply_failure(
     pending: Dict[str, Dict[str, Any]], *, sender: str, content: str, reply: str, now: float,
 ) -> None:
-    """发送失败时调用：记进待重试队列（或续期已有条目）。达到最大重试次数则放弃。"""
+    """发送失败时调用：记进待重试队列（或续期已有条目）。达到最大重试次数则放弃。
+
+    L4 增强：首次记录时写入 enqueued_at（入队时刻），后续续期不覆盖，
+    供 select_due_retries(max_age_seconds=1800) 过期清除。
+    """
     existing = pending.get(sender)
     attempts = (existing["attempts"] + 1) if existing else 1
     if attempts >= MAX_REPLY_RETRY_ATTEMPTS:
         pending.pop(sender, None)
         return
+    # L4：首次入队记录 enqueued_at；续期保留原值（基于首次失败时刻计算最大年龄）
+    enqueued_at = existing.get("enqueued_at", now) if existing else now
     pending[sender] = {
         "content": content,
         "reply": reply,
         "failed_at": now,
         "attempts": attempts,
+        "enqueued_at": enqueued_at,
     }
 
 
@@ -4397,6 +4416,104 @@ def window_needs_maximize(is_zoomed: bool, is_iconic: bool) -> bool:
     强行弹最大化窗口会打扰客户机操作者，绝不动。
     """
     return (not is_iconic) and (not is_zoomed)
+
+
+# ─── L1：判群前窗口形态不变量 ──────────────────────────────────────────────────────────────
+# 双栏布局阈值：宽度 < 600px 时微信进单栏，标题 pane 可能不渲染，强读必 title_unreadable。
+_DUAL_PANE_WIDTH_THRESHOLD = 600
+
+
+def assert_window_shape_for_header(hwnd: int, ctypes_mod=None) -> bool:
+    """纯函数(CI可测)：判群前窗口形态不变量。
+
+    回答"当前窗口是否处于可靠读取标题区的形态"：
+      - iconic=True（最小化/托盘）→ False（标题 pane 不渲染，强读必 title_unreadable）
+      - zoomed=True + iconic=False → True（最大化，双栏布局，标题 pane 就绪）
+      - zoomed=False + iconic=False + 宽度 >= 阈值 → True（窗口够宽，双栏就绪）
+      - zoomed=False + iconic=False + 宽度 < 阈值 → False（单栏布局，标题不渲染）
+
+    ctypes_mod：可注入 mock（含 windll.user32.IsZoomed/IsIconic/GetWindowRect），
+    便于 macOS/Linux CI 测试；生产代码传 None 时自动 import ctypes。
+    """
+    if ctypes_mod is None:
+        try:
+            import ctypes as _ctypes
+            ctypes_mod = _ctypes
+        except ImportError:
+            return True  # 非 Windows 环境：跳过形态检查，不阻断流程
+
+    user32 = ctypes_mod.windll.user32
+
+    if user32.IsIconic(hwnd):
+        return False  # 最小化/托盘：标题 pane 不可读
+
+    if user32.IsZoomed(hwnd):
+        return True  # 已最大化：双栏布局，标题就绪
+
+    # 非最大化：检查窗口宽度是否达到双栏阈值
+    try:
+        import ctypes as _ctypes
+
+        class _RECT(_ctypes.Structure):
+            _fields_ = [("left", _ctypes.c_long), ("top", _ctypes.c_long),
+                        ("right", _ctypes.c_long), ("bottom", _ctypes.c_long)]
+
+        rect = _RECT()
+        user32.GetWindowRect(hwnd, _ctypes.byref(rect))
+        width = rect.right - rect.left
+    except Exception:
+        # GetWindowRect 失败：保守返回 False，触发修形
+        return False
+
+    return width >= _DUAL_PANE_WIDTH_THRESHOLD
+
+
+# ─── L2：半死区梯度自愈 ──────────────────────────────────────────────────────────────────────
+# 跨 sender 连续 title_unreadable 计数器（模块级，跨轮次累计）
+_title_unreadable_counter: Dict[str, int] = {}
+
+# zj-deadzone-dump 诊断文件路径（%PUBLIC% = C:\Users\Public，失败不阻断发送）
+_DEADZONE_DUMP_PATH = os.path.join(
+    os.environ.get("PUBLIC", "C:\\Users\\Public"), "zj-deadzone-dump.json"
+)
+
+
+def should_heal_half_deadzone(
+    title_fail_counts_by_sender: Dict[str, int],
+    threshold: int = 3,
+    min_senders: int = 2,
+) -> bool:
+    """纯函数(CI可测)：是否应触发半死区梯度自愈。
+
+    当跨 >= min_senders 个不同 sender 均连续 title_unreadable 达 threshold 次时，
+    认为是系统级半死区（非单个联系人的冷门问题），触发修形复测。
+
+    防冷门联系人误触发：单 sender 再多次失败也不触发，必须跨多个 sender 同时达阈值。
+    """
+    qualifying = sum(
+        1 for count in title_fail_counts_by_sender.values()
+        if count >= threshold
+    )
+    return qualifying >= min_senders
+
+
+def _dump_deadzone_diag(reason: str, extra: Optional[Dict] = None) -> None:
+    """将半死区诊断信息写盘（%PUBLIC%\zj-deadzone-dump.json）。
+
+    失败不抛、不阻断发送——诊断不能影响主流程。
+    """
+    try:
+        data = {
+            "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "reason": reason,
+            "title_unreadable_counter": dict(_title_unreadable_counter),
+        }
+        if extra:
+            data.update(extra)
+        with open(_DEADZONE_DUMP_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass  # 诊断写盘失败不阻断发送
 
 
 def build_diag(*, main_window_found, login_present, logged_in, screen_locked,
