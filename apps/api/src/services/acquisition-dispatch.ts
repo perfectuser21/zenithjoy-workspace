@@ -660,6 +660,40 @@ export function isDmDispatchable(
     : Boolean(lead.profileUrl && lead.profileUrl.trim());
 }
 
+// FR-4: 辅助函数 getSessionOnlineStatus — 复用三级判定逻辑（同 agent-burner.ts sessions 端点）
+// 查 agent_platform_sessions + agents.last_heartbeat_at，返回 online/offline/unknown。
+// 必须携带 tenant_id 条件（Invariant-6：所有写入路径携带 tenant_id）。
+export async function getSessionOnlineStatus(
+  pool: QueryablePool,
+  tenantId: string,
+  agentId: string,
+  accountLabel: string,
+): Promise<'online' | 'offline' | 'unknown'> {
+  const r = await pool.query(
+    `SELECT s.uia_online, s.uia_error,
+            (a.last_heartbeat_at >= NOW() - INTERVAL '2 minutes') AS heartbeat_online
+       FROM zenithjoy.agent_platform_sessions s
+       LEFT JOIN zenithjoy.agents a ON a.id = s.agent_id
+       WHERE s.agent_id = $1
+         AND s.platform = 'douyin'
+         AND s.account_label = $2
+         AND EXISTS (
+           SELECT 1 FROM zenithjoy.agents a2
+            WHERE a2.id = s.agent_id AND a2.tenant_id::text = $3
+         )
+       LIMIT 1`,
+    [agentId, accountLabel, tenantId],
+  );
+  if (r.rows.length === 0) return 'unknown';
+  const row = r.rows[0];
+  const heartbeatOnline = row.heartbeat_online === true;
+  if (!heartbeatOnline) return 'offline';
+  if (row.uia_online === false) return 'offline';
+  if (row.uia_online === true) return 'online';
+  // uia_online IS NULL，有无 uia_error 都是 unknown
+  return 'unknown';
+}
+
 export async function dispatchDue(
   pool: QueryablePool,
   tenantId: string,
@@ -782,6 +816,26 @@ export async function dispatchDue(
       );
       skippedLimit += 1;
       continue;
+    }
+
+    // FR-4: dispatch 前二次在线检测（UIA 信号覆盖心跳判定）
+    // agentId 非空（isDmDispatchable 已保证），查 UIA 在线状态
+    if (agentId) {
+      const onlineStatus = await getSessionOnlineStatus(pool, tenantId, agentId, label);
+      if (onlineStatus === 'offline') {
+        // 账号 UIA 检测为离线 → 回退 pending_dispatch，不发私信
+        await pool.query(
+          `UPDATE zenithjoy.dm_assignments SET status = 'pending_dispatch', updated_at = now() WHERE id = $1`,
+          [row.id]
+        );
+        console.log(`[dispatch] pre-dispatch check: offline, requeued as pending_dispatch (label=${label})`);
+        skippedLimit += 1;
+        continue;
+      } else if (onlineStatus === 'unknown') {
+        // unknown → 保守策略：允许派单，写日志
+        console.log(`[dispatch] uia_unknown, proceeding with heartbeat-only (label=${label})`);
+      }
+      // online → 正常继续
     }
 
     // 真派单：写 publish_tasks → agent 收到后执行 douyin-dm-outreach.cjs

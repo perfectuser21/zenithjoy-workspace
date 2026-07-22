@@ -5141,3 +5141,44 @@ agent_suite:
   status: active
   product: 私域运营
   note: "fail-closed轮询desktop-lease-broker hook：网络异常/非200状态一律fail-closed"
+  # ── Path 2 Android Agent 信号上报 ────────────────────────────────────────────
+
+- id: android-signal-uia-signal
+  path: sprints/07212317-android-signal-reporting/tests/fr1-uia-signal.test.ts
+  type: integration
+  ci: L4
+  status: active
+  product: 新媒体运营
+  note: "UIA 双信号（uia-signal 端点 + sessions 三级判定）"
+
+- id: android-signal-error-code
+  path: sprints/07212317-android-signal-reporting/tests/fr2-error-code-classification.test.ts
+  type: integration
+  ci: L4
+  status: active
+  product: 新媒体运营
+  note: "采集失败五分类（error_code 白名单 + UNKNOWN 降级）"
+
+- id: android-signal-latest-reply
+  path: sprints/07212317-android-signal-reporting/tests/fr3-latest-reply.test.ts
+  type: integration
+  ci: L4
+  status: active
+  product: 新媒体运营
+  note: "评论最新回复写入路径（latest_reply + latest_reply_at）"
+
+- id: android-signal-dispatch-precheck
+  path: sprints/07212317-android-signal-reporting/tests/fr4-dispatch-precheck.test.ts
+  type: integration
+  ci: L4
+  status: active
+  product: 新媒体运营
+  note: "dispatch 前二次在线检测（gap 内离线 → pending_dispatch）"
+
+- id: android-signal-verify
+  path: sprints/07212317-android-signal-reporting/tests/fr5-signal-verify.test.ts
+  type: integration
+  ci: L4
+  status: active
+  product: 新媒体运营
+  note: "最小信号验证 GET 端点（sessions/collect_tasks/leads 三组数据）"
