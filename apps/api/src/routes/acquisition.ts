@@ -35,6 +35,18 @@ const pendingCollectTasksRateLimit = simpleRateLimit({
 // （不是 tenantId——这条路由不走 tenantContext，鉴权发生在 handler 内部按 task_id 反查）。
 // Stage2 单个视频多条评论仍是同一次 report 调用，一个采集任务生命周期内可能有多个视频轮流
 // report，180次/60s 留足并发余量。
+// 采集失败原因五分类（task 3, 2026-07-22 Path2 安卓信号上报 sprint）：Android 端
+// CollectFailureClassifier 已把 11+ 个自由字符串错误码归类到这五类，这里做防御性
+// 兜底——万一未来 Android 版本传入新增/未同步的错误码，落库前也归一为 UNKNOWN，
+// 不让 acquisition_collect_tasks.error_code 列的值域被污染。
+const VALID_COLLECT_ERROR_CODES = new Set([
+  'KEYWORD_NO_RESULT', 'PLATFORM_LIMITED', 'NETWORK_ERROR', 'ACCOUNT_ABNORMAL', 'UNKNOWN',
+]);
+function normalizeCollectErrorCode(raw: unknown): string | null {
+  if (typeof raw !== 'string' || raw.length === 0) return null;
+  return VALID_COLLECT_ERROR_CODES.has(raw) ? raw : 'UNKNOWN';
+}
+
 const collectReportRateLimit = simpleRateLimit({
   windowMs: 60_000,
   max: 180,
@@ -1098,9 +1110,10 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
     const videoTotal = vcRes.rows[0]?.total ?? 0;
     const videoDone = vcRes.rows[0]?.done ?? 0;
     const leadCountAfter = task.lead_count_raw + batch.length;
+    const normalizedErrorCode = normalizeCollectErrorCode(errorCode);
     const s = settleCollectTask({
       currentStatus: task.status === 'pending' ? 'running' : task.status,
-      agentTerminal: terminal ? { terminal, error_code: errorCode, partial_reason: partialReason } : null,
+      agentTerminal: terminal ? { terminal, error_code: normalizedErrorCode, partial_reason: partialReason } : null,
       videoTotal,
       videoDone,
       leadCount: leadCountAfter,

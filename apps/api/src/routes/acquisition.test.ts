@@ -1143,6 +1143,25 @@ describe('POST /api/acquisition/collect/report — 终态守卫 + settle 结算 
     await new Promise((r) => setTimeout(r, 20));
     expect(vi.mocked(scoreLeads)).not.toHaveBeenCalled();
   });
+
+  it('error_code 不在五分类枚举里时，落库前归一为 UNKNOWN（防御未来 Android 版本传入新值）', async () => {
+    mockClientQuery.mockImplementation(clientImpl(taskRow()));
+    const res = await request(app).post('/api/acquisition/collect/report')
+      .send({ task_id: TASK_ID, video_id: 'v1', commenters: [], terminal: 'failed', error_code: 'SOME_BRAND_NEW_CODE' });
+    expect(res.status).toBe(200);
+    const updateCall = mockClientQuery.mock.calls.find((c) => String(c[0]).trim().startsWith('UPDATE zenithjoy.acquisition_collect_tasks'));
+    expect(updateCall).toBeDefined();
+    expect((updateCall as any)[1][2]).toBe('UNKNOWN');
+  });
+
+  it('error_code 已经是合法五分类值时，落库前原样透传', async () => {
+    mockClientQuery.mockImplementation(clientImpl(taskRow()));
+    const res = await request(app).post('/api/acquisition/collect/report')
+      .send({ task_id: TASK_ID, video_id: 'v1', commenters: [], terminal: 'failed', error_code: 'NETWORK_ERROR' });
+    expect(res.status).toBe(200);
+    const updateCall = mockClientQuery.mock.calls.find((c) => String(c[0]).trim().startsWith('UPDATE zenithjoy.acquisition_collect_tasks'));
+    expect((updateCall as any)[1][2]).toBe('NETWORK_ERROR');
+  });
 });
 
 describe('POST /api/acquisition/collect/sweep-timeouts — stage_1_done 收尸 [BEHAVIOR]', () => {
