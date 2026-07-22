@@ -59,6 +59,16 @@ STATUS=$(psql "$DB" -t -A -c "SELECT status FROM zenithjoy.publish_tasks WHERE i
 COOKIE_PATH=$(psql "$DB" -t -A -c "SELECT response->>'cookie_local_path' FROM zenithjoy.publish_tasks WHERE id='$TASK_ID_NEW'")
 echo "$COOKIE_PATH" | grep -q "/burner/" || { echo "FAIL Step 4: cookie path 未含 /burner/: $COOKIE_PATH"; exit 1; }
 
+echo "=== Step 4b: fake-agent 首次扫描上报，归一 pending 占位为真实昵称 ==="
+# 2026-07-22 account_label 语义统一 sprint 之后，qr-bind-result 只落
+# pending:<task_id> 占位（不再直接采用调用方传入的 account_label/account_nickname），
+# 真实账号名要靠 account-scan-result 归一。真实 Android 客户端在 qr-bind-result 后
+# 一定会紧跟着报一次扫描结果；这里补上同一步，让本 smoke 反映真实生产链路，
+# 后续 Step 7 才能按账号名 "装修小号1" 查到已归一的 burner session。
+curl -fsS -X POST "$API_BASE/api/agent/burner/account-scan-result" \
+  -H "Content-Type: application/json" \
+  -d "{\"agent_id\":\"$AGENT_ID\",\"ok\":true,\"account_ids\":[\"装修小号1\"]}" >/dev/null
+
 echo "=== Step 5: 验证 agent_platform_sessions 写入 burner 行 ==="
 SESSION_COUNT=$(psql "$DB" -t -A -c "SELECT count(*) FROM zenithjoy.agent_platform_sessions WHERE agent_id='$AGENT_ID' AND platform='douyin' AND role='burner' AND status='active' AND created_at > NOW() - interval '60 seconds'")
 [ "$SESSION_COUNT" = "1" ] || { echo "FAIL Step 5: burner session 写入数 $SESSION_COUNT"; exit 1; }
