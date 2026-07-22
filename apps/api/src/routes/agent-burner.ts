@@ -45,7 +45,7 @@ const OK = (data: unknown) => ({
 // 根因：qr-bind-result（用户绑号）和 account-scan-result（UIA 扫描）曾各自往
 // account_label 塞不同语义的值（用户起的标签名 vs 真实抖音昵称），在
 // (agent_id,platform,account_label) 唯一约束下会为同一台设备的同一个账号产生
-//两条独立行——这正是 P0 串台 bug 那批脏数据的更深根因。
+// 两条独立行——这正是 P0 串台 bug 那批脏数据的更深根因。
 // 统一方案：account_label 最终只允许是"UIA 扫描读到的真实昵称"，绑号刚完成、
 // 还没有扫描结果时用 pending:<task_id> 占位，等第一次扫描进来后"归一"。
 
