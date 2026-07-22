@@ -720,50 +720,57 @@ router.post('/account-scan-result', async (req: Request, res: Response) => {
 
   const ids = Array.isArray(account_ids) ? account_ids.filter((x) => typeof x === 'string' && x) : [];
   let written = 0;
-  if (ok === true && ids.length > 0) {
-    // 归一：把该 agent 下的 pending 占位行归一到这次扫描到的真实昵称
+  // 差集标离线必须在 ok===true 时无条件跑（即使 ids 为空——本轮扫描一个账号都没扫到，
+  // 例如设备上所有小号都被登出，这正是"该标离线"的场景）。只在 ok=false（扫描本身失败）
+  // 时整体跳过——此时没有真实的"当前扫描结果"，不能拿空列表去把所有账号错误地标离线。
+  if (ok === true) {
+    // 归一 + 差集共用同一份"当前库内状态"快照：这条 SELECT 必须在下面的归一/insert
+    // 写入循环之前执行——computeOfflineDiff 需要看到"本次扫描写入之前"的 active 状态，
+    // 不是写入之后的。若被挪到写入循环之后，本轮扫描到的账号早已被写成 active，
+    // 差集会永远算不出任何离线账号。
     const existingRes = await pool.query(
-      `SELECT account_label FROM zenithjoy.agent_platform_sessions
+      `SELECT account_label, status FROM zenithjoy.agent_platform_sessions
         WHERE agent_id = $1 AND platform = 'douyin' AND role = 'burner'`,
       [agent_id],
     );
     const existingLabels: string[] = existingRes.rows.map((r) => r.account_label);
-    for (const nickname of ids) {
-      const action = reconcileAccountLabel({ agentId: agent_id, existingLabels, realNickname: nickname });
-      if (action.type === 'rename') {
+    const previouslyActiveLabels: string[] = existingRes.rows
+      .filter((r) => r.status === 'active')
+      .map((r) => r.account_label);
+
+    if (ids.length > 0) {
+      // 归一：把该 agent 下的 pending 占位行归一到这次扫描到的真实昵称
+      for (const nickname of ids) {
+        const action = reconcileAccountLabel({ agentId: agent_id, existingLabels, realNickname: nickname });
+        if (action.type === 'rename') {
+          await pool.query(
+            `UPDATE zenithjoy.agent_platform_sessions
+                SET account_label = $3, status = 'active', bound_at = NOW()
+              WHERE agent_id = $1 AND platform = 'douyin' AND account_label = $2`,
+            [agent_id, action.from, action.to],
+          );
+        } else if (action.type === 'delete_pending') {
+          await pool.query(
+            `DELETE FROM zenithjoy.agent_platform_sessions
+              WHERE agent_id = $1 AND platform = 'douyin' AND account_label = $2`,
+            [agent_id, action.label],
+          );
+        }
         await pool.query(
-          `UPDATE zenithjoy.agent_platform_sessions
-              SET account_label = $3, status = 'active', bound_at = NOW()
-            WHERE agent_id = $1 AND platform = 'douyin' AND account_label = $2`,
-          [agent_id, action.from, action.to],
+          `INSERT INTO zenithjoy.agent_platform_sessions
+             (agent_id, platform, account_label, role, status, bound_at, created_at)
+           VALUES ($1, 'douyin', $2, 'burner', 'active', NOW(), NOW())
+           ON CONFLICT (agent_id, platform, account_label) DO UPDATE
+             SET role='burner', status='active', bound_at=NOW()`,
+          [agent_id, nickname],
         );
-      } else if (action.type === 'delete_pending') {
-        await pool.query(
-          `DELETE FROM zenithjoy.agent_platform_sessions
-            WHERE agent_id = $1 AND platform = 'douyin' AND account_label = $2`,
-          [agent_id, action.label],
-        );
+        written += 1;
       }
-      await pool.query(
-        `INSERT INTO zenithjoy.agent_platform_sessions
-           (agent_id, platform, account_label, role, status, bound_at, created_at)
-         VALUES ($1, 'douyin', $2, 'burner', 'active', NOW(), NOW())
-         ON CONFLICT (agent_id, platform, account_label) DO UPDATE
-           SET role='burner', status='active', bound_at=NOW()`,
-        [agent_id, nickname],
-      );
-      written += 1;
     }
 
     // 差集标离线：本次扫描仍是权威真相来源，上次 active 但这次没扫到的账号标 offline。
-    // 只在 ok===true（真扫描成功）时执行——扫描失败(ok=false)绝不能拿空列表去把
-    // 所有账号错误地标离线，这条 guard 精确对应 Step 1 测试里最后一条用例的注释。
-    const activeRes = await pool.query(
-      `SELECT account_label FROM zenithjoy.agent_platform_sessions
-        WHERE agent_id = $1 AND platform = 'douyin' AND role = 'burner' AND status = 'active'`,
-      [agent_id],
-    );
-    const previouslyActiveLabels: string[] = activeRes.rows.map((r) => r.account_label);
+    // 无条件跑（不受 ids.length>0 限制）——ids 为空时 computeOfflineDiff 会把所有
+    // previouslyActiveLabels 判定为离线，这正是"本轮全部登出"场景需要的效果。
     const offlineDiff = computeOfflineDiff({ previouslyActiveLabels, currentlyScannedLabels: ids });
     for (const label of offlineDiff) {
       await pool.query(
