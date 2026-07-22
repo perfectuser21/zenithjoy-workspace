@@ -16,6 +16,7 @@ import com.google.gson.Gson
 import com.zenithjoy.agent.account.DeviceAccountModel
 import com.zenithjoy.agent.account.DeviceAccountRegistry
 import com.zenithjoy.agent.account.DeviceAccountScanService
+import com.zenithjoy.agent.collect.CollectFailureClassifier
 import com.zenithjoy.agent.collect.CollectJob
 import com.zenithjoy.agent.collect.CollectReporter
 import com.zenithjoy.agent.collect.CollectResult
@@ -858,7 +859,11 @@ class AgentService : Service() {
                         val videos = stage1Accumulator.remove(taskId) ?: emptyList()
                         stage1PendingKeywords.remove(taskId)
                         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                            reporter?.reportVideos(taskId, videos, errorCode = if (videos.isEmpty()) errorCode else null)
+                            reporter?.reportVideos(
+                                taskId,
+                                videos,
+                                errorCode = if (videos.isEmpty()) CollectFailureClassifier.classify(errorCode) else null,
+                            )
                             collectTaskQueue.markCurrentDone()
                             processNextQueuedTask()
                         }
