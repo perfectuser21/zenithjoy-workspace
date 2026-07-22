@@ -3,6 +3,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { feishuLogin } from '../api/feishuLogin';
 
+interface QRLoginObj {
+  matchOrigin: (origin: string) => boolean;
+  matchData: (data: unknown) => boolean;
+}
+
 declare global {
   interface Window {
     QRLogin?: (config: {
@@ -11,7 +16,7 @@ declare global {
       width: number;
       height: number;
       style?: string;
-    }) => unknown;
+    }) => QRLoginObj;
   }
 }
 
@@ -63,9 +68,24 @@ export default function FeishuLogin() {
     const script = document.createElement('script');
     script.src = 'https://lf-package-cn.feishucdn.com/obj/feishu-static/lark/passport/qrcode/LarkSSOSDKWebQRCode-1.0.3.js';
     script.async = true;
+
+    // 扫码成功后飞书组件不会自己跳转，而是通过 postMessage 把 tmp_code 发给本页面，
+    // 页面自己校验来源+拼接 tmp_code 后跳去 goto 地址——这一步之前漏了，扫码显示成功
+    // 但页面停在原地不动就是因为没有这个监听 (matchOrigin/matchData 是飞书SDK返回对象的方法)。
+    let qrLoginObj: QRLoginObj | undefined;
+    const handleMessage = (event: MessageEvent) => {
+      if (!qrLoginObj) return;
+      if (!qrLoginObj.matchOrigin(event.origin) || !qrLoginObj.matchData(event.data)) return;
+      const tmpCode = (event.data as { tmp_code?: string }).tmp_code;
+      if (!tmpCode) return;
+      const goto = `https://passport.feishu.cn/suite/passport/oauth/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=STATE&tmp_code=${tmpCode}`;
+      window.location.href = goto;
+    };
+    window.addEventListener('message', handleMessage);
+
     script.onload = () => {
       const goto = `https://passport.feishu.cn/suite/passport/oauth/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=STATE`;
-      window.QRLogin?.({
+      qrLoginObj = window.QRLogin?.({
         id: 'feishu-qr-container',
         goto,
         width: 280,
@@ -75,6 +95,8 @@ export default function FeishuLogin() {
     };
     script.onerror = () => setError('飞书登录组件加载失败');
     document.body.appendChild(script);
+
+    return () => window.removeEventListener('message', handleMessage);
   }, [appId, redirectUri, searchParams]);
 
   const directAuthUrl = appId
