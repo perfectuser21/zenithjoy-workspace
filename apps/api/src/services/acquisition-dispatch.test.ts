@@ -177,6 +177,34 @@ describe('rescoreLead', () => {
     expect(/\bgrade\s*=/.test(updateCall!.text)).toBe(true);
     expect(updateCall!.params).toContain('精准'); // 两条评论里的最高档
   });
+
+  it('rescoreLead 把最新一条评论内容回填进 acquisition_leads.latest_reply/latest_reply_at', async () => {
+    const calls: { text: string; params?: unknown[] }[] = [];
+    const pool: QueryablePool = {
+      query: vi.fn(async (text: string, params?: unknown[]) => {
+        calls.push({ text, params });
+        if (/acquisition_lead_comments/.test(text)) {
+          return {
+            rows: [
+              { grade: '感兴趣', commented_at: new Date('2026-07-20T03:00:00Z'), comment_text: '旧评论' },
+              { grade: '精准', commented_at: new Date('2026-07-22T09:00:00Z'), comment_text: '这是最新一条评论' },
+            ],
+          };
+        }
+        return { rows: [] };
+      }),
+    };
+
+    await rescoreLead(pool, 'tenant-1', 'lead-reply-test', new Date('2026-07-22T12:00:00Z'));
+
+    const updateCall = calls.find(
+      (c) => /UPDATE\s+zenithjoy\.acquisition_leads/i.test(c.text) && !/FOR UPDATE/i.test(c.text)
+    );
+    expect(updateCall).toBeTruthy();
+    expect(/latest_reply\s*=/.test(updateCall!.text)).toBe(true);
+    expect(/latest_reply_at\s*=/.test(updateCall!.text)).toBe(true);
+    expect(updateCall!.params).toContain('这是最新一条评论'); // 取 commented_at 最大的那条内容,不是数组顺序最后一条
+  });
 });
 
 describe('acquisition-dispatch outreach_eligible gate', () => {

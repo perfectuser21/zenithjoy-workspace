@@ -267,18 +267,25 @@ export async function rescoreLead(
   );
 
   const r = await pool.query(
-    `SELECT c.grade, c.commented_at
+    `SELECT c.grade, c.commented_at, c.comment_text
        FROM zenithjoy.acquisition_lead_comments c
        JOIN zenithjoy.acquisition_leads l ON l.id = c.lead_id AND l.tenant_id = $1
       WHERE c.lead_id = $2
       ORDER BY c.commented_at ASC`,
     [tenantId, leadId]
   );
-  const comments: LeadComment[] = r.rows.map((row) => ({ grade: row.grade, commented_at: row.commented_at }));
+  const comments: (LeadComment & { comment_text?: string | null })[] = r.rows.map((row) => ({
+    grade: row.grade, commented_at: row.commented_at, comment_text: row.comment_text,
+  }));
   const score = computeRelevanceScore(comments, now);
   const commentCount = comments.length;
   const lastCommentedAt = commentCount > 0
     ? new Date(Math.max(...comments.map((c) => new Date(c.commented_at).getTime()))).toISOString()
+    : null;
+  const latestReplyText = commentCount > 0
+    ? comments.reduce((latest, c) =>
+        new Date(c.commented_at).getTime() > new Date(latest.commented_at).getTime() ? c : latest
+      ).comment_text ?? null
     : null;
 
   // outreach_eligible：最高档是精准或高意向 → true，否则 false
@@ -295,9 +302,10 @@ export async function rescoreLead(
   await pool.query(
     `UPDATE zenithjoy.acquisition_leads
         SET relevance_score = $3, comment_count = $4, last_commented_at = $5,
-            outreach_eligible = $6, grade = $7, updated_at = now()
+            outreach_eligible = $6, grade = $7, latest_reply = $8, latest_reply_at = $5,
+            updated_at = now()
       WHERE tenant_id = $1 AND id = $2`,
-    [tenantId, leadId, score, commentCount, lastCommentedAt, outreachEligible, highestGrade]
+    [tenantId, leadId, score, commentCount, lastCommentedAt, outreachEligible, highestGrade, latestReplyText]
   );
 
   // FR-8：outreach_eligible 变 false → 取消该 lead 的 pending/queued dm_assignments
