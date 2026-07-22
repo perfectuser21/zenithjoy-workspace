@@ -60,6 +60,11 @@ const accountScanTriggerRateLimit = simpleRateLimit({
   max: 1,
 });
 
+// CodeQL js/missing-rate-limiting：/leads/:id/signal-status 碰鉴权(tenantContextOptional
+// 反查tenant)+DB查询（2026-07-22 Path2 安卓信号上报 sprint Task5 新增路由触发静态分析）。
+// 按 tenantId 限流（默认 tenantKeyFn），诊断端点允许较宽松轮询节奏。
+const signalStatusRateLimit = simpleRateLimit({ windowMs: 60_000, max: 60 });
+
 const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
 
 /** 一条评论上报映射出的 lead 字段。 */
@@ -262,7 +267,7 @@ acquisitionRouter.get('/videos/:videoId/leads', tenantContextOptional, async (re
 // GET /api/acquisition/leads/:id/signal-status — 最小消费验证端点（2026-07-22 Path2 安卓信号上报 sprint）：
 // 跨表拼装账号在线状态（Task1）+采集失败原因（Task3）+评论同步回复（Task4），证明本次上报的
 // 信号真实有效，不是"写了没人读"的哑数据（decision 8dbe91ee 教训）。完整 UI 展示留给下一个 sprint。
-acquisitionRouter.get('/leads/:id/signal-status', tenantContextOptional, async (req: Request, res: Response) => {
+acquisitionRouter.get('/leads/:id/signal-status', tenantContextOptional, signalStatusRateLimit, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const leadId = req.params.id;

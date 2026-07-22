@@ -18,6 +18,17 @@ import pool from '../db/connection';
 import { writeDmOutreachStatus, type DmStatus } from '../services/lead-writer';
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { agentContext } from '../middleware/agent-context';
+import { simpleRateLimit } from '../middleware/simple-rate-limit';
+
+// CodeQL js/missing-rate-limiting：/account-scan-result 无 tenantContext（鉴权靠 body.agent_id
+// 直接反查），且本次 account_label 语义统一 sprint 大幅改写了该 handler，触发静态分析对
+// "改动过的代码"重新计入告警。按 agent_id 限流——真机心跳循环~30s一次、dashboard 手动触发已由
+// accountScanTriggerRateLimit（acquisition.ts）单独限流 1次/60s，这里给足并发/连续调用余量。
+const accountScanResultRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 60,
+  keyFn: (req) => (req.body && req.body.agent_id) || 'anonymous',
+});
 import { isDuplicateDmOutreachResult } from '../services/device-platform';
 
 const router = Router();
@@ -689,7 +700,7 @@ router.get('/dm-tasks/:task_id', async (req: Request, res: Response) => {
 //       无完成过滤）会把同一行永远当"待处理"重复下发，手机每次心跳(~30s)重扫一次账号，
 //       无限循环，battery drain + 抖音风控风险。
 // 幂等：镜像 /warmup-result 的模式——已终态(done/failed)的行直接短路，不重复写。
-router.post('/account-scan-result', async (req: Request, res: Response) => {
+router.post('/account-scan-result', accountScanResultRateLimit, async (req: Request, res: Response) => {
   const { agent_id, request_id, ok, account_ids, error_code, screenshot_b64, tree_dump } = req.body || {};
   if (!agent_id || typeof agent_id !== 'string') {
     return res.status(400).json(ERR('MISSING_AGENT_ID', 'agent_id 必填'));
