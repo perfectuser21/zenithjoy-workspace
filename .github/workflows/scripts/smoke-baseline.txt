@@ -94,3 +94,4 @@ agent-offline-alert-smoke.sh
 overlay-card-redesign-smoke.sh
 xian-runner-fleet-smoke.sh
 golden-path-2-smoke.sh
+android-signal-reporting-smoke.sh
