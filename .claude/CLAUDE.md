@@ -59,7 +59,7 @@
 4. **加厚是"先减肥再增肌"**：升级 thickness 必须两段式 commit：`commit 1 删旧 mock/hardcode` → `commit 2 写新实现`。改名 `_legacy` / TODO 注释不算删除。
 5. **真机 bug 修复 PR 必须回流 smoke**：除 vitest regression test 外，必须把复现判据回流进对应 `golden-path-N-smoke.sh`（真机不可及的步骤允许 API 层等价断言，但须在 smoke 内注明「真机段等价断言」+ TODO 标记）。只进 vitest 不进 smoke = 同一坑必然摔第二次（UIA 死区 #1136→#1163 两天两修实证）。
 
-### 调用 harness-planner 前必填 5 问
+### 调用 harness-planner 前必填 6 问
 
 ```
 □ 1. 本 sprint 推进哪条 Journey？（名 + Notion URL + 当前 Maturity）
@@ -69,9 +69,14 @@
 □ 5. 涉及几种设备/操作系统类型（Windows/Android/其他）？每种是否都有对应的展示层区分（列表/图标/筛选），
      还是会被现有通用组件悄悄合并成一种？（decision 8dbe91ee：机器管理页/账号管理页曾因未过这一问，
      长期不区分安卓与Windows设备，字段 os_type/device_platform 有但UI从未接线）
+□ 6. 是否新增/修改常驻桌面 UI（窗口/浮条/overlay/托盘弹窗）？若是，必须先给出「场景×显示策略矩阵」，
+     至少覆盖 4 个场景：RPA 自动化进行中（不抢焦点/鼠标穿透/让位规则）、客户前台全屏、锁屏/无人值守、
+     多设备泳道。每个场景写明显示行为与共存约束，缺场景不许点火。（decision 2e47a08c：作战窗设计
+     只写了窗口形态没写共存策略，用户追问才补；line04 抢焦点/cloak失败/桌面租约实证共存策略是
+     设计期问题不是实现期问题）
 ```
 
-不填齐 5 问，**禁止启动 harness-planner**。第2问的"角色"指系统组件（中台/Agent/CI/dashboard），不能替代第5问的设备类型检查，两者不互相包含。
+不填齐 6 问，**禁止启动 harness-planner**。第2问的"角色"指系统组件（中台/Agent/CI/dashboard），不能替代第5问的设备类型检查，两者不互相包含。
 
 ### 触发 /dev 路径C 的场景
 
