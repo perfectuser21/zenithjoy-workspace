@@ -31,7 +31,8 @@ export default defineConfig({
       // Ops Infra — Agent 离线静默告警：scanAndAlert 去重/恢复/webhook 失败路径 vitest 单测
       '../../sprints/07201705-agent-offline-alert/tests/**/*.test.ts',
       // Android Signal Reporting — UIA 双信号/error_code 五分类/latest_reply/dispatch 二次检测/signal-verify
-      '../../sprints/07212317-android-signal-reporting/tests/**/*.test.ts',
+      // 注：fr1-fr5 是 supertest 集成测试，需要真实 DB，由 test:sprint script 单独跑，不进 L3 CI
+      // '../../sprints/07212317-android-signal-reporting/tests/**/*.test.ts',
     ],
     exclude: ['node_modules/**', 'tests/integration/**', 'tests/ws1/**', 'tests/ws2/**', 'tests/ws3/**', 'tests/ws4/**', 'tests/ws5/**', 'tests/ws6/**'],
     coverage: {

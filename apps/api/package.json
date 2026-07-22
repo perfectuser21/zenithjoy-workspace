@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:sprint": "vitest run ../../sprints/07212317-android-signal-reporting/tests/",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
   },
