@@ -811,7 +811,11 @@ acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Respo
 
     if (list.length === 0) {
       // 空清单终态：empty → partial(stage1_empty)；error_code / 卡片全解析失败 → failed（checkpoint 保留可重试）
-      const failCode = reasonErrorCode ?? (rawList.length > 0 ? 'ALL_RESOLVE_FAILED' : null);
+      const rawFailCode = reasonErrorCode ?? (rawList.length > 0 ? 'ALL_RESOLVE_FAILED' : null);
+      const failCode = normalizeCollectErrorCode(rawFailCode);
+      if (failCode === 'UNKNOWN' && rawFailCode !== 'UNKNOWN') {
+        console.warn(`[acquisition] collect/report-videos error_code 归一为 UNKNOWN，原始值：task=${taskId} raw=${rawFailCode}`);
+      }
       const s = settleCollectTask({
         currentStatus: task.status === 'pending' ? 'running' : task.status,
         agentTerminal: searchEmpty
@@ -1111,6 +1115,9 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
     const videoDone = vcRes.rows[0]?.done ?? 0;
     const leadCountAfter = task.lead_count_raw + batch.length;
     const normalizedErrorCode = normalizeCollectErrorCode(errorCode);
+    if (normalizedErrorCode === 'UNKNOWN' && errorCode !== 'UNKNOWN') {
+      console.warn(`[acquisition] collect/report error_code 归一为 UNKNOWN，原始值：task=${taskId} raw=${errorCode}`);
+    }
     const s = settleCollectTask({
       currentStatus: task.status === 'pending' ? 'running' : task.status,
       agentTerminal: terminal ? { terminal, error_code: normalizedErrorCode, partial_reason: partialReason } : null,
