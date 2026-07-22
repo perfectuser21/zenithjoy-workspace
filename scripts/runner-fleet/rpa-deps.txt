@@ -1,0 +1,22 @@
+# ZenithJoy wechat-capable RPA 依赖清单
+# Sprint: 07202259-xian-runner-fleet
+# 脚本 deploy-runner.ps1 按此清单安装依赖，cleanup-runner.ps1 按此清单卸载
+# 格式：type:name:version_check_cmd
+#
+# ── Python 及核心 pip 包 ──
+python:Python:python --version
+pip:uiautomation:python -c "import uiautomation"
+pip:pyautogui:python -c "import pyautogui"
+pip:pywin32:python -c "import win32api"
+pip:Pillow:python -c "import PIL"
+pip:requests:python -c "import requests"
+pip:websockets:python -c "import websockets"
+pip:psutil:python -c "import psutil"
+#
+# ── 系统层 ──
+winget:Git.Git:git --version
+winget:Microsoft.VisualCppRedist.2015+.x64:N/A
+#
+# ── GitHub Actions Runner（由脚本从 GitHub API 下载，不走 winget）──
+# runner 版本由脚本在运行时从 GitHub Release API 获取最新版
+runner:actions-runner:RUNNER_ROOT\run.cmd

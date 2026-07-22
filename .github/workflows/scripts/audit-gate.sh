@@ -11,7 +11,9 @@ set -uo pipefail
 DIR="${1:-.}"
 # astro / @astrojs/mdx：修复需升 astro 7.x（semver major，涉及站点构建验证），
 # 已另立 sprint 跟踪；升级合并后删除这两行。
-ALLOWLIST=("astro" "@astrojs/mdx")
+# sharp/miniflare/wrangler：同一根因，都是 astro 传递依赖链带进来的（astro→miniflare→sharp,
+# astro→wrangler），升 astro 7.x 后这三个一并解决，不是独立漏洞，随 astro 那条一起删。
+ALLOWLIST=("astro" "@astrojs/mdx" "sharp" "miniflare" "wrangler")
 
 cd "$DIR"
 AUDIT_JSON=$(npm audit --json 2>/dev/null || true)

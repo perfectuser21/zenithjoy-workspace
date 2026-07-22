@@ -22,3 +22,24 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # Staff Hub — 员工内部前端，只绑 Tailscale IP(100.86.118.99)，公网不可达
+  # 跟客户前端(autopilot-dashboard)物理隔离：独立容器/独立端口/独立nginx.conf
+  staff-hub:
+    image: nginx:alpine
+    container_name: staff-hub
+    restart: unless-stopped
+    networks:
+      - zenithjoy-net
+    ports:
+      - "100.86.118.99:8090:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /opt/zenithjoy/staff-hub/dist:/usr/share/nginx/html:ro
+      - /opt/zenithjoy/staff-hub/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

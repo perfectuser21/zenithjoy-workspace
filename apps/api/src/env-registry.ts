@@ -85,9 +85,11 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'NOTION_PARENT_PAGE_ID', reason: 'Notion 父页面 ID，缺则用默认/跳过' },
 
   // —— GitHub（secret 写入等）——
+  { name: 'GH_TOKEN', reason: 'GitHub API 读取 token，缺则 staff-hub path health 走匿名请求，可能遇到 rate limit' },
   { name: 'GH_REPO_OWNER', reason: 'GitHub repo owner，缺则用默认' },
   { name: 'GH_REPO_NAME', reason: 'GitHub repo name，缺则用默认' },
   { name: 'GH_SECRETS_WRITE_PAT', reason: 'GitHub secrets 写入 PAT，缺则 secret 写入功能不可用' },
+  { name: 'GITHUB_TOKEN', reason: 'GitHub API 读取 token 的 Actions 默认别名，缺则退回 GH_TOKEN 或匿名请求' },
 
   // —— Agent / 安装包分发 ——
   { name: 'ZENITHJOY_API_URL', reason: '中台对外 API url，缺则用默认/请求推导' },
@@ -128,6 +130,7 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   // —— 员工工具（Line 00 运营中枢，staff only）——
   { name: 'STAFF_EMAILS', reason: '员工邮箱白名单，逗号分隔，缺则 staffGuard 一律 403（无 dev 放行）' },
   { name: 'CECELIA_SKILL_EVAL_URL', reason: 'Cecelia skill-eval 服务地址，缺则用默认 http://hk-vps:9100' },
+  { name: 'STAFF_HUB_GITHUB_REPO', reason: 'Staff Hub Path 健康页读取 smoke run 时使用的 GitHub 仓库，缺则回退默认 perfectuser21/zenithjoy-workspace' },
   { name: 'MMV_CLAUDE_ACCOUNT_DIR', reason: '对话式创建Skill在mmv上跑claude -p时用哪个账号池目录，缺则默认 /Users/administrator/.claude-account1' },
   { name: 'INTERNAL_API_BASE', reason: '内部回调服务基础 URL（detached 子进程通知终态），缺则默认 http://localhost:3001' },
 

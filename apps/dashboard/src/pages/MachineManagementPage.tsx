@@ -3,9 +3,11 @@
  *
  * 列表：本租户机器（hostname/nickname + online绿/offline红 + 主/副标签 + version
  *       + last_seen + session_count「N 个号」）。点机器行 → 详情。
+ *       Sprint 07202259：双 tab 展示 — 「内部机群」vs「客户设备」
  * 详情：该机器抖音号列表 + 「重命名」「设为主/副机器」（PUT）+「添加抖音号」（派 qr-bind 单）。
  *
- * 契约见 sprints/06260400-machine-management/contract.md。
+ * 契约见 sprints/06260400-machine-management/contract.md
+ *        sprints/07202259-xian-runner-fleet/contract.md（owner_type 双维度展示）
  */
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -65,6 +67,20 @@ function formatTime(iso?: string): string {
   return t.toLocaleString('zh-CN', { hour12: false });
 }
 
+// ============ 归属类型徽章（Sprint 07202259）============
+function OwnerTypeBadge({ ownerType }: { ownerType: Machine['owner_type'] }) {
+  const isFleet = ownerType === 'internal_fleet';
+  return (
+    <span
+      className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${
+        isFleet ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-500'
+      }`}
+    >
+      {isFleet ? '机群' : '客户'}
+    </span>
+  );
+}
+
 // ============ 列表视图 ============
 function MachineList({
   machines,
@@ -86,6 +102,7 @@ function MachineList({
         <thead>
           <tr className="bg-gray-50 text-gray-600">
             <th className="border border-gray-200 px-4 py-2 text-left font-medium">机器</th>
+            <th className="border border-gray-200 px-4 py-2 text-left font-medium">归属</th>
             <th className="border border-gray-200 px-4 py-2 text-left font-medium">状态</th>
             <th className="border border-gray-200 px-4 py-2 text-left font-medium">角色</th>
             <th className="border border-gray-200 px-4 py-2 text-left font-medium">版本</th>
@@ -104,6 +121,9 @@ function MachineList({
                 <div className="font-medium">{m.nickname || m.hostname}</div>
                 <div className="text-xs text-gray-400">{m.hostname}</div>
                 <OsBadge osType={m.os_type} />
+              </td>
+              <td className="border border-gray-200 px-4 py-3">
+                <OwnerTypeBadge ownerType={m.owner_type ?? 'customer'} />
               </td>
               <td className="border border-gray-200 px-4 py-3">
                 <StatusBadge status={m.status} />
@@ -464,8 +484,18 @@ function MachineDetailView({
   );
 }
 
+// ============ Tab 标签 ============
+type OwnerTab = 'all' | 'internal_fleet' | 'customer';
+
+const TAB_LABELS: Record<OwnerTab, string> = {
+  all: '全部',
+  internal_fleet: '内部机群',
+  customer: '客户设备',
+};
+
 // ============ 页面容器 ============
 export default function MachineManagementPage() {
+  const [activeTab, setActiveTab] = useState<OwnerTab>('all');
   const [machines, setMachines] = useState<Machine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -475,10 +505,10 @@ export default function MachineManagementPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
-  const loadList = useCallback(async () => {
+  const loadList = useCallback(async (tab: OwnerTab = 'all') => {
     setLoading(true);
     try {
-      const data = await fetchMachines();
+      const data = await fetchMachines(tab === 'all' ? undefined : tab);
       setMachines(data);
       setError(null);
     } catch {
@@ -488,8 +518,16 @@ export default function MachineManagementPage() {
     }
   }, []);
 
+  // tab 切换时重新加载
+  function handleTabChange(tab: OwnerTab) {
+    setActiveTab(tab);
+    setSelectedId(null);
+    setDetail(null);
+    loadList(tab);
+  }
+
   useEffect(() => {
-    loadList();
+    loadList('all');
   }, [loadList]);
 
   const openDetail = useCallback(async (id: string) => {
@@ -521,17 +559,37 @@ export default function MachineManagementPage() {
 
   return (
     <div className="p-6">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold">机器管理</h1>
         {!selectedId ? (
           <button
-            onClick={loadList}
+            onClick={() => loadList(activeTab)}
             className="rounded bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700"
           >
             刷新
           </button>
         ) : null}
       </div>
+
+      {/* 双维度 Tab：内部机群 / 客户设备 / 全部（Sprint 07202259） */}
+      {!selectedId ? (
+        <div className="mb-4 flex gap-1 border-b border-gray-200">
+          {(['all', 'internal_fleet', 'customer'] as OwnerTab[]).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => handleTabChange(tab)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === tab
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {TAB_LABELS[tab]}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {!selectedId ? (
         <>

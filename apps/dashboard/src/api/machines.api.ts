@@ -40,6 +40,8 @@ export interface Machine {
   last_seen: string;
   session_count: number;
   os_type: string | null;
+  /** Sprint 07202259：内部机群 vs 客户设备区分 */
+  owner_type: 'internal_fleet' | 'customer';
 }
 
 /** 机器下绑定的一个抖音号 */
@@ -89,9 +91,15 @@ async function parseEnvelope<T>(r: Response): Promise<T> {
   return j.data as T;
 }
 
-/** 列出本租户机器 */
-export async function fetchMachines(): Promise<Machine[]> {
-  const r = await fetch(`${API_BASE}/agent/machines`, { headers: authHeaders(), credentials: 'include' });
+/**
+ * 列出本租户机器
+ * @param ownerType 可选过滤：'internal_fleet'=内部机群，'customer'=客户设备，不传=全部
+ */
+export async function fetchMachines(ownerType?: 'internal_fleet' | 'customer'): Promise<Machine[]> {
+  const url = ownerType
+    ? `${API_BASE}/agent/machines?owner_type=${ownerType}`
+    : `${API_BASE}/agent/machines`;
+  const r = await fetch(url, { headers: authHeaders(), credentials: 'include' });
   return parseEnvelope<Machine[]>(r);
 }
 

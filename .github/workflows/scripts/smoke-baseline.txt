@@ -59,6 +59,7 @@ account-scan-result-smoke.sh
 line04-selfheal-observability-smoke.sh
 wechat-cs-reply-smoke.sh
 staff-skill-eval-smoke.sh
+staff-hub-smoke.sh
 skill-create-smoke.sh
 android-collect-protocol-v2-smoke.sh
 cross-line-seam-smoke.sh
@@ -90,3 +91,4 @@ scan-fail-diagnostic-capture-smoke.sh
 gpa-voice-rtc-smoke.sh
 installer-env-reset-smoke.sh
 agent-offline-alert-smoke.sh
+xian-runner-fleet-smoke.sh
