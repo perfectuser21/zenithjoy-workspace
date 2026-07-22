@@ -33,6 +33,10 @@ export default function FeishuLogin() {
   // 硬编码转https会导致发给飞书的redirect_uri和真实回调地址协议不一致，飞书直接拒绝
   // (Error 20029 Invalid redirect URL)。生产走真HTTPS后这里会自然是https，不用改代码。
   const redirectUri = `${window.location.origin}/login/feishu`;
+  // 白名单核对要用邮箱，飞书默认不返回email字段——必须显式申请这个scope
+  // (对应飞书应用后台"权限管理"里要开通"获取用户邮箱信息" contact:user.email:readonly)，
+  // 不然email永远是空的，STAFF_EMAILS怎么配都会被误判成"未绑定邮箱"拒绝登录。
+  const emailScope = 'contact:user.email:readonly';
 
   const handleFeishuCallback = useCallback(async (code: string) => {
     setLoading(true);
@@ -78,13 +82,13 @@ export default function FeishuLogin() {
       if (!qrLoginObj.matchOrigin(event.origin) || !qrLoginObj.matchData(event.data)) return;
       const tmpCode = (event.data as { tmp_code?: string }).tmp_code;
       if (!tmpCode) return;
-      const goto = `https://passport.feishu.cn/suite/passport/oauth/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=STATE&tmp_code=${tmpCode}`;
+      const goto = `https://passport.feishu.cn/suite/passport/oauth/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=STATE&scope=${emailScope}&tmp_code=${tmpCode}`;
       window.location.href = goto;
     };
     window.addEventListener('message', handleMessage);
 
     script.onload = () => {
-      const goto = `https://passport.feishu.cn/suite/passport/oauth/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=STATE`;
+      const goto = `https://passport.feishu.cn/suite/passport/oauth/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=STATE&scope=${emailScope}`;
       qrLoginObj = window.QRLogin?.({
         id: 'feishu-qr-container',
         goto,
@@ -100,7 +104,7 @@ export default function FeishuLogin() {
   }, [appId, redirectUri, searchParams]);
 
   const directAuthUrl = appId
-    ? `https://open.feishu.cn/open-apis/authen/v1/authorize?app_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=STATE`
+    ? `https://open.feishu.cn/open-apis/authen/v1/authorize?app_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=STATE&scope=${emailScope}`
     : '#';
 
   return (
