@@ -976,6 +976,18 @@ describe('POST /api/acquisition/collect/report-videos — Stage1 清单回报 [B
     expect((updateCall as any)[1][2]).toBe('NETWORK_ERROR');
   });
 
+  it('videos 非空但全部解析失败（后端合成 ALL_RESOLVE_FAILED，无 reason.error_code）→ 归一为 PLATFORM_LIMITED，不得降级为 UNKNOWN [全分支复审]', async () => {
+    mockResolveShareToMedia.mockResolvedValue(null); // 所有卡片解析失败 → list.length===0 但 rawList.length>0
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1')
+      .send({ task_id: TASK_ID, videos: [{ share_url: 'https://v.douyin.com/dead/' }] });
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('failed');
+    const updateCall = mockClientQuery.mock.calls.find((c) => String(c[0]).trim().startsWith('UPDATE zenithjoy.acquisition_collect_tasks'));
+    expect(updateCall).toBeDefined();
+    expect((updateCall as any)[1][2]).toBe('PLATFORM_LIMITED');
+  });
+
   it('任务已终态 → 409', async () => {
     mockClientQuery.mockImplementation(async (sql: unknown) => {
       const s = String(sql);
@@ -1609,5 +1621,23 @@ describe('GET /api/acquisition/leads/:id/signal-status [BEHAVIOR]', () => {
     expect(res.body.data).toHaveProperty('last_collect_error_code', 'NETWORK_ERROR');
     expect(res.body.data).toHaveProperty('latest_reply', '好的，加一下');
     expect(res.body.data).toHaveProperty('latest_reply_at', '2026-07-22T09:00:00Z');
+  });
+
+  it('account_online 查询须过滤 platform=douyin，避免未来其它平台 burner session 混入 [全分支复审]', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ latest_reply: null, latest_reply_at: null }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await request(app)
+      .get(`/api/acquisition/leads/${VALID_LEAD_ID}/signal-status`)
+      .set('x-test-tenant-id', 'tenant-a');
+
+    const onlineCall = (mod.default.query as any).mock.calls.find((c: unknown[]) =>
+      /FROM zenithjoy\.agent_platform_sessions/i.test(String(c[0]))
+    );
+    expect(onlineCall).toBeDefined();
+    expect(String(onlineCall[0])).toMatch(/platform\s*=\s*'douyin'/);
   });
 });

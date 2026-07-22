@@ -635,6 +635,7 @@ export interface DispatchResult {
   dispatched: number;
   skipped_window: number;
   skipped_limit: number;
+  skipped_stale_heartbeat: number;
 }
 
 /**
@@ -668,7 +669,7 @@ export async function dispatchDue(
 
   // 时段闸：当前不在 dm_active 时段 → 一条都不发
   if (!withinActiveWindow(now, cfg.dm_active_start, cfg.dm_active_end)) {
-    return { dispatched: 0, skipped_window: -1, skipped_limit: 0 };
+    return { dispatched: 0, skipped_window: -1, skipped_limit: 0, skipped_stale_heartbeat: 0 };
   }
 
   const dueRes = await pool.query(
@@ -681,6 +682,7 @@ export async function dispatchDue(
 
   let dispatched = 0;
   let skippedLimit = 0;
+  let skippedStaleHeartbeat = 0;
   const skippedWindow = 0;
 
   // 每号本轮已发计数（叠加历史 + 本轮），避免一轮内冲破上限
@@ -767,7 +769,7 @@ export async function dispatchDue(
           WHERE id = $1`,
         [row.id, `offline_reassign_from:${label}`]
       );
-      skippedLimit += 1;
+      skippedStaleHeartbeat += 1;
       continue;
     }
 
@@ -823,7 +825,12 @@ export async function dispatchDue(
     dispatched += 1;
   }
 
-  return { dispatched, skipped_window: skippedWindow, skipped_limit: skippedLimit };
+  return {
+    dispatched,
+    skipped_window: skippedWindow,
+    skipped_limit: skippedLimit,
+    skipped_stale_heartbeat: skippedStaleHeartbeat,
+  };
 }
 
 // ── cookieHealth：按 status + 陈旧度分类 ─────────────────────────────────────

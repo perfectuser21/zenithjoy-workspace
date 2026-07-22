@@ -281,7 +281,7 @@ acquisitionRouter.get('/leads/:id/signal-status', tenantContextOptional, async (
       `SELECT s.account_label, s.status, a.last_heartbeat_at
          FROM zenithjoy.agent_platform_sessions s
          JOIN zenithjoy.agents a ON a.id = s.agent_id AND a.tenant_id::text = $1
-        WHERE s.role = 'burner'`,
+        WHERE s.role = 'burner' AND s.platform = 'douyin'`,
       [tenantId]
     );
     const accountOnline = onlineRes.rows.map((r) => ({
@@ -862,7 +862,12 @@ acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Respo
     if (list.length === 0) {
       // 空清单终态：empty → partial(stage1_empty)；error_code / 卡片全解析失败 → failed（checkpoint 保留可重试）
       const rawFailCode = reasonErrorCode ?? (rawList.length > 0 ? 'ALL_RESOLVE_FAILED' : null);
-      const failCode = normalizeCollectErrorCode(rawFailCode);
+      // ALL_RESOLVE_FAILED 是本端点自己合成的已知信号（卡片全解析失败），不是 Android 传来的
+      // 未知码，须显式映射到 PLATFORM_LIMITED，不能走 normalizeCollectErrorCode 白名单兜底
+      // 被误判成 UNKNOWN（全分支复审 Important finding）。
+      const failCode = rawFailCode === 'ALL_RESOLVE_FAILED'
+        ? 'PLATFORM_LIMITED'
+        : normalizeCollectErrorCode(rawFailCode);
       if (failCode === 'UNKNOWN' && rawFailCode !== 'UNKNOWN') {
         console.warn(`[acquisition] collect/report-videos error_code 归一为 UNKNOWN，原始值：task=${taskId} raw=${rawFailCode}`);
       }
