@@ -1,8 +1,11 @@
 /**
  * staff 鉴权中间件
  *
- * 检查 X-User-Email 头是否在 STAFF_EMAILS 白名单中。
- * STAFF_EMAILS 未配置时一律 403（不同于 superAdminGuard 的 dev 放行）。
+ * 检查 X-User-Email 是否在 STAFF_EMAILS 白名单，或 X-Feishu-User-Id 是否在
+ * STAFF_FEISHU_OPENIDS 白名单，任一命中即放行。open_id 兜底是因为部分飞书账号
+ * 从不返回 email 字段（即使已开通 contact:user.email:readonly 权限），而 open_id
+ * 是飞书 OAuth 必定返回的字段，不依赖任何额外权限审批。
+ * 两个白名单都未配置/都不命中时一律 403（不同于 superAdminGuard 的 dev 放行）。
  */
 import type { Request, Response, NextFunction } from 'express';
 
@@ -11,13 +14,21 @@ function parseStaffEmails(): string[] {
   return raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 }
 
+function parseStaffFeishuOpenIds(): string[] {
+  const raw = process.env.STAFF_FEISHU_OPENIDS ?? '';
+  return raw.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
 export function staffGuard(req: Request, res: Response, next: NextFunction): void {
   const emailHeader = req.headers['x-user-email'];
   const userEmail = typeof emailHeader === 'string' ? emailHeader.trim().toLowerCase() : '';
+  const openIdHeader = req.headers['x-feishu-user-id'];
+  const userOpenId = typeof openIdHeader === 'string' ? openIdHeader.trim() : '';
 
-  const staffEmails = parseStaffEmails();
+  const emailOk = userEmail !== '' && parseStaffEmails().includes(userEmail);
+  const openIdOk = userOpenId !== '' && parseStaffFeishuOpenIds().includes(userOpenId);
 
-  if (!userEmail || !staffEmails.includes(userEmail)) {
+  if (!emailOk && !openIdOk) {
     res.status(403).json({
       success: false,
       data: null,
