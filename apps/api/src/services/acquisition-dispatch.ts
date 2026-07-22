@@ -267,18 +267,25 @@ export async function rescoreLead(
   );
 
   const r = await pool.query(
-    `SELECT c.grade, c.commented_at
+    `SELECT c.grade, c.commented_at, c.comment_text
        FROM zenithjoy.acquisition_lead_comments c
        JOIN zenithjoy.acquisition_leads l ON l.id = c.lead_id AND l.tenant_id = $1
       WHERE c.lead_id = $2
       ORDER BY c.commented_at ASC`,
     [tenantId, leadId]
   );
-  const comments: LeadComment[] = r.rows.map((row) => ({ grade: row.grade, commented_at: row.commented_at }));
+  const comments: (LeadComment & { comment_text?: string | null })[] = r.rows.map((row) => ({
+    grade: row.grade, commented_at: row.commented_at, comment_text: row.comment_text,
+  }));
   const score = computeRelevanceScore(comments, now);
   const commentCount = comments.length;
   const lastCommentedAt = commentCount > 0
     ? new Date(Math.max(...comments.map((c) => new Date(c.commented_at).getTime()))).toISOString()
+    : null;
+  const latestReplyText = commentCount > 0
+    ? comments.reduce((latest, c) =>
+        new Date(c.commented_at).getTime() > new Date(latest.commented_at).getTime() ? c : latest
+      ).comment_text ?? null
     : null;
 
   // outreach_eligible：最高档是精准或高意向 → true，否则 false
@@ -293,11 +300,13 @@ export async function rescoreLead(
   const outreachEligible = highestGrade === '高意向' || highestGrade === '精准';
 
   await pool.query(
+    // latest_reply_at 复用 $5(last_commented_at)——两者是同一个时间戳，改其中一列的取值时另一列会跟着变，勿拆开单独赋值。
     `UPDATE zenithjoy.acquisition_leads
         SET relevance_score = $3, comment_count = $4, last_commented_at = $5,
-            outreach_eligible = $6, grade = $7, updated_at = now()
+            outreach_eligible = $6, grade = $7, latest_reply = $8, latest_reply_at = $5,
+            updated_at = now()
       WHERE tenant_id = $1 AND id = $2`,
-    [tenantId, leadId, score, commentCount, lastCommentedAt, outreachEligible, highestGrade]
+    [tenantId, leadId, score, commentCount, lastCommentedAt, outreachEligible, highestGrade, latestReplyText]
   );
 
   // FR-8：outreach_eligible 变 false → 取消该 lead 的 pending/queued dm_assignments
@@ -626,6 +635,7 @@ export interface DispatchResult {
   dispatched: number;
   skipped_window: number;
   skipped_limit: number;
+  skipped_stale_heartbeat: number;
 }
 
 /**
@@ -659,7 +669,7 @@ export async function dispatchDue(
 
   // 时段闸：当前不在 dm_active 时段 → 一条都不发
   if (!withinActiveWindow(now, cfg.dm_active_start, cfg.dm_active_end)) {
-    return { dispatched: 0, skipped_window: -1, skipped_limit: 0 };
+    return { dispatched: 0, skipped_window: -1, skipped_limit: 0, skipped_stale_heartbeat: 0 };
   }
 
   const dueRes = await pool.query(
@@ -672,6 +682,7 @@ export async function dispatchDue(
 
   let dispatched = 0;
   let skippedLimit = 0;
+  let skippedStaleHeartbeat = 0;
   const skippedWindow = 0;
 
   // 每号本轮已发计数（叠加历史 + 本轮），避免一轮内冲破上限
@@ -722,7 +733,7 @@ export async function dispatchDue(
     // 同款约定（~380 行注释——agents.tenant_id 是 uuid，转 ::text 去跟 $3 比较）。
     // + 显式 ORDER BY s.bound_at DESC NULLS LAST 兜底 LIMIT 1 的确定性。
     const leadRes = await pool.query(
-      `SELECT l.profile_url, l.douyin_id, s.agent_id, ag.capabilities
+      `SELECT l.profile_url, l.douyin_id, s.agent_id, ag.capabilities, ag.last_heartbeat_at
          FROM zenithjoy.acquisition_leads l
          LEFT JOIN zenithjoy.agent_platform_sessions s
            ON s.account_label = $2 AND s.platform = 'douyin' AND s.role = 'burner' AND s.status = 'active'
@@ -740,6 +751,27 @@ export async function dispatchDue(
     const douyinId = leadRes.rows[0]?.douyin_id ?? null;
     const agentId = leadRes.rows[0]?.agent_id ?? null;
     const devicePlatform = resolveDevicePlatform(leadRes.rows[0]?.capabilities ?? null);
+    const lastHeartbeatAt = leadRes.rows[0]?.last_heartbeat_at ?? null;
+
+    // gap 期间自动 requeue：build 阶段判在线是那一刻的心跳快照，dispatchDue 真正执行
+    // 发送前可能已经过了几小时——这里补上第二次心跳新鲜度检测，跟 buildAssignments
+    // Step B 的 2 分钟阈值保持一致（本文件 ~383 行附近）。离线时回退
+    // pending_dispatch（不是 limited——limited 语义是"配额/字段缺失"，回退到
+    // pending_dispatch 才能让下一轮 buildAssignments 的 Step A/B 重新捡起来正常排期）。
+    const heartbeatFresh = lastHeartbeatAt
+      ? (now.getTime() - new Date(lastHeartbeatAt).getTime()) < 2 * 60 * 1000
+      : false;
+    if (!heartbeatFresh) {
+      await pool.query(
+        `UPDATE zenithjoy.dm_assignments
+            SET status = 'pending_dispatch', account_label = '', scheduled_for = NULL,
+                dispatch_reason = $2, updated_at = now()
+          WHERE id = $1`,
+        [row.id, `offline_reassign_from:${label}`]
+      );
+      skippedStaleHeartbeat += 1;
+      continue;
+    }
 
     if (!isDmDispatchable(devicePlatform, { profileUrl, douyinId }, agentId)) {
       // 该号无 active agent，或本通道要的定位字段缺失（android 缺抖音号 / windows 缺主页 URL）
@@ -793,7 +825,12 @@ export async function dispatchDue(
     dispatched += 1;
   }
 
-  return { dispatched, skipped_window: skippedWindow, skipped_limit: skippedLimit };
+  return {
+    dispatched,
+    skipped_window: skippedWindow,
+    skipped_limit: skippedLimit,
+    skipped_stale_heartbeat: skippedStaleHeartbeat,
+  };
 }
 
 // ── cookieHealth：按 status + 陈旧度分类 ─────────────────────────────────────

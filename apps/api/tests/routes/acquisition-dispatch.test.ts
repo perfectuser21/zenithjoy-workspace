@@ -28,7 +28,7 @@ import {
 // 内存 fake pool — 只支持 service 用到的几类查询，按 SQL 关键字派发
 // ─────────────────────────────────────────────────────────────────────────
 interface Lead { id: string; tenant_id: string; sec_uid: string | null; profile_url: string | null; partial: boolean; relevance_score: number | null; nickname: string; created_at: string }
-interface Session { account_label: string; role: string; platform: string; status: string; bound_at: string | null; tenant_id: string; agent_id?: string }
+interface Session { account_label: string; role: string; platform: string; status: string; bound_at: string | null; tenant_id: string; agent_id?: string; last_heartbeat_at?: string }
 interface Assignment { id: string; tenant_id: string; lead_id: string; account_label: string; status: string; scheduled_for: string | null; created_at: string }
 interface OutreachLog { id: string; tenant_id: string; account_label: string; lead_id: string | null; profile_url: string | null; status: string; sent_at: string }
 
@@ -44,6 +44,9 @@ function makeFakePool(seed: {
   const assignments = seed.assignments ?? [];
   const logs = seed.logs ?? [];
   let idc = 1;
+  // dispatchDue 的 leadRes 查询没把 now 当 bind param，这里从「到期指派」查询里捞一份
+  // 供 leadRes 分支默认「派单时刻心跳新鲜」——session 没显式指定 last_heartbeat_at 时的兜底。
+  let lastDispatchNow: string | null = null;
 
   const pool = {
     _state: { leads, assignments, logs },
@@ -133,6 +136,7 @@ function makeFakePool(seed: {
       // dispatchDue due query
       if (sql.includes('FROM zenithjoy.dm_assignments') && sql.includes("status = 'queued'") && sql.includes('scheduled_for <=')) {
         const [tenant, nowIso] = params as string[];
+        lastDispatchNow = nowIso;
         const rows = assignments.filter((x) => x.tenant_id === tenant && x.status === 'queued' && x.scheduled_for !== null && x.scheduled_for <= nowIso)
           .sort((a, b) => (a.scheduled_for! < b.scheduled_for! ? -1 : 1))
           .map((x) => ({ id: x.id, lead_id: x.lead_id, account_label: x.account_label }));
@@ -152,7 +156,13 @@ function makeFakePool(seed: {
         const [leadId, label] = params as string[];
         const l = leads.find((x) => x.id === leadId);
         const s = sessions.find((x) => x.account_label === label && x.role === 'burner' && x.status === 'active');
-        return { rows: l ? [{ profile_url: l.profile_url, agent_id: s?.agent_id ?? null }] : [] };
+        return {
+          rows: l ? [{
+            profile_url: l.profile_url,
+            agent_id: s?.agent_id ?? null,
+            last_heartbeat_at: s?.last_heartbeat_at ?? lastDispatchNow,
+          }] : [],
+        };
       }
       // insert publish_tasks (真派单)
       if (sql.startsWith('INSERT INTO zenithjoy.publish_tasks')) {

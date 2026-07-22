@@ -18,6 +18,17 @@ import pool from '../db/connection';
 import { writeDmOutreachStatus, type DmStatus } from '../services/lead-writer';
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { agentContext } from '../middleware/agent-context';
+import { simpleRateLimit } from '../middleware/simple-rate-limit';
+
+// CodeQL js/missing-rate-limiting：/account-scan-result 无 tenantContext（鉴权靠 body.agent_id
+// 直接反查），且本次 account_label 语义统一 sprint 大幅改写了该 handler，触发静态分析对
+// "改动过的代码"重新计入告警。按 agent_id 限流——真机心跳循环~30s一次、dashboard 手动触发已由
+// accountScanTriggerRateLimit（acquisition.ts）单独限流 1次/60s，这里给足并发/连续调用余量。
+const accountScanResultRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 60,
+  keyFn: (req) => (req.body && req.body.agent_id) || 'anonymous',
+});
 import { isDuplicateDmOutreachResult } from '../services/device-platform';
 
 const router = Router();
@@ -40,6 +51,44 @@ const OK = (data: unknown) => ({
   data,
   timestamp: new Date().toISOString(),
 });
+
+// ── account_label 语义统一（2026-07-22 Path2 安卓信号上报 sprint）──────────
+// 根因：qr-bind-result（用户绑号）和 account-scan-result（UIA 扫描）曾各自往
+// account_label 塞不同语义的值（用户起的标签名 vs 真实抖音昵称），在
+// (agent_id,platform,account_label) 唯一约束下会为同一台设备的同一个账号产生
+// 两条独立行——这正是 P0 串台 bug 那批脏数据的更深根因。
+// 统一方案：account_label 最终只允许是"UIA 扫描读到的真实昵称"，绑号刚完成、
+// 还没有扫描结果时用 pending:<task_id> 占位，等第一次扫描进来后"归一"。
+
+export function resolveBindAccountLabel(input: { task_id: string; payload: Record<string, unknown> }): string {
+  return `pending:${input.task_id}`;
+}
+
+export type ReconcileAction =
+  | { type: 'none' }
+  | { type: 'rename'; from: string; to: string }
+  | { type: 'delete_pending'; label: string };
+
+export function reconcileAccountLabel(input: {
+  agentId: string;
+  existingLabels: string[];
+  realNickname: string;
+}): ReconcileAction {
+  const pendingLabel = input.existingLabels.find((l) => l.startsWith('pending:'));
+  if (!pendingLabel) return { type: 'none' };
+  if (input.existingLabels.includes(input.realNickname)) {
+    return { type: 'delete_pending', label: pendingLabel };
+  }
+  return { type: 'rename', from: pendingLabel, to: input.realNickname };
+}
+
+export function computeOfflineDiff(input: {
+  previouslyActiveLabels: string[];
+  currentlyScannedLabels: string[];
+}): string[] {
+  const currentSet = new Set(input.currentlyScannedLabels);
+  return input.previouslyActiveLabels.filter((label) => !currentSet.has(label));
+}
 
 function tenantOf(req: Request, res: Response): string | null {
   const t = req.tenantId;
@@ -134,7 +183,7 @@ router.post('/qr-bind-result', async (req: Request, res: Response) => {
     return res.status(404).json(ERR('TASK_NOT_FOUND', 'task_id 未找到'));
   }
   const payload = t.rows[0].payload || {};
-  const accountLabel = payload.account_label || 'default';
+  const accountLabel = resolveBindAccountLabel({ task_id: task_id, payload });
   // agent_id 优先取 body，兜底取 task payload（agent 回调时可能未传 body.agent_id）
   const resolvedAgentId = agent_id || payload.agent_id;
   if (!resolvedAgentId) {
@@ -651,7 +700,7 @@ router.get('/dm-tasks/:task_id', async (req: Request, res: Response) => {
 //       无完成过滤）会把同一行永远当"待处理"重复下发，手机每次心跳(~30s)重扫一次账号，
 //       无限循环，battery drain + 抖音风控风险。
 // 幂等：镜像 /warmup-result 的模式——已终态(done/failed)的行直接短路，不重复写。
-router.post('/account-scan-result', async (req: Request, res: Response) => {
+router.post('/account-scan-result', accountScanResultRateLimit, async (req: Request, res: Response) => {
   const { agent_id, request_id, ok, account_ids, error_code, screenshot_b64, tree_dump } = req.body || {};
   if (!agent_id || typeof agent_id !== 'string') {
     return res.status(400).json(ERR('MISSING_AGENT_ID', 'agent_id 必填'));
@@ -682,17 +731,65 @@ router.post('/account-scan-result', async (req: Request, res: Response) => {
 
   const ids = Array.isArray(account_ids) ? account_ids.filter((x) => typeof x === 'string' && x) : [];
   let written = 0;
-  if (ok === true && ids.length > 0) {
-    for (const nickname of ids) {
+  // 差集标离线必须在 ok===true 时无条件跑（即使 ids 为空——本轮扫描一个账号都没扫到，
+  // 例如设备上所有小号都被登出，这正是"该标离线"的场景）。只在 ok=false（扫描本身失败）
+  // 时整体跳过——此时没有真实的"当前扫描结果"，不能拿空列表去把所有账号错误地标离线。
+  if (ok === true) {
+    // 归一 + 差集共用同一份"当前库内状态"快照：这条 SELECT 必须在下面的归一/insert
+    // 写入循环之前执行——computeOfflineDiff 需要看到"本次扫描写入之前"的 active 状态，
+    // 不是写入之后的。若被挪到写入循环之后，本轮扫描到的账号早已被写成 active，
+    // 差集会永远算不出任何离线账号。
+    const existingRes = await pool.query(
+      `SELECT account_label, status FROM zenithjoy.agent_platform_sessions
+        WHERE agent_id = $1 AND platform = 'douyin' AND role = 'burner'`,
+      [agent_id],
+    );
+    const existingLabels: string[] = existingRes.rows.map((r) => r.account_label);
+    const previouslyActiveLabels: string[] = existingRes.rows
+      .filter((r) => r.status === 'active')
+      .map((r) => r.account_label);
+
+    if (ids.length > 0) {
+      // 归一：把该 agent 下的 pending 占位行归一到这次扫描到的真实昵称
+      for (const nickname of ids) {
+        const action = reconcileAccountLabel({ agentId: agent_id, existingLabels, realNickname: nickname });
+        if (action.type === 'rename') {
+          await pool.query(
+            `UPDATE zenithjoy.agent_platform_sessions
+                SET account_label = $3, status = 'active', bound_at = NOW()
+              WHERE agent_id = $1 AND platform = 'douyin' AND account_label = $2`,
+            [agent_id, action.from, action.to],
+          );
+        } else if (action.type === 'delete_pending') {
+          await pool.query(
+            `DELETE FROM zenithjoy.agent_platform_sessions
+              WHERE agent_id = $1 AND platform = 'douyin' AND account_label = $2`,
+            [agent_id, action.label],
+          );
+        }
+        await pool.query(
+          `INSERT INTO zenithjoy.agent_platform_sessions
+             (agent_id, platform, account_label, role, status, bound_at, created_at)
+           VALUES ($1, 'douyin', $2, 'burner', 'active', NOW(), NOW())
+           ON CONFLICT (agent_id, platform, account_label) DO UPDATE
+             SET role='burner', status='active', bound_at=NOW()`,
+          [agent_id, nickname],
+        );
+        written += 1;
+      }
+    }
+
+    // 差集标离线：本次扫描仍是权威真相来源，上次 active 但这次没扫到的账号标 offline。
+    // 无条件跑（不受 ids.length>0 限制）——ids 为空时 computeOfflineDiff 会把所有
+    // previouslyActiveLabels 判定为离线，这正是"本轮全部登出"场景需要的效果。
+    const offlineDiff = computeOfflineDiff({ previouslyActiveLabels, currentlyScannedLabels: ids });
+    for (const label of offlineDiff) {
       await pool.query(
-        `INSERT INTO zenithjoy.agent_platform_sessions
-           (agent_id, platform, account_label, role, status, bound_at, created_at)
-         VALUES ($1, 'douyin', $2, 'burner', 'active', NOW(), NOW())
-         ON CONFLICT (agent_id, platform, account_label) DO UPDATE
-           SET role='burner', status='active', bound_at=NOW()`,
-        [agent_id, nickname],
+        `UPDATE zenithjoy.agent_platform_sessions
+            SET status = 'offline'
+          WHERE agent_id = $1 AND platform = 'douyin' AND account_label = $2`,
+        [agent_id, label],
       );
-      written += 1;
     }
   }
 

@@ -177,6 +177,58 @@ describe('rescoreLead', () => {
     expect(/\bgrade\s*=/.test(updateCall!.text)).toBe(true);
     expect(updateCall!.params).toContain('精准'); // 两条评论里的最高档
   });
+
+  it('rescoreLead 把最新一条评论内容回填进 acquisition_leads.latest_reply/latest_reply_at', async () => {
+    const calls: { text: string; params?: unknown[] }[] = [];
+    const pool: QueryablePool = {
+      query: vi.fn(async (text: string, params?: unknown[]) => {
+        calls.push({ text, params });
+        if (/acquisition_lead_comments/.test(text)) {
+          return {
+            rows: [
+              // 最新评论(按 commented_at)故意放在数组第一位、非最后一位：
+              // 若实现误用"数组最后一条"而非"commented_at 最大的一条"，这里会先露馅。
+              { grade: '精准', commented_at: new Date('2026-07-22T09:00:00Z'), comment_text: '这是最新一条评论' },
+              { grade: '感兴趣', commented_at: new Date('2026-07-20T03:00:00Z'), comment_text: '旧评论' },
+            ],
+          };
+        }
+        return { rows: [] };
+      }),
+    };
+
+    await rescoreLead(pool, 'tenant-1', 'lead-reply-test', new Date('2026-07-22T12:00:00Z'));
+
+    const updateCall = calls.find(
+      (c) => /UPDATE\s+zenithjoy\.acquisition_leads/i.test(c.text) && !/FOR UPDATE/i.test(c.text)
+    );
+    expect(updateCall).toBeTruthy();
+    expect(/latest_reply\s*=/.test(updateCall!.text)).toBe(true);
+    expect(/latest_reply_at\s*=/.test(updateCall!.text)).toBe(true);
+    expect(updateCall!.params).toContain('这是最新一条评论'); // 取 commented_at 最大的那条内容,不是数组顺序最后一条
+  });
+
+  it('rescoreLead 零评论时 latest_reply/latest_reply_at 回填为 null', async () => {
+    const calls: { text: string; params?: unknown[] }[] = [];
+    const pool: QueryablePool = {
+      query: vi.fn(async (text: string, params?: unknown[]) => {
+        calls.push({ text, params });
+        return { rows: [] };
+      }),
+    };
+
+    await rescoreLead(pool, 'tenant-1', 'lead-zero-comments', new Date('2026-07-22T12:00:00Z'));
+
+    const updateCall = calls.find(
+      (c) => /UPDATE\s+zenithjoy\.acquisition_leads/i.test(c.text) && !/FOR UPDATE/i.test(c.text)
+    );
+    expect(updateCall).toBeTruthy();
+    expect(updateCall!.params).toContain(null);
+    const latestReplyParamIndex = 7; // $8 = latestReplyText，params 数组下标从 0 开始
+    expect(updateCall!.params![latestReplyParamIndex]).toBeNull();
+    const lastCommentedAtParamIndex = 4; // $5 = lastCommentedAt，latest_reply_at 复用同一个值
+    expect(updateCall!.params![lastCommentedAtParamIndex]).toBeNull();
+  });
 });
 
 describe('acquisition-dispatch outreach_eligible gate', () => {
@@ -331,6 +383,7 @@ describe('acquisition-dispatch dispatchDue 账号会话租户隔离（Fix 2，P0
               douyin_id: '1689210742',
               agent_id: match?.agentId ?? null,
               capabilities: ['windows'],
+              last_heartbeat_at: new Date(DISPATCH_TEST_NOW.getTime() - 30 * 1000),
             }],
           };
         }
@@ -388,5 +441,75 @@ describe('acquisition-dispatch Step A 重标离线小号保留审计轨迹（Fix
     );
     expect(reasonParam, 'dispatch_reason 应携带 offline_reassign_from:<原账号> 而不是被清空成 NULL').toBeTruthy();
     expect(String(reasonParam)).toMatch(/offline_reassign_from:.*burner-offline/);
+  });
+});
+
+describe('dispatchDue — gap 期间账号变离线', () => {
+  it('build 时在线、dispatch 执行时心跳已过期(>2分钟未更新) → 回退 pending_dispatch，不强发', async () => {
+    const staleHeartbeat = new Date(DISPATCH_TEST_NOW.getTime() - 5 * 60 * 1000); // 5 分钟前，超过 2 分钟阈值
+    const calls: { text: string; params?: unknown[] }[] = [];
+    const pool: QueryablePool = {
+      query: vi.fn(async (text: string, params?: unknown[]) => {
+        calls.push({ text, params });
+        if (/FROM\s+zenithjoy\.dm_assignments/i.test(text) && /status = 'queued'/i.test(text)) {
+          return { rows: [{ id: 'assign-1', lead_id: 'lead-1', account_label: 'stale-burner' }] };
+        }
+        if (/dm_outreach_log/i.test(text)) {
+          return { rows: [{ hour: 0, day: 0 }] };
+        }
+        if (/FROM\s+zenithjoy\.acquisition_leads/i.test(text)) {
+          return {
+            rows: [{
+              profile_url: 'https://douyin.com/xxx', douyin_id: 'dy123',
+              agent_id: 'agent-1', capabilities: ['android'],
+              last_heartbeat_at: staleHeartbeat,
+            }],
+          };
+        }
+        return { rows: [] };
+      }),
+    };
+
+    await dispatchDue(pool, 'tenant-1', DISPATCH_TEST_NOW);
+
+    const requeueCall = calls.find((c) =>
+      /UPDATE\s+zenithjoy\.dm_assignments/i.test(c.text) && /pending_dispatch/i.test(c.text)
+    );
+    expect(requeueCall).toBeTruthy();
+    const dispatchedCall = calls.find((c) =>
+      /INSERT INTO\s+zenithjoy\.publish_tasks/i.test(c.text)
+    );
+    expect(dispatchedCall).toBeFalsy(); // 绝不能真派单
+  });
+
+  it('build 时在线、dispatch 执行时心跳仍新鲜(<2分钟) → 正常派单', async () => {
+    const freshHeartbeat = new Date(DISPATCH_TEST_NOW.getTime() - 30 * 1000); // 30 秒前
+    const calls: { text: string; params?: unknown[] }[] = [];
+    const pool: QueryablePool = {
+      query: vi.fn(async (text: string, params?: unknown[]) => {
+        calls.push({ text, params });
+        if (/FROM\s+zenithjoy\.dm_assignments/i.test(text) && /status = 'queued'/i.test(text)) {
+          return { rows: [{ id: 'assign-2', lead_id: 'lead-2', account_label: 'fresh-burner' }] };
+        }
+        if (/dm_outreach_log/i.test(text)) {
+          return { rows: [{ hour: 0, day: 0 }] };
+        }
+        if (/FROM\s+zenithjoy\.acquisition_leads/i.test(text)) {
+          return {
+            rows: [{
+              profile_url: 'https://douyin.com/yyy', douyin_id: 'dy456',
+              agent_id: 'agent-2', capabilities: ['android'],
+              last_heartbeat_at: freshHeartbeat,
+            }],
+          };
+        }
+        return { rows: [] };
+      }),
+    };
+
+    await dispatchDue(pool, 'tenant-1', DISPATCH_TEST_NOW);
+
+    const dispatchedCall = calls.find((c) => /INSERT INTO\s+zenithjoy\.publish_tasks/i.test(c.text));
+    expect(dispatchedCall).toBeTruthy();
   });
 });

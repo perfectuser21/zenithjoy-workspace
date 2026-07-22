@@ -957,6 +957,37 @@ describe('POST /api/acquisition/collect/report-videos — Stage1 清单回报 [B
     expect(res.body.data.status).toBe('failed');
   });
 
+  it('error_code 不在五分类枚举里时，落库前归一为 UNKNOWN（防御未来 Android 版本传入新值）', async () => {
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1')
+      .send({ task_id: TASK_ID, videos: [], reason: { error_code: 'SOME_BRAND_NEW_CODE' } });
+    expect(res.status).toBe(200);
+    const updateCall = mockClientQuery.mock.calls.find((c) => String(c[0]).trim().startsWith('UPDATE zenithjoy.acquisition_collect_tasks'));
+    expect(updateCall).toBeDefined();
+    expect((updateCall as any)[1][2]).toBe('UNKNOWN');
+  });
+
+  it('error_code 已经是合法五分类值时，落库前原样透传', async () => {
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1')
+      .send({ task_id: TASK_ID, videos: [], reason: { error_code: 'NETWORK_ERROR' } });
+    expect(res.status).toBe(200);
+    const updateCall = mockClientQuery.mock.calls.find((c) => String(c[0]).trim().startsWith('UPDATE zenithjoy.acquisition_collect_tasks'));
+    expect((updateCall as any)[1][2]).toBe('NETWORK_ERROR');
+  });
+
+  it('videos 非空但全部解析失败（后端合成 ALL_RESOLVE_FAILED，无 reason.error_code）→ 归一为 PLATFORM_LIMITED，不得降级为 UNKNOWN [全分支复审]', async () => {
+    mockResolveShareToMedia.mockResolvedValue(null); // 所有卡片解析失败 → list.length===0 但 rawList.length>0
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1')
+      .send({ task_id: TASK_ID, videos: [{ share_url: 'https://v.douyin.com/dead/' }] });
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('failed');
+    const updateCall = mockClientQuery.mock.calls.find((c) => String(c[0]).trim().startsWith('UPDATE zenithjoy.acquisition_collect_tasks'));
+    expect(updateCall).toBeDefined();
+    expect((updateCall as any)[1][2]).toBe('PLATFORM_LIMITED');
+  });
+
   it('任务已终态 → 409', async () => {
     mockClientQuery.mockImplementation(async (sql: unknown) => {
       const s = String(sql);
@@ -1142,6 +1173,25 @@ describe('POST /api/acquisition/collect/report — 终态守卫 + settle 结算 
       .send({ task_id: TASK_ID, video_id: 'v1', commenters: [{ nickname: 'n1' }] });
     await new Promise((r) => setTimeout(r, 20));
     expect(vi.mocked(scoreLeads)).not.toHaveBeenCalled();
+  });
+
+  it('error_code 不在五分类枚举里时，落库前归一为 UNKNOWN（防御未来 Android 版本传入新值）', async () => {
+    mockClientQuery.mockImplementation(clientImpl(taskRow()));
+    const res = await request(app).post('/api/acquisition/collect/report')
+      .send({ task_id: TASK_ID, video_id: 'v1', commenters: [], terminal: 'failed', error_code: 'SOME_BRAND_NEW_CODE' });
+    expect(res.status).toBe(200);
+    const updateCall = mockClientQuery.mock.calls.find((c) => String(c[0]).trim().startsWith('UPDATE zenithjoy.acquisition_collect_tasks'));
+    expect(updateCall).toBeDefined();
+    expect((updateCall as any)[1][2]).toBe('UNKNOWN');
+  });
+
+  it('error_code 已经是合法五分类值时，落库前原样透传', async () => {
+    mockClientQuery.mockImplementation(clientImpl(taskRow()));
+    const res = await request(app).post('/api/acquisition/collect/report')
+      .send({ task_id: TASK_ID, video_id: 'v1', commenters: [], terminal: 'failed', error_code: 'NETWORK_ERROR' });
+    expect(res.status).toBe(200);
+    const updateCall = mockClientQuery.mock.calls.find((c) => String(c[0]).trim().startsWith('UPDATE zenithjoy.acquisition_collect_tasks'));
+    expect((updateCall as any)[1][2]).toBe('NETWORK_ERROR');
   });
 });
 
@@ -1506,5 +1556,88 @@ describe('POST /api/acquisition/account-scan/trigger', () => {
       .send({});
     expect(second.status).toBe(429);
     expect(second.body.error.code).toBe('RATE_LIMITED');
+  });
+});
+
+// ────── Android 信号上报 sprint Task5 — 最小消费验证端点 ──────
+describe('GET /api/acquisition/leads/:id/signal-status [BEHAVIOR]', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  const VALID_LEAD_ID = '22222222-2222-2222-2222-222222222222';
+
+  it('无 tenant 上下文 → 401 NO_TENANT', async () => {
+    const res = await request(app).get(`/api/acquisition/leads/${VALID_LEAD_ID}/signal-status`);
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('NO_TENANT');
+  });
+
+  it('非法 UUID → 404（不查库、不 500）', async () => {
+    const res = await request(app)
+      .get('/api/acquisition/leads/not-a-uuid/signal-status')
+      .set('x-test-tenant-id', 'tenant-a');
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('LEAD_NOT_FOUND');
+  });
+
+  it('线索不存在（或不属于本 tenant）→ 404', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any).mockResolvedValueOnce({ rows: [] }); // lead 查询空
+    const res = await request(app)
+      .get(`/api/acquisition/leads/${VALID_LEAD_ID}/signal-status`)
+      .set('x-test-tenant-id', 'tenant-a');
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('LEAD_NOT_FOUND');
+  });
+
+  it('跨 tenant 访问他人线索 → 404（IDOR，不泄露存在性）', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any).mockResolvedValueOnce({ rows: [] }); // WHERE tenant_id=$2 过滤掉别人的线索
+    const res = await request(app)
+      .get(`/api/acquisition/leads/${VALID_LEAD_ID}/signal-status`)
+      .set('x-test-tenant-id', 'tenant-b');
+    expect(res.status).toBe(404);
+  });
+
+  it('GET /leads/:id/signal-status 能读出在线状态+失败原因+评论同步时间戳', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({
+        rows: [{ latest_reply: '好的，加一下', latest_reply_at: '2026-07-22T09:00:00Z' }],
+      }) // lead 归属校验 + latest_reply
+      .mockResolvedValueOnce({
+        rows: [{ account_label: 'burner-1', status: 'active', last_heartbeat_at: new Date().toISOString() }],
+      }) // burner session 在线状态
+      .mockResolvedValueOnce({ rows: [{ error_code: 'NETWORK_ERROR' }] }); // 最近一次采集任务失败原因
+
+    const res = await request(app)
+      .get(`/api/acquisition/leads/${VALID_LEAD_ID}/signal-status`)
+      .set('x-test-tenant-id', 'tenant-a');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveProperty('account_online');
+    expect(res.body.data.account_online).toEqual([
+      expect.objectContaining({ account_label: 'burner-1', status: 'active', heartbeat_fresh: true }),
+    ]);
+    expect(res.body.data).toHaveProperty('last_collect_error_code', 'NETWORK_ERROR');
+    expect(res.body.data).toHaveProperty('latest_reply', '好的，加一下');
+    expect(res.body.data).toHaveProperty('latest_reply_at', '2026-07-22T09:00:00Z');
+  });
+
+  it('account_online 查询须过滤 platform=douyin，避免未来其它平台 burner session 混入 [全分支复审]', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({ rows: [{ latest_reply: null, latest_reply_at: null }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await request(app)
+      .get(`/api/acquisition/leads/${VALID_LEAD_ID}/signal-status`)
+      .set('x-test-tenant-id', 'tenant-a');
+
+    const onlineCall = (mod.default.query as any).mock.calls.find((c: unknown[]) =>
+      /FROM zenithjoy\.agent_platform_sessions/i.test(String(c[0]))
+    );
+    expect(onlineCall).toBeDefined();
+    expect(String(onlineCall[0])).toMatch(/platform\s*=\s*'douyin'/);
   });
 });

@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# lint-feature-has-smoke.test.sh — 4 case
+# lint-feature-has-smoke.test.sh — 6 case
 # A: feat: PR 触及 apps/src + 有 smoke.sh → PASS
 # B: feat: PR 触及 apps/src + 无 smoke.sh → FAIL
 # C: feat: PR 不触及 apps/src → PASS (跳过)
 # D: fix: PR 触及 apps/src → PASS (跳过，非 feat)
+# E: feat: PR 触及 apps/src + 对既有大 smoke.sh 做有实质内容的扩展（新增 Step）→ PASS
+# F: feat: PR 触及 apps/src + 只象征性碰一下既有大 smoke.sh（无实质新增）→ FAIL
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,6 +18,27 @@ init_repo() {
   mkdir -p apps/api/src .github/workflows/scripts/smoke
   echo "export const x = 1;" > apps/api/src/base.ts
   git add . && git commit -q -m "base"
+  git branch -M main && git checkout -q -b "test-case"
+}
+
+# Like init_repo, but commits an existing smoke script to `main` itself
+# (before branching) — needed for E/F cases where the smoke file must
+# genuinely predate the feature branch, not just predate a later commit
+# on the same branch (git diff main...HEAD would otherwise see it as new).
+init_repo_with_existing_smoke() {
+  git init -q && git config user.email "t@t" && git config user.name "t" && git config commit.gpgsign false
+  mkdir -p apps/api/src .github/workflows/scripts/smoke
+  echo "export const x = 1;" > apps/api/src/base.ts
+  cat > .github/workflows/scripts/smoke/existing-smoke.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "Step 1"
+curl -sf http://localhost:3000/health || exit 1
+echo "Step 2"
+node -e "console.log('ok')"
+EOF
+  chmod +x .github/workflows/scripts/smoke/existing-smoke.sh
+  git add . && git commit -q -m "base incl. existing smoke"
   git branch -M main && git checkout -q -b "test-case"
 }
 
@@ -68,6 +91,29 @@ TMPDIR=$(mktemp -d); cd "$TMPDIR"; init_repo
 echo "export const z = 3;" > apps/api/src/fix.ts
 git add . && git commit -q -m "fix(api): fix something"
 check_result "fix-skips" 0
+cd /tmp; rm -rf "$TMPDIR"
+
+# E: feat + apps/src + 对既有大 smoke.sh 做有实质内容的扩展 → PASS
+TMPDIR=$(mktemp -d); cd "$TMPDIR"; init_repo_with_existing_smoke
+echo "export const y = 2;" > apps/api/src/feature.ts
+cat >> .github/workflows/scripts/smoke/existing-smoke.sh <<'EOF'
+
+echo "Step 3: 新功能回归"
+curl -sf -X POST http://localhost:3000/api/new-feature -d '{}' || exit 1
+psql "$DB_URL" -c "SELECT 1" || exit 1
+echo "Step 3 passed"
+EOF
+git add . && git commit -q -m "feat(api): add feature, extend existing smoke with Step 3"
+check_result "feat-extends-existing-smoke" 0
+cd /tmp; rm -rf "$TMPDIR"
+
+# F: feat + apps/src + 只象征性碰一下既有大 smoke.sh（无实质新增）→ FAIL
+TMPDIR=$(mktemp -d); cd "$TMPDIR"; init_repo_with_existing_smoke
+echo "export const y = 2;" > apps/api/src/feature.ts
+sed -i.bak 's/Step 1/Step 1 (touched)/' .github/workflows/scripts/smoke/existing-smoke.sh
+rm -f .github/workflows/scripts/smoke/existing-smoke.sh.bak
+git add . && git commit -q -m "feat(api): add feature, trivially touch existing smoke"
+check_result "feat-trivial-touch-fails" 1
 cd /tmp; rm -rf "$TMPDIR"
 
 echo ""; echo "lint-feature-has-smoke: PASSED=$PASSED FAILED=$FAILED"

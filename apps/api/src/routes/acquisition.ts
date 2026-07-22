@@ -35,6 +35,18 @@ const pendingCollectTasksRateLimit = simpleRateLimit({
 // （不是 tenantId——这条路由不走 tenantContext，鉴权发生在 handler 内部按 task_id 反查）。
 // Stage2 单个视频多条评论仍是同一次 report 调用，一个采集任务生命周期内可能有多个视频轮流
 // report，180次/60s 留足并发余量。
+// 采集失败原因五分类（task 3, 2026-07-22 Path2 安卓信号上报 sprint）：Android 端
+// CollectFailureClassifier 已把 11+ 个自由字符串错误码归类到这五类，这里做防御性
+// 兜底——万一未来 Android 版本传入新增/未同步的错误码，落库前也归一为 UNKNOWN，
+// 不让 acquisition_collect_tasks.error_code 列的值域被污染。
+const VALID_COLLECT_ERROR_CODES = new Set([
+  'KEYWORD_NO_RESULT', 'PLATFORM_LIMITED', 'NETWORK_ERROR', 'ACCOUNT_ABNORMAL', 'UNKNOWN',
+]);
+function normalizeCollectErrorCode(raw: unknown): string | null {
+  if (typeof raw !== 'string' || raw.length === 0) return null;
+  return VALID_COLLECT_ERROR_CODES.has(raw) ? raw : 'UNKNOWN';
+}
+
 const collectReportRateLimit = simpleRateLimit({
   windowMs: 60_000,
   max: 180,
@@ -46,6 +58,17 @@ const collectReportRateLimit = simpleRateLimit({
 const accountScanTriggerRateLimit = simpleRateLimit({
   windowMs: 60_000,
   max: 1,
+});
+
+// CodeQL js/missing-rate-limiting：/leads/:id/signal-status 碰鉴权(tenantContextOptional
+// 反查tenant)+DB查询（2026-07-22 Path2 安卓信号上报 sprint Task5 新增路由触发静态分析）。
+// 必须排在 tenantContextOptional 之前——CodeQL 追踪的是"鉴权节点执行前有没有先经过限流"，
+// 放在鉴权之后不算数。因此不能用默认 tenantKeyFn（此时 req.tenantId 还没被
+// tenantContextOptional 解析出来）——按 IP 限流，诊断端点允许较宽松轮询节奏。
+const signalStatusRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 60,
+  keyFn: (req) => req.ip || 'anonymous',
 });
 
 const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
@@ -242,6 +265,56 @@ acquisitionRouter.get('/videos/:videoId/leads', tenantContextOptional, async (re
     }));
 
     return ok(res, { leads, total: leads.length });
+  } catch (err) {
+    return fail(res, 500, 'DB_ERROR', (err as Error).message);
+  }
+});
+
+// GET /api/acquisition/leads/:id/signal-status — 最小消费验证端点（2026-07-22 Path2 安卓信号上报 sprint）：
+// 跨表拼装账号在线状态（Task1）+采集失败原因（Task3）+评论同步回复（Task4），证明本次上报的
+// 信号真实有效，不是"写了没人读"的哑数据（decision 8dbe91ee 教训）。完整 UI 展示留给下一个 sprint。
+acquisitionRouter.get('/leads/:id/signal-status', signalStatusRateLimit, tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+  const leadId = req.params.id;
+  if (!UUID_RE.test(leadId)) return fail(res, 404, 'LEAD_NOT_FOUND', '线索不存在');
+
+  try {
+    const leadRes = await pool.query<{ latest_reply: string | null; latest_reply_at: string | null }>(
+      `SELECT latest_reply, latest_reply_at
+         FROM zenithjoy.acquisition_leads WHERE id = $1 AND tenant_id = $2`,
+      [leadId, tenantId]
+    );
+    if (leadRes.rows.length === 0) return fail(res, 404, 'LEAD_NOT_FOUND', '线索不存在');
+    const lead = leadRes.rows[0];
+
+    const onlineRes = await pool.query<{ account_label: string; status: string; last_heartbeat_at: string | null }>(
+      `SELECT s.account_label, s.status, a.last_heartbeat_at
+         FROM zenithjoy.agent_platform_sessions s
+         JOIN zenithjoy.agents a ON a.id = s.agent_id AND a.tenant_id::text = $1
+        WHERE s.role = 'burner' AND s.platform = 'douyin'`,
+      [tenantId]
+    );
+    const accountOnline = onlineRes.rows.map((r) => ({
+      account_label: r.account_label,
+      status: r.status,
+      heartbeat_fresh: r.last_heartbeat_at
+        ? Date.now() - new Date(r.last_heartbeat_at).getTime() < 2 * 60 * 1000
+        : false,
+    }));
+
+    const taskRes = await pool.query<{ error_code: string | null }>(
+      `SELECT error_code FROM zenithjoy.acquisition_collect_tasks
+        WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [tenantId]
+    );
+
+    return ok(res, {
+      account_online: accountOnline,
+      last_collect_error_code: taskRes.rows[0]?.error_code ?? null,
+      latest_reply: lead.latest_reply,
+      latest_reply_at: lead.latest_reply_at,
+    });
   } catch (err) {
     return fail(res, 500, 'DB_ERROR', (err as Error).message);
   }
@@ -799,7 +872,16 @@ acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Respo
 
     if (list.length === 0) {
       // 空清单终态：empty → partial(stage1_empty)；error_code / 卡片全解析失败 → failed（checkpoint 保留可重试）
-      const failCode = reasonErrorCode ?? (rawList.length > 0 ? 'ALL_RESOLVE_FAILED' : null);
+      const rawFailCode = reasonErrorCode ?? (rawList.length > 0 ? 'ALL_RESOLVE_FAILED' : null);
+      // ALL_RESOLVE_FAILED 是本端点自己合成的已知信号（卡片全解析失败），不是 Android 传来的
+      // 未知码，须显式映射到 PLATFORM_LIMITED，不能走 normalizeCollectErrorCode 白名单兜底
+      // 被误判成 UNKNOWN（全分支复审 Important finding）。
+      const failCode = rawFailCode === 'ALL_RESOLVE_FAILED'
+        ? 'PLATFORM_LIMITED'
+        : normalizeCollectErrorCode(rawFailCode);
+      if (failCode === 'UNKNOWN' && rawFailCode !== 'UNKNOWN') {
+        console.warn(`[acquisition] collect/report-videos error_code 归一为 UNKNOWN，原始值：task=${taskId} raw=${rawFailCode}`);
+      }
       const s = settleCollectTask({
         currentStatus: task.status === 'pending' ? 'running' : task.status,
         agentTerminal: searchEmpty
@@ -1098,9 +1180,13 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
     const videoTotal = vcRes.rows[0]?.total ?? 0;
     const videoDone = vcRes.rows[0]?.done ?? 0;
     const leadCountAfter = task.lead_count_raw + batch.length;
+    const normalizedErrorCode = normalizeCollectErrorCode(errorCode);
+    if (normalizedErrorCode === 'UNKNOWN' && errorCode !== 'UNKNOWN') {
+      console.warn(`[acquisition] collect/report error_code 归一为 UNKNOWN，原始值：task=${taskId} raw=${errorCode}`);
+    }
     const s = settleCollectTask({
       currentStatus: task.status === 'pending' ? 'running' : task.status,
-      agentTerminal: terminal ? { terminal, error_code: errorCode, partial_reason: partialReason } : null,
+      agentTerminal: terminal ? { terminal, error_code: normalizedErrorCode, partial_reason: partialReason } : null,
       videoTotal,
       videoDone,
       leadCount: leadCountAfter,

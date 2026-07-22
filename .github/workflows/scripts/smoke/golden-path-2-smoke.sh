@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # golden-path-2-smoke.sh
-# ZenithJoy Walking Skeleton — Path 2 客户智能获客路径（23 步本地版）
+# ZenithJoy Walking Skeleton — Path 2 客户智能获客路径（24 步本地版）
 # Notion Journey: https://www.notion.so/35ac40c2ba6381ed8df4f3fa0b64f5bf
 #
 # 2026-07-07 用户更正（decision 431acd2c）：整条去飞书、改本地中台。
@@ -29,6 +29,9 @@
 #               + 服务端日志出现 [comment-grading] target_profile_desc 为空 诊断行（不再静默）；
 #           23b 主 tenant（已配置画像）→ /collect/report 不传 grade，真调 DeepSeek 判定
 #               → lead.grade ∈ {高意向,精准} + outreach_eligible=true
+#   Step 24 account_label 语义统一回归（2026-07-22 安卓信号上报 sprint Task 1）：
+#           qr-bind→qr-bind-result 落 pending:<task_id> 占位 → 首次扫描上报真实昵称
+#           归一改名 + status=active → 该昵称从扫描结果消失 → 差集标 status=offline
 #
 # 2026-07-15（handoff 0715）：铺到 11 步，回流两个真根因（铁律5）——
 #   Seg2 judgeVideo INV-6 短路不写库 / Seg4 心跳从不按 os_type 刷新 capabilities。
@@ -53,7 +56,7 @@
 # 用法：
 #   API_BASE=http://localhost:5200 DB_URL=postgresql://... \
 #     bash .github/workflows/scripts/smoke/golden-path-2-smoke.sh
-#   退出码 0 = 23 步服务端段全通；非零 = 第 EXIT_CODE 步红
+#   退出码 0 = 24 步服务端段全通；非零 = 第 EXIT_CODE 步红
 #
 # 真调判定依赖：API server 进程需带 TOAPIS_API_KEY（CI: secrets.TOAPIS_API_KEY 注入 job env）。
 # 无 key 时 judge-video 落 pending/no_api_key → Step 8 真红（这是设计：#1269/#1271 就是全 mock 漏过的）。
@@ -74,7 +77,7 @@ fail() { echo "❌ $1"; exit "$2"; }
 psq() { psql "$DB_URL" -At -c "$1"; }
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ZenithJoy Path 2 Walking Skeleton — 客户智能获客路径（23 步本地版）"
+echo "  ZenithJoy Path 2 Walking Skeleton — 客户智能获客路径（24 步本地版）"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # ───────────────────────────────────────────────────────────────────
@@ -912,12 +915,71 @@ S23B_ELIGIBLE=$(psq "SELECT COALESCE(outreach_eligible::text,'<NULL>') FROM zeni
 ok "Step 23b ✅ outreach_eligible=true"
 ok "Step 23 ✅ 评论意向判定 comment-grading.ts 回归通过（画像为空日志 + 真实 DeepSeek 判定链路全通）"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 24：account_label 语义统一回归——绑号占位→扫描归一→差集标离线全链路
+# （2026-07-22 Path2 安卓信号上报 sprint 铁律5回流，agent-burner.ts）
+#
+# 复用主 tenant/agent（Step1/2 建立的 $TENANT_ID/$AGENT_PK），真实串联 3 个
+# HTTP 请求验证 resolveBindAccountLabel/reconcileAccountLabel/computeOfflineDiff
+# 三个纯函数拼成生产路径后的效果——此前只有 agent-burner.test.ts 的 vitest 单测
+# 逐个函数覆盖，从未验证过它们串成真实请求链路（qr-bind→qr-bind-result→
+# account-scan-result×2）时的端到端效果：
+#   24a：qr-bind 派任务 + qr-bind-result 回调完成 → 落 pending:<task_id> 占位行
+#   24b：首次扫描上报真实昵称 → 占位行归一改名为真实昵称，status=active
+#   24c：该昵称从下一轮扫描结果里消失（account_ids=[]）→ 差集判定标 status=offline
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 24: account_label 语义统一——绑号占位/扫描归一/差集标离线全链路"
+
+# 24a：qr-bind 派任务 + qr-bind-result 回调完成 → 落 pending:<task_id> 占位行
+S24_TMP=$(mktemp)
+S24_LABEL="p2-smoke-s24-${RND}"
+S24_HTTP=$(curl -s -o "$S24_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/agent/burner/qr-bind" \
+  -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" \
+  -d "{\"agent_id\":\"$AGENT_PK\",\"account_label\":\"$S24_LABEL\"}")
+[ "$S24_HTTP" = "200" ] || fail "Step 24a qr-bind expected 200, got $S24_HTTP: $(cat "$S24_TMP")" 24
+S24_TASK_ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S24_TMP" 2>/dev/null)
+[ -n "$S24_TASK_ID" ] || fail "Step 24a qr-bind 无 task_id: $(cat "$S24_TMP")" 24
+ok "Step 24a qr-bind → task_id=$S24_TASK_ID"
+
+S24_HTTP=$(curl -s -o "$S24_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/agent/burner/qr-bind-result" \
+  -H "Content-Type: application/json" \
+  -d "{\"task_id\":\"$S24_TASK_ID\",\"agent_id\":\"$AGENT_PK\",\"qr_login\":\"success\"}")
+[ "$S24_HTTP" = "200" ] || fail "Step 24a qr-bind-result expected 200, got $S24_HTTP: $(cat "$S24_TMP")" 24
+S24_PENDING_LABEL="pending:${S24_TASK_ID}"
+S24_ROW=$(psq "SELECT account_label FROM zenithjoy.agent_platform_sessions WHERE agent_id='$AGENT_PK' AND platform='douyin' AND role='burner' AND account_label='$S24_PENDING_LABEL'")
+[ "$S24_ROW" = "$S24_PENDING_LABEL" ] || fail "Step 24a agent_platform_sessions.account_label 期望 '$S24_PENDING_LABEL'（绑号占位），实得 '$S24_ROW'" 24
+ok "Step 24a ✅ 绑号完成 → account_label 落 pending:<task_id> 占位（$S24_PENDING_LABEL）"
+
+# 24b：首次扫描上报真实昵称 → 占位行归一为真实昵称，status=active
+S24_NICK="p2smokes24nick${RND//-/}"
+S24_HTTP=$(curl -s -o "$S24_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/agent/burner/account-scan-result" -H "Content-Type: application/json" \
+  -d "{\"agent_id\":\"$AGENT_PK\",\"ok\":true,\"account_ids\":[\"$S24_NICK\"]}")
+[ "$S24_HTTP" = "200" ] || fail "Step 24b account-scan-result(首次) expected 200, got $S24_HTTP: $(cat "$S24_TMP")" 24
+S24_ROW2=$(psq "SELECT account_label || ',' || status FROM zenithjoy.agent_platform_sessions WHERE agent_id='$AGENT_PK' AND platform='douyin' AND role='burner' AND account_label='$S24_NICK'")
+[ "$S24_ROW2" = "$S24_NICK,active" ] || fail "Step 24b 归一后期望 account_label='$S24_NICK',status='active'，实得 '$S24_ROW2'（pending 占位未归一到真实昵称）" 24
+S24_PENDING_GONE=$(psq "SELECT count(*) FROM zenithjoy.agent_platform_sessions WHERE agent_id='$AGENT_PK' AND platform='douyin' AND account_label='$S24_PENDING_LABEL' AND bound_at > NOW() - interval '120 seconds'")
+[ "$S24_PENDING_GONE" = "0" ] || fail "Step 24b pending 占位行 '$S24_PENDING_LABEL' 归一后仍残留（应改名或删除，实际残留 $S24_PENDING_GONE 行）" 24
+ok "Step 24b ✅ 首次扫描 → pending 占位归一为真实昵称 $S24_NICK，status=active"
+
+# 24c：该昵称从下一轮扫描结果里消失（account_ids=[]）→ 差集判定标 offline
+S24_HTTP=$(curl -s -o "$S24_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/agent/burner/account-scan-result" -H "Content-Type: application/json" \
+  -d "{\"agent_id\":\"$AGENT_PK\",\"ok\":true,\"account_ids\":[]}")
+[ "$S24_HTTP" = "200" ] || fail "Step 24c account-scan-result(消失) expected 200, got $S24_HTTP: $(cat "$S24_TMP")" 24
+S24_STATUS3=$(psq "SELECT status FROM zenithjoy.agent_platform_sessions WHERE agent_id='$AGENT_PK' AND platform='douyin' AND role='burner' AND account_label='$S24_NICK'")
+[ "$S24_STATUS3" = "offline" ] || fail "Step 24c 账号消失后期望 status='offline'，实得 '$S24_STATUS3'（差集标离线未生效）" 24
+ok "Step 24c ✅ 账号从扫描结果消失 → status=offline（差集标离线生效）"
+ok "Step 24 ✅ account_label 语义统一全链路回归通过（绑号占位→扫描归一→差集标离线）"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" \
-      "$S22_TMP" "$S23A_TMP" "$S23A_COOKIES" "$S23B_TMP" 2>/dev/null
+      "$S22_TMP" "$S23A_TMP" "$S23A_COOKIES" "$S23B_TMP" "$S24_TMP" 2>/dev/null
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Path 2 23 步本地版 smoke 全绿（服务端段）"
+echo "  ✅ Path 2 24 步本地版 smoke 全绿（服务端段）"
 echo "  真机段：等 Android evaluator 通道（xian-rog nightly）接管复跑"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 exit 0
