@@ -259,6 +259,56 @@ acquisitionRouter.get('/videos/:videoId/leads', tenantContextOptional, async (re
   }
 });
 
+// GET /api/acquisition/leads/:id/signal-status — 最小消费验证端点（2026-07-22 Path2 安卓信号上报 sprint）：
+// 跨表拼装账号在线状态（Task1）+采集失败原因（Task3）+评论同步回复（Task4），证明本次上报的
+// 信号真实有效，不是"写了没人读"的哑数据（decision 8dbe91ee 教训）。完整 UI 展示留给下一个 sprint。
+acquisitionRouter.get('/leads/:id/signal-status', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+  const leadId = req.params.id;
+  if (!UUID_RE.test(leadId)) return fail(res, 404, 'LEAD_NOT_FOUND', '线索不存在');
+
+  try {
+    const leadRes = await pool.query<{ latest_reply: string | null; latest_reply_at: string | null }>(
+      `SELECT latest_reply, latest_reply_at
+         FROM zenithjoy.acquisition_leads WHERE id = $1 AND tenant_id = $2`,
+      [leadId, tenantId]
+    );
+    if (leadRes.rows.length === 0) return fail(res, 404, 'LEAD_NOT_FOUND', '线索不存在');
+    const lead = leadRes.rows[0];
+
+    const onlineRes = await pool.query<{ account_label: string; status: string; last_heartbeat_at: string | null }>(
+      `SELECT s.account_label, s.status, a.last_heartbeat_at
+         FROM zenithjoy.agent_platform_sessions s
+         JOIN zenithjoy.agents a ON a.id = s.agent_id AND a.tenant_id::text = $1
+        WHERE s.role = 'burner'`,
+      [tenantId]
+    );
+    const accountOnline = onlineRes.rows.map((r) => ({
+      account_label: r.account_label,
+      status: r.status,
+      heartbeat_fresh: r.last_heartbeat_at
+        ? Date.now() - new Date(r.last_heartbeat_at).getTime() < 2 * 60 * 1000
+        : false,
+    }));
+
+    const taskRes = await pool.query<{ error_code: string | null }>(
+      `SELECT error_code FROM zenithjoy.acquisition_collect_tasks
+        WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [tenantId]
+    );
+
+    return ok(res, {
+      account_online: accountOnline,
+      last_collect_error_code: taskRes.rows[0]?.error_code ?? null,
+      latest_reply: lead.latest_reply,
+      latest_reply_at: lead.latest_reply_at,
+    });
+  } catch (err) {
+    return fail(res, 500, 'DB_ERROR', (err as Error).message);
+  }
+});
+
 // Agent 轮询端点 — 返回待处理的 collect 任务（来自 collect/start 写入的 acquisition_collect_tasks）
 // stage_1_done 任务也返回（Stage 2 重试，含视频 URL 列表）
 // 用 x-agent-id 解析出请求方自己的 tenant_id + agent_id，只返回本租户内、

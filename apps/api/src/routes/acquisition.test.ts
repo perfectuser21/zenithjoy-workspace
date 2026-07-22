@@ -1546,3 +1546,68 @@ describe('POST /api/acquisition/account-scan/trigger', () => {
     expect(second.body.error.code).toBe('RATE_LIMITED');
   });
 });
+
+// ────── Android 信号上报 sprint Task5 — 最小消费验证端点 ──────
+describe('GET /api/acquisition/leads/:id/signal-status [BEHAVIOR]', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  const VALID_LEAD_ID = '22222222-2222-2222-2222-222222222222';
+
+  it('无 tenant 上下文 → 401 NO_TENANT', async () => {
+    const res = await request(app).get(`/api/acquisition/leads/${VALID_LEAD_ID}/signal-status`);
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('NO_TENANT');
+  });
+
+  it('非法 UUID → 404（不查库、不 500）', async () => {
+    const res = await request(app)
+      .get('/api/acquisition/leads/not-a-uuid/signal-status')
+      .set('x-test-tenant-id', 'tenant-a');
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('LEAD_NOT_FOUND');
+  });
+
+  it('线索不存在（或不属于本 tenant）→ 404', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any).mockResolvedValueOnce({ rows: [] }); // lead 查询空
+    const res = await request(app)
+      .get(`/api/acquisition/leads/${VALID_LEAD_ID}/signal-status`)
+      .set('x-test-tenant-id', 'tenant-a');
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('LEAD_NOT_FOUND');
+  });
+
+  it('跨 tenant 访问他人线索 → 404（IDOR，不泄露存在性）', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any).mockResolvedValueOnce({ rows: [] }); // WHERE tenant_id=$2 过滤掉别人的线索
+    const res = await request(app)
+      .get(`/api/acquisition/leads/${VALID_LEAD_ID}/signal-status`)
+      .set('x-test-tenant-id', 'tenant-b');
+    expect(res.status).toBe(404);
+  });
+
+  it('GET /leads/:id/signal-status 能读出在线状态+失败原因+评论同步时间戳', async () => {
+    const mod = await import('../db/connection');
+    (mod.default.query as any)
+      .mockResolvedValueOnce({
+        rows: [{ latest_reply: '好的，加一下', latest_reply_at: '2026-07-22T09:00:00Z' }],
+      }) // lead 归属校验 + latest_reply
+      .mockResolvedValueOnce({
+        rows: [{ account_label: 'burner-1', status: 'active', last_heartbeat_at: new Date().toISOString() }],
+      }) // burner session 在线状态
+      .mockResolvedValueOnce({ rows: [{ error_code: 'NETWORK_ERROR' }] }); // 最近一次采集任务失败原因
+
+    const res = await request(app)
+      .get(`/api/acquisition/leads/${VALID_LEAD_ID}/signal-status`)
+      .set('x-test-tenant-id', 'tenant-a');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveProperty('account_online');
+    expect(res.body.data.account_online).toEqual([
+      expect.objectContaining({ account_label: 'burner-1', status: 'active', heartbeat_fresh: true }),
+    ]);
+    expect(res.body.data).toHaveProperty('last_collect_error_code', 'NETWORK_ERROR');
+    expect(res.body.data).toHaveProperty('latest_reply', '好的，加一下');
+    expect(res.body.data).toHaveProperty('latest_reply_at', '2026-07-22T09:00:00Z');
+  });
+});
