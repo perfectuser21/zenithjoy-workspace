@@ -169,11 +169,43 @@ COMMENT ON COLUMN zenithjoy.acquisition_collect_tasks.error_code IS
 - Android APK 代码改动（Agent 协议约束用服务端契约测试覆盖，Android 侧 Kotlin 单测由 Android 通道负责）
 - 触达状态回填获客列表 / 人工触达配置 / 下载客户端链接 / 关键词去重机制 / 任务进程状态展示（另立 sprint）
 
+## Invariant 约束
+
+从代码/DB/smoke 加载的不变量（实现必须满足，不得破坏）：
+
+1. **agent_platform_sessions schema**：`status` CHECK 约束现有值 `pending | active | expired | offline | connected`（migration 20260507 + 20260524）；新增 `uia_online_status` 字段须独立列，不修改 `status` CHECK 约束以保持兼容
+2. **acquisition_collect_tasks.error_code**：字段已存在（migration 20260618），无 CHECK 约束（允许任意字符串字面值），五分类枚举是应用层约定，不加 DB 约束（历史数据含旧值）
+3. **acquisition_leads.latest_reply / latest_reply_at**：字段已存在（migration 20260703），类型 `TEXT DEFAULT NULL` / `TIMESTAMPTZ DEFAULT NULL`，全仓库无写入路径（死列）——实现必须补写入路径，不得再留 NULL
+4. **golden-path-2-smoke.sh Step 1-14**：现有 14 步断言必须全绿，本次新增 Step 15-20 不得破坏已有步骤
+5. **agent-context.ts 心跳超时门限**：`last_heartbeat_at > NOW() - INTERVAL '5 minutes'`（middleware 第 86 行），在线判定逻辑必须复用此常量，不得硬编码不同值
+6. **buildAssignments burner 查询**：当前 `WHERE s.role = 'burner' AND s.status = 'active'`（acquisition-dispatch.ts 第 381 行），二次在线检测必须复用同一查询条件，不得引入新的判定分支导致两处判定逻辑漂移
+7. **dm_assignments 状态机**：`pending_dispatch → queued → dispatched → sent | failed`，gap 回退只能写 `pending_dispatch`，禁止写 `cancelled` 或删除行（保留审计链路）
+8. **crawl-comments-result 协议**：现有 payload 字段 `task_id / video_url / comments / error_code` 必须向前兼容，`latest_reply` / `latest_reply_at` 以可选字段追加，无这两个字段时 lead-writer 正常运行不报错
+
+## 累积 FR
+
+从既有代码加载的功能需求（已存在，本次实现必须对齐）：
+
+1. **HeartbeatPayload 协议**（`apps/api/src/schemas/agent-protocol.ts`）：`type: 'heartbeat'` envelope 已有 `payload: HeartbeatPayload` 定义，扩展字段须以 Zod optional 追加，保持向后兼容
+2. **walking-skeleton 心跳路由**（`apps/api/src/routes/walking-skeleton.ts`）：`POST /api/agent/heartbeat` 已处理 `os_type` → `capabilities` 刷新（Step 11 回归），UIA 结果写入须在同一事务/同一路由处理函数内完成，不建新路由
+3. **acquisition-collect 状态流转**（`apps/api/src/services/acquisition-collect.ts` 第 161-196 行）：`failed` 状态的 `error_code` 已由 `t.error_code ?? null` 字面透传，Agent 上报的 error_code 直接落库，服务层无需额外映射
+4. **lead-writer crawl-comments-result 处理**（`apps/api/src/routes/agent-burner.ts` POST `/crawl-comments-result`）：评论上报写 Lead 行已走 `writeDmOutreachStatus` + pool.query 路径；`latest_reply` 写入须在同一 SQL upsert 内追加，不建独立端点
+5. **dispatchDue pending_dispatch 回退**（`apps/api/src/services/acquisition-dispatch.ts` Step A 第 391-416 行）：已有"离线 burner 的 queued 行 → `pending_dispatch`"回退逻辑（Step A），二次在线检测复用此模式，在 Step C/D 执行前插入"本次 assignment 对应账号当前状态"查询
+6. **GET burner/sessions 端点**（`apps/api/src/routes/agent-burner.ts`）：已存在，按 `tenant_id` 列 burner sessions；account-signal 新端点可作为独立端点或在此响应追加字段，两种方案均可接受
+
 ## 假设
 
 - [ASSUMPTION: `agent_platform_sessions` 表已有 `offline` 值在 status CHECK 约束里（migration 20260524 加过），本次补 `uia_unknown` 或复用 `uia_online_status` 独立字段，确认后取其一]
 - [ASSUMPTION: `lead-writer.ts` 的 `crawl-comments-result` 处理路径已能接收额外字段，只需补写两个新字段]
 - [ASSUMPTION: `dispatchDue` 执行前距 `buildAssignments` 间隔 <10 分钟，gap 内变离线属小概率但真实发生场景]
+
+## NFR
+
+- **延迟**：心跳处理器写 `uia_online_status` 须在原有心跳响应 P99 <200ms 基础上增量 <50ms（单次 SQL upsert，无额外网络调用）
+- **并发**：`dispatchDue` 二次在线检测须在现有单进程单循环模型内执行（无并发风险），不引入锁或事务升级
+- **兼容性**：所有协议扩展字段为可选（Zod optional），旧版 Android Agent（不携带 UIA 字段）的心跳必须正常处理，不报 validation error
+- **数据保留**：`latest_reply` / `latest_reply_at` 写入策略为 upsert（`ON CONFLICT DO UPDATE`），不 INSERT 新行，确保 Lead 行唯一性约束不被破坏
+- **smoke 幂等**：新增 Step 15-20 必须幂等（多次跑结果相同），Step 15-16 的在线/离线覆盖顺序在同一 smoke 运行内有序执行，不依赖外部状态
 
 ## 验收标准（Final E2E）
 
@@ -291,3 +323,6 @@ commit-9：smoke 验证 — golden-path-2-smoke.sh Step 15-20 全绿（CI 门控
 _Sprint ID: f08ab898-2090-4ffb-9aaa-a48c320d42d2_
 _Sprint Dir: sprints/07212317-android-signal-reporting_
 _生成时间: 2026-07-22_
+
+journey_type: user_facing
+target_environment: local_api
