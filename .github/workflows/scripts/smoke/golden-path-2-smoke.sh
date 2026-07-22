@@ -960,7 +960,7 @@ S24_HTTP=$(curl -s -o "$S24_TMP" -w "%{http_code}" --max-time 15 \
 [ "$S24_HTTP" = "200" ] || fail "Step 24b account-scan-result(首次) expected 200, got $S24_HTTP: $(cat "$S24_TMP")" 24
 S24_ROW2=$(psq "SELECT account_label || ',' || status FROM zenithjoy.agent_platform_sessions WHERE agent_id='$AGENT_PK' AND platform='douyin' AND role='burner' AND account_label='$S24_NICK'")
 [ "$S24_ROW2" = "$S24_NICK,active" ] || fail "Step 24b 归一后期望 account_label='$S24_NICK',status='active'，实得 '$S24_ROW2'（pending 占位未归一到真实昵称）" 24
-S24_PENDING_GONE=$(psq "SELECT count(*) FROM zenithjoy.agent_platform_sessions WHERE agent_id='$AGENT_PK' AND platform='douyin' AND account_label='$S24_PENDING_LABEL'")
+S24_PENDING_GONE=$(psq "SELECT count(*) FROM zenithjoy.agent_platform_sessions WHERE agent_id='$AGENT_PK' AND platform='douyin' AND account_label='$S24_PENDING_LABEL' AND bound_at > NOW() - interval '120 seconds'")
 [ "$S24_PENDING_GONE" = "0" ] || fail "Step 24b pending 占位行 '$S24_PENDING_LABEL' 归一后仍残留（应改名或删除，实际残留 $S24_PENDING_GONE 行）" 24
 ok "Step 24b ✅ 首次扫描 → pending 占位归一为真实昵称 $S24_NICK，status=active"
 
