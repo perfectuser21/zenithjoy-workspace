@@ -17,6 +17,7 @@ import { resolve } from 'path';
 const REPO_ROOT = resolve(__dirname, '../../../..');
 const SETUP_RESET_PS1 = resolve(REPO_ROOT, 'services/agent/install-pack/setup-reset.ps1');
 const START_BAT = resolve(REPO_ROOT, 'services/agent/install-pack/start.bat');
+const BUILD_INSTALL_PACK_SH = resolve(REPO_ROOT, 'services/agent/scripts/build-install-pack.sh');
 
 describe('[CONTRACT] setup-reset.ps1 -- BEHAVIOR-1 static assertions', () => {
 
@@ -150,6 +151,25 @@ describe('[CONTRACT] setup-reset.ps1 -- BEHAVIOR-1 static assertions', () => {
                         /-TimeoutSec\b/i.test(content);
     expect(hasSafeExec).toBe(true);
   });
+
+  // -----------------------------------------------------------------------
+  // SR-8: build-install-pack.sh copies setup-reset.ps1 into the pack output
+  // (both the --dry-run stub block and the real release block).
+  // Root cause of issue 73a75417: the script had 6-8 other install-pack/*
+  // cp lines in each block but never copied setup-reset.ps1, so the built
+  // installer never shipped the file even though it exists in the repo.
+  // -----------------------------------------------------------------------
+  it('SR-8: build-install-pack.sh copies setup-reset.ps1 into PACK_DIR in both build blocks', () => {
+    expect(existsSync(BUILD_INSTALL_PACK_SH)).toBe(true);
+    const content = readFileSync(BUILD_INSTALL_PACK_SH, 'utf8');
+
+    const copyLines = content
+      .split('\n')
+      .filter(line => /^\s*cp\s+install-pack\/setup-reset\.ps1\b/.test(line));
+
+    // One cp line in the --dry-run stub block, one in the real release block.
+    expect(copyLines.length).toBeGreaterThanOrEqual(2);
+  });
 });
 
 // -----------------------------------------------------------------------
@@ -250,5 +270,36 @@ describe('[CONTRACT] start.bat -- BEHAVIOR-2 static assertions', () => {
     // ZJ_BOOT_FAIL_TEST must be present as a literal string in start.bat
     // so the CI smoke can set this env var to trigger the 401 failure path
     expect(content).toMatch(/ZJ_BOOT_FAIL_TEST/);
+  });
+
+  // -----------------------------------------------------------------------
+  // SB-8: start.bat invokes setup-reset.ps1 exactly once, on first launch of
+  // this installed version -- inside the "Step 1: .env doesn't exist yet"
+  // block, not on every run. install-autostart.ps1 (Step 6.92) and
+  // create-shortcut.ps1 (Step 6.93) are explicitly documented as
+  // "idempotent, runs every time" -- setup-reset.ps1 kills all
+  // zenithjoy-agent processes (setup-reset.ps1 Step 1), so calling it on
+  // every start.bat run would race-kill the process that is about to start.
+  // Root cause of issue 73a75417: setup-reset.ps1 was written with a
+  // contract test but never wired into any caller.
+  // -----------------------------------------------------------------------
+  it('SB-8: start.bat invokes setup-reset.ps1 inside the first-run (.env creation) block only', () => {
+    if (!existsSync(START_BAT)) return;
+
+    const content = readFileSync(START_BAT, 'utf8');
+    const firstRunBlockMatch = content.match(
+      /REM Step 1: Verify \.env exists[\s\S]*?(?=REM Step 1\.5:)/
+    );
+    expect(firstRunBlockMatch).not.toBeNull();
+
+    const firstRunBlock = firstRunBlockMatch ? firstRunBlockMatch[0] : '';
+    expect(firstRunBlock).toMatch(/powershell.*-File.*setup-reset\.ps1/i);
+
+    // Must NOT also be invoked from the Step 6.92 every-run autostart block.
+    const everyRunBlockMatch = content.match(
+      /Step 6\.92: Register boot autostart[\s\S]*?(?=REM Step 6\.93:)/
+    );
+    const everyRunBlock = everyRunBlockMatch ? everyRunBlockMatch[0] : '';
+    expect(everyRunBlock).not.toMatch(/setup-reset\.ps1/i);
   });
 });
