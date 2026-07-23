@@ -39,6 +39,20 @@ if not exist .env (
     if exist .env.template (
         copy .env.template .env >nul
         echo [setup] .env created from .env.template
+        REM First launch of this installed version = install/update event.
+        REM Run setup-reset.ps1 once here (kills stale zenithjoy-agent.exe from an old
+        REM version dir, clears undeclared HKCU ZENITHJOY_* keys, rebuilds the scheduled
+        REM task) BEFORE this script launches its own zenithjoy-agent.exe below.
+        REM Deliberately NOT called from Step 6.92 (install-autostart.ps1) — that block
+        REM is documented as "idempotent, runs every time", and setup-reset.ps1 kills
+        REM all zenithjoy-agent processes, so running it on every launch would race-kill
+        REM the process this very script is about to start.
+        if exist "%~dp0setup-reset.ps1" (
+            powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup-reset.ps1" >nul 2>&1
+            echo [setup-reset] first-run environment cleanup done
+        ) else (
+            echo [setup-reset] setup-reset.ps1 not found, skipping (old install pack)
+        )
     ) else (
         echo [ERROR] .env not found. Please re-download install pack from dashboard.
         echo [ERROR] Make sure you EXTRACTED the whole package first, do NOT run start.bat from inside the zip/rar.

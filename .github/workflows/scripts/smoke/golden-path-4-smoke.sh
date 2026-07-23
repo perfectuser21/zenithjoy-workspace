@@ -198,6 +198,38 @@ echo "Step 3l version bump 校验通过：$ACTUAL"
 ok "Step 3l ✅ 半死区修复三件套 + 队列过期（L1 窗口形态/L2 梯度自愈/L3 skip细分/L4 过期上限）"
 
 # ───────────────────────────────────────────────────────────────────
+# Step 3m（issue 73a75417，2026-07-23）：setup-reset.ps1 打包+接线回归——
+# 刀B 只写了脚本本体+断言脚本自身内容的 contract test（setup-reset-ps1-contract.test.ts
+# SR-1~SR-7），从没断言过它真的进了打包产物、也没断言有任何调用点，rog 真机确认装机
+# 目录里确实没有这个文件。真机段（打包产物实际含该文件+真装机跑通清理）等价断言：
+# 静态源码检查 build-install-pack.sh 两处 cp 清单 + start.bat 首跑块调用点。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 3m: setup-reset.ps1 打包+接线回归（issue 73a75417，真机段等价断言）"
+
+BUILD_PACK_SH_3M="services/agent/scripts/build-install-pack.sh"
+START_BAT_3M="services/agent/install-pack/start.bat"
+
+SETUP_RESET_CP_COUNT=$(grep -cE '^\s*cp\s+install-pack/setup-reset\.ps1\b' "$BUILD_PACK_SH_3M" || true)
+[ "$SETUP_RESET_CP_COUNT" -ge 2 ] \
+  || fail "Step 3m build-install-pack.sh 拷贝 setup-reset.ps1 的行数=$SETUP_RESET_CP_COUNT（期望≥2，dry-run stub块+release块各一处）" 3
+
+grep -qE 'powershell.*-File.*setup-reset\.ps1' "$START_BAT_3M" \
+  || fail "Step 3m start.bat 没有任何位置调用 setup-reset.ps1（清环境功能仍零交付）" 3
+
+# 用 Step 1.5 标记切出首跑块，确认调用点在这里面（装机/更新时跑一次），不在 Step 6.92
+# 每次启动都跑的 install-autostart.ps1 块里（setup-reset.ps1 会杀掉所有 zenithjoy-agent
+# 进程，每次启动都跑会打断正在启动的自己）。
+FIRST_RUN_BLOCK=$(awk '/REM Step 1: Verify \.env exists/,/REM Step 1\.5:/' "$START_BAT_3M")
+echo "$FIRST_RUN_BLOCK" | grep -qE 'powershell.*-File.*setup-reset\.ps1' \
+  || fail "Step 3m setup-reset.ps1 调用点不在 Step 1 首跑块内" 3
+
+EVERY_RUN_BLOCK=$(awk '/Step 6\.92: Register boot autostart/,/REM Step 6\.93:/' "$START_BAT_3M")
+echo "$EVERY_RUN_BLOCK" | grep -qE 'setup-reset\.ps1' \
+  && fail "Step 3m setup-reset.ps1 被接到了 Step 6.92 每次启动都跑的块里（会race-kill自己）" 3
+
+ok "Step 3m ✅ setup-reset.ps1 已进打包产物两处清单，且仅在首跑块调用（非每次启动）"
+
+# ───────────────────────────────────────────────────────────────────
 # Step 6：上线自检消息——每次启动发一条给固定测试联系人（task 7be2842d，已实现）
 # 纯函数等价断言：_should_send_startup_selfcheck deny-by-default + send_startup_selfcheck
 # 找到目标会话真调 reply_in_chat_with_lease。真机段（真实微信真发送）见 xian-rog 真机通道。

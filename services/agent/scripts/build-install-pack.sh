@@ -62,6 +62,7 @@ if [ "$DRY_RUN" = true ]; then
   cp install-pack/start.vbs "${PACK_DIR}/"
   cp install-pack/create-shortcut.ps1 "${PACK_DIR}/" 2>/dev/null || true
   cp install-pack/install-autostart.ps1 "${PACK_DIR}/" 2>/dev/null || true
+  cp install-pack/setup-reset.ps1 "${PACK_DIR}/" 2>/dev/null || true
   cp install-pack/.env.template "${PACK_DIR}/" 2>/dev/null || true
   # icon.ico = 悦升云端 logo（快捷方式图标 + exe 应用图标同源）
   cp build/icon.ico "${PACK_DIR}/" 2>/dev/null || true
@@ -114,6 +115,8 @@ cp build/icon.ico "$PACK_DIR/"
 cp install-pack/uninstall.bat "$PACK_DIR/"
 # 进程守护：watchdog 崩溃自愈循环 + 开机自启注册脚本
 cp install-pack/install-autostart.ps1 "$PACK_DIR/"
+# 环境清理：装机/更新首次启动时跑一次（start.bat Step 1 首跑块调用），杀残留进程+清HKCU+重建计划任务
+cp install-pack/setup-reset.ps1 "$PACK_DIR/"
 cp install-pack/.env.template "$PACK_DIR/"
 cp "install-pack/README.txt" "$PACK_DIR/"
 cp install-pack/ffmpeg.exe "$PACK_DIR/"
