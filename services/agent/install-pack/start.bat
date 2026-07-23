@@ -43,7 +43,7 @@ if not exist .env (
         REM Run setup-reset.ps1 once here (kills stale zenithjoy-agent.exe from an old
         REM version dir, clears undeclared HKCU ZENITHJOY_* keys, rebuilds the scheduled
         REM task) BEFORE this script launches its own zenithjoy-agent.exe below.
-        REM Deliberately NOT called from Step 6.92 (install-autostart.ps1) — that block
+        REM Deliberately NOT called from Step 6.92 (install-autostart.ps1) -- that block
         REM is documented as "idempotent, runs every time", and setup-reset.ps1 kills
         REM all zenithjoy-agent processes, so running it on every launch would race-kill
         REM the process this very script is about to start.
