@@ -50,7 +50,11 @@ jobs:
             -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HK_VPS_PORT }} -o StrictHostKeyChecking=no" \
             deploy/staff-hub/nginx.conf \
             ${{ secrets.HK_VPS_USER }}@${{ secrets.HK_VPS_HOST }}:/opt/zenithjoy/staff-hub/nginx.conf
-          echo "✅ dist + nginx.conf synced"
+          rsync -avz \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HK_VPS_PORT }} -o StrictHostKeyChecking=no" \
+            deploy/staff-hub/common.conf \
+            ${{ secrets.HK_VPS_USER }}@${{ secrets.HK_VPS_HOST }}:/opt/zenithjoy/staff-hub/common.conf
+          echo "✅ dist + nginx.conf + common.conf synced"
 
       - name: Restart staff-hub container
         uses: appleboy/ssh-action@v1.0.3
