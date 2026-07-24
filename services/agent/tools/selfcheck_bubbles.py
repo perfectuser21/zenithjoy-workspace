@@ -41,6 +41,12 @@ FIND_WINDOW_RETRY_DELAY_S = 12.0
 FIND_ITEM_RETRIES = 5
 FIND_ITEM_RETRY_DELAY_S = 2.0
 
+# reset_fn（_reset_session_list_to_top）有界重试：其内部点击升级梯（PostMessage→验证→
+# click_input）是瞬时操作，rog CI×生产监听共享桌面场景下单次失败常见（issue b237a4b6：
+# 2026-07-24 真机截图证实窗口停在真实客户聊天面板，reset_fn 首次"切通讯录未生效"就放弃，
+# 换一轮全新尝试大概率能成功）——不能只试一次就判定 gate 失败。
+RESET_FN_RETRIES = 3
+
 
 def find_target_item(descendants, target):
     """纯函数（CI 可测）：在一批 ListItem 里找 name 以 target 开头的那个。
@@ -58,7 +64,9 @@ def find_target_item(descendants, target):
     return None
 
 
-def find_item_with_recovery(mw, target, retries, retry_delay_s, sleep_fn, reset_fn):
+def find_item_with_recovery(
+    mw, target, retries, retry_delay_s, sleep_fn, reset_fn, reset_retries=RESET_FN_RETRIES
+):
     """真根因修法（2026-07-08 rog 实证，session-1 诊断亲眼确认）：先做几轮廉价重试
     （覆盖极端渲染瞬态），仍找不到就调用 reset_fn（真机上是
     listen_chat._reset_session_list_to_top）尝试恢复后再补查一次。
@@ -68,6 +76,11 @@ def find_item_with_recovery(mw, target, retries, retry_delay_s, sleep_fn, reset_
     这时 mw.descendants(ListItem) 枚举到的是聊天气泡（"[bubble-gate] <ts>"/
     时间戳），不是会话列表条目，目标联系人自然永远"找不到"——纯重试没用，
     等的是压根不会变化的错误视图，必须主动切 tab 强制视图重建。
+
+    reset_fn 本身有界重试（issue b237a4b6，2026-07-24）：_reset_session_list_to_top
+    的点击升级梯是瞬时操作，单次失败（如 rog CI×生产监听共享桌面时前台焦点被抢）不代表
+    真的恢复不了——只调一次就放弃会把瞬态失败误判成 gate 真失败。reset_retries 次内
+    任一次成功即返回；全部失败才最终判 not_found。
 
     纯逻辑（CI 可测，mw/sleep_fn/reset_fn 全部注入）：mw 只需支持
     `descendants(control_type=...)`；reset_fn(mw) -> bool 模拟
@@ -81,14 +94,15 @@ def find_item_with_recovery(mw, target, retries, retry_delay_s, sleep_fn, reset_
         item = find_target_item(mw.descendants(control_type="ListItem"), target)
         if item is not None:
             return item, f"retry_{i + 1}"
-    try:
-        if reset_fn(mw):
-            sleep_fn(1.0)
-            item = find_target_item(mw.descendants(control_type="ListItem"), target)
-            if item is not None:
-                return item, "reset_recovery"
-    except Exception:
-        pass
+    for j in range(reset_retries):
+        try:
+            if reset_fn(mw):
+                sleep_fn(1.0)
+                item = find_target_item(mw.descendants(control_type="ListItem"), target)
+                if item is not None:
+                    return item, f"reset_recovery_{j + 1}"
+        except Exception:
+            pass
     return None, "not_found"
 
 

@@ -150,7 +150,7 @@ def test_find_item_with_recovery_falls_back_to_reset_when_stuck_in_chat_panel():
         mw, "文件传输助手", retries=5, retry_delay_s=0.01,
         sleep_fn=lambda s: None, reset_fn=_reset,
     )
-    assert item is not None and how == "reset_recovery"
+    assert item is not None and how == "reset_recovery_1"
     assert reset_calls == [mw]
 
 
@@ -176,3 +176,51 @@ def test_find_item_with_recovery_reset_exception_swallowed():
         sleep_fn=lambda s: None, reset_fn=_boom,
     )
     assert item is None and how == "not_found"
+
+
+# ── reset_fn 有界重试（issue b237a4b6，2026-07-24 rog 真机截图+UIA 实证）──────────
+#
+# CI self-hosted runner（rog）和生产 line04-wechat-cs 监听共用同一微信窗口，靠
+# desktop-lease-broker 优先级互斥；CI 持租期间监听整轮让位（刻意不碰 UIA），窗口
+# 状态维持在让位那一刻。若那一刻正停在已打开的聊天面板，reset_fn 之前只调一次，
+# 失败就直接放弃——但 _reset_session_list_to_top 的点击升级梯是瞬时操作，网络/
+# 前台焦点/窗口动画等瞬态原因导致的单次失败，换一轮全新尝试大概率能成功。
+
+def test_find_item_with_recovery_reset_retries_until_success():
+    # reset_fn 前两次失败（"切通讯录未生效，升级梯用尽"），第三次成功。
+    stuck_chat_bubbles = [_Item("[bubble-gate] 1783439923\n08:01\n")]
+    session_list_after_reset = [_Item("文件传输助手\n消息\n08:02\n")]
+    mw = _MW([stuck_chat_bubbles] * 6 + [session_list_after_reset])
+    reset_calls = []
+
+    def _reset(mw_):
+        reset_calls.append(mw_)
+        return len(reset_calls) >= 3
+
+    item, how = find_item_with_recovery(
+        mw, "文件传输助手", retries=5, retry_delay_s=0.01,
+        sleep_fn=lambda s: None, reset_fn=_reset,
+    )
+    assert item is not None and how == "reset_recovery_3"
+    assert len(reset_calls) == 3
+
+
+def test_find_item_with_recovery_reset_gives_up_after_bounded_retries():
+    # reset_fn 一直失败，重试必须有上限，不能无限拖垮 CI。
+    stuck_chat_bubbles = [_Item("[bubble-gate] 1783439923\n08:01\n")]
+    mw = _MW([stuck_chat_bubbles] * 20)
+    reset_calls = []
+
+    def _reset(mw_):
+        reset_calls.append(mw_)
+        return False
+
+    item, how = find_item_with_recovery(
+        mw, "文件传输助手", retries=1, retry_delay_s=0.01,
+        sleep_fn=lambda s: None, reset_fn=_reset,
+    )
+    assert item is None and how == "not_found"
+    assert 2 <= len(reset_calls) <= 10, (
+        f"reset_fn 全失败时应重试多次才放弃（不能仍是老的只试一次），"
+        f"也不能无上限重试拖垮 CI，实际调用 {len(reset_calls)} 次"
+    )
