@@ -1,0 +1,25 @@
+{
+  "round": 1,
+  "verdict": "REVISION",
+  "rubric_scores": {
+    "完整性": 4,
+    "可验证性": 4,
+    "边界覆盖": 3,
+    "铁律覆盖": 4,
+    "TDD纪律": 4,
+    "mock限制": 4,
+    "测试格式": 4
+  },
+  "total": "27/35",
+  "judgments_written": 7,
+  "blockers": [
+    "B1: smoke Step 29c else 分支缺 exit 1 硬失败（INV-5 违反）",
+    "B2: BEHAVIOR-GP4-E sec_uid 强去重在 tests/ 和 smoke 中双缺口",
+    "B3: gp2-manual-outreach.test.ts 缺 BEHAVIOR-GP2-D（cancelling_assignment API 层断言）"
+  ],
+  "suggestions": [
+    "S1: GP4-A 先红假绿风险（改为二次调用验证）",
+    "S2: GP2-B/C FAKE_LEAD_ID FK 约束问题",
+    "S3: GP5-D migration meta-assertion 改为 it.todo"
+  ]
+}
