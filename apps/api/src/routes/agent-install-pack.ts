@@ -99,6 +99,24 @@ function upsertEnvLines(envText: string, kvLines: string[]): string {
   return out;
 }
 
+// GP-3 根路径：返回 manifest 信息（含 download_url）供 install-pack 页面检测
+agentInstallPackRouter.get('/', (_req: Request, res: Response) => {
+  const m = readInstallPackManifest();
+  if (!m) {
+    return res.status(503).json({
+      ok: false,
+      code: 'INSTALL_PACK_NOT_BUILT',
+      message: 'install pack not built yet — wait for next CI run',
+    });
+  }
+  return res.status(200).json({
+    ok: true,
+    download_url: m.cos_url || m.download_url,
+    apk_url: m.cos_url || m.download_url,
+    version: m.version,
+  });
+});
+
 agentInstallPackRouter.get('/manifest', (_req: Request, res: Response) => {
   const m = readInstallPackManifest();
   if (!m) {

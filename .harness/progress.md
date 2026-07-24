@@ -1,3 +1,5 @@
 (新 sprint 开始 2026-07-24，旧台账来自错误 session 已清除)
 planner: done (sprint-prd.md@9e33e9e6, invariants=8, fr=5)
 contract-proposer: done (round=1, behaviors=17, gp_coverage=GP1-GP5, dod=contract-dod.md, draft=contract-draft.md, tests=4 files+1 smoke片段)
+gan: done (contract-draft.md@39d5bbbc r2, verdict=APPROVED, 铁律覆盖=5/5, judgments_written=7, rubric=.harness/verdicts/gan-r2-39d5bbbc.json)
+harness-generator: done (red_sha=af32bba3, green_impl=pending-commit, GP1-GP5 all implemented, migrations=2 files, smoke merged into golden-path-2-smoke.sh step25-29)

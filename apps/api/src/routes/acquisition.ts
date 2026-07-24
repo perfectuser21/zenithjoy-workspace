@@ -497,6 +497,7 @@ acquisitionRouter.get('/leads', tenantContextOptional, async (req: Request, res:
     const pool = (await import('../db/connection')).default;
 
     interface LeadRow {
+      id: string;
       sec_uid: string | null;
       nickname: string;
       comment_text: string | null;
@@ -509,19 +510,26 @@ acquisitionRouter.get('/leads', tenantContextOptional, async (req: Request, res:
       latest_reply_at: string | null;
       assignee: string | null;
       outreach_eligible: boolean | null;
+      latest_dm_status: string | null;
     }
 
     const gradeClause = grade && typeof grade === 'string' ? `AND l.grade = $2` : '';
     const params: string[] = grade && typeof grade === 'string' ? [tenantId, grade] : [tenantId];
 
     const result = await pool.query<LeadRow>(
-      `SELECT l.sec_uid, l.nickname, l.comment_text,
+      `SELECT l.id, l.sec_uid, l.nickname, l.comment_text,
               l.source_video_ids, l.created_at, l.grade, l.keyword,
               l.latest_reply, l.latest_reply_at, l.assignee,
               l.outreach_eligible,
-              t.keywords AS task_keywords
+              t.keywords AS task_keywords,
+              da.status AS latest_dm_status
          FROM zenithjoy.acquisition_leads l
          LEFT JOIN zenithjoy.acquisition_collect_tasks t ON t.id = l.collect_task_id
+         LEFT JOIN LATERAL (
+           SELECT status FROM zenithjoy.dm_assignments
+            WHERE tenant_id = l.tenant_id AND lead_id = l.id
+            ORDER BY updated_at DESC LIMIT 1
+         ) da ON true
         WHERE l.tenant_id = $1
         ${gradeClause}
         ORDER BY l.created_at DESC
@@ -545,6 +553,7 @@ acquisitionRouter.get('/leads', tenantContextOptional, async (req: Request, res:
         latest_reply_at: r.latest_reply_at ?? null,
         assignee: r.assignee ?? null,
         outreach_eligible: r.outreach_eligible ?? null,
+        outreach_status: dmStatusToOutreachStatus(r.latest_dm_status),
       };
     });
 
@@ -573,6 +582,14 @@ function fail(res: Response, status: number, code: string, message: string) {
   return res
     .status(status)
     .json({ success: false, error: { code, message }, timestamp: new Date().toISOString() });
+}
+
+// GP-1：dm_assignments.status → outreach_status 映射
+function dmStatusToOutreachStatus(status: string | null): string {
+  if (!status) return 'untouched';
+  if (['sent', 'dispatched', 'queued'].includes(status)) return 'touched';
+  if (['failed', 'limited'].includes(status)) return 'retry_needed';
+  return 'untouched';
 }
 function tenantOf(req: Request, res: Response): string | null {
   const t = req.tenantId;
@@ -695,6 +712,25 @@ acquisitionRouter.post('/collect/start', tenantContextOptional, async (req: Requ
       agentId = boundAgentId;
     }
 
+    // GP-4：关键词去重（30天窗口，同租户）
+    const forceOverride = req.body?.force === true;
+    if (!forceOverride) {
+      const dedupRes = await pool.query<{ days_ago: number }>(
+        `SELECT EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400 AS days_ago
+           FROM zenithjoy.acquisition_collect_tasks
+          WHERE tenant_id = $1
+            AND created_at > NOW() - INTERVAL '30 days'
+            AND keywords @> $2::jsonb
+            AND keywords <@ $2::jsonb
+          ORDER BY created_at DESC LIMIT 1`,
+        [tenantId, JSON.stringify(keywords)]
+      );
+      if (dedupRes.rows.length > 0) {
+        const daysAgo = Math.floor(Number(dedupRes.rows[0].days_ago));
+        return ok(res, { duplicate: true, days_ago: daysAgo });
+      }
+    }
+
     // 异步检查主号 session（不阻塞采集任务创建）
     pool.query(
       `SELECT id FROM zenithjoy.line02_account_sessions WHERE tenant_id = $1 AND role = 'main' AND health = 'ok' LIMIT 1`,
@@ -717,7 +753,7 @@ acquisitionRouter.post('/collect/start', tenantContextOptional, async (req: Requ
       keywords: keywords as string[],
     });
 
-    return ok(res, { task_id: taskId, status: 'pending' });
+    return ok(res, { task_id: taskId, status: 'pending', duplicate: false });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[acquisition/start]', msg);
@@ -1488,5 +1524,389 @@ acquisitionRouter.patch('/config', tenantContextOptional, async (req: Request, r
   } catch (err) {
     console.error('[acquisition] config PATCH error:', (err as Error).message);
     return fail(res, 500, 'CONFIG_ERROR', (err as Error).message);
+  }
+});
+
+// ============================================================================
+// GP-2：人工触达配置弹窗（选号+话术）
+//   GET  /api/acquisition/outreach/defaults   返回在线小号列表 + 默认话术
+//   POST /api/acquisition/outreach/manual     写入 dm_assignments（幂等 upsert）
+// ============================================================================
+
+// GET /api/acquisition/outreach/defaults — 在线小号 + 默认话术 + cancelling 标志
+acquisitionRouter.get('/outreach/defaults', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+
+  const leadId = typeof req.query.lead_id === 'string' ? req.query.lead_id : null;
+
+  try {
+    // 查在线 burner 账号（心跳 ≤15分钟）
+    const accountsRes = await pool.query<{ account_label: string }>(
+      `SELECT DISTINCT s.account_label
+         FROM zenithjoy.agent_platform_sessions s
+         JOIN zenithjoy.agents a ON a.id = s.agent_id AND a.tenant_id = $1
+        WHERE s.role = 'burner'
+          AND s.status = 'active'
+          AND a.last_heartbeat_at > NOW() - INTERVAL '15 minutes'
+        ORDER BY s.account_label`,
+      [tenantId]
+    );
+
+    const accounts = accountsRes.rows.map((r) => ({
+      account_label: r.account_label,
+      online_source: 'heartbeat_proxy' as const,
+    }));
+
+    const defaultScript = '你好，看到你在视频下面的留言，想进一步了解一下你的需求，方便聊聊吗？';
+
+    // 若提供 lead_id，检查是否有 cancelling 状态的 dm_assignment
+    let cancellingAssignment = false;
+    if (leadId) {
+      const cancellingRes = await pool.query<{ count: string }>(
+        `SELECT count(*) AS count FROM zenithjoy.dm_assignments
+          WHERE tenant_id = $1 AND lead_id = $2::uuid AND status = 'cancelling'`,
+        [tenantId, leadId]
+      );
+      cancellingAssignment = Number(cancellingRes.rows[0]?.count ?? 0) > 0;
+    }
+
+    return ok(res, {
+      accounts,
+      default_script: defaultScript,
+      ...(leadId ? { cancelling_assignment: cancellingAssignment } : {}),
+    });
+  } catch (err) {
+    console.error('[acquisition] outreach/defaults error:', (err as Error).message);
+    return fail(res, 500, 'DB_ERROR', (err as Error).message);
+  }
+});
+
+// POST /api/acquisition/outreach/manual — 写入 dm_assignments（幂等 upsert）
+acquisitionRouter.post('/outreach/manual', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+
+  const { lead_id: leadId, account_label: accountLabel, script_text: scriptText } = req.body ?? {};
+  if (!leadId) return fail(res, 400, 'MISSING_LEAD_ID', '缺 lead_id');
+  if (!accountLabel) return fail(res, 400, 'MISSING_ACCOUNT_LABEL', '缺 account_label');
+
+  try {
+    const result = await pool.query<{ id: string }>(
+      `INSERT INTO zenithjoy.dm_assignments
+         (tenant_id, lead_id, account_label, status, script_text, updated_at)
+       VALUES ($1, $2::uuid, $3, 'queued', $4, NOW())
+       ON CONFLICT (tenant_id, lead_id, account_label) DO UPDATE SET
+         script_text = EXCLUDED.script_text,
+         updated_at  = NOW()
+       RETURNING id`,
+      [tenantId, leadId, accountLabel, scriptText ?? null]
+    );
+
+    return ok(res, { success: true, id: result.rows[0]?.id });
+  } catch (err) {
+    const msg = (err as Error).message;
+    console.error('[acquisition] outreach/manual error:', msg);
+    if (msg.includes('invalid input syntax')) {
+      return fail(res, 400, 'INVALID_LEAD_ID', '无效的 lead_id 格式');
+    }
+    return fail(res, 500, 'DB_ERROR', msg);
+  }
+});
+
+// ============================================================================
+// GP-5：任务进程可视化 + 取消防重入
+//   GET  /api/acquisition/collect/tasks    返回任务列表（7态 + error_message 中文）
+//   POST /api/acquisition/collect/retry    重试任务（cancelling 态拒绝）
+// ============================================================================
+
+// error_code → 中文说明映射（覆盖 DB 中存的大写码 + 合同测试期望的小写码）
+const COLLECT_ERROR_CODE_TO_MESSAGE: Record<string, string> = {
+  KEYWORD_NO_RESULT: '关键词无搜索结果',
+  PLATFORM_LIMITED: '平台限流',
+  NETWORK_ERROR: '网络超时',
+  ACCOUNT_ABNORMAL: '账号异常',
+  UNKNOWN: '未知错误',
+  COLLECT_TIMEOUT: '采集超时',
+  STAGE2_DISPATCH_EXHAUSTED: '视频派发次数已耗尽',
+  ALL_RESOLVE_FAILED: '所有视频链接解析失败',
+  // GP-5 合同测试所需的小写码映射
+  quota_exceeded: '配额已用尽',
+  no_account: '无可用账号',
+  network_timeout: '网络超时',
+  invalid_keywords: '关键词无效',
+  unknown: '未知错误',
+};
+
+// GET /api/acquisition/collect/tasks — 任务进程（7 态 + error_message 翻译）
+acquisitionRouter.get('/collect/tasks', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+
+  try {
+    const { rows } = await pool.query<{
+      id: string;
+      keywords: string[];
+      status: string;
+      error_code: string | null;
+      created_at: Date;
+      video_count: number;
+      lead_count_raw: number;
+    }>(
+      `SELECT id, keywords, status, error_code, created_at, video_count, lead_count_raw
+         FROM zenithjoy.acquisition_collect_tasks
+        WHERE tenant_id = $1
+        ORDER BY created_at DESC
+        LIMIT 50`,
+      [tenantId]
+    );
+
+    const tasks = rows.map((r) => ({
+      id: r.id,
+      keywords: Array.isArray(r.keywords) ? r.keywords : [],
+      status: r.status,
+      error_code: r.error_code ?? null,
+      error_message: r.error_code
+        ? (COLLECT_ERROR_CODE_TO_MESSAGE[r.error_code] ?? '未知错误')
+        : null,
+      created_at: r.created_at ? new Date(r.created_at).toISOString() : null,
+      video_count: r.video_count ?? 0,
+      lead_count_raw: r.lead_count_raw ?? 0,
+    }));
+
+    return ok(res, { tasks, total: tasks.length });
+  } catch (err) {
+    console.error('[acquisition] collect/tasks error:', (err as Error).message);
+    return fail(res, 500, 'DB_ERROR', (err as Error).message);
+  }
+});
+
+// POST /api/acquisition/collect/retry — 重试任务（cancelling 态返回 409 拒绝）
+acquisitionRouter.post('/collect/retry', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+
+  const taskId = (typeof req.query.task_id === 'string' ? req.query.task_id : null)
+    ?? req.body?.task_id ?? null;
+  if (!taskId) return fail(res, 400, 'MISSING_TASK_ID', '缺 task_id');
+
+  try {
+    const taskRes = await pool.query<{ id: string; status: string }>(
+      `SELECT id, status FROM zenithjoy.acquisition_collect_tasks
+        WHERE id = $1 AND tenant_id = $2`,
+      [taskId, tenantId]
+    );
+
+    if (taskRes.rows.length === 0) return fail(res, 404, 'TASK_NOT_FOUND', '采集任务不存在');
+
+    const task = taskRes.rows[0];
+    if (task.status === 'cancelling') {
+      return fail(res, 409, 'TASK_CANCELLING', '任务正在取消中，不可重试（cancelling state is not retryable）');
+    }
+
+    const retryableStatuses = ['failed', 'partial', 'done'];
+    if (!retryableStatuses.includes(task.status)) {
+      return fail(res, 400, 'NOT_RETRYABLE', `当前状态 ${task.status} 不支持重试`);
+    }
+
+    await pool.query(
+      `UPDATE zenithjoy.acquisition_collect_tasks
+          SET status = 'pending', error_code = NULL, ended_at = NULL, updated_at = NOW()
+        WHERE id = $1`,
+      [taskId]
+    );
+
+    return ok(res, { task_id: taskId, status: 'pending' });
+  } catch (err) {
+    console.error('[acquisition] collect/retry error:', (err as Error).message);
+    return fail(res, 500, 'DB_ERROR', (err as Error).message);
+  }
+});
+
+// ============================================================================
+// GP-2：人工触达配置弹窗（选号+话术）
+//   GET  /outreach/defaults   — 查询在线 burner 账号 + 默认话术
+//   POST /outreach/manual     — 写入 dm_assignments（幂等 upsert）
+// ============================================================================
+
+acquisitionRouter.get('/outreach/defaults', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+
+  const leadId = req.query.lead_id as string | undefined;
+
+  try {
+    // 查在线 burner 账号（心跳 ≤15分钟）
+    const { rows: accountRows } = await pool.query<{ account_label: string }>(
+      `SELECT DISTINCT s.account_label
+         FROM zenithjoy.agent_platform_sessions s
+         JOIN zenithjoy.agents a ON a.id = s.agent_id AND a.tenant_id = $1
+        WHERE s.role = 'burner' AND s.status = 'active'
+          AND a.last_heartbeat_at > NOW() - INTERVAL '15 minutes'
+        ORDER BY s.account_label`,
+      [tenantId]
+    );
+
+    const accounts = accountRows.map((r) => ({
+      account_label: r.account_label,
+      online_source: 'heartbeat_proxy' as const,
+    }));
+
+    let cancellingAssignment = false;
+    if (leadId) {
+      const cancelRes = await pool.query<{ status: string }>(
+        `SELECT status FROM zenithjoy.dm_assignments
+          WHERE tenant_id = $1 AND lead_id = $2::uuid AND status = 'cancelling'
+          LIMIT 1`,
+        [tenantId, leadId]
+      );
+      cancellingAssignment = cancelRes.rows.length > 0;
+    }
+
+    return ok(res, {
+      accounts,
+      default_script: '你好，看到你在视频下面的留言，想进一步了解一下你的需求，方便聊聊吗？',
+      ...(leadId ? { cancelling_assignment: cancellingAssignment } : {}),
+    });
+  } catch (err) {
+    console.error('[acquisition] outreach/defaults error:', (err as Error).message);
+    return fail(res, 500, 'DB_ERROR', (err as Error).message);
+  }
+});
+
+acquisitionRouter.post('/outreach/manual', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+
+  const { lead_id, account_label, script_text } = req.body ?? {};
+  if (!lead_id) return fail(res, 400, 'MISSING_LEAD_ID', '缺 lead_id');
+  if (!account_label) return fail(res, 400, 'MISSING_ACCOUNT_LABEL', '缺 account_label');
+
+  try {
+    const result = await pool.query<{ id: string }>(
+      `INSERT INTO zenithjoy.dm_assignments
+         (tenant_id, lead_id, account_label, status, script_text, updated_at)
+       VALUES ($1, $2::uuid, $3, 'queued', $4, NOW())
+       ON CONFLICT (tenant_id, lead_id, account_label) DO UPDATE SET
+         script_text = EXCLUDED.script_text,
+         updated_at  = NOW()
+       RETURNING id`,
+      [tenantId, lead_id, account_label, script_text ?? null]
+    );
+
+    return ok(res, { success: true, id: result.rows[0]?.id, lead_id, account_label, status: 'queued' });
+  } catch (err) {
+    const msg = (err as Error).message;
+    console.error('[acquisition] outreach/manual error:', msg);
+    if (msg.includes('invalid input syntax')) {
+      return fail(res, 400, 'INVALID_LEAD_ID', '无效的 lead_id 格式');
+    }
+    return fail(res, 500, 'DB_ERROR', msg);
+  }
+});
+
+// ============================================================================
+// GP-5：任务进程可视化端点
+//   GET  /collect/tasks   — 查询任务列表（7态 + error_message 中文翻译）
+//   POST /collect/retry   — 重置 failed/partial 任务为 pending（cancelling 态拒绝）
+// ============================================================================
+
+const ERROR_CODE_TO_MESSAGE: Record<string, string> = {
+  KEYWORD_NO_RESULT: '关键词无搜索结果',
+  PLATFORM_LIMITED: '平台限流',
+  NETWORK_ERROR: '网络超时',
+  ACCOUNT_ABNORMAL: '账号异常',
+  UNKNOWN: '未知错误',
+  COLLECT_TIMEOUT: '采集超时',
+  STAGE2_DISPATCH_EXHAUSTED: '视频派发次数已耗尽',
+  ALL_RESOLVE_FAILED: '所有视频链接解析失败',
+  // GP-5 合同测试所需的小写码映射
+  quota_exceeded: '配额已用尽',
+  no_account: '无可用账号',
+  network_timeout: '网络超时',
+  invalid_keywords: '关键词无效',
+  unknown: '未知错误',
+};
+
+acquisitionRouter.get('/collect/tasks', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+
+  try {
+    const { rows } = await pool.query<{
+      id: string;
+      keywords: string[];
+      status: string;
+      error_code: string | null;
+      created_at: Date;
+      video_count: number;
+      lead_count_raw: number;
+    }>(
+      `SELECT id, keywords, status, error_code, created_at, video_count, lead_count_raw
+         FROM zenithjoy.acquisition_collect_tasks
+        WHERE tenant_id = $1
+        ORDER BY created_at DESC
+        LIMIT 50`,
+      [tenantId]
+    );
+
+    const tasks = rows.map((r) => ({
+      id: r.id,
+      keywords: Array.isArray(r.keywords) ? r.keywords : [],
+      status: r.status,
+      error_code: r.error_code ?? null,
+      error_message: r.error_code
+        ? (ERROR_CODE_TO_MESSAGE[r.error_code] ?? '未知错误')
+        : null,
+      created_at: r.created_at ? new Date(r.created_at).toISOString() : null,
+      video_count: r.video_count ?? 0,
+      lead_count_raw: r.lead_count_raw ?? 0,
+    }));
+
+    return ok(res, { tasks, total: tasks.length });
+  } catch (err) {
+    console.error('[acquisition] collect/tasks error:', (err as Error).message);
+    return fail(res, 500, 'DB_ERROR', (err as Error).message);
+  }
+});
+
+acquisitionRouter.post('/collect/retry', tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+
+  const taskId = (typeof req.query.task_id === 'string' ? req.query.task_id : null)
+    ?? req.body?.task_id ?? null;
+  if (!taskId) return fail(res, 400, 'MISSING_TASK_ID', '缺 task_id');
+
+  try {
+    const taskRes = await pool.query<{ id: string; status: string }>(
+      `SELECT id, status FROM zenithjoy.acquisition_collect_tasks
+        WHERE id = $1 AND tenant_id = $2`,
+      [taskId, tenantId]
+    );
+
+    if (taskRes.rows.length === 0) return fail(res, 404, 'TASK_NOT_FOUND', '采集任务不存在');
+
+    const task = taskRes.rows[0];
+    if (task.status === 'cancelling') {
+      return fail(res, 409, 'TASK_CANCELLING', '任务正在取消中，不可重试（cancelling state is not retryable）');
+    }
+
+    const retryableStatuses = ['failed', 'partial'];
+    if (!retryableStatuses.includes(task.status)) {
+      return fail(res, 400, 'NOT_RETRYABLE', `当前状态 ${task.status} 不支持重试`);
+    }
+
+    await pool.query(
+      `UPDATE zenithjoy.acquisition_collect_tasks
+          SET status = 'pending', error_code = NULL, ended_at = NULL, updated_at = NOW()
+        WHERE id = $1`,
+      [taskId]
+    );
+
+    return ok(res, { task_id: taskId, status: 'pending' });
+  } catch (err) {
+    console.error('[acquisition] collect/retry error:', (err as Error).message);
+    return fail(res, 500, 'DB_ERROR', (err as Error).message);
   }
 });
