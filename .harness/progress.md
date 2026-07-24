@@ -1,8 +1,6 @@
-planner: done (sprint-prd.md@30142aee, invariants=15, fr=5)
-gan: done (contract-draft.md@7817b717 r1, verdict=APPROVED, 铁律覆盖=4/4, judgments_written=33, rubric=.harness/verdicts/gan-92ac6089.json)
-generator: pr_opened (#1442, red=7817b717)
-generator: done (pr=#1442, red=7817b717, green=3591adf)
-evaluator: done (verdict=PASS, sha=3591adf, verdict_file=.harness/verdicts/evaluate-3591adf.json)
-judge: done (verdict=PASS, judged=true, fix_rounds=6, sha=d0965a5b)
-review: pending (review_required=true, waiting for 主理人 sign-off on xian-rog WeChat items 2/3)
-report: done (harness-report.md@sprint-dir, judge=PASS 6-rounds, review=PENDING)
+# Sprint: Path2 Dashboard展示与人工干预能力建设
+# Task: 7cb465c1-03cc-4934-a638-e61f78195d37
+# Sprint Dir: sprints/07221948-path2-dashboard-visibility
+# Started: 2026-07-24
+planner: done (sprint-prd.md@573d702e, invariants=10, fr=5, lines=295[5-FR-sprint])
+contract: done (contract-draft.md, contract-dod.md, tests/ — 17 assertions C-01..C-17, smoke Step 25-29 scaffold)
