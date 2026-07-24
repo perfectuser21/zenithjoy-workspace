@@ -2,7 +2,7 @@
 
 **Task ID**: 7cb465c1-03cc-4934-a638-e61f78195d37
 **Sprint**: 07221948-path2-dashboard-visibility
-**Contract Round**: 1
+**Contract Round**: 2
 **Date**: 2026-07-24
 **Journey**: Path 2 客户智能获客（https://www.notion.so/35ac40c2ba6381ed8df4f3fa0b64f5bf）
 **Target Environment**: windows_cloud（GitHub Actions windows-latest runner）
@@ -172,6 +172,18 @@
   [ -n "$TASK_ID" ] || fail "C-12 force=true 时 task_id 为空，期望正常执行"
   ```
 
+**断言 C-12a（sec_uid 强去重）**
+- 前提：leads 表中已存在 `sec_uid = 'test_dup_sec_uid'` 的记录
+- 触发：采集任务写入结果时包含相同 sec_uid 的条目
+- 断言：leads 表中该 sec_uid 仍只有 1 行（不重复写入）
+- 验证命令（psql）：
+  ```sql
+  SELECT count(1) FROM zenithjoy.leads
+   WHERE tenant_id = '<test_tenant_id>'
+     AND sec_uid = 'test_dup_sec_uid';
+  -- 期望返回 1（去重后不重复）
+  ```
+
 **断言 C-13（UI：409 触发弹确认对话框）**
 - 触发：Playwright 在采集发起界面输入已采集过的关键词并提交
 - 断言：页面出现含"已采集过"或"是否仍要继续"字样的对话框
@@ -275,6 +287,31 @@ commit-3: 后端实现（C-01 C-02 C-05 C-06 C-07 C-09 C-11 C-12 C-15 变绿）
 commit-4: 前端实现（C-04 C-08 C-10 C-13 C-16 C-17 变绿）
 commit-5: smoke Step 25-29 全绿；C-03 索引创建随 migration 到位
 ```
+
+---
+
+## E2E 验收
+
+| 断言ID | 场景 | 验证方式 | 预期结果 |
+|--------|------|---------|---------|
+| C-01 | 获客列表 API 返回触达状态 | smoke Step 25 curl | outreach_status 字段存在且值域合法（queued/dispatched/sent/limited/failed/cancelled/pending_dispatch/null） |
+| C-02 | 有 dm_assignment 记录的 lead | smoke Step 25 curl + psql | outreach_status 字段非 null |
+| C-03 | dm_assignments 索引存在 | smoke Step 25 psql | pg_indexes 中 idx_dm_assign_tenant_lead_updated 存在，返回 1 行 |
+| C-04 | Dashboard leads 页"触达状态"列头可见 | Playwright leads-unified-table.spec.ts | 页面含"触达状态"列头文字 |
+| C-05 | candidates 端点结构正确 | smoke Step 26a curl | HTTP 200，data.accounts 为数组，data.default_message 非空 |
+| C-06 | manual-outreach 幂等写入 | smoke Step 26b curl + psql | 重复提交均返回 HTTP 200，dm_assignments 行数=1 |
+| C-07 | 未鉴权返回 401 | smoke Step 26 curl（无 session） | HTTP 401 |
+| C-08 | 人工触达弹窗可触发 | Playwright acquisition-outreach-manual.spec.ts | 弹窗出现，含小号列表和话术文本框 |
+| C-09 | install-pack/manifest 返回有效 apk_url | smoke Step 27 curl | HTTP 200，apk_url 非空且以 http 开头 |
+| C-10 | 绑号页含安卓客户端下载入口 | Playwright acquisition-accounts-apk.spec.ts | "下载安卓客户端"按钮可见，href 以 http 开头 |
+| C-11 | 重复关键词触发 409 | smoke Step 28a curl | HTTP 409，error.code=KEYWORD_RECENTLY_USED，含 matched_keywords 和 last_used_at |
+| C-12 | force=true 绕过去重 | smoke Step 28b curl | HTTP 200，data.task_id 非空 |
+| C-12a | sec_uid 强去重 | smoke Step 28 psql | 重复 sec_uid 的 leads 行数=1（不重复写入） |
+| C-13 | 409 触发前端确认弹窗 | Playwright acquisition-tasks-progress.spec.ts | 页面出现含"已采集过"或"是否仍要继续"字样的对话框 |
+| C-14 | acquisition_collect_tasks.agent_os_type 字段存在 | smoke Step 29 psql | information_schema 中字段存在，count=1 |
+| C-15 | collect-tasks 含 error_code_message + agent_os_type | smoke Step 29 curl | tasks[0] 同时含 error_code_message 字段和 agent_os_type 字段 |
+| C-16 | 任务列表状态徽标 + 失败重试按钮可见 | Playwright acquisition-tasks-progress.spec.ts | 状态徽标可见，failed/partial 态行含"重试"按钮 |
+| C-17 | cancelling 态重试按钮被禁用 | Playwright acquisition-tasks-progress.spec.ts | 重试按钮 disabled=true 或不在 DOM 中 |
 
 ---
 

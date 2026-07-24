@@ -6,6 +6,29 @@
 
 ---
 
+## 行为断言清单（[BEHAVIOR] 标记）
+
+[BEHAVIOR] C-01: GET /api/acquisition/leads 响应含 outreach_status 字段，值域为 queued|dispatched|sent|limited|failed|cancelled|pending_dispatch|null
+[BEHAVIOR] C-02: 有 dm_assignments 记录的 lead，outreach_status 非 null
+[BEHAVIOR] C-03: pg_indexes 中存在 idx_dm_assign_tenant_lead_updated 索引（dm_assignments 表）
+[BEHAVIOR] C-04: Playwright 打开 /dashboard/leads，页面含"触达状态"列头文本
+[BEHAVIOR] C-05: GET /api/acquisition/manual-outreach/candidates 返回 HTTP 200，data.accounts 为数组，data.default_message 非空字符串
+[BEHAVIOR] C-06: 连续两次 POST /api/acquisition/manual-outreach 相同参数均返回 HTTP 200，dm_assignments 表中该组合仅有 1 行（ON CONFLICT DO UPDATE 幂等）
+[BEHAVIOR] C-07: 不携带 tenant session 调用 POST /api/acquisition/manual-outreach 返回 HTTP 401
+[BEHAVIOR] C-08: Playwright 点击"人工触达"按钮后弹窗出现，含小号选择列表和话术文本框
+[BEHAVIOR] C-09: GET /api/install-pack/manifest 返回 HTTP 200，apk_url 字段非空且以 http 开头
+[BEHAVIOR] C-10: Playwright 打开账号绑定页面，含"下载安卓客户端"按钮/链接且 href 指向 apk_url
+[BEHAVIOR] C-11: POST /api/acquisition/collect/start（30 天内重复关键词，无 force）返回 HTTP 409，error.code=KEYWORD_RECENTLY_USED，含 matched_keywords 数组和 last_used_at 字段
+[BEHAVIOR] C-12: POST /api/acquisition/collect/start 带 force:true 返回 HTTP 200，data.task_id 非空
+[BEHAVIOR] C-12a: 采集结果按 sec_uid 强去重，重复 sec_uid 不写入 leads 表
+[BEHAVIOR] C-13: Playwright 在采集界面提交重复关键词后页面出现含"已采集过"或"是否仍要继续"字样的确认对话框
+[BEHAVIOR] C-14: information_schema.columns 中 acquisition_collect_tasks 表存在 agent_os_type 字段
+[BEHAVIOR] C-15: GET /api/acquisition/collect-tasks 响应中 tasks 数组元素含 error_code_message 字段和 agent_os_type 字段
+[BEHAVIOR] C-16: Playwright 打开 /area/acquisition/tasks，任务列表行可见状态徽标，failed/partial 态任务行含"重试"按钮
+[BEHAVIOR] C-17: cancelling 态任务的重试按钮 disabled 属性为 true 或按钮不存在于 DOM
+
+---
+
 ## Definition of Done 清单
 
 ### 层级 1：DB Migration
@@ -38,6 +61,7 @@
   - 30 天内命中且无 `force:true` → 409 `KEYWORD_RECENTLY_USED`，含 `matched_keywords` + `last_used_at`
   - 带 `force:true` → 200，`data.task_id` 非空
   - `cancelling` 态任务不受本改动影响
+- [ ] 采集结果写入时按 sec_uid 强去重，重复 sec_uid 不写入 leads 表（C-12a 通过）
 - [ ] `GET /api/acquisition/collect-tasks` 新增 `error_code_message` + `agent_os_type` 字段（C-15 通过）
   - `error_code_message`：后端翻译，前端不重复维护
   - `agent_os_type`：从 `acquisition_collect_tasks.agent_os_type` 直接透传
@@ -100,7 +124,7 @@
 
 ## 完成判定
 
-**全部 17 个合同断言（C-01 至 C-17）通过 = sprint DONE**
+**全部 18 个合同断言（C-01 至 C-17 + C-12a）通过 = sprint DONE**
 
 回归要求：现有 golden-path-2-smoke.sh Step 1-24 全绿不可退步。
 
@@ -110,3 +134,32 @@
 
 - 技术验收：CI windows_cloud runner 全绿
 - 产品验收：`sprints/07221948-path2-dashboard-visibility/` 下 contract-draft.md 所列断言全通过
+
+---
+
+## 快速本地验收命令
+
+manual:bash
+```bash
+# 快速本地验收（需先登录获取 COOKIE_JAR）
+API_BASE=http://localhost:3000
+
+# C-01: outreach_status 字段存在
+curl -s -b "$COOKIE_JAR" "$API_BASE/api/acquisition/leads" | jq '.leads[0].outreach_status'
+
+# C-05: candidates 端点结构验证
+curl -s -b "$COOKIE_JAR" "$API_BASE/api/acquisition/manual-outreach/candidates" | jq '{success:.success, default_message:.data.default_message, accounts_count:(.data.accounts|length)}'
+
+# C-07: 无 session 返回 401
+curl -s -o /dev/null -w "%{http_code}" -X POST "$API_BASE/api/acquisition/manual-outreach" \
+  -H "Content-Type: application/json" -d '{"lead_id":"x","account_label":"y"}'
+
+# C-09: apk_url 非空且 http 开头
+curl -s "$API_BASE/api/install-pack/manifest" | jq '.apk_url'
+
+# C-14: agent_os_type 字段存在于 DB
+psql "$DB_URL" -t -c "SELECT count(1) FROM information_schema.columns WHERE table_schema='zenithjoy' AND table_name='acquisition_collect_tasks' AND column_name='agent_os_type'"
+
+# C-03: 索引存在
+psql "$DB_URL" -t -c "SELECT indexname FROM pg_indexes WHERE tablename='dm_assignments' AND indexname='idx_dm_assign_tenant_lead_updated'"
+```
