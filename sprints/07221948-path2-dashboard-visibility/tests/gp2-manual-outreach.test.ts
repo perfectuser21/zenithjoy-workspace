@@ -110,3 +110,29 @@ describe('BEHAVIOR-GP2-C: POST /outreach/manual is idempotent (ON CONFLICT DO UP
     expect(res2.status).not.toBe(409);
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// BEHAVIOR-GP2-D：GET /outreach/defaults 对 cancelling 任务 lead 返回 cancelling_assignment 标志
+// 先红：端点实现前不含 cancelling_assignment 字段 → 断言失败（符合预期）
+// ──────────────────────────────────────────────────────────────────────────────
+describe('BEHAVIOR-GP2-D: GET /outreach/defaults flags lead with cancelling assignment', () => {
+  it(
+    'should return cancelling_assignment:true for lead with an assignment in cancelling status',
+    async () => {
+      // 先红：端点当前不含 cancelling_assignment 字段，断言必定失败
+      // 实现后：若 dm_assignments 中存在 status=cancelling 的行，响应须包含 cancelling_assignment:true
+      const FAKE_CANCELLING_LEAD_ID = '00000000-0000-0000-0000-000000000099';
+      const res = await fetch(
+        `${API_BASE}/api/acquisition/outreach/defaults?lead_id=${FAKE_CANCELLING_LEAD_ID}`,
+        { headers: headers(TENANT_ID) }
+      );
+      // 先红：端点可能 404（未实现）或 200 但缺字段
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      // 核心断言：有 cancelling 状态 assignment 的 lead，defaults 响应须含 cancelling_assignment:true
+      // 先红时此字段不存在，断言失败 → 实现后补充真实 DB seed 使之通过
+      expect(data).toHaveProperty('cancelling_assignment');
+      expect(data.cancelling_assignment).toBe(true);
+    }
+  );
+});

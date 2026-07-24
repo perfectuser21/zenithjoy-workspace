@@ -302,7 +302,25 @@ if dup:
 print('OK: 超 30 天关键词不触发去重')
 " || fail "Step 28d 超 30 天关键词错误触发去重（FR-4.5 违反）" 28
 
-ok "Step 28 ✅ 关键词去重机制全链路通过（30天内→duplicate:true / force跳过 / 跨租户隔离 / 超30天不触发）"
+# 28e: sec_uid 强去重（BEHAVIOR-GP4-E / INV-5）
+# 同租户同 sec_uid 采集两次，leads 表只有 1 条（ON CONFLICT DO NOTHING 生效）
+S28_SEC_UID="sec_uid_dedup_${RND}"
+S28_TENANT_E="s28-te-${RND}"
+psq "INSERT INTO zenithjoy.acquisition_leads \
+  (tenant_id, sec_uid, nickname, comment_text) \
+  VALUES ('$S28_TENANT_E', '$S28_SEC_UID', 'lead_first', 'comment1') \
+  ON CONFLICT DO NOTHING" > /dev/null
+psq "INSERT INTO zenithjoy.acquisition_leads \
+  (tenant_id, sec_uid, nickname, comment_text) \
+  VALUES ('$S28_TENANT_E', '$S28_SEC_UID', 'lead_second', 'comment2') \
+  ON CONFLICT DO NOTHING" > /dev/null
+
+S28_SEC_UID_COUNT=$(psq "SELECT count(*) FROM zenithjoy.acquisition_leads \
+  WHERE tenant_id='$S28_TENANT_E' AND sec_uid='$S28_SEC_UID'")
+[ "$S28_SEC_UID_COUNT" = "1" ] || \
+  fail "Step 28e sec_uid 强去重失败：同租户同 sec_uid 期望 1 条，得 $S28_SEC_UID_COUNT（ON CONFLICT DO NOTHING 未生效，BEHAVIOR-GP4-E / INV-5 违反）" 28
+
+ok "Step 28 ✅ 关键词去重机制全链路通过（30天内→duplicate:true / force跳过 / 跨租户隔离 / 超30天不触发 / sec_uid强去重）"
 rm -f "$S28_TMP"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -365,7 +383,7 @@ if [ -n "$S29_CANCEL_TASK" ]; then
     fail "Step 29c cancelling 任务重试期望 400/409, 得 $S29_HTTP2（cancelling 防重入未实现）" 29
   ok "Step 29c ✅ cancelling 任务重试被正确拒绝（HTTP $S29_HTTP2）"
 else
-  echo "  WARN: 未找到 cancelling 任务，跳过 29c 断言"
+  fail "Step 29c cancelling 任务 seed 失败，无法验证防重入" 29
 fi
 
 # 29d: DB schema 层验证 agents.os_type 与 line02_account_sessions.device_type 值域一致（INV-1）

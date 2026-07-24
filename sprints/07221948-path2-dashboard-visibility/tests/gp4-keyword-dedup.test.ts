@@ -114,3 +114,50 @@ describe('BEHAVIOR-GP4-D: keyword older than 30 days does not trigger dedup', ()
     // 若 dup 不存在（先红），此 it 通过（形状断言宽松）
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// BEHAVIOR-GP4-E：sec_uid 强去重（INV-5 / ON CONFLICT DO NOTHING）
+// 同租户同 sec_uid 采集两次，leads 表只有 1 条
+// ──────────────────────────────────────────────────────────────────────────────
+describe('BEHAVIOR-GP4-E: sec_uid strong dedup prevents duplicate leads', () => {
+  const SEC_UID_TENANT = `gp4e-${RND}`;
+  const SEC_UID_VALUE = `sec_uid_test_${RND}`;
+
+  it('seeding same sec_uid twice should result in only 1 lead row (ON CONFLICT DO NOTHING)', async () => {
+    // 先红：leads 表可能缺 unique 约束 (tenant_id, sec_uid)，导致插入两条
+    // 通过 GET /acquisition/leads 端点验证去重效果：同 sec_uid 只能有 1 条
+    const postLead = (nickname: string) =>
+      fetch(`${API_BASE}/api/acquisition/collect/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Tenant-Id': SEC_UID_TENANT,
+        },
+        body: JSON.stringify({
+          keywords: [`kw_sec_uid_${RND}`],
+          sec_uid: SEC_UID_VALUE,
+          nickname,
+        }),
+      });
+
+    // 第一次采集
+    await postLead('lead_first');
+    // 第二次采集，同 sec_uid，期望 ON CONFLICT DO NOTHING 只保留 1 条
+    await postLead('lead_second');
+
+    // 查询 leads 列表，断言同 sec_uid 只有 1 条记录
+    const res = await fetch(
+      `${API_BASE}/api/acquisition/leads?sec_uid=${encodeURIComponent(SEC_UID_VALUE)}`,
+      { headers: { 'X-Tenant-Id': SEC_UID_TENANT } }
+    );
+    // 先红：端点可能不支持 sec_uid 过滤，或 leads 表无唯一约束
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    const leads = data.leads ?? data.data ?? [];
+    const matchingLeads = leads.filter(
+      (l: any) => l.sec_uid === SEC_UID_VALUE
+    );
+    // 核心断言：同租户同 sec_uid 只允许 1 条（ON CONFLICT DO NOTHING 生效）
+    expect(matchingLeads.length).toBe(1);
+  });
+});

@@ -169,12 +169,7 @@ describe('BEHAVIOR-GP5-D: device type field value domain unification (INV-1)', (
     }
   });
 
-  it('migration file for device type unification should exist (INV-1 compliance)', () => {
-    // 先红：此断言验证 migration 文件必须存在
-    // 实现后：sprints/.../tests/ 目录下此测试通过意味着 PR 包含了 migration
-    // 注意：此为 meta-assertion（合同层），真实 DB 验证在 smoke Step 29
-    const migrationRequired = true; // 声明 migration 是必须的
-    expect(migrationRequired).toBe(true);
-    // 实际文件检查在 CI 的 smoke Step 29 psql 断言中执行
-  });
+  it.todo(
+    'DB migration for device type unification must exist — real file check done in smoke Step 29 psql assertion (INV-1 compliance)'
+  );
 });
