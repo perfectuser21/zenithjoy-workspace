@@ -28,6 +28,10 @@ test -f "$SCRIPT"
 test -f "$WORKFLOW"
 grep -Fq 'shell: powershell' "$WORKFLOW"
 ! grep -Fq 'shell: pwsh' "$WORKFLOW"
+grep -Fq -- '- name: Verify acceptance temp cleanup' "$WORKFLOW"
+grep -Fq 'if: always()' "$WORKFLOW"
+grep -Fq 'zj-accept-cleanup-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-' "$WORKFLOW"
+grep -Fq 'deferred acceptance directory cleanup failed' "$WORKFLOW"
 require_literal 'zenithjoy-agent-v2.0.89.tar.gz'
 require_literal 'Export-ScheduledTask'
 require_literal 'Register-ScheduledTask'
@@ -187,7 +191,7 @@ require_order "Invoke-CleanupStep -Name 'remove test configuration template'" \
 
 primary_line="$(line_of '$primaryError = $null')"
 root_line="$(line_of 'New-Item -ItemType Directory -Force -Path $testRoot')"
-catch_line="$(last_line_of '} catch {')"
+catch_line="$(line_of '$primaryError = $_.Exception')"
 finally_line="$(last_line_of '} finally {')"
 test "$primary_line" -lt "$root_line"
 test "$root_line" -lt "$catch_line"
@@ -217,6 +221,8 @@ require_literal 'Wait-Until -TimeoutSeconds 15'
 require_literal 'Start-Sleep -Milliseconds 500'
 require_literal '$Process.WaitForExit(10000)'
 require_literal '$Process.WaitForExit()'
+require_literal '$cleanupMarker'
+require_literal '[acceptance] cleanup deferred to Harness post-step'
 ! grep -Fq "'taskkill could not stop the test launcher process tree'" "$SCRIPT"
 ! grep -Fq 'mutation stop barrier did not pass' "$SCRIPT"
 ! grep -Fq 'if ($mutationBarrierPassed) {' "$SCRIPT"

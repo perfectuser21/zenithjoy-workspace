@@ -55,3 +55,56 @@ jobs:
             Write-Error "e2e-verify.ps1 not found at $ps1Path (sprint_dir=$sprintDir)"
             exit 1
           }
+
+      - name: Verify acceptance temp cleanup
+        if: always()
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $runPrefix = "zj-accept-cleanup-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-"
+          $markers = @(
+            Get-ChildItem -LiteralPath $env:RUNNER_TEMP -File `
+              -Filter "$runPrefix*.txt" -ErrorAction SilentlyContinue
+          )
+          $runnerTempFull = [IO.Path]::GetFullPath($env:RUNNER_TEMP)
+          $runnerTempPrefix = (
+            $runnerTempFull.TrimEnd(
+              [IO.Path]::DirectorySeparatorChar,
+              [IO.Path]::AltDirectorySeparatorChar
+            ) + [IO.Path]::DirectorySeparatorChar
+          )
+          foreach ($marker in $markers) {
+            $target = (Get-Content $marker.FullName -Raw).Trim()
+            $targetFull = [IO.Path]::GetFullPath($target)
+            $expectedName = (
+              "zj-accept-1467-$env:GITHUB_RUN_ID-" +
+              "$env:GITHUB_RUN_ATTEMPT-*"
+            )
+            if (
+              -not $targetFull.StartsWith(
+                $runnerTempPrefix,
+                [StringComparison]::OrdinalIgnoreCase
+              ) -or
+              [IO.Path]::GetFileName($targetFull) -notlike $expectedName
+            ) {
+              throw "invalid deferred acceptance cleanup target"
+            }
+
+            $deadline = (Get-Date).AddSeconds(30)
+            do {
+              if (Test-Path $targetFull) {
+                Remove-Item -LiteralPath $targetFull -Recurse -Force `
+                  -ErrorAction SilentlyContinue
+              }
+              if (-not (Test-Path $targetFull)) {
+                break
+              }
+              Start-Sleep -Seconds 1
+            } while ((Get-Date) -lt $deadline)
+
+            if (Test-Path $targetFull) {
+              throw "deferred acceptance directory cleanup failed"
+            }
+            Remove-Item -LiteralPath $marker.FullName -Force
+          }
+          Write-Host "Acceptance temp cleanup verified"

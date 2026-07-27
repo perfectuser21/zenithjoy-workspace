@@ -20,6 +20,7 @@ $privateTempRoot = if ($env:RUNNER_TEMP) {
     [IO.Path]::GetTempPath()
 }
 $testRoot = Join-Path $privateTempRoot "zj-accept-1467-$runToken"
+$cleanupMarker = Join-Path $privateTempRoot "zj-accept-cleanup-$runToken.txt"
 $archive = Join-Path $testRoot "zenithjoy-agent-v$packVersion.tar.gz"
 $extractRoot = Join-Path $testRoot 'extract'
 $stdoutFile = Join-Path $testRoot 'start-stdout.txt'
@@ -1247,10 +1248,29 @@ exit $pythonProcess.ExitCode
         Invoke-CleanupStep -Name 'remove acceptance directory' `
             -Errors $cleanupErrors -Action {
                 if ($testRootOwned) {
-                    Remove-PathAndAssertAbsent -Path $testRoot -Recurse `
-                        -FailureMessage (
-                            'temporary acceptance directory cleanup failed'
+                    try {
+                        Remove-PathAndAssertAbsent -Path $testRoot -Recurse `
+                            -FailureMessage (
+                                'temporary acceptance directory cleanup failed'
+                            )
+                    } catch {
+                        $canDeferToHarness = (
+                            $env:GITHUB_ACTIONS -eq 'true' -and
+                            [bool]$env:RUNNER_TEMP -and
+                            (Test-PathWithinDirectory $testRoot $env:RUNNER_TEMP)
                         )
+                        if (-not $canDeferToHarness) {
+                            throw
+                        }
+                        [IO.File]::WriteAllText(
+                            $cleanupMarker,
+                            $testRoot,
+                            [Text.Encoding]::ASCII
+                        )
+                        Write-Host (
+                            '[acceptance] cleanup deferred to Harness post-step'
+                        )
+                    }
                 } else {
                     Assert-True (
                         -not (Test-Path $testRoot)
