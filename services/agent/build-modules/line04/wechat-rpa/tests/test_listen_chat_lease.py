@@ -238,6 +238,7 @@ def _capture_urlopen_url(response_payload: dict):
     captured: dict = {}
 
     def _fake(req, timeout=None):
+        captured["request"] = req
         captured["url"] = req.full_url if hasattr(req, "full_url") else req.get_full_url()
         mock = MagicMock()
         mock.__enter__ = lambda s: s
@@ -246,6 +247,45 @@ def _capture_urlopen_url(response_payload: dict):
         return mock
 
     return patch("urllib.request.urlopen", side_effect=_fake), captured
+
+
+def test_ack_yield_posts_current_lease_and_listener_id(capsys):
+    status = {
+        "held": True,
+        "lease_id": "ci-lease-001",
+        "client_id": "ci/bubble-read-gate",
+        "priority": 10,
+    }
+    ctx, captured = _capture_urlopen_url({"ok": True})
+    with ctx:
+        result = lc.desktop_lease_ack_yield(status)
+
+    assert result is True
+    assert captured["url"].endswith(
+        "/api/agent/desktop-lease-broker/ack-yield"
+    )
+    request = captured["request"]
+    payload = json.loads(request.data.decode("utf-8"))
+    assert payload == {
+        "leaseId": "ci-lease-001",
+        "clientId": lc._DESKTOP_LEASE_CLIENT_ID,
+    }
+    assert "yield acknowledged" in capsys.readouterr().err
+
+
+def test_ack_yield_missing_lease_id_fails_without_http():
+    with patch("urllib.request.urlopen") as mock_open:
+        assert lc.desktop_lease_ack_yield({"held": True}) is False
+    mock_open.assert_not_called()
+
+
+def test_ack_yield_http_error_returns_false(capsys):
+    with patch("urllib.request.urlopen", side_effect=Exception("timeout")):
+        result = lc.desktop_lease_ack_yield({
+            "held": True, "lease_id": "ci-lease-err",
+        })
+    assert result is False
+    assert "yield acknowledge error" in capsys.readouterr().err
 
 
 def test_acquire_url_is_local_discovery_not_middleware(capsys):
