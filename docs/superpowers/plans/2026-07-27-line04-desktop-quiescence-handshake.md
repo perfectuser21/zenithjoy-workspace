@@ -4,7 +4,7 @@
 
 **Goal:** 让真机 CI 只有在取得桌面租约且常驻监听确认已经结束在途 UIA 操作后才进入 PsExec，并让所有交接异常在碰微信前 fail closed。
 
-**Architecture:** DesktopLeaseBroker 为每个当前租约保存与 lease ID 绑定的静默确认；`listen_chat.py` 在主循环安全点对高优先级 CI 租约确认后持续让位；两条真机 workflow 在 acquire 与 PsExec 之间轮询同一租约的确认状态。旧确认不会跨 release、过期或换租继承，监听确认失败仍暂停，CI 确认失败则不操作微信。
+**Architecture:** DesktopLeaseBroker 为每个当前租约保存与 lease ID 绑定的静默确认；`listen_chat.py` 在主循环安全点对高优先级 CI 租约确认后持续让位；两条真机 workflow 在 acquire 与 PsExec 之间轮询同一租约的确认状态。滚动升级期间，只有尚未返回 `lease_id` 的旧 Broker 才可使用 acquire 后新追加的唯一 `(CI)` loop-top 日志；新协议一旦可见就禁止回落。旧确认不会跨 release、过期或换租继承，监听确认失败仍暂停，CI 确认失败则不操作微信。
 
 **Tech Stack:** TypeScript、Node.js HTTP、Vitest、Python 3、pytest、PowerShell 5.1、GitHub Actions、Bash smoke。
 
@@ -32,7 +32,8 @@
 - `services/agent/wechat-rpa/tests/test_mainloop_wiring.py`
   - 证明确认发生在扫描前，且确认失败不会穿透让位分支。
 - `.github/workflows/wechat-cs-e2e.yml`
-  - PR required gate：等待 `line04/listen_chat` 确认后才运行 PsExec。
+  - PR required gate：等待 `line04/listen_chat` 确认后才运行 PsExec；兼容尚未部署新
+    Broker 的单次滚动升级。
 - `.github/workflows/nightly-real-machine-staging.yml`
   - nightly 真机 gate：采用相同 fail-closed 协议。
 - `.github/workflows/scripts/smoke/line04-ci-desktop-mutex-smoke.sh`
@@ -581,6 +582,11 @@ Expected: FAIL，指出 workflow 仍含 `proceeding anyway` 或缺静默确认�
 
 - [ ] **Step 3: Replace acquire block in `wechat-cs-e2e.yml`**
 
+在 acquire 前记录 `C:\Users\Public\zj-listener.log` 当前行数。下方现代协议分支用于
+`/status` 已返回 `lease_id` 的 Agent；若该字段不存在，只允许在 holder 仍是
+`ci/bubble-read-gate` 时读取 acquire 后新增行，并以唯一 ASCII 锚点 `(CI)` 作为旧监听
+到达 loop-top 的确认。不得用固定 sleep 或任意新日志替代该锚点。
+
 将 acquire 的 fail-open 逻辑替换为：
 
 ```powershell
@@ -855,6 +861,7 @@ b237a4b6-3534-4ebb-9e99-3afb6025f920 → Closed，附 #1469 与三次真机 run
   - 本机 IPC：Task 2。
   - listener 安全点与失败仍让位：Task 3。
   - 两条 workflow fail closed：Task 4。
+  - 旧 Agent → 新 Agent 滚动升级：Task 4 的 `lease_id` capability 分支与 `(CI)` 安全点日志。
   - 三次真机验收：Task 5。
   - #1469 → #1467 串行收敛与 issues 回写：Task 6。
 - Type consistency:

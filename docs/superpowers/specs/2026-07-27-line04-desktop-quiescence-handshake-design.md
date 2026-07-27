@@ -147,6 +147,23 @@ if _should_yield_desktop(status, ...):
 30 秒覆盖监听正常的 1–3 秒轮询以及正在结束的同步 UIA 操作；超时不继续猜测，因为这
 说明监听可能卡在桌面事务内，正是 CI 不应并发介入的场景。
 
+### 5. 滚动升级桥：只对旧 Broker 接受安全点日志
+
+PR workflow 操作的是 xian-rog 上当前已安装的 Agent，而不是 checkout 中尚未合并的新
+Agent。若 PR 只接受新 `/ack-yield`，新代码在合并前永远无法通过自己的真机 gate。
+
+为跨过这一轮发布，CI 在 acquire 前记录
+`C:\Users\Public\zj-listener.log` 的行数。等待期间：
+
+- `/status` 已包含 `lease_id`：说明 Agent 已支持新协议，只接受同 lease ID 的
+  `yield_acknowledged`，禁止回落日志。
+- `/status` 没有 `lease_id`：说明仍是旧 Broker。CI 必须确认当前 holder 仍是自己的
+  client ID，并且只接受 acquire 后新追加、包含唯一 `(CI)` 锚点的 loop-top 让位日志。
+
+旧监听只有在完成上一轮同步 UIA 并重新到达 loop-top 后才写该锚点；Broker 同时仍保持
+唯一当前 holder，因此它是滚动升级期的安全确认，而不是固定 sleep。新 Broker 一上线，
+fallback 自动关闭，之后永久走 lease-scoped API。
+
 ## 数据流
 
 ```text
@@ -173,6 +190,8 @@ CI                         Broker                      listen_chat
 - **Broker 不可达：** CI 在 PsExec 前失败；监听按既有兼容策略运行，但不会收到 CI
   已授权的假信号。
 - **监听未运行或卡死：** 无静默确认，CI 30 秒超时失败，不触碰微信。
+- **旧 Agent 尚未升级：** 只接受 acquire 之后新追加的唯一 `(CI)` loop-top 日志；
+  holder 改变或无新日志均失败。
 - **确认请求丢失：** 监听每轮让位都会幂等重发，下一次可恢复。
 - **租约在等待时过期/变化：** lease ID 不匹配，CI 失败。
 - **CI 中途退出：** `finally` 尝试释放；最坏由 TTL/watchdog 清理。
