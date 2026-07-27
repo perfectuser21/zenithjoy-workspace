@@ -28,6 +28,7 @@ $preflightStdout = Join-Path $testRoot 'preflight-stdout.txt'
 $preflightStderr = Join-Path $testRoot 'preflight-stderr.txt'
 $preflightExitFile = Join-Path $testRoot 'preflight-exit.txt'
 $preflightWrapper = Join-Path $testRoot 'run-preflight.ps1'
+$preflightCmd = Join-Path $testRoot 'run-preflight.cmd'
 $psexecStdout = Join-Path $testRoot 'psexec-stdout.txt'
 $psexecStderr = Join-Path $testRoot 'psexec-stderr.txt'
 $preflightReport = 'C:\Users\Public\zj-preflight.json'
@@ -785,18 +786,30 @@ exit $pythonProcess.ExitCode
     $powershellExe = (
         "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
     )
+    $cmdExe = Join-Path $env:SystemRoot 'System32\cmd.exe'
+    [IO.File]::WriteAllLines(
+        $preflightCmd,
+        @(
+            '@echo off',
+            (
+                '"' + $powershellExe + '"' +
+                ' -NoProfile -ExecutionPolicy Bypass -File ' +
+                '"' + $preflightWrapper + '"'
+            ),
+            'exit /b %ERRORLEVEL%'
+        ),
+        [Text.Encoding]::ASCII
+    )
     $psexecArguments = @(
         '-i',
         '1',
         '-accepteula',
         '-w',
         ('"' + $testDir + '"'),
-        ('"' + $powershellExe + '"'),
-        '-NoProfile',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-File',
-        ('"' + $preflightWrapper + '"')
+        $cmdExe,
+        '/d',
+        '/c',
+        ('"' + $preflightCmd + '"')
     )
     $preflightInvoker = Start-Process `
         -FilePath $psexec `
