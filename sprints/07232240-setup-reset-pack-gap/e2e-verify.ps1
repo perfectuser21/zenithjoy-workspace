@@ -644,12 +644,20 @@ try {
         }
 
     $resetLog = Get-Content $sharedLog -Raw
+    $resetErrorLines = @(
+        $resetLog -split "`r?`n" |
+        Where-Object { $_ -match '\[ERROR\]' } |
+        ForEach-Object { $_.Trim() }
+    )
+    Assert-True (
+        $resetErrorLines.Count -eq 0
+    ) (
+        'setup-reset log contains an error: ' +
+        ($resetErrorLines -join ' | ')
+    )
     Assert-True (
         $resetLog.Contains('[setup-reset] done')
     ) 'setup-reset did not finish successfully'
-    Assert-True (
-        $resetLog -notmatch '\[ERROR\]'
-    ) 'setup-reset log contains an error'
 
     Wait-Until -TimeoutSeconds 30 `
         -FailureMessage 'start launcher did not report setup-reset result' `
@@ -846,6 +854,9 @@ exit $pythonProcess.ExitCode
     Write-Host '[acceptance] ALL ACCEPTANCE ASSERTIONS PASSED'
 } catch {
     $primaryError = $_.Exception
+    Write-Host (
+        "[acceptance] ERROR: acceptance failed: $($primaryError.Message)"
+    )
 } finally {
     Write-Host '[acceptance] restoring original staging state'
 
@@ -1192,6 +1203,9 @@ exit $pythonProcess.ExitCode
 }
 
 $allErrors = [Collections.Generic.List[Exception]]::new()
+foreach ($cleanupError in $cleanupErrors) {
+    Write-Host "[acceptance] ERROR: $($cleanupError.Message)"
+}
 if ($null -ne $primaryError) {
     $allErrors.Add(
         [Exception]::new(

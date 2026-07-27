@@ -63,6 +63,9 @@ require_literal 'function Invoke-CleanupStep'
 require_literal '$cleanupErrors'
 require_literal '$primaryError'
 require_literal '[AggregateException]::new'
+require_literal '[acceptance] ERROR:'
+require_literal '$resetErrorLines'
+require_literal 'setup-reset log contains an error:'
 require_literal "Invoke-CleanupStep -Name 'register original scheduled task'"
 require_literal "Invoke-CleanupStep -Name 'restore shared setup-reset log'"
 require_literal "Invoke-CleanupStep -Name 'restore preflight report'"
