@@ -17,6 +17,7 @@ import { resolve } from 'path';
 const REPO_ROOT = resolve(__dirname, '../../../..');
 const SETUP_RESET_PS1 = resolve(REPO_ROOT, 'services/agent/install-pack/setup-reset.ps1');
 const START_BAT = resolve(REPO_ROOT, 'services/agent/install-pack/start.bat');
+const BUILD_INSTALL_PACK_SH = resolve(REPO_ROOT, 'services/agent/scripts/build-install-pack.sh');
 
 describe('[CONTRACT] setup-reset.ps1 -- BEHAVIOR-1 static assertions', () => {
 
@@ -62,7 +63,9 @@ describe('[CONTRACT] setup-reset.ps1 -- BEHAVIOR-1 static assertions', () => {
 
   // -----------------------------------------------------------------------
   // SR-3: I-1 compliance -- no [WARN] + continue patterns in error paths
-  // Pattern: lines containing 'WARN' that are NOT comments and followed by no throw/exit
+  // Pattern: lines containing 'WARN' that are NOT comments and followed by no
+  // explicit non-zero termination. Do not treat words inside log messages
+  // (for example "(exit 1)") as control flow.
   // -----------------------------------------------------------------------
   it('SR-3: setup-reset.ps1 has no warning-downgrade pattern (I-1 no-warn-and-continue)', () => {
     if (!existsSync(SETUP_RESET_PS1)) return;
@@ -75,11 +78,13 @@ describe('[CONTRACT] setup-reset.ps1 -- BEHAVIOR-1 static assertions', () => {
       const line = lines[i].trimStart();
       // Skip comment lines
       if (line.startsWith('#')) continue;
-      // Flag Write-Host/echo with [WARN] or [WARNING] not followed by throw/exit on same or next line
-      if (/\[WARN(ING)?\]/i.test(line) && !/throw|exit|break|return/i.test(line)) {
-        // Check next line for throw/exit
+      // Flag Write-Host/echo with [WARN] or [WARNING] not followed by an
+      // executable `throw` or `exit <non-zero>` statement on the next line.
+      if (/\[WARN(ING)?\]/i.test(line)) {
         const nextLine = (lines[i + 1] ?? '').trim();
-        if (!/throw|exit|break|return/i.test(nextLine)) {
+        const terminatesWithFailure = /^throw(?:\s|$)/i.test(nextLine) ||
+          /^exit\s+(?!0(?:\s|$))\S+/i.test(nextLine);
+        if (!terminatesWithFailure) {
           warnDowngradeLines.push(i + 1);
         }
       }
@@ -149,6 +154,25 @@ describe('[CONTRACT] setup-reset.ps1 -- BEHAVIOR-1 static assertions', () => {
                         /try\s*\{/i.test(content) ||
                         /-TimeoutSec\b/i.test(content);
     expect(hasSafeExec).toBe(true);
+  });
+
+  // -----------------------------------------------------------------------
+  // SR-8: build-install-pack.sh copies setup-reset.ps1 into the pack output
+  // (both the --dry-run stub block and the real release block).
+  // Root cause of issue 73a75417: the script had 6-8 other install-pack/*
+  // cp lines in each block but never copied setup-reset.ps1, so the built
+  // installer never shipped the file even though it exists in the repo.
+  // -----------------------------------------------------------------------
+  it('SR-8: build-install-pack.sh copies setup-reset.ps1 into PACK_DIR in both build blocks', () => {
+    expect(existsSync(BUILD_INSTALL_PACK_SH)).toBe(true);
+    const content = readFileSync(BUILD_INSTALL_PACK_SH, 'utf8');
+
+    const copyLines = content
+      .split('\n')
+      .filter(line => /^\s*cp\s+install-pack\/setup-reset\.ps1\b/.test(line));
+
+    // One cp line in the --dry-run stub block, one in the real release block.
+    expect(copyLines.length).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -250,5 +274,58 @@ describe('[CONTRACT] start.bat -- BEHAVIOR-2 static assertions', () => {
     // ZJ_BOOT_FAIL_TEST must be present as a literal string in start.bat
     // so the CI smoke can set this env var to trigger the 401 failure path
     expect(content).toMatch(/ZJ_BOOT_FAIL_TEST/);
+  });
+
+  // -----------------------------------------------------------------------
+  // SB-8: start.bat invokes setup-reset.ps1 exactly once, on first launch of
+  // this installed version -- inside the "Step 1: .env doesn't exist yet"
+  // block, not on every run. install-autostart.ps1 (Step 6.92) and
+  // create-shortcut.ps1 (Step 6.93) are explicitly documented as
+  // "idempotent, runs every time" -- setup-reset.ps1 kills all
+  // zenithjoy-agent processes (setup-reset.ps1 Step 1), so calling it on
+  // every start.bat run would race-kill the process that is about to start.
+  // Root cause of issue 73a75417: setup-reset.ps1 was written with a
+  // contract test but never wired into any caller.
+  // -----------------------------------------------------------------------
+  it('SB-8: start.bat invokes setup-reset.ps1 inside the first-run (.env creation) block only', () => {
+    if (!existsSync(START_BAT)) return;
+
+    const content = readFileSync(START_BAT, 'utf8');
+    const firstRunBlockMatch = content.match(
+      /REM Step 1: Verify \.env exists[\s\S]*?(?=REM Step 1\.5:)/
+    );
+    expect(firstRunBlockMatch).not.toBeNull();
+
+    const firstRunBlock = firstRunBlockMatch ? firstRunBlockMatch[0] : '';
+    expect(firstRunBlock).toMatch(/powershell.*-File.*setup-reset\.ps1/i);
+
+    // Must NOT also be invoked from the Step 6.92 every-run autostart block.
+    const everyRunBlockMatch = content.match(
+      /Step 6\.92: Register boot autostart[\s\S]*?(?=REM Step 6\.93:)/
+    );
+    const everyRunBlock = everyRunBlockMatch ? everyRunBlockMatch[0] : '';
+    expect(everyRunBlock).not.toMatch(/setup-reset\.ps1/i);
+  });
+
+  // -----------------------------------------------------------------------
+  // SB-9: setup-reset failure must not be reported as success. The reset is
+  // deliberately non-fatal for startup availability, but operators still
+  // need an accurate warning and a retained log for diagnosis.
+  // -----------------------------------------------------------------------
+  it('SB-9: start.bat checks setup-reset exit code before reporting success', () => {
+    if (!existsSync(START_BAT)) return;
+
+    const content = readFileSync(START_BAT, 'utf8');
+    const firstRunBlockMatch = content.match(
+      /REM Step 1: Verify \.env exists[\s\S]*?(?=REM Step 1\.5:)/
+    );
+    expect(firstRunBlockMatch).not.toBeNull();
+
+    const firstRunBlock = firstRunBlockMatch ? firstRunBlockMatch[0] : '';
+    expect(firstRunBlock).toMatch(/if errorlevel 1\s*\(/i);
+    expect(firstRunBlock).toMatch(/\[WARN\].*setup-reset.*failed/i);
+    expect(firstRunBlock).toMatch(
+      /else\s*\([\s\S]*\[setup-reset\] first-run environment cleanup done/i
+    );
   });
 });

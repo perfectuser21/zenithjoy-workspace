@@ -131,8 +131,10 @@ try {
         # /it (interactive-only) fails on headless CI runners; retry without it
         $createArgsFallback = $createArgs | Where-Object { $_ -ne "/it" }
         $result2 = schtasks @createArgsFallback 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "[WARN] schtasks /create failed (exit $LASTEXITCODE): $result2 -- autostart not registered (non-fatal for env cleanup)"
+        $fallbackExitCode = $LASTEXITCODE
+        if ($fallbackExitCode -ne 0) {
+            Write-Host "[WARN] schtasks /create failed (exit $fallbackExitCode): $result2 -- autostart not registered"
+            throw "ZenithJoyAgent scheduled task creation failed after fallback (exit $fallbackExitCode)"
         } else {
             Write-Host "[setup-reset] ZenithJoyAgent scheduled task re-created (ONLOGON, LIMITED, no /it)"
         }
