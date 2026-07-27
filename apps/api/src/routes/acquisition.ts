@@ -1187,8 +1187,11 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
     const videoDone = vcRes.rows[0]?.done ?? 0;
     const leadCountAfter = task.lead_count_raw + batch.length;
     const normalizedErrorCode = normalizeCollectErrorCode(errorCode);
+    let checkpointToWrite: Record<string, unknown> | null =
+      checkpoint && typeof checkpoint === 'object' ? checkpoint : null;
     if (normalizedErrorCode === 'UNKNOWN' && errorCode !== 'UNKNOWN') {
       console.warn(`[acquisition] collect/report error_code 归一为 UNKNOWN，原始值：task=${taskId} raw=${errorCode}`);
+      checkpointToWrite = { ...(checkpointToWrite ?? {}), raw_error_code: errorCode };
     }
     const s = settleCollectTask({
       currentStatus: task.status === 'pending' ? 'running' : task.status,
@@ -1213,7 +1216,7 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
               updated_at     = NOW()
         WHERE id = $1`,
       [taskId, newStatus, newErrorCode, videoTotal, batch.length,
-       checkpoint ? JSON.stringify(checkpoint) : null, isTerminal]
+       checkpointToWrite ? JSON.stringify(checkpointToWrite) : null, isTerminal]
     );
     await client.query('COMMIT');
 
