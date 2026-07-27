@@ -67,19 +67,81 @@ require_literal 'preflight.py'
 require_literal '--dry-run'
 require_literal 'taskkill.exe'
 require_literal 'Start-ScheduledTask'
+require_literal '[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey'
+require_literal '[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames'
+require_literal 'GetValueNames()'
+require_literal 'GetValueKind'
+require_literal 'RegistryValueKind'
+require_literal '$originalZenithjoyRegistry'
+require_literal "Invoke-CleanupStep -Name 'reconcile HKCU Environment'"
+require_literal 'registry reconciliation value mismatch'
+require_literal '$preflightInvoker = Start-Process'
+require_literal '$preflightInvoker.WaitForExit(120000)'
+require_literal '$pythonProcess.WaitForExit(110000)'
+require_literal "WriteAllText(\$exitFile, '124')"
+require_literal '$preflightInvoker'
+require_literal "Invoke-CleanupStep -Name 'stop preflight invoker tree'"
+require_literal "Assert-True ([string]\$originalTask.State -ne 'Disabled')"
+require_literal "Assert-True (\$originalAgentPids.Count -gt 0)"
+require_literal 'function Test-PathWithinDirectory'
+require_literal '[IO.Path]::GetFullPath'
+require_literal '[IO.Path]::DirectorySeparatorChar'
+require_literal '$mutationBarrierPassed'
+require_literal "Invoke-CleanupStep -Name 'wait for mutation stop barrier'"
+require_literal 'mutation stop barrier did not pass'
+require_literal "Invoke-CleanupStep -Name 'wait for test preflight processes to exit'"
+require_literal '$preflightProcessesQuiescent'
+require_literal 'RUNNER_TEMP'
+require_literal '$env:TEMP'
+require_literal 'icacls.exe'
+require_literal '/inheritance:r'
+require_literal 'SYSTEM:(OI)(CI)F'
+require_literal 'acceptance directory ACL hardening failed'
+require_literal '$expectedPackSha256 = '
+require_literal 'edf5748a4f928b01242128cb111797bc1fa3cdf2901810b087d91e78d88fab88'
+require_literal 'install pack SHA256 does not match v2.0.89'
+require_literal 'runtime Agent real publish flag is not disabled'
+require_literal 'runtime compatibility real publish flag is not disabled'
+require_literal "Invoke-CleanupStep -Name 'remove test runtime configuration'"
+require_literal "Invoke-CleanupStep -Name 'remove test configuration template'"
 
 require_order "Assert-True (\$null -ne \$originalTask) 'required original scheduled task is missing'" \
   'New-Item -ItemType Directory -Force -Path $testRoot'
+require_order 'Assert-True ($originalAgentPids.Count -gt 0)' \
+  'New-Item -ItemType Directory -Force -Path $testRoot'
+require_order '$registrySnapshotCaptured = $true' '$testLaunchStarted = $true'
+require_order 'acceptance directory ACL verification failed' \
+  'downloading real install pack'
 require_order '$sharedLogMutationStarted = $true' \
   'Remove-PathAndAssertAbsent -Path $sharedLog'
 require_order '$preflightReportMutationStarted = $true' \
   'Remove-PathAndAssertAbsent -Path $preflightReport'
 require_order '$testLaunchStarted = $true' '$testCmd = Start-Process'
+require_order '$pythonProcess.WaitForExit(110000)' \
+  '$preflightInvoker.WaitForExit(120000)'
 require_order "Invoke-CleanupStep -Name 'register original scheduled task'" \
   "Invoke-CleanupStep -Name 'restore shared setup-reset log'"
 require_order "Invoke-CleanupStep -Name 'restore shared setup-reset log'" \
   "Invoke-CleanupStep -Name 'restore preflight report'"
 require_order "Invoke-CleanupStep -Name 'restore preflight report'" \
+  "Invoke-CleanupStep -Name 'remove acceptance directory'"
+require_order '$archiveHash = ' \
+  'install pack SHA256 does not match v2.0.89'
+require_order 'install pack SHA256 does not match v2.0.89' \
+  '& tar.exe -xzf $archive'
+require_order "Invoke-CleanupStep -Name 'stop preflight invoker tree'" \
+  "Invoke-CleanupStep -Name 'wait for mutation stop barrier'"
+require_order "Invoke-CleanupStep -Name 'wait for mutation stop barrier'" \
+  "Invoke-CleanupStep -Name 'register original scheduled task'"
+require_order "Invoke-CleanupStep -Name 'reconcile HKCU Environment'" \
+  "Invoke-CleanupStep -Name 'start original scheduled task'"
+require_order "Invoke-CleanupStep -Name 'wait for new original Agent process'" \
+  "Invoke-CleanupStep -Name 'wait for test preflight processes to exit'"
+require_order "Invoke-CleanupStep -Name 'wait for test preflight processes to exit'" \
+  "Invoke-CleanupStep -Name 'restore preflight report'"
+require_order "Invoke-CleanupStep -Name 'remove test runtime configuration'" \
+  "Invoke-CleanupStep -Name 'remove test configuration template'"
+require_order "Invoke-CleanupStep -Name 'remove test configuration template'" \
   "Invoke-CleanupStep -Name 'remove acceptance directory'"
 
 primary_line="$(line_of '$primaryError = $null')"
@@ -93,5 +155,6 @@ test "$catch_line" -lt "$finally_line"
 test "$(grep -c -F 'Remove-Item' "$SCRIPT")" -eq 1
 ! grep -Eq 'Write-(Host|Output).*(LICENSE|\.env)' "$SCRIPT"
 ! grep -Eq 'Write-(Host|Output).*(sourceLicense|sourceConfigText|preparedConfigText)' "$SCRIPT"
+! grep -Eq 'Write-(Host|Output).*(Registry|originalZenithjoyRegistry)' "$SCRIPT"
 
 echo "e2e-verify contract: PASS"
