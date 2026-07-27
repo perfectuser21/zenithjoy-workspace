@@ -1,81 +1,113 @@
-# 设计：安卓采集失败原始错误码留证
+# 设计：采集失败原始错误码留证（修订版——纯服务端）
 
-## 背景
+## 背景（含实现阶段的关键修正）
 
-2026-07-27 排查 Path2 安卓智能获客验收 5 号机（华为 BKK-AL10）"采集任务失败"时发现：安卓端 `AgentService.kt` 在上报采集结果前，先用 `CollectFailureClassifier.classify(errorCode)` 把原始错误码（如疑似的 `ALL_SHARE_FAILED`）归类成 5 个人话分类之一（含 UNKNOWN 兜底），再把**分类后的值**覆盖回 `errorCode` 变量发给服务端。服务端 `acquisition_collect_tasks.error_code` 列因此永远只存得到分类结果，原始信号从未离开过手机——事后想诊断"到底是哪种具体故障"时无据可查。
+2026-07-27 排查 Path2 安卓智能获客验收 5 号机（华为 BKK-AL10）"采集任务失败"时，最初以为原始错误码在**客户端**分类后就被丢弃了。深入读代码后发现真相更细：`AgentService.kt` 里 `reporter?.reportVideos(...)` 有两个调用点，行为不一样：
 
-`acquisition_collect_tasks` 表已有一个 `checkpoint JSONB` 列（其它端点如 `/collect/report` 已经在用它存诊断性上下文），但 `/collect/report-videos` 这条路径从没往里写过东西。
+- **主路径**（`DouyinCollectService.onVideoCardResult` 回调，约 227 行）：`errorCode = if (error.isNotEmpty()) error else null` —— **直接把原始错误码发给服务端，没有做任何客户端分类**。5 号机大概率走的是这条路径。
+- **兜底路径**（`finishWithError` 场景，约 862 行）：`errorCode = CollectFailureClassifier.classify(errorCode)` —— 客户端先分类再发送，原始值确实没离开手机。
+
+服务端 `apps/api/src/routes/acquisition.ts` 收到 `error_code` 后统一过 `normalizeCollectErrorCode()`——一个白名单校验：不在 `VALID_COLLECT_ERROR_CODES` 里的值一律强制改成 `UNKNOWN`，并且**已经**用 `console.warn` 打印过原始值（例如第 883/1185 行：`raw=${rawFailCode}`）。也就是说：**5 号机这类场景，原始信号其实已经到达过服务器，只是被打印到了控制台日志（今天已经随容器重建丢失），从没写进数据库。**
+
+这个发现把修复范围大幅简化：**主路径的信息丢失完全是服务端的事，不需要改一行 Android 代码就能补上**——只要在已有的 `console.warn` 分支旁边，把同一个值写进 `acquisition_collect_tasks.checkpoint` 就行。
 
 ## 目标
 
-在**不改变**分类算法（`CollectFailureClassifier.kt`）、**不改变**客户/Dashboard 看到的 `error_code` 展示逻辑的前提下，让服务端多存一份原始错误码，供事后排查。
+服务端在把 `error_code` 归一为 `UNKNOWN` 时，把归一前的原始值持久化进 `checkpoint.raw_error_code`，不再只打日志。
 
 ## 不做的事
 
+- **不改动任何 Android/Kotlin 代码**——本次范围内不需要，且能立即对已安装的任意版本 APK 生效
 - 不新建表、不新建字段（复用已有的 `checkpoint JSONB` 列）
-- 不改变 `error_code` 列的值域/分类策略
-- 不处理 `/collect/report`（Stage2 评论上报）路径——它已经有 `checkpoint` 参数在用，本次只补 `/collect/report-videos`（Stage1）这一条缺失的路径
+- 不改变 `error_code` 列的值域/分类策略、`normalizeCollectErrorCode()` 的判定逻辑
+- 不处理"兜底路径"（约 862 行，客户端已先分类）造成的信息丢失——那条路径的原始值确实从未过网络，属于另一个范围更大的问题（决策 e38c097b 涉及的分类策略），本次不动
 
 ## 设计
 
-### 1. 客户端：`CollectReporter.kt`
+`apps/api/src/routes/acquisition.ts` 里现有两处 `normalizeCollectErrorCode` 降级判断，行为模式相同（`if (normalized === 'UNKNOWN' && raw !== 'UNKNOWN') console.warn(...)`），分别对应两个独立的 UPDATE 语句，按各自现有的 jsonb 写法就地补写：
 
-`reportVideos()` 新增可选参数，与 `reportCollect()` 已有的同名参数保持一致：
+### 位置 1：`POST /collect/report-videos`（Stage1，空清单分支，约 874-899 行）
 
-```kotlin
-fun reportVideos(
-    taskId: String,
-    videos: List<VideoInfo>,
-    searchResultEmpty: Boolean = false,
-    errorCode: String? = null,
-    checkpoint: Map<String, Any?>? = null,  // 新增
-): ReportResult
+现状：
+```ts
+const failCode = rawFailCode === 'ALL_RESOLVE_FAILED'
+  ? 'PLATFORM_LIMITED'
+  : normalizeCollectErrorCode(rawFailCode);
+if (failCode === 'UNKNOWN' && rawFailCode !== 'UNKNOWN') {
+  console.warn(`[acquisition] collect/report-videos error_code 归一为 UNKNOWN，原始值：task=${taskId} raw=${rawFailCode}`);
+}
+const s = settleCollectTask({ /* ... */ });
+await client.query(
+  `UPDATE zenithjoy.acquisition_collect_tasks
+      SET status = $2, error_code = $3, started_at = COALESCE(started_at, NOW()),
+          ended_at = NOW(), updated_at = NOW()
+    WHERE id = $1`,
+  [taskId, s.status, s.error_code]
+);
 ```
 
-`buildVideosBody()` 内部把 `checkpoint`（非空时）加进请求体 JSON，字段名与 `/collect/report` 保持一致（`checkpoint`），不新增自定义协议。
-
-### 2. 客户端：`AgentService.kt`
-
-调用点（约 865 行）在分类**之前**先把原始值捕获下来，构造 `checkpoint`：
-
-```kotlin
-val rawErrorCode = errorCode
-val classifiedErrorCode = if (videos.isEmpty()) CollectFailureClassifier.classify(errorCode) else null
-reporter?.reportVideos(
-    taskId,
-    videos,
-    errorCode = classifiedErrorCode,
-    checkpoint = if (classifiedErrorCode != null) mapOf("raw_error_code" to rawErrorCode) else null,
-)
+改为：
+```ts
+const failCode = rawFailCode === 'ALL_RESOLVE_FAILED'
+  ? 'PLATFORM_LIMITED'
+  : normalizeCollectErrorCode(rawFailCode);
+let rawErrorCheckpoint: string | null = null;
+if (failCode === 'UNKNOWN' && rawFailCode !== 'UNKNOWN') {
+  console.warn(`[acquisition] collect/report-videos error_code 归一为 UNKNOWN，原始值：task=${taskId} raw=${rawFailCode}`);
+  rawErrorCheckpoint = JSON.stringify({ raw_error_code: rawFailCode });
+}
+const s = settleCollectTask({ /* ... */ });
+await client.query(
+  `UPDATE zenithjoy.acquisition_collect_tasks
+      SET status = $2, error_code = $3,
+          checkpoint = CASE WHEN $4::jsonb IS NOT NULL
+                       THEN COALESCE(checkpoint, '{}'::jsonb) || $4::jsonb
+                       ELSE checkpoint END,
+          started_at = COALESCE(started_at, NOW()),
+          ended_at = NOW(), updated_at = NOW()
+    WHERE id = $1`,
+  [taskId, s.status, s.error_code, rawErrorCheckpoint]
+);
 ```
 
-`errorCode` 参数（分类后的值）保持完全不变——服务端现有 `error_code` 列写入逻辑、客户展示逻辑零改动。
+### 位置 2：`POST /collect/report`（Stage2，约 1181-1204 行）
 
-### 3. 服务端：`apps/api/src/routes/acquisition.ts`
+这条路径的 UPDATE 已经在写 `checkpoint`（`checkpoint = COALESCE($6::jsonb, checkpoint)`，来自客户端主动传的 `checkpoint` 参数，整体替换式，不是 merge）。补法：normalize 降级发生时，把 `raw_error_code` **合并**进客户端已传的 `checkpoint`（如果有），而不是覆盖：
 
-`POST /collect/report-videos` handler：
-1. 解构请求体时多读一个 `checkpoint`（`const { task_id: taskId, videos, reason, checkpoint } = req.body || {}`）
-2. 失败态那条 `UPDATE zenithjoy.acquisition_collect_tasks` 语句（约 894 行）里，把 `checkpoint` merge 进去，写法与仓库里已有的 `stage2_dispatch_counts`/`media_kinds` merge 模式一致：
-
-```sql
-UPDATE zenithjoy.acquisition_collect_tasks
-   SET status = $2, error_code = $3,
-       checkpoint = COALESCE(checkpoint, '{}'::jsonb) || $4::jsonb,
-       started_at = COALESCE(started_at, NOW()), ended_at = NOW(), updated_at = NOW()
- WHERE id = $1
+现状：
+```ts
+const normalizedErrorCode = normalizeCollectErrorCode(errorCode);
+if (normalizedErrorCode === 'UNKNOWN' && errorCode !== 'UNKNOWN') {
+  console.warn(`[acquisition] collect/report error_code 归一为 UNKNOWN，原始值：task=${taskId} raw=${errorCode}`);
+}
+/* ... */
+[taskId, newStatus, newErrorCode, videoTotal, batch.length,
+ checkpoint ? JSON.stringify(checkpoint) : null, isTerminal]
 ```
 
-- `checkpoint` 缺失或非对象时，merge 参数传 `'{}'::jsonb`（不写入任何内容，行为等同于改动前）
-- 只做浅层 `||` merge，不做深度合并——这条路径每次只会写一次 `raw_error_code`，不存在需要深度合并的历史字段冲突
+改为：
+```ts
+const normalizedErrorCode = normalizeCollectErrorCode(errorCode);
+let checkpointToWrite: Record<string, unknown> | null = checkpoint ?? null;
+if (normalizedErrorCode === 'UNKNOWN' && errorCode !== 'UNKNOWN') {
+  console.warn(`[acquisition] collect/report error_code 归一为 UNKNOWN，原始值：task=${taskId} raw=${errorCode}`);
+  checkpointToWrite = { ...(checkpoint ?? {}), raw_error_code: errorCode };
+}
+/* ... */
+[taskId, newStatus, newErrorCode, videoTotal, batch.length,
+ checkpointToWrite ? JSON.stringify(checkpointToWrite) : null, isTerminal]
+```
 
 ## 边界情况
 
-- `videos` 非空（成功场景）：`classifiedErrorCode` 为 `null`，本次改动不生成 `checkpoint`，行为不变
-- 客户端不带 `checkpoint` 字段（旧版 APK 请求）：服务端 `checkpoint` 解构得到 `undefined`，merge 参数退化成 `'{}'::jsonb`，等价于改动前的行为——**向后兼容，不要求同时升级客户端**
-- `checkpoint` 里可能已有其它字段（本路径目前没有，但未来若加）：`||` merge 保留已有 key，只新增/覆盖 `raw_error_code`
+- `rawFailCode`/`errorCode` 本来就是合法值（不触发降级）：`rawErrorCheckpoint`/新增字段均为 `null`/不变，行为与改动前完全一致
+- 位置 2 客户端本来就传了 `checkpoint` 且触发了降级：新逻辑用 spread 合并，保留客户端原有 key，只追加/覆盖 `raw_error_code`
+- 位置 1 目前没有客户端传入的 `checkpoint`（该端点协议里没有这个字段），所以只需要处理"从空到有一个值"，不需要考虑合并已有 `checkpoint` 内容（`COALESCE(checkpoint,'{}'::jsonb) || ...` 已经处理了"该行 checkpoint 本来是 NULL"的情况）
 
 ## 测试策略
 
-- **Kotlin 单测**（`CollectReporterTest.kt` 或同目录新测试）：验证 `reportVideos` 传入 `checkpoint` 时，实际 HTTP body 包含该字段；不传时 body 不含 `checkpoint` 键
-- **TS 单测**（`acquisition.test.ts` 或相邻测试文件，mock pool.query）：验证 `/collect/report-videos` 收到 `checkpoint: {raw_error_code: "ALL_SHARE_FAILED"}` 时，UPDATE 语句的 jsonb merge 参数正确；不带 `checkpoint` 时 merge 参数为 `'{}'::jsonb`
-- 无需 E2E（纯内部诊断字段，不涉及用户可见行为）
+- **TS 单测**（新建或加进 acquisition 相关测试文件，mock `pool`/`client.query`）：
+  1. 位置 1：`reason.error_code` 传一个不在白名单里的值（如 `"ALL_SHARE_FAILED"`）→ 断言 UPDATE 调用的 jsonb 参数包含 `{"raw_error_code":"ALL_SHARE_FAILED"}`
+  2. 位置 1：`reason.error_code` 传合法值（如 `"NETWORK_ERROR"`）→ 断言 UPDATE 调用时该 jsonb 参数为 `null`（不触发写入）
+  3. 位置 2：`errorCode` 传不在白名单里的值、且请求体带了别的 `checkpoint` 字段 → 断言最终写入的 checkpoint 同时保留原有字段和新增的 `raw_error_code`
+- 无需 E2E / 无需 Android 侧任何测试（本次不改 Kotlin 代码）
