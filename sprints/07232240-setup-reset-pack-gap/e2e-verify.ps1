@@ -936,6 +936,16 @@ exit $pythonProcess.ExitCode
                 $script:mutationBarrierPassed = $true
             }
 
+        Invoke-CleanupStep -Name 'dispose test process handles' `
+            -Errors $cleanupErrors -Action {
+                if ($null -ne $preflightInvoker) {
+                    $preflightInvoker.Dispose()
+                }
+                if ($null -ne $testCmd) {
+                    $testCmd.Dispose()
+                }
+            }
+
         Invoke-CleanupStep -Name 'register original scheduled task' `
             -Errors $cleanupErrors -Action {
                 Register-ScheduledTask -TaskName $taskName `

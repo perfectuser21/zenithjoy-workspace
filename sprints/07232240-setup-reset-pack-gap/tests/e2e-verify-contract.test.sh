@@ -96,6 +96,7 @@ require_literal "\$cmdExe = Join-Path \$env:SystemRoot 'System32\\cmd.exe'"
 require_literal '$cmdExe,'
 require_literal '$preflightInvoker'
 require_literal "Invoke-CleanupStep -Name 'stop preflight invoker tree'"
+require_literal "Invoke-CleanupStep -Name 'dispose test process handles'"
 require_literal "Assert-True ([string]\$originalTask.State -ne 'Disabled')"
 require_literal "Assert-True (\$originalAgentPids.Count -gt 0)"
 require_literal 'function Test-PathWithinDirectory'
@@ -165,6 +166,10 @@ require_order 'install pack SHA256 does not match v2.0.89' \
   '& tar.exe -xzf $archive'
 require_order "Invoke-CleanupStep -Name 'stop preflight invoker tree'" \
   "Invoke-CleanupStep -Name 'wait for mutation stop barrier'"
+require_order "Invoke-CleanupStep -Name 'wait for mutation stop barrier'" \
+  "Invoke-CleanupStep -Name 'dispose test process handles'"
+require_order "Invoke-CleanupStep -Name 'dispose test process handles'" \
+  "Invoke-CleanupStep -Name 'register original scheduled task'"
 require_order "Invoke-CleanupStep -Name 'unregister test scheduled task'" \
   "Invoke-CleanupStep -Name 'stop preflight invoker tree'"
 require_order "Invoke-CleanupStep -Name 'wait for mutation stop barrier'" \
