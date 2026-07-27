@@ -4,7 +4,13 @@ Set-StrictMode -Version Latest
 $taskName = 'ZenithJoyAgent'
 $packVersion = '2.0.89'
 $packUrl = 'https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/zenithjoy-agent-v2.0.89.tar.gz'
-$runToken = if ($env:GITHUB_RUN_ID) { $env:GITHUB_RUN_ID } else { [guid]::NewGuid().ToString('N') }
+$stagingApiBase = 'https://staging-autopilot.zenjoymedia.media'
+$stagingApiUrl = 'wss://staging-autopilot.zenjoymedia.media/agent-ws'
+
+$runId = if ($env:GITHUB_RUN_ID) { $env:GITHUB_RUN_ID } else { 'local' }
+$runAttempt = if ($env:GITHUB_RUN_ATTEMPT) { $env:GITHUB_RUN_ATTEMPT } else { '0' }
+$runGuid = [guid]::NewGuid().ToString('N')
+$runToken = "$runId-$runAttempt-$runGuid"
 $testRoot = "C:\Users\Public\zj-accept-1467-$runToken"
 $archive = Join-Path $testRoot "zenithjoy-agent-v$packVersion.tar.gz"
 $extractRoot = Join-Path $testRoot 'extract'
@@ -15,6 +21,7 @@ $preflightStderr = Join-Path $testRoot 'preflight-stderr.txt'
 $preflightExitFile = Join-Path $testRoot 'preflight-exit.txt'
 $preflightBatch = Join-Path $testRoot 'run-preflight.bat'
 $preflightReport = 'C:\Users\Public\zj-preflight.json'
+$preflightReportBackup = Join-Path $testRoot 'preflight-before.json'
 $sharedDataDir = Join-Path $env:APPDATA 'zenithjoy-agent'
 $sharedLog = Join-Path $sharedDataDir 'setup-reset.log'
 $sharedLogBackup = Join-Path $testRoot 'setup-reset-before.log'
@@ -24,14 +31,22 @@ $testDir = $null
 $originalDir = $null
 $originalTask = $null
 $originalTaskXml = $null
-$originalTaskExists = $false
-$originalTaskSignature = '<absent>'
+$originalTaskSignature = $null
+$originalAgentPids = [Collections.Generic.HashSet[int]]::new()
+$originalSharedLogHash = $null
+$originalPreflightReportHash = $null
 $hadSharedLog = $false
+$hadPreflightReport = $false
+$testRootOwned = $false
+$sharedLogMutationStarted = $false
+$preflightReportMutationStarted = $false
 $testLaunchStarted = $false
+$originalTaskRegistered = $false
 $acceptancePassed = $false
 
 function Assert-True {
     param([bool]$Condition, [string]$Message)
+
     if (-not $Condition) {
         throw $Message
     }
@@ -39,6 +54,7 @@ function Assert-True {
 
 function Write-Checkpoint {
     param([string]$Message)
+
     Write-Host "[acceptance] PASS: $Message"
 }
 
@@ -72,6 +88,7 @@ function Get-DotEnvValue {
     if (-not $match.Success) {
         return $null
     }
+
     return $match.Groups[1].Value.Trim()
 }
 
@@ -178,6 +195,47 @@ function Wait-Until {
     throw $FailureMessage
 }
 
+function Remove-PathAndAssertAbsent {
+    param(
+        [string]$Path,
+        [switch]$Recurse,
+        [string]$FailureMessage
+    )
+
+    if (Test-Path $Path) {
+        $removeArgs = @{
+            LiteralPath = $Path
+            Force = $true
+            ErrorAction = 'SilentlyContinue'
+        }
+        if ($Recurse) {
+            $removeArgs.Recurse = $true
+        }
+        Remove-Item @removeArgs
+    }
+
+    Assert-True (-not (Test-Path $Path)) $FailureMessage
+}
+
+function Invoke-CleanupStep {
+    param(
+        [string]$Name,
+        [scriptblock]$Action,
+        [Collections.Generic.List[Exception]]$Errors
+    )
+
+    try {
+        & $Action
+        Write-Checkpoint "cleanup $Name"
+    } catch {
+        $wrapped = [Exception]::new(
+            "cleanup step '$Name' failed: $($_.Exception.Message)",
+            $_.Exception
+        )
+        $Errors.Add($wrapped)
+    }
+}
+
 function Stop-TestProcessTree {
     param($Process)
 
@@ -185,58 +243,112 @@ function Stop-TestProcessTree {
         return
     }
 
-    try {
+    if (-not $Process.HasExited) {
         & "$env:SystemRoot\System32\taskkill.exe" `
             /PID $Process.Id /T /F 2>$null | Out-Null
-    } catch {
-        Write-Host "[acceptance] cleanup: test launcher tree already stopped"
+        Assert-True (
+            $LASTEXITCODE -eq 0
+        ) 'taskkill could not stop the test launcher process tree'
     }
 }
 
-New-Item -ItemType Directory -Force -Path $testRoot | Out-Null
-New-Item -ItemType Directory -Force -Path $extractRoot | Out-Null
-
-$originalTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-$originalTaskExists = $null -ne $originalTask
-$originalTaskSignature = Get-TaskSignature $originalTask
-if ($originalTaskExists) {
-    $originalTaskXml = Export-ScheduledTask -TaskName $taskName
-}
-
-$originalDir = Find-OriginalAgentDirectory $originalTask
-Assert-True ([bool]$originalDir) 'cannot locate the current staging Agent directory'
-$sourceConfigPath = Join-Path $originalDir '.env'
-Assert-True (Test-Path $sourceConfigPath) 'current staging Agent configuration is missing'
-
-$sourceConfigText = Get-Content $sourceConfigPath -Raw
-$sourceLicense = Get-DotEnvValue $sourceConfigText 'ZENITHJOY_LICENSE'
-$sourceEnvironment = Get-DotEnvValue $sourceConfigText 'ZENITHJOY_ENV'
-$sourceApiBase = Get-DotEnvValue $sourceConfigText 'ZENITHJOY_API_BASE'
-
-Assert-True (
-    [bool]$sourceLicense -and
-    $sourceLicense -ne '__PLACEHOLDER__' -and
-    $sourceLicense -ne 'ZJ-F-XXXXXX'
-) 'current staging Agent has no usable license'
-Assert-True (
-    $sourceEnvironment -eq 'staging' -or
-    ($sourceApiBase -and $sourceApiBase -match 'staging')
-) 'current Agent is not configured for staging'
-
-Write-Checkpoint "source staging Agent located at $originalDir"
-Write-Checkpoint "scheduled task snapshot state=$originalTaskExists"
-
-if (Test-Path $sharedLog) {
-    Copy-Item $sharedLog $sharedLogBackup -Force
-    $hadSharedLog = $true
-}
-
+$primaryError = $null
+$cleanupErrors = [Collections.Generic.List[Exception]]::new()
 try {
+    $originalTask = Get-ScheduledTask -TaskName $taskName `
+        -ErrorAction SilentlyContinue
+    Assert-True ($null -ne $originalTask) 'required original scheduled task is missing'
+    $originalTaskXml = Export-ScheduledTask -TaskName $taskName
+    $originalTaskSignature = Get-TaskSignature $originalTask
+
+    $originalDir = Find-OriginalAgentDirectory $originalTask
+    Assert-True ([bool]$originalDir) 'cannot locate the current staging Agent directory'
+    $sourceConfigPath = Join-Path $originalDir '.env'
+    Assert-True (
+        Test-Path $sourceConfigPath
+    ) 'current staging Agent configuration is missing'
+
+    $sourceConfigText = Get-Content $sourceConfigPath -Raw
+    $sourceLicense = Get-DotEnvValue $sourceConfigText 'ZENITHJOY_LICENSE'
+    $sourceEnvironment = Get-DotEnvValue $sourceConfigText 'ZENITHJOY_ENV'
+    $sourceApiBase = Get-DotEnvValue $sourceConfigText 'ZENITHJOY_API_BASE'
+
+    Assert-True (
+        [bool]$sourceLicense -and
+        $sourceLicense -ne '__PLACEHOLDER__' -and
+        $sourceLicense -ne 'ZJ-F-XXXXXX'
+    ) 'current staging Agent has no usable license'
+    Assert-True (
+        $sourceEnvironment -eq 'staging' -or
+        ($sourceApiBase -and $sourceApiBase -match 'staging')
+    ) 'current Agent is not configured for staging'
+
+    foreach ($process in @(Get-AgentProcesses)) {
+        $path = [string]$process.ExecutablePath
+        if (
+            $path -and
+            $path.StartsWith(
+                $originalDir,
+                [StringComparison]::OrdinalIgnoreCase
+            )
+        ) {
+            $null = $originalAgentPids.Add([int]$process.ProcessId)
+        }
+    }
+
+    Write-Checkpoint "source staging Agent located at $originalDir"
+    Write-Checkpoint 'required scheduled task snapshot captured'
+    Write-Checkpoint "original Agent PID count=$($originalAgentPids.Count)"
+
+    Assert-True (
+        -not (Test-Path $testRoot)
+    ) 'unique acceptance directory already exists'
+    $testRootOwned = $true
+    New-Item -ItemType Directory -Force -Path $testRoot | Out-Null
+    Assert-True (Test-Path $testRoot) 'acceptance directory creation failed'
+    New-Item -ItemType Directory -Force -Path $extractRoot | Out-Null
+    Assert-True (Test-Path $extractRoot) 'extraction directory creation failed'
+
+    if (Test-Path $sharedLog) {
+        $hadSharedLog = $true
+        $originalSharedLogHash = (
+            Get-FileHash $sharedLog -Algorithm SHA256
+        ).Hash
+        Copy-Item $sharedLog $sharedLogBackup -Force
+        Assert-True (
+            Test-Path $sharedLogBackup
+        ) 'shared setup-reset log backup is missing'
+        Assert-True (
+            (Get-FileHash $sharedLogBackup -Algorithm SHA256).Hash -eq
+            $originalSharedLogHash
+        ) 'shared setup-reset log backup hash mismatch'
+    }
+
+    if (Test-Path $preflightReport) {
+        $hadPreflightReport = $true
+        $originalPreflightReportHash = (
+            Get-FileHash $preflightReport -Algorithm SHA256
+        ).Hash
+        Copy-Item $preflightReport $preflightReportBackup -Force
+        Assert-True (
+            Test-Path $preflightReportBackup
+        ) 'preflight report backup is missing'
+        Assert-True (
+            (Get-FileHash $preflightReportBackup -Algorithm SHA256).Hash -eq
+            $originalPreflightReportHash
+        ) 'preflight report backup hash mismatch'
+    }
+
     Write-Host "[acceptance] downloading real install pack v$packVersion"
     Invoke-WebRequest -Uri $packUrl -OutFile $archive -UseBasicParsing
-    Assert-True ((Get-Item $archive).Length -gt 100MB) 'downloaded install pack is unexpectedly small'
+    Assert-True (
+        (Get-Item $archive).Length -gt 100MB
+    ) 'downloaded install pack is unexpectedly small'
     $archiveHash = (Get-FileHash $archive -Algorithm SHA256).Hash
-    Write-Checkpoint "artifact downloaded size=$((Get-Item $archive).Length) sha256=$archiveHash"
+    Write-Checkpoint (
+        "artifact downloaded size=$((Get-Item $archive).Length) " +
+        "sha256=$archiveHash"
+    )
 
     & tar.exe -xzf $archive -C $extractRoot
     Assert-True ($LASTEXITCODE -eq 0) 'install pack extraction failed'
@@ -244,7 +356,9 @@ try {
     $testDirectoryItem = Get-ChildItem $extractRoot -Directory `
         -Filter "zenithjoy-agent-v$packVersion" |
         Select-Object -First 1
-    Assert-True ($null -ne $testDirectoryItem) 'expected version directory is missing after extraction'
+    Assert-True (
+        $null -ne $testDirectoryItem
+    ) 'expected version directory is missing after extraction'
     $testDir = $testDirectoryItem.FullName
 
     foreach ($requiredFile in @(
@@ -264,11 +378,36 @@ try {
     Copy-Item $sourceConfigPath $testConfigTemplate -Force
     Set-DotEnvValue $testConfigTemplate 'ZENITHJOY_ENV' 'staging'
     Set-DotEnvValue $testConfigTemplate 'ZENITHJOY_AGENT_REAL_PUBLISH' '0'
-    Remove-Item $testConfig -Force -ErrorAction SilentlyContinue
-    Assert-True (-not (Test-Path $testConfig)) 'test configuration already exists before first launch'
-    Write-Checkpoint 'disposable staging template prepared with real publishing disabled'
+    Set-DotEnvValue $testConfigTemplate 'REAL_PUBLISH' '0'
+    Set-DotEnvValue $testConfigTemplate 'ZENITHJOY_API_BASE' $stagingApiBase
+    Set-DotEnvValue $testConfigTemplate 'ZENITHJOY_API_URL' $stagingApiUrl
+    Remove-PathAndAssertAbsent -Path $testConfig `
+        -FailureMessage 'test configuration exists before first launch'
 
-    Remove-Item $sharedLog -Force -ErrorAction SilentlyContinue
+    $preparedConfigText = Get-Content $testConfigTemplate -Raw
+    Assert-True (
+        (Get-DotEnvValue $preparedConfigText 'ZENITHJOY_ENV') -eq 'staging'
+    ) 'prepared environment is not staging'
+    Assert-True (
+        (Get-DotEnvValue $preparedConfigText 'ZENITHJOY_AGENT_REAL_PUBLISH') -eq
+        '0'
+    ) 'prepared Agent real publish flag is not disabled'
+    Assert-True (
+        (Get-DotEnvValue $preparedConfigText 'REAL_PUBLISH') -eq '0'
+    ) 'prepared compatibility real publish flag is not disabled'
+    Assert-True (
+        (Get-DotEnvValue $preparedConfigText 'ZENITHJOY_API_BASE') -eq
+        $stagingApiBase
+    ) 'prepared API base is not the required staging endpoint'
+    Assert-True (
+        (Get-DotEnvValue $preparedConfigText 'ZENITHJOY_API_URL') -eq
+        $stagingApiUrl
+    ) 'prepared API URL is not the required staging endpoint'
+    Write-Checkpoint 'disposable staging template is explicit and fail-closed'
+
+    $sharedLogMutationStarted = $true
+    Remove-PathAndAssertAbsent -Path $sharedLog `
+        -FailureMessage 'shared setup-reset log removal failed'
     $launchStartedUtc = (Get-Date).ToUniversalTime()
     $testLaunchStarted = $true
     $testCmd = Start-Process `
@@ -297,8 +436,12 @@ try {
         }
 
     $resetLog = Get-Content $sharedLog -Raw
-    Assert-True ($resetLog.Contains('[setup-reset] done')) 'setup-reset did not finish successfully'
-    Assert-True ($resetLog -notmatch '\[ERROR\]') 'setup-reset log contains an error'
+    Assert-True (
+        $resetLog.Contains('[setup-reset] done')
+    ) 'setup-reset did not finish successfully'
+    Assert-True (
+        $resetLog -notmatch '\[ERROR\]'
+    ) 'setup-reset log contains an error'
 
     Wait-Until -TimeoutSeconds 30 `
         -FailureMessage 'start launcher did not report setup-reset result' `
@@ -320,8 +463,20 @@ try {
     Assert-True (
         $startOutput -notmatch 'setup-reset failed'
     ) 'start launcher reported setup-reset failure'
-    Assert-True (Test-Path $testConfig) 'first launch did not create its configuration'
-    Write-Checkpoint 'first launch created configuration and reported setup-reset success'
+    Assert-True (
+        Test-Path $testConfig
+    ) 'first launch did not create its configuration'
+    Write-Checkpoint 'first launch created configuration and reported success'
+
+    $runtimeConfigText = Get-Content $testConfig -Raw
+    $apiBase = Get-DotEnvValue $runtimeConfigText 'ZENITHJOY_API_BASE'
+    $apiUrl = Get-DotEnvValue $runtimeConfigText 'ZENITHJOY_API_URL'
+    Assert-True (
+        $apiBase -eq $stagingApiBase
+    ) 'test launch did not retain the required staging API base'
+    Assert-True (
+        $apiUrl -eq $stagingApiUrl
+    ) 'test launch did not retain the required staging API URL'
 
     $temporaryTask = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
     $temporaryTaskSignature = Get-TaskSignature $temporaryTask
@@ -331,13 +486,7 @@ try {
             [StringComparison]::OrdinalIgnoreCase
         ) -ge 0
     ) 'scheduled task does not point at the test installation'
-    Write-Checkpoint 'scheduled task temporarily points at the test installation'
-
-    $apiBase = Get-DotEnvValue (Get-Content $testConfig -Raw) 'ZENITHJOY_API_BASE'
-    if (-not $apiBase) {
-        $apiBase = 'https://staging-autopilot.zenjoymedia.media'
-    }
-    Assert-True ($apiBase -match 'staging') 'test launch resolved a non-staging API base'
+    Write-Checkpoint 'scheduled task temporarily points at test installation'
 
     $python = Join-Path $testDir 'python-embedded\python.exe'
     $preflight = Join-Path $testDir 'wechat-rpa\preflight.py'
@@ -346,7 +495,9 @@ try {
     Assert-True (Test-Path $preflight) 'packaged WeChat preflight is missing'
     Assert-True (Test-Path $psexec) 'PsExec64 is missing on xian-rog'
 
-    Remove-Item $preflightReport -Force -ErrorAction SilentlyContinue
+    $preflightReportMutationStarted = $true
+    Remove-PathAndAssertAbsent -Path $preflightReport `
+        -FailureMessage 'preflight report removal failed'
     $preflightLines = @(
         '@echo off',
         'set PYTHONUTF8=1',
@@ -365,23 +516,19 @@ try {
         -Condition { Test-Path $preflightExitFile }
 
     $preflightExit = [int](Get-Content $preflightExitFile -Raw)
-    if ($preflightExit -ne 0) {
-        if (Test-Path $preflightStdout) {
-            Get-Content $preflightStdout | Select-Object -Last 80
-        }
-        if (Test-Path $preflightStderr) {
-            Get-Content $preflightStderr | Select-Object -Last 40
-        }
-    }
     Assert-True ($preflightExit -eq 0) 'packaged preflight failed'
-    Assert-True (Test-Path $preflightReport) 'packaged preflight report is missing'
+    Assert-True (
+        Test-Path $preflightReport
+    ) 'packaged preflight report is missing'
 
     $report = Get-Content $preflightReport -Raw -Encoding utf8 |
         ConvertFrom-Json
     $loginCheck = $report.checks |
         Where-Object { $_.name -eq 'wechat_login' } |
         Select-Object -First 1
-    Assert-True ($null -ne $loginCheck) 'preflight report has no WeChat login check'
+    Assert-True (
+        $null -ne $loginCheck
+    ) 'preflight report has no WeChat login check'
     Assert-True (
         $loginCheck.status -eq 'ok'
     ) 'WeChat is not logged in in interactive session 1'
@@ -408,82 +555,166 @@ try {
 
     $acceptancePassed = $true
     Write-Host '[acceptance] ALL ACCEPTANCE ASSERTIONS PASSED'
+} catch {
+    $primaryError = $_.Exception
 } finally {
     Write-Host '[acceptance] restoring original staging state'
 
     if ($testLaunchStarted) {
-        Stop-TestProcessTree $testCmd
-
-        if ($testDir) {
-            foreach ($process in @(Get-AgentProcesses)) {
-                $path = [string]$process.ExecutablePath
-                if (
-                    $path -and
-                    $path.StartsWith(
-                        $testDir,
-                        [StringComparison]::OrdinalIgnoreCase
-                    )
-                ) {
-                    Stop-Process -Id $process.ProcessId -Force `
-                        -ErrorAction SilentlyContinue
-                }
+        Invoke-CleanupStep -Name 'stop test launcher tree' `
+            -Errors $cleanupErrors -Action {
+                Stop-TestProcessTree $testCmd
             }
-        }
 
-        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false `
-            -ErrorAction SilentlyContinue
-
-        if ($originalTaskExists) {
-            Register-ScheduledTask -TaskName $taskName `
-                -Xml $originalTaskXml -Force | Out-Null
-            Start-ScheduledTask -TaskName $taskName
-        }
-    }
-
-    if ($testLaunchStarted) {
-        if ($hadSharedLog) {
-            New-Item -ItemType Directory -Force -Path $sharedDataDir | Out-Null
-            Copy-Item $sharedLogBackup $sharedLog -Force
-        } else {
-            Remove-Item $sharedLog -Force -ErrorAction SilentlyContinue
-        }
-    }
-
-    if ($testLaunchStarted) {
-        $restoredTask = Get-ScheduledTask -TaskName $taskName `
-            -ErrorAction SilentlyContinue
-        $restoredTaskSignature = Get-TaskSignature $restoredTask
-        Assert-True (
-            $restoredTaskSignature -eq $originalTaskSignature
-        ) 'scheduled task restoration does not match the snapshot'
-        Write-Checkpoint 'scheduled task snapshot restored'
-
-        if ($originalTaskExists) {
-            Wait-Until -TimeoutSeconds 180 `
-                -FailureMessage 'original staging Agent did not restart' `
-                -Condition {
+        Invoke-CleanupStep -Name 'stop test Agent processes' `
+            -Errors $cleanupErrors -Action {
+                if ($testDir) {
                     foreach ($process in @(Get-AgentProcesses)) {
                         $path = [string]$process.ExecutablePath
                         if (
                             $path -and
                             $path.StartsWith(
-                                $originalDir,
+                                $testDir,
                                 [StringComparison]::OrdinalIgnoreCase
                             )
                         ) {
-                            return $true
+                            Stop-Process -Id $process.ProcessId -Force `
+                                -ErrorAction Stop
                         }
                     }
-                    return $false
                 }
-            Write-Checkpoint 'original staging Agent restarted'
-        }
+            }
+
+        Invoke-CleanupStep -Name 'unregister test scheduled task' `
+            -Errors $cleanupErrors -Action {
+                Unregister-ScheduledTask -TaskName $taskName `
+                    -Confirm:$false -ErrorAction Stop
+            }
+
+        Invoke-CleanupStep -Name 'register original scheduled task' `
+            -Errors $cleanupErrors -Action {
+                Register-ScheduledTask -TaskName $taskName `
+                    -Xml $originalTaskXml -Force | Out-Null
+                $script:originalTaskRegistered = $true
+            }
+
+        Invoke-CleanupStep -Name 'verify original scheduled task' `
+            -Errors $cleanupErrors -Action {
+                $restoredTask = Get-ScheduledTask -TaskName $taskName `
+                    -ErrorAction Stop
+                Assert-True (
+                    (Get-TaskSignature $restoredTask) -eq
+                    $originalTaskSignature
+                ) 'scheduled task restoration does not match snapshot'
+            }
     }
 
-    Remove-Item $testRoot -Recurse -Force -ErrorAction SilentlyContinue
-    Assert-True (-not (Test-Path $testRoot)) 'temporary acceptance directory cleanup failed'
-    Write-Checkpoint 'temporary acceptance directory removed'
+    if ($sharedLogMutationStarted) {
+        Invoke-CleanupStep -Name 'restore shared setup-reset log' `
+            -Errors $cleanupErrors -Action {
+                if ($hadSharedLog) {
+                    New-Item -ItemType Directory -Force `
+                        -Path $sharedDataDir | Out-Null
+                    Copy-Item $sharedLogBackup $sharedLog -Force
+                    Assert-True (
+                        Test-Path $sharedLog
+                    ) 'shared setup-reset log restoration is missing'
+                    Assert-True (
+                        (Get-FileHash $sharedLog -Algorithm SHA256).Hash -eq
+                        $originalSharedLogHash
+                    ) 'shared setup-reset log restoration hash mismatch'
+                } else {
+                    Remove-PathAndAssertAbsent -Path $sharedLog `
+                        -FailureMessage 'shared setup-reset log cleanup failed'
+                }
+            }
+    }
+
+    if ($preflightReportMutationStarted) {
+        Invoke-CleanupStep -Name 'restore preflight report' `
+            -Errors $cleanupErrors -Action {
+                if ($hadPreflightReport) {
+                    Copy-Item $preflightReportBackup $preflightReport -Force
+                    Assert-True (
+                        Test-Path $preflightReport
+                    ) 'preflight report restoration is missing'
+                    Assert-True (
+                        (Get-FileHash $preflightReport -Algorithm SHA256).Hash -eq
+                        $originalPreflightReportHash
+                    ) 'preflight report restoration hash mismatch'
+                } else {
+                    Remove-PathAndAssertAbsent -Path $preflightReport `
+                        -FailureMessage 'preflight report cleanup failed'
+                }
+            }
+    }
+
+    if ($testLaunchStarted) {
+        Invoke-CleanupStep -Name 'start original scheduled task' `
+            -Errors $cleanupErrors -Action {
+                Assert-True (
+                    $script:originalTaskRegistered
+                ) 'original scheduled task registration did not succeed'
+                Start-ScheduledTask -TaskName $taskName -ErrorAction Stop
+            }
+
+        Invoke-CleanupStep -Name 'wait for new original Agent process' `
+            -Errors $cleanupErrors -Action {
+                Wait-Until -TimeoutSeconds 180 `
+                    -FailureMessage 'a new original staging Agent did not start' `
+                    -Condition {
+                        foreach ($process in @(Get-AgentProcesses)) {
+                            $path = [string]$process.ExecutablePath
+                            if (
+                                $path -and
+                                $path.StartsWith(
+                                    $originalDir,
+                                    [StringComparison]::OrdinalIgnoreCase
+                                ) -and
+                                -not $originalAgentPids.Contains([int]$process.ProcessId)
+                            ) {
+                                return $true
+                            }
+                        }
+                        return $false
+                    }
+            }
+    }
+
+    Invoke-CleanupStep -Name 'remove acceptance directory' `
+        -Errors $cleanupErrors -Action {
+            if ($testRootOwned) {
+                Remove-PathAndAssertAbsent -Path $testRoot -Recurse `
+                    -FailureMessage 'temporary acceptance directory cleanup failed'
+            } else {
+                Assert-True (
+                    -not (Test-Path $testRoot)
+                ) 'unowned acceptance directory unexpectedly exists'
+            }
+        }
 }
 
-Assert-True $acceptancePassed 'acceptance did not reach the success state'
+$allErrors = [Collections.Generic.List[Exception]]::new()
+if ($null -ne $primaryError) {
+    $allErrors.Add(
+        [Exception]::new(
+            "acceptance failed: $($primaryError.Message)",
+            $primaryError
+        )
+    )
+}
+foreach ($cleanupError in $cleanupErrors) {
+    $allErrors.Add($cleanupError)
+}
+if (-not $acceptancePassed -and $null -eq $primaryError) {
+    $allErrors.Add([Exception]::new('acceptance did not reach success state'))
+}
+
+if ($allErrors.Count -gt 0) {
+    throw [AggregateException]::new(
+        'acceptance and cleanup reported one or more failures',
+        [Exception[]]$allErrors.ToArray()
+    )
+}
+
 exit 0
