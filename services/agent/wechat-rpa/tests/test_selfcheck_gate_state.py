@@ -19,6 +19,7 @@ from selfcheck_bubbles import (  # noqa: E402
     FIND_WINDOW_RETRY_DELAY_S,
     classify_no_window,
     clear_target_search,
+    finalize_search_recovery_cleanup,
     find_item_with_recovery,
     find_target_item,
     find_target_item_via_search,
@@ -159,12 +160,37 @@ def test_find_target_item_via_search_rejects_duplicate_exact_names_and_clears():
     assert mw.search.values == ["文件传输助手", ""]
 
 
-def test_main_finally_clears_successful_search_recovery():
-    """搜索成功后的任何发送/读回出口，都必须由 main finally 清空查询。"""
+def test_main_clears_successful_search_recovery_before_returning():
+    """内部 gate 返回后，main 必须执行 fail-closed 清理再决定最终退出码。"""
     source = inspect.getsource(main)
-    assert 'item_recovery == "search_recovery"' in source
-    assert "finally:" in source
-    assert "clear_target_search(mw)" in source
+    assert 'item_recovery") == "search_recovery"' in source
+    assert "finalize_search_recovery_cleanup(" in source
+    assert "return cleanup_exit" in source
+
+
+def test_finalize_search_cleanup_uses_fresh_window_and_fails_gate_when_uncleared():
+    """旧 wrapper 失效时必须重新取窗口；全部清理失败时覆盖原成功结果。"""
+    stale = object()
+    fresh_a = object()
+    fresh_b = object()
+    fresh_windows = iter([fresh_a, fresh_b])
+    cleared = []
+    written = []
+    result = {"ok": True, "err": None}
+
+    exit_code = finalize_search_recovery_cleanup(
+        result,
+        stale,
+        lambda: next(fresh_windows),
+        clear_fn=lambda window: cleared.append(window) or False,
+        write_fn=lambda payload: written.append(dict(payload)),
+    )
+
+    assert exit_code == 1
+    assert cleared == [fresh_a, fresh_b, stale]
+    assert result["ok"] is False
+    assert "搜索框清理失败" in result["err"]
+    assert written == [result]
 
 
 def test_item_retry_budget_covers_render_transient_but_not_forever():
