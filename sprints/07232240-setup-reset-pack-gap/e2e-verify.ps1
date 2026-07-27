@@ -55,6 +55,7 @@ $hadSharedLog = $false
 $hadPreflightReport = $false
 $testRootOwned = $false
 $sharedLogMutationStarted = $false
+$sharedLogRestored = $false
 $preflightReportMutationStarted = $false
 $testLaunchStarted = $false
 $registrySnapshotCaptured = $false
@@ -932,6 +933,7 @@ exit $pythonProcess.ExitCode
                     Remove-PathAndAssertAbsent -Path $sharedLog `
                         -FailureMessage 'shared setup-reset log cleanup failed'
                 }
+                $script:sharedLogRestored = $true
             }
     }
 
@@ -1004,7 +1006,11 @@ exit $pythonProcess.ExitCode
         $testLaunchStarted -and
         $mutationBarrierPassed -and
         $originalTaskRegistered -and
-        $originalTaskVerified
+        $originalTaskVerified -and
+        (
+            (-not $sharedLogMutationStarted) -or
+            $sharedLogRestored
+        )
     ) {
         Invoke-CleanupStep -Name 'start original scheduled task' `
             -Errors $cleanupErrors -Action {
@@ -1128,6 +1134,10 @@ exit $pythonProcess.ExitCode
         $mutationBarrierPassed -and
         $originalTaskRegistered -and
         $originalTaskVerified -and
+        (
+            (-not $sharedLogMutationStarted) -or
+            $sharedLogRestored
+        ) -and
         (
             (-not $testLaunchStarted) -or
             $newOriginalAgentObserved

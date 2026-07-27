@@ -47,6 +47,8 @@ require_literal '[guid]::NewGuid()'
 require_literal '$originalAgentPids'
 require_literal '-not $originalAgentPids.Contains([int]$process.ProcessId)'
 require_literal '$sharedLogMutationStarted = $true'
+require_literal '$sharedLogRestored = $false'
+require_literal '$script:sharedLogRestored = $true'
 require_literal '$preflightReportMutationStarted = $true'
 require_literal '$preflightReportBackup'
 require_literal '$originalPreflightReportHash'
@@ -138,6 +140,10 @@ require_order "Invoke-CleanupStep -Name 'register original scheduled task'" \
   "Invoke-CleanupStep -Name 'restore shared setup-reset log'"
 require_order "Invoke-CleanupStep -Name 'restore shared setup-reset log'" \
   "Invoke-CleanupStep -Name 'restore preflight report'"
+require_order 'shared setup-reset log restoration hash mismatch' \
+  '$script:sharedLogRestored = $true'
+require_order 'shared setup-reset log cleanup failed' \
+  '$script:sharedLogRestored = $true'
 require_order "Invoke-CleanupStep -Name 'restore preflight report'" \
   "Invoke-CleanupStep -Name 'remove acceptance directory'"
 require_order '$archiveHash = ' \
@@ -168,6 +174,24 @@ finally_line="$(last_line_of '} finally {')"
 test "$primary_line" -lt "$root_line"
 test "$root_line" -lt "$catch_line"
 test "$catch_line" -lt "$finally_line"
+
+test "$(grep -c -F '(-not $sharedLogMutationStarted) -or' "$SCRIPT")" -eq 2
+test "$(grep -c -F '$sharedLogRestored' "$SCRIPT")" -eq 3
+shared_log_start_gate_line="$(
+  grep -n -m1 -F '(-not $sharedLogMutationStarted) -or' "$SCRIPT" |
+    cut -d: -f1
+)"
+shared_log_final_gate_line="$(
+  grep -n -F '(-not $sharedLogMutationStarted) -or' "$SCRIPT" |
+    tail -n 1 |
+    cut -d: -f1
+)"
+start_original_line="$(
+  line_of "Invoke-CleanupStep -Name 'start original scheduled task'"
+)"
+safe_final_line="$(line_of '$safeFinalCleanup = (')"
+test "$shared_log_start_gate_line" -lt "$start_original_line"
+test "$safe_final_line" -lt "$shared_log_final_gate_line"
 
 test "$(grep -c -F 'Remove-Item' "$SCRIPT")" -eq 1
 ! grep -Fq 'mutation stop barrier did not pass' "$SCRIPT"
