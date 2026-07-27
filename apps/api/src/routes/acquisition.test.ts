@@ -967,6 +967,29 @@ describe('POST /api/acquisition/collect/report-videos — Stage1 清单回报 [B
     expect((updateCall as any)[1][2]).toBe('UNKNOWN');
   });
 
+  it('error_code 不在五分类枚举里时，原始值必须持久化进 checkpoint.raw_error_code', async () => {
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1')
+      .send({ task_id: TASK_ID, videos: [], reason: { error_code: 'ALL_SHARE_FAILED' } });
+    expect(res.status).toBe(200);
+    const updateCall = mockClientQuery.mock.calls.find((c) => String(c[0]).trim().startsWith('UPDATE zenithjoy.acquisition_collect_tasks'));
+    expect(updateCall).toBeDefined();
+    const params = (updateCall as any)[1];
+    expect(params[2]).toBe('UNKNOWN');
+    expect(params[3]).toBe(JSON.stringify({ raw_error_code: 'ALL_SHARE_FAILED' }));
+  });
+
+  it('error_code 已经是合法五分类值时，不写 checkpoint（保持改动前行为）', async () => {
+    const res = await request(app).post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', 'agent-1')
+      .send({ task_id: TASK_ID, videos: [], reason: { error_code: 'NETWORK_ERROR' } });
+    expect(res.status).toBe(200);
+    const updateCall = mockClientQuery.mock.calls.find((c) => String(c[0]).trim().startsWith('UPDATE zenithjoy.acquisition_collect_tasks'));
+    const params = (updateCall as any)[1];
+    expect(params[2]).toBe('NETWORK_ERROR');
+    expect(params[3]).toBeNull();
+  });
+
   it('error_code 已经是合法五分类值时，落库前原样透传', async () => {
     const res = await request(app).post('/api/acquisition/collect/report-videos')
       .set('x-agent-id', 'agent-1')
