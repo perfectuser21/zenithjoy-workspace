@@ -14,10 +14,10 @@ class WsUrlBuilderTest {
     fun `重连 URL 必须同时携带 token 与 machine_id`() {
         val url = WsUrlBuilder.build(
             apiUrl = "wss://staging-autopilot.zenjoymedia.media/agent-ws",
-            token = "220d55af0011223344556677889900aabbccddeeff00112233445566778899",
+            token = "220d55af0011223344556677889900aabbccddeeff00112233445566778899", // gitleaks:allow (测试 fixture，非真 secret)
             machineId = "afa73fead5fd2b3be1fa6a5c1a66943e",
         )
-        assertTrue(url.contains("token=220d55af0011223344556677889900aabbccddeeff00112233445566778899"))
+        assertTrue(url.contains("token=220d55af0011223344556677889900aabbccddeeff00112233445566778899")) // gitleaks:allow
         assertTrue(url.contains("machine_id=afa73fead5fd2b3be1fa6a5c1a66943e"))
     }
 
