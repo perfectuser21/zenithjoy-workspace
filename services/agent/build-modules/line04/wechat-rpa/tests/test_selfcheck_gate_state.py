@@ -5,6 +5,7 @@
 把「进程在但 UIA 死区」和「微信真没跑」混为一谈，运营无法按 reason 行动。
 """
 import os
+import inspect
 import sys
 
 _TOOLS = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tools"))
@@ -17,9 +18,11 @@ from selfcheck_bubbles import (  # noqa: E402
     FIND_WINDOW_RETRIES,
     FIND_WINDOW_RETRY_DELAY_S,
     classify_no_window,
+    clear_target_search,
     find_item_with_recovery,
     find_target_item,
     find_target_item_via_search,
+    main,
 )
 
 
@@ -122,6 +125,46 @@ def test_find_target_item_via_search_uses_edit1_and_exact_first_line():
     assert mw.search.focused is True
     assert mw.search.value == "文件传输助手"
     assert slept == [0.8]
+
+
+def test_find_target_item_via_search_rejects_duplicate_exact_names_and_clears():
+    """两个完全同名结果无法证明哪个是系统账号，必须拒绝并清空搜索态。"""
+    exact_a = _Item("文件传输助手\n搜索结果 A\n08:02\n")
+    exact_b = _Item("文件传输助手\n搜索结果 B\n08:03\n")
+
+    class _SearchEdit:
+        def __init__(self):
+            self.values = []
+
+        def set_focus(self):
+            pass
+
+        def set_edit_text(self, value):
+            self.values.append(value)
+
+    class _SearchMW:
+        def __init__(self):
+            self.search = _SearchEdit()
+
+        def child_window(self, **kwargs):
+            return self.search
+
+        def descendants(self, control_type=None):
+            return [exact_a, exact_b]
+
+    mw = _SearchMW()
+    found = find_target_item_via_search(mw, "文件传输助手", lambda s: None)
+
+    assert found is None
+    assert mw.search.values == ["文件传输助手", ""]
+
+
+def test_main_finally_clears_successful_search_recovery():
+    """搜索成功后的任何发送/读回出口，都必须由 main finally 清空查询。"""
+    source = inspect.getsource(main)
+    assert 'item_recovery == "search_recovery"' in source
+    assert "finally:" in source
+    assert "clear_target_search(mw)" in source
 
 
 def test_item_retry_budget_covers_render_transient_but_not_forever():
