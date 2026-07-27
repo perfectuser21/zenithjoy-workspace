@@ -879,8 +879,10 @@ acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Respo
       const failCode = rawFailCode === 'ALL_RESOLVE_FAILED'
         ? 'PLATFORM_LIMITED'
         : normalizeCollectErrorCode(rawFailCode);
+      let rawErrorCheckpoint: string | null = null;
       if (failCode === 'UNKNOWN' && rawFailCode !== 'UNKNOWN') {
         console.warn(`[acquisition] collect/report-videos error_code 归一为 UNKNOWN，原始值：task=${taskId} raw=${rawFailCode}`);
+        rawErrorCheckpoint = JSON.stringify({ raw_error_code: rawFailCode });
       }
       const s = settleCollectTask({
         currentStatus: task.status === 'pending' ? 'running' : task.status,
@@ -893,10 +895,14 @@ acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Respo
       });
       await client.query(
         `UPDATE zenithjoy.acquisition_collect_tasks
-            SET status = $2, error_code = $3, started_at = COALESCE(started_at, NOW()),
+            SET status = $2, error_code = $3,
+                checkpoint = CASE WHEN $4::jsonb IS NOT NULL
+                             THEN COALESCE(checkpoint, '{}'::jsonb) || $4::jsonb
+                             ELSE checkpoint END,
+                started_at = COALESCE(started_at, NOW()),
                 ended_at = NOW(), updated_at = NOW()
           WHERE id = $1`,
-        [taskId, s.status, s.error_code]
+        [taskId, s.status, s.error_code, rawErrorCheckpoint]
       );
       await client.query('COMMIT');
       sseService.close(taskId, { task_id: taskId, status: s.status, video_count: 0 });
@@ -1181,8 +1187,11 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
     const videoDone = vcRes.rows[0]?.done ?? 0;
     const leadCountAfter = task.lead_count_raw + batch.length;
     const normalizedErrorCode = normalizeCollectErrorCode(errorCode);
+    let checkpointToWrite: Record<string, unknown> | null =
+      checkpoint && typeof checkpoint === 'object' ? checkpoint : null;
     if (normalizedErrorCode === 'UNKNOWN' && errorCode !== 'UNKNOWN') {
       console.warn(`[acquisition] collect/report error_code 归一为 UNKNOWN，原始值：task=${taskId} raw=${errorCode}`);
+      checkpointToWrite = { ...(checkpointToWrite ?? {}), raw_error_code: errorCode };
     }
     const s = settleCollectTask({
       currentStatus: task.status === 'pending' ? 'running' : task.status,
@@ -1207,7 +1216,7 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
               updated_at     = NOW()
         WHERE id = $1`,
       [taskId, newStatus, newErrorCode, videoTotal, batch.length,
-       checkpoint ? JSON.stringify(checkpoint) : null, isTerminal]
+       checkpointToWrite ? JSON.stringify(checkpointToWrite) : null, isTerminal]
     );
     await client.query('COMMIT');
 
