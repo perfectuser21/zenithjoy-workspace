@@ -19,13 +19,18 @@ echo "offscreen-version-gate-smoke: 期望 line04 版本 = $EXPECTED (repo=$REPO
 command -v node >/dev/null 2>&1   || { echo "FAIL: 缺 node"; exit 6; }
 command -v python3 >/dev/null 2>&1 || { echo "FAIL: 缺 python3"; exit 6; }
 
+manifest_version() {
+  local manifest_path="$1"
+  node -e "process.stdout.write(require('$manifest_path').version)"
+}
+
 MOD_MANIFEST="$REPO_ROOT/services/agent/modules/line04/manifest.json"
-V1=$(node -e "process.stdout.write(require('$MOD_MANIFEST').version)")
+V1=$(manifest_version "$MOD_MANIFEST")
 [ "$V1" = "$EXPECTED" ] || { echo "FAIL: modules/line04 manifest version=$V1 != $EXPECTED"; exit 2; }
 echo "  OK: modules/line04 manifest = $V1"
 
 BUILD_MANIFEST="$REPO_ROOT/services/agent/build-modules/line04/manifest.json"
-V2=$(node -e "process.stdout.write(require('$BUILD_MANIFEST').version)")
+V2=$(manifest_version "$BUILD_MANIFEST")
 [ "$V2" = "$EXPECTED" ] || { echo "FAIL: build-modules/line04 manifest version=$V2 != $EXPECTED"; exit 3; }
 echo "  OK: build-modules/line04 manifest = $V2"
 
