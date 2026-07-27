@@ -19,6 +19,7 @@ from selfcheck_bubbles import (  # noqa: E402
     classify_no_window,
     find_item_with_recovery,
     find_target_item,
+    find_target_item_via_search,
 )
 
 
@@ -83,6 +84,44 @@ def test_find_target_item_skips_broken_items():
     items = [_Item(raises=True), _Item("文件传输助手\n消息\n08:01\n")]
     found = find_target_item(items, "文件传输助手")
     assert found is items[1]
+
+
+def test_find_target_item_via_search_uses_edit1_and_exact_first_line():
+    exact = _Item("文件传输助手\n搜索结果\n08:02\n")
+    prefix_only = _Item("文件传输助手测试号\n搜索结果\n08:01\n")
+
+    class _SearchEdit:
+        def __init__(self):
+            self.focused = False
+            self.value = None
+
+        def set_focus(self):
+            self.focused = True
+
+        def set_edit_text(self, value):
+            self.value = value
+
+    class _SearchMW:
+        def __init__(self):
+            self.search = _SearchEdit()
+            self.lookup = None
+
+        def child_window(self, **kwargs):
+            self.lookup = kwargs
+            return self.search
+
+        def descendants(self, control_type=None):
+            return [prefix_only, exact]
+
+    mw = _SearchMW()
+    slept = []
+    found = find_target_item_via_search(mw, "文件传输助手", slept.append)
+
+    assert found is exact
+    assert mw.lookup == {"auto_id": "edit1", "control_type": "Edit"}
+    assert mw.search.focused is True
+    assert mw.search.value == "文件传输助手"
+    assert slept == [0.8]
 
 
 def test_item_retry_budget_covers_render_transient_but_not_forever():
@@ -224,3 +263,22 @@ def test_find_item_with_recovery_reset_gives_up_after_bounded_retries():
         f"reset_fn 全失败时应重试多次才放弃（不能仍是老的只试一次），"
         f"也不能无上限重试拖垮 CI，实际调用 {len(reset_calls)} 次"
     )
+
+
+def test_find_item_with_recovery_searches_exact_target_after_reset_exhausted():
+    """真机导航按钮完全不响应时，最后用顶部搜索框定位固定目标，而非重复同类点击。"""
+    stuck_chat_bubbles = [_Item("[bubble-gate] 1783439923\n08:01\n")]
+    mw = _MW([stuck_chat_bubbles] * 20)
+    target_item = _Item("文件传输助手\n搜索结果\n08:02\n")
+    reset_calls, search_calls = [], []
+
+    item, how = find_item_with_recovery(
+        mw, "文件传输助手", retries=1, retry_delay_s=0.01,
+        sleep_fn=lambda s: None,
+        reset_fn=lambda mw_: reset_calls.append(mw_) or False,
+        search_fn=lambda mw_, target: search_calls.append((mw_, target)) or target_item,
+    )
+
+    assert item is target_item and how == "search_recovery"
+    assert len(reset_calls) == 3
+    assert search_calls == [(mw, "文件传输助手")]
