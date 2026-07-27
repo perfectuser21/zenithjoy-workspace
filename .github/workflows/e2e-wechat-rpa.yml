@@ -30,7 +30,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run E2E verification
-        shell: pwsh
+        shell: powershell
         env:
           E2E_SUPER_ADMIN_EMAIL: ${{ secrets.E2E_SUPER_ADMIN_EMAIL }}
           E2E_SUPER_ADMIN_PASSWORD: ${{ secrets.E2E_SUPER_ADMIN_PASSWORD }}

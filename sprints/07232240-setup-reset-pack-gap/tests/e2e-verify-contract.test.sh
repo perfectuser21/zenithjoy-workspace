@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SCRIPT="$ROOT/sprints/07232240-setup-reset-pack-gap/e2e-verify.ps1"
+WORKFLOW="$ROOT/.github/workflows/e2e-wechat-rpa.yml"
 
 require_literal() {
   grep -Fq -- "$1" "$SCRIPT"
@@ -24,6 +25,9 @@ require_order() {
 }
 
 test -f "$SCRIPT"
+test -f "$WORKFLOW"
+grep -Fq 'shell: powershell' "$WORKFLOW"
+! grep -Fq 'shell: pwsh' "$WORKFLOW"
 require_literal 'zenithjoy-agent-v2.0.89.tar.gz'
 require_literal 'Export-ScheduledTask'
 require_literal 'Register-ScheduledTask'
