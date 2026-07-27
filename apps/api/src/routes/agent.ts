@@ -199,12 +199,20 @@ agentRouter.post('/boot-fail', bootFailRateLimit, async (req: Request, res: Resp
   try {
     // Try to update the agent's last_boot_error by machine_id
     // If machine_id not found, return 202 (accepted but not recorded)
+    //
+    // zenithjoy.agents 没有 machine_id 列（该列只在 license_machines 上），
+    // 必须先按 machine_id 从 license_machines 反查 agent_id 再更新 agents
+    // （2026-07-27 发现：旧 SQL 直接 WHERE machine_id=$2 查 agents，Postgres
+    // 报 42703 column does not exist，无论机器是否注册都必 500）。
     const pool = (await import('../db/connection')).default;
     const result = await pool.query(
-      `UPDATE zenithjoy.agents
-         SET last_boot_error = $1::jsonb
-       WHERE machine_id = $2
-       RETURNING id`,
+      `UPDATE zenithjoy.agents a
+          SET last_boot_error = $1::jsonb
+         FROM zenithjoy.license_machines lm
+        WHERE lm.machine_id = $2
+          AND lm.agent_id IS NOT NULL
+          AND lm.agent_id = a.agent_id
+       RETURNING a.id`,
       [JSON.stringify(payload), payload.machine_id]
     );
 

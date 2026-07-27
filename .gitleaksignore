@@ -8,6 +8,10 @@
 9a1b0e4d920e0c96dd7a48b68ab77fb847bc8425:apps/api/tests/services/license.service.test.ts:generic-api-key:61
 9a1b0e4d920e0c96dd7a48b68ab77fb847bc8425:apps/api/tests/routes/agent.test.ts:generic-api-key:48
 
+# WsUrlBuilderTest 里的 hex ws_token 测试 fixture（非真 secret，PR #1478 安卓Agent WS重连401修复）
+a8f1d7b607a016817fbada90b8f0054af22c8f45:services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/WsUrlBuilderTest.kt:generic-api-key:17
+a8f1d7b607a016817fbada90b8f0054af22c8f45:services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/WsUrlBuilderTest.kt:generic-api-key:20
+
 # 火山引擎语音技术公开文档固定值 PlgvMymc7f3tQnJ6（X-Api-App-Key，所有开发者共用，
 # 非账号密钥）。commit 782c0127 曾硬编码在源码里，后续 commit 64977c48 已改走环境变量，
 # 但该字符串仍存在于 782c0127 的历史 diff 中，需豁免该历史 fingerprint

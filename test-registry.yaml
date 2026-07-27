@@ -1033,7 +1033,15 @@ tests:
     ci: L3
     status: active
     product: AI员工
-    note: "WS auth 修复 — authenticateWsToken 通过 licenses 表验证（v1.1.7），修复新账号 401"
+    note: "WS auth 修复 — authenticateWsToken 通过 licenses 表验证（v1.1.7），修复新账号 401；07-27 补充 hex ws_token 重连回归测试"
+
+  - id: api-boot-fail-machine-id-column
+    path: apps/api/src/routes/__tests__/boot-fail-machine-id-column.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "07-27 Path2 安卓验收 — POST /api/agent/boot-fail 引用 zenithjoy.agents 不存在的 machine_id 列回归测试，mock pool.query 复现真实 Postgres 42703 约束"
 
   - id: agent-e2e-video-pipeline
     path: e2e/agent-video-pipeline.spec.js
