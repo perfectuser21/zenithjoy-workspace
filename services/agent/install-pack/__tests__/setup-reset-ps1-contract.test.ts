@@ -63,7 +63,9 @@ describe('[CONTRACT] setup-reset.ps1 -- BEHAVIOR-1 static assertions', () => {
 
   // -----------------------------------------------------------------------
   // SR-3: I-1 compliance -- no [WARN] + continue patterns in error paths
-  // Pattern: lines containing 'WARN' that are NOT comments and followed by no throw/exit
+  // Pattern: lines containing 'WARN' that are NOT comments and followed by no
+  // explicit non-zero termination. Do not treat words inside log messages
+  // (for example "(exit 1)") as control flow.
   // -----------------------------------------------------------------------
   it('SR-3: setup-reset.ps1 has no warning-downgrade pattern (I-1 no-warn-and-continue)', () => {
     if (!existsSync(SETUP_RESET_PS1)) return;
@@ -76,11 +78,13 @@ describe('[CONTRACT] setup-reset.ps1 -- BEHAVIOR-1 static assertions', () => {
       const line = lines[i].trimStart();
       // Skip comment lines
       if (line.startsWith('#')) continue;
-      // Flag Write-Host/echo with [WARN] or [WARNING] not followed by throw/exit on same or next line
-      if (/\[WARN(ING)?\]/i.test(line) && !/throw|exit|break|return/i.test(line)) {
-        // Check next line for throw/exit
+      // Flag Write-Host/echo with [WARN] or [WARNING] not followed by an
+      // executable `throw` or `exit <non-zero>` statement on the next line.
+      if (/\[WARN(ING)?\]/i.test(line)) {
         const nextLine = (lines[i + 1] ?? '').trim();
-        if (!/throw|exit|break|return/i.test(nextLine)) {
+        const terminatesWithFailure = /^throw(?:\s|$)/i.test(nextLine) ||
+          /^exit\s+(?!0(?:\s|$))\S+/i.test(nextLine);
+        if (!terminatesWithFailure) {
           warnDowngradeLines.push(i + 1);
         }
       }
