@@ -48,8 +48,13 @@ if not exist .env (
         REM all zenithjoy-agent processes, so running it on every launch would race-kill
         REM the process this very script is about to start.
         if exist "%~dp0setup-reset.ps1" (
-            powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup-reset.ps1" >nul 2>&1
-            echo [setup-reset] first-run environment cleanup done
+            if not exist "%APPDATA%\zenithjoy-agent" mkdir "%APPDATA%\zenithjoy-agent" >nul 2>&1
+            powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup-reset.ps1" > "%APPDATA%\zenithjoy-agent\setup-reset.log" 2>&1
+            if errorlevel 1 (
+                echo [WARN] setup-reset failed; startup will continue. See %APPDATA%\zenithjoy-agent\setup-reset.log
+            ) else (
+                echo [setup-reset] first-run environment cleanup done
+            )
         ) else (
             echo [setup-reset] setup-reset.ps1 not found, skipping (old install pack)
         )

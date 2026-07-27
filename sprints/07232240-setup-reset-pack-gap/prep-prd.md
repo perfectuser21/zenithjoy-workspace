@@ -13,13 +13,15 @@ rog 真机安装目录 `zenithjoy-agent-v2.0.88/` 下没有 `setup-reset.ps1` �
 
 ## 修法
 1. `build-install-pack.sh` 两处 cp 清单都补 `cp install-pack/setup-reset.ps1 "$PACK_DIR/"`（跟随同段其它行的容错风格，release 段其它可选文件多带 `2>/dev/null || true`）
-2. `install-autostart.ps1`（安装/开机自启动配置脚本）接入调用 `setup-reset.ps1`：装机/更新流程执行一次（非每次 start.bat 启动都跑，避免重复杀进程/重建计划任务的过度操作）
-3. 判定点：调用时机选"装机/更新时跑一次"——用户确认维持此方案（未选"每次启动都跑"）
+2. `start.bat` 的 Step 1（新版本目录中 `.env` 不存在、从模板首次创建）接入调用 `setup-reset.ps1`：装机/更新流程执行一次；刻意不接到每次启动都会运行的 `install-autostart.ps1`，避免重复杀进程/重建计划任务
+3. 调用方检查 PowerShell 退出码：成功才打印完成；失败保留 `%APPDATA%\zenithjoy-agent\setup-reset.log`、明确告警但继续启动，避免清理异常把 Agent 永久锁死
+4. 判定点：调用时机选"装机/更新时跑一次"——用户确认维持此方案（未选"每次启动都跑"）
 
 ## Regression Test 计划
 扩展 `services/agent/install-pack/__tests__/setup-reset-ps1-contract.test.ts`（或新增同目录 test）：
 1. 断言 `build-install-pack.sh` 源码含拷贝 `setup-reset.ps1` 到 `$PACK_DIR` 的行（两处清单都要）
-2. 断言 `install-autostart.ps1` 源码含调用 `setup-reset.ps1` 的逻辑
+2. 断言 `start.bat` 的 Step 1 首跑块调用 `setup-reset.ps1`，且 Step 6.92 每次启动块不调用
+3. 断言调用方检查 PowerShell `errorlevel`，失败与成功日志不会混淆
 
 这两条测试先写、先跑红（当前 origin/main 状态下必然失败），再改代码让其转绿，永久留 CI 做 regression test。
 
