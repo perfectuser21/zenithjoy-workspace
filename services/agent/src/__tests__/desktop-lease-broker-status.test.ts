@@ -20,10 +20,63 @@ describe('DesktopLeaseBroker.status（只读窥视，供监听让位判定）', 
     expect(acq.granted).toBe(true);
     const s = broker.status();
     expect(s.held).toBe(true);
+    expect(s.lease_id).toBe(acq.lease_id);
     expect(s.client_id).toBe('ci/bubble-read-gate');
     expect(s.priority).toBe(10);
+    expect(s.yield_acknowledged).toBe(false);
+    expect(s.yield_acknowledged_by).toBeUndefined();
     // status 是只读的：再查一次仍持有，租约没被 status 消费
     expect(broker.status().held).toBe(true);
+  });
+
+  it('当前 lease ID 的静默确认成功并由 status 返回', async () => {
+    broker = new DesktopLeaseBroker({ watchdogIntervalMs: 60000, ttlMs: 60000 });
+    const acq = await broker.acquire({
+      clientId: 'ci/bubble-read-gate', priority: 10, ttlMs: 60000,
+    });
+
+    expect(broker.acknowledgeYield({
+      leaseId: acq.lease_id!, clientId: 'line04/listen_chat',
+    })).toEqual({ ok: true });
+    expect(broker.status()).toMatchObject({
+      held: true,
+      lease_id: acq.lease_id,
+      yield_acknowledged: true,
+      yield_acknowledged_by: 'line04/listen_chat',
+    });
+    expect(broker.status().yield_acknowledged_at).toEqual(expect.any(Number));
+  });
+
+  it('错误 lease ID 不能确认当前租约', async () => {
+    broker = new DesktopLeaseBroker({ watchdogIntervalMs: 60000, ttlMs: 60000 });
+    await broker.acquire({
+      clientId: 'ci/bubble-read-gate', priority: 10, ttlMs: 60000,
+    });
+
+    expect(broker.acknowledgeYield({
+      leaseId: 'stale-lease', clientId: 'line04/listen_chat',
+    })).toEqual({ ok: false, reason: 'lease_mismatch' });
+    expect(broker.status().yield_acknowledged).toBe(false);
+  });
+
+  it('release 后的新租约不继承旧确认', async () => {
+    broker = new DesktopLeaseBroker({ watchdogIntervalMs: 60000, ttlMs: 60000 });
+    const first = await broker.acquire({
+      clientId: 'ci/first', priority: 10, ttlMs: 60000,
+    });
+    broker.acknowledgeYield({
+      leaseId: first.lease_id!, clientId: 'line04/listen_chat',
+    });
+    await broker.release({ leaseId: first.lease_id!, clientId: 'ci/first' });
+    const second = await broker.acquire({
+      clientId: 'ci/second', priority: 10, ttlMs: 60000,
+    });
+
+    expect(second.lease_id).not.toBe(first.lease_id);
+    expect(broker.status()).toMatchObject({
+      lease_id: second.lease_id,
+      yield_acknowledged: false,
+    });
   });
 
   it('租约已过期（未及 watchdog）→ status 视为未持有', async () => {

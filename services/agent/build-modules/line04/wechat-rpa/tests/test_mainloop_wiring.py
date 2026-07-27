@@ -125,10 +125,18 @@ def test_desktop_mutex_yield_wired_at_loop_top():
     硬撞 → 本测试红。
     """
     src = _source()
-    m = re.search(r"_should_yield_desktop\(\s*desktop_lease_status\(\)", src)
+    pattern = re.compile(
+        r"_desktop_status\s*=\s*desktop_lease_status\(\).*?"
+        r"if _should_yield_desktop\(\s*_desktop_status,.*?"
+        r"desktop_lease_ack_yield\(_desktop_status\).*?"
+        r"time\.sleep\(args\.interval\).*?"
+        r"continue",
+        re.DOTALL,
+    )
+    m = pattern.search(src)
     assert m is not None, (
-        "主循环缺 _should_yield_desktop(desktop_lease_status(), ...) 让位检查 —— "
-        "CI 抢桌面时监听不会让位，回到硬撞真塌"
+        "监听必须在 loop-top 读取一次 status，对同一 status 确认静默，"
+        "并无条件 sleep/continue"
     )
     # 必须在心跳块（tree_size = ... descendants）之前，证明"整轮让位"而非只跳发送
     yield_idx = m.start()
@@ -140,9 +148,6 @@ def test_desktop_mutex_yield_wired_at_loop_top():
     assert scan_idx == -1 or yield_idx < scan_idx, (
         "让位检查必须在 scan_unread 之前（loop 顶），否则 CI 持租时监听仍扫描抢前台"
     )
-    # 让位分支必须 continue 跳过本轮（不是只 log）
-    window = src[yield_idx: yield_idx + 400]
-    assert "continue" in window, "让位分支必须 continue 整轮跳过"
 
 
 def test_classify_already_replied_bypasses_anchor():

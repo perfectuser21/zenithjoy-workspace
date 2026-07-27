@@ -58,22 +58,67 @@ jobs:
             ('"' + $py + '" "' + $script + '" > "' + $outLog + '" 2>&1')
           )
           Set-Content -Path $bat -Value $lines -Encoding ascii
-          # desktop mutex (CI x resident line04 listener, rog): acquire high-priority
-          # (priority=10 < listener 50) global desktop lease BEFORE PsExec grabs session-1,
-          # so the resident listener yields via its loop-top /status check. Wide TTL 180s +
-          # always-release in finally; if this job dies, broker watchdog clears it in <=180s.
+          # Two-phase desktop handoff: acquire the high-priority lease, then wait until the
+          # resident listener reaches its loop-top safe point before PsExec grabs session-1.
+          # Old installed agents acknowledge through a post-acquire safe-point log; new agents
+          # acknowledge the exact lease id through broker status. All failures are closed.
           $port = if ($env:ZENITHJOY_LOCAL_PORT) { $env:ZENITHJOY_LOCAL_PORT } else { '58432' }
           $leaseBase = "http://127.0.0.1:$port/api/agent/desktop-lease-broker"
+          $listenerLog = 'C:\Users\Public\zj-listener.log'
+          $listenerLogLineCount = 0
+          if (Test-Path $listenerLog) {
+            $listenerLogLineCount = @(Get-Content $listenerLog -Encoding utf8).Count
+          }
           $leaseId = $null
           try {
-            $acqBody = @{ clientId = 'ci/wechat-bubble'; priority = 10; ttlMs = 180000 } | ConvertTo-Json -Compress
-            $acq = Invoke-RestMethod -Uri "$leaseBase/acquire" -Method Post -Body $acqBody -ContentType 'application/json' -TimeoutSec 5 -ErrorAction Stop
-            if ($acq.granted) { $leaseId = $acq.lease_id; Write-Host "desktop-lease acquired lease_id=$leaseId" }
-            else { Write-Host "desktop-lease NOT granted (proceeding anyway)" }
-          } catch {
-            Write-Host "desktop-lease broker unreachable (proceeding anyway): $_"
-          }
-          try {
+            try {
+              $acqBody = @{ clientId = 'ci/wechat-bubble'; priority = 10; ttlMs = 180000 } | ConvertTo-Json -Compress
+              $acq = Invoke-RestMethod -Uri "$leaseBase/acquire" -Method Post -Body $acqBody -ContentType 'application/json' -TimeoutSec 5 -ErrorAction Stop
+              if (-not $acq.granted -or -not $acq.lease_id) {
+                throw 'not granted'
+              }
+              $leaseId = [string]$acq.lease_id
+              Write-Host "desktop-lease acquired lease_id=$leaseId"
+
+              $acknowledged = $false
+              $deadline = (Get-Date).AddSeconds(30)
+              while ((Get-Date) -lt $deadline) {
+                $status = Invoke-RestMethod -Uri "$leaseBase/status" -Method Get -TimeoutSec 5 -ErrorAction Stop
+                if (-not $status.held -or [string]$status.client_id -ne 'ci/wechat-bubble') {
+                  throw 'desktop-lease owner changed while waiting for quiescence'
+                }
+
+                $leaseField = $status.PSObject.Properties['lease_id']
+                if ($null -ne $leaseField) {
+                  if ([string]$status.lease_id -ne $leaseId) {
+                    throw 'desktop-lease id changed while waiting for quiescence'
+                  }
+                  if (
+                    $status.yield_acknowledged -and
+                    [string]$status.yield_acknowledged_by -eq 'line04/listen_chat'
+                  ) {
+                    $acknowledged = $true
+                    Write-Host "desktop-lease quiescence acknowledged lease_id=$leaseId"
+                    break
+                  }
+                } elseif (Test-Path $listenerLog) {
+                  $newLines = @(Get-Content $listenerLog -Encoding utf8 | Select-Object -Skip $listenerLogLineCount)
+                  if ($newLines | Select-String -SimpleMatch '(CI)') {
+                    $acknowledged = $true
+                    Write-Host "desktop-lease legacy quiescence acknowledged lease_id=$leaseId"
+                    break
+                  }
+                }
+                Start-Sleep -Milliseconds 500
+              }
+              if (-not $acknowledged) {
+                throw 'desktop-lease quiescence timeout'
+              }
+            } catch {
+              Write-Error ("desktop-lease acquire failed closed: " + $_)
+              throw
+            }
+
             & C:\Users\asus\PSTools\PsExec64.exe -i 1 -accepteula -w C:\Users\Public $bat
             if (-not (Test-Path $outJson)) {
               if (Test-Path $outLog) { Get-Content $outLog }

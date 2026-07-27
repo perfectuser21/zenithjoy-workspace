@@ -33,11 +33,25 @@ export interface ReleaseResult {
   ok: boolean;
 }
 
+export interface AcknowledgeYieldParams {
+  leaseId: string;
+  clientId: string;
+}
+
+export interface AcknowledgeYieldResult {
+  ok: boolean;
+  reason?: 'lease_not_found' | 'lease_mismatch';
+}
+
 export interface StatusResult {
   held: boolean;
+  lease_id?: string;
   client_id?: string;
   priority?: number;
   expires_at?: number;
+  yield_acknowledged?: boolean;
+  yield_acknowledged_by?: string;
+  yield_acknowledged_at?: number;
 }
 
 export interface BrainLogPayload {
@@ -52,6 +66,8 @@ interface Lease {
   clientId: string;
   priority: number;
   expiresAt: number;
+  yieldAcknowledgedBy?: string;
+  yieldAcknowledgedAt?: number;
 }
 
 interface PendingPreempt {
@@ -187,6 +203,19 @@ export class DesktopLeaseBroker {
     return { ok: true };
   }
 
+  acknowledgeYield(params: AcknowledgeYieldParams): AcknowledgeYieldResult {
+    const held = this.currentLease;
+    if (!held || held.expiresAt < Date.now()) {
+      return { ok: false, reason: 'lease_not_found' };
+    }
+    if (held.leaseId !== params.leaseId) {
+      return { ok: false, reason: 'lease_mismatch' };
+    }
+    held.yieldAcknowledgedBy = params.clientId;
+    held.yieldAcknowledgedAt = Date.now();
+    return { ok: true };
+  }
+
   /**
    * 只读窥视当前租约状态（不占租、不改状态）。供常驻监听主循环顶部判断"是否有他人
    * 持有更高优先级桌面租约（CI 抢桌面）"→ 整轮让位。已过期（未及 watchdog 清）视为未持有。
@@ -198,9 +227,13 @@ export class DesktopLeaseBroker {
     }
     return {
       held: true,
+      lease_id: held.leaseId,
       client_id: held.clientId,
       priority: held.priority,
       expires_at: held.expiresAt,
+      yield_acknowledged: Boolean(held.yieldAcknowledgedBy),
+      yield_acknowledged_by: held.yieldAcknowledgedBy,
+      yield_acknowledged_at: held.yieldAcknowledgedAt,
     };
   }
 

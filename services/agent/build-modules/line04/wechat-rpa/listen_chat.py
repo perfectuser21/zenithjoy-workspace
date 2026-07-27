@@ -3701,6 +3701,50 @@ def desktop_lease_status() -> Optional[dict]:
         return None
 
 
+def desktop_lease_ack_yield(status: dict) -> bool:
+    """确认当前高优先级租约已在主循环安全点获得桌面静默。"""
+    lease_id = status.get("lease_id")
+    if not lease_id:
+        print(
+            "[desktop_lease] yield acknowledge skipped reason=missing_lease_id",
+            file=sys.stderr,
+        )
+        return False
+    url = _get_local_discovery_base() + \
+        "/api/agent/desktop-lease-broker/ack-yield"
+    payload = json.dumps({
+        "leaseId": lease_id,
+        "clientId": _DESKTOP_LEASE_CLIENT_ID,
+    }).encode("utf-8")
+    try:
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:
+        print(
+            f"[desktop_lease] yield acknowledge error={exc}",
+            file=sys.stderr,
+        )
+        return False
+    if result.get("ok"):
+        print(
+            f"[desktop_lease] yield acknowledged lease_id={lease_id}",
+            file=sys.stderr,
+        )
+        return True
+    print(
+        f"[desktop_lease] yield acknowledge rejected "
+        f"lease_id={lease_id} reason={result.get('reason')}",
+        file=sys.stderr,
+    )
+    return False
+
+
 def _should_yield_desktop(status: Optional[dict], my_client_id: str, my_priority: int) -> bool:
     """纯函数（CI 可测）：给定 broker /status 响应，判断监听本轮是否应整轮让位。
 
@@ -5258,10 +5302,15 @@ def run_real_listen(args: argparse.Namespace) -> int:
             # 租约 → 整轮让位（不碰心跳/扫描/发送/UIA 标志），CI 释放后下一轮自动恢复；期间不扫描=
             # last_readable_scan_at 不推进但扫描块也不跑，不会误触发 scan 自愈（#1402）。CI 弄乱微信
             # 由 #1402 的 ~15s scan 自愈在恢复后接管。Broker 不可达 → 不暂停（降级，对齐 f26e099c）。
+            _desktop_status = desktop_lease_status()
             if _should_yield_desktop(
-                desktop_lease_status(), _DESKTOP_LEASE_CLIENT_ID, _DESKTOP_LEASE_PRIORITY
+                _desktop_status, _DESKTOP_LEASE_CLIENT_ID, _DESKTOP_LEASE_PRIORITY
             ):
-                _log("桌面租约被他人(CI)持有，本轮整轮让位暂停（不扫描/不发送/不动 UIA 标志）")
+                desktop_lease_ack_yield(_desktop_status)
+                _log(
+                    "桌面租约被他人(CI)持有，已到安全点并整轮让位"
+                    "（不扫描/不发送/不动 UIA 标志）"
+                )
                 time.sleep(args.interval)
                 continue
 

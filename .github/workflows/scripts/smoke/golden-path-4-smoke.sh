@@ -189,11 +189,14 @@ diff -r services/agent/wechat-rpa/ services/agent/build-modules/line04/wechat-rp
 echo "Step 3l rsync 同步校验通过"
 
 # version bump 校验
-EXPECTED="1.0.151"
-ACTUAL=$(python3 -c "import json; print(json.load(open('services/agent/modules/line04/manifest.json'))['version'])")
-[ "$ACTUAL" = "$EXPECTED" ] \
-  || { echo "FAIL Step 3l: manifest version 期望 $EXPECTED，实际 $ACTUAL"; exit 3; }
-echo "Step 3l version bump 校验通过：$ACTUAL"
+EXPECTED="1.0.152"
+SOURCE_VERSION=$(node -e "process.stdout.write(require('./services/agent/modules/line04/manifest.json').version)")
+BUILD_VERSION=$(node -e "process.stdout.write(require('./services/agent/build-modules/line04/manifest.json').version)")
+API_VERSION=$(sed -n "s/.*'line04-wechat-cs'.*required_version: '\\([^']*\\)'.*/\\1/p" apps/api/src/services/walking-skeleton.service.ts)
+[ "$SOURCE_VERSION" = "$EXPECTED" ] || { echo "FAIL Step 3l: source manifest 期望 $EXPECTED，实际 $SOURCE_VERSION"; exit 3; }
+[ "$BUILD_VERSION" = "$EXPECTED" ] || { echo "FAIL Step 3l: build manifest 期望 $EXPECTED，实际 $BUILD_VERSION"; exit 3; }
+[ "$API_VERSION" = "$EXPECTED" ] || { echo "FAIL Step 3l: API required_version 期望 $EXPECTED，实际 $API_VERSION"; exit 3; }
+echo "Step 3l version 三面一致性校验通过：$SOURCE_VERSION"
 
 ok "Step 3l ✅ 半死区修复三件套 + 队列过期（L1 窗口形态/L2 梯度自愈/L3 skip细分/L4 过期上限）"
 

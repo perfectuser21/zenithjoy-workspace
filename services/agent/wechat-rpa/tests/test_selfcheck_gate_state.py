@@ -5,6 +5,7 @@
 把「进程在但 UIA 死区」和「微信真没跑」混为一谈，运营无法按 reason 行动。
 """
 import os
+import inspect
 import sys
 
 _TOOLS = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tools"))
@@ -17,8 +18,13 @@ from selfcheck_bubbles import (  # noqa: E402
     FIND_WINDOW_RETRIES,
     FIND_WINDOW_RETRY_DELAY_S,
     classify_no_window,
+    clear_target_search,
+    finalize_search_recovery_cleanup,
     find_item_with_recovery,
     find_target_item,
+    find_target_item_via_search,
+    main,
+    return_to_session_list_via_back,
 )
 
 
@@ -83,6 +89,259 @@ def test_find_target_item_skips_broken_items():
     items = [_Item(raises=True), _Item("文件传输助手\n消息\n08:01\n")]
     found = find_target_item(items, "文件传输助手")
     assert found is items[1]
+
+
+def test_return_to_session_list_via_back_focuses_unique_button_and_posts_enter():
+    """断开的 RDP 桌面不能 SetCursorPos；用 UIA 焦点 + 主窗口 Enter 消息返回。"""
+    calls = []
+
+    class _Back:
+        def __init__(self, name, class_name):
+            self.element_info = type(
+                "_EI", (), {"name": name, "class_name": class_name}
+            )()
+            self.focused = False
+
+        def set_focus(self):
+            self.focused = True
+
+        def has_keyboard_focus(self):
+            return self.focused
+
+    back = _Back("返回", "mmui::XButton")
+    decoy = _Back("返回顶部", "mmui::XButton")
+
+    class _MainWindow:
+        element_info = type("_EI", (), {"handle": 461008})()
+
+        def descendants(self, control_type=None):
+            assert control_type == "Button"
+            return [decoy, back]
+
+    mw = _MainWindow()
+    ok = return_to_session_list_via_back(
+        mw,
+        post_enter_fn=lambda hwnd: calls.append(hwnd) or True,
+    )
+
+    assert ok is True
+    assert back.focused is True
+    assert calls == [461008]
+
+
+def test_return_to_session_list_via_back_rejects_ambiguous_exact_buttons():
+    class _Back:
+        element_info = type(
+            "_EI", (), {"name": "返回", "class_name": "mmui::XButton"}
+        )()
+
+    class _MainWindow:
+        element_info = type("_EI", (), {"handle": 461008})()
+
+        def descendants(self, control_type=None):
+            return [_Back(), _Back()]
+
+    calls = []
+    assert return_to_session_list_via_back(
+        _MainWindow(),
+        post_enter_fn=lambda hwnd: calls.append(hwnd) or True,
+    ) is False
+    assert calls == []
+
+
+def test_find_target_item_via_search_uses_edit1_and_exact_first_line():
+    exact = _Item("文件传输助手\n搜索结果\n08:02\n")
+    prefix_only = _Item("文件传输助手测试号\n搜索结果\n08:01\n")
+
+    class _SearchEdit:
+        def __init__(self):
+            self.focused = False
+            self.value = None
+
+        def set_focus(self):
+            self.focused = True
+
+        def set_edit_text(self, value):
+            self.value = value
+
+    class _SearchMW:
+        def __init__(self):
+            self.search = _SearchEdit()
+            self.lookup = None
+
+        def child_window(self, **kwargs):
+            self.lookup = kwargs
+            return self.search
+
+        def descendants(self, control_type=None):
+            return [prefix_only, exact]
+
+    mw = _SearchMW()
+    slept = []
+    found = find_target_item_via_search(mw, "文件传输助手", slept.append)
+
+    assert found is exact
+    assert mw.lookup == {"auto_id": "edit1", "control_type": "Edit"}
+    assert mw.search.focused is True
+    assert mw.search.value == "文件传输助手"
+    assert slept == [0.8]
+
+
+def test_search_supports_real_uiawrapper_descendants_without_child_window():
+    """find_weixin 真机返回 UIAWrapper；它没有 child_window，须按 automation_id 枚举 Edit。"""
+    exact = _Item("文件传输助手\n刚刚\n")
+
+    class _Edit:
+        def __init__(self, automation_id):
+            self.element_info = type(
+                "_EI", (), {"automation_id": automation_id}
+            )()
+            self.values = []
+
+        def set_focus(self):
+            pass
+
+        def set_edit_text(self, value):
+            self.values.append(value)
+
+    decoy = _Edit("other")
+    search = _Edit("edit1")
+
+    class _WrapperOnlyMW:
+        def descendants(self, control_type=None):
+            if control_type == "Edit":
+                return [decoy, search]
+            if control_type == "ListItem":
+                return [exact]
+            return []
+
+    mw = _WrapperOnlyMW()
+    found = find_target_item_via_search(mw, "文件传输助手", lambda s: None)
+
+    assert found is exact
+    assert search.values == ["文件传输助手"]
+    assert clear_target_search(mw) is True
+    assert search.values == ["文件传输助手", ""]
+    assert decoy.values == []
+
+
+def test_find_target_item_via_search_rejects_duplicate_exact_names_and_clears():
+    """两个完全同名结果无法证明哪个是系统账号，必须拒绝并清空搜索态。"""
+    exact_a = _Item("文件传输助手\n搜索结果 A\n08:02\n")
+    exact_b = _Item("文件传输助手\n搜索结果 B\n08:03\n")
+
+    class _SearchEdit:
+        def __init__(self):
+            self.values = []
+
+        def set_focus(self):
+            pass
+
+        def set_edit_text(self, value):
+            self.values.append(value)
+
+    class _SearchMW:
+        def __init__(self):
+            self.search = _SearchEdit()
+
+        def child_window(self, **kwargs):
+            return self.search
+
+        def descendants(self, control_type=None):
+            return [exact_a, exact_b]
+
+    mw = _SearchMW()
+    found = find_target_item_via_search(mw, "文件传输助手", lambda s: None)
+
+    assert found is None
+    assert mw.search.values == ["文件传输助手", ""]
+
+
+def test_failed_search_records_cleanup_state_for_fresh_window_retry():
+    """歧义搜索即使旧 wrapper 清理失败，也必须留下统一 fresh-wrapper 清理状态。"""
+    exact_a = _Item("文件传输助手\n搜索结果 A\n08:02\n")
+    exact_b = _Item("文件传输助手\n搜索结果 B\n08:03\n")
+
+    class _FailingClearEdit:
+        def set_focus(self):
+            pass
+
+        def set_edit_text(self, value):
+            if value == "":
+                raise RuntimeError("stale wrapper")
+
+    class _WorkingEdit:
+        def __init__(self):
+            self.values = []
+
+        def set_edit_text(self, value):
+            self.values.append(value)
+
+    class _SearchMW:
+        def __init__(self, items, edit):
+            self.items = items
+            self.edit = edit
+
+        def child_window(self, **kwargs):
+            return self.edit
+
+        def descendants(self, control_type=None):
+            return self.items
+
+    stale = _SearchMW([exact_a, exact_b], _FailingClearEdit())
+    fresh = _SearchMW([], _WorkingEdit())
+    cleanup_state = {}
+
+    found = find_target_item_via_search(
+        stale,
+        "文件传输助手",
+        lambda s: None,
+        cleanup_state=cleanup_state,
+        find_window_fn=lambda: fresh,
+    )
+    cleanup_exit = finalize_search_recovery_cleanup(
+        {},
+        cleanup_state["mw"],
+        cleanup_state["find_window_fn"],
+    )
+
+    assert found is None
+    assert cleanup_state["search_attempted"] is True
+    assert cleanup_exit is None
+    assert fresh.edit.values == [""]
+
+
+def test_main_clears_successful_search_recovery_before_returning():
+    """任何搜索尝试返回后，main 必须执行 fail-closed 清理再决定最终退出码。"""
+    source = inspect.getsource(main)
+    assert 'cleanup_state.get("search_attempted")' in source
+    assert "finalize_search_recovery_cleanup(" in source
+    assert "return cleanup_exit" in source
+
+
+def test_finalize_search_cleanup_uses_fresh_window_and_fails_gate_when_uncleared():
+    """旧 wrapper 失效时必须重新取窗口；全部清理失败时覆盖原成功结果。"""
+    stale = object()
+    fresh_a = object()
+    fresh_b = object()
+    fresh_windows = iter([fresh_a, fresh_b])
+    cleared = []
+    written = []
+    result = {"ok": True, "err": None}
+
+    exit_code = finalize_search_recovery_cleanup(
+        result,
+        stale,
+        lambda: next(fresh_windows),
+        clear_fn=lambda window: cleared.append(window) or False,
+        write_fn=lambda payload: written.append(dict(payload)),
+    )
+
+    assert exit_code == 1
+    assert cleared == [fresh_a, fresh_b, stale]
+    assert result["ok"] is False
+    assert "搜索框清理失败" in result["err"]
+    assert written == [result]
 
 
 def test_item_retry_budget_covers_render_transient_but_not_forever():
@@ -150,7 +409,7 @@ def test_find_item_with_recovery_falls_back_to_reset_when_stuck_in_chat_panel():
         mw, "文件传输助手", retries=5, retry_delay_s=0.01,
         sleep_fn=lambda s: None, reset_fn=_reset,
     )
-    assert item is not None and how == "reset_recovery"
+    assert item is not None and how == "reset_recovery_1"
     assert reset_calls == [mw]
 
 
@@ -176,3 +435,91 @@ def test_find_item_with_recovery_reset_exception_swallowed():
         sleep_fn=lambda s: None, reset_fn=_boom,
     )
     assert item is None and how == "not_found"
+
+
+# ── reset_fn 有界重试（issue b237a4b6，2026-07-24 rog 真机截图+UIA 实证）──────────
+#
+# CI self-hosted runner（rog）和生产 line04-wechat-cs 监听共用同一微信窗口，靠
+# desktop-lease-broker 优先级互斥；CI 持租期间监听整轮让位（刻意不碰 UIA），窗口
+# 状态维持在让位那一刻。若那一刻正停在已打开的聊天面板，reset_fn 之前只调一次，
+# 失败就直接放弃——但 _reset_session_list_to_top 的点击升级梯是瞬时操作，网络/
+# 前台焦点/窗口动画等瞬态原因导致的单次失败，换一轮全新尝试大概率能成功。
+
+def test_find_item_with_recovery_reset_retries_until_success():
+    # reset_fn 前两次失败（"切通讯录未生效，升级梯用尽"），第三次成功。
+    stuck_chat_bubbles = [_Item("[bubble-gate] 1783439923\n08:01\n")]
+    session_list_after_reset = [_Item("文件传输助手\n消息\n08:02\n")]
+    mw = _MW([stuck_chat_bubbles] * 6 + [session_list_after_reset])
+    reset_calls = []
+
+    def _reset(mw_):
+        reset_calls.append(mw_)
+        return len(reset_calls) >= 3
+
+    item, how = find_item_with_recovery(
+        mw, "文件传输助手", retries=5, retry_delay_s=0.01,
+        sleep_fn=lambda s: None, reset_fn=_reset,
+    )
+    assert item is not None and how == "reset_recovery_3"
+    assert len(reset_calls) == 3
+
+
+def test_find_item_with_recovery_reset_gives_up_after_bounded_retries():
+    # reset_fn 一直失败，重试必须有上限，不能无限拖垮 CI。
+    stuck_chat_bubbles = [_Item("[bubble-gate] 1783439923\n08:01\n")]
+    mw = _MW([stuck_chat_bubbles] * 20)
+    reset_calls = []
+
+    def _reset(mw_):
+        reset_calls.append(mw_)
+        return False
+
+    item, how = find_item_with_recovery(
+        mw, "文件传输助手", retries=1, retry_delay_s=0.01,
+        sleep_fn=lambda s: None, reset_fn=_reset,
+    )
+    assert item is None and how == "not_found"
+    assert 2 <= len(reset_calls) <= 10, (
+        f"reset_fn 全失败时应重试多次才放弃（不能仍是老的只试一次），"
+        f"也不能无上限重试拖垮 CI，实际调用 {len(reset_calls)} 次"
+    )
+
+
+def test_find_item_with_recovery_searches_exact_target_after_reset_exhausted():
+    """真机导航按钮完全不响应时，最后用顶部搜索框定位固定目标，而非重复同类点击。"""
+    stuck_chat_bubbles = [_Item("[bubble-gate] 1783439923\n08:01\n")]
+    mw = _MW([stuck_chat_bubbles] * 20)
+    target_item = _Item("文件传输助手\n搜索结果\n08:02\n")
+    reset_calls, search_calls = [], []
+
+    item, how = find_item_with_recovery(
+        mw, "文件传输助手", retries=1, retry_delay_s=0.01,
+        sleep_fn=lambda s: None,
+        reset_fn=lambda mw_: reset_calls.append(mw_) or False,
+        search_fn=lambda mw_, target: search_calls.append((mw_, target)) or target_item,
+    )
+
+    assert item is target_item and how == "search_recovery"
+    assert len(reset_calls) == 3
+    assert search_calls == [(mw, "文件传输助手")]
+
+
+def test_find_item_with_recovery_uses_back_before_global_search():
+    """聊天详情页无搜索框时，reset 全失败后先返回会话列表，再决定是否搜索。"""
+    stuck_chat_bubbles = [_Item("[bubble-gate] 1783439923\n08:01\n")]
+    session_list_after_back = [_Item("文件传输助手\n消息\n08:02\n")]
+    mw = _MW([stuck_chat_bubbles] * 2 + [session_list_after_back])
+    back_calls, search_calls = [], []
+
+    item, how = find_item_with_recovery(
+        mw, "文件传输助手", retries=1, retry_delay_s=0.01,
+        sleep_fn=lambda s: None,
+        reset_fn=lambda mw_: False,
+        back_fn=lambda mw_: back_calls.append(mw_) or True,
+        search_fn=lambda mw_, target: search_calls.append((mw_, target)),
+    )
+
+    assert item is session_list_after_back[0]
+    assert how == "back_recovery"
+    assert back_calls == [mw]
+    assert search_calls == []
