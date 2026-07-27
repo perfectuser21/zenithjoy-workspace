@@ -302,4 +302,26 @@ describe('[CONTRACT] start.bat -- BEHAVIOR-2 static assertions', () => {
     const everyRunBlock = everyRunBlockMatch ? everyRunBlockMatch[0] : '';
     expect(everyRunBlock).not.toMatch(/setup-reset\.ps1/i);
   });
+
+  // -----------------------------------------------------------------------
+  // SB-9: setup-reset failure must not be reported as success. The reset is
+  // deliberately non-fatal for startup availability, but operators still
+  // need an accurate warning and a retained log for diagnosis.
+  // -----------------------------------------------------------------------
+  it('SB-9: start.bat checks setup-reset exit code before reporting success', () => {
+    if (!existsSync(START_BAT)) return;
+
+    const content = readFileSync(START_BAT, 'utf8');
+    const firstRunBlockMatch = content.match(
+      /REM Step 1: Verify \.env exists[\s\S]*?(?=REM Step 1\.5:)/
+    );
+    expect(firstRunBlockMatch).not.toBeNull();
+
+    const firstRunBlock = firstRunBlockMatch ? firstRunBlockMatch[0] : '';
+    expect(firstRunBlock).toMatch(/if errorlevel 1\s*\(/i);
+    expect(firstRunBlock).toMatch(/\[WARN\].*setup-reset.*failed/i);
+    expect(firstRunBlock).toMatch(
+      /else\s*\([\s\S]*\[setup-reset\] first-run environment cleanup done/i
+    );
+  });
 });
