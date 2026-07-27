@@ -88,6 +88,8 @@ require_literal '$preflightInvoker = Start-Process'
 require_literal '$preflightInvoker.WaitForExit(120000)'
 require_literal '$pythonProcess.WaitForExit(110000)'
 require_literal "WriteAllText(\$exitFile, '124')"
+require_literal '$preflightFailureChecks'
+require_literal 'PsExec preflight invoker failed:'
 require_literal "\$preflightCmd = Join-Path \$testRoot 'run-preflight.cmd'"
 require_literal '[IO.File]::WriteAllLines('
 require_literal "\$cmdExe = Join-Path \$env:SystemRoot 'System32\\cmd.exe'"
