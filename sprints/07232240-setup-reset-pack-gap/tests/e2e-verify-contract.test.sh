@@ -215,6 +215,9 @@ test "$(grep -c -F 'Remove-Item' "$SCRIPT")" -eq 1
 require_literal '[GC]::WaitForPendingFinalizers()'
 require_literal 'Wait-Until -TimeoutSeconds 15'
 require_literal 'Start-Sleep -Milliseconds 500'
+require_literal '$Process.WaitForExit(10000)'
+require_literal '$Process.WaitForExit()'
+! grep -Fq "'taskkill could not stop the test launcher process tree'" "$SCRIPT"
 ! grep -Fq 'mutation stop barrier did not pass' "$SCRIPT"
 ! grep -Fq 'if ($mutationBarrierPassed) {' "$SCRIPT"
 ! grep -Fq '$preflightInvoker.ExitCode' "$SCRIPT"

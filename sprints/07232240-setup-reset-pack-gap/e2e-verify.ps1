@@ -428,9 +428,13 @@ function Stop-TestProcessTree {
     if (-not $Process.HasExited) {
         & "$env:SystemRoot\System32\taskkill.exe" `
             /PID $Process.Id /T /F 2>$null | Out-Null
-        Assert-True (
-            $LASTEXITCODE -eq 0
-        ) 'taskkill could not stop the test launcher process tree'
+        $null = $Process.WaitForExit(10000)
+        $Process.Refresh()
+        Assert-True $Process.HasExited `
+            'test launcher process did not exit after taskkill'
+    }
+    if ($Process.HasExited) {
+        $Process.WaitForExit()
     }
 }
 
