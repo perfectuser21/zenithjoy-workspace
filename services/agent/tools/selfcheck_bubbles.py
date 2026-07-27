@@ -64,8 +64,33 @@ def find_target_item(descendants, target):
     return None
 
 
+def find_target_item_via_search(mw, target, sleep_fn=time.sleep):
+    """导航 tab 无法切换时，用顶部全局搜索框精确定位固定自检会话。
+
+    WeChat 4.1.8 的全局搜索框稳定暴露为 ``Edit(auto_id='edit1')``；这是仓库
+    voice_call 真机路径已经使用的定位接缝。这里只返回首行显示名精确等于 target
+    的 ListItem，搜索失败或 UIA wrapper 失效均返回 None，由 gate fail-closed。
+    """
+    try:
+        search_edit = mw.child_window(auto_id="edit1", control_type="Edit")
+        search_edit.set_focus()
+        search_edit.set_edit_text(target)
+        sleep_fn(0.8)
+        for item in mw.descendants(control_type="ListItem"):
+            try:
+                first_line = (item.element_info.name or "").split("\n", 1)[0].strip()
+            except Exception:
+                continue
+            if first_line == target:
+                return item
+    except Exception as exc:
+        print(f"[bubble-gate] global search recovery failed: {exc}")
+    return None
+
+
 def find_item_with_recovery(
-    mw, target, retries, retry_delay_s, sleep_fn, reset_fn, reset_retries=RESET_FN_RETRIES
+    mw, target, retries, retry_delay_s, sleep_fn, reset_fn,
+    reset_retries=RESET_FN_RETRIES, search_fn=None,
 ):
     """真根因修法（2026-07-08 rog 实证，session-1 诊断亲眼确认）：先做几轮廉价重试
     （覆盖极端渲染瞬态），仍找不到就调用 reset_fn（真机上是
@@ -101,6 +126,13 @@ def find_item_with_recovery(
                 item = find_target_item(mw.descendants(control_type="ListItem"), target)
                 if item is not None:
                     return item, f"reset_recovery_{j + 1}"
+        except Exception:
+            pass
+    if search_fn is not None:
+        try:
+            item = search_fn(mw, target)
+            if item is not None:
+                return item, "search_recovery"
         except Exception:
             pass
     return None, "not_found"
@@ -182,6 +214,9 @@ def main() -> int:
         item, how = find_item_with_recovery(
             mw, TARGET, FIND_ITEM_RETRIES, FIND_ITEM_RETRY_DELAY_S,
             time.sleep, listen_chat._reset_session_list_to_top,
+            search_fn=lambda window, target: find_target_item_via_search(
+                window, target, time.sleep
+            ),
         )
         if item is not None and how != "first_try":
             print(f"[bubble-gate] {TARGET} found via {how}")
