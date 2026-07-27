@@ -138,7 +138,7 @@ class WsClient(
 
     private fun buildWsUrl(): String {
         val token = config.wsToken.ifEmpty { config.licenseKey }
-        return "${config.apiUrl}?token=${java.net.URLEncoder.encode(token, "UTF-8")}"
+        return WsUrlBuilder.build(config.apiUrl, token, config.machineId)
     }
 
     private fun buildHelloPayload(): Map<String, Any?> {

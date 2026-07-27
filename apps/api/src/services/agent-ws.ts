@@ -6,19 +6,39 @@ import { upsertAgent, touchAgentHeartbeat, setAgentOffline, findOrCreateAgentUui
 import { upsertAgentSkillStatuses } from './skill-db';
 import { handleTaskResult } from './task-dispatch';
 import { validateLicense } from './walking-skeleton.service';
+import { verifyWsToken } from './license.service';
 import pool from '../db/connection'; // H-2 Bug 9: resolveAgentUuidFromHello 直接 UPDATE 复用 row
 
 const WS_PATH = '/agent-ws';
 
 /**
- * 用 license key（ZJ-X-XXXXXXXX）校验并返回 tenant_id。
- * 查 licenses 表（新账号走这里），不再查 tenants.license_key（该字段新账号为空）。
+ * WS 鉴权，兼容两种 token：
+ *  - license_key（ZJ-X-XXXXXXXX）：查 licenses 表，走 validateLicense（旧 v1.0/v1.1 Agent 首连）。
+ *  - hex ws_token（HMAC-SHA256(license_id:machine_id)）：register 成功后签发，Agent v1.2+
+ *    重连一律优先使用。此前只有 signWsToken 签发、从未在这里校验 → 断线重连必然 401
+ *    （2026-07-27 Path2 安卓验收实测 staging 490/495 次 /agent-ws 请求 401）。
+ *    hex token 本身不带 license_id，需按 machine_id 反查 license_machines JOIN licenses 拿到
+ *    license_id + tenant_id，再用 verifyWsToken 常量时间比较。
  */
-export async function authenticateWsToken(token: string): Promise<string | null> {
+export async function authenticateWsToken(token: string, machineId?: string): Promise<string | null> {
   if (!token) return null;
-  const result = await validateLicense(token);
-  if (!result.ok) return null;
-  return result.license.tenant_id;
+
+  const licenseResult = await validateLicense(token);
+  if (licenseResult.ok) return licenseResult.license.tenant_id;
+
+  if (!machineId) return null;
+  const { rows } = await pool.query<{ license_id: string; tenant_id: string | null }>(
+    `SELECT lm.license_id, l.tenant_id
+       FROM zenithjoy.license_machines lm
+       JOIN zenithjoy.licenses l ON l.id = lm.license_id
+      WHERE lm.machine_id = $1
+      LIMIT 1`,
+    [machineId]
+  );
+  const row = rows[0];
+  if (!row || !row.tenant_id) return null;
+  if (!verifyWsToken(row.license_id, machineId, token)) return null;
+  return row.tenant_id;
 }
 
 const WS_PING_INTERVAL_MS = 30_000;
@@ -49,6 +69,7 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
 
     const url = new URL(req.url, 'http://x');
     const token = url.searchParams.get('token') || (req.headers['x-agent-token'] as string) || '';
+    const machineId = url.searchParams.get('machine_id') || (req.headers['x-agent-machine-id'] as string) || undefined;
 
     if (!token) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
@@ -58,7 +79,7 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
 
     let tenantId: string | null;
     try {
-      tenantId = await authenticateWsToken(token);
+      tenantId = await authenticateWsToken(token, machineId);
     } catch (err) {
       console.warn('[agent-ws] DB error during license check:', err);
       socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n');
