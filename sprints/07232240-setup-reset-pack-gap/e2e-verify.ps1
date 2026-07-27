@@ -60,8 +60,13 @@ $testLaunchStarted = $false
 $registrySnapshotCaptured = $false
 $registryReconciled = $false
 $mutationBarrierPassed = $false
-$preflightProcessesQuiescent = $false
+$preflightAndReportQuiescent = $false
 $originalTaskRegistered = $false
+$originalTaskVerified = $false
+$originalAgentStartedUtc = $null
+$newOriginalAgentObserved = $false
+$reportRestored = $false
+$safeFinalCleanup = $false
 $acceptancePassed = $false
 
 function Assert-True {
@@ -114,22 +119,68 @@ function Test-PathWithinDirectory {
     }
 }
 
-function Get-TestPreflightProcesses {
-    param([string]$Directory)
+function Test-CommandLineReferencesPath {
+    param([string]$CommandLine, [string]$Directory)
 
-    if (-not $Directory) {
-        return @()
+    if (-not $CommandLine -or -not $Directory) {
+        return $false
     }
 
+    try {
+        $trimChars = [char[]]@(
+            [IO.Path]::DirectorySeparatorChar,
+            [IO.Path]::AltDirectorySeparatorChar
+        )
+        $normalizedDirectory = (
+            [IO.Path]::GetFullPath($Directory)
+        ).TrimEnd($trimChars)
+        $escapedDirectory = [regex]::Escape($normalizedDirectory)
+        $pattern = (
+            '(?i)(^|["''\s=])' + $escapedDirectory +
+            '(?=\\|/|["''\s]|$)'
+        )
+        return [regex]::IsMatch($CommandLine, $pattern)
+    } catch {
+        return $false
+    }
+}
+
+function Get-TestMutationProcesses {
+    param(
+        [string]$Root,
+        [string]$Directory,
+        [Collections.Generic.HashSet[int]]$OriginalAgentPids
+    )
+
     return @(
-        Get-CimInstance Win32_Process `
-            -Filter "Name='python.exe' OR Name='pythonw.exe'" `
-            -ErrorAction SilentlyContinue |
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Where-Object {
-            $path = [string]$_.ExecutablePath
-            $commandLine = [string]$_.CommandLine
-            (Test-PathWithinDirectory $path $Directory) -and
-            $commandLine -match '(?i)preflight\.py'
+            $process = $_
+            $processName = [string]$process.Name
+            $processCommandLine = [string]$process.CommandLine
+            $isNewAgent = (
+                $processName -ieq 'zenithjoy-agent.exe' -and
+                -not $OriginalAgentPids.Contains([int]$process.ProcessId)
+            )
+            $referencesTestPath = (
+                (Test-CommandLineReferencesPath $processCommandLine $Root) -or
+                (
+                    $Directory -and
+                    (Test-CommandLineReferencesPath `
+                        $processCommandLine $Directory)
+                )
+            )
+            return $isNewAgent -or $referencesTestPath
+        }
+    )
+}
+
+function Get-GlobalPreflightProcesses {
+    return @(
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            $process = $_
+            ([string]$process.CommandLine) -match '(?i)preflight\.py'
         }
     )
 }
@@ -672,8 +723,13 @@ $apiBase = __API_BASE__
 $stdoutFile = __STDOUT__
 $stderrFile = __STDERR__
 $exitFile = __EXIT_FILE__
+$quotedPreflight = '"' + $preflight.Replace('"', '\"') + '"'
+$quotedApiBase = '"' + $apiBase.Replace('"', '\"') + '"'
+$pythonArgumentList = (
+    $quotedPreflight + ' --dry-run --middleware-url ' + $quotedApiBase
+)
 $pythonProcess = Start-Process -FilePath $python `
-    -ArgumentList @($preflight, '--dry-run', '--middleware-url', $apiBase) `
+    -ArgumentList $pythonArgumentList `
     -RedirectStandardOutput $stdoutFile `
     -RedirectStandardError $stderrFile `
     -PassThru
@@ -793,6 +849,12 @@ exit $pythonProcess.ExitCode
     Write-Host '[acceptance] restoring original staging state'
 
     if ($testLaunchStarted) {
+        Invoke-CleanupStep -Name 'unregister test scheduled task' `
+            -Errors $cleanupErrors -Action {
+                Unregister-ScheduledTask -TaskName $taskName `
+                    -Confirm:$false -ErrorAction Stop
+            }
+
         Invoke-CleanupStep -Name 'stop preflight invoker tree' `
             -Errors $cleanupErrors -Action {
                 Stop-TestProcessTree $preflightInvoker
@@ -811,51 +873,30 @@ exit $pythonProcess.ExitCode
                         Stop-TestProcessTree $preflightInvoker
                         Stop-TestProcessTree $testCmd
 
-                        if ($testDir) {
-                            foreach ($process in @(Get-AgentProcesses)) {
-                                $path = [string]$process.ExecutablePath
-                                if (
-                                    Test-PathWithinDirectory $path $testDir
-                                ) {
-                                    Stop-Process -Id $process.ProcessId -Force `
-                                        -ErrorAction SilentlyContinue
-                                }
-                            }
+                        $mutationProcesses = @(
+                            Get-TestMutationProcesses `
+                                $testRoot $testDir $originalAgentPids
+                        )
+                        foreach ($process in $mutationProcesses) {
+                            Stop-Process -Id $process.ProcessId -Force `
+                                -ErrorAction SilentlyContinue
                         }
 
-                        $testAgents = @()
-                        if ($testDir) {
-                            $testAgents = @(
-                                Get-AgentProcesses |
-                                Where-Object {
-                                    Test-PathWithinDirectory `
-                                        ([string]$_.ExecutablePath) $testDir
-                                }
-                            )
-                        }
+                        $remainingMutationProcesses = @(
+                            Get-TestMutationProcesses `
+                                $testRoot $testDir $originalAgentPids
+                        )
                         return (
                             (Test-ProcessExited $preflightInvoker) -and
                             (Test-ProcessExited $testCmd) -and
-                            $testAgents.Count -eq 0
+                            $remainingMutationProcesses.Count -eq 0
                         )
                     }
                 $script:mutationBarrierPassed = $true
             }
 
-        Invoke-CleanupStep -Name 'unregister test scheduled task' `
-            -Errors $cleanupErrors -Action {
-                Assert-True (
-                    $script:mutationBarrierPassed
-                ) 'mutation stop barrier did not pass'
-                Unregister-ScheduledTask -TaskName $taskName `
-                    -Confirm:$false -ErrorAction Stop
-            }
-
         Invoke-CleanupStep -Name 'register original scheduled task' `
             -Errors $cleanupErrors -Action {
-                Assert-True (
-                    $script:mutationBarrierPassed
-                ) 'mutation stop barrier did not pass'
                 Register-ScheduledTask -TaskName $taskName `
                     -Xml $originalTaskXml -Force | Out-Null
                 $script:originalTaskRegistered = $true
@@ -863,24 +904,19 @@ exit $pythonProcess.ExitCode
 
         Invoke-CleanupStep -Name 'verify original scheduled task' `
             -Errors $cleanupErrors -Action {
-                Assert-True (
-                    $script:mutationBarrierPassed
-                ) 'mutation stop barrier did not pass'
                 $restoredTask = Get-ScheduledTask -TaskName $taskName `
                     -ErrorAction Stop
                 Assert-True (
                     (Get-TaskSignature $restoredTask) -eq
                     $originalTaskSignature
                 ) 'scheduled task restoration does not match snapshot'
+                $script:originalTaskVerified = $true
             }
     }
 
     if ($sharedLogMutationStarted) {
         Invoke-CleanupStep -Name 'restore shared setup-reset log' `
             -Errors $cleanupErrors -Action {
-                Assert-True (
-                    $script:mutationBarrierPassed
-                ) 'mutation stop barrier did not pass'
                 if ($hadSharedLog) {
                     New-Item -ItemType Directory -Force `
                         -Path $sharedDataDir | Out-Null
@@ -902,9 +938,6 @@ exit $pythonProcess.ExitCode
     if ($testLaunchStarted -and $registrySnapshotCaptured) {
         Invoke-CleanupStep -Name 'reconcile HKCU Environment' `
             -Errors $cleanupErrors -Action {
-                Assert-True (
-                    $script:mutationBarrierPassed
-                ) 'mutation stop barrier did not pass'
                 $environmentKey = (
                     [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey(
                         'Environment',
@@ -967,16 +1000,21 @@ exit $pythonProcess.ExitCode
             }
     }
 
-    if ($testLaunchStarted) {
+    if (
+        $testLaunchStarted -and
+        $mutationBarrierPassed -and
+        $originalTaskRegistered -and
+        $originalTaskVerified
+    ) {
         Invoke-CleanupStep -Name 'start original scheduled task' `
             -Errors $cleanupErrors -Action {
-                Assert-True (
-                    $script:originalTaskRegistered
-                ) 'original scheduled task registration did not succeed'
                 Assert-True (
                     $script:registryReconciled
                 ) 'HKCU Environment reconciliation did not succeed'
                 Start-ScheduledTask -TaskName $taskName -ErrorAction Stop
+                $script:originalAgentStartedUtc = (
+                    Get-Date
+                ).ToUniversalTime()
             }
 
         Invoke-CleanupStep -Name 'wait for new original Agent process' `
@@ -995,31 +1033,66 @@ exit $pythonProcess.ExitCode
                         }
                         return $false
                     }
+                $script:newOriginalAgentObserved = $true
             }
+    }
 
-        Invoke-CleanupStep -Name 'wait for test preflight processes to exit' `
+    if ($newOriginalAgentObserved) {
+        $reportStability = [PSCustomObject]@{
+            State = $null
+            SinceUtc = $null
+        }
+        Invoke-CleanupStep -Name 'wait for global preflight and report stability' `
             -Errors $cleanupErrors -Action {
-                Wait-Until -TimeoutSeconds 60 `
-                    -FailureMessage 'test preflight.py processes did not exit' `
+                Assert-True (
+                    $null -ne $script:originalAgentStartedUtc
+                ) 'original Agent start time is unavailable'
+                Wait-Until -TimeoutSeconds 120 `
+                    -FailureMessage (
+                        'global preflight/report state did not become stable'
+                    ) `
                     -Condition {
                         $preflightProcesses = @(
-                            Get-TestPreflightProcesses $testDir
+                            Get-GlobalPreflightProcesses
                         )
                         if ($preflightProcesses.Count -gt 0) {
-                            foreach ($process in $preflightProcesses) {
-                                Stop-Process -Id $process.ProcessId -Force `
-                                    -ErrorAction SilentlyContinue
-                            }
+                            $reportStability.State = $null
+                            $reportStability.SinceUtc = $null
                             return $false
                         }
-                        Start-Sleep -Seconds 2
+
+                        $nowUtc = (Get-Date).ToUniversalTime()
+                        if (Test-Path $preflightReport) {
+                            $reportItem = Get-Item $preflightReport
+                            $reportHash = (
+                                Get-FileHash $preflightReport -Algorithm SHA256
+                            ).Hash
+                            $reportState = (
+                                "$($reportItem.Length)|" +
+                                "$($reportItem.LastWriteTimeUtc.Ticks)|" +
+                                $reportHash
+                            )
+                        } else {
+                            $reportState = '<absent>'
+                        }
+
+                        if ($reportStability.State -ne $reportState) {
+                            $reportStability.State = $reportState
+                            $reportStability.SinceUtc = $nowUtc
+                            return $false
+                        }
+
                         return (
-                            @(
-                                Get-TestPreflightProcesses $testDir
-                            ).Count -eq 0
+                            $null -ne $reportStability.SinceUtc -and
+                            $nowUtc -ge (
+                                $reportStability.SinceUtc
+                            ).AddSeconds(10) -and
+                            $nowUtc -ge (
+                                $originalAgentStartedUtc
+                            ).AddSeconds(20)
                         )
                     }
-                $script:preflightProcessesQuiescent = $true
+                $script:preflightAndReportQuiescent = $true
             }
     }
 
@@ -1027,8 +1100,8 @@ exit $pythonProcess.ExitCode
         Invoke-CleanupStep -Name 'restore preflight report' `
             -Errors $cleanupErrors -Action {
                 Assert-True (
-                    $script:preflightProcessesQuiescent
-                ) 'test preflight processes are not quiescent'
+                    $script:preflightAndReportQuiescent
+                ) 'global preflight/report state is not quiescent'
                 if ($hadPreflightReport) {
                     Copy-Item $preflightReportBackup $preflightReport -Force
                     Assert-True (
@@ -1042,38 +1115,70 @@ exit $pythonProcess.ExitCode
                     Remove-PathAndAssertAbsent -Path $preflightReport `
                         -FailureMessage 'preflight report cleanup failed'
                 }
+                $script:reportRestored = $true
             }
     }
 
-    Invoke-CleanupStep -Name 'remove test runtime configuration' `
-        -Errors $cleanupErrors -Action {
-            if ($testDir) {
-                $testConfig = Join-Path $testDir '.env'
-                Remove-PathAndAssertAbsent -Path $testConfig `
-                    -FailureMessage 'test runtime configuration cleanup failed'
-            }
-        }
+    if (-not $testLaunchStarted) {
+        $mutationBarrierPassed = $true
+        $originalTaskRegistered = $true
+        $originalTaskVerified = $true
+    }
+    $safeFinalCleanup = (
+        $mutationBarrierPassed -and
+        $originalTaskRegistered -and
+        $originalTaskVerified -and
+        (
+            (-not $testLaunchStarted) -or
+            $newOriginalAgentObserved
+        ) -and
+        (
+            (-not $preflightReportMutationStarted) -or
+            $reportRestored
+        )
+    )
 
-    Invoke-CleanupStep -Name 'remove test configuration template' `
-        -Errors $cleanupErrors -Action {
-            if ($testDir) {
-                $testConfigTemplate = Join-Path $testDir '.env.template'
-                Remove-PathAndAssertAbsent -Path $testConfigTemplate `
-                    -FailureMessage 'test configuration template cleanup failed'
+    if ($safeFinalCleanup) {
+        Invoke-CleanupStep -Name 'remove test runtime configuration' `
+            -Errors $cleanupErrors -Action {
+                if ($testDir) {
+                    $testConfig = Join-Path $testDir '.env'
+                    Remove-PathAndAssertAbsent -Path $testConfig `
+                        -FailureMessage (
+                            'test runtime configuration cleanup failed'
+                        )
+                }
             }
-        }
 
-    Invoke-CleanupStep -Name 'remove acceptance directory' `
-        -Errors $cleanupErrors -Action {
-            if ($testRootOwned) {
-                Remove-PathAndAssertAbsent -Path $testRoot -Recurse `
-                    -FailureMessage 'temporary acceptance directory cleanup failed'
-            } else {
-                Assert-True (
-                    -not (Test-Path $testRoot)
-                ) 'unowned acceptance directory unexpectedly exists'
+        Invoke-CleanupStep -Name 'remove test configuration template' `
+            -Errors $cleanupErrors -Action {
+                if ($testDir) {
+                    $testConfigTemplate = Join-Path $testDir '.env.template'
+                    Remove-PathAndAssertAbsent -Path $testConfigTemplate `
+                        -FailureMessage (
+                            'test configuration template cleanup failed'
+                        )
+                }
             }
-        }
+
+        Invoke-CleanupStep -Name 'remove acceptance directory' `
+            -Errors $cleanupErrors -Action {
+                if ($testRootOwned) {
+                    Remove-PathAndAssertAbsent -Path $testRoot -Recurse `
+                        -FailureMessage (
+                            'temporary acceptance directory cleanup failed'
+                        )
+                } else {
+                    Assert-True (
+                        -not (Test-Path $testRoot)
+                    ) 'unowned acceptance directory unexpectedly exists'
+                }
+            }
+    } elseif ($testRootOwned) {
+        Write-Host (
+            "[acceptance] manual recovery directory retained at $testRoot"
+        )
+    }
 }
 
 $allErrors = [Collections.Generic.List[Exception]]::new()

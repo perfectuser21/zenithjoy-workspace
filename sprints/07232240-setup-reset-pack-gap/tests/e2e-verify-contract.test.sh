@@ -88,9 +88,6 @@ require_literal '[IO.Path]::GetFullPath'
 require_literal '[IO.Path]::DirectorySeparatorChar'
 require_literal '$mutationBarrierPassed'
 require_literal "Invoke-CleanupStep -Name 'wait for mutation stop barrier'"
-require_literal 'mutation stop barrier did not pass'
-require_literal "Invoke-CleanupStep -Name 'wait for test preflight processes to exit'"
-require_literal '$preflightProcessesQuiescent'
 require_literal 'RUNNER_TEMP'
 require_literal '$env:TEMP'
 require_literal 'icacls.exe'
@@ -104,6 +101,24 @@ require_literal 'runtime Agent real publish flag is not disabled'
 require_literal 'runtime compatibility real publish flag is not disabled'
 require_literal "Invoke-CleanupStep -Name 'remove test runtime configuration'"
 require_literal "Invoke-CleanupStep -Name 'remove test configuration template'"
+require_literal 'function Test-CommandLineReferencesPath'
+require_literal 'function Get-TestMutationProcesses'
+require_literal 'function Get-GlobalPreflightProcesses'
+require_literal '$process.CommandLine'
+require_literal '-not $originalAgentPids.Contains([int]$process.ProcessId)'
+require_literal '$safeFinalCleanup'
+require_literal 'if ($safeFinalCleanup) {'
+require_literal 'manual recovery directory retained at'
+require_literal '$originalAgentStartedUtc'
+require_literal '$reportStability'
+require_literal '.AddSeconds(10)'
+require_literal '.AddSeconds(20)'
+require_literal "Invoke-CleanupStep -Name 'wait for global preflight and report stability'"
+require_literal '$preflightAndReportQuiescent'
+require_literal '$pythonArgumentList = ('
+require_literal '-ArgumentList $pythonArgumentList'
+require_literal '.Replace('
+require_literal "'\\\"'"
 
 require_order "Assert-True (\$null -ne \$originalTask) 'required original scheduled task is missing'" \
   'New-Item -ItemType Directory -Force -Path $testRoot'
@@ -131,13 +146,15 @@ require_order 'install pack SHA256 does not match v2.0.89' \
   '& tar.exe -xzf $archive'
 require_order "Invoke-CleanupStep -Name 'stop preflight invoker tree'" \
   "Invoke-CleanupStep -Name 'wait for mutation stop barrier'"
+require_order "Invoke-CleanupStep -Name 'unregister test scheduled task'" \
+  "Invoke-CleanupStep -Name 'stop preflight invoker tree'"
 require_order "Invoke-CleanupStep -Name 'wait for mutation stop barrier'" \
   "Invoke-CleanupStep -Name 'register original scheduled task'"
 require_order "Invoke-CleanupStep -Name 'reconcile HKCU Environment'" \
   "Invoke-CleanupStep -Name 'start original scheduled task'"
 require_order "Invoke-CleanupStep -Name 'wait for new original Agent process'" \
-  "Invoke-CleanupStep -Name 'wait for test preflight processes to exit'"
-require_order "Invoke-CleanupStep -Name 'wait for test preflight processes to exit'" \
+  "Invoke-CleanupStep -Name 'wait for global preflight and report stability'"
+require_order "Invoke-CleanupStep -Name 'wait for global preflight and report stability'" \
   "Invoke-CleanupStep -Name 'restore preflight report'"
 require_order "Invoke-CleanupStep -Name 'remove test runtime configuration'" \
   "Invoke-CleanupStep -Name 'remove test configuration template'"
@@ -153,6 +170,8 @@ test "$root_line" -lt "$catch_line"
 test "$catch_line" -lt "$finally_line"
 
 test "$(grep -c -F 'Remove-Item' "$SCRIPT")" -eq 1
+! grep -Fq 'mutation stop barrier did not pass' "$SCRIPT"
+! grep -Fq 'if ($mutationBarrierPassed) {' "$SCRIPT"
 ! grep -Eq 'Write-(Host|Output).*(LICENSE|\.env)' "$SCRIPT"
 ! grep -Eq 'Write-(Host|Output).*(sourceLicense|sourceConfigText|preparedConfigText)' "$SCRIPT"
 ! grep -Eq 'Write-(Host|Output).*(Registry|originalZenithjoyRegistry)' "$SCRIPT"
