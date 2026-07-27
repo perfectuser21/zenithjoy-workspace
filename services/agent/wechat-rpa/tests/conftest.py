@@ -30,6 +30,36 @@ _MUTABLE_STATE = ("_SENT_TEXTS", "_REPLY_ANCHOR", "_INFLIGHT", "_LAST_EMIT",
                   "_TRAILING_STALL", "_ANCHOR_STALL", "_KNOWN_GROUPS")
 
 
+class _EmptyDesktop:
+    """Unit-test desktop boundary: never expose the operator's real windows."""
+
+    @staticmethod
+    def windows():
+        return []
+
+
+@pytest.fixture(autouse=True)
+def _isolate_real_desktop(monkeypatch):
+    """Block all real UIA/Win32 desktop discovery during unit tests."""
+    monkeypatch.setenv("ZJ_TEST_DESKTOP_ISOLATED", "1")
+
+    try:
+        import pywinauto
+    except ImportError:
+        pywinauto = None
+
+    if pywinauto is not None:
+        monkeypatch.setattr(
+            pywinauto,
+            "Desktop",
+            lambda *args, **kwargs: _EmptyDesktop(),
+            raising=False,
+        )
+
+    import find_weixin
+    monkeypatch.setattr(find_weixin, "_enum_hidden_main_hwnds", lambda: [])
+
+
 def _clear_state(mod) -> None:
     for name in _MUTABLE_STATE:
         obj = getattr(mod, name, None)
