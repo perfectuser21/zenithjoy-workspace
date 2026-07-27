@@ -367,18 +367,35 @@ function Remove-PathAndAssertAbsent {
         [string]$FailureMessage
     )
 
-    if (Test-Path $Path) {
-        $removeArgs = @{
-            LiteralPath = $Path
-            Force = $true
-            ErrorAction = 'SilentlyContinue'
+    $removeArgs = @{
+        LiteralPath = $Path
+        Force = $true
+        ErrorAction = 'SilentlyContinue'
+    }
+    if ($Recurse) {
+        $removeArgs.Recurse = $true
+    }
+    $removeOnce = {
+        if (Test-Path $Path) {
+            Remove-Item @removeArgs
         }
-        if ($Recurse) {
-            $removeArgs.Recurse = $true
-        }
-        Remove-Item @removeArgs
+    }
+    if ($Recurse) {
+        [GC]::Collect()
+        [GC]::WaitForPendingFinalizers()
+        Wait-Until -TimeoutSeconds 15 -FailureMessage $FailureMessage `
+            -Condition {
+                & $removeOnce
+                if (Test-Path $Path) {
+                    Start-Sleep -Milliseconds 500
+                    return $false
+                }
+                return $true
+            }
+        return
     }
 
+    & $removeOnce
     Assert-True (-not (Test-Path $Path)) $FailureMessage
 }
 
@@ -940,9 +957,11 @@ exit $pythonProcess.ExitCode
             -Errors $cleanupErrors -Action {
                 if ($null -ne $preflightInvoker) {
                     $preflightInvoker.Dispose()
+                    $script:preflightInvoker = $null
                 }
                 if ($null -ne $testCmd) {
                     $testCmd.Dispose()
+                    $script:testCmd = $null
                 }
             }
 

@@ -212,6 +212,9 @@ test "$shared_log_start_gate_line" -lt "$start_original_line"
 test "$safe_final_line" -lt "$shared_log_final_gate_line"
 
 test "$(grep -c -F 'Remove-Item' "$SCRIPT")" -eq 1
+require_literal '[GC]::WaitForPendingFinalizers()'
+require_literal 'Wait-Until -TimeoutSeconds 15'
+require_literal 'Start-Sleep -Milliseconds 500'
 ! grep -Fq 'mutation stop barrier did not pass' "$SCRIPT"
 ! grep -Fq 'if ($mutationBarrierPassed) {' "$SCRIPT"
 ! grep -Fq '$preflightInvoker.ExitCode' "$SCRIPT"
