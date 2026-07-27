@@ -128,6 +128,44 @@ def test_find_target_item_via_search_uses_edit1_and_exact_first_line():
     assert slept == [0.8]
 
 
+def test_search_supports_real_uiawrapper_descendants_without_child_window():
+    """find_weixin 真机返回 UIAWrapper；它没有 child_window，须按 automation_id 枚举 Edit。"""
+    exact = _Item("文件传输助手\n刚刚\n")
+
+    class _Edit:
+        def __init__(self, automation_id):
+            self.element_info = type(
+                "_EI", (), {"automation_id": automation_id}
+            )()
+            self.values = []
+
+        def set_focus(self):
+            pass
+
+        def set_edit_text(self, value):
+            self.values.append(value)
+
+    decoy = _Edit("other")
+    search = _Edit("edit1")
+
+    class _WrapperOnlyMW:
+        def descendants(self, control_type=None):
+            if control_type == "Edit":
+                return [decoy, search]
+            if control_type == "ListItem":
+                return [exact]
+            return []
+
+    mw = _WrapperOnlyMW()
+    found = find_target_item_via_search(mw, "文件传输助手", lambda s: None)
+
+    assert found is exact
+    assert search.values == ["文件传输助手"]
+    assert clear_target_search(mw) is True
+    assert search.values == ["文件传输助手", ""]
+    assert decoy.values == []
+
+
 def test_find_target_item_via_search_rejects_duplicate_exact_names_and_clears():
     """两个完全同名结果无法证明哪个是系统账号，必须拒绝并清空搜索态。"""
     exact_a = _Item("文件传输助手\n搜索结果 A\n08:02\n")
