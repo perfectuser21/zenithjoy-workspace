@@ -199,11 +199,36 @@ def _write(result: dict) -> None:
         pass
 
 
-def main() -> int:
-    result = {
-        "ok": False, "err": None, "bubble_count": 0,
-        "marker_found": False, "marker_outgoing": False,
-    }
+def finalize_search_recovery_cleanup(
+    result,
+    fallback_mw,
+    find_window_fn,
+    clear_fn=clear_target_search,
+    write_fn=_write,
+):
+    """搜索恢复用完后强制清理；清不掉就覆盖 gate 成功结果并 fail-closed。
+
+    长流程结束时原 ``mw`` 的 UIA wrapper 可能已经失效，因此先重新获取两次主窗口
+    wrapper 尝试清理，最后才用原 wrapper 兜底。返回 ``None`` 表示已清理；返回 1
+    表示所有尝试均失败，调用方必须用它覆盖原返回码。
+    """
+    for _ in range(2):
+        try:
+            fresh_mw = find_window_fn()
+        except Exception:
+            fresh_mw = None
+        if fresh_mw is not None and clear_fn(fresh_mw):
+            return None
+    if fallback_mw is not None and clear_fn(fallback_mw):
+        return None
+
+    result["ok"] = False
+    result["err"] = "全局搜索框清理失败；为避免监听在过滤态恢复，gate fail-closed"
+    write_fn(result)
+    return 1
+
+
+def _run_gate(result, cleanup_state) -> int:
     mw = None
     item_recovery = None
     try:
@@ -247,6 +272,11 @@ def main() -> int:
             ),
         )
         item_recovery = how
+        cleanup_state.update({
+            "item_recovery": item_recovery,
+            "mw": mw,
+            "find_window_fn": find_weixin.get_main_window,
+        })
         if item is not None and how != "first_try":
             print(f"[bubble-gate] {TARGET} found via {how}")
         if item is None:
@@ -303,9 +333,24 @@ def main() -> int:
         result["err"] = repr(e)
         _write(result)
         return 1
-    finally:
-        if item_recovery == "search_recovery" and mw is not None:
-            clear_target_search(mw)
+
+
+def main() -> int:
+    result = {
+        "ok": False, "err": None, "bubble_count": 0,
+        "marker_found": False, "marker_outgoing": False,
+    }
+    cleanup_state = {}
+    exit_code = _run_gate(result, cleanup_state)
+    if cleanup_state.get("item_recovery") == "search_recovery":
+        cleanup_exit = finalize_search_recovery_cleanup(
+            result,
+            cleanup_state.get("mw"),
+            cleanup_state["find_window_fn"],
+        )
+        if cleanup_exit is not None:
+            return cleanup_exit
+    return exit_code
 
 
 if __name__ == "__main__":
