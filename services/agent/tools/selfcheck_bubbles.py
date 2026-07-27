@@ -64,6 +64,58 @@ def find_target_item(descendants, target):
     return None
 
 
+def _post_enter_to_window(hwnd: int) -> bool:
+    """向指定窗口投递一次 Enter；不依赖真实鼠标或当前输入桌面。"""
+    import ctypes
+
+    windll = getattr(ctypes, "windll", None)
+    if windll is None or not hwnd:
+        return False
+    try:
+        user32 = windll.user32
+        key_down = user32.PostMessageW(hwnd, 0x0100, 0x0D, 0x001C0001)
+        key_up = user32.PostMessageW(hwnd, 0x0101, 0x0D, 0xC01C0001)
+        return bool(key_down and key_up)
+    except Exception:
+        return False
+
+
+def return_to_session_list_via_back(
+    mw,
+    post_enter_fn=_post_enter_to_window,
+) -> bool:
+    """从聊天详情页返回会话列表，专供无真实鼠标输入权的 session-1 gate。
+
+    xian-rog 断开的 RDP 桌面会拒绝 ``SetCursorPos``，而 mmui 的 Invoke /
+    LegacyIAccessible 默认动作又会静默无效。真机验证可工作的无坐标路径是：
+    精确找到唯一 ``返回`` XButton → UIA SetFocus → 向微信主窗口投递 Enter。
+    任何定位歧义、焦点未生效或消息投递失败都返回 False，让调用方 fail-closed。
+    """
+    try:
+        matches = []
+        for button in mw.descendants(control_type="Button"):
+            try:
+                info = button.element_info
+                name = (info.name or "").strip()
+                class_name = info.class_name or ""
+            except Exception:
+                continue
+            if name == "返回" and class_name == "mmui::XButton":
+                matches.append(button)
+        if len(matches) != 1:
+            return False
+
+        back = matches[0]
+        back.set_focus()
+        if not back.has_keyboard_focus():
+            return False
+        hwnd = int(mw.element_info.handle or 0)
+        return bool(post_enter_fn(hwnd))
+    except Exception as exc:
+        print(f"[bubble-gate] chat detail back recovery failed: {exc}")
+        return False
+
+
 def _find_target_search_edit(mw):
     """兼容 WindowSpecification 与 find_weixin 返回的真实 UIAWrapper。"""
     child_window = getattr(mw, "child_window", None)
@@ -144,7 +196,7 @@ def find_target_item_via_search(
 
 def find_item_with_recovery(
     mw, target, retries, retry_delay_s, sleep_fn, reset_fn,
-    reset_retries=RESET_FN_RETRIES, search_fn=None,
+    reset_retries=RESET_FN_RETRIES, search_fn=None, back_fn=None,
 ):
     """真根因修法（2026-07-08 rog 实证，session-1 诊断亲眼确认）：先做几轮廉价重试
     （覆盖极端渲染瞬态），仍找不到就调用 reset_fn（真机上是
@@ -160,6 +212,10 @@ def find_item_with_recovery(
     的点击升级梯是瞬时操作，单次失败（如 rog CI×生产监听共享桌面时前台焦点被抢）不代表
     真的恢复不了——只调一次就放弃会把瞬态失败误判成 gate 真失败。reset_retries 次内
     任一次成功即返回；全部失败才最终判 not_found。
+
+    reset 全失败后，若窗口停在 WeChat 4.1.8 ChatDetailView，则 back_fn 用
+    UIA 焦点 + 主窗口 Enter 消息返回会话列表。该路径不依赖真实鼠标输入桌面；
+    返回后仍必须重新枚举并精确找到 target，不能只凭消息投递成功放行。
 
     纯逻辑（CI 可测，mw/sleep_fn/reset_fn 全部注入）：mw 只需支持
     `descendants(control_type=...)`；reset_fn(mw) -> bool 模拟
@@ -180,6 +236,15 @@ def find_item_with_recovery(
                 item = find_target_item(mw.descendants(control_type="ListItem"), target)
                 if item is not None:
                     return item, f"reset_recovery_{j + 1}"
+        except Exception:
+            pass
+    if back_fn is not None:
+        try:
+            if back_fn(mw):
+                sleep_fn(1.0)
+                item = find_target_item(mw.descendants(control_type="ListItem"), target)
+                if item is not None:
+                    return item, "back_recovery"
         except Exception:
             pass
     if search_fn is not None:
@@ -295,6 +360,7 @@ def _run_gate(result, cleanup_state) -> int:
         item, how = find_item_with_recovery(
             mw, TARGET, FIND_ITEM_RETRIES, FIND_ITEM_RETRY_DELAY_S,
             time.sleep, listen_chat._reset_session_list_to_top,
+            back_fn=return_to_session_list_via_back,
             search_fn=lambda window, target: find_target_item_via_search(
                 window,
                 target,

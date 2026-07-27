@@ -24,6 +24,7 @@ from selfcheck_bubbles import (  # noqa: E402
     find_target_item,
     find_target_item_via_search,
     main,
+    return_to_session_list_via_back,
 )
 
 
@@ -88,6 +89,64 @@ def test_find_target_item_skips_broken_items():
     items = [_Item(raises=True), _Item("文件传输助手\n消息\n08:01\n")]
     found = find_target_item(items, "文件传输助手")
     assert found is items[1]
+
+
+def test_return_to_session_list_via_back_focuses_unique_button_and_posts_enter():
+    """断开的 RDP 桌面不能 SetCursorPos；用 UIA 焦点 + 主窗口 Enter 消息返回。"""
+    calls = []
+
+    class _Back:
+        def __init__(self, name, class_name):
+            self.element_info = type(
+                "_EI", (), {"name": name, "class_name": class_name}
+            )()
+            self.focused = False
+
+        def set_focus(self):
+            self.focused = True
+
+        def has_keyboard_focus(self):
+            return self.focused
+
+    back = _Back("返回", "mmui::XButton")
+    decoy = _Back("返回顶部", "mmui::XButton")
+
+    class _MainWindow:
+        element_info = type("_EI", (), {"handle": 461008})()
+
+        def descendants(self, control_type=None):
+            assert control_type == "Button"
+            return [decoy, back]
+
+    mw = _MainWindow()
+    ok = return_to_session_list_via_back(
+        mw,
+        post_enter_fn=lambda hwnd: calls.append(hwnd) or True,
+    )
+
+    assert ok is True
+    assert back.focused is True
+    assert calls == [461008]
+
+
+def test_return_to_session_list_via_back_rejects_ambiguous_exact_buttons():
+    class _Back:
+        element_info = type(
+            "_EI", (), {"name": "返回", "class_name": "mmui::XButton"}
+        )()
+
+    class _MainWindow:
+        element_info = type("_EI", (), {"handle": 461008})()
+
+        def descendants(self, control_type=None):
+            return [_Back(), _Back()]
+
+    calls = []
+    assert return_to_session_list_via_back(
+        _MainWindow(),
+        post_enter_fn=lambda hwnd: calls.append(hwnd) or True,
+    ) is False
+    assert calls == []
 
 
 def test_find_target_item_via_search_uses_edit1_and_exact_first_line():
@@ -443,3 +502,24 @@ def test_find_item_with_recovery_searches_exact_target_after_reset_exhausted():
     assert item is target_item and how == "search_recovery"
     assert len(reset_calls) == 3
     assert search_calls == [(mw, "文件传输助手")]
+
+
+def test_find_item_with_recovery_uses_back_before_global_search():
+    """聊天详情页无搜索框时，reset 全失败后先返回会话列表，再决定是否搜索。"""
+    stuck_chat_bubbles = [_Item("[bubble-gate] 1783439923\n08:01\n")]
+    session_list_after_back = [_Item("文件传输助手\n消息\n08:02\n")]
+    mw = _MW([stuck_chat_bubbles] * 2 + [session_list_after_back])
+    back_calls, search_calls = [], []
+
+    item, how = find_item_with_recovery(
+        mw, "文件传输助手", retries=1, retry_delay_s=0.01,
+        sleep_fn=lambda s: None,
+        reset_fn=lambda mw_: False,
+        back_fn=lambda mw_: back_calls.append(mw_) or True,
+        search_fn=lambda mw_, target: search_calls.append((mw_, target)),
+    )
+
+    assert item is session_list_after_back[0]
+    assert how == "back_recovery"
+    assert back_calls == [mw]
+    assert search_calls == []
