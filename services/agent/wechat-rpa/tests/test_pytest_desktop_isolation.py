@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
-import pytest
 
-
-@pytest.mark.skipif(sys.platform != "win32", reason="Windows desktop isolation guard")
 def test_unit_suite_desktop_is_sandboxed():
-    from pywinauto import Desktop
+    assert os.environ.get("ZJ_TEST_DESKTOP_ISOLATED") == "1"
 
-    assert Desktop(backend="uia").windows() == []
+    if sys.platform == "win32":
+        from pywinauto import Desktop
+
+        assert Desktop(backend="uia").windows() == []
