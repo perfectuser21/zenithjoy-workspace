@@ -669,7 +669,10 @@ git commit -m "fix(ci): 等监听静默确认后再操作真微信"
 ### Task 5: 全量回归、更新 #1469 并真机连续验证
 
 **Files:**
-- Verify only; no planned production file changes.
+- Modify: `services/agent/package.json`
+- Modify: `services/agent/package-lock.json`
+- Modify: `services/agent/build-modules/line04/manifest.json`
+- Modify: `services/agent/modules/line04/manifest.json`
 
 - [ ] **Step 1: Run focused TypeScript tests**
 
@@ -725,7 +728,42 @@ git status --short
 
 Expected: smoke/lint PASS；仅允许计划内提交后的状态文件，不允许未提交代码。
 
-- [ ] **Step 5: Push #1469 branch**
+- [ ] **Step 5: Bump deployable core and line04 module versions**
+
+本修复同时改到 `services/agent/src/` 与 `services/agent/wechat-rpa/`，必须把 Agent core
+从 `2.0.88` 提升到 `2.0.89`，并把两份 line04 manifest 从 `1.0.151` 提升到
+`1.0.152`。运行：
+
+```bash
+bash .github/workflows/scripts/lint-agent-version-bump.sh
+bash .github/workflows/scripts/lint-line04-manifest-version-bump.sh
+```
+
+Expected: 两个版本门禁均 PASS，确保合并后旧机器能实际 OTA 到握手实现。
+
+- [ ] **Step 6: Verify the production TypeScript build**
+
+Run:
+
+```bash
+cd services/agent
+npm run build
+```
+
+Expected: `tsc -p tsconfig.build.json` exit 0。仓库通用 `npm run typecheck` 的既有
+`import.meta` 测试配置问题单独记录，但不能代替生产 build 验证。
+
+- [ ] **Step 7: Commit version bumps**
+
+```bash
+git add services/agent/package.json services/agent/package-lock.json \
+  services/agent/build-modules/line04/manifest.json \
+  services/agent/modules/line04/manifest.json \
+  docs/superpowers/plans/2026-07-27-line04-desktop-quiescence-handshake.md
+git commit -m "chore(agent): 发布桌面静默握手版本"
+```
+
+- [ ] **Step 8: Push #1469 branch**
 
 ```bash
 git push origin cp-0724100714-bubble-gate-reset-retry
@@ -733,7 +771,7 @@ git push origin cp-0724100714-bubble-gate-reset-retry
 
 Expected: remote branch 更新到本地 HEAD。
 
-- [ ] **Step 6: Update PR #1469 description**
+- [ ] **Step 9: Update PR #1469 description**
 
 在 PR body 中写明：
 
@@ -755,7 +793,7 @@ Expected: remote branch 更新到本地 HEAD。
 - [ ] xian-rog run 3 PASS
 ```
 
-- [ ] **Step 7: Wait for all PR checks**
+- [ ] **Step 10: Wait for all PR checks**
 
 Run:
 
@@ -765,7 +803,7 @@ gh pr checks 1469 --watch --interval 20
 
 Expected: required checks 全绿。
 
-- [ ] **Step 8: Re-run the real-machine workflow until three consecutive PASS results**
+- [ ] **Step 11: Re-run the real-machine workflow until three consecutive PASS results**
 
 每次使用最新 #1469 head 对应的 `WeChat CS E2E` workflow run；如 GitHub 不自动产生三次，
 用 `gh run rerun <run-id>` 触发相同 SHA 的重跑。每次记录 run URL，并确认 job3 日志顺序：
