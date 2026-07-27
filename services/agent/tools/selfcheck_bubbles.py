@@ -41,6 +41,12 @@ FIND_WINDOW_RETRY_DELAY_S = 12.0
 FIND_ITEM_RETRIES = 5
 FIND_ITEM_RETRY_DELAY_S = 2.0
 
+# reset_fn（_reset_session_list_to_top）有界重试：其内部点击升级梯（PostMessage→验证→
+# click_input）是瞬时操作，rog CI×生产监听共享桌面场景下单次失败常见（issue b237a4b6：
+# 2026-07-24 真机截图证实窗口停在真实客户聊天面板，reset_fn 首次"切通讯录未生效"就放弃，
+# 换一轮全新尝试大概率能成功）——不能只试一次就判定 gate 失败。
+RESET_FN_RETRIES = 3
+
 
 def find_target_item(descendants, target):
     """纯函数（CI 可测）：在一批 ListItem 里找 name 以 target 开头的那个。
@@ -58,7 +64,140 @@ def find_target_item(descendants, target):
     return None
 
 
-def find_item_with_recovery(mw, target, retries, retry_delay_s, sleep_fn, reset_fn):
+def _post_enter_to_window(hwnd: int) -> bool:
+    """向指定窗口投递一次 Enter；不依赖真实鼠标或当前输入桌面。"""
+    import ctypes
+
+    windll = getattr(ctypes, "windll", None)
+    if windll is None or not hwnd:
+        return False
+    try:
+        user32 = windll.user32
+        key_down = user32.PostMessageW(hwnd, 0x0100, 0x0D, 0x001C0001)
+        key_up = user32.PostMessageW(hwnd, 0x0101, 0x0D, 0xC01C0001)
+        return bool(key_down and key_up)
+    except Exception:
+        return False
+
+
+def return_to_session_list_via_back(
+    mw,
+    post_enter_fn=_post_enter_to_window,
+) -> bool:
+    """从聊天详情页返回会话列表，专供无真实鼠标输入权的 session-1 gate。
+
+    xian-rog 断开的 RDP 桌面会拒绝 ``SetCursorPos``，而 mmui 的 Invoke /
+    LegacyIAccessible 默认动作又会静默无效。真机验证可工作的无坐标路径是：
+    精确找到唯一 ``返回`` XButton → UIA SetFocus → 向微信主窗口投递 Enter。
+    任何定位歧义、焦点未生效或消息投递失败都返回 False，让调用方 fail-closed。
+    """
+    try:
+        matches = []
+        for button in mw.descendants(control_type="Button"):
+            try:
+                info = button.element_info
+                name = (info.name or "").strip()
+                class_name = info.class_name or ""
+            except Exception:
+                continue
+            if name == "返回" and class_name == "mmui::XButton":
+                matches.append(button)
+        if len(matches) != 1:
+            return False
+
+        back = matches[0]
+        back.set_focus()
+        if not back.has_keyboard_focus():
+            return False
+        hwnd = int(mw.element_info.handle or 0)
+        return bool(post_enter_fn(hwnd))
+    except Exception as exc:
+        print(f"[bubble-gate] chat detail back recovery failed: {exc}")
+        return False
+
+
+def _find_target_search_edit(mw):
+    """兼容 WindowSpecification 与 find_weixin 返回的真实 UIAWrapper。"""
+    child_window = getattr(mw, "child_window", None)
+    if callable(child_window):
+        return child_window(auto_id="edit1", control_type="Edit")
+    for edit in mw.descendants(control_type="Edit"):
+        try:
+            automation_id = edit.element_info.automation_id or ""
+        except Exception:
+            continue
+        if automation_id == "edit1":
+            return edit
+    raise RuntimeError("global search Edit(auto_id='edit1') not found")
+
+
+def clear_target_search(mw) -> bool:
+    """清空顶部全局搜索框；失败时只记录，由调用方继续 fail-closed。"""
+    try:
+        search_edit = _find_target_search_edit(mw)
+        search_edit.set_edit_text("")
+        return True
+    except Exception as exc:
+        print(f"[bubble-gate] global search cleanup failed: {exc}")
+        return False
+
+
+def find_target_item_via_search(
+    mw,
+    target,
+    sleep_fn=time.sleep,
+    cleanup_state=None,
+    find_window_fn=None,
+):
+    """导航 tab 无法切换时，用顶部全局搜索框精确定位固定自检会话。
+
+    WeChat 4.1.8 的全局搜索框稳定暴露为 ``Edit(auto_id='edit1')``；这是仓库
+    voice_call 真机路径已经使用的定位接缝。只有唯一一个首行显示名精确等于 target
+    的 ListItem 才允许继续；搜索失败、结果歧义或 UIA wrapper 失效均返回 None，
+    并立即尝试清空搜索框，由 gate fail-closed。不论是否找到，都通过 cleanup_state
+    记录“搜索已执行”，让 main 在整个 gate 返回后再用新鲜窗口 wrapper 统一清理。
+    唯一结果暂不清空，避免使 item wrapper 失效。
+    """
+    if cleanup_state is not None:
+        cleanup_state.update({
+            "search_attempted": True,
+            "mw": mw,
+            "find_window_fn": find_window_fn,
+        })
+    found = None
+    try:
+        search_edit = _find_target_search_edit(mw)
+        search_edit.set_focus()
+        search_edit.set_edit_text(target)
+        sleep_fn(0.8)
+        matches = []
+        for item in mw.descendants(control_type="ListItem"):
+            try:
+                first_line = (item.element_info.name or "").split("\n", 1)[0].strip()
+            except Exception:
+                continue
+            if first_line == target:
+                matches.append(item)
+        if len(matches) == 1:
+            found = matches[0]
+            return found
+        if len(matches) > 1:
+            print(
+                f"[bubble-gate] global search recovery ambiguous: "
+                f"{len(matches)} exact matches for {target}"
+            )
+    except Exception as exc:
+        print(f"[bubble-gate] global search recovery failed: {exc}")
+    finally:
+        if found is None:
+            clear_target_search(mw)
+    return None
+
+
+def find_item_with_recovery(
+    mw, target, retries, retry_delay_s, sleep_fn, reset_fn,
+    reset_retries=RESET_FN_RETRIES, search_fn=None, back_fn=None,
+):
     """真根因修法（2026-07-08 rog 实证，session-1 诊断亲眼确认）：先做几轮廉价重试
     （覆盖极端渲染瞬态），仍找不到就调用 reset_fn（真机上是
     listen_chat._reset_session_list_to_top）尝试恢复后再补查一次。
@@ -68,6 +207,15 @@ def find_item_with_recovery(mw, target, retries, retry_delay_s, sleep_fn, reset_
     这时 mw.descendants(ListItem) 枚举到的是聊天气泡（"[bubble-gate] <ts>"/
     时间戳），不是会话列表条目，目标联系人自然永远"找不到"——纯重试没用，
     等的是压根不会变化的错误视图，必须主动切 tab 强制视图重建。
+
+    reset_fn 本身有界重试（issue b237a4b6，2026-07-24）：_reset_session_list_to_top
+    的点击升级梯是瞬时操作，单次失败（如 rog CI×生产监听共享桌面时前台焦点被抢）不代表
+    真的恢复不了——只调一次就放弃会把瞬态失败误判成 gate 真失败。reset_retries 次内
+    任一次成功即返回；全部失败才最终判 not_found。
+
+    reset 全失败后，若窗口停在 WeChat 4.1.8 ChatDetailView，则 back_fn 用
+    UIA 焦点 + 主窗口 Enter 消息返回会话列表。该路径不依赖真实鼠标输入桌面；
+    返回后仍必须重新枚举并精确找到 target，不能只凭消息投递成功放行。
 
     纯逻辑（CI 可测，mw/sleep_fn/reset_fn 全部注入）：mw 只需支持
     `descendants(control_type=...)`；reset_fn(mw) -> bool 模拟
@@ -81,14 +229,31 @@ def find_item_with_recovery(mw, target, retries, retry_delay_s, sleep_fn, reset_
         item = find_target_item(mw.descendants(control_type="ListItem"), target)
         if item is not None:
             return item, f"retry_{i + 1}"
-    try:
-        if reset_fn(mw):
-            sleep_fn(1.0)
-            item = find_target_item(mw.descendants(control_type="ListItem"), target)
+    for j in range(reset_retries):
+        try:
+            if reset_fn(mw):
+                sleep_fn(1.0)
+                item = find_target_item(mw.descendants(control_type="ListItem"), target)
+                if item is not None:
+                    return item, f"reset_recovery_{j + 1}"
+        except Exception:
+            pass
+    if back_fn is not None:
+        try:
+            if back_fn(mw):
+                sleep_fn(1.0)
+                item = find_target_item(mw.descendants(control_type="ListItem"), target)
+                if item is not None:
+                    return item, "back_recovery"
+        except Exception:
+            pass
+    if search_fn is not None:
+        try:
+            item = search_fn(mw, target)
             if item is not None:
-                return item, "reset_recovery"
-    except Exception:
-        pass
+                return item, "search_recovery"
+        except Exception:
+            pass
     return None, "not_found"
 
 
@@ -127,11 +292,38 @@ def _write(result: dict) -> None:
         pass
 
 
-def main() -> int:
-    result = {
-        "ok": False, "err": None, "bubble_count": 0,
-        "marker_found": False, "marker_outgoing": False,
-    }
+def finalize_search_recovery_cleanup(
+    result,
+    fallback_mw,
+    find_window_fn,
+    clear_fn=clear_target_search,
+    write_fn=_write,
+):
+    """搜索恢复用完后强制清理；清不掉就覆盖 gate 成功结果并 fail-closed。
+
+    长流程结束时原 ``mw`` 的 UIA wrapper 可能已经失效，因此先重新获取两次主窗口
+    wrapper 尝试清理，最后才用原 wrapper 兜底。返回 ``None`` 表示已清理；返回 1
+    表示所有尝试均失败，调用方必须用它覆盖原返回码。
+    """
+    for _ in range(2):
+        try:
+            fresh_mw = find_window_fn()
+        except Exception:
+            fresh_mw = None
+        if fresh_mw is not None and clear_fn(fresh_mw):
+            return None
+    if fallback_mw is not None and clear_fn(fallback_mw):
+        return None
+
+    result["ok"] = False
+    result["err"] = "全局搜索框清理失败；为避免监听在过滤态恢复，gate fail-closed"
+    write_fn(result)
+    return 1
+
+
+def _run_gate(result, cleanup_state) -> int:
+    mw = None
+    item_recovery = None
     try:
         import listen_chat
         import find_weixin
@@ -168,7 +360,21 @@ def main() -> int:
         item, how = find_item_with_recovery(
             mw, TARGET, FIND_ITEM_RETRIES, FIND_ITEM_RETRY_DELAY_S,
             time.sleep, listen_chat._reset_session_list_to_top,
+            back_fn=return_to_session_list_via_back,
+            search_fn=lambda window, target: find_target_item_via_search(
+                window,
+                target,
+                time.sleep,
+                cleanup_state=cleanup_state,
+                find_window_fn=find_weixin.get_main_window,
+            ),
         )
+        item_recovery = how
+        cleanup_state.update({
+            "item_recovery": item_recovery,
+            "mw": mw,
+            "find_window_fn": find_weixin.get_main_window,
+        })
         if item is not None and how != "first_try":
             print(f"[bubble-gate] {TARGET} found via {how}")
         if item is None:
@@ -225,6 +431,24 @@ def main() -> int:
         result["err"] = repr(e)
         _write(result)
         return 1
+
+
+def main() -> int:
+    result = {
+        "ok": False, "err": None, "bubble_count": 0,
+        "marker_found": False, "marker_outgoing": False,
+    }
+    cleanup_state = {}
+    exit_code = _run_gate(result, cleanup_state)
+    if cleanup_state.get("search_attempted"):
+        cleanup_exit = finalize_search_recovery_cleanup(
+            result,
+            cleanup_state.get("mw"),
+            cleanup_state["find_window_fn"],
+        )
+        if cleanup_exit is not None:
+            return cleanup_exit
+    return exit_code
 
 
 if __name__ == "__main__":

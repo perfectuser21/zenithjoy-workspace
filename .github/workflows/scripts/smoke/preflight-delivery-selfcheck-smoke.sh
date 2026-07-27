@@ -10,7 +10,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
-EXPECTED="1.0.151"
+EXPECTED="1.0.152"
 PF="$REPO_ROOT/services/agent/build-modules/line04/preflight.js"
 
 command -v node >/dev/null 2>&1 || { echo "FAIL: 缺 node"; exit 6; }
@@ -39,8 +39,11 @@ a.strictEqual(p.shouldRunDeliverySelfcheck(now, 0), true, '从未发→首次必
 console.log('  OK: 带发送自检 interpretVerifyDelivery/checkVerifyDelivery + 真送达自检节流门（编译产物）');
 " || { echo "FAIL: 带发送自检逻辑断言不通过"; exit 5; }
 
-V=$(node -e "process.stdout.write(require('$REPO_ROOT/services/agent/build-modules/line04/manifest.json').version)")
-[ "$V" = "$EXPECTED" ] || { echo "FAIL: build-modules/line04 manifest=$V != $EXPECTED"; exit 3; }
-echo "  OK: build-modules/line04 manifest = $V"
+SOURCE_VERSION=$(node -e "process.stdout.write(require('$REPO_ROOT/services/agent/modules/line04/manifest.json').version)")
+BUILD_VERSION=$(node -e "process.stdout.write(require('$REPO_ROOT/services/agent/build-modules/line04/manifest.json').version)")
+[ "$SOURCE_VERSION" = "$EXPECTED" ] || { echo "FAIL: modules/line04 manifest=$SOURCE_VERSION != $EXPECTED"; exit 3; }
+[ "$BUILD_VERSION" = "$EXPECTED" ] || { echo "FAIL: build-modules/line04 manifest=$BUILD_VERSION != $EXPECTED"; exit 3; }
+[ "$SOURCE_VERSION" = "$BUILD_VERSION" ] || { echo "FAIL: source/build manifest 版本不一致"; exit 3; }
+echo "  OK: line04 source/build manifests = $SOURCE_VERSION"
 
 echo "preflight-delivery-selfcheck-smoke: PASS"
