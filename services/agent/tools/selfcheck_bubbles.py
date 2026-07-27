@@ -64,27 +64,53 @@ def find_target_item(descendants, target):
     return None
 
 
+def clear_target_search(mw) -> bool:
+    """清空顶部全局搜索框；失败时只记录，由调用方继续 fail-closed。"""
+    try:
+        search_edit = mw.child_window(auto_id="edit1", control_type="Edit")
+        search_edit.set_edit_text("")
+        return True
+    except Exception as exc:
+        print(f"[bubble-gate] global search cleanup failed: {exc}")
+        return False
+
+
 def find_target_item_via_search(mw, target, sleep_fn=time.sleep):
     """导航 tab 无法切换时，用顶部全局搜索框精确定位固定自检会话。
 
     WeChat 4.1.8 的全局搜索框稳定暴露为 ``Edit(auto_id='edit1')``；这是仓库
-    voice_call 真机路径已经使用的定位接缝。这里只返回首行显示名精确等于 target
-    的 ListItem，搜索失败或 UIA wrapper 失效均返回 None，由 gate fail-closed。
+    voice_call 真机路径已经使用的定位接缝。只有唯一一个首行显示名精确等于 target
+    的 ListItem 才允许继续；搜索失败、结果歧义或 UIA wrapper 失效均返回 None，
+    并立即清空搜索框，由 gate fail-closed。唯一结果暂不清空，避免使 item wrapper
+    失效；main 会在使用结束后的 finally 中统一清理。
     """
+    found = None
     try:
         search_edit = mw.child_window(auto_id="edit1", control_type="Edit")
         search_edit.set_focus()
         search_edit.set_edit_text(target)
         sleep_fn(0.8)
+        matches = []
         for item in mw.descendants(control_type="ListItem"):
             try:
                 first_line = (item.element_info.name or "").split("\n", 1)[0].strip()
             except Exception:
                 continue
             if first_line == target:
-                return item
+                matches.append(item)
+        if len(matches) == 1:
+            found = matches[0]
+            return found
+        if len(matches) > 1:
+            print(
+                f"[bubble-gate] global search recovery ambiguous: "
+                f"{len(matches)} exact matches for {target}"
+            )
     except Exception as exc:
         print(f"[bubble-gate] global search recovery failed: {exc}")
+    finally:
+        if found is None:
+            clear_target_search(mw)
     return None
 
 
@@ -178,6 +204,8 @@ def main() -> int:
         "ok": False, "err": None, "bubble_count": 0,
         "marker_found": False, "marker_outgoing": False,
     }
+    mw = None
+    item_recovery = None
     try:
         import listen_chat
         import find_weixin
@@ -218,6 +246,7 @@ def main() -> int:
                 window, target, time.sleep
             ),
         )
+        item_recovery = how
         if item is not None and how != "first_try":
             print(f"[bubble-gate] {TARGET} found via {how}")
         if item is None:
@@ -274,6 +303,9 @@ def main() -> int:
         result["err"] = repr(e)
         _write(result)
         return 1
+    finally:
+        if item_recovery == "search_recovery" and mw is not None:
+            clear_target_search(mw)
 
 
 if __name__ == "__main__":
