@@ -89,7 +89,7 @@ require_literal '$preflightInvoker.WaitForExit(120000)'
 require_literal '$pythonProcess.WaitForExit(110000)'
 require_literal "WriteAllText(\$exitFile, '124')"
 require_literal '$preflightFailureChecks'
-require_literal 'PsExec preflight invoker failed:'
+require_literal 'packaged preflight failed:'
 require_literal "\$preflightCmd = Join-Path \$testRoot 'run-preflight.cmd'"
 require_literal '[IO.File]::WriteAllLines('
 require_literal "\$cmdExe = Join-Path \$env:SystemRoot 'System32\\cmd.exe'"
@@ -209,6 +209,7 @@ test "$safe_final_line" -lt "$shared_log_final_gate_line"
 test "$(grep -c -F 'Remove-Item' "$SCRIPT")" -eq 1
 ! grep -Fq 'mutation stop barrier did not pass' "$SCRIPT"
 ! grep -Fq 'if ($mutationBarrierPassed) {' "$SCRIPT"
+! grep -Fq '$preflightInvoker.ExitCode' "$SCRIPT"
 ! grep -Eq 'Write-(Host|Output).*(LICENSE|\.env)' "$SCRIPT"
 ! grep -Eq 'Write-(Host|Output).*(sourceLicense|sourceConfigText|preparedConfigText)' "$SCRIPT"
 ! grep -Eq 'Write-(Host|Output).*(Registry|originalZenithjoyRegistry)' "$SCRIPT"

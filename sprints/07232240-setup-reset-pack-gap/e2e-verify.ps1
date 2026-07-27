@@ -822,10 +822,10 @@ exit $pythonProcess.ExitCode
         Stop-TestProcessTree $preflightInvoker
         throw 'interactive packaged preflight exceeded 120 seconds'
     }
-    $preflightExit = $null
-    if (Test-Path $preflightExitFile) {
-        $preflightExit = [int](Get-Content $preflightExitFile -Raw)
-    }
+    Assert-True (
+        Test-Path $preflightExitFile
+    ) 'interactive packaged preflight did not write an exit code'
+    $preflightExit = [int](Get-Content $preflightExitFile -Raw)
     $preflightFailureChecks = @()
     if (Test-Path $preflightReport) {
         try {
@@ -841,22 +841,12 @@ exit $pythonProcess.ExitCode
         }
     }
     Assert-True (
-        $preflightInvoker.ExitCode -eq 0
+        $preflightExit -eq 0
     ) (
-        'PsExec preflight invoker failed: ' +
-        "invoker_exit=$($preflightInvoker.ExitCode) " +
-        "preflight_exit=$(if ($null -eq $preflightExit) {
-            '<missing>'
-        } else {
-            $preflightExit
-        }) " +
+        'packaged preflight failed: ' +
+        "preflight_exit=$preflightExit " +
         "failing_checks=$($preflightFailureChecks -join ',')"
     )
-    Assert-True (
-        Test-Path $preflightExitFile
-    ) 'interactive packaged preflight did not write an exit code'
-
-    Assert-True ($preflightExit -eq 0) 'packaged preflight failed'
     Assert-True (
         Test-Path $preflightReport
     ) 'packaged preflight report is missing'
