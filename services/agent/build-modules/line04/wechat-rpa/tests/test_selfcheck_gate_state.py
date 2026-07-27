@@ -160,10 +160,64 @@ def test_find_target_item_via_search_rejects_duplicate_exact_names_and_clears():
     assert mw.search.values == ["文件传输助手", ""]
 
 
+def test_failed_search_records_cleanup_state_for_fresh_window_retry():
+    """歧义搜索即使旧 wrapper 清理失败，也必须留下统一 fresh-wrapper 清理状态。"""
+    exact_a = _Item("文件传输助手\n搜索结果 A\n08:02\n")
+    exact_b = _Item("文件传输助手\n搜索结果 B\n08:03\n")
+
+    class _FailingClearEdit:
+        def set_focus(self):
+            pass
+
+        def set_edit_text(self, value):
+            if value == "":
+                raise RuntimeError("stale wrapper")
+
+    class _WorkingEdit:
+        def __init__(self):
+            self.values = []
+
+        def set_edit_text(self, value):
+            self.values.append(value)
+
+    class _SearchMW:
+        def __init__(self, items, edit):
+            self.items = items
+            self.edit = edit
+
+        def child_window(self, **kwargs):
+            return self.edit
+
+        def descendants(self, control_type=None):
+            return self.items
+
+    stale = _SearchMW([exact_a, exact_b], _FailingClearEdit())
+    fresh = _SearchMW([], _WorkingEdit())
+    cleanup_state = {}
+
+    found = find_target_item_via_search(
+        stale,
+        "文件传输助手",
+        lambda s: None,
+        cleanup_state=cleanup_state,
+        find_window_fn=lambda: fresh,
+    )
+    cleanup_exit = finalize_search_recovery_cleanup(
+        {},
+        cleanup_state["mw"],
+        cleanup_state["find_window_fn"],
+    )
+
+    assert found is None
+    assert cleanup_state["search_attempted"] is True
+    assert cleanup_exit is None
+    assert fresh.edit.values == [""]
+
+
 def test_main_clears_successful_search_recovery_before_returning():
-    """内部 gate 返回后，main 必须执行 fail-closed 清理再决定最终退出码。"""
+    """任何搜索尝试返回后，main 必须执行 fail-closed 清理再决定最终退出码。"""
     source = inspect.getsource(main)
-    assert 'item_recovery") == "search_recovery"' in source
+    assert 'cleanup_state.get("search_attempted")' in source
     assert "finalize_search_recovery_cleanup(" in source
     assert "return cleanup_exit" in source
 
