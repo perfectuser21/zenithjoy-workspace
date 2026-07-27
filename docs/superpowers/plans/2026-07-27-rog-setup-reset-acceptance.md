@@ -174,17 +174,30 @@ Then query `ZenithJoyAgent` and assert its action contains the test directory.
 
 Poll up to 300 seconds for a `zenithjoy-agent.exe` process whose
 `ExecutablePath` starts with the test directory. Parse only
-`ZENITHJOY_API_BASE` from the copied test `.env`, then run:
+`ZENITHJOY_API_BASE` from the copied test `.env`. Run packaged preflight in the
+logged-in desktop session, matching the repository's existing xian-rog bubble
+gate pattern:
 
 ```powershell
 $python = Join-Path $testDir 'python-embedded\python.exe'
 $preflight = Join-Path $testDir 'wechat-rpa\preflight.py'
-$preflightProcess = Start-Process -FilePath $python `
-    -ArgumentList @($preflight, '--dry-run', '--middleware-url', $apiBase) `
-    -Wait -PassThru -NoNewWindow `
-    -RedirectStandardOutput $preflightStdout `
-    -RedirectStandardError $preflightStderr
-Assert-True ($preflightProcess.ExitCode -eq 0) 'packaged preflight failed'
+$psexec = 'C:\Users\asus\PSTools\PsExec64.exe'
+$batch = Join-Path $testRoot 'run-preflight.bat'
+$lines = @(
+    '@echo off',
+    'set PYTHONUTF8=1',
+    ('"' + $python + '" "' + $preflight + '" --dry-run --middleware-url "' +
+        $apiBase + '" > "' + $preflightStdout + '" 2> "' + $preflightStderr + '"'),
+    ('echo %ERRORLEVEL% > "' + $preflightExitFile + '"')
+)
+Set-Content -Path $batch -Value $lines -Encoding ascii
+& $psexec -i 1 -accepteula -w $testDir $batch
+
+$preflightExit = [int](Get-Content $preflightExitFile -Raw)
+Assert-True ($preflightExit -eq 0) 'packaged preflight failed'
+$report = Get-Content 'C:\Users\Public\zj-preflight.json' -Raw | ConvertFrom-Json
+$login = $report.checks | Where-Object { $_.name -eq 'wechat_login' }
+Assert-True ($login.status -eq 'ok') 'WeChat is not logged in in interactive session 1'
 ```
 
 This covers the real Windows session, installed WeChat, WeChat version,
