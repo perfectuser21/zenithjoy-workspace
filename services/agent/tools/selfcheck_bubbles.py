@@ -75,15 +75,28 @@ def clear_target_search(mw) -> bool:
         return False
 
 
-def find_target_item_via_search(mw, target, sleep_fn=time.sleep):
+def find_target_item_via_search(
+    mw,
+    target,
+    sleep_fn=time.sleep,
+    cleanup_state=None,
+    find_window_fn=None,
+):
     """导航 tab 无法切换时，用顶部全局搜索框精确定位固定自检会话。
 
     WeChat 4.1.8 的全局搜索框稳定暴露为 ``Edit(auto_id='edit1')``；这是仓库
     voice_call 真机路径已经使用的定位接缝。只有唯一一个首行显示名精确等于 target
     的 ListItem 才允许继续；搜索失败、结果歧义或 UIA wrapper 失效均返回 None，
-    并立即清空搜索框，由 gate fail-closed。唯一结果暂不清空，避免使 item wrapper
-    失效；main 会在使用结束后的 finally 中统一清理。
+    并立即尝试清空搜索框，由 gate fail-closed。不论是否找到，都通过 cleanup_state
+    记录“搜索已执行”，让 main 在整个 gate 返回后再用新鲜窗口 wrapper 统一清理。
+    唯一结果暂不清空，避免使 item wrapper 失效。
     """
+    if cleanup_state is not None:
+        cleanup_state.update({
+            "search_attempted": True,
+            "mw": mw,
+            "find_window_fn": find_window_fn,
+        })
     found = None
     try:
         search_edit = mw.child_window(auto_id="edit1", control_type="Edit")
@@ -268,7 +281,11 @@ def _run_gate(result, cleanup_state) -> int:
             mw, TARGET, FIND_ITEM_RETRIES, FIND_ITEM_RETRY_DELAY_S,
             time.sleep, listen_chat._reset_session_list_to_top,
             search_fn=lambda window, target: find_target_item_via_search(
-                window, target, time.sleep
+                window,
+                target,
+                time.sleep,
+                cleanup_state=cleanup_state,
+                find_window_fn=find_weixin.get_main_window,
             ),
         )
         item_recovery = how
@@ -342,7 +359,7 @@ def main() -> int:
     }
     cleanup_state = {}
     exit_code = _run_gate(result, cleanup_state)
-    if cleanup_state.get("item_recovery") == "search_recovery":
+    if cleanup_state.get("search_attempted"):
         cleanup_exit = finalize_search_recovery_cleanup(
             result,
             cleanup_state.get("mw"),
