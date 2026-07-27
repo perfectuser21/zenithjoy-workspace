@@ -39,6 +39,48 @@ describe('registerLeaseBrokerRoutes — 挂到真实 http.Server [BEHAVIOR]', ()
     const body = await resp.json();
     expect(typeof body.granted).toBe('boolean');
   });
+
+  it('POST /ack-yield 只确认当前 lease ID，并由 status 可见', async () => {
+    server = http.createServer((_req, res) => {
+      res.writeHead(404);
+      res.end();
+    });
+    registerLeaseBrokerRoutes(server);
+    await new Promise<void>((r) => server!.listen(PORT, r));
+
+    const acquire = await fetch(
+      `http://localhost:${PORT}/api/agent/desktop-lease-broker/acquire`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: 'ci/bubble-read-gate', priority: 10, ttlMs: 5000,
+        }),
+      },
+    );
+    const lease = await acquire.json() as { lease_id: string };
+    const ack = await fetch(
+      `http://localhost:${PORT}/api/agent/desktop-lease-broker/ack-yield`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leaseId: lease.lease_id, clientId: 'line04/listen_chat',
+        }),
+      },
+    );
+    const status = await fetch(
+      `http://localhost:${PORT}/api/agent/desktop-lease-broker/status`,
+    );
+
+    expect(ack.status).toBe(200);
+    expect(await ack.json()).toEqual({ ok: true });
+    expect(await status.json()).toMatchObject({
+      lease_id: lease.lease_id,
+      yield_acknowledged: true,
+      yield_acknowledged_by: 'line04/listen_chat',
+    });
+  });
 });
 
 describe('index.ts 真实启动路径 — 必须调用 registerLeaseBrokerRoutes [ARTIFACT 防回归]', () => {

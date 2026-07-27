@@ -120,7 +120,11 @@ export const leaseBroker = new DesktopLeaseBroker({
 });
 
 export interface LeaseBrokerIpcRequest {
-  type: 'desktop_lease_acquire' | 'desktop_lease_renew' | 'desktop_lease_release';
+  type:
+    | 'desktop_lease_acquire'
+    | 'desktop_lease_renew'
+    | 'desktop_lease_release'
+    | 'desktop_lease_ack_yield';
   payload: Record<string, unknown>;
 }
 
@@ -148,6 +152,12 @@ export async function handleDesktopLeaseIpc(req: LeaseBrokerIpcRequest): Promise
         clientId: String(req.payload.clientId ?? ''),
       });
       return r as unknown as Record<string, unknown>;
+    }
+    case 'desktop_lease_ack_yield': {
+      return leaseBroker.acknowledgeYield({
+        leaseId: String(req.payload.leaseId ?? ''),
+        clientId: String(req.payload.clientId ?? ''),
+      }) as unknown as Record<string, unknown>;
     }
     default:
       return Promise.resolve({ ok: false, reason: 'unknown_type' });
@@ -204,6 +214,7 @@ export function registerLeaseBrokerRoutes(server: http.Server, tenantId?: string
             '/api/agent/desktop-lease-broker/acquire': 'desktop_lease_acquire',
             '/api/agent/desktop-lease-broker/renew': 'desktop_lease_renew',
             '/api/agent/desktop-lease-broker/release': 'desktop_lease_release',
+            '/api/agent/desktop-lease-broker/ack-yield': 'desktop_lease_ack_yield',
           };
           const ipcType = typeMap[url];
           if (ipcType) {
