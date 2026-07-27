@@ -64,10 +64,25 @@ def find_target_item(descendants, target):
     return None
 
 
+def _find_target_search_edit(mw):
+    """兼容 WindowSpecification 与 find_weixin 返回的真实 UIAWrapper。"""
+    child_window = getattr(mw, "child_window", None)
+    if callable(child_window):
+        return child_window(auto_id="edit1", control_type="Edit")
+    for edit in mw.descendants(control_type="Edit"):
+        try:
+            automation_id = edit.element_info.automation_id or ""
+        except Exception:
+            continue
+        if automation_id == "edit1":
+            return edit
+    raise RuntimeError("global search Edit(auto_id='edit1') not found")
+
+
 def clear_target_search(mw) -> bool:
     """清空顶部全局搜索框；失败时只记录，由调用方继续 fail-closed。"""
     try:
-        search_edit = mw.child_window(auto_id="edit1", control_type="Edit")
+        search_edit = _find_target_search_edit(mw)
         search_edit.set_edit_text("")
         return True
     except Exception as exc:
@@ -99,7 +114,7 @@ def find_target_item_via_search(
         })
     found = None
     try:
-        search_edit = mw.child_window(auto_id="edit1", control_type="Edit")
+        search_edit = _find_target_search_edit(mw)
         search_edit.set_focus()
         search_edit.set_edit_text(target)
         sleep_fn(0.8)
