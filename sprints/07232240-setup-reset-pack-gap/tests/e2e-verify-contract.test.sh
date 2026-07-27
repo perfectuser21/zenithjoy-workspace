@@ -32,6 +32,7 @@ grep -Fq -- '- name: Verify acceptance temp cleanup' "$WORKFLOW"
 grep -Fq 'if: always()' "$WORKFLOW"
 grep -Fq 'zj-accept-cleanup-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-' "$WORKFLOW"
 grep -Fq 'deferred acceptance directory cleanup failed' "$WORKFLOW"
+grep -Fq 'rd /s /q' "$WORKFLOW"
 require_literal 'zenithjoy-agent-v2.0.89.tar.gz'
 require_literal 'Export-ScheduledTask'
 require_literal 'Register-ScheduledTask'
@@ -219,6 +220,8 @@ test "$(grep -c -F 'Remove-Item' "$SCRIPT")" -eq 1
 require_literal '[GC]::WaitForPendingFinalizers()'
 require_literal 'Wait-Until -TimeoutSeconds 15'
 require_literal 'Start-Sleep -Milliseconds 500'
+require_literal 'rd /s /q'
+require_literal '"\\?\"'
 require_literal '$Process.WaitForExit(10000)'
 require_literal '$Process.WaitForExit()'
 require_literal '$cleanupMarker'

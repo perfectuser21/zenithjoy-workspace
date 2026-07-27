@@ -93,8 +93,12 @@ jobs:
             $deadline = (Get-Date).AddSeconds(30)
             do {
               if (Test-Path $targetFull) {
-                Remove-Item -LiteralPath $targetFull -Recurse -Force `
-                  -ErrorAction SilentlyContinue
+                $extendedTarget = "\\?\" + $targetFull
+                $removeCommand = (
+                  'rd /s /q "' + $extendedTarget + '" >nul 2>&1'
+                )
+                & "$env:SystemRoot\System32\cmd.exe" `
+                  /d /s /c $removeCommand | Out-Null
               }
               if (-not (Test-Path $targetFull)) {
                 break

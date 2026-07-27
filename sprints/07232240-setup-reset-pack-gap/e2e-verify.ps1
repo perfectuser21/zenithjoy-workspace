@@ -378,7 +378,16 @@ function Remove-PathAndAssertAbsent {
     }
     $removeOnce = {
         if (Test-Path $Path) {
-            Remove-Item @removeArgs
+            if ($Recurse) {
+                $extendedPath = "\\?\" + [IO.Path]::GetFullPath($Path)
+                $removeCommand = (
+                    'rd /s /q "' + $extendedPath + '" >nul 2>&1'
+                )
+                & "$env:SystemRoot\System32\cmd.exe" `
+                    /d /s /c $removeCommand | Out-Null
+            } else {
+                Remove-Item @removeArgs
+            }
         }
     }
     if ($Recurse) {
