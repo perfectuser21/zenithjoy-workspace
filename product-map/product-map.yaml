@@ -44,7 +44,7 @@ golden_paths:
     app_id: staff_app
     line_id: line00
     name: Ability 验收流程
-    status: proposed
+    status: active
 
   - id: line_health
     app_id: staff_app

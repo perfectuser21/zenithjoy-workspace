@@ -5182,3 +5182,19 @@ agent_suite:
   status: active
   product: 新媒体运营
   note: "最小信号验证 GET 端点（sessions/collect_tasks/leads 三组数据）"
+
+- id: ability-acceptance-api
+  path: apps/api/src/routes/__tests__/ability-acceptance.test.ts
+  type: integration
+  ci: L3
+  status: active
+  product: 运营中枢
+  note: "Sprint 30a0c83a: Ability 验收 API 路由合同测试（T1-T9 + R1）"
+
+- id: ability-acceptance-e2e
+  path: apps/dashboard/e2e/ability-acceptance.spec.ts
+  type: e2e
+  ci: L4
+  status: active
+  product: 运营中枢
+  note: "Sprint 30a0c83a: Ability 验收 Staff Hub E2E 合同测试（C1-C5）"

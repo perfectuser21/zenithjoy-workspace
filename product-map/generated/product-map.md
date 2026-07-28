@@ -1,6 +1,6 @@
 # Product Map
 
-<!-- digest: d7f5e70f9d4dd7d66de265881b7be3d10df0ba41d0e50af73acbf64e0f177697 -->
+<!-- digest: 30c8b67c598bd2bee0e016d3d0d81029fd9ceda1b6d5f0c338f2e952294637cf -->
 
 > 此文件由 `npm run product-map:generate` 自动生成，请勿手工编辑。
 > 唯一手写源：`product-map/product-map.yaml`
@@ -25,7 +25,7 @@
 
 | ID | App | Line | Status |
 |----|-----|------|--------|
-| ability_acceptance | staff_app | line00 | proposed |
+| ability_acceptance | staff_app | line00 | active |
 | line_health | staff_app | line00 | active |
 | skill_acceptance | staff_app | line00 | active |
 
