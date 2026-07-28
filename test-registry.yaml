@@ -4987,3 +4987,11 @@ agent_suite:
   status: active
   product: 产品基础设施
   note: "sprint(07280933): Product Map SSOT — 7 个 node:test 测试，覆盖 BEHAVIOR-01~12，loadAndValidateProductMap/validateRelations/productMapDigest/assertBootstrapParity"
+
+- id: product-map-sprint-contract
+  path: sprints/07280933-product-map-ssot-claude/tests/contract.test.js
+  type: e2e
+  ci: L2
+  status: active
+  product: 产品基础设施
+  note: "sprint(07280933): Product Map SSOT 合同测试 — BEHAVIOR-01~12 合同验收，RED/GREEN TDD 基线，与 scripts/product-map/__tests__/product-map.test.js 配对"
