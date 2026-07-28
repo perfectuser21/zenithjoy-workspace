@@ -234,6 +234,16 @@ const panelEventRateLimit = simpleRateLimit({
   keyFn: (req) => (req.body && req.body.agent_id) || 'anonymous',
 });
 
+// CodeQL js/missing-rate-limiting：/panel-active-tasks 碰 DB 查询且不走 tenantContext
+// 中间件（直接读 X-Tenant-Id header，缺则 400，同 GET /sessions 的 tenantContextOptional
+// 语义但本端点故意不复用其 401 分支），按 tenant 限流。作战窗轮询节奏预期约 10s 一次
+// （services/agent 桥接轮询默认周期），120次/60s 给足并发/多设备余量。
+const panelActiveTasksRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 120,
+  keyFn: (req) => req.header('X-Tenant-Id') || 'anonymous',
+});
+
 // ── FR-1b. POST /uia-signal — UIA 在线状态写入（x-agent-id 反查 tenant）──
 // Android agent 通过 x-agent-id header 上报 UIAutomator 探测到的小号在线状态。
 // 写入 agent_platform_sessions 的 uia_online / uia_checked_at / uia_error 列。
@@ -1084,7 +1094,7 @@ router.post('/panel-event', panelEventRateLimit, async (req: Request, res: Respo
 //   - 最新事件是 done/failed → 归入 recentCompleted，state=该事件值；
 //   - 否则若 NOW()-最新行created_at > PANEL_LINE02_STUCK_THRESHOLD_MS → state='stuck'；
 //   - 否则按最新事件映射（task_started/step→work，waiting→waiting，stuck→stuck）。
-router.get('/panel-active-tasks', async (req: Request, res: Response) => {
+router.get('/panel-active-tasks', panelActiveTasksRateLimit, async (req: Request, res: Response) => {
   const tenantId = (req.header('X-Tenant-Id') || '').trim();
   if (!tenantId) {
     return res.status(400).json({ error: 'MISSING_TENANT', message: '缺 X-Tenant-Id' });
