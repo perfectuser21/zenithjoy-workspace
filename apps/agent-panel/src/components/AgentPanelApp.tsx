@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { LineState } from '@/shared/types';
-import { notifyHostExpandToggle } from '@/shared/native-bridge';
+import { notifyHostExpandToggle, onHostExpandChanged } from '@/shared/native-bridge';
 import { CollapsedStrip } from './CollapsedStrip';
 import { ExpandedPanel } from './ExpandedPanel';
 import { RpaMiniView } from './RpaMiniView';
@@ -34,6 +34,14 @@ export function AgentPanelApp({ lines, rpaActive, connected }: AgentPanelAppProp
   useEffect(() => {
     notifyHostExpandToggle(isFirstRun);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // xian-rog 真机验证实测复现：热键(Ctrl+Alt+Z)/托盘点击只改了原生窗口几何尺寸
+  // (MainWindow.xaml.cs ToggleExpanded)，网页内部 expanded 状态从未收到通知——
+  // 窗口已经变全屏，内容却仍渲染收起态那个6px小灯。用 setExpandedState（不是
+  // setExpanded）直接改内部状态，不再回调 notifyHostExpandToggle，否则跟宿主形成消息乒乓。
+  useEffect(() => {
+    onHostExpandChanged((next) => setExpandedState(next));
   }, []);
 
   let body;

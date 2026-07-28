@@ -81,6 +81,23 @@ describe('registerLeaseBrokerRoutes — 挂到真实 http.Server [BEHAVIOR]', ()
       yield_acknowledged_by: 'line04/listen_chat',
     });
   });
+
+  it('GET /status 响应带 Access-Control-Allow-Origin（apps/agent-panel的useRpaGuard hook从浏览器fetch这个端点，虚拟host与Agent跨源，缺CORS头会被浏览器静默拦截，xian-rog真机验证实测复现）', async () => {
+    // 用独立端口（不复用PORT）：紧邻的上一条ack-yield测试内部有真实TTL等待，
+    // Node/undici的fetch连接池会在同端口的server重启后复用陈旧keep-alive socket，
+    // 触发ECONNRESET("read ECONNRESET"/"other side closed")——本地Node20+CI Node20均实测复现，
+    // 与CORS头逻辑本身无关，是端口复用导致的连接池竞态，换独立端口即可规避。
+    const isolatedPort = PORT + 1;
+    server = http.createServer((_req, res) => {
+      res.writeHead(404);
+      res.end();
+    });
+    registerLeaseBrokerRoutes(server);
+    await new Promise<void>((r) => { server!.listen(isolatedPort, r); });
+
+    const status = await fetch(`http://localhost:${isolatedPort}/api/agent/desktop-lease-broker/status`);
+    expect(status.headers.get('access-control-allow-origin')).toBe('*');
+  });
 });
 
 describe('index.ts 真实启动路径 — 必须调用 registerLeaseBrokerRoutes [ARTIFACT 防回归]', () => {
