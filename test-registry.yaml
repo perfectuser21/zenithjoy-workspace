@@ -5133,6 +5133,14 @@ agent_suite:
   product: 私域运营
   note: "本地SSE订阅hook：连接端点/snapshot解析/error断线态/坏帧不崩/卸载关闭连接"
 
+- id: agent-panel-ui-vite-config-base-unit
+  path: apps/agent-panel/src/vite-config.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "xian-rog真机验证实测：base必须是相对路径，否则WebView2虚拟host/file://下打包产物script src解析失败，页面空白"
+
 - id: agent-panel-ui-use-rpa-guard-unit
   path: apps/agent-panel/src/hooks/useRpaGuard.test.ts
   type: unit
