@@ -9,10 +9,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 import {
   loadAndValidateProductMap,
   validateSchema,
   validateRelations,
+  validateSmokeFiles,
   canonicalize,
   productMapDigest,
   assertBootstrapParity,
@@ -45,17 +47,81 @@ test('T2: validateSchema — 缺失 apps 字段时返回非空 errors', () => {
 
 // ─── Test 3: 种子分类精确性 ───────────────────────────────────────────────────
 
-test('T3: staff_app/line00 精确 3 个 GP，ability_acceptance status=active', async () => {
+test('T3: staff_app/line00 精确 4 个 GP（含gp_anchor_enforcement），ability_acceptance status=active', async () => {
   const { map } = await loadAndValidateProductMap();
   const line00Gps = map.golden_paths.filter(g => g.app_id === 'staff_app' && g.line_id === 'line00');
-  assert.deepEqual(line00Gps.map(g => g.id).sort(), ['ability_acceptance', 'line_health', 'skill_acceptance']);
+  assert.deepEqual(line00Gps.map(g => g.id).sort(), ['ability_acceptance', 'gp_anchor_enforcement', 'line_health', 'skill_acceptance']);
 
   const abilityGp = line00Gps.find(g => g.id === 'ability_acceptance');
   assert.equal(abilityGp.status, 'active');
 
-  // Line 01/02/04 无任何 GP
+  const anchorGp = line00Gps.find(g => g.id === 'gp_anchor_enforcement');
+  assert.equal(anchorGp.status, 'proposed', 'gp_anchor_enforcement 机制未建完，须为proposed');
+  assert.ok(anchorGp.smoke_files.includes('.github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh'));
+
+  // Line 01/02/04 各精确 1 条 GP（GP锚定闭环刀1新增，取代旧"须无GP"断言）
   const customerGps = map.golden_paths.filter(g => ['line01', 'line02', 'line04'].includes(g.line_id));
-  assert.equal(customerGps.length, 0, 'Line 01/02/04 须无 GP');
+  assert.deepEqual(
+    customerGps.map(g => `${g.line_id}/${g.id}`).sort(),
+    ['line01/customer_first_success', 'line02/customer_smart_acquisition', 'line04/customer_private_ai']
+  );
+  for (const gp of customerGps) {
+    assert.ok(Array.isArray(gp.steps) && gp.steps.length > 0, `${gp.id} 须含非空 steps 数组`);
+    assert.ok(Array.isArray(gp.smoke_files) && gp.smoke_files.length > 0, `${gp.id} 须含非空 smoke_files 数组`);
+  }
+});
+
+// ─── Test 8: smoke_files 存在性 + 非空占位校验（proven-to-fire）───────────────
+
+test('T8: validateSmokeFiles — 缺失路径报错含具体路径；空文件占位报错', async () => {
+  // 负向1: 路径不存在
+  const fakeMap1 = { golden_paths: [{ id: 'test_gp', smoke_files: ['.github/workflows/scripts/smoke/nonexistent-fake.sh'] }] };
+  const result1 = validateSmokeFiles(fakeMap1, process.cwd());
+  assert.equal(result1.ok, false);
+  assert.ok(result1.errors.some(e => e.includes('nonexistent-fake.sh')), `错误须含具体路径，实际: ${JSON.stringify(result1.errors)}`);
+
+  // 正向: 真实存在且内容合法的 smoke 文件
+  const { map } = await loadAndValidateProductMap();
+  const result2 = validateSmokeFiles(map, process.cwd());
+  assert.equal(result2.ok, true, `已注册的smoke_files须全部真实存在且非空占位，实际错误: ${JSON.stringify(result2.errors)}`);
+
+  // grandfather: 未声明 smoke_files 字段的历史条目（skill_acceptance）不参与校验
+  const skillAcceptance = map.golden_paths.find(g => g.id === 'skill_acceptance');
+  assert.ok(skillAcceptance && !skillAcceptance.smoke_files, 'skill_acceptance 应保持无 smoke_files 字段（历史grandfather）');
+});
+
+// ─── Test 9: ajv 版本供应链冒烟断言 ────────────────────────────────────────────
+
+test('T9: schema 能被当前 ajv 版本成功 compile（供应链版本漂移冒烟）', async () => {
+  const Ajv = (await import('ajv')).default;
+  const ajv = new Ajv({ strict: true, allErrors: true });
+  const schema = JSON.parse(readFileSync(resolve(__dirname, '../../../product-map/product-map.schema.json'), 'utf8'));
+  assert.doesNotThrow(() => ajv.compile(schema), 'schema 须能被当前 ajv 成功 compile（版本升级/strict模式变化会在此处第一时间暴露）');
+});
+
+// ─── Test 10: YAML 语法错误诊断（非裸堆栈崩溃）───────────────────────────────
+
+test('T10: loadAndValidateProductMap 对YAML语法错误返回结构化FAIL，不抛未捕获异常', async () => {
+  const badYamlPath = resolve(__dirname, '../../../product-map/product-map.yaml');
+  const original = readFileSync(badYamlPath, 'utf8');
+  const fs = await import('node:fs');
+  try {
+    fs.writeFileSync(badYamlPath, original.replace('apps:', 'apps:\n   bad_indent:'));
+    let caught = null;
+    let result = null;
+    try {
+      result = await loadAndValidateProductMap();
+    } catch (e) {
+      caught = e;
+    }
+    if (caught) {
+      assert.match(caught.message, /YAML syntax error/i, `裸抛异常须为结构化YAML语法错误消息，实际: ${caught.message}`);
+    } else {
+      assert.ok(result.errors.some(e => /YAML syntax error/i.test(e)), `result.errors须含YAML syntax error，实际: ${JSON.stringify(result.errors)}`);
+    }
+  } finally {
+    fs.writeFileSync(badYamlPath, original);
+  }
 });
 
 // ─── Test 4: 关系校验通过 ─────────────────────────────────────────────────────

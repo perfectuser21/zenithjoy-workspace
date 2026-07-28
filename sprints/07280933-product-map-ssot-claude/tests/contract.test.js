@@ -121,13 +121,17 @@ describe('BEHAVIOR-02: 种子分类精确性', () => {
     );
   });
 
-  test('Line 01/02/04 不含任何 Golden Path 条目', async () => {
+  test('Line 01/02/04 各精确含 1 条 Golden Path 条目（GP锚定闭环刀1新增，取代本历史断言原有的"须无GP"约定）', async () => {
     const lib = await loadLib();
     const { map } = await lib.loadAndValidateProductMap();
     const customerGps = map.golden_paths.filter(g =>
       ['line01', 'line02', 'line04'].includes(g.line_id)
     );
-    assert.equal(customerGps.length, 0, `Line 01/02/04 须无 GP，实际: ${JSON.stringify(customerGps)}`);
+    assert.deepEqual(
+      customerGps.map(g => `${g.line_id}/${g.id}`).sort(),
+      ['line01/customer_first_success', 'line02/customer_smart_acquisition', 'line04/customer_private_ai'],
+      `实际: ${JSON.stringify(customerGps)}`
+    );
   });
 });
 
@@ -471,15 +475,15 @@ describe('BEHAVIOR-12: 范围边界守卫', () => {
     }
   });
 
-  test('product-map.yaml 不含 line01/02/04 的 GP 条目', async () => {
+  test('product-map.yaml 的 line01/02/04 各含 1 条已注册 GP（GP锚定闭环刀1新增，取代本历史断言原有的"须无GP"约定）', async () => {
     const lib = await loadLib();
     const { map } = await lib.loadAndValidateProductMap();
     const customerLineGps = map.golden_paths.filter(g =>
       g.app_id === 'customer_app' &&
       ['line01', 'line02', 'line04'].includes(g.line_id)
     );
-    assert.equal(customerLineGps.length, 0,
-      `customer_app Line 01/02/04 须无 GP，实际: ${JSON.stringify(customerLineGps)}`
+    assert.equal(customerLineGps.length, 3,
+      `customer_app Line 01/02/04 须各含1条GP共3条，实际: ${JSON.stringify(customerLineGps)}`
     );
   });
 
