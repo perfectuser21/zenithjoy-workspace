@@ -1,0 +1,15 @@
+{
+  "round": "r1",
+  "verdict": "REVISION",
+  "rubric_scores": {
+    "iron_law_coverage":        { "score": 4, "max": 5, "verdict": "PASS" },
+    "assertion_executability":  { "score": 4, "max": 5, "verdict": "PASS" },
+    "internal_consistency":     { "score": 2, "max": 5, "verdict": "FAIL" },
+    "edge_case_coverage":       { "score": 4, "max": 5, "verdict": "PASS" },
+    "cumulative_fr_regression": { "score": 4, "max": 5, "verdict": "PASS" },
+    "contract_doc_format":      { "score": 5, "max": 5, "verdict": "PASS" },
+    "prd_alignment_accuracy":   { "score": 3, "max": 5, "verdict": "WARN" }
+  },
+  "judgments_written": 7,
+  "main_issue": "A3 判定点与 product-map.test.js T3 断言不一致（test.js 仍是 proposed，DoD 缺更新 T3 断言的 checkbox）"
+}

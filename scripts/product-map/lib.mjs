@@ -143,7 +143,7 @@ export function validateRelations(map) {
 // ─── canonicalize ──────────────────────────────────────────────────────────────
 
 /**
- * 规范化排序：apps 按 id、lines 按 id、golden_paths 按 [app_id, line_id, id] 排序
+ * 规范化排序：apps 按 id、lines 按 id、golden_paths 按 id 字母序排序
  * surfaces/editions 按字典序排序
  */
 export function canonicalize(map) {
@@ -152,11 +152,7 @@ export function canonicalize(map) {
     lines: [...(app.lines || [])].sort((a, b) => a.id.localeCompare(b.id)),
   }));
 
-  const golden_paths = [...(map.golden_paths || [])].sort((a, b) => {
-    const k1 = `${a.app_id}|${a.line_id}|${a.id}`;
-    const k2 = `${b.app_id}|${b.line_id}|${b.id}`;
-    return k1.localeCompare(k2);
-  });
+  const golden_paths = [...(map.golden_paths || [])].sort((a, b) => a.id.localeCompare(b.id));
 
   const surfaces = [...(map.surfaces || [])].sort();
   const editions = [...(map.editions || [])].sort();
