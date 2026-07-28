@@ -13,6 +13,60 @@ describe('PanelEventBus', () => {
     vi.useRealTimers();
   });
 
+  describe('onChange 变更订阅（xian-rog真机验证实测发现的真实bug：registerPanelEventRoutes的'
+    + 'SSE stream只在客户端首次连接时写一帧snapshot，之后只发心跳注释，事件总线状态变了'
+    + '(task_started/step/waiting/stuck/done/failed) SSE从来没推过新帧——网页壳订阅了SSE但'
+    + '实际收不到任何实时更新，页面必须重新连接/刷新才能看到最新状态，"实时"看板根本不实时）', () => {
+    it('ingest task_started → onChange 回调触发', () => {
+      bus = new PanelEventBus();
+      const cb = vi.fn();
+      bus.onChange(cb);
+      bus.ingest({
+        event: 'task_started', task_id: 't1', line: 'line04', device: 'xian-pc', title: 'x', ts: Date.now(),
+      });
+      expect(cb).toHaveBeenCalled();
+    });
+
+    it('看门狗自发触发stuck（不经ingest）→ 同样要触发 onChange，否则灯态变红网页也收不到通知', () => {
+      vi.useFakeTimers();
+      bus = new PanelEventBus({ watchdogMs: 1000 });
+      const cb = vi.fn();
+      bus.ingest({
+        event: 'task_started', task_id: 't1', line: 'line04', device: 'xian-pc', title: 'x', ts: Date.now(),
+      });
+      bus.onChange(cb); // task_started的那次调用不算，只关心看门狗自己触发的
+      cb.mockClear();
+      vi.advanceTimersByTime(1000);
+      expect(cb).toHaveBeenCalled();
+      expect(bus.getActiveTasks('line04')[0].state).toBe('stuck');
+    });
+
+    it('取消订阅(unsubscribe)后不再收到通知', () => {
+      bus = new PanelEventBus();
+      const cb = vi.fn();
+      const unsubscribe = bus.onChange(cb);
+      unsubscribe();
+      bus.ingest({
+        event: 'task_started', task_id: 't1', line: 'line04', device: 'xian-pc', title: 'x', ts: Date.now(),
+      });
+      expect(cb).not.toHaveBeenCalled();
+    });
+
+    it('一个回调抛异常不影响其它订阅者收到通知（多个SSE客户端场景，一个连接坏了不该拖垮其它连接）', () => {
+      bus = new PanelEventBus();
+      const bad = vi.fn(() => { throw new Error('boom'); });
+      const good = vi.fn();
+      bus.onChange(bad);
+      bus.onChange(good);
+      expect(() => {
+        bus.ingest({
+          event: 'task_started', task_id: 't1', line: 'line04', device: 'xian-pc', title: 'x', ts: Date.now(),
+        });
+      }).not.toThrow();
+      expect(good).toHaveBeenCalled();
+    });
+  });
+
   it('task_started → 出现在活跃任务列表，状态 work', () => {
     bus = new PanelEventBus();
     bus.ingest({

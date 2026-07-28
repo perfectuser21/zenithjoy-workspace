@@ -119,4 +119,50 @@ describe('AgentPanelApp（首次装机仪式 + 三态编排）', () => {
       expect(screen.getByTestId('panel-collapsed')).toBeInTheDocument();
     });
   });
+
+  describe('离线重连摘要横幅（PrepPRD Golden Path Step10）', () => {
+    it('reconnectSummary非空 → 渲染"离线期间完成N个任务，失败M个"横幅', () => {
+      window.localStorage.setItem('agent-panel-first-run-shown', 'true');
+      render(
+        <AgentPanelApp
+          lines={lines}
+          rpaActive={false}
+          connected
+          reconnectSummary={{ done: 2, failed: 1 }}
+          onDismissReconnectSummary={() => {}}
+        />,
+      );
+      expect(screen.getByText(/离线期间完成\s*2\s*个任务，失败\s*1\s*个/)).toBeInTheDocument();
+    });
+
+    it('reconnectSummary为null → 不渲染横幅', () => {
+      window.localStorage.setItem('agent-panel-first-run-shown', 'true');
+      render(
+        <AgentPanelApp
+          lines={lines}
+          rpaActive={false}
+          connected
+          reconnectSummary={null}
+          onDismissReconnectSummary={() => {}}
+        />,
+      );
+      expect(screen.queryByText(/离线期间/)).not.toBeInTheDocument();
+    });
+
+    it('点击横幅的关闭按钮 → 调用 onDismissReconnectSummary', () => {
+      window.localStorage.setItem('agent-panel-first-run-shown', 'true');
+      const onDismiss = vi.fn();
+      render(
+        <AgentPanelApp
+          lines={lines}
+          rpaActive={false}
+          connected
+          reconnectSummary={{ done: 1, failed: 0 }}
+          onDismissReconnectSummary={onDismiss}
+        />,
+      );
+      act(() => { screen.getByTestId('reconnect-summary-dismiss').click(); });
+      expect(onDismiss).toHaveBeenCalled();
+    });
+  });
 });

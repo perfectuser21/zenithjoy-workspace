@@ -993,6 +993,43 @@ else
   ok "Step 17d ⚠️ apps/agent-panel 依赖未装，跳过本地单测复跑（CI 独立 job 已跑，见 lint-feature-has-smoke）"
 fi
 
+# 17e：SSE 实时推送 proven-to-fire ——xian-rog真机验证实测发现的真实bug：SSE stream此前
+# 只在客户端首次连接时写一帧snapshot，之后总线状态怎么变都不会推新帧，网页壳订阅了SSE
+# 却收不到任何实时更新，"实时"看板必须重连/刷新页面才看得到最新数据。真起一个http.Server
+# 验证：连上SSE后总线状态变化，客户端真的收到第二帧（不是逻辑上"应该会推"，是真连一次看到）。
+if command -v npx >/dev/null 2>&1 && [ -d "services/agent/node_modules" ]; then
+  PANEL_SSE_PUSH_OUT=$(cd services/agent && npx tsx -e "
+    import http from 'node:http';
+    import { PanelEventBus } from './src/shared/panel-event-bus';
+    import { registerPanelEventRoutes } from './src/handlers/panel-events-route';
+    const bus = new PanelEventBus();
+    const server = http.createServer((_req, res) => { res.writeHead(404); res.end(); });
+    registerPanelEventRoutes(server, bus);
+    server.listen(0, async () => {
+      const port = (server.address() as any).port;
+      const resp = await fetch('http://localhost:' + port + '/api/agent/panel/events/stream');
+      const reader = resp.body!.getReader();
+      await reader.read(); // 首帧snapshot，跳过
+      bus.ingest({ event: 'task_started', task_id: 'gp4smoke-sse', line: 'line04', device: 'smoke', title: 'sse推送验证', ts: Date.now() });
+      const { value } = await reader.read();
+      const chunk = new TextDecoder().decode(value);
+      await reader.cancel();
+      bus.destroy();
+      server.close();
+      if (!chunk.includes('sse推送验证')) { console.error('FAIL no push frame received'); process.exit(1); }
+      console.log('PASS');
+      process.exit(0);
+    });
+  " 2>&1)
+  if echo "$PANEL_SSE_PUSH_OUT" | tail -1 | grep -q PASS; then
+    ok "Step 17e ✅ SSE 实时推送 proven-to-fire：总线状态变化后客户端真的收到新一帧（不是只在连接时发一次）"
+  else
+    fail "Step 17e SSE stream 只发首帧不推更新，'实时'看板不是实时的（网页壳必须重连才看得到最新数据）: $PANEL_SSE_PUSH_OUT" 17
+  fi
+else
+  fail "Step 17e services/agent 依赖未安装，无法真跑 SSE 实时推送 proven-to-fire" 17
+fi
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ✅ Path 4 17 步 golden path smoke 服务端段全通"
 echo "  真机段：xian-rog 真机验收证据见 sprints/07150800-line04-overlay-continuation/evidence/"

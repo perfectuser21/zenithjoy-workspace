@@ -27,3 +27,10 @@ export function onHostExpandChanged(callback: (expanded: boolean) => void): void
     }
   });
 }
+
+// PrepPRD Golden Path Step9："客户前台全屏(视频/PPT/游戏)：浮条自动隐藏；stuck例外——
+// 不弹窗不闪烁，只让托盘图标变红"。宿主要知道有没有 stuck 才能决定托盘图标颜色，
+// 灯态聚合逻辑网页侧已经在算(渲染灯带颜色就是这个数据)，不在原生C#侧重复实现一遍。
+export function notifyHostLightState(hasStuck: boolean): void {
+  window.chrome?.webview?.postMessage({ type: 'light-state-changed', hasStuck });
+}

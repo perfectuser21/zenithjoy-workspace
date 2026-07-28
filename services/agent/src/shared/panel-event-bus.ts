@@ -74,9 +74,20 @@ export class PanelEventBus {
 
   private readonly watchdogTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+  private readonly changeListeners = new Set<() => void>();
+
   constructor(opts: PanelEventBusOptions = {}) {
     this.watchdogMs = opts.watchdogMs ?? DEFAULT_WATCHDOG_MS;
     this.recentLimit = opts.recentLimit ?? DEFAULT_RECENT_LIMIT;
+  }
+
+  // xian-rog 真机验证实测发现：registerPanelEventRoutes 的 SSE stream 只在客户端首次连接时
+  // 写一帧 snapshot，之后只发心跳注释，事件总线状态变了 SSE 从来没推过新帧——网页壳订阅了 SSE
+  // 但实际收不到任何实时更新，"实时"看板根本不实时。onChange 让路由层能订阅状态变化，
+  // 每次变化时主动推一帧新快照给所有连着的 SSE 客户端。
+  onChange(callback: () => void): () => void {
+    this.changeListeners.add(callback);
+    return () => this.changeListeners.delete(callback);
   }
 
   ingest(evt: PanelEvent): void {
@@ -104,8 +115,9 @@ export class PanelEventBus {
         this.complete(evt, 'failed');
         break;
       default:
-        break;
+        return; // 未知事件类型不算真实变化，不通知订阅者
     }
+    this.notifyChange();
   }
 
   getActiveTasks(line: string): PanelTaskSnapshot[] {
@@ -175,6 +187,7 @@ export class PanelEventBus {
       if (!task) return; // 已经 done/failed，看门狗不应该再动它
       this.active.set(taskId, { ...task, state: 'stuck', updated_at: Date.now() });
       this.watchdogTimers.delete(taskId);
+      this.notifyChange();
     }, this.watchdogMs);
     this.watchdogTimers.set(taskId, timer);
   }
@@ -184,6 +197,16 @@ export class PanelEventBus {
     if (timer) {
       clearTimeout(timer);
       this.watchdogTimers.delete(taskId);
+    }
+  }
+
+  private notifyChange(): void {
+    for (const cb of this.changeListeners) {
+      try {
+        cb();
+      } catch {
+        // 一个订阅者(SSE连接)出错不该拖垮其它订阅者，同旁观者纪律
+      }
     }
   }
 }

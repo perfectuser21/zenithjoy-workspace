@@ -47,4 +47,31 @@ internal static class NativeMethods
         var ex = GetWindowLong(hWnd, GWL_EXSTYLE);
         SetWindowLong(hWnd, GWL_EXSTYLE, ex & ~(WS_EX_NOACTIVATE | WS_EX_TRANSPARENT));
     }
+
+    // PrepPRD Golden Path Step9："客户前台全屏(视频/PPT/游戏)：浮条自动隐藏"——
+    // 判定"当前有没有别的窗口真占满整个屏幕"的标准Win32做法：拿前台窗口矩形跟屏幕矩形比对。
+
+    public struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    /// <summary>前台窗口是否真占满整个屏幕（不是我们自己）——客户在看视频/放PPT/打游戏的判定信号。</summary>
+    public static bool IsForegroundFullscreen(IntPtr ownHwnd, RECT screenBounds)
+    {
+        var fg = GetForegroundWindow();
+        if (fg == IntPtr.Zero || fg == ownHwnd) return false;
+        if (!GetWindowRect(fg, out var rect)) return false;
+        return rect.Left <= screenBounds.Left && rect.Top <= screenBounds.Top
+            && rect.Right >= screenBounds.Right && rect.Bottom >= screenBounds.Bottom;
+    }
 }
