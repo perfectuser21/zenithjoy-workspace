@@ -17,7 +17,7 @@
 #   e2e         — full workflow from external perspective. Runs in L4.
 
 version: "1.0.0"
-updated: "2026-07-12"
+updated: "2026-07-28"
 
 # ─── Suite-level (managed by vitest configs) ──────────────────────────────────
 
@@ -4979,3 +4979,11 @@ agent_suite:
   status: active
   product: 中台认证
   note: "db/index.ts re-export pool透传验证——default export存在且与connection.ts同对象，供vi.mock('../../../apps/api/src/db')精确mock使用"
+
+- id: product-map-contract
+  path: scripts/product-map/__tests__/product-map.test.js
+  type: unit
+  ci: L2
+  status: active
+  product: 产品基础设施
+  note: "sprint(07280933): Product Map SSOT — 7 个 node:test 测试，覆盖 BEHAVIOR-01~12，loadAndValidateProductMap/validateRelations/productMapDigest/assertBootstrapParity"
