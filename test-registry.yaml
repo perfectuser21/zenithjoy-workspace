@@ -5198,3 +5198,19 @@ agent_suite:
   status: active
   product: 运营中枢
   note: "Sprint 30a0c83a: Ability 验收 Staff Hub E2E 合同测试（C1-C5）"
+
+- id: ability-acceptance-contract-api-test
+  path: sprints/07281218-relay-30a0c83a/tests/ability-acceptance.api.test.ts
+  type: contract
+  ci: L3
+  status: active
+  product: 运营中枢
+  note: "Sprint 30a0c83a: Ability 验收 API 合同测试骨架（Red 基线，永久保留）"
+
+- id: ability-acceptance-contract-e2e-spec
+  path: sprints/07281218-relay-30a0c83a/tests/ability-acceptance.e2e.spec.ts
+  type: contract
+  ci: L4
+  status: active
+  product: 运营中枢
+  note: "Sprint 30a0c83a: Ability 验收 Playwright E2E 合同测试骨架（Red 基线，永久保留）"
