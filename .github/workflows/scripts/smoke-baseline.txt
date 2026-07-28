@@ -12,6 +12,7 @@ cs-oneclick-setup-smoke.sh
 dashboard-walking-skeleton-1-smoke.sh
 deploy-version-selfcheck-smoke.sh
 golden-path-4-smoke.sh
+golden-path-f1-anchor-smoke.sh
 heartbeat-modules-smoke.sh
 line02-dm-dispatch-smoke.sh
 line04-client-wiring-smoke.sh

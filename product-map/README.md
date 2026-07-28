@@ -28,11 +28,12 @@ Golden Path（黄金路径）归属于特定 App 和 Line，可跨多个 Surface
 
 ## Golden Path 准入规则
 
-新增 GP 到 `product-map.yaml` 前，必须满足以下 3 个必要条件：
+新增 GP 到 `product-map.yaml` 前，必须满足以下 4 个必要条件：
 
 1. **有明确的 app_id 和 line_id**：GP 必须归属于已定义的 App 和 Line
 2. **status 经过评审确认**：`proposed` 表示待验证，`active` 须经过 Sprint 验收通过
 3. **不包含已验证范围外的 required_surfaces 或 edition**：只引用 `surfaces` 和 `editions` 列表中已存在的值
+4. **`smoke_files` 若声明，路径必须真实存在于仓库**（GP锚定闭环刀1新增）：`product-map-contract` CI job 会校验 `smoke_files` 声明的每个路径存在且非空占位；未声明该字段的历史条目不受影响（grandfather）
 
 ---
 

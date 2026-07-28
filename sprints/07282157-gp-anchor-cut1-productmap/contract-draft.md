@@ -170,7 +170,7 @@ node -e "const c=require('fs').readFileSync('scripts/product-map/lib.mjs','utf8'
 **验证命令**:
 ```bash
 grep -q "ajv.*compile" scripts/product-map/__tests__/product-map.test.js || { echo "FAIL: 缺ajv compile冒烟断言"; exit 1; }
-npm run test:product-map 2>&1 | grep -qiE "fail" && { echo "FAIL: compile冒烟断言未通过"; exit 1; }
+npm run test:product-map > /dev/null 2>&1 || { echo "FAIL: compile冒烟断言未通过"; exit 1; }
 echo PASS
 ```
 
@@ -235,8 +235,7 @@ npm run product-map:generate
 npm run product-map:check
 
 echo "=== Step B: 既有回归测试同步改写后仍全绿 ==="
-npm run test:product-map 2>&1 | tee /tmp/e2e-test-product-map.log
-grep -qE "fail|FAIL" /tmp/e2e-test-product-map.log && { echo "FAIL: product-map单测有失败"; exit 1; }
+npm run test:product-map
 
 echo "=== Step C: 变异测试smoke真跑 ==="
 bash .github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh

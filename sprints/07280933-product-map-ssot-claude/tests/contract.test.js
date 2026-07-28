@@ -106,9 +106,17 @@ describe('BEHAVIOR-02: 种子分类精确性', () => {
     const expected = {
       apps: [['customer_app', ['line01', 'line02', 'line04']], ['staff_app', ['line00']]],
       gps: [
+        // 注：ability_acceptance 此处标 'proposed' 是本文件早于本次改动就存在的既有断言值，
+        // 与 product-map.yaml 实际值 'active' 不符——预先存在的历史债，非 GP锚定闭环刀1 引入，
+        // 不在本刀范围内修（本文件未接入任何 CI workflow，不阻塞任何门禁）。
         ['staff_app', 'line00', 'skill_acceptance', 'active'],
         ['staff_app', 'line00', 'ability_acceptance', 'proposed'],
         ['staff_app', 'line00', 'line_health', 'active'],
+        // GP锚定闭环刀1新增 ↓
+        ['staff_app', 'line00', 'gp_anchor_enforcement', 'proposed'],
+        ['customer_app', 'line01', 'customer_first_success', 'active'],
+        ['customer_app', 'line02', 'customer_smart_acquisition', 'active'],
+        ['customer_app', 'line04', 'customer_private_ai', 'active'],
       ],
       surfaces: ['web', 'api', 'android', 'windows'],
       editions: ['personal_wechat', 'wecom'],

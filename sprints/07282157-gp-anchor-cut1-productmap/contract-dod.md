@@ -41,11 +41,11 @@ journey_type: dev_pipeline
   期望: OK
 
 - [ ] [BEHAVIOR] 既有回归测试（line01/02/04须无GP的旧断言）已同步改写且全绿
-  Test: manual:bash -c 'cd /Users/administrator/worktrees/zenithjoy/session-b08db3c1 && npm run test:product-map 2>&1 | tee /tmp/dod-test-pm.log; grep -qiE "fail" /tmp/dod-test-pm.log && exit 1 || echo OK'
-  期望: OK
+  Test: manual:bash -c 'cd /Users/administrator/worktrees/zenithjoy/session-b08db3c1 && npm run test:product-map > /tmp/dod-test-pm.log 2>&1; CODE=$?; cat /tmp/dod-test-pm.log; [ $CODE -eq 0 ] && echo OK || exit 1'
+  期望: OK（依 node:test 真实 exit code 判定，不 grep 文本——node:test 成功时输出仍含字面"fail 0"，grep会误判）
 
 - [ ] [BEHAVIOR] ajv版本供应链冒烟断言存在且生效（防未来无关PR被ajv升级误伤）
-  Test: manual:bash -c 'cd /Users/administrator/worktrees/zenithjoy/session-b08db3c1 && grep -q "ajv.*compile" scripts/product-map/__tests__/product-map.test.js && npm run test:product-map 2>&1 | grep -qiE "fail" && exit 1 || echo OK'
+  Test: manual:bash -c 'cd /Users/administrator/worktrees/zenithjoy/session-b08db3c1 && grep -q "ajv.*compile" scripts/product-map/__tests__/product-map.test.js || exit 1; npm run test:product-map > /dev/null 2>&1 && echo OK || exit 1'
   期望: OK
 
 ## E2E 验收

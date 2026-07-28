@@ -41,11 +41,138 @@
   ],
   "golden_paths": [
     {
+      "id": "customer_first_success",
+      "app_id": "customer_app",
+      "line_id": "line01",
+      "name": "客户首次成功",
+      "status": "active",
+      "smoke_files": [
+        ".github/workflows/scripts/smoke/golden-path-1-smoke.sh"
+      ],
+      "steps": [
+        {
+          "id": "step1",
+          "name": "注册自动登录（含 free license）"
+        },
+        {
+          "id": "step2",
+          "name": "装客户端 + Agent 自动连中台"
+        },
+        {
+          "id": "step3",
+          "name": "画像诊断（行业/受众/风格 3 字段）"
+        },
+        {
+          "id": "step4",
+          "name": "扫码绑定抖音主号（Agent 弹登录窗，session 存本地）"
+        },
+        {
+          "id": "step5",
+          "name": "AI 生成 1 条内容（接 Claude API）"
+        },
+        {
+          "id": "step6",
+          "name": "中台派任务 + dryrun 发布 + 回执"
+        }
+      ]
+    },
+    {
+      "id": "customer_smart_acquisition",
+      "app_id": "customer_app",
+      "line_id": "line02",
+      "name": "客户智能获客",
+      "status": "active",
+      "smoke_files": [
+        ".github/workflows/scripts/smoke/golden-path-2-smoke.sh"
+      ],
+      "steps": [
+        {
+          "id": "step1",
+          "name": "注册客户端自动"
+        },
+        {
+          "id": "step2",
+          "name": "装客户端"
+        },
+        {
+          "id": "step3",
+          "name": "Android 端 Agent 连中台"
+        },
+        {
+          "id": "step4",
+          "name": "绑客户飞书企业",
+          "status": "deprecated"
+        },
+        {
+          "id": "step5",
+          "name": "系统自动建 3 张本地表（获客画像 / 对标视频 / Lead）落本地中台 DB"
+        },
+        {
+          "id": "step6",
+          "name": "客户在本地界面/dashboard 填获客画像 + 手填对标视频 URL"
+        },
+        {
+          "id": "step7",
+          "name": "手机端登录 2-3 个抖音小号 + 中台检测登录态"
+        },
+        {
+          "id": "step8",
+          "name": "评论区挖客闭环——读对标视频→抓评论→触达带企微号→企微webhook收好友→AI首答→写本地Lead表"
+        }
+      ]
+    },
+    {
+      "id": "customer_private_ai",
+      "app_id": "customer_app",
+      "line_id": "line04",
+      "name": "客户私域 AI 接管",
+      "status": "active",
+      "smoke_files": [
+        ".github/workflows/scripts/smoke/golden-path-4-smoke.sh"
+      ],
+      "steps": [
+        {
+          "id": "step1",
+          "name": "中台扫码绑个微干净测试号"
+        },
+        {
+          "id": "step2",
+          "name": "飞书 Bitable 自动建 3 张表（客户档案 / 营销画像 / 内容排期）"
+        },
+        {
+          "id": "step3",
+          "name": "名单内客户私聊进来 → DeepSeek拼对话历史写回复草稿 → 写飞书互动记录表（待审）"
+        },
+        {
+          "id": "step4",
+          "name": "中台定时触发\"今日朋友圈\" → DeepSeek拼营销画像写文案草稿 → 写飞书内容排期表（待审）"
+        },
+        {
+          "id": "step5",
+          "name": "用户在飞书审批 → 批准后系统spawn wechat_rpa.py真发（强制频控）"
+        },
+        {
+          "id": "step6",
+          "name": "发布回执（成功/失败+原因）回写飞书内容排期+互动记录表"
+        }
+      ]
+    },
+    {
       "id": "ability_acceptance",
       "app_id": "staff_app",
       "line_id": "line00",
       "name": "Ability 验收流程",
       "status": "active"
+    },
+    {
+      "id": "gp_anchor_enforcement",
+      "app_id": "staff_app",
+      "line_id": "line00",
+      "name": "GP锚定闭环",
+      "status": "proposed",
+      "smoke_files": [
+        ".github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh"
+      ]
     },
     {
       "id": "line_health",
@@ -62,5 +189,5 @@
       "status": "active"
     }
   ],
-  "digest": "30c8b67c598bd2bee0e016d3d0d81029fd9ceda1b6d5f0c338f2e952294637cf"
+  "digest": "df7dc2bffd1f3a7e2bf8b85a2f0e9647b2c2f7d1d36755e6d0d822ce64a1b754"
 }

@@ -93,8 +93,8 @@ test('T8: validateSmokeFiles — 缺失路径报错含具体路径；空文件�
 // ─── Test 9: ajv 版本供应链冒烟断言 ────────────────────────────────────────────
 
 test('T9: schema 能被当前 ajv 版本成功 compile（供应链版本漂移冒烟）', async () => {
-  const Ajv = (await import('ajv')).default;
-  const ajv = new Ajv({ strict: true, allErrors: true });
+  const Ajv2020 = (await import('ajv/dist/2020.js')).default;
+  const ajv = new Ajv2020({ strict: true, allErrors: true });
   const schema = JSON.parse(readFileSync(resolve(__dirname, '../../../product-map/product-map.schema.json'), 'utf8'));
   assert.doesNotThrow(() => ajv.compile(schema), 'schema 须能被当前 ajv 成功 compile（版本升级/strict模式变化会在此处第一时间暴露）');
 });
