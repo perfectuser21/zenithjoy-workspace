@@ -25,4 +25,12 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2592.51" />
   </ItemGroup>
 
+  <!-- SDK-style项目默认glob整个目录树——AgentPanelHost.Tests/是独立的xunit测试项目，
+       必须显式排除，否则它的.cs文件会被主项目一起编译，缺xunit引用报CS0246。 -->
+  <ItemGroup>
+    <Compile Remove="AgentPanelHost.Tests/**" />
+    <EmbeddedResource Remove="AgentPanelHost.Tests/**" />
+    <None Remove="AgentPanelHost.Tests/**" />
+  </ItemGroup>
+
 </Project>
