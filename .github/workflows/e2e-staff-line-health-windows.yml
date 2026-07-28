@@ -27,11 +27,17 @@ concurrency:
   group: e2e-staff-line-health-${{ github.ref }}
   cancel-in-progress: true
 
+# 最小权限：两个 job 都只需读代码，不写 issue/PR/package（CodeQL actions/missing-workflow-permissions）
+permissions:
+  contents: read
+
 jobs:
   e2e:
     name: Playwright — 业务线健康看板（ubuntu chromium）
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
 
     defaults:
       run:
@@ -113,6 +119,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     if: github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
 
     defaults:
       run:

@@ -1,5 +1,5 @@
 /**
- * Staff Hub 业务线健康看板（GP3 / line-health）E2E — 真实后端，禁 page.route()
+ * Staff Hub 业务线健康看板（GP3 / line-health）E2E — 真实后端，禁用 Playwright 请求拦截 API
  *
  * 覆盖 contract-dod.md [BEHAVIOR:E2E] 的 Golden Path 四步 + 四张截图：
  *   01-overview.png       总览页 3 张卡片，line01/line02 显示"未接入"徽章
@@ -11,8 +11,11 @@
  *   - Brain 在 CI/沙盒可能不可达 → line04 走 degraded 分支，属合法路径（合同「未覆盖真实链路清单」第2条）
  *   - GitHub 未认证可能限流 → environments 可能全 unavailable，断言只看结构不看具体数据
  *
- * product-map 缺失场景不用 page.route() 伪造响应，而是在 Node 侧真重命名文件
+ * product-map 缺失场景不伪造 HTTP 响应，而是在 Node 侧真重命名文件
  * （apps/api 每次请求真读该文件），跑完立即恢复。
+ *
+ * 注意：本文件正文与注释都不得出现 Playwright 拦截 API 的字面调用串 —— 合同 DoD 的
+ * [ARTIFACT] 检查、workflow guard 与 e2e-verify.ps1 都用纯字符串匹配把关，注释里提一嘴也会误伤。
  */
 import fs from 'fs';
 import path from 'path';
