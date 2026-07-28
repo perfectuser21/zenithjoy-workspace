@@ -49,9 +49,9 @@ GP-Anchor: none(infra)                                ← 显式豁免
 ## 4. product-map 扩展（刀 1）
 
 - `golden_paths` 补三条客户线 GP：`customer_first_success`（line01，6 步）、`customer_smart_acquisition`（line02，8 步）、`customer_private_ai`（line04，6 步），步骤从 `.claude/CLAUDE.md` 迁移。
-- schema 加两字段：`steps`（`id`+`name` 业务步骤清单）、`smoke_file`（`golden-path-N-smoke.sh` 仓库相对路径）。`product-map-contract` job 校验 `smoke_file` 存在——GP 无 smoke 注册不进去，本身即准入闸。
+- schema 加两字段：`steps`（`id`+`name` 业务步骤清单）、`smoke_files`（`golden-path-N-smoke.sh` 仓库相对路径）。`product-map-contract` job 校验 `smoke_files` 存在——GP 无 smoke 注册不进去，本身即准入闸。
 - CLAUDE.md 步骤清单改为指向 product-map 的引用，消除双写。
-- **business step ≠ smoke step**：Path2 业务 8 步 vs smoke 11 步，不强行对齐。product-map 记业务步骤；smoke 内部步数是实现细节。验证只到「碰没碰 smoke_file」粒度（YAGNI，step 粒度标记留待有真实需要）。
+- **business step ≠ smoke step**：Path2 业务 8 步 vs smoke 11 步，不强行对齐。product-map 记业务步骤；smoke 内部步数是实现细节。验证只到「碰没碰 smoke_files」粒度（YAGNI，step 粒度标记留待有真实需要）。
 
 ## 5. 排刀
 
@@ -74,7 +74,7 @@ GP-Anchor: none(infra)                                ← 显式豁免
 - **硬闸不阻塞紧急修复的依据**：合规成本 = 在 PR body 写一行 `GP-Anchor: ...`（约 10 秒），远低于任何紧急修复本身的成本。这就是不设 hotfix 旁路的前提——旁路省下的 10 秒换来的是所有修复都自称紧急的后门（主理人拍板：一律硬闸）。
 - **锚定系统自身故障的回滚路径**：⑥ 的 lint 挂载在 `ci-l1-process.yml`，回滚 = revert 单个 job 引用（一行 workflow 改动，不需要动 product-map 数据）；① Brain 校验回滚 = 关闭 `gp_anchor` 必填开关（单个 feature flag / revert 一个 commit）。两处回滚互相独立，回滚任意一处不影响已积累的锚定数据。
 - **误拦（false positive）处置**：lint 报错信息必须带自修复指引（合法格式示例 + product-map 现有 id 清单），使误拦可在 PR 内自助解决，不需要管理员介入。
-- **「smoke diff 触碰」的精确定义**（刀 3 验收口径）：diff 文件清单包含该 GP 的 `smoke_file` 路径（或其在 smoke 内 source 的断言脚本路径）即为触碰；不做内容语义判断。宽松方向的误差（碰了文件但没实质推进）由 ⑦ nightly 实跑 smoke 兜底。
+- **「smoke diff 触碰」的精确定义**（刀 3 验收口径）：diff 文件清单包含该 GP 的 `smoke_files` 路径（或其在 smoke 内 source 的断言脚本路径）即为触碰；不做内容语义判断。宽松方向的误差（碰了文件但没实质推进）由 ⑦ nightly 实跑 smoke 兜底。
 - **刀 5 归户的工作量边界**：只做近 40 个 PR 的一次性台账（人工判断归属 line，产出一个 markdown 台账 + 欠 smoke 回流的 Brain Issue），不做批量数据迁移、不改历史 git 记录，准确性以主理人抽查为准。
 
 ## 7. 非目标
@@ -87,8 +87,8 @@ GP-Anchor: none(infra)                                ← 显式豁免
 ## 8. 验收标准（整体）
 
 1. 无 GP-Anchor 行（或 id 查无）的 PR 无法合并（CI 红）。
-2. 声称 `#stepN` 推进但 diff 未触碰对应 `smoke_file` 的 PR 无法合并。
+2. 声称 `#stepN` 推进但 diff 未触碰对应 `smoke_files` 的 PR 无法合并。
 3. 无锚任务无法注册进 Brain（400），tick 不派发。
-4. `npm run product-map:check` PASS 且三条客户线 GP 带 steps + smoke_file。
+4. `npm run product-map:check` PASS 且三条客户线 GP 带 steps + smoke_files。
 5. `golden-path-f1-anchor-smoke.sh` 的变异测试（无锚样例必须被拦）在 CI 常绿。
 6. ci-patrol 日报出现「GP 无 smoke 覆盖步骤数」棘轮指标。

@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# golden-path-f1-anchor-smoke.sh — GP锚定闭环 刀1 变异测试
+# golden-path-f1-anchor-smoke.sh — GP锚定闭环 变异测试（刀1+刀2累积）
 #
-# 范围（刀1收窄版，见 sprints/07282157-gp-anchor-cut1-productmap/contract-draft.md）：
-# 只验证刀1自己交付的三件事，零网络、零DB依赖：
+# 范围（按刀累积追加，不新起平行文件）：
+# 刀1（零网络零DB）：
 #   ① schema校验逻辑对格式错误正确判红
 #   ② smoke_files存在性/非空占位校验正确触发
 #   ③ gp_anchor_enforcement自身注册数据正确
-# 不测 lint-gp-anchor.sh（刀2）或 Brain API 400（刀4）——那两项依赖的交付物
-# 此刻还不存在。刀2/刀4落地时应往本文件追加断言，而非另起新文件。
+# 刀2（新增）：
+#   ④ lint-gp-anchor.sh 对非法/合法GP-Anchor声明正确判红/判绿
+# 不测 Brain API 400（刀4）——依赖的交付物此刻还不存在。刀4落地时应往本文件
+# 追加断言，而非另起新文件。
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -64,6 +66,34 @@ if (!gp.smoke_files || !gp.smoke_files.includes('.github/workflows/scripts/smoke
 }
 console.log('PASS: gp_anchor_enforcement注册数据正确');
 " || FAIL=1
+
+echo "=== ④ lint-gp-anchor.sh：非法/合法GP-Anchor声明正确判红/判绿 ==="
+LINT="$REPO_ROOT/.github/workflows/scripts/lint-gp-anchor.sh"
+
+# 负向：无声明
+if PR_BODY="" bash "$LINT" origin/main >/tmp/f1-lint-check.log 2>&1; then
+  echo "FAIL: 空PR body应判红，实际判绿"; FAIL=1
+elif ! grep -q "GP-ANCHOR-MISSING" /tmp/f1-lint-check.log; then
+  echo "FAIL: 空PR body错误信息缺GP-ANCHOR-MISSING"; FAIL=1
+else
+  echo "PASS: 空PR body正确判红"
+fi
+
+# 负向：id不存在
+if PR_BODY="GP-Anchor: line99/nonexistent_gp#step1" bash "$LINT" origin/main >/tmp/f1-lint-check.log 2>&1; then
+  echo "FAIL: 不存在的id应判红，实际判绿"; FAIL=1
+elif ! grep -q "GP-ANCHOR-ID-NOTFOUND" /tmp/f1-lint-check.log; then
+  echo "FAIL: 不存在id的错误信息缺GP-ANCHOR-ID-NOTFOUND"; FAIL=1
+else
+  echo "PASS: 不存在的id正确判红"
+fi
+
+# 正向：keep-green合法声明
+if ! PR_BODY="GP-Anchor: line01/customer_first_success keep-green" bash "$LINT" origin/main >/tmp/f1-lint-check.log 2>&1; then
+  echo "FAIL: 合法keep-green声明应判绿，实际判红"; cat /tmp/f1-lint-check.log; FAIL=1
+else
+  echo "PASS: 合法keep-green声明正确判绿"
+fi
 
 if [ "$FAIL" -ne 0 ]; then
   echo "❌ golden-path-f1-anchor-smoke.sh 未通过"

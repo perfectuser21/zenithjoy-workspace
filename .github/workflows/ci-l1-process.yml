@@ -329,6 +329,20 @@ jobs:
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: bash .github/workflows/scripts/lint-feature-has-smoke.sh origin/main
 
+  lint-gp-anchor:
+    if: github.event_name == 'pull_request'
+    name: Lint — GP Anchor
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run lint-gp-anchor
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: bash .github/workflows/scripts/lint-gp-anchor.sh origin/main
+
   lint-agent-version-bump:
     if: github.event_name == 'pull_request'
     name: Lint — Agent Version Bump
@@ -392,6 +406,7 @@ jobs:
     name: L1 Process Gate Passed
     needs: [verify-dev-workflow, pr-title, ci-config-audit, secrets-scan, frontend-browser-dod-check,
             lint-test-pairing, lint-test-quality, lint-tdd-commit-order, lint-no-fake-test, lint-feature-has-smoke,
+            lint-gp-anchor,
             lint-agent-version-bump, lint-line04-manifest-version-bump, lint-wechat-rpa-runner,
             lint-contract-test-immutability, lint-workflow-yaml-parse]
     if: always() && github.event_name == 'pull_request'
@@ -453,6 +468,11 @@ jobs:
 
           if [ "${{ needs.lint-feature-has-smoke.result }}" != "success" ]; then
             echo "FAIL: Lint Feature Has Smoke (${{ needs.lint-feature-has-smoke.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.lint-gp-anchor.result }}" != "success" ]; then
+            echo "FAIL: Lint GP Anchor (${{ needs.lint-gp-anchor.result }})"
             FAILED=true
           fi
 
