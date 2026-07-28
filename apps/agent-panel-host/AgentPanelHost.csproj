@@ -15,14 +15,24 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <!-- WPF本身没有托盘图标API——NotifyIcon是WinForms的东西，业界标准做法就是WPF项目里
+         开UseWindowsForms只为拿这一个类，不是真的在写WinForms UI。PrepPRD Golden Path
+         Step3要求"按热键或点托盘"两条路都要通，之前漏了托盘这半边。 -->
+    <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ZenithJoyAgentPanel</AssemblyName>
     <RootNamespace>ZenithJoy.AgentPanel</RootNamespace>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2592.51" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 悦升云端logo，与services/agent/build/icon.ico同源（托盘图标+exe图标同一张） -->
+    <None Include="icon.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- SDK-style项目默认glob整个目录树——AgentPanelHost.Tests/是独立的xunit测试项目，

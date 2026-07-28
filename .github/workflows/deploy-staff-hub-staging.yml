@@ -1,0 +1,93 @@
+name: Deploy Staff Hub to Staging (:9444)
+
+# 对齐 apps/api 的 deploy-staging-hk.yml 模式：push main 自动部署到 staging，绝不碰生产。
+# 生产更新走人工闸门 promote-staff-hub-prod-hk.yml（workflow_dispatch）。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/staff-hub/**'
+      - 'deploy/staff-hub/**'
+      - 'deploy/docker-compose.staff-hub-staging.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staff-hub-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy-staff-hub-staging:
+    name: Build & Deploy Staff Hub Staging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: npm install --workspace=apps/staff-hub
+
+      - name: Create .env.production
+        run: |
+          echo "VITE_FEISHU_APP_ID=${{ secrets.FEISHU_APP_ID }}" > apps/staff-hub/.env.production
+
+      - name: Build staff-hub
+        run: npm run build --workspace=apps/staff-hub
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HK_VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p ${{ secrets.HK_VPS_PORT }} ${{ secrets.HK_VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy dist + nginx configs to VPS via rsync（仅 staging 路径）
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HK_VPS_PORT }} -o StrictHostKeyChecking=no" \
+            apps/staff-hub/dist/ \
+            ${{ secrets.HK_VPS_USER }}@${{ secrets.HK_VPS_HOST }}:/opt/zenithjoy/staff-hub-staging/dist/
+          rsync -avz \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HK_VPS_PORT }} -o StrictHostKeyChecking=no" \
+            deploy/staff-hub/nginx-staging.conf \
+            ${{ secrets.HK_VPS_USER }}@${{ secrets.HK_VPS_HOST }}:/opt/zenithjoy/staff-hub-staging/nginx.conf
+          rsync -avz \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HK_VPS_PORT }} -o StrictHostKeyChecking=no" \
+            deploy/staff-hub/common-staging.conf \
+            ${{ secrets.HK_VPS_USER }}@${{ secrets.HK_VPS_HOST }}:/opt/zenithjoy/staff-hub-staging/common.conf
+          echo "✅ staging dist + nginx configs synced"
+
+      - name: Bring up staff-hub-staging via docker compose + 冒烟（仅 staging，绝不碰生产 staff-hub）
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HK_VPS_HOST }}
+          username: ${{ secrets.HK_VPS_USER }}
+          key: ${{ secrets.HK_VPS_SSH_KEY }}
+          port: ${{ secrets.HK_VPS_PORT }}
+          script: |
+            set -euo pipefail
+            cd /opt/zenithjoy/repo
+            git fetch --force --prune origin main
+            git checkout origin/main -- deploy/docker-compose.staff-hub-staging.yml
+            docker compose -f deploy/docker-compose.staff-hub-staging.yml up -d staff-hub-staging
+            docker restart staff-hub-staging
+            echo "✅ staff-hub-staging restarted"
+
+            echo "▶ 冒烟：staging :9444 首页 200（走 Tailscale IP，容器 healthcheck 起来后再测）"
+            STATUS=none
+            for i in $(seq 1 20); do
+              STATUS=$(docker inspect staff-hub-staging --format '{{.State.Health.Status}}' 2>/dev/null || echo none)
+              [ "$STATUS" = "healthy" ] && break
+              sleep 3
+            done
+            [ "$STATUS" = "healthy" ] || { echo "❌ 容器未 healthy: $STATUS"; docker logs --tail 50 staff-hub-staging; exit 1; }
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' -k "https://100.86.118.99:9444/" -H "Host: staff.zenjoymedia.media")
+            [ "$CODE" = "200" ] || { echo "❌ staging :9444 首页 http=$CODE"; exit 1; }
+            echo "✅ staging :9444 首页 200"
+
+      - name: Notify Brain on failure
+        if: failure()
+        run: |
+          curl -s -X POST "${{ vars.BRAIN_PUBLIC_URL || 'http://localhost:5221' }}/api/brain/alerts" \
+            -H "Content-Type: application/json" \
+            -d '{"level":"P1","source":"deploy-staff-hub-staging","message":"Staff Hub staging 部署失败 sha=${{ github.sha }}"}' || true

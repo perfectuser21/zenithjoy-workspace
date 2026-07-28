@@ -68,6 +68,12 @@ if [ "$DRY_RUN" = true ]; then
   cp build/icon.ico "${PACK_DIR}/" 2>/dev/null || true
   echo "[build-dryrun] start.bat + start.vbs + create-shortcut.ps1 + icon.ico 拷贝完成"
 
+  # 作战窗 Agent Panel 刀1 stub（agent-panel-web网页内容 + agent-panel-host原生宿主exe占位）
+  mkdir -p "${PACK_DIR}/agent-panel-host/agent-panel-web"
+  printf '<!doctype html><title>dry-run stub</title>\n' > "${PACK_DIR}/agent-panel-host/agent-panel-web/index.html"
+  printf '# dry-run stub: agent-panel-host/ZenithJoyAgentPanel.exe\n' > "${PACK_DIR}/agent-panel-host/ZenithJoyAgentPanel.exe"
+  echo "[build-dryrun] agent-panel-host/(含agent-panel-web/) stub 创建完成"
+
   echo "[build-dryrun] PACK_DIR=${PACK_DIR} 内容: $(ls ${PACK_DIR}/)"
   echo "[build-dryrun] ✅ dry-run 验证结构就绪"
   exit 0
@@ -265,6 +271,51 @@ echo "[build] wechat-rpa scripts bundled: $(ls ${PACK_DIR}/wechat-rpa/)"
 echo "[build] copying publishers/ (douyin-publisher et al)"
 cp -r publishers/ "$PACK_DIR/publishers/"
 echo "[build] publishers/ included in pack"
+
+# ── 作战窗 Agent Panel 刀1 打包 ───────────────────────────────────────────────
+# apps/agent-panel（网页内容，纯Node，跨平台可build）+ apps/agent-panel-host（WPF+WebView2
+# 原生宿主，net8.0-windows，只能在Windows打包机上build——这不是漏做，是真实平台限制：
+# WPF的markup编译器没有macOS/Linux版本。非Windows打包机上此段WARN跳过，不静默、不假装出包。
+AGENT_PANEL_WEB_DIR="../../apps/agent-panel"
+AGENT_PANEL_HOST_DIR="../../apps/agent-panel-host"
+AGENT_PANEL_HOST_OUT="${PACK_DIR}/agent-panel-host"
+
+case "$(uname -s)" in
+  *NT*|*MINGW*|*MSYS*|*CYGWIN*)
+    if ! command -v dotnet >/dev/null 2>&1; then
+      echo "[build] WARN: Windows打包机但缺dotnet SDK，跳过作战窗原生宿主打包（装机包将不含作战窗）"
+    elif [ ! -d "$AGENT_PANEL_HOST_DIR" ]; then
+      echo "[build] WARN: apps/agent-panel-host 目录不存在，跳过作战窗原生宿主打包"
+    else
+      echo "[build] dotnet publish apps/agent-panel-host（self-contained win-x64，客户机不需要预装.NET Runtime）..."
+      dotnet publish "${AGENT_PANEL_HOST_DIR}/AgentPanelHost.csproj" \
+        -c Release -r win-x64 --self-contained true \
+        -p:PublishSingleFile=false \
+        -o "$AGENT_PANEL_HOST_OUT" || {
+        echo "ERROR: apps/agent-panel-host dotnet publish 失败" >&2
+        exit 1
+      }
+      echo "[build] agent-panel-host/ZenithJoyAgentPanel.exe 打包完成"
+
+      if [ -d "$AGENT_PANEL_WEB_DIR" ]; then
+        echo "[build] building apps/agent-panel web content（作战窗客户端网页）..."
+        (cd "$AGENT_PANEL_WEB_DIR" && npm run build) || {
+          echo "ERROR: apps/agent-panel vite build 失败" >&2
+          exit 1
+        }
+        mkdir -p "${AGENT_PANEL_HOST_OUT}/agent-panel-web"
+        cp -r "${AGENT_PANEL_WEB_DIR}/dist/"* "${AGENT_PANEL_HOST_OUT}/agent-panel-web/"
+        echo "[build] agent-panel-host/agent-panel-web/（网页内容，与exe同目录，MainWindow.xaml.cs按此路径查找）打包完成"
+      else
+        echo "[build] WARN: apps/agent-panel 目录不存在，作战窗宿主将拿不到网页内容（运行时会退回localhost:5175开发服务器地址）"
+      fi
+    fi
+    ;;
+  *)
+    echo "[build] WARN: 非Windows打包机（uname=$(uname -s)），WPF(net8.0-windows)无法本地build，跳过作战窗原生宿主打包"
+    echo "[build]       真实发布装机包必须在Windows打包机（如xian-rog）上跑本脚本才会包含作战窗"
+    ;;
+esac
 
 echo "[build] copying scripts/ (douyin-comment-crawl.cjs et al)"
 mkdir -p "$PACK_DIR/scripts"

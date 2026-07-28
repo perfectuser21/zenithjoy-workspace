@@ -25,6 +25,9 @@ public partial class MainWindow : Window
     private bool _userWantsExpanded;
     private bool _rpaActive;
     private IntPtr _hwnd;
+    // 托盘图标只借 WinForms 的 NotifyIcon 类(WPF没有自己的托盘API)，不引入其它WinForms控件；
+    // 全部用完整命名空间限定，避免 System.Windows.MessageBox 与 System.Windows.Forms.MessageBox 撞名。
+    private System.Windows.Forms.NotifyIcon? _trayIcon;
 
     public MainWindow()
     {
@@ -42,6 +45,7 @@ public partial class MainWindow : Window
         NativeMethods.RegisterHotKey(
             _hwnd, NativeMethods.HOTKEY_ID_SUMMON,
             NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT, NativeMethods.VK_Z);
+        SetupTrayIcon();
 
         await Web.EnsureCoreWebView2Async();
         Web.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
@@ -58,6 +62,30 @@ public partial class MainWindow : Window
         var baseDir = AppDomain.CurrentDomain.BaseDirectory;
         var indexPath = Path.Combine(baseDir, "agent-panel-web", "index.html");
         Web.CoreWebView2.Navigate(File.Exists(indexPath) ? new Uri(indexPath).AbsoluteUri : "http://localhost:5175");
+    }
+
+    // PrepPRD Golden Path Step3："客户按热键(Ctrl+Alt+Z)或点托盘 → 展开"——两条召唤入口都要通，
+    // 缺了这个客户热键一失灵/一冲突就彻底叫不出面板了。
+    private void SetupTrayIcon()
+    {
+        var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon.ico");
+        var icon = File.Exists(iconPath)
+            ? new System.Drawing.Icon(iconPath)
+            : System.Drawing.SystemIcons.Application;
+
+        _trayIcon = new System.Windows.Forms.NotifyIcon
+        {
+            Icon = icon,
+            Visible = true,
+            Text = "作战窗",
+        };
+        _trayIcon.Click += (_, _) => ToggleExpanded();
+    }
+
+    private void ToggleExpanded()
+    {
+        _userWantsExpanded = !_userWantsExpanded;
+        ApplyWindowMode(PanelWindowState.Resolve(_userWantsExpanded, _rpaActive));
     }
 
     private void OnWebMessageReceived(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs e)
@@ -142,8 +170,7 @@ public partial class MainWindow : Window
     {
         if (msg == NativeMethods.WM_HOTKEY && wParam.ToInt32() == NativeMethods.HOTKEY_ID_SUMMON)
         {
-            _userWantsExpanded = !_userWantsExpanded;
-            ApplyWindowMode(PanelWindowState.Resolve(_userWantsExpanded, _rpaActive));
+            ToggleExpanded();
             handled = true;
         }
         return IntPtr.Zero;
@@ -153,6 +180,11 @@ public partial class MainWindow : Window
     {
         NativeMethods.UnregisterHotKey(_hwnd, NativeMethods.HOTKEY_ID_SUMMON);
         _rpaPollTimer.Stop();
+        if (_trayIcon is not null)
+        {
+            _trayIcon.Visible = false; // 不显式隐藏，图标会在托盘里残留到下次鼠标划过才消失
+            _trayIcon.Dispose();
+        }
         base.OnClosed(e);
     }
 }
