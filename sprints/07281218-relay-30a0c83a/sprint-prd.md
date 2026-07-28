@@ -290,5 +290,5 @@ API 变更（`apps/api/**`）触发现有 API 部署流水线（需人工卡点 
 
 ## journey_type: autonomous
 ## journey_type_reason: 涉及后端 API + DB 迁移 + Staff Hub 前端 + product-map 修复，全链路可在 CI runner 自动验证（无需人工真机），命中"全链路自动化"分支
-## target_environment: windows_cloud（前端 E2E） + local_api（后端 API 集成）
-## target_environment_reason: Staff Hub 是 ZenithJoy 系统，前端 E2E 走 windows_cloud；API 集成测试走 local_api（curl + psql）
+## target_environment: windows_cloud
+## target_environment_reason: Staff Hub 是 ZenithJoy 系统，E2E 验收走 windows_cloud Playwright；API 合同测试已在 CI L4 内联跑（local_api 是 CI 内部分类，theater 路由统一用 windows_cloud）
