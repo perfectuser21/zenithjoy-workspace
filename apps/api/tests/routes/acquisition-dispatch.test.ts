@@ -200,6 +200,14 @@ function makeFakePool(seed: {
           .map((s) => ({ account_label: s.account_label, role: s.role, platform: s.platform, status: s.status, bound_at: s.bound_at }));
         return { rows };
       }
+      // getSessionOnlineStatus — uia_online/heartbeat_online 查询
+      if (sql.includes('uia_online') && sql.includes('heartbeat_online')) {
+        return { rows: [{
+          uia_online: true,
+          uia_error: null,
+          heartbeat_online: true
+        }] };
+      }
       throw new Error('fake pool: unhandled SQL: ' + sql.slice(0, 120));
     },
   };

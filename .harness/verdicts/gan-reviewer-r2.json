@@ -2,13 +2,18 @@
   "round": 2,
   "verdict": "REVISION",
   "rubric_scores": {
-    "completeness": 9,
-    "verifiability": 7,
-    "scope_guard": 9,
-    "negative_cases": 6,
-    "e2e_acceptance": 7,
-    "tdd_friendliness": 8,
-    "ci_alignment": 6
+    "correctness": { "score": 8, "max": 10 },
+    "completeness": { "score": 8, "max": 10 },
+    "testability": { "score": 7, "max": 10 },
+    "e2e_coverage": { "score": 8, "max": 10 },
+    "iron_law_compliance": { "score": 9, "max": 10 },
+    "edge_cases": { "score": 7, "max": 10 },
+    "thin_slice_discipline": { "score": 9, "max": 10 }
   },
-  "feedback_items": ["F-01","F-02","F-03","F-04","F-05"]
+  "p1_issues": [
+    "sprint-prd.md 第262-267行和第273行仍有Step 15-19残留须改为Step 24-28",
+    "fr4-dispatch-precheck.test.ts sendDmMock 声明后未被 assert（缺 expect(sendDmMock).not.toHaveBeenCalled()）",
+    "BEHAVIOR-8 smoke Step27的dm_assignments queued行缺前置setup/INSERT"
+  ],
+  "judgments_written": 9
 }

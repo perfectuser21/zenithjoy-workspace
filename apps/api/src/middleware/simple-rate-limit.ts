@@ -9,12 +9,22 @@
  * 按 tenant_id 隔离计数（而非默认按 IP），因为调用方是我们自己的中台/客户端，
  * 同一租户的不同请求可能经不同出口 IP，按 tenant 限流才是真实的业务边界。
  */
-import { rateLimit } from 'express-rate-limit';
+import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import type { Request } from 'express';
 
 /** 按 tenant_id 限流（body / query 均取，配合 tenantContext 中间件之后使用）。 */
 export function tenantKeyFn(req: Request): string {
   return req.tenantId || (req.body && req.body.tenant_id) || (req.query && req.query.tenant_id) || 'anonymous';
+}
+
+/**
+ * 按 IP 限流（诊断/无鉴权端点用）。必须过 ipKeyGenerator helper 处理 IPv6——
+ * 直接用 req.ip 会被 express-rate-limit v7+ 判定为 IPv6 场景可绕过限流而抛
+ * ERR_ERL_KEY_GEN_IPV6（2026-07-28 rescue #1456 实测复现：fr5-signal-verify
+ * supertest 请求触发，req.ip 是 ::ffff:127.0.0.1 这类 IPv6 映射地址）。
+ */
+export function ipKeyFn(req: Request): string {
+  return req.ip ? ipKeyGenerator(req.ip) : 'anonymous';
 }
 
 export function simpleRateLimit(opts: { windowMs: number; max: number; keyFn?: (req: Request) => string }) {

@@ -216,7 +216,74 @@ router.post('/qr-bind-result', async (req: Request, res: Response) => {
   return res.json(OK({ task_id, sessions_updated: 1 }));
 });
 
+// CodeQL js/missing-rate-limiting：/uia-signal 碰鉴权(x-agent-id反查tenant)+DB写入。
+// 按 agent_id 限流——真机 UIA 探测循环节奏与 account-scan-result 同量级（~30-60s一次），
+// 60次/60s 给足并发/连续调用余量（同 accountScanResultRateLimit 的既往修法）。
+const uiaSignalRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 60,
+  keyFn: (req) => req.header('x-agent-id') || 'anonymous',
+});
+
+// ── FR-1b. POST /uia-signal — UIA 在线状态写入（x-agent-id 反查 tenant）──
+// Android agent 通过 x-agent-id header 上报 UIAutomator 探测到的小号在线状态。
+// 写入 agent_platform_sessions 的 uia_online / uia_checked_at / uia_error 列。
+router.post('/uia-signal', uiaSignalRateLimit, async (req: Request, res: Response) => {
+  const xAgentId = req.header('x-agent-id') ?? '';
+  if (!xAgentId) return res.status(401).json(ERR('MISSING_AGENT_ID', '缺 x-agent-id header'));
+
+  // 用 x-agent-id 反查 tenant_id（同 acquisition.ts 等路由的做法）
+  const agentRes = await pool.query<{ tenant_id: string }>(
+    `SELECT tenant_id FROM zenithjoy.agents WHERE agent_id = $1 OR id::text = $1 LIMIT 1`,
+    [xAgentId],
+  );
+  const tenantId = agentRes.rows[0]?.tenant_id ?? null;
+  if (!tenantId) return res.status(401).json(ERR('UNKNOWN_AGENT', 'agent 未注册'));
+
+  const { account_label, uia_online, uia_error } = req.body || {};
+  if (!account_label || typeof account_label !== 'string') {
+    return res.status(400).json(ERR('MISSING_ACCOUNT_LABEL', 'account_label 必填'));
+  }
+  if (typeof uia_online !== 'boolean') {
+    return res.status(400).json(ERR('MISSING_UIA_ONLINE', 'uia_online 必填（boolean）'));
+  }
+
+  // 校验 account_label 是否存在（对应 tenant 下、douyin 平台）
+  const sessionCheck = await pool.query(
+    `SELECT 1 FROM zenithjoy.agent_platform_sessions
+      WHERE agent_id = $1 AND platform = 'douyin' AND account_label = $2 LIMIT 1`,
+    [xAgentId, account_label],
+  );
+  if (sessionCheck.rows.length === 0) {
+    return res.status(404).json(ERR('SESSION_NOT_FOUND', `account_label='${account_label}' 不存在`));
+  }
+
+  // 写入 UIA 信号字段；uia_online=false 时同步将 status='offline'
+  const safeUiaError = typeof uia_error === 'string' ? uia_error : null;
+  if (uia_online === false) {
+    await pool.query(
+      `UPDATE zenithjoy.agent_platform_sessions
+          SET uia_online = $3, uia_checked_at = NOW(), uia_error = $4,
+              status = 'offline', updated_at = NOW()
+        WHERE agent_id = $1 AND platform = 'douyin' AND account_label = $2`,
+      [xAgentId, account_label, uia_online, safeUiaError],
+    );
+  } else {
+    await pool.query(
+      `UPDATE zenithjoy.agent_platform_sessions
+          SET uia_online = $3, uia_checked_at = NOW(), uia_error = $4,
+              updated_at = NOW()
+        WHERE agent_id = $1 AND platform = 'douyin' AND account_label = $2`,
+      [xAgentId, account_label, uia_online, safeUiaError],
+    );
+  }
+
+  console.log(`[uia-signal] agent=${xAgentId} account_label=${account_label} uia_online=${uia_online}`);
+  return res.json(OK({ account_label, uia_online, updated: true }));
+});
+
 // ── 3. GET /sessions — 列 burner sessions（从 session 解析 tenant，不信 query 占位）──
+// FR-1c: 增加 computed_online_status 三级判定 + heartbeat_online / uia_online / uia_checked_at / uia_error
 router.get('/sessions', tenantContextOptional, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
@@ -225,9 +292,12 @@ router.get('/sessions', tenantContextOptional, async (req: Request, res: Respons
       `SELECT s.account_label, s.role, s.status, s.bound_at,
               s.device_type,
               s.created_at, s.agent_id,
+              s.uia_online, s.uia_checked_at, s.uia_error,
               a.hostname AS agent_hostname,
               a.nickname AS agent_nickname,
               a.status AS agent_status,
+              a.last_heartbeat_at,
+              (a.last_heartbeat_at >= NOW() - INTERVAL '2 minutes') AS heartbeat_online,
               (SELECT response->>'account_nickname'
                  FROM zenithjoy.publish_tasks
                 WHERE agent_id=s.agent_id
@@ -244,7 +314,31 @@ router.get('/sessions', tenantContextOptional, async (req: Request, res: Respons
         ORDER BY s.created_at DESC`,
       [tenantId],
     );
-    return res.json(OK({ sessions: r.rows }));
+
+    // 叠加 computed_online_status 三级判定（JS 层计算，与 FR-5 signal-verify SQL 逻辑一致）
+    const sessions = r.rows.map((s) => {
+      const heartbeatOnline = s.heartbeat_online === true;
+      let computedOnlineStatus: 'online' | 'offline' | 'unknown';
+      if (!heartbeatOnline) {
+        computedOnlineStatus = 'offline';
+      } else if (s.uia_online === false) {
+        computedOnlineStatus = 'offline';
+      } else if (s.uia_online === true) {
+        computedOnlineStatus = 'online';
+      } else if (s.uia_error !== null) {
+        computedOnlineStatus = 'unknown';
+      } else {
+        // uia_online IS NULL
+        computedOnlineStatus = 'unknown';
+      }
+      return {
+        ...s,
+        heartbeat_online: heartbeatOnline,
+        computed_online_status: computedOnlineStatus,
+      };
+    });
+
+    return res.json(OK({ sessions }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown';
     console.error('[burner/sessions] query failed:', msg);

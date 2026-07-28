@@ -93,3 +93,4 @@ installer-env-reset-smoke.sh
 agent-offline-alert-smoke.sh
 overlay-card-redesign-smoke.sh
 xian-runner-fleet-smoke.sh
+android-signal-reporting-smoke.sh

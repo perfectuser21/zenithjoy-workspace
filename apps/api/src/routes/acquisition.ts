@@ -10,7 +10,7 @@ import {
 } from '../services/acquisition-collect';
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { licenseAuth } from '../middleware/license-auth';
-import { simpleRateLimit } from '../middleware/simple-rate-limit';
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import { sseService } from '../services/sse.service';
 import { scoreLeads, buildAssignments, dispatchDue, rescoreLead, upsertConfig } from '../services/acquisition-dispatch';
 import { resolveShareToMedia, type MediaKind } from '../services/douyin-share-resolver';
@@ -18,6 +18,32 @@ import { judgeVideo } from '../services/content-judgment';
 import { gradeComments } from '../services/comment-grading';
 
 export const acquisitionRouter = Router();
+
+// FR-2: error_code 白名单（新枚举 + 历史值向后兼容）
+// 定义在文件顶部，供 collect/report-videos 和 collect/report 两个 handler 共用。
+// 2026-07-28 rescue #1456：PLATFORM_LIMIT/ACCOUNT_OFFLINE 改回 PLATFORM_LIMITED/ACCOUNT_ABNORMAL——
+// 与下方 VALID_COLLECT_ERROR_CODES、以及 Android 端 CollectFailureClassifier.kt 实际吐出的值对齐
+// （原命名和真机不一致会把真实 PLATFORM_LIMITED/ACCOUNT_ABNORMAL 静默降级成 UNKNOWN，白名单形同虚设）。
+const VALID_REPORT_ERROR_CODES = new Set([
+  'KEYWORD_NO_RESULT',
+  'KEYWORD_BANNED',
+  'PLATFORM_LIMITED',
+  'NETWORK_ERROR',
+  'ACCOUNT_ABNORMAL',
+  'UNKNOWN',
+  // 历史值向后兼容
+  'STAGE2_DISPATCH_EXHAUSTED',
+  'COLLECT_TIMEOUT',
+  'stage1_empty',
+]);
+
+/** 非枚举值强制 normalize 为 UNKNOWN，并写日志。历史值保留原值。空/undefined → null。 */
+function normalizeReportErrorCode(code: string | null | undefined): string | null {
+  if (!code) return null;
+  if (VALID_REPORT_ERROR_CODES.has(code)) return code;
+  console.log(`[acquisition] error_code normalized: UNKNOWN (original: ${code})`);
+  return 'UNKNOWN';
+}
 
 // CodeQL js/missing-rate-limiting：/pending-collect-tasks 碰鉴权(x-agent-id反查tenant)+DB
 // 查询，且本次PR改动了这条路由（新增title查询）触发静态分析对"改动过的代码"重新计入告警。
@@ -68,7 +94,7 @@ const accountScanTriggerRateLimit = simpleRateLimit({
 const signalStatusRateLimit = simpleRateLimit({
   windowMs: 60_000,
   max: 60,
-  keyFn: (req) => req.ip || 'anonymous',
+  keyFn: ipKeyFn,
 });
 
 const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
@@ -812,7 +838,9 @@ acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Respo
   const rawList: Array<{ video_id?: string; share_url?: string; title?: string; thumbnail_url?: string; publish_date?: string }> =
     Array.isArray(videos) ? videos.filter((v) => v && (v.video_id || v.share_url)) : [];
   const searchEmpty = reason?.search_result === 'empty';
-  const reasonErrorCode: string | null = reason?.error_code ?? null;
+  // FR-2: error_code 白名单校验（非枚举值 normalize 为 UNKNOWN）
+  const rawReasonErrorCode: string | null = reason?.error_code ?? null;
+  const reasonErrorCode: string | null = normalizeReportErrorCode(rawReasonErrorCode);
   if (rawList.length === 0 && !searchEmpty && !reasonErrorCode) {
     return fail(res, 400, 'MISSING_REASON', '空清单必须带 reason（search_result=empty 或 error_code）');
   }
@@ -872,7 +900,11 @@ acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Respo
 
     if (list.length === 0) {
       // 空清单终态：empty → partial(stage1_empty)；error_code / 卡片全解析失败 → failed（checkpoint 保留可重试）
-      const rawFailCode = reasonErrorCode ?? (rawList.length > 0 ? 'ALL_RESOLVE_FAILED' : null);
+      // 2026-07-28 rescue #1456：用 rawReasonErrorCode（未归一的真实原始值）而非 reasonErrorCode
+      // （FR-2 在 L843 已提前 normalize 过一次）——否则下面 rawFailCode !== 'UNKNOWN' 的留证判断
+      // 永远拿到已经被归一过的值，非枚举原始错误码（如 ALL_SHARE_FAILED）永远进不了
+      // checkpoint.raw_error_code，等于 #1484 的留证机制被 FR-2 的提前归一悄悄短路。
+      const rawFailCode = rawReasonErrorCode ?? (rawList.length > 0 ? 'ALL_RESOLVE_FAILED' : null);
       // ALL_RESOLVE_FAILED 是本端点自己合成的已知信号（卡片全解析失败），不是 Android 传来的
       // 未知码，须显式映射到 PLATFORM_LIMITED，不能走 normalizeCollectErrorCode 白名单兜底
       // 被误判成 UNKNOWN（全分支复审 Important finding）。
@@ -975,10 +1007,16 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
     video_title: videoTitle,
     thumbnail_url: thumbnailUrl,
     publish_date: publishDate,
+    reason,
+    latest_reply: latestReply,
+    latest_reply_at: latestReplyAt,
   } = req.body || {};
 
   if (!taskId) return fail(res, 400, 'MISSING_TASK_ID', '缺 task_id');
-  if (!videoId) return fail(res, 400, 'MISSING_VIDEO_ID', '缺 video_id');
+  // FR-2/FR-3: video_id 在纯信号上报（reason.error_code / latest_reply / terminal）时可选；
+  // 若同时传 commenters/comments 但无 video_id → 仍报错（commenters 需绑定到具体视频）
+  const hasSignalOnly = !commenters && !req.body?.comments && (reason?.error_code || latestReply || terminal);
+  if (!videoId && !hasSignalOnly) return fail(res, 400, 'MISSING_VIDEO_ID', '缺 video_id');
 
   const batch: Array<{ sec_uid?: string | null; nickname: string; comment_text?: string; grade?: string; keyword?: string; douyin_id?: string | null }> =
     Array.isArray(commenters) ? commenters : [];
@@ -1069,6 +1107,18 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
       return ok(res, { task_id: taskId, ignored: true, status: s.status });
     }
 
+    // FR-3: latest_reply 留证前先拍一份"本请求开始前"的快照——commenters 循环里
+    // rescoreLead 也会把 latest_reply/latest_reply_at 改写成"最新一条公开评论"，
+    // 如果 FR-3 的"只前进不回退"判断跟活的列值比，会永远输给 rescoreLead 刚写完的
+    // NOW()（2026-07-28 rescue #1456 实测复现：commenters 和 latest_reply 同一请求
+    // 一起传时，latest_reply 显式信号被 rescoreLead 的评论文本悄悄覆盖）。改成跟
+    // "进这个事务之前"的旧值比，FR-3 信号不再输给同一请求里稍早跑的 rescoreLead。
+    const preLatestReplyRes = await client.query<{ max_at: string | null }>(
+      `SELECT MAX(latest_reply_at) AS max_at FROM zenithjoy.acquisition_leads WHERE collect_task_id = $1 AND tenant_id = $2`,
+      [taskId, tenantId]
+    );
+    const preExistingLatestReplyAt = preLatestReplyRes.rows[0]?.max_at ?? null;
+
     // ── 去重落库：先处理 commenters（已抓先落库不丢，即使本次是终态回报）──
     let inserted = 0;
     let deduped = 0;
@@ -1154,27 +1204,30 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
 
     // ── 视频维度：只接受 Stage1 登记过的 (task_id, video_id)。agent 对非数字 ID 会
     // hash fallback 出假 video_id，盲 upsert 会污染视频表且原登记行永不落章 → 重发风暴 ──
-    const regRes = await client.query(
-      `SELECT 1 FROM zenithjoy.acquisition_collect_videos
-        WHERE task_id = $1 AND video_id = $2 LIMIT 1`,
-      [taskId, videoId]
-    );
-    if (regRes.rows.length === 0) {
-      console.warn(`[acquisition] collect/report 拒绝未登记 video_id：task=${taskId} video=${videoId}（视频行不写，leads 照常）`);
-    } else {
-      await client.query(
-        `INSERT INTO zenithjoy.acquisition_collect_videos
-           (video_id, task_id, tenant_id, title, thumbnail_url, publish_date, comment_count, comments_reported_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-         ON CONFLICT (task_id, video_id) DO UPDATE
-           SET comment_count        = zenithjoy.acquisition_collect_videos.comment_count + EXCLUDED.comment_count,
-               title                = COALESCE(EXCLUDED.title, zenithjoy.acquisition_collect_videos.title),
-               thumbnail_url        = COALESCE(EXCLUDED.thumbnail_url, zenithjoy.acquisition_collect_videos.thumbnail_url),
-               publish_date         = COALESCE(EXCLUDED.publish_date, zenithjoy.acquisition_collect_videos.publish_date),
-               comments_reported_at = NOW(),
-               updated_at           = NOW()`,
-        [videoId, taskId, tenantId, videoTitle ?? null, thumbnailUrl ?? null, publishDate ?? null, batch.length]
+    // FR-2/FR-3: video_id 为空（纯信号上报）时跳过视频行写入
+    if (videoId) {
+      const regRes = await client.query(
+        `SELECT 1 FROM zenithjoy.acquisition_collect_videos
+          WHERE task_id = $1 AND video_id = $2 LIMIT 1`,
+        [taskId, videoId]
       );
+      if (regRes.rows.length === 0) {
+        console.warn(`[acquisition] collect/report 拒绝未登记 video_id：task=${taskId} video=${videoId}（视频行不写，leads 照常）`);
+      } else {
+        await client.query(
+          `INSERT INTO zenithjoy.acquisition_collect_videos
+             (video_id, task_id, tenant_id, title, thumbnail_url, publish_date, comment_count, comments_reported_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+           ON CONFLICT (task_id, video_id) DO UPDATE
+             SET comment_count        = zenithjoy.acquisition_collect_videos.comment_count + EXCLUDED.comment_count,
+                 title                = COALESCE(EXCLUDED.title, zenithjoy.acquisition_collect_videos.title),
+                 thumbnail_url        = COALESCE(EXCLUDED.thumbnail_url, zenithjoy.acquisition_collect_videos.thumbnail_url),
+                 publish_date         = COALESCE(EXCLUDED.publish_date, zenithjoy.acquisition_collect_videos.publish_date),
+                 comments_reported_at = NOW(),
+                 updated_at           = NOW()`,
+          [videoId, taskId, tenantId, videoTitle ?? null, thumbnailUrl ?? null, publishDate ?? null, batch.length]
+        );
+      }
     }
 
     // ── 计数重算 + settle 结算（倒推逻辑已删，Stage1 推进只走 report-videos）──
@@ -1186,13 +1239,45 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
     const videoTotal = vcRes.rows[0]?.total ?? 0;
     const videoDone = vcRes.rows[0]?.done ?? 0;
     const leadCountAfter = task.lead_count_raw + batch.length;
-    const normalizedErrorCode = normalizeCollectErrorCode(errorCode);
+    // FR-2: error_code 白名单校验（reason.error_code 或 body.error_code，同名合并处理）
+    // reason.error_code 优先（FR-2 测试格式），其次 body 顶层 error_code（历史兼容）
+    // 2026-07-28 rescue #1456：与 #1484（已上线）的 raw_error_code 留证行为合并——
+    // 归一为 UNKNOWN 时，原始值（不管来自 reason.error_code 还是 body.error_code）写入
+    // checkpoint.raw_error_code，不再让真实报错码丢失在 UNKNOWN 兜底里。
+    const rawReasonErrorCode = reason?.error_code ?? null;
+    const rawBodyErrorCode = typeof errorCode === 'string' ? errorCode : null;
+    const rawErrorCodeInput = rawReasonErrorCode ?? rawBodyErrorCode;
+    const normalizedErrorCode = normalizeReportErrorCode(rawErrorCodeInput);
     let checkpointToWrite: Record<string, unknown> | null =
       checkpoint && typeof checkpoint === 'object' ? checkpoint : null;
-    if (normalizedErrorCode === 'UNKNOWN' && errorCode !== 'UNKNOWN') {
-      console.warn(`[acquisition] collect/report error_code 归一为 UNKNOWN，原始值：task=${taskId} raw=${errorCode}`);
-      checkpointToWrite = { ...(checkpointToWrite ?? {}), raw_error_code: errorCode };
+    if (normalizedErrorCode === 'UNKNOWN' && rawErrorCodeInput && rawErrorCodeInput !== 'UNKNOWN') {
+      console.warn(`[acquisition] collect/report error_code 归一为 UNKNOWN，原始值：task=${taskId} raw=${rawErrorCodeInput}`);
+      checkpointToWrite = { ...(checkpointToWrite ?? {}), raw_error_code: rawErrorCodeInput };
     }
+
+    // FR-3: latest_reply 时间戳只向前不回退——跟"进事务前"的快照 preExistingLatestReplyAt
+    // 比，不跟活的列值比（commenters 循环里 rescoreLead 会把 latest_reply_at 改写成
+    // NOW()，跟活值比会导致 FR-3 显式信号永远输给同一请求里刚跑完的 rescoreLead）。
+    const safeLatestReply = typeof latestReply === 'string' && latestReply.trim() ? latestReply.trim() : null;
+    if (safeLatestReply) {
+      const safeLatestReplyAt = typeof latestReplyAt === 'string' && latestReplyAt.trim()
+        ? latestReplyAt.trim()
+        : new Date().toISOString();
+      const shouldAdvance = preExistingLatestReplyAt === null
+        || new Date(safeLatestReplyAt).getTime() > new Date(preExistingLatestReplyAt).getTime();
+      if (shouldAdvance) {
+        // 从 acquisition_collect_tasks 反查 lead：按 task_id 找该任务下全部 lead 行
+        await client.query(
+          `UPDATE zenithjoy.acquisition_leads
+              SET latest_reply    = $3,
+                  latest_reply_at = $4::timestamptz,
+                  updated_at      = NOW()
+            WHERE collect_task_id = $1 AND tenant_id = $2`,
+          [taskId, tenantId, safeLatestReply, safeLatestReplyAt],
+        );
+      }
+    }
+
     const s = settleCollectTask({
       currentStatus: task.status === 'pending' ? 'running' : task.status,
       agentTerminal: terminal ? { terminal, error_code: normalizedErrorCode, partial_reason: partialReason } : null,
@@ -1497,5 +1582,77 @@ acquisitionRouter.patch('/config', tenantContextOptional, async (req: Request, r
   } catch (err) {
     console.error('[acquisition] config PATCH error:', (err as Error).message);
     return fail(res, 500, 'CONFIG_ERROR', (err as Error).message);
+  }
+});
+
+// CodeQL js/missing-rate-limiting：/signal-verify 碰鉴权(tenantContextOptional反查tenant)+DB
+// 查询。同 signalStatusRateLimit 的既往修法：必须排在 tenantContextOptional 之前（CodeQL 追踪
+// 的是"鉴权节点执行前有没有先经过限流"），按 IP 限流，诊断端点允许较宽松轮询节奏。
+const signalVerifyRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 60,
+  keyFn: ipKeyFn,
+});
+
+// GET /api/acquisition/signal-verify — FR-5 信号验证聚合端点（Bearer token 鉴权，tenant 级）
+// 返回三组数据（每组最新 10 条）：burner_sessions / recent_collect_errors / recent_lead_replies
+acquisitionRouter.get('/signal-verify', signalVerifyRateLimit, tenantContextOptional, async (req: Request, res: Response) => {
+  const tenantId = tenantOf(req, res);
+  if (!tenantId) return;
+
+  try {
+    // burner_sessions：计算 computed_online_status（三级判定：心跳 > UIA > NULL）
+    const sessionsRes = await pool.query(
+      `SELECT
+         s.account_label,
+         s.uia_online,
+         s.uia_checked_at,
+         s.uia_error,
+         (a.last_heartbeat_at >= NOW() - INTERVAL '2 minutes') AS heartbeat_online,
+         CASE
+           WHEN (a.last_heartbeat_at IS NULL OR a.last_heartbeat_at < NOW() - INTERVAL '2 minutes') THEN 'offline'
+           WHEN s.uia_online = false THEN 'offline'
+           WHEN s.uia_online = true  THEN 'online'
+           ELSE 'unknown'
+         END AS computed_online_status
+       FROM zenithjoy.agent_platform_sessions s
+       LEFT JOIN zenithjoy.agents a ON a.id = s.agent_id
+       WHERE s.agent_id IN (
+         SELECT id FROM zenithjoy.agents WHERE tenant_id = $1
+       )
+         AND s.platform = 'douyin'
+       ORDER BY s.updated_at DESC NULLS LAST
+       LIMIT 10`,
+      [tenantId],
+    );
+
+    // recent_collect_errors：acquisition_collect_tasks 的 error_code 字段
+    const errorsRes = await pool.query(
+      `SELECT id AS task_id, error_code, updated_at
+         FROM zenithjoy.acquisition_collect_tasks
+        WHERE tenant_id = $1 AND error_code IS NOT NULL
+        ORDER BY updated_at DESC
+        LIMIT 10`,
+      [tenantId],
+    );
+
+    // recent_lead_replies：acquisition_leads 的 latest_reply / latest_reply_at 字段
+    const repliesRes = await pool.query(
+      `SELECT id AS lead_id, latest_reply, latest_reply_at
+         FROM zenithjoy.acquisition_leads
+        WHERE tenant_id = $1 AND latest_reply_at IS NOT NULL
+        ORDER BY latest_reply_at DESC
+        LIMIT 10`,
+      [tenantId],
+    );
+
+    return ok(res, {
+      burner_sessions: sessionsRes.rows,
+      recent_collect_errors: errorsRes.rows,
+      recent_lead_replies: repliesRes.rows,
+    });
+  } catch (err) {
+    console.error('[acquisition] signal-verify error:', (err as Error).message);
+    return fail(res, 500, 'SIGNAL_VERIFY_ERROR', (err as Error).message);
   }
 });
