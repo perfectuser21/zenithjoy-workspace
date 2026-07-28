@@ -29,6 +29,9 @@ WORKDIR /app
 COPY --from=builder /repo/apps/api/package*.json ./
 RUN npm install --production
 COPY --from=builder /repo/apps/api/dist/ ./dist/
+# product-map.json 是业务线清单权威来源（staff-health.ts 每次请求真读），此前从未拷进镜像，
+# 生产/staging 容器里恒 ENOENT，line-health 端点只能走硬编码兜底清单（2026-07-28 真机复现）
+COPY product-map/generated/ ./product-map/generated/
 
 EXPOSE 5200
 

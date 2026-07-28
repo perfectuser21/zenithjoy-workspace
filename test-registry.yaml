@@ -5245,3 +5245,11 @@ agent_suite:
   status: active
   product: 中台认证
   note: "Sprint 07281207 业务线健康看板聚合层单测：LINE_DEFS 查找 / product-map 真读与兜底 / 三环境四态 + 30 天陈旧阈值边界 / recent_commit 一致性 / related_prs 独立降级 / GitHub 单槽缓存命中与释放 / abilities 两条降级分支。"
+
+- id: staff-line-health-dockerfile-productmap-regression
+  path: apps/api/src/services/__tests__/dockerfile-product-map.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 中台认证
+  note: "回归测试(2026-07-28)：真机发现 apps/api/Dockerfile 生产阶段从未 COPY product-map/ 目录，line-health 接口在真实部署环境里恒 source=fallback。断言 Dockerfile 生产阶段含 COPY product-map 指令，防止再次漏拷。"
