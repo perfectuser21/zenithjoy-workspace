@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ⚠️ 从未在本环境执行（无 dotnet SDK，macOS 沙箱）——这不是"跳过测试"，
+    是环境硬约束下的诚实记录。CI 在 windows_cloud runner 上首次真跑这些测试，
+    那才是这些用例第一次真正见红/见绿。仅覆盖 PanelWindowState 纯逻辑
+    （不碰 WPF/Win32，理论上可跨平台跑），WebView2Preflight/NativeMethods/
+    MainWindow 涉及真实 Windows API，只能在 windows_cloud 做等价断言/真机验证。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 只含 PanelWindowState：唯一不碰 Windows API 的纯逻辑文件，理论上可跨平台编译/跑。
+         WebView2Preflight/NativeMethods/MainWindow 依赖 Windows 专属类型(Microsoft.Win32.Registry
+         等)，跨平台编译都过不了，只能在 windows_cloud 验证。 -->
+    <Compile Include="../PanelWindowState.cs" />
+  </ItemGroup>
+
+</Project>

@@ -24,6 +24,8 @@
 #   Step 14 后台把回复真实发送出去，气泡刷新确认才算成功（真链路：cs/outbound → receipt → DB 翻状态）
 #   Step 15 客户桌面浮窗实时看到"正在回复谁+推理摘要+发送中→已送达"（events.jsonl 单写者，PR#1315）
 #   Step 16 浮窗切换显示当前回复客户的画像面板（events 消费循环真调用 switch_customer，已接线）
+#   Step 17 作战窗 Agent Panel 面板可见性（刀1）：line04打点接线+panel-events.jsonl单写者隔离+
+#           看门狗stuck proven-to-fire+客户视图业务语言正向/负向断言（PrepPRD sprints/07280929-agent-panel-knife1）
 #
 # Step 4/5 是共享前门（注册/装机，Path1/2/4 复用），断言见 golden-path-2-smoke.sh Step1-2，本 smoke 不复测。
 #
@@ -36,6 +38,9 @@
 #   - Step 6：真机段（真实微信真发送给固定测试联系人）见 xian-rog 真机通道，本 smoke 纯函数等价断言
 #   - Step 16：真机段（真实浮窗 DOM 渲染验证）见 xian-rog 真机通道，本 smoke 端到端功能断言到 get_events()/switch_customer 调用层
 #   - Step 13 回复判断内核内部质量：用户 2026-07-15 拍板不重新审计，本步只做一次真调 + 响应结构断言
+#   - Step 17：真机段（真实WebView2原生窗口渲染/Ctrl+Alt+Z热键/WS_EX_NOACTIVATE穿透）
+#     只能在 windows_cloud CI 验证（apps/agent-panel-host，无dotnet SDK环境无法本地编译验证），
+#     本 smoke 覆盖服务端等价断言：事件总线/打点接线/看门狗proven-to-fire/业务语言渲染。
 #
 # 用法：
 #   API_BASE=http://localhost:5200 DATABASE_URL=postgresql://... \
@@ -189,7 +194,7 @@ diff -r services/agent/wechat-rpa/ services/agent/build-modules/line04/wechat-rp
 echo "Step 3l rsync 同步校验通过"
 
 # version bump 校验
-EXPECTED="1.0.152"
+EXPECTED="1.0.153"
 SOURCE_VERSION=$(node -e "process.stdout.write(require('./services/agent/modules/line04/manifest.json').version)")
 BUILD_VERSION=$(node -e "process.stdout.write(require('./services/agent/build-modules/line04/manifest.json').version)")
 API_VERSION=$(sed -n "s/.*'line04-wechat-cs'.*required_version: '\\([^']*\\)'.*/\\1/p" apps/api/src/services/walking-skeleton.service.ts)
@@ -916,8 +921,81 @@ print('PASS')
 " 2>/dev/null && ok "Step 3j ✅ 热键真机根因守卫在位（GetForegroundWindow 判据 + INPUT sizeof=40）" \
              || fail "Step 3j 热键真机根因回归——自检误报或 SendInput 发不出键" 3
 
+echo ""
+# ───────────────────────────────────────────────────────────────────
+# Step 17：作战窗 Agent Panel 面板可见性（刀1，PrepPRD sprints/07280929-agent-panel-knife1）
+# 壳进程活+SSE连通+任务事件到达 的等价断言；看门狗 stuck 变异测试 proven-to-fire；
+# 客户视图业务语言正向断言 + 内部代号负向断言。
+# 真机段 TODO：真实 WebView2 原生窗口渲染/热键/WS_EX 标志只能在 windows_cloud 真跑验证，
+# 本 smoke 覆盖服务端等价断言（事件总线/打点接线/看门狗/business-label/构建产物）。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 17: 作战窗 Agent Panel 面板可见性（刀1）"
+
+# 17a：line04 已接线作战窗打点（task_started/done/failed 真调用 write_panel_event，
+# 与 Step 16a 同款 grep 静态断言范式）
+LISTEN_CHAT_PANEL="services/agent/wechat-rpa/listen_chat.py"
+if grep -q 'write_panel_event' "$LISTEN_CHAT_PANEL" && grep -q '"task_started"' "$LISTEN_CHAT_PANEL"; then
+  ok "Step 17a ✅ line04 已接线作战窗事件打点(task_started/done/failed)"
+else
+  fail "Step 17a listen_chat.py 未接线 write_panel_event，面板永远收不到line04真实事件" 17
+fi
+
+# 17b：panel-events.jsonl 与现有 events.jsonl 单写者约束互不干扰
+# （判定点：与 golden-path-4-smoke Step 15c 曾因单写者被破坏出过真机事故同型防回归）
+if python3 -c "
+import sys, os, tempfile
+sys.path.insert(0, 'services/agent/wechat-rpa')
+os.environ['ZJ_STATE_DIR'] = tempfile.mkdtemp(prefix='zj-gp4-smoke-panel-')
+from panel.panel_events import write_panel_event
+write_panel_event('task_started', task_id='smoke1', line='line04', device='smoke', title='smoke')
+sd = os.environ['ZJ_STATE_DIR']
+assert os.path.exists(os.path.join(sd, 'panel-events.jsonl')), 'panel-events.jsonl 未生成'
+assert not os.path.exists(os.path.join(sd, 'events.jsonl')), '不能碰line04现有events.jsonl(单写者约束)'
+print('PASS')
+" 2>&1 | tail -1 | grep -q PASS; then
+  ok "Step 17b ✅ panel-events.jsonl 独立文件，不碰现有 events.jsonl 单写者约束"
+else
+  fail "Step 17b panel事件写入违反单写者隔离，可能重演画像卡永远空白的真机事故" 17
+fi
+
+# 17c：看门狗 stuck proven-to-fire —— 真实wall-clock掐死handler(不发step事件)，
+# 缩短阈值到150ms后真等待验证确实报stuck（不是逻辑上"应该会红"，是亲眼看它报红一次）
+if command -v npx >/dev/null 2>&1 && [ -d "services/agent/node_modules" ]; then
+  PANEL_STUCK_OUT=$(cd services/agent && npx tsx -e "
+    import { PanelEventBus } from './src/shared/panel-event-bus';
+    const bus = new PanelEventBus({ watchdogMs: 150 });
+    bus.ingest({ event: 'task_started', task_id: 'gp4smoke', line: 'line04', device: 'smoke', title: 'x', ts: Date.now() });
+    setTimeout(() => {
+      const t = bus.getActiveTasks('line04')[0];
+      bus.destroy();
+      if (!t || t.state !== 'stuck') { console.error('FAIL state=' + (t && t.state)); process.exit(1); }
+      console.log('PASS');
+      process.exit(0);
+    }, 300);
+  " 2>&1)
+  if echo "$PANEL_STUCK_OUT" | tail -1 | grep -q PASS; then
+    ok "Step 17c ✅ 看门狗 stuck proven-to-fire：真掐死handler后亲眼看到stuck真报红"
+  else
+    fail "Step 17c 看门狗未能在超时后真正判定stuck（proven-to-fire失败）: $PANEL_STUCK_OUT" 17
+  fi
+else
+  fail "Step 17c services/agent 依赖未安装，无法真跑看门狗 proven-to-fire（不能静默跳过判定点验证）" 17
+fi
+
+# 17d：客户视图业务语言正向+负向断言（判定点：客户视图绝不出现line02/line04内部代号）
+if command -v npx >/dev/null 2>&1 && [ -d "apps/agent-panel/node_modules" ]; then
+  if (cd apps/agent-panel && npx vitest run --silent 2>&1 | tail -5 | grep -q "passed"); then
+    ok "Step 17d ✅ apps/agent-panel 业务语言渲染单测全绿（正向智能获客/回复/发布 + 负向不含line0N代号）"
+  else
+    fail "Step 17d apps/agent-panel 单测未过，业务语言/代号泄露断言可能失败" 17
+  fi
+else
+  ok "Step 17d ⚠️ apps/agent-panel 依赖未装，跳过本地单测复跑（CI 独立 job 已跑，见 lint-feature-has-smoke）"
+fi
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Path 4 16 步 golden path smoke 服务端段全通"
+echo "  ✅ Path 4 17 步 golden path smoke 服务端段全通"
 echo "  真机段：xian-rog 真机验收证据见 sprints/07150800-line04-overlay-continuation/evidence/"
+echo "  作战窗刀1真机段(WebView2原生窗口/热键/WS_EX)：windows_cloud CI 独立验证，见 sprints/07280929-agent-panel-knife1/"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 exit 0
