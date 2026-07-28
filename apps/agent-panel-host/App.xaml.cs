@@ -1,8 +1,16 @@
 using System.Windows;
+// UseWindowsForms=true 会给整个项目注入 global using System.Windows.Forms，
+// MessageBox/MessageBoxButton/MessageBoxImage 在两个命名空间都存在同名类型，
+// 用别名钉死指向 WPF 版本，避免 CS0104。
+using MessageBox = System.Windows.MessageBox;
+using MessageBoxButton = System.Windows.MessageBoxButton;
+using MessageBoxImage = System.Windows.MessageBoxImage;
 
 namespace ZenithJoy.AgentPanel;
 
-public partial class App : Application
+// UseWindowsForms=true(为借NotifyIcon)后 Application 在 System.Windows 与
+// System.Windows.Forms 间产生歧义，必须显式限定为 WPF 的 Application。
+public partial class App : System.Windows.Application
 {
     protected override void OnStartup(StartupEventArgs e)
     {
