@@ -55,13 +55,28 @@ public partial class MainWindow : Window
         _rpaPollTimer.Start();
     }
 
+    private const string VirtualHost = "agent-panel.local";
+
     private void NavigateToPanelContent()
     {
-        // 打包时 apps/agent-panel/dist 随 exe 一起分发（同目录 agent-panel-web/index.html），
-        // 与 line04 的 python-embedded 打包同一套思路——不依赖开发服务器。
+        // 打包时 apps/agent-panel/dist 随 exe 一起分发（同目录 agent-panel-web/index.html）。
+        // xian-rog 真机验证实测：<script type="module"> 打包产物直接以 file:// 加载会被
+        // Chromium 的模块加载 CORS 限制静默拦截（不触发 window.onerror，也不报 NavigationCompleted
+        // 失败——WebView2 认为导航成功，只是脚本从未执行，#root 永远空）。改用
+        // SetVirtualHostNameToFolderMapping 把本地目录映射成虚拟 https 域名，微软官方文档
+        // 推荐的 WebView2 加载本地打包网页内容的标准做法，避免这个 CORS 死角。
         var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-        var indexPath = Path.Combine(baseDir, "agent-panel-web", "index.html");
-        Web.CoreWebView2.Navigate(File.Exists(indexPath) ? new Uri(indexPath).AbsoluteUri : "http://localhost:5175");
+        var webRoot = Path.Combine(baseDir, "agent-panel-web");
+        if (Directory.Exists(webRoot))
+        {
+            Web.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                VirtualHost, webRoot, Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
+            Web.CoreWebView2.Navigate($"https://{VirtualHost}/index.html");
+        }
+        else
+        {
+            Web.CoreWebView2.Navigate("http://localhost:5175");
+        }
     }
 
     // PrepPRD Golden Path Step3："客户按热键(Ctrl+Alt+Z)或点托盘 → 展开"——两条召唤入口都要通，
