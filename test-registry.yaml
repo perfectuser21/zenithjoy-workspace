@@ -1503,8 +1503,7 @@ tests:
     note: "Walking Skeleton 1 — install-pack manifest API 单元测试"
     note: "Path 2 Sprint A WS2 — feishu-token getValidToken + 2h 过期刷新 + cascade 失败 BEHAVIOR 测试"
 
-  # ============ Content Clipper ============
-  - id: content-clipper-routes
+  # ============ Content Clipper =====  - id: content-clipper-routes
     path: apps/api/src/routes/clips.test.ts
     type: unit
     ci: L3
@@ -5214,3 +5213,35 @@ agent_suite:
   status: active
   product: 运营中枢
   note: "Sprint 30a0c83a: Ability 验收 Playwright E2E 合同测试骨架（Red 基线，永久保留）"
+
+- id: staff-line-health-sprint-contract
+  path: sprints/07281207-staff-line-health-dashboard/tests/line-health.test.ts
+  type: integration
+  ci: L3
+  status: active
+  product: 中台认证
+  note: "Sprint 07281207 业务线健康看板（GP3/line_health）合同测试：三个端点的 not_connected/degraded/product-map fallback/陈旧分支 stale/GitHub 缓存 TTL/recent_commit 一致性/禁用字段反查。Brain 打桩、GitHub 走真实网络（仅陈旧阈值一条局部覆盖）。用根 vitest.config.cjs 跑。"
+
+- id: staff-line-health-e2e
+  path: apps/staff-hub/e2e/line-health.spec.ts
+  type: e2e
+  ci: windows_cloud
+  status: active
+  product: 中台认证
+  note: "Sprint 07281207 业务线健康看板 Playwright E2E（总览三卡片/详情部署 tab/能力 tab/未接入空态/product-map 缺失 banner）。变体C：真实后端，禁 page.route()。workflow: e2e-staff-line-health-windows.yml"
+
+- id: staff-health-shared-sources-unit
+  path: apps/api/src/services/__tests__/staff-health.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 中台认证
+  note: "Sprint 07281207：path-health 与 line-health 共用数据源原语单测（maturity 档位/GitHub 鉴权头/env 覆盖回退/Brain 非数组兜底/smoke hint 匹配）。"
+
+- id: staff-line-health-service-unit
+  path: apps/api/src/services/__tests__/line-health.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 中台认证
+  note: "Sprint 07281207 业务线健康看板聚合层单测：LINE_DEFS 查找 / product-map 真读与兜底 / 三环境四态 + 30 天陈旧阈值边界 / recent_commit 一致性 / related_prs 独立降级 / GitHub 单槽缓存命中与释放 / abilities 两条降级分支。"

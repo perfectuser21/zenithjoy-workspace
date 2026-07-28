@@ -1167,13 +1167,31 @@ print('✓ signal-verify 三字段完整，值域合法')
 " "$S29_TMP" 2>/dev/null || fail "Step 29 signal-verify 响应结构不合格: $(cat "$S29_TMP")" 29
 ok "Step 29 ✅ signal-verify 三字段（burner_sessions/recent_collect_errors/recent_lead_replies）完整且格式合法"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 30：account-scan-result 失败留痕回归（issue 2026-07-28）
+# 手机内部自动循环扫描失败（request_id="scan-<timestamp>" 非UUID格式，占真机常态运行的
+# 绝大多数场景）此前会被服务端无条件丢弃，只留在手机本地 logcat——07-28 真机复测两台
+# 设备卡在"中台无法绑定安卓机"却查无痕迹的根因。断言失败结果无条件落 agent_scan_failures。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 30: account-scan-result 失败留痕（非UUID request_id，模拟真机自动循环扫描）"
+S30_TMP=$(mktemp)
+S30_REQID="scan-$(date +%s)"
+S30_HTTP=$(curl -s -o "$S30_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/agent/burner/account-scan-result" -H "Content-Type: application/json" \
+  -d "{\"agent_id\":\"$AGENT_PK\",\"request_id\":\"$S30_REQID\",\"ok\":false,\"error_code\":\"OPEN_PANEL_FAILED\"}")
+[ "$S30_HTTP" = "200" ] || fail "Step 30 account-scan-result(失败) expected 200, got $S30_HTTP: $(cat "$S30_TMP")" 30
+S30_ROW=$(psq "SELECT error_code FROM zenithjoy.agent_scan_failures WHERE agent_id='$AGENT_PK' AND request_id='$S30_REQID'")
+[ "$S30_ROW" = "OPEN_PANEL_FAILED" ] || fail "Step 30 agent_scan_failures.error_code 期望 'OPEN_PANEL_FAILED'，实得 '$S30_ROW'（非UUID request_id 的扫描失败未落库）" 30
+ok "Step 30 ✅ 非UUID request_id 的扫描失败已落 agent_scan_failures（error_code=$S30_ROW）"
+ok "Step 30 ✅ 已登记：sweep-timeouts 看门狗接线 + 绑定失败审计留痕由 apps/api vitest 回归覆盖（services/scheduler.test.ts / customer-admin.test.ts），非HTTP可断言行为不入本smoke"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" \
       "$S22_TMP" "$S23A_TMP" "$S23A_COOKIES" "$S23B_TMP" "$S24_TMP" \
-      "$S25_TMP" "$S25_TMP2" "$S26_TMP" "$S27_TMP" "$S28_TMP" "$S29_TMP" 2>/dev/null
+      "$S25_TMP" "$S25_TMP2" "$S26_TMP" "$S27_TMP" "$S28_TMP" "$S29_TMP" "$S30_TMP" 2>/dev/null
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Path 2 29 步本地版 smoke 全绿（服务端段）"
+echo "  ✅ Path 2 30 步本地版 smoke 全绿（服务端段）"
 echo "  真机段：等 Android evaluator 通道（xian-rog nightly）接管复跑"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 exit 0

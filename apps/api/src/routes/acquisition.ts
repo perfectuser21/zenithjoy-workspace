@@ -94,7 +94,10 @@ const accountScanTriggerRateLimit = simpleRateLimit({
 const signalStatusRateLimit = simpleRateLimit({
   windowMs: 60_000,
   max: 60,
-  keyFn: ipKeyFn,
+  // 包一层箭头而不是模块级直接引用 ipKeyFn：直接引用会在 import 阶段立即取该导出，
+  // 使得只桩了部分导出的单测（vitest 4 对 mock 缺失导出直接报错）在 import app 时整体挂掉。
+  // 包一层后取值推迟到限流器真正被调用时，运行时行为完全不变。
+  keyFn: (req) => ipKeyFn(req),
 });
 
 const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
@@ -1334,10 +1337,12 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
   }
 });
 
-// POST /api/acquisition/collect/sweep-timeouts — stale running + stage_1_done 收尸；pending(离线) 保留不丢
 // running 基准 COALESCE(started_at, updated_at, created_at)；stage_1_done 基准 updated_at
-//（Stage2 每次 report 都 touch updated_at，用 started_at 会误杀正在跑 Stage2 的任务）
-acquisitionRouter.post('/collect/sweep-timeouts', smokeOrAgentGate, async (_req: Request, res: Response) => {
+//（Stage2 每次 report 都 touch updated_at，用 started_at 会误杀正在跑 Stage2 的任务）。
+// 2026-07-28 issue：本函数此前只挂在 HTTP 路由下，没有任何调度器调用它——代码写好了但从
+// 没上线生效，卡 running/stage_1_done 的任务会无限期挂着不收尾。抽成独立函数供 scheduler.ts
+// 定时调用，避免 HTTP self-call 往返（同 dispatchDue 直接 import 调用的既有模式）。
+export async function sweepCollectTimeouts(): Promise<{ swept: number }> {
   const cutoffMs = SWEEP_TIMEOUT_MS;
   const { rows } = await pool.query<{ id: string; tenant_id: string; status: string; lead_count: number }>(
     `SELECT t.id, t.tenant_id, t.status,
@@ -1382,7 +1387,13 @@ acquisitionRouter.post('/collect/sweep-timeouts', smokeOrAgentGate, async (_req:
       .then(() => dispatchDue(pool, tenantId))
       .catch((e: Error) => console.error('[acquisition] sweep-timeouts dm-dispatch error:', e.message));
   }
-  return ok(res, { swept });
+  return { swept };
+}
+
+// POST /api/acquisition/collect/sweep-timeouts — stale running + stage_1_done 收尸；pending(离线) 保留不丢
+acquisitionRouter.post('/collect/sweep-timeouts', smokeOrAgentGate, async (_req: Request, res: Response) => {
+  const result = await sweepCollectTimeouts();
+  return ok(res, result);
 });
 
 // GET /api/acquisition/collect/:task_id — 获客页查状态（精确 6 字段：task_id/status/video_count/lead_count_raw/created_at/ended_at）
@@ -1591,7 +1602,10 @@ acquisitionRouter.patch('/config', tenantContextOptional, async (req: Request, r
 const signalVerifyRateLimit = simpleRateLimit({
   windowMs: 60_000,
   max: 60,
-  keyFn: ipKeyFn,
+  // 包一层箭头而不是模块级直接引用 ipKeyFn：直接引用会在 import 阶段立即取该导出，
+  // 使得只桩了部分导出的单测（vitest 4 对 mock 缺失导出直接报错）在 import app 时整体挂掉。
+  // 包一层后取值推迟到限流器真正被调用时，运行时行为完全不变。
+  keyFn: (req) => ipKeyFn(req),
 });
 
 // GET /api/acquisition/signal-verify — FR-5 信号验证聚合端点（Bearer token 鉴权，tenant 级）

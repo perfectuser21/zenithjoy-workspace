@@ -11,6 +11,7 @@
  * 合同对应：contract-dod.md BEHAVIOR FR9/FR10/FR11
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import fs from 'fs';
 import request from 'supertest';
 
 vi.mock('../../db/connection', () => ({
@@ -497,5 +498,252 @@ describe('staff routes — feishu-login 真实限流行为（不走上面的pass
 
     expect(statuses.slice(0, 5)).toEqual([200, 200, 200, 200, 200]);
     expect(statuses[5]).toBe(429);
+  });
+});
+
+// ─── 业务线健康看板（GP3 / line_health）────────────────────────────────────
+// Sprint 07281207-staff-line-health-dashboard 合同：三个新端点的聚合/降级/鉴权行为。
+// 本文件顶部已整体 mock axios（Brain + GitHub 全打桩），真实链路由
+// .github/workflows/scripts/smoke/staff-line-health-smoke.sh 与 sprint 合同测试承担。
+
+const LINE04_JOURNEY_ID = 'e675da0f-1117-4301-a801-cd4753beb8c8';
+const FAKE_SHA = 'b'.repeat(40);
+
+function daysAgo(days: number): string {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+/** 按 URL 分派 Brain / GitHub commits / GitHub search / GitHub actions runs */
+function routeLineHealthMocks(options: {
+  brain?: () => Promise<unknown>;
+  commitDaysAgo?: Record<string, number | null>;
+  searchFails?: boolean;
+} = {}) {
+  const commitDaysAgo = options.commitDaysAgo ?? { develop: null, 'release/cs-stable': 200, main: 3 };
+  axiosGetMock.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => {
+    if (url.includes('/journey_features')) {
+      if (options.brain) return options.brain();
+      const journeyId = config?.params?.journey_id;
+      if (journeyId === LINE04_JOURNEY_ID) {
+        return Promise.resolve({
+          status: 200,
+          data: [
+            { id: 'gpb', name: 'GP-B 被动接待', status: 'planned', thickness: 'thin', kind: 'ability', updated_at: '2026-07-28T00:00:00Z' },
+            { id: 'gpc', name: 'GP-C 主动触达', status: 'done', thickness: 'thin', kind: 'ability', updated_at: '2026-07-28T00:00:00Z' },
+          ],
+        });
+      }
+      return Promise.resolve({ status: 200, data: [] });
+    }
+    if (url.includes('/search/issues')) {
+      if (options.searchFails) return Promise.reject(new Error('search rate limited'));
+      return Promise.resolve({
+        status: 200,
+        data: { items: [{ number: 1487, title: 'fix(staff): wechat', html_url: 'https://github.com/x/y/pull/1487', state: 'closed', updated_at: '2026-07-28T00:00:00Z' }] },
+      });
+    }
+    if (url.includes('/commits')) {
+      const branch = String(config?.params?.sha ?? '');
+      const age = commitDaysAgo[branch];
+      if (age === undefined) return Promise.reject(new Error('branch not found'));
+      if (age === null) return Promise.resolve({ status: 200, data: [] });
+      return Promise.resolve({
+        status: 200,
+        data: [{
+          sha: FAKE_SHA,
+          html_url: `https://github.com/x/y/commit/${FAKE_SHA}`,
+          commit: { message: 'feat: line04', author: { date: daysAgo(age) } },
+        }],
+      });
+    }
+    return Promise.resolve({ status: 200, data: { workflow_runs: [] } });
+  });
+}
+
+describe('staff routes — line health 业务线健康看板', () => {
+  beforeEach(async () => {
+    vi.stubEnv('STAFF_EMAILS', 'staff@test.com');
+    vi.stubEnv('CECELIA_BRAIN_URL', 'http://brain.test');
+    vi.stubEnv('STAFF_HUB_GITHUB_REPO', 'perfectuser21/zenithjoy-workspace');
+    axiosGetMock.mockReset();
+    const { clearLineHealthCache } = await import('../../services/line-health');
+    clearLineHealthCache();
+    routeLineHealthMocks();
+  });
+
+  it('[BEHAVIOR] GET /api/staff/line-health 返回 line01/line02/line04 三条，line01 标 not_connected 而非 0/0', async () => {
+    const res = await request(app).get('/api/staff/line-health').set('X-User-Email', 'staff@test.com');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(3);
+    expect(res.body.data.map((d: { line_key: string }) => d.line_key)).toEqual(['line01', 'line02', 'line04']);
+    expect(res.body.source).toBe('product_map');
+    expect(res.body.fallback_reason).toBeNull();
+
+    const line01 = res.body.data[0];
+    expect(line01.availability).toBe('not_connected');
+    expect(line01.maturity).toBe('not_connected');
+    expect(line01.journey_id).toBeNull();
+    expect(line01.message).toBeNull();
+    expect(line01.feature_counts).toEqual({ total: 0, done: 0, working: 0, planned: 0 });
+    expect(Object.keys(line01).sort()).toEqual(
+      ['availability', 'feature_counts', 'journey_id', 'journey_name', 'label', 'line_key', 'maturity', 'message', 'smoke'].sort()
+    );
+    expect(line01).not.toHaveProperty('path_key');
+    expect(line01).not.toHaveProperty('status');
+  });
+
+  it('[BEHAVIOR] line04 journey_id 必须是整合后的"智能客服" journey，且能力计数来自 Brain', async () => {
+    const res = await request(app).get('/api/staff/line-health').set('X-User-Email', 'staff@test.com');
+    const line04 = res.body.data.find((d: { line_key: string }) => d.line_key === 'line04');
+    expect(line04.journey_id).toBe(LINE04_JOURNEY_ID);
+    expect(line04.journey_name).toBe('智能客服');
+    expect(line04.feature_counts).toEqual({ total: 2, done: 1, working: 0, planned: 1 });
+  });
+
+  it('[BEHAVIOR] line04 Brain 查询失败时该线 degraded（HTTP 仍 200），line01/line02 不受影响', async () => {
+    routeLineHealthMocks({ brain: () => Promise.reject(new Error('brain down')) });
+    const res = await request(app).get('/api/staff/line-health').set('X-User-Email', 'staff@test.com');
+
+    expect(res.status).toBe(200);
+    const line04 = res.body.data.find((d: { line_key: string }) => d.line_key === 'line04');
+    expect(line04.availability).toBe('degraded');
+    expect(line04.message).toContain('Brain:');
+    expect(res.body.data[0].availability).toBe('not_connected');
+  });
+
+  it('[BEHAVIOR] product-map.json 读取失败时降级为兜底清单，source=fallback 且仍返回 3 条线', async () => {
+    const spy = vi.spyOn(fs, 'readFileSync').mockImplementation(() => {
+      throw new Error('ENOENT: no such file or directory');
+    });
+    const res = await request(app).get('/api/staff/line-health').set('X-User-Email', 'staff@test.com');
+    spy.mockRestore();
+
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe('fallback');
+    expect(typeof res.body.fallback_reason).toBe('string');
+    expect(res.body.fallback_reason.length).toBeGreaterThan(0);
+    expect(res.body.data).toHaveLength(3);
+  });
+
+  it('[BEHAVIOR] deployment 返回三环境四态 + recent_commit 与 production 一致 + related_prs 恒为数组', async () => {
+    const res = await request(app)
+      .get('/api/staff/line-health/line04/deployment')
+      .set('X-User-Email', 'staff@test.com');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.environments).toHaveLength(3);
+    const byName = Object.fromEntries(
+      res.body.data.environments.map((e: { name: string }) => [e.name, e])
+    );
+    // develop 返回空提交列表 → not_deployed；release/cs-stable 200 天前 → stale；main 3 天前 → active
+    expect(byName.dev.status).toBe('not_deployed');
+    expect(byName.dev.commit_sha).toBeNull();
+    expect(byName.staging.status).toBe('stale');
+    expect(byName.staging.commit_sha).toBe(FAKE_SHA);
+    expect(byName.production.status).toBe('active');
+
+    expect(res.body.data.recent_commit.sha).toBe(byName.production.commit_sha);
+    expect(res.body.data.recent_commit.date).toBe(byName.production.commit_date);
+    expect(Array.isArray(res.body.data.related_prs)).toBe(true);
+    expect(res.body.data.related_prs[0].number).toBe(1487);
+    expect(res.body.data).not.toHaveProperty('version');
+    expect(res.body.data).not.toHaveProperty('deploy_version');
+  });
+
+  it('[BEHAVIOR] GitHub 查询失败时该环境标 unavailable（区别于 not_deployed），related_prs 独立降级为 []', async () => {
+    routeLineHealthMocks({ commitDaysAgo: { main: 1 }, searchFails: true });
+    const res = await request(app)
+      .get('/api/staff/line-health/line04/deployment')
+      .set('X-User-Email', 'staff@test.com');
+
+    expect(res.status).toBe(200);
+    const byName = Object.fromEntries(
+      res.body.data.environments.map((e: { name: string }) => [e.name, e])
+    );
+    expect(byName.dev.status).toBe('unavailable');
+    expect(byName.staging.status).toBe('unavailable');
+    expect(byName.production.status).toBe('active');
+    expect(res.body.data.related_prs).toEqual([]);
+  });
+
+  it('[BEHAVIOR] GitHub 数据 5 分钟缓存 — 同一业务线第二次 deployment 请求不再打 GitHub', async () => {
+    await request(app).get('/api/staff/line-health/line04/deployment').set('X-User-Email', 'staff@test.com');
+    const firstCount = axiosGetMock.mock.calls.length;
+    expect(firstCount).toBeGreaterThan(0);
+
+    await request(app).get('/api/staff/line-health/line04/deployment').set('X-User-Email', 'staff@test.com');
+    expect(axiosGetMock.mock.calls.length).toBe(firstCount);
+  });
+
+  it('[BEHAVIOR] not_connected 线（line01）deployment/abilities 均 200 空态，message 字面等于约定文案', async () => {
+    const deploy = await request(app)
+      .get('/api/staff/line-health/line01/deployment')
+      .set('X-User-Email', 'staff@test.com');
+    expect(deploy.status).toBe(200);
+    expect(deploy.body.data.connected).toBe(false);
+    expect(deploy.body.data.message).toBe('该业务线尚未接入 Brain 数据，暂无法展示');
+    expect(deploy.body.data.environments).toEqual([]);
+    expect(deploy.body.data.recent_commit).toBeNull();
+    expect(deploy.body.data.related_prs).toEqual([]);
+
+    const abilities = await request(app)
+      .get('/api/staff/line-health/line02/abilities')
+      .set('X-User-Email', 'staff@test.com');
+    expect(abilities.status).toBe(200);
+    expect(abilities.body.data.connected).toBe(false);
+    expect(abilities.body.data.abilities).toEqual([]);
+    expect(abilities.body.data).not.toHaveProperty('features');
+  });
+
+  it('[BEHAVIOR] abilities 返回 Brain 全量能力清单，字段齐全', async () => {
+    const res = await request(app)
+      .get('/api/staff/line-health/line04/abilities')
+      .set('X-User-Email', 'staff@test.com');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.connected).toBe(true);
+    expect(res.body.data.message).toBeNull();
+    expect(res.body.data.abilities).toHaveLength(2);
+    expect(res.body.data.abilities[0]).toEqual({
+      id: 'gpb',
+      name: 'GP-B 被动接待',
+      status: 'planned',
+      thickness: 'thin',
+      kind: 'ability',
+      updated_at: '2026-07-28T00:00:00Z',
+    });
+  });
+
+  it('[BEHAVIOR] abilities 在 Brain 查询失败时返回 [] + "Brain:" 前缀 message，不 500', async () => {
+    routeLineHealthMocks({ brain: () => Promise.reject(new Error('brain down')) });
+    const res = await request(app)
+      .get('/api/staff/line-health/line04/abilities')
+      .set('X-User-Email', 'staff@test.com');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.abilities).toEqual([]);
+    expect(res.body.data.message).toContain('Brain:');
+  });
+
+  it('[BEHAVIOR] error path — 未知 lineKey 在 deployment/abilities 均返回 404，不静默 200 空数据', async () => {
+    for (const suffix of ['deployment', 'abilities']) {
+      const res = await request(app)
+        .get(`/api/staff/line-health/bogus-line/${suffix}`)
+        .set('X-User-Email', 'staff@test.com');
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+    }
+  });
+
+  it('[BEHAVIOR] error path — 三个 line-health 端点无认证头一律 403（staffGuard 不遗漏）', async () => {
+    for (const path of [
+      '/api/staff/line-health',
+      '/api/staff/line-health/line04/deployment',
+      '/api/staff/line-health/line04/abilities',
+    ]) {
+      const res = await request(app).get(path);
+      expect(res.status).toBe(403);
+    }
   });
 });

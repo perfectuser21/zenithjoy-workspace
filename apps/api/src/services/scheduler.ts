@@ -21,6 +21,7 @@
 
 import { enqueueWarmupTasks } from './warmup-dispatch';
 import { dispatchDue } from './acquisition-dispatch';
+import { sweepCollectTimeouts } from '../routes/acquisition';
 import pool from '../db/connection';
 
 const CRON_EXPRESSION = '0 9 * * *'; // cron: '0 9 * * *' — 每日 09:00（server 时区）
@@ -181,6 +182,30 @@ export async function triggerDmDispatchSweep(): Promise<void> {
   }
 }
 
+// 2026-07-28 issue：collect/sweep-timeouts 端点代码早就写好（10分钟超时把 running/
+// stage_1_done 的采集任务转终态+写 error_code），但此前没有任何调度器调用它，等于摆设——
+// 07-28真机复测有安卓设备的采集任务卡在 running 无限期不收尾。同 sweepInFlight 模式加
+// 再入守卫，防止上一轮没跑完时下一次 tick 重叠。
+let collectSweepInFlight = false;
+
+export async function triggerCollectTimeoutSweep(): Promise<void> {
+  if (collectSweepInFlight) {
+    console.warn('[scheduler] collect-timeout-sweep 上一轮尚未完成，本次 tick 跳过');
+    return;
+  }
+  collectSweepInFlight = true;
+  try {
+    const r = await sweepCollectTimeouts();
+    if (r.swept > 0) {
+      console.log(`[scheduler] collect-timeout-sweep fired: swept=${r.swept}`);
+    }
+  } catch (err) {
+    console.warn('[scheduler] collect-timeout-sweep 失败:', err);
+  } finally {
+    collectSweepInFlight = false;
+  }
+}
+
 /**
  * 启动 cron 轮询：每分钟检查 server 时间是否进入 09:00 那一分钟，进入则 fire。
  * 同一日同一 09:00 分钟只 fire 一次（lastFiredYmd 防抖）。
@@ -227,6 +252,10 @@ export function startScheduler(): SchedulerHandle {
       // Path2 Seg4 DM 派单：每次 tick 都扫（不按时刻门控，随时检查到期的 queued assignment）
       triggerDmDispatchSweep().catch((err) => {
         console.warn('[scheduler] interval-fired dm-dispatch-sweep 异常:', err);
+      });
+      // Path2 采集任务超时收尸：每次 tick 都扫（不按时刻门控，10分钟 cutoff 由函数内部判断）
+      triggerCollectTimeoutSweep().catch((err) => {
+        console.warn('[scheduler] interval-fired collect-timeout-sweep 异常:', err);
       });
     }, POLL_INTERVAL_MS),
     lastFiredYmd: null,

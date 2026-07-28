@@ -295,6 +295,9 @@ router.post('/:id/service-agents/:userId/bind-device', async (req: Request, res:
       [memberUserId]
     );
     if ((memBound.rowCount ?? 0) > 0) {
+      // 2026-07-28 issue：绑定失败此前只回 4xx 不落库，服务端查无痕迹，07-28真机复测
+      // 有安卓设备卡在"中台无法绑定"却排查不出原因——补一次审计记录，不阻断主操作。
+      await audit(req, tenantId, 'bind_device_failed_member_already_bound', 'machine', machineId);
       return fail(res, 409, ERR.ALREADY_BOUND, '该成员已绑定 PC');
     }
     const machineBound = await pool.query(
@@ -303,6 +306,7 @@ router.post('/:id/service-agents/:userId/bind-device', async (req: Request, res:
       [machineId]
     );
     if ((machineBound.rowCount ?? 0) > 0) {
+      await audit(req, tenantId, 'bind_device_failed_machine_already_bound', 'machine', machineId);
       return fail(res, 409, ERR.ALREADY_BOUND, '该 PC 已被绑定');
     }
 
@@ -321,6 +325,7 @@ router.post('/:id/service-agents/:userId/bind-device', async (req: Request, res:
       );
       const alreadyThis = Number(alreadyRes.rows[0]?.cnt ?? 0);
       if (alreadyThis === 0 && existing >= Number(lic.max_machines)) {
+        await audit(req, tenantId, 'bind_device_failed_quota_exceeded', 'machine', machineId);
         return fail(
           res,
           409,
@@ -349,8 +354,10 @@ router.post('/:id/service-agents/:userId/bind-device', async (req: Request, res:
     });
   } catch (err) {
     if (isUniqueViolation(err)) {
+      await audit(req, tenantId, 'bind_device_failed_unique_violation', 'machine', machineId);
       return fail(res, 409, ERR.ALREADY_BOUND, '成员或 PC 已被绑定');
     }
+    await audit(req, tenantId, 'bind_device_failed_error', 'machine', machineId);
     return fail(res, 500, 'BIND_FAILED', err instanceof Error ? err.message : 'unknown');
   }
 });

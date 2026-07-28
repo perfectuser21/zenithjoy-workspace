@@ -634,18 +634,23 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
     expect(calls[0][0]).toMatch(/agent_platform_sessions/);
   });
 
-  it('ok=false → 不写 agent_platform_sessions，200 返回 written=0', async () => {
-    // request_id='req-2' 非 UUID 格式 → 不会触发任何 publish_tasks 查询
+  it('ok=false → 不写 agent_platform_sessions，200 返回 written=0，但落库 agent_scan_failures（issue 2026-07-28）', async () => {
+    // request_id='req-2' 非 UUID 格式 → 不会触发任何 publish_tasks 查询，
+    // 但失败留痕必须无条件落库——此前这条自动循环路径的失败会被服务端完全丢弃，
+    // 07-28真机复测两台设备卡在"中台无法绑定"却查无痕迹的根因。
     vi.mocked(pool.query).mockResolvedValue({ rows: [] } as any);
 
     const app = buildApp();
     const r = await request(app)
       .post('/api/agent/burner/account-scan-result')
-      .send({ agent_id: AGENT_UUID, request_id: 'req-2', ok: false, account_ids: [] });
+      .send({ agent_id: AGENT_UUID, request_id: 'req-2', ok: false, error_code: 'OPEN_PANEL_FAILED', account_ids: [] });
 
     expect(r.status).toBe(200);
     expect(r.body.data.written).toBe(0);
-    expect(vi.mocked(pool.query).mock.calls.length).toBe(0);
+    const calls = vi.mocked(pool.query).mock.calls;
+    expect(calls.length).toBe(1);
+    expect(calls[0][0]).toMatch(/agent_scan_failures/);
+    expect(calls[0][1]).toEqual([AGENT_UUID, 'req-2', 'OPEN_PANEL_FAILED', expect.any(String)]);
   });
 
   it('account_ids 为空数组 → 不写 agent_platform_sessions，200 返回 written=0', async () => {

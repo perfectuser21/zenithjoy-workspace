@@ -1,0 +1,51 @@
+name: Agent Panel Host — Windows Build Check
+
+# 作战窗 Agent Panel 刀1（apps/agent-panel-host）编译检查——WPF+WebView2 原生宿主，
+# TargetFramework net8.0-windows 只能在 windows-latest 上编译（WPF SDK Windows 专属）。
+# PrepPRD: sprints/07280929-agent-panel-knife1/prep-prd.md
+#
+# ⚠️ 范围声明：本 workflow 只做编译检查（dotnet build）+ 纯逻辑单测（PanelWindowStateTests，
+# 不碰 WPF/Win32 API），不做真实窗口创建/热键注册/WebView2 渲染的运行时验证——那需要真机
+# 或更重的 GUI 自动化测试环境，是后续加厚项，不在本次范围内。
+# 本 check 存在的意义：PR#1488 落地时沙箱环境无 dotnet SDK，C# 代码从未被编译验证过，
+# 这个 workflow 补上"至少能编译过"这一层，防止拼写错/API 误用/命名空间错误悄悄潜伏。
+
+on:
+  push:
+    branches: [main, 'cp-*']
+    paths:
+      - 'apps/agent-panel-host/**'
+      - '.github/workflows/agent-panel-host-build.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/agent-panel-host/**'
+      - '.github/workflows/agent-panel-host-build.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: agent-panel-host-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build (WPF+WebView2) + PanelWindowState unit tests
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore main host project
+        run: dotnet restore apps/agent-panel-host/AgentPanelHost.csproj
+
+      - name: Build main host project (WPF + WebView2)
+        run: dotnet build apps/agent-panel-host/AgentPanelHost.csproj --no-restore -c Release
+
+      - name: Restore + run pure-logic unit tests (PanelWindowState, no WPF/Win32 deps)
+        run: |
+          dotnet restore apps/agent-panel-host/AgentPanelHost.Tests/AgentPanelHost.Tests.csproj
+          dotnet test apps/agent-panel-host/AgentPanelHost.Tests/AgentPanelHost.Tests.csproj --no-restore -c Release --logger "console;verbosity=normal"

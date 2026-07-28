@@ -1,4 +1,4 @@
-import { ClipboardCheck, LayoutDashboard, LogOut, ShieldCheck, Wrench } from 'lucide-react';
+import { Activity, ClipboardCheck, LayoutDashboard, LogOut, ShieldCheck, Wrench } from 'lucide-react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
@@ -8,6 +8,8 @@ import SkillEvalPage from './pages/SkillEvalPage';
 import PathHealthPage from './pages/PathHealthPage';
 import AbilityAcceptancePage from './pages/AbilityAcceptancePage';
 import AbilityAcceptanceHistoryPage from './pages/AbilityAcceptanceHistoryPage';
+import LineHealthPage from './pages/LineHealthPage';
+import LineHealthDetailPage from './pages/LineHealthDetailPage';
 
 function Shell() {
   const { authLoading, isAuthenticated, logout, user } = useAuth();
@@ -43,6 +45,9 @@ function Shell() {
           <NavLink to="/ability-acceptance" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
             <ClipboardCheck size={18} /> Ability 验收
           </NavLink>
+          <NavLink to="/line-health" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+            <Activity size={18} /> 业务线健康
+          </NavLink>
         </nav>
         <div className="sidebar-footer">
           <div className="muted">{user?.email || user?.name}</div>
@@ -58,6 +63,8 @@ function Shell() {
           <Route path="/path-health" element={<PathHealthPage />} />
           <Route path="/ability-acceptance" element={<AbilityAcceptancePage />} />
           <Route path="/ability-acceptance/history" element={<AbilityAcceptanceHistoryPage />} />
+          <Route path="/line-health" element={<LineHealthPage />} />
+          <Route path="/line-health/:lineKey" element={<LineHealthDetailPage />} />
           <Route path="/login/feishu" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
