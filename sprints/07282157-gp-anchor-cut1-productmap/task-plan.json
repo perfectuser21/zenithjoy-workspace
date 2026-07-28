@@ -1,0 +1,36 @@
+{
+  "initiative_id": "cc19a228-a94b-4a09-a93e-303f963804ee",
+  "journey_type": "dev_pipeline",
+  "journey_type_reason": "纯CI/数据结构地基改动，无终端客户可感知的用户路径，服务的是开发者/AI-agent提交PR的流程本身",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "product-map SSOT扩展承载客户线GP + GP锚定自身注册",
+      "scope": "product-map.yaml补line01/02/04三条客户GP+schema扩展(steps id+name数组、smoke_files字符串数组)+lib.mjs新增validateSmokeFiles(含空文件质量判据)+CI job(ci-l2-consistency.yml)接线校验+注册line00/gp_anchor_enforcement(status=proposed)+新写golden-path-f1-anchor-smoke.sh(零网络零DB,加入smoke-baseline.txt)+同步改写product-map.test.js与contract.test.js的旧断言+renderProductMapMarkdown扩展渲染steps/smoke_files列+YAML语法错误try/catch+ajv compile冒烟断言",
+      "dod": [
+        "[BEHAVIOR] product-map:validate对新增GP条目通过schema校验",
+        "[BEHAVIOR] product-map:check对smoke_files存在性+非空占位proven-to-fire校验",
+        "[BEHAVIOR] gp_anchor_enforcement自身注册数据正确",
+        "[BEHAVIOR] YAML语法错误报结构化FAIL",
+        "[BEHAVIOR] golden-path-f1-anchor-smoke.sh真跑通过且零网络零DB",
+        "[BEHAVIOR] 既有回归测试同步改写后全绿",
+        "[ARTIFACT] schema含steps/smoke_files字段定义",
+        "[ARTIFACT] smoke脚本已登记进smoke-baseline.txt"
+      ],
+      "files": [
+        "product-map/product-map.yaml",
+        "product-map/product-map.schema.json",
+        "scripts/product-map/lib.mjs",
+        "scripts/product-map/__tests__/product-map.test.js",
+        "sprints/07280933-product-map-ssot-claude/tests/contract.test.js",
+        ".github/workflows/ci-l2-consistency.yml",
+        ".github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh",
+        ".github/workflows/scripts/smoke-baseline.txt",
+        "product-map/README.md"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 90
+    }
+  ]
+}
