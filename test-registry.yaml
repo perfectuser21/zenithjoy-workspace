@@ -5191,7 +5191,7 @@ agent_suite:
   note: "Sprint 30a0c83a: Ability 验收 API 路由合同测试（T1-T9 + R1）"
 
 - id: ability-acceptance-e2e
-  path: apps/dashboard/e2e/ability-acceptance.spec.ts
+  path: apps/staff-hub/e2e/ability-acceptance.spec.ts
   type: e2e
   ci: L4
   status: active
