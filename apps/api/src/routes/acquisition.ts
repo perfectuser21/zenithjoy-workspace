@@ -1107,6 +1107,18 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
       return ok(res, { task_id: taskId, ignored: true, status: s.status });
     }
 
+    // FR-3: latest_reply 留证前先拍一份"本请求开始前"的快照——commenters 循环里
+    // rescoreLead 也会把 latest_reply/latest_reply_at 改写成"最新一条公开评论"，
+    // 如果 FR-3 的"只前进不回退"判断跟活的列值比，会永远输给 rescoreLead 刚写完的
+    // NOW()（2026-07-28 rescue #1456 实测复现：commenters 和 latest_reply 同一请求
+    // 一起传时，latest_reply 显式信号被 rescoreLead 的评论文本悄悄覆盖）。改成跟
+    // "进这个事务之前"的旧值比，FR-3 信号不再输给同一请求里稍早跑的 rescoreLead。
+    const preLatestReplyRes = await client.query<{ max_at: string | null }>(
+      `SELECT MAX(latest_reply_at) AS max_at FROM zenithjoy.acquisition_leads WHERE collect_task_id = $1 AND tenant_id = $2`,
+      [taskId, tenantId]
+    );
+    const preExistingLatestReplyAt = preLatestReplyRes.rows[0]?.max_at ?? null;
+
     // ── 去重落库：先处理 commenters（已抓先落库不丢，即使本次是终态回报）──
     let inserted = 0;
     let deduped = 0;
@@ -1243,23 +1255,27 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
       checkpointToWrite = { ...(checkpointToWrite ?? {}), raw_error_code: rawErrorCodeInput };
     }
 
-    // FR-3: latest_reply 时间戳只向前不回退
+    // FR-3: latest_reply 时间戳只向前不回退——跟"进事务前"的快照 preExistingLatestReplyAt
+    // 比，不跟活的列值比（commenters 循环里 rescoreLead 会把 latest_reply_at 改写成
+    // NOW()，跟活值比会导致 FR-3 显式信号永远输给同一请求里刚跑完的 rescoreLead）。
     const safeLatestReply = typeof latestReply === 'string' && latestReply.trim() ? latestReply.trim() : null;
     if (safeLatestReply) {
       const safeLatestReplyAt = typeof latestReplyAt === 'string' && latestReplyAt.trim()
         ? latestReplyAt.trim()
         : new Date().toISOString();
-      // 从 acquisition_collect_tasks 反查 lead：按 task_id 找最近 updated 的 lead 行
-      // 只向前不回退：只有 incoming 时间戳新于现有时间戳才更新
-      await client.query(
-        `UPDATE zenithjoy.acquisition_leads
-            SET latest_reply    = $3,
-                latest_reply_at = $4::timestamptz,
-                updated_at      = NOW()
-          WHERE collect_task_id = $1 AND tenant_id = $2
-            AND (latest_reply_at IS NULL OR latest_reply_at < $4::timestamptz)`,
-        [taskId, tenantId, safeLatestReply, safeLatestReplyAt],
-      );
+      const shouldAdvance = preExistingLatestReplyAt === null
+        || new Date(safeLatestReplyAt).getTime() > new Date(preExistingLatestReplyAt).getTime();
+      if (shouldAdvance) {
+        // 从 acquisition_collect_tasks 反查 lead：按 task_id 找该任务下全部 lead 行
+        await client.query(
+          `UPDATE zenithjoy.acquisition_leads
+              SET latest_reply    = $3,
+                  latest_reply_at = $4::timestamptz,
+                  updated_at      = NOW()
+            WHERE collect_task_id = $1 AND tenant_id = $2`,
+          [taskId, tenantId, safeLatestReply, safeLatestReplyAt],
+        );
+      }
     }
 
     const s = settleCollectTask({
