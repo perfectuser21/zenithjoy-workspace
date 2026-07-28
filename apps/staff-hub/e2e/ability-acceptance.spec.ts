@@ -20,7 +20,7 @@
  */
 import { test, expect, Page } from '@playwright/test';
 
-const BASE = process.env.E2E_BASE_URL || 'http://localhost:5173';
+const BASE = process.env.E2E_BASE_URL || 'http://localhost:5175';
 
 // ── Mock 数据 ─────────────────────────────────────────────────────────────────
 const MOCK_RUN_ID = 'aaaabbbb-cccc-dddd-eeee-ffffaaaabbbb';

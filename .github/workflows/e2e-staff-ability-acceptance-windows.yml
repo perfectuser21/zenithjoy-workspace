@@ -1,0 +1,80 @@
+name: E2E — Staff Hub Ability Acceptance
+
+# Sprint 07281218-relay-30a0c83a（ability_acceptance Golden Path）
+# 单 job: windows-latest，起 staff-hub Vite dev server（5175），跑 Playwright
+# 使用 page.route mock API，不依赖真实后端
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/staff-hub/src/pages/AbilityAcceptancePage.tsx'
+      - 'apps/staff-hub/src/pages/AbilityAcceptanceHistoryPage.tsx'
+      - 'apps/staff-hub/src/App.tsx'
+      - 'apps/staff-hub/e2e/ability-acceptance.spec.ts'
+      - 'apps/staff-hub/playwright.config.ts'
+      - '.github/workflows/e2e-staff-ability-acceptance-windows.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-staff-ability-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-windows:
+    name: Playwright — Ability Acceptance（windows-latest）
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Windows rollup native binding
+        run: npm install @rollup/rollup-win32-x64-msvc --no-save
+
+      - name: Install Playwright Chromium
+        working-directory: apps/staff-hub
+        run: npx playwright install chromium --with-deps
+
+      - name: Start Staff Hub Vite dev server
+        working-directory: apps/staff-hub
+        env:
+          VITE_SKIP_AUTH: 'true'
+        run: |
+          npx vite --port 5175 &
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5175 >/dev/null 2>&1; then
+              echo "Staff Hub Vite ready after ${i}s"
+              break
+            fi
+            echo "waiting... ${i}s"
+            sleep 1
+          done
+
+      - name: Run ability-acceptance E2E
+        working-directory: apps/staff-hub
+        env:
+          E2E_BASE_URL: 'http://localhost:5175'
+        run: npx playwright test e2e/ability-acceptance.spec.ts --reporter=list
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ability-acceptance-playwright-results
+          path: apps/staff-hub/test-results/
+          retention-days: 7
