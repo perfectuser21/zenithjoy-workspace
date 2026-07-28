@@ -24,6 +24,9 @@ import { handleShipinhaoPublish } from './handlers/shipinhao-publish';
 import { handleZhihuPublish } from './handlers/zhihu-publish';
 import { handleDevQuickVerify, isDevMachineFromEnv, runRegisteredAction } from './handlers/dev-quick-verify';
 import { registerLeaseBrokerRoutes } from './handlers/wechat-rpa';
+import { registerPanelEventRoutes } from './handlers/panel-events-route';
+import { PanelEventBus } from './shared/panel-event-bus';
+import { PanelEventsTail } from './shared/panel-events-tail';
 import { startTray, updateTrayStatus, updateTrayModules, showModuleError, destroyTray } from './tray';
 // Walking Skeleton #1 — HTTP heartbeat 链路（与上面 WS 链路并存）
 import {
@@ -1129,6 +1132,13 @@ function startLocalDiscoveryServer(loop: HeartbeatLoop): void {
   // Sprint 0703-line04-desktop-lease-broker（补线）：挂载 /api/agent/desktop-lease-broker/*
   // 到 agent 本地唯一的 http.Server 上——listen_chat.py 经此 IPC 通道申请/续租/归还桌面租约。
   registerLeaseBrokerRoutes(server);
+
+  // 作战窗 Agent Panel 刀1：panel-events.jsonl(listen_chat.py写)→PanelEventBus(看门狗+灯态聚合)
+  // →本地SSE(/api/agent/panel/events/stream)，供WebView2壳订阅。
+  const panelEventBus = new PanelEventBus();
+  const panelEventsTail = new PanelEventsTail(panelEventBus);
+  panelEventsTail.start();
+  registerPanelEventRoutes(server, panelEventBus);
 
   server.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {

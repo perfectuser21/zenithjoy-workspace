@@ -23,7 +23,7 @@ PSQL_DB="${PGDATABASE:-cecelia}"
 PSQL_HOST="${PGHOST:-localhost}"
 PSQL_PASS="${PGPASSWORD:-cecelia}"
 REPO_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
-EXPECTED_LINE04_VERSION="1.0.152"
+EXPECTED_LINE04_VERSION="1.0.153"
 MANIFEST_LINE04_VERSION=$(node -e "process.stdout.write(require('$REPO_ROOT/services/agent/modules/line04/manifest.json').version)")
 [ "$MANIFEST_LINE04_VERSION" = "$EXPECTED_LINE04_VERSION" ] \
   || { echo "FAIL: line04 manifest version=${MANIFEST_LINE04_VERSION} != ${EXPECTED_LINE04_VERSION}"; exit 3; }

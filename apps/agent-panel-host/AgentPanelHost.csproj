@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    作战窗 Agent Panel 刀1 — WebView2 原生桌面壳宿主。
+    PrepPRD: sprints/07280929-agent-panel-knife1/prep-prd.md
+
+    ⚠️ 未本地编译/运行验证：本环境无 .NET SDK（macOS 沙箱，dotnet 命令不存在）。
+    真实运行时行为（窗口创建/热键/WS_EX标志/WebView2渲染）只能在 windows_cloud CI
+    （GHA windows-latest runner）首次验证，这是 PrepPRD 已定的 target_environment，
+    不是临时决定。这个宿主只做"窗口力学"：定位/尺寸/WS_EX标志/热键转发，
+    所有业务状态(收起/展开/RPA贴边该显示什么内容)都由已构建+已测试的
+    apps/agent-panel 网页内容自己渲染，宿主不重复业务逻辑。
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>ZenithJoyAgentPanel</AssemblyName>
+    <RootNamespace>ZenithJoy.AgentPanel</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2592.51" />
+  </ItemGroup>
+
+</Project>
