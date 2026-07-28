@@ -195,3 +195,8 @@ services/agent/dist-installpack/
 services/content-pipeline/scripts/publishers/.cookie-backups/
 services/agent/dist-modules/*.tar.gz
 services/agent/dist-installpack/*.tar.gz
+
+# Playwright 运行产物（Staff Hub E2E 截图 / trace），由 CI artifact 上传，不入 git
+apps/staff-hub/screenshots/
+apps/staff-hub/test-results/
+apps/staff-hub/playwright-report/

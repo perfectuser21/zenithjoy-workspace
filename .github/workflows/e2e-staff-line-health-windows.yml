@@ -1,0 +1,145 @@
+name: E2E — Staff Hub 业务线健康看板
+
+# Sprint 07281207-staff-line-health-dashboard（GP3 / line_health）
+# 双 job：
+#   - e2e（ubuntu-latest）：PR 快反馈，起真实 apps/api + staff-hub Vite dev server，跑 Playwright
+#   - e2e-windows（windows-latest）：workflow_dispatch 深验，复用 sprint 目录 e2e-verify.ps1
+# 变体C 死规则：spec 打真实后端，禁 page.route()（脚本内二次校验）。
+# 本 sprint 三个端点只读聚合 product-map.json + Brain + GitHub，不查 Postgres，因此不需要 DB secrets。
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/api/src/routes/staff.ts'
+      - 'apps/api/src/services/line-health.ts'
+      - 'apps/api/src/services/staff-health.ts'
+      - 'apps/staff-hub/src/pages/LineHealthPage.tsx'
+      - 'apps/staff-hub/src/pages/LineHealthDetailPage.tsx'
+      - 'apps/staff-hub/e2e/line-health.spec.ts'
+      - 'apps/staff-hub/playwright.config.ts'
+      - 'product-map/generated/product-map.json'
+      - '.github/workflows/e2e-staff-line-health-windows.yml'
+      - 'sprints/07281207-staff-line-health-dashboard/**'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-staff-line-health-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Playwright — 业务线健康看板（ubuntu chromium）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build & start apps/api (真实后端，无 stub)
+        working-directory: apps/api
+        env:
+          PORT: '3000'
+          NODE_ENV: development
+          STAFF_EMAILS: 'staff@test.com'
+          BETTER_AUTH_SECRET: 'ci-only-secret-32-chars-min-not-prod-123'
+        run: |
+          npm run build
+          node dist/index.js > /tmp/apps-api.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:3000/health > /dev/null 2>&1; then
+              echo "apps/api ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:3000/health > /dev/null || { cat /tmp/apps-api.log; exit 1; }
+
+      - name: Install Playwright Chromium
+        working-directory: apps/staff-hub
+        run: npx playwright install chromium --with-deps
+
+      - name: Start Vite dev server (staff-hub, VITE_SKIP_AUTH=true)
+        working-directory: apps/staff-hub
+        env:
+          VITE_SKIP_AUTH: 'true'
+          VITE_MOCK_USER_EMAIL: 'staff@test.com'
+          STAFF_HUB_API_TARGET: 'http://localhost:3000'
+        run: |
+          npx vite --port 5175 &
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5175 > /dev/null 2>&1; then
+              echo "Vite ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Guard — spec 禁止 page.route()（变体C 死规则1）
+        run: |
+          if grep -q 'page\.route(' apps/staff-hub/e2e/line-health.spec.ts; then
+            echo "FAIL: line-health.spec.ts 含 page.route()，违反变体C 死规则（禁 stub 真实后端）"
+            exit 1
+          fi
+
+      - name: Run Playwright E2E
+        working-directory: apps/staff-hub
+        env:
+          E2E_BASE_URL: 'http://localhost:5175'
+          E2E_API_URL: 'http://localhost:3000'
+        run: npx playwright test e2e/line-health.spec.ts --reporter=list
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staff-line-health-screenshots-ubuntu
+          path: apps/staff-hub/screenshots/
+          if-no-files-found: warn
+
+  e2e-windows:
+    name: Playwright — 业务线健康看板（windows-latest 深验）
+    runs-on: windows-latest
+    timeout-minutes: 30
+    if: github.event_name == 'workflow_dispatch'
+
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: apps/staff-hub
+        run: npx playwright install chromium --with-deps
+
+      - name: Run e2e-verify.ps1（起 apps/api + Vite preview + Playwright）
+        working-directory: sprints/07281207-staff-line-health-dashboard
+        run: ./e2e-verify.ps1
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staff-line-health-screenshots-windows
+          path: sprints/07281207-staff-line-health-dashboard/screenshots/
+          if-no-files-found: warn

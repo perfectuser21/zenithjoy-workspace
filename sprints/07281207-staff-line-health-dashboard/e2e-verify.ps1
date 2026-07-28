@@ -67,10 +67,13 @@ $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c npm.cmd run build" `
 if ($proc.ExitCode -ne 0) { throw "FAIL: Staff Hub build exit=$($proc.ExitCode)" }
 
 Write-Host "▶ 启动 Vite preview port $VitePort..."
+# STAFF_HUB_API_TARGET：vite preview 的 /api 反代目标（vite.config.ts preview.proxy 读取），
+# 指向本脚本上面起的 apps/api，否则前端 fetch('/api/...') 会打到 preview 服务器自身 404。
 $serverProc = Start-Process -FilePath "cmd.exe" `
   -ArgumentList "/c npx.cmd vite preview --port $VitePort --host" `
   -WorkingDirectory "$repoRoot\apps\staff-hub" `
-  -PassThru -NoNewWindow
+  -PassThru -NoNewWindow `
+  -Environment @{ STAFF_HUB_API_TARGET = "http://localhost:$ApiPort" }
 
 $waited = 0
 do {

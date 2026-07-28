@@ -1,91 +1,116 @@
-contract_branch: cp-07061203-android-device-account-model
-sprint_dir: sprints/07061204-android-device-account-model
+contract_branch: cp-07281207-staff-line-health-dashboard
+sprint_dir: sprints/07281207-staff-line-health-dashboard
 
 ---
 skeleton: false
-journey_type: autonomous
+journey_type: user_facing
 ---
-# Contract DoD — Sprint: 机器管理：安卓设备账号模型
+# Contract DoD — Sprint: Staff Hub 业务线健康看板（GP3 / line_health）
 
-**范围**: Android agent 账号扫描判定抽成纯函数（无 Android 框架依赖）：单次扫描内账号去重、双端登录冲突覆盖判定（以后上报者为准）+ 冲突覆盖后"标失效/写日志告警"判定（Round 2 新增）、tenant_id 绑定隔离、扫描数据保鲜（读取失败保留旧列表标 stale）、下线判定、派发时发现未登录立即触发重扫、全局互斥锁判定，共 9 个函数写 JUnit 单测；同时 `agent_platform_sessions` schema 扩展 `device_type` 列。Dashboard `device_type` 标签展示 + 无障碍服务真实读取可行性仅人工补验，不计入本次 Harness 自动裁决（PRD `target_environment_reason` 显式声明）。
+**范围**: `GET /api/staff/line-health` 系列 3 个端点、Staff Hub 总览页、详情页两个 tab（部署/能力）、四类降级路径（not_connected / degraded / product-map fallback / 未知 lineKey 404）、Playwright E2E
 **大小**: M
-
-> 所有 Android [BEHAVIOR] 在 `services/agent-android` 目录跑 `gradle :app:testDebugUnitTest`。CI（`.github/workflows/android-agent-ci.yml`，`runs-on: ubuntu-latest`）runner 预装 Android SDK 自动设有 `ANDROID_HOME`，必须真跑；本地开发机缺 `ANDROID_HOME` 时该条命令降级输出 `SKIP(no ANDROID_HOME) — logic-done-pending`，不得据此直接判 done。Schema [BEHAVIOR] 用 `psql $DB` 真查，缺 `$DB` 时同样降级为 `SKIP — logic-done-pending`。
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] `DeviceAccountModel` object + 九个纯函数在 `services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/account/DeviceAccountModel.kt` 中定义
-  Test: manual:bash -c 'f=services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/account/DeviceAccountModel.kt; [ -f "$f" ] || { echo FAIL; exit 1; }; for fn in dedupeSameDeviceAccounts resolveDeviceConflict shouldInvalidateOldDeviceRecord shouldLogConflictAlert filterAccountsByTenant resolveScanReadResult checkAccountOffline evaluateDispatchAccountStatus shouldSkipScanDueToMutex; do grep -q "fun $fn" "$f" || { echo "FAIL: missing $fn"; exit 1; }; done; echo OK'
-  期望: OK
+- [x] [ARTIFACT] `apps/api/src/routes/staff.ts` 新增 3 个路由：`GET /line-health`、`GET /line-health/:lineKey/deployment`、`GET /line-health/:lineKey/abilities`
+  Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/staff.ts','utf8');if(!(c.includes(\"'/line-health'\")&&c.includes('/line-health/:lineKey/deployment')&&c.includes('/line-health/:lineKey/abilities')))process.exit(1)"
 
-- [ ] [ARTIFACT] 合同测试文件已原样复制进真实 Android 单测源码树（TDD red → green 承接）
-  Test: manual:bash -c 'diff sprints/07061204-android-device-account-model/tests/android/DeviceAccountModelLogicTest.kt services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/account/DeviceAccountModelLogicTest.kt >/dev/null || { echo FAIL; exit 1; }; echo OK'
-  期望: OK
+- [x] [ARTIFACT] `apps/staff-hub/src/pages/LineHealthPage.tsx` 新建，风格照抄 `PathHealthPage.tsx`
+  Test: node -e "const c=require('fs').readFileSync('apps/staff-hub/src/pages/LineHealthPage.tsx','utf8');if(!c.includes('line-health'))process.exit(1)"
 
-- [ ] [ARTIFACT] `agent_platform_sessions` schema 扩展迁移文件存在（新增 `device_type` 字段）
-  Test: manual:bash -c 'grep -rl "device_type" apps/api/db/migrations/*.sql | grep -q agent_platform_sessions.*device_type -e device_type && grep -rl "device_type" apps/api/db/migrations/*.sql | xargs grep -lq "agent_platform_sessions" || { echo FAIL; exit 1; }; echo OK'
-  期望: OK
+- [x] [ARTIFACT] `apps/staff-hub/src/pages/LineHealthDetailPage.tsx` 新建，含部署/能力两个 tab
+  Test: node -e "const c=require('fs').readFileSync('apps/staff-hub/src/pages/LineHealthDetailPage.tsx','utf8');if(!(c.includes('deployment')&&c.includes('abilities')))process.exit(1)"
 
-## BEHAVIOR 条目（manual:bash，Android gradle 单测 + psql schema 真跑，非 mock）
+- [x] [ARTIFACT] `apps/staff-hub` 路由注册 `/line-health` 与 `/line-health/:lineKey`，接入 staffGuard 保护体系（前端路由本身不需要额外鉴权，但需确认已挂载在 `Shell()` 已登录分支内，与 `path-health` 同级）
+  Test: node -e "const c=require('fs').readFileSync('apps/staff-hub/src/App.tsx','utf8');if(!(c.includes('/line-health')&&c.includes('LineHealthPage')&&c.includes('LineHealthDetailPage')))process.exit(1)"
 
-- [ ] [BEHAVIOR] 全局互斥锁判定——采集/触达任务运行中本轮跳过，未运行则正常扫描（Golden Path Step 1）
-  Test: manual:bash -c 'set -e; cd services/agent-android; [ -n "${ANDROID_HOME:-}" ] || { echo "SKIP(no ANDROID_HOME) — logic-done-pending"; exit 0; }; gradle :app:testDebugUnitTest --tests "*DeviceAccountModelLogicTest*" --rerun; XML=app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.account.DeviceAccountModelLogicTest.xml; grep -q "failures=\"0\" errors=\"0\"" "$XML" || { echo FAIL; exit 1; }; grep -qF "collect or outreach task running means scan should be skipped this cycle" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; grep -qF "no collect or outreach task running means scan should proceed" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; echo OK'
-  期望: OK
+- [x] [ARTIFACT] `apps/staff-hub/e2e/line-health.spec.ts` 新建，Playwright E2E
+  Test: node -e "const c=require('fs').readFileSync('apps/staff-hub/e2e/line-health.spec.ts','utf8');if(c.includes('page.route('))process.exit(1);if(!c.includes('line-health'))process.exit(1)"
 
-- [ ] [BEHAVIOR] 扫描数据保鲜——读取成功更新活跃列表，读取失败保留旧列表标 stale 不用空值覆盖（Golden Path 边界情况段）
-  Test: manual:bash -c 'set -e; cd services/agent-android; [ -n "${ANDROID_HOME:-}" ] || { echo "SKIP(no ANDROID_HOME) — logic-done-pending"; exit 0; }; gradle :app:testDebugUnitTest --tests "*DeviceAccountModelLogicTest*" --rerun; XML=app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.account.DeviceAccountModelLogicTest.xml; grep -q "failures=\"0\" errors=\"0\"" "$XML" || { echo FAIL; exit 1; }; grep -qF "successful scan read updates active list" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; grep -qF "failed scan read (accessibility timeout etc) keeps previous list and marks stale" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; echo OK'
-  期望: OK
+- [x] [ARTIFACT] `.github/workflows/e2e-staff-line-health-windows.yml` 新建，双 job（ubuntu PR 快反馈 + windows_dispatch 深验）
+  Test: node -e "const c=require('fs').readFileSync('.github/workflows/e2e-staff-line-health-windows.yml','utf8');if(!(c.includes('windows-latest')&&c.includes('line-health')))process.exit(1)"
 
-- [ ] [BEHAVIOR] 单次扫描内账号去重——保持首次出现顺序，无重复/空列表原样返回（Golden Path Step 3）
-  Test: manual:bash -c 'set -e; cd services/agent-android; [ -n "${ANDROID_HOME:-}" ] || { echo "SKIP(no ANDROID_HOME) — logic-done-pending"; exit 0; }; gradle :app:testDebugUnitTest --tests "*DeviceAccountModelLogicTest*" --rerun; XML=app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.account.DeviceAccountModelLogicTest.xml; grep -q "failures=\"0\" errors=\"0\"" "$XML" || { echo FAIL; exit 1; }; grep -qF "duplicate douyin ids in single scan are deduped preserving order" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; grep -qF "empty scan list dedupes to empty list" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; echo OK'
-  期望: OK
+- [x] [ARTIFACT] `apps/api/src/routes/__tests__/staff.test.ts` 新增本 sprint 测试用例，且不破坏既有 `path-health` 测试
+  Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/__tests__/staff.test.ts','utf8');if(!c.includes('line-health'))process.exit(1)"
 
-- [ ] [BEHAVIOR] tenant_id 绑定隔离——只返回目标租户账号，多租户互不串（Golden Path Step 4，Invariant 租户隔离铁律）
-  Test: manual:bash -c 'set -e; cd services/agent-android; [ -n "${ANDROID_HOME:-}" ] || { echo "SKIP(no ANDROID_HOME) — logic-done-pending"; exit 0; }; gradle :app:testDebugUnitTest --tests "*DeviceAccountModelLogicTest*" --rerun; XML=app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.account.DeviceAccountModelLogicTest.xml; grep -q "failures=\"0\" errors=\"0\"" "$XML" || { echo FAIL; exit 1; }; grep -qF "filters accounts to only the queried tenant, excluding other tenants" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; grep -qF "second tenant query returns only its own accounts, none leak from tenant-1" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; echo OK'
-  期望: OK
+- [x] [ARTIFACT] `apps/staff-hub` 补齐 Playwright 可运行环境（Reviewer r1 非阻塞建议5：当前 `apps/staff-hub/package.json` 无 `@playwright/test` devDependency 且无 `playwright.config.ts`，与已具备该环境的 `apps/dashboard` 不同，须先补齐避免留到 final-e2e 才暴雷）：`package.json` 新增 `@playwright/test` devDependency + 新建 `apps/staff-hub/playwright.config.ts`（可参照 `apps/dashboard/playwright.config.ts` 结构，baseURL 改用 5175 端口对齐本 sprint `e2e-verify.ps1`）
+  Test: node -e "const pkg=require('fs').readFileSync('apps/staff-hub/package.json','utf8');if(!pkg.includes('@playwright/test'))process.exit(1);require('fs').accessSync('apps/staff-hub/playwright.config.ts')"
 
-- [ ] [BEHAVIOR] 双端登录冲突覆盖判定——同设备/无绑定不算冲突，不同设备以后上报者为准覆盖，过期上报不覆盖（Golden Path Step 5）
-  Test: manual:bash -c 'set -e; cd services/agent-android; [ -n "${ANDROID_HOME:-}" ] || { echo "SKIP(no ANDROID_HOME) — logic-done-pending"; exit 0; }; gradle :app:testDebugUnitTest --tests "*DeviceAccountModelLogicTest*" --rerun; XML=app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.account.DeviceAccountModelLogicTest.xml; grep -q "failures=\"0\" errors=\"0\"" "$XML" || { echo FAIL; exit 1; }; grep -qF "no existing binding (first scan) yields NO_CONFLICT" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; grep -qF "different device with later scan timestamp overwrites existing" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; grep -qF "different device with earlier (stale, out-of-order) scan timestamp keeps existing" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; echo OK'
-  期望: OK
+## BEHAVIOR 条目（内嵌可执行 manual: 命令，假设 `apps/api` 已在 localhost:3000 启动）
 
-- [ ] [BEHAVIOR] 冲突覆盖后"标失效+写日志告警"判定（Round 2 新增，补齐 Step 5 后半句）——仅 OVERWRITE_EXISTING 触发标失效与写告警，NO_CONFLICT/KEEP_EXISTING_STALE_REPORT 均不触发（Golden Path Step 5 后半句）
-  Test: manual:bash -c 'set -e; cd services/agent-android; [ -n "${ANDROID_HOME:-}" ] || { echo "SKIP(no ANDROID_HOME) — logic-done-pending"; exit 0; }; gradle :app:testDebugUnitTest --tests "*DeviceAccountModelLogicTest*" --rerun; XML=app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.account.DeviceAccountModelLogicTest.xml; grep -q "failures=\"0\" errors=\"0\"" "$XML" || { echo FAIL; exit 1; }; grep -qF "OVERWRITE_EXISTING resolution should invalidate old device record" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; grep -qF "NO_CONFLICT resolution should not invalidate old device record" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; grep -qF "OVERWRITE_EXISTING resolution should log conflict alert" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; grep -qF "KEEP_EXISTING_STALE_REPORT resolution should not log conflict alert" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; echo OK'
-  期望: OK
+- [x] [BEHAVIOR] GET /api/staff/line-health 返回 line01/line02/line04 三条，line01 标 not_connected 而非 0/0
+  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e ".data | length == 3" && echo "$RESP" | jq -e ".data[] | select(.line_key==\"line01\") | .availability == \"not_connected\""'
+  期望: exit 0
 
-- [ ] [BEHAVIOR] 下线判定——记录账号仍在当前登录列表则在线，不在（或列表为空）则离线（Golden Path Step 5）
-  Test: manual:bash -c 'set -e; cd services/agent-android; [ -n "${ANDROID_HOME:-}" ] || { echo "SKIP(no ANDROID_HOME) — logic-done-pending"; exit 0; }; gradle :app:testDebugUnitTest --tests "*DeviceAccountModelLogicTest*" --rerun; XML=app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.account.DeviceAccountModelLogicTest.xml; grep -q "failures=\"0\" errors=\"0\"" "$XML" || { echo FAIL; exit 1; }; grep -qF "account still present in currently logged-in list is ONLINE" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; grep -qF "account missing from currently logged-in list WENT_OFFLINE" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; echo OK'
-  期望: OK
+- [x] [BEHAVIOR] line01/line02 maturity 字面为 not_connected 且 journey_id 为 null（判定点1，非靠0/0反推）
+  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e ".data[] | select(.line_key==\"line02\") | .maturity == \"not_connected\" and .journey_id == null"'
+  期望: exit 0
 
-- [ ] [BEHAVIOR] 派发时发现未登录立即触发重扫——记录在线但实际未登录判定 TRIGGER_RESCAN_AND_FAIL，其余情况 PROCEED（Golden Path Step 7）
-  Test: manual:bash -c 'set -e; cd services/agent-android; [ -n "${ANDROID_HOME:-}" ] || { echo "SKIP(no ANDROID_HOME) — logic-done-pending"; exit 0; }; gradle :app:testDebugUnitTest --tests "*DeviceAccountModelLogicTest*" --rerun; XML=app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.account.DeviceAccountModelLogicTest.xml; grep -q "failures=\"0\" errors=\"0\"" "$XML" || { echo FAIL; exit 1; }; grep -qF "dispatch finds account recorded online but actually logged out triggers rescan and fails task" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; grep -qF "dispatch finds account recorded online and actually still logged in proceeds normally" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; echo OK'
-  期望: OK
+- [x] [BEHAVIOR] 总览卡片 schema keys 完整性 — 顶层字段集合恒等于约定集合（防字段漂移）
+  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e "(.data[0] | keys | sort) == ([\"availability\",\"feature_counts\",\"journey_id\",\"journey_name\",\"label\",\"line_key\",\"maturity\",\"message\",\"smoke\"] | sort)"'
+  期望: exit 0
 
-- [ ] [BEHAVIOR] error path — 冲突覆盖判定对时间戳相等的边界场景（tie-break）明确判 OVERWRITE_EXISTING，防止 Generator 用 `>` 而非 `>=` 导致边界漂移
-  Test: manual:bash -c 'set -e; cd services/agent-android; [ -n "${ANDROID_HOME:-}" ] || { echo "SKIP(no ANDROID_HOME) — logic-done-pending"; exit 0; }; gradle :app:testDebugUnitTest --tests "*DeviceAccountModelLogicTest*" --rerun; XML=app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.account.DeviceAccountModelLogicTest.xml; grep -q "failures=\"0\" errors=\"0\"" "$XML" || { echo FAIL; exit 1; }; grep -qF "different device with equal scan timestamp overwrites existing (later reporter wins ties)" "$XML" || { echo "FAIL: testcase missing"; exit 1; }; echo OK'
-  期望: OK
+- [x] [BEHAVIOR] 禁用字段名反向检查 — 总览卡片不得出现 path_key/health/status 字段
+  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e "(.data[0] | has(\"path_key\") | not) and (.data[0] | has(\"health\") | not) and (.data[0] | has(\"status\") | not)"'
+  期望: exit 0
 
-- [ ] [BEHAVIOR] `agent_platform_sessions` schema 已扩展 `device_type` 字段，可用 psql 查到（Golden Path Step 8/出口，PRD E2E 验收点 5）
-  Test: manual:bash -c 'set -e; if [ -z "${DB:-}" ]; then echo "SKIP(no \$DB) — logic-done-pending"; exit 0; fi; C=$(psql "$DB" -t -c "SELECT count(*) FROM information_schema.columns WHERE table_schema='"'"'zenithjoy'"'"' AND table_name='"'"'agent_platform_sessions'"'"' AND column_name='"'"'device_type'"'"'" | tr -d " "); [ "$C" = "1" ] || { echo "FAIL: device_type 列不存在"; exit 1; }; echo OK'
-  期望: OK
+- [x] [BEHAVIOR] error path — 无认证头访问 GET /api/staff/line-health 返回 403
+  Test: manual:bash -c 'CODE=$(curl -s -o /dev/null -w "%{http_code}" localhost:3000/api/staff/line-health); [ "$CODE" = "403" ]'
+  期望: exit 0
 
-- [ ] [BEHAVIOR] `agent_platform_sessions` 既有 `role` CHECK 约束未被本次 schema 变更破坏（回归防护，对应"已知约束"段）
-  Test: manual:bash -c 'set -e; if [ -z "${DB:-}" ]; then echo "SKIP(no \$DB) — logic-done-pending"; exit 0; fi; C=$(psql "$DB" -t -c "SELECT count(*) FROM pg_constraint WHERE conname='"'"'chk_aps_role'"'"' AND conrelid='"'"'zenithjoy.agent_platform_sessions'"'"'::regclass" | tr -d " "); [ "$C" = "1" ] || { echo "FAIL: chk_aps_role 约束缺失，疑似被破坏"; exit 1; }; echo OK'
-  期望: OK
+- [x] [BEHAVIOR] error path — 未知 lineKey 访问 deployment/abilities 均返回 404（非静默200空数据）
+  Test: manual:bash -c 'C1=$(curl -s -o /dev/null -w "%{http_code}" localhost:3000/api/staff/line-health/bogus/deployment -H "X-User-Email: staff@test.com"); C2=$(curl -s -o /dev/null -w "%{http_code}" localhost:3000/api/staff/line-health/bogus/abilities -H "X-User-Email: staff@test.com"); [ "$C1" = "404" ] && [ "$C2" = "404" ]'
+  期望: exit 0
 
-- [ ] [BEHAVIOR] 单测用例总数 ≥ 26，防止 Generator 删测试假绿通过（覆盖九块纯函数全部场景，Round 2 新增 6 条后总数应为 29）
-  Test: manual:bash -c 'set -e; cd services/agent-android; [ -n "${ANDROID_HOME:-}" ] || { echo "SKIP(no ANDROID_HOME) — logic-done-pending"; exit 0; }; gradle :app:testDebugUnitTest --tests "*DeviceAccountModelLogicTest*" --rerun; XML=app/build/test-results/testDebugUnitTest/TEST-com.zenithjoy.agent.account.DeviceAccountModelLogicTest.xml; grep -q "failures=\"0\" errors=\"0\"" "$XML" || { echo FAIL; exit 1; }; COUNT=$(grep -o "tests=\"[0-9]*\"" "$XML" | head -1 | grep -o "[0-9]*"); [ "$COUNT" -ge 26 ] || { echo "FAIL: only $COUNT tests"; exit 1; }; echo OK'
-  期望: OK
+- [x] [BEHAVIOR] deployment 端点返回三环境状态 + related_prs 恒为数组类型
+  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health/line04/deployment -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e "(.data.environments | length == 3) and (.data.related_prs | type == \"array\")"'
+  期望: exit 0
 
-## 接缝清单（人工真机/前端补验，未验前不得标 done——详见 contract-draft.md）
+- [x] [BEHAVIOR] not_connected 线（line01）两个 tab 均返回 200 空态，message 字面等于约定文案（判定点2）
+  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health/line01/deployment -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e ".data.connected == false and .data.message == \"该业务线尚未接入 Brain 数据，暂无法展示\" and (.data.environments == [])"'
+  期望: exit 0
 
-1. 抖音"切换账号"界面无障碍服务能否真实读到当前登录账号列表 — 人工在 Honor 真机（Tailscale IP 100.91.227.1）确认可行性，读不到需降级为主动打开弹窗扫描
-2. 扫描流程超时强制退出"切换账号"界面，不留半开状态 — 人工真机手动触发崩溃/锁屏场景核实
-3. Dashboard 机器管理页 `device_type` 标签真实展示（跟 Web 小号同列表） — 人工在 Dashboard 手动核实一次
-4.（Round 2 新增）tenant_id 来源约束：`tenantId` 参数必须由服务端按 agent_id 反查得到（对齐"同机双租户 deny"修复严格程度），不得信任 Android 设备上报值——Generator 阶段实现约束，纯函数层面无法验证调用方传参来源，需 code review 人工核实
+- [x] [BEHAVIOR] abilities 端点返回数组，每项字段齐全（id/name/status/thickness）
+  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health/line04/abilities -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e "(.data.abilities | type == \"array\") and (all(.data.abilities[]; has(\"thickness\") and has(\"status\") and has(\"id\") and has(\"name\")))"'
+  期望: exit 0
 
-## 产品风险登记（Risks，详见 contract-draft.md "产品风险登记" 段）
+- [x] [BEHAVIOR] Rule B 第三方真调一次 — GitHub 真实 API 可达，且 production commit_sha 若非空必须匹配真实40位hex格式（非硬编码假值）
+  Test: manual:bash -c 'GH=$(curl -sf "https://api.github.com/repos/perfectuser21/zenithjoy-workspace/commits?sha=main&per_page=1"); echo "$GH" | jq -e ".[0].sha | type == \"string\" and (length == 40)"; RESP=$(curl -sf localhost:3000/api/staff/line-health/line04/deployment -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e "(.data.environments[] | select(.name==\"production\") | .commit_sha) as \$s | (\$s == null) or (\$s | test(\"^[0-9a-f]{40}\$\"))"'
+  期望: exit 0
 
-1. 双端冲突覆盖判定依赖服务端时间戳而非设备本地时间，若 Generator 误用设备本地时间会导致 clock skew 误判 — 本轮已通过纯函数签名约定（`scanAtMs` 语义明确为"中台接收扫描请求时打的时间戳"）+ Step 5 五条 [BEHAVIOR]/测试覆盖降低风险，服务端时间戳注入点本身超出本次纯函数验收范围
-2. 无障碍服务读取技术可行性未最终确认（PRD `[ASSUMPTION]`）— PRD 已拍板"两种方案判定逻辑相同，不影响本次可测试范围"，接缝清单第 1 条待真机验证
-3.（Round 2 新增）"标失效+写日志告警"落地动作（调用方是否真执行副作用代码）未被自动化验收覆盖 — Mitigation：本轮已新增 `shouldInvalidateOldDeviceRecord`/`shouldLogConflictAlert` 两个纯函数把"该不该做"判定显式覆盖，"真的做了"这层调用方副作用验证超出本 sprint 纯函数验收范围，需 code review + 未来 sprint 补充调用方集成测试
-4.（Round 2 新增）`shouldSkipScanDueToMutex` 只测布尔透传，三个无障碍服务共享同一把全局互斥锁的真实竞态（TOCTOU）未被本 sprint 覆盖 — Mitigation：标注为超出本 sprint 范围，属于 Generator 集成代码的职责，列入接缝清单供未来 sprint 或人工真机验证跟进
+- [x] [BEHAVIOR] deployment/abilities 两个新端点均挂 staffGuard（无认证头同样403，不遗漏）
+  Test: manual:bash -c 'C1=$(curl -s -o /dev/null -w "%{http_code}" localhost:3000/api/staff/line-health/line04/deployment); C2=$(curl -s -o /dev/null -w "%{http_code}" localhost:3000/api/staff/line-health/line04/abilities); [ "$C1" = "403" ] && [ "$C2" = "403" ]'
+  期望: exit 0
+
+- [x] [BEHAVIOR] dev/staging 陈旧分支不得显示为 active（Reviewer r1 必须修复项1）——当前仓库 develop（末次提交2026-03-07）与 release/cs-stable（末次提交2026-06-23）均已超过30天陈旧阈值，是真实存在的真机验证场景
+  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health/line04/deployment -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e "(.data.environments[] | select(.name==\"dev\") | .status) != \"active\"" && echo "$RESP" | jq -e "(.data.environments[] | select(.name==\"staging\") | .status) != \"active\""'
+  期望: exit 0
+
+- [x] [BEHAVIOR] recent_commit 字段存在且与 environments 中 production 项一致（Reviewer r1 必须修复项3）
+  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health/line04/deployment -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e ".data | has(\"recent_commit\")" && echo "$RESP" | jq -e "((.data.recent_commit == null) and ((.data.environments[] | select(.name==\"production\") | .commit_sha) == null)) or (.data.recent_commit.sha == (.data.environments[] | select(.name==\"production\") | .commit_sha))"'
+  期望: exit 0
+
+- [x] [BEHAVIOR] deployment 端点禁用字段反向检查 — 不得出现 deploy_version/version（Reviewer r1 必须修复项4）
+  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health/line04/deployment -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e "(.data | has(\"deploy_version\") | not) and (.data | has(\"version\") | not)"'
+  期望: exit 0
+
+- [x] [BEHAVIOR] abilities 端点禁用字段反向检查 — 不得出现 features（Reviewer r1 必须修复项4）
+  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health/line04/abilities -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e "(.data | has(\"features\") | not)"'
+  期望: exit 0
+
+## BEHAVIOR:E2E 条目（user_facing 专属，Mode B final-e2e 跑，windows_cloud + Playwright）
+
+- [x] [BEHAVIOR:E2E] 员工完整走完总览→详情→部署tab→能力tab→返回的 Golden Path，截图可视化验证
+  Screenshots:
+    - 01-overview.png     期望：`/line-health` 总览页渲染 3 张卡片，line01/line02 显示"未接入"灰色徽章，line04 显示 maturity/done/total
+    - 02-detail-deploy.png 期望：点击 line04 卡片后 `/line-health/line04` 详情页默认打开"部署"tab，三环境状态区块可见
+    - 03-detail-abilities.png 期望：切换到"能力"tab，能力清单渲染（或 windows_cloud 沙盒 Brain 不可达时的"数据暂不可达"降级文案，二者均可）
+    - 04-fallback-banner.png 期望：product-map.json 缺失场景下页面顶部出现降级 banner 提示，而非白屏/控制台报错
+  路径格式：`sprints/07281207-staff-line-health-dashboard/screenshots/<step>.png`
+  期望：evaluator 完成后截图已复制到 `sprints/07281207-staff-line-health-dashboard/screenshots/` 目录
+
+## 未覆盖真实链路清单（同 contract-draft.md，重复登记以便 evaluator 单独核对本文件时不漏看）
+
+1. vitest 单测（`apps/api/src/routes/__tests__/staff.test.ts`）中 Brain(`axios.get` journey_features) 与 GitHub(`axios.get` REST API) 两个第三方依赖打桩，延续该文件既有 `path-health` 测试模式；真验证补位由本文件 BEHAVIOR 段的真实 curl 命令承担（针对已启动的真实 `apps/api` 进程，未被 mock）。
+2. windows_cloud final-e2e 中 `CECELIA_BRAIN_URL` 默认未配置真实可达地址（GHA windows-latest 沙盒无法直连内网 Brain，且不可修改共享 `.github/workflows/e2e-windows.yml` 注入新 secret）；line04 能力 tab 在该场景下允许降级为"数据暂不可达"文案，`logic-done-pending`，真实 Brain 数据的完整验证留给 evaluator 模式A（ubuntu-latest，本机/CI 可达 Brain）与 staging 人工验收。
+3. 陈旧阈值判定（30天边界）与 GitHub 数据缓存 TTL 两个 NFR 的内部逻辑（Reviewer r1 必须修复项1/2）：前者靠 vitest `githubMockOverride` 局部覆盖单条 GitHub 请求返回虚拟旧 `commit_date` 验证边界判定，后者靠 `githubRealGetSpy` 计数两次连续请求是否复用同一次真实网络调用，均无法用简单 curl 命令控制"提交日期"或精确观测"是否真的省了一次网络调用"。真验证补位：本文件上方新增的 `dev/staging 陈旧分支不得显示为 active` 一条 [BEHAVIOR] 直接用当前仓库真实 `develop`/`release/cs-stable`（均已陈旧超30天）验证"不误判为 active"这一具体事实，作为陈旧阈值逻辑的真实世界补充验证（不依赖 mock）；缓存 TTL 的通用验证仅在 vitest 层覆盖。

@@ -132,6 +132,7 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'STAFF_FEISHU_OPENIDS', reason: '员工飞书 open_id 白名单，逗号分隔，STAFF_EMAILS 的兜底路径——部分飞书账号从不返回 email 字段，open_id 是必定返回的字段' },
   { name: 'CECELIA_SKILL_EVAL_URL', reason: 'Cecelia skill-eval 服务地址，缺则用默认 http://hk-vps:9100' },
   { name: 'STAFF_HUB_GITHUB_REPO', reason: 'Staff Hub Path 健康页读取 smoke run 时使用的 GitHub 仓库，缺则回退默认 perfectuser21/zenithjoy-workspace' },
+  { name: 'PRODUCT_MAP_PATH', reason: 'Staff Hub 业务线健康看板读取的 product-map.json 路径覆盖（测试/非常规部署布局用），缺则按 cwd 逐级向上找 product-map/generated/product-map.json' },
   { name: 'MMV_CLAUDE_ACCOUNT_DIR', reason: '对话式创建Skill在mmv上跑claude -p时用哪个账号池目录，缺则默认 /Users/administrator/.claude-account1' },
   { name: 'INTERNAL_API_BASE', reason: '内部回调服务基础 URL（detached 子进程通知终态），缺则默认 http://localhost:3001' },
 

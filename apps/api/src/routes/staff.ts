@@ -17,12 +17,25 @@
  *   SVG 输入盒→圆核→输出盒图 + 折叠详解表），原样透传，不再重新臆造一个更差的展示层；
  *   ?format=json 时改拉原始 report_data JSON（调试/兼容用）
  */
-import { Router } from 'express';
+import { Router, type Response } from 'express';
 import multer from 'multer';
 import axios from 'axios';
 import { staffGuard } from '../middleware/staff';
 import { simpleRateLimit } from '../middleware/simple-rate-limit';
 import { ipKeyGenerator } from 'express-rate-limit';
+import {
+  JourneyFeature,
+  GitHubRun,
+  fetchJourneyFeatures,
+  fetchLatestSmokeRun,
+  maturityFromCounts,
+} from '../services/staff-health';
+import {
+  buildLineAbilities,
+  buildLineDeployment,
+  buildLineHealthOverview,
+  findLineDef,
+} from '../services/line-health';
 
 const router = Router();
 // 登录端点身份未知，按来源 IP 限流（不能按 tenant/user，此时还没有）：
@@ -36,26 +49,6 @@ const feishuLoginRateLimit = simpleRateLimit({
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
 
 type PathKey = 'path1' | 'path2' | 'path4';
-
-type JourneyFeature = {
-  id: string;
-  name: string;
-  status?: string | null;
-  thickness?: string | null;
-  kind?: string | null;
-  updated_at?: string | null;
-};
-
-type GitHubRun = {
-  id: number;
-  html_url: string;
-  status: string;
-  conclusion: string | null;
-  name: string;
-  display_title?: string | null;
-  run_started_at?: string | null;
-  updated_at?: string | null;
-};
 
 const PATH_DEFS: Array<{
   pathKey: PathKey;
@@ -89,49 +82,9 @@ const PATH_DEFS: Array<{
 
 // 反代地址：CECELIA_SKILL_EVAL_URL env var 优先（含协议+主机+端口+路径前缀），缺省走 9100
 const SKILL_EVAL_BASE = () => process.env.CECELIA_SKILL_EVAL_URL ?? 'http://hk-vps:9100';
-const CECELIA_BRAIN_BASE = () => process.env.CECELIA_BRAIN_URL ?? 'http://host.docker.internal:5221';
-const GITHUB_REPO = process.env.STAFF_HUB_GITHUB_REPO ?? 'perfectuser21/zenithjoy-workspace';
 
 function deriveSkillName(originalname: string): string {
   return originalname.replace(/\.zip$/i, '').trim() || 'unnamed-skill';
-}
-
-function maturityFromCounts(done: number, total: number): 'thin' | 'medium' | 'thick' | 'mature' {
-  if (total <= 0 || done <= 0) return 'thin';
-  const ratio = done / total;
-  if (ratio >= 1) return 'mature';
-  if (ratio >= 0.66) return 'thick';
-  if (ratio >= 0.33) return 'medium';
-  return 'thin';
-}
-
-async function fetchJourneyFeatures(journeyId: string): Promise<JourneyFeature[]> {
-  const upstream = await axios.get(`${CECELIA_BRAIN_BASE()}/api/brain/journey_features`, {
-    params: { journey_id: journeyId },
-    timeout: 20000,
-  });
-  return Array.isArray(upstream.data) ? upstream.data as JourneyFeature[] : [];
-}
-
-async function fetchLatestSmokeRun(hints: string[]): Promise<GitHubRun | null> {
-  const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '';
-  const headers: Record<string, string> = {
-    Accept: 'application/vnd.github+json',
-    'User-Agent': 'zenithjoy-staff-hub',
-  };
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const upstream = await axios.get(`https://api.github.com/repos/${GITHUB_REPO}/actions/runs`, {
-    headers,
-    params: { per_page: 30 },
-    timeout: 20000,
-  });
-  const runs = Array.isArray(upstream.data?.workflow_runs) ? upstream.data.workflow_runs as GitHubRun[] : [];
-  const matched = runs.find((run) => {
-    const hay = `${run.name} ${run.display_title ?? ''}`.toLowerCase();
-    return hints.some((hint) => hay.includes(hint.toLowerCase()));
-  });
-  return matched ?? null;
 }
 
 // ─── 飞书登录（公开路由，不受 staffGuard 保护 —— 登录前谈不上"已登录"）───────
@@ -408,6 +361,48 @@ router.get('/path-health', async (_req, res): Promise<void> => {
     success: true,
     data: items,
   });
+});
+
+// ─── 业务线健康看板（GP3 / line_health）────────────────────────────────────
+// 聚合逻辑在 services/line-health.ts，本处只做路由注册 + HTTP 语义（404 / 200 降级）。
+// 三个端点都在 router.use(staffGuard) 之后注册，因此都受员工白名单保护。
+
+function lineNotFound(res: Response): void {
+  res.status(404).json({
+    success: false,
+    error: { code: 'NOT_FOUND', message: 'unknown line_key' },
+  });
+}
+
+router.get('/line-health', async (_req, res): Promise<void> => {
+  const overview = await buildLineHealthOverview();
+  res.status(200).json({
+    success: true,
+    data: overview.data,
+    source: overview.source,
+    fallback_reason: overview.fallback_reason,
+  });
+});
+
+router.get('/line-health/:lineKey/deployment', async (req, res): Promise<void> => {
+  const def = findLineDef(req.params.lineKey);
+  // 未知 lineKey 明确 404，不静默返回 200 空数据（否则前端会误判成"这条线没数据"）
+  if (!def) {
+    lineNotFound(res);
+    return;
+  }
+  const data = await buildLineDeployment(def);
+  res.status(200).json({ success: true, data });
+});
+
+router.get('/line-health/:lineKey/abilities', async (req, res): Promise<void> => {
+  const def = findLineDef(req.params.lineKey);
+  if (!def) {
+    lineNotFound(res);
+    return;
+  }
+  const data = await buildLineAbilities(def);
+  res.status(200).json({ success: true, data });
 });
 
 export default router;
