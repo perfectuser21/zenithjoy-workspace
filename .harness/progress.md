@@ -1,10 +1,3 @@
-(重建：孤儿重点火 orphan_requeue_count=1，前序容器产物已丢失，从 Step 1 开跑)
-planner: done (sprint-prd.md@9b64e471, invariants=7, fr=3, lines=294)
-contract-proposer: done (contract-draft.md + contract-dod.md + tests/2 + e2e-contract.sh, invariants=7/7, checkpoints=27)
-gan: done (contract-draft.md@948ec3f2 r2, verdict=APPROVED, 铁律覆盖=7/7, judgments_written=7, rubric=.harness/verdicts/gan-948ec3f2.json)
-generator: pr_opened (#1493, red=01eefa25, green=f0588bb3)
-judge: done (verdict=PASS, sha=5c6b628, worktree=/tmp/cecelia-prompts/worktree-30a0c83a, judged=true)
-merge: auto-merge 已启用 (PR #1493, SHA=ed030e84, CI 运行中)
-handoff: done (docs/handoffs/202607281732-1493.md, commit=e6a032fa)
-handoff: pushed (commit=e6a032fa, CI再次触发)
-status: auto-merge 等待 CI 完成（Ability Acceptance Smoke + Playwright E2E pending）
+(新sprint,无台账 -- dc438e65 / 07282119-agent-panel-knife2-android)
+planner: done (sprint-prd.md@84ca42e1, invariants=8, fr=1)
+contract-proposer: done (contract-draft.md + contract-dod.md + tests/3 + task-plan.json, round=1, behaviors=15, self-check=PASS, branch=cp-07282119-agent-panel-knife2-android)

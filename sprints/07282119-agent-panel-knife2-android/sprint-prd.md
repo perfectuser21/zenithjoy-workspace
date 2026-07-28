@@ -74,7 +74,7 @@
 
 ## E2E 验收
 
-> Planner 初稿此区块留空实现细节，最终可执行脚本由 proposer 在 GAN 阶段按 target_environment=windows_cloud 产出。
+> Planner 初稿此区块留空实现细节，最终可执行脚本由 proposer 在 GAN 阶段按 target_environment=local_api 产出。
 
 ```bash
 # 期望验收点（自然语言，供 proposer 翻译成命令）：
@@ -88,7 +88,7 @@
 
 ## journey_type: user_facing
 ## journey_type_reason: journey afa6abca-53c0-4815-8594-b7fb81ca547f 在 Brain 中已注册 journey_type=user_facing；本 sprint 核心产出是 apps/agent-panel 前端 UI 泳道渲染，用户/运营者直接肉眼可见任务进度与卡死红灯
-## target_environment: windows_cloud
-## target_environment_reason: task payload 已显式指定 target_environment=windows_cloud；作战窗为 ZenithJoy Windows Electron/WebView2 壳应用，按全局 E2E 环境路由死规则须走 GitHub Actions windows-latest 干净 sandbox
+## target_environment: local_api
+## target_environment_reason: Round 2 修订（Reviewer round1 阻塞问题2）——round1 误套"UI→windows_cloud"全局规则，但本 sprint 实际改动范围是 apps/agent-panel(React 组件/jsdom 单测)、services/agent(Node 桥接模块)、apps/api(Node+Postgres 新端点)，完全不碰 apps/agent-panel-host（WPF 原生壳+WebView2 渲染层，那个才是 windows_cloud 的适用对象，见 agent-panel-host-build.yml runs-on: windows-latest）。本 sprint 的验收载体 golden-path-2-smoke.sh 实际由 ci-l4-e2e-smoke.yml 的 smoke-api-contract job（runs-on: ubuntu-latest，起 postgres service）与 ci-smoke-glob-runner.yml（同为 ubuntu-latest）调用，全程 curl+psql 打真实 Node+Postgres 后端 + vitest(jsdom) 跑前端组件测试，无任何 Windows/WebView2 参与。target_environment 改为 local_api 如实反映"Node+Postgres 后端 + jsdom 前端测试全在 Linux CI 跑"的真实执行环境。
 ## journey_id: afa6abca-53c0-4815-8594-b7fb81ca547f
 ## step_id: Path2-Step8（来源: PrepPRD"锚定 Path2 Step 8"，journey afa6abca 无独立 journey_steps 表记录可查，以 Journey description 中的步骤编号锚定）
