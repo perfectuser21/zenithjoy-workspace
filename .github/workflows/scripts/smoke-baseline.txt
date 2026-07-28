@@ -94,3 +94,4 @@ agent-offline-alert-smoke.sh
 overlay-card-redesign-smoke.sh
 xian-runner-fleet-smoke.sh
 android-signal-reporting-smoke.sh
+staff-line-health-smoke.sh

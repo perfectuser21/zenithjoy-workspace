@@ -94,7 +94,10 @@ const accountScanTriggerRateLimit = simpleRateLimit({
 const signalStatusRateLimit = simpleRateLimit({
   windowMs: 60_000,
   max: 60,
-  keyFn: ipKeyFn,
+  // 包一层箭头而不是模块级直接引用 ipKeyFn：直接引用会在 import 阶段立即取该导出，
+  // 使得只桩了部分导出的单测（vitest 4 对 mock 缺失导出直接报错）在 import app 时整体挂掉。
+  // 包一层后取值推迟到限流器真正被调用时，运行时行为完全不变。
+  keyFn: (req) => ipKeyFn(req),
 });
 
 const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
@@ -1599,7 +1602,10 @@ acquisitionRouter.patch('/config', tenantContextOptional, async (req: Request, r
 const signalVerifyRateLimit = simpleRateLimit({
   windowMs: 60_000,
   max: 60,
-  keyFn: ipKeyFn,
+  // 包一层箭头而不是模块级直接引用 ipKeyFn：直接引用会在 import 阶段立即取该导出，
+  // 使得只桩了部分导出的单测（vitest 4 对 mock 缺失导出直接报错）在 import app 时整体挂掉。
+  // 包一层后取值推迟到限流器真正被调用时，运行时行为完全不变。
+  keyFn: (req) => ipKeyFn(req),
 });
 
 // GET /api/acquisition/signal-verify — FR-5 信号验证聚合端点（Bearer token 鉴权，tenant 级）

@@ -1,6 +1,3 @@
-contract_branch: cp-07281207-staff-line-health-dashboard
-sprint_dir: sprints/07281207-staff-line-health-dashboard
-
 ---
 skeleton: false
 journey_type: user_facing
