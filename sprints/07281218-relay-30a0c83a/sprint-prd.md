@@ -95,105 +95,33 @@ PR #1486 建立了 Product Map SSOT，但生成投影中 `golden_paths` 数组�
 
 ## 技术设计要点
 
-### DB Schema（四张表）
+### DB（四张表）
 
-```sql
--- acceptance_template: 验收项模板（seed 数据 = Line02/Android 的 FR/NFR/Invariant/SOP）
-CREATE TABLE acceptance_template (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id TEXT NOT NULL,
-  app_id TEXT NOT NULL,           -- 'customer_app'
-  line_id TEXT NOT NULL,          -- 'line02'
-  surface TEXT NOT NULL,          -- 'android'
-  kind TEXT NOT NULL CHECK (kind IN ('FR', 'NFR', 'Invariant', 'SOP')),
-  seq INTEGER NOT NULL,           -- 显示顺序
-  title TEXT NOT NULL,
-  description TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+- `acceptance_template`：验收项模板，字段含 tenant_id / app_id / line_id / surface / kind（FR|NFR|Invariant|SOP）/ seq / title / description
+- `acceptance_run`：一次验收任务，幂等 UNIQUE(tenant_id, task_id, sha)；status∈{in_progress, submitted, cancelled}；记录版本快照 staging_version / production_version / version_diff_count；必填 created_by
+- `device_result`：每台设备一行，UNIQUE(run_id, device_index)，device_index 范围 1-5
+- `check_result`：每台设备每个验收项一行，UNIQUE(device_result_id, template_id)；result∈{PASS,FAIL,BLOCKED,pending}；必填 checked_by
 
--- acceptance_run: 一次验收任务
-CREATE TABLE acceptance_run (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id TEXT NOT NULL,
-  app_id TEXT NOT NULL,
-  line_id TEXT NOT NULL,
-  surface TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'in_progress' CHECK (status IN ('in_progress', 'submitted', 'cancelled')),
-  task_id TEXT,                   -- Brain task ID（幂等 key 之一）
-  sha TEXT,                       -- Git commit SHA（幂等 key 之二）
-  staging_version TEXT,           -- 验收时 staging 版本快照
-  production_version TEXT,        -- 验收时 production 版本快照
-  version_diff_count INTEGER DEFAULT 0,
-  created_by TEXT NOT NULL,       -- 验收人 email / feishu_open_id
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  submitted_at TIMESTAMPTZ,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (tenant_id, task_id, sha) -- 幂等约束（task_id+sha 不为 null 时生效）
-);
+完整 DDL 由 generator 根据上述语义自行编写，迁移文件路径：`apps/api/db/migrations/20260728_ability_acceptance.sql`。
 
--- device_result: 每台测试设备一条记录（最多 5 台）
-CREATE TABLE device_result (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  run_id UUID NOT NULL REFERENCES acceptance_run(id) ON DELETE CASCADE,
-  tenant_id TEXT NOT NULL,
-  device_index INTEGER NOT NULL CHECK (device_index BETWEEN 1 AND 5),
-  device_label TEXT,              -- 设备名称/型号（自由文本）
-  overall_result TEXT CHECK (overall_result IN ('PASS', 'FAIL', 'BLOCKED', 'pending')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (run_id, device_index)
-);
+### API（7 个端点，统一前缀 `/api/staff/ability-acceptance`，均受 staffGuard 保护）
 
--- check_result: 每台设备的每个验收项结果
-CREATE TABLE check_result (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  device_result_id UUID NOT NULL REFERENCES device_result(id) ON DELETE CASCADE,
-  tenant_id TEXT NOT NULL,
-  template_id UUID NOT NULL REFERENCES acceptance_template(id),
-  result TEXT NOT NULL CHECK (result IN ('PASS', 'FAIL', 'BLOCKED', 'pending')),
-  evidence TEXT,                  -- 文字证据 / 截图 URL
-  checked_by TEXT NOT NULL,       -- 验收人
-  checked_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (device_result_id, template_id)
-);
-```
+| Method | Path | 核心行为 |
+|--------|------|---------|
+| GET | `/templates` | 按 app_id/line_id/surface 查模板 |
+| GET | `/versions` | 返回 staging/production 真实版本 + diff_count（禁止伪造） |
+| POST | `/runs` | 幂等创建（同 task_id+sha 返回已有 run_id，created:false） |
+| GET | `/runs` | 历史 run 列表 |
+| GET | `/runs/:runId` | run 详情含 device_result + check_result |
+| POST | `/runs/:runId/devices/:deviceIndex/checks` | 录入/更新验收项结果 |
+| POST | `/runs/:runId/submit` | 提交锁定（status→submitted，之后 checks 返回 400） |
 
-### API 路由
+版本来源优先级：env var → VERSION 文件 → `Unknown (来源: ...)`，禁止伪造。
 
-所有路由均在 `/api/staff/ability-acceptance` 下，受 `staffGuard` 保护：
+### 前端
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/templates?app_id=&line_id=&surface=` | 查询验收项模板 |
-| GET | `/versions?app_id=&line_id=&surface=` | 查询 staging/production 真实版本与差异 |
-| POST | `/runs` | 幂等创建 run（body: app_id, line_id, surface, task_id?, sha?） |
-| GET | `/runs?app_id=&line_id=&surface=` | 列出历史 run |
-| GET | `/runs/:runId` | 查询 run 详情（含 device_result + check_result） |
-| POST | `/runs/:runId/devices/:deviceIndex/checks` | 录入/更新某台设备的某条验收结果 |
-| POST | `/runs/:runId/submit` | 提交验收（run 状态 → submitted，不可再修改） |
-
-版本来源优先级：
-1. `process.env.STAGING_VERSION` / `process.env.PRODUCTION_VERSION`（CI 注入）
-2. 读取仓库根目录 `VERSION` 文件
-3. 兜底：`Unknown (来源: VERSION 文件不可达)` — 禁止伪造版本号
-
-### 前端结构
-
-```
-apps/staff-hub/src/pages/
-  AbilityAcceptancePage.tsx      -- 主页（版本概览 + 创建/继续 + 验收流程）
-  AbilityAcceptanceHistoryPage.tsx -- 历史 run 列表 + 明细
-
-apps/staff-hub/src/App.tsx       -- 新增导航 + 路由：
-  /ability-acceptance             → AbilityAcceptancePage
-  /ability-acceptance/history     → AbilityAcceptanceHistoryPage
-```
-
-导航图标使用 `lucide-react` 的 `ClipboardCheck`。
+- 两个新页面：`AbilityAcceptancePage.tsx`（版本概览 + 创建/继续 run + 逐条验收 + 提交）、`AbilityAcceptanceHistoryPage.tsx`（历史列表 + 明细）
+- `App.tsx` 新增导航入口（lucide `ClipboardCheck` 图标）+ 两条路由（`/ability-acceptance`、`/ability-acceptance/history`）
 
 ---
 
@@ -230,64 +158,15 @@ apps/staff-hub/src/App.tsx       -- 新增导航 + 路由：
 
 ---
 
+<!-- 不计入 thin-slice 行数上限，纯参考资料 -->
 ## Response Schema
 
-### POST /api/staff/ability-acceptance/runs
+**POST /runs** 请求体：`{ app_id, line_id, surface, task_id?, sha? }`  
+响应：`{ success: true, data: { run_id: "uuid", status: "in_progress", created: true|false } }`  
+- 首次创建：`created: true`；同 task_id+sha 再次请求：`created: false`，run_id 相同
 
-请求体：
-```json
-{
-  "app_id": "customer_app",
-  "line_id": "line02",
-  "surface": "android",
-  "task_id": "30a0c83a-47f4-4151-9636-a8cd2b6f1d7a",
-  "sha": "abc1234"
-}
-```
-
-成功响应：
-```json
-{
-  "success": true,
-  "data": {
-    "run_id": "uuid",
-    "status": "in_progress",
-    "created": true
-  }
-}
-```
-
-幂等响应（已存在）：
-```json
-{
-  "success": true,
-  "data": {
-    "run_id": "existing-uuid",
-    "status": "in_progress",
-    "created": false
-  }
-}
-```
-
-### GET /api/staff/ability-acceptance/versions
-
-```json
-{
-  "success": true,
-  "data": {
-    "staging": {
-      "version": "1.2.3",
-      "source": "env:STAGING_VERSION"
-    },
-    "production": {
-      "version": "1.2.2",
-      "source": "file:VERSION"
-    },
-    "diff_count": 1,
-    "has_diff": true
-  }
-}
-```
+**GET /versions** 响应：`{ success: true, data: { staging: { version, source }, production: { version, source }, diff_count, has_diff } }`  
+- source 枚举：`env:STAGING_VERSION` / `file:VERSION` / `unknown`
 
 ---
 
@@ -333,129 +212,54 @@ apps/staff-hub/src/App.tsx       -- 新增导航 + 路由：
 
 ### Phase A：product-map 保序合同 E2E（10/10 PASS）
 
-```bash
-# 安装依赖（根 package.json 已加 ajv）
-npm install --prefix /workspace
-# 运行 product-map 合同测试
-node --test scripts/product-map/__tests__/product-map.test.js
-# 期望：10 个测试全部 PASS，其中：
-# T3: ability_acceptance status=active（本 sprint 升级后）
-# T6: productMapDigest 确定性，同一 map 两次调用返回相同 hex
-```
+运行：`node --test scripts/product-map/__tests__/product-map.test.js`
+
+**必须通过的关键断言：**
+- T3：`ability_acceptance` status = `active`（本 sprint 升级后）
+- T6：`productMapDigest` 确定性——同一 YAML 两次调用返回相同 hex（保序修复验证）
+- T1-T10 全部 PASS（需在根 `package.json` 安装 `ajv@^8.17.1` + `ajv-formats@^3.0.1`）
 
 ### Phase B：API 集成合同 E2E
 
-`sprints/07281218-relay-30a0c83a/e2e-contract.sh` 内容（需 `$API_BASE` + `$DB`）：
+脚本：`sprints/07281218-relay-30a0c83a/e2e-contract.sh`（需 `$API_BASE` + `$DB`）
 
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
+**必须验证的 9 条断言：**
 
-API="${API_BASE:-http://localhost:3000}"
-STAFF_EMAIL="${STAFF_EMAIL:-staff@test.com}"
-TENANT="${TENANT_ID:-default}"
-
-# 1. staffGuard 拦截未授权请求
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$API/api/staff/ability-acceptance/runs")
-[ "$STATUS" = "403" ] || { echo "FAIL: expected 403, got $STATUS"; exit 1; }
-
-# 2. 版本查询（查不到时返回 Unknown，不中断）
-V=$(curl -s -H "X-User-Email: $STAFF_EMAIL" "$API/api/staff/ability-acceptance/versions")
-echo "$V" | grep -q '"success":true' || { echo "FAIL: versions API"; exit 1; }
-
-# 3. 幂等创建 run（第一次）
-R1=$(curl -s -X POST -H "Content-Type: application/json" \
-  -H "X-User-Email: $STAFF_EMAIL" \
-  -d '{"app_id":"customer_app","line_id":"line02","surface":"android","task_id":"30a0c83a","sha":"abc1234"}' \
-  "$API/api/staff/ability-acceptance/runs")
-echo "$R1" | grep -q '"created":true' || { echo "FAIL: first create"; exit 1; }
-RUN_ID=$(echo "$R1" | node -e "const d=require('fs').readFileSync('/dev/stdin','utf8');console.log(JSON.parse(d).data.run_id)")
-
-# 4. 幂等创建 run（第二次，同 task_id+sha）
-R2=$(curl -s -X POST -H "Content-Type: application/json" \
-  -H "X-User-Email: $STAFF_EMAIL" \
-  -d '{"app_id":"customer_app","line_id":"line02","surface":"android","task_id":"30a0c83a","sha":"abc1234"}' \
-  "$API/api/staff/ability-acceptance/runs")
-echo "$R2" | grep -q '"created":false' || { echo "FAIL: idempotent create"; exit 1; }
-RUN_ID2=$(echo "$R2" | node -e "const d=require('fs').readFileSync('/dev/stdin','utf8');console.log(JSON.parse(d).data.run_id)")
-[ "$RUN_ID" = "$RUN_ID2" ] || { echo "FAIL: idempotent run_id mismatch"; exit 1; }
-
-# 5. 录入 check（device_index=1）
-CHK=$(curl -s -X POST -H "Content-Type: application/json" \
-  -H "X-User-Email: $STAFF_EMAIL" \
-  -d "{\"template_id\":\"$(psql $DB -t -c \"SELECT id FROM acceptance_template WHERE tenant_id='$TENANT' LIMIT 1\" | tr -d ' ')\",\"result\":\"PASS\",\"evidence\":\"截图已保存\"}" \
-  "$API/api/staff/ability-acceptance/runs/$RUN_ID/devices/1/checks")
-echo "$CHK" | grep -q '"success":true' || { echo "FAIL: check upsert"; exit 1; }
-
-# 6. 提交验收
-SUB=$(curl -s -X POST -H "X-User-Email: $STAFF_EMAIL" \
-  "$API/api/staff/ability-acceptance/runs/$RUN_ID/submit")
-echo "$SUB" | grep -q '"success":true' || { echo "FAIL: submit"; exit 1; }
-
-# 7. 提交后再录入 check → 400
-LOCK=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-  -H "Content-Type: application/json" \
-  -H "X-User-Email: $STAFF_EMAIL" \
-  -d '{}' \
-  "$API/api/staff/ability-acceptance/runs/$RUN_ID/devices/1/checks")
-[ "$LOCK" = "400" ] || { echo "FAIL: expected 400 after submit, got $LOCK"; exit 1; }
-
-# 8. audit 字段 DB 验证
-AUDITOR=$(psql "$DB" -t -c "SELECT created_by FROM acceptance_run WHERE id='$RUN_ID'" | tr -d ' ')
-[ "$AUDITOR" = "$STAFF_EMAIL" ] || { echo "FAIL: audit created_by=$AUDITOR"; exit 1; }
-
-# 9. 租户隔离验证（TENANT_B 不能看到 TENANT_A 的 run）
-T2_RUNS=$(curl -s -H "X-User-Email: $STAFF_EMAIL" \
-  -H "X-Tenant-Id: tenant_b" \
-  "$API/api/staff/ability-acceptance/runs?app_id=customer_app&line_id=line02")
-echo "$T2_RUNS" | node -e "const d=require('fs').readFileSync('/dev/stdin','utf8');const arr=JSON.parse(d).data||[];process.exit(arr.some(r=>r.id==='$RUN_ID')?1:0)" || { echo "FAIL: tenant isolation"; exit 1; }
-
-echo "ALL PASS"
-```
+| # | 场景 | 期望结果 |
+|---|------|---------|
+| 1 | 无认证头访问 `/runs` | HTTP 403 |
+| 2 | 带 `X-User-Email` 访问 `/versions` | `success:true`，版本字段非空（可为 Unknown） |
+| 3 | 首次 POST `/runs`（task_id=30a0c83a, sha=abc1234） | `created:true`，返回 run_id |
+| 4 | 同参数二次 POST `/runs` | `created:false`，run_id 与第一次相同 |
+| 5 | POST `/runs/:runId/devices/1/checks`（result=PASS） | `success:true` |
+| 6 | POST `/runs/:runId/submit` | `success:true`，run status → submitted |
+| 7 | submit 后再 POST checks | HTTP 400 `RUN_ALREADY_SUBMITTED` |
+| 8 | DB 查 `acceptance_run.created_by` | 等于 `$STAFF_EMAIL` |
+| 9 | 用 tenant_b 头查 runs 列表 | 不含 tenant_a 的 run_id（租户隔离） |
 
 ### Phase C：Playwright E2E（windows_cloud）
 
-`apps/dashboard/e2e/ability-acceptance.spec.ts`（运行于 windows_cloud，mock API）：
+文件：`apps/dashboard/e2e/ability-acceptance.spec.ts`，全部场景使用 `page.route` mock API，不依赖真实 DB。
 
-```
-场景 1: staff 账号登录后左侧导航出现「Ability 验收」入口
-场景 2: /ability-acceptance 页面加载并显示版本概览（staging/production 版本卡片可见）
-场景 3: 点击「新建验收 run」后出现验收项清单
-场景 4: 选择某条验收项为 PASS，点击「提交验收」，页面出现「验收已提交」状态
-场景 5: 历史回看页面列出已提交 run，点击展开可见明细
-```
+**必须验证的 5 个场景：**
 
-所有场景使用 `page.route` mock `/api/staff/ability-acceptance/*`，不依赖真实 DB，可在 CI windows_cloud runner 稳定运行。
+| # | 场景 | 可见断言 |
+|---|------|---------|
+| 1 | staff 登录后 | 左侧导航出现「Ability 验收」入口 |
+| 2 | 访问 `/ability-acceptance` | 版本概览卡片（staging / production 版本）可见 |
+| 3 | 点击「新建验收 run」 | 验收项清单出现 |
+| 4 | 选一条为 PASS → 点「提交验收」 | 页面出现「验收已提交」状态文字 |
+| 5 | 访问历史页 | 已提交 run 列出，点击可展开明细 |
 
 ---
 
+<!-- 不计入 thin-slice 行数上限，纯参考资料 -->
 ## CI Gate
 
-`.github/workflows/ci-l2-consistency.yml` 新增 job：
-
-```yaml
-ability-acceptance-smoke:
-  name: Ability Acceptance Smoke
-  runs-on: ubuntu-latest
-  timeout-minutes: 5
-  steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-    - run: npm install
-    - run: node --test scripts/product-map/__tests__/product-map.test.js
-    - name: Check ability_acceptance status=active
-      run: |
-        node -e "
-          import('/workspace/scripts/product-map/lib.mjs').then(async ({loadAndValidateProductMap}) => {
-            const { map } = await loadAndValidateProductMap();
-            const gp = map.golden_paths.find(g => g.id === 'ability_acceptance');
-            if (!gp || gp.status !== 'active') { console.error('FAIL: ability_acceptance not active'); process.exit(1); }
-            console.log('PASS');
-          });
-        "
-```
+`.github/workflows/ci-l2-consistency.yml` 新增 `ability-acceptance-smoke` job（ubuntu-latest, timeout 5m）：
+- `npm install`
+- `node --test scripts/product-map/__tests__/product-map.test.js`（10/10 PASS）
+- 断言 `ability_acceptance.status === 'active'`（通过 `loadAndValidateProductMap()` 验证）
 
 ---
 
