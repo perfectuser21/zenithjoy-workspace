@@ -1,7 +1,7 @@
 # Contract Definition of Done — Product Map SSOT
 
 **Sprint ID:** 9130f0be-8e8d-4cc5-96f5-7a5313804496
-**合同版本:** Round 1
+**合同版本:** Round 2
 **日期:** 2026-07-28
 
 ---
@@ -97,3 +97,26 @@ package.json               ✓ 追加 4 个 npm scripts
 5. 测试数量不等于 7（多了 = 范围蔓延，少了 = 未完成）
 6. `test-registry.yaml` 未同步更新（orphan-test-check 会阻断）
 7. 新增任何数据库迁移文件
+
+---
+
+## 行为断言索引（Harness 扫描格式）
+
+[BEHAVIOR] BEHAVIOR-01: 产品分类结构解析 — loadAndValidateProductMap() 返回 map.apps 精确含 customer_app 和 staff_app，app/line 归属精确匹配，errors 为空数组；负向：缺 apps 字段时 errors 非空
+[BEHAVIOR] BEHAVIOR-02: 种子分类精确性 — staff_app/line00 的 golden_paths 精确为 3 条（skill_acceptance/active、ability_acceptance/proposed、line_health/active）；customer_app 三条 Line 的 golden_paths 均为空数组
+[BEHAVIOR] BEHAVIOR-03: Surface 与 Edition 类型隔离 — map.surfaces 精确为 ["web","api","android","windows"]，map.editions 精确为 ["personal_wechat","wecom"]，两集合互不交叉
+[BEHAVIOR] BEHAVIOR-04: 交叉引用关系校验（有效引用通过）— validateRelations(map) 返回空数组，所有 GP 的 app_id/line_id/required_surfaces/edition 均在顶层注册表中存在
+[BEHAVIOR] BEHAVIOR-05: 交叉引用关系校验（无效引用报错）— missing_app 报 "references unknown app"；"mobile" surface 报 "references unknown surface"；重复 GP id 报 "duplicate"，每条错误含具体 ID
+[BEHAVIOR] BEHAVIOR-06: 确定性投影生成 — npm run product-map:generate 产出 product-map.json 和 product-map.md，两文件含相同 SHA-256 digest，连续两次生成 git diff 无变化
+[BEHAVIOR] BEHAVIOR-07: 漂移检测 — check 命令在 generated 与 YAML 一致时 exit 0；修改 YAML 不重新生成后 exit 1，输出含 "drift" 或 "mismatch"
+[BEHAVIOR] BEHAVIOR-08: Provider Bootstrap 无手写分类 — AGENTS.md/.claude/CLAUDE.md/DEFINITION.md 不含 App/Line/GP ID 字面量，均含 product-map/generated/product-map.md 路径引用；负向：注入 customer_app 后 assertBootstrapParity 抛 "duplicates Product Map fact"
+[BEHAVIOR] BEHAVIOR-09: 贡献者文档断言 — product-map/README.md 通过 7 个 assert.match（ownership/7步工作流/3个准入条件/Surface vs Line/Edition vs Line/generated路径/validate命令）
+[BEHAVIOR] BEHAVIOR-10: CI L2 Job 无 paths 过滤器 — product-map-contract Job 存在，不含 paths: 过滤器，含 npm ci/test:product-map/product-map:check 三条命令，timeout-minutes: 5，l2-passed 的 needs 含此 Job
+[BEHAVIOR] BEHAVIOR-11: test-registry.yaml 注册 — 含 id=product-map-contract 条目，type: unit，ci: L2，status: active，path 指向 scripts/product-map/__tests__/product-map.test.js，updated: 2026-07-28
+[BEHAVIOR] BEHAVIOR-12: 范围外交付物不存在 — PR 不含 Brain API 路由/Staff Hub UI 页面/DB 迁移文件/Harness 自动生成代码；product-map.yaml 不含 Line 01/02/04 的任何 Golden Path
+
+---
+
+## 本地验收命令
+
+manual:bash npm run product-map:validate && npm run test:product-map && npm run product-map:check
