@@ -15,6 +15,7 @@ internal static class NativeMethods
     public const uint MOD_CONTROL = 0x0002;
     public const uint MOD_ALT = 0x0001;
     public const int HOTKEY_ID_SUMMON = 0x5A50; // 'ZP' 随意选的常量，避开与其它注册冲突
+    public const uint VK_Z = 0x5A; // Win32虚拟键码，避免为了一个枚举值引入整套System.Windows.Forms
 
     public const int GWL_EXSTYLE = -20;
     public const int WS_EX_NOACTIVATE = 0x08000000;
