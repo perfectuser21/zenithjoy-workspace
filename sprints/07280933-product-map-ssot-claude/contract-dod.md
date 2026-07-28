@@ -111,7 +111,7 @@ package.json               ✓ 追加 4 个 npm scripts
 [BEHAVIOR] BEHAVIOR-07: 漂移检测 — check 命令在 generated 与 YAML 一致时 exit 0；修改 YAML 不重新生成后 exit 1，输出含 "drift" 或 "mismatch"
 [BEHAVIOR] BEHAVIOR-08: Provider Bootstrap 无手写分类 — AGENTS.md/.claude/CLAUDE.md/DEFINITION.md 不含 App/Line/GP ID 字面量，均含 product-map/generated/product-map.md 路径引用；负向：注入 customer_app 后 assertBootstrapParity 抛 "duplicates Product Map fact"
 [BEHAVIOR] BEHAVIOR-09: 贡献者文档断言 — product-map/README.md 通过 7 个 assert.match（ownership/7步工作流/3个准入条件/Surface vs Line/Edition vs Line/generated路径/validate命令）
-[BEHAVIOR] BEHAVIOR-10: CI L2 Job 无 paths 过滤器 — product-map-contract Job 存在，不含 paths: 过滤器，含 npm ci/test:product-map/product-map:check 三条命令，timeout-minutes: 5，l2-passed 的 needs 含此 Job
+[BEHAVIOR] BEHAVIOR-10: CI L2 Job 无 paths 过滤器 — product-map-contract Job 存在，不含 paths: 过滤器，含 npm ci/test:product-map/product-map:check 三条命令，timeout-minutes: 5，l2-passed 的 needs 含此 Job，且 l2-passed 的 FAILED 判断 shell 块含 needs.product-map-contract.result 检查（含 FAIL 字样）
 [BEHAVIOR] BEHAVIOR-11: test-registry.yaml 注册 — 含 id=product-map-contract 条目，type: unit，ci: L2，status: active，path 指向 scripts/product-map/__tests__/product-map.test.js，updated: 2026-07-28
 [BEHAVIOR] BEHAVIOR-12: 范围外交付物不存在 — PR 不含 Brain API 路由/Staff Hub UI 页面/DB 迁移文件/Harness 自动生成代码；product-map.yaml 不含 Line 01/02/04 的任何 Golden Path
 

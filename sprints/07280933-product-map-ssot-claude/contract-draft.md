@@ -161,6 +161,14 @@
 - 该 Job 的步骤包含 `npm ci`、`npm run test:product-map`、`npm run product-map:check` 三条命令
 - `timeout-minutes: 5`（精确值）
 - `l2-passed` 的 `needs` 数组包含 `product-map-contract`
+- `l2-passed` Job 的 FAILED 判断 shell 块中包含以下形式的 result 检查：
+  ```yaml
+  if [ "${{ needs.product-map-contract.result }}" != "success" ]; then
+    echo "FAIL: Product Map Contract (${{ needs.product-map-contract.result }})"
+    FAILED=true
+  fi
+  ```
+  即：workflow 文件含 `needs.product-map-contract.result` 字面量，且同一上下文中含 `FAIL` 字样
 
 ---
 
@@ -218,8 +226,9 @@ npm run test:product-map
 echo "PASS: test:product-map"
 
 echo "=== Step 4: 冻结分类语义核查 ==="
-node -e "
-const m = require('./product-map/generated/product-map.json');
+node --input-type=module -e "
+import { readFileSync } from 'node:fs';
+const m = JSON.parse(readFileSync('./product-map/generated/product-map.json', 'utf8'));
 const result = {
   apps: m.apps.map(a => [a.id, a.lines.map(l => l.id)]),
   gps: m.golden_paths.map(g => [g.app_id, g.line_id, g.id, g.status]),
@@ -313,6 +322,24 @@ try {
   console.log('PASS: 负向 — bootstrap 分类注入报错');
 }
 " --input-type=module
+
+echo "=== Step 10: CI l2-passed FAILED 判断块含 product-map-contract result 检查 ==="
+# BEHAVIOR-10 补充：仅加入 needs 不够，须有 FAILED 判断块
+node --input-type=module -e "
+import { readFileSync } from 'node:fs';
+const content = readFileSync('.github/workflows/ci-l2-consistency.yml', 'utf8');
+if (!content.includes('needs.product-map-contract.result')) {
+  console.error('FAIL: l2-passed 缺少 needs.product-map-contract.result 判断块');
+  process.exit(1);
+}
+const idx = content.indexOf('needs.product-map-contract.result');
+const ctx = content.slice(Math.max(0, idx - 50), idx + 200);
+if (!/FAIL/i.test(ctx)) {
+  console.error('FAIL: product-map-contract result 判断块须含 FAIL 字样，实际上下文:', ctx);
+  process.exit(1);
+}
+console.log('PASS: l2-passed FAILED 判断块含 product-map-contract result 检查');
+"
 
 echo ""
 echo "=============================="

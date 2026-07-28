@@ -16,7 +16,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -74,14 +74,10 @@ describe('BEHAVIOR-01: 产品分类结构解析', () => {
   test('负向: 缺失 apps 字段时 errors 非空', async () => {
     const lib = await loadLib();
     // 直接调用底层 schema 校验而不读文件
+    // 实现须暴露 validateSchema(input) 接口，接受对象并返回 { errors } 结构
     const badInput = { surfaces: [], editions: [], golden_paths: [] };
-    const result = lib.validateSchema ? lib.validateSchema(badInput) : null;
-    // 若 validateSchema 不存在，通过 loadAndValidateProductMap 传入 mock（合同要求此行为）
-    // 实现时须支持此路径
-    if (result !== null) {
-      assert.ok(result.errors.length > 0, '缺失 apps 时 errors 须非空');
-    }
-    // 标记：实现须暴露 validateSchema 或等价接口以支持此负向测试
+    const result = lib.validateSchema(badInput);
+    assert.ok(result.errors.length > 0, '缺失 apps 字段时 errors 须非空');
   });
 });
 
@@ -265,13 +261,7 @@ describe('BEHAVIOR-08: Provider Bootstrap 无手写分类', () => {
       assert.ok(repoFileExists(file), `${file} 须存在`);
       const content = readRepoFile(file);
       for (const term of TAXONOMY_TERMS) {
-        // 词汇只能在 "指向 generated 投影" 的上下文中出现（如路径引用），
-        // 不得作为字面分类定义出现。
-        // 精确判断：不得出现在代码块/列表/表格的分类定义行中。
-        // 合同约束：不含任何手写 ID — assertBootstrapParity 负责精确检测，
-        // 此处做基础验证（文件指向投影而不重复定义）。
-        const hasPointerRef = content.includes('product-map/generated/product-map.md');
-        assert.ok(hasPointerRef, `${file} 须包含生成投影的路径引用`);
+        assert.ok(!content.includes(term), `${file} 不得包含手写分类 ID: ${term}`);
       }
     });
   }
@@ -408,6 +398,25 @@ describe('BEHAVIOR-10: CI L2 Job 配置', () => {
     const afterL2 = content.slice(l2PassedIdx, l2PassedIdx + 600);
     assert.match(afterL2, /product-map-contract/, 'l2-passed needs 须包含 product-map-contract');
   });
+
+  test('l2-passed FAILED 判断块含 product-map-contract result 检查', () => {
+    const content = readRepoFile('.github/workflows/ci-l2-consistency.yml');
+    // l2-passed Job 须在 shell 脚本中检查 product-map-contract 的 result
+    // 仅加入 needs 不够，须有对应的 FAILED 判断块
+    assert.ok(
+      content.includes('needs.product-map-contract.result'),
+      'l2-passed FAILED 判断块须含 needs.product-map-contract.result 检查'
+    );
+    // 判断块须含 "FAIL" 或 "FAILED" 字样（可操作提示）
+    const pmContractIdx = content.indexOf('needs.product-map-contract.result');
+    assert.ok(pmContractIdx !== -1, 'product-map-contract result 检查须存在');
+    const surroundingContext = content.slice(Math.max(0, pmContractIdx - 50), pmContractIdx + 200);
+    assert.match(
+      surroundingContext,
+      /FAIL/i,
+      'l2-passed 中 product-map-contract result 检查须包含 FAIL 字样'
+    );
+  });
 });
 
 // ─── BEHAVIOR-11: test-registry.yaml 注册 ─────────────────────────────────────
@@ -447,15 +456,19 @@ describe('BEHAVIOR-11: test-registry.yaml 注册', () => {
 
 describe('BEHAVIOR-12: 范围边界守卫', () => {
   test('不含数据库迁移文件新增', () => {
-    // 合同阶段静态检查：若此测试运行时迁移文件不存在则通过
     const migrationPatterns = [
       'apps/api/src/db/migrations',
       'apps/api/migrations',
       'db/migrations',
     ];
-    // 此处不检查 git diff（静态），仅检查 product-map 相关迁移是否意外存在
-    // 实际 diff 检查由 CI lint 或 Harness Report 覆盖
-    assert.ok(true, '迁移文件静态检查通过（Harness Report 须确认 PR diff 无迁移文件）');
+    for (const dir of migrationPatterns) {
+      const absPath = resolve(REPO_ROOT, dir);
+      if (existsSync(absPath)) {
+        const files = readdirSync(absPath);
+        const pmFiles = files.filter(f => f.includes('product_map') || f.includes('product-map'));
+        assert.equal(pmFiles.length, 0, `不得含 product-map 相关迁移文件: ${JSON.stringify(pmFiles)}`);
+      }
+    }
   });
 
   test('product-map.yaml 不含 line01/02/04 的 GP 条目', async () => {

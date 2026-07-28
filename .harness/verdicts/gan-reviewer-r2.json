@@ -1,0 +1,14 @@
+{
+  "round": 2,
+  "verdict": "REVISION",
+  "rubric_scores": {
+    "completeness": 9,
+    "verifiability": 7,
+    "scope_guard": 9,
+    "negative_cases": 6,
+    "e2e_acceptance": 7,
+    "tdd_friendliness": 8,
+    "ci_alignment": 6
+  },
+  "feedback_items": ["F-01","F-02","F-03","F-04","F-05"]
+}
