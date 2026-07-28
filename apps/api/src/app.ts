@@ -64,6 +64,7 @@ import { operatorSessionsRouter } from './routes/operator-sessions';
 // Line 07 — AI 爆款视频翻拍 9节点流水线
 import videoRemakeRouter from './routes/video-remake';
 import staffRouter from './routes/staff';
+import { abilityAcceptanceRouter } from './routes/ability-acceptance';
 import { skillDraftsRouter, skillDraftsInternalRouter } from './routes/skill-drafts';
 import { agentOfflineScanRouter } from './routes/agent-offline-scan';
 import { errorHandler, notFoundHandler } from './middleware/error';
@@ -204,6 +205,7 @@ app.use('/api/brain', brainSprintStateRouter);
 app.use('/api/video-remake', videoRemakeRouter);
 // Line 00 运营中枢 — 对话式创建 Skill（staff only，受 staffGuard 保护）
 // 必须在 staffRouter 之前注册，否则 Express 先匹配 /api/staff 统一前缀 router
+app.use('/api/staff/ability-acceptance', abilityAcceptanceRouter);
 app.use('/api/staff/skill-drafts', skillDraftsRouter);
 // 内部回调端点（子进程完成后通知终态，无 staffGuard，无公网暴露）
 app.use('/internal/skill-drafts', skillDraftsInternalRouter);

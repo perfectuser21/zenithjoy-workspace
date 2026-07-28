@@ -1,4 +1,4 @@
-import { Activity, LayoutDashboard, LogOut, ShieldCheck, Wrench } from 'lucide-react';
+import { Activity, ClipboardCheck, LayoutDashboard, LogOut, ShieldCheck, Wrench } from 'lucide-react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
@@ -6,6 +6,8 @@ import FeishuLogin from './pages/FeishuLogin';
 import HomePage from './pages/HomePage';
 import SkillEvalPage from './pages/SkillEvalPage';
 import PathHealthPage from './pages/PathHealthPage';
+import AbilityAcceptancePage from './pages/AbilityAcceptancePage';
+import AbilityAcceptanceHistoryPage from './pages/AbilityAcceptanceHistoryPage';
 import LineHealthPage from './pages/LineHealthPage';
 import LineHealthDetailPage from './pages/LineHealthDetailPage';
 
@@ -40,6 +42,9 @@ function Shell() {
           <NavLink to="/path-health" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
             <ShieldCheck size={18} /> Path 健康
           </NavLink>
+          <NavLink to="/ability-acceptance" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+            <ClipboardCheck size={18} /> Ability 验收
+          </NavLink>
           <NavLink to="/line-health" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
             <Activity size={18} /> 业务线健康
           </NavLink>
@@ -56,6 +61,8 @@ function Shell() {
           <Route path="/" element={<HomePage />} />
           <Route path="/skill-eval" element={<SkillEvalPage />} />
           <Route path="/path-health" element={<PathHealthPage />} />
+          <Route path="/ability-acceptance" element={<AbilityAcceptancePage />} />
+          <Route path="/ability-acceptance/history" element={<AbilityAcceptanceHistoryPage />} />
           <Route path="/line-health" element={<LineHealthPage />} />
           <Route path="/line-health/:lineKey" element={<LineHealthDetailPage />} />
           <Route path="/login/feishu" element={<Navigate to="/" replace />} />

@@ -1,0 +1,16 @@
+{
+  "round": "r2",
+  "verdict": "APPROVED",
+  "rubric_scores": {
+    "iron_law_coverage":        { "score": 4, "max": 5, "verdict": "PASS" },
+    "assertion_executability":  { "score": 4, "max": 5, "verdict": "PASS" },
+    "internal_consistency":     { "score": 4, "max": 5, "verdict": "PASS" },
+    "edge_case_coverage":       { "score": 4, "max": 5, "verdict": "PASS" },
+    "cumulative_fr_regression": { "score": 5, "max": 5, "verdict": "PASS" },
+    "contract_doc_format":      { "score": 5, "max": 5, "verdict": "PASS" },
+    "prd_alignment_accuracy":   { "score": 3, "max": 5, "verdict": "WARN" }
+  },
+  "judgments_written": 7,
+  "judgment_points": 27,
+  "total_assertions": 35
+}

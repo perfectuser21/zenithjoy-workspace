@@ -45,13 +45,13 @@ test('T2: validateSchema — 缺失 apps 字段时返回非空 errors', () => {
 
 // ─── Test 3: 种子分类精确性 ───────────────────────────────────────────────────
 
-test('T3: staff_app/line00 精确 3 个 GP，ability_acceptance status=proposed', async () => {
+test('T3: staff_app/line00 精确 3 个 GP，ability_acceptance status=active', async () => {
   const { map } = await loadAndValidateProductMap();
   const line00Gps = map.golden_paths.filter(g => g.app_id === 'staff_app' && g.line_id === 'line00');
   assert.deepEqual(line00Gps.map(g => g.id).sort(), ['ability_acceptance', 'line_health', 'skill_acceptance']);
 
   const abilityGp = line00Gps.find(g => g.id === 'ability_acceptance');
-  assert.equal(abilityGp.status, 'proposed');
+  assert.equal(abilityGp.status, 'active');
 
   // Line 01/02/04 无任何 GP
   const customerGps = map.golden_paths.filter(g => ['line01', 'line02', 'line04'].includes(g.line_id));

@@ -45,7 +45,7 @@
       "app_id": "staff_app",
       "line_id": "line00",
       "name": "Ability 验收流程",
-      "status": "proposed"
+      "status": "active"
     },
     {
       "id": "line_health",
@@ -62,5 +62,5 @@
       "status": "active"
     }
   ],
-  "digest": "d7f5e70f9d4dd7d66de265881b7be3d10df0ba41d0e50af73acbf64e0f177697"
+  "digest": "30c8b67c598bd2bee0e016d3d0d81029fd9ceda1b6d5f0c338f2e952294637cf"
 }
