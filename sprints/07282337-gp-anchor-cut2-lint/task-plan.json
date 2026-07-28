@@ -1,0 +1,36 @@
+{
+  "initiative_id": "84f52137-3685-4bfa-ad1d-0e70b01fd9c9",
+  "journey_type": "dev_pipeline",
+  "journey_type_reason": "纯CI shell脚本+workflow yaml改动，无终端客户可感知的用户路径",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "lint-gp-anchor.sh CI硬闸——PR body GP-Anchor声明机械校验",
+      "scope": "新写lint-gp-anchor.sh(jq解析PR_BODY恰好一行GP-Anchor声明,推进/keep-green/none三形态,推进类校验id存在+diff触碰smoke_files,none(backlog)纯格式校验)+挂进ci-l1-process.yml三处挂载(job定义+needs+if判断块)+新建.github/pull_request_template.md+修正设计文档字段名bug(smoke_file→smoke_files)+往golden-path-f1-anchor-smoke.sh追加断言(不新建平行文件)",
+      "dod": [
+        "[BEHAVIOR] 无GP-Anchor行判红",
+        "[BEHAVIOR] 多行GP-Anchor声明判红",
+        "[BEHAVIOR] 不存在id判红+line级简表",
+        "[BEHAVIOR] 推进类diff触碰校验(自举验收本刀自身)",
+        "[BEHAVIOR] keep-green只校验id",
+        "[BEHAVIOR] none白名单类别放行/白名单外判红",
+        "[BEHAVIOR] 三处挂载全部到位",
+        "[BEHAVIOR] 未新建平行smoke文件",
+        "[ARTIFACT] lint-gp-anchor.sh新建",
+        "[ARTIFACT] PR模板新建",
+        "[ARTIFACT] 设计文档字段名修正"
+      ],
+      "files": [
+        ".github/workflows/scripts/lint-gp-anchor.sh",
+        ".github/workflows/ci-l1-process.yml",
+        ".github/pull_request_template.md",
+        "docs/superpowers/specs/2026-07-28-gp-anchor-enforcement-design.md",
+        ".github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh",
+        "scripts/product-map/__tests__/lint-gp-anchor.test.js"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 90
+    }
+  ]
+}
