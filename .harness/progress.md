@@ -5,3 +5,6 @@ gan: done (contract-draft.md@948ec3f2 r2, verdict=APPROVED, 铁律覆盖=7/7, ju
 generator: pr_opened (#1493, red=01eefa25, green=f0588bb3)
 judge: done (verdict=PASS, sha=5c6b628, worktree=/tmp/cecelia-prompts/worktree-30a0c83a, judged=true)
 merge: auto-merge 已启用 (PR #1493, SHA=ed030e84, CI 运行中)
+handoff: done (docs/handoffs/202607281732-1493.md, commit=e6a032fa)
+handoff: pushed (commit=e6a032fa, CI再次触发)
+status: auto-merge 等待 CI 完成（Ability Acceptance Smoke + Playwright E2E pending）
