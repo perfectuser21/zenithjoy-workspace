@@ -81,8 +81,8 @@ const PATH_DEFS: Array<{
   {
     pathKey: 'path4',
     label: 'Path 4',
-    journeyId: 'bfeed805-deed-46c3-8624-87f0028101d4',
-    journeyName: '客户私域 AI 接管',
+    journeyId: 'e675da0f-1117-4301-a801-cd4753beb8c8',
+    journeyName: '智能客服',
     smokeWorkflowHints: ['golden-path-4', 'path4', 'wechat'],
   },
 ];

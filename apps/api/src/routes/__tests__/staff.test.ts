@@ -229,6 +229,32 @@ describe('staff routes — path health 聚合', () => {
     expect(res.body.data[2].path_key).toBe('path4');
   });
 
+  it('[BEHAVIOR] path4 查询的 journey_id 必须是整合后的"智能客服" journey，不能是已废弃孤儿 journey', async () => {
+    const CURRENT_ZHIKEFU_JOURNEY_ID = 'e675da0f-1117-4301-a801-cd4753beb8c8';
+    axiosGetMock.mockImplementation((url: string, config?: { params?: { journey_id?: string } }) => {
+      if (url.includes('/journey_features')) {
+        const journeyId = config?.params?.journey_id;
+        if (journeyId === CURRENT_ZHIKEFU_JOURNEY_ID) {
+          return Promise.resolve({
+            data: [{ id: 'gpb', name: 'GP-B 被动接待', status: 'planned', thickness: 'thin', kind: 'ability', updated_at: '2026-07-28T00:00:00Z' }],
+          });
+        }
+        // 任何其它 journey_id（包括已废弃的孤儿 journey）都不该被查到数据——查到空
+        // 就说明 PATH_DEFS 还指着旧 id，这条测试要能抓出这种回退。
+        return Promise.resolve({ data: [] });
+      }
+      return Promise.resolve({ data: { workflow_runs: [] } });
+    });
+
+    const res = await request(app)
+      .get('/api/staff/path-health')
+      .set('X-User-Email', 'staff@test.com');
+
+    const path4 = res.body.data.find((p: { path_key: string }) => p.path_key === 'path4');
+    expect(path4.features).toHaveLength(1);
+    expect(path4.features[0].name).toBe('GP-B 被动接待');
+  });
+
   it('[BEHAVIOR] 上游部分失败时仍返回 200，并把 path 标记为 degraded', async () => {
     axiosGetMock
       .mockRejectedValueOnce(new Error('brain down'))
