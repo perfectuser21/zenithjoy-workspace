@@ -15,12 +15,14 @@ import { Router } from 'express';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { staffGuard } from '../middleware/staff';
+import { simpleRateLimit, tenantKeyFn } from '../middleware/simple-rate-limit';
 import db from '../db/connection';
 
 const router = Router();
 
-// 所有端点受 staffGuard 保护
+// 所有端点受 staffGuard 保护，并按 tenant 限流（CodeQL js/missing-rate-limiting）
 router.use(staffGuard);
+router.use(simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: tenantKeyFn }));
 
 // 从请求头获取 tenant_id（X-Tenant-Id 头）
 function getTenantId(req: { headers: Record<string, string | string[] | undefined> }): string {
