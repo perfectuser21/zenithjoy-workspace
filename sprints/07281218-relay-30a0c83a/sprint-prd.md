@@ -4,7 +4,7 @@
 **Sprint Dir:** `sprints/07281218-relay-30a0c83a`  
 **生成时间:** 2026-07-28  
 **类型:** feature + infrastructure  
-**目标环境:** windows_cloud（前端 E2E） + local_api（后端 API 集成测试）  
+**目标环境:** windows_cloud（Playwright E2E + API 合同测试，theater 统一）  
 **Journey ID:** 636a918c-8b23-4df5-baec-b1eb3308fffb  
 **Feature ID:** 09edf50f-6cd3-4fda-8b21-7d2efcd075ec  
 
@@ -291,4 +291,4 @@ API 变更（`apps/api/**`）触发现有 API 部署流水线（需人工卡点 
 ## journey_type: autonomous
 ## journey_type_reason: 涉及后端 API + DB 迁移 + Staff Hub 前端 + product-map 修复，全链路可在 CI runner 自动验证（无需人工真机），命中"全链路自动化"分支
 ## target_environment: windows_cloud
-## target_environment_reason: Staff Hub 是 ZenithJoy 系统，E2E 验收走 windows_cloud Playwright；API 合同测试已在 CI L4 内联跑（local_api 是 CI 内部分类，theater 路由统一用 windows_cloud）
+## target_environment_reason: Staff Hub 是 ZenithJoy 系统，E2E 验收走 windows_cloud Playwright Runner；API 合同测试已在 CI L4 内联（theater 统一 windows_cloud）
