@@ -31,7 +31,7 @@
 |----|--------|--------|---------|
 | A1 | T1 全通过：map 解析两个 app，结构完整 | PASS | `errors === []`，`appIds === ['customer_app','staff_app']` |
 | A2 | T2 全通过：负向 schema 校验 | PASS | 缺 apps 字段时 `errors.length > 0` |
-| A3 | T3 全通过：`ability_acceptance.status === 'active'` | PASS | `abilityGp.status === 'active'`（本 sprint 升级后） |
+| A3 | T3 全通过：`ability_acceptance.status === 'active'` | PASS | `abilityGp.status === 'active'`（本 sprint 升级后）（依赖 product-map.yaml 与 product-map.test.js T3 断言同步修改，缺任一则 CI 红） |
 | A4 | T4 全通过：关系校验正向 | PASS | `validateRelations(map) === []` |
 | A5 | T5 全通过：关系校验三个负向用例 | PASS | missing_app / unknown_surface / duplicate GP 三个断言均触发 |
 | A6 | T6 全通过：`productMapDigest` 确定性（保序修复验证） | PASS | `d1 === d2`，格式 `/^[a-f0-9]{64}$/` |

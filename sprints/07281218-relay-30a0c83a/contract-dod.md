@@ -31,6 +31,7 @@
 - [ ] `product-map/generated/product-map.json`：已重新生成，`golden_paths` 按 `id` 字母序，`ability_acceptance.status: active`
 - [ ] `product-map/generated/product-map.md`：已重新生成
 - [ ] `package.json` 根 devDependencies 含 `ajv@^8.17.1` + `ajv-formats@^3.0.1`
+- [ ] `scripts/product-map/__tests__/product-map.test.js`：T3 断言从 `status === 'proposed'` 改为 `status === 'active'`
 - [ ] **验证：** `node --test scripts/product-map/__tests__/product-map.test.js` 全 7 用例 PASS
 
 ### [DB] 迁移文件
