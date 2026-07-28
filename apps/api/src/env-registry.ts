@@ -127,6 +127,10 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'DATABASE_USER', reason: '数据库用户（拆分式连接）' },
   { name: 'DATABASE_PASSWORD', reason: '数据库密码（拆分式连接）' },
 
+  // —— Ability Acceptance 版本来源（Staff Hub 验收台，Line 00）——
+  { name: 'STAGING_VERSION', reason: 'Staging 环境版本号，缺则回落读 VERSION 文件或返回 Unknown' },
+  { name: 'PRODUCTION_VERSION', reason: 'Production 环境版本号，缺则回落读 VERSION 文件或返回 Unknown' },
+
   // —— 员工工具（Line 00 运营中枢，staff only）——
   { name: 'STAFF_EMAILS', reason: '员工邮箱白名单，逗号分隔，缺则 staffGuard 一律 403（无 dev 放行）' },
   { name: 'STAFF_FEISHU_OPENIDS', reason: '员工飞书 open_id 白名单，逗号分隔，STAFF_EMAILS 的兜底路径——部分飞书账号从不返回 email 字段，open_id 是必定返回的字段' },
