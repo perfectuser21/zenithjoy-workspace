@@ -5061,6 +5061,14 @@ agent_suite:
   product: 私域运营
   note: "writePanelEvent服务层单测：INSERT语句tenant_id隔离+6事件类型+可选字段透传+异常上抛"
 
+- id: agent-panel-ui-light-state-color-unit
+  path: apps/agent-panel/src/shared/light-state-color.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "灯态→实际颜色映射，decision e0f59dfa：绿=工作中/黄=等待/红=卡住/灰=空闲"
+
 - id: agent-panel-ui-collapsed-strip-unit
   path: apps/agent-panel/src/components/CollapsedStrip.test.tsx
   type: unit
