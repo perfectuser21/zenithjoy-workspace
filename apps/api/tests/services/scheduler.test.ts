@@ -21,6 +21,9 @@ vi.mock('../../src/db/connection', () => ({
 vi.mock('../../src/services/acquisition-dispatch', () => ({
   dispatchDue: vi.fn().mockResolvedValue({ dispatched: 0, skipped_window: 0, skipped_limit: 0 }),
 }));
+vi.mock('../../src/routes/acquisition', () => ({
+  sweepCollectTimeouts: vi.fn().mockResolvedValue({ swept: 0 }),
+}));
 
 const SCHEDULER_PATH = path.resolve(__dirname, '../../src/services/scheduler.ts');
 
@@ -236,5 +239,101 @@ describe('ws4 services/scheduler.ts — triggerDmDispatchSweep（Path2 Seg4 DM�
     await firstCall;
 
     warnSpy.mockRestore();
+  });
+});
+
+describe('ws4 services/scheduler.ts — triggerCollectTimeoutSweep（issue 2026-07-28：sweep-timeouts 看门狗接线）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('export triggerCollectTimeoutSweep', () => {
+    const src = fs.readFileSync(SCHEDULER_PATH, 'utf-8');
+    expect(src).toMatch(
+      /export\s+(async\s+)?function\s+triggerCollectTimeoutSweep\b|export\s+\{[^}]*triggerCollectTimeoutSweep[^}]*\}/,
+    );
+  });
+
+  it('调用一次 sweepCollectTimeouts', async () => {
+    const acquisitionModule = await import('../../src/routes/acquisition');
+    const sweepMock = acquisitionModule.sweepCollectTimeouts as unknown as ReturnType<typeof vi.fn>;
+    sweepMock.mockResolvedValue({ swept: 3 });
+
+    const { triggerCollectTimeoutSweep } = await import('../../src/services/scheduler');
+    await triggerCollectTimeoutSweep();
+
+    expect(sweepMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('sweepCollectTimeouts 抛异常时，只 warn 不向上抛出', async () => {
+    const acquisitionModule = await import('../../src/routes/acquisition');
+    const sweepMock = acquisitionModule.sweepCollectTimeouts as unknown as ReturnType<typeof vi.fn>;
+    sweepMock.mockRejectedValue(new Error('boom'));
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { triggerCollectTimeoutSweep } = await import('../../src/services/scheduler');
+    await expect(triggerCollectTimeoutSweep()).resolves.not.toThrow();
+
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('并发场景：上一轮尚未完成时，本次 tick 应立即跳过（不重复调用，且 warn 一次）', async () => {
+    const acquisitionModule = await import('../../src/routes/acquisition');
+    const sweepMock = acquisitionModule.sweepCollectTimeouts as unknown as ReturnType<typeof vi.fn>;
+
+    let resolveSweep!: (value: { swept: number }) => void;
+    const deferred = new Promise<{ swept: number }>((resolve) => {
+      resolveSweep = resolve;
+    });
+    sweepMock.mockReturnValue(deferred);
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { triggerCollectTimeoutSweep } = await import('../../src/services/scheduler');
+
+    const firstCall = triggerCollectTimeoutSweep();
+    const secondCall = triggerCollectTimeoutSweep();
+    await secondCall;
+
+    expect(sweepMock).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('上一轮尚未完成'));
+
+    resolveSweep({ swept: 0 });
+    await firstCall;
+
+    warnSpy.mockRestore();
+  });
+
+  it('startScheduler 的 setInterval 回调里，每次 tick 都会调用 sweepCollectTimeouts（不按时刻门控）', async () => {
+    vi.useFakeTimers();
+    try {
+      const poolModule = await import('../../src/db/connection');
+      const mockPool = poolModule.default as unknown as { query: ReturnType<typeof vi.fn> };
+      mockPool.query.mockResolvedValue({ rows: [] });
+
+      const acquisitionModule = await import('../../src/routes/acquisition');
+      const sweepMock = acquisitionModule.sweepCollectTimeouts as unknown as ReturnType<typeof vi.fn>;
+      sweepMock.mockResolvedValue({ swept: 0 });
+
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ generated: 0, skipped: [] }),
+      });
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      const { startScheduler, stopScheduler } = await import('../../src/services/scheduler');
+      const handle = startScheduler();
+
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(sweepMock).toHaveBeenCalled();
+
+      stopScheduler(handle);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -1334,10 +1334,12 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
   }
 });
 
-// POST /api/acquisition/collect/sweep-timeouts — stale running + stage_1_done 收尸；pending(离线) 保留不丢
 // running 基准 COALESCE(started_at, updated_at, created_at)；stage_1_done 基准 updated_at
-//（Stage2 每次 report 都 touch updated_at，用 started_at 会误杀正在跑 Stage2 的任务）
-acquisitionRouter.post('/collect/sweep-timeouts', smokeOrAgentGate, async (_req: Request, res: Response) => {
+//（Stage2 每次 report 都 touch updated_at，用 started_at 会误杀正在跑 Stage2 的任务）。
+// 2026-07-28 issue：本函数此前只挂在 HTTP 路由下，没有任何调度器调用它——代码写好了但从
+// 没上线生效，卡 running/stage_1_done 的任务会无限期挂着不收尾。抽成独立函数供 scheduler.ts
+// 定时调用，避免 HTTP self-call 往返（同 dispatchDue 直接 import 调用的既有模式）。
+export async function sweepCollectTimeouts(): Promise<{ swept: number }> {
   const cutoffMs = SWEEP_TIMEOUT_MS;
   const { rows } = await pool.query<{ id: string; tenant_id: string; status: string; lead_count: number }>(
     `SELECT t.id, t.tenant_id, t.status,
@@ -1382,7 +1384,13 @@ acquisitionRouter.post('/collect/sweep-timeouts', smokeOrAgentGate, async (_req:
       .then(() => dispatchDue(pool, tenantId))
       .catch((e: Error) => console.error('[acquisition] sweep-timeouts dm-dispatch error:', e.message));
   }
-  return ok(res, { swept });
+  return { swept };
+}
+
+// POST /api/acquisition/collect/sweep-timeouts — stale running + stage_1_done 收尸；pending(离线) 保留不丢
+acquisitionRouter.post('/collect/sweep-timeouts', smokeOrAgentGate, async (_req: Request, res: Response) => {
+  const result = await sweepCollectTimeouts();
+  return ok(res, result);
 });
 
 // GET /api/acquisition/collect/:task_id — 获客页查状态（精确 6 字段：task_id/status/video_count/lead_count_raw/created_at/ended_at）
