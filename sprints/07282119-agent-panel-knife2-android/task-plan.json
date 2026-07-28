@@ -1,0 +1,39 @@
+{
+  "initiative_id": "afa6abca-53c0-4815-8594-b7fb81ca547f",
+  "journey_type": "user_facing",
+  "journey_type_reason": "journey afa6abca 已注册 journey_type=user_facing；本 sprint 核心产出是 apps/agent-panel 前端泳道可见性（客户/测试人员肉眼可见任务进度与卡死红灯）",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "作战窗 Agent Panel 刀2：line02（安卓获客）事件打点上报 + 中台看门狗 + 泳道可见性",
+      "scope": "新增 POST /api/agent/burner/panel-event（line02 专用事件写入，body agent_id 反查 tenant，不信任客户端 tenant）+ GET /api/agent/burner/panel-active-tasks（中台 3 分钟看门狗计算，state 一律服务端计算不落盘）；services/agent 新增 line02 桥接模块真实轮询中台并 ingest 进本地 PanelEventBus，CONNECTED_LINES 加入 line02（真实数据驱动，非硬编码）；apps/agent-panel 现有通用渲染回归锁定（lane-line02/lane-line04 物理隔离 + 设备名格式 + severity 灯态）；golden-path-2-smoke.sh 新增 Step 31。Android 真机段（DeviceAccountScanService/AgentService 真实调用）本 sprint 不覆盖，标 logic-done-pending。",
+      "dod": [
+        "[BEHAVIOR] task_started 事件写入 panel_events，tenant_id 为服务端反查值（不信任客户端）",
+        "[BEHAVIOR] step 事件 progress 字段正确写入",
+        "[BEHAVIOR] 3分钟无新事件（时间窗口回填）→ 中台看门狗计算 state=stuck",
+        "[BEHAVIOR] stuck 任务收到新事件后自动脱离 stuck（无需人工干预）",
+        "[BEHAVIOR] done 事件后任务从 activeTasks 消失，出现在 recentCompleted",
+        "[BEHAVIOR] failed 事件 detail 携带 error_code，severity=error",
+        "[BEHAVIOR] 缺 agent_id → 400 MISSING_AGENT_ID；agent_id 不存在 → 404 AGENT_NOT_FOUND；line≠line02 → 400 INVALID_LINE",
+        "[BEHAVIOR] 跨租户查询互不可见（Invariant 租户隔离）",
+        "[BEHAVIOR] 同型号两台设备并发扫描不合并显示（Invariant 多设备类型UI区分）",
+        "[BEHAVIOR] services/agent 桥接模块真实调用 PanelEventBus.ingest，panel-events-route CONNECTED_LINES 回归通过",
+        "[BEHAVIOR] apps/agent-panel line02 泳道渲染回归全绿（物理隔离/设备格式/灯态）",
+        "[ARTIFACT] golden-path-2-smoke.sh 新增 Step 31 且纳入 CI"
+      ],
+      "files": [
+        "apps/api/src/routes/agent-burner.ts",
+        "services/agent/src/shared/panel-line02-bridge.ts",
+        "services/agent/src/handlers/panel-events-route.ts",
+        "services/agent/src/index.ts",
+        "apps/agent-panel/src/components/ExpandedPanel.test.tsx",
+        "apps/agent-panel/src/components/CollapsedStrip.test.tsx",
+        ".github/workflows/scripts/smoke/golden-path-2-smoke.sh",
+        "services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/AgentService.kt"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 100
+    }
+  ]
+}

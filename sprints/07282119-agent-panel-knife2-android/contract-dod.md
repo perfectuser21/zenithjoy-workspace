@@ -1,6 +1,3 @@
-contract_branch: cp-07282119-agent-panel-knife2-android
-sprint_dir: sprints/07282119-agent-panel-knife2-android
-
 ---
 skeleton: false
 journey_type: user_facing

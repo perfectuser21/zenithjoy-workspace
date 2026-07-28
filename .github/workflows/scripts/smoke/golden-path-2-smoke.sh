@@ -32,6 +32,11 @@
 #   Step 24 account_label 语义统一回归（2026-07-22 安卓信号上报 sprint Task 1）：
 #           qr-bind→qr-bind-result 落 pending:<task_id> 占位 → 首次扫描上报真实昵称
 #           归一改名 + status=active → 该昵称从扫描结果消失 → 差集标 status=offline
+#   Step 31 作战窗 Agent Panel 刀2/安卓获客(line02) 打点+中台看门狗回归（Sprint
+#           07282119-agent-panel-knife2-android）：panel-event 写入(task_started/step/
+#           failed) → panel-active-tasks 中台3分钟看门狗计算(stuck→自愈→done终态) →
+#           多设备物理隔离 → 跨租户隔离 → error path。真机段(Android状态机真实调用)
+#           logic-done-pending，见 contract-draft.md「未覆盖真实链路清单」
 #
 # 2026-07-15（handoff 0715）：铺到 11 步，回流两个真根因（铁律5）——
 #   Seg2 judgeVideo INV-6 短路不写库 / Seg4 心跳从不按 os_type 刷新 capabilities。
@@ -1185,13 +1190,166 @@ S30_ROW=$(psq "SELECT error_code FROM zenithjoy.agent_scan_failures WHERE agent_
 ok "Step 30 ✅ 非UUID request_id 的扫描失败已落 agent_scan_failures（error_code=$S30_ROW）"
 ok "Step 30 ✅ 已登记：sweep-timeouts 看门狗接线 + 绑定失败审计留痕由 apps/api vitest 回归覆盖（services/scheduler.test.ts / customer-admin.test.ts），非HTTP可断言行为不入本smoke"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 31：作战窗 Agent Panel 刀2/安卓获客(line02) 打点 + 中台看门狗回归
+# Sprint 07282119-agent-panel-knife2-android
+# POST /api/agent/burner/panel-event（body agent_id 反查tenant） +
+# GET  /api/agent/burner/panel-active-tasks（中台3分钟看门狗计算）
+# 真机段（DeviceAccountScanService/AgentService 真实按状态机节奏调用上报接口）
+# logic-done-pending：本 smoke 跑在 ubuntu-latest CI 容器，无真实 Android 设备，
+# 未真验，见 contract-draft.md「未覆盖真实链路清单」；待 Android 真机通道接管复跑。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 31: line02 panel_events 打点 + 中台看门狗回归"
+
+# 31a：task_started 写入 panel_events，tenant_id 为服务端反查值
+S31_TID="scan-$(date +%s)"
+S31_TMP=$(mktemp)
+S31_HTTP=$(curl -s -o "$S31_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/agent/burner/panel-event" -H "Content-Type: application/json" \
+  -d "{\"agent_id\":\"$AGENT_PK\",\"event\":\"task_started\",\"task_id\":\"$S31_TID\",\"line\":\"line02\",\"device\":\"RMX3478-b6ee\",\"title\":\"📱 RMX3478-b6ee 第1/3步\",\"progress\":[1,3]}")
+[ "$S31_HTTP" = "200" ] || fail "Step 31a panel-event(task_started) expected 200, got $S31_HTTP: $(cat "$S31_TMP")" 31
+python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d.get('ok') is True" "$S31_TMP" 2>/dev/null \
+  || fail "Step 31a panel-event 响应缺 ok:true: $(cat "$S31_TMP")" 31
+S31_ROW=$(psq "SELECT tenant_id||'|'||event||'|'||line||'|'||device FROM zenithjoy.panel_events WHERE task_id='$S31_TID' AND created_at > NOW() - interval '5 minutes'")
+[ "$S31_ROW" = "$TENANT_ID|task_started|line02|RMX3478-b6ee" ] || fail "Step 31a panel_events 行不匹配，实得 '$S31_ROW'" 31
+ok "Step 31a ✅ task_started 写入 panel_events，tenant_id 服务端反查=$TENANT_ID"
+
+# 31b：step 事件 progress 字段正确写入
+S31B_TMP=$(mktemp)
+S31B_HTTP=$(curl -s -o "$S31B_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/agent/burner/panel-event" -H "Content-Type: application/json" \
+  -d "{\"agent_id\":\"$AGENT_PK\",\"event\":\"step\",\"task_id\":\"$S31_TID\",\"line\":\"line02\",\"device\":\"RMX3478-b6ee\",\"title\":\"📱 RMX3478-b6ee 第2/3步\",\"progress\":[2,3]}")
+[ "$S31B_HTTP" = "200" ] || fail "Step 31b panel-event(step) expected 200, got $S31B_HTTP: $(cat "$S31B_TMP")" 31
+S31B_PROG=$(psq "SELECT progress FROM zenithjoy.panel_events WHERE task_id='$S31_TID' AND event='step' AND created_at > NOW() - interval '5 minutes'")
+echo "$S31B_PROG" | grep -qE '\[2,[ ]?3\]' || fail "Step 31b progress 期望 [2,3]，实得 '$S31B_PROG'" 31
+ok "Step 31b ✅ step 事件 progress=[2,3] 正确写入"
+
+# 31c：3分钟无新事件（时间窗口回填模拟）→ 中台看门狗计算 state=stuck，且 title/progress 透传
+S31_STUCK_TID="scan-stuck-$(date +%s)"
+psq "INSERT INTO zenithjoy.panel_events (tenant_id, task_id, event, line, device, title, progress, created_at) VALUES ('$TENANT_ID', '$S31_STUCK_TID', 'task_started', 'line02', 'RMX3478-c3d4', '📱 RMX3478-c3d4 第1/3步', '[1,3]', NOW() - interval '4 minutes')" > /dev/null
+S31C_TMP=$(mktemp)
+S31C_HTTP=$(curl -s -o "$S31C_TMP" -w "%{http_code}" --max-time 15 \
+  -H "X-Tenant-Id: $TENANT_ID" "$API_BASE/api/agent/burner/panel-active-tasks?line=line02")
+[ "$S31C_HTTP" = "200" ] || fail "Step 31c panel-active-tasks expected 200, got $S31C_HTTP: $(cat "$S31C_TMP")" 31
+python3 -c "
+import json, sys
+d = json.load(open(sys.argv[1]))
+t = next((x for x in d['activeTasks'] if x['task_id'] == sys.argv[2]), None)
+assert t is not None, 'stuck task 未出现在 activeTasks'
+assert t['state'] == 'stuck', f\"state={t.get('state')!r} 期望 stuck\"
+assert t['title'] == '📱 RMX3478-c3d4 第1/3步', f\"title={t.get('title')!r} 未透传\"
+assert t['progress'] == [1, 3], f\"progress={t.get('progress')!r} 未透传\"
+" "$S31C_TMP" "$S31_STUCK_TID" || fail "Step 31c 看门狗 stuck 判定/字段透传失败: $(cat "$S31C_TMP")" 31
+ok "Step 31c ✅ 3分钟无新事件 → state=stuck，title/progress 原样透传"
+
+# 31d：边界情况——stuck 任务收到新事件后自动脱离 stuck（无需人工干预）
+S31D_TMP=$(mktemp)
+curl -s -o /dev/null --max-time 15 -X POST "$API_BASE/api/agent/burner/panel-event" -H "Content-Type: application/json" \
+  -d "{\"agent_id\":\"$AGENT_PK\",\"event\":\"step\",\"task_id\":\"$S31_STUCK_TID\",\"line\":\"line02\",\"device\":\"RMX3478-c3d4\",\"title\":\"📱 RMX3478-c3d4 第2/3步\",\"progress\":[2,3]}"
+S31D_HTTP=$(curl -s -o "$S31D_TMP" -w "%{http_code}" --max-time 15 \
+  -H "X-Tenant-Id: $TENANT_ID" "$API_BASE/api/agent/burner/panel-active-tasks?line=line02")
+[ "$S31D_HTTP" = "200" ] || fail "Step 31d panel-active-tasks expected 200, got $S31D_HTTP" 31
+python3 -c "
+import json, sys
+d = json.load(open(sys.argv[1]))
+t = next((x for x in d['activeTasks'] if x['task_id'] == sys.argv[2]), None)
+assert t is not None, 'recover task 未出现在 activeTasks'
+assert t['state'] != 'stuck', f\"state={t.get('state')!r}，新事件后应自动脱离 stuck\"
+" "$S31D_TMP" "$S31_STUCK_TID" || fail "Step 31d stuck 自愈失败: $(cat "$S31D_TMP")" 31
+ok "Step 31d ✅ 新事件到达后自动脱离 stuck（无需人工干预）"
+
+# 31e：done 事件 → 从 activeTasks 消失，出现在 recentCompleted
+S31_DONE_TID="scan-done-$(date +%s)"
+curl -s -o /dev/null --max-time 15 -X POST "$API_BASE/api/agent/burner/panel-event" -H "Content-Type: application/json" \
+  -d "{\"agent_id\":\"$AGENT_PK\",\"event\":\"task_started\",\"task_id\":\"$S31_DONE_TID\",\"line\":\"line02\",\"device\":\"RMX3478-b6ee\",\"title\":\"x\",\"progress\":[1,1]}"
+S31E_TMP=$(mktemp)
+S31E_HTTP=$(curl -s -o "$S31E_TMP" -w "%{http_code}" --max-time 15 -X POST "$API_BASE/api/agent/burner/panel-event" -H "Content-Type: application/json" \
+  -d "{\"agent_id\":\"$AGENT_PK\",\"event\":\"done\",\"task_id\":\"$S31_DONE_TID\",\"line\":\"line02\",\"device\":\"RMX3478-b6ee\",\"title\":\"扫描完成\"}")
+[ "$S31E_HTTP" = "200" ] || fail "Step 31e panel-event(done) expected 200, got $S31E_HTTP: $(cat "$S31E_TMP")" 31
+S31E2_TMP=$(mktemp)
+curl -s -o "$S31E2_TMP" --max-time 15 -H "X-Tenant-Id: $TENANT_ID" "$API_BASE/api/agent/burner/panel-active-tasks?line=line02" > /dev/null
+python3 -c "
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert not any(x['task_id'] == sys.argv[2] for x in d['activeTasks']), 'done task 仍在 activeTasks'
+c = next((x for x in d['recentCompleted'] if x['task_id'] == sys.argv[2]), None)
+assert c is not None, 'done task 未出现在 recentCompleted'
+assert c['state'] == 'done', f\"state={c.get('state')!r} 期望 done\"
+" "$S31E2_TMP" "$S31_DONE_TID" || fail "Step 31e done 终态转移失败: $(cat "$S31E2_TMP")" 31
+ok "Step 31e ✅ done 事件后任务从 activeTasks 消失，出现在 recentCompleted"
+
+# 31f：failed 事件 detail 携带 error_code，severity=error
+S31_FAIL_TID="scan-fail-$(date +%s)"
+S31F_TMP=$(mktemp)
+S31F_HTTP=$(curl -s -o "$S31F_TMP" -w "%{http_code}" --max-time 15 -X POST "$API_BASE/api/agent/burner/panel-event" -H "Content-Type: application/json" \
+  -d "{\"agent_id\":\"$AGENT_PK\",\"event\":\"failed\",\"task_id\":\"$S31_FAIL_TID\",\"line\":\"line02\",\"device\":\"RMX3478-b6ee\",\"title\":\"扫描失败\",\"detail\":\"OPEN_PANEL_FAILED\",\"severity\":\"error\"}")
+[ "$S31F_HTTP" = "200" ] || fail "Step 31f panel-event(failed) expected 200, got $S31F_HTTP: $(cat "$S31F_TMP")" 31
+S31F_ROW=$(psq "SELECT detail||'|'||severity FROM zenithjoy.panel_events WHERE task_id='$S31_FAIL_TID' AND event='failed' AND created_at > NOW() - interval '5 minutes'")
+[ "$S31F_ROW" = "OPEN_PANEL_FAILED|error" ] || fail "Step 31f detail/severity 期望 'OPEN_PANEL_FAILED|error'，实得 '$S31F_ROW'" 31
+ok "Step 31f ✅ failed 事件 detail=OPEN_PANEL_FAILED，severity=error"
+
+# 31g：多台同型号设备并发扫描 → 泳道按型号+agent_id后4位区分，不合并显示
+S31_AGENT2=$(psql "$DB_URL" -At -q -c "INSERT INTO zenithjoy.agents (tenant_id, agent_id, hostname, status) VALUES ('$TENANT_ID', 'p2-smoke-panel-dev2-${RND}', 'android-device-2', 'online') RETURNING id")
+S31_DEV1_TID="scan-multidev-a-$(date +%s)"; S31_DEV2_TID="scan-multidev-b-$(date +%s)"
+curl -s -o /dev/null --max-time 15 -X POST "$API_BASE/api/agent/burner/panel-event" -H "Content-Type: application/json" \
+  -d "{\"agent_id\":\"$AGENT_PK\",\"event\":\"task_started\",\"task_id\":\"$S31_DEV1_TID\",\"line\":\"line02\",\"device\":\"RMX3478-b6ee\",\"title\":\"x\",\"progress\":[1,2]}"
+curl -s -o /dev/null --max-time 15 -X POST "$API_BASE/api/agent/burner/panel-event" -H "Content-Type: application/json" \
+  -d "{\"agent_id\":\"$S31_AGENT2\",\"event\":\"task_started\",\"task_id\":\"$S31_DEV2_TID\",\"line\":\"line02\",\"device\":\"RMX3478-a1f2\",\"title\":\"x\",\"progress\":[1,2]}"
+S31G_TMP=$(mktemp)
+curl -s -o "$S31G_TMP" --max-time 15 -H "X-Tenant-Id: $TENANT_ID" "$API_BASE/api/agent/burner/panel-active-tasks?line=line02" > /dev/null
+python3 -c "
+import json, sys
+d = json.load(open(sys.argv[1]))
+t1 = next((x for x in d['activeTasks'] if x['task_id'] == sys.argv[2]), None)
+t2 = next((x for x in d['activeTasks'] if x['task_id'] == sys.argv[3]), None)
+assert t1 is not None and t2 is not None, '两台设备的活跃任务未同时存在'
+assert t1['device'] != t2['device'], f\"同型号两台设备被合并显示：device相同={t1['device']!r}\"
+" "$S31G_TMP" "$S31_DEV1_TID" "$S31_DEV2_TID" || fail "Step 31g 多设备物理隔离失败: $(cat "$S31G_TMP")" 31
+ok "Step 31g ✅ 同型号(RMX3478)两台设备并发扫描不合并显示（device 各自独立）"
+
+# 31h：跨租户互不可见（Invariant 租户隔离）
+S31_OTHER_TENANT=$(psql "$DB_URL" -At -q -c "INSERT INTO zenithjoy.tenants (name, license_key, plan) VALUES ('p2-smoke-panel-other-${RND}', 'ZJ-F-panel-other-${RND}', 'free') RETURNING id")
+S31_ISO_TID="scan-isolation-$(date +%s)"
+curl -s -o /dev/null --max-time 15 -X POST "$API_BASE/api/agent/burner/panel-event" -H "Content-Type: application/json" \
+  -d "{\"agent_id\":\"$AGENT_PK\",\"event\":\"task_started\",\"task_id\":\"$S31_ISO_TID\",\"line\":\"line02\",\"device\":\"x\",\"title\":\"x\",\"progress\":[1,1]}"
+S31H_TMP=$(mktemp)
+curl -s -o "$S31H_TMP" --max-time 15 -H "X-Tenant-Id: $S31_OTHER_TENANT" "$API_BASE/api/agent/burner/panel-active-tasks?line=line02" > /dev/null
+python3 -c "
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert not any(x['task_id'] == sys.argv[2] for x in d['activeTasks']), '跨租户任务串台可见'
+" "$S31H_TMP" "$S31_ISO_TID" || fail "Step 31h 跨租户隔离失败: $(cat "$S31H_TMP")" 31
+psq "DELETE FROM zenithjoy.tenants WHERE id='$S31_OTHER_TENANT'" > /dev/null
+ok "Step 31h ✅ 跨租户 panel-active-tasks 查询互不可见"
+
+# 31i：error path — 缺 X-Tenant-Id / 缺 agent_id / 非法 line 均正确拒绝
+S31I_HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$API_BASE/api/agent/burner/panel-active-tasks?line=line02")
+[ "$S31I_HTTP" = "400" ] || fail "Step 31i 缺 X-Tenant-Id 期望 400，实得 $S31I_HTTP" 31
+S31I2_TMP=$(mktemp)
+S31I2_HTTP=$(curl -s -o "$S31I2_TMP" -w "%{http_code}" --max-time 15 -X POST "$API_BASE/api/agent/burner/panel-event" -H "Content-Type: application/json" \
+  -d '{"event":"task_started","task_id":"x","line":"line02","device":"x","title":"x"}')
+[ "$S31I2_HTTP" = "400" ] || fail "Step 31i 缺 agent_id 期望 400，实得 $S31I2_HTTP: $(cat "$S31I2_TMP")" 31
+python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d.get('error')=='MISSING_AGENT_ID'" "$S31I2_TMP" 2>/dev/null \
+  || fail "Step 31i 缺 agent_id 期望 error=MISSING_AGENT_ID: $(cat "$S31I2_TMP")" 31
+S31I3_TMP=$(mktemp)
+S31I3_HTTP=$(curl -s -o "$S31I3_TMP" -w "%{http_code}" --max-time 15 -X POST "$API_BASE/api/agent/burner/panel-event" -H "Content-Type: application/json" \
+  -d "{\"agent_id\":\"$AGENT_PK\",\"event\":\"task_started\",\"task_id\":\"x\",\"line\":\"line99\",\"device\":\"x\",\"title\":\"x\"}")
+[ "$S31I3_HTTP" = "400" ] || fail "Step 31i line 非法期望 400，实得 $S31I3_HTTP: $(cat "$S31I3_TMP")" 31
+python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d.get('error')=='INVALID_LINE'" "$S31I3_TMP" 2>/dev/null \
+  || fail "Step 31i line 非法期望 error=INVALID_LINE: $(cat "$S31I3_TMP")" 31
+ok "Step 31i ✅ 缺 X-Tenant-Id/缺 agent_id/非法 line 均正确拒绝（400 + 对应 error code）"
+
+rm -f "$S31_TMP" "$S31B_TMP" "$S31C_TMP" "$S31D_TMP" "$S31E_TMP" "$S31E2_TMP" "$S31F_TMP" "$S31G_TMP" \
+      "$S31H_TMP" "$S31I2_TMP" "$S31I3_TMP" 2>/dev/null
+ok "Step 31 ✅ line02 打点+中台看门狗全链路回归通过（真机段 logic-done-pending，见 contract-draft.md）"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" \
       "$S22_TMP" "$S23A_TMP" "$S23A_COOKIES" "$S23B_TMP" "$S24_TMP" \
       "$S25_TMP" "$S25_TMP2" "$S26_TMP" "$S27_TMP" "$S28_TMP" "$S29_TMP" "$S30_TMP" 2>/dev/null
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Path 2 30 步本地版 smoke 全绿（服务端段）"
+echo "  ✅ Path 2 31 步本地版 smoke 全绿（服务端段）"
 echo "  真机段：等 Android evaluator 通道（xian-rog nightly）接管复跑"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 exit 0

@@ -225,6 +225,25 @@ const uiaSignalRateLimit = simpleRateLimit({
   keyFn: (req) => req.header('x-agent-id') || 'anonymous',
 });
 
+// CodeQL js/missing-rate-limiting：/panel-event 同 account-scan-result/uia-signal 无
+// tenantContext（鉴权靠 body.agent_id 直接反查），按 agent_id 限流。安卓状态机心跳/切换节奏
+// 与 account-scan-result 同量级，60次/60s 给足并发余量（同款既往修法）。
+const panelEventRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 60,
+  keyFn: (req) => (req.body && req.body.agent_id) || 'anonymous',
+});
+
+// CodeQL js/missing-rate-limiting：/panel-active-tasks 碰 DB 查询且不走 tenantContext
+// 中间件（直接读 X-Tenant-Id header，缺则 400，同 GET /sessions 的 tenantContextOptional
+// 语义但本端点故意不复用其 401 分支），按 tenant 限流。作战窗轮询节奏预期约 10s 一次
+// （services/agent 桥接轮询默认周期），120次/60s 给足并发/多设备余量。
+const panelActiveTasksRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 120,
+  keyFn: (req) => req.header('X-Tenant-Id') || 'anonymous',
+});
+
 // ── FR-1b. POST /uia-signal — UIA 在线状态写入（x-agent-id 反查 tenant）──
 // Android agent 通过 x-agent-id header 上报 UIAutomator 探测到的小号在线状态。
 // 写入 agent_platform_sessions 的 uia_online / uia_checked_at / uia_error 列。
@@ -991,6 +1010,143 @@ router.get('/warmup-liveness', tenantContextOptional, async (req: Request, res: 
     [agentId, tenantId],
   );
   return res.json(OK({ liveness: r.rows }));
+});
+
+// ════════════════════════════════════════════════════════════════════════
+//  作战窗 Agent Panel 刀2/安卓获客(line02) — panel事件打点 + 中台看门狗聚合
+//  Sprint 07282119-agent-panel-knife2-android
+// ════════════════════════════════════════════════════════════════════════
+
+// 中台看门狗 stuck 判定阈值（Invariant INV-6：禁止裸魔法数，必须是命名常量）——
+// 3 分钟无新事件即判定该 task 为 stuck（相对"最新事件"created_at 计算，
+// 非相对 task_started 起始时间，否则长耗时任务一开始就会被永久误判且无法自愈）。
+const PANEL_LINE02_STUCK_THRESHOLD_MS = 180_000;
+
+const PANEL_LINE02_VALID_EVENTS = ['task_started', 'step', 'waiting', 'stuck', 'done', 'failed'];
+
+// ── POST /panel-event — Line02(安卓)状态机打点上报 ──
+// 鉴权模型：body agent_id 反查 tenant（同 account-scan-result 家族，判定点已登记），
+// 不用 internalAuth/X-Tenant-Id——安卓侧从不发可信 tenant，tenant 永远服务端反查。
+// 响应格式沿用 /api/panel/events（line04 刀1薄写入端点）同款风格：{ok:true,id} / {error,message}，
+// 不另起炉灶（PRD 已知约束）。
+router.post('/panel-event', panelEventRateLimit, async (req: Request, res: Response) => {
+  const {
+    agent_id: agentId, event, task_id: taskId, line, device, title, detail, progress, severity,
+  } = req.body || {};
+
+  if (!agentId || typeof agentId !== 'string') {
+    return res.status(400).json({ error: 'MISSING_AGENT_ID', message: 'agent_id 必填' });
+  }
+  if (line !== 'line02') {
+    return res.status(400).json({ error: 'INVALID_LINE', message: '本端点仅接受 line=line02（其余 line 走既有 /api/panel/events）' });
+  }
+  if (!event || !PANEL_LINE02_VALID_EVENTS.includes(event)) {
+    return res.status(400).json({
+      error: 'INVALID_EVENT',
+      message: `event 必须是 ${PANEL_LINE02_VALID_EVENTS.join('/')} 之一`,
+    });
+  }
+  if (!taskId || !device || !title) {
+    return res.status(400).json({ error: 'MISSING_FIELDS', message: '缺 task_id/device/title' });
+  }
+
+  try {
+    // 不信任客户端 tenant——安卓侧发的是 agents.id（body.agent_id），反查真实 tenant_id
+    // （acquisition.ts:1476 原话："安卓 agent 按设计发 X-Tenant-Id = agentId，不能信 header"）。
+    const agentRes = await pool.query(
+      `SELECT tenant_id FROM zenithjoy.agents WHERE id = $1`,
+      [agentId],
+    );
+    if (agentRes.rows.length === 0) {
+      return res.status(404).json({ error: 'AGENT_NOT_FOUND', message: 'agent_id 未注册' });
+    }
+    const tenantId: string = agentRes.rows[0].tenant_id;
+
+    const r = await pool.query(
+      `INSERT INTO zenithjoy.panel_events
+         (tenant_id, task_id, event, line, device, title, detail, progress, severity)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING id`,
+      [
+        tenantId,
+        taskId,
+        event,
+        line,
+        device,
+        title,
+        typeof detail === 'string' ? detail : null,
+        Array.isArray(progress) ? JSON.stringify(progress) : null,
+        typeof severity === 'string' ? severity : 'info',
+      ],
+    );
+    return res.status(200).json({ ok: true, id: r.rows[0].id });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown';
+    console.error('[panel-event] write failed:', msg);
+    return res.status(500).json({ error: 'INTERNAL', message: 'write failed' });
+  }
+});
+
+// ── GET /panel-active-tasks — 中台看门狗计算：跨设备(安卓)line02任务活性聚合 ──
+// 鉴权：X-Tenant-Id header（与 GET /sessions 同款 tenantContextOptional 语义，缺则 400，
+// 不复用 tenantOf() 的 401——DoD/合同断言明确要求 400）。
+// state 计算（服务端行为契约）：取每个 task_id 最新一条 panel_events 行；
+//   - 最新事件是 done/failed → 归入 recentCompleted，state=该事件值；
+//   - 否则若 NOW()-最新行created_at > PANEL_LINE02_STUCK_THRESHOLD_MS → state='stuck'；
+//   - 否则按最新事件映射（task_started/step→work，waiting→waiting，stuck→stuck）。
+router.get('/panel-active-tasks', panelActiveTasksRateLimit, async (req: Request, res: Response) => {
+  const tenantId = (req.header('X-Tenant-Id') || '').trim();
+  if (!tenantId) {
+    return res.status(400).json({ error: 'MISSING_TENANT', message: '缺 X-Tenant-Id' });
+  }
+  const line = typeof req.query.line === 'string' && req.query.line ? req.query.line : 'line02';
+
+  try {
+    const r = await pool.query(
+      `SELECT DISTINCT ON (task_id)
+              task_id, device, title, detail, progress, severity, event, created_at
+         FROM zenithjoy.panel_events
+        WHERE tenant_id = $1 AND line = $2
+        ORDER BY task_id, created_at DESC`,
+      [tenantId, line],
+    );
+
+    const now = Date.now();
+    const activeTasks: Array<Record<string, unknown>> = [];
+    const recentCompleted: Array<Record<string, unknown>> = [];
+
+    for (const row of r.rows) {
+      const base = {
+        task_id: row.task_id,
+        device: row.device,
+        title: row.title,
+        detail: row.detail ?? null,
+        progress: row.progress ?? null,
+      };
+      if (row.event === 'done' || row.event === 'failed') {
+        recentCompleted.push({ ...base, state: row.event });
+        continue;
+      }
+      const ageMs = now - new Date(row.created_at).getTime();
+      let state: string;
+      if (ageMs > PANEL_LINE02_STUCK_THRESHOLD_MS) {
+        state = 'stuck';
+      } else if (row.event === 'waiting') {
+        state = 'waiting';
+      } else if (row.event === 'stuck') {
+        state = 'stuck';
+      } else {
+        state = 'work'; // task_started/step
+      }
+      activeTasks.push({ ...base, state });
+    }
+
+    return res.status(200).json({ line, activeTasks, recentCompleted });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown';
+    console.error('[panel-active-tasks] query failed:', msg);
+    return res.status(500).json({ error: 'INTERNAL', message: 'query failed' });
+  }
 });
 
 export default router;

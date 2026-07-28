@@ -9,15 +9,26 @@ import { PanelEventBus } from '../shared/panel-event-bus';
 
 const KNOWN_LINES = ['line02', 'line04', 'publish'];
 
-// PrepPRD 原话"只有真实接入的line04会上灯"——line02/publish 目前是占位线，尚未真实接入
-// 事件总线。壳侧 CollapsedStrip.tsx 用 lines.filter(l=>l.connected) 决定上不上灯带，
-// 缺这个字段时恒为 undefined/falsy，灯带永远空白（xian-rog真机验证实测复现）。
-const CONNECTED_LINES = new Set(['line04']);
+// PrepPRD 原话"只有真实接入的line04会上灯"——line04 是本刀1唯一恒真接入线（本机文件 tail），
+// publish 目前仍是占位线，尚未真实接入事件总线。
+const STATIC_CONNECTED_LINES = new Set(['line04']);
+
+// Sprint 07282119-agent-panel-knife2-android（Golden Path Step 6）：line02（安卓，跨设备）不能
+// 硬编码 true——那是"有灯没线"假绿，桥接失败时客户端仍显示"已接入"会掩盖真实故障。line02 的
+// connected 语义改为动态判定：只有 PanelLine02Bridge 真实调用过 bus.ingest() 且拿到过 line02
+// 数据（哪怕一次）后，才视为已接入（判定点已登记：与 line04"确实有数据通路"同一语义）。
+function isLineConnected(line: string, bus: PanelEventBus): boolean {
+  if (STATIC_CONNECTED_LINES.has(line)) return true;
+  if (line === 'line02') {
+    return bus.getActiveTasks(line).length > 0 || bus.getRecentCompleted(line).length > 0;
+  }
+  return false;
+}
 
 function snapshotLines(bus: PanelEventBus) {
   return KNOWN_LINES.map((line) => ({
     line,
-    connected: CONNECTED_LINES.has(line),
+    connected: isLineConnected(line, bus),
     lightState: bus.getLightState(line),
     activeTasks: bus.getActiveTasks(line),
     recentCompleted: bus.getRecentCompleted(line),

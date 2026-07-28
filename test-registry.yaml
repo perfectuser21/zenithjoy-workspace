@@ -5269,3 +5269,37 @@ agent_suite:
   status: active
   product: 中台认证
   note: "回归测试(2026-07-28)：真机发现 apps/api/Dockerfile 生产阶段从未 COPY product-map/ 目录，line-health 接口在真实部署环境里恒 source=fallback。断言 Dockerfile 生产阶段含 COPY product-map 指令，防止再次漏拷。"
+
+  # ── 作战窗 Agent Panel 刀2/安卓获客(line02)打点+可见性（Sprint 07282119-agent-panel-knife2-android）──
+
+- id: agent-panel-line02-bridge-unit
+  path: services/agent/src/shared/__tests__/panel-line02-bridge.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 客户智能获客
+  note: "PanelLine02Bridge单测：轮询中台panel-active-tasks真实调用PanelEventBus.ingest()（真bus，mock fetch边界）/fetch失败静默降级不清空已知状态/done状态映射进recentCompleted"
+
+- id: agent-panel-line02-sprint-contract-integration
+  path: sprints/07282119-agent-panel-knife2-android/tests/panel-event-line02.integration.test.ts
+  type: contract
+  ci: L4
+  status: active
+  product: 客户智能获客
+  note: "Sprint 07282119合同测试（Red基线，永久保留）：POST /api/agent/burner/panel-event + GET /api/agent/burner/panel-active-tasks真实Postgres+supertest验证，覆盖task_started/step/stuck看门狗/自愈/done/failed/跨租户隔离/多设备物理隔离"
+
+- id: agent-panel-line02-bridge-sprint-contract
+  path: sprints/07282119-agent-panel-knife2-android/tests/panel-line02-bridge.test.ts
+  type: contract
+  ci: L3
+  status: active
+  product: 客户智能获客
+  note: "Sprint 07282119合同测试（Red基线，永久保留）：与services/agent/src/shared/__tests__/panel-line02-bridge.test.ts同款断言，合同GAN阶段锁定证据"
+
+- id: agent-panel-line02-lane-sprint-contract
+  path: sprints/07282119-agent-panel-knife2-android/tests/agent-panel-line02-lane.test.tsx
+  type: contract
+  ci: L3
+  status: active
+  product: 客户智能获客
+  note: "Sprint 07282119合同测试（Red基线，永久保留）：line02泳道渲染回归——lane-line02与lane-line04物理隔离/设备名格式/多设备不合并/stuck灯态变红。需在apps/agent-panel(jsdom+@别名)环境跑，非根vitest.config.cjs(node环境)"

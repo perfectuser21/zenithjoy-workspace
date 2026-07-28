@@ -12,6 +12,10 @@ import { PanelEventBus } from '../../shared/panel-event-bus';
 describe('registerPanelEventRoutes — 挂到真实 http.Server [BEHAVIOR]', () => {
   let server: http.Server | null = null;
   const PORT = 25311;
+  // 独立端口，避免与相邻测试共用 25311 时偶发 CI 端口复用竞态（"other side closed"，
+  // 2026-07-28 CI 两次复现，本机 8/8 稳定通过——怀疑是 undici keep-alive 连接跨测试边界
+  // 与 server.close() 时序竞争，用独立端口彻底消除相邻测试间的耦合，不改动其它测试）
+  const PORT_LINE02_DYNAMIC = 25312;
 
   afterEach(async () => {
     if (server) {
@@ -94,6 +98,35 @@ describe('registerPanelEventRoutes — 挂到真实 http.Server [BEHAVIOR]', () 
     const body = await resp.json();
     const byLine = Object.fromEntries(body.lines.map((l: { line: string; connected: boolean }) => [l.line, l.connected]));
     expect(byLine).toEqual({ line02: false, line04: true, publish: false });
+
+    bus.destroy();
+  });
+
+  it('Sprint 07282119-agent-panel-knife2-android：line02 的 connected 是动态判定，不是硬编码——'
+    + 'PanelLine02Bridge 真实调用 bus.ingest() 拿到过 line02 数据（哪怕一次）后才反转为 true'
+    + '（"有灯没线"假绿的反面：桥接失败时客户端不能仍显示"已接入"掩盖真实故障）', async () => {
+    const bus = new PanelEventBus();
+    server = http.createServer((_req, res) => { res.writeHead(404); res.end(); });
+    registerPanelEventRoutes(server, bus);
+    await new Promise<void>((r) => { server!.listen(PORT_LINE02_DYNAMIC, r); });
+
+    const respBefore = await fetch(`http://localhost:${PORT_LINE02_DYNAMIC}/api/agent/panel/state`);
+    const bodyBefore = await respBefore.json();
+    const byLineBefore = Object.fromEntries(
+      bodyBefore.lines.map((l: { line: string; connected: boolean }) => [l.line, l.connected]),
+    );
+    expect(byLineBefore).toEqual({ line02: false, line04: true, publish: false });
+
+    bus.ingest({
+      event: 'task_started', task_id: 't-line02-bridge', line: 'line02', device: 'RMX3478-b6ee', title: 'x', ts: Date.now(),
+    });
+
+    const respAfter = await fetch(`http://localhost:${PORT_LINE02_DYNAMIC}/api/agent/panel/state`);
+    const bodyAfter = await respAfter.json();
+    const byLineAfter = Object.fromEntries(
+      bodyAfter.lines.map((l: { line: string; connected: boolean }) => [l.line, l.connected]),
+    );
+    expect(byLineAfter).toEqual({ line02: true, line04: true, publish: false });
 
     bus.destroy();
   });

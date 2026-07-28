@@ -44,4 +44,19 @@ describe('CollapsedStrip（收起态边缘灯带）', () => {
     const { container } = render(<CollapsedStrip lines={lines} />);
     expect(container.textContent).not.toMatch(/line0[24]/i);
   });
+
+  // Sprint 07282119-agent-panel-knife2-android（Golden Path Step 7/8）回归锁定：
+  // lamp-line02 与 lamp-line04 独立灯，line02 stuck 态必须正确反映为红态（不合并/不串态）。
+  it('收起态灯带 lamp-line02 与 lamp-line04 独立，stuck 态 data-state 正确反映（灯变红）', () => {
+    const lines: LineState[] = [
+      { ...base, line: 'line04', connected: true, lightState: 'work' },
+      { ...base, line: 'line02', connected: true, lightState: 'stuck' },
+    ];
+    render(<CollapsedStrip lines={lines} />);
+    const lamp02 = screen.getByTestId('lamp-line02');
+    const lamp04 = screen.getByTestId('lamp-line04');
+    expect(lamp02).not.toBe(lamp04);
+    expect(lamp02.getAttribute('data-state')).toBe('stuck');
+    expect(lamp04.getAttribute('data-state')).toBe('work');
+  });
 });
