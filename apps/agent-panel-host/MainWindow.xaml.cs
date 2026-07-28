@@ -41,7 +41,7 @@ public partial class MainWindow : Window
         HwndSource.FromHwnd(_hwnd)!.AddHook(WndProc);
         NativeMethods.RegisterHotKey(
             _hwnd, NativeMethods.HOTKEY_ID_SUMMON,
-            NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT, (uint)System.Windows.Forms.Keys.Z);
+            NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT, NativeMethods.VK_Z);
 
         await Web.EnsureCoreWebView2Async();
         Web.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
