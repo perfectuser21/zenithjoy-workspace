@@ -63,15 +63,18 @@ public partial class MainWindow : Window
         // xian-rog 真机验证实测：<script type="module"> 打包产物直接以 file:// 加载会被
         // Chromium 的模块加载 CORS 限制静默拦截（不触发 window.onerror，也不报 NavigationCompleted
         // 失败——WebView2 认为导航成功，只是脚本从未执行，#root 永远空）。改用
-        // SetVirtualHostNameToFolderMapping 把本地目录映射成虚拟 https 域名，微软官方文档
-        // 推荐的 WebView2 加载本地打包网页内容的标准做法，避免这个 CORS 死角。
+        // SetVirtualHostNameToFolderMapping 把本地目录映射成虚拟域名，微软官方文档推荐的
+        // WebView2 加载本地打包网页内容的标准做法，避免这个 CORS 死角。
+        // 用 http:// 不用 https://——真机验证实测：https 虚拟host会导致混合内容拦截，
+        // 页面无法fetch/EventSource连本地 http://localhost:58432 后端（离线态永远卡死，
+        // 即便后端真的在跑）。本地环回本来就没有传输层加密需求，http/http同scheme即可。
         var baseDir = AppDomain.CurrentDomain.BaseDirectory;
         var webRoot = Path.Combine(baseDir, "agent-panel-web");
         if (Directory.Exists(webRoot))
         {
             Web.CoreWebView2.SetVirtualHostNameToFolderMapping(
                 VirtualHost, webRoot, Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
-            Web.CoreWebView2.Navigate($"https://{VirtualHost}/index.html");
+            Web.CoreWebView2.Navigate($"http://{VirtualHost}/index.html");
         }
         else
         {
@@ -97,10 +100,27 @@ public partial class MainWindow : Window
         _trayIcon.Click += (_, _) => ToggleExpanded();
     }
 
+    // 热键(Ctrl+Alt+Z)/托盘点击是原生发起的展开态切换——只改窗口几何尺寸不够，
+    // 网页内部 AgentPanelApp 自己也存了一份 expanded 状态决定渲染什么内容，
+    // 不通知网页的话窗口已经变全屏但内容还停在收起态那个6px小灯（xian-rog真机验证实测复现）。
     private void ToggleExpanded()
     {
         _userWantsExpanded = !_userWantsExpanded;
         ApplyWindowMode(PanelWindowState.Resolve(_userWantsExpanded, _rpaActive));
+        NotifyWebExpandChanged(_userWantsExpanded);
+    }
+
+    private void NotifyWebExpandChanged(bool expanded)
+    {
+        try
+        {
+            Web.CoreWebView2?.PostWebMessageAsJson(
+                JsonSerializer.Serialize(new { type = "host-expand-changed", expanded }));
+        }
+        catch
+        {
+            // WebView2 还没初始化完成时忽略，不崩宿主（旁观者纪律）
+        }
     }
 
     private void OnWebMessageReceived(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs e)

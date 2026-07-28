@@ -84,4 +84,39 @@ describe('AgentPanelApp（首次装机仪式 + 三态编排）', () => {
       expect(postMessage).toHaveBeenCalledWith({ type: 'user-toggle-expand', expanded: false });
     });
   });
+
+  describe('响应宿主主动发来的展开态变化（热键/托盘）', () => {
+    afterEach(() => { delete (window as any).chrome; });
+
+    it('xian-rog真机验证实测复现：按热键只改了原生窗口几何尺寸，网页expanded状态从未收到通知——'
+      + '窗口已变全屏，内容却仍渲染收起态那个6px小灯。收到host-expand-changed消息后必须切到展开态渲染', () => {
+      window.localStorage.setItem('agent-panel-first-run-shown', 'true');
+      const handlers: Array<(ev: { data: unknown }) => void> = [];
+      const addEventListener = vi.fn((_type: string, handler: (ev: { data: unknown }) => void) => {
+        handlers.push(handler);
+      });
+      (window as any).chrome = { webview: { postMessage: vi.fn(), addEventListener } };
+
+      render(<AgentPanelApp lines={lines} rpaActive={false} connected />);
+      expect(screen.getByTestId('panel-collapsed')).toBeInTheDocument();
+
+      act(() => { handlers[0]({ data: { type: 'host-expand-changed', expanded: true } }); });
+      expect(screen.getByTestId('panel-expanded')).toBeInTheDocument();
+    });
+
+    it('收到host-expand-changed(expanded:false)时切回收起态渲染', () => {
+      const handlers: Array<(ev: { data: unknown }) => void> = [];
+      const addEventListener = vi.fn((_type: string, handler: (ev: { data: unknown }) => void) => {
+        handlers.push(handler);
+      });
+      (window as any).chrome = { webview: { postMessage: vi.fn(), addEventListener } };
+
+      // 首次仪式自动展开
+      render(<AgentPanelApp lines={lines} rpaActive={false} connected />);
+      expect(screen.getByTestId('panel-expanded')).toBeInTheDocument();
+
+      act(() => { handlers[0]({ data: { type: 'host-expand-changed', expanded: false } }); });
+      expect(screen.getByTestId('panel-collapsed')).toBeInTheDocument();
+    });
+  });
 });

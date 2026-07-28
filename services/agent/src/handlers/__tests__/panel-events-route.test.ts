@@ -56,6 +56,39 @@ describe('registerPanelEventRoutes — 挂到真实 http.Server [BEHAVIOR]', () 
     bus.destroy();
   });
 
+  it('快照每条line带connected字段，只有line04是真实接入(PRD原话"只有真实接入的line04会上灯")——'
+    + '壳侧CollapsedStrip.tsx用lines.filter(l=>l.connected)决定上不上灯带，connected缺失时'
+    + '恒为undefined/falsy，灯带永远空白（xian-rog真机验证实测复现：有真实业务数据+CORS都修好后'
+    + '收起态灯带仍然是空白8px无内容）', async () => {
+    const bus = new PanelEventBus();
+    server = http.createServer((_req, res) => { res.writeHead(404); res.end(); });
+    registerPanelEventRoutes(server, bus);
+    await new Promise<void>((r) => { server!.listen(PORT, r); });
+
+    const resp = await fetch(`http://localhost:${PORT}/api/agent/panel/state`);
+    const body = await resp.json();
+    const byLine = Object.fromEntries(body.lines.map((l: { line: string; connected: boolean }) => [l.line, l.connected]));
+    expect(byLine).toEqual({ line02: false, line04: true, publish: false });
+
+    bus.destroy();
+  });
+
+  it('响应带 Access-Control-Allow-Origin，壳走虚拟host(http://agent-panel.local)与Agent(http://localhost:port)跨源，浏览器fetch/EventSource无CORS头会被浏览器静默拦截(xian-rog真机验证实测复现：直接导航能连通，fetch却"Failed to fetch")', async () => {
+    const bus = new PanelEventBus();
+    server = http.createServer((_req, res) => { res.writeHead(404); res.end(); });
+    registerPanelEventRoutes(server, bus);
+    await new Promise<void>((r) => { server!.listen(PORT, r); });
+
+    const stateResp = await fetch(`http://localhost:${PORT}/api/agent/panel/state`);
+    expect(stateResp.headers.get('access-control-allow-origin')).toBe('*');
+
+    const streamResp = await fetch(`http://localhost:${PORT}/api/agent/panel/events/stream`);
+    expect(streamResp.headers.get('access-control-allow-origin')).toBe('*');
+    await streamResp.body!.cancel();
+
+    bus.destroy();
+  });
+
   it('不认识的路径交给原有 listeners，不吞掉其它路由', async () => {
     const bus = new PanelEventBus();
     server = http.createServer((_req, res) => {

@@ -178,9 +178,12 @@ export function registerLeaseBrokerRoutes(server: http.Server, tenantId?: string
     const url = req.url ?? '';
 
     // 只读窥视端点（GET）：常驻监听主循环顶部靠它判断 CI 是否正持有更高优先级桌面租约 → 让位。
+    // apps/agent-panel 的 useRpaGuard hook 也从浏览器 fetch 这个端点（fail-closed判定）——
+    // 壳网页经 SetVirtualHostNameToFolderMapping 跑在虚拟host，与Agent本地服务器跨源，
+    // 缺 CORS 头会被浏览器静默拦截（xian-rog真机验证实测复现）。
     if (req.method === 'GET' && url === '/api/agent/desktop-lease-broker/status') {
       const s = leaseBroker.status();
-      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
       res.end(JSON.stringify(s));
       return;
     }

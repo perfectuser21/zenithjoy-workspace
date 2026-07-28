@@ -81,6 +81,18 @@ describe('registerLeaseBrokerRoutes — 挂到真实 http.Server [BEHAVIOR]', ()
       yield_acknowledged_by: 'line04/listen_chat',
     });
   });
+
+  it('GET /status 响应带 Access-Control-Allow-Origin（apps/agent-panel的useRpaGuard hook从浏览器fetch这个端点，虚拟host与Agent跨源，缺CORS头会被浏览器静默拦截，xian-rog真机验证实测复现）', async () => {
+    server = http.createServer((_req, res) => {
+      res.writeHead(404);
+      res.end();
+    });
+    registerLeaseBrokerRoutes(server);
+    await new Promise<void>((r) => server!.listen(PORT, r));
+
+    const status = await fetch(`http://localhost:${PORT}/api/agent/desktop-lease-broker/status`);
+    expect(status.headers.get('access-control-allow-origin')).toBe('*');
+  });
 });
 
 describe('index.ts 真实启动路径 — 必须调用 registerLeaseBrokerRoutes [ARTIFACT 防回归]', () => {
