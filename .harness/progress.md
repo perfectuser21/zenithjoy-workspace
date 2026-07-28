@@ -4,3 +4,4 @@ contract-proposer: done (contract-draft.md + contract-dod.md + tests/2 + e2e-con
 gan: done (contract-draft.md@948ec3f2 r2, verdict=APPROVED, 铁律覆盖=7/7, judgments_written=7, rubric=.harness/verdicts/gan-948ec3f2.json)
 generator: pr_opened (#1493, red=01eefa25, green=f0588bb3)
 judge: done (verdict=PASS, sha=5c6b628, worktree=/tmp/cecelia-prompts/worktree-30a0c83a, judged=true)
+merge: auto-merge 已启用 (PR #1493, SHA=ed030e84, CI 运行中)
