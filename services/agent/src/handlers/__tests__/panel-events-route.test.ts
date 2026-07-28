@@ -98,6 +98,35 @@ describe('registerPanelEventRoutes — 挂到真实 http.Server [BEHAVIOR]', () 
     bus.destroy();
   });
 
+  it('Sprint 07282119-agent-panel-knife2-android：line02 的 connected 是动态判定，不是硬编码——'
+    + 'PanelLine02Bridge 真实调用 bus.ingest() 拿到过 line02 数据（哪怕一次）后才反转为 true'
+    + '（"有灯没线"假绿的反面：桥接失败时客户端不能仍显示"已接入"掩盖真实故障）', async () => {
+    const bus = new PanelEventBus();
+    server = http.createServer((_req, res) => { res.writeHead(404); res.end(); });
+    registerPanelEventRoutes(server, bus);
+    await new Promise<void>((r) => { server!.listen(PORT, r); });
+
+    const respBefore = await fetch(`http://localhost:${PORT}/api/agent/panel/state`);
+    const bodyBefore = await respBefore.json();
+    const byLineBefore = Object.fromEntries(
+      bodyBefore.lines.map((l: { line: string; connected: boolean }) => [l.line, l.connected]),
+    );
+    expect(byLineBefore).toEqual({ line02: false, line04: true, publish: false });
+
+    bus.ingest({
+      event: 'task_started', task_id: 't-line02-bridge', line: 'line02', device: 'RMX3478-b6ee', title: 'x', ts: Date.now(),
+    });
+
+    const respAfter = await fetch(`http://localhost:${PORT}/api/agent/panel/state`);
+    const bodyAfter = await respAfter.json();
+    const byLineAfter = Object.fromEntries(
+      bodyAfter.lines.map((l: { line: string; connected: boolean }) => [l.line, l.connected]),
+    );
+    expect(byLineAfter).toEqual({ line02: true, line04: true, publish: false });
+
+    bus.destroy();
+  });
+
   it('响应带 Access-Control-Allow-Origin，壳走虚拟host(http://agent-panel.local)与Agent(http://localhost:port)跨源，浏览器fetch/EventSource无CORS头会被浏览器静默拦截(xian-rog真机验证实测复现：直接导航能连通，fetch却"Failed to fetch")', async () => {
     const bus = new PanelEventBus();
     server = http.createServer((_req, res) => { res.writeHead(404); res.end(); });
