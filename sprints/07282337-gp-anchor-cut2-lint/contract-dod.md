@@ -45,7 +45,7 @@ journey_type: dev_pipeline
   期望: OK
 
 - [ ] [BEHAVIOR] ci-l1-process.yml三处挂载全部到位(job定义+needs+if判断块)
-  Test: manual:bash -c 'cd /Users/administrator/worktrees/zenithjoy/session-b08db3c1 && grep -q "^  lint-gp-anchor:" .github/workflows/ci-l1-process.yml && grep -q "lint-gp-anchor\]" .github/workflows/ci-l1-process.yml && grep -q "needs.lint-gp-anchor.result" .github/workflows/ci-l1-process.yml && echo OK || exit 1'
+  Test: manual:bash -c 'cd /Users/administrator/worktrees/zenithjoy/session-b08db3c1 && grep -q "^  lint-gp-anchor:" .github/workflows/ci-l1-process.yml && awk "/needs: \[/,/\]/" .github/workflows/ci-l1-process.yml | grep -q "lint-gp-anchor" && grep -q "needs.lint-gp-anchor.result" .github/workflows/ci-l1-process.yml && echo OK || exit 1'
   期望: OK
 
 - [ ] [BEHAVIOR] 未新建平行smoke文件(golden-path-f1-anchor-smoke.sh追加断言而非另起新文件)

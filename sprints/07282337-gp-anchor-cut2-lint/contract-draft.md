@@ -158,7 +158,7 @@ echo PASS
 **验证命令**:
 ```bash
 grep -q "^  lint-gp-anchor:" .github/workflows/ci-l1-process.yml || { echo "FAIL: 缺job定义"; exit 1; }
-grep -q "lint-gp-anchor\]" .github/workflows/ci-l1-process.yml || { echo "FAIL: 缺needs挂载"; exit 1; }
+awk '/needs: \[/,/\]/' .github/workflows/ci-l1-process.yml | grep -q "lint-gp-anchor" || { echo "FAIL: 缺needs挂载"; exit 1; }
 grep -q 'needs.lint-gp-anchor.result' .github/workflows/ci-l1-process.yml || { echo "FAIL: 缺if判断块"; exit 1; }
 echo PASS
 ```
@@ -216,7 +216,7 @@ echo "✅ 正向样例全部通过"
 
 echo "=== Step C: 三处挂载校验 ==="
 grep -q "^  lint-gp-anchor:" .github/workflows/ci-l1-process.yml
-grep -q "lint-gp-anchor\]" .github/workflows/ci-l1-process.yml
+awk '/needs: \[/,/\]/' .github/workflows/ci-l1-process.yml | grep -q "lint-gp-anchor"
 grep -q 'needs.lint-gp-anchor.result' .github/workflows/ci-l1-process.yml
 echo "✅ 三处挂载到位"
 
