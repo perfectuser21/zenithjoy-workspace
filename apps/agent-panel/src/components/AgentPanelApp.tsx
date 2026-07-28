@@ -13,12 +13,17 @@ export interface AgentPanelAppProps {
   rpaActive: boolean;
   /** 面板↔Agent 本地 SSE 是否连通 */
   connected: boolean;
+  /** 断线期间产生的done/failed摘要（PrepPRD Golden Path Step10），null=无摘要不显示 */
+  reconnectSummary?: { done: number; failed: number } | null;
+  onDismissReconnectSummary?: () => void;
 }
 
 // 三态编排 + 首次装机仪式（PrepPRD Golden Path Step1）：
 // 首次(无本地标记位)自动全屏展开一次亮相，之后收起为常驻灯带；
 // RPA 进行中时无论当前处于展开/收起，一律强制渲染贴边只读 mini 视图（抢占式，不等用户手动收起）。
-export function AgentPanelApp({ lines, rpaActive, connected }: AgentPanelAppProps) {
+export function AgentPanelApp({
+  lines, rpaActive, connected, reconnectSummary = null, onDismissReconnectSummary,
+}: AgentPanelAppProps) {
   const [isFirstRun] = useState(() => {
     const shown = window.localStorage.getItem(FIRST_RUN_KEY) === 'true';
     if (!shown) window.localStorage.setItem(FIRST_RUN_KEY, 'true');
@@ -63,6 +68,26 @@ export function AgentPanelApp({ lines, rpaActive, connected }: AgentPanelAppProp
   return (
     <div>
       {!connected && <div>离线/重连中…</div>}
+      {reconnectSummary && (
+        <div data-testid="reconnect-summary-banner">
+          离线期间完成
+          {' '}
+          {reconnectSummary.done}
+          {' '}
+          个任务，失败
+          {' '}
+          {reconnectSummary.failed}
+          {' '}
+          个
+          <button
+            type="button"
+            data-testid="reconnect-summary-dismiss"
+            onClick={onDismissReconnectSummary}
+          >
+            知道了
+          </button>
+        </div>
+      )}
       {body}
     </div>
   );

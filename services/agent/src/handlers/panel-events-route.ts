@@ -51,10 +51,21 @@ export function registerPanelEventRoutes(server: http.Server, bus: PanelEventBus
       // 首帧：完整快照，壳一连上就有数据可渲染，不用等下一条事件才有内容
       res.write(`event: snapshot\ndata: ${JSON.stringify(snapshotLines(bus))}\n\n`);
 
+      // xian-rog 真机验证实测发现：这里原来只发首帧，之后总线状态怎么变都不会推新帧——
+      // 网页壳订阅了SSE但实际收不到任何实时更新，"实时"看板必须重连/刷新页面才看得到最新数据。
+      // bus.onChange 在每次事件(task_started/step/waiting/stuck/done/failed)真正改变状态后
+      // 触发，这里订阅它，每次变化都重新推一帧完整快照给这个客户端。
+      const unsubscribe = bus.onChange(() => {
+        res.write(`event: snapshot\ndata: ${JSON.stringify(snapshotLines(bus))}\n\n`);
+      });
+
       const heartbeat = setInterval(() => {
         res.write(': heartbeat\n\n');
       }, 15_000);
-      req.on('close', () => clearInterval(heartbeat));
+      req.on('close', () => {
+        clearInterval(heartbeat);
+        unsubscribe();
+      });
       return;
     }
 

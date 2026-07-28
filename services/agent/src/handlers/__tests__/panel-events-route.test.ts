@@ -56,6 +56,31 @@ describe('registerPanelEventRoutes — 挂到真实 http.Server [BEHAVIOR]', () 
     bus.destroy();
   });
 
+  it('总线状态变化后 SSE 连接收到新的一帧snapshot（不是只在连接时发一次）——'
+    + 'xian-rog真机验证实测发现的真实bug：改之前SSE只在客户端首次连接时写一帧，'
+    + '之后事件总线状态怎么变都不会推新帧，网页壳订阅了SSE却实际收不到任何实时更新，'
+    + '"实时"看板必须重连/刷新页面才能看到最新数据', async () => {
+    const bus = new PanelEventBus();
+    server = http.createServer((_req, res) => { res.writeHead(404); res.end(); });
+    registerPanelEventRoutes(server, bus);
+    await new Promise<void>((r) => { server!.listen(PORT, r); });
+
+    const resp = await fetch(`http://localhost:${PORT}/api/agent/panel/events/stream`);
+    const reader = resp.body!.getReader();
+    await reader.read(); // 首帧snapshot，跳过
+
+    bus.ingest({
+      event: 'task_started', task_id: 't1', line: 'line04', device: 'xian-pc', title: '实时更新测试', ts: Date.now(),
+    });
+
+    const { value } = await reader.read();
+    const chunk = new TextDecoder().decode(value);
+    expect(chunk).toContain('event: snapshot');
+    expect(chunk).toContain('实时更新测试');
+    await reader.cancel();
+    bus.destroy();
+  });
+
   it('快照每条line带connected字段，只有line04是真实接入(PRD原话"只有真实接入的line04会上灯")——'
     + '壳侧CollapsedStrip.tsx用lines.filter(l=>l.connected)决定上不上灯带，connected缺失时'
     + '恒为undefined/falsy，灯带永远空白（xian-rog真机验证实测复现：有真实业务数据+CORS都修好后'

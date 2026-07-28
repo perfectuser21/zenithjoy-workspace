@@ -19,15 +19,20 @@ public partial class MainWindow : Window
     private const string AgentLocalBase = "http://localhost:58432";
     private static readonly TimeSpan RpaPollInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan RpaPollTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan FullscreenPollInterval = TimeSpan.FromSeconds(2);
 
     private readonly HttpClient _http = new() { Timeout = RpaPollTimeout };
     private readonly DispatcherTimer _rpaPollTimer;
+    private readonly DispatcherTimer _fullscreenPollTimer;
     private bool _userWantsExpanded;
     private bool _rpaActive;
+    private bool _hasStuck;
     private IntPtr _hwnd;
     // 托盘图标只借 WinForms 的 NotifyIcon 类(WPF没有自己的托盘API)，不引入其它WinForms控件；
     // 全部用完整命名空间限定，避免 System.Windows.MessageBox 与 System.Windows.Forms.MessageBox 撞名。
     private System.Windows.Forms.NotifyIcon? _trayIcon;
+    private System.Drawing.Icon? _baseTrayIcon;
+    private System.Drawing.Icon? _stuckTrayIcon; // GetHicon()产生的非托管句柄，用完必须显式Dispose不然长期运行泄漏GDI句柄
 
     public MainWindow()
     {
@@ -36,6 +41,11 @@ public partial class MainWindow : Window
 
         _rpaPollTimer = new DispatcherTimer { Interval = RpaPollInterval };
         _rpaPollTimer.Tick += async (_, _) => await PollRpaGuardAsync();
+
+        // PrepPRD Golden Path Step9："客户前台全屏(视频/PPT/游戏)：浮条自动隐藏"——
+        // 跟RPA轮询同一节奏，原生独立轮询不依赖网页JS线程健康。
+        _fullscreenPollTimer = new DispatcherTimer { Interval = FullscreenPollInterval };
+        _fullscreenPollTimer.Tick += (_, _) => UpdateFullscreenSuppression();
     }
 
     private async void OnLoaded(object? sender, RoutedEventArgs e)
@@ -53,6 +63,7 @@ public partial class MainWindow : Window
 
         ApplyWindowMode(PanelWindowState.Resolve(_userWantsExpanded, _rpaActive));
         _rpaPollTimer.Start();
+        _fullscreenPollTimer.Start();
     }
 
     private const string VirtualHost = "agent-panel.local";
@@ -87,17 +98,41 @@ public partial class MainWindow : Window
     private void SetupTrayIcon()
     {
         var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon.ico");
-        var icon = File.Exists(iconPath)
+        _baseTrayIcon = File.Exists(iconPath)
             ? new System.Drawing.Icon(iconPath)
             : System.Drawing.SystemIcons.Application;
 
         _trayIcon = new System.Windows.Forms.NotifyIcon
         {
-            Icon = icon,
+            Icon = _baseTrayIcon,
             Visible = true,
             Text = "作战窗",
         };
         _trayIcon.Click += (_, _) => ToggleExpanded();
+    }
+
+    // PrepPRD Golden Path Step9 的 stuck 例外："不弹窗不闪烁，只让托盘图标变红"——
+    // 全屏隐藏浮条期间客户唯一能看到的提示就是这个。灯态聚合是网页侧已经在算的数据
+    // (渲染灯带颜色的同一份)，宿主收到 light-state-changed 消息后原地画个红点叠加，
+    // 不用额外准备一张红色图标资源文件。
+    private void UpdateTrayIcon()
+    {
+        if (_trayIcon is null || _baseTrayIcon is null) return;
+
+        var previousDynamicIcon = _stuckTrayIcon;
+        _stuckTrayIcon = _hasStuck ? BuildStuckTrayIcon(_baseTrayIcon) : null;
+        _trayIcon.Icon = _hasStuck ? _stuckTrayIcon : _baseTrayIcon;
+        previousDynamicIcon?.Dispose(); // GetHicon()句柄，_trayIcon.Icon切走之后才能安全释放
+    }
+
+    private static System.Drawing.Icon BuildStuckTrayIcon(System.Drawing.Icon baseIcon)
+    {
+        using var bmp = baseIcon.ToBitmap();
+        using var g = System.Drawing.Graphics.FromImage(bmp);
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        var dotSize = Math.Max(4, bmp.Width / 2);
+        g.FillEllipse(System.Drawing.Brushes.Red, bmp.Width - dotSize, bmp.Height - dotSize, dotSize, dotSize);
+        return System.Drawing.Icon.FromHandle(bmp.GetHicon());
     }
 
     // 热键(Ctrl+Alt+Z)/托盘点击是原生发起的展开态切换——只改窗口几何尺寸不够，
@@ -133,6 +168,11 @@ public partial class MainWindow : Window
             {
                 _userWantsExpanded = doc.RootElement.GetProperty("expanded").GetBoolean();
                 ApplyWindowMode(PanelWindowState.Resolve(_userWantsExpanded, _rpaActive));
+            }
+            else if (type == "light-state-changed")
+            {
+                _hasStuck = doc.RootElement.GetProperty("hasStuck").GetBoolean();
+                UpdateTrayIcon();
             }
         }
         catch
@@ -199,6 +239,31 @@ public partial class MainWindow : Window
                 NativeMethods.ApplyRpaGuardStyles(_hwnd); // 永不夺焦 + 鼠标穿透
                 break;
         }
+        UpdateFullscreenSuppression();
+    }
+
+    // PrepPRD Golden Path Step9："客户前台全屏(视频/PPT/游戏)：浮条自动隐藏；stuck例外——
+    // 不弹窗不闪烁，只让托盘图标变红"——只在收起态(浮条)生效，展开态/RPA贴边态不受影响
+    // (客户主动展开看板 或 RPA正在跑 都不该被这条规则隐藏掉)。
+    private void UpdateFullscreenSuppression()
+    {
+        var mode = PanelWindowState.Resolve(_userWantsExpanded, _rpaActive);
+        if (mode != PanelWindowMode.Collapsed)
+        {
+            Visibility = Visibility.Visible;
+            return;
+        }
+
+        var screen = SystemParameters.WorkArea;
+        var screenRect = new NativeMethods.RECT
+        {
+            Left = (int)screen.Left,
+            Top = (int)screen.Top,
+            Right = (int)screen.Right,
+            Bottom = (int)screen.Bottom,
+        };
+        var suppress = NativeMethods.IsForegroundFullscreen(_hwnd, screenRect);
+        Visibility = suppress ? Visibility.Hidden : Visibility.Visible;
     }
 
     private nint WndProc(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
@@ -215,11 +280,13 @@ public partial class MainWindow : Window
     {
         NativeMethods.UnregisterHotKey(_hwnd, NativeMethods.HOTKEY_ID_SUMMON);
         _rpaPollTimer.Stop();
+        _fullscreenPollTimer.Stop();
         if (_trayIcon is not null)
         {
             _trayIcon.Visible = false; // 不显式隐藏，图标会在托盘里残留到下次鼠标划过才消失
             _trayIcon.Dispose();
         }
+        _stuckTrayIcon?.Dispose();
         base.OnClosed(e);
     }
 }
