@@ -1,0 +1,48 @@
+{
+  "initiative_id": null,
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 apps/staff-hub 前端页面（总览页+详情页两个 tab），员工在浏览器中直接查看交互，非纯后端自动化任务",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "Staff Hub 业务线健康看板（GP3 / line_health）— 总览页 + 详情页两个 tab + 3 个 API 端点 + 四类降级路径",
+      "scope": "新增 GET /api/staff/line-health 系列 3 个只读聚合端点（总览卡片/部署环境/能力清单），复用 GET /api/staff/path-health 现有聚合与降级风格；新增 Staff Hub 总览页 LineHealthPage.tsx + 详情页 LineHealthDetailPage.tsx（部署/能力两个 tab）+ 路由注册；覆盖 not_connected（line01/02 未接入 Brain）/ degraded（Brain 5xx/timeout）/ fallback（product-map.json 缺失）/ 未知 lineKey 404 四类降级路径；新增 Playwright E2E 与 windows_cloud CI workflow",
+      "dod": [
+        "[BEHAVIOR] GET /api/staff/line-health 返回 line01/line02/line04 三条，line01/line02 标 not_connected 而非 0/0",
+        "[BEHAVIOR] line01/line02 maturity 字面为 not_connected 且 journey_id 为 null",
+        "[BEHAVIOR] 总览卡片 schema keys 完整性恒等于约定集合，不含禁用字段 path_key/health/status",
+        "[BEHAVIOR] line04 单条线 Brain 查询失败时该线 degraded，不拖垮 line01/line02",
+        "[BEHAVIOR] product-map.json 读取失败时降级为兜底清单，source=fallback",
+        "[BEHAVIOR] GET .../deployment 返回三环境状态 + related_prs 恒为数组",
+        "[BEHAVIOR] not_connected 线两个 tab 均返回 200 空态，message 字面等于约定文案",
+        "[BEHAVIOR] GET .../abilities 返回字段齐全的能力清单",
+        "[BEHAVIOR] 未知 lineKey 返回 404（deployment/abilities 均覆盖）",
+        "[BEHAVIOR] 三个端点均挂 staffGuard，无认证头返回 403",
+        "[BEHAVIOR] GitHub 真实第三方调用可达，production commit_sha 格式为真实40位hex",
+        "[BEHAVIOR] dev/staging 陈旧分支（develop/release/cs-stable）不得显示为 active，须区分 stale（Reviewer r1 修复项1）",
+        "[BEHAVIOR] GitHub 数据缓存 5 分钟，短时间内重复请求不产生二次真实调用（Reviewer r1 修复项2）",
+        "[BEHAVIOR] recent_commit 字段存在且与 environments 中 production 项一致（Reviewer r1 修复项3）",
+        "[BEHAVIOR] deployment/abilities 两端点各自禁用字段（deploy_version/version、features）反向检查（Reviewer r1 修复项4）",
+        "[ARTIFACT] apps/staff-hub/src/pages/LineHealthPage.tsx 与 LineHealthDetailPage.tsx 存在并接入路由",
+        "[ARTIFACT] apps/staff-hub/e2e/line-health.spec.ts 存在且不含 page.route()",
+        "[ARTIFACT] .github/workflows/e2e-staff-line-health-windows.yml 存在",
+        "[ARTIFACT] apps/staff-hub 补齐 @playwright/test devDependency + playwright.config.ts（Reviewer r1 非阻塞建议5）"
+      ],
+      "files": [
+        "apps/api/src/routes/staff.ts",
+        "apps/api/src/routes/__tests__/staff.test.ts",
+        "apps/staff-hub/src/pages/LineHealthPage.tsx",
+        "apps/staff-hub/src/pages/LineHealthDetailPage.tsx",
+        "apps/staff-hub/src/App.tsx",
+        "apps/staff-hub/e2e/line-health.spec.ts",
+        "apps/staff-hub/package.json",
+        "apps/staff-hub/playwright.config.ts",
+        ".github/workflows/e2e-staff-line-health-windows.yml",
+        "sprints/07281207-staff-line-health-dashboard/e2e-verify.ps1"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 130
+    }
+  ]
+}
