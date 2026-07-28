@@ -13,6 +13,14 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$REPO_ROOT"
 
+# smoke-glob-runner job 只跑 `npm ci --workspace=apps/api`，不装根 package.json 的
+# ajv/yaml（lib.mjs 依赖）。自愈式装依赖，与仓库既有 smoke 脚本（如
+# dev-quick-verify-smoke.sh）"现场重建"惯例一致，不改动共享 CI workflow 文件。
+if ! node -e "require.resolve('ajv')" >/dev/null 2>&1; then
+  echo "[setup] 根依赖(ajv/yaml)未装，现场跑 npm ci"
+  npm ci --no-audit --no-fund >/dev/null 2>&1
+fi
+
 FAIL=0
 
 echo "=== ① schema校验：格式错误必须判红 ==="
