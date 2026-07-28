@@ -6,6 +6,7 @@
 # D: fix: PR 触及 apps/src → PASS (跳过，非 feat)
 # E: feat: PR 触及 apps/src + 对既有大 smoke.sh 做有实质内容的扩展（新增 Step）→ PASS
 # F: feat: PR 触及 apps/src + 只象征性碰一下既有大 smoke.sh（无实质新增）→ FAIL
+# G: feat: PR 触及 apps/src + 只改既有version-gate smoke.sh的EXPECTED="x.y.z"一行同步版本号 → PASS(版本同步豁免)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -114,6 +115,29 @@ sed -i.bak 's/Step 1/Step 1 (touched)/' .github/workflows/scripts/smoke/existing
 rm -f .github/workflows/scripts/smoke/existing-smoke.sh.bak
 git add . && git commit -q -m "feat(api): add feature, trivially touch existing smoke"
 check_result "feat-trivial-touch-fails" 1
+cd /tmp; rm -rf "$TMPDIR"
+
+# G: feat + apps/src + 只改既有 version-gate smoke 的 EXPECTED="x.y.z" 一行 → PASS（版本同步豁免）
+TMPDIR=$(mktemp -d); cd "$TMPDIR"
+git init -q && git config user.email "t@t" && git config user.name "t" && git config commit.gpgsign false
+mkdir -p apps/api/src .github/workflows/scripts/smoke
+echo "export const x = 1;" > apps/api/src/base.ts
+cat > .github/workflows/scripts/smoke/version-gate-smoke.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+EXPECTED_LINE04_VERSION="1.0.1"
+node -e "process.stdout.write(require('./manifest.json').version)"
+curl -sf http://localhost:3000/health || exit 1
+echo "version-gate OK"
+EOF
+chmod +x .github/workflows/scripts/smoke/version-gate-smoke.sh
+git add . && git commit -q -m "base incl. version-gate smoke"
+git branch -M main && git checkout -q -b "test-case"
+echo "export const y = 2;" > apps/api/src/feature.ts
+sed -i.bak 's/EXPECTED_LINE04_VERSION="1.0.1"/EXPECTED_LINE04_VERSION="1.0.2"/' .github/workflows/scripts/smoke/version-gate-smoke.sh
+rm -f .github/workflows/scripts/smoke/version-gate-smoke.sh.bak
+git add . && git commit -q -m "feat(api): add feature, bump line04 version-gate smoke EXPECTED"
+check_result "feat-version-sync-only-passes" 0
 cd /tmp; rm -rf "$TMPDIR"
 
 echo ""; echo "lint-feature-has-smoke: PASSED=$PASSED FAILED=$FAILED"

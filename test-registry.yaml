@@ -4995,3 +4995,149 @@ agent_suite:
   status: active
   product: 产品基础设施
   note: "sprint(07280933): Product Map SSOT 合同测试 — BEHAVIOR-01~12 合同验收，RED/GREEN TDD 基线，与 scripts/product-map/__tests__/product-map.test.js 配对"
+
+  # ── 作战窗 Agent Panel 刀1（Path4，PrepPRD sprints/07280929-agent-panel-knife1）──
+
+- id: agent-panel-event-bus-unit
+  path: services/agent/src/__tests__/panel-event-bus.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "PanelEventBus单测：6种事件(task_started/step/waiting/stuck/done/failed)+看门狗90s(可调)+多task灯态max()聚合+最近完成列表50条上限"
+
+- id: agent-panel-line-labels-unit
+  path: services/agent/src/__tests__/panel-line-labels.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "客户视图业务语言映射：line02→智能获客/line04→智能回复/publish→智能发布，防内部代号泄露断言"
+
+- id: agent-panel-rpa-guard-unit
+  path: services/agent/src/__tests__/panel-rpa-guard.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "desktop-lease-broker查询fail-closed守卫：超时/异常/不可解析一律视为RPA进行中"
+
+- id: agent-panel-events-tail-unit
+  path: services/agent/src/__tests__/panel-events-tail.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "panel-events.jsonl文件tail桥接：坏行跳过/offset续读/文件不存在不抛异常/stop()后不再消费"
+
+- id: agent-panel-events-route-behavior
+  path: services/agent/src/handlers/__tests__/panel-events-route.test.ts
+  type: integration
+  ci: L4
+  status: active
+  product: 私域运营
+  note: "registerPanelEventRoutes挂到真实http.Server验证：/state快照+/events/stream SSE首帧+index.ts真接线AST校验"
+
+- id: agent-panel-events-py-unit
+  path: services/agent/wechat-rpa/tests/test_panel_events.py
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "panel_events.py写入单测+listen_chat.py三处打点(task_started/done/failed)AST接线校验，与现有events.jsonl单写者隔离断言"
+
+- id: agent-panel-events-route-unit
+  path: apps/api/src/routes/__tests__/panel-events.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "POST /api/panel/events 路由层单测：租户解析/字段校验/事件类型校验/service层mock"
+
+- id: agent-panel-events-service-unit
+  path: apps/api/src/services/panel/panel-events-service.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "writePanelEvent服务层单测：INSERT语句tenant_id隔离+6事件类型+可选字段透传+异常上抛"
+
+- id: agent-panel-ui-collapsed-strip-unit
+  path: apps/agent-panel/src/components/CollapsedStrip.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "收起态边缘灯带组件：只为connected线上灯，占位线不上灯带，灯色由lightState决定"
+
+- id: agent-panel-ui-expanded-panel-unit
+  path: apps/agent-panel/src/components/ExpandedPanel.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "展开态全屏看板组件：业务语言正向断言+内部代号负向断言+未接入占位文案+空状态兜底文案"
+
+- id: agent-panel-ui-rpa-mini-unit
+  path: apps/agent-panel/src/components/RpaMiniView.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "RPA贴边只读缩略视图：只读无交互元素断言+异常态天然可见"
+
+- id: agent-panel-ui-app-unit
+  path: apps/agent-panel/src/components/AgentPanelApp.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "三态编排+首次装机仪式：本地标记位仅触发一次+RPA抢占式收起+挂载时通知原生宿主初始态"
+
+- id: agent-panel-ui-line-labels-unit
+  path: apps/agent-panel/src/shared/line-labels.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "客户端业务语言映射，与services/agent同款判定点独立小实现"
+
+- id: agent-panel-ui-native-bridge-unit
+  path: apps/agent-panel/src/shared/native-bridge.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "WebView2 JS↔原生宿主桥接：window.chrome.webview.postMessage转发/非宿主环境安全no-op"
+
+- id: agent-panel-ui-types-unit
+  path: apps/agent-panel/src/shared/types.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "面板类型契约构造验证：LightState/TaskState取值+TaskSnapshot必填/可选字段+LineState.connected语义"
+
+- id: agent-panel-ui-setup-unit
+  path: apps/agent-panel/src/test/setup.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "验证vitest setupFiles加载的@testing-library/jest-dom自定义matcher真实挂载生效"
+
+- id: agent-panel-ui-use-agent-panel-state-unit
+  path: apps/agent-panel/src/hooks/useAgentPanelState.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "本地SSE订阅hook：连接端点/snapshot解析/error断线态/坏帧不崩/卸载关闭连接"
+
+- id: agent-panel-ui-use-rpa-guard-unit
+  path: apps/agent-panel/src/hooks/useRpaGuard.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "fail-closed轮询desktop-lease-broker hook：网络异常/非200状态一律fail-closed"
