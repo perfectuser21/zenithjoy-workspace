@@ -1,116 +1,162 @@
-contract_branch: cp-07281207-staff-line-health-dashboard
-sprint_dir: sprints/07281207-staff-line-health-dashboard
+contract_branch: cp-07282119-agent-panel-knife2-android
+sprint_dir: sprints/07282119-agent-panel-knife2-android
 
 ---
 skeleton: false
 journey_type: user_facing
 ---
-# Contract DoD — Sprint: Staff Hub 业务线健康看板（GP3 / line_health）
+# Contract DoD — Sprint: 作战窗 Agent Panel 刀2/安卓获客(line02)打点+可见性
 
-**范围**: `GET /api/staff/line-health` 系列 3 个端点、Staff Hub 总览页、详情页两个 tab（部署/能力）、四类降级路径（not_connected / degraded / product-map fallback / 未知 lineKey 404）、Playwright E2E
+**范围**: `POST /api/agent/burner/panel-event`（新端点，line02 事件写入 panel_events）+ `GET /api/agent/burner/panel-active-tasks`（新端点，中台看门狗计算）+ `services/agent` 桥接模块（真实 ingest 进本地 PanelEventBus）+ `apps/agent-panel` line02 泳道渲染回归 + `golden-path-2-smoke.sh` Step 31
 **大小**: M
 
 ## ARTIFACT 条目
 
-- [x] [ARTIFACT] `apps/api/src/routes/staff.ts` 新增 3 个路由：`GET /line-health`、`GET /line-health/:lineKey/deployment`、`GET /line-health/:lineKey/abilities`
-  Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/staff.ts','utf8');if(!(c.includes(\"'/line-health'\")&&c.includes('/line-health/:lineKey/deployment')&&c.includes('/line-health/:lineKey/abilities')))process.exit(1)"
+- [ ] [ARTIFACT] `POST /api/agent/burner/panel-event` 端点代码存在于 `apps/api/src/routes/agent-burner.ts`
+  Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/agent-burner.ts','utf8');if(!c.includes('panel-event'))process.exit(1)"
 
-- [x] [ARTIFACT] `apps/staff-hub/src/pages/LineHealthPage.tsx` 新建，风格照抄 `PathHealthPage.tsx`
-  Test: node -e "const c=require('fs').readFileSync('apps/staff-hub/src/pages/LineHealthPage.tsx','utf8');if(!c.includes('line-health'))process.exit(1)"
+- [ ] [ARTIFACT] `GET /api/agent/burner/panel-active-tasks` 端点代码存在
+  Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/agent-burner.ts','utf8');if(!c.includes('panel-active-tasks'))process.exit(1)"
 
-- [x] [ARTIFACT] `apps/staff-hub/src/pages/LineHealthDetailPage.tsx` 新建，含部署/能力两个 tab
-  Test: node -e "const c=require('fs').readFileSync('apps/staff-hub/src/pages/LineHealthDetailPage.tsx','utf8');if(!(c.includes('deployment')&&c.includes('abilities')))process.exit(1)"
+- [ ] [ARTIFACT] 3 分钟看门狗阈值为命名常量，不是裸魔法数（Invariant 禁止写死环境假设值）
+  Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/agent-burner.ts','utf8');if(!/const\s+\w*STUCK\w*_?(MS|THRESHOLD)/i.test(c))process.exit(1)"
 
-- [x] [ARTIFACT] `apps/staff-hub` 路由注册 `/line-health` 与 `/line-health/:lineKey`，接入 staffGuard 保护体系（前端路由本身不需要额外鉴权，但需确认已挂载在 `Shell()` 已登录分支内，与 `path-health` 同级）
-  Test: node -e "const c=require('fs').readFileSync('apps/staff-hub/src/App.tsx','utf8');if(!(c.includes('/line-health')&&c.includes('LineHealthPage')&&c.includes('LineHealthDetailPage')))process.exit(1)"
+- [ ] [ARTIFACT] `services/agent` 新增 line02 桥接模块存在
+  Test: node -e "require('fs').accessSync('services/agent/src/shared/panel-line02-bridge.ts')"
 
-- [x] [ARTIFACT] `apps/staff-hub/e2e/line-health.spec.ts` 新建，Playwright E2E
-  Test: node -e "const c=require('fs').readFileSync('apps/staff-hub/e2e/line-health.spec.ts','utf8');if(c.includes('page.route('))process.exit(1);if(!c.includes('line-health'))process.exit(1)"
+- [ ] [ARTIFACT] `golden-path-2-smoke.sh` 新增 Step 31（line02 panel_events 打点回归）
+  Test: node -e "const c=require('fs').readFileSync('.github/workflows/scripts/smoke/golden-path-2-smoke.sh','utf8');if(!c.includes('Step 31'))process.exit(1)"
 
-- [x] [ARTIFACT] `.github/workflows/e2e-staff-line-health-windows.yml` 新建，双 job（ubuntu PR 快反馈 + windows_dispatch 深验）
-  Test: node -e "const c=require('fs').readFileSync('.github/workflows/e2e-staff-line-health-windows.yml','utf8');if(!(c.includes('windows-latest')&&c.includes('line-health')))process.exit(1)"
+## BEHAVIOR 条目（内嵌可执行 manual: 命令）
 
-- [x] [ARTIFACT] `apps/api/src/routes/__tests__/staff.test.ts` 新增本 sprint 测试用例，且不破坏既有 `path-health` 测试
-  Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/__tests__/staff.test.ts','utf8');if(!c.includes('line-health'))process.exit(1)"
+- [ ] [BEHAVIOR] task_started 事件写入 panel_events，line=line02，tenant_id 为服务端反查值
+  Test: manual:bash -c '
+TID="dod-scan-$(date +%s)";
+RESP=$(curl -sf -X POST "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-event" -H "Content-Type: application/json" -d "{\"agent_id\":\"$AGENT_ID\",\"event\":\"task_started\",\"task_id\":\"$TID\",\"line\":\"line02\",\"device\":\"RMX3478-b6ee\",\"title\":\"x\",\"progress\":[1,3]}");
+echo "$RESP" | jq -e ".ok == true" || exit 1;
+ROW=$(psql "$DB" -At -c "SELECT tenant_id||'"'"'|'"'"'||event||'"'"'|'"'"'||line FROM zenithjoy.panel_events WHERE task_id='"'"'$TID'"'"' AND created_at > NOW() - interval '"'"'5 minutes'"'"'");
+[ "$ROW" = "${TENANT_ID}|task_started|line02" ] || exit 1; echo OK'
+  期望: OK
 
-- [x] [ARTIFACT] `apps/staff-hub` 补齐 Playwright 可运行环境（Reviewer r1 非阻塞建议5：当前 `apps/staff-hub/package.json` 无 `@playwright/test` devDependency 且无 `playwright.config.ts`，与已具备该环境的 `apps/dashboard` 不同，须先补齐避免留到 final-e2e 才暴雷）：`package.json` 新增 `@playwright/test` devDependency + 新建 `apps/staff-hub/playwright.config.ts`（可参照 `apps/dashboard/playwright.config.ts` 结构，baseURL 改用 5175 端口对齐本 sprint `e2e-verify.ps1`）
-  Test: node -e "const pkg=require('fs').readFileSync('apps/staff-hub/package.json','utf8');if(!pkg.includes('@playwright/test'))process.exit(1);require('fs').accessSync('apps/staff-hub/playwright.config.ts')"
+- [ ] [BEHAVIOR] step 事件 progress 字段正确写入
+  Test: manual:bash -c '
+TID="dod-step-$(date +%s)";
+curl -sf -X POST "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-event" -H "Content-Type: application/json" -d "{\"agent_id\":\"$AGENT_ID\",\"event\":\"task_started\",\"task_id\":\"$TID\",\"line\":\"line02\",\"device\":\"RMX3478-b6ee\",\"title\":\"x\",\"progress\":[1,3]}" > /dev/null;
+curl -sf -X POST "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-event" -H "Content-Type: application/json" -d "{\"agent_id\":\"$AGENT_ID\",\"event\":\"step\",\"task_id\":\"$TID\",\"line\":\"line02\",\"device\":\"RMX3478-b6ee\",\"title\":\"x\",\"progress\":[2,3]}" | jq -e ".ok==true" || exit 1;
+PROG=$(psql "$DB" -At -c "SELECT progress FROM zenithjoy.panel_events WHERE task_id='"'"'$TID'"'"' AND event='"'"'step'"'"' AND created_at > NOW() - interval '"'"'5 minutes'"'"'");
+echo "$PROG" | grep -qE "\[2, ?3\]" || exit 1; echo OK'
+  期望: OK
 
-## BEHAVIOR 条目（内嵌可执行 manual: 命令，假设 `apps/api` 已在 localhost:3000 启动）
+- [ ] [BEHAVIOR] activeTasks 里 title/progress 字段确实透传（Reviewer round1 问题3）
+  Test: manual:bash -c '
+TID="dod-passthrough-$(date +%s)";
+curl -sf -X POST "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-event" -H "Content-Type: application/json" -d "{\"agent_id\":\"$AGENT_ID\",\"event\":\"task_started\",\"task_id\":\"$TID\",\"line\":\"line02\",\"device\":\"RMX3478-b6ee\",\"title\":\"passthrough-title\",\"progress\":[1,3]}" > /dev/null;
+RESP=$(curl -sf -H "X-Tenant-Id: ${TENANT_ID}" "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-active-tasks?line=line02");
+echo "$RESP" | jq -e --arg tid "$TID" ".activeTasks[] | select(.task_id==\$tid) | .title == \"passthrough-title\"" || exit 1;
+echo "$RESP" | jq -e --arg tid "$TID" ".activeTasks[] | select(.task_id==\$tid) | .progress == [1,3]" || exit 1; echo OK'
+  期望: OK
 
-- [x] [BEHAVIOR] GET /api/staff/line-health 返回 line01/line02/line04 三条，line01 标 not_connected 而非 0/0
-  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e ".data | length == 3" && echo "$RESP" | jq -e ".data[] | select(.line_key==\"line01\") | .availability == \"not_connected\""'
+- [ ] [BEHAVIOR] 3分钟无新事件（时间窗口回填模拟）→ 中台看门狗计算 state=stuck
+  Test: manual:bash -c '
+STID="dod-stuck-$(date +%s)";
+psql "$DB" -c "INSERT INTO zenithjoy.panel_events (tenant_id, task_id, event, line, device, title, progress, created_at) VALUES ('"'"'${TENANT_ID}'"'"', '"'"'$STID'"'"', '"'"'task_started'"'"', '"'"'line02'"'"', '"'"'RMX3478-c3d4'"'"', '"'"'x'"'"', '"'"'[1,3]'"'"', NOW() - interval '"'"'4 minutes'"'"')" > /dev/null;
+RESP=$(curl -sf -H "X-Tenant-Id: ${TENANT_ID}" "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-active-tasks?line=line02");
+echo "$RESP" | jq -e --arg tid "$STID" ".activeTasks[] | select(.task_id==\$tid) | .state == \"stuck\"" || exit 1; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] stuck 任务收到新事件后自动脱离 stuck（PRD 边界情况：无需人工干预）
+  Test: manual:bash -c '
+STID="dod-recover-$(date +%s)";
+psql "$DB" -c "INSERT INTO zenithjoy.panel_events (tenant_id, task_id, event, line, device, title, progress, created_at) VALUES ('"'"'${TENANT_ID}'"'"', '"'"'$STID'"'"', '"'"'task_started'"'"', '"'"'line02'"'"', '"'"'RMX3478-c3d4'"'"', '"'"'x'"'"', '"'"'[1,3]'"'"', NOW() - interval '"'"'4 minutes'"'"')" > /dev/null;
+curl -sf -X POST "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-event" -H "Content-Type: application/json" -d "{\"agent_id\":\"$AGENT_ID\",\"event\":\"step\",\"task_id\":\"$STID\",\"line\":\"line02\",\"device\":\"RMX3478-c3d4\",\"title\":\"x\",\"progress\":[2,3]}" > /dev/null;
+RESP=$(curl -sf -H "X-Tenant-Id: ${TENANT_ID}" "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-active-tasks?line=line02");
+echo "$RESP" | jq -e --arg tid "$STID" ".activeTasks[] | select(.task_id==\$tid) | .state != \"stuck\"" || exit 1; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] done 事件后任务从 activeTasks 消失，出现在 recentCompleted
+  Test: manual:bash -c '
+TID="dod-done-$(date +%s)";
+curl -sf -X POST "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-event" -H "Content-Type: application/json" -d "{\"agent_id\":\"$AGENT_ID\",\"event\":\"task_started\",\"task_id\":\"$TID\",\"line\":\"line02\",\"device\":\"RMX3478-b6ee\",\"title\":\"x\",\"progress\":[1,1]}" > /dev/null;
+curl -sf -X POST "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-event" -H "Content-Type: application/json" -d "{\"agent_id\":\"$AGENT_ID\",\"event\":\"done\",\"task_id\":\"$TID\",\"line\":\"line02\",\"device\":\"RMX3478-b6ee\",\"title\":\"x\"}" | jq -e ".ok==true" || exit 1;
+RESP=$(curl -sf -H "X-Tenant-Id: ${TENANT_ID}" "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-active-tasks?line=line02");
+echo "$RESP" | jq -e --arg tid "$TID" "[.activeTasks[] | select(.task_id==\$tid)] | length == 0" || exit 1;
+echo "$RESP" | jq -e --arg tid "$TID" ".recentCompleted[] | select(.task_id==\$tid) | .state == \"done\"" || exit 1; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] failed 事件 detail 携带 error_code，severity=error
+  Test: manual:bash -c '
+TID="dod-fail-$(date +%s)";
+curl -sf -X POST "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-event" -H "Content-Type: application/json" -d "{\"agent_id\":\"$AGENT_ID\",\"event\":\"failed\",\"task_id\":\"$TID\",\"line\":\"line02\",\"device\":\"RMX3478-b6ee\",\"title\":\"x\",\"detail\":\"OPEN_PANEL_FAILED\",\"severity\":\"error\"}" | jq -e ".ok==true" || exit 1;
+ROW=$(psql "$DB" -At -c "SELECT detail||'"'"'|'"'"'||severity FROM zenithjoy.panel_events WHERE task_id='"'"'$TID'"'"' AND event='"'"'failed'"'"' AND created_at > NOW() - interval '"'"'5 minutes'"'"'");
+[ "$ROW" = "OPEN_PANEL_FAILED|error" ] || exit 1; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] error path — 缺 agent_id 返回 400 MISSING_AGENT_ID，不写库
+  Test: manual:bash -c '
+CODE=$(curl -s -o /tmp/dod_resp.json -w "%{http_code}" -X POST "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-event" -H "Content-Type: application/json" -d "{\"event\":\"task_started\",\"task_id\":\"x\",\"line\":\"line02\",\"device\":\"x\",\"title\":\"x\"}");
+[ "$CODE" = "400" ] || exit 1;
+cat /tmp/dod_resp.json | jq -e ".error == \"MISSING_AGENT_ID\"" || exit 1; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] error path — line 不是 line02 返回 400 INVALID_LINE
+  Test: manual:bash -c '
+CODE=$(curl -s -o /tmp/dod_resp2.json -w "%{http_code}" -X POST "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-event" -H "Content-Type: application/json" -d "{\"agent_id\":\"$AGENT_ID\",\"event\":\"task_started\",\"task_id\":\"x\",\"line\":\"line99\",\"device\":\"x\",\"title\":\"x\"}");
+[ "$CODE" = "400" ] || exit 1;
+cat /tmp/dod_resp2.json | jq -e ".error == \"INVALID_LINE\"" || exit 1; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] INV-1（租户隔离）— agent_id 不存在时不得写入任意 tenant，返回 404 AGENT_NOT_FOUND
+  Test: manual:bash -c '
+CODE=$(curl -s -o /tmp/dod_resp3.json -w "%{http_code}" -X POST "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-event" -H "Content-Type: application/json" -d "{\"agent_id\":\"00000000-0000-0000-0000-000000000000\",\"event\":\"task_started\",\"task_id\":\"x\",\"line\":\"line02\",\"device\":\"x\",\"title\":\"x\"}");
+[ "$CODE" = "404" ] || exit 1;
+cat /tmp/dod_resp3.json | jq -e ".error == \"AGENT_NOT_FOUND\"" || exit 1; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] INV-1（租户隔离）— 跨租户 panel-active-tasks 查询互不可见
+  Test: manual:bash -c '
+OTHER_TENANT=$(psql "$DB" -At -c "INSERT INTO zenithjoy.tenants (name, license_key, plan) VALUES ('"'"'dod-other-tenant'"'"', '"'"'ZJ-F-dod-other'"'"', '"'"'free'"'"') RETURNING id");
+TID="dod-isolation-$(date +%s)";
+curl -sf -X POST "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-event" -H "Content-Type: application/json" -d "{\"agent_id\":\"$AGENT_ID\",\"event\":\"task_started\",\"task_id\":\"$TID\",\"line\":\"line02\",\"device\":\"x\",\"title\":\"x\",\"progress\":[1,1]}" > /dev/null;
+RESP=$(curl -sf -H "X-Tenant-Id: ${OTHER_TENANT}" "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-active-tasks?line=line02");
+echo "$RESP" | jq -e --arg tid "$TID" "[.activeTasks[] | select(.task_id==\$tid)] | length == 0" || exit 1;
+psql "$DB" -c "DELETE FROM zenithjoy.tenants WHERE id='"'"'${OTHER_TENANT}'"'"'" > /dev/null; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] INV-2（端点鉴权）— GET panel-active-tasks 缺 X-Tenant-Id 返回 400
+  Test: manual:bash -c '
+CODE=$(curl -s -o /dev/null -w "%{http_code}" "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-active-tasks?line=line02");
+[ "$CODE" = "400" ] || exit 1; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] INV-8（多设备类型UI区分）— 同型号两台设备并发扫描不合并显示
+  Test: manual:bash -c '
+DEV2_AGENT=$(psql "$DB" -At -c "INSERT INTO zenithjoy.agents (tenant_id, agent_id, hostname, status) VALUES ('"'"'${TENANT_ID}'"'"', '"'"'dod-dev2-'"'"'||extract(epoch from now()), '"'"'android-2'"'"', '"'"'online'"'"') RETURNING id");
+T1="dod-multidev-a-$(date +%s)"; T2="dod-multidev-b-$(date +%s)";
+curl -sf -X POST "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-event" -H "Content-Type: application/json" -d "{\"agent_id\":\"$AGENT_ID\",\"event\":\"task_started\",\"task_id\":\"$T1\",\"line\":\"line02\",\"device\":\"RMX3478-b6ee\",\"title\":\"x\",\"progress\":[1,1]}" > /dev/null;
+curl -sf -X POST "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-event" -H "Content-Type: application/json" -d "{\"agent_id\":\"$DEV2_AGENT\",\"event\":\"task_started\",\"task_id\":\"$T2\",\"line\":\"line02\",\"device\":\"RMX3478-a1f2\",\"title\":\"x\",\"progress\":[1,1]}" > /dev/null;
+RESP=$(curl -sf -H "X-Tenant-Id: ${TENANT_ID}" "${API_BASE:-http://localhost:5200}/api/agent/burner/panel-active-tasks?line=line02");
+D1=$(echo "$RESP" | jq -r --arg tid "$T1" ".activeTasks[] | select(.task_id==\$tid) | .device");
+D2=$(echo "$RESP" | jq -r --arg tid "$T2" ".activeTasks[] | select(.task_id==\$tid) | .device");
+[ -n "$D1" ] && [ -n "$D2" ] && [ "$D1" != "$D2" ] || exit 1; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] services/agent 桥接模块真实调用 PanelEventBus.ingest（真 bus，mock fetch 边界）
+  Test: manual:bash -c 'cd services/agent && npx vitest run src/shared/__tests__/panel-line02-bridge.test.ts --reporter=verbose'
+  期望: exit 0，全部测试通过
+
+- [ ] [BEHAVIOR] panel-events-route CONNECTED_LINES 回归（现有断言从 line02:false 反转为动态判定）
+  Test: manual:bash -c 'cd services/agent && npx vitest run src/handlers/__tests__/panel-events-route.test.ts --reporter=verbose'
   期望: exit 0
 
-- [x] [BEHAVIOR] line01/line02 maturity 字面为 not_connected 且 journey_id 为 null（判定点1，非靠0/0反推）
-  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e ".data[] | select(.line_key==\"line02\") | .maturity == \"not_connected\" and .journey_id == null"'
+- [ ] [BEHAVIOR] apps/agent-panel line02 泳道渲染回归（与 line04 物理隔离 + 设备名格式）
+  Test: manual:bash -c 'cd apps/agent-panel && npx vitest run src/components/ExpandedPanel.test.tsx src/components/CollapsedStrip.test.tsx --reporter=verbose'
   期望: exit 0
 
-- [x] [BEHAVIOR] 总览卡片 schema keys 完整性 — 顶层字段集合恒等于约定集合（防字段漂移）
-  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e "(.data[0] | keys | sort) == ([\"availability\",\"feature_counts\",\"journey_id\",\"journey_name\",\"label\",\"line_key\",\"maturity\",\"message\",\"smoke\"] | sort)"'
+## BEHAVIOR:E2E 条目（Mode B final-e2e 跑，local_api）
+
+- [ ] [BEHAVIOR:E2E] golden-path-2-smoke.sh Step 31 全绿（服务端段真链路：task_started→step→stuck回填→done/failed→多设备隔离）
+  Test: manual:bash -c 'API_BASE=http://localhost:5200 DB_URL="$DATABASE_URL" bash .github/workflows/scripts/smoke/golden-path-2-smoke.sh'
   期望: exit 0
 
-- [x] [BEHAVIOR] 禁用字段名反向检查 — 总览卡片不得出现 path_key/health/status 字段
-  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e "(.data[0] | has(\"path_key\") | not) and (.data[0] | has(\"health\") | not) and (.data[0] | has(\"status\") | not)"'
-  期望: exit 0
-
-- [x] [BEHAVIOR] error path — 无认证头访问 GET /api/staff/line-health 返回 403
-  Test: manual:bash -c 'CODE=$(curl -s -o /dev/null -w "%{http_code}" localhost:3000/api/staff/line-health); [ "$CODE" = "403" ]'
-  期望: exit 0
-
-- [x] [BEHAVIOR] error path — 未知 lineKey 访问 deployment/abilities 均返回 404（非静默200空数据）
-  Test: manual:bash -c 'C1=$(curl -s -o /dev/null -w "%{http_code}" localhost:3000/api/staff/line-health/bogus/deployment -H "X-User-Email: staff@test.com"); C2=$(curl -s -o /dev/null -w "%{http_code}" localhost:3000/api/staff/line-health/bogus/abilities -H "X-User-Email: staff@test.com"); [ "$C1" = "404" ] && [ "$C2" = "404" ]'
-  期望: exit 0
-
-- [x] [BEHAVIOR] deployment 端点返回三环境状态 + related_prs 恒为数组类型
-  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health/line04/deployment -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e "(.data.environments | length == 3) and (.data.related_prs | type == \"array\")"'
-  期望: exit 0
-
-- [x] [BEHAVIOR] not_connected 线（line01）两个 tab 均返回 200 空态，message 字面等于约定文案（判定点2）
-  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health/line01/deployment -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e ".data.connected == false and .data.message == \"该业务线尚未接入 Brain 数据，暂无法展示\" and (.data.environments == [])"'
-  期望: exit 0
-
-- [x] [BEHAVIOR] abilities 端点返回数组，每项字段齐全（id/name/status/thickness）
-  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health/line04/abilities -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e "(.data.abilities | type == \"array\") and (all(.data.abilities[]; has(\"thickness\") and has(\"status\") and has(\"id\") and has(\"name\")))"'
-  期望: exit 0
-
-- [x] [BEHAVIOR] Rule B 第三方真调一次 — GitHub 真实 API 可达，且 production commit_sha 若非空必须匹配真实40位hex格式（非硬编码假值）
-  Test: manual:bash -c 'GH=$(curl -sf "https://api.github.com/repos/perfectuser21/zenithjoy-workspace/commits?sha=main&per_page=1"); echo "$GH" | jq -e ".[0].sha | type == \"string\" and (length == 40)"; RESP=$(curl -sf localhost:3000/api/staff/line-health/line04/deployment -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e "(.data.environments[] | select(.name==\"production\") | .commit_sha) as \$s | (\$s == null) or (\$s | test(\"^[0-9a-f]{40}\$\"))"'
-  期望: exit 0
-
-- [x] [BEHAVIOR] deployment/abilities 两个新端点均挂 staffGuard（无认证头同样403，不遗漏）
-  Test: manual:bash -c 'C1=$(curl -s -o /dev/null -w "%{http_code}" localhost:3000/api/staff/line-health/line04/deployment); C2=$(curl -s -o /dev/null -w "%{http_code}" localhost:3000/api/staff/line-health/line04/abilities); [ "$C1" = "403" ] && [ "$C2" = "403" ]'
-  期望: exit 0
-
-- [x] [BEHAVIOR] dev/staging 陈旧分支不得显示为 active（Reviewer r1 必须修复项1）——当前仓库 develop（末次提交2026-03-07）与 release/cs-stable（末次提交2026-06-23）均已超过30天陈旧阈值，是真实存在的真机验证场景
-  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health/line04/deployment -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e "(.data.environments[] | select(.name==\"dev\") | .status) != \"active\"" && echo "$RESP" | jq -e "(.data.environments[] | select(.name==\"staging\") | .status) != \"active\""'
-  期望: exit 0
-
-- [x] [BEHAVIOR] recent_commit 字段存在且与 environments 中 production 项一致（Reviewer r1 必须修复项3）
-  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health/line04/deployment -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e ".data | has(\"recent_commit\")" && echo "$RESP" | jq -e "((.data.recent_commit == null) and ((.data.environments[] | select(.name==\"production\") | .commit_sha) == null)) or (.data.recent_commit.sha == (.data.environments[] | select(.name==\"production\") | .commit_sha))"'
-  期望: exit 0
-
-- [x] [BEHAVIOR] deployment 端点禁用字段反向检查 — 不得出现 deploy_version/version（Reviewer r1 必须修复项4）
-  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health/line04/deployment -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e "(.data | has(\"deploy_version\") | not) and (.data | has(\"version\") | not)"'
-  期望: exit 0
-
-- [x] [BEHAVIOR] abilities 端点禁用字段反向检查 — 不得出现 features（Reviewer r1 必须修复项4）
-  Test: manual:bash -c 'RESP=$(curl -sf localhost:3000/api/staff/line-health/line04/abilities -H "X-User-Email: staff@test.com"); echo "$RESP" | jq -e "(.data | has(\"features\") | not)"'
-  期望: exit 0
-
-## BEHAVIOR:E2E 条目（user_facing 专属，Mode B final-e2e 跑，windows_cloud + Playwright）
-
-- [x] [BEHAVIOR:E2E] 员工完整走完总览→详情→部署tab→能力tab→返回的 Golden Path，截图可视化验证
-  Screenshots:
-    - 01-overview.png     期望：`/line-health` 总览页渲染 3 张卡片，line01/line02 显示"未接入"灰色徽章，line04 显示 maturity/done/total
-    - 02-detail-deploy.png 期望：点击 line04 卡片后 `/line-health/line04` 详情页默认打开"部署"tab，三环境状态区块可见
-    - 03-detail-abilities.png 期望：切换到"能力"tab，能力清单渲染（或 windows_cloud 沙盒 Brain 不可达时的"数据暂不可达"降级文案，二者均可）
-    - 04-fallback-banner.png 期望：product-map.json 缺失场景下页面顶部出现降级 banner 提示，而非白屏/控制台报错
-  路径格式：`sprints/07281207-staff-line-health-dashboard/screenshots/<step>.png`
-  期望：evaluator 完成后截图已复制到 `sprints/07281207-staff-line-health-dashboard/screenshots/` 目录
-
-## 未覆盖真实链路清单（同 contract-draft.md，重复登记以便 evaluator 单独核对本文件时不漏看）
-
-1. vitest 单测（`apps/api/src/routes/__tests__/staff.test.ts`）中 Brain(`axios.get` journey_features) 与 GitHub(`axios.get` REST API) 两个第三方依赖打桩，延续该文件既有 `path-health` 测试模式；真验证补位由本文件 BEHAVIOR 段的真实 curl 命令承担（针对已启动的真实 `apps/api` 进程，未被 mock）。
-2. windows_cloud final-e2e 中 `CECELIA_BRAIN_URL` 默认未配置真实可达地址（GHA windows-latest 沙盒无法直连内网 Brain，且不可修改共享 `.github/workflows/e2e-windows.yml` 注入新 secret）；line04 能力 tab 在该场景下允许降级为"数据暂不可达"文案，`logic-done-pending`，真实 Brain 数据的完整验证留给 evaluator 模式A（ubuntu-latest，本机/CI 可达 Brain）与 staging 人工验收。
-3. 陈旧阈值判定（30天边界）与 GitHub 数据缓存 TTL 两个 NFR 的内部逻辑（Reviewer r1 必须修复项1/2）：前者靠 vitest `githubMockOverride` 局部覆盖单条 GitHub 请求返回虚拟旧 `commit_date` 验证边界判定，后者靠 `githubRealGetSpy` 计数两次连续请求是否复用同一次真实网络调用，均无法用简单 curl 命令控制"提交日期"或精确观测"是否真的省了一次网络调用"。真验证补位：本文件上方新增的 `dev/staging 陈旧分支不得显示为 active` 一条 [BEHAVIOR] 直接用当前仓库真实 `develop`/`release/cs-stable`（均已陈旧超30天）验证"不误判为 active"这一具体事实，作为陈旧阈值逻辑的真实世界补充验证（不依赖 mock）；缓存 TTL 的通用验证仅在 vitest 层覆盖。
+- [ ] [BEHAVIOR:E2E] Android 真机段（DeviceAccountScanService/AgentService 真实按状态机节奏调用上报接口）
+  期望: **logic-done-pending**（本 sprint target_environment=local_api 是 ubuntu-latest CI 容器，无真实 Android 设备，未真验，见 contract-draft.md「未覆盖真实链路清单」；不得标 done，待 Android 真机通道接管复跑）
