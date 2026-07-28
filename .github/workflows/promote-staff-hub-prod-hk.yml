@@ -1,0 +1,93 @@
+name: Promote Staff Hub to Production :9443（人工放行闸）
+
+# ───────────────────────────────────────────────────────────────────────────
+# 对齐 apps/api 的 promote-prod-hk.yml 模式：Staff Hub 生产更新的唯一入口，
+# 只能人手点（workflow_dispatch），绝无 push 自动触发。
+#   push main → 自动上 staff-hub-staging（deploy-staff-hub-staging.yml，:9444）
+#   → 人工在 :9444 验收过 → 手点本 workflow → 生产 staff-hub（:9443）才更新。
+# ───────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: '要 promote 的 commit SHA（默认 main HEAD）'
+        required: false
+        default: ''
+
+concurrency:
+  group: promote-staff-hub-prod-hk
+  cancel-in-progress: false
+
+jobs:
+  promote-staff-hub-prod-hk:
+    name: Build & Promote Staff Hub 生产 :9443
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Install dependencies
+        run: npm install --workspace=apps/staff-hub
+
+      - name: Create .env.production
+        run: |
+          echo "VITE_FEISHU_APP_ID=${{ secrets.FEISHU_APP_ID }}" > apps/staff-hub/.env.production
+
+      - name: Build staff-hub
+        run: npm run build --workspace=apps/staff-hub
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HK_VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p ${{ secrets.HK_VPS_PORT }} ${{ secrets.HK_VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy dist + nginx.conf to VPS via rsync（仅生产路径）
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HK_VPS_PORT }} -o StrictHostKeyChecking=no" \
+            apps/staff-hub/dist/ \
+            ${{ secrets.HK_VPS_USER }}@${{ secrets.HK_VPS_HOST }}:/opt/zenithjoy/staff-hub/dist/
+          rsync -avz \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HK_VPS_PORT }} -o StrictHostKeyChecking=no" \
+            deploy/staff-hub/nginx.conf \
+            ${{ secrets.HK_VPS_USER }}@${{ secrets.HK_VPS_HOST }}:/opt/zenithjoy/staff-hub/nginx.conf
+          rsync -avz \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HK_VPS_PORT }} -o StrictHostKeyChecking=no" \
+            deploy/staff-hub/common.conf \
+            ${{ secrets.HK_VPS_USER }}@${{ secrets.HK_VPS_HOST }}:/opt/zenithjoy/staff-hub/common.conf
+          echo "✅ 生产 dist + nginx.conf + common.conf synced"
+
+      - name: Restart staff-hub 生产容器 + 冒烟
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HK_VPS_HOST }}
+          username: ${{ secrets.HK_VPS_USER }}
+          key: ${{ secrets.HK_VPS_SSH_KEY }}
+          port: ${{ secrets.HK_VPS_PORT }}
+          script: |
+            set -euo pipefail
+            docker restart staff-hub
+            echo "✅ staff-hub 生产容器已重启"
+
+            STATUS=none
+            for i in $(seq 1 20); do
+              STATUS=$(docker inspect staff-hub --format '{{.State.Health.Status}}' 2>/dev/null || echo none)
+              [ "$STATUS" = "healthy" ] && break
+              sleep 3
+            done
+            [ "$STATUS" = "healthy" ] || { echo "❌ 容器未 healthy: $STATUS"; docker logs --tail 50 staff-hub; exit 1; }
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' -k "https://100.86.118.99:9443/" -H "Host: staff.zenjoymedia.media")
+            [ "$CODE" = "200" ] || { echo "❌ 生产 :9443 首页 http=$CODE"; exit 1; }
+            echo "✅ 生产 :9443 首页 200"
+
+      - name: Notify Brain on failure
+        if: failure()
+        run: |
+          curl -s -X POST "${{ vars.BRAIN_PUBLIC_URL || 'http://localhost:5221' }}/api/brain/alerts" \
+            -H "Content-Type: application/json" \
+            -d '{"level":"P0","source":"promote-staff-hub-prod-hk","message":"Staff Hub 生产 promote 失败 sha=${{ inputs.sha || github.sha }}"}' || true
