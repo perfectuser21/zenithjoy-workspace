@@ -10,7 +10,7 @@ import {
 } from '../services/acquisition-collect';
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { licenseAuth } from '../middleware/license-auth';
-import { simpleRateLimit } from '../middleware/simple-rate-limit';
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import { sseService } from '../services/sse.service';
 import { scoreLeads, buildAssignments, dispatchDue, rescoreLead, upsertConfig } from '../services/acquisition-dispatch';
 import { resolveShareToMedia, type MediaKind } from '../services/douyin-share-resolver';
@@ -94,7 +94,7 @@ const accountScanTriggerRateLimit = simpleRateLimit({
 const signalStatusRateLimit = simpleRateLimit({
   windowMs: 60_000,
   max: 60,
-  keyFn: (req) => req.ip || 'anonymous',
+  keyFn: ipKeyFn,
 });
 
 const VALID_GRADES = ['感兴趣', '精准', '高意向'] as const;
@@ -900,7 +900,11 @@ acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Respo
 
     if (list.length === 0) {
       // 空清单终态：empty → partial(stage1_empty)；error_code / 卡片全解析失败 → failed（checkpoint 保留可重试）
-      const rawFailCode = reasonErrorCode ?? (rawList.length > 0 ? 'ALL_RESOLVE_FAILED' : null);
+      // 2026-07-28 rescue #1456：用 rawReasonErrorCode（未归一的真实原始值）而非 reasonErrorCode
+      // （FR-2 在 L843 已提前 normalize 过一次）——否则下面 rawFailCode !== 'UNKNOWN' 的留证判断
+      // 永远拿到已经被归一过的值，非枚举原始错误码（如 ALL_SHARE_FAILED）永远进不了
+      // checkpoint.raw_error_code，等于 #1484 的留证机制被 FR-2 的提前归一悄悄短路。
+      const rawFailCode = rawReasonErrorCode ?? (rawList.length > 0 ? 'ALL_RESOLVE_FAILED' : null);
       // ALL_RESOLVE_FAILED 是本端点自己合成的已知信号（卡片全解析失败），不是 Android 传来的
       // 未知码，须显式映射到 PLATFORM_LIMITED，不能走 normalizeCollectErrorCode 白名单兜底
       // 被误判成 UNKNOWN（全分支复审 Important finding）。
@@ -1565,9 +1569,18 @@ acquisitionRouter.patch('/config', tenantContextOptional, async (req: Request, r
   }
 });
 
+// CodeQL js/missing-rate-limiting：/signal-verify 碰鉴权(tenantContextOptional反查tenant)+DB
+// 查询。同 signalStatusRateLimit 的既往修法：必须排在 tenantContextOptional 之前（CodeQL 追踪
+// 的是"鉴权节点执行前有没有先经过限流"），按 IP 限流，诊断端点允许较宽松轮询节奏。
+const signalVerifyRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 60,
+  keyFn: ipKeyFn,
+});
+
 // GET /api/acquisition/signal-verify — FR-5 信号验证聚合端点（Bearer token 鉴权，tenant 级）
 // 返回三组数据（每组最新 10 条）：burner_sessions / recent_collect_errors / recent_lead_replies
-acquisitionRouter.get('/signal-verify', tenantContextOptional, async (req: Request, res: Response) => {
+acquisitionRouter.get('/signal-verify', signalVerifyRateLimit, tenantContextOptional, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
 

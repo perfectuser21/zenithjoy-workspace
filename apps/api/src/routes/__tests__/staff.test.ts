@@ -36,6 +36,7 @@ vi.mock('axios', () => ({
 vi.mock('../../middleware/simple-rate-limit', () => ({
   simpleRateLimit: () => (_req: unknown, _res: unknown, next: () => void) => next(),
   tenantKeyFn: () => 'anonymous',
+  ipKeyFn: () => 'anonymous',
 }));
 
 import app from '../../app';

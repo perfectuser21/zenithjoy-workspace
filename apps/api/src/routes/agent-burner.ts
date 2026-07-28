@@ -216,10 +216,19 @@ router.post('/qr-bind-result', async (req: Request, res: Response) => {
   return res.json(OK({ task_id, sessions_updated: 1 }));
 });
 
+// CodeQL js/missing-rate-limiting：/uia-signal 碰鉴权(x-agent-id反查tenant)+DB写入。
+// 按 agent_id 限流——真机 UIA 探测循环节奏与 account-scan-result 同量级（~30-60s一次），
+// 60次/60s 给足并发/连续调用余量（同 accountScanResultRateLimit 的既往修法）。
+const uiaSignalRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 60,
+  keyFn: (req) => req.header('x-agent-id') || 'anonymous',
+});
+
 // ── FR-1b. POST /uia-signal — UIA 在线状态写入（x-agent-id 反查 tenant）──
 // Android agent 通过 x-agent-id header 上报 UIAutomator 探测到的小号在线状态。
 // 写入 agent_platform_sessions 的 uia_online / uia_checked_at / uia_error 列。
-router.post('/uia-signal', async (req: Request, res: Response) => {
+router.post('/uia-signal', uiaSignalRateLimit, async (req: Request, res: Response) => {
   const xAgentId = req.header('x-agent-id') ?? '';
   if (!xAgentId) return res.status(401).json(ERR('MISSING_AGENT_ID', '缺 x-agent-id header'));
 
