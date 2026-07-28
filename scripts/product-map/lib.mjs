@@ -5,6 +5,7 @@
  *   loadAndValidateProductMap()   — 读取并校验 product-map.yaml
  *   validateSchema(input)         — 底层 schema 校验（接受对象）
  *   validateRelations(map)        — 交叉引用关系校验
+ *   validateSmokeFiles(map, repoRoot) — smoke_files 存在性 + 非空占位校验
  *   canonicalize(map)             — 规范化排序
  *   canonicalJson(map)            — 规范化 JSON 字符串
  *   productMapDigest(map)         — SHA-256 摘要
@@ -12,13 +13,13 @@
  *   assertBootstrapParity(map, docs) — bootstrap 文件无手写分类词汇
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
-import { parse as parseYaml } from 'yaml';
+import { parse as parseYaml, YAMLParseError } from 'yaml';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../..');
@@ -55,7 +56,8 @@ export function validateSchema(input) {
   }
   const errors = (validate.errors || []).map(e => {
     const path = e.instancePath || '/';
-    return `Schema error at ${path}: ${e.message}`;
+    const params = e.params ? ` (${JSON.stringify(e.params)})` : '';
+    return `Schema error at ${path}: ${e.message}${params}`;
   });
   return { errors };
 }
@@ -69,12 +71,53 @@ export function validateSchema(input) {
  */
 export async function loadAndValidateProductMap() {
   const raw = readFileSync(YAML_PATH, 'utf8');
-  const parsed = parseYaml(raw);
+  let parsed;
+  try {
+    parsed = parseYaml(raw);
+  } catch (e) {
+    if (e instanceof YAMLParseError) {
+      const line = e.linePos?.[0]?.line ?? '?';
+      return { map: null, errors: [`FAIL: YAML syntax error at line ${line}: ${e.message}`] };
+    }
+    throw e;
+  }
   const { errors } = validateSchema(parsed);
   if (errors.length > 0) {
     return { map: null, errors };
   }
   return { map: parsed, errors: [] };
+}
+
+// ─── validateSmokeFiles ─────────────────────────────────────────────────────────
+
+/**
+ * 校验 GP 条目声明的 smoke_files：存在性 + 非空占位质量判据。
+ * 只校验声明了 smoke_files 字段的条目（天然 grandfather 未声明该字段的历史条目）。
+ * 质量判据与 lint-feature-has-smoke.sh 同款：非注释非空行 ≥5 且含 ≥1 条真实命令
+ * （curl/psql/docker/node/npm/npx），防止 touch 空文件骗过存在性校验。
+ *
+ * @returns { ok: boolean, errors: string[] }
+ */
+export function validateSmokeFiles(map, repoRoot) {
+  const errors = [];
+  for (const gp of (map.golden_paths || [])) {
+    if (!gp.smoke_files) continue;
+    for (const relPath of gp.smoke_files) {
+      const absPath = resolve(repoRoot, relPath);
+      if (!existsSync(absPath)) {
+        errors.push(`::error::GP-SMOKE-MISSING gp=${gp.id} path=${relPath} — 文件不存在。可能原因：①路径拼写错 ②脚本被误删/移动 ③注册时压根没建这个文件。参考现有合法条目的 smoke_files 写法。`);
+        continue;
+      }
+      const content = readFileSync(absPath, 'utf8');
+      const realLines = content.split('\n')
+        .filter(l => !/^\s*#/.test(l) && l.trim() !== '').length;
+      const realCmds = (content.match(/(^|[^a-zA-Z_])(curl|psql|docker|node|npm|npx)[ \t]/gm) || []).length;
+      if (realLines < 5 || realCmds < 1) {
+        errors.push(`::error::GP-SMOKE-EMPTY gp=${gp.id} path=${relPath} — 疑似空占位（非空行=${realLines}，真实命令数=${realCmds}，需≥5行且≥1条curl/psql/docker/node/npm/npx命令）。`);
+      }
+    }
+  }
+  return { ok: errors.length === 0, errors };
 }
 
 // ─── validateRelations ─────────────────────────────────────────────────────────
@@ -214,11 +257,12 @@ export function renderProductMapMarkdown(map, digest) {
 
   lines.push('## Golden Paths');
   lines.push('');
-  lines.push('| ID | App | Line | Status |');
-  lines.push('|----|-----|------|--------|');
+  lines.push('| ID | App | Line | Status | Steps | Smoke Files |');
+  lines.push('|----|-----|------|--------|-------|-------------|');
   for (const gp of c.golden_paths) {
-    const name = gp.name || '';
-    lines.push(`| ${gp.id} | ${gp.app_id} | ${gp.line_id} | ${gp.status} |`);
+    const steps = (gp.steps || []).map(s => `${s.id}:${s.name}${s.status === 'deprecated' ? '（已废弃）' : ''}`).join('<br>') || '—';
+    const smokeFiles = (gp.smoke_files || []).join('<br>') || '—';
+    lines.push(`| ${gp.id} | ${gp.app_id} | ${gp.line_id} | ${gp.status} | ${steps} | ${smokeFiles} |`);
   }
   lines.push('');
 

@@ -165,6 +165,7 @@ jobs:
             case "$1" in
               wechat-rpa-real-agent-smoke.sh) echo 240 ;;
               golden-path-2-smoke.sh) echo 300 ;;  # 23步含Step8c/23b真实LLM调用
+              golden-path-f1-anchor-smoke.sh) echo 180 ;;  # 现场npm ci根依赖(ajv/yaml)，冷cache偶发慢
               *) echo 90 ;;
             esac
           }

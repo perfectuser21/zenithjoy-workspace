@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import {
   loadAndValidateProductMap,
   validateRelations,
+  validateSmokeFiles,
   canonicalize,
   canonicalJson,
   productMapDigest,
@@ -108,6 +109,13 @@ async function cmdCheck() {
       console.error(`FAIL: mismatch — product-map.md does not contain current digest`);
       process.exit(1);
     }
+  }
+
+  const smokeResult = validateSmokeFiles(map, REPO_ROOT);
+  if (!smokeResult.ok) {
+    console.error('FAIL: smoke_files 校验未通过:');
+    for (const e of smokeResult.errors) console.error(' ', e);
+    process.exit(1);
   }
 
   console.log(`PASS: no drift — generated files match current product-map.yaml (digest: ${currentDigest.slice(0, 8)}...)`);
