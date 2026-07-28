@@ -53,6 +53,15 @@ import auto_reply  # type: ignore  # noqa: E402
 # 每客服真发 gate（按 machine_id 拉自己那份配置；真发跟随中台 auto_agent 开关，拉失败强制 dryrun）。
 import cs_config_gate  # type: ignore  # noqa: E402
 
+# 作战窗 Agent Panel 刀1：独立事件打点（panel-events.jsonl，与现有 events.jsonl 完全分离，
+# 不碰单写者约束）。面板是旁观者——打点失败绝不能影响真实回复流程，import 失败也只降级为 no-op。
+try:
+    from panel.panel_events import write_panel_event, new_task_id  # type: ignore  # noqa: E402
+except Exception as exc:  # pragma: no cover
+    write_panel_event = None  # type: ignore[assignment]
+    new_task_id = None  # type: ignore[assignment]
+    print(f"[listen_chat] panel_events import failed: {exc}", file=sys.stderr)
+
 # AI 失败占位 —— 与 apps/api wechat-draft.ts 的 FAIL_PLACEHOLDER 对齐。
 # 自动回模式下中台 AI 失败时 reply 为 undefined；万一拿到占位文案也必须跳过不发给客户。
 FAIL_PLACEHOLDER = "AI 生成失败（请人审决定是否重试）"
@@ -5860,6 +5869,8 @@ def run_real_listen(args: argparse.Namespace) -> int:
                 draft_message_ids = {}
                 # 并行 dict：按 id(m) 存 draft-generate 返回的 reasoning（events_writer 用）。
                 draft_reasonings: "dict[int, str | None]" = {}
+                # 并行 dict：按 id(m) 存作战窗刀1的 panel task_id（done/failed 打点时取回）。
+                panel_task_ids: "dict[int, str]" = {}
                 if eligible:
                     import concurrent.futures
 
@@ -5867,6 +5878,15 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         # FR-3（F3.1）：在调 post_draft_generate 前写 thinking 事件，
                         # 激活 overlay setThinking() 蓝色动画（Gate D，Inv-14）
                         _write_event("thinking", mm["sender"])
+                        # 作战窗刀1：task_started（PrepPRD Golden Path Step5）
+                        if write_panel_event and new_task_id:
+                            _panel_tid = new_task_id(mm["sender"])
+                            panel_task_ids[id(mm)] = _panel_tid
+                            write_panel_event(
+                                "task_started", task_id=_panel_tid, line="line04",
+                                device=getattr(args, "machine_id", None) or "unknown-device",
+                                title=f"回复客户{mm['sender']}",
+                            )
                         return post_draft_generate(
                             args.middleware_url, mm["sender"],
                             mm.get("wxid") or mm.get("sender_wxid") or mm.get("sender", ""),
@@ -5946,6 +5966,14 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         sender_reply_cooldown[m["sender"]] = time.time()  # per-sender 30s 冷却
                         _commit_reply_success(m, last_preview)  # DELIVERED
                         _write_event("reply_sent", m["sender"], draft_reasonings.pop(id(m), None))
+                        # 作战窗刀1：done（PrepPRD Golden Path Step5）
+                        _panel_tid = panel_task_ids.pop(id(m), None)
+                        if write_panel_event and _panel_tid:
+                            write_panel_event(
+                                "done", task_id=_panel_tid, line="line04",
+                                device=getattr(args, "machine_id", None) or "unknown-device",
+                                title=f"回复客户{m['sender']}",
+                            )
                         # 真送达确认 → 回执中台 ok=True（bug2 下半：中台据此销账，不再记假账）。
                         # 不进 _commit_reply_success 本体——它还被 replied/dup/roster_gate 终态复用，
                         # 那些场景无 message_id。message_id 缺省时 post_message_receipt 自动跳过。
@@ -5956,6 +5984,14 @@ def run_real_listen(args: argparse.Namespace) -> int:
                         _log(f"auto-replied OK sender={m['sender']} receipt={receipt['status']}")
                     else:
                         reply_failed_at[key] = time.time()
+                        # 作战窗刀1：failed（PrepPRD Golden Path Step5）
+                        _panel_tid = panel_task_ids.pop(id(m), None)
+                        if write_panel_event and _panel_tid:
+                            write_panel_event(
+                                "failed", task_id=_panel_tid, line="line04",
+                                device=getattr(args, "machine_id", None) or "unknown-device",
+                                title=f"回复客户{m['sender']}", detail="发送失败，冷却后重试",
+                            )
                         # issue（2026-07-08）：_open_chat 已经清掉了微信原生角标，reply_failed_at
                         # 单独存在不够——它只在这条消息还出现在 unread 里才会被求值，角标一清就
                         # 永远没机会重试。record_reply_failure 记进独立队列，主循环每轮单独检查。

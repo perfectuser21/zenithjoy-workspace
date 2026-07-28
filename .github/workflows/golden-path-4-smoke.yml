@@ -109,9 +109,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: '20' }
+        with: { node-version: '20', cache: 'npm', cache-dependency-path: services/agent/package-lock.json }
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
+      # Step 17（作战窗刀1）需要真跑 services/agent 的 TS 逻辑证明看门狗 proven-to-fire，
+      # 不是静态 grep——装依赖才能用 tsx 直接执行。
+      - name: Install services/agent deps (for Step 17 panel-event-bus proven-to-fire check)
+        run: npm ci --no-audit --no-fund
+        working-directory: services/agent
       - name: Run full golden-path-4-smoke (REAL_PUBLISH=0 dryrun)
         env:
           REAL_PUBLISH: '0'

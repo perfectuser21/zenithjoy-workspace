@@ -50,6 +50,8 @@ import { wechatRouter } from './routes/wechat';
 import { wechatConfigRouter } from './routes/wechat-config';
 // Line04 对话记忆三层后端 — tenant 隔离的 写消息/取上下文/触发日收尾
 import { wechatMemoryRouter } from './routes/wechat-memory';
+// 作战窗 Agent Panel 刀1 — events 表薄写入端点
+import { panelEventsRouter } from './routes/panel-events';
 import clipsRouter from './routes/clips';
 import clipsAuthRouter from './routes/clips-auth';
 import { acquisitionRouter } from './routes/acquisition';
@@ -190,6 +192,7 @@ app.use('/api/wechat', wechatRouter);
 app.use('/api/wechat', wechatConfigRouter);
 // Line04 对话记忆三层后端 — /api/wechat/memory/{message,consolidate,context}
 app.use('/api/wechat', wechatMemoryRouter);
+app.use('/api/panel', panelEventsRouter);
 app.use('/api/clips', clipsRouter);
 app.use('/api/clips/auth', clipsAuthRouter);
 // 智能获客「分析+指派」中台大脑（刀1）— 挂同前缀，路径(/config,/dispatch/*,/cookie-health)不与 acquisitionRouter 冲突
