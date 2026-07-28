@@ -89,6 +89,28 @@
 - [ ] 覆盖全部 9 条 API 集成断言（B1-B9）
 - [ ] 需要环境变量：`$API_BASE`、`$DB`（psql DSN）、`$STAFF_EMAIL`（白名单邮箱）
 
+**手动执行合同 E2E：**
+
+manual:bash bash sprints/07281218-relay-30a0c83a/e2e-contract.sh
+
+**product-map 合同 E2E：**
+
+manual:bash node --test scripts/product-map/__tests__/product-map.test.js
+
+---
+
+## 行为断言（[BEHAVIOR] 标签）
+
+[BEHAVIOR] B1 无认证 → 403：`curl -s -o /dev/null -w "%{http_code}" $API_BASE/api/staff/ability-acceptance/runs` → HTTP 403，`error.code=FORBIDDEN`
+
+[BEHAVIOR] B3 幂等首次创建：`POST $API_BASE/api/staff/ability-acceptance/runs {task_id:"30a0c83a",sha:"abc1234"}` → HTTP 200，`data.created===true`，`data.run_id` 为 UUID 格式
+
+[BEHAVIOR] B4 幂等复用：相同 task_id+sha 二次 POST `/runs` → HTTP 200，`data.created===false`，`data.run_id` 与首次相同
+
+[BEHAVIOR] B6 提交后锁定：`POST /runs/:runId/submit` 成功后再 `POST /runs/:runId/devices/1/checks` → HTTP 400，`error.code=RUN_ALREADY_SUBMITTED`
+
+[BEHAVIOR] B9 租户隔离：用 tenant_b 的 X-User-Email 头 `GET /runs` → 响应 `data` 数组不含 tenant_a 创建的 run_id
+
 ### [CI Gate]
 
 - [ ] `.github/workflows/ci-l2-consistency.yml` 新增 `ability-acceptance-smoke` job

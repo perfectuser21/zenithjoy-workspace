@@ -78,6 +78,30 @@
 
 ---
 
+## E2E 验收
+
+本合同的 E2E 验收分三个阶段执行，覆盖 product-map 保序、API 集成、Playwright 前端三条验收链路：
+
+### Phase A — product-map 保序合同 E2E
+
+运行：`node --test scripts/product-map/__tests__/product-map.test.js`（T1-T7 全 PASS）
+
+关键断言：T3 `ability_acceptance.status === 'active'`；T6 `productMapDigest` 两次调用返回相同 hex。
+
+### Phase B — API 集成合同 E2E
+
+脚本：`bash sprints/07281218-relay-30a0c83a/e2e-contract.sh`（需 `$API_BASE`、`$DB`、`$STAFF_EMAIL`）
+
+覆盖 B1-B9 共 9 条断言：无认证 → 403、版本接口非空、幂等创建/复用、check 录入、提交锁定、audit 字段、租户隔离。
+
+### Phase C — Playwright E2E（windows_cloud）
+
+文件：`apps/dashboard/e2e/ability-acceptance.spec.ts`
+
+覆盖 C1-C5 共 5 个可见断言：导航入口、版本概览卡片、验收项清单、提交状态文字、历史明细展开。
+
+---
+
 ## 累积 FR 回归断言（3 个）
 
 | ID | 来源 sprint | 断言 |
