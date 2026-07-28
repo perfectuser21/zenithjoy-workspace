@@ -1,0 +1,53 @@
+# Product Map SSOT — ZenithJoy
+# 此文件是唯一手写分类来源。App/Line/GP 的任何变更只在此处修改。
+# 生成投影：npm run product-map:generate
+# 校验：npm run product-map:validate
+# 漂移检测：npm run product-map:check
+
+apps:
+  - id: customer_app
+    name: 客户端（Customer App）
+    lines:
+      - id: line01
+        name: Line 01 客户首次成功
+      - id: line02
+        name: Line 02 客户智能获客
+      - id: line04
+        name: Line 04 客户私域 AI 接管
+
+  - id: staff_app
+    name: 员工后台（Staff App）
+    lines:
+      - id: line00
+        name: Line 00 运营与系统
+
+surfaces:
+  - web
+  - api
+  - android
+  - windows
+
+editions:
+  - personal_wechat
+  - wecom
+
+# Golden Paths — 仅 staff_app/line00 有已确认 GP
+# customer_app 三条 Line 的 GP 待各 Sprint 批准后补充
+golden_paths:
+  - id: skill_acceptance
+    app_id: staff_app
+    line_id: line00
+    name: Skill 验收流程
+    status: active
+
+  - id: ability_acceptance
+    app_id: staff_app
+    line_id: line00
+    name: Ability 验收流程
+    status: proposed
+
+  - id: line_health
+    app_id: staff_app
+    line_id: line00
+    name: Line 健康度看板
+    status: active

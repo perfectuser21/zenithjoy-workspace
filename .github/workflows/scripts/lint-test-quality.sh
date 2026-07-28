@@ -2,7 +2,7 @@
 # lint-test-quality.sh (ZenithJoy)
 # 拦"假测试 stub"：
 #   Rule A: readFileSync(src/) grep 占主导 + 无 await fn() 业务调用 → fail
-#   Rule B: 完全没 expect → fail
+#   Rule B: 完全没 expect / assert.* → fail（node:assert/strict 与 expect() 等价）
 #   Rule C: 全 .skip → fail
 #
 # 用法：bash lint-test-quality.sh [BASE_REF]
@@ -45,10 +45,11 @@ while IFS= read -r tf; do
     continue
   fi
 
-  # Rule B: 完全无 expect
+  # Rule B: 完全无 expect / assert（node:assert/strict 等价于 expect，两者均可）
   EXPECTS=$(grep -cE "expect\s*\(" "$tf" 2>/dev/null || true)
-  EXPECTS="${EXPECTS:-0}"
-  if [ "$EXPECTS" -eq 0 ]; then
+  ASSERTS=$(grep -cE "assert\.(ok|equal|deepEqual|notEqual|strictEqual|match|throws|doesNotThrow|rejects)\s*\(" "$tf" 2>/dev/null || true)
+  EXPECTS="${EXPECTS:-0}"; ASSERTS="${ASSERTS:-0}"
+  if [ "$EXPECTS" -eq 0 ] && [ "$ASSERTS" -eq 0 ]; then
     BAD_EMPTY+=("$tf")
     continue
   fi

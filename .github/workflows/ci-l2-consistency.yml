@@ -207,10 +207,32 @@ jobs:
       - name: Run registry sync check
         run: node scripts/sync-registry.cjs
 
+  product-map-contract:
+    name: Product Map Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run product-map unit tests
+        run: npm run test:product-map
+
+      - name: Check product-map drift
+        run: |
+          npm run product-map:generate
+          npm run product-map:check
+
   # ─── L2 Gate ──────────────────────────────────────────────────────────
   l2-passed:
     name: L2 Consistency Gate Passed
-    needs: [tsconfig-inheritance, engines-consistency, sensitive-files, orphan-test-check, registry-sync-check]
+    needs: [tsconfig-inheritance, engines-consistency, sensitive-files, orphan-test-check, registry-sync-check, product-map-contract]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -245,6 +267,11 @@ jobs:
 
           if [ "${{ needs.registry-sync-check.result }}" != "success" ]; then
             echo "FAIL: Registry Sync Check (${{ needs.registry-sync-check.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.product-map-contract.result }}" != "success" ]; then
+            echo "FAIL: Product Map Contract (${{ needs.product-map-contract.result }})"
             FAILED=true
           fi
 

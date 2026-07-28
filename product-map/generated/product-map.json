@@ -1,0 +1,66 @@
+{
+  "apps": [
+    {
+      "id": "customer_app",
+      "name": "客户端（Customer App）",
+      "lines": [
+        {
+          "id": "line01",
+          "name": "Line 01 客户首次成功"
+        },
+        {
+          "id": "line02",
+          "name": "Line 02 客户智能获客"
+        },
+        {
+          "id": "line04",
+          "name": "Line 04 客户私域 AI 接管"
+        }
+      ]
+    },
+    {
+      "id": "staff_app",
+      "name": "员工后台（Staff App）",
+      "lines": [
+        {
+          "id": "line00",
+          "name": "Line 00 运营与系统"
+        }
+      ]
+    }
+  ],
+  "surfaces": [
+    "android",
+    "api",
+    "web",
+    "windows"
+  ],
+  "editions": [
+    "personal_wechat",
+    "wecom"
+  ],
+  "golden_paths": [
+    {
+      "id": "ability_acceptance",
+      "app_id": "staff_app",
+      "line_id": "line00",
+      "name": "Ability 验收流程",
+      "status": "proposed"
+    },
+    {
+      "id": "line_health",
+      "app_id": "staff_app",
+      "line_id": "line00",
+      "name": "Line 健康度看板",
+      "status": "active"
+    },
+    {
+      "id": "skill_acceptance",
+      "app_id": "staff_app",
+      "line_id": "line00",
+      "name": "Skill 验收流程",
+      "status": "active"
+    }
+  ],
+  "digest": "d7f5e70f9d4dd7d66de265881b7be3d10df0ba41d0e50af73acbf64e0f177697"
+}

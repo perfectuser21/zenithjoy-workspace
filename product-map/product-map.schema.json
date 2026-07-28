@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zenithjoy.com/schemas/product-map.schema.json",
+  "title": "Product Map",
+  "description": "ZenithJoy Product Map — machine-verifiable classification SSOT",
+  "type": "object",
+  "required": ["apps", "surfaces", "editions", "golden_paths"],
+  "additionalProperties": false,
+  "properties": {
+    "apps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "lines"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "name": { "type": "string" },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["id", "name"],
+              "additionalProperties": false,
+              "properties": {
+                "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+                "name": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "surfaces": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" }
+    },
+    "editions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" }
+    },
+    "golden_paths": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "app_id", "line_id", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "app_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "line_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "name": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["active", "proposed", "deprecated"]
+          },
+          "required_surfaces": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "edition": { "type": "string" }
+        }
+      }
+    }
+  }
+}

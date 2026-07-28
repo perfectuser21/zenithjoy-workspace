@@ -15,7 +15,11 @@
     "dev:geoai": "npm run dev --workspace=apps/geoai",
     "lint": "npm run lint --workspaces --if-present",
     "clean": "find . -name 'node_modules' -type d -prune -exec rm -rf '{}' +",
-    "clean:dist": "find . -name 'dist' -type d -prune -exec rm -rf '{}' +"
+    "clean:dist": "find . -name 'dist' -type d -prune -exec rm -rf '{}' +",
+    "product-map:validate": "node scripts/product-map/cli.mjs validate",
+    "product-map:generate": "node scripts/product-map/cli.mjs generate",
+    "product-map:check": "node scripts/product-map/cli.mjs check",
+    "test:product-map": "node --test scripts/product-map/__tests__/product-map.test.js"
   },
   "keywords": [
     "monorepo",
@@ -30,7 +34,10 @@
     "npm": ">=9.0.0"
   },
   "devDependencies": {
-    "vitest": "^4.0.18"
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "vitest": "^4.0.18",
+    "yaml": "^2.9.0"
   },
   "overrides": {
     "vite": "^7.3.2",
