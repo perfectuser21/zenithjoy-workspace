@@ -45,7 +45,7 @@ router.get('/templates', async (req, res) => {
       [tenantId]
     );
     res.json({ success: true, data: result.rows });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ success: false, data: null, error: { code: 'INTERNAL_ERROR', message: '服务器内部错误' } });
   }
 });
@@ -64,7 +64,7 @@ router.get('/versions', async (req, res) => {
         production: { version: productionVersion, source: process.env.PRODUCTION_VERSION ? 'env:PRODUCTION_VERSION' : 'file:VERSION' },
       },
     });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ success: false, data: null, error: { code: 'INTERNAL_ERROR', message: '服务器内部错误' } });
   }
 });
@@ -111,7 +111,7 @@ router.post('/runs', async (req, res) => {
       success: true,
       data: { run_id: result.rows[0].run_id, created: true, status: 'in_progress' },
     });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ success: false, data: null, error: { code: 'INTERNAL_ERROR', message: '服务器内部错误' } });
   }
 });
@@ -125,7 +125,7 @@ router.get('/runs', async (req, res) => {
       [tenantId]
     );
     res.json({ success: true, data: result.rows });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ success: false, data: null, error: { code: 'INTERNAL_ERROR', message: '服务器内部错误' } });
   }
 });
@@ -163,7 +163,7 @@ router.get('/runs/:runId', async (req, res) => {
       success: true,
       data: { ...runResult.rows[0], devices },
     });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ success: false, data: null, error: { code: 'INTERNAL_ERROR', message: '服务器内部错误' } });
   }
 });
@@ -235,7 +235,7 @@ router.post('/runs/:runId/devices/:deviceIndex/checks', async (req, res) => {
     );
 
     return res.json({ success: true, data: { updated: true } });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ success: false, data: null, error: { code: 'INTERNAL_ERROR', message: '服务器内部错误' } });
   }
 });
@@ -272,7 +272,7 @@ router.post('/runs/:runId/submit', async (req, res) => {
       success: true,
       data: { run_id: runId, status: 'submitted' },
     });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ success: false, data: null, error: { code: 'INTERNAL_ERROR', message: '服务器内部错误' } });
   }
 });
