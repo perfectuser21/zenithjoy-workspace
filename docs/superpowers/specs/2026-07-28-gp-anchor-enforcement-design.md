@@ -69,14 +69,22 @@ GP-Anchor: none(infra)                                ← 显式豁免
 - 刀 1 落地前 GP 未注册、闸未通电：刀 1 的 PR 用现行 prose 声明（它自己就是注册锚点的 PR）。刀 2 合并起，刀 3/4/5 的 PR 必须过自己建的闸——机制上线的过程即其第一轮真机验收。
 - `golden-path-f1-anchor-smoke.sh` 按「守卫必须变异测试」原则写：喂无锚 PR body 给 lint 必须红；喂合法声明必须绿；Brain API 注册无锚任务必须 400。守卫本身被 smoke 持续验证。
 
-## 6. 非目标
+## 6. 回滚与应急
+
+- **硬闸不阻塞紧急修复的依据**：合规成本 = 在 PR body 写一行 `GP-Anchor: ...`（约 10 秒），远低于任何紧急修复本身的成本。这就是不设 hotfix 旁路的前提——旁路省下的 10 秒换来的是所有修复都自称紧急的后门（主理人拍板：一律硬闸）。
+- **锚定系统自身故障的回滚路径**：⑥ 的 lint 挂载在 `ci-l1-process.yml`，回滚 = revert 单个 job 引用（一行 workflow 改动，不需要动 product-map 数据）；① Brain 校验回滚 = 关闭 `gp_anchor` 必填开关（单个 feature flag / revert 一个 commit）。两处回滚互相独立，回滚任意一处不影响已积累的锚定数据。
+- **误拦（false positive）处置**：lint 报错信息必须带自修复指引（合法格式示例 + product-map 现有 id 清单），使误拦可在 PR 内自助解决，不需要管理员介入。
+- **「smoke diff 触碰」的精确定义**（刀 3 验收口径）：diff 文件清单包含该 GP 的 `smoke_file` 路径（或其在 smoke 内 source 的断言脚本路径）即为触碰；不做内容语义判断。宽松方向的误差（碰了文件但没实质推进）由 ⑦ nightly 实跑 smoke 兜底。
+- **刀 5 归户的工作量边界**：只做近 40 个 PR 的一次性台账（人工判断归属 line，产出一个 markdown 台账 + 欠 smoke 回流的 Brain Issue），不做批量数据迁移、不改历史 git 记录，准确性以主理人抽查为准。
+
+## 7. 非目标
 
 - 不做 step 粒度的 smoke 断言映射（只验文件级触碰）。
 - 不做 hotfix 旁路与事后清算机制（拍板：一律硬闸）。
 - 不在本设计内对齐 Path2 业务步骤与 smoke 步数的编号。
 - 不迁移历史 PR 的 git 记录，只做归户台账 + 欠债 Issue。
 
-## 7. 验收标准（整体）
+## 8. 验收标准（整体）
 
 1. 无 GP-Anchor 行（或 id 查无）的 PR 无法合并（CI 红）。
 2. 声称 `#stepN` 推进但 diff 未触碰对应 `smoke_file` 的 PR 无法合并。
