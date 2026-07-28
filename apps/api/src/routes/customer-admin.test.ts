@@ -213,6 +213,25 @@ describe('POST /api/tenant/:id/service-agents/:userId/bind-device 绑真实成�
     expect(res.body.error.code).toBe('ALREADY_BOUND');
   });
 
+  it('成员已绑失败 → 写一条 customer_admin_audit 记录（issue 2026-07-28：绑定失败此前零留痕）', async () => {
+    setHandler((sql) => {
+      if (/FROM zenithjoy\.tenant_members/.test(sql)) return { rows: [{ feishu_user_id: 'usr-1' }], rowCount: 1 };
+      if (/WHERE member_user_id = \$1 AND deleted_at IS NULL/.test(sql)) return { rows: [{ x: 1 }], rowCount: 1 };
+      return { rows: [], rowCount: 0 };
+    });
+    const res = await request(app)
+      .post(`/api/tenant/${TID}/service-agents/usr-1/bind-device`)
+      .send({ machine_id: 'pc-1' });
+    expect(res.status).toBe(409);
+    const auditCall = mockQuery.mock.calls.find(([sql]: [string]) =>
+      /INSERT INTO zenithjoy\.customer_admin_audit/.test(sql)
+    );
+    expect(auditCall).toBeTruthy();
+    expect(auditCall![1]).toEqual(
+      expect.arrayContaining([TID, expect.any(String), 'bind_device_failed_member_already_bound', 'machine', 'pc-1'])
+    );
+  });
+
   it('机器配额满 → 409 MACHINE_QUOTA_EXCEEDED', async () => {
     setHandler((sql) => {
       if (/FROM zenithjoy\.tenant_members/.test(sql)) return { rows: [{ feishu_user_id: 'usr-1' }], rowCount: 1 };

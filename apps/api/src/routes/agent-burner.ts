@@ -887,6 +887,26 @@ router.post('/account-scan-result', accountScanResultRateLimit, async (req: Requ
     }
   }
 
+  // 2026-07-28 issue：扫描失败（ok!==true）时无条件落 agent_scan_failures，不再依赖
+  // request_id 是否为 UUID / 是否命中 publish_tasks——手机内部自动循环扫描（request_id
+  // 形如 "scan-<timestamp>"，占真机常态运行的绝大多数场景）此前会被下面 taskFound 分支
+  // 完全跳过，error_code/screenshot/tree_dump 服务端从未落库，只留在手机本地 logcat。
+  if (ok !== true) {
+    await pool.query(
+      `INSERT INTO zenithjoy.agent_scan_failures (agent_id, request_id, error_code, detail)
+       VALUES ($1, $2, $3, $4::jsonb)`,
+      [
+        agent_id,
+        typeof request_id === 'string' ? request_id : null,
+        typeof error_code === 'string' ? error_code : null,
+        JSON.stringify({
+          screenshot_b64: typeof screenshot_b64 === 'string' ? screenshot_b64 : null,
+          tree_dump: typeof tree_dump === 'string' ? tree_dump : null,
+        }),
+      ],
+    );
+  }
+
   // 仅当 request_id 对应真实 publish_tasks 行（手动触发场景）才推进其终态，
   // 关闭 getQueuedTasks() 重复派发的循环。
   if (taskFound) {
