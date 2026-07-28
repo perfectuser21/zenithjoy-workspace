@@ -1,4 +1,5 @@
 import type { LineState } from '@/shared/types';
+import { lightStateColor } from '@/shared/light-state-color';
 
 // 收起态：屏幕边缘细灯带。只为已接入(connected)的线上灯——
 // 未接入占位线不上灯带（避免稀释信号，判定点：占位线只在展开态显示）。
@@ -20,7 +21,7 @@ export function CollapsedStrip({ lines, onClick }: { lines: LineState[]; onClick
           key={l.line}
           data-testid={`lamp-${l.line}`}
           data-state={l.lightState}
-          style={{ width: 6, height: 26, display: 'block' }}
+          style={{ width: 6, height: 26, display: 'block', backgroundColor: lightStateColor(l.lightState) }}
         />
       ))}
     </div>
