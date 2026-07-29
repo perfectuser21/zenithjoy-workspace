@@ -57,6 +57,14 @@ public partial class MainWindow : Window
             NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT, NativeMethods.VK_Z);
         SetupTrayIcon();
 
+        // 真机WindowFromPoint实测：Topmost属性切换+直接SetWindowPos(HWND_TOPMOST)双重
+        // 修复都没能让收起态灯带真正可点——根因很可能根本不是z-order，是WPF窗口
+        // AllowsTransparency=true的per-pixel透明度点击穿透机制：WebView2控件从未显式
+        // 设置过DefaultBackgroundColor，默认值在这种承载场景下可能停留在全透明alpha，
+        // 哪怕网页CSS画了纯色背景，合成层alpha通道依然是透明的，点击直接穿透到桌面下层
+        // 窗口(微信)。显式设成不透明色(=CSS --zj-bg)让整个控件在合成层真正不透明。
+        Web.DefaultBackgroundColor = System.Drawing.Color.FromArgb(0xFF, 0x0F, 0x17, 0x2A);
+
         await Web.EnsureCoreWebView2Async();
         Web.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
         NavigateToPanelContent();
@@ -252,6 +260,13 @@ public partial class MainWindow : Window
     {
         Topmost = false;
         Topmost = true;
+        // 真机WindowFromPoint实测：光靠WPF的Topmost属性切换，实测仍然打不过微信这类
+        // 普通非topmost窗口的z-order争夺。直接P/Invoke SetWindowPos(HWND_TOPMOST)
+        // 是无歧义的最终手段，双保险。
+        if (_hwnd != IntPtr.Zero)
+        {
+            NativeMethods.ForceTopmost(_hwnd);
+        }
     }
 
     // PrepPRD Golden Path Step9："客户前台全屏(视频/PPT/游戏)：浮条自动隐藏；stuck例外——
