@@ -5,7 +5,8 @@ echo "== staff-hub smoke =="
 node scripts/check-staff-hub-llm-imports.mjs
 test -f apps/staff-hub/src/App.tsx
 test -f apps/staff-hub/src/pages/SkillEvalPage.tsx
-test -f apps/staff-hub/src/pages/PathHealthPage.tsx
+# Path 健康已下线合并进业务线健康看板（line-health），2026-07-29
+test -f apps/staff-hub/src/pages/LineHealthPage.tsx
 node -e "const fs=require('fs');const c=fs.readFileSync('apps/dashboard/src/config/navigation.config.ts','utf8');if(c.includes('/staff/skill-eval'))process.exit(1);console.log('dashboard route removed')"
 
 echo "-- 起真实API进程，验证feishu-login真实behavior --"
@@ -34,12 +35,12 @@ if [ "$STATUS" != "400" ]; then
 fi
 echo "feishu-login 缺code->400: PASS"
 
-STATUS2=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${PORT}/api/staff/path-health" \
+STATUS2=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${PORT}/api/staff/line-health" \
   -H "X-User-Email: not-in-whitelist@example.com")
 if [ "$STATUS2" != "403" ]; then
-  echo "FAIL: path-health 非白名单邮箱应403，实得 $STATUS2"; exit 1
+  echo "FAIL: line-health 非白名单邮箱应403，实得 $STATUS2"; exit 1
 fi
-echo "path-health 非白名单->403: PASS"
+echo "line-health 非白名单->403: PASS"
 
 kill $API_PID 2>/dev/null || true
 trap - EXIT
