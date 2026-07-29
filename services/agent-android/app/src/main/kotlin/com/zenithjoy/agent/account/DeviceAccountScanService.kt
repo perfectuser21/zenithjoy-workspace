@@ -292,9 +292,19 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
             if (switchEntry != null) {
                 // "切换账号"是 clickable ImageView，坐标点其中心最稳(ACTION_CLICK 对抖音部分节点无效)。
                 tapNodeCenter(switchEntry)
-                delay(800L)
-                val panel = awaitRootInActiveWindow(attempts = 6)
-                if (panel != null && findNodeByIds(panel, "com.ss.android.ugc.aweme:id/recycler_view") != null) {
+                // 真机复现(2026-07-29，客户已交付环境MAA-AN00，装含前两次修复的2.1.17真实跑通)：
+                // 原实现只 delay(800L) 后调 awaitRootInActiveWindow(attempts=6) 检查一次——但那个
+                // 函数语义是"等任意非null根节点出现"就立即返回，不等 recycler_view 这个特定元素
+                // 真正渲染完成，面板展开动画/加载较慢时检查过早，误判"面板未出现"。与已验证两次
+                // 有效的根因(我tab等待/CLEAR_TOP恢复)完全同源，改为对齐同一轮询模式。
+                var panel: AccessibilityNodeInfo? = null
+                for (panelPollAttempt in 0 until 4) {
+                    delay(800L)
+                    val checkRoot = rootInActiveWindow
+                    panel = checkRoot?.takeIf { findNodeByIds(it, "com.ss.android.ugc.aweme:id/recycler_view") != null }
+                    if (panel != null) break
+                }
+                if (panel != null) {
                     return true
                 }
                 android.util.Log.w(TAG, "点了切换账号但面板未出现(第${attempt + 1}次)")
