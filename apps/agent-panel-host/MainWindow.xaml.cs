@@ -63,7 +63,7 @@ public partial class MainWindow : Window
         // 设置过DefaultBackgroundColor，默认值在这种承载场景下可能停留在全透明alpha，
         // 哪怕网页CSS画了纯色背景，合成层alpha通道依然是透明的，点击直接穿透到桌面下层
         // 窗口(微信)。显式设成不透明色(=CSS --zj-bg)让整个控件在合成层真正不透明。
-        Web.DefaultBackgroundColor = System.Windows.Media.Color.FromArgb(0xFF, 0x0F, 0x17, 0x2A);
+        Web.DefaultBackgroundColor = System.Drawing.Color.FromArgb(0xFF, 0x0F, 0x17, 0x2A);
 
         await Web.EnsureCoreWebView2Async();
         Web.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
