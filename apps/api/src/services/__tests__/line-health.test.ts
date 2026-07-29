@@ -253,7 +253,7 @@ describe('buildLineDeployment — 真实 /version（不再猜 git 分支）', ()
 
   it('/version 返回非 2xx 错误状态（真实 axios 对非 2xx 默认 reject）时同样降级为 null，不抛异常、不解析错误响应体', async () => {
     clearLineHealthCache();
-    axiosGetMock.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => {
+    axiosGetMock.mockImplementation((url: string) => {
       if (url === STAGING_VERSION_URL) return Promise.reject(new Error('Request failed with status code 503'));
       if (url === PROD_VERSION_URL) {
         return Promise.resolve({ status: 200, data: { sha: PROD_SHA, version: '1.0.1', buildTime: isoDaysAgo(2) } });
