@@ -5011,6 +5011,22 @@ agent_suite:
   product: 产品基础设施
   note: "sprint(07280933): Product Map SSOT 合同测试 — BEHAVIOR-01~12 合同验收，RED/GREEN TDD 基线，与 scripts/product-map/__tests__/product-map.test.js 配对"
 
+- id: realmachine-unverified-ratchet
+  path: scripts/product-map/__tests__/realmachine-unverified-ratchet.test.js
+  type: unit
+  ci: L2
+  status: active
+  product: 产品基础设施
+  note: "sprint(07292330): 真机验证车道三层防假绿 · 第3层 ci-patrol 棘轮 — computeRealmachineUnverifiedRatchet 5个node:test测试，覆盖已覆盖/未覆盖/缺nightly_ref/混合场景/空数组5种场景"
+
+- id: realmachine-unverified-ratchet-sprint-contract
+  path: sprints/07292330-realmachine-verify-lane/tests/realmachine-unverified-ratchet.test.js
+  type: unit
+  ci: L2
+  status: active
+  product: 产品基础设施
+  note: "sprint(07292330): 真机验证车道三层防假绿合同测试（GAN已批准）— 与 scripts/product-map/__tests__/realmachine-unverified-ratchet.test.js 配对，RED/GREEN TDD 基线原件留档"
+
   # ── 作战窗 Agent Panel 刀1（Path4，PrepPRD sprints/07280929-agent-panel-knife1）──
 
 - id: agent-panel-event-bus-unit

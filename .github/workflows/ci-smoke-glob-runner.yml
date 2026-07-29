@@ -150,6 +150,7 @@ jobs:
           wechat-cs-visible-delivery-smoke.sh
           line04-preflight-smoke.sh
           line02-android-collect-realmachine-smoke.sh
+          account-scan-realmachine-smoke.sh
           "
 
           is_denied() {

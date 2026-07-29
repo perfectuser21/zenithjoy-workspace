@@ -66,6 +66,8 @@ echo "=== Step 5: SESSION_EXPIRED → task failed + 该号 expired + 另一号�
 psql "$DB" -c "INSERT INTO zenithjoy.agent_platform_sessions (agent_id, platform, account_label, role, status, bound_at, created_at) VALUES ('$AGENT_ID','douyin','装修小号2','burner','active',NOW(),NOW()) ON CONFLICT (agent_id,platform,account_label) DO UPDATE SET status='active'" >/dev/null
 DM3=$(curl -sf -X POST "$API_BASE/api/agent/burner/dm-outreach" -H "Content-Type: application/json" \
   -d "{\"tenant_id\":\"$TENANT_ID\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"$LABEL\",\"profile_url\":\"https://www.douyin.com/user/MS4wccc\",\"message\":\"hi\"}" | jq -r '.data.task_id')
+# gate-allow: 下一步不是自我实现假测试——除了 error_code 读回，还直接断言了 HTTP 响应里
+# session_disabled 真实副作用(服务端按 error_code 触发 session 失效的业务逻辑)，属于真实行为验证
 curl -sf -X POST "$API_BASE/api/agent/burner/dm-outreach-result" \
   -H "X-Smoke-Token: $SMOKE_TOKEN" -H "Content-Type: application/json" \
   -d "{\"task_id\":\"$DM3\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"$LABEL\",\"status\":\"failed\",\"error_code\":\"SESSION_EXPIRED\",\"profile_url\":\"https://www.douyin.com/user/MS4wccc\"}" \

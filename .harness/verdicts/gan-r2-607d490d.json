@@ -1,0 +1,17 @@
+{
+  "verdict": "APPROVED",
+  "round": 2,
+  "commit": "607d490d",
+  "task_id": "1d087bfe-cf40-4d28-a5b4-76383565510e",
+  "rubric_scores": {
+    "dod_machineability": 8,
+    "scope_match_prd": 9,
+    "test_is_red": 9,
+    "internal_consistency": 8,
+    "risk_registered": 8,
+    "verification_oracle_completeness": 8,
+    "ci_workflow_alignment": 8
+  },
+  "judgments_written": 2,
+  "feedback": "Round 1 两处阻塞已核实真修复：(1) 内部一致——realmachine-unverified-ratchet.mjs 环境变量命名统一为 REALMACHINE_SMOKE_DIR/REALMACHINE_NIGHTLY_YML，contract-draft.md 新增 SSOT 声明段，全文（final-e2e 脚本第263行 + contract-dod.md 两条 BEHAVIOR）逐处核对一致，repo grep 无残留 SMOKE_DIR_OVERRIDE。(2) Verification Oracle 完整性——Golden Path Step 4 验证命令改为联合查询 status+response，判定逻辑抽成 assert_task_terminal_success(STATUS, RESPONSE_JSON) 纯函数，Step 3 显式声明轮询只在 status=done 时才进入 Step4；新增 tests/account-scan-realmachine-smoke.terminal-assert.test.sh 覆盖 A(status=failed但account_ids非空→必须判红，最贴近原始OPEN_PANEL_FAILED bug场景)/B(happy path对照)/C(status=done但account_ids为空→必须判红)三个 case，已实测脚本不存在时正确 exit 1（TDD Red 阶段符合预期）。bash -n 全部 tests/*.test.sh 语法通过，无全角标点紧贴$VAR的bug。已读 e2e-wechat-rpa.yml（self-hosted wechat-capable runner，无MOCK_*注入）+ nightly-real-machine-staging.yml（wechat-bubble/douyin-read真机job+nightly-report汇总开[nightly-red] issue机制真实存在）+ ci-l1-process.yml（l1-passed聚合gate的needs列表模式可挂载新lint job）+ ci-smoke-glob-runner.yml（DENYLIST机制真实存在，line02-android-collect-realmachine-smoke.sh确为先例），三份workflow内容与合同声称的接线方式一致。7维全部≥7，APPROVED。合同行数380→396（+16行，为修复PRD核心断言退化问题新增的必要回归测试，非范围蔓延）。"
+}

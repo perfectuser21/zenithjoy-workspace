@@ -137,6 +137,30 @@ export function computeGpSmokeRatchet(map) {
   return { gp_no_smoke_count: ids.length, gp_no_smoke_ids: ids };
 }
 
+// ─── computeRealmachineUnverifiedRatchet ────────────────────────────────────────
+
+/**
+ * 真机验证车道三层防假绿守卫 · 第3层 — patrol 棘轮指标：统计"带 [CI-MOCK] 但无对应
+ * nightly 真机 job 覆盖"的步骤数。纯函数，输入已解析对象，不做文件 I/O（跟进
+ * computeGpSmokeRatchet 同款模式）。
+ *
+ * @param {{file: string, line: number, nightlyRef: string|null}[]} markers
+ *   已从 golden-path-*-smoke.sh 里扫描出的 [CI-MOCK: real-device-only | nightly_ref: X] 标记
+ * @param {string} nightlyYaml
+ *   nightly-real-machine-staging.yml 的原始文本内容
+ * @returns { realmachine_unverified_count: number, realmachine_unverified_ids: string[] }
+ */
+export function computeRealmachineUnverifiedRatchet(markers, nightlyYaml) {
+  const ids = [];
+  for (const marker of (markers || [])) {
+    const covered = !!marker.nightlyRef && nightlyYaml.includes(marker.nightlyRef);
+    if (!covered) {
+      ids.push(`${marker.file}:${marker.line}`);
+    }
+  }
+  return { realmachine_unverified_count: ids.length, realmachine_unverified_ids: ids };
+}
+
 // ─── validateRelations ─────────────────────────────────────────────────────────
 
 /**

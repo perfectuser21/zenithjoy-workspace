@@ -1178,6 +1178,7 @@ ok "Step 29 ✅ signal-verify 三字段（burner_sessions/recent_collect_errors/
 # 绝大多数场景）此前会被服务端无条件丢弃，只留在手机本地 logcat——07-28 真机复测两台
 # 设备卡在"中台无法绑定安卓机"却查无痕迹的根因。断言失败结果无条件落 agent_scan_failures。
 # ───────────────────────────────────────────────────────────────────
+# [CI-MOCK: real-device-only | nightly_ref: account-scan-realmachine-smoke.sh]
 echo "▶ Step 30: account-scan-result 失败留痕（非UUID request_id，模拟真机自动循环扫描）"
 S30_TMP=$(mktemp)
 S30_REQID="scan-$(date +%s)"

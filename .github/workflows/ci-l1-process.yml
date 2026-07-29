@@ -274,6 +274,18 @@ jobs:
       - name: Run lint-no-fake-test
         run: bash .github/workflows/scripts/lint-no-fake-test.sh origin/main
 
+  lint-smoke-mock-honesty:
+    if: github.event_name == 'pull_request'
+    name: Lint — Smoke Mock Honesty
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run lint-smoke-mock-honesty
+        run: bash .github/workflows/scripts/lint-smoke-mock-honesty.sh .github/workflows/scripts/smoke
+
   test-deploy-lib:
     name: Test — Deploy Lib (发版自洽函数库)
     runs-on: ubuntu-latest
@@ -406,7 +418,7 @@ jobs:
     name: L1 Process Gate Passed
     needs: [verify-dev-workflow, pr-title, ci-config-audit, secrets-scan, frontend-browser-dod-check,
             lint-test-pairing, lint-test-quality, lint-tdd-commit-order, lint-no-fake-test, lint-feature-has-smoke,
-            lint-gp-anchor,
+            lint-gp-anchor, lint-smoke-mock-honesty,
             lint-agent-version-bump, lint-line04-manifest-version-bump, lint-wechat-rpa-runner,
             lint-contract-test-immutability, lint-workflow-yaml-parse]
     if: always() && github.event_name == 'pull_request'
@@ -463,6 +475,11 @@ jobs:
 
           if [ "${{ needs.lint-no-fake-test.result }}" != "success" ]; then
             echo "FAIL: Lint No Fake Test (${{ needs.lint-no-fake-test.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.lint-smoke-mock-honesty.result }}" != "success" ]; then
+            echo "FAIL: Lint Smoke Mock Honesty (${{ needs.lint-smoke-mock-honesty.result }})"
             FAILED=true
           fi
 

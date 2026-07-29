@@ -1,0 +1,20 @@
+{
+  "verdict": "REVISION",
+  "round": 1,
+  "sha7": "2cfc6df9",
+  "task_id": "1d087bfe-cf40-4d28-a5b4-76383565510e",
+  "sprint_dir": "sprints/07292330-realmachine-verify-lane",
+  "target_environment": "windows_wechat",
+  "rubric_scores": {
+    "dod_machineability": 8,
+    "scope_match_prd": 9,
+    "test_is_red": 9,
+    "internal_consistency": 4,
+    "risk_registered": 8,
+    "verification_oracle_completeness": 5,
+    "ci_workflow_alignment": 8
+  },
+  "judgments_written": 0,
+  "feedback_file": "sprints/07292330-realmachine-verify-lane/gan-feedback-r1.md",
+  "feedback": "REVISION_NEEDED：内部一致(4分)——realmachine-unverified-ratchet.mjs 的测试覆盖环境变量在 contract-draft.md(SMOKE_DIR_OVERRIDE) 与 contract-dod.md(REALMACHINE_SMOKE_DIR+REALMACHINE_NIGHTLY_YML) 两处命名互相矛盾，Generator 只能实现一套，另一处必然失效。Verification Oracle 完整性(5分)——Golden Path Step4 的验证命令只查 account_ids 非空，完全没有对 status 字段的独立查询/断言，PRD 明确要求的\"status='done' 且 account_ids 非空\"两段式核心判据未在展示的验证代码里同时兑现，存在退化回旧有\"字段读到就算过\"假绿模式的风险，且 DoD 缺少针对该反例(status!=done 但 account_ids 非空)的回归测试。其余5维(scope匹配/test真红/风险登记/DoD机检性/CI workflow对齐)均达标，无范围蔓延，未越界碰触PRD排除项(agent心跳双字段/Path2结构化记录/真机OTA)。详见 gan-feedback-r1.md。"
+}

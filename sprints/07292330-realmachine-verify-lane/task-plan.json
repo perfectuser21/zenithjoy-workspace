@@ -1,0 +1,36 @@
+{
+  "initiative_id": null,
+  "journey_type": "autonomous",
+  "journey_type_reason": "F3 夜间体检 Journey（ec4eb591）在 Brain DB 中已登记 journey_type=autonomous，本 sprint 的三层机制性质是 dev_pipeline/夜间巡检基建，非用户直接交互的业务功能",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "真机验证车道 + 防假绿三层守卫（account-scan-realmachine-smoke.sh + lint-smoke-mock-honesty.sh + ci-patrol 棘轮数据源）",
+      "scope": "新建 account-scan-realmachine-smoke.sh（xian-rog 真机：install -r 最新APK/开无障碍/动态定位agent_id/触发account-scan/trigger/轮询publish_tasks终态/断言done+account_ids非空/envfail-fail三态区分）；在 nightly-real-machine-staging.yml 加刀D job并接入现有 nightly-report 汇总(needs列表+汇总表+失败条件)；把该脚本加入 ci-smoke-glob-runner.yml 的 DENYLIST；新建 lint-smoke-mock-honesty.sh（扫描 golden-path-*-smoke.sh 里 POST *-result 端点硬编码 error_code/ok 字面值且断言读回同值、但缺 [CI-MOCK: real-device-only | nightly_ref: <script>] 标记的步骤，未标记则报红），接入 ci-l1-process.yml；给 golden-path-2-smoke.sh Step30 假payload步骤加该标记；新建 scripts/product-map/realmachine-unverified-ratchet.mjs（report-only CLI，跟进 gp-smoke-ratchet.mjs 模式）+ computeRealmachineUnverifiedRatchet 纯函数加入 scripts/product-map/lib.mjs（统计标记但nightly_ref未被nightly yml引用/缺nightly_ref的步骤数），并把测试文件加入 package.json 的 test:product-map 脚本列表。",
+      "dod": [
+        "[BEHAVIOR] account-scan-realmachine-smoke.sh 无设备环境下正确 exit 3（envfail，非1）",
+        "[BEHAVIOR] lint-smoke-mock-honesty.sh 对漏标记的假payload步骤报红，对补标记后的同一步骤放行，对当前仓库全部golden-path-*-smoke.sh跑通",
+        "[BEHAVIOR] realmachine-unverified-ratchet 对新增未覆盖标记步骤计数上升，对当前仓库真实状态计数为0，对缺nightly_ref的标记同样计入未覆盖",
+        "[ARTIFACT] account-scan-realmachine-smoke.sh / lint-smoke-mock-honesty.sh / realmachine-unverified-ratchet.mjs 三个新文件存在且含核心逻辑关键字",
+        "[ARTIFACT] nightly-real-machine-staging.yml 刀D job已接入汇总 + ci-smoke-glob-runner.yml DENYLIST已加 + ci-l1-process.yml 已接入 lint-smoke-mock-honesty + golden-path-2-smoke.sh 已加标记 + package.json test:product-map 已加新测试文件"
+      ],
+      "files": [
+        ".github/workflows/scripts/smoke/account-scan-realmachine-smoke.sh",
+        ".github/workflows/nightly-real-machine-staging.yml",
+        ".github/workflows/scripts/ci-smoke-glob-runner.yml",
+        ".github/workflows/scripts/lint-smoke-mock-honesty.sh",
+        ".github/workflows/ci-l1-process.yml",
+        ".github/workflows/scripts/smoke/golden-path-2-smoke.sh",
+        ".github/workflows/scripts/__tests__/account-scan-realmachine-smoke.test.sh",
+        ".github/workflows/scripts/__tests__/lint-smoke-mock-honesty.test.sh",
+        "scripts/product-map/lib.mjs",
+        "scripts/product-map/realmachine-unverified-ratchet.mjs",
+        "scripts/product-map/__tests__/realmachine-unverified-ratchet.test.js",
+        "package.json"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 100
+    }
+  ]
+}
