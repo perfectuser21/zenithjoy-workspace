@@ -27,6 +27,15 @@ jobs:
       - name: Build dist
         run: npm run build
         working-directory: services/agent
+      # 作战窗刀1(PR #1497起)把apps/agent-panel的vite build接进了build-install-pack.sh，
+      # 但这个job此前只npm install了services/agent，从未装过apps/agent-panel的devDependencies
+      # (含vite)——build-install-pack.sh内部跑`npm run build`(=vite build)时报
+      # "'vite' is not recognized"，job从此每次必红，publish job被跳过，
+      # 2026-07-29之前合并的相关PR全部没有真的推送到生产（发现记录见 docs/handoffs/
+      # 202607291540-panel-click-through-investigation.md 关联issue）。
+      - name: Install agent-panel web deps
+        run: npm install --no-audit --no-fund
+        working-directory: apps/agent-panel
       - name: Build install pack
         shell: bash
         run: bash scripts/build-install-pack.sh
