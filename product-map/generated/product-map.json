@@ -77,10 +77,38 @@
       ]
     },
     {
+      "id": "benchmark_link_acquisition",
+      "app_id": "customer_app",
+      "line_id": "line02",
+      "name": "对标链接获客",
+      "status": "proposed",
+      "steps": [
+        {
+          "id": "step1",
+          "name": "客户手填对标账号链接"
+        },
+        {
+          "id": "step2",
+          "name": "读对标账号视频→抓评论区"
+        },
+        {
+          "id": "step3",
+          "name": "触达带企微号→收好友→AI首答→写Lead表"
+        }
+      ]
+    },
+    {
       "id": "customer_smart_acquisition",
       "app_id": "customer_app",
       "line_id": "line02",
-      "name": "客户智能获客",
+      "name": "客户智能获客（已拆分为四条获客 GP）",
+      "status": "deprecated"
+    },
+    {
+      "id": "keyword_acquisition",
+      "app_id": "customer_app",
+      "line_id": "line02",
+      "name": "关键词获客",
       "status": "active",
       "smoke_files": [
         ".github/workflows/scripts/smoke/golden-path-2-smoke.sh"
@@ -88,36 +116,140 @@
       "steps": [
         {
           "id": "step1",
-          "name": "注册客户端自动"
+          "name": "注册客户端自动登录"
         },
         {
           "id": "step2",
-          "name": "装客户端"
+          "name": "装客户端 + Android 端 Agent 连中台"
         },
         {
           "id": "step3",
-          "name": "Android 端 Agent 连中台"
-        },
-        {
-          "id": "step4",
-          "name": "绑客户飞书企业",
-          "status": "deprecated"
-        },
-        {
-          "id": "step5",
           "name": "系统自动建 3 张本地表（获客画像 / 对标视频 / Lead）落本地中台 DB"
         },
         {
-          "id": "step6",
-          "name": "客户在本地界面/dashboard 填获客画像 + 手填对标视频 URL"
+          "id": "step4",
+          "name": "客户在本地界面填获客画像 + 关键词"
         },
         {
-          "id": "step7",
+          "id": "step5",
           "name": "手机端登录 2-3 个抖音小号 + 中台检测登录态"
         },
         {
-          "id": "step8",
-          "name": "评论区挖客闭环——读对标视频→抓评论→触达带企微号→企微webhook收好友→AI首答→写本地Lead表"
+          "id": "step6",
+          "name": "按关键词搜索目标视频（替代手填对标 URL）"
+        },
+        {
+          "id": "step7",
+          "name": "评论区挖客闭环——抓评论→触达带企微号→企微webhook收好友→AI首答→写本地Lead表"
+        }
+      ]
+    },
+    {
+      "id": "live_acquisition",
+      "app_id": "customer_app",
+      "line_id": "line02",
+      "name": "直播获客",
+      "status": "proposed",
+      "steps": [
+        {
+          "id": "step1",
+          "name": "客户指定目标直播间/主播"
+        },
+        {
+          "id": "step2",
+          "name": "抓直播间互动观众"
+        },
+        {
+          "id": "step3",
+          "name": "触达带企微号→收好友→AI首答→写Lead表"
+        }
+      ]
+    },
+    {
+      "id": "video_link_acquisition",
+      "app_id": "customer_app",
+      "line_id": "line02",
+      "name": "视频链接获客",
+      "status": "proposed",
+      "steps": [
+        {
+          "id": "step1",
+          "name": "客户手填目标视频链接"
+        },
+        {
+          "id": "step2",
+          "name": "抓该视频评论区"
+        },
+        {
+          "id": "step3",
+          "name": "触达带企微号→收好友→AI首答→写Lead表"
+        }
+      ]
+    },
+    {
+      "id": "active_voice_outreach",
+      "app_id": "customer_app",
+      "line_id": "line04",
+      "name": "智能客服·GP-A 主动语音触达",
+      "status": "active",
+      "steps": [
+        {
+          "id": "step1",
+          "name": "拨号触发"
+        },
+        {
+          "id": "step2",
+          "name": "接通判定"
+        },
+        {
+          "id": "step3",
+          "name": "AI实时对话"
+        },
+        {
+          "id": "step4",
+          "name": "通话记录回写"
+        }
+      ]
+    },
+    {
+      "id": "business_report",
+      "app_id": "customer_app",
+      "line_id": "line04",
+      "name": "智能客服·GP-D 经营汇报",
+      "status": "active",
+      "steps": [
+        {
+          "id": "step1",
+          "name": "数据齐备"
+        },
+        {
+          "id": "step2",
+          "name": "报告生成"
+        },
+        {
+          "id": "step3",
+          "name": "送达老板"
+        }
+      ]
+    },
+    {
+      "id": "cs_shared_binding",
+      "app_id": "customer_app",
+      "line_id": "line04",
+      "name": "智能客服·绑定/安装（共享前置）",
+      "status": "active",
+      "steps": [
+        {
+          "id": "step1",
+          "name": "注册自动登录"
+        },
+        {
+          "id": "step2",
+          "name": "装客户端 + Agent 连中台"
+        },
+        {
+          "id": "step3",
+          "name": "扫码绑定微信号"
         }
       ]
     },
@@ -125,8 +257,8 @@
       "id": "customer_private_ai",
       "app_id": "customer_app",
       "line_id": "line04",
-      "name": "客户私域 AI 接管",
-      "status": "active",
+      "name": "客户私域 AI 接管（已细化为智能客服六条 GP）",
+      "status": "deprecated",
       "smoke_files": [
         ".github/workflows/scripts/smoke/golden-path-4-smoke.sh"
       ],
@@ -154,6 +286,94 @@
         {
           "id": "step6",
           "name": "发布回执（成功/失败+原因）回写飞书内容排期+互动记录表"
+        }
+      ]
+    },
+    {
+      "id": "group_operation",
+      "app_id": "customer_app",
+      "line_id": "line04",
+      "name": "智能客服·GP-F 社群运营",
+      "status": "active",
+      "steps": [
+        {
+          "id": "step1",
+          "name": "群动静被感知"
+        },
+        {
+          "id": "step2",
+          "name": "响应与治理"
+        },
+        {
+          "id": "step3",
+          "name": "留痕"
+        }
+      ]
+    },
+    {
+      "id": "moments_interaction",
+      "app_id": "customer_app",
+      "line_id": "line04",
+      "name": "智能客服·GP-E 朋友圈互动",
+      "status": "active",
+      "steps": [
+        {
+          "id": "step1",
+          "name": "客户动态被感知"
+        },
+        {
+          "id": "step2",
+          "name": "互动决策"
+        },
+        {
+          "id": "step3",
+          "name": "互动执行与留痕"
+        }
+      ]
+    },
+    {
+      "id": "moments_publish",
+      "app_id": "customer_app",
+      "line_id": "line04",
+      "name": "智能客服·GP-C 朋友圈发布",
+      "status": "active",
+      "steps": [
+        {
+          "id": "step1",
+          "name": "内容成稿"
+        },
+        {
+          "id": "step2",
+          "name": "发布上圈"
+        },
+        {
+          "id": "step3",
+          "name": "发布确认与留痕"
+        }
+      ]
+    },
+    {
+      "id": "passive_reception",
+      "app_id": "customer_app",
+      "line_id": "line04",
+      "name": "智能客服·GP-B 被动接待",
+      "status": "active",
+      "steps": [
+        {
+          "id": "step1",
+          "name": "消息被感知"
+        },
+        {
+          "id": "step2",
+          "name": "决定谁来答"
+        },
+        {
+          "id": "step3",
+          "name": "回复送达"
+        },
+        {
+          "id": "step4",
+          "name": "留痕与善后"
         }
       ]
     },
@@ -189,5 +409,5 @@
       "status": "active"
     }
   ],
-  "digest": "81299f155a7a890161ef5bacc296794f7e94cf6f22f71a8470361be9e26922f9"
+  "digest": "fbea3a9eb73f647b31f5bdcc84cd49bbbda59e1d11a850ffcb79c091aac40052"
 }

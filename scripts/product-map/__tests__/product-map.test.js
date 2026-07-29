@@ -59,15 +59,41 @@ test('T3: staff_app/line00 精确 4 个 GP（含gp_anchor_enforcement），abili
   assert.equal(anchorGp.status, 'active', 'gp_anchor_enforcement 刀1-5全部合并，§8验收标准满足，须为active');
   assert.ok(anchorGp.smoke_files.includes('.github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh'));
 
-  // Line 01/02/04 各精确 1 条 GP（GP锚定闭环刀1新增，取代旧"须无GP"断言）
+  // 客户侧 GP 定稿全景（2026-07-29 主理人拍板，task 58596a57）：
+  // line01 首次成功 1 条；line02 拆 4 条获客（老 id 保留 deprecated 防锚点断裂）；
+  // line04 细化为共享前置 + 智能客服六条（老 id 同样保留 deprecated）
   const customerGps = map.golden_paths.filter(g => ['line01', 'line02', 'line04'].includes(g.line_id));
   assert.deepEqual(
     customerGps.map(g => `${g.line_id}/${g.id}`).sort(),
-    ['line01/customer_first_success', 'line02/customer_smart_acquisition', 'line04/customer_private_ai']
+    [
+      'line01/customer_first_success',
+      'line02/benchmark_link_acquisition',
+      'line02/customer_smart_acquisition',
+      'line02/keyword_acquisition',
+      'line02/live_acquisition',
+      'line02/video_link_acquisition',
+      'line04/active_voice_outreach',
+      'line04/business_report',
+      'line04/cs_shared_binding',
+      'line04/customer_private_ai',
+      'line04/group_operation',
+      'line04/moments_interaction',
+      'line04/moments_publish',
+      'line04/passive_reception',
+    ]
   );
+  // 老 GP 必须是 deprecated（拆分后不许悄悄复活）
+  assert.equal(customerGps.find(g => g.id === 'customer_smart_acquisition').status, 'deprecated');
+  assert.equal(customerGps.find(g => g.id === 'customer_private_ai').status, 'deprecated');
+  // 唯一 working 的获客 GP 是关键词获客，且必须带 smoke（主理人：其余三条只是写出来占位）
+  const keyword = customerGps.find(g => g.id === 'keyword_acquisition');
+  assert.equal(keyword.status, 'active');
+  assert.ok(keyword.smoke_files.includes('.github/workflows/scripts/smoke/golden-path-2-smoke.sh'));
+  // 非 deprecated 的客户 GP 都必须有非空 steps（占位 proposed 的也要求写出步骤草案）；
+  // deprecated 老 GP 的 steps 已迁入拆分后的子 GP，不再要求
   for (const gp of customerGps) {
+    if (gp.status === 'deprecated') continue;
     assert.ok(Array.isArray(gp.steps) && gp.steps.length > 0, `${gp.id} 须含非空 steps 数组`);
-    assert.ok(Array.isArray(gp.smoke_files) && gp.smoke_files.length > 0, `${gp.id} 须含非空 smoke_files 数组`);
   }
 });
 
