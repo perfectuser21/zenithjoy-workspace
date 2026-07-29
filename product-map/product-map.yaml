@@ -52,13 +52,14 @@ golden_paths:
     status: active
 
   # GP锚定闭环刀1新增：机制自身注册。status=proposed——刀2-5尚未落地，
-  # 待设计文档 docs/superpowers/specs/2026-07-28-gp-anchor-enforcement-design.md
-  # §8 整体验收标准全部满足后，由后续PR翻转为active。
+  # 刀1-5全部合并，§8 六条验收标准均已满足（刀4③"无锚任务注册400"因task-tasks.js
+  # 跨项目共用改为执行时terminal fail，功能等价但触发时点不同，见刀4 handoff架构修正说明），
+  # 刀5翻转为active。
   - id: gp_anchor_enforcement
     app_id: staff_app
     line_id: line00
     name: GP锚定闭环
-    status: proposed
+    status: active
     smoke_files:
       - .github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh
 
