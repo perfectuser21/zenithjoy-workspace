@@ -168,8 +168,8 @@ echo "── exit=$CODE ──"
 PASSED=0
 FAILED=0
 
-# 断言 1: Step 1 必须成功（"已覆盖安装最新APK"出现在输出里）
-if printf '%s' "$OUTPUT" | grep -q "已覆盖安装最新APK"; then
+# 断言 1: Step 1 必须成功（"已覆盖安装最新 APK"出现在输出里）
+if printf '%s' "$OUTPUT" | grep -q "已覆盖安装最新 APK"; then
   echo "✅ PASS: Step 1 (adb install -r) 成功执行"
   PASSED=$((PASSED+1))
 else

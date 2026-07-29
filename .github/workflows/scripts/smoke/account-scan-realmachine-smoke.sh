@@ -24,6 +24,8 @@
 #   DB_SSH_HOST    真机 DB 所在 SSH host（默认 hk-vps）
 #   POLL_MAX       轮询次数（默认 18）
 #   POLL_INTERVAL  轮询间隔秒（默认 10，18×10s=3分钟预算）
+#   ANDROID_APK_COS_URL  安装包公网 COS 直链（默认 http://apk.zenjoymedia.media/install-pack/android/zenithjoy-agent.apk，
+#                  与服务端 apps/api/src/routes/agent-install-pack.ts 的同名兜底常量保持一致约定）
 set -uo pipefail
 
 ok()      { echo "✅ $1"; }
@@ -78,9 +80,16 @@ main() {
   ok "staging API 可达"
 
   # ── Step 1: adb install -r 覆盖安装最新 APK（不卸载，保住注册态）+ 开无障碍服务 ──
-  PACK=$(curl -fsSk -m 15 "$API_BASE/api/agent/install-pack/android" -H "X-Tenant-Id: $TENANT" 2>&1)
-  APK_URL=$(printf '%s' "$PACK" | jq -r '.apk_url // empty' 2>/dev/null)
-  [ -n "$APK_URL" ] || envfail "install-pack/android 未返回 apk_url: $PACK"
+  # 修复 PR#1558 遗留 bug（task 1d087bfe-cf40-4d28-a5b4-76383565510e）：不再走
+  # GET /api/agent/install-pack/android —— 该端点是给浏览器登录客户用的 better-auth
+  # session cookie 鉴权端点（apps/api/src/routes/agent-install-pack.ts:360-372，
+  # auth.api.getSession() 未登录返回 401；android-onboarding-smoke.sh:7-10 已明确
+  # 断言"无 session → 401"本身是设计行为）。CI self-hosted runner（xian-rog）没有
+  # 浏览器 session，这个 401 是结构性必然的，导致 Step 1 从未真正走到过 adb 层。
+  # 改为直连公网 COS 直链——与服务端 agent-install-pack.ts:390-393 的兜底常量、
+  # 及 ANDROID_APK_COS_URL 覆盖约定保持一致（该端点本身也只是把这个常量原样透传
+  # 回 apk_url 字段，鉴权对拿到的地址没有任何增值，直连更简单也更可靠）。
+  APK_URL="${ANDROID_APK_COS_URL:-http://apk.zenjoymedia.media/install-pack/android/zenithjoy-agent.apk}"
 
   APK_TMP=$(mktemp /tmp/zj-agent-XXXXXX.apk)
   curl -fsSk -m 60 -o "$APK_TMP" "$APK_URL" || envfail "APK 下载失败: $APK_URL"
