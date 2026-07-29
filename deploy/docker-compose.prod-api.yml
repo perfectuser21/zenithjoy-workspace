@@ -38,5 +38,5 @@ services:
       PORT: "5200"
     volumes:
       - /opt/zenithjoy/prod-api/content-output:/data/content-output
-      - /opt/zenithjoy/prod-api/install-pack:/data/install-pack:ro
+      - /opt/zenithjoy/prod-api/install-pack:/data/install-pack
     mem_limit: 1g
