@@ -304,7 +304,14 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         android.util.Log.e(TAG, "launchDouyinApp failed: ${e.message}"); false
     }
 
-    /** 拉起抖音后等它真正到前台；期间前台是厂商弹窗(荣耀开屏广告/auto-jump/更新)则消掉。尽力而为。 */
+    /**
+     * 拉起抖音后等它真正到前台；期间前台是厂商弹窗(荣耀开屏广告/auto-jump/更新/壁纸推荐)则消掉。尽力而为。
+     * 真机复现(2026-07-29，客户已交付环境ANY-AN00)：消除弹窗原先用 performAction(ACTION_CLICK)，
+     * 荣耀壁纸推荐弹窗的"关闭"按钮点了没反应(该 App 生态部分节点 ACTION_CLICK 无效，同 openSwitchAccountPanel()
+     * 对"切换账号"节点的既有教训)，弹窗一直卡着直到本函数超时，openSwitchAccountPanel() 在最开头
+     * "抖音未到前台"这一步就直接失败——与我tab点击等待逻辑是完全不同的根因。改用 tapNodeCenter 手势点击，
+     * 对齐同文件已验证过的可靠模式。
+     */
     private suspend fun awaitDouyinForeground(maxAttempts: Int = 24, delayMs: Long = 500L): Boolean {
         repeat(maxAttempts) {
             val root = rootInActiveWindow
@@ -317,7 +324,7 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
                     ?: findNodeByText(root, "稍后") ?: findNodeByText(root, "取消") ?: findNodeByText(root, "我知道了")
                     ?: findNodeByContentDesc(root, "跳过") ?: findNodeByContentDesc(root, "关闭")
                 if (dismiss != null) {
-                    (findClickableSelfOrAncestor(dismiss) ?: dismiss).performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    tapNodeCenter(dismiss)
                 } else {
                     performGlobalAction(GLOBAL_ACTION_BACK)
                 }
