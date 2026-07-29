@@ -9,11 +9,11 @@ export default function HomePage() {
           <h1 style={{ fontSize: '2.2rem', marginTop: 18 }}>Staff Hub 第一刀已切开</h1>
           <p className="muted" style={{ lineHeight: 1.7 }}>
             这个站点跟客户 Dashboard 分离，只承载员工内部能力。当前先落两条主线：
-            Skill 验收迁移，以及 ZenithJoy 自身 Path1/2/4 健康观察。
+            Skill 验收迁移，以及 ZenithJoy 三条对外业务线（Line01/02/04）健康观察。
           </p>
           <div className="actions" style={{ marginTop: 18 }}>
             <a className="button primary" href="/skill-eval">去 Skill 验收</a>
-            <a className="button secondary" href="/path-health">看 Path 健康</a>
+            <a className="button secondary" href="/line-health">看业务线健康</a>
           </div>
         </div>
         <div className="card">
@@ -29,7 +29,7 @@ export default function HomePage() {
             </div>
             <div className="list-row">
               <Activity size={18} />
-              <p className="muted">Path 健康卡片基于真实 Brain feature 与 GitHub smoke 数据，失败必须诚实显示。</p>
+              <p className="muted">业务线健康卡片基于真实 Brain feature 与 GitHub smoke 数据，失败必须诚实显示。</p>
             </div>
           </div>
         </div>
@@ -41,8 +41,8 @@ export default function HomePage() {
           <p className="muted">上传 skill zip，跟踪任务状态，直接查看 Cecelia HTML 报告。</p>
         </div>
         <div className="card">
-          <h3>Path 观察</h3>
-          <p className="muted">Path1 / Path2 / Path4 三条核心内部链路的最近 smoke 与 feature 状态。</p>
+          <h3>业务线观察</h3>
+          <p className="muted">Line01 / Line02 / Line04 三条对外核心链路的最近 smoke 与 feature 状态。</p>
         </div>
         <div className="card">
           <h3>独立部署位</h3>

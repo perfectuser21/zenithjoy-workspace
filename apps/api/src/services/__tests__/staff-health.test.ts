@@ -1,5 +1,5 @@
 /**
- * staff-health 共用数据源单测（path-health 与 line-health 共享的原语）
+ * staff-health 共用数据源单测（line-health 业务线健康看板复用的原语）
  *
  * 覆盖：maturity 档位换算 / GitHub 鉴权头 / 仓库名 env 覆盖 /
  *      Brain journey_features 非数组兜底 / smoke run hint 匹配与未匹配

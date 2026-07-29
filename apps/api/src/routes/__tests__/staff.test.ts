@@ -179,107 +179,6 @@ describe('staff routes — 下游 Cecelia skill-eval 契约转发', () => {
   });
 });
 
-describe('staff routes — path health 聚合', () => {
-  beforeEach(() => {
-    vi.stubEnv('STAFF_EMAILS', 'staff@test.com');
-    vi.stubEnv('CECELIA_BRAIN_URL', 'http://brain.test');
-    vi.stubEnv('STAFF_HUB_GITHUB_REPO', 'perfectuser21/zenithjoy-workspace');
-    axiosGetMock.mockReset();
-  });
-
-  it('[BEHAVIOR] GET /api/staff/path-health 返回 Path1/2/4 三项，含 features 与 smoke', async () => {
-    axiosGetMock.mockImplementation((url: string, config?: { params?: { journey_id?: string } }) => {
-      if (url.includes('/journey_features')) {
-        const journeyId = config?.params?.journey_id;
-        if (journeyId === 'c019cdeb-d90b-4f8b-a658-ae333663ac35') {
-          return Promise.resolve({
-            data: [{ id: 'f1', name: '发布链路', status: 'done', thickness: 'thin', kind: 'feature', updated_at: '2026-07-21T00:00:00Z' }],
-          });
-        }
-        if (journeyId === 'afa6abca-53c0-4815-8594-b7fb81ca547f') {
-          return Promise.resolve({
-            data: [{ id: 'f2', name: '获客链路', status: 'working', thickness: 'medium', kind: 'ability', updated_at: '2026-07-21T00:00:00Z' }],
-          });
-        }
-        return Promise.resolve({
-          data: [{ id: 'f4', name: '客服链路', status: 'planned', thickness: 'thin', kind: 'feature', updated_at: '2026-07-21T00:00:00Z' }],
-        });
-      }
-
-      return Promise.resolve({
-        data: {
-          workflow_runs: [
-            { id: 11, name: 'golden-path-1-smoke', status: 'completed', conclusion: 'success', html_url: 'https://example.com/1', run_started_at: '2026-07-21T00:00:00Z', updated_at: '2026-07-21T00:03:00Z' },
-            { id: 22, name: 'golden-path-2-smoke', status: 'completed', conclusion: 'failure', html_url: 'https://example.com/2', run_started_at: '2026-07-21T00:00:00Z', updated_at: '2026-07-21T00:04:00Z' },
-            { id: 44, name: 'golden-path-4-smoke', status: 'completed', conclusion: 'success', html_url: 'https://example.com/4', run_started_at: '2026-07-21T00:00:00Z', updated_at: '2026-07-21T00:05:00Z' },
-          ],
-        },
-      });
-    });
-
-    const res = await request(app)
-      .get('/api/staff/path-health')
-      .set('X-User-Email', 'staff@test.com');
-
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.data).toHaveLength(3);
-    expect(res.body.data[0].path_key).toBe('path1');
-    expect(res.body.data[0].features[0].name).toBe('发布链路');
-    expect(res.body.data[0].smoke.conclusion).toBe('success');
-    expect(res.body.data[1].path_key).toBe('path2');
-    expect(res.body.data[2].path_key).toBe('path4');
-  });
-
-  it('[BEHAVIOR] path4 查询的 journey_id 必须是整合后的"智能客服" journey，不能是已废弃孤儿 journey', async () => {
-    const CURRENT_ZHIKEFU_JOURNEY_ID = 'e675da0f-1117-4301-a801-cd4753beb8c8';
-    axiosGetMock.mockImplementation((url: string, config?: { params?: { journey_id?: string } }) => {
-      if (url.includes('/journey_features')) {
-        const journeyId = config?.params?.journey_id;
-        if (journeyId === CURRENT_ZHIKEFU_JOURNEY_ID) {
-          return Promise.resolve({
-            data: [{ id: 'gpb', name: 'GP-B 被动接待', status: 'planned', thickness: 'thin', kind: 'ability', updated_at: '2026-07-28T00:00:00Z' }],
-          });
-        }
-        // 任何其它 journey_id（包括已废弃的孤儿 journey）都不该被查到数据——查到空
-        // 就说明 PATH_DEFS 还指着旧 id，这条测试要能抓出这种回退。
-        return Promise.resolve({ data: [] });
-      }
-      return Promise.resolve({ data: { workflow_runs: [] } });
-    });
-
-    const res = await request(app)
-      .get('/api/staff/path-health')
-      .set('X-User-Email', 'staff@test.com');
-
-    const path4 = res.body.data.find((p: { path_key: string }) => p.path_key === 'path4');
-    expect(path4.features).toHaveLength(1);
-    expect(path4.features[0].name).toBe('GP-B 被动接待');
-  });
-
-  it('[BEHAVIOR] 上游部分失败时仍返回 200，并把 path 标记为 degraded', async () => {
-    axiosGetMock
-      .mockRejectedValueOnce(new Error('brain down'))
-      .mockResolvedValueOnce({
-        data: { workflow_runs: [{ id: 11, name: 'golden-path-1-smoke', status: 'completed', conclusion: 'success', html_url: 'https://example.com/1' }] },
-      })
-      .mockResolvedValueOnce({ data: [] })
-      .mockRejectedValueOnce(new Error('github down'))
-      .mockResolvedValueOnce({ data: [] })
-      .mockResolvedValueOnce({ data: { workflow_runs: [] } });
-
-    const res = await request(app)
-      .get('/api/staff/path-health')
-      .set('X-User-Email', 'staff@test.com');
-
-    expect(res.status).toBe(200);
-    expect(res.body.data[0].availability).toBe('degraded');
-    expect(res.body.data[0].message).toContain('Brain:');
-    expect(res.body.data[1].availability).toBe('degraded');
-    expect(res.body.data[1].message).toContain('GitHub:');
-  });
-});
-
 describe('staff routes — POST /api/staff/feishu-login（公开路由，不受 staffGuard 保护）', () => {
   beforeEach(() => {
     vi.stubEnv('STAFF_EMAILS', 'staff@test.com,boss@zenithjoy.local');
@@ -571,7 +470,7 @@ describe('staff routes — line health 业务线健康看板', () => {
     routeLineHealthMocks();
   });
 
-  it('[BEHAVIOR] GET /api/staff/line-health 返回 line01/line02/line04 三条，line01 标 not_connected 而非 0/0', async () => {
+  it('[BEHAVIOR] GET /api/staff/line-health 返回 line01/line02/line04 三条，三条线均已接入 Brain（原 Path 健康 line01/02 映射已合并进本页面）', async () => {
     const res = await request(app).get('/api/staff/line-health').set('X-User-Email', 'staff@test.com');
 
     expect(res.status).toBe(200);
@@ -581,16 +480,23 @@ describe('staff routes — line health 业务线健康看板', () => {
     expect(res.body.fallback_reason).toBeNull();
 
     const line01 = res.body.data[0];
-    expect(line01.availability).toBe('not_connected');
-    expect(line01.maturity).toBe('not_connected');
-    expect(line01.journey_id).toBeNull();
-    expect(line01.message).toBeNull();
+    // 原 Path 健康 path1 映射：智能发布 journey c019cdeb
+    expect(line01.journey_id).toBe('c019cdeb-d90b-4f8b-a658-ae333663ac35');
+    expect(line01.journey_name).toBe('智能发布');
+    expect(line01.maturity).toBe('thin');
+    expect(line01.availability).toBe('degraded');
+    expect(line01.message).toContain('GitHub:');
     expect(line01.feature_counts).toEqual({ total: 0, done: 0, working: 0, planned: 0 });
     expect(Object.keys(line01).sort()).toEqual(
       ['availability', 'feature_counts', 'journey_id', 'journey_name', 'label', 'line_key', 'maturity', 'message', 'smoke'].sort()
     );
     expect(line01).not.toHaveProperty('path_key');
     expect(line01).not.toHaveProperty('status');
+
+    const line02 = res.body.data[1];
+    // 原 Path 健康 path2 映射：客户智能获客路径 journey afa6abca
+    expect(line02.journey_id).toBe('afa6abca-53c0-4815-8594-b7fb81ca547f');
+    expect(line02.journey_name).toBe('客户智能获客路径');
   });
 
   it('[BEHAVIOR] line04 journey_id 必须是整合后的"智能客服" journey，且能力计数来自 Brain', async () => {
@@ -601,15 +507,15 @@ describe('staff routes — line health 业务线健康看板', () => {
     expect(line04.feature_counts).toEqual({ total: 2, done: 1, working: 0, planned: 1 });
   });
 
-  it('[BEHAVIOR] line04 Brain 查询失败时该线 degraded（HTTP 仍 200），line01/line02 不受影响', async () => {
+  it('[BEHAVIOR] Brain 查询失败时三条线均 degraded（HTTP 仍 200）——三条线现在都真实接入 Brain，故障是全局性的', async () => {
     routeLineHealthMocks({ brain: () => Promise.reject(new Error('brain down')) });
     const res = await request(app).get('/api/staff/line-health').set('X-User-Email', 'staff@test.com');
 
     expect(res.status).toBe(200);
-    const line04 = res.body.data.find((d: { line_key: string }) => d.line_key === 'line04');
-    expect(line04.availability).toBe('degraded');
-    expect(line04.message).toContain('Brain:');
-    expect(res.body.data[0].availability).toBe('not_connected');
+    for (const item of res.body.data) {
+      expect(item.availability).toBe('degraded');
+      expect(item.message).toContain('Brain:');
+    }
   });
 
   it('[BEHAVIOR] product-map.json 读取失败时降级为兜底清单，source=fallback 且仍返回 3 条线', async () => {
@@ -676,24 +582,20 @@ describe('staff routes — line health 业务线健康看板', () => {
     expect(axiosGetMock.mock.calls.length).toBe(firstCount);
   });
 
-  it('[BEHAVIOR] not_connected 线（line01）deployment/abilities 均 200 空态，message 字面等于约定文案', async () => {
+  it('[BEHAVIOR] line01/line02（原 Path 健康路径）deployment/abilities 现在均 connected=true，不再落回未接入空态', async () => {
     const deploy = await request(app)
       .get('/api/staff/line-health/line01/deployment')
       .set('X-User-Email', 'staff@test.com');
     expect(deploy.status).toBe(200);
-    expect(deploy.body.data.connected).toBe(false);
-    expect(deploy.body.data.message).toBe('该业务线尚未接入 Brain 数据，暂无法展示');
-    expect(deploy.body.data.environments).toEqual([]);
-    expect(deploy.body.data.recent_commit).toBeNull();
-    expect(deploy.body.data.related_prs).toEqual([]);
+    expect(deploy.body.data.connected).toBe(true);
+    expect(deploy.body.data.environments).toHaveLength(3);
 
     const abilities = await request(app)
       .get('/api/staff/line-health/line02/abilities')
       .set('X-User-Email', 'staff@test.com');
     expect(abilities.status).toBe(200);
-    expect(abilities.body.data.connected).toBe(false);
-    expect(abilities.body.data.abilities).toEqual([]);
-    expect(abilities.body.data).not.toHaveProperty('features');
+    expect(abilities.body.data.connected).toBe(true);
+    expect(Array.isArray(abilities.body.data.abilities)).toBe(true);
   });
 
   it('[BEHAVIOR] abilities 返回 Brain 全量能力清单，字段齐全', async () => {

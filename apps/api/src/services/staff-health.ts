@@ -1,11 +1,12 @@
 /**
- * Staff Hub 健康类看板共用数据源（path-health 与 line-health 共享）
+ * Staff Hub 健康类看板共用数据源
  *
  * 从 routes/staff.ts 抽出，避免 line-health（业务线健康看板）重复实现同一套
  * Brain journey_features / GitHub Actions runs 拉取逻辑（DRY），也让 staff.ts
- * 不因新增三个端点而膨胀到 500 行以上。
+ * 不因新增端点而膨胀到 500 行以上。原「Path 健康」页面（/path-health）曾是本模块
+ * 另一个消费者，已下线合并进业务线健康看板（line-health.ts）。
  *
- * 注意：本模块**不做任何缓存**——path-health 现有合同测试按 axios 调用顺序断言降级行为，
+ * 注意：本模块**不做任何缓存**——line-health 现有合同测试按 axios 调用顺序断言降级行为，
  * 在这里加缓存会改变其调用次数。缓存策略是 line-health 自己的事（见 line-health.ts）。
  */
 import axios from 'axios';

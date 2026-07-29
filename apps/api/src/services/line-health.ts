@@ -10,9 +10,14 @@
  * 的 customer_app.lines 为权威来源；journeyId / 相关路径 / PR 标题关键词等映射本 sprint
  * 硬编码在 LINE_DEFS（product-map 当前无 owned_paths 字段，不做重复维护的第二份路径映射）。
  *
+ * journeyId 取值与已下线的「Path 健康」页面（原 PATH_DEFS）保持一致（line01=Path1=智能发布
+ * journey c019cdeb，line02=Path2=客户智能获客路径 journey afa6abca，line04=Path4=智能客服
+ * journey e675da0f）——两个页面本是同一件事，Path 健康已合并进本页面并删除。
+ *
  * 判定点（详见 contract-draft.md 判定点登记表）：
- *   1. line01/line02 未接入 Brain → 专门 "not_connected" 态（字面区分，不靠 0/0 反推）
- *   2. Brain 故障（仅 line04 会发起该请求）→ "degraded" + "Brain:" 前缀消息，HTTP 仍 200
+ *   1. journeyId 为 null 时该线走 "not_connected" 态（字面区分，不靠 0/0 反推）——
+ *      当前 line01/02/04 均已接入 Brain，此分支保留给未来 product-map 新增无归属线的场景
+ *   2. Brain 故障 → "degraded" + "Brain:" 前缀消息，HTTP 仍 200
  *   3. "版本" = 按业务线相关路径过滤的最近 commit（不是全局 HEAD，也不查 /version 端点）
  *   4. "关联 PR" = GitHub Search Issues 按标题关键词匹配（接受稀疏结果）
  *   5. 降级粒度 = 按字段独立（三个环境彼此独立 try/catch，related_prs 与 abilities 再独立）
@@ -65,8 +70,9 @@ export const LINE_DEFS: LineDef[] = [
   {
     lineKey: 'line01',
     label: 'Line 01 客户首次成功',
-    journeyId: null,
-    journeyName: null,
+    // 原 Path 健康 PATH_DEFS 的 path1 映射（智能发布 journey），Path 健康已下线合并进本页面
+    journeyId: 'c019cdeb-d90b-4f8b-a658-ae333663ac35',
+    journeyName: '智能发布',
     smokeWorkflowHints: ['golden-path-1', 'path1'],
     relatedPaths: ['apps/api/src/routes/publish.ts'],
     prTitleKeywords: ['line01', 'path1'],
@@ -74,8 +80,9 @@ export const LINE_DEFS: LineDef[] = [
   {
     lineKey: 'line02',
     label: 'Line 02 客户智能获客',
-    journeyId: null,
-    journeyName: null,
+    // 原 Path 健康 PATH_DEFS 的 path2 映射（客户智能获客路径 journey），Path 健康已下线合并进本页面
+    journeyId: 'afa6abca-53c0-4815-8594-b7fb81ca547f',
+    journeyName: '客户智能获客路径',
     smokeWorkflowHints: ['golden-path-2', 'path2', 'acquisition'],
     relatedPaths: ['apps/api/src/routes/acquisition.ts'],
     prTitleKeywords: ['line02', 'acquisition'],
