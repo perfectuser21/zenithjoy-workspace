@@ -45,7 +45,11 @@ process.stdin.on('end', () => {
     || /🔴\s*未发现严重问题/.test(input)
     || /🔴\s*无严重问题/.test(input)
     || /🔴\s*没有严重问题/.test(input)
-    || /🔴\s*没有发现严重问题/.test(input);
+    || /🔴\s*没有发现严重问题/.test(input)
+    // PR#1527 真实事故：DeepSeek V3 markdown 标题+下一行bullet格式，标题与bullet间无冒号
+    // 「#### 🔴 严重问题\n- **无**」——按行匹配，标题行含"严重问题"+🔴，
+    // 下一行是仅含"无"/"未发现"的独立 bullet 声明。
+    || /^#{0,6}\s*🔴\s*严重问题\s*$\n+^[-*]\s*\*{0,2}(?:无|未发现)\*{0,2}\s*$/m.test(input);
 
   const textWithoutHeadings = input
     .replace(/#+\s*[^🔴\n]*[（(]🔴[)）][^\n]*/g, '')  // section headings: "### 严重问题 (🔴)"
