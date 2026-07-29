@@ -143,6 +143,10 @@ body {
   padding: 4px;
   cursor: pointer;
   background: var(--zj-bg);
+  /* 真机实测发现：不设高度时这个div只占内容高度(几个灯点的高度)，宿主原生窗口
+     实际是屏幕高度的细长条(Height = screen.Height - 60)，导致条上九成区域点击
+     完全没反应——用户描述的"召唤不出来"根因就是这个，不是热键/事件问题。 */
+  height: 100vh;
 }
 
 .panel-rpa-mini {

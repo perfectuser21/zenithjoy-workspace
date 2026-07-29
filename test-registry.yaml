@@ -4979,6 +4979,14 @@ agent_suite:
   product: 中台认证
   note: "db/index.ts re-export pool透传验证——default export存在且与connection.ts同对象，供vi.mock('../../../apps/api/src/db')精确mock使用"
 
+- id: devgate-detect-review-issues-unit
+  path: scripts/devgate/__tests__/detect-review-issues.test.js
+  type: unit
+  ci: L2
+  status: active
+  product: 研发基础设施
+  note: "PR#1527真实事故：DeepSeek V3审查'#### 🔴 严重问题\\n- **无**'标题+下一行bullet格式(标题bullet间无冒号)被现有12条正则漏判，误拦纯CSS修复PR。回归锁定新增第13条按行匹配规则+2条既有格式不回归断言"
+
 - id: product-map-contract
   path: scripts/product-map/__tests__/product-map.test.js
   type: unit
