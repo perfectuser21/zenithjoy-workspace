@@ -169,7 +169,7 @@
       "app_id": "staff_app",
       "line_id": "line00",
       "name": "GP锚定闭环",
-      "status": "proposed",
+      "status": "active",
       "smoke_files": [
         ".github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh"
       ]
@@ -189,5 +189,5 @@
       "status": "active"
     }
   ],
-  "digest": "df7dc2bffd1f3a7e2bf8b85a2f0e9647b2c2f7d1d36755e6d0d822ce64a1b754"
+  "digest": "7a21c7a8e4d69e5359315ae78dd62e0060e48fee90852add130a3bf348e66272"
 }

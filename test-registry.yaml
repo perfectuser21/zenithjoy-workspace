@@ -4995,6 +4995,14 @@ agent_suite:
   product: 产品基础设施
   note: "sprint(07280933): Product Map SSOT — 7 个 node:test 测试，覆盖 BEHAVIOR-01~12，loadAndValidateProductMap/validateRelations/productMapDigest/assertBootstrapParity"
 
+- id: gp-anchor-smoke-ratchet
+  path: scripts/product-map/__tests__/gp-smoke-ratchet.test.js
+  type: unit
+  ci: L2
+  status: active
+  product: 产品基础设施
+  note: "GP锚定闭环刀5 — computeGpSmokeRatchet 5个node:test测试，覆盖smoke_files为null/缺失/空数组/全覆盖/golden_paths为空5种场景"
+
 - id: product-map-sprint-contract
   path: sprints/07280933-product-map-ssot-claude/tests/contract.test.js
   type: e2e

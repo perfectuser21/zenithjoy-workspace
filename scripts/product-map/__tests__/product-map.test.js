@@ -56,7 +56,7 @@ test('T3: staff_app/line00 精确 4 个 GP（含gp_anchor_enforcement），abili
   assert.equal(abilityGp.status, 'active');
 
   const anchorGp = line00Gps.find(g => g.id === 'gp_anchor_enforcement');
-  assert.equal(anchorGp.status, 'proposed', 'gp_anchor_enforcement 机制未建完，须为proposed');
+  assert.equal(anchorGp.status, 'active', 'gp_anchor_enforcement 刀1-5全部合并，§8验收标准满足，须为active');
   assert.ok(anchorGp.smoke_files.includes('.github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh'));
 
   // Line 01/02/04 各精确 1 条 GP（GP锚定闭环刀1新增，取代旧"须无GP"断言）
