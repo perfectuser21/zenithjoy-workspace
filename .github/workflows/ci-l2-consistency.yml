@@ -232,59 +232,10 @@ jobs:
           npm run product-map:generate
           npm run product-map:check
 
-  ability-acceptance-smoke:
-    name: Ability Acceptance Smoke
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: package-lock.json
-
-      - name: Install apps/api deps
-        run: npm ci --workspace=apps/api
-
-      - name: Check ability-acceptance route exists
-        run: |
-          if [ ! -f "apps/api/src/routes/ability-acceptance.ts" ]; then
-            echo "FAIL: apps/api/src/routes/ability-acceptance.ts not found"
-            exit 1
-          fi
-          echo "PASS: ability-acceptance route file exists"
-
-      - name: Check DB migration exists
-        run: |
-          if [ ! -f "apps/api/db/migrations/20260728_ability_acceptance.sql" ]; then
-            echo "FAIL: DB migration file not found"
-            exit 1
-          fi
-          echo "PASS: DB migration file exists"
-
-      - name: Check frontend pages exist
-        run: |
-          if [ ! -f "apps/staff-hub/src/pages/AbilityAcceptancePage.tsx" ]; then
-            echo "FAIL: AbilityAcceptancePage.tsx not found"
-            exit 1
-          fi
-          if [ ! -f "apps/staff-hub/src/pages/AbilityAcceptanceHistoryPage.tsx" ]; then
-            echo "FAIL: AbilityAcceptanceHistoryPage.tsx not found"
-            exit 1
-          fi
-          echo "PASS: frontend pages exist"
-
-      - name: Run ability-acceptance unit tests
-        env:
-          STAFF_EMAILS: staff-a@test.com,staff-b@test.com
-        run: npm run test --workspace=apps/api -- ability-acceptance 2>&1 | tail -30
-
   # ─── L2 Gate ──────────────────────────────────────────────────────────
   l2-passed:
     name: L2 Consistency Gate Passed
-    needs: [tsconfig-inheritance, engines-consistency, sensitive-files, orphan-test-check, registry-sync-check, product-map-contract, ability-acceptance-smoke]
+    needs: [tsconfig-inheritance, engines-consistency, sensitive-files, orphan-test-check, registry-sync-check, product-map-contract]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -324,11 +275,6 @@ jobs:
 
           if [ "${{ needs.product-map-contract.result }}" != "success" ]; then
             echo "FAIL: Product Map Contract (${{ needs.product-map-contract.result }})"
-            FAILED=true
-          fi
-
-          if [ "${{ needs.ability-acceptance-smoke.result }}" != "success" ]; then
-            echo "FAIL: Ability Acceptance Smoke (${{ needs.ability-acceptance-smoke.result }})"
             FAILED=true
           fi
 

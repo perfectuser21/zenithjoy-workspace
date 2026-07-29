@@ -5222,38 +5222,6 @@ agent_suite:
   product: 新媒体运营
   note: "最小信号验证 GET 端点（sessions/collect_tasks/leads 三组数据）"
 
-- id: ability-acceptance-api
-  path: apps/api/src/routes/__tests__/ability-acceptance.test.ts
-  type: integration
-  ci: L3
-  status: active
-  product: 运营中枢
-  note: "Sprint 30a0c83a: Ability 验收 API 路由合同测试（T1-T9 + R1）"
-
-- id: ability-acceptance-e2e
-  path: apps/staff-hub/e2e/ability-acceptance.spec.ts
-  type: e2e
-  ci: L4
-  status: active
-  product: 运营中枢
-  note: "Sprint 30a0c83a: Ability 验收 Staff Hub E2E 合同测试（C1-C5）"
-
-- id: ability-acceptance-contract-api-test
-  path: sprints/07281218-relay-30a0c83a/tests/ability-acceptance.api.test.ts
-  type: contract
-  ci: L3
-  status: active
-  product: 运营中枢
-  note: "Sprint 30a0c83a: Ability 验收 API 合同测试骨架（Red 基线，永久保留）"
-
-- id: ability-acceptance-contract-e2e-spec
-  path: sprints/07281218-relay-30a0c83a/tests/ability-acceptance.e2e.spec.ts
-  type: contract
-  ci: L4
-  status: active
-  product: 运营中枢
-  note: "Sprint 30a0c83a: Ability 验收 Playwright E2E 合同测试骨架（Red 基线，永久保留）"
-
 - id: staff-line-health-sprint-contract
   path: sprints/07281207-staff-line-health-dashboard/tests/line-health.test.ts
   type: integration
@@ -5284,7 +5252,7 @@ agent_suite:
   ci: L3
   status: active
   product: 中台认证
-  note: "Sprint 07281207：path-health 与 line-health 共用数据源原语单测（maturity 档位/GitHub 鉴权头/env 覆盖回退/Brain 非数组兜底/smoke hint 匹配）。"
+  note: "Sprint 07281207：line-health 业务线健康看板复用数据源原语单测（maturity 档位/GitHub 鉴权头/env 覆盖回退/Brain 非数组兜底/smoke hint 匹配）。原 path-health 消费者已下线。"
 
 - id: staff-line-health-service-unit
   path: apps/api/src/services/__tests__/line-health.test.ts

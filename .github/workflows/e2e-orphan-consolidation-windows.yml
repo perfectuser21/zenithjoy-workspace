@@ -10,8 +10,6 @@ name: E2E Orphan Specs Consolidation (Windows)
 #   video-remake / wechat-cs-config
 # （path-2-sprint-a 已删除，决策19e6480c 2026-07-14：测的 /dashboard/feishu-bind
 #   页面已随 FeishuBindTenant 一起下线，Path2 改本地不再需要飞书绑定这条流程）
-# （ability-acceptance 已迁移至 apps/staff-hub/e2e/，由独立 workflow
-#   e2e-staff-ability-acceptance-windows.yml 管理，非 dashboard 范畴）
 #
 # 门禁哲学(用户 2026-07-12 拍板「不留红」):8 个 spec 全绿才过,无棘轮债名单、
 # 无 continue-on-error 兜底掩红。任一 spec 红 → job 红 → 阻塞合并。

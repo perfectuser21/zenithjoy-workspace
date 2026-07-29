@@ -162,7 +162,7 @@
       "app_id": "staff_app",
       "line_id": "line00",
       "name": "Ability 验收流程",
-      "status": "active"
+      "status": "deprecated"
     },
     {
       "id": "gp_anchor_enforcement",
@@ -189,5 +189,5 @@
       "status": "active"
     }
   ],
-  "digest": "7a21c7a8e4d69e5359315ae78dd62e0060e48fee90852add130a3bf348e66272"
+  "digest": "81299f155a7a890161ef5bacc296794f7e94cf6f22f71a8470361be9e26922f9"
 }
