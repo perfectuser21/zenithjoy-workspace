@@ -220,7 +220,7 @@ public partial class MainWindow : Window
                 Top = screen.Top + 12;
                 Width = 8;
                 Height = screen.Height - 60;
-                Topmost = true;
+                ReassertTopmost();
                 break;
             case PanelWindowMode.Expanded:
                 NativeMethods.ClearRpaGuardStyles(_hwnd);
@@ -228,7 +228,7 @@ public partial class MainWindow : Window
                 Top = screen.Top;
                 Width = screen.Width;
                 Height = screen.Height;
-                Topmost = true;
+                ReassertTopmost();
                 break;
             case PanelWindowMode.RpaMini:
                 // 判定点：展开态期间 RPA 突然开始 → 立即抢占式收起为贴边态，不等用户手动收起
@@ -240,6 +240,18 @@ public partial class MainWindow : Window
                 break;
         }
         UpdateFullscreenSuppression();
+    }
+
+    // 真机实测发现：WPF 的 Topmost=true 在已经是 true 时是no-op(依赖属性系统检测值未变
+    // 直接跳过底层 SetWindowPos(HWND_TOPMOST) 调用)——窗口z-order从此再也不会被刷新到
+    // 最上层。WeChat(非topmost普通窗口)被用户点击激活后，实测WindowFromPoint在本窗口
+    // 屏幕坐标范围内返回的是微信句柄，说明本窗口早就跌到微信下面去了，只是Topmost标志位
+    // 还是true，Windows并没有真的按这个标志位重新排过序。False→True显式切换强制WPF
+    // 真正重新调用SetWindowPos，把窗口插回z-order最顶层。
+    private void ReassertTopmost()
+    {
+        Topmost = false;
+        Topmost = true;
     }
 
     // PrepPRD Golden Path Step9："客户前台全屏(视频/PPT/游戏)：浮条自动隐藏；stuck例外——
@@ -264,6 +276,13 @@ public partial class MainWindow : Window
         };
         var suppress = NativeMethods.IsForegroundFullscreen(_hwnd, screenRect);
         Visibility = suppress ? Visibility.Hidden : Visibility.Visible;
+        // 收起态浮条常驻期间，客户持续在用微信等其它应用，每次那些应用被激活都可能把
+        // 本窗口挤到z-order底下(见ReassertTopmost注释)。这个2秒轮询本来就在跑，顺路
+        // 每次都重新抢一次顶层位置，而不是只在ApplyWindowMode状态切换那一刻抢一次。
+        if (!suppress)
+        {
+            ReassertTopmost();
+        }
     }
 
     private nint WndProc(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
