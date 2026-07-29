@@ -252,6 +252,13 @@ public partial class MainWindow : Window
     {
         Topmost = false;
         Topmost = true;
+        // 真机WindowFromPoint实测：光靠WPF的Topmost属性切换，实测仍然打不过微信这类
+        // 普通非topmost窗口的z-order争夺。直接P/Invoke SetWindowPos(HWND_TOPMOST)
+        // 是无歧义的最终手段，双保险。
+        if (_hwnd != IntPtr.Zero)
+        {
+            NativeMethods.ForceTopmost(_hwnd);
+        }
     }
 
     // PrepPRD Golden Path Step9："客户前台全屏(视频/PPT/游戏)：浮条自动隐藏；stuck例外——

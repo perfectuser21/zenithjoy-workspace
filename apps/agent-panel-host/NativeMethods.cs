@@ -74,4 +74,21 @@ internal static class NativeMethods
         return rect.Left <= screenBounds.Left && rect.Top <= screenBounds.Top
             && rect.Right >= screenBounds.Right && rect.Bottom >= screenBounds.Bottom;
     }
+
+    // 真机WindowFromPoint实测：WPF的Topmost属性（哪怕显式False→True切换过）仍然打不过
+    // 微信这种普通非topmost窗口——WPF的Topmost最终也是走SetWindowPos，但走的是WPF自己
+    // 的interop封装，中间可能被HwndSource/合成层的时序吃掉。直接P/Invoke SetWindowPos
+    // 才是无歧义的最终手段，每次都显式指定HWND_TOPMOST不经过任何依赖属性系统。
+    public const int HWND_TOPMOST = -1;
+    public const uint SWP_NOMOVE = 0x0002;
+    public const uint SWP_NOSIZE = 0x0001;
+    public const uint SWP_NOACTIVATE = 0x0010;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    public static void ForceTopmost(IntPtr hWnd)
+    {
+        SetWindowPos(hWnd, (IntPtr)HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
 }
