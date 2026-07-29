@@ -297,12 +297,29 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
                 // 函数语义是"等任意非null根节点出现"就立即返回，不等 recycler_view 这个特定元素
                 // 真正渲染完成，面板展开动画/加载较慢时检查过早，误判"面板未出现"。与已验证两次
                 // 有效的根因(我tab等待/CLEAR_TOP恢复)完全同源，改为对齐同一轮询模式。
-                var panel: AccessibilityNodeInfo? = null
-                for (panelPollAttempt in 0 until 4) {
-                    delay(800L)
-                    val checkRoot = rootInActiveWindow
-                    panel = checkRoot?.takeIf { findNodeByIds(it, "com.ss.android.ugc.aweme:id/recycler_view") != null }
-                    if (panel != null) break
+                var panel = awaitSwitchAccountPanel()
+                if (panel == null) {
+                    // 真机复现(2026-07-29，客户已交付环境MAA-AN00，连续3次100%稳定复现)：点击
+                    // "切换账号"有时会误触发相邻的"更换背景"浮层——真机实测证实真正的切换账号
+                    // 触发点是账号昵称旁边一个很小的下拉箭头，上方几乎整个大块区域都是"更换
+                    // 背景"的点击热区，switchEntry 节点报告的中心坐标稍微偏一点就会落进这个
+                    // 热区。检测到这个误触发浮层就先关掉它，再重新点一次switchEntry重试。
+                    val overlayRoot = rootInActiveWindow
+                    val isBgOverlay = overlayRoot != null &&
+                        (findNodeByText(overlayRoot, "更换背景") != null ||
+                            findNodeByContentDescContains(overlayRoot, "更换背景") != null)
+                    if (isBgOverlay) {
+                        val closeBtn = overlayRoot?.let {
+                            findNodeByContentDescContains(it, "关闭") ?: findNodeByText(it, "关闭")
+                        }
+                        if (closeBtn != null) {
+                            android.util.Log.w(TAG, "点击切换账号误触发更换背景浮层，关闭后重试")
+                            tapNodeCenter(closeBtn)
+                            delay(500L)
+                            tapNodeCenter(switchEntry)
+                            panel = awaitSwitchAccountPanel()
+                        }
+                    }
                 }
                 if (panel != null) {
                     return true
@@ -314,6 +331,17 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         }
         android.util.Log.w(TAG, "switch-account panel 打不开 (OPEN_PANEL_FAILED)")
         return false
+    }
+
+    /** 点击"切换账号"后轮询等待 recycler_view 面板真正渲染出来，最多4次(共≤3200ms)。 */
+    private suspend fun awaitSwitchAccountPanel(): AccessibilityNodeInfo? {
+        repeat(4) {
+            delay(800L)
+            val checkRoot = rootInActiveWindow
+            val panel = checkRoot?.takeIf { findNodeByIds(it, "com.ss.android.ugc.aweme:id/recycler_view") != null }
+            if (panel != null) return panel
+        }
+        return null
     }
 
     /**

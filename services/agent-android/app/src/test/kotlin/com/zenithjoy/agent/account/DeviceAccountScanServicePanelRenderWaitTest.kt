@@ -22,10 +22,16 @@ import java.io.File
 class DeviceAccountScanServicePanelRenderWaitTest {
     private val SOURCE_PATH = "src/main/kotlin/com/zenithjoy/agent/account/DeviceAccountScanService.kt"
 
-    // 锚点框住"点击切换账号后等待面板出现"这一段
+    // 锚点框住"点击切换账号后等待面板出现"这一段（PR#1554起轮询逻辑被提取成
+    // awaitSwitchAccountPanel()辅助函数，供误触发重试路径复用，这里只验证调用点）
     private fun waitSegment(src: String): String =
         src.substringAfter("tapNodeCenter(switchEntry)", missingDelimiterValue = "")
-            .substringBefore("点了切换账号但面板未出现", missingDelimiterValue = "")
+            .substringBefore("if (panel != null) {\n                    return true", missingDelimiterValue = "")
+
+    // 锚点框住 awaitSwitchAccountPanel() 函数体本身
+    private fun awaitPanelFnBody(src: String): String =
+        src.substringAfter("private suspend fun awaitSwitchAccountPanel(): AccessibilityNodeInfo? {", missingDelimiterValue = "")
+            .substringBefore("\n    }", missingDelimiterValue = "")
 
     @Test
     fun `点切换账号后等待面板出现必须轮询多次而不是单次检查`() {
@@ -33,14 +39,20 @@ class DeviceAccountScanServicePanelRenderWaitTest {
         val segment = waitSegment(src)
         assertTrue("等待段锚点必须存在（结构被改动会导致这里判空）", segment.isNotEmpty())
         assertTrue(
-            "必须循环多次重新取根节点检查recycler_view是否出现，不能只delay一次后调用" +
+            "必须调用轮询等待函数(awaitSwitchAccountPanel)，不能只delay一次后调用" +
                 "awaitRootInActiveWindow检查一次——那个函数只等\"任意根节点\"不等特定元素渲染完成，" +
                 "真机复现面板动画/加载较慢时会检查过早",
-            segment.contains("for (") || segment.contains("repeat("),
+            segment.contains("awaitSwitchAccountPanel()"),
+        )
+        val fnBody = awaitPanelFnBody(src)
+        assertTrue("awaitSwitchAccountPanel 函数体锚点必须存在", fnBody.isNotEmpty())
+        assertTrue(
+            "必须循环多次重新取根节点检查recycler_view是否出现",
+            fnBody.contains("repeat(") || fnBody.contains("for ("),
         )
         assertTrue(
-            "轮询过程中必须重新检查 recycler_view 是否出现，不能只调 awaitRootInActiveWindow 交差",
-            segment.contains("recycler_view"),
+            "轮询过程中必须重新检查 recycler_view 是否出现",
+            fnBody.contains("recycler_view"),
         )
     }
 }
