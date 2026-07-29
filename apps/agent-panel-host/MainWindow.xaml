@@ -5,8 +5,7 @@
         Title="作战窗"
         WindowStyle="None"
         ResizeMode="NoResize"
-        AllowsTransparency="True"
-        Background="Transparent"
+        Background="#0F172A"
         ShowInTaskbar="False"
         Topmost="True">
     <Grid>
