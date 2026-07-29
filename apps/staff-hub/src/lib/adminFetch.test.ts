@@ -10,9 +10,9 @@ describe('adminFetch', () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await adminFetch('/api/staff/path-health', 'staff@test.com', { method: 'GET' });
+    await adminFetch('/api/staff/line-health', 'staff@test.com', { method: 'GET' });
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/staff/path-health', expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith('/api/staff/line-health', expect.objectContaining({
       credentials: 'include',
       headers: expect.objectContaining({ 'X-User-Email': 'staff@test.com' }),
     }));
@@ -22,9 +22,9 @@ describe('adminFetch', () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await adminFetch('/api/staff/path-health', { email: '', feishu_user_id: 'ou_abc123' }, { method: 'GET' });
+    await adminFetch('/api/staff/line-health', { email: '', feishu_user_id: 'ou_abc123' }, { method: 'GET' });
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/staff/path-health', expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith('/api/staff/line-health', expect.objectContaining({
       credentials: 'include',
       headers: expect.objectContaining({ 'X-Feishu-User-Id': 'ou_abc123' }),
     }));
@@ -36,9 +36,9 @@ describe('adminFetch', () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await adminFetch('/api/staff/path-health', { email: 'staff@test.com', feishu_user_id: 'ou_abc123' });
+    await adminFetch('/api/staff/line-health', { email: 'staff@test.com', feishu_user_id: 'ou_abc123' });
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/staff/path-health', expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith('/api/staff/line-health', expect.objectContaining({
       headers: expect.objectContaining({ 'X-User-Email': 'staff@test.com', 'X-Feishu-User-Id': 'ou_abc123' }),
     }));
   });

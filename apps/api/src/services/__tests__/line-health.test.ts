@@ -29,6 +29,20 @@ const LINE01 = LINE_DEFS[0];
 const LINE04 = LINE_DEFS[2];
 const SHA = 'c'.repeat(40);
 
+// 合成一个"未接入 Brain"的 LineDef 夹具，独立于 LINE_DEFS 真实数据。
+// line01/02/04 现在都已接入真实 journey（原 Path 健康映射合并进本页面后），
+// LINE_DEFS 里已经没有天然的 not_connected 样本了——但 not_connected 分支本身仍是
+// 真实代码路径（product-map 未来新增无归属线时会命中），必须继续测。
+const NOT_CONNECTED_LINE = {
+  lineKey: 'line01' as const,
+  label: 'Line 01 客户首次成功',
+  journeyId: null,
+  journeyName: null,
+  smokeWorkflowHints: [],
+  relatedPaths: [],
+  prTitleKeywords: [],
+};
+
 function isoDaysAgo(days: number): string {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
@@ -72,7 +86,7 @@ describe('LINE_DEFS / findLineDef', () => {
   it('只认 line01/line02/line04 三条对外业务线，其余返回 null', () => {
     expect(LINE_DEFS.map((d) => d.lineKey)).toEqual(['line01', 'line02', 'line04']);
     expect(findLineDef('line04')?.journeyId).toBe('e675da0f-1117-4301-a801-cd4753beb8c8');
-    expect(findLineDef('line01')?.journeyId).toBeNull();
+    expect(findLineDef('line01')?.journeyId).toBe('c019cdeb-d90b-4f8b-a658-ae333663ac35');
     expect(findLineDef('line03')).toBeNull();
     expect(findLineDef('')).toBeNull();
   });
@@ -94,18 +108,24 @@ describe('loadCustomerLines — product-map.json 权威清单', () => {
 });
 
 describe('buildLineHealthOverview', () => {
-  it('未接入线固定 not_connected 且 feature_counts 全 0，source=product_map', async () => {
+  // 回归守卫：line01/02/04 三条线必须都带真实 journeyId（原 Path 健康 PATH_DEFS 的
+  // path1/path2/path4 映射，合并进本页面时曾一度被漏写成 journeyId:null，导致业务线
+  // 健康看板显示"未接入"而实际上 Brain 里有数据——不允许静默回退）。
+  it('三条线均已接入真实 journey，source=product_map，无一条落回 not_connected', async () => {
     const overview = await buildLineHealthOverview();
     expect(overview.source).toBe('product_map');
     expect(overview.fallback_reason).toBeNull();
     expect(overview.data).toHaveLength(3);
 
-    const line02 = overview.data[1];
-    expect(line02.availability).toBe('not_connected');
-    expect(line02.maturity).toBe('not_connected');
-    expect(line02.journey_id).toBeNull();
-    expect(line02.feature_counts).toEqual({ total: 0, done: 0, working: 0, planned: 0 });
-    expect(line02.smoke).toBeNull();
+    for (const item of overview.data) {
+      expect(item.journey_id).not.toBeNull();
+      expect(item.availability).not.toBe('not_connected');
+    }
+
+    const [line01, line02, line04] = overview.data;
+    expect(line01.journey_id).toBe('c019cdeb-d90b-4f8b-a658-ae333663ac35');
+    expect(line02.journey_id).toBe('afa6abca-53c0-4815-8594-b7fb81ca547f');
+    expect(line04.journey_id).toBe('e675da0f-1117-4301-a801-cd4753beb8c8');
   });
 
   it('product-map 不可读时 source=fallback，但仍用内置 LINE_DEFS 返回 3 条线', async () => {
@@ -120,7 +140,7 @@ describe('buildLineHealthOverview', () => {
 
 describe('buildLineDeployment', () => {
   it('未接入线不打 GitHub，直接返回空态与约定文案', async () => {
-    const data = await buildLineDeployment(LINE01);
+    const data = await buildLineDeployment(NOT_CONNECTED_LINE);
     expect(data.connected).toBe(false);
     expect(data.message).toBe(NOT_CONNECTED_MESSAGE);
     expect(data.environments).toEqual([]);
@@ -170,8 +190,8 @@ describe('buildLineDeployment', () => {
     await buildLineDeployment(LINE04);
     expect(axiosGetMock.mock.calls.length).toBe(firstCount);
 
-    // 切到 line01（未接入，占用单槽），再切回 line04 → 必须重新抓取
-    await buildLineDeployment(LINE01);
+    // 切到一条未接入线（占用单槽，不打 GitHub），再切回 line04 → 必须重新抓取
+    await buildLineDeployment(NOT_CONNECTED_LINE);
     await buildLineDeployment(LINE04);
     expect(axiosGetMock.mock.calls.length).toBeGreaterThan(firstCount);
   });
@@ -188,7 +208,7 @@ describe('buildLineDeployment', () => {
 
 describe('buildLineAbilities', () => {
   it('未接入线返回 connected=false + 空数组 + 约定文案，不打 Brain', async () => {
-    const data = await buildLineAbilities(LINE01);
+    const data = await buildLineAbilities(NOT_CONNECTED_LINE);
     expect(data.connected).toBe(false);
     expect(data.abilities).toEqual([]);
     expect(data.message).toBe(NOT_CONNECTED_MESSAGE);

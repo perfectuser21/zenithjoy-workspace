@@ -24,13 +24,6 @@ import { staffGuard } from '../middleware/staff';
 import { simpleRateLimit } from '../middleware/simple-rate-limit';
 import { ipKeyGenerator } from 'express-rate-limit';
 import {
-  JourneyFeature,
-  GitHubRun,
-  fetchJourneyFeatures,
-  fetchLatestSmokeRun,
-  maturityFromCounts,
-} from '../services/staff-health';
-import {
   buildLineAbilities,
   buildLineDeployment,
   buildLineHealthOverview,
@@ -47,38 +40,6 @@ const feishuLoginRateLimit = simpleRateLimit({
   keyFn: (req) => ipKeyGenerator(req.ip || 'unknown'),
 });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
-
-type PathKey = 'path1' | 'path2' | 'path4';
-
-const PATH_DEFS: Array<{
-  pathKey: PathKey;
-  label: string;
-  journeyId: string;
-  journeyName: string;
-  smokeWorkflowHints: string[];
-}> = [
-  {
-    pathKey: 'path1',
-    label: 'Path 1',
-    journeyId: 'c019cdeb-d90b-4f8b-a658-ae333663ac35',
-    journeyName: '智能发布',
-    smokeWorkflowHints: ['golden-path-1', 'path1', 'publish'],
-  },
-  {
-    pathKey: 'path2',
-    label: 'Path 2',
-    journeyId: 'afa6abca-53c0-4815-8594-b7fb81ca547f',
-    journeyName: '客户智能获客路径',
-    smokeWorkflowHints: ['golden-path-2', 'path2', 'acquisition'],
-  },
-  {
-    pathKey: 'path4',
-    label: 'Path 4',
-    journeyId: 'e675da0f-1117-4301-a801-cd4753beb8c8',
-    journeyName: '智能客服',
-    smokeWorkflowHints: ['golden-path-4', 'path4', 'wechat'],
-  },
-];
 
 // 反代地址：CECELIA_SKILL_EVAL_URL env var 优先（含协议+主机+端口+路径前缀），缺省走 9100
 const SKILL_EVAL_BASE = () => process.env.CECELIA_SKILL_EVAL_URL ?? 'http://hk-vps:9100';
@@ -299,71 +260,9 @@ router.get('/skill-eval/report/:jobId', async (req, res): Promise<void> => {
   }
 });
 
-router.get('/path-health', async (_req, res): Promise<void> => {
-  const items = await Promise.all(PATH_DEFS.map(async (pathDef) => {
-    let features: JourneyFeature[] = [];
-    let smoke: GitHubRun | null = null;
-    const messages: string[] = [];
-
-    try {
-      features = await fetchJourneyFeatures(pathDef.journeyId);
-    } catch (err) {
-      const message = axios.isAxiosError(err) ? err.message : 'brain unavailable';
-      messages.push(`Brain: ${message}`);
-    }
-
-    try {
-      smoke = await fetchLatestSmokeRun(pathDef.smokeWorkflowHints);
-      if (!smoke) messages.push('GitHub: no recent smoke run matched');
-    } catch (err) {
-      const message = axios.isAxiosError(err) ? err.message : 'github unavailable';
-      messages.push(`GitHub: ${message}`);
-    }
-
-    const doneCount = features.filter((feature) => feature.status === 'done').length;
-    const featureCounts = {
-      total: features.length,
-      done: doneCount,
-      working: features.filter((feature) => feature.status === 'working').length,
-      planned: features.filter((feature) => feature.status === 'planned').length,
-    };
-
-    return {
-      path_key: pathDef.pathKey,
-      label: pathDef.label,
-      journey_id: pathDef.journeyId,
-      journey_name: pathDef.journeyName,
-      maturity: maturityFromCounts(doneCount, features.length),
-      availability: messages.length > 0 ? 'degraded' : 'ready',
-      message: messages.length > 0 ? messages.join('; ') : null,
-      feature_counts: featureCounts,
-      features: features.map((feature) => ({
-        id: feature.id,
-        name: feature.name,
-        status: feature.status ?? 'unknown',
-        thickness: feature.thickness ?? 'unknown',
-        kind: feature.kind ?? 'feature',
-        updated_at: feature.updated_at ?? null,
-      })),
-      smoke: smoke ? {
-        id: smoke.id,
-        name: smoke.name,
-        status: smoke.status,
-        conclusion: smoke.conclusion,
-        html_url: smoke.html_url,
-        started_at: smoke.run_started_at ?? null,
-        updated_at: smoke.updated_at ?? null,
-      } : null,
-    };
-  }));
-
-  res.status(200).json({
-    success: true,
-    data: items,
-  });
-});
-
 // ─── 业务线健康看板（GP3 / line_health）────────────────────────────────────
+// 原「Path 健康」页面（/path-health，PATH_DEFS）与本页面是同一件事——业务线清单更权威
+// （product-map.json SSOT）、详情页多了部署/能力两个 tab，Path 健康已下线并入本页面。
 // 聚合逻辑在 services/line-health.ts，本处只做路由注册 + HTTP 语义（404 / 200 降级）。
 // 三个端点都在 router.use(staffGuard) 之后注册，因此都受员工白名单保护。
 
