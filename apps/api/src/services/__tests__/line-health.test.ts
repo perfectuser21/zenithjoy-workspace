@@ -38,7 +38,6 @@ const NOT_CONNECTED_LINE = {
   label: 'Line 01 客户首次成功',
   journeyId: null,
   journeyName: null,
-  smokeWorkflowHints: [],
   relatedPaths: [],
   prTitleKeywords: [],
 };
@@ -236,5 +235,109 @@ describe('buildLineAbilities', () => {
     expect(data.abilities).toEqual([]);
     expect(data.message).toContain('Brain:');
     expect(data.message).toContain('brain down');
+  });
+});
+
+// 2026-07-29 用户拍板：总览卡片去掉不可靠的 smoke 匹配，改成三环境版本 + 待发布变更清单
+describe('buildLineHealthOverview — 版本概览 + 待发布变更清单', () => {
+  it('总览每条连通线都带 environments（三环境状态与 buildLineDeployment 一致），不再有 smoke 字段', async () => {
+    const overview = await buildLineHealthOverview();
+    const line04 = overview.data.find((d) => d.line_key === 'line04')!;
+
+    expect(line04).not.toHaveProperty('smoke');
+    expect(line04.environments).toHaveLength(3);
+    const byName = Object.fromEntries(line04.environments.map((e) => [e.name, e]));
+    // 复用默认 stubGithub()：develop=null(not_deployed) / release/cs-stable=90天前(stale) / main=2天前(active)
+    expect(byName.dev.status).toBe('not_deployed');
+    expect(byName.staging.status).toBe('stale');
+    expect(byName.production.status).toBe('active');
+  });
+
+  it('Brain 返回空数组（非错误）时 availability=ready，不再因"无 smoke 匹配"而 degraded', async () => {
+    const overview = await buildLineHealthOverview();
+    const line01 = overview.data.find((d) => d.line_key === 'line01')!;
+    expect(line01.availability).toBe('ready');
+    expect(line01.message).toBeNull();
+  });
+
+  it('pending_changes：staging 分支上比 production 更新、命中相关路径的提交才计入，production 自身提交被排除', async () => {
+    const PROD_SHA = 'a'.repeat(40);
+    const NEW_SHA = 'b'.repeat(40);
+    axiosGetMock.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => {
+      if (url.includes('/journey_features')) return Promise.resolve({ status: 200, data: [] });
+      if (url.includes('/search/issues')) return Promise.resolve({ status: 200, data: { items: [] } });
+      if (url.includes('/commits')) {
+        const branch = String(config?.params?.sha ?? '');
+        const since = config?.params?.since;
+        if (branch === 'main') {
+          // production：单条最近提交
+          return Promise.resolve({
+            status: 200,
+            data: [{ sha: PROD_SHA, html_url: `https://github.com/x/y/commit/${PROD_SHA}`, commit: { message: 'feat: prod baseline', author: { date: isoDaysAgo(2) } } }],
+          });
+        }
+        if (branch === 'release/cs-stable' && since) {
+          // 待发布变更清单查询（带 since）：返回 2 条——1 条是 production 自身（应被排除），1 条是真正新增
+          return Promise.resolve({
+            status: 200,
+            data: [
+              { sha: NEW_SHA, html_url: `https://github.com/x/y/commit/${NEW_SHA}`, commit: { message: 'feat(line04): 新功能\n\n详细说明另起一行', author: { date: isoDaysAgo(1) } } },
+              { sha: PROD_SHA, html_url: `https://github.com/x/y/commit/${PROD_SHA}`, commit: { message: 'feat: prod baseline', author: { date: isoDaysAgo(2) } } },
+            ],
+          });
+        }
+        if (branch === 'release/cs-stable') {
+          // fetchEnvironment 本身那次调用（per_page:1，无 since）
+          return Promise.resolve({
+            status: 200,
+            data: [{ sha: NEW_SHA, html_url: `https://github.com/x/y/commit/${NEW_SHA}`, commit: { message: 'feat(line04): 新功能', author: { date: isoDaysAgo(1) } } }],
+          });
+        }
+        return Promise.resolve({ status: 200, data: [] }); // develop
+      }
+      return Promise.resolve({ status: 200, data: { workflow_runs: [] } });
+    });
+
+    const overview = await buildLineHealthOverview();
+    const line04 = overview.data.find((d) => d.line_key === 'line04')!;
+    expect(line04.pending_changes).toHaveLength(1);
+    expect(line04.pending_changes[0].sha).toBe(NEW_SHA);
+    expect(line04.pending_changes[0].message).toBe('feat(line04): 新功能'); // 只取首行，不含提交详细说明
+    expect(line04.pending_changes.some((c) => c.sha === PROD_SHA)).toBe(false);
+  });
+
+  it('production 尚无匹配提交（commit_date 为 null）时 pending_changes 为空，不发起 since 查询', async () => {
+    axiosGetMock.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => {
+      if (url.includes('/journey_features')) return Promise.resolve({ status: 200, data: [] });
+      if (url.includes('/search/issues')) return Promise.resolve({ status: 200, data: { items: [] } });
+      if (url.includes('/commits')) {
+        const branch = String(config?.params?.sha ?? '');
+        if (branch === 'main') return Promise.resolve({ status: 200, data: [] }); // production 无提交
+        return Promise.resolve({ status: 200, data: [] });
+      }
+      return Promise.resolve({ status: 200, data: { workflow_runs: [] } });
+    });
+
+    const overview = await buildLineHealthOverview();
+    const line04 = overview.data.find((d) => d.line_key === 'line04')!;
+    expect(line04.pending_changes).toEqual([]);
+    const sinceCalls = axiosGetMock.mock.calls.filter(
+      ([url, config]) => String(url).includes('/commits') && (config as { params?: Record<string, unknown> })?.params?.since
+    );
+    expect(sinceCalls).toHaveLength(0);
+  });
+
+  it('总览版本概览按 lineKey 各自独立缓存（不是单槽）：连续拉取三条线互不驱逐', async () => {
+    const countGithubCalls = () =>
+      axiosGetMock.mock.calls.filter(([url]: [string]) => url.includes('/commits') || url.includes('/search/issues')).length;
+
+    await buildLineHealthOverview();
+    const firstCount = countGithubCalls();
+    expect(firstCount).toBeGreaterThan(0);
+
+    await buildLineHealthOverview();
+    // 三条线的版本概览都命中各自缓存 → 第二次总览请求不应再发起额外的 commits/search 调用
+    // （journey_features 走 Brain，本模块不缓存，不计入本断言）
+    expect(countGithubCalls()).toBe(firstCount);
   });
 });

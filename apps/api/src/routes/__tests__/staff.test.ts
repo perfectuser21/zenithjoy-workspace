@@ -484,11 +484,13 @@ describe('staff routes — line health 业务线健康看板', () => {
     expect(line01.journey_id).toBe('c019cdeb-d90b-4f8b-a658-ae333663ac35');
     expect(line01.journey_name).toBe('智能发布');
     expect(line01.maturity).toBe('thin');
-    expect(line01.availability).toBe('degraded');
-    expect(line01.message).toContain('GitHub:');
+    // 2026-07-29：总览卡片去掉 smoke 匹配后，availability 只反映 Brain 是否报错——
+    // Brain 正常返回空数组（0 features）本身不是错误，应为 ready
+    expect(line01.availability).toBe('ready');
+    expect(line01.message).toBeNull();
     expect(line01.feature_counts).toEqual({ total: 0, done: 0, working: 0, planned: 0 });
     expect(Object.keys(line01).sort()).toEqual(
-      ['availability', 'feature_counts', 'journey_id', 'journey_name', 'label', 'line_key', 'maturity', 'message', 'smoke'].sort()
+      ['availability', 'environments', 'feature_counts', 'journey_id', 'journey_name', 'label', 'line_key', 'maturity', 'message', 'pending_changes'].sort()
     );
     expect(line01).not.toHaveProperty('path_key');
     expect(line01).not.toHaveProperty('status');

@@ -22,15 +22,18 @@
  *   4. "关联 PR" = GitHub Search Issues 按标题关键词匹配（接受稀疏结果）
  *   5. 降级粒度 = 按字段独立（三个环境彼此独立 try/catch，related_prs 与 abilities 再独立）
  *   6. GitHub 数据缓存 5 分钟（未认证 60 次/小时限额，多员工同开会打满）
+ *
+ * 2026-07-29 用户拍板：总览卡片去掉 smoke 状态（workflow name 匹配逻辑天然不可靠——
+ * golden-path-N-smoke.sh 常是塞进别的大 workflow 里跑的一个步骤，GitHub API 只能看到
+ * 外层 workflow 名字，永远匹配不上，导致"数据暂不可达"这类误导性提示），改成用户真正
+ * 关心的东西：三环境版本号 + staging 相对 production 的待发布变更清单。
  */
 import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
 import {
-  GitHubRun,
   JourneyFeature,
   fetchJourneyFeatures,
-  fetchLatestSmokeRun,
   githubHeaders,
   githubRepo,
   maturityFromCounts,
@@ -60,7 +63,6 @@ export type LineDef = {
   /** null = 尚未接入 Brain（line01/line02），压根不发起 Brain 请求 */
   journeyId: string | null;
   journeyName: string | null;
-  smokeWorkflowHints: string[];
   /** 按路径过滤最近 commit 用；thin 阶段每个环境只打一次 GitHub，取首个代表路径 */
   relatedPaths: string[];
   prTitleKeywords: string[];
@@ -73,7 +75,6 @@ export const LINE_DEFS: LineDef[] = [
     // 原 Path 健康 PATH_DEFS 的 path1 映射（智能发布 journey），Path 健康已下线合并进本页面
     journeyId: 'c019cdeb-d90b-4f8b-a658-ae333663ac35',
     journeyName: '智能发布',
-    smokeWorkflowHints: ['golden-path-1', 'path1'],
     relatedPaths: ['apps/api/src/routes/publish.ts'],
     prTitleKeywords: ['line01', 'path1'],
   },
@@ -83,7 +84,6 @@ export const LINE_DEFS: LineDef[] = [
     // 原 Path 健康 PATH_DEFS 的 path2 映射（客户智能获客路径 journey），Path 健康已下线合并进本页面
     journeyId: 'afa6abca-53c0-4815-8594-b7fb81ca547f',
     journeyName: '客户智能获客路径',
-    smokeWorkflowHints: ['golden-path-2', 'path2', 'acquisition'],
     relatedPaths: ['apps/api/src/routes/acquisition.ts'],
     prTitleKeywords: ['line02', 'acquisition'],
   },
@@ -93,7 +93,6 @@ export const LINE_DEFS: LineDef[] = [
     // PR #1487 修复后的整合版"智能客服" journey，不得回退到已废弃孤儿 journey
     journeyId: 'e675da0f-1117-4301-a801-cd4753beb8c8',
     journeyName: '智能客服',
-    smokeWorkflowHints: ['golden-path-4', 'path4', 'wechat'],
     relatedPaths: ['apps/api/src/routes/wechat.ts', 'apps/api/src/services/wechat'],
     prTitleKeywords: ['wechat'],
   },
@@ -134,6 +133,14 @@ export type LineRelatedPr = {
   updated_at: string | null;
 };
 
+/** staging 分支上、production 当前版本之后新增的提交（"待发布变更清单"） */
+export type LinePendingChange = {
+  sha: string;
+  message: string;
+  url: string;
+  date: string | null;
+};
+
 export type LineDeployment = {
   line_key: string;
   connected: boolean;
@@ -168,15 +175,10 @@ export type LineHealthItem = {
   availability: 'ready' | 'degraded' | 'not_connected';
   message: string | null;
   feature_counts: { total: number; done: number; working: number; planned: number };
-  smoke: null | {
-    id: number;
-    name: string;
-    status: string;
-    conclusion: string | null;
-    html_url: string;
-    started_at: string | null;
-    updated_at: string | null;
-  };
+  /** 三环境版本概览（dev/staging/production），未接入线为空数组 */
+  environments: LineEnvironment[];
+  /** staging 相对 production 的待发布变更清单，未接入线为空数组 */
+  pending_changes: LinePendingChange[];
 };
 
 export type LineHealthOverview = {
@@ -257,13 +259,29 @@ type SingleSlotCache<T> = { key: string; value: T; expiresAt: number } | null;
  * 切换到另一条业务线立刻释放上一槽，保证不会长期持有陈旧部署信息、内存也恒定有界。
  */
 let deploymentCache: SingleSlotCache<LineDeployment> = null;
-/** 总览页 smoke run 单槽缓存（URL 恒定，只随 hints 变） */
-let smokeCache: SingleSlotCache<GitHubRun | null> = null;
+
+type LineVersionSummary = { environments: LineEnvironment[]; pending_changes: LinePendingChange[] };
+
+/**
+ * 总览页版本概览缓存——按 lineKey 分别持有一份（不能用单槽：总览页一次要同时展示
+ * 三条线，单槽缓存在遍历时会互相驱逐，等于没缓存）。
+ */
+const versionSummaryCache = new Map<string, { value: LineVersionSummary; expiresAt: number }>();
+
+function readVersionSummary(lineKey: string): LineVersionSummary | null {
+  const slot = versionSummaryCache.get(lineKey);
+  if (slot && Date.now() < slot.expiresAt) return slot.value;
+  return null;
+}
+
+function writeVersionSummary(lineKey: string, value: LineVersionSummary): void {
+  versionSummaryCache.set(lineKey, { value, expiresAt: Date.now() + GITHUB_CACHE_TTL_MS });
+}
 
 /** 仅供测试/运维排障使用：清空 line-health 的全部 GitHub 缓存 */
 export function clearLineHealthCache(): void {
   deploymentCache = null;
-  smokeCache = null;
+  versionSummaryCache.clear();
 }
 
 function readSlot<T>(slot: SingleSlotCache<T>, key: string): { hit: true; value: T } | { hit: false } {
@@ -364,6 +382,68 @@ async function fetchRelatedPrs(
       updated_at: item.updated_at ?? null,
     }));
   return { prs, sawHttp200: result.status === 200 };
+}
+
+/**
+ * staging 分支（release/cs-stable）上、production 当前提交时间之后、命中该线相关路径
+ * 的提交列表——"待发布变更清单"。sinceDate 为空（production 尚无匹配提交）时直接返回空，
+ * 不发起请求。GitHub commits API 的 since 是按提交时间闭区间，返回结果里若含 production
+ * 自身那条提交（sha 相同）需要过滤掉，只保留严格更新的部分。
+ */
+async function fetchPendingChanges(
+  relatedPath: string,
+  branch: string,
+  sinceDate: string | null,
+  excludeSha: string | null
+): Promise<{ changes: LinePendingChange[]; sawHttp200: boolean }> {
+  if (!sinceDate) return { changes: [], sawHttp200: false };
+  const result = await githubGet<GhCommit[]>(`https://api.github.com/repos/${githubRepo()}/commits`, {
+    sha: branch,
+    path: relatedPath,
+    since: sinceDate,
+    per_page: 15,
+  });
+  if (!result.ok) return { changes: [], sawHttp200: false };
+
+  const commits = Array.isArray(result.data) ? result.data : [];
+  const changes = commits
+    .filter((c) => typeof c.sha === 'string' && c.sha !== excludeSha)
+    .map((c) => ({
+      sha: c.sha as string,
+      message: (c.commit?.message ?? '').split('\n')[0],
+      url: c.html_url ?? `https://github.com/${githubRepo()}/commit/${c.sha}`,
+      date: c.commit?.author?.date ?? c.commit?.committer?.date ?? null,
+    }));
+  return { changes, sawHttp200: result.status === 200 };
+}
+
+/**
+ * 总览卡片用的轻量版本概览：三环境状态 + staging 相对 production 的待发布变更清单。
+ * 与 buildLineDeployment 共享 fetchEnvironment/fetchPendingChanges，但走独立的按线缓存
+ * （总览一次要同时看三条线，不能用 buildLineDeployment 的单槽缓存互相驱逐）。
+ */
+async function fetchLineVersionSummary(def: LineDef): Promise<LineVersionSummary> {
+  const cached = readVersionSummary(def.lineKey);
+  if (cached) return cached;
+
+  const relatedPath = def.relatedPaths[0] ?? '';
+  const envResults = await Promise.all(ENV_BRANCHES.map((env) => fetchEnvironment(env, relatedPath)));
+  const environments = envResults.map((r) => r.environment);
+
+  const production = envResults.find((r) => r.environment.name === 'production');
+  const stagingBranch = ENV_BRANCHES.find((e) => e.name === 'staging')?.branch ?? 'release/cs-stable';
+  const { changes, sawHttp200: changesOk } = await fetchPendingChanges(
+    relatedPath,
+    stagingBranch,
+    production?.environment.commit_date ?? null,
+    production?.environment.commit_sha ?? null
+  );
+
+  const payload: LineVersionSummary = { environments, pending_changes: changes };
+  if (envResults.some((r) => r.sawHttp200) || changesOk) {
+    writeVersionSummary(def.lineKey, payload);
+  }
+  return payload;
 }
 
 // ─── 三个端点的聚合构造 ──────────────────────────────────────────────────────
@@ -467,15 +547,6 @@ function mapAbility(feature: JourneyFeature): LineAbility {
   };
 }
 
-async function fetchSmokeRunCached(hints: string[]): Promise<GitHubRun | null> {
-  const key = hints.join('|');
-  const cached = readSlot(smokeCache, key);
-  if (cached.hit) return cached.value;
-  const run = await fetchLatestSmokeRun(hints);
-  smokeCache = makeSlot(key, run);
-  return run;
-}
-
 function notConnectedItem(def: LineDef, label: string): LineHealthItem {
   return {
     line_key: def.lineKey,
@@ -487,13 +558,13 @@ function notConnectedItem(def: LineDef, label: string): LineHealthItem {
     availability: 'not_connected',
     message: null,
     feature_counts: { total: 0, done: 0, working: 0, planned: 0 },
-    smoke: null,
+    environments: [],
+    pending_changes: [],
   };
 }
 
 async function buildConnectedItem(def: LineDef, label: string): Promise<LineHealthItem> {
   let features: JourneyFeature[] = [];
-  let smoke: GitHubRun | null = null;
   const messages: string[] = [];
 
   try {
@@ -503,13 +574,9 @@ async function buildConnectedItem(def: LineDef, label: string): Promise<LineHeal
     messages.push(`Brain: ${message}`);
   }
 
-  try {
-    smoke = await fetchSmokeRunCached(def.smokeWorkflowHints);
-    if (!smoke) messages.push('GitHub: no recent smoke run matched');
-  } catch (err) {
-    const message = axios.isAxiosError(err) ? err.message : (err as Error).message || 'github unavailable';
-    messages.push(`GitHub: ${message}`);
-  }
+  // 版本概览走独立的 GitHub 抓取，永不抛异常（各环境/变更清单各自独立降级），
+  // 不再像旧版 smoke 匹配那样把"没找到"当成 degraded 的理由——只有 Brain 真故障才算 degraded。
+  const { environments, pending_changes } = await fetchLineVersionSummary(def);
 
   const doneCount = features.filter((feature) => feature.status === 'done').length;
 
@@ -527,17 +594,8 @@ async function buildConnectedItem(def: LineDef, label: string): Promise<LineHeal
       working: features.filter((feature) => feature.status === 'working').length,
       planned: features.filter((feature) => feature.status === 'planned').length,
     },
-    smoke: smoke
-      ? {
-          id: smoke.id,
-          name: smoke.name,
-          status: smoke.status,
-          conclusion: smoke.conclusion,
-          html_url: smoke.html_url,
-          started_at: smoke.run_started_at ?? null,
-          updated_at: smoke.updated_at ?? null,
-        }
-      : null,
+    environments,
+    pending_changes,
   };
 }
 

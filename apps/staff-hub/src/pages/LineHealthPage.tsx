@@ -4,6 +4,20 @@ import { useNavigate } from 'react-router-dom';
 import { adminFetch } from '../lib/adminFetch';
 import { useAuth } from '../contexts/AuthContext';
 
+export type LineEnvironment = {
+  name: 'dev' | 'staging' | 'production';
+  status: 'active' | 'stale' | 'not_deployed' | 'unavailable';
+  commit_sha: string | null;
+  commit_date: string | null;
+};
+
+export type LinePendingChange = {
+  sha: string;
+  message: string;
+  url: string;
+  date: string | null;
+};
+
 export type LineHealthItem = {
   line_key: string;
   label: string;
@@ -18,15 +32,8 @@ export type LineHealthItem = {
     working: number;
     planned: number;
   };
-  smoke: null | {
-    id: number;
-    name: string;
-    status: string;
-    conclusion: string | null;
-    html_url: string;
-    started_at: string | null;
-    updated_at: string | null;
-  };
+  environments: LineEnvironment[];
+  pending_changes: LinePendingChange[];
 };
 
 function renderAvailabilityPill(item: LineHealthItem) {
@@ -49,6 +56,46 @@ function renderAvailabilityPill(item: LineHealthItem) {
     <span className="pill" data-testid={`line-badge-${item.line_key}`}>
       正常
     </span>
+  );
+}
+
+const ENV_LABEL: Record<LineEnvironment['name'], string> = {
+  dev: 'dev',
+  staging: 'staging',
+  production: 'prod',
+};
+
+function shortSha(sha: string | null): string {
+  return sha ? sha.slice(0, 7) : '(未部署)';
+}
+
+function renderVersionRow(item: LineHealthItem) {
+  if (item.environments.length === 0) return null;
+  const byName = Object.fromEntries(item.environments.map((e) => [e.name, e]));
+  return (
+    <p className="muted" data-testid={`line-versions-${item.line_key}`}>
+      {(['dev', 'staging', 'production'] as const)
+        .map((name) => `${ENV_LABEL[name]} ${shortSha(byName[name]?.commit_sha ?? null)}`)
+        .join(' · ')}
+    </p>
+  );
+}
+
+function renderPendingChanges(item: LineHealthItem) {
+  if (item.pending_changes.length === 0) return null;
+  return (
+    <div className="muted" style={{ marginTop: 6 }} data-testid={`line-pending-changes-${item.line_key}`}>
+      staging 比 production 多 {item.pending_changes.length} 个提交：
+      <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
+        {item.pending_changes.slice(0, 5).map((change) => (
+          <li key={change.sha}>
+            <a href={change.url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
+              {change.message}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -93,7 +140,7 @@ export default function LineHealthPage() {
           <div>
             <h2>业务线健康</h2>
             <p className="muted">
-              对外三条业务线（line01 / line02 / line04）的接入状态、能力完成度与最近 smoke 结果。
+              对外三条业务线（line01 / line02 / line04）的接入状态、能力完成度、三环境版本与待发布变更。
             </p>
           </div>
           <button className="button secondary" onClick={() => void load()}>
@@ -135,6 +182,8 @@ export default function LineHealthPage() {
                 maturity: <strong>{item.maturity}</strong> · done {item.feature_counts.done}/
                 {item.feature_counts.total}
               </p>
+              {renderVersionRow(item)}
+              {renderPendingChanges(item)}
               {item.availability === 'degraded' && item.message ? (
                 <div className="error" style={{ marginTop: 10 }}>
                   数据暂不可达：{item.message}
