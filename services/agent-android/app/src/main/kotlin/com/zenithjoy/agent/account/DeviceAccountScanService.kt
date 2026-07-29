@@ -238,6 +238,25 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
             if (attempt > 0) {
                 launchDouyinApp(); awaitDouyinForeground(maxAttempts = 8); delay(2000L)
             }
+            // 真机复现(2026-07-29，客户已交付环境MAA-AN00，adb dumpsys实时确认)：CLEAR_TOP
+            // relaunch 不总是可靠——有时会恢复到之前停留过的某个深层子页面(比如抖音自己的
+            // "个人主页封面预览/更换"页 com.ss.android.ugc.aweme.profile.ui.ProfileCoverPreviewActivity)，
+            // 包名依然匹配抖音(awaitDouyinForeground 判定"已到前台"直接放行)，但这类子页面没有
+            // 底部导航栏，导致"我"tab查找/坐标兜底全部落空，3次重试全部按同样方式失败(此前误判
+            // 为厂商弹窗)。加一层恢复：找不到底部导航栏特征时，多按几次返回键退回主页feed，
+            // 而不是冒然对着错误页面点坐标/干等CLEAR_TOP重来(CLEAR_TOP已被证明有时也解决不了)。
+            // 用 for+break（不是 repeat{ return@repeat }——那只是 continue，会白跑完剩余轮次）
+            // 确保命中主页feed后立即停止，不再多按无意义的返回键。
+            for (backAttempt in 0 until 5) {
+                val checkRoot = rootInActiveWindow
+                val onHomeFeed = checkRoot != null && (
+                    findNodeByContentDescContains(checkRoot, "我，按钮") != null ||
+                        findNodeByContentDescContains(checkRoot, "首页，按钮") != null
+                    )
+                if (onHomeFeed) break
+                performGlobalAction(GLOBAL_ACTION_BACK)
+                delay(600L)
+            }
             val preTapRoot = awaitRootInActiveWindow()
             val meTabNode = preTapRoot?.let {
                 val candidate = findNodeByContentDescContains(it, "我，按钮") ?: findNodeByText(it, "我")
