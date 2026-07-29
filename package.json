@@ -19,7 +19,8 @@
     "product-map:validate": "node scripts/product-map/cli.mjs validate",
     "product-map:generate": "node scripts/product-map/cli.mjs generate",
     "product-map:check": "node scripts/product-map/cli.mjs check",
-    "test:product-map": "node --test scripts/product-map/__tests__/product-map.test.js"
+    "product-map:gp-smoke-ratchet": "node scripts/product-map/gp-smoke-ratchet.mjs",
+    "test:product-map": "node --test scripts/product-map/__tests__/product-map.test.js scripts/product-map/__tests__/gp-smoke-ratchet.test.js"
   },
   "keywords": [
     "monorepo",
