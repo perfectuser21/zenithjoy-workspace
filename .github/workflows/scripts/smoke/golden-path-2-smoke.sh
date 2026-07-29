@@ -1189,11 +1189,14 @@ S30_ROW=$(psq "SELECT error_code FROM zenithjoy.agent_scan_failures WHERE agent_
 [ "$S30_ROW" = "OPEN_PANEL_FAILED" ] || fail "Step 30 agent_scan_failures.error_code 期望 'OPEN_PANEL_FAILED'，实得 '$S30_ROW'（非UUID request_id 的扫描失败未落库）" 30
 ok "Step 30 ✅ 非UUID request_id 的扫描失败已落 agent_scan_failures（error_code=$S30_ROW）"
 ok "Step 30 ✅ 已登记：sweep-timeouts 看门狗接线 + 绑定失败审计留痕由 apps/api vitest 回归覆盖（services/scheduler.test.ts / customer-admin.test.ts），非HTTP可断言行为不入本smoke"
-# TODO(真机段, sprints/07290930-android-open-panel-failed-navigation-bug)：OPEN_PANEL_FAILED
-# 根因(点我tab后单次delay(1500L)检查过早，个人页渲染慢时误判)已修——等价断言由
-# services/agent-android DeviceAccountScanServiceSwitchEntryPollTest.kt（Kotlin JVM 单测，
-# 静态断言等待逻辑改为轮询而非单次固定delay）覆盖，本 smoke 跑在 ubuntu-latest CI 容器无真实
-# Android 设备，UIA 导航时序本身未真验；待 Android 真机通道接管复跑确认。
+# ✅ 真机段已闭环(2026-07-29，真实设备MAA-AN00，非本smoke——本smoke跑在ubuntu-latest CI容器
+# 无真实Android设备，UIA导航时序本身不在这里验)：OPEN_PANEL_FAILED 最终定位到6个独立根因，
+# 全部合并且真机端到端验证通过(status=done, account_ids=["秦军餐饮","大湖成长之路（Ai+）"])：
+#   PR#1523 我tab点击等待改轮询 / PR#1536 消除弹窗ACTION_CLICK改手势点击 /
+#   PR#1545 agent注册数据库竞态 / PR#1547 CLEAR_TOP恢复不到主页feed /
+#   PR#1552 切换账号面板渲染等待改轮询 / PR#1554+#1555 误触发相邻"更换背景"热区+
+#   关闭浮层后节点引用过期，重新查找节点再点击+放宽整体超时预算。
+# 逻辑层等价断言见 services/agent-android 对应 *Test.kt（Kotlin JVM 单测）。
 
 # ───────────────────────────────────────────────────────────────────
 # Step 31：作战窗 Agent Panel 刀2/安卓获客(line02) 打点 + 中台看门狗回归
