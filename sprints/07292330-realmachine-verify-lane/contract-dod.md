@@ -41,6 +41,9 @@ journey_type: autonomous
 - [ ] [ARTIFACT] account-scan-realmachine-smoke.sh 文件存在，含真机验证车道核心步骤（安装/无障碍/定位/触发/轮询/断言）
   Test: node -e "const c=require('fs').readFileSync('.github/workflows/scripts/smoke/account-scan-realmachine-smoke.sh','utf8'); for (const kw of ['adb install -r','enabled_accessibility_services','account-scan/trigger','publish_tasks','account_ids']) { if(!c.includes(kw)) { console.error('missing: '+kw); process.exit(1); } }"
 
+- [ ] [ARTIFACT] account-scan-realmachine-smoke.sh 的终态断言已抽成可独立调用的 assert_task_terminal_success 函数，且脚本用 source-guard 使其可被 source 而不触发真机主流程（round 2 修订：使"status='done' AND account_ids非空"两段式联合断言可被回归测试覆盖，不退化成只查 account_ids）
+  Test: node -e "const c=require('fs').readFileSync('.github/workflows/scripts/smoke/account-scan-realmachine-smoke.sh','utf8'); if(!/assert_task_terminal_success\s*\(\)/.test(c) && !/function\s+assert_task_terminal_success/.test(c)) { console.error('missing function definition'); process.exit(1);} if(!c.includes('--source-only')) { console.error('missing source-only guard'); process.exit(1);} const fnBody = c.slice(c.indexOf('assert_task_terminal_success')); const doneIdx = fnBody.search(/\\\$1|STATUS/); const acctIdx = fnBody.search(/account_ids/); if(doneIdx === -1 || acctIdx === -1 || doneIdx > acctIdx) { console.error('function body 未先判 status 后判 account_ids'); process.exit(1); }"
+
 - [ ] [ARTIFACT] nightly-real-machine-staging.yml 新增"刀D"account-scan job，接入 nightly-report 汇总
   Test: node -e "const c=require('fs').readFileSync('.github/workflows/nightly-real-machine-staging.yml','utf8'); if(!c.includes('account-scan-realmachine-smoke.sh')) process.exit(1); if(!/needs:\s*\[[^\]]*account-scan[^\]]*\]/.test(c)) process.exit(1);"
 
@@ -69,6 +72,14 @@ journey_type: autonomous
 
 - [ ] [BEHAVIOR] account-scan-realmachine-smoke.sh 在无 Android 设备环境下正确走 envfail 分支（exit 3，非 1，区分"环境未就绪"与"真机验证失败"）
   Test: manual:bash -c 'bash .github/workflows/scripts/smoke/account-scan-realmachine-smoke.sh; CODE=$?; [ "$CODE" -eq 3 ] || { echo "FAIL: 无设备环境应 exit 3，实得 $CODE"; exit 1; }; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] error path（round 2 新增，PRD 原始 bug 复现场景回归测试）— status≠done（如 failed，模拟脏数据/上次运行残留）但 response.account_ids 恰好非空时，assert_task_terminal_success 仍必须判红，不得因 account_ids 非空就误判为绿
+  Test: manual:bash -c 'source .github/workflows/scripts/smoke/account-scan-realmachine-smoke.sh --source-only; set +e; assert_task_terminal_success "failed" "{\"account_ids\":[\"acc-stale-1\"],\"error_code\":\"MUTEX_BUSY\"}"; CODE=$?; set -e; [ "$CODE" -ne 0 ] || { echo "FAIL: status=failed 但 account_ids 非空时被误判为绿(exit 0)"; exit 1; }; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] happy path 对照（round 2 新增）— status='done' 且 account_ids 非空时，assert_task_terminal_success 必须判绿（配合上一条反例，证明函数不是恒返回失败）
+  Test: manual:bash -c 'source .github/workflows/scripts/smoke/account-scan-realmachine-smoke.sh --source-only; assert_task_terminal_success "done" "{\"account_ids\":[\"acc1\"]}" || { echo "FAIL: status=done 且 account_ids 非空应判绿"; exit 1; }; echo OK'
   期望: OK
 
 - [ ] [BEHAVIOR] lint-smoke-mock-honesty.sh 对漏标记的假payload步骤报红（proven-to-fire）

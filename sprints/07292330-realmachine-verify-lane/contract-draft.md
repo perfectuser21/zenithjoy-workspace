@@ -12,6 +12,7 @@
 - `.github/workflows/scripts/smoke/android-onboarding-smoke.sh` 已验证的 `GET /api/agent/install-pack/android` 返回 `{apk_url, deeplink}`，`apk_url` 走自定义域名可真实下载——真机 smoke 的"安装最新 APK"步骤复用该端点，不新建下载通道。
 - `.github/workflows/scripts/smoke/line02-android-collect-realmachine-smoke.sh` 现有真机脚本约定（本 sprint 直接复用的模式）：`ok()`/`fail()`(exit 1，真验证失败)/`envfail()`(exit 3，环境未就绪) 三态区分；设备唤醒/复位手法（`input keyevent KEYCODE_WAKEUP`、`monkey -p <pkg> -c android.intent.category.LAUNCHER 1`）；无障碍开启断言 `settings get secure enabled_accessibility_services`。
 - `.github/workflows/nightly-real-machine-staging.yml` 现有 `nightly-report` 汇总 job（`needs: [wechat-bubble, douyin-read]`, `if: always()`）已内置"红→自动开 `[nightly-red]` issue，同日去重"逻辑——刀D 只需把新 job 加进 `needs` 列表 + 汇总表新增一行 + 失败条件加一个 `||` 分支，禁止重新发明开 issue 的逻辑（精简纪律：复用已存在的收尾机制）。
+- **`realmachine-unverified-ratchet.mjs` 测试期覆盖环境变量 SSOT（round 2 修订，回应 GAN round 1 内部一致问题）**：该 CLI 唯一支持的两个环境变量名为 `REALMACHINE_SMOKE_DIR`（覆盖扫描的 smoke 脚本目录，默认 `.github/workflows/scripts/smoke`）与 `REALMACHINE_NIGHTLY_YML`（覆盖读取的 nightly workflow 文件路径，默认 `.github/workflows/nightly-real-machine-staging.yml`）——两者各自独立可覆盖，未设置时使用默认值。合同全文（Golden Path Step 6、final-e2e 脚本、contract-dod.md 全部 BEHAVIOR 条目）必须统一使用这两个变量名，禁止出现 `SMOKE_DIR_OVERRIDE` 等其他命名（round 1 曾出现过命名分裂，已修）。
 
 ## 禁 mock 边清单
 
@@ -104,31 +105,36 @@ TASK_ID=$(echo "$RESP" | jq -r '.data.task_id')
 ### Step 3: 轮询 publish_tasks 终态
 **来源**: `[FROM_PRD]` — PRD Golden Path 第 3 条："job 脚本轮询 `publish_tasks.status` + `response->>'error_code'` 终态 → 拿到 done / OPEN_PANEL_FAILED / MUTEX_BUSY / 超时 之一"
 
-**可观测行为**: 脚本每 10 秒查一次 `publish_tasks` 该行状态，直到 `status` 变为 `done`/`failed` 或达到 `POLL_MAX=18` 次（3 分钟）超时。
+**可观测行为**: 脚本每 10 秒查一次 `publish_tasks` 该行 `status`+`response`，直到 `status` 变为 `done`/`failed` 或达到 `POLL_MAX=18` 次（3 分钟）超时才跳出循环。**轮询循环只在 `STATUS='done'` 时才跳出并进入 Step 4 的 account_ids 检查；`STATUS` 为其他终态（`failed`/超时视为等价 failed）时，脚本直接判该次运行为红（`fail()`，exit 1），不进入 Step 4 的 account_ids 检查分支**——这是防止"仅凭 account_ids 非空就判绿"退化的第一道防线（本 sprint 要修复的原始 bug 模式）。
 
 **验证命令**:
 ```bash
-STATUS=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -c \
-  \"SELECT status FROM zenithjoy.publish_tasks WHERE id='$TASK_ID'\"")
+ROW=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -F'|' -c \
+  \"SELECT status, response FROM zenithjoy.publish_tasks WHERE id='$TASK_ID'\"")
+STATUS="${ROW%%|*}"
 ```
 
-**硬阈值**: 3 分钟内拿到终态之一（done/failed），否则判超时（等价 failed 分支）。
+**硬阈值**: 3 分钟内拿到终态之一（done/failed），否则判超时（等价 failed 分支，不进入 Step 4）。
 
 ---
 
 ### Step 4: 断言终态 + 失败留证据
 **来源**: `[FROM_PRD]` — PRD Golden Path 第 4 条："job 断言 `status='done'` 且 `account_ids` 非空（真读到账号）→ 绿；任何非 done → 红，自动开 `[nightly-red]` issue，失败留证据 → 出口：每晚一份真实账本"
 
-**可观测行为**: `status='done'` 且 `response->'account_ids'` 是非空数组 → 脚本 exit 0；否则 exit 1 并打印 `response` 全文（含 `error_code`/`screenshot_b64` 供排查）。`nightly-report` job 汇总该结果，红时开 `[nightly-red]` issue（复用现成逻辑，仅扩展 `needs`/汇总表/失败条件）。
+**可观测行为**: `status='done'` **且** `response->'account_ids'` 是非空数组 → 脚本 exit 0；`status` 非 `done`（即使 `response->'account_ids'` 恰好非空——脏数据/上次运行残留）→ 脚本仍必须 exit 1 并打印 `response` 全文（含 `error_code`/`screenshot_b64` 供排查）。`nightly-report` job 汇总该结果，红时开 `[nightly-red]` issue（复用现成逻辑，仅扩展 `needs`/汇总表/失败条件）。
+
+**两段式判据不可拆分**：这是 PRD 原文用粗体强调的核心断言，禁止退化成"只要 account_ids 读到就算过"（即 Step30 历史 bug 的翻版：字段读到就算过）。为使该联合断言可被独立回归测试覆盖（不依赖真机/真 SSH），`account-scan-realmachine-smoke.sh` 必须把判定逻辑抽成一个纯 bash 函数 `assert_task_terminal_success STATUS RESPONSE_JSON`（返回 0=真通过，1=判红），脚本用 `[ "${BASH_SOURCE[0]}" = "${0}" ] && main "$@"` 守卫，使该函数可被 `source` 后直接单独调用（不触发真机主流程）——见 `contract-dod.md` 对应 `[ARTIFACT]`/`[BEHAVIOR]` 条目。
 
 **验证命令**:
 ```bash
-RESP=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -c \
-  \"SELECT response FROM zenithjoy.publish_tasks WHERE id='$TASK_ID'\"")
-echo "$RESP" | jq -e '.account_ids | length > 0'
+ROW=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -F'|' -c \
+  \"SELECT status, response FROM zenithjoy.publish_tasks WHERE id='$TASK_ID'\"")
+STATUS="${ROW%%|*}"; RESP="${ROW#*|}"
+source .github/workflows/scripts/smoke/account-scan-realmachine-smoke.sh --source-only
+assert_task_terminal_success "$STATUS" "$RESP"
 ```
 
-**硬阈值**: `status='done'` AND `account_ids` 数组长度 ≥ 1。
+**硬阈值**: `status='done'` AND `account_ids` 数组长度 ≥ 1（联合断言，`assert_task_terminal_success` 内部先判 `STATUS`，非 `done` 直接返回 1，不看 `account_ids`）。
 
 ---
 
@@ -254,7 +260,7 @@ cat > "$TMPSMOKE/golden-path-98-smoke.sh" <<'FIXEOF2'
 # [CI-MOCK: real-device-only | nightly_ref: nonexistent-job-not-in-nightly.sh]
 echo "占位：nightly_ref 指向的脚本不存在于 nightly-real-machine-staging.yml"
 FIXEOF2
-AFTER_JSON=$(SMOKE_DIR_OVERRIDE="$TMPSMOKE" node scripts/product-map/realmachine-unverified-ratchet.mjs)
+AFTER_JSON=$(REALMACHINE_SMOKE_DIR="$TMPSMOKE" REALMACHINE_NIGHTLY_YML=.github/workflows/nightly-real-machine-staging.yml node scripts/product-map/realmachine-unverified-ratchet.mjs)
 AFTER_COUNT=$(echo "$AFTER_JSON" | jq -r '.realmachine_unverified_count')
 rm -rf "$TMPSMOKE"
 
@@ -278,5 +284,6 @@ echo "✅ 新刀D job 已接入 nightly workflow"
 | 功能 | Test File | BEHAVIOR 覆盖 | 预期红证据 |
 |---|---|---|---|
 | account-scan-realmachine-smoke.sh 无设备环境降级 | `tests/account-scan-realmachine-smoke.envfail.test.sh` | 无设备环境应 exit 3(环境未就绪) | 脚本不存在 → bash 报 No such file，exit 127（非 3）→ N failures |
+| account-scan-realmachine-smoke.sh 两段式终态联合断言（round 2 新增，回归覆盖 status≠done 但 account_ids 恰好非空的原始 bug 反例） | `tests/account-scan-realmachine-smoke.terminal-assert.test.sh` | status=failed 但 account_ids 非空 → 正确判红 / status=done 且 account_ids 非空 → 正确判绿 / status=done 但 account_ids 为空 → 正确判红 | 脚本不存在或 `assert_task_terminal_success` 未定义 → RED 分支 exit 1 → N failures |
 | lint-smoke-mock-honesty.sh 检测规则 | `tests/lint-smoke-mock-honesty.test.sh` | 漏标记的假payload步骤未被抓 / 补标记后期望通过 / 真实仓库现状应通过 | 脚本不存在 → exit 127 → N failures |
 | realmachine-unverified-ratchet 纯函数 | `tests/realmachine-unverified-ratchet.test.js`（Generator 落地时复制到 `scripts/product-map/__tests__/realmachine-unverified-ratchet.test.js`，同 `gp-smoke-ratchet.test.js` 先例） | 新增未覆盖步骤后计数应上升 / 全部标记均有效覆盖时计数为0 / 缺nightly_ref的标记同样计入未覆盖 | `computeRealmachineUnverifiedRatchet` 未导出 → import 报错 → N failures |
