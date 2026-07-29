@@ -254,11 +254,21 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
                 android.util.Log.i(TAG, "我tab未进无障碍树，降级用坐标兜底")
                 tapAtCoordinate(meX, meY) // 我 tab
             }
-            delay(1500L)
-            val profileRoot = awaitRootInActiveWindow()
-            val switchEntry = profileRoot?.let {
-                // 真 content-desc 带后缀(如"切换账号，用户名有6条未读消息")且位置随账号态变，必须 contains 匹配。
-                findNodeByContentDescContains(it, "切换账号") ?: findNodeByText(it, "切换账号")
+            // 真机复现(2026-07-28，staging agent_scan_failures，2台设备3次干净复现)：原实现只
+            // delay(1500L) 单次检查一次——个人页渲染较慢(CLEAR_TOP冷启动/头像等网络内容加载)时
+            // 检查过早，误判"未见切换账号"转CLEAR_TOP重试；每轮重试走同一条固定延迟路径，3次
+            // 重试系统性命中同一时序窗口全部失败(失败tree_dump证实"我，按钮"节点其实一直都在，
+            // 只是还没等到导航完成)。改为对齐同文件 readMyProfile() 已验证过的轮询等待模式，
+            // 最多轮询4次(共≤3200ms)，找到就立即停止，不再死等固定时长。
+            var switchEntry: AccessibilityNodeInfo? = null
+            for (pollAttempt in 0 until 4) {
+                delay(800L)
+                val profileRoot = rootInActiveWindow
+                switchEntry = profileRoot?.let {
+                    // 真 content-desc 带后缀(如"切换账号，用户名有6条未读消息")且位置随账号态变，必须 contains 匹配。
+                    findNodeByContentDescContains(it, "切换账号") ?: findNodeByText(it, "切换账号")
+                }
+                if (switchEntry != null) break
             }
             if (switchEntry != null) {
                 // "切换账号"是 clickable ImageView，坐标点其中心最稳(ACTION_CLICK 对抖音部分节点无效)。
