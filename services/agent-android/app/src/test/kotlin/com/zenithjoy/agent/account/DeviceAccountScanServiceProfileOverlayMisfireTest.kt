@@ -38,8 +38,9 @@ class DeviceAccountScanServiceProfileOverlayMisfireTest {
             segment.contains("\"关闭\""),
         )
         assertTrue(
-            "关闭浮层后必须重新点一次 switchEntry 重试，不能关完就放弃",
-            segment.contains("tapNodeCenter(switchEntry)"),
+            "关闭浮层后必须重新点一次切换账号入口重试，不能关完就放弃（真机复现PR#1555教训：" +
+                "关闭浮层后页面树已刷新，必须重新查找节点再点，不能直接复用旧switchEntry引用）",
+            segment.contains("tapNodeCenter("),
         )
         assertTrue(
             "重试后必须再次调用面板等待逻辑重新判定，不能假设关闭浮层后就一定成功",

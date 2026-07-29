@@ -316,8 +316,18 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
                             android.util.Log.w(TAG, "点击切换账号误触发更换背景浮层，关闭后重试")
                             tapNodeCenter(closeBtn)
                             delay(500L)
-                            tapNodeCenter(switchEntry)
-                            panel = awaitSwitchAccountPanel()
+                            // 真机复现(2026-07-29，客户已交付环境MAA-AN00)：关闭浮层后页面树已经
+                            // 刷新，复用关闭浮层【之前】拿到的旧 switchEntry 节点引用点击不生效
+                            // (Android AccessibilityNodeInfo 在树刷新后可能失效，静默无效果)——
+                            // 必须重新从当前根节点查一次"切换账号"节点再点击，不能用旧引用。
+                            val freshRoot = rootInActiveWindow
+                            val freshSwitchEntry = freshRoot?.let {
+                                findNodeByContentDescContains(it, "切换账号") ?: findNodeByText(it, "切换账号")
+                            }
+                            if (freshSwitchEntry != null) {
+                                tapNodeCenter(freshSwitchEntry)
+                                panel = awaitSwitchAccountPanel()
+                            }
                         }
                     }
                 }
@@ -762,7 +772,11 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
     companion object {
         private const val TAG = "DeviceAccountScanSvc"
         private const val DOUYIN_PKG = "com.ss.android.ugc.aweme"
-        private const val SCAN_TOTAL_TIMEOUT_MS = 30_000L
+        // 真机复现(2026-07-29，客户已交付环境MAA-AN00)：PR#1554新增"检测更换背景误触发浮层→
+        // 关闭→重新查找→重新点击→再等面板"这一步后，单次attempt最坏情况耗时明显变长(实测单次
+        // ~8-13秒)，3次CLEAR_TOP重试原30秒预算不够用，会在还没跑完第3次前就被整体超时打断
+        // (真机复现SCAN_TIMEOUT而不是更明确的OPEN_PANEL_FAILED)。调大到45秒留足余量。
+        private const val SCAN_TOTAL_TIMEOUT_MS = 45_000L
         // 逐号刷2-3视频(每个~3.5s)+切号，多号累计需更长；3min 兜底。
         private const val WARMUP_TOTAL_TIMEOUT_MS = 180_000L
 
