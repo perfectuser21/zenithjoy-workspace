@@ -97,3 +97,4 @@ xian-runner-fleet-smoke.sh
 android-signal-reporting-smoke.sh
 ability-acceptance-smoke.sh
 staff-line-health-smoke.sh
+staff-hub-env-badge-smoke.sh

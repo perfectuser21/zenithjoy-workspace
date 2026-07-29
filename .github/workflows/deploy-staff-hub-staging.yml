@@ -30,6 +30,7 @@ jobs:
       - name: Create .env.production
         run: |
           echo "VITE_FEISHU_APP_ID=${{ secrets.FEISHU_APP_ID }}" > apps/staff-hub/.env.production
+          echo "VITE_DEPLOY_ENV=staging" >> apps/staff-hub/.env.production
 
       - name: Build staff-hub
         run: npm run build --workspace=apps/staff-hub

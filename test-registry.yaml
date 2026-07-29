@@ -5262,6 +5262,14 @@ agent_suite:
   product: 中台认证
   note: "Sprint 07281207 业务线健康看板 Playwright E2E（总览三卡片/详情部署 tab/能力 tab/未接入空态/product-map 缺失 banner）。变体C：真实后端，禁 page.route()。workflow: e2e-staff-line-health-windows.yml"
 
+- id: staff-hub-env-badge-unit
+  path: apps/staff-hub/src/components/EnvBadge.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: 中台认证
+  note: "员工反馈 staging(:9444)/生产(:9443) 两个端口太容易混淆，照搬 apps/dashboard 已验证过的 EnvBadge 模式：staging=橙色角标/production=不显示/本地dev=蓝色角标。跑法：cd apps/staff-hub && npx vitest run --config vitest.config.ts（新增本地 vitest.config.ts，此前 staff-hub 无 React 渲染类测试）。"
+
 - id: staff-health-shared-sources-unit
   path: apps/api/src/services/__tests__/staff-health.test.ts
   type: unit
@@ -5319,3 +5327,11 @@ agent_suite:
   status: active
   product: 客户智能获客
   note: "Sprint 07282119合同测试（Red基线，永久保留）：line02泳道渲染回归——lane-line02与lane-line04物理隔离/设备名格式/多设备不合并/stuck灯态变红。需在apps/agent-panel(jsdom+@别名)环境跑，非根vitest.config.cjs(node环境)"
+
+- id: detect-review-issues-unit
+  path: scripts/devgate/detect-review-issues.test.js
+  type: unit
+  ci: L2
+  status: active
+  product: dev_pipeline
+  note: "PR #1528 真机复现：detect-review-issues.js 对 DeepSeek V3「#### 🔴 严重问题\\n- **无**」这种无括号无冒号+独立bullet的输出格式误判为有严重问题，阻塞了实际无问题的PR。补regex分支+node --test 4个场景（含原格式回归）。"
