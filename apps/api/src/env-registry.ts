@@ -107,6 +107,8 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'DASHBOARD_URL', reason: 'Dashboard 地址，缺则用默认' },
   { name: 'DASHBOARD_BASE_URL', reason: 'Dashboard base url，缺则用默认' },
   { name: 'CECELIA_BRAIN_URL', reason: 'Cecelia Brain 地址，缺则不回写 Brain' },
+  { name: 'LINE_HEALTH_STAGING_VERSION_URL', reason: '业务线健康看板查 staging apps/api 真实 /version 的内网地址，缺则默认 localhost:5201' },
+  { name: 'LINE_HEALTH_PROD_VERSION_URL', reason: '业务线健康看板查 production apps/api 真实 /version 的内网地址，缺则默认 localhost:5200' },
   { name: 'CONTENT_SERVICE_PROXY_URL', reason: '内容服务代理地址，缺则直连' },
   { name: 'CONTENT_OUTPUT_DIR', reason: '内容产出目录，缺则用默认目录' },
   { name: 'SCREENSHOTS_DIR', reason: '截图输出目录，缺则用默认目录' },

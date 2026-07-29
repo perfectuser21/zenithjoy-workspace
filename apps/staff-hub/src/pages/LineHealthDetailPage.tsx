@@ -4,18 +4,18 @@ import { Link, useParams } from 'react-router-dom';
 import { adminFetch } from '../lib/adminFetch';
 import { useAuth } from '../contexts/AuthContext';
 
-type EnvStatus = 'active' | 'stale' | 'not_deployed' | 'unavailable';
+type LiveVersion = {
+  sha: string | null;
+  version: string | null;
+  build_time: string | null;
+};
 
 type DeploymentData = {
   line_key: string;
   connected: boolean;
   message: string | null;
-  environments: Array<{
-    name: string;
-    status: EnvStatus;
-    commit_sha: string | null;
-    commit_date: string | null;
-  }>;
+  staging: LiveVersion;
+  production: LiveVersion;
   recent_commit: null | { sha: string; message: string; date: string | null; url: string };
   related_prs: Array<{
     number: number;
@@ -40,23 +40,13 @@ type AbilitiesData = {
   }>;
 };
 
-const ENV_LABELS: Record<string, string> = {
-  dev: '开发（develop）',
-  staging: '预发（release/*）',
-  production: '生产（main）',
+const ENV_LABELS: Record<'staging' | 'production', string> = {
+  staging: '预发（:5201）',
+  production: '生产（:5200）',
 };
 
-const ENV_STATUS_LABELS: Record<EnvStatus, string> = {
-  active: '活跃',
-  stale: '陈旧（超 30 天无相关提交）',
-  not_deployed: '未部署 / 无匹配提交',
-  unavailable: 'GitHub 暂不可达',
-};
-
-function envPillClass(status: EnvStatus): string {
-  if (status === 'active') return 'pill';
-  if (status === 'stale') return 'pill warn';
-  return 'pill fail';
+function shortSha(sha: string | null): string {
+  return sha ? sha.slice(0, 7) : '不可达';
 }
 
 export default function LineHealthDetailPage() {
@@ -144,17 +134,25 @@ export default function LineHealthDetailPage() {
               </div>
             ) : (
               <>
-                <h3>环境状态</h3>
+                <h3>部署版本（apps/api 真实 /version，两条线共享同一次部署）</h3>
                 <div className="feature-list" data-testid="deployment-environments">
-                  {deployment.environments.map((env) => (
-                    <div key={env.name} className="feature-item" data-testid={`env-row-${env.name}`}>
-                      <strong>{ENV_LABELS[env.name] ?? env.name}</strong>
-                      <div className="muted">
-                        <span className={envPillClass(env.status)}>{ENV_STATUS_LABELS[env.status]}</span>{' '}
-                        {env.commit_sha ? `${env.commit_sha.slice(0, 7)} · ${env.commit_date ?? ''}` : '—'}
+                  {(['staging', 'production'] as const).map((name) => {
+                    const env = deployment[name];
+                    return (
+                      <div key={name} className="feature-item" data-testid={`env-row-${name}`}>
+                        <strong>{ENV_LABELS[name]}</strong>
+                        <div className="muted">
+                          {env.sha ? (
+                            <>
+                              {shortSha(env.sha)} · {env.version ?? ''} · {env.build_time ?? ''}
+                            </>
+                          ) : (
+                            <span className="pill fail">不可达</span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <h3 style={{ marginTop: 18 }}>最近相关提交</h3>

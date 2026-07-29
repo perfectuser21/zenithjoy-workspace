@@ -4,11 +4,15 @@ import { useNavigate } from 'react-router-dom';
 import { adminFetch } from '../lib/adminFetch';
 import { useAuth } from '../contexts/AuthContext';
 
-export type LineEnvironment = {
-  name: 'dev' | 'staging' | 'production';
-  status: 'active' | 'stale' | 'not_deployed' | 'unavailable';
-  commit_sha: string | null;
-  commit_date: string | null;
+export type LiveVersion = {
+  sha: string | null;
+  version: string | null;
+  build_time: string | null;
+};
+
+export type LineHealthDeploymentSummary = {
+  staging: LiveVersion;
+  production: LiveVersion;
 };
 
 export type LinePendingChange = {
@@ -32,7 +36,6 @@ export type LineHealthItem = {
     working: number;
     planned: number;
   };
-  environments: LineEnvironment[];
   pending_changes: LinePendingChange[];
 };
 
@@ -59,24 +62,16 @@ function renderAvailabilityPill(item: LineHealthItem) {
   );
 }
 
-const ENV_LABEL: Record<LineEnvironment['name'], string> = {
-  dev: 'dev',
-  staging: 'staging',
-  production: 'prod',
-};
-
 function shortSha(sha: string | null): string {
-  return sha ? sha.slice(0, 7) : '(未部署)';
+  return sha ? sha.slice(0, 7) : '不可达';
 }
 
-function renderVersionRow(item: LineHealthItem) {
-  if (item.environments.length === 0) return null;
-  const byName = Object.fromEntries(item.environments.map((e) => [e.name, e]));
+function renderDeploymentSummary(deployment: LineHealthDeploymentSummary | null) {
+  if (!deployment) return null;
   return (
-    <p className="muted" data-testid={`line-versions-${item.line_key}`}>
-      {(['dev', 'staging', 'production'] as const)
-        .map((name) => `${ENV_LABEL[name]} ${shortSha(byName[name]?.commit_sha ?? null)}`)
-        .join(' · ')}
+    <p className="muted" data-testid="line-deployment-summary">
+      apps/api 当前部署版本：staging {shortSha(deployment.staging.sha)} · production{' '}
+      {shortSha(deployment.production.sha)}
     </p>
   );
 }
@@ -103,6 +98,7 @@ export default function LineHealthPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [items, setItems] = useState<LineHealthItem[]>([]);
+  const [deployment, setDeployment] = useState<LineHealthDeploymentSummary | null>(null);
   const [source, setSource] = useState<string>('product_map');
   const [fallbackReason, setFallbackReason] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -120,6 +116,7 @@ export default function LineHealthPage() {
       }
       const json = await res.json();
       setItems(json.data ?? []);
+      setDeployment(json.deployment ?? null);
       setSource(json.source ?? 'product_map');
       setFallbackReason(json.fallback_reason ?? null);
     } catch {
@@ -140,13 +137,15 @@ export default function LineHealthPage() {
           <div>
             <h2>业务线健康</h2>
             <p className="muted">
-              对外三条业务线（line01 / line02 / line04）的接入状态、能力完成度、三环境版本与待发布变更。
+              对外三条业务线（line01 / line02 / line04）的接入状态、能力完成度与待发布变更。
             </p>
           </div>
           <button className="button secondary" onClick={() => void load()}>
             <RefreshCw size={16} /> 刷新
           </button>
         </div>
+
+        {renderDeploymentSummary(deployment)}
 
         {source === 'fallback' ? (
           <div className="error" data-testid="fallback-banner">
@@ -182,7 +181,6 @@ export default function LineHealthPage() {
                 maturity: <strong>{item.maturity}</strong> · done {item.feature_counts.done}/
                 {item.feature_counts.total}
               </p>
-              {renderVersionRow(item)}
               {renderPendingChanges(item)}
               {item.availability === 'degraded' && item.message ? (
                 <div className="error" style={{ marginTop: 10 }}>
