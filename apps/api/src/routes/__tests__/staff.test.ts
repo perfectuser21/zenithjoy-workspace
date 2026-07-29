@@ -406,8 +406,8 @@ describe('staff routes — feishu-login 真实限流行为（不走上面的pass
 // .github/workflows/scripts/smoke/staff-line-health-smoke.sh 与 sprint 合同测试承担。
 
 const LINE04_JOURNEY_ID = 'e675da0f-1117-4301-a801-cd4753beb8c8';
-const STAGING_VERSION_URL = 'http://localhost:5201/version';
-const PROD_VERSION_URL = 'http://localhost:5200/version';
+const STAGING_VERSION_URL = 'http://zenithjoy-api-staging:5200/version';
+const PROD_VERSION_URL = 'http://zenithjoy-api-prod:5200/version';
 const FAKE_SHA = 'b'.repeat(40); // production /version sha
 const STAGING_SHA = 'e'.repeat(40);
 const RECENT_SHA = 'f'.repeat(40); // main 上按路径过滤的最近提交（与部署状态无关）
