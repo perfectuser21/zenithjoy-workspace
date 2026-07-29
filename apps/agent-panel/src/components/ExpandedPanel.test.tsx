@@ -91,6 +91,17 @@ describe('ExpandedPanel（展开态全屏看板）', () => {
     expect(screen.getByText('📱 RMX3478-b6ee 第2/3步')).toBeInTheDocument();
   });
 
+  // xian-rog真机截图实测发现：展开态全是纯白底黑字，无任何卡片/泳道/配色——设计稿
+  // (docs/superpowers/specs/2026-07-22-agent-panel-design.md)要求的"slate深底/细边框/
+  // uppercase小标签"从未落地成代码，只verify了文字内容对不对，没人验证过它长什么样。
+  it('泳道渲染panel-lane卡片样式，任务卡渲染panel-task-card样式（视觉设计非纯文本）', () => {
+    render(<ExpandedPanel lines={lines} />);
+    const lane04 = screen.getByTestId('lane-line04');
+    expect(lane04.className).toContain('panel-lane');
+    const task = screen.getByTestId('task-t1');
+    expect(task.className).toContain('panel-task-card');
+  });
+
   it('同型号两台设备（RMX3478-b6ee / RMX3478-a1f2）在 line02 泳道内各自独立展示，不合并', () => {
     const multiDeviceLines: LineState[] = lines.map((l) => (l.line === 'line02' ? {
       ...l,

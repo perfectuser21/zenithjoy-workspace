@@ -29,6 +29,11 @@ describe('RpaMiniView（展开态+RPA进行中：贴边只读缩略）', () => {
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
+  it('渲染panel-rpa-mini卡片样式（视觉设计非纯文本贴边小窗）', () => {
+    render(<RpaMiniView lines={lines} />);
+    expect(screen.getByTestId('panel-rpa-mini').className).toContain('panel-rpa-mini');
+  });
+
   it('异常态(stuck)在mini视图里天然可见，不需要额外升级机制', () => {
     const stuckLines: LineState[] = [{
       line: 'line04', connected: true, lightState: 'stuck', activeTasks: [], recentCompleted: [],

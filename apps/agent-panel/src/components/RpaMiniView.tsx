@@ -6,10 +6,10 @@ import { toBusinessLabel } from '@/shared/line-labels';
 export function RpaMiniView({ lines }: { lines: LineState[] }) {
   const connected = lines.filter((l) => l.connected);
   return (
-    <div data-testid="panel-rpa-mini">
-      <div>🔒 RPA 进行中 · 贴边只读</div>
+    <div data-testid="panel-rpa-mini" className="panel-rpa-mini">
+      <div className="panel-rpa-mini__header">🔒 RPA 进行中 · 贴边只读</div>
       {connected.map((l) => (
-        <div key={l.line} data-testid={`mini-${l.line}`} data-state={l.lightState}>
+        <div key={l.line} data-testid={`mini-${l.line}`} data-state={l.lightState} className="panel-rpa-mini__line">
           {toBusinessLabel(l.line)}
           {l.activeTasks[0] && ` ${l.activeTasks[0].title}`}
         </div>
