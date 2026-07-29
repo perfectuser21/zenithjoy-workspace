@@ -5327,3 +5327,11 @@ agent_suite:
   status: active
   product: 客户智能获客
   note: "Sprint 07282119合同测试（Red基线，永久保留）：line02泳道渲染回归——lane-line02与lane-line04物理隔离/设备名格式/多设备不合并/stuck灯态变红。需在apps/agent-panel(jsdom+@别名)环境跑，非根vitest.config.cjs(node环境)"
+
+- id: detect-review-issues-unit
+  path: scripts/devgate/detect-review-issues.test.js
+  type: unit
+  ci: L2
+  status: active
+  product: dev_pipeline
+  note: "PR #1528 真机复现：detect-review-issues.js 对 DeepSeek V3「#### 🔴 严重问题\\n- **无**」这种无括号无冒号+独立bullet的输出格式误判为有严重问题，阻塞了实际无问题的PR。补regex分支+node --test 4个场景（含原格式回归）。"
