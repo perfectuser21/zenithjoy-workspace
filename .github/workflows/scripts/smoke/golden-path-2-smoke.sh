@@ -1189,6 +1189,11 @@ S30_ROW=$(psq "SELECT error_code FROM zenithjoy.agent_scan_failures WHERE agent_
 [ "$S30_ROW" = "OPEN_PANEL_FAILED" ] || fail "Step 30 agent_scan_failures.error_code 期望 'OPEN_PANEL_FAILED'，实得 '$S30_ROW'（非UUID request_id 的扫描失败未落库）" 30
 ok "Step 30 ✅ 非UUID request_id 的扫描失败已落 agent_scan_failures（error_code=$S30_ROW）"
 ok "Step 30 ✅ 已登记：sweep-timeouts 看门狗接线 + 绑定失败审计留痕由 apps/api vitest 回归覆盖（services/scheduler.test.ts / customer-admin.test.ts），非HTTP可断言行为不入本smoke"
+# TODO(真机段, sprints/07290930-android-open-panel-failed-navigation-bug)：OPEN_PANEL_FAILED
+# 根因(点我tab后单次delay(1500L)检查过早，个人页渲染慢时误判)已修——等价断言由
+# services/agent-android DeviceAccountScanServiceSwitchEntryPollTest.kt（Kotlin JVM 单测，
+# 静态断言等待逻辑改为轮询而非单次固定delay）覆盖，本 smoke 跑在 ubuntu-latest CI 容器无真实
+# Android 设备，UIA 导航时序本身未真验；待 Android 真机通道接管复跑确认。
 
 # ───────────────────────────────────────────────────────────────────
 # Step 31：作战窗 Agent Panel 刀2/安卓获客(line02) 打点 + 中台看门狗回归
