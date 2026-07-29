@@ -181,4 +181,36 @@ describe('AgentPanelApp（首次装机仪式 + 三态编排）', () => {
       expect(screen.getByTestId('reconnect-summary-banner').className).toContain('panel-banner');
     });
   });
+
+  // 用户真机实测发现：展开态里没有任何可点击收起的地方，ExpandedPanel通篇零点击
+  // 处理器，唯一收起方式是热键(⌃⌥Z)/托盘——大部分人不会记热键，被卡在全屏态出不来，
+  // 挡住其它窗口。补一个始终可见、可点击的收起按钮，不依赖用户记住热键。
+  describe('展开态收起按钮（真机实测发现：展开态无法点击收起，只能靠热键）', () => {
+    it('展开态渲染可点击的收起按钮', () => {
+      render(<AgentPanelApp lines={lines} rpaActive={false} connected />);
+      expect(screen.getByTestId('panel-collapse-button')).toBeInTheDocument();
+    });
+
+    it('点击收起按钮 → 切回收起态渲染', () => {
+      render(<AgentPanelApp lines={lines} rpaActive={false} connected />);
+      expect(screen.getByTestId('panel-expanded')).toBeInTheDocument();
+      act(() => { screen.getByTestId('panel-collapse-button').click(); });
+      expect(screen.getByTestId('panel-collapsed')).toBeInTheDocument();
+    });
+
+    it('点击收起按钮 → 通知原生宿主expanded=false（宿主需要跟着改窗口尺寸）', () => {
+      const postMessage = vi.fn();
+      (window as any).chrome = { webview: { postMessage } };
+      render(<AgentPanelApp lines={lines} rpaActive={false} connected />);
+      act(() => { screen.getByTestId('panel-collapse-button').click(); });
+      expect(postMessage).toHaveBeenCalledWith({ type: 'user-toggle-expand', expanded: false });
+      delete (window as any).chrome;
+    });
+
+    it('收起态(非展开)不渲染收起按钮', () => {
+      window.localStorage.setItem('agent-panel-first-run-shown', 'true');
+      render(<AgentPanelApp lines={lines} rpaActive={false} connected />);
+      expect(screen.queryByTestId('panel-collapse-button')).not.toBeInTheDocument();
+    });
+  });
 });
