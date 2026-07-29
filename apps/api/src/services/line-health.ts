@@ -77,8 +77,18 @@ export function resolveVersionUrl(envValue: string | undefined, fallback: string
   }
 }
 
-const STAGING_VERSION_URL = resolveVersionUrl(process.env.LINE_HEALTH_STAGING_VERSION_URL, 'http://localhost:5201/version');
-const PROD_VERSION_URL = resolveVersionUrl(process.env.LINE_HEALTH_PROD_VERSION_URL, 'http://localhost:5200/version');
+// hk-vps 上 staging/production 是 zenithjoy-net 桥接网络里两个独立容器（zenithjoy-api-staging /
+// zenithjoy-api-prod），彼此网络命名空间隔离——不管请求实际由哪个容器处理，"localhost" 永远只
+// 指向处理请求的这个容器自己，够不着兄弟容器（2026-07-29 真机验证踩过：曾用 localhost:5201/5200
+// 做默认值，结果无论谁处理请求，"staging" 那次查询都打不通，"production" 那次其实打的是自己，
+// 把自己的版本误标成"production"）。跨容器互访必须用 Docker 内置 DNS 按容器名解析，
+// 两个容器内部都监听同一个 PORT=5200（宿主机才分别映射到 :5201/:5200 两个不同端口）。
+/** 供测试断言真机默认值——严禁改回 localhost，回归守卫见 line-health.test.ts */
+export const DEFAULT_STAGING_VERSION_URL = 'http://zenithjoy-api-staging:5200/version';
+export const DEFAULT_PROD_VERSION_URL = 'http://zenithjoy-api-prod:5200/version';
+
+const STAGING_VERSION_URL = resolveVersionUrl(process.env.LINE_HEALTH_STAGING_VERSION_URL, DEFAULT_STAGING_VERSION_URL);
+const PROD_VERSION_URL = resolveVersionUrl(process.env.LINE_HEALTH_PROD_VERSION_URL, DEFAULT_PROD_VERSION_URL);
 
 export type LineKey = 'line01' | 'line02' | 'line04';
 
@@ -357,7 +367,7 @@ async function fetchCommitDate(sha: string): Promise<string | null> {
 }
 
 /**
- * 三条线共享的部署摘要：staging(:5201)/production(:5200) 各自真实 /version。
+ * 三条线共享的部署摘要：staging(zenithjoy-api-staging)/production(zenithjoy-api-prod) 各自真实 /version。
  * 只要有一边真拿到过数据就缓存（本地/CI 环境两边都拿不到很正常，不缓存好让下次重试）。
  */
 async function fetchDeploymentSummary(): Promise<DeploymentSummaryInternal> {

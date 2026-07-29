@@ -19,6 +19,8 @@ vi.mock('axios', () => ({
 }));
 
 import {
+  DEFAULT_PROD_VERSION_URL,
+  DEFAULT_STAGING_VERSION_URL,
   LINE_DEFS,
   NOT_CONNECTED_MESSAGE,
   buildLineAbilities,
@@ -33,8 +35,8 @@ import {
 const LINE01 = LINE_DEFS[0];
 const LINE04 = LINE_DEFS[2];
 
-const STAGING_VERSION_URL = 'http://localhost:5201/version';
-const PROD_VERSION_URL = 'http://localhost:5200/version';
+const STAGING_VERSION_URL = 'http://zenithjoy-api-staging:5200/version';
+const PROD_VERSION_URL = 'http://zenithjoy-api-prod:5200/version';
 
 const STAGING_SHA = 'a'.repeat(40);
 const PROD_SHA = 'b'.repeat(40);
@@ -139,6 +141,23 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   clearLineHealthCache();
+});
+
+// 2026-07-29 真机 bug（真实 staging 部署验证发现）：staging/production 默认地址曾写成
+// http://localhost:5201 / http://localhost:5200。hk-vps 上这两个 apps/api 实例是 zenithjoy-net
+// 桥接网络里两个独立容器（zenithjoy-api-staging / zenithjoy-api-prod），彼此网络命名空间隔离——
+// "localhost" 从任一容器内部发出永远只指向"处理这次请求的那个容器自己"，够不着兄弟容器。
+// 实测复现：无论请求落在哪个容器，"staging" 那次查询必连不上（该容器内部根本没监听 5201），
+// "production" 那次其实打的是容器自己（两个容器内部都用 PORT=5200 监听），于是把"自己的版本"
+// 误标成了"production"。必须用 Docker 内置 DNS 按容器名跨容器互访，回归守卫钉死默认值不许
+// 再退回 localhost。
+describe('staging/production 默认地址必须是容器名（不是 localhost）——真机 bug 回归守卫', () => {
+  it('默认地址必须走 Docker 容器名 DNS，不得是 localhost（localhost 在桥接网络里只指向自己，够不着兄弟容器）', () => {
+    expect(DEFAULT_STAGING_VERSION_URL).toBe('http://zenithjoy-api-staging:5200/version');
+    expect(DEFAULT_PROD_VERSION_URL).toBe('http://zenithjoy-api-prod:5200/version');
+    expect(DEFAULT_STAGING_VERSION_URL).not.toContain('localhost');
+    expect(DEFAULT_PROD_VERSION_URL).not.toContain('localhost');
+  });
 });
 
 describe('resolveVersionUrl — env 覆盖必须是合法 http(s) URL，否则落回默认值', () => {
