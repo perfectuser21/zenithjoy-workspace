@@ -8,13 +8,11 @@ export function CollapsedStrip({ lines, onClick }: { lines: LineState[]; onClick
   return (
     <div
       data-testid="panel-collapsed"
+      className="panel-collapsed"
       role="button"
       tabIndex={0}
       onClick={onClick}
       onKeyDown={(e) => { if (e.key === 'Enter') onClick?.(); }}
-      style={{
-        display: 'flex', flexDirection: 'column', gap: 4, cursor: 'pointer',
-      }}
     >
       {connected.map((l) => (
         <span

@@ -56,7 +56,9 @@ export function AgentPanelApp({
     body = (
       <>
         {isFirstRun && (
-          <div>作战窗已上线 · 从现在起你能随时看到 AI 在做什么（⌃⌥Z 收起）</div>
+          <div className="panel-banner panel-banner--firstrun">
+            作战窗已上线 · 从现在起你能随时看到 AI 在做什么（⌃⌥Z 收起）
+          </div>
         )}
         <ExpandedPanel lines={lines} />
       </>
@@ -66,22 +68,25 @@ export function AgentPanelApp({
   }
 
   return (
-    <div>
-      {!connected && <div>离线/重连中…</div>}
+    <div className="panel-root">
+      {!connected && <div className="panel-banner panel-banner--offline">离线/重连中…</div>}
       {reconnectSummary && (
-        <div data-testid="reconnect-summary-banner">
-          离线期间完成
-          {' '}
-          {reconnectSummary.done}
-          {' '}
-          个任务，失败
-          {' '}
-          {reconnectSummary.failed}
-          {' '}
-          个
+        <div data-testid="reconnect-summary-banner" className="panel-banner panel-banner--reconnect">
+          <span>
+            离线期间完成
+            {' '}
+            {reconnectSummary.done}
+            {' '}
+            个任务，失败
+            {' '}
+            {reconnectSummary.failed}
+            {' '}
+            个
+          </span>
           <button
             type="button"
             data-testid="reconnect-summary-dismiss"
+            className="panel-banner__dismiss"
             onClick={onDismissReconnectSummary}
           >
             知道了

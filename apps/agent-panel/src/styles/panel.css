@@ -1,0 +1,147 @@
+/* 作战窗 Agent Panel 视觉设计
+   基准：docs/superpowers/specs/2026-07-22-agent-panel-design.md 第5节
+   "复用 Cecelia Warroom 设计语言（slate 深底/细边框/uppercase 小标签/等宽数字/状态灯点）" */
+
+:root {
+  --zj-bg: #0f172a;
+  --zj-bg-elevated: #1a2436;
+  --zj-bg-card: rgba(148, 163, 184, 0.07);
+  --zj-border: rgba(148, 163, 184, 0.18);
+  --zj-text: #e2e8f0;
+  --zj-text-dim: #94a3b8;
+  --zj-accent: #38bdf8;
+}
+
+html, body, #root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.panel-root {
+  min-height: 100vh;
+  background: var(--zj-bg);
+  color: var(--zj-text);
+}
+
+.panel-banner {
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel-banner--firstrun {
+  background: linear-gradient(90deg, #16a34a, #22c55e);
+  color: #ffffff;
+}
+
+.panel-banner--offline {
+  background: var(--zj-bg-elevated);
+  color: var(--zj-text-dim);
+  border-bottom: 1px solid var(--zj-border);
+}
+
+.panel-banner--reconnect {
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.panel-banner__dismiss {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: inherit;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.panel-expanded {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding: 20px;
+}
+
+.panel-lane {
+  background: var(--zj-bg-elevated);
+  border: 1px solid var(--zj-border);
+  border-radius: 12px;
+  padding: 16px;
+  min-height: 220px;
+}
+
+.panel-lane__title {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--zj-text-dim);
+  margin-bottom: 12px;
+}
+
+.panel-lane__empty {
+  font-size: 13px;
+  color: var(--zj-text-dim);
+}
+
+.panel-task-card {
+  background: var(--zj-bg-card);
+  border: 1px solid var(--zj-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.panel-task-card:last-child {
+  margin-bottom: 0;
+}
+
+.panel-task-card__title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--zj-text);
+}
+
+.panel-task-card__detail {
+  font-size: 12px;
+  color: var(--zj-text-dim);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-collapsed {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  cursor: pointer;
+  background: var(--zj-bg);
+}
+
+.panel-rpa-mini {
+  background: var(--zj-bg-elevated);
+  border: 1px solid var(--zj-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: var(--zj-text);
+  font-size: 13px;
+}
+
+.panel-rpa-mini__header {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.panel-rpa-mini__line {
+  color: var(--zj-text-dim);
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}

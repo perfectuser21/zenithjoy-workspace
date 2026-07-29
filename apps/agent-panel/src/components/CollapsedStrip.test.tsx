@@ -39,6 +39,12 @@ describe('CollapsedStrip（收起态边缘灯带）', () => {
     }
   });
 
+  it('容器渲染panel-collapsed类（深色背景卡片，非默认透明白底）', () => {
+    const lines: LineState[] = [{ ...base, connected: true, lightState: 'work' }];
+    render(<CollapsedStrip lines={lines} />);
+    expect(screen.getByTestId('panel-collapsed').className).toContain('panel-collapsed');
+  });
+
   it('渲染文本里绝不出现内部代号(灯带本身没有文字标签，但data-line属性也不能是原始代号裸露到可见文本)', () => {
     const lines: LineState[] = [{ ...base, connected: true, lightState: 'work' }];
     const { container } = render(<CollapsedStrip lines={lines} />);

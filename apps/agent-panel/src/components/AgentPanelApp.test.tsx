@@ -164,5 +164,21 @@ describe('AgentPanelApp（首次装机仪式 + 三态编排）', () => {
       act(() => { screen.getByTestId('reconnect-summary-dismiss').click(); });
       expect(onDismiss).toHaveBeenCalled();
     });
+
+    // xian-rog真机截图实测发现：整个作战窗展开态是纯白底黑字，无任何视觉设计——
+    // 设计稿(2026-07-22-agent-panel-design.md)要求的slate深底面板从未真正落地。
+    it('渲染panel-banner样式（横幅非纯文本裸露）', () => {
+      window.localStorage.setItem('agent-panel-first-run-shown', 'true');
+      render(
+        <AgentPanelApp
+          lines={lines}
+          rpaActive={false}
+          connected
+          reconnectSummary={{ done: 1, failed: 0 }}
+          onDismissReconnectSummary={() => {}}
+        />,
+      );
+      expect(screen.getByTestId('reconnect-summary-banner').className).toContain('panel-banner');
+    });
   });
 });
