@@ -62,8 +62,23 @@ const GITHUB_CACHE_TTL_MS = 5 * 60 * 1000;
 const DEPLOYMENT_SUMMARY_TTL_MS = 30 * 1000;
 const LIVE_VERSION_TIMEOUT_MS = 5000;
 
-const STAGING_VERSION_URL = process.env.LINE_HEALTH_STAGING_VERSION_URL || 'http://localhost:5201/version';
-const PROD_VERSION_URL = process.env.LINE_HEALTH_PROD_VERSION_URL || 'http://localhost:5200/version';
+/**
+ * env 覆盖必须是合法 http(s) URL，否则忽略并落回默认值——避免一个手滑的错误配置
+ * （比如误填了非 URL 字符串）导致后续 axios.get 用一个奇怪的地址发起请求。
+ */
+export function resolveVersionUrl(envValue: string | undefined, fallback: string): string {
+  if (!envValue) return fallback;
+  try {
+    const parsed = new URL(envValue);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return fallback;
+    return envValue;
+  } catch {
+    return fallback;
+  }
+}
+
+const STAGING_VERSION_URL = resolveVersionUrl(process.env.LINE_HEALTH_STAGING_VERSION_URL, 'http://localhost:5201/version');
+const PROD_VERSION_URL = resolveVersionUrl(process.env.LINE_HEALTH_PROD_VERSION_URL, 'http://localhost:5200/version');
 
 export type LineKey = 'line01' | 'line02' | 'line04';
 

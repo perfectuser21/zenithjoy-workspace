@@ -27,6 +27,7 @@ import {
   clearLineHealthCache,
   findLineDef,
   loadCustomerLines,
+  resolveVersionUrl,
 } from '../line-health';
 
 const LINE01 = LINE_DEFS[0];
@@ -140,6 +141,31 @@ afterEach(() => {
   clearLineHealthCache();
 });
 
+describe('resolveVersionUrl — env 覆盖必须是合法 http(s) URL，否则落回默认值', () => {
+  const FALLBACK = 'http://localhost:5200/version';
+
+  it('未设置 env → 直接用默认值', () => {
+    expect(resolveVersionUrl(undefined, FALLBACK)).toBe(FALLBACK);
+  });
+
+  it('合法 http(s) URL → 原样使用', () => {
+    expect(resolveVersionUrl('http://10.0.0.5:5200/version', FALLBACK)).toBe('http://10.0.0.5:5200/version');
+    expect(resolveVersionUrl('https://internal.example.com/version', FALLBACK)).toBe(
+      'https://internal.example.com/version'
+    );
+  });
+
+  it('不是合法 URL（手滑填了随意字符串）→ 落回默认值，不带着垃圾地址去发请求', () => {
+    expect(resolveVersionUrl('not a url', FALLBACK)).toBe(FALLBACK);
+    expect(resolveVersionUrl('', FALLBACK)).toBe(FALLBACK);
+  });
+
+  it('非 http(s) 协议（如 file://）→ 落回默认值', () => {
+    expect(resolveVersionUrl('file:///etc/passwd', FALLBACK)).toBe(FALLBACK);
+    expect(resolveVersionUrl('ftp://internal/version', FALLBACK)).toBe(FALLBACK);
+  });
+});
+
 describe('LINE_DEFS / findLineDef', () => {
   it('只认 line01/line02/line04 三条对外业务线，其余返回 null', () => {
     expect(LINE_DEFS.map((d) => d.lineKey)).toEqual(['line01', 'line02', 'line04']);
@@ -223,6 +249,39 @@ describe('buildLineDeployment — 真实 /version（不再猜 git 分支）', ()
     const data = await buildLineDeployment(LINE04);
     expect(data.staging).toEqual({ sha: null, version: null, build_time: null });
     expect(data.production.sha).toBe(PROD_SHA);
+  });
+
+  it('/version 返回非 2xx 错误状态（真实 axios 对非 2xx 默认 reject）时同样降级为 null，不抛异常、不解析错误响应体', async () => {
+    clearLineHealthCache();
+    axiosGetMock.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => {
+      if (url === STAGING_VERSION_URL) return Promise.reject(new Error('Request failed with status code 503'));
+      if (url === PROD_VERSION_URL) {
+        return Promise.resolve({ status: 200, data: { sha: PROD_SHA, version: '1.0.1', buildTime: isoDaysAgo(2) } });
+      }
+      if (/\/commits\/[0-9a-z]+$/.test(url)) return Promise.resolve({ status: 200, data: { commit: { author: { date: isoDaysAgo(2) } } } });
+      if (url.includes('/search/issues')) return Promise.resolve({ status: 200, data: { items: [] } });
+      if (url.endsWith('/commits')) return Promise.resolve({ status: 200, data: [] });
+      return Promise.resolve({ status: 200, data: {} });
+    });
+    const data = await buildLineDeployment(LINE04);
+    expect(data.staging).toEqual({ sha: null, version: null, build_time: null });
+    expect(data.production.sha).toBe(PROD_SHA);
+  });
+
+  it('/version 返回 200 但响应体缺字段（如 build-info.json 用兜底值 "unknown"）时对外呈现为 null，不把字面量 "unknown" 当真实 sha', async () => {
+    clearLineHealthCache();
+    axiosGetMock.mockImplementation((url: string) => {
+      if (url === STAGING_VERSION_URL) return Promise.resolve({ status: 200, data: { sha: 'unknown', version: 'unknown', buildTime: 'unknown' } });
+      if (url === PROD_VERSION_URL) {
+        return Promise.resolve({ status: 200, data: { sha: PROD_SHA, version: '1.0.1', buildTime: isoDaysAgo(2) } });
+      }
+      if (/\/commits\/[0-9a-z]+$/.test(url)) return Promise.resolve({ status: 200, data: { commit: { author: { date: isoDaysAgo(2) } } } });
+      if (url.includes('/search/issues')) return Promise.resolve({ status: 200, data: { items: [] } });
+      if (url.endsWith('/commits')) return Promise.resolve({ status: 200, data: [] });
+      return Promise.resolve({ status: 200, data: {} });
+    });
+    const data = await buildLineDeployment(LINE04);
+    expect(data.staging).toEqual({ sha: null, version: null, build_time: null });
   });
 
   it('GitHub search 故障时 related_prs 独立降级为 []，不影响 staging/production 读取', async () => {
