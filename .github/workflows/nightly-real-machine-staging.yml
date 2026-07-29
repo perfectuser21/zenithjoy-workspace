@@ -175,10 +175,41 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh
           bash .github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh
 
+  # ─── 真安卓 account-scan 真机验证车道 full check（刀D，2026-07-30 接入）───
+  # envfail(exit 3,环境未就绪)不算真机bug红：捕获真实退出码为 job output，job 本身以
+  # success 收尾(exit 0)，nightly-report 按 code=3 打 infra-skip 标签，不计入绿/红判定
+  # （PRD 边界情况显式要求：无设备在线不阻塞判定，但结果仍要留痕，不静默吞掉）。
+  account-scan:
+    name: 真安卓 — account-scan 真机验证车道
+    needs: [wechat-bubble]
+    if: always()
+    runs-on: [self-hosted, wechat-capable]
+    timeout-minutes: 10
+    outputs:
+      exit_code: ${{ steps.run.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run account-scan-realmachine-smoke.sh
+        id: run
+        shell: bash
+        run: |
+          chmod +x .github/workflows/scripts/smoke/account-scan-realmachine-smoke.sh
+          set +e
+          bash .github/workflows/scripts/smoke/account-scan-realmachine-smoke.sh
+          CODE=$?
+          set -e
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          if [ "$CODE" -eq 3 ]; then
+            echo "🟠 envfail(exit 3)：环境未就绪，非真机验证bug，job 标 success 但留痕 code=3(infra-skip)"
+            exit 0
+          fi
+          exit "$CODE"
+
   # ─── 汇总 + 红→自动开 Issue（值班闭环最小版）───
   nightly-report:
     name: Nightly 真机回归汇总（红→开 Issue）
-    needs: [wechat-bubble, douyin-read]
+    needs: [wechat-bubble, douyin-read, account-scan]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -189,8 +220,16 @@ jobs:
         run: |
           WECHAT="${{ needs.wechat-bubble.result }}"
           DOUYIN="${{ needs.douyin-read.result }}"
+          ACCOUNT_SCAN="${{ needs.account-scan.result }}"
+          ACCOUNT_SCAN_CODE="${{ needs.account-scan.outputs.exit_code }}"
           TODAY=$(TZ=Asia/Shanghai date +%F)
-          echo "wechat-bubble=$WECHAT douyin-read=$DOUYIN"
+          echo "wechat-bubble=$WECHAT douyin-read=$DOUYIN account-scan=$ACCOUNT_SCAN(code=$ACCOUNT_SCAN_CODE)"
+
+          ACCOUNT_SCAN_LABEL="$ACCOUNT_SCAN"
+          if [ "$ACCOUNT_SCAN_CODE" = "3" ]; then
+            ACCOUNT_SCAN_LABEL="infra-skip"
+          fi
+
           {
             echo "## Nightly 真机回归 $TODAY"
             echo ""
@@ -198,16 +237,18 @@ jobs:
             echo "|---|---|"
             echo "| 真微信 气泡门 | $WECHAT |"
             echo "| 真抖音 keyword→comment 读侧 | $DOUYIN |"
+            echo "| 真安卓 account-scan 真机验证车道 | $ACCOUNT_SCAN_LABEL |"
           } >> "$GITHUB_STEP_SUMMARY"
-          if [ "$WECHAT" = "failure" ] || [ "$DOUYIN" = "failure" ]; then
-            TITLE="[nightly-red] 真机回归失败 $TODAY (微信=$WECHAT 抖音=$DOUYIN)"
+
+          if [ "$WECHAT" = "failure" ] || [ "$DOUYIN" = "failure" ] || [ "$ACCOUNT_SCAN" = "failure" ]; then
+            TITLE="[nightly-red] 真机回归失败 $TODAY (微信=$WECHAT 抖音=$DOUYIN account-scan=$ACCOUNT_SCAN_LABEL)"
             # 同日去重：已有同标题 open issue 则不重复开
             EXIST=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
               --search "in:title [nightly-red] $TODAY" --json number --jq 'length')
             if [ "$EXIST" = "0" ]; then
               gh issue create --repo "$GITHUB_REPOSITORY" \
                 --title "$TITLE" \
-                --body "$(printf 'Nightly 真机回归（staging）失败。\n\n| job | 结果 |\n|---|---|\n| wechat-bubble | %s |\n| douyin-read | %s |\n\nRun: %s/%s/actions/runs/%s\n\n处理约定：真机 flaky 先 rerun 一次；连续 2 晚红=真 bug，走 /dev 修。' "$WECHAT" "$DOUYIN" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
+                --body "$(printf 'Nightly 真机回归（staging）失败。\n\n| job | 结果 |\n|---|---|\n| wechat-bubble | %s |\n| douyin-read | %s |\n| account-scan | %s |\n\nRun: %s/%s/actions/runs/%s\n\n处理约定：真机 flaky 先 rerun 一次；连续 2 晚红=真 bug，走 /dev 修。' "$WECHAT" "$DOUYIN" "$ACCOUNT_SCAN_LABEL" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
               echo "issue created"
             else
               echo "same-day nightly-red issue already open, skip"
