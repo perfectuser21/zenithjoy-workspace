@@ -5222,6 +5222,14 @@ agent_suite:
   product: 新媒体运营
   note: "最小信号验证 GET 端点（sessions/collect_tasks/leads 三组数据）"
 
+- id: ability-acceptance-contract-api-test
+  path: sprints/07281218-relay-30a0c83a/tests/ability-acceptance.api.test.ts
+  type: contract
+  ci: L3
+  status: active
+  product: 运营中枢
+  note: "Sprint 30a0c83a: Ability 验收 API 合同测试骨架（Red 基线，永久保留，CI 机械闸禁止改动）。2026-07-29：对应功能（Ability验收台）已因产品决策整体下线改走 Notion，但本文件受 lint-contract-test-immutability 保护不可修改/删除，作为历史留痕保留——文件本身是自包含骨架未真实依赖已删除的实现文件，不会因功能下线而转红。"
+
 - id: staff-line-health-sprint-contract
   path: sprints/07281207-staff-line-health-dashboard/tests/line-health.test.ts
   type: integration
