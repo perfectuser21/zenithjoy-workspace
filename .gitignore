@@ -200,3 +200,5 @@ services/agent/dist-installpack/*.tar.gz
 apps/staff-hub/screenshots/
 apps/staff-hub/test-results/
 apps/staff-hub/playwright-report/
+apps/agent-panel-host/AgentPanelHost.Tests/bin/
+apps/agent-panel-host/AgentPanelHost.Tests/obj/
