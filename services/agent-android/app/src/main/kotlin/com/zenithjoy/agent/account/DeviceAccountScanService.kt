@@ -245,14 +245,15 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
             // 底部导航栏，导致"我"tab查找/坐标兜底全部落空，3次重试全部按同样方式失败(此前误判
             // 为厂商弹窗)。加一层恢复：找不到底部导航栏特征时，多按几次返回键退回主页feed，
             // 而不是冒然对着错误页面点坐标/干等CLEAR_TOP重来(CLEAR_TOP已被证明有时也解决不了)。
-            var onHomeFeed = false
-            repeat(5) {
+            // 用 for+break（不是 repeat{ return@repeat }——那只是 continue，会白跑完剩余轮次）
+            // 确保命中主页feed后立即停止，不再多按无意义的返回键。
+            for (backAttempt in 0 until 5) {
                 val checkRoot = rootInActiveWindow
-                onHomeFeed = checkRoot != null && (
+                val onHomeFeed = checkRoot != null && (
                     findNodeByContentDescContains(checkRoot, "我，按钮") != null ||
                         findNodeByContentDescContains(checkRoot, "首页，按钮") != null
                     )
-                if (onHomeFeed) return@repeat
+                if (onHomeFeed) break
                 performGlobalAction(GLOBAL_ACTION_BACK)
                 delay(600L)
             }

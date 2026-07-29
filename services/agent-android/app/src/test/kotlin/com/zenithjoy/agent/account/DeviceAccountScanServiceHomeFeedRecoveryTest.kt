@@ -40,7 +40,12 @@ class DeviceAccountScanServiceHomeFeedRecoveryTest {
         )
         assertTrue(
             "恢复必须是循环多次尝试(单次返回键可能退不完深层子页面栈)，不能只按一次",
-            segment.contains("repeat("),
+            segment.contains("for (") || segment.contains("repeat("),
+        )
+        assertTrue(
+            "命中主页feed后必须真正跳出循环(break)，不能只是repeat{ return@repeat }这种" +
+                "会白跑完剩余轮次的continue语义",
+            segment.contains("break") || !segment.contains("repeat("),
         )
     }
 }
