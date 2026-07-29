@@ -38,3 +38,8 @@ test('原有格式（括号+冒号）仍然正常识别为无问题', () => {
   const input = '严重问题（🔴）\n- **无**';
   assert.equal(run(input), 0);
 });
+
+test('PR #1539 真实 DeepSeek 输出格式："没有发现以下问题：\\n- 🔴 没有..." → 不阻塞', () => {
+  const input = '没有发现以下问题：\n- 🔴 没有逻辑问题或安全风险\n- 🟡 没有需要优化的代码质量问题';
+  assert.equal(run(input), 0);
+});

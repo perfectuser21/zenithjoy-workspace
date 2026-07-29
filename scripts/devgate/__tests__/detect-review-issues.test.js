@@ -49,3 +49,20 @@ test('已有的"🔴 严重问题：未发现"格式继续判定通过（不回�
   const result = run(review);
   assert.equal(result.status, 0);
 });
+
+test('PR#1539真实事故复现：DeepSeek "没有发现以下问题：\\n- 🔴 没有..." 格式不应判为有问题', () => {
+  const review = [
+    '这是一个简单的版本号更新变更，我来进行审查：',
+    '',
+    '🟢 正面反馈：',
+    '- 版本号更新符合语义化版本规范',
+    '',
+    '没有发现以下问题：',
+    '- 🔴 没有逻辑问题或安全风险',
+    '- 🟡 没有需要优化的代码质量问题',
+    '',
+    '代码质量良好，变更简单明确。',
+  ].join('\n');
+  const result = run(review);
+  assert.equal(result.status, 0, `应判定通过(exit 0)，实际 exit ${result.status}: ${result.stderr}`);
+});
