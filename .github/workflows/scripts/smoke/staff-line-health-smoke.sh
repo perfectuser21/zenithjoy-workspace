@@ -57,11 +57,13 @@ echo "$OVERVIEW" | jq -e '.source == "product_map" and .fallback_reason == null'
   || fail "product-map.json 存在时 source 应为 product_map"
 echo "   总览 3 条均已接入: PASS"
 
-echo "-- 2. 总览 schema keys 完整性 + 禁用字段反查 --"
-echo "$OVERVIEW" | jq -e '(.data[0] | keys | sort) == (["availability","feature_counts","journey_id","journey_name","label","line_key","maturity","message","smoke"] | sort)' >/dev/null \
+echo "-- 2. 总览 schema keys 完整性 + 禁用字段反查（2026-07-29：smoke 字段已移除，改成 environments/pending_changes）--"
+echo "$OVERVIEW" | jq -e '(.data[0] | keys | sort) == (["availability","environments","feature_counts","journey_id","journey_name","label","line_key","maturity","message","pending_changes"] | sort)' >/dev/null \
   || fail "总览卡片字段集合漂移"
-echo "$OVERVIEW" | jq -e '(.data[0] | has("path_key") | not) and (.data[0] | has("health") | not) and (.data[0] | has("status") | not)' >/dev/null \
+echo "$OVERVIEW" | jq -e '(.data[0] | has("path_key") | not) and (.data[0] | has("health") | not) and (.data[0] | has("status") | not) and (.data[0] | has("smoke") | not)' >/dev/null \
   || fail "总览卡片出现禁用字段"
+echo "$OVERVIEW" | jq -e '.data[] | (.environments | type == "array") and (.pending_changes | type == "array")' >/dev/null \
+  || fail "environments/pending_changes 必须恒为数组"
 echo "   schema keys + 禁用字段: PASS"
 
 echo "-- 3. deployment 三环境 + related_prs 数组 + recent_commit 一致性 --"
