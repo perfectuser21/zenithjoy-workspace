@@ -10,6 +10,7 @@ import AbilityAcceptancePage from './pages/AbilityAcceptancePage';
 import AbilityAcceptanceHistoryPage from './pages/AbilityAcceptanceHistoryPage';
 import LineHealthPage from './pages/LineHealthPage';
 import LineHealthDetailPage from './pages/LineHealthDetailPage';
+import EnvBadge from './components/EnvBadge';
 
 function Shell() {
   const { authLoading, isAuthenticated, logout, user } = useAuth();
@@ -76,6 +77,7 @@ function Shell() {
 export default function App() {
   return (
     <AuthProvider>
+      <EnvBadge />
       <Shell />
     </AuthProvider>
   );

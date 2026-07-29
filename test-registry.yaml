@@ -5262,6 +5262,14 @@ agent_suite:
   product: 中台认证
   note: "Sprint 07281207 业务线健康看板 Playwright E2E（总览三卡片/详情部署 tab/能力 tab/未接入空态/product-map 缺失 banner）。变体C：真实后端，禁 page.route()。workflow: e2e-staff-line-health-windows.yml"
 
+- id: staff-hub-env-badge-unit
+  path: apps/staff-hub/src/components/EnvBadge.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: 中台认证
+  note: "员工反馈 staging(:9444)/生产(:9443) 两个端口太容易混淆，照搬 apps/dashboard 已验证过的 EnvBadge 模式：staging=橙色角标/production=不显示/本地dev=蓝色角标。跑法：cd apps/staff-hub && npx vitest run --config vitest.config.ts（新增本地 vitest.config.ts，此前 staff-hub 无 React 渲染类测试）。"
+
 - id: staff-health-shared-sources-unit
   path: apps/api/src/services/__tests__/staff-health.test.ts
   type: unit
