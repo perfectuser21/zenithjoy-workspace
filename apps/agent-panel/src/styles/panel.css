@@ -63,6 +63,25 @@ body {
   cursor: pointer;
 }
 
+.panel-collapse-button {
+  position: fixed;
+  top: 16px;
+  right: 20px;
+  z-index: 10;
+  background: var(--zj-bg-elevated);
+  border: 1px solid var(--zj-border);
+  color: var(--zj-text-dim);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.panel-collapse-button:hover {
+  color: var(--zj-text);
+  border-color: var(--zj-accent);
+}
+
 .panel-expanded {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

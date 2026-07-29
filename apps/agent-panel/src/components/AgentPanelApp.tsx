@@ -60,6 +60,14 @@ export function AgentPanelApp({
             作战窗已上线 · 从现在起你能随时看到 AI 在做什么（⌃⌥Z 收起）
           </div>
         )}
+        <button
+          type="button"
+          data-testid="panel-collapse-button"
+          className="panel-collapse-button"
+          onClick={() => setExpanded(false)}
+        >
+          收起（⌃⌥Z）
+        </button>
         <ExpandedPanel lines={lines} />
       </>
     );
