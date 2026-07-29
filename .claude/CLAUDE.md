@@ -36,7 +36,7 @@ npm run product-map:check
 ### 调用 harness-planner 前必填 6 问
 
 ```
-1. 本 sprint 推进哪条 Journey？
+1. 本 sprint 推进哪条 Journey？须填 product-map/generated/product-map.json 里机器可查的 GP id（如 line02/customer_smart_acquisition），填不出来 = 6问不通过
 2. 涉及几个角色？
 3. 推进哪些 Feature？
 4. Feature 0 端到端 smoke 跑到哪步？
