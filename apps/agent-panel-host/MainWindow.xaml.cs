@@ -224,9 +224,16 @@ public partial class MainWindow : Window
         {
             case PanelWindowMode.Collapsed:
                 NativeMethods.ClearRpaGuardStyles(_hwnd);
-                Left = screen.Right - 8;
+                // PrepPRD原始设计："屏幕边缘细灯带（约4-6px，hover 热区略宽）"——"hover热区
+                // 略宽"这句从来没真正落地：窗口宽度本身就是可点击区域，8个WPF单位在150%
+                // DPI下只有12个真实像素宽，远低于人类鼠标(哪怕是精确操作)能可靠点中的最小
+                // 目标尺寸(常见可用性基线~24px起)。真机反复实测各种z-order/透明度修复都
+                // 无法让点击生效，最后发现这才是真根因——窗口本身宽度就小到实际上点不中。
+                // 加宽到28个WPF单位(150% DPI下42真实像素)，灯光条本身仍紧贴右边缘视觉观感
+                // 不变(CollapsedStrip.tsx里灯的宽度还是6px)，只是可点击的容器区域变宽。
+                Left = screen.Right - 28;
                 Top = screen.Top + 12;
-                Width = 8;
+                Width = 28;
                 Height = screen.Height - 60;
                 ReassertTopmost();
                 break;
