@@ -406,20 +406,34 @@ describe('staff routes — feishu-login 真实限流行为（不走上面的pass
 // .github/workflows/scripts/smoke/staff-line-health-smoke.sh 与 sprint 合同测试承担。
 
 const LINE04_JOURNEY_ID = 'e675da0f-1117-4301-a801-cd4753beb8c8';
-const FAKE_SHA = 'b'.repeat(40);
+const STAGING_VERSION_URL = 'http://localhost:5201/version';
+const PROD_VERSION_URL = 'http://localhost:5200/version';
+const FAKE_SHA = 'b'.repeat(40); // production /version sha
+const STAGING_SHA = 'e'.repeat(40);
+const RECENT_SHA = 'f'.repeat(40); // main 上按路径过滤的最近提交（与部署状态无关）
 
 function daysAgo(days: number): string {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
-/** 按 URL 分派 Brain / GitHub commits / GitHub search / GitHub actions runs */
+/** 按 URL 分派 apps/api 自身 /version（内网直连）与 Brain / GitHub commits / search */
 function routeLineHealthMocks(options: {
   brain?: () => Promise<unknown>;
-  commitDaysAgo?: Record<string, number | null>;
+  recentCommitDaysAgo?: number | null;
   searchFails?: boolean;
+  stagingUnreachable?: boolean;
+  productionUnreachable?: boolean;
 } = {}) {
-  const commitDaysAgo = options.commitDaysAgo ?? { develop: null, 'release/cs-stable': 200, main: 3 };
+  const recentCommitDaysAgo = options.recentCommitDaysAgo ?? 3;
   axiosGetMock.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => {
+    if (url === STAGING_VERSION_URL) {
+      if (options.stagingUnreachable) return Promise.reject(new Error('econnrefused'));
+      return Promise.resolve({ status: 200, data: { sha: STAGING_SHA, version: '1.0.1', buildTime: daysAgo(1) } });
+    }
+    if (url === PROD_VERSION_URL) {
+      if (options.productionUnreachable) return Promise.reject(new Error('econnrefused'));
+      return Promise.resolve({ status: 200, data: { sha: FAKE_SHA, version: '1.0.1', buildTime: daysAgo(3) } });
+    }
     if (url.includes('/journey_features')) {
       if (options.brain) return options.brain();
       const journeyId = config?.params?.journey_id;
@@ -441,17 +455,21 @@ function routeLineHealthMocks(options: {
         data: { items: [{ number: 1487, title: 'fix(staff): wechat', html_url: 'https://github.com/x/y/pull/1487', state: 'closed', updated_at: '2026-07-28T00:00:00Z' }] },
       });
     }
-    if (url.includes('/commits')) {
-      const branch = String(config?.params?.sha ?? '');
-      const age = commitDaysAgo[branch];
-      if (age === undefined) return Promise.reject(new Error('branch not found'));
-      if (age === null) return Promise.resolve({ status: 200, data: [] });
+    // 单条 commit 查询（fetchCommitDate，production sha 的真实提交时间）
+    if (/\/commits\/[0-9a-z]+$/.test(url)) {
+      return Promise.resolve({ status: 200, data: { commit: { author: { date: daysAgo(3) } } } });
+    }
+    // 分支提交列表：main + path，per_page:1（recent_commit）或 since（待发布变更清单）
+    if (url.endsWith('/commits')) {
+      const params = config?.params ?? {};
+      if (params.since) return Promise.resolve({ status: 200, data: [] });
+      if (recentCommitDaysAgo === null) return Promise.resolve({ status: 200, data: [] });
       return Promise.resolve({
         status: 200,
         data: [{
-          sha: FAKE_SHA,
-          html_url: `https://github.com/x/y/commit/${FAKE_SHA}`,
-          commit: { message: 'feat: line04', author: { date: daysAgo(age) } },
+          sha: RECENT_SHA,
+          html_url: `https://github.com/x/y/commit/${RECENT_SHA}`,
+          commit: { message: 'feat: line04', author: { date: daysAgo(recentCommitDaysAgo) } },
         }],
       });
     }
@@ -478,6 +496,9 @@ describe('staff routes — line health 业务线健康看板', () => {
     expect(res.body.data.map((d: { line_key: string }) => d.line_key)).toEqual(['line01', 'line02', 'line04']);
     expect(res.body.source).toBe('product_map');
     expect(res.body.fallback_reason).toBeNull();
+    // 2026-07-29 二次修正：staging/production 版本是三条线共享的部署摘要，只在顶层出现一次
+    expect(res.body.deployment.staging.sha).toBe(STAGING_SHA);
+    expect(res.body.deployment.production.sha).toBe(FAKE_SHA);
 
     const line01 = res.body.data[0];
     // 原 Path 健康 path1 映射：智能发布 journey c019cdeb
@@ -490,7 +511,7 @@ describe('staff routes — line health 业务线健康看板', () => {
     expect(line01.message).toBeNull();
     expect(line01.feature_counts).toEqual({ total: 0, done: 0, working: 0, planned: 0 });
     expect(Object.keys(line01).sort()).toEqual(
-      ['availability', 'environments', 'feature_counts', 'journey_id', 'journey_name', 'label', 'line_key', 'maturity', 'message', 'pending_changes'].sort()
+      ['availability', 'feature_counts', 'journey_id', 'journey_name', 'label', 'line_key', 'maturity', 'message', 'pending_changes'].sort()
     );
     expect(line01).not.toHaveProperty('path_key');
     expect(line01).not.toHaveProperty('status');
@@ -534,44 +555,32 @@ describe('staff routes — line health 业务线健康看板', () => {
     expect(res.body.data).toHaveLength(3);
   });
 
-  it('[BEHAVIOR] deployment 返回三环境四态 + recent_commit 与 production 一致 + related_prs 恒为数组', async () => {
+  it('[BEHAVIOR] deployment 返回 staging/production 真实 /version + recent_commit（main 上按路径过滤的最近提交）+ related_prs 恒为数组', async () => {
     const res = await request(app)
       .get('/api/staff/line-health/line04/deployment')
       .set('X-User-Email', 'staff@test.com');
 
     expect(res.status).toBe(200);
-    expect(res.body.data.environments).toHaveLength(3);
-    const byName = Object.fromEntries(
-      res.body.data.environments.map((e: { name: string }) => [e.name, e])
-    );
-    // develop 返回空提交列表 → not_deployed；release/cs-stable 200 天前 → stale；main 3 天前 → active
-    expect(byName.dev.status).toBe('not_deployed');
-    expect(byName.dev.commit_sha).toBeNull();
-    expect(byName.staging.status).toBe('stale');
-    expect(byName.staging.commit_sha).toBe(FAKE_SHA);
-    expect(byName.production.status).toBe('active');
+    expect(res.body.data.staging.sha).toBe(STAGING_SHA);
+    expect(res.body.data.production.sha).toBe(FAKE_SHA);
+    expect(res.body.data.production.version).toBe('1.0.1');
 
-    expect(res.body.data.recent_commit.sha).toBe(byName.production.commit_sha);
-    expect(res.body.data.recent_commit.date).toBe(byName.production.commit_date);
+    expect(res.body.data.recent_commit.sha).toBe(RECENT_SHA);
     expect(Array.isArray(res.body.data.related_prs)).toBe(true);
     expect(res.body.data.related_prs[0].number).toBe(1487);
-    expect(res.body.data).not.toHaveProperty('version');
+    expect(res.body.data).not.toHaveProperty('environments');
     expect(res.body.data).not.toHaveProperty('deploy_version');
   });
 
-  it('[BEHAVIOR] GitHub 查询失败时该环境标 unavailable（区别于 not_deployed），related_prs 独立降级为 []', async () => {
-    routeLineHealthMocks({ commitDaysAgo: { main: 1 }, searchFails: true });
+  it('[BEHAVIOR] apps/api /version 不可达时该环境 sha 为 null（不是抛异常/假数据），related_prs 独立降级为 []', async () => {
+    routeLineHealthMocks({ stagingUnreachable: true, searchFails: true });
     const res = await request(app)
       .get('/api/staff/line-health/line04/deployment')
       .set('X-User-Email', 'staff@test.com');
 
     expect(res.status).toBe(200);
-    const byName = Object.fromEntries(
-      res.body.data.environments.map((e: { name: string }) => [e.name, e])
-    );
-    expect(byName.dev.status).toBe('unavailable');
-    expect(byName.staging.status).toBe('unavailable');
-    expect(byName.production.status).toBe('active');
+    expect(res.body.data.staging).toEqual({ sha: null, version: null, build_time: null });
+    expect(res.body.data.production.sha).toBe(FAKE_SHA);
     expect(res.body.data.related_prs).toEqual([]);
   });
 
@@ -590,7 +599,8 @@ describe('staff routes — line health 业务线健康看板', () => {
       .set('X-User-Email', 'staff@test.com');
     expect(deploy.status).toBe(200);
     expect(deploy.body.data.connected).toBe(true);
-    expect(deploy.body.data.environments).toHaveLength(3);
+    expect(deploy.body.data.staging.sha).toBe(STAGING_SHA);
+    expect(deploy.body.data.production.sha).toBe(FAKE_SHA);
 
     const abilities = await request(app)
       .get('/api/staff/line-health/line02/abilities')

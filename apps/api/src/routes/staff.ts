@@ -278,6 +278,7 @@ router.get('/line-health', async (_req, res): Promise<void> => {
   res.status(200).json({
     success: true,
     data: overview.data,
+    deployment: overview.deployment,
     source: overview.source,
     fallback_reason: overview.fallback_reason,
   });

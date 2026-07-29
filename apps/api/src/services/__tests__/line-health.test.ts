@@ -1,10 +1,15 @@
 /**
  * line-health 聚合层单测（业务线健康看板 GP3 / line_health）
  *
- * 覆盖：LINE_DEFS 查找 / product-map.json 真读与兜底 / 三环境四态判定与 30 天陈旧阈值 /
- *      recent_commit 与 production 一致 / related_prs 独立降级 / GitHub 单槽缓存 /
- *      abilities 的 not_connected 与 Brain 故障两条分支。
+ * 覆盖：LINE_DEFS 查找 / product-map.json 真读与兜底 / staging+production 真实 /version
+ *      版本读取（含不可达降级）/ recent_commit（main 上按路径过滤的最近提交，与部署状态无关）
+ *      / related_prs 独立降级 / 部署摘要单槽缓存 / abilities 的 not_connected 与 Brain 故障两条分支
+ *      / 待发布变更清单按 lineKey 独立缓存。
  * HTTP 层（staffGuard / 404 / JSON 包壳）由 routes/__tests__/staff.test.ts 覆盖。
+ *
+ * 2026-07-29 二次修正：不再用 git 分支（develop/release-cs-stable/main）猜三环境状态——
+ * 那套推断本身就是错的（develop 从未被部署、release/cs-stable 与真实 staging 部署无关、
+ * production 也不等于 main HEAD）。改为直接 mock apps/api 自己的 /version 端点。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -16,18 +21,24 @@ vi.mock('axios', () => ({
 import {
   LINE_DEFS,
   NOT_CONNECTED_MESSAGE,
-  STALE_THRESHOLD_DAYS,
   buildLineAbilities,
   buildLineDeployment,
   buildLineHealthOverview,
   clearLineHealthCache,
   findLineDef,
   loadCustomerLines,
+  resolveVersionUrl,
 } from '../line-health';
 
 const LINE01 = LINE_DEFS[0];
 const LINE04 = LINE_DEFS[2];
-const SHA = 'c'.repeat(40);
+
+const STAGING_VERSION_URL = 'http://localhost:5201/version';
+const PROD_VERSION_URL = 'http://localhost:5200/version';
+
+const STAGING_SHA = 'a'.repeat(40);
+const PROD_SHA = 'b'.repeat(40);
+const RECENT_SHA = 'c'.repeat(40);
 
 // 合成一个"未接入 Brain"的 LineDef 夹具，独立于 LINE_DEFS 真实数据。
 // line01/02/04 现在都已接入真实 journey（原 Path 健康映射合并进本页面后），
@@ -46,27 +57,76 @@ function isoDaysAgo(days: number): string {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
-/** 按 URL 分派 Brain / commits / search / actions runs 的桩 */
-function stubGithub(opts: { commitDays?: Record<string, number | null>; searchFails?: boolean; noStatus?: boolean } = {}) {
-  const commitDays = opts.commitDays ?? { develop: null, 'release/cs-stable': 90, main: 2 };
+type GhCommitFixture = {
+  sha: string;
+  html_url?: string;
+  commit: { message: string; author: { date: string } };
+};
+
+/** 按 URL 分派 /version（内网直连）与 GitHub commits/search 的桩 */
+function stubGithub(
+  opts: {
+    stagingUnreachable?: boolean;
+    productionUnreachable?: boolean;
+    productionCommitDate?: string | null;
+    recentCommitAge?: number | null;
+    recentCommitFails?: boolean;
+    pendingCommits?: GhCommitFixture[];
+    searchFails?: boolean;
+  } = {}
+) {
+  const {
+    stagingUnreachable = false,
+    productionUnreachable = false,
+    productionCommitDate = isoDaysAgo(2),
+    recentCommitAge = 2,
+    recentCommitFails = false,
+    pendingCommits = [],
+    searchFails = false,
+  } = opts;
+
   axiosGetMock.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => {
+    if (url === STAGING_VERSION_URL) {
+      if (stagingUnreachable) return Promise.reject(new Error('econnrefused'));
+      return Promise.resolve({ status: 200, data: { sha: STAGING_SHA, version: '1.0.1', buildTime: isoDaysAgo(1) } });
+    }
+    if (url === PROD_VERSION_URL) {
+      if (productionUnreachable) return Promise.reject(new Error('econnrefused'));
+      return Promise.resolve({ status: 200, data: { sha: PROD_SHA, version: '1.0.1', buildTime: isoDaysAgo(2) } });
+    }
     if (url.includes('/journey_features')) return Promise.resolve({ status: 200, data: [] });
     if (url.includes('/search/issues')) {
-      if (opts.searchFails) return Promise.reject(new Error('search down'));
-      return Promise.resolve({ status: 200, data: { items: [{ number: 7, title: 'fix: x', html_url: 'u', state: 'open', updated_at: 't' }] } });
-    }
-    if (url.includes('/commits')) {
-      const branch = String(config?.params?.sha ?? '');
-      const age = commitDays[branch];
-      if (age === undefined) return Promise.reject(new Error('404 branch'));
-      const status = opts.noStatus ? undefined : 200;
-      if (age === null) return Promise.resolve({ status, data: [] });
+      if (searchFails) return Promise.reject(new Error('search down'));
       return Promise.resolve({
-        status,
-        data: [{ sha: SHA, html_url: `https://github.com/x/y/commit/${SHA}`, commit: { message: 'feat: x', author: { date: isoDaysAgo(age) } } }],
+        status: 200,
+        data: { items: [{ number: 7, title: 'fix: x', html_url: 'u', state: 'open', updated_at: 't' }] },
       });
     }
-    return Promise.resolve({ status: 200, data: { workflow_runs: [] } });
+    // 单条 commit 查询（fetchCommitDate）：URL 形如 .../commits/<sha>
+    if (/\/commits\/[0-9a-z]+$/.test(url)) {
+      if (productionCommitDate === null) return Promise.reject(new Error('commit not found'));
+      return Promise.resolve({ status: 200, data: { commit: { author: { date: productionCommitDate } } } });
+    }
+    // 分支提交列表：URL 形如 .../commits（sha/path/since 走 query params）
+    if (url.endsWith('/commits')) {
+      const params = config?.params ?? {};
+      if (params.since) {
+        return Promise.resolve({ status: 200, data: pendingCommits });
+      }
+      if (recentCommitFails) return Promise.reject(new Error('commits list down'));
+      if (recentCommitAge === null) return Promise.resolve({ status: 200, data: [] });
+      return Promise.resolve({
+        status: 200,
+        data: [
+          {
+            sha: RECENT_SHA,
+            html_url: `https://github.com/x/y/commit/${RECENT_SHA}`,
+            commit: { message: 'feat: recent change', author: { date: isoDaysAgo(recentCommitAge) } },
+          },
+        ],
+      });
+    }
+    return Promise.resolve({ status: 200, data: {} });
   });
 }
 
@@ -79,6 +139,31 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   clearLineHealthCache();
+});
+
+describe('resolveVersionUrl — env 覆盖必须是合法 http(s) URL，否则落回默认值', () => {
+  const FALLBACK = 'http://localhost:5200/version';
+
+  it('未设置 env → 直接用默认值', () => {
+    expect(resolveVersionUrl(undefined, FALLBACK)).toBe(FALLBACK);
+  });
+
+  it('合法 http(s) URL → 原样使用', () => {
+    expect(resolveVersionUrl('http://10.0.0.5:5200/version', FALLBACK)).toBe('http://10.0.0.5:5200/version');
+    expect(resolveVersionUrl('https://internal.example.com/version', FALLBACK)).toBe(
+      'https://internal.example.com/version'
+    );
+  });
+
+  it('不是合法 URL（手滑填了随意字符串）→ 落回默认值，不带着垃圾地址去发请求', () => {
+    expect(resolveVersionUrl('not a url', FALLBACK)).toBe(FALLBACK);
+    expect(resolveVersionUrl('', FALLBACK)).toBe(FALLBACK);
+  });
+
+  it('非 http(s) 协议（如 file://）→ 落回默认值', () => {
+    expect(resolveVersionUrl('file:///etc/passwd', FALLBACK)).toBe(FALLBACK);
+    expect(resolveVersionUrl('ftp://internal/version', FALLBACK)).toBe(FALLBACK);
+  });
 });
 
 describe('LINE_DEFS / findLineDef', () => {
@@ -137,51 +222,77 @@ describe('buildLineHealthOverview', () => {
   });
 });
 
-describe('buildLineDeployment', () => {
-  it('未接入线不打 GitHub，直接返回空态与约定文案', async () => {
+describe('buildLineDeployment — 真实 /version（不再猜 git 分支）', () => {
+  it('未接入线不打任何网络请求，直接返回空态与约定文案', async () => {
     const data = await buildLineDeployment(NOT_CONNECTED_LINE);
     expect(data.connected).toBe(false);
     expect(data.message).toBe(NOT_CONNECTED_MESSAGE);
-    expect(data.environments).toEqual([]);
+    expect(data.staging).toEqual({ sha: null, version: null, build_time: null });
+    expect(data.production).toEqual({ sha: null, version: null, build_time: null });
     expect(data.recent_commit).toBeNull();
     expect(data.related_prs).toEqual([]);
     expect(axiosGetMock).not.toHaveBeenCalled();
   });
 
-  it('三环境四态互斥：空提交=not_deployed、超阈值=stale、阈值内=active', async () => {
+  it('staging/production 直接反映 apps/api /version 真实返回值，recent_commit 取 main 上最近相关提交（与部署状态无关）', async () => {
     const data = await buildLineDeployment(LINE04);
-    const byName = Object.fromEntries(data.environments.map((e) => [e.name, e]));
-    expect(byName.dev.status).toBe('not_deployed');
-    expect(byName.dev.commit_sha).toBeNull();
-    expect(byName.staging.status).toBe('stale');
-    expect(byName.staging.commit_sha).toBe(SHA);
-    expect(byName.production.status).toBe('active');
-    expect(data.recent_commit?.sha).toBe(byName.production.commit_sha);
-    expect(data.recent_commit?.date).toBe(byName.production.commit_date);
+    expect(data.staging.sha).toBe(STAGING_SHA);
+    expect(data.production.sha).toBe(PROD_SHA);
+    expect(data.production.version).toBe('1.0.1');
+    expect(data.recent_commit?.sha).toBe(RECENT_SHA);
     expect(data.related_prs).toHaveLength(1);
   });
 
-  it(`陈旧阈值 ${STALE_THRESHOLD_DAYS} 天边界：刚好超过一天标 stale，刚好差一天仍 active`, async () => {
+  it('/version 不可达时该环境 sha/version/build_time 全为 null（不是抛异常、不是假数据）', async () => {
     clearLineHealthCache();
-    stubGithub({ commitDays: { develop: STALE_THRESHOLD_DAYS + 1, 'release/cs-stable': STALE_THRESHOLD_DAYS - 1, main: 1 } });
+    stubGithub({ stagingUnreachable: true });
     const data = await buildLineDeployment(LINE04);
-    const byName = Object.fromEntries(data.environments.map((e) => [e.name, e]));
-    expect(byName.dev.status).toBe('stale');
-    expect(byName.staging.status).toBe('active');
+    expect(data.staging).toEqual({ sha: null, version: null, build_time: null });
+    expect(data.production.sha).toBe(PROD_SHA);
   });
 
-  it('GitHub 查询失败标 unavailable（区别于 not_deployed），related_prs 独立降级为 []', async () => {
+  it('/version 返回非 2xx 错误状态（真实 axios 对非 2xx 默认 reject）时同样降级为 null，不抛异常、不解析错误响应体', async () => {
     clearLineHealthCache();
-    stubGithub({ commitDays: { main: 1 }, searchFails: true });
+    axiosGetMock.mockImplementation((url: string) => {
+      if (url === STAGING_VERSION_URL) return Promise.reject(new Error('Request failed with status code 503'));
+      if (url === PROD_VERSION_URL) {
+        return Promise.resolve({ status: 200, data: { sha: PROD_SHA, version: '1.0.1', buildTime: isoDaysAgo(2) } });
+      }
+      if (/\/commits\/[0-9a-z]+$/.test(url)) return Promise.resolve({ status: 200, data: { commit: { author: { date: isoDaysAgo(2) } } } });
+      if (url.includes('/search/issues')) return Promise.resolve({ status: 200, data: { items: [] } });
+      if (url.endsWith('/commits')) return Promise.resolve({ status: 200, data: [] });
+      return Promise.resolve({ status: 200, data: {} });
+    });
     const data = await buildLineDeployment(LINE04);
-    const byName = Object.fromEntries(data.environments.map((e) => [e.name, e]));
-    expect(byName.dev.status).toBe('unavailable');
-    expect(byName.dev.commit_sha).toBeNull();
-    expect(byName.production.status).toBe('active');
+    expect(data.staging).toEqual({ sha: null, version: null, build_time: null });
+    expect(data.production.sha).toBe(PROD_SHA);
+  });
+
+  it('/version 返回 200 但响应体缺字段（如 build-info.json 用兜底值 "unknown"）时对外呈现为 null，不把字面量 "unknown" 当真实 sha', async () => {
+    clearLineHealthCache();
+    axiosGetMock.mockImplementation((url: string) => {
+      if (url === STAGING_VERSION_URL) return Promise.resolve({ status: 200, data: { sha: 'unknown', version: 'unknown', buildTime: 'unknown' } });
+      if (url === PROD_VERSION_URL) {
+        return Promise.resolve({ status: 200, data: { sha: PROD_SHA, version: '1.0.1', buildTime: isoDaysAgo(2) } });
+      }
+      if (/\/commits\/[0-9a-z]+$/.test(url)) return Promise.resolve({ status: 200, data: { commit: { author: { date: isoDaysAgo(2) } } } });
+      if (url.includes('/search/issues')) return Promise.resolve({ status: 200, data: { items: [] } });
+      if (url.endsWith('/commits')) return Promise.resolve({ status: 200, data: [] });
+      return Promise.resolve({ status: 200, data: {} });
+    });
+    const data = await buildLineDeployment(LINE04);
+    expect(data.staging).toEqual({ sha: null, version: null, build_time: null });
+  });
+
+  it('GitHub search 故障时 related_prs 独立降级为 []，不影响 staging/production 读取', async () => {
+    clearLineHealthCache();
+    stubGithub({ searchFails: true });
+    const data = await buildLineDeployment(LINE04);
     expect(data.related_prs).toEqual([]);
+    expect(data.production.sha).toBe(PROD_SHA);
   });
 
-  it('缓存命中：同一条线连续两次请求只打一轮 GitHub；切到另一条线即释放槽位', async () => {
+  it('缓存命中：同一条线连续两次请求只打一轮外部调用；切到另一条线即释放槽位', async () => {
     await buildLineDeployment(LINE04);
     const firstCount = axiosGetMock.mock.calls.length;
     expect(firstCount).toBeGreaterThan(0);
@@ -189,15 +300,15 @@ describe('buildLineDeployment', () => {
     await buildLineDeployment(LINE04);
     expect(axiosGetMock.mock.calls.length).toBe(firstCount);
 
-    // 切到一条未接入线（占用单槽，不打 GitHub），再切回 line04 → 必须重新抓取
+    // 切到一条未接入线（占用单槽，不打任何请求），再切回 line04 → 必须重新抓取
     await buildLineDeployment(NOT_CONNECTED_LINE);
     await buildLineDeployment(LINE04);
     expect(axiosGetMock.mock.calls.length).toBeGreaterThan(firstCount);
   });
 
-  it('全部 GitHub 调用都不是真实 200 响应时不写缓存，下次仍重新抓取（故障态不钉死 5 分钟）', async () => {
+  it('staging/production 与 related_prs 全部拿不到真实数据时不写缓存，下次仍重新抓取（故障态不钉死）', async () => {
     clearLineHealthCache();
-    stubGithub({ noStatus: true, searchFails: true });
+    stubGithub({ stagingUnreachable: true, productionUnreachable: true, recentCommitFails: true, searchFails: true });
     await buildLineDeployment(LINE04);
     const firstCount = axiosGetMock.mock.calls.length;
     await buildLineDeployment(LINE04);
@@ -238,19 +349,18 @@ describe('buildLineAbilities', () => {
   });
 });
 
-// 2026-07-29 用户拍板：总览卡片去掉不可靠的 smoke 匹配，改成三环境版本 + 待发布变更清单
-describe('buildLineHealthOverview — 版本概览 + 待发布变更清单', () => {
-  it('总览每条连通线都带 environments（三环境状态与 buildLineDeployment 一致），不再有 smoke 字段', async () => {
+// 2026-07-29 用户拍板：总览卡片去掉不可靠的 smoke 匹配，改成版本概览 + 待发布变更清单
+// 2026-07-29 二次修正：版本概览改用真实 /version（不再用 git 分支猜），且 staging/production
+// 是三条线共享的一份部署摘要（同一个 apps/api），不再挂在每条 LineHealthItem 上。
+describe('buildLineHealthOverview — 共享部署摘要 + 待发布变更清单', () => {
+  it('总览顶层带 deployment（staging/production 真实 sha），每条 item 不再有 environments/smoke 字段', async () => {
     const overview = await buildLineHealthOverview();
-    const line04 = overview.data.find((d) => d.line_key === 'line04')!;
+    expect(overview.deployment.staging.sha).toBe(STAGING_SHA);
+    expect(overview.deployment.production.sha).toBe(PROD_SHA);
 
+    const line04 = overview.data.find((d) => d.line_key === 'line04')!;
     expect(line04).not.toHaveProperty('smoke');
-    expect(line04.environments).toHaveLength(3);
-    const byName = Object.fromEntries(line04.environments.map((e) => [e.name, e]));
-    // 复用默认 stubGithub()：develop=null(not_deployed) / release/cs-stable=90天前(stale) / main=2天前(active)
-    expect(byName.dev.status).toBe('not_deployed');
-    expect(byName.staging.status).toBe('stale');
-    expect(byName.production.status).toBe('active');
+    expect(line04).not.toHaveProperty('environments');
   });
 
   it('Brain 返回空数组（非错误）时 availability=ready，不再因"无 smoke 匹配"而 degraded', async () => {
@@ -260,42 +370,21 @@ describe('buildLineHealthOverview — 版本概览 + 待发布变更清单', () 
     expect(line01.message).toBeNull();
   });
 
-  it('pending_changes：staging 分支上比 production 更新、命中相关路径的提交才计入，production 自身提交被排除', async () => {
-    const PROD_SHA = 'a'.repeat(40);
-    const NEW_SHA = 'b'.repeat(40);
-    axiosGetMock.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => {
-      if (url.includes('/journey_features')) return Promise.resolve({ status: 200, data: [] });
-      if (url.includes('/search/issues')) return Promise.resolve({ status: 200, data: { items: [] } });
-      if (url.includes('/commits')) {
-        const branch = String(config?.params?.sha ?? '');
-        const since = config?.params?.since;
-        if (branch === 'main') {
-          // production：单条最近提交
-          return Promise.resolve({
-            status: 200,
-            data: [{ sha: PROD_SHA, html_url: `https://github.com/x/y/commit/${PROD_SHA}`, commit: { message: 'feat: prod baseline', author: { date: isoDaysAgo(2) } } }],
-          });
-        }
-        if (branch === 'release/cs-stable' && since) {
-          // 待发布变更清单查询（带 since）：返回 2 条——1 条是 production 自身（应被排除），1 条是真正新增
-          return Promise.resolve({
-            status: 200,
-            data: [
-              { sha: NEW_SHA, html_url: `https://github.com/x/y/commit/${NEW_SHA}`, commit: { message: 'feat(line04): 新功能\n\n详细说明另起一行', author: { date: isoDaysAgo(1) } } },
-              { sha: PROD_SHA, html_url: `https://github.com/x/y/commit/${PROD_SHA}`, commit: { message: 'feat: prod baseline', author: { date: isoDaysAgo(2) } } },
-            ],
-          });
-        }
-        if (branch === 'release/cs-stable') {
-          // fetchEnvironment 本身那次调用（per_page:1，无 since）
-          return Promise.resolve({
-            status: 200,
-            data: [{ sha: NEW_SHA, html_url: `https://github.com/x/y/commit/${NEW_SHA}`, commit: { message: 'feat(line04): 新功能', author: { date: isoDaysAgo(1) } } }],
-          });
-        }
-        return Promise.resolve({ status: 200, data: [] }); // develop
-      }
-      return Promise.resolve({ status: 200, data: { workflow_runs: [] } });
+  it('pending_changes：main 分支上比 production 更新、命中相关路径的提交才计入，production 自身提交被排除', async () => {
+    const NEW_SHA = 'd'.repeat(40);
+    stubGithub({
+      pendingCommits: [
+        {
+          sha: NEW_SHA,
+          html_url: `https://github.com/x/y/commit/${NEW_SHA}`,
+          commit: { message: 'feat(line04): 新功能\n\n详细说明另起一行', author: { date: isoDaysAgo(1) } },
+        },
+        {
+          sha: PROD_SHA,
+          html_url: `https://github.com/x/y/commit/${PROD_SHA}`,
+          commit: { message: 'feat: prod baseline', author: { date: isoDaysAgo(2) } },
+        },
+      ],
     });
 
     const overview = await buildLineHealthOverview();
@@ -306,37 +395,28 @@ describe('buildLineHealthOverview — 版本概览 + 待发布变更清单', () 
     expect(line04.pending_changes.some((c) => c.sha === PROD_SHA)).toBe(false);
   });
 
-  it('production 尚无匹配提交（commit_date 为 null）时 pending_changes 为空，不发起 since 查询', async () => {
-    axiosGetMock.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => {
-      if (url.includes('/journey_features')) return Promise.resolve({ status: 200, data: [] });
-      if (url.includes('/search/issues')) return Promise.resolve({ status: 200, data: { items: [] } });
-      if (url.includes('/commits')) {
-        const branch = String(config?.params?.sha ?? '');
-        if (branch === 'main') return Promise.resolve({ status: 200, data: [] }); // production 无提交
-        return Promise.resolve({ status: 200, data: [] });
-      }
-      return Promise.resolve({ status: 200, data: { workflow_runs: [] } });
-    });
+  it('production /version 不可达（拿不到 sha）时 pending_changes 为空，不发起 since 查询', async () => {
+    stubGithub({ productionUnreachable: true });
 
     const overview = await buildLineHealthOverview();
     const line04 = overview.data.find((d) => d.line_key === 'line04')!;
     expect(line04.pending_changes).toEqual([]);
     const sinceCalls = axiosGetMock.mock.calls.filter(
-      ([url, config]) => String(url).includes('/commits') && (config as { params?: Record<string, unknown> })?.params?.since
+      ([url, config]) => String(url).endsWith('/commits') && (config as { params?: Record<string, unknown> })?.params?.since
     );
     expect(sinceCalls).toHaveLength(0);
   });
 
-  it('总览版本概览按 lineKey 各自独立缓存（不是单槽）：连续拉取三条线互不驱逐', async () => {
+  it('总览待发布变更清单按 lineKey 各自独立缓存（不是单槽）：连续拉取三条线互不驱逐', async () => {
     const countGithubCalls = () =>
-      axiosGetMock.mock.calls.filter(([url]: [string]) => url.includes('/commits') || url.includes('/search/issues')).length;
+      axiosGetMock.mock.calls.filter(([url]: [string]) => String(url).endsWith('/commits') || String(url).includes('/search/issues')).length;
 
     await buildLineHealthOverview();
     const firstCount = countGithubCalls();
     expect(firstCount).toBeGreaterThan(0);
 
     await buildLineHealthOverview();
-    // 三条线的版本概览都命中各自缓存 → 第二次总览请求不应再发起额外的 commits/search 调用
+    // 三条线的待发布变更清单 + 共享部署摘要都命中各自缓存 → 第二次总览请求不应再发起额外调用
     // （journey_features 走 Brain，本模块不缓存，不计入本断言）
     expect(countGithubCalls()).toBe(firstCount);
   });

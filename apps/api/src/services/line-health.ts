@@ -18,15 +18,28 @@
  *   1. journeyId 为 null 时该线走 "not_connected" 态（字面区分，不靠 0/0 反推）——
  *      当前 line01/02/04 均已接入 Brain，此分支保留给未来 product-map 新增无归属线的场景
  *   2. Brain 故障 → "degraded" + "Brain:" 前缀消息，HTTP 仍 200
- *   3. "版本" = 按业务线相关路径过滤的最近 commit（不是全局 HEAD，也不查 /version 端点）
- *   4. "关联 PR" = GitHub Search Issues 按标题关键词匹配（接受稀疏结果）
- *   5. 降级粒度 = 按字段独立（三个环境彼此独立 try/catch，related_prs 与 abilities 再独立）
- *   6. GitHub 数据缓存 5 分钟（未认证 60 次/小时限额，多员工同开会打满）
+ *   3. "关联 PR" = GitHub Search Issues 按标题关键词匹配（接受稀疏结果）
+ *   4. 降级粒度 = 按字段独立（部署摘要 / related_prs / abilities 各自独立降级）
+ *   5. GitHub 数据缓存 5 分钟（未认证 60 次/小时限额，多员工同开会打满）
  *
- * 2026-07-29 用户拍板：总览卡片去掉 smoke 状态（workflow name 匹配逻辑天然不可靠——
+ * 2026-07-29 用户拍板 #1：总览卡片去掉 smoke 状态（workflow name 匹配逻辑天然不可靠——
  * golden-path-N-smoke.sh 常是塞进别的大 workflow 里跑的一个步骤，GitHub API 只能看到
- * 外层 workflow 名字，永远匹配不上，导致"数据暂不可达"这类误导性提示），改成用户真正
- * 关心的东西：三环境版本号 + staging 相对 production 的待发布变更清单。
+ * 外层 workflow 名字，永远匹配不上），改成三环境版本号 + 待发布变更清单。
+ *
+ * 2026-07-29 事后发现并修正 #2：上一版"三环境版本"本身也是错的——用 git 分支去猜
+ * 部署状态是另一种不可靠的推断：
+ *   - "dev" 对应 develop 分支，但该分支自 2026-03-07 起从未被任何 workflow 部署过，
+ *     纯属死概念，界面上不该出现"三环境"。
+ *   - "staging" 曾对应 release/cs-stable 分支，但该分支自 2026-06-23 起同样无人维护，
+ *     跟真实 staging 部署毫无关系（真实触发：push main 改 apps/api/** →
+ *     deploy-staging-hk.yml 自动部署 hk-vps :5201）。
+ *   - "production" 曾对应 main 分支 HEAD，这也是错的——production 走 promote-prod-hk.yml
+ *     人工点选任意 SHA 推送，跟 main 当前指向没有必然关系（人工卡点的意义就是让它可以滞后）。
+ *   - 三条业务线（line01/02/04）背后其实是同一个 apps/api 部署，不存在"各自独立的版本"。
+ * 正确数据源：apps/api 自带的 /version 端点（build-info.ts，构建时把 git sha 写入
+ * dist/build-info.json，进程启动后原样暴露）——直接问"正在跑的进程是哪个 commit"，
+ * 而不是从 git 历史反推。staging/production 版本作为全局共享信息只在总览页顶部展示一次；
+ * "待发布变更清单"则用该 sha 的真实提交时间作 since 过滤，按各线相关路径统计。
  */
 import fs from 'fs';
 import path from 'path';
@@ -39,23 +52,35 @@ import {
   maturityFromCounts,
 } from './staff-health';
 
-/** 判定点 2：未接入业务线的空态文案（前端直接渲染，不重新措辞） */
+/** 判定点 1：未接入业务线的空态文案（前端直接渲染，不重新措辞） */
 export const NOT_CONNECTED_MESSAGE = '该业务线尚未接入 Brain 数据，暂无法展示';
 
-/**
- * 环境"陈旧"阈值：分支存在且找到匹配提交，但提交时间距今超过该天数 → status=stale。
- * 仓库当前 develop（末次提交 2026-03-07）/ release/cs-stable（2026-06-23）都已严重陈旧，
- * 没有这条阈值它们会被显示成 active，比"没有环境"更具误导性（Reviewer r1 必须修复项1）。
- * thin 阶段硬编码，不做环境变量化（已在合同保质期条款登记为可调技术债）。
- */
-export const STALE_THRESHOLD_DAYS = 30;
-
-/** 判定点 6：GitHub 数据缓存 TTL */
+/** 判定点 5：GitHub 数据缓存 TTL */
 const GITHUB_CACHE_TTL_MS = 5 * 60 * 1000;
 
+/** apps/api 自身 /version 端点是内网直连（同机 docker/localhost），缓存 TTL 远短于 GitHub 那档 */
+const DEPLOYMENT_SUMMARY_TTL_MS = 30 * 1000;
+const LIVE_VERSION_TIMEOUT_MS = 5000;
+
+/**
+ * env 覆盖必须是合法 http(s) URL，否则忽略并落回默认值——避免一个手滑的错误配置
+ * （比如误填了非 URL 字符串）导致后续 axios.get 用一个奇怪的地址发起请求。
+ */
+export function resolveVersionUrl(envValue: string | undefined, fallback: string): string {
+  if (!envValue) return fallback;
+  try {
+    const parsed = new URL(envValue);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return fallback;
+    return envValue;
+  } catch {
+    return fallback;
+  }
+}
+
+const STAGING_VERSION_URL = resolveVersionUrl(process.env.LINE_HEALTH_STAGING_VERSION_URL, 'http://localhost:5201/version');
+const PROD_VERSION_URL = resolveVersionUrl(process.env.LINE_HEALTH_PROD_VERSION_URL, 'http://localhost:5200/version');
+
 export type LineKey = 'line01' | 'line02' | 'line04';
-export type EnvName = 'dev' | 'staging' | 'production';
-export type EnvStatus = 'active' | 'stale' | 'not_deployed' | 'unavailable';
 
 export type LineDef = {
   lineKey: LineKey;
@@ -63,7 +88,7 @@ export type LineDef = {
   /** null = 尚未接入 Brain（line01/line02），压根不发起 Brain 请求 */
   journeyId: string | null;
   journeyName: string | null;
-  /** 按路径过滤最近 commit 用；thin 阶段每个环境只打一次 GitHub，取首个代表路径 */
+  /** 按路径过滤"最近相关提交"/"待发布变更清单"用；thin 阶段每条线取首个代表路径 */
   relatedPaths: string[];
   prTitleKeywords: string[];
 };
@@ -98,24 +123,17 @@ export const LINE_DEFS: LineDef[] = [
   },
 ];
 
-/**
- * 环境 → 分支映射。用 commits API `?sha=<branch>&path=<related_path>` 单次调用同时判断
- * "分支是否存在"（404 = 不存在）与"该分支该路径最近提交"，不额外调 Deployments API
- * （本仓库未启用 GitHub Environments/Deployments，无历史记录可查）。
- * staging 对应 `release/*` 系列当前唯一在用的 release/cs-stable（新增 release 分支需同步，
- * 已在合同保质期条款登记）。
- */
-const ENV_BRANCHES: Array<{ name: EnvName; branch: string }> = [
-  { name: 'dev', branch: 'develop' },
-  { name: 'staging', branch: 'release/cs-stable' },
-  { name: 'production', branch: 'main' },
-];
+/** apps/api /version 端点的原样透传；sha/version/build_time 全 null = 该环境不可达或未知 */
+export type LiveVersion = {
+  sha: string | null;
+  version: string | null;
+  build_time: string | null;
+};
 
-export type LineEnvironment = {
-  name: EnvName;
-  status: EnvStatus;
-  commit_sha: string | null;
-  commit_date: string | null;
+/** 总览页顶部的共享部署摘要——staging/production 对三条业务线都是同一份数据 */
+export type LineHealthDeploymentSummary = {
+  staging: LiveVersion;
+  production: LiveVersion;
 };
 
 export type LineRecentCommit = {
@@ -133,7 +151,7 @@ export type LineRelatedPr = {
   updated_at: string | null;
 };
 
-/** staging 分支上、production 当前版本之后新增的提交（"待发布变更清单"） */
+/** main 分支上、production 当前版本之后新增、命中该线相关路径的提交（"待发布变更清单"） */
 export type LinePendingChange = {
   sha: string;
   message: string;
@@ -145,7 +163,9 @@ export type LineDeployment = {
   line_key: string;
   connected: boolean;
   message: string | null;
-  environments: LineEnvironment[];
+  staging: LiveVersion;
+  production: LiveVersion;
+  /** main 上按本线相关路径过滤的最近一次提交——描述"代码最近改到哪"，不代表已部署 */
   recent_commit: LineRecentCommit | null;
   related_prs: LineRelatedPr[];
 };
@@ -175,14 +195,14 @@ export type LineHealthItem = {
   availability: 'ready' | 'degraded' | 'not_connected';
   message: string | null;
   feature_counts: { total: number; done: number; working: number; planned: number };
-  /** 三环境版本概览（dev/staging/production），未接入线为空数组 */
-  environments: LineEnvironment[];
-  /** staging 相对 production 的待发布变更清单，未接入线为空数组 */
+  /** production 相对 main 的待发布变更清单，未接入线为空数组 */
   pending_changes: LinePendingChange[];
 };
 
 export type LineHealthOverview = {
   data: LineHealthItem[];
+  /** 三条线共享的部署摘要（同一个 apps/api 部署），只在总览页展示一次 */
+  deployment: LineHealthDeploymentSummary;
   source: 'product_map' | 'fallback';
   fallback_reason: string | null;
 };
@@ -227,7 +247,7 @@ export function loadCustomerLines(): { lines: Array<{ id: string; name: string }
   return { lines: null, error: `product-map.json 读取或解析失败: ${lastError}` };
 }
 
-// ─── GitHub 抓取 + 缓存（判定点 6）──────────────────────────────────────────
+// ─── GitHub 抓取 + 缓存（判定点 5）──────────────────────────────────────────
 
 type GhOk<T> = { ok: true; data: T; status: number };
 type GhErr = { ok: false; error: string };
@@ -260,28 +280,32 @@ type SingleSlotCache<T> = { key: string; value: T; expiresAt: number } | null;
  */
 let deploymentCache: SingleSlotCache<LineDeployment> = null;
 
-type LineVersionSummary = { environments: LineEnvironment[]; pending_changes: LinePendingChange[] };
+/** 总览页"待发布变更清单"缓存——按 lineKey 分别持有一份（总览一次要同时展示三条线，单槽会互相驱逐）。 */
+const pendingChangesCache = new Map<string, { value: LinePendingChange[]; expiresAt: number }>();
 
-/**
- * 总览页版本概览缓存——按 lineKey 分别持有一份（不能用单槽：总览页一次要同时展示
- * 三条线，单槽缓存在遍历时会互相驱逐，等于没缓存）。
- */
-const versionSummaryCache = new Map<string, { value: LineVersionSummary; expiresAt: number }>();
-
-function readVersionSummary(lineKey: string): LineVersionSummary | null {
-  const slot = versionSummaryCache.get(lineKey);
+function readPendingChanges(lineKey: string): LinePendingChange[] | null {
+  const slot = pendingChangesCache.get(lineKey);
   if (slot && Date.now() < slot.expiresAt) return slot.value;
   return null;
 }
 
-function writeVersionSummary(lineKey: string, value: LineVersionSummary): void {
-  versionSummaryCache.set(lineKey, { value, expiresAt: Date.now() + GITHUB_CACHE_TTL_MS });
+function writePendingChanges(lineKey: string, value: LinePendingChange[]): void {
+  pendingChangesCache.set(lineKey, { value, expiresAt: Date.now() + GITHUB_CACHE_TTL_MS });
 }
 
-/** 仅供测试/运维排障使用：清空 line-health 的全部 GitHub 缓存 */
+type DeploymentSummaryInternal = {
+  summary: LineHealthDeploymentSummary;
+  /** production sha 对应的真实提交时间，供"待发布变更清单"的 since 过滤用，不对外暴露 */
+  productionCommitDate: string | null;
+};
+
+let deploymentSummaryCache: { value: DeploymentSummaryInternal; expiresAt: number } | null = null;
+
+/** 仅供测试/运维排障使用：清空 line-health 的全部缓存（GitHub + 部署摘要） */
 export function clearLineHealthCache(): void {
   deploymentCache = null;
-  versionSummaryCache.clear();
+  pendingChangesCache.clear();
+  deploymentSummaryCache = null;
 }
 
 function readSlot<T>(slot: SingleSlotCache<T>, key: string): { hit: true; value: T } | { hit: false } {
@@ -293,13 +317,6 @@ function readSlot<T>(slot: SingleSlotCache<T>, key: string): { hit: true; value:
 
 function makeSlot<T>(key: string, value: T): SingleSlotCache<T> {
   return { key, value, expiresAt: Date.now() + GITHUB_CACHE_TTL_MS };
-}
-
-function isStale(commitDate: string | null): boolean {
-  if (!commitDate) return false;
-  const ts = Date.parse(commitDate);
-  if (Number.isNaN(ts)) return false;
-  return Date.now() - ts > STALE_THRESHOLD_DAYS * 24 * 60 * 60 * 1000;
 }
 
 type GhCommit = {
@@ -316,46 +333,76 @@ type GhSearchItem = {
   updated_at?: string;
 };
 
-async function fetchEnvironment(
-  env: { name: EnvName; branch: string },
+/** apps/api 自己的 /version 端点——直接问"正在跑的进程是哪个 build"，零 git 历史推断。 */
+async function fetchLiveVersion(url: string): Promise<LiveVersion> {
+  try {
+    const resp = await axios.get(url, { timeout: LIVE_VERSION_TIMEOUT_MS });
+    const data = (resp?.data ?? {}) as Record<string, unknown>;
+    const pick = (v: unknown): string | null =>
+      typeof v === 'string' && v.trim() !== '' && v !== 'unknown' ? v : null;
+    return {
+      sha: pick(data.sha),
+      version: pick(data.version),
+      build_time: pick(data.buildTime),
+    };
+  } catch {
+    return { sha: null, version: null, build_time: null };
+  }
+}
+
+async function fetchCommitDate(sha: string): Promise<string | null> {
+  const result = await githubGet<GhCommit>(`https://api.github.com/repos/${githubRepo()}/commits/${sha}`, {});
+  if (!result.ok) return null;
+  return result.data?.commit?.author?.date ?? result.data?.commit?.committer?.date ?? null;
+}
+
+/**
+ * 三条线共享的部署摘要：staging(:5201)/production(:5200) 各自真实 /version。
+ * 只要有一边真拿到过数据就缓存（本地/CI 环境两边都拿不到很正常，不缓存好让下次重试）。
+ */
+async function fetchDeploymentSummary(): Promise<DeploymentSummaryInternal> {
+  if (deploymentSummaryCache && Date.now() < deploymentSummaryCache.expiresAt) {
+    return deploymentSummaryCache.value;
+  }
+
+  const [staging, production] = await Promise.all([
+    fetchLiveVersion(STAGING_VERSION_URL),
+    fetchLiveVersion(PROD_VERSION_URL),
+  ]);
+  const productionCommitDate = production.sha ? await fetchCommitDate(production.sha) : null;
+
+  const value: DeploymentSummaryInternal = {
+    summary: { staging, production },
+    productionCommitDate,
+  };
+  if (staging.sha || production.sha) {
+    deploymentSummaryCache = { value, expiresAt: Date.now() + DEPLOYMENT_SUMMARY_TTL_MS };
+  }
+  return value;
+}
+
+async function fetchRecentCommitOnMain(
   relatedPath: string
-): Promise<{ environment: LineEnvironment; commit: GhCommit | null; sawHttp200: boolean }> {
+): Promise<{ commit: LineRecentCommit | null; sawHttp200: boolean }> {
   const result = await githubGet<GhCommit[]>(`https://api.github.com/repos/${githubRepo()}/commits`, {
-    sha: env.branch,
+    sha: 'main',
     path: relatedPath,
     per_page: 1,
   });
+  if (!result.ok) return { commit: null, sawHttp200: false };
 
-  if (!result.ok) {
-    // 网络/限流/分支 404 —— 与"分支存在但查无提交"必须区分（NFR 可观测条款）
-    return {
-      environment: { name: env.name, status: 'unavailable', commit_sha: null, commit_date: null },
-      commit: null,
-      sawHttp200: false,
-    };
-  }
-
-  const sawHttp200 = result.status === 200;
   const commits = Array.isArray(result.data) ? result.data : [];
   const top = commits[0];
-  if (!top?.sha) {
-    return {
-      environment: { name: env.name, status: 'not_deployed', commit_sha: null, commit_date: null },
-      commit: null,
-      sawHttp200,
-    };
-  }
+  if (!top?.sha) return { commit: null, sawHttp200: result.status === 200 };
 
-  const commitDate = top.commit?.author?.date ?? top.commit?.committer?.date ?? null;
   return {
-    environment: {
-      name: env.name,
-      status: isStale(commitDate) ? 'stale' : 'active',
-      commit_sha: top.sha,
-      commit_date: commitDate,
+    commit: {
+      sha: top.sha,
+      message: top.commit?.message ?? '',
+      date: top.commit?.author?.date ?? top.commit?.committer?.date ?? null,
+      url: top.html_url ?? `https://github.com/${githubRepo()}/commit/${top.sha}`,
     },
-    commit: top,
-    sawHttp200,
+    sawHttp200: true,
   };
 }
 
@@ -385,20 +432,19 @@ async function fetchRelatedPrs(
 }
 
 /**
- * staging 分支（release/cs-stable）上、production 当前提交时间之后、命中该线相关路径
- * 的提交列表——"待发布变更清单"。sinceDate 为空（production 尚无匹配提交）时直接返回空，
- * 不发起请求。GitHub commits API 的 since 是按提交时间闭区间，返回结果里若含 production
- * 自身那条提交（sha 相同）需要过滤掉，只保留严格更新的部分。
+ * main 分支上、production 真实提交时间之后、命中该线相关路径的提交列表——"待发布变更清单"。
+ * sinceDate 为空（production /version 不可达，取不到真实提交时间）时直接返回空，不发起请求。
+ * GitHub commits API 的 since 是按提交时间闭区间，返回结果里若含 production 自身那条提交
+ * （sha 相同）需要过滤掉，只保留严格更新的部分。
  */
 async function fetchPendingChanges(
   relatedPath: string,
-  branch: string,
   sinceDate: string | null,
   excludeSha: string | null
 ): Promise<{ changes: LinePendingChange[]; sawHttp200: boolean }> {
   if (!sinceDate) return { changes: [], sawHttp200: false };
   const result = await githubGet<GhCommit[]>(`https://api.github.com/repos/${githubRepo()}/commits`, {
-    sha: branch,
+    sha: 'main',
     path: relatedPath,
     since: sinceDate,
     per_page: 15,
@@ -417,43 +463,31 @@ async function fetchPendingChanges(
   return { changes, sawHttp200: result.status === 200 };
 }
 
-/**
- * 总览卡片用的轻量版本概览：三环境状态 + staging 相对 production 的待发布变更清单。
- * 与 buildLineDeployment 共享 fetchEnvironment/fetchPendingChanges，但走独立的按线缓存
- * （总览一次要同时看三条线，不能用 buildLineDeployment 的单槽缓存互相驱逐）。
- */
-async function fetchLineVersionSummary(def: LineDef): Promise<LineVersionSummary> {
-  const cached = readVersionSummary(def.lineKey);
+async function fetchLinePendingChanges(
+  def: LineDef,
+  productionSha: string | null,
+  productionCommitDate: string | null
+): Promise<LinePendingChange[]> {
+  const cached = readPendingChanges(def.lineKey);
   if (cached) return cached;
 
   const relatedPath = def.relatedPaths[0] ?? '';
-  const envResults = await Promise.all(ENV_BRANCHES.map((env) => fetchEnvironment(env, relatedPath)));
-  const environments = envResults.map((r) => r.environment);
-
-  const production = envResults.find((r) => r.environment.name === 'production');
-  const stagingBranch = ENV_BRANCHES.find((e) => e.name === 'staging')?.branch ?? 'release/cs-stable';
-  const { changes, sawHttp200: changesOk } = await fetchPendingChanges(
-    relatedPath,
-    stagingBranch,
-    production?.environment.commit_date ?? null,
-    production?.environment.commit_sha ?? null
-  );
-
-  const payload: LineVersionSummary = { environments, pending_changes: changes };
-  if (envResults.some((r) => r.sawHttp200) || changesOk) {
-    writeVersionSummary(def.lineKey, payload);
-  }
-  return payload;
+  const { changes, sawHttp200 } = await fetchPendingChanges(relatedPath, productionCommitDate, productionSha);
+  if (sawHttp200) writePendingChanges(def.lineKey, changes);
+  return changes;
 }
 
 // ─── 三个端点的聚合构造 ──────────────────────────────────────────────────────
+
+const EMPTY_LIVE_VERSION: LiveVersion = { sha: null, version: null, build_time: null };
 
 function notConnectedDeployment(lineKey: string): LineDeployment {
   return {
     line_key: lineKey,
     connected: false,
     message: NOT_CONNECTED_MESSAGE,
-    environments: [],
+    staging: EMPTY_LIVE_VERSION,
+    production: EMPTY_LIVE_VERSION,
     recent_commit: null,
     related_prs: [],
   };
@@ -470,38 +504,25 @@ export async function buildLineDeployment(def: LineDef): Promise<LineDeployment>
   }
 
   const relatedPath = def.relatedPaths[0] ?? '';
-  // 三个环境彼此独立（判定点 5：一处限流不得拖垮整块）
-  const envResults = await Promise.all(
-    ENV_BRANCHES.map((env) => fetchEnvironment(env, relatedPath))
-  );
-  const { prs, sawHttp200: prsOk } = await fetchRelatedPrs(def.prTitleKeywords);
-
-  const environments = envResults.map((r) => r.environment);
-  const productionResult = envResults.find((r) => r.environment.name === 'production');
-  const productionCommit = productionResult?.commit ?? null;
-
-  // recent_commit 直接复用 production 环境已取到的 commit，不重复调用 GitHub（合同要求二者一致）
-  const recentCommit: LineRecentCommit | null = productionCommit?.sha
-    ? {
-        sha: productionCommit.sha,
-        message: productionCommit.commit?.message ?? '',
-        date: productionResult?.environment.commit_date ?? null,
-        url:
-          productionCommit.html_url ??
-          `https://github.com/${githubRepo()}/commit/${productionCommit.sha}`,
-      }
-    : null;
+  // 部署摘要 / 最近相关提交 / 关联 PR 彼此独立（判定点 4：一处限流不得拖垮整块）
+  const [{ summary }, { commit: recentCommit, sawHttp200: recentOk }, { prs, sawHttp200: prsOk }] =
+    await Promise.all([
+      fetchDeploymentSummary(),
+      fetchRecentCommitOnMain(relatedPath),
+      fetchRelatedPrs(def.prTitleKeywords),
+    ]);
 
   const payload: LineDeployment = {
     line_key: def.lineKey,
     connected: true,
     message: null,
-    environments,
+    staging: summary.staging,
+    production: summary.production,
     recent_commit: recentCommit,
     related_prs: prs,
   };
 
-  if (envResults.some((r) => r.sawHttp200) || prsOk) {
+  if (recentOk || prsOk || summary.staging.sha || summary.production.sha) {
     deploymentCache = makeSlot(def.lineKey, payload);
   }
   return payload;
@@ -558,12 +579,16 @@ function notConnectedItem(def: LineDef, label: string): LineHealthItem {
     availability: 'not_connected',
     message: null,
     feature_counts: { total: 0, done: 0, working: 0, planned: 0 },
-    environments: [],
     pending_changes: [],
   };
 }
 
-async function buildConnectedItem(def: LineDef, label: string): Promise<LineHealthItem> {
+async function buildConnectedItem(
+  def: LineDef,
+  label: string,
+  productionSha: string | null,
+  productionCommitDate: string | null
+): Promise<LineHealthItem> {
   let features: JourneyFeature[] = [];
   const messages: string[] = [];
 
@@ -574,9 +599,9 @@ async function buildConnectedItem(def: LineDef, label: string): Promise<LineHeal
     messages.push(`Brain: ${message}`);
   }
 
-  // 版本概览走独立的 GitHub 抓取，永不抛异常（各环境/变更清单各自独立降级），
-  // 不再像旧版 smoke 匹配那样把"没找到"当成 degraded 的理由——只有 Brain 真故障才算 degraded。
-  const { environments, pending_changes } = await fetchLineVersionSummary(def);
+  // 待发布变更清单走独立的 GitHub 抓取，永不抛异常（各自独立降级），
+  // 不把"抓不到"当成 degraded 的理由——只有 Brain 真故障才算 degraded。
+  const pending_changes = await fetchLinePendingChanges(def, productionSha, productionCommitDate);
 
   const doneCount = features.filter((feature) => feature.status === 'done').length;
 
@@ -594,7 +619,6 @@ async function buildConnectedItem(def: LineDef, label: string): Promise<LineHeal
       working: features.filter((feature) => feature.status === 'working').length,
       planned: features.filter((feature) => feature.status === 'planned').length,
     },
-    environments,
     pending_changes,
   };
 }
@@ -605,12 +629,19 @@ export async function buildLineHealthOverview(): Promise<LineHealthOverview> {
   const labelOf = (def: LineDef): string =>
     lines?.find((line) => line.id === def.lineKey)?.name ?? def.label;
 
+  const { summary, productionCommitDate } = await fetchDeploymentSummary();
+
   const data = await Promise.all(
-    LINE_DEFS.map((def) => (def.journeyId ? buildConnectedItem(def, labelOf(def)) : Promise.resolve(notConnectedItem(def, labelOf(def)))))
+    LINE_DEFS.map((def) =>
+      def.journeyId
+        ? buildConnectedItem(def, labelOf(def), summary.production.sha, productionCommitDate)
+        : Promise.resolve(notConnectedItem(def, labelOf(def)))
+    )
   );
 
   return {
     data,
+    deployment: summary,
     source: lines ? 'product_map' : 'fallback',
     fallback_reason: lines ? null : error,
   };
