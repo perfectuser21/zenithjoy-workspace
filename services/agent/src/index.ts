@@ -25,6 +25,7 @@ import { handleZhihuPublish } from './handlers/zhihu-publish';
 import { handleDevQuickVerify, isDevMachineFromEnv, runRegisteredAction } from './handlers/dev-quick-verify';
 import { registerLeaseBrokerRoutes } from './handlers/wechat-rpa';
 import { registerPanelEventRoutes } from './handlers/panel-events-route';
+import { launchAgentPanelHost } from './agent-panel-launcher';
 import { PanelEventBus } from './shared/panel-event-bus';
 import { PanelEventsTail } from './shared/panel-events-tail';
 import { startTray, updateTrayStatus, updateTrayModules, showModuleError, destroyTray } from './tray';
@@ -409,6 +410,7 @@ function connect(cfg: AgentConfig): void {
     console.log(`[agent] connected as ${cfg.agentId}`);
     backoff = 1000;
     updateTrayStatus('online');
+    launchAgentPanelHost();
     ws.send(JSON.stringify(makeMsg('hello', buildHelloPayload(cfg))));
     heartbeatTimer = setInterval(() => {
       if (ws.readyState === ws.OPEN) {

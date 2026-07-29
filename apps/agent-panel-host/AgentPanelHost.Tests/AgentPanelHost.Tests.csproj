@@ -20,10 +20,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- 只含 PanelWindowState：唯一不碰 Windows API 的纯逻辑文件，理论上可跨平台编译/跑。
+    <!-- 只含不碰 Windows 专属 API 的纯逻辑文件，理论上可跨平台编译/跑。
          WebView2Preflight/NativeMethods/MainWindow 依赖 Windows 专属类型(Microsoft.Win32.Registry
-         等)，跨平台编译都过不了，只能在 windows_cloud 验证。 -->
+         等)，跨平台编译都过不了，只能在 windows_cloud 验证。System.Threading.Mutex 跨平台可用
+         (macOS/Linux 上是进程内单例，不是跨进程具名锁，但 TryAcquire/Dispose 的正确性验证不受影响)。 -->
     <Compile Include="../PanelWindowState.cs" />
+    <Compile Include="../SingleInstanceGuard.cs" />
   </ItemGroup>
 
 </Project>

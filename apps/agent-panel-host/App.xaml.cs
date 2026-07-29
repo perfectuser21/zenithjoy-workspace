@@ -12,9 +12,20 @@ namespace ZenithJoy.AgentPanel;
 // System.Windows.Forms 间产生歧义，必须显式限定为 WPF 的 Application。
 public partial class App : System.Windows.Application
 {
+    private SingleInstanceGuard? _instanceGuard;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // 单实例守卫：核心进程(agent-panel-launcher.ts)一旦重复拉起，第二个实例在这里
+        // 直接退出，不建窗口，不抢已运行实例的 WebView2 焦点。
+        _instanceGuard = new SingleInstanceGuard("ZenithJoyAgentPanel");
+        if (!_instanceGuard.TryAcquire())
+        {
+            Shutdown(0);
+            return;
+        }
 
         // 判定点：WebView2 Runtime 缺失时的提示不用 WebView2 渲染（自举悖论），
         // 用 Win32 原生 MessageBox——这一步必须在任何 WPF 窗口/WebView2 控件创建之前完成。
@@ -37,5 +48,11 @@ public partial class App : System.Windows.Application
 
         var window = new MainWindow();
         window.Show();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _instanceGuard?.Dispose();
+        base.OnExit(e);
     }
 }

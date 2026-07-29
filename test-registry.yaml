@@ -5005,6 +5005,14 @@ agent_suite:
   product: 私域运营
   note: "PanelEventBus单测：6种事件(task_started/step/waiting/stuck/done/failed)+看门狗90s(可调)+多task灯态max()聚合+最近完成列表50条上限"
 
+- id: agent-panel-launcher-unit
+  path: services/agent/src/__tests__/agent-panel-launcher.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 私域运营
+  note: "xian-rog真机验证发现核心进程从未拉起过agent-panel-host WPF壳，PrepPRD Step1首次装机仪式在生产环境不成立。launchAgentPanelHost单测：win32且exe存在才拉起/detached+unref/进程生命周期内只拉一次"
+
 - id: agent-panel-line-labels-unit
   path: services/agent/src/__tests__/panel-line-labels.test.ts
   type: unit
