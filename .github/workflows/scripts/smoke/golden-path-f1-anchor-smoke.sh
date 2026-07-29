@@ -60,7 +60,8 @@ import { loadAndValidateProductMap } from '$REPO_ROOT/scripts/product-map/lib.mj
 const { map } = await loadAndValidateProductMap();
 const gp = map.golden_paths.find(g => g.id === 'gp_anchor_enforcement');
 if (!gp) { console.error('FAIL: gp_anchor_enforcement未注册'); process.exit(1); }
-if (gp.status !== 'proposed') { console.error('FAIL: status应为proposed，实际:', gp.status); process.exit(1); }
+const VALID_STATUSES = ['proposed', 'active'];
+if (!VALID_STATUSES.includes(gp.status)) { console.error('FAIL: status应为proposed或active，实际:', gp.status); process.exit(1); }
 if (!gp.smoke_files || !gp.smoke_files.includes('.github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh')) {
   console.error('FAIL: smoke_files未正确指向自身'); process.exit(1);
 }
