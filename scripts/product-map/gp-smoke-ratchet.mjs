@@ -13,7 +13,9 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeGpSmokeRatchet } from './lib.mjs';
+// 必须引零依赖模块而非 lib.mjs：lib.mjs 顶层 import ajv/yaml，主 checkout 无
+// node_modules 时本 CLI 会 ERR_MODULE_NOT_FOUND 崩（0730 ci-patrol 首跑实证）
+import { computeGpSmokeRatchet } from './gp-smoke-ratchet-lib.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../..');
