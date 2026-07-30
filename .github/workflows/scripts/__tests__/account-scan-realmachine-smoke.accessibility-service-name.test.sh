@@ -63,8 +63,8 @@ case "\$1" in
     ;;
   shell)
     shift
-    if [ "\$1" = "monkey" ]; then
-      : # 模拟 install -r 后重新拉起 App（本测试不关心这一步，只关心无障碍组件名）
+    if [ "\$1" = "am" ]; then
+      : # 模拟 install -r 后 deeplink 重新拉起 App（本测试不关心这一步，只关心无障碍组件名）
     elif [ "\$1" = "pidof" ]; then
       echo "12345" # 模拟拉起后进程存活，让脚本能继续往下走到无障碍设置这一步
     elif [ "\$1" = "settings" ] && [ "\$2" = "put" ] && [ "\$3" = "secure" ] && [ "\$4" = "enabled_accessibility_services" ]; then
@@ -84,8 +84,16 @@ exit 0
 ADBEOF
 chmod +x "$FAKE_BIN/adb"
 
+# 需要给 envbind 修复新增的 license_key 查询一个非空回答，否则脚本会在
+# 拉起 App、设置无障碍组件之前就因"查不到 active license_key"envfail
+# （本测试关注点是无障碍组件名是否正确写入，不是 license 查询本身）。
 cat > "$FAKE_BIN/ssh" << 'SSHEOF'
 #!/usr/bin/env bash
+CMD="$2"
+if echo "$CMD" | grep -q "SELECT license_key FROM zenithjoy.licenses"; then
+  echo "ZJ-TEST-FAKE0001"
+  exit 0
+fi
 exit 0
 SSHEOF
 chmod +x "$FAKE_BIN/ssh"
