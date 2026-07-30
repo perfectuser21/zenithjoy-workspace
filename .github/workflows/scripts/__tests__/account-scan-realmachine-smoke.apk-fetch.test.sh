@@ -115,7 +115,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b'{"ok":false,"code":"UNAUTHORIZED"}')
         elif self.path.startswith('/fake-apk'):
-            body = b'FAKEAPKDATA' * 100
+            body = b'PK' + b'FAKEAPKDATA' * 100
             self.send_response(200)
             self.send_header('Content-Type', 'application/vnd.android.package-archive')
             self.send_header('Content-Length', str(len(body)))

@@ -91,11 +91,40 @@ main() {
   # 回 apk_url 字段，鉴权对拿到的地址没有任何增值，直连更简单也更可靠）。
   APK_URL="${ANDROID_APK_COS_URL:-http://apk.zenjoymedia.media/install-pack/android/zenithjoy-agent.apk}"
 
-  APK_TMP=$(mktemp /tmp/zj-agent-XXXXXX.apk)
+  # mktemp 不带后缀+事后自己拼 .apk：BSD mktemp（macOS）不支持"X序列后跟非X后缀"
+  # 模板（会整段当字面量、不做随机替换，导致重复调用时literal文件已存在而报错）；
+  # GNU mktemp（Linux CI/Windows Git-Bash）支持但没必要依赖这个差异——不带后缀是两边通吃的写法。
+  APK_TMP_BASE=$(mktemp /tmp/zj-agent-XXXXXX)
+  rm -f "$APK_TMP_BASE"
+  APK_TMP="${APK_TMP_BASE}.apk"
   curl -fsSk -m 60 -o "$APK_TMP" "$APK_URL" || envfail "APK 下载失败: $APK_URL"
+
+  # 下载后基本校验（防"curl exit 0 但内容是 403/html 错误页"被当成合法 APK 传给
+  # adb install——退回不带内容校验时这类问题只会在 adb install 报一个无关的失败信息，
+  # 排查者要重新手动下载才能发现，浪费一轮真机排查）：
+  #   1) 非空文件  2) zip/APK magic bytes 'PK'（.apk 本质是 zip 容器）
+  APK_SIZE=$(wc -c < "$APK_TMP" 2>/dev/null | tr -d ' ')
+  case "$APK_SIZE" in
+    ''|0)
+      rm -f "$APK_TMP"
+      envfail "下载的 APK 文件为空(0字节或读取失败): $APK_URL"
+      ;;
+  esac
+  APK_MAGIC=$(head -c 2 "$APK_TMP" 2>/dev/null)
+  if [ "$APK_MAGIC" != "PK" ]; then
+    APK_PREVIEW=$(head -c 200 "$APK_TMP" 2>/dev/null | tr -d '\0')
+    rm -f "$APK_TMP"
+    envfail "下载的文件不是合法 APK(zip magic bytes 校验失败,可能是 COS 返回了错误页而非二进制包): $APK_URL 内容预览: $APK_PREVIEW"
+  fi
+
   # adb install -r：覆盖装不卸载，保住设备已有的注册态(agent_id/绑定关系不丢)
-  "$ADB" install -r "$APK_TMP" >/dev/null 2>&1 || envfail "adb install -r 失败"
+  # 不再吞掉 adb 的原始 stderr——envfail 留痕必须带上真实报错文本（如
+  # INSTALL_FAILED_UPDATE_INCOMPATIBLE 签名不匹配 / INSUFFICIENT_STORAGE 等），
+  # 否则每次排查都要重新登真机手跑一遍才能看到根因，白白多耗一轮时间。
+  INSTALL_ERR=$("$ADB" install -r "$APK_TMP" 2>&1)
+  INSTALL_CODE=$?
   rm -f "$APK_TMP"
+  [ "$INSTALL_CODE" -eq 0 ] || envfail "adb install -r 失败: $INSTALL_ERR"
   ok "已覆盖安装最新 APK(adb install -r)"
 
   "$ADB" shell settings put secure enabled_accessibility_services 'com.zenithjoy.agent/com.zenithjoy.agent.AccessibilityService' >/dev/null 2>&1 || true
