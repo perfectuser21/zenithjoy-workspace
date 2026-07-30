@@ -3792,6 +3792,14 @@ agent_suite:
     product: 中台认证
     note: "发版自洽 — migration runner 幂等/排序纯逻辑：只取 .sql + 文件名升序 + computePending 幂等（重复跑不重复应用、新 migration 被算进、旧文件不报错）。"
 
+  - id: deploy-promote-all-prod-hk-backend
+    path: apps/api/tests/deploy/promote-all-prod-workflow.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 平台基础
+    note: "回归测试(2026-07-30)：promote-all-prod.yml 的 promote-backend job 07-15拆库刀3后端迁hk-vps docker时未同步更新，仍SSH到已废弃US_MAC_HOST走老蓝绿部署。断言不再引用US_MAC_*secrets且走Tailscale+HK_VPS_SSH_KEY+docker健康冒烟；顺带断言已废弃的promote-prod.yml已被删除。"
+
   - id: line04-per-cs-config-store-sprint
     path: sprints/06222337-line04-per-cs-config/tests/cs-account-config-store.test.ts
     type: unit
