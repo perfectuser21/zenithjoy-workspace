@@ -2,15 +2,17 @@ name: Promote ALL to Production (一键放行闸：后端+前端整体)
 
 # ───────────────────────────────────────────────────────────────────────────
 # 统一人工放行闸（2026-06-27）：一次确认，把同一套验证过的 release 整体切到生产。
-#   过去切生产要分别点两个工作流（promote-prod=后端 :5200、promote-dashboard-prod=前端 autopilot），
-#   原因是前后端在不同机器（API 在美国 Mac、dashboard 在 HK VPS）。但同一个 release 是一个整体，
-#   分两次点容易切了一边忘另一边、版本对不上。本 workflow 合成一键：
-#     先后端（蓝绿：复验 staging → 记回滚锚点 → 原子切 current → 迁移 → 重启 :5200 → 失败自动回滚）
+#   过去切生产要分别点两个工作流（promote-prod=后端 :5200、promote-dashboard-prod=前端 autopilot）。
+#   同一个 release 是一个整体，分两次点容易切了一边忘另一边、版本对不上。本 workflow 合成一键：
+#     先后端（HK docker：git 同步到指定 SHA → docker build+up 生产容器 → /health 冒烟断言 build sha）
 #     → 后端成功后再前端（build 生产 dist → release 隔离切软链 → 重启 autopilot-dashboard → 公网验证）
-#   任一步失败 → 报 P0；后端失败已自动回滚、前端不会切（needs 卡住）。
+#   任一步失败 → 报 P0；后端失败不影响生产（fail-closed，容器未切换）、前端不会切（needs 卡住）。
 #
 #   ★只能人手点★（workflow_dispatch + confirm=PROMOTE）。绝无 push/schedule 自动触发；AI 不自行 promote。
-#   原 promote-prod.yml / promote-dashboard-prod.yml 保留，供只切单边的场景。
+#   原 promote-dashboard-prod.yml 保留，供只切前端的场景；后端单独入口见 promote-prod-hk.yml。
+#
+#   07-30 修复：本 job 此前是独立内联脚本，07-15 拆库刀3把生产后端迁到 hk-vps docker 后没跟着更新，
+#   仍 SSH 到已废弃的美国 Mac :5200 蓝绿部署——现已改为与 promote-prod-hk.yml 同款 HK docker 部署逻辑。
 #
 # Release Gate（2026-07-09 刀C，6站2轨模型第⑤站）：
 #   人工放行保持不变，但机器先查证据——没绿不让点：
@@ -114,9 +116,10 @@ jobs:
           echo "✅ nightly 证据齐：最近 ${COUNT} 次全绿，最新 ${AGE_H}h 前。"
 
   promote-backend:
-    name: 1/2 后端 → 生产 :5200（蓝绿+迁移+失败自动回滚）
+    name: 1/2 后端 → 生产 :5200（HK docker + 冒烟）
     runs-on: ubuntu-latest
     needs: [release-gate]
+    timeout-minutes: 30
     steps:
       - name: 二次确认闸（必须输入 PROMOTE）
         run: |
@@ -127,63 +130,56 @@ jobs:
           fi
           echo "✅ 人工二次确认通过，开始整体 promote（先后端 :5200）。"
 
-      - name: Promote 后端 via SSH (blue_green_deploy：验 staging → 原子切 current → 重启 :5200 → 失败自动回滚)
-        uses: appleboy/ssh-action@v1.0.3
+      - name: 接入 Tailscale（走内网）
+        uses: tailscale/github-action@v3
         with:
-          host: ${{ secrets.US_MAC_HOST }}
-          username: ${{ secrets.US_MAC_USER }}
-          key: ${{ secrets.US_MAC_SSH_KEY }}
-          port: ${{ secrets.US_MAC_PORT }}
-          script_stop: true
-          command_timeout: 20m
-          script: |
-            set -euo pipefail
-            REPO=/Users/administrator/perfect21/zenithjoy
-            INPUT_SHA="${{ github.event.inputs.sha }}"
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          version: latest
 
-            # shellcheck source=/dev/null
-            source "$REPO/.github/workflows/scripts/deploy-lib.sh"
+      - name: Promote 后端 via SSH（HK docker build + up + 冒烟，同 promote-prod-hk.yml）
+        env:
+          SSH_KEY: ${{ secrets.HK_VPS_SSH_KEY }}
+          SSH_HOST: ${{ vars.HK_VPS_TAILSCALE_IP || '100.86.118.99' }}
+          INPUT_SHA: ${{ github.event.inputs.sha }}
+        timeout-minutes: 25
+        run: |
+          KEY_FILE=$(mktemp)
+          trap 'rm -f "$KEY_FILE"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
 
-            export ZJ_REPO="$REPO"
-            export ZJ_API_DIR="$REPO/apps/api"
-            export ZJ_PROD_PORT=5200
-            export ZJ_STAGING_PORT=5201
-            export ZJ_PROD_LABEL=com.zenithjoy.api
-            export ZJ_STAGING_LABEL=com.zenithjoy.api.staging
-            export ZJ_STAGING_DB="${{ vars.ZJ_STAGING_DB || 'zenithjoy_staging' }}"
-            # 拆库刀1（决策 0710）：生产库名由 repo variable ZJ_PROD_DB 控制，未设=zenithjoy（07-14 切换日已翻，decision d8366ef1）
-            export ZJ_PROD_DB="${{ vars.ZJ_PROD_DB || 'zenithjoy' }}"
-            export ZJ_PROD_PLIST="$HOME/Library/LaunchAgents/com.zenithjoy.api.plist"
-            export ZJ_NODE=/opt/homebrew/bin/node
-            export ZJ_RELEASES_DIR="${ZJ_RELEASES_DIR:-/Users/administrator/zenithjoy-releases}"
-            export ZJ_KEEP_RELEASES="${ZJ_KEEP_RELEASES:-5}"
-            export BRAIN_URL="${BRAIN_URL:-http://localhost:5221}"
-            mkdir -p "$ZJ_RELEASES_DIR"
+          ssh -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=30 \
+              -o ServerAliveInterval=60 \
+              -i "$KEY_FILE" \
+              "root@${SSH_HOST}" \
+              bash -s -- "${INPUT_SHA}" << 'REMOTE_EOF'
+          set -euo pipefail
+          INPUT_SHA="${1:-}"
+          REPO=/opt/zenithjoy/repo
 
-            # 目标 sha：输入为空 → 用常驻 staging 当前指向的 release sha（即刚验过的候选）
-            TARGET_SHA="$INPUT_SHA"
-            if [ -z "$TARGET_SHA" ]; then
-              STAGING_LINK="$ZJ_RELEASES_DIR/staging"
-              if [ -L "$STAGING_LINK" ]; then
-                TARGET_SHA="$(basename "$(readlink "$STAGING_LINK")")"
-              fi
-            fi
-            if [ -z "$TARGET_SHA" ]; then
-              echo "❌ 取不到 promote 目标 sha（输入为空且 releases/staging 软链不存在）"; exit 1
-            fi
-            echo "promote 目标 sha=${TARGET_SHA}"
+          git -C "$REPO" fetch --force --prune origin main
+          DEPLOY_SHA="${INPUT_SHA:-$(git -C "$REPO" rev-parse origin/main)}"
+          echo "=== [1/3] git sync → ${DEPLOY_SHA} ==="
+          git -C "$REPO" reset --hard "$DEPLOY_SHA"
 
-            # blue_green_deploy 的 hook 指向真实实现：
-            export BG_DEPLOY_STAGING_FN=staging_deploy_slot
-            export BG_VERIFY_STAGING_FN=staging_verify
-            export BG_RECORD_ANCHOR_FN=staging_record_anchor
-            export BG_PROMOTE_FN=staging_promote
-            export BG_VERIFY_PROD_FN=staging_verify_prod
-            export BG_ROLLBACK_FN=staging_rollback
-            export BG_DESTROY_STAGING_FN=staging_destroy_slot
-            export BG_ALERT_P0_FN=staging_alert_p0
+          echo "=== [2/3] docker build + up（仅生产容器）==="
+          cd "$REPO"
+          BUILD_SHA="$DEPLOY_SHA" docker compose -f deploy/docker-compose.prod-api.yml build zenithjoy-api-prod
+          docker compose -f deploy/docker-compose.prod-api.yml up -d zenithjoy-api-prod
 
-            blue_green_deploy "$TARGET_SHA"
+          echo "=== [3/3] 冒烟：healthy + /version sha 断言 ==="
+          STATUS=none
+          for i in $(seq 1 20); do
+            STATUS=$(docker inspect zenithjoy-api-prod --format '{{.State.Health.Status}}' 2>/dev/null || echo none)
+            [ "$STATUS" = "healthy" ] && break
+            sleep 5
+          done
+          [ "$STATUS" = "healthy" ] || { echo "❌ 容器未 healthy: $STATUS"; docker logs --tail 50 zenithjoy-api-prod; exit 1; }
+          GOT_SHA=$(curl -fsS http://127.0.0.1:5200/health | python3 -c "import sys,json; print(json.load(sys.stdin).get('build',{}).get('sha',''))")
+          [ "$GOT_SHA" = "$DEPLOY_SHA" ] || { echo "❌ /health build.sha=$GOT_SHA ≠ $DEPLOY_SHA（旧进程仍在跑）"; exit 1; }
+          echo "✅ prod :5200 healthy，build.sha 断言通过"
+          REMOTE_EOF
 
   promote-dashboard:
     name: 2/2 前端 → 生产 autopilot（后端成功后才切）
@@ -296,5 +292,5 @@ jobs:
               "title": "ZenithJoy 一键 promote 到生产失败",
               "priority": "P0",
               "task_type": "dev",
-              "description": "promote-all-prod.yml 失败。后端失败已自动回滚 :5200；若后端成功而前端失败，需人工核实 autopilot 与 :5200 版本是否一致。"
+              "description": "promote-all-prod.yml 失败。后端失败为 fail-closed（容器未切换，旧版本仍在跑，需人工排查）；若后端成功而前端失败，需人工核实 autopilot 与 :5200 版本是否一致。"
             }' || echo "Brain API 不可达，跳过告警"
