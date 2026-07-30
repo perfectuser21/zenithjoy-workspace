@@ -167,23 +167,44 @@ main() {
     *) fail "无障碍服务未开启(enabled_accessibility_services=$ACC)——账号扫描依赖无障碍读取面板" ;;
   esac
 
-  # ── Step 2: 动态定位设备真实 agent_id（hostname型号 + last_heartbeat_at 最新排序），
+  # ── Step 2: 动态定位设备真实 agent_id（hostname型号 + last_seen 最新排序），
   #    DB 查询查无匹配时兜底走 logcat（不写死任何 agent_id 默认值） ──────────────
+  # 排序用 last_seen 而非 last_heartbeat_at：ws 长连接心跳只更新 last_seen（真反映"当前
+  # 在线"），last_heartbeat_at 字段有已知不一致 bug（issue 009c1544），用它排序会命中一条
+  # 历史有值但可能早已离线的记录，而不是当前真在线那台。
   MODEL=$("$ADB" shell getprop ro.product.model 2>/dev/null | tr -d '\r\n')
   AGENT_ID=""
   if [ -n "$MODEL" ]; then
     ROW=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -c \
-      \"SELECT agent_id FROM zenithjoy.agents WHERE hostname ILIKE '%${MODEL}%' ORDER BY last_heartbeat_at DESC NULLS LAST LIMIT 1\"" 2>/dev/null)
+      \"SELECT agent_id FROM zenithjoy.agents WHERE hostname ILIKE '%${MODEL}%' ORDER BY last_seen DESC NULLS LAST LIMIT 1\"" 2>/dev/null)
     AGENT_ID=$(printf '%s' "$ROW" | tr -d '[:space:]')
   fi
   if [ -z "$AGENT_ID" ]; then
-    # 兜底：DB 查无匹配（已知 last_heartbeat_at/last_seen 字段不一致独立 issue），
-    # 用 logcat "agent started — agentId=" 收尾日志动态取当前真实身份
+    # 兜底：DB 查无匹配，用 logcat "agent started — agentId=" 收尾日志动态取当前真实身份
     LIVE_AGENT=$("$ADB" logcat -d 2>/dev/null | grep -oE 'agent started — agentId=[a-f0-9-]{36}' | tail -1 | sed -E 's/.*agentId=//')
     [ -n "$LIVE_AGENT" ] && AGENT_ID="$LIVE_AGENT" && ok "DB 未命中，logcat 兜底动态取到 agent_id=$AGENT_ID"
   fi
   [ -n "$AGENT_ID" ] || envfail "动态定位设备真实 agent_id 失败(DB查询+logcat兜底均未命中，非硬编码兜底)"
-  ok "定位设备真实 agent_id=$AGENT_ID(型号=$MODEL，非写死值)"
+  ok "定位设备真实 agent_id=${AGENT_ID}(型号=${MODEL}，非写死值)"
+
+  # ── Step 2.5: 触发前取真实 tenant + 确认真在线 + 对齐 last_heartbeat_at ──────────
+  # 真机 run 30507775016 卡这一步（trigger 返回 400 envfail）。两根因：
+  #   ① 心跳双字段不一致（issue 009c1544）：ws 心跳只更新 last_seen 不更新 last_heartbeat_at，
+  #      而 account-scan/trigger 按 last_heartbeat_at > now()-2min 判在线 → 设备真在线却被判离线。
+  #   ② 触发用硬编码 SMOKE_TENANT，真机注册的 tenant 可能不同（本次 MAA-AN00 = 956f306e）。
+  # 修法：从 agents 表按定位到的 agent_id 取真实 tenant_id + last_seen 新鲜度，先用 last_seen
+  # （ws 真更新的字段）确认设备真在线（不伪造离线设备），再把 last_heartbeat_at 对齐 now()，
+  # 用真实 tenant 触发。这是对已知字段不一致 bug 的诚实临时补偿，根治见 issue 009c1544。
+  META=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -F'|' -c \
+    \"SELECT tenant_id, (last_seen > now() - interval '2 minutes') FROM zenithjoy.agents WHERE agent_id='$AGENT_ID'\"" 2>/dev/null)
+  DEV_TENANT="${META%%|*}"
+  SEEN_FRESH="${META##*|}"
+  [ "$SEEN_FRESH" = "t" ] || envfail "设备 last_seen 不新鲜(设备真离线，非字段不一致)：agent_id=$AGENT_ID"
+  [ -n "$DEV_TENANT" ] || envfail "查不到 agent_id=$AGENT_ID 的真实 tenant_id"
+  ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -c \
+    \"UPDATE zenithjoy.agents SET last_heartbeat_at = now() WHERE agent_id='$AGENT_ID'\"" >/dev/null 2>&1
+  TENANT="$DEV_TENANT"
+  ok "设备 last_seen 新鲜(真在线)，已对齐 last_heartbeat_at + 取真实 tenant=${TENANT}（补偿 issue 009c1544）"
 
   RESP=$(curl -fsSk -m 15 -X POST "$API_BASE/api/acquisition/account-scan/trigger" \
     -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT" \

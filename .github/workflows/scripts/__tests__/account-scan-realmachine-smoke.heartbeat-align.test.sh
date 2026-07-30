@@ -122,7 +122,7 @@ fi
 
 TRIGGER_TENANT=$(cat "$TENANT_FILE" 2>/dev/null || echo "")
 if [ "$TRIGGER_TENANT" = "$REAL_TENANT" ]; then
-  echo "✅ PASS: 触发用了 DB 查出的真实 tenant（$TRIGGER_TENANT），不是硬编码 SMOKE_TENANT"
+  echo "✅ PASS: 触发用了 DB 查出的真实 tenant（${TRIGGER_TENANT}），不是硬编码 SMOKE_TENANT"
 elif [ "$TRIGGER_TENANT" = "hardcoded-wrong-tenant" ]; then
   echo "❌ FAIL: 触发用了硬编码 SMOKE_TENANT，真机注册在别的 tenant 时必然 400"; FAILED=1
 else
