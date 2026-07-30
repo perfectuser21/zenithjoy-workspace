@@ -8,6 +8,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { computeGpSmokeRatchet } from '../lib.mjs';
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 test('T1: smoke_files 为 null 的 GP 被计入无覆盖', () => {
   const map = {
@@ -58,4 +62,22 @@ test('T5: golden_paths 为空数组时不报错，计数为 0', () => {
   const result = computeGpSmokeRatchet({ golden_paths: [] });
   assert.equal(result.gp_no_smoke_count, 0);
   assert.deepEqual(result.gp_no_smoke_ids, []);
+});
+
+test('T6: CLI gp-smoke-ratchet.mjs 不得 import lib.mjs（避免连带 ajv/yaml，主checkout无node_modules时崩——0730巡检首跑实证）', () => {
+  const src = readFileSync(resolve(__dirname, '../gp-smoke-ratchet.mjs'), 'utf8');
+  assert.ok(!src.includes("from './lib.mjs'"), 'CLI 应 import 零依赖的 gp-smoke-ratchet-lib.mjs，而非 lib.mjs');
+  assert.ok(src.includes('gp-smoke-ratchet-lib.mjs'), 'CLI 应从 gp-smoke-ratchet-lib.mjs 取 computeGpSmokeRatchet');
+});
+
+test('T7: deprecated GP 不计入棘轮（退役条目永不补smoke，计入会永久虚高）', () => {
+  const map = {
+    golden_paths: [
+      { id: 'gp_old', status: 'deprecated' },
+      { id: 'gp_new', status: 'proposed' },
+    ],
+  };
+  const result = computeGpSmokeRatchet(map);
+  assert.equal(result.gp_no_smoke_count, 1);
+  assert.deepEqual(result.gp_no_smoke_ids, ['gp_new']);
 });

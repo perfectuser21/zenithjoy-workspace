@@ -121,21 +121,11 @@ export function validateSmokeFiles(map, repoRoot) {
 }
 
 // ─── computeGpSmokeRatchet ──────────────────────────────────────────────────────
+// 实现移至零依赖模块 gp-smoke-ratchet-lib.mjs（CLI 直引它避免连带本文件的 ajv/yaml
+// import，主 checkout 无 node_modules 时 CLI 才能跑——0730 巡检首跑实证）。
+// 此处 re-export 维持既有 caller（单测）不变。
 
-/**
- * GP锚定闭环 刀5 — patrol 棘轮指标：统计 smoke_files 缺失/空的 GP 数量。
- * 只做 GP 粒度（非 step 粒度 — 非目标②已拍板，见
- * docs/superpowers/specs/2026-07-28-gp-anchor-enforcement-design.md §7）。
- * Report-only：供 ci-patrol 日报展示，不作为 CI 硬闸（避免与 lint-gp-anchor 重复拦截）。
- *
- * @returns { gp_no_smoke_count: number, gp_no_smoke_ids: string[] }
- */
-export function computeGpSmokeRatchet(map) {
-  const ids = (map.golden_paths || [])
-    .filter(gp => !gp.smoke_files || gp.smoke_files.length === 0)
-    .map(gp => gp.id);
-  return { gp_no_smoke_count: ids.length, gp_no_smoke_ids: ids };
-}
+export { computeGpSmokeRatchet } from './gp-smoke-ratchet-lib.mjs';
 
 // ─── computeRealmachineUnverifiedRatchet ────────────────────────────────────────
 
