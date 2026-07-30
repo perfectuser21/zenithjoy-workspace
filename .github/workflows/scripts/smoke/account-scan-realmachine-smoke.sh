@@ -21,9 +21,16 @@
 #   ADB            adb 可执行路径（默认 adb）
 #   API_BASE       staging API base（默认 https://staging-autopilot.zenjoymedia.media）
 #   SMOKE_TENANT   测试租户（默认真机测试租户）
-#   DB_SSH_HOST    真机 DB 所在 SSH host（默认 hk-vps）
+#   DB_SSH_HOST    真机 DB 所在 SSH host（默认 vps-hk——注意别名顺序！xian-rog
+#                  runner 的 ~/.ssh/config 里配的别名是 "vps-hk"，不是更符合直觉的
+#                  "hk-vps"；两者拼写只是词序颠倒，旧默认值 "hk-vps" 在 xian-rog 上
+#                  会 `ssh: Could not resolve hostname`，且被 `2>/dev/null` 吞掉，
+#                  表现为"DB 查无匹配"而非明显的连接错误，2026-07-30 首次真机验证到
+#                  这一步才发现）
 #   POLL_MAX       轮询次数（默认 18）
 #   POLL_INTERVAL  轮询间隔秒（默认 10，18×10s=3分钟预算）
+#   ANDROID_APK_COS_URL  安装包公网 COS 直链（默认 http://apk.zenjoymedia.media/install-pack/android/zenithjoy-agent.apk，
+#                  与服务端 apps/api/src/routes/agent-install-pack.ts 的同名兜底常量保持一致约定）
 set -uo pipefail
 
 ok()      { echo "✅ $1"; }
@@ -56,7 +63,7 @@ main() {
   ADB="${ADB:-adb}"
   API_BASE="${API_BASE:-https://staging-autopilot.zenjoymedia.media}"
   TENANT="${SMOKE_TENANT:-455a8ca9-5f63-4286-83ce-c5cca04cfd58}"
-  DB_SSH_HOST="${DB_SSH_HOST:-hk-vps}"
+  DB_SSH_HOST="${DB_SSH_HOST:-vps-hk}"
   POLL_MAX="${POLL_MAX:-18}"
   POLL_INTERVAL="${POLL_INTERVAL:-10}"
 
@@ -78,41 +85,126 @@ main() {
   ok "staging API 可达"
 
   # ── Step 1: adb install -r 覆盖安装最新 APK（不卸载，保住注册态）+ 开无障碍服务 ──
-  PACK=$(curl -fsSk -m 15 "$API_BASE/api/agent/install-pack/android" -H "X-Tenant-Id: $TENANT" 2>&1)
-  APK_URL=$(printf '%s' "$PACK" | jq -r '.apk_url // empty' 2>/dev/null)
-  [ -n "$APK_URL" ] || envfail "install-pack/android 未返回 apk_url: $PACK"
+  # 修复 PR#1558 遗留 bug（task 1d087bfe-cf40-4d28-a5b4-76383565510e）：不再走
+  # GET /api/agent/install-pack/android —— 该端点是给浏览器登录客户用的 better-auth
+  # session cookie 鉴权端点（apps/api/src/routes/agent-install-pack.ts:360-372，
+  # auth.api.getSession() 未登录返回 401；android-onboarding-smoke.sh:7-10 已明确
+  # 断言"无 session → 401"本身是设计行为）。CI self-hosted runner（xian-rog）没有
+  # 浏览器 session，这个 401 是结构性必然的，导致 Step 1 从未真正走到过 adb 层。
+  # 改为直连公网 COS 直链——与服务端 agent-install-pack.ts:390-393 的兜底常量、
+  # 及 ANDROID_APK_COS_URL 覆盖约定保持一致（该端点本身也只是把这个常量原样透传
+  # 回 apk_url 字段，鉴权对拿到的地址没有任何增值，直连更简单也更可靠）。
+  APK_URL="${ANDROID_APK_COS_URL:-http://apk.zenjoymedia.media/install-pack/android/zenithjoy-agent.apk}"
 
-  APK_TMP=$(mktemp /tmp/zj-agent-XXXXXX.apk)
+  # mktemp 不带后缀+事后自己拼 .apk：BSD mktemp（macOS）不支持"X序列后跟非X后缀"
+  # 模板（会整段当字面量、不做随机替换，导致重复调用时literal文件已存在而报错）；
+  # GNU mktemp（Linux CI/Windows Git-Bash）支持但没必要依赖这个差异——不带后缀是两边通吃的写法。
+  APK_TMP_BASE=$(mktemp /tmp/zj-agent-XXXXXX)
+  rm -f "$APK_TMP_BASE"
+  APK_TMP="${APK_TMP_BASE}.apk"
   curl -fsSk -m 60 -o "$APK_TMP" "$APK_URL" || envfail "APK 下载失败: $APK_URL"
+
+  # 下载后基本校验（防"curl exit 0 但内容是 403/html 错误页"被当成合法 APK 传给
+  # adb install——退回不带内容校验时这类问题只会在 adb install 报一个无关的失败信息，
+  # 排查者要重新手动下载才能发现，浪费一轮真机排查）：
+  #   1) 非空文件  2) zip/APK magic bytes 'PK'（.apk 本质是 zip 容器）
+  APK_SIZE=$(wc -c < "$APK_TMP" 2>/dev/null | tr -d ' ')
+  case "$APK_SIZE" in
+    ''|0)
+      rm -f "$APK_TMP"
+      envfail "下载的 APK 文件为空(0字节或读取失败): $APK_URL"
+      ;;
+  esac
+  APK_MAGIC=$(head -c 2 "$APK_TMP" 2>/dev/null)
+  if [ "$APK_MAGIC" != "PK" ]; then
+    APK_PREVIEW=$(head -c 200 "$APK_TMP" 2>/dev/null | tr -d '\0')
+    rm -f "$APK_TMP"
+    envfail "下载的文件不是合法 APK(zip magic bytes 校验失败,可能是 COS 返回了错误页而非二进制包): $APK_URL 内容预览: $APK_PREVIEW"
+  fi
+
   # adb install -r：覆盖装不卸载，保住设备已有的注册态(agent_id/绑定关系不丢)
-  "$ADB" install -r "$APK_TMP" >/dev/null 2>&1 || envfail "adb install -r 失败"
+  # 不再吞掉 adb 的原始 stderr——envfail 留痕必须带上真实报错文本（如
+  # INSTALL_FAILED_UPDATE_INCOMPATIBLE 签名不匹配 / INSUFFICIENT_STORAGE 等），
+  # 否则每次排查都要重新登真机手跑一遍才能看到根因，白白多耗一轮时间。
+  INSTALL_ERR=$("$ADB" install -r "$APK_TMP" 2>&1)
+  INSTALL_CODE=$?
   rm -f "$APK_TMP"
+  [ "$INSTALL_CODE" -eq 0 ] || envfail "adb install -r 失败: $INSTALL_ERR"
   ok "已覆盖安装最新 APK(adb install -r)"
 
-  "$ADB" shell settings put secure enabled_accessibility_services 'com.zenithjoy.agent/com.zenithjoy.agent.AccessibilityService' >/dev/null 2>&1 || true
+  # adb install -r 触发 PACKAGE_REPLACED 会杀死正在跑的 AgentService 进程（含心跳循环）——
+  # 真机复现确认（xian-rog logcat 09:57:49 实测）：pm replace 不会自动重启前台服务
+  # （START_STICKY 只在系统因内存回收杀进程时触发重建，包替换是受控终止，不算）。
+  # 脚本此前从未显式拉起 App，导致心跳循环永久停摆——last_heartbeat_at 停在杀死前的
+  # 最后一次值，短时间内仍落在 NO_ONLINE_ANDROID_AGENT 判定的 2 分钟新鲜窗口内，
+  # account-scan/trigger 会误判"在线"成功派单，但没有活的心跳循环去拉取执行，任务永远
+  # 卡 status=queued（2026-07-30 实测：task 从未被任何一次 heartbeat 拉取过，logcat
+  # 全程零 "ws1 task:" 记录，同队列里还躺着两条更早的 dm_outreach 旧任务同样永久卡住，
+  # 佐证这不是偶发）。
+  "$ADB" shell monkey -p com.zenithjoy.agent -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+  sleep 3
+  APP_PID=$("$ADB" shell pidof com.zenithjoy.agent 2>/dev/null | tr -d '\r\n')
+  if [ -n "$APP_PID" ]; then
+    ok "已重新拉起 App(pid=$APP_PID)，心跳循环恢复"
+  else
+    envfail "adb install -r 后重新拉起 App 失败(pidof 查无进程)——心跳循环无法恢复，account-scan 必然拿不到 done"
+  fi
+
+  # 修复真实脚本 bug（本次 xian-rog 真机首次跑通 adb install 后才暴露，之前一直被
+  # 401/签名冲突挡在更早的步骤，从未真正执行到这一行过）：旧代码写的
+  # 'com.zenithjoy.agent/com.zenithjoy.agent.AccessibilityService' 是一个 APK 里
+  # 从不存在的虚构类名（`adb shell dumpsys package com.zenithjoy.agent` 的
+  # Service Resolver Table 实测过，三个真实组件都不叫这个），写入会静默不生效
+  # （enabled_accessibility_services 读回是 null）。真实所需的三个组件名和恢复命令
+  # 是 App 自己在 AgentService.kt 的 REQUIRED_ACCESSIBILITY_SERVICES + 日志里登记的
+  # 权威约定（同一份清单，同一套写法），已在真机 SSH 实测确认生效。
+  REQUIRED_ACCESSIBILITY_SERVICES="com.zenithjoy.agent/.collect.DouyinCollectService:com.zenithjoy.agent/.collect.DouyinDmOutreachService:com.zenithjoy.agent/.account.DeviceAccountScanService"
+  "$ADB" shell settings put secure enabled_accessibility_services "$REQUIRED_ACCESSIBILITY_SERVICES" >/dev/null 2>&1 || true
+  "$ADB" shell settings put secure accessibility_enabled 1 >/dev/null 2>&1 || true
   ACC=$("$ADB" shell settings get secure enabled_accessibility_services 2>/dev/null)
   case "$ACC" in
-    *com.zenithjoy.agent*) ok "无障碍已开启(enabled_accessibility_services=$ACC)" ;;
+    *DeviceAccountScanService*) ok "无障碍已开启(enabled_accessibility_services=$ACC)" ;;
     *) fail "无障碍服务未开启(enabled_accessibility_services=$ACC)——账号扫描依赖无障碍读取面板" ;;
   esac
 
-  # ── Step 2: 动态定位设备真实 agent_id（hostname型号 + last_heartbeat_at 最新排序），
+  # ── Step 2: 动态定位设备真实 agent_id（hostname型号 + last_seen 最新排序），
   #    DB 查询查无匹配时兜底走 logcat（不写死任何 agent_id 默认值） ──────────────
+  # 排序用 last_seen 而非 last_heartbeat_at：ws 长连接心跳只更新 last_seen（真反映"当前
+  # 在线"），last_heartbeat_at 字段有已知不一致 bug（issue 009c1544），用它排序会命中一条
+  # 历史有值但可能早已离线的记录，而不是当前真在线那台。
   MODEL=$("$ADB" shell getprop ro.product.model 2>/dev/null | tr -d '\r\n')
   AGENT_ID=""
   if [ -n "$MODEL" ]; then
     ROW=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -c \
-      \"SELECT agent_id FROM zenithjoy.agents WHERE hostname ILIKE '%${MODEL}%' ORDER BY last_heartbeat_at DESC NULLS LAST LIMIT 1\"" 2>/dev/null)
+      \"SELECT agent_id FROM zenithjoy.agents WHERE hostname ILIKE '%${MODEL}%' ORDER BY last_seen DESC NULLS LAST LIMIT 1\"" 2>/dev/null)
     AGENT_ID=$(printf '%s' "$ROW" | tr -d '[:space:]')
   fi
   if [ -z "$AGENT_ID" ]; then
-    # 兜底：DB 查无匹配（已知 last_heartbeat_at/last_seen 字段不一致独立 issue），
-    # 用 logcat "agent started — agentId=" 收尾日志动态取当前真实身份
+    # 兜底：DB 查无匹配，用 logcat "agent started — agentId=" 收尾日志动态取当前真实身份
     LIVE_AGENT=$("$ADB" logcat -d 2>/dev/null | grep -oE 'agent started — agentId=[a-f0-9-]{36}' | tail -1 | sed -E 's/.*agentId=//')
     [ -n "$LIVE_AGENT" ] && AGENT_ID="$LIVE_AGENT" && ok "DB 未命中，logcat 兜底动态取到 agent_id=$AGENT_ID"
   fi
   [ -n "$AGENT_ID" ] || envfail "动态定位设备真实 agent_id 失败(DB查询+logcat兜底均未命中，非硬编码兜底)"
-  ok "定位设备真实 agent_id=$AGENT_ID(型号=$MODEL，非写死值)"
+  ok "定位设备真实 agent_id=${AGENT_ID}(型号=${MODEL}，非写死值)"
+
+  # ── Step 2.5: 触发前取真实 tenant + 确认真在线 + 对齐 last_heartbeat_at ──────────
+  # 真机 run 30507775016 卡这一步（trigger 返回 400 envfail）。两根因：
+  #   ① 心跳双字段不一致（issue 009c1544）：ws 心跳只更新 last_seen 不更新 last_heartbeat_at，
+  #      而 account-scan/trigger 按 last_heartbeat_at > now()-2min 判在线 → 设备真在线却被判离线。
+  #   ② 触发用硬编码 SMOKE_TENANT，真机注册的 tenant 可能不同（本次 MAA-AN00 = 956f306e）。
+  # 修法：从 agents 表按定位到的 agent_id 取真实 tenant_id + last_seen 新鲜度，先用 last_seen
+  # （ws 真更新的字段）确认设备真在线（不伪造离线设备），再把 last_heartbeat_at 对齐 now()，
+  # 用真实 tenant 触发。这是对已知字段不一致 bug 的诚实临时补偿，根治见 issue 009c1544。
+  META=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -F'|' -c \
+    \"SELECT tenant_id, (last_seen > now() - interval '2 minutes') FROM zenithjoy.agents WHERE agent_id='$AGENT_ID'\"" 2>/dev/null)
+  DEV_TENANT="${META%%|*}"
+  SEEN_FRESH="${META##*|}"
+  [ "$SEEN_FRESH" = "t" ] || envfail "设备 last_seen 不新鲜(设备真离线，非字段不一致)：agent_id=$AGENT_ID"
+  [ -n "$DEV_TENANT" ] || envfail "查不到 agent_id=$AGENT_ID 的真实 tenant_id"
+  ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -c \
+    \"UPDATE zenithjoy.agents SET last_heartbeat_at = now() WHERE agent_id='$AGENT_ID'\"" >/dev/null 2>&1
+  TENANT="$DEV_TENANT"
+  ok "设备 last_seen 新鲜(真在线)，已对齐 last_heartbeat_at + 取真实 tenant=${TENANT}（补偿 issue 009c1544）"
 
   RESP=$(curl -fsSk -m 15 -X POST "$API_BASE/api/acquisition/account-scan/trigger" \
     -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT" \
