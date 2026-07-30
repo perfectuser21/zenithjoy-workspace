@@ -127,10 +127,20 @@ main() {
   [ "$INSTALL_CODE" -eq 0 ] || envfail "adb install -r 失败: $INSTALL_ERR"
   ok "已覆盖安装最新 APK(adb install -r)"
 
-  "$ADB" shell settings put secure enabled_accessibility_services 'com.zenithjoy.agent/com.zenithjoy.agent.AccessibilityService' >/dev/null 2>&1 || true
+  # 修复真实脚本 bug（本次 xian-rog 真机首次跑通 adb install 后才暴露，之前一直被
+  # 401/签名冲突挡在更早的步骤，从未真正执行到这一行过）：旧代码写的
+  # 'com.zenithjoy.agent/com.zenithjoy.agent.AccessibilityService' 是一个 APK 里
+  # 从不存在的虚构类名（`adb shell dumpsys package com.zenithjoy.agent` 的
+  # Service Resolver Table 实测过，三个真实组件都不叫这个），写入会静默不生效
+  # （enabled_accessibility_services 读回是 null）。真实所需的三个组件名和恢复命令
+  # 是 App 自己在 AgentService.kt 的 REQUIRED_ACCESSIBILITY_SERVICES + 日志里登记的
+  # 权威约定（同一份清单，同一套写法），已在真机 SSH 实测确认生效。
+  REQUIRED_ACCESSIBILITY_SERVICES="com.zenithjoy.agent/.collect.DouyinCollectService:com.zenithjoy.agent/.collect.DouyinDmOutreachService:com.zenithjoy.agent/.account.DeviceAccountScanService"
+  "$ADB" shell settings put secure enabled_accessibility_services "$REQUIRED_ACCESSIBILITY_SERVICES" >/dev/null 2>&1 || true
+  "$ADB" shell settings put secure accessibility_enabled 1 >/dev/null 2>&1 || true
   ACC=$("$ADB" shell settings get secure enabled_accessibility_services 2>/dev/null)
   case "$ACC" in
-    *com.zenithjoy.agent*) ok "无障碍已开启(enabled_accessibility_services=$ACC)" ;;
+    *DeviceAccountScanService*) ok "无障碍已开启(enabled_accessibility_services=$ACC)" ;;
     *) fail "无障碍服务未开启(enabled_accessibility_services=$ACC)——账号扫描依赖无障碍读取面板" ;;
   esac
 
