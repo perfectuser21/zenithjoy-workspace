@@ -128,28 +128,10 @@ export function validateSmokeFiles(map, repoRoot) {
 export { computeGpSmokeRatchet } from './gp-smoke-ratchet-lib.mjs';
 
 // ─── computeRealmachineUnverifiedRatchet ────────────────────────────────────────
-
-/**
- * 真机验证车道三层防假绿守卫 · 第3层 — patrol 棘轮指标：统计"带 [CI-MOCK] 但无对应
- * nightly 真机 job 覆盖"的步骤数。纯函数，输入已解析对象，不做文件 I/O（跟进
- * computeGpSmokeRatchet 同款模式）。
- *
- * @param {{file: string, line: number, nightlyRef: string|null}[]} markers
- *   已从 golden-path-*-smoke.sh 里扫描出的 [CI-MOCK: real-device-only | nightly_ref: X] 标记
- * @param {string} nightlyYaml
- *   nightly-real-machine-staging.yml 的原始文本内容
- * @returns { realmachine_unverified_count: number, realmachine_unverified_ids: string[] }
- */
-export function computeRealmachineUnverifiedRatchet(markers, nightlyYaml) {
-  const ids = [];
-  for (const marker of (markers || [])) {
-    const covered = !!marker.nightlyRef && nightlyYaml.includes(marker.nightlyRef);
-    if (!covered) {
-      ids.push(`${marker.file}:${marker.line}`);
-    }
-  }
-  return { realmachine_unverified_count: ids.length, realmachine_unverified_ids: ids };
-}
+// 2026-07-30：同 computeGpSmokeRatchet 一样抽成零依赖 -lib.mjs（CI 硬闸 job 无
+// node_modules 时直接 import lib.mjs 会因顶层 ajv/yaml 崩），本文件只 re-export
+// 维持既有 caller（单测）不变。
+export { computeRealmachineUnverifiedRatchet } from './realmachine-unverified-ratchet-lib.mjs';
 
 // ─── validateRelations ─────────────────────────────────────────────────────────
 
