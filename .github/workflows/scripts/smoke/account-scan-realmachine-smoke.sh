@@ -21,7 +21,12 @@
 #   ADB            adb 可执行路径（默认 adb）
 #   API_BASE       staging API base（默认 https://staging-autopilot.zenjoymedia.media）
 #   SMOKE_TENANT   测试租户（默认真机测试租户）
-#   DB_SSH_HOST    真机 DB 所在 SSH host（默认 hk-vps）
+#   DB_SSH_HOST    真机 DB 所在 SSH host（默认 vps-hk——注意别名顺序！xian-rog
+#                  runner 的 ~/.ssh/config 里配的别名是 "vps-hk"，不是更符合直觉的
+#                  "hk-vps"；两者拼写只是词序颠倒，旧默认值 "hk-vps" 在 xian-rog 上
+#                  会 `ssh: Could not resolve hostname`，且被 `2>/dev/null` 吞掉，
+#                  表现为"DB 查无匹配"而非明显的连接错误，2026-07-30 首次真机验证到
+#                  这一步才发现）
 #   POLL_MAX       轮询次数（默认 18）
 #   POLL_INTERVAL  轮询间隔秒（默认 10，18×10s=3分钟预算）
 #   ANDROID_APK_COS_URL  安装包公网 COS 直链（默认 http://apk.zenjoymedia.media/install-pack/android/zenithjoy-agent.apk，
@@ -58,7 +63,7 @@ main() {
   ADB="${ADB:-adb}"
   API_BASE="${API_BASE:-https://staging-autopilot.zenjoymedia.media}"
   TENANT="${SMOKE_TENANT:-455a8ca9-5f63-4286-83ce-c5cca04cfd58}"
-  DB_SSH_HOST="${DB_SSH_HOST:-hk-vps}"
+  DB_SSH_HOST="${DB_SSH_HOST:-vps-hk}"
   POLL_MAX="${POLL_MAX:-18}"
   POLL_INTERVAL="${POLL_INTERVAL:-10}"
 
