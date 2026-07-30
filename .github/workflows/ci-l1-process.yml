@@ -286,6 +286,29 @@ jobs:
       - name: Run lint-smoke-mock-honesty
         run: bash .github/workflows/scripts/lint-smoke-mock-honesty.sh .github/workflows/scripts/smoke
 
+  # 真机验证车道三层防假绿 · 第3层棘轮的真正 CI 硬闸（2026-07-30 升级，proven-to-fire
+  # 演练实测发现 realmachine-unverified-ratchet.mjs 之前只是 report-only，棘轮升不升
+  # 完全靠 ci-patrol 每日巡检"恰好注意到"，没有机械保证——本 job 补上这条硬闸，
+  # 照抄 baseline-lint(lint-smoke-baseline.sh) 的既有模式：读当前值与 baseline 比较，
+  # 超标直接卡 PR + 机械开 issue，不等巡检）。
+  lint-realmachine-unverified-ratchet:
+    if: github.event_name == 'pull_request'
+    name: Lint — Realmachine Unverified Ratchet
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    env:
+      PR_BODY: ${{ github.event.pull_request.body }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run lint-realmachine-unverified-ratchet
+        run: bash .github/workflows/scripts/lint-realmachine-unverified-ratchet.sh origin/main
+
   test-realmachine-verify-lane:
     if: github.event_name == 'pull_request'
     name: Test — 真机验证车道回归（防假绿守卫自身的行为测试，此前是孤儿从不跑）
@@ -301,7 +324,8 @@ jobs:
           set -e
           FOUND=0
           for t in .github/workflows/scripts/__tests__/account-scan-realmachine-smoke.*.test.sh \
-                   .github/workflows/scripts/__tests__/lint-smoke-mock-honesty.test.sh; do
+                   .github/workflows/scripts/__tests__/lint-smoke-mock-honesty.test.sh \
+                   .github/workflows/scripts/__tests__/lint-realmachine-unverified-ratchet.test.sh; do
             [ -f "$t" ] || continue
             FOUND=$((FOUND+1))
             echo "▶ $t"
@@ -442,7 +466,7 @@ jobs:
     name: L1 Process Gate Passed
     needs: [verify-dev-workflow, pr-title, ci-config-audit, secrets-scan, frontend-browser-dod-check,
             lint-test-pairing, lint-test-quality, lint-tdd-commit-order, lint-no-fake-test, lint-feature-has-smoke,
-            lint-gp-anchor, lint-smoke-mock-honesty, test-realmachine-verify-lane,
+            lint-gp-anchor, lint-smoke-mock-honesty, lint-realmachine-unverified-ratchet, test-realmachine-verify-lane,
             lint-agent-version-bump, lint-line04-manifest-version-bump, lint-wechat-rpa-runner,
             lint-contract-test-immutability, lint-workflow-yaml-parse]
     if: always() && github.event_name == 'pull_request'
@@ -504,6 +528,11 @@ jobs:
 
           if [ "${{ needs.lint-smoke-mock-honesty.result }}" != "success" ]; then
             echo "FAIL: Lint Smoke Mock Honesty (${{ needs.lint-smoke-mock-honesty.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.lint-realmachine-unverified-ratchet.result }}" != "success" ]; then
+            echo "FAIL: Lint Realmachine Unverified Ratchet (${{ needs.lint-realmachine-unverified-ratchet.result }})"
             FAILED=true
           fi
 
