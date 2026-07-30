@@ -1,104 +1,105 @@
 # 常驻 staging (:5201) 访问指南
 
-> 蓝绿加固 Line D（2026-06-25）。
-> main 合并后候选会自动部署到 mmv（美国 Mac，公网 38.23.47.81）上的【常驻 staging 实例】
-> `com.zenithjoy.api.staging`（端口 5201，连 `zenithjoy_test` 库，无客户流量），并跑过
-> golden-path。**人工打开 staging 看过、确认 OK，再去 Actions 手点 `promote-prod.yml`
-> 放行到生产 :5200。** 本文给两条访问 staging 的道。
+> **2026-07-30 更新**：本文之前描述的"美国 mmv 常驻 staging"架构已过期——拆库刀3-T3
+> （2026-07-14）把 staging 从 mmv 本机 launchd 迁到了 HK VPS 的 Docker 容器，
+> T5（2026-07-15）又把生产也迁了过去。**现在生产和 staging 是 HK 同一台机器上的
+> 两个独立 API 容器，共用同一个 Postgres 容器实例，只用库名区分**（见下方「架构」）。
+> 本次更新由 Brain issue 88d15763（P0 根因排查：测试 license/租户在生产库和
+> staging 库各播种一份，导致真机误连生产无感知）核实确认。
+>
+> main 合并触碰 `apps/api/**` → GitHub Actions 自动部署候选到 HK staging 容器
+> （`deploy-staging-hk.yml`，端口 :5201，连 `zenithjoy_staging` 库，无客户流量），
+> 并跑过 golden-path。**人工打开 staging 看过、确认 OK，再去 Actions 手点
+> `promote-prod-hk.yml` 放行到生产 :5200。** 本文给访问 staging 的道 + 架构说明。
 
 ---
 
-## 道一：SSH 本地端口转发（自己用，已就绪）
+## 架构：生产和 staging 共用同一个 Postgres 容器
 
-把 mmv 的 `:5201` 转发到本机 `127.0.0.1:5201`，浏览器直接开 `http://perfect21:5201`。
+HK VPS（Tailscale `100.86.118.99`，别名 `vps-hk`）上跑三个关键容器：
 
-### 一次性配置 `~/.ssh/config`
+| 容器 | 镜像 | 宿主端口 | 说明 |
+|---|---|---|---|
+| `zenithjoy-api-prod` | `zenithjoy-api-prod:latest` | `127.0.0.1:5200` | 生产 API，域名 `https://autopilot.zenjoymedia.media` |
+| `zenithjoy-api-staging` | `zenithjoy-api-staging:latest` | `127.0.0.1:5201` | staging API，域名 `https://staging-autopilot.zenjoymedia.media` |
+| `zenithjoy-db-postgres` | `postgres:17` | `127.0.0.1:5432` | **两个 API 容器共用的唯一 Postgres 实例** |
 
-```sshconfig
-# mmv = 美国 Mac（公网 38.23.47.81）。钥匙 = 1Password「ROGSSH」
-# （mmv authorized_keys 已认 rog-1password-2026-06-13）。
-Host mmv
-    HostName 38.23.47.81
-    User administrator
-    IdentityFile ~/.ssh/rog-1password           # 1Password ROGSSH 私钥
-    LocalForward 5201 127.0.0.1:5201            # mmv:5201 → 本机 127.0.0.1:5201
-    ServerAliveInterval 30
-    ServerAliveCountInterval 3
+**两个 API 容器都连同一个 `zenithjoy-db-postgres` 容器，只是 `DATABASE_NAME` 不同**：
 
-# 让 perfect21 这个主机名解析到本地转发端口
-Host perfect21
-    HostName 127.0.0.1
+| | `zenithjoy-api-prod` | `zenithjoy-api-staging` |
+|---|---|---|
+| `DATABASE_HOST` | `zenithjoy-db-postgres` | `zenithjoy-db-postgres`（同一个）|
+| `DATABASE_NAME` | `zenithjoy` | `zenithjoy_staging` |
+| `DATABASE_USER` | `zenithjoy` | `zenithjoy`（同一个角色）|
+| `DATABASE_PASSWORD` | 同一份密码 | 同一份密码 |
+
+验证（在 HK 上）：
+```bash
+ssh root@100.86.118.99   # 走 Tailscale，见下方「访问」
+docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Ports}}' | grep -E 'postgres|zenithjoy'
+docker exec zenithjoy-api-prod printenv | grep DATABASE_NAME     # zenithjoy
+docker exec zenithjoy-api-staging printenv | grep DATABASE_NAME  # zenithjoy_staging
+docker exec zenithjoy-db-postgres psql -U zenithjoy -d postgres -c '\l'  # 两库都在同一实例里
 ```
 
-> 注：`perfect21` 在 mmv 本机 = `localhost`；在其他机器上，`Host perfect21 → 127.0.0.1`
-> 配合上面的 `LocalForward` 即可让 `http://perfect21:5201` 命中转发端口。
+**这意味着什么（安全含义）**：
+- 生产/staging 的隔离**完全依赖每个 API 容器 `.env` 里的 `DATABASE_NAME` 配对正确**，
+  不是网络隔离、不是不同的数据库账号密码。改错一个环境变量、或者一个客户端错连
+  到了 `zenithjoy`（而不是 `zenithjoy_staging`），数据库层面不会有任何天然信号拦下来。
+- 同一个 Postgres 角色 `zenithjoy` 对两个库都有权限——凭据一旦泄漏，两个库同时暴露。
+- 2026-07-30 真机验证车道调试时，就是因为一台测试设备的客户端配置指向了错误的
+  环境（而不是数据库层面的原因），心跳误连到了生产的 `zenithjoy` 库而非预期的
+  `zenithjoy_staging`。审计过程中进一步发现同一个测试 license/租户在两个库里各播种
+  了一份，导致误连后走标准注册流程也"成功"、没有任何信号能让人发现连错了环境——
+  这个漏洞已经在 `apps/api/src/services/license.service.ts::registerAgent()` 里
+  修了（`is_test` license 在 `NODE_ENV=production` 的 API 进程里会被显式拒绝，
+  见 Brain issue 88d15763），但**代码层的这道闸门是纵深防御的最后一环，不能代替
+  客户端配置正确指向环境**。
 
-### 用
+---
+
+## 访问：SSH 到 HK VPS（走 Tailscale）
+
+**必须通过 Tailscale，不能直接连公网 IP**（`43.154.85.217` / `124.156.138.116` 的 22 端口不通）：
 
 ```bash
-ssh mmv            # 建隧道（保持这个会话开着）
-# 另开浏览器/终端：
-open http://perfect21:5201/health      # 应返回 ok
-open http://perfect21:5201             # 打开 staging dashboard
+ssh -o StrictHostKeyChecking=no root@100.86.118.99
 ```
 
-隧道断了重连 `ssh mmv` 即可。钥匙从 1Password「ROGSSH」取，别硬编码进任何文件。
+进去之后：
+```bash
+curl -s http://localhost:5201/health    # staging，应返回 ok
+curl -s http://localhost:5200/health    # 生产，应返回 ok
+```
+
+本机自己开浏览器看 staging dashboard，走 Cloudflare 公网域名即可（下面「公网域名」一节），
+不需要再配 SSH 端口转发——staging 已经有稳定公网地址，不像迁移前那样只能转发到本机
+Mac 才能访问。
 
 ---
 
-## 道二：Cloudflare Access 公网域名 + 邮箱登录闸（同事用，runbook）
+## 公网域名（同事直接用，已就绪，不需要额外配置）
 
-给非本机的同事一个公网网址 `https://staging.zenjoymedia.media`，背后回源到 mmv 的
-`http://localhost:5201`，前面套 Cloudflare Access 邮箱登录闸（只放白名单邮箱进）。
+生产和 staging 都已经挂在 Cloudflare Tunnel 后面，各自独立域名，**不需要额外的
+Access 邮箱白名单闸就能访问**（如需收紧访问，另行按 cloudflared skill 加 Zero Trust
+Access 策略，不在本文范围）：
 
-> ⚠️ **白名单邮箱待用户提供 + 用户在 Cloudflare Zero Trust 后台点**。下面是占位 runbook，
-> 邮箱/域名拿到后照做。
+| 环境 | 域名 | 连的库 |
+|---|---|---|
+| 生产 | `https://autopilot.zenjoymedia.media` | `zenithjoy` |
+| staging | `https://staging-autopilot.zenjoymedia.media` | `zenithjoy_staging` |
 
-### 前置
-
-- `zenjoymedia.media` 已托管在 Cloudflare（生产 `autopilot.zenjoymedia.media` 已在用，确认同账户）。
-- mmv 上已有 `cloudflared`（生产 dashboard 走 Cloudflare Tunnel；若没有按 cloudflared skill 装）。
-
-### 步骤
-
-1. **加 Tunnel 路由（mmv 上 / Cloudflare 后台）**
-   在现有 tunnel 的 config（`~/.cloudflared/config.yml`）ingress 里加一条：
-   ```yaml
-   ingress:
-     - hostname: staging.zenjoymedia.media
-       service: http://localhost:5201
-     # ... 现有 autopilot 等规则 ...
-     - service: http_status:404
-   ```
-   并加 DNS：`cloudflared tunnel route dns <tunnel-name> staging.zenjoymedia.media`
-   （或在 Cloudflare DNS 后台加 CNAME → `<tunnel-id>.cfargotunnel.com`，Proxied 橙云）。
-   重启 cloudflared 使生效。
-
-2. **建 Access 应用（Cloudflare Zero Trust 后台，用户操作）**
-   Zero Trust → Access → Applications → Add application → Self-hosted：
-   - Application name: `ZenithJoy Staging`
-   - Application domain: `staging.zenjoymedia.media`
-   - Session duration: 24h（按需）
-
-3. **建 Access 策略 = 邮箱白名单闸（用户操作，邮箱待提供）**
-   Policy name: `staging-allow-whitelist`，Action: `Allow`，Include 任选：
-   - **Emails**：`<TODO: 待用户提供白名单邮箱，逗号分隔>`
-   - 或 **Emails ending in**：`@<TODO: 公司域名，如 zenjoymedia.media>`
-   - 或 **Login methods**：Google（配合上面的邮箱/域名收紧）
-   登录方式：开 One-time PIN（邮箱收验证码）或接 Google OAuth。
-
-4. **验证**
-   未登录浏览器开 `https://staging.zenjoymedia.media` → 应被 Cloudflare Access 拦到登录页；
-   用白名单邮箱过验证码/Google 登录 → 进到 staging dashboard；非白名单邮箱应被拒。
-
-> 待用户给：① 白名单邮箱清单 ② 确认用 OTP 还是 Google ③ 用户在 Zero Trust 后台点建应用+策略。
+```bash
+open https://staging-autopilot.zenjoymedia.media/health   # 应返回 ok
+open https://staging-autopilot.zenjoymedia.media          # 打开 staging dashboard
+```
 
 ---
 
 ## 人工验证 instruction（放行前必走）
 
-打开 staging（道一 `http://perfect21:5201` 或道二 `https://staging.zenjoymedia.media`），
-确认下列都 OK，再去 Actions 手点 `promote-prod.yml`（confirm 框输入 `PROMOTE`）：
+打开 `https://staging-autopilot.zenjoymedia.media`，确认下列都 OK，再去 Actions
+手点 `promote-prod-hk.yml`（confirm 框输入 `PROMOTE`）：
 
 | 步骤 | 操作 | 应看到 |
 |---|---|---|
@@ -106,4 +107,6 @@ open http://perfect21:5201             # 打开 staging dashboard
 | Y | 开 `…/version` | `sha` = 本次候选 commit（与你要放行的一致） |
 | Z | 开 staging dashboard 首页，走本次 PR 改动相关的页面/动作 | 改动生效、无报错、无白屏；本次 PR 描述里声明的「应看到的变化」真出现 |
 
-任一不对 → 不要 promote，回去修。staging 连的是 `zenithjoy_test` 库，随便点不影响客户。
+任一不对 → 不要 promote，回去修。staging 连的是 `zenithjoy_staging` 库，随便点
+不影响客户——但记住上面「架构」一节的教训：这道隔离是配置层面的，不是数据库
+账号层面的，改配置/加新环境变量时格外小心 `DATABASE_NAME` 有没有指对。

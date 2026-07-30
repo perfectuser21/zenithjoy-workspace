@@ -71,15 +71,20 @@ router.post('/acquisition-seed', async (req: Request, res: Response) => {
       [tenantId, licenseKey]
     );
 
+    // is_test=true（Brain issue 88d15763）：本端点本身已被 NODE_ENV=production 门禁
+    // 404 挡在生产之外（见上方中间件），这里显式打标是双保险——万一同一个
+    // license_key 后续被人工在生产库手动复制/迁移，registerAgent() 的生产环境
+    // 校验闸门仍能认出它是测试专用，不会静默放行。
     const lic = await client.query<{ id: string }>(
       `INSERT INTO zenithjoy.licenses
-         (license_key, tier, max_machines, tenant_id, status, expires_at)
-       VALUES ($1, 'enterprise', 10, $2, 'active', NOW() + INTERVAL '3650 days')
+         (license_key, tier, max_machines, tenant_id, status, expires_at, is_test)
+       VALUES ($1, 'enterprise', 10, $2, 'active', NOW() + INTERVAL '3650 days', true)
        ON CONFLICT (license_key) DO UPDATE
          SET tenant_id = EXCLUDED.tenant_id,
              max_machines = EXCLUDED.max_machines,
              tier = 'enterprise',
              status = 'active',
+             is_test = true,
              updated_at = NOW()
        RETURNING id`,
       [licenseKey, tenantId]

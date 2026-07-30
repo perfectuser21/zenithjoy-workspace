@@ -2051,6 +2051,16 @@ tests:
     product: 中台认证
     note: "H-2 Bug 9 layer 3 — license register 必须填 agents.license_id + hostname (heartbeat path 找现有 row)"
 
+  # ─── P0 — 测试 license 禁止在生产环境注册（Brain issue 88d15763）──────────────
+
+  - id: p0-88d15763-license-register-test-license-prod-guard
+    path: apps/api/src/services/__tests__/license-register-test-license-prod-guard.test.ts
+    type: unit
+    ci: L3
+    status: passed
+    product: 中台认证
+    note: "P0 根因修复 — 测试 license(is_test=true)在 NODE_ENV=production 注册必须被拒绝(TEST_LICENSE_IN_PRODUCTION)，非生产环境/真实客户 license 不受影响"
+
   - id: h2-bug9-l4-heartbeat-getQueuedTasks
     path: apps/api/src/services/__tests__/walking-skeleton-getQueuedTasks.test.ts
     type: unit

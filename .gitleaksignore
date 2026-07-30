@@ -143,3 +143,11 @@ bf08663c9c9712bb698808867d05d0158efc3ead:sprints/zj-ai-video-ws1-ws3-ws4/contrac
 # PR #937 — walking-skeleton.test.ts 的测试假 license（ZJ-B-AGTUUID01，非真凭据），
 # 后续 commit 已改为低熵 fake-test-license，无实际泄露
 b1221a58be60b2a2173215535ef6a47e8f38e132:apps/api/src/routes/walking-skeleton.test.ts:generic-api-key:73
+
+# PR #1563 — license-register-test-license-prod-guard.test.ts 里的测试 fixture license_key
+# （ZJ-F-K3MYP4VR / ZJ-M-REALCUST），Brain issue 88d15763 P0 修复的回归测试用例，非真凭据。
+# ZJ-F-K3MYP4VR 本身就是本次事故排查出的、已在生产/staging 库播种的测试专用 license，
+# 拿它当"该被拒绝"的输入正是本测试要验证的行为。
+0fdbbd29c13decb0bce8fefb1c11010973228634:apps/api/src/services/__tests__/license-register-test-license-prod-guard.test.ts:generic-api-key:27
+0fdbbd29c13decb0bce8fefb1c11010973228634:apps/api/src/services/__tests__/license-register-test-license-prod-guard.test.ts:generic-api-key:66
+0fdbbd29c13decb0bce8fefb1c11010973228634:apps/api/src/services/__tests__/license-register-test-license-prod-guard.test.ts:generic-api-key:91
