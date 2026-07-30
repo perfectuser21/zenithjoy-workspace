@@ -21,7 +21,10 @@
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve, basename, join } from 'node:path';
-import { computeRealmachineUnverifiedRatchet } from './lib.mjs';
+// 零依赖引入（同 gp-smoke-ratchet.mjs 教训）：不从 lib.mjs 取，避免其顶层 ajv/yaml
+// import 在无 node_modules 的 CI 硬闸 job（lint-realmachine-unverified-ratchet.sh）
+// 里 ERR_MODULE_NOT_FOUND 崩掉。
+import { computeRealmachineUnverifiedRatchet } from './realmachine-unverified-ratchet-lib.mjs';
 
 const CWD = process.cwd();
 const SMOKE_DIR = resolve(CWD, process.env.REALMACHINE_SMOKE_DIR || '.github/workflows/scripts/smoke');
