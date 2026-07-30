@@ -59,6 +59,11 @@ export interface LicenseRow {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  /**
+   * 测试用途标记（Brain issue 88d15763）。true = smoke/真机测试专用 license，
+   * 生产环境（NODE_ENV=production）禁止注册。见 registerAgent() 的环境校验。
+   */
+  is_test?: boolean;
 }
 
 export interface LicenseMachineRow {
@@ -261,7 +266,8 @@ export type RegisterErrorCode =
   | 'INVALID_LICENSE'
   | 'EXPIRED'
   | 'SUSPENDED'
-  | 'QUOTA_EXCEEDED';
+  | 'QUOTA_EXCEEDED'
+  | 'TEST_LICENSE_IN_PRODUCTION';
 
 /**
  * RegisterSuccess — 双 schema (H-1):
@@ -298,7 +304,12 @@ export interface RegisterFailure {
   message: string;
   // 新字段 (H-1, 仅 QUOTA_EXCEEDED 返完整 current_count/limit)
   success: false;
-  error: 'INVALID_LICENSE' | 'EXPIRED' | 'SUSPENDED' | 'LICENSE_DEVICE_LIMIT_EXCEEDED';
+  error:
+    | 'INVALID_LICENSE'
+    | 'EXPIRED'
+    | 'SUSPENDED'
+    | 'LICENSE_DEVICE_LIMIT_EXCEEDED'
+    | 'TEST_LICENSE_IN_PRODUCTION';
   current_count?: number;    // 仅 LICENSE_DEVICE_LIMIT_EXCEEDED 时填
   limit?: number;
 }
@@ -399,6 +410,23 @@ export async function registerAgent(
       message: 'License key 不存在',
       success: false,
       error: 'INVALID_LICENSE',
+    };
+  }
+
+  // P0 环境隔离闸门（Brain issue 88d15763）：测试专用 license（is_test=true）
+  // 禁止在生产环境（NODE_ENV=production）注册。必须在任何配额/装机查询之前
+  // 就短路拒绝——否则误连生产的测试设备仍会在 license_machines/agents 里
+  // 留下真实装机记录，问题会悄无声息地发生而不留痕迹。
+  // 不检查 license_key 命名规律（如 SMOKE/TEST 前缀）：历史遗留测试 license
+  // （如 ZJ-F-K3MYP4VR）和真实客户 license 用完全相同的 ZJ-{tier}-{8位} 格式，
+  // 命名本身不可靠，只有显式打标的 is_test 列才可靠。
+  if (license.is_test === true && process.env.NODE_ENV === 'production') {
+    return {
+      ok: false,
+      code: 'TEST_LICENSE_IN_PRODUCTION',
+      message: '测试专用 license 禁止在生产环境注册',
+      success: false,
+      error: 'TEST_LICENSE_IN_PRODUCTION',
     };
   }
 

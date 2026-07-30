@@ -26,11 +26,13 @@ export const agentRouter = Router();
 //     200 OK: { ok:true, license_id, tier, max_machines, registered_machine_id, ws_token,
 //               success:true, agent_id (UUID), license_tier, device_count, device_limit }
 //     401   : { ok:false, code:'INVALID_LICENSE', success:false, error:'INVALID_LICENSE' }
-//     403   : { ok:false, code:'EXPIRED' | 'SUSPENDED' | 'QUOTA_EXCEEDED',
-//               success:false, error:'EXPIRED' | 'SUSPENDED' | 'LICENSE_DEVICE_LIMIT_EXCEEDED',
+//     403   : { ok:false, code:'EXPIRED' | 'SUSPENDED' | 'QUOTA_EXCEEDED' | 'TEST_LICENSE_IN_PRODUCTION',
+//               success:false, error:'EXPIRED' | 'SUSPENDED' | 'LICENSE_DEVICE_LIMIT_EXCEEDED' | 'TEST_LICENSE_IN_PRODUCTION',
 //               current_count?, limit? }
 //     400   : { ok:false, code:'BAD_REQUEST' }
 // 注意：QUOTA_EXCEEDED 老 code 映射 LICENSE_DEVICE_LIMIT_EXCEEDED 新 error 名。
+// TEST_LICENSE_IN_PRODUCTION（Brain issue 88d15763）：license.is_test=true 且当前
+// 进程 NODE_ENV=production → 拒绝，防止测试专用 license 在生产环境"注册成功"。
 agentRouter.post('/register', async (req: Request, res: Response) => {
   const { license_key, machine_id, hostname, agent_id, version } =
     req.body ?? {};
