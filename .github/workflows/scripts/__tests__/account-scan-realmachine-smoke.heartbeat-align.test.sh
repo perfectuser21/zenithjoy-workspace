@@ -46,7 +46,7 @@ case "\$1" in
   install) echo "Success" ;;
   shell)
     shift
-    if [ "\$1" = "monkey" ]; then :
+    if [ "\$1" = "am" ]; then :
     elif [ "\$1" = "pidof" ]; then echo "12345"
     elif [ "\$1" = "settings" ] && [ "\$2" = "get" ]; then
       echo "com.zenithjoy.agent/.account.DeviceAccountScanService"
@@ -64,6 +64,9 @@ chmod +x "$FAKE_BIN/adb"
 cat > "$FAKE_BIN/ssh" << SSHEOF
 #!/usr/bin/env bash
 CMD="\$2"
+if echo "\$CMD" | grep -q "SELECT license_key FROM zenithjoy.licenses"; then
+  echo "ZJ-TEST-FAKE0001"; exit 0
+fi
 if echo "\$CMD" | grep -q "UPDATE zenithjoy.agents SET last_heartbeat_at"; then
   touch "$UPDATED_FLAG"; exit 0
 fi

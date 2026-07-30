@@ -141,13 +141,30 @@ main() {
   # 卡 status=queued（2026-07-30 实测：task 从未被任何一次 heartbeat 拉取过，logcat
   # 全程零 "ws1 task:" 记录，同队列里还躺着两条更早的 dm_outreach 旧任务同样永久卡住，
   # 佐证这不是偶发）。
-  "$ADB" shell monkey -p com.zenithjoy.agent -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+  #
+  # 用 zenithjoy://bind deeplink 拉起而不是泛泛的 monkey LAUNCHER（2026-07-30 真机
+  # ssh+logcat 现场排查根因）：adb install -r 不清空 App 数据，设备本地 SharedPreferences
+  # 缓存的 config.apiUrl 可能仍指向生产(wss://autopilot.zenjoymedia.media/agent-ws)而非
+  # staging——真机复现过一次：logcat 显示心跳确实每 30s 成功发送一条("ws1 heartbeat ok")，
+  # 但连的是 wss://autopilot.zenjoymedia.media（生产），更新的是生产库 zenithjoy 而非本
+  # 脚本查询的 zenithjoy_staging，导致 last_seen 新鲜度检查永远查不到新值——不是等不够久，
+  # 是设备压根没在往这个库报数据，等多久都没用。MainActivity.onCreate() 的
+  # parseBindDeepLink() 会在 AgentService/WsClient 首次初始化之前，把 zenithjoy://bind
+  # deeplink 里的 api/license 参数写进 config，一次性从根上纠正，不依赖设备残留状态。
+  STAGING_LICENSE_KEY=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -c \
+    \"SELECT license_key FROM zenithjoy.licenses WHERE tenant_id='${TENANT}' AND status='active' ORDER BY created_at DESC LIMIT 1\"" 2>/dev/null | tr -d '[:space:]')
+  [ -n "$STAGING_LICENSE_KEY" ] || envfail "查不到 tenant=${TENANT} 在 zenithjoy_staging 的 active license_key，无法构造 bind deeplink"
+  WS_URL="${API_BASE/https/wss}/agent-ws"
+  BIND_API_ENC=$(jq -rn --arg v "$WS_URL" '$v|@uri')
+  BIND_LICENSE_ENC=$(jq -rn --arg v "$STAGING_LICENSE_KEY" '$v|@uri')
+  DEEPLINK="zenithjoy://bind?license=${BIND_LICENSE_ENC}&api=${BIND_API_ENC}"
+  "$ADB" shell am start -a android.intent.action.VIEW -d "$DEEPLINK" >/dev/null 2>&1 || true
   sleep 3
   APP_PID=$("$ADB" shell pidof com.zenithjoy.agent 2>/dev/null | tr -d '\r\n')
   if [ -n "$APP_PID" ]; then
-    ok "已重新拉起 App(pid=$APP_PID)，心跳循环恢复"
+    ok "已用 deeplink 纠正环境绑定(api=${WS_URL})，已重新拉起 App(pid=$APP_PID)，心跳循环恢复"
   else
-    envfail "adb install -r 后重新拉起 App 失败(pidof 查无进程)——心跳循环无法恢复，account-scan 必然拿不到 done"
+    envfail "adb install -r 后 deeplink 拉起 App 失败(pidof 查无进程)——心跳循环无法恢复，account-scan 必然拿不到 done"
   fi
 
   # 修复真实脚本 bug（本次 xian-rog 真机首次跑通 adb install 后才暴露，之前一直被
@@ -195,11 +212,26 @@ main() {
   # 修法：从 agents 表按定位到的 agent_id 取真实 tenant_id + last_seen 新鲜度，先用 last_seen
   # （ws 真更新的字段）确认设备真在线（不伪造离线设备），再把 last_heartbeat_at 对齐 now()，
   # 用真实 tenant 触发。这是对已知字段不一致 bug 的诚实临时补偿，根治见 issue 009c1544。
-  META=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -F'|' -c \
-    \"SELECT tenant_id, (last_seen > now() - interval '2 minutes') FROM zenithjoy.agents WHERE agent_id='$AGENT_ID'\"" 2>/dev/null)
-  DEV_TENANT="${META%%|*}"
-  SEEN_FRESH="${META##*|}"
-  [ "$SEEN_FRESH" = "t" ] || envfail "设备 last_seen 不新鲜(设备真离线，非字段不一致)：agent_id=$AGENT_ID"
+  #
+  # 有界轮询（2026-07-30 加固，防御真实启动时序）：上面刚用 deeplink 重新拉起 App，
+  # 从进程冷启动 → register/WS 握手 → 首次心跳落库，即便绑定的环境完全正确，也需要
+  # 几秒钟才能完成；此前是查一次没新鲜就立刻 envfail，真机首跑就在这被误判过一次
+  # （设备其实几秒后就新鲜了）。改成有界重试，FRESH_POLL_MAX×FRESH_POLL_INTERVAL 秒
+  # 预算内反复查，超出预算仍不新鲜才真正判 envfail（不是无限等）。
+  FRESH_POLL_MAX="${FRESH_POLL_MAX:-12}"
+  FRESH_POLL_INTERVAL="${FRESH_POLL_INTERVAL:-5}"
+  DEV_TENANT=""
+  SEEN_FRESH=""
+  for j in $(seq 1 "$FRESH_POLL_MAX"); do
+    META=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -F'|' -c \
+      \"SELECT tenant_id, (last_seen > now() - interval '2 minutes') FROM zenithjoy.agents WHERE agent_id='$AGENT_ID'\"" 2>/dev/null)
+    DEV_TENANT="${META%%|*}"
+    SEEN_FRESH="${META##*|}"
+    echo "  [$j/$FRESH_POLL_MAX] last_seen fresh=$SEEN_FRESH"
+    [ "$SEEN_FRESH" = "t" ] && break
+    sleep "$FRESH_POLL_INTERVAL"
+  done
+  [ "$SEEN_FRESH" = "t" ] || envfail "设备 last_seen 不新鲜(${FRESH_POLL_MAX}×${FRESH_POLL_INTERVAL}s 有界重试后设备仍真离线，非字段不一致)：agent_id=$AGENT_ID"
   [ -n "$DEV_TENANT" ] || envfail "查不到 agent_id=$AGENT_ID 的真实 tenant_id"
   ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -c \
     \"UPDATE zenithjoy.agents SET last_heartbeat_at = now() WHERE agent_id='$AGENT_ID'\"" >/dev/null 2>&1

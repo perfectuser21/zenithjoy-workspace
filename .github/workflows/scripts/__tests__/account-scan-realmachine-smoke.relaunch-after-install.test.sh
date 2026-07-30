@@ -44,7 +44,9 @@ mkdir -p "$FAKE_BIN"
 LAUNCHED_FLAG="$WORKDIR/launched.flag"
 rm -f "$LAUNCHED_FLAG"
 
-# ── 有状态假 adb：模拟"install -r 杀死进程，只有 monkey LAUNCHER 才能重新拉起"──
+# ── 有状态假 adb：模拟"install -r 杀死进程，只有 deeplink am start 才能重新拉起"──
+# （2026-07-30 envbind 修复：泛泛的 monkey LAUNCHER 换成 zenithjoy://bind deeplink，
+#  因为纯 monkey 拉起不会纠正设备残留的错误 apiUrl 绑定，见 envbind.test.sh）
 cat > "$FAKE_BIN/adb" << ADBEOF
 #!/usr/bin/env bash
 case "\$1" in
@@ -59,8 +61,8 @@ case "\$1" in
     ;;
   shell)
     shift
-    if [ "\$1" = "monkey" ]; then
-      # -p com.zenithjoy.agent -c android.intent.category.LAUNCHER 1 → 模拟真正拉起 App
+    if [ "\$1" = "am" ]; then
+      # am start -a android.intent.action.VIEW -d "zenithjoy://bind?..." → 模拟真正拉起 App
       touch "$LAUNCHED_FLAG"
     elif [ "\$1" = "pidof" ]; then
       if [ -f "$LAUNCHED_FLAG" ]; then echo "12345"; fi
@@ -79,8 +81,17 @@ exit 0
 ADBEOF
 chmod +x "$FAKE_BIN/adb"
 
+# 需要给 envbind 修复新增的 license_key 查询一个非空回答，否则脚本会在
+# 重新拉起 App 之前就因"查不到 active license_key"envfail，测试永远看不到本文件
+# 要验的"install -r 后显式重新拉起 App"这一步（本测试的关注点在拉起本身，不是
+# 后续 agent_id 定位，其余查询继续保持空响应即可，跟修复前行为一致）。
 cat > "$FAKE_BIN/ssh" << 'SSHEOF'
 #!/usr/bin/env bash
+CMD="$2"
+if echo "$CMD" | grep -q "SELECT license_key FROM zenithjoy.licenses"; then
+  echo "ZJ-TEST-FAKE0001"
+  exit 0
+fi
 exit 0
 SSHEOF
 chmod +x "$FAKE_BIN/ssh"
