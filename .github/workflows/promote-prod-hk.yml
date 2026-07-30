@@ -2,7 +2,7 @@ name: Promote to Production HK :5200（人工放行闸）
 
 # ───────────────────────────────────────────────────────────────────────────
 # 拆库刀3-T5（2026-07-15）：生产 API 已迁 hk-vps docker（zenithjoy-api-prod）。
-#   本 workflow 取代 promote-prod.yml（美国蓝绿版保留作回滚期应急，T6 后删）：
+#   本 workflow 取代 promote-prod.yml（美国蓝绿版，T6 已删除，07-30）：
 #   人手点 workflow_dispatch（死的人工卡点，绝不自动触发）→ ssh HK →
 #   git 同步到指定 SHA → docker build + up 生产容器 → /health 冒烟断言 build sha。
 #   staging（zenithjoy-api-staging）不受影响。
