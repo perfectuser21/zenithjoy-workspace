@@ -63,7 +63,11 @@ case "\$1" in
     ;;
   shell)
     shift
-    if [ "\$1" = "settings" ] && [ "\$2" = "put" ] && [ "\$3" = "secure" ] && [ "\$4" = "enabled_accessibility_services" ]; then
+    if [ "\$1" = "monkey" ]; then
+      : # 模拟 install -r 后重新拉起 App（本测试不关心这一步，只关心无障碍组件名）
+    elif [ "\$1" = "pidof" ]; then
+      echo "12345" # 模拟拉起后进程存活，让脚本能继续往下走到无障碍设置这一步
+    elif [ "\$1" = "settings" ] && [ "\$2" = "put" ] && [ "\$3" = "secure" ] && [ "\$4" = "enabled_accessibility_services" ]; then
       printf '%s' "\$5" > "$STATE_FILE"
     elif [ "\$1" = "settings" ] && [ "\$2" = "get" ] && [ "\$3" = "secure" ] && [ "\$4" = "enabled_accessibility_services" ]; then
       if [ -s "$STATE_FILE" ]; then cat "$STATE_FILE"; else echo "null"; fi

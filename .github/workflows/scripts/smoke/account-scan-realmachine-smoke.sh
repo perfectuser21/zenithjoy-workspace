@@ -132,6 +132,24 @@ main() {
   [ "$INSTALL_CODE" -eq 0 ] || envfail "adb install -r 失败: $INSTALL_ERR"
   ok "已覆盖安装最新 APK(adb install -r)"
 
+  # adb install -r 触发 PACKAGE_REPLACED 会杀死正在跑的 AgentService 进程（含心跳循环）——
+  # 真机复现确认（xian-rog logcat 09:57:49 实测）：pm replace 不会自动重启前台服务
+  # （START_STICKY 只在系统因内存回收杀进程时触发重建，包替换是受控终止，不算）。
+  # 脚本此前从未显式拉起 App，导致心跳循环永久停摆——last_heartbeat_at 停在杀死前的
+  # 最后一次值，短时间内仍落在 NO_ONLINE_ANDROID_AGENT 判定的 2 分钟新鲜窗口内，
+  # account-scan/trigger 会误判"在线"成功派单，但没有活的心跳循环去拉取执行，任务永远
+  # 卡 status=queued（2026-07-30 实测：task 从未被任何一次 heartbeat 拉取过，logcat
+  # 全程零 "ws1 task:" 记录，同队列里还躺着两条更早的 dm_outreach 旧任务同样永久卡住，
+  # 佐证这不是偶发）。
+  "$ADB" shell monkey -p com.zenithjoy.agent -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+  sleep 3
+  APP_PID=$("$ADB" shell pidof com.zenithjoy.agent 2>/dev/null | tr -d '\r\n')
+  if [ -n "$APP_PID" ]; then
+    ok "已重新拉起 App(pid=$APP_PID)，心跳循环恢复"
+  else
+    envfail "adb install -r 后重新拉起 App 失败(pidof 查无进程)——心跳循环无法恢复，account-scan 必然拿不到 done"
+  fi
+
   # 修复真实脚本 bug（本次 xian-rog 真机首次跑通 adb install 后才暴露，之前一直被
   # 401/签名冲突挡在更早的步骤，从未真正执行到这一行过）：旧代码写的
   # 'com.zenithjoy.agent/com.zenithjoy.agent.AccessibilityService' 是一个 APK 里
