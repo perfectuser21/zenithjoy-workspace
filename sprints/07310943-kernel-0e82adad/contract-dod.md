@@ -89,10 +89,10 @@ target_environment: windows_cloud
   Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "未登录取消返回 401"'
 
 - [ ] [BEHAVIOR] [L2] B-10: Windows UI 真实显示取消三态与冷却 [接缝×2]
-  动作: 在 Windows Chrome 对真 API/PG 连走两次“点击放弃→等待 heartbeat→回执→重触发”
-  预期观察: 每轮依次可见“取消中”“取消指令已发送，等待设备响应”“已取消”和剩余等待时间
+  动作: 在 Windows Chrome 对真 API/PG 连走两次“点击放弃→等待 heartbeat→回执→重触发”，并在 requested、sent 两态分别对“放弃”控件执行 Playwright `toBeDisabled()` 断言
+  预期观察: 每轮依次可见“取消中”“取消指令已发送，等待设备响应”“已取消”和剩余等待时间；requested/sent 期间“放弃”按钮持续禁用，无法再次触发取消请求
   等待预算: 240s
-  留证: screenshots/cancel-requested.png、cancel-sent.png、cancel-confirmed.png、cancel-cooldown.png 与 Playwright trace
+  留证: screenshots/cancel-requested.png、cancel-sent.png（均须呈现禁用控件状态）、cancel-confirmed.png、cancel-cooldown.png 与含两次 `toBeDisabled()` oracle 的 Playwright trace
   Test: manual:bash -c 'test "${RUNNER_OS:-}" = "Windows" && pwsh -NoProfile -File sprints/07310943-kernel-0e82adad/e2e-verify.ps1 -BaseUrl http://localhost:5174 -ApiUrl http://localhost:3000 -Repeat 2 -ScreenshotDir sprints/07310943-kernel-0e82adad/screenshots'
 
 ## Invariant 铁律映射
