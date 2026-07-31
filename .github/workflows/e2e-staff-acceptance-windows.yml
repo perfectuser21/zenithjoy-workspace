@@ -1,0 +1,228 @@
+name: E2E — Staff Hub 验收模块
+
+# Staff Hub 验收模块（决策 fc7b5dc0：Staff Hub 直连 Brain，Notion 降级为员工自用）
+# 双 job：
+#   - e2e（ubuntu-latest）：PR 快反馈，起真实 apps/api + staff-hub Vite dev server，跑 Playwright
+#   - e2e-windows（windows-latest）：workflow_dispatch 深验，内联 pwsh 步骤起真实后端（无外部 sprints 脚本依赖）
+# 变体C 死规则：spec 打真实后端，禁 page.route()（脚本内二次校验）。
+# 验收三个端点只读反代 Brain 内网 acceptance 接口，不查自身 Postgres，因此不需要 DB secrets；
+# CECELIA_BRAIN_URL 在 CI 沙盒默认不可达，availability 会自然落到 degraded 分支，属合法路径。
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/api/src/routes/staff.ts'
+      - 'apps/api/src/services/acceptance.ts'
+      - 'apps/staff-hub/src/pages/AcceptancePage.tsx'
+      - 'apps/staff-hub/src/pages/AcceptanceDetailPage.tsx'
+      - 'apps/staff-hub/src/pages/AcceptanceHistoryPage.tsx'
+      - 'apps/staff-hub/e2e/acceptance.spec.ts'
+      - 'apps/staff-hub/playwright.config.ts'
+      - '.github/workflows/e2e-staff-acceptance-windows.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-staff-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
+# 最小权限：两个 job 都只需读代码，不写 issue/PR/package（CodeQL actions/missing-workflow-permissions）
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: Playwright — 验收模块（ubuntu chromium）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build & start apps/api (真实后端，无 stub)
+        working-directory: apps/api
+        env:
+          PORT: '3000'
+          NODE_ENV: development
+          STAFF_EMAILS: 'staff@test.com'
+          BETTER_AUTH_SECRET: 'ci-only-secret-32-chars-min-not-prod-123'
+          CECELIA_BRAIN_URL: 'http://127.0.0.1:39999'
+        run: |
+          npm run build
+          node dist/index.js > /tmp/apps-api.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:3000/health > /dev/null 2>&1; then
+              echo "apps/api ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:3000/health > /dev/null || { cat /tmp/apps-api.log; exit 1; }
+
+      - name: Install Playwright Chromium
+        working-directory: apps/staff-hub
+        run: npx playwright install chromium --with-deps
+
+      - name: Start Vite dev server (staff-hub, VITE_SKIP_AUTH=true)
+        working-directory: apps/staff-hub
+        env:
+          VITE_SKIP_AUTH: 'true'
+          VITE_MOCK_USER_EMAIL: 'staff@test.com'
+          STAFF_HUB_API_TARGET: 'http://localhost:3000'
+        run: |
+          npx vite --port 5175 &
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5175 > /dev/null 2>&1; then
+              echo "Vite ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Guard — spec 禁止 page.route()（变体C 死规则1）
+        run: |
+          if grep -q 'page\.route(' apps/staff-hub/e2e/acceptance.spec.ts; then
+            echo "FAIL: acceptance.spec.ts 含 page.route()，违反变体C 死规则（禁 stub 真实后端）"
+            exit 1
+          fi
+
+      - name: Run Playwright E2E
+        working-directory: apps/staff-hub
+        env:
+          E2E_BASE_URL: 'http://localhost:5175'
+          E2E_API_URL: 'http://localhost:3000'
+        run: npx playwright test e2e/acceptance.spec.ts --reporter=list
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staff-acceptance-screenshots-ubuntu
+          path: apps/staff-hub/screenshots/
+          if-no-files-found: warn
+
+  e2e-windows:
+    name: Playwright — 验收模块（windows-latest 深验）
+    runs-on: windows-latest
+    timeout-minutes: 30
+    if: github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: apps/staff-hub
+        run: npx playwright install chromium --with-deps
+
+      - name: Build apps/api
+        working-directory: apps/api
+        run: npm run build
+
+      - name: Start apps/api (真实后端，无 stub)
+        working-directory: apps/api
+        run: |
+          $proc = Start-Process -FilePath "node" -ArgumentList "dist/index.js" `
+            -WorkingDirectory "${{ github.workspace }}\apps\api" `
+            -PassThru -NoNewWindow `
+            -RedirectStandardOutput "$env:RUNNER_TEMP\apps-api.log" `
+            -RedirectStandardError "$env:RUNNER_TEMP\apps-api.err.log" `
+            -Environment @{
+              PORT                = "3000"
+              NODE_ENV            = "development"
+              STAFF_EMAILS        = "staff@test.com"
+              BETTER_AUTH_SECRET  = "ci-only-secret-32-chars-min-not-prod-123"
+              CECELIA_BRAIN_URL   = "http://127.0.0.1:39999"
+            }
+          "$($proc.Id)" | Out-File -FilePath "$env:RUNNER_TEMP\apps-api.pid"
+
+          $waited = 0
+          do {
+            Start-Sleep -Seconds 1; $waited++
+            $conn = Test-NetConnection -ComputerName localhost -Port 3000 -WarningAction SilentlyContinue
+          } while (-not $conn.TcpTestSucceeded -and $waited -lt 30)
+          if (-not $conn.TcpTestSucceeded) {
+            Get-Content "$env:RUNNER_TEMP\apps-api.log","$env:RUNNER_TEMP\apps-api.err.log" -ErrorAction SilentlyContinue
+            throw "FAIL: apps/api 未在 30s 内就绪 port=3000"
+          }
+          Write-Host "apps/api 就绪 port=3000"
+
+      - name: Build & start Staff Hub Vite preview (VITE_SKIP_AUTH=true)
+        working-directory: apps/staff-hub
+        run: |
+          $env:VITE_SKIP_AUTH = "true"
+          $env:VITE_MOCK_USER_EMAIL = "staff@test.com"
+          npm run build
+          Remove-Item Env:\VITE_SKIP_AUTH -ErrorAction SilentlyContinue
+          Remove-Item Env:\VITE_MOCK_USER_EMAIL -ErrorAction SilentlyContinue
+
+          $proc = Start-Process -FilePath "npx.cmd" -ArgumentList "vite preview --port 5175 --host" `
+            -WorkingDirectory "${{ github.workspace }}\apps\staff-hub" `
+            -PassThru -NoNewWindow `
+            -Environment @{ STAFF_HUB_API_TARGET = "http://localhost:3000" }
+          "$($proc.Id)" | Out-File -FilePath "$env:RUNNER_TEMP\vite.pid"
+
+          $waited = 0
+          do {
+            Start-Sleep -Seconds 1; $waited++
+            $conn = Test-NetConnection -ComputerName localhost -Port 5175 -WarningAction SilentlyContinue
+          } while (-not $conn.TcpTestSucceeded -and $waited -lt 30)
+          if (-not $conn.TcpTestSucceeded) { throw "FAIL: Vite 未在 30s 内就绪 port=5175" }
+          Write-Host "Vite 就绪 port=5175"
+
+      - name: Guard — spec 禁止 page.route()（变体C 死规则1）
+        run: |
+          $specContent = Get-Content "apps\staff-hub\e2e\acceptance.spec.ts" -Raw
+          if ($specContent -match "page\.route\(") {
+            throw "FAIL: acceptance.spec.ts 含 page.route()，违反变体C 死规则（禁 stub 真实后端）"
+          }
+
+      - name: Run Playwright E2E
+        working-directory: apps/staff-hub
+        env:
+          E2E_BASE_URL: 'http://localhost:5175'
+          E2E_API_URL: 'http://localhost:3000'
+        run: npx playwright test e2e/acceptance.spec.ts --reporter=list
+
+      - name: Stop background processes
+        if: always()
+        run: |
+          foreach ($pidFile in @("$env:RUNNER_TEMP\apps-api.pid", "$env:RUNNER_TEMP\vite.pid")) {
+            if (Test-Path $pidFile) {
+              $procId = Get-Content $pidFile
+              Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staff-acceptance-screenshots-windows
+          path: apps/staff-hub/screenshots/
+          if-no-files-found: warn
