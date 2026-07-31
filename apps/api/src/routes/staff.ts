@@ -29,6 +29,12 @@ import {
   buildLineHealthOverview,
   findLineDef,
 } from '../services/line-health';
+import {
+  fetchPendingRuns,
+  fetchHistoryByGpId,
+  submitResults,
+  type SubmitResultItem,
+} from '../services/acceptance';
 
 const router = Router();
 // 登录端点身份未知，按来源 IP 限流（不能按 tenant/user，此时还没有）：
@@ -303,6 +309,45 @@ router.get('/line-health/:lineKey/abilities', async (req, res): Promise<void> =>
   }
   const data = await buildLineAbilities(def);
   res.status(200).json({ success: true, data });
+});
+
+// ─── 验收模块（Staff Hub 直连 Brain，决策 fc7b5dc0）───────────────────────
+// 反代逻辑在 services/acceptance.ts，本处只做 HTTP 语义 + 身份透传。
+
+router.get('/acceptance/pending', async (_req, res): Promise<void> => {
+  const result = await fetchPendingRuns();
+  res.status(200).json({ success: true, ...result });
+});
+
+router.get('/acceptance/history', async (req, res): Promise<void> => {
+  const gpId = typeof req.query.gp_id === 'string' ? req.query.gp_id : '';
+  if (!gpId) {
+    res.status(400).json({ success: false, error: { code: 'BAD_REQUEST', message: 'gp_id query param required' } });
+    return;
+  }
+  const result = await fetchHistoryByGpId(gpId);
+  res.status(200).json({ success: true, ...result });
+});
+
+router.post('/acceptance/results', async (req, res): Promise<void> => {
+  const items = req.body?.results as SubmitResultItem[] | undefined;
+  if (!Array.isArray(items) || items.length === 0) {
+    res.status(400).json({ success: false, error: { code: 'BAD_REQUEST', message: 'results must be a non-empty array' } });
+    return;
+  }
+  const emailHeader = req.headers['x-user-email'];
+  const openIdHeader = req.headers['x-feishu-user-id'];
+  const submittedBy =
+    (typeof emailHeader === 'string' && emailHeader.trim()) ||
+    (typeof openIdHeader === 'string' && openIdHeader.trim()) ||
+    'unknown';
+  try {
+    const result = await submitResults(items, submittedBy);
+    res.status(200).json({ success: true, data: result });
+  } catch (err) {
+    const message = axios.isAxiosError(err) ? err.message : (err as Error).message || 'submit failed';
+    res.status(502).json({ success: false, error: { code: 'BRAIN_UNAVAILABLE', message } });
+  }
 });
 
 export default router;
