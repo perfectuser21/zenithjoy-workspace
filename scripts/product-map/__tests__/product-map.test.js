@@ -47,13 +47,13 @@ test('T2: validateSchema — 缺失 apps 字段时返回非空 errors', () => {
 
 // ─── Test 3: 种子分类精确性 ───────────────────────────────────────────────────
 
-test('T3: staff_app/line00 精确 4 个 GP（含gp_anchor_enforcement），ability_acceptance status=deprecated（2026-07-29 改走 Notion，Staff Hub 实现已删除）', async () => {
+test('T3: staff_app/line00 精确 4 个 GP（含gp_anchor_enforcement），ability_acceptance status=active（2026-07-31 决策fc7b5dc0覆盖07-29：验收收回自家前端直连Brain）', async () => {
   const { map } = await loadAndValidateProductMap();
   const line00Gps = map.golden_paths.filter(g => g.app_id === 'staff_app' && g.line_id === 'line00');
   assert.deepEqual(line00Gps.map(g => g.id).sort(), ['ability_acceptance', 'gp_anchor_enforcement', 'line_health', 'skill_acceptance']);
 
   const abilityGp = line00Gps.find(g => g.id === 'ability_acceptance');
-  assert.equal(abilityGp.status, 'deprecated');
+  assert.equal(abilityGp.status, 'active', 'ability_acceptance 2026-07-31 重新实现（Staff Hub 直连 Brain），须为active');
 
   const anchorGp = line00Gps.find(g => g.id === 'gp_anchor_enforcement');
   assert.equal(anchorGp.status, 'active', 'gp_anchor_enforcement 刀1-5全部合并，§8验收标准满足，须为active');

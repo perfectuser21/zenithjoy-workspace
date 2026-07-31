@@ -39,12 +39,13 @@ golden_paths:
     name: Skill 验收流程
     status: active
 
-  # 2026-07-29 用户拍板：Ability 验收改走 Notion，Staff Hub 内的实现（页面+路由+E2E）已下线删除
+  # 2026-07-31 用户拍板（决策 fc7b5dc0，覆盖 07-29 走 Notion 的决策）：验收+展示全部收回
+  # 自家前端，Staff Hub 直连 Brain 零同步层重新实现（cecelia PR #4516 后端 + 本仓库前端）
   - id: ability_acceptance
     app_id: staff_app
     line_id: line00
     name: Ability 验收流程
-    status: deprecated
+    status: active
 
   - id: line_health
     app_id: staff_app

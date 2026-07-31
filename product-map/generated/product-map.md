@@ -1,6 +1,6 @@
 # Product Map
 
-<!-- digest: fbea3a9eb73f647b31f5bdcc84cd49bbbda59e1d11a850ffcb79c091aac40052 -->
+<!-- digest: 5011e4ef15b9419c3b21ea0cd0b36bd4d0f2b26fc12c7e85fc3376e540765f5b -->
 
 > 此文件由 `npm run product-map:generate` 自动生成，请勿手工编辑。
 > 唯一手写源：`product-map/product-map.yaml`
@@ -39,7 +39,7 @@
 | moments_interaction | customer_app | line04 | active | step1:客户动态被感知<br>step2:互动决策<br>step3:互动执行与留痕 | — |
 | moments_publish | customer_app | line04 | active | step1:内容成稿<br>step2:发布上圈<br>step3:发布确认与留痕 | — |
 | passive_reception | customer_app | line04 | active | step1:消息被感知<br>step2:决定谁来答<br>step3:回复送达<br>step4:留痕与善后 | — |
-| ability_acceptance | staff_app | line00 | deprecated | — | — |
+| ability_acceptance | staff_app | line00 | active | — | — |
 | gp_anchor_enforcement | staff_app | line00 | active | — | .github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh |
 | line_health | staff_app | line00 | active | — | — |
 | skill_acceptance | staff_app | line00 | active | — | — |
