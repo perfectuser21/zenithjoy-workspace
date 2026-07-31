@@ -17,7 +17,7 @@
  *   SVG 输入盒→圆核→输出盒图 + 折叠详解表），原样透传，不再重新臆造一个更差的展示层；
  *   ?format=json 时改拉原始 report_data JSON（调试/兼容用）
  */
-import { Router, type Response } from 'express';
+import { Router, type Request, type Response } from 'express';
 import multer from 'multer';
 import axios from 'axios';
 import { staffGuard } from '../middleware/staff';
@@ -335,12 +335,7 @@ router.post('/acceptance/results', async (req, res): Promise<void> => {
     res.status(400).json({ success: false, error: { code: 'BAD_REQUEST', message: 'results must be a non-empty array' } });
     return;
   }
-  const emailHeader = req.headers['x-user-email'];
-  const openIdHeader = req.headers['x-feishu-user-id'];
-  const submittedBy =
-    (typeof emailHeader === 'string' && emailHeader.trim()) ||
-    (typeof openIdHeader === 'string' && openIdHeader.trim()) ||
-    'unknown';
+  const submittedBy = (req as Request & { staffIdentity?: string }).staffIdentity ?? 'unknown';
   try {
     const result = await submitResults(items, submittedBy);
     res.status(200).json({ success: true, data: result });
