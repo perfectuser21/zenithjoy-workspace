@@ -4,7 +4,7 @@
  * 这些测试使用真实 Express app + zenithjoy_test Postgres；禁止 mock
  * acquisition route、heartbeat service 或数据库。
  */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { randomUUID } from 'node:crypto';
 import app from '../../../apps/api/src/app';
@@ -50,7 +50,9 @@ beforeAll(async () => {
   );
   agentId = agent.rows[0].id;
   runtimeAgentId = `cancel-agent-${run}`;
+});
 
+beforeEach(async () => {
   const task = await testPool.query<{ id: string }>(
     `INSERT INTO zenithjoy.acquisition_collect_tasks
        (tenant_id, keywords, status, agent_id, started_at)
@@ -61,9 +63,12 @@ beforeAll(async () => {
   taskId = task.rows[0].id;
 });
 
-afterAll(async () => {
+afterEach(async () => {
   await testPool.query('DELETE FROM zenithjoy.publish_tasks WHERE agent_id = $1', [agentId]);
   await testPool.query('DELETE FROM zenithjoy.acquisition_collect_tasks WHERE tenant_id IN ($1, $2)', [tenantA, tenantB]);
+});
+
+afterAll(async () => {
   await testPool.query('DELETE FROM zenithjoy.agents WHERE id = $1', [agentId]);
   await testPool.query('DELETE FROM zenithjoy.licenses WHERE license_key = $1', [licenseKey]);
   await testPool.query('DELETE FROM zenithjoy.tenant_members WHERE tenant_id IN ($1, $2)', [tenantA, tenantB]);
@@ -71,12 +76,30 @@ afterAll(async () => {
   await testPool.end();
 });
 
+async function requestCancel() {
+  return request(app)
+    .post('/api/acquisition/collect/cancel')
+    .set('X-Feishu-User-Id', userA)
+    .send({ task_id: taskId });
+}
+
+async function reportCancelled(headerAgentId = runtimeAgentId) {
+  return request(app)
+    .post('/api/acquisition/collect/report')
+    .set('x-agent-id', headerAgentId)
+    .send({
+      task_id: taskId,
+      video_id: `cancelled_${taskId.slice(0, 8)}`,
+      commenters: [],
+      checkpoint: { last_video_id: null, processed_video_ids: [] },
+      terminal: true,
+      partial_reason: 'user_cancelled',
+    });
+}
+
 describe('Android 获客任务不可逆取消真实接缝', () => {
   it('本人租户取消 running 任务返回 cancelling 且不接受 body tenant_id', async () => {
-    const res = await request(app)
-      .post('/api/acquisition/collect/cancel')
-      .set('X-Feishu-User-Id', userA)
-      .send({ task_id: taskId });
+    const res = await requestCancel();
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
@@ -110,6 +133,9 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
   });
 
   it('下一次生产形状 heartbeat 只下发一条 acquisition_cancel 指令', async () => {
+    const cancelled = await requestCancel();
+    expect(cancelled.status).toBe(200);
+
     const res = await request(app)
       .post('/api/agent/heartbeat')
       .send({
@@ -131,6 +157,9 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
   });
 
   it('Agent 离线期间保留取消意图且恢复 heartbeat 后继续下发', async () => {
+    const cancelled = await requestCancel();
+    expect(cancelled.status).toBe(200);
+
     await testPool.query(
       `UPDATE zenithjoy.agents SET status = 'offline' WHERE id = $1`,
       [agentId],
@@ -172,14 +201,14 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
   });
 
   it('重复取消幂等且不生成第二条指令、不延长取消时间', async () => {
+    const first = await requestCancel();
+    expect(first.status).toBe(200);
+
     const before = await testPool.query(
       `SELECT cancel_requested_at FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
       [taskId],
     );
-    const res = await request(app)
-      .post('/api/acquisition/collect/cancel')
-      .set('X-Feishu-User-Id', userA)
-      .send({ task_id: taskId });
+    const res = await requestCancel();
     const after = await testPool.query(
       `SELECT cancel_requested_at FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
       [taskId],
@@ -232,39 +261,34 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
       [taskId],
     );
     const res = await request(app)
-      .get(`/api/acquisition/collect/${taskId}`)
+      .get('/api/acquisition/collect-tasks')
       .set('X-Feishu-User-Id', userA);
     expect(res.status).toBe(200);
-    expect(res.body.data.status).toBe('cancelling');
-    expect(res.body.data.cancel_phase).toBe('sent');
-    expect(res.body.data.cancelled_at).toBeNull();
+    const task = res.body.data.tasks.find((item: { id: string }) => item.id === taskId);
+    expect(task).toMatchObject({
+      id: taskId,
+      status: 'cancelling',
+      cancel_phase: 'sent',
+    });
+    const row = await testPool.query(
+      `SELECT cancelled_at
+         FROM zenithjoy.acquisition_collect_tasks
+        WHERE id = $1`,
+      [taskId],
+    );
+    expect(row.rows[0].cancelled_at).toBeNull();
   });
 
   it('只有绑定 Android Agent 回执后才落 cancelled 并从该刻开始五分钟冷却', async () => {
-    const rejected = await request(app)
-      .post('/api/acquisition/collect/report')
-      .set('x-agent-id', randomUUID())
-      .send({
-        task_id: taskId,
-        video_id: `cancelled_${taskId.slice(0, 8)}`,
-        commenters: [],
-        checkpoint: { last_video_id: null, processed_video_ids: [] },
-        terminal: true,
-        partial_reason: 'user_cancelled',
-      });
+    const requested = await requestCancel();
+    expect(requested.status).toBe(200);
+    const reportStartedAt = Date.now();
+
+    const rejected = await reportCancelled(randomUUID());
     expect(rejected.status).toBe(403);
 
-    const res = await request(app)
-      .post('/api/acquisition/collect/report')
-      .set('x-agent-id', agentId)
-      .send({
-        task_id: taskId,
-        video_id: `cancelled_${taskId.slice(0, 8)}`,
-        commenters: [],
-        checkpoint: { last_video_id: null, processed_video_ids: [] },
-        terminal: true,
-        partial_reason: 'user_cancelled',
-      });
+    // 生产 CollectReporter 发送 agents.agent_id 文本 slug，不走 DB UUID 兼容旁路。
+    const res = await reportCancelled(runtimeAgentId);
 
     expect(res.status).toBe(200);
     expect(res.body.data.status).toBe('cancelled');
@@ -277,24 +301,21 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
     expect(row.rows[0].status).toBe('cancelled');
     expect(row.rows[0].cancelled_at).not.toBeNull();
     expect(row.rows[0].ended_at).not.toBeNull();
+    expect(new Date(row.rows[0].cancelled_at).getTime()).toBeGreaterThanOrEqual(reportStartedAt);
+    expect(new Date(row.rows[0].ended_at).getTime()).toBeGreaterThanOrEqual(reportStartedAt);
   });
 
   it('重复 cancelled 回执幂等且不延长五分钟冷却起点', async () => {
+    const requested = await requestCancel();
+    expect(requested.status).toBe(200);
+    const confirmed = await reportCancelled(runtimeAgentId);
+    expect(confirmed.status).toBe(200);
+
     const before = await testPool.query(
       `SELECT cancelled_at FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
       [taskId],
     );
-    const repeated = await request(app)
-      .post('/api/acquisition/collect/report')
-      .set('x-agent-id', agentId)
-      .send({
-        task_id: taskId,
-        video_id: `cancelled_${taskId.slice(0, 8)}`,
-        commenters: [],
-        checkpoint: { last_video_id: null, processed_video_ids: [] },
-        terminal: true,
-        partial_reason: 'user_cancelled',
-      });
+    const repeated = await reportCancelled(runtimeAgentId);
     expect(repeated.status).toBe(200);
     expect(repeated.body.data.status).toBe('cancelled');
     const after = await testPool.query(
@@ -305,6 +326,11 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
   });
 
   it('冷却期内同设备新任务返回 DEVICE_CANCEL_COOLDOWN 和剩余秒数', async () => {
+    const requested = await requestCancel();
+    expect(requested.status).toBe(200);
+    const confirmed = await reportCancelled(runtimeAgentId);
+    expect(confirmed.status).toBe(200);
+
     const blocked = await request(app)
       .post('/api/acquisition/collect/start')
       .set('X-Feishu-User-Id', userA)
