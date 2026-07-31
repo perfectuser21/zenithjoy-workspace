@@ -23,6 +23,9 @@ target_environment: windows_cloud
 - [ ] [ARTIFACT] Android workflow 支持 `scenario=cancel`、`repeat=2` 并上传 `android-cancel-evidence`
   Test: node -e "const c=require('fs').readFileSync('.github/workflows/e2e-line02-android-collect.yml','utf8');for(const s of ['scenario','cancel','repeat','attempt_marker','android-cancel-evidence'])if(!c.includes(s))process.exit(1)"
 
+- [ ] [ARTIFACT] 独立 E2E runner 承载完整取消链，禁止从 Markdown 围栏动态抽取
+  Test: node -e "const c=require('fs').readFileSync('sprints/07310943-kernel-0e82adad/e2e-verify.sh','utf8');for(const s of ['e2e-verify.ps1','gh workflow run','DISPATCHED_AT','ATTEMPT_MARKER','android-cancel-evidence','safe_exit','cancel-requested.png','cancel-cooldown.png'])if(!c.includes(s))process.exit(1);if(c.includes('awk')||c.includes('contract-draft.md'))process.exit(1)"
+
 ## BEHAVIOR 条目
 
 - [ ] [BEHAVIOR] [L2] B-01: 本人租户放弃 running 任务后进入取消中
@@ -167,7 +170,7 @@ target_environment: windows_cloud
   预期观察: UI 四态正确，Android 安全退出后才 confirmed，同 machine_id 冷却不可被新 agent_id 绕过
   等待预算: 1200s
   留证: 四张截图、两轮 Playwright trace、绑定本次 run/SHA/marker 的两个 Android result JSON 与 run URL
-  Test: manual:bash -c 'export SPRINT_DIR="${SPRINT_DIR:-sprints/07310943-kernel-0e82adad}"; bash -c "$(awk "/^## E2E 验收/{found=1;next} found&&/^## /{exit} found&&/^.{3}bash$/{b=1;next} b&&/^.{3}$/{b=0;next} b{print}" "$SPRINT_DIR/contract-draft.md")"'
+  Test: manual:bash -c 'export SPRINT_DIR="${SPRINT_DIR:-sprints/07310943-kernel-0e82adad}"; bash "$SPRINT_DIR/e2e-verify.sh"'
 
 ## 未覆盖真实链路清单
 

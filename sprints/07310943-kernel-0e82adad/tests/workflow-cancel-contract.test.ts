@@ -25,4 +25,26 @@ describe('取消链 CI workflow 合同', () => {
       expect(android).toContain(evidenceField);
     }
   });
+
+  it('独立 E2E runner 直接执行完整取消链', () => {
+    const runner = readFileSync(
+      'sprints/07310943-kernel-0e82adad/e2e-verify.sh',
+      'utf8',
+    );
+
+    for (const oracle of [
+      'e2e-verify.ps1',
+      'gh workflow run',
+      'DISPATCHED_AT',
+      'ATTEMPT_MARKER',
+      'android-cancel-evidence',
+      'safe_exit',
+      'cancel-requested.png',
+      'cancel-cooldown.png',
+    ]) {
+      expect(runner).toContain(oracle);
+    }
+    expect(runner).not.toContain('contract-draft.md');
+    expect(runner).not.toContain('awk');
+  });
 });

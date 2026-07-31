@@ -32,6 +32,7 @@
         ".github/workflows/e2e-orphan-consolidation-windows.yml",
         ".github/workflows/scripts/smoke/golden-path-2-smoke.sh",
         ".github/workflows/scripts/smoke/line02-android-cancel-realmachine-smoke.sh",
+        "sprints/07310943-kernel-0e82adad/e2e-verify.sh",
         "sprints/07310943-kernel-0e82adad/e2e-verify.ps1"
       ],
       "depends_on": [],

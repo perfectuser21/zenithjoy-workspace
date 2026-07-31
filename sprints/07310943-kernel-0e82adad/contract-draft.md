@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 12)
+# Sprint Contract Draft (Round 14)
 
 sprint: `07310943-kernel-0e82adad`
 task_id: `e76cb826-caaf-404b-b853-845e107408b5`
@@ -194,10 +194,9 @@ Dashboard 使用浏览器 session；body 字面为 `{"task_id":"<uuid>"}`，禁�
 1. `.github/workflows/e2e-orphan-consolidation-windows.yml`：已有 Windows Chromium/Vite；`[CI_GAP: 未启动 Postgres/API，未跑真实取消、三态与冷却]`。补齐后 workflow 必须实际运行 `apps/dashboard/e2e/acquisition-cancel.spec.ts` 两次且任一失败阻塞 gate。
 2. `.github/workflows/e2e-line02-android-collect.yml`：已有 xian-rog + adb + 普通采集 smoke；`[CI_GAP: 无 cancel 输入、无抢占/关面板/回执 evidence，证据未绑定触发 run/SHA]`。补齐后 `scenario=cancel` 必须调用真实取消 smoke并上传含 `github_run_id/head_sha/attempt_marker/repeat_index/cancel_requested_at/command_received_at` 的证据。
 
-## E2E 验收（最终 final-e2e 跑）
+## 独立 `e2e-verify.sh` 内容合同
 
-**journey_type**: user_facing
-**target_environment**: windows_cloud（Android 接缝另派 `android_realmachine`）
+Generator 必须把以下脚本逐语义实现为 `${SPRINT_DIR}/e2e-verify.sh`；该文件是唯一模式 B 入口，不得读取或解析 `contract-draft.md`：
 
 ```bash
 #!/usr/bin/env bash
@@ -227,6 +226,20 @@ test -s "$SPRINT_DIR/screenshots/cancel-confirmed.png"
 test -s "$SPRINT_DIR/screenshots/cancel-cooldown.png"
 echo "OK: Windows 真后端 UI x2 + Android 真机取消 x2"
 ```
+
+## E2E 验收（最终 final-e2e 跑）
+
+**journey_type**: user_facing
+**target_environment**: windows_cloud（Android 接缝另派 `android_realmachine`）
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+: "${SPRINT_DIR:=sprints/07310943-kernel-0e82adad}"
+bash "$SPRINT_DIR/e2e-verify.sh"
+```
+
+`e2e-verify.sh` 是 Generator 必须交付的独立可执行 runner；它必须内含上一轮合同定义的完整链路：校验 Windows runner，调用 `e2e-verify.ps1` 双跑真 API/PG/UI，按当前 `HEAD SHA + GITHUB_REF_NAME + 唯一 attempt_marker + dispatch 时间` 派发并发现 Android run，等待成功、下载本次 `android-cancel-evidence`，逐字段校验两轮 `result-N.json`，最后检查四张截图。任一环境变量、run、evidence、字段或截图缺失必须非 0 退出。禁止从 Markdown 动态抽取命令，禁止空脚本返回 0。
 
 `e2e-verify.ps1` 必须用 `Start-Process` 启真 API 3000 与 Vite 5174、用 `Test-NetConnection` 等待、向 Vite 注入 `VITE_API_URL=http://localhost:3000`；Playwright 禁止 `page.route()`，用真 DB fixture，并验证 requested/sent/confirmed/cooldown 四个可见状态。
 
@@ -301,9 +314,11 @@ N/A：不接受外部自然语言或 prompt；HTTP/Android 输入按 schema、�
 | 回执终态 | 同上 | `只有绑定 Android Agent 回执后才落 cancelled` | 现无 cancelled_at |
 | 稳定设备冷却 | 同上 | `稳定 machine_id 冷却不能被更换 agent_id 绕过` | 现 start 无 machine_id 冷却闸 |
 | 真 workflow | `sprints/07310943-kernel-0e82adad/tests/workflow-cancel-contract.test.ts` | `Windows 与 Android workflow 执行真实取消链` | 两 workflow 均无 cancel 场景 |
+| 独立 E2E 入口 | 同上 | `独立 E2E runner 直接执行完整取消链` | `e2e-verify.sh` 尚不存在，禁止 Markdown 围栏空提取假绿 |
 
 ## Notes
 
 - PRD 指定主 target 为 `windows_cloud`；Android 真机段按 PRD 要求独立路由 `android_realmachine`。
 - 本 sprint 不含暂停/恢复、批量取消、staging 发布、Bark 通知、prod promote 或已采数据回滚。
 - Round 12 仅修 Reviewer 指出的五项阻塞：report 必须经过 heartbeat/sent、heartbeat 前设备快照为空、E2E 入口真实可执行、Android evidence 绑定本次 run/SHA 且实测 30 秒 NFR、补齐取消响应禁用字段；不扩 PRD 范围。
+- Round 14 仅修 Reviewer 指出的 E2E-01 空提取假绿：模式 B 与 DoD 都直接执行独立 `e2e-verify.sh`，并以 Red test 强制 runner 包含完整语义 oracle；不扩 PRD 范围。
