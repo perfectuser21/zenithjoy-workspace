@@ -195,4 +195,3 @@ target_environment: windows_cloud
 - Android cancel 场景尚未出现在当前 xian-rog workflow，Generator 补齐并真跑两次前为 `logic-done-pending`。
 - 当前 Windows 获客 spec 使用 `page.route()`；不得作为本合同的 Mode B 证据。
 - 无第三方 API mock 豁免；GitHub Actions 仅用于派发真实目标环境。
-
