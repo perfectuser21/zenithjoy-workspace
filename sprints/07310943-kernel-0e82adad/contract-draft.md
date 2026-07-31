@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 9)
+# Sprint Contract Draft (Round 10)
 
 sprint: `07310943-kernel-0e82adad`
 task_id: `e76cb826-caaf-404b-b853-845e107408b5`
@@ -360,4 +360,4 @@ curl -sf "http://localhost:5221/api/brain/tasks/$TASK_ID" | jq -e '.decisions.ap
 - PRD 指定 `target_environment=windows_cloud`，合同保持该路由；Android 真实接缝由独立 xian-rog workflow 补位，并在未跑前保持 `logic-done-pending`。
 - 本 sprint 不引入暂停、恢复、批量取消或已采数据回滚。
 - `contract-gate: skipped (file not found, third-party repo)`。
-- Round 9 收敛：本轮输入仍无 reviewer feedback artifact；对冻结 PRD、Round 8 合同、生产调用方 shape、两份实际 workflow 与七项格式闸重新做确定性复核。保持同一真实后端 Playwright 剧本先跑全新 Windows CI、再跑已部署 staging，并由 Android 真机接缝双跑补位；未增加 PRD 外范围。
+- Round 10 收敛：本轮输入仍无 reviewer feedback artifact；从 Round 9 合同恢复本地 PRD 与合同产物，并重新核对冻结 PRD、生产调用方 shape、两份实际 workflow、registry、产品分类投影与七项格式闸。保持同一真实后端 Playwright 剧本先跑全新 Windows CI、再跑已部署 staging，并由 Android 真机接缝双跑补位；未增加 PRD 外范围。
