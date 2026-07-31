@@ -98,6 +98,12 @@ jobs:
       BASE_URL: 'http://localhost:5174'
       PLAYWRIGHT_BASE_URL: 'http://localhost:5174'
       DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/zenithjoy_test'
+      # API runtime uses split DB settings; migrations and fixtures use DATABASE_URL.
+      DATABASE_HOST: 'localhost'
+      DATABASE_PORT: '5432'
+      DATABASE_NAME: 'zenithjoy_test'
+      DATABASE_USER: 'postgres'
+      DATABASE_PASSWORD: 'postgres'
 
     steps:
       - uses: actions/checkout@v4
