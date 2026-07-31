@@ -136,11 +136,11 @@ target_environment: windows_cloud
   Test: manual:bash -c 'for N in 1 2; do jq -e "(.machine_id|type==\"string\" and length>0) and (.adb_serial|type==\"string\" and length>0)" "sprints/07310943-kernel-0e82adad/evidence/android/result-$N.json"; done'
 
 - [ ] [BEHAVIOR] [L2] INV-6: 凭据不硬编码、不进日志
-  动作: 对当前提交运行仓库 secrets scan
-  预期观察: gitleaks exit 0，evidence 与日志不含 license/session 原值
-  等待预算: 120s
-  留证: secrets scan job URL 与脱敏日志
-  Test: manual:bash -c 'npx gitleaks detect --no-banner --redact --source .'
+  动作: 核验当前 PR 精确提交的官方 Secrets Scan (gitleaks) check
+  预期观察: PR head 与 EXPECTED_SHA 一致，官方 gitleaks check 状态为 SUCCESS，evidence 与日志不含 license/session 原值
+  等待预算: 0s
+  留证: 当前 PR head SHA、secrets scan job URL 与脱敏日志
+  Test: manual:bash -c ': "${PR_URL:?}" "${EXPECTED_SHA:?}"; test "$(gh pr view "$PR_URL" --json headRefOid --jq .headRefOid)" = "$EXPECTED_SHA"; gh pr checks "$PR_URL" --json name,state --jq '\''any(.[]; .name == "Secrets Scan (gitleaks)" and .state == "SUCCESS")'\'' | grep -qx true'
 
 - [ ] [BEHAVIOR] [L2] INV-7: 错误与日志不泄露租户、任务或设备
   动作: 执行跨租户和不存在 UUID 防枚举请求并扫描结构化响应
