@@ -1,5 +1,5 @@
 {
-  "initiative_id": "pending",
+  "initiative_id": "e76cb826-7fbf-45bd-b94d-75793edc2f33",
   "journey_type": "user_facing",
   "journey_type_reason": "核心入口、取消进度与冷却提示位于客户 Dashboard，并需 Android Agent 真机协同确认。",
   "tasks": [
