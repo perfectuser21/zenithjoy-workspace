@@ -22,6 +22,7 @@ export default function AcceptanceHistoryPage() {
       setRuns(json.runs ?? []);
     } catch {
       setDegraded(true);
+      setRuns([]);
     } finally {
       setSearched(true);
     }
@@ -46,7 +47,14 @@ export default function AcceptanceHistoryPage() {
           <li key={run.run_key}>
             <div
               data-testid={`acceptance-history-run-${run.run_key}`}
+              role="button"
+              tabIndex={0}
               onClick={() => setExpanded(expanded === run.run_key ? null : run.run_key)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  setExpanded(expanded === run.run_key ? null : run.run_key);
+                }
+              }}
               style={{ cursor: 'pointer' }}
             >
               {run.title}（{run.version ?? '未知版本'}） — {run.created_at}

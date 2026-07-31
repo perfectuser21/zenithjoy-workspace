@@ -14,9 +14,9 @@ const KINDS: Array<Check['kind']> = ['FR', 'NFR', 'Invariant', 'SOP'];
 
 // v1 简化：判定项名字里若含 "Step N" 前缀就按此分组，否则归"未分组"
 // （Brain checks 暂无独立 step 字段，见 design 文档"不包含"一节，非本次范围）
-function stepOf(name: string): string {
-  const m = name.match(/Step\s*\d+/i);
-  return m ? m[0] : '未分组';
+export function stepOf(name: string): string {
+  const m = name.match(/step\s*(\d+)/i);
+  return m ? `Step ${m[1]}` : '未分组';
 }
 
 export default function AcceptanceDetailPage() {

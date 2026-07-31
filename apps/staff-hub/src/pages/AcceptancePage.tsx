@@ -52,7 +52,12 @@ export default function AcceptancePage() {
             <li
               key={run.run_key}
               data-testid={`acceptance-run-${run.run_key}`}
+              role="button"
+              tabIndex={0}
               onClick={() => navigate(`/acceptance/${run.run_key}`)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') navigate(`/acceptance/${run.run_key}`);
+              }}
               style={{ cursor: 'pointer' }}
             >
               <strong>{run.title}</strong> — {run.status}（{done}/{total}）
