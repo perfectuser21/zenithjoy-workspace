@@ -116,10 +116,17 @@ describe('Android cancel receipt accepts heartbeat UUID identity', () => {
     expect(command.rows[0].status).toBe('completed');
     expect(command.rows[0].receipt_at).not.toBeNull();
 
+    // The route deliberately enables its real-DB branch in Vitest only when
+    // DATABASE_URL is present. CI supplies split DATABASE_* settings, so set
+    // the same opt-in signal while still using testPool's real PostgreSQL.
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = previousDatabaseUrl || 'postgresql://integration-test';
     const cooldownStart = await request(app)
       .post('/api/acquisition/collect/start')
       .set('X-Feishu-User-Id', userId)
       .send({ keywords: ['装修'], agent_id: agentUuid });
+    if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = previousDatabaseUrl;
     expect(cooldownStart.status).toBe(409);
     expect(cooldownStart.body.error.code).toBe('DEVICE_CANCEL_COOLDOWN');
     expect(cooldownStart.body.error.remaining_seconds).toBeGreaterThan(0);
