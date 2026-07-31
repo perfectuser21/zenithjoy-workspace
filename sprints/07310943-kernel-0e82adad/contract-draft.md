@@ -1,7 +1,7 @@
-# Sprint Contract Draft (Round 3)
+# Sprint Contract Draft (Round 4)
 
 sprint: `07310943-kernel-0e82adad`
-task_id: `e76cb826-7fbf-45bd-b94d-75793edc2f33`
+task_id: `e76cb826-caaf-404b-b853-845e107408b5`
 journey_id: `afa6abca-53c0-4815-8594-b7fb81ca547f`
 step_id: `step6`
 
@@ -12,6 +12,7 @@ step_id: `step6`
 - `test_registry` 与仓库测试共同确认 integration 测试风格为 `vitest + supertest + 真 Postgres`，Android 为 JUnit/Kotlin。
 - `context-manifest: unavailable`；PRD 已内嵌累积 FR，合同按 PRD 字面保留。
 - `contract-gate: skipped (file not found, third-party repo)`。
+- `product-map:check` 在安装锁定依赖后重跑通过（digest `fbea3a9e...`），分类投影无漂移。
 - 产品分类锚点来自 `product-map/generated/product-map.md`：`customer_app / line02 / keyword_acquisition`。
 
 ## 已知约束（来自回归测试与累积 FR）
@@ -276,7 +277,7 @@ echo "OK: windows_cloud UI/API + Android real-machine cancel x2"
 |---|---|---|
 | **FR（做什么）** | 功能承诺 | 前台不可逆放弃单设备运行中获客任务，真机退出回执后确认，随后 5 分钟冷却 |
 | **NFR（做得多好）** | 延迟/可靠性 | 取消指令最长 30 秒随 heartbeat 下发；2 分钟无回执不假成功；重复请求幂等 |
-| **Invariant（永不违反）** | 安全/一致性 | 租户隔离；只有绑定 Agent 回执可落终态；不回滚已采数据；无暂停/恢复语义 |
+| **Invariant（永不违反）** | 安全/一致性 | 租户隔离与鉴权；只有绑定 Agent 的语义回执可落终态；状态枚举全仓复查；不回滚已采数据；无暂停/恢复语义 |
 | **判定点（怎么知道）** | 现实判断 | 见下表 |
 | **保质期（何时过期）** | 数据/能力 | 取消命令到 `cancelled` 后失活；冷却精确 300 秒；旧 Agent 不识别指令时保持等待 |
 | **死亡告警（停了谁知道）** | 告警 | 指令 sent 超 2 分钟未回执写结构化告警并在 UI 保持等待；值班从 CI/真机 workflow 与服务告警得知 |
@@ -346,10 +347,11 @@ curl -sf "http://localhost:5221/api/brain/tasks/$TASK_ID" | jq -e '.decisions.ap
 | 非法状态 | 同上 | `已结束任务返回 409 TASK_NOT_CANCELLABLE` | 当前 cancel route 未按认证租户和可取消状态收敛 |
 | 超时不假成功 | 同上 | `取消指令发出 121 秒无回执仍保持 cancelling sent` | 当前详情 response 无 cancel_phase |
 | 重复回执 | 同上 | `重复 cancelled 回执幂等且不延长五分钟冷却起点` | 当前回执可能重写冷却起点 |
+| 状态枚举复查 | 同上 | `新增取消状态后全状态枚举仍可真实读写` | 当前迁移尚未把取消生命周期状态与非法状态拒绝作为同一真 PG 矩阵锁定 |
 
 ## Notes
 
 - PRD 指定 `target_environment=windows_cloud`，合同保持该路由；Android 真实接缝由独立 xian-rog workflow 补位，并在未跑前保持 `logic-done-pending`。
 - 本 sprint 不引入暂停、恢复、批量取消或已采数据回滚。
 - `contract-gate: skipped (file not found, third-party repo)`。
-- Round 3 收敛：所有带 `-t` 的 integration oracle 改为可独立建任务并完成前置状态，不再依赖测试声明顺序；取消回执成功路径固定使用生产 `agents.agent_id` 文本 slug；超时查询复用 PRD 已定义的 `/collect-tasks`，不新增详情端点。
+- Round 4 收敛：继承 Round 3 的独立 integration oracle、生产 `agents.agent_id` 文本 slug 与既有 `/collect-tasks` 查询；补齐恢复后冻结 PRD 新增的“状态枚举复查”和“语义成功”铁律映射，不扩展功能范围。
