@@ -219,7 +219,7 @@ Generator 必须补齐的用户路径：
 
 ## E2E 验收（最终 final-e2e 跑）
 
-**journey_type**: user_facing  
+**journey_type**: user_facing
 **target_environment**: windows_cloud
 
 ```bash
