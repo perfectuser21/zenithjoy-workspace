@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 4)
+# Sprint Contract Draft (Round 5)
 
 sprint: `07310943-kernel-0e82adad`
 task_id: `e76cb826-caaf-404b-b853-845e107408b5`
@@ -12,7 +12,7 @@ step_id: `step6`
 - `test_registry` 与仓库测试共同确认 integration 测试风格为 `vitest + supertest + 真 Postgres`，Android 为 JUnit/Kotlin。
 - `context-manifest: unavailable`；PRD 已内嵌累积 FR，合同按 PRD 字面保留。
 - `contract-gate: skipped (file not found, third-party repo)`。
-- `product-map:check` 在安装锁定依赖后重跑通过（digest `fbea3a9e...`），分类投影无漂移。
+- `product-map:check` 在 Round 5 安装锁定依赖后重跑通过（digest `fbea3a9e...`），分类投影无漂移。
 - 产品分类锚点来自 `product-map/generated/product-map.md`：`customer_app / line02 / keyword_acquisition`。
 
 ## 已知约束（来自回归测试与累积 FR）
@@ -85,6 +85,8 @@ step_id: `step6`
 ```json
 {"task_id":"<command-uuid>","platform":"android","type":"acquisition_cancel","payload":{"collect_task_id":"<uuid>"}}
 ```
+
+上式是 `HttpHeartbeatLoop` 实际消费的必填子集；服务端为旧 Agent 保留的 `id/status/folder_path/created_at` 以及 payload 内 `local_path/folder_path/account_label` 可继续存在，合同不得以“精简 schema”为由删除兼容字段。Android 必须按字面读取 `task_id/platform/type/payload.collect_task_id`。
 
 同一 `collect_task_id` 最多一条活动取消指令。指令被本次心跳返回时，服务端原子写 `cancel_sent_at`，前台才显示“取消指令已发送，等待设备响应”。
 
@@ -227,7 +229,11 @@ set -euo pipefail
 : "${GITHUB_REF_NAME:?GITHUB_REF_NAME required}"
 : "${GH_REPO:=perfectuser21/zenithjoy-workspace}"
 test "${RUNNER_OS:-}" = "Windows" || { echo "FAIL: windows_cloud runner required"; exit 1; }
-pwsh -NoProfile -File "$SPRINT_DIR/e2e-verify.ps1" -BaseUrl "http://localhost:5174" -ApiUrl "http://localhost:3000" -ScreenshotDir "$SPRINT_DIR/screenshots"
+: "${STAGING_DASHBOARD_URL:?STAGING_DASHBOARD_URL required}"
+: "${STAGING_API_URL:?STAGING_API_URL required}"
+# 先在全新 Windows VM 启真 Postgres/API/Vite 验实现，再对已部署 staging 跑同一套 UI 剧本并截图。
+pwsh -NoProfile -File "$SPRINT_DIR/e2e-verify.ps1" -Scenario ci -BaseUrl "http://localhost:5174" -ApiUrl "http://localhost:3000" -ScreenshotDir "$SPRINT_DIR/screenshots/ci"
+pwsh -NoProfile -File "$SPRINT_DIR/e2e-verify.ps1" -Scenario staging -BaseUrl "$STAGING_DASHBOARD_URL" -ApiUrl "$STAGING_API_URL" -ScreenshotDir "$SPRINT_DIR/screenshots"
 for ATTEMPT in 1 2; do
   gh workflow run e2e-line02-android-collect.yml --repo "$GH_REPO" --ref "$GITHUB_REF_NAME" -f scenario=cancel -f smoke_kw=装修
   sleep 5
@@ -253,8 +259,8 @@ echo "OK: windows_cloud UI/API + Android real-machine cancel x2"
 
 `e2e-verify.ps1` 硬要求：
 
-- `Start-Process` 启真实 `apps/api`，端口 3000；`Test-NetConnection` 等待就绪。
-- Vite 固定 5174，`VITE_API_URL=http://localhost:3000`；不得设置除 `VITE_SKIP_AUTH=true` 外的 mock 变量。
+- `Scenario=ci` 时用 `Start-Process` 启真 Postgres 依赖下的 `apps/api`（端口 3000），`Test-NetConnection` 等待就绪；Vite 固定 5174 且 `VITE_API_URL=http://localhost:3000`。
+- `Scenario=staging` 时禁止启动本地 API/Vite，必须把同一 Playwright 剧本打到 `$STAGING_DASHBOARD_URL/$STAGING_API_URL`；两种模式都不得设置除 `VITE_SKIP_AUTH=true` 外的 mock 变量。
 - Playwright spec `apps/dashboard/e2e/acquisition-cancel.spec.ts` 禁止 `page.route()`，用两个真实租户、真实 DB fixture。
 - 截图写 `${SPRINT_DIR}/screenshots/staging-cancel-requested.png`、`staging-cancel-sent.png`、`staging-cancel-confirmed.png`、`staging-cancel-cooldown.png`。
 - 任何 API、DB、DOM 或真机证据缺失均 exit 非 0。
@@ -354,4 +360,4 @@ curl -sf "http://localhost:5221/api/brain/tasks/$TASK_ID" | jq -e '.decisions.ap
 - PRD 指定 `target_environment=windows_cloud`，合同保持该路由；Android 真实接缝由独立 xian-rog workflow 补位，并在未跑前保持 `logic-done-pending`。
 - 本 sprint 不引入暂停、恢复、批量取消或已采数据回滚。
 - `contract-gate: skipped (file not found, third-party repo)`。
-- Round 4 收敛：继承 Round 3 的独立 integration oracle、生产 `agents.agent_id` 文本 slug 与既有 `/collect-tasks` 查询；补齐恢复后冻结 PRD 新增的“状态枚举复查”和“语义成功”铁律映射，不扩展功能范围。
+- Round 5 收敛：没有额外 reviewer feedback artifact；对 Round 4 做确定性复核，并修正 Final E2E 只跑 localhost、未实际覆盖 staging 预览闸的矛盾。现在同一真实后端 Playwright 剧本先跑全新 Windows CI，再跑已部署 staging；功能范围不变。

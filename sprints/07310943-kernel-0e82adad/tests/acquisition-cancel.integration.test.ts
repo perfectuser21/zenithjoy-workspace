@@ -112,6 +112,7 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
     });
     expect(Object.keys(res.body).sort()).toEqual(['data', 'success', 'timestamp']);
     expect(Object.keys(res.body.data).sort()).toEqual(['cancel_phase', 'status', 'task_id']);
+    expect(Number.isNaN(Date.parse(res.body.timestamp))).toBe(false);
     for (const forbidden of ['tenant_id', 'device_id', 'paused', 'resumable']) {
       expect(res.body.data).not.toHaveProperty(forbidden);
     }
@@ -154,6 +155,14 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
         task.type === 'acquisition_cancel' && task.payload?.collect_task_id === taskId,
     );
     expect(commands).toHaveLength(1);
+    expect(commands[0]).toMatchObject({
+      platform: 'android',
+      type: 'acquisition_cancel',
+      payload: { collect_task_id: taskId },
+    });
+    expect(typeof commands[0].task_id).toBe('string');
+    // 只锁生产 Android 真正消费的字段；服务端现有 legacy 兼容字段允许保留。
+    expect(commands[0].payload.collect_task_id).toBe(taskId);
   });
 
   it('Agent 离线期间保留取消意图且恢复 heartbeat 后继续下发', async () => {
@@ -270,6 +279,7 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
       status: 'cancelling',
       cancel_phase: 'sent',
     });
+    expect(task.cooldown_remaining_seconds).toBe(0);
     const row = await testPool.query(
       `SELECT cancelled_at
          FROM zenithjoy.acquisition_collect_tasks
@@ -292,6 +302,8 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.status).toBe('cancelled');
+    expect(Object.keys(res.body).sort()).toEqual(['data', 'success', 'timestamp']);
+    expect(Number.isNaN(Date.parse(res.body.timestamp))).toBe(false);
     const row = await testPool.query(
       `SELECT status, cancelled_at, ended_at
          FROM zenithjoy.acquisition_collect_tasks
@@ -338,6 +350,11 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
 
     expect(blocked.status).toBe(409);
     expect(blocked.body.error.code).toBe('DEVICE_CANCEL_COOLDOWN');
+    expect(blocked.body.success).toBe(false);
+    expect(blocked.body.error.message).toBe('设备冷却中');
+    expect(Object.keys(blocked.body).sort()).toEqual(['error', 'success', 'timestamp']);
+    expect(Object.keys(blocked.body.error).sort()).toEqual(['code', 'message', 'remaining_seconds']);
+    expect(Number.isNaN(Date.parse(blocked.body.timestamp))).toBe(false);
     expect(blocked.body.error.remaining_seconds).toBeGreaterThan(0);
     expect(blocked.body.error.remaining_seconds).toBeLessThanOrEqual(300);
 

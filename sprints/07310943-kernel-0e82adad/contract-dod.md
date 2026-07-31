@@ -23,8 +23,8 @@ target_environment: windows_cloud
 - [ ] [ARTIFACT] Android 有取消协调器与真实状态机安全退出测试
   Test: node -e "const fs=require('fs');const a=fs.readFileSync('services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/collect/AcquisitionCancellationCoordinator.kt','utf8');const t=fs.readFileSync('services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/collect/AcquisitionCancellationCoordinatorTest.kt','utf8');for(const s of ['reportCancel','safeExit'])if(!a.includes(s)||!t.includes(s))process.exit(1)"
 
-- [ ] [ARTIFACT] windows_cloud E2E 脚本启动真 API，且 Android workflow 增加 `scenario=cancel` 与 evidence artifact
-  Test: node -e "const fs=require('fs');const ps=fs.readFileSync('sprints/07310943-kernel-0e82adad/e2e-verify.ps1','utf8');const wf=fs.readFileSync('.github/workflows/e2e-line02-android-collect.yml','utf8');if(!ps.includes('Test-NetConnection')||!ps.includes('apps\\\\api')||!wf.includes('scenario')||!wf.includes('android-cancel-evidence'))process.exit(1)"
+- [ ] [ARTIFACT] windows_cloud E2E 脚本以 ci/staging 双模式分别验证真本地后端与已部署 staging，且 Android workflow 增加 `scenario=cancel` 与 evidence artifact
+  Test: node -e "const fs=require('fs');const ps=fs.readFileSync('sprints/07310943-kernel-0e82adad/e2e-verify.ps1','utf8');const wf=fs.readFileSync('.github/workflows/e2e-line02-android-collect.yml','utf8');for(const s of ['Scenario','Test-NetConnection','apps\\\\api','staging'])if(!ps.includes(s))process.exit(1);if(!wf.includes('scenario')||!wf.includes('android-cancel-evidence'))process.exit(1)"
 
 - [ ] [ARTIFACT] `golden-path-2-smoke.sh` 收编 running→cancelling→cancelled、跨租户与冷却拒绝
   Test: node -e "const c=require('fs').readFileSync('.github/workflows/scripts/smoke/golden-path-2-smoke.sh','utf8');for(const s of ['cancelling','cancelled','DEVICE_CANCEL_COOLDOWN'])if(!c.includes(s))process.exit(1)"
@@ -113,7 +113,7 @@ target_environment: windows_cloud
   预期观察: 依次出现“取消中”“取消指令已发送，等待设备响应”“已取消”和剩余等待时间
   等待预算: 240s
   留证: ${SPRINT_DIR}/screenshots/staging-cancel-requested.png、staging-cancel-sent.png、staging-cancel-confirmed.png、staging-cancel-cooldown.png
-  Test: manual:bash -c 'test "${RUNNER_OS:-}" = "Windows" && pwsh -NoProfile -File "sprints/07310943-kernel-0e82adad/e2e-verify.ps1" -BaseUrl "${STAGING_DASHBOARD_URL:?}" -ApiUrl "${STAGING_API_URL:?}" -ScreenshotDir "sprints/07310943-kernel-0e82adad/screenshots"'
+  Test: manual:bash -c 'test "${RUNNER_OS:-}" = "Windows" && pwsh -NoProfile -File "sprints/07310943-kernel-0e82adad/e2e-verify.ps1" -Scenario staging -BaseUrl "${STAGING_DASHBOARD_URL:?}" -ApiUrl "${STAGING_API_URL:?}" -ScreenshotDir "sprints/07310943-kernel-0e82adad/screenshots"'
 
 ## Invariant 铁律映射
 
