@@ -21,7 +21,7 @@ target_environment: windows_cloud
   Test: node -e "const c=require('fs').readFileSync('.github/workflows/e2e-orphan-consolidation-windows.yml','utf8');for(const s of ['acquisition-cancel.spec.ts','apps/api','Repeat cancel E2E'])if(!c.includes(s))process.exit(1)"
 
 - [ ] [ARTIFACT] Android workflow 支持 `scenario=cancel`、`repeat=2` 并上传 `android-cancel-evidence`
-  Test: node -e "const c=require('fs').readFileSync('.github/workflows/e2e-line02-android-collect.yml','utf8');for(const s of ['scenario','cancel','repeat','android-cancel-evidence'])if(!c.includes(s))process.exit(1)"
+  Test: node -e "const c=require('fs').readFileSync('.github/workflows/e2e-line02-android-collect.yml','utf8');for(const s of ['scenario','cancel','repeat','attempt_marker','android-cancel-evidence'])if(!c.includes(s))process.exit(1)"
 
 ## BEHAVIOR 条目
 
@@ -47,22 +47,22 @@ target_environment: windows_cloud
   Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "重复取消幂等|已结束任务返回 409"'
 
 - [ ] [BEHAVIOR] [L2] B-04: heartbeat 下发唯一指令并快照稳定设备 [接缝×2]
-  动作: Android 以生产字段和已认证 machine_id 连续 heartbeat 两次
-  预期观察: within 30s 首次响应含唯一 acquisition_cancel，任务 device_machine_id 等于 machine_id，重复心跳不生成第二条活动指令
+  动作: 先确认任务 device_machine_id/cancel_sent_at 均为空，再记录 cancel 接受时间并以生产字段和已认证 machine_id 发 heartbeat
+  预期观察: 实测 within 30s 响应含唯一 acquisition_cancel，只有 heartbeat 后任务 device_machine_id 才等于 machine_id
   等待预算: 30s
-  留证: 两次 heartbeat JSON、publish_tasks 计数与任务设备快照
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "heartbeat 下发唯一取消指令并快照稳定设备"'
+  留证: cancel accepted/command received 实测毫秒差、heartbeat JSON 与 heartbeat 前后真 PG 快照
+  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "heartbeat 下发唯一取消指令并快照稳定设备|取消接受到真实 heartbeat 响应的实测时延不超过 30 秒"'
 
 - [ ] [BEHAVIOR] [L3] B-05: Android 真机抢占采集、安全退出后回执 [接缝×2]
   动作: xian-rog 在采集运行中接收真实取消指令，按 workflow repeat=2 执行
   预期观察: 两轮均停止当前采集、关闭切换账号面板、后续列表读取为 0，随后 report_status=cancelled
   等待预算: 900s
-  留证: android-cancel-evidence/result-1.json、result-2.json 与 GitHub run URL
-  Test: manual:bash -c 'for N in 1 2; do F="sprints/07310943-kernel-0e82adad/evidence/android/result-$N.json"; jq -e ".safe_exit==true and .switch_account_panel_open==false and .continued_list_reads==0 and .report_status==\"cancelled\"" "$F"; done'
+  留证: 绑定本次 github_run_id/head_sha/attempt_marker 的 result-1.json、result-2.json 与 GitHub run URL
+  Test: manual:bash -c ': "${ANDROID_RUN_ID:?}" "${EXPECTED_SHA:?}" "${ATTEMPT_MARKER:?}"; for N in 1 2; do F="sprints/07310943-kernel-0e82adad/evidence/android/result-$N.json"; jq -e --argjson run_id "$ANDROID_RUN_ID" --arg sha "$EXPECTED_SHA" --arg marker "$ATTEMPT_MARKER" --argjson repeat_index "$N" ".github_run_id==\$run_id and .head_sha==\$sha and .attempt_marker==\$marker and .repeat_index==\$repeat_index and .safe_exit==true and .switch_account_panel_open==false and .continued_list_reads==0 and .report_status==\"cancelled\" and (((.command_received_at|fromdateiso8601)-(.cancel_requested_at|fromdateiso8601)) <= 30)" "$F"; done'
 
 - [ ] [BEHAVIOR] [L2] B-06: 无回执两分钟仍等待，绑定回执才落终态
-  动作: 先让 cancel_sent_at 超过 121 秒不回执，再以错误 Agent 和绑定 Agent 分别回执
-  预期观察: 超时仍 cancelling/sent；错误 Agent 403；绑定 Agent 才返回 data.status=cancelled
+  动作: 先在 heartbeat 前用绑定 Agent 提前回执，再让 cancel_sent_at 超过 121 秒不回执，最后以错误 Agent 和经过 heartbeat/sent 的绑定 Agent 分别回执
+  预期观察: heartbeat 前回执 409 CANCEL_NOT_SENT；超时仍 cancelling/sent；错误 Agent 403；只有 heartbeat 真下发后的绑定 Agent 才返回 data.status=cancelled
   等待预算: 5s
   留证: 三次响应与 cancelled_at/ended_at 真 PG 查询
   Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "121 秒无回执|只有绑定 Android Agent 回执"'
@@ -123,7 +123,7 @@ target_environment: windows_cloud
   预期观察: 两轮语义 oracle 全真且结论一致，否则 FAIL/FLAKY
   等待预算: 0s
   留证: evidence/android/result-1.json、result-2.json
-  Test: manual:bash -c 'for N in 1 2; do jq -e ".safe_exit==true and .report_status==\"cancelled\"" "sprints/07310943-kernel-0e82adad/evidence/android/result-$N.json"; done'
+  Test: manual:bash -c ': "${ANDROID_RUN_ID:?}" "${EXPECTED_SHA:?}" "${ATTEMPT_MARKER:?}"; for N in 1 2; do jq -e --argjson run_id "$ANDROID_RUN_ID" --arg sha "$EXPECTED_SHA" --arg marker "$ATTEMPT_MARKER" ".github_run_id==\$run_id and .head_sha==\$sha and .attempt_marker==\$marker and .safe_exit==true and .report_status==\"cancelled\"" "sprints/07310943-kernel-0e82adad/evidence/android/result-$N.json"; done'
 
 - [ ] [BEHAVIOR] [L3] INV-5: 环境身份从真机发现而非写死
   动作: workflow 从 AgentConfig/heartbeat 采集本轮 machine_id 与 adb serial
@@ -166,8 +166,8 @@ target_environment: windows_cloud
   动作: Windows 真浏览器连跑两轮 UI/API/PG，再由 xian-rog 连跑两轮 Android 真机取消
   预期观察: UI 四态正确，Android 安全退出后才 confirmed，同 machine_id 冷却不可被新 agent_id 绕过
   等待预算: 1200s
-  留证: 四张截图、两轮 Playwright trace、两个 Android result JSON 与 run URL
-  Test: manual:bash -c 'bash /tmp/e2e-selfcheck.sh'
+  留证: 四张截图、两轮 Playwright trace、绑定本次 run/SHA/marker 的两个 Android result JSON 与 run URL
+  Test: manual:bash -c 'export SPRINT_DIR="${SPRINT_DIR:-sprints/07310943-kernel-0e82adad}"; bash -c "$(awk "/^## E2E 验收/{found=1;next} found&&/^## /{exit} found&&/^.{3}bash$/{b=1;next} b&&/^.{3}$/{b=0;next} b{print}" "$SPRINT_DIR/contract-draft.md")"'
 
 ## 未覆盖真实链路清单
 

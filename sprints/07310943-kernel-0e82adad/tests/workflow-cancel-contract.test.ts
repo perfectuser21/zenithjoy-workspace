@@ -11,7 +11,18 @@ describe('取消链 CI workflow 合同', () => {
     expect(windows).toContain('Repeat cancel E2E');
     expect(android).toContain('scenario:');
     expect(android).toContain('repeat:');
+    expect(android).toContain('attempt_marker:');
     expect(android).toContain('android-cancel-evidence');
     expect(android).toContain('line02-android-cancel-realmachine-smoke.sh');
+    for (const evidenceField of [
+      'github_run_id',
+      'head_sha',
+      'attempt_marker',
+      'repeat_index',
+      'cancel_requested_at',
+      'command_received_at',
+    ]) {
+      expect(android).toContain(evidenceField);
+    }
   });
 });

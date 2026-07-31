@@ -64,10 +64,10 @@ beforeAll(async () => {
 beforeEach(async () => {
   const task = await testPool.query<{ id: string }>(
     `INSERT INTO zenithjoy.acquisition_collect_tasks
-       (tenant_id, keywords, status, agent_id, device_machine_id, started_at)
-     VALUES ($1, '["装修"]'::jsonb, 'running', $2, $3, NOW())
+       (tenant_id, keywords, status, agent_id, started_at)
+     VALUES ($1, '["装修"]'::jsonb, 'running', $2, NOW())
      RETURNING id`,
-    [tenantA, agentId, stableMachineId],
+    [tenantA, agentId],
   );
   taskId = task.rows[0].id;
 });
@@ -107,6 +107,20 @@ async function reportCancelled(headerAgentId = runtimeAgentId) {
     });
 }
 
+async function sendProductionHeartbeat() {
+  return request(app)
+    .post('/api/agent/heartbeat')
+    .send({
+      license: licenseKey,
+      version: 'contract-red',
+      hostname: `cancel-phone-${run}`,
+      os_type: 'android',
+      agent_id: runtimeAgentId,
+      agent_uuid: agentId,
+      machine_id: stableMachineId,
+    });
+}
+
 describe('Android 获客任务不可逆取消真实接缝', () => {
   it('本人租户取消 running 任务返回 cancelling 且不接受 body tenant_id', async () => {
     const res = await requestCancel();
@@ -123,7 +137,7 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
     expect(Object.keys(res.body).sort()).toEqual(['data', 'success', 'timestamp']);
     expect(Object.keys(res.body.data).sort()).toEqual(['cancel_phase', 'status', 'task_id']);
     expect(Number.isNaN(Date.parse(res.body.timestamp))).toBe(false);
-    for (const forbidden of ['tenant_id', 'device_id', 'paused', 'resumable']) {
+    for (const forbidden of ['tenant_id', 'device_machine_id', 'agent_id', 'paused', 'resumable']) {
       expect(res.body.data).not.toHaveProperty(forbidden);
     }
   });
@@ -157,17 +171,17 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
     const cancelled = await requestCancel();
     expect(cancelled.status).toBe(200);
 
-    const res = await request(app)
-      .post('/api/agent/heartbeat')
-      .send({
-        license: licenseKey,
-        version: 'contract-red',
-        hostname: `cancel-phone-${run}`,
-        os_type: 'android',
-        agent_id: runtimeAgentId,
-        agent_uuid: agentId,
-        machine_id: stableMachineId,
-      });
+    const beforeHeartbeat = await testPool.query<{ device_machine_id: string | null; cancel_sent_at: Date | null }>(
+      `SELECT device_machine_id, cancel_sent_at
+         FROM zenithjoy.acquisition_collect_tasks
+        WHERE id = $1`,
+      [taskId],
+    );
+    expect(beforeHeartbeat.rows[0]).toEqual({ device_machine_id: null, cancel_sent_at: null });
+
+    const cancelAcceptedAt = Date.now();
+    const res = await sendProductionHeartbeat();
+    const commandReceivedAt = Date.now();
 
     expect(res.status).toBe(200);
     const commands = res.body.queued_tasks.filter(
@@ -183,6 +197,7 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
     expect(typeof commands[0].task_id).toBe('string');
     // 只锁生产 Android 真正消费的字段；服务端现有 legacy 兼容字段允许保留。
     expect(commands[0].payload.collect_task_id).toBe(taskId);
+    expect(commandReceivedAt - cancelAcceptedAt).toBeLessThanOrEqual(30_000);
     const persisted = await testPool.query<{ device_machine_id: string; cancel_sent_at: Date }>(
       `SELECT device_machine_id, cancel_sent_at
          FROM zenithjoy.acquisition_collect_tasks
@@ -191,6 +206,25 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
     );
     expect(persisted.rows[0].device_machine_id).toBe(stableMachineId);
     expect(persisted.rows[0].cancel_sent_at).not.toBeNull();
+  });
+
+  it('取消接受到真实 heartbeat 响应的实测时延不超过 30 秒', async () => {
+    const acceptedAt = Date.now();
+    const cancelled = await requestCancel();
+    expect(cancelled.status).toBe(200);
+
+    const heartbeat = await sendProductionHeartbeat();
+    const receivedAt = Date.now();
+    expect(heartbeat.status).toBe(200);
+    expect(heartbeat.body.queued_tasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'acquisition_cancel',
+          payload: expect.objectContaining({ collect_task_id: taskId }),
+        }),
+      ]),
+    );
+    expect(receivedAt - acceptedAt).toBeLessThanOrEqual(30_000);
   });
 
   it('Agent 离线期间保留取消意图且恢复 heartbeat 后继续下发', async () => {
@@ -320,6 +354,32 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
   it('只有绑定 Android Agent 回执后才落 cancelled 并从该刻开始五分钟冷却', async () => {
     const requested = await requestCancel();
     expect(requested.status).toBe(200);
+
+    const premature = await reportCancelled(runtimeAgentId);
+    expect(premature.status).toBe(409);
+    expect(premature.body.error.code).toBe('CANCEL_NOT_SENT');
+    const beforeHeartbeat = await testPool.query(
+      `SELECT status, cancel_sent_at, cancelled_at
+         FROM zenithjoy.acquisition_collect_tasks
+        WHERE id = $1`,
+      [taskId],
+    );
+    expect(beforeHeartbeat.rows[0]).toEqual({
+      status: 'cancelling',
+      cancel_sent_at: null,
+      cancelled_at: null,
+    });
+
+    const heartbeat = await sendProductionHeartbeat();
+    expect(heartbeat.status).toBe(200);
+    expect(heartbeat.body.queued_tasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'acquisition_cancel',
+          payload: expect.objectContaining({ collect_task_id: taskId }),
+        }),
+      ]),
+    );
     const reportStartedAt = Date.now();
 
     const rejected = await reportCancelled(randomUUID());
@@ -348,6 +408,8 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
   it('重复 cancelled 回执幂等且不延长五分钟冷却起点', async () => {
     const requested = await requestCancel();
     expect(requested.status).toBe(200);
+    const heartbeat = await sendProductionHeartbeat();
+    expect(heartbeat.status).toBe(200);
     const confirmed = await reportCancelled(runtimeAgentId);
     expect(confirmed.status).toBe(200);
 
@@ -368,6 +430,8 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
   it('稳定 machine_id 冷却不能被更换 agent_id 绕过且不误伤另一设备', async () => {
     const requested = await requestCancel();
     expect(requested.status).toBe(200);
+    const heartbeat = await sendProductionHeartbeat();
+    expect(heartbeat.status).toBe(200);
     const confirmed = await reportCancelled(runtimeAgentId);
     expect(confirmed.status).toBe(200);
 

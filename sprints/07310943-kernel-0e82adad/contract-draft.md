@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 11)
+# Sprint Contract Draft (Round 12)
 
 sprint: `07310943-kernel-0e82adad`
 task_id: `e76cb826-caaf-404b-b853-845e107408b5`
@@ -140,9 +140,9 @@ Dashboard 使用浏览器 session；body 字面为 `{"task_id":"<uuid>"}`，禁�
 
 **可观测行为**: 真实 heartbeat shape 得到唯一 `acquisition_cancel`；取走时写 `cancel_sent_at` 和稳定 `device_machine_id`，前台显示等待设备响应。
 
-**验证命令**: `DATABASE_URL="$DATABASE_URL" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "heartbeat 下发唯一取消指令并快照稳定设备"`
+**验证命令**: `DATABASE_URL="$DATABASE_URL" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "heartbeat 下发唯一取消指令并快照稳定设备|取消接受到真实 heartbeat 响应的实测时延不超过 30 秒"`
 
-**硬阈值**: 30 秒内 exactly 1；`device_machine_id` 字面等于已认证 heartbeat 的 `machine_id`。
+**硬阈值**: 从 cancel HTTP 接受时间到生产 shape heartbeat 响应携带指令的实测时差 `<= 30000ms` 且 exactly 1；heartbeat 前 `device_machine_id/cancel_sent_at` 必须为 null，heartbeat 后 `device_machine_id` 才字面等于已认证 `machine_id`。
 
 ### Step 4: Android 抢占当前采集并安全退出
 
@@ -158,11 +158,11 @@ Dashboard 使用浏览器 session；body 字面为 `{"task_id":"<uuid>"}`，禁�
 
 **来源**: `[FROM_PRD]` — Golden Path 步骤 5 与“2 分钟无回执不假成功”。
 
-**可观测行为**: sent 超 120 秒仍为等待；绑定 Agent 回执后原子落终态；重复回执不改变首次 `cancelled_at`。
+**可观测行为**: sent 超 120 秒仍为等待；即使绑定 Agent 也不能在 heartbeat 真取走指令前回执成功；绑定 Agent 经过 heartbeat/sent 后回执才原子落终态；重复回执不改变首次 `cancelled_at`。
 
 **验证命令**: `DATABASE_URL="$DATABASE_URL" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "121 秒无回执|绑定 Android Agent 回执|重复 cancelled 回执"`
 
-**硬阈值**: 无回执永不自动 cancelled；错误 Agent 403；成功响应 `data.status=cancelled`。
+**硬阈值**: heartbeat 前回执 409 `CANCEL_NOT_SENT` 且 DB 仍 cancelling；无回执永不自动 cancelled；错误 Agent 403；成功响应 `data.status=cancelled`。
 
 ### Step 6: 同一物理设备冷却 5 分钟
 
@@ -192,7 +192,7 @@ Dashboard 使用浏览器 session；body 字面为 `{"task_id":"<uuid>"}`，禁�
 已逐行读取两份实际 workflow：
 
 1. `.github/workflows/e2e-orphan-consolidation-windows.yml`：已有 Windows Chromium/Vite；`[CI_GAP: 未启动 Postgres/API，未跑真实取消、三态与冷却]`。补齐后 workflow 必须实际运行 `apps/dashboard/e2e/acquisition-cancel.spec.ts` 两次且任一失败阻塞 gate。
-2. `.github/workflows/e2e-line02-android-collect.yml`：已有 xian-rog + adb + 普通采集 smoke；`[CI_GAP: 无 cancel 输入、无抢占/关面板/回执 evidence]`。补齐后 `scenario=cancel` 必须调用真实取消 smoke 并上传证据。
+2. `.github/workflows/e2e-line02-android-collect.yml`：已有 xian-rog + adb + 普通采集 smoke；`[CI_GAP: 无 cancel 输入、无抢占/关面板/回执 evidence，证据未绑定触发 run/SHA]`。补齐后 `scenario=cancel` 必须调用真实取消 smoke并上传含 `github_run_id/head_sha/attempt_marker/repeat_index/cancel_requested_at/command_received_at` 的证据。
 
 ## E2E 验收（最终 final-e2e 跑）
 
@@ -207,15 +207,20 @@ set -euo pipefail
 : "${GH_REPO:=perfectuser21/zenithjoy-workspace}"
 test "${RUNNER_OS:-}" = "Windows" || { echo "FAIL: windows_cloud runner required"; exit 1; }
 pwsh -NoProfile -File "$SPRINT_DIR/e2e-verify.ps1" -BaseUrl http://localhost:5174 -ApiUrl http://localhost:3000 -Repeat 2 -ScreenshotDir "$SPRINT_DIR/screenshots"
-gh workflow run e2e-line02-android-collect.yml --repo "$GH_REPO" --ref "$GITHUB_REF_NAME" -f scenario=cancel -f repeat=2
-sleep 5
-RUN_ID=$(gh run list --repo "$GH_REPO" --workflow e2e-line02-android-collect.yml --branch "$GITHUB_REF_NAME" --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')
+EXPECTED_SHA=$(git rev-parse HEAD)
+DISPATCHED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+ATTEMPT_MARKER="cancel-${EXPECTED_SHA:0:12}-$(date +%s)-$$"
+gh workflow run e2e-line02-android-collect.yml --repo "$GH_REPO" --ref "$GITHUB_REF_NAME" -f scenario=cancel -f repeat=2 -f attempt_marker="$ATTEMPT_MARKER"
+RUN_ID=""
+for DISCOVERY_POLL in $(seq 1 30); do RUN_ID=$(gh run list --repo "$GH_REPO" --workflow e2e-line02-android-collect.yml --branch "$GITHUB_REF_NAME" --event workflow_dispatch --limit 20 --json databaseId,createdAt,headSha | jq -r --arg ts "$DISPATCHED_AT" --arg sha "$EXPECTED_SHA" '[.[] | select(.createdAt >= $ts and .headSha == $sha)] | first | .databaseId // empty'); test -n "$RUN_ID" && break; sleep 2; done
 test -n "$RUN_ID"
 for POLL in $(seq 1 180); do STATUS=$(gh run view "$RUN_ID" --repo "$GH_REPO" --json status --jq '.status'); test "$STATUS" = completed && break; test "$POLL" -lt 180 || exit 1; sleep 5; done
-test "$(gh run view "$RUN_ID" --repo "$GH_REPO" --json conclusion --jq '.conclusion')" = success
+RUN_META=$(gh run view "$RUN_ID" --repo "$GH_REPO" --json conclusion,headSha,url)
+test "$(jq -r .conclusion <<<"$RUN_META")" = success
+test "$(jq -r .headSha <<<"$RUN_META")" = "$EXPECTED_SHA"
 mkdir -p "$SPRINT_DIR/evidence/android"
 gh run download "$RUN_ID" --repo "$GH_REPO" --name android-cancel-evidence --dir "$SPRINT_DIR/evidence/android"
-for N in 1 2; do jq -e '.safe_exit==true and .switch_account_panel_open==false and .continued_list_reads==0 and .report_status=="cancelled" and (.machine_id|type=="string" and length>0)' "$SPRINT_DIR/evidence/android/result-$N.json"; done
+for N in 1 2; do jq -e --argjson run_id "$RUN_ID" --arg sha "$EXPECTED_SHA" --arg marker "$ATTEMPT_MARKER" --argjson repeat_index "$N" '.github_run_id==$run_id and .head_sha==$sha and .attempt_marker==$marker and .repeat_index==$repeat_index and .scenario=="cancel" and .safe_exit==true and .switch_account_panel_open==false and .continued_list_reads==0 and .report_status=="cancelled" and (.machine_id|type=="string" and length>0) and ((.cancel_requested_at|fromdateiso8601) <= (.command_received_at|fromdateiso8601)) and (((.command_received_at|fromdateiso8601)-(.cancel_requested_at|fromdateiso8601)) <= 30)' "$SPRINT_DIR/evidence/android/result-$N.json"; done
 test -s "$SPRINT_DIR/screenshots/cancel-requested.png"
 test -s "$SPRINT_DIR/screenshots/cancel-sent.png"
 test -s "$SPRINT_DIR/screenshots/cancel-confirmed.png"
@@ -243,7 +248,7 @@ echo "OK: Windows 真后端 UI x2 + Android 真机取消 x2"
 | 把可变 agent_id 当设备键 | 重装/重注册立即绕过冷却 | heartbeat 认证后快照 `machine_id`；真 PG 测同 machine_id 换 agent_id 仍 409 |
 | 403/404 差异枚举 | 跨租户探测任务存在性 | 跨租户与随机不存在 UUID 的状态/信封深相等测试 |
 | 取消排队而不抢占 | Agent 继续操作账号且前台假成功 | Android 真机双跑，先 safe_exit 后 report，验面板关闭与读取计数为 0 |
-| workflow 只跑替身 | CI 假绿 | Windows 启真 API/PG 且禁 page.route；Android 上传语义 evidence |
+| workflow 只跑替身或下载到历史 artifact | CI 假绿 | Windows 启真 API/PG 且禁 page.route；Android evidence 绑定本次 run ID、HEAD SHA、唯一 marker，并校验真实 30 秒时延 |
 | 重复请求/回执改时间 | 冷却被无限延长 | 唯一活动命令 + `COALESCE(cancelled_at,NOW())` 语义的真 PG 幂等测试 |
 
 ## 八要素需求规范
@@ -291,6 +296,7 @@ N/A：不接受外部自然语言或 prompt；HTTP/Android 输入按 schema、�
 | 取消与 schema | `sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts` | `本人租户取消 running 任务返回 cancelling` | 现 route 仍要求 body tenant_id |
 | 防枚举 | 同上 | `跨租户与不存在任务返回不可区分的 403` | 现 route 分 404/成功路径 |
 | 心跳设备快照 | 同上 | `heartbeat 下发唯一取消指令并快照稳定设备` | 现任务无 device_machine_id |
+| 心跳下发时延 | 同上 | `取消接受到真实 heartbeat 响应的实测时延不超过 30 秒` | 现链路无取消时延 oracle |
 | 幂等 | 同上 | `重复取消幂等且不生成第二条指令` | 现无唯一命令与首次时间 |
 | 回执终态 | 同上 | `只有绑定 Android Agent 回执后才落 cancelled` | 现无 cancelled_at |
 | 稳定设备冷却 | 同上 | `稳定 machine_id 冷却不能被更换 agent_id 绕过` | 现 start 无 machine_id 冷却闸 |
@@ -300,4 +306,4 @@ N/A：不接受外部自然语言或 prompt；HTTP/Android 输入按 schema、�
 
 - PRD 指定主 target 为 `windows_cloud`；Android 真机段按 PRD 要求独立路由 `android_realmachine`。
 - 本 sprint 不含暂停/恢复、批量取消、staging 发布、Bark 通知、prod promote 或已采数据回滚。
-- Round 11 只修 Reviewer 指出的设备身份、防枚举、五行剧本、CI 真链、风险登记与测试路径一致性，删除 Round 10 的 PRD 外 staging/Bark/promote 范围。
+- Round 12 仅修 Reviewer 指出的五项阻塞：report 必须经过 heartbeat/sent、heartbeat 前设备快照为空、E2E 入口真实可执行、Android evidence 绑定本次 run/SHA 且实测 30 秒 NFR、补齐取消响应禁用字段；不扩 PRD 范围。
