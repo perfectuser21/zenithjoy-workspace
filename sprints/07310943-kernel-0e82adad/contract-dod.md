@@ -67,10 +67,10 @@ target_environment: windows_cloud
   Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "取消指令发出 121 秒无回执仍保持 cancelling sent"'
 
 - [ ] [BEHAVIOR] [L2] B-06: 绑定 Agent 回执后才落 cancelled 并启动冷却
-  动作: 以任务绑定 agent 的 x-agent-id 发送 production reportCancel body
-  预期观察: API 返回 cancelled，DB 同事务写 cancelled_at 与 ended_at
+  动作: 以生产 AgentConfig.agentId 对应的 agents.agent_id 文本 slug 作为 x-agent-id，发送 production reportCancel body
+  预期观察: API 返回 cancelled，DB 同事务写不早于本次请求开始时刻的 cancelled_at 与 ended_at
   等待预算: 5s
-  留证: report response 与带 created_at 时间窗的 DB 查询结果
+  留证: report response 与 cancelled_at/ended_at 本次请求时间窗查询结果
   Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "只有绑定 Android Agent 回执后才落 cancelled"'
 
 - [ ] [BEHAVIOR] [L2] B-07: 同设备冷却 5 分钟且显示剩余时间
