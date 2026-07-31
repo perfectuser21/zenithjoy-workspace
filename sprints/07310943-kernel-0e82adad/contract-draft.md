@@ -212,7 +212,7 @@ DISPATCHED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 ATTEMPT_MARKER="cancel-${EXPECTED_SHA:0:12}-$(date +%s)-$$"
 gh workflow run e2e-line02-android-collect.yml --repo "$GH_REPO" --ref "$GITHUB_REF_NAME" -f scenario=cancel -f repeat=2 -f attempt_marker="$ATTEMPT_MARKER"
 RUN_ID=""
-for DISCOVERY_POLL in $(seq 1 30); do RUN_ID=$(gh run list --repo "$GH_REPO" --workflow e2e-line02-android-collect.yml --branch "$GITHUB_REF_NAME" --event workflow_dispatch --limit 20 --json databaseId,createdAt,headSha | jq -r --arg ts "$DISPATCHED_AT" --arg sha "$EXPECTED_SHA" '[.[] | select(.createdAt >= $ts and .headSha == $sha)] | first | .databaseId // empty'); test -n "$RUN_ID" && break; sleep 2; done
+for DISCOVERY_POLL in $(seq 1 30); do RUN_ID=$(gh run list --repo "$GH_REPO" --workflow e2e-line02-android-collect.yml --branch "$GITHUB_REF_NAME" --event workflow_dispatch --limit 20 --json databaseId,createdAt,headSha | jq -r --arg ts "$DISPATCHED_AT" --arg sha "$EXPECTED_SHA" '[.[] | select((.createdAt|fromdateiso8601) >= ($ts|fromdateiso8601) and .headSha == $sha)] | first | .databaseId // empty'); test -n "$RUN_ID" && break; sleep 2; done
 test -n "$RUN_ID"
 for POLL in $(seq 1 180); do STATUS=$(gh run view "$RUN_ID" --repo "$GH_REPO" --json status --jq '.status'); test "$STATUS" = completed && break; test "$POLL" -lt 180 || exit 1; sleep 5; done
 RUN_META=$(gh run view "$RUN_ID" --repo "$GH_REPO" --json conclusion,headSha,url)
