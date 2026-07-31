@@ -21,6 +21,7 @@ let tenantA = '';
 let tenantB = '';
 let taskId = '';
 let agentId = '';
+let runtimeAgentId = '';
 let licenseKey = '';
 
 beforeAll(async () => {
@@ -48,6 +49,7 @@ beforeAll(async () => {
     [tenantA, `cancel-agent-${run}`, `cancel-phone-${run}`, license.rows[0].id],
   );
   agentId = agent.rows[0].id;
+  runtimeAgentId = `cancel-agent-${run}`;
 
   const task = await testPool.query<{ id: string }>(
     `INSERT INTO zenithjoy.acquisition_collect_tasks
@@ -92,16 +94,16 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
     }
   });
 
-  it('跨租户取消返回 TASK_NOT_FOUND 且不泄露设备或任务数据', async () => {
+  it('跨租户取消返回 403 FORBIDDEN 且不泄露设备或任务数据', async () => {
     const res = await request(app)
       .post('/api/acquisition/collect/cancel')
       .set('X-Feishu-User-Id', userB)
       .send({ task_id: taskId });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
     expect(res.body.error).toEqual({
-      code: 'TASK_NOT_FOUND',
-      message: '采集任务不存在',
+      code: 'FORBIDDEN',
+      message: '无权操作该采集任务',
     });
     expect(JSON.stringify(res.body)).not.toContain(agentId);
     expect(JSON.stringify(res.body)).not.toContain(tenantA);
@@ -115,6 +117,7 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
         version: 'contract-red',
         hostname: `cancel-phone-${run}`,
         os_type: 'android',
+        agent_id: runtimeAgentId,
         agent_uuid: agentId,
         machine_id: `cancel-machine-${run}`,
       });
@@ -125,6 +128,47 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
         task.type === 'acquisition_cancel' && task.payload?.collect_task_id === taskId,
     );
     expect(commands).toHaveLength(1);
+  });
+
+  it('Agent 离线期间保留取消意图且恢复 heartbeat 后继续下发', async () => {
+    await testPool.query(
+      `UPDATE zenithjoy.agents SET status = 'offline' WHERE id = $1`,
+      [agentId],
+    );
+    const pending = await testPool.query(
+      `SELECT status, cancel_requested_at, cancelled_at
+         FROM zenithjoy.acquisition_collect_tasks
+        WHERE id = $1`,
+      [taskId],
+    );
+    expect(pending.rows[0].status).toBe('cancelling');
+    expect(pending.rows[0].cancel_requested_at).not.toBeNull();
+    expect(pending.rows[0].cancelled_at).toBeNull();
+
+    await testPool.query(
+      `UPDATE zenithjoy.agents SET status = 'online' WHERE id = $1`,
+      [agentId],
+    );
+    const recovered = await request(app)
+      .post('/api/agent/heartbeat')
+      .send({
+        license: licenseKey,
+        version: 'contract-red',
+        hostname: `cancel-phone-${run}`,
+        os_type: 'android',
+        agent_id: runtimeAgentId,
+        agent_uuid: agentId,
+        machine_id: `cancel-machine-${run}`,
+      });
+    expect(recovered.status).toBe(200);
+    expect(recovered.body.queued_tasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'acquisition_cancel',
+          payload: expect.objectContaining({ collect_task_id: taskId }),
+        }),
+      ]),
+    );
   });
 
   it('重复取消幂等且不生成第二条指令、不延长取消时间', async () => {
@@ -155,7 +199,61 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
     expect(after.rows[0].cancel_requested_at).toEqual(before.rows[0].cancel_requested_at);
   });
 
+  it('已结束任务返回 409 TASK_NOT_CANCELLABLE 且终态不变', async () => {
+    const done = await testPool.query<{ id: string }>(
+      `INSERT INTO zenithjoy.acquisition_collect_tasks
+         (tenant_id, keywords, status, agent_id, started_at, ended_at)
+       VALUES ($1, '["装修"]'::jsonb, 'done', $2, NOW(), NOW())
+       RETURNING id`,
+      [tenantA, agentId],
+    );
+    const res = await request(app)
+      .post('/api/acquisition/collect/cancel')
+      .set('X-Feishu-User-Id', userA)
+      .send({ task_id: done.rows[0].id });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('TASK_NOT_CANCELLABLE');
+    const row = await testPool.query(
+      `SELECT status, cancel_requested_at
+         FROM zenithjoy.acquisition_collect_tasks
+        WHERE id = $1`,
+      [done.rows[0].id],
+    );
+    expect(row.rows[0]).toEqual({ status: 'done', cancel_requested_at: null });
+  });
+
+  it('取消指令发出 121 秒无回执仍保持 cancelling sent', async () => {
+    await testPool.query(
+      `UPDATE zenithjoy.acquisition_collect_tasks
+          SET status = 'cancelling',
+              cancel_sent_at = NOW() - interval '121 seconds',
+              cancelled_at = NULL
+        WHERE id = $1`,
+      [taskId],
+    );
+    const res = await request(app)
+      .get(`/api/acquisition/collect/${taskId}`)
+      .set('X-Feishu-User-Id', userA);
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('cancelling');
+    expect(res.body.data.cancel_phase).toBe('sent');
+    expect(res.body.data.cancelled_at).toBeNull();
+  });
+
   it('只有绑定 Android Agent 回执后才落 cancelled 并从该刻开始五分钟冷却', async () => {
+    const rejected = await request(app)
+      .post('/api/acquisition/collect/report')
+      .set('x-agent-id', randomUUID())
+      .send({
+        task_id: taskId,
+        video_id: `cancelled_${taskId.slice(0, 8)}`,
+        commenters: [],
+        checkpoint: { last_video_id: null, processed_video_ids: [] },
+        terminal: true,
+        partial_reason: 'user_cancelled',
+      });
+    expect(rejected.status).toBe(403);
+
     const res = await request(app)
       .post('/api/acquisition/collect/report')
       .set('x-agent-id', agentId)
@@ -163,6 +261,7 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
         task_id: taskId,
         video_id: `cancelled_${taskId.slice(0, 8)}`,
         commenters: [],
+        checkpoint: { last_video_id: null, processed_video_ids: [] },
         terminal: true,
         partial_reason: 'user_cancelled',
       });
@@ -178,6 +277,31 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
     expect(row.rows[0].status).toBe('cancelled');
     expect(row.rows[0].cancelled_at).not.toBeNull();
     expect(row.rows[0].ended_at).not.toBeNull();
+  });
+
+  it('重复 cancelled 回执幂等且不延长五分钟冷却起点', async () => {
+    const before = await testPool.query(
+      `SELECT cancelled_at FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
+      [taskId],
+    );
+    const repeated = await request(app)
+      .post('/api/acquisition/collect/report')
+      .set('x-agent-id', agentId)
+      .send({
+        task_id: taskId,
+        video_id: `cancelled_${taskId.slice(0, 8)}`,
+        commenters: [],
+        checkpoint: { last_video_id: null, processed_video_ids: [] },
+        terminal: true,
+        partial_reason: 'user_cancelled',
+      });
+    expect(repeated.status).toBe(200);
+    expect(repeated.body.data.status).toBe('cancelled');
+    const after = await testPool.query(
+      `SELECT cancelled_at FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
+      [taskId],
+    );
+    expect(after.rows[0].cancelled_at).toEqual(before.rows[0].cancelled_at);
   });
 
   it('冷却期内同设备新任务返回 DEVICE_CANCEL_COOLDOWN 和剩余秒数', async () => {
