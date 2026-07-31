@@ -1,0 +1,40 @@
+{
+  "initiative_id": "pending",
+  "journey_type": "user_facing",
+  "journey_type_reason": "核心入口、取消进度与冷却提示位于客户 Dashboard，并需 Android Agent 真机协同确认。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "交付 Android 获客任务不可逆放弃闭环",
+      "scope": "让本人租户从 Dashboard 放弃单设备运行中获客任务，经心跳指令驱动 Android 安全退出并回执后确认取消，同时执行五分钟同设备冷却；不含暂停、批量取消或已采数据回滚。",
+      "dod": [
+        "[BEHAVIOR] 点击放弃后立即显示取消中，重复请求只产生一个取消意图和一条指令",
+        "[BEHAVIOR] 下一次生产形状心跳在三十秒内下发唯一 acquisition_cancel 指令",
+        "[BEHAVIOR] Android 真机安全退出并回执前，服务端和前台不得显示已取消",
+        "[BEHAVIOR] 回执后同设备五分钟内重启被拒并显示剩余秒数，期满恢复",
+        "[BEHAVIOR] 两租户真实数据验证跨租户取消不泄露任务或设备",
+        "[ARTIFACT] 真 Postgres integration、真实后端 Playwright、Android JUnit 与 xian-rog workflow 证据齐全"
+      ],
+      "files": [
+        "apps/api/db/migrations/20260731_acquisition_cancel_lifecycle.sql",
+        "apps/api/src/routes/acquisition.ts",
+        "apps/api/src/routes/walking-skeleton.ts",
+        "apps/api/src/services/walking-skeleton.service.ts",
+        "apps/api/tests/integration/acquisition-cancel.integration.test.ts",
+        "apps/dashboard/src/pages/AcquisitionTasksPage.tsx",
+        "apps/dashboard/e2e/acquisition-cancel.spec.ts",
+        "services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/AgentService.kt",
+        "services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/HttpHeartbeatLoop.kt",
+        "services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/collect/AcquisitionCancellationCoordinator.kt",
+        "services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/collect/AcquisitionCancellationCoordinatorTest.kt",
+        ".github/workflows/e2e-line02-android-collect.yml",
+        ".github/workflows/scripts/smoke/golden-path-2-smoke.sh",
+        ".github/workflows/scripts/smoke/dispatch-line02-android-cancel.sh",
+        "sprints/07310943-kernel-0e82adad/e2e-verify.ps1"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 120
+    }
+  ]
+}
