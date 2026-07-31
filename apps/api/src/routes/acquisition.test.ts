@@ -1052,32 +1052,6 @@ describe('POST /api/acquisition/collect/report-videos — Stage1 清单回报 [B
     expect(upd).toBeTruthy();
   });
 
-  it('新取消合同等待物理回执时，普通视频回报不得提前写 cancelled', async () => {
-    mockClientQuery.mockImplementation(async (sql: unknown) => {
-      const s = String(sql);
-      if (s.includes('FOR UPDATE')) {
-        return {
-          rows: [{
-            id: TASK_ID,
-            tenant_id: TENANT,
-            status: 'cancelling',
-            agent_id: 'agent-1',
-            lead_count_raw: 3,
-            cancel_command_id: '00000000-0000-0000-0000-00000000ca11',
-          }],
-        };
-      }
-      return { rows: [] };
-    });
-    const res = await request(app).post('/api/acquisition/collect/report-videos')
-      .set('x-agent-id', 'agent-1').send({ task_id: TASK_ID, videos: [{ video_id: 'v1' }] });
-    expect(res.status).toBe(200);
-    expect(res.body.data).toMatchObject({ ignored: true, status: 'cancelling' });
-    const prematureTerminalWrite = mockClientQuery.mock.calls
-      .map((c) => String(c[0]))
-      .find((sql) => /UPDATE zenithjoy\.acquisition_collect_tasks[\s\S]*status\s*=\s*'cancelled'/i.test(sql));
-    expect(prematureTerminalWrite).toBeUndefined();
-  });
 });
 
 // ────── Bug C 回归：share_url → 服务端解析真实 video_id ──────
@@ -1205,21 +1179,6 @@ describe('POST /api/acquisition/collect/report — 终态守卫 + settle 结算 
     const leadWrites = mockClientQuery.mock.calls.map((c) => String(c[0]))
       .filter((s) => s.includes('acquisition_leads'));
     expect(leadWrites).toHaveLength(0);
-  });
-
-  it('新取消合同等待物理回执时，普通评论回报保持 cancelling', async () => {
-    mockClientQuery.mockImplementation(clientImpl(taskRow({
-      status: 'cancelling',
-      cancel_command_id: '00000000-0000-0000-0000-00000000ca11',
-    })));
-    const res = await request(app).post('/api/acquisition/collect/report')
-      .send({ task_id: TASK_ID, video_id: 'v1', commenters: [{ nickname: 'n1' }] });
-    expect(res.status).toBe(200);
-    expect(res.body.data).toMatchObject({ ignored: true, status: 'cancelling' });
-    const prematureTerminalWrite = mockClientQuery.mock.calls
-      .map((c) => String(c[0]))
-      .find((sql) => /UPDATE zenithjoy\.acquisition_collect_tasks[\s\S]*status\s*=\s*'cancelled'/i.test(sql));
-    expect(prematureTerminalWrite).toBeUndefined();
   });
 
   it('回报 upsert 用 (task_id, video_id) 并打 comments_reported_at', async () => {

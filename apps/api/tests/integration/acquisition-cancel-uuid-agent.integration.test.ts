@@ -68,6 +68,64 @@ describe('Android cancel receipt accepts heartbeat UUID identity', () => {
     await testPool.end();
   });
 
+  it('keeps ordinary video and comment reports cancelling until the physical receipt', async () => {
+    const cancel = await request(app)
+      .post('/api/acquisition/collect/cancel')
+      .set('X-Feishu-User-Id', userId)
+      .send({ task_id: taskId });
+    expect(cancel.status).toBe(200);
+
+    const requested = await testPool.query<{
+      status: string;
+      cancel_command_id: string | null;
+      cancelled_at: Date | null;
+    }>(
+      `SELECT status, cancel_command_id, cancelled_at
+         FROM zenithjoy.acquisition_collect_tasks
+        WHERE id = $1`,
+      [taskId],
+    );
+    expect(requested.rows[0]).toMatchObject({
+      status: 'cancelling',
+      cancelled_at: null,
+    });
+    expect(requested.rows[0].cancel_command_id).not.toBeNull();
+
+    const videos = await request(app)
+      .post('/api/acquisition/collect/report-videos')
+      .set('x-agent-id', agentUuid)
+      .send({ task_id: taskId, videos: [{ video_id: `pre-receipt-video-${run}` }] });
+    expect(videos.status).toBe(200);
+    expect(videos.body.data).toMatchObject({ ignored: true, status: 'cancelling' });
+
+    const comments = await request(app)
+      .post('/api/acquisition/collect/report')
+      .set('x-agent-id', agentUuid)
+      .send({
+        task_id: taskId,
+        video_id: `pre-receipt-comments-${run}`,
+        commenters: [{ nickname: 'pre-receipt' }],
+      });
+    expect(comments.status).toBe(200);
+    expect(comments.body.data).toMatchObject({ ignored: true, status: 'cancelling' });
+
+    const afterOrdinaryReports = await testPool.query<{
+      status: string;
+      cancelled_at: Date | null;
+      ended_at: Date | null;
+    }>(
+      `SELECT status, cancelled_at, ended_at
+         FROM zenithjoy.acquisition_collect_tasks
+        WHERE id = $1`,
+      [taskId],
+    );
+    expect(afterOrdinaryReports.rows[0]).toEqual({
+      status: 'cancelling',
+      cancelled_at: null,
+      ended_at: null,
+    });
+  });
+
   it('reports cancelled with the UUID persisted from heartbeat', async () => {
     const cancel = await request(app)
       .post('/api/acquisition/collect/cancel')
