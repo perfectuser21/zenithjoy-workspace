@@ -5,6 +5,10 @@ task_id: `e76cb826-caaf-404b-b853-845e107408b5`
 journey_id: `afa6abca-53c0-4815-8594-b7fb81ca547f`
 step_id: `step6`
 
+## GP-Anchor
+
+GP-Anchor: line02/keyword_acquisition#step6
+
 ## 技术上下文与推导
 
 - `api_registry` 未命中获客取消端点；沿用 `apps/api/src/routes/acquisition.ts` 的 `{success,data,timestamp}` / `{success,error,timestamp}` 信封。
