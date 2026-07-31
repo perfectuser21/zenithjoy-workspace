@@ -1,4 +1,4 @@
-import { Activity, LayoutDashboard, LogOut, Wrench } from 'lucide-react';
+import { Activity, ClipboardCheck, History, LayoutDashboard, LogOut, Wrench } from 'lucide-react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
@@ -7,6 +7,9 @@ import HomePage from './pages/HomePage';
 import SkillEvalPage from './pages/SkillEvalPage';
 import LineHealthPage from './pages/LineHealthPage';
 import LineHealthDetailPage from './pages/LineHealthDetailPage';
+import AcceptancePage from './pages/AcceptancePage';
+import AcceptanceDetailPage from './pages/AcceptanceDetailPage';
+import AcceptanceHistoryPage from './pages/AcceptanceHistoryPage';
 import EnvBadge from './components/EnvBadge';
 
 function Shell() {
@@ -40,6 +43,12 @@ function Shell() {
           <NavLink to="/line-health" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
             <Activity size={18} /> 业务线健康
           </NavLink>
+          <NavLink to="/acceptance" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+            <ClipboardCheck size={18} /> 验收
+          </NavLink>
+          <NavLink to="/acceptance-history" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+            <History size={18} /> 验收历史
+          </NavLink>
         </nav>
         <div className="sidebar-footer">
           <div className="muted">{user?.email || user?.name}</div>
@@ -54,6 +63,9 @@ function Shell() {
           <Route path="/skill-eval" element={<SkillEvalPage />} />
           <Route path="/line-health" element={<LineHealthPage />} />
           <Route path="/line-health/:lineKey" element={<LineHealthDetailPage />} />
+          <Route path="/acceptance" element={<AcceptancePage />} />
+          <Route path="/acceptance/:runKey" element={<AcceptanceDetailPage />} />
+          <Route path="/acceptance-history" element={<AcceptanceHistoryPage />} />
           <Route path="/login/feishu" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -38,5 +38,10 @@ export function staffGuard(req: Request, res: Response, next: NextFunction): voi
     return;
   }
 
+  // 挂载实际通过校验的身份，供下游路由使用（例如验收结果提交的 submitted_by 留痕）。
+  // 下游绝不能自行重新解析原始 X-User-Email/X-Feishu-User-Id header——那两个头未经校验，
+  // 只要另一个头命中白名单就能放行，若下游各自解析会让未验证的字符串被当成可信身份写入审计记录。
+  (req as Request & { staffIdentity?: string }).staffIdentity = emailOk ? userEmail : userOpenId;
+
   next();
 }

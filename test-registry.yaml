@@ -5353,3 +5353,51 @@ agent_suite:
   status: active
   product: dev_pipeline
   note: "PR #1528 真机复现：detect-review-issues.js 对 DeepSeek V3「#### 🔴 严重问题\\n- **无**」这种无括号无冒号+独立bullet的输出格式误判为有严重问题，阻塞了实际无问题的PR。补regex分支+node --test 4个场景（含原格式回归）。"
+
+- id: staff-acceptance-service-unit
+  path: apps/api/src/services/__tests__/acceptance.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 中台认证
+  note: "验收终局（决策fc7b5dc0）Staff Hub直连Brain反代层：pending/history读路径Brain不可达降级availability=degraded不抛异常，submitResults写路径失败必须冒泡不能伪装成功。"
+
+- id: staff-acceptance-routes-unit
+  path: apps/api/src/routes/__tests__/staff-acceptance.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 中台认证
+  note: "验收模块路由层HTTP语义：pending/history 200含availability字段、history缺gp_id 400、results空数组400、service抛错502、无认证头403、submitted_by读staffGuard校验通过的身份（防伪造header污染审计记录）。"
+
+- id: staff-acceptance-list-unit
+  path: apps/staff-hub/src/pages/AcceptancePage.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: 中台认证
+  note: "验收列表页：待验收run渲染+待处理数角标、Brain降级态展示提示不崩溃。"
+
+- id: staff-acceptance-detail-unit
+  path: apps/staff-hub/src/pages/AcceptanceDetailPage.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: 中台认证
+  note: "验收详情页：矩阵总览+按Step分组判定项渲染、工作卡展开、提交调用结果端点、stepOf纯函数归一化(Step1/Step 1/step1统一成Step N)。"
+
+- id: staff-acceptance-history-unit
+  path: apps/staff-hub/src/pages/AcceptanceHistoryPage.test.tsx
+  type: unit
+  ci: L3
+  status: active
+  product: 中台认证
+  note: "验收历史页：按GP查询历史run+展开看判定项结果意见，查询失败清空陈旧结果避免与降级提示同屏。"
+
+- id: staff-acceptance-e2e
+  path: apps/staff-hub/e2e/acceptance.spec.ts
+  type: e2e
+  ci: windows_cloud
+  status: active
+  product: 中台认证
+  note: "验收模块 Playwright E2E（列表/详情矩阵/历史页）。变体C：真实后端，禁page.route()，降级/正常路径用.or()二选一断言。workflow: e2e-staff-acceptance-windows.yml"
