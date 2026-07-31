@@ -11,8 +11,8 @@ android {
         applicationId = "com.zenithjoy.agent"
         minSdk = 26
         targetSdk = 34
-        versionCode = 21
-        versionName = "2.1.17"
+        versionCode = 23
+        versionName = "2.1.19"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -33,6 +33,12 @@ android {
     }
 
     buildTypes {
+        create("e2e") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".e2e"
+            versionNameSuffix = "-e2e"
+            isDebuggable = true
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

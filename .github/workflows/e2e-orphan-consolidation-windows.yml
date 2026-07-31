@@ -97,6 +97,7 @@ jobs:
       E2E_BASE_URL: 'http://localhost:5174'
       BASE_URL: 'http://localhost:5174'
       PLAYWRIGHT_BASE_URL: 'http://localhost:5174'
+      DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/zenithjoy_test'
 
     steps:
       - uses: actions/checkout@v4
@@ -116,9 +117,22 @@ jobs:
         working-directory: apps/dashboard
         run: npx playwright install chromium --with-deps
 
+      - name: Start apps/api with real Postgres
+        run: |
+          choco install postgresql --no-progress -y --params '/Password:postgres' --params-global
+          PG_HOME=$(powershell -NoProfile -Command "(Get-ChildItem 'C:\Program Files\PostgreSQL' -Directory | Sort-Object Name -Descending | Select-Object -First 1).FullName")
+          export PGPASSWORD=postgres
+          "$PG_HOME/bin/createdb.exe" -U postgres -h localhost zenithjoy_test
+          npm run migrate --workspace apps/api
+          npm run build --workspace apps/api
+          npm run dev --workspace apps/api &
+          for i in $(seq 1 60); do curl -fs http://localhost:3000/health >/dev/null 2>&1 && break; sleep 1; done
+          curl -fs http://localhost:3000/health
+
       - name: Start Vite dev server (VITE_SKIP_AUTH=true)
         working-directory: apps/dashboard
         env:
+          VITE_API_URL: 'http://localhost:3000'
           VITE_SKIP_AUTH: 'true'
           VITE_MOCK_USER_ID: 'dev-user-001'
           VITE_MOCK_USER_NAME: '测试用户'
@@ -143,6 +157,12 @@ jobs:
         continue-on-error: true
         working-directory: apps/dashboard
         run: npx playwright test e2e/acquisition-android-entry.spec.ts --reporter=list
+
+      - name: Repeat cancel E2E
+        working-directory: apps/dashboard
+        run: |
+          npx playwright test e2e/acquisition-cancel.spec.ts --reporter=list
+          npx playwright test e2e/acquisition-cancel.spec.ts --reporter=list
 
       - name: Run — content-judgment-gate
         id: content_judgment

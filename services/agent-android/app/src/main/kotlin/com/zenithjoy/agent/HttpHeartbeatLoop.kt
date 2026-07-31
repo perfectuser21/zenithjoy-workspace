@@ -16,14 +16,15 @@ import java.util.concurrent.TimeUnit
 /**
  * HTTP 心跳循环（ws1 协议，对齐桌面 agent HeartbeatLoop）。
  *
- * 每 intervalMs（默认 30s）POST /api/agent/heartbeat，
+ * 每 intervalMs（默认 20s）POST /api/agent/heartbeat，为取消命令的 30s
+ * 送达合同预留网络往返与系统调度抖动余量。
  * 响应里的 agent_id 持久化到 params.onAgentIdReceived（首次心跳收敛身份）。
  * queued_tasks 转发给 onTask 回调，由 AgentService 路由处理。
  */
 class HttpHeartbeatLoop(
     private val params: Params,
     private val scope: CoroutineScope,
-    private val intervalMs: Long = 30_000L,
+    private val intervalMs: Long = 20_000L,
     private val onTask: ((task: HeartbeatTask) -> Unit)? = null,
     private val onHeartbeat: ((resp: HeartbeatResponse) -> Unit)? = null,
     private val onAgentIdReceived: ((agentId: String) -> Unit)? = null,

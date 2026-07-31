@@ -19,6 +19,7 @@ import com.zenithjoy.agent.account.DeviceAccountScanService
 import com.zenithjoy.agent.collect.CollectFailureClassifier
 import com.zenithjoy.agent.collect.CollectJob
 import com.zenithjoy.agent.collect.CollectReporter
+import com.zenithjoy.agent.collect.AcquisitionCancellationCoordinator
 import com.zenithjoy.agent.collect.CollectResult
 import com.zenithjoy.agent.collect.CollectTaskQueue
 import com.zenithjoy.agent.collect.CommentEntry
@@ -319,15 +320,7 @@ class AgentService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private suspend fun initAgent() {
-        // 计算机器指纹（首次）
-        if (config.machineId.isEmpty()) {
-            config.machineId = MachineFingerprint.compute(this)
-        }
-        // 生成 agentId（首次）
-        if (config.agentId.isEmpty()) {
-            val slug = MachineFingerprint.hostnameSlug()
-            config.agentId = "agent-$slug-${System.currentTimeMillis().toString(36)}"
-        }
+        ensureRegistrationIdentity()
 
         // License 注册（复用 POST /api/agent/register）
         performRegister()
@@ -372,6 +365,22 @@ class AgentService : Service() {
                     DeviceAccountScanService.dispatchTask(
                         this@AgentService, task.task_id, tenantId = "", thisDeviceId = config.machineId,
                     )
+                } else if (task.type == "acquisition_cancel") {
+                    val collectTaskId = task.payload["collect_task_id"] as? String
+                    if (collectTaskId != null) {
+                        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            val activeReporter = reporter ?: return@launch
+                            val result = AcquisitionCancellationCoordinator(
+                                safeExit = { DouyinCollectService.cancelCurrentCollection(it) },
+                                reportCancel = { activeReporter.reportCancel(it) },
+                            ).cancel(collectTaskId)
+                            if (result?.success == true) {
+                                android.util.Log.i(TAG, "acquisition_cancel safe_exit=true report_status=cancelled taskId=$collectTaskId")
+                            } else {
+                                android.util.Log.e(TAG, "acquisition_cancel safe exit/report failed taskId=$collectTaskId")
+                            }
+                        }
+                    }
                 }
             },
             onHeartbeat = { resp ->
@@ -507,6 +516,9 @@ class AgentService : Service() {
             return
         }
         try {
+            // onStartCommand 可能在 initAgent 尚未算完机器指纹时触发注册重试。谁赢得
+            // single-flight 锁，谁就在构造请求前同步补齐身份，禁止发送空 machine_id。
+            ensureRegistrationIdentity()
             android.util.Log.i(TAG, "registering with license...")
             try {
                 val registrar = AgentRegistrar()
@@ -549,6 +561,16 @@ class AgentService : Service() {
             }
         } finally {
             registerCallInFlight.set(false)
+        }
+    }
+
+    private suspend fun ensureRegistrationIdentity() {
+        if (config.machineId.isEmpty()) {
+            config.machineId = MachineFingerprint.compute(this)
+        }
+        if (config.agentId.isEmpty()) {
+            val slug = MachineFingerprint.hostnameSlug()
+            config.agentId = "agent-$slug-${System.currentTimeMillis().toString(36)}"
         }
     }
 

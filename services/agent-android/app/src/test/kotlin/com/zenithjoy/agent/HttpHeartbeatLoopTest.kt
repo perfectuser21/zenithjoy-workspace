@@ -58,6 +58,28 @@ class HttpHeartbeatLoopTest {
     }
 
     @Test
+    fun `default cadence leaves headroom under thirty second cancellation SLA`() = runTest {
+        repeat(2) {
+            server.enqueue(MockResponse().setBody("""{"ok":true,"agent_id":"uuid-1"}"""))
+        }
+
+        val loop = HttpHeartbeatLoop(
+            params = makeParams(server.url("/").toString().trimEnd('/')),
+            scope = this,
+            httpClient = OkHttpClient(),
+        )
+        loop.start()
+        advanceTimeBy(25_000)
+        loop.stop()
+
+        assertEquals(
+            "A 30s default interval plus network/scheduler jitter violates the <=30s delivery contract",
+            2,
+            server.requestCount,
+        )
+    }
+
+    @Test
     fun `heartbeat response queued_tasks dispatched to onTask`() = runTest {
         server.enqueue(MockResponse().setBody("""
             {"ok":true,"agent_id":"uuid-1","queued_tasks":[

@@ -1352,13 +1352,28 @@ rm -f "$S31_TMP" "$S31B_TMP" "$S31C_TMP" "$S31D_TMP" "$S31E_TMP" "$S31E2_TMP" "$
       "$S31H_TMP" "$S31I2_TMP" "$S31I3_TMP" 2>/dev/null
 ok "Step 31 ✅ line02 打点+中台看门狗全链路回归通过（真机段 logic-done-pending，见 contract-draft.md）"
 
+# Step 32：不可逆取消链必须接入 Path2 canonical smoke；深层状态机由真 PG contract test
+# 与 Android/Windows 双接缝 workflow 验证，此处锁住生产入口和五个持久化字段不被漏打包。
+node - <<'NODE' || fail "Step 32 不可逆取消链产物缺失" 32
+const fs = require('fs');
+const migration = fs.readFileSync('apps/api/db/migrations/20260731_acquisition_cancel_lifecycle.sql', 'utf8');
+const route = fs.readFileSync('apps/api/src/routes/acquisition.ts', 'utf8');
+for (const field of ['cancel_requested_at', 'cancel_sent_at', 'cancelled_at', 'cancel_command_id', 'device_machine_id']) {
+  if (!migration.includes(field)) process.exit(1);
+}
+for (const behavior of ["'/collect/cancel'", 'DEVICE_CANCEL_COOLDOWN', 'CANCEL_NOT_SENT']) {
+  if (!route.includes(behavior)) process.exit(1);
+}
+NODE
+ok "Step 32 ✅ Path2 不可逆取消入口、稳定设备冷却与回执闸已接入"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" \
       "$S22_TMP" "$S23A_TMP" "$S23A_COOKIES" "$S23B_TMP" "$S24_TMP" \
       "$S25_TMP" "$S25_TMP2" "$S26_TMP" "$S27_TMP" "$S28_TMP" "$S29_TMP" "$S30_TMP" 2>/dev/null
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Path 2 31 步本地版 smoke 全绿（服务端段）"
+echo "  ✅ Path 2 32 步本地版 smoke 全绿（服务端段）"
 echo "  真机段：等 Android evaluator 通道（xian-rog nightly）接管复跑"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 exit 0

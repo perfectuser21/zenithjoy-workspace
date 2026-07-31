@@ -70,6 +70,8 @@ interface Task {
   created_at: string | null;
   video_count: number;
   lead_count_raw: number;
+  cancel_phase: 'requested' | 'sent' | 'confirmed' | null;
+  cooldown_remaining_seconds: number;
 }
 
 interface Video {
@@ -165,6 +167,33 @@ function TaskListView() {
     }
   }
 
+  async function handleCancel(taskId: string) {
+    setError('');
+    setTasks((current) => current.map((task) => task.id === taskId
+      ? { ...task, status: 'cancelling', cancel_phase: 'requested' }
+      : task));
+    try {
+      const response = await fetch('/api/acquisition/collect/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId }),
+      });
+      const body = await response.json();
+      if (!body?.success) throw new Error(body?.error?.message || '放弃任务失败');
+      await load();
+    } catch (cause) {
+      setError(String((cause as Error).message || cause));
+      await load();
+    }
+  }
+
+  const cancelLabel = (task: Task) => {
+    if (task.status === 'cancelled') return '已取消';
+    if (task.cancel_phase === 'sent') return '取消指令已发送，等待设备响应';
+    if (task.status === 'cancelling') return '取消中';
+    return '放弃';
+  };
+
   return (
     <div className="max-w-4xl mx-auto py-2 space-y-6">
       <div>
@@ -252,9 +281,25 @@ function TaskListView() {
                   <td className="py-2 text-gray-700 dark:text-gray-300">{t.lead_count_raw}</td>
                   <td className="py-2 text-gray-500 dark:text-gray-400">{t.created_at ? new Date(t.created_at).toLocaleString('zh-CN') : '—'}</td>
                   <td className="py-2">
-                    <Link to={`/area/acquisition/tasks/${t.id}`} className="flex items-center gap-1 text-emerald-600 hover:text-emerald-700 text-xs">
-                      查看详情 <ChevronRight className="w-3 h-3" />
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link to={`/area/acquisition/tasks/${t.id}`} className="flex items-center gap-1 text-emerald-600 hover:text-emerald-700 text-xs">
+                        查看详情 <ChevronRight className="w-3 h-3" />
+                      </Link>
+                      {['running', 'cancelling', 'cancelled'].includes(t.status) ? (
+                        <button
+                          type="button"
+                          data-testid={`cancel-${t.cancel_phase ?? 'available'}`}
+                          disabled={t.status !== 'running'}
+                          onClick={() => handleCancel(t.id)}
+                          className="text-xs text-red-600 disabled:text-gray-400"
+                        >
+                          {cancelLabel(t)}
+                        </button>
+                      ) : null}
+                      {t.cooldown_remaining_seconds > 0 ? (
+                        <span className="text-xs text-amber-600">设备冷却中，还需等待 {t.cooldown_remaining_seconds} 秒</span>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               ))}

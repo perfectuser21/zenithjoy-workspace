@@ -17,6 +17,7 @@ import { licenseAuth } from '../middleware/license-auth';
 import {
   upsertAgentByHeartbeat,
   getQueuedTasks,
+  markAcquisitionCancelsSent,
   findAgentById,
   bindFolder,
   createPublishTask,
@@ -113,6 +114,9 @@ heartbeatRouter.post(
         await saveModuleStatus(agent.id, normalized);
       }
       const queued = await getQueuedTasks(agent.id);
+      if (typeof machine_id === 'string' && machine_id.length > 0) {
+        await markAcquisitionCancelsSent(agent.id, machine_id.slice(0, 200), queued);
+      }
       return res.status(200).json({
         ok: true,
         agent_id: agent.id,
@@ -131,7 +135,7 @@ heartbeatRouter.post(
           return {
             task_id: t.id,
             platform: t.platform,
-            type: t.type,
+            type: t.task_type ?? t.type,
             payload: {
               local_path: t.folder_path,
               folder_path: t.folder_path,

@@ -18,6 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -1370,6 +1371,18 @@ class DouyinCollectService : AccessibilityService() {
     }
 
     companion object {
+        /** 抢占采集、关闭可能半开的面板，并阻止后续列表读取。 */
+        fun cancelCurrentCollection(taskId: String): Boolean {
+            val service = activeInstance ?: return true
+            if (service.currentTaskId.isNotEmpty() && service.currentTaskId != taskId) return false
+            service.scope.coroutineContext.cancelChildren()
+            service.performGlobalAction(GLOBAL_ACTION_BACK)
+            service.state = State.IDLE
+            service.currentTaskId = ""
+            service.releaseCollectWakeLock()
+            return true
+        }
+
         private const val TAG = "DouyinCollectService"
         private const val DOUYIN_PKG = "com.ss.android.ugc.aweme"
         private const val RESULTS_SETTLE_MS = 400L

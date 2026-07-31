@@ -20,6 +20,15 @@ on:
       smoke_kw:
         description: '测试关键词(默认装修——商业词广告密度最高,最压得出采集稳定性)'
         default: '装修'
+      scenario:
+        description: 'collect 或 cancel'
+        default: 'collect'
+      repeat:
+        description: '真机重复次数'
+        default: '1'
+      attempt_marker:
+        description: '调用方生成的唯一证据标记'
+        default: ''
   schedule:
     - cron: '0 20 * * *'   # 每天 UTC 20:00 = 北京 04:00(避开白天真机占用)
   # ── 采集修稳后打开下面,升级为 PR required 硬 gate ──
@@ -35,13 +44,53 @@ on:
   #     - '.github/workflows/e2e-line02-android-collect.yml'
   #     - '.github/workflows/scripts/smoke/line02-android-collect-realmachine-smoke.sh'
 
+permissions:
+  contents: read
+
 concurrency:
-  group: e2e-line02-android-collect
+  # v1 can remain ghost-locked when an offline ephemeral runner cannot post
+  # its cancellation result. v2 preserves the same one-phone global mutex.
+  group: e2e-line02-android-collect-v2
   cancel-in-progress: false
 
 jobs:
+  build-cancel-apk:
+    name: Build isolated Android cancel E2E APK
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.scenario == 'cancel'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+        working-directory: services/agent-android
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle 8.6
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.6'
+
+      - name: Build side-by-side E2E APK
+        run: gradle :app:assembleE2e
+
+      - name: Upload exact-SHA E2E APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-cancel-e2e-apk-${{ github.sha }}
+          path: services/agent-android/app/build/outputs/apk/e2e/*.apk
+          retention-days: 3
+
   android-collect-smoke:
     name: agent-android 采集真机 smoke（xian-rog）
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.scenario != 'cancel'
     # 复用微信真机 runner(Android 设备连在同一台 xian-rog 上)。语义上可后续加 android-capable label。
     runs-on: [self-hosted, wechat-capable]
     timeout-minutes: 12
@@ -53,13 +102,16 @@ jobs:
     env:
       API_BASE: https://staging-autopilot.zenjoymedia.media
       SMOKE_KW: ${{ github.event.inputs.smoke_kw || '装修' }}
+      SCENARIO: ${{ github.event.inputs.scenario || 'collect' }}
+      REPEAT: ${{ github.event.inputs.repeat || '1' }}
+      ATTEMPT_MARKER: ${{ github.event.inputs.attempt_marker || '' }}
 
     steps:
       - uses: actions/checkout@v4
 
       - name: 定位 adb（WinGet scrcpy 版）
         run: |
-          ADB=$(ls "/c/Users/asus/AppData/Local/Microsoft/WinGet/Packages/Genymobile.scrcpy_"*/scrcpy-*/adb.exe 2>/dev/null | head -1)
+          ADB=$(ls "/c/Users/asus/AppData/Local/Microsoft/WinGet/Packages/Genymobile.scrcpy_"*/scrcpy-*/adb.exe 2>/dev/null | head -1 || true)
           [ -n "$ADB" ] || ADB=$(command -v adb 2>/dev/null || true)
           [ -n "$ADB" ] || { echo "🟠 环境未就绪: runner 上找不到 adb"; exit 3; }
           echo "ADB=$ADB" >> "$GITHUB_ENV"
@@ -69,3 +121,181 @@ jobs:
         run: |
           chmod +x .github/workflows/scripts/smoke/line02-android-collect-realmachine-smoke.sh
           bash .github/workflows/scripts/smoke/line02-android-collect-realmachine-smoke.sh
+
+  android-cancel-smoke:
+    name: Android acquisition cancel 真业务双跑（physical phone）
+    needs: build-cancel-apk
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.scenario == 'cancel'
+    # GitHub 控制面、候选 API 和隔离数据库在 US M4；只有 APK 与 adb
+    # 通过 Cloudflare SSH 到西安 M4，避免跨洋 adb streamed install。
+    runs-on: [self-hosted, android-capable, us-m4]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      REPEAT: ${{ github.event.inputs.repeat || '2' }}
+      ATTEMPT_MARKER: ${{ github.event.inputs.attempt_marker || '' }}
+      AGENT_PACKAGE: com.zenithjoy.agent.e2e
+      AGENT_ACTIVITY: com.zenithjoy.agent.MainActivity
+      ANDROID_REMOTE_HOST: xian-m4-cf
+      ANDROID_DEVICE_ENDPOINT: 192.168.3.242:5555
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Download exact-SHA E2E APK
+        uses: actions/download-artifact@v4
+        with:
+          name: android-cancel-e2e-apk-${{ github.sha }}
+          path: ${{ runner.temp }}/android-cancel-e2e-apk
+
+      - name: Create isolated local E2E PostgreSQL database
+        run: |
+          E2E_DATABASE_NAME="zenithjoy_android_cancel_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          createdb "$E2E_DATABASE_NAME"
+          {
+            echo "E2E_DATABASE_NAME=$E2E_DATABASE_NAME"
+            echo "E2E_DATABASE_URL=postgresql://$(id -un)@localhost:5432/$E2E_DATABASE_NAME"
+          } >> "$GITHUB_ENV"
+
+      - name: Locate physical Android device and install isolated APK
+        run: |
+          APK=$(find "$RUNNER_TEMP/android-cancel-e2e-apk" -name '*.apk' -type f -print -quit)
+          [ -n "$APK" ] || { echo "E2E APK artifact missing"; exit 4; }
+          ADB="$GITHUB_WORKSPACE/.github/workflows/scripts/smoke/remote-adb.sh"
+          chmod +x "$ADB"
+          ANDROID_SSH_CONTROL_PATH="$RUNNER_TEMP/r16-xian-m4-ssh"
+          REMOTE_APK="/tmp/zenithjoy-android-cancel-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.apk"
+          REMOTE_INSTALL_SCRIPT="/tmp/zenithjoy-android-install-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
+          {
+            echo "ADB=$ADB"
+            echo "ANDROID_SSH_CONTROL_PATH=$ANDROID_SSH_CONTROL_PATH"
+            echo "REMOTE_APK=$REMOTE_APK"
+            echo "REMOTE_INSTALL_SCRIPT=$REMOTE_INSTALL_SCRIPT"
+          } >> "$GITHUB_ENV"
+          ssh -MNf -o BatchMode=yes -o ControlMaster=yes \
+            -o "ControlPath=$ANDROID_SSH_CONTROL_PATH" -o ControlPersist=600 \
+            "$ANDROID_REMOTE_HOST"
+          scp -o BatchMode=yes -o "ControlPath=$ANDROID_SSH_CONTROL_PATH" \
+            "$APK" "$ANDROID_REMOTE_HOST:$REMOTE_APK"
+          scp -o BatchMode=yes -o "ControlPath=$ANDROID_SSH_CONTROL_PATH" \
+            .github/workflows/scripts/smoke/remote-android-install.sh \
+            "$ANDROID_REMOTE_HOST:$REMOTE_INSTALL_SCRIPT"
+          ssh -o BatchMode=yes -o "ControlPath=$ANDROID_SSH_CONTROL_PATH" \
+            "$ANDROID_REMOTE_HOST" \
+            "REMOTE_APK='$REMOTE_APK' \
+             ANDROID_DEVICE_ENDPOINT='$ANDROID_DEVICE_ENDPOINT' \
+             AGENT_PACKAGE='$AGENT_PACKAGE' /bin/bash '$REMOTE_INSTALL_SCRIPT'"
+          "$ADB" devices
+
+      - name: Install candidate API dependencies
+        run: npm ci
+
+      - name: Configure candidate database and network
+        run: |
+          [ -n "$E2E_DATABASE_URL" ] || { echo "isolated E2E database missing"; exit 5; }
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const u = new URL(process.env.E2E_DATABASE_URL);
+          const values = {
+            DATABASE_HOST: u.hostname,
+            DATABASE_PORT: u.port || '5432',
+            DATABASE_NAME: decodeURIComponent(u.pathname.replace(/^\//, '')),
+            DATABASE_USER: decodeURIComponent(u.username),
+            DATABASE_PASSWORD: decodeURIComponent(u.password),
+          };
+          process.stdout.write(`::add-mask::${values.DATABASE_PASSWORD}\n`);
+          fs.appendFileSync(process.env.GITHUB_ENV,
+            Object.entries(values).map(([k, v]) => `${k}=${v}\n`).join(''));
+          NODE
+          TAILNET_IP=$(tailscale ip -4 | head -1)
+          [ -n "$TAILNET_IP" ] || { echo "Tailscale IPv4 missing"; exit 6; }
+          API_PORT=$((20000 + GITHUB_RUN_ID % 20000))
+          for offset in $(seq 0 99); do
+            candidate=$((API_PORT + offset))
+            if ! lsof -nP -iTCP:"$candidate" -sTCP:LISTEN >/dev/null 2>&1; then
+              API_PORT=$candidate
+              break
+            fi
+            test "$offset" -lt 99
+          done
+          {
+            echo "API_PORT=$API_PORT"
+            echo "API_BASE=http://127.0.0.1:$API_PORT"
+            echo "API_WS_URL=ws://$TAILNET_IP:$API_PORT/agent-ws"
+          } >> "$GITHUB_ENV"
+
+      - name: Migrate real E2E PostgreSQL and start current-branch API
+        run: |
+          DATABASE_URL="$E2E_DATABASE_URL" npm run migrate --workspace apps/api
+          npm run build --workspace apps/api
+          PORT="$API_PORT" NODE_ENV=test node -r dotenv/config apps/api/dist/index.js \
+            > "$RUNNER_TEMP/android-cancel-api.log" 2>&1 &
+          API_PID=$!
+          echo "API_PID=$API_PID" >> "$GITHUB_ENV"
+          for poll in $(seq 1 40); do
+            curl --fail --silent "$API_BASE/health" >/dev/null && break
+            if ! kill -0 "$API_PID" 2>/dev/null; then
+              cat "$RUNNER_TEMP/android-cancel-api.log" >&2
+              exit 7
+            fi
+            test "$poll" -lt 40
+            sleep 1
+          done
+
+      - name: Register candidate tenant/license on physical Android
+        run: |
+          chmod +x .github/workflows/scripts/smoke/line02-android-cancel-candidate-setup.sh
+          .github/workflows/scripts/smoke/line02-android-cancel-candidate-setup.sh
+
+      - name: Android acquisition cancel real-business x2
+        run: |
+          chmod +x .github/workflows/scripts/smoke/line02-android-cancel-realmachine-smoke.sh
+          for repeat_index in $(seq 1 "$REPEAT"); do
+            GITHUB_RUN_ID="$GITHUB_RUN_ID" HEAD_SHA="$GITHUB_SHA" REPEAT_INDEX="$repeat_index" \
+              .github/workflows/scripts/smoke/line02-android-cancel-realmachine-smoke.sh
+          done
+
+      - name: Upload android-cancel evidence
+        if: always()
+        # evidence schema includes github_run_id, head_sha, attempt_marker,
+        # repeat_index, cancel_requested_at, command_received_at.
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-cancel-evidence-${{ github.sha }}
+          path: sprints/07310943-kernel-0e82adad/evidence/android/result-*.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload candidate API diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-cancel-api-log-${{ github.sha }}
+          path: ${{ runner.temp }}/android-cancel-api.log
+          retention-days: 7
+
+      - name: Cleanup isolated Android and database fixture
+        if: always()
+        run: |
+          chmod +x .github/workflows/scripts/smoke/line02-android-cancel-candidate-cleanup.sh
+          .github/workflows/scripts/smoke/line02-android-cancel-candidate-cleanup.sh
+          if [ -n "${ANDROID_REMOTE_HOST:-}" ] && [ -n "${REMOTE_APK:-}" ]; then
+            ssh -o BatchMode=yes -o "ControlPath=${ANDROID_SSH_CONTROL_PATH:-none}" \
+              "$ANDROID_REMOTE_HOST" \
+              "rm -f '$REMOTE_APK' '${REMOTE_INSTALL_SCRIPT:-}'" >/dev/null 2>&1 || true
+          fi
+          if [ -n "${E2E_DATABASE_NAME:-}" ]; then
+            dropdb --force --if-exists "$E2E_DATABASE_NAME"
+          fi
+          if [ -S "${ANDROID_SSH_CONTROL_PATH:-}" ]; then
+            ssh -o "ControlPath=$ANDROID_SSH_CONTROL_PATH" -O exit \
+              "$ANDROID_REMOTE_HOST" >/dev/null 2>&1 || true
+          fi

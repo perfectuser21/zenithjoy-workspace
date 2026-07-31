@@ -33,17 +33,17 @@ if [ "$REPORT_RESP" != "400" ]; then
 fi
 echo "[smoke] PASS: collect/report param validation 400"
 
-# 3. 验证 collect/cancel 端点 — 缺 task_id 返回 400
+# 3. 验证 collect/cancel 端点 — 未登录必须先由生产鉴权层返回 401
 CANCEL_RESP=$(curl -sf -o /dev/null -w "%{http_code}" \
   -X POST "$BASE_URL/api/acquisition/collect/cancel" \
   -H "Content-Type: application/json" \
   -d '{}' 2>/dev/null || true)
-echo "[smoke] collect/cancel (no task_id) status=$CANCEL_RESP"
-if [ "$CANCEL_RESP" != "400" ]; then
-  echo "[smoke] FAIL: collect/cancel without task_id returned $CANCEL_RESP (expected 400)"
+echo "[smoke] collect/cancel (no auth) status=$CANCEL_RESP"
+if [ "$CANCEL_RESP" != "401" ]; then
+  echo "[smoke] FAIL: collect/cancel without auth returned $CANCEL_RESP (expected 401)"
   exit 1
 fi
-echo "[smoke] PASS: collect/cancel param validation 400"
+echo "[smoke] PASS: collect/cancel auth gate 401"
 
 # 4. 验证 collect/report-videos 端点 — 缺 x-agent-id 返回 401（端点存在且鉴权生效）
 RV_RESP=$(curl -sf -o /dev/null -w "%{http_code}" \
