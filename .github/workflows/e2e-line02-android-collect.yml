@@ -269,7 +269,7 @@ jobs:
         # repeat_index, cancel_requested_at, command_received_at.
         uses: actions/upload-artifact@v4
         with:
-          name: android-cancel-evidence-${{ github.sha }}
+          name: android-cancel-evidence
           path: sprints/07310943-kernel-0e82adad/evidence/android/result-*.json
           if-no-files-found: error
           retention-days: 30

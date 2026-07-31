@@ -116,6 +116,31 @@ describe('Android cancel receipt accepts heartbeat UUID identity', () => {
     expect(command.rows[0].status).toBe('completed');
     expect(command.rows[0].receipt_at).not.toBeNull();
 
+    const cooldownStart = await request(app)
+      .post('/api/acquisition/collect/start')
+      .set('X-Feishu-User-Id', userId)
+      .send({ keywords: ['装修'], agent_id: agentUuid });
+    expect(cooldownStart.status).toBe(409);
+    expect(cooldownStart.body.error.code).toBe('DEVICE_CANCEL_COOLDOWN');
+    expect(cooldownStart.body.error.remaining_seconds).toBeGreaterThan(0);
+    expect(cooldownStart.body.error.remaining_seconds).toBeLessThanOrEqual(300);
+
+    const persisted = await testPool.query<{
+      status: string;
+      device_machine_id: string;
+      cancelled_at: Date | null;
+    }>(
+      `SELECT status, device_machine_id, cancelled_at
+         FROM zenithjoy.acquisition_collect_tasks
+        WHERE id = $1`,
+      [taskId],
+    );
+    expect(persisted.rows[0]).toMatchObject({
+      status: 'cancelled',
+      device_machine_id: machineId,
+    });
+    expect(persisted.rows[0].cancelled_at).not.toBeNull();
+
     const nextHeartbeat = await request(app)
       .post('/api/agent/heartbeat')
       .send({

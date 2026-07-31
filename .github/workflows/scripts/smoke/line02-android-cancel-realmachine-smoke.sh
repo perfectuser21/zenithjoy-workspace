@@ -172,6 +172,30 @@ CONTINUED_LIST_READS=$(sed -n "/acquisition_cancel safe_exit=true report_status=
 test "$PANEL_OPEN" = false
 test "$CONTINUED_LIST_READS" -eq 0
 
+# A confirmed physical-device cancellation must immediately close the loop at
+# the real start route. This is deliberately an HTTP request, not a DB-only
+# inference: the evidence proves the customer-visible error contract on the
+# same candidate API and stable machine identity used by the Android run.
+COOLDOWN_REQUEST=$(jq -cn --arg agent_id "$E2E_AGENT_UUID" \
+  '{keywords:["装修"],agent_id:$agent_id}')
+COOLDOWN_RESPONSE_FILE="${RUNNER_TEMP:-/tmp}/cooldown-response-$REPEAT_INDEX.json"
+COOLDOWN_HTTP_STATUS=$(curl --silent --show-error \
+  --output "$COOLDOWN_RESPONSE_FILE" --write-out '%{http_code}' \
+  -X POST "$API_BASE/api/acquisition/collect/start" \
+  -H "Content-Type: application/json" \
+  -H "X-Feishu-User-Id: $E2E_USER_ID" \
+  --data "$COOLDOWN_REQUEST")
+COOLDOWN_RESPONSE=$(cat "$COOLDOWN_RESPONSE_FILE")
+test "$COOLDOWN_HTTP_STATUS" = "409"
+jq -e \
+  '.success == false
+   and .error.code == "DEVICE_CANCEL_COOLDOWN"
+   and (.error.remaining_seconds | type == "number")
+   and .error.remaining_seconds > 0
+   and .error.remaining_seconds <= 300' \
+  <<<"$COOLDOWN_RESPONSE" >/dev/null
+COOLDOWN_REMAINING_SECONDS=$(jq -r '.error.remaining_seconds' <<<"$COOLDOWN_RESPONSE")
+
 mkdir -p sprints/07310943-kernel-0e82adad/evidence/android
 jq -n \
   --argjson github_run_id "$GITHUB_RUN_ID" --arg head_sha "$HEAD_SHA" \
@@ -181,6 +205,10 @@ jq -n \
   --arg cancelled_at "$CANCELLED_AT" --arg task_id "$TASK_ID" \
   --arg ended_at "$ENDED_AT" --arg command_id "$COMMAND_ID" \
   --arg agent_package "$AGENT_PACKAGE" --arg database_status "$FINAL_STATUS" \
+  --argjson cooldown_request "$COOLDOWN_REQUEST" \
+  --argjson cooldown_response "$COOLDOWN_RESPONSE" \
+  --argjson cooldown_http_status "$COOLDOWN_HTTP_STATUS" \
+  --argjson cooldown_remaining_seconds "$COOLDOWN_REMAINING_SECONDS" \
   --argjson delivery_ms "$DELIVERY_MS" \
   --argjson panel_open "$PANEL_OPEN" --argjson continued_list_reads "$CONTINUED_LIST_READS" \
   '{github_run_id:$github_run_id,head_sha:$head_sha,attempt_marker:$attempt_marker,repeat_index:$repeat_index,
@@ -189,7 +217,10 @@ jq -n \
     task_id:$task_id,agent_package:$agent_package,database_status:$database_status,
     cancel_requested_at:$cancel_requested_at,command_received_at:$command_received_at,
     cancelled_at:$cancelled_at,ended_at:$ended_at,command_id:$command_id,
-    cancel_delivery_ms:$delivery_ms}' \
+    cancel_delivery_ms:$delivery_ms,
+    device_safe_exit:{safe_exit:true,switch_account_panel_open:$panel_open,continued_list_reads:$continued_list_reads},
+    cooldown_probe:{request:$cooldown_request,response:$cooldown_response,http_status:$cooldown_http_status,
+      error_code:$cooldown_response.error.code,remaining_seconds:$cooldown_remaining_seconds}}' \
   > "sprints/07310943-kernel-0e82adad/evidence/android/result-$REPEAT_INDEX.json"
 
-echo "PASS: physical Android cancellation completed for task $TASK_ID in ${DELIVERY_MS}ms"
+echo "PASS: physical Android cancellation completed for task $TASK_ID in ${DELIVERY_MS}ms; cooldown=${COOLDOWN_REMAINING_SECONDS}s"
