@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 7)
+# Sprint Contract Draft (Round 8)
 
 sprint: `07310943-kernel-0e82adad`
 task_id: `e76cb826-caaf-404b-b853-845e107408b5`
@@ -12,7 +12,7 @@ step_id: `step6`
 - `test_registry` 与仓库测试共同确认 integration 测试风格为 `vitest + supertest + 真 Postgres`，Android 为 JUnit/Kotlin。
 - `context-manifest: unavailable`；PRD 已内嵌累积 FR，合同按 PRD 字面保留。
 - `contract-gate: skipped (file not found, third-party repo)`。
-- `product-map:check` 在 Round 7 安装锁定依赖后重跑通过（digest `fbea3a9e...`），分类投影无漂移。
+- `product-map:check` 在 Round 8 安装锁定依赖后重跑通过（digest `fbea3a9e...`），分类投影无漂移。
 - 产品分类锚点来自 `product-map/generated/product-map.md`：`customer_app / line02 / keyword_acquisition`。
 
 ## 已知约束（来自回归测试与累积 FR）
@@ -360,4 +360,4 @@ curl -sf "http://localhost:5221/api/brain/tasks/$TASK_ID" | jq -e '.decisions.ap
 - PRD 指定 `target_environment=windows_cloud`，合同保持该路由；Android 真实接缝由独立 xian-rog workflow 补位，并在未跑前保持 `logic-done-pending`。
 - 本 sprint 不引入暂停、恢复、批量取消或已采数据回滚。
 - `contract-gate: skipped (file not found, third-party repo)`。
-- Round 7 收敛：本轮输入仍无 reviewer feedback artifact；对冻结 PRD、Round 6 合同、生产调用方 shape、两份实际 workflow 与七项格式闸重新做确定性复核。保持同一真实后端 Playwright 剧本先跑全新 Windows CI、再跑已部署 staging，并由 Android 真机接缝双跑补位；未增加 PRD 外范围。
+- Round 8 收敛：本轮输入仍无 reviewer feedback artifact；对冻结 PRD、Round 7 合同、生产调用方 shape、两份实际 workflow 与七项格式闸重新做确定性复核。保持同一真实后端 Playwright 剧本先跑全新 Windows CI、再跑已部署 staging，并由 Android 真机接缝双跑补位；未增加 PRD 外范围。
