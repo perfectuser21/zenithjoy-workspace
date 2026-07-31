@@ -104,6 +104,16 @@ describe('Android cancel receipt accepts heartbeat UUID identity', () => {
     expect(report.status).toBe(200);
     expect(report.body.data).toMatchObject({ task_id: taskId, status: 'cancelled' });
 
+    // Production registration owns this binding; heartbeat only refreshes the
+    // machine row. Recreate that real registered-device relation before the
+    // customer retries collect/start.
+    await testPool.query(
+      `UPDATE zenithjoy.license_machines
+          SET agent_id = $1, status = 'active'
+        WHERE license_id = $2 AND machine_id = $3`,
+      [runtimeAgentId, licenseId, machineId],
+    );
+
     const command = await testPool.query<{ status: string; receipt_at: Date | null }>(
       `SELECT status, receipt_at
          FROM zenithjoy.publish_tasks
