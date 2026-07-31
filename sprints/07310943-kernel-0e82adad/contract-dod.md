@@ -12,16 +12,16 @@ target_environment: windows_cloud
 ## ARTIFACT 条目
 
 - [ ] [ARTIFACT] 迁移为 `acquisition_collect_tasks` 增加 `cancel_requested_at/cancel_sent_at/cancelled_at/cancel_command_id`，并以真 Postgres migration test 锁定可重复执行
-  Test: node -e "require('fs').accessSync('apps/api/db/migrations/20260731_acquisition_cancel_lifecycle.sql')"
+  Test: node -e "const c=require('fs').readFileSync('apps/api/db/migrations/20260731_acquisition_cancel_lifecycle.sql','utf8');for(const s of ['cancel_requested_at','cancel_sent_at','cancelled_at','cancel_command_id'])if(!c.includes(s))process.exit(1)"
 
 - [ ] [ARTIFACT] API route、heartbeat 入队与冷却规则有实现及相邻 integration tests
-  Test: node -e "const fs=require('fs');for(const p of ['apps/api/src/routes/acquisition.ts','apps/api/tests/integration/acquisition-cancel.integration.test.ts'])fs.accessSync(p)"
+  Test: node -e "const fs=require('fs');const r=fs.readFileSync('apps/api/src/routes/acquisition.ts','utf8');const t=fs.readFileSync('apps/api/tests/integration/acquisition-cancel.integration.test.ts','utf8');for(const s of ['DEVICE_CANCEL_COOLDOWN','cancel_requested_at','acquisition_cancel'])if(!r.includes(s)||!t.includes(s))process.exit(1)"
 
 - [ ] [ARTIFACT] Dashboard 有真实后端 Playwright spec，spec 内禁止 `page.route()`
   Test: node -e "const fs=require('fs');const p='apps/dashboard/e2e/acquisition-cancel.spec.ts';const c=fs.readFileSync(p,'utf8');if(c.includes('page.route(')||!c.includes('放弃'))process.exit(1)"
 
 - [ ] [ARTIFACT] Android 有取消协调器与真实状态机安全退出测试
-  Test: node -e "const fs=require('fs');for(const p of ['services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/collect/AcquisitionCancellationCoordinator.kt','services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/collect/AcquisitionCancellationCoordinatorTest.kt'])fs.accessSync(p)"
+  Test: node -e "const fs=require('fs');const a=fs.readFileSync('services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/collect/AcquisitionCancellationCoordinator.kt','utf8');const t=fs.readFileSync('services/agent-android/app/src/test/kotlin/com/zenithjoy/agent/collect/AcquisitionCancellationCoordinatorTest.kt','utf8');for(const s of ['reportCancel','safeExit'])if(!a.includes(s)||!t.includes(s))process.exit(1)"
 
 - [ ] [ARTIFACT] windows_cloud E2E 脚本启动真 API，且 Android workflow 增加 `scenario=cancel` 与 evidence artifact
   Test: node -e "const fs=require('fs');const ps=fs.readFileSync('sprints/07310943-kernel-0e82adad/e2e-verify.ps1','utf8');const wf=fs.readFileSync('.github/workflows/e2e-line02-android-collect.yml','utf8');if(!ps.includes('Test-NetConnection')||!ps.includes('apps\\\\api')||!wf.includes('scenario')||!wf.includes('android-cancel-evidence'))process.exit(1)"
@@ -36,21 +36,21 @@ target_environment: windows_cloud
   预期观察: API 返回 status=cancelling 与 cancel_phase=requested，DB 记录取消意图
   等待预算: 0s
   留证: integration reporter 输出与对应 DB 行
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run --config apps/api/vitest.integration.config.ts sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "本人租户取消 running 任务返回 cancelling"'
+  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "本人租户取消 running 任务返回 cancelling"'
 
 - [ ] [BEHAVIOR] [L2] B-02: 重复点击放弃保持幂等
   动作: 对同一 running/cancelling 任务连续提交两次取消
   预期观察: 只存在一条 acquisition_cancel 指令，cancel_requested_at 不延长
   等待预算: 0s
   留证: publish_tasks 计数与前后时间戳查询输出
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run --config apps/api/vitest.integration.config.ts sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "重复取消幂等且不生成第二条指令"'
+  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "重复取消幂等且不生成第二条指令"'
 
 - [ ] [BEHAVIOR] [L2] B-03: 下一次真实 shape 心跳下发唯一取消指令 [接缝×2]
   动作: Android 以 production HttpHeartbeatLoop 字段调用 POST /api/agent/heartbeat
   预期观察: within 30s queued_tasks 出现唯一 acquisition_cancel，payload.collect_task_id 匹配
   等待预算: 30s
   留证: 两次 heartbeat 响应 JSON 与 cancel_sent_at DB 查询
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run --config apps/api/vitest.integration.config.ts sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "下一次生产形状 heartbeat 只下发一条"'
+  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "下一次生产形状 heartbeat 只下发一条|Agent 离线期间保留取消意图"'
 
 - [ ] [BEHAVIOR] [L3] B-04: Android 真机抢占当前采集并安全退出后回执 [接缝×2]
   动作: 在 xian-rog 真机运行采集后，从服务端下发取消指令，连续执行两轮
@@ -64,28 +64,42 @@ target_environment: windows_cloud
   预期观察: status 仍为 cancelling，cancel_phase=sent，不存在 cancelled_at
   等待预算: 0s
   留证: API JSON 与 DB 定点查询输出
-  Test: manual:bash -c ': "${API_BASE:?}" "${TEST_USER_A:?}" "${TASK_ID:?}" "${DATABASE_URL:?}"; psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "UPDATE zenithjoy.acquisition_collect_tasks SET status='"'"'cancelling'"'"', cancel_sent_at=NOW()-interval '"'"'121 seconds'"'"', cancelled_at=NULL WHERE id='"'"'$TASK_ID'"'"'"; curl -sf -H "X-Feishu-User-Id: $TEST_USER_A" "$API_BASE/api/acquisition/collect/$TASK_ID" | jq -e ".data.status==\"cancelling\" and .data.cancel_phase==\"sent\" and .data.cancelled_at==null"'
+  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "取消指令发出 121 秒无回执仍保持 cancelling sent"'
 
 - [ ] [BEHAVIOR] [L2] B-06: 绑定 Agent 回执后才落 cancelled 并启动冷却
   动作: 以任务绑定 agent 的 x-agent-id 发送 production reportCancel body
   预期观察: API 返回 cancelled，DB 同事务写 cancelled_at 与 ended_at
   等待预算: 5s
   留证: report response 与带 created_at 时间窗的 DB 查询结果
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run --config apps/api/vitest.integration.config.ts sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "只有绑定 Android Agent 回执后才落 cancelled"'
+  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "只有绑定 Android Agent 回执后才落 cancelled"'
 
 - [ ] [BEHAVIOR] [L2] B-07: 同设备冷却 5 分钟且显示剩余时间
   动作: cancelled 后立即在同 agent_id 发新任务，再把 cancelled_at 调整到 301 秒前重试
   预期观察: 首次 409 DEVICE_CANCEL_COOLDOWN 且 remaining_seconds 在 1..300，期满后 pending
   等待预算: 5s
   留证: 两次 start 响应与 cancelled_at DB 查询
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run --config apps/api/vitest.integration.config.ts sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "冷却期内同设备新任务返回 DEVICE_CANCEL_COOLDOWN"'
+  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "冷却期内同设备新任务返回 DEVICE_CANCEL_COOLDOWN"'
 
-- [ ] [BEHAVIOR] [L2] B-08: 跨租户取消不泄露任务或设备
+- [ ] [BEHAVIOR] [L2] B-08: 跨租户取消返回冻结 PRD 指定的 403 且不泄露任务或设备
   动作: 租户 B 对租户 A 的 task_id 发取消请求
-  预期观察: 返回 404 TASK_NOT_FOUND，响应不含 tenant A 或 agent id，DB 不变
+  预期观察: 返回 403 FORBIDDEN，响应不含 tenant A 或 agent id，DB 不变
   等待预算: 0s
   留证: integration response 与 DB 定点状态
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run --config apps/api/vitest.integration.config.ts sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "跨租户取消返回 TASK_NOT_FOUND"'
+  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "跨租户取消返回 403 FORBIDDEN"'
+
+- [ ] [BEHAVIOR] [L2] B-08A: 已结束任务不可放弃且终态不变
+  动作: 本人租户对 done 任务调用取消端点
+  预期观察: 返回 409 TASK_NOT_CANCELLABLE，status 仍为 done 且 cancel_requested_at 为空
+  等待预算: 0s
+  留证: integration response 与 DB 定点查询
+  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "已结束任务返回 409 TASK_NOT_CANCELLABLE"'
+
+- [ ] [BEHAVIOR] [L2] B-08B: 重复 cancelled 回执不延长冷却
+  动作: 对已确认 cancelled 的任务重复发送同一 production reportCancel body
+  预期观察: 仍返回 cancelled，cancelled_at 与第一次回执时间完全相同
+  等待预算: 0s
+  留证: 两次回执响应与前后 cancelled_at 查询
+  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "重复 cancelled 回执幂等且不延长五分钟冷却起点"'
 
 - [ ] [BEHAVIOR] [L2] B-09: 未登录取消被鉴权层拒绝
   动作: 不带 session、X-Feishu-User-Id 或 tenant body 调取消端点
@@ -122,7 +136,7 @@ target_environment: windows_cloud
   预期观察: 租户 B 得不到租户 A 的任务或设备数据
   等待预算: 10s
   留证: vitest reporter 与两个 tenant_id 的 DB 查询
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run --config apps/api/vitest.integration.config.ts sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "跨租户取消返回 TASK_NOT_FOUND"'
+  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "跨租户取消返回 403 FORBIDDEN"'
 
 - [ ] [BEHAVIOR] [L2] INV-4: 凭据不硬编码、不进 git、不进日志
   动作: 查询当前提交的 L1 Secrets Scan job
@@ -136,7 +150,7 @@ target_environment: windows_cloud
   预期观察: 响应和日志均不含 tenant A、agent id、关键词或聊天内容
   等待预算: 5s
   留证: redaction integration reporter 与扫描结果
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run --config apps/api/vitest.integration.config.ts sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "跨租户取消返回 TASK_NOT_FOUND"'
+  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "跨租户取消返回 403 FORBIDDEN"'
 
 - [ ] [BEHAVIOR] [L2] INV-6: 每个新增或修改端点都有鉴权
   动作: 无认证调用 cancel，再用无效 license 调 heartbeat
@@ -147,10 +161,10 @@ target_environment: windows_cloud
 
 - [ ] [BEHAVIOR] [L2] INV-7: 所有任务查询与写入限定当前租户
   动作: 并发执行本人取消与跨租户取消
-  预期观察: A 成功、B 得不泄露的 404，DB 只有 A 的行变化
+  预期观察: A 成功、B 得不泄露的 403，DB 只有 A 的行变化
   等待预算: 5s
   留证: integration reporter 与 tenant-scoped SQL 参数证据
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run --config apps/api/vitest.integration.config.ts sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "本人租户取消|跨租户取消"'
+  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "本人租户取消|跨租户取消"'
 
 - [ ] [BEHAVIOR] [L3] INV-8: 环境值从真机推导而非写死
   动作: Android workflow 运行时发现 adb、device serial、窗口状态并写证据

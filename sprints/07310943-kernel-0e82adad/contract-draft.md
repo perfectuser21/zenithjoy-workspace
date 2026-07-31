@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 sprint: `07310943-kernel-0e82adad`
 task_id: `e76cb826-7fbf-45bd-b94d-75793edc2f33`
@@ -52,10 +52,10 @@ step_id: `step6`
 **Error**:
 
 ```json
-{"success":false,"error":{"code":"TASK_NOT_FOUND|TASK_NOT_CANCELLABLE","message":"<string>"},"timestamp":"<ISO-8601>"}
+{"success":false,"error":{"code":"FORBIDDEN|TASK_NOT_CANCELLABLE","message":"<string>"},"timestamp":"<ISO-8601>"}
 ```
 
-- 跨租户与不存在统一 `404 TASK_NOT_FOUND`，不得泄露任务或设备是否存在。
+- 跨租户严格按冻结 PRD Final E2E 返回 `403 FORBIDDEN`，响应不得携带任务、租户或设备字段；不存在任务仍沿用现有 404。
 - 已结束或不支持放弃的状态返回 `409 TASK_NOT_CANCELLABLE`，不改变既有终态。
 
 ### Endpoint: GET `/api/acquisition/collect-tasks`
@@ -143,7 +143,7 @@ Android 生产调用方继续使用 `x-agent-id` header，body 沿用 `CollectRe
 
 **可观测行为**: 点击后 UI 显示“取消中”，按钮置灰；API 只写一次取消意图和一条命令。
 
-**验证命令**: `DATABASE_URL="$DATABASE_URL" npx vitest run --config apps/api/vitest.integration.config.ts sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "本人租户取消|重复取消幂等"`
+**验证命令**: `DATABASE_URL="$DATABASE_URL" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "本人租户取消|重复取消幂等"`
 
 **硬阈值**: HTTP 200；`status=cancelling`；`cancel_phase=requested`；命令数恒为 1；`cancel_requested_at` 不变。
 
@@ -153,7 +153,7 @@ Android 生产调用方继续使用 `x-agent-id` header，body 沿用 `CollectRe
 
 **可观测行为**: Android 下一个 heartbeat 的 `queued_tasks` 出现唯一 `acquisition_cancel`；服务端记录 `cancel_sent_at`；前台显示“取消指令已发送，等待设备响应”。
 
-**验证命令**: `DATABASE_URL="$DATABASE_URL" npx vitest run --config apps/api/vitest.integration.config.ts sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "下一次生产形状 heartbeat"`
+**验证命令**: `DATABASE_URL="$DATABASE_URL" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "下一次生产形状 heartbeat|Agent 离线期间保留取消意图"`
 
 **硬阈值**: 30 秒内出现 1 条且仅 1 条命令；shape 与“真实调用方请求 shape”逐字段一致；未出现或重复出现即失败。
 
@@ -173,7 +173,7 @@ Android 生产调用方继续使用 `x-agent-id` header，body 沿用 `CollectRe
 
 **可观测行为**: `cancel_sent_at` 已超过 2 分钟但无回执时仍为 `cancelling/sent`；绑定 Agent 以真实 `x-agent-id` 回执后，原子落 `cancelled/confirmed`。
 
-**验证命令**: `DATABASE_URL="$DATABASE_URL" npx vitest run --config apps/api/vitest.integration.config.ts sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "只有绑定 Android Agent 回执"`
+**验证命令**: `DATABASE_URL="$DATABASE_URL" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "取消指令发出 121 秒|只有绑定 Android Agent 回执|重复 cancelled 回执"`
 
 **硬阈值**: 无回执永不自动转终态；错误 Agent 回执 403；正确回执后 `status=cancelled` 且 `cancelled_at/ended_at` 非空。
 
@@ -183,7 +183,7 @@ Android 生产调用方继续使用 `x-agent-id` header，body 沿用 `CollectRe
 
 **可观测行为**: 冷却从 `cancelled_at` 起算；同 `agent_id` 新任务在 300 秒内被 409 拒绝并显示剩余秒数；301 秒后成功。
 
-**验证命令**: `DATABASE_URL="$DATABASE_URL" npx vitest run --config apps/api/vitest.integration.config.ts sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "冷却期内同设备"`
+**验证命令**: `DATABASE_URL="$DATABASE_URL" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "冷却期内同设备"`
 
 **硬阈值**: `1 <= remaining_seconds <= 300`；重复 cancel 不延长；期满返回 `status=pending`。
 
@@ -297,7 +297,7 @@ notes: `judgment-pending-user: Android 是否已安全退出采集`
 
 | 场景 | 失败行为 | 重试幂等？ | 降级策略 |
 |---|---|---|---|
-| 未登录/跨租户取消 | 401 或不泄露的 404，不写库 | 是 | 无 |
+| 未登录/跨租户取消 | 未登录 401；跨租户按冻结 PRD 返回不泄露数据的 403，不写库 | 是 | 无 |
 | 已终态任务取消 | 409，不改终态 | 是 | UI 显示明确提示并刷新 |
 | Agent 离线 | 保留 requested；恢复 heartbeat 后下发 | 是，唯一命令键为 collect_task_id | 不自动 cancelled |
 | sent 超 2 分钟无回执 | 维持 cancelling/sent 并告警 | 是 | 用户看到“等待设备响应” |
@@ -323,22 +323,29 @@ N/A：本任务没有对外暴露可接受 prompt/自然语言任务的 agent；
 
 向 `$BARK_URL` 发送 staging 链接、截图 URL、Android 两次 run URL，并注明“需主理人放行”。PATCH Brain task metadata：
 
-```json
-{"staging_deployed":true,"approval_required":true,"staging_url":"<url>"}
+```bash
+: "${BARK_URL:?}" "${STAGING_DASHBOARD_URL:?}" "${TASK_ID:?}"
+curl -sf -X POST "$BARK_URL" -H 'Content-Type: application/json' -d "{\"title\":\"ZenithJoy staging 待预览\",\"body\":\"需主理人放行：$STAGING_DASHBOARD_URL；截图与 Android x2 证据见 Sprint artifacts\"}" | jq -e .
+curl -sf -X PATCH "http://localhost:5221/api/brain/tasks/$TASK_ID" -H 'Content-Type: application/json' -d "{\"metadata\":{\"staging_deployed\":true,\"approval_required\":true,\"staging_url\":\"$STAGING_DASHBOARD_URL\"}}" | jq -e .
+curl -sf "http://localhost:5221/api/brain/tasks/$TASK_ID" | jq -e '.decisions.approval=="approved" or .metadata.approval_granted==true'
 ```
 
-prod promote 前必须核查 decisions/approval 字段；未放行禁止 promote。
+最后一条命令是 prod promote 的阻塞闸；未放行时 `jq -e` 必须非 0，禁止 promote。
 
 ## Test Contract
 
 | 功能 | Test File | BEHAVIOR 覆盖（必须是 it() 名子串） | 预期红证据 |
 |---|---|---|---|
 | 认证取消与 schema | `tests/acquisition-cancel.integration.test.ts` | `本人租户取消 running 任务返回 cancelling` | 当前 route 读 body tenant_id，返回 400 |
-| 租户隔离 | 同上 | `跨租户取消返回 TASK_NOT_FOUND` | 当前 route 没有 session tenant 中间件 |
+| 租户隔离 | 同上 | `跨租户取消返回 403 FORBIDDEN` | 当前 route 接受 body tenant_id，尚未按认证租户给出 403 |
 | 心跳下发 | 同上 | `下一次生产形状 heartbeat 只下发一条` | 当前未向 publish_tasks 入 cancel command |
 | 幂等 | 同上 | `重复取消幂等且不生成第二条指令` | 当前无 cancel_requested_at/唯一命令 |
 | 回执终态 | 同上 | `只有绑定 Android Agent 回执后才落 cancelled` | 当前无 cancelled_at |
 | 冷却 | 同上 | `冷却期内同设备新任务返回 DEVICE_CANCEL_COOLDOWN` | 当前 start 无冷却闸 |
+| 离线恢复 | 同上 | `Agent 离线期间保留取消意图` | 当前没有取消命令恢复下发合同 |
+| 非法状态 | 同上 | `已结束任务返回 409 TASK_NOT_CANCELLABLE` | 当前 cancel route 未按认证租户和可取消状态收敛 |
+| 超时不假成功 | 同上 | `取消指令发出 121 秒无回执仍保持 cancelling sent` | 当前详情 response 无 cancel_phase |
+| 重复回执 | 同上 | `重复 cancelled 回执幂等且不延长五分钟冷却起点` | 当前回执可能重写冷却起点 |
 
 ## Notes
 
