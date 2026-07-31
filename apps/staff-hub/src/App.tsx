@@ -8,6 +8,7 @@ import SkillEvalPage from './pages/SkillEvalPage';
 import LineHealthPage from './pages/LineHealthPage';
 import LineHealthDetailPage from './pages/LineHealthDetailPage';
 import AcceptancePage from './pages/AcceptancePage';
+import AcceptanceDetailPage from './pages/AcceptanceDetailPage';
 import EnvBadge from './components/EnvBadge';
 
 function Shell() {
@@ -59,6 +60,7 @@ function Shell() {
           <Route path="/line-health" element={<LineHealthPage />} />
           <Route path="/line-health/:lineKey" element={<LineHealthDetailPage />} />
           <Route path="/acceptance" element={<AcceptancePage />} />
+          <Route path="/acceptance/:runKey" element={<AcceptanceDetailPage />} />
           <Route path="/login/feishu" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
