@@ -354,4 +354,36 @@ describe('Android 获客任务不可逆取消真实接缝', () => {
     expect(allowed.status).toBe(200);
     expect(allowed.body.data.status).toBe('pending');
   });
+
+  it('新增取消状态后全状态枚举仍可真实读写，非法状态被约束拒绝', async () => {
+    const validStatuses = [
+      'pending',
+      'running',
+      'cancelling',
+      'cancelled',
+      'done',
+      'stage_1_done',
+      'partial',
+      'failed',
+    ];
+
+    for (const status of validStatuses) {
+      await testPool.query(
+        `UPDATE zenithjoy.acquisition_collect_tasks SET status = $1 WHERE id = $2`,
+        [status, taskId],
+      );
+      const row = await testPool.query<{ status: string }>(
+        `SELECT status FROM zenithjoy.acquisition_collect_tasks WHERE id = $1`,
+        [taskId],
+      );
+      expect(row.rows[0].status).toBe(status);
+    }
+
+    await expect(
+      testPool.query(
+        `UPDATE zenithjoy.acquisition_collect_tasks SET status = 'paused' WHERE id = $1`,
+        [taskId],
+      ),
+    ).rejects.toThrow();
+  });
 });

@@ -117,61 +117,68 @@ target_environment: windows_cloud
 
 ## Invariant 铁律映射
 
-- [ ] [BEHAVIOR] [L2] INV-1: target_environment 固定由 payload 路由 windows_cloud
-  动作: 在本次 GitHub run 查询执行取消 UI E2E 的 runner 标签
-  预期观察: Windows job conclusion=success，合同 target_environment=windows_cloud
-  等待预算: 60s
-  留证: GitHub jobs JSON
-  Test: manual:bash -c ': "${GH_REPO:?}" "${GITHUB_RUN_ID:?}"; gh api "repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID/jobs" | jq -e "[.jobs[] | select(.name|test(\"cancel\";\"i\")) | select((.labels|index(\"windows-latest\")) and .conclusion==\"success\")] | length>=1"'
+- [ ] [BEHAVIOR] [L2] INV-1: 租户查询与写入严格限定当前租户
+  动作: 并发执行租户 A 本人取消与租户 B 跨租户取消
+  预期观察: A 成功、B 返回不泄露数据的 403，DB 只有 A 的任务行变化
+  等待预算: 5s
+  留证: integration reporter 与两个 tenant_id 的 DB 查询
+  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "本人租户取消|跨租户取消"'
 
-- [ ] [BEHAVIOR] [L3] INV-2: 真环境接缝必须真机验证 [接缝×2]
+- [ ] [BEHAVIOR] [L2] INV-2: 每个新增或修改端点都有鉴权
+  动作: 无认证调用 cancel，再用无效 license 调 heartbeat
+  预期观察: cancel 返回 401，heartbeat 返回 401 INVALID_LICENSE，均不写业务状态
+  等待预算: 0s
+  留证: 两个 HTTP response JSON 与任务状态定点查询
+  Test: manual:bash -c ': "${API_BASE:?}" "${TASK_ID:?}"; C1=$(curl -s -o /tmp/inv2a.json -w "%{http_code}" -X POST "$API_BASE/api/acquisition/collect/cancel" -H "Content-Type: application/json" -d "{\"task_id\":\"$TASK_ID\"}"); C2=$(curl -s -o /tmp/inv2b.json -w "%{http_code}" -X POST "$API_BASE/api/agent/heartbeat" -H "Content-Type: application/json" -d "{\"license\":\"invalid\",\"hostname\":\"x\",\"os_type\":\"android\"}"); test "$C1" = 401; test "$C2" = 401; jq -e ".error.code==\"UNAUTHORIZED\"" /tmp/inv2a.json; jq -e ".code==\"INVALID_LICENSE\"" /tmp/inv2b.json'
+
+- [ ] [BEHAVIOR] [L2] INV-3: E2E 默认种两个租户并断言互不串
+  动作: 在真 Postgres 创建租户 A/B，并以 B 取消 A 的任务
+  预期观察: 租户 B 得不到租户 A 的任务或设备数据，A 的任务保持原状态
+  等待预算: 10s
+  留证: vitest reporter 与两个 tenant_id 的 DB 查询
+  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "跨租户取消返回 403 FORBIDDEN"'
+
+- [ ] [BEHAVIOR] [L3] INV-4: 真环境接缝必须真机验证 [接缝×2]
   动作: 查询两次 Android cancel workflow 证据
   预期观察: 两次均 success 且 safe_exit=true，任何不一致判 FLAKY
   等待预算: 180s
   留证: evidence/android-1/result.json 与 evidence/android-2/result.json
   Test: manual:bash -c 'for N in 1 2; do F="sprints/07310943-kernel-0e82adad/evidence/android-$N/result.json"; jq -e ".safe_exit==true and .report_status==\"cancelled\"" "$F"; done; diff -u <(jq -S "del(.timestamps,.run_id)" sprints/07310943-kernel-0e82adad/evidence/android-1/result.json) <(jq -S "del(.timestamps,.run_id)" sprints/07310943-kernel-0e82adad/evidence/android-2/result.json)'
 
-- [ ] [BEHAVIOR] [L2] INV-3: E2E 默认种两个租户并断言互不串
-  动作: 运行真 Postgres 跨租户取消 integration case
-  预期观察: 租户 B 得不到租户 A 的任务或设备数据
-  等待预算: 10s
-  留证: vitest reporter 与两个 tenant_id 的 DB 查询
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "跨租户取消返回 403 FORBIDDEN"'
+- [ ] [BEHAVIOR] [L3] INV-5: 环境值从真机发现而非写死
+  动作: Android workflow 运行时发现 adb、device serial 与窗口状态
+  预期观察: 两轮 evidence 均记录非空 discovered_device_serial，成功 oracle 不依赖固定坐标
+  等待预算: 60s
+  留证: Android result.json 的 environment 字段
+  Test: manual:bash -c 'for F in sprints/07310943-kernel-0e82adad/evidence/android-{1,2}/result.json; do jq -e ".environment.discovered_device_serial|type==\"string\" and length>0" "$F"; done'
 
-- [ ] [BEHAVIOR] [L2] INV-4: 凭据不硬编码、不进 git、不进日志
+- [ ] [BEHAVIOR] [L2] INV-6: 凭据不硬编码、不进 git、不进日志
   动作: 查询当前提交的 L1 Secrets Scan job
   预期观察: gitleaks job conclusion=success
   等待预算: 120s
   留证: GitHub job URL 与 conclusion
   Test: manual:bash -c ': "${GH_REPO:?}" "${GITHUB_RUN_ID:?}"; gh api "repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID/jobs" | jq -e "[.jobs[] | select(.name|test(\"Secrets Scan\")) | select(.conclusion==\"success\")] | length==1"'
 
-- [ ] [BEHAVIOR] [L2] INV-5: 错误响应与日志不泄露租户/设备数据
+- [ ] [BEHAVIOR] [L2] INV-7: 错误响应与日志不泄露租户、设备与业务内容
   动作: 用租户 B 取消租户 A 任务并捕获 API 响应及本轮结构化日志
   预期观察: 响应和日志均不含 tenant A、agent id、关键词或聊天内容
   等待预算: 5s
   留证: redaction integration reporter 与扫描结果
   Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "跨租户取消返回 403 FORBIDDEN"'
 
-- [ ] [BEHAVIOR] [L2] INV-6: 每个新增或修改端点都有鉴权
-  动作: 无认证调用 cancel，再用无效 license 调 heartbeat
-  预期观察: cancel 返回 401，heartbeat 返回 401 INVALID_LICENSE
-  等待预算: 0s
-  留证: 两个 HTTP response JSON
-  Test: manual:bash -c ': "${API_BASE:?}" "${TASK_ID:?}"; C1=$(curl -s -o /tmp/inv6a.json -w "%{http_code}" -X POST "$API_BASE/api/acquisition/collect/cancel" -H "Content-Type: application/json" -d "{\"task_id\":\"$TASK_ID\"}"); C2=$(curl -s -o /tmp/inv6b.json -w "%{http_code}" -X POST "$API_BASE/api/agent/heartbeat" -H "Content-Type: application/json" -d "{\"license\":\"invalid\",\"hostname\":\"x\",\"os_type\":\"android\"}"); test "$C1" = 401; test "$C2" = 401; jq -e ".error.code==\"UNAUTHORIZED\"" /tmp/inv6a.json; jq -e ".code==\"INVALID_LICENSE\"" /tmp/inv6b.json'
+- [ ] [BEHAVIOR] [L2] INV-8: 新增取消状态后全状态枚举仍可真实读写
+  动作: 在真 Postgres 逐一写入 acquisition_collect_tasks 的既有状态与 cancelling/cancelled
+  预期观察: 所有合法状态均可写入并原样读回，非法状态被 CHECK 约束拒绝
+  等待预算: 10s
+  留证: integration reporter 的状态矩阵与非法状态约束错误
+  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "新增取消状态后全状态枚举仍可真实读写"'
 
-- [ ] [BEHAVIOR] [L2] INV-7: 所有任务查询与写入限定当前租户
-  动作: 并发执行本人取消与跨租户取消
-  预期观察: A 成功、B 得不泄露的 403，DB 只有 A 的行变化
-  等待预算: 5s
-  留证: integration reporter 与 tenant-scoped SQL 参数证据
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "本人租户取消|跨租户取消"'
-
-- [ ] [BEHAVIOR] [L3] INV-8: 环境值从真机推导而非写死
-  动作: Android workflow 运行时发现 adb、device serial、窗口状态并写证据
-  预期观察: evidence 记录非空 discovered_device_serial，脚本未使用固定坐标作为成功 oracle
-  等待预算: 60s
-  留证: Android result.json 的 environment 字段
-  Test: manual:bash -c 'for F in sprints/07310943-kernel-0e82adad/evidence/android-{1,2}/result.json; do jq -e ".environment.discovered_device_serial|type==\"string\" and length>0" "$F"; done'
+- [ ] [BEHAVIOR] [L2] INV-9: 指令与终态只按语义字段判成功
+  动作: 先取 heartbeat 响应，再以绑定 Agent 发送 cancelled 回执
+  预期观察: heartbeat 必须含匹配 task_id 的 acquisition_cancel；回执必须含 data.status=cancelled，通用 success/ok 单独出现不算通过
+  等待预算: 30s
+  留证: heartbeat queued_tasks JSON、report response 与 DB 终态
+  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "下一次生产形状 heartbeat 只下发一条|只有绑定 Android Agent 回执后才落 cancelled"'
 
 ## BEHAVIOR:E2E 条目
 
