@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 2)
+# Sprint Contract Draft (Round 3)
 
 sprint: `07310943-kernel-0e82adad`
 task_id: `e76cb826-7fbf-45bd-b94d-75793edc2f33`
@@ -111,7 +111,7 @@ Android 生产调用方继续使用 `x-agent-id` header，body 沿用 `CollectRe
 
 1. Dashboard 生产调用方 `AcquisitionTasksPage.tsx` 使用相对 URL、浏览器 session cookie、`Content-Type: application/json`；取消 body 只传 `task_id`。合同禁止测试用 body `tenant_id` 走另一条路径。
 2. Android `HttpHeartbeatLoop.kt` 真实调用 `POST /api/agent/heartbeat`，认证在 body `license`，并携带 `version/hostname/os_type/agent_id/agent_uuid/machine_id`；响应解析字段为 `task_id/platform/type/payload`。
-3. Android `CollectReporter.kt` 真实回执调用 `POST /api/acquisition/collect/report`，认证为 header `x-agent-id`，body 使用 `task_id/video_id/commenters/checkpoint/terminal/partial_reason`。DoD 必须逐字段复用，禁止改为 body `tenant_id`。
+3. Android `CollectReporter.kt` 真实回执调用 `POST /api/acquisition/collect/report`，认证为 header `x-agent-id`，其值是运行期 `AgentConfig.agentId`，对应 DB `agents.agent_id` 文本 slug；body 使用 `task_id/video_id/commenters/checkpoint/terminal/partial_reason`。DoD 的成功路径必须逐字段复用且发送文本 slug，禁止用 DB UUID 兼容旁路冒充生产调用方，也禁止改为 body `tenant_id`。
 
 ## 禁 mock 边清单
 
@@ -175,7 +175,7 @@ Android 生产调用方继续使用 `x-agent-id` header，body 沿用 `CollectRe
 
 **验证命令**: `DATABASE_URL="$DATABASE_URL" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "取消指令发出 121 秒|只有绑定 Android Agent 回执|重复 cancelled 回执"`
 
-**硬阈值**: 无回执永不自动转终态；错误 Agent 回执 403；正确回执后 `status=cancelled` 且 `cancelled_at/ended_at` 非空。
+**硬阈值**: 无回执永不自动转终态；错误 Agent 回执 403；生产文本 `x-agent-id` 回执后 `status=cancelled`，且 `cancelled_at/ended_at` 均不早于本次回执开始时刻。
 
 ### Step 6: 确认后进入同设备 5 分钟冷却，期满恢复
 
@@ -352,3 +352,4 @@ curl -sf "http://localhost:5221/api/brain/tasks/$TASK_ID" | jq -e '.decisions.ap
 - PRD 指定 `target_environment=windows_cloud`，合同保持该路由；Android 真实接缝由独立 xian-rog workflow 补位，并在未跑前保持 `logic-done-pending`。
 - 本 sprint 不引入暂停、恢复、批量取消或已采数据回滚。
 - `contract-gate: skipped (file not found, third-party repo)`。
+- Round 3 收敛：所有带 `-t` 的 integration oracle 改为可独立建任务并完成前置状态，不再依赖测试声明顺序；取消回执成功路径固定使用生产 `agents.agent_id` 文本 slug；超时查询复用 PRD 已定义的 `/collect-tasks`，不新增详情端点。
