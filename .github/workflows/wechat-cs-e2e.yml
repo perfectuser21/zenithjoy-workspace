@@ -44,15 +44,16 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE="${{ github.event.pull_request.base.sha }}"
             HEAD="${{ github.event.pull_request.head.sha }}"
+            FILES=$(git diff --name-only "$BASE...$HEAD")
           else
             BASE="${{ github.event.before }}"
             HEAD="${{ github.sha }}"
             if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
               BASE=$(git rev-parse "$HEAD^")
             fi
+            FILES=$(git diff --name-only "$BASE" "$HEAD")
           fi
 
-          FILES=$(git diff --name-only "$BASE" "$HEAD")
           echo "$FILES"
           AGENT=false; AGENT_OR_API=false
           if echo "$FILES" | grep -qE '^services/agent/'; then AGENT=true; fi
