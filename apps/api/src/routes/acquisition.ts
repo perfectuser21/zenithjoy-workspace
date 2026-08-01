@@ -1120,13 +1120,15 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
   } = req.body || {};
 
   if (!taskId) return fail(res, 400, 'MISSING_TASK_ID', '缺 task_id');
+  // 取消终态是生产 Agent 的受保护回执：先鉴权，再校验业务 payload。
+  // 否则未认证调用方可通过缺少 video_id 把 401 降成 400，并探测路由校验顺序。
+  if (partialReason === 'user_cancelled' && !req.header('x-agent-id')) {
+    return fail(res, 401, 'MISSING_AGENT_ID', '缺 x-agent-id');
+  }
   // FR-2/FR-3: video_id 在纯信号上报（reason.error_code / latest_reply / terminal）时可选；
   // 若同时传 commenters/comments 但无 video_id → 仍报错（commenters 需绑定到具体视频）
   const hasSignalOnly = !commenters && !req.body?.comments && (reason?.error_code || latestReply || terminal);
   if (!videoId && !hasSignalOnly) return fail(res, 400, 'MISSING_VIDEO_ID', '缺 video_id');
-  if (partialReason === 'user_cancelled' && !req.header('x-agent-id')) {
-    return fail(res, 401, 'MISSING_AGENT_ID', '缺 x-agent-id');
-  }
 
   const batch: Array<{ sec_uid?: string | null; nickname: string; comment_text?: string; grade?: string; keyword?: string; douyin_id?: string | null }> =
     Array.isArray(commenters) ? commenters : [];
