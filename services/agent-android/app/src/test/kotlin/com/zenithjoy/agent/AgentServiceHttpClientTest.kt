@@ -14,7 +14,7 @@ import org.junit.Test
  * force-stop 重启 App(新建连接池)后立刻恢复 200 快速响应。根因：httpClient 供极低频调用
  * （报告类端点数分钟一次），OkHttp 默认连接池把空闲连接保留 5 分钟，长时间无调用后网络切换/
  * NAT 超时会让池里的连接静默失效，下次复用时写入成功但读永远拿不到响应，直到 readTimeout 才
- * 报错。HttpHeartbeatLoop 用的是【独立的】OkHttpClient 实例，靠自己每 30s 一次的高频调用保持
+ * 报错。HttpHeartbeatLoop 用的是【独立的】OkHttpClient 实例，靠自己每 20s 一次的高频调用保持
  * 连接常新，从不受影响——两者互不共享连接池，这正是"心跳一直正常、回执一直 timeout"的原因。
  *
  * 修复：AgentService.buildReportHttpClient() 把 maxIdleConnections 设为 0，让这个低频客户端

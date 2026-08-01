@@ -17,7 +17,7 @@
 #   e2e         — full workflow from external perspective. Runs in L4.
 
 version: "1.0.0"
-updated: "2026-07-28"
+updated: "2026-07-31"
 
 # ─── Suite-level (managed by vitest configs) ──────────────────────────────────
 
@@ -38,6 +38,38 @@ api_suite:
 # ─── 逐文件注册 ────────────────────────────────────────────────────────────────
 
 tests:
+
+- id: acquisition-cancel-android-uuid-integration
+  path: apps/api/tests/integration/acquisition-cancel-uuid-agent.integration.test.ts
+  type: integration
+  ci: L4
+  status: active
+  product: AI员工
+  note: "R16 真机回归：heartbeat UUID 身份、取消 command 收敛、未分配 pending 防 500"
+
+- id: acquisition-cancel-integration
+  path: sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts
+  type: integration
+  ci: L4
+  status: active
+  product: AI员工
+  note: "Sprint 07310943：真 Postgres 验证不可逆取消、心跳、绑定回执与稳定设备冷却"
+
+- id: acquisition-cancel-workflow-contract
+  path: sprints/07310943-kernel-0e82adad/tests/workflow-cancel-contract.test.ts
+  type: integration
+  ci: L4
+  status: active
+  product: AI员工
+  note: "Sprint 07310943：Windows 与 Android 真链 workflow 合同"
+
+- id: acquisition-cancel-dashboard-e2e
+  path: apps/dashboard/e2e/acquisition-cancel.spec.ts
+  type: e2e
+  ci: L4
+  status: active
+  product: AI员工
+  note: "Sprint 07310943：真 API/Postgres Dashboard 取消三态与冷却"
 
   # ── AI 视频 ──────────────────────────────────────────────────────────────────
 

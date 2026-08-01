@@ -1,4 +1,5 @@
 name: E2E Orphan Specs Consolidation (Windows)
+run-name: ${{ inputs.attempt_marker || github.workflow }}
 
 # ci-patrol 2026-07-12 巡检发现 12 个 spec 零 workflow 引用，收编到此 workflow。
 # triage 后:3 个已过时删除(crm-config/customer-management/wechat-bind-button),
@@ -28,6 +29,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      attempt_marker:
+        description: '调用方生成的唯一证据标记'
+        required: false
+        default: ''
 
 concurrency:
   group: e2e-orphan-consolidation-${{ github.ref }}
@@ -97,6 +103,13 @@ jobs:
       E2E_BASE_URL: 'http://localhost:5174'
       BASE_URL: 'http://localhost:5174'
       PLAYWRIGHT_BASE_URL: 'http://localhost:5174'
+      DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/zenithjoy_test'
+      # API runtime uses split DB settings; migrations and fixtures use DATABASE_URL.
+      DATABASE_HOST: 'localhost'
+      DATABASE_PORT: '5432'
+      DATABASE_NAME: 'zenithjoy_test'
+      DATABASE_USER: 'postgres'
+      DATABASE_PASSWORD: 'postgres'
 
     steps:
       - uses: actions/checkout@v4
@@ -116,9 +129,22 @@ jobs:
         working-directory: apps/dashboard
         run: npx playwright install chromium --with-deps
 
+      - name: Start apps/api with real Postgres
+        run: |
+          choco install postgresql --no-progress -y --params '/Password:postgres' --params-global
+          PG_HOME=$(powershell -NoProfile -Command "(Get-ChildItem 'C:\Program Files\PostgreSQL' -Directory | Sort-Object Name -Descending | Select-Object -First 1).FullName")
+          export PGPASSWORD=postgres
+          "$PG_HOME/bin/createdb.exe" -U postgres -h localhost zenithjoy_test
+          npm run migrate --workspace apps/api
+          npm run build --workspace apps/api
+          npm run dev --workspace apps/api &
+          for i in $(seq 1 60); do curl -fs http://localhost:3000/health >/dev/null 2>&1 && break; sleep 1; done
+          curl -fs http://localhost:3000/health
+
       - name: Start Vite dev server (VITE_SKIP_AUTH=true)
         working-directory: apps/dashboard
         env:
+          VITE_API_URL: 'http://localhost:3000'
           VITE_SKIP_AUTH: 'true'
           VITE_MOCK_USER_ID: 'dev-user-001'
           VITE_MOCK_USER_NAME: '测试用户'
@@ -143,6 +169,33 @@ jobs:
         continue-on-error: true
         working-directory: apps/dashboard
         run: npx playwright test e2e/acquisition-android-entry.spec.ts --reporter=list
+
+      - name: Repeat cancel E2E
+        working-directory: apps/dashboard
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          rm -rf test-results/acquisition-cancel-repeat-1 test-results/acquisition-cancel-repeat-2
+          npx playwright test e2e/acquisition-cancel.spec.ts --reporter=list --trace=on --output=test-results/acquisition-cancel-repeat-1
+          npx playwright test e2e/acquisition-cancel.spec.ts --reporter=list --trace=on --output=test-results/acquisition-cancel-repeat-2
+          mkdir -p ../../sprints/07310943-kernel-0e82adad/evidence/windows
+          node -e "require('fs').writeFileSync('../../sprints/07310943-kernel-0e82adad/evidence/windows/run.json', JSON.stringify({github_run_id:Number(process.env.GITHUB_RUN_ID),github_run_attempt:Number(process.env.GITHUB_RUN_ATTEMPT),head_sha:process.env.PR_HEAD_SHA,repeat_count:2}, null, 2))"
+
+      - name: Upload Windows cancel evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-cancel-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            sprints/07310943-kernel-0e82adad/screenshots/cancel-requested.png
+            sprints/07310943-kernel-0e82adad/screenshots/cancel-sent.png
+            sprints/07310943-kernel-0e82adad/screenshots/cancel-confirmed.png
+            sprints/07310943-kernel-0e82adad/screenshots/cancel-cooldown.png
+            sprints/07310943-kernel-0e82adad/evidence/windows/run.json
+            apps/dashboard/test-results/acquisition-cancel-repeat-1/
+            apps/dashboard/test-results/acquisition-cancel-repeat-2/
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Run — content-judgment-gate
         id: content_judgment

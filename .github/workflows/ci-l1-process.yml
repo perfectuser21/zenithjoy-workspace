@@ -324,6 +324,8 @@ jobs:
           set -e
           FOUND=0
           for t in .github/workflows/scripts/__tests__/account-scan-realmachine-smoke.*.test.sh \
+                   .github/workflows/scripts/__tests__/android-cancel-workflow.real-fixture.test.sh \
+                   .github/workflows/scripts/__tests__/windows-cancel-workflow.evidence-correlation.test.sh \
                    .github/workflows/scripts/__tests__/lint-smoke-mock-honesty.test.sh \
                    .github/workflows/scripts/__tests__/lint-realmachine-unverified-ratchet.test.sh; do
             [ -f "$t" ] || continue

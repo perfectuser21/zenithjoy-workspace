@@ -125,7 +125,7 @@ export default defineConfig({
       },
       // Line02 智能获客 — leads / acquisition tasks
       '/api/acquisition': {
-        target: 'http://localhost:5200',
+        target: process.env.VITE_API_URL || 'http://localhost:5200',
         changeOrigin: true,
       },
       // Brain API — 内容工厂配置（content-types）等

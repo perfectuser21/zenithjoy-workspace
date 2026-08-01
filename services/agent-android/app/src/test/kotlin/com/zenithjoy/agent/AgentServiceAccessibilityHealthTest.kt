@@ -1,5 +1,6 @@
 package com.zenithjoy.agent
 
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -20,6 +21,16 @@ class AgentServiceAccessibilityHealthTest {
         "com.zenithjoy.agent/.collect.DouyinCollectService:" +
             "com.zenithjoy.agent/.collect.DouyinDmOutreachService:" +
             "com.zenithjoy.agent/.account.DeviceAccountScanService"
+
+    private fun agentServiceSource(): String {
+        val candidates = listOf(
+            File("src/main/kotlin/com/zenithjoy/agent/AgentService.kt"),
+            File("app/src/main/kotlin/com/zenithjoy/agent/AgentService.kt"),
+        )
+        val file = candidates.firstOrNull { it.exists() }
+            ?: error("AgentService.kt not found in ${candidates.map { it.absolutePath }}")
+        return file.readText()
+    }
 
     @Test
     fun `全部三个服务都在已启用列表——无缺失`() {
@@ -47,5 +58,29 @@ class AgentServiceAccessibilityHealthTest {
         val withNoise = "com.other.app/.SomeService:$allThreeEnabled"
         val missing = AgentService.missingAccessibilityServices(withNoise, AgentService.REQUIRED_ACCESSIBILITY_SERVICES)
         assertTrue(missing.isEmpty())
+    }
+
+    @Test
+    fun `注册重试抢先时也必须在构造请求前补齐机器身份`() {
+        val source = agentServiceSource()
+        val registerStart = source.indexOf("private suspend fun performRegister()")
+        val registerEnd = source.indexOf("\n    private ", registerStart + 1).let {
+            if (it == -1) source.length else it
+        }
+        val registerBody = source.substring(registerStart, registerEnd)
+
+        val lockIndex = registerBody.indexOf("registerCallInFlight.compareAndSet(false, true)")
+        val identityIndex = registerBody.indexOf("ensureRegistrationIdentity()")
+        val requestIndex = registerBody.indexOf("AgentRegistrar.RegisterRequest(")
+
+        assertTrue("performRegister must still own the single-flight lock", lockIndex >= 0)
+        assertTrue(
+            "the winning register call must initialize identity after it owns the lock",
+            identityIndex > lockIndex,
+        )
+        assertTrue(
+            "identity must be initialized before the HTTP register request is constructed",
+            requestIndex > identityIndex,
+        )
     }
 }

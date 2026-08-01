@@ -902,6 +902,22 @@ describe('POST /api/acquisition/collect/report-videos — Stage1 清单回报 [B
     expect(res.status).toBe(401);
   });
 
+  it('同一任务 60 秒内第 181 次上报 → 429 RATE_LIMITED', async () => {
+    const rateLimitedTaskId = '00000000-0000-0000-0000-00000000c181';
+    for (let attempt = 1; attempt <= 180; attempt += 1) {
+      const res = await request(app)
+        .post('/api/acquisition/collect/report-videos')
+        .send({ task_id: rateLimitedTaskId, videos: [{ video_id: 'v1' }] });
+      expect(res.status).toBe(401);
+    }
+
+    const blocked = await request(app)
+      .post('/api/acquisition/collect/report-videos')
+      .send({ task_id: rateLimitedTaskId, videos: [{ video_id: 'v1' }] });
+    expect(blocked.status).toBe(429);
+    expect(blocked.body.error.code).toBe('RATE_LIMITED');
+  });
+
   it('agent 与任务绑定不符 → 403', async () => {
     mockClientQuery.mockImplementation(async (sql: unknown) => {
       const s = String(sql);
@@ -1035,6 +1051,7 @@ describe('POST /api/acquisition/collect/report-videos — Stage1 清单回报 [B
     const upd = mockClientQuery.mock.calls.map((c) => String(c[0])).find((s) => s.includes("'cancelled'") || s.includes('cancelled'));
     expect(upd).toBeTruthy();
   });
+
 });
 
 // ────── Bug C 回归：share_url → 服务端解析真实 video_id ──────

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      The physical-phone harness must select this exact side-by-side service
+      through the system UI. Production and E2E packages otherwise expose the
+      same inherited application label, making the six service rows ambiguous.
+      This overlay is compiled only into the e2e build type.
+    -->
+    <application>
+        <service
+            android:name=".collect.DouyinCollectService"
+            android:label="ZenithJoy Collect E2E" />
+    </application>
+
+</manifest>

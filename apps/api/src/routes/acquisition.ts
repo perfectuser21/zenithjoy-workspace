@@ -8,7 +8,7 @@ import {
   settleCollectTask,
   TERMINAL_COLLECT_STATUSES,
 } from '../services/acquisition-collect';
-import { tenantContextOptional } from '../middleware/tenant-context';
+import { tenantContext, tenantContextOptional } from '../middleware/tenant-context';
 import { licenseAuth } from '../middleware/license-auth';
 import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import { sseService } from '../services/sse.service';
@@ -18,6 +18,12 @@ import { judgeVideo } from '../services/content-judgment';
 import { gradeComments } from '../services/comment-grading';
 
 export const acquisitionRouter = Router();
+
+// Keep route registration lazy so legacy tests that partially mock this module can
+// still import unrelated acquisition endpoints. Authentication remains delegated
+// to the production tenantContext middleware when the cancel endpoint is called.
+const collectCancelTenantContext = (req: Request, res: Response, next: NextFunction) =>
+  tenantContext(req, res, next);
 
 // FR-2: error_code 白名单（新枚举 + 历史值向后兼容）
 // 定义在文件顶部，供 collect/report-videos 和 collect/report 两个 handler 共用。
@@ -79,11 +85,29 @@ const collectReportRateLimit = simpleRateLimit({
   keyFn: (req) => (req.body && req.body.task_id) || 'anonymous',
 });
 
+const collectReportVideosRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 180,
+  keyFn: (req) => (req.body && req.body.task_id) || 'anonymous',
+});
+
 // Path2 账号扫描手动触发限流：同租户 60 秒内只允许触发一次，防止连点把
 // DeviceAccountScanService（无障碍面板读取）打崩（sprint 07192358）。
 const accountScanTriggerRateLimit = simpleRateLimit({
   windowMs: 60_000,
   max: 1,
+});
+
+const collectStartRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 30,
+  keyFn: (req) => ipKeyFn(req),
+});
+
+const collectCancelRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 30,
+  keyFn: (req) => ipKeyFn(req),
 });
 
 // CodeQL js/missing-rate-limiting：/leads/:id/signal-status 碰鉴权(tenantContextOptional
@@ -153,10 +177,9 @@ acquisitionRouter.get('/overview', (_req: Request, res: Response) => {
 
 // 前端列表端点 — 返回租户的采集任务列表（最新 20 条）
 acquisitionRouter.get('/collect-tasks', tenantContextOptional, async (req: Request, res: Response) => {
-  if (process.env.VITEST) {
+  if (process.env.VITEST && !process.env.DATABASE_URL) {
     return res.status(200).json({ success: true, data: { tasks: [], total: 0 }, timestamp: new Date().toISOString() });
   }
-
   const tenantId = req.tenantId;
   if (!tenantId) {
     return res.status(401).json({ success: false, error: { code: 'NO_TENANT', message: '缺租户上下文（未登录或无 X-Tenant-Id）' }, timestamp: new Date().toISOString() });
@@ -170,8 +193,12 @@ acquisitionRouter.get('/collect-tasks', tenantContextOptional, async (req: Reque
       created_at: Date;
       video_count: number;
       lead_count_raw: number;
+      cancel_requested_at: Date | null;
+      cancel_sent_at: Date | null;
+      cancelled_at: Date | null;
     }>(
-      `SELECT id, keywords, status, created_at, video_count, lead_count_raw
+      `SELECT id, keywords, status, created_at, video_count, lead_count_raw,
+              cancel_requested_at, cancel_sent_at, cancelled_at
          FROM zenithjoy.acquisition_collect_tasks
         WHERE tenant_id = $1
         ORDER BY created_at DESC
@@ -186,6 +213,12 @@ acquisitionRouter.get('/collect-tasks', tenantContextOptional, async (req: Reque
       created_at: r.created_at ? new Date(r.created_at).toISOString() : null,
       video_count: r.video_count ?? 0,
       lead_count_raw: r.lead_count_raw ?? 0,
+      cancel_phase: r.status === 'cancelled' ? 'confirmed'
+        : r.cancel_sent_at ? 'sent'
+        : r.cancel_requested_at ? 'requested' : null,
+      cooldown_remaining_seconds: r.cancelled_at
+        ? Math.max(0, Math.min(300, Math.ceil((r.cancelled_at.getTime() + 300_000 - Date.now()) / 1000)))
+        : 0,
     }));
 
     return res.status(200).json({ success: true, data: { tasks, total: tasks.length }, timestamp: new Date().toISOString() });
@@ -684,7 +717,7 @@ acquisitionRouter.post('/collect/expand', tenantContextOptional, async (req: Req
 });
 
 // POST /api/acquisition/collect/start
-acquisitionRouter.post('/collect/start', tenantContextOptional, async (req: Request, res: Response) => {
+acquisitionRouter.post('/collect/start', collectStartRateLimit, tenantContextOptional, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const keywords: unknown = req.body?.keywords;
@@ -698,6 +731,36 @@ acquisitionRouter.post('/collect/start', tenantContextOptional, async (req: Requ
   try {
     if (!Array.isArray(keywords) || keywords.length === 0)
       return fail(res, 400, 'MISSING_KEYWORDS', 'keywords 不能为空');
+
+    if (agentId && (!process.env.VITEST || process.env.DATABASE_URL)) {
+      const machine = await pool.query<{ machine_id: string }>(
+        `SELECT lm.machine_id
+           FROM zenithjoy.agents a
+           JOIN zenithjoy.license_machines lm
+             ON lm.license_id = a.license_id AND lm.agent_id = a.agent_id
+          WHERE a.id = $1 AND a.tenant_id = $2 AND lm.status = 'active'
+          LIMIT 1`,
+        [agentId, tenantId],
+      );
+      const machineId = machine.rows[0]?.machine_id;
+      if (machineId) {
+        const cooldown = await pool.query<{ remaining_seconds: number }>(
+          `SELECT CEIL(EXTRACT(EPOCH FROM (cancelled_at + interval '5 minutes' - NOW())))::int AS remaining_seconds
+             FROM zenithjoy.acquisition_collect_tasks
+            WHERE tenant_id = $1 AND device_machine_id = $2 AND status = 'cancelled'
+              AND cancelled_at > NOW() - interval '5 minutes'
+            ORDER BY cancelled_at DESC LIMIT 1`,
+          [tenantId, machineId],
+        );
+        if (cooldown.rows[0]) {
+          return res.status(409).json({
+            success: false,
+            error: { code: 'DEVICE_CANCEL_COOLDOWN', message: '设备冷却中', remaining_seconds: Math.max(1, Math.min(300, cooldown.rows[0].remaining_seconds)) },
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+    }
 
     // 方案 D：选了抖音小号 → 任务必须派到持有该 session 的机器（物理约束，覆盖手选的 agent_id）
     if (accountLabel) {
@@ -797,34 +860,56 @@ acquisitionRouter.post(
 );
 
 // POST /api/acquisition/collect/cancel
-acquisitionRouter.post('/collect/cancel', async (req: Request, res: Response) => {
-  const tenantId = req.body?.tenant_id;
+acquisitionRouter.post('/collect/cancel', collectCancelRateLimit, collectCancelTenantContext, async (req: Request, res: Response) => {
+  const tenantId = req.tenantId;
   const taskId = req.body?.task_id;
-  if (!tenantId || !taskId) return fail(res, 400, 'MISSING_FIELDS', '缺 tenant_id / task_id');
-
-  const r = await pool.query(
-    `UPDATE zenithjoy.acquisition_collect_tasks
-        SET status = 'cancelling', updated_at = NOW()
-      WHERE id = $1 AND tenant_id = $2
-        AND status IN ('pending', 'running')
-      RETURNING id`,
-    [taskId, tenantId]
-  );
-  if (r.rows.length === 0) {
-    // 任务不存在或已终态
-    const exists = await pool.query(
-      `SELECT id FROM zenithjoy.acquisition_collect_tasks WHERE id = $1 AND tenant_id = $2`,
-      [taskId, tenantId]
-    );
-    if (exists.rows.length === 0) return fail(res, 404, 'NO_COLLECT_TASK', '采集任务不存在');
+  if (!tenantId) return;
+  if (typeof taskId !== 'string' || !UUID_RE.test(taskId)) {
+    return fail(res, 403, 'FORBIDDEN', '无权操作该采集任务');
   }
-  return ok(res, { task_id: taskId, status: 'cancelling' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query<{ id: string; status: string; agent_id: string | null; cancel_sent_at: Date | null }>(
+      `SELECT id, status, agent_id, cancel_sent_at FROM zenithjoy.acquisition_collect_tasks
+        WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, [taskId, tenantId],
+    );
+    if (!found.rows[0]) {
+      await client.query('ROLLBACK');
+      return fail(res, 403, 'FORBIDDEN', '无权操作该采集任务');
+    }
+    const task = found.rows[0];
+    if (!['running', 'cancelling'].includes(task.status)) {
+      await client.query('ROLLBACK');
+      return fail(res, 409, 'TASK_NOT_CANCELLABLE', '任务已结束，无法取消');
+    }
+    if (task.status !== 'cancelling') {
+      const commandId = randomUUID();
+      await client.query(
+        `UPDATE zenithjoy.acquisition_collect_tasks SET status='cancelling', cancel_requested_at=NOW(),
+          cancel_command_id=$2, updated_at=NOW() WHERE id=$1`, [taskId, commandId],
+      );
+      await client.query(
+        `INSERT INTO zenithjoy.publish_tasks
+          (id, agent_id, platform, status, task_type, payload, tenant_id, created_at, updated_at)
+         VALUES ($1,$2,'android','queued','acquisition_cancel',$3::jsonb,$4,NOW(),NOW())`,
+        [commandId, task.agent_id, JSON.stringify({ collect_task_id: taskId }), tenantId],
+      );
+    }
+    await client.query('COMMIT');
+    return ok(res, { task_id: taskId, status: 'cancelling', cancel_phase: task.cancel_sent_at ? 'sent' : 'requested' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 });
 
 // POST /api/acquisition/collect/report-videos — Stage1 视频清单回报（幂等可重入）
 // 鉴权：x-agent-id 反查 tenant → 任务按 (id, tenant_id) 查 → agent 绑定校验。
 // 幂等：ON CONFLICT (task_id, video_id) + video_count 按 distinct 重算，重复回报同结果不重计数。
-acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Response) => {
+acquisitionRouter.post('/collect/report-videos', collectReportVideosRateLimit, async (req: Request, res: Response) => {
   const { task_id: taskId, videos, reason } = req.body || {};
   if (!taskId) return fail(res, 400, 'MISSING_TASK_ID', '缺 task_id');
 
@@ -868,7 +953,7 @@ acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Respo
   try {
     await client.query('BEGIN');
     const taskRes = await client.query(
-      `SELECT id, tenant_id, status, agent_id, lead_count_raw
+      `SELECT id, tenant_id, status, agent_id, lead_count_raw, cancel_command_id
          FROM zenithjoy.acquisition_collect_tasks
         WHERE id = $1 AND tenant_id = $2
         FOR UPDATE`,
@@ -878,7 +963,13 @@ acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Respo
       await client.query('ROLLBACK');
       return fail(res, 404, 'NO_COLLECT_TASK', '采集任务不存在');
     }
-    const task = taskRes.rows[0] as { id: string; status: string; agent_id: string | null; lead_count_raw: number };
+    const task = taskRes.rows[0] as {
+      id: string;
+      status: string;
+      agent_id: string | null;
+      lead_count_raw: number;
+      cancel_command_id: string | null;
+    };
     if (task.agent_id && task.agent_id !== xAgentId) {
       await client.query('ROLLBACK');
       return fail(res, 403, 'AGENT_MISMATCH', '任务已绑定其他 agent');
@@ -888,7 +979,20 @@ acquisitionRouter.post('/collect/report-videos', async (req: Request, res: Respo
       return fail(res, 409, 'TASK_TERMINAL', `任务已终态 ${task.status}`);
     }
     if (task.status === 'cancelling') {
-      // 唯一落章路径：cancelling → cancelled（settleCollectTask 语义）
+      // 新取消合同由物理 Agent 的 user_cancelled 回执独占落章。取消请求之后仍可能有
+      // 已在途的 Stage1 普通回报；它只能被忽略并保持 cancelling，否则真正的设备回执
+      // 到达时会被终态守卫吞掉，publish_tasks 也永远无法完成。
+      if (task.cancel_command_id) {
+        await client.query('ROLLBACK');
+        return ok(res, {
+          task_id: taskId,
+          ignored: true,
+          status: 'cancelling',
+          video_count: 0,
+          accepted: 0,
+        });
+      }
+      // 无 cancel_command_id 的旧数据保持原兼容语义。
       const s = settleCollectTask({ currentStatus: 'cancelling', videoTotal: 0, videoDone: 0, leadCount: task.lead_count_raw });
       await client.query(
         `UPDATE zenithjoy.acquisition_collect_tasks
@@ -1016,6 +1120,11 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
   } = req.body || {};
 
   if (!taskId) return fail(res, 400, 'MISSING_TASK_ID', '缺 task_id');
+  // 取消终态是生产 Agent 的受保护回执：先鉴权，再校验业务 payload。
+  // 否则未认证调用方可通过缺少 video_id 把 401 降成 400，并探测路由校验顺序。
+  if (partialReason === 'user_cancelled' && !req.header('x-agent-id')) {
+    return fail(res, 401, 'MISSING_AGENT_ID', '缺 x-agent-id');
+  }
   // FR-2/FR-3: video_id 在纯信号上报（reason.error_code / latest_reply / terminal）时可选；
   // 若同时传 commenters/comments 但无 video_id → 仍报错（commenters 需绑定到具体视频）
   const hasSignalOnly = !commenters && !req.body?.comments && (reason?.error_code || latestReply || terminal);
@@ -1076,7 +1185,8 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
   try {
     await client.query('BEGIN');
     const taskRes = await client.query(
-      `SELECT id, tenant_id, status, error_code, video_count, lead_count_raw, keywords
+      `SELECT id, tenant_id, status, error_code, video_count, lead_count_raw, keywords,
+              agent_id, cancel_sent_at, cancelled_at, cancel_command_id
          FROM zenithjoy.acquisition_collect_tasks WHERE id = $1
          FOR UPDATE`,
       [taskId]
@@ -1088,6 +1198,8 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
     const task = taskRes.rows[0] as {
       id: string; tenant_id: string; status: string; error_code: string | null;
       video_count: number; lead_count_raw: number; keywords: string[] | null;
+      agent_id: string | null; cancel_sent_at: Date | null; cancelled_at: Date | null;
+      cancel_command_id: string | null;
     };
     const tenantId = task.tenant_id;
 
@@ -1098,16 +1210,70 @@ acquisitionRouter.post('/collect/report', collectReportRateLimit, async (req: Re
     }
     // ── cancelling → 落章 cancelled（唯一落章路径），不再写数据 ──
     if (task.status === 'cancelling') {
-      const s = settleCollectTask({ currentStatus: 'cancelling', videoTotal: 0, videoDone: 0, leadCount: task.lead_count_raw });
+      // 既有采集服务的普通 cancelling 回报保持兼容；只有新的明确取消回执走绑定/sent 闸。
+      if (partialReason !== 'user_cancelled') {
+        if (task.cancel_command_id) {
+          await client.query('ROLLBACK');
+          return ok(res, { task_id: taskId, ignored: true, status: 'cancelling' });
+        }
+        await client.query(
+          `UPDATE zenithjoy.acquisition_collect_tasks
+              SET status = 'cancelled', ended_at = COALESCE(ended_at, NOW()), updated_at = NOW()
+            WHERE id = $1`,
+          [taskId],
+        );
+        await client.query('COMMIT');
+        sseService.close(taskId, { task_id: taskId, status: 'cancelled' });
+        return ok(res, { task_id: taskId, ignored: true, status: 'cancelled' });
+      }
+      const xAgentId = req.header('x-agent-id') ?? '';
+      if (!xAgentId) {
+        await client.query('ROLLBACK');
+        return fail(res, 401, 'MISSING_AGENT_ID', '缺 x-agent-id');
+      }
+      const bound = await client.query<{ id: string }>(
+        `SELECT id
+           FROM zenithjoy.agents
+          WHERE tenant_id = $3
+            AND (id::text = $1 OR agent_id = $1)
+            AND (id::text = $2 OR agent_id = $2)`,
+        [task.agent_id, xAgentId, tenantId],
+      );
+      if (!bound.rows[0]) {
+        await client.query('ROLLBACK');
+        return fail(res, 403, 'FORBIDDEN', 'Agent 无权回执该任务');
+      }
+      if (!task.cancel_sent_at) {
+        await client.query('ROLLBACK');
+        return fail(res, 409, 'CANCEL_NOT_SENT', '取消指令尚未发送');
+      }
+      if (terminal !== true || partialReason !== 'user_cancelled') {
+        await client.query('ROLLBACK');
+        return fail(res, 409, 'INVALID_CANCEL_REPORT', '取消回执语义无效');
+      }
       await client.query(
         `UPDATE zenithjoy.acquisition_collect_tasks
-            SET status = $2, ended_at = COALESCE(ended_at, NOW()), updated_at = NOW()
+            SET status = 'cancelled', cancelled_at = COALESCE(cancelled_at, NOW()),
+                ended_at = COALESCE(ended_at, NOW()), updated_at = NOW()
           WHERE id = $1`,
-        [taskId, s.status]
+        [taskId]
       );
+      if (task.cancel_command_id) {
+        await client.query(
+          `UPDATE zenithjoy.publish_tasks
+              SET status = 'completed',
+                  result = jsonb_build_object('status', 'cancelled', 'collect_task_id', $2::text),
+                  receipt_at = COALESCE(receipt_at, NOW()),
+                  updated_at = NOW()
+            WHERE id = $1
+              AND agent_id = $3
+              AND task_type = 'acquisition_cancel'`,
+          [task.cancel_command_id, taskId, bound.rows[0].id],
+        );
+      }
       await client.query('COMMIT');
-      sseService.close(taskId, { task_id: taskId, status: s.status });
-      return ok(res, { task_id: taskId, ignored: true, status: s.status });
+      sseService.close(taskId, { task_id: taskId, status: 'cancelled' });
+      return ok(res, { task_id: taskId, status: 'cancelled' });
     }
 
     // FR-3: latest_reply 留证前先拍一份"本请求开始前"的快照——commenters 循环里

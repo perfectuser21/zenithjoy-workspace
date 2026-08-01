@@ -47,6 +47,7 @@ export interface PublishTaskRow {
   platform: string;
   status: 'pending' | 'running' | 'success' | 'failed';
   type: 'video' | 'image' | 'article';
+  task_type: string | null;
   folder_path: string | null;
   result: unknown | null;
   receipt_at: string | null;
@@ -393,13 +394,33 @@ export async function upsertAgentByHeartbeat(args: {
  */
 export async function getQueuedTasks(agentId: string): Promise<PublishTaskRow[]> {
   const { rows } = await pool.query<PublishTaskRow>(
-    `SELECT id, agent_id, platform, status, type, folder_path, result, receipt_at, created_at, payload
+    `SELECT id, agent_id, platform, status, type, task_type, folder_path, result, receipt_at, created_at, payload
        FROM zenithjoy.publish_tasks
       WHERE agent_id = $1 AND status IN ('pending', 'queued', 'dispatched')
       ORDER BY created_at ASC`,
     [agentId]
   );
   return rows;
+}
+
+/** 心跳真实取走取消指令时，原子记录已发送和稳定物理设备身份。 */
+export async function markAcquisitionCancelsSent(
+  agentId: string,
+  machineId: string,
+  tasks: PublishTaskRow[],
+): Promise<void> {
+  const ids = tasks.filter((task) => task.task_type === 'acquisition_cancel').map((task) => task.id);
+  if (ids.length === 0) return;
+  await pool.query(
+    `UPDATE zenithjoy.acquisition_collect_tasks c
+        SET cancel_sent_at = COALESCE(c.cancel_sent_at, NOW()),
+            device_machine_id = COALESCE(c.device_machine_id, $2),
+            updated_at = NOW()
+       FROM zenithjoy.publish_tasks p
+      WHERE p.id = ANY($1::uuid[]) AND c.cancel_command_id = p.id
+        AND c.status = 'cancelling'`,
+    [ids, machineId],
+  );
 }
 
 /** 找 agent；返回 null 表示不存在（给 folder_bind / publish/task 用） */
