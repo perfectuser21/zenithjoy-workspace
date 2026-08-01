@@ -167,8 +167,27 @@ jobs:
       - name: Repeat cancel E2E
         working-directory: apps/dashboard
         run: |
-          npx playwright test e2e/acquisition-cancel.spec.ts --reporter=list
-          npx playwright test e2e/acquisition-cancel.spec.ts --reporter=list
+          rm -rf test-results/acquisition-cancel-repeat-1 test-results/acquisition-cancel-repeat-2
+          npx playwright test e2e/acquisition-cancel.spec.ts --reporter=list --trace=on --output=test-results/acquisition-cancel-repeat-1
+          npx playwright test e2e/acquisition-cancel.spec.ts --reporter=list --trace=on --output=test-results/acquisition-cancel-repeat-2
+          mkdir -p ../../sprints/07310943-kernel-0e82adad/evidence/windows
+          node -e "require('fs').writeFileSync('../../sprints/07310943-kernel-0e82adad/evidence/windows/run.json', JSON.stringify({github_run_id:Number(process.env.GITHUB_RUN_ID),github_run_attempt:Number(process.env.GITHUB_RUN_ATTEMPT),head_sha:process.env.GITHUB_SHA,repeat_count:2}, null, 2))"
+
+      - name: Upload Windows cancel evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-cancel-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            sprints/07310943-kernel-0e82adad/screenshots/cancel-requested.png
+            sprints/07310943-kernel-0e82adad/screenshots/cancel-sent.png
+            sprints/07310943-kernel-0e82adad/screenshots/cancel-confirmed.png
+            sprints/07310943-kernel-0e82adad/screenshots/cancel-cooldown.png
+            sprints/07310943-kernel-0e82adad/evidence/windows/run.json
+            apps/dashboard/test-results/acquisition-cancel-repeat-1/
+            apps/dashboard/test-results/acquisition-cancel-repeat-2/
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Run — content-judgment-gate
         id: content_judgment
