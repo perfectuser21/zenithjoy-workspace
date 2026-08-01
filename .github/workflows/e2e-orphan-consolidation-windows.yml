@@ -166,12 +166,14 @@ jobs:
 
       - name: Repeat cancel E2E
         working-directory: apps/dashboard
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           rm -rf test-results/acquisition-cancel-repeat-1 test-results/acquisition-cancel-repeat-2
           npx playwright test e2e/acquisition-cancel.spec.ts --reporter=list --trace=on --output=test-results/acquisition-cancel-repeat-1
           npx playwright test e2e/acquisition-cancel.spec.ts --reporter=list --trace=on --output=test-results/acquisition-cancel-repeat-2
           mkdir -p ../../sprints/07310943-kernel-0e82adad/evidence/windows
-          node -e "require('fs').writeFileSync('../../sprints/07310943-kernel-0e82adad/evidence/windows/run.json', JSON.stringify({github_run_id:Number(process.env.GITHUB_RUN_ID),github_run_attempt:Number(process.env.GITHUB_RUN_ATTEMPT),head_sha:process.env.GITHUB_SHA,repeat_count:2}, null, 2))"
+          node -e "require('fs').writeFileSync('../../sprints/07310943-kernel-0e82adad/evidence/windows/run.json', JSON.stringify({github_run_id:Number(process.env.GITHUB_RUN_ID),github_run_attempt:Number(process.env.GITHUB_RUN_ATTEMPT),head_sha:process.env.PR_HEAD_SHA,repeat_count:2}, null, 2))"
 
       - name: Upload Windows cancel evidence
         if: always()
