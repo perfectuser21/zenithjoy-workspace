@@ -34,19 +34,29 @@ jobs:
       - id: filter
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "agent_or_api=true" >> "$GITHUB_OUTPUT"
             echo "agent=true" >> "$GITHUB_OUTPUT"
-            echo "non-PR event: run all"
+            echo "manual dispatch: run all"
             exit 0
           fi
-          BASE="${{ github.event.pull_request.base.sha }}"
-          HEAD="${{ github.event.pull_request.head.sha }}"
-          FILES=$(git diff --name-only "$BASE...$HEAD")
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+            if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+              BASE=$(git rev-parse "$HEAD^")
+            fi
+          fi
+
+          FILES=$(git diff --name-only "$BASE" "$HEAD")
           echo "$FILES"
           AGENT=false; AGENT_OR_API=false
-          if echo "$FILES" | grep -qE '^(services/agent/|\.github/workflows/wechat-cs-e2e\.yml$)'; then AGENT=true; fi
-          if echo "$FILES" | grep -qE '^(services/agent/|apps/api/|\.github/workflows/wechat-cs-e2e\.yml$)'; then AGENT_OR_API=true; fi
+          if echo "$FILES" | grep -qE '^services/agent/'; then AGENT=true; fi
+          if echo "$FILES" | grep -qE '^(services/agent/|apps/api/|\.github/workflows/wechat-cs-e2e\.yml$|\.github/workflows/scripts/smoke/wechat-cs-hardening-smoke\.sh$)'; then AGENT_OR_API=true; fi
           echo "agent=$AGENT" >> "$GITHUB_OUTPUT"
           echo "agent_or_api=$AGENT_OR_API" >> "$GITHUB_OUTPUT"
 
