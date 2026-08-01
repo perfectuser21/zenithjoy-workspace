@@ -31,11 +31,13 @@ rog 的 GitHub Actions runner 原先是**手动 `run.cmd` 挂在控制台会话�
 已改成 Windows 服务 + 开机自启（`actions.runner.perfectuser21.zenithjoy-workspace.xian-rog-wechat`）。
 
 ### 新增第二个 runner（解开安卓E2E的结构性死结）
-**关键发现：rog 在 `192.168.1.x`，根本够不到 `192.168.3.x` 的手机池（实测超时）。**
+**关键发现：办公室有两个互不相通的内网段，rog 和手机池不在同一段，实测够不到。**
 所以把安卓 E2E 挂在 rog 上从架构上就是错的——它只能测自己 USB 上那一台（而那台还坏了）。
 
-新注册 `xian-pc4-android`（4号机，`192.168.3.231`，同网段），标签 `self-hosted,android-capable,Windows,X64`，
+新注册 `xian-pc4-android`（4号机，与手机池同网段），标签 `self-hosted,android-capable,Windows,X64`，
 服务模式 + 开机自启。**已实测：该 runner 能同时驱动小粉+小白两台手机**。
+
+> 具体网段划分/主机地址/序列号见 memory `machines.md`（不入库，避免仓库文档承载内网拓扑细节）。
 
 ### 手机池自愈守护
 `C:\platform-tools\watchdog.ps1`（4号机）+ 定时任务 `ZJPhonePoolWatchdog`，每5分钟：
@@ -68,6 +70,10 @@ DEV=$("$ADB" devices | awk '/[[:space:]]device$/{print $1; exit}')
 今天所有配置（装adb、关休眠、分发密钥、装runner、装守护）**全是手敲 SSH 命令**，不在版本控制里。
 机器一重装全部丢失。建议加 `scripts/setup-test-machine.ps1` 把这套固化成可复现脚本。
 
+### 2b. PC 侧无监控（守护只覆盖手机）
+`watchdog.ps1` 只巡检手机池。**PC 本身掉线（如 rog 今天反复失联）没有任何自动发现机制**，
+全靠人工 `ssh` 撞上才知道。建议扩展守护或另建：定期探活 5 台 PC + 2 个 runner 状态，异常告警。
+
 ### 3. 三台设备待人工（都是物理层，远程无解）
 - **2号机 PC**：sshd 起不来报 `Couldn't open /dev/null`，已排查网络/权限/执行策略/系统日志/杀软全正常，未解决
 - **小黄（MAA-AN00）**：重启后停在锁屏（BFU 状态），安卓全盘加密下 adbd 拒绝一切连接。
@@ -91,8 +97,8 @@ DEV=$("$ADB" devices | awk '/[[:space:]]device$/{print $1; exit}')
 
 ## 关键踩坑（避免重复劳动）
 
-1. **操作手机一律从 3/4/5 号机发起**（同 `192.168.3.x` 网段）。走 Tailscale 跨国会退化成 DERP 中转
-   300-700ms，adb TCP 握手直接超时。1号机/rog 在 `192.168.1.x` 够不着手机
+1. **操作手机一律从 3/4/5 号机发起**（与手机池同网段）。走 Tailscale 跨国会退化成 DERP 中转
+   300-700ms，adb TCP 握手直接超时。1号机/rog 在另一网段，够不着手机
 2. 手机 IP 是 DHCP 会变，**用 `adb mdns services` 发现，别写死**
 3. adb 授权是 per-电脑的。1号机密钥已分发给 3/4/5 号机共享；**rog 用的是另一把**（指纹不同）
 4. 国内机器从 GitHub 下大文件只有 0.04~0.09 MB/s，**开 HK exit node 反而更慢**（GFW 入境限速）。
