@@ -1,4 +1,5 @@
 name: E2E Line02 Android Collect (ROG 真机 nightly)
+run-name: ${{ inputs.attempt_marker }}
 
 # agent-android(Kotlin)抖音采集的真机端到端守卫。
 #

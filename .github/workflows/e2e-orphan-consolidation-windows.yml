@@ -1,4 +1,5 @@
 name: E2E Orphan Specs Consolidation (Windows)
+run-name: ${{ inputs.attempt_marker || github.workflow }}
 
 # ci-patrol 2026-07-12 巡检发现 12 个 spec 零 workflow 引用，收编到此 workflow。
 # triage 后:3 个已过时删除(crm-config/customer-management/wechat-bind-button),
@@ -28,6 +29,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      attempt_marker:
+        description: '调用方生成的唯一证据标记'
+        required: false
+        default: ''
 
 concurrency:
   group: e2e-orphan-consolidation-${{ github.ref }}
