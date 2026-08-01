@@ -78,10 +78,10 @@
 
 ## E2E 验收
 
-> Proposer 按 `windows_cloud` 产出可执行脚本，并将 Android 真机接缝单独路由到 `android_realmachine` 验证；未完成真机接缝时只能标记 logic-done-pending。
+> 本 Sprint 已进入批准合同 v15 的 Kernel 最终评估；不得重跑 Planner/Proposer/Generator，也不得触发新 workflow。Evaluator 只读取最终 SHA `2b5d6dae27a338cc0ce8ad1d759b3f46185206ce` 的既有真实证据：Android exact-SHA 双跑 `30677699424`（SUCCESS）与 Windows Chrome + real Postgres/API run `30672675248` attempt 2（SUCCESS，2026-08-01T01:45:33Z），然后执行 Judge 与 `review_required` Gate。
 
 ```bash
-# 占位：proposer 将按 target_environment 填入真实脚本
+# 可执行入口已由批准合同 v15 固化为本目录 e2e-verify.sh / e2e-verify.ps1；本恢复轮只复用上述同 SHA 运行证据，不再次 dispatch
 # 期望验收点：客户放弃 running 任务后依次观察 cancelling/等待设备响应/cancelled；
 # 跨租户请求返回 403；5 分钟内同设备重触发被拒并返回剩余时间；期满可重新触发；
 # Android Agent 真机收到取消后安全退出且服务端只在真实 cancelled 回执后展示“已取消”。
@@ -89,7 +89,7 @@
 
 ## journey_type: user_facing
 ## journey_type_reason: 核心入口与最终状态均位于客户使用的 apps/dashboard，并跨越 API 与 Android Agent。
-## target_environment: windows_cloud
-## target_environment_reason: payload 显式指定 windows_cloud，ZenithJoy Dashboard/UI 主验收在 GitHub Actions windows-latest 执行。
+## target_environment: android_realmachine
+## target_environment_reason: payload 显式指定 Android physical 真机验收；对应机械枚举 android_realmachine，并以 exact-SHA Android 真机证据为主、Windows 云端证据为跨端补充。
 ## journey_id: afa6abca-53c0-4815-8594-b7fb81ca547f
 ## step_id: step6
