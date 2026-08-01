@@ -75,6 +75,10 @@ echo "  PASS Node.js 内置守护 + autostart 指向 start.bat"
 echo "=== 7: main push 也按实际 diff 路由真机 Gate ==="
 grep -q 'github.event.before' "$WORKFLOW" \
   || { echo "FAIL: push 未使用 github.event.before，仍可能无条件跑真机 Gate"; exit 1; }
+grep -Fq 'git diff --name-only "$BASE...$HEAD"' "$WORKFLOW" \
+  || { echo "FAIL: pull_request 必须保留 merge-base 三点 diff，避免把 base-only 变更误判为 PR 变更"; exit 1; }
+grep -Fq 'git diff --name-only "$BASE" "$HEAD"' "$WORKFLOW" \
+  || { echo "FAIL: push 必须直接比较 before/sha 两个端点"; exit 1; }
 ! grep -q 'non-PR event: run all' "$WORKFLOW" \
   || { echo "FAIL: 非 PR 事件仍硬编码 run all"; exit 1; }
 grep -q 'github.event_name.*workflow_dispatch' "$WORKFLOW" \
