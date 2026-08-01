@@ -87,6 +87,17 @@ DEV=$("$ADB" devices | awk '/[[:space:]]device$/{print $1; exit}')
 2. 配置脚本化 `setup-test-machine.ps1`
 3. 微信客服 E2E 的备份 runner（现仍是 rog 单点，需另一台装微信4.1.8 + 独立微信号，属成本项待拍板）
 
+## 安全说明（本次基建的凭据/暴露面，如实记录）
+
+| 项 | 现状 | 说明 |
+|---|---|---|
+| SSH 私钥 `id_ed25519_zenithjoy_bootstrap` | **无 passphrase**，仅存主控机 `~/.ssh/`，权限 600 | 无人值守自动化必须免密；风险边界=主控机本身。私钥从未离开主控机，只分发过公钥 |
+| adb 密钥 `adbkey` | 在 1/3/4/5 号机 `%USERPROFILE%\.android\` | 为让 4 台 PC 共享手机授权而分发（否则每台每机都要人工点授权）。仅内网设备可用 |
+| runner 注册 token | 一次性、GitHub 侧几分钟过期 | 未落盘，用完即弃 |
+| 公网手册 `docs.zenjoymedia.media/phone-adb-setup.html` | **有意设为免登录**（用户明确要求，方便员工现场照做） | 内容仅为操作步骤 + SSH **公钥**（公钥公开是设计使然）。**不含任何私钥/密码/token**。文档中心其他页面仍保留 Basic Auth |
+
+> 内网主机地址/序列号等细节一律只写 memory `machines.md`，不入仓库。
+
 ## 数据源
 
 - **设备台账（权威，先读这个）**：memory `machines.md` —— 含全部设备IP/序列号/网段/踩坑/命令模板
