@@ -461,6 +461,25 @@ describe('acquisition-dispatch routes', () => {
     expect(inserted).toBe(false);
   });
 
+  it('partial patch cannot make merged keyword bounds invalid', async () => {
+    const pool = await mockPool();
+    pool.query.mockResolvedValueOnce({
+      rows: [{ ...defaultConfig('t1'), keywords_per_round_max: 5 }],
+    });
+
+    const res = await request(app)
+      .put('/api/acquisition/config')
+      .set('X-Tenant-Id', 't1')
+      .send({ keywords_per_round_min: 10 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('INVALID_CONFIG');
+    const inserted = pool.query.mock.calls.some((c: unknown[]) =>
+      typeof c[0] === 'string' && (c[0] as string).includes('INSERT INTO zenithjoy.acquisition_config')
+    );
+    expect(inserted).toBe(false);
+  });
+
   it('PUT /config 合法 → 200 + upsert', async () => {
     const pool = await mockPool();
     pool.query
