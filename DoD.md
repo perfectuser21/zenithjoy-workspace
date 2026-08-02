@@ -1,182 +1,154 @@
-contract_branch: cp-harness-propose-r14-e76cb826-a26
-sprint_dir: sprints/07310943-kernel-0e82adad
-
 ---
 skeleton: false
-journey_type: user_facing
-target_environment: windows_cloud
+journey_type: autonomous
 ---
-# Contract DoD — 前台放弃安卓获客任务（不可逆取消）
+# Contract DoD — Kernel acquisition effective-config guard
 
-**范围**: 本人租户单设备 running 获客任务的不可逆放弃、心跳取消、Android 安全退出回执、三段可见状态、稳定物理设备 5 分钟冷却。
-**不含**: 暂停/恢复、批量放弃、staging 发布、Bark/promote、已采数据回滚。
-**大小**: L
+**范围**: 仅修复现有 acquisition config PUT/PATCH 对当前租户有效 keyword bounds 的校验与原子持久化。
+**大小**: M
 
 ## ARTIFACT 条目
 
-- [x] [ARTIFACT] migration 增加取消时间、唯一命令与稳定设备快照字段
-  Test: node -e "const c=require('fs').readFileSync('apps/api/db/migrations/20260731_acquisition_cancel_lifecycle.sql','utf8');for(const s of ['cancel_requested_at','cancel_sent_at','cancelled_at','cancel_command_id','device_machine_id'])if(!c.includes(s))process.exit(1)"
+- [ ] [ARTIFACT] 真 Postgres 集成 smoke 覆盖 7 个 PRD 场景，包含完整 PUT、整行业务字段 diff、双租户隔离与无行首次并发
+  Test: node -e "const fs=require('fs');const c=fs.readFileSync('sprints/08030017-kernel-acquisition-config-recovery-181/tests/acquisition-config-effective-validation.integration.test.ts','utf8');for(const s of ['completeConfig','changedBusinessKeys','tenantB','tenantNew','新租户首次并发 upsert'])if(!c.includes(s))process.exit(1)"
 
-- [x] [ARTIFACT] Dashboard cancel spec 打真实后端且不含 `page.route()`
-  Test: node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/acquisition-cancel.spec.ts','utf8');if(c.includes('page.route(')||!c.includes('cancel-requested')||!c.includes('cancel-confirmed'))process.exit(1)"
+- [ ] [ARTIFACT] 共享冻结 Red fixture 相对冻结 SHA 未改
+  Test: git diff --exit-code 0dc4e3c07ff19a0ac95440723986bf3cb78580b2 -- apps/api/tests/routes/acquisition-dispatch.test.ts
 
-- [x] [ARTIFACT] Windows workflow 启真 API/Postgres 并执行 cancel spec 两次
-  Test: node -e "const c=require('fs').readFileSync('.github/workflows/e2e-orphan-consolidation-windows.yml','utf8');for(const s of ['acquisition-cancel.spec.ts','apps/api','Repeat cancel E2E'])if(!c.includes(s))process.exit(1)"
+- [ ] [ARTIFACT] 新增真 Postgres 集成测试已登记到测试注册表
+  Test: node -e "const fs=require('fs');const c=fs.readFileSync('test-registry.yaml','utf8');if(!c.includes('sprints/08030017-kernel-acquisition-config-recovery-181/tests/acquisition-config-effective-validation.integration.test.ts'))process.exit(1)"
 
-- [x] [ARTIFACT] Android workflow 支持 `scenario=cancel`、`repeat=2` 并上传 `android-cancel-evidence`
-  Test: node -e "const c=require('fs').readFileSync('.github/workflows/e2e-line02-android-collect.yml','utf8');for(const s of ['scenario','cancel','repeat','attempt_marker','android-cancel-evidence'])if(!c.includes(s))process.exit(1)"
-
-- [x] [ARTIFACT] 独立 E2E runner 承载完整取消链，禁止从 Markdown 围栏动态抽取
-  Test: node -e "const c=require('fs').readFileSync('sprints/07310943-kernel-0e82adad/e2e-verify.sh','utf8');for(const s of ['e2e-verify.ps1','gh workflow run','DISPATCHED_AT','ATTEMPT_MARKER','android-cancel-evidence','safe_exit','cancel-requested.png','cancel-cooldown.png'])if(!c.includes(s))process.exit(1);if(c.includes('awk')||c.includes('contract-draft.md'))process.exit(1)"
+- [ ] [ARTIFACT] Final E2E 使用 Dashboard 同形 session cookie 且禁止 X-Tenant-Id 绕过鉴权
+  Test: node -e "const fs=require('fs');const c=fs.readFileSync('sprints/08030017-kernel-acquisition-config-recovery-181/contract-draft.md','utf8');const e=c.split('## E2E 验收')[1].split('## 探索提示')[0];if(!e.includes('Cookie: ${AUTH_COOKIE_A}')||!e.includes('UNAUTH_CODE')||e.includes('X-Tenant-Id'))process.exit(1)"
 
 ## BEHAVIOR 条目
 
-- [x] [BEHAVIOR] [L2] B-01: 本人租户放弃 running 任务后进入取消中
-  动作: 以租户 A session 调 POST /api/acquisition/collect/cancel，body 只传 task_id
-  预期观察: HTTP 200，status=cancelling、cancel_phase=requested，响应无租户/设备字段
-  等待预算: 0s
-  留证: Vitest reporter、response JSON 与真 PG 任务行
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "本人租户取消 running 任务返回 cancelling"'
-
-- [x] [BEHAVIOR] [L2] B-02: 跨租户与不存在任务不可区分
-  动作: 租户 B 分别取消租户 A 的真实 task_id 和随机不存在 UUID
-  预期观察: 两次均返回完全相同的 403 FORBIDDEN 信封，DB 无变化且响应不含任务/设备信息
-  等待预算: 0s
-  留证: 两个 response JSON 的 deep-equal 输出与 DB 前后状态
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "跨租户与不存在任务返回不可区分的 403"'
-
-- [x] [BEHAVIOR] [L2] B-03: 重复取消幂等且终态不可重入
-  动作: 并发重复取消同一 running 任务，再取消本人已 done 任务
-  预期观察: 活动命令 exactly 1、首次请求时间不变；done 返回 409 且状态不变
-  等待预算: 5s
-  留证: publish_tasks 计数、时间戳与终态查询
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "重复取消幂等|已结束任务返回 409"'
-
-- [x] [BEHAVIOR] [L2] B-04: heartbeat 下发唯一指令并快照稳定设备 [接缝×2]
-  动作: 先确认任务 device_machine_id/cancel_sent_at 均为空，再记录 cancel 接受时间并以生产字段和已认证 machine_id 发 heartbeat
-  预期观察: 实测 within 30s 响应含唯一 acquisition_cancel，只有 heartbeat 后任务 device_machine_id 才等于 machine_id
-  等待预算: 30s
-  留证: cancel accepted/command received 实测毫秒差、heartbeat JSON 与 heartbeat 前后真 PG 快照
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "heartbeat 下发唯一取消指令并快照稳定设备|取消接受到真实 heartbeat 响应的实测时延不超过 30 秒"'
-
-- [x] [BEHAVIOR] [L3] B-05: Android 真机抢占采集、安全退出后回执 [接缝×2]
-  动作: xian-rog 在采集运行中接收真实取消指令，按 workflow repeat=2 执行
-  预期观察: 两轮均停止当前采集、关闭切换账号面板、后续列表读取为 0，随后 report_status=cancelled
-  等待预算: 900s
-  留证: 绑定本次 github_run_id/head_sha/attempt_marker 的 result-1.json、result-2.json 与 GitHub run URL
-  Test: manual:bash -c ': "${ANDROID_RUN_ID:?}" "${EXPECTED_SHA:?}" "${ATTEMPT_MARKER:?}"; for N in 1 2; do F="sprints/07310943-kernel-0e82adad/evidence/android/result-$N.json"; jq -e --argjson run_id "$ANDROID_RUN_ID" --arg sha "$EXPECTED_SHA" --arg marker "$ATTEMPT_MARKER" --argjson repeat_index "$N" ".github_run_id==\$run_id and .head_sha==\$sha and .attempt_marker==\$marker and .repeat_index==\$repeat_index and .safe_exit==true and .switch_account_panel_open==false and .continued_list_reads==0 and .report_status==\"cancelled\" and (((.command_received_at|fromdateiso8601)-(.cancel_requested_at|fromdateiso8601)) <= 30)" "$F"; done'
-
-- [x] [BEHAVIOR] [L2] B-06: 无回执两分钟仍等待，绑定回执才落终态
-  动作: 先在 heartbeat 前用绑定 Agent 提前回执，再让 cancel_sent_at 超过 121 秒不回执，最后以错误 Agent 和经过 heartbeat/sent 的绑定 Agent 分别回执
-  预期观察: heartbeat 前回执 409 CANCEL_NOT_SENT；超时仍 cancelling/sent；错误 Agent 403；只有 heartbeat 真下发后的绑定 Agent 才返回 data.status=cancelled
-  等待预算: 5s
-  留证: 三次响应与 cancelled_at/ended_at 真 PG 查询
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "121 秒无回执|只有绑定 Android Agent 回执"'
-
-- [x] [BEHAVIOR] [L2] B-07: 重复 cancelled 回执不延长冷却起点
-  动作: 对已 confirmed 的任务重复发送同一生产 report body
-  预期观察: 两次均返回 cancelled，cancelled_at 与 ended_at 保持首次值
-  等待预算: 0s
-  留证: 两次 response 与前后时间戳
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "重复 cancelled 回执幂等"'
-
-- [x] [BEHAVIOR] [L2] B-08: 稳定 machine_id 冷却不能被换 agent_id 绕过
-  动作: confirmed 后用同一 machine_id 注册新的 runtime agent_id 再 start，并用另一 machine_id 对照，最后把 cancelled_at 调到 301 秒前
-  预期观察: 同物理设备 409 且 remaining_seconds=1..300；另一设备不误伤；期满同设备返回 pending
-  等待预算: 5s
-  留证: 三次 start response 与 `(tenant_id,device_machine_id)` 查询
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "稳定 machine_id 冷却不能被更换 agent_id 绕过"'
-
-- [x] [BEHAVIOR] [L2] B-09: 未登录请求被鉴权层拒绝
-  动作: 不带 session 调取消端点
-  预期观察: HTTP 401，任务状态、取消时间与命令计数均不变
-  等待预算: 0s
-  留证: response JSON 与 DB 前后快照
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "未登录取消返回 401"'
-
-- [x] [BEHAVIOR] [L2] B-10: Windows UI 真实显示取消三态与冷却 [接缝×2]
-  动作: 在 Windows Chrome 对真 API/PG 连走两次“点击放弃→等待 heartbeat→回执→重触发”，并在 requested、sent 两态分别对“放弃”控件执行 Playwright `toBeDisabled()` 断言
-  预期观察: 每轮依次可见“取消中”“取消指令已发送，等待设备响应”“已取消”和剩余等待时间；requested/sent 期间“放弃”按钮持续禁用，无法再次触发取消请求
-  等待预算: 240s
-  留证: screenshots/cancel-requested.png、cancel-sent.png（均须呈现禁用控件状态）、cancel-confirmed.png、cancel-cooldown.png 与含两次 `toBeDisabled()` oracle 的 Playwright trace
-  Test: manual:bash -c 'test "${RUNNER_OS:-}" = "Windows" && pwsh -NoProfile -File sprints/07310943-kernel-0e82adad/e2e-verify.ps1 -BaseUrl http://localhost:5174 -ApiUrl http://localhost:3000 -Repeat 2 -ScreenshotDir sprints/07310943-kernel-0e82adad/screenshots'
-
-## Invariant 铁律映射
-
-- [x] [BEHAVIOR] [L2] INV-1: 租户隔离且防存在性枚举
-  动作: 两租户对真实异租户 UUID 和不存在 UUID 执行取消
-  预期观察: 两个 403 信封深相等，只有本人任务可变化
-  等待预算: 5s
-  留证: integration reporter 与两租户 DB 查询
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "跨租户与不存在任务返回不可区分的 403"'
-
-- [x] [BEHAVIOR] [L2] INV-2: 新增和修改端点都有生产鉴权
-  动作: 无 session 调 cancel，无效 license 调 heartbeat，无 x-agent-id 调 report
-  预期观察: 分别 401/401/401，均不写业务状态
-  等待预算: 0s
-  留证: integration response 与 DB 快照
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "未登录取消返回 401|无效生产调用方认证"'
-
-- [x] [BEHAVIOR] [L2] INV-3: E2E 默认两个租户且互不串
-  动作: 真 PG 创建租户 A/B，A 取消本人任务，B 尝试同一 UUID
-  预期观察: A 成功、B 防枚举拒绝，B 无法读到 A 的设备键
-  等待预算: 5s
-  留证: 两租户 fixture 与 DB 查询
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "本人租户取消|跨租户与不存在任务"'
-
-- [x] [BEHAVIOR] [L3] INV-4: 真机接缝未真验不得 done [接缝×2]
-  动作: 读取 Android workflow 两轮真实 evidence
-  预期观察: 两轮语义 oracle 全真且结论一致，否则 FAIL/FLAKY
-  等待预算: 0s
-  留证: evidence/android/result-1.json、result-2.json
-  Test: manual:bash -c ': "${ANDROID_RUN_ID:?}" "${EXPECTED_SHA:?}" "${ATTEMPT_MARKER:?}"; for N in 1 2; do jq -e --argjson run_id "$ANDROID_RUN_ID" --arg sha "$EXPECTED_SHA" --arg marker "$ATTEMPT_MARKER" ".github_run_id==\$run_id and .head_sha==\$sha and .attempt_marker==\$marker and .safe_exit==true and .report_status==\"cancelled\"" "sprints/07310943-kernel-0e82adad/evidence/android/result-$N.json"; done'
-
-- [x] [BEHAVIOR] [L3] INV-5: 环境身份从真机发现而非写死
-  动作: workflow 从 AgentConfig/heartbeat 采集本轮 machine_id 与 adb serial
-  预期观察: 两轮 evidence 的 machine_id、adb_serial 均非空，合同无固定坐标 oracle
-  等待预算: 0s
-  留证: evidence environment 字段
-  Test: manual:bash -c 'for N in 1 2; do jq -e "(.machine_id|type==\"string\" and length>0) and (.adb_serial|type==\"string\" and length>0)" "sprints/07310943-kernel-0e82adad/evidence/android/result-$N.json"; done'
-
-- [x] [BEHAVIOR] [L2] INV-6: 凭据不硬编码、不进日志
-  动作: 对当前提交运行仓库 secrets scan
-  预期观察: gitleaks exit 0，evidence 与日志不含 license/session 原值
-  等待预算: 120s
-  留证: secrets scan job URL 与脱敏日志
-  Test: manual:bash -c 'npx gitleaks detect --no-banner --redact --source .'
-
-- [x] [BEHAVIOR] [L2] INV-7: 错误与日志不泄露租户、任务或设备
-  动作: 执行跨租户和不存在 UUID 防枚举请求并扫描结构化响应
-  预期观察: 响应 shape 深相等且不含 tenant_id/device_machine_id/agent_id
-  等待预算: 0s
-  留证: response JSON 与 reporter 输出
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "跨租户与不存在任务返回不可区分的 403"'
-
-- [x] [BEHAVIOR] [L2] INV-8: 全状态枚举仍可真实读写
-  动作: 真 PG 逐一写入所有既有状态和 cancelling/cancelled，再尝试 paused
-  预期观察: 合法状态原样读回，paused 被约束拒绝
+- [ ] [BEHAVIOR] [L2] B-01: PUT 仅提高 min 的冲突更新以 400 拒绝且双租户零写入 [接缝×2]
+  动作: 租户 A 已有 min=3/max=10，仅 PUT min=11，同时保存 A/B 完整行快照
+  预期观察: HTTP 400、error.code=INVALID_CONFIG；A 行含 updated_at 与 B 行均完全不变
   等待预算: 10s
-  留证: 状态矩阵 reporter 与 PG constraint error
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "新增取消状态后全状态枚举"'
+  留证: Vitest stdout、HTTP body 与 A/B 真 Postgres 写前写后快照断言
+  Test: manual:bash -c 'DB_URL="${DB_URL:?}" npx vitest run sprints/08030017-kernel-acquisition-config-recovery-181/tests/acquisition-config-effective-validation.integration.test.ts -t "PUT 仅提高 min 的无效有效态返回 400 INVALID_CONFIG 且两租户整行零持久化"'
 
-- [x] [BEHAVIOR] [L2] INV-9: 指令与终态按语义字段判成功
-  动作: 检查 heartbeat 指令 type/payload，再检查 report 的 data.status 与 DB 终态
-  预期观察: 只有 acquisition_cancel+匹配 collect_task_id 算 sent，只有 data.status=cancelled+DB 落章算 confirmed
+- [ ] [BEHAVIOR] [L2] B-02: PATCH 仅降低 max 的冲突更新以 400 拒绝且双租户零写入 [接缝×2]
+  动作: 租户 A 已有 min=3/max=10，仅 PATCH max=2，同时保存 A/B 完整行快照
+  预期观察: HTTP 400、error.code=INVALID_CONFIG；A 行含 updated_at 与 B 行均完全不变
+  等待预算: 10s
+  留证: Vitest stdout、HTTP body 与 A/B 真 Postgres 写前写后快照断言
+  Test: manual:bash -c 'DB_URL="${DB_URL:?}" npx vitest run sprints/08030017-kernel-acquisition-config-recovery-181/tests/acquisition-config-effective-validation.integration.test.ts -t "PATCH 仅降低 max 的无效有效态返回 400 INVALID_CONFIG 且两租户整行零持久化"'
+
+- [ ] [BEHAVIOR] [L2] B-03: 合法部分 PATCH 只改请求字段并保持双租户隔离 [接缝×2]
+  动作: 对 A 仅 PATCH min=8，并保存 A 业务整行与 B 完整行快照
+  预期观察: HTTP 200；A 的 min=8/max=10，A 业务字段 diff 恰为 min，B 完整行不变
+  等待预算: 10s
+  留证: Vitest stdout、response body、changedBusinessKeys 与 A/B DB 快照
+  Test: manual:bash -c 'DB_URL="${DB_URL:?}" npx vitest run sprints/08030017-kernel-acquisition-config-recovery-181/tests/acquisition-config-effective-validation.integration.test.ts -t "合法部分 PATCH 只改变请求字段且保持双租户隔离"'
+
+- [ ] [BEHAVIOR] [L2] B-04: 合法非上下界部分 PUT 不误拒且只改请求字段 [接缝×2]
+  动作: 对 A 仅 PUT dm_per_day=31，并保存 A 业务整行与 B 完整行快照
+  预期观察: HTTP 200；A 业务字段 diff 恰为 dm_per_day，bounds 原值不变，B 完整行不变
+  等待预算: 10s
+  留证: Vitest stdout、changedBusinessKeys 与 A/B DB 快照
+  Test: manual:bash -c 'DB_URL="${DB_URL:?}" npx vitest run sprints/08030017-kernel-acquisition-config-recovery-181/tests/acquisition-config-effective-validation.integration.test.ts -t "合法非上下界部分 PUT 只改变请求字段且保持双租户隔离"'
+
+- [ ] [BEHAVIOR] [L2] B-05: 合法完整 PUT 含全部字段且 min=max 成功可读回 [接缝×2]
+  动作: 对 A PUT completeConfig 的全部 16 个既有配置字段，其中 min=max=12
+  预期观察: HTTP 200；response 与 DB 整行匹配全部请求字段；B 完整行不变
+  等待预算: 10s
+  留证: Vitest stdout、完整请求/response 匹配与 A/B DB 查询
+  Test: manual:bash -c 'DB_URL="${DB_URL:?}" npx vitest run sprints/08030017-kernel-acquisition-config-recovery-181/tests/acquisition-config-effective-validation.integration.test.ts -t "合法完整 PUT 含全部配置字段且 min=max 时整行持久化可读回"'
+
+- [ ] [BEHAVIOR] [L2] B-06: 已有租户并发 patch 按实际可见配置串行判定 [接缝×2]
+  动作: A 已有 min=3/max=10，同时 PATCH min=9 与 max=8
+  预期观察: 两请求恰一 200、一 400 INVALID_CONFIG；最终 A 的 min<=max，B 完整行不变
+  等待预算: 15s
+  留证: Vitest stdout、两个 HTTP status/body 与最终 A/B DB 快照
+  Test: manual:bash -c 'DB_URL="${DB_URL:?}" npx vitest run sprints/08030017-kernel-acquisition-config-recovery-181/tests/acquisition-config-effective-validation.integration.test.ts -t "已有租户并发部分更新按实际可见配置串行校验且最终合法"'
+
+- [ ] [BEHAVIOR] [L2] B-07: 新租户首次并发 upsert 不创建无效有效态 [接缝×2]
+  动作: 确认新 tenant 无配置行，同时 PATCH min=5 与 max=4；两补丁单独对默认配置均合法、合并后冲突
+  预期观察: 两请求恰一 200、一 400 INVALID_CONFIG；仅一行被创建且 min<=max，B 完整行不变
+  等待预算: 15s
+  留证: Vitest stdout、两个 HTTP status/body 与新 tenant/B 的最终 DB 快照
+  Test: manual:bash -c 'DB_URL="${DB_URL:?}" npx vitest run sprints/08030017-kernel-acquisition-config-recovery-181/tests/acquisition-config-effective-validation.integration.test.ts -t "新租户首次并发 upsert 串行校验且不会创建无效有效态"'
+
+- [ ] [BEHAVIOR] [L2] B-08: 真实 local_api 以 Dashboard session-cookie 鉴权完成双租户全链 [接缝×2]
+  动作: 启动真实 apps/api HTTP app；先无 cookie 请求，再用 A/B 两个 disposable better-auth session cookie 依次执行非法 PUT/PATCH、合法部分 PATCH 与合法完整 PUT
+  预期观察: 无 cookie=401；A/B cookie 各自解析到对应 tenant；非法请求 400 INVALID_CONFIG 且 A/B 全量快照不变；合法更新可读回且 B 不变
+  等待预算: 120s
+  留证: /tmp/kernel-acquisition-api.log、各 HTTP body、A/B 写前写后 JSON、psql 最终不变量与脚本 exit code
+  Test: manual:bash -c 'awk '\''/^## E2E 验收/{f=1;next} f&&/^## /{exit} f&&/^```bash/{b=1;next} b&&/^```/{exit} b{print}'\'' sprints/08030017-kernel-acquisition-config-recovery-181/contract-draft.md > /tmp/kernel-effective-config-e2e.sh; bash /tmp/kernel-effective-config-e2e.sh'
+
+- [ ] [BEHAVIOR] [L2] B-09: 冻结 Red fixture 不改而由实现点绿
+  动作: 比对共享 fixture 与冻结 SHA 后，真启动 apps/api Vitest 执行指定 Red smoke
+  预期观察: fixture diff 为空；目标 smoke 从已记录的 200!=400 Red 转为 1/1 passed
   等待预算: 30s
-  留证: heartbeat/report JSON 与 DB 行
-  Test: manual:bash -c 'DATABASE_URL="${DATABASE_URL:?}" npx vitest run sprints/07310943-kernel-0e82adad/tests/acquisition-cancel.integration.test.ts -t "heartbeat 下发唯一取消指令|只有绑定 Android Agent 回执"'
+  留证: git diff exit code、Vitest 解释器启动行及 1 passed stdout
+  Test: manual:bash -c 'git diff --exit-code 0dc4e3c07ff19a0ac95440723986bf3cb78580b2 -- apps/api/tests/routes/acquisition-dispatch.test.ts && npm test --workspace=apps/api -- --run tests/routes/acquisition-dispatch.test.ts -t "partial patch cannot make merged keyword bounds invalid" --reporter=verbose'
 
-## BEHAVIOR:E2E 条目
+## Invariant 映射
 
-- [x] [BEHAVIOR:E2E] [L3] E2E-01: 用户完整走完不可逆取消 Golden Path [接缝×2]
-  动作: Windows 真浏览器连跑两轮 UI/API/PG，再由 xian-rog 连跑两轮 Android 真机取消
-  预期观察: UI 四态正确，Android 安全退出后才 confirmed，同 machine_id 冷却不可被新 agent_id 绕过
-  等待预算: 1200s
-  留证: 四张截图、两轮 Playwright trace、绑定本次 run/SHA/marker 的两个 Android result JSON 与 run URL
-  Test: manual:bash -c 'export SPRINT_DIR="${SPRINT_DIR:-sprints/07310943-kernel-0e82adad}"; bash "$SPRINT_DIR/e2e-verify.sh"'
-
-## 未覆盖真实链路清单
-
-- Windows workflow 尚未启动真 API/PG 或执行 cancel spec；Generator 补齐并双跑前为 `logic-done-pending`。
-- Android workflow 尚无 cancel scenario/evidence；Generator 补齐并真机双跑前为 `logic-done-pending`。
-- 无第三方 API、force、stub 或假数据豁免。
+- INV-1 N/A：不触及 cortex learning，且不以 source inspection 冒充本 Sprint 真 DB 验收。
+- INV-2：B-01 至 B-07 的写入与校验只使用同一 `DB_URL` 解析逻辑。
+- INV-3 N/A：不触及 agents 表。
+- INV-4 N/A：不新增 status 枚举。
+- INV-5 N/A：不触及 watchdog recovery。
+- INV-6：B-01/B-02/B-06/B-07 同时断言 HTTP 语义字段和 DB 真状态。
+- INV-7 N/A：不改依赖或 audit 白名单。
+- INV-8 N/A：不触及 relay 心跳。
+- INV-9：测试毕业后必须运行既有 TDD 顺序与覆盖门禁。
+- INV-10：B-01 至 B-09 使用真实 exit code；B-08/B-09 留下解释器启动和 pass 输出。
+- INV-11 N/A：BEHAVIOR 不使用 manual:node 双引号插值。
+- INV-12：冻结 Red 先失败、实现后转绿；失败不得吞掉。
+- INV-13：共享 Red fixture 只读，B-09 机械 diff。
+- INV-14 N/A：无周期扫描。
+- INV-15 N/A：无付费外部调用。
+- INV-16 N/A：无跨模块时间常数。
+- INV-17 N/A：纯 local_api，不涉及设备。
+- INV-18：target_environment 明确为 local_api。
+- INV-19 N/A：本角色不调用 judge API。
+- INV-20 N/A：不新增 varchar/path 字段。
+- INV-21 N/A：不是退役能力复活。
+- INV-22：有效态冲突显式返回 400，不依赖外层 catch。
+- INV-23：真 Postgres 不可用时 B-01 至 B-07 全部 FAIL。
+- INV-24 N/A：不触及 journey_features report。
+- INV-25 N/A：不触及 controller 状态机。
+- INV-26 N/A：不新增 host 白名单。
+- INV-27 N/A：不触及 headed payload。
+- INV-28 N/A：不做退役判断。
+- INV-29：DB/事务错误必须回滚并返回失败，不吞错。
+- INV-30：复用既有 `zenithjoy.acquisition_config`，不新增表。
+- INV-31 N/A：不新增后台 job。
+- INV-32 N/A：不新增重叠字段或展示层。
+- INV-33：PUT/PATCH/DoD/E2E 对 INVALID_CONFIG、零写入和合法兼容语义一致。
+- INV-34 N/A：不使用 git rev-parse 判 ref。
+- INV-35 N/A：不使用部署 worktree。
+- INV-36：E2E 任一路径失败均传播非零 exit。
+- INV-37 N/A：不做部署判变。
+- INV-38：B-01 至 B-07 真执行 production routers/middleware/service/Postgres；B-08 另走完整 HTTP app socket + session cookie。
+- INV-39：Test Contract 固定四列且 Test File 路径用 backtick。
+- INV-40：Red commit 只允许精确 add 本 Sprint test 文件。
+- INV-41：真实相邻 router/service/DB 覆盖被改的原子接缝。
+- INV-42 N/A：不新增 cron。
+- INV-43：Generator 只推分支，禁止自行 merge。
+- INV-44 N/A：不依赖 headed shell 继承。
+- INV-45：仅使用允许的 Kernel proposal context并核对本次真实路由。
+- INV-46：禁止修改共享 CI workflow 和 quality allowlist。
+- INV-47：盲评 A/B verdict 前禁止 merge。
+- INV-48：所有 smoke 失败不可吞掉。
+- INV-49 N/A：不改 brain/src。
+- INV-50 N/A：不新增 task_type。
+- INV-51 N/A：不新增常驻宿主服务。
+- INV-52 N/A：不新增 LaunchAgent/Daemon。
+- INV-53 N/A：不改 launchd patrol。
+- INV-54：B-01 至 B-09 可机检且失败非零。
+- INV-55：本会话只执行当前 proposer 任务。
+- INV-56 N/A：无屏幕坐标/UIA/env 假设。
+- INV-57：API↔Postgres 接缝未真验前为 logic-done-pending。
+- INV-58：B-01 至 B-07 均种至少 A/B 两租户并断言隔离。
+- INV-59：DB_URL 从环境注入，不进 git/log。
+- INV-60：租户 ID 随机生成且无 PII，不记录完整敏感配置。
+- INV-61：沿用现有 tenant middleware，不新增无鉴权端点。
+- INV-62：Final E2E 所有读写按 better-auth session scope，集成 smoke 按生产 `X-Feishu-User-Id` 回落 scope；B-01 至 B-08 验证跨租户不变。
+contract_branch: cp-harness-propose-r4-e74484fc-r35bbaf33-a25
+sprint_dir: sprints/08030017-kernel-acquisition-config-recovery-181
