@@ -1,0 +1,27 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "任务是 Kernel Harness 后台验收恢复，只产生精确 SHA 的双角色证据与 merge-ready 信号，无用户界面操作",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "完成 PR #1581 精确 SHA 的 Evaluator 与 Independent Judge 双重验收",
+      "scope": "在冻结基线下从 evaluate 恢复，对 c305f6217da65bb69413c39e621b7e797e0fb189 生成两份独立结构化结论，并仅在一致时产生不可执行 merge 的 ready 信号",
+      "dod": [
+        "[BEHAVIOR] PR #1581 实时 head 精确等于目标 SHA 且双结论前后均未合并",
+        "[BEHAVIOR] Evaluator 在 target SHA 的真实 local_api + attempt Postgres 上通过并输出完整证据",
+        "[BEHAVIOR] Independent Judge 未读取其他 candidate 且独立锚定同一 SHA",
+        "[BEHAVIOR] 只有双 PASS 与三方 SHA 一致时 merge_ready=true",
+        "[ARTIFACT] evidence/evaluator.json、evidence/independent-judge.json、evidence/merge-gate.json"
+      ],
+      "files": [
+        "sprints/08030535-kernel-acquisition-config-recovery-bb102e83/evidence/evaluator.json",
+        "sprints/08030535-kernel-acquisition-config-recovery-bb102e83/evidence/independent-judge.json",
+        "sprints/08030535-kernel-acquisition-config-recovery-bb102e83/evidence/merge-gate.json"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 60
+    }
+  ]
+}
