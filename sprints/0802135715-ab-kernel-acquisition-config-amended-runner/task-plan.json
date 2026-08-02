@@ -1,0 +1,25 @@
+{
+  "initiative_id": "line02/keyword_acquisition",
+  "journey_type": "autonomous",
+  "journey_type_reason": "纯后端 acquisition 配置 API 与 Postgres 持久化行为修复",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "校验合并后的 Acquisition keyword 上下界",
+      "scope": "在不改变共享 Red fixture 和其他配置规则的前提下，使当前租户配置补丁按合并后的有效配置校验，非法更新返回既有错误契约且零持久化，合法更新保持兼容。",
+      "dod": [
+        "[BEHAVIOR] 部分更新 min 或 max 导致合并后 min>max 时返回 HTTP 400/INVALID_CONFIG 且两个租户均不变",
+        "[BEHAVIOR] 合法部分、完整及 min=max 更新成功持久化并保持租户隔离",
+        "[ARTIFACT] 真路由 + 真 Postgres 集成测试保持 Red/Green 证据"
+      ],
+      "files": [
+        "apps/api/src/routes/acquisition-dispatch.ts",
+        "apps/api/src/services/acquisition-dispatch.ts",
+        "sprints/0802135715-ab-kernel-acquisition-config-amended-runner/tests/acquisition-effective-config.integration.test.ts"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 60
+    }
+  ]
+}
