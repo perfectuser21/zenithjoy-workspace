@@ -25,8 +25,8 @@ journey_type: autonomous
   Test: manual:bash -c 'RESP=$(gh pr view 1581 --repo perfectuser21/zenithjoy-workspace --json state,headRefOid,mergeCommit); echo "$RESP" | jq -e '"'"'.state=="OPEN" and .headRefOid=="c305f6217da65bb69413c39e621b7e797e0fb189" and .mergeCommit==null'"'"' >/dev/null; git diff --exit-code b937e1d39a81c4a46d06a83a84886facb79d7ba2 c305f6217da65bb69413c39e621b7e797e0fb189 -- apps/api/tests/routes/acquisition-dispatch.test.ts'
 
 - [ ] [BEHAVIOR] [L2] B-02: Evaluator 对 target SHA 的真实 local_api 行为验收通过 [接缝×2]
-  动作: 在 target SHA worktree 对 attempt 空库跑 migration，真实 signup 双租户并执行 effective-config guard，再读取 Evaluator 结果
-  预期观察: 非法更新 400 INVALID_CONFIG 且零写入；合法路径隔离；Evaluator PASS 并逐层锚定 target SHA
+  动作: 从 Fleet DB_URL 派生 API 实际读取的五个拆分式 DATABASE_* 变量，在 target SHA worktree 对该空库跑 migration，真实 signup 双租户并执行 effective-config guard，再用 psql 原始 DB_URL 回读并读取 Evaluator 结果
+  预期观察: API 写入的两租户配置可从同一 DB_URL 精确回读；非法更新 400 INVALID_CONFIG 且零写入；合法路径隔离；Evaluator PASS 并逐层锚定 target SHA
   等待预算: 180s
   留证: migration/API/Vitest 日志、HTTP body、DB 时间窗查询与 evaluator.json
   Test: manual:bash -c 'RECOVERY_EVIDENCE_DIR="${RECOVERY_EVIDENCE_DIR:?}" npx vitest run sprints/08030535-kernel-acquisition-config-recovery-bb102e83/tests/recovery-evidence-contract.test.ts -t "Evaluator 结构化结论锚定目标 SHA 且行为证据全部通过"'
@@ -48,7 +48,7 @@ journey_type: autonomous
 ## Invariant 映射
 
 - INV-1：B-02 以真 API/Postgres 交叉验证；未覆盖项不得冒充全链路。
-- INV-2：migration、应用与查询统一使用 Fleet 注入的 `DB_URL`/`DATABASE_URL`。
+- INV-2：migration 使用由 Fleet `DB_URL` 原样设置的 `DATABASE_URL`；API 使用从该 URL 派生的 `DATABASE_HOST/PORT/NAME/USER/PASSWORD`；查询使用原始 `DB_URL`，并以 API 写入后精确回读证明三者同库。
 - INV-3 N/A：不触及 agents 表。
 - INV-4 N/A：不新增状态枚举。
 - INV-5 N/A：本任务不是 watchdog_overdue 恢复。

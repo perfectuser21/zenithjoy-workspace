@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 ## Notes
 
@@ -7,6 +7,7 @@
 - `gh pr view 1581` 已核实 PR 当前为 OPEN、head 精确等于目标 SHA、未合并。API/DB/test registry 可达；本任务不新增 HTTP schema 或 DB schema。context-manifest: unavailable（HTTP 404）。
 - contract-gate: skipped (file not found, third-party repo)
 - `npm run product-map:check` 在 `npm ci` 后通过，digest `5011e4ef...`，无分类漂移。
+- Round 2 仅修复 Reviewer 指出的 DB 一致性缺口：从 Fleet 的 `DB_URL` 派生 API 实际读取的五个拆分式 `DATABASE_*` 变量，并以真实 API 写入后 `psql "$DB_URL"` 精确回读证明 migration、API 与 oracle 命中同一 attempt 空库。
 
 ## Response Schema（推导来源: PRD字面）
 
@@ -100,13 +101,13 @@ gh pr view 1581 --repo perfectuser21/zenithjoy-workspace --json state,headRefOid
 ### Step 2: Evaluator 在 target SHA 上完成真实 local_api 验收
 **来源**: `[FROM_PRD]` — PRD「Golden Path」第 2 步与「验收标准」。
 
-**可观测行为**: attempt 空库先跑 target SHA 的真实 migration，再启动真实 API；两个 signup cookie 对应两个 tenant；effective-config 非法更新 400/零写入、合法更新成功且租户隔离；Evaluator 结构化结果锚定 target SHA。
+**可观测行为**: attempt 空库先跑 target SHA 的真实 migration；由同一 `DB_URL` 派生 API 实际读取的 `DATABASE_HOST/PORT/NAME/USER/PASSWORD` 后启动真实 API；两个 signup cookie 对应两个 tenant；真实 API 写入可由 `psql "$DB_URL"` 精确回读，effective-config 非法更新 400/零写入、合法更新成功且租户隔离；Evaluator 结构化结果锚定 target SHA。
 
 **验证命令**:
 ```bash
 RECOVERY_EVIDENCE_DIR="${RECOVERY_EVIDENCE_DIR:?}" npx vitest run sprints/08030535-kernel-acquisition-config-recovery-bb102e83/tests/recovery-evidence-contract.test.ts -t "Evaluator 结构化结论锚定目标 SHA 且行为证据全部通过"
 ```
-**硬阈值**: migration/app/signup/业务 smoke 均 exit 0；Evaluator 顶层及每条 behavior test 的 exit_code=0、log_tail 非空、anchor_sha 精确相等；业务链 ≤180s。
+**硬阈值**: migration/app/signup/业务 smoke 均 exit 0；API 写入 tenant A/B 的 `3|5`、`2|8` 必须由 `psql "$DB_URL"` 精确回读；Evaluator 顶层及每条 behavior test 的 exit_code=0、log_tail 非空、anchor_sha 精确相等；业务链 ≤180s。
 
 ### Step 3: Independent Judge 对同一 SHA 独立复核
 **来源**: `[FROM_PRD]` — PRD「Golden Path」第 3 步与「范围限定」。
@@ -161,7 +162,16 @@ git diff --exit-code "$FROZEN_RED_SHA" "$TARGET_SHA" -- apps/api/tests/routes/ac
 git worktree add --detach "$WORKTREE" "$TARGET_SHA" >/dev/null
 cd "$WORKTREE"
 npm ci --prefer-offline >/tmp/kernel-r4-npm-ci.log 2>&1
-export DATABASE_URL="$DB_URL" PORT="$API_PORT" BETTER_AUTH_URL="$BASE_URL" NODE_ENV=test
+# migration 读取 DATABASE_URL；业务 API 的 apps/api/src/db/connection.ts 只读取拆分式变量。
+# 两组变量必须由 Fleet 注入的同一个 DB_URL 派生，禁止使用默认库或第二条连接串。
+node -e 'const u=new URL(process.env.DB_URL);if(!/^postgres(ql)?:$/.test(u.protocol)||!u.hostname||!u.pathname.slice(1)||!u.username)process.exit(1)'
+export DATABASE_URL="$DB_URL"
+export DATABASE_HOST="$(node -e 'process.stdout.write(new URL(process.env.DB_URL).hostname)')"
+export DATABASE_PORT="$(node -e 'const u=new URL(process.env.DB_URL);process.stdout.write(u.port||"5432")')"
+export DATABASE_NAME="$(node -e 'process.stdout.write(decodeURIComponent(new URL(process.env.DB_URL).pathname.slice(1)))')"
+export DATABASE_USER="$(node -e 'process.stdout.write(decodeURIComponent(new URL(process.env.DB_URL).username))')"
+export DATABASE_PASSWORD="$(node -e 'process.stdout.write(decodeURIComponent(new URL(process.env.DB_URL).password))')"
+export PORT="$API_PORT" BETTER_AUTH_URL="$BASE_URL" NODE_ENV=test
 npm run migrate --workspace=apps/api >/tmp/kernel-r4-migrate.log 2>&1
 psql "$DB_URL" -Atc "SELECT (to_regclass('zenithjoy.acquisition_config') IS NOT NULL) AND (to_regclass('zenithjoy.tenant_members') IS NOT NULL)" | grep -qx t
 npm run build --workspace=apps/api >/tmp/kernel-r4-build.log 2>&1
@@ -178,6 +188,10 @@ TENANT_B=$(psql "$DB_URL" -Atc "SELECT tenant_id FROM zenithjoy.tenant_members W
 [ -n "$TENANT_A" ] && [ -n "$TENANT_B" ] && [ "$TENANT_A" != "$TENANT_B" ]
 curl -fsS -b "$COOKIE_A" -H 'content-type: application/json' -X PUT "$BASE_URL/api/acquisition/config" -d '{"keywords_per_round_min":3,"keywords_per_round_max":5}' | jq -e '.success==true and .data.keywords_per_round_min==3 and .data.keywords_per_round_max==5' >/dev/null
 curl -fsS -b "$COOKIE_B" -H 'content-type: application/json' -X PUT "$BASE_URL/api/acquisition/config" -d '{"keywords_per_round_min":2,"keywords_per_round_max":8}' | jq -e '.success==true and .data.keywords_per_round_min==2 and .data.keywords_per_round_max==8' >/dev/null
+# 同库探针：API 使用拆分式变量写入后，必须能从原始 Fleet DB_URL 精确回读。
+SAME_DB_PROBE=$(psql "$DB_URL" -Atc "SELECT tenant_id::text||'|'||keywords_per_round_min||'|'||keywords_per_round_max FROM zenithjoy.acquisition_config WHERE tenant_id IN ('${TENANT_A}','${TENANT_B}') AND created_at > NOW()-interval '5 minutes' ORDER BY tenant_id")
+echo "$SAME_DB_PROBE" | grep -Fx "${TENANT_A}|3|5" >/dev/null
+echo "$SAME_DB_PROBE" | grep -Fx "${TENANT_B}|2|8" >/dev/null
 BEFORE=$(psql "$DB_URL" -Atc "SELECT keywords_per_round_min||'|'||keywords_per_round_max||'|'||updated_at::text FROM zenithjoy.acquisition_config WHERE tenant_id='${TENANT_A}'")
 CODE=$(curl -sS -b "$COOKIE_A" -o /tmp/kernel-r4-invalid.json -w '%{http_code}' -H 'content-type: application/json' -X PUT "$BASE_URL/api/acquisition/config" -d '{"keywords_per_round_min":10}')
 [ "$CODE" = 400 ] && jq -e '.success==false and .error.code=="INVALID_CONFIG" and (.error.message|type=="string")' /tmp/kernel-r4-invalid.json >/dev/null
@@ -192,7 +206,7 @@ echo "$PR_AFTER" | jq -e --arg sha "$TARGET_SHA" '.state=="OPEN" and .headRefOid
 echo "PASS: PR #1581 target_sha=$TARGET_SHA evaluator+judge exact-SHA evidence valid; merge-ready signal only; PR remains unmerged"
 ```
 
-通过标准：真实 GitHub API 前后两次均为 OPEN/未合并/精确 SHA；target SHA worktree 在本 attempt 空库真实 migration；两个真实 signup cookie 产生不同 tenant；非法 effective config 400 `INVALID_CONFIG` 且 DB 行含时间戳完全不变；共享 Red test 通过且 fixture 零 diff；Evaluator/Judge/merge-gate 三文件结构及 SHA 全部通过。任一资源或证据不可用必须非零。
+通过标准：真实 GitHub API 前后两次均为 OPEN/未合并/精确 SHA；target SHA worktree 在本 attempt 空库真实 migration；API 的五个拆分式 DB 变量均由同一 `DB_URL` 派生；两个真实 signup cookie 产生不同 tenant；API 写入后 `psql "$DB_URL"` 精确回读两租户配置；非法 effective config 400 `INVALID_CONFIG` 且 DB 行含时间戳完全不变；共享 Red test 通过且 fixture 零 diff；Evaluator/Judge/merge-gate 三文件结构及 SHA 全部通过。任一资源或证据不可用必须非零。
 
 ## 探索提示（L3 探索层 — evaluator 剧本全过后执行）
 
