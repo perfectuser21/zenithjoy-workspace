@@ -1,0 +1,27 @@
+{
+  "initiative_id": "e74484fc-1866-4965-bc1f-8045f872493c",
+  "journey_type": "autonomous",
+  "journey_type_reason": "纯后端 acquisition 配置 API 与 Postgres 原子持久化修复",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "恢复 acquisition 有效配置原子守卫",
+      "scope": "部分或完整 PUT/PATCH 仅在与锁后实际可见租户配置合并合法时持久化；冲突返回 400 INVALID_CONFIG 且零写入",
+      "dod": [
+        "[BEHAVIOR] PUT/PATCH 单字段冲突返回 400 INVALID_CONFIG 且双租户整行不变",
+        "[BEHAVIOR] 受控并发冲突恰一成功一拒绝且最终 min<=max",
+        "[BEHAVIOR] 合法部分 PATCH、完整 PUT、min=max 与非边界字段更新成功并满足完整 schema",
+        "[ARTIFACT] 真 Postgres 集成 smoke test"
+      ],
+      "files": [
+        "apps/api/src/services/acquisition-dispatch.ts",
+        "apps/api/src/routes/acquisition-dispatch.ts",
+        "apps/api/src/routes/acquisition.ts",
+        "sprints/08030017-kernel-acquisition-config-recovery-181/tests/acquisition-config-effective-validation.integration.test.ts"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 90
+    }
+  ]
+}
