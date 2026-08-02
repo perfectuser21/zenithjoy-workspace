@@ -1,0 +1,29 @@
+{
+  "initiative_id": "761a22c9-73c0-4b2b-a788-3bf5c00369b9",
+  "journey_type": "autonomous",
+  "journey_type_reason": "纯 API 配置校验与持久化行为修复",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "修复 acquisition configuration effective bounds validation",
+      "scope": "partial PUT 读取当前 tenant 配置并校验合并后的 effective configuration；非法返回 400 INVALID_CONFIG 且不持久化；合法 update 保持兼容",
+      "dod": [
+        "[BEHAVIOR] 共享 Red 从 actual 200 / expected 400 转为 PASS，测试文件保持不变",
+        "[BEHAVIOR] 非法 effective configuration 不触发 acquisition_config INSERT",
+        "[BEHAVIOR] 合法 partial 与完整有效配置继续通过既有校验/upsert 路径",
+        "[ARTIFACT] E2E 验收脚本及 CI 宿主落地"
+      ],
+      "files": [
+        "apps/api/src/routes/acquisition-dispatch.ts",
+        "apps/api/src/services/acquisition-dispatch.ts",
+        "sprints/08020910-ab-one-session-acquisition-config/e2e-verify.sh",
+        ".github/workflows/scripts/smoke/acquisition-config-validation-smoke.sh",
+        ".github/workflows/scripts/smoke/golden-path-2-smoke.sh",
+        ".github/workflows/scripts/smoke-baseline.txt"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 60
+    }
+  ]
+}
