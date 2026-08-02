@@ -1,0 +1,26 @@
+{
+  "initiative_id": "e74484fc-1866-4965-bc1f-8045f872493c",
+  "journey_type": "autonomous",
+  "journey_type_reason": "纯后端 acquisition 配置 API 与 Postgres 持久化行为修复",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "按租户当前有效配置恢复 acquisition 上下界守卫",
+      "scope": "部分或完整 PUT/PATCH 仅在与当前租户配置合并后的 keyword bounds 合法时持久化；冲突返回 400 INVALID_CONFIG 且零写入",
+      "dod": [
+        "[BEHAVIOR] PUT/PATCH 对称单字段冲突与后续可见当前值冲突均返回 400 INVALID_CONFIG 且整行不变",
+        "[BEHAVIOR] 合法部分、完整与 min=max 更新成功，第二租户不变",
+        "[ARTIFACT] 真实 Postgres 集成测试覆盖完整合同"
+      ],
+      "files": [
+        "apps/api/src/services/acquisition-dispatch.ts",
+        "apps/api/src/routes/acquisition-dispatch.ts",
+        "apps/api/src/routes/acquisition.ts",
+        "sprints/08030017-kernel-acquisition-config-recovery-181/tests/acquisition-config-effective-validation.integration.test.ts"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 60
+    }
+  ]
+}
