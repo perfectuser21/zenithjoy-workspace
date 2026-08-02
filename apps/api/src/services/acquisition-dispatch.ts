@@ -19,6 +19,14 @@ export interface QueryablePool {
   query: (text: string, params?: unknown[]) => Promise<{ rows: any[]; rowCount?: number | null }>;
 }
 
+interface QueryableClient extends QueryablePool {
+  release: () => void;
+}
+
+export class InvalidAcquisitionConfigError extends Error {
+  readonly code = 'INVALID_CONFIG';
+}
+
 // ── 配置默认值（与 migration DEFAULT 对齐，无配置行时返回它）──────────────
 export interface AcquisitionConfig {
   tenant_id: string;
@@ -128,9 +136,35 @@ export async function upsertConfig(
   tenantId: string,
   patch: Record<string, unknown>
 ): Promise<AcquisitionConfig> {
-  const current = await getConfig(pool, tenantId);
+  const transactionPool = pool as QueryablePool & { connect?: () => Promise<QueryableClient> };
+  if (!transactionPool.connect) return upsertConfigWithQueryable(pool, tenantId, patch);
+
+  const client = await transactionPool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [tenantId]);
+    const next = await upsertConfigWithQueryable(client, tenantId, patch);
+    await client.query('COMMIT');
+    return next;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function upsertConfigWithQueryable(
+  queryable: QueryablePool,
+  tenantId: string,
+  patch: Record<string, unknown>
+): Promise<AcquisitionConfig> {
+  const current = await getConfig(queryable, tenantId);
   const next: AcquisitionConfig = { ...current, ...sanitizePatch(patch), tenant_id: tenantId };
-  await pool.query(
+  const effectiveConfigError = validateConfigPatch(next as unknown as Record<string, unknown>);
+  if (effectiveConfigError) throw new InvalidAcquisitionConfigError(effectiveConfigError);
+
+  await queryable.query(
     `INSERT INTO zenithjoy.acquisition_config (
        tenant_id, collect_rounds_per_day, keywords_per_round_min, keywords_per_round_max,
        collect_active_start, collect_active_end, burner_count, dm_per_hour, dm_per_day,
@@ -946,4 +980,3 @@ export function pickAssignee(roster: string[], dayLeadCount: number): string | n
   if (!Array.isArray(roster) || roster.length === 0) return null;
   return roster[dayLeadCount % roster.length];
 }
-

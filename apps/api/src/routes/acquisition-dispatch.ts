@@ -23,6 +23,7 @@ import {
   buildAssignments,
   dispatchDue,
   cookieHealth,
+  InvalidAcquisitionConfigError,
 } from '../services/acquisition-dispatch';
 
 export const acquisitionDispatchRouter = Router();
@@ -58,8 +59,15 @@ acquisitionDispatchRouter.put('/config', tenantContextOptional, async (req: Requ
   const patch = (req.body ?? {}) as Record<string, unknown>;
   const err = validateConfigPatch(patch);
   if (err) return res.status(400).json(ERR('INVALID_CONFIG', err));
-  const cfg = await upsertConfig(pool, tenantId, patch);
-  return res.json(OK(cfg));
+  try {
+    const cfg = await upsertConfig(pool, tenantId, patch);
+    return res.json(OK(cfg));
+  } catch (error) {
+    if (error instanceof InvalidAcquisitionConfigError) {
+      return res.status(400).json(ERR(error.code, error.message));
+    }
+    throw error;
+  }
 });
 
 // ── POST /dispatch/build — scoreLeads + buildAssignments ──
