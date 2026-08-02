@@ -111,6 +111,15 @@ export function validateConfigPatch(patch: Record<string, unknown>): string | nu
   return null;
 }
 
+export class InvalidAcquisitionConfigError extends Error {
+  readonly code = 'INVALID_CONFIG';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidAcquisitionConfigError';
+  }
+}
+
 // ── getConfig：读配置（无则返默认）─────────────────────────────────────────
 export async function getConfig(pool: QueryablePool, tenantId: string): Promise<AcquisitionConfig> {
   const r = await pool.query(
@@ -130,6 +139,11 @@ export async function upsertConfig(
 ): Promise<AcquisitionConfig> {
   const current = await getConfig(pool, tenantId);
   const next: AcquisitionConfig = { ...current, ...sanitizePatch(patch), tenant_id: tenantId };
+  if (next.keywords_per_round_min > next.keywords_per_round_max) {
+    throw new InvalidAcquisitionConfigError(
+      'keywords_per_round_min 不能大于 keywords_per_round_max'
+    );
+  }
   await pool.query(
     `INSERT INTO zenithjoy.acquisition_config (
        tenant_id, collect_rounds_per_day, keywords_per_round_min, keywords_per_round_max,
@@ -946,4 +960,3 @@ export function pickAssignee(roster: string[], dayLeadCount: number): string | n
   if (!Array.isArray(roster) || roster.length === 0) return null;
   return roster[dayLeadCount % roster.length];
 }
-
