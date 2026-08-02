@@ -39,6 +39,14 @@ api_suite:
 
 tests:
 
+- id: kernel-acquisition-effective-config-guard-integration
+  path: sprints/08030017-kernel-acquisition-config-recovery-181/tests/acquisition-config-effective-validation.integration.test.ts
+  type: integration
+  ci: L4
+  status: active
+  product: 私域运营
+  note: "Kernel recovery：真 Postgres 验证部分/完整配置有效态、零持久化、双租户隔离及已有/首次新租户并发 upsert"
+
 - id: acquisition-cancel-android-uuid-integration
   path: apps/api/tests/integration/acquisition-cancel-uuid-agent.integration.test.ts
   type: integration
