@@ -178,6 +178,26 @@ S5_ROW=$(psq "SELECT count(*) FROM zenithjoy.acquisition_config WHERE tenant_id=
 [ "$S5_ROW" = "1" ] || fail "Step 5 acquisition_config 无本轮时间窗内写入" 5
 ok "Step 5 ✅ 画像已落本地 acquisition_config（时间窗验证）"
 
+# Step 5b：PUT partial patch 必须按数据库当前值校验 effective configuration。
+# 先落合法边界，再只上调 min 使合并后 min > max；400 后数据库值必须保持不变。
+echo "▶ Step 5b: partial PUT 合并后边界校验"
+S5B_TMP=$(mktemp)
+S5B_HTTP=$(curl -s -o "$S5B_TMP" -w "%{http_code}" --max-time 15 \
+  -X PUT "$API_BASE/api/acquisition/config" \
+  -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" \
+  -d '{"keywords_per_round_min":3,"keywords_per_round_max":5}')
+[ "$S5B_HTTP" = "200" ] || fail "Step 5b 合法完整边界 PUT expected 200, got $S5B_HTTP: $(cat "$S5B_TMP")" 5
+S5B_HTTP=$(curl -s -o "$S5B_TMP" -w "%{http_code}" --max-time 15 \
+  -X PUT "$API_BASE/api/acquisition/config" \
+  -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" \
+  -d '{"keywords_per_round_min":10}')
+[ "$S5B_HTTP" = "400" ] || fail "Step 5b 非法 effective config expected 400, got $S5B_HTTP: $(cat "$S5B_TMP")" 5
+python3 -c "import json,sys; assert json.load(open(sys.argv[1]))['error']['code']=='INVALID_CONFIG'" "$S5B_TMP" 2>/dev/null \
+  || fail "Step 5b expected error.code=INVALID_CONFIG: $(cat "$S5B_TMP")" 5
+S5B_ROW=$(psq "SELECT keywords_per_round_min||'|'||keywords_per_round_max FROM zenithjoy.acquisition_config WHERE tenant_id='$TENANT_ID'")
+[ "$S5B_ROW" = "3|5" ] || fail "Step 5b 非法 effective config 被持久化，数据库实得 '$S5B_ROW'" 5
+ok "Step 5b ✅ 合并后非法返回 INVALID_CONFIG，合法边界 3|5 保持未改"
+
 # ───────────────────────────────────────────────────────────────────
 # Step 6：手机端登录抖音小号 — 服务端等价断言（DeviceAccountScanService 写回路径）
 # TODO(android-evaluator-channel): 真机登录段由 Android 通道接管。
@@ -1367,7 +1387,7 @@ for (const behavior of ["'/collect/cancel'", 'DEVICE_CANCEL_COOLDOWN', 'CANCEL_N
 NODE
 ok "Step 32 ✅ Path2 不可逆取消入口、稳定设备冷却与回执闸已接入"
 
-rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
+rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S5B_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" \
       "$S22_TMP" "$S23A_TMP" "$S23A_COOKIES" "$S23B_TMP" "$S24_TMP" \
       "$S25_TMP" "$S25_TMP2" "$S26_TMP" "$S27_TMP" "$S28_TMP" "$S29_TMP" "$S30_TMP" 2>/dev/null
