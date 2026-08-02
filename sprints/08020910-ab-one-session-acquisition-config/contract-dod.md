@@ -16,8 +16,8 @@ target_environment: local_api
 - [x] [ARTIFACT] Test Contract 指向仓库已注册、L4 收集的共享测试文件
   Test: node -e "const fs=require('fs');const r=fs.readFileSync('test-registry.yaml','utf8');if(!r.includes('path: apps/api/tests/routes/acquisition-dispatch.test.ts'))process.exit(1)"
 
-- [x] [ARTIFACT] sprint E2E 验收脚本落地且由 CI workflow 收集
-  Test: node -e "const fs=require('fs');if(!fs.existsSync('sprints/08020910-ab-one-session-acquisition-config/e2e-verify.sh'))process.exit(1);const ys=fs.readdirSync('.github/workflows').filter(f=>/\.ya?ml$/.test(f)).map(f=>fs.readFileSync('.github/workflows/'+f,'utf8')).join('\n');if(!ys.includes('sprints/08020910-ab-one-session-acquisition-config/e2e-verify.sh'))process.exit(1)"
+- [x] [ARTIFACT] sprint E2E 验收脚本落地，目标回归 smoke 已注册到现有 CI Smoke Glob Gate
+  Test: node -e "const fs=require('fs');if(!fs.existsSync('sprints/08020910-ab-one-session-acquisition-config/e2e-verify.sh'))process.exit(1);if(!fs.existsSync('.github/workflows/scripts/smoke/acquisition-config-validation-smoke.sh'))process.exit(1);const b=fs.readFileSync('.github/workflows/scripts/smoke-baseline.txt','utf8');if(!b.split(/\n/).includes('acquisition-config-validation-smoke.sh'))process.exit(1)"
 
 ## BEHAVIOR 条目
 

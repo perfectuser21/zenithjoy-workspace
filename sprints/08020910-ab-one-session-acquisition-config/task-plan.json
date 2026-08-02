@@ -17,7 +17,9 @@
         "apps/api/src/routes/acquisition-dispatch.ts",
         "apps/api/src/services/acquisition-dispatch.ts",
         "sprints/08020910-ab-one-session-acquisition-config/e2e-verify.sh",
-        ".github/workflows/e2e-acquisition-config-validation.yml"
+        ".github/workflows/scripts/smoke/acquisition-config-validation-smoke.sh",
+        ".github/workflows/scripts/smoke/golden-path-2-smoke.sh",
+        ".github/workflows/scripts/smoke-baseline.txt"
       ],
       "depends_on": [],
       "complexity": "S",
