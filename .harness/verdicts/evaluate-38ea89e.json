@@ -1,0 +1,52 @@
+{
+  "phase": "evaluate",
+  "verdict": "PASS",
+  "task_id": "761a22c9-73c0-4b2b-a788-3bf5c00369b9",
+  "anchor_sha": "38ea89ec0634872db4123ecf24f5502f8692a51e",
+  "verification_level": "L2",
+  "artifact_gate": "PASS",
+  "contract_gate": "PASS",
+  "unverifiable": [],
+  "behavior_tests": [
+    {
+      "id": "B-01",
+      "command": "bash .github/workflows/scripts/smoke/acquisition-config-validation-smoke.sh",
+      "exit_code": 0,
+      "log_tail": "PASS: complete=200 invalid_partial=400/INVALID_CONFIG unchanged=true legal_partial=200 db=3|6",
+      "verification_level": "L2"
+    },
+    {
+      "id": "B-02",
+      "command": "bash .github/workflows/scripts/smoke/acquisition-config-validation-smoke.sh",
+      "exit_code": 0,
+      "log_tail": "PASS: complete=200 invalid_partial=400/INVALID_CONFIG unchanged=true legal_partial=200 db=3|6",
+      "verification_level": "L2"
+    },
+    {
+      "id": "B-03",
+      "command": "bash .github/workflows/scripts/smoke/acquisition-config-validation-smoke.sh",
+      "exit_code": 0,
+      "log_tail": "PASS: complete=200 invalid_partial=400/INVALID_CONFIG unchanged=true legal_partial=200 db=3|6",
+      "verification_level": "L2"
+    },
+    {
+      "id": "B-04",
+      "command": "bash sprints/08020910-ab-one-session-acquisition-config/e2e-verify.sh",
+      "exit_code": 0,
+      "log_tail": "Test Files 1 passed (1); Tests 23 passed (23)",
+      "verification_level": "L2"
+    }
+  ],
+  "ci_checks": {
+    "total": 101,
+    "pass": 95,
+    "skipping": 6,
+    "failed": 0,
+    "pending": 0
+  },
+  "notes": [
+    "共享 fixture 相对 0dc4e3c0 零 diff。",
+    "冻结 mock fixture 之外，专用 smoke 使用真实 API 与 PostgreSQL，并带 updated_at 时间窗与非法请求前后快照断言。",
+    "附件 commit 后 controller 必须在新 head 上重新执行 Evaluator 并重锚，再调用 Judge。"
+  ]
+}
