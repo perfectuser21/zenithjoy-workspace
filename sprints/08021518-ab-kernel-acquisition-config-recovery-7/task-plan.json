@@ -1,0 +1,23 @@
+{
+  "initiative_id": "635b4360-8601-4bad-8a03-ef37ed431b79",
+  "journey_type": "autonomous",
+  "journey_type_reason": "纯后端 acquisition 配置 API 与 Postgres 持久化行为修复",
+  "tasks": [{
+    "task_id": "ws1",
+    "title": "按租户合并 acquisition 配置后校验关键词上下界",
+    "scope": "部分或完整更新仅在当前租户有效配置合法时持久化；冲突返回 400 INVALID_CONFIG 且零写入",
+    "dod": [
+      "[BEHAVIOR] 对称单字段冲突均返回 400 INVALID_CONFIG 且配置不变",
+      "[BEHAVIOR] 合法部分、完整与 min=max 更新成功，第二租户不变",
+      "[ARTIFACT] 真实 Postgres 集成测试覆盖合同"
+    ],
+    "files": [
+      "apps/api/src/services/acquisition-dispatch.ts",
+      "apps/api/src/routes/acquisition-dispatch.ts",
+      "sprints/08021518-ab-kernel-acquisition-config-recovery-7/tests/acquisition-config-effective-validation.integration.test.ts"
+    ],
+    "depends_on": [],
+    "complexity": "S",
+    "estimated_minutes": 60
+  }]
+}
