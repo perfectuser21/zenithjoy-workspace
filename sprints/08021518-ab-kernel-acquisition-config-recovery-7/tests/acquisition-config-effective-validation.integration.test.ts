@@ -74,10 +74,16 @@ describe('acquisition effective config validation（真 HTTP + 真 Postgres）',
     const beforeB = await config(tenantB);
     const minOnly = await request(app).put('/api/acquisition/config').set('X-Tenant-Id', tenantA).send({ keywords_per_round_min: 7 });
     expect(minOnly.status).toBe(200);
+    expect(minOnly.body.data).toMatchObject({ keywords_per_round_min: 7, keywords_per_round_max: 8 });
     expectSuccessSchema(minOnly.body);
+    expect(await config(tenantA)).toMatchObject({ keywords_per_round_min: 7, keywords_per_round_max: 8 });
+    expect(await config(tenantB)).toEqual(beforeB);
     const maxOnly = await request(app).put('/api/acquisition/config').set('X-Tenant-Id', tenantA).send({ keywords_per_round_max: 9 });
     expect(maxOnly.status).toBe(200);
+    expect(maxOnly.body.data).toMatchObject({ keywords_per_round_min: 7, keywords_per_round_max: 9 });
     expectSuccessSchema(maxOnly.body);
+    expect(await config(tenantA)).toMatchObject({ keywords_per_round_min: 7, keywords_per_round_max: 9 });
+    expect(await config(tenantB)).toEqual(beforeB);
     const equal = await request(app).put('/api/acquisition/config').set('X-Tenant-Id', tenantA).send({ keywords_per_round_min: 7, keywords_per_round_max: 7 });
     expect(equal.status).toBe(200);
     expect(equal.body.data).toMatchObject({ keywords_per_round_min: 7, keywords_per_round_max: 7 });

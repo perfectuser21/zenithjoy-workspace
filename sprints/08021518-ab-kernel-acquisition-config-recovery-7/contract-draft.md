@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 7)
+# Sprint Contract Draft (Round 8)
 
 ## Response Schema（推导来源: PRD 字面 + 现有路由）
 
@@ -94,7 +94,7 @@ N/A：既有受鉴权配置 API，不是 agent/prompt 输入面。
 
 ### Step 4: 有效 PUT 部分、完整及相等边界继续成功
 **来源**: `[FROM_PRD]` — PRD Golden Path 第 3 步与边界情况。
-**可观测行为**: min-only、max-only、完整更新与 min=max 返回 200 并可从 DB 读到，B 不变。
+**可观测行为**: min-only 返回并落库 7/8；max-only 返回并落库 7/9；完整 min=max 返回并落库 7/7；每一步 B 均不变。
 **验证命令**: `curl -sf -X PUT "$API_URL/api/acquisition/config" -H "X-Tenant-Id: $TENANT_A_ID" -H 'Content-Type: application/json' -d '{"keywords_per_round_min":7,"keywords_per_round_max":7}' | jq -e '.success==true and .data.keywords_per_round_min==7 and .data.keywords_per_round_max==7 and (.timestamp|type=="string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$")) and keys==["data","success","timestamp"]'`
 **硬阈值**: HTTP 200、两值均为 7、成功响应 timestamp 为 ISO-8601 且顶层 keys 完整，由上述命令执法。
 
@@ -165,4 +165,5 @@ psql "$DB_URL" -XtAc "SELECT keywords_per_round_min=7 AND keywords_per_round_max
 - Reviewer Round 4 修订：新增 B-05 五行剧本，以真实共享 Red 路径、sprint 外零变更和零 merge commit 的 git 基线证据机检冻结 Red、候选材料禁查/禁复制及盲测裁决前禁合并边界。
 - Reviewer Round 5 修订：错误与成功响应均新增完整顶层 keys 断言及 ISO-8601 timestamp 可解析断言。
 - Reviewer Round 6 修订：B-05 放行 PRD 必需的 `apps/api/` 实现/测试变更；integration Red 补齐 `error.message` 非空与 A 最终从真 PostgreSQL 回读 7/7 的断言。
+- Reviewer Round 7 修订：B-04 的 integration Red 在 min-only 后逐项断言响应/真 PostgreSQL 为 7/8，在 max-only 后断言为 7/9，并在每一步确认租户 B 不变，避免后续完整更新覆盖中间错误造成假绿。
 - 本轮未检查或复制 One-session 候选 worktree、patch、日志、PR 或反馈。

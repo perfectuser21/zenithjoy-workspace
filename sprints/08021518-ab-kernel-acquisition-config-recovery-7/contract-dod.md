@@ -34,7 +34,7 @@ journey_type: autonomous
 
 - [ ] [BEHAVIOR] [L2] B-04: 有效部分、完整和相等边界更新继续成功且不串租户
   动作: A 依次提交有效 min-only、max-only 和 min=max 完整更新
-  预期观察: 均成功；成功响应顶层仅 data/success/timestamp 且 timestamp 可按 ISO-8601 解析；DB 最终为 7/7，B 配置不变
+  预期观察: min-only 响应与 DB 均为 7/8，max-only 响应与 DB 均为 7/9，完整相等更新后均为 7/7；每一步成功响应顶层仅 data/success/timestamp 且 timestamp 可按 ISO-8601 解析，且每一步 B 配置不变
   等待预算: 30s
   留证: Vitest 真 HTTP 与真 DB 输出
   Test: manual:bash -c 'cd apps/api && TEST_DATABASE_URL="$DB_URL" npx vitest run --config ../../sprints/08021518-ab-kernel-acquisition-config-recovery-7/tests/vitest.config.ts -t "有效部分、完整和相等边界更新继续成功且不串租户" --reporter=verbose'
