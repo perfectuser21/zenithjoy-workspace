@@ -122,14 +122,23 @@ export async function getConfig(pool: QueryablePool, tenantId: string): Promise<
   return { ...defaultConfig(tenantId), ...row, tenant_id: tenantId };
 }
 
+export function mergeConfigPatch(
+  current: AcquisitionConfig,
+  patch: Record<string, unknown>,
+  tenantId = current.tenant_id
+): AcquisitionConfig {
+  return { ...current, ...sanitizePatch(patch), tenant_id: tenantId };
+}
+
 // ── upsertConfig：写配置（merge 默认 + patch 后整行 upsert）───────────────
 export async function upsertConfig(
   pool: QueryablePool,
   tenantId: string,
-  patch: Record<string, unknown>
+  patch: Record<string, unknown>,
+  currentConfig?: AcquisitionConfig
 ): Promise<AcquisitionConfig> {
-  const current = await getConfig(pool, tenantId);
-  const next: AcquisitionConfig = { ...current, ...sanitizePatch(patch), tenant_id: tenantId };
+  const current = currentConfig ?? await getConfig(pool, tenantId);
+  const next = mergeConfigPatch(current, patch, tenantId);
   await pool.query(
     `INSERT INTO zenithjoy.acquisition_config (
        tenant_id, collect_rounds_per_day, keywords_per_round_min, keywords_per_round_max,
@@ -946,4 +955,3 @@ export function pickAssignee(roster: string[], dayLeadCount: number): string | n
   if (!Array.isArray(roster) || roster.length === 0) return null;
   return roster[dayLeadCount % roster.length];
 }
-

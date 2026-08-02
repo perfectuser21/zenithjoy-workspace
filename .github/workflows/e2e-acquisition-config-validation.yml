@@ -1,0 +1,27 @@
+name: Acquisition Config Effective Validation
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/routes/acquisition-dispatch.ts'
+      - 'apps/api/src/services/acquisition-dispatch.ts'
+      - 'apps/api/tests/routes/acquisition-dispatch.test.ts'
+      - 'sprints/08020910-ab-one-session-acquisition-config/e2e-verify.sh'
+      - '.github/workflows/e2e-acquisition-config-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  effective-config-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: bash sprints/08020910-ab-one-session-acquisition-config/e2e-verify.sh
