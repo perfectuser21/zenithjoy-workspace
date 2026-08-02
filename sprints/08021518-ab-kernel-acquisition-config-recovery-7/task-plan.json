@@ -1,0 +1,24 @@
+{
+  "initiative_id": "7194e308-c1b5-43a4-a92b-1c7299837c98",
+  "journey_type": "autonomous",
+  "journey_type_reason": "纯后端租户配置校验，通过 local_api 与真 Postgres 验收",
+  "tasks": [{
+    "task_id": "ws1",
+    "title": "恢复 acquisition effective config 校验与 HTTP 错误映射",
+    "scope": "原子读取当前租户配置并合并 patch；拒绝关键词上下界倒置，稳定返回 400/INVALID_CONFIG 且零持久化；保持有效更新和鉴权行为",
+    "dod": [
+      "[BEHAVIOR] 真 HTTP 对无效 effective config 返回 400/INVALID_CONFIG，真 Postgres 前后不变",
+      "[BEHAVIOR] 有效部分、完整及相等边界更新成功且另一租户不变",
+      "[ARTIFACT] 真 HTTP + 真 Postgres integration Red 测试"
+    ],
+    "files": [
+      "apps/api/src/services/acquisition-dispatch.ts",
+      "apps/api/src/routes/acquisition-dispatch.ts",
+      "apps/api/src/routes/acquisition.ts",
+      "sprints/08021518-ab-kernel-acquisition-config-recovery-7/tests/acquisition-config-effective-validation.integration.test.ts"
+    ],
+    "depends_on": [],
+    "complexity": "M",
+    "estimated_minutes": 60
+  }]
+}
