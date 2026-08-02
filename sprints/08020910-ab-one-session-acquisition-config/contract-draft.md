@@ -124,7 +124,7 @@ N/A：此任务不新增 agent、prompt 或新外部输入面；沿用现有 API
 
 ## E2E 验收
 
-**journey_type**：autonomous  
+**journey_type**：autonomous
 **target_environment**：local_api
 
 ```bash
