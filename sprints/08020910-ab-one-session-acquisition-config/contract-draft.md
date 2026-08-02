@@ -17,6 +17,12 @@
 - [累积 FR] task payload 未提供 journey_id，context-manifest 不适用。
 - [共享 Red] commit `0dc4e3c07ff19a0ac95440723986bf3cb78580b2` 的测试不可修改、删除、跳过或弱化。
 
+## GP-Anchor
+
+GP-Anchor: line02/keyword_acquisition#step7
+
+本任务保持关键词获客评论区挖客闭环的配置前置条件全绿；锚点来自 `product-map/generated/product-map.json`。
+
 ## Golden Path
 
 独立小路（无父路）。
