@@ -130,14 +130,25 @@ export async function getConfig(pool: QueryablePool, tenantId: string): Promise<
   return { ...defaultConfig(tenantId), ...row, tenant_id: tenantId };
 }
 
+export function mergeConfigPatch(
+  current: AcquisitionConfig,
+  patch: Record<string, unknown>,
+  tenantId = current.tenant_id
+): AcquisitionConfig {
+  return { ...current, ...sanitizePatch(patch), tenant_id: tenantId };
+}
+
 // ── upsertConfig：写配置（merge 默认 + patch 后整行 upsert）───────────────
 export async function upsertConfig(
   pool: QueryablePool,
   tenantId: string,
-  patch: Record<string, unknown>
+  patch: Record<string, unknown>,
+  currentConfig?: AcquisitionConfig
 ): Promise<AcquisitionConfig> {
   const transactionPool = pool as QueryablePool & { connect?: () => Promise<QueryableClient> };
-  if (!transactionPool.connect) return upsertConfigWithQueryable(pool, tenantId, patch);
+  if (!transactionPool.connect) {
+    return upsertConfigWithQueryable(pool, tenantId, patch, currentConfig);
+  }
 
   const client = await transactionPool.connect();
   try {
@@ -157,10 +168,11 @@ export async function upsertConfig(
 async function upsertConfigWithQueryable(
   queryable: QueryablePool,
   tenantId: string,
-  patch: Record<string, unknown>
+  patch: Record<string, unknown>,
+  currentConfig?: AcquisitionConfig
 ): Promise<AcquisitionConfig> {
-  const current = await getConfig(queryable, tenantId);
-  const next: AcquisitionConfig = { ...current, ...sanitizePatch(patch), tenant_id: tenantId };
+  const current = currentConfig ?? await getConfig(queryable, tenantId);
+  const next = mergeConfigPatch(current, patch, tenantId);
   const effectiveConfigError = validateConfigPatch(next as unknown as Record<string, unknown>);
   if (effectiveConfigError) throw new InvalidAcquisitionConfigError(effectiveConfigError);
 

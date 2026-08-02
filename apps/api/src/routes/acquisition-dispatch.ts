@@ -17,6 +17,7 @@ import { tenantContextOptional } from '../middleware/tenant-context';
 import { enqueueWarmupTasks } from '../services/warmup-dispatch';
 import {
   getConfig,
+  mergeConfigPatch,
   upsertConfig,
   validateConfigPatch,
   scoreLeads,
@@ -52,12 +53,13 @@ acquisitionDispatchRouter.get('/config', tenantContextOptional, async (req: Requ
   return res.json(OK(cfg));
 });
 
-// ── PUT /config — upsert（数值范围校验，非法 400）──
+// ── PUT /config — upsert（effective configuration 校验，非法 400）──
 acquisitionDispatchRouter.put('/config', tenantContextOptional, async (req: Request, res: Response) => {
   const tenantId = tenantOf(req, res);
   if (!tenantId) return;
   const patch = (req.body ?? {}) as Record<string, unknown>;
-  const err = validateConfigPatch(patch);
+  const current = await getConfig(pool, tenantId);
+  const err = validateConfigPatch({ ...mergeConfigPatch(current, patch, tenantId) });
   if (err) return res.status(400).json(ERR('INVALID_CONFIG', err));
   try {
     const cfg = await upsertConfig(pool, tenantId, patch);
