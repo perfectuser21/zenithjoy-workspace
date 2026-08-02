@@ -56,9 +56,9 @@ async function readConfig(tenantId: string): Promise<Record<string, unknown> | u
   return result.rows[0];
 }
 
-function withoutUpdatedAt(row: Record<string, unknown> | undefined): Record<string, unknown> {
+function withoutTimestamps(row: Record<string, unknown> | undefined): Record<string, unknown> {
   if (!row) return {};
-  const { updated_at: _updatedAt, ...businessFields } = row;
+  const { created_at: _createdAt, updated_at: _updatedAt, ...businessFields } = row;
   return businessFields;
 }
 
@@ -163,7 +163,7 @@ describe('Kernel acquisition effective-config guard [BEHAVIOR]', () => {
   });
 
   it('合法部分 PATCH 只改变请求字段且保持双租户隔离', async () => {
-    const beforeA = withoutUpdatedAt(await readConfig(tenantUuidA));
+    const beforeA = withoutTimestamps(await readConfig(tenantUuidA));
     const beforeB = await readConfig(tenantUuidB);
 
     const response = await request(app)
@@ -175,13 +175,13 @@ describe('Kernel acquisition effective-config guard [BEHAVIOR]', () => {
     expect(response.body.success).toBe(true);
     expect(response.body.data.keywords_per_round_min).toBe(8);
     expect(response.body.data.keywords_per_round_max).toBe(10);
-    const afterA = withoutUpdatedAt(await readConfig(tenantUuidA));
+    const afterA = withoutTimestamps(await readConfig(tenantUuidA));
     expect(changedBusinessKeys(beforeA, afterA)).toEqual(['keywords_per_round_min']);
     expect(await readConfig(tenantUuidB)).toEqual(beforeB);
   });
 
   it('合法非上下界部分 PUT 只改变请求字段且保持双租户隔离', async () => {
-    const beforeA = withoutUpdatedAt(await readConfig(tenantUuidA));
+    const beforeA = withoutTimestamps(await readConfig(tenantUuidA));
     const beforeB = await readConfig(tenantUuidB);
 
     const response = await request(app)
@@ -191,7 +191,7 @@ describe('Kernel acquisition effective-config guard [BEHAVIOR]', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
-    const afterA = withoutUpdatedAt(await readConfig(tenantUuidA));
+    const afterA = withoutTimestamps(await readConfig(tenantUuidA));
     expect(changedBusinessKeys(beforeA, afterA)).toEqual(['dm_per_day']);
     expect(afterA.keywords_per_round_min).toBe(3);
     expect(afterA.keywords_per_round_max).toBe(10);
@@ -209,7 +209,7 @@ describe('Kernel acquisition effective-config guard [BEHAVIOR]', () => {
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
     expect(response.body.data).toMatchObject({ tenant_id: tenantUuidA, ...completeConfig });
-    expect(withoutUpdatedAt(await readConfig(tenantUuidA))).toMatchObject({ tenant_id: tenantUuidA, ...completeConfig });
+    expect(withoutTimestamps(await readConfig(tenantUuidA))).toMatchObject({ tenant_id: tenantUuidA, ...completeConfig });
     expect(await readConfig(tenantUuidB)).toEqual(beforeB);
   });
 
