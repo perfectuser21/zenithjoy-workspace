@@ -26,28 +26,28 @@ target_environment: local_api
   预期观察: route 同步返回 HTTP 400，`error.code=INVALID_CONFIG`，pool 调用中不存在 acquisition_config INSERT。
   等待预算: 0s
   留证: Vitest verbose 输出中目标测试 PASS 与断言位置。
-  Test: manual:bash -c 'cd apps/api && npx vitest run tests/routes/acquisition-dispatch.test.ts -t "partial patch cannot make merged keyword bounds invalid" --reporter=verbose'
+  Test: manual:bash -c 'bash .github/workflows/scripts/smoke/acquisition-config-validation-smoke.sh'
 
 - [x] [BEHAVIOR] [L2] B-02: 非法配置沿用 400 INVALID_CONFIG 与不写库语义
   动作: 对 tenant 提交既有非法数值请求。
   预期观察: route 同步返回 HTTP 400、错误码 `INVALID_CONFIG`，且不调用 acquisition_config INSERT。
   等待预算: 0s
   留证: Vitest verbose 输出中 `PUT /config 非法数值` case PASS。
-  Test: manual:bash -c 'cd apps/api && npx vitest run tests/routes/acquisition-dispatch.test.ts -t "PUT /config 非法数值" --reporter=verbose'
+  Test: manual:bash -c 'bash .github/workflows/scripts/smoke/acquisition-config-validation-smoke.sh'
 
 - [x] [BEHAVIOR] [L2] B-03: 合法 update 继续返回 200 并 upsert
   动作: 对 tenant 提交现有合法配置 patch；完整有效配置同样由相同 validator 接受。
   预期观察: route 同步返回 HTTP 200，响应 data 反映新值，且存在 acquisition_config INSERT/upsert。
   等待预算: 0s
   留证: Vitest verbose 输出中合法 route case 与完整 bounds validator case PASS。
-  Test: manual:bash -c 'cd apps/api && npx vitest run tests/routes/acquisition-dispatch.test.ts -t "PUT /config 合法|validateConfigPatch" --reporter=verbose'
+  Test: manual:bash -c 'bash .github/workflows/scripts/smoke/acquisition-config-validation-smoke.sh'
 
 - [x] [BEHAVIOR] [L2] B-04: acquisition dispatch route 相关回归全绿
   动作: 运行共享测试文件的完整 route/service 回归集。
   预期观察: 所有既有合法、非法、认证与 tenant 隔离 case 全部通过，无 skip。
   等待预算: 120s
   留证: Vitest verbose 完整输出与 exit code 0。
-  Test: manual:bash -c 'cd apps/api && npx vitest run tests/routes/acquisition-dispatch.test.ts --reporter=verbose'
+  Test: manual:bash -c 'bash sprints/08020910-ab-one-session-acquisition-config/e2e-verify.sh'
 
 ## Invariant 覆盖映射
 

@@ -76,7 +76,7 @@
 
 ## 未覆盖真实链路清单
 
-- 真实 PostgreSQL 往返｜共享 Red fixture 由 Owner 冻结为 supertest + mock pool，验证查询/写入调用而非真实 DB｜补位：现有 acquisition dispatch smoke 与 PR CI 的 API 回归宿主继续覆盖真实服务接线；本 PR 不把 mock 证据表述为真实 PG 证据。
+- 共享 Red fixture 本身不覆盖真实 PostgreSQL 往返｜Owner 冻结测试使用 supertest + mock pool｜补位：专用 `acquisition-config-validation-smoke.sh` 通过真实 API + PostgreSQL 验证完整合法 PUT、非法 partial PUT 的 400/`INVALID_CONFIG`/数据库快照不变，以及后续合法 partial PUT；mock 证据不冒充真实 PG 证据。
 
 ## 八要素需求规范
 
@@ -130,9 +130,11 @@ N/A：此任务不新增 agent、prompt 或新外部输入面；沿用现有 API
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
-cd apps/api
-npx vitest run tests/routes/acquisition-dispatch.test.ts -t 'partial patch cannot make merged keyword bounds invalid' --reporter=verbose
-npx vitest run tests/routes/acquisition-dispatch.test.ts --reporter=verbose
+REAL_SMOKE=.github/workflows/scripts/smoke/acquisition-config-validation-smoke.sh
+grep -q 'jq -e' "$REAL_SMOKE"
+grep -q 'psql' "$REAL_SMOKE"
+grep -q "NOW() - interval" "$REAL_SMOKE"
+bash sprints/08020910-ab-one-session-acquisition-config/e2e-verify.sh
 ```
 
 ## Test Contract
