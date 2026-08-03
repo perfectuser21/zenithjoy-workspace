@@ -9,27 +9,27 @@ journey_type: autonomous
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] `evidence/fleet-run.json`、`evaluator.json`、`independent-judge.json`、`merge-gate.json` 均由本 attempt 新生成并保留原始 log_tail。
-  Test: node -e "for(const f of ['fleet-run.json','evaluator.json','independent-judge.json','merge-gate.json'])JSON.parse(require('fs').readFileSync('sprints/08032258-kernel-pr1581-fleet-validation-r12/evidence/'+f,'utf8'))"
+- [ ] [ARTIFACT] `evidence/validation-identity.json`、`fleet-run.json`、`evaluator.json`、`independent-judge.json`、`merge-gate.json` 均由本 validation attempt 新生成并保留原始 log_tail。
+  Test: node -e "for(const f of ['validation-identity.json','fleet-run.json','evaluator.json','independent-judge.json','merge-gate.json'])JSON.parse(require('fs').readFileSync('sprints/08032258-kernel-pr1581-fleet-validation-r12/evidence/'+f,'utf8'))"
 
 - [ ] [ARTIFACT] 共享 Red fixture 与产品文件未被本 Sprint 相对冻结 base 修改。
   Test: git diff --exit-code a0d63324d4e682a209a21aa9f0ce7ccad6f46ab6 -- apps/api/src apps/api/tests/routes/acquisition-dispatch.test.ts sprints/08030017-kernel-acquisition-config-recovery-181/tests
 
 ## BEHAVIOR 条目
 
-- [ ] [BEHAVIOR] [L2] B-01: 入口锁定真实 PR head、US M4 affinity 与精确 SHA [接缝×2]
-  动作: 查询 GitHub PR #1581 当前 head，并读取本 attempt fleet-run 原始执行字段
-  预期观察: head/final_sha、machine、provider/account/model、snapshot 与 digest 全部逐字匹配冻结 PRD
+- [ ] [BEHAVIOR] [L2] B-01: 唯一身份 SSOT 锁定验证 attempt 与执行面 [接缝×2]
+  动作: 读取 Fleet admission 一次性生成的 validation-identity，并与 fleet-run 和冻结 PRD 对账
+  预期观察: validation_attempt_id 只来自 SSOT；required snapshot 为冻结 PRD 值，且明确不等于 proposer 角色 snapshot；所有执行字段逐字一致
   等待预算: 30s
-  留证: GitHub API stdout 与 evidence/fleet-run.json
-  Test: manual:bash -c 'H=$(gh api repos/perfectuser21/zenithjoy-workspace/pulls/1581 --jq .head.sha); [ "$H" = c305f6217da65bb69413c39e621b7e797e0fb189 ] && jq -e ".run_id==\"bfaf1e49-a8cb-401e-9fc3-d6c62c457edc\" and .attempt_id==\"eebdf8c1-a3d4-45a5-8c61-04773adf2663\" and .repository==\"perfectuser21/zenithjoy-workspace\" and .pr_number==1581 and .machine==\"us-mac-m4\" and .final_sha==\"$H\" and .provider==\"codex\" and .account==\"team2\" and .model==\"gpt-5.6-sol\" and .capability_snapshot_id==\"f235c1d6-cc88-41d0-8390-3ebabb1794f2\" and .runner_digest==\"sha256:e0797f5a440d61827d1ea86afee629e6f5a687da6f958608671ba9c873e5e94a\"" sprints/08032258-kernel-pr1581-fleet-validation-r12/evidence/fleet-run.json'
+  留证: evidence/validation-identity.json、fleet-run.json 与 Vitest stdout
+  Test: manual:bash -c 'npx vitest run sprints/08032258-kernel-pr1581-fleet-validation-r12/tests/fleet-validation-evidence.test.ts -t "唯一身份 SSOT 锁定验证 attempt 和执行面" --reporter=verbose'
 
 - [ ] [BEHAVIOR] [L2] B-02: 本 attempt 真产品 effective-config 验证通过 [接缝×2]
   动作: 在 attempt 空库完成 migration/signup/session-cookie 后，对精确 SHA 运行真实 API 与真 Postgres 回归
   预期观察: pipeline_status=passed、product_validation.exit_code=0/final_sha 精确匹配，真实 signup 的 A/B 租户分别保持合法且互不串写，执行时间不超过 7200s
   等待预算: 7200s
   留证: fleet-run.json 的 product_validation.log_tail/log_path 与 API/Vitest 输出
-  Test: manual:bash -c 'jq -e ".run_id==\"bfaf1e49-a8cb-401e-9fc3-d6c62c457edc\" and .attempt_id==\"eebdf8c1-a3d4-45a5-8c61-04773adf2663\" and .pipeline_status==\"passed\" and .product_validation.exit_code==0 and .product_validation.final_sha==\"c305f6217da65bb69413c39e621b7e797e0fb189\" and (.product_validation.log_tail|type==\"string\" and length>0) and ((.finished_at|fromdateiso8601)-(.started_at|fromdateiso8601)<=7200)" sprints/08032258-kernel-pr1581-fleet-validation-r12/evidence/fleet-run.json'
+  Test: manual:bash -c 'npx vitest run sprints/08032258-kernel-pr1581-fleet-validation-r12/tests/fleet-validation-evidence.test.ts -t "入口证据只引用身份 SSOT 并锁定仓库 PR 机器和最终 SHA" --reporter=verbose'
 
 - [ ] [BEHAVIOR] [L2] B-03: Evaluator 新鲜 PASS 且证据结构完整 [接缝×2]
   动作: 读取本 attempt Evaluator 原始 verdict 并与 fleet started_at、final SHA 对账
@@ -70,7 +70,7 @@ journey_type: autonomous
 - INV-7 N/A：不改依赖或 audit 白名单。
 - INV-8：长跑由 fleet 控制面维持心跳；失联即失败。
 - INV-9 N/A：本 Sprint 不毕业产品测试。
-- INV-10：B-01 至 B-06 均记录真实 exit code 与解释器输出。
+- INV-10：B-01 至 B-06 均记录真实 exit code 与解释器输出，且目标 Vitest 解释器实际启动。
 - INV-11 N/A：无 manual:node 双引号插值。
 - INV-12：缺 evidence 的新测试真实 Red，生成本 attempt 证据后转绿。
 - INV-13：ARTIFACT diff 禁止修改共享 Red fixture。
@@ -85,7 +85,7 @@ journey_type: autonomous
 - INV-26：host 白名单同时核对实际 fleet evidence，不靠字符串标签。
 - INV-27 N/A：不点火 headed relay。
 - INV-28 至 INV-32 N/A：不退役、不加 job/table/字段/UI。
-- INV-33：PR head、final_sha 与 verdict SHA 统一 exact-match 语义。
+- INV-33：PR head、final_sha 与 verdict SHA 统一 exact-match 语义；run/attempt/snapshot 统一从 validation-identity 读取。
 - INV-34：git ref 验证使用精确 worktree commit，远端真相使用 GitHub API。
 - INV-35 N/A：不以生产 deploy root 跑 smoke。
 - INV-36：任一链路失败传播非零且禁止 warning 降级。

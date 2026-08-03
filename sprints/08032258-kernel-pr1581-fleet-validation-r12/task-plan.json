@@ -12,9 +12,10 @@
         "[BEHAVIOR] 真 Postgres/真实 signup session 下双租户无串写、并发有效态保护与产品验证 exit 0",
         "[BEHAVIOR] Evaluator 与 Independent Judge 新鲜独立 PASS，Judge 精确引用 Evaluator 且绑定同一 final SHA",
         "[BEHAVIOR] merge gate 仅开放人工确认且 merge_performed=false",
-        "[ARTIFACT] 四份本 attempt 原始 evidence JSON 与 log_tail"
+        "[ARTIFACT] 唯一 validation-identity SSOT 与四份引用该身份的原始 evidence JSON/log_tail"
       ],
       "files": [
+        "sprints/08032258-kernel-pr1581-fleet-validation-r12/evidence/validation-identity.json",
         "sprints/08032258-kernel-pr1581-fleet-validation-r12/evidence/fleet-run.json",
         "sprints/08032258-kernel-pr1581-fleet-validation-r12/evidence/evaluator.json",
         "sprints/08032258-kernel-pr1581-fleet-validation-r12/evidence/independent-judge.json",

@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 3)
+# Sprint Contract Draft (Round 4)
 
 ## Notes
 
@@ -6,14 +6,39 @@
 - contract-gate: skipped (file not found, third-party repo)
 - Registry 可达；未发现本验证任务专属 HTTP schema。context-manifest: unavailable（404 HTML）。
 - `npm run product-map:check` 首次因 workspace 未安装锁定依赖 `ajv` 未启动；此环境问题不得当作 PASS，安装依赖后必须重跑。
-- Round 3 以 Fleet 本轮注入的 capability snapshot `f235c1d6-cc88-41d0-8390-3ebabb1794f2` 为唯一实际执行面身份；所有本 attempt 证据必须逐字绑定该 snapshot。
-- Round 3 统一控制面身份为 run `bfaf1e49-a8cb-401e-9fc3-d6c62c457edc` / attempt `eebdf8c1-a3d4-45a5-8c61-04773adf2663`；产品 E2E、Evaluator、Judge 与 merge gate 均须绑定该身份。
+- 身份 SSOT 只有 `evidence/validation-identity.json`。Fleet 在产品验证点火时一次性生成其中的 `validation_attempt_id`；fleet-run、Evaluator、Judge 与 merge gate 只允许引用该值，不得使用 proposer/reviewer 各角色自己的 task attempt ID。
+- 冻结 PRD 要求的验证执行面是 snapshot `cc3550be-875a-48d3-9be4-24343fb355a9`；本 proposer 角色自身的 attempt `87d621ce-5d79-4cb6-bfa8-5ede64eb00c8` 与 capability snapshot `3a09708c-cf4f-4ca9-9a23-526d57f7e162` 仅是合同起草来源元数据，明确禁止写入 validation identity 或冒充产品验证执行面。
+- 身份 SSOT 同时锁定 logical run `bfaf1e49-a8cb-401e-9fc3-d6c62c457edc`、目标 SHA、provider/account/model/machine、runner digest；任一后续 evidence 自报值与 SSOT 不同即 fail-closed。
 - 产品 E2E 只产出产品验证原始结果；Evaluator、Independent Judge 与 merge gate 由各自后续角色生成，禁止产品脚本预造裁决，也禁止在 Judge 尚未运行时循环读取 Judge 结果。
 - GP 使用 `keep-green`：本 Sprint 验证既有 step7 对应改动，不新增业务行为；推进型 `#step7` 会要求修改共享 smoke 文件，与冻结 PRD 范围相冲突。
 
 ## Response Schema（推导来源: N/A）
 
 N/A — 本 Sprint 不新增 HTTP 响应；证据 JSON 字段由下方 Golden Path 与失败测试逐字锁定。
+
+## Validation Identity SSOT
+
+Fleet admission 必须在任何产品命令前原子创建 `evidence/validation-identity.json`；文件创建后只读，不得由 Evaluator、Judge 或 merge gate 覆盖。唯一合法结构为：
+
+```json
+{
+  "schema_version": 1,
+  "logical_run_id": "bfaf1e49-a8cb-401e-9fc3-d6c62c457edc",
+  "validation_attempt_id": "<Fleet 点火时新生成 UUID；不得等于任一合同角色 attempt_id>",
+  "repository": "perfectuser21/zenithjoy-workspace",
+  "pr_number": 1581,
+  "final_sha": "c305f6217da65bb69413c39e621b7e797e0fb189",
+  "machine": "us-mac-m4",
+  "provider": "codex",
+  "account": "team2",
+  "model": "gpt-5.6-sol",
+  "capability_snapshot_id": "cc3550be-875a-48d3-9be4-24343fb355a9",
+  "runner_digest": "sha256:e0797f5a440d61827d1ea86afee629e6f5a687da6f958608671ba9c873e5e94a",
+  "created_at": "<Fleet admission UTC ISO-8601>"
+}
+```
+
+`fleet-run.json`、`evaluator.json`、`independent-judge.json`、`merge-gate.json` 的 `run_id`/`attempt_id`/`final_sha` 必须分别等于此文件的 `logical_run_id`/`validation_attempt_id`/`final_sha`。当前 proposer capability evidence 只证明合同在哪里起草，不参与上述验证身份。
 
 ## 已知约束（来自回归测试）
 
@@ -27,7 +52,7 @@ N/A — 本 Sprint 不新增 HTTP 响应；证据 JSON 字段由下方 Golden Pa
 |---|---|---|
 | FR（做什么） | 功能承诺 | 对 PR #1581 精确 SHA 在获准 US M4 跑新鲜 provider-neutral 全链，收集独立双裁决后只开放人工合并确认。 |
 | NFR（做得多好） | 性能/可靠性 | 总预算 7200s；严格 affinity、runner digest、能力快照均逐字匹配；任何缺证或漂移 fail-closed。 |
-| Invariant（永不违反） | 安全/一致性 | 不复用旧证据、不改共享 Red fixture、不读其他候选、不自动合并；所有证据绑定同一 run/attempt/final SHA。 |
+| Invariant（永不违反） | 安全/一致性 | 不复用旧证据、不改共享 Red fixture、不读其他候选、不自动合并；所有验证证据只绑定 validation-identity SSOT 的 logical_run_id/validation_attempt_id/final_sha。 |
 | 判定点（怎么知道） | 模糊现实判断 | 见判定点登记表。 |
 | 保质期（何时过期） | 退役责任 | PR head 一旦变化，四份证据立即过期，必须对新 SHA 重跑。 |
 | 死亡告警（停了谁知道） | 故障发现 | pipeline/runner/bridge/callback/GAN 非通过即保留 log_tail 并阻断 merge gate。 |
@@ -70,7 +95,7 @@ N/A — 本 Sprint 不新增设备/agent 到服务端请求；产品验证沿用
 
 - PR head ↔ GitHub PR #1581：必须查询真实远端 PR head，禁止本地常量代替 observed SHA。
 - acquisition PUT/PATCH 路由 ↔ service ↔ Postgres：必须在 attempt 空库迁移后启动真实 API，以 signup 产生的真实 session cookie 调用，禁止 mock 路由、service、pool 或 transaction client。
-- fleet dispatcher ↔ runner execution evidence：必须来自本 attempt 的 `us-mac-m4` 实际运行记录。
+- fleet admission ↔ validation-identity ↔ runner execution evidence：Fleet 只生成一次 validation_attempt_id，后续角色不得改写；必须来自要求 snapshot 的 `us-mac-m4` 实际运行记录。
 - Evaluator/Judge ↔ merge gate：必须使用两份不同 evidence_id 的真实裁决文件，禁止合成或复制。
 
 ## 未覆盖真实链路清单
@@ -94,7 +119,7 @@ N/A — 本 Sprint 不新增设备/agent 到服务端请求；产品验证沿用
 
 **可观测行为**: GitHub PR 当前 head、fleet 实际机器、provider/account/model、能力快照与 runner digest 全部逐字匹配；否则停止。
 
-**验证命令**: `H=$(gh api repos/perfectuser21/zenithjoy-workspace/pulls/1581 --jq .head.sha) && [ "$H" = c305f6217da65bb69413c39e621b7e797e0fb189 ] && jq -e --arg h "$H" '.run_id=="bfaf1e49-a8cb-401e-9fc3-d6c62c457edc" and .attempt_id=="eebdf8c1-a3d4-45a5-8c61-04773adf2663" and .repository=="perfectuser21/zenithjoy-workspace" and .pr_number==1581 and .machine=="us-mac-m4" and .final_sha==$h and .provider=="codex" and .account=="team2" and .model=="gpt-5.6-sol" and .capability_snapshot_id=="f235c1d6-cc88-41d0-8390-3ebabb1794f2" and .runner_digest=="sha256:e0797f5a440d61827d1ea86afee629e6f5a687da6f958608671ba9c873e5e94a"' "$SPRINT_DIR/evidence/fleet-run.json"`
+**验证命令**: `H=$(gh api repos/perfectuser21/zenithjoy-workspace/pulls/1581 --jq .head.sha) && [ "$H" = c305f6217da65bb69413c39e621b7e797e0fb189 ] && npx vitest run sprints/08032258-kernel-pr1581-fleet-validation-r12/tests/fleet-validation-evidence.test.ts -t '唯一身份 SSOT 锁定验证 attempt 和执行面' --reporter=verbose`
 
 **硬阈值**: observed head 与 final_sha 均精确相等；所有 affinity 字段精确相等，命令 exit 0。
 
@@ -103,7 +128,7 @@ N/A — 本 Sprint 不新增设备/agent 到服务端请求；产品验证沿用
 
 **可观测行为**: 同一 attempt 空库完成真实 migration/signup/session-cookie 后，PR #1581 的产品回归与真实 API 验证通过；不读取 r11 verdict。
 
-**验证命令**: `jq -e '.run_id=="bfaf1e49-a8cb-401e-9fc3-d6c62c457edc" and .attempt_id=="eebdf8c1-a3d4-45a5-8c61-04773adf2663" and .pipeline_status=="passed" and .product_validation.exit_code==0 and .product_validation.final_sha=="c305f6217da65bb69413c39e621b7e797e0fb189" and (.product_validation.log_tail|type=="string" and length>0) and ((.finished_at|fromdateiso8601)-(.started_at|fromdateiso8601)<=7200)' "$SPRINT_DIR/evidence/fleet-run.json"`
+**验证命令**: `npx vitest run sprints/08032258-kernel-pr1581-fleet-validation-r12/tests/fleet-validation-evidence.test.ts -t '入口证据只引用身份 SSOT 并锁定仓库 PR 机器和最终 SHA' --reporter=verbose`
 
 **硬阈值**: product_validation exit_code=0；run/attempt 精确匹配；总执行时间 ≤7200s。
 
@@ -139,7 +164,8 @@ N/A — 本 Sprint 不新增设备/agent 到服务端请求；产品验证沿用
 
 | 功能 | Test File | BEHAVIOR 覆盖 | 预期红证据 |
 |---|---|---|---|
-| fleet 入口锁定 | `tests/fleet-validation-evidence.test.ts` | 入口证据锁定仓库 PR 机器和精确最终 SHA | evidence 尚未生成，ENOENT |
+| 验证身份 SSOT | `tests/fleet-validation-evidence.test.ts` | 唯一身份 SSOT 锁定验证 attempt 和执行面 | evidence 尚未生成，ENOENT |
+| fleet 入口锁定 | `tests/fleet-validation-evidence.test.ts` | 入口证据只引用身份 SSOT 并锁定仓库 PR 机器和最终 SHA | evidence 尚未生成，ENOENT |
 | Evaluator 新鲜证据 | `tests/fleet-validation-evidence.test.ts` | Evaluator 新鲜 PASS 证据绑定本 attempt 和最终 SHA | evidence 尚未生成，ENOENT |
 | Judge 独立证据 | `tests/fleet-validation-evidence.test.ts` | Independent Judge 新鲜独立 PASS 证据绑定 Evaluator 和最终 SHA | evidence 尚未生成，ENOENT |
 | 人工确认门 | `tests/fleet-validation-evidence.test.ts` | 双裁决齐备后仍只开放人工确认而未自动合并 | evidence 尚未生成，ENOENT |
@@ -231,4 +257,4 @@ ELAPSED=$(( $(date +%s)-START_EPOCH ))
 echo "OK: exact-SHA real-signup two-tenant effective-config validation passed sha=$TARGET_SHA elapsed=${ELAPSED}s"
 ```
 
-> 后续收证顺序（不可并行伪造）：Fleet wrapper 先据本脚本真实 exit code 写 fleet-run.json；Evaluator 再写 evaluator.json；Independent Judge 读取并引用 Evaluator 后写 independent-judge.json；控制面最后写 merge-gate.json。四份证据齐备后，从 proposer 合同分支运行 npx vitest run sprints/08032258-kernel-pr1581-fleet-validation-r12/tests/fleet-validation-evidence.test.ts --reporter=verbose，不得在精确 SHA 产品 worktree 内寻找本轮合同测试。
+> 后续收证顺序（不可并行伪造）：Fleet admission 先原子写入且只写一次 validation-identity.json（其 required snapshot 必须来自冻结 PRD，不得取 proposer capability snapshot）；Fleet wrapper 再据本脚本真实 exit code 写 fleet-run.json；Evaluator 再写 evaluator.json；Independent Judge 读取并引用 Evaluator 后写 independent-judge.json；控制面最后写 merge-gate.json。所有文件逐字引用 identity SSOT 的 logical_run_id/validation_attempt_id/final_sha。五份证据齐备后，从 proposer 合同分支运行 npx vitest run sprints/08032258-kernel-pr1581-fleet-validation-r12/tests/fleet-validation-evidence.test.ts --reporter=verbose，不得在精确 SHA 产品 worktree 内寻找本轮合同测试。
