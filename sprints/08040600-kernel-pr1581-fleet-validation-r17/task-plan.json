@@ -1,0 +1,28 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "任务是无 UI 的 Kernel Harness 后台真实 fleet 验证与三角色证据收集。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "完成 PR #1581 精确 SHA 的真实 fleet 三角色验证",
+      "scope": "在严格 us-mac-m4 对精确 SHA 运行产品 E2E，由 Generator、Evaluator、Judge 依次用各自运行身份产出摘要串联证据；不修改产品实现或执行合并。",
+      "dod": [
+        "[BEHAVIOR] Generator 在真 Postgres 与真实 signup cookie 下并发提交冲突配置，断言响应为 200/400、失败码 INVALID_CONFIG 且最终有效态合法",
+        "[BEHAVIOR] Evaluator 使用自身 runtime identity 并精确引用 Generator receipt SHA-256，attempt/capability snapshot 与 Generator 不同",
+        "[BEHAVIOR] Judge 使用自身 runtime identity 并精确引用 Evaluator evidence SHA-256，三角色 attempt/capability snapshot 分别两两不同",
+        "[BEHAVIOR] 最终 PASS 前 GitHub PR 仍 open、未合并且 head SHA 未漂移",
+        "[ARTIFACT] 三角色原始 evidence JSON、Generator receipt 与 log_tail"
+      ],
+      "files": [
+        "sprints/08040600-kernel-pr1581-fleet-validation-r17/evidence/generator.json",
+        "sprints/08040600-kernel-pr1581-fleet-validation-r17/evidence/generator.receipt.sha256",
+        "sprints/08040600-kernel-pr1581-fleet-validation-r17/evidence/evaluator.json",
+        "sprints/08040600-kernel-pr1581-fleet-validation-r17/evidence/judge.json"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 120
+    }
+  ]
+}
