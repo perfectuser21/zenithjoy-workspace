@@ -91,8 +91,8 @@ test('renderHtml 生成的页面包含14步内容、无英文残留、判定按�
 
   // 无英文单词残留（排除 script/style 标签内容）
   const stripped = html
-    .replace(/<script[\s\S]*?<\/script>/g, ' ')
-    .replace(/<style[\s\S]*?<\/style>/g, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<[^>]+>/g, ' ');
   const englishWords = stripped.match(/[A-Za-z]{2,}/g) || [];
   assert.deepEqual(englishWords, [], `可见文本含英文残留: ${JSON.stringify(englishWords)}`);
