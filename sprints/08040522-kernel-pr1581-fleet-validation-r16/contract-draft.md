@@ -100,6 +100,31 @@ GP-Anchor: line02/keyword_acquisition keep-green
 - [接缝×2] attempt-scoped 空 Postgres → migration → PR 原集成测试：Generator/Evaluator 各自从空库重复一次。
 - [接缝×2] GitHub head/state → 证据摘要链 → Judge verdict：head 变化、提前 merge 或摘要错配均使整链失效。
 
+## 必跑检查注册表（stable check ID → 精确命令）
+
+Generator 与 Evaluator 各自必须执行下列五项；`command` 必须逐字写入 evidence，禁止别名、缩短或只记测试文件名。
+
+- `product-map-contract`
+  ```bash
+  npm run product-map:check
+  ```
+- `db-empty-bootstrap`
+  ```bash
+  DATABASE_URL="$DB_URL" npm run migrate --workspace=apps/api && psql "$DB_URL" -tAc "SELECT to_regclass('zenithjoy.acquisition_config') IS NOT NULL" | grep -qx t
+  ```
+- `effective-config-integration`
+  ```bash
+  DB_URL="$DB_URL" npx vitest run sprints/08030017-kernel-acquisition-config-recovery-181/tests/acquisition-config-effective-validation.integration.test.ts --reporter=verbose
+  ```
+- `shared-red-smoke`
+  ```bash
+  npm test --workspace=apps/api -- --run tests/routes/acquisition-dispatch.test.ts -t 'partial patch cannot make merged keyword bounds invalid' --reporter=verbose
+  ```
+- `fixture-unchanged`
+  ```bash
+  git diff --exit-code c305f6217da65bb69413c39e621b7e797e0fb189 -- apps/api/tests/routes/acquisition-dispatch.test.ts
+  ```
+
 ## Golden Path
 
 覆盖父路 `line02/keyword_acquisition#step7` 第 7-7 步

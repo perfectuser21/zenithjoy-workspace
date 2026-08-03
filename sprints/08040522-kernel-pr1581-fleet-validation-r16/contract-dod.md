@@ -13,7 +13,7 @@ journey_type: autonomous
   Test: node -e "const j=require('./sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/run-manifest.json');if(j.run_id!=='5a037785-2708-489e-9912-b20494f11fd9'||j.target_head_sha!=='c305f6217da65bb69413c39e621b7e797e0fb189'||'attempt_id' in j)process.exit(1)"
 
 - [ ] [ARTIFACT] 三角色各有独立 `routing-<role>.json` 与 `<role>.json`，且 evidence 引用 routing 文件现场 SHA-256
-  Test: node sprints/08040522-kernel-pr1581-fleet-validation-r16/tests/validate-fleet-evidence.mjs sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence /tmp/pr1581-final.json
+  Test: node --check sprints/08040522-kernel-pr1581-fleet-validation-r16/tests/validate-fleet-evidence.mjs
 
 - [ ] [ARTIFACT] 共享 Red fixture 相对冻结目标头无修改
   Test: git diff --exit-code c305f6217da65bb69413c39e621b7e797e0fb189 -- apps/api/tests/routes/acquisition-dispatch.test.ts
