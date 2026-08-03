@@ -25,6 +25,14 @@ else
   echo "$SSHDB_BLOCK" | grep -q 'ConnectTimeout' || { echo "❌ FAIL: sshdb 缺 ConnectTimeout"; FAIL=1; }
 fi
 
+# 公网直连路由支持（2026-08-03 run 30794878185 实锤 SYSTEM 无 Tailscale 身份后新增）：
+# sshdb 必须支持 DB_SSH_PORT（跨境22被墙走6443）与可选 DB_SSH_KEY（runner 专用受限密钥 -i）
+if [ -n "${SSHDB_LINE:-}" ]; then
+  SSHDB_BLOCK6=$(sed -n "${SSHDB_LINE},$((SSHDB_LINE+6))p" "$SCRIPT")
+  echo "$SSHDB_BLOCK6" | grep -q 'DB_SSH_PORT' || { echo "❌ FAIL: sshdb 缺 DB_SSH_PORT 支持(跨境22被墙需走高位端口)"; FAIL=1; }
+  echo "$SSHDB_BLOCK6" | grep -q 'DB_SSH_KEY' || { echo "❌ FAIL: sshdb 缺 DB_SSH_KEY 可选专用密钥支持"; FAIL=1; }
+fi
+
 RAW_COUNT=$(grep -c 'ssh "\$DB_SSH_HOST"' "$SCRIPT" || true)
 if [ "${RAW_COUNT:-0}" -gt 0 ]; then
   echo "❌ FAIL: 仍有 $RAW_COUNT 处裸 ssh \"\$DB_SSH_HOST\" 调用未走 sshdb"; FAIL=1
