@@ -16,8 +16,8 @@ target_environment: local_api
 - [ ] [ARTIFACT] 本 run 运行清单记录固定 repo/PR/base/final SHA 与 Runner late-bound 完整 Fleet attestation
   Test: node -e "const d=require('./sprints/08040114-kernel-pr1581-fleet-validation-r13/evidence/run-manifest.json');for(const k of ['attempt_id','provider','account','model','machine','capability_snapshot_id','runner_digest'])if(typeof d[k]!=='string'||!d[k])process.exit(1);if(d.machine!=='us-mac-m4'||d.actual_final_sha!=='c305f6217da65bb69413c39e621b7e797e0fb189')process.exit(1)"
 
-- [ ] [ARTIFACT] 合并门重算器具备三源读取、SHA-256 绑定、fail-closed 写出与非零退出
-  Test: node -e "const c=require('fs').readFileSync('sprints/08040114-kernel-pr1581-fleet-validation-r13/scripts/recompute-merge-gate.mjs','utf8');for(const s of ['run-manifest.json','evaluator-verdict.json','independent-judge-verdict.json','merge-gate.json','createHash','source_sha256','merge_allowed','process.exitCode'])if(!c.includes(s))process.exit(1)"
+- [ ] [ARTIFACT] 合并门重算器具备四源读取、Judge Runner attestation 绑定、放行前远端 HEAD 重读、SHA-256 绑定、fail-closed 写出与非零退出
+  Test: node -e "const c=require('fs').readFileSync('sprints/08040114-kernel-pr1581-fleet-validation-r13/scripts/recompute-merge-gate.mjs','utf8');for(const s of ['run-manifest.json','evaluator-verdict.json','judge-runner-attestation.json','independent-judge-verdict.json','refs/pull/1581/head','ls-remote','remote_pr_head_checked_at','merge-gate.json','createHash','source_sha256','merge_allowed','process.exitCode'])if(!c.includes(s))process.exit(1)"
 
 ## BEHAVIOR 条目
 
@@ -43,18 +43,25 @@ target_environment: local_api
   Test: manual:bash -c 'npx vitest run sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts -t "Evaluator 裁决为本 attempt 新鲜 PASS 且绑定精确最终 SHA" --reporter=verbose'
 
 - [ ] [BEHAVIOR] [L2] B-04: Independent Judge 独立产生同 SHA APPROVED 证据 [接缝×2]
-  动作: Judge 在 Evaluator 后独立审查合同、真实日志和证据摘要，并写自己的 verdict
-  预期观察: verdict=`APPROVED`、role=`independent_judge`、producer_execution_id 与 runtime attempt 均与 Evaluator 不同、final SHA 一致，Judge 保留自己的 capability，并记录 Evaluator attempt/capability 引用与文件真实 SHA-256
+  动作: Judge Runner 先用现场注入的 `HARNESS_*` 与 `CAPABILITY_SNAPSHOT_ID` 写独立 attestation；Judge 再审查合同、真实日志和证据摘要并写自己的 verdict
+  预期观察: verdict=`APPROVED`、role=`independent_judge`、producer_execution_id 与 runtime attempt 均与 Evaluator 不同、final SHA 一致；Judge verdict 的 attempt/provider/account/model/machine/snapshot/digest/producer_execution_id 逐字段等于独立 Runner attestation，并记录 Evaluator attempt/capability 引用与文件真实 SHA-256
   等待预算: 7200s
-  留证: `evidence/independent-judge-verdict.json`、独立行为日志与 evaluator_evidence_sha256
+  留证: `evidence/judge-runner-attestation.json`、`evidence/independent-judge-verdict.json`、独立行为日志与 evaluator_evidence_sha256
   Test: manual:bash -c 'npx vitest run sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts -t "Independent Judge 裁决独立新鲜 APPROVED 且绑定同一最终 SHA" --reporter=verbose'
 
 - [ ] [BEHAVIOR] [L2] B-05: 双裁决机械 AND 门只对新鲜同 SHA 证据放行 [接缝×2]
-  动作: 执行 `scripts/recompute-merge-gate.mjs` 读取同一 run 的 run-manifest、Evaluator 与 Judge 三份文件（各角色保留自己 attempt/capability），覆盖生成 merge-gate.json 并运行 SHA 漂移自测
-  预期观察: 仅双裁决通过且新鲜同 SHA 时 `merge_allowed=true`、`reasons=[]` 并记录三源 SHA-256；SHA 漂移自测非零且明确给出 `judge_final_sha_mismatch`
+  动作: 执行 `scripts/recompute-merge-gate.mjs` 读取同一 run 的四源文件，并在最终放行点真实重读远端 `refs/pull/1581/head`，覆盖生成 merge-gate.json 并运行证据 SHA 漂移自测
+  预期观察: 仅双裁决通过、Judge attestation 匹配且新鲜同 SHA时 `merge_allowed=true`、`reasons=[]`，记录四源 SHA-256、远端 HEAD 与读取时间；证据 SHA 漂移自测非零且明确给出 `judge_final_sha_mismatch`
   等待预算: 30s
-  留证: 现场重算的 `evidence/merge-gate.json`、三源 SHA-256、Vitest stdout 与漂移拒绝原因
+  留证: 现场重算的 `evidence/merge-gate.json`、四源 SHA-256、门禁时远端 HEAD、Vitest stdout 与漂移拒绝原因
   Test: manual:bash -c 'npx vitest run sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts -t "机械合并门" --reporter=verbose'
+
+- [ ] [BEHAVIOR] [L2] B-06: 合并门放行前重读远端 PR HEAD 并拒绝验证期间漂移 [接缝×2]
+  动作: 在 Evaluator 与 Judge 证据完成后运行门禁的远端 HEAD 漂移自测，模拟门禁时读取到不同于冻结候选的 PR HEAD
+  预期观察: 重算器非零退出，`merge_allowed=false`，reasons 含 `remote_pr_head_mismatch`；不得消费 E2E 开始时保存的旧 HEAD 放行
+  等待预算: 30s
+  留证: Vitest stdout、远端 HEAD 读取时间与 `remote_pr_head_mismatch` 诊断 JSON
+  Test: manual:bash -c 'npx vitest run sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts -t "机械合并门重算会拒绝门禁时远端 PR HEAD 漂移" --reporter=verbose'
 
 ## Invariant 映射
 
@@ -76,7 +83,7 @@ target_environment: local_api
 - INV-16 N/A：不改扫描间隔/TTL 时间常数。
 - INV-17 N/A：合同不以 Android 排除说明冒充真机覆盖。
 - INV-18：task payload 与合同均明确 `target_environment=local_api`，实际机器另由 Fleet attestation 绑定。
-- INV-19：B-03/B-04 强制顶层 `exit_code`、`log_tail` 与 `behavior_tests[]`，每项也含 exit_code/log_tail。
+- INV-19：B-03/B-04 强制顶层 `exit_code`、`log_tail` 与 `behavior_tests[]`，每项也含 exit_code/log_tail；Judge 身份另由独立 Runner attestation 逐字段佐证。
 - INV-20 N/A：不写 varchar 路径字段。
 - INV-21 N/A：不是退役功能复活。
 - INV-22：B-02 的错误码契约显式断言失败分支，不能依赖异常。
@@ -90,11 +97,11 @@ target_environment: local_api
 - INV-30：B-02 使用既有 `zenithjoy.acquisition_config`，不建同义表。
 - INV-31 N/A：不新增后台 job。
 - INV-32 N/A：不新增重叠字段、设备类型或 UI 展示。
-- INV-33：Evaluator/Judge/gate 对 final SHA 的 unknown/漂移语义统一为失败。
+- INV-33：Evaluator/Judge/gate 与门禁时远端 PR HEAD 对 final SHA 的 unknown/漂移语义统一为失败。
 - INV-34：B-01/E2E 使用 `git rev-parse HEAD` 的已检出 commit 与 `merge-base --is-ancestor`，不以裸 rev-parse 判 ref 存在。
 - INV-35：B-02 使用隔离 mktemp worktree 与 attempt DB，不触碰生产 deploy root。
 - INV-36：E2E `set -euo pipefail`，任一路径失败非零，不 warning 降级。
-- INV-37：B-01 用远端 PR ref 与实际 worktree HEAD 对账，不用 workspace diff 判变。
+- INV-37：B-01 用远端 PR ref 与实际 worktree HEAD 对账，B-05/B-06 在最终放行点再次重读远端 PR ref，不用 workspace diff 或旧读数判变。
 - INV-38：B-02 真启动 Vitest/Node；不以同步 readFileSync 冒充产品行为。
 - INV-39：contract-draft 的 Test Contract 固定四列，测试路径用 backtick。
 - INV-40：提交只精确 add 本 Sprint 合同、测试与 task plan，禁止 `git add .`。
@@ -104,7 +111,7 @@ target_environment: local_api
 - INV-44 N/A：不依赖 headed tmux 子 shell 的隐式环境继承；Fleet attestation 为显式必填。
 - INV-45：B-01 核对本 task 的真实远端 PR，每个验收角色只使用其 Runner 当场注入的 capability snapshot，不照抄历史派发结果。
 - INV-46：共享 `.github/workflows/*.yml`、smoke allowlist 与质量基础设施不在 scope，禁止修改。
-- INV-47：若任何自动机制提前合并，仍必须用 PR head SHA 与双 verdict SHA 对账；不一致即失败。
+- INV-47：若任何自动机制准备合并，必须先现场重读远端 PR head 并与双 verdict SHA 对账；不一致即失败。
 - INV-48：所有 smoke 铁律由 `set -euo pipefail` 与非零 oracle 执行。
 - INV-49 N/A：不改 brain/src。
 - INV-50 N/A：不新增 task_type。

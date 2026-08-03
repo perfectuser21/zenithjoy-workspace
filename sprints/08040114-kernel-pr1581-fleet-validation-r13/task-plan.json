@@ -10,15 +10,16 @@
       "dod": [
         "[BEHAVIOR] 固定 PR HEAD、冻结基线与 Fleet capability attestation 逐字段一致",
         "[BEHAVIOR] attempt 空库经真实 migration/signup 后，目标候选的 effective-config 产品验证通过",
-        "[BEHAVIOR] Evaluator PASS 与 Independent Judge APPROVED 分别绑定各自 Runner runtime identity，且均为本 run 新鲜证据并绑定同一最终 SHA",
-        "[BEHAVIOR] 重算器现场读取三源证据，仅在双证据通过、新鲜且 SHA 一致时输出 merge_allowed=true，并对漂移非零退出",
-        "[ARTIFACT] evidence/run-manifest.json、evaluator-verdict.json、independent-judge-verdict.json、merge-gate.json"
+        "[BEHAVIOR] Evaluator PASS 与 Independent Judge APPROVED 分别绑定各自 Runner runtime identity；Judge verdict 逐字段绑定其独立 Runner attestation，且均为本 run 新鲜证据并绑定同一最终 SHA",
+        "[BEHAVIOR] 重算器现场读取四源证据并在放行前重读远端 PR HEAD，仅在双证据通过、新鲜且 SHA 一致时输出 merge_allowed=true，并对证据或远端漂移非零退出",
+        "[ARTIFACT] evidence/run-manifest.json、evaluator-verdict.json、judge-runner-attestation.json、independent-judge-verdict.json、merge-gate.json"
       ],
       "files": [
         "sprints/08040114-kernel-pr1581-fleet-validation-r13/scripts/recompute-merge-gate.mjs",
         "test-registry.yaml",
         "sprints/08040114-kernel-pr1581-fleet-validation-r13/evidence/run-manifest.json",
         "sprints/08040114-kernel-pr1581-fleet-validation-r13/evidence/evaluator-verdict.json",
+        "sprints/08040114-kernel-pr1581-fleet-validation-r13/evidence/judge-runner-attestation.json",
         "sprints/08040114-kernel-pr1581-fleet-validation-r13/evidence/independent-judge-verdict.json",
         "sprints/08040114-kernel-pr1581-fleet-validation-r13/evidence/merge-gate.json"
       ],

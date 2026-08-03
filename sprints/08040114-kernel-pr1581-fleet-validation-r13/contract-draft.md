@@ -1,9 +1,10 @@
-# Sprint Contract Draft (Round 6)
+# Sprint Contract Draft (Round 7)
 
 ## Notes
 
 - contract-gate: skipped (file not found, third-party repo)
-- Round 6 修订：GAN task bundle 中的 Proposer/Reviewer identity 只是各自作者 provenance，不是未来验收身份。Evaluator 与 Independent Judge 必须分别从 Runner 注入的 `HARNESS_*` 与 `CAPABILITY_SNAPSHOT_ID` late-bind 自己的身份，禁止在合同、DoD 或测试中固化任一 GAN 作者的 attempt/account/snapshot。
+- Round 7 修订：Independent Judge 必须先由其实际 Runner 写出独立 `judge-runner-attestation.json`，Judge verdict 再逐字段绑定该 attestation；合并门真正放行前必须重新读取远端 `refs/pull/1581/head`，禁止只信产品 E2E 开始时的旧读数。
+- GAN task bundle 中的 Proposer/Reviewer identity 只是各自作者 provenance，不是未来验收身份。Evaluator 与 Independent Judge 必须分别从 Runner 注入的 `HARNESS_*` 与 `CAPABILITY_SNAPSHOT_ID` late-bind 自己的身份，禁止在合同、DoD 或测试中固化任一 GAN 作者的 attempt/account/snapshot。
 - 本合同只验证 PR #1581 的固定候选，不修改其产品行为，也不读取其他候选实现。
 - Registry 可达但快照已陈旧 386 小时；本任务无新增 HTTP schema，按 PRD 字面约束与目标 PR 已冻结测试翻译。context-manifest: unavailable（404 HTML）。
 - `npm run product-map:check` 首次因依赖未安装报 `ERR_MODULE_NOT_FOUND: ajv`；执行 `npm ci` 后重跑，结果见自查证据。
@@ -12,7 +13,8 @@
 ## Risks
 
 - Fleet 尚未创建未来 Evaluator/Judge attempt；若固化 GAN 作者身份会必然误拒真实执行角色，因此所有可变身份必须 late-bound。
-- PR HEAD 可在验证期间漂移；任一证据与最终 HEAD 不同即全部作废。
+- PR HEAD 可在验证期间漂移；合并门必须在写 `merge_allowed=true` 的同一次执行中重读远端 PR HEAD，任一证据与该读数不同即全部作废。
+- Judge verdict 若没有独立 Runner attestation，或 verdict 身份与 attestation 任一字段不一致，即使内容写着 APPROVED 也必须拒绝。
 - Evaluator 或 Judge 缺证、超时、证据摘要断链或非 `us-mac-m4` 执行均 fail-closed，不得复用旧证降级。
 - 真实 migration/signup 依赖 attempt 级空库和仓库锁定依赖；资源不可用时应留可诊断非零证据，不得要求长期业务凭据。
 
@@ -45,7 +47,7 @@ N/A — 本 Sprint 不新增 HTTP 响应。被验证的现有 `PUT/PATCH /api/ac
 | 判定点 | 候选方法 | 所选方法 | 依据 | 误判后果 |
 |---|---|---|---|---|
 | ⚠️ 本轮结果是否可合并 | A. 任一角色通过；B. Evaluator PASS 与 Independent Judge APPROVED 均新鲜且 SHA 完全一致 | B. 双裁决机械 AND 门 | PRD Golden Path 第 4 步明确要求 | 错误代码直接合并 |
-| 证据是否为本轮新鲜产物 | A. 看文件名；B. 核对 run_id、角色 runtime identity、produced_at、mtime 与该角色 started_at | B. 身份与双时间信号 | 文件名可复制，历史文件可冒充 | 旧证据错误放行 |
+| 证据是否为本轮新鲜产物 | A. 看文件名；B. 核对 run_id、角色 runtime identity、独立 Runner attestation、produced_at、mtime 与该角色 started_at | B. attestation、身份与双时间信号 | 文件名可复制，历史文件可冒充 | 旧证据错误放行 |
 | 实际机器是否获准 | A. 仅相信任务描述；B. 核对 Fleet attestation 的 provider/account/model/machine/snapshot/digest | B. 运行时 attestation | PRD 要求实际目标匹配能力快照 | 未授权机器结果被采信 |
 
 `judgment-pending-user`：N/A — PRD 已明确拍板双裁决 AND 门、证据新鲜度和获准机器，不新增未确认判断。
@@ -56,7 +58,7 @@ N/A — 本 Sprint 不新增 HTTP 响应。被验证的现有 `PUT/PATCH /api/ac
 |---|---|---|---|
 | PR HEAD 不等于固定 SHA | 立即非零退出，本 attempt 证据作废 | 是；新 SHA 需新 attempt | 禁止继续或复用旧证 |
 | migration、真实登录或产品断言失败 | 非零退出并保留去敏日志 | attempt 级空库可从头重跑 | 禁止直接 INSERT 身份或注入 cookie |
-| 任一裁决缺失/旧/非通过 | `merge_allowed=false` 且 reasons 非空 | 由缺失角色用自己的 runtime attempt 补齐后重算 | 禁止单证放行 |
+| 任一裁决或 Judge Runner attestation 缺失/旧/非通过 | `merge_allowed=false` 且 reasons 非空 | 由缺失角色用自己的 runtime attempt 补齐后重算 | 禁止单证或自报身份放行 |
 | Evaluator/Judge SHA 不一致 | 两份证据全部作废 | 对最终 PR HEAD 重跑两角色 | 禁止选择其中一份 |
 
 ### 输入对抗面
@@ -73,8 +75,8 @@ N/A — 本任务不新增对外 agent 或用户输入接口；唯一外部输�
 - GitHub `refs/pull/1581/head` ↔ 实际候选 worktree：必须真 `git ls-remote` 与 detached worktree，禁止本地假 ref。
 - 仓库 migration ↔ attempt 空 Postgres：必须在同一 `DB_URL` 运行真实 `npm run migrate` 并检查目标表，禁止预置 schema。
 - better-auth signup/session ↔ acquisition route ↔ Postgres：必须真实 signup、cookie、HTTP 与 DB 读写，禁止 mock router、middleware、service 或 pool。
-- Evaluator evidence ↔ Independent Judge evidence ↔ merge gate：必须读取两份独立新鲜文件并校验 SHA/时间/摘要，禁止 stub 任一裁决。
-- 三份源证据 ↔ `scripts/recompute-merge-gate.mjs` ↔ `merge-gate.json`：门禁必须由脚本现场重算并记录三个源文件 SHA-256，禁止人工预制或直接信任已有 gate 文件。
+- Evaluator evidence ↔ Judge Runner attestation ↔ Independent Judge evidence ↔ merge gate：必须读取独立新鲜文件，Judge verdict 身份逐字段等于其 Runner attestation，并校验 SHA/时间/摘要，禁止 stub 任一裁决或自报 Judge 身份。
+- 四份源证据 + 远端 `refs/pull/1581/head` ↔ `scripts/recompute-merge-gate.mjs` ↔ `merge-gate.json`：门禁必须在放行前现场重读远端 HEAD、重算并记录四个源文件 SHA-256，禁止人工预制或直接信任已有 gate 文件。
 
 ## 未覆盖真实链路清单
 
@@ -84,7 +86,7 @@ N/A — 本任务不新增对外 agent 或用户输入接口；唯一外部输�
 
 - [接缝×2] US M4 Fleet attestation ↔ 固定 PR ref/worktree：每次核对 provider/account/model/machine/snapshot/digest 与远端 PR HEAD；两次不一致判 FLAKY，真验前为 `logic-done-pending`。
 - [接缝×2] 真实 signup cookie ↔ acquisition API ↔ attempt Postgres：两临时租户重复验证零写入与隔离；真验前为 `logic-done-pending`。
-- [接缝×2] Evaluator ↔ Independent Judge ↔ merge gate：双证据必须独立新鲜且同 SHA；两次门禁结果不一致判 FLAKY，真验前为 `logic-done-pending`。
+- [接缝×2] Evaluator ↔ Judge 独立 Runner attestation ↔ Independent Judge ↔ 远端 PR HEAD ↔ merge gate：双证据必须独立新鲜、Judge 身份有 Runner 佐证且与门禁时远端 HEAD 同 SHA；两次门禁结果不一致判 FLAKY，真验前为 `logic-done-pending`。
 
 ## GP-Anchor
 
@@ -121,35 +123,35 @@ awk '/^## E2E 验收/{f=1;next} f&&/^## /{exit} f&&/^```bash/{b=1;next} b&&/^```
 ### Step 3: Evaluator 与 Independent Judge 分别产生新鲜同 SHA 裁决
 **来源**: `[FROM_PRD]` — PRD「Golden Path」第 3 步。
 
-**可观测行为**: 两份不同角色证据均属于本 run，各自在其 Runner 注入的 runtime attempt 起点后 7200 秒内产生，均绑定固定最终 SHA；Evaluator `PASS`，Judge `APPROVED`，每份均带自己的 provider/account/model/machine/snapshot/digest 和真实 exit code/log_tail/behavior_tests。
+**可观测行为**: 两份不同角色证据均属于本 run，各自在其 Runner 注入的 runtime attempt 起点后 7200 秒内产生，均绑定固定最终 SHA；Evaluator `PASS`，Judge `APPROVED`。Judge Runner 在 verdict 前用其运行时 `HARNESS_*`/`CAPABILITY_SNAPSHOT_ID` 写独立 attestation，verdict 的 attempt/provider/account/model/machine/snapshot/digest/producer_execution_id 必须与之逐字段一致；每份 verdict 均带真实 exit code/log_tail/behavior_tests。
 
 **验证命令**:
 ```bash
 npx vitest run sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts -t "Evaluator 裁决|Independent Judge 裁决" --reporter=verbose
 ```
-**硬阈值**: 2/2 exit 0；两份 run/final SHA 匹配；各自 runtime identity 完整且 machine=`us-mac-m4`、digest 匹配；Evaluator/Judge 的 attempt 与 capability 不得强制共用；`behavior_tests.length>=4` 且所有 exit_code=0；produced_at/mtime 新鲜；两份 `producer_execution_id` 不同；Judge 记录 Evaluator 的 attempt/capability 引用与文件真实 SHA-256。
+**硬阈值**: 2/2 exit 0；两份 run/final SHA 匹配；各自 runtime identity 完整且 machine=`us-mac-m4`、digest 匹配；Evaluator/Judge 的 attempt 与 capability 不得强制共用；Judge attestation 与 verdict 身份 8 字段逐字相等且 attestation/verdict 都在 Judge 7200 秒窗口内；`behavior_tests.length>=4` 且所有 exit_code=0；两份 `producer_execution_id` 不同；Judge 记录 Evaluator 的 attempt/capability 引用与文件真实 SHA-256。
 
 ### Step 4: 双证据机械 AND 门形成合并出口
 **来源**: `[FROM_PRD]` — PRD「Golden Path」第 4 步及全部边界情况。
 
-**可观测行为**: `scripts/recompute-merge-gate.mjs` 每次从 run-manifest、Evaluator、Judge 三个源文件重算并覆盖 `merge-gate.json`；仅当两份裁决通过、新鲜且 SHA 一致时 `merge_allowed=true`；任何缺证、旧证、漂移或能力不符时写出 reasons、非零退出并保持不可合并。输出必须记录三个源文件的真实 SHA-256，使修改源证据后旧 gate 无法继续放行。
+**可观测行为**: `scripts/recompute-merge-gate.mjs` 每次从 run-manifest、Evaluator、Judge Runner attestation、Judge verdict 四个源文件重算，并在写任何 `merge_allowed=true` 前执行真实 `git ls-remote origin refs/pull/1581/head`；仅当两份裁决通过、新鲜、Judge 身份有独立 attestation 且四份证据与门禁时远端 HEAD 同 SHA 时覆盖 `merge-gate.json` 为可合并。任何缺证、旧证、漂移、远端查询失败或能力不符时写出 reasons、非零退出并保持不可合并。输出必须记录四个源文件 SHA-256、远端 HEAD 与读取时间。
 
 **验证命令**:
 ```bash
 npx vitest run sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts -t "机械合并门" --reporter=verbose
 ```
-**硬阈值**: 正向重算 1/1 exit 0；`merge_allowed=true`、reasons=`[]`、Evaluator/Judge/gate 四处 final SHA 完全一致且 `source_sha256` 三项均为 64 位十六进制；SHA 漂移自测必须非零并输出 `merge_allowed=false` 与 `judge_final_sha_mismatch`；本角色与 Generator 均不得执行 merge。
+**硬阈值**: 正向重算 1/1 exit 0；`merge_allowed=true`、reasons=`[]`、远端 HEAD/Evaluator/Judge/gate 五处 final SHA 完全一致且 `source_sha256` 四项均为 64 位十六进制；`remote_pr_head_checked_at` 是本次 gate 进程内的新鲜时间；Judge SHA 漂移和远端 HEAD 漂移两种自测均必须非零，分别输出 `judge_final_sha_mismatch`、`remote_pr_head_mismatch`；本角色与 Generator 均不得执行 merge。
 
 ### Step 5: 对历史证据与 SHA 漂移 fail-closed
 **来源**: `[AI_ADDED]` — 将 PRD 边界情况转为可执行的负向 oracle，防止复制 r12 文件或只改文件名假绿。
 
-**可观测行为**: 证据 run/attempt、produced_at/mtime、role、final SHA 任一不符即测试非零；远端 PR HEAD 漂移即 E2E 在产品测试前失败。
+**可观测行为**: 证据 run/attempt、Judge attestation、produced_at/mtime、role、final SHA 任一不符即测试非零；远端 PR HEAD 在 E2E 前或最终 gate 放行前漂移均失败。
 
 **验证命令**:
 ```bash
 npx vitest run sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts --reporter=verbose
 ```
-**硬阈值**: 正式证据 5/5 exit 0；缺任一必需文件或任一字段漂移时至少 1 test fail，禁止 404/skip/`|| true` 旁路。
+**硬阈值**: 正式证据 6/6 exit 0；缺任一必需文件或任一字段漂移时至少 1 test fail，禁止 404/skip/`|| true` 旁路。
 
 ## E2E 验收（最终 final-e2e 跑）
 
@@ -277,6 +279,12 @@ echo "OK: PR #1581 exact SHA real fleet product validation passed elapsed=${ELAP
 
 通过标准：唯一 Fleet 数据资源为本 attempt `DB_URL`；真实 migration→真实 signup/session→双租户 HTTP/DB 顺序零写入与并发一成一拒全绿；不直接 INSERT 业务身份，不预注入 cookie/tenant；attestation 与远端 SHA 精确匹配；总耗时 ≤7200 秒。脚本仅生成真实运行清单，不伪造 Evaluator/Judge verdict。
 
+### Final gate 时序（Runner/Controller 强制）
+
+1. Evaluator 用自己的 Runner identity 产出 `evaluator-verdict.json`。
+2. Independent Judge 启动时先直接从其 Runner 注入的 `HARNESS_ATTEMPT_ID`、`HARNESS_PROVIDER`、`HARNESS_ACCOUNT`、`HARNESS_MACHINE`、`HARNESS_MODEL`、`HARNESS_RUNNER_DIGEST`、`CAPABILITY_SNAPSHOT_ID` 与当前时间生成 `judge-runner-attestation.json`。该文件至少包含 `role="independent_judge"`、稳定 run/repo/PR/final SHA、上述 7 个运行时身份字段、`producer_execution_id`（取当前 Judge `HARNESS_ATTEMPT_ID`）、`attempt_started_at` 与 `produced_at`；不得接收 verdict body 覆盖这些值。Judge verdict 只能引用该文件并逐字段复制身份，禁止复制 Evaluator 或 GAN 作者身份。
+3. Judge 完成后运行 `scripts/recompute-merge-gate.mjs`。脚本必须在最终判定点真实重读 `refs/pull/1581/head`；远端不可达、HEAD 不等于固定 SHA 或不等于任一证据 SHA，均写 `merge_allowed=false` 并非零退出。任何执行 merge 的控制器必须只消费此次现场重算结果，不得消费较早的 gate 文件。
+
 ## 探索提示（L3 探索层 — evaluator 剧本全过后执行）
 
 探索预算: 10 分钟 / 15 动作
@@ -293,6 +301,7 @@ echo "OK: PR #1581 exact SHA real fleet product validation passed elapsed=${ELAP
 |---|---|---|---|
 | Fleet 与候选绑定 | `sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts` | 精确 PR HEAD 与冻结基线及获准 US M4 能力绑定 | `run-manifest.json` 缺失，真实解释器报 ENOENT |
 | Evaluator 新鲜证据 | `sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts` | Evaluator 裁决为本 attempt 新鲜 PASS 且绑定精确最终 SHA | evaluator evidence 缺失，真实解释器报 ENOENT |
-| Judge 独立新鲜证据 | `sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts` | Independent Judge 裁决独立新鲜 APPROVED 且绑定同一最终 SHA | judge evidence 缺失，真实解释器报 ENOENT |
+| Judge 独立新鲜证据 | `sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts` | Independent Judge 裁决独立新鲜 APPROVED 且绑定同一最终 SHA | Judge Runner attestation 或 verdict 缺失，真实解释器报 ENOENT |
 | 合并机械门 | `sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts` | 机械合并门仅在双裁决新鲜且 SHA 一致时放行 | merge gate 缺失，真实解释器报 ENOENT |
 | 合并门负向重算 | `sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts` | 机械合并门重算会拒绝 SHA 漂移且留下不可合并原因 | 重算器缺失，真实解释器报 MODULE_NOT_FOUND |
+| 放行前远端 HEAD 重读 | `sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts` | 机械合并门重算会拒绝门禁时远端 PR HEAD 漂移 | 重算器缺失，真实解释器报 MODULE_NOT_FOUND |

@@ -106,11 +106,16 @@ describe('PR #1581 real fleet validation evidence [BEHAVIOR]', () => {
 
   it('Independent Judge 裁决独立新鲜 APPROVED 且绑定同一最终 SHA', () => {
     const evaluator = readJson('evaluator-verdict.json');
+    const judgeAttestation = readJson('judge-runner-attestation.json');
     const judge = readJson('independent-judge-verdict.json');
+    expectStableBinding(judgeAttestation);
+    expectRuntimeIdentity(judgeAttestation);
     expectStableBinding(judge);
     expectRuntimeIdentity(judge);
+    expectSameRuntimeIdentity(judge, judgeAttestation);
     expect(judge.verdict).toBe('APPROVED');
     expect(judge.role).toBe('independent_judge');
+    expect(judgeAttestation.role).toBe('independent_judge');
     const evaluatorSha256 = createHash('sha256')
       .update(readFileSync(join(evidenceDir, 'evaluator-verdict.json')))
       .digest('hex');
@@ -118,11 +123,13 @@ describe('PR #1581 real fleet validation evidence [BEHAVIOR]', () => {
     expect(typeof evaluator.producer_execution_id).toBe('string');
     expect(typeof judge.producer_execution_id).toBe('string');
     expect(judge.producer_execution_id).not.toBe(evaluator.producer_execution_id);
+    expect(judge.producer_execution_id).toBe(judgeAttestation.producer_execution_id);
     expect(judge.attempt_id).not.toBe(evaluator.attempt_id);
     expect(judge.evaluator_attempt_id).toBe(evaluator.attempt_id);
     expect(judge.evaluator_capability_snapshot_id).toBe(evaluator.capability_snapshot_id);
-    expect(typeof judge.attempt_started_at).toBe('string');
-    expectFresh('independent-judge-verdict.json', judge.attempt_started_at, judge);
+    expect(typeof judgeAttestation.attempt_started_at).toBe('string');
+    expectFresh('judge-runner-attestation.json', judgeAttestation.attempt_started_at, judgeAttestation);
+    expectFresh('independent-judge-verdict.json', judgeAttestation.attempt_started_at, judge);
     expectExecutableVerdict(judge);
   });
 
@@ -138,10 +145,13 @@ describe('PR #1581 real fleet validation evidence [BEHAVIOR]', () => {
     expect(gate.judge_verdict).toBe('APPROVED');
     expect(gate.evaluator_final_sha).toBe(expected.finalSha);
     expect(gate.judge_final_sha).toBe(expected.finalSha);
+    expect(gate.remote_pr_head).toBe(expected.finalSha);
+    expect(Date.parse(gate.remote_pr_head_checked_at)).toBeGreaterThanOrEqual(Date.parse(manifest.attempt_started_at));
     expect(gate.reasons).toEqual([]);
     expect(gate.source_sha256).toMatchObject({
       run_manifest: expect.stringMatching(/^[0-9a-f]{64}$/),
       evaluator: expect.stringMatching(/^[0-9a-f]{64}$/),
+      judge_runner_attestation: expect.stringMatching(/^[0-9a-f]{64}$/),
       independent_judge: expect.stringMatching(/^[0-9a-f]{64}$/),
     });
     expectFresh('merge-gate.json', manifest.attempt_started_at, gate);
@@ -156,5 +166,15 @@ describe('PR #1581 real fleet validation evidence [BEHAVIOR]', () => {
     const diagnostic = JSON.parse(result.stdout.trim()) as Json;
     expect(diagnostic.merge_allowed).toBe(false);
     expect(diagnostic.reasons).toContain('judge_final_sha_mismatch');
+  });
+
+  it('机械合并门重算会拒绝门禁时远端 PR HEAD 漂移', () => {
+    const result = spawnSync('node', [gateBuilder, '--evidence-dir', evidenceDir, '--self-test-remote-head-drift'], {
+      encoding: 'utf8',
+    });
+    expect(result.status).not.toBe(0);
+    const diagnostic = JSON.parse(result.stdout.trim()) as Json;
+    expect(diagnostic.merge_allowed).toBe(false);
+    expect(diagnostic.reasons).toContain('remote_pr_head_mismatch');
   });
 });
