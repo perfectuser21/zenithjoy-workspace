@@ -5433,3 +5433,11 @@ agent_suite:
   status: active
   product: 中台认证
   note: "验收模块 Playwright E2E（列表/详情矩阵/历史页）。变体C：真实后端，禁page.route()，降级/正常路径用.or()二选一断言。workflow: e2e-staff-acceptance-windows.yml"
+
+- id: kernel-pr1581-fleet-validation-r16-contract
+  path: sprints/08040522-kernel-pr1581-fleet-validation-r16/tests/fleet-validation.test.ts
+  type: contract
+  ci: L4
+  status: active
+  product: 客户智能获客
+  note: "PR #1581 冻结头 c305f621 的真实 Fleet 验证合同：严格 us-mac-m4、Generator/Evaluator/Judge 独立 runtime provenance、SHA-256 证据链、verdict 前未合并与失败不降级。"

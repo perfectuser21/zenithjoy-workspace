@@ -1,0 +1,27 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "本 Sprint 是 PR #1581 的后台 Kernel Harness 严格 Fleet 验证链路",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "在严格 us-mac-m4 上完成 PR #1581 三角色证据链验证",
+      "scope": "对冻结目标头生成本 run 的 Generator 证据，供后续 Evaluator 与 Judge 独立复验、摘要串联并形成 verdict；不修改产品实现、共享 Red fixture 或合并 PR",
+      "dod": [
+        "[BEHAVIOR] Generator 在 us-mac-m4 对精确目标头真执行并生成 runtime identity late-bound 的独立证据",
+        "[BEHAVIOR] Evaluator 独立重跑并以 SHA-256 引用 Generator 证据，Judge 再引用两份证据给合法 verdict",
+        "[BEHAVIOR] verdict 前 PR 保持 OPEN，head 变化、缺证、fallback、提前 merge 或测试失败均非零退出",
+        "[ARTIFACT] evidence/run-manifest.json、generator.json、evaluator.json、judge.json 形成可追溯摘要链"
+      ],
+      "files": [
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/run-manifest.json",
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/generator.json",
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/evaluator.json",
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/judge.json"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 120
+    }
+  ]
+}
