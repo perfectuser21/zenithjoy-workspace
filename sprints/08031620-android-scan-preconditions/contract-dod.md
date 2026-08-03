@@ -18,6 +18,10 @@ journey_type: agent_remote
 - [ ] [ARTIFACT] versionCode 已 bump（本 sprint 前基线 23）
   Test: node -e "const c=require('fs').readFileSync('services/agent-android/app/build.gradle.kts','utf8'); const m=c.match(/versionCode\s*=\s*(\d+)/); if(!m||parseInt(m[1],10)<=23)process.exit(1)"
 
+## Invariant 覆盖条目
+
+N/A：本 line（客户智能获客路径）当前无与安卓账号扫描直接相关的 invariant 记录（已查 golden-path-decisions/invariants 三源——step 级/journey_feature 级/area 级，均为空或不相关，详见 sprint-prd.md Invariant 约束段）
+
 ## BEHAVIOR 条目
 
 - [ ] [BEHAVIOR] 07-31 真实锁屏 tree_dump 被分类器正确识别为锁屏
@@ -46,6 +50,10 @@ journey_type: agent_remote
 
 - [ ] [BEHAVIOR] 诊断页后台弹窗权限自检函数覆盖 true/false 两分支
   Test: manual:bash -c 'cd services/agent-android && ./gradlew :app:testDebugUnitTest --tests "*BackgroundPermission*" 2>&1 | tee /tmp/t7.log; grep -q "BUILD SUCCESSFUL" /tmp/t7.log || exit 1; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] `DeviceAccountScanService.kt` 在 SCREEN_LOCKED/LAUNCH_BLOCKED 调用点确实传入 versionName/foregroundPackage 参数（Risks 表问题2 mitigation，防调用点漏传静默失效）
+  Test: manual:bash -c 'cd services/agent-android && ./gradlew :app:testDebugUnitTest --tests "*DeviceAccountScanServiceDiagnosticFieldsCallSiteTest*" 2>&1 | tee /tmp/t8.log; grep -q "BUILD SUCCESSFUL" /tmp/t8.log || exit 1; echo OK'
   期望: OK
 
 ## 未覆盖真实链路清单（引用，同 contract-draft.md）

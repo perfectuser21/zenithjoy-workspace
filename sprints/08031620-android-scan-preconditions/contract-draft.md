@@ -81,7 +81,8 @@ cd services/agent-android && ./gradlew :app:testDebugUnitTest --tests "*AccountS
 ---
 
 ### Step 3: failure detail 全链路透传（versionName + stage + 前台包名）
-**来源**: `[AI_ADDED]` — 见文首「范围修正」，理由：不透传到服务端持久化则 PRD 目标（运维免登真机排障）不成立
+**来源**: `[FROM_PRD]` — PRD Golden Path 具体步骤第 3 条（detail 携带 versionName/stage/前台包名的需求本身逐字来自 PRD）
+**范围补充**: `[AI_ADDED]` — 发现现有服务端 `account-scan-result` 路由（`apps/api/src/routes/agent-burner.ts:817`）只解构 `screenshot_b64`/`tree_dump`，PRD 要求的三字段若不跟着透传到服务端持久化，会在 `AgentService.kt` 广播转发这一步被静默丢弃，起不到 PRD 说的"运维免登真机复现即可判断根因方向"的效果——故补充 `AgentService.kt` + `apps/api/src/routes/agent-burner.ts` 两个 PRD「预期受影响文件」未列出的文件入范围（详见文首「范围修正」）
 
 **可观测行为**：
 1. `AgentService.buildAccountScanResultBody()` 输出的 JSON body 含 `version_name`/`stage`/`foreground_package` 三字段
@@ -175,6 +176,14 @@ echo "✅ Golden Path 验证通过（JVM 单测 + 服务端集成测试 + versio
 | 设备锁屏且不可编程解锁 | 本轮扫描终止，上报 `SCREEN_LOCKED`，不做无限重试 | 是（下一次心跳周期由既有机制自然触发下一轮扫描，本 sprint 不新增重试逻辑） | 无自动降级，等待下轮自然扫描或人工介入 |
 | 后台启动被拦截 | 本轮扫描终止，上报 `LAUNCH_BLOCKED` | 同上 | 诊断页展示后台弹窗权限自检项，供人工排查引导 |
 | detail 透传服务端持久化失败（如 DB 写入异常） | 沿用既有 `agent_scan_failures` INSERT 的既有错误处理行为（本 sprint 不新增额外容错分支，不在范围内） | 不适用 | 不适用 |
+
+## Risks（Round 2 补，Reviewer 问题3）
+
+| 风险 | 后果 | Mitigation |
+|------|------|------------|
+| tree_dump 启发式分类器只用 2 条真实样本（da659ea0 锁屏/236f43b1 launcher）训练直觉，未见机型/系统语言（如英文系统"Swipe up to unlock"）可能不含"上滑解锁"关键词而漏判 | 新机型的锁屏/拦截场景继续走泛化 `OPEN_PANEL_FAILED`，看不出根因分类的价值 | 已有 nightly account-scan-realmachine-smoke.sh 车道（2026-08-03 验证全绿）持续跑不同机型，未知分类盲区会自然暴露在 `agent_scan_failures.error_code` 分布里，属既有可观测机制，非本 sprint 需要解决的开放问题 |
+| `buildAccountScanResultBody()` 签名扩展新增 3 个可选参数——若 `DeviceAccountScanService.kt` 调用点漏传，默认值 `null` 会静默不传，不触发编译错误 | "版本已升级但字段悄悄没传"的半吊子实现，现有测试只测函数本身不测调用点，不会被抓到 | 见下方新增 [BEHAVIOR] 条目：验证 `DeviceAccountScanService.kt` 在锁屏/前台超时分支调用 `buildAccountScanResultBody` 时确实传入了非默认值的三参数 |
+| `apps/api` 的 `agent_scan_failures` 是生产高频写入表（本 sprint 前每天几十条真实失败记录）——本次改动的是生产在跑的 INSERT 语句，新增字段解构若类型判断疏漏可能让 INSERT 整体抛异常 | 现有失败记录排障能力（本身是诊断工具）被本次改动连带打坏 | 沿用现有代码同款 `typeof x === 'string' ? x : null` 防御写法（agent-burner.ts 既有 `screenshot_b64`/`tree_dump` 处理已是此模式）；contract-dod.md 已有"不带三新字段时 detail 对应键为 null"用例覆盖非字符串/缺省输入不炸 |
 
 ## 效果确认
 
