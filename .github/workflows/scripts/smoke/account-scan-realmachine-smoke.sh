@@ -41,8 +41,14 @@ envfail() { echo "🟠 环境未就绪(非真机验证bug,查设备/staging/DB):
 # vps-hk 报 Host key verification failed（交互 shell 的 known_hosts 条目对 runner 的
 # ssh 客户端/算法协商不适用）。内网 Tailscale 固定 IP 场景用 accept-new 首连自动记录、
 # 后续变更仍拒绝；BatchMode 防挂交互提示。所有 DB 查询必须走本函数，禁止裸 ssh。
+# 公网直连路由（2026-08-03 run 30794878185）：runner 服务跑 SYSTEM 账户，无 Tailscale 身份
+# （vps-hk 走 Tailscale SSH 报 failed to look up local user "SYSTEM"）。改走 hk-vps 公网
+# 高位端口（跨境 22 被墙，sshd 另听 6443）+ runner 专用受限密钥（服务端 forced-command
+# 只放行 staging psql，见 hk-vps:/root/zj-smoke-staging-psql.sh）。workflow 注入三个 env；
+# 本地交互跑不传 key 时仍走默认 vps-hk（Tailscale 身份路径不变）。
 sshdb() {
-  ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 "$DB_SSH_HOST" "$@"
+  ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+    -p "${DB_SSH_PORT:-22}" ${DB_SSH_KEY:+-i "$DB_SSH_KEY"} "$DB_SSH_HOST" "$@"
 }
 
 # assert_task_terminal_success STATUS RESPONSE_JSON
