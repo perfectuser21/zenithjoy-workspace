@@ -171,7 +171,7 @@ main() {
     LICENSE_QUERY_ERR=$(mktemp)
     STAGING_LICENSE_KEY=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -c \
       \"SELECT license_key FROM zenithjoy.licenses WHERE tenant_id='${TENANT}' AND status='active' ORDER BY created_at DESC LIMIT 1\"" 2>"$LICENSE_QUERY_ERR" | tr -d '[:space:]')
-    LICENSE_ERR_TEXT=$(head -c 200 "$LICENSE_QUERY_ERR" 2>/dev/null || true)
+    LICENSE_ERR_TEXT=$(head -c 200 "$LICENSE_QUERY_ERR" || true)
     rm -f "$LICENSE_QUERY_ERR"
     [ -n "$STAGING_LICENSE_KEY" ] && break
     echo "  [license查询 ${LICENSE_RETRY}/3] 空结果，stderr: ${LICENSE_ERR_TEXT:-无}"
