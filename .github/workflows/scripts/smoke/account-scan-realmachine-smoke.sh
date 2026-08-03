@@ -162,9 +162,22 @@ main() {
   # 是设备压根没在往这个库报数据，等多久都没用。MainActivity.onCreate() 的
   # parseBindDeepLink() 会在 AgentService/WsClient 首次初始化之前，把 zenithjoy://bind
   # deeplink 里的 api/license 参数写进 config，一次性从根上纠正，不依赖设备残留状态。
-  STAGING_LICENSE_KEY=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -c \
-    \"SELECT license_key FROM zenithjoy.licenses WHERE tenant_id='${TENANT}' AND status='active' ORDER BY created_at DESC LIMIT 1\"" 2>/dev/null | tr -d '[:space:]')
-  [ -n "$STAGING_LICENSE_KEY" ] || envfail "查不到 tenant=${TENANT} 在 zenithjoy_staging 的 active license_key，无法构造 bind deeplink"
+  # 真机复现(2026-08-03 nightly run 30786965614)：ssh 走 Tailscale DERP 中继会闪断，
+  # 单次查询失败且 stderr 被吞时伪装成"查无数据"（数据实际完好）。有界重试自愈瞬断，
+  # stderr 进文案区分"真查无数据"与"ssh 链路失败"。
+  STAGING_LICENSE_KEY=""
+  LICENSE_ERR_TEXT=""
+  for LICENSE_RETRY in 1 2 3; do
+    LICENSE_QUERY_ERR=$(mktemp)
+    STAGING_LICENSE_KEY=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -c \
+      \"SELECT license_key FROM zenithjoy.licenses WHERE tenant_id='${TENANT}' AND status='active' ORDER BY created_at DESC LIMIT 1\"" 2>"$LICENSE_QUERY_ERR" | tr -d '[:space:]')
+    LICENSE_ERR_TEXT=$(head -c 200 "$LICENSE_QUERY_ERR" || true)
+    rm -f "$LICENSE_QUERY_ERR"
+    [ -n "$STAGING_LICENSE_KEY" ] && break
+    echo "  [license查询 ${LICENSE_RETRY}/3] 空结果，stderr: ${LICENSE_ERR_TEXT:-无}"
+    [ "$LICENSE_RETRY" -lt 3 ] && sleep 8
+  done
+  [ -n "$STAGING_LICENSE_KEY" ] || envfail "查不到 tenant=${TENANT} 在 zenithjoy_staging 的 active license_key 或 ssh 链路失败(3次重试后)，无法构造 bind deeplink。最后一次 stderr: ${LICENSE_ERR_TEXT:-无}"
   WS_URL="${API_BASE/https/wss}/agent-ws"
   BIND_API_ENC=$(jq -rn --arg v "$WS_URL" '$v|@uri')
   BIND_LICENSE_ENC=$(jq -rn --arg v "$STAGING_LICENSE_KEY" '$v|@uri')
