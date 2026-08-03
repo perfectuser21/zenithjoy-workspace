@@ -232,6 +232,32 @@ jobs:
           npm run product-map:generate
           npm run product-map:check
 
+  acceptance-spec-contract:
+    name: Line02 Acceptance Spec Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run acceptance-spec unit tests
+        run: npm run test:acceptance-spec
+
+      - name: Validate line02-android.yaml
+        run: npm run acceptance-spec:validate
+
+      - name: Check generated page has no drift from spec
+        run: |
+          npm run acceptance-spec:generate
+          git diff --exit-code acceptance-spec/generated/line02-android.html || \
+            (echo "FAIL: acceptance-spec/generated/line02-android.html 与 acceptance-spec/line02-android.yaml 不一致，请本地重跑 npm run acceptance-spec:generate 后提交" && exit 1)
+
   # ─── L2 Gate ──────────────────────────────────────────────────────────
   l2-passed:
     name: L2 Consistency Gate Passed

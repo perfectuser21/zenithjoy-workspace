@@ -97,10 +97,18 @@ test('renderHtml 生成的页面包含14步内容、无英文残留、判定按�
   const englishWords = stripped.match(/[A-Za-z]{2,}/g) || [];
   assert.deepEqual(englishWords, [], `可见文本含英文残留: ${JSON.stringify(englishWords)}`);
 
-  // 判定按钮数量：每个非固定不适用的格子（na!==true）应有一组 tri 按钮
+  // 表格是纯前端渲染（tbody 在生成的静态 HTML 里本来就是空的，靠内嵌的 STEPS 数据
+  // 在浏览器里现场 render），所以不能数静态 HTML 里的 class="tri"（那只是 CSS 规则本身）。
+  // 改为核对内嵌的 STEPS 字面量：14 步、每步4格、非不适用格子数与 spec 一致。
+  const m = html.match(/var STEPS = (\[[\s\S]*?\]);/);
+  assert.ok(m, '生成的 HTML 里应有内嵌的 STEPS 数据');
+  const clientSteps = JSON.parse(m[1]);
+  assert.equal(clientSteps.length, 14);
   const judgedCellCount = spec.steps.reduce((sum, st) => {
     return sum + ['c1', 'c2', 'c3', 'c4'].filter(ck => !(st.cells[ck].na === true)).length;
   }, 0);
-  const triCount = (html.match(/class="tri"/g) || []).length;
-  assert.equal(triCount, judgedCellCount, '判定按钮组数应等于非不适用的格子数');
+  const clientJudgedCellCount = clientSteps.reduce((sum, st) => {
+    return sum + ['c1', 'c2', 'c3', 'c4'].filter(ck => !(st[ck].na === true)).length;
+  }, 0);
+  assert.equal(clientJudgedCellCount, judgedCellCount, '生成页面里非不适用的格子数应与规程文件一致');
 });
