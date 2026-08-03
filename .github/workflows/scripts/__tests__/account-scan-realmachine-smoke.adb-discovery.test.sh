@@ -46,5 +46,7 @@ else
 fi
 grep -q 'envfail "adb 不可用' "$SCRIPT" \
   || { echo "❌ FAIL: 缺'adb 不可用'独立 envfail 文案（应带 stderr）"; FAIL=1; }
+grep -q 'envfail "无 Android 设备在线' "$SCRIPT" \
+  || { echo "❌ FAIL: 原'无 Android 设备在线'文案丢失（三种文案必须并存互异）"; FAIL=1; }
 
 [ "$FAIL" -eq 0 ] && { echo "✅ PASS"; exit 0; } || { echo "❌ RED/FAIL"; exit 1; }
