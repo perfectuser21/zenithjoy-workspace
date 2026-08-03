@@ -1,7 +1,8 @@
-# Sprint Contract Draft (Round 7)
+# Sprint Contract Draft (Round 8)
 
 ## Notes
 
+- Round 8 修订：全 pipeline 只能使用 Controller 在 run 入口一次生成的 `pipeline_started_at`/`deadline_at`，两者固定相差 7200 秒并通过 run-manifest 传给 Evaluator、Judge 与最终门禁；禁止每个角色重置自己的 7200 秒窗口。
 - contract-gate: skipped (file not found, third-party repo)
 - Round 7 修订：Independent Judge 必须先由其实际 Runner 写出独立 `judge-runner-attestation.json`，Judge verdict 再逐字段绑定该 attestation；合并门真正放行前必须重新读取远端 `refs/pull/1581/head`，禁止只信产品 E2E 开始时的旧读数。
 - GAN task bundle 中的 Proposer/Reviewer identity 只是各自作者 provenance，不是未来验收身份。Evaluator 与 Independent Judge 必须分别从 Runner 注入的 `HARNESS_*` 与 `CAPABILITY_SNAPSHOT_ID` late-bind 自己的身份，禁止在合同、DoD 或测试中固化任一 GAN 作者的 attempt/account/snapshot。
@@ -15,7 +16,7 @@
 - Fleet 尚未创建未来 Evaluator/Judge attempt；若固化 GAN 作者身份会必然误拒真实执行角色，因此所有可变身份必须 late-bound。
 - PR HEAD 可在验证期间漂移；合并门必须在写 `merge_allowed=true` 的同一次执行中重读远端 PR HEAD，任一证据与该读数不同即全部作废。
 - Judge verdict 若没有独立 Runner attestation，或 verdict 身份与 attestation 任一字段不一致，即使内容写着 APPROVED 也必须拒绝。
-- Evaluator 或 Judge 缺证、超时、证据摘要断链或非 `us-mac-m4` 执行均 fail-closed，不得复用旧证降级。
+- Evaluator 或 Judge 缺证、超过全 run 共享 `deadline_at`、证据摘要断链或非 `us-mac-m4` 执行均 fail-closed，不得复用旧证降级。
 - 真实 migration/signup 依赖 attempt 级空库和仓库锁定依赖；资源不可用时应留可诊断非零证据，不得要求长期业务凭据。
 
 ## Response Schema（推导来源: PRD字面）
@@ -37,7 +38,7 @@ N/A — 本 Sprint 不新增 HTTP 响应。被验证的现有 `PUT/PATCH /api/ac
 | **NFR（做得多好）** | 性能/可靠性 | 全流程 ≤7200 秒；runner digest 固定；旧证、缺证、SHA 漂移、机器/能力不符均 fail-closed。 |
 | **Invariant（永不违反）** | 安全/一致性 | 不修改候选产品行为；不合并；不复用历史裁决；两个临时租户互不串；secret/cookie 不进日志或 git。 |
 | **判定点（怎么知道）** | 模糊现实判断 | 见下方登记表。 |
-| **保质期（何时过期）** | 证据时效 | 证据仅对本 run、各自生产角色的 runtime identity 与实际最终 SHA 有效；PR HEAD 或任一角色 capability 变化立即过期。 |
+| **保质期（何时过期）** | 证据时效 | 证据仅对本 run、各自生产角色的 runtime identity 与实际最终 SHA 有效；超过共享 `deadline_at`、PR HEAD 或任一角色 capability 变化立即过期。 |
 | **死亡告警（停了谁知道）** | 失效发现 | 任一脚本非零、7200 秒超时或 merge gate reasons 非空即由 Harness controller 标红；不得静默完成。 |
 | **失败语义（挂了怎么办）** | 放行/重试/降级 | 一律拦截合并；保留 log_tail；针对新 HEAD/新 attempt 从头重跑，不降级到旧证据。 |
 | **效果确认（已发≠已生效）** | 真实生效 | 真远端 PR ref、真目标提交 worktree、真空库 migration、真实 signup cookie、真 HTTP/DB 断言；最终双证据均绑定同一 SHA。 |
@@ -47,7 +48,7 @@ N/A — 本 Sprint 不新增 HTTP 响应。被验证的现有 `PUT/PATCH /api/ac
 | 判定点 | 候选方法 | 所选方法 | 依据 | 误判后果 |
 |---|---|---|---|---|
 | ⚠️ 本轮结果是否可合并 | A. 任一角色通过；B. Evaluator PASS 与 Independent Judge APPROVED 均新鲜且 SHA 完全一致 | B. 双裁决机械 AND 门 | PRD Golden Path 第 4 步明确要求 | 错误代码直接合并 |
-| 证据是否为本轮新鲜产物 | A. 看文件名；B. 核对 run_id、角色 runtime identity、独立 Runner attestation、produced_at、mtime 与该角色 started_at | B. attestation、身份与双时间信号 | 文件名可复制，历史文件可冒充 | 旧证据错误放行 |
+| 证据是否为本轮新鲜产物 | A. 看文件名；B. 核对 run_id、角色 runtime identity、独立 Runner attestation、produced_at、mtime 与全 run 共享 `pipeline_started_at`/`deadline_at` | B. attestation、身份与共享时间窗双信号 | 文件名可复制，角色自建时间窗会放大总时限 | 旧证据或超时证据错误放行 |
 | 实际机器是否获准 | A. 仅相信任务描述；B. 核对 Fleet attestation 的 provider/account/model/machine/snapshot/digest | B. 运行时 attestation | PRD 要求实际目标匹配能力快照 | 未授权机器结果被采信 |
 
 `judgment-pending-user`：N/A — PRD 已明确拍板双裁决 AND 门、证据新鲜度和获准机器，不新增未确认判断。
@@ -60,6 +61,7 @@ N/A — 本 Sprint 不新增 HTTP 响应。被验证的现有 `PUT/PATCH /api/ac
 | migration、真实登录或产品断言失败 | 非零退出并保留去敏日志 | attempt 级空库可从头重跑 | 禁止直接 INSERT 身份或注入 cookie |
 | 任一裁决或 Judge Runner attestation 缺失/旧/非通过 | `merge_allowed=false` 且 reasons 非空 | 由缺失角色用自己的 runtime attempt 补齐后重算 | 禁止单证或自报身份放行 |
 | Evaluator/Judge SHA 不一致 | 两份证据全部作废 | 对最终 PR HEAD 重跑两角色 | 禁止选择其中一份 |
+| 任一阶段超过全 run 共享 `deadline_at` | `merge_allowed=false`、reasons 含 `pipeline_deadline_exceeded` 并非零退出 | 新 run 生成新的共享窗口后从头执行 | 禁止给 E2E/Evaluator/Judge 分别重置 7200 秒 |
 
 ### 输入对抗面
 
@@ -75,6 +77,7 @@ N/A — 本任务不新增对外 agent 或用户输入接口；唯一外部输�
 - GitHub `refs/pull/1581/head` ↔ 实际候选 worktree：必须真 `git ls-remote` 与 detached worktree，禁止本地假 ref。
 - 仓库 migration ↔ attempt 空 Postgres：必须在同一 `DB_URL` 运行真实 `npm run migrate` 并检查目标表，禁止预置 schema。
 - better-auth signup/session ↔ acquisition route ↔ Postgres：必须真实 signup、cookie、HTTP 与 DB 读写，禁止 mock router、middleware、service 或 pool。
+- Controller 全 run 时钟 ↔ run-manifest ↔ Evaluator/Judge/merge gate：`pipeline_started_at`/`deadline_at` 必须一次生成、全链传递且恒定相差 7200 秒，禁止下游角色重置。
 - Evaluator evidence ↔ Judge Runner attestation ↔ Independent Judge evidence ↔ merge gate：必须读取独立新鲜文件，Judge verdict 身份逐字段等于其 Runner attestation，并校验 SHA/时间/摘要，禁止 stub 任一裁决或自报 Judge 身份。
 - 四份源证据 + 远端 `refs/pull/1581/head` ↔ `scripts/recompute-merge-gate.mjs` ↔ `merge-gate.json`：门禁必须在放行前现场重读远端 HEAD、重算并记录四个源文件 SHA-256，禁止人工预制或直接信任已有 gate 文件。
 
@@ -118,21 +121,23 @@ npx vitest run sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-v
 ```bash
 awk '/^## E2E 验收/{f=1;next} f&&/^## /{exit} f&&/^```bash/{b=1;next} b&&/^```/{exit} b{print}' sprints/08040114-kernel-pr1581-fleet-validation-r13/contract-draft.md > /tmp/kernel-pr1581-r13-e2e.sh && bash /tmp/kernel-pr1581-r13-e2e.sh
 ```
-**硬阈值**: migration 与目标表检查 exit 0；真实 signup/login 双 tenant；顺序非法请求 2/2 拒绝且零写入；并发 statuses 恰为 `[200,400]`、最终 `min<=max`；真实 HTTP/DB 断言全部 exit 0；总耗时 ≤7200 秒。
+**硬阈值**: migration 与目标表检查 exit 0；真实 signup/login 双 tenant；顺序非法请求 2/2 拒绝且零写入；并发 statuses 恰为 `[200,400]`、最终 `min<=max`；真实 HTTP/DB 断言全部 exit 0；本步完成时必须早于全 run 共享 `deadline_at`，不得重置计时。
 
 ### Step 3: Evaluator 与 Independent Judge 分别产生新鲜同 SHA 裁决
 **来源**: `[FROM_PRD]` — PRD「Golden Path」第 3 步。
 
-**可观测行为**: 两份不同角色证据均属于本 run，各自在其 Runner 注入的 runtime attempt 起点后 7200 秒内产生，均绑定固定最终 SHA；Evaluator `PASS`，Judge `APPROVED`。Judge Runner 在 verdict 前用其运行时 `HARNESS_*`/`CAPABILITY_SNAPSHOT_ID` 写独立 attestation，verdict 的 attempt/provider/account/model/machine/snapshot/digest/producer_execution_id 必须与之逐字段一致；每份 verdict 均带真实 exit code/log_tail/behavior_tests。
+**可观测行为**: 两份不同角色证据均属于本 run，使用 run-manifest 中同一个 `pipeline_started_at`/`deadline_at`，均在共享截止时间前产生并绑定固定最终 SHA；Evaluator `PASS`，Judge `APPROVED`。Judge Runner 在 verdict 前用其运行时 `HARNESS_*`/`CAPABILITY_SNAPSHOT_ID` 写独立 attestation，verdict 的 attempt/provider/account/model/machine/snapshot/digest/producer_execution_id 必须与之逐字段一致；每份 verdict 均带真实 exit code/log_tail/behavior_tests。
 
 **验证命令**:
 ```bash
 npx vitest run sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts -t "Evaluator 裁决|Independent Judge 裁决" --reporter=verbose
 ```
-**硬阈值**: 2/2 exit 0；两份 run/final SHA 匹配；各自 runtime identity 完整且 machine=`us-mac-m4`、digest 匹配；Evaluator/Judge 的 attempt 与 capability 不得强制共用；Judge attestation 与 verdict 身份 8 字段逐字相等且 attestation/verdict 都在 Judge 7200 秒窗口内；`behavior_tests.length>=4` 且所有 exit_code=0；两份 `producer_execution_id` 不同；Judge 记录 Evaluator 的 attempt/capability 引用与文件真实 SHA-256。
+**硬阈值**: 2/2 exit 0；两份 run/final SHA 匹配；各自 runtime identity 完整且 machine=`us-mac-m4`、digest 匹配；Evaluator/Judge 的 attempt 与 capability 不得强制共用；Judge attestation 与 verdict 身份 8 字段逐字相等，且 Evaluator/Judge 的 produced_at 与 mtime 都在同一个 7200 秒 pipeline 窗口内；`behavior_tests.length>=4` 且所有 exit_code=0；两份 `producer_execution_id` 不同；Judge 记录 Evaluator 的 attempt/capability 引用与文件真实 SHA-256。
 
 ### Step 4: 双证据机械 AND 门形成合并出口
 **来源**: `[FROM_PRD]` — PRD「Golden Path」第 4 步及全部边界情况。
+
+**共享截止时间硬条款**: 重算器必须先验证四个源文件的 `pipeline_started_at`/`deadline_at` 与 run-manifest 字面一致、两者相差恰为 7200 秒，并且所有 attempt_started_at、produced_at、mtime、`remote_pr_head_checked_at` 与 gate produced_at/mtime 都在该唯一窗口内。当前时间超过 `deadline_at` 时必须写 `merge_allowed=false`、reasons 含 `pipeline_deadline_exceeded` 并非零退出；禁止对 E2E、Evaluator 或 Judge 重置计时。
 
 **可观测行为**: `scripts/recompute-merge-gate.mjs` 每次从 run-manifest、Evaluator、Judge Runner attestation、Judge verdict 四个源文件重算，并在写任何 `merge_allowed=true` 前执行真实 `git ls-remote origin refs/pull/1581/head`；仅当两份裁决通过、新鲜、Judge 身份有独立 attestation 且四份证据与门禁时远端 HEAD 同 SHA 时覆盖 `merge-gate.json` 为可合并。任何缺证、旧证、漂移、远端查询失败或能力不符时写出 reasons、非零退出并保持不可合并。输出必须记录四个源文件 SHA-256、远端 HEAD 与读取时间。
 
@@ -144,6 +149,8 @@ npx vitest run sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-v
 
 ### Step 5: 对历史证据与 SHA 漂移 fail-closed
 **来源**: `[AI_ADDED]` — 将 PRD 边界情况转为可执行的负向 oracle，防止复制 r12 文件或只改文件名假绿。
+
+**超时负向 oracle**: `--self-test-deadline-exceeded` 必须非零退出并输出 `pipeline_deadline_exceeded`；正式证据测试共 7 条，超时时至少 1 条失败。
 
 **可观测行为**: 证据 run/attempt、Judge attestation、produced_at/mtime、role、final SHA 任一不符即测试非零；远端 PR HEAD 在 E2E 前或最终 gate 放行前漂移均失败。
 
@@ -169,6 +176,8 @@ set -euo pipefail
 : "${HARNESS_MODEL:?Fleet attestation 缺 model}"
 : "${HARNESS_RUNNER_DIGEST:?Fleet attestation 缺 runner digest}"
 : "${CAPABILITY_SNAPSHOT_ID:?Fleet attestation 缺 capability snapshot id}"
+: "${HARNESS_PIPELINE_STARTED_AT:?Controller 必须在全 run 入口一次注入 pipeline_started_at}"
+: "${HARNESS_DEADLINE_AT:?Controller 必须注入与 pipeline_started_at 相差 7200 秒的 deadline_at}"
 export DB_URL
 EXPECTED_SHA="c305f6217da65bb69413c39e621b7e797e0fb189"
 BASE_SHA="676fed7de12023d355deac7849af8a525ae53f8d"
@@ -183,8 +192,13 @@ COOKIE_A="$TMP_ROOT/cookie-a.jar"
 COOKIE_B="$TMP_ROOT/cookie-b.jar"
 API_LOG="$TMP_ROOT/api.log"
 API_PID=""
-START_EPOCH=$(date +%s)
 STARTED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+PIPELINE_START_EPOCH=$(node -e 'const n=Date.parse(process.env.HARNESS_PIPELINE_STARTED_AT);if(!Number.isFinite(n))process.exit(1);process.stdout.write(String(Math.floor(n/1000)))')
+DEADLINE_EPOCH=$(node -e 'const n=Date.parse(process.env.HARNESS_DEADLINE_AT);if(!Number.isFinite(n))process.exit(1);process.stdout.write(String(Math.floor(n/1000)))')
+[ "$((DEADLINE_EPOCH-PIPELINE_START_EPOCH))" -eq 7200 ] || { echo "FAIL: shared pipeline window must equal 7200s"; exit 1; }
+check_deadline() {
+  [ "$(date +%s)" -le "$DEADLINE_EPOCH" ] || { echo "FAIL: pipeline_deadline_exceeded"; exit 1; }
+}
 cleanup() {
   set +e
   [ -z "$API_PID" ] || kill "$API_PID" 2>/dev/null
@@ -193,6 +207,7 @@ cleanup() {
   rm -rf "$TMP_ROOT"
 }
 trap cleanup EXIT
+check_deadline
 [ "$HARNESS_MACHINE" = "us-mac-m4" ]
 [ -n "$HARNESS_PROVIDER" ]
 [ -n "$HARNESS_ACCOUNT" ]
@@ -208,6 +223,7 @@ git -C "$ORIGIN_ROOT" worktree add --detach "$CANDIDATE_DIR" "$EXPECTED_SHA"
 [ "$(git -C "$CANDIDATE_DIR" rev-parse HEAD)" = "$EXPECTED_SHA" ]
 cd "$CANDIDATE_DIR"
 npm ci
+check_deadline
 npm run product-map:check
 export DATABASE_URL="$DB_URL"
 export DATABASE_HOST="$(node -e 'process.stdout.write(new URL(process.env.DB_URL).hostname)')"
@@ -270,20 +286,22 @@ if [ "$(cat "$TMP_ROOT/concurrent-min.code")" = 400 ]; then INVALID_BODY="$TMP_R
 jq -e '.success==false and .error.code=="INVALID_CONFIG"' "$INVALID_BODY" >/dev/null
 psql "$DB_URL" -v ta="$TENANT_A" -tAc "SELECT keywords_per_round_min <= keywords_per_round_max FROM zenithjoy.acquisition_config WHERE tenant_id=:'ta'" | grep -qx t
 curl -sfS -b "$COOKIE_B" "$CONFIG_URL" | jq -S '.data' | diff -u "$TMP_ROOT/b-before-concurrency.json" -
+check_deadline
 mkdir -p "$EVIDENCE_DIR"
-jq -n --arg run "$RUN_ID" --arg attempt "$ATTEMPT_ID" --arg started "$STARTED_AT" --arg sha "$EXPECTED_SHA" --arg base "$BASE_SHA" --arg provider "$HARNESS_PROVIDER" --arg account "$HARNESS_ACCOUNT" --arg model "$HARNESS_MODEL" --arg machine "$HARNESS_MACHINE" --arg snapshot "$CAPABILITY_SNAPSHOT_ID" --arg digest "$HARNESS_RUNNER_DIGEST" '{run_id:$run,attempt_id:$attempt,attempt_started_at:$started,repo:"perfectuser21/zenithjoy-workspace",pr_number:1581,frozen_base_sha:$base,requested_final_sha:$sha,actual_final_sha:$sha,provider:$provider,account:$account,model:$model,machine:$machine,capability_snapshot_id:$snapshot,runner_digest:$digest}' >"$EVIDENCE_DIR/run-manifest.json"
-ELAPSED=$(( $(date +%s) - START_EPOCH ))
-[ "$ELAPSED" -le 7200 ] || { echo "FAIL: elapsed=${ELAPSED}s > 7200s"; exit 1; }
-echo "OK: PR #1581 exact SHA real fleet product validation passed elapsed=${ELAPSED}s"
+jq -n --arg run "$RUN_ID" --arg attempt "$ATTEMPT_ID" --arg started "$STARTED_AT" --arg pipeline "$HARNESS_PIPELINE_STARTED_AT" --arg deadline "$HARNESS_DEADLINE_AT" --arg sha "$EXPECTED_SHA" --arg base "$BASE_SHA" --arg provider "$HARNESS_PROVIDER" --arg account "$HARNESS_ACCOUNT" --arg model "$HARNESS_MODEL" --arg machine "$HARNESS_MACHINE" --arg snapshot "$CAPABILITY_SNAPSHOT_ID" --arg digest "$HARNESS_RUNNER_DIGEST" '{run_id:$run,attempt_id:$attempt,attempt_started_at:$started,pipeline_started_at:$pipeline,deadline_at:$deadline,repo:"perfectuser21/zenithjoy-workspace",pr_number:1581,frozen_base_sha:$base,requested_final_sha:$sha,actual_final_sha:$sha,provider:$provider,account:$account,model:$model,machine:$machine,capability_snapshot_id:$snapshot,runner_digest:$digest}' >"$EVIDENCE_DIR/run-manifest.json"
+check_deadline
+ELAPSED=$(( $(date +%s) - PIPELINE_START_EPOCH ))
+echo "OK: PR #1581 exact SHA real fleet product validation passed shared_pipeline_elapsed=${ELAPSED}s"
 ```
 
 通过标准：唯一 Fleet 数据资源为本 attempt `DB_URL`；真实 migration→真实 signup/session→双租户 HTTP/DB 顺序零写入与并发一成一拒全绿；不直接 INSERT 业务身份，不预注入 cookie/tenant；attestation 与远端 SHA 精确匹配；总耗时 ≤7200 秒。脚本仅生成真实运行清单，不伪造 Evaluator/Judge verdict。
 
 ### Final gate 时序（Runner/Controller 强制）
 
+0. Controller 在整个 run 入口一次生成 `HARNESS_PIPELINE_STARTED_AT` 和 `HARNESS_DEADLINE_AT`（精确 +7200 秒），传给 E2E、Evaluator 与 Judge；任一角色不得重写。Evaluator、Judge attestation、Judge verdict 和 gate 必须从 run-manifest 复制这两个字段，写前/写后检查未超 deadline。
 1. Evaluator 用自己的 Runner identity 产出 `evaluator-verdict.json`。
 2. Independent Judge 启动时先直接从其 Runner 注入的 `HARNESS_ATTEMPT_ID`、`HARNESS_PROVIDER`、`HARNESS_ACCOUNT`、`HARNESS_MACHINE`、`HARNESS_MODEL`、`HARNESS_RUNNER_DIGEST`、`CAPABILITY_SNAPSHOT_ID` 与当前时间生成 `judge-runner-attestation.json`。该文件至少包含 `role="independent_judge"`、稳定 run/repo/PR/final SHA、上述 7 个运行时身份字段、`producer_execution_id`（取当前 Judge `HARNESS_ATTEMPT_ID`）、`attempt_started_at` 与 `produced_at`；不得接收 verdict body 覆盖这些值。Judge verdict 只能引用该文件并逐字段复制身份，禁止复制 Evaluator 或 GAN 作者身份。
-3. Judge 完成后运行 `scripts/recompute-merge-gate.mjs`。脚本必须在最终判定点真实重读 `refs/pull/1581/head`；远端不可达、HEAD 不等于固定 SHA 或不等于任一证据 SHA，均写 `merge_allowed=false` 并非零退出。任何执行 merge 的控制器必须只消费此次现场重算结果，不得消费较早的 gate 文件。
+3. Judge 完成后运行 `scripts/recompute-merge-gate.mjs`。脚本必须先核对四源共享时间窗、所有时间戳及当前时间未超 deadline，再在最终判定点真实重读 `refs/pull/1581/head`；超时、远端不可达、HEAD 不等于固定 SHA 或不等于任一证据 SHA，均写 `merge_allowed=false` 并非零退出。任何执行 merge 的控制器必须只消费此次现场重算结果，不得消费较早的 gate 文件。
 
 ## 探索提示（L3 探索层 — evaluator 剧本全过后执行）
 
@@ -305,3 +323,4 @@ echo "OK: PR #1581 exact SHA real fleet product validation passed elapsed=${ELAP
 | 合并机械门 | `sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts` | 机械合并门仅在双裁决新鲜且 SHA 一致时放行 | merge gate 缺失，真实解释器报 ENOENT |
 | 合并门负向重算 | `sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts` | 机械合并门重算会拒绝 SHA 漂移且留下不可合并原因 | 重算器缺失，真实解释器报 MODULE_NOT_FOUND |
 | 放行前远端 HEAD 重读 | `sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts` | 机械合并门重算会拒绝门禁时远端 PR HEAD 漂移 | 重算器缺失，真实解释器报 MODULE_NOT_FOUND |
+| 全 run 共享截止时间 | `sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts` | 机械合并门重算会拒绝全 run 共享截止时间超时 | 重算器缺失，真实解释器报 MODULE_NOT_FOUND |

@@ -14,10 +14,10 @@ target_environment: local_api
   Test: node -e "const fs=require('fs'),d=fs.readFileSync('sprints/08040114-kernel-pr1581-fleet-validation-r13/contract-draft.md','utf8'),t=fs.readFileSync('sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts','utf8');if(!d.includes('GP-Anchor: line02/keyword_acquisition keep-green')||!d.includes('## E2E 验收')||!t.includes('机械合并门重算会拒绝 SHA 漂移'))process.exit(1)"
 
 - [ ] [ARTIFACT] 本 run 运行清单记录固定 repo/PR/base/final SHA 与 Runner late-bound 完整 Fleet attestation
-  Test: node -e "const d=require('./sprints/08040114-kernel-pr1581-fleet-validation-r13/evidence/run-manifest.json');for(const k of ['attempt_id','provider','account','model','machine','capability_snapshot_id','runner_digest'])if(typeof d[k]!=='string'||!d[k])process.exit(1);if(d.machine!=='us-mac-m4'||d.actual_final_sha!=='c305f6217da65bb69413c39e621b7e797e0fb189')process.exit(1)"
+  Test: node -e "const d=require('./sprints/08040114-kernel-pr1581-fleet-validation-r13/evidence/run-manifest.json');for(const k of ['attempt_id','provider','account','model','machine','capability_snapshot_id','runner_digest','pipeline_started_at','deadline_at'])if(typeof d[k]!=='string'||!d[k])process.exit(1);if(d.machine!=='us-mac-m4'||d.actual_final_sha!=='c305f6217da65bb69413c39e621b7e797e0fb189'||Date.parse(d.deadline_at)-Date.parse(d.pipeline_started_at)!==7200000)process.exit(1)"
 
-- [ ] [ARTIFACT] 合并门重算器具备四源读取、Judge Runner attestation 绑定、放行前远端 HEAD 重读、SHA-256 绑定、fail-closed 写出与非零退出
-  Test: node -e "const c=require('fs').readFileSync('sprints/08040114-kernel-pr1581-fleet-validation-r13/scripts/recompute-merge-gate.mjs','utf8');for(const s of ['run-manifest.json','evaluator-verdict.json','judge-runner-attestation.json','independent-judge-verdict.json','refs/pull/1581/head','ls-remote','remote_pr_head_checked_at','merge-gate.json','createHash','source_sha256','merge_allowed','process.exitCode'])if(!c.includes(s))process.exit(1)"
+- [ ] [ARTIFACT] 合并门重算器具备四源读取、Judge Runner attestation 绑定、全 run 共享截止时间、放行前远端 HEAD 重读、SHA-256 绑定、fail-closed 写出与非零退出
+  Test: node -e "const c=require('fs').readFileSync('sprints/08040114-kernel-pr1581-fleet-validation-r13/scripts/recompute-merge-gate.mjs','utf8');for(const s of ['run-manifest.json','evaluator-verdict.json','judge-runner-attestation.json','independent-judge-verdict.json','pipeline_started_at','deadline_at','pipeline_deadline_exceeded','refs/pull/1581/head','ls-remote','remote_pr_head_checked_at','merge-gate.json','createHash','source_sha256','merge_allowed','process.exitCode'])if(!c.includes(s))process.exit(1)"
 
 ## BEHAVIOR 条目
 
@@ -31,27 +31,27 @@ target_environment: local_api
 - [ ] [BEHAVIOR] [L2] B-02: 目标 SHA 在 attempt 空库完成真实 signup 双租户产品验证 [接缝×2]
   动作: 在 detached 目标 worktree `npm ci`，对同一 `DB_URL` 跑真实 migration，启动真实 API，注册两个临时主体并用 cookie 调 PUT/PATCH
   预期观察: 非法局部更新均 400 `INVALID_CONFIG` 且 A/B 完整快照不变；同租户并发的两次单独合法 patch 恰一 200、一 400，最终 `min<=max`，B 不变
-  等待预算: 7200s
+  等待预算: 5400s（且受全 run 共享 `deadline_at` 限制，不得重置）
   留证: candidate integration stdout、API log、HTTP body、DB before/after diff 与 E2E exit code
   Test: manual:bash -c 'awk '"'"'/^## E2E 验收/{f=1;next} f&&/^## /{exit} f&&/^```bash/{b=1;next} b&&/^```/{exit} b{print}'"'"' sprints/08040114-kernel-pr1581-fleet-validation-r13/contract-draft.md > /tmp/kernel-pr1581-r13-e2e.sh; bash /tmp/kernel-pr1581-r13-e2e.sh'
 
 - [ ] [BEHAVIOR] [L2] B-03: Evaluator 产生其 runtime attempt 新鲜 PASS 证据 [接缝×2]
   动作: 完成产品 E2E 后由 Evaluator 写独立 verdict，记录真实 exit code、log_tail 与逐行为结果
-  预期观察: verdict=`PASS`、role=`evaluator`、run/final SHA 匹配冻结对象；attempt/provider/account/model/machine/snapshot/digest 匹配 Evaluator Runner 现场写入的 run-manifest，produced_at 与 mtime 均在其 7200 秒窗口内
-  等待预算: 7200s
+  预期观察: verdict=`PASS`、role=`evaluator`、run/final SHA 匹配冻结对象；attempt/provider/account/model/machine/snapshot/digest 匹配 Evaluator Runner，pipeline_started_at/deadline_at 与 run-manifest 字面一致，produced_at 与 mtime 均在全 run 唯一 7200 秒窗口内
+  等待预算: 1200s（且不得越过共享 `deadline_at`）
   留证: `evidence/evaluator-verdict.json`、行为日志尾部与文件 SHA-256
   Test: manual:bash -c 'npx vitest run sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts -t "Evaluator 裁决为本 attempt 新鲜 PASS 且绑定精确最终 SHA" --reporter=verbose'
 
 - [ ] [BEHAVIOR] [L2] B-04: Independent Judge 独立产生同 SHA APPROVED 证据 [接缝×2]
   动作: Judge Runner 先用现场注入的 `HARNESS_*` 与 `CAPABILITY_SNAPSHOT_ID` 写独立 attestation；Judge 再审查合同、真实日志和证据摘要并写自己的 verdict
-  预期观察: verdict=`APPROVED`、role=`independent_judge`、producer_execution_id 与 runtime attempt 均与 Evaluator 不同、final SHA 一致；Judge verdict 的 attempt/provider/account/model/machine/snapshot/digest/producer_execution_id 逐字段等于独立 Runner attestation，并记录 Evaluator attempt/capability 引用与文件真实 SHA-256
-  等待预算: 7200s
+  预期观察: verdict=`APPROVED`、role=`independent_judge`、producer_execution_id 与 runtime attempt 均与 Evaluator 不同、final SHA 一致；Judge verdict 的 attempt/provider/account/model/machine/snapshot/digest/producer_execution_id 逐字段等于独立 Runner attestation，pipeline_started_at/deadline_at 与 run-manifest 字面一致且时间戳均未越界，并记录 Evaluator attempt/capability 引用与文件真实 SHA-256
+  等待预算: 480s（且不得越过共享 `deadline_at`）
   留证: `evidence/judge-runner-attestation.json`、`evidence/independent-judge-verdict.json`、独立行为日志与 evaluator_evidence_sha256
   Test: manual:bash -c 'npx vitest run sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts -t "Independent Judge 裁决独立新鲜 APPROVED 且绑定同一最终 SHA" --reporter=verbose'
 
 - [ ] [BEHAVIOR] [L2] B-05: 双裁决机械 AND 门只对新鲜同 SHA 证据放行 [接缝×2]
   动作: 执行 `scripts/recompute-merge-gate.mjs` 读取同一 run 的四源文件，并在最终放行点真实重读远端 `refs/pull/1581/head`，覆盖生成 merge-gate.json 并运行证据 SHA 漂移自测
-  预期观察: 仅双裁决通过、Judge attestation 匹配且新鲜同 SHA时 `merge_allowed=true`、`reasons=[]`，记录四源 SHA-256、远端 HEAD 与读取时间；证据 SHA 漂移自测非零且明确给出 `judge_final_sha_mismatch`
+  预期观察: 仅双裁决通过、Judge attestation 匹配、四源共用同一 7200 秒窗口且当前时间未超 deadline、同 SHA 时 `merge_allowed=true`、`reasons=[]`，记录四源 SHA-256、远端 HEAD 与读取时间；证据 SHA 漂移自测非零且明确给出 `judge_final_sha_mismatch`
   等待预算: 30s
   留证: 现场重算的 `evidence/merge-gate.json`、四源 SHA-256、门禁时远端 HEAD、Vitest stdout 与漂移拒绝原因
   Test: manual:bash -c 'npx vitest run sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts -t "机械合并门" --reporter=verbose'
@@ -62,6 +62,13 @@ target_environment: local_api
   等待预算: 30s
   留证: Vitest stdout、远端 HEAD 读取时间与 `remote_pr_head_mismatch` 诊断 JSON
   Test: manual:bash -c 'npx vitest run sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts -t "机械合并门重算会拒绝门禁时远端 PR HEAD 漂移" --reporter=verbose'
+
+- [ ] [BEHAVIOR] [L2] B-07: 全 run 共享 7200 秒截止时间超时时 fail-closed [接缝×2]
+  动作: 运行门禁超时自测，将当前时间置于 run-manifest 共享 `deadline_at` 之后
+  预期观察: 重算器非零退出，`merge_allowed=false`，reasons 含 `pipeline_deadline_exceeded`；不为 Evaluator 或 Judge 重建新的 7200 秒窗口
+  等待预算: 30s
+  留证: Vitest stdout 与超时诊断 JSON
+  Test: manual:bash -c 'npx vitest run sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts -t "机械合并门重算会拒绝全 run 共享截止时间超时" --reporter=verbose'
 
 ## Invariant 映射
 

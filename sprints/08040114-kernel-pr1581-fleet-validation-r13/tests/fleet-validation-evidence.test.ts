@@ -22,14 +22,30 @@ function readJson(name: string): Json {
   return JSON.parse(readFileSync(join(evidenceDir, name), 'utf8')) as Json;
 }
 
-function expectFresh(name: string, startedAt: string, artifact: Json): void {
-  const attemptStarted = Date.parse(startedAt);
+function expectPipelineWindow(manifest: Json): { pipelineStarted: number; deadline: number } {
+  const pipelineStarted = Date.parse(manifest.pipeline_started_at);
+  const deadline = Date.parse(manifest.deadline_at);
+  expect(Number.isFinite(pipelineStarted)).toBe(true);
+  expect(Number.isFinite(deadline)).toBe(true);
+  expect(deadline - pipelineStarted).toBe(7_200_000);
+  return { pipelineStarted, deadline };
+}
+
+function expectFresh(name: string, manifest: Json, artifact: Json): void {
+  const { pipelineStarted, deadline } = expectPipelineWindow(manifest);
+  const attemptStarted = Date.parse(artifact.attempt_started_at);
   const producedAt = Date.parse(artifact.produced_at);
   expect(Number.isFinite(attemptStarted)).toBe(true);
   expect(Number.isFinite(producedAt)).toBe(true);
+  expect(artifact.pipeline_started_at).toBe(manifest.pipeline_started_at);
+  expect(artifact.deadline_at).toBe(manifest.deadline_at);
+  expect(attemptStarted).toBeGreaterThanOrEqual(pipelineStarted);
+  expect(attemptStarted).toBeLessThanOrEqual(deadline);
   expect(producedAt).toBeGreaterThanOrEqual(attemptStarted);
-  expect(producedAt - attemptStarted).toBeLessThanOrEqual(7_200_000);
-  expect(statSync(join(evidenceDir, name)).mtimeMs).toBeGreaterThanOrEqual(attemptStarted);
+  expect(producedAt).toBeLessThanOrEqual(deadline);
+  const mtime = statSync(join(evidenceDir, name)).mtimeMs;
+  expect(mtime).toBeGreaterThanOrEqual(pipelineStarted);
+  expect(mtime).toBeLessThanOrEqual(deadline);
 }
 
 function expectStableBinding(artifact: Json): void {
@@ -37,6 +53,8 @@ function expectStableBinding(artifact: Json): void {
   expect(artifact.repo).toBe(expected.repo);
   expect(artifact.pr_number).toBe(expected.pr);
   expect(artifact.final_sha).toBe(expected.finalSha);
+  expect(typeof artifact.pipeline_started_at).toBe('string');
+  expect(typeof artifact.deadline_at).toBe('string');
 }
 
 function expectRuntimeIdentity(artifact: Json): void {
@@ -90,6 +108,12 @@ describe('PR #1581 real fleet validation evidence [BEHAVIOR]', () => {
       runner_digest: expected.runnerDigest,
     });
     expectRuntimeIdentity(manifest);
+    const { pipelineStarted, deadline } = expectPipelineWindow(manifest);
+    const manifestMtime = statSync(join(evidenceDir, 'run-manifest.json')).mtimeMs;
+    expect(Date.parse(manifest.attempt_started_at)).toBeGreaterThanOrEqual(pipelineStarted);
+    expect(Date.parse(manifest.attempt_started_at)).toBeLessThanOrEqual(deadline);
+    expect(manifestMtime).toBeGreaterThanOrEqual(pipelineStarted);
+    expect(manifestMtime).toBeLessThanOrEqual(deadline);
   });
 
   it('Evaluator 裁决为本 attempt 新鲜 PASS 且绑定精确最终 SHA', () => {
@@ -100,11 +124,12 @@ describe('PR #1581 real fleet validation evidence [BEHAVIOR]', () => {
     expectSameRuntimeIdentity(evaluator, manifest);
     expect(evaluator.verdict).toBe('PASS');
     expect(evaluator.role).toBe('evaluator');
-    expectFresh('evaluator-verdict.json', manifest.attempt_started_at, evaluator);
+    expectFresh('evaluator-verdict.json', manifest, evaluator);
     expectExecutableVerdict(evaluator);
   });
 
   it('Independent Judge 裁决独立新鲜 APPROVED 且绑定同一最终 SHA', () => {
+    const manifest = readJson('run-manifest.json');
     const evaluator = readJson('evaluator-verdict.json');
     const judgeAttestation = readJson('judge-runner-attestation.json');
     const judge = readJson('independent-judge-verdict.json');
@@ -128,8 +153,8 @@ describe('PR #1581 real fleet validation evidence [BEHAVIOR]', () => {
     expect(judge.evaluator_attempt_id).toBe(evaluator.attempt_id);
     expect(judge.evaluator_capability_snapshot_id).toBe(evaluator.capability_snapshot_id);
     expect(typeof judgeAttestation.attempt_started_at).toBe('string');
-    expectFresh('judge-runner-attestation.json', judgeAttestation.attempt_started_at, judgeAttestation);
-    expectFresh('independent-judge-verdict.json', judgeAttestation.attempt_started_at, judge);
+    expectFresh('judge-runner-attestation.json', manifest, judgeAttestation);
+    expectFresh('independent-judge-verdict.json', manifest, judge);
     expectExecutableVerdict(judge);
   });
 
@@ -146,7 +171,10 @@ describe('PR #1581 real fleet validation evidence [BEHAVIOR]', () => {
     expect(gate.evaluator_final_sha).toBe(expected.finalSha);
     expect(gate.judge_final_sha).toBe(expected.finalSha);
     expect(gate.remote_pr_head).toBe(expected.finalSha);
-    expect(Date.parse(gate.remote_pr_head_checked_at)).toBeGreaterThanOrEqual(Date.parse(manifest.attempt_started_at));
+    const { pipelineStarted, deadline } = expectPipelineWindow(manifest);
+    expect(Date.parse(gate.remote_pr_head_checked_at)).toBeGreaterThanOrEqual(pipelineStarted);
+    expect(Date.parse(gate.remote_pr_head_checked_at)).toBeLessThanOrEqual(deadline);
+    expect(Date.now()).toBeLessThanOrEqual(deadline);
     expect(gate.reasons).toEqual([]);
     expect(gate.source_sha256).toMatchObject({
       run_manifest: expect.stringMatching(/^[0-9a-f]{64}$/),
@@ -154,7 +182,7 @@ describe('PR #1581 real fleet validation evidence [BEHAVIOR]', () => {
       judge_runner_attestation: expect.stringMatching(/^[0-9a-f]{64}$/),
       independent_judge: expect.stringMatching(/^[0-9a-f]{64}$/),
     });
-    expectFresh('merge-gate.json', manifest.attempt_started_at, gate);
+    expectFresh('merge-gate.json', manifest, gate);
     expect(evaluator.final_sha).toBe(judge.final_sha);
   });
 
@@ -176,5 +204,15 @@ describe('PR #1581 real fleet validation evidence [BEHAVIOR]', () => {
     const diagnostic = JSON.parse(result.stdout.trim()) as Json;
     expect(diagnostic.merge_allowed).toBe(false);
     expect(diagnostic.reasons).toContain('remote_pr_head_mismatch');
+  });
+
+  it('机械合并门重算会拒绝全 run 共享截止时间超时', () => {
+    const result = spawnSync('node', [gateBuilder, '--evidence-dir', evidenceDir, '--self-test-deadline-exceeded'], {
+      encoding: 'utf8',
+    });
+    expect(result.status).not.toBe(0);
+    const diagnostic = JSON.parse(result.stdout.trim()) as Json;
+    expect(diagnostic.merge_allowed).toBe(false);
+    expect(diagnostic.reasons).toContain('pipeline_deadline_exceeded');
   });
 });

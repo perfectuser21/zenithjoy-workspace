@@ -10,8 +10,8 @@
       "dod": [
         "[BEHAVIOR] 固定 PR HEAD、冻结基线与 Fleet capability attestation 逐字段一致",
         "[BEHAVIOR] attempt 空库经真实 migration/signup 后，目标候选的 effective-config 产品验证通过",
-        "[BEHAVIOR] Evaluator PASS 与 Independent Judge APPROVED 分别绑定各自 Runner runtime identity；Judge verdict 逐字段绑定其独立 Runner attestation，且均为本 run 新鲜证据并绑定同一最终 SHA",
-        "[BEHAVIOR] 重算器现场读取四源证据并在放行前重读远端 PR HEAD，仅在双证据通过、新鲜且 SHA 一致时输出 merge_allowed=true，并对证据或远端漂移非零退出",
+        "[BEHAVIOR] Evaluator PASS 与 Independent Judge APPROVED 分别绑定各自 Runner runtime identity；Judge verdict 逐字段绑定其独立 Runner attestation，且均为本 run 新鲜证据、绑定同一最终 SHA 并共用同一 pipeline_started_at/deadline_at",
+        "[BEHAVIOR] 重算器现场读取四源证据并在放行前重读远端 PR HEAD，仅在双证据通过、新鲜、未超过全 run 共享 7200 秒截止时间且 SHA 一致时输出 merge_allowed=true，并对证据、远端漂移或超时非零退出",
         "[ARTIFACT] evidence/run-manifest.json、evaluator-verdict.json、judge-runner-attestation.json、independent-judge-verdict.json、merge-gate.json"
       ],
       "files": [
