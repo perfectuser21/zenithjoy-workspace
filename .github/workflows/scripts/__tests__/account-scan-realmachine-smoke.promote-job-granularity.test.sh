@@ -17,6 +17,6 @@ if grep -q '{c:\.conclusion' "$WF"; then
   echo "❌ FAIL: 仍在用 workflow 级 conclusion 判定（连坐模式）"; FAIL=1
 fi
 grep -q 'ANDROID_WARN' "$WF" || { echo "❌ FAIL: 真安卓应为警告不阻塞(缺 ANDROID_WARN 逻辑)"; FAIL=1; }
-grep -q 'AGE_H' "$WF" && grep -q '36' "$WF" || { echo "❌ FAIL: 36h 新鲜度检查丢失"; FAIL=1; }
+grep -q 'AGE_H" -gt 36' "$WF" || { echo "❌ FAIL: 36h 新鲜度判定丢失（AGE_H -gt 36 比较不存在，注释里的36不算）"; FAIL=1; }
 
 [ "$FAIL" -eq 0 ] && { echo "✅ PASS"; exit 0; } || { echo "❌ RED/FAIL"; exit 1; }

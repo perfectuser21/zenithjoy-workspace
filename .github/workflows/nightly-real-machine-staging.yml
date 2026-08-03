@@ -33,6 +33,8 @@ concurrency:
 jobs:
   # ─── 真微信 full check：复用 wechat-cs-e2e job3 的气泡门（PsExec -i 1 进 session 1）───
   wechat-bubble:
+    # ⚠️ 三个 job 显示名的前缀（真微信/真抖音/真安卓）被 promote-all-prod.yml 证据②按
+    # startswith 匹配作放行证据——改 job 名必须同步改 promote，否则会全部落入 missing 判红。
     name: 真微信 — 气泡门 full check（真发文件传输助手）
     runs-on: [self-hosted, wechat-capable]
     timeout-minutes: 10

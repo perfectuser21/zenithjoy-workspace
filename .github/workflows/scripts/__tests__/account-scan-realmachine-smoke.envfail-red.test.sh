@@ -14,8 +14,8 @@ echo "━━ envfail-red 结构性测试 ━━"
 [ -f "$WF" ] || { echo "❌ $WF 不存在"; exit 1; }
 FAIL=0
 
-# "-eq 3" 条件后 3 行内出现 exit 0 = 包装还在
-WRAP=$(awk '/-eq 3/{found=NR} found && NR<=found+3 && /exit 0/{print NR; exit}' "$WF")
+# "-eq 3" 条件后 6 行内出现 exit 0 = 包装还在（窗口放宽防中间夹 echo 漏检）
+WRAP=$(awk '/-eq 3/{found=NR} found && NR<=found+6 && /exit 0/{print NR; exit}' "$WF")
 if [ -n "$WRAP" ]; then
   echo "❌ FAIL: 刀D 仍有 envfail(exit 3)→exit 0 包装 (line $WRAP)——违反 decision 2f11ae25"; FAIL=1
 else
