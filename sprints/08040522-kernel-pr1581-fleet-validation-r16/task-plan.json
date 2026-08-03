@@ -1,0 +1,33 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "本 Sprint 是 PR #1581 的后台 Kernel Harness 严格 Fleet 验证链路",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "在严格 us-mac-m4 上完成 PR #1581 签名三角色证据链验证",
+      "scope": "由 Fleet 外部签名每角色 start/completion receipt，在 detached c305f621 worktree 与 attempt 空库执行真实检查，按 fail-closed 规则形成 verdict；不修改产品实现、共享 Red fixture 或合并 PR",
+      "dod": [
+        "[BEHAVIOR] 三角色各有签名有效、绑定自身 runtime identity/evidence digest 的独立 Fleet start/completion receipt",
+        "[BEHAVIOR] Generator/Evaluator 各自在 detached c305f621 worktree 与 attempt 空库执行相同五个 stable checks",
+        "[BEHAVIOR] 任一签名、摘要、目标 SHA、检查或 merge 时序异常时 Judge verdict 不得 PASS",
+        "[ARTIFACT] run manifest、六份签名 receipt、三份 role evidence 形成可追溯链"
+      ],
+      "files": [
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/run-manifest.json",
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/runner-start-generator.json",
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/runner-complete-generator.json",
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/generator.json",
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/runner-start-evaluator.json",
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/runner-complete-evaluator.json",
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/evaluator.json",
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/runner-start-judge.json",
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/runner-complete-judge.json",
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/judge.json"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 120
+    }
+  ]
+}
