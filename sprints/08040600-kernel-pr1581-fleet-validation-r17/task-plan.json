@@ -8,7 +8,8 @@
       "title": "完成 PR #1581 精确 SHA 的真实 fleet 三角色验证",
       "scope": "在 strict us-mac-m4 对精确目标 SHA 执行产品验证；每个角色消费 Fleet 在角色启动前签发的 receipt，并保留成功或失败完整证据，Judge 给出一致裁决；不修改产品或合并 PR。",
       "dod": [
-        "[BEHAVIOR] Generator 消费只读 Fleet receipt，在真 Postgres 和真实登录下完成双租户及并发冲突验证",
+        "[BEHAVIOR] Generator 消费只读 Fleet receipt，在候选独立 worktree 内机检 HEAD 精确等于目标 SHA",
+        "[BEHAVIOR] Generator 在同一空 DB_URL 跑真实 migration、机检目标表、动态创建双 signup/session/tenant，并断言跨租户泄漏数为 0",
         "[BEHAVIOR] Evaluator 无论成功或失败均输出完整 envelope，verdict 由 exit_code 与 behavior_tests 唯一推导",
         "[BEHAVIOR] Judge 引用 Evaluator SHA-256，按确定性规则输出 PASS/FAIL/INSUFFICIENT_EVIDENCE",
         "[BEHAVIOR] 最终裁决前 PR 保持 open、未合并且 head SHA 未漂移",

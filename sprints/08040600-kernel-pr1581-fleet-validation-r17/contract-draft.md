@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 4)
+# Sprint Contract Draft (Round 5)
 
 ## Notes
 
@@ -6,7 +6,7 @@
 - contract-gate: skipped (file not found, third-party repo)
 - Registry 未提供本验证流程专属 HTTP schema，按 PRD 字面协议定义证据 envelope；`context-manifest` 无累积 FR。
 - `product-map:check` 首次执行因当前 workspace 未安装 `ajv` 而未启动校验逻辑；锁定依赖安装后须重跑并以 exit 0 为准。
-- Round 4 修复 reviewer 阻塞：角色脚本禁止创建/改写 Runner attestation；改为消费 Fleet 在角色命令启动前签发、位于 checkout 外的只读 receipt。所有角色用 trap/finalizer 在失败路径也保存完整 envelope，Judge verdict 由证据确定性推导。
+- Round 5 修复 reviewer 阻塞：Generator 必须在独立候选 worktree 内机检 `git rev-parse HEAD`；B-01 将真实 migration、目标表 bootstrap、动态 signup/session/tenant 与双租户隔离分别写成可机检 evidence 字段，禁止仅用笼统的 `product_validation` 声明代替。
 
 ## Response Schema（推导来源: PRD 字面 + NEW_PATTERN）
 
@@ -100,20 +100,20 @@ GP-Anchor: line02/keyword_acquisition keep-green
 ### Step 1: 冻结目标与严格机器
 **来源**: `[FROM_PRD]` — PRD「Golden Path」第 1 步。
 
-**可观测行为**: PR head、实际 checkout 均为目标 SHA；机器为 us-mac-m4；Fleet receipt 在角色命令前已存在且不在 checkout。
+**可观测行为**: PR head 为目标 SHA；Generator 为候选提交创建独立 worktree，并在该 worktree 内读取 `git rev-parse HEAD`，结果必须等于目标 SHA；机器为 us-mac-m4；Fleet receipt 在角色命令前已存在且不在 checkout。
 
-**验证命令**: `H=$(gh api repos/perfectuser21/zenithjoy-workspace/pulls/1581 --jq .head.sha) && [ "$H" = c305f6217da65bb69413c39e621b7e797e0fb189 ] && [ "$HARNESS_MACHINE" = us-mac-m4 ] && [ -f "$HARNESS_FLEET_RECEIPT_PATH" ] && case "$HARNESS_FLEET_RECEIPT_PATH" in "$PWD"/*) exit 1;; esac`
+**验证命令**: `H=$(gh api repos/perfectuser21/zenithjoy-workspace/pulls/1581 --jq .head.sha) && [ "$H" = c305f6217da65bb69413c39e621b7e797e0fb189 ] && A=$(jq -er '.actual_checkout_sha' sprints/08040600-kernel-pr1581-fleet-validation-r17/evidence/generator.json) && [ "$A" = "$H" ] && [ "$HARNESS_MACHINE" = us-mac-m4 ] && [ -f "$HARNESS_FLEET_RECEIPT_PATH" ] && case "$HARNESS_FLEET_RECEIPT_PATH" in "$PWD"/*) exit 1;; esac`
 
 **硬阈值**: 所有字面相等且命令 exit 0。
 
 ### Step 2: Generator 跑真实产品链
 **来源**: `[FROM_PRD]` — PRD「Golden Path」第 2 步和范围限定。
 
-**可观测行为**: 空库 migration、两个真实 signup/cookie、双租户隔离及同租户冲突 PATCH 均真实执行；无论成败均写完整 Generator envelope。
+**可观测行为**: 同一 Fleet 注入的全新 `DB_URL` 上运行仓库真实 migration；用 `to_regclass` 机检 acquisition 配置目标表；经真实 signup/login API 动态创建两个 session cookie 与两个非空且不同的 tenant；tenant A 写入后 tenant B 读取不到 A 的值；同租户冲突 PATCH 真实执行。cookie、密码和 DB_URL 不进入证据。无论成败均写完整 Generator envelope。
 
 **验证命令**: `npx vitest run sprints/08040600-kernel-pr1581-fleet-validation-r17/tests/fleet-validation-evidence.test.ts -t "Generator 新鲜证据绑定 Fleet 前置 receipt 和目标 SHA" --reporter=verbose`
 
-**硬阈值**: 成功路径 response statuses=`[200,400]`、错误码 `INVALID_CONFIG`、最终 min≤max、exit 0；失败路径 evidence.exit_code 非零且 log_tail/失败 behavior 非空。
+**硬阈值**: `actual_checkout_sha=target_sha`；`migration.exit_code=0`；`bootstrap.target_table_exists=true`；`auth.signup_count=2`、`session_cookie_count=2`、两个动态 tenant ID 非空且互异；`tenant_isolation.cross_tenant_leak_count=0`；成功路径 response statuses=`[200,400]`、错误码 `INVALID_CONFIG`、最终 min≤max、exit 0。上述每项都必须在 `behavior_tests` 有独立 L2 记录；失败路径 evidence.exit_code 非零且 log_tail/失败 behavior 非空。
 
 ### Step 3: Evaluator 完整保留成功或失败
 **来源**: `[FROM_PRD]` — PRD「Golden Path」第 2-3 步。
@@ -204,4 +204,4 @@ echo "$PR" | jq -e '.state=="open" and .merged==false and .merged_at==null and .
 exit "$EXIT_CODE"
 ```
 
-E2E 所引用的三个 role helper 由 Generator 按本合同实现：Generator helper 必须执行仓库真实 `npm ci`、migration、API 启动、双 signup cookie、双租户及并发 PATCH；finalizer 必须在任意退出路径输出 schema v2 完整 envelope，且不得写/改 Fleet receipt；Judge helper 必须严格按 Step 4 三值函数裁决。
+E2E 所引用的三个 role helper 由 Generator 按本合同实现：Generator helper 必须 `git fetch origin pull/1581/head`，以 `git rev-parse --verify '<ref>^{commit}'` 解出候选后创建独立 worktree，并在该 worktree 内执行 `git rev-parse HEAD`；不等于目标 SHA 时必须在启动依赖前失败。随后在同一 `DB_URL` 执行仓库真实 `npm ci`、migration、`to_regclass` 目标表断言、API 启动、两个动态 signup cookie、两个动态 tenant 与交叉读取隔离断言、并发 PATCH。每个阶段必须写独立 `behavior_tests`，不得只写总括成功字段；finalizer 必须在任意退出路径输出 schema v2 完整 envelope，且不得写/改 Fleet receipt；Judge helper必须严格按 Step 4 三值函数裁决。

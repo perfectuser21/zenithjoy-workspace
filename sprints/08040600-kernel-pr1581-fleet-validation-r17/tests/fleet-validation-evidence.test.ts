@@ -69,6 +69,18 @@ describe('PR #1581 fleet evidence chain [BEHAVIOR]', () => {
     expect(generator.repository).toBe('perfectuser21/zenithjoy-workspace');
     expect(generator.pr_number).toBe(1581);
     expect(generator.base_sha).toBe('676fed7de12023d355deac7849af8a525ae53f8d');
+    expect(generator.actual_checkout_sha).toBe(finalSha);
+    expect(generator.product_validation.migration).toMatchObject({ exit_code: 0 });
+    expect(generator.product_validation.bootstrap).toMatchObject({ target_table_exists: true });
+    expect(generator.product_validation.auth.signup_count).toBe(2);
+    expect(generator.product_validation.auth.session_cookie_count).toBe(2);
+    expect(generator.product_validation.auth.tenant_ids).toHaveLength(2);
+    expect(generator.product_validation.auth.tenant_ids.every((id: unknown) => typeof id === 'string' && id.length > 0)).toBe(true);
+    expect(new Set(generator.product_validation.auth.tenant_ids).size).toBe(2);
+    expect(generator.product_validation.tenant_isolation).toMatchObject({ cross_tenant_leak_count: 0 });
+    for (const name of ['checkout-head', 'migration', 'target-table-bootstrap', 'dynamic-signup-session-tenant', 'dual-tenant-isolation']) {
+      expect(generator.behavior_tests).toContainEqual(expect.objectContaining({ name, verification_level: 'L2', exit_code: 0 }));
+    }
     expect(generator.product_validation.concurrent_effective_config).toMatchObject({
       response_statuses: [200, 400], invalid_error_code: 'INVALID_CONFIG',
     });

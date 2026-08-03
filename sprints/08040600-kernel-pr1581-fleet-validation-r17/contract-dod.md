@@ -18,8 +18,8 @@ journey_type: autonomous
 ## BEHAVIOR 条目
 
 - [ ] [BEHAVIOR] [L2] B-01: Generator 消费 Fleet 前置 receipt 并验证真实产品链 [接缝×2]
-  动作: Fleet 在角色启动前签发 checkout 外 receipt；Generator 只读核验后，在 us-mac-m4 对目标 SHA 用空库 migration、两个真实 signup cookie 执行双租户和并发冲突验证
-  预期观察: evidence 身份逐字段等于 receipt；并发响应状态为 200/400、错误码 INVALID_CONFIG、最终 min<=max；失败时也保留非零 exit_code、失败 behavior 和 log_tail
+  动作: Fleet 在角色启动前签发 checkout 外 receipt；Generator 只读核验后，在 us-mac-m4 创建候选独立 worktree 并机检 HEAD；在同一空 DB_URL 跑真实 migration、机检目标表，再经真实 signup/login 动态创建两个 session cookie 与不同 tenant，执行跨租户读取隔离和并发冲突验证
+  预期观察: actual_checkout_sha 精确等于目标 SHA；migration exit 0；目标表存在；signup_count=2、session_cookie_count=2、两个 tenant 非空且不同；cross_tenant_leak_count=0；并发响应为 200/400、错误码 INVALID_CONFIG、最终 min<=max；每阶段有独立 L2 behavior，失败也保留非零 exit_code、失败 behavior 和 log_tail
   等待预算: 7200s
   留证: evidence/generator.json、generator.fleet-receipt.json、generator.receipt.sha256 与原始产品日志
   Test: manual:bash -c 'npx vitest run sprints/08040600-kernel-pr1581-fleet-validation-r17/tests/fleet-validation-evidence.test.ts -t "Generator 新鲜证据绑定 Fleet 前置 receipt 和目标 SHA" --reporter=verbose'
@@ -72,7 +72,7 @@ journey_type: autonomous
 - INV-21 smoke 铁律（第 2 次）：N/A，不改 smoke 文件。
 - INV-22 端点鉴权：业务 config 只用真实 signup session cookie。
 - INV-23 smoke 铁律（第 3 次）：N/A，不改 smoke 文件。
-- INV-24 测试默认双租户：Generator 创建两个租户并断言互不串。
+- INV-24 测试默认双租户：Generator 经真实 signup 创建两个不同租户，tenant A 写入后以 tenant B cookie 查询并断言 `cross_tenant_leak_count=0`。
 - INV-25 scheduler jobs：N/A，不新增 cron。
 - INV-26 凭据安全：只用 Runner/临时 cookie jar，凭据不进 git/log。
 - INV-27 生产实体自报：PR head 用 GitHub API，不以 workspace diff 判断。
@@ -84,12 +84,12 @@ journey_type: autonomous
 - INV-33 watchdog 恢复：N/A，不更改任务状态或执行恢复。
 - INV-34 lint-test-quality await：测试文件所有 I/O helper 为 async/await。
 - INV-35 deploy root 安全：N/A，不以生产 deploy root 跑 smoke。
-- INV-36 租户隔离：查询与写入均由真实 session tenant scope，双租户交叉断言。
+- INV-36 租户隔离：查询与写入均由真实 session tenant scope，测试显式核验两个动态 tenant ID 不同且交叉读取泄漏数为 0。
 - INV-37 退役代码 death cause：N/A，不复活功能。
 - INV-38 headed shell 环境：所有必需 HARNESS 变量在角色入口显式校验。
 - INV-39 Red 精确 add：只提交本 Sprint tests 与合同文件。
 - INV-40 单 slot 串行：Generator→Evaluator→Judge 串行；无并行任务。
-- INV-41 历史模板先核实：Round 4 以 reviewer 反馈和真实 PRD 修订，不假设旧路径。
+- INV-41 历史模板先核实：Round 5 以 reviewer 反馈和真实 PRD 修订，不假设旧路径。
 - INV-42 多设备类型：N/A，本任务仅 strict us-mac-m4。
 - INV-43 部署失败不降级：所有失败通过 finalizer 留证并返回非零。
 - INV-44 host 白名单核对 headed：strict affinity 核验实际 HARNESS_MACHINE，不以派发标签代替。
