@@ -17,7 +17,7 @@ name: Promote ALL to Production (一键放行闸：后端+前端整体)
 # Release Gate（2026-07-09 刀C，6站2轨模型第⑤站）：
 #   人工放行保持不变，但机器先查证据——没绿不让点：
 #     ① staging 部署最近一次绿（deploy-us-vps + deploy-dashboard-staging）
-#     ② 真机 nightly 最近 2 晚绿且最新一次 <36h（nightly-real-machine-staging）
+#     ② 真机 nightly 最近 2 晚 真微信/真抖音 job 绿且最新 <36h（job 粒度；真安卓红不阻塞但大字警告）
 #   nightly 可豁免（waive_nightly 填理由，纯云轨改动/引导期用），豁免会大字记录在 run summary——
 #   谁豁免谁负责。promote 成功后自动打 release-YYYYMMDD-N tag + GitHub Release（回滚锚+记录）。
 # ───────────────────────────────────────────────────────────────────────────
@@ -93,19 +93,41 @@ jobs:
           fi
           RUNS=$(gh run list --repo "$GITHUB_REPOSITORY" \
                    --workflow nightly-real-machine-staging.yml \
-                   --status completed --limit 2 --json conclusion,createdAt \
-                   --jq '[.[] | {c:.conclusion, t:.createdAt}]')
+                   --status completed --limit 2 --json databaseId,createdAt \
+                   --jq '[.[] | {id:.databaseId, t:.createdAt}]')
           COUNT=$(echo "$RUNS" | jq 'length')
           echo "nightly 最近完成记录: $RUNS"
           if [ "$COUNT" = "0" ]; then
             echo "::error::nightly 一次都没跑过——没有真机证据，不能 promote（或填 waive_nightly）"
             exit 1
           fi
-          BAD=$(echo "$RUNS" | jq '[.[] | select(.c != "success")] | length')
-          if [ "$BAD" != "0" ]; then
-            echo "::error::nightly 最近 $COUNT 次中有非绿——真机回归没过，不能 promote（先修红或填 waive_nightly）"
-            exit 1
+          # job 粒度判定（用户拍板方案B，2026-08-03，互不连坐）：真微信/真抖音阻塞本 promote
+          # （发的是中台后端+前端），真安卓 account-scan 红不阻塞（APK 走 COS 分发不经此
+          # promote）但大字警告 summary——谁放行谁知情。
+          FAIL=0; ANDROID_WARN=0
+          for RID in $(echo "$RUNS" | jq -r '.[].id'); do
+            JOBS=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RID/jobs" \
+                     --jq '[.jobs[] | {n:.name, c:.conclusion}]')
+            echo "run $RID jobs: $JOBS"
+            for NAME in "真微信" "真抖音"; do
+              C=$(echo "$JOBS" | jq -r --arg n "$NAME" '[.[] | select(.n | startswith($n))][0].c // "missing"')
+              if [ "$C" != "success" ]; then
+                echo "::error::run $RID 的 $NAME job 非绿（$C）——真机回归没过，不能 promote（先修红或填 waive_nightly）"
+                FAIL=1
+              fi
+            done
+            AC=$(echo "$JOBS" | jq -r '[.[] | select(.n | startswith("真安卓"))][0].c // "missing"')
+            [ "$AC" = "success" ] || ANDROID_WARN=1
+          done
+          if [ "$ANDROID_WARN" = "1" ]; then
+            {
+              echo "## ⚠️ 真安卓 account-scan 车道近 2 晚有红"
+              echo ""
+              echo "不阻塞本次 promote（安卓 APK 走 COS 分发），但安卓真机验证车道当前不可信——谁放行谁知情（decision 2f11ae25 / 方案B）。"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "⚠️ 真安卓车道近2晚有红：不阻塞，已大字记录 summary"
           fi
+          [ "$FAIL" = "0" ] || exit 1
           LATEST=$(echo "$RUNS" | jq -r '.[0].t')
           AGE_H=$(( ( $(date +%s) - $(date -d "$LATEST" +%s) ) / 3600 ))
           echo "最新 nightly: $LATEST（${AGE_H}h 前）"
@@ -113,7 +135,7 @@ jobs:
             echo "::error::最新 nightly 已 ${AGE_H}h（>36h）——证据过期（nightly 可能停摆），不能 promote"
             exit 1
           fi
-          echo "✅ nightly 证据齐：最近 ${COUNT} 次全绿，最新 ${AGE_H}h 前。"
+          echo "✅ nightly 证据齐：最近 ${COUNT} 次 真微信/真抖音 job 全绿，最新 ${AGE_H}h 前。"
 
   promote-backend:
     name: 1/2 后端 → 生产 :5200（HK docker + 冒烟）

@@ -60,7 +60,14 @@ assert_task_terminal_success() {
 }
 
 main() {
-  ADB="${ADB:-adb}"
+  # ── ADB 解析（decision 2f11ae25 配套：裸 adb 不在 runner PATH 时静默失败被误报"无设备"）──
+  # 未显式传入时探测：glob scrcpy 自带 adb 优先（e2e-line02-android-collect.yml 已验证顺序；
+  # sort -V 防 3.10<3.2 字典序取旧版），command -v 兜底；全失败=独立 envfail 文案。
+  if [ -z "${ADB:-}" ]; then
+    ADB=$(ls /c/Users/*/AppData/Local/Microsoft/WinGet/Packages/Genymobile.scrcpy_*/scrcpy-*/adb.exe 2>/dev/null | sort -V | tail -1 || true)
+    [ -n "$ADB" ] || ADB=$(command -v adb 2>/dev/null || true)
+    [ -n "$ADB" ] || envfail "runner 上找不到 adb"
+  fi
   API_BASE="${API_BASE:-https://staging-autopilot.zenjoymedia.media}"
   TENANT="${SMOKE_TENANT:-455a8ca9-5f63-4286-83ce-c5cca04cfd58}"
   DB_SSH_HOST="${DB_SSH_HOST:-vps-hk}"
@@ -74,6 +81,10 @@ main() {
 
   # ── 环境自检（区分"环境未就绪"与"真机验证真的失败"） ────────────────
   command -v jq >/dev/null 2>&1 || envfail "runner 缺 jq"
+
+  # 无论显式传入还是探测所得，先证 adb 本身可用（坏驱动/坏路径不该被误报成"无设备"）
+  ADB_VER_ERR=$("$ADB" version 2>&1 >/dev/null) \
+    || envfail "adb 不可用: ${ADB_VER_ERR:-unknown}（ADB=${ADB}）"
 
   "$ADB" devices 2>/dev/null | grep -qE '[[:space:]]device$' \
     || envfail "无 Android 设备在线(adb devices 无 'device' 行)"
