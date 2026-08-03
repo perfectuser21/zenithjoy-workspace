@@ -108,4 +108,44 @@ class AgentServiceAccountScanTest {
         val parsed = JSONObject(body)
         assertEquals(rawTreeDump, parsed.getString("tree_dump"))
     }
+
+    // ── sprint 08031620-android-scan-preconditions：新增 versionName/stage/foregroundPackage 三字段透传 ──
+    // 服务端 apps/api/src/routes/agent-burner.ts 目前只解构 screenshot_b64/tree_dump 等既有字段，
+    // 若不把这三个新字段跟着这条链路走到位，PRD 要求的"运维免登真机排障"就落空——见 contract-draft.md 范围修正说明。
+
+    @Test
+    fun builds_account_scan_result_body_with_new_diagnostic_fields_when_present() {
+        val body = AgentService.buildAccountScanResultBody(
+            requestId = "req1", agentId = "a1", ok = false, stale = false,
+            accountIds = emptyList(), errorCode = "SCREEN_LOCKED",
+            versionName = "2.1.20", stage = "lock_check", foregroundPackage = "com.android.systemui",
+        )
+        assertTrue(body.contains("\"version_name\":\"2.1.20\""))
+        assertTrue(body.contains("\"stage\":\"lock_check\""))
+        assertTrue(body.contains("\"foreground_package\":\"com.android.systemui\""))
+    }
+
+    @Test
+    fun builds_account_scan_result_body_without_new_diagnostic_fields_when_null() {
+        val body = AgentService.buildAccountScanResultBody(
+            requestId = "req2", agentId = "a1", ok = true, stale = false,
+            accountIds = listOf("大湖"), errorCode = "",
+        )
+        assertTrue(body.contains("\"version_name\":null"))
+        assertTrue(body.contains("\"stage\":null"))
+        assertTrue(body.contains("\"foreground_package\":null"))
+    }
+
+    @Test
+    fun new_diagnostic_fields_body_is_valid_json_round_trip() {
+        val body = AgentService.buildAccountScanResultBody(
+            requestId = "req3", agentId = "a1", ok = false, stale = false,
+            accountIds = emptyList(), errorCode = "LAUNCH_BLOCKED",
+            versionName = "2.1.20", stage = "launch_wait", foregroundPackage = "com.coloros.wallpapers",
+        )
+        val parsed = JSONObject(body)
+        assertEquals("2.1.20", parsed.getString("version_name"))
+        assertEquals("launch_wait", parsed.getString("stage"))
+        assertEquals("com.coloros.wallpapers", parsed.getString("foreground_package"))
+    }
 }
