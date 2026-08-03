@@ -5053,6 +5053,14 @@ agent_suite:
   product: 产品基础设施
   note: "GP锚定闭环刀5 — computeGpSmokeRatchet 5个node:test测试，覆盖smoke_files为null/缺失/空数组/全覆盖/golden_paths为空5种场景"
 
+- id: line02-acceptance-spec
+  path: scripts/acceptance-spec/__tests__/line02-android.test.js
+  type: unit
+  ci: L2
+  status: active
+  product: line02客户智能获客
+  note: "发版验收双表刀1 — line02安卓验收规程SSOT(acceptance-spec/line02-android.yaml)，5个node:test测试：真实yaml通过schema校验/cell缺t与na报具体路径错/缺verifiable_by报错/非法枚举报错/renderHtml生成页面无英文残留且判定格数与规程一致"
+
 - id: product-map-sprint-contract
   path: sprints/07280933-product-map-ssot-claude/tests/contract.test.js
   type: e2e
