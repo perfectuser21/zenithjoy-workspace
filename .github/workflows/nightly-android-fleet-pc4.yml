@@ -67,13 +67,22 @@ jobs:
       matrix:
         serial: ${{ fromJson(needs.discover-devices.outputs.serials) }}
     runs-on: [self-hosted, android-capable]
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       ANDROID_SERIAL: ${{ matrix.serial }}
     outputs:
       exit_code: ${{ steps.run.outputs.code }}
     steps:
+      # pc4 到 github.com 的出境带宽实测被限速到 ~10KB/s（GFW 对国内出境大流量的
+      # 统计限速，Tailscale exit-node/SOCKS5 代理均无法绕开——目标域名固定后限速跟着走，
+      # 与 pc4 本机带宽无关，COS 国内直连当时实测 14.7MB/s 印证瓶颈只在"到 github.com"这一段）。
+      # 全量 checkout 31MB 在此带宽下要 30-50 分钟，sparse-checkout 只拉本 job 真正需要的
+      # smoke 脚本目录，checkout 体积降到 KB 级，从根上避开限速而不是硬扛超时。
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/workflows/scripts/smoke
+          sparse-checkout-cone-mode: false
 
       - name: Run account-scan-realmachine-smoke.sh against ${{ matrix.serial }}
         id: run
