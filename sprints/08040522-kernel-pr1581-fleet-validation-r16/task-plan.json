@@ -1,0 +1,30 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "本 Sprint 是 PR #1581 的后台 Kernel Harness 严格 Fleet 验证链路",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "在严格 us-mac-m4 上完成 PR #1581 三角色证据链验证",
+      "scope": "对冻结目标头依次生成本 run 的 Generator、Evaluator 与 Judge 独立路由证明和执行证据，按 fail-closed 规则形成 verdict；不修改产品实现、共享 Red fixture 或合并 PR",
+      "dod": [
+        "[BEHAVIOR] 三角色各有绑定自身 runtime identity 的独立 Runner routing attestation，且均命中 us-mac-m4 无 fallback",
+        "[BEHAVIOR] Generator/Evaluator 各自在 attempt 空库 migration 后执行相同五个 stable check ID 与精确命令",
+        "[BEHAVIOR] 任一必跑检查非零时 Judge verdict 不得 PASS，摘要链与 merge 时序必须匹配",
+        "[ARTIFACT] run manifest、三份 routing attestation、三份 role evidence 形成可追溯链"
+      ],
+      "files": [
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/run-manifest.json",
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/routing-generator.json",
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/routing-evaluator.json",
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/routing-judge.json",
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/generator.json",
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/evaluator.json",
+        "sprints/08040522-kernel-pr1581-fleet-validation-r16/evidence/judge.json"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 120
+    }
+  ]
+}
