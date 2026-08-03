@@ -43,6 +43,11 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
 
     private var state = State.IDLE
 
+    // sprint 08031620-android-scan-preconditions：openSwitchAccountPanel() 返回 false 时，
+    // 记录具体失败原因(SCREEN_LOCKED/LAUNCH_BLOCKED)供 runScanSequence() 读取上报，不改动
+    // DouyinUiaOps 接口既有 Boolean 返回签名（避免波及 DeviceAccountWarmupPass.kt 等其他调用点）。
+    private var lastOpenPanelFailureReason: String? = null
+
     internal enum class State {
         IDLE,
         OPENING_SWITCH_ACCOUNT_PANEL,
@@ -150,7 +155,30 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
                 freshlyScannedRawIds = emptyList(),
             )
             val (screenshotB64, treeDump) = captureFailureDiagnostics()
-            sendScanResultBroadcast(requestId, ok = false, stale = resolution.stale, accountIds = resolution.accountIds, errorCode = "OPEN_PANEL_FAILED", screenshotB64 = screenshotB64, treeDump = treeDump)
+            val foregroundPackage = rootInActiveWindow?.packageName?.toString()
+            // sprint 08031620：openSwitchAccountPanel() 内部识别出锁屏/后台拦截时会设置
+            // lastOpenPanelFailureReason；取不到则回退既有泛化 OPEN_PANEL_FAILED（保持既有语义，
+            // 不破坏 DeviceAccountScanServiceBroadcastTest 既有回归断言）。
+            when (lastOpenPanelFailureReason) {
+                "SCREEN_LOCKED" -> sendScanResultBroadcast(
+                    requestId, ok = false, stale = resolution.stale, accountIds = resolution.accountIds,
+                    errorCode = "SCREEN_LOCKED", screenshotB64 = screenshotB64, treeDump = treeDump,
+                    versionName = com.zenithjoy.agent.BuildConfig.VERSION_NAME, stage = "SCREEN_LOCKED",
+                    foregroundPackage = foregroundPackage,
+                )
+                "LAUNCH_BLOCKED" -> sendScanResultBroadcast(
+                    requestId, ok = false, stale = resolution.stale, accountIds = resolution.accountIds,
+                    errorCode = "LAUNCH_BLOCKED", screenshotB64 = screenshotB64, treeDump = treeDump,
+                    versionName = com.zenithjoy.agent.BuildConfig.VERSION_NAME, stage = "LAUNCH_BLOCKED",
+                    foregroundPackage = foregroundPackage,
+                )
+                else -> sendScanResultBroadcast(
+                    requestId, ok = false, stale = resolution.stale, accountIds = resolution.accountIds,
+                    errorCode = "OPEN_PANEL_FAILED", screenshotB64 = screenshotB64, treeDump = treeDump,
+                    versionName = com.zenithjoy.agent.BuildConfig.VERSION_NAME, stage = "OPEN_PANEL_FAILED",
+                    foregroundPackage = foregroundPackage,
+                )
+            }
             return
         }
 
@@ -214,9 +242,35 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
      * 故先点 我 tab(content-desc"我，按钮")导航到个人页，"切换账号"节点这时才进树。
      */
     override suspend fun openSwitchAccountPanel(): Boolean {
+        lastOpenPanelFailureReason = null
+
+        // 锁屏前置检查（sprint 08031620，真机复现 2026-07-31 agent_scan_failures.id da659ea0）：
+        // 扫描触发时设备可能处于锁屏，此时任何后续操作都是徒劳。检测当前树是否呈现锁屏特征，
+        // 尝试唤醒屏幕后复检；若复检仍是锁屏特征（如密码锁/图案锁等无法程序化解锁的锁屏），
+        // 判定不可编程解锁，独立上报 SCREEN_LOCKED，不再混入泛化 OPEN_PANEL_FAILED。
+        val preCheckDump = rootInActiveWindow?.let { dumpNodeTreeAsString(it) }
+        if (AccountScanFailureClassifier.isLockScreenTreeDump(preCheckDump)) {
+            attemptWakeScreen()
+            delay(500L)
+            val postWakeDump = rootInActiveWindow?.let { dumpNodeTreeAsString(it) }
+            if (AccountScanFailureClassifier.isLockScreenTreeDump(postWakeDump)) {
+                lastOpenPanelFailureReason = "SCREEN_LOCKED"
+                android.util.Log.w(TAG, "设备锁屏且唤醒后仍锁屏，判定不可编程解锁，SCREEN_LOCKED")
+                return false
+            }
+        }
+
         // 先把抖音拉到已知前台(扫描触发时它可能后台/停在任意子页)。
         launchDouyinApp()
         if (!awaitDouyinForeground()) {
+            // 后台启动拦截检测（sprint 08031620，真机复现 2026-07-30 agent_scan_failures.id
+            // 236f43b1，realme RMX3478/ColorOS）：startActivity 被系统后台弹窗权限静默拦截，
+            // 抖音从未真正进入前台、停留桌面 launcher——与既有 CLEAR_TOP 恢复深层子页是不同
+            // 阶段的失败，独立上报 LAUNCH_BLOCKED；无法判定桌面特征时仍走既有 OPEN_PANEL_FAILED。
+            val blockedDump = rootInActiveWindow?.let { dumpNodeTreeAsString(it) }
+            if (AccountScanFailureClassifier.isHomeLauncherTreeDump(blockedDump)) {
+                lastOpenPanelFailureReason = "LAUNCH_BLOCKED"
+            }
             android.util.Log.w(TAG, "抖音未到前台，OPEN_PANEL_FAILED")
             return false
         }
@@ -359,6 +413,29 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
      * 那些页没有底部导航 → 坐标点"我"tab 落空。用 NEW_TASK|CLEAR_TOP(=0x14000000) relaunch 启动
      * activity(SplashActivity)，把它之上的子 activity 全 finish 掉，落到主页 feed(实测有效)。
      */
+    /**
+     * 尝试唤醒屏幕（sprint 08031620）：真机复现 07-31 锁屏场景失败瞬间屏幕熄灭/锁定，任何后续
+     * startActivity/无障碍操作都是徒劳。用短时 WakeLock 触发点亮，不主动尝试解锁手势——图案锁/
+     * 密码锁等安全锁屏无法被无障碍服务程序化解锁，唤醒后复检 tree_dump 仍是锁屏特征即判定
+     * SCREEN_LOCKED（尽力而为，不保证覆盖所有厂商锁屏实现，见 sprint-prd.md 假设段）。
+     */
+    @Suppress("DEPRECATION")
+    private fun attemptWakeScreen() {
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager ?: return
+            val wakeLock = pm.newWakeLock(
+                android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
+                    android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                    android.os.PowerManager.ON_AFTER_RELEASE,
+                "$TAG:ScanWakeUp",
+            )
+            wakeLock.acquire(3000L)
+            wakeLock.release()
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "attemptWakeScreen failed: ${e.message}")
+        }
+    }
+
     private fun launchDouyinApp(): Boolean = try {
         val launchIntent = applicationContext.packageManager.getLaunchIntentForPackage(DOUYIN_PKG)
         if (launchIntent == null) false
@@ -728,6 +805,7 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
     private fun sendScanResultBroadcast(
         requestId: String, ok: Boolean, stale: Boolean, accountIds: List<String>, errorCode: String,
         screenshotB64: String? = null, treeDump: String? = null,
+        versionName: String? = null, stage: String? = null, foregroundPackage: String? = null,
     ) {
         val intent = Intent(ACTION_ACCOUNT_SCAN_RESULT).apply {
             setPackage(applicationContext.packageName)
@@ -738,6 +816,9 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
             putExtra(EXTRA_ERROR, errorCode)
             if (screenshotB64 != null) putExtra(EXTRA_SCREENSHOT_B64, screenshotB64)
             if (treeDump != null) putExtra(EXTRA_TREE_DUMP, treeDump)
+            if (versionName != null) putExtra(EXTRA_VERSION_NAME, versionName)
+            if (stage != null) putExtra(EXTRA_STAGE, stage)
+            if (foregroundPackage != null) putExtra(EXTRA_FOREGROUND_PACKAGE, foregroundPackage)
         }
         sendBroadcast(intent)
         android.util.Log.i(TAG, "account scan result broadcast: requestId=$requestId ok=$ok stale=$stale accounts=${accountIds.size} error=$errorCode hasScreenshot=${screenshotB64 != null}")
@@ -791,6 +872,9 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         const val EXTRA_ERROR = "error"
         const val EXTRA_SCREENSHOT_B64 = "screenshot_b64"
         const val EXTRA_TREE_DUMP = "tree_dump"
+        const val EXTRA_VERSION_NAME = "version_name"
+        const val EXTRA_STAGE = "stage"
+        const val EXTRA_FOREGROUND_PACKAGE = "foreground_package"
         const val ACTION_ACCOUNT_WARMUP_TASK = "com.zenithjoy.agent.ACCOUNT_WARMUP_TASK"
         const val ACTION_ACCOUNT_WARMUP_RESULT = "com.zenithjoy.agent.ACCOUNT_WARMUP_RESULT"
         const val EXTRA_OPERATOR_NICKNAME = "operator_nickname"

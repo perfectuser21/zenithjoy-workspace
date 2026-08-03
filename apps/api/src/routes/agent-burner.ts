@@ -814,7 +814,10 @@ router.get('/dm-tasks/:task_id', async (req: Request, res: Response) => {
 //       无限循环，battery drain + 抖音风控风险。
 // 幂等：镜像 /warmup-result 的模式——已终态(done/failed)的行直接短路，不重复写。
 router.post('/account-scan-result', accountScanResultRateLimit, async (req: Request, res: Response) => {
-  const { agent_id, request_id, ok, account_ids, error_code, screenshot_b64, tree_dump } = req.body || {};
+  const {
+    agent_id, request_id, ok, account_ids, error_code, screenshot_b64, tree_dump,
+    version_name, stage, foreground_package,
+  } = req.body || {};
   if (!agent_id || typeof agent_id !== 'string') {
     return res.status(400).json(ERR('MISSING_AGENT_ID', 'agent_id 必填'));
   }
@@ -921,6 +924,11 @@ router.post('/account-scan-result', accountScanResultRateLimit, async (req: Requ
         JSON.stringify({
           screenshot_b64: typeof screenshot_b64 === 'string' ? screenshot_b64 : null,
           tree_dump: typeof tree_dump === 'string' ? tree_dump : null,
+          // sprint 08031620-android-scan-preconditions：运维排障免登真机复现所需三字段，
+          // 沿用既有 screenshot_b64/tree_dump 同款类型守卫，非法/缺省一律降级为 null。
+          version_name: typeof version_name === 'string' ? version_name : null,
+          stage: typeof stage === 'string' ? stage : null,
+          foreground_package: typeof foreground_package === 'string' ? foreground_package : null,
         }),
       ],
     );

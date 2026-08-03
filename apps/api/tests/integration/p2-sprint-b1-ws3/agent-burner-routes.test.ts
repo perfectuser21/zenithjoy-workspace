@@ -162,4 +162,57 @@ describe('Workstream 3a — agent-burner routes [BEHAVIOR]', () => {
     expect(rows[0].status).toBe('done');
     expect(rows[0].response.comment_count).toBe(5);
   });
+
+  // ── sprint 08031620-android-scan-preconditions：failure detail 全链路透传（真 Postgres，禁 mock 边）──
+  it('POST /api/agent/burner/account-scan-result ok=false 带 version_name/stage/foreground_package → agent_scan_failures.detail 真实持久化三新字段', async () => {
+    const requestId = `req-diag-${Date.now()}`;
+    const r = await request(app)
+      .post('/api/agent/burner/account-scan-result')
+      .send({
+        agent_id: agentId,
+        request_id: requestId,
+        ok: false,
+        account_ids: [],
+        error_code: 'SCREEN_LOCKED',
+        version_name: '2.1.20',
+        stage: 'lock_check',
+        foreground_package: 'com.android.systemui',
+      });
+    expect(r.status).toBe(200);
+
+    const { rows } = await pool.query(
+      `SELECT error_code, detail FROM zenithjoy.agent_scan_failures
+        WHERE agent_id=$1 AND request_id=$2 AND created_at > NOW() - interval '5 minutes'`,
+      [agentId, requestId]
+    );
+    expect(rows.length).toBe(1);
+    expect(rows[0].error_code).toBe('SCREEN_LOCKED');
+    expect(rows[0].detail.version_name).toBe('2.1.20');
+    expect(rows[0].detail.stage).toBe('lock_check');
+    expect(rows[0].detail.foreground_package).toBe('com.android.systemui');
+  });
+
+  it('POST /api/agent/burner/account-scan-result ok=false 不带三新字段时 detail 对应键为 null（向后兼容既有手机端）', async () => {
+    const requestId = `req-diag-nil-${Date.now()}`;
+    const r = await request(app)
+      .post('/api/agent/burner/account-scan-result')
+      .send({
+        agent_id: agentId,
+        request_id: requestId,
+        ok: false,
+        account_ids: [],
+        error_code: 'OPEN_PANEL_FAILED',
+      });
+    expect(r.status).toBe(200);
+
+    const { rows } = await pool.query(
+      `SELECT detail FROM zenithjoy.agent_scan_failures
+        WHERE agent_id=$1 AND request_id=$2 AND created_at > NOW() - interval '5 minutes'`,
+      [agentId, requestId]
+    );
+    expect(rows.length).toBe(1);
+    expect(rows[0].detail.version_name ?? null).toBeNull();
+    expect(rows[0].detail.stage ?? null).toBeNull();
+    expect(rows[0].detail.foreground_package ?? null).toBeNull();
+  });
 });
