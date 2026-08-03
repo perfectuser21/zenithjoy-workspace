@@ -37,6 +37,14 @@ ok()      { echo "✅ $1"; }
 fail()    { echo "❌ 真机验证失败: $1"; exit 1; }
 envfail() { echo "🟠 环境未就绪(非真机验证bug,查设备/staging/DB): $1"; exit 3; }
 
+# DB 查询 ssh 统一封装（真机复现 2026-08-03 run 30793335158）：runner 上下文的 ssh 对
+# vps-hk 报 Host key verification failed（交互 shell 的 known_hosts 条目对 runner 的
+# ssh 客户端/算法协商不适用）。内网 Tailscale 固定 IP 场景用 accept-new 首连自动记录、
+# 后续变更仍拒绝；BatchMode 防挂交互提示。所有 DB 查询必须走本函数，禁止裸 ssh。
+sshdb() {
+  ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 "$DB_SSH_HOST" "$@"
+}
+
 # assert_task_terminal_success STATUS RESPONSE_JSON
 # 两段式联合断言：先判 STATUS=='done'，再判 RESPONSE_JSON.account_ids 非空数组。
 # 返回 0 = 真通过；返回 1 = 判红。STATUS 非 done 时直接返回 1，不看 account_ids
@@ -169,7 +177,7 @@ main() {
   LICENSE_ERR_TEXT=""
   for LICENSE_RETRY in 1 2 3; do
     LICENSE_QUERY_ERR=$(mktemp)
-    STAGING_LICENSE_KEY=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -c \
+    STAGING_LICENSE_KEY=$(sshdb "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -c \
       \"SELECT license_key FROM zenithjoy.licenses WHERE tenant_id='${TENANT}' AND status='active' ORDER BY created_at DESC LIMIT 1\"" 2>"$LICENSE_QUERY_ERR" | tr -d '[:space:]')
     LICENSE_ERR_TEXT=$(head -c 200 "$LICENSE_QUERY_ERR" || true)
     rm -f "$LICENSE_QUERY_ERR"
@@ -216,7 +224,7 @@ main() {
   MODEL=$("$ADB" shell getprop ro.product.model 2>/dev/null | tr -d '\r\n')
   AGENT_ID=""
   if [ -n "$MODEL" ]; then
-    ROW=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -c \
+    ROW=$(sshdb "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -c \
       \"SELECT agent_id FROM zenithjoy.agents WHERE hostname ILIKE '%${MODEL}%' ORDER BY last_seen DESC NULLS LAST LIMIT 1\"" 2>/dev/null)
     AGENT_ID=$(printf '%s' "$ROW" | tr -d '[:space:]')
   fi
@@ -247,7 +255,7 @@ main() {
   DEV_TENANT=""
   SEEN_FRESH=""
   for j in $(seq 1 "$FRESH_POLL_MAX"); do
-    META=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -F'|' -c \
+    META=$(sshdb "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -F'|' -c \
       \"SELECT tenant_id, (last_seen > now() - interval '2 minutes') FROM zenithjoy.agents WHERE agent_id='$AGENT_ID'\"" 2>/dev/null)
     DEV_TENANT="${META%%|*}"
     SEEN_FRESH="${META##*|}"
@@ -257,7 +265,7 @@ main() {
   done
   [ "$SEEN_FRESH" = "t" ] || envfail "设备 last_seen 不新鲜(${FRESH_POLL_MAX}×${FRESH_POLL_INTERVAL}s 有界重试后设备仍真离线，非字段不一致)：agent_id=$AGENT_ID"
   [ -n "$DEV_TENANT" ] || envfail "查不到 agent_id=$AGENT_ID 的真实 tenant_id"
-  ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -c \
+  sshdb "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -c \
     \"UPDATE zenithjoy.agents SET last_heartbeat_at = now() WHERE agent_id='$AGENT_ID'\"" >/dev/null 2>&1
   TENANT="$DEV_TENANT"
   ok "设备 last_seen 新鲜(真在线)，已对齐 last_heartbeat_at + 取真实 tenant=${TENANT}（补偿 issue 009c1544）"
@@ -274,7 +282,7 @@ main() {
   STATUS=""
   RESPONSE_JSON="{}"
   for i in $(seq 1 "$POLL_MAX"); do
-    ROW=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -F'|' -c \
+    ROW=$(sshdb "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -F'|' -c \
       \"SELECT status, response FROM zenithjoy.publish_tasks WHERE id='$TASK_ID'\"" 2>/dev/null)
     STATUS="${ROW%%|*}"
     RESPONSE_JSON="${ROW#*|}"
