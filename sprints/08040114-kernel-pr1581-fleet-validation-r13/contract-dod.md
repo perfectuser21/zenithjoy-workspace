@@ -14,7 +14,7 @@ target_environment: local_api
   Test: node -e "const fs=require('fs');for(const p of ['sprints/08040114-kernel-pr1581-fleet-validation-r13/contract-draft.md','sprints/08040114-kernel-pr1581-fleet-validation-r13/contract-dod.md','sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts']){const c=fs.readFileSync(p,'utf8');if(c.length<100)process.exit(1)}"
 
 - [ ] [ARTIFACT] 本 attempt 运行清单记录固定 repo/PR/base/final SHA 与完整 Fleet attestation
-  Test: node -e "const d=require('./sprints/08040114-kernel-pr1581-fleet-validation-r13/evidence/run-manifest.json');if(d.run_id!=='a6e3ba3f-9856-4353-b05f-29f1049f7ca0'||d.attempt_id!=='1884647e-b67a-4bfd-a44c-3d2e84509526'||d.actual_final_sha!=='c305f6217da65bb69413c39e621b7e797e0fb189')process.exit(1)"
+  Test: node -e "const d=require('./sprints/08040114-kernel-pr1581-fleet-validation-r13/evidence/run-manifest.json');if(d.run_id!=='a6e3ba3f-9856-4353-b05f-29f1049f7ca0'||d.attempt_id!=='dec08fbf-29c4-4f2c-8ad7-17d60c6b8b4b'||d.capability_snapshot_id!=='585b9cec-925b-46d2-b9a4-756f37565670'||d.account!=='team2'||d.actual_final_sha!=='c305f6217da65bb69413c39e621b7e797e0fb189')process.exit(1)"
 
 - [ ] [ARTIFACT] Evaluator、Independent Judge 与 merge gate 三份证据可区分
   Test: node -e "const fs=require('fs'),p='sprints/08040114-kernel-pr1581-fleet-validation-r13/evidence/';for(const f of ['evaluator-verdict.json','independent-judge-verdict.json','merge-gate.json'])JSON.parse(fs.readFileSync(p+f,'utf8'))"
@@ -37,14 +37,14 @@ target_environment: local_api
 
 - [ ] [BEHAVIOR] [L2] B-03: Evaluator 产生本 attempt 新鲜 PASS 证据 [接缝×2]
   动作: 完成产品 E2E 后由 Evaluator 写独立 verdict，记录真实 exit code、log_tail 与逐行为结果
-  预期观察: verdict=`PASS`、role=`evaluator`、run/attempt/final SHA 精确匹配，produced_at 与 mtime 均在 attempt 7200 秒窗口内
+  预期观察: verdict=`PASS`、role=`evaluator`、run/attempt/final SHA 与 provider/account/model/machine/snapshot/digest 精确匹配当前 task bundle，produced_at 与 mtime 均在 attempt 7200 秒窗口内
   等待预算: 7200s
   留证: `evidence/evaluator-verdict.json`、行为日志尾部与文件 SHA-256
   Test: manual:bash -c 'npx vitest run sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts -t "Evaluator 裁决为本 attempt 新鲜 PASS 且绑定精确最终 SHA" --reporter=verbose'
 
 - [ ] [BEHAVIOR] [L2] B-04: Independent Judge 独立产生同 SHA APPROVED 证据 [接缝×2]
   动作: Judge 在 Evaluator 后独立审查合同、真实日志和证据摘要，并写自己的 verdict
-  预期观察: verdict=`APPROVED`、role=`independent_judge`、producer_execution_id 与 Evaluator 不同、final SHA 与 Evaluator/远端 PR 一致，且记录 Evaluator evidence SHA-256
+  预期观察: verdict=`APPROVED`、role=`independent_judge`、producer_execution_id 与 Evaluator 不同、final SHA 和 Fleet capability 与 Evaluator/当前 task bundle 一致，且记录值精确等于 Evaluator 文件真实 SHA-256
   等待预算: 7200s
   留证: `evidence/independent-judge-verdict.json`、独立行为日志与 evaluator_evidence_sha256
   Test: manual:bash -c 'npx vitest run sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts -t "Independent Judge 裁决独立新鲜 APPROVED 且绑定同一最终 SHA" --reporter=verbose'

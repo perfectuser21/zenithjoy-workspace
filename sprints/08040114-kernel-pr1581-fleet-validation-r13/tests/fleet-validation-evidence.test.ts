@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -7,12 +8,12 @@ const sprintDir = 'sprints/08040114-kernel-pr1581-fleet-validation-r13';
 const evidenceDir = process.env.HARNESS_EVIDENCE_DIR ?? join(sprintDir, 'evidence');
 const expected = {
   runId: 'a6e3ba3f-9856-4353-b05f-29f1049f7ca0',
-  attemptId: '1884647e-b67a-4bfd-a44c-3d2e84509526',
+  attemptId: 'dec08fbf-29c4-4f2c-8ad7-17d60c6b8b4b',
   repo: 'perfectuser21/zenithjoy-workspace',
   pr: 1581,
   baseSha: '676fed7de12023d355deac7849af8a525ae53f8d',
   finalSha: 'c305f6217da65bb69413c39e621b7e797e0fb189',
-  snapshotId: '13eb5828-b09a-4e76-ba5e-14309f842263',
+  snapshotId: '585b9cec-925b-46d2-b9a4-756f37565670',
   runnerDigest: 'sha256:e0797f5a440d61827d1ea86afee629e6f5a687da6f958608671ba9c873e5e94a',
 };
 
@@ -38,6 +39,12 @@ function expectCommonBinding(artifact: Json): void {
   expect(artifact.repo).toBe(expected.repo);
   expect(artifact.pr_number).toBe(expected.pr);
   expect(artifact.final_sha).toBe(expected.finalSha);
+  expect(artifact.provider).toBe('codex');
+  expect(artifact.account).toBe('team2');
+  expect(artifact.model).toBe('gpt-5.6-sol');
+  expect(artifact.machine).toBe('us-mac-m4');
+  expect(artifact.capability_snapshot_id).toBe(expected.snapshotId);
+  expect(artifact.runner_digest).toBe(expected.runnerDigest);
 }
 
 function expectExecutableVerdict(artifact: Json): void {
@@ -99,7 +106,10 @@ describe('PR #1581 real fleet validation evidence [BEHAVIOR]', () => {
     expectCommonBinding(judge);
     expect(judge.verdict).toBe('APPROVED');
     expect(judge.role).toBe('independent_judge');
-    expect(judge.evaluator_evidence_sha256).toMatch(/^[a-f0-9]{64}$/);
+    const evaluatorSha256 = createHash('sha256')
+      .update(readFileSync(join(evidenceDir, 'evaluator-verdict.json')))
+      .digest('hex');
+    expect(judge.evaluator_evidence_sha256).toBe(evaluatorSha256);
     expect(typeof evaluator.producer_execution_id).toBe('string');
     expect(typeof judge.producer_execution_id).toBe('string');
     expect(judge.producer_execution_id).not.toBe(evaluator.producer_execution_id);

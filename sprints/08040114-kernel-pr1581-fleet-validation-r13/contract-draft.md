@@ -1,8 +1,9 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 ## Notes
 
 - contract-gate: skipped (file not found, third-party repo)
+- Round 2 重绑定：本轮以 task bundle 顶层输入为 SSOT，`attempt_id=dec08fbf-29c4-4f2c-8ad7-17d60c6b8b4b`、`capability_snapshot_id=585b9cec-925b-46d2-b9a4-756f37565670`、`provider/account/model/machine=codex/team2/gpt-5.6-sol/us-mac-m4`；上一轮合同及 reviewer 当时上下文中的 attempt/snapshot 均已过期，不得作为本轮证据。
 - 本合同只验证 PR #1581 的固定候选，不修改其产品行为，也不读取其他候选实现。
 - Registry 可达但快照已陈旧 386 小时；本任务无新增 HTTP schema，按 PRD 字面约束与目标 PR 已冻结测试翻译。context-manifest: unavailable（404 HTML）。
 - `npm run product-map:check` 首次因依赖未安装报 `ERR_MODULE_NOT_FOUND: ajv`；执行 `npm ci` 后重跑，结果见自查证据。
@@ -112,13 +113,13 @@ awk '/^## E2E 验收/{f=1;next} f&&/^## /{exit} f&&/^```bash/{b=1;next} b&&/^```
 ### Step 3: Evaluator 与 Independent Judge 分别产生新鲜同 SHA 裁决
 **来源**: `[FROM_PRD]` — PRD「Golden Path」第 3 步。
 
-**可观测行为**: 两份不同角色证据均属于本 run/attempt，在 attempt 起点后 7200 秒内产生，均绑定固定最终 SHA；Evaluator `PASS`，Judge `APPROVED`，每份均带真实 exit code/log_tail/behavior_tests。
+**可观测行为**: 两份不同角色证据均属于本 run/attempt，在 attempt 起点后 7200 秒内产生，均绑定固定最终 SHA 与当前 Fleet capability snapshot；Evaluator `PASS`，Judge `APPROVED`，每份均带真实 exit code/log_tail/behavior_tests。
 
 **验证命令**:
 ```bash
 npx vitest run sprints/08040114-kernel-pr1581-fleet-validation-r13/tests/fleet-validation-evidence.test.ts -t "Evaluator 裁决|Independent Judge 裁决" --reporter=verbose
 ```
-**硬阈值**: 2/2 exit 0；每份 `behavior_tests.length>=4` 且所有 exit_code=0；produced_at/mtime 新鲜；两份 `producer_execution_id` 不同；Judge 记录 Evaluator 文件 SHA-256。
+**硬阈值**: 2/2 exit 0；每份 run/attempt/provider/account/model/machine/snapshot/digest/final SHA 全匹配；`behavior_tests.length>=4` 且所有 exit_code=0；produced_at/mtime 新鲜；两份 `producer_execution_id` 不同；Judge 记录并精确匹配 Evaluator 文件真实 SHA-256。
 
 ### Step 4: 双证据机械 AND 门形成合并出口
 **来源**: `[FROM_PRD]` — PRD「Golden Path」第 4 步及全部边界情况。
@@ -157,10 +158,11 @@ set -euo pipefail
 : "${HARNESS_MODEL:?Fleet attestation 缺 model}"
 : "${HARNESS_RUNNER_DIGEST:?Fleet attestation 缺 runner digest}"
 : "${CAPABILITY_SNAPSHOT_ID:?Fleet attestation 缺 capability snapshot id}"
+export DB_URL
 EXPECTED_SHA="c305f6217da65bb69413c39e621b7e797e0fb189"
 BASE_SHA="676fed7de12023d355deac7849af8a525ae53f8d"
 RUN_ID="a6e3ba3f-9856-4353-b05f-29f1049f7ca0"
-ATTEMPT_ID="1884647e-b67a-4bfd-a44c-3d2e84509526"
+ATTEMPT_ID="dec08fbf-29c4-4f2c-8ad7-17d60c6b8b4b"
 SPRINT_DIR="sprints/08040114-kernel-pr1581-fleet-validation-r13"
 ORIGIN_ROOT=$(git rev-parse --show-toplevel)
 EVIDENCE_DIR="${HARNESS_EVIDENCE_DIR:-$ORIGIN_ROOT/$SPRINT_DIR/evidence}"
@@ -185,9 +187,11 @@ trap cleanup EXIT
 [ "$HARNESS_ACCOUNT" = "team2" ]
 [ "$HARNESS_MODEL" = "gpt-5.6-sol" ]
 [ "$HARNESS_RUNNER_DIGEST" = "sha256:e0797f5a440d61827d1ea86afee629e6f5a687da6f958608671ba9c873e5e94a" ]
-[ "$CAPABILITY_SNAPSHOT_ID" = "13eb5828-b09a-4e76-ba5e-14309f842263" ]
+[ "$CAPABILITY_SNAPSHOT_ID" = "585b9cec-925b-46d2-b9a4-756f37565670" ]
 REMOTE_SHA=$(git -C "$ORIGIN_ROOT" ls-remote origin refs/pull/1581/head | awk '{print $1}')
 [ "$REMOTE_SHA" = "$EXPECTED_SHA" ] || { echo "FAIL: PR HEAD drift expected=$EXPECTED_SHA actual=$REMOTE_SHA"; exit 1; }
+git -C "$ORIGIN_ROOT" fetch --no-tags origin refs/pull/1581/head
+git -C "$ORIGIN_ROOT" cat-file -e "$EXPECTED_SHA^{commit}"
 git -C "$ORIGIN_ROOT" merge-base --is-ancestor "$BASE_SHA" "$EXPECTED_SHA"
 git -C "$ORIGIN_ROOT" worktree add --detach "$CANDIDATE_DIR" "$EXPECTED_SHA"
 [ "$(git -C "$CANDIDATE_DIR" rev-parse HEAD)" = "$EXPECTED_SHA" ]
