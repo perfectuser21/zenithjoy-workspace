@@ -1,0 +1,117 @@
+name: Nightly Android Fleet Regression (pc4)
+
+# ═══════════════════════════════════════════════════════════════════
+# pc4 手机池（小白 RMX3478 / 小黄 MAA-AN00 / 小粉 ANY-AN00）夜间账号扫描回归。
+#
+# 与 nightly-real-machine-staging.yml 刀D（rog 上单台 4号机）互补而非重复：那条车道
+# 覆盖 rog，本车道覆盖 pc4 手机池的多台设备。08-03 真机诊断实锤：小粉/小白今天
+# adb install -r 后无障碍服务被系统静默撤销，此前完全靠人工偶然发现——本车道让
+# 这类"设备心跳活着但任务永远不投递"的假在线状态每晚自动暴露，不再等人碰巧去查。
+#
+# 两段式设计（discover → matrix scan）：小黄的无线调试端口每次重连会变
+# （machines.md 已记录的已知坑），不能在 workflow 里硬编码 serial:port，必须每次
+# 运行时现查 `adb devices` 动态发现，再对发现到的每台设备各跑一次
+# account-scan-realmachine-smoke.sh（envfail 一律红，decision 2f11ae25 同款约束）。
+#
+# 红 → 不新开独立 issue 机制（避免与 nightly-real-machine-staging 的 [nightly-red]
+# 撞车产生两套并行的红灯处理约定），只在 job summary 里明确列出哪台设备红，
+# 处理约定同 decision 2f11ae25：envfail 与真机验证失败同级，都算红，不装绿。
+# ═══════════════════════════════════════════════════════════════════
+
+on:
+  schedule:
+    - cron: '30 19 * * *'   # UTC 19:30 = 北京 03:30，错开 nightly-real-machine 的 03:00，避免同时抢 pc4 上的其他任务
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-android-fleet-pc4
+  cancel-in-progress: false
+
+jobs:
+  discover-devices:
+    name: 发现 pc4 上当前在线的设备（不写死 serial，小黄端口每次会变）
+    runs-on: [self-hosted, android-capable]
+    timeout-minutes: 5
+    outputs:
+      serials: ${{ steps.list.outputs.serials }}
+      count: ${{ steps.list.outputs.count }}
+    steps:
+      - name: List connected devices
+        id: list
+        shell: bash
+        run: |
+          set -uo pipefail
+          ADB=$(command -v adb 2>/dev/null || echo "C:/platform-tools/adb.exe")
+          echo "使用 ADB=$ADB"
+          "$ADB" devices
+          SERIALS_JSON=$("$ADB" devices 2>/dev/null | awk '/[[:space:]]device$/{print $1}' | jq -R . | jq -sc .)
+          COUNT=$(echo "$SERIALS_JSON" | jq 'length')
+          echo "serials=$SERIALS_JSON" >> "$GITHUB_OUTPUT"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "发现 $COUNT 台在线设备: $SERIALS_JSON"
+          [ "$COUNT" -gt 0 ] || echo "::warning::pc4 上未发现任何在线设备，本次夜间回归车道空转"
+          # 已知非阻塞瑕疵：account-scan-realmachine-smoke.sh 内部"设备在线: $DEV"这行日志
+          # 固定取 adb devices 列表第一项显示，多机并发跑 matrix 时该行显示的 serial 可能
+          # 与本 job 实际操作的 ANDROID_SERIAL 不一致（纯日志展示问题，install/scan 等实际
+          # 操作指令因遵循 ANDROID_SERIAL 环境变量约定，仍会准确落到对应设备，不影响功能）
+
+  account-scan-fleet:
+    name: 账号扫描回归 — ${{ matrix.serial }}
+    needs: discover-devices
+    if: needs.discover-devices.outputs.count != '0'
+    strategy:
+      fail-fast: false
+      matrix:
+        serial: ${{ fromJson(needs.discover-devices.outputs.serials) }}
+    runs-on: [self-hosted, android-capable]
+    timeout-minutes: 10
+    env:
+      ANDROID_SERIAL: ${{ matrix.serial }}
+    outputs:
+      exit_code: ${{ steps.run.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run account-scan-realmachine-smoke.sh against ${{ matrix.serial }}
+        id: run
+        shell: bash
+        run: |
+          chmod +x .github/workflows/scripts/smoke/account-scan-realmachine-smoke.sh
+          set +e
+          bash .github/workflows/scripts/smoke/account-scan-realmachine-smoke.sh
+          CODE=$?
+          set -e
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          exit "$CODE"
+
+  fleet-report:
+    name: pc4 手机池回归汇总
+    needs: [discover-devices, account-scan-fleet]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Summarize
+        run: |
+          COUNT="${{ needs.discover-devices.outputs.count }}"
+          RESULT="${{ needs.account-scan-fleet.result }}"
+          {
+            echo "## pc4 手机池夜间账号扫描回归"
+            echo ""
+            echo "发现设备数: $COUNT"
+            echo "account-scan-fleet 整体结果: $RESULT"
+            echo ""
+            echo "（envfail 与真机验证失败同级计红，decision 2f11ae25；单台设备的具体失败详情见对应 matrix job 日志）"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$COUNT" = "0" ]; then
+            echo "::error::pc4 上一台在线设备都没发现，本次回归空转（车道本身可能瘫痪，需人工核实 pc4/手机池状态）"
+            exit 1
+          fi
+          if [ "$RESULT" = "failure" ]; then
+            echo "::error::至少一台设备的账号扫描回归失败，见各 matrix job 详情"
+            exit 1
+          fi
+          echo "✅ pc4 手机池全部设备账号扫描回归通过"
