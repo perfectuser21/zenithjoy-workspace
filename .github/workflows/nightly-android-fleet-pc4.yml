@@ -73,16 +73,28 @@ jobs:
     outputs:
       exit_code: ${{ steps.run.outputs.code }}
     steps:
-      # pc4 到 github.com 的出境带宽实测被限速到 ~10KB/s（GFW 对国内出境大流量的
-      # 统计限速，Tailscale exit-node/SOCKS5 代理均无法绕开——目标域名固定后限速跟着走，
-      # 与 pc4 本机带宽无关，COS 国内直连当时实测 14.7MB/s 印证瓶颈只在"到 github.com"这一段）。
-      # 全量 checkout 31MB 在此带宽下要 30-50 分钟，sparse-checkout 只拉本 job 真正需要的
-      # smoke 脚本目录，checkout 体积降到 KB 级，从根上避开限速而不是硬扛超时。
+      # pc4 到 github.com 除了出境带宽被限速到 ~10KB/s（sparse-checkout 已解决体积问题），
+      # 还会间歇性连 TCP 都建不起来（"Failed to connect to github.com port 443"，GFW 对
+      # 出境流量的间歇性封锁，与带宽限速是两层独立问题）。用 HK exit-node 临时兜底建连，
+      # --exit-node-allow-lan-access 保证同一时间 adb 对局域网手机的访问不受影响
+      # （真机验证过：开启后 adb devices 仍能枚举全部 6 个 serial）。checkout 后立即关闭，
+      # 不长期占用 exit-node（对齐 device-transfer skill"临时开、拉完关"的既定做法）。
+      - name: 临时开 HK exit-node 保证 checkout 能连上 github.com
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node=100.86.118.99 --exit-node-allow-lan-access || true
+
       - uses: actions/checkout@v4
         with:
           sparse-checkout: |
             .github/workflows/scripts/smoke
           sparse-checkout-cone-mode: false
+
+      - name: 关闭 exit-node（不常驻占用）
+        if: always()
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node= || true
 
       - name: Run account-scan-realmachine-smoke.sh against ${{ matrix.serial }}
         id: run
