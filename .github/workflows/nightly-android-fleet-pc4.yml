@@ -70,6 +70,13 @@ jobs:
     timeout-minutes: 15
     env:
       ANDROID_SERIAL: ${{ matrix.serial }}
+      # 真机验证发现：pc4 runner 服务跑 SYSTEM 账户无 Tailscale 身份，走默认 vps-hk
+      # Tailscale SSH 会报 "failed to look up local user SYSTEM"（与 nightly-real-machine-staging.yml
+      # 的 rog runner 早前遇到的同一个坑），改走 hk-vps 公网高位端口 + 受限密钥，
+      # 密钥已从 rog 的 C:\actions-runner\.ssh\zjdb_ed25519 原样复制到 pc4 同路径并重设 ACL。
+      DB_SSH_HOST: root@124.156.138.116
+      DB_SSH_PORT: '6443'
+      DB_SSH_KEY: /c/actions-runner/.ssh/zjdb_ed25519
     outputs:
       exit_code: ${{ steps.run.outputs.code }}
     steps:
