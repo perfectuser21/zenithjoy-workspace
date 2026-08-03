@@ -104,6 +104,7 @@ if [ -n "$SEEDED_AGENT_ID" ]; then
 
   # 5. sprint 08031620-android-scan-preconditions：ok=false + version_name/stage/foreground_package
   #    → agent_scan_failures.detail 真实持久化三新字段（运维免登真机复现判断根因方向的核心诉求）
+  # [CI-MOCK: real-device-only | nightly_ref: account-scan-realmachine-smoke.sh]
   TMP6=$(mktemp)
   SMOKE_REQ_ID="scan-smoke-diag-$$"
   HTTP=$(curl -s -o "$TMP6" -w "%{http_code}" --max-time 15 \
