@@ -1,0 +1,29 @@
+{
+  "initiative_id": "a6e3ba3f-9856-4353-b05f-29f1049f7ca0",
+  "journey_type": "autonomous",
+  "journey_type_reason": "该 Sprint 是无用户界面的真实 Fleet 产品验证、双裁决与机械合并门流程。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "完成 PR #1581 精确 SHA 的 US M4 双裁决验证",
+      "scope": "对固定 PR/SHA 在获准 US M4 完成一次新鲜 provider-neutral 验证，产出同一最终 SHA 的 Evaluator、Independent Judge 与机械合并门证据；不修改产品行为且不执行合并。",
+      "dod": [
+        "[BEHAVIOR] 固定 PR HEAD、冻结基线与 Fleet capability attestation 逐字段一致",
+        "[BEHAVIOR] attempt 空库经真实 migration/signup 后，目标候选的 effective-config 产品验证通过",
+        "[BEHAVIOR] Evaluator PASS 与 Independent Judge APPROVED 均为本 attempt 新鲜证据并绑定同一最终 SHA",
+        "[BEHAVIOR] 机械门仅在双证据通过、新鲜且 SHA 一致时输出 merge_allowed=true",
+        "[ARTIFACT] evidence/run-manifest.json、evaluator-verdict.json、independent-judge-verdict.json、merge-gate.json"
+      ],
+      "files": [
+        "test-registry.yaml",
+        "sprints/08040114-kernel-pr1581-fleet-validation-r13/evidence/run-manifest.json",
+        "sprints/08040114-kernel-pr1581-fleet-validation-r13/evidence/evaluator-verdict.json",
+        "sprints/08040114-kernel-pr1581-fleet-validation-r13/evidence/independent-judge-verdict.json",
+        "sprints/08040114-kernel-pr1581-fleet-validation-r13/evidence/merge-gate.json"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 60
+    }
+  ]
+}
