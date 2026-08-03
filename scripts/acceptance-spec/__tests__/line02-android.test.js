@@ -89,10 +89,31 @@ test('renderHtml 生成的页面包含14步内容、无英文残留、判定按�
     assert.ok(html.includes(st.name), `缺步骤名：${st.name}`);
   }
 
-  // 无英文单词残留（排除 script/style 标签内容）
-  const stripped = html
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, ' ')
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, ' ')
+  // 无英文单词残留（排除 script/style 标签内容）。
+  // 用字符串定位而非正则匹配 script/style 标签本身——CodeQL js/bad-tag-filter
+  // 会把"用正则匹配<script>...</script>再replace"这整类写法判成不完备的 HTML
+  // 过滤反模式（不管正则怎么调都能造出绕过它的边界case），改用 indexOf 精确切片。
+  function stripBlocksByTagName(source, tagName) {
+    const lower = source.toLowerCase();
+    const openNeedle = '<' + tagName;
+    const closeNeedle = '</' + tagName;
+    let out = '';
+    let pos = 0;
+    while (true) {
+      const openStart = lower.indexOf(openNeedle, pos);
+      if (openStart === -1) { out += source.slice(pos); break; }
+      const openEnd = lower.indexOf('>', openStart);
+      if (openEnd === -1) { out += source.slice(pos); break; }
+      const closeStart = lower.indexOf(closeNeedle, openEnd);
+      if (closeStart === -1) { out += source.slice(pos); break; }
+      const closeEnd = lower.indexOf('>', closeStart);
+      if (closeEnd === -1) { out += source.slice(pos); break; }
+      out += source.slice(pos, openStart) + ' ';
+      pos = closeEnd + 1;
+    }
+    return out;
+  }
+  const stripped = stripBlocksByTagName(stripBlocksByTagName(html, 'script'), 'style')
     .replace(/<[^>]+>/g, ' ');
   const englishWords = stripped.match(/[A-Za-z]{2,}/g) || [];
   assert.deepEqual(englishWords, [], `可见文本含英文残留: ${JSON.stringify(englishWords)}`);
