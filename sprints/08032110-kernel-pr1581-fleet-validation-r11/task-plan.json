@@ -1,0 +1,26 @@
+{
+  "initiative_id": "intent:b3c74dad-0e21-4758-8a71-499c61d0736e:6",
+  "journey_type": "autonomous",
+  "journey_type_reason": "无人值守 Fleet 后端验证链在双独立 verdict 后只报告可合并。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "完成 PR #1581 精确 SHA 的 US M4 真实 Fleet 验证",
+      "scope": "为本 sprint 产出可机检 verifier，并用本 run/attempt 的真实 Fleet 阶段与双闸证据形成不可旁路的验证报告；不修改 PR 功能、共享 Red、共享 CI，也不执行合并。",
+      "dod": [
+        "[BEHAVIOR] PR live head、Runner checkout 与 expected SHA 完全相同，且只使用已准入 us-mac-m4 1.267.97",
+        "[BEHAVIOR] Planner、合同对抗、Generator、Evaluator、Independent Judge 均有本 run/attempt 的同 SHA 新鲜回执",
+        "[BEHAVIOR] Evaluator 与 Independent Judge 独立 PASS 且禁区核对全过后只报告可合并，merged 仍为 false",
+        "[ARTIFACT] sprint 内 verify-fleet-validation.mjs 与 fleet-validation-report.json"
+      ],
+      "files": [
+        "sprints/08032110-kernel-pr1581-fleet-validation-r11/verify-fleet-validation.mjs",
+        "sprints/08032110-kernel-pr1581-fleet-validation-r11/fleet-validation-report.json",
+        "sprints/08032110-kernel-pr1581-fleet-validation-r11/tests/fleet-validation-report.test.ts"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 90
+    }
+  ]
+}
