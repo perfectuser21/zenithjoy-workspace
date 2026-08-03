@@ -87,7 +87,8 @@ chmod +x "$FAKE_BIN/adb"
 # 后续 agent_id 定位，其余查询继续保持空响应即可，跟修复前行为一致）。
 cat > "$FAKE_BIN/ssh" << 'SSHEOF'
 #!/usr/bin/env bash
-CMD="$2"
+# 取最后一个参数当命令：兼容 sshdb 封装携带的 -o 选项对（host 与命令始终在末尾）
+CMD="${!#}"
 if echo "$CMD" | grep -q "SELECT license_key FROM zenithjoy.licenses"; then
   echo "ZJ-TEST-FAKE0001"
   exit 0
