@@ -76,10 +76,13 @@ assert_task_terminal_success() {
 main() {
   # ── ADB 解析（decision 2f11ae25 配套：裸 adb 不在 runner PATH 时静默失败被误报"无设备"）──
   # 未显式传入时探测：glob scrcpy 自带 adb 优先（e2e-line02-android-collect.yml 已验证顺序；
-  # sort -V 防 3.10<3.2 字典序取旧版），command -v 兜底；全失败=独立 envfail 文案。
+  # sort -V 防 3.10<3.2 字典序取旧版），command -v 次之，独立 platform-tools 安装兜底
+  # （pc4 实证：adb 装在 C:\platform-tools 且未加入 PATH，前两种探测均失效误报 envfail）；
+  # 全失败=独立 envfail 文案。
   if [ -z "${ADB:-}" ]; then
     ADB=$(ls /c/Users/*/AppData/Local/Microsoft/WinGet/Packages/Genymobile.scrcpy_*/scrcpy-*/adb.exe 2>/dev/null | sort -V | tail -1 || true)
     [ -n "$ADB" ] || ADB=$(command -v adb 2>/dev/null || true)
+    [ -n "$ADB" ] || { [ -f "/c/platform-tools/adb.exe" ] && ADB="/c/platform-tools/adb.exe"; }
     [ -n "$ADB" ] || envfail "runner 上找不到 adb"
   fi
   API_BASE="${API_BASE:-https://staging-autopilot.zenjoymedia.media}"
