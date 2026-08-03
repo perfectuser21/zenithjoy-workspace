@@ -125,8 +125,16 @@ class AgentService : Service() {
             val errorCode = intent.getStringExtra(DeviceAccountScanService.EXTRA_ERROR) ?: ""
             val screenshotB64 = intent.getStringExtra(DeviceAccountScanService.EXTRA_SCREENSHOT_B64)
             val treeDump = intent.getStringExtra(DeviceAccountScanService.EXTRA_TREE_DUMP)
+            val versionName = intent.getStringExtra(DeviceAccountScanService.EXTRA_VERSION_NAME)
+            val stage = intent.getStringExtra(DeviceAccountScanService.EXTRA_STAGE)
+            val foregroundPackage = intent.getStringExtra(DeviceAccountScanService.EXTRA_FOREGROUND_PACKAGE)
             // 网络请求不能跑主线程(NetworkOnMainThreadException)，跟 warmupResultReceiver 同套路。
-            scope.launch(Dispatchers.IO) { reportAccountScanResult(requestId, ok, stale, accountIds, errorCode, screenshotB64, treeDump) }
+            scope.launch(Dispatchers.IO) {
+                reportAccountScanResult(
+                    requestId, ok, stale, accountIds, errorCode, screenshotB64, treeDump,
+                    versionName, stage, foregroundPackage,
+                )
+            }
         }
     }
 
@@ -778,9 +786,15 @@ class AgentService : Service() {
         errorCode: String,
         screenshotB64: String? = null,
         treeDump: String? = null,
+        versionName: String? = null,
+        stage: String? = null,
+        foregroundPackage: String? = null,
     ) {
         val url = "${config.deriveHttpBase()}/api/agent/burner/account-scan-result"
-        val body = buildAccountScanResultBody(requestId, config.agentId, ok, stale, accountIds, errorCode, screenshotB64, treeDump)
+        val body = buildAccountScanResultBody(
+            requestId, config.agentId, ok, stale, accountIds, errorCode, screenshotB64, treeDump,
+            versionName, stage, foregroundPackage,
+        )
         try {
             val request = Request.Builder()
                 .url(url)
@@ -1126,18 +1140,27 @@ class AgentService : Service() {
             errorCode: String,
             screenshotB64: String? = null,
             treeDump: String? = null,
+            versionName: String? = null,
+            stage: String? = null,
+            foregroundPackage: String? = null,
         ): String {
             fun esc(s: String): String = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
             val ids = accountIds.joinToString(",") { "\"${esc(it)}\"" }
             val screenshotField = if (screenshotB64 != null) "\"${esc(screenshotB64)}\"" else "null"
             val treeDumpField = if (treeDump != null) "\"${esc(treeDump)}\"" else "null"
+            val versionNameField = if (versionName != null) "\"${esc(versionName)}\"" else "null"
+            val stageField = if (stage != null) "\"${esc(stage)}\"" else "null"
+            val foregroundPackageField = if (foregroundPackage != null) "\"${esc(foregroundPackage)}\"" else "null"
             return "{\"request_id\":\"${esc(requestId)}\"," +
                 "\"agent_id\":\"${esc(agentId)}\"," +
                 "\"ok\":$ok,\"stale\":$stale," +
                 "\"account_ids\":[$ids]," +
                 "\"error_code\":\"${esc(errorCode)}\"," +
                 "\"screenshot_b64\":$screenshotField," +
-                "\"tree_dump\":$treeDumpField}"
+                "\"tree_dump\":$treeDumpField," +
+                "\"version_name\":$versionNameField," +
+                "\"stage\":$stageField," +
+                "\"foreground_package\":$foregroundPackageField}"
         }
     }
 }
