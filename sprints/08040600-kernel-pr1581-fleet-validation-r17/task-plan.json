@@ -1,0 +1,29 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "无 UI 的 Kernel Harness 后台真实 fleet 验证与三角色证据裁决。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "完成 PR #1581 精确 SHA 的真实 fleet 三角色验证",
+      "scope": "在 strict us-mac-m4 对精确目标 SHA 执行产品验证；每个角色消费 Fleet 在角色启动前签发的 receipt，并保留成功或失败完整证据，Judge 给出一致裁决；不修改产品或合并 PR。",
+      "dod": [
+        "[BEHAVIOR] Generator 消费只读 Fleet receipt，在真 Postgres 和真实登录下完成双租户及并发冲突验证",
+        "[BEHAVIOR] Evaluator 无论成功或失败均输出完整 envelope，verdict 由 exit_code 与 behavior_tests 唯一推导",
+        "[BEHAVIOR] Judge 引用 Evaluator SHA-256，按确定性规则输出 PASS/FAIL/INSUFFICIENT_EVIDENCE",
+        "[BEHAVIOR] 最终裁决前 PR 保持 open、未合并且 head SHA 未漂移",
+        "[ARTIFACT] 三角色 evidence、Fleet 前置 receipt、摘要与原始日志"
+      ],
+      "files": [
+        "sprints/08040600-kernel-pr1581-fleet-validation-r17/scripts/verify-fleet-receipt.mjs",
+        "sprints/08040600-kernel-pr1581-fleet-validation-r17/scripts/finalize-role-evidence.mjs",
+        "sprints/08040600-kernel-pr1581-fleet-validation-r17/scripts/run-pr1581-generator-e2e.sh",
+        "sprints/08040600-kernel-pr1581-fleet-validation-r17/scripts/evaluate-pr1581-evidence.mjs",
+        "sprints/08040600-kernel-pr1581-fleet-validation-r17/scripts/judge-pr1581-evidence.mjs"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 120
+    }
+  ]
+}
