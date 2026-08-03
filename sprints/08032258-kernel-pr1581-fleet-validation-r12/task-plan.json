@@ -1,0 +1,30 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "任务是无 UI 的 Kernel Harness 后台真实 fleet 验证与双裁决收证。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "完成 PR #1581 精确 SHA 的真实 fleet 双裁决验证",
+      "scope": "在获准 US M4 对精确 SHA 运行新鲜 provider-neutral 全链；以 Fleet 控制面 admission attempt/time 外部锚点拒绝历史证据重放，产品 E2E、Evaluator、Independent Judge 和控制面按顺序各自产出证据并由统一门禁关联，不修改产品实现或自动合并。",
+      "dod": [
+        "[BEHAVIOR] PR head、严格 affinity、runner digest、能力快照与 exact SHA 全部匹配",
+        "[BEHAVIOR] validation identity 精确绑定 Fleet 控制面注入的当前 admission attempt_id/started_at，历史证据整包重放失败",
+        "[BEHAVIOR] 真 Postgres/真实 signup session 下双租户无串写、并发有效态保护与产品验证 exit 0",
+        "[BEHAVIOR] Evaluator 与 Independent Judge 新鲜独立 PASS，Judge 精确引用 Evaluator 且绑定同一 final SHA",
+        "[BEHAVIOR] merge gate 仅开放人工确认且 merge_performed=false",
+        "[ARTIFACT] 唯一 validation-identity SSOT 与四份引用该身份的原始 evidence JSON/log_tail"
+      ],
+      "files": [
+        "sprints/08032258-kernel-pr1581-fleet-validation-r12/evidence/validation-identity.json",
+        "sprints/08032258-kernel-pr1581-fleet-validation-r12/evidence/fleet-run.json",
+        "sprints/08032258-kernel-pr1581-fleet-validation-r12/evidence/evaluator.json",
+        "sprints/08032258-kernel-pr1581-fleet-validation-r12/evidence/independent-judge.json",
+        "sprints/08032258-kernel-pr1581-fleet-validation-r12/evidence/merge-gate.json"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 120
+    }
+  ]
+}
