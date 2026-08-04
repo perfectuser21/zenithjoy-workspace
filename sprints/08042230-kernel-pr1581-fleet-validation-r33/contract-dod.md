@@ -55,24 +55,31 @@ target_environment: local_api
 
 - [ ] [BEHAVIOR] [L2] B-06: 当前 Runner 身份和新鲜账本记录一致
   动作: 真实调用生产 CLI 生成 receipt，用 Runner 注入身份核对并查 attempt-scoped Postgres。
-  预期观察: attempt/capability 相等，五分钟内恰有一条目标 SHA 记录。
+  预期观察: attempt/provider/account/machine/model/runner digest/capability 全部与当前 Runner 相等，五分钟内恰有一条目标 SHA 记录。
   等待预算: 5s
   留证: jq 结果和 DB count
-  Test: manual:bash -c 'R=$(mktemp); trap '"'"'rm -f "$R"'"'"' EXIT; node packages/brain/src/harness/fleet-worker.js validate --bundle "${FLEET_VALID_BUNDLE:?}" --workspace "${FLEET_TARGET_WORKTREE:?}" --receipt "$R"; jq -e '"'"'.runner_provenance.attempt_id==env.HARNESS_ATTEMPT_ID and .runner_provenance.capability_snapshot_id==env.CAPABILITY_SNAPSHOT_ID'"'"' "$R" >/dev/null; psql "${DB_URL:?}" -v ON_ERROR_STOP=1 -tAc "SELECT count(*)>0 FROM harness_validation_receipts WHERE attempt_id='"'"'${HARNESS_ATTEMPT_ID:?}'"'"' AND target_head_sha='"'"'c305f6217da65bb69413c39e621b7e797e0fb189'"'"' AND created_at>NOW()-interval '"'"'5 minutes'"'"'" | grep -qx t'
+  Test: manual:bash -c ': "${HARNESS_ATTEMPT_ID:?}" "${HARNESS_PROVIDER:?}" "${HARNESS_ACCOUNT:?}" "${HARNESS_MACHINE:?}" "${HARNESS_MODEL:?}" "${HARNESS_RUNNER_DIGEST:?}" "${CAPABILITY_SNAPSHOT_ID:?}"; BEFORE=$(psql "${DB_URL:?}" -tAc "SELECT count(*) FROM harness_validation_receipts WHERE attempt_id='"'"'${HARNESS_ATTEMPT_ID}'"'"' AND target_head_sha='"'"'c305f6217da65bb69413c39e621b7e797e0fb189'"'"' AND created_at>NOW()-interval '"'"'5 minutes'"'"'" | tr -d " "); R=$(mktemp); trap '"'"'rm -f "$R"'"'"' EXIT; node packages/brain/src/harness/fleet-worker.js validate --bundle "${FLEET_VALID_BUNDLE:?}" --workspace "${FLEET_TARGET_WORKTREE:?}" --receipt "$R"; jq -e '"'"'.runner_provenance.attempt_id==env.HARNESS_ATTEMPT_ID and .runner_provenance.provider==env.HARNESS_PROVIDER and .runner_provenance.account==env.HARNESS_ACCOUNT and .runner_provenance.machine==env.HARNESS_MACHINE and .runner_provenance.model==env.HARNESS_MODEL and .runner_provenance.runner_digest==env.HARNESS_RUNNER_DIGEST and .runner_provenance.capability_snapshot_id==env.CAPABILITY_SNAPSHOT_ID'"'"' "$R" >/dev/null; AFTER=$(psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc "SELECT count(*) FROM harness_validation_receipts WHERE attempt_id='"'"'${HARNESS_ATTEMPT_ID}'"'"' AND target_head_sha='"'"'c305f6217da65bb69413c39e621b7e797e0fb189'"'"' AND created_at>NOW()-interval '"'"'5 minutes'"'"'" | tr -d " "); [ "$AFTER" -eq $((BEFORE+1)) ]'
 
 - [ ] [BEHAVIOR] [L2] B-07: attempt 空库先经真实 migration bootstrap
   动作: 对 Fleet 注入的全新 `DB_URL` 运行仓库 receipt migration，再启动 Worker。
   预期观察: migration exit 0，目标表可解析；未 bootstrap 时 Worker 必须 environment_failure，不能伪造成功。
   等待预算: 30s
   留证: migration exit code、`to_regclass` 输出与失败 receipt
-  Test: manual:bash -c 'psql "${DB_URL:?}" -v ON_ERROR_STOP=1 -f packages/brain/migrations/20260804_create_harness_validation_receipts.sql >/dev/null; psql "$DB_URL" -tAc "SELECT to_regclass('"'"'harness_validation_receipts'"'"') IS NOT NULL" | grep -qx t'
+  Test: manual:bash -c 'psql "${DB_URL:?}" -v ON_ERROR_STOP=1 -c "DROP TABLE IF EXISTS harness_validation_receipts" >/dev/null; R=$(mktemp); trap '"'"'rm -f "$R"'"'"' EXIT; if node packages/brain/src/harness/fleet-worker.js validate --bundle "${FLEET_VALID_BUNDLE:?}" --workspace "${FLEET_TARGET_WORKTREE:?}" --receipt "$R"; then exit 1; fi; jq -e '"'"'.status=="failed" and .failure_class=="environment_failure" and .failed_dependency=="postgres"'"'"' "$R"; psql "$DB_URL" -v ON_ERROR_STOP=1 -f packages/brain/migrations/20260804_create_harness_validation_receipts.sql >/dev/null; psql "$DB_URL" -tAc "SELECT to_regclass('"'"'harness_validation_receipts'"'"') IS NOT NULL" | grep -qx t'
 
 - [ ] [BEHAVIOR] [L2] B-08: product-map 依赖缺失必须真失败
   动作: 在隔离的目标 checkout 中删除生成的 product-map JSON，再调用同一生产 Fleet Worker CLI。
   预期观察: CLI exit 非零，receipt 为 failed/environment_failure 且 failed_dependency=product_map，不产生 passed 账本。
   等待预算: 30s
   留证: CLI exit code、失败 receipt 与五分钟 DB 查询
-  Test: manual:bash -c 'W=$(mktemp -d); R=$(mktemp); trap '"'"'rm -rf "$W" "$R"'"'"' EXIT; cp -R "${FLEET_TARGET_WORKTREE:?}/." "$W/"; rm -f "$W/product-map/generated/product-map.json"; if node packages/brain/src/harness/fleet-worker.js validate --bundle "${FLEET_VALID_BUNDLE:?}" --workspace "$W" --receipt "$R"; then exit 1; fi; jq -e '"'"'.status=="failed" and .failure_class=="environment_failure" and .failed_dependency=="product_map"'"'"' "$R"'
+  Test: manual:bash -c 'W=$(mktemp -d); R=$(mktemp); trap '"'"'rm -rf "$W" "$R"'"'"' EXIT; BEFORE=$(psql "${DB_URL:?}" -tAc "SELECT count(*) FROM harness_validation_receipts WHERE attempt_id='"'"'${HARNESS_ATTEMPT_ID:?}'"'"' AND status='"'"'passed'"'"' AND created_at>NOW()-interval '"'"'5 minutes'"'"'" | tr -d " "); cp -R "${FLEET_TARGET_WORKTREE:?}/." "$W/"; rm -f "$W/product-map/generated/product-map.json"; if node packages/brain/src/harness/fleet-worker.js validate --bundle "${FLEET_VALID_BUNDLE:?}" --workspace "$W" --receipt "$R"; then exit 1; fi; jq -e '"'"'.status=="failed" and .failure_class=="environment_failure" and .failed_dependency=="product_map"'"'"' "$R"; AFTER=$(psql "$DB_URL" -tAc "SELECT count(*) FROM harness_validation_receipts WHERE attempt_id='"'"'${HARNESS_ATTEMPT_ID:?}'"'"' AND status='"'"'passed'"'"' AND created_at>NOW()-interval '"'"'5 minutes'"'"'" | tr -d " "); [ "$AFTER" = "$BEFORE" ]'
+
+- [ ] [BEHAVIOR] [L2] B-09: Evaluator 证据以 SHA-256 交给独立 Judge
+  动作: Evaluator 写入自己的完整 runtime provenance、被测 receipt digest；Judge 用 Runner 注入的独立身份复算该证据摘要并引用。
+  预期观察: Evaluator 与 Judge 各自 provenance 全字段匹配各自 Runner；Judge 引用的 digest 与 Evaluator evidence 文件逐字哈希一致，且不要求角色共享 attempt/account/snapshot。
+  等待预算: 5s
+  留证: evaluator evidence JSON、SHA-256 校验输出、judge evidence JSON
+  Test: manual:bash -c ': "${HARNESS_ATTEMPT_ID:?}" "${HARNESS_PROVIDER:?}" "${HARNESS_ACCOUNT:?}" "${HARNESS_MACHINE:?}" "${HARNESS_MODEL:?}" "${HARNESS_RUNNER_DIGEST:?}" "${CAPABILITY_SNAPSHOT_ID:?}" "${EVALUATOR_EVIDENCE_FILE:?}" "${EVALUATOR_EVIDENCE_SHA256:?}" "${JUDGE_EVIDENCE_FILE:?}"; printf "%s  %s\n" "$EVALUATOR_EVIDENCE_SHA256" "$EVALUATOR_EVIDENCE_FILE" | sha256sum -c -; jq -e '"'"'.role=="judge" and .provenance.attempt_id==env.HARNESS_ATTEMPT_ID and .provenance.provider==env.HARNESS_PROVIDER and .provenance.account==env.HARNESS_ACCOUNT and .provenance.machine==env.HARNESS_MACHINE and .provenance.model==env.HARNESS_MODEL and .provenance.runner_digest==env.HARNESS_RUNNER_DIGEST and .provenance.capability_snapshot_id==env.CAPABILITY_SNAPSHOT_ID and .evaluator_evidence_sha256==env.EVALUATOR_EVIDENCE_SHA256'"'"' "$JUDGE_EVIDENCE_FILE"'
 
 ## Invariant 映射
 
@@ -91,3 +98,4 @@ target_environment: local_api
 - INV-13 manual oracle 记录真实 exit code并确认解释器启动。
 - INV-14 validation identity 从当前 Runner late-bound，不固化作者 UUID。
 - INV-15 其余铁律与本 sprint 无交集，显式 N/A；`npm run product-map:check` 必须通过。
+- INV-16 Evaluator 与 Judge 各自 late-bind 当前 Runner 身份，Judge 只通过 SHA-256 摘要引用 Evaluator 证据，禁止共享 role attempt/snapshot。
