@@ -396,6 +396,41 @@ if [ "$API_REACHABLE" -eq 1 ]; then
     || fail "Step 9b 回读 whitelist 不一致: $(cat "$S9_TMP")" 9
   rm -f "$S9_TMP"
   ok "Step 9b ✅ 回读一致（whitelist 含 gp4-smoke-whitelist-name）"
+
+  # Step 9c（2026-08-04，§1.9 同型回归守卫，issue PR#1146）：§1.9 事故根因是 getCSConfig
+  # 的 SELECT 曾漏掉 takeover_mode/blacklist 两列，导致"全接管"前台看着配了、agent 端
+  # 却读不到、形同虚设。真实黑名单写入走的是 PUT /api/crm/customers/identity（非本
+  # cs/config 路由——该路由职责是 persona/whitelist/hours，blacklist 归 CRM 管），
+  # 这里调用真实路由写入再回读 cs/config，精确重演该事故的失败模式（SELECT 漏列
+  # → 字段从响应消失）。
+  # 注（核实过真实路由行为后修正）：/customers/identity 内部会 resolveTenantId(wechat_id)
+  # （先查 service_agents，再退化到 cs-XXXXXX license 正则），X-Internal-Token 只经
+  # hasLegacyServiceCredential → superAdminGuard 绕开「管理员角色闸/租户隔离闸」，并不会
+  # 替 handler 免掉 resolveTenantId 这一步。S9_WECHAT 是随机串，两条解析路都命中不了 →
+  # 不先建绑定行会 404 TARGET_NOT_FOUND（与 §1.9 无关的假阳性）。故比照 Step 7 的做法，
+  # 先补一个最小 tenant + service_agents 绑定行 fixture，仅在 DB_REACHABLE 时跑
+  # （CI=true 下 DB_REACHABLE 恒为 1，见脚本开头，不会静默 SKIP）。
+  if [ "$DB_REACHABLE" -eq 1 ]; then
+    S9C_TENANT=$(psq "INSERT INTO zenithjoy.tenants (name, license_key) VALUES ('gp4-smoke-tenant9c-${RND}', 'ZJ-F-GP49C${RND//-/}') RETURNING id")
+    [ -n "$S9C_TENANT" ] || fail "Step 9c fixture tenant 建立失败" 9
+    psq "INSERT INTO zenithjoy.service_agents (tenant_id, machine_id, wechat_id) VALUES ('$S9C_TENANT'::uuid, 'gp4-smoke-machine9c-${RND}', '$S9_WECHAT') ON CONFLICT (tenant_id) WHERE deleted_at IS NULL DO UPDATE SET wechat_id=EXCLUDED.wechat_id" >/dev/null
+
+    S9C_CONTACT="gp4-smoke-blacklist-${RND//-/}"
+    S9C_HTTP=$(curl -s -o "$S9_TMP" -w '%{http_code}' --max-time 15 \
+      -X PUT "$API_BASE/api/crm/customers/identity" \
+      -H "Content-Type: application/json" -H "X-Internal-Token: $INT_TOKEN" \
+      -d "{\"wechat_id\":\"$S9_WECHAT\",\"contact\":\"$S9C_CONTACT\",\"identity\":\"blacklist\"}")
+    [ "$S9C_HTTP" = "200" ] || fail "Step 9c PUT crm/customers/identity expected 200, got $S9C_HTTP: $(cat "$S9_TMP")" 9
+
+    S9_HTTP=$(curl -s -o "$S9_TMP" -w '%{http_code}' --max-time 15 "$API_BASE/api/wechat/cs/config/$S9_WECHAT")
+    [ "$S9_HTTP" = "200" ] || fail "Step 9c GET cs/config(回读blacklist) expected 200, got $S9_HTTP: $(cat "$S9_TMP")" 9
+    python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert '$S9C_CONTACT' in (d.get('blacklist') or [])" "$S9_TMP" 2>/dev/null \
+      || fail "Step 9c blacklist 回读不含刚拉黑的联系人（§1.9 SELECT 漏列同型回归）: $(cat "$S9_TMP")" 9
+    rm -f "$S9_TMP"
+    ok "Step 9c ✅ blacklist 回读含刚拉黑的联系人（§1.9 SELECT 漏列同型回归守卫）"
+  else
+    echo "  SKIP: DB 不可达，跳过 Step 9c（需 service_agents fixture 才能过 resolveTenantId）"
+  fi
   ok "Step 9 ✅ 白名单/接管模式配置链路通"
 else
   echo "  SKIP: API 不可达"
