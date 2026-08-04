@@ -103,20 +103,94 @@ jobs:
   golden-path-4-smoke:
     name: Golden Path 4 — Full 6-step E2E Smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     # 合同 r1 #14：ws1..ws5 全绿才跑完整端到端
     needs: [ws1, ws2, ws3, ws4, ws5]
+    # 2026-08-04 修复（假绿灯审计）：此前本 job 不起 DB/API，脚本探测到不可达就整段 SKIP
+    # 仍报 PASS——Step 1/7/8/9/12/13/14 从未在这条跑道上真跑过。真覆盖只发生在
+    # Smoke Glob Gate（ci-smoke-glob-runner.yml）。现补齐同款 DB/API 基建，让这条
+    # 专属跑道的名字（"Full ... E2E Smoke"）名副其实。
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: cecelia
+          POSTGRES_PASSWORD: cecelia
+          POSTGRES_DB: cecelia
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      DATABASE_USER: cecelia
+      DATABASE_PASSWORD: cecelia
+      DATABASE_NAME: cecelia
+      DATABASE_URL: postgres://cecelia:cecelia@localhost:5432/cecelia
+      DB_URL: postgres://cecelia:cecelia@localhost:5432/cecelia
+      PORT: 5200
+      NODE_ENV: test
+      API_BASE: http://localhost:5200
+      ADMIN_FEISHU_OPENIDS: ou_admin_smoke_999
+      BETTER_AUTH_SECRET: ci-only-secret-32-chars-min-not-prod-123
+      BETTER_AUTH_URL: http://localhost:5200
+      ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '20', cache: 'npm', cache-dependency-path: services/agent/package-lock.json }
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
+
+      - name: Install apps/api deps
+        run: npm ci --workspace=apps/api
+
       # Step 17（作战窗刀1）需要真跑 services/agent 的 TS 逻辑证明看门狗 proven-to-fire，
       # 不是静态 grep——装依赖才能用 tsx 直接执行。
       - name: Install services/agent deps (for Step 17 panel-event-bus proven-to-fire check)
         run: npm ci --no-audit --no-fund
         working-directory: services/agent
+
+      # 2026-08-04 修复（Step 17d 假绿）：脚本此前声称"CI 独立 job 已跑"业务语言渲染单测，
+      # 实际全仓库无该 job。装了依赖后脚本自带的 `[ -d node_modules ]` 分支会自动真跑 vitest。
+      - name: Install apps/agent-panel deps (for Step 17d business-language vitest)
+        run: npm ci --no-audit --no-fund
+        working-directory: apps/agent-panel
+
+      - name: Create zenithjoy schema + pgcrypto
+        env:
+          PGPASSWORD: cecelia
+        run: |
+          psql -h localhost -U cecelia -d cecelia -c "CREATE SCHEMA IF NOT EXISTS zenithjoy;"
+          psql -h localhost -U cecelia -d cecelia -c "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";"
+
+      - name: Run apps/api/db migrations
+        env:
+          PGPASSWORD: cecelia
+        run: |
+          for f in apps/api/db/migrations/*.sql; do
+            echo "→ $f"
+            psql -h localhost -U cecelia -d cecelia -v ON_ERROR_STOP=1 -f "$f"
+          done
+
+      - name: Build apps/api
+        working-directory: apps/api
+        run: npm run build
+
+      - name: Start apps/api
+        working-directory: apps/api
+        run: |
+          node dist/index.js > /tmp/apps-api.log 2>&1 &
+          echo $! > /tmp/apps-api.pid
+          for i in $(seq 1 40); do
+            curl -fs http://localhost:5200/health >/dev/null 2>&1 && { echo "apps/api ready ${i}s"; break; }
+            sleep 1
+          done
+          curl -fs http://localhost:5200/health || (cat /tmp/apps-api.log && exit 1)
+
       - name: Run full golden-path-4-smoke (REAL_PUBLISH=0 dryrun)
         env:
           REAL_PUBLISH: '0'
