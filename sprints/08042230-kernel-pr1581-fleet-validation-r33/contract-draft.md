@@ -1,11 +1,11 @@
-# Sprint Contract Draft (Round 6)
+# Sprint Contract Draft (Round 7)
 
 ## Notes
 
 - contract-gate: skipped (file not found, third-party repo)
 - 本轮删除 sprint 级 `validate-fleet-payload.mjs` 旁路；唯一被测对象是实际 Fleet Worker 派发后产生的权威 receipt，不改变 PR #1581 业务实现或 Harness 调度。
 - GAN authoring identity 仅属本轮作者 provenance；Evaluator/Judge 身份均由 Runner 的 `HARNESS_*` 与 `CAPABILITY_SNAPSHOT_ID` 运行时注入，合同不固化角色 UUID。
-- Round 5 案卷 reviewer 行的 `blockers[]` 为空，正式编号不可取得；按 `review_feedback.reason` 的三项缺口登记为 `R5-1` 至 `R5-3`。本轮逐项 closure 见结果案卷；合同实际改动包括 B-06/B-07/B-08 的完整文字阈值机检、独立 Risks 表，以及全字段 late-bound provenance 和 Evaluator→Judge SHA-256 证据链。
+- Round 6 案卷 reviewer 行的 `blockers[]` 为空；按 `review_feedback.reason` 唯一缺口登记为 `R6-1`。本轮在 Step 4、B-04、E2E 与 TDD Red 测试中加入格式完整但指向不存在 `step999` 的 `gp_anchor` 负向用例，要求 `target_mismatch` 且 `failed_field=gp_anchor`，从而关闭合法 shape 绕过 SSOT 的缺口。
 
 ## GP-Anchor
 
@@ -154,9 +154,10 @@ jq -e '.status=="failed" and .failure_class=="target_mismatch" and .failed_field
 for CASE in target_head_missing target_head_short; do jq -e '.status=="failed" and .failure_class=="payload_invalid" and .failed_field=="target_head_sha" and (.error|test("target_head_sha"))' "$FLEET_MUTATION_RECEIPT_DIR/$CASE.json" || exit 1; done
 jq -e '.status=="failed" and .failure_class=="target_mismatch" and .failed_field=="target_head_sha" and (.error|test("target_head_sha"))' "$FLEET_MUTATION_RECEIPT_DIR/target_head_mismatch.json"
 for CASE in gp_anchor_missing gp_anchor_ambiguous; do jq -e '.status=="failed" and .failure_class=="payload_invalid" and .failed_field=="gp_anchor" and (.error|test("gp_anchor"))' "$FLEET_MUTATION_RECEIPT_DIR/$CASE.json" || exit 1; done
+jq -e '.status=="failed" and .failure_class=="target_mismatch" and .failed_field=="gp_anchor" and (.error|test("gp_anchor"))' "$FLEET_MUTATION_RECEIPT_DIR/gp_anchor_nonexistent_step.json"
 ```
 
-**硬阈值**: 被篡改输入必须非零退出；7 个失败 receipt 的 `failure_class`、`failed_field` 与含字段名的 `error` 全部精确命中上述 oracle；命令 exit 0 表示负向断言成立。
+**硬阈值**: 被篡改输入必须非零退出；8 个失败 receipt（含格式合法但指向不存在 `step999` 的 anchor）的 `failure_class`、`failed_field` 与含字段名的 `error` 全部精确命中上述 oracle；命令 exit 0 表示负向断言成立。
 
 ### Step 5: 串联 Evaluator 与 Independent Judge 证据
 **来源**: `[AI_ADDED]` — 防止不同角色复用 Proposer 身份或 Judge 审到未锚定的 Evaluator 输出。
@@ -218,6 +219,8 @@ jq 'del(.inputs.payload.gp_anchor)' "$EVIDENCE_DIR/bundle.json" >"$EVIDENCE_DIR/
 jq -e '.failure_class=="payload_invalid" and .failed_field=="gp_anchor" and (.error|test("gp_anchor"))' "$EVIDENCE_DIR/gp_anchor_missing.json"
 jq '.inputs.payload.gp_anchor="line02/keyword_acquisition"' "$EVIDENCE_DIR/bundle.json" >"$EVIDENCE_DIR/gp-ambiguous.json"; expect_failed gp_anchor_ambiguous "$EVIDENCE_DIR/gp-ambiguous.json"
 jq -e '.failure_class=="payload_invalid" and .failed_field=="gp_anchor" and (.error|test("gp_anchor"))' "$EVIDENCE_DIR/gp_anchor_ambiguous.json"
+jq '.inputs.payload.gp_anchor="line02/keyword_acquisition#step999"' "$EVIDENCE_DIR/bundle.json" >"$EVIDENCE_DIR/gp-nonexistent-step.json"; expect_failed gp_anchor_nonexistent_step "$EVIDENCE_DIR/gp-nonexistent-step.json"
+jq -e '.failure_class=="target_mismatch" and .failed_field=="gp_anchor" and (.error|test("gp_anchor"))' "$EVIDENCE_DIR/gp_anchor_nonexistent_step.json"
 cp -R "$WORKTREE" "$EVIDENCE_DIR/no-map"
 rm -f "$EVIDENCE_DIR/no-map/product-map/generated/product-map.json"
 if node packages/brain/src/harness/fleet-worker.js validate --bundle "$EVIDENCE_DIR/bundle.json" --workspace "$EVIDENCE_DIR/no-map" --receipt "$EVIDENCE_DIR/no-map.json"; then echo 'FAIL: product-map 缺失竟成功'; exit 1; fi

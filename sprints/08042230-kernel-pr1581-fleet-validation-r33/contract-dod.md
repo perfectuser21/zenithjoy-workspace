@@ -39,12 +39,12 @@ target_environment: local_api
   留证: 三条 mutation receipt
   Test: manual:bash -c 'D=$(mktemp -d); trap '"'"'rm -rf "$D"'"'"' EXIT; jq '"'"'del(.inputs.payload.target_head_sha)'"'"' "${FLEET_VALID_BUNDLE:?}" >"$D/a.json"; jq '"'"'.inputs.payload.target_head_sha="HEAD"'"'"' "$FLEET_VALID_BUNDLE" >"$D/b.json"; jq '"'"'.inputs.payload.target_head_sha="0000000000000000000000000000000000000000"'"'"' "$FLEET_VALID_BUNDLE" >"$D/c.json"; for C in a b; do if node packages/brain/src/harness/fleet-worker.js validate --bundle "$D/$C.json" --workspace "${FLEET_TARGET_WORKTREE:?}" --receipt "$D/$C-r.json"; then exit 1; fi; jq -e '"'"'.status=="failed" and .failure_class=="payload_invalid" and .failed_field=="target_head_sha" and (.error|test("target_head_sha"))'"'"' "$D/$C-r.json"; done; if node packages/brain/src/harness/fleet-worker.js validate --bundle "$D/c.json" --workspace "$FLEET_TARGET_WORKTREE" --receipt "$D/c-r.json"; then exit 1; fi; jq -e '"'"'.status=="failed" and .failure_class=="target_mismatch" and .failed_field=="target_head_sha" and (.error|test("target_head_sha"))'"'"' "$D/c-r.json"'
 
-- [ ] [BEHAVIOR] [L2] B-04: gp_anchor 缺失或不唯一必须拒绝
-  动作: 经 Harness 删除 anchor，再传不能唯一解析到 Step 7 的 anchor。
-  预期观察: 两例 failed/payload_invalid，`failed_field=gp_anchor` 且 error 点名该字段，Fleet 不猜测其他 Step。
+- [ ] [BEHAVIOR] [L2] B-04: gp_anchor 缺失、格式不完整或指向不存在 Step 必须拒绝
+  动作: 经 Harness 删除 anchor、传缺少 Step 的不完整 anchor，再传格式完整但指向 `step999` 的 anchor。
+  预期观察: 前两例 failed/payload_invalid；`step999` 例 failed/target_mismatch；三例均 `failed_field=gp_anchor` 且 error 点名该字段，Fleet 不猜测其他 Step。
   等待预算: 60s
-  留证: 两条 mutation receipt
-  Test: manual:bash -c 'D=$(mktemp -d); trap '"'"'rm -rf "$D"'"'"' EXIT; jq '"'"'del(.inputs.payload.gp_anchor)'"'"' "${FLEET_VALID_BUNDLE:?}" >"$D/a.json"; jq '"'"'.inputs.payload.gp_anchor="line02/keyword_acquisition"'"'"' "$FLEET_VALID_BUNDLE" >"$D/b.json"; for C in a b; do if node packages/brain/src/harness/fleet-worker.js validate --bundle "$D/$C.json" --workspace "${FLEET_TARGET_WORKTREE:?}" --receipt "$D/$C-r.json"; then exit 1; fi; jq -e '"'"'.status=="failed" and .failure_class=="payload_invalid" and .failed_field=="gp_anchor" and (.error|test("gp_anchor"))'"'"' "$D/$C-r.json"; done'
+  留证: 三条 mutation receipt
+  Test: manual:bash -c 'D=$(mktemp -d); trap '"'"'rm -rf "$D"'"'"' EXIT; jq '"'"'del(.inputs.payload.gp_anchor)'"'"' "${FLEET_VALID_BUNDLE:?}" >"$D/a.json"; jq '"'"'.inputs.payload.gp_anchor="line02/keyword_acquisition"'"'"' "$FLEET_VALID_BUNDLE" >"$D/b.json"; for C in a b; do if node packages/brain/src/harness/fleet-worker.js validate --bundle "$D/$C.json" --workspace "${FLEET_TARGET_WORKTREE:?}" --receipt "$D/$C-r.json"; then exit 1; fi; jq -e '"'"'.status=="failed" and .failure_class=="payload_invalid" and .failed_field=="gp_anchor" and (.error|test("gp_anchor"))'"'"' "$D/$C-r.json"; done; jq '"'"'.inputs.payload.gp_anchor="line02/keyword_acquisition#step999"'"'"' "$FLEET_VALID_BUNDLE" >"$D/c.json"; if node packages/brain/src/harness/fleet-worker.js validate --bundle "$D/c.json" --workspace "$FLEET_TARGET_WORKTREE" --receipt "$D/c-r.json"; then exit 1; fi; jq -e '"'"'.status=="failed" and .failure_class=="target_mismatch" and .failed_field=="gp_anchor" and (.error|test("gp_anchor"))'"'"' "$D/c-r.json"'
 
 - [ ] [BEHAVIOR] [L2] B-05: GitHub 或 Postgres 不可用不得成功 [接缝×2]
   动作: 由 Fleet 故障注入通道分别阻断 GitHub 与 attempt-scoped Postgres，各执行两次。

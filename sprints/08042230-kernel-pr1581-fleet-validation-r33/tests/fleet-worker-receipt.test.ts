@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
 const worker = 'packages/brain/src/harness/fleet-worker.js';
@@ -37,5 +38,22 @@ describe('Fleet Worker 真链路 receipt [BEHAVIOR]', () => {
   it('product-map 缺失时生产 Fleet Worker L2 fail-closed', async () => {
     requireExecutionInputs();
     throw new Error('TDD RED: Generator 必须实现隔离 checkout 缺 product-map 的真实 CLI 集成测试');
+  });
+
+  it('格式合法但指向不存在 Step 的 gp_anchor 必须 fail-closed', async () => {
+    const { bundle, workspace } = requireExecutionInputs();
+    const dir = mkdtempSync(`${tmpdir()}/fleet-anchor-${process.pid}-`);
+    try {
+      const mutated = JSON.parse(readFileSync(bundle, 'utf8'));
+      mutated.inputs.payload.gp_anchor = 'line02/keyword_acquisition#step999';
+      const badBundle = `${dir}/bundle.json`;
+      const receipt = `${dir}/receipt.json`;
+      writeFileSync(badBundle, JSON.stringify(mutated));
+      const run = dispatch(badBundle, workspace, receipt);
+      expect(run.status, run.stderr).not.toBe(0);
+      expect(JSON.parse(readFileSync(receipt, 'utf8'))).toMatchObject({ status: 'failed', failure_class: 'target_mismatch', failed_field: 'gp_anchor' });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

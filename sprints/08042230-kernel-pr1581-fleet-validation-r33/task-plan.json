@@ -11,7 +11,7 @@
         "[BEHAVIOR] 生产 Fleet Worker CLI 真派发两次，正确 payload 仅在权威对账全部完成后 passed",
         "[BEHAVIOR] attempt 空库运行仓库 migration 后目标表存在",
         "[BEHAVIOR] product-map 缺失时 CLI 非零并分类 environment_failure",
-        "[BEHAVIOR] repo/head/anchor 与 GitHub/Postgres 九项变异均 fail-closed",
+        "[BEHAVIOR] repo/head/anchor 与 GitHub/Postgres 变异均 fail-closed，含格式合法但指向不存在 Step 的 gp_anchor",
         "[BEHAVIOR] receipt provenance 与当前 Runner late-bound 身份一致",
         "[BEHAVIOR] Evaluator 与 Judge 分别 late-bind 自身 Runner 身份，Judge 复算并引用 Evaluator 证据 SHA-256",
         "[ARTIFACT] 生产 Fleet receipt schema、执行接线与无 fixture 集成测试"
