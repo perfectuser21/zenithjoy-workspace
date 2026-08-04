@@ -1,11 +1,11 @@
-# Sprint Contract Draft (Round 4)
+# Sprint Contract Draft (Round 5)
 
 ## Notes
 
 - contract-gate: skipped (file not found, third-party repo)
 - 本轮删除 sprint 级 `validate-fleet-payload.mjs` 旁路；唯一被测对象是实际 Fleet Worker 派发后产生的权威 receipt，不改变 PR #1581 业务实现或 Harness 调度。
 - GAN authoring identity 仅属本轮作者 provenance；Evaluator/Judge 身份均由 Runner 的 `HARNESS_*` 与 `CAPABILITY_SNAPSHOT_ID` 运行时注入，合同不固化角色 UUID。
-- Round 3 案卷 reviewer 行的 `blockers[]` 为空，正式编号不可取得；按 reviewer summary 的三项缺口登记为 R3-1～R3-3。本轮不再消费预制 receipt：E2E 自己调用生产 Fleet Worker CLI；先对 attempt 空库运行仓库 migration；并用缺失 product-map 的隔离 checkout 真验 L2 fail-closed。
+- Round 4 案卷 reviewer 行的 `blockers[]` 为空，正式编号不可取得；按 reviewer summary 将唯一缺口登记为 `R4-1`。本轮把每个负向 receipt 的 oracle 收紧为具体 `failed_field`、精确 `failure_class` 与包含字段名的 `error`，使 repo/head/anchor 任一不一致都可被逐字段观察，而非只验证通用失败。
 
 ## GP-Anchor
 
@@ -136,14 +136,18 @@ R=$(mktemp); node packages/brain/src/harness/fleet-worker.js validate --bundle "
 ### Step 4: 篡改或依赖故障时 fail-closed
 **来源**: `[FROM_PRD]` — PRD「边界情况」四项。
 
-**可观测行为**: 缺失/错 repo/非完整 SHA/格式合法但与 PR head 不一致的 SHA/缺失或错误锚点均 exit 非零；GitHub/SSOT 故障分类为环境失败，不产生 `ok=true`。
+**可观测行为**: 缺失/错 repo/非完整 SHA/格式合法但与 PR head 不一致的 SHA/缺失或错误锚点均 exit 非零；每个 receipt 必须用 `failed_field` 指明 `base_repo`、`target_head_sha` 或 `gp_anchor`，并在 `error` 中包含同一字段名；GitHub/SSOT 故障分类为环境失败，不产生成功结论。
 
 **验证命令**:
 ```bash
-for CASE in repo_missing repo_wrong target_head_missing target_head_short target_head_mismatch gp_anchor_missing gp_anchor_ambiguous; do test -s "${FLEET_MUTATION_RECEIPT_DIR:?}/$CASE.json" && jq -e '.status=="failed" and .failure_class!="none"' "$FLEET_MUTATION_RECEIPT_DIR/$CASE.json" || exit 1; done
+jq -e '.status=="failed" and .failure_class=="payload_invalid" and .failed_field=="base_repo" and (.error|test("base_repo"))' "${FLEET_MUTATION_RECEIPT_DIR:?}/repo_missing.json"
+jq -e '.status=="failed" and .failure_class=="target_mismatch" and .failed_field=="base_repo" and (.error|test("base_repo"))' "$FLEET_MUTATION_RECEIPT_DIR/repo_wrong.json"
+for CASE in target_head_missing target_head_short; do jq -e '.status=="failed" and .failure_class=="payload_invalid" and .failed_field=="target_head_sha" and (.error|test("target_head_sha"))' "$FLEET_MUTATION_RECEIPT_DIR/$CASE.json" || exit 1; done
+jq -e '.status=="failed" and .failure_class=="target_mismatch" and .failed_field=="target_head_sha" and (.error|test("target_head_sha"))' "$FLEET_MUTATION_RECEIPT_DIR/target_head_mismatch.json"
+for CASE in gp_anchor_missing gp_anchor_ambiguous; do jq -e '.status=="failed" and .failure_class=="payload_invalid" and .failed_field=="gp_anchor" and (.error|test("gp_anchor"))' "$FLEET_MUTATION_RECEIPT_DIR/$CASE.json" || exit 1; done
 ```
 
-**硬阈值**: 被篡改输入必须非零退出，失败 JSON 不含成功结论且分类精确；命令 exit 0 表示负向断言成立。
+**硬阈值**: 被篡改输入必须非零退出；7 个失败 receipt 的 `failure_class`、`failed_field` 与含字段名的 `error` 全部精确命中上述 oracle；命令 exit 0 表示负向断言成立。
 
 ## E2E 验收
 
@@ -172,12 +176,19 @@ jq -s -e '.[0].target_head_sha==.[1].target_head_sha and .[0].gp_anchor==.[1].gp
 psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc "SELECT count(*) FROM harness_validation_receipts WHERE attempt_id='${HARNESS_ATTEMPT_ID}' AND target_head_sha='c305f6217da65bb69413c39e621b7e797e0fb189' AND created_at>NOW()-interval '5 minutes'" | grep -qx 2
 expect_failed() { local name="$1" bundle="$2" receipt="$EVIDENCE_DIR/$name.json"; if node packages/brain/src/harness/fleet-worker.js validate --bundle "$bundle" --workspace "$WORKTREE" --receipt "$receipt"; then echo "FAIL: $name 竟成功"; return 1; fi; jq -e '.status=="failed" and .failure_class!="none"' "$receipt"; }
 jq 'del(.inputs.payload.base_repo)' "$EVIDENCE_DIR/bundle.json" >"$EVIDENCE_DIR/repo-missing.json"; expect_failed repo_missing "$EVIDENCE_DIR/repo-missing.json"
+jq -e '.failure_class=="payload_invalid" and .failed_field=="base_repo" and (.error|test("base_repo"))' "$EVIDENCE_DIR/repo_missing.json"
 jq '.inputs.payload.base_repo="wrong/repo"' "$EVIDENCE_DIR/bundle.json" >"$EVIDENCE_DIR/repo-wrong.json"; expect_failed repo_wrong "$EVIDENCE_DIR/repo-wrong.json"
+jq -e '.failure_class=="target_mismatch" and .failed_field=="base_repo" and (.error|test("base_repo"))' "$EVIDENCE_DIR/repo_wrong.json"
 jq 'del(.inputs.payload.target_head_sha)' "$EVIDENCE_DIR/bundle.json" >"$EVIDENCE_DIR/head-missing.json"; expect_failed target_head_missing "$EVIDENCE_DIR/head-missing.json"
+jq -e '.failure_class=="payload_invalid" and .failed_field=="target_head_sha" and (.error|test("target_head_sha"))' "$EVIDENCE_DIR/target_head_missing.json"
 jq '.inputs.payload.target_head_sha="HEAD"' "$EVIDENCE_DIR/bundle.json" >"$EVIDENCE_DIR/head-short.json"; expect_failed target_head_short "$EVIDENCE_DIR/head-short.json"
+jq -e '.failure_class=="payload_invalid" and .failed_field=="target_head_sha" and (.error|test("target_head_sha"))' "$EVIDENCE_DIR/target_head_short.json"
 jq '.inputs.payload.target_head_sha="0000000000000000000000000000000000000000"' "$EVIDENCE_DIR/bundle.json" >"$EVIDENCE_DIR/head-mismatch.json"; expect_failed target_head_mismatch "$EVIDENCE_DIR/head-mismatch.json"
+jq -e '.failure_class=="target_mismatch" and .failed_field=="target_head_sha" and (.error|test("target_head_sha"))' "$EVIDENCE_DIR/target_head_mismatch.json"
 jq 'del(.inputs.payload.gp_anchor)' "$EVIDENCE_DIR/bundle.json" >"$EVIDENCE_DIR/gp-missing.json"; expect_failed gp_anchor_missing "$EVIDENCE_DIR/gp-missing.json"
+jq -e '.failure_class=="payload_invalid" and .failed_field=="gp_anchor" and (.error|test("gp_anchor"))' "$EVIDENCE_DIR/gp_anchor_missing.json"
 jq '.inputs.payload.gp_anchor="line02/keyword_acquisition"' "$EVIDENCE_DIR/bundle.json" >"$EVIDENCE_DIR/gp-ambiguous.json"; expect_failed gp_anchor_ambiguous "$EVIDENCE_DIR/gp-ambiguous.json"
+jq -e '.failure_class=="payload_invalid" and .failed_field=="gp_anchor" and (.error|test("gp_anchor"))' "$EVIDENCE_DIR/gp_anchor_ambiguous.json"
 cp -R "$WORKTREE" "$EVIDENCE_DIR/no-map"
 rm -f "$EVIDENCE_DIR/no-map/product-map/generated/product-map.json"
 if node packages/brain/src/harness/fleet-worker.js validate --bundle "$EVIDENCE_DIR/bundle.json" --workspace "$EVIDENCE_DIR/no-map" --receipt "$EVIDENCE_DIR/no-map.json"; then echo 'FAIL: product-map 缺失竟成功'; exit 1; fi
