@@ -384,7 +384,10 @@ if split_idx is None:
     sys.exit(1)
 
 def strip_comments(chunk):
-    return [l for l in chunk if not l.strip().startswith('//')]
+    # 三次修正：只剥整行注释漏了行尾注释（`nickname: wid, // 无 source 时兜底`这类 TS
+    # 常见写法），字段名躲在 // 后面依然能让检查误判通过——反例已复现，改成剥到每行的
+    # // 之前（简单按字面量切，够用；不处理字符串里恰好含 // 的极端情况）。
+    return [l.split('//')[0] for l in chunk]
 
 branch_true = strip_comments(block[:split_idx])
 branch_false = strip_comments(block[split_idx:])
@@ -817,7 +820,11 @@ for py_file in overlay_dir.rglob('*.py'):
         if write_pattern.search(line):
             window = lines[max(0, i-5):i+6]
             non_comment_window = [w for w in window if not w.strip().startswith('#')]
-            if any('events' in w.lower() for w in non_comment_window):
+            # 三次修正：'events' 子串太宽——诊断字段名 events_tail_offset 等无关标识符
+            # 也会命中，实测复现过窗口内恰好有这类字段、纯粹字段顺序调整就能把这步无辜
+            # 打红。收窄到真实文件名字面量 'events.jsonl'，检出能力不损失（真实写者用
+            # os.path.join(...,'events.jsonl') 这类写法，字面量本身就在代码行里）。
+            if any('events.jsonl' in w.lower() for w in non_comment_window):
                 violations.append(f'{py_file}:{i+1}: {line.strip()}')
 
 if violations:
