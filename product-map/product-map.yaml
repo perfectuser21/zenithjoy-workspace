@@ -189,6 +189,8 @@ golden_paths:
     line_id: line04
     name: 智能客服·绑定/安装（共享前置）
     status: active
+    smoke_files:
+      - .github/workflows/scripts/smoke/golden-path-4-smoke.sh
     steps:
       - id: step1
         name: 注册自动登录
@@ -203,6 +205,11 @@ golden_paths:
     line_id: line04
     name: 智能客服·GP-A 主动语音触达
     status: active
+    # gpa-voice-rtc-smoke.sh 存在但纯 grep/文件存在性检查（真实命令数=0），
+    # 被 product-map:check 的 GP-SMOKE-EMPTY 反占位质检拦下，2026-08-04 审计后
+    # 排除在外（如实反映：该脚本目前不构成有效 smoke 覆盖），待重写为含真实命令的验证。
+    smoke_files:
+      - .github/workflows/scripts/smoke/gpa-voice-outreach-smoke.sh
     steps:
       - id: step1
         name: 拨号触发
@@ -218,6 +225,11 @@ golden_paths:
     line_id: line04
     name: 智能客服·GP-B 被动接待
     status: active
+    smoke_files:
+      - .github/workflows/scripts/smoke/golden-path-4-smoke.sh
+      - .github/workflows/scripts/smoke/line04-wxid-whitelist-smoke.sh
+      - .github/workflows/scripts/smoke/line04-cs-memory-smoke.sh
+      - .github/workflows/scripts/smoke/line04-cs-tenant-isolation-smoke.sh
     steps:
       - id: step1
         name: 消息被感知
@@ -233,6 +245,10 @@ golden_paths:
     line_id: line04
     name: 智能客服·GP-C 朋友圈发布
     status: active
+    # 仅覆盖 step1（内容成稿）；发布上圈(step2)/发布确认与留痕(step3) 目前无对应 smoke，
+    # 真实覆盖缺口——2026-08-04 审计发现，待后续 sprint 补齐。
+    smoke_files:
+      - .github/workflows/scripts/smoke/path4-sprint-1-ws4-smoke.sh
     steps:
       - id: step1
         name: 内容成稿
@@ -246,6 +262,9 @@ golden_paths:
     line_id: line04
     name: 智能客服·GP-D 经营汇报
     status: active
+    # cs-daily-report-smoke.sh 目前是存量债（Smoke Glob Gate 非阻断），非必绿基线。
+    smoke_files:
+      - .github/workflows/scripts/smoke/cs-daily-report-smoke.sh
     steps:
       - id: step1
         name: 数据齐备
@@ -259,6 +278,7 @@ golden_paths:
     line_id: line04
     name: 智能客服·GP-E 朋友圈互动
     status: active
+    # 2026-08-04 审计：暂无对应 smoke 脚本，真实覆盖缺口，待后续 sprint 补齐。
     steps:
       - id: step1
         name: 客户动态被感知
@@ -272,6 +292,7 @@ golden_paths:
     line_id: line04
     name: 智能客服·GP-F 社群运营
     status: active
+    # 2026-08-04 审计：暂无对应 smoke 脚本，真实覆盖缺口，待后续 sprint 补齐。
     steps:
       - id: step1
         name: 群动静被感知
