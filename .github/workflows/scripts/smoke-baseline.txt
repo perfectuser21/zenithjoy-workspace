@@ -99,3 +99,4 @@ staff-line-health-smoke.sh
 staff-hub-env-badge-smoke.sh
 staff-acceptance-smoke.sh
 acquisition-config-validation-smoke.sh
+trim-json-lib-smoke.sh
