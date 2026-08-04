@@ -350,11 +350,66 @@ fi
 echo "▶ Step 8: CRM 客户列表页（customer-profile 六字段）"
 
 WECHAT_TS="apps/api/src/routes/wechat.ts"
-grep -q "customer-profile" "$WECHAT_TS" || fail "Step 8 wechat.ts 未注册 customer-profile 路由" 8
-for field in level nickname source contact_count recent_actions ai_profile; do
-  grep -q "$field" "$WECHAT_TS" || fail "Step 8 customer-profile 缺字段 $field" 8
-done
-ok "Step 8a ✅ customer-profile 路由含六字段声明"
+grep -q "customer-profile" "$WECHAT_TS" || fail "Step 8 customer-profile 路由未注册" 8
+# 2026-08-05 加固（0804 审计发现②，二次修正）：旧检测对整个 723 行文件裸 grep 字段名，
+# 六字段中的 level/nickname/source 等词在头部注释、SQL 查询结果类型声明里也出现，实测验证过：
+# 从真实响应对象里删掉 level 字段（保留头部注释里的"level"字样），旧检测依然误判通过。
+# 第一版修法（锚定 `const data = row?{...}:{...}` 整块 + word-boundary）仍有两处残留假绿，
+# 复审实测验证过：①占位分支内 `// 占位：...作为 nickname` 这行注释本身含 nickname 字样，
+# 删掉两处真实 nickname 字段后整块检查依然通过；②检查只看"整块里出现过"不分分支，只删占位
+# 分支里的 ai_profile 也照样通过——违反本步骤自己注释里"两个分支都要覆盖"的承诺。
+# 改为：按 `? {`/`: {` 切成两个分支，各自剥掉注释行（`// ...`）后独立检查六字段。
+S8A_CHECK=$(python3 -c "
+import re, sys
+
+FIELDS = ['level', 'nickname', 'source', 'contact_count', 'recent_actions', 'ai_profile']
+with open('$WECHAT_TS', encoding='utf-8') as f:
+    lines = f.readlines()
+
+start_idx = end_idx = None
+for i, l in enumerate(lines):
+    if 'const data = row' in l:
+        start_idx = i
+    if start_idx is not None and 'return res.json({ data });' in l:
+        end_idx = i
+        break
+if start_idx is None or end_idx is None:
+    print('EXTRACT_FAILED')
+    sys.exit(1)
+
+block = lines[start_idx:end_idx + 1]
+split_idx = next((i for i, l in enumerate(block) if l.rstrip() == '      : {'), None)
+if split_idx is None:
+    print('SPLIT_FAILED（三元表达式 else 分支起始行格式已变，检查需同步更新）')
+    sys.exit(1)
+
+def strip_comments(chunk):
+    # 三次修正：只剥整行注释漏了行尾注释（如 nickname: wid, // 无 source 时兜底 这类 TS
+    # 常见写法），字段名躲在 // 后面依然能让检查误判通过——反例已复现，改成剥到每行的
+    # // 之前（简单按字面量切，够用；不处理字符串里恰好含 // 的极端情况）。
+    return [l.split('//')[0] for l in chunk]
+
+branch_true = strip_comments(block[:split_idx])
+branch_false = strip_comments(block[split_idx:])
+
+missing = []
+for field in FIELDS:
+    pat = re.compile(r'\b' + re.escape(field) + r'\b')
+    if not any(pat.search(l) for l in branch_true):
+        missing.append(f'row存在分支缺{field}')
+    if not any(pat.search(l) for l in branch_false):
+        missing.append(f'占位分支缺{field}')
+
+if missing:
+    print('MISSING:', missing)
+    sys.exit(1)
+print('PASS')
+" 2>&1)
+if echo "$S8A_CHECK" | tail -1 | grep -q "PASS"; then
+  ok "Step 8a ✅ customer-profile 响应对象两分支均含六字段（去注释+分支独立检查，防头部注释/类型声明/单分支假阳性）"
+else
+  fail "Step 8a customer-profile 响应对象字段检查失败: $S8A_CHECK" 8
+fi
 
 if [ "$API_REACHABLE" -eq 1 ]; then
   S8_TMP=$(mktemp)
@@ -469,9 +524,15 @@ assert r1 is True, f'wxid 命中但 should_reply={r1}（改备注后应仍命中
 cfg2 = {'whitelist': ['老客户甲']}
 r2 = gate.should_reply(cfg2, '老客户甲', sender_wxid=None)
 assert r2 is True, f'旧格式纯字符串向后兼容失败: {r2}'
+
+# 2026-08-05 加固（0804 审计发现⑤）：以上两条断言全是正向（期望 True），should_reply
+# 若被变异成恒返回 True（=对所有陌生人自动回复），Step 11 照样全绿。补一条负向：白名单
+# 模式下不在名单里的路人不该被回复。
+r3 = gate.should_reply(cfg, '路人甲', sender_wxid='wxid_stranger_gp4smoke')
+assert r3 is False, f'路人不在白名单里但 should_reply={r3}（白名单模式误判成全接管，可能是恒True变异）'
 print('PASS')
 " 2>&1 | tail -1 | grep -q "PASS" \
-  && ok "Step 11 ✅ 白名单 wxid 优先匹配 + 旧格式兼容通过（判定点已修：不再靠显示名）" \
+  && ok "Step 11 ✅ 白名单 wxid 优先匹配 + 旧格式兼容 + 负向拒答（不在名单里不回）三态通过" \
   || fail "Step 11 白名单 wxid 匹配断言失败" 11
 
 # ───────────────────────────────────────────────────────────────────
@@ -731,9 +792,51 @@ grep -qn '_write_event("reply_sent"' "$LISTEN_CHAT_MAIN" || fail "Step 15b DELIV
 ok "Step 15b ✅ DELIVERED 点含 _write_event 调用（_commit_reply_success 后）"
 
 OVERLAY_DIR="services/agent/wechat-rpa/overlay"
-WRITE_OPENS=$(grep -rn 'open.*"a"\|open.*"w"' "$OVERLAY_DIR" --include="*.py" 2>/dev/null | grep -i "events" | grep -v "^[[:space:]]*#" | grep -v "__pycache__" || true)
-[ -z "$WRITE_OPENS" ] || fail "Step 15c overlay 目录含 events 写入调用（违反单写者约束）: $WRITE_OPENS" 15
-ok "Step 15c ✅ overlay 只读消费 events.jsonl（单写者约束）"
+# 2026-08-05 加固（0804 审计发现①，五次修正）：旧检测要求"写入调用"和字面 events 出现在
+# 同一行，单引号写法（open(p, 'a')）、路径存变量都能逃逸——实测验证过旧 grep 检测不出。
+# 几轮复审各自实测复现过残留问题：嵌套括号写法漏检、窗口误吞无关注释导致假红、窗口关键词
+# 收窄成 'events.jsonl' 字面量又漏检 self._events_path 这类属性引用（真放过，比误杀更危险）；
+# 上一版改成"解析 open()/write_text() 第一个实参"又漏了链式写法——`Path(x).open("a")`
+# 第一实参是 mode 字符串、`.write_text("内容")` 第一实参永远是待写内容，两种都会被误判成
+# "实参不含 events"而放行。最终改为直接看写入调用**自身那一行**（去掉行尾注释后）有没有
+# events 字样——self._events_path/events_path 这类引用变量名本身就在该行内，链式/非链式
+# 写法都覆盖到；同行看不出结论（如路径存在更早一行的变量里）再退化到窗口内找
+# events.jsonl 字面量兜底，窗口只看非注释行防无关注释误判。
+S15C_CHECK=$(python3 -c "
+import re, sys
+from pathlib import Path
+
+overlay_dir = Path('$OVERLAY_DIR')
+write_pattern = re.compile(
+    r'''open\s*\(.*['\"'\''](a\+?|w\+?|x)['\"'\'']|\.write_text\s*\(|\.open\s*\(.*['\"'\''](a\+?|w\+?|x)['\"'\'']'''
+)
+violations = []
+for py_file in overlay_dir.rglob('*.py'):
+    if '__pycache__' in str(py_file):
+        continue
+    lines = py_file.read_text(encoding='utf-8', errors='replace').splitlines()
+    for i, line in enumerate(lines):
+        if line.strip().startswith('#'):
+            continue
+        if write_pattern.search(line):
+            window = lines[max(0, i-5):i+6]
+            non_comment_window = [w for w in window if not w.strip().startswith('#')]
+            own_line = line.split('#')[0].lower()
+            if 'events' in own_line or any('events.jsonl' in w.lower() for w in non_comment_window):
+                violations.append(f'{py_file}:{i+1}: {line.strip()}')
+
+if violations:
+    print('VIOLATIONS:')
+    for v in violations:
+        print(v)
+    sys.exit(1)
+print('PASS')
+" 2>&1)
+if echo "$S15C_CHECK" | tail -1 | grep -q "PASS"; then
+  ok "Step 15c ✅ overlay 只读消费 events.jsonl（单写者约束，窗口化检测+去注释，防单引号/嵌套括号/链式调用逃逸与无关注释误报红；跨行调用/别名传递仍是行级检测固有天花板，未覆盖）"
+else
+  fail "Step 15c overlay 目录含 events 写入调用（违反单写者约束）: $S15C_CHECK" 15
+fi
 
 # Step 15d：心跳超时 degraded 状态不能吞掉同批真实事件（2026-07-16 真机回归：
 # listen_chat.py 全文件从未写过 heartbeat 类型事件，EventTailConsumer 的
