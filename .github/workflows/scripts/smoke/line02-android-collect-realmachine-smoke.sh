@@ -26,6 +26,8 @@
 
 set -uo pipefail
 
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/trim-json.sh"
+
 ok()      { echo "✅ $1"; }
 fail()    { echo "❌ 采集验证失败: $1"; exit 1; }   # 采集真坏 → 硬红,阻塞 PR
 envfail() { echo "🟠 环境未就绪(非采集 bug,查设备/staging/agent): $1"; exit 3; }  # 环境噪音 → 红但可辨
@@ -182,7 +184,7 @@ if [ "${MATCHED:-0}" -ge 1 ]; then
   # ── Seg3 语义质量零容忍闸门 ──
   LEADS_JSON=$(ssh hk-vps "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -t -c \
     \"SELECT json_agg(json_build_object('nickname', nickname, 'comment_text', comment_text, 'sec_uid', sec_uid, 'profile_url', profile_url)) \
-      FROM zenithjoy.acquisition_leads WHERE collect_task_id = '$TASK' AND tenant_id = '$TENANT'\"" | tr -d '\n' | xargs)
+      FROM zenithjoy.acquisition_leads WHERE collect_task_id = '$TASK' AND tenant_id = '$TENANT'\"" | tr -d '\n' | trim_json_stdin)
 
   QUALITY_RESULT=$(echo "$LEADS_JSON" | node -e "
 const {checkLeadQuality} = require('./.github/workflows/scripts/smoke/lib/lead-quality-gate.cjs');
