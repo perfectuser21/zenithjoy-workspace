@@ -42,7 +42,27 @@ jobs:
       PYTHONUTF8: '1'
       PYTHONIOENCODING: 'utf-8'
     steps:
+      # xian-rog 到 github.com 的出境网络存在两层独立问题（pc4 车道 PR#1590/#1592 已验证
+      # 并修复的同一根因）：出境带宽被 GFW 统计限速到 ~10KB/s，以及间歇性 TCP 连接失败
+      # （"Failed to connect to github.com port 443"，内置重试落空）。sparse-checkout 解决
+      # 体积问题，HK exit-node 临时开关解决建连问题；--exit-node-allow-lan-access 保证
+      # 真机 USB/局域网访问不受影响，checkout 完立即关闭不常驻占用。
+      - name: 临时开 HK exit-node 保证 checkout 能连上 github.com
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node=100.86.118.99 --exit-node-allow-lan-access || true
+
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            services/agent/tools
+          sparse-checkout-cone-mode: false
+
+      - name: 关闭 exit-node（不常驻占用）
+        if: always()
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node= || true
 
       # run 块必须全 ASCII：PowerShell 5.1 按 GBK 解析 UTF-8 临时 .ps1 会吞引号（0702 实锤）
       - name: Run bubble gate in session 1 via PsExec
@@ -159,7 +179,24 @@ jobs:
     env:
       SMOKE_KW: '美甲'
     steps:
+      # 见 wechat-bubble job 上方注释：xian-rog 出境网络两层独立问题（GFW 带宽限速 +
+      # 间歇性 TCP 连接失败），复用 pc4 车道 PR#1590/#1592 已验证方案。
+      - name: 临时开 HK exit-node 保证 checkout 能连上 github.com
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node=100.86.118.99 --exit-node-allow-lan-access || true
+
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/workflows/scripts/smoke
+          sparse-checkout-cone-mode: false
+
+      - name: 关闭 exit-node（不常驻占用）
+        if: always()
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node= || true
 
       - name: 定位最新 agent 安装目录
         run: |
@@ -196,7 +233,25 @@ jobs:
       DB_SSH_PORT: '6443'
       DB_SSH_KEY: /c/actions-runner/.ssh/zjdb_ed25519
     steps:
+      # 见 wechat-bubble job 上方注释：xian-rog 出境网络两层独立问题（GFW 带宽限速 +
+      # 间歇性 TCP 连接失败），复用 pc4 车道 PR#1590/#1592 已验证方案。08-02/08-03 两晚
+      # 实锤复现 "Failed to connect to github.com port 443"（run 30763282351 等）。
+      - name: 临时开 HK exit-node 保证 checkout 能连上 github.com
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node=100.86.118.99 --exit-node-allow-lan-access || true
+
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/workflows/scripts/smoke
+          sparse-checkout-cone-mode: false
+
+      - name: 关闭 exit-node（不常驻占用）
+        if: always()
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node= || true
 
       - name: Run account-scan-realmachine-smoke.sh
         id: run
