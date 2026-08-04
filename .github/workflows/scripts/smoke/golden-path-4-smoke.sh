@@ -482,6 +482,14 @@ if [ "$API_REACHABLE" -eq 1 ] && [ "$DB_REACHABLE" -eq 1 ]; then
     -d "{\"contact\":\"$S12_CONTACT\",\"role\":\"in\",\"text\":\"租户A的悄悄话\"}")
   [ "$S12_HTTP" = "200" ] || fail "Step 12a memory/message(租户A) expected 200, got $S12_HTTP: $(cat "$S12_TMP")" 12
 
+  # Step 12a2（2026-08-04，阳性对照）：原测试只验"B 读不到 A"，缺"A 能读到自己写的"——
+  # 若 memory/context 整体坏死（对谁都返回空），隔离测试会因为"系统根本没工作"而误判通过。
+  S12_HTTP=$(curl -s -o "$S12_TMP" -w '%{http_code}' --max-time 15 \
+    "$API_BASE/api/wechat/memory/context?contact=$S12_CONTACT" -H "X-Tenant-Id: $S12_TENANT_A")
+  [ "$S12_HTTP" = "200" ] || fail "Step 12a2 memory/context(租户A自读) expected 200, got $S12_HTTP: $(cat "$S12_TMP")" 12
+  grep -q "租户A的悄悄话" "$S12_TMP" || fail "Step 12a2 阳性对照失败：租户A读不到自己刚写的记忆（memory/context 可能整体坏死）" 12
+  ok "Step 12a2 ✅ 阳性对照：租户A能读到自己写的记忆"
+
   S12_HTTP=$(curl -s -o "$S12_TMP" -w '%{http_code}' --max-time 15 \
     "$API_BASE/api/wechat/memory/context?contact=$S12_CONTACT" -H "X-Tenant-Id: $S12_TENANT_B")
   [ "$S12_HTTP" = "200" ] || fail "Step 12b memory/context(租户B) expected 200, got $S12_HTTP: $(cat "$S12_TMP")" 12
