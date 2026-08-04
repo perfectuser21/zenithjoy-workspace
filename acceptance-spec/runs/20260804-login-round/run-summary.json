@@ -1,0 +1,7 @@
+{
+  "mode": "login",
+  "account": "ai-acceptance@zenithjoy.test",
+  "staging_url": "https://staging-autopilot.zenjoymedia.media",
+  "machines_online": 7,
+  "note": "常驻验收账号登录（凭据在 1Password CS「ZenithJoy AI验收账号 (staging常驻)」）"
+}

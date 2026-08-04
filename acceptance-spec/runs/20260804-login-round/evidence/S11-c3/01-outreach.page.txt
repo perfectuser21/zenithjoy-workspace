@@ -1,0 +1,54 @@
+STAGING
+
+工作台
+智能发布
+智能获客
+私域客服
+视频剪辑
+公司信息
+设置
+A
+
+AI验收员(常驻)
+
+在线
+
+工作台
+选择机器…
+ANY-AN00
+MAA-AN00
+RMX3478
+XX-ROG
+触达记录
+
+查看私信触达历史：Lead 昵称、指派小号、排期时间和发送状态。
+
+Lead 昵称	指派小号	排期时间	发送时间	状态
+ZJ安全测试号-苏彦卿	manual-burner-test	2026/7/17 08:45:48	2026/7/17 08:45:49	已发送
+ZJ安全测试号-苏彦卿	manual-burner-test	2026/7/17 08:45:48	2026/7/16 19:35:49	已发送
+ZJ安全测试号-苏彦卿	manual-burner-test	2026/7/17 08:45:48	2026/7/16 19:42:23	已发送
+ZJ安全测试号-苏彦卿	manual-burner-test	2026/7/17 08:45:48	2026/7/17 06:17:12	已发送
+ZJ安全测试号-苏彦卿	manual-burner-test	2026/7/17 08:45:48	2026/7/17 06:24:03	已发送
+ZJ安全测试号-苏彦卿	manual-burner-test	2026/7/17 08:45:48	2026/7/17 06:27:11	已发送
+ZJ安全测试号-苏彦卿	manual-burner-test	2026/7/17 08:45:48	2026/7/17 06:35:28	已发送
+/user/MS4wLjABAAAAebFJTd7ZZtvVvjje5eFoaPeugljM2SeCSBypMRCPJk5F24Cgpvv5EWvRoN5likjT		—	—	pending_dispatch
+/user/MS4wLjABAAAA3BRq7fzgPdWuU_ed-qrCldezaRKl1tpjOl1usa4XvTQ		—	—	pending_dispatch
+/user/MS4wLjABAAAAg3EZWpT_GPTVCCVd6YEz0ibxkQCo_Sz356MqXjqB_y8		—	—	pending_dispatch
+/user/MS4wLjABAAAAhptgmwX7tdQjE33ZT2_SJxUuoGg6ShOk84PSmWmxzl4		—	—	pending_dispatch
+/user/MS4wLjABAAAAJMfYmLkfQkyUMOs-ePnYdg4yRuxgjLelI4EXnZr2kJ0		—	—	pending_dispatch
+/user/MS4wLjABAAAANg6rS0trG_6B9rPqUCW_qjM8qepP-TXR17r07nqjnD0		—	—	pending_dispatch
+/user/MS4wLjABAAAAr5zaYHE9dd2O9rmDlqV8kAYTWT9NrjMLI8S30LXK2r3obZtR_N0QcBBm9r9Zrmsd		—	—	pending_dispatch
+/user/MS4wLjABAAAAl19_4j9UtUark2j3JLeUfo9F3FMwISNCp2Azl3Q1VF0		—	—	pending_dispatch
+/user/MS4wLjABAAAALH2QkAeC7a8vzUWTTt-S0mdHBGaq958KQSwRxp7mIQqCXXaydsBfQScuSjMr4nZw		—	—	pending_dispatch
+/user/MS4wLjABAAAAjuVdHDfLe_Qofl4hV2cfMbgJpRi2Q_EPAJ30RQWcqyw		—	—	pending_dispatch
+/user/MS4wLjABAAAArffOmQD7Mmmrg6GumkEI8FnS3Nz_7xuZ_gg3GD_iKOQVGQ-4Tp04f5-LUcpt8YAe		—	—	pending_dispatch
+/user/MS4wLjABAAAAwl2dY8azCyh7mbSwDGZW1o7vA7qFGbTEju2J0LEPbik		—	—	pending_dispatch
+/user/MS4wLjABAAAAe020pCiW-rYrL3r4emMuxKBhJypZ0MqJpzCNDGKpUHg		—	—	pending_dispatch
+/user/MS4wLjABAAAA3or4BQ3Qwr5obujycYPxmAkkjbnhgcHx_pyLZtQ6pRQJYbU9xwvgw09w1Ymiu16i		—	—	pending_dispatch
+/user/MS4wLjABAAAAKzQYr0pSnFqOHZrPQQxKWtakJQ20Hk-1l578GbxdZKI		—	—	pending_dispatch
+/user/MS4wLjABAAAAOMbVK71ICqduR7n-Ncnnaua29Pavxe1OX5IynuWzhj3ZYWg3mhdS4W9ybdILXdcM		—	—	pending_dispatch
+/user/MS4wLjABAAAAHyuIhHxWGXCeAPhTk1SJGecGfXVJirgp1rWS91bmbnU		—	—	pending_dispatch
+/user/MS4wLjABAAAA5sXyLrw2k6cqtzUYmzoE2NmC7nLu3swPGkxBAxB5SbT_-vCkSi8KPGRA5k1FstHm		—	—	pending_dispatch
+/user/MS4wLjABAAAAZdFHOriQOc2rKiElN2vbQAG2tRyFQikf_UFubV-XRfQ		—	—	pending_dispatch
+/user/MS4wLjABAAAAGbFRjMP30VfbzMPwkZpt90JbIEkn6g-h2a-Q18tNOdfxssTcAWUm70P-DMMJwAfx		—	—	pending_dispatch
+/user/MS4wLjABAAAArNTwIL6qTM_B-CgINHYv6tMOYY0A6ndB_Qyq-oAUlgYOt9dHgeLkgcnBYzOxbbfd		—	—	pending_dispatch
