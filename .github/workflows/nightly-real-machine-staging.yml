@@ -166,12 +166,13 @@ jobs:
           }
 
   # ─── 真抖音·读侧 full check：复用 line02 keyword→comment smoke（DPAPI 真 session）───
-  # 同一台 ROG，串行跑（needs）避免桌面/窗口争用；前一个红了也照跑（if always）。
+  # 迁 pc4 手机池轨（android-capable）：原绑 xian-rog(wechat-capable) 已于 PR#1600 退役，
+  # 改为 pc4 安卓手机池 runner。出境网络方案同 pc4 车道 PR#1590/#1592/#1596 已验证方案。
   douyin-read:
     name: 真抖音 — keyword→comment 读侧 full check
     needs: [wechat-bubble]
     if: always()
-    runs-on: [self-hosted, wechat-capable]
+    runs-on: [self-hosted, android-capable]
     timeout-minutes: 15
     defaults:
       run:
@@ -179,8 +180,9 @@ jobs:
     env:
       SMOKE_KW: '美甲'
     steps:
-      # 见 wechat-bubble job 上方注释：xian-rog 出境网络两层独立问题（GFW 带宽限速 +
-      # 间歇性 TCP 连接失败），复用 pc4 车道 PR#1590/#1592 已验证方案。
+      # pc4 手机池轨出境网络方案（PR#1590/#1592/#1596 已验证）：HK exit-node 临时开关
+      # 解决 GFW 带宽限速 + 间歇性 TCP 连接失败（"Failed to connect to github.com port 443"）；
+      # --exit-node-allow-lan-access 保证手机池 USB/局域网访问不受影响，checkout 完立即关闭。
       - name: 临时开 HK exit-node 保证 checkout 能连上 github.com
         shell: bash
         run: |
@@ -222,20 +224,21 @@ jobs:
     name: 真安卓 — account-scan 真机验证车道
     needs: [wechat-bubble]
     if: always()
-    runs-on: [self-hosted, wechat-capable]
+    runs-on: [self-hosted, android-capable]
     timeout-minutes: 10
     outputs:
       exit_code: ${{ steps.run.outputs.code }}
     env:
       # 公网直连路由（SYSTEM 无 Tailscale 身份，run 30794878185 实锤）：hk-vps 公网
       # 高位端口 6443（跨境22被墙）+ runner 专用受限密钥（forced-command 只放行 staging psql）
+      # pc4 runner ACL 已在 PR#1593 注入 DB_SSH_HOST/PORT/KEY（公网受限密钥）
       DB_SSH_HOST: root@124.156.138.116
       DB_SSH_PORT: '6443'
       DB_SSH_KEY: /c/actions-runner/.ssh/zjdb_ed25519
     steps:
-      # 见 wechat-bubble job 上方注释：xian-rog 出境网络两层独立问题（GFW 带宽限速 +
-      # 间歇性 TCP 连接失败），复用 pc4 车道 PR#1590/#1592 已验证方案。08-02/08-03 两晚
-      # 实锤复现 "Failed to connect to github.com port 443"（run 30763282351 等）。
+      # pc4 手机池轨出境网络方案（PR#1590/#1592/#1596 已验证）：HK exit-node 临时开关
+      # 解决 GFW 带宽限速 + 间歇性 TCP 连接失败（"Failed to connect to github.com port 443"）；
+      # 08-02/08-03 两晚 xian-rog 实锤复现（run 30763282351 等），pc4 轨同方案兜底。
       - name: 临时开 HK exit-node 保证 checkout 能连上 github.com
         shell: bash
         run: |
