@@ -792,16 +792,16 @@ grep -qn '_write_event("reply_sent"' "$LISTEN_CHAT_MAIN" || fail "Step 15b DELIV
 ok "Step 15b ✅ DELIVERED 点含 _write_event 调用（_commit_reply_success 后）"
 
 OVERLAY_DIR="services/agent/wechat-rpa/overlay"
-# 2026-08-05 加固（0804 审计发现①，四次修正）：旧检测要求"写入调用"和字面 events 出现在
+# 2026-08-05 加固（0804 审计发现①，五次修正）：旧检测要求"写入调用"和字面 events 出现在
 # 同一行，单引号写法（open(p, 'a')）、路径存变量都能逃逸——实测验证过旧 grep 检测不出。
-# 后续几轮复审各自实测复现过残留问题：嵌套括号写法漏检、窗口扫描误吞无关注释导致假红、
-# 窗口关键词收窄成 'events.jsonl' 字面量又导致真实最常见写法（self._events_path 这类
-# 提前赋值的属性/变量引用）漏检成假绿——防线方向从"宁可错杀"翻成了"真放过"，是这个
-# 守卫存在的全部理由要防的那类回归。
-# 最终写法：优先精确解析 open()/.open()/.write_text() 调用的**第一个实参**，若该实参
-# 本身（变量名/属性名）含 events 字样，直接判定违规（覆盖 self._events_path/events_path
-# 这类间接引用）；实参解析不出结论时，退化到窗口内找 events.jsonl 字面量（覆盖嵌套括号
-# 内联拼路径的写法），且窗口只看非注释行（避免无关注释误判）。
+# 几轮复审各自实测复现过残留问题：嵌套括号写法漏检、窗口误吞无关注释导致假红、窗口关键词
+# 收窄成 'events.jsonl' 字面量又漏检 self._events_path 这类属性引用（真放过，比误杀更危险）；
+# 上一版改成"解析 open()/write_text() 第一个实参"又漏了链式写法——`Path(x).open("a")`
+# 第一实参是 mode 字符串、`.write_text("内容")` 第一实参永远是待写内容，两种都会被误判成
+# "实参不含 events"而放行。最终改为直接看写入调用**自身那一行**（去掉行尾注释后）有没有
+# events 字样——self._events_path/events_path 这类引用变量名本身就在该行内，链式/非链式
+# 写法都覆盖到；同行看不出结论（如路径存在更早一行的变量里）再退化到窗口内找
+# events.jsonl 字面量兜底，窗口只看非注释行防无关注释误判。
 S15C_CHECK=$(python3 -c "
 import re, sys
 from pathlib import Path
@@ -810,7 +810,6 @@ overlay_dir = Path('$OVERLAY_DIR')
 write_pattern = re.compile(
     r'''open\s*\(.*['\"'\''](a\+?|w\+?|x)['\"'\'']|\.write_text\s*\(|\.open\s*\(.*['\"'\''](a\+?|w\+?|x)['\"'\'']'''
 )
-target_pattern = re.compile(r'''(?:open|write_text)\s*\(\s*([^,)]*)''')
 violations = []
 for py_file in overlay_dir.rglob('*.py'):
     if '__pycache__' in str(py_file):
@@ -820,11 +819,10 @@ for py_file in overlay_dir.rglob('*.py'):
         if line.strip().startswith('#'):
             continue
         if write_pattern.search(line):
-            m = target_pattern.search(line)
-            tgt = (m.group(1) or '').lower() if m else ''
             window = lines[max(0, i-5):i+6]
             non_comment_window = [w for w in window if not w.strip().startswith('#')]
-            if 'events' in tgt or any('events.jsonl' in w.lower() for w in non_comment_window):
+            own_line = line.split('#')[0].lower()
+            if 'events' in own_line or any('events.jsonl' in w.lower() for w in non_comment_window):
                 violations.append(f'{py_file}:{i+1}: {line.strip()}')
 
 if violations:
@@ -835,7 +833,7 @@ if violations:
 print('PASS')
 " 2>&1)
 if echo "$S15C_CHECK" | tail -1 | grep -q "PASS"; then
-  ok "Step 15c ✅ overlay 只读消费 events.jsonl（单写者约束，窗口化检测+去注释，防跨行/单引号/嵌套括号逃逸与无关注释误报红）"
+  ok "Step 15c ✅ overlay 只读消费 events.jsonl（单写者约束，窗口化检测+去注释，防单引号/嵌套括号/链式调用逃逸与无关注释误报红；跨行调用/别名传递仍是行级检测固有天花板，未覆盖）"
 else
   fail "Step 15c overlay 目录含 events 写入调用（违反单写者约束）: $S15C_CHECK" 15
 fi
