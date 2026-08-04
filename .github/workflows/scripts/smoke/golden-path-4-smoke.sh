@@ -1070,11 +1070,18 @@ fi
 # 从给定目录逐级向上找 node_modules，不经过 npx 独立缓存，能同时兼容"该 workspace 下嵌套
 # 一份"和"依赖被去重提升到根目录"两种真实布局，且在真的没装时可靠返回非 0。
 if command -v node >/dev/null 2>&1 && (cd apps/agent-panel && node -e "require.resolve('vitest/package.json')" >/dev/null 2>&1); then
-  if (cd apps/agent-panel && npx vitest run --silent 2>&1 | tail -5 | grep -q "passed"); then
+  # 2026-08-05 三次修正：`... | tail -5 | grep -q "passed"` 是假绿——vitest 部分测试失败时
+  # 输出仍含 "N passed"（如 "1 failed | 75 passed"），grep 照样匹配成功；且管道让 if 判断的
+  # 是 grep 的退出码而非 vitest 自己的退出码，真实回归会被这行放行。改成直接判 vitest 自身
+  # exit code（此前 Smoke Glob Gate 从未装 apps/agent-panel 依赖，这个 then 分支在 CI 里从未真
+  # 跑过，本次改动首次让它在必绿的 required check 上执行，必须先堵死这个假绿再启用）。
+  S17D_LOG=$(mktemp)
+  if (cd apps/agent-panel && npx vitest run --silent >"$S17D_LOG" 2>&1); then
     ok "Step 17d ✅ apps/agent-panel 业务语言渲染单测全绿（正向智能获客/回复/发布 + 负向不含line0N代号）"
   else
-    fail "Step 17d apps/agent-panel 单测未过，业务语言/代号泄露断言可能失败" 17
+    fail "Step 17d apps/agent-panel 单测未过，业务语言/代号泄露断言可能失败: $(tail -20 "$S17D_LOG")" 17
   fi
+  rm -f "$S17D_LOG"
 else
   # 2026-08-04 修复（Fix 3）：此前这里用 `ok`（绿）静默吞掉，文案声称"CI 独立 job 已跑"——
   # 但 Smoke Glob Gate（ci-smoke-glob-runner.yml）本身就是这条"CI 独立 job"跑道，它自己此前
