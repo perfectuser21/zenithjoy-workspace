@@ -1058,11 +1058,18 @@ else
 fi
 
 # 17d：客户视图业务语言正向+负向断言（判定点：客户视图绝不出现line02/line04内部代号）
-# 判据用能力探测（npx --no-install 真的从该 workspace 跑一次 vitest）而非目录存在性：
+# 判据用 Node 模块解析能力探测（node -e require.resolve）而非目录存在性：
 # apps/agent-panel/node_modules 这个嵌套目录只是因为根 vitest(^4.0.18→4.1.9) 与该 workspace
 # vitest(^4.1.10→4.1.10) 版本冲突、npm 被迫留一份嵌套拷贝才偶然存在——lockfile 一旦重新解析
 # 去重合并，目录会消失但依赖其实装好了，靠目录存在性判断会在这种情况下误报"依赖未安装"。
-if command -v npx >/dev/null 2>&1 && (cd apps/agent-panel && npx --no-install vitest --version >/dev/null 2>&1); then
+# 2026-08-05 二次修正：改用过 `npx --no-install vitest --version` 探测，但该命令会命中
+# npx 自己维护的全局执行缓存（~/.npm/_npx/），跟"该 workspace 是否真的解析得到 vitest"无关——
+# 在一个从未装过 vitest 的全新空目录里，只要全局 _npx 缓存命中过同版本，这条探测依然会
+# 误报"可用"（EXIT=0），把"依赖真的缺失"这类真实回归悄悄放行成假绿，恰恰是这轮修复要打击
+# 的问题。改用 `node -e "require.resolve(...)"`——它严格走 Node CommonJS 模块解析算法，
+# 从给定目录逐级向上找 node_modules，不经过 npx 独立缓存，能同时兼容"该 workspace 下嵌套
+# 一份"和"依赖被去重提升到根目录"两种真实布局，且在真的没装时可靠返回非 0。
+if command -v node >/dev/null 2>&1 && (cd apps/agent-panel && node -e "require.resolve('vitest/package.json')" >/dev/null 2>&1); then
   if (cd apps/agent-panel && npx vitest run --silent 2>&1 | tail -5 | grep -q "passed"); then
     ok "Step 17d ✅ apps/agent-panel 业务语言渲染单测全绿（正向智能获客/回复/发布 + 负向不含line0N代号）"
   else
