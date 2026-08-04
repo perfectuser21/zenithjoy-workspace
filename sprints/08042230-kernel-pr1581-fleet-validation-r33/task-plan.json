@@ -1,0 +1,28 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "验证 Fleet Worker 后端 payload 消费与可审计结论绑定，不含用户界面。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "实现 Fleet payload 严格校验与审计 receipt",
+      "scope": "实现 sprint 级真实 CLI，严格消费 base_repo、base_sha、target_head_sha、gp_anchor，对账 PR #1581 与 product-map，并对篡改输入 fail-closed。",
+      "dod": [
+        "[BEHAVIOR] 正确 payload 输出字段原样绑定且 failure_class=none 的 receipt",
+        "[BEHAVIOR] 缺失/错误 repo、非完整 SHA、错误 anchor 均非零退出",
+        "[BEHAVIOR] 格式合法但与 PR head 不一致的 SHA 以 target_mismatch 拒绝",
+        "[BEHAVIOR] 缺失 gp_anchor 以 payload_invalid 拒绝",
+        "[BEHAVIOR] GitHub 证据依赖不可用时以 environment_failure 失败，不误报通过",
+        "[BEHAVIOR] Final E2E 真调 GitHub 两次并精确解析 product-map Step 7",
+        "[ARTIFACT] sprints/08042230-kernel-pr1581-fleet-validation-r33/validate-fleet-payload.mjs"
+      ],
+      "files": [
+        "sprints/08042230-kernel-pr1581-fleet-validation-r33/validate-fleet-payload.mjs",
+        "sprints/08042230-kernel-pr1581-fleet-validation-r33/tests/fleet-payload-validation.test.ts"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 60
+    }
+  ]
+}
