@@ -1,0 +1,25 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "验证对象是 Fleet Worker 后端 payload 消费和验收回执绑定，不含用户界面。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "验证 Fleet Worker 权威 payload 与目标 PR 审计绑定",
+      "scope": "消费真实 Runner payload，精确核对 PR #1581 head、冻结基线和 GP 锚点，输出携带当前执行身份且 fail-closed 的验收回执。",
+      "dod": [
+        "[BEHAVIOR] 三个权威 payload 字段逐字保留并与真实目标事实一致",
+        "[BEHAVIOR] 三字段篡改和依赖失败均不得产生 passed 结论",
+        "[ARTIFACT] 本轮 Fleet 验收回执符合合同 Response Schema"
+      ],
+      "files": [
+        "sprints/08050200-kernel-pr1581-fleet-validation-r35/contract-draft.md",
+        "sprints/08050200-kernel-pr1581-fleet-validation-r35/contract-dod.md",
+        "sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-payload-contract.test.ts"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 60
+    }
+  ]
+}
