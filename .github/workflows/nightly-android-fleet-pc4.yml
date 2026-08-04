@@ -39,19 +39,64 @@ jobs:
       serials: ${{ steps.list.outputs.serials }}
       count: ${{ steps.list.outputs.count }}
     steps:
-      - name: List connected devices
+      # 去重逻辑本体在 .github/workflows/scripts/smoke/lib/dedupe-adb-devices.sh
+      # （dedupe-adb-devices-lib-smoke.sh 单测覆盖，纯逻辑，无需真机即可验证）；
+      # 本 job 只做 checkout 拉这份脚本 + 真机上跑 getprop 拿硬件序列号。
+      # 本 job 之前不需要 checkout；新增后同 account-scan-fleet job 一样跑在 pc4
+      # self-hosted runner 上，有同款出境网络两层问题（带宽限速+间歇断连），照抄
+      # 同一套 HK exit-node + sparse-checkout 兜底，避免制造新的 nightly 失败点。
+      - name: 临时开 HK exit-node 保证 checkout 能连上 github.com
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node=100.86.118.99 --exit-node-allow-lan-access || true
+
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/workflows/scripts/smoke
+          sparse-checkout-cone-mode: false
+
+      - name: 关闭 exit-node（不常驻占用）
+        if: always()
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node= || true
+
+      - name: List connected devices（按硬件序列号去重，防同一物理设备双 entry 并发互踩）
         id: list
         shell: bash
         run: |
           set -uo pipefail
+          source .github/workflows/scripts/smoke/lib/dedupe-adb-devices.sh
           ADB=$(command -v adb 2>/dev/null || echo "C:/platform-tools/adb.exe")
           echo "使用 ADB=$ADB"
           "$ADB" devices
-          SERIALS_JSON=$("$ADB" devices 2>/dev/null | awk '/[[:space:]]device$/{print $1}' | jq -R . | jq -sc .)
+          RAW_IDS=$("$ADB" devices 2>/dev/null | awk '/[[:space:]]device$/{print $1}')
+
+          # 同一物理设备可能同时挂 USB serial + 无线调试 IP:port（或无线调试换端口后
+          # 旧 entry 未清理，machines.md 已记录的已知坑）——按 ro.serialno（硬件序列号，
+          # USB/无线调试拿到的都是同一个值）归一去重，只保留每台物理设备的第一条活跃
+          # 连接进 matrix，避免同一物理设备被两个 job 并发操作互踩
+          # （2026-08-03 夜实际复现：2红1取消，见 memory
+          # handoff_0804_gp2_android_smoke_audit_18_findings.md）。
+          # ⚠️ 不要先拼字符串再喂给 dedupe_adb_devices——$(...) 命令替换会吃掉
+          # 每次 printf 的尾部换行符，多台设备拼接后会失去行边界，dedupe_adb_devices
+          # 按 TAB+换行分行解析会把整段拼成一行乱码（本地用 mock 数据复现过：拼字符串
+          # 写法在 3 台设备场景下直接吐出空结果）。改用管道直接把 while 循环的输出喂给
+          # dedupe_adb_devices，不经过中间字符串。
+          DEDUPED_IDS=$(
+            while IFS= read -r ADB_ID; do
+              [ -z "$ADB_ID" ] && continue
+              HW_SERIAL=$("$ADB" -s "$ADB_ID" shell getprop ro.serialno 2>/dev/null | tr -d '\r\n')
+              printf '%s\t%s\n' "$ADB_ID" "$HW_SERIAL"
+            done <<< "$RAW_IDS" | dedupe_adb_devices
+          )
+
+          SERIALS_JSON=$(printf '%s\n' "$DEDUPED_IDS" | jq -R 'select(length > 0)' | jq -sc .)
           COUNT=$(echo "$SERIALS_JSON" | jq 'length')
           echo "serials=$SERIALS_JSON" >> "$GITHUB_OUTPUT"
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
-          echo "发现 $COUNT 台在线设备: $SERIALS_JSON"
+          echo "去重后 $COUNT 台在线设备: $SERIALS_JSON"
           [ "$COUNT" -gt 0 ] || echo "::warning::pc4 上未发现任何在线设备，本次夜间回归车道空转"
           # 已知非阻塞瑕疵：account-scan-realmachine-smoke.sh 内部"设备在线: $DEV"这行日志
           # 固定取 adb devices 列表第一项显示，多机并发跑 matrix 时该行显示的 serial 可能
