@@ -182,9 +182,27 @@ if [ "${MATCHED:-0}" -ge 1 ]; then
   ok "Seg3 抓评论者 lead_count_raw=$LEADS"
 
   # ── Seg3 语义质量零容忍闸门 ──
-  LEADS_JSON=$(ssh hk-vps "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -t -c \
+  # ssh hk-vps 环境问题（网络/连接失败/psql报错混入stdout）此前会被悄悄吞成空数组，
+  # checkLeadQuality([]) 对空输入返回 passed:true+profile_url_coverage:0，会触发下方
+  # profile_url 覆盖率硬闸误报"方案A未落地"——把环境问题误判成产品缺陷硬红。此处先用
+  # ssh退出码+JSON合法性做 envfail 分级（2026-08-04 审计发现）。
+  LEADS_JSON_RAW=$(ssh hk-vps "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -t -c \
     \"SELECT json_agg(json_build_object('nickname', nickname, 'comment_text', comment_text, 'sec_uid', sec_uid, 'profile_url', profile_url)) \
-      FROM zenithjoy.acquisition_leads WHERE collect_task_id = '$TASK' AND tenant_id = '$TENANT'\"" | tr -d '\n' | trim_json_stdin)
+      FROM zenithjoy.acquisition_leads WHERE collect_task_id = '$TASK' AND tenant_id = '$TENANT'\"")
+  SSH_EXIT=$?
+  [ "$SSH_EXIT" -eq 0 ] || envfail "ssh hk-vps 取 Seg3 leads 语义质量数据失败(exit=$SSH_EXIT)——环境不可达，非采集/语义质量缺陷"
+  LEADS_JSON=$(echo "$LEADS_JSON_RAW" | tr -d '\n' | trim_json_stdin)
+  # LEADS 在上面已确认 >0（真有 leads落库），此处若解析不出非空数组，大概率是
+  # ssh/psql 输出被污染（连接问题/报错文本混入 stdout），而非真的没有 leads——
+  # 不能悄悄放行进 checkLeadQuality([])（对空输入按"合法"处理，会把环境问题
+  # 误判成 profile_url 覆盖率不足的产品缺陷）。
+  echo "$LEADS_JSON" | node -e "
+let d='';process.stdin.on('data',c=>d+=c);
+process.stdin.on('end',()=>{
+  const arr = JSON.parse(d.trim());
+  if (!Array.isArray(arr) || arr.length === 0) process.exit(1);
+});
+" 2>/dev/null || envfail "ssh hk-vps 返回内容非合法非空 JSON 数组（LEADS=$LEADS 已确认>0，此处应有数据）——疑 ssh/psql 输出被污染: $(echo "$LEADS_JSON" | head -c 200)"
 
   QUALITY_RESULT=$(echo "$LEADS_JSON" | node -e "
 const {checkLeadQuality} = require('./.github/workflows/scripts/smoke/lib/lead-quality-gate.cjs');
@@ -225,4 +243,10 @@ else
   echo "🟡 无 matched 视频(全 rejected 或仍有 pending)——Seg3/4 无匹配可验:判定链正常工作但无命中(非 bug,非红)"
 fi
 
-echo "🎉 PASS: agent-android 挖客链路 Seg1-4 端到端接线全通过(task=$TASK)"
+# 收尾信息按实际执行到的分支输出，不用一句话掩盖"本轮只验了一半"的事实
+# （2026-08-04 审计发现：此前无论 MATCHED 是否 >=1 都无条件打印"Seg1-4 全通过"）
+if [ "${MATCHED:-0}" -ge 1 ]; then
+  echo "🎉 PASS: agent-android 挖客链路 Seg1-4 端到端接线全通过(task=$TASK)"
+else
+  echo "🎉 PASS: agent-android 挖客链路 Seg1-2 验证通过(task=$TASK)——Seg3/4(抓评论/私信派单)因本轮无 matched 视频未触发验证，判定链本身工作正常，只是没命中"
+fi
