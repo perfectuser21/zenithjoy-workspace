@@ -79,6 +79,8 @@ jobs:
       # fake executor base：本 repo 在 apps/api 里挂了 _smoke-fake-* 路由，指回自身
       FAKE_LLM_BASE: http://localhost:5200
       FAKE_AGENT_BASE: http://localhost:5200
+      # golden-path-2-smoke.sh Step 8c/23b 真调判定依赖（同 ci-l4-e2e-smoke.yml 第90行）
+      TOAPIS_API_KEY: ${{ secrets.TOAPIS_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4
