@@ -384,7 +384,7 @@ if split_idx is None:
     sys.exit(1)
 
 def strip_comments(chunk):
-    # 三次修正：只剥整行注释漏了行尾注释（`nickname: wid, // 无 source 时兜底`这类 TS
+    # 三次修正：只剥整行注释漏了行尾注释（如 nickname: wid, // 无 source 时兜底 这类 TS
     # 常见写法），字段名躲在 // 后面依然能让检查误判通过——反例已复现，改成剥到每行的
     # // 之前（简单按字面量切，够用；不处理字符串里恰好含 // 的极端情况）。
     return [l.split('//')[0] for l in chunk]
@@ -792,15 +792,16 @@ grep -qn '_write_event("reply_sent"' "$LISTEN_CHAT_MAIN" || fail "Step 15b DELIV
 ok "Step 15b ✅ DELIVERED 点含 _write_event 调用（_commit_reply_success 后）"
 
 OVERLAY_DIR="services/agent/wechat-rpa/overlay"
-# 2026-08-05 加固（0804 审计发现①，二次修正）：旧检测要求"写入调用"和字面 events 出现在
+# 2026-08-05 加固（0804 审计发现①，四次修正）：旧检测要求"写入调用"和字面 events 出现在
 # 同一行，单引号写法（open(p, 'a')）、路径存变量都能逃逸——实测验证过旧 grep 检测不出。
-# 第一版修法（写模式命中后上下 5 行窗口找 events 字样）仍有两处残留问题，复审实测验证过：
-# ①`[^)]*` 类不能跨越嵌套括号，`open(os.path.join(d,'events.jsonl'),'a')` 这种最常见的
-# 真实写法反而漏检；②窗口扫描不分注释/代码，附近若有任何提到"events"字样的**无关**注释
-# （哪怕写的是另一个文件），会把一次正当写入误判成违规、把 Step 15c 拖红。
-# 改法：①`[^)]*`→`.*` 补上嵌套括号写法；②窗口内先剥掉注释行再找 events 字样，只认
-# 代码行里真实出现的引用（listen_chat.py 真实写者的 `events_path = os.path.join(...,
-# "events.jsonl")` 就是代码行，不受影响）。
+# 后续几轮复审各自实测复现过残留问题：嵌套括号写法漏检、窗口扫描误吞无关注释导致假红、
+# 窗口关键词收窄成 'events.jsonl' 字面量又导致真实最常见写法（self._events_path 这类
+# 提前赋值的属性/变量引用）漏检成假绿——防线方向从"宁可错杀"翻成了"真放过"，是这个
+# 守卫存在的全部理由要防的那类回归。
+# 最终写法：优先精确解析 open()/.open()/.write_text() 调用的**第一个实参**，若该实参
+# 本身（变量名/属性名）含 events 字样，直接判定违规（覆盖 self._events_path/events_path
+# 这类间接引用）；实参解析不出结论时，退化到窗口内找 events.jsonl 字面量（覆盖嵌套括号
+# 内联拼路径的写法），且窗口只看非注释行（避免无关注释误判）。
 S15C_CHECK=$(python3 -c "
 import re, sys
 from pathlib import Path
@@ -809,6 +810,7 @@ overlay_dir = Path('$OVERLAY_DIR')
 write_pattern = re.compile(
     r'''open\s*\(.*['\"'\''](a\+?|w\+?|x)['\"'\'']|\.write_text\s*\(|\.open\s*\(.*['\"'\''](a\+?|w\+?|x)['\"'\'']'''
 )
+target_pattern = re.compile(r'''(?:open|write_text)\s*\(\s*([^,)]*)''')
 violations = []
 for py_file in overlay_dir.rglob('*.py'):
     if '__pycache__' in str(py_file):
@@ -818,13 +820,11 @@ for py_file in overlay_dir.rglob('*.py'):
         if line.strip().startswith('#'):
             continue
         if write_pattern.search(line):
+            m = target_pattern.search(line)
+            tgt = (m.group(1) or '').lower() if m else ''
             window = lines[max(0, i-5):i+6]
             non_comment_window = [w for w in window if not w.strip().startswith('#')]
-            # 三次修正：'events' 子串太宽——诊断字段名 events_tail_offset 等无关标识符
-            # 也会命中，实测复现过窗口内恰好有这类字段、纯粹字段顺序调整就能把这步无辜
-            # 打红。收窄到真实文件名字面量 'events.jsonl'，检出能力不损失（真实写者用
-            # os.path.join(...,'events.jsonl') 这类写法，字面量本身就在代码行里）。
-            if any('events.jsonl' in w.lower() for w in non_comment_window):
+            if 'events' in tgt or any('events.jsonl' in w.lower() for w in non_comment_window):
                 violations.append(f'{py_file}:{i+1}: {line.strip()}')
 
 if violations:
