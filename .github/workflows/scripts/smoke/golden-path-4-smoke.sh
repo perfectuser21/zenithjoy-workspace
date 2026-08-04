@@ -67,6 +67,14 @@ if psql "$DB_URL" -c '\q' 2>/dev/null; then DB_REACHABLE=1; fi
 API_REACHABLE=0
 if curl -s --max-time 2 -o /dev/null "$API_BASE/health" 2>/dev/null; then API_REACHABLE=1; fi
 
+# 2026-08-04 修复（假绿灯审计）：CI 环境下 DB/API 不可达绝不允许静默 SKIP——
+# 之前专属 workflow 不起 DB/API，关键步骤(1/7/8/9/12/13/14)整段 SKIP 仍报 PASS。
+# 本地手跑（无 CI 标记）仍允许 SKIP 降级，方便开发者没起本地服务时快速跑纯函数段。
+if [ "${CI:-}" = "true" ]; then
+  [ "$DB_REACHABLE" -eq 1 ] || fail "DB 不可达（CI=true 下不允许静默 SKIP，检查 postgres service / DATABASE_URL 是否已配好）" 1
+  [ "$API_REACHABLE" -eq 1 ] || fail "API 不可达（CI=true 下不允许静默 SKIP，检查 apps/api 是否已构建启动 / /health 是否通）" 1
+fi
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ZenithJoy Path 4 Walking Skeleton — Line04 客户私域 AI 接管（16 步权威版）"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
