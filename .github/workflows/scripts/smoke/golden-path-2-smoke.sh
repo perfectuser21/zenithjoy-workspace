@@ -1172,6 +1172,13 @@ ok "Step 27 ✅ latest_reply 增量写入路径全通"
 # uia_online=false 模拟；服务端二次检测+回退逻辑是纯服务端可测的核心行为。
 # 此前本 Step 只测 dispatch/build+dispatch/run 两次 HTTP 200（不崩溃），从未验证过
 # dm_assignments 真实落库状态——离线回退是否生效完全没被验证过。
+# 2026-08-05 补断言后实测复现一个此前完全不可见的真根因：Step 24b 的 account-scan-result
+# 差集下线逻辑（computeOfflineDiff，按 agent_id 全局比对）会把本 Step 用的 BURNER_LABEL
+# 顺带标成 offline（Step24b 那次扫描只报了另一个号 S24_NICK，BURNER_LABEL 不在扫描结果
+# 里=被当成"旧账号已登出"）——这是 account-scan-result 差集逻辑本身的正确业务行为
+# （真机上一次扫描确实只能看到当时打开的号），但导致 build 阶段"账号在线"这个前提条件
+# 根本不成立，dispatch/build 的 assigned 恒为 0（原 Step 28 从未检查 assigned 计数，
+# 这个隐患一直不可见）。见下方 28b2：显式把 BURNER_LABEL 拉回 active 补上前提条件。
 # TODO(android-evaluator-channel): 真机段（实际 UIA 掉线后 dispatch 回退）在真机 nightly 复跑。
 # ───────────────────────────────────────────────────────────────────
 echo "▶ Step 28: dispatch 前二次在线检测——离线账号回退 pending_dispatch（真机段等价断言）"
@@ -1205,6 +1212,19 @@ psq "UPDATE zenithjoy.dm_assignments SET status='cancelled', updated_at=now()
        AND lead_id NOT IN (SELECT id FROM zenithjoy.acquisition_leads
                             WHERE tenant_id='$TENANT_ID' AND douyin_id='$S28_DOUYIN_ID')" >/dev/null
 ok "Step 28b ✅ 本轮派单隔离到本 lead（其它 lead/残留 assignment 清场）"
+
+# 28b2：重新激活 BURNER_LABEL——真根因（本次实测复现才发现）：Step 24b 的
+# account-scan-result 扫描只上报了 account_ids=[$S24_NICK]，account-scan-result 的
+# computeOfflineDiff 差集逻辑按 agent_id 全局比对"上次 active 但这次没扫到的账号"，
+# BURNER_LABEL 不在 Step 24b 那次扫描结果里，被当成"没扫到的旧账号"顺带标了
+# offline——这是 Step 24 场景的正常业务行为（真机场景确实如此：一次扫描只能看到
+# 手机上打开的那些号），但导致跑到本 Step 时 BURNER_LABEL 早已不是 active，
+# dispatch/build 找不到在线 burner，assigned 恒为 0（原 Step 28 从未检查过
+# assigned 计数，这个缺陷此前完全不可见）。显式拉回 active，让 28d 的"build 时
+# 账号在线"这个前提条件真实成立。
+psq "UPDATE zenithjoy.agent_platform_sessions SET status='active'
+     WHERE agent_id='$AGENT_PK' AND account_label='$BURNER_LABEL' AND platform='douyin'" >/dev/null
+ok "Step 28b2 ✅ BURNER_LABEL 重新激活为 active（抵消 Step 24 扫描差集的离线副作用）"
 
 # 28c：确保 agent 心跳新鲜——buildAssignments 的在线 burner 查询要求关联 agent 的
 # last_heartbeat_at 在 2 分钟内（先于 FR-4 二次检测执行），脚本跑到这里距 Step 11
