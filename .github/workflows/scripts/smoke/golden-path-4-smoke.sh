@@ -350,11 +350,19 @@ fi
 echo "▶ Step 8: CRM 客户列表页（customer-profile 六字段）"
 
 WECHAT_TS="apps/api/src/routes/wechat.ts"
-grep -q "customer-profile" "$WECHAT_TS" || fail "Step 8 wechat.ts 未注册 customer-profile 路由" 8
+grep -q "customer-profile" "$WECHAT_TS" || fail "Step 8 customer-profile 路由未注册" 8
+# 2026-08-05 加固（0804 审计发现②）：旧检测对整个 723 行文件裸 grep 字段名，六字段中的
+# level/nickname/source 等词在头部注释、SQL 查询结果类型声明里也出现，实测验证过：
+# 从真实响应对象里删掉 level 字段（保留头部注释里的"level"字样），旧检测依然误判通过。
+# 改为先锚定到真正构造响应体的 `const data = row ? {...} : {...}` 这个对象字面量块
+# （两个分支都要覆盖，"无记录占位"分支同样必须含六字段），再在这个窄范围内检查——
+# 用 word-boundary 而非要求冒号，兼容 ES6 简写属性写法（如 `recent_actions,`）。
+DATA_BLOCK=$(awk '/const data = row/{p=1} p{print} /return res\.json\(\{ data \}\);/{exit}' "$WECHAT_TS")
+[ -n "$DATA_BLOCK" ] || fail "Step 8a customer-profile 响应对象构造块提取失败（awk 锚点未命中，路由实现可能已重构）" 8
 for field in level nickname source contact_count recent_actions ai_profile; do
-  grep -q "$field" "$WECHAT_TS" || fail "Step 8 customer-profile 缺字段 $field" 8
+  echo "$DATA_BLOCK" | grep -qE "\b${field}\b" || fail "Step 8a customer-profile 响应对象缺字段 $field（锚定构造块检查，非全文件松散grep）" 8
 done
-ok "Step 8a ✅ customer-profile 路由含六字段声明"
+ok "Step 8a ✅ customer-profile 响应对象构造块含六字段（锚定上下文，防头部注释/类型声明假阳性）"
 
 if [ "$API_REACHABLE" -eq 1 ]; then
   S8_TMP=$(mktemp)
@@ -469,9 +477,15 @@ assert r1 is True, f'wxid 命中但 should_reply={r1}（改备注后应仍命中
 cfg2 = {'whitelist': ['老客户甲']}
 r2 = gate.should_reply(cfg2, '老客户甲', sender_wxid=None)
 assert r2 is True, f'旧格式纯字符串向后兼容失败: {r2}'
+
+# 2026-08-05 加固（0804 审计发现⑤）：以上两条断言全是正向（期望 True），should_reply
+# 若被变异成恒返回 True（=对所有陌生人自动回复），Step 11 照样全绿。补一条负向：白名单
+# 模式下不在名单里的路人不该被回复。
+r3 = gate.should_reply(cfg, '路人甲', sender_wxid='wxid_stranger_gp4smoke')
+assert r3 is False, f'路人不在白名单里但 should_reply={r3}（白名单模式误判成全接管，可能是恒True变异）'
 print('PASS')
 " 2>&1 | tail -1 | grep -q "PASS" \
-  && ok "Step 11 ✅ 白名单 wxid 优先匹配 + 旧格式兼容通过（判定点已修：不再靠显示名）" \
+  && ok "Step 11 ✅ 白名单 wxid 优先匹配 + 旧格式兼容 + 负向拒答（不在名单里不回）三态通过" \
   || fail "Step 11 白名单 wxid 匹配断言失败" 11
 
 # ───────────────────────────────────────────────────────────────────
@@ -731,9 +745,44 @@ grep -qn '_write_event("reply_sent"' "$LISTEN_CHAT_MAIN" || fail "Step 15b DELIV
 ok "Step 15b ✅ DELIVERED 点含 _write_event 调用（_commit_reply_success 后）"
 
 OVERLAY_DIR="services/agent/wechat-rpa/overlay"
-WRITE_OPENS=$(grep -rn 'open.*"a"\|open.*"w"' "$OVERLAY_DIR" --include="*.py" 2>/dev/null | grep -i "events" | grep -v "^[[:space:]]*#" | grep -v "__pycache__" || true)
-[ -z "$WRITE_OPENS" ] || fail "Step 15c overlay 目录含 events 写入调用（违反单写者约束）: $WRITE_OPENS" 15
-ok "Step 15c ✅ overlay 只读消费 events.jsonl（单写者约束）"
+# 2026-08-05 加固（0804 审计发现①）：旧检测要求"写入调用"和字面 events 出现在同一行，
+# 单引号写法（open(p, 'a')）、路径存变量（p = os.path.join(...,'events.jsonl')）都能逃逸——
+# 实测验证过：注入 `p = os.path.join('/tmp','events.jsonl'); open(p,'a')` 旧 grep 检测不出。
+# 改用窗口化检测：写模式 open/.open/.write_text 命中后，往上下各看 5 行找"events"字样，
+# 覆盖跨行/单引号两种逃逸手法。
+S15C_CHECK=$(python3 -c "
+import re, sys
+from pathlib import Path
+
+overlay_dir = Path('$OVERLAY_DIR')
+write_pattern = re.compile(
+    r'''open\s*\([^)]*['\"'\''](a\+?|w\+?|x)['\"'\'']|\.write_text\s*\(|\.open\s*\([^)]*['\"'\''](a\+?|w\+?|x)['\"'\'']'''
+)
+violations = []
+for py_file in overlay_dir.rglob('*.py'):
+    if '__pycache__' in str(py_file):
+        continue
+    lines = py_file.read_text(encoding='utf-8', errors='replace').splitlines()
+    for i, line in enumerate(lines):
+        if line.strip().startswith('#'):
+            continue
+        if write_pattern.search(line):
+            window = lines[max(0, i-5):i+6]
+            if any('events' in w.lower() for w in window):
+                violations.append(f'{py_file}:{i+1}: {line.strip()}')
+
+if violations:
+    print('VIOLATIONS:')
+    for v in violations:
+        print(v)
+    sys.exit(1)
+print('PASS')
+" 2>&1)
+if echo "$S15C_CHECK" | tail -1 | grep -q "PASS"; then
+  ok "Step 15c ✅ overlay 只读消费 events.jsonl（单写者约束，窗口化检测防跨行/单引号逃逸）"
+else
+  fail "Step 15c overlay 目录含 events 写入调用（违反单写者约束）: $S15C_CHECK" 15
+fi
 
 # Step 15d：心跳超时 degraded 状态不能吞掉同批真实事件（2026-07-16 真机回归：
 # listen_chat.py 全文件从未写过 heartbeat 类型事件，EventTailConsumer 的
