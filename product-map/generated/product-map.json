@@ -192,6 +192,9 @@
       "line_id": "line04",
       "name": "智能客服·GP-A 主动语音触达",
       "status": "active",
+      "smoke_files": [
+        ".github/workflows/scripts/smoke/gpa-voice-outreach-smoke.sh"
+      ],
       "steps": [
         {
           "id": "step1",
@@ -217,6 +220,9 @@
       "line_id": "line04",
       "name": "智能客服·GP-D 经营汇报",
       "status": "active",
+      "smoke_files": [
+        ".github/workflows/scripts/smoke/cs-daily-report-smoke.sh"
+      ],
       "steps": [
         {
           "id": "step1",
@@ -238,6 +244,9 @@
       "line_id": "line04",
       "name": "智能客服·绑定/安装（共享前置）",
       "status": "active",
+      "smoke_files": [
+        ".github/workflows/scripts/smoke/golden-path-4-smoke.sh"
+      ],
       "steps": [
         {
           "id": "step1",
@@ -337,6 +346,9 @@
       "line_id": "line04",
       "name": "智能客服·GP-C 朋友圈发布",
       "status": "active",
+      "smoke_files": [
+        ".github/workflows/scripts/smoke/path4-sprint-1-ws4-smoke.sh"
+      ],
       "steps": [
         {
           "id": "step1",
@@ -358,6 +370,12 @@
       "line_id": "line04",
       "name": "智能客服·GP-B 被动接待",
       "status": "active",
+      "smoke_files": [
+        ".github/workflows/scripts/smoke/golden-path-4-smoke.sh",
+        ".github/workflows/scripts/smoke/line04-wxid-whitelist-smoke.sh",
+        ".github/workflows/scripts/smoke/line04-cs-memory-smoke.sh",
+        ".github/workflows/scripts/smoke/line04-cs-tenant-isolation-smoke.sh"
+      ],
       "steps": [
         {
           "id": "step1",
@@ -409,5 +427,5 @@
       "status": "active"
     }
   ],
-  "digest": "5011e4ef15b9419c3b21ea0cd0b36bd4d0f2b26fc12c7e85fc3376e540765f5b"
+  "digest": "0c3556c1bd2c0d6cc7e722ec4f0d6d047d90e4146a71c765eafaf2e426da2f08"
 }

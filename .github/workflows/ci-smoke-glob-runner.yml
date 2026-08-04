@@ -91,8 +91,28 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
-      - name: Install apps/api deps
-        run: npm ci --workspace=apps/api
+      # 2026-08-04 修复（假绿灯审计 Fix 3，含实测修正）：golden-path-4-smoke.sh Step 17d 需要
+      # apps/agent-panel/node_modules 存在才能真跑 vitest 业务语言渲染单测。此前 Step 17d
+      # 依赖缺失时的 else 分支用 `ok`（绿）静默吞掉，且文案声称"CI 独立 job 已跑"——但这条
+      # Smoke Glob Gate 本身就是那个"CI 独立 job"，它自己从未装过这个依赖，从未真跑过。
+      # 显式装上，配合脚本侧把 else 分支改成 CI=true 下 fail，让这个判定点不再假绿。
+      # ⚠️ 实测发现：原计划里"apps/api 和 apps/agent-panel 各一条独立 npm ci --workspace= 步骤"
+      # 仍会互相冲刷——`npm ci` 每次都会先清空根 node_modules，即使两条都带 --workspace=，
+      # 分两次独立调用时第二条一样会把第一条装好的依赖树清掉（本地实测复现：先
+      # `npm ci --workspace=apps/api` 装出 express，再单独 `npm ci --workspace=apps/agent-panel`
+      # 后 express 消失）。必须像 golden-path-4-smoke.yml Fix 1 一样合并成一条命令、
+      # 同时声明两个 workspace。
+      - name: Install apps/api + apps/agent-panel deps
+        run: npm ci --workspace=apps/api --workspace=apps/agent-panel
+
+      # golden-path-4-smoke.sh 的 Step 17c/17e 需要 services/agent/node_modules 存在才能用
+      # npx tsx 真跑 panel-event-bus proven-to-fire。此前这条 workflow 从不显式装它，全靠字母序
+      # 排在前面的兄弟脚本（如 agent-core-self-upgrade-smoke.sh）顺手装上——那些脚本一改名/
+      # 一挪走/一改安装逻辑，gp4 的 Step 17c/17e 就会红。显式装，去掉这层隐式耦合。
+      # services/agent 是独立 npm 项目、有自己的 lockfile，working-directory 安装不影响根 workspace。
+      - name: Install services/agent deps (golden-path-4-smoke Step 17 depends on this)
+        run: npm ci --no-audit --no-fund
+        working-directory: services/agent
 
       - name: Create zenithjoy schema + pgcrypto
         run: |
