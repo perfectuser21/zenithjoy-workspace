@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
@@ -36,8 +36,18 @@ describe('Fleet Worker 真链路 receipt [BEHAVIOR]', () => {
   });
 
   it('product-map 缺失时生产 Fleet Worker L2 fail-closed', async () => {
-    requireExecutionInputs();
-    throw new Error('TDD RED: Generator 必须实现隔离 checkout 缺 product-map 的真实 CLI 集成测试');
+    const { bundle, workspace } = requireExecutionInputs();
+    const dir = mkdtempSync(`${tmpdir()}/fleet-productmap-${process.pid}-`);
+    try {
+      cpSync(workspace, dir, { recursive: true });
+      rmSync(`${dir}/product-map/generated/product-map.json`, { force: true });
+      const receipt = `${dir}/receipt.json`;
+      const run = dispatch(bundle, dir, receipt);
+      expect(run.status, run.stderr).not.toBe(0);
+      expect(JSON.parse(readFileSync(receipt, 'utf8'))).toMatchObject({ status: 'failed', failure_class: 'environment_failure', failed_dependency: 'product_map' });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('格式合法但指向不存在 Step 的 gp_anchor 必须 fail-closed', async () => {
