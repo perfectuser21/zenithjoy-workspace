@@ -13,6 +13,7 @@
         "[BEHAVIOR] product-map 缺失时 CLI 非零并分类 environment_failure",
         "[BEHAVIOR] repo/head/anchor 与 GitHub/Postgres 九项变异均 fail-closed",
         "[BEHAVIOR] receipt provenance 与当前 Runner late-bound 身份一致",
+        "[BEHAVIOR] Evaluator 与 Judge 分别 late-bind 自身 Runner 身份，Judge 复算并引用 Evaluator 证据 SHA-256",
         "[ARTIFACT] 生产 Fleet receipt schema、执行接线与无 fixture 集成测试"
       ],
       "files": [

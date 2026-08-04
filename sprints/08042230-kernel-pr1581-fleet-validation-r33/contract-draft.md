@@ -1,11 +1,11 @@
-# Sprint Contract Draft (Round 5)
+# Sprint Contract Draft (Round 6)
 
 ## Notes
 
 - contract-gate: skipped (file not found, third-party repo)
 - 本轮删除 sprint 级 `validate-fleet-payload.mjs` 旁路；唯一被测对象是实际 Fleet Worker 派发后产生的权威 receipt，不改变 PR #1581 业务实现或 Harness 调度。
 - GAN authoring identity 仅属本轮作者 provenance；Evaluator/Judge 身份均由 Runner 的 `HARNESS_*` 与 `CAPABILITY_SNAPSHOT_ID` 运行时注入，合同不固化角色 UUID。
-- Round 4 案卷 reviewer 行的 `blockers[]` 为空，正式编号不可取得；按 reviewer summary 将唯一缺口登记为 `R4-1`。本轮把每个负向 receipt 的 oracle 收紧为具体 `failed_field`、精确 `failure_class` 与包含字段名的 `error`，使 repo/head/anchor 任一不一致都可被逐字段观察，而非只验证通用失败。
+- Round 5 案卷 reviewer 行的 `blockers[]` 为空，正式编号不可取得；按 `review_feedback.reason` 的三项缺口登记为 `R5-1` 至 `R5-3`。本轮逐项 closure 见结果案卷；合同实际改动包括 B-06/B-07/B-08 的完整文字阈值机检、独立 Risks 表，以及全字段 late-bound provenance 和 Evaluator→Judge SHA-256 证据链。
 
 ## GP-Anchor
 
@@ -89,6 +89,15 @@ Fleet Worker 的生产同形入口是 Kernel 派发的 task bundle payload，生
 - GitHub/Postgres 故障必须由 Fleet 故障注入/真实依赖层记录 `environment_failure`，禁止删除本地 fixture 冒充。
 - product-map SSOT：Evaluator 读取当前冻结仓库文件，锚点必须精确存在；未读取真实文件只能标 `logic-done-pending`。
 
+## Risks
+
+| 风险 | 触发信号 | mitigation | 失败归类 |
+|---|---|---|---|
+| GitHub PR head 在验收前漂移 | API 返回 head/base/repo 与冻结 payload 任一不等 | fail-closed，不回退工作区 HEAD；保留 GitHub 响应摘要并要求新 target SHA 重新验收 | `target_mismatch` |
+| attempt 空库未 bootstrap 或 Postgres 中断 | 目标表不存在、migration/写入非零 | 同一 `DB_URL` 先验证未 bootstrap 必败，再跑仓库真实 migration；任何 DB 失败禁产 passed receipt | `environment_failure` / `postgres` |
+| GP SSOT 缺失或锚点不唯一 | product-map 不可读或精确 line/id/step 数量不等于 1 | 只读冻结 checkout 的生成 JSON，禁止模糊匹配或猜测相邻 step | `environment_failure` / `product_map` 或 `payload_invalid` |
+| 角色身份或证据串线 | receipt provenance 缺项、证据 digest 不匹配 | 每个执行角色分别从 Runner 注入的全部 `HARNESS_*`/`CAPABILITY_SNAPSHOT_ID` late-bind；Judge 先复算 Evaluator 证据 SHA-256，再引用其摘要 | validation gate FAIL |
+
 ## Golden Path
 
 覆盖父路 关键词获客（`line02/keyword_acquisition`）第 7-7 步（仅覆盖验收 payload 锚定，不实现父路业务）。
@@ -128,7 +137,7 @@ git rev-parse --verify 'c305f6217da65bb69413c39e621b7e797e0fb189^{commit}'
 
 **验证命令**:
 ```bash
-R=$(mktemp); node packages/brain/src/harness/fleet-worker.js validate --bundle "${FLEET_VALID_BUNDLE:?}" --workspace "${FLEET_TARGET_WORKTREE:?}" --receipt "$R" && jq -e '.status=="passed" and .base_repo=="perfectuser21/zenithjoy-workspace" and .base_sha=="676fed7de12023d355deac7849af8a525ae53f8d" and .target_head_sha=="c305f6217da65bb69413c39e621b7e797e0fb189" and .gp_anchor=="line02/keyword_acquisition#step7" and .failure_class=="none" and .runner_provenance.attempt_id==env.HARNESS_ATTEMPT_ID and .runner_provenance.capability_snapshot_id==env.CAPABILITY_SNAPSHOT_ID' "$R"
+R=$(mktemp); node packages/brain/src/harness/fleet-worker.js validate --bundle "${FLEET_VALID_BUNDLE:?}" --workspace "${FLEET_TARGET_WORKTREE:?}" --receipt "$R" && jq -e '.status=="passed" and .base_repo=="perfectuser21/zenithjoy-workspace" and .base_sha=="676fed7de12023d355deac7849af8a525ae53f8d" and .target_head_sha=="c305f6217da65bb69413c39e621b7e797e0fb189" and .gp_anchor=="line02/keyword_acquisition#step7" and .failure_class=="none" and .runner_provenance.attempt_id==env.HARNESS_ATTEMPT_ID and .runner_provenance.provider==env.HARNESS_PROVIDER and .runner_provenance.account==env.HARNESS_ACCOUNT and .runner_provenance.machine==env.HARNESS_MACHINE and .runner_provenance.model==env.HARNESS_MODEL and .runner_provenance.runner_digest==env.HARNESS_RUNNER_DIGEST and .runner_provenance.capability_snapshot_id==env.CAPABILITY_SNAPSHOT_ID' "$R"
 ```
 
 **硬阈值**: 所有字段精确相等且 provenance 非空；命令 exit 0。
@@ -149,6 +158,20 @@ for CASE in gp_anchor_missing gp_anchor_ambiguous; do jq -e '.status=="failed" a
 
 **硬阈值**: 被篡改输入必须非零退出；7 个失败 receipt 的 `failure_class`、`failed_field` 与含字段名的 `error` 全部精确命中上述 oracle；命令 exit 0 表示负向断言成立。
 
+### Step 5: 串联 Evaluator 与 Independent Judge 证据
+**来源**: `[AI_ADDED]` — 防止不同角色复用 Proposer 身份或 Judge 审到未锚定的 Evaluator 输出。
+
+**可观测行为**: Evaluator 证据记录其自身完整 runtime provenance，并引用被测 repo/head/receipt SHA-256；Independent Judge 用自己的 runtime provenance，复算并引用 Evaluator 证据 SHA-256。两角色不共享 attempt/account/snapshot。
+
+**验证命令**:
+```bash
+jq -e '.role=="evaluator" and .provenance.attempt_id==env.HARNESS_ATTEMPT_ID and .provenance.provider==env.HARNESS_PROVIDER and .provenance.account==env.HARNESS_ACCOUNT and .provenance.machine==env.HARNESS_MACHINE and .provenance.model==env.HARNESS_MODEL and .provenance.runner_digest==env.HARNESS_RUNNER_DIGEST and .provenance.capability_snapshot_id==env.CAPABILITY_SNAPSHOT_ID and .subject.base_repo=="perfectuser21/zenithjoy-workspace" and .subject.target_head_sha=="c305f6217da65bb69413c39e621b7e797e0fb189" and (.subject.receipt_sha256|test("^[0-9a-f]{64}$"))' "${EVALUATOR_EVIDENCE_FILE:?}"
+printf '%s  %s\n' "${EVALUATOR_EVIDENCE_SHA256:?}" "$EVALUATOR_EVIDENCE_FILE" | sha256sum -c -
+jq -e '.role=="judge" and .provenance.attempt_id==env.HARNESS_ATTEMPT_ID and .provenance.provider==env.HARNESS_PROVIDER and .provenance.account==env.HARNESS_ACCOUNT and .provenance.machine==env.HARNESS_MACHINE and .provenance.model==env.HARNESS_MODEL and .provenance.runner_digest==env.HARNESS_RUNNER_DIGEST and .provenance.capability_snapshot_id==env.CAPABILITY_SNAPSHOT_ID and .evaluator_evidence_sha256==env.EVALUATOR_EVIDENCE_SHA256' "${JUDGE_EVIDENCE_FILE:?}"
+```
+
+**硬阈值**: 两份 evidence 的角色与各自 runtime provenance 全字段精确相等；receipt/evaluator digest 均为 64 位小写 SHA-256；`sha256sum -c` exit 0；任一身份复用或摘要不一致即 FAIL。
+
 ## E2E 验收
 
 **journey_type**: autonomous
@@ -158,7 +181,13 @@ for CASE in gp_anchor_missing gp_anchor_ambiguous; do jq -e '.status=="failed" a
 #!/bin/bash
 set -euo pipefail
 : "${HARNESS_ATTEMPT_ID:?Runner must inject current evaluator attempt}"
+: "${HARNESS_PROVIDER:?Runner must inject current evaluator provider}"
+: "${HARNESS_ACCOUNT:?Runner must inject current evaluator account}"
+: "${HARNESS_MACHINE:?Runner must inject current evaluator machine}"
+: "${HARNESS_MODEL:?Runner must inject current evaluator model}"
+: "${HARNESS_RUNNER_DIGEST:?Runner must inject current evaluator runner digest}"
 : "${CAPABILITY_SNAPSHOT_ID:?Runner must inject current capability snapshot}"
+: "${EVALUATOR_EVIDENCE_FILE:?Runner must inject attempt-unique persistent evidence path}"
 : "${DB_URL:?Fleet must inject attempt-scoped Postgres}"
 ROOT=$(pwd)
 EVIDENCE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/fleet-r33-${HARNESS_ATTEMPT_ID}.XXXXXX")
@@ -171,7 +200,7 @@ git -C "$WORKTREE" rev-parse --verify 'c305f6217da65bb69413c39e621b7e797e0fb189^
 psql "$DB_URL" -v ON_ERROR_STOP=1 -f packages/brain/migrations/20260804_create_harness_validation_receipts.sql
 psql "$DB_URL" -tAc "SELECT to_regclass('harness_validation_receipts') IS NOT NULL" | grep -qx t
 jq -n '{inputs:{payload:{base_repo:"perfectuser21/zenithjoy-workspace",base_sha:"676fed7de12023d355deac7849af8a525ae53f8d",target_head_sha:"c305f6217da65bb69413c39e621b7e797e0fb189",gp_anchor:"line02/keyword_acquisition#step7"}}}' >"$EVIDENCE_DIR/bundle.json"
-for pass in 1 2; do node packages/brain/src/harness/fleet-worker.js validate --bundle "$EVIDENCE_DIR/bundle.json" --workspace "$WORKTREE" --receipt "$EVIDENCE_DIR/receipt-$pass.json"; jq -e '.status=="passed" and .base_repo=="perfectuser21/zenithjoy-workspace" and .base_sha=="676fed7de12023d355deac7849af8a525ae53f8d" and .target_head_sha=="c305f6217da65bb69413c39e621b7e797e0fb189" and .gp_anchor=="line02/keyword_acquisition#step7" and .failure_class=="none" and .runner_provenance.attempt_id==env.HARNESS_ATTEMPT_ID and .runner_provenance.capability_snapshot_id==env.CAPABILITY_SNAPSHOT_ID and (all(.checks[];.status=="passed" and .skipped!=true))' "$EVIDENCE_DIR/receipt-$pass.json"; done
+for pass in 1 2; do node packages/brain/src/harness/fleet-worker.js validate --bundle "$EVIDENCE_DIR/bundle.json" --workspace "$WORKTREE" --receipt "$EVIDENCE_DIR/receipt-$pass.json"; jq -e '.status=="passed" and .base_repo=="perfectuser21/zenithjoy-workspace" and .base_sha=="676fed7de12023d355deac7849af8a525ae53f8d" and .target_head_sha=="c305f6217da65bb69413c39e621b7e797e0fb189" and .gp_anchor=="line02/keyword_acquisition#step7" and .failure_class=="none" and .runner_provenance.attempt_id==env.HARNESS_ATTEMPT_ID and .runner_provenance.provider==env.HARNESS_PROVIDER and .runner_provenance.account==env.HARNESS_ACCOUNT and .runner_provenance.machine==env.HARNESS_MACHINE and .runner_provenance.model==env.HARNESS_MODEL and .runner_provenance.runner_digest==env.HARNESS_RUNNER_DIGEST and .runner_provenance.capability_snapshot_id==env.CAPABILITY_SNAPSHOT_ID and (all(.checks[];.status=="passed" and .skipped!=true))' "$EVIDENCE_DIR/receipt-$pass.json"; done
 jq -s -e '.[0].target_head_sha==.[1].target_head_sha and .[0].gp_anchor==.[1].gp_anchor' "$EVIDENCE_DIR/receipt-1.json" "$EVIDENCE_DIR/receipt-2.json"
 psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc "SELECT count(*) FROM harness_validation_receipts WHERE attempt_id='${HARNESS_ATTEMPT_ID}' AND target_head_sha='c305f6217da65bb69413c39e621b7e797e0fb189' AND created_at>NOW()-interval '5 minutes'" | grep -qx 2
 expect_failed() { local name="$1" bundle="$2" receipt="$EVIDENCE_DIR/$name.json"; if node packages/brain/src/harness/fleet-worker.js validate --bundle "$bundle" --workspace "$WORKTREE" --receipt "$receipt"; then echo "FAIL: $name 竟成功"; return 1; fi; jq -e '.status=="failed" and .failure_class!="none"' "$receipt"; }
@@ -193,7 +222,9 @@ cp -R "$WORKTREE" "$EVIDENCE_DIR/no-map"
 rm -f "$EVIDENCE_DIR/no-map/product-map/generated/product-map.json"
 if node packages/brain/src/harness/fleet-worker.js validate --bundle "$EVIDENCE_DIR/bundle.json" --workspace "$EVIDENCE_DIR/no-map" --receipt "$EVIDENCE_DIR/no-map.json"; then echo 'FAIL: product-map 缺失竟成功'; exit 1; fi
 jq -e '.status=="failed" and .failure_class=="environment_failure" and .failed_dependency=="product_map"' "$EVIDENCE_DIR/no-map.json"
-sha256sum "$EVIDENCE_DIR/receipt-1.json" | tee "$EVIDENCE_DIR/evaluator-evidence.sha256"
+RECEIPT_SHA=$(sha256sum "$EVIDENCE_DIR/receipt-1.json" | awk '{print $1}')
+jq -n --arg attempt "$HARNESS_ATTEMPT_ID" --arg provider "$HARNESS_PROVIDER" --arg account "$HARNESS_ACCOUNT" --arg machine "$HARNESS_MACHINE" --arg model "$HARNESS_MODEL" --arg runner "$HARNESS_RUNNER_DIGEST" --arg snapshot "$CAPABILITY_SNAPSHOT_ID" --arg receipt "$RECEIPT_SHA" '{role:"evaluator",provenance:{attempt_id:$attempt,provider:$provider,account:$account,machine:$machine,model:$model,runner_digest:$runner,capability_snapshot_id:$snapshot},subject:{base_repo:"perfectuser21/zenithjoy-workspace",target_head_sha:"c305f6217da65bb69413c39e621b7e797e0fb189",receipt_sha256:$receipt}}' >"$EVALUATOR_EVIDENCE_FILE"
+sha256sum "$EVALUATOR_EVIDENCE_FILE" | tee "${EVALUATOR_EVIDENCE_FILE}.sha256"
 echo 'Golden Path 验证通过'
 ```
 

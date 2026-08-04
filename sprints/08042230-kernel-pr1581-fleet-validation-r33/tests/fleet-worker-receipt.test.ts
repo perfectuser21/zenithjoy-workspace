@@ -31,7 +31,7 @@ describe('Fleet Worker 真链路 receipt [BEHAVIOR]', () => {
     const { bundle, workspace } = requireExecutionInputs();
     const receipt = `${process.env.TMPDIR ?? '/tmp'}/fleet-${process.pid}-identity.json`;
     expect(dispatch(bundle, workspace, receipt).status).toBe(0);
-    expect(JSON.parse(readFileSync(receipt, 'utf8')).runner_provenance).toMatchObject({ attempt_id: process.env.HARNESS_ATTEMPT_ID, capability_snapshot_id: process.env.CAPABILITY_SNAPSHOT_ID });
+    expect(JSON.parse(readFileSync(receipt, 'utf8')).runner_provenance).toMatchObject({ attempt_id: process.env.HARNESS_ATTEMPT_ID, provider: process.env.HARNESS_PROVIDER, account: process.env.HARNESS_ACCOUNT, machine: process.env.HARNESS_MACHINE, model: process.env.HARNESS_MODEL, runner_digest: process.env.HARNESS_RUNNER_DIGEST, capability_snapshot_id: process.env.CAPABILITY_SNAPSHOT_ID });
   });
 
   it('product-map 缺失时生产 Fleet Worker L2 fail-closed', async () => {
