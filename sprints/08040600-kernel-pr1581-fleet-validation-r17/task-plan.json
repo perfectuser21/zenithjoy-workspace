@@ -1,0 +1,32 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "无 UI 的 Kernel Harness 后台真实 fleet 验证与三角色证据裁决。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "完成 PR #1581 精确 SHA 的真实 fleet 三角色验证",
+      "scope": "在 strict us-mac-m4 对精确目标 SHA 执行产品验证；每个角色消费 Fleet 在角色启动前签发的 receipt，Evaluator/Judge 以 Runner late-bound 上游 provenance 阻断旧证据，并通过真实生产 CLI 负向执行证明旧 attempt、缺证和失败 behavior 均被拒绝；不修改产品或合并 PR。",
+      "dod": [
+        "[BEHAVIOR] Generator 消费只读 Fleet receipt，在候选独立 worktree 内机检 HEAD 精确等于目标 SHA",
+        "[BEHAVIOR] Generator 在同一空 DB_URL 跑真实 migration、机检目标表、动态创建双 signup/session/tenant，并断言跨租户泄漏数为 0",
+        "[BEHAVIOR] Evaluator 扫描 Generator 与自身的顶层及全部 behavior exit_code，任一非零均输出 FAIL",
+        "[BEHAVIOR] Judge 引用 Evaluator SHA-256 并扫描 Generator/Evaluator 顶层及全部 behavior，任一非零均输出 FAIL",
+        "[BEHAVIOR] Evaluator 与 Judge 使用 Runner 注入的 logical cycle、上游 attempt/capability/SHA-256 拒绝旧 attempt 重放",
+        "[BEHAVIOR] 负向测试真实启动 Evaluator/Judge 生产 CLI，旧 attempt、缺证或失败 behavior 必须非零退出并落盘 FAIL/INSUFFICIENT_EVIDENCE",
+        "[BEHAVIOR] 最终裁决前 PR 保持 open、未合并且 head SHA 未漂移",
+        "[ARTIFACT] 三角色 evidence、Fleet 前置 receipt、摘要与原始日志"
+      ],
+      "files": [
+        "sprints/08040600-kernel-pr1581-fleet-validation-r17/scripts/verify-fleet-receipt.mjs",
+        "sprints/08040600-kernel-pr1581-fleet-validation-r17/scripts/finalize-role-evidence.mjs",
+        "sprints/08040600-kernel-pr1581-fleet-validation-r17/scripts/run-pr1581-generator-e2e.sh",
+        "sprints/08040600-kernel-pr1581-fleet-validation-r17/scripts/evaluate-pr1581-evidence.mjs",
+        "sprints/08040600-kernel-pr1581-fleet-validation-r17/scripts/judge-pr1581-evidence.mjs"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 120
+    }
+  ]
+}
