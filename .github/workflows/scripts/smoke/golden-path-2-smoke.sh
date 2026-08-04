@@ -1206,14 +1206,24 @@ psq "UPDATE zenithjoy.dm_assignments SET status='cancelled', updated_at=now()
                             WHERE tenant_id='$TENANT_ID' AND douyin_id='$S28_DOUYIN_ID')" >/dev/null
 ok "Step 28b ✅ 本轮派单隔离到本 lead（其它 lead/残留 assignment 清场）"
 
-# 28c：确保 agent 心跳新鲜——dispatchDue 有独立于 UIA 的 2 分钟心跳新鲜度闸（先于 FR-4
-# 二次检测执行），脚本跑到这里距 Step 11 的心跳可能已超 2 分钟，不补心跳会在心跳闸
-# 就被回退，走不到本 Step 真正要测的 FR-4 UIA 二次检测分支。
-curl -s -o /dev/null --max-time 15 \
+# 28c：确保 agent 心跳新鲜——buildAssignments 的在线 burner 查询要求关联 agent 的
+# last_heartbeat_at 在 2 分钟内（先于 FR-4 二次检测执行），脚本跑到这里距 Step 11
+# 的心跳、经过 Step 23 真调 LLM 判定的重试等待，可能已超 2 分钟，不补心跳会在
+# burner 候选查询就查空，走不到本 Step 真正要测的 FR-4 UIA 二次检测分支。
+S28C_TMP=$(mktemp)
+S28C_HTTP=$(curl -s -o "$S28C_TMP" -w "%{http_code}" --max-time 15 \
   -X POST "$API_BASE/api/agent/heartbeat" \
   -H "Content-Type: application/json" -H "Authorization: Bearer $LICENSE_KEY" \
-  -d "{\"version\":\"2.0.99\",\"hostname\":\"p2-smoke-host\",\"os_type\":\"android\",\"agent_uuid\":\"$AGENT_PK\"}"
+  -d "{\"version\":\"2.0.99\",\"hostname\":\"p2-smoke-host\",\"os_type\":\"android\",\"agent_uuid\":\"$AGENT_PK\"}")
+[ "$S28C_HTTP" = "200" ] || fail "Step 28c 心跳刷新 expected 200, got $S28C_HTTP: $(cat "$S28C_TMP")" 28
 ok "Step 28c ✅ 心跳刷新（保证走到 UIA 二次检测分支而非心跳新鲜度分支）"
+
+# 诊断行：dispatch/build 前直接查 agent 心跳新鲜度 + burner session 状态，万一后面
+# assigned=0 复发，日志能直接看出是心跳没刷新到位还是 session 状态不对，不用再猜
+S28_DIAG=$(psq "SELECT a.id||'|'||EXTRACT(EPOCH FROM (NOW()-a.last_heartbeat_at))||'|'||s.status||'|'||s.role
+  FROM zenithjoy.agent_platform_sessions s JOIN zenithjoy.agents a ON a.id=s.agent_id
+  WHERE s.account_label='$BURNER_LABEL' AND s.platform='douyin' AND s.role='burner'")
+echo "  [诊断] agent_id|心跳距今秒数|session.status|session.role = $S28_DIAG"
 
 # 28d：build 时账号仍在线（BURNER_LABEL 尚未置离线）→ 建出 queued assignment
 S28_HTTP=$(curl -s -o "$S28_TMP" -w "%{http_code}" --max-time 15 \
@@ -1221,7 +1231,7 @@ S28_HTTP=$(curl -s -o "$S28_TMP" -w "%{http_code}" --max-time 15 \
   -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" -d '{}')
 [ "$S28_HTTP" = "200" ] || fail "Step 28d dispatch/build expected 200, got $S28_HTTP: $(cat "$S28_TMP")" 28
 S28_ASSIGNED=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['assigned'])" "$S28_TMP" 2>/dev/null || echo 0)
-[ "$S28_ASSIGNED" -ge 1 ] 2>/dev/null || fail "Step 28d assigned=$S28_ASSIGNED，期望 >=1（本轮专属 lead 没被挑中排单）: $(cat "$S28_TMP")" 28
+[ "$S28_ASSIGNED" -ge 1 ] 2>/dev/null || fail "Step 28d assigned=$S28_ASSIGNED，期望 >=1（本轮专属 lead 没被挑中排单，诊断见上一行）: $(cat "$S28_TMP")" 28
 ok "Step 28d ✅ dispatch/build assigned=$S28_ASSIGNED（build 时账号在线，正常排入 queued）"
 
 # 28e：build 完成后、真正 dispatch 前，账号掉线（模拟 gap 期间掉线的真实时序）
