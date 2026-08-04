@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "environment": "预发后台",
+  "boundary": "验证环境=预发后台；未覆盖：真机/收信端",
+  "version_stamp": {
+    "captured_at": "2026-08-04T10:35:05.889Z",
+    "staging_url": "https://staging-autopilot.zenjoymedia.media",
+    "backend_sha": "unknown(健康端点未暴露构建号)",
+    "apk_expected": "2.1.19"
+  },
+  "run": {
+    "trigger": "manual",
+    "operator": "AI员工采证器"
+  },
+  "cells": [
+    {
+      "id": "S1-c3",
+      "verdict": null,
+      "criteria": "用的是本轮发的测试授权码，绑进的是预发环境",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S1-c3/01-signup-page.png",
+        "evidence/S1-c3/01-signup-page.page.txt",
+        "evidence/S1-c3/02-after-signup.png",
+        "evidence/S1-c3/02-after-signup.page.txt"
+      ],
+      "note": "注册页（预发域名可见）；注册提交后（账号 ai-table-1785839361704@zenithjoy.test）"
+    },
+    {
+      "id": "S4-c2",
+      "verdict": null,
+      "criteria": "在约定时间窗内恢复在线，不是等半天才连上",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S4-c2/01-accounts.png",
+        "evidence/S4-c2/01-accounts.page.txt"
+      ],
+      "scenario_required": true,
+      "note": "设备与账号状态页"
+    },
+    {
+      "id": "S4-c3",
+      "verdict": null,
+      "criteria": "后台看到在线的确实是这台测试机",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S4-c3/01-accounts.png",
+        "evidence/S4-c3/01-accounts.page.txt"
+      ],
+      "scenario_required": true,
+      "note": "设备与账号状态页"
+    },
+    {
+      "id": "S5-c3",
+      "verdict": null,
+      "criteria": "掉线的小号不再显示「可用」",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S5-c3/01-accounts.png",
+        "evidence/S5-c3/01-accounts.page.txt"
+      ],
+      "scenario_required": true,
+      "note": "设备与账号状态页"
+    },
+    {
+      "id": "S5-c4",
+      "verdict": null,
+      "criteria": "红线9/10：掉线号不被强行派任务；一个小号出问题不连坐其它小号",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S5-c4/01-accounts.png",
+        "evidence/S5-c4/01-accounts.page.txt"
+      ],
+      "scenario_required": true,
+      "note": "设备与账号状态页"
+    },
+    {
+      "id": "S6-c3",
+      "verdict": null,
+      "criteria": "任务记录绑定的是正确的客户账号、这台手机、本轮关键词（红线2）",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S6-c3/01-collect-fail.png",
+        "evidence/S6-c3/01-collect-fail.page.txt"
+      ],
+      "note": "发起采集交互失败: locator.click: Timeout 5000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"开始采集\")').first()\u001b[22m\n\u001b[2m    - locator resolved to <button disabled type=\"button\" class=\"flex items-center gap-1 rounded bg-emerald-600 px-4 py-2 text-white text-sm disabled:bg-gray-300 dark:disabled:bg-slate-700\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not enabled\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not enabled\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    10 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is not enabled\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n；发起采集失败现场"
+    },
+    {
+      "id": "S6-c4",
+      "verdict": null,
+      "criteria": "红线3：不能碰到别的客户的数据",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S6-c4/01-tasks-initial.png",
+        "evidence/S6-c4/01-tasks-initial.page.txt"
+      ],
+      "note": "新账号任务列表初始状态（归属隔离证据）"
+    },
+    {
+      "id": "S7-c1",
+      "verdict": null,
+      "criteria": "任务有明确结果不卡死；失败时有具体原因，不是笼统「未知错误」",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S7-c1/poll-01.png",
+        "evidence/S7-c1/poll-01.page.txt",
+        "evidence/S7-c1/poll-02.png",
+        "evidence/S7-c1/poll-02.page.txt",
+        "evidence/S7-c1/poll-03.png",
+        "evidence/S7-c1/poll-03.page.txt",
+        "evidence/S7-c1/poll-04.png",
+        "evidence/S7-c1/poll-04.page.txt",
+        "evidence/S7-c1/poll-05.png",
+        "evidence/S7-c1/poll-05.page.txt"
+      ],
+      "note": "第1次轮询（3秒）；第2次轮询（66秒）；第3次轮询（129秒）；第4次轮询（192秒）；第5次轮询（255秒）"
+    },
+    {
+      "id": "S7-c2",
+      "verdict": null,
+      "criteria": "5分钟内进入终态",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S7-c2/poll-01.png",
+        "evidence/S7-c2/poll-01.page.txt",
+        "evidence/S7-c2/poll-02.png",
+        "evidence/S7-c2/poll-02.page.txt",
+        "evidence/S7-c2/poll-03.png",
+        "evidence/S7-c2/poll-03.page.txt",
+        "evidence/S7-c2/poll-04.png",
+        "evidence/S7-c2/poll-04.page.txt",
+        "evidence/S7-c2/poll-05.png",
+        "evidence/S7-c2/poll-05.page.txt"
+      ],
+      "note": "第1次轮询（3秒）；第2次轮询（66秒）；第3次轮询（129秒）；第4次轮询（192秒）；第5次轮询（255秒）"
+    },
+    {
+      "id": "S8-c1",
+      "verdict": null,
+      "criteria": "至少采到2条真实存在的抖音视频",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S8-c1/poll-01.png",
+        "evidence/S8-c1/poll-01.page.txt",
+        "evidence/S8-c1/poll-02.png",
+        "evidence/S8-c1/poll-02.page.txt",
+        "evidence/S8-c1/poll-03.png",
+        "evidence/S8-c1/poll-03.page.txt",
+        "evidence/S8-c1/poll-04.png",
+        "evidence/S8-c1/poll-04.page.txt",
+        "evidence/S8-c1/poll-05.png",
+        "evidence/S8-c1/poll-05.page.txt"
+      ],
+      "note": "第1次轮询（3秒）；第2次轮询（66秒）；第3次轮询（129秒）；第4次轮询（192秒）；第5次轮询（255秒）"
+    },
+    {
+      "id": "S8-c3",
+      "verdict": null,
+      "criteria": "视频编号是真实长编号（15位以上）",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S8-c3/poll-01.png",
+        "evidence/S8-c3/poll-01.page.txt",
+        "evidence/S8-c3/poll-02.png",
+        "evidence/S8-c3/poll-02.page.txt",
+        "evidence/S8-c3/poll-03.png",
+        "evidence/S8-c3/poll-03.page.txt",
+        "evidence/S8-c3/poll-04.png",
+        "evidence/S8-c3/poll-04.page.txt",
+        "evidence/S8-c3/poll-05.png",
+        "evidence/S8-c3/poll-05.page.txt"
+      ],
+      "note": "第1次轮询（3秒）；第2次轮询（66秒）；第3次轮询（129秒）；第4次轮询（192秒）；第5次轮询（255秒）"
+    },
+    {
+      "id": "S8-c4",
+      "verdict": null,
+      "criteria": "红线4：禁止本地随手生成的假编号",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S8-c4/poll-01.png",
+        "evidence/S8-c4/poll-01.page.txt",
+        "evidence/S8-c4/poll-02.png",
+        "evidence/S8-c4/poll-02.page.txt",
+        "evidence/S8-c4/poll-03.png",
+        "evidence/S8-c4/poll-03.page.txt",
+        "evidence/S8-c4/poll-04.png",
+        "evidence/S8-c4/poll-04.page.txt",
+        "evidence/S8-c4/poll-05.png",
+        "evidence/S8-c4/poll-05.page.txt"
+      ],
+      "note": "第1次轮询（3秒）；第2次轮询（66秒）；第3次轮询（129秒）；第4次轮询（192秒）；第5次轮询（255秒）"
+    },
+    {
+      "id": "S9-c1",
+      "verdict": null,
+      "criteria": "至少1条视频判出结果，不永远卡在「判定中」",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S9-c1/poll-01.png",
+        "evidence/S9-c1/poll-01.page.txt",
+        "evidence/S9-c1/poll-02.png",
+        "evidence/S9-c1/poll-02.page.txt",
+        "evidence/S9-c1/poll-03.png",
+        "evidence/S9-c1/poll-03.page.txt",
+        "evidence/S9-c1/poll-04.png",
+        "evidence/S9-c1/poll-04.page.txt",
+        "evidence/S9-c1/poll-05.png",
+        "evidence/S9-c1/poll-05.page.txt"
+      ],
+      "note": "第1次轮询（3秒）；第2次轮询（66秒）；第3次轮询（129秒）；第4次轮询（192秒）；第5次轮询（255秒）"
+    },
+    {
+      "id": "S9-c2",
+      "verdict": null,
+      "criteria": "3分钟内出结果",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S9-c2/poll-01.png",
+        "evidence/S9-c2/poll-01.page.txt",
+        "evidence/S9-c2/poll-02.png",
+        "evidence/S9-c2/poll-02.page.txt",
+        "evidence/S9-c2/poll-03.png",
+        "evidence/S9-c2/poll-03.page.txt",
+        "evidence/S9-c2/poll-04.png",
+        "evidence/S9-c2/poll-04.page.txt",
+        "evidence/S9-c2/poll-05.png",
+        "evidence/S9-c2/poll-05.page.txt"
+      ],
+      "note": "第1次轮询（3秒）；第2次轮询（66秒）；第3次轮询（129秒）；第4次轮询（192秒）；第5次轮询（255秒）"
+    },
+    {
+      "id": "S10-c1",
+      "verdict": null,
+      "criteria": "产出真实线索：昵称、评论、目标身份都能核实",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S10-c1/01-leads.png",
+        "evidence/S10-c1/01-leads.page.txt"
+      ],
+      "note": "线索列表页"
+    },
+    {
+      "id": "S10-c4",
+      "verdict": null,
+      "criteria": "红线11：旧评论数据不能覆盖新的",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S10-c4/01-leads.png",
+        "evidence/S10-c4/01-leads.page.txt"
+      ],
+      "scenario_required": true,
+      "note": "线索列表页"
+    },
+    {
+      "id": "S11-c1",
+      "verdict": null,
+      "criteria": "派单目标来自本轮真实产生的线索，不是人工填的固定数据",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S11-c1/01-outreach.png",
+        "evidence/S11-c1/01-outreach.page.txt"
+      ],
+      "note": "私信派单页"
+    },
+    {
+      "id": "S11-c3",
+      "verdict": null,
+      "criteria": "客户账号、任务、线索、派单串成同一条链（红线2）",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S11-c3/01-outreach.png",
+        "evidence/S11-c3/01-outreach.page.txt"
+      ],
+      "note": "私信派单页"
+    },
+    {
+      "id": "S11-c4",
+      "verdict": null,
+      "criteria": "红线3：不能触达其他客户的数据",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S11-c4/01-outreach.png",
+        "evidence/S11-c4/01-outreach.page.txt"
+      ],
+      "note": "私信派单页"
+    },
+    {
+      "id": "S13-c4",
+      "verdict": null,
+      "criteria": "红线8：「被频控限制」不能显示成「已私信」",
+      "symptoms": [],
+      "reasons": [],
+      "evidence": [
+        "evidence/S13-c4/01-outreach.png",
+        "evidence/S13-c4/01-outreach.page.txt"
+      ],
+      "scenario_required": true,
+      "note": "私信派单页"
+    }
+  ]
+}
