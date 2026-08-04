@@ -70,9 +70,12 @@ if curl -s --max-time 2 -o /dev/null "$API_BASE/health" 2>/dev/null; then API_RE
 # 2026-08-04 修复（假绿灯审计）：CI 环境下 DB/API 不可达绝不允许静默 SKIP——
 # 之前专属 workflow 不起 DB/API，关键步骤(1/7/8/9/12/13/14)整段 SKIP 仍报 PASS。
 # 本地手跑（无 CI 标记）仍允许 SKIP 降级，方便开发者没起本地服务时快速跑纯函数段。
+# 2026-08-04 修复（Fix 5）：退出码专用 90，不复用 Step 1 的编号——脚本约定退出码=第几步失败，
+# 复用 1 会让"基建整体不可达"和"Step 1 断言本身失败"在退出码上无法区分。90 不与任何现有
+# Step 编号（最大到 17）冲突。
 if [ "${CI:-}" = "true" ]; then
-  [ "$DB_REACHABLE" -eq 1 ] || fail "DB 不可达（CI=true 下不允许静默 SKIP，检查 postgres service / DATABASE_URL 是否已配好）" 1
-  [ "$API_REACHABLE" -eq 1 ] || fail "API 不可达（CI=true 下不允许静默 SKIP，检查 apps/api 是否已构建启动 / /health 是否通）" 1
+  [ "$DB_REACHABLE" -eq 1 ] || fail "DB 不可达（CI=true 下不允许静默 SKIP，检查 postgres service / DATABASE_URL 是否已配好）" 90
+  [ "$API_REACHABLE" -eq 1 ] || fail "API 不可达（CI=true 下不允许静默 SKIP，检查 apps/api 是否已构建启动 / /health 是否通）" 90
 fi
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -538,6 +541,21 @@ echo "▶ Step 14: 真实发送 + 回执翻状态（防假成功）"
 if [ "$DB_REACHABLE" -eq 1 ] && [ "$API_REACHABLE" -eq 1 ]; then
   S14_AGENT=$(psq "SELECT id FROM zenithjoy.agents ORDER BY created_at DESC LIMIT 1")
   if [ -z "$S14_AGENT" ]; then
+    # 2026-08-04 修复（Fix 2）：本分支 Fix 1 修好之后，golden-path-4-smoke.yml 专属 job
+    # 用的是全新的、只跑过本脚本的 per-job postgres，zenithjoy.agents 表是空的——之前靠
+    # Smoke Glob Gate 里字母序更早跑的兄弟脚本顺手插入过 agents 行才不 SKIP。这里补一个
+    # 最小 tenants + agents fixture 自建，不再依赖别的脚本先跑过。
+    S14_TENANT=$(psq "INSERT INTO zenithjoy.tenants (name, license_key) VALUES ('gp4-smoke-s14-tenant-${RND}', 'ZJ-F-GP4S14${RND//-/}') RETURNING id")
+    if [ -n "$S14_TENANT" ]; then
+      S14_AGENT=$(psq "INSERT INTO zenithjoy.agents (tenant_id, agent_id) VALUES ('$S14_TENANT'::uuid, 'gp4-smoke-agent-${RND}') RETURNING id")
+    fi
+  fi
+  if [ -z "$S14_AGENT" ]; then
+    # fixture 自建也失败（例如迁移未跑全、schema 不一致）——CI=true 下不允许静默 SKIP 掉
+    # 这个全脚本最有价值的防假成功断言；本地手跑（无 CI 标记）仍保留原有 SKIP 提示。
+    if [ "${CI:-}" = "true" ]; then
+      fail "Step 14 无法建立/查到 agents 行（fixture 建立失败），CI=true 下不允许静默 SKIP 掉这个防假成功断言" 14
+    fi
     echo "  SKIP: 库内无 agents 行，Step 14 fixture 无法建立（需先跑过共享前门注册）"
   else
     S14_TASK=$(psq "INSERT INTO zenithjoy.wechat_publish_task (agent_id, task_type, content, target_friend_alias, status, approval_source) VALUES ('$S14_AGENT'::uuid, 'private_chat', 'gp4-smoke 回复内容', 'gp4smoke联系人', 'approved', 'system') RETURNING id")
@@ -1041,7 +1059,15 @@ if command -v npx >/dev/null 2>&1 && [ -d "apps/agent-panel/node_modules" ]; the
     fail "Step 17d apps/agent-panel 单测未过，业务语言/代号泄露断言可能失败" 17
   fi
 else
-  ok "Step 17d ⚠️ apps/agent-panel 依赖未装，跳过本地单测复跑（CI 独立 job 已跑，见 lint-feature-has-smoke）"
+  # 2026-08-04 修复（Fix 3）：此前这里用 `ok`（绿）静默吞掉，文案声称"CI 独立 job 已跑"——
+  # 但 Smoke Glob Gate（ci-smoke-glob-runner.yml）本身就是这条"CI 独立 job"跑道，它自己此前
+  # 从未装过 apps/agent-panel 依赖，从未真跑过这个断言。CI=true 下不允许静默跳过判定点验证；
+  # 本地手跑（无 CI 标记）仍保留原有跳过提示。
+  if [ "${CI:-}" = "true" ]; then
+    fail "Step 17d apps/agent-panel 依赖未安装，无法真跑业务语言渲染单测（不能静默跳过判定点验证）" 17
+  else
+    ok "Step 17d ⚠️ apps/agent-panel 依赖未装，本地手跑跳过单测复跑"
+  fi
 fi
 
 # 17e：SSE 实时推送 proven-to-fire ——xian-rog真机验证实测发现的真实bug：SSE stream此前

@@ -140,25 +140,35 @@ jobs:
       ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
     steps:
       - uses: actions/checkout@v4
+      # 2026-08-04 修复（Fix 4）：本 job 真正装的依赖来自两个 lockfile——根 package-lock.json
+      # （覆盖 apps/api + apps/agent-panel）和 services/agent/package-lock.json（独立项目）。
+      # 只声明后者会让根 lockfile 那部分装依赖走不了 npm cache。
       - uses: actions/setup-node@v4
-        with: { node-version: '20', cache: 'npm', cache-dependency-path: services/agent/package-lock.json }
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            services/agent/package-lock.json
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
 
-      - name: Install apps/api deps
-        run: npm ci --workspace=apps/api
+      # 2026-08-04 修复（假绿灯审计 Fix 1）：apps/api 和 apps/agent-panel 都是根 workspace 成员
+      # （根 package.json workspaces: ["apps/*"]）。此前分两条独立 `npm ci` 跑，其中
+      # "Install apps/agent-panel deps" 在 apps/agent-panel 目录下裸跑 `npm ci`（不带 --workspace），
+      # npm 会把本地 prefix 解析到仓库根目录并把安装范围限定到这一个 workspace——而 `npm ci`
+      # 每次都会先清空 node_modules，导致这一步把前面 "Install apps/api deps" 装好的依赖树整个
+      # 冲掉，Build/Start apps/api 两步全红（缺 express/pg/better-auth/zod）。
+      # 合并成一步、同时声明两个 workspace，一次性装全，不再互相清空。
+      - name: Install apps/api + apps/agent-panel deps
+        run: npm ci --workspace=apps/api --workspace=apps/agent-panel
 
       # Step 17（作战窗刀1）需要真跑 services/agent 的 TS 逻辑证明看门狗 proven-to-fire，
-      # 不是静态 grep——装依赖才能用 tsx 直接执行。
+      # 不是静态 grep——装依赖才能用 tsx 直接执行。services/agent 是独立 npm 项目、有自己的
+      # lockfile，不受根 workspace 影响，保持独立 working-directory 安装。
       - name: Install services/agent deps (for Step 17 panel-event-bus proven-to-fire check)
         run: npm ci --no-audit --no-fund
         working-directory: services/agent
-
-      # 2026-08-04 修复（Step 17d 假绿）：脚本此前声称"CI 独立 job 已跑"业务语言渲染单测，
-      # 实际全仓库无该 job。装了依赖后脚本自带的 `[ -d node_modules ]` 分支会自动真跑 vitest。
-      - name: Install apps/agent-panel deps (for Step 17d business-language vitest)
-        run: npm ci --no-audit --no-fund
-        working-directory: apps/agent-panel
 
       - name: Create zenithjoy schema + pgcrypto
         env:
