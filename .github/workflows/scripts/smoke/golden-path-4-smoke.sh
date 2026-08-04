@@ -370,6 +370,12 @@ for f in ['level','nickname','source','contact_count','recent_actions','ai_profi
 " 2>/dev/null || fail "Step 8b customer-profile 响应六字段不完整" 8
     ok "Step 8b ✅ customer-profile API 响应六字段结构完整"
   else
+    # 2026-08-05 修复：customer-profile 路由对任何合法 wechat_id 参数总是返回 200
+    # （查不到记录时也返回占位六字段），非 200 在正常运行下几乎不该出现——一旦出现大概率
+    # 是真实服务异常。CI=true 下不允许静默 SKIP 掉这个判定点（比照 Step14/17d 已建立的模式）。
+    if [ "${CI:-}" = "true" ]; then
+      fail "Step 8b customer-profile 返回非 200（HTTP=$S8_HTTP），CI=true 下不允许静默 SKIP：$(cat "$S8_TMP")" 8
+    fi
     echo "  SKIP: customer-profile HTTP=$S8_HTTP（结构断言由 vitest 覆盖）"
   fi
   rm -f "$S8_TMP"
@@ -1052,7 +1058,11 @@ else
 fi
 
 # 17d：客户视图业务语言正向+负向断言（判定点：客户视图绝不出现line02/line04内部代号）
-if command -v npx >/dev/null 2>&1 && [ -d "apps/agent-panel/node_modules" ]; then
+# 判据用能力探测（npx --no-install 真的从该 workspace 跑一次 vitest）而非目录存在性：
+# apps/agent-panel/node_modules 这个嵌套目录只是因为根 vitest(^4.0.18→4.1.9) 与该 workspace
+# vitest(^4.1.10→4.1.10) 版本冲突、npm 被迫留一份嵌套拷贝才偶然存在——lockfile 一旦重新解析
+# 去重合并，目录会消失但依赖其实装好了，靠目录存在性判断会在这种情况下误报"依赖未安装"。
+if command -v npx >/dev/null 2>&1 && (cd apps/agent-panel && npx --no-install vitest --version >/dev/null 2>&1); then
   if (cd apps/agent-panel && npx vitest run --silent 2>&1 | tail -5 | grep -q "passed"); then
     ok "Step 17d ✅ apps/agent-panel 业务语言渲染单测全绿（正向智能获客/回复/发布 + 负向不含line0N代号）"
   else
