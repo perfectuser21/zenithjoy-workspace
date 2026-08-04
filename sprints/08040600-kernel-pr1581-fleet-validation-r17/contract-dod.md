@@ -1,0 +1,127 @@
+---
+skeleton: false
+journey_type: autonomous
+---
+# Contract DoD — PR #1581 真实 fleet 验证 r17
+
+**范围**: 精确 SHA、strict us-mac-m4、Fleet 前置身份 receipt、三角色完整成功/失败证据和一致最终裁决；不修改产品实现、不合并。
+**大小**: M
+
+## ARTIFACT 条目
+
+- [ ] [ARTIFACT] 三角色 schema v2 evidence、Fleet 前置 receipt 副本、Generator receipt SHA-256 与原始日志齐全。
+  Test: node -e "for(const r of ['generator','evaluator','judge']){const e=JSON.parse(require('fs').readFileSync('sprints/08040600-kernel-pr1581-fleet-validation-r17/evidence/'+r+'.json'));if(e.schema_version!==2||!Number.isInteger(e.exit_code)||!e.log_tail||!Array.isArray(e.behavior_tests)||!e.behavior_tests.length)process.exit(1);JSON.parse(require('fs').readFileSync('sprints/08040600-kernel-pr1581-fleet-validation-r17/evidence/'+r+'.fleet-receipt.json'))}"
+
+- [ ] [ARTIFACT] role helper 中不存在创建、覆盖或回写 Fleet receipt 的代码，GAN authoring UUID 未固化为未来角色期望。
+  Test: bash -c "! rg -n '(writeFile|writeFileSync|cp |install ).*(HARNESS_FLEET_RECEIPT_PATH)|(attempt_id|capability_snapshot_id).*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' sprints/08040600-kernel-pr1581-fleet-validation-r17/scripts sprints/08040600-kernel-pr1581-fleet-validation-r17/tests"
+
+## BEHAVIOR 条目
+
+- [ ] [BEHAVIOR] [L2] B-01: Generator 消费 Fleet 前置 receipt 并验证真实产品链 [接缝×2]
+  动作: Fleet 在角色启动前签发 checkout 外 receipt；Generator 只读核验后，在 us-mac-m4 创建候选独立 worktree 并机检 HEAD；在同一空 DB_URL 跑真实 migration、机检目标表，再经真实 signup/login 动态创建两个 session cookie 与不同 tenant，执行跨租户读取隔离和并发冲突验证
+  预期观察: actual_checkout_sha 精确等于目标 SHA；migration exit 0；目标表存在；signup_count=2、session_cookie_count=2、两个 tenant 非空且不同；cross_tenant_leak_count=0；并发响应为 200/400、错误码 INVALID_CONFIG、最终 min<=max；每阶段有独立 L2 behavior，失败也保留非零 exit_code、失败 behavior 和 log_tail
+  等待预算: 7200s
+  留证: evidence/generator.json、generator.fleet-receipt.json、generator.receipt.sha256 与原始产品日志
+  Test: manual:bash -c 'npx vitest run sprints/08040600-kernel-pr1581-fleet-validation-r17/tests/fleet-validation-evidence.test.ts -t "Generator 新鲜证据绑定 Fleet 前置 receipt 和目标 SHA" --reporter=verbose'
+
+- [ ] [BEHAVIOR] [L2] B-02: Evaluator 保留失败证据并由结果确定 verdict [接缝×2]
+  动作: 以临时 evidence 分别构造旧 attempt/provenance 与 behavior exit_code=9，真实启动 Evaluator 生产 CLI；随后核验本轮真实 Evaluator evidence
+  预期观察: 旧 attempt、失败 behavior、错误 PR number 三个负向调用均非零退出并落盘 verdict=FAIL；分别含 old-attempt-replay-rejected、失败 behavior、target-pr-binding-rejected；本轮 evidence 与 Generator provenance 逐字段绑定 repository/PR/base/final，且全部 behavior exit 0 时才 PASS
+  等待预算: 600s
+  留证: evidence/evaluator.json、evaluator.fleet-receipt.json 与 evaluator 原始日志
+  Test: manual:bash -c 'npx vitest run sprints/08040600-kernel-pr1581-fleet-validation-r17/tests/fleet-validation-evidence.test.ts -t "Evaluator 生产入口拒绝旧 attempt 和失败 behavior" --reporter=verbose'
+
+- [ ] [BEHAVIOR] [L2] B-03: Judge 摘要串联并输出唯一一致裁决 [接缝×2]
+  动作: 以临时 evidence 分别注入同 run/SHA 但旧 logical cycle/attempt/capability、删除 Evaluator 文件、注入 behavior exit_code=9，三次真实启动 Judge 生产 CLI；随后核验本轮 Judge evidence、Evaluator SHA-256 与真实 GitHub PR
+  预期观察: 旧 provenance、缺证、错误 repository 均非零退出并落盘 INSUFFICIENT_EVIDENCE，错误目标含 target-pr-binding-rejected；失败 behavior 非零退出并落盘 FAIL；所有拒绝均含非零 behavior；三份 evidence 与 provenance 逐字段绑定 repository/PR/base/final，且上游全部成功才 PASS；PR 仍 open、未合并且 head 精确匹配
+  等待预算: 600s
+  留证: evidence/judge.json、judge.fleet-receipt.json、Evaluator 摘要与 GitHub API 结果摘要
+  Test: manual:bash -c 'PR=$(gh api repos/perfectuser21/zenithjoy-workspace/pulls/1581); echo "$PR" | jq -e '\''.state=="open" and .merged==false and .merged_at==null and .head.sha=="c305f6217da65bb69413c39e621b7e797e0fb189"'\'' >/dev/null; npx vitest run sprints/08040600-kernel-pr1581-fleet-validation-r17/tests/fleet-validation-evidence.test.ts -t "Judge 生产入口拒绝旧 provenance、缺失证据和失败 behavior" --reporter=verbose'
+
+- [ ] [BEHAVIOR] [L2] B-04: 角色不能事后自签且缺证不能判 PASS
+  动作: 扫描 role helper 的 receipt 写入操作，并用失败/缺失证据输入执行确定性 verdict 规则
+  预期观察: role helper 无 receipt 创建或回写；完整失败得到 FAIL；缺证得到 INSUFFICIENT_EVIDENCE；两种情况均不得 PASS
+  等待预算: 30s
+  留证: Vitest stdout、source scan 输出与失败语义断言
+  Test: manual:bash -c 'npx vitest run sprints/08040600-kernel-pr1581-fleet-validation-r17/tests/fleet-validation-evidence.test.ts -t "角色不得自行生成 Fleet receipt 且缺证不得判 PASS" --reporter=verbose'
+
+- [ ] [BEHAVIOR] [L2] B-05: 同 run 和 SHA 的旧 attempt 重放必须被 provenance 拒绝
+  动作: 向 Evaluator 生产 CLI 输入 run_id、final_sha 正确但 provenance 过期的 evidence；向 Judge 生产 CLI 输入同 run/SHA 但旧 logical cycle/attempt/capability 的 Evaluator evidence
+  预期观察: 两个真实进程均非零退出并落盘 old-attempt-replay-rejected；Evaluator 为 FAIL，Judge 为 INSUFFICIENT_EVIDENCE；均不得 PASS
+  等待预算: 30s
+  留证: Vitest stdout 与 evaluator/judge evidence 中的 replay rejection behavior
+  Test: manual:bash -c 'npx vitest run sprints/08040600-kernel-pr1581-fleet-validation-r17/tests/fleet-validation-evidence.test.ts -t "Evaluator 生产入口拒绝旧 attempt 和失败 behavior|Judge 生产入口拒绝旧 provenance、缺失证据和失败 behavior" --reporter=verbose'
+
+- [ ] [BEHAVIOR] [L2] B-06: INT/TERM 中断不得记录成功 [接缝×2]
+  动作: 分别在角色执行中发送 INT 与 TERM，并等待唯一 EXIT finalizer 写 evidence
+  预期观察: INT evidence.exit_code=130、TERM evidence.exit_code=143；两者均含 interrupted-signal 非零 behavior、verdict 非 PASS，且 finalizer 只执行一次
+  等待预算: 30s
+  留证: 中断进程退出码、evidence JSON 与 interrupted-signal behavior
+  Test: manual:bash -c 'npx vitest run sprints/08040600-kernel-pr1581-fleet-validation-r17/tests/fleet-validation-evidence.test.ts -t "中断与错误目标 PR 均不得记录成功" --reporter=verbose'
+
+## Invariant 映射（PRD 铁律逐项）
+
+> PRD 中重复的 `smoke 铁律` 分别保留映射；N/A 表示本 Sprint 不触及该模块，并非静默删除。
+
+- INV-01 LaunchAgent 常驻服务：N/A，本 Sprint 不新增宿主服务。
+- INV-02 status 枚举全仓复查：Judge 三值为证据协议新枚举；测试精确覆盖 PASS/FAIL/INSUFFICIENT_EVIDENCE。
+- INV-03 共享 CI 基础设施默认禁区：N/A，不改 workflow/smoke allowlist。
+- INV-04 git_sha 同语义同策略：Generator/Evaluator/Judge 均以 target SHA 不等即失败处理。
+- INV-05 Test Contract 四列：contract-draft 的 Test Contract 固定四列且 testFile 用反引号。
+- INV-06 表名认领冲突：N/A，不建表或改 schema。
+- INV-07 后台 job 必有消费方：N/A，不新增 job。
+- INV-08 提前合并处理：PR 在 verdict 前 merged=true 直接 FAIL 并留 GitHub 证据。
+- INV-09 git ref 验证：helper 必须使用 `git rev-parse --verify '<ref>^{commit}'`。
+- INV-10 smoke 铁律（第 1 次）：N/A，不改 smoke 文件。
+- INV-11 服务双信号：N/A，不判断常驻服务存活。
+- INV-12 headed payload 可反查：任务稳定对象包含 repo、PR、run、task short id。
+- INV-13 时间常数关系：唯一总预算 7200s；各子预算不得超过总预算。
+- INV-14 真环境才 done：三项接缝未真验均为 logic-done-pending。
+- INV-15 feat+brain smoke 登记：N/A，不改 brain/src。
+- INV-16 relay 心跳：由控制面负责；角色证据不得把无心跳的长等待伪装 PASS。
+- INV-17 catch 吞错须计数：所有 helper 失败写 behavior_tests 与非零 exit_code。
+- INV-18 dep audit：N/A，不改依赖。
+- INV-19 日志脱敏：cookie、密码、DB_URL 不进 log_tail/evidence。
+- INV-20 毕业后 lint：Generator 提交前跑仓库适用的 lint/test coverage 门。
+- INV-21 smoke 铁律（第 2 次）：N/A，不改 smoke 文件。
+- INV-22 端点鉴权：业务 config 只用真实 signup session cookie。
+- INV-23 smoke 铁律（第 3 次）：N/A，不改 smoke 文件。
+- INV-24 测试默认双租户：Generator 经真实 signup 创建两个不同租户，tenant A 写入后以 tenant B cookie 查询并断言 `cross_tenant_leak_count=0`。
+- INV-25 scheduler jobs：N/A，不新增 cron。
+- INV-26 凭据安全：只用 Runner/临时 cookie jar，凭据不进 git/log。
+- INV-27 生产实体自报：PR head 用 GitHub API，不以 workspace diff 判断。
+- INV-28 成功看语义字段：配置接口断言 success、data 和 INVALID_CONFIG，不只看 HTTP 200。
+- INV-29 journey feature freshness：N/A，不写 journey_features。
+- INV-30 新 task_type 七点接线：N/A，不新增 task_type。
+- INV-31 禁止环境假设：机器取 HARNESS_MACHINE，身份取 Fleet receipt，不写坐标/env 假值。
+- INV-32 smoke 铁律（第 4 次）：N/A，不改 smoke 文件。
+- INV-33 watchdog 恢复：N/A，不更改任务状态或执行恢复。
+- INV-34 lint-test-quality await：测试文件所有 I/O helper 为 async/await。
+- INV-35 deploy root 安全：N/A，不以生产 deploy root 跑 smoke。
+- INV-36 租户隔离：查询与写入均由真实 session tenant scope，测试显式核验两个动态 tenant ID 不同且交叉读取泄漏数为 0。
+- INV-37 退役代码 death cause：N/A，不复活功能。
+- INV-38 headed shell 环境：所有必需 HARNESS 变量在角色入口显式校验。
+- INV-39 Red 精确 add：只提交本 Sprint tests 与合同文件。
+- INV-40 单 slot 串行：Generator→Evaluator→Judge 串行；无并行任务。
+- INV-41 历史模板先核实：Round 5 以 reviewer 反馈和真实 PRD 修订，不假设旧路径。
+- INV-42 多设备类型：N/A，本任务仅 strict us-mac-m4。
+- INV-43 部署失败不降级：所有失败通过 finalizer 留证并返回非零。
+- INV-44 host 白名单核对 headed：strict affinity 核验实际 HARNESS_MACHINE，不以派发标签代替。
+- INV-45 smoke 铁律（第 5 次）：N/A，不改 smoke 文件。
+- INV-46 新常驻服务 manifest：N/A，不新增服务。
+- INV-47 多轮扫描真实时间：N/A，不改扫描器。
+- INV-48 android theater：N/A，本任务产品验证为 local_api，不声称覆盖移动真机。
+- INV-49 source inspection vs mock：被改接缝不 mock；receipt 写入禁令另做 source scan。
+- INV-50 DB 字段长度：N/A，不新增字段。
+- INV-51 manual node 引号：DoD 的 node 命令不得含未转义 `${}`；批准前真跑。
+- INV-52 窄触发两层交叉：真实产品 E2E + 证据结构测试两层核验。
+- INV-53 Judge API envelope：Judge 顶层与每条 behavior 均含 exit_code/log_tail/evidence。
+- INV-54 付费扫描幂等：N/A，不调用付费扫描。
+- INV-55 agents 表列名：N/A，不读写 agents 表。
+- INV-56 Generator 禁 merge：Generator 只产 evidence，合并权不在角色脚本。
+- INV-57 report 不能只看容器 exit：Judge 验 evidence、摘要和 PR 状态，不以进程 exit 单信号 PASS。
+- INV-58 null/false 失败契约：每个 helper 明确捕获非零/假值并写失败 behavior。
+- INV-59 退役判断查生产库：N/A，不退役模块。
+- INV-60 manual oracle 真实 exit code：每项 behavior 记录实际 exit_code，且 Vitest 证明解释器启动。
+- INV-61 DB 连接同源：migration、API、产品验证均从同一 `DB_URL` 解析。
+- INV-62 target_environment 路由：任务 payload 为 local_api，实际 Fleet machine 另以 us-mac-m4 receipt 严格核验。
