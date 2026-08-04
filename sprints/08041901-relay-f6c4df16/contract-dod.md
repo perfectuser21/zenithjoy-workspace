@@ -7,7 +7,7 @@
 
 ## 完成定义（Definition of Done）
 
-### [BEHAVIOR-1] douyin-read 绑定 android-capable runner
+### [BEHAVIOR] douyin-read 绑定 android-capable runner (B-1)
 
 - 描述：`nightly-real-machine-staging.yml` 内 `douyin-read` job 的 `runs-on` 为 `[self-hosted, android-capable]`
 - 验收类型：manual:bash
@@ -20,7 +20,7 @@
 
 ---
 
-### [BEHAVIOR-2] account-scan 绑定 android-capable runner
+### [BEHAVIOR] account-scan 绑定 android-capable runner (B-2)
 
 - 描述：`nightly-real-machine-staging.yml` 内 `account-scan` job 的 `runs-on` 为 `[self-hosted, android-capable]`
 - 验收类型：manual:bash
@@ -33,7 +33,7 @@
 
 ---
 
-### [BEHAVIOR-3] wechat-bubble 保留 wechat-capable（keep-green 约束）
+### [BEHAVIOR] wechat-bubble 保留 wechat-capable（keep-green 约束）(B-3)
 
 - 描述：`wechat-bubble` job 的 `runs-on` 必须保持 `[self-hosted, wechat-capable]`，迁移不得波及微信 job
 - 验收类型：manual:bash
@@ -47,7 +47,7 @@
 
 ---
 
-### [BEHAVIOR-4] account-scan 的 DB_SSH 环境变量完整保留
+### [BEHAVIOR] account-scan 的 DB_SSH 环境变量完整保留 (B-4)
 
 - 描述：`DB_SSH_HOST`、`DB_SSH_PORT`、`DB_SSH_KEY` 三个变量在 `account-scan` job 中均存在（pc4 runner ACL 已就绪）
 - 验收类型：manual:bash
@@ -61,7 +61,7 @@
 
 ---
 
-### [BEHAVIOR-5] wechat-capable 不再出现在安卓两 job 中
+### [BEHAVIOR] wechat-capable 不再出现在安卓两 job 中 (B-5)
 
 - 描述：`douyin-read` 和 `account-scan` job 的 `runs-on` 行不得包含 `wechat-capable`，确保不存在残留绑定
 - 验收类型：manual:bash
