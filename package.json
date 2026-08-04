@@ -23,7 +23,7 @@
     "test:product-map": "node --test scripts/product-map/__tests__/product-map.test.js scripts/product-map/__tests__/gp-smoke-ratchet.test.js scripts/product-map/__tests__/realmachine-unverified-ratchet.test.js",
     "acceptance-spec:validate": "node scripts/acceptance-spec/cli.mjs validate",
     "acceptance-spec:generate": "node scripts/acceptance-spec/cli.mjs generate",
-    "test:acceptance-spec": "node --test scripts/acceptance-spec/__tests__/line02-android.test.js"
+    "test:acceptance-spec": "node --test scripts/acceptance-spec/__tests__/line02-android.test.js scripts/acceptance-spec/ai-run/__tests__/line02-ai-run.test.js"
   },
   "keywords": [
     "monorepo",
