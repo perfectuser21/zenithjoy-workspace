@@ -6,14 +6,20 @@
  * 按 cells-map 逐格截图 + 抓取页面可见文本，产出证据包与待判定骨架。
  * 判定不在这里发生——判定属于 AI 判官（见 judge-runbook.md），判据=屏幕所见。
  *
- * 用法:
+ * 用法（推荐 · 登录模式，链路格才有东西可验）:
+ *   ACCEPTANCE_EMAIL=... ACCEPTANCE_PASSWORD=... \
  *   node scripts/acceptance-spec/ai-run/capture.mjs \
  *     --staging https://staging-autopilot.zenjoymedia.media \
  *     --out acceptance-spec/runs/<自定时间戳>
+ *   凭据在 1Password CS「ZenithJoy AI验收账号 (staging常驻)」（绑真机租户，4台安卓在线）
+ *
+ * 用法（回落 · 注册模式，无凭据时自动走）:
+ *   同上去掉凭据 → 每轮新注册，租户下无设备，链路格如实标无法验证
  *
  * 产出:
  *   <out>/evidence/<格号>/*.png|page.txt   逐格截图与页面文本
  *   <out>/pending-judgments.json           待判定骨架（verdict=null，判官填完后校验为 ai-column.json）
+ *   <out>/run-summary.json                 本轮模式/账号/在线机器数（不含密码）
  *   <out>/capture-log.txt                  采证过程流水
  */
 
@@ -23,6 +29,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import { CELLS_MAP } from './cells-map.mjs';
 import { getCellCriteria, checkCellsMapComplete } from './lib.mjs';
+import { resolveCredentials, buildRunSummary, performLogin } from './login.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../..');
@@ -80,10 +87,16 @@ async function main() {
 
   const cellState = {}; // id -> { evidence: [], notes: [] }
   for (const c of CELLS_MAP) cellState[c.id] = { evidence: [], notes: [] };
+  let machinesOnline = 0;
 
   const stampSuffix = new Date().toISOString().replace(/[:.]/g, '-');
-  const email = `ai-table-${Date.now()}@zenithjoy.test`;
-  const password = 'AiTable!2026';
+  const creds = resolveCredentials(
+    { email: arg('email', null), password: arg('password', null) },
+    process.env
+  );
+  const email = creds.mode === 'login' ? creds.email : `ai-table-${Date.now()}@zenithjoy.test`;
+  const password = creds.mode === 'login' ? creds.password : 'AiTable!2026';
+  log(`身份模式=${creds.mode}${creds.source ? `（凭据来源 ${creds.source}）` : ''} 账号=${email}`);
 
   async function captureFor(cellIds, name, note) {
     for (const id of cellIds) {
@@ -95,26 +108,43 @@ async function main() {
   }
 
   try {
-    // ── 用户流1：注册（S1-c3 的直接证据：在预发域名完成注册+授权）──
-    log('步骤：注册用户流');
-    await page.goto(`${STAGING}/signup`, { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(1500);
-    await captureFor(['S1-c3'], '01-signup-page', '注册页（预发域名可见）');
-    // 尽力走真实注册表单（字段名按常见命名探测，探不到则记录并继续）
-    try {
-      const nameInput = page.locator('input[name="name"], input[placeholder*="名"], input[autocomplete="name"]').first();
-      const emailInput = page.locator('input[type="email"], input[name="email"]').first();
-      const pwdInput = page.locator('input[type="password"]').first();
-      await nameInput.fill('AI验收员', { timeout: 5000 });
-      await emailInput.fill(email, { timeout: 5000 });
-      await pwdInput.fill(password, { timeout: 5000 });
-      await page.locator('button[type="submit"], button:has-text("注册")').first().click({ timeout: 5000 });
-      await page.waitForTimeout(4000);
-      await captureFor(['S1-c3'], '02-after-signup', `注册提交后（账号 ${email}）`);
-      log(`注册表单已提交：${email}`);
-    } catch (e) {
-      log(`注册表单交互失败（记录后继续，判官据此判无法验证）：${e.message}`);
-      cellState['S1-c3'].notes.push(`注册表单交互失败: ${e.message}`);
+    // ── 用户流1：取得身份（S1-c3 的直接证据：在预发域名完成绑定/登录）──
+    if (creds.mode === 'login') {
+      log('步骤：常驻验收账号登录');
+      try {
+        const ok = await performLogin(page, STAGING, email, password);
+        await captureFor(['S1-c3'], '01-after-login', `常驻验收账号登录${ok ? '成功' : '后仍停留登录页'}（${email}）`);
+        if (!ok) {
+          cellState['S1-c3'].notes.push('登录后仍停留在登录页');
+          log('登录未离开登录页——后续链路格大概率无数据，判官据实判定');
+        } else {
+          log('登录成功');
+        }
+      } catch (e) {
+        log(`登录交互失败（记录后继续）：${e.message}`);
+        cellState['S1-c3'].notes.push(`登录交互失败: ${e.message}`);
+        await captureFor(['S1-c3'], '01-login-fail', '登录失败现场');
+      }
+    } else {
+      log('步骤：注册用户流（无凭据，回落注册模式）');
+      await page.goto(`${STAGING}/signup`, { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(1500);
+      await captureFor(['S1-c3'], '01-signup-page', '注册页（预发域名可见）');
+      try {
+        const nameInput = page.locator('input[name="name"], input[placeholder*="名"], input[autocomplete="name"]').first();
+        const emailInput = page.locator('input[type="email"], input[name="email"]').first();
+        const pwdInput = page.locator('input[type="password"]').first();
+        await nameInput.fill('AI验收员', { timeout: 5000 });
+        await emailInput.fill(email, { timeout: 5000 });
+        await pwdInput.fill(password, { timeout: 5000 });
+        await page.locator('button[type="submit"], button:has-text("注册")').first().click({ timeout: 5000 });
+        await page.waitForTimeout(4000);
+        await captureFor(['S1-c3'], '02-after-signup', `注册提交后（账号 ${email}）`);
+        log(`注册表单已提交：${email}`);
+      } catch (e) {
+        log(`注册表单交互失败（记录后继续，判官据此判无法验证）：${e.message}`);
+        cellState['S1-c3'].notes.push(`注册表单交互失败: ${e.message}`);
+      }
     }
 
     // ── 用户流2：发起采集（S6-c3 触发 + S6-c4 归属隔离）──
@@ -164,11 +194,20 @@ async function main() {
       log('任务详情不可进入（可能无任务行），跳过详情补证');
     }
 
-    // ── 用户流4：账号页（S4/S5）──
+    // ── 用户流4：机器页（S4 设备在线格的主证据）+ 账号页（S5）──
+    log('步骤：机器页观察（设备在线/归属）');
+    await page.goto(`${STAGING}/dashboard/machines`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(2500);
+    await captureFor(['S4-c2', 'S4-c3'], '01-machines', '机器列表页（在线状态与最后心跳）');
+    try {
+      machinesOnline = await page.locator('text=/在线|online/i').count();
+    } catch { /* 计数失败不阻塞 */ }
+    log(`机器页可见"在线"字样计数=${machinesOnline}`);
+
     log('步骤：账号页观察');
     await page.goto(`${STAGING}/area/acquisition/accounts`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2500);
-    await captureFor(['S4-c2', 'S4-c3', 'S5-c3', 'S5-c4'], '01-accounts', '设备与账号状态页');
+    await captureFor(['S4-c2', 'S4-c3', 'S5-c3', 'S5-c4'], '02-accounts', '设备与账号状态页');
 
     // ── 用户流5：线索页（S10）──
     log('步骤：线索页观察');
@@ -209,7 +248,11 @@ async function main() {
     })),
   };
   writeFileSync(resolve(OUT, 'pending-judgments.json'), JSON.stringify(pending, null, 2), 'utf8');
-  log(`采证完成：${OUT}/pending-judgments.json（${pending.cells.length} 格待判定，账号 ${email}）`);
+
+  const summary = buildRunSummary({ mode: creds.mode, email, staging: STAGING, machinesOnline });
+  writeFileSync(resolve(OUT, 'run-summary.json'), JSON.stringify(summary, null, 2), 'utf8');
+
+  log(`采证完成：${OUT}/pending-judgments.json（${pending.cells.length} 格待判定，模式=${creds.mode}，账号 ${email}）`);
   log(`时间戳后缀参考: ${stampSuffix}`);
 }
 
