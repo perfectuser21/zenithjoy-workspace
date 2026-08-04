@@ -131,4 +131,31 @@ runs-on: [self-hosted, android-capable]
 
 ---
 
+## Invariant 约束
+
+- [INVARIANT-1] `wechat-bubble` job 必须保留 `[self-hosted, wechat-capable]`（rog），不得迁移（wechat-hook 依赖 rog 微信环境）
+- [INVARIANT-2] `douyin-read`/`account-scan` job 名称不得更改（`promote-all-prod.yml` 的 `startswith("真抖音")`/`startswith("真安卓")` 匹配逻辑依赖 job name）
+- [INVARIANT-3] `nightly-real-machine-staging.yml` 的 `needs` 依赖链（wechat-bubble → douyin-read → account-scan → nightly-report）不得改动
+- [INVARIANT-4] DB_SSH_* 环境变量配置不得删除（pc4 上已就绪，account-scan 需通过 SSH 隧道访问 DB）
+
+---
+
+## 累积 FR
+
+- [FR-1] 将 `douyin-read` job 的 `runs-on` 从 `[self-hosted, wechat-capable]` 改为 `[self-hosted, android-capable]`
+- [FR-2] 将 `account-scan` job 的 `runs-on` 从 `[self-hosted, wechat-capable]` 改为 `[self-hosted, android-capable]`
+- [FR-3] 同步更新两个 job 内的注释，反映迁移到 pc4 出境网络方案
+
+---
+
+## NFR
+
+- [NFR-1] 变更仅限 `.github/workflows/nightly-real-machine-staging.yml`，零代码路径改动，review diff < 20 行
+- [NFR-2] 合入后不得导致 `wechat-bubble` runner 绑定发生变化（keep-green 约束）
+
+---
+
 最后更新: 2026-08-04
+
+journey_type: ci_fix
+target_environment: local_api
