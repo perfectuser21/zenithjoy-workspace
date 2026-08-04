@@ -3,8 +3,9 @@
 **TASK_ID**: f6c4df16-ba9c-49ed-89fc-67bbba743182
 **SPRINT_DIR**: sprints/08041901-relay-f6c4df16
 **GP Anchor**: line02/keyword_acquisition keep-green
+GP-Anchor: line02/keyword_acquisition keep-green
 **journey_type**: ci_fix
-**target_environment**: local_api
+**target_environment**: ci_config
 **起草日期**: 2026-08-04
 
 ---

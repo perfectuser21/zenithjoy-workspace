@@ -158,4 +158,4 @@ runs-on: [self-hosted, android-capable]
 最后更新: 2026-08-04
 
 journey_type: ci_fix
-target_environment: local_api
+target_environment: ci_config
