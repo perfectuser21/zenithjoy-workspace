@@ -351,18 +351,62 @@ echo "▶ Step 8: CRM 客户列表页（customer-profile 六字段）"
 
 WECHAT_TS="apps/api/src/routes/wechat.ts"
 grep -q "customer-profile" "$WECHAT_TS" || fail "Step 8 customer-profile 路由未注册" 8
-# 2026-08-05 加固（0804 审计发现②）：旧检测对整个 723 行文件裸 grep 字段名，六字段中的
-# level/nickname/source 等词在头部注释、SQL 查询结果类型声明里也出现，实测验证过：
+# 2026-08-05 加固（0804 审计发现②，二次修正）：旧检测对整个 723 行文件裸 grep 字段名，
+# 六字段中的 level/nickname/source 等词在头部注释、SQL 查询结果类型声明里也出现，实测验证过：
 # 从真实响应对象里删掉 level 字段（保留头部注释里的"level"字样），旧检测依然误判通过。
-# 改为先锚定到真正构造响应体的 `const data = row ? {...} : {...}` 这个对象字面量块
-# （两个分支都要覆盖，"无记录占位"分支同样必须含六字段），再在这个窄范围内检查——
-# 用 word-boundary 而非要求冒号，兼容 ES6 简写属性写法（如 `recent_actions,`）。
-DATA_BLOCK=$(awk '/const data = row/{p=1} p{print} /return res\.json\(\{ data \}\);/{exit}' "$WECHAT_TS")
-[ -n "$DATA_BLOCK" ] || fail "Step 8a customer-profile 响应对象构造块提取失败（awk 锚点未命中，路由实现可能已重构）" 8
-for field in level nickname source contact_count recent_actions ai_profile; do
-  echo "$DATA_BLOCK" | grep -qE "\b${field}\b" || fail "Step 8a customer-profile 响应对象缺字段 $field（锚定构造块检查，非全文件松散grep）" 8
-done
-ok "Step 8a ✅ customer-profile 响应对象构造块含六字段（锚定上下文，防头部注释/类型声明假阳性）"
+# 第一版修法（锚定 `const data = row?{...}:{...}` 整块 + word-boundary）仍有两处残留假绿，
+# 复审实测验证过：①占位分支内 `// 占位：...作为 nickname` 这行注释本身含 nickname 字样，
+# 删掉两处真实 nickname 字段后整块检查依然通过；②检查只看"整块里出现过"不分分支，只删占位
+# 分支里的 ai_profile 也照样通过——违反本步骤自己注释里"两个分支都要覆盖"的承诺。
+# 改为：按 `? {`/`: {` 切成两个分支，各自剥掉注释行（`// ...`）后独立检查六字段。
+S8A_CHECK=$(python3 -c "
+import re, sys
+
+FIELDS = ['level', 'nickname', 'source', 'contact_count', 'recent_actions', 'ai_profile']
+with open('$WECHAT_TS', encoding='utf-8') as f:
+    lines = f.readlines()
+
+start_idx = end_idx = None
+for i, l in enumerate(lines):
+    if 'const data = row' in l:
+        start_idx = i
+    if start_idx is not None and 'return res.json({ data });' in l:
+        end_idx = i
+        break
+if start_idx is None or end_idx is None:
+    print('EXTRACT_FAILED')
+    sys.exit(1)
+
+block = lines[start_idx:end_idx + 1]
+split_idx = next((i for i, l in enumerate(block) if l.rstrip() == '      : {'), None)
+if split_idx is None:
+    print('SPLIT_FAILED（三元表达式 else 分支起始行格式已变，检查需同步更新）')
+    sys.exit(1)
+
+def strip_comments(chunk):
+    return [l for l in chunk if not l.strip().startswith('//')]
+
+branch_true = strip_comments(block[:split_idx])
+branch_false = strip_comments(block[split_idx:])
+
+missing = []
+for field in FIELDS:
+    pat = re.compile(r'\b' + re.escape(field) + r'\b')
+    if not any(pat.search(l) for l in branch_true):
+        missing.append(f'row存在分支缺{field}')
+    if not any(pat.search(l) for l in branch_false):
+        missing.append(f'占位分支缺{field}')
+
+if missing:
+    print('MISSING:', missing)
+    sys.exit(1)
+print('PASS')
+" 2>&1)
+if echo "$S8A_CHECK" | tail -1 | grep -q "PASS"; then
+  ok "Step 8a ✅ customer-profile 响应对象两分支均含六字段（去注释+分支独立检查，防头部注释/类型声明/单分支假阳性）"
+else
+  fail "Step 8a customer-profile 响应对象字段检查失败: $S8A_CHECK" 8
+fi
 
 if [ "$API_REACHABLE" -eq 1 ]; then
   S8_TMP=$(mktemp)
@@ -745,18 +789,22 @@ grep -qn '_write_event("reply_sent"' "$LISTEN_CHAT_MAIN" || fail "Step 15b DELIV
 ok "Step 15b ✅ DELIVERED 点含 _write_event 调用（_commit_reply_success 后）"
 
 OVERLAY_DIR="services/agent/wechat-rpa/overlay"
-# 2026-08-05 加固（0804 审计发现①）：旧检测要求"写入调用"和字面 events 出现在同一行，
-# 单引号写法（open(p, 'a')）、路径存变量（p = os.path.join(...,'events.jsonl')）都能逃逸——
-# 实测验证过：注入 `p = os.path.join('/tmp','events.jsonl'); open(p,'a')` 旧 grep 检测不出。
-# 改用窗口化检测：写模式 open/.open/.write_text 命中后，往上下各看 5 行找"events"字样，
-# 覆盖跨行/单引号两种逃逸手法。
+# 2026-08-05 加固（0804 审计发现①，二次修正）：旧检测要求"写入调用"和字面 events 出现在
+# 同一行，单引号写法（open(p, 'a')）、路径存变量都能逃逸——实测验证过旧 grep 检测不出。
+# 第一版修法（写模式命中后上下 5 行窗口找 events 字样）仍有两处残留问题，复审实测验证过：
+# ①`[^)]*` 类不能跨越嵌套括号，`open(os.path.join(d,'events.jsonl'),'a')` 这种最常见的
+# 真实写法反而漏检；②窗口扫描不分注释/代码，附近若有任何提到"events"字样的**无关**注释
+# （哪怕写的是另一个文件），会把一次正当写入误判成违规、把 Step 15c 拖红。
+# 改法：①`[^)]*`→`.*` 补上嵌套括号写法；②窗口内先剥掉注释行再找 events 字样，只认
+# 代码行里真实出现的引用（listen_chat.py 真实写者的 `events_path = os.path.join(...,
+# "events.jsonl")` 就是代码行，不受影响）。
 S15C_CHECK=$(python3 -c "
 import re, sys
 from pathlib import Path
 
 overlay_dir = Path('$OVERLAY_DIR')
 write_pattern = re.compile(
-    r'''open\s*\([^)]*['\"'\''](a\+?|w\+?|x)['\"'\'']|\.write_text\s*\(|\.open\s*\([^)]*['\"'\''](a\+?|w\+?|x)['\"'\'']'''
+    r'''open\s*\(.*['\"'\''](a\+?|w\+?|x)['\"'\'']|\.write_text\s*\(|\.open\s*\(.*['\"'\''](a\+?|w\+?|x)['\"'\'']'''
 )
 violations = []
 for py_file in overlay_dir.rglob('*.py'):
@@ -768,7 +816,8 @@ for py_file in overlay_dir.rglob('*.py'):
             continue
         if write_pattern.search(line):
             window = lines[max(0, i-5):i+6]
-            if any('events' in w.lower() for w in window):
+            non_comment_window = [w for w in window if not w.strip().startswith('#')]
+            if any('events' in w.lower() for w in non_comment_window):
                 violations.append(f'{py_file}:{i+1}: {line.strip()}')
 
 if violations:
@@ -779,7 +828,7 @@ if violations:
 print('PASS')
 " 2>&1)
 if echo "$S15C_CHECK" | tail -1 | grep -q "PASS"; then
-  ok "Step 15c ✅ overlay 只读消费 events.jsonl（单写者约束，窗口化检测防跨行/单引号逃逸）"
+  ok "Step 15c ✅ overlay 只读消费 events.jsonl（单写者约束，窗口化检测+去注释，防跨行/单引号/嵌套括号逃逸与无关注释误报红）"
 else
   fail "Step 15c overlay 目录含 events 写入调用（违反单写者约束）: $S15C_CHECK" 15
 fi
