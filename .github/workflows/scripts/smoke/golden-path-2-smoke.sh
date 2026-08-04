@@ -1070,11 +1070,55 @@ S26_HTTP=$(curl -s -o "$S26_TMP" -w "%{http_code}" --max-time 20 \
   -d "{\"task_id\":\"$S26_TASK\",\"video_id\":\"$S26_VID\",\"commenters\":[{\"nickname\":\"$S26_NICK\",\"comment_text\":\"测试\",\"grade\":\"高意向\"}],\"terminal\":\"partial\",\"partial_reason\":\"stage1_empty\",\"reason\":{\"search_result\":\"empty\",\"error_code\":\"KEYWORD_NO_RESULT\"}}")
 [ "$S26_HTTP" = "200" ] || fail "Step 26c collect/report expected 200, got $S26_HTTP: $(cat "$S26_TMP")" 26
 
-# 26d：psql 断言 error_code 在枚举范围内（非 NULL 且是合法值）
-# acquisition_collect_tasks.error_code 由 settleCollectTask 写入（partial 状态用 partial_reason）
-# 此处验证 reason.error_code 被服务端接受（HTTP 200 = 通过）
 ok "Step 26c ✅ collect/report 携带 reason.error_code=KEYWORD_NO_RESULT 返回 200（枚举值被接受）"
-ok "Step 26 ✅ error_code 五分类上报链路全通"
+
+# 26d：正例——terminal=failed + reason.error_code=KEYWORD_NO_RESULT（不传 partial_reason）
+# ⚠️ 用全新 task，不复用 26c 的 task：settleCollectTask 对已终态 task 直接短路（changed=false），
+# 26c 那个 task 已经被 partial 结算过，复用会测不出任何东西。
+# ⚠️ 也不能沿用 26c 的 terminal=partial+partial_reason 组合：settleCollectTask 的 partial 分支
+# 是 `partial_reason ?? error_code`，partial_reason truthy 时会抢先，实际落库会是 partial_reason
+# 而非 reason.error_code——这正是本 Step 长期只测 HTTP 200、从不敢测 DB 的真实原因。
+# terminal=failed 分支（acquisition-collect.ts settleCollectTask）直接用 t.error_code，
+# 干净地测 FR-2 落库链路，不受 partial_reason 干扰。
+S26D_TMP=$(mktemp)
+S26D_HTTP=$(curl -s -o "$S26D_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/collect/start" \
+  -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" \
+  -d '{"keywords":["p2-smoke-fr2-errcode-d"]}')
+[ "$S26D_HTTP" = "200" ] || fail "Step 26d collect/start expected 200, got $S26D_HTTP: $(cat "$S26D_TMP")" 26
+S26D_TASK=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S26D_TMP" 2>/dev/null)
+[ -n "$S26D_TASK" ] || fail "Step 26d 无 task_id" 26
+
+S26D_HTTP=$(curl -s -o "$S26D_TMP" -w "%{http_code}" --max-time 20 \
+  -X POST "$API_BASE/api/acquisition/collect/report" \
+  -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
+  -d "{\"task_id\":\"$S26D_TASK\",\"terminal\":\"failed\",\"reason\":{\"error_code\":\"KEYWORD_NO_RESULT\"}}")
+[ "$S26D_HTTP" = "200" ] || fail "Step 26d collect/report(failed+error_code) expected 200, got $S26D_HTTP: $(cat "$S26D_TMP")" 26
+
+S26D_DB_CODE=$(psq "SELECT COALESCE(error_code,'<NULL>') FROM zenithjoy.acquisition_collect_tasks WHERE id='$S26D_TASK'")
+[ "$S26D_DB_CODE" = "KEYWORD_NO_RESULT" ] || fail "Step 26d error_code 未真实落库：DB='$S26D_DB_CODE' 期望 'KEYWORD_NO_RESULT'（此前本 Step 只测 HTTP 200 从未验证过落库，见头部注释）" 26
+ok "Step 26d ✅ terminal=failed + reason.error_code=KEYWORD_NO_RESULT → DB 真实落库 error_code=KEYWORD_NO_RESULT"
+
+# 26e：反例——非枚举值必须被 normalize 为 UNKNOWN（normalizeReportErrorCode，防止值域被污染）
+S26E_TMP=$(mktemp)
+S26E_HTTP=$(curl -s -o "$S26E_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/collect/start" \
+  -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" \
+  -d '{"keywords":["p2-smoke-fr2-errcode-e"]}')
+[ "$S26E_HTTP" = "200" ] || fail "Step 26e collect/start expected 200, got $S26E_HTTP: $(cat "$S26E_TMP")" 26
+S26E_TASK=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S26E_TMP" 2>/dev/null)
+[ -n "$S26E_TASK" ] || fail "Step 26e 无 task_id" 26
+
+S26E_HTTP=$(curl -s -o "$S26E_TMP" -w "%{http_code}" --max-time 20 \
+  -X POST "$API_BASE/api/acquisition/collect/report" \
+  -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
+  -d "{\"task_id\":\"$S26E_TASK\",\"terminal\":\"failed\",\"reason\":{\"error_code\":\"TOTALLY_UNKNOWN_CODE_XYZ\"}}")
+[ "$S26E_HTTP" = "200" ] || fail "Step 26e collect/report(非枚举error_code) expected 200, got $S26E_HTTP: $(cat "$S26E_TMP")" 26
+
+S26E_DB_CODE=$(psq "SELECT COALESCE(error_code,'<NULL>') FROM zenithjoy.acquisition_collect_tasks WHERE id='$S26E_TASK'")
+[ "$S26E_DB_CODE" = "UNKNOWN" ] || fail "Step 26e 非枚举 error_code 未被 normalize：DB='$S26E_DB_CODE' 期望 'UNKNOWN'（值域保护失效，白名单形同虚设）" 26
+ok "Step 26e ✅ 非枚举 error_code='TOTALLY_UNKNOWN_CODE_XYZ' → DB normalize 为 UNKNOWN"
+ok "Step 26 ✅ error_code 五分类上报链路全通（含落库正例+normalize反例）"
 
 # ───────────────────────────────────────────────────────────────────
 # Step 27：latest_reply 写入路径验证（FR-3）
@@ -1119,40 +1163,97 @@ ok "Step 27 ✅ latest_reply 增量写入路径全通"
 
 # ───────────────────────────────────────────────────────────────────
 # Step 28：dispatch 前二次检测 mock 离线场景（FR-4）
-# 真机段等价断言：将一个 burner 的 uia_online 设为 false（触发 offline 状态），
-# 验证 dispatch/run 后对应的 dm_assignments 变为 pending_dispatch 而非 dispatched。
+# 场景：assignment 在 build 阶段账号仍在线时排入 queued，dispatch/run 真正执行前
+# 账号才掉线（build→run 之间的 gap 期间常态）——服务端必须在真正发送前二次查 UIA
+# 在线状态，离线则回退 pending_dispatch（不是 limited，好让下一轮 buildAssignments
+# Step A/B 重新捡起来），而不是误标 dispatched（服务端以为发了，账号实际已掉线，
+# 私信静默丢失且无人知晓）。
+# 真机段等价断言：UIA 掉线检测本身是 Android 真机行为，本 smoke 用手动置位
+# uia_online=false 模拟；服务端二次检测+回退逻辑是纯服务端可测的核心行为。
+# 此前本 Step 只测 dispatch/build+dispatch/run 两次 HTTP 200（不崩溃），从未验证过
+# dm_assignments 真实落库状态——离线回退是否生效完全没被验证过。
 # TODO(android-evaluator-channel): 真机段（实际 UIA 掉线后 dispatch 回退）在真机 nightly 复跑。
 # ───────────────────────────────────────────────────────────────────
 echo "▶ Step 28: dispatch 前二次在线检测——离线账号回退 pending_dispatch（真机段等价断言）"
 S28_TMP=$(mktemp)
 
-# 28a：把 Step 6 的 BURNER_LABEL 设为 uia_online=false（模拟 UIA 掉线）
+# 28a：本轮专属新 lead（隔离本 tenant 其它 lead，防 dispatch/build 选中别的 lead
+# 导致后面断言对错行——同款隔离手法见 Step 22a2/22d）
+S28_HTTP=$(curl -s -o "$S28_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/collect/start" \
+  -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" \
+  -d '{"keywords":["p2-smoke-fr4-offline"]}')
+[ "$S28_HTTP" = "200" ] || fail "Step 28a collect/start expected 200, got $S28_HTTP: $(cat "$S28_TMP")" 28
+S28_TASK=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S28_TMP" 2>/dev/null)
+[ -n "$S28_TASK" ] || fail "Step 28a 无 task_id" 28
+
+S28_VIDEO="p2smokefr4${RND//-/}"
+S28_NICK="p2smokefr4nick${RND//-/}"
+S28_DOUYIN_ID="douyinfr4${RND//-/}"
+S28_HTTP=$(curl -s -o "$S28_TMP" -w "%{http_code}" --max-time 20 \
+  -X POST "$API_BASE/api/acquisition/collect/report" \
+  -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
+  -d "{\"task_id\":\"$S28_TASK\",\"video_id\":\"$S28_VIDEO\",\"commenters\":[{\"nickname\":\"$S28_NICK\",\"comment_text\":\"求联系方式\",\"grade\":\"高意向\",\"douyin_id\":\"$S28_DOUYIN_ID\"}]}")
+[ "$S28_HTTP" = "200" ] || fail "Step 28a collect/report expected 200, got $S28_HTTP: $(cat "$S28_TMP")" 28
+ok "Step 28a ✅ 本轮专属 lead 落库 douyin_id=$S28_DOUYIN_ID"
+
+# 28b：隔离本 tenant 其它 lead/残留 assignment，避免 dispatch/build 选错行
+psq "UPDATE zenithjoy.acquisition_leads SET outreach_eligible=false, updated_at=now()
+     WHERE tenant_id='$TENANT_ID' AND douyin_id IS DISTINCT FROM '$S28_DOUYIN_ID'" >/dev/null
+psq "UPDATE zenithjoy.dm_assignments SET status='cancelled', updated_at=now()
+     WHERE tenant_id='$TENANT_ID' AND status IN ('queued','pending_dispatch','limited')
+       AND lead_id NOT IN (SELECT id FROM zenithjoy.acquisition_leads
+                            WHERE tenant_id='$TENANT_ID' AND douyin_id='$S28_DOUYIN_ID')" >/dev/null
+ok "Step 28b ✅ 本轮派单隔离到本 lead（其它 lead/残留 assignment 清场）"
+
+# 28c：确保 agent 心跳新鲜——dispatchDue 有独立于 UIA 的 2 分钟心跳新鲜度闸（先于 FR-4
+# 二次检测执行），脚本跑到这里距 Step 11 的心跳可能已超 2 分钟，不补心跳会在心跳闸
+# 就被回退，走不到本 Step 真正要测的 FR-4 UIA 二次检测分支。
+curl -s -o /dev/null --max-time 15 \
+  -X POST "$API_BASE/api/agent/heartbeat" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $LICENSE_KEY" \
+  -d "{\"version\":\"2.0.99\",\"hostname\":\"p2-smoke-host\",\"os_type\":\"android\",\"agent_uuid\":\"$AGENT_PK\"}"
+ok "Step 28c ✅ 心跳刷新（保证走到 UIA 二次检测分支而非心跳新鲜度分支）"
+
+# 28d：build 时账号仍在线（BURNER_LABEL 尚未置离线）→ 建出 queued assignment
+S28_HTTP=$(curl -s -o "$S28_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/dispatch/build" \
+  -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" -d '{}')
+[ "$S28_HTTP" = "200" ] || fail "Step 28d dispatch/build expected 200, got $S28_HTTP: $(cat "$S28_TMP")" 28
+S28_ASSIGNED=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['assigned'])" "$S28_TMP" 2>/dev/null || echo 0)
+[ "$S28_ASSIGNED" -ge 1 ] 2>/dev/null || fail "Step 28d assigned=$S28_ASSIGNED，期望 >=1（本轮专属 lead 没被挑中排单）: $(cat "$S28_TMP")" 28
+ok "Step 28d ✅ dispatch/build assigned=$S28_ASSIGNED（build 时账号在线，正常排入 queued）"
+
+# 28e：build 完成后、真正 dispatch 前，账号掉线（模拟 gap 期间掉线的真实时序）
+sleep 2
 S28_HTTP=$(curl -s -o "$S28_TMP" -w "%{http_code}" --max-time 15 \
   -X POST "$API_BASE/api/agent/burner/uia-signal" \
   -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
   -d "{\"account_label\":\"$BURNER_LABEL\",\"uia_online\":false}")
-[ "$S28_HTTP" = "200" ] || fail "Step 28a uia-signal offline expected 200, got $S28_HTTP: $(cat "$S28_TMP")" 28
-
-# 28b：psql 确认 status=offline（uia_online=false 覆盖了 status）
+[ "$S28_HTTP" = "200" ] || fail "Step 28e uia-signal offline expected 200, got $S28_HTTP: $(cat "$S28_TMP")" 28
 S28_STATUS=$(psq "SELECT COALESCE(status,'<NULL>') FROM zenithjoy.agent_platform_sessions WHERE agent_id='$AGENT_PK' AND account_label='$BURNER_LABEL' AND platform='douyin' LIMIT 1")
-[ "$S28_STATUS" = "offline" ] || fail "Step 28b session.status='$S28_STATUS' 期望 'offline'（uia_online=false 应将 status 改为 offline）" 28
-ok "Step 28b ✅ uia_online=false → session.status=offline"
+[ "$S28_STATUS" = "offline" ] || fail "Step 28e session.status='$S28_STATUS' 期望 'offline'（uia_online=false 应将 status 改为 offline）" 28
+ok "Step 28e ✅ uia_online=false → session.status=offline"
 
-# 28c：触发 dispatch/run，验证 UIA 离线的账号对应的 assignment 回退为 pending_dispatch
-# 先 build 一个 assignment（基于 Step 27 产出的 lead），再 run dispatch
-S28_HTTP=$(curl -s -o "$S28_TMP" -w "%{http_code}" --max-time 15 \
-  -X POST "$API_BASE/api/acquisition/dispatch/build" \
-  -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" -d '{}')
-[ "$S28_HTTP" = "200" ] || fail "Step 28c dispatch/build expected 200, got $S28_HTTP: $(cat "$S28_TMP")" 28
-sleep 2
+# 28f：dispatch/run——服务端应在真正发送前二次查 UIA 状态，发现离线，回退 pending_dispatch
 S28_HTTP=$(curl -s -o "$S28_TMP" -w "%{http_code}" --max-time 15 \
   -X POST "$API_BASE/api/acquisition/dispatch/run" \
   -H "Content-Type: application/json" -H "X-Tenant-Id: $TENANT_ID" -d '{}')
-[ "$S28_HTTP" = "200" ] || fail "Step 28c dispatch/run expected 200, got $S28_HTTP: $(cat "$S28_TMP")" 28
-ok "Step 28c ✅ dispatch/run 返回 200（离线账号回退不崩溃）"
-ok "Step 28 ✅ dispatch 前二次检测离线回退路径验证通过（真机段等价断言：uia_online=false → status=offline → dispatch 回退 pending_dispatch）"
+[ "$S28_HTTP" = "200" ] || fail "Step 28f dispatch/run expected 200, got $S28_HTTP: $(cat "$S28_TMP")" 28
+ok "Step 28f ✅ dispatch/run 返回 200（离线账号回退不崩溃）"
 
-# 28d：恢复 BURNER_LABEL 为 online（避免影响后续步骤 Step 29）
+# 核心回归断言：本轮专属 lead 的 dm_assignment 真的被回退成 pending_dispatch，不是被
+# 误标成 dispatched（若误标 dispatched，服务端以为发出去了，实际账号已离线，私信
+# 静默丢失且无人知晓——这才是本 Step 标题声称要验证、此前从未真正验证过的行为）
+S28_ASSIGN_STATUS=$(psq "SELECT COALESCE(da.status,'<NULL>') FROM zenithjoy.dm_assignments da
+  JOIN zenithjoy.acquisition_leads l ON l.id = da.lead_id
+  WHERE l.tenant_id='$TENANT_ID' AND l.douyin_id='$S28_DOUYIN_ID'
+  ORDER BY da.updated_at DESC LIMIT 1")
+[ "$S28_ASSIGN_STATUS" = "pending_dispatch" ] || fail "Step 28f dm_assignments.status='$S28_ASSIGN_STATUS' 期望 'pending_dispatch'（FR-4 二次在线检测未生效：离线账号的 assignment 没有被正确回退，可能被误标 dispatched 导致私信静默丢失）" 28
+ok "Step 28f ✅ dm_assignments.status=pending_dispatch（FR-4 二次在线检测真实生效，离线账号回退不误标 dispatched）"
+ok "Step 28 ✅ dispatch 前二次检测离线回退路径验证通过（真机段等价断言：uia_online=false → status=offline → dispatch 真实回退 pending_dispatch，非仅测 HTTP 200）"
+
+# 28g：恢复 BURNER_LABEL 为 online（避免影响后续步骤 Step 29）
 curl -s -o "$S28_TMP" --max-time 15 \
   -X POST "$API_BASE/api/agent/burner/uia-signal" \
   -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
