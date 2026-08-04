@@ -92,6 +92,15 @@ jobs:
       - name: Install apps/api deps
         run: npm ci --workspace=apps/api
 
+      # 2026-08-04 修复（假绿灯审计）：golden-path-4-smoke.sh 的 Step 17c/17e 需要
+      # services/agent/node_modules 存在才能用 npx tsx 真跑 panel-event-bus proven-to-fire。
+      # 此前这条 workflow 从不显式装它，全靠字母序排在前面的兄弟脚本（如
+      # agent-core-self-upgrade-smoke.sh）顺手装上——那些脚本一改名/一挪走/一改安装逻辑，
+      # gp4 的 Step 17c/17e 就会红。显式装，去掉这层隐式耦合。
+      - name: Install services/agent deps (golden-path-4-smoke Step 17 depends on this)
+        run: npm ci --no-audit --no-fund
+        working-directory: services/agent
+
       - name: Create zenithjoy schema + pgcrypto
         run: |
           psql -h localhost -U cecelia -d cecelia -c "CREATE SCHEMA IF NOT EXISTS zenithjoy;"
