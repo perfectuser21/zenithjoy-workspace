@@ -1,0 +1,26 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "Fleet Worker 后端消费 task bundle 并产生机器可审计结论，无用户界面步骤",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "验证 Fleet Worker payload 与冻结 PR 目标绑定",
+      "scope": "使用真实 Runner task bundle、GitHub、git、product-map 与 attempt Postgres 验证三字段消费、失败分类及当前执行身份回执",
+      "dod": [
+        "[BEHAVIOR] 三个 payload 字段与冻结目标逐字一致",
+        "[BEHAVIOR] 缺失、篡改与依赖失败均 fail-closed",
+        "[ARTIFACT] 独立负例 oracle 与 TDD 测试存在"
+      ],
+      "files": [
+        "sprints/08050200-kernel-pr1581-fleet-validation-r35/contract-draft.md",
+        "sprints/08050200-kernel-pr1581-fleet-validation-r35/contract-dod.md",
+        "sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-payload-oracle.sh",
+        "sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-payload-contract.test.ts"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 60
+    }
+  ]
+}
