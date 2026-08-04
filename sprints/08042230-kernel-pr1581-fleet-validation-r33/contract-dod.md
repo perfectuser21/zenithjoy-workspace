@@ -50,6 +50,27 @@ target_environment: local_api
   留证: 两次 GitHub JSON 摘要与 product-map jq 输出
   Test: manual:bash -c 'for n in 1 2; do gh api repos/perfectuser21/zenithjoy-workspace/pulls/1581 | jq -e '"'"'.head.sha=="c305f6217da65bb69413c39e621b7e797e0fb189" and .base.sha=="676fed7de12023d355deac7849af8a525ae53f8d" and .head.repo.full_name=="perfectuser21/zenithjoy-workspace"'"'"' || exit 1; done; jq -e '"'"'.golden_paths[] | select(.line_id=="line02" and .id=="keyword_acquisition") | [.steps[] | select(.id=="step7")] | length==1'"'"' product-map/generated/product-map.json'
 
+- [ ] [BEHAVIOR] [L2] B-06: 格式合法但与 PR head 不一致的 target_head_sha 必须拒绝
+  动作: 传入 40 位小写 hex SHA，但其值与真实 PR #1581 head 不同。
+  预期观察: CLI 非零退出，JSON 为 ok=false 且 failure_class=target_mismatch。
+  等待预算: 0s
+  留证: mismatch-sha JSON stdout
+  Test: manual:bash -c 'd=$(mktemp -d); trap '"'"'rm -rf "$d"'"'"' EXIT; gh api repos/perfectuser21/zenithjoy-workspace/pulls/1581 >"$d/pr.json"; node sprints/08042230-kernel-pr1581-fleet-validation-r33/validate-fleet-payload.mjs --payload-json '"'"'{"base_repo":"perfectuser21/zenithjoy-workspace","base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","gp_anchor":"line02/keyword_acquisition#step7"}'"'"' --pr-json "$d/pr.json" --product-map product-map/generated/product-map.json >"$d/out.json" && exit 1; jq -e '"'"'.ok==false and .failure_class=="target_mismatch"'"'"' "$d/out.json"'
+
+- [ ] [BEHAVIOR] [L2] B-07: 缺失 gp_anchor 必须拒绝
+  动作: 删除 payload 的 gp_anchor 后调用真实 CLI。
+  预期观察: CLI 非零退出，JSON 为 ok=false 且 failure_class=payload_invalid。
+  等待预算: 0s
+  留证: missing-anchor JSON stdout
+  Test: manual:bash -c 'f=$(mktemp); node sprints/08042230-kernel-pr1581-fleet-validation-r33/validate-fleet-payload.mjs --payload-json '"'"'{"base_repo":"perfectuser21/zenithjoy-workspace","base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"c305f6217da65bb69413c39e621b7e797e0fb189"}'"'"' --offline >"$f" && exit 1; jq -e '"'"'.ok==false and .failure_class=="payload_invalid"'"'"' "$f"; rm -f "$f"'
+
+- [ ] [BEHAVIOR] [L2] B-08: GitHub 依赖不可用时环境失败且不误报通过 [接缝×2]
+  动作: 用不存在的 PR 证据路径模拟 GitHub 证据获取失败，连续执行两次。
+  预期观察: 两次均非零退出，JSON 的 ok=false 且 failure_class=environment_failure。
+  等待预算: 5s
+  留证: 两次 dependency-failure JSON stdout
+  Test: manual:bash -c 'd=$(mktemp -d); trap '"'"'rm -rf "$d"'"'"' EXIT; p='"'"'{"base_repo":"perfectuser21/zenithjoy-workspace","base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"c305f6217da65bb69413c39e621b7e797e0fb189","gp_anchor":"line02/keyword_acquisition#step7"}'"'"'; for n in 1 2; do node sprints/08042230-kernel-pr1581-fleet-validation-r33/validate-fleet-payload.mjs --payload-json "$p" --pr-json "$d/unavailable-pr.json" --product-map product-map/generated/product-map.json >"$d/out-$n.json" && exit 1; jq -e '"'"'.ok==false and .failure_class=="environment_failure"'"'"' "$d/out-$n.json" || exit 1; done'
+
 ## Invariant 映射
 
 - INV-01 本机常驻服务/LaunchAgent：N/A，本 sprint 不安装服务。

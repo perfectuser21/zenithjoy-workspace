@@ -10,6 +10,9 @@
       "dod": [
         "[BEHAVIOR] 正确 payload 输出字段原样绑定且 failure_class=none 的 receipt",
         "[BEHAVIOR] 缺失/错误 repo、非完整 SHA、错误 anchor 均非零退出",
+        "[BEHAVIOR] 格式合法但与 PR head 不一致的 SHA 以 target_mismatch 拒绝",
+        "[BEHAVIOR] 缺失 gp_anchor 以 payload_invalid 拒绝",
+        "[BEHAVIOR] GitHub 证据依赖不可用时以 environment_failure 失败，不误报通过",
         "[BEHAVIOR] Final E2E 真调 GitHub 两次并精确解析 product-map Step 7",
         "[ARTIFACT] sprints/08042230-kernel-pr1581-fleet-validation-r33/validate-fleet-payload.mjs"
       ],

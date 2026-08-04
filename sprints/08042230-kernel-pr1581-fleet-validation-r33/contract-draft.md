@@ -1,10 +1,11 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 ## Notes
 
 - contract-gate: skipped (file not found, third-party repo)
 - PRD 未定义 HTTP 端点；本合同只定义 Fleet payload 校验 CLI 与审计回执，不改变 PR #1581 业务实现或 Harness 调度。
 - GAN authoring identity 仅属本轮作者 provenance；Evaluator/Judge 身份均由 Runner 的 `HARNESS_*` 与 `CAPABILITY_SNAPSHOT_ID` 运行时注入，合同不固化角色 UUID。
+- Round 1 案卷 reviewer 行的 `blockers[]` 为空；但 `review_feedback` 明确指出三个缺口，本轮已补齐“合法格式但错误 target SHA”、“缺失 GP anchor”与“GitHub 依赖不可用”的可执行拒绝验收。
 
 ## GP-Anchor
 
@@ -133,11 +134,16 @@ jq -e '.ok==true and .base_repo=="perfectuser21/zenithjoy-workspace" and .base_s
 ### Step 4: 篡改或依赖故障时 fail-closed
 **来源**: `[FROM_PRD]` — PRD「边界情况」四项。
 
-**可观测行为**: 缺失/错 repo/非完整 SHA/错锚均 exit 非零；GitHub/SSOT 故障分类为环境失败，不产生 `ok=true`。
+**可观测行为**: 缺失/错 repo/非完整 SHA/格式合法但与 PR head 不一致的 SHA/缺失或错误锚点均 exit 非零；GitHub/SSOT 故障分类为环境失败，不产生 `ok=true`。
 
 **验证命令**:
 ```bash
-node sprints/08042230-kernel-pr1581-fleet-validation-r33/validate-fleet-payload.mjs --payload-json '{"base_repo":"perfectuser21/zenithjoy-workspace","base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"HEAD","gp_anchor":"line02/keyword_acquisition#step7"}' --offline >/tmp/fleet-invalid-sha.json 2>&1 && exit 1 || jq -e '.ok==false and .failure_class=="payload_invalid"' /tmp/fleet-invalid-sha.json
+EVIDENCE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/fleet-r33-negative.XXXXXX")
+trap 'rm -rf "$EVIDENCE_DIR"' EXIT
+gh api repos/perfectuser21/zenithjoy-workspace/pulls/1581 >"$EVIDENCE_DIR/pr.json"
+for bad in '{"base_repo":"perfectuser21/zenithjoy-workspace","base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","gp_anchor":"line02/keyword_acquisition#step7"}' '{"base_repo":"perfectuser21/zenithjoy-workspace","base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"c305f6217da65bb69413c39e621b7e797e0fb189"}'; do if node sprints/08042230-kernel-pr1581-fleet-validation-r33/validate-fleet-payload.mjs --payload-json "$bad" --pr-json "$EVIDENCE_DIR/pr.json" --product-map product-map/generated/product-map.json >"$EVIDENCE_DIR/rejected.json"; then exit 1; fi; jq -e '.ok==false and (.failure_class=="payload_invalid" or .failure_class=="target_mismatch")' "$EVIDENCE_DIR/rejected.json" >/dev/null; done
+if node sprints/08042230-kernel-pr1581-fleet-validation-r33/validate-fleet-payload.mjs --payload-json '{"base_repo":"perfectuser21/zenithjoy-workspace","base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"c305f6217da65bb69413c39e621b7e797e0fb189","gp_anchor":"line02/keyword_acquisition#step7"}' --pr-json "$EVIDENCE_DIR/unavailable-pr.json" --product-map product-map/generated/product-map.json >"$EVIDENCE_DIR/dependency.json"; then exit 1; fi
+jq -e '.ok==false and .failure_class=="environment_failure"' "$EVIDENCE_DIR/dependency.json"
 ```
 
 **硬阈值**: 被篡改输入必须非零退出，失败 JSON 不含成功结论且分类精确；命令 exit 0 表示负向断言成立。
@@ -169,7 +175,9 @@ for pass in 1 2; do gh api repos/perfectuser21/zenithjoy-workspace/pulls/1581 >"
 FLEET_RECEIPT="$EVIDENCE_DIR/receipt.json"
 node "$VALIDATOR" --payload-json "$PAYLOAD" --pr-json "$EVIDENCE_DIR/pr-2.json" --product-map product-map/generated/product-map.json --provenance-json "$(jq -nc --arg attempt "$HARNESS_ATTEMPT_ID" --arg provider "$HARNESS_PROVIDER" --arg account "$HARNESS_ACCOUNT" --arg machine "$HARNESS_MACHINE" --arg model "$HARNESS_MODEL" --arg digest "$HARNESS_RUNNER_DIGEST" --arg snapshot "$CAPABILITY_SNAPSHOT_ID" '{attempt_id:$attempt,provider:$provider,account:$account,machine:$machine,model:$model,runner_digest:$digest,capability_snapshot_id:$snapshot}')" >"$FLEET_RECEIPT"
 jq -e '.ok==true and .base_repo=="perfectuser21/zenithjoy-workspace" and .base_sha=="676fed7de12023d355deac7849af8a525ae53f8d" and .target_head_sha=="c305f6217da65bb69413c39e621b7e797e0fb189" and .gp_anchor=="line02/keyword_acquisition#step7" and .failure_class=="none" and (.provenance.attempt_id|length>0) and (.provenance.capability_snapshot_id|length>0)' "$FLEET_RECEIPT"
-for bad in '{"base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"c305f6217da65bb69413c39e621b7e797e0fb189","gp_anchor":"line02/keyword_acquisition#step7"}' '{"base_repo":"perfectuser21/other","base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"c305f6217da65bb69413c39e621b7e797e0fb189","gp_anchor":"line02/keyword_acquisition#step7"}' '{"base_repo":"perfectuser21/zenithjoy-workspace","base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"HEAD","gp_anchor":"line02/keyword_acquisition#step7"}' '{"base_repo":"perfectuser21/zenithjoy-workspace","base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"c305f6217da65bb69413c39e621b7e797e0fb189","gp_anchor":"line02/keyword_acquisition#step6"}'; do if node "$VALIDATOR" --payload-json "$bad" --pr-json "$EVIDENCE_DIR/pr-2.json" --product-map product-map/generated/product-map.json >"$EVIDENCE_DIR/rejected.json"; then echo 'FAIL: 篡改 payload 被接受'; exit 1; fi; jq -e '.ok==false and .failure_class!="none"' "$EVIDENCE_DIR/rejected.json" >/dev/null; done
+for bad in '{"base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"c305f6217da65bb69413c39e621b7e797e0fb189","gp_anchor":"line02/keyword_acquisition#step7"}' '{"base_repo":"perfectuser21/other","base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"c305f6217da65bb69413c39e621b7e797e0fb189","gp_anchor":"line02/keyword_acquisition#step7"}' '{"base_repo":"perfectuser21/zenithjoy-workspace","base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"HEAD","gp_anchor":"line02/keyword_acquisition#step7"}' '{"base_repo":"perfectuser21/zenithjoy-workspace","base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","gp_anchor":"line02/keyword_acquisition#step7"}' '{"base_repo":"perfectuser21/zenithjoy-workspace","base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"c305f6217da65bb69413c39e621b7e797e0fb189"}' '{"base_repo":"perfectuser21/zenithjoy-workspace","base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"c305f6217da65bb69413c39e621b7e797e0fb189","gp_anchor":"line02/keyword_acquisition#step6"}'; do if node "$VALIDATOR" --payload-json "$bad" --pr-json "$EVIDENCE_DIR/pr-2.json" --product-map product-map/generated/product-map.json >"$EVIDENCE_DIR/rejected.json"; then echo 'FAIL: 篡改 payload 被接受'; exit 1; fi; jq -e '.ok==false and .failure_class!="none"' "$EVIDENCE_DIR/rejected.json" >/dev/null; done
+if node "$VALIDATOR" --payload-json "$PAYLOAD" --pr-json "$EVIDENCE_DIR/github-unavailable.json" --product-map product-map/generated/product-map.json >"$EVIDENCE_DIR/dependency-failure.json"; then echo 'FAIL: GitHub 依赖不可用被误报成功'; exit 1; fi
+jq -e '.ok==false and .failure_class=="environment_failure"' "$EVIDENCE_DIR/dependency-failure.json" >/dev/null
 sha256sum "$FLEET_RECEIPT" | tee "$SPRINT_DIR/evaluator-evidence.sha256"
 echo 'Golden Path 验证通过'
 ```
@@ -188,4 +196,4 @@ echo 'Golden Path 验证通过'
 
 | 功能 | Test File | BEHAVIOR 覆盖 | 预期红证据 |
 |---|---|---|---|
-| payload 权威输入校验 | `sprints/08042230-kernel-pr1581-fleet-validation-r33/tests/fleet-payload-validation.test.ts` | 正确 payload 原样绑定；缺失 base_repo；不是完整 SHA；不能唯一解析到 Step 7 | `validate-fleet-payload.mjs` 尚不存在，4 tests failed |
+| payload 权威输入校验 | `sprints/08042230-kernel-pr1581-fleet-validation-r33/tests/fleet-payload-validation.test.ts` | 正确 payload 原样绑定；缺失 base_repo；不是完整 SHA；格式合法但与 PR head 不一致；缺失 gp_anchor；不能唯一解析到 Step 7；GitHub 依赖不可用 | `validate-fleet-payload.mjs` 尚不存在，7 tests failed |
