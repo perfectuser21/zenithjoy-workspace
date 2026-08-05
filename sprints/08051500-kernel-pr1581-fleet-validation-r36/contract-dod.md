@@ -19,7 +19,7 @@ target_environment: local_api
 
 - [ ] [BEHAVIOR] [L2] B-01: 正确 payload 经真实 Fleet Worker 绑定同一目标
   动作: 通过 Brain 生产 task 入口派发一次正确 Harness Initiative
-  预期观察: task completed，execution surface 为 Fleet，result/evidence 同时含 repo/head/anchor 与当前 Runner provenance
+  预期观察: task completed，execution surface 为 Fleet，payload 与 result/evidence 同时精确含 repo/base_sha/head/anchor，冻结 base_sha 为 676fed7de12023d355deac7849af8a525ae53f8d，且 evidence 含 Fleet Runner provenance
   等待预算: 7200s
   留证: Brain task JSON 与 SHA-256
   Test: manual:bash -c 'FLEET_TERMINAL_TIMEOUT_MS=7200000 npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "正确 payload 经真实 Fleet Worker 绑定目标"'
@@ -44,6 +44,13 @@ target_environment: local_api
   等待预算: 7200s
   留证: Brain task 失败 JSON
   Test: manual:bash -c 'FLEET_TERMINAL_TIMEOUT_MS=7200000 npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "缺失 base_repo fail-closed"'
+
+- [ ] [BEHAVIOR] [L2] B-03B: 错误冻结 base_sha fail-closed
+  动作: 将另一个格式有效的完整 commit SHA 作为 base_sha，通过同一生产入口派发
+  预期观察: 真实 Fleet task 为 failed/validation_input_invalid，错误点名 base_sha，证明 Worker 实际比较冻结基线而非仅保存或回显 payload
+  等待预算: 7200s
+  留证: Brain task 失败 JSON
+  Test: manual:bash -c 'FLEET_TERMINAL_TIMEOUT_MS=7200000 npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "错误冻结 base_sha fail-closed"'
 
 - [ ] [BEHAVIOR] [L2] B-04: 畸形 SHA fail-closed
   动作: 传 target_head_sha=HEAD

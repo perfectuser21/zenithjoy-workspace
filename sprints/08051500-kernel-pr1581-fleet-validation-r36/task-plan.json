@@ -8,8 +8,8 @@
       "title": "执行 Fleet Worker 生产链 payload 验证",
       "scope": "经生产 Brain 派发验证正确 payload、错误 payload fail-closed，以及真实任务自然依赖失败时的环境分类；不修改 PR #1581 业务实现或 Harness 调度",
       "dod": [
-        "[BEHAVIOR] 正确 payload 的真实 Fleet 结论绑定 repo/head/anchor",
-        "[BEHAVIOR] 错误或缺失 base_repo、错误或缺失 SHA、错误或缺失 anchor 全部 fail-closed",
+        "[BEHAVIOR] 正确 payload 的真实 Fleet 结论绑定 repo/base_sha/head/anchor，且 evidence 精确回显冻结 base_sha",
+        "[BEHAVIOR] 错误或缺失 base_repo、错误冻结 base_sha、错误或缺失 target SHA、错误或缺失 anchor 全部 fail-closed",
         "[BEHAVIOR] 正确 payload 的真实 Fleet task 依赖终态可执行验收：成功含 Fleet 自身 identity，失败必须为 environment_failure 且不得业务通过；Evaluator receipt 以摘要串联而不混绑身份",
         "[ARTIFACT] 合同、DoD、真实失败测试及 Red 证据"
       ],

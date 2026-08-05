@@ -15,7 +15,7 @@ function payload(overrides: Record<string, unknown> = {}) {
 function expectFleetEvidence(task: Record<string, any>) {
   const result = task.result ?? task.metadata ?? {};
   const evidence = JSON.stringify(result);
-  for (const value of ['perfectuser21/zenithjoy-workspace', 'c305f6217da65bb69413c39e621b7e797e0fb189', 'line02/keyword_acquisition#step7']) expect(evidence).toContain(value);
+  for (const value of ['perfectuser21/zenithjoy-workspace', '676fed7de12023d355deac7849af8a525ae53f8d', 'c305f6217da65bb69413c39e621b7e797e0fb189', 'line02/keyword_acquisition#step7']) expect(evidence).toContain(value);
   const identity = result.validation_identity ?? result.provenance;
   expect(identity).toEqual(expect.objectContaining({ attempt_id: expect.any(String), capability_snapshot_id: expect.any(String) }));
   expect(identity.attempt_id.length).toBeGreaterThan(0);
@@ -64,6 +64,10 @@ describe('Fleet Worker production chain [BEHAVIOR]', () => {
   it('缺失 base_repo fail-closed', async () => {
     const body = payload(); delete body.payload.base_repo;
     await expectFailed(body, 'base_repo');
+  }, timeout);
+
+  it('错误冻结 base_sha fail-closed', async () => {
+    await expectFailed(payload({ base_sha: 'c305f6217da65bb69413c39e621b7e797e0fb189' }), 'base_sha');
   }, timeout);
 
   it('畸形 SHA fail-closed', async () => {
