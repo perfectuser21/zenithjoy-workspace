@@ -1,11 +1,11 @@
-# Sprint Contract Draft (Round 10)
+# Sprint Contract Draft (Round 11)
 
 ## Notes
 
 - contract-gate: skipped (file not found, third-party repo)
-- R9-1 closure：Red 命令的外层预算改为完整 `7200s`，并提交解释器实际启动后的真实非零 exit code 与日志；不再以 75 秒截断冒充 TDD Red。
-- R9-2 closure：E2E 在使用 Fleet 注入的空库前，先运行仓库真实 `apps/api` migration，并机检 `zenithjoy.schema_migrations`；测试依赖预检复用同一 bootstrap。
-- R9-3 closure：正确 payload 只派发一次；删除 `[接缝×2]` 和“双派发”要求，使 B-01 描述、测试体与 PRD 单次可审计验证一致。
+- R10-1 closure：删除“完整 7200 秒自然收口”的虚假声明；Red 记录现在逐字保留本轮真实命令、解释器启动事实、执行中断事实，并明确该证据尚不能关闭业务 RED。7200 秒是 Evaluator 的单条等待预算，合同不再把短时中断写成真实非零 verdict。
+- R10-2 closure：依赖失败 oracle 移入真实 Fleet task 结果判定：正确 payload 若未 completed，只接受 task 自身返回 `environment_failure` 且点名 `github` 或 `postgres`；删除仅靠测试进程 preflight/exit 75 代替 Worker 结果的断言。
+- R10-3 closure：B-01、E2E 与 Red 记录统一为“7200 秒内真实终态”；未取得终态时一律 FAIL，不再同时声称已自然收口和被提前中断。
 - validation identity 仅在执行时从 `HARNESS_*` 与 `CAPABILITY_SNAPSHOT_ID` late-bind。
 
 ## GP-Anchor
@@ -78,7 +78,7 @@ DoD 必须逐字段复用该 shape，通过 `POST /api/brain/tasks` 进入真实
 
 ## 未覆盖真实链路清单
 
-- 依赖故障不主动破坏共享 GitHub/Postgres；E2E 真实预检两项依赖，失败时必须以 exit 75 和 `ENVIRONMENT_FAILURE:<dependency>` 留证。生产 Worker 内部故障分类仍须在真实故障时复核；依赖健康时该内部分类为 `logic-done-pending`。
+- 不主动破坏共享 GitHub/Postgres。依赖健康时无法安全制造真实故障，故障注入仍为 `logic-done-pending`；但 E2E 对真实 Fleet task 的任何自然依赖失败强制校验 `environment_failure` 与依赖名，禁止用本地 preflight 结果冒充 Worker evidence。
 
 ## 接缝清单
 
@@ -113,11 +113,11 @@ DoD 必须逐字段复用该 shape，通过 `POST /api/brain/tasks` 进入真实
 ### Step 3: 生产 evidence 绑定同一目标
 **来源**: `[FROM_PRD]` — Golden Path 第 3 项与 NFR 可观测要求。
 
-**可观测行为**: 真实 task completed，result/evidence 同时含 repo/head/anchor，且当前 Runner 身份 late-bound。
+**可观测行为**: 真实 task completed 时 result/evidence 同时含 repo/head/anchor 且当前 Runner 身份 late-bound；若真实 GitHub/Postgres 在执行中不可用，task 必须 failed/environment_failure 并点名依赖，绝不能产生业务成功。
 
 **验证命令**: `curl -sf localhost:5221/api/brain/tasks/$FLEET_TASK_ID | jq -e --arg a "$HARNESS_ATTEMPT_ID" --arg c "$CAPABILITY_SNAPSHOT_ID" '.status=="completed" and ((.result//.metadata//{})|tostring|contains("perfectuser21/zenithjoy-workspace") and contains("c305f6217da65bb69413c39e621b7e797e0fb189") and contains("line02/keyword_acquisition#step7")) and ((.result//.metadata//{})|tostring|contains($a)) and ((.result//.metadata//{})|tostring|contains($c))'`
 
-**硬阈值**: 生产 task/result/evidence 同目标且当前执行身份匹配。
+**硬阈值**: 7200 秒内出现真实终态；成功则 task/result/evidence 同目标且当前执行身份匹配，依赖失败则 `failed/environment_failure` 且错误点名 `github|postgres`。
 
 ### Step 4: 所有字段错误与依赖失败 fail-closed
 **来源**: `[FROM_PRD]` — 边界情况全部四项。
@@ -126,7 +126,7 @@ DoD 必须逐字段复用该 shape，通过 `POST /api/brain/tasks` 进入真实
 
 **验证命令**: `bash -c 'for SPEC in ${FLEET_NEGATIVE_TASK_SPECS:?}; do ID=${SPEC%%:*}; FIELD=${SPEC#*:}; curl -sf localhost:5221/api/brain/tasks/$ID | jq -e --arg field "$FIELD" '\''.status=="failed" and .failure_class=="validation_input_invalid" and ((.error_message//"")|ascii_downcase|contains($field))'\''; done'`
 
-**硬阈值**: 八种字段变异全部 `failed/validation_input_invalid` 且错误点名字段；依赖预检失败必须 exit 75 并输出 `ENVIRONMENT_FAILURE`，不得标业务通过。
+**硬阈值**: 七种字段变异全部 `failed/validation_input_invalid` 且错误点名字段；真实 Fleet task 遇依赖失败必须 `failed/environment_failure` 并点名依赖，不得标业务通过。
 
 ## E2E 验收
 
@@ -152,7 +152,14 @@ psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc "SELECT to_regclass('zenithjoy.schema_mig
 git rev-parse --verify 'c305f6217da65bb69413c39e621b7e797e0fb189^{commit}' | grep -qx c305f6217da65bb69413c39e621b7e797e0fb189
 jq -e '[.golden_paths[]|select(.line_id=="line02" and .id=="keyword_acquisition")|.steps[]|select(.id=="step7")]|length==1' product-map/generated/product-map.json
 GOOD=$(make_payload perfectuser21/zenithjoy-workspace c305f6217da65bb69413c39e621b7e797e0fb189 line02/keyword_acquisition#step7)
-ID=$(submit "$GOOD"); wait_terminal "$ID" "$D/good.json"; jq -e --arg a "$HARNESS_ATTEMPT_ID" --arg c "$CAPABILITY_SNAPSHOT_ID" '.status=="completed" and .payload.base_repo=="perfectuser21/zenithjoy-workspace" and .payload.target_head_sha=="c305f6217da65bb69413c39e621b7e797e0fb189" and .payload.gp_anchor=="line02/keyword_acquisition#step7" and ((.execution_surface//.executor//"")|ascii_downcase|contains("fleet")) and ((.result//.metadata//{})|tostring|contains("c305f6217da65bb69413c39e621b7e797e0fb189") and contains("line02/keyword_acquisition#step7") and contains($a) and contains($c))' "$D/good.json"
+ID=$(submit "$GOOD"); wait_terminal "$ID" "$D/good.json"
+if jq -e '.status=="completed"' "$D/good.json" >/dev/null; then
+  jq -e --arg a "$HARNESS_ATTEMPT_ID" --arg c "$CAPABILITY_SNAPSHOT_ID" '.payload.base_repo=="perfectuser21/zenithjoy-workspace" and .payload.target_head_sha=="c305f6217da65bb69413c39e621b7e797e0fb189" and .payload.gp_anchor=="line02/keyword_acquisition#step7" and ((.execution_surface//.executor//"")|ascii_downcase|contains("fleet")) and ((.result//.metadata//{})|tostring|contains("c305f6217da65bb69413c39e621b7e797e0fb189") and contains("line02/keyword_acquisition#step7") and contains($a) and contains($c))' "$D/good.json"
+else
+  jq -e '.status=="failed" and .failure_class=="environment_failure" and ((.error_message//"")|ascii_downcase|test("github|postgres"))' "$D/good.json"
+  echo 'ENVIRONMENT_FAILURE:真实 Fleet task 未产生业务通过' >&2
+  exit 75
+fi
 negative() { local name="$1" field="$2" json="$3"; local id; id=$(submit "$json"); wait_terminal "$id" "$D/$name.json"; jq -e --arg field "$field" '.status=="failed" and .failure_class=="validation_input_invalid" and ((.error_message//"")|ascii_downcase|contains($field))' "$D/$name.json"; }
 negative wrong_repo base_repo "$(make_payload wrong/repo c305f6217da65bb69413c39e621b7e797e0fb189 line02/keyword_acquisition#step7)"
 negative malformed_head target_head_sha "$(make_payload perfectuser21/zenithjoy-workspace HEAD line02/keyword_acquisition#step7)"

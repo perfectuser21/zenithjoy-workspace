@@ -12,8 +12,8 @@ target_environment: local_api
 - [ ] [ARTIFACT] 合同不存在独立 verifier/伪 receipt 实现
   Test: bash -c 'test ! -e sprints/08051500-kernel-pr1581-fleet-validation-r36/verify-fleet-payload.mjs'
 
-- [ ] [ARTIFACT] 冻结基线真实 RED 证据使用完整 7200 秒预算并记录解释器、真实非零 exit code 与日志
-  Test: bash -c 'grep -q "command: timeout 7200s npx vitest run" sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log && grep -Eq "exit_code: ([1-9]|[1-9][0-9]+)" sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log && grep -q "result: RED" sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log'
+- [ ] [ARTIFACT] 冻结基线 Red 记录不得把提前中断伪装成完整 7200 秒 verdict
+  Test: bash -c 'grep -q "command: timeout 7200s npx vitest run" sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log && grep -q "terminal_verdict: unavailable" sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log && grep -q "result: INCOMPLETE_RED_EVIDENCE" sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log'
 
 ## BEHAVIOR 条目
 
@@ -59,12 +59,12 @@ target_environment: local_api
   留证: 两份 Brain task 失败 JSON
   Test: manual:bash -c 'npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "缺失或不可解析锚点 fail-closed"'
 
-- [ ] [BEHAVIOR] [L2] B-07: GitHub 与 Postgres 依赖预检失败不误报业务通过 [接缝×2]
-  动作: 真实请求 PR #1581 GitHub API；对 Runner 注入的空 DB_URL 运行仓库真实 migration 并机检 schema_migrations
-  预期观察: GitHub 成功且空库 schema 自举成功才继续；两类故障均为 ENVIRONMENT_FAILURE/exitCode=75
+- [ ] [BEHAVIOR] [L2] B-07: GitHub 与 Postgres 依赖失败由真实 Fleet task 分类 [接缝×2]
+  动作: 派发正确 payload 并读取真实 Fleet task 终态；不以测试进程预检结果替代 Worker result
+  预期观察: completed 时 evidence 完整；若执行中依赖自然失败，则 task 为 failed/environment_failure 且点名 github 或 postgres，绝不业务通过
   等待预算: 30s
   留证: GitHub 响应摘要、psql exit code、依赖失败分类
-  Test: manual:bash -c 'npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "GitHub 与 Postgres 依赖预检"'
+  Test: manual:bash -c 'npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "真实 Fleet task 的依赖失败分类"'
 
 ## Invariant 映射
 

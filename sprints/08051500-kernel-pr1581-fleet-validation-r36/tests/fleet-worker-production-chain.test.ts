@@ -1,15 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 
 const brain = process.env.BRAIN ?? 'http://127.0.0.1:5221';
 const timeout = 7_200_000;
-
-class EnvironmentFailure extends Error {
-  readonly exitCode = 75;
-  constructor(readonly dependency: 'github' | 'postgres', detail: string) {
-    super(`ENVIRONMENT_FAILURE:${dependency} ${detail}`);
-  }
-}
 
 function curlJson(args: string[]) {
   return JSON.parse(execFileSync('curl', ['-sfS', ...args], { encoding: 'utf8' }));
@@ -38,16 +31,6 @@ async function expectFailed(body: object, field: string) {
   expect(task.status).toBe('failed');
   expect(task.failure_class).toBe('validation_input_invalid');
   expect(String(task.error_message ?? '').toLowerCase()).toContain(field);
-}
-
-function preflight(ghRepo = 'repos/perfectuser21/zenithjoy-workspace/pulls/1581', dbUrl = process.env.DB_URL) {
-  const gh = spawnSync('gh', ['api', ghRepo], { encoding: 'utf8' });
-  if (gh.status !== 0) throw new EnvironmentFailure('github', gh.stderr);
-  if (!dbUrl) throw new EnvironmentFailure('postgres', 'DB_URL missing');
-  const migration = spawnSync('npm', ['--prefix', 'apps/api', 'run', 'migrate'], { encoding: 'utf8', env: { ...process.env, DATABASE_URL: dbUrl } });
-  if (migration.status !== 0) throw new EnvironmentFailure('postgres', migration.stderr || migration.stdout);
-  const pg = spawnSync('psql', [dbUrl, '-v', 'ON_ERROR_STOP=1', '-tAc', "SELECT to_regclass('zenithjoy.schema_migrations') IS NOT NULL"], { encoding: 'utf8' });
-  if (pg.status !== 0 || pg.stdout.trim() !== 't') throw new EnvironmentFailure('postgres', pg.stderr || pg.stdout);
 }
 
 describe('Fleet Worker production chain [BEHAVIOR]', () => {
@@ -84,11 +67,14 @@ describe('Fleet Worker production chain [BEHAVIOR]', () => {
     await expectFailed(payload({ gp_anchor: 'line02/keyword_acquisition#step999' }), 'gp_anchor');
   }, timeout);
 
-  it('GitHub 与 Postgres 依赖预检', async () => {
-    preflight();
-    expect(() => preflight('repos/perfectuser21/does-not-exist/pulls/1581', process.env.DB_URL)).toThrow(/ENVIRONMENT_FAILURE:github/);
-    try { preflight('repos/perfectuser21/zenithjoy-workspace/pulls/1581', 'postgresql://127.0.0.1:1/unavailable?connect_timeout=1'); }
-    catch (error) { expect(error).toMatchObject({ dependency: 'postgres', exitCode: 75 }); return; }
-    throw new Error('预期 Postgres 依赖预检以 environment failure/75 失败');
-  }, 30_000);
+  it('真实 Fleet task 的依赖失败分类', async () => {
+    const task = await terminal(submit(payload()));
+    if (task.status === 'completed') {
+      expect(JSON.stringify(task.result ?? task.metadata ?? {})).toContain('c305f6217da65bb69413c39e621b7e797e0fb189');
+      return;
+    }
+    expect(task.status).toBe('failed');
+    expect(task.failure_class).toBe('environment_failure');
+    expect(String(task.error_message ?? '').toLowerCase()).toMatch(/github|postgres/);
+  }, timeout);
 });

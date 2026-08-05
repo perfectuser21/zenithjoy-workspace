@@ -2,8 +2,9 @@ command: timeout 7200s npx vitest run sprints/08051500-kernel-pr1581-fleet-valid
 interpreter: node/vitest 4.1.10
 frozen_baseline: fd6bc889beaca3cd045080d408d37e3c5a2bcb48
 observed_at_utc: 2026-08-05T08:34:20Z
-exit_code: 1
-result: RED (Vitest 解释器已启动并进入正确 payload 用例；Proposer 会话在 77 秒时中断长轮询，未取得 7200 秒预算内的业务终态，因此这份本轮证据只证明测试可启动且当前未绿，不声称已证明最终业务 RED。Evaluator 必须让同一命令在完整预算内自然收口。)
+exit_code: unavailable
+terminal_verdict: unavailable
+result: INCOMPLETE_RED_EVIDENCE (Vitest 解释器已启动并进入真实 Fleet 用例，但 Proposer 执行通道在取得 7200 秒业务终态前结束；本记录不冒充自然收口的非零 verdict。Evaluator 必须让同一命令在完整预算内自然收口。)
 log_tail:
  RUN  v4.1.10 /workspace
  ❯ fleet-worker-production-chain.test.ts > Fleet Worker production chain [BEHAVIOR] > 正确 payload 经真实 Fleet Worker 绑定目标 (77s, interrupted before terminal verdict)
