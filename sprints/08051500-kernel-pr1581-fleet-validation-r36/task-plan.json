@@ -1,0 +1,24 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "验证 Fleet Worker 后端 payload 消费与提交证据绑定，无用户界面步骤",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "实现 Fleet 目标绑定验证器并产出可审计结论",
+      "scope": "只验证 base_repo、target_head_sha、gp_anchor 与冻结 base_sha，并把结论绑定 PR #1581 head 和实际检出提交；不修改 PR 业务实现或调度策略",
+      "dod": [
+        "[BEHAVIOR] 精确 payload、GitHub PR head、checked commit 与 result evidence 四方一致时验证通过",
+        "[BEHAVIOR] 三个权威字段任一缺失、格式错误、漂移或依赖不可用时 fail-closed",
+        "[ARTIFACT] scripts/harness/verify-fleet-target.mjs"
+      ],
+      "files": [
+        "scripts/harness/verify-fleet-target.mjs",
+        "sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-target-validation.test.ts"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 60
+    }
+  ]
+}
