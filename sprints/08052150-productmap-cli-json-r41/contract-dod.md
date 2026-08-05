@@ -26,14 +26,14 @@ journey_type: autonomous
   预期观察: stdout 是 ok=false 的单 JSON，errors 含 digest 原因，被测 CLI 退出非 0
   等待预算: 0s
   留证: node:test TAP 输出
-  Test: manual:bash -c 'node --test sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js --test-name-pattern="漂移失败时"'
+  Test: manual:bash -c 'node --test --test-name-pattern="漂移失败时" sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js'
 
 - [ ] [BEHAVIOR] [L2] B-03: 投影缺失或损坏不泄漏非 JSON stdout
   动作: 分别在隔离副本删除与破坏 `product-map.json` 后执行 `check --json`
   预期观察: 两次 stdout 均可解析，ok=false、errors 为非空字符串数组，退出非 0
   等待预算: 0s
   留证: node:test TAP 输出
-  Test: manual:bash -c 'node --test sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js --test-name-pattern="缺失或不可解析"'
+  Test: manual:bash -c 'node --test --test-name-pattern="缺失或不可解析" sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js'
 
 - [ ] [BEHAVIOR] [L2] B-04: JSON 顶层 keys 完整且无额外字段
   动作: 对真实 `check --json` stdout 执行 jq keys 精确匹配
@@ -47,7 +47,7 @@ journey_type: autonomous
   预期观察: stdout 与当前 digest 构成的既有 PASS 行逐字一致，退出 0
   等待预算: 0s
   留证: node:test TAP 输出
-  Test: manual:bash -c 'node --test sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js --test-name-pattern="逐字一致"'
+  Test: manual:bash -c 'node --test --test-name-pattern="逐字一致" sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js'
 
 - [ ] [BEHAVIOR] [L2] B-06: 产品分类合同原入口继续通过
   动作: 执行仓库既有 `npm run product-map:check`
@@ -55,6 +55,13 @@ journey_type: autonomous
   等待预算: 0s
   留证: npm 命令输出与 exit code
   Test: manual:bash -c 'npm run product-map:check'
+
+- [ ] [BEHAVIOR] [L2] B-07: JSON 标志与既有参数并存时互不干扰
+  动作: 以既有 Node 运行参数 `--no-warnings` 搭配 `check --json` 启动真实 CLI 子进程
+  预期观察: 输出与不带 Node 参数时一致，均为单个精确 JSON 对象且检查通过时退出 0
+  等待预算: 0s
+  留证: node:test TAP 输出
+  Test: manual:bash -c 'node --test --test-name-pattern="与既有参数并存" sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js'
 
 ## Invariant 覆盖
 

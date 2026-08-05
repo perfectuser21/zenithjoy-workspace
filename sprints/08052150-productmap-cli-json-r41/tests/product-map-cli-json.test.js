@@ -16,8 +16,8 @@ function sandbox() {
   return root;
 }
 
-function check(root, args = ['check', '--json']) {
-  return spawnSync(process.execPath, ['scripts/product-map/cli.mjs', ...args], {
+function check(root, args = ['check', '--json'], nodeArgs = []) {
+  return spawnSync(process.execPath, [...nodeArgs, 'scripts/product-map/cli.mjs', ...args], {
     cwd: root,
     encoding: 'utf8',
   });
@@ -44,8 +44,12 @@ test('check --json 漂移失败时 stdout 仍为单个 JSON 且退出非 0', () 
   const result = check(root);
   assert.notEqual(result.status, 0);
   const body = JSON.parse(result.stdout);
+  assert.deepEqual(Object.keys(body).sort(), ['errors', 'ok']);
+  assert.equal(typeof body.ok, 'boolean');
   assert.equal(body.ok, false);
-  assert.ok(Array.isArray(body.errors) && body.errors.some((error) => typeof error === 'string' && error.includes('digest')));
+  assert.ok(Array.isArray(body.errors) && body.errors.length >= 1);
+  assert.ok(body.errors.every((error) => typeof error === 'string' && error.length > 0));
+  assert.ok(body.errors.some((error) => error.includes('digest')));
   assert.equal(result.stdout.trim().split('\n').length, 1);
 });
 
@@ -58,8 +62,11 @@ test('check --json 在 product-map.json 缺失或不可解析时始终输出合�
     const result = check(root);
     assert.notEqual(result.status, 0, mode);
     const body = JSON.parse(result.stdout);
+    assert.deepEqual(Object.keys(body).sort(), ['errors', 'ok'], mode);
+    assert.equal(typeof body.ok, 'boolean', mode);
     assert.equal(body.ok, false, mode);
     assert.ok(Array.isArray(body.errors) && body.errors.length >= 1, mode);
+    assert.ok(body.errors.every((error) => typeof error === 'string' && error.length > 0), mode);
     assert.equal(result.stdout.trim().split('\n').length, 1, mode);
   }
 });
@@ -70,4 +77,16 @@ test('不带 --json 的 check 输出与既有文本逐字一致', () => {
   const result = check(root, ['check']);
   assert.equal(result.status, 0);
   assert.equal(result.stdout, `PASS: no drift — generated files match current product-map.yaml (digest: ${digest.slice(0, 8)}...)\n`);
+});
+
+test('--json 与既有参数并存时互不干扰', () => {
+  const root = sandbox();
+  const baseline = check(root);
+  const result = check(root, ['check', '--json'], ['--no-warnings']);
+  assert.equal(result.status, 0);
+  const body = JSON.parse(result.stdout);
+  assert.deepEqual(Object.keys(body).sort(), ['errors', 'ok']);
+  assert.deepEqual(body, { ok: true, errors: [] });
+  assert.equal(result.stdout, baseline.stdout);
+  assert.equal(result.stdout.trim().split('\n').length, 1);
 });
