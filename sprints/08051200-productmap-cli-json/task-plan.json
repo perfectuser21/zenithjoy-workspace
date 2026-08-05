@@ -1,0 +1,26 @@
+{
+  "initiative_id": "a0860dd1-c5e5-4886-a51f-9bd94a2eecd1",
+  "journey_type": "dev_pipeline",
+  "journey_type_reason": "供 CI 与 Brain 消费的仓库分类合同检查 CLI",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "实现 product-map check --json 机器输出",
+      "scope": "在不改变普通 check 和退出码语义的前提下，为 check 增加成功与失败均合法的 JSON 输出，并补齐 CLI 单测",
+      "dod": [
+        "[BEHAVIOR] check --json 成功时输出精确 ok/errors schema 且 exit 0",
+        "[BEHAVIOR] 缺失或损坏生成 JSON 时输出 ok=false、具体 errors 且 exit 非0",
+        "[BEHAVIOR] 普通 check stdout 与冻结基线逐字一致",
+        "[ARTIFACT] scripts/product-map/__tests__/product-map-cli-json.test.js"
+      ],
+      "files": [
+        "scripts/product-map/cli.mjs",
+        "scripts/product-map/__tests__/product-map-cli-json.test.js",
+        "package.json"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 60
+    }
+  ]
+}
