@@ -5473,3 +5473,11 @@ agent_suite:
   status: active
   product: 中台认证
   note: "验收模块 Playwright E2E（列表/详情矩阵/历史页）。变体C：真实后端，禁page.route()，降级/正常路径用.or()二选一断言。workflow: e2e-staff-acceptance-windows.yml"
+
+- id: product-map-cli-json-contract
+  path: sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js
+  type: contract
+  ci: L2
+  status: active
+  product: product-map
+  note: "product-map CLI check --json 合同测试：真实子进程覆盖成功、漂移、投影缺失/损坏、普通文本兼容与既有 Node 参数并存。"
