@@ -1,0 +1,23 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "验证 Fleet Worker 后端 payload 消费与验收证据绑定，不含用户界面",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "实现 Fleet payload 与 PR head、冻结基线及 GP 锚点的严格绑定校验",
+      "scope": "消费三个权威 payload 字段，拒绝缺失、漂移和不可解析输入，输出可审计结论",
+      "dod": [
+        "[BEHAVIOR] 正确 payload 仅在 GitHub PR head、冻结 base 与 GP Step 7 全部一致时输出 ok:true",
+        "[BEHAVIOR] 三个权威字段任一缺失或不一致均非零退出且分类 payload_invalid",
+        "[ARTIFACT] validate-fleet-payload.mjs"
+      ],
+      "files": [
+        "sprints/08051905-kernel-pr1581-fleet-validation-r39/validate-fleet-payload.mjs"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 60
+    }
+  ]
+}
