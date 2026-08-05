@@ -27,7 +27,7 @@ const GENERATED_DIR = resolve(REPO_ROOT, 'product-map/generated');
 const JSON_OUT = resolve(GENERATED_DIR, 'product-map.json');
 const MD_OUT = resolve(GENERATED_DIR, 'product-map.md');
 
-const [,, command] = process.argv;
+const [,, command, ...args] = process.argv; const jsonMode = command === 'check' && args.includes('--json'); if (jsonMode) process.on('uncaughtException', error => failJson([error.message]));
 
 async function cmdValidate() {
   const { map, errors } = await loadAndValidateProductMap();
@@ -83,13 +83,13 @@ async function cmdGenerate() {
 
 async function cmdCheck() {
   if (!existsSync(JSON_OUT)) {
-    console.error('FAIL: drift — product-map/generated/product-map.json does not exist. Run npm run product-map:generate first.');
+    if (jsonMode) failJson(['product-map/generated/product-map.json does not exist']); console.error('FAIL: drift — product-map/generated/product-map.json does not exist. Run npm run product-map:generate first.');
     process.exit(1);
   }
 
   const { map, errors } = await loadAndValidateProductMap();
   if (errors.length > 0) {
-    console.error('FAIL: mismatch — product-map.yaml has schema errors');
+    if (jsonMode) failJson(errors); console.error('FAIL: mismatch — product-map.yaml has schema errors');
     process.exit(1);
   }
 
@@ -97,7 +97,7 @@ async function cmdCheck() {
   const generatedJson = JSON.parse(readFileSync(JSON_OUT, 'utf8'));
 
   if (generatedJson.digest !== currentDigest) {
-    console.error(`FAIL: drift detected — generated digest ${generatedJson.digest.slice(0, 8)} does not match current YAML digest ${currentDigest.slice(0, 8)}`);
+    if (jsonMode) failJson([`generated digest ${generatedJson.digest.slice(0, 8)} does not match current YAML digest ${currentDigest.slice(0, 8)}`]); console.error(`FAIL: drift detected — generated digest ${generatedJson.digest.slice(0, 8)} does not match current YAML digest ${currentDigest.slice(0, 8)}`);
     console.error('Run npm run product-map:generate to update the generated files.');
     process.exit(1);
   }
@@ -106,19 +106,19 @@ async function cmdCheck() {
   if (existsSync(MD_OUT)) {
     const mdContent = readFileSync(MD_OUT, 'utf8');
     if (!mdContent.includes(currentDigest)) {
-      console.error(`FAIL: mismatch — product-map.md does not contain current digest`);
+      if (jsonMode) failJson(['product-map.md does not contain current digest']); console.error(`FAIL: mismatch — product-map.md does not contain current digest`);
       process.exit(1);
     }
   }
 
   const smokeResult = validateSmokeFiles(map, REPO_ROOT);
   if (!smokeResult.ok) {
-    console.error('FAIL: smoke_files 校验未通过:');
+    if (jsonMode) failJson(smokeResult.errors); console.error('FAIL: smoke_files 校验未通过:');
     for (const e of smokeResult.errors) console.error(' ', e);
     process.exit(1);
   }
 
-  console.log(`PASS: no drift — generated files match current product-map.yaml (digest: ${currentDigest.slice(0, 8)}...)`);
+  console.log(jsonMode ? JSON.stringify({ ok: true, errors: [] }) : `PASS: no drift — generated files match current product-map.yaml (digest: ${currentDigest.slice(0, 8)}...)`);
 }
 
 switch (command) {
@@ -135,4 +135,9 @@ switch (command) {
     console.error(`Unknown command: ${command}`);
     console.error('Usage: node scripts/product-map/cli.mjs [validate|generate|check]');
     process.exit(1);
+}
+
+function failJson(errors) {
+  console.log(JSON.stringify({ ok: false, errors }));
+  process.exit(1);
 }
