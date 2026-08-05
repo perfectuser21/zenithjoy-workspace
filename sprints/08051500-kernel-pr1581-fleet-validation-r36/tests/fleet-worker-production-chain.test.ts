@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 
 const brain = process.env.BRAIN ?? 'http://127.0.0.1:5221';
-const timeout = 7_200_000;
+const timeout = Number(process.env.FLEET_TERMINAL_TIMEOUT_MS ?? 90_000);
 
 function curlJson(args: string[]) {
   return JSON.parse(execFileSync('curl', ['-sfS', ...args], { encoding: 'utf8' }));
@@ -68,13 +68,12 @@ describe('Fleet Worker production chain [BEHAVIOR]', () => {
   }, timeout);
 
   it('真实 Fleet task 的依赖失败分类', async () => {
-    const task = await terminal(submit(payload()));
-    if (task.status === 'completed') {
-      expect(JSON.stringify(task.result ?? task.metadata ?? {})).toContain('c305f6217da65bb69413c39e621b7e797e0fb189');
-      return;
-    }
+    const failureTaskId = process.env.FLEET_DEPENDENCY_FAILURE_TASK_ID;
+    expect(failureTaskId, '必须由 Fleet 隔离故障演练注入真实失败 task id；正常 completed task 不能替代依赖失败证据').toBeTruthy();
+    const task = curlJson([`${brain}/api/brain/tasks/${failureTaskId}`]);
     expect(task.status).toBe('failed');
     expect(task.failure_class).toBe('environment_failure');
     expect(String(task.error_message ?? '').toLowerCase()).toMatch(/github|postgres/);
-  }, timeout);
+    expect(task.payload).toMatchObject(payload().payload);
+  });
 });

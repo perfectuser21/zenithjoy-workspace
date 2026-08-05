@@ -12,8 +12,8 @@ target_environment: local_api
 - [ ] [ARTIFACT] 合同不存在独立 verifier/伪 receipt 实现
   Test: bash -c 'test ! -e sprints/08051500-kernel-pr1581-fleet-validation-r36/verify-fleet-payload.mjs'
 
-- [ ] [ARTIFACT] 冻结基线 Red 记录不得把提前中断伪装成完整 7200 秒 verdict
-  Test: bash -c 'grep -q "command: timeout 7200s npx vitest run" sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log && grep -q "terminal_verdict: unavailable" sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log && grep -q "result: INCOMPLETE_RED_EVIDENCE" sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log'
+- [ ] [ARTIFACT] 冻结基线 Red 记录含真实非零终态
+  Test: bash -c 'grep -q "exit_code: 1" sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log && grep -q "terminal_verdict: FAIL" sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log && grep -q "result: RED_CONFIRMED" sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log'
 
 ## BEHAVIOR 条目
 
@@ -22,48 +22,48 @@ target_environment: local_api
   预期观察: task completed，execution surface 为 Fleet，result/evidence 同时含 repo/head/anchor 与当前 Runner provenance
   等待预算: 7200s
   留证: Brain task JSON 与 SHA-256
-  Test: manual:bash -c 'npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "正确 payload 经真实 Fleet Worker 绑定目标"'
+  Test: manual:bash -c 'FLEET_TERMINAL_TIMEOUT_MS=7200000 npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "正确 payload 经真实 Fleet Worker 绑定目标"'
 
 - [ ] [BEHAVIOR] [L2] B-02: 错误仓库 fail-closed
   动作: 通过同一生产入口派发 base_repo=wrong/repo
   预期观察: 真实 Fleet task 进入非 completed 终态并留下失败证据
   等待预算: 7200s
   留证: Brain task 失败 JSON
-  Test: manual:bash -c 'npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "错误仓库 fail-closed"'
+  Test: manual:bash -c 'FLEET_TERMINAL_TIMEOUT_MS=7200000 npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "错误仓库 fail-closed"'
 
 - [ ] [BEHAVIOR] [L2] B-03: 缺失 target_head_sha fail-closed
   动作: 删除 target_head_sha 后通过生产入口派发
   预期观察: 真实 Fleet task 为 failed/validation_input_invalid，错误点名 target_head_sha
   等待预算: 7200s
   留证: Brain task 失败 JSON
-  Test: manual:bash -c 'npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "缺失 target_head_sha fail-closed"'
+  Test: manual:bash -c 'FLEET_TERMINAL_TIMEOUT_MS=7200000 npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "缺失 target_head_sha fail-closed"'
 
 - [ ] [BEHAVIOR] [L2] B-04: 畸形 SHA fail-closed
   动作: 传 target_head_sha=HEAD
   预期观察: 真实 Fleet task 为 failed/validation_input_invalid，错误点名 target_head_sha，且不回退工作区 HEAD
   等待预算: 7200s
   留证: Brain task 失败 JSON
-  Test: manual:bash -c 'npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "畸形 SHA fail-closed"'
+  Test: manual:bash -c 'FLEET_TERMINAL_TIMEOUT_MS=7200000 npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "畸形 SHA fail-closed"'
 
 - [ ] [BEHAVIOR] [L2] B-05: 可解析但非 PR head SHA fail-closed
   动作: 先确认冻结 base SHA 是可解析 commit，再将它作为 target_head_sha 派发
   预期观察: 真实 Fleet task 为 failed/validation_input_invalid，证明拒绝原因是 PR head 不一致而非 SHA 不可解析
   等待预算: 7200s
   留证: rev-parse 输出与 Brain task 失败 JSON
-  Test: manual:bash -c 'npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "可解析但非 PR head SHA fail-closed"'
+  Test: manual:bash -c 'FLEET_TERMINAL_TIMEOUT_MS=7200000 npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "可解析但非 PR head SHA fail-closed"'
 
 - [ ] [BEHAVIOR] [L2] B-06: 缺失或不可解析锚点均 fail-closed
   动作: 分别删除 gp_anchor、传 line02/keyword_acquisition#step999
   预期观察: 两个真实 Fleet task 均非 completed，不猜其他 Step
   等待预算: 7200s
   留证: 两份 Brain task 失败 JSON
-  Test: manual:bash -c 'npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "缺失或不可解析锚点 fail-closed"'
+  Test: manual:bash -c 'FLEET_TERMINAL_TIMEOUT_MS=7200000 npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "缺失或不可解析锚点 fail-closed"'
 
-- [ ] [BEHAVIOR] [L2] B-07: GitHub 与 Postgres 依赖失败由真实 Fleet task 分类 [接缝×2]
-  动作: 派发正确 payload 并读取真实 Fleet task 终态；不以测试进程预检结果替代 Worker result
-  预期观察: completed 时 evidence 完整；若执行中依赖自然失败，则 task 为 failed/environment_failure 且点名 github 或 postgres，绝不业务通过
-  等待预算: 30s
-  留证: GitHub 响应摘要、psql exit code、依赖失败分类
+- [ ] [BEHAVIOR] [L2] B-07: 隔离故障演练的真实 Fleet task 必须环境失败 [接缝×2]
+  动作: Fleet 在本 attempt 隔离资源内使 GitHub 或 Postgres 一项不可用，仍以正确三字段 payload 派发；将真实失败任务 ID 注入 FLEET_DEPENDENCY_FAILURE_TASK_ID
+  预期观察: 该任务只能为 failed/environment_failure，错误点名 github 或 postgres；completed 明确 FAIL
+  等待预算: 7200s
+  留证: 隔离故障操作记录与 Brain task 失败 JSON（均含当前 session id）
   Test: manual:bash -c 'npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "真实 Fleet task 的依赖失败分类"'
 
 ## Invariant 映射

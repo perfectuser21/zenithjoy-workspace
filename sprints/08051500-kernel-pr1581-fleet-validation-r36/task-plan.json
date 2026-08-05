@@ -1,0 +1,27 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "验证 Fleet Worker 后端 payload 消费与证据绑定，不含用户界面",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "执行 Fleet Worker 生产链 payload 验证",
+      "scope": "经生产 Brain 派发验证正确 payload、错误 payload fail-closed 与隔离依赖故障分类；不修改 PR #1581 业务实现或 Harness 调度",
+      "dod": [
+        "[BEHAVIOR] 正确 payload 的真实 Fleet 结论绑定 repo/head/anchor",
+        "[BEHAVIOR] 错 repo、错误 SHA、错误 anchor 全部 fail-closed",
+        "[BEHAVIOR] 隔离依赖故障的真实 Fleet task 为 environment_failure",
+        "[ARTIFACT] 合同、DoD、真实失败测试及 Red 证据"
+      ],
+      "files": [
+        "sprints/08051500-kernel-pr1581-fleet-validation-r36/contract-draft.md",
+        "sprints/08051500-kernel-pr1581-fleet-validation-r36/contract-dod.md",
+        "sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts",
+        "sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 60
+    }
+  ]
+}

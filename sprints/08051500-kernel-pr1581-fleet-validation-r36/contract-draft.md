@@ -1,11 +1,10 @@
-# Sprint Contract Draft (Round 11)
+# Sprint Contract Draft (Round 12)
 
 ## Notes
 
 - contract-gate: skipped (file not found, third-party repo)
-- R10-1 closure：删除“完整 7200 秒自然收口”的虚假声明；Red 记录现在逐字保留本轮真实命令、解释器启动事实、执行中断事实，并明确该证据尚不能关闭业务 RED。7200 秒是 Evaluator 的单条等待预算，合同不再把短时中断写成真实非零 verdict。
-- R10-2 closure：依赖失败 oracle 移入真实 Fleet task 结果判定：正确 payload 若未 completed，只接受 task 自身返回 `environment_failure` 且点名 `github` 或 `postgres`；删除仅靠测试进程 preflight/exit 75 代替 Worker 结果的断言。
-- R10-3 closure：B-01、E2E 与 Red 记录统一为“7200 秒内真实终态”；未取得终态时一律 FAIL，不再同时声称已自然收口和被提前中断。
+- R11-1 closure：冻结测试新增 90 秒 proposer Red 探针并实际跑到 Vitest 非零终态；`red-evidence.log` 记录真实 exit code=1、FAIL 与日志，不再提交 incomplete 证据。Evaluator 通过 `FLEET_TERMINAL_TIMEOUT_MS=7200000` 保留完整业务预算。
+- R11-2 closure：依赖失败条目不再允许正确任务 completed 分支通过；必须由 attempt 隔离故障演练产出真实 Fleet task，并以 `FLEET_DEPENDENCY_FAILURE_TASK_ID` 对 task 自身的 `failed/environment_failure`、依赖名和原 payload 做强断言。local_api E2E 开头显式检查 Brain 生产入口、Runner identity 与 attempt 级 DB 资源，缺任一项立即环境失败。
 - validation identity 仅在执行时从 `HARNESS_*` 与 `CAPABILITY_SNAPSHOT_ID` late-bind。
 
 ## GP-Anchor
@@ -144,6 +143,7 @@ submit() { curl -sfS -X POST "$BRAIN/api/brain/tasks" -H 'content-type: applicat
 wait_terminal() { local id="$1"; local out="$2"; for i in $(seq 1 720); do curl -sfS "$BRAIN/api/brain/tasks/$id" >"$out"; jq -e '.status|IN("completed","failed","cancelled")' "$out" >/dev/null && return 0; sleep 10; done; echo "FAIL: task $id 7200s 内未终态"; return 1; }
 make_payload() { jq -nc --arg repo "$1" --arg head "$2" --arg anchor "$3" '{task_type:"harness_initiative",title:"Fleet payload validation",payload:{base_repo:$repo,base_sha:"676fed7de12023d355deac7849af8a525ae53f8d",target_head_sha:$head,gp_anchor:$anchor,target_environment:"local_api"}}'; }
 dependency_failure() { printf 'ENVIRONMENT_FAILURE:%s\n' "$1" >&2; exit 75; }
+curl -sfS "$BRAIN/api/brain/health" | jq -e '.status=="ok" or .status=="degraded"' >/dev/null || dependency_failure brain
 GH_PR=$(gh api repos/perfectuser21/zenithjoy-workspace/pulls/1581 2>"$D/github.err") || dependency_failure github
 printf '%s' "$GH_PR" | jq -e '.head.repo.full_name=="perfectuser21/zenithjoy-workspace" and .head.sha=="c305f6217da65bb69413c39e621b7e797e0fb189" and .base.sha=="676fed7de12023d355deac7849af8a525ae53f8d"'
 : "${DB_URL:?Fleet must inject attempt-scoped DB_URL}"
@@ -160,6 +160,9 @@ else
   echo 'ENVIRONMENT_FAILURE:真实 Fleet task 未产生业务通过' >&2
   exit 75
 fi
+FAILURE_TASK_ID=${FLEET_DEPENDENCY_FAILURE_TASK_ID:?Fleet 隔离故障演练必须注入真实失败 task id}
+curl -sfS "$BRAIN/api/brain/tasks/$FAILURE_TASK_ID" >"$D/dependency-failure.json"
+jq -e '.status=="failed" and .failure_class=="environment_failure" and ((.error_message//"")|ascii_downcase|test("github|postgres")) and .payload.base_repo=="perfectuser21/zenithjoy-workspace" and .payload.target_head_sha=="c305f6217da65bb69413c39e621b7e797e0fb189" and .payload.gp_anchor=="line02/keyword_acquisition#step7"' "$D/dependency-failure.json"
 negative() { local name="$1" field="$2" json="$3"; local id; id=$(submit "$json"); wait_terminal "$id" "$D/$name.json"; jq -e --arg field "$field" '.status=="failed" and .failure_class=="validation_input_invalid" and ((.error_message//"")|ascii_downcase|contains($field))' "$D/$name.json"; }
 negative wrong_repo base_repo "$(make_payload wrong/repo c305f6217da65bb69413c39e621b7e797e0fb189 line02/keyword_acquisition#step7)"
 negative malformed_head target_head_sha "$(make_payload perfectuser21/zenithjoy-workspace HEAD line02/keyword_acquisition#step7)"
