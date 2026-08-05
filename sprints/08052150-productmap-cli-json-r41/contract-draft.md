@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 ## Notes
 
@@ -88,7 +88,7 @@ GP-Anchor: line00/gp_anchor_enforcement keep-green
 
 **验证命令**:
 ```bash
-node --test sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js --test-name-pattern='成功时'
+node --test --test-name-pattern='成功时' sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js
 ```
 **硬阈值**: 测试 exit = 0；验证命令即上式。
 
@@ -110,7 +110,7 @@ OUT=$(node scripts/product-map/cli.mjs check --json); CODE=$?; [ "$CODE" -eq 0 ]
 
 **验证命令**:
 ```bash
-node --test sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js --test-name-pattern='失败时|缺失或不可解析'
+node --test --test-name-pattern='失败时|缺失或不可解析' sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js
 ```
 **硬阈值**: 两类异常全部 exit 0（测试进程），每个被测 CLI exit 非 0 且 JSON 可解析；验证命令即上式。
 
@@ -121,9 +121,20 @@ node --test sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.
 
 **验证命令**:
 ```bash
-node --test sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js --test-name-pattern='逐字一致' && npm run product-map:check
+node --test --test-name-pattern='逐字一致' sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js && npm run product-map:check
 ```
 **硬阈值**: 两条命令 exit 0，stdout 字节级相等；验证命令即上式。
+
+### Step 5: JSON 标志与既有参数并存
+**来源**: `[FROM_PRD]` — Thin PRD「边界情况」要求 `--json` 与其他既有参数并存时互不干扰。
+
+**可观测行为**: 仓库当前 CLI 没有其他业务标志；与既有 Node 运行参数 `--no-warnings` 并存时，`check --json` 仍只输出精确 JSON schema，退出码保持检查结论语义。
+
+**验证命令**:
+```bash
+node --test --test-name-pattern='与既有参数并存' sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js
+```
+**硬阈值**: 带既有 Node 参数的真实 CLI 子进程输出与无该参数时一致，测试 exit = 0；验证命令即上式。
 
 ## E2E 验收
 
@@ -157,7 +168,7 @@ npm run product-map:check
 
 | 功能 | Test File | BEHAVIOR 覆盖 | 预期红证据 |
 |---|---|---|---|
-| JSON 成功/失败/边界与兼容 | `sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js` | `check --json 成功时`；`check --json 漂移失败时`；`product-map.json 缺失或不可解析时`；`不带 --json 的 check 输出与既有文本逐字一致` | 当前 CLI 忽略 `--json`，前三类 JSON 解析/shape 断言失败 |
+| JSON 成功/失败/边界与兼容 | `sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js` | `check --json 成功时`；`check --json 漂移失败时`；`product-map.json 缺失或不可解析时`；`不带 --json 的 check 输出与既有文本逐字一致`；`--json 与既有参数并存` | 当前 CLI 忽略 `--json`，JSON 解析/shape 断言失败 |
 
 ## 探索提示（L3 探索层 — evaluator 剧本全过后执行）
 
