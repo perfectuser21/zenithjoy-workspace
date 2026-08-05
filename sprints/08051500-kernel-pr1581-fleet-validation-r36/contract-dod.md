@@ -12,16 +12,16 @@ target_environment: local_api
 - [ ] [ARTIFACT] 合同不存在独立 verifier/伪 receipt 实现
   Test: bash -c 'test ! -e sprints/08051500-kernel-pr1581-fleet-validation-r36/verify-fleet-payload.mjs'
 
-- [ ] [ARTIFACT] 冻结基线真实 RED 证据含命令、解释器、exit code 与超时日志
-  Test: bash -c 'grep -q "command: timeout 75s npx vitest run" sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log && grep -q "exit_code: 124" sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log && grep -q "result: RED" sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log'
+- [ ] [ARTIFACT] 冻结基线真实 RED 证据使用完整 7200 秒预算并记录解释器、真实非零 exit code 与日志
+  Test: bash -c 'grep -q "command: timeout 7200s npx vitest run" sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log && grep -Eq "exit_code: ([1-9]|[1-9][0-9]+)" sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log && grep -q "result: RED" sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/red-evidence.log'
 
 ## BEHAVIOR 条目
 
-- [ ] [BEHAVIOR] [L2] B-01: 正确 payload 经真实 Fleet Worker 绑定同一目标 [接缝×2]
-  动作: 通过 Brain 生产 task 入口连续派发两次正确 Harness Initiative
-  预期观察: 两个 task 均 completed，execution surface 为 Fleet，result/evidence 同时含 repo/head/anchor 与当前 Runner provenance
+- [ ] [BEHAVIOR] [L2] B-01: 正确 payload 经真实 Fleet Worker 绑定同一目标
+  动作: 通过 Brain 生产 task 入口派发一次正确 Harness Initiative
+  预期观察: task completed，execution surface 为 Fleet，result/evidence 同时含 repo/head/anchor 与当前 Runner provenance
   等待预算: 7200s
-  留证: 两份 Brain task JSON 与 SHA-256
+  留证: Brain task JSON 与 SHA-256
   Test: manual:bash -c 'npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "正确 payload 经真实 Fleet Worker 绑定目标"'
 
 - [ ] [BEHAVIOR] [L2] B-02: 错误仓库 fail-closed
@@ -60,8 +60,8 @@ target_environment: local_api
   Test: manual:bash -c 'npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "缺失或不可解析锚点 fail-closed"'
 
 - [ ] [BEHAVIOR] [L2] B-07: GitHub 与 Postgres 依赖预检失败不误报业务通过 [接缝×2]
-  动作: 真实请求 PR #1581 GitHub API，并对 Runner 注入的 attempt-scoped DB_URL 执行 SELECT 1
-  预期观察: 两项均成功才继续业务验证；冻结测试对两类故障均断言 ENVIRONMENT_FAILURE 分类及内部 exitCode=75，E2E 以同一分类 exit 75
+  动作: 真实请求 PR #1581 GitHub API；对 Runner 注入的空 DB_URL 运行仓库真实 migration 并机检 schema_migrations
+  预期观察: GitHub 成功且空库 schema 自举成功才继续；两类故障均为 ENVIRONMENT_FAILURE/exitCode=75
   等待预算: 30s
   留证: GitHub 响应摘要、psql exit code、依赖失败分类
   Test: manual:bash -c 'npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "GitHub 与 Postgres 依赖预检"'

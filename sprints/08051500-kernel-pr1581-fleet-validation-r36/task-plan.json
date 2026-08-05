@@ -6,7 +6,7 @@
     {
       "task_id": "ws1",
       "title": "执行 Fleet Worker 生产链 payload 验证",
-      "scope": "以生产 Brain 派发入口验证正确与错误 payload；不实现替代 verifier，不修改 PR #1581 或调度",
+      "scope": "以生产 Brain 单次派发验证正确 payload，并验证错误 payload fail-closed；在 attempt 空库运行真实 migration；不实现替代 verifier，不修改 PR #1581 或调度",
       "dod": [
         "[BEHAVIOR] 正确 payload 经真实 Fleet Worker 后结论绑定 repo/head/anchor",
         "[BEHAVIOR] 错 repo、缺失/畸形/不一致 SHA、缺失/不可解析 anchor 全部 fail-closed",

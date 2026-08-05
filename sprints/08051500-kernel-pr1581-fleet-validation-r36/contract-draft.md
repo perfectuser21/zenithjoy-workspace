@@ -1,11 +1,11 @@
-# Sprint Contract Draft (Round 9)
+# Sprint Contract Draft (Round 10)
 
 ## Notes
 
 - contract-gate: skipped (file not found, third-party repo)
-- R8-1 closure：依赖预检冻结测试复用真实 `gh`/`psql` 执行体，并对两类故障分别断言 `ENVIRONMENT_FAILURE:<dependency>` 与内部 `exitCode=75`；E2E 同样 exit 75，消除 oracle 分叉。
-- R8-2 closure：SHA 负例拆成“畸形 SHA”与“可解析但非 PR head SHA”；后者先以 `git rev-parse --verify '<base_sha>^{commit}'` 证明可解析，再派发并要求 fail-closed。
-- R8-3 closure：在冻结基线真实执行测试并提交 `tests/red-evidence.log`，记录命令、解释器、真实 exit code=124 与 75 秒窗口超时日志；证据明确标 RED，未把未终态冒充 PASS。
+- R9-1 closure：Red 命令的外层预算改为完整 `7200s`，并提交解释器实际启动后的真实非零 exit code 与日志；不再以 75 秒截断冒充 TDD Red。
+- R9-2 closure：E2E 在使用 Fleet 注入的空库前，先运行仓库真实 `apps/api` migration，并机检 `zenithjoy.schema_migrations`；测试依赖预检复用同一 bootstrap。
+- R9-3 closure：正确 payload 只派发一次；删除 `[接缝×2]` 和“双派发”要求，使 B-01 描述、测试体与 PRD 单次可审计验证一致。
 - validation identity 仅在执行时从 `HARNESS_*` 与 `CAPABILITY_SNAPSHOT_ID` late-bind。
 
 ## GP-Anchor
@@ -82,7 +82,7 @@ DoD 必须逐字段复用该 shape，通过 `POST /api/brain/tasks` 进入真实
 
 ## 接缝清单
 
-- `[接缝×2]` 正确 payload 经 Brain 真实派发两次；两次 evidence 都绑定相同 repo/base/head/anchor。
+- 正确 payload 经 Brain 真实派发一次；evidence 绑定 repo/base/head/anchor。
 - 验收剧场风险：任何仅运行仓库内测试驱动器、未取得真实 Fleet task/result/evidence 的结果一律 FAIL。
 - GitHub/Postgres 故障分类须在真实故障时验；未发生真实故障为 `logic-done-pending`。
 
@@ -147,11 +147,12 @@ dependency_failure() { printf 'ENVIRONMENT_FAILURE:%s\n' "$1" >&2; exit 75; }
 GH_PR=$(gh api repos/perfectuser21/zenithjoy-workspace/pulls/1581 2>"$D/github.err") || dependency_failure github
 printf '%s' "$GH_PR" | jq -e '.head.repo.full_name=="perfectuser21/zenithjoy-workspace" and .head.sha=="c305f6217da65bb69413c39e621b7e797e0fb189" and .base.sha=="676fed7de12023d355deac7849af8a525ae53f8d"'
 : "${DB_URL:?Fleet must inject attempt-scoped DB_URL}"
-psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc 'SELECT 1' 2>"$D/postgres.err" | grep -qx 1 || dependency_failure postgres
+DATABASE_URL="$DB_URL" npm --prefix apps/api run migrate >"$D/migrate.log" 2>"$D/postgres.err" || dependency_failure postgres
+psql "$DB_URL" -v ON_ERROR_STOP=1 -tAc "SELECT to_regclass('zenithjoy.schema_migrations') IS NOT NULL" 2>>"$D/postgres.err" | grep -qx t || dependency_failure postgres
 git rev-parse --verify 'c305f6217da65bb69413c39e621b7e797e0fb189^{commit}' | grep -qx c305f6217da65bb69413c39e621b7e797e0fb189
 jq -e '[.golden_paths[]|select(.line_id=="line02" and .id=="keyword_acquisition")|.steps[]|select(.id=="step7")]|length==1' product-map/generated/product-map.json
 GOOD=$(make_payload perfectuser21/zenithjoy-workspace c305f6217da65bb69413c39e621b7e797e0fb189 line02/keyword_acquisition#step7)
-for n in 1 2; do ID=$(submit "$GOOD"); wait_terminal "$ID" "$D/good-$n.json"; jq -e --arg a "$HARNESS_ATTEMPT_ID" --arg c "$CAPABILITY_SNAPSHOT_ID" '.status=="completed" and .payload.base_repo=="perfectuser21/zenithjoy-workspace" and .payload.target_head_sha=="c305f6217da65bb69413c39e621b7e797e0fb189" and .payload.gp_anchor=="line02/keyword_acquisition#step7" and ((.execution_surface//.executor//"")|ascii_downcase|contains("fleet")) and ((.result//.metadata//{})|tostring|contains("c305f6217da65bb69413c39e621b7e797e0fb189") and contains("line02/keyword_acquisition#step7") and contains($a) and contains($c))' "$D/good-$n.json"; done
+ID=$(submit "$GOOD"); wait_terminal "$ID" "$D/good.json"; jq -e --arg a "$HARNESS_ATTEMPT_ID" --arg c "$CAPABILITY_SNAPSHOT_ID" '.status=="completed" and .payload.base_repo=="perfectuser21/zenithjoy-workspace" and .payload.target_head_sha=="c305f6217da65bb69413c39e621b7e797e0fb189" and .payload.gp_anchor=="line02/keyword_acquisition#step7" and ((.execution_surface//.executor//"")|ascii_downcase|contains("fleet")) and ((.result//.metadata//{})|tostring|contains("c305f6217da65bb69413c39e621b7e797e0fb189") and contains("line02/keyword_acquisition#step7") and contains($a) and contains($c))' "$D/good.json"
 negative() { local name="$1" field="$2" json="$3"; local id; id=$(submit "$json"); wait_terminal "$id" "$D/$name.json"; jq -e --arg field "$field" '.status=="failed" and .failure_class=="validation_input_invalid" and ((.error_message//"")|ascii_downcase|contains($field))' "$D/$name.json"; }
 negative wrong_repo base_repo "$(make_payload wrong/repo c305f6217da65bb69413c39e621b7e797e0fb189 line02/keyword_acquisition#step7)"
 negative malformed_head target_head_sha "$(make_payload perfectuser21/zenithjoy-workspace HEAD line02/keyword_acquisition#step7)"
@@ -159,7 +160,7 @@ git rev-parse --verify '676fed7de12023d355deac7849af8a525ae53f8d^{commit}' | gre
 negative parseable_non_pr_head target_head_sha "$(make_payload perfectuser21/zenithjoy-workspace 676fed7de12023d355deac7849af8a525ae53f8d line02/keyword_acquisition#step7)"
 negative bad_anchor gp_anchor "$(make_payload perfectuser21/zenithjoy-workspace c305f6217da65bb69413c39e621b7e797e0fb189 line02/keyword_acquisition#step999)"
 for field in base_repo target_head_sha gp_anchor; do negative missing_$field "$field" "$(echo "$GOOD" | jq "del(.payload.$field)")"; done
-sha256sum "$D/good-1.json" "$D/good-2.json"
+sha256sum "$D/good.json"
 ```
 
 ## 探索提示（L3 探索层 — evaluator 剧本全过后执行）

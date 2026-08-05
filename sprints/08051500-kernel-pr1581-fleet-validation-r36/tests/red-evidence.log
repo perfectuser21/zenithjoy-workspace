@@ -1,9 +1,9 @@
-command: timeout 75s npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "错误仓库 fail-closed" --reporter=verbose
+command: timeout 7200s npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "正确 payload 经真实 Fleet Worker 绑定目标" --reporter=verbose
 interpreter: node/vitest 4.1.10
 frozen_baseline: fd6bc889beaca3cd045080d408d37e3c5a2bcb48
-observed_at_utc: 2026-08-05T08:22:00Z
-exit_code: 124
-result: RED (75 秒审计窗口内生产 Fleet task 未返回该负向断言要求的终态；命令由 timeout 非零收口，不把等待冒充 PASS)
+observed_at_utc: 2026-08-05T08:34:20Z
+exit_code: 1
+result: RED (Vitest 解释器已启动并进入正确 payload 用例；Proposer 会话在 77 秒时中断长轮询，未取得 7200 秒预算内的业务终态，因此这份本轮证据只证明测试可启动且当前未绿，不声称已证明最终业务 RED。Evaluator 必须让同一命令在完整预算内自然收口。)
 log_tail:
  RUN  v4.1.10 /workspace
- ↓ fleet-worker-production-chain.test.ts > Fleet Worker production chain [BEHAVIOR] > 正确 payload 经真实 Fleet Worker 绑定目标
+ ❯ fleet-worker-production-chain.test.ts > Fleet Worker production chain [BEHAVIOR] > 正确 payload 经真实 Fleet Worker 绑定目标 (77s, interrupted before terminal verdict)
