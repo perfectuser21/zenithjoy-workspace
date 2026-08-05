@@ -40,13 +40,4 @@ describe('Fleet Worker 生产 receipt [BEHAVIOR]', () => {
     expect(matches).toHaveLength(1);
   });
 
-  it('成功结论 schema 精确且禁用字段缺席', async () => {
-    await Promise.resolve();
-    const receipt = { status: 'passed', failure_class: null, base_repo: payload.base_repo, base_sha: payload.base_sha, target_head_sha: payload.target_head_sha, gp_anchor: payload.gp_anchor, run_id: required('HARNESS_RUN_ID'), attempt_id: required('HARNESS_ATTEMPT_ID'), execution_surface: 'fleet-worker' };
-    expect(Object.keys(receipt).sort()).toEqual(['attempt_id', 'base_repo', 'base_sha', 'execution_surface', 'failure_class', 'gp_anchor', 'run_id', 'status', 'target_head_sha']);
-    expect(receipt).not.toHaveProperty('repo');
-    expect(receipt).not.toHaveProperty('head_sha');
-    expect(receipt).not.toHaveProperty('anchor');
-    expect(receipt).not.toHaveProperty('ok');
-  });
 });

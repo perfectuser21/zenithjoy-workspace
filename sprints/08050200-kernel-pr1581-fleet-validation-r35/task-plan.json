@@ -5,11 +5,13 @@
   "tasks": [
     {
       "task_id": "ws1",
-      "title": "交付 Fleet Worker 生产 receipt 验证",
-      "scope": "以 Brain payload、Fleet task bundle、实际 checkout、GitHub PR 和 GP SSOT 验证目标对象绑定",
+      "title": "交付 Fleet Worker 结构化验收回执验证",
+      "scope": "以 Brain payload、Fleet task bundle、实际 checkout、GitHub PR、GP SSOT 和 Postgres 证据产出不可自造的结构化验收回执",
       "dod": [
         "[BEHAVIOR] Fleet bundle 的 repo/base/expected head/anchor 与 Brain payload 逐字段相等",
         "[BEHAVIOR] 实际 checkout 与 GitHub PR head 均等于 target_head_sha",
+        "[BEHAVIOR] 七类错误输入输出 status=failed 与稳定 failure_class，依赖故障输出 environment_failed",
+        "[BEHAVIOR] passed 回执仅在全部生产证据通过后输出并携带 evidence_sha256",
         "[ARTIFACT] 零 mock 生产 receipt 回归测试"
       ],
       "files": [

@@ -38,12 +38,12 @@ journey_type: autonomous
   留证: jq 输出
   Test: manual:bash -c 'A=$(curl -sf "$BRAIN_URL/api/brain/tasks/$HARNESS_TASK_ID" | jq -er .payload.gp_anchor); test "$A" = line02/keyword_acquisition#step7; jq -e --arg a "$A" '\''.task_bundle.inputs.gp_anchor==$a'\'' "$HARNESS_TASK_BUNDLE_FILE"; jq -e '\''[.golden_paths[]|select(.line_id=="line02" and .id=="keyword_acquisition" and any(.steps[];.id=="step7"))]|length==1'\'' product-map/generated/product-map.json'
 
-- [ ] [BEHAVIOR] [L2] B-04: 成功结论 schema 精确且禁用字段缺席
-  动作: 用生产对象生成审计结论并执行完整 keys/禁用字段断言
-  预期观察: 九个 key 精确存在，repo/head_sha/anchor/ok 均缺席
+- [ ] [BEHAVIOR] [L2] B-04: 实际验收回执 schema 精确且绑定证据
+  动作: 从合同提取并运行完整 E2E 验收进程，再读取它在全部生产检查结束后写出的真实 receipt
+  预期观察: status=passed、failure_class=none、十个 key 精确存在且证据摘要为 64 位 hex
   等待预算: 0s
-  留证: stdout JSON 与 jq exit code
-  Test: manual:bash -c 'P=$(curl -sf "$BRAIN_URL/api/brain/tasks/$HARNESS_TASK_ID" | jq -ec .payload); jq -n --arg repo "$(jq -r .base_repo <<<"$P")" --arg base "$(jq -r .base_sha <<<"$P")" --arg head "$(jq -r .target_head_sha <<<"$P")" --arg anchor "$(jq -r .gp_anchor <<<"$P")" --arg run "$HARNESS_RUN_ID" --arg attempt "$HARNESS_ATTEMPT_ID" '\''{status:"passed",failure_class:null,base_repo:$repo,base_sha:$base,target_head_sha:$head,gp_anchor:$anchor,run_id:$run,attempt_id:$attempt,execution_surface:"fleet-worker"}'\'' | jq -e '\''keys==["attempt_id","base_repo","base_sha","execution_surface","failure_class","gp_anchor","run_id","status","target_head_sha"] and (has("repo")|not) and (has("head_sha")|not) and (has("anchor")|not) and (has("ok")|not)'\'''
+  留证: ${SPRINT_DIR}/evidence/${HARNESS_ATTEMPT_ID}/receipt.json 与 jq exit code
+  Test: manual:bash -c 'X="${SPRINT_DIR}/evidence/${HARNESS_ATTEMPT_ID}/e2e-contract.sh"; mkdir -p "$(dirname "$X")"; awk '\''/^## E2E 验收/{found=1;next} found&&/^## /{exit} found&&/^```bash/{b=1;next} b&&/^```/{b=0;next} b{print}'\'' "$SPRINT_DIR/contract-draft.md" >"$X"; bash "$X" >"${X%.sh}.log"; R="${SPRINT_DIR}/evidence/${HARNESS_ATTEMPT_ID}/receipt.json"; jq -e '\''.status=="passed" and .failure_class=="none" and (.evidence_sha256|test("^[0-9a-f]{64}$")) and keys==["attempt_id","base_repo","base_sha","evidence_sha256","execution_surface","failure_class","gp_anchor","run_id","status","target_head_sha"] and (has("repo")|not) and (has("head_sha")|not) and (has("anchor")|not) and (has("ok")|not)'\'' "$R"'
 
 - [ ] [BEHAVIOR] [L2] B-05: 生产 receipt 回归测试 fail-closed
   动作: 运行零 mock 测试，直接读取当前 Brain/bundle/git/GitHub
@@ -52,9 +52,16 @@ journey_type: autonomous
   留证: vitest verbose 输出与真实 exit code
   Test: manual:bash -c 'npx vitest run sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-production-receipt.test.ts --reporter=verbose'
 
+- [ ] [BEHAVIOR] [L2] B-06: 七类错误输入输出稳定失败分类
+  动作: 读取 E2E 验收进程对七个逐项篡改 payload 的实际负向回执
+  预期观察: 每行 status=failed，failure_class 精确覆盖七类且无 passed
+  等待预算: 0s
+  留证: ${SPRINT_DIR}/evidence/${HARNESS_ATTEMPT_ID}/negative-matrix.jsonl
+  Test: manual:bash -c 'F="${SPRINT_DIR}/evidence/${HARNESS_ATTEMPT_ID}/negative-matrix.jsonl"; test "$(wc -l < "$F" | tr -d " ")" -eq 7; jq -s -e '\''all(.[];.status=="failed") and ([.[].failure_class]|sort)==(["base_repo_mismatch","base_repo_missing","gp_anchor_invalid","gp_anchor_missing","target_head_sha_invalid","target_head_sha_mismatch","target_head_sha_missing"]|sort)'\'' "$F"'
+
 ## Invariant 映射
 
 - INV-01（真实派发、strict ref、同义语义一致、真实 exit code）由 B-01/B-02/B-05 覆盖。
 - INV-02（GP anchor、Test Contract 四列、secret/PII、共享 CI 禁区）由 B-03 与 ARTIFACT 条目覆盖。
-- INV-03（verdict 锚定真实 SHA、identity late-bound、依赖失败不假绿）由 B-02/B-04/B-05 覆盖。
+- INV-03（verdict 锚定真实 SHA、identity late-bound、输入/依赖失败不假绿）由 B-02/B-04/B-05/B-06 覆盖。
 - N/A：本 sprint 不新增服务、状态、表、job、API、租户、通知、RPA、UI、cron、部署、relay 或付费 API；其余 thin PRD 铁律不触及。

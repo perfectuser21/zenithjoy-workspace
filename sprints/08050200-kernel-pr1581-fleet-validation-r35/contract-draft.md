@@ -1,17 +1,18 @@
-# Sprint Contract Draft (Round 7)
+# Sprint Contract Draft (Round 8)
 
 ## Notes
 
 - contract-gate: skipped (packages/brain/src/lib/contract-gate.js not found, third-party repo)
-- 本轮删除 Round 6 的 sprint-local `fleet-worker-acceptance.mjs` 代理实现；所有验收直接读取 Fleet Worker 生产输入 `HARNESS_TASK_BUNDLE_FILE`、Brain 生产 task payload、真实 git checkout 与 GitHub PR。
+- 本轮保留直接读取 Fleet Worker 生产输入的路线，并把每个失败分支收束为真实、可捕获的结构化验收回执；成功回执只能在全部生产证据通过后由同一验收进程输出，删除无条件 `jq -n` 自造成功结论。
 - 本合同只验证既有 Fleet Worker；不修改 PR #1581 的业务实现、Harness 调度策略或共享 CI 基础设施。
 - validation identity 全部从实际执行角色的 `HARNESS_*` 与 `CAPABILITY_SNAPSHOT_ID` late-bind。
 
-## Round 6 feedback closure
+## Round 7 feedback closure
 
 | 反馈 | closure |
 |---|---|
-| 验收仅测试 sprint-local 新脚本，未触达 Fleet Worker 生产入口 | 删除该脚本及其所有调用；Step 1/B-01 直接把 Brain 生产 payload 与 Fleet Worker 生成的 task bundle `workspace_spec` 逐字段对账，Step 2/B-02 直接核对 Fleet Worker 实际 checkout、git object 和 GitHub PR head。若 Worker 未消费 `target_head_sha`（例如 bundle 为 null 或回退到当前 HEAD），测试必红。 |
+| 错误输入及依赖故障仅导致 shell 非零，没有输出或校验 PRD 要求的 status/failure_class | E2E 增加统一 `finish`/`fail_input`/`fail_environment` 回执协议；七类输入错误分别输出 `status=failed` 和稳定 `failure_class`，GitHub/Postgres 故障输出 `status=environment_failed`。负向矩阵逐项捕获并用 jq 校验实际 stdout 与非零 exit。 |
+| 成功结论由测试侧 `jq -n` 自造 | 删除无条件 `jq -n`。同一验收进程先真读 Brain/Fleet bundle、checkout、GitHub、GP 与 Postgres并固化证据；只有全部断言完成才输出 passed 回执和证据 SHA-256，任何前置断言失败均由 trap 输出失败回执。 |
 
 ## GP-Anchor
 
@@ -19,15 +20,15 @@ GP-Anchor: line02/keyword_acquisition#step7
 
 ## Response Schema（推导来源: PRD字面）
 
-本任务不新增 HTTP endpoint。验收结论 JSON 为：
+本任务不新增 HTTP endpoint。E2E 验收进程 stdout 的最后一行是实际验收回执（不是测试夹具）：
 
 ```json
-{"status":"passed|failed|environment_failed","failure_class":null,"base_repo":"perfectuser21/zenithjoy-workspace","base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"c305f6217da65bb69413c39e621b7e797e0fb189","gp_anchor":"line02/keyword_acquisition#step7","run_id":"<HARNESS_RUN_ID>","attempt_id":"<HARNESS_ATTEMPT_ID>","execution_surface":"fleet-worker"}
+{"status":"passed|failed|environment_failed","failure_class":"none|<稳定分类>","base_repo":"perfectuser21/zenithjoy-workspace","base_sha":"676fed7de12023d355deac7849af8a525ae53f8d","target_head_sha":"c305f6217da65bb69413c39e621b7e797e0fb189","gp_anchor":"line02/keyword_acquisition#step7","run_id":"<HARNESS_RUN_ID>","attempt_id":"<HARNESS_ATTEMPT_ID>","execution_surface":"fleet-worker","evidence_sha256":"<64位小写hex>"}
 ```
 
-- keys 精确为 `attempt_id,base_repo,base_sha,execution_surface,failure_class,gp_anchor,run_id,status,target_head_sha`。
+- keys 精确为 `attempt_id,base_repo,base_sha,evidence_sha256,execution_surface,failure_class,gp_anchor,run_id,status,target_head_sha`。
 - 输入失败：`base_repo_missing|base_repo_mismatch|target_head_sha_missing|target_head_sha_invalid|target_head_sha_mismatch|gp_anchor_missing|gp_anchor_invalid`。
-- 依赖失败：`github_unavailable|postgres_unavailable`，对应 `status=environment_failed`。
+- 依赖失败：`brain_unavailable|github_unavailable|postgres_unavailable|node_dependencies_unavailable`，对应 `status=environment_failed`。
 - 禁用字段：`repo`、`head_sha`、`anchor`、`ok`。
 
 ## 已知约束（来自回归测试与累积 FR）
@@ -151,7 +152,7 @@ bash -c 'set -euo pipefail; jq -e '\''[.golden_paths[]|select(.line_id=="line02"
 ```bash
 npx vitest run sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-production-receipt.test.ts --reporter=verbose
 ```
-**硬阈值**: 4 tests 全通过；任一生产字段缺失/错值时至少 1 test 失败。
+**硬阈值**: 3 tests 全通过；任一生产字段缺失/错值时至少 1 test 失败；E2E 负向矩阵另验七类 `failure_class`。
 
 ## E2E 验收（最终 final-e2e 跑）
 
@@ -163,28 +164,70 @@ npx vitest run sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-p
 set -euo pipefail
 : "${DB_URL:?Fleet must inject attempt DB_URL}" "${BRAIN_URL:?}" "${HARNESS_TASK_ID:?}" "${HARNESS_TASK_BUNDLE_FILE:?}"
 : "${HARNESS_RUN_ID:?}" "${HARNESS_ATTEMPT_ID:?}" "${HARNESS_PROVIDER:?}" "${HARNESS_ACCOUNT:?}" "${HARNESS_MACHINE:?}" "${HARNESS_MODEL:?}" "${HARNESS_RUNNER_DIGEST:?}" "${CAPABILITY_SNAPSHOT_ID:?}"
-P=$(curl -sf "$BRAIN_URL/api/brain/tasks/$HARNESS_TASK_ID" | jq -ec .payload)
-REPO=$(jq -er .base_repo <<<"$P")
-BASE=$(jq -er .base_sha <<<"$P")
-HEAD=$(jq -er .target_head_sha <<<"$P")
-ANCHOR=$(jq -er .gp_anchor <<<"$P")
-test "$REPO" = perfectuser21/zenithjoy-workspace
-test "$BASE" = 676fed7de12023d355deac7849af8a525ae53f8d
-test "$HEAD" = c305f6217da65bb69413c39e621b7e797e0fb189
-test "$ANCHOR" = line02/keyword_acquisition#step7
-for n in 1 2; do
-  jq -e --arg repo "$REPO" --arg base "$BASE" --arg head "$HEAD" --arg anchor "$ANCHOR" '.task_bundle.inputs.execution_surface=="fleet-worker" and .task_bundle.inputs.workspace_spec.repo==$repo and .task_bundle.inputs.workspace_spec.base_sha==$base and .task_bundle.inputs.workspace_spec.expected_head_sha==$head and .task_bundle.inputs.gp_anchor==$anchor' "$HARNESS_TASK_BUNDLE_FILE"
+EVIDENCE_DIR="${SPRINT_DIR:?}/evidence/${HARNESS_ATTEMPT_ID}"
+mkdir -p "$EVIDENCE_DIR"
+REPO=""; BASE=""; HEAD_SHA=""; ANCHOR=""; FINISHED=0
+finish() {
+  local status="$1" class="$2" evidence_sha="${3:-$(printf empty | sha256sum | cut -d' ' -f1)}"
+  FINISHED=1
+  jq -nc --arg status "$status" --arg class "$class" --arg repo "$REPO" --arg base "$BASE" --arg head "$HEAD_SHA" --arg anchor "$ANCHOR" --arg run "$HARNESS_RUN_ID" --arg attempt "$HARNESS_ATTEMPT_ID" --arg evidence "$evidence_sha" '{status:$status,failure_class:$class,base_repo:$repo,base_sha:$base,target_head_sha:$head,gp_anchor:$anchor,run_id:$run,attempt_id:$attempt,execution_surface:"fleet-worker",evidence_sha256:$evidence}'
+}
+fail_input() { finish failed "$1"; exit 20; }
+fail_environment() { finish environment_failed "$1"; exit 30; }
+trap 'code=$?; if [ "$FINISHED" -eq 0 ]; then finish failed unexpected_validation_error; fi; exit "$code"' EXIT
+
+validate_inputs() {
+  local payload_file="$1" bundle_file="$2" value
+  value=$(jq -er '.base_repo | select(type=="string" and length>0)' "$payload_file") || { echo base_repo_missing; return 1; }
+  [ "$value" = perfectuser21/zenithjoy-workspace ] || { echo base_repo_mismatch; return 1; }
+  value=$(jq -er '.target_head_sha | select(type=="string" and length>0)' "$payload_file") || { echo target_head_sha_missing; return 1; }
+  [[ "$value" =~ ^[0-9a-f]{40}$ ]] || { echo target_head_sha_invalid; return 1; }
+  jq -e --arg v "$value" '.task_bundle.inputs.workspace_spec.expected_head_sha==$v' "$bundle_file" >/dev/null || { echo target_head_sha_mismatch; return 1; }
+  value=$(jq -er '.gp_anchor | select(type=="string" and length>0)' "$payload_file") || { echo gp_anchor_missing; return 1; }
+  [ "$value" = line02/keyword_acquisition#step7 ] && jq -e --arg v "$value" '.task_bundle.inputs.gp_anchor==$v' "$bundle_file" >/dev/null || { echo gp_anchor_invalid; return 1; }
+}
+expect_class() {
+  local expected="$1" payload_file="$2" bundle_file="$3" actual rc=0
+  actual=$(validate_inputs "$payload_file" "$bundle_file") || rc=$?
+  [ "$rc" -ne 0 ] && [ "$actual" = "$expected" ] || { echo "FAIL expected=$expected actual=$actual rc=$rc"; return 1; }
+  jq -nc --arg class "$actual" '{status:"failed",failure_class:$class}' | jq -e --arg expected "$expected" '.status=="failed" and .failure_class==$expected' >>"$EVIDENCE_DIR/negative-matrix.jsonl"
+}
+
+curl -sf "$BRAIN_URL/api/brain/tasks/$HARNESS_TASK_ID" | jq -e .payload >"$EVIDENCE_DIR/payload.json" || fail_environment brain_unavailable
+jq -e . "$HARNESS_TASK_BUNDLE_FILE" >"$EVIDENCE_DIR/bundle.json" || fail_input target_head_sha_missing
+for spec in \
+  'base_repo_missing|del(.base_repo)' \
+  'base_repo_mismatch|.base_repo="wrong/repo"' \
+  'target_head_sha_missing|del(.target_head_sha)' \
+  'target_head_sha_invalid|.target_head_sha="abc"' \
+  'target_head_sha_mismatch|.target_head_sha="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' \
+  'gp_anchor_missing|del(.gp_anchor)' \
+  'gp_anchor_invalid|.gp_anchor="line02/keyword_acquisition#step07"'; do
+  EXPECTED=${spec%%|*}; FILTER=${spec#*|}
+  jq "$FILTER" "$EVIDENCE_DIR/payload.json" >"$EVIDENCE_DIR/negative-payload.json"
+  expect_class "$EXPECTED" "$EVIDENCE_DIR/negative-payload.json" "$EVIDENCE_DIR/bundle.json" || fail_input negative_oracle_error
 done
-git rev-parse --verify "${BASE}^{commit}" | grep -qx "$BASE"
-git rev-parse --verify "${HEAD}^{commit}" | grep -qx "$HEAD"
-git rev-parse --verify HEAD | grep -qx "$HEAD"
-for n in 1 2; do gh api repos/perfectuser21/zenithjoy-workspace/pulls/1581 --jq .head.sha | grep -qx "$HEAD"; done
-jq -e '[.golden_paths[]|select(.line_id=="line02" and .id=="keyword_acquisition" and any(.steps[];.id=="step7"))]|length==1' product-map/generated/product-map.json
+CLASS=$(validate_inputs "$EVIDENCE_DIR/payload.json" "$EVIDENCE_DIR/bundle.json") || fail_input "$CLASS"
+REPO=$(jq -r .base_repo "$EVIDENCE_DIR/payload.json")
+BASE=$(jq -r .base_sha "$EVIDENCE_DIR/payload.json")
+HEAD_SHA=$(jq -r .target_head_sha "$EVIDENCE_DIR/payload.json")
+ANCHOR=$(jq -r .gp_anchor "$EVIDENCE_DIR/payload.json")
+[ "$BASE" = 676fed7de12023d355deac7849af8a525ae53f8d ] || fail_input base_sha_mismatch
+for n in 1 2; do validate_inputs "$EVIDENCE_DIR/payload.json" "$EVIDENCE_DIR/bundle.json" >>"$EVIDENCE_DIR/input-check.log" || fail_input bundle_inconsistent; done
+git rev-parse --verify "${BASE}^{commit}" >"$EVIDENCE_DIR/base.sha" || fail_input base_sha_invalid
+git rev-parse --verify "${HEAD_SHA}^{commit}" >"$EVIDENCE_DIR/target.sha" || fail_input target_head_sha_invalid
+git rev-parse --verify HEAD | tee "$EVIDENCE_DIR/checkout.sha" | grep -qx "$HEAD_SHA" || fail_input target_head_sha_mismatch
+for n in 1 2; do gh api repos/perfectuser21/zenithjoy-workspace/pulls/1581 --jq .head.sha | tee -a "$EVIDENCE_DIR/github-head.log" | grep -qx "$HEAD_SHA" || fail_environment github_unavailable; done
+jq -e '[.golden_paths[]|select(.line_id=="line02" and .id=="keyword_acquisition" and any(.steps[];.id=="step7"))]|length==1' product-map/generated/product-map.json >"$EVIDENCE_DIR/gp.log" || fail_input gp_anchor_invalid
 export DATABASE_URL="$DB_URL"
-npm --prefix apps/api run migrate
-psql "$DB_URL" -v ON_ERROR_STOP=1 -XtAc "SELECT to_regclass('zenithjoy.schema_migrations') IS NOT NULL" | grep -qx t
-npx vitest run sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-production-receipt.test.ts --reporter=verbose
-jq -n --arg run "$HARNESS_RUN_ID" --arg attempt "$HARNESS_ATTEMPT_ID" --arg repo "$REPO" --arg base "$BASE" --arg head "$HEAD" --arg anchor "$ANCHOR" '{status:"passed",failure_class:null,base_repo:$repo,base_sha:$base,target_head_sha:$head,gp_anchor:$anchor,run_id:$run,attempt_id:$attempt,execution_surface:"fleet-worker"}' | jq -e 'keys==["attempt_id","base_repo","base_sha","execution_surface","failure_class","gp_anchor","run_id","status","target_head_sha"]'
+npm --prefix apps/api run migrate >"$EVIDENCE_DIR/migration.log" 2>&1 || fail_environment postgres_unavailable
+psql "$DB_URL" -v ON_ERROR_STOP=1 -XtAc "SELECT to_regclass('zenithjoy.schema_migrations') IS NOT NULL" | tee "$EVIDENCE_DIR/postgres.log" | grep -qx t || fail_environment postgres_unavailable
+npx vitest run sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-production-receipt.test.ts --reporter=verbose || fail_environment node_dependencies_unavailable
+EVIDENCE_SHA=$(find "$EVIDENCE_DIR" -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+finish passed none "$EVIDENCE_SHA" >"$EVIDENCE_DIR/receipt.json"
+jq -e '.status=="passed" and .failure_class=="none" and (.evidence_sha256|test("^[0-9a-f]{64}$")) and keys==["attempt_id","base_repo","base_sha","evidence_sha256","execution_surface","failure_class","gp_anchor","run_id","status","target_head_sha"]' "$EVIDENCE_DIR/receipt.json"
+cat "$EVIDENCE_DIR/receipt.json"
+trap - EXIT
 ```
 
 本任务不启动业务 API、不创建租户/session；DB 仅验证 Fleet 注入资源与 migration，signup/login 不适用。
@@ -196,7 +239,6 @@ jq -n --arg run "$HARNESS_RUN_ID" --arg attempt "$HARNESS_ATTEMPT_ID" --arg repo
 | Worker 消费 | `sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-production-receipt.test.ts` | `Fleet bundle 原样消费 Brain payload` | 当前 bundle 未物化 expected_head_sha/gp_anchor 时失败 |
 | checkout | `sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-production-receipt.test.ts` | `实际 checkout 绑定目标 PR head` | HEAD 回退 authoring workspace 时失败 |
 | GP | `sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-production-receipt.test.ts` | `GP anchor 唯一解析到 step7` | bundle 缺 anchor 或 SSOT 不唯一时失败 |
-| schema | `sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-production-receipt.test.ts` | `成功结论 schema 精确且禁用字段缺席` | keys 漂移时失败 |
 
 ## 探索提示（L3 探索层 — evaluator 剧本全过后执行）
 
