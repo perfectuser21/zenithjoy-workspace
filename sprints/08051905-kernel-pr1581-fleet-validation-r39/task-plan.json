@@ -1,0 +1,25 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "验证 Fleet Worker 后端真实 Harness Initiative receipt 与验收证据绑定，不含 UI",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "实现真实 Fleet Worker receipt 验收与负向矩阵",
+      "scope": "从 Brain 与 Postgres 同一 Harness Initiative receipt 消费三个权威 payload 字段，绑定冻结 base、PR head 与 GP anchor，并确定性分类输入和环境失败",
+      "dod": [
+        "[BEHAVIOR] 真实 task receipt 仅在五方证据一致时输出 ok:true",
+        "[BEHAVIOR] 三字段八个缺失/错值/格式边界均 payload_invalid",
+        "[BEHAVIOR] Brain/Postgres/GitHub 不可用均非零且 environment_failure",
+        "[ARTIFACT] fleet-worker-receipt-check.mjs 与 tests/run-negative-matrix.mjs"
+      ],
+      "files": [
+        "sprints/08051905-kernel-pr1581-fleet-validation-r39/fleet-worker-receipt-check.mjs",
+        "sprints/08051905-kernel-pr1581-fleet-validation-r39/tests/run-negative-matrix.mjs"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 90
+    }
+  ]
+}
