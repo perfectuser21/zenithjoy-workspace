@@ -1,0 +1,23 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "Fleet Worker 后端消费真实 task bundle 并输出持久化机器可审计结论",
+  "tasks": [{
+    "task_id": "ws1",
+    "title": "实现 Fleet Worker payload 验收与持久化证据",
+    "scope": "在 sprint 测试目录实现单一验收入口、九项负例矩阵和可回读 evidence manifest",
+    "dod": [
+      "[BEHAVIOR] 当前 Fleet bundle、Brain task 与 Runner attempt 绑定冻结目标",
+      "[BEHAVIOR] 九种输入或依赖错误均非零并输出精确 failure_class",
+      "[BEHAVIOR] 最终审计证据持久化且 SHA-256 manifest 可回读",
+      "[ARTIFACT] 验收入口、负例矩阵与 TDD 测试存在"
+    ],
+    "files": [
+      "sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-worker-acceptance.mjs",
+      "sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-negative-matrix.sh"
+    ],
+    "depends_on": [],
+    "complexity": "S",
+    "estimated_minutes": 60
+  }]
+}
