@@ -1,6 +1,7 @@
-contract_branch: cp-harness-propose-r3-63f76ab6-ra0860dd1-a18
-sprint_dir: sprints/08051200-productmap-cli-json
-
+---
+skeleton: false
+journey_type: dev_pipeline
+---
 # Contract DoD — product-map CLI `check --json`
 
 **范围**: 仅 `scripts/product-map/` CLI 与单测；不改分类数据、其他子命令或共享 CI。
