@@ -1,0 +1,22 @@
+{
+  "initiative_id": "ac94d083-eb41-4873-8709-dfabd7eb8ee2",
+  "journey_type": "autonomous",
+  "journey_type_reason": "验证 Fleet Worker 后端执行面消费 payload 并绑定验收证据，无用户界面步骤。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "实现 Fleet 原始 bundle 只读验证与可审计结论",
+      "scope": "消费 Fleet Worker 启动当前角色的原始 task bundle，核对冻结 base、目标提交和 GP 锚点并输出失败分类。",
+      "dod": [
+        "[BEHAVIOR] Worker 原始 bundle、实际 checkout、GitHub head 与 GP Step 7 绑定且非法输入 fail closed",
+        "[ARTIFACT] fleet-bundle-verifier.mjs"
+      ],
+      "files": [
+        "sprints/08051905-kernel-pr1581-fleet-validation-r39/fleet-bundle-verifier.mjs"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 60
+    }
+  ]
+}
