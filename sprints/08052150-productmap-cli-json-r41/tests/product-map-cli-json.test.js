@@ -129,3 +129,24 @@ test('--json 与既有参数并存时互不干扰', () => {
   assert.equal(result.stdout, baseline.stdout);
   assert.equal(result.stdout.trim().split('\n').length, 1);
 });
+
+test('check --json 多个检查问题并存时汇总全部具体 errors', () => {
+  const root = sandbox();
+  const jsonPath = resolve(root, 'product-map/generated/product-map.json');
+  const generated = JSON.parse(readFileSync(jsonPath, 'utf8'));
+  generated.digest = '0'.repeat(64);
+  writeFileSync(jsonPath, JSON.stringify(generated));
+  writeFileSync(resolve(root, 'product-map/generated/product-map.md'), 'wrong digest\n');
+  rmSync(resolve(root, '.github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh'));
+
+  const result = check(root);
+  assert.notEqual(result.status, 0);
+  const body = JSON.parse(result.stdout);
+  assert.equal(body.ok, false);
+  assert.ok(body.errors.some((error) => error.includes('digest')));
+  assert.ok(body.errors.some((error) => error.includes('product-map.md')));
+  assert.ok(body.errors.some((error) => error.includes('golden-path-f1-anchor-smoke.sh')));
+  assert.ok(body.errors.length >= 3);
+  assert.ok(body.errors.every((error) => typeof error === 'string' && error.length > 0));
+  assert.equal(result.stdout.trim().split('\n').length, 1);
+});

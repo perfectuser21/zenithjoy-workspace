@@ -129,7 +129,7 @@ switch (command) {
     await cmdGenerate();
     break;
   case 'check':
-    await cmdCheck();
+    await (jsonMode ? cmdCheckJson() : cmdCheck());
     break;
   default:
     console.error(`Unknown command: ${command}`);
@@ -140,4 +140,41 @@ switch (command) {
 function failJson(errors) {
   console.log(JSON.stringify({ ok: false, errors }));
   process.exit(1);
+}
+
+async function cmdCheckJson() {
+  const checkErrors = [];
+  const { map, errors } = await loadAndValidateProductMap();
+  checkErrors.push(...errors);
+
+  let generatedJson;
+  if (!existsSync(JSON_OUT)) {
+    checkErrors.push('product-map/generated/product-map.json does not exist');
+  } else {
+    try {
+      generatedJson = JSON.parse(readFileSync(JSON_OUT, 'utf8'));
+    } catch (error) {
+      checkErrors.push(`product-map/generated/product-map.json is not valid JSON: ${error.message}`);
+    }
+  }
+
+  if (errors.length === 0) {
+    const currentDigest = productMapDigest(map);
+    if (generatedJson && generatedJson.digest !== currentDigest) {
+      checkErrors.push(`generated digest ${String(generatedJson.digest).slice(0, 8)} does not match current YAML digest ${currentDigest.slice(0, 8)}`);
+    }
+
+    if (existsSync(MD_OUT)) {
+      const mdContent = readFileSync(MD_OUT, 'utf8');
+      if (!mdContent.includes(currentDigest)) {
+        checkErrors.push('product-map.md does not contain current digest');
+      }
+    }
+
+    const smokeResult = validateSmokeFiles(map, REPO_ROOT);
+    checkErrors.push(...smokeResult.errors);
+  }
+
+  if (checkErrors.length > 0) failJson(checkErrors);
+  console.log(JSON.stringify({ ok: true, errors: [] }));
 }
