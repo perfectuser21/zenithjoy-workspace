@@ -1,0 +1,24 @@
+{
+  "initiative_id": "73abda71-e5ff-4bd4-a88d-30db032ffa43",
+  "journey_type": "autonomous",
+  "journey_type_reason": "入口和出口均为本地非交互式 product-map CLI",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "实现 product-map check --json 机器输出模式",
+      "scope": "为 check 增加 JSON 成功/失败输出，保留普通文本与退出码，覆盖缺失、损坏及漂移边界",
+      "dod": [
+        "[BEHAVIOR] check --json 成功与失败均输出精确 ok/errors JSON，退出码保持原语义",
+        "[BEHAVIOR] 普通 check 输出逐字不变",
+        "[ARTIFACT] scripts/product-map/ 下 CLI 与测试"
+      ],
+      "files": [
+        "scripts/product-map/cli.mjs",
+        "scripts/product-map/__tests__/product-map-cli-json.test.js"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 60
+    }
+  ]
+}
