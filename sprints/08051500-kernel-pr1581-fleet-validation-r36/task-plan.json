@@ -1,0 +1,24 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "验证 Fleet Worker 后端 payload 消费与提交证据绑定，不含 UI",
+  "tasks": [{
+    "task_id": "ws1",
+    "title": "执行 Fleet Worker payload 真链路验收",
+    "scope": "维护本 Sprint 的合同与真实 TDD Red；生产 Worker 必须消费权威 payload 并生成可审计 receipt",
+    "dod": [
+      "[BEHAVIOR] 正确 payload 经生产 Worker 两次执行均绑定目标 repo/head/anchor",
+      "[BEHAVIOR] 字段变异及 GitHub/Postgres 故障均 fail-closed",
+      "[ARTIFACT] Round 4 合同、DoD、测试与 task-plan"
+    ],
+    "files": [
+      "sprints/08051500-kernel-pr1581-fleet-validation-r36/contract-draft.md",
+      "sprints/08051500-kernel-pr1581-fleet-validation-r36/contract-dod.md",
+      "sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-receipt.test.ts",
+      "sprints/08051500-kernel-pr1581-fleet-validation-r36/task-plan.json"
+    ],
+    "depends_on": [],
+    "complexity": "M",
+    "estimated_minutes": 45
+  }]
+}
