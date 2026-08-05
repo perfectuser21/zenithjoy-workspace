@@ -66,10 +66,17 @@ target_environment: local_api
   留证: 两份 Brain task 失败 JSON
   Test: manual:bash -c 'FLEET_TERMINAL_TIMEOUT_MS=7200000 npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "缺失或不可解析锚点 fail-closed"'
 
+- [ ] [BEHAVIOR] [L2] B-07: 正确 payload 的依赖终态不误报业务成功 [接缝×2]
+  动作: 通过生产入口再次派发正确 payload，让真实 Fleet Worker 访问 GitHub 与 Postgres
+  预期观察: 依赖健康时 completed 且证据含 Fleet 自身 validation identity；任一真实依赖失败时只能 failed/environment_failure 并点名 github 或 postgres，绝不 completed
+  等待预算: 7200s
+  留证: Brain task 终态 JSON、Fleet evidence SHA-256、Evaluator 自身 late-bound receipt
+  Test: manual:bash -c 'FLEET_TERMINAL_TIMEOUT_MS=7200000 npx vitest run sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts -t "正确 payload 的依赖终态不误报业务成功"'
+
 ## Invariant 映射
 
 - ref 使用 `git rev-parse --verify '<ref>^{commit}'`；当前 HEAD 不作目标真值。
 - 生产 Brain→dispatcher→Fleet Worker 边禁止 mock；不得自行写成功 receipt。
 - 共享 CI、生产调度、PR #1581 业务代码均未授权修改。
-- 临时证据用 session 独享路径；secrets/PII 不进日志；validation identity late-bound。
+- 临时证据用 session 独享路径；secrets/PII 不进日志；Fleet 与 Evaluator validation identity 分别 late-bound，以 evidence SHA-256 串联而不要求身份相等。
 - status 枚举、租户、API auth、cron、launchd、UI/真机、业务写库等其余铁律：N/A，本 Sprint 不改对应模块。

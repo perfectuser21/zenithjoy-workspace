@@ -1,11 +1,11 @@
-# Sprint Contract Draft (Round 14)
+# Sprint Contract Draft (Round 15)
 
 ## Notes
 
 - contract-gate: skipped (file not found, third-party repo)
-- R13-1 closure：删除未由 Fleet 提供的 `FLEET_DEPENDENCY_FAILURE_ENDPOINT`、B-07 与 E2E 强制故障调用；依赖失败仅由同一真实 Fleet task 的自然终态分支断言 `failed/environment_failure`，不再要求合同外资源，且 7200 秒等待统一由 `wait_terminal` 执行。
-- R13-2 closure：删除依赖故障的第 8 个冻结测试，`fleet-worker-production-chain.test.ts` 现为 7 条测试，与 `red-evidence.log` 的 `1 failed | 6 skipped (7)` 一致。
-- validation identity 仅在执行时从 `HARNESS_*` 与 `CAPABILITY_SNAPSHOT_ID` late-bind。
+- R14-1 closure：新增 B-07 与同名真实生产链测试；它再次提交正确 payload，并对真实终态作穷尽断言：成功必须有 Fleet 证据，失败只允许 `environment_failure` 且点名 `github|postgres`，因此依赖失败不再只是合同文字，Evaluator 可直接执行且无法将失败误报为业务成功。
+- R14-2 closure：删除 Fleet evidence 与 Evaluator `HARNESS_ATTEMPT_ID`/`CAPABILITY_SNAPSHOT_ID` 相等的错误断言；Fleet evidence 只校验其自身非空 validation identity。E2E 另产 Evaluator receipt，late-bind 当前 Evaluator 身份并引用 Fleet evidence SHA-256，明确两个角色不共用 attempt/snapshot。
+- validation identity 全部在执行时 late-bind；合同不固化 Proposer、Reviewer、Evaluator 或 Fleet 的 UUID/snapshot。
 
 ## GP-Anchor
 
@@ -33,7 +33,7 @@ N/A — 本 Sprint 不新增 HTTP 响应。验收读取生产 Brain task/result�
 | 保质期（何时过期） | PR head 改变即失效。 |
 | 死亡告警（停了谁知道） | 任务非 completed，Evaluator/Judge 阻塞。 |
 | 失败语义（挂了怎么办） | 字段错误 fail-closed；依赖错误标环境失败。 |
-| 效果确认（已发≠已生效） | task payload、GitHub PR 真值、Fleet evidence 三方同 SHA。 |
+| 效果确认（已发≠已生效） | task payload、GitHub PR 真值、Fleet evidence 三方同 SHA；Evaluator receipt 引用 Fleet evidence 摘要。 |
 
 ### 判定点登记表
 
@@ -112,11 +112,11 @@ DoD 必须逐字段复用该 shape，通过 `POST /api/brain/tasks` 进入真实
 ### Step 3: 生产 evidence 绑定同一目标
 **来源**: `[FROM_PRD]` — Golden Path 第 3 项与 NFR 可观测要求。
 
-**可观测行为**: 真实 task completed 时 result/evidence 同时含 repo/head/anchor 且当前 Runner 身份 late-bound；若真实 GitHub/Postgres 在执行中不可用，task 必须 failed/environment_failure 并点名依赖，绝不能产生业务成功。
+**可观测行为**: 真实 task completed 时 result/evidence 同时含 repo/head/anchor 及 Fleet 自身非空 validation identity；Evaluator 以自己的 late-bound identity 另写 receipt 并引用 Fleet evidence 摘要，不要求两个角色身份相等。若真实 GitHub/Postgres 在执行中不可用，task 必须 failed/environment_failure 并点名依赖，绝不能产生业务成功。
 
-**验证命令**: `curl -sf localhost:5221/api/brain/tasks/$FLEET_TASK_ID | jq -e --arg a "$HARNESS_ATTEMPT_ID" --arg c "$CAPABILITY_SNAPSHOT_ID" '.status=="completed" and ((.result//.metadata//{})|tostring|contains("perfectuser21/zenithjoy-workspace") and contains("c305f6217da65bb69413c39e621b7e797e0fb189") and contains("line02/keyword_acquisition#step7")) and ((.result//.metadata//{})|tostring|contains($a)) and ((.result//.metadata//{})|tostring|contains($c))'`
+**验证命令**: `curl -sf localhost:5221/api/brain/tasks/$FLEET_TASK_ID | jq -e '.status=="completed" and ((.result//.metadata//{})|tostring|contains("perfectuser21/zenithjoy-workspace") and contains("c305f6217da65bb69413c39e621b7e797e0fb189") and contains("line02/keyword_acquisition#step7")) and (((.result//.metadata//{}).validation_identity//(.result//.metadata//{}).provenance) as $v | ($v|type)=="object" and (($v.attempt_id//"")|length)>0 and (($v.capability_snapshot_id//"")|length)>0)'`
 
-**硬阈值**: 7200 秒内出现真实终态；成功则 task/result/evidence 同目标且当前执行身份匹配，依赖失败则 `failed/environment_failure` 且错误点名 `github|postgres`。
+**硬阈值**: 7200 秒内出现真实终态；成功则 task/result/evidence 同目标且 Fleet validation identity 非空，Evaluator receipt 含自身 identity 与 Fleet evidence SHA-256；依赖失败则 `failed/environment_failure` 且错误点名 `github|postgres`。
 
 ### Step 4: 所有字段错误与依赖失败 fail-closed
 **来源**: `[FROM_PRD]` — 边界情况全部四项。
@@ -154,12 +154,15 @@ jq -e '[.golden_paths[]|select(.line_id=="line02" and .id=="keyword_acquisition"
 GOOD=$(make_payload perfectuser21/zenithjoy-workspace c305f6217da65bb69413c39e621b7e797e0fb189 line02/keyword_acquisition#step7)
 ID=$(submit "$GOOD"); wait_terminal "$ID" "$D/good.json"
 if jq -e '.status=="completed"' "$D/good.json" >/dev/null; then
-  jq -e --arg a "$HARNESS_ATTEMPT_ID" --arg c "$CAPABILITY_SNAPSHOT_ID" '.payload.base_repo=="perfectuser21/zenithjoy-workspace" and .payload.target_head_sha=="c305f6217da65bb69413c39e621b7e797e0fb189" and .payload.gp_anchor=="line02/keyword_acquisition#step7" and ((.execution_surface//.executor//"")|ascii_downcase|contains("fleet")) and ((.result//.metadata//{})|tostring|contains("c305f6217da65bb69413c39e621b7e797e0fb189") and contains("line02/keyword_acquisition#step7") and contains($a) and contains($c))' "$D/good.json"
+  jq -e '.payload.base_repo=="perfectuser21/zenithjoy-workspace" and .payload.target_head_sha=="c305f6217da65bb69413c39e621b7e797e0fb189" and .payload.gp_anchor=="line02/keyword_acquisition#step7" and ((.execution_surface//.executor//"")|ascii_downcase|contains("fleet")) and ((.result//.metadata//{})|tostring|contains("c305f6217da65bb69413c39e621b7e797e0fb189") and contains("line02/keyword_acquisition#step7")) and (((.result//.metadata//{}).validation_identity//(.result//.metadata//{}).provenance) as $v | ($v|type)=="object" and (($v.attempt_id//"")|length)>0 and (($v.capability_snapshot_id//"")|length)>0)' "$D/good.json"
 else
   jq -e '.status=="failed" and .failure_class=="environment_failure" and ((.error_message//"")|ascii_downcase|test("github|postgres"))' "$D/good.json"
   echo 'ENVIRONMENT_FAILURE:真实 Fleet task 未产生业务通过' >&2
   exit 75
 fi
+FLEET_EVIDENCE_SHA=$(sha256sum "$D/good.json" | awk '{print $1}')
+jq -n --arg attempt "$HARNESS_ATTEMPT_ID" --arg provider "${HARNESS_PROVIDER:?}" --arg account "${HARNESS_ACCOUNT:?}" --arg machine "${HARNESS_MACHINE:?}" --arg model "${HARNESS_MODEL:?}" --arg runner "${HARNESS_RUNNER_DIGEST:?}" --arg capability "$CAPABILITY_SNAPSHOT_ID" --arg fleet_task_id "$ID" --arg fleet_evidence_sha256 "$FLEET_EVIDENCE_SHA" '{role:"evaluator",validation_identity:{attempt_id:$attempt,provider:$provider,account:$account,machine:$machine,model:$model,runner_digest:$runner,capability_snapshot_id:$capability},fleet_receipt:{task_id:$fleet_task_id,evidence_sha256:$fleet_evidence_sha256}}' >"$D/evaluator-receipt.json"
+jq -e --arg id "$ID" --arg sha "$FLEET_EVIDENCE_SHA" '.role=="evaluator" and (.validation_identity.attempt_id|length)>0 and (.validation_identity.capability_snapshot_id|length)>0 and .fleet_receipt.task_id==$id and .fleet_receipt.evidence_sha256==$sha' "$D/evaluator-receipt.json"
 negative() { local name="$1" field="$2" json="$3"; local id; id=$(submit "$json"); wait_terminal "$id" "$D/$name.json"; jq -e --arg field "$field" '.status=="failed" and .failure_class=="validation_input_invalid" and ((.error_message//"")|ascii_downcase|contains($field))' "$D/$name.json"; }
 negative wrong_repo base_repo "$(make_payload wrong/repo c305f6217da65bb69413c39e621b7e797e0fb189 line02/keyword_acquisition#step7)"
 negative malformed_head target_head_sha "$(make_payload perfectuser21/zenithjoy-workspace HEAD line02/keyword_acquisition#step7)"
@@ -184,4 +187,4 @@ sha256sum "$D/good.json"
 
 | 功能 | Test File | BEHAVIOR 覆盖 | 预期红证据 |
 |---|---|---|---|
-| Fleet 真链路 | `sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts` | 正确 payload 经真实 Fleet Worker 绑定目标；错误仓库 fail-closed；缺失 base_repo fail-closed；缺失 target_head_sha fail-closed；畸形 SHA fail-closed；可解析但非 PR head SHA fail-closed；缺失或不可解析锚点 fail-closed | `tests/red-evidence.log` 记录冻结基线真实 exit code=1 与 Vitest FAIL 日志（1 failed + 6 skipped，共 7 条） |
+| Fleet 真链路 | `sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-worker-production-chain.test.ts` | 正确 payload 经真实 Fleet Worker 绑定目标；错误仓库 fail-closed；缺失 base_repo fail-closed；缺失 target_head_sha fail-closed；畸形 SHA fail-closed；可解析但非 PR head SHA fail-closed；缺失或不可解析锚点 fail-closed；正确 payload 的依赖终态不误报业务成功 | `tests/red-evidence.log` 记录冻结基线真实 exit code=1 与 Vitest FAIL 日志（1 failed + 7 skipped，共 8 条） |

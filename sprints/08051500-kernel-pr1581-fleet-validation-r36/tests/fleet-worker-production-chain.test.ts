@@ -12,6 +12,16 @@ function payload(overrides: Record<string, unknown> = {}) {
   return { task_type: 'harness_initiative', title: 'Fleet payload validation', payload: { base_repo: 'perfectuser21/zenithjoy-workspace', base_sha: '676fed7de12023d355deac7849af8a525ae53f8d', target_head_sha: 'c305f6217da65bb69413c39e621b7e797e0fb189', gp_anchor: 'line02/keyword_acquisition#step7', target_environment: 'local_api', ...overrides } };
 }
 
+function expectFleetEvidence(task: Record<string, any>) {
+  const result = task.result ?? task.metadata ?? {};
+  const evidence = JSON.stringify(result);
+  for (const value of ['perfectuser21/zenithjoy-workspace', 'c305f6217da65bb69413c39e621b7e797e0fb189', 'line02/keyword_acquisition#step7']) expect(evidence).toContain(value);
+  const identity = result.validation_identity ?? result.provenance;
+  expect(identity).toEqual(expect.objectContaining({ attempt_id: expect.any(String), capability_snapshot_id: expect.any(String) }));
+  expect(identity.attempt_id.length).toBeGreaterThan(0);
+  expect(identity.capability_snapshot_id.length).toBeGreaterThan(0);
+}
+
 function submit(body: object) {
   return curlJson(['-X', 'POST', `${brain}/api/brain/tasks`, '-H', 'content-type: application/json', '-d', JSON.stringify(body)]).id as string;
 }
@@ -39,8 +49,7 @@ describe('Fleet Worker production chain [BEHAVIOR]', () => {
     expect(task.status).toBe('completed');
     expect(String(task.execution_surface ?? task.executor ?? '').toLowerCase()).toContain('fleet');
     expect(task.payload).toMatchObject(payload().payload);
-    const evidence = JSON.stringify(task.result ?? task.metadata ?? {});
-    for (const value of ['perfectuser21/zenithjoy-workspace', 'c305f6217da65bb69413c39e621b7e797e0fb189', 'line02/keyword_acquisition#step7', process.env.HARNESS_ATTEMPT_ID, process.env.CAPABILITY_SNAPSHOT_ID]) expect(evidence).toContain(value);
+    expectFleetEvidence(task);
   }, timeout);
 
   it('错误仓库 fail-closed', async () => {
@@ -70,5 +79,16 @@ describe('Fleet Worker production chain [BEHAVIOR]', () => {
     const missing = payload(); delete missing.payload.gp_anchor;
     await expectFailed(missing, 'gp_anchor');
     await expectFailed(payload({ gp_anchor: 'line02/keyword_acquisition#step999' }), 'gp_anchor');
+  }, timeout);
+
+  it('正确 payload 的依赖终态不误报业务成功', async () => {
+    const task = await terminal(submit(payload()));
+    if (task.status === 'completed') {
+      expectFleetEvidence(task);
+      return;
+    }
+    expect(task.status).toBe('failed');
+    expect(task.failure_class).toBe('environment_failure');
+    expect(String(task.error_message ?? '').toLowerCase()).toMatch(/github|postgres/);
   }, timeout);
 });
