@@ -35,6 +35,7 @@ import {
   submitResults,
   type SubmitResultItem,
 } from '../services/acceptance';
+import { fetchWorkbenchSummary, submitWorkbenchFeedback } from '../services/workbench';
 
 const router = Router();
 // 登录端点身份未知，按来源 IP 限流（不能按 tenant/user，此时还没有）：
@@ -341,6 +342,32 @@ router.post('/acceptance/results', async (req, res): Promise<void> => {
     res.status(200).json({ success: true, data: result });
   } catch (err) {
     const message = axios.isAxiosError(err) ? err.message : (err as Error).message || 'submit failed';
+    res.status(502).json({ success: false, error: { code: 'BRAIN_UNAVAILABLE', message } });
+  }
+});
+
+// ─── 员工工作台（Workbench，任务 9cc10ff2 · 决策 af0d0818 执行层）────────────
+// 汇总"今天轮到我判断什么" + 反馈网关（→Brain captures 进箱走去向链）。
+
+router.get('/workbench/summary', async (_req, res): Promise<void> => {
+  const result = await fetchWorkbenchSummary();
+  res.status(200).json({ success: true, ...result });
+});
+
+router.post('/workbench/feedback', async (req, res): Promise<void> => {
+  const content = typeof req.body?.content === 'string' ? req.body.content.trim() : '';
+  if (!content) {
+    res.status(400).json({ success: false, error: { code: 'BAD_REQUEST', message: 'content is required' } });
+    return;
+  }
+  const nature = req.body?.nature === 'issue' ? 'issue' as const : undefined;
+  const link = typeof req.body?.link === 'string' && req.body.link.trim() ? req.body.link.trim() : undefined;
+  const email = (req as Request & { staffIdentity?: string }).staffIdentity;
+  try {
+    const capture = await submitWorkbenchFeedback({ content, nature, link, email });
+    res.status(200).json({ success: true, capture });
+  } catch (err) {
+    const message = axios.isAxiosError(err) ? err.message : (err as Error).message || 'feedback failed';
     res.status(502).json({ success: false, error: { code: 'BRAIN_UNAVAILABLE', message } });
   }
 });
