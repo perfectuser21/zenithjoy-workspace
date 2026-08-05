@@ -1,9 +1,10 @@
-# Sprint Contract Draft（Round 1）
+# Sprint Contract Draft（Round 2）
 
 ## Notes
 
 - contract-gate: skipped (file not found, third-party repo)
 - GAN 起草身份仅作 provenance；未来 Evaluator/Judge 身份必须读取 Runner 注入的 `HARNESS_*` 与 `CAPABILITY_SNAPSHOT_ID`，本合同不固化任何角色 UUID。
+- Round 2 scope 收敛：JSON 只要求至少含 `ok`、`errors`，允许未来兼容性扩展字段。
 
 ## Response Schema（推导来源: PRD 字面）
 
@@ -24,8 +25,8 @@
 {"ok": false, "errors": ["具体问题描述"]}
 ```
 
-- 顶层 keys 必须恰为 `errors`、`ok`；不新增 PRD 未授权字段。
-- 禁用字段名：`error`、`message`、`success`、`status`。
+- 顶层至少含 `ok`、`errors`；PRD 未限制额外字段。
+- 禁用字段名：N/A（PRD 未定义）。
 
 ## 已知约束（来自回归测试）
 
@@ -40,7 +41,7 @@
 | FR（做什么） | `check --json` 输出单个机器可解析对象；普通 `check` 逐字兼容。 |
 | NFR（做得多好） | Node.js 20；stdout 在 JSON 模式无额外文本；无 PRD 指定延迟阈值。 |
 | Invariant（永不违反） | 退出码通过=0、失败=非0；不改分类数据、其他子命令或共享 CI。 |
-| 判定点（怎么知道） | `jq` 校验字段、类型、keys 与错误数组；shell 校验退出码。 |
+| 判定点（怎么知道） | `jq` 校验必填字段、类型与错误数组；shell 校验退出码。 |
 | 保质期（何时过期） | 随 CLI 合同长期有效；字段变更须新 PRD。 |
 | 死亡告警（停了谁知道） | L2 `product-map-contract` 与 CLI smoke 首次执行即失败。 |
 | 失败语义（挂了怎么办） | fail-closed，输出合法 JSON 后非0退出；不得未捕获异常污染 stdout。 |
@@ -56,7 +57,7 @@
 |---|---|---|---|
 | 生成 JSON 缺失/损坏 | stdout 输出 `ok=false` 与具体 `errors`，exit 非0 | 是（只读检查） | 无文本降级，保持 JSON 合同 |
 | YAML/schema/smoke 检查失败 | 聚合具体问题至字符串数组，exit 非0 | 是 | fail-closed |
-| 普通 `check` | 保持冻结基线原输出与退出码 | 是 | N/A |
+| 普通 `check` 成功、缺文件、digest 漂移 | 分别保持冻结基线的 stdout/stderr 与退出码 | 是 | N/A |
 
 ### 输入对抗面
 
@@ -91,21 +92,21 @@ GP-Anchor: none(config)
 
 **来源**: `[FROM_PRD]` — Golden Path 第 4 点与范围限定。
 
-**可观测行为**: 不带 `--json` 时 stdout 为冻结基线的 PASS 行，stderr 为空且 exit 0。
+**可观测行为**: 不带 `--json` 时，成功、缺失生成 JSON、digest 漂移三条既有分支的 stdout/stderr 与退出码逐字保持冻结基线。
 
-**验证命令**: `OUT=$(node scripts/product-map/cli.mjs check); [ "$OUT" = "PASS: no drift — generated files match current product-map.yaml (digest: $(node -e \"import('./scripts/product-map/lib.mjs').then(async m=>console.log(m.productMapDigest((await m.loadAndValidateProductMap()).map).slice(0,8)))\")...)" ]`
+**验证命令**: `node --test scripts/product-map/__tests__/product-map-cli-json.test.js --test-name-pattern='普通 check'`
 
-**硬阈值**: stdout 逐字相同；exit=0。上述命令同时执行字面比较与 exit-code 断言。
+**硬阈值**: 成功分支 exit=0 且 PASS 行逐字相同；缺文件与 digest 漂移分支 exit=1，stdout 为空，stderr 分别逐字等于冻结错误文本。测试夹具逐项断言。
 
 ### Step 2：`check --json` 成功输出
 
 **来源**: `[FROM_PRD]` — Golden Path 第 1-2 点。
 
-**可观测行为**: stdout 仅一个 JSON 对象，`ok=true`、`errors=[]`，且无额外 keys，exit 0。
+**可观测行为**: stdout 仅一个 JSON 对象，至少含 `ok=true`、`errors=[]`，exit 0。
 
-**验证命令**: `node scripts/product-map/cli.mjs check --json | jq -e 'type=="object" and keys==["errors","ok"] and .ok==true and .errors==[]'`
+**验证命令**: `node scripts/product-map/cli.mjs check --json | jq -e 'type=="object" and has("ok") and has("errors") and .ok==true and (.ok|type=="boolean") and .errors==[] and (.errors|type=="array")'`
 
-**硬阈值**: 合法 JSON；keys 精确；字段类型和值符合 PRD；exit=0。验证命令已 codify 全部阈值。
+**硬阈值**: 合法单 JSON；必填字段类型和值符合 PRD；exit=0。额外字段不导致失败。
 
 ### Step 3：损坏输入仍输出结构化失败
 
@@ -113,7 +114,7 @@ GP-Anchor: none(config)
 
 **可观测行为**: 在隔离临时仓库删除或损坏生成 JSON 后，stdout 仍为单个合法对象，`ok=false`、`errors` 为非空字符串数组，exit 非0；stderr 不含未捕获堆栈。
 
-**验证命令**: `bash -c 'TMP=$(mktemp -d); trap "rm -rf \"$TMP\"" EXIT; mkdir -p "$TMP/scripts" "$TMP/product-map/generated"; cp -R scripts/product-map "$TMP/scripts/"; cp -R product-map/product-map.yaml product-map/product-map.schema.json "$TMP/product-map/"; ln -s "$PWD/node_modules" "$TMP/node_modules"; printf "{" > "$TMP/product-map/generated/product-map.json"; set +e; OUT=$(cd "$TMP" && node scripts/product-map/cli.mjs check --json 2>err); RC=$?; set -e; [ "$RC" -ne 0 ]; printf "%s" "$OUT" | jq -e '"'"'type=="object" and keys==["errors","ok"] and .ok==false and (.errors|type=="array" and length>0 and all(type=="string"))'"'"'; [ ! -s "$TMP/err" ]'`
+**验证命令**: `node --test scripts/product-map/__tests__/product-map-cli-json.test.js --test-name-pattern='损坏或缺失'`
 
 **硬阈值**: exit 非0、stdout 单 JSON、非空字符串错误数组、stderr 空；上述命令逐项断言。
 
@@ -123,7 +124,7 @@ GP-Anchor: none(config)
 
 **可观测行为**: `check --json extra` 仍执行 check JSON 模式并给出同一成功结论；参数不改变既有 command 选择。
 
-**验证命令**: `node scripts/product-map/cli.mjs check --json extra | jq -e 'keys==["errors","ok"] and .ok==true and .errors==[]'`
+**验证命令**: `node scripts/product-map/cli.mjs check --json extra | jq -e 'has("ok") and has("errors") and .ok==true and .errors==[]'`
 
 **硬阈值**: exit=0 且 schema/value 与 Step 2 相同；验证命令已覆盖。
 
@@ -140,7 +141,7 @@ npm run product-map:check >/tmp/product-map-text.out
 EXPECTED="PASS: no drift — generated files match current product-map.yaml (digest: $(node -e "import('./scripts/product-map/lib.mjs').then(async m=>console.log(m.productMapDigest((await m.loadAndValidateProductMap()).map).slice(0,8)))")...)"
 [ "$(cat /tmp/product-map-text.out)" = "$EXPECTED" ]
 node scripts/product-map/cli.mjs check --json >/tmp/product-map-ok.json
-jq -e 'type=="object" and keys==["errors","ok"] and .ok==true and .errors==[]' /tmp/product-map-ok.json
+jq -e 'type=="object" and has("ok") and has("errors") and .ok==true and (.ok|type=="boolean") and .errors==[] and (.errors|type=="array")' /tmp/product-map-ok.json
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP" /tmp/product-map-text.out /tmp/product-map-ok.json' EXIT
 mkdir -p "$TMP/scripts" "$TMP/product-map/generated"
@@ -154,8 +155,17 @@ RC=$?
 set -e
 [ "$RC" -ne 0 ]
 [ ! -s "$TMP/failure.err" ]
-jq -e 'type=="object" and keys==["errors","ok"] and .ok==false and (.errors|type=="array" and length>0 and all(type=="string"))' "$TMP/failure.json"
+jq -e 'type=="object" and has("ok") and has("errors") and .ok==false and (.errors|type=="array" and length>0 and all(type=="string"))' "$TMP/failure.json"
+rm -f "$TMP/product-map/generated/product-map.json"
+set +e
+(cd "$TMP" && node scripts/product-map/cli.mjs check --json) > "$TMP/missing.json" 2> "$TMP/missing.err"
+MISSING_RC=$?
+set -e
+[ "$MISSING_RC" -ne 0 ]
+[ ! -s "$TMP/missing.err" ]
+jq -e 'type=="object" and has("ok") and has("errors") and .ok==false and (.errors|type=="array" and length>0 and all(type=="string"))' "$TMP/missing.json"
 node scripts/product-map/cli.mjs check --json extra | jq -e '.ok==true and .errors==[]'
+node --test scripts/product-map/__tests__/product-map-cli-json.test.js
 echo 'Golden Path 验证通过'
 ```
 
@@ -175,6 +185,6 @@ echo 'Golden Path 验证通过'
 
 | 功能 | Test File | BEHAVIOR 覆盖 | 预期红证据 |
 |---|---|---|---|
-| JSON 成功与 schema | `tests/product-map-cli-json.test.ts` | `check --json 成功时只输出 ok/errors JSON` | 当前 CLI 输出文本，JSON.parse 失败 |
-| JSON 失败与兼容 | `tests/product-map-cli-json.test.ts` | `check --json 对损坏 JSON 输出结构化失败` | 当前 CLI 裸抛 SyntaxError/JSON stdout 缺失 |
-
+| JSON 成功与必填字段 | `tests/product-map-cli-json.test.ts` | `check --json 成功时输出含 ok/errors 的 JSON` | 当前 CLI 输出文本，JSON.parse 失败 |
+| JSON 错误路径 | `tests/product-map-cli-json.test.ts` | `check --json 对损坏或缺失 JSON 输出结构化失败` | 当前 CLI 裸抛或只写 stderr，JSON stdout 缺失 |
+| 文本模式兼容 | `tests/product-map-cli-json.test.ts` | `普通 check 的成功与失败输出逐字保持兼容` | 回归守卫在当前实现通过；JSON 测试维持整套 Red |

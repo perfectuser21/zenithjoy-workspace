@@ -8,15 +8,14 @@
       "title": "实现 product-map check --json 机器输出",
       "scope": "在不改变普通 check 和退出码语义的前提下，为 check 增加成功与失败均合法的 JSON 输出，并补齐 CLI 单测",
       "dod": [
-        "[BEHAVIOR] check --json 成功时输出精确 ok/errors schema 且 exit 0",
+        "[BEHAVIOR] check --json 成功时输出至少含 ok/errors 的 JSON 且 exit 0",
         "[BEHAVIOR] 缺失或损坏生成 JSON 时输出 ok=false、具体 errors 且 exit 非0",
-        "[BEHAVIOR] 普通 check stdout 与冻结基线逐字一致",
+        "[BEHAVIOR] 普通 check 成功、缺文件与 digest 漂移分支的 stdout/stderr 与退出码逐字兼容",
         "[ARTIFACT] scripts/product-map/__tests__/product-map-cli-json.test.js"
       ],
       "files": [
         "scripts/product-map/cli.mjs",
-        "scripts/product-map/__tests__/product-map-cli-json.test.js",
-        "package.json"
+        "scripts/product-map/__tests__/product-map-cli-json.test.js"
       ],
       "depends_on": [],
       "complexity": "S",
