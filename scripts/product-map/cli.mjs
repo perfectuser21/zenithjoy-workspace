@@ -121,6 +121,60 @@ async function cmdCheck() {
   console.log(`PASS: no drift — generated files match current product-map.yaml (digest: ${currentDigest.slice(0, 8)}...)`);
 }
 
+async function cmdCheckJson() {
+  const errors = [];
+  let map;
+  let currentDigest;
+
+  try {
+    const result = await loadAndValidateProductMap();
+    map = result.map;
+    if (result.errors.length > 0) {
+      errors.push(...result.errors.map(error => `product-map.yaml schema error: ${error}`));
+    } else {
+      currentDigest = productMapDigest(map);
+    }
+  } catch (error) {
+    errors.push(`Unable to read product-map.yaml: ${error.message}`);
+  }
+
+  if (!existsSync(JSON_OUT)) {
+    errors.push('product-map/generated/product-map.json does not exist. Run npm run product-map:generate first.');
+  } else {
+    try {
+      const generatedJson = JSON.parse(readFileSync(JSON_OUT, 'utf8'));
+      if (currentDigest && generatedJson.digest !== currentDigest) {
+        errors.push(`Generated digest ${String(generatedJson.digest).slice(0, 8)} does not match current YAML digest ${currentDigest.slice(0, 8)}`);
+      }
+    } catch (error) {
+      errors.push(`Unable to parse product-map/generated/product-map.json: ${error.message}`);
+    }
+  }
+
+  if (currentDigest && existsSync(MD_OUT)) {
+    try {
+      const mdContent = readFileSync(MD_OUT, 'utf8');
+      if (!mdContent.includes(currentDigest)) {
+        errors.push('product-map.md does not contain current digest');
+      }
+    } catch (error) {
+      errors.push(`Unable to read product-map/generated/product-map.md: ${error.message}`);
+    }
+  }
+
+  if (map) {
+    try {
+      const smokeResult = validateSmokeFiles(map, REPO_ROOT);
+      if (!smokeResult.ok) errors.push(...smokeResult.errors.map(error => String(error)));
+    } catch (error) {
+      errors.push(`Unable to validate smoke files: ${error.message}`);
+    }
+  }
+
+  console.log(JSON.stringify({ ok: errors.length === 0, errors }));
+  if (errors.length > 0) process.exitCode = 1;
+}
+
 switch (command) {
   case 'validate':
     await cmdValidate();
@@ -129,7 +183,8 @@ switch (command) {
     await cmdGenerate();
     break;
   case 'check':
-    await cmdCheck();
+    if (process.argv.slice(3).includes('--json')) await cmdCheckJson();
+    else await cmdCheck();
     break;
   default:
     console.error(`Unknown command: ${command}`);
