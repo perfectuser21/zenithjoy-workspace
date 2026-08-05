@@ -1,0 +1,27 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "验证 Fleet Worker 后端 payload 消费与提交证据绑定，不含用户界面步骤",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "执行 Fleet payload 与目标提交绑定验收",
+      "scope": "仅维护并执行本 Sprint 的验收合同，核对真实 payload、PR head、候选 checkout 与既有结果证据；不修改 PR #1581 业务实现或 Harness 调度",
+      "dod": [
+        "[BEHAVIOR] 原始 payload 三个权威字段、冻结 base SHA 与 GP anchor 精确有效",
+        "[BEHAVIOR] GitHub PR head、候选 checkout 与既有结果证据均绑定 target SHA",
+        "[BEHAVIOR] 三字段篡改及 GitHub/Postgres 依赖故障均不得通过",
+        "[ARTIFACT] Round 3 合同、DoD、测试与 task-plan"
+      ],
+      "files": [
+        "sprints/08051500-kernel-pr1581-fleet-validation-r36/contract-draft.md",
+        "sprints/08051500-kernel-pr1581-fleet-validation-r36/contract-dod.md",
+        "sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-target-validation.test.ts",
+        "sprints/08051500-kernel-pr1581-fleet-validation-r36/task-plan.json"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 30
+    }
+  ]
+}
