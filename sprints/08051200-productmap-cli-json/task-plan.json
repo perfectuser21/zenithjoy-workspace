@@ -11,11 +11,11 @@
         "[BEHAVIOR] check --json 成功时输出至少含 ok/errors 的 JSON 且 exit 0",
         "[BEHAVIOR] 缺失或损坏生成 JSON 时输出 ok=false、具体 errors 且 exit 非0",
         "[BEHAVIOR] 普通 check 成功、缺文件与 digest 漂移分支的 stdout/stderr 与退出码逐字兼容",
-        "[ARTIFACT] scripts/product-map/__tests__/product-map-cli-json.test.js"
+        "[ARTIFACT] scripts/product-map/__tests__/product-map-cli-json.test.mjs"
       ],
       "files": [
         "scripts/product-map/cli.mjs",
-        "scripts/product-map/__tests__/product-map-cli-json.test.js"
+        "scripts/product-map/__tests__/product-map-cli-json.test.mjs"
       ],
       "depends_on": [],
       "complexity": "S",

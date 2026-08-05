@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const repo = resolve(import.meta.dirname, '../../..');
+const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const cli = resolve(repo, 'scripts/product-map/cli.mjs');
 
-function fixture(): string {
+function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'product-map-cli-json-'));
   mkdirSync(join(root, 'scripts'), { recursive: true });
   mkdirSync(join(root, 'product-map/generated'), { recursive: true });
@@ -21,7 +22,7 @@ function fixture(): string {
   return root;
 }
 
-function run(root: string, ...args: string[]) {
+function run(root, ...args) {
   return spawnSync(process.execPath, [join(root, 'scripts/product-map/cli.mjs'), 'check', ...args], { cwd: root, encoding: 'utf8' });
 }
 
@@ -47,7 +48,7 @@ test('check --json 对损坏或缺失 JSON 输出结构化失败', async t => {
         const body = JSON.parse(result.stdout);
         assert.equal(body.ok, false);
         assert.ok(Array.isArray(body.errors) && body.errors.length > 0);
-        assert.ok(body.errors.every((error: unknown) => typeof error === 'string' && error.length > 0));
+        assert.ok(body.errors.every(error => typeof error === 'string' && error.length > 0));
       } finally {
         rmSync(root, { recursive: true, force: true });
       }

@@ -1,10 +1,10 @@
-# Sprint Contract Draft（Round 2）
+# Sprint Contract Draft（Round 3）
 
 ## Notes
 
 - contract-gate: skipped (file not found, third-party repo)
 - GAN 起草身份仅作 provenance；未来 Evaluator/Judge 身份必须读取 Runner 注入的 `HARNESS_*` 与 `CAPABILITY_SNAPSHOT_ID`，本合同不固化任何角色 UUID。
-- Round 2 scope 收敛：JSON 只要求至少含 `ok`、`errors`，允许未来兼容性扩展字段。
+- Round 3 仅修复 R2-1：冻结测试改为 Node.js 20 可直接执行的 `.mjs`，并统一所有测试路径与参数顺序。
 
 ## Response Schema（推导来源: PRD 字面）
 
@@ -94,7 +94,7 @@ GP-Anchor: none(config)
 
 **可观测行为**: 不带 `--json` 时，成功、缺失生成 JSON、digest 漂移三条既有分支的 stdout/stderr 与退出码逐字保持冻结基线。
 
-**验证命令**: `node --test scripts/product-map/__tests__/product-map-cli-json.test.js --test-name-pattern='普通 check'`
+**验证命令**: `node --test --test-name-pattern='普通 check' scripts/product-map/__tests__/product-map-cli-json.test.mjs`
 
 **硬阈值**: 成功分支 exit=0 且 PASS 行逐字相同；缺文件与 digest 漂移分支 exit=1，stdout 为空，stderr 分别逐字等于冻结错误文本。测试夹具逐项断言。
 
@@ -114,7 +114,7 @@ GP-Anchor: none(config)
 
 **可观测行为**: 在隔离临时仓库删除或损坏生成 JSON 后，stdout 仍为单个合法对象，`ok=false`、`errors` 为非空字符串数组，exit 非0；stderr 不含未捕获堆栈。
 
-**验证命令**: `node --test scripts/product-map/__tests__/product-map-cli-json.test.js --test-name-pattern='损坏或缺失'`
+**验证命令**: `node --test --test-name-pattern='损坏或缺失' scripts/product-map/__tests__/product-map-cli-json.test.mjs`
 
 **硬阈值**: exit 非0、stdout 单 JSON、非空字符串错误数组、stderr 空；上述命令逐项断言。
 
@@ -165,7 +165,7 @@ set -e
 [ ! -s "$TMP/missing.err" ]
 jq -e 'type=="object" and has("ok") and has("errors") and .ok==false and (.errors|type=="array" and length>0 and all(type=="string"))' "$TMP/missing.json"
 node scripts/product-map/cli.mjs check --json extra | jq -e '.ok==true and .errors==[]'
-node --test scripts/product-map/__tests__/product-map-cli-json.test.js
+node --test scripts/product-map/__tests__/product-map.test.js scripts/product-map/__tests__/gp-smoke-ratchet.test.js scripts/product-map/__tests__/realmachine-unverified-ratchet.test.js scripts/product-map/__tests__/product-map-cli-json.test.mjs
 echo 'Golden Path 验证通过'
 ```
 
@@ -185,6 +185,6 @@ echo 'Golden Path 验证通过'
 
 | 功能 | Test File | BEHAVIOR 覆盖 | 预期红证据 |
 |---|---|---|---|
-| JSON 成功与必填字段 | `tests/product-map-cli-json.test.ts` | `check --json 成功时输出含 ok/errors 的 JSON` | 当前 CLI 输出文本，JSON.parse 失败 |
-| JSON 错误路径 | `tests/product-map-cli-json.test.ts` | `check --json 对损坏或缺失 JSON 输出结构化失败` | 当前 CLI 裸抛或只写 stderr，JSON stdout 缺失 |
-| 文本模式兼容 | `tests/product-map-cli-json.test.ts` | `普通 check 的成功与失败输出逐字保持兼容` | 回归守卫在当前实现通过；JSON 测试维持整套 Red |
+| JSON 成功与必填字段 | `scripts/product-map/__tests__/product-map-cli-json.test.mjs` | `check --json 成功时输出含 ok/errors 的 JSON` | 当前 CLI 输出文本，JSON.parse 失败 |
+| JSON 错误路径 | `scripts/product-map/__tests__/product-map-cli-json.test.mjs` | `check --json 对损坏或缺失 JSON 输出结构化失败` | 当前 CLI 裸抛或只写 stderr，JSON stdout 缺失 |
+| 文本模式兼容 | `scripts/product-map/__tests__/product-map-cli-json.test.mjs` | `普通 check 的成功与失败输出逐字保持兼容` | 回归守卫在当前实现通过；JSON 测试维持整套 Red |

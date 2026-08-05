@@ -15,7 +15,7 @@ journey_type: dev_pipeline
 ## ARTIFACT 条目
 
 - [ ] [ARTIFACT] CLI 与 node:test 单测均在授权目录。
-  Test: bash -c 'test -f scripts/product-map/cli.mjs && test -f scripts/product-map/__tests__/product-map-cli-json.test.js'
+  Test: bash -c 'test -f scripts/product-map/cli.mjs && test -f scripts/product-map/__tests__/product-map-cli-json.test.mjs'
 
 ## BEHAVIOR 条目
 
@@ -31,21 +31,21 @@ journey_type: dev_pipeline
   预期观察: 成功 PASS 行与两个失败分支 stderr 均逐字等于冻结文本，退出码保持 0/1/1
   等待预算: 0s
   留证: 完整 stdout 文本
-  Test: manual:bash -c 'node --test scripts/product-map/__tests__/product-map-cli-json.test.js --test-name-pattern="普通 check"'
+  Test: manual:bash -c 'node --test --test-name-pattern="普通 check" scripts/product-map/__tests__/product-map-cli-json.test.mjs'
 
 - [ ] [BEHAVIOR] [L2] B-03: 损坏 product-map.json 返回 JSON 失败 [接缝×2]
   动作: 在隔离临时仓库将生成 JSON 写成不可解析内容后执行 `check --json`
   预期观察: exit 非0，stdout 为 `ok=false` 与非空字符串 errors，stderr 空
   等待预算: 2s
   留证: 临时仓库 failure.json 与 exit code
-  Test: manual:bash -c 'node --test scripts/product-map/__tests__/product-map-cli-json.test.js --test-name-pattern="损坏或缺失"'
+  Test: manual:bash -c 'node --test --test-name-pattern="损坏或缺失" scripts/product-map/__tests__/product-map-cli-json.test.mjs'
 
 - [ ] [BEHAVIOR] [L2] B-04: 缺失 product-map.json 返回 JSON 失败 [接缝×2]
   动作: 在隔离临时仓库不提供生成 JSON 后执行 `check --json`
   预期观察: exit 非0，stdout 合法且 errors 含具体缺失原因
   等待预算: 2s
   留证: 临时仓库 stdout 与 exit code
-  Test: manual:bash -c 'node --test scripts/product-map/__tests__/product-map-cli-json.test.js --test-name-pattern="损坏或缺失"'
+  Test: manual:bash -c 'node --test --test-name-pattern="损坏或缺失" scripts/product-map/__tests__/product-map-cli-json.test.mjs'
 
 - [ ] [BEHAVIOR] [L2] B-05: `--json` 与额外既有参数并存不互扰
   动作: 执行 `check --json extra`
@@ -59,4 +59,4 @@ journey_type: dev_pipeline
   预期观察: 所有测试通过且进程 exit 0
   等待预算: 30s
   留证: TAP 输出
-  Test: manual:bash -c 'npm run test:product-map'
+  Test: manual:bash -c 'node --test scripts/product-map/__tests__/product-map.test.js scripts/product-map/__tests__/gp-smoke-ratchet.test.js scripts/product-map/__tests__/realmachine-unverified-ratchet.test.js scripts/product-map/__tests__/product-map-cli-json.test.mjs'
