@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 10)
+# Sprint Contract Draft (Round 11)
 
 ## Notes
 
@@ -7,12 +7,12 @@
 - 本合同只验证既有 Fleet Worker；不修改 PR #1581 的业务实现、Harness 调度策略或共享 CI 基础设施。
 - validation identity 全部从实际执行角色的 `HARNESS_*` 与 `CAPABILITY_SNAPSHOT_ID` late-bind。
 
-## Round 9 feedback closure
+## Round 10 feedback closure
 
 | 反馈 | closure |
 |---|---|
-| R9-1：GitHub mismatch oracle 未绑定权威 payload target | `check_github_head` 改为接收并读取 payload 文件，比较目标只能来自该文件的 `target_head_sha`；负向场景先生成结构化 mismatch payload，再用真实 GitHub 返回值对账。回执中的 target 也由同一 payload 装载，消除常量参数与权威输入分叉。 |
-| R9-2：业务断言失败会被误分类为 Node 依赖故障 | 把 Node/Vitest 可用性预检与测试结果拆开：缺少可执行 Vitest 才是 `node_dependencies_unavailable/environment_failed`；Vitest 已启动但测试非零改为 `production_oracle_failed/failed`。因此业务失败不再冒充基础设施故障。 |
+| R10-1：GitHub/Postgres 不可用分支缺少可执行验收 | 在同一 E2E 进程加入两个确定性断网探针：GitHub 指向不可达 loopback 端口、Postgres 指向不可达 loopback 端口；两者必须非零，并分别产出 `environment_failed/github_unavailable` 与 `environment_failed/postgres_unavailable` 的十键回执。真实依赖成功路径仍真调 GitHub 与 attempt Postgres，不以探针替代。 |
+| R10-2：B-04 完整 E2E 等待预算错误写为 0s | B-04 等待预算改为 PRD 的 7200s，明确完整 E2E 超时即 FAIL；不再把含 GitHub、migration、Postgres 与 Vitest 的异步验收误标同步观察。 |
 
 ## GP-Anchor
 
@@ -260,10 +260,23 @@ for n in 1 2; do
   printf '%s\n' "$GH_HEAD" | tee -a "$EVIDENCE_DIR/github-head.log"
   [ "$GH_HEAD" = "$HEAD_SHA" ] || fail_input target_head_sha_mismatch
 done
+# 依赖故障必须有可执行的分类 oracle；不可达 loopback 仅触发失败路径，不替代上面的真实成功调用。
+if GH_HOST=127.0.0.1:1 gh api repos/perfectuser21/zenithjoy-workspace/pulls/1581 --jq .head.sha >/dev/null 2>&1; then
+  fail_input negative_oracle_error
+else
+  finish environment_failed github_unavailable >"$EVIDENCE_DIR/github-unavailable-receipt.json"
+fi
+jq -e '.status=="environment_failed" and .failure_class=="github_unavailable" and keys==["attempt_id","base_repo","base_sha","evidence_sha256","execution_surface","failure_class","gp_anchor","run_id","status","target_head_sha"]' "$EVIDENCE_DIR/github-unavailable-receipt.json"
 jq -e '[.golden_paths[]|select(.line_id=="line02" and .id=="keyword_acquisition" and any(.steps[];.id=="step7"))]|length==1' product-map/generated/product-map.json >"$EVIDENCE_DIR/gp.log" || fail_input gp_anchor_invalid
 export DATABASE_URL="$DB_URL"
 npm --prefix apps/api run migrate >"$EVIDENCE_DIR/migration.log" 2>&1 || fail_environment postgres_unavailable
 psql "$DB_URL" -v ON_ERROR_STOP=1 -XtAc "SELECT to_regclass('zenithjoy.schema_migrations') IS NOT NULL" | tee "$EVIDENCE_DIR/postgres.log" | grep -qx t || fail_environment postgres_unavailable
+if PGCONNECT_TIMEOUT=1 psql 'postgresql://127.0.0.1:1/harness_unreachable' -XtAc 'SELECT 1' >/dev/null 2>&1; then
+  fail_input negative_oracle_error
+else
+  finish environment_failed postgres_unavailable >"$EVIDENCE_DIR/postgres-unavailable-receipt.json"
+fi
+jq -e '.status=="environment_failed" and .failure_class=="postgres_unavailable" and keys==["attempt_id","base_repo","base_sha","evidence_sha256","execution_surface","failure_class","gp_anchor","run_id","status","target_head_sha"]' "$EVIDENCE_DIR/postgres-unavailable-receipt.json"
 test -x node_modules/.bin/vitest || fail_environment node_dependencies_unavailable
 node_modules/.bin/vitest run sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-production-receipt.test.ts --reporter=verbose || fail_input production_oracle_failed
 EVIDENCE_SHA=$(find "$EVIDENCE_DIR" -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)

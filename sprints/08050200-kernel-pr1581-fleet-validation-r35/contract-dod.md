@@ -41,7 +41,7 @@ journey_type: autonomous
 - [ ] [BEHAVIOR] [L2] B-04: 实际验收回执 schema 精确且绑定证据
   动作: 从合同提取并运行完整 E2E 验收进程，再读取它在全部生产检查结束后写出的真实 receipt
   预期观察: status=passed、failure_class=none、十个 key 精确存在且证据摘要为 64 位 hex
-  等待预算: 0s
+  等待预算: 7200s（超时=FAIL）
   留证: ${SPRINT_DIR}/evidence/${HARNESS_ATTEMPT_ID}/receipt.json 与 jq exit code
   Test: manual:bash -c 'X="${SPRINT_DIR}/evidence/${HARNESS_ATTEMPT_ID}/e2e-contract.sh"; mkdir -p "$(dirname "$X")"; awk '\''/^## E2E 验收/{found=1;next} found&&/^## /{exit} found&&/^```bash/{b=1;next} b&&/^```/{b=0;next} b{print}'\'' "$SPRINT_DIR/contract-draft.md" >"$X"; bash "$X" >"${X%.sh}.log"; R="${SPRINT_DIR}/evidence/${HARNESS_ATTEMPT_ID}/receipt.json"; jq -e '\''.status=="passed" and .failure_class=="none" and (.evidence_sha256|test("^[0-9a-f]{64}$")) and keys==["attempt_id","base_repo","base_sha","evidence_sha256","execution_surface","failure_class","gp_anchor","run_id","status","target_head_sha"] and (has("repo")|not) and (has("head_sha")|not) and (has("anchor")|not) and (has("ok")|not)'\'' "$R"'
 
@@ -66,9 +66,23 @@ journey_type: autonomous
   留证: GitHub SHA 输出与 E2E failure_class
   Test: manual:bash -c 'F="${SPRINT_DIR}/evidence/${HARNESS_ATTEMPT_ID}/github-mismatch-receipt.json"; jq -e '\''.status=="failed" and .failure_class=="target_head_sha_mismatch" and (.evidence_sha256|test("^[0-9a-f]{64}$")) and keys==["attempt_id","base_repo","base_sha","evidence_sha256","execution_surface","failure_class","gp_anchor","run_id","status","target_head_sha"]'\'' "$F"'
 
+- [ ] [BEHAVIOR] [L2] B-08: GitHub 不可用明确归环境失败
+  动作: 执行完整 E2E 内指向不可达 loopback 端口的 GitHub 依赖探针
+  预期观察: 探针非零，回执为 environment_failed/github_unavailable，不产生 passed
+  等待预算: 30s
+  留证: ${SPRINT_DIR}/evidence/${HARNESS_ATTEMPT_ID}/github-unavailable-receipt.json
+  Test: manual:bash -c 'F="${SPRINT_DIR}/evidence/${HARNESS_ATTEMPT_ID}/github-unavailable-receipt.json"; jq -e '\''.status=="environment_failed" and .failure_class=="github_unavailable" and keys==["attempt_id","base_repo","base_sha","evidence_sha256","execution_surface","failure_class","gp_anchor","run_id","status","target_head_sha"]'\'' "$F"'
+
+- [ ] [BEHAVIOR] [L2] B-09: Postgres 不可用明确归环境失败
+  动作: 执行完整 E2E 内指向不可达 loopback 端口的 Postgres 依赖探针
+  预期观察: 探针非零，回执为 environment_failed/postgres_unavailable，不产生 passed
+  等待预算: 30s
+  留证: ${SPRINT_DIR}/evidence/${HARNESS_ATTEMPT_ID}/postgres-unavailable-receipt.json
+  Test: manual:bash -c 'F="${SPRINT_DIR}/evidence/${HARNESS_ATTEMPT_ID}/postgres-unavailable-receipt.json"; jq -e '\''.status=="environment_failed" and .failure_class=="postgres_unavailable" and keys==["attempt_id","base_repo","base_sha","evidence_sha256","execution_surface","failure_class","gp_anchor","run_id","status","target_head_sha"]'\'' "$F"'
+
 ## Invariant 映射
 
 - INV-01（真实派发、strict ref、同义语义一致、真实 exit code）由 B-01/B-02/B-05 覆盖。
 - INV-02（GP anchor、Test Contract 四列、secret/PII、共享 CI 禁区）由 B-03 与 ARTIFACT 条目覆盖。
-- INV-03（verdict 锚定真实 SHA、identity late-bound、输入/依赖失败不假绿）由 B-02/B-04/B-05/B-06 覆盖。
+- INV-03（verdict 锚定真实 SHA、identity late-bound、输入/依赖失败不假绿）由 B-02/B-04/B-05/B-06/B-08/B-09 覆盖。
 - N/A：本 sprint 不新增服务、状态、表、job、API、租户、通知、RPA、UI、cron、部署、relay 或付费 API；其余 thin PRD 铁律不触及。
