@@ -1,0 +1,24 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "验证对象是 Fleet Worker 后端 payload 消费与证据绑定，不含用户界面",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "实现 Fleet payload 验收入口、负例矩阵与审计证据",
+      "scope": "验证 Brain task payload 三字段、冻结 git/PR/GP 对象、Postgres 依赖和可回读证据",
+      "dod": [
+        "[BEHAVIOR] Brain payload 三字段与当前 Fleet receipt、PR head 和 GP 锚点精确绑定",
+        "[BEHAVIOR] 缺失、篡改及依赖失败均 fail-closed 并给精确分类",
+        "[ARTIFACT] 验收入口、负例矩阵与测试位于本 sprint 目录"
+      ],
+      "files": [
+        "sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-worker-acceptance.mjs",
+        "sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-negative-matrix.sh"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 60
+    }
+  ]
+}
