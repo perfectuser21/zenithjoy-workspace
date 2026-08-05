@@ -1,0 +1,25 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "后端 Fleet payload 与提交证据绑定验证，不含 UI",
+  "tasks": [{
+    "task_id": "ws1",
+    "title": "实现 Sprint 内 Fleet payload 验收执行体",
+    "scope": "在本 Sprint 内实现只读验收 CLI，消费权威 payload 并真对账 GitHub、冻结 checkout、product-map 与 Postgres 连通性；不修改 PR #1581、生产 Worker、migration 或 Harness 调度",
+    "dod": [
+      "[BEHAVIOR] 正确 payload 两次执行均绑定目标 repo/base/head/anchor",
+      "[BEHAVIOR] 字段缺失及 GitHub/Postgres 故障均 fail-closed",
+      "[ARTIFACT] Sprint 验收执行体与测试"
+    ],
+    "files": [
+      "sprints/08051500-kernel-pr1581-fleet-validation-r36/verify-fleet-payload.mjs",
+      "sprints/08051500-kernel-pr1581-fleet-validation-r36/tests/fleet-payload-validation.test.ts",
+      "sprints/08051500-kernel-pr1581-fleet-validation-r36/contract-draft.md",
+      "sprints/08051500-kernel-pr1581-fleet-validation-r36/contract-dod.md",
+      "sprints/08051500-kernel-pr1581-fleet-validation-r36/task-plan.json"
+    ],
+    "depends_on": [],
+    "complexity": "M",
+    "estimated_minutes": 60
+  }]
+}
