@@ -42,12 +42,12 @@ journey_type: autonomous
   留证: jq exit code
   Test: manual:bash -c 'node scripts/product-map/cli.mjs check --json | jq -e '\''keys==["errors","ok"] and all(.errors[]; type=="string")'\'''
 
-- [ ] [BEHAVIOR] [L2] B-05: 普通 check 人类文本逐字零回归
-  动作: 在隔离副本执行不带 `--json` 的 `check`
-  预期观察: stdout 与当前 digest 构成的既有 PASS 行逐字一致，退出 0
+- [ ] [BEHAVIOR] [L2] B-05: 普通 check 成功与三种失败的人类文本及退出码逐字零回归
+  动作: 在隔离副本分别执行不带 `--json` 的成功、投影缺失、投影不可解析和 digest 漂移检查
+  预期观察: 四条路径的 stdout/stderr 与冻结基线逐字一致；成功退出 0，三条失败退出非 0
   等待预算: 0s
   留证: node:test TAP 输出
-  Test: manual:bash -c 'node --test --test-name-pattern="逐字一致" sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js'
+  Test: manual:bash -c 'node --test --test-name-pattern="不带 --json.*逐字一致" sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js'
 
 - [ ] [BEHAVIOR] [L2] B-06: 产品分类合同原入口继续通过
   动作: 执行仓库既有 `npm run product-map:check`

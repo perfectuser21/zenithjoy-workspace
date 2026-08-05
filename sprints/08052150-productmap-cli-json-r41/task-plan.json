@@ -6,10 +6,10 @@
     {
       "task_id": "ws1",
       "title": "实现 product-map check --json 机器输出模式",
-      "scope": "为 check 增加 JSON 成功/失败输出，保留普通文本与退出码，覆盖缺失、损坏、漂移及与既有参数并存边界",
+      "scope": "为 check 增加 JSON 成功/失败输出，逐字保留普通模式成功、缺失、损坏、漂移文本与退出码，并覆盖与既有参数并存边界",
       "dod": [
         "[BEHAVIOR] check --json 成功与失败均输出精确 ok/errors JSON，退出码保持原语义",
-        "[BEHAVIOR] 普通 check 输出逐字不变",
+        "[BEHAVIOR] 普通 check 成功及缺失、损坏、漂移失败的 stdout/stderr 与退出码逐字不变",
         "[BEHAVIOR] --json 与既有 Node 运行参数并存且输出不受影响",
         "[ARTIFACT] scripts/product-map/ 下 CLI 与测试"
       ],

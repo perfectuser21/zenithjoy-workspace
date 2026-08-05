@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 2)
+# Sprint Contract Draft (Round 3)
 
 ## Notes
 
@@ -114,16 +114,16 @@ node --test --test-name-pattern='失败时|缺失或不可解析' sprints/080521
 ```
 **硬阈值**: 两类异常全部 exit 0（测试进程），每个被测 CLI exit 非 0 且 JSON 可解析；验证命令即上式。
 
-### Step 4: 普通文本零回归
+### Step 4: 普通文本成功与失败均零回归
 **来源**: `[FROM_PRD]` — Thin PRD 具体要求 1。
 
-**可观测行为**: 不带 `--json` 时 stdout 与当前基线逐字一致，退出码语义不变。
+**可观测行为**: 不带 `--json` 时，成功、投影缺失、投影不可解析及 digest 漂移四条路径的 stdout、stderr 均与当前基线逐字一致，退出码语义不变。
 
 **验证命令**:
 ```bash
-node --test --test-name-pattern='逐字一致' sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js && npm run product-map:check
+node --test --test-name-pattern='不带 --json.*逐字一致' sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js && npm run product-map:check
 ```
-**硬阈值**: 两条命令 exit 0，stdout 字节级相等；验证命令即上式。
+**硬阈值**: 测试命令 exit 0；四条普通模式路径的 stdout/stderr 字节级相等，成功 CLI exit 0，三条失败 CLI exit 非 0；验证命令即上式。
 
 ### Step 5: JSON 标志与既有参数并存
 **来源**: `[FROM_PRD]` — Thin PRD「边界情况」要求 `--json` 与其他既有参数并存时互不干扰。
@@ -160,7 +160,7 @@ set -e
 printf '%s' "$OUT" | jq -e 'type=="object" and keys==["errors","ok"] and .ok==true and (.ok|type)=="boolean" and (.errors|type)=="array" and (.errors|length)==0 and all(.errors[]; type=="string")'
 [ "$(printf '%s' "$OUT" | wc -l | tr -d ' ')" -eq 0 ]
 
-# 普通入口必须继续通过且输出由回归测试做逐字比较。
+# 普通入口的成功、缺失、损坏和漂移路径由回归测试逐字比较 stdout/stderr 与退出码。
 npm run product-map:check
 ```
 
@@ -168,7 +168,7 @@ npm run product-map:check
 
 | 功能 | Test File | BEHAVIOR 覆盖 | 预期红证据 |
 |---|---|---|---|
-| JSON 成功/失败/边界与兼容 | `sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js` | `check --json 成功时`；`check --json 漂移失败时`；`product-map.json 缺失或不可解析时`；`不带 --json 的 check 输出与既有文本逐字一致`；`--json 与既有参数并存` | 当前 CLI 忽略 `--json`，JSON 解析/shape 断言失败 |
+| JSON 成功/失败/边界与兼容 | `sprints/08052150-productmap-cli-json-r41/tests/product-map-cli-json.test.js` | `check --json 成功时`；`check --json 漂移失败时`；`product-map.json 缺失或不可解析时`；`不带 --json 成功时 stdout/stderr 与既有文本逐字一致`；`不带 --json 失败时缺失、不可解析和漂移的 stdout/stderr 及退出码逐字一致`；`--json 与既有参数并存` | 当前 CLI 忽略 `--json`，JSON 解析/shape 断言失败 |
 
 ## 探索提示（L3 探索层 — evaluator 剧本全过后执行）
 

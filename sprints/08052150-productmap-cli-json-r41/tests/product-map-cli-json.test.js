@@ -71,12 +71,51 @@ test('check --json 在 product-map.json 缺失或不可解析时始终输出合�
   }
 });
 
-test('不带 --json 的 check 输出与既有文本逐字一致', () => {
+test('不带 --json 成功时 stdout/stderr 与既有文本逐字一致', () => {
   const root = sandbox();
   const digest = JSON.parse(readFileSync(resolve(root, 'product-map/generated/product-map.json'), 'utf8')).digest;
   const result = check(root, ['check']);
   assert.equal(result.status, 0);
   assert.equal(result.stdout, `PASS: no drift — generated files match current product-map.yaml (digest: ${digest.slice(0, 8)}...)\n`);
+  assert.equal(result.stderr, '');
+});
+
+test('不带 --json 失败时缺失、不可解析和漂移的 stdout/stderr 及退出码逐字一致', () => {
+  {
+    const root = sandbox();
+    rmSync(resolve(root, 'product-map/generated/product-map.json'));
+    const result = check(root, ['check']);
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, '');
+    assert.equal(result.stderr, 'FAIL: drift — product-map/generated/product-map.json does not exist. Run npm run product-map:generate first.\n');
+  }
+
+  {
+    const root = sandbox();
+    writeFileSync(resolve(root, 'product-map/generated/product-map.json'), '{not-json');
+    const result = check(root, ['check']);
+    const cliUrl = `file://${resolve(root, 'scripts/product-map/cli.mjs')}`;
+    const expected = `<anonymous_script>:1\n{not-json\n ^\n\nSyntaxError: Expected property name or '}' in JSON at position 1\n    at JSON.parse (<anonymous>)\n    at cmdCheck (${cliUrl}:97:30)\n    at async ${cliUrl}:132:5\n\nNode.js ${process.version}\n`;
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, '');
+    assert.equal(result.stderr, expected);
+  }
+
+  {
+    const root = sandbox();
+    const jsonPath = resolve(root, 'product-map/generated/product-map.json');
+    const generated = JSON.parse(readFileSync(jsonPath, 'utf8'));
+    const generatedPrefix = '00000000';
+    generated.digest = `${generatedPrefix}${'0'.repeat(56)}`;
+    writeFileSync(jsonPath, JSON.stringify(generated));
+    const currentPrefix = JSON.parse(readFileSync(resolve(root, 'product-map/generated/product-map.json'), 'utf8')).digest;
+    const yamlDigest = JSON.parse(readFileSync(resolve(repoRoot, 'product-map/generated/product-map.json'), 'utf8')).digest.slice(0, 8);
+    const result = check(root, ['check']);
+    assert.equal(currentPrefix.slice(0, 8), generatedPrefix);
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, '');
+    assert.equal(result.stderr, `FAIL: drift detected — generated digest ${generatedPrefix} does not match current YAML digest ${yamlDigest}\nRun npm run product-map:generate to update the generated files.\n`);
+  }
 });
 
 test('--json 与既有参数并存时互不干扰', () => {
