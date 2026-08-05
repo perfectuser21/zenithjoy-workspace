@@ -1,0 +1,325 @@
+{
+  "schema_version": 1,
+  "environment": "预发后台",
+  "boundary": "验证环境=预发后台；未覆盖：真机/收信端",
+  "version_stamp": {
+    "captured_at": "2026-08-04T11:26:43.131Z",
+    "staging_url": "https://staging-autopilot.zenjoymedia.media",
+    "backend_sha": "unknown(健康端点未暴露构建号)",
+    "apk_expected": "2.1.19"
+  },
+  "run": {
+    "trigger": "manual",
+    "operator": "AI员工采证器"
+  },
+  "cells": [
+    {
+      "id": "S1-c3",
+      "verdict": "通过",
+      "criteria": "用的是本轮发的测试授权码，绑进的是预发环境",
+      "symptoms": [],
+      "reasons": [
+        "常驻验收账号在带STAGING角标的预发域名登录成功并进入后台（01-after-login.png）"
+      ],
+      "evidence": [
+        "evidence/S1-c3/01-after-login.page.txt",
+        "evidence/S1-c3/01-after-login.png"
+      ],
+      "note": "常驻验收账号登录成功（ai-acceptance@zenithjoy.test）"
+    },
+    {
+      "id": "S4-c2",
+      "verdict": "无法验证",
+      "criteria": "在约定时间窗内恢复在线，不是等半天才连上",
+      "symptoms": [],
+      "reasons": [
+        "机器页可见4台设备在线，但本轮未制造重启场景，恢复时间窗无从判定"
+      ],
+      "evidence": [
+        "evidence/S4-c2/01-machines.page.txt",
+        "evidence/S4-c2/01-machines.png",
+        "evidence/S4-c2/02-accounts.page.txt",
+        "evidence/S4-c2/02-accounts.png"
+      ],
+      "scenario_required": true,
+      "note": "机器列表页（在线状态与最后心跳）；设备与账号状态页"
+    },
+    {
+      "id": "S4-c3",
+      "verdict": "通过",
+      "criteria": "后台看到在线的确实是这台测试机",
+      "symptoms": [],
+      "reasons": [
+        "机器页列出ANY-AN00/MAA-AN00/RMX3478/XX-ROG四台，与该租户已知真机清单一致（01-machines.png）"
+      ],
+      "evidence": [
+        "evidence/S4-c3/01-machines.page.txt",
+        "evidence/S4-c3/01-machines.png",
+        "evidence/S4-c3/02-accounts.page.txt",
+        "evidence/S4-c3/02-accounts.png"
+      ],
+      "scenario_required": true,
+      "note": "机器列表页（在线状态与最后心跳）；设备与账号状态页"
+    },
+    {
+      "id": "S5-c3",
+      "verdict": "无法验证",
+      "criteria": "掉线的小号不再显示「可用」",
+      "symptoms": [],
+      "reasons": [
+        "账号页有小号数据，但本轮无掉线场景，无法判定\"掉线仍标可用\""
+      ],
+      "evidence": [
+        "evidence/S5-c3/02-accounts.page.txt",
+        "evidence/S5-c3/02-accounts.png"
+      ],
+      "scenario_required": true,
+      "note": "设备与账号状态页"
+    },
+    {
+      "id": "S5-c4",
+      "verdict": "无法验证",
+      "criteria": "红线9/10：掉线号不被强行派任务；一个小号出问题不连坐其它小号",
+      "symptoms": [],
+      "reasons": [
+        "掉线派单/连坐场景未出现"
+      ],
+      "evidence": [
+        "evidence/S5-c4/02-accounts.page.txt",
+        "evidence/S5-c4/02-accounts.png"
+      ],
+      "scenario_required": true,
+      "note": "设备与账号状态页"
+    },
+    {
+      "id": "S6-c3",
+      "verdict": "通过",
+      "criteria": "任务记录绑定的是正确的客户账号、这台手机、本轮关键词（红线2）",
+      "symptoms": [],
+      "reasons": [
+        "真实发起采集成功，历史任务首行即本轮：关键词\"装修\"、创建时间2026/8/4 19:26:21、归属本租户（poll-01.png）"
+      ],
+      "evidence": [
+        "evidence/S6-c3/01-collect-started.page.txt",
+        "evidence/S6-c3/01-collect-started.png",
+        "evidence/S6-c3/task-detail.page.txt",
+        "evidence/S6-c3/task-detail.png"
+      ],
+      "note": "已发起采集 关键词=装修；任务详情页（视频/判定明细）"
+    },
+    {
+      "id": "S6-c4",
+      "verdict": "通过",
+      "criteria": "红线3：不能碰到别的客户的数据",
+      "symptoms": [],
+      "reasons": [
+        "任务列表全部为本租户数据，未见他租户任务（poll-01.png）"
+      ],
+      "evidence": [
+        "evidence/S6-c4/01-tasks-initial.page.txt",
+        "evidence/S6-c4/01-tasks-initial.png"
+      ],
+      "note": "新账号任务列表初始状态（归属隔离证据）"
+    },
+    {
+      "id": "S7-c1",
+      "verdict": "不通过",
+      "criteria": "任务有明确结果不卡死；失败时有具体原因，不是笼统「未知错误」",
+      "symptoms": [
+        "失败只报「未知错误」（已知问题）"
+      ],
+      "reasons": [
+        "本轮任务（19:26:21）状态\"失败\"，视频数0线索数0；库查错误码=UNKNOWN——规程判据明令\"失败时须有具体原因，不是笼统未知错误\""
+      ],
+      "evidence": [
+        "evidence/S7-c1/poll-01.page.txt",
+        "evidence/S7-c1/poll-01.png"
+      ],
+      "note": "第1次轮询（3秒）"
+    },
+    {
+      "id": "S7-c2",
+      "verdict": "通过",
+      "criteria": "5分钟内进入终态",
+      "symptoms": [],
+      "reasons": [
+        "任务在首次轮询（发起后约3秒）即进入终态\"失败\"，远快于5分钟预算"
+      ],
+      "evidence": [
+        "evidence/S7-c2/poll-01.page.txt",
+        "evidence/S7-c2/poll-01.png"
+      ],
+      "note": "第1次轮询（3秒）"
+    },
+    {
+      "id": "S8-c1",
+      "verdict": "不通过",
+      "criteria": "至少采到2条真实存在的抖音视频",
+      "symptoms": [
+        "一条都没采到"
+      ],
+      "reasons": [
+        "本轮任务视频数0，未达\"至少2条真实视频\"（历史任务可见1~5条，说明产品本可做到，本轮是真回归）"
+      ],
+      "evidence": [
+        "evidence/S8-c1/poll-01.page.txt",
+        "evidence/S8-c1/poll-01.png",
+        "evidence/S8-c1/task-detail.page.txt",
+        "evidence/S8-c1/task-detail.png"
+      ],
+      "note": "第1次轮询（3秒）；任务详情页（视频/判定明细）"
+    },
+    {
+      "id": "S8-c3",
+      "verdict": "无法验证",
+      "criteria": "视频编号是真实长编号（15位以上）",
+      "symptoms": [],
+      "reasons": [
+        "本轮无视频产出，编号长度无从判定"
+      ],
+      "evidence": [
+        "evidence/S8-c3/poll-01.page.txt",
+        "evidence/S8-c3/poll-01.png",
+        "evidence/S8-c3/task-detail.page.txt",
+        "evidence/S8-c3/task-detail.png"
+      ],
+      "note": "第1次轮询（3秒）；任务详情页（视频/判定明细）"
+    },
+    {
+      "id": "S8-c4",
+      "verdict": "无法验证",
+      "criteria": "红线4：禁止本地随手生成的假编号",
+      "symptoms": [],
+      "reasons": [
+        "本轮无视频产出，无法判断有无假编号"
+      ],
+      "evidence": [
+        "evidence/S8-c4/poll-01.page.txt",
+        "evidence/S8-c4/poll-01.png",
+        "evidence/S8-c4/task-detail.page.txt",
+        "evidence/S8-c4/task-detail.png"
+      ],
+      "note": "第1次轮询（3秒）；任务详情页（视频/判定明细）"
+    },
+    {
+      "id": "S9-c1",
+      "verdict": "无法验证",
+      "criteria": "至少1条视频判出结果，不永远卡在「判定中」",
+      "symptoms": [],
+      "reasons": [
+        "任务在采集阶段即失败，未进入判定阶段"
+      ],
+      "evidence": [
+        "evidence/S9-c1/poll-01.page.txt",
+        "evidence/S9-c1/poll-01.png",
+        "evidence/S9-c1/task-detail.page.txt",
+        "evidence/S9-c1/task-detail.png"
+      ],
+      "note": "第1次轮询（3秒）；任务详情页（视频/判定明细）"
+    },
+    {
+      "id": "S9-c2",
+      "verdict": "无法验证",
+      "criteria": "3分钟内出结果",
+      "symptoms": [],
+      "reasons": [
+        "同S9-c1"
+      ],
+      "evidence": [
+        "evidence/S9-c2/poll-01.page.txt",
+        "evidence/S9-c2/poll-01.png",
+        "evidence/S9-c2/task-detail.page.txt",
+        "evidence/S9-c2/task-detail.png"
+      ],
+      "note": "第1次轮询（3秒）；任务详情页（视频/判定明细）"
+    },
+    {
+      "id": "S10-c1",
+      "verdict": "不通过",
+      "criteria": "产出真实线索：昵称、评论、目标身份都能核实",
+      "symptoms": [
+        "线索混入了按钮名/坐标等技术垃圾"
+      ],
+      "reasons": [
+        "线索页共93条历史数据，评论内容与评级正常，但昵称列大量显示\"/user/MS4wLjAB...\"路径片段而非真实昵称（01-leads.png）——规程判据要求昵称可核实且不得混入技术垃圾"
+      ],
+      "evidence": [
+        "evidence/S10-c1/01-leads.page.txt",
+        "evidence/S10-c1/01-leads.png"
+      ],
+      "note": "线索列表页"
+    },
+    {
+      "id": "S10-c4",
+      "verdict": "无法验证",
+      "criteria": "红线11：旧评论数据不能覆盖新的",
+      "symptoms": [],
+      "reasons": [
+        "覆盖场景需两轮对照，本轮任务失败无新数据"
+      ],
+      "evidence": [
+        "evidence/S10-c4/01-leads.page.txt",
+        "evidence/S10-c4/01-leads.png"
+      ],
+      "scenario_required": true,
+      "note": "线索列表页"
+    },
+    {
+      "id": "S11-c1",
+      "verdict": "无法验证",
+      "criteria": "派单目标来自本轮真实产生的线索，不是人工填的固定数据",
+      "symptoms": [],
+      "reasons": [
+        "触达记录为7/17历史派单（目标\"ZJ安全测试号-苏彦卿\"），非本轮线索；本轮无线索产出无法验证\"来自本轮真实线索\""
+      ],
+      "evidence": [
+        "evidence/S11-c1/01-outreach.page.txt",
+        "evidence/S11-c1/01-outreach.png"
+      ],
+      "note": "私信派单页"
+    },
+    {
+      "id": "S11-c3",
+      "verdict": "无法验证",
+      "criteria": "客户账号、任务、线索、派单串成同一条链（红线2）",
+      "symptoms": [],
+      "reasons": [
+        "同S11-c1，本轮无新链条可核"
+      ],
+      "evidence": [
+        "evidence/S11-c3/01-outreach.page.txt",
+        "evidence/S11-c3/01-outreach.png"
+      ],
+      "note": "私信派单页"
+    },
+    {
+      "id": "S11-c4",
+      "verdict": "通过",
+      "criteria": "红线3：不能触达其他客户的数据",
+      "symptoms": [],
+      "reasons": [
+        "触达记录页仅本租户数据，未见他租户（01-outreach.png）"
+      ],
+      "evidence": [
+        "evidence/S11-c4/01-outreach.page.txt",
+        "evidence/S11-c4/01-outreach.png"
+      ],
+      "note": "私信派单页"
+    },
+    {
+      "id": "S13-c4",
+      "verdict": "通过",
+      "criteria": "红线8：「被频控限制」不能显示成「已私信」",
+      "symptoms": [],
+      "reasons": [
+        "历史触达记录状态列均为\"已发送\"，未出现\"被限制\"与\"已私信\"并存的矛盾展示（01-outreach.page.txt）；本轮无新频控场景"
+      ],
+      "evidence": [
+        "evidence/S13-c4/01-outreach.page.txt",
+        "evidence/S13-c4/01-outreach.png"
+      ],
+      "scenario_required": true,
+      "note": "私信派单页"
+    }
+  ]
+}

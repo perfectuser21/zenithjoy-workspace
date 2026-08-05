@@ -1,5 +1,15 @@
 name: Android CI — agent-android
 
+# 可 required 设计（同 e2e-line02-lead-human-handoff-windows.yml 已验证过的模式）：
+# pull_request 不带原生 on.pull_request.paths 门——否则不相关 PR 整条 workflow 不跑，
+# 若把 test-and-build 直接设成 required check，required 会永远等不到这个从未触发的
+# check 上报，导致所有不碰 services/agent-android/** 的 PR 被无限期卡死在 merge
+# 前（2026-08-04 实测复现：把 "Unit Tests + Release APK" 直接设 required 后，
+# 一个完全不相关的 PR 卡在 mergeStateStatus=BLOCKED 出不去）。改为 workflow 每
+# PR 都跑，内部 changes job 用 git diff 判定是否跑真 job，聚合 gate
+# 「Android CI Gate Passed」在真 job 跳过时照样报绿，required 挂聚合 gate。
+# push 保留原生 paths 门（不影响 required-check 阻塞判定，只影响 main 分支的
+# APK 构建/上传是否触发，维持原有行为）。
 on:
   push:
     branches: [main]
@@ -7,17 +17,44 @@ on:
       - 'services/agent-android/**'
       - '.github/workflows/android-agent-ci.yml'
   pull_request:
-    paths:
-      - 'services/agent-android/**'
-      - '.github/workflows/android-agent-ci.yml'
 
 concurrency:
   group: android-agent-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: changes — 变更路径检测
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      android: ${{ steps.filter.outputs.android }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "android=true" >> "$GITHUB_OUTPUT"
+            echo "non-PR event: run all"
+            exit 0
+          fi
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          FILES=$(git diff --name-only "$BASE...$HEAD")
+          echo "$FILES"
+          ANDROID=false
+          if echo "$FILES" | grep -qE '^(services/agent-android/|\.github/workflows/android-agent-ci\.yml$)'; then
+            ANDROID=true
+          fi
+          echo "android=$ANDROID" >> "$GITHUB_OUTPUT"
+
   test-and-build:
     name: Unit Tests + Release APK
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -97,3 +134,25 @@ jobs:
           name: zenithjoy-agent-${{ github.sha }}
           path: services/agent-android/app/build/outputs/apk/release/*.apk
           retention-days: 30
+
+  # ─── 聚合 gate（required context）───────────────────────────────────────────
+  # 每 PR 都跑；真 test-and-build job 跳过（不相关 PR）视为通过，失败才红。
+  # required 挂这个，不挂 test-and-build 本身（同 lead-gate 模式）。
+  android-ci-gate:
+    name: Android CI Gate Passed
+    needs: [changes, test-and-build]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Android CI Gate
+        run: |
+          echo "changes=${{ needs.changes.result }} test-and-build=${{ needs.test-and-build.result }}"
+          if [ "${{ needs.changes.result }}" != "success" ]; then
+            echo "FAIL: changes 检测未成功"; exit 1
+          fi
+          case "${{ needs.test-and-build.result }}" in
+            success|skipped) ;;
+            *) echo "FAIL: test-and-build 结果为 ${{ needs.test-and-build.result }}"; exit 1 ;;
+          esac
+          echo "Android CI Gate Passed"

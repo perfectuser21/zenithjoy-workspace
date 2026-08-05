@@ -101,6 +101,22 @@ if [ -n "$SEEDED_AGENT_ID" ]; then
   [ "$HTTP" = "200" ] || fail "内部循环 requestId 查无行期望 200（不 404），得 $HTTP：$(cat "$TMP5")"
   ok "内部定时循环 requestId 查无 publish_tasks 行 → 不 404，照常写 session（向后兼容）"
   rm -f "$TMP5"
+
+  # 5. sprint 08031620-android-scan-preconditions：ok=false + version_name/stage/foreground_package
+  #    → agent_scan_failures.detail 真实持久化三新字段（运维免登真机复现判断根因方向的核心诉求）
+  # [CI-MOCK: real-device-only | nightly_ref: account-scan-realmachine-smoke.sh]
+  TMP6=$(mktemp)
+  SMOKE_REQ_ID="scan-smoke-diag-$$"
+  HTTP=$(curl -s -o "$TMP6" -w "%{http_code}" --max-time 15 \
+    -X POST "${API_BASE}/api/agent/burner/account-scan-result" \
+    -H "Content-Type: application/json" \
+    -d "{\"agent_id\":\"${SEEDED_AGENT_ID}\",\"request_id\":\"${SMOKE_REQ_ID}\",\"ok\":false,\"account_ids\":[],\"error_code\":\"SCREEN_LOCKED\",\"version_name\":\"2.1.20\",\"stage\":\"lock_check\",\"foreground_package\":\"com.android.systemui\"}")
+  [ "$HTTP" = "200" ] || fail "SCREEN_LOCKED+三新字段回传期望 200，得 $HTTP：$(cat "$TMP6")"
+  DETAIL_ROW=$(psql "$DB" -At -F'|' -c \
+    "SELECT error_code, detail->>'version_name', detail->>'stage', detail->>'foreground_package' FROM zenithjoy.agent_scan_failures WHERE agent_id='${SEEDED_AGENT_ID}' AND request_id='${SMOKE_REQ_ID}' AND created_at > NOW() - interval '5 minutes'" 2>/dev/null || echo "")
+  [ "$DETAIL_ROW" = "SCREEN_LOCKED|2.1.20|lock_check|com.android.systemui" ] || fail "期望 detail 三字段真实持久化，得: $DETAIL_ROW"
+  ok "ok=false + version_name/stage/foreground_package → agent_scan_failures.detail 真实持久化三新字段"
+  rm -f "$TMP6"
 else
   echo "⏭️  未提供 DB 或 seed 失败，跳过真库落地校验（仅验证 400 分支）"
 fi

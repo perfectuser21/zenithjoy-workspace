@@ -11,6 +11,7 @@ clips-smoke.sh
 cs-oneclick-setup-smoke.sh
 dashboard-walking-skeleton-1-smoke.sh
 deploy-version-selfcheck-smoke.sh
+golden-path-2-smoke.sh
 golden-path-4-smoke.sh
 golden-path-f1-anchor-smoke.sh
 heartbeat-modules-smoke.sh
@@ -99,3 +100,6 @@ staff-line-health-smoke.sh
 staff-hub-env-badge-smoke.sh
 staff-acceptance-smoke.sh
 acquisition-config-validation-smoke.sh
+trim-json-lib-smoke.sh
+dedupe-adb-devices-lib-smoke.sh
+staff-workbench-smoke.sh

@@ -136,6 +136,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * 状态自检：后台弹窗/自启动权限（sprint 08031620-android-scan-preconditions）。
+     * 尽力而为信号（Settings.canDrawOverlays 不能覆盖所有厂商的后台启动限制真实状态，
+     * 见 com.zenithjoy.agent.account.BackgroundPermissionCheck 说明），未授权时提示手动排查，
+     * 不跳转具体设置页——各厂商（ColorOS/MIUI/EMUI）路径不统一，本 sprint 不做自动引导。
+     */
+    private fun backgroundPermissionBanner(): android.view.View {
+        val canDrawOverlays = Settings.canDrawOverlays(this)
+        val desc = com.zenithjoy.agent.account.BackgroundPermissionCheck.describeOverlayPermission(canDrawOverlays)
+        return TextView(this).apply { text = desc }
+    }
+
     private fun showLicenseInput() {
         val layout = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
@@ -210,6 +222,7 @@ class MainActivity : AppCompatActivity() {
         layout.addView(accessibilityBanner())
         layout.addView(mediaProjectionBanner())
         layout.addView(recordAudioBanner())
+        layout.addView(backgroundPermissionBanner())
         layout.addView(status)
         layout.addView(startBtn)
         layout.addView(resetBtn)

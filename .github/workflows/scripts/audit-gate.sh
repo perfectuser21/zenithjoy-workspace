@@ -11,15 +11,17 @@ set -uo pipefail
 DIR="${1:-.}"
 # astro / @astrojs/mdx：修复需升 astro 7.x（semver major，涉及站点构建验证），
 # 已另立 sprint 跟踪；升级合并后删除这两行。
-# sharp/miniflare/wrangler：同一根因，都是 astro 传递依赖链带进来的（astro→miniflare→sharp,
-# astro→wrangler），升 astro 7.x 后这三个一并解决，不是独立漏洞，随 astro 那条一起删。
+# sharp/miniflare/wrangler/undici：同一根因，都是 astro 传递依赖链带进来的（astro→miniflare→
+# sharp, astro→miniflare→undici, astro→wrangler），升 astro 7.x 后这几个一并解决，不是独立
+# 漏洞，随 astro 那条一起删。undici 于 08-04 由 npm 漏洞库新公布 CVE 补入本链（node_modules/
+# miniflare/node_modules/undici，非本仓库代码改动引入，修复需 wrangler@4.35.0 semver major）。
 #
 # 2026-07-27：以下一批是 npm 外部 CVE 库当天新公布的漏洞，package-lock.json 最后改动在
 # 07-21（先于本次 CVE 公布），确认不是任何近期代码改动引入——已建 issue a46e7823 跟踪，
 # 需要 eslint@10 / @vitest/coverage-v8@4 等 semver major 升级（glob/minimatch/rimraf/
 # brace-expansion/ts-node-dev 目前 npm 侧无可用修复版本）。issue 关闭后删除本段。
 ALLOWLIST=(
-  "astro" "@astrojs/mdx" "sharp" "miniflare" "wrangler"
+  "astro" "@astrojs/mdx" "sharp" "miniflare" "wrangler" "undici"
   "eslint" "@eslint/config-array" "@eslint/eslintrc"
   "@typescript-eslint/eslint-plugin" "@typescript-eslint/parser"
   "@typescript-eslint/type-utils" "@typescript-eslint/typescript-estree"

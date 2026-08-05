@@ -1,0 +1,33 @@
+{
+  "initiative_id": "94884367-4ac9-4eec-a4c6-ef5fd58b5332",
+  "journey_type": "agent_remote",
+  "journey_type_reason": "改动的是远端安装在客户/测试设备上的 Android Agent（AccessibilityService 无障碍服务代码）及其服务端持久化对端，属远端 agent 协议代码",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "安卓账号扫描前置条件修复：锁屏检测/唤醒 + 后台启动拦截检测 + 错误码分层 + detail 全链路透传 + 诊断页自检",
+      "scope": "新增 AccountScanFailureClassifier 纯函数判定锁屏/桌面launcher两类tree_dump特征；DeviceAccountScanService.kt 在 openSwitchAccountPanel() 前置锁屏检查(SCREEN_LOCKED)与前台确认超时检查(LAUNCH_BLOCKED)接线，不改动既有3重重试/返回主页feed逻辑；AgentService.buildAccountScanResultBody() 扩展 versionName/stage/foregroundPackage 三可选参数并透传进JSON body；apps/api agent-burner.ts 的 account-scan-result 路由解构并持久化这三个新字段进 agent_scan_failures.detail；新增 BackgroundPermissionCheck 展示后台弹窗权限自检文案；bump versionCode",
+      "dod": [
+        "[BEHAVIOR] AccountScanFailureClassifier.isLockScreenTreeDump 对07-31真实锁屏fixture返回true，正常态fixture返回false",
+        "[BEHAVIOR] AccountScanFailureClassifier.isHomeLauncherTreeDump 对07-30真实launcher fixture返回true，正常态fixture返回false",
+        "[BEHAVIOR] buildAccountScanResultBody 新增三字段并正确输出到JSON(含null情形)",
+        "[BEHAVIOR] apps/api account-scan-result 路由真实持久化三新字段进agent_scan_failures.detail(真PG集成测试)",
+        "[BEHAVIOR] 既有 SCAN_TIMEOUT/DeviceAccountScanServiceCleanupTest 回归不被破坏",
+        "[BEHAVIOR] BackgroundPermissionCheck 展示文案true/false两分支覆盖",
+        "[ARTIFACT] SCREEN_LOCKED/LAUNCH_BLOCKED 错误码字面量已接入DeviceAccountScanService.kt",
+        "[ARTIFACT] versionCode已bump(>23)"
+      ],
+      "files": [
+        "services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/account/AccountScanFailureClassifier.kt",
+        "services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/account/DeviceAccountScanService.kt",
+        "services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/account/BackgroundPermissionCheck.kt",
+        "services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/AgentService.kt",
+        "services/agent-android/app/build.gradle.kts",
+        "apps/api/src/routes/agent-burner.ts"
+      ],
+      "depends_on": [],
+      "complexity": "M",
+      "estimated_minutes": 90
+    }
+  ]
+}

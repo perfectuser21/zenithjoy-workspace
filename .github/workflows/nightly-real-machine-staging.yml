@@ -33,6 +33,8 @@ concurrency:
 jobs:
   # ─── 真微信 full check：复用 wechat-cs-e2e job3 的气泡门（PsExec -i 1 进 session 1）───
   wechat-bubble:
+    # ⚠️ 三个 job 显示名的前缀（真微信/真抖音/真安卓）被 promote-all-prod.yml 证据②按
+    # startswith 匹配作放行证据——改 job 名必须同步改 promote，否则会全部落入 missing 判红。
     name: 真微信 — 气泡门 full check（真发文件传输助手）
     runs-on: [self-hosted, wechat-capable]
     timeout-minutes: 10
@@ -40,7 +42,27 @@ jobs:
       PYTHONUTF8: '1'
       PYTHONIOENCODING: 'utf-8'
     steps:
+      # xian-rog 到 github.com 的出境网络存在两层独立问题（pc4 车道 PR#1590/#1592 已验证
+      # 并修复的同一根因）：出境带宽被 GFW 统计限速到 ~10KB/s，以及间歇性 TCP 连接失败
+      # （"Failed to connect to github.com port 443"，内置重试落空）。sparse-checkout 解决
+      # 体积问题，HK exit-node 临时开关解决建连问题；--exit-node-allow-lan-access 保证
+      # 真机 USB/局域网访问不受影响，checkout 完立即关闭不常驻占用。
+      - name: 临时开 HK exit-node 保证 checkout 能连上 github.com
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node=100.86.118.99 --exit-node-allow-lan-access || true
+
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            services/agent/tools
+          sparse-checkout-cone-mode: false
+
+      - name: 关闭 exit-node（不常驻占用）
+        if: always()
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node= || true
 
       # run 块必须全 ASCII：PowerShell 5.1 按 GBK 解析 UTF-8 临时 .ps1 会吞引号（0702 实锤）
       - name: Run bubble gate in session 1 via PsExec
@@ -144,12 +166,13 @@ jobs:
           }
 
   # ─── 真抖音·读侧 full check：复用 line02 keyword→comment smoke（DPAPI 真 session）───
-  # 同一台 ROG，串行跑（needs）避免桌面/窗口争用；前一个红了也照跑（if always）。
+  # 迁 pc4 手机池轨（android-capable）：原绑 xian-rog(wechat-capable) 已于 PR#1600 退役，
+  # 改为 pc4 安卓手机池 runner。出境网络方案同 pc4 车道 PR#1590/#1592/#1596 已验证方案。
   douyin-read:
     name: 真抖音 — keyword→comment 读侧 full check
     needs: [wechat-bubble]
     if: always()
-    runs-on: [self-hosted, wechat-capable]
+    runs-on: [self-hosted, android-capable]
     timeout-minutes: 15
     defaults:
       run:
@@ -157,7 +180,25 @@ jobs:
     env:
       SMOKE_KW: '美甲'
     steps:
+      # pc4 手机池轨出境网络方案（PR#1590/#1592/#1596 已验证）：HK exit-node 临时开关
+      # 解决 GFW 带宽限速 + 间歇性 TCP 连接失败（"Failed to connect to github.com port 443"）；
+      # --exit-node-allow-lan-access 保证手机池 USB/局域网访问不受影响，checkout 完立即关闭。
+      - name: 临时开 HK exit-node 保证 checkout 能连上 github.com
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node=100.86.118.99 --exit-node-allow-lan-access || true
+
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/workflows/scripts/smoke
+          sparse-checkout-cone-mode: false
+
+      - name: 关闭 exit-node（不常驻占用）
+        if: always()
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node= || true
 
       - name: 定位最新 agent 安装目录
         run: |
@@ -176,19 +217,44 @@ jobs:
           bash .github/workflows/scripts/smoke/line02-keyword-comment-smoke.sh
 
   # ─── 真安卓 account-scan 真机验证车道 full check（刀D，2026-07-30 接入）───
-  # envfail(exit 3,环境未就绪)不算真机bug红：捕获真实退出码为 job output，job 本身以
-  # success 收尾(exit 0)，nightly-report 按 code=3 打 infra-skip 标签，不计入绿/红判定
-  # （PRD 边界情况显式要求：无设备在线不阻塞判定，但结果仍要留痕，不静默吞掉）。
+  # envfail(exit 3,环境未就绪)与真机 bug 同级计红（decision 2f11ae25，supersede 07292330
+  # 合同 infra-skip 条款）：exit_code 仍写 job output 供 nightly-report 区分标签，
+  # 但 job 一律以真实退出码收尾——车道瘫痪必须红+报警，不准包装成绿。
   account-scan:
     name: 真安卓 — account-scan 真机验证车道
     needs: [wechat-bubble]
     if: always()
-    runs-on: [self-hosted, wechat-capable]
+    runs-on: [self-hosted, android-capable]
     timeout-minutes: 10
     outputs:
       exit_code: ${{ steps.run.outputs.code }}
+    env:
+      # 公网直连路由（SYSTEM 无 Tailscale 身份，run 30794878185 实锤）：hk-vps 公网
+      # 高位端口 6443（跨境22被墙）+ runner 专用受限密钥（forced-command 只放行 staging psql）
+      # pc4 runner ACL 已在 PR#1593 注入 DB_SSH_HOST/PORT/KEY（公网受限密钥）
+      DB_SSH_HOST: root@124.156.138.116
+      DB_SSH_PORT: '6443'
+      DB_SSH_KEY: /c/actions-runner/.ssh/zjdb_ed25519
     steps:
+      # pc4 手机池轨出境网络方案（PR#1590/#1592/#1596 已验证）：HK exit-node 临时开关
+      # 解决 GFW 带宽限速 + 间歇性 TCP 连接失败（"Failed to connect to github.com port 443"）；
+      # 08-02/08-03 两晚 xian-rog 实锤复现（run 30763282351 等），pc4 轨同方案兜底。
+      - name: 临时开 HK exit-node 保证 checkout 能连上 github.com
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node=100.86.118.99 --exit-node-allow-lan-access || true
+
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/workflows/scripts/smoke
+          sparse-checkout-cone-mode: false
+
+      - name: 关闭 exit-node（不常驻占用）
+        if: always()
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node= || true
 
       - name: Run account-scan-realmachine-smoke.sh
         id: run
@@ -200,10 +266,6 @@ jobs:
           CODE=$?
           set -e
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
-          if [ "$CODE" -eq 3 ]; then
-            echo "🟠 envfail(exit 3)：环境未就绪，非真机验证bug，job 标 success 但留痕 code=3(infra-skip)"
-            exit 0
-          fi
           exit "$CODE"
 
   # ─── 汇总 + 红→自动开 Issue（值班闭环最小版）───
@@ -227,7 +289,7 @@ jobs:
 
           ACCOUNT_SCAN_LABEL="$ACCOUNT_SCAN"
           if [ "$ACCOUNT_SCAN_CODE" = "3" ]; then
-            ACCOUNT_SCAN_LABEL="infra-skip"
+            ACCOUNT_SCAN_LABEL="envfail(环境未就绪)"
           fi
 
           {
@@ -248,7 +310,7 @@ jobs:
             if [ "$EXIST" = "0" ]; then
               gh issue create --repo "$GITHUB_REPOSITORY" \
                 --title "$TITLE" \
-                --body "$(printf 'Nightly 真机回归（staging）失败。\n\n| job | 结果 |\n|---|---|\n| wechat-bubble | %s |\n| douyin-read | %s |\n| account-scan | %s |\n\nRun: %s/%s/actions/runs/%s\n\n处理约定：真机 flaky 先 rerun 一次；连续 2 晚红=真 bug，走 /dev 修。' "$WECHAT" "$DOUYIN" "$ACCOUNT_SCAN_LABEL" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
+                --body "$(printf 'Nightly 真机回归（staging）失败。\n\n| job | 结果 |\n|---|---|\n| wechat-bubble | %s |\n| douyin-read | %s |\n| account-scan | %s |\n\nRun: %s/%s/actions/runs/%s\n\n处理约定：真机 flaky 先 rerun 一次；连续 2 晚红=真 bug，走 /dev 修。account-scan=envfail(环境未就绪) 同样要处理——车道瘫痪不是噪音（decision 2f11ae25）。' "$WECHAT" "$DOUYIN" "$ACCOUNT_SCAN_LABEL" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
               echo "issue created"
             else
               echo "same-day nightly-red issue already open, skip"

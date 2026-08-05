@@ -1,0 +1,190 @@
+name: Nightly Android Fleet Regression (pc4)
+
+# ═══════════════════════════════════════════════════════════════════
+# pc4 手机池（小白 RMX3478 / 小黄 MAA-AN00 / 小粉 ANY-AN00）夜间账号扫描回归。
+#
+# 与 nightly-real-machine-staging.yml 刀D（rog 上单台 4号机）互补而非重复：那条车道
+# 覆盖 rog，本车道覆盖 pc4 手机池的多台设备。08-03 真机诊断实锤：小粉/小白今天
+# adb install -r 后无障碍服务被系统静默撤销，此前完全靠人工偶然发现——本车道让
+# 这类"设备心跳活着但任务永远不投递"的假在线状态每晚自动暴露，不再等人碰巧去查。
+#
+# 两段式设计（discover → matrix scan）：小黄的无线调试端口每次重连会变
+# （machines.md 已记录的已知坑），不能在 workflow 里硬编码 serial:port，必须每次
+# 运行时现查 `adb devices` 动态发现，再对发现到的每台设备各跑一次
+# account-scan-realmachine-smoke.sh（envfail 一律红，decision 2f11ae25 同款约束）。
+#
+# 红 → 不新开独立 issue 机制（避免与 nightly-real-machine-staging 的 [nightly-red]
+# 撞车产生两套并行的红灯处理约定），只在 job summary 里明确列出哪台设备红，
+# 处理约定同 decision 2f11ae25：envfail 与真机验证失败同级，都算红，不装绿。
+# ═══════════════════════════════════════════════════════════════════
+
+on:
+  schedule:
+    - cron: '30 19 * * *'   # UTC 19:30 = 北京 03:30，错开 nightly-real-machine 的 03:00，避免同时抢 pc4 上的其他任务
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-android-fleet-pc4
+  cancel-in-progress: false
+
+jobs:
+  discover-devices:
+    name: 发现 pc4 上当前在线的设备（不写死 serial，小黄端口每次会变）
+    runs-on: [self-hosted, android-capable]
+    timeout-minutes: 5
+    outputs:
+      serials: ${{ steps.list.outputs.serials }}
+      count: ${{ steps.list.outputs.count }}
+    steps:
+      # 去重逻辑本体在 .github/workflows/scripts/smoke/lib/dedupe-adb-devices.sh
+      # （dedupe-adb-devices-lib-smoke.sh 单测覆盖，纯逻辑，无需真机即可验证）；
+      # 本 job 只做 checkout 拉这份脚本 + 真机上跑 getprop 拿硬件序列号。
+      # 本 job 之前不需要 checkout；新增后同 account-scan-fleet job 一样跑在 pc4
+      # self-hosted runner 上，有同款出境网络两层问题（带宽限速+间歇断连），照抄
+      # 同一套 HK exit-node + sparse-checkout 兜底，避免制造新的 nightly 失败点。
+      - name: 临时开 HK exit-node 保证 checkout 能连上 github.com
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node=100.86.118.99 --exit-node-allow-lan-access || true
+
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/workflows/scripts/smoke
+          sparse-checkout-cone-mode: false
+
+      - name: 关闭 exit-node（不常驻占用）
+        if: always()
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node= || true
+
+      - name: List connected devices（按硬件序列号去重，防同一物理设备双 entry 并发互踩）
+        id: list
+        shell: bash
+        run: |
+          set -uo pipefail
+          source .github/workflows/scripts/smoke/lib/dedupe-adb-devices.sh
+          ADB=$(command -v adb 2>/dev/null || echo "C:/platform-tools/adb.exe")
+          echo "使用 ADB=$ADB"
+          "$ADB" devices
+          RAW_IDS=$("$ADB" devices 2>/dev/null | awk '/[[:space:]]device$/{print $1}')
+
+          # 同一物理设备可能同时挂 USB serial + 无线调试 IP:port（或无线调试换端口后
+          # 旧 entry 未清理，machines.md 已记录的已知坑）——按 ro.serialno（硬件序列号，
+          # USB/无线调试拿到的都是同一个值）归一去重，只保留每台物理设备的第一条活跃
+          # 连接进 matrix，避免同一物理设备被两个 job 并发操作互踩
+          # （2026-08-03 夜实际复现：2红1取消，见 memory
+          # handoff_0804_gp2_android_smoke_audit_18_findings.md）。
+          # ⚠️ 不要先拼字符串再喂给 dedupe_adb_devices——$(...) 命令替换会吃掉
+          # 每次 printf 的尾部换行符，多台设备拼接后会失去行边界，dedupe_adb_devices
+          # 按 TAB+换行分行解析会把整段拼成一行乱码（本地用 mock 数据复现过：拼字符串
+          # 写法在 3 台设备场景下直接吐出空结果）。改用管道直接把 while 循环的输出喂给
+          # dedupe_adb_devices，不经过中间字符串。
+          DEDUPED_IDS=$(
+            while IFS= read -r ADB_ID; do
+              [ -z "$ADB_ID" ] && continue
+              HW_SERIAL=$("$ADB" -s "$ADB_ID" shell getprop ro.serialno 2>/dev/null | tr -d '\r\n')
+              printf '%s\t%s\n' "$ADB_ID" "$HW_SERIAL"
+            done <<< "$RAW_IDS" | dedupe_adb_devices
+          )
+
+          SERIALS_JSON=$(printf '%s\n' "$DEDUPED_IDS" | jq -R 'select(length > 0)' | jq -sc .)
+          COUNT=$(echo "$SERIALS_JSON" | jq 'length')
+          echo "serials=$SERIALS_JSON" >> "$GITHUB_OUTPUT"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "去重后 $COUNT 台在线设备: $SERIALS_JSON"
+          [ "$COUNT" -gt 0 ] || echo "::warning::pc4 上未发现任何在线设备，本次夜间回归车道空转"
+          # 已知非阻塞瑕疵：account-scan-realmachine-smoke.sh 内部"设备在线: $DEV"这行日志
+          # 固定取 adb devices 列表第一项显示，多机并发跑 matrix 时该行显示的 serial 可能
+          # 与本 job 实际操作的 ANDROID_SERIAL 不一致（纯日志展示问题，install/scan 等实际
+          # 操作指令因遵循 ANDROID_SERIAL 环境变量约定，仍会准确落到对应设备，不影响功能）
+
+  account-scan-fleet:
+    name: 账号扫描回归 — ${{ matrix.serial }}
+    needs: discover-devices
+    if: needs.discover-devices.outputs.count != '0'
+    strategy:
+      fail-fast: false
+      matrix:
+        serial: ${{ fromJson(needs.discover-devices.outputs.serials) }}
+    runs-on: [self-hosted, android-capable]
+    timeout-minutes: 15
+    env:
+      ANDROID_SERIAL: ${{ matrix.serial }}
+      # 真机验证发现：pc4 runner 服务跑 SYSTEM 账户无 Tailscale 身份，走默认 vps-hk
+      # Tailscale SSH 会报 "failed to look up local user SYSTEM"（与 nightly-real-machine-staging.yml
+      # 的 rog runner 早前遇到的同一个坑），改走 hk-vps 公网高位端口 + 受限密钥，
+      # 密钥已从 rog 的 C:\actions-runner\.ssh\zjdb_ed25519 原样复制到 pc4 同路径并重设 ACL。
+      DB_SSH_HOST: root@124.156.138.116
+      DB_SSH_PORT: '6443'
+      DB_SSH_KEY: /c/actions-runner/.ssh/zjdb_ed25519
+    outputs:
+      exit_code: ${{ steps.run.outputs.code }}
+    steps:
+      # pc4 到 github.com 除了出境带宽被限速到 ~10KB/s（sparse-checkout 已解决体积问题），
+      # 还会间歇性连 TCP 都建不起来（"Failed to connect to github.com port 443"，GFW 对
+      # 出境流量的间歇性封锁，与带宽限速是两层独立问题）。用 HK exit-node 临时兜底建连，
+      # --exit-node-allow-lan-access 保证同一时间 adb 对局域网手机的访问不受影响
+      # （真机验证过：开启后 adb devices 仍能枚举全部 6 个 serial）。checkout 后立即关闭，
+      # 不长期占用 exit-node（对齐 device-transfer skill"临时开、拉完关"的既定做法）。
+      - name: 临时开 HK exit-node 保证 checkout 能连上 github.com
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node=100.86.118.99 --exit-node-allow-lan-access || true
+
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/workflows/scripts/smoke
+          sparse-checkout-cone-mode: false
+
+      - name: 关闭 exit-node（不常驻占用）
+        if: always()
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node= || true
+
+      - name: Run account-scan-realmachine-smoke.sh against ${{ matrix.serial }}
+        id: run
+        shell: bash
+        run: |
+          chmod +x .github/workflows/scripts/smoke/account-scan-realmachine-smoke.sh
+          set +e
+          bash .github/workflows/scripts/smoke/account-scan-realmachine-smoke.sh
+          CODE=$?
+          set -e
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          exit "$CODE"
+
+  fleet-report:
+    name: pc4 手机池回归汇总
+    needs: [discover-devices, account-scan-fleet]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Summarize
+        run: |
+          COUNT="${{ needs.discover-devices.outputs.count }}"
+          RESULT="${{ needs.account-scan-fleet.result }}"
+          {
+            echo "## pc4 手机池夜间账号扫描回归"
+            echo ""
+            echo "发现设备数: $COUNT"
+            echo "account-scan-fleet 整体结果: $RESULT"
+            echo ""
+            echo "（envfail 与真机验证失败同级计红，decision 2f11ae25；单台设备的具体失败详情见对应 matrix job 日志）"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$COUNT" = "0" ]; then
+            echo "::error::pc4 上一台在线设备都没发现，本次回归空转（车道本身可能瘫痪，需人工核实 pc4/手机池状态）"
+            exit 1
+          fi
+          if [ "$RESULT" = "failure" ]; then
+            echo "::error::至少一台设备的账号扫描回归失败，见各 matrix job 详情"
+            exit 1
+          fi
+          echo "✅ pc4 手机池全部设备账号扫描回归通过"

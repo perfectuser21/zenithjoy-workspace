@@ -67,6 +67,17 @@ if psql "$DB_URL" -c '\q' 2>/dev/null; then DB_REACHABLE=1; fi
 API_REACHABLE=0
 if curl -s --max-time 2 -o /dev/null "$API_BASE/health" 2>/dev/null; then API_REACHABLE=1; fi
 
+# 2026-08-04 修复（假绿灯审计）：CI 环境下 DB/API 不可达绝不允许静默 SKIP——
+# 之前专属 workflow 不起 DB/API，关键步骤(1/7/8/9/12/13/14)整段 SKIP 仍报 PASS。
+# 本地手跑（无 CI 标记）仍允许 SKIP 降级，方便开发者没起本地服务时快速跑纯函数段。
+# 2026-08-04 修复（Fix 5）：退出码专用 90，不复用 Step 1 的编号——脚本约定退出码=第几步失败，
+# 复用 1 会让"基建整体不可达"和"Step 1 断言本身失败"在退出码上无法区分。90 不与任何现有
+# Step 编号（最大到 17）冲突。
+if [ "${CI:-}" = "true" ]; then
+  [ "$DB_REACHABLE" -eq 1 ] || fail "DB 不可达（CI=true 下不允许静默 SKIP，检查 postgres service / DATABASE_URL 是否已配好）" 90
+  [ "$API_REACHABLE" -eq 1 ] || fail "API 不可达（CI=true 下不允许静默 SKIP，检查 apps/api 是否已构建启动 / /health 是否通）" 90
+fi
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ZenithJoy Path 4 Walking Skeleton — Line04 客户私域 AI 接管（16 步权威版）"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -339,11 +350,66 @@ fi
 echo "▶ Step 8: CRM 客户列表页（customer-profile 六字段）"
 
 WECHAT_TS="apps/api/src/routes/wechat.ts"
-grep -q "customer-profile" "$WECHAT_TS" || fail "Step 8 wechat.ts 未注册 customer-profile 路由" 8
-for field in level nickname source contact_count recent_actions ai_profile; do
-  grep -q "$field" "$WECHAT_TS" || fail "Step 8 customer-profile 缺字段 $field" 8
-done
-ok "Step 8a ✅ customer-profile 路由含六字段声明"
+grep -q "customer-profile" "$WECHAT_TS" || fail "Step 8 customer-profile 路由未注册" 8
+# 2026-08-05 加固（0804 审计发现②，二次修正）：旧检测对整个 723 行文件裸 grep 字段名，
+# 六字段中的 level/nickname/source 等词在头部注释、SQL 查询结果类型声明里也出现，实测验证过：
+# 从真实响应对象里删掉 level 字段（保留头部注释里的"level"字样），旧检测依然误判通过。
+# 第一版修法（锚定 `const data = row?{...}:{...}` 整块 + word-boundary）仍有两处残留假绿，
+# 复审实测验证过：①占位分支内 `// 占位：...作为 nickname` 这行注释本身含 nickname 字样，
+# 删掉两处真实 nickname 字段后整块检查依然通过；②检查只看"整块里出现过"不分分支，只删占位
+# 分支里的 ai_profile 也照样通过——违反本步骤自己注释里"两个分支都要覆盖"的承诺。
+# 改为：按 `? {`/`: {` 切成两个分支，各自剥掉注释行（`// ...`）后独立检查六字段。
+S8A_CHECK=$(python3 -c "
+import re, sys
+
+FIELDS = ['level', 'nickname', 'source', 'contact_count', 'recent_actions', 'ai_profile']
+with open('$WECHAT_TS', encoding='utf-8') as f:
+    lines = f.readlines()
+
+start_idx = end_idx = None
+for i, l in enumerate(lines):
+    if 'const data = row' in l:
+        start_idx = i
+    if start_idx is not None and 'return res.json({ data });' in l:
+        end_idx = i
+        break
+if start_idx is None or end_idx is None:
+    print('EXTRACT_FAILED')
+    sys.exit(1)
+
+block = lines[start_idx:end_idx + 1]
+split_idx = next((i for i, l in enumerate(block) if l.rstrip() == '      : {'), None)
+if split_idx is None:
+    print('SPLIT_FAILED（三元表达式 else 分支起始行格式已变，检查需同步更新）')
+    sys.exit(1)
+
+def strip_comments(chunk):
+    # 三次修正：只剥整行注释漏了行尾注释（如 nickname: wid, // 无 source 时兜底 这类 TS
+    # 常见写法），字段名躲在 // 后面依然能让检查误判通过——反例已复现，改成剥到每行的
+    # // 之前（简单按字面量切，够用；不处理字符串里恰好含 // 的极端情况）。
+    return [l.split('//')[0] for l in chunk]
+
+branch_true = strip_comments(block[:split_idx])
+branch_false = strip_comments(block[split_idx:])
+
+missing = []
+for field in FIELDS:
+    pat = re.compile(r'\b' + re.escape(field) + r'\b')
+    if not any(pat.search(l) for l in branch_true):
+        missing.append(f'row存在分支缺{field}')
+    if not any(pat.search(l) for l in branch_false):
+        missing.append(f'占位分支缺{field}')
+
+if missing:
+    print('MISSING:', missing)
+    sys.exit(1)
+print('PASS')
+" 2>&1)
+if echo "$S8A_CHECK" | tail -1 | grep -q "PASS"; then
+  ok "Step 8a ✅ customer-profile 响应对象两分支均含六字段（去注释+分支独立检查，防头部注释/类型声明/单分支假阳性）"
+else
+  fail "Step 8a customer-profile 响应对象字段检查失败: $S8A_CHECK" 8
+fi
 
 if [ "$API_REACHABLE" -eq 1 ]; then
   S8_TMP=$(mktemp)
@@ -359,6 +425,12 @@ for f in ['level','nickname','source','contact_count','recent_actions','ai_profi
 " 2>/dev/null || fail "Step 8b customer-profile 响应六字段不完整" 8
     ok "Step 8b ✅ customer-profile API 响应六字段结构完整"
   else
+    # 2026-08-05 修复：customer-profile 路由对任何合法 wechat_id 参数总是返回 200
+    # （查不到记录时也返回占位六字段），非 200 在正常运行下几乎不该出现——一旦出现大概率
+    # 是真实服务异常。CI=true 下不允许静默 SKIP 掉这个判定点（比照 Step14/17d 已建立的模式）。
+    if [ "${CI:-}" = "true" ]; then
+      fail "Step 8b customer-profile 返回非 200（HTTP=$S8_HTTP），CI=true 下不允许静默 SKIP：$(cat "$S8_TMP")" 8
+    fi
     echo "  SKIP: customer-profile HTTP=$S8_HTTP（结构断言由 vitest 覆盖）"
   fi
   rm -f "$S8_TMP"
@@ -388,6 +460,41 @@ if [ "$API_REACHABLE" -eq 1 ]; then
     || fail "Step 9b 回读 whitelist 不一致: $(cat "$S9_TMP")" 9
   rm -f "$S9_TMP"
   ok "Step 9b ✅ 回读一致（whitelist 含 gp4-smoke-whitelist-name）"
+
+  # Step 9c（2026-08-04，§1.9 同型回归守卫，issue PR#1146）：§1.9 事故根因是 getCSConfig
+  # 的 SELECT 曾漏掉 takeover_mode/blacklist 两列，导致"全接管"前台看着配了、agent 端
+  # 却读不到、形同虚设。真实黑名单写入走的是 PUT /api/crm/customers/identity（非本
+  # cs/config 路由——该路由职责是 persona/whitelist/hours，blacklist 归 CRM 管），
+  # 这里调用真实路由写入再回读 cs/config，精确重演该事故的失败模式（SELECT 漏列
+  # → 字段从响应消失）。
+  # 注（核实过真实路由行为后修正）：/customers/identity 内部会 resolveTenantId(wechat_id)
+  # （先查 service_agents，再退化到 cs-XXXXXX license 正则），X-Internal-Token 只经
+  # hasLegacyServiceCredential → superAdminGuard 绕开「管理员角色闸/租户隔离闸」，并不会
+  # 替 handler 免掉 resolveTenantId 这一步。S9_WECHAT 是随机串，两条解析路都命中不了 →
+  # 不先建绑定行会 404 TARGET_NOT_FOUND（与 §1.9 无关的假阳性）。故比照 Step 7 的做法，
+  # 先补一个最小 tenant + service_agents 绑定行 fixture，仅在 DB_REACHABLE 时跑
+  # （CI=true 下 DB_REACHABLE 恒为 1，见脚本开头，不会静默 SKIP）。
+  if [ "$DB_REACHABLE" -eq 1 ]; then
+    S9C_TENANT=$(psq "INSERT INTO zenithjoy.tenants (name, license_key) VALUES ('gp4-smoke-tenant9c-${RND}', 'ZJ-F-GP49C${RND//-/}') RETURNING id")
+    [ -n "$S9C_TENANT" ] || fail "Step 9c fixture tenant 建立失败" 9
+    psq "INSERT INTO zenithjoy.service_agents (tenant_id, machine_id, wechat_id) VALUES ('$S9C_TENANT'::uuid, 'gp4-smoke-machine9c-${RND}', '$S9_WECHAT') ON CONFLICT (tenant_id) WHERE deleted_at IS NULL DO UPDATE SET wechat_id=EXCLUDED.wechat_id" >/dev/null
+
+    S9C_CONTACT="gp4-smoke-blacklist-${RND//-/}"
+    S9C_HTTP=$(curl -s -o "$S9_TMP" -w '%{http_code}' --max-time 15 \
+      -X PUT "$API_BASE/api/crm/customers/identity" \
+      -H "Content-Type: application/json" -H "X-Internal-Token: $INT_TOKEN" \
+      -d "{\"wechat_id\":\"$S9_WECHAT\",\"contact\":\"$S9C_CONTACT\",\"identity\":\"blacklist\"}")
+    [ "$S9C_HTTP" = "200" ] || fail "Step 9c PUT crm/customers/identity expected 200, got $S9C_HTTP: $(cat "$S9_TMP")" 9
+
+    S9_HTTP=$(curl -s -o "$S9_TMP" -w '%{http_code}' --max-time 15 "$API_BASE/api/wechat/cs/config/$S9_WECHAT")
+    [ "$S9_HTTP" = "200" ] || fail "Step 9c GET cs/config(回读blacklist) expected 200, got $S9_HTTP: $(cat "$S9_TMP")" 9
+    python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert '$S9C_CONTACT' in (d.get('blacklist') or [])" "$S9_TMP" 2>/dev/null \
+      || fail "Step 9c blacklist 回读不含刚拉黑的联系人（§1.9 SELECT 漏列同型回归）: $(cat "$S9_TMP")" 9
+    rm -f "$S9_TMP"
+    ok "Step 9c ✅ blacklist 回读含刚拉黑的联系人（§1.9 SELECT 漏列同型回归守卫）"
+  else
+    echo "  SKIP: DB 不可达，跳过 Step 9c（需 service_agents fixture 才能过 resolveTenantId）"
+  fi
   ok "Step 9 ✅ 白名单/接管模式配置链路通"
 else
   echo "  SKIP: API 不可达"
@@ -417,9 +524,15 @@ assert r1 is True, f'wxid 命中但 should_reply={r1}（改备注后应仍命中
 cfg2 = {'whitelist': ['老客户甲']}
 r2 = gate.should_reply(cfg2, '老客户甲', sender_wxid=None)
 assert r2 is True, f'旧格式纯字符串向后兼容失败: {r2}'
+
+# 2026-08-05 加固（0804 审计发现⑤）：以上两条断言全是正向（期望 True），should_reply
+# 若被变异成恒返回 True（=对所有陌生人自动回复），Step 11 照样全绿。补一条负向：白名单
+# 模式下不在名单里的路人不该被回复。
+r3 = gate.should_reply(cfg, '路人甲', sender_wxid='wxid_stranger_gp4smoke')
+assert r3 is False, f'路人不在白名单里但 should_reply={r3}（白名单模式误判成全接管，可能是恒True变异）'
 print('PASS')
 " 2>&1 | tail -1 | grep -q "PASS" \
-  && ok "Step 11 ✅ 白名单 wxid 优先匹配 + 旧格式兼容通过（判定点已修：不再靠显示名）" \
+  && ok "Step 11 ✅ 白名单 wxid 优先匹配 + 旧格式兼容 + 负向拒答（不在名单里不回）三态通过" \
   || fail "Step 11 白名单 wxid 匹配断言失败" 11
 
 # ───────────────────────────────────────────────────────────────────
@@ -438,6 +551,14 @@ if [ "$API_REACHABLE" -eq 1 ] && [ "$DB_REACHABLE" -eq 1 ]; then
     -H "Content-Type: application/json" -H "X-Tenant-Id: $S12_TENANT_A" \
     -d "{\"contact\":\"$S12_CONTACT\",\"role\":\"in\",\"text\":\"租户A的悄悄话\"}")
   [ "$S12_HTTP" = "200" ] || fail "Step 12a memory/message(租户A) expected 200, got $S12_HTTP: $(cat "$S12_TMP")" 12
+
+  # Step 12a2（2026-08-04，阳性对照）：原测试只验"B 读不到 A"，缺"A 能读到自己写的"——
+  # 若 memory/context 整体坏死（对谁都返回空），隔离测试会因为"系统根本没工作"而误判通过。
+  S12_HTTP=$(curl -s -o "$S12_TMP" -w '%{http_code}' --max-time 15 \
+    "$API_BASE/api/wechat/memory/context?contact=$S12_CONTACT" -H "X-Tenant-Id: $S12_TENANT_A")
+  [ "$S12_HTTP" = "200" ] || fail "Step 12a2 memory/context(租户A自读) expected 200, got $S12_HTTP: $(cat "$S12_TMP")" 12
+  grep -q "租户A的悄悄话" "$S12_TMP" || fail "Step 12a2 阳性对照失败：租户A读不到自己刚写的记忆（memory/context 可能整体坏死）" 12
+  ok "Step 12a2 ✅ 阳性对照：租户A能读到自己写的记忆"
 
   S12_HTTP=$(curl -s -o "$S12_TMP" -w '%{http_code}' --max-time 15 \
     "$API_BASE/api/wechat/memory/context?contact=$S12_CONTACT" -H "X-Tenant-Id: $S12_TENANT_B")
@@ -487,6 +608,21 @@ echo "▶ Step 14: 真实发送 + 回执翻状态（防假成功）"
 if [ "$DB_REACHABLE" -eq 1 ] && [ "$API_REACHABLE" -eq 1 ]; then
   S14_AGENT=$(psq "SELECT id FROM zenithjoy.agents ORDER BY created_at DESC LIMIT 1")
   if [ -z "$S14_AGENT" ]; then
+    # 2026-08-04 修复（Fix 2）：本分支 Fix 1 修好之后，golden-path-4-smoke.yml 专属 job
+    # 用的是全新的、只跑过本脚本的 per-job postgres，zenithjoy.agents 表是空的——之前靠
+    # Smoke Glob Gate 里字母序更早跑的兄弟脚本顺手插入过 agents 行才不 SKIP。这里补一个
+    # 最小 tenants + agents fixture 自建，不再依赖别的脚本先跑过。
+    S14_TENANT=$(psq "INSERT INTO zenithjoy.tenants (name, license_key) VALUES ('gp4-smoke-s14-tenant-${RND}', 'ZJ-F-GP4S14${RND//-/}') RETURNING id")
+    if [ -n "$S14_TENANT" ]; then
+      S14_AGENT=$(psq "INSERT INTO zenithjoy.agents (tenant_id, agent_id) VALUES ('$S14_TENANT'::uuid, 'gp4-smoke-agent-${RND}') RETURNING id")
+    fi
+  fi
+  if [ -z "$S14_AGENT" ]; then
+    # fixture 自建也失败（例如迁移未跑全、schema 不一致）——CI=true 下不允许静默 SKIP 掉
+    # 这个全脚本最有价值的防假成功断言；本地手跑（无 CI 标记）仍保留原有 SKIP 提示。
+    if [ "${CI:-}" = "true" ]; then
+      fail "Step 14 无法建立/查到 agents 行（fixture 建立失败），CI=true 下不允许静默 SKIP 掉这个防假成功断言" 14
+    fi
     echo "  SKIP: 库内无 agents 行，Step 14 fixture 无法建立（需先跑过共享前门注册）"
   else
     S14_TASK=$(psq "INSERT INTO zenithjoy.wechat_publish_task (agent_id, task_type, content, target_friend_alias, status, approval_source) VALUES ('$S14_AGENT'::uuid, 'private_chat', 'gp4-smoke 回复内容', 'gp4smoke联系人', 'approved', 'system') RETURNING id")
@@ -656,9 +792,51 @@ grep -qn '_write_event("reply_sent"' "$LISTEN_CHAT_MAIN" || fail "Step 15b DELIV
 ok "Step 15b ✅ DELIVERED 点含 _write_event 调用（_commit_reply_success 后）"
 
 OVERLAY_DIR="services/agent/wechat-rpa/overlay"
-WRITE_OPENS=$(grep -rn 'open.*"a"\|open.*"w"' "$OVERLAY_DIR" --include="*.py" 2>/dev/null | grep -i "events" | grep -v "^[[:space:]]*#" | grep -v "__pycache__" || true)
-[ -z "$WRITE_OPENS" ] || fail "Step 15c overlay 目录含 events 写入调用（违反单写者约束）: $WRITE_OPENS" 15
-ok "Step 15c ✅ overlay 只读消费 events.jsonl（单写者约束）"
+# 2026-08-05 加固（0804 审计发现①，五次修正）：旧检测要求"写入调用"和字面 events 出现在
+# 同一行，单引号写法（open(p, 'a')）、路径存变量都能逃逸——实测验证过旧 grep 检测不出。
+# 几轮复审各自实测复现过残留问题：嵌套括号写法漏检、窗口误吞无关注释导致假红、窗口关键词
+# 收窄成 'events.jsonl' 字面量又漏检 self._events_path 这类属性引用（真放过，比误杀更危险）；
+# 上一版改成"解析 open()/write_text() 第一个实参"又漏了链式写法——`Path(x).open("a")`
+# 第一实参是 mode 字符串、`.write_text("内容")` 第一实参永远是待写内容，两种都会被误判成
+# "实参不含 events"而放行。最终改为直接看写入调用**自身那一行**（去掉行尾注释后）有没有
+# events 字样——self._events_path/events_path 这类引用变量名本身就在该行内，链式/非链式
+# 写法都覆盖到；同行看不出结论（如路径存在更早一行的变量里）再退化到窗口内找
+# events.jsonl 字面量兜底，窗口只看非注释行防无关注释误判。
+S15C_CHECK=$(python3 -c "
+import re, sys
+from pathlib import Path
+
+overlay_dir = Path('$OVERLAY_DIR')
+write_pattern = re.compile(
+    r'''open\s*\(.*['\"'\''](a\+?|w\+?|x)['\"'\'']|\.write_text\s*\(|\.open\s*\(.*['\"'\''](a\+?|w\+?|x)['\"'\'']'''
+)
+violations = []
+for py_file in overlay_dir.rglob('*.py'):
+    if '__pycache__' in str(py_file):
+        continue
+    lines = py_file.read_text(encoding='utf-8', errors='replace').splitlines()
+    for i, line in enumerate(lines):
+        if line.strip().startswith('#'):
+            continue
+        if write_pattern.search(line):
+            window = lines[max(0, i-5):i+6]
+            non_comment_window = [w for w in window if not w.strip().startswith('#')]
+            own_line = line.split('#')[0].lower()
+            if 'events' in own_line or any('events.jsonl' in w.lower() for w in non_comment_window):
+                violations.append(f'{py_file}:{i+1}: {line.strip()}')
+
+if violations:
+    print('VIOLATIONS:')
+    for v in violations:
+        print(v)
+    sys.exit(1)
+print('PASS')
+" 2>&1)
+if echo "$S15C_CHECK" | tail -1 | grep -q "PASS"; then
+  ok "Step 15c ✅ overlay 只读消费 events.jsonl（单写者约束，窗口化检测+去注释，防单引号/嵌套括号/链式调用逃逸与无关注释误报红；跨行调用/别名传递仍是行级检测固有天花板，未覆盖）"
+else
+  fail "Step 15c overlay 目录含 events 写入调用（违反单写者约束）: $S15C_CHECK" 15
+fi
 
 # Step 15d：心跳超时 degraded 状态不能吞掉同批真实事件（2026-07-16 真机回归：
 # listen_chat.py 全文件从未写过 heartbeat 类型事件，EventTailConsumer 的
@@ -983,14 +1161,40 @@ else
 fi
 
 # 17d：客户视图业务语言正向+负向断言（判定点：客户视图绝不出现line02/line04内部代号）
-if command -v npx >/dev/null 2>&1 && [ -d "apps/agent-panel/node_modules" ]; then
-  if (cd apps/agent-panel && npx vitest run --silent 2>&1 | tail -5 | grep -q "passed"); then
+# 判据用 Node 模块解析能力探测（node -e require.resolve）而非目录存在性：
+# apps/agent-panel/node_modules 这个嵌套目录只是因为根 vitest(^4.0.18→4.1.9) 与该 workspace
+# vitest(^4.1.10→4.1.10) 版本冲突、npm 被迫留一份嵌套拷贝才偶然存在——lockfile 一旦重新解析
+# 去重合并，目录会消失但依赖其实装好了，靠目录存在性判断会在这种情况下误报"依赖未安装"。
+# 2026-08-05 二次修正：改用过 `npx --no-install vitest --version` 探测，但该命令会命中
+# npx 自己维护的全局执行缓存（~/.npm/_npx/），跟"该 workspace 是否真的解析得到 vitest"无关——
+# 在一个从未装过 vitest 的全新空目录里，只要全局 _npx 缓存命中过同版本，这条探测依然会
+# 误报"可用"（EXIT=0），把"依赖真的缺失"这类真实回归悄悄放行成假绿，恰恰是这轮修复要打击
+# 的问题。改用 `node -e "require.resolve(...)"`——它严格走 Node CommonJS 模块解析算法，
+# 从给定目录逐级向上找 node_modules，不经过 npx 独立缓存，能同时兼容"该 workspace 下嵌套
+# 一份"和"依赖被去重提升到根目录"两种真实布局，且在真的没装时可靠返回非 0。
+if command -v node >/dev/null 2>&1 && (cd apps/agent-panel && node -e "require.resolve('vitest/package.json')" >/dev/null 2>&1); then
+  # 2026-08-05 三次修正：`... | tail -5 | grep -q "passed"` 是假绿——vitest 部分测试失败时
+  # 输出仍含 "N passed"（如 "1 failed | 75 passed"），grep 照样匹配成功；且管道让 if 判断的
+  # 是 grep 的退出码而非 vitest 自己的退出码，真实回归会被这行放行。改成直接判 vitest 自身
+  # exit code（此前 Smoke Glob Gate 从未装 apps/agent-panel 依赖，这个 then 分支在 CI 里从未真
+  # 跑过，本次改动首次让它在必绿的 required check 上执行，必须先堵死这个假绿再启用）。
+  S17D_LOG=$(mktemp)
+  if (cd apps/agent-panel && npx vitest run --silent >"$S17D_LOG" 2>&1); then
     ok "Step 17d ✅ apps/agent-panel 业务语言渲染单测全绿（正向智能获客/回复/发布 + 负向不含line0N代号）"
   else
-    fail "Step 17d apps/agent-panel 单测未过，业务语言/代号泄露断言可能失败" 17
+    fail "Step 17d apps/agent-panel 单测未过，业务语言/代号泄露断言可能失败: $(tail -20 "$S17D_LOG")" 17
   fi
+  rm -f "$S17D_LOG"
 else
-  ok "Step 17d ⚠️ apps/agent-panel 依赖未装，跳过本地单测复跑（CI 独立 job 已跑，见 lint-feature-has-smoke）"
+  # 2026-08-04 修复（Fix 3）：此前这里用 `ok`（绿）静默吞掉，文案声称"CI 独立 job 已跑"——
+  # 但 Smoke Glob Gate（ci-smoke-glob-runner.yml）本身就是这条"CI 独立 job"跑道，它自己此前
+  # 从未装过 apps/agent-panel 依赖，从未真跑过这个断言。CI=true 下不允许静默跳过判定点验证；
+  # 本地手跑（无 CI 标记）仍保留原有跳过提示。
+  if [ "${CI:-}" = "true" ]; then
+    fail "Step 17d apps/agent-panel 依赖未安装，无法真跑业务语言渲染单测（不能静默跳过判定点验证）" 17
+  else
+    ok "Step 17d ⚠️ apps/agent-panel 依赖未装，本地手跑跳过单测复跑"
+  fi
 fi
 
 # 17e：SSE 实时推送 proven-to-fire ——xian-rog真机验证实测发现的真实bug：SSE stream此前

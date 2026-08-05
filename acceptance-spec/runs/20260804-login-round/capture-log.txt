@@ -1,0 +1,15 @@
+[2026-08-04T11:26:10.211Z] 采证开始 staging=https://staging-autopilot.zenjoymedia.media out=/Users/administrator/worktrees/zenithjoy/session-6c40de7e/acceptance-spec/runs/20260804-login-round
+[2026-08-04T11:26:11.574Z] 身份模式=login（凭据来源 env） 账号=ai-acceptance@zenithjoy.test
+[2026-08-04T11:26:11.574Z] 步骤：常驻验收账号登录
+[2026-08-04T11:26:18.066Z] 登录成功
+[2026-08-04T11:26:18.067Z] 步骤：任务页发起采集
+[2026-08-04T11:26:25.099Z] 采集已发起 关键词=装修
+[2026-08-04T11:26:25.100Z] 步骤：等待任务演进（最长5分钟，每60秒截容一次）
+[2026-08-04T11:26:28.372Z] 第1次轮询检测到终态字样，提前结束等待
+[2026-08-04T11:26:31.595Z] 步骤：机器页观察（设备在线/归属）
+[2026-08-04T11:26:34.356Z] 机器页可见"在线"字样计数=7
+[2026-08-04T11:26:34.357Z] 步骤：账号页观察
+[2026-08-04T11:26:37.342Z] 步骤：线索页观察
+[2026-08-04T11:26:40.052Z] 步骤：派单页观察
+[2026-08-04T11:26:43.131Z] 采证完成：/Users/administrator/worktrees/zenithjoy/session-6c40de7e/acceptance-spec/runs/20260804-login-round/pending-judgments.json（20 格待判定，模式=login，账号 ai-acceptance@zenithjoy.test）
+[2026-08-04T11:26:43.132Z] 时间戳后缀参考: 2026-08-04T11-26-11-574Z

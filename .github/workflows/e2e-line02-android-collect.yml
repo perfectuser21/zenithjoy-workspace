@@ -108,7 +108,28 @@ jobs:
       ATTEMPT_MARKER: ${{ github.event.inputs.attempt_marker || '' }}
 
     steps:
+      # xian-rog 到 github.com 的出境网络存在两层独立问题（pc4/staging 车道
+      # PR#1590/#1592/#1596/#1602 已验证并修复的同一根因）：出境带宽被 GFW 统计限速到
+      # ~10KB/s；间歇性 TCP 连接失败（"Failed to connect to github.com port 443"，
+      # 内置重试落空）。sparse-checkout 解决体积问题，HK exit-node 临时开关解决建连
+      # 问题；--exit-node-allow-lan-access 保证真机 USB/局域网访问不受影响，checkout
+      # 完立即关闭不常驻占用。
+      - name: 临时开 HK exit-node 保证 checkout 能连上 github.com
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node=100.86.118.99 --exit-node-allow-lan-access || true
+
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/workflows/scripts/smoke
+          sparse-checkout-cone-mode: false
+
+      - name: 关闭 exit-node（不常驻占用）
+        if: always()
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node= || true
 
       - name: 定位 adb（WinGet scrcpy 版）
         run: |

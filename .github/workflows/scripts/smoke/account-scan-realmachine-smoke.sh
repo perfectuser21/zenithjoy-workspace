@@ -37,6 +37,20 @@ ok()      { echo "✅ $1"; }
 fail()    { echo "❌ 真机验证失败: $1"; exit 1; }
 envfail() { echo "🟠 环境未就绪(非真机验证bug,查设备/staging/DB): $1"; exit 3; }
 
+# DB 查询 ssh 统一封装（真机复现 2026-08-03 run 30793335158）：runner 上下文的 ssh 对
+# vps-hk 报 Host key verification failed（交互 shell 的 known_hosts 条目对 runner 的
+# ssh 客户端/算法协商不适用）。内网 Tailscale 固定 IP 场景用 accept-new 首连自动记录、
+# 后续变更仍拒绝；BatchMode 防挂交互提示。所有 DB 查询必须走本函数，禁止裸 ssh。
+# 公网直连路由（2026-08-03 run 30794878185）：runner 服务跑 SYSTEM 账户，无 Tailscale 身份
+# （vps-hk 走 Tailscale SSH 报 failed to look up local user "SYSTEM"）。改走 hk-vps 公网
+# 高位端口（跨境 22 被墙，sshd 另听 6443）+ runner 专用受限密钥（服务端 forced-command
+# 只放行 staging psql，见 hk-vps:/root/zj-smoke-staging-psql.sh）。workflow 注入三个 env；
+# 本地交互跑不传 key 时仍走默认 vps-hk（Tailscale 身份路径不变）。
+sshdb() {
+  ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+    -p "${DB_SSH_PORT:-22}" ${DB_SSH_KEY:+-i "$DB_SSH_KEY"} "$DB_SSH_HOST" "$@"
+}
+
 # assert_task_terminal_success STATUS RESPONSE_JSON
 # 两段式联合断言：先判 STATUS=='done'，再判 RESPONSE_JSON.account_ids 非空数组。
 # 返回 0 = 真通过；返回 1 = 判红。STATUS 非 done 时直接返回 1，不看 account_ids
@@ -60,7 +74,17 @@ assert_task_terminal_success() {
 }
 
 main() {
-  ADB="${ADB:-adb}"
+  # ── ADB 解析（decision 2f11ae25 配套：裸 adb 不在 runner PATH 时静默失败被误报"无设备"）──
+  # 未显式传入时探测：glob scrcpy 自带 adb 优先（e2e-line02-android-collect.yml 已验证顺序；
+  # sort -V 防 3.10<3.2 字典序取旧版），command -v 次之，独立 platform-tools 安装兜底
+  # （pc4 实证：adb 装在 C:\platform-tools 且未加入 PATH，前两种探测均失效误报 envfail）；
+  # 全失败=独立 envfail 文案。
+  if [ -z "${ADB:-}" ]; then
+    ADB=$(ls /c/Users/*/AppData/Local/Microsoft/WinGet/Packages/Genymobile.scrcpy_*/scrcpy-*/adb.exe 2>/dev/null | sort -V | tail -1 || true)
+    [ -n "$ADB" ] || ADB=$(command -v adb 2>/dev/null || true)
+    [ -n "$ADB" ] || { [ -f "/c/platform-tools/adb.exe" ] && ADB="/c/platform-tools/adb.exe"; }
+    [ -n "$ADB" ] || envfail "runner 上找不到 adb"
+  fi
   API_BASE="${API_BASE:-https://staging-autopilot.zenjoymedia.media}"
   TENANT="${SMOKE_TENANT:-455a8ca9-5f63-4286-83ce-c5cca04cfd58}"
   DB_SSH_HOST="${DB_SSH_HOST:-vps-hk}"
@@ -74,6 +98,10 @@ main() {
 
   # ── 环境自检（区分"环境未就绪"与"真机验证真的失败"） ────────────────
   command -v jq >/dev/null 2>&1 || envfail "runner 缺 jq"
+
+  # 无论显式传入还是探测所得，先证 adb 本身可用（坏驱动/坏路径不该被误报成"无设备"）
+  ADB_VER_ERR=$("$ADB" version 2>&1 >/dev/null) \
+    || envfail "adb 不可用: ${ADB_VER_ERR:-unknown}（ADB=${ADB}）"
 
   "$ADB" devices 2>/dev/null | grep -qE '[[:space:]]device$' \
     || envfail "无 Android 设备在线(adb devices 无 'device' 行)"
@@ -151,9 +179,22 @@ main() {
   # 是设备压根没在往这个库报数据，等多久都没用。MainActivity.onCreate() 的
   # parseBindDeepLink() 会在 AgentService/WsClient 首次初始化之前，把 zenithjoy://bind
   # deeplink 里的 api/license 参数写进 config，一次性从根上纠正，不依赖设备残留状态。
-  STAGING_LICENSE_KEY=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -c \
-    \"SELECT license_key FROM zenithjoy.licenses WHERE tenant_id='${TENANT}' AND status='active' ORDER BY created_at DESC LIMIT 1\"" 2>/dev/null | tr -d '[:space:]')
-  [ -n "$STAGING_LICENSE_KEY" ] || envfail "查不到 tenant=${TENANT} 在 zenithjoy_staging 的 active license_key，无法构造 bind deeplink"
+  # 真机复现(2026-08-03 nightly run 30786965614)：ssh 走 Tailscale DERP 中继会闪断，
+  # 单次查询失败且 stderr 被吞时伪装成"查无数据"（数据实际完好）。有界重试自愈瞬断，
+  # stderr 进文案区分"真查无数据"与"ssh 链路失败"。
+  STAGING_LICENSE_KEY=""
+  LICENSE_ERR_TEXT=""
+  for LICENSE_RETRY in 1 2 3; do
+    LICENSE_QUERY_ERR=$(mktemp)
+    STAGING_LICENSE_KEY=$(sshdb "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -c \
+      \"SELECT license_key FROM zenithjoy.licenses WHERE tenant_id='${TENANT}' AND status='active' ORDER BY created_at DESC LIMIT 1\"" 2>"$LICENSE_QUERY_ERR" | tr -d '[:space:]')
+    LICENSE_ERR_TEXT=$(head -c 200 "$LICENSE_QUERY_ERR" || true)
+    rm -f "$LICENSE_QUERY_ERR"
+    [ -n "$STAGING_LICENSE_KEY" ] && break
+    echo "  [license查询 ${LICENSE_RETRY}/3] 空结果，stderr: ${LICENSE_ERR_TEXT:-无}"
+    [ "$LICENSE_RETRY" -lt 3 ] && sleep 8
+  done
+  [ -n "$STAGING_LICENSE_KEY" ] || envfail "查不到 tenant=${TENANT} 在 zenithjoy_staging 的 active license_key 或 ssh 链路失败(3次重试后)，无法构造 bind deeplink。最后一次 stderr: ${LICENSE_ERR_TEXT:-无}"
   WS_URL="${API_BASE/https/wss}/agent-ws"
   BIND_API_ENC=$(jq -rn --arg v "$WS_URL" '$v|@uri')
   BIND_LICENSE_ENC=$(jq -rn --arg v "$STAGING_LICENSE_KEY" '$v|@uri')
@@ -192,7 +233,7 @@ main() {
   MODEL=$("$ADB" shell getprop ro.product.model 2>/dev/null | tr -d '\r\n')
   AGENT_ID=""
   if [ -n "$MODEL" ]; then
-    ROW=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -c \
+    ROW=$(sshdb "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -c \
       \"SELECT agent_id FROM zenithjoy.agents WHERE hostname ILIKE '%${MODEL}%' ORDER BY last_seen DESC NULLS LAST LIMIT 1\"" 2>/dev/null)
     AGENT_ID=$(printf '%s' "$ROW" | tr -d '[:space:]')
   fi
@@ -223,7 +264,7 @@ main() {
   DEV_TENANT=""
   SEEN_FRESH=""
   for j in $(seq 1 "$FRESH_POLL_MAX"); do
-    META=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -F'|' -c \
+    META=$(sshdb "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -F'|' -c \
       \"SELECT tenant_id, (last_seen > now() - interval '2 minutes') FROM zenithjoy.agents WHERE agent_id='$AGENT_ID'\"" 2>/dev/null)
     DEV_TENANT="${META%%|*}"
     SEEN_FRESH="${META##*|}"
@@ -233,7 +274,7 @@ main() {
   done
   [ "$SEEN_FRESH" = "t" ] || envfail "设备 last_seen 不新鲜(${FRESH_POLL_MAX}×${FRESH_POLL_INTERVAL}s 有界重试后设备仍真离线，非字段不一致)：agent_id=$AGENT_ID"
   [ -n "$DEV_TENANT" ] || envfail "查不到 agent_id=$AGENT_ID 的真实 tenant_id"
-  ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -c \
+  sshdb "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -c \
     \"UPDATE zenithjoy.agents SET last_heartbeat_at = now() WHERE agent_id='$AGENT_ID'\"" >/dev/null 2>&1
   TENANT="$DEV_TENANT"
   ok "设备 last_seen 新鲜(真在线)，已对齐 last_heartbeat_at + 取真实 tenant=${TENANT}（补偿 issue 009c1544）"
@@ -250,7 +291,7 @@ main() {
   STATUS=""
   RESPONSE_JSON="{}"
   for i in $(seq 1 "$POLL_MAX"); do
-    ROW=$(ssh "$DB_SSH_HOST" "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -F'|' -c \
+    ROW=$(sshdb "docker exec zenithjoy-db-postgres psql -U zenithjoy -d zenithjoy_staging -tA -F'|' -c \
       \"SELECT status, response FROM zenithjoy.publish_tasks WHERE id='$TASK_ID'\"" 2>/dev/null)
     STATUS="${ROW%%|*}"
     RESPONSE_JSON="${ROW#*|}"
