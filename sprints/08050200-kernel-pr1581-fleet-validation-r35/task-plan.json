@@ -1,0 +1,25 @@
+{
+  "initiative_id": "bb50964c-f8f7-4843-87da-7148a2611d80",
+  "journey_type": "autonomous",
+  "journey_type_reason": "Fleet Worker 后端消费 Brain task payload 并产生机器可审计结论，无用户界面步骤",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "补齐真实 Fleet Worker payload 验收入口与失败分类",
+      "scope": "在 sprint 测试目录实现单一验收入口，真查 Brain 当前任务、Runner attempt、GitHub、git、GP SSOT 与 Postgres，并让正负例共用校验逻辑",
+      "dod": [
+        "[BEHAVIOR] 当前 Fleet task/attempt 与冻结目标逐字绑定",
+        "[BEHAVIOR] 六种输入或依赖错误均非零并输出精确 failure_class",
+        "[ARTIFACT] 验收入口、负例矩阵与 TDD 测试存在"
+      ],
+      "files": [
+        "sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-worker-acceptance.mjs",
+        "sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-negative-matrix.sh",
+        "sprints/08050200-kernel-pr1581-fleet-validation-r35/tests/fleet-worker-acceptance.test.ts"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 60
+    }
+  ]
+}
