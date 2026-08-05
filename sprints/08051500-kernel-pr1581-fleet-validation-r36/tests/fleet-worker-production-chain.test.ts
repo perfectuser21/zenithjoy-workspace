@@ -44,8 +44,10 @@ function preflight(ghRepo = 'repos/perfectuser21/zenithjoy-workspace/pulls/1581'
   const gh = spawnSync('gh', ['api', ghRepo], { encoding: 'utf8' });
   if (gh.status !== 0) throw new EnvironmentFailure('github', gh.stderr);
   if (!dbUrl) throw new EnvironmentFailure('postgres', 'DB_URL missing');
-  const pg = spawnSync('psql', [dbUrl, '-v', 'ON_ERROR_STOP=1', '-tAc', 'SELECT 1'], { encoding: 'utf8' });
-  if (pg.status !== 0 || pg.stdout.trim() !== '1') throw new EnvironmentFailure('postgres', pg.stderr || pg.stdout);
+  const migration = spawnSync('npm', ['--prefix', 'apps/api', 'run', 'migrate'], { encoding: 'utf8', env: { ...process.env, DATABASE_URL: dbUrl } });
+  if (migration.status !== 0) throw new EnvironmentFailure('postgres', migration.stderr || migration.stdout);
+  const pg = spawnSync('psql', [dbUrl, '-v', 'ON_ERROR_STOP=1', '-tAc', "SELECT to_regclass('zenithjoy.schema_migrations') IS NOT NULL"], { encoding: 'utf8' });
+  if (pg.status !== 0 || pg.stdout.trim() !== 't') throw new EnvironmentFailure('postgres', pg.stderr || pg.stdout);
 }
 
 describe('Fleet Worker production chain [BEHAVIOR]', () => {
