@@ -5410,6 +5410,22 @@ agent_suite:
   product: dev_pipeline
   note: "PR #1528 真机复现：detect-review-issues.js 对 DeepSeek V3「#### 🔴 严重问题\\n- **无**」这种无括号无冒号+独立bullet的输出格式误判为有严重问题，阻塞了实际无问题的PR。补regex分支+node --test 4个场景（含原格式回归）。"
 
+- id: staff-workbench-service-unit
+  path: apps/api/src/services/__tests__/workbench.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 中台认证
+  note: "员工工作台（任务9cc10ff2·决策af0d0818执行层）service层：summary三路并取任一Brain路失败availability=degraded不抛；feedback转发Brain captures的payload组装（source=api/nature白名单/link→ref_pr_url/email前缀）。"
+
+- id: staff-workbench-routes-unit
+  path: apps/api/src/routes/__tests__/staff-workbench.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 中台认证
+  note: "员工工作台路由层HTTP语义：summary 200透传metrics/pending_runs/ai_tasks与degraded、feedback空content 400、service抛错502、成功200含capture回执id。"
+
 - id: staff-acceptance-service-unit
   path: apps/api/src/services/__tests__/acceptance.test.ts
   type: unit
