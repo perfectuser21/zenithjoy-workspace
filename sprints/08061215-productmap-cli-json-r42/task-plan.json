@@ -1,0 +1,24 @@
+{
+  "initiative_id": "a29c526c-760e-4262-97d4-c3b3ccdec700",
+  "journey_type": "autonomous",
+  "journey_type_reason": "非交互式本地 CLI 行为，由 CI 直接读取 stdout 与退出码",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "实现 product-map check --json 严格输出模式",
+      "scope": "为 check 子命令增加 JSON 成功与失败输出，保持文本模式、参数及退出码兼容",
+      "dod": [
+        "[BEHAVIOR] check --json 成功与文件故障均输出严格 ok/errors JSON，退出码语义不变",
+        "[BEHAVIOR] 无 --json 文本输出与冻结基线逐字一致",
+        "[ARTIFACT] CLI 单测覆盖成功、失败、坏 JSON、参数共存和零回归"
+      ],
+      "files": [
+        "scripts/product-map/cli.mjs",
+        "scripts/product-map/__tests__/product-map.test.js"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 60
+    }
+  ]
+}
