@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,11 +10,12 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '../../..');
 
 function sandbox() {
-  const root = mkdtempSync(resolve(repo, '.product-map-cli-json-'));
+  const root = mkdtempSync(resolve(tmpdir(), 'product-map-cli-json-'));
   mkdirSync(resolve(root, 'scripts'), { recursive: true });
   cpSync(resolve(repo, 'scripts/product-map'), resolve(root, 'scripts/product-map'), { recursive: true });
   cpSync(resolve(repo, 'product-map'), resolve(root, 'product-map'), { recursive: true });
   cpSync(resolve(repo, '.github/workflows/scripts/smoke'), resolve(root, '.github/workflows/scripts/smoke'), { recursive: true });
+  symlinkSync(resolve(repo, 'node_modules'), resolve(root, 'node_modules'), 'dir');
   return root;
 }
 
@@ -98,12 +99,9 @@ test('check 不带 --json 时成功 stdout 与既有文本逐字一致', () => w
   assert.equal(result.stdout, `PASS: no drift — generated files match current product-map.yaml (digest: ${generated.digest.slice(0, 8)}...)\n`);
 }));
 
-test('JSON 标志只作用于 check 且不干扰既有命令参数', () => withSandbox(root => {
-  const check = runCommand(root, 'check', '--json');
-  assert.equal(check.status, 0);
-  assert.deepEqual(JSON.parse(check.stdout), { ok: true, errors: [] });
-  const validate = runCommand(root, 'validate', '--json');
-  assert.equal(validate.status, 0);
-  assert.equal(validate.stderr, '');
-  assert.equal(validate.stdout, 'PASS: product-map.yaml is valid\n');
+test('既有 check 位置参数与新增 --json 选项并存且语义互不干扰', () => withSandbox(root => {
+  const result = runCommand(root, 'check', '--json');
+  assert.equal(result.status, 0);
+  assert.equal(result.stderr, '');
+  assert.deepEqual(JSON.parse(result.stdout), { ok: true, errors: [] });
 }));

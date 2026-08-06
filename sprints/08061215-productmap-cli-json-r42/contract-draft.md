@@ -1,10 +1,11 @@
-# Sprint Contract Draft（Round 2）
+# Sprint Contract Draft（Round 3）
 
 ## Notes
 
 - contract-gate: skipped (file not found, third-party repo)
 - context-manifest: unavailable（Brain 返回 404）
 - 本合同仅改变 `check` 子命令与其单测，不修改 Product Map 数据、其他子命令或 CI。
+- 参数面审计：当前 CLI 唯一既有参数是 argv[2] 的子命令位置参数，无既有 option-style flag；并存验收严格限定为生产调用形态 `check --json`，不再用未知 token 或 `validate --json` 虚构额外参数语义。
 
 ## Response Schema（推导来源: PRD字面）
 
@@ -93,7 +94,7 @@ GP-Anchor: line00/gp_anchor_enforcement keep-green
 
 **可观测行为**: `check --json` 成功时 stdout 仅为单行 JSON，包含且仅包含 `ok=true`、`errors=[]`。
 
-**验证命令**: `node --test --test-name-pattern='成功时只输出' sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js`
+**验证命令**: `node --test --test-name-pattern='成功时只输出' scripts/product-map/__tests__/product-map-cli-json.test.js`
 
 **硬阈值**: JSON 可解析；keys=`["errors","ok"]`；`ok` 为 boolean；`errors` 为 string[]；成功退出码 0。上述命令非零即 FAIL。
 
@@ -103,7 +104,7 @@ GP-Anchor: line00/gp_anchor_enforcement keep-green
 
 **可观测行为**: 隔离副本缺少或含损坏 `product-map.json` 时，stdout 仍是失败 JSON；当 digest、Markdown 与 smoke file 同时出错时，`errors` 分别包含三个具体字符串，且每个失败对象严格只有 `errors`、`ok` 两个 key。
 
-**验证命令**: `node --test --test-name-pattern='缺少 product-map.json|不可解析 product-map.json|多个检查问题' sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js`
+**验证命令**: `node --test --test-name-pattern='缺少 product-map.json|不可解析 product-map.json|多个检查问题' scripts/product-map/__tests__/product-map-cli-json.test.js`
 
 **硬阈值**: 三种失败均严格 keys=`["errors","ok"]`、`ok=false`、errors 非空且逐项 string、退出码非 0；多问题场景 errors 长度至少 3 且分别描述 digest、Markdown 与 smoke file；上述命令非零即 FAIL。
 
@@ -113,19 +114,19 @@ GP-Anchor: line00/gp_anchor_enforcement keep-green
 
 **可观测行为**: 不带 `--json` 的成功 stdout 与基线模板逐字一致，stderr 为空，退出码仍为 0。
 
-**验证命令**: `node --test --test-name-pattern='不带 --json' sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js`
+**验证命令**: `node --test --test-name-pattern='不带 --json' scripts/product-map/__tests__/product-map-cli-json.test.js`
 
 **硬阈值**: stdout 字节串精确等于既有 PASS 行（含换行）；上述命令非零即 FAIL。
 
-### Step 4: JSON 标志不干扰既有命令参数
+### Step 4: 既有位置参数与 JSON 选项并存
 
 **来源**: `[FROM_PRD]` — Thin PRD「边界情况」第二条。
 
-**可观测行为**: 仓库 CLI 当前没有其他 option-style flag；`--json` 与既有 `check` 位置参数共同工作，并且把同一 token 传给既有 `validate` 子命令时仍保持 validate 的原文本与退出码，证明 JSON 模式只作用于 check。
+**可观测行为**: 源码审计确认仓库 CLI 当前没有其他 option-style flag；真实既有参数是 argv[2] 的 `check` 子命令。生产形态 `check --json` 同时保留 `check` 的检查/退出码语义并切换 JSON 呈现。不存在的额外 option 明确 N/A，不以未知 token 或其他子命令静默忽略 `--json` 冒充覆盖。
 
-**验证命令**: `node --test --test-name-pattern='既有命令参数' sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js`
+**验证命令**: `node --test --test-name-pattern='既有 check 位置参数与新增 --json 选项并存' scripts/product-map/__tests__/product-map-cli-json.test.js`
 
-**硬阈值**: `check --json` 退出 0 且 JSON 严格等于 `{ok:true,errors:[]}`；`validate --json` 仍逐字输出既有 `PASS: product-map.yaml is valid` 文本并退出 0；上述命令非零即 FAIL。
+**硬阈值**: `check --json` 退出 0、stderr 为空且 JSON 严格等于 `{ok:true,errors:[]}`；源码无其他既有 option-style flag，故额外 flag 组合为 N/A；上述命令非零即 FAIL。
 
 ### Step 5: 调用方用退出码完成门禁
 
@@ -133,7 +134,7 @@ GP-Anchor: line00/gp_anchor_enforcement keep-green
 
 **可观测行为**: 同一真实 CLI 在有效输入返回 0，在缺失、损坏或多问题输入返回非 0，JSON 内容与退出码语义一致。
 
-**验证命令**: `node --test sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js`
+**验证命令**: `node --test scripts/product-map/__tests__/product-map-cli-json.test.js`
 
 **硬阈值**: 6 个子测试全部通过且 node:test 进程退出 0；否则 FAIL。
 
@@ -152,9 +153,8 @@ set -euo pipefail
 : "${HARNESS_MODEL:?Runner must inject model}"
 : "${HARNESS_RUNNER_DIGEST:?Runner must inject runner digest}"
 : "${CAPABILITY_SNAPSHOT_ID:?Runner must inject current-role capability snapshot}"
-SPRINT_DIR="sprints/08061215-productmap-cli-json-r42"
 START=$(date +%s)
-node --test "$SPRINT_DIR/tests/product-map-cli-json.test.js" | tee /tmp/product-map-cli-json-e2e.log
+node --test scripts/product-map/__tests__/product-map-cli-json.test.js | tee /tmp/product-map-cli-json-e2e.log
 grep -q '# pass 6' /tmp/product-map-cli-json-e2e.log
 grep -q '# fail 0' /tmp/product-map-cli-json-e2e.log
 ELAPSED=$(( $(date +%s) - START ))
@@ -162,18 +162,18 @@ ELAPSED=$(( $(date +%s) - START ))
 echo "OK: check --json Golden Path 全部通过，evaluator_attempt=$HARNESS_ATTEMPT_ID snapshot=$CAPABILITY_SNAPSHOT_ID"
 ```
 
-说明：本任务不依赖 Postgres，故 Fleet 的 DB_URL 资源不进入合同；E2E 用每个测试独享的仓库内临时副本，真实执行 CLI 并由 `finally` 清理。
+说明：本任务不依赖 Postgres，故 Fleet 的 DB_URL 资源不进入合同；E2E 用 `os.tmpdir()` 下每个测试独享的可写临时副本，真实执行 CLI 并由 `finally` 清理，冻结/只读 workspace 不会成为 Red 原因。
 
 ## Test Contract
 
 | 功能 | Test File | BEHAVIOR 覆盖 | 预期红证据 |
 |---|---|---|---|
-| JSON 成功 | `tests/product-map-cli-json.test.js` | `成功时只输出 ok=true 与空 errors` | 当前实现输出人类文本，JSON.parse/退出码断言失败 |
-| 缺失输入 | `tests/product-map-cli-json.test.js` | `缺少 product-map.json 时输出合法失败 JSON` | 当前实现把文本写 stderr，stdout 非 JSON |
-| 损坏输入 | `tests/product-map-cli-json.test.js` | `不可解析 product-map.json 时输出具体错误 JSON` | 当前实现裸 SyntaxError |
-| 默认兼容 | `tests/product-map-cli-json.test.js` | `不带 --json 时成功 stdout 与既有文本逐字一致` | 实现前作为既有行为保护（当前通过） |
-| 多问题聚合 | `tests/product-map-cli-json.test.js` | `多个检查问题分别进入 errors 且失败对象严格 keys` | 当前实现首错即退出，无法聚合 |
-| 参数并存 | `tests/product-map-cli-json.test.js` | `JSON 标志只作用于 check 且不干扰既有命令参数` | 当前实现未识别 `--json` |
+| JSON 成功 | `scripts/product-map/__tests__/product-map-cli-json.test.js` | `成功时只输出 ok=true 与空 errors` | 当前实现输出人类文本，JSON.parse/退出码断言失败 |
+| 缺失输入 | `scripts/product-map/__tests__/product-map-cli-json.test.js` | `缺少 product-map.json 时输出合法失败 JSON` | 当前实现把文本写 stderr，stdout 非 JSON |
+| 损坏输入 | `scripts/product-map/__tests__/product-map-cli-json.test.js` | `不可解析 product-map.json 时输出具体错误 JSON` | 当前实现裸 SyntaxError |
+| 默认兼容 | `scripts/product-map/__tests__/product-map-cli-json.test.js` | `不带 --json 时成功 stdout 与既有文本逐字一致` | 实现前作为既有行为保护（当前通过） |
+| 多问题聚合 | `scripts/product-map/__tests__/product-map-cli-json.test.js` | `多个检查问题分别进入 errors 且失败对象严格 keys` | 当前实现首错即退出，无法聚合 |
+| 参数并存 | `scripts/product-map/__tests__/product-map-cli-json.test.js` | `既有 check 位置参数与新增 --json 选项并存` | 当前实现未识别 `--json` |
 
 ## 探索提示（L3 探索层 — evaluator 剧本全过后执行）
 
@@ -183,5 +183,5 @@ echo "OK: check --json Golden Path 全部通过，evaluator_attempt=$HARNESS_ATT
 - 错输入: 将生成 JSON 写成空文件、数组或合法但缺 digest 的对象，确认 stdout 仍为合法失败 JSON。
 - 重复提交: 连续执行 `check --json` 两次，确认输出与退出码确定且无状态残留。
 - 中途中断: N/A（同步只读 CLI 无可恢复中间态）。
-- 边界值: `--json` 与既有 command 位置参数共同出现；errors 多项时均为 string 且无重复。
+- 边界值: `--json` 与既有 `check` command 位置参数共同出现；errors 多项时均为 string 且无重复。当前无其他既有 option-style flag，额外组合 N/A。
 - 发现分级: P0/P1（非 JSON stdout、退出码反转、默认文本回退）阻塞 merge；P2/P3 记录 findings。
