@@ -5045,6 +5045,14 @@ agent_suite:
   product: 产品基础设施
   note: "sprint(07280933): Product Map SSOT — 7 个 node:test 测试，覆盖 BEHAVIOR-01~12，loadAndValidateProductMap/validateRelations/productMapDigest/assertBootstrapParity"
 
+- id: product-map-cli-json
+  path: scripts/product-map/__tests__/product-map-cli-json.test.js
+  type: integration
+  ci: L2
+  status: active
+  product: 产品基础设施
+  note: "sprint(08061215): 真实文件系统副本与 Node 子进程验证 product-map check --json 输出、错误聚合及退出码"
+
 - id: gp-anchor-smoke-ratchet
   path: scripts/product-map/__tests__/gp-smoke-ratchet.test.js
   type: unit

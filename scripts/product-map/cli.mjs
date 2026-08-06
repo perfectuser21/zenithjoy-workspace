@@ -27,7 +27,7 @@ const GENERATED_DIR = resolve(REPO_ROOT, 'product-map/generated');
 const JSON_OUT = resolve(GENERATED_DIR, 'product-map.json');
 const MD_OUT = resolve(GENERATED_DIR, 'product-map.md');
 
-const [,, command] = process.argv;
+const [,, command, ...options] = process.argv;
 
 async function cmdValidate() {
   const { map, errors } = await loadAndValidateProductMap();
@@ -81,6 +81,57 @@ async function cmdGenerate() {
   console.log(`PASS: generated product-map.json and product-map.md (digest: ${digest.slice(0, 8)}...)`);
 }
 
+async function cmdCheckJson() {
+  const errors = [];
+  let map = null;
+  let currentDigest = null;
+  let generatedJson = null;
+
+  try {
+    const result = await loadAndValidateProductMap();
+    map = result.map;
+    if (result.errors.length > 0) {
+      errors.push('product-map.yaml has schema errors', ...result.errors.map(String));
+    } else {
+      currentDigest = productMapDigest(map);
+    }
+  } catch (error) {
+    errors.push(`Unable to read product-map.yaml: ${error.message}`);
+  }
+
+  if (!existsSync(JSON_OUT)) {
+    errors.push('product-map/generated/product-map.json does not exist. Run npm run product-map:generate first.');
+  } else {
+    try {
+      generatedJson = JSON.parse(readFileSync(JSON_OUT, 'utf8'));
+    } catch (error) {
+      errors.push(`Unable to parse product-map/generated/product-map.json: ${error.message}`);
+    }
+  }
+
+  if (generatedJson && currentDigest && generatedJson.digest !== currentDigest) {
+    errors.push(`Generated JSON digest ${String(generatedJson.digest)} does not match current YAML digest ${currentDigest}`);
+  }
+
+  if (currentDigest && existsSync(MD_OUT)) {
+    try {
+      if (!readFileSync(MD_OUT, 'utf8').includes(currentDigest)) {
+        errors.push('product-map.md does not contain current digest');
+      }
+    } catch (error) {
+      errors.push(`Unable to read product-map.md: ${error.message}`);
+    }
+  }
+
+  if (map) {
+    const smokeResult = validateSmokeFiles(map, REPO_ROOT);
+    errors.push(...smokeResult.errors.map(String));
+  }
+
+  console.log(JSON.stringify({ ok: errors.length === 0, errors }));
+  if (errors.length > 0) process.exitCode = 1;
+}
+
 async function cmdCheck() {
   if (!existsSync(JSON_OUT)) {
     console.error('FAIL: drift — product-map/generated/product-map.json does not exist. Run npm run product-map:generate first.');
@@ -129,7 +180,11 @@ switch (command) {
     await cmdGenerate();
     break;
   case 'check':
-    await cmdCheck();
+    if (options.includes('--json')) {
+      await cmdCheckJson();
+    } else {
+      await cmdCheck();
+    }
     break;
   default:
     console.error(`Unknown command: ${command}`);
