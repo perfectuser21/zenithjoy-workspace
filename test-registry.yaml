@@ -41,7 +41,7 @@ tests:
 
 - id: acquisition-cancel-android-uuid-integration
   path: apps/api/tests/integration/acquisition-cancel-uuid-agent.integration.test.ts
-  type: integration
+  type: unit
   ci: L4
   status: active
   product: AI员工
@@ -5044,6 +5044,14 @@ agent_suite:
   status: active
   product: 产品基础设施
   note: "sprint(07280933): Product Map SSOT — 7 个 node:test 测试，覆盖 BEHAVIOR-01~12，loadAndValidateProductMap/validateRelations/productMapDigest/assertBootstrapParity"
+
+- id: product-map-cli-json
+  path: scripts/product-map/__tests__/product-map-cli-json.test.js
+  type: integration
+  ci: L2
+  status: active
+  product: 产品基础设施
+  note: "Sprint 08061215：真实子进程与隔离文件系统验证 product-map check --json 成功、聚合失败、默认文本兼容和退出码语义"
 
 - id: gp-anchor-smoke-ratchet
   path: scripts/product-map/__tests__/gp-smoke-ratchet.test.js

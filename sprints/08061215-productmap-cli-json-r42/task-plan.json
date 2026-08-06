@@ -6,16 +6,17 @@
     {
       "task_id": "ws1",
       "title": "实现 product-map check --json 稳定机器输出",
-      "scope": "为 check 增加 JSON 成功、聚合失败输出，同时保持默认文本、退出码和其他子命令不变，并在 scripts/product-map/ 范围内补单测",
+      "scope": "为 check 增加 JSON 成功、聚合失败输出，同时保持默认文本、退出码和其他子命令不变；在 scripts/product-map/ 补单测并在根测试 SSOT 做必需登记",
       "dod": [
-        "[BEHAVIOR] 有效输入输出严格 {ok:true,errors:[]} 且退出 0",
-        "[BEHAVIOR] 缺失、损坏或同时存在多个检查问题时输出严格失败 JSON 并聚合具体 errors",
+        "[BEHAVIOR] 有效输入输出至少包含 {ok:true,errors:[]} 且退出 0",
+        "[BEHAVIOR] 缺失、损坏或同时存在多个检查问题时输出含必填字段的失败 JSON 并聚合具体 errors",
         "[BEHAVIOR] 不带 --json 的 stdout 逐字兼容",
-        "[ARTIFACT] product-map CLI JSON 模式测试位于 scripts/product-map/__tests__/"
+        "[ARTIFACT] product-map CLI JSON 模式测试位于 scripts/product-map/__tests__/ 且登记到 test-registry.yaml"
       ],
       "files": [
         "scripts/product-map/cli.mjs",
-        "scripts/product-map/__tests__/product-map-cli-json.test.js"
+        "scripts/product-map/__tests__/product-map-cli-json.test.js",
+        "test-registry.yaml"
       ],
       "depends_on": [],
       "complexity": "S",

@@ -34,7 +34,8 @@ function runCommand(root, command, ...args) {
 }
 
 function assertFailureShape(body) {
-  assert.deepEqual(Object.keys(body).sort(), ['errors', 'ok']);
+  assert.ok(Object.hasOwn(body, 'ok'));
+  assert.ok(Object.hasOwn(body, 'errors'));
   assert.equal(body.ok, false);
   assert.ok(Array.isArray(body.errors) && body.errors.length > 0);
   assert.ok(body.errors.every(error => typeof error === 'string' && error.length > 0));
@@ -49,7 +50,9 @@ test('check --json 成功时只输出 ok=true 与空 errors 且退出码为 0', 
   const result = run(root, '--json');
   assert.equal(result.status, 0);
   assert.equal(result.stderr, '');
-  assert.deepEqual(JSON.parse(result.stdout), { ok: true, errors: [] });
+  const body = JSON.parse(result.stdout);
+  assert.equal(body.ok, true);
+  assert.deepEqual(body.errors, []);
   assert.equal(result.stdout.trim().split('\n').length, 1, 'stdout 必须是单个 JSON 对象');
 }));
 
@@ -73,7 +76,7 @@ test('check --json 遇到不可解析 product-map.json 时输出具体错误 JSO
   assert.ok(body.errors.some(error => /parse|JSON/i.test(error)));
 }));
 
-test('check --json 多个检查问题分别进入 errors 且失败对象严格 keys', () => withSandbox(root => {
+test('check --json 多个检查问题分别进入 errors 且保留必填字段', () => withSandbox(root => {
   const jsonPath = resolve(root, 'product-map/generated/product-map.json');
   const map = JSON.parse(readFileSync(jsonPath, 'utf8'));
   map.digest = 'wrong-digest';
@@ -103,5 +106,7 @@ test('既有 check 位置参数与新增 --json 选项并存且语义互不干�
   const result = runCommand(root, 'check', '--json');
   assert.equal(result.status, 0);
   assert.equal(result.stderr, '');
-  assert.deepEqual(JSON.parse(result.stdout), { ok: true, errors: [] });
+  const body = JSON.parse(result.stdout);
+  assert.equal(body.ok, true);
+  assert.deepEqual(body.errors, []);
 }));

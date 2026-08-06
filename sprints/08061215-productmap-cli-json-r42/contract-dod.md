@@ -4,15 +4,17 @@ journey_type: autonomous
 ---
 # Contract DoD — product-map CLI `check --json`
 
-**范围**: 仅 `scripts/product-map/` 下 CLI 与单测；不改数据、其他子命令或 CI。
+**范围**: 产品代码与单测仅限 `scripts/product-map/`；允许且必须在根 `test-registry.yaml` 登记新增测试，不改数据、其他子命令或 CI。
 **大小**: S
 
 ## ARTIFACT 条目
 
 - [ ] [ARTIFACT] `scripts/product-map/cli.mjs` 实现 JSON 模式且单测位于 PRD 允许的 `scripts/product-map/` 范围
   Test: node -e "const fs=require('fs');const cli=fs.readFileSync('scripts/product-map/cli.mjs','utf8');if(!cli.includes('--json')||!fs.existsSync('scripts/product-map/__tests__/product-map-cli-json.test.js'))process.exit(1)"
-- [ ] [ARTIFACT] 只修改 PRD 允许的 CLI/测试范围
-  Test: bash -c 'git diff --name-only 6669497377b163ab7a8f4b40742b3f238d6d5538...HEAD | grep -Ev "^(scripts/product-map/|sprints/08061215-productmap-cli-json-r42/)" && exit 1 || exit 0'
+- [ ] [ARTIFACT] 新增测试已登记到测试 SSOT，满足 L2 orphan-test-check
+  Test: bash -c 'grep -qF "path: scripts/product-map/__tests__/product-map-cli-json.test.js" test-registry.yaml'
+- [ ] [ARTIFACT] 只修改 PRD 允许的 CLI/测试、Sprint 合同及必需测试登记
+  Test: bash -c 'git diff --name-only 6669497377b163ab7a8f4b40742b3f238d6d5538...HEAD | grep -Ev "^(scripts/product-map/|sprints/08061215-productmap-cli-json-r42/|test-registry.yaml$)" && exit 1 || exit 0'
 
 ## BEHAVIOR 条目
 
@@ -39,7 +41,7 @@ journey_type: autonomous
 
 - [ ] [BEHAVIOR] [L2] B-04: 多个检查问题被完整聚合
   动作: 在同一隔离副本同时制造 digest 不一致、Markdown digest 不一致与 smoke file 缺失
-  预期观察: stdout 的严格失败对象中 errors 至少三项，并分别描述三个真实问题
+  预期观察: stdout 失败对象至少含 ok/errors，errors 至少三项并分别描述三个真实问题；允许额外字段
   等待预算: 5s
   留证: node:test TAP 中 `多个检查问题` 子测试输出
   Test: manual:bash -c 'node --test --test-name-pattern="多个检查问题" scripts/product-map/__tests__/product-map-cli-json.test.js'
@@ -53,7 +55,7 @@ journey_type: autonomous
 
 - [ ] [BEHAVIOR] [L2] B-06: 既有 check 位置参数与新增 JSON 选项并存
   动作: 按生产 argv 形态执行 `check --json`；源码审计确认当前无其他既有 option-style flag
-  预期观察: check 的检查和退出码语义保留，同时 stdout 切换为严格成功 JSON；不存在的额外 flag 组合明确 N/A
+  预期观察: check 的检查和退出码语义保留，同时 stdout 切换为至少含 ok/errors 的成功 JSON；不存在的额外 flag 组合明确 N/A
   等待预算: 5s
   留证: node:test TAP 中 `既有 check 位置参数与新增 --json 选项并存` 子测试输出
   Test: manual:bash -c 'node --test --test-name-pattern="既有 check 位置参数与新增 --json 选项并存" scripts/product-map/__tests__/product-map-cli-json.test.js'
@@ -69,7 +71,7 @@ journey_type: autonomous
 - [铁律07] N/A：本 Sprint 仅改本地只读 CLI 输出与单测，不触及该铁律对应的服务、DB、调度、真机、部署或外部系统。
 - [铁律08] N/A：本 Sprint 仅改本地只读 CLI 输出与单测，不触及该铁律对应的服务、DB、调度、真机、部署或外部系统。
 - [铁律09] N/A：本 Sprint 仅改本地只读 CLI 输出与单测，不触及该铁律对应的服务、DB、调度、真机、部署或外部系统。
-- [铁律10] 适用：B-01 至 B-06 是本 Sprint smoke；按 PRD 范围保留在 `scripts/product-map/` 单测体系，不修改范围外 registry。
+- [铁律10] 适用：B-01 至 B-06 是本 Sprint smoke；单测位于 `scripts/product-map/`，并按仓库 L2 规则登记到根 `test-registry.yaml`。
 - [铁律11] N/A：本 Sprint 仅改本地只读 CLI 输出与单测，不触及该铁律对应的服务、DB、调度、真机、部署或外部系统。
 - [铁律12] N/A：本 Sprint 仅改本地只读 CLI 输出与单测，不触及该铁律对应的服务、DB、调度、真机、部署或外部系统。
 - [铁律13] N/A：本 Sprint 仅改本地只读 CLI 输出与单测，不触及该铁律对应的服务、DB、调度、真机、部署或外部系统。
@@ -80,7 +82,7 @@ journey_type: autonomous
 - [铁律18] N/A：本 Sprint 仅改本地只读 CLI 输出与单测，不触及该铁律对应的服务、DB、调度、真机、部署或外部系统。
 - [铁律19] N/A：本 Sprint 仅改本地只读 CLI 输出与单测，不触及该铁律对应的服务、DB、调度、真机、部署或外部系统。
 - [铁律20] N/A：本 Sprint 仅改本地只读 CLI 输出与单测，不触及该铁律对应的服务、DB、调度、真机、部署或外部系统。
-- [铁律21] 适用：push 前执行 product-map:check 与定向测试；本 Sprint 范围明确排除范围外 registry 变更。
+- [铁律21] 适用：push 前执行 product-map:check、定向测试与 orphan-test-check；仅允许根 registry 的必要新增登记。
 - [铁律22] 适用：B-01 至 B-06 是本 Sprint smoke。
 - [铁律23] N/A：本 Sprint 仅改本地只读 CLI 输出与单测，不触及该铁律对应的服务、DB、调度、真机、部署或外部系统。
 - [铁律24] 适用：B-01 至 B-06 是本 Sprint smoke。

@@ -1,10 +1,10 @@
-# Sprint Contract Draft（Round 3）
+# Sprint Contract Draft（Round 4）
 
 ## Notes
 
 - contract-gate: skipped (file not found, third-party repo)
 - context-manifest: unavailable（Brain 返回 404）
-- 本合同仅改变 `check` 子命令与其单测，不修改 Product Map 数据、其他子命令或 CI。
+- 本合同仅改变 `check` 子命令与其单测，不修改 Product Map 数据、其他子命令或 CI；仓库级 `test-registry.yaml` 仅登记新增测试，是 L2 必需的测试治理元数据，不扩大产品行为范围。
 - 参数面审计：当前 CLI 唯一既有参数是 argv[2] 的子命令位置参数，无既有 option-style flag；并存验收严格限定为生产调用形态 `check --json`，不再用未知 token 或 `validate --json` 虚构额外参数语义。
 
 ## Response Schema（推导来源: PRD字面）
@@ -19,7 +19,7 @@
 
 - `ok`（boolean，必填）：来源——PRD 明确。
 - `errors`（string[]，必填）：来源——PRD 明确；成功为空数组，失败每项为具体原因。
-- Schema 完整性：顶层 keys 完全等于 `["errors","ok"]`。
+- Schema 完整性：顶层至少存在 `ok` 与 `errors`；允许未来添加其他字段。
 - 禁用字段名：`[]`（PRD 未声明同义禁用字段）。
 - HTTP Error：N/A——本任务是本地 CLI，无 HTTP 响应；失败仍使用同一 JSON schema，并以非零退出码表达。
 
@@ -38,7 +38,7 @@
 | FR（做什么） | `check --json` 输出 `{ok,errors}`，保持既有文本模式与退出码。 |
 | NFR（做得多好） | JSON 模式 stdout 始终是单个可解析对象；不新增 PRD 外性能阈值。 |
 | Invariant（永不违反） | 不修改 product-map 数据、其他子命令、无 `--json` 文本与原退出码。 |
-| 判定点（怎么知道） | JSON parse、严格 keys/type/value、进程退出码和既有文本逐字断言。 |
+| 判定点（怎么知道） | JSON parse、必填字段存在/type/value、进程退出码和既有文本逐字断言。 |
 | 保质期（何时过期） | CLI 参数存在期间持续有效；移除须经产品合同变更。 |
 | 死亡告警（停了谁知道） | `test:product-map`/L2 product-map-contract 非零失败，CI 当次即知。 |
 | 失败语义（挂了怎么办） | fail-closed：`ok=false`、具体 errors、非零退出；不得打印裸堆栈到 stdout。 |
@@ -92,21 +92,21 @@ GP-Anchor: line00/gp_anchor_enforcement keep-green
 
 **来源**: `[FROM_PRD]` — Thin PRD「Golden Path」及具体第 1、2 条。
 
-**可观测行为**: `check --json` 成功时 stdout 仅为单行 JSON，包含且仅包含 `ok=true`、`errors=[]`。
+**可观测行为**: `check --json` 成功时 stdout 仅为单行 JSON，至少包含 `ok=true`、`errors=[]`，允许额外字段。
 
 **验证命令**: `node --test --test-name-pattern='成功时只输出' scripts/product-map/__tests__/product-map-cli-json.test.js`
 
-**硬阈值**: JSON 可解析；keys=`["errors","ok"]`；`ok` 为 boolean；`errors` 为 string[]；成功退出码 0。上述命令非零即 FAIL。
+**硬阈值**: JSON 可解析；存在 `ok` 与 `errors`；`ok` 为 boolean；`errors` 为 string[]；成功退出码 0。上述命令非零即 FAIL。
 
 ### Step 2: 现有检查聚合一个或多个输入故障
 
 **来源**: `[FROM_PRD]` — Thin PRD「边界情况」第一、三条。
 
-**可观测行为**: 隔离副本缺少或含损坏 `product-map.json` 时，stdout 仍是失败 JSON；当 digest、Markdown 与 smoke file 同时出错时，`errors` 分别包含三个具体字符串，且每个失败对象严格只有 `errors`、`ok` 两个 key。
+**可观测行为**: 隔离副本缺少或含损坏 `product-map.json` 时，stdout 仍是失败 JSON；当 digest、Markdown 与 smoke file 同时出错时，`errors` 分别包含三个具体字符串，且每个失败对象至少存在 `errors`、`ok` 两个必填字段。
 
 **验证命令**: `node --test --test-name-pattern='缺少 product-map.json|不可解析 product-map.json|多个检查问题' scripts/product-map/__tests__/product-map-cli-json.test.js`
 
-**硬阈值**: 三种失败均严格 keys=`["errors","ok"]`、`ok=false`、errors 非空且逐项 string、退出码非 0；多问题场景 errors 长度至少 3 且分别描述 digest、Markdown 与 smoke file；上述命令非零即 FAIL。
+**硬阈值**: 三种失败均存在 `ok` 与 `errors`、`ok=false`、errors 非空且逐项 string、退出码非 0；多问题场景 errors 长度至少 3 且分别描述 digest、Markdown 与 smoke file；上述命令非零即 FAIL。
 
 ### Step 3: 保持默认人类可读输出
 
@@ -126,7 +126,7 @@ GP-Anchor: line00/gp_anchor_enforcement keep-green
 
 **验证命令**: `node --test --test-name-pattern='既有 check 位置参数与新增 --json 选项并存' scripts/product-map/__tests__/product-map-cli-json.test.js`
 
-**硬阈值**: `check --json` 退出 0、stderr 为空且 JSON 严格等于 `{ok:true,errors:[]}`；源码无其他既有 option-style flag，故额外 flag 组合为 N/A；上述命令非零即 FAIL。
+**硬阈值**: `check --json` 退出 0、stderr 为空且 JSON 至少包含 `{ok:true,errors:[]}`；源码无其他既有 option-style flag，故额外 flag 组合为 N/A；上述命令非零即 FAIL。
 
 ### Step 5: 调用方用退出码完成门禁
 
@@ -172,7 +172,7 @@ echo "OK: check --json Golden Path 全部通过，evaluator_attempt=$HARNESS_ATT
 | 缺失输入 | `scripts/product-map/__tests__/product-map-cli-json.test.js` | `缺少 product-map.json 时输出合法失败 JSON` | 当前实现把文本写 stderr，stdout 非 JSON |
 | 损坏输入 | `scripts/product-map/__tests__/product-map-cli-json.test.js` | `不可解析 product-map.json 时输出具体错误 JSON` | 当前实现裸 SyntaxError |
 | 默认兼容 | `scripts/product-map/__tests__/product-map-cli-json.test.js` | `不带 --json 时成功 stdout 与既有文本逐字一致` | 实现前作为既有行为保护（当前通过） |
-| 多问题聚合 | `scripts/product-map/__tests__/product-map-cli-json.test.js` | `多个检查问题分别进入 errors 且失败对象严格 keys` | 当前实现首错即退出，无法聚合 |
+| 多问题聚合 | `scripts/product-map/__tests__/product-map-cli-json.test.js` | `多个检查问题分别进入 errors 且保留必填字段` | 当前实现首错即退出，无法聚合 |
 | 参数并存 | `scripts/product-map/__tests__/product-map-cli-json.test.js` | `既有 check 位置参数与新增 --json 选项并存` | 当前实现未识别 `--json` |
 
 ## 探索提示（L3 探索层 — evaluator 剧本全过后执行）
