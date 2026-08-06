@@ -1,0 +1,25 @@
+{
+  "initiative_id": "a29c526c-760e-4262-97d4-c3b3ccdec700",
+  "journey_type": "autonomous",
+  "journey_type_reason": "CI/运维在本地执行无 UI 的 product-map 检查并消费机器结论",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "实现 product-map check --json 稳定机器输出",
+      "scope": "为 check 增加 JSON 成功、聚合失败输出，同时保持默认文本、退出码和其他子命令不变，并在 scripts/product-map/ 范围内补单测",
+      "dod": [
+        "[BEHAVIOR] 有效输入输出严格 {ok:true,errors:[]} 且退出 0",
+        "[BEHAVIOR] 缺失、损坏或同时存在多个检查问题时输出严格失败 JSON 并聚合具体 errors",
+        "[BEHAVIOR] 不带 --json 的 stdout 逐字兼容",
+        "[ARTIFACT] product-map CLI JSON 模式测试位于 scripts/product-map/__tests__/"
+      ],
+      "files": [
+        "scripts/product-map/cli.mjs",
+        "scripts/product-map/__tests__/product-map-cli-json.test.js"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 60
+    }
+  ]
+}
