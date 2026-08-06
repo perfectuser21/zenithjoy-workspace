@@ -21,42 +21,42 @@ journey_type: autonomous
   预期观察: stdout 仅有 `{ok:true,errors:[]}`，stderr 为空且退出码 0
   等待预算: 5s
   留证: node:test TAP 中 `成功时只输出` 子测试输出
-  Test: manual:bash -c 'node --test --test-name-pattern="成功时只输出" sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js'
+  Test: manual:bash -c 'node --test --test-name-pattern="成功时只输出" scripts/product-map/__tests__/product-map-cli-json.test.js'
 
 - [ ] [BEHAVIOR] [L2] B-02: 缺失生成 JSON 返回结构化失败
   动作: 删除隔离副本的 `product-map.json` 后执行 `check --json`
   预期观察: stdout 是 `ok=false` 的单个 JSON，errors 含缺失原因，进程非零且无 stderr
   等待预算: 5s
   留证: node:test TAP 中 `缺少 product-map.json` 子测试输出
-  Test: manual:bash -c 'node --test --test-name-pattern="缺少 product-map.json" sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js'
+  Test: manual:bash -c 'node --test --test-name-pattern="缺少 product-map.json" scripts/product-map/__tests__/product-map-cli-json.test.js'
 
 - [ ] [BEHAVIOR] [L2] B-03: 损坏生成 JSON 不泄漏裸异常
   动作: 将隔离副本的 `product-map.json` 写成不可解析内容后执行 `check --json`
   预期观察: stdout 是 `ok=false` 的合法 JSON，errors 含 parse/JSON 原因，进程非零且 stderr 为空
   等待预算: 5s
   留证: node:test TAP 中 `不可解析 product-map.json` 子测试输出
-  Test: manual:bash -c 'node --test --test-name-pattern="不可解析 product-map.json" sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js'
+  Test: manual:bash -c 'node --test --test-name-pattern="不可解析 product-map.json" scripts/product-map/__tests__/product-map-cli-json.test.js'
 
 - [ ] [BEHAVIOR] [L2] B-04: 多个检查问题被完整聚合
   动作: 在同一隔离副本同时制造 digest 不一致、Markdown digest 不一致与 smoke file 缺失
   预期观察: stdout 的严格失败对象中 errors 至少三项，并分别描述三个真实问题
   等待预算: 5s
   留证: node:test TAP 中 `多个检查问题` 子测试输出
-  Test: manual:bash -c 'node --test --test-name-pattern="多个检查问题" sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js'
+  Test: manual:bash -c 'node --test --test-name-pattern="多个检查问题" scripts/product-map/__tests__/product-map-cli-json.test.js'
 
 - [ ] [BEHAVIOR] [L2] B-05: 默认文本输出零回归
   动作: 在同一真实隔离副本执行不带 `--json` 的 `check`
   预期观察: stdout 与当前 PASS 文本（含 digest 与换行）逐字一致，退出码 0
   等待预算: 5s
   留证: node:test TAP 中 `不带 --json` 子测试输出
-  Test: manual:bash -c 'node --test --test-name-pattern="不带 --json" sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js'
+  Test: manual:bash -c 'node --test --test-name-pattern="不带 --json" scripts/product-map/__tests__/product-map-cli-json.test.js'
 
-- [ ] [BEHAVIOR] [L2] B-06: JSON 标志只作用于 check 且不干扰既有命令参数
-  动作: 分别执行 `check --json` 与既有 `validate --json` 命令形态
-  预期观察: check 返回严格成功 JSON；validate 仍返回既有人类文本与退出码
+- [ ] [BEHAVIOR] [L2] B-06: 既有 check 位置参数与新增 JSON 选项并存
+  动作: 按生产 argv 形态执行 `check --json`；源码审计确认当前无其他既有 option-style flag
+  预期观察: check 的检查和退出码语义保留，同时 stdout 切换为严格成功 JSON；不存在的额外 flag 组合明确 N/A
   等待预算: 5s
-  留证: node:test TAP 中 `既有命令参数` 子测试输出
-  Test: manual:bash -c 'node --test --test-name-pattern="既有命令参数" sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js'
+  留证: node:test TAP 中 `既有 check 位置参数与新增 --json 选项并存` 子测试输出
+  Test: manual:bash -c 'node --test --test-name-pattern="既有 check 位置参数与新增 --json 选项并存" scripts/product-map/__tests__/product-map-cli-json.test.js'
 
 ## Invariant 覆盖
 
