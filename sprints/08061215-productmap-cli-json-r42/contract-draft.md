@@ -1,8 +1,9 @@
-# Sprint Contract Draft (Round 1)
+# Sprint Contract Draft (Round 2)
 
 ## Notes
 
 - contract-gate: skipped (file not found, third-party repo)
+- 文本兼容基线固定为 Round 1 合同锚 `1c0df82311dc685cb44f497a13b4b295b0fcf4d9`；validation role 身份由 Runner late-bound。
 - PRD 正文以 task bundle 的 Thin PRD 为主，仓库 `sprint-prd.md` 为补充。
 - 本任务不依赖数据库、网络、业务身份或第三方 API。
 
@@ -103,20 +104,20 @@ N/A：本地 CLI 不暴露 agent 或外部用户内容入口。
 ### Step 3: 失败结论仍是严格 JSON
 **来源**: `[FROM_PRD]` — Thin PRD「边界情况」缺失/不可解析投影与多问题要求。
 
-**可观测行为**: 真实文件缺失或坏 JSON 时，stdout 仍为单个对象，`ok=false`，`errors` 为非空字符串数组，exit 非 0。
+**可观测行为**: 真实文件缺失或坏 JSON 时，stdout 仍为单个对象，`ok=false`，`errors` 为非空字符串数组，exit 非 0；同时制造 digest 漂移与两个缺失 smoke file 时，三个具体问题均逐项出现在 `errors`，不得首错即停。
 
 **验证命令**: `bash -c 'set +e; OUT=$(node scripts/product-map/cli.mjs check --json); CODE=$?; [ "$CODE" -ne 0 ] && printf "%s" "$OUT" | jq -e '\''keys==["errors","ok"] and .ok==false and (.errors|type)=="array" and (.errors|length)>0 and all(.errors[]; type=="string")'\'''`
 
-**硬阈值**: exit≠0；stdout 解析成功；errors 至少 1 条且全为 string。测试与 E2E 通过真实文件故障建立前置状态。
+**硬阈值**: exit≠0；stdout 解析成功；errors 至少 1 条且全为 string；多问题 fixture 中 `errors.length>=3`，且分别包含 `digest`、`harness-missing-one.sh`、`harness-missing-two.sh`。
 
 ### Step 4: 文本模式零回归
 **来源**: `[FROM_PRD]` — Thin PRD 具体第 1、3 项。
 
-**可观测行为**: 不带 `--json` 的 stdout、stderr 与冻结 base SHA 的 CLI 逐字一致，退出码一致。
+**可观测行为**: 不带 `--json` 的成功及失败路径 stdout、stderr 与冻结合同锚 SHA 的 CLI 逐字一致，退出码一致。
 
 **验证命令**: `cmp "$BASE_STDOUT" "$NEW_STDOUT" && cmp "$BASE_STDERR" "$NEW_STDERR" && [ "$BASE_CODE" -eq "$NEW_CODE" ]`
 
-**硬阈值**: 两个输出逐字节相同，exit code 完全相同。
+**硬阈值**: 成功与 digest 漂移失败 fixture 上，两份 stdout、stderr 均逐字节相同，两个 exit code 均完全相同。
 
 ### Step 5: 防造假完整性检查
 **来源**: `[AI_ADDED]` — 防止只验证可解析却漏掉多余 key、stderr 污染和失败退出码。
@@ -125,7 +126,7 @@ N/A：本地 CLI 不暴露 agent 或外部用户内容入口。
 
 **验证命令**: `node --test sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js scripts/product-map/__tests__/product-map.test.js`
 
-**硬阈值**: 新合同测试 5/5 与既有测试全部通过；任一失败均为非零退出。
+**硬阈值**: 新合同测试 7/7 与既有测试全部通过；任一失败均为非零退出。
 
 ## E2E 验收（最终 final-e2e 跑）
 
@@ -138,21 +139,40 @@ set -euo pipefail
 REPO_ROOT=$(pwd)
 CLI="$REPO_ROOT/scripts/product-map/cli.mjs"
 JSON_PATH="$REPO_ROOT/product-map/generated/product-map.json"
-BASE_CLI="$REPO_ROOT/scripts/product-map/.harness-base-cli.mjs"
+YAML_PATH="$REPO_ROOT/product-map/product-map.yaml"
+BASE_ROOT=$(mktemp -d)
+NEW_ROOT=$(mktemp -d)
 BACKUP_JSON=$(mktemp)
+BACKUP_YAML=$(mktemp)
 TMP_DIR=$(mktemp -d)
 cp "$JSON_PATH" "$BACKUP_JSON"
-cleanup() { cp "$BACKUP_JSON" "$JSON_PATH"; rm -f "$BACKUP_JSON" "$BASE_CLI"; rm -rf "$TMP_DIR"; }
+cp "$YAML_PATH" "$BACKUP_YAML"
+cleanup() { cp "$BACKUP_JSON" "$JSON_PATH"; cp "$BACKUP_YAML" "$YAML_PATH"; rm -f "$BACKUP_JSON" "$BACKUP_YAML"; rm -rf "$BASE_ROOT" "$NEW_ROOT" "$TMP_DIR"; }
 trap cleanup EXIT
 
-git show d1991c02f89b581b431b1ee18a1028f6ab6c933c:scripts/product-map/cli.mjs > "$BASE_CLI"
+mkdir -p "$BASE_ROOT/scripts" "$NEW_ROOT/scripts"
+cp -R scripts/product-map "$BASE_ROOT/scripts/"
+cp -R scripts/product-map "$NEW_ROOT/scripts/"
+cp -R product-map "$BASE_ROOT/"
+cp -R product-map "$NEW_ROOT/"
+git show 1c0df82311dc685cb44f497a13b4b295b0fcf4d9:scripts/product-map/cli.mjs > "$BASE_ROOT/scripts/product-map/cli.mjs"
 set +e
-node "$BASE_CLI" check >"$TMP_DIR/base.out" 2>"$TMP_DIR/base.err"; BASE_CODE=$?
-node "$CLI" check >"$TMP_DIR/new.out" 2>"$TMP_DIR/new.err"; NEW_CODE=$?
+(cd "$BASE_ROOT" && node scripts/product-map/cli.mjs check) >"$TMP_DIR/base.out" 2>"$TMP_DIR/base.err"; BASE_CODE=$?
+(cd "$NEW_ROOT" && node scripts/product-map/cli.mjs check) >"$TMP_DIR/new.out" 2>"$TMP_DIR/new.err"; NEW_CODE=$?
 set -e
 cmp "$TMP_DIR/base.out" "$TMP_DIR/new.out"
 cmp "$TMP_DIR/base.err" "$TMP_DIR/new.err"
 [ "$BASE_CODE" -eq "$NEW_CODE" ]
+
+node -e 'const fs=require("fs");for(const root of process.argv.slice(1)){const p=root+"/product-map/generated/product-map.json";const j=JSON.parse(fs.readFileSync(p));j.digest="00000000"+j.digest.slice(8);fs.writeFileSync(p,JSON.stringify(j,null,2)+"\n")}' "$BASE_ROOT" "$NEW_ROOT"
+set +e
+(cd "$BASE_ROOT" && node scripts/product-map/cli.mjs check) >"$TMP_DIR/base-fail.out" 2>"$TMP_DIR/base-fail.err"; BASE_FAIL_CODE=$?
+(cd "$NEW_ROOT" && node scripts/product-map/cli.mjs check) >"$TMP_DIR/new-fail.out" 2>"$TMP_DIR/new-fail.err"; NEW_FAIL_CODE=$?
+set -e
+[ "$BASE_FAIL_CODE" -ne 0 ]
+[ "$BASE_FAIL_CODE" -eq "$NEW_FAIL_CODE" ]
+cmp "$TMP_DIR/base-fail.out" "$TMP_DIR/new-fail.out"
+cmp "$TMP_DIR/base-fail.err" "$TMP_DIR/new-fail.err"
 
 OUT=$(timeout 10s node "$CLI" check --json --unused-existing-compatible)
 [ "$?" -eq 0 ]
@@ -175,6 +195,16 @@ set -e
 printf '%s' "$OUT" | jq -e 'keys==["errors","ok"] and .ok==false and (.errors|length)>0 and all(.errors[]; type=="string")'
 
 cp "$BACKUP_JSON" "$JSON_PATH"
+cp "$BACKUP_YAML" "$YAML_PATH"
+sed -i '0,/\.github\/workflows\/scripts\/smoke\/golden-path-f1-anchor-smoke\.sh/s//harness-missing-one.sh/' "$YAML_PATH"
+sed -i '0,/\.github\/workflows\/scripts\/smoke\/golden-path-1-smoke\.sh/s//harness-missing-two.sh/' "$YAML_PATH"
+set +e
+OUT=$(node "$CLI" check --json 2>"$TMP_DIR/multi.err"); CODE=$?
+set -e
+[ "$CODE" -ne 0 ]
+[ ! -s "$TMP_DIR/multi.err" ]
+printf '%s' "$OUT" | jq -e 'keys==["errors","ok"] and .ok==false and (.errors|length)>=3 and any(.errors[]; test("digest";"i")) and any(.errors[]; contains("harness-missing-one.sh")) and any(.errors[]; contains("harness-missing-two.sh"))'
+cp "$BACKUP_YAML" "$YAML_PATH"
 node --test sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js scripts/product-map/__tests__/product-map.test.js
 echo 'Golden Path 验证通过'
 ```
@@ -197,4 +227,6 @@ echo 'Golden Path 验证通过'
 | 缺文件失败 | `sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js` | `缺少 product-map.json 时输出合法失败 JSON` | 当前 CLI 只写 stderr，stdout 为空 |
 | 坏 JSON 失败 | `sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js` | `不可解析 product-map.json 时仍输出合法失败 JSON` | 当前 CLI 抛 SyntaxError |
 | 参数兼容 | `sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js` | `与既有额外参数并存时保持 JSON 语义` | 当前 CLI 输出文本 |
-| 文本兼容 | `sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js` | `不带 --json 的成功输出逐字保持` | 现状通过，作为零回归基线 |
+| 多问题聚合 | `sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js` | `多个检查问题同时存在时 errors 逐项表达` | 当前 CLI 首错即停且输出非 JSON |
+| 文本兼容成功 | `sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js` | `不带 --json 的成功输出逐字保持` | 现状通过，作为零回归基线 |
+| 文本兼容失败 | `sprints/08061215-productmap-cli-json-r42/tests/product-map-cli-json.test.js` | `不带 --json 的失败输出与退出码逐字保持` | 约束后续实现不得改变原失败文本 |

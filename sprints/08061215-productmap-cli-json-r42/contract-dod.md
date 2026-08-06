@@ -48,7 +48,21 @@ target_environment: local_api
   预期观察: stdout、stderr 与 exit code逐字一致
   等待预算: 10s
   留证: cmp 结果与两个 exit code
-  Test: manual:bash -c 'B=scripts/product-map/.base-cli.mjs; D=$(mktemp -d); trap '\''rm -f "$B"; rm -rf "$D"'\'' EXIT; git show d1991c02f89b581b431b1ee18a1028f6ab6c933c:scripts/product-map/cli.mjs > "$B"; set +e; node "$B" check >"$D/a" 2>"$D/ae"; A=$?; node scripts/product-map/cli.mjs check >"$D/b" 2>"$D/be"; C=$?; set -e; [ "$A" -eq "$C" ] && cmp "$D/a" "$D/b" && cmp "$D/ae" "$D/be"'
+  Test: manual:bash -c 'B=scripts/product-map/.base-cli.mjs; D=$(mktemp -d); trap '\''rm -f "$B"; rm -rf "$D"'\'' EXIT; git show 1c0df82311dc685cb44f497a13b4b295b0fcf4d9:scripts/product-map/cli.mjs > "$B"; set +e; node "$B" check >"$D/a" 2>"$D/ae"; A=$?; node scripts/product-map/cli.mjs check >"$D/b" 2>"$D/be"; C=$?; set -e; [ "$A" -eq "$C" ] && cmp "$D/a" "$D/b" && cmp "$D/ae" "$D/be"'
+
+- [ ] [BEHAVIOR] [L2] B-06: 多个检查问题同时存在时 errors 逐项表达
+  动作: 在隔离副本中同时制造 digest 漂移与两个 smoke_files 缺失，再执行 check --json
+  预期观察: stdout 单个 JSON 中至少三条 error 分别指出 digest 与两个具体缺失路径，退出非 0
+  等待预算: 10s
+  留证: JSON stdout、空 stderr 与 exit code
+  Test: manual:bash -c 'D=$(mktemp -d); trap '\''rm -rf "$D"'\'' EXIT; mkdir -p "$D/scripts"; cp -R scripts/product-map "$D/scripts/"; cp -R product-map "$D/"; sed -i '\''0,/\.github\/workflows\/scripts\/smoke\/golden-path-f1-anchor-smoke\.sh/s//harness-missing-one.sh/'\'' "$D/product-map/product-map.yaml"; sed -i '\''0,/\.github\/workflows\/scripts\/smoke\/golden-path-1-smoke\.sh/s//harness-missing-two.sh/'\'' "$D/product-map/product-map.yaml"; set +e; OUT=$(cd "$D" && node scripts/product-map/cli.mjs check --json 2>err); CODE=$?; set -e; [ "$CODE" -ne 0 ] && [ ! -s "$D/err" ] && printf "%s" "$OUT" | jq -e '\''keys==["errors","ok"] and .ok==false and (.errors|length)>=3 and any(.errors[]; test("digest";"i")) and any(.errors[]; contains("harness-missing-one.sh")) and any(.errors[]; contains("harness-missing-two.sh"))'\'''
+
+- [ ] [BEHAVIOR] [L2] B-07: 不带 --json 的失败输出与退出码逐字零回归
+  动作: 在两个隔离副本制造相同 digest 漂移，分别运行合同锚 CLI 与候选 CLI 的文本 check
+  预期观察: 两者均失败，stdout、stderr 和 exit code 逐字一致
+  等待预算: 10s
+  留证: 两组输出 cmp 结果与 exit code
+  Test: manual:bash -c 'D=$(mktemp -d); trap '\''rm -rf "$D"'\'' EXIT; for R in base new; do mkdir -p "$D/$R/scripts"; cp -R scripts/product-map "$D/$R/scripts/"; cp -R product-map "$D/$R/"; done; git show 1c0df82311dc685cb44f497a13b4b295b0fcf4d9:scripts/product-map/cli.mjs > "$D/base/scripts/product-map/cli.mjs"; node -e '\''const fs=require("fs");for(const r of process.argv.slice(1)){const p=r+"/product-map/generated/product-map.json";const j=JSON.parse(fs.readFileSync(p));j.digest="00000000"+j.digest.slice(8);fs.writeFileSync(p,JSON.stringify(j))}'\'' "$D/base" "$D/new"; set +e; (cd "$D/base" && node scripts/product-map/cli.mjs check)>"$D/a" 2>"$D/ae"; A=$?; (cd "$D/new" && node scripts/product-map/cli.mjs check)>"$D/b" 2>"$D/be"; B=$?; set -e; [ "$A" -ne 0 ] && [ "$A" -eq "$B" ] && cmp "$D/a" "$D/b" && cmp "$D/ae" "$D/be"'
 
 - [ ] [BEHAVIOR] [L2] INV-01: 产品分类投影无漂移
   动作: 执行仓库 SSOT 分类合同检查

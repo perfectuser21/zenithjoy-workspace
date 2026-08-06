@@ -6,11 +6,12 @@
     {
       "task_id": "ws1",
       "title": "实现 product-map check --json 严格输出模式",
-      "scope": "为 check 子命令增加 JSON 成功与失败输出，保持文本模式、参数及退出码兼容",
+      "scope": "为 check 子命令增加 JSON 成功、单故障与多故障聚合输出，并保持文本模式成功/失败、参数及退出码兼容",
       "dod": [
         "[BEHAVIOR] check --json 成功与文件故障均输出严格 ok/errors JSON，退出码语义不变",
-        "[BEHAVIOR] 无 --json 文本输出与冻结基线逐字一致",
-        "[ARTIFACT] CLI 单测覆盖成功、失败、坏 JSON、参数共存和零回归"
+        "[BEHAVIOR] 多个检查问题同时存在时 errors 逐项表达每个具体问题",
+        "[BEHAVIOR] 无 --json 成功与失败输出均与冻结合同锚逐字一致",
+        "[ARTIFACT] CLI 单测覆盖成功、单故障、多故障、坏 JSON、参数共存和双路径零回归"
       ],
       "files": [
         "scripts/product-map/cli.mjs",
