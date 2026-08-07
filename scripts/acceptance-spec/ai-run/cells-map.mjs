@@ -4,8 +4,7 @@
  * 规程文件（acceptance-spec/line02-android.yaml）里 19 个 machine_db 格
  * → 各自的采证动作：走哪个后台页面、做什么、等多久。
  *
- * action 三值：
- *   signup_flow      — 走注册/授权用户流（本身就是证据）
+ * action 二值：
  *   trigger_collect  — 在任务页真实发起一次采集
  *   observe          — 打开页面观察并截图
  *
@@ -16,8 +15,8 @@
  */
 
 export const CELLS_MAP = [
-  { id: 'S1-c3', route: '/signup', action: 'signup_flow', wait_budget_ms: 60000,
-    note: '在预发域名完成注册+授权即为「绑进预发」的直接证据（截图含域名与登录态）' },
+  { id: 'S1-c3', route: '/area/acquisition/accounts', action: 'observe', wait_budget_ms: 60000,
+    note: '登录验收账号后观察账号列表（截图含域名与登录态，作为「绑进预发」的直接证据）' },
 
   { id: 'S4-c2', route: '/area/acquisition/accounts', action: 'observe', wait_budget_ms: 30000,
     note: '恢复时间窗需真机重启场景；无场景时判无法验证' },
@@ -53,8 +52,8 @@ export const CELLS_MAP = [
 
   { id: 'S10-c1', route: '/area/acquisition/leads', action: 'observe', wait_budget_ms: 60000,
     note: '线索昵称/评论/目标身份可核验' },
-  { id: 'S10-c4', route: '/area/acquisition/leads', action: 'observe', wait_budget_ms: 30000,
-    note: '红线11：覆盖场景需两轮数据对照' },
+  { id: 'S10-c4', route: '/area/acquisition/tasks', action: 'trigger_collect', wait_budget_ms: 30000,
+    note: '红线11：二次同关键词采集，覆盖场景需两轮数据对照' },
 
   { id: 'S11-c1', route: '/area/acquisition/outreach', action: 'observe', wait_budget_ms: 60000,
     note: '派单目标须来自本轮真实线索' },

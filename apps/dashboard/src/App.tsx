@@ -343,6 +343,12 @@ function App() {
           {/* 环境角标置于最外层，登录页/加载页/任意页面都可见 */}
           <EnvBadge />
           <AppContent />
+          {/* FR-10: 构建版本戳（仅 staging 有 VITE_BUILD_SHA，生产不展示） */}
+          {import.meta.env.VITE_BUILD_SHA && (
+            <span data-testid="build-sha" style={{ position: 'fixed', bottom: 4, right: 6, fontSize: '10px', opacity: 0.4, pointerEvents: 'none', zIndex: 9999 }}>
+              {(import.meta.env.VITE_BUILD_SHA as string).slice(0, 7)}
+            </span>
+          )}
         </AuthProvider>
       </InstanceProvider>
     </ThemeProvider>

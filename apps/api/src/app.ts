@@ -116,6 +116,11 @@ app.get('/version', (req, res) => {
   res.json(getBuildInfo());
 });
 
+// /api/version 别名——与前缀挂载时路径一致
+app.get('/api/version', (req, res) => {
+  res.json(getBuildInfo());
+});
+
 // Path 2 Step4 — fake-LLM 替身：仅非生产挂载于根路径，
 // 供 evaluator/CI 把 OPENROUTER_BASE_URL 指向 apps/api 自身做端到端验证。
 // 生产不挂载 → 真 OpenRouter 链路不受影响。router 对未匹配路径会 next() 透传。

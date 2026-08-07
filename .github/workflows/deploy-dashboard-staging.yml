@@ -54,7 +54,7 @@ jobs:
             echo "=== [1/5] git sync（候选 = origin/main）==="
             git -C "$REPO" remote prune origin 2>/dev/null || true
             git -C "$REPO" fetch --force --prune origin main
-            git -C "$REPO" reset --hard origin/main
+            git -C "$REPO" reset --hard ${{ github.sha }}
 
             echo "=== [2/5] build dashboard（STAGING build env）==="
             cd "$REPO"
@@ -67,6 +67,8 @@ jobs:
             export VITE_STAFF_EMAILS='408080793@qq.com,121406646@qq.com,Zenithjoy21xx@gmail.com,xuxiao21xx@icloud.com'
             # 环境角标：staging build 注入 staging → 前端右上角显橙色 STAGING 旗（生产 promote 注入 production，不显示）。
             export VITE_DEPLOY_ENV='staging'
+            # FR-10: 注入构建 SHA，前端可展示版本戳
+            export VITE_BUILD_SHA='${{ github.sha }}'
             npm run build --workspace=apps/dashboard
 
             echo "=== [3/5] 落 staging dist + staging nginx.conf（绝不碰生产 autopilot-dashboard）==="

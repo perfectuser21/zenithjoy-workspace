@@ -1,0 +1,55 @@
+name: AI 打表器（验收采证）
+
+# 允许域名白名单：staging-autopilot.zenjoymedia.media（采证器 Playwright allowlist）
+
+on:
+  workflow_dispatch:
+    inputs:
+      staging_url:
+        description: 'Staging URL'
+        required: false
+        default: 'https://staging-autopilot.zenjoymedia.media'
+      keyword:
+        description: '采集关键词'
+        required: false
+        default: '装修'
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run acceptance scorer
+        env:
+          ACCEPTANCE_EMAIL: ${{ secrets.STAGING_ACCEPTANCE_EMAIL }}
+          ACCEPTANCE_PASSWORD: ${{ secrets.STAGING_ACCEPTANCE_PASSWORD }}
+          ACCEPTANCE_AI_TOKEN: ${{ secrets.ACCEPTANCE_AI_TOKEN }}
+          STAGING_URL: ${{ inputs.staging_url }}
+        run: |
+          node scripts/acceptance-spec/ai-run/capture.mjs \
+            --staging "$STAGING_URL" \
+            --keyword "${{ inputs.keyword }}" \
+            --out acceptance-spec/runs/ci-$(date +%Y%m%d-%H%M%S)
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-evidence-${{ github.run_id }}
+          path: acceptance-spec/runs/
+          retention-days: 7

@@ -26,10 +26,9 @@
 import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium } from '@playwright/test';
 import { CELLS_MAP } from './cells-map.mjs';
-import { getCellCriteria, checkCellsMapComplete, buildPendingCells } from './lib.mjs';
 import { resolveCredentials, buildRunSummary, performLogin } from './login.mjs';
+// lib.mjs 和 playwright 在 main() 内动态导入（避免导入此文件做单元测试时报错）
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../..');
@@ -59,6 +58,7 @@ async function snap(page, cellDir, name) {
 
 async function main() {
   // 采证前自检：映射与规程必须 1:1，否则宁可不产出也不产出半份证据
+  const { getCellCriteria, checkCellsMapComplete, buildPendingCells } = await import('./lib.mjs');
   const { errors: mapErrors } = await checkCellsMapComplete(CELLS_MAP);
   if (mapErrors.length > 0) {
     console.error('FAIL: 采证映射与规程不一致，拒绝开跑：');
@@ -81,9 +81,22 @@ async function main() {
   } catch { /* 保持 unknown */ }
 
   const criteria = await getCellCriteria();
+  const { chromium } = await import('@playwright/test');
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   page.setDefaultTimeout(30000);
+
+  // Playwright allowlist: 只放行 staging 域名（防止采证器访问生产或无关域名）
+  // allowlist 域名: staging-autopilot.zenjoymedia.media
+  const ALLOWED_HOSTNAME = new URL(STAGING).hostname;
+  await page.route('**/*', (route) => {
+    const url = new URL(route.request().url());
+    if (url.hostname === ALLOWED_HOSTNAME || url.hostname === 'localhost') {
+      route.continue();
+    } else {
+      route.abort();
+    }
+  });
 
   const cellState = {}; // id -> { evidence: [], notes: [] }
   for (const c of CELLS_MAP) cellState[c.id] = { evidence: [], notes: [] };
@@ -94,8 +107,8 @@ async function main() {
     { email: arg('email', null), password: arg('password', null) },
     process.env
   );
-  const email = creds.mode === 'login' ? creds.email : `ai-table-${Date.now()}@zenithjoy.test`;
-  const password = creds.mode === 'login' ? creds.password : 'AiTable!2026';
+  const email = creds.email;
+  const password = creds.password;
   log(`身份模式=${creds.mode}${creds.source ? `（凭据来源 ${creds.source}）` : ''} 账号=${email}`);
 
   async function captureFor(cellIds, name, note) {
@@ -108,43 +121,25 @@ async function main() {
   }
 
   try {
-    // ── 用户流1：取得身份（S1-c3 的直接证据：在预发域名完成绑定/登录）──
-    if (creds.mode === 'login') {
-      log('步骤：常驻验收账号登录');
-      try {
-        const ok = await performLogin(page, STAGING, email, password);
-        await captureFor(['S1-c3'], '01-after-login', `常驻验收账号登录${ok ? '成功' : '后仍停留登录页'}（${email}）`);
-        if (!ok) {
-          cellState['S1-c3'].notes.push('登录后仍停留在登录页');
-          log('登录未离开登录页——后续链路格大概率无数据，判官据实判定');
-        } else {
-          log('登录成功');
-        }
-      } catch (e) {
-        log(`登录交互失败（记录后继续）：${e.message}`);
-        cellState['S1-c3'].notes.push(`登录交互失败: ${e.message}`);
-        await captureFor(['S1-c3'], '01-login-fail', '登录失败现场');
+    // ── 用户流1：取得身份（S1-c3 的直接证据：在预发域名完成登录后观察账号列表）──
+    log('步骤：常驻验收账号登录');
+    try {
+      const ok = await performLogin(page, STAGING, email, password);
+      await captureFor(['S1-c3'], '01-after-login', `常驻验收账号登录${ok ? '成功' : '后仍停留登录页'}（${email}）`);
+      if (!ok) {
+        cellState['S1-c3'].notes.push('登录后仍停留在登录页');
+        log('登录未离开登录页——后续链路格大概率无数据，判官据实判定');
+      } else {
+        log('登录成功');
+        // 导航到账号列表页作为 S1-c3 证据
+        await page.goto(`${STAGING}/area/acquisition/accounts`, { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(2000);
+        await captureFor(['S1-c3'], '02-accounts-list', '账号列表页（登录后观察，绑进预发的证据）');
       }
-    } else {
-      log('步骤：注册用户流（无凭据，回落注册模式）');
-      await page.goto(`${STAGING}/signup`, { waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(1500);
-      await captureFor(['S1-c3'], '01-signup-page', '注册页（预发域名可见）');
-      try {
-        const nameInput = page.locator('input[name="name"], input[placeholder*="名"], input[autocomplete="name"]').first();
-        const emailInput = page.locator('input[type="email"], input[name="email"]').first();
-        const pwdInput = page.locator('input[type="password"]').first();
-        await nameInput.fill('AI验收员', { timeout: 5000 });
-        await emailInput.fill(email, { timeout: 5000 });
-        await pwdInput.fill(password, { timeout: 5000 });
-        await page.locator('button[type="submit"], button:has-text("注册")').first().click({ timeout: 5000 });
-        await page.waitForTimeout(4000);
-        await captureFor(['S1-c3'], '02-after-signup', `注册提交后（账号 ${email}）`);
-        log(`注册表单已提交：${email}`);
-      } catch (e) {
-        log(`注册表单交互失败（记录后继续，判官据此判无法验证）：${e.message}`);
-        cellState['S1-c3'].notes.push(`注册表单交互失败: ${e.message}`);
-      }
+    } catch (e) {
+      log(`登录交互失败（记录后继续）：${e.message}`);
+      cellState['S1-c3'].notes.push(`登录交互失败: ${e.message}`);
+      await captureFor(['S1-c3'], '01-login-fail', '登录失败现场');
     }
 
     // ── 用户流2：发起采集（S6-c3 触发 + S6-c4 归属隔离）──
@@ -209,11 +204,28 @@ async function main() {
     await page.waitForTimeout(2500);
     await captureFor(['S4-c2', 'S4-c3', 'S5-c3', 'S5-c4'], '02-accounts', '设备与账号状态页');
 
-    // ── 用户流5：线索页（S10）──
+    // ── 用户流5：线索页（S10-c1）+ 二次采集（S10-c4）──
     log('步骤：线索页观察');
     await page.goto(`${STAGING}/area/acquisition/leads`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2500);
-    await captureFor(['S10-c1', 'S10-c4'], '01-leads', '线索列表页');
+    await captureFor(['S10-c1'], '01-leads', '线索列表页');
+
+    // S10-c4：二次同关键词采集（trigger_collect）
+    log('步骤：二次采集（S10-c4）');
+    await page.goto(`${STAGING}/area/acquisition/tasks`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(2500);
+    try {
+      const kwInput = page.locator('input[placeholder*="关键词"]').first();
+      await kwInput.fill(KEYWORD, { timeout: 8000 });
+      await page.locator('button:has-text("开始采集")').first().click({ timeout: 5000 });
+      await page.waitForTimeout(4000);
+      await captureFor(['S10-c4'], '01-second-collect', `二次采集已发起 关键词=${KEYWORD}（两轮数据对照）`);
+      log(`二次采集已发起 关键词=${KEYWORD}`);
+    } catch (e) {
+      log(`二次采集交互失败（记录后继续）：${e.message}`);
+      cellState['S10-c4'].notes.push(`二次采集交互失败: ${e.message}`);
+      await captureFor(['S10-c4'], '01-second-collect-fail', '二次采集失败现场');
+    }
 
     // ── 用户流6：派单页（S11/S13）──
     log('步骤：派单页观察');
@@ -251,3 +263,8 @@ main().catch(e => {
   console.error('FAIL: 采证器异常终止：', e.message);
   process.exit(1);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 导出工具函数（供测试文件和外部调用）— 实现在 capture-utils.mjs（无外部依赖）
+// ─────────────────────────────────────────────────────────────────────────────
+export { preflightCheck, pollUntilTerminal, computeS4C2RecoveryWindow } from './capture-utils.mjs';
