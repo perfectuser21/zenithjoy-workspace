@@ -7,9 +7,9 @@ import {
 } from '../lib.mjs';
 import { CELLS_MAP } from '../cells-map.mjs';
 
-test('规程文件里 machine_db 格正好 20 个，格号格式 S<步>-c<列>', async () => {
+test('规程文件里 machine_db 格正好 19 个，格号格式 S<步>-c<列>', async () => {
   const ids = await getMachineCellIds();
-  assert.equal(ids.length, 20);
+  assert.equal(ids.length, 19);
   for (const id of ids) {
     assert.match(id, /^S\d+-c[1-4]$/, `格号格式不对: ${id}`);
   }
@@ -86,7 +86,7 @@ test('AI列结果：缺 version_stamp 或 environment 报错', async () => {
   assert.ok((await validateAiColumn(c2)).errors.length > 0);
 });
 
-test('AI列结果：20 格必须齐——少一格报错点名格号', async () => {
+test('AI列结果：19 格必须齐——少一格报错点名格号', async () => {
   const ids = await getMachineCellIds();
   const col = goodColumn(ids);
   col.cells = col.cells.filter(c => c.id !== 'S11-c3');
