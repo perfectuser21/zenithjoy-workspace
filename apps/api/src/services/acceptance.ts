@@ -75,9 +75,11 @@ export type SubmitResultsResponse = {
 
 export async function submitResults(
   items: SubmitResultItem[],
-  submittedBy: string
+  submittedBy: string,
+  runKey: string
 ): Promise<SubmitResultsResponse> {
   const payload = {
+    run_key: runKey,
     results: items.map((item) => ({ ...item, submitted_by: submittedBy })),
   };
   // 写路径不 catch——失败必须冒泡给路由层返回非 200，不能伪装成功
