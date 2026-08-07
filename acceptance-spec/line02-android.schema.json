@@ -46,6 +46,8 @@
         "na": { "type": "boolean" },
         "hard": { "type": "boolean" },
         "verifiable_by": { "enum": ["machine_db", "machine_visual", "human_only"] },
+        "kind": { "enum": ["FR", "NFR", "Invariant", "SOP"] },
+        "scenario_class": { "enum": ["mandatory", "opportunistic", "unverifiable_this_version"] },
         "fails": { "type": "array", "items": { "type": "string", "minLength": 1 } }
       },
       "anyOf": [
@@ -58,7 +60,7 @@
       },
       "then": {},
       "else": {
-        "required": ["t", "verifiable_by"]
+        "required": ["t", "verifiable_by", "kind"]
       }
     }
   }
