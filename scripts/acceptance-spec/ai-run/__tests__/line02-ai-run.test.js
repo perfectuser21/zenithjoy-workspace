@@ -1,11 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   getMachineCellIds,
+  getCellCriteria,
   checkCellsMapComplete,
+  buildPendingCells,
   validateAiColumn,
 } from '../lib.mjs';
 import { CELLS_MAP } from '../cells-map.mjs';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 test('规程文件里 machine_db 格正好 19 个，格号格式 S<步>-c<列>', async () => {
   const ids = await getMachineCellIds();
@@ -37,6 +44,34 @@ test('cells-map 每格必须有路由、动作、等待预算', () => {
     assert.ok(['observe', 'signup_flow', 'trigger_collect'].includes(c.action), `${c.id} 动作非法: ${c.action}`);
     assert.ok(Number.isInteger(c.wait_budget_ms) && c.wait_budget_ms > 0, `${c.id} 缺等待预算`);
   }
+});
+
+test('采证器里写死的格号必须全部在 cells-map 里——删了映射忘了删调用点会让整轮采证崩掉', () => {
+  const src = readFileSync(resolve(HERE, '../capture.mjs'), 'utf8');
+  const known = new Set(CELLS_MAP.map(c => c.id));
+  const referenced = [...new Set(src.match(/S\d+-c[1-4]/g) || [])];
+  const orphans = referenced.filter(id => !known.has(id));
+  assert.deepEqual(orphans, [], `capture.mjs 引用了 cells-map 里不存在的格号: ${orphans.join(', ')}`);
+});
+
+test('场景标记来自规程 scenario_class: mandatory——判官「不许假绿」的闸不能空转', async () => {
+  const criteria = await getCellCriteria();
+  assert.equal(criteria['S5-c4'].scenario_class, 'mandatory');
+  assert.equal(criteria['S7-c1'].scenario_class, undefined);
+
+  const cellState = Object.fromEntries(CELLS_MAP.map(c => [c.id, { evidence: ['e.png'], notes: [] }]));
+  const cells = buildPendingCells(CELLS_MAP, criteria, cellState);
+  const marked = cells.filter(c => c.scenario_required === true).map(c => c.id).sort();
+  assert.deepEqual(marked, ['S10-c4', 'S4-c2', 'S4-c3', 'S5-c3', 'S5-c4'].sort());
+});
+
+test('采证缺失的格必须留下「判无法验证」的占位证据，不能空数组蒙混', () => {
+  const criteria = { 'S7-c1': { criteria: '判据原文' } };
+  const cellState = { 'S7-c1': { evidence: [], notes: [] } };
+  const [cell] = buildPendingCells([{ id: 'S7-c1' }], criteria, cellState);
+  assert.equal(cell.verdict, null);
+  assert.equal(cell.evidence.length, 1);
+  assert.match(cell.evidence[0], /采证缺失/);
 });
 
 function goodColumn(ids) {

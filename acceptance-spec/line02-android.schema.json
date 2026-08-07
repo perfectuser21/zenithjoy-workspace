@@ -58,7 +58,11 @@
         "properties": { "na": { "const": true } },
         "required": ["na"]
       },
-      "then": {},
+      "then": {
+        "not": {
+          "anyOf": [{ "required": ["kind"] }, { "required": ["scenario_class"] }]
+        }
+      },
       "else": {
         "required": ["t", "verifiable_by", "kind"]
       }

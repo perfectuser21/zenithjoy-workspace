@@ -4,7 +4,7 @@
  * 导出：
  *   getMachineCellIds()          — 从规程文件取全部 machine_db 格号（S<步>-c<列>）
  *   checkCellsMapComplete(map)   — 采证映射与规程 1:1 校验（缺/多/重复均点名格号）
- *   validateAiColumn(column)     — AI列结果协议校验（schema + 20格完整性）
+ *   validateAiColumn(column)     — AI列结果协议校验（schema + 19格完整性）
  */
 
 import { readFileSync } from 'node:fs';
@@ -49,11 +49,32 @@ export async function getCellCriteria() {
     for (const ck of CKEYS) {
       const cell = st.cells[ck];
       if (!cell.na && cell.verifiable_by === 'machine_db') {
-        out[`S${st.n}-${ck}`] = { criteria: cell.t, step_name: st.name };
+        out[`S${st.n}-${ck}`] = { criteria: cell.t, step_name: st.name, scenario_class: cell.scenario_class };
       }
     }
   }
   return out;
+}
+
+/**
+ * 待判定骨架的 cells 数组：采证器把逐格证据填进来，判官填 verdict。
+ *
+ * scenario_required 标记的来源是规程的 scenario_class: mandatory（SSOT 在 yaml），
+ * 判官据此对「场景没出现」的格判无法验证而不是通过——见 judge-runbook.md 铁规 4。
+ */
+export function buildPendingCells(cellsMap, criteria, cellState) {
+  return cellsMap.map(c => ({
+    id: c.id,
+    verdict: null, // 由 AI 判官按 judge-runbook.md 依据截图/页面文本填写：通过 | 不通过 | 无法验证
+    criteria: criteria[c.id]?.criteria || '',
+    symptoms: [],
+    reasons: [],
+    evidence: cellState[c.id].evidence.length > 0
+      ? cellState[c.id].evidence
+      : ['(采证缺失——判官必须判无法验证并注明)'],
+    ...(criteria[c.id]?.scenario_class === 'mandatory' ? { scenario_required: true } : {}),
+    ...(cellState[c.id].notes.length > 0 ? { note: cellState[c.id].notes.join('；') } : {}),
+  }));
 }
 
 /** 采证映射与规程 1:1：缺格/多格/重复格全部点名 */

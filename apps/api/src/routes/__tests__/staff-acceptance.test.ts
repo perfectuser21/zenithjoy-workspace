@@ -120,6 +120,16 @@ describe('staff routes — 验收模块（Staff Hub 直连 Brain）', () => {
     expect(submitResultsMock).not.toHaveBeenCalled();
   });
 
+  it('[BEHAVIOR] POST /api/staff/acceptance/results run_key 全是空白 → 400（空白不算作用域）', async () => {
+    const res = await request(app)
+      .post('/api/staff/acceptance/results')
+      .set('X-User-Email', 'staff@test.com')
+      .send({ run_key: '   ', results: [{ check_key: 'S3-c1', result: '通过' }] });
+
+    expect(res.status).toBe(400);
+    expect(submitResultsMock).not.toHaveBeenCalled();
+  });
+
   it('[BEHAVIOR] POST /api/staff/acceptance/results service 抛错 → 502', async () => {
     submitResultsMock.mockRejectedValue(new Error('Brain 500'));
 

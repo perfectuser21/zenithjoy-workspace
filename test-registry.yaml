@@ -5075,7 +5075,7 @@ agent_suite:
   ci: L2
   status: active
   product: line02客户智能获客
-  note: "发版验收双表刀2 — AI列采证映射与结果协议：20格machine_db映射与规程1:1(缺/多点名格号)、三态枚举/版本戳/边界声明/逐格证据强制、20格完整性校验"
+  note: "发版验收双表刀2 — AI列采证映射与结果协议：19格machine_db映射与规程1:1(缺/多点名格号)、三态枚举/版本戳/边界声明/逐格证据强制、19格完整性校验、采证器写死格号不得脱离cells-map、场景标记源自yaml的scenario_class"
 
 - id: line02-acceptance-spec
   path: scripts/acceptance-spec/__tests__/line02-android.test.js

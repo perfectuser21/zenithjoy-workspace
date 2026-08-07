@@ -35,6 +35,28 @@ test('cell 缺 t 和 na 两者都没有 → 校验报错，且报错信息带具
   );
 });
 
+test('na:true 的格带 kind / scenario_class → 校验报错（本步没要求的格不该有判据属性）', () => {
+  const bad = {
+    version: '1.0.0',
+    environment: 'x',
+    steps: [
+      {
+        n: 1,
+        name: '步骤1',
+        op: '做点什么',
+        cells: {
+          c1: { t: '判据', verifiable_by: 'human_only', kind: 'FR' },
+          c2: { na: true, kind: 'FR' }, // na 格不该带 kind
+          c3: { na: true },
+          c4: { na: true },
+        },
+      },
+    ],
+  };
+  const { errors } = validateSchema(bad);
+  assert.ok(errors.length > 0, 'na 格带 kind 应该报错');
+});
+
 test('cell 有 t 但缺 verifiable_by → 校验报错', () => {
   const bad = {
     version: '1.0.0',
@@ -45,7 +67,7 @@ test('cell 有 t 但缺 verifiable_by → 校验报错', () => {
         name: '步骤1',
         op: '做点什么',
         cells: {
-          c1: { t: '判据文字，但没写谁能验' }, // 缺 verifiable_by
+          c1: { t: '判据文字，但没写谁能验', kind: 'FR' }, // 缺 verifiable_by（kind 齐全，确保只测这一件事）
           c2: { na: true },
           c3: { na: true },
           c4: { na: true },
@@ -67,7 +89,7 @@ test('verifiable_by 值不在三值枚举里 → 校验报错', () => {
         name: '步骤1',
         op: '做点什么',
         cells: {
-          c1: { t: '判据', verifiable_by: 'ai_magic' }, // 非法枚举值
+          c1: { t: '判据', verifiable_by: 'ai_magic', kind: 'FR' }, // 非法枚举值（其余字段齐全，确保只测这一件事）
           c2: { na: true },
           c3: { na: true },
           c4: { na: true },
