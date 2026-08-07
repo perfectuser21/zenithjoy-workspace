@@ -57,6 +57,25 @@ describe('AcceptanceDetailPage', () => {
     await waitFor(() => expect(screen.getByTestId('acceptance-submit-success')).toBeInTheDocument());
   });
 
+  it('提交 body 带 run_key（Brain 侧写入必须限定单个 run 作用域，缺了直接 400）', async () => {
+    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, availability: 'ready', runs: [RUN] }) });
+    renderPage();
+    await waitFor(() => screen.getByTestId('acceptance-check-r1:001'));
+    fireEvent.change(screen.getByTestId('acceptance-result-r1:001'), { target: { value: '通过' } });
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, data: { updated: 1, runs: [] } }) });
+    fireEvent.click(screen.getByTestId('acceptance-submit'));
+
+    await waitFor(() => expect(screen.getByTestId('acceptance-submit-success')).toBeInTheDocument());
+    const submitCall = fetchMock.mock.calls.find(
+      ([, init]) => (init as RequestInit | undefined)?.method === 'POST'
+    );
+    expect(submitCall).toBeDefined();
+    const body = JSON.parse((submitCall![1] as RequestInit).body as string);
+    expect(body.run_key).toBe('r1');
+    expect(body.results).toHaveLength(1);
+  });
+
   it('不同大小写/空格写法的Step前缀会被归一化合并到同一分组', async () => {
     renderPage();
     await waitFor(() => screen.getByTestId('acceptance-matrix'));
