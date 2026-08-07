@@ -12,7 +12,7 @@ import { tenantContext, tenantContextOptional } from '../middleware/tenant-conte
 import { licenseAuth } from '../middleware/license-auth';
 import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import { sseService } from '../services/sse.service';
-import { scoreLeads, buildAssignments, dispatchDue, rescoreLead, upsertConfig } from '../services/acquisition-dispatch';
+import { InvalidAcquisitionConfigError, scoreLeads, buildAssignments, dispatchDue, rescoreLead, upsertConfig } from '../services/acquisition-dispatch';
 import { resolveShareToMedia, type MediaKind } from '../services/douyin-share-resolver';
 import { judgeVideo } from '../services/content-judgment';
 import { gradeComments } from '../services/comment-grading';
@@ -1757,6 +1757,9 @@ acquisitionRouter.patch('/config', tenantContextOptional, async (req: Request, r
     const row = fullConfig.rows[0] ?? {};
     return ok(res, { ...saved, target_profile_desc: row.target_profile_desc ?? null });
   } catch (err) {
+    if (err instanceof InvalidAcquisitionConfigError) {
+      return fail(res, 400, err.code, err.message);
+    }
     console.error('[acquisition] config PATCH error:', (err as Error).message);
     return fail(res, 500, 'CONFIG_ERROR', (err as Error).message);
   }
