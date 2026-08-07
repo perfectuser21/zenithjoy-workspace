@@ -76,6 +76,13 @@ CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${API}/api/staff/acceptan
 [ "$CODE" = "400" ] || fail "results 空数组应 400，实得 $CODE"
 echo "   results 空数组 400: PASS"
 
+echo "-- 5. POST results 缺 run_key → 400（写入必须限定单个 run 作用域）--"
+CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${API}/api/staff/acceptance/results" \
+  -H "$AUTH_HEADER" -H "Content-Type: application/json" \
+  -d '{"results":[{"check_key":"S3-c1","result":"通过"}]}')
+[ "$CODE" = "400" ] || fail "results 缺 run_key 应 400，实得 $CODE"
+echo "   results 缺 run_key 400: PASS"
+
 kill $API_PID 2>/dev/null || true
 trap - EXIT
 cd ../..

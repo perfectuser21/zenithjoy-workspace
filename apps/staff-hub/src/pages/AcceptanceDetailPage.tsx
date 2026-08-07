@@ -68,13 +68,13 @@ export default function AcceptanceDetailPage() {
     const items = Object.entries(draft)
       .filter(([, v]) => v.result)
       .map(([check_key, v]) => ({ check_key, result: v.result as '通过' | '不通过' | '无法验证', note: v.note || undefined }));
-    if (items.length === 0) return;
+    if (items.length === 0 || !run) return;
     setSubmitState('submitting');
     try {
       const res = await adminFetch('/api/staff/acceptance/results', user, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ results: items }),
+        body: JSON.stringify({ run_key: run.run_key, results: items }),
       });
       if (!res.ok) throw new Error('submit failed');
       setSubmitState('success');

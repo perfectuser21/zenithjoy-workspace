@@ -52,11 +52,25 @@ describe('acceptance service', () => {
   it('submitResults: 正常提交返回 Brain 响应体', async () => {
     mockedAxios.post.mockResolvedValueOnce({ data: { updated: 1, runs: [{ run_key: 'r1', status: 'passed' }] } });
     const { submitResults } = await import('../acceptance');
-    const result = await submitResults([{ check_key: 'r1:001', result: '通过' }], 'alice@zenjoymedia.media');
+    const result = await submitResults([{ check_key: 'r1:001', result: '通过' }], 'alice@zenjoymedia.media', 'r1');
     expect(result.updated).toBe(1);
     expect(mockedAxios.post).toHaveBeenCalledWith(
       'http://brain.test/api/brain/acceptance/results',
-      { results: [{ check_key: 'r1:001', result: '通过', submitted_by: 'alice@zenjoymedia.media' }] },
+      { run_key: 'r1', results: [{ check_key: 'r1:001', result: '通过', submitted_by: 'alice@zenjoymedia.media' }] },
+      expect.any(Object)
+    );
+  });
+
+  it('submitResults: run_key 作为顶层字段透传给 Brain（写入必须限定在单个 run 作用域）', async () => {
+    mockedAxios.post.mockResolvedValueOnce({ data: { updated: 1, runs: [] } });
+    const { submitResults } = await import('../acceptance');
+    await submitResults([{ check_key: 'S3-c1', result: '通过' }], 'alice@zenjoymedia.media', 'run-abc');
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      'http://brain.test/api/brain/acceptance/results',
+      {
+        run_key: 'run-abc',
+        results: [{ check_key: 'S3-c1', result: '通过', submitted_by: 'alice@zenjoymedia.media' }],
+      },
       expect.any(Object)
     );
   });
@@ -64,6 +78,6 @@ describe('acceptance service', () => {
   it('submitResults: Brain 报错时异常必须冒泡（写路径不能伪装成功）', async () => {
     mockedAxios.post.mockRejectedValueOnce(new Error('Brain 500'));
     const { submitResults } = await import('../acceptance');
-    await expect(submitResults([{ check_key: 'r1:001', result: '通过' }], 'alice@zenjoymedia.media')).rejects.toThrow('Brain 500');
+    await expect(submitResults([{ check_key: 'r1:001', result: '通过' }], 'alice@zenjoymedia.media', 'r1')).rejects.toThrow('Brain 500');
   });
 });

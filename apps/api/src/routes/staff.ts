@@ -336,9 +336,17 @@ router.post('/acceptance/results', async (req, res): Promise<void> => {
     res.status(400).json({ success: false, error: { code: 'BAD_REQUEST', message: 'results must be a non-empty array' } });
     return;
   }
+  // run_key 是写入作用域：同批合并的 cecelia D1 PR 把 Brain 的 submitAcceptanceResults
+  // 改成无 run_key 一律 400，这里先挡住，不白跑一趟网络。
+  // 作用域的真正校验（check_key 属不属于该 run）在 Brain 侧按 run_id 做，网关不重复判。
+  const runKey = typeof req.body?.run_key === 'string' ? req.body.run_key.trim() : '';
+  if (!runKey) {
+    res.status(400).json({ success: false, error: { code: 'BAD_REQUEST', message: 'run_key required（写入必须限定在单个 run 作用域内）' } });
+    return;
+  }
   const submittedBy = (req as Request & { staffIdentity?: string }).staffIdentity ?? 'unknown';
   try {
-    const result = await submitResults(items, submittedBy);
+    const result = await submitResults(items, submittedBy, runKey);
     res.status(200).json({ success: true, data: result });
   } catch (err) {
     const message = axios.isAxiosError(err) ? err.message : (err as Error).message || 'submit failed';

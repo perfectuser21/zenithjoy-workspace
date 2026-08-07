@@ -5075,7 +5075,7 @@ agent_suite:
   ci: L2
   status: active
   product: line02客户智能获客
-  note: "发版验收双表刀2 — AI列采证映射与结果协议：20格machine_db映射与规程1:1(缺/多点名格号)、三态枚举/版本戳/边界声明/逐格证据强制、20格完整性校验"
+  note: "发版验收双表刀2 — AI列采证映射与结果协议：19格machine_db映射与规程1:1(缺/多点名格号)、三态枚举/版本戳/边界声明/逐格证据强制、19格完整性校验、采证器写死格号不得脱离cells-map、场景标记源自yaml的scenario_class"
 
 - id: line02-acceptance-spec
   path: scripts/acceptance-spec/__tests__/line02-android.test.js
@@ -5084,6 +5084,14 @@ agent_suite:
   status: active
   product: line02客户智能获客
   note: "发版验收双表刀1 — line02安卓验收规程SSOT(acceptance-spec/line02-android.yaml)，5个node:test测试：真实yaml通过schema校验/cell缺t与na报具体路径错/缺verifiable_by报错/非法枚举报错/renderHtml生成页面无英文残留且判定格数与规程一致"
+
+- id: line02-acceptance-spec-fields
+  path: scripts/acceptance-spec/__tests__/spec-fields.test.js
+  type: unit
+  ci: L2
+  status: active
+  product: line02客户智能获客
+  note: "D1数据层地基 — 规程yaml静态属性口径定案表逐格钉死：建行格36/每格合法kind(FR20-NFR4-Invariant9-SOP3)/S14-c1补kind:SOP/S13-c4改判human_only后machine_db19与human_only17/时限三格留machine_db/hard8格/scenario_class三集合(mandatory5+unverifiable1+opportunistic空集)/S5与S10的op加厚/scenario_required已从cells-map迁走"
 
 - id: product-map-sprint-contract
   path: sprints/07280933-product-map-ssot-claude/tests/contract.test.js

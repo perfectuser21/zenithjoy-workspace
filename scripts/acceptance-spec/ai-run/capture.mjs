@@ -28,7 +28,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import { CELLS_MAP } from './cells-map.mjs';
-import { getCellCriteria, checkCellsMapComplete } from './lib.mjs';
+import { getCellCriteria, checkCellsMapComplete, buildPendingCells } from './lib.mjs';
 import { resolveCredentials, buildRunSummary, performLogin } from './login.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -219,7 +219,7 @@ async function main() {
     log('步骤：派单页观察');
     await page.goto(`${STAGING}/area/acquisition/outreach`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2500);
-    await captureFor(['S11-c1', 'S11-c3', 'S11-c4', 'S13-c4'], '01-outreach', '私信派单页');
+    await captureFor(['S11-c1', 'S11-c3', 'S11-c4'], '01-outreach', '私信派单页');
   } finally {
     await browser.close();
   }
@@ -236,16 +236,7 @@ async function main() {
       apk_expected: '2.1.19',
     },
     run: { trigger: 'manual', operator: 'AI员工采证器' },
-    cells: CELLS_MAP.map(c => ({
-      id: c.id,
-      verdict: null, // 由 AI 判官按 judge-runbook.md 依据截图/页面文本填写：通过 | 不通过 | 无法验证
-      criteria: criteria[c.id]?.criteria || '',
-      symptoms: [],
-      reasons: [],
-      evidence: cellState[c.id].evidence.length > 0 ? cellState[c.id].evidence : ['(采证缺失——判官必须判无法验证并注明)'],
-      ...(c.scenario_required ? { scenario_required: true } : {}),
-      ...(cellState[c.id].notes.length > 0 ? { note: cellState[c.id].notes.join('；') } : {}),
-    })),
+    cells: buildPendingCells(CELLS_MAP, criteria, cellState),
   };
   writeFileSync(resolve(OUT, 'pending-judgments.json'), JSON.stringify(pending, null, 2), 'utf8');
 

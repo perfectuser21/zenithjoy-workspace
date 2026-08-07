@@ -261,7 +261,7 @@ jobs:
   # ─── L2 Gate ──────────────────────────────────────────────────────────
   l2-passed:
     name: L2 Consistency Gate Passed
-    needs: [tsconfig-inheritance, engines-consistency, sensitive-files, orphan-test-check, registry-sync-check, product-map-contract]
+    needs: [tsconfig-inheritance, engines-consistency, sensitive-files, orphan-test-check, registry-sync-check, product-map-contract, acceptance-spec-contract]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -301,6 +301,11 @@ jobs:
 
           if [ "${{ needs.product-map-contract.result }}" != "success" ]; then
             echo "FAIL: Product Map Contract (${{ needs.product-map-contract.result }})"
+            FAILED=true
+          fi
+
+          if [ "${{ needs.acceptance-spec-contract.result }}" != "success" ]; then
+            echo "FAIL: Line02 Acceptance Spec Contract (${{ needs.acceptance-spec-contract.result }})"
             FAILED=true
           fi
 

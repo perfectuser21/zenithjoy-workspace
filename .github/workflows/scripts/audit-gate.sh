@@ -20,7 +20,11 @@ DIR="${1:-.}"
 # 07-21（先于本次 CVE 公布），确认不是任何近期代码改动引入——已建 issue a46e7823 跟踪，
 # 需要 eslint@10 / @vitest/coverage-v8@4 等 semver major 升级（glob/minimatch/rimraf/
 # brace-expansion/ts-node-dev 目前 npm 侧无可用修复版本）。issue 关闭后删除本段。
+# 2026-08-07：js-yaml CVE-2026-59870（!!omap 二次方 CPU）当天新公布，lock 早于公布、非代码
+# 改动引入；fix 不 backport 4.x，需 js-yaml@5 semver major（传递依赖声明 ^4.1.1）。
+# 已建 issue 366d671d 跟踪，升级合并后删除 js-yaml 这一项。
 ALLOWLIST=(
+  "js-yaml"
   "astro" "@astrojs/mdx" "sharp" "miniflare" "wrangler" "undici"
   "eslint" "@eslint/config-array" "@eslint/eslintrc"
   "@typescript-eslint/eslint-plugin" "@typescript-eslint/parser"

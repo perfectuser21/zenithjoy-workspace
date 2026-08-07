@@ -108,13 +108,35 @@ describe('staff routes — 验收模块（Staff Hub 直连 Brain）', () => {
     expect(res.body.error.code).toBe('BAD_REQUEST');
   });
 
+  it('[BEHAVIOR] POST /api/staff/acceptance/results 缺 run_key → 400，不打到 Brain', async () => {
+    const res = await request(app)
+      .post('/api/staff/acceptance/results')
+      .set('X-User-Email', 'staff@test.com')
+      .send({ results: [{ check_key: 'S3-c1', result: '通过' }] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('BAD_REQUEST');
+    expect(res.body.error.message).toMatch(/run_key/);
+    expect(submitResultsMock).not.toHaveBeenCalled();
+  });
+
+  it('[BEHAVIOR] POST /api/staff/acceptance/results run_key 全是空白 → 400（空白不算作用域）', async () => {
+    const res = await request(app)
+      .post('/api/staff/acceptance/results')
+      .set('X-User-Email', 'staff@test.com')
+      .send({ run_key: '   ', results: [{ check_key: 'S3-c1', result: '通过' }] });
+
+    expect(res.status).toBe(400);
+    expect(submitResultsMock).not.toHaveBeenCalled();
+  });
+
   it('[BEHAVIOR] POST /api/staff/acceptance/results service 抛错 → 502', async () => {
     submitResultsMock.mockRejectedValue(new Error('Brain 500'));
 
     const res = await request(app)
       .post('/api/staff/acceptance/results')
       .set('X-User-Email', 'staff@test.com')
-      .send({ results: [{ check_key: 'r1:001', result: '通过' }] });
+      .send({ run_key: 'r1', results: [{ check_key: 'r1:001', result: '通过' }] });
 
     expect(res.status).toBe(502);
     expect(res.body.success).toBe(false);
@@ -127,14 +149,15 @@ describe('staff routes — 验收模块（Staff Hub 直连 Brain）', () => {
     const res = await request(app)
       .post('/api/staff/acceptance/results')
       .set('X-User-Email', 'staff@test.com')
-      .send({ results: [{ check_key: 'r1:001', result: '通过' }] });
+      .send({ run_key: 'r1', results: [{ check_key: 'r1:001', result: '通过' }] });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.updated).toBe(1);
     expect(submitResultsMock).toHaveBeenCalledWith(
       [{ check_key: 'r1:001', result: '通过' }],
-      'staff@test.com'
+      'staff@test.com',
+      'r1'
     );
   });
 
@@ -147,12 +170,13 @@ describe('staff routes — 验收模块（Staff Hub 直连 Brain）', () => {
       .post('/api/staff/acceptance/results')
       .set('X-Feishu-User-Id', 'ou_f8fea87de8cc141b1b94914780eed76b')
       .set('X-User-Email', 'forged-not-in-whitelist@evil.com')
-      .send({ results: [{ check_key: 'r1:001', result: '通过' }] });
+      .send({ run_key: 'r1', results: [{ check_key: 'r1:001', result: '通过' }] });
 
     expect(res.status).toBe(200);
     expect(submitResultsMock).toHaveBeenCalledWith(
       [{ check_key: 'r1:001', result: '通过' }],
-      'ou_f8fea87de8cc141b1b94914780eed76b'
+      'ou_f8fea87de8cc141b1b94914780eed76b',
+      'r1'
     );
   });
 
@@ -162,12 +186,13 @@ describe('staff routes — 验收模块（Staff Hub 直连 Brain）', () => {
     const res = await request(app)
       .post('/api/staff/acceptance/results')
       .set('X-User-Email', 'staff@test.com')
-      .send({ results: [{ check_key: 'r1:001', result: '通过' }] });
+      .send({ run_key: 'r1', results: [{ check_key: 'r1:001', result: '通过' }] });
 
     expect(res.status).toBe(200);
     expect(submitResultsMock).toHaveBeenCalledWith(
       [{ check_key: 'r1:001', result: '通过' }],
-      'staff@test.com'
+      'staff@test.com',
+      'r1'
     );
   });
 
