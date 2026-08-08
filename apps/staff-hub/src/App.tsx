@@ -1,5 +1,6 @@
 import { Activity, ClipboardCheck, History, LayoutDashboard, LogOut, Wrench } from 'lucide-react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import FeishuLogin from './pages/FeishuLogin';
@@ -10,10 +11,34 @@ import LineHealthDetailPage from './pages/LineHealthDetailPage';
 import AcceptancePage from './pages/AcceptancePage';
 import AcceptanceDetailPage from './pages/AcceptanceDetailPage';
 import AcceptanceHistoryPage from './pages/AcceptanceHistoryPage';
+import QuadrantPage from './pages/QuadrantPage';
+import NewRunPage from './pages/NewRunPage';
 import EnvBadge from './components/EnvBadge';
+import { adminFetch } from './lib/adminFetch';
 
 function Shell() {
   const { authLoading, isAuthenticated, logout, user } = useAuth();
+  const [acceptanceBadge, setAcceptanceBadge] = useState<number>(0);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const fetchBadge = async () => {
+      try {
+        const res = await adminFetch('/api/staff/acceptance/pending', user);
+        const json = await res.json() as { runs?: { status?: string }[]; availability?: string };
+        if (cancelled || json.availability === 'degraded') return;
+        const pending = (json.runs ?? []).filter(
+          (r) => r.status !== 'closed'
+        ).length;
+        setAcceptanceBadge(pending);
+      } catch {
+        // 静默失败，不影响页面
+      }
+    };
+    void fetchBadge();
+    return () => { cancelled = true; };
+  }, [user]);
 
   if (authLoading) {
     return <div className="login-wrap"><div className="card">加载中...</div></div>;
@@ -45,6 +70,23 @@ function Shell() {
           </NavLink>
           <NavLink to="/acceptance" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
             <ClipboardCheck size={18} /> 验收
+            <span
+              data-testid="acceptance-nav-badge"
+              style={{
+                marginLeft: '6px',
+                background: acceptanceBadge > 0 ? '#d64545' : '#eceff2',
+                color: acceptanceBadge > 0 ? '#fff' : '#7a8494',
+                borderRadius: '10px',
+                padding: '1px 6px',
+                fontSize: '12px',
+                fontWeight: 700,
+                display: 'inline-block',
+                minWidth: '18px',
+                textAlign: 'center',
+              }}
+            >
+              {acceptanceBadge}
+            </span>
           </NavLink>
           <NavLink to="/acceptance-history" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
             <History size={18} /> 验收历史
@@ -64,6 +106,8 @@ function Shell() {
           <Route path="/line-health" element={<LineHealthPage />} />
           <Route path="/line-health/:lineKey" element={<LineHealthDetailPage />} />
           <Route path="/acceptance" element={<AcceptancePage />} />
+          <Route path="/acceptance/new" element={<NewRunPage />} />
+          <Route path="/acceptance/:runKey/quadrant" element={<QuadrantPage />} />
           <Route path="/acceptance/:runKey" element={<AcceptanceDetailPage />} />
           <Route path="/acceptance-history" element={<AcceptanceHistoryPage />} />
           <Route path="/login/feishu" element={<Navigate to="/" replace />} />
