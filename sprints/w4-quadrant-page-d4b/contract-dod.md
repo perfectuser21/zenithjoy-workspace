@@ -124,6 +124,57 @@
 
 ---
 
+## BEHAVIOR 条目（manual:bash，Playwright E2E + Node.js 真跑）
+
+> Oracle 前提：`apps/staff-hub` 起在 `localhost:5174`（`npm run dev`），Brain 不可达时测试走降级路径断言（`quadrant-locked` / `quadrant-degraded-banner`）。
+
+- [ ] [BEHAVIOR] 合看页路由三态渲染（FR-1 + INV-4 合看闸）：human_complete 完成后渲染 `quadrant-matrix`；未完成显示 `quadrant-locked`；Brain 不可达显示 `quadrant-degraded-banner`
+
+```bash
+cd /workspace && npx playwright test sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts --grep "合看页路由" --reporter=line
+```
+
+- [ ] [BEHAVIOR] 建单页 mandatory 场景码强制校验（FR-6 + INV-3）：5 个 mandatory 码未全勾选时 `new-run-submit` 为 disabled；全勾选后变为可点击
+
+```bash
+cd /workspace && npx playwright test sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts --grep "建单页" --reporter=line
+```
+
+- [ ] [BEHAVIOR] lib.mjs generate 产出只读 HTML（FR-7 + INV-6）：HTML 不含 `<select>` 控件；「暂时无法验证」全部替换为「无法验证」
+
+```bash
+cd /workspace && node scripts/acceptance-spec/cli.mjs generate > /tmp/acceptance-gen.html && node -e "
+const html = require('fs').readFileSync('/tmp/acceptance-gen.html', 'utf8');
+const checks = [
+  ['无 <select>', !/<select/i.test(html)],
+  ['无暂时无法验证', !/暂时无法验证/.test(html)],
+];
+let pass = true;
+for (const [name, ok] of checks) { console.log((ok ? 'PASS' : 'FAIL') + ': ' + name); if (!ok) pass = false; }
+process.exit(pass ? 0 : 1);
+"
+```
+
+- [ ] [BEHAVIOR] 反代层不透传 AI 列原始数据（FR-8 + INV-1 + NFR-4）：quadrant 响应 JSON 不含 `ai_raw` / `ai_column` 键
+
+```bash
+cd /workspace && npx playwright test sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts --grep "ai_raw" --reporter=line
+```
+
+- [ ] [BEHAVIOR] 员工 staff token 调 review-closed 收到 403，UI 不崩溃（NFR-1 + INV-2）：页面显示「权限不足，只有发起人或主理人可关闭复盘」
+
+```bash
+cd /workspace && npx playwright test sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts --grep "403" --reporter=line
+```
+
+- [ ] [BEHAVIOR] S13-c4 格显示「本版无受控手段制造频控场景」图例，不含裁决按钮（INV-5）
+
+```bash
+cd /workspace && npx playwright test sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts --grep "S13-c4" --reporter=line
+```
+
+---
+
 ## manual:bash 验收命令
 
 ### 合看页路由可访问
