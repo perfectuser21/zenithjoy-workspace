@@ -5489,3 +5489,19 @@ agent_suite:
   status: active
   product: 中台认证
   note: "验收模块 Playwright E2E（列表/详情矩阵/历史页）。变体C：真实后端，禁page.route()，降级/正常路径用.or()二选一断言。workflow: e2e-staff-acceptance-windows.yml"
+
+- id: ai-acceptance-capture-invariants-unit
+  path: scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js
+  type: unit
+  ci: L3
+  status: active
+  product: 中台认证
+  note: "AI打表器D2合同测试——action白名单/signup禁用/双自检/trigger_collect计数闸/36格零缺格/scenario_not_triggered禁用。18条断言。"
+
+- id: ai-acceptance-capture-invariants-sprint
+  path: sprints/w1-ai-scorer-d2/tests/capture-invariants.test.js
+  type: unit
+  ci: L3
+  status: active
+  product: 中台认证
+  note: "AI打表器D2 sprint 合同测试入口（与 scripts/ 下副本同内容，sprint目录存档用）。"
