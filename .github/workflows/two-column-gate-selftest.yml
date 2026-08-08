@@ -1,0 +1,101 @@
+name: two-column-gate selftest（五情形自检）
+
+# ───────────────────────────────────────────────────────────────────────────
+# W5 D5 TDD 合同测试：以 --fixture 模式验证 two-column-gate.sh 五情形。
+# 每情形用独立 step，期望退出码与实际退出码不符则 workflow 失败。
+# TASK_ID: 11cc5f4c-9bd0-4612-bf5a-9a6b574756af
+# ───────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    paths:
+      - 'scripts/release-gate/two-column-gate.sh'
+      - 'scripts/release-gate/fixtures/**'
+      - '.github/workflows/two-column-gate-selftest.yml'
+  pull_request:
+    paths:
+      - 'scripts/release-gate/two-column-gate.sh'
+      - 'scripts/release-gate/fixtures/**'
+      - '.github/workflows/two-column-gate-selftest.yml'
+  workflow_dispatch:
+
+jobs:
+  selftest:
+    name: two-column-gate 五情形自检
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 情形1：未定案（finalized=false）→ 期望 exit 1
+      - name: "情形1: 未定案 → 期望 exit 1"
+        id: case1
+        run: |
+          set +e
+          bash scripts/release-gate/two-column-gate.sh \
+            --fixture scripts/release-gate/fixtures/case-not-finalized.json
+          CODE=$?
+          set -e
+          echo "exit code: $CODE"
+          if [ "$CODE" -ne 1 ]; then
+            echo "::error::情形1 FAIL: 期望 exit 1，实际 exit $CODE"
+            exit 1
+          fi
+          echo "情形1 PASS: exit 1 符合预期（未定案应拒绝放行）"
+
+      # 情形2：定案绿 + sha 匹配 → 期望 exit 0
+      - name: "情形2: 定案绿 + sha 匹配 → 期望 exit 0"
+        id: case2
+        env:
+          PROMOTE_SHA: "aaaaaaaabbbbbbbbccccccccddddddddeeeeeeee"
+        run: |
+          bash scripts/release-gate/two-column-gate.sh \
+            --fixture scripts/release-gate/fixtures/case-green.json
+          echo "情形2 PASS: exit 0 符合预期（定案绿 + sha 匹配应放行）"
+
+      # 情形3：fixture 文件不存在（模拟取数失败/不可达）→ 期望 exit 1
+      - name: "情形3: fixture 文件不存在 → 期望 exit 1"
+        id: case3
+        run: |
+          set +e
+          bash scripts/release-gate/two-column-gate.sh \
+            --fixture scripts/release-gate/fixtures/nonexistent.json
+          CODE=$?
+          set -e
+          echo "exit code: $CODE"
+          if [ "$CODE" -ne 1 ]; then
+            echo "::error::情形3 FAIL: 期望 exit 1，实际 exit $CODE"
+            exit 1
+          fi
+          echo "情形3 PASS: exit 1 符合预期（fixture 不存在模拟取数失败）"
+
+      # 情形4：infra_error + bypass=true → 期望 exit 0
+      - name: "情形4: infra_error + bypass=true → 期望 exit 0"
+        id: case4
+        env:
+          BYPASS_TWO_COLUMN_INFRA: "true"
+          PROMOTE_SHA: "aaaaaaaabbbbbbbbccccccccddddddddeeeeeeee"
+        run: |
+          bash scripts/release-gate/two-column-gate.sh \
+            --fixture scripts/release-gate/fixtures/case-infra-error-bypass.json
+          echo "情形4 PASS: exit 0 符合预期（infra_error + bypass=true 应放行）"
+
+      # 情形5：cells_red + bypass=true → 期望 exit 1（bypass 无效）
+      - name: "情形5: cells_red + bypass=true → 期望 exit 1（bypass 不生效）"
+        id: case5
+        env:
+          BYPASS_TWO_COLUMN_INFRA: "true"
+          PROMOTE_SHA: "aaaaaaaabbbbbbbbccccccccddddddddeeeeeeee"
+        run: |
+          set +e
+          bash scripts/release-gate/two-column-gate.sh \
+            --fixture scripts/release-gate/fixtures/case-cells-red-bypass.json
+          CODE=$?
+          set -e
+          echo "exit code: $CODE"
+          if [ "$CODE" -ne 1 ]; then
+            echo "::error::情形5 FAIL: 期望 exit 1（bypass 对 cells_red 无效），实际 exit $CODE"
+            exit 1
+          fi
+          echo "情形5 PASS: exit 1 符合预期（cells_red 时 bypass 不生效，INVARIANT-2 通过）"

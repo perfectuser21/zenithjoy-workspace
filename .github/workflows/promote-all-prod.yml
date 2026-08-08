@@ -137,6 +137,15 @@ jobs:
           fi
           echo "✅ nightly 证据齐：最近 ${COUNT} 次 真微信/真抖音 job 全绿，最新 ${AGE_H}h 前。"
 
+      - name: 证据③ two-column-gate（双列验收放行闸）
+        env:
+          GATE_TOKEN: ${{ secrets.GATE_TOKEN }}
+          PROMOTE_SHA: ${{ github.event.inputs.sha }}
+          BYPASS_TWO_COLUMN_INFRA: ${{ github.event.inputs.bypass_two_column_infra }}
+          JOURNEY_ID: 2fa4d085-1451-4f3f-8fa1-b6d4bacdb1b6
+        run: |
+          bash scripts/release-gate/two-column-gate.sh
+
   promote-backend:
     name: 1/2 后端 → 生产 :5200（HK docker + 冒烟）
     runs-on: ubuntu-latest
@@ -222,11 +231,18 @@ jobs:
             REPO=/opt/zenithjoy/repo
             DASH_DIR=/opt/zenithjoy/autopilot-dashboard
 
-            echo "=== [1/5] git sync（候选 = origin/main）==="
+            echo "=== [1/5] git sync（sha 优先：inputs.sha 非空则用，否则 origin/main）==="
             git -C "$REPO" remote prune origin 2>/dev/null || true
-            git -C "$REPO" fetch --force --prune origin main
-            git -C "$REPO" reset --hard origin/main
-            SHA="$(git -C "$REPO" rev-parse HEAD)"
+            INPUT_SHA="${{ github.event.inputs.sha }}"
+            if [ -n "$INPUT_SHA" ]; then
+              git -C "$REPO" fetch --force origin "$INPUT_SHA"
+              git -C "$REPO" reset --hard "$INPUT_SHA"
+              SHA="$INPUT_SHA"
+            else
+              git -C "$REPO" fetch --force --prune origin main
+              git -C "$REPO" reset --hard origin/main
+              SHA="$(git -C "$REPO" rev-parse HEAD)"
+            fi
             echo "候选 sha=$SHA"
 
             echo "=== [2/5] npm build（生产 build env）==="
