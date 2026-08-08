@@ -197,7 +197,7 @@ Body: { gp_id, tenant_account, phone_model, client_id, task_no, passphrase,
 
 ---
 
-## 非功能需求（NFR）
+## NFR（非功能需求）
 
 | # | 项目 | 要求 |
 |---|---|---|
@@ -296,3 +296,6 @@ commit-8: E2E 全绿验证
 4. 若存在已完成的 run（human_complete），导航至 `/acceptance/{runKey}/quadrant`，截图合看矩阵
 5. 截图中确认 S13-c4 图例文字、第 14 步灰带标记存在
 6. 运行 `node scripts/acceptance-spec/cli.mjs generate`，确认产出 HTML 不含三态选择控件
+
+journey_type: android
+target_environment: mac_web
