@@ -18,6 +18,9 @@ on:
       - 'apps/staff-hub/src/pages/AcceptanceDetailPage.tsx'
       - 'apps/staff-hub/src/pages/AcceptanceHistoryPage.tsx'
       - 'apps/staff-hub/e2e/acceptance.spec.ts'
+      - 'apps/staff-hub/src/pages/QuadrantPage.tsx'
+      - 'apps/staff-hub/src/pages/NewRunPage.tsx'
+      - 'sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts'
       - 'apps/staff-hub/playwright.config.ts'
       - '.github/workflows/e2e-staff-acceptance-windows.yml'
   workflow_dispatch:
@@ -104,7 +107,7 @@ jobs:
         env:
           E2E_BASE_URL: 'http://localhost:5175'
           E2E_API_URL: 'http://localhost:3000'
-        run: npx playwright test e2e/acceptance.spec.ts --reporter=list
+        run: npx playwright test e2e/acceptance.spec.ts ../../sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts --reporter=list
 
       - name: Upload screenshots
         if: always()

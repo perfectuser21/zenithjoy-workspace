@@ -105,3 +105,4 @@ dedupe-adb-devices-lib-smoke.sh
 staff-workbench-smoke.sh
 ai-acceptance-capture-smoke.sh
 release-gate-d5-smoke.sh
+staff-acceptance-quadrant-smoke.sh

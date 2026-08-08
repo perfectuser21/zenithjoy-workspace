@@ -5505,3 +5505,11 @@ agent_suite:
   status: active
   product: 中台认证
   note: "AI打表器D2 sprint 合同测试入口（与 scripts/ 下副本同内容，sprint目录存档用）。"
+
+- id: w4-quadrant-page-e2e
+  path: sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts
+  type: e2e
+  ci: ubuntu_chromium
+  status: active
+  product: 中台认证
+  note: "W4 四象限合看页+建单页+lib.mjs只读模式 E2E（mac_web，Playwright）。合看页三态断言(matrix/locked/degraded)、建单页7字段+mandatory场景码强制校验、lib.mjs只读规范。workflow: e2e-staff-acceptance-windows.yml"
