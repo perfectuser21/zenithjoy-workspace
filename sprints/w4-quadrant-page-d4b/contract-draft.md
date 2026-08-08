@@ -15,11 +15,7 @@
 
 ## GP-Anchor
 
-| 字段 | 值 |
-|---|---|
-| gp_id | 7790f728-f490-4243-b166-03f3250a0938 |
-| GP 步骤 | 步2「部署被证明没坏」加厚 |
-| Journey | 工厂 · F2 部署闭环（2fa4d085-1451-4f3f-8fa1-b6d4bacdb1b6） |
+GP-Anchor: line00/ability_acceptance#step2
 
 ---
 
