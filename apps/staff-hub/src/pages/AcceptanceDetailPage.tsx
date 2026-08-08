@@ -91,6 +91,8 @@ export default function AcceptanceDetailPage() {
   return (
     <div data-testid="acceptance-detail-page">
       <Link to="/acceptance">← 返回验收列表</Link>
+      {' | '}
+      <Link to={`/acceptance/${run.run_key}/quadrant`}>查看合看矩阵 →</Link>
       <h1>{run.title}</h1>
 
       <table data-testid="acceptance-matrix">

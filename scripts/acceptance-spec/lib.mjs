@@ -102,13 +102,46 @@ function toClientSteps(spec) {
   });
 }
 
+function renderTbody(steps) {
+  const CKEYS = ['c1', 'c2', 'c3', 'c4'];
+  const NA_TEXT = '本步无此项要求';
+
+  function serverCellHtml(st, ck) {
+    const cfg = st[ck] || {};
+    const critText = cfg.t || NA_TEXT;
+    const critCls = cfg.t ? '' : ' na-text';
+    const crit = cfg.hard ? `<span class="hard">${critText}</span>` : critText;
+    if (st.fixedNa && ck === 'c1') {
+      return `<div class="crit">${crit}</div><span class="fixed-na">固定：不适用</span>`;
+    }
+    if (st.fixedNa) {
+      return `<div class="crit na-text">${NA_TEXT}</div>`;
+    }
+    if (cfg.fails && cfg.fails.length) {
+      const chipLabels = cfg.fails.map(f => `<span class="fchip-label">${esc(f)}</span>`).join('');
+      return `<div class="crit${critCls}">${crit}</div><div class="failbox-readonly"><div class="fb-t">常见不通过情况：</div>${chipLabels}</div>`;
+    }
+    return `<div class="crit${critCls}">${crit}</div>`;
+  }
+
+  return steps.map(st => {
+    const cells = CKEYS.map(ck => `<td class="ck">${serverCellHtml(st, ck)}</td>`).join('');
+    const cmt = st.fixedNa ? '<td class="cmt"></td>' : '<td class="cmt"></td>';
+    return `<tr data-step="${st.n}">` +
+      `<td class="stepcol"><span class="dot${st.fixedNa ? ' na' : ''}">${st.n}</span></td>` +
+      `<td class="opcol"><div class="stname">${esc(st.name)}</div><div class="stop">${esc(st.op)}</div></td>` +
+      cells + cmt + `</tr>`;
+  }).join('');
+}
+
 export function renderHtml(spec) {
   const clientSteps = toClientSteps(spec);
   const stepsJson = JSON.stringify(clientSteps);
 
+  // 只读判据说明书模式：不含填写表单，仅展示规程内容
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>安卓智能获客 · 员工真机验收表</title>
+<title>安卓智能获客 · 员工真机验收说明书（只读）</title>
 <style>html,body{margin:0}</style></head><body>
 <style>
   :root{
@@ -250,8 +283,8 @@ export function renderHtml(spec) {
 </style>
 
 <header><div class="wrap">
-  <h1>安卓智能获客 · 员工真机验收表</h1>
-  <p class="sub">一行是一步，共 14 步。每步分四格检查：<b>①功能对不对 ②时限与频控 ③环境与数据 ④红线踩没踩</b>，四格各自判定，步骤红绿灯自动汇总。<b>判「不通过」时不用写作文</b>——会弹出这一格的常见情况选择题，点选看到的现象即可；只有清单里没有的情况才需要在「其他」里写一句。某格本来没要求的已预标「不适用」。</p>
+  <h1>安卓智能获客 · 验收判据说明书（只读）</h1>
+  <p class="sub">本说明书为只读判据规程，供参阅验收标准使用。每步分四格检查：<b>①功能对不对 ②时限与频控 ③环境与数据 ④红线踩没踩</b>，四格各自有判定标准。判定结果请在 Staff Hub 验收详情页填写；某格本来没要求的已预标「不适用」；第三态统一表述为「无法验证」。</p>
   <div class="pills">
     <span class="pill">当前测试版本：${esc(spec.version)}</span>
     <span class="pill">测试环境：${esc(spec.environment)}</span>
@@ -273,33 +306,14 @@ export function renderHtml(spec) {
 
 <div id="bar"><div class="wrap">
   <div class="counts">
-    <span class="c pass">步骤全绿 <span id="c-OK">0</span></span>
-    <span class="c fail">有问题 <span id="c-NO">0</span></span>
-    <span class="c pend">未完成 <span id="c-PEND">13</span></span>
-    <span class="c ni">固定不适用 1</span>
+    <span class="c pass">步骤数量 ${clientSteps.length}</span>
+    <span class="c ni">固定不适用步骤 ${clientSteps.filter(s => s.fixedNa).length}</span>
   </div>
-  <div class="nextTip" id="nextTip">下一步：第1步</div>
   <div class="spacer"></div>
-  <button class="btn" id="btnReset">换一轮（清空重来）</button>
-  <button class="btn primary" id="btnReport">生成结论文字</button>
+  <span style="font-size:13px;color:var(--ink-soft)">只读说明书 · 填写入口请前往 Staff Hub 验收详情页</span>
 </div></div>
 
 <div class="wrap">
-
-<details><summary>验收单信息（先填这些，方便对照）</summary>
-  <div class="details-body">
-    <div class="cover" id="coverFields">
-      <div class="f"><label>测试日期</label><input type="date" data-f="date"></div>
-      <div class="f"><label>测试人</label><input type="text" data-f="tester"></div>
-      <div class="f"><label>复核人</label><input type="text" data-f="reviewer"></div>
-      <div class="f"><label>手机型号 / 系统版本</label><input type="text" data-f="phone"></div>
-      <div class="f"><label>客户端编号</label><input type="text" data-f="agentid" placeholder="客户端状态页里能看到"></div>
-      <div class="f"><label>测试用客户账号</label><input type="text" data-f="tenant"></div>
-      <div class="f"><label>本轮采集任务编号</label><input type="text" data-f="taskid"></div>
-      <div class="f"><label>本轮暗号话术</label><input type="text" data-f="watermark" placeholder="【暗号-年月日-时分-缩写】…"></div>
-    </div>
-  </div>
-</details>
 
 <div class="legend">
   <span class="li"><b>每格三选一：</b>通过 / 不通过 / 不适用</span>
@@ -320,7 +334,7 @@ export function renderHtml(spec) {
   <th style="min-width:200px">④ 红线踩没踩<span class="th-sub">绝对禁止的事发生了吗</span></th>
   <th style="min-width:180px">备注 / 证据文件名</th>
 </tr></thead>
-<tbody id="tbody"></tbody>
+<tbody id="tbody">${renderTbody(clientSteps)}</tbody>
 </table>
 </div>
 
@@ -375,236 +389,28 @@ export function renderHtml(spec) {
   </div>
 </details>
 
-<div style="margin:18px 0">
+<div style="margin:18px 0;background:var(--accent-soft);border-radius:8px;padding:12px 16px">
   <strong>最终结论怎么算（固定规则，不能人工改）：</strong>
-  第1步到第13步全部亮绿灯，才算这条获客链路真正打通。第14步这个版本没做，固定不适用，所以完整功能验收目前必然「不通过」，只能报「前13步全部打通」。
-  <textarea id="reportOut" readonly placeholder="点右上角「生成结论文字」…"></textarea>
+  第1步到第13步全部亮绿灯，才算这条获客链路真正打通。第14步这个版本没做，固定不适用，所以完整功能验收目前必然「无法验证」，只能报「前13步全部打通」。
+  判定结果请在 Staff Hub 验收详情页填写，本说明书为只读判据规程。
 </div>
 
 </div>
 
 <footer><div class="wrap">
-  结构对齐 0715 四级下钻账本原型：步骤 × 要素逐格打分；不通过走「症状选择题」，对齐专业测试用例执行规范（预期结果内联 + 结构化缺陷记录）。机器托管的七项（不变量、保质期、死亡告警、失败语义、效果确认、输入对抗、账本保鲜）由系统侧另行验证，不在本表。判据来源：仓库里一份唯一的验收规程文件（改判据只改那一份，不再改这个网页），本页由脚本自动生成，请勿手工编辑。当前测试版本：${esc(spec.version)}。勾选只存在你自己的浏览器里，正式证据按上面规范整理外发。
+  步骤 × 要素判据说明书（只读）。判据来源：仓库里一份唯一的验收规程文件（改判据只改那一份，不再改这个网页），本页由脚本自动生成，请勿手工编辑。第三态统一表述为「无法验证」。当前测试版本：${esc(spec.version)}。
 </div></footer>
 
 <script>
+// 只读说明书：无填写交互，仅导航功能
 (function(){
-  var CKEYS = ['c1','c2','c3','c4'];
-  var NA_TEXT = '本步无此项要求';
-  var STEPS = ${stepsJson};
-
-  var KEY = 'p2sop-grid-v5';
-  function load(){ try{ return JSON.parse(localStorage.getItem(KEY)||'{}'); }catch(e){ return {}; } }
-  function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
-  var state = load();
-  if(!state.rows) state.rows = {};
-  if(!state.cover) state.cover = {};
-
-  function row(n){ state.rows[n] = state.rows[n] || {}; return state.rows[n]; }
-  function getCell(n, ck){
-    var st = STEPS[n-1];
-    if(st.fixedNa) return 'na';
-    var r = state.rows[n] || {};
-    if(r[ck] !== undefined && r[ck] !== '') return r[ck];
-    if(st[ck] && st[ck].na) return 'na';
-    return '';
-  }
-  function getSyms(n, ck){
-    var r = state.rows[n] || {};
-    return (r['sym_'+ck] || []);
-  }
-  function stepAgg(n){
-    var st = STEPS[n-1];
-    if(st.fixedNa) return 'na';
-    var anyNo=false, anyPend=false;
-    CKEYS.forEach(function(ck){
-      var v = getCell(n, ck);
-      if(v==='no') anyNo=true;
-      if(v==='') anyPend=true;
-    });
-    if(anyNo) return 'no';
-    if(anyPend) return 'pend';
-    return 'ok';
-  }
-
-  var STATE_LABEL = {ok:'通过', no:'不通过', na:'不适用', '':'未判'};
-  var CK_LABEL = {c1:'功能', c2:'时限频控', c3:'环境数据', c4:'红线'};
-
-  function cellHtml(st, ck){
-    var cfg = st[ck] || {};
-    var critText = cfg.t || NA_TEXT;
-    var critCls = cfg.t ? '' : ' na-text';
-    var crit = cfg.hard ? '<span class="hard">'+critText+'</span>' : critText;
-    if(st.fixedNa && ck==='c1'){
-      return '<div class="crit">'+crit+'</div><span class="fixed-na">固定：不适用</span>';
-    }
-    if(st.fixedNa){
-      return '<div class="crit na-text">'+NA_TEXT+'</div>';
-    }
-    var btns = ['ok','no','na'].map(function(v){
-      var label = v==='ok'?'通过':(v==='no'?'不通过':'不适用');
-      return '<button type="button" class="tbtn" data-step="'+st.n+'" data-ck="'+ck+'" data-v="'+v+'">'+label+'</button>';
-    }).join('');
-    var fb = '';
-    if(cfg.fails && cfg.fails.length){
-      var chips = cfg.fails.map(function(f,i){
-        return '<button type="button" class="fchip" data-step="'+st.n+'" data-ck="'+ck+'" data-i="'+i+'">'+f+'</button>';
-      }).join('');
-      fb = '<div class="failbox" id="fb-'+st.n+'-'+ck+'">'+
-        '<div class="fb-t">看到的是哪种情况？（可多选）</div>'+chips+
-        '<input type="text" class="fother" data-step="'+st.n+'" data-ck="'+ck+'" placeholder="清单里没有？写一句其他情况">'+
-        '</div>';
-    }
-    return '<div class="crit'+critCls+'">'+crit+'</div><div class="tri">'+btns+'</div>'+fb;
-  }
-
-  var tbody = document.getElementById('tbody');
-  tbody.innerHTML = STEPS.map(function(st){
-    var cells = CKEYS.map(function(ck){ return '<td class="ck">'+cellHtml(st, ck)+'</td>'; }).join('');
-    var evc = (st.ev||[]).map(function(e){
-      return '<button type="button" class="evchip" data-step="'+st.n+'" data-ev="'+e+'">＋'+e+'</button>';
-    }).join('');
-    var cmt = st.fixedNa ? '<td class="cmt"></td>'
-      : '<td class="cmt"><textarea class="comment-in" data-step="'+st.n+'" placeholder="补充细节 / 受阻原因（选填）"></textarea>'+
-        (evc?'<div class="evchips">'+evc+'</div>':'')+'</td>';
-    return '<tr data-step="'+st.n+'">'+
-      '<td class="stepcol"><span class="dot" id="dot-'+st.n+'">'+st.n+'</span></td>'+
-      '<td class="opcol"><div class="stname">'+st.name+'</div><div class="stop">'+st.op+'</div></td>'+
-      cells + cmt + '</tr>';
-  }).join('');
-
-  tbody.addEventListener('click', function(e){
-    var b = e.target.closest('.tbtn');
-    if(b){
-      var n = b.getAttribute('data-step'), ck = b.getAttribute('data-ck'), v = b.getAttribute('data-v');
-      row(n)[ck] = (getCell(+n, ck) === v) ? '' : v;
-      save(); render(); return;
-    }
-    var f = e.target.closest('.fchip');
-    if(f){
-      var n2 = f.getAttribute('data-step'), ck2 = f.getAttribute('data-ck'), i = +f.getAttribute('data-i');
-      var key = 'sym_'+ck2;
-      var arr = row(n2)[key] || [];
-      var pos = arr.indexOf(i);
-      if(pos>=0) arr.splice(pos,1); else arr.push(i);
-      row(n2)[key] = arr;
-      save(); render(); return;
-    }
-    var ev = e.target.closest('.evchip');
-    if(ev){
-      var n3 = ev.getAttribute('data-step'), name = ev.getAttribute('data-ev');
-      var ta = document.querySelector('.comment-in[data-step="'+n3+'"]');
-      if(ta){
-        ta.value = ta.value ? (ta.value.indexOf(name)>=0 ? ta.value : ta.value+'；'+name) : name;
-        row(n3).cmt = ta.value;
-        save();
-      }
-      return;
-    }
-  });
-  tbody.querySelectorAll('.comment-in').forEach(function(ta){
-    var n = ta.getAttribute('data-step');
-    ta.value = (state.rows[n] && state.rows[n].cmt) || '';
-    ta.addEventListener('input', function(){ row(n).cmt = ta.value; save(); });
-  });
-  tbody.querySelectorAll('.fother').forEach(function(inp){
-    var n = inp.getAttribute('data-step'), ck = inp.getAttribute('data-ck');
-    inp.value = (state.rows[n] && state.rows[n]['oth_'+ck]) || '';
-    inp.addEventListener('input', function(){ row(n)['oth_'+ck] = inp.value; save(); });
-  });
-  document.querySelectorAll('#coverFields input').forEach(function(inp){
-    var k = inp.getAttribute('data-f');
-    inp.value = state.cover[k] || '';
-    inp.addEventListener('input', function(){ state.cover[k] = inp.value; save(); });
-  });
-
-  function render(){
-    var ok=0, no=0, pend=0, firstPend=null;
-    STEPS.forEach(function(st){
-      var n = st.n;
-      CKEYS.forEach(function(ck){
-        var v = getCell(n, ck);
-        document.querySelectorAll('.tbtn[data-step="'+n+'"][data-ck="'+ck+'"]').forEach(function(b){
-          b.classList.toggle('active', v === b.getAttribute('data-v'));
-        });
-        var fb = document.getElementById('fb-'+n+'-'+ck);
-        if(fb){
-          fb.classList.toggle('open', v==='no');
-          var syms = getSyms(n, ck);
-          fb.querySelectorAll('.fchip').forEach(function(c){
-            c.classList.toggle('sel', syms.indexOf(+c.getAttribute('data-i'))>=0);
-          });
-        }
-      });
-      var agg = stepAgg(n);
-      var dot = document.getElementById('dot-'+n);
-      dot.className = 'dot' + (agg==='ok'?' ok':agg==='no'?' no':agg==='na'?' na':'');
-      if(st.fixedNa) return;
-      if(agg==='ok') ok++;
-      else if(agg==='no') no++;
-      else { pend++; if(firstPend===null) firstPend=n; }
-    });
-    document.getElementById('c-OK').textContent = ok;
-    document.getElementById('c-NO').textContent = no;
-    document.getElementById('c-PEND').textContent = pend;
-    var tip = document.getElementById('nextTip');
-    if(firstPend===null){
-      tip.textContent = no>0 ? '13步都判完了，有'+no+'步不通过，可以生成结论' : '13步全部绿灯，可以生成结论了';
-    } else {
-      tip.textContent = '下一步：第'+firstPend+'步 — '+STEPS[firstPend-1].name+'（点这里跳过去）';
-    }
-    tip.onclick = function(){
-      var target = firstPend || 1;
-      var tr = document.querySelector('tr[data-step="'+target+'"]');
-      if(!tr) return;
+  var steps = document.querySelectorAll('tr[data-step]');
+  steps.forEach(function(tr){
+    tr.addEventListener('click', function(){
       tr.scrollIntoView({behavior:'smooth', block:'center'});
       tr.classList.add('cur');
-      setTimeout(function(){ tr.classList.remove('cur'); }, 1600);
-    };
-  }
-  render();
-
-  document.getElementById('btnReset').addEventListener('click', function(){
-    if(!confirm('清空本页所有打勾和填写内容，开始新一轮？')) return;
-    localStorage.removeItem(KEY); location.reload();
-  });
-
-  document.getElementById('btnReport').addEventListener('click', function(){
-    var c = state.cover;
-    var NL = String.fromCharCode(10);
-    var lines = [];
-    lines.push('安卓智能获客验收结论（按步×四格明细） — ' + new Date().toISOString());
-    lines.push('测试人：'+(c.tester||'—')+'　复核人：'+(c.reviewer||'—')+'　机型：'+(c.phone||'—'));
-    lines.push('客户端编号：'+(c.agentid||'—')+'　测试账号：'+(c.tenant||'—')+'　任务编号：'+(c.taskid||'—'));
-    lines.push('');
-    var chainPass = true;
-    STEPS.forEach(function(st){
-      var n = st.n;
-      var agg = stepAgg(n);
-      var aggLabel = st.fixedNa ? '不适用（固定）' : (agg==='ok'?'绿灯':agg==='no'?'不通过':'未完成');
-      var parts = [];
-      if(!st.fixedNa){
-        CKEYS.forEach(function(ck){
-          var v = getCell(n, ck);
-          var piece = CK_LABEL[ck]+'='+STATE_LABEL[v];
-          if(v==='no'){
-            var cfg = st[ck]||{};
-            var syms = getSyms(n, ck).map(function(i){ return (cfg.fails||[])[i]; }).filter(Boolean);
-            var oth = (state.rows[n] && state.rows[n]['oth_'+ck]) || '';
-            if(oth) syms.push('其他：'+oth);
-            if(syms.length) piece += '【'+syms.join('；')+'】';
-          }
-          parts.push(piece);
-        });
-      }
-      var cmt = (state.rows[n] && state.rows[n].cmt) || '';
-      lines.push('第'+n+'步 '+st.name+'：'+aggLabel+(parts.length?'（'+parts.join('，')+'）':'')+(cmt?'　备注：'+cmt:''));
-      if(!st.fixedNa && agg!=='ok') chainPass = false;
+      setTimeout(function(){ tr.classList.remove('cur'); }, 1200);
     });
-    lines.push('');
-    lines.push('第1~13步结论：' + (chainPass ? '全部绿灯，获客链路打通' : '未全部通过（存在不通过或未完成的步骤）'));
-    lines.push('完整功能验收结论：不通过 —— 第14步公开回评这个版本没做，固定不适用');
-    document.getElementById('reportOut').value = lines.join(NL);
   });
 })();
 </script>
