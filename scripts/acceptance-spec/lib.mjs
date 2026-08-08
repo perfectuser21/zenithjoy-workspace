@@ -284,7 +284,7 @@ export function renderHtml(spec) {
 
 <header><div class="wrap">
   <h1>安卓智能获客 · 验收判据说明书（只读）</h1>
-  <p class="sub">本说明书为只读判据规程，供参阅验收标准使用。每步分四格检查：<b>①功能对不对 ②时限与频控 ③环境与数据 ④红线踩没踩</b>，四格各自有判定标准。判定结果请在 Staff Hub 验收详情页填写；某格本来没要求的已预标「不适用」；第三态统一表述为「无法验证」。</p>
+  <p class="sub">本说明书为只读判据规程，供参阅验收标准使用。每步分四格检查：<b>①功能对不对 ②时限与频控 ③环境与数据 ④红线踩没踩</b>，四格各自有判定标准。判定结果请在员工工作台验收详情页填写；某格本来没要求的已预标「不适用」；第三态统一表述为「无法验证」。</p>
   <div class="pills">
     <span class="pill">当前测试版本：${esc(spec.version)}</span>
     <span class="pill">测试环境：${esc(spec.environment)}</span>
@@ -310,7 +310,7 @@ export function renderHtml(spec) {
     <span class="c ni">固定不适用步骤 ${clientSteps.filter(s => s.fixedNa).length}</span>
   </div>
   <div class="spacer"></div>
-  <span style="font-size:13px;color:var(--ink-soft)">只读说明书 · 填写入口请前往 Staff Hub 验收详情页</span>
+  <span style="font-size:13px;color:var(--ink-soft)">只读说明书 · 填写入口请前往员工工作台验收详情页</span>
 </div></div>
 
 <div class="wrap">
@@ -392,7 +392,7 @@ export function renderHtml(spec) {
 <div style="margin:18px 0;background:var(--accent-soft);border-radius:8px;padding:12px 16px">
   <strong>最终结论怎么算（固定规则，不能人工改）：</strong>
   第1步到第13步全部亮绿灯，才算这条获客链路真正打通。第14步这个版本没做，固定不适用，所以完整功能验收目前必然「无法验证」，只能报「前13步全部打通」。
-  判定结果请在 Staff Hub 验收详情页填写，本说明书为只读判据规程。
+  判定结果请在员工工作台验收详情页填写，本说明书为只读判据规程。
 </div>
 
 </div>
