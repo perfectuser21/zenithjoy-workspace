@@ -2,8 +2,12 @@
 
 **TASK_ID**: 11cc5f4c-9bd0-4612-bf5a-9a6b574756af
 **Sprint**: W5-放行闸第三证据项双表绿(验收一体两面D5)
-**Contract 版本**: v1.1（P1修复轮——selftest 五情形 + INV-1 验收命令修正）
+**Contract 版本**: v1.2（Judge fix：补合同测试 + GP-Anchor 声明）
 **日期**: 2026-08-08
+
+## GP-Anchor
+
+gp-anchor: skipped(infra-ci — GP 7790f728-f490-4243-b166-03f3250a0938 为 candidate 状态，未入 product-map.json；PR body 已声明 GP-Anchor: none(config))
 
 ---
 
