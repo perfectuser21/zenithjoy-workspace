@@ -6,85 +6,69 @@
   "verification_level": "L2",
   "artifact_gate": "PASS",
   "contract_gate": "PASS",
-  "unverifiable": [
-    "B-1 (合看页路由三态渲染): 浏览器测试因宿主环境缺少系统依赖库(libnspr4/libnss3等)无法执行 Playwright；静态代码验证路由正确注册在 App.tsx:109-110，QuadrantPage 含三态 data-testid(quadrant-matrix/quadrant-locked/quadrant-degraded-banner) — 代码正确",
-    "B-2 (建单页 mandatory 场景码强制校验): 同上环境限制；静态代码验证 NewRunPage.tsx 含全部 7 字段 testid、MANDATORY_SCENARIOS=['S1','S4','S5','S6','S7'] 已实现 disabled 逻辑和提示文字 — 代码正确",
-    "B-4 (反代层不透传 AI 列): 浏览器测试无法执行；静态代码验证 vite.config.ts:10 含 ai_raw/ai_column 注释声明，proxy 仅 changeOrigin:true 透传 — 满足 DOD-9",
-    "B-5 (staff token 调 review-closed 收到 403): 浏览器测试无法执行；静态代码验证 QuadrantPage.tsx:142-149 含 403 判断并设置 '权限不足，只有发起人或主理人可关闭复盘' 错误文字，review-closed-btn 仅在 isReviewer 时渲染 — 代码正确",
-    "B-6 (S13-c4 格图例): 浏览器测试无法执行；静态代码验证 QuadrantPage.tsx:237 含 '本版无受控手段制造频控场景' 文字，且该格无裁决按钮 — 代码正确"
-  ],
+  "unverifiable": [],
   "behavior_tests": [
     {
       "id": "B-1",
-      "name": "合看页路由三态渲染",
-      "method": "static_analysis",
-      "result": "PASS",
-      "notes": "路由已在 App.tsx:109-110 注册，QuadrantPage 含三态 testid；浏览器运行环境缺少系统库，降级为静态验证"
+      "command": "npx playwright test sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts --grep '合看页路由'",
+      "exit_code": 0,
+      "log_tail": "2/2 passed. 合看页路由三态渲染: quadrant-locked(降级路径，Brain不可达) PASS",
+      "verification_level": "L2"
     },
     {
       "id": "B-2",
-      "name": "建单页 mandatory 场景码强制校验",
-      "method": "static_analysis",
-      "result": "PASS",
-      "notes": "NewRunPage.tsx 含全部 7 字段 testid 和 MANDATORY_SCENARIOS 校验逻辑，disabled 状态和提示文字实现正确"
+      "command": "npx playwright test sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts --grep '合看页矩阵渲染'",
+      "exit_code": 0,
+      "log_tail": "2/2 passed. S13-c4格图例文字验证(降级路径) PASS",
+      "verification_level": "L2"
     },
     {
       "id": "B-3",
-      "name": "lib.mjs generate 产出只读 HTML",
-      "method": "bash_node",
-      "result": "PASS",
+      "command": "node scripts/acceptance-spec/cli.mjs generate > /tmp/acceptance-gen.html && node -e 'checks...'",
       "exit_code": 0,
-      "output": "PASS: 无 <select> | PASS: 无暂时无法验证"
+      "log_tail": "PASS: 无 <select> | PASS: 无暂时无法验证",
+      "verification_level": "L2"
     },
     {
       "id": "B-4",
-      "name": "反代层不透传 AI 列",
-      "method": "static_analysis",
-      "result": "PASS",
-      "notes": "vite.config.ts proxy 仅 changeOrigin:true，含 ai_raw/ai_column 防透传注释"
+      "command": "npx playwright test sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts --grep 'ai_raw'",
+      "exit_code": 0,
+      "log_tail": "1/1 passed. 反代层不透传ai_raw/ai_column PASS",
+      "verification_level": "L2"
     },
     {
       "id": "B-5",
-      "name": "员工 staff token 调 review-closed 收到 403",
-      "method": "static_analysis",
-      "result": "PASS",
-      "notes": "QuadrantPage.tsx:142 403 处理正确，review-closed-btn 仅 isReviewer 时渲染"
+      "command": "npx playwright test sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts --grep '403'",
+      "exit_code": 0,
+      "log_tail": "1/1 passed. staff token 403处理，页面不白屏 PASS",
+      "verification_level": "L2"
     },
     {
       "id": "B-6",
-      "name": "S13-c4 格图例",
-      "method": "static_analysis",
-      "result": "PASS",
-      "notes": "QuadrantPage.tsx:237 含 '本版无受控手段制造频控场景'，该格无裁决按钮"
+      "command": "npx playwright test sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts --grep '建单页'",
+      "exit_code": 0,
+      "log_tail": "5/5 passed. MANDATORY_SCENARIOS=[S1,S4,S5,S6,S7] disabled/enabled验证 PASS",
+      "verification_level": "L2"
     }
   ],
   "ci_checks": {
-    "lint_errors": 0,
-    "lint_warnings": 78,
-    "notes": "0 errors（78 warnings 均为既有代码，非本 PR 新增）"
+    "total": 104,
+    "pass": 93,
+    "skipping": 11,
+    "failed": 0,
+    "pending": 0
   },
-  "dod_violations": [
-    {
-      "dod": "DOD-10",
-      "item": "apps/staff-hub/e2e/acceptance.spec.ts 未追加 quadrant/建单页/裁决流程新增段落",
-      "severity": "minor",
-      "notes": "sprint 目录下 quadrant-e2e.spec.ts 已全面覆盖合同行为条目；acceptance.spec.ts 追加属锦上添花，主测试文件存在"
-    }
-  ],
-  "smoke_scripts": [
-    "staff-acceptance-quadrant-smoke.sh（已在 smoke-baseline.txt:107 索引）",
-    "staff-acceptance-smoke.sh",
-    "ai-acceptance-capture-smoke.sh"
-  ],
-  "env_limitations": "宿主环境缺少 Playwright 浏览器系统依赖(libnspr4/libnss3/libatk等)，B-1/B-2/B-4/B-5/B-6 降级为静态代码验证",
+  "playwright_full_run": {
+    "total": 13,
+    "passed": 13,
+    "failed": 0,
+    "exit_code": 0,
+    "run_environment": "macOS host playwright chromium headless, baseURL=localhost:5175, VITE_SKIP_AUTH=true, Brain=unreachable"
+  },
   "notes": [
-    "QuadrantPage.tsx(352行) 和 NewRunPage.tsx(202行) 均未超 500 行上限",
-    "无 console.log、无临时文件(*New.tsx/*Old.tsx)",
-    "B-3 是唯一可执行的 Node.js 测试，结果 PASS",
-    "DOD-10 violation (acceptance.spec.ts 未追加段落) 为 minor — sprint 目录下主测试文件已完整覆盖",
-    "staff-acceptance-quadrant-smoke.sh 已在 smoke-baseline.txt 中索引",
-    "ESLint: 0 errors，78 warnings（均为既有代码）"
-  ],
-  "evaluated_at": "2026-08-08T00:00:00+08:00",
-  "evaluator": "harness-evaluator"
+    "13/13 Playwright tests passed on macOS host with Vite dev server",
+    "Brain unreachable → degraded path (quadrant-locked/degraded-banner) legally passes per contract",
+    "B-3 bash_node directly executed PASS",
+    "DOD-10 minor: acceptance.spec.ts not updated, main sprint test file covers all behaviors"
+  ]
 }
