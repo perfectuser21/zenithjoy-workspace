@@ -18,9 +18,10 @@ test('凭据解析：无命令行参数时回落环境变量', () => {
   assert.equal(c.source, 'env');
 });
 
-test('凭据解析：两者都无 → 返回 signup 模式而不是抛错（保持旧行为可用）', () => {
+test('凭据解析：两者都无 → D2 返回 ai_incomplete 整轮退出（不再 signup 回落）', () => {
   const c = resolveCredentials({}, {});
-  assert.equal(c.mode, 'signup');
+  assert.equal(c.mode, 'ai_incomplete');
+  assert.equal(c.ai_incomplete, true);
   assert.equal(c.email, null);
 });
 

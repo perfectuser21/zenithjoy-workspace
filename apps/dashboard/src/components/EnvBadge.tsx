@@ -27,6 +27,12 @@ function readDeployEnv(): string {
   return (env.VITE_DEPLOY_ENV || '').toLowerCase();
 }
 
+/** D2 FR-4：读 build 时注入的 VITE_BUILD_SHA，供验收版本戳核对 */
+export function readBuildSha(): string {
+  const env = import.meta.env as Record<string, string | undefined>;
+  return env.VITE_BUILD_SHA || 'unknown';
+}
+
 /** 返回当前环境对应的角标配置；生产返回 null（不显示）。 */
 export function resolveEnvFlag(): EnvFlag | null {
   const deployEnv = readDeployEnv();
@@ -52,10 +58,12 @@ export default function EnvBadge() {
   const flag = resolveEnvFlag();
   if (!flag) return null;
 
+  const buildSha = readBuildSha();
+
   return (
     <div
       data-testid="env-badge"
-      title={`${flag.text} 环境 · 非生产（生产地址：autopilot.zenjoymedia.media）`}
+      title={`${flag.text} 环境 · build: ${buildSha} · 非生产（生产地址：autopilot.zenjoymedia.media）`}
       style={{
         position: 'fixed',
         top: 0,

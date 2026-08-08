@@ -112,7 +112,11 @@ app.get('/health', (req, res) => {
 
 // Version —— 暴露真正在跑的构建（git sha / version / 构建时间）。
 // 发版脚本干净重启后断言 /version.sha == 刚部署 commit，不一致 = 跑的是旧进程 → 发版红。
+// D2 FR-3：/api/version 与 /version 同时挂载（capture.mjs fail-loud 路径为 /api/version）。
 app.get('/version', (req, res) => {
+  res.json(getBuildInfo());
+});
+app.get('/api/version', (req, res) => {
   res.json(getBuildInfo());
 });
 

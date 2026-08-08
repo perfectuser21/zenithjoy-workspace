@@ -103,3 +103,4 @@ acquisition-config-validation-smoke.sh
 trim-json-lib-smoke.sh
 dedupe-adb-devices-lib-smoke.sh
 staff-workbench-smoke.sh
+ai-acceptance-capture-smoke.sh
