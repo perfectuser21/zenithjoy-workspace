@@ -67,6 +67,8 @@ jobs:
             export VITE_STAFF_EMAILS='408080793@qq.com,121406646@qq.com,Zenithjoy21xx@gmail.com,xuxiao21xx@icloud.com'
             # 环境角标：staging build 注入 staging → 前端右上角显橙色 STAGING 旗（生产 promote 注入 production，不显示）。
             export VITE_DEPLOY_ENV='staging'
+            # D2 FR-4：注入 git SHA，前端可读供验收版本戳核对
+            export VITE_BUILD_SHA='${{ github.sha }}'
             npm run build --workspace=apps/dashboard
 
             echo "=== [3/5] 落 staging dist + staging nginx.conf（绝不碰生产 autopilot-dashboard）==="

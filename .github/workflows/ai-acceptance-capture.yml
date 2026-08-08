@@ -1,0 +1,120 @@
+name: AI 打表器——采证 + 判定（D2）
+
+# ───────────────────────────────────────────────────────────────────────────
+# theater 闸声明（contract-draft.md §真机边界声明）：
+#   runner: ubuntu-latest only（云端沙盒，无真机权限）
+#   secrets 白名单（3个）: STAGING_ACCEPTANCE_EMAIL / STAGING_ACCEPTANCE_PASSWORD / ACCEPTANCE_AI_TOKEN
+#   禁用 secrets 已从白名单移除（见 contract-draft.md Invariant-7）
+#   trigger_collect 全局 ≤ 2（由 capture.mjs 内部计数闸保障）
+#   无注册动作（白名单收口后纯 observe + trigger_collect）
+# ───────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_dispatch:
+    inputs:
+      staging_url:
+        description: 'Staging URL（默认 https://staging-autopilot.zenjoymedia.media）'
+        required: false
+        default: 'https://staging-autopilot.zenjoymedia.media'
+      keyword:
+        description: '采集关键词（默认 装修）'
+        required: false
+        default: '装修'
+      run_key:
+        description: '本轮唯一 run_key（留空则自动生成 ai-run-<时间戳>）'
+        required: false
+        default: ''
+
+concurrency:
+  group: ai-acceptance-capture
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    name: 采证器（Playwright + staging UI 只读观察 + ≤2次受控点火）
+    runs-on: ubuntu-latest
+
+    env:
+      STAGING_URL: ${{ github.event.inputs.staging_url || 'https://staging-autopilot.zenjoymedia.media' }}
+      KEYWORD: ${{ github.event.inputs.keyword || '装修' }}
+      RUN_KEY: ${{ github.event.inputs.run_key || format('ai-run-{0}', github.run_id) }}
+      STAGING_ACCEPTANCE_EMAIL: ${{ secrets.STAGING_ACCEPTANCE_EMAIL }}
+      STAGING_ACCEPTANCE_PASSWORD: ${{ secrets.STAGING_ACCEPTANCE_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --silent
+
+      - name: Install Playwright browsers（仅 Chromium）
+        run: npx playwright install chromium --with-deps
+
+      - name: 运行采证器
+        run: |
+          OUT_DIR="acceptance-spec/runs/${RUN_KEY}"
+          node scripts/acceptance-spec/ai-run/capture.mjs \
+            --staging "$STAGING_URL" \
+            --keyword "$KEYWORD" \
+            --out "$OUT_DIR"
+        env:
+          STAGING_URL: ${{ env.STAGING_URL }}
+          KEYWORD: ${{ env.KEYWORD }}
+          RUN_KEY: ${{ env.RUN_KEY }}
+          STAGING_ACCEPTANCE_EMAIL: ${{ secrets.STAGING_ACCEPTANCE_EMAIL }}
+          STAGING_ACCEPTANCE_PASSWORD: ${{ secrets.STAGING_ACCEPTANCE_PASSWORD }}
+
+      - name: 上传证据包 artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-evidence-${{ env.RUN_KEY }}
+          path: acceptance-spec/runs/${{ env.RUN_KEY }}/
+          retention-days: 30
+
+  judge:
+    name: 判官（读 artifact 截图按屏幕所见判定 → POST ai-results）
+    runs-on: ubuntu-latest
+    needs: [capture]
+    if: success()
+
+    env:
+      RUN_KEY: ${{ github.event.inputs.run_key || format('ai-run-{0}', github.run_id) }}
+      STAGING_URL: ${{ github.event.inputs.staging_url || 'https://staging-autopilot.zenjoymedia.media' }}
+      ACCEPTANCE_AI_TOKEN: ${{ secrets.ACCEPTANCE_AI_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --silent
+
+      - name: 下载证据包
+        uses: actions/download-artifact@v4
+        with:
+          name: acceptance-evidence-${{ env.RUN_KEY }}
+          path: acceptance-spec/runs/${{ env.RUN_KEY }}/
+
+      - name: 判官判定并回写 Brain
+        run: |
+          node scripts/acceptance-spec/ai-run/judge.mjs \
+            --run-dir "acceptance-spec/runs/${RUN_KEY}" \
+            --run-key "${RUN_KEY}" \
+            --brain-url "http://host.docker.internal:5221"
+        env:
+          RUN_KEY: ${{ env.RUN_KEY }}
+          ACCEPTANCE_AI_TOKEN: ${{ secrets.ACCEPTANCE_AI_TOKEN }}
