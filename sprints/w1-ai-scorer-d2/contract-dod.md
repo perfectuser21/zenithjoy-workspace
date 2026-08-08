@@ -13,6 +13,8 @@ target_environment: ubuntu-latest
 
 本单 AI 全部动作限于：**staging 后台 UI 只读观察** + **受控点火（专用验收租户采集入口，≤2次/轮）**。AI 绝不执行直接控制手机、SSH 到设备、触发重启、操作 App、发送私信/关注/点赞、跨出专用验收租户的写操作等动作。theater 闸检查：无 self-hosted runner；secrets 白名单不含 ACCEPTANCE_API_TOKEN；trigger_collect ≤ 2；无 signup 动作。
 
+**真机动作边界**：S5「制造一次小号掉线」由**员工**在 Step 2 手动执行，AI 不触碰手机池。本 sprint 内 AI 只做 staging 观察 + ≤2 次受控采集点火，任何超出上述范围的设备操作均视为 P0 违规。
+
 ---
 
 ## ARTIFACT 条目
@@ -68,42 +70,42 @@ target_environment: ubuntu-latest
   预期观察: 返回对象 mode 不等于 'signup'，且包含 ai_incomplete 或 error 标记；不抛异常（调用方 capture.mjs 读取标记后退出）
   等待预算: 0s
   留证: node 单测输出
-  Test: manual:bash -c 'node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js 2>&1 | grep "无凭据"'
+  Test: manual:bash -c 'node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js 2>&1 | grep -E "^ok " | grep "无凭据" || (echo "FAIL: B-03 单测未通过"; exit 1)'
 
 - [ ] [BEHAVIOR] [L1] B-04: 无凭据时 capture.mjs 以 exit 1 退出，不生成 pending-judgments.json
   动作: 在无 STAGING_ACCEPTANCE_EMAIL / STAGING_ACCEPTANCE_PASSWORD 环境下以 --dry-run 或 stub 模式运行 capture.mjs 的无凭据路径
   预期观察: 进程 exit code = 1；输出目录内无 pending-judgments.json；run-summary.json（若生成）中 ai_incomplete = true
   等待预算: 0s
   留证: exit code + 目录内容 ls 输出
-  Test: manual:bash -c 'node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js 2>&1 | grep "无凭据退出"'
+  Test: manual:bash -c 'node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js 2>&1 | grep -E "^ok " | grep "无凭据退出" || (echo "FAIL: B-04 单测未通过"; exit 1)'
 
 - [ ] [BEHAVIOR] [L1] B-05: tenant 不匹配时双自检使整轮 ai_incomplete 退出，trigger_collect_count = 0
   动作: 模拟 /api/me 返回 tenant_id 与 ACCEPTANCE_TENANT_ID 不等的场景
   预期观察: assertTenantAndDevice() 触发 ai_incomplete 退出；run-summary.json 中 trigger_collect_count = 0；不调用任何 trigger_collect
   等待预算: 0s
   留证: 单测 stub 验证
-  Test: manual:bash -c 'node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js 2>&1 | grep "tenant 不匹配"'
+  Test: manual:bash -c 'node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js 2>&1 | grep -E "^ok " | grep "tenant 不匹配" || (echo "FAIL: B-05 单测未通过"; exit 1)'
 
 - [ ] [BEHAVIOR] [L1] B-06: machines_online = 0 时双自检使整轮 ai_incomplete 退出
   动作: 模拟 run-summary.machines_online = 0 场景（登录成功但无在线机器）
   预期观察: assertTenantAndDevice() 的 machines_online ≥ 1 校验失败 → ai_incomplete 退出；无 trigger_collect 调用
   等待预算: 0s
   留证: 单测 stub 验证
-  Test: manual:bash -c 'node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js 2>&1 | grep "machines_online=0"'
+  Test: manual:bash -c 'node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js 2>&1 | grep -E "^ok " | grep "machines_online=0" || (echo "FAIL: B-06 单测未通过"; exit 1)'
 
 - [ ] [BEHAVIOR] [L1] B-07: trigger_collect 全局计数超过 2 次时断言失败退出
   动作: 构造一个 cells-map 含 3 个 trigger_collect 格的场景，让 capture 主循环走到第 3 次调用
   预期观察: 第 3 次 trigger_collect 调用时断言失败，进程 exit 1；第 1、2 次正常执行
   等待预算: 0s
   留证: 单测输出与 exit code
-  Test: manual:bash -c 'node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js 2>&1 | grep "trigger_collect 超限"'
+  Test: manual:bash -c 'node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js 2>&1 | grep -E "^ok " | grep "trigger_collect 超限" || (echo "FAIL: B-07 单测未通过"; exit 1)'
 
 - [ ] [BEHAVIOR] [L1] B-08: /api/version 不可达时整轮 ai_incomplete 退出（fail-loud）
   动作: 模拟 /api/version 返回非 2xx 或 timeout
   预期观察: capture.mjs 不静默忽略，而是以 ai_incomplete + exit 1 退出；run-summary.json 中 version_stamp.backend_sha 不为实际值
   等待预算: 0s
   留证: 单测 stub 验证
-  Test: manual:bash -c 'node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js 2>&1 | grep "version fail-loud"'
+  Test: manual:bash -c 'node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js 2>&1 | grep -E "^ok " | grep "version fail-loud" || (echo "FAIL: B-08 单测未通过"; exit 1)'
 
 - [ ] [BEHAVIOR] [L1] B-09: workflow secrets 白名单不含禁用 secret，runner 为 ubuntu-latest
   动作: 静态解析 .github/workflows/ai-acceptance-capture.yml
@@ -130,13 +132,29 @@ target_environment: ubuntu-latest
   Test: manual:bash -c 'node -e "import(\"./scripts/acceptance-spec/ai-run/cells-map.mjs\").then(m=>{const tc=m.CELLS_MAP.filter(c=>c.action===\"trigger_collect\");const ids=tc.map(c=>c.id).sort();if(tc.length!==2||ids[0]!==\"S10-c4\"||ids[1]!==\"S6-c3\"){console.error(\"FAIL: tc 格数或格号不符\",ids);process.exit(1)}console.log(\"PASS: \"+ids)})"'
 
 - [ ] [BEHAVIOR] [L1] INV-3: 无凭据不静默 signup 回落（单测覆盖）
-  Test: manual:bash -c 'node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js 2>&1 | grep -E "ok|not ok" | grep "无凭据"'
+  Test: manual:bash -c 'node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js 2>&1 | grep -E "^ok " | grep "无凭据" || (echo "FAIL: INV-3 单测未通过"; exit 1)'
 
 - [ ] [BEHAVIOR] [L1] INV-4: 双自检（tenant + machines_online）先于任何采集动作（单测覆盖）
-  Test: manual:bash -c 'node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js 2>&1 | grep -E "ok|not ok" | grep "双自检"'
+  Test: manual:bash -c 'node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js 2>&1 | grep -E "^ok " | grep "双自检" || (echo "FAIL: INV-4 单测未通过"; exit 1)'
 
 - [ ] [BEHAVIOR] [L1] INV-5: runner 为 ubuntu-latest，禁 self-hosted
   Test: manual:bash -c 'node -e "const c=require(\"fs\").readFileSync(\".github/workflows/ai-acceptance-capture.yml\",\"utf8\");if(!c.includes(\"ubuntu-latest\")||c.includes(\"self-hosted\")){process.exit(1)}console.log(\"PASS\")"'
+
+- [ ] [BEHAVIOR] [L1] INV-8: POST ai-results 回写 payload 必须包含全部 36 格，无缺席格
+  动作: mock 层校验 pending-judgments.json 的 cells 数组长度为 36（Brain 侧 400 验证无法本地测试，用 mock 层替代）
+  预期观察: cells.length === 36；任何缺席格（长度 < 36）导致断言失败
+  等待预算: 0s
+  留证: 单测输出
+  Test: manual:bash -c 'node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js 2>&1 | grep -E "^ok " | grep "36格" || (echo "FAIL: INV-8 36格单测未通过"; exit 1)'
+
+- [ ] [BEHAVIOR] [L1] INV-9: scenario_not_triggered reason 在判官 payload 中出现次数为零
+  动作1: 静态扫描 cells-map.mjs 确认无 scenario_not_triggered 字样
+  动作2: capture-invariants.test.js 单测验证 cells 构建逻辑不产生该 reason
+  预期观察: grep 命令无匹配（exit 1），单测输出包含 `^ok ` 且含"scenario_not_triggered"关键字测试通过
+  等待预算: 0s
+  留证: grep 命令输出 + 单测 stdout
+  Test: manual:bash -c 'grep "scenario_not_triggered" scripts/acceptance-spec/ai-run/cells-map.mjs && echo FAIL || echo PASS'
+  Test2: manual:bash -c 'node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js 2>&1 | grep -E "^ok " | grep "scenario_not_triggered" || (echo "FAIL: INV-9 单测未通过"; exit 1)'
 
 ---
 
