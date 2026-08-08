@@ -2,7 +2,7 @@
 
 **TASK_ID**: 11cc5f4c-9bd0-4612-bf5a-9a6b574756af
 **Sprint**: W5-放行闸第三证据项双表绿(验收一体两面D5)
-**Contract 版本**: v1.0（首轮，无前轮 reviewer feedback）
+**Contract 版本**: v1.1（P1修复轮——selftest 五情形 + INV-1 验收命令修正）
 **日期**: 2026-08-08
 
 ---
@@ -25,7 +25,7 @@
 | two-column-gate-selftest.yml | 新建 CI workflow | `.github/workflows/two-column-gate-selftest.yml` |
 | promote-all-prod.yml 接线 | 修改 CI workflow | `.github/workflows/promote-all-prod.yml`（:138 后新增证据③ step） |
 | promote-dashboard sha 绑定 | 修改 CI workflow | `.github/workflows/promote-all-prod.yml`（promote-dashboard job） |
-| fixture JSON 测试文件 | 新建测试 fixture | `scripts/release-gate/fixtures/*.json`（4 个） |
+| fixture JSON 测试文件 | 新建测试 fixture | `scripts/release-gate/fixtures/*.json`（5 个：含 case-sha-mismatch） |
 
 ---
 
@@ -78,16 +78,17 @@ bypass 仅在 infra_error 时生效；cells_red 时即使传入 `bypass_two_colu
 
 ---
 
-## selftest 四情形验收
+## selftest 五情形验收
 
-`two-column-gate-selftest.yml` 独立 CI workflow，四个 step 各自构造 fixture JSON，调 `--fixture` 模式，期望退出码如下：
+`two-column-gate-selftest.yml` 独立 CI workflow，五个 step 各自构造 fixture JSON，调 `--fixture` 模式，期望退出码如下：
 
-| 情形 | fixture 内容 | 期望 |
+| 情形 | fixture 文件 | 期望 |
 |------|--------------|------|
-| 未定案 | `finalized=false` | exit 1（step 标红 = 符合预期） |
-| 定案绿 + sha 匹配 | `finalized=true, gate_verdict=green, backend_sha=$PROMOTE_SHA` | exit 0 |
-| 取数失败 | HTTP 错误（不可达，用无效 fixture 模拟） | exit 1 |
-| infra_error + bypass=true | `blocked_reason=ai_run_infra_error, bypass_two_column_infra=true` | exit 0 |
+| 情形1：未定案（finalized=false） | `case-not-finalized.json` | exit 1（step 标红 = 符合预期） |
+| 情形2：定案绿 + sha 匹配 | `case-green.json`（`finalized=true, gate_verdict=green, backend_sha=$PROMOTE_SHA`） | exit 0 |
+| 情形3：取数失败（fixture 文件不存在，模拟不可达的近似代理） | `nonexistent.json`（文件不存在） | exit 1 |
+| 情形4：infra_error + bypass=true | `case-infra-error-bypass.json`（`blocked_reason=ai_run_infra_error, bypass_two_column_infra=true`） | exit 0 |
+| 情形5：cells_red + bypass=true → INVARIANT-2 负路径 | `case-cells-red-bypass.json`（`blocked_reason=undecided_cells, bypass_two_column_infra=true`） | exit 1（bypass 不生效） |
 
 ---
 

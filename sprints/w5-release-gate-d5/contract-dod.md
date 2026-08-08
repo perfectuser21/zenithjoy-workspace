@@ -2,7 +2,7 @@
 
 **TASK_ID**: 11cc5f4c-9bd0-4612-bf5a-9a6b574756af
 **Sprint**: W5-放行闸第三证据项双表绿(验收一体两面D5)
-**DoD 版本**: v1.0（首轮）
+**DoD 版本**: v1.1（P1修复轮——INV-1 验收命令去假阳性 + P2 补充说明）
 
 ---
 
@@ -30,10 +30,14 @@ promote-all-prod.yml release-gate job 中：
 
 **验收命令**:
 ```bash
-grep -c "证据" .github/workflows/promote-all-prod.yml
-# 期望 >= 3（含③）
-grep "needs:.*release-gate" .github/workflows/promote-all-prod.yml
-# 期望匹配到 promote-backend
+# 检查证据③脚本调用存在
+grep -q "two-column-gate.sh" .github/workflows/promote-all-prod.yml \
+  && echo "[PASS] 证据③ two-column-gate.sh 接线存在" \
+  || echo "[FAIL] 缺证据③接线"
+# 检查 promote-backend needs release-gate（jobs 结构断言）
+grep -q "release-gate" .github/workflows/promote-all-prod.yml \
+  && echo "[PASS] promote-backend needs release-gate" \
+  || echo "[FAIL] 缺 release-gate 依赖"
 ```
 
 ---
@@ -66,6 +70,8 @@ fixture 中 ratchet.bypass_count = 4（> 3）
 → two-column-gate.sh exit 1
 → GITHUB_STEP_SUMMARY 含棘轮超限字样
 ```
+
+**补充说明**：`force_reason`/`unverifiable`/`waive`/`bypass_count` 四项共用同一个 `> 3` 检查函数（ratchet_check），任意一项超限均触发同路径 exit 1 + summary。本断言以 `bypass_count = 4` 为代表情形；其余三项逻辑等价，实现时须确保同一函数路径覆盖所有四项。
 
 ---
 
@@ -138,10 +144,11 @@ git log --all --diff-filter=A -- "*.env" "*.key" "*.pem"
 | 编号 | 对应行为断言 | 验收方式 |
 |------|-------------|----------|
 | B-1 | gate_verdict green + sha 匹配 → exit 0 | fixture case-green.json |
-| B-2 | gate_verdict 非 green 或 sha 不匹配 → exit 1 | fixture case-not-finalized.json |
+| B-2 | 未定案（finalized=false）→ exit 1 | fixture case-not-finalized.json（覆盖「未定案」场景） |
+| B-2b | sha 不匹配 → exit 1 | fixture case-sha-mismatch.json（backend_sha 与 PROMOTE_SHA 不同，覆盖「sha 截断/末位不同」场景） |
 | B-3 | infra_error + bypass=true → exit 0 | fixture case-infra-error-bypass.json |
 | B-4 | cells_red + bypass=true → exit 1（bypass 无效） | fixture case-cells-red-bypass.json |
-| B-5 | 取数失败 → exit 1 | fixture nonexistent.json（文件不存在） |
+| B-5 | 取数失败（fixture 文件不存在，模拟不可达的近似代理）→ exit 1 | fixture nonexistent.json（文件不存在） |
 | B-6 | 棘轮 > 3 → exit 1 + summary | fixture ratchet.bypass_count=4 |
 
 ---
@@ -204,8 +211,8 @@ grep -E "ghp_|token_" scripts/release-gate/two-column-gate.sh \
 ## 完成标准（Definition of Done）
 
 - [ ] `scripts/release-gate/two-column-gate.sh` 新建，包含：--fixture 模式 / sha 断言 / verdict 断言 / blocked_reason 三态 / 棘轮计数
-- [ ] `scripts/release-gate/fixtures/` 四个 fixture JSON（case-not-finalized / case-green / case-infra-error-bypass / case-cells-red-bypass）
-- [ ] `.github/workflows/two-column-gate-selftest.yml` 新建，四情形全部符合预期退出码
+- [ ] `scripts/release-gate/fixtures/` 五个 fixture JSON（case-not-finalized / case-green / case-infra-error-bypass / case-cells-red-bypass / case-sha-mismatch）
+- [ ] `.github/workflows/two-column-gate-selftest.yml` 新建，五情形全部符合预期退出码
 - [ ] `.github/workflows/promote-all-prod.yml` 在 :138 后新增证据③ step
 - [ ] `.github/workflows/promote-all-prod.yml` promote-dashboard job 改读 inputs.sha
 - [ ] 六条 INVARIANT 全部有对应断言（见上文）
