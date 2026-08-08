@@ -402,6 +402,8 @@ export function renderHtml(spec) {
 </div></footer>
 
 <script>
+// 内嵌规程数据（供外部脚本/测试引用，不用于填写交互）
+var STEPS = ${stepsJson};
 // 只读说明书：无填写交互，仅导航功能
 (function(){
   var steps = document.querySelectorAll('tr[data-step]');
