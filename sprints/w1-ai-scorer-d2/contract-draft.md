@@ -297,3 +297,9 @@ node scripts/acceptance-spec/ai-run/__tests__/capture-invariants.test.js
 - 真机动作（员工 Step 2 执行）
 - 多租户 / 生产环境的任何改动
 - 规程 yaml 进 Brain 容器方案（FR-7 Gate B 决策前不实施）
+
+## GP-Anchor
+
+gp-anchor: none(infra)
+
+> 本 sprint 属于验收基础设施改造（采证器白名单收口 + 判定对接 + staging 版本戳），非推进 Golden Path 业务步骤，显式豁免 GP 步骤绑定。
