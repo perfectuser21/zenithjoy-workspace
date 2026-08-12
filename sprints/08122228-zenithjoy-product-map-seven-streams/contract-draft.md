@@ -190,7 +190,7 @@ SM07=$(jq -r '[.golden_paths[] | select(.line_id=="line07" and .status!="depreca
 SM10=$(jq -r '[.golden_paths[] | select(.line_id=="line10" and .status!="deprecated") | .smoke_files[]?] | join(",")' product-map/generated/product-map.json)
 [ "$SM10" = ".github/workflows/scripts/smoke/customer-admin-backend-smoke.sh" ]
 
-CHANGED=$(git diff --name-only origin/main...HEAD)
+CHANGED=$(git diff --name-only origin/main...HEAD 2>/dev/null) || CHANGED=$(git diff --name-only HEAD)
 for f in .github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh \
          .github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh \
          .github/workflows/scripts/smoke/customer-admin-backend-smoke.sh; do
@@ -198,6 +198,7 @@ for f in .github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh \
 done
 ```
 **硬阈值**: 三个 `smoke_files` 精确匹配 PRD 指定路径；三个文件路径不在本 sprint 变更文件列表中。
+`CHANGED` 计算须与 `tests/contract.test.js` T7 一致：`origin/main...HEAD` 不可达（沙盒无网络场景）时不裸吞错误静默退化为空，而是显式 fallback 为 `git diff --name-only HEAD`，仍是同一条边界约束的弱化验证。
 
 ---
 
@@ -209,13 +210,13 @@ done
 
 **验证命令**:
 ```bash
-CHANGED=$(git diff --name-only origin/main...HEAD)
+CHANGED=$(git diff --name-only origin/main...HEAD 2>/dev/null) || CHANGED=$(git diff --name-only HEAD)
 echo "$CHANGED" | grep -vE '^(product-map/product-map\.yaml|product-map/generated/product-map\.(json|md)|scripts/product-map/__tests__/.*|sprints/.*)$' \
   && { echo "FAIL: 越界改动（超出允许路径前缀）"; exit 1; } || true
 echo "$CHANGED" | grep -qi 'cecelia' \
   && { echo "FAIL: 触碰 Cecelia 仓库路径"; exit 1; } || true
 ```
-**硬阈值**: 两条负向检查均不命中（无越界路径、无 Cecelia 路径）。
+**硬阈值**: 两条负向检查均不命中（无越界路径、无 Cecelia 路径）。`CHANGED` 计算与 Step 7 同一 fallback 规则：`origin/main...HEAD` 不可达时不裸吞错误，显式 fallback 为 `git diff --name-only HEAD`，与 `tests/contract.test.js` T7 一致，不得空判通过。
 
 ---
 
@@ -283,7 +284,7 @@ SM10=$(jq -r '[.golden_paths[] | select(.line_id=="line10" and .status!="depreca
 [ "$SM10" = ".github/workflows/scripts/smoke/customer-admin-backend-smoke.sh" ] || { echo "FAIL: SM10=$SM10"; exit 1; }
 echo "OK smoke_files 精确锚定"
 
-CHANGED=$(git diff --name-only origin/main...HEAD || true)
+CHANGED=$(git diff --name-only origin/main...HEAD 2>/dev/null) || CHANGED=$(git diff --name-only HEAD)
 for f in .github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh \
          .github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh \
          .github/workflows/scripts/smoke/customer-admin-backend-smoke.sh; do

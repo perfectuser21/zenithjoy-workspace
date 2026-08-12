@@ -121,7 +121,9 @@ test('T4: line05/07/10 三条新 GP 精确锚定 PRD 指定的既有 smoke 文�
     assert.ok(Array.isArray(gp.smoke_files) && gp.smoke_files.length > 0, `${lineId}/${gp.id} 须声明 smoke_files`);
     assert.deepEqual(gp.smoke_files, [smokePath], `${lineId}/${gp.id} smoke_files 须精确锚定既有文件 ${smokePath}`);
     assert.ok(existsSync(resolve(REPO_ROOT, smokePath)), `锚定的 smoke 文件须真实存在于仓库: ${smokePath}`);
-    assert.ok(Array.isArray(gp.steps) && gp.steps.length > 0, `${lineId}/${gp.id} 须含非空 steps 数组`);
+    // 注意（reviewer round1 阻塞问题1修复）：不断言 gp.steps 非空。PRD [ASSUMPTION]（sprint-prd.md 第45行）
+    // 只授权 Proposer 定稿三条新 GP 的 id/name，未授权编造 steps 业务步骤内容。
+    // schema 本身 steps 可选，line_health 等既有 active GP 也没有 steps 字段，不得逼 generator 凭空编造。
   }
 
   // 三个被锚定的 smoke 文件本身内容合格（≥5 非空行 + ≥1 真实命令），复用既有 validateSmokeFiles 质量判据，
