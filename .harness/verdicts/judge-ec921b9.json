@@ -1,0 +1,17 @@
+{
+  "phase": "judge",
+  "sha7": "ec921b9a",
+  "round": 2,
+  "verdict": "PASS",
+  "judged": true,
+  "api": "POST /api/brain/harness/judge (Brain, DeepSeek-backed independent judge)",
+  "history": {
+    "round1_sha": "6a738681",
+    "round1_verdict": "FAIL",
+    "round1_failure_class": "product_failure",
+    "round1_reason": "T7/Step8 边界检查真实FAIL；judge拒绝controller/evaluator的事后waived裁定，要求走真正合同修订",
+    "resolution": "GAN round3补充轮最小化扩展ALLOWED正则纳入3个harness机械文件(.harness/verdicts/.*, DoD.md, test-registry.yaml)，reviewer重新APPROVED(gan-b8d8b65a.json)，evaluator重新锚定验收全PASS无waiver(evaluate-dd45f04.json)"
+  },
+  "worktree_used": "/Users/administrator/perfect21/cecelia/.claude/worktrees/harness-v2/task-c2b59b6a (canonical judge authority path per harnessTaskWorktreePath, checked out to PR head via detached HEAD)",
+  "note": "Brain task c2b59b6a / relay-run 62a1451a+e2057e84 均已被 orphan-guard 误判 failed（详见 progress.md WARN 行），judge filesystem authority 通过在 canonical cecelia worktree 路径下 checkout 到 PR head 解决，run_id 仍沿用 e2057e84（exact GET 可读，judge API 未对 run phase 做限制）。"
+}
