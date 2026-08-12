@@ -1,0 +1,26 @@
+{
+  "phase": "gan",
+  "sha7": "b8d8b65a",
+  "round": 3,
+  "round_type": "supplementary",
+  "baseline_verdict": ".harness/verdicts/gan-75cc469f.json",
+  "verdict": "APPROVED",
+  "scope": "T7(tests/contract.test.js) ALLOWED 正则 + contract-dod.md Step7 BEHAVIOR + contract-draft.md Step7/Step8 验证命令，共4处embedding，扩展允许 .harness/verdicts/.* | DoD.md | test-registry.yaml",
+  "checks": {
+    "regex_precision": "PASS — DoD.md 与 test-registry.yaml 均为 ^(...)$ 整体锚定下的精确分支，只匹配仓库根路径下的同名文件，不匹配子目录同名文件（node 正则实测: src/business-logic/DoD.md=false, nested/test-registry.yaml=false, DoD.md=true, test-registry.yaml=true）。.harness/verdicts/.* 为目录级通配（设计如此，对应'裁决留痕附件'语义），是四个新增分支里唯一的非精确匹配面。",
+    "single_change_scope": "PASS — git show b8d8b65a 仅改 3 文件 6 行（contract-dod.md 1行 / contract-draft.md 4行 / tests/contract.test.js 1行）。与 round2 基线(75cc469f)相比：BEHAVIOR 条目数 10→10 不变，判定点登记表 diff 为空，Golden Path Step 数 9→9 不变，T1-T6 未改动。四处正则字面一致（JS 转义 vs grep ERE 转义等价）。",
+    "anti_cheat_risk": "ACCEPTABLE_WITH_NOTE — DoD.md/test-registry.yaml 是精确文件锚定，无法被目录嵌套绕过冒充业务文件。.harness/verdicts/.* 是目录通配，理论上允许任意文件名/内容落入该目录而不触发越界检测，是四者中风险最高的一支；但该目录的实际写入方是 harness controller 而非 generator 本身，且当前分支下该目录仅有 2 个既有命名规范文件(evaluate-*.json / gan-*.json)，属于可接受的已知系统性口子，非本轮引入的新增违规面。建议后续轮次可选加固为 .harness/verdicts/(gan|evaluate)-[0-9a-f]{7,}\\.json 精确文件名模式，非阻塞。",
+    "test_run": "PASS — node --test sprints/08122228-zenithjoy-product-map-seven-streams/tests/contract.test.js: 7/7 pass (T1-T7)，T7 未走 fallback 分支（origin/main 可达，真实执行 15 文件 diff 校验，非空判通过）。"
+  },
+  "rubric_scores_inherited_from_round2": {
+    "dod_machineability": 9,
+    "scope_match_prd": 9,
+    "test_is_red": 10,
+    "internal_consistency": 9,
+    "risk_registered": 7,
+    "verification_oracle_completeness": 9,
+    "ci_workflow_alignment": 10
+  },
+  "judgments_written": 0,
+  "feedback": "round3 补充轮范围核实通过。三个新增允许路径中 DoD.md/test-registry.yaml 精确锚定仓库根路径，无子目录泄漏；.harness/verdicts/.* 为目录通配，是四支里唯一的非精确匹配面，评估为可接受的已知系统性口子（写入方是 controller 非 generator，当前仅含既定命名规范文件），非本轮新增的越界风险，建议未来可选加固为精确文件名正则但不阻塞本轮。确认只改动了 T7 ALLOWED 常量与三处 embedding 共四处字面一致的正则，未触碰 T1-T6、其它 BEHAVIOR/ARTIFACT 条目、判定点登记表或业务断言。独立执行 node --test 确认 7/7 PASS 且 T7 非空判通过（真实 diff 校验）。VERDICT: APPROVED。"
+}
