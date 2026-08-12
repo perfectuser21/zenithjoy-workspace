@@ -1,4 +1,7 @@
 {
+  "SUPERSEDED": true,
+  "superseded_by": ".harness/verdicts/evaluate-dd45f04.json",
+  "superseded_reason": "本文件是 GAN round1/round2 合同下（sha=d5d02a20）的历史评估快照，记录的 T7 边界校验 FAIL 已在合同 round3 补充修订（.harness/verdicts/gan-b8d8b65a.json）中通过扩展 ALLOWED 正则彻底解决，非当前 PR 最终状态的缺陷。当前有效结论见 evaluate-dd45f04.json（0 项 unverifiable，全部真实 PASS）。本文件仅作历史留痕保留，不代表 PR 当前状态。",
   "verdict": "PASS",
   "task_id": "c2b59b6a-c46c-4ac9-a615-a19a60f2712e",
   "pr": "https://github.com/perfectuser21/zenithjoy-workspace/pull/1629",
