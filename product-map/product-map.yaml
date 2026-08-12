@@ -9,17 +9,23 @@ apps:
     name: 客户端（Customer App）
     lines:
       - id: line01
-        name: Line 01 客户首次成功
+        name: Line 01 智能发布
       - id: line02
-        name: Line 02 客户智能获客
+        name: Line 02 智能获客
       - id: line04
-        name: Line 04 客户私域 AI 接管
+        name: Line 04 智能客服
+      - id: line05
+        name: Line 05 视频剪辑
+      - id: line07
+        name: Line 07 AI爆款视频翻拍
 
   - id: staff_app
     name: 员工后台（Staff App）
     lines:
       - id: line00
-        name: Line 00 运营与系统
+        name: Line 00 运营中枢
+      - id: line10
+        name: Line 10 客户管理
 
 surfaces:
   - web
@@ -33,11 +39,14 @@ editions:
 
 # Golden Paths
 golden_paths:
+  # 2026-08-12 收敛（本 sprint，判定点见 contract-draft.md）：与 ability_acceptance 疑似功能重叠，
+  # 决策 fc7b5dc0 重写的是"验收"（ability_acceptance 所指代的功能域），skill_acceptance 未见后续
+  # 重写/CI 覆盖证据，标记 deprecated（条目保留不删除）。
   - id: skill_acceptance
     app_id: staff_app
     line_id: line00
     name: Skill 验收流程
-    status: active
+    status: deprecated
 
   # 2026-07-31 用户拍板（决策 fc7b5dc0，覆盖 07-29 走 Notion 的决策）：验收+展示全部收回
   # 自家前端，Staff Hub 直连 Brain 零同步层重新实现（cecelia PR #4516 后端 + 本仓库前端）
@@ -300,3 +309,30 @@ golden_paths:
         name: 响应与治理
       - id: step3
         name: 留痕
+
+  # 2026-08-12 新增（本 sprint，task c2b59b6a）：锚定既有 smoke，不新写业务代码。
+  # id/name 由 Generator 定稿（PRD [ASSUMPTION] 授权），未授权编造 steps 业务步骤内容
+  # （reviewer round1 阻塞问题1：schema steps 可选，line_health 等既有 active GP 也没有 steps 字段）。
+  - id: video_editing
+    app_id: customer_app
+    line_id: line05
+    name: 视频剪辑
+    status: active
+    smoke_files:
+      - .github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh
+
+  - id: viral_video_remake
+    app_id: customer_app
+    line_id: line07
+    name: AI爆款视频翻拍
+    status: active
+    smoke_files:
+      - .github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh
+
+  - id: customer_management
+    app_id: staff_app
+    line_id: line10
+    name: 客户管理
+    status: active
+    smoke_files:
+      - .github/workflows/scripts/smoke/customer-admin-backend-smoke.sh

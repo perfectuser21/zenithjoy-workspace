@@ -24,7 +24,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ─── Test 1: 结构解析 ─────────────────────────────────────────────────────────
 
-test('T1: loadAndValidateProductMap 解析两个 app，customer_app 有 line01/02/04，staff_app 有 line00', async () => {
+test('T1: loadAndValidateProductMap 解析两个 app，customer_app 有 line01/02/04/05/07，staff_app 有 line00/10', async () => {
   const { map, errors } = await loadAndValidateProductMap();
   assert.deepEqual(errors, [], `schema 错误: ${JSON.stringify(errors)}`);
   assert.ok(map !== null, 'map 须非 null');
@@ -34,8 +34,8 @@ test('T1: loadAndValidateProductMap 解析两个 app，customer_app 有 line01/0
 
   const customerApp = map.apps.find(a => a.id === 'customer_app');
   const staffApp = map.apps.find(a => a.id === 'staff_app');
-  assert.deepEqual(customerApp.lines.map(l => l.id).sort(), ['line01', 'line02', 'line04']);
-  assert.deepEqual(staffApp.lines.map(l => l.id).sort(), ['line00']);
+  assert.deepEqual(customerApp.lines.map(l => l.id).sort(), ['line01', 'line02', 'line04', 'line05', 'line07']);
+  assert.deepEqual(staffApp.lines.map(l => l.id).sort(), ['line00', 'line10']);
 });
 
 // ─── Test 2: 负向 schema 校验 ─────────────────────────────────────────────────
@@ -47,7 +47,7 @@ test('T2: validateSchema — 缺失 apps 字段时返回非空 errors', () => {
 
 // ─── Test 3: 种子分类精确性 ───────────────────────────────────────────────────
 
-test('T3: staff_app/line00 精确 4 个 GP（含gp_anchor_enforcement），ability_acceptance status=active（2026-07-31 决策fc7b5dc0覆盖07-29：验收收回自家前端直连Brain）', async () => {
+test('T3: staff_app/line00 精确 4 个 GP（含gp_anchor_enforcement），skill_acceptance已deprecated，ability_acceptance status=active（2026-07-31 决策fc7b5dc0覆盖07-29：验收收回自家前端直连Brain；2026-08-12 本sprint收敛skill_acceptance→deprecated，判定点见contract-draft.md）', async () => {
   const { map } = await loadAndValidateProductMap();
   const line00Gps = map.golden_paths.filter(g => g.app_id === 'staff_app' && g.line_id === 'line00');
   assert.deepEqual(line00Gps.map(g => g.id).sort(), ['ability_acceptance', 'gp_anchor_enforcement', 'line_health', 'skill_acceptance']);
@@ -55,14 +55,22 @@ test('T3: staff_app/line00 精确 4 个 GP（含gp_anchor_enforcement），abili
   const abilityGp = line00Gps.find(g => g.id === 'ability_acceptance');
   assert.equal(abilityGp.status, 'active', 'ability_acceptance 2026-07-31 重新实现（Staff Hub 直连 Brain），须为active');
 
+  const skillGp = line00Gps.find(g => g.id === 'skill_acceptance');
+  assert.equal(skillGp.status, 'deprecated', 'skill_acceptance 2026-08-12 本sprint收敛为deprecated（与ability_acceptance疑似功能重叠，三重证据判定点见contract-draft.md），条目原样保留未删除');
+
   const anchorGp = line00Gps.find(g => g.id === 'gp_anchor_enforcement');
   assert.equal(anchorGp.status, 'active', 'gp_anchor_enforcement 刀1-5全部合并，§8验收标准满足，须为active');
   assert.ok(anchorGp.smoke_files.includes('.github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh'));
 
-  // 客户侧 GP 定稿全景（2026-07-29 主理人拍板，task 58596a57）：
+  const healthGp = line00Gps.find(g => g.id === 'line_health');
+  assert.equal(healthGp.status, 'active', 'line_health 本轮不受影响，须保持 active');
+
+  // 客户侧 GP 定稿全景（2026-07-29 主理人拍板，task 58596a57；2026-08-12 本sprint task c2b59b6a
+  // 追加 line05/line07 两条新 GP，锚定既有 smoke，不新写业务代码）：
   // line01 首次成功 1 条；line02 拆 4 条获客（老 id 保留 deprecated 防锚点断裂）；
-  // line04 细化为共享前置 + 智能客服六条（老 id 同样保留 deprecated）
-  const customerGps = map.golden_paths.filter(g => ['line01', 'line02', 'line04'].includes(g.line_id));
+  // line04 细化为共享前置 + 智能客服六条（老 id 同样保留 deprecated）；
+  // line05 视频剪辑 1 条；line07 AI爆款视频翻拍 1 条
+  const customerGps = map.golden_paths.filter(g => ['line01', 'line02', 'line04', 'line05', 'line07'].includes(g.line_id));
   assert.deepEqual(
     customerGps.map(g => `${g.line_id}/${g.id}`).sort(),
     [
@@ -80,6 +88,8 @@ test('T3: staff_app/line00 精确 4 个 GP（含gp_anchor_enforcement），abili
       'line04/moments_interaction',
       'line04/moments_publish',
       'line04/passive_reception',
+      'line05/video_editing',
+      'line07/viral_video_remake',
     ]
   );
   // 老 GP 必须是 deprecated（拆分后不许悄悄复活）
@@ -89,10 +99,20 @@ test('T3: staff_app/line00 精确 4 个 GP（含gp_anchor_enforcement），abili
   const keyword = customerGps.find(g => g.id === 'keyword_acquisition');
   assert.equal(keyword.status, 'active');
   assert.ok(keyword.smoke_files.includes('.github/workflows/scripts/smoke/golden-path-2-smoke.sh'));
+  // line05/line07 新增 GP 必须精确锚定既有 smoke，未新写业务代码
+  const videoEditing = customerGps.find(g => g.id === 'video_editing');
+  assert.equal(videoEditing.status, 'active');
+  assert.deepEqual(videoEditing.smoke_files, ['.github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh']);
+  const viralRemake = customerGps.find(g => g.id === 'viral_video_remake');
+  assert.equal(viralRemake.status, 'active');
+  assert.deepEqual(viralRemake.smoke_files, ['.github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh']);
   // 非 deprecated 的客户 GP 都必须有非空 steps（占位 proposed 的也要求写出步骤草案）；
-  // deprecated 老 GP 的 steps 已迁入拆分后的子 GP，不再要求
+  // deprecated 老 GP 的 steps 已迁入拆分后的子 GP，不再要求；
+  // line05/line07 新增 GP 不要求 steps（PRD [ASSUMPTION] 只授权定稿 id/name，未授权编造业务步骤内容，
+  // 见 GAN round1 reviewer-feedback-r1.md 阻塞问题1修复结论）
   for (const gp of customerGps) {
     if (gp.status === 'deprecated') continue;
+    if (['line05', 'line07'].includes(gp.line_id)) continue;
     assert.ok(Array.isArray(gp.steps) && gp.steps.length > 0, `${gp.id} 须含非空 steps 数组`);
   }
 });
