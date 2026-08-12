@@ -1,64 +1,81 @@
-contract_branch: cp-08031845-harness-propose-r1-9488436
-sprint_dir: sprints/08031620-android-scan-preconditions
+contract_branch: cp-08122231-harness-prd
+sprint_dir: sprints/08122228-zenithjoy-product-map-seven-streams
 
 ---
 skeleton: false
-journey_type: agent_remote
+journey_type: autonomous
 ---
-# Contract DoD — Sprint: 安卓账号扫描前置条件修复（锁屏+后台启动拦截+错误码分层）
+# Contract DoD — Sprint: ZenithJoy Product Map 7 Value Streams / 18 Capabilities 修复
 
-**范围**: `services/agent-android` 新增 `AccountScanFailureClassifier` 分类函数 + `DeviceAccountScanService.kt` 前置检查接线 + `AgentService.kt` body 拼装扩展 + `apps/api/src/routes/agent-burner.ts` detail 持久化扩展 + Agent 诊断页后台弹窗权限自检展示项 + bump versionCode
-**大小**: M
+**范围**: `product-map/product-map.yaml` 手写编辑（4 条 Line 改名 + 新增 line05/07/10 + 新增 3 条锚定既有 smoke 的 Golden Path + line00 收敛 `skill_acceptance` → deprecated）、`product-map:generate` 重建投影、`product-map:check` 校验、`scripts/product-map/__tests__/product-map.test.js` 同步更新、`sprints/08122228-zenithjoy-product-map-seven-streams/tests/contract.test.js` 新增 failing-first 合同测试。
+**大小**: S
 
 ## ARTIFACT 条目
 
-- [ ] [ARTIFACT] `AccountScanFailureClassifier` 分类函数文件存在
-  Test: node -e "process.exit(require('fs').existsSync('services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/account/AccountScanFailureClassifier.kt') ? 0 : 1)"
+- [ ] [ARTIFACT] `product-map.yaml` 4 条 Line 完成改名（line01→智能发布/line02→智能获客/line04→智能客服/line00→运营中枢）
+  Test: node -e "const c=require('fs').readFileSync('product-map/product-map.yaml','utf8'); const need=['Line 01 智能发布','Line 02 智能获客','Line 04 智能客服','Line 00 运营中枢']; for(const n of need){ if(!c.includes(n)){ console.error('缺: '+n); process.exit(1);} }"
 
-- [ ] [ARTIFACT] `SCREEN_LOCKED` / `LAUNCH_BLOCKED` 错误码字面量已接入 `DeviceAccountScanService.kt`
-  Test: node -e "const c=require('fs').readFileSync('services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/account/DeviceAccountScanService.kt','utf8'); if(!c.includes('SCREEN_LOCKED')||!c.includes('LAUNCH_BLOCKED'))process.exit(1)"
+- [ ] [ARTIFACT] `product-map.yaml` 新增 line05/line07（customer_app 下）+ line10（staff_app 下）三条 Line
+  Test: node -e "const c=require('fs').readFileSync('product-map/product-map.yaml','utf8'); const need=['id: line05','id: line07','id: line10']; for(const n of need){ if(!c.includes(n)){ console.error('缺: '+n); process.exit(1);} }"
 
-- [ ] [ARTIFACT] versionCode 已 bump（本 sprint 前基线 23）
-  Test: node -e "const c=require('fs').readFileSync('services/agent-android/app/build.gradle.kts','utf8'); const m=c.match(/versionCode\s*=\s*(\d+)/); if(!m||parseInt(m[1],10)<=23)process.exit(1)"
+- [ ] [ARTIFACT] `product-map.yaml` 中 `skill_acceptance` 条目 `status` 已改为 `deprecated`（条目保留未删除）
+  Test: node -e "
+    const { parse } = require('yaml');
+    const fs = require('fs');
+    const c = fs.readFileSync('product-map/product-map.yaml','utf8');
+    const m = parse(c);
+    const gp = m.golden_paths.find(g => g.id === 'skill_acceptance');
+    if (!gp) { console.error('skill_acceptance 条目被误删'); process.exit(1); }
+    if (gp.status !== 'deprecated') { console.error('skill_acceptance status 不是 deprecated: ' + gp.status); process.exit(1); }
+  "
 
-## Invariant 覆盖条目
+- [ ] [ARTIFACT] `scripts/product-map/__tests__/product-map.test.js` 已同步更新（不再断言旧的 3-Line / 4-GP 分布）
+  Test: node -e "const c=require('fs').readFileSync('scripts/product-map/__tests__/product-map.test.js','utf8'); if(c.includes(\"['line01', 'line02', 'line04']\")) { console.error('T1 仍是旧断言，未同步更新'); process.exit(1); }"
 
-N/A：本 line（客户智能获客路径）当前无与安卓账号扫描直接相关的 invariant 记录（已查 golden-path-decisions/invariants 三源——step 级/journey_feature 级/area 级，均为空或不相关，详见 sprint-prd.md Invariant 约束段）
+## BEHAVIOR 条目（内嵌可执行 manual: 命令）
 
-## BEHAVIOR 条目
+- [ ] [BEHAVIOR] `product-map.yaml` 通过 schema + 关系校验（validate PASS）
+  Test: manual:bash -c 'cd "$(git rev-parse --show-toplevel)" && node scripts/product-map/cli.mjs validate | grep -q "PASS: product-map.yaml is valid"'
+  期望: exit 0
 
-- [ ] [BEHAVIOR] 07-31 真实锁屏 tree_dump 被分类器正确识别为锁屏
-  Test: manual:bash -c 'cd services/agent-android && ./gradlew :app:testDebugUnitTest --tests "*AccountScanFailureClassifierTest*" 2>&1 | tee /tmp/t1.log; grep -q "BUILD SUCCESSFUL" /tmp/t1.log || exit 1; echo OK'
-  期望: OK
+- [ ] [BEHAVIOR] `generate` 重建投影后 `check` 报告零漂移
+  Test: manual:bash -c 'cd "$(git rev-parse --show-toplevel)" && npm run product-map:generate >/tmp/gen.log 2>&1 && npm run product-map:check 2>&1 | grep -q "PASS: no drift"'
+  期望: exit 0
 
-- [ ] [BEHAVIOR] 07-30 真实 launcher tree_dump 被分类器正确识别为桌面 launcher（同一测试类内）
-  Test: manual:bash -c 'cd services/agent-android && ./gradlew :app:testDebugUnitTest --tests "*AccountScanFailureClassifierTest*" 2>&1 | tee /tmp/t2.log; grep -q "BUILD SUCCESSFUL" /tmp/t2.log || exit 1; echo OK'
-  期望: OK
+- [ ] [BEHAVIOR] `apps[].lines` 精确等于 7 条（line00/01/02/04/05/07/10）
+  Test: manual:bash -c 'cd "$(git rev-parse --show-toplevel)" && npm run product-map:generate >/dev/null 2>&1; LINES=$(jq -r "[.apps[].lines[].id] | sort | join(\",\")" product-map/generated/product-map.json); [ "$LINES" = "line00,line01,line02,line04,line05,line07,line10" ]'
+  期望: exit 0
 
-- [ ] [BEHAVIOR] 正常态 tree_dump 不被误判为锁屏/launcher（假阳性防护）
-  Test: manual:bash -c 'cd services/agent-android && ./gradlew :app:testDebugUnitTest --tests "*AccountScanFailureClassifierTest*" --tests "*normal*" 2>&1 | tee /tmp/t3.log; grep -q "BUILD SUCCESSFUL" /tmp/t3.log || exit 1; echo OK'
-  期望: OK
+- [ ] [BEHAVIOR] 非 deprecated Golden Path 总数精确为 18，且按 line 分布 line01=1/line02=4/line04=7/line05=1/line07=1/line00=3/line10=1
+  Test: manual:bash -c 'cd "$(git rev-parse --show-toplevel)" && npm run product-map:generate >/dev/null 2>&1; F=0; declare -A WANT=( [line01]=1 [line02]=4 [line04]=7 [line05]=1 [line07]=1 [line00]=3 [line10]=1 ); for L in "${!WANT[@]}"; do A=$(jq --arg l "$L" "[.golden_paths[] | select(.line_id==\$l and .status!=\"deprecated\")] | length" product-map/generated/product-map.json); [ "$A" = "${WANT[$L]}" ] || { echo "FAIL line=$L want=${WANT[$L]} got=$A"; F=1; }; done; T=$(jq "[.golden_paths[] | select(.status!=\"deprecated\")] | length" product-map/generated/product-map.json); [ "$T" = "18" ] || { echo "FAIL total=$T"; F=1; }; [ "$F" = "0" ]'
+  期望: exit 0
 
-- [ ] [BEHAVIOR] `buildAccountScanResultBody()` 输出 JSON 含 version_name/stage/foreground_package 三新字段
-  Test: manual:bash -c 'cd services/agent-android && ./gradlew :app:testDebugUnitTest --tests "*AgentServiceAccountScanTest*" 2>&1 | tee /tmp/t4.log; grep -q "BUILD SUCCESSFUL" /tmp/t4.log || exit 1; echo OK'
-  期望: OK
+- [ ] [BEHAVIOR] deprecated 条目原样保留、精确为三个历史 id，不计入 18
+  Test: manual:bash -c 'cd "$(git rev-parse --show-toplevel)" && npm run product-map:generate >/dev/null 2>&1; DEP=$(jq -r "[.golden_paths[] | select(.status==\"deprecated\") | .id] | sort | join(\",\")" product-map/generated/product-map.json); [ "$DEP" = "customer_private_ai,customer_smart_acquisition,skill_acceptance" ]'
+  期望: exit 0
 
-- [ ] [BEHAVIOR] 服务端 `agent_scan_failures.detail` 真实持久化三新字段（真 Postgres 集成测试，非 mock——注意不是 src/routes/agent-burner.test.ts，那个文件 mock 了 pool.query，此项必须用真 PG 集成测试文件）
-  Test: manual:bash -c 'cd apps/api && npx vitest run tests/integration/p2-sprint-b1-ws3/agent-burner-routes.test.ts --reporter=verbose 2>&1 | tee /tmp/t5.log; grep -qE "passed|✓" /tmp/t5.log || exit 1; ! grep -qE "✗|failed \(" /tmp/t5.log || exit 1; echo OK'
-  期望: OK
+- [ ] [BEHAVIOR] line05/07/10 三条新 GP 的 `smoke_files` 精确锚定 PRD 指定的三个既有文件
+  Test: manual:bash -c 'cd "$(git rev-parse --show-toplevel)" && npm run product-map:generate >/dev/null 2>&1; A=$(jq -r "[.golden_paths[] | select(.line_id==\"line05\" and .status!=\"deprecated\") | .smoke_files[]?] | join(\",\")" product-map/generated/product-map.json); B=$(jq -r "[.golden_paths[] | select(.line_id==\"line07\" and .status!=\"deprecated\") | .smoke_files[]?] | join(\",\")" product-map/generated/product-map.json); C=$(jq -r "[.golden_paths[] | select(.line_id==\"line10\" and .status!=\"deprecated\") | .smoke_files[]?] | join(\",\")" product-map/generated/product-map.json); [ "$A" = ".github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh" ] && [ "$B" = ".github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh" ] && [ "$C" = ".github/workflows/scripts/smoke/customer-admin-backend-smoke.sh" ]'
+  期望: exit 0
 
-- [ ] [BEHAVIOR] 既有回归测试不被破坏：`SCAN_TIMEOUT` 超时上报机制保持通过
-  Test: manual:bash -c 'cd services/agent-android && ./gradlew :app:testDebugUnitTest --tests "*DeviceAccountScanServiceCleanupTest*" 2>&1 | tee /tmp/t6.log; grep -q "BUILD SUCCESSFUL" /tmp/t6.log || exit 1; echo OK'
-  期望: OK
+- [ ] [BEHAVIOR] 三个被锚定的既有 smoke 文件本身未被本 sprint 新写/修改（git diff 不含这三个路径）
+  Test: manual:bash -c 'cd "$(git rev-parse --show-toplevel)" && CHANGED=$(git diff --name-only origin/main...HEAD 2>/dev/null) || CHANGED=$(git diff --name-only HEAD); for f in .github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh .github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh .github/workflows/scripts/smoke/customer-admin-backend-smoke.sh; do echo "$CHANGED" | grep -qxF "$f" && exit 1; done; exit 0'
+  期望: exit 0
 
-- [ ] [BEHAVIOR] 诊断页后台弹窗权限自检函数覆盖 true/false 两分支
-  Test: manual:bash -c 'cd services/agent-android && ./gradlew :app:testDebugUnitTest --tests "*BackgroundPermission*" 2>&1 | tee /tmp/t7.log; grep -q "BUILD SUCCESSFUL" /tmp/t7.log || exit 1; echo OK'
-  期望: OK
+- [ ] [BEHAVIOR] 边界校验 — 变更文件全部落在允许前缀内，且不含 Cecelia 仓库路径
+  Test: manual:bash -c 'cd "$(git rev-parse --show-toplevel)" && CHANGED=$(git diff --name-only origin/main...HEAD 2>/dev/null) || CHANGED=$(git diff --name-only HEAD); OUT=$(echo "$CHANGED" | grep -vE "^(product-map/product-map\.yaml|product-map/generated/product-map\.(json|md)|scripts/product-map/__tests__/.*|sprints/.*)$" || true); [ -z "$OUT" ] || { echo "越界: $OUT"; exit 1; }; echo "$CHANGED" | grep -qi "cecelia" && exit 1 || exit 0'
+  期望: exit 0
 
-- [ ] [BEHAVIOR] `DeviceAccountScanService.kt` 在 SCREEN_LOCKED/LAUNCH_BLOCKED 调用点确实传入 versionName/foregroundPackage 参数（Risks 表问题2 mitigation，防调用点漏传静默失效）
-  Test: manual:bash -c 'cd services/agent-android && ./gradlew :app:testDebugUnitTest --tests "*DeviceAccountScanServiceDiagnosticFieldsCallSiteTest*" 2>&1 | tee /tmp/t8.log; grep -q "BUILD SUCCESSFUL" /tmp/t8.log || exit 1; echo OK'
-  期望: OK
+- [ ] [BEHAVIOR] error path — schema 违规（未知 app_id 引用）被 `validateRelations` 正确拒绝，不产生假绿
+  Test: manual:bash -c 'cd "$(git rev-parse --show-toplevel)" && node --input-type=module -e "
+import { loadAndValidateProductMap, validateRelations } from \"./scripts/product-map/lib.mjs\";
+const { map } = await loadAndValidateProductMap();
+const bad = { ...map, golden_paths: [...map.golden_paths, { id: \"bad_probe\", app_id: \"missing_app\", line_id: \"line00\", status: \"active\" }] };
+const errs = validateRelations(bad);
+if (!errs.some(e => e.toLowerCase().includes(\"references unknown app\"))) { console.error(\"FAIL: 未正确拒绝未知 app_id\"); process.exit(1); }
+"'
+  期望: exit 0
 
-## 未覆盖真实链路清单（引用，同 contract-draft.md）
-
-真机锁屏/后台拦截真实触发不在 JVM 单测覆盖范围，由已验证全绿的 nightly account-scan-realmachine-smoke.sh 车道在合并装机后自动回归（详见 contract-draft.md「未覆盖真实链路清单」段）。
+- [ ] [BEHAVIOR] 既有回归测试套件（`npm run test:product-map`）全绿，未因本 sprint 改动而破窗
+  Test: manual:bash -c 'cd "$(git rev-parse --show-toplevel)" && npm run test:product-map'
+  期望: exit 0
