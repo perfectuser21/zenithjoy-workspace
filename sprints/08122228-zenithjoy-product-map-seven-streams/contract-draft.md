@@ -208,17 +208,17 @@ done
 
 **来源**: `[FROM_PRD]` — sprint-prd.md 范围限定段第 40 行"不在范围内：Cecelia 仓库任何文件；新建手工 registry/扫描分类脚本"；E2E 期望点 6（第 90 行）。
 
-**可观测行为**: `git diff --name-only` 相对 `origin/main` 的全部变更路径，都落在允许前缀集合（`product-map.yaml` / `product-map/generated/*` / `scripts/product-map/__tests__/*` / `sprints/**`）内；无任何路径含 `cecelia` 字样（大小写不敏感）。
+**可观测行为**: `git diff --name-only` 相对 `origin/main` 的全部变更路径，都落在允许前缀集合（`product-map.yaml` / `product-map/generated/*` / `scripts/product-map/__tests__/*` / `sprints/**` / `.harness/verdicts/*` / `DoD.md` / `test-registry.yaml`）内；无任何路径含 `cecelia` 字样（大小写不敏感）。
 
 **验证命令**:
 ```bash
 CHANGED=$(git diff --name-only origin/main...HEAD 2>/dev/null) || CHANGED=$(git diff --name-only HEAD)
-echo "$CHANGED" | grep -vE '^(product-map/product-map\.yaml|product-map/generated/product-map\.(json|md)|scripts/product-map/__tests__/.*|sprints/.*)$' \
+echo "$CHANGED" | grep -vE '^(product-map/product-map\.yaml|product-map/generated/product-map\.(json|md)|scripts/product-map/__tests__/.*|sprints/.*|\.harness/verdicts/.*|DoD\.md|test-registry\.yaml)$' \
   && { echo "FAIL: 越界改动（超出允许路径前缀）"; exit 1; } || true
 echo "$CHANGED" | grep -qi 'cecelia' \
   && { echo "FAIL: 触碰 Cecelia 仓库路径"; exit 1; } || true
 ```
-**硬阈值**: 两条负向检查均不命中（无越界路径、无 Cecelia 路径）。`CHANGED` 计算与 Step 7 同一 fallback 规则：`origin/main...HEAD` 不可达时不裸吞错误，显式 fallback 为 `git diff --name-only HEAD`，与 `tests/contract.test.js` T7 一致，不得空判通过。
+**硬阈值**: 两条负向检查均不命中（无越界路径、无 Cecelia 路径）。`CHANGED` 计算与 Step 7 同一 fallback 规则：`origin/main...HEAD` 不可达时不裸吞错误，显式 fallback 为 `git diff --name-only HEAD`，与 `tests/contract.test.js` T7 一致，不得空判通过。允许前缀集合额外包含 harness 流水线对任何 sprint PR 都成立的通用机械副作用文件（`.harness/verdicts/*`、`DoD.md`、`test-registry.yaml`），round3 合同修订纳入（judge 裁定不接受事后豁免，需走合同修订）。
 
 ---
 
@@ -295,7 +295,7 @@ done
 echo "OK 三个锚定 smoke 文件未被本 sprint 改动"
 
 echo "=== Step 8: 边界 — Cecelia 仓库零改动 + 无越界新文件 ==="
-echo "$CHANGED" | grep -vE '^(product-map/product-map\.yaml|product-map/generated/product-map\.(json|md)|scripts/product-map/__tests__/.*|sprints/.*)$' \
+echo "$CHANGED" | grep -vE '^(product-map/product-map\.yaml|product-map/generated/product-map\.(json|md)|scripts/product-map/__tests__/.*|sprints/.*|\.harness/verdicts/.*|DoD\.md|test-registry\.yaml)$' \
   && { echo "FAIL: 越界改动"; exit 1; } || true
 echo "$CHANGED" | grep -qi 'cecelia' \
   && { echo "FAIL: 触碰 Cecelia 仓库路径"; exit 1; } || true

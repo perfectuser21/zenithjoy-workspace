@@ -180,7 +180,7 @@ test('T7: git diff 变更路径全部落在允许前缀内，且不含 Cecelia /
       .filter(Boolean);
   }
 
-  const ALLOWED = /^(product-map\/product-map\.yaml|product-map\/generated\/product-map\.(json|md)|scripts\/product-map\/__tests__\/.*|sprints\/.*)$/;
+  const ALLOWED = /^(product-map\/product-map\.yaml|product-map\/generated\/product-map\.(json|md)|scripts\/product-map\/__tests__\/.*|sprints\/.*|\.harness\/verdicts\/.*|DoD\.md|test-registry\.yaml)$/;
   const outOfScope = changed.filter(f => !ALLOWED.test(f));
   assert.deepEqual(outOfScope, [], `以下改动越界（超出允许路径前缀）: ${JSON.stringify(outOfScope)}`);
 
