@@ -1,5 +1,7 @@
 # Sprint Contract Draft (Round 1)
 
+GP-Anchor: line00/gp_anchor_enforcement keep-green
+
 ## Response Schema（推导来源: PRD字面 — N/A）
 
 本 sprint 无 HTTP 响应面：纯 `product-map/product-map.yaml`（手写 SSOT）编辑 + `product-map:generate`（CLI 生成投影）+
