@@ -6,15 +6,23 @@
       "lines": [
         {
           "id": "line01",
-          "name": "Line 01 客户首次成功"
+          "name": "Line 01 智能发布"
         },
         {
           "id": "line02",
-          "name": "Line 02 客户智能获客"
+          "name": "Line 02 智能获客"
         },
         {
           "id": "line04",
-          "name": "Line 04 客户私域 AI 接管"
+          "name": "Line 04 智能客服"
+        },
+        {
+          "id": "line05",
+          "name": "Line 05 视频剪辑"
+        },
+        {
+          "id": "line07",
+          "name": "Line 07 AI爆款视频翻拍"
         }
       ]
     },
@@ -24,7 +32,11 @@
       "lines": [
         {
           "id": "line00",
-          "name": "Line 00 运营与系统"
+          "name": "Line 00 运营中枢"
+        },
+        {
+          "id": "line10",
+          "name": "Line 10 客户管理"
         }
       ]
     }
@@ -396,6 +408,26 @@
       ]
     },
     {
+      "id": "video_editing",
+      "app_id": "customer_app",
+      "line_id": "line05",
+      "name": "视频剪辑",
+      "status": "active",
+      "smoke_files": [
+        ".github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh"
+      ]
+    },
+    {
+      "id": "viral_video_remake",
+      "app_id": "customer_app",
+      "line_id": "line07",
+      "name": "AI爆款视频翻拍",
+      "status": "active",
+      "smoke_files": [
+        ".github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh"
+      ]
+    },
+    {
       "id": "ability_acceptance",
       "app_id": "staff_app",
       "line_id": "line00",
@@ -424,8 +456,18 @@
       "app_id": "staff_app",
       "line_id": "line00",
       "name": "Skill 验收流程",
-      "status": "active"
+      "status": "deprecated"
+    },
+    {
+      "id": "customer_management",
+      "app_id": "staff_app",
+      "line_id": "line10",
+      "name": "客户管理",
+      "status": "active",
+      "smoke_files": [
+        ".github/workflows/scripts/smoke/customer-admin-backend-smoke.sh"
+      ]
     }
   ],
-  "digest": "0c3556c1bd2c0d6cc7e722ec4f0d6d047d90e4146a71c765eafaf2e426da2f08"
+  "digest": "8fff7a0c3f783f50559aff8437ac09a30436488f817c6817c838f38e6ffa4629"
 }

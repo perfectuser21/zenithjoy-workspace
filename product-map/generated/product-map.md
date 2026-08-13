@@ -1,6 +1,6 @@
 # Product Map
 
-<!-- digest: 0c3556c1bd2c0d6cc7e722ec4f0d6d047d90e4146a71c765eafaf2e426da2f08 -->
+<!-- digest: 8fff7a0c3f783f50559aff8437ac09a30436488f817c6817c838f38e6ffa4629 -->
 
 > 此文件由 `npm run product-map:generate` 自动生成，请勿手工编辑。
 > 唯一手写源：`product-map/product-map.yaml`
@@ -11,15 +11,18 @@
 
 | Line ID | Name |
 |---------|------|
-| line01 | Line 01 客户首次成功 |
-| line02 | Line 02 客户智能获客 |
-| line04 | Line 04 客户私域 AI 接管 |
+| line01 | Line 01 智能发布 |
+| line02 | Line 02 智能获客 |
+| line04 | Line 04 智能客服 |
+| line05 | Line 05 视频剪辑 |
+| line07 | Line 07 AI爆款视频翻拍 |
 
 ### staff_app — 员工后台（Staff App）
 
 | Line ID | Name |
 |---------|------|
-| line00 | Line 00 运营与系统 |
+| line00 | Line 00 运营中枢 |
+| line10 | Line 10 客户管理 |
 
 ## Golden Paths
 
@@ -39,10 +42,13 @@
 | moments_interaction | customer_app | line04 | active | step1:客户动态被感知<br>step2:互动决策<br>step3:互动执行与留痕 | — |
 | moments_publish | customer_app | line04 | active | step1:内容成稿<br>step2:发布上圈<br>step3:发布确认与留痕 | .github/workflows/scripts/smoke/path4-sprint-1-ws4-smoke.sh |
 | passive_reception | customer_app | line04 | active | step1:消息被感知<br>step2:决定谁来答<br>step3:回复送达<br>step4:留痕与善后 | .github/workflows/scripts/smoke/golden-path-4-smoke.sh<br>.github/workflows/scripts/smoke/line04-wxid-whitelist-smoke.sh<br>.github/workflows/scripts/smoke/line04-cs-memory-smoke.sh<br>.github/workflows/scripts/smoke/line04-cs-tenant-isolation-smoke.sh |
+| video_editing | customer_app | line05 | active | — | .github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh |
+| viral_video_remake | customer_app | line07 | active | — | .github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh |
 | ability_acceptance | staff_app | line00 | active | — | — |
 | gp_anchor_enforcement | staff_app | line00 | active | — | .github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh |
 | line_health | staff_app | line00 | active | — | — |
-| skill_acceptance | staff_app | line00 | active | — | — |
+| skill_acceptance | staff_app | line00 | deprecated | — | — |
+| customer_management | staff_app | line10 | active | — | .github/workflows/scripts/smoke/customer-admin-backend-smoke.sh |
 
 ## Surfaces
 

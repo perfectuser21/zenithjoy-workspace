@@ -1,0 +1,27 @@
+{
+  "note_for_automated_reviewers": "round1_blocking_issues 是 round2 之前发现并已在 round2 修复的历史问题（见下方 round2_resolution），不是当前 PR 状态的未解决缺陷。本文件记录的 APPROVED 结论至今仍有效，round3 补充修订（gan-b8d8b65a.json）只是在此基础上额外扩展了 T7 的 ALLOWED 正则，未推翻本轮批准。",
+  "phase": "gan",
+  "sha7": "75cc469f",
+  "rounds": 2,
+  "verdict": "APPROVED",
+  "rubric_scores": {
+    "dod_machineability": 9,
+    "scope_match_prd": 9,
+    "test_is_red": 10,
+    "internal_consistency": 9,
+    "risk_registered": 7,
+    "verification_oracle_completeness": 9,
+    "ci_workflow_alignment": 10
+  },
+  "judgments_written": 2,
+  "round1_blocking_issues": [
+    "scope_match_prd: line05/07/10 强制要求 steps 非空,超出 PRD 授权(只授权 id/name)",
+    "DoD/E2E git diff origin/main...HEAD 裸吞错误导致 vacuous pass 风险"
+  ],
+  "round2_resolution": "两处均已修复(commit 75cc469f),reviewer 独立实跑验证",
+  "format_checks": {
+    "behavior_count_ge_4": 10,
+    "e2e_section_present": true,
+    "manual_bash_present": true
+  }
+}

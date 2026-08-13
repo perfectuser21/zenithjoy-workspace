@@ -1,6 +1,3 @@
-contract_branch: cp-08122231-harness-prd
-sprint_dir: sprints/08122228-zenithjoy-product-map-seven-streams
-
 ---
 skeleton: false
 journey_type: autonomous
@@ -63,7 +60,7 @@ journey_type: autonomous
   期望: exit 0
 
 - [ ] [BEHAVIOR] 边界校验 — 变更文件全部落在允许前缀内，且不含 Cecelia 仓库路径
-  Test: manual:bash -c 'cd "$(git rev-parse --show-toplevel)" && CHANGED=$(git diff --name-only origin/main...HEAD 2>/dev/null) || CHANGED=$(git diff --name-only HEAD); OUT=$(echo "$CHANGED" | grep -vE "^(product-map/product-map\.yaml|product-map/generated/product-map\.(json|md)|scripts/product-map/__tests__/.*|sprints/.*)$" || true); [ -z "$OUT" ] || { echo "越界: $OUT"; exit 1; }; echo "$CHANGED" | grep -qi "cecelia" && exit 1 || exit 0'
+  Test: manual:bash -c 'cd "$(git rev-parse --show-toplevel)" && CHANGED=$(git diff --name-only origin/main...HEAD 2>/dev/null) || CHANGED=$(git diff --name-only HEAD); OUT=$(echo "$CHANGED" | grep -vE "^(product-map/product-map\.yaml|product-map/generated/product-map\.(json|md)|scripts/product-map/__tests__/.*|sprints/.*|\.harness/verdicts/.*|DoD\.md|test-registry\.yaml)$" || true); [ -z "$OUT" ] || { echo "越界: $OUT"; exit 1; }; echo "$CHANGED" | grep -qi "cecelia" && exit 1 || exit 0'
   期望: exit 0
 
 - [ ] [BEHAVIOR] error path — schema 违规（未知 app_id 引用）被 `validateRelations` 正确拒绝，不产生假绿

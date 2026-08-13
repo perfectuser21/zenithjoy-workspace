@@ -1,0 +1,32 @@
+{
+  "initiative_id": null,
+  "journey_type": "autonomous",
+  "journey_type_reason": "改动限于 YAML 配置 + CLI 生成脚本 + Node 测试，无 apps/dashboard UI、无远端 agent 协议、无 packages/engine skill，纯后端配置校验场景（PRD 已声明 journey_type: autonomous）",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "product-map.yaml 7 Value Stream / 18 Capability 收敛 — 改名 4 Line + 新增 line05/07/10 + 新增 3 条锚定既有 smoke 的 GP + line00 收敛 skill_acceptance→deprecated",
+      "scope": "编辑 product-map/product-map.yaml：a) line01→'Line 01 智能发布'、line02→'Line 02 智能获客'、line04→'Line 04 智能客服'、line00→'Line 00 运营中枢' 四条 Line 改名（customer_first_success GP 名称原样保留）；b) customer_app 新增 line05='Line 05 视频剪辑'、line07='Line 07 AI爆款视频翻拍'；c) staff_app 新增 line10='Line 10 客户管理'；d) 新增 3 条 status=active 的 Golden Path，精确锚定既有 smoke_files（不新写业务代码、不修改这三个 smoke 文件）：line05 锚定 .github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh，line07 锚定 .github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh，line10 锚定 .github/workflows/scripts/smoke/customer-admin-backend-smoke.sh；e) line00 的 skill_acceptance 条目 status 改为 deprecated（条目保留不删除，ability_acceptance/line_health/gp_anchor_enforcement 保持 active 不变，gp_anchor_enforcement 内容不可改动）。跑 npm run product-map:generate 重建 product-map/generated/{product-map.json,product-map.md}。同步更新 scripts/product-map/__tests__/product-map.test.js 中被本次编辑打破的硬编码断言（T1 的 line 列表、T3 的 line00 4-GP 分布与 customer 侧 GP 全景清单），使 npm run test:product-map 全绿。",
+      "dod": [
+        "[BEHAVIOR] node scripts/product-map/cli.mjs validate 输出 PASS，exit 0",
+        "[BEHAVIOR] npm run product-map:generate && npm run product-map:check 无漂移，exit 0",
+        "[BEHAVIOR] product-map/generated/product-map.json 的 apps[].lines[].id 精确等于 7 条：line00/01/02/04/05/07/10",
+        "[BEHAVIOR] product-map/generated/product-map.json 中 status!=deprecated 的 golden_paths 精确为 18 条，按 line 分布 line01=1/line02=4/line04=7/line05=1/line07=1/line00=3/line10=1",
+        "[BEHAVIOR] deprecated 条目精确为 3 个（customer_smart_acquisition/customer_private_ai/skill_acceptance），原样保留、不计入 18",
+        "[BEHAVIOR] line05/07/10 三条新 GP 的 smoke_files 精确等于 PRD 指定的三个既有路径，且这三个文件本身不出现在本 sprint git diff 中",
+        "[BEHAVIOR] git diff --name-only 相对 origin/main 的全部改动路径落在 product-map.yaml / product-map/generated/* / scripts/product-map/__tests__/* / sprints/** 内，无 Cecelia 仓库路径",
+        "[BEHAVIOR] npm run test:product-map 全绿（含同步更新后的 product-map.test.js）",
+        "[ARTIFACT] product-map/product-map.yaml 含 4 条 Line 改名 + line05/07/10 三条新 Line + skill_acceptance status=deprecated"
+      ],
+      "files": [
+        "product-map/product-map.yaml",
+        "product-map/generated/product-map.json",
+        "product-map/generated/product-map.md",
+        "scripts/product-map/__tests__/product-map.test.js"
+      ],
+      "depends_on": [],
+      "complexity": "S",
+      "estimated_minutes": 45
+    }
+  ]
+}

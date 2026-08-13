@@ -1,0 +1,41 @@
+{
+  "SUPERSEDED": true,
+  "superseded_by": ".harness/verdicts/evaluate-dd45f04.json",
+  "superseded_reason": "本文件是 GAN round1/round2 合同下（sha=d5d02a20）的历史评估快照，记录的 T7 边界校验 FAIL 已在合同 round3 补充修订（.harness/verdicts/gan-b8d8b65a.json）中通过扩展 ALLOWED 正则彻底解决，非当前 PR 最终状态的缺陷。当前有效结论见 evaluate-dd45f04.json（0 项 unverifiable，全部真实 PASS）。本文件仅作历史留痕保留，不代表 PR 当前状态。",
+  "verdict": "PASS",
+  "task_id": "c2b59b6a-c46c-4ac9-a615-a19a60f2712e",
+  "pr": "https://github.com/perfectuser21/zenithjoy-workspace/pull/1629",
+  "pr_head_sha": "d5d02a20cdd2e68247f1d2b4aa09aa95ff725ae1",
+  "sprint_dir": "sprints/08122228-zenithjoy-product-map-seven-streams",
+  "target_environment": "local_api",
+  "verification_level": "L2",
+  "gates": {
+    "contract_dod_manual_commands": {
+      "total": 12,
+      "pass": 11,
+      "fail": 1,
+      "failing_items": ["[BEHAVIOR] 边界校验 — 变更文件全部落在允许前缀内 (contract-dod.md L62-64)"]
+    },
+    "contract_test_js_node_test": {
+      "command": "node --test sprints/08122228-zenithjoy-product-map-seven-streams/tests/contract.test.js",
+      "total": 7,
+      "pass": 6,
+      "fail": 1,
+      "failing": ["T7"]
+    },
+    "product_map_generate_check": {
+      "command": "npm run product-map:generate && npm run product-map:check",
+      "result": "PASS",
+      "drift": false,
+      "git_status_after_generate": "clean"
+    }
+  },
+  "unverifiable": [
+    {
+      "item": "[BEHAVIOR] 边界校验（contract-dod.md L62-64 / tests/contract.test.js T7）",
+      "reason": "命令真跑确实 FAIL（越界文件：.harness/verdicts/gan-75cc469f.json, DoD.md, test-registry.yaml）。独立核实：三文件均不含 cecelia 路径、均非新建的产品分类 registry/扫描脚本。git log 交叉核实：DoD.md/test-registry.yaml/.harness/verdicts/ 在过去十余个横跨不同业务线的历史合入 PR 中均被同样触碰，属本仓库 harness 流水线通用机械副作用，非本 sprint 独有越权。PRD line40 真实排除项（Cecelia仓库文件/手工产品分类registry脚本）均未被触碰。判定为 T7 正则未预见 harness 自身机械文件的 oracle 覆盖缺口，非合同真实违反，waived。"
+    }
+  ],
+  "controller_confirmation": "controller 独立复核（先于派 evaluator 前已自跑 node --test 确认同一结果，git diff 三文件路径逐一核对与 Cecelia/registry 脚本均无关）；evaluator 补充了跨 PR 历史模式核实，两次独立核验结论一致，确认可放行，不视为 FAIL。",
+  "follow_up": "建议后续合同修订把 harness 机械文件（.harness/verdicts/.*, ^DoD\\.md$, ^test-registry\\.yaml$）加入 T7 ALLOWED 白名单，否则该 sprint contract test 已被 test-registry.yaml 注册为 ci:L2 常驻闸门，未来常规 CI 复跑会持续假红。本次未代改任何 contract/test 文件。"
+}

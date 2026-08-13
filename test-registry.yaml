@@ -5101,6 +5101,14 @@ agent_suite:
   product: 产品基础设施
   note: "sprint(07280933): Product Map SSOT 合同测试 — BEHAVIOR-01~12 合同验收，RED/GREEN TDD 基线，与 scripts/product-map/__tests__/product-map.test.js 配对"
 
+- id: product-map-seven-streams-sprint-contract
+  path: sprints/08122228-zenithjoy-product-map-seven-streams/tests/contract.test.js
+  type: e2e
+  ci: L2
+  status: active
+  product: 产品基础设施
+  note: "sprint(08122228, task c2b59b6a): 7 Value Stream / 18 Golden Path 收敛合同测试（T1-T7），RED/GREEN TDD 基线，与 scripts/product-map/__tests__/product-map.test.js 配对"
+
 - id: realmachine-unverified-ratchet
   path: scripts/product-map/__tests__/realmachine-unverified-ratchet.test.js
   type: unit
