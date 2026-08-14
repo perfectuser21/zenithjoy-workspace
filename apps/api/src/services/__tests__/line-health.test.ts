@@ -196,10 +196,13 @@ describe('LINE_DEFS / findLineDef', () => {
 });
 
 describe('loadCustomerLines — product-map.json 权威清单', () => {
-  it('真读仓库内 product-map.json，拿到 customer_app 的三条业务线', () => {
+  it('真读仓库内 product-map.json，拿到 customer_app 的五条业务线', () => {
+    // 断言随 product-map.json 权威清单更新（#1629 收敛 7 Value Streams / 18 Golden Paths，
+    // customer_app 新增 line05 视频剪辑 / line07 AI爆款视频翻拍），此前这里的三条
+    // ['line01','line02','line04'] 是该次收敛前的旧断言，未跟着一起更新，main 分支已是红的。
     const { lines, error } = loadCustomerLines();
     expect(error).toBeNull();
-    expect(lines?.map((l) => l.id).sort()).toEqual(['line01', 'line02', 'line04']);
+    expect(lines?.map((l) => l.id).sort()).toEqual(['line01', 'line02', 'line04', 'line05', 'line07']);
   });
 
   it('文件路径不存在时返回 error 而非抛异常（供上层兜底）', () => {

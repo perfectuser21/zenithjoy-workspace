@@ -154,8 +154,9 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
                 previousKnownIds = DeviceAccountRegistry.snapshot().keys.toList(),
                 freshlyScannedRawIds = emptyList(),
             )
-            val (screenshotB64, treeDump) = captureFailureDiagnostics()
+            val (screenshotB64, treeDump, screenshotFailureReason) = captureFailureDiagnostics()
             val foregroundPackage = rootInActiveWindow?.packageName?.toString()
+            val douyinVersionName = captureDouyinVersionName()
             // sprint 08031620：openSwitchAccountPanel() 内部识别出锁屏/后台拦截时会设置
             // lastOpenPanelFailureReason；取不到则回退既有泛化 OPEN_PANEL_FAILED（保持既有语义，
             // 不破坏 DeviceAccountScanServiceBroadcastTest 既有回归断言）。
@@ -165,18 +166,21 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
                     errorCode = "SCREEN_LOCKED", screenshotB64 = screenshotB64, treeDump = treeDump,
                     versionName = com.zenithjoy.agent.BuildConfig.VERSION_NAME, stage = "SCREEN_LOCKED",
                     foregroundPackage = foregroundPackage,
+                    screenshotFailureReason = screenshotFailureReason, douyinVersionName = douyinVersionName,
                 )
                 "LAUNCH_BLOCKED" -> sendScanResultBroadcast(
                     requestId, ok = false, stale = resolution.stale, accountIds = resolution.accountIds,
                     errorCode = "LAUNCH_BLOCKED", screenshotB64 = screenshotB64, treeDump = treeDump,
                     versionName = com.zenithjoy.agent.BuildConfig.VERSION_NAME, stage = "LAUNCH_BLOCKED",
                     foregroundPackage = foregroundPackage,
+                    screenshotFailureReason = screenshotFailureReason, douyinVersionName = douyinVersionName,
                 )
                 else -> sendScanResultBroadcast(
                     requestId, ok = false, stale = resolution.stale, accountIds = resolution.accountIds,
                     errorCode = "OPEN_PANEL_FAILED", screenshotB64 = screenshotB64, treeDump = treeDump,
                     versionName = com.zenithjoy.agent.BuildConfig.VERSION_NAME, stage = "OPEN_PANEL_FAILED",
                     foregroundPackage = foregroundPackage,
+                    screenshotFailureReason = screenshotFailureReason, douyinVersionName = douyinVersionName,
                 )
             }
             return
@@ -226,8 +230,14 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         }
 
         // Step 8（出口）：结果广播给 AgentService，由它调用中台接口写回 agent_platform_sessions。
-        val (screenshotB64, treeDump) = if (readSucceeded) null to null else captureFailureDiagnostics()
-        sendScanResultBroadcast(requestId, ok = readSucceeded, stale = resolution.stale, accountIds = resolution.accountIds, errorCode = if (readSucceeded) "" else "READ_FAILED", screenshotB64 = screenshotB64, treeDump = treeDump)
+        val (screenshotB64, treeDump, screenshotFailureReason) =
+            if (readSucceeded) Triple(null, null, null) else captureFailureDiagnostics()
+        sendScanResultBroadcast(
+            requestId, ok = readSucceeded, stale = resolution.stale, accountIds = resolution.accountIds,
+            errorCode = if (readSucceeded) "" else "READ_FAILED", screenshotB64 = screenshotB64, treeDump = treeDump,
+            screenshotFailureReason = screenshotFailureReason,
+            douyinVersionName = if (readSucceeded) null else captureDouyinVersionName(),
+        )
 
         state = State.CLOSING_SWITCH_ACCOUNT_PANEL
         closeSwitchAccountPanel()
@@ -806,6 +816,7 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         requestId: String, ok: Boolean, stale: Boolean, accountIds: List<String>, errorCode: String,
         screenshotB64: String? = null, treeDump: String? = null,
         versionName: String? = null, stage: String? = null, foregroundPackage: String? = null,
+        screenshotFailureReason: String? = null, douyinVersionName: String? = null,
     ) {
         val intent = Intent(ACTION_ACCOUNT_SCAN_RESULT).apply {
             setPackage(applicationContext.packageName)
@@ -819,35 +830,63 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
             if (versionName != null) putExtra(EXTRA_VERSION_NAME, versionName)
             if (stage != null) putExtra(EXTRA_STAGE, stage)
             if (foregroundPackage != null) putExtra(EXTRA_FOREGROUND_PACKAGE, foregroundPackage)
+            if (screenshotFailureReason != null) putExtra(EXTRA_SCREENSHOT_FAILURE_REASON, screenshotFailureReason)
+            if (douyinVersionName != null) putExtra(EXTRA_DOUYIN_VERSION_NAME, douyinVersionName)
         }
         sendBroadcast(intent)
-        android.util.Log.i(TAG, "account scan result broadcast: requestId=$requestId ok=$ok stale=$stale accounts=${accountIds.size} error=$errorCode hasScreenshot=${screenshotB64 != null}")
+        android.util.Log.i(
+            TAG,
+            "account scan result broadcast: requestId=$requestId ok=$ok stale=$stale accounts=${accountIds.size} " +
+                "error=$errorCode hasScreenshot=${screenshotB64 != null} screenshotFailureReason=$screenshotFailureReason",
+        )
+    }
+
+    /** 设备上抖音 App 真实版本号（诊断用，代替代码里硬编码假设的"抖音39.4.0"，读取失败返回 null 不阻塞）。 */
+    private fun captureDouyinVersionName(): String? = try {
+        packageManager.getPackageInfo(DOUYIN_PKG, 0).versionName
+    } catch (e: Exception) {
+        android.util.Log.w(TAG, "douyin versionName query threw: ${e.message}")
+        null
     }
 
     /**
-     * 失败诊断捕获：截图（未授权/失败则 null，不阻塞上报）+ 当前无障碍树摘要。
+     * 失败诊断捕获：截图（未授权/失败则 null，不阻塞上报）+ 当前无障碍树摘要 +
+     * 截图失败原因分类（本次bug修复：此前三种不同失败原因坍缩成同一个不可区分的 null）。
      * 只在 OPEN_PANEL_FAILED/READ_FAILED 路径调用，成功路径不产生额外开销（sprint 07201209）。
      */
-    private fun captureFailureDiagnostics(): Pair<String?, String?> {
+    private fun captureFailureDiagnostics(): Triple<String?, String?, String?> {
         // 复用 AgentService 构造的进程内唯一 ScreenCaptureService（sprint 07201209 review 修复）：
         // 不能在这里自己 new 一个新实例——ScreenCaptureReal 是进程级单例 object，manager 字段
         // 全局唯一，第二个 ScreenCaptureService 会撞上 A14 "同一 MediaProjection 不能二次
         // createVirtualDisplay" 纪律并崩溃，殃及 ContentJudgmentService 的截图能力。
         // AgentService 尚未启动（极端时序）时该引用为 null，captureToBase64() 自然短路为 null，
         // 与既有"截图不可用"的优雅降级行为一致。
+        //
+        // 本次bug修复（真机复现 08-11 run 31427538362 确诊）：此前这里三种不同的截图失败原因
+        // （服务未初始化/捕获返回null/捕获抛异常）被同一个 try/catch 静默坍缩成同一个不可区分
+        // 的 null，导致历次 OPEN_PANEL_FAILED 现场都无法判断截图诊断本身为什么瞎。现在用
+        // AccountScanFailureClassifier.classifyScreenshotCaptureFailure 显式区分三种原因。
+        val service = AgentService.sharedScreenCaptureService
+        var threwMessage: String? = null
         val screenshot = try {
-            AgentService.sharedScreenCaptureService?.captureToBase64()
+            service?.captureToBase64()
         } catch (e: Exception) {
             android.util.Log.w(TAG, "failure screenshot capture threw: ${e.message}")
+            threwMessage = e.message ?: e.javaClass.simpleName
             null
         }
+        val screenshotFailureReason = AccountScanFailureClassifier.classifyScreenshotCaptureFailure(
+            serviceAvailable = service != null,
+            threwMessage = threwMessage,
+            resultIsNull = screenshot == null,
+        )
         val tree = try {
             dumpNodeTreeAsString(rootInActiveWindow)
         } catch (e: Exception) {
             android.util.Log.w(TAG, "failure tree dump threw: ${e.message}")
             null
         }
-        return screenshot to tree
+        return Triple(screenshot, tree, screenshotFailureReason)
     }
 
     companion object {
@@ -875,6 +914,8 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         const val EXTRA_VERSION_NAME = "version_name"
         const val EXTRA_STAGE = "stage"
         const val EXTRA_FOREGROUND_PACKAGE = "foreground_package"
+        const val EXTRA_SCREENSHOT_FAILURE_REASON = "screenshot_failure_reason"
+        const val EXTRA_DOUYIN_VERSION_NAME = "douyin_version_name"
         const val ACTION_ACCOUNT_WARMUP_TASK = "com.zenithjoy.agent.ACCOUNT_WARMUP_TASK"
         const val ACTION_ACCOUNT_WARMUP_RESULT = "com.zenithjoy.agent.ACCOUNT_WARMUP_RESULT"
         const val EXTRA_OPERATOR_NICKNAME = "operator_nickname"

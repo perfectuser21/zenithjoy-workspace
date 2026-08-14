@@ -33,4 +33,22 @@ object AccountScanFailureClassifier {
         val hitCount = LAUNCHER_ICON_MARKERS.count { treeDumpText.contains(it) }
         return hitCount >= 2
     }
+
+    /**
+     * 诊断截图捕获失败原因分类（真机复现 08-11 run 31427538362，task_id=8a251802-...确诊）：
+     * captureFailureDiagnostics() 此前用一个 try/catch 把"服务未初始化(sharedScreenCaptureService
+     * 为null)"/"截图返回null(服务可用、无异常，但就是没拍到)"/"截图过程抛异常"三种不同原因
+     * 静默坍缩成同一个不可区分的 null——DB screenshot_b64 恒为 null，导致历次 OPEN_PANEL_FAILED
+     * 现场都无法判断截图诊断本身为什么瞎。返回 null 代表截图捕获成功（不是失败）。
+     */
+    fun classifyScreenshotCaptureFailure(
+        serviceAvailable: Boolean,
+        threwMessage: String?,
+        resultIsNull: Boolean,
+    ): String? {
+        if (!serviceAvailable) return "service_null"
+        if (threwMessage != null) return "capture_threw:$threwMessage"
+        if (resultIsNull) return "capture_returned_null"
+        return null
+    }
 }

@@ -128,11 +128,14 @@ class AgentService : Service() {
             val versionName = intent.getStringExtra(DeviceAccountScanService.EXTRA_VERSION_NAME)
             val stage = intent.getStringExtra(DeviceAccountScanService.EXTRA_STAGE)
             val foregroundPackage = intent.getStringExtra(DeviceAccountScanService.EXTRA_FOREGROUND_PACKAGE)
+            val screenshotFailureReason = intent.getStringExtra(DeviceAccountScanService.EXTRA_SCREENSHOT_FAILURE_REASON)
+            val douyinVersionName = intent.getStringExtra(DeviceAccountScanService.EXTRA_DOUYIN_VERSION_NAME)
             // 网络请求不能跑主线程(NetworkOnMainThreadException)，跟 warmupResultReceiver 同套路。
             scope.launch(Dispatchers.IO) {
                 reportAccountScanResult(
                     requestId, ok, stale, accountIds, errorCode, screenshotB64, treeDump,
                     versionName, stage, foregroundPackage,
+                    screenshotFailureReason, douyinVersionName,
                 )
             }
         }
@@ -789,11 +792,13 @@ class AgentService : Service() {
         versionName: String? = null,
         stage: String? = null,
         foregroundPackage: String? = null,
+        screenshotFailureReason: String? = null,
+        douyinVersionName: String? = null,
     ) {
         val url = "${config.deriveHttpBase()}/api/agent/burner/account-scan-result"
         val body = buildAccountScanResultBody(
             requestId, config.agentId, ok, stale, accountIds, errorCode, screenshotB64, treeDump,
-            versionName, stage, foregroundPackage,
+            versionName, stage, foregroundPackage, screenshotFailureReason, douyinVersionName,
         )
         try {
             val request = Request.Builder()
@@ -1143,6 +1148,11 @@ class AgentService : Service() {
             versionName: String? = null,
             stage: String? = null,
             foregroundPackage: String? = null,
+            // 本次bug修复：screenshotFailureReason 区分诊断截图为什么拿不到（service_null/
+            // capture_returned_null/capture_threw:<msg>，见 AccountScanFailureClassifier），
+            // douyinVersionName 是设备上抖音真实版本号（代替代码里硬编码假设的"抖音39.4.0"）。
+            screenshotFailureReason: String? = null,
+            douyinVersionName: String? = null,
         ): String {
             fun esc(s: String): String = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
             val ids = accountIds.joinToString(",") { "\"${esc(it)}\"" }
@@ -1151,6 +1161,8 @@ class AgentService : Service() {
             val versionNameField = if (versionName != null) "\"${esc(versionName)}\"" else "null"
             val stageField = if (stage != null) "\"${esc(stage)}\"" else "null"
             val foregroundPackageField = if (foregroundPackage != null) "\"${esc(foregroundPackage)}\"" else "null"
+            val screenshotFailureReasonField = if (screenshotFailureReason != null) "\"${esc(screenshotFailureReason)}\"" else "null"
+            val douyinVersionNameField = if (douyinVersionName != null) "\"${esc(douyinVersionName)}\"" else "null"
             return "{\"request_id\":\"${esc(requestId)}\"," +
                 "\"agent_id\":\"${esc(agentId)}\"," +
                 "\"ok\":$ok,\"stale\":$stale," +
@@ -1160,7 +1172,9 @@ class AgentService : Service() {
                 "\"tree_dump\":$treeDumpField," +
                 "\"version_name\":$versionNameField," +
                 "\"stage\":$stageField," +
-                "\"foreground_package\":$foregroundPackageField}"
+                "\"foreground_package\":$foregroundPackageField," +
+                "\"screenshot_failure_reason\":$screenshotFailureReasonField," +
+                "\"douyin_version_name\":$douyinVersionNameField}"
         }
     }
 }

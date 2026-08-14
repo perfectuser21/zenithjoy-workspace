@@ -817,6 +817,9 @@ router.post('/account-scan-result', accountScanResultRateLimit, async (req: Requ
   const {
     agent_id, request_id, ok, account_ids, error_code, screenshot_b64, tree_dump,
     version_name, stage, foreground_package,
+    // 本次bug修复：screenshot_failure_reason 区分诊断截图为什么拿不到（service_null/
+    // capture_returned_null/capture_threw:<msg>），douyin_version_name 是设备上抖音真实版本号。
+    screenshot_failure_reason, douyin_version_name,
   } = req.body || {};
   if (!agent_id || typeof agent_id !== 'string') {
     return res.status(400).json(ERR('MISSING_AGENT_ID', 'agent_id 必填'));
@@ -929,6 +932,10 @@ router.post('/account-scan-result', accountScanResultRateLimit, async (req: Requ
           version_name: typeof version_name === 'string' ? version_name : null,
           stage: typeof stage === 'string' ? stage : null,
           foreground_package: typeof foreground_package === 'string' ? foreground_package : null,
+          // 本次bug修复：诊断截图恒为null时区分三种失败原因 + 设备上抖音真实版本号，
+          // 同款类型守卫，非法/缺省一律降级为 null。
+          screenshot_failure_reason: typeof screenshot_failure_reason === 'string' ? screenshot_failure_reason : null,
+          douyin_version_name: typeof douyin_version_name === 'string' ? douyin_version_name : null,
         }),
       ],
     );
@@ -949,6 +956,11 @@ router.post('/account-scan-result', accountScanResultRateLimit, async (req: Requ
           error_code: typeof error_code === 'string' ? error_code : null,
           screenshot_b64: typeof screenshot_b64 === 'string' ? screenshot_b64 : null,
           tree_dump: typeof tree_dump === 'string' ? tree_dump : null,
+          // 本次bug修复：此前这个 response 只有 ok/account_ids/error_code/screenshot_b64/
+          // tree_dump 五个字段——account-scan-realmachine-smoke.sh 读的正是这个字段，
+          // 诊断截图恒为null时看不出原因。补上失败原因分类 + 设备上抖音真实版本号。
+          screenshot_failure_reason: typeof screenshot_failure_reason === 'string' ? screenshot_failure_reason : null,
+          douyin_version_name: typeof douyin_version_name === 'string' ? douyin_version_name : null,
         }),
       ],
     );
