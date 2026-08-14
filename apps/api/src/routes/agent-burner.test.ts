@@ -584,6 +584,60 @@ describe('POST /account-scan-result — 账号扫描结果写回', () => {
     expect(responseJson.ok).toBe(false);
   });
 
+  it('screenshot_failure_reason/douyin_version_name 存在 → publish_tasks.response 和 agent_scan_failures.detail 都落库带上（本次bug修复：诊断截图恒为null时区分失败原因）', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ status: 'queued' }] } as any); // SELECT publish_tasks
+
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/account-scan-result')
+      .send({
+        agent_id: AGENT_UUID,
+        request_id: TASK_UUID,
+        ok: false,
+        account_ids: [],
+        error_code: 'OPEN_PANEL_FAILED',
+        screenshot_failure_reason: 'service_null',
+        douyin_version_name: '39.5.0',
+      });
+
+    expect(r.status).toBe(200);
+    const calls = vi.mocked(pool.query).mock.calls;
+
+    const updateCall = calls.find((c) => /UPDATE\s+zenithjoy\.publish_tasks/i.test(String(c[0])));
+    expect(updateCall).toBeTruthy();
+    const responseJson = JSON.parse(updateCall![1][2] as string);
+    expect(responseJson.screenshot_failure_reason).toBe('service_null');
+    expect(responseJson.douyin_version_name).toBe('39.5.0');
+
+    const failureInsertCall = calls.find((c) => /agent_scan_failures/i.test(String(c[0])));
+    expect(failureInsertCall).toBeTruthy();
+    const detailJson = JSON.parse(failureInsertCall![1][3] as string);
+    expect(detailJson.screenshot_failure_reason).toBe('service_null');
+    expect(detailJson.douyin_version_name).toBe('39.5.0');
+  });
+
+  it('screenshot_failure_reason/douyin_version_name 缺省 → 落库为 null，不报错（类型守卫回归）', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ status: 'queued' }] } as any);
+
+    const app = buildApp();
+    const r = await request(app)
+      .post('/api/agent/burner/account-scan-result')
+      .send({
+        agent_id: AGENT_UUID,
+        request_id: TASK_UUID,
+        ok: false,
+        account_ids: [],
+        error_code: 'OPEN_PANEL_FAILED',
+      });
+
+    expect(r.status).toBe(200);
+    const calls = vi.mocked(pool.query).mock.calls;
+    const updateCall = calls.find((c) => /UPDATE\s+zenithjoy\.publish_tasks/i.test(String(c[0])));
+    const responseJson = JSON.parse(updateCall![1][2] as string);
+    expect(responseJson.screenshot_failure_reason).toBeNull();
+    expect(responseJson.douyin_version_name).toBeNull();
+  });
+
   it('request_id 对应行已是终态 done → 幂等短路，不重复写 agent_platform_sessions / publish_tasks', async () => {
     vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ status: 'done' }] } as any); // SELECT publish_tasks
 
