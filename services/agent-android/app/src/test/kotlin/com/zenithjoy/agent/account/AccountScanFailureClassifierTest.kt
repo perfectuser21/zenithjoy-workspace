@@ -1,6 +1,8 @@
 package com.zenithjoy.agent.account
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -77,5 +79,66 @@ class AccountScanFailureClassifierTest {
     @Test
     fun `launcher 树不应同时被判定为锁屏`() {
         assertFalse(AccountScanFailureClassifier.isLockScreenTreeDump(homeLauncherTreeDump))
+    }
+
+    // ── classifyScreenshotCaptureFailure：诊断截图捕获失败原因分类（本次bug修复） ──
+    // 根因（真机复现 08-11 run 31427538362，task_id=8a251802-...）：captureFailureDiagnostics()
+    // 此前把"服务未初始化"/"截图返回null"/"截图抛异常"三种不同原因，用同一个 try/catch
+    // 静默坍缩成同一个不可区分的 null——DB 里 screenshot_b64 恒为 null，导致历次
+    // OPEN_PANEL_FAILED 现场都无法判断截图诊断本身为什么瞎，只能靠信息量少得多的 tree_dump。
+
+    @Test
+    fun `截图服务未初始化(sharedScreenCaptureService为null)时分类为 service_null`() {
+        assertEquals(
+            "service_null",
+            AccountScanFailureClassifier.classifyScreenshotCaptureFailure(
+                serviceAvailable = false, threwMessage = null, resultIsNull = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `截图抛异常时分类为 capture_threw 并携带异常信息`() {
+        assertEquals(
+            "capture_threw:boom",
+            AccountScanFailureClassifier.classifyScreenshotCaptureFailure(
+                serviceAvailable = true, threwMessage = "boom", resultIsNull = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `服务可用且未抛异常但截图仍返回null时分类为 capture_returned_null`() {
+        assertEquals(
+            "capture_returned_null",
+            AccountScanFailureClassifier.classifyScreenshotCaptureFailure(
+                serviceAvailable = true, threwMessage = null, resultIsNull = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `截图成功捕获(非null)时返回null——代表不是失败`() {
+        assertNull(
+            AccountScanFailureClassifier.classifyScreenshotCaptureFailure(
+                serviceAvailable = true, threwMessage = null, resultIsNull = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `三种失败原因互不相同——回归本次bug(此前全部坍缩成同一个null)`() {
+        val reasons = setOf(
+            AccountScanFailureClassifier.classifyScreenshotCaptureFailure(
+                serviceAvailable = false, threwMessage = null, resultIsNull = true,
+            ),
+            AccountScanFailureClassifier.classifyScreenshotCaptureFailure(
+                serviceAvailable = true, threwMessage = "x", resultIsNull = true,
+            ),
+            AccountScanFailureClassifier.classifyScreenshotCaptureFailure(
+                serviceAvailable = true, threwMessage = null, resultIsNull = true,
+            ),
+        )
+        assertEquals("三种失败场景必须产生三个不同的可观测原因", 3, reasons.size)
     }
 }

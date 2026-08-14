@@ -148,4 +148,43 @@ class AgentServiceAccountScanTest {
         assertEquals("launch_wait", parsed.getString("stage"))
         assertEquals("com.coloros.wallpapers", parsed.getString("foreground_package"))
     }
+
+    // ── 本次bug修复：新增 screenshotFailureReason（诊断截图为什么拿不到）+ douyinVersionName
+    // （设备上抖音真实版本号，代替代码注释里硬编码假设的"抖音39.4.0"）两个透传字段。
+    // 服务端 apps/api/src/routes/agent-burner.ts 的 /account-scan-result 需要跟着接住，
+    // 否则这两个字段会在手机端序列化好、服务端却从未落库，等于白采集——同 sprint
+    // 08031620 versionName/stage/foregroundPackage 三字段当年踩过的同一个坑。
+
+    @Test
+    fun builds_account_scan_result_body_with_screenshot_failure_reason_and_douyin_version_when_present() {
+        val body = AgentService.buildAccountScanResultBody(
+            requestId = "req4", agentId = "a1", ok = false, stale = false,
+            accountIds = emptyList(), errorCode = "OPEN_PANEL_FAILED",
+            screenshotFailureReason = "service_null", douyinVersionName = "39.5.0",
+        )
+        assertTrue(body.contains("\"screenshot_failure_reason\":\"service_null\""))
+        assertTrue(body.contains("\"douyin_version_name\":\"39.5.0\""))
+    }
+
+    @Test
+    fun builds_account_scan_result_body_without_screenshot_failure_reason_fields_when_null() {
+        val body = AgentService.buildAccountScanResultBody(
+            requestId = "req5", agentId = "a1", ok = true, stale = false,
+            accountIds = listOf("大湖"), errorCode = "",
+        )
+        assertTrue(body.contains("\"screenshot_failure_reason\":null"))
+        assertTrue(body.contains("\"douyin_version_name\":null"))
+    }
+
+    @Test
+    fun screenshot_failure_reason_and_douyin_version_round_trip_as_valid_json() {
+        val body = AgentService.buildAccountScanResultBody(
+            requestId = "req6", agentId = "a1", ok = false, stale = false,
+            accountIds = emptyList(), errorCode = "OPEN_PANEL_FAILED",
+            screenshotFailureReason = "capture_threw:boom", douyinVersionName = "39.5.0",
+        )
+        val parsed = JSONObject(body)
+        assertEquals("capture_threw:boom", parsed.getString("screenshot_failure_reason"))
+        assertEquals("39.5.0", parsed.getString("douyin_version_name"))
+    }
 }
