@@ -59,6 +59,18 @@
             </intent-filter>
         </activity>
 
+        <!-- 账号扫描 LAUNCH_BLOCKED 修复（Brain task 29320ff1，decision 61298fc6）：荣耀 iAware
+             拒绝无障碍服务从后台直接拉起抖音；先起这个透明、无 UI、不进最近任务的 trampoline
+             让 App 成为前台 Activity，由它在 onResume 拉起目标 App 后立即 finish。 -->
+        <activity
+            android:name=".account.DouyinLaunchTrampolineActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <service
             android:name=".AgentService"
             android:enabled="true"

@@ -446,16 +446,36 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         }
     }
 
+    /**
+     * 拉起抖音（Brain task 29320ff1，decision 61298fc6）：先起自家透明 trampoline 让 App 成为
+     * 前台 Activity、由它从前台拉起抖音——荣耀 iAware 等厂商策略拒绝"无前台 Activity 的调用方"
+     * 直接 startActivity 第三方 App（真机 0/5 → LAUNCH_BLOCKED），自家 Activity 放行（3/3）。
+     * 只有 startActivity 本身**抛异常**时才回退直启；OEM 对 trampoline 的静默拦截不会抛异常，
+     * 走不到 catch（结果上等价：能拦自家 Activity 的 OEM 大概率也拦直启，终态仍是
+     * LAUNCH_BLOCKED）。返回值 true 只表示"trampoline 已发起"，不代表抖音已拉起——
+     * 调用方一律以 awaitDouyinForeground() 为准。
+     */
     private fun launchDouyinApp(): Boolean = try {
+        applicationContext.startActivity(
+            DouyinLaunchTrampoline.buildTrampolineIntent(applicationContext, DOUYIN_PKG),
+        )
+        true
+    } catch (e: Exception) {
+        android.util.Log.w(TAG, "trampoline 启动失败(${e.message})，退回直接拉起抖音")
+        launchDouyinDirect()
+    }
+
+    /** 改动前的直启实现，仅作 trampoline 起不来时的回退。 */
+    private fun launchDouyinDirect(): Boolean = try {
         val launchIntent = applicationContext.packageManager.getLaunchIntentForPackage(DOUYIN_PKG)
         if (launchIntent == null) false
         else {
-            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            launchIntent.addFlags(DouyinLaunchTrampoline.TARGET_FLAGS)
             applicationContext.startActivity(launchIntent)
             true
         }
     } catch (e: Exception) {
-        android.util.Log.e(TAG, "launchDouyinApp failed: ${e.message}"); false
+        android.util.Log.e(TAG, "launchDouyinDirect failed: ${e.message}"); false
     }
 
     /**
@@ -891,7 +911,7 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
 
     companion object {
         private const val TAG = "DeviceAccountScanSvc"
-        private const val DOUYIN_PKG = "com.ss.android.ugc.aweme"
+        internal const val DOUYIN_PKG = DouyinLaunchTrampoline.DEFAULT_TARGET_PACKAGE
         // 真机复现(2026-07-29，客户已交付环境MAA-AN00)：PR#1554新增"检测更换背景误触发浮层→
         // 关闭→重新查找→重新点击→再等面板"这一步后，单次attempt最坏情况耗时明显变长(实测单次
         // ~8-13秒)，3次CLEAR_TOP重试原30秒预算不够用，会在还没跑完第3次前就被整体超时打断
