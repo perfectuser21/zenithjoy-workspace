@@ -891,7 +891,7 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
 
     companion object {
         private const val TAG = "DeviceAccountScanSvc"
-        private const val DOUYIN_PKG = "com.ss.android.ugc.aweme"
+        internal const val DOUYIN_PKG = "com.ss.android.ugc.aweme"
         // 真机复现(2026-07-29，客户已交付环境MAA-AN00)：PR#1554新增"检测更换背景误触发浮层→
         // 关闭→重新查找→重新点击→再等面板"这一步后，单次attempt最坏情况耗时明显变长(实测单次
         // ~8-13秒)，3次CLEAR_TOP重试原30秒预算不够用，会在还没跑完第3次前就被整体超时打断
