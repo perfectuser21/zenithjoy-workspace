@@ -23,6 +23,9 @@ shizuku_server_alive() {
 # "/base.apk" 替换成 "/lib/arm64/libshizuku.so" 后输出到 stdout。
 #
 # 空输入（App 未安装）或找不到 base.apk 行 → 不输出，return 1。
+#
+# 假设 arm64 机队（rog/pc4 已知机型均为 arm64）；lib 目录写死 lib/arm64，不做多 ABI
+# 探测——挪用到其他 ABI 设备会拿到错误路径，如需支持须另行扩展。
 resolve_shizuku_starter_path() {
   local pm_path_output="$1"
   [ -z "$pm_path_output" ] && return 1

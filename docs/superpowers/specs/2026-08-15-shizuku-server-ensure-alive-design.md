@@ -36,8 +36,9 @@ adb shell /data/app/~~<hash1>/moe.shizuku.privileged.api-<hash2>==/lib/arm64/lib
 
 ### `shizuku_server_alive(ps_output)`
 
-输入：一段文本（`adb shell ps -A` 的输出，通过 stdin 管道传入，与 `dedupe_adb_devices`
-读 stdin 的方式一致）。
+输入：一段文本（`adb shell ps -A` 的输出，作为位置参数传入，如
+`shizuku_server_alive "$ps_output"`——跟 `dedupe_adb_devices` 读 stdin 的方式不同，
+因为这里是单个标量判定，位置参数比建一条 stdin 管道更直接）。
 输出：无 stdout 输出，只用 return code——含有一行进程名是 `shizuku_server` 则 return 0，
 否则 return 1。
 依赖：无，纯字符串匹配（`grep`）。
