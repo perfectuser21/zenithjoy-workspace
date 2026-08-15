@@ -34,7 +34,7 @@
 - Create: `app/src/main/kotlin/com/zenithjoy/agent/account/DouyinLaunchTrampoline.kt`
 - Modify: `app/src/main/kotlin/com/zenithjoy/agent/account/DeviceAccountScanService.kt:894`（`private const val DOUYIN_PKG` → `internal const val DOUYIN_PKG`）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```kotlin
 package com.zenithjoy.agent.account
@@ -81,19 +81,19 @@ class DouyinLaunchTrampolineTest {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认编译失败（红）**
+- [x] **Step 2: 跑测试确认编译失败（红）**
 
 Run: `./gradlew :app:testDebugUnitTest --tests 'com.zenithjoy.agent.account.DouyinLaunchTrampolineTest' -q --console=plain 2>&1 | grep -v "SDK processing" | tail -20`
 Expected: 编译错误 `Unresolved reference: DouyinLaunchTrampoline`（以及 `DOUYIN_PKG` 不可见）。
 
-- [ ] **Step 3: commit-1（先红）**
+- [x] **Step 3: commit-1（先红）**
 
 ```bash
 git add app/src/test/kotlin/com/zenithjoy/agent/account/DouyinLaunchTrampolineTest.kt
 git commit -m "test(agent-android): DouyinLaunchTrampoline 纯逻辑守卫（先红）[29320ff1]"
 ```
 
-- [ ] **Step 4: 最小实现**
+- [x] **Step 4: 最小实现**
 
 `app/src/main/kotlin/com/zenithjoy/agent/account/DouyinLaunchTrampoline.kt`：
 
@@ -152,12 +152,12 @@ import android.app.Activity
 class DouyinLaunchTrampolineActivity : Activity()
 ```
 
-- [ ] **Step 5: 跑测试确认绿**
+- [x] **Step 5: 跑测试确认绿**
 
 Run: `./gradlew :app:testDebugUnitTest --tests 'com.zenithjoy.agent.account.DouyinLaunchTrampolineTest' -q --console=plain 2>&1 | grep -v "SDK processing" | tail -20`
 Expected: 无输出（全部 PASS）。
 
-- [ ] **Step 6: commit-2**
+- [x] **Step 6: commit-2**
 
 ```bash
 git add app/src/main/kotlin/com/zenithjoy/agent/account/DouyinLaunchTrampoline.kt \
@@ -175,7 +175,7 @@ git commit -m "feat(agent-android): DouyinLaunchTrampoline 常量与目标包解
 - Modify: `app/src/main/AndroidManifest.xml`（`ShareIngestActivity` 的 `</activity>` 之后）
 - Modify: `app/src/main/kotlin/com/zenithjoy/agent/account/DouyinLaunchTrampolineActivity.kt`（覆盖 Task 1 占位版）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```kotlin
 package com.zenithjoy.agent
@@ -234,19 +234,19 @@ class ManifestLaunchTrampolineActivityTest {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认红**
+- [x] **Step 2: 跑测试确认红**
 
 Run: `./gradlew :app:testDebugUnitTest --tests 'com.zenithjoy.agent.ManifestLaunchTrampolineActivityTest' -q --console=plain 2>&1 | grep -v "SDK processing" | tail -20`
 Expected: FAIL，`Manifest 未声明 .account.DouyinLaunchTrampolineActivity`。
 
-- [ ] **Step 3: commit-1（先红）**
+- [x] **Step 3: commit-1（先红）**
 
 ```bash
 git add app/src/test/kotlin/com/zenithjoy/agent/ManifestLaunchTrampolineActivityTest.kt
 git commit -m "test(agent-android): Manifest 必须声明透明 trampoline activity（先红）[29320ff1]"
 ```
 
-- [ ] **Step 4: 实现 — Manifest 声明**
+- [x] **Step 4: 实现 — Manifest 声明**
 
 在 `app/src/main/AndroidManifest.xml` 里 `ShareIngestActivity` 的 `</activity>`（约第 60 行）之后插入：
 
@@ -264,7 +264,7 @@ git commit -m "test(agent-android): Manifest 必须声明透明 trampoline activ
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 ```
 
-- [ ] **Step 5: 实现 — 完整 Activity（覆盖 Task 1 占位版）**
+- [x] **Step 5: 实现 — 完整 Activity（覆盖 Task 1 占位版）**
 
 `app/src/main/kotlin/com/zenithjoy/agent/account/DouyinLaunchTrampolineActivity.kt`：
 
@@ -348,12 +348,12 @@ class DouyinLaunchTrampolineActivity : Activity() {
 }
 ```
 
-- [ ] **Step 6: 跑测试确认绿（同时确认 Task 1 仍绿、整体编译通过）**
+- [x] **Step 6: 跑测试确认绿（同时确认 Task 1 仍绿、整体编译通过）**
 
 Run: `./gradlew :app:testDebugUnitTest --tests 'com.zenithjoy.agent.ManifestLaunchTrampolineActivityTest' --tests 'com.zenithjoy.agent.account.DouyinLaunchTrampolineTest' -q --console=plain 2>&1 | grep -v "SDK processing" | tail -20`
 Expected: 无输出（PASS）。
 
-- [ ] **Step 7: commit-2**
+- [x] **Step 7: commit-2**
 
 ```bash
 git add app/src/main/AndroidManifest.xml app/src/main/kotlin/com/zenithjoy/agent/account/DouyinLaunchTrampolineActivity.kt
@@ -368,7 +368,7 @@ git commit -m "feat(agent-android): 透明 DouyinLaunchTrampolineActivity + Mani
 - Test: `app/src/test/kotlin/com/zenithjoy/agent/account/DeviceAccountScanServiceLaunchTrampolineTest.kt`
 - Modify: `app/src/main/kotlin/com/zenithjoy/agent/account/DeviceAccountScanService.kt:449-458`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```kotlin
 package com.zenithjoy.agent.account
@@ -422,19 +422,19 @@ class DeviceAccountScanServiceLaunchTrampolineTest {
 }
 ```
 
-- [ ] **Step 2: 跑测试确认红**
+- [x] **Step 2: 跑测试确认红**
 
 Run: `./gradlew :app:testDebugUnitTest --tests 'com.zenithjoy.agent.account.DeviceAccountScanServiceLaunchTrampolineTest' -q --console=plain 2>&1 | grep -v "SDK processing" | tail -20`
 Expected: 第一个用例 FAIL（`launchDouyinApp 必须调用 DouyinLaunchTrampoline.buildTrampolineIntent`）；第二个用例 PASS（Task 2 已实现）。
 
-- [ ] **Step 3: commit-1（先红）**
+- [x] **Step 3: commit-1（先红）**
 
 ```bash
 git add app/src/test/kotlin/com/zenithjoy/agent/account/DeviceAccountScanServiceLaunchTrampolineTest.kt
 git commit -m "test(agent-android): launchDouyinApp 必须走 trampoline 且保留直启回退（先红）[29320ff1]"
 ```
 
-- [ ] **Step 4: 实现 — 替换 `launchDouyinApp()`**
+- [x] **Step 4: 实现 — 替换 `launchDouyinApp()`**
 
 把 `DeviceAccountScanService.kt:449-458` 的整个 `launchDouyinApp()` 替换为：
 
@@ -470,12 +470,12 @@ git commit -m "test(agent-android): launchDouyinApp 必须走 trampoline 且保�
     }
 ```
 
-- [ ] **Step 5: 跑本任务测试 + 全量单测确认绿**
+- [x] **Step 5: 跑本任务测试 + 全量单测确认绿**
 
 Run: `./gradlew :app:testDebugUnitTest -q --console=plain 2>&1 | grep -v "SDK processing" | tail -30`
 Expected: 无失败输出。
 
-- [ ] **Step 6: commit-2**
+- [x] **Step 6: commit-2**
 
 ```bash
 git add app/src/main/kotlin/com/zenithjoy/agent/account/DeviceAccountScanService.kt
@@ -489,19 +489,19 @@ git commit -m "fix(agent-android): 账号扫描拉抖音先经透明 trampoline 
 **Files:**
 - Modify: `app/build.gradle.kts:14-15`
 
-- [ ] **Step 1: 改版本**
+- [x] **Step 1: 改版本**
 
 ```kotlin
         versionCode = 25
         versionName = "2.1.21"
 ```
 
-- [ ] **Step 2: 确认既有版本上报测试仍绿**
+- [x] **Step 2: 确认既有版本上报测试仍绿**
 
 Run: `./gradlew :app:testDebugUnitTest --tests 'com.zenithjoy.agent.AgentVersionReportingTest' -q --console=plain 2>&1 | grep -v "SDK processing" | tail -10`
 Expected: 无输出。
 
-- [ ] **Step 3: commit**
+- [x] **Step 3: commit**
 
 ```bash
 git add app/build.gradle.kts
@@ -516,22 +516,22 @@ git commit -m "chore(agent-android): bump 2.1.21 (versionCode 25) [29320ff1]"
 
 探针要点：`ssh xian-rog "adb -s 192.168.1.96:5555 ..."`；每轮 `am force-stop 抖音` → `input keyevent HOME` → `logcat -c` → 广播 `am broadcast -a com.zenithjoy.agent.DEBUG_E2E -p com.zenithjoy.agent.e2e --es flow scan --es request_id <rid> --es device_id abdev --es tenant_id abtenant`（**不传 launch_mode**）→ 轮询 `logcat -d | grep "account scan result broadcast: requestId=<rid>"` 取 `ok=` 与 `error=`。
 
-- [ ] **Step 1: 打 e2e 包**
+- [x] **Step 1: 打 e2e 包**
 
 Run: `./gradlew :app:assembleE2e -q --console=plain 2>&1 | grep -v "SDK processing" | tail -5 && ls -la app/build/outputs/apk/e2e/app-e2e.apk`
 Expected: APK 时间戳为当前时间。
 
-- [ ] **Step 2: 推到 rog 并装到 4号机**
+- [x] **Step 2: 推到 rog 并装到 4号机**
 
 Run: `scp -q app/build/outputs/apk/e2e/app-e2e.apk xian-rog:zj-trampoline.apk && ssh xian-rog "adb -s 192.168.1.96:5555 install -r C:\Users\asus\zj-trampoline.apk"`
 Expected: `Success`。（跨境 scp 可能几分钟，用后台运行等待。）
 
-- [ ] **Step 3: 后台冷启动扫描 3 次（修前基线 0/5 红）**
+- [x] **Step 3: 后台冷启动扫描 3 次（修前基线 0/5 红）**
 
 Run: `<scratchpad>/launch-probe.sh bg 3`
 Expected: 3 行 `ok=true accounts=<≥1> error=`；logcat 出现 `DouyinLaunchTrampoline: 已从前台 trampoline 拉起 com.ss.android.ugc.aweme` 与 `BAL_ALLOW_VISIBLE_WINDOW) result code=0`，**不再出现** `prevent start activity by iaware`。
 
-- [ ] **Step 4: 结果回写**
+- [x] **Step 4: 结果回写**
 
 把 3 次结果（PASS 数、logcat 关键行）追加到 PR body 的「真机验证」段；未达 3/3 → 停下按 systematic-debugging 回 Phase 1，不加第二个补丁叠上去。
 
@@ -539,12 +539,12 @@ Expected: 3 行 `ok=true accounts=<≥1> error=`；logcat 出现 `DouyinLaunchTr
 
 ### Task 6: 收尾
 
-- [ ] **Step 1: 全量单测最终确认**
+- [x] **Step 1: 全量单测最终确认**
 
 Run: `./gradlew :app:testDebugUnitTest -q --console=plain 2>&1 | grep -v "SDK processing" | tail -10`
 Expected: 无失败。
 
-- [ ] **Step 2: 交给 finishing-a-development-branch（Option 2：push + PR）**
+- [x] **Step 2: 交给 finishing-a-development-branch（Option 2：push + PR）**
 
 PR 标题：`fix(agent-android): 账号扫描 LAUNCH_BLOCKED——拉抖音先经透明 trampoline 过厂商后台启动拦截 [29320ff1]`
 PR body 必含：根因 + 4号机对照表（后台直启 0/5 / overlay 0/3 / trampoline 3/3）+ 修后 Task 5 真机结果 + 决策链 964ba941/61298fc6/7ea333a3 + GP 锚点 `line02/keyword_acquisition#step5`。
