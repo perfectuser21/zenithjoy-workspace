@@ -18,8 +18,8 @@ import android.content.Intent
 object DouyinLaunchTrampoline {
     const val EXTRA_TARGET_PACKAGE = "com.zenithjoy.agent.extra.LAUNCH_TARGET_PACKAGE"
 
-    /** 与 DeviceAccountScanService.DOUYIN_PKG 是同一常量，不留两份字面量。 */
-    const val DEFAULT_TARGET_PACKAGE = DeviceAccountScanService.DOUYIN_PKG
+    /** 规范来源；DeviceAccountScanService.DOUYIN_PKG 引用它，不留两份字面量。 */
+    const val DEFAULT_TARGET_PACKAGE = "com.ss.android.ugc.aweme"
 
     /** trampoline 自身从 Service 上下文启动，必须 NEW_TASK。 */
     const val TRAMPOLINE_FLAGS = Intent.FLAG_ACTIVITY_NEW_TASK

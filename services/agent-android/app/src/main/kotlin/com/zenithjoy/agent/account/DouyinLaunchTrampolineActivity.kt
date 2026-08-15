@@ -14,8 +14,9 @@ import android.os.Looper
  * 从该 Activity 再拉目标则 `BAL_ALLOW_VISIBLE_WINDOW` 放行（3/3）。见 [DouyinLaunchTrampoline]。
  *
  * 形态对齐 ShareIngestActivity：Manifest 上 Translucent 主题 + noHistory + excludeFromRecents +
- * taskAffinity="" + singleTask；代码上有自杀定时器兜底（焦点始终不来也不泄漏），
- * singleTask 复用（onNewIntent）时先清旧定时器再重挂，避免带着上一轮的过期回调。
+ * taskAffinity="" + singleTask；代码上有自杀定时器兜底（onResume 始终未被回调、即被系统半路
+ * 取消时 2s 自杀兜底，不泄漏），singleTask 复用（onNewIntent）时先清旧定时器再重挂，
+ * 避免带着上一轮的过期回调。
  */
 class DouyinLaunchTrampolineActivity : Activity() {
 

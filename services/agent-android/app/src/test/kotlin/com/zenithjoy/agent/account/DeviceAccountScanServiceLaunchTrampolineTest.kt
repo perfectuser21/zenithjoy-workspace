@@ -41,9 +41,12 @@ class DeviceAccountScanServiceLaunchTrampolineTest {
     @Test
     fun `trampoline activity 在 onResume 拉起目标并 finish`() {
         val act = source("com/zenithjoy/agent/account/DouyinLaunchTrampolineActivity.kt")
-        assertTrue(act.contains("override fun onResume()"))
-        assertTrue(act.contains("getLaunchIntentForPackage("))
-        assertTrue(act.contains("DouyinLaunchTrampoline.TARGET_FLAGS"))
-        assertTrue(act.contains("finish()"))
+        val onResume = functionBody(act, "override fun onResume()")
+        assertTrue("onResume 必须调用 launchTargetThenFinish()", onResume.contains("launchTargetThenFinish()"))
+        val launchTarget = functionBody(act, "private fun launchTargetThenFinish()")
+        assertTrue("launchTargetThenFinish 必须解析目标启动 Intent", launchTarget.contains("getLaunchIntentForPackage("))
+        assertTrue("launchTargetThenFinish 必须使用 DouyinLaunchTrampoline.TARGET_FLAGS", launchTarget.contains("DouyinLaunchTrampoline.TARGET_FLAGS"))
+        assertTrue("launchTargetThenFinish 必须真正 startActivity", launchTarget.contains("startActivity("))
+        assertTrue("launchTargetThenFinish 必须 finish 自身", launchTarget.contains("finish()"))
     }
 }
