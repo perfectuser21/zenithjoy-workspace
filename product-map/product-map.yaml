@@ -128,6 +128,7 @@ golden_paths:
         name: 按关键词搜索目标视频（替代手填对标 URL）
       - id: step7
         name: 评论区挖客闭环——抓评论→触达带企微号→企微webhook收好友→AI首答→写本地Lead表
+        status: deprecated   # 退役（决策 19c25189，2026-08-15）：企微 webhook/AI 首答链路代码中不存在，0707 已拍板去飞书改本地中台
 
   # 以下三条为占位（主理人 07-29：只写出来，尚无实际实现）
   - id: live_acquisition
