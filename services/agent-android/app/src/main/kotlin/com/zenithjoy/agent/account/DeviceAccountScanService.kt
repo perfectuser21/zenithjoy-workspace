@@ -446,11 +446,29 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         }
     }
 
+    /**
+     * 拉起抖音（Brain task 29320ff1，decision 61298fc6）：先起自家透明 trampoline 让 App 成为
+     * 前台 Activity、由它从前台拉起抖音——荣耀 iAware 等厂商策略拒绝"无前台 Activity 的调用方"
+     * 直接 startActivity 第三方 App（真机 0/5 → LAUNCH_BLOCKED），自家 Activity 放行（3/3）。
+     * trampoline 本身起不来（未知 OEM 也拦 / 抛异常）时退回原直启，行为 = 改动前，
+     * 后续 awaitDouyinForeground() 仍是"抖音到前台了吗"的唯一裁判。
+     */
     private fun launchDouyinApp(): Boolean = try {
+        applicationContext.startActivity(
+            DouyinLaunchTrampoline.buildTrampolineIntent(applicationContext, DOUYIN_PKG),
+        )
+        true
+    } catch (e: Exception) {
+        android.util.Log.w(TAG, "trampoline 启动失败(${e.message})，退回直接拉起抖音")
+        launchDouyinDirect()
+    }
+
+    /** 改动前的直启实现，仅作 trampoline 起不来时的回退。 */
+    private fun launchDouyinDirect(): Boolean = try {
         val launchIntent = applicationContext.packageManager.getLaunchIntentForPackage(DOUYIN_PKG)
         if (launchIntent == null) false
         else {
-            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            launchIntent.addFlags(DouyinLaunchTrampoline.TARGET_FLAGS)
             applicationContext.startActivity(launchIntent)
             true
         }
