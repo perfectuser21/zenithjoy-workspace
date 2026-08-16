@@ -283,6 +283,42 @@ ok "Step 8c judge-video 真调 → judgment_status=$JUDGE_STATUS 已落库（LLM
 ok "Step 8 ✅ 采集+判定服务端链路全通"
 
 # ───────────────────────────────────────────────────────────────────
+# Step 8d：视频判定"存疑"→ commander(DeepSeek) 复核 · 真环境守卫
+# force_result=uncertain 只跳过主判、让 commander 走对 ToAPIs DeepSeek 的【真请求】——
+# 守的是"commander 模型名(deepseek-v4-flash)失效/不可达"这类环境接缝：单测全 mock 测不到，
+# 模型一改名 commander 会永远 error→存疑全被保守丢弃，这里真调一次兜住。
+# 断言：① 存疑必被 commander 消化成终态 matched/rejected（uncertain 绝不泄漏给调用方）；
+#       ② reason 带 commander 真判轨迹(via_commander + 准/不准)，不是 no_api_key/error 保守兜底。
+# ───────────────────────────────────────────────────────────────────
+echo "▶ Step 8d: 视频存疑 → commander(DeepSeek) 真调复核"
+VIDEO_ID_CMD="p2cmd${RND//-/}"
+S8_HTTP=$(curl -s -o "$S8_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "$API_BASE/api/acquisition/collect/report-videos" \
+  -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
+  -d "{\"task_id\":\"$TASK_ID\",\"videos\":[{\"video_id\":\"$VIDEO_ID_CMD\",\"title\":\"p2 commander 复核视频\"}]}")
+[ "$S8_HTTP" = "200" ] || fail "Step 8d report-videos expected 200, got $S8_HTTP: $(cat "$S8_TMP")" 8
+CMD_STATUS=""; CMD_REASON=""
+for S8_TRY in 1 2 3; do
+  S8_HTTP=$(curl -s -o "$S8_TMP" -w "%{http_code}" --max-time 60 \
+    -X POST "$API_BASE/api/acquisition/judge-video" \
+    -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
+    -d "{\"video_id\":\"$VIDEO_ID_CMD\",\"capture_type\":\"audio\",\"data_b64\":\"$PNG_B64\",\"force_result\":\"uncertain\",\"title\":\"p2 commander 复核视频\"}")
+  [ "$S8_HTTP" = "200" ] || fail "Step 8d judge-video expected 200, got $S8_HTTP: $(cat "$S8_TMP")" 8
+  CMD_STATUS=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['judgment_status'])" "$S8_TMP" 2>/dev/null)
+  CMD_REASON=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data'].get('judgment_reason') or '')" "$S8_TMP" 2>/dev/null)
+  case "$CMD_STATUS" in matched|rejected) break ;; *) echo "  ↻ Step 8d 第 ${S8_TRY} 次 commander 未出终态（status=$CMD_STATUS reason=$CMD_REASON），5s 重试"; sleep 5 ;; esac
+done
+case "$CMD_STATUS" in matched|rejected) : ;; *) fail "Step 8d 存疑未被 commander 消化成终态（3次）: status=$CMD_STATUS reason=$CMD_REASON" 8 ;; esac
+case "$CMD_REASON" in
+  *via_commander*准*) : ;;
+  *no_api_key*|*error_保守拒*|*timeout_保守拒*) fail "Step 8d commander 未真跑通(模型名失效/不可达?): reason=$CMD_REASON" 8 ;;
+  *) fail "Step 8d commander reason 非预期真判轨迹: $CMD_REASON" 8 ;;
+esac
+CMD_ROW=$(psq "SELECT count(*) FROM zenithjoy.acquisition_collect_videos WHERE tenant_id='$TENANT_ID' AND video_id='$VIDEO_ID_CMD' AND judgment_status IN ('matched','rejected') AND updated_at > NOW() - interval '300 seconds'")
+[ "$CMD_ROW" = "1" ] || fail "Step 8d commander 终态未落库" 8
+ok "Step 8d ✅ 存疑→commander(DeepSeek)真调复核→终态=$CMD_STATUS（reason=$CMD_REASON）"
+
+# ───────────────────────────────────────────────────────────────────
 # Step 9：抓评论回填真实抖音号 → Lead 落库带号（铁律 5 回流：Seg3 私信 0 送达 bug）
 #
 # 复现的真 bug（2026-07-15 staging）：acquisition_leads 根本没有 douyin_id 列，
