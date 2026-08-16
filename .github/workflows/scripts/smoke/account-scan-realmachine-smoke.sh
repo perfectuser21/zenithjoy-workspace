@@ -103,8 +103,10 @@ main() {
   ADB_VER_ERR=$("$ADB" version 2>&1 >/dev/null) \
     || envfail "adb 不可用: ${ADB_VER_ERR:-unknown}（ADB=${ADB}）"
 
-  "$ADB" devices 2>/dev/null | grep -qE '[[:space:]]device$' \
-    || envfail "无 Android 设备在线(adb devices 无 'device' 行)"
+  # WiFi-adb 掉线自愈(task c0efdb69)：四号机夜里息屏后掉线，先重连再判在线。
+  source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/ensure-device-online.sh"
+  ensure_device_online "$ADB" "${ANDROID_ADB_ENDPOINT:-}" \
+    || envfail "无 Android 设备在线(adb devices 无 'device' 行；重连 ${ANDROID_ADB_ENDPOINT:-未配端点} 后仍失败)"
   DEV=$("$ADB" devices 2>/dev/null | awk '/[[:space:]]device$/{print $1; exit}')
   ok "设备在线: $DEV"
 

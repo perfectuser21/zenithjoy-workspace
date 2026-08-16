@@ -46,8 +46,10 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 # ── 1. 环境自检(区分"环境未就绪"与"采集失败") ────────────────────────
 command -v jq >/dev/null 2>&1 || envfail "runner 缺 jq"
-"$ADB" devices 2>/dev/null | grep -qE '[[:space:]]device$' \
-  || envfail "无 Android 设备在线(adb devices 无 'device' 行)"
+# WiFi-adb 掉线自愈(task c0efdb69)：四号机夜里息屏后掉线，先重连再判在线，止住 nightly 连红。
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/ensure-device-online.sh"
+ensure_device_online "$ADB" "${ANDROID_ADB_ENDPOINT:-}" \
+  || envfail "无 Android 设备在线(adb devices 无 'device' 行；重连 ${ANDROID_ADB_ENDPOINT:-未配端点} 后仍失败)"
 DEV=$("$ADB" devices 2>/dev/null | awk '/[[:space:]]device$/{print $1; exit}')
 ok "设备在线: $DEV"
 
