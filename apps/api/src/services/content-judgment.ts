@@ -314,8 +314,11 @@ async function commanderReview(
     return finalize(verdict, verdict === 'matched' ? '准' : '不准');
   } catch (err) {
     const isTimeout = axios.isAxiosError(err) && err.code === 'ECONNABORTED';
+    // 静态格式串 + %s 占位（videoId 用户可控，不能拼进格式串——tainted-format-string）
     console.error(
-      `[content-judgment] commander ${isTimeout ? 'timeout' : 'error'} videoId=${videoId}:`,
+      '[content-judgment] commander %s videoId=%s: %s',
+      isTimeout ? 'timeout' : 'error',
+      videoId,
       (err as Error).message
     );
     return finalize('rejected', isTimeout ? 'timeout_保守拒' : 'error_保守拒');
