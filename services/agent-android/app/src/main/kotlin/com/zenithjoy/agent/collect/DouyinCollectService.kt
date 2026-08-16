@@ -1115,13 +1115,17 @@ class DouyinCollectService : AccessibilityService() {
      */
     private suspend fun resolveDouyinIdForCommenter(nickname: String): String? {
         val panelRoot = awaitRootInActiveWindow() ?: return null
-        val avatar = findNodeByContentDesc(panelRoot, avatarContentDesc(nickname)) ?: run {
-            android.util.Log.d(TAG, "avatar not found for $nickname (可能已滚出可视区)")
+        val avatar = findNodeByContentDesc(panelRoot, avatarContentDesc(nickname))
+        // 结构定位兜底（28cee213，2026-08-16）：新版评论头像无 desc/无 id，按昵称文本节点的
+        // bounds 在其左侧同一行手势点（头像圆心）；昵称贴着面板左缘则判无头像。
+        val structuralPoint = if (avatar == null) structuralAvatarTapPoint(panelRoot, nickname) else null
+        if (avatar == null && structuralPoint == null) {
+            android.util.Log.d(TAG, "avatar not found for $nickname (可能已滚出可视区/无头像锚)")
             return null
         }
 
         val beforeTapToken = fetchToken
-        tapNodeCenter(avatar)
+        if (avatar != null) tapNodeCenter(avatar) else tapPoint(structuralPoint!!.first, structuralPoint.second)
         delay(RandomDelay.sample(RandomDelay.CLICK_MS))
         // 快照纪律：点击跨窗口后必须重新抓取，禁止复用点击前的 root。
         fetchToken = SnapshotDiscipline.nextFetchToken(beforeTapToken)
@@ -1165,8 +1169,28 @@ class DouyinCollectService : AccessibilityService() {
         android.util.Log.w(TAG, "navigateBackToComments: 按满 $MAX_BACK_TO_COMMENTS 次仍未确认回到评论面板")
     }
 
-    private fun countAvatarNodes(root: AccessibilityNodeInfo): Int =
-        root.findAccessibilityNodeInfosByViewId("$DOUYIN_PKG:id/avatar")?.size ?: 0
+    // 28cee213：新版评论面板无 id/avatar，用结构判据（"N条评论"标题 / 「回复」动作文本）等价计数 1。
+    private fun countAvatarNodes(root: AccessibilityNodeInfo): Int {
+        val byId = root.findAccessibilityNodeInfosByViewId("$DOUYIN_PKG:id/avatar")?.size ?: 0
+        if (byId > 0) return byId
+        return if (CommentAvatarLocator.looksLikeCommentPanel(collectNodeTexts(root))) 1 else 0
+    }
+
+    /** 昵称文本节点左侧同一行的头像点击点（无 desc/无 id 头像的结构定位）。 */
+    private fun structuralAvatarTapPoint(root: AccessibilityNodeInfo, nickname: String): Pair<Int, Int>? {
+        val nick = findNodeByText(root, nickname) ?: return null
+        val b = Rect(); nick.getBoundsInScreen(b)
+        if (b.isEmpty) return null
+        return CommentAvatarLocator.tapPointLeftOfNickname(b.left, b.top, b.right, b.bottom, panelLeft = 0)
+    }
+
+    private fun tapPoint(x: Int, y: Int) {
+        val path = Path().apply { moveTo(x.toFloat(), y.toFloat()) }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 80))
+            .build()
+        dispatchGesture(gesture, null, null)
+    }
 
     /** 主页独有的 "抖音号：" 行是否还在树上（在 = 还没退出主页）。 */
     private fun hasDouyinIdLine(root: AccessibilityNodeInfo): Boolean =
