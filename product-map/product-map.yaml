@@ -113,22 +113,19 @@ golden_paths:
     status: active
     smoke_files:
       - .github/workflows/scripts/smoke/golden-path-2-smoke.sh
+    # 承诺式骨干 4 步（决策 60da58cf，2026-08-15，按 capability/references/step-cutting.md 四测试扫出）。
+    # 每步是「客户可观察的状态变化」承诺；注册/装机/建表/填画像=共享前置件(复用 Path1)，不算本路骨干；
+    # 挂片/FR/NFR/判定点/断言落 Brain 账本(journey_features + journey_step_links)，不进本文件（决策 26793221）。
+    # 旧 step7「触达带企微号→企微webhook→AI首答」已退役(决策 19c25189)：代码中不存在，0707 去飞书改本地中台。
     steps:
       - id: step1
-        name: 注册客户端自动登录
+        name: 中台显示手机上有 N 个可用抖音小号
       - id: step2
-        name: 装客户端 + Android 端 Agent 连中台
+        name: 系统按关键词替客户找到符合画像的目标视频，中台可见清单
       - id: step3
-        name: 系统自动建 3 张本地表（获客画像 / 对标视频 / Lead）落本地中台 DB
+        name: Lead 表出现带抖音号的潜在客户
       - id: step4
-        name: 客户在本地界面填获客画像 + 关键词
-      - id: step5
-        name: 手机端登录 2-3 个抖音小号 + 中台检测登录态
-      - id: step6
-        name: 按关键词搜索目标视频（替代手填对标 URL）
-      - id: step7
-        name: 评论区挖客闭环——抓评论→触达带企微号→企微webhook收好友→AI首答→写本地Lead表
-        status: deprecated   # 退役（决策 19c25189，2026-08-15）：企微 webhook/AI 首答链路代码中不存在，0707 已拍板去飞书改本地中台
+        name: 系统用小号给线索发出私信，客户看到每条已发出/被限流/失败/已送达
 
   # 以下三条为占位（主理人 07-29：只写出来，尚无实际实现）
   - id: live_acquisition
