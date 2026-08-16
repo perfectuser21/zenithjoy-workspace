@@ -16,6 +16,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.zenithjoy.agent.account.DouyinLaunchTrampoline
 import com.zenithjoy.agent.account.ScanMutex
 
 /**
@@ -267,6 +268,11 @@ class DouyinDmOutreachService : AccessibilityService() {
 
     // ── 步骤实现 ──────────────────────────────────────────────────────────────
 
+    // 从后台无障碍服务直接 startActivity 拉抖音被荣耀 iAware 拦截（真机实证，logcat
+    // `prevent start activity by iaware`），与 DouyinCollectService/DeviceAccountScanService
+    // 同一类问题、同一模式修复：先经透明 trampoline 过一道前台 Activity 再转发，目标 Intent
+    // 自带的 dmOutreachLaunchFlags（CLEAR_TASK 语义）原样保留、trampoline 不改写。trampoline
+    // 起不来（异常）则回退 launchDouyinDirect() 直启，行为与改动前完全一致。
     private fun launchDouyinApp(): Boolean {
         return try {
             val pm = applicationContext.packageManager
@@ -276,6 +282,22 @@ class DouyinDmOutreachService : AccessibilityService() {
             // 图标查找在会话页里命中的是会话内搜索而非首页全局搜索，把目标抖音号打进消息
             // 搜索框导致 NO_MATCH。CLEAR_TASK 强制清栈回干净首页（同 DouyinCollectService
             // 的 stage1LaunchFlags 已验证过的同款模式，不动登录态）。
+            launchIntent.flags = dmOutreachLaunchFlags(launchIntent.flags)
+            applicationContext.startActivity(
+                DouyinLaunchTrampoline.buildTrampolineIntentForTarget(applicationContext, launchIntent),
+            )
+            true
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "trampoline launchDouyinApp failed: ${e.message}, 回退直启")
+            launchDouyinDirect()
+        }
+    }
+
+    // 直启回退：trampoline 起不来时的兜底路径，逻辑与改动前的 launchDouyinApp() 完全一致。
+    private fun launchDouyinDirect(): Boolean {
+        return try {
+            val pm = applicationContext.packageManager
+            val launchIntent = pm.getLaunchIntentForPackage(DOUYIN_PKG) ?: return false
             launchIntent.flags = dmOutreachLaunchFlags(launchIntent.flags)
             applicationContext.startActivity(launchIntent)
             true
