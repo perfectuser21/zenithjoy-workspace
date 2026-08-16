@@ -2,6 +2,7 @@ package com.zenithjoy.agent.account
 
 import android.app.Activity
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -53,6 +54,23 @@ class DouyinLaunchTrampolineActivity : Activity() {
     }
 
     private fun launchTargetThenFinish() {
+        val explicitTarget = if (Build.VERSION.SDK_INT >= 33) {
+            intent?.getParcelableExtra(DouyinLaunchTrampoline.EXTRA_TARGET_INTENT, Intent::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent?.getParcelableExtra(DouyinLaunchTrampoline.EXTRA_TARGET_INTENT)
+        }
+        if (explicitTarget != null) {
+            try {
+                startActivity(explicitTarget)
+                android.util.Log.i(TAG, "已从前台 trampoline 转发显式目标 Intent")
+            } catch (e: Exception) {
+                android.util.Log.w(TAG, "trampoline 转发显式目标 Intent 失败: ${e.message}")
+            }
+            finish()
+            return
+        }
+
         val target = DouyinLaunchTrampoline.resolveTargetPackage(
             intent?.getStringExtra(DouyinLaunchTrampoline.EXTRA_TARGET_PACKAGE),
         )
