@@ -279,18 +279,58 @@ class DouyinCollectService : AccessibilityService() {
         if (event.packageName != DOUYIN_PKG) return
 
         val root = rootInActiveWindow ?: return
-        val commentBtn = findNodeByContentDescPrefix(root, "评论") ?: findNodeByIds(root,
+        val commentBtn = findVisibleCommentButton(root) ?: return
+
+        state = State.OPENING_COMMENTS
+        clickCommentButton(commentBtn)
+        startCommentsTimeout()
+        startExtractionWatchdog()
+    }
+
+    /**
+     * 找【当前视频、屏幕内可见】的评论按钮（Brain task 28cee213，2026-08-16 4号机真机实证）：
+     * 详情页竖向 feed 的无障碍树里同时有相邻视频的"评论N，按钮"（bounds 在屏外，top 为负/超屏），
+     * 旧逻辑 findNodeByContentDescPrefix 取 DFS 首个命中 → 点在屏外 → 面板没开 → 0 条评论。
+     * 候选全部收集后交纯逻辑 [CommentButtonPicker] 挑屏内最靠下的；全在屏外返回 null 不点。
+     * resource-id 候选保留兜底（抖音 id 混淆，大概率命中不了）。
+     */
+    private fun findVisibleCommentButton(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        val matches = ArrayList<AccessibilityNodeInfo>()
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            if (node.contentDescription?.toString()?.startsWith("评论") == true) matches.add(node)
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        if (matches.isNotEmpty()) {
+            val rect = Rect()
+            val cands = matches.mapIndexed { i, n ->
+                n.getBoundsInScreen(rect)
+                CommentButtonPicker.Candidate(i, rect.top, rect.bottom, n.isVisibleToUser)
+            }
+            val idx = CommentButtonPicker.pick(cands, resources.displayMetrics.heightPixels)
+            if (idx != null) return matches[idx]
+            android.util.Log.w(TAG, "评论按钮候选 ${matches.size} 个全在屏外/不可见，不点")
+            return null
+        }
+        return findNodeByIds(root,
             "com.ss.android.ugc.aweme:id/iv_comment",
             "com.ss.android.ugc.aweme:id/comment_icon",
             "com.ss.android.ugc.aweme:id/tv_comment_count",
             "com.ss.android.ugc.aweme:id/comment_count",
         )
-        if (commentBtn == null) return
+    }
 
-        state = State.OPENING_COMMENTS
-        commentBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        startCommentsTimeout()
-        startExtractionWatchdog()
+    /** 评论按钮优先手势点中心（抖音多数动作栏节点 ACTION_CLICK 无效），bounds 空才退回 ACTION_CLICK。 */
+    private fun clickCommentButton(node: AccessibilityNodeInfo) {
+        val bounds = Rect()
+        node.getBoundsInScreen(bounds)
+        if (bounds.isEmpty) {
+            node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        } else {
+            tapNodeCenter(node)
+        }
     }
 
     // ── 1. 启动抖音 ───────────────────────────────────────────────────────────
@@ -936,18 +976,11 @@ class DouyinCollectService : AccessibilityService() {
         if (event.packageName != DOUYIN_PKG) return
 
         val root = rootInActiveWindow ?: return
-        // resource-id 混淆同上——评论按钮改为优先按 content-desc 匹配（"评论"/带数字的
-        // "评论 N" 朗读文案），resource-id 候选值保留兜底但大概率命中不了。
-        val commentBtn = findNodeByContentDescPrefix(root, "评论") ?: findNodeByIds(root,
-            "com.ss.android.ugc.aweme:id/iv_comment",
-            "com.ss.android.ugc.aweme:id/comment_icon",
-            "com.ss.android.ugc.aweme:id/tv_comment_count",
-            "com.ss.android.ugc.aweme:id/comment_count",
-        )
-        if (commentBtn == null) return
+        // 只挑屏幕内可见的评论按钮 + 手势点（见 findVisibleCommentButton / clickCommentButton）。
+        val commentBtn = findVisibleCommentButton(root) ?: return
 
         state = State.OPENING_COMMENTS
-        commentBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        clickCommentButton(commentBtn)
         startCommentsTimeout()
         startExtractionWatchdog()
     }
@@ -1034,6 +1067,8 @@ class DouyinCollectService : AccessibilityService() {
                 delay(COMMENT_LIST_POLL_MS)
             }
         }
+        // 诊断（28cee213）：全部轮询仍 0 条时把当前树打出来，下次别再靠猜（荣耀只留 W/E 级日志时也可见）。
+        rootInActiveWindow?.let { dumpNodeDescs(it, "comments-empty", 60) }
         return sawWindow to emptyList()
     }
 
@@ -1080,13 +1115,17 @@ class DouyinCollectService : AccessibilityService() {
      */
     private suspend fun resolveDouyinIdForCommenter(nickname: String): String? {
         val panelRoot = awaitRootInActiveWindow() ?: return null
-        val avatar = findNodeByContentDesc(panelRoot, avatarContentDesc(nickname)) ?: run {
-            android.util.Log.d(TAG, "avatar not found for $nickname (可能已滚出可视区)")
+        val avatar = findNodeByContentDesc(panelRoot, avatarContentDesc(nickname))
+        // 结构定位兜底（28cee213，2026-08-16）：新版评论头像无 desc/无 id，按昵称文本节点的
+        // bounds 在其左侧同一行手势点（头像圆心）；昵称贴着面板左缘则判无头像。
+        val structuralPoint = if (avatar == null) structuralAvatarTapPoint(panelRoot, nickname) else null
+        if (avatar == null && structuralPoint == null) {
+            android.util.Log.d(TAG, "avatar not found for $nickname (可能已滚出可视区/无头像锚)")
             return null
         }
 
         val beforeTapToken = fetchToken
-        tapNodeCenter(avatar)
+        if (avatar != null) tapNodeCenter(avatar) else tapPoint(structuralPoint!!.first, structuralPoint.second)
         delay(RandomDelay.sample(RandomDelay.CLICK_MS))
         // 快照纪律：点击跨窗口后必须重新抓取，禁止复用点击前的 root。
         fetchToken = SnapshotDiscipline.nextFetchToken(beforeTapToken)
@@ -1130,8 +1169,28 @@ class DouyinCollectService : AccessibilityService() {
         android.util.Log.w(TAG, "navigateBackToComments: 按满 $MAX_BACK_TO_COMMENTS 次仍未确认回到评论面板")
     }
 
-    private fun countAvatarNodes(root: AccessibilityNodeInfo): Int =
-        root.findAccessibilityNodeInfosByViewId("$DOUYIN_PKG:id/avatar")?.size ?: 0
+    // 28cee213：新版评论面板无 id/avatar，用结构判据（"N条评论"标题 / 「回复」动作文本）等价计数 1。
+    private fun countAvatarNodes(root: AccessibilityNodeInfo): Int {
+        val byId = root.findAccessibilityNodeInfosByViewId("$DOUYIN_PKG:id/avatar")?.size ?: 0
+        if (byId > 0) return byId
+        return if (CommentAvatarLocator.looksLikeCommentPanel(collectNodeTexts(root))) 1 else 0
+    }
+
+    /** 昵称文本节点左侧同一行的头像点击点（无 desc/无 id 头像的结构定位）。 */
+    private fun structuralAvatarTapPoint(root: AccessibilityNodeInfo, nickname: String): Pair<Int, Int>? {
+        val nick = findNodeByText(root, nickname) ?: return null
+        val b = Rect(); nick.getBoundsInScreen(b)
+        if (b.isEmpty) return null
+        return CommentAvatarLocator.tapPointLeftOfNickname(b.left, b.top, b.right, b.bottom, panelLeft = 0)
+    }
+
+    private fun tapPoint(x: Int, y: Int) {
+        val path = Path().apply { moveTo(x.toFloat(), y.toFloat()) }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 80))
+            .build()
+        dispatchGesture(gesture, null, null)
+    }
 
     /** 主页独有的 "抖音号：" 行是否还在树上（在 = 还没退出主页）。 */
     private fun hasDouyinIdLine(root: AccessibilityNodeInfo): Boolean =
