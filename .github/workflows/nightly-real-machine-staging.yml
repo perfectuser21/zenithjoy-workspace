@@ -52,10 +52,14 @@ jobs:
         run: |
           "/c/Program Files/Tailscale/tailscale.exe" set --exit-node=100.86.118.99 --exit-node-allow-lan-access || true
 
+      # selfcheck_bubbles.py 通过 sys.path 依赖 ../wechat-rpa（import listen_chat/find_weixin），
+      # sparse 列表必须含 services/agent/wechat-rpa（07-30~08-16 漏拉连红 17 晚，issue #1639）；
+      # 由 lint-nightly-sparse-checkout-deps.sh 机械对账守卫。
       - uses: actions/checkout@v4
         with:
           sparse-checkout: |
             services/agent/tools
+            services/agent/wechat-rpa
           sparse-checkout-cone-mode: false
 
       - name: 关闭 exit-node（不常驻占用）
