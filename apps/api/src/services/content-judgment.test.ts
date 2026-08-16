@@ -394,6 +394,17 @@ describe('content-judgment: 视频三档 + commander 复核', () => {
     expect(mockedPost).toHaveBeenCalledTimes(1);
   });
 
+  it('force_result=uncertain 测试钩子 → 跳过主判、直接真调 commander（只 commander 一次调用）', async () => {
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost.mockResolvedValueOnce({ data: { choices: [{ message: { content: '准' } }] } } as never);
+
+    const pool = makePool({ targetProfileDesc: '中小企业主，关注降本增效' });
+    const res = await judgeVideo(pool, 'tenant-fu', 'video-fu', 'audio', btoa('x'), 'uncertain');
+
+    expect(res.judgment_status).toBe('matched');
+    expect(mockedPost).toHaveBeenCalledTimes(1); // 没调主判，只调了 commander
+  });
+
   it('commander 请求体必须带上主判理由 + 转写文案（让它整体再看）', async () => {
     const mockedPost = vi.mocked(axios.post);
     mockedPost

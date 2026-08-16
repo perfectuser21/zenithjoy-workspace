@@ -22,7 +22,9 @@ export interface JudgeVideoResult {
 }
 
 export interface JudgeVideoOptions {
-  forceResult?: 'matched' | 'rejected' | 'pending';
+  // 'uncertain'：仅非生产测试钩子——跳过主判、直接真调 commander，供 smoke 在真环境验证
+  // commander 模型（deepseek-v4-flash）可用、能返回终态（环境接缝守卫，单测 mock 测不到）。
+  forceResult?: 'matched' | 'rejected' | 'pending' | 'uncertain';
   forceTimeout?: boolean;
 }
 
@@ -30,6 +32,9 @@ export interface JudgeVideoOptions {
 const JUDGMENT_TIMEOUT_MS = 20_000;  // 带图/音判定较慢，留余量（服务端即便 agent 8s 超时也要写库）
 const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';  // ToAPIs 代理，国内可用（OpenAI 兼容）；api. 子域 2026-07-14 实测全球挂起（gp2 smoke Step8c 真调抓到），默认切主域，可用 TOAPIS_BASE_URL 覆盖
 const JUDGMENT_MODEL = 'gemini-2.5-flash-official';
+// commander（复核官）：主判判"存疑"(UNCERTAIN)时的第二个 AI，走同一个 ToAPIs 代理（OpenAI 兼容，
+// 换 model 字段即可，不新接 key），用不同模型(DeepSeek)做跨模型交叉验证，只判"准/不准"。
+const COMMANDER_MODEL = process.env.COMMANDER_MODEL || 'deepseek-v4-flash';
 
 // ── judgeVideo：核心判决函数 ─────────────────────────────────────────────────
 /**
@@ -50,7 +55,7 @@ export async function judgeVideo(
   videoId: string,
   captureType: string,
   dataB64: string,
-  forceResult?: 'matched' | 'rejected' | 'pending',
+  forceResult?: 'matched' | 'rejected' | 'pending' | 'uncertain',
   forceTimeout?: boolean,
   title?: string,
 ): Promise<JudgeVideoResult> {
@@ -102,6 +107,13 @@ export async function judgeVideo(
       // 模拟超时：标 pending 后立即返回
       await markPending(pool, tenantId, videoId, captureType, 'force_timeout');
       return { judgment_status: 'pending', judgment_reason: 'force_timeout' };
+    }
+    if (forceResult === 'uncertain') {
+      // 跳过主判、直接真调 commander（真环境验证 commander 模型可用 + 存疑消化成终态）
+      return commanderReview(
+        pool, tenantId, videoId, captureType, '（force_uncertain 测试转写）',
+        targetProfileDesc, 'force_uncertain', title,
+      );
     }
     if (forceResult) {
       await writeJudgment(pool, tenantId, videoId, captureType, forceResult, 'force_result');
@@ -164,7 +176,7 @@ async function callGemini(
     );
 
     const text: string = resp.data?.choices?.[0]?.message?.content ?? '';
-    return parseGeminiResponse(pool, tenantId, videoId, captureType, text);
+    return parseGeminiResponse(pool, tenantId, videoId, captureType, text, targetProfileDesc, title);
   } catch (err) {
     const isTimeout = axios.isAxiosError(err) && err.code === 'ECONNABORTED';
     const reason = isTimeout ? 'gemini_timeout' : 'gemini_error';
@@ -195,11 +207,12 @@ ${targetProfileDesc}
 判断规则：
 1. 如果视频内容与目标客户画像高度相关（评论区可能有潜在客户），回复：MATCHED
 2. 如果视频内容与目标客户画像明显不相关，回复：REJECTED，并简短说明原因（不超过 30 字）
-3. 如果无法判断，回复：MATCHED（保守策略，不漏过潜在客户）
+3. 如果边界模糊、信息不足、拿不准是否相关，回复：UNCERTAIN，并简短说明为什么拿不准（不超过 30 字）
+   （不要为了保守而硬判 MATCHED——拿不准就如实说 UNCERTAIN，后面有复核官二次判）
 
 请严格按格式回复：
-第一行：MATCHED 或 REJECTED
-如果是 REJECTED，第二行：原因：...${transcriptInstruction}`;
+第一行：MATCHED 或 REJECTED 或 UNCERTAIN
+如果是 REJECTED 或 UNCERTAIN，第二行：原因：...${transcriptInstruction}`;
 }
 
 function extractTranscript(text: string): string | null {
@@ -209,12 +222,20 @@ function extractTranscript(text: string): string | null {
   return extracted || null;
 }
 
+function extractReason(text: string): string | null {
+  const lines = text.trim().split('\n');
+  const reasonLine = lines.find(l => l.includes('原因：') || l.includes('原因:'));
+  return reasonLine?.replace(/^原因[：:]/, '').trim() ?? null;
+}
+
 function parseGeminiResponse(
   pool: QueryablePool,
   tenantId: string,
   videoId: string,
   captureType: string,
   text: string,
+  targetProfileDesc: string,
+  title?: string,
 ): Promise<JudgeVideoResult> {
   const upper = text.trim().toUpperCase();
   const transcript = extractTranscript(text);
@@ -224,20 +245,108 @@ function parseGeminiResponse(
     }));
   }
   if (upper.startsWith('REJECTED')) {
-    // 提取原因（第二行）
-    const lines = text.trim().split('\n');
-    const reasonLine = lines.find(l => l.includes('原因：') || l.includes('原因:'));
-    const reason = reasonLine?.replace(/^原因[：:]/, '').trim() ?? null;
+    const reason = extractReason(text);
     return writeJudgment(pool, tenantId, videoId, captureType, 'rejected', reason, transcript).then(() => ({
       judgment_status: 'rejected' as const,
       judgment_reason: reason,
     }));
   }
-  // 无法解析 → 保守 matched
-  return writeJudgment(pool, tenantId, videoId, captureType, 'matched', 'parse_fallback', transcript).then(() => ({
-    judgment_status: 'matched' as const,
-    judgment_reason: 'parse_fallback',
-  }));
+  if (upper.startsWith('UNCERTAIN')) {
+    // 存疑 → 交 commander(第二个 AI)拿主判理由二次判，不再"保守 matched"直接放行
+    const primaryReason = extractReason(text) ?? 'uncertain';
+    return commanderReview(
+      pool, tenantId, videoId, captureType, transcript, targetProfileDesc, primaryReason, title,
+    );
+  }
+  // 无法解析主判输出 → 当存疑处理，交 commander（不再直接放行）
+  return commanderReview(
+    pool, tenantId, videoId, captureType, transcript, targetProfileDesc, 'parse_fallback', title,
+  );
+}
+
+// ── commander 复核官：主判"存疑"时的第二个 AI（DeepSeek via ToAPIs）──────────────
+// 拿到【前段转写文案 + 标题 + 画像 + 主判为什么拿不准的理由】整体再看，只判"准/不准"：
+//   准   → matched（放行去抓评论）
+//   不准 → rejected（丢）
+// 无 key / 调用失败 / 输出无法解析 → 一律保守判 rejected（存疑绝不放行）。
+async function commanderReview(
+  pool: QueryablePool,
+  tenantId: string,
+  videoId: string,
+  captureType: string,
+  transcript: string | null,
+  targetProfileDesc: string,
+  primaryReason: string,
+  title?: string,
+): Promise<JudgeVideoResult> {
+  const finalize = async (
+    status: 'matched' | 'rejected',
+    tag: string,
+  ): Promise<JudgeVideoResult> => {
+    const reason = `via_commander|primary存疑:${primaryReason}|commander:${tag}`;
+    await writeJudgment(pool, tenantId, videoId, captureType, status, reason, transcript);
+    return { judgment_status: status, judgment_reason: reason };
+  };
+
+  const apiKey = process.env.TOAPIS_API_KEY;
+  if (!apiKey) {
+    console.error('[content-judgment] commander: TOAPIS_API_KEY 未配置，存疑保守判 rejected');
+    return finalize('rejected', 'no_api_key');
+  }
+
+  const prompt = buildCommanderPrompt(targetProfileDesc, transcript, primaryReason, title);
+  try {
+    const resp = await axios.post(
+      `${TOAPIS_BASE}/chat/completions`,
+      {
+        model: COMMANDER_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 100,
+        temperature: 0.1,
+      },
+      {
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        timeout: JUDGMENT_TIMEOUT_MS,
+      }
+    );
+    const text: string = resp.data?.choices?.[0]?.message?.content ?? '';
+    const verdict = parseCommanderVerdict(text);
+    return finalize(verdict, verdict === 'matched' ? '准' : '不准');
+  } catch (err) {
+    const isTimeout = axios.isAxiosError(err) && err.code === 'ECONNABORTED';
+    console.error(
+      `[content-judgment] commander ${isTimeout ? 'timeout' : 'error'} videoId=${videoId}:`,
+      (err as Error).message
+    );
+    return finalize('rejected', isTimeout ? 'timeout_保守拒' : 'error_保守拒');
+  }
+}
+
+function buildCommanderPrompt(
+  targetProfileDesc: string,
+  transcript: string | null,
+  primaryReason: string,
+  title?: string,
+): string {
+  return `你是内容判决的复核官（commander）。主判 AI 对下面这条视频拿不准、判为"存疑"，现在交给你终审。
+你只需回答：这条视频是否值得去它的评论区找潜在客户——只回"准"（值得，放行）或"不准"（不值得，丢弃）。
+
+目标客户画像：
+${targetProfileDesc}
+
+视频标题：${title || '(无)'}
+视频前段文案（转写）：${transcript || '(无转写)'}
+主判为什么拿不准：${primaryReason}
+
+请整体权衡后，严格只回一个词：准 或 不准`;
+}
+
+function parseCommanderVerdict(text: string): 'matched' | 'rejected' {
+  const t = text.trim();
+  // "不准" 含 "准" 字，必须先判否定
+  if (t.includes('不准') || t.includes('不匹配') || t.includes('不相关')) return 'rejected';
+  if (t.includes('准') || t.includes('匹配') || t.includes('相关')) return 'matched';
+  return 'rejected'; // 无法解析 → 保守拒（存疑不放行）
 }
 
 // ── 内部：写库 ──────────────────────────────────────────────────────────────
