@@ -306,3 +306,108 @@ describe('content-judgment judgeVideo', () => {
     expect(params).not.toContain('这是测试转写文案内容');
   });
 });
+
+// ── 视频判定三档 + commander 复核（step2 判定闸加固）─────────────────────────────
+// 主判 Gemini 出 MATCHED/REJECTED/UNCERTAIN；UNCERTAIN(存疑) → commander(DeepSeek via ToAPIs)
+// 拿主判理由复核 → 准=matched / 不准=rejected；解析失败=默认 rejected(保守)。
+// 对外契约不变（存疑在服务端 commander 内部消化）。
+describe('content-judgment: 视频三档 + commander 复核', () => {
+  beforeEach(() => {
+    // mockReset 而非 clearAllMocks：清空 mockResolvedValueOnce 队列，防跨用例泄漏
+    // （clearAllMocks 只清 calls/results，不清 Once 队列——用例调用数不齐时会漏进下一个用例）。
+    vi.mocked(axios.post).mockReset();
+    process.env.TOAPIS_API_KEY = 'test-key';
+  });
+
+  // 主判返回 UNCERTAIN，附理由 + 转写，供 commander 复核
+  const UNCERTAIN_RESP = {
+    data: {
+      choices: [
+        {
+          message: {
+            content: 'UNCERTAIN\n原因：内容边界模糊，可能相关也可能无关\n转写：今天分享一个提高效率的小方法',
+          },
+        },
+      ],
+    },
+  } as never;
+
+  it('主判 UNCERTAIN + commander 准 → matched，且真调了两次（主判 + commander）', async () => {
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost
+      .mockResolvedValueOnce(UNCERTAIN_RESP)
+      .mockResolvedValueOnce({ data: { choices: [{ message: { content: '准' } }] } } as never);
+
+    const pool = makePool({ targetProfileDesc: '中小企业主，关注降本增效' });
+    const res = await judgeVideo(pool, 'tenant-cmd-1', 'video-cmd-1', 'audio', btoa('fake-audio'));
+
+    expect(res.judgment_status).toBe('matched');
+    expect(mockedPost).toHaveBeenCalledTimes(2);
+  });
+
+  it('主判 UNCERTAIN + commander 不准 → rejected', async () => {
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost
+      .mockResolvedValueOnce(UNCERTAIN_RESP)
+      .mockResolvedValueOnce({ data: { choices: [{ message: { content: '不准' } }] } } as never);
+
+    const pool = makePool({ targetProfileDesc: '中小企业主，关注降本增效' });
+    const res = await judgeVideo(pool, 'tenant-cmd-2', 'video-cmd-2', 'audio', btoa('fake-audio'));
+
+    expect(res.judgment_status).toBe('rejected');
+    expect(mockedPost).toHaveBeenCalledTimes(2);
+  });
+
+  it('主判 UNCERTAIN + commander 乱返回(无法解析) → 默认 rejected（保守，宁可漏也不放）', async () => {
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost
+      .mockResolvedValueOnce(UNCERTAIN_RESP)
+      .mockResolvedValueOnce({ data: { choices: [{ message: { content: '嗯……说不好' } }] } } as never);
+
+    const pool = makePool({ targetProfileDesc: '中小企业主，关注降本增效' });
+    const res = await judgeVideo(pool, 'tenant-cmd-3', 'video-cmd-3', 'audio', btoa('fake-audio'));
+
+    expect(res.judgment_status).toBe('rejected');
+  });
+
+  it('主判 MATCHED → 直接 matched，不调 commander（只一次调用）', async () => {
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost.mockResolvedValue({ data: { choices: [{ message: { content: 'MATCHED' } }] } } as never);
+
+    const pool = makePool({ targetProfileDesc: '中小企业主，关注降本增效' });
+    const res = await judgeVideo(pool, 'tenant-cmd-4', 'video-cmd-4', 'audio', btoa('fake-audio'));
+
+    expect(res.judgment_status).toBe('matched');
+    expect(mockedPost).toHaveBeenCalledTimes(1);
+  });
+
+  it('主判 REJECTED → 直接 rejected，不调 commander（只一次调用）', async () => {
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost.mockResolvedValue({
+      data: { choices: [{ message: { content: 'REJECTED\n原因：完全跑题' } }] },
+    } as never);
+
+    const pool = makePool({ targetProfileDesc: '中小企业主，关注降本增效' });
+    const res = await judgeVideo(pool, 'tenant-cmd-5', 'video-cmd-5', 'audio', btoa('fake-audio'));
+
+    expect(res.judgment_status).toBe('rejected');
+    expect(mockedPost).toHaveBeenCalledTimes(1);
+  });
+
+  it('commander 请求体必须带上主判理由 + 转写文案（让它整体再看）', async () => {
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost
+      .mockResolvedValueOnce(UNCERTAIN_RESP)
+      .mockResolvedValueOnce({ data: { choices: [{ message: { content: '准' } }] } } as never);
+
+    const pool = makePool({ targetProfileDesc: '中小企业主，关注降本增效' });
+    await judgeVideo(pool, 'tenant-cmd-6', 'video-cmd-6', 'audio', btoa('fake-audio'), undefined, undefined, '效率工具测评');
+
+    // 第二次调用 = commander，请求体应含主判理由 + 转写文案 + 画像
+    const commanderCall = mockedPost.mock.calls[1];
+    const body = JSON.stringify(commanderCall?.[1] ?? {});
+    expect(body).toContain('内容边界模糊'); // 主判理由
+    expect(body).toContain('今天分享一个提高效率的小方法'); // 转写文案
+    expect(body).toContain('中小企业主'); // 画像
+  });
+});
