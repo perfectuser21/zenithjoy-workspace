@@ -22,6 +22,7 @@ import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import com.zenithjoy.agent.account.DouyinLaunchTrampoline
 import com.zenithjoy.agent.account.ScanMutex
 
 /**
@@ -236,17 +237,27 @@ class DouyinCollectService : AccessibilityService() {
     }
 
     // 深链打开抖音视频：snssdk1128://aweme/detail/<videoId>
+    // 与账号扫描/私信同款问题：从后台无障碍服务直接 startActivity 拉抖音被荣耀 iAware 拦截，
+    // 先经透明 trampoline 过一道前台 Activity 再转发；trampoline 起不来（异常）则回退直接启动。
     private fun launchVideoByDeepLink(videoId: String): Boolean {
+        val uri = Uri.parse("snssdk1128://aweme/detail/$videoId")
+        val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
         return try {
-            val uri = Uri.parse("snssdk1128://aweme/detail/$videoId")
-            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            applicationContext.startActivity(intent)
+            applicationContext.startActivity(
+                DouyinLaunchTrampoline.buildTrampolineIntentForTarget(applicationContext, intent),
+            )
             true
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "deeplink launch failed videoId=$videoId: ${e.message}")
-            false
+            android.util.Log.w(TAG, "trampoline deeplink launch failed videoId=$videoId: ${e.message}, 回退直启")
+            try {
+                applicationContext.startActivity(intent)
+                true
+            } catch (e2: Exception) {
+                android.util.Log.e(TAG, "deeplink launch failed videoId=$videoId: ${e2.message}")
+                false
+            }
         }
     }
 
@@ -284,6 +295,10 @@ class DouyinCollectService : AccessibilityService() {
 
     // ── 1. 启动抖音 ───────────────────────────────────────────────────────────
 
+    // 从后台无障碍服务直接 startActivity 拉抖音被荣耀 iAware 拦截（真机实证，logcat
+    // `prevent start activity by iaware`），先经透明 trampoline 过一道前台 Activity 再转发，
+    // 目标 Intent 自带的 stage1LaunchFlags（CLEAR_TASK 语义）原样保留、trampoline 不改写。
+    // trampoline 起不来（异常）则回退 launchDouyinDirect() 直启，行为与改动前完全一致。
     private fun launchDouyin(): Boolean {
         return try {
             val pm = applicationContext.packageManager
@@ -291,6 +306,22 @@ class DouyinCollectService : AccessibilityService() {
             // 必须叠加 CLEAR_TASK：仅 NEW_TASK 会 resume 到上次采集残留的 DetailActivity
             // （取分享链会点进视频详情页，任务中途死留栈）→ 在详情页跑搜索 → SEARCH_TIMEOUT。
             // CLEAR_TASK 强制清栈从 launcher 全新启动回干净首页 feed（不动登录态，真机实证）。
+            launchIntent.flags = stage1LaunchFlags(launchIntent.flags)
+            applicationContext.startActivity(
+                DouyinLaunchTrampoline.buildTrampolineIntentForTarget(applicationContext, launchIntent),
+            )
+            true
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "trampoline launch douyin failed: ${e.message}, 回退直启")
+            launchDouyinDirect()
+        }
+    }
+
+    // 直启回退：trampoline 起不来时的兜底路径，逻辑与改动前的 launchDouyin() 完全一致。
+    private fun launchDouyinDirect(): Boolean {
+        return try {
+            val pm = applicationContext.packageManager
+            val launchIntent = pm.getLaunchIntentForPackage(DOUYIN_PKG) ?: return false
             launchIntent.flags = stage1LaunchFlags(launchIntent.flags)
             applicationContext.startActivity(launchIntent)
             true

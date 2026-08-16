@@ -18,6 +18,9 @@ import android.content.Intent
 object DouyinLaunchTrampoline {
     const val EXTRA_TARGET_PACKAGE = "com.zenithjoy.agent.extra.LAUNCH_TARGET_PACKAGE"
 
+    /** 显式目标 Intent extra key（DouyinCollectService/DouyinDmOutreachService 走这条路径）。 */
+    const val EXTRA_TARGET_INTENT = "com.zenithjoy.agent.extra.LAUNCH_TARGET_INTENT"
+
     /** 规范来源；DeviceAccountScanService.DOUYIN_PKG 引用它，不留两份字面量。 */
     const val DEFAULT_TARGET_PACKAGE = "com.ss.android.ugc.aweme"
 
@@ -34,4 +37,14 @@ object DouyinLaunchTrampoline {
         Intent(context, DouyinLaunchTrampolineActivity::class.java)
             .addFlags(TRAMPOLINE_FLAGS)
             .putExtra(EXTRA_TARGET_PACKAGE, targetPackage)
+
+    /**
+     * 显式目标 Intent 版本：调用方（DouyinCollectService/DouyinDmOutreachService）已经构造好
+     * 带自己业务语义 flags（如 CLEAR_TASK、深链 ACTION_VIEW）的目标 Intent，trampoline 只负责
+     * 让 App 先成为前台 Activity 再原样转发这个 Intent，不改写调用方决定好的 flags。
+     */
+    fun buildTrampolineIntentForTarget(context: Context, targetIntent: Intent): Intent =
+        Intent(context, DouyinLaunchTrampolineActivity::class.java)
+            .addFlags(TRAMPOLINE_FLAGS)
+            .putExtra(EXTRA_TARGET_INTENT, targetIntent)
 }
