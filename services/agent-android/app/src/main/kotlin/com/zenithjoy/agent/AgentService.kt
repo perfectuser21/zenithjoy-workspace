@@ -16,6 +16,7 @@ import com.google.gson.Gson
 import com.zenithjoy.agent.account.DeviceAccountModel
 import com.zenithjoy.agent.account.DeviceAccountRegistry
 import com.zenithjoy.agent.account.DeviceAccountScanService
+import com.zenithjoy.agent.account.DouyinLaunchTrampoline
 import com.zenithjoy.agent.collect.CollectFailureClassifier
 import com.zenithjoy.agent.collect.CollectJob
 import com.zenithjoy.agent.collect.CollectReporter
@@ -464,7 +465,17 @@ class AgentService : Service() {
                     val intent = Intent(Intent.ACTION_VIEW, uri).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
-                    applicationContext.startActivity(intent)
+                    // 从后台 Service 直接 startActivity 拉抖音同样被荣耀 iAware 拦截（同
+                    // DouyinCollectService/DouyinDmOutreachService 一类问题），先经透明
+                    // trampoline 转发；trampoline 异常时回退直启，行为与改动前完全一致。
+                    try {
+                        applicationContext.startActivity(
+                            DouyinLaunchTrampoline.buildTrampolineIntentForTarget(applicationContext, intent),
+                        )
+                    } catch (e: Exception) {
+                        android.util.Log.w(TAG, "trampoline videoOpener deeplink failed videoId=$videoId: ${e.message}, 回退直启")
+                        applicationContext.startActivity(intent)
+                    }
                     Thread.sleep(RandomDelay.sample(RandomDelay.NAV_MS))
                 } catch (e: Exception) {
                     android.util.Log.e(TAG, "judgment videoOpener deeplink failed videoId=$videoId: ${e.message}")
