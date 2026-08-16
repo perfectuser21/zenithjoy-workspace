@@ -106,6 +106,8 @@ jobs:
       SCENARIO: ${{ github.event.inputs.scenario || 'collect' }}
       REPEAT: ${{ github.event.inputs.repeat || '1' }}
       ATTEMPT_MARKER: ${{ github.event.inputs.attempt_marker || '' }}
+      # 四号机走 WiFi-adb 固定端口；夜里息屏掉线后由 smoke 的 ensure_device_online 自动重连(task c0efdb69)。
+      ANDROID_ADB_ENDPOINT: 192.168.1.96:5555
 
     steps:
       # xian-rog 到 github.com 的出境网络存在两层独立问题（pc4/staging 车道
