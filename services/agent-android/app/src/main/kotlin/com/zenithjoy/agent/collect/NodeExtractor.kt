@@ -68,15 +68,96 @@ object NodeExtractor {
     fun extractComments(nodes: List<NodeInfo>): List<CommentEntry> {
         val byResourceId = extractByResourceIdAnchor(nodes)
         val byContentDesc = extractByContentDescAnchor(nodes)
+        val byStructure = extractByStructuralAnchor(nodes)
 
-        // 合并去重（同一条评论两条锚点都命中时按 nickname+text 归一）：resourceId 锚点
-        // 优先（历史上验证更久），content-desc 锚点补 resourceId 锚不到的那些。
+        // 合并去重（同一条评论多条锚点都命中时按 nickname+text 归一）：resourceId 锚点
+        // 优先（历史上验证更久），content-desc 锚点补 resourceId 锚不到的那些，
+        // 结构锚点兜底（2026-08-16 抖音新版评论条目两者皆无时唯一能用的锚）。
         val seen = mutableSetOf<Pair<String, String>>()
         val merged = mutableListOf<CommentEntry>()
-        for (e in byResourceId + byContentDesc) {
+        for (e in byResourceId + byContentDesc + byStructure) {
             if (seen.add(e.commenterId to e.text)) merged.add(e)
         }
         return merged
+    }
+
+    /** 结构锚点：评论 item 动作行里的「回复」按钮文本（精确匹配）。 */
+    private const val STRUCT_REPLY_TEXT = "回复"
+
+    /** 结构锚点：紧跟「回复」之后的点赞节点朗读文案前缀（"赞N,未选中"/"赞N,已选中"）。 */
+    private const val STRUCT_LIKE_DESC_PREFIX = "赞"
+
+    /** 「回复」之后允许隔几个节点出现点赞节点（真机 dump 里紧邻，留余量）。 */
+    private const val STRUCT_LIKE_LOOKAHEAD = 3
+
+    /** 从「回复」向前回溯昵称/正文时最多看多少个节点（防止跨到上一条评论）。 */
+    private const val STRUCT_LOOKBACK = 12
+
+    /** 昵称长度上限（抖音昵称 ≤ 20 字，留余量；正文通常更长）。 */
+    private const val STRUCT_NICKNAME_MAX = 24
+
+    private val STRUCT_DATE_REGEX = Regex(
+        "^(\\d{1,2}-\\d{1,2}|\\d{4}-\\d{1,2}-\\d{1,2}|\\d+\\s*(天|小时|分钟|秒)前|昨天|前天|刚刚)$",
+    )
+
+    private fun isStructNoise(text: String): Boolean {
+        val t = text.trim()
+        if (t.isEmpty()) return true
+        if (t == STRUCT_REPLY_TEXT) return true
+        if (t.startsWith("·")) return true                                  // " · 广东" 地区（trim 后以 · 开头）
+        if (STRUCT_DATE_REGEX.matches(t)) return true                       // 日期
+        if (t.startsWith("展开") && t.endsWith("回复")) return true          // "展开N条回复"
+        if (t.endsWith("条评论")) return true                                // "8383条评论" 标题
+        return false
+    }
+
+    /**
+     * 结构锚点（2026-08-16，4号机 MAA-AN00 真机 dump 实证）：抖音新版评论面板的条目
+     * **没有 resource-id 也没有 content-desc**——昵称/正文/日期/地区都是裸 TextView，
+     * 只有动作行的「回复」文本与「赞N,未选中」朗读文案稳定。DFS 扁平序列里每条评论固定为
+     * `昵称 → 正文 → 日期 → [· 地区] → 回复 → 赞N(desc) → [数字] → 点踩`，楼中楼同构。
+     *
+     * 算法：以每个精确等于「回复」且其后 [STRUCT_LIKE_LOOKAHEAD] 个节点内出现「赞…」desc 的
+     * 节点为锚，向前跳过日期/地区/空节点，取到的第一段文本为正文、再前一段为昵称；
+     * 昵称超长、昵称正文相同、或回溯撞上另一个「回复」/「展开N条回复」则放弃这一条。
+     * 「作者」角标（昵称与正文之间独立的"作者"文本）视为博主本人，跳过。
+     */
+    private fun extractByStructuralAnchor(nodes: List<NodeInfo>): List<CommentEntry> {
+        val entries = mutableListOf<CommentEntry>()
+        for ((i, n) in nodes.withIndex()) {
+            if (n.text.trim() != STRUCT_REPLY_TEXT) continue
+            val likeFollows = (i + 1..minOf(i + STRUCT_LIKE_LOOKAHEAD, nodes.lastIndex))
+                .any { nodes[it].contentDescription.trim().startsWith(STRUCT_LIKE_DESC_PREFIX) }
+            if (!likeFollows) continue
+
+            var content: String? = null
+            var nickname: String? = null
+            var isAuthor = false
+            var j = i - 1
+            val floor = maxOf(0, i - STRUCT_LOOKBACK)
+            while (j >= floor && nickname == null) {
+                val t = nodes[j].text.trim()
+                if (t.isNotEmpty()) {
+                    if (t == STRUCT_REPLY_TEXT || (t.startsWith("展开") && t.endsWith("回复"))) break // 撞上上一条
+                    if (!isStructNoise(t)) {
+                        when {
+                            content == null -> content = t
+                            t == AUTHOR_BADGE_TEXT -> isAuthor = true
+                            else -> nickname = t
+                        }
+                    }
+                }
+                j--
+            }
+            val nick = nickname?.trim().orEmpty()
+            val body = content?.trim().orEmpty()
+            if (nick.isEmpty() || body.isEmpty()) continue
+            if (nick == body) continue
+            if (nick.length > STRUCT_NICKNAME_MAX) continue
+            if (isAuthor) continue
+            entries.add(CommentEntry(commenterId = nick, text = body))
+        }
+        return entries
     }
 
     private fun extractByResourceIdAnchor(nodes: List<NodeInfo>): List<CommentEntry> {
