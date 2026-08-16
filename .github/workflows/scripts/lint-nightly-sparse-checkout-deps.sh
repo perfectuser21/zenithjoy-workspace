@@ -71,9 +71,10 @@ for ln in job_block:
         if s.startswith("sparse-checkout:"):
             in_sparse = True
             sparse_indent = indent(ln)
-            # 同行 inline 值（如 sparse-checkout: services/agent/tools）也接受
+            # 同行 inline 值（如 sparse-checkout: services/agent/tools）也接受；
+            # 块标量指示符 | / |- / > / >- 都表示"列表在下面几行"
             rest = s[len("sparse-checkout:"):].strip()
-            if rest and rest != "|":
+            if rest and rest[0] not in "|>":
                 sparse.append(rest.strip("'\""))
                 in_sparse = False
         continue
@@ -87,14 +88,22 @@ if not sparse:
     print(f"::error file={wf}::job `{job}` 没有 sparse-checkout 块（或为空）——若已改回整仓 checkout 请删除本守卫的调用")
     sys.exit(1)
 
-# 3) 解析脚本里的 sys.path 依赖：os.path.join(_HERE, "..", "<dir>") 形态
+# 3) 解析脚本里的 sys.path 依赖：os.path.join(_HERE, "..", "<dir>") 形态（单/双引号都认）
+#    只对账脚本自身用 _HERE 拼出的目录，不追被 import 模块内部的传递依赖
+#    （wechat-rpa 内部零向上引用，见 spec 2026-08-16-nightly-sparse-checkout-deps-guard-design）。
 src = open(script, encoding="utf-8").read()
-script_dir = os.path.dirname(script).rstrip("/")            # services/agent/tools
+script_dir = os.path.relpath(os.path.dirname(os.path.abspath(script)))   # 归一为仓根相对路径，如 services/agent/tools
 required = {script_dir}
-for m in re.finditer(r'os\.path\.join\(\s*_HERE\s*,\s*((?:"[^"]+"\s*,?\s*)+)\)', src):
-    parts = [p.strip().strip('"') for p in m.group(1).split(",") if p.strip()]
+joins = re.findall(r'os\.path\.join\(\s*_HERE\s*,\s*((?:["\'][^"\']+["\']\s*,?\s*)+)\)', src)
+for group in joins:
+    parts = [p.strip().strip("\"'") for p in group.split(",") if p.strip()]
     d = os.path.normpath(os.path.join(script_dir, *parts))
     required.add(d)
+# 守卫自检：脚本明明在改 sys.path，却一个 _HERE join 都没解析到 → 说明依赖写法变了、
+# 本守卫已经"看不见"依赖，必须报红而不是放行（守卫失明比没有守卫更危险）。
+if not joins and re.search(r"sys\.path\.(insert|append)\(", src):
+    print(f"::error file={script}::{script} 修改了 sys.path，但本守卫没有解析到任何 os.path.join(_HERE, ...) 依赖形态——请同步 lint 的解析规则")
+    sys.exit(1)
 
 # 4) 对账：每个依赖目录必须被某个 sparse 项前缀覆盖（非 cone 模式 = 路径前缀）
 def covered(d):
