@@ -279,18 +279,58 @@ class DouyinCollectService : AccessibilityService() {
         if (event.packageName != DOUYIN_PKG) return
 
         val root = rootInActiveWindow ?: return
-        val commentBtn = findNodeByContentDescPrefix(root, "评论") ?: findNodeByIds(root,
+        val commentBtn = findVisibleCommentButton(root) ?: return
+
+        state = State.OPENING_COMMENTS
+        clickCommentButton(commentBtn)
+        startCommentsTimeout()
+        startExtractionWatchdog()
+    }
+
+    /**
+     * 找【当前视频、屏幕内可见】的评论按钮（Brain task 28cee213，2026-08-16 4号机真机实证）：
+     * 详情页竖向 feed 的无障碍树里同时有相邻视频的"评论N，按钮"（bounds 在屏外，top 为负/超屏），
+     * 旧逻辑 findNodeByContentDescPrefix 取 DFS 首个命中 → 点在屏外 → 面板没开 → 0 条评论。
+     * 候选全部收集后交纯逻辑 [CommentButtonPicker] 挑屏内最靠下的；全在屏外返回 null 不点。
+     * resource-id 候选保留兜底（抖音 id 混淆，大概率命中不了）。
+     */
+    private fun findVisibleCommentButton(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        val matches = ArrayList<AccessibilityNodeInfo>()
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            if (node.contentDescription?.toString()?.startsWith("评论") == true) matches.add(node)
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        if (matches.isNotEmpty()) {
+            val rect = Rect()
+            val cands = matches.mapIndexed { i, n ->
+                n.getBoundsInScreen(rect)
+                CommentButtonPicker.Candidate(i, rect.top, rect.bottom, n.isVisibleToUser)
+            }
+            val idx = CommentButtonPicker.pick(cands, resources.displayMetrics.heightPixels)
+            if (idx != null) return matches[idx]
+            android.util.Log.w(TAG, "评论按钮候选 ${matches.size} 个全在屏外/不可见，不点")
+            return null
+        }
+        return findNodeByIds(root,
             "com.ss.android.ugc.aweme:id/iv_comment",
             "com.ss.android.ugc.aweme:id/comment_icon",
             "com.ss.android.ugc.aweme:id/tv_comment_count",
             "com.ss.android.ugc.aweme:id/comment_count",
         )
-        if (commentBtn == null) return
+    }
 
-        state = State.OPENING_COMMENTS
-        commentBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        startCommentsTimeout()
-        startExtractionWatchdog()
+    /** 评论按钮优先手势点中心（抖音多数动作栏节点 ACTION_CLICK 无效），bounds 空才退回 ACTION_CLICK。 */
+    private fun clickCommentButton(node: AccessibilityNodeInfo) {
+        val bounds = Rect()
+        node.getBoundsInScreen(bounds)
+        if (bounds.isEmpty) {
+            node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        } else {
+            tapNodeCenter(node)
+        }
     }
 
     // ── 1. 启动抖音 ───────────────────────────────────────────────────────────
@@ -936,18 +976,11 @@ class DouyinCollectService : AccessibilityService() {
         if (event.packageName != DOUYIN_PKG) return
 
         val root = rootInActiveWindow ?: return
-        // resource-id 混淆同上——评论按钮改为优先按 content-desc 匹配（"评论"/带数字的
-        // "评论 N" 朗读文案），resource-id 候选值保留兜底但大概率命中不了。
-        val commentBtn = findNodeByContentDescPrefix(root, "评论") ?: findNodeByIds(root,
-            "com.ss.android.ugc.aweme:id/iv_comment",
-            "com.ss.android.ugc.aweme:id/comment_icon",
-            "com.ss.android.ugc.aweme:id/tv_comment_count",
-            "com.ss.android.ugc.aweme:id/comment_count",
-        )
-        if (commentBtn == null) return
+        // 只挑屏幕内可见的评论按钮 + 手势点（见 findVisibleCommentButton / clickCommentButton）。
+        val commentBtn = findVisibleCommentButton(root) ?: return
 
         state = State.OPENING_COMMENTS
-        commentBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        clickCommentButton(commentBtn)
         startCommentsTimeout()
         startExtractionWatchdog()
     }
@@ -1034,6 +1067,8 @@ class DouyinCollectService : AccessibilityService() {
                 delay(COMMENT_LIST_POLL_MS)
             }
         }
+        // 诊断（28cee213）：全部轮询仍 0 条时把当前树打出来，下次别再靠猜（荣耀只留 W/E 级日志时也可见）。
+        rootInActiveWindow?.let { dumpNodeDescs(it, "comments-empty", 60) }
         return sawWindow to emptyList()
     }
 
