@@ -275,11 +275,16 @@ def classify_no_window(process_running: bool) -> tuple:
 def _weixin_process_running() -> bool:
     import subprocess
     try:
-        out = subprocess.run(
-            ["tasklist", "/FI", "IMAGENAME eq Weixin.exe"],
-            capture_output=True, text=True, timeout=15,
-        ).stdout or ""
-        return "Weixin.exe" in out
+        # 拿原始 bytes 自己容错解码：中文 Windows 的 tasklist 输出是 GBK（"映像名称 PID 会话名…"），
+        # 而 nightly job 设了 PYTHONUTF8=1——text=True 会按 utf-8 解 GBK 表头 → reader 线程
+        # UnicodeDecodeError → stdout=None → 误判"没跑"（2026-08-16 rog 实录：Weixin.exe 在跑却报 NO_PROCESS）。
+        raw = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq Weixin.exe", "/NH"],
+            capture_output=True, timeout=15,
+        ).stdout or b""
+        if isinstance(raw, str):  # 被 mock/上层改成 text 模式时也兼容
+            return "Weixin.exe" in raw
+        return "Weixin.exe" in raw.decode("utf-8", errors="replace")
     except Exception:
         return True  # 查不出进程时保守当作在跑 → 走 UIA_DEAD 分支（宁可报死区不误报没跑）
 
