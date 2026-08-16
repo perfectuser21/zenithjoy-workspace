@@ -328,7 +328,9 @@ jobs:
                    .github/workflows/scripts/__tests__/windows-cancel-workflow.evidence-correlation.test.sh \
                    .github/workflows/scripts/__tests__/lint-smoke-mock-honesty.test.sh \
                    .github/workflows/scripts/__tests__/lint-nightly-sparse-checkout-deps.test.sh \
-                   .github/workflows/scripts/__tests__/lint-realmachine-unverified-ratchet.test.sh; do
+                   .github/workflows/scripts/__tests__/lint-realmachine-unverified-ratchet.test.sh \
+                   .github/workflows/scripts/__tests__/dm-send-realmachine-smoke.test.sh \
+                   .github/workflows/scripts/smoke/lib/ensure-device-online.test.sh; do
             [ -f "$t" ] || continue
             FOUND=$((FOUND+1))
             echo "▶ $t"

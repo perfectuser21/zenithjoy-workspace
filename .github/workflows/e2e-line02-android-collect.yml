@@ -146,6 +146,55 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/line02-android-collect-realmachine-smoke.sh
           bash .github/workflows/scripts/smoke/line02-android-collect-realmachine-smoke.sh
 
+  dm-send-realmachine-smoke:
+    name: agent-android 私信真机送达 smoke（xian-rog）
+    # 跟采集 smoke 同一台 4 号机(192.168.1.96)——串行(needs)避免同时抢抖音前台。
+    # always()：采集失败也照跑(本守卫独立 envfail，不会因采集红被跳过)。cancel 场景不跑。
+    needs: [android-collect-smoke]
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || github.event.inputs.scenario != 'cancel') }}
+    runs-on: [self-hosted, wechat-capable]
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    env:
+      # 四号机走 WiFi-adb 固定端口；息屏掉线由 smoke 的 ensure_device_online 自动重连(task c0efdb69)。
+      ANDROID_ADB_ENDPOINT: 192.168.1.96:5555
+      # e2e/debug 构建才有 DEBUG_E2E 私信广播；4 号机常驻此包(同 douyin 测试号已登录)。
+      SMOKE_APP_PKG: com.zenithjoy.agent.e2e
+      # 固定测试号(同事号，见 Memory line02-test-douyin-accounts)——绝不发给真实陌生人。
+      SMOKE_DM_TARGET: '133643315'
+    steps:
+      - name: 临时开 HK exit-node 保证 checkout 能连上 github.com
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node=100.86.118.99 --exit-node-allow-lan-access || true
+
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/workflows/scripts/smoke
+          sparse-checkout-cone-mode: false
+
+      - name: 关闭 exit-node（不常驻占用）
+        if: always()
+        shell: bash
+        run: |
+          "/c/Program Files/Tailscale/tailscale.exe" set --exit-node= || true
+
+      - name: 定位 adb（WinGet scrcpy 版）
+        run: |
+          ADB=$(ls "/c/Users/asus/AppData/Local/Microsoft/WinGet/Packages/Genymobile.scrcpy_"*/scrcpy-*/adb.exe 2>/dev/null | head -1 || true)
+          [ -n "$ADB" ] || ADB=$(command -v adb 2>/dev/null || true)
+          [ -n "$ADB" ] || { echo "🟠 环境未就绪: runner 上找不到 adb"; exit 3; }
+          echo "ADB=$ADB" >> "$GITHUB_ENV"
+          echo "adb: $ADB"
+
+      - name: agent-android 私信真机送达 smoke
+        run: |
+          chmod +x .github/workflows/scripts/smoke/dm-send-realmachine-smoke.sh
+          bash .github/workflows/scripts/smoke/dm-send-realmachine-smoke.sh
+
   android-cancel-smoke:
     name: Android acquisition cancel 真业务双跑（physical phone）
     needs: build-cancel-apk
