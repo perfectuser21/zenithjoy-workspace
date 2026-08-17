@@ -81,28 +81,43 @@ main() {
 
   # 设备在线（掉线自愈，复用 #1646 的 ensure-device-online）
   source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/ensure-device-online.sh"
+  source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/adb-target.sh"
   ensure_device_online "$ADB" "${ANDROID_ADB_ENDPOINT:-}" \
     || envfail "无 Android 设备在线(adb devices 无 'device' 行；重连 ${ANDROID_ADB_ENDPOINT:-未配端点} 后仍失败)"
 
+  # 绑定唯一目标设备：mDNS 会自动为同一台手机再加一个 transport，不带 -s 的调用
+  # 返回 more than one device/emulator，pm list packages 的输出因此变空 →
+  # 误报"包 $PKG 未安装"（08-17 实测，包其实装着且进程在跑）。
+  local DEV
+  DEV=$(select_adb_device "$ADB" "${ANDROID_ADB_ENDPOINT:-}") \
+    || envfail "select_adb_device 未选出在线设备(adb devices 无 device 行)"
+
+  # 抖音状态复位：collect job 真跑完会把抖音留在 ChatRoomActivity，私信 RPA 从这个
+  # 脏状态起步会在 13 秒内 outcome=FAILED（08-17 实测）。collect smoke 采集前早有
+  # 同样处置（"根治前一轮残留栈"），dm 侧一直漏了这一步——这也是为什么 08-16 夜车
+  # 里 dm job 显示 success：那晚 collect 死在环境闸、根本没碰抖音。
+  "$ADB" -s "$DEV" shell am force-stop com.ss.android.ugc.aweme >/dev/null 2>&1 || true
+  sleep 3
+
   # 前置：e2e 包已装（DEBUG_E2E 只在 e2e/debug 构建里，生产包收不到广播）
-  if ! "$ADB" shell pm list packages 2>/dev/null | tr -d '\r' | grep -q "package:${PKG}$"; then
+  if ! "$ADB" -s "$DEV" shell pm list packages 2>/dev/null | tr -d '\r' | grep -q "package:${PKG}$"; then
     envfail "包 $PKG 未安装（DEBUG_E2E 私信触达只在 e2e/debug 构建可用；夜车需先装 e2e apk）"
   fi
 
   # 前置：DouyinDmOutreachService 无障碍已启用（没开 RPA 走不了）
-  if ! "$ADB" shell settings get secure enabled_accessibility_services 2>/dev/null | tr -d '\r' \
+  if ! "$ADB" -s "$DEV" shell settings get secure enabled_accessibility_services 2>/dev/null | tr -d '\r' \
        | grep -q "${PKG}/com.zenithjoy.agent.collect.DouyinDmOutreachService"; then
     envfail "无障碍服务 DouyinDmOutreachService 未启用（授权后需强杀重启 App 让服务注册）"
   fi
   ok "前置就绪：设备在线 + $PKG 已装 + DmOutreachService 无障碍已启用"
 
   # 清 buffer + 放大（默认 256K 会被抖音刷屏冲掉 app 日志，见 Memory logcat -G 坑）
-  "$ADB" logcat -c >/dev/null 2>&1 || true
-  "$ADB" logcat -G 16M >/dev/null 2>&1 || true
+  "$ADB" -s "$DEV" logcat -c >/dev/null 2>&1 || true
+  "$ADB" -s "$DEV" logcat -G 16M >/dev/null 2>&1 || true
 
   # fire DEBUG_E2E dm 广播（自包含，只发固定测试号）
   ok "fire 私信: target=$TARGET label=$LABEL msg=$MESSAGE"
-  "$ADB" shell am broadcast -a com.zenithjoy.agent.DEBUG_E2E -p "$PKG" \
+  "$ADB" -s "$DEV" shell am broadcast -a com.zenithjoy.agent.DEBUG_E2E -p "$PKG" \
     --es flow dm \
     --es target_douyin_id "$TARGET" \
     --es message "$MESSAGE" \
@@ -115,7 +130,7 @@ main() {
   local i outcome dump
   for i in $(seq 1 "$POLL_MAX"); do
     sleep "$POLL_INTERVAL"
-    dump=$("$ADB" logcat -d -v brief 2>/dev/null | tr -cd '[:print:]\n')
+    dump=$("$ADB" -s "$DEV" logcat -d -v brief 2>/dev/null | tr -cd '[:print:]\n')
     outcome=$(classify_dm_outcome "$dump")
     echo "  [$i/$POLL_MAX] outcome=$outcome"
     [ "$outcome" != "NONE" ] && break
