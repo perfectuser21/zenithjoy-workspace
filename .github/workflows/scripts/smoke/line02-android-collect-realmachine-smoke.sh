@@ -39,6 +39,34 @@ envfail() { echo "🟠 环境未就绪(非采集 bug,查设备/staging/agent): $
 # e2e-line02-android-collect 连红 12+ 晚全部停在环境自检、从未跑到业务逻辑，
 # 就是因为判据坏了却没有任何守卫能发现（2026-08-17 诊断）。
 
+# extract_agent_id LOGCAT_TEXT
+#   从 logcat 文本提取最后一条 `agent started — agentId=<uuid>` 的 uuid，无匹配输出空。
+#   只认 `agentId=<uuid>`、**不匹配那个 em dash**：rog 上经 PowerShell 看日志时
+#   codepage 936 会把它破坏成 U+9225 U+003F（08-17 实测），判据不该建立在这种字符上。
+extract_agent_id() {
+  printf '%s\n' "${1:-}" \
+    | grep -oE 'agentId=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' \
+    | tail -1 | sed -E 's/^agentId=//'
+}
+
+# resolve_live_agent_id FETCH_CMD COLDSTART_CMD
+#   两阶段取 agent_id：
+#     ① 先用 FETCH_CMD 读当前 logcat —— 设备刚启动过时零副作用命中；
+#     ② 读不到说明启动日志已被环形缓冲冲掉（第四台实测 16MB 缓冲但 98MB readable，
+#        load avg 11.6 刷屏极快，几小时前的日志必然没了），此时调 COLDSTART_CMD
+#        重启 agent 让日志重新产生，再读一次。
+#   两次都读不到 → 输出空并返回非 0，由调用方 envfail。绝不返回假 uuid：任务派给
+#   错的 agent_id 会让采集永远 status=pending 卡死，表面像"采集坏了"实则派错对象
+#   （2026-07-09 / 07-16 两次真机踩过）。
+resolve_live_agent_id() {
+  local fetch_cmd="$1" coldstart_cmd="$2" out
+  out=$(extract_agent_id "$("$fetch_cmd")")
+  if [ -n "$out" ]; then printf '%s' "$out"; return 0; fi
+  out=$(extract_agent_id "$("$coldstart_cmd")")
+  printf '%s' "$out"
+  [ -n "$out" ]
+}
+
 # `source line02-android-collect-realmachine-smoke.sh --source-only` 时到此为止，不跑真机主流程。
 if [ "${1:-}" = "--source-only" ]; then
   return 0 2>/dev/null || exit 0
@@ -83,12 +111,44 @@ ok "staging API 可达"
 # (AgentService.kt 收尾日志),从这里动态取当前真实身份;只有显式传了 SMOKE_AGENT 才用
 # 固定值(供调试锁定某台设备用)。
 if [ -z "${SMOKE_AGENT:-}" ]; then
-  LIVE_AGENT=$("$ADB" -s "$DEV" logcat -d 2>/dev/null | grep -oE 'agent started — agentId=[a-f0-9-]{36}' | tail -1 | sed -E 's/.*agentId=//')
+  # 阶段①：直读当前 logcat（设备刚启动过时命中，零副作用）
+  _fetch_agent_log() { "$ADB" -s "$DEV" logcat -d 2>/dev/null; }
+
+  # 阶段②：冷启动 agent 让 initAgent 重跑，把 `agent started` 日志重新打出来。
+  # 之所以需要这一步：logcat 是环形缓冲，设备跑久了旧启动日志必然被冲掉
+  # （第四台实测 uptime 11 天、16MB 缓冲却有 98MB readable），而
+  # 「读不到日志」并不等于「agent 没跑」——它 pid 在、心跳 online、无障碍已授权。
+  # 三件事必须按序做，缺一即引入新的假红：
+  #   a) 先清空并放大 logcat 缓冲：该设备刷屏极快，不清就可能刚打出来又被淹掉
+  #      （dm-send-realmachine-smoke.sh :100-101 早有同样处置）
+  #   b) 存下无障碍授权：荣耀在 force-stop 后会**撤销**它（08-17 实测变 null，
+  #      随后 collect 与 dm 两个 job 都误报"无障碍未开"）
+  #   c) 拉起后写回授权，再轮询等日志（initAgent 含中台注册往返，实测 3~20s，
+  #      故用 2s 步长轮询而非固定 sleep——固定值要么白等要么不够）
+  _coldstart_agent() {
+    local acc_backup i
+    acc_backup=$("$ADB" -s "$DEV" shell settings get secure enabled_accessibility_services 2>/dev/null | tr -d '\r')
+    "$ADB" -s "$DEV" logcat -c >/dev/null 2>&1 || true
+    "$ADB" -s "$DEV" logcat -G 16M >/dev/null 2>&1 || true
+    "$ADB" -s "$DEV" shell am force-stop com.zenithjoy.agent >/dev/null 2>&1 || true
+    "$ADB" -s "$DEV" shell monkey -p com.zenithjoy.agent -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+    if [ -n "$acc_backup" ] && [ "$acc_backup" != "null" ]; then
+      "$ADB" -s "$DEV" shell settings put secure enabled_accessibility_services "$acc_backup" >/dev/null 2>&1 || true
+      "$ADB" -s "$DEV" shell settings put secure accessibility_enabled 1 >/dev/null 2>&1 || true
+    fi
+    for i in $(seq 1 15); do   # 15×2s = 30s 上限
+      sleep 2
+      if "$ADB" -s "$DEV" logcat -d 2>/dev/null | grep -q 'agent started'; then break; fi
+    done
+    "$ADB" -s "$DEV" logcat -d 2>/dev/null
+  }
+
+  LIVE_AGENT=$(resolve_live_agent_id _fetch_agent_log _coldstart_agent)
   if [ -n "$LIVE_AGENT" ]; then
     AGENT_ID="$LIVE_AGENT"
     ok "动态取到设备当前真实 agent_id=$AGENT_ID（非硬编码默认值）"
   else
-    envfail "logcat 里找不到 'agent started — agentId=' 记录，设备可能从没跑完 initAgent（无障碍/截图授权后需强杀重启 App 让 initAgent 冷启动跑一遍，重启AGENT服务按钮在进程存活时不会重跑已初始化的轮询循环）"
+    envfail "取不到 agent_id：直读 logcat 无 'agent started' 记录，冷启动 agent 后 30s 内仍未打出（查 initAgent 是否卡在中台注册，或无障碍授权是否被撤销未写回）"
   fi
 fi
 
