@@ -32,6 +32,19 @@ ok()      { echo "✅ $1"; }
 fail()    { echo "❌ 采集验证失败: $1"; exit 1; }   # 采集真坏 → 硬红,阻塞 PR
 envfail() { echo "🟠 环境未就绪(非采集 bug,查设备/staging/agent): $1"; exit 3; }  # 环境噪音 → 红但可辨
 
+# ── 判据纯函数区（可 source，变异测试锚点）──────────────────────────────
+# 放在 --source-only guard 之前，供 __tests__/ 下的变异测试单独加载做 mock 测试。
+# 结构照抄 dm-send-realmachine-smoke.sh（:41-71）的既有模式。
+# 之所以要抽出来：这些判据此前混在主流程里无法被测，退化了没人知道——
+# e2e-line02-android-collect 连红 12+ 晚全部停在环境自检、从未跑到业务逻辑，
+# 就是因为判据坏了却没有任何守卫能发现（2026-08-17 诊断）。
+
+# `source line02-android-collect-realmachine-smoke.sh --source-only` 时到此为止，不跑真机主流程。
+if [ "${1:-}" = "--source-only" ]; then
+  return 0 2>/dev/null || exit 0
+fi
+
+main() {
 ADB="${ADB:-adb}"
 API_BASE="${API_BASE:-https://staging-autopilot.zenjoymedia.media}"
 TENANT="${SMOKE_TENANT:-455a8ca9-5f63-4286-83ce-c5cca04cfd58}"
@@ -48,10 +61,15 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 command -v jq >/dev/null 2>&1 || envfail "runner 缺 jq"
 # WiFi-adb 掉线自愈(task c0efdb69)：四号机夜里息屏后掉线，先重连再判在线，止住 nightly 连红。
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/ensure-device-online.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/adb-target.sh"
 ensure_device_online "$ADB" "${ANDROID_ADB_ENDPOINT:-}" \
   || envfail "无 Android 设备在线(adb devices 无 'device' 行；重连 ${ANDROID_ADB_ENDPOINT:-未配端点} 后仍失败)"
-DEV=$("$ADB" devices 2>/dev/null | awk '/[[:space:]]device$/{print $1; exit}')
-ok "设备在线: $DEV"
+# 绑定唯一目标设备后再动手：adb server 每次重启会通过 mDNS 自动为同一台手机再加
+# 一个 transport，此时任何不带 -s 的调用都返回 more than one device/emulator，
+# 被 grep 吃成空值 → 误报"包未安装/无障碍未开"（2026-08-17 实测，且清理后会复发）。
+DEV=$(select_adb_device "$ADB" "${ANDROID_ADB_ENDPOINT:-}") \
+  || envfail "select_adb_device 未选出在线设备(adb devices 无 device 行)"
+ok "设备在线: $DEV（后续所有 adb 调用绑定 -s）"
 
 curl -fsSk -m 10 "$API_BASE/api/acquisition/overview" -H "X-Tenant-Id: $TENANT" >/dev/null 2>&1 \
   || envfail "staging API 不可达: $API_BASE"
@@ -65,7 +83,7 @@ ok "staging API 可达"
 # (AgentService.kt 收尾日志),从这里动态取当前真实身份;只有显式传了 SMOKE_AGENT 才用
 # 固定值(供调试锁定某台设备用)。
 if [ -z "${SMOKE_AGENT:-}" ]; then
-  LIVE_AGENT=$("$ADB" logcat -d 2>/dev/null | grep -oE 'agent started — agentId=[a-f0-9-]{36}' | tail -1 | sed -E 's/.*agentId=//')
+  LIVE_AGENT=$("$ADB" -s "$DEV" logcat -d 2>/dev/null | grep -oE 'agent started — agentId=[a-f0-9-]{36}' | tail -1 | sed -E 's/.*agentId=//')
   if [ -n "$LIVE_AGENT" ]; then
     AGENT_ID="$LIVE_AGENT"
     ok "动态取到设备当前真实 agent_id=$AGENT_ID（非硬编码默认值）"
@@ -89,13 +107,13 @@ ok "seed 自愈 OK (tenant=$TENANT)"
 
 # 覆盖安装 / 息屏后 agent 进程可能是空壳(无采集轮询)——今天真机踩过的坑,主动拉起。
 # 无障碍权限覆盖安装后保留,无需重新授权采集(截图授权是判定链的事,不影响采集)。
-"$ADB" shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
-"$ADB" shell input swipe 540 2000 540 600 200 >/dev/null 2>&1 || true
-"$ADB" shell monkey -p com.zenithjoy.agent -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+"$ADB" -s "$DEV" shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+"$ADB" -s "$DEV" shell input swipe 540 2000 540 600 200 >/dev/null 2>&1 || true
+"$ADB" -s "$DEV" shell monkey -p com.zenithjoy.agent -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
 # 采集前把抖音复位到干净态(根治前一轮残留栈导致的 NO_SEARCH_INPUT/SEARCH_TIMEOUT)
-"$ADB" shell am force-stop com.ss.android.ugc.aweme >/dev/null 2>&1 || true
+"$ADB" -s "$DEV" shell am force-stop com.ss.android.ugc.aweme >/dev/null 2>&1 || true
 sleep 6
-ACC=$("$ADB" shell settings get secure enabled_accessibility_services 2>/dev/null)
+ACC=$("$ADB" -s "$DEV" shell settings get secure enabled_accessibility_services 2>/dev/null)
 case "$ACC" in *com.zenithjoy.agent*) ok "无障碍已开";; *) envfail "无障碍未开(采集依赖):$ACC";; esac
 
 # ── 2. 派"装修"任务(collect/start) ───────────────────────────────────
@@ -252,3 +270,6 @@ if [ "${MATCHED:-0}" -ge 1 ]; then
 else
   echo "🎉 PASS: agent-android 挖客链路 Seg1-2 验证通过(task=$TASK)——Seg3/4(抓评论/私信派单)因本轮无 matched 视频未触发验证，判定链本身工作正常，只是没命中"
 fi
+}
+
+[ "${BASH_SOURCE[0]}" = "${0}" ] && main "$@"
