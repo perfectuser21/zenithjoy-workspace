@@ -63,14 +63,22 @@ echo "== C. uiautomator dump 的三个真机必需条件（08-17 真机实测踩
 #   2) 带重试 —— 界面在动时 dump 报 "ERROR: could not get idle state."（实测抖音
 #      SplashActivity 动画期间必失败）
 #   3) exec-out 而非 shell cat 读取 —— 实测 shell cat 拿到 0 字节，exec-out 才拿到完整 xml
-check "授权段用 MSYS_NO_PATHCONV 防路径转换" "yes" \
-  "$(grep -q 'MSYS_NO_PATHCONV' "$COLLECT" && echo yes || echo no)"
+# ⚠️ 必须匹配"紧跟 adb 调用"的形态，不能只 grep 关键词——本文件的注释里也写了
+# MSYS_NO_PATHCONV，光 grep 关键词的话删掉真实代码后注释仍让断言通过（08-17
+# 变异验证抓到，这是本次第三个同类假守卫）。
+check "授权段用 MSYS_NO_PATHCONV 防路径转换" "2" \
+  "$(grep -cE 'MSYS_NO_PATHCONV=1 "\$ADB" -s "\$DEV"' "$COLLECT" || true)"
+# 注意断言的取窗方向：重试循环包在 dump **之前**（for 在外、dump 在内），
+# 所以要往前取（-B）而不是往后取（-A）——第一版写成 -A6 时这条恒红，
+# 是断言自己的 bug 而非实现缺失（08-17 踩到，与 adb-target 那次同类）。
 check "dump 带重试（应对 could not get idle state）" "yes" \
-  "$(grep -A6 'uiautomator dump' "$COLLECT" | grep -qE 'for [a-z]+ in 1 2 3|retry' && echo yes || echo no)"
+  "$(grep -B6 -A2 'uiautomator dump' "$COLLECT" | grep -qE 'for [a-z]+ in 1 2 3' && echo yes || echo no)"
 check "用 exec-out 读 dump（shell cat 拿不到内容）" "yes" \
   "$(grep -q 'exec-out cat' "$COLLECT" && echo yes || echo no)"
+# 同理：monkey 在「调用 _tap_by_text」之前，而 dump 在函数体内（行号更靠前），
+# 所以锚点要选调用处而不是 dump 处。
 check "授权前把 agent 拉到前台（否则 dump 的是别的 app）" "yes" \
-  "$(grep -B12 'uiautomator dump' "$COLLECT" | grep -q 'monkey -p com.zenithjoy.agent' && echo yes || echo no)"
+  "$(grep -B6 "if _tap_by_text /sdcard/zj_ui.xml" "$COLLECT" | grep -q 'monkey -p com.zenithjoy.agent' && echo yes || echo no)"
 
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"

@@ -204,11 +204,26 @@ case "$ACC" in *com.zenithjoy.agent*) ok "无障碍已开";; *) envfail "无障�
 # 失败只警告、**不 envfail**：采集主链路不依赖截图授权（见上方注释"截图授权是
 # 判定链的事,不影响采集"），judged=0 该由下方 Seg2 判定闸去报——授权段抢先把
 # 整个 job 判死只会造出一个新的假红源，那正是本次修复要消灭的东西。
+# _tap_by_text <设备上的dump路径> <文案...>
+#   dump 当前界面 → 按文案找节点 → 点它的 bounds 中心。任一文案命中即返回 0。
+#
+# 三个真机必需条件（2026-08-17 真机实测踩出，PR #1312 原版都缺，缺了授权段就是死代码）：
+#   1) MSYS_NO_PATHCONV=1：workflow 用 git bash，`/sdcard/xxx` 会被 MSYS 路径转换成
+#      `C:/Program Files/Git/sdcard/xxx`，dump 压根没落到设备上（实测 ls 报
+#      "ls: C:/Program: No such file or directory"）
+#   2) 带重试：界面在动时 dump 报 "ERROR: could not get idle state."（实测抖音
+#      SplashActivity 动画期间必失败），需等它静下来再试
+#   3) 用 exec-out 读而非 shell cat：实测 shell cat 拿到 0 字节，exec-out 拿到 8537 字节
 _tap_by_text() {   # _tap_by_text <设备上的dump路径> <文案...>
   local dump="$1"; shift
-  local xml word xy
-  "$ADB" -s "$DEV" shell uiautomator dump "$dump" >/dev/null 2>&1 || return 1
-  xml=$("$ADB" -s "$DEV" shell cat "$dump" 2>/dev/null)
+  local xml word xy i out
+  for i in 1 2 3; do
+    out=$(MSYS_NO_PATHCONV=1 "$ADB" -s "$DEV" shell uiautomator dump "$dump" 2>&1 | tr -d '\r')
+    case "$out" in *"dumped to"*) break ;; esac
+    sleep 3   # could not get idle state —— 界面还在动，等一下重试
+  done
+  xml=$(MSYS_NO_PATHCONV=1 "$ADB" -s "$DEV" exec-out cat "$dump" 2>/dev/null)
+  [ -n "$xml" ] || { echo "  [MediaProjection] dump 读不到界面（$out）"; return 1; }
   for word in "$@"; do
     xy=$(parse_ui_bounds "$xml" "$word")
     if [ -n "$xy" ]; then
@@ -220,6 +235,11 @@ _tap_by_text() {   # _tap_by_text <设备上的dump路径> <文案...>
   done
   return 1
 }
+
+# 「授权截屏」按钮在 agent 自己的 MainActivity 上——dump 前必须把它拉到前台，否则
+# dump 到的是抖音（真机实测当时前台是 aweme/SplashActivity，界面里根本没这个按钮）。
+"$ADB" -s "$DEV" shell monkey -p com.zenithjoy.agent -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+sleep 4
 
 if _tap_by_text /sdcard/zj_ui.xml '授权截屏'; then
   sleep 2
