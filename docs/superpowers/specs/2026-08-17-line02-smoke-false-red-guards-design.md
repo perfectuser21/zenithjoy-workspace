@@ -139,6 +139,22 @@ source "$SCRIPT" --source-only     # 只定义函数不执行主流程
 **真机 E2E（手动，非 CI）**：第四台 `192.168.1.96:5555`，经 `ssh xian-rog`。rog 上 cmd 引号嵌套不可靠 → scp 传 `.ps1` 再 `powershell -ExecutionPolicy Bypass -File`。repo 在 rog 的 `C:\actions-runner\_work\zenithjoy-workspace\zenithjoy-workspace`，git bash 在 `C:\Program Files\Git\bin\bash.EXE`。
 > 陷阱：在 rog 上用 **PowerShell** 看 logcat 会踩 GBK（codepage 936 把 em dash 变成 `U+9225 U+003F`），但 workflow 用 **git bash 走 UTF-8 不受影响**——别把这个误判成编码 bug（08-17 我在这条岔路上绕过一次）。
 
+## PR 元数据的两个机械闸（08-17 实际被卡住才补上）
+
+改这类 PR 时最容易忽略的不是代码，而是两个读 **PR 元数据**的 lint：
+
+1. **`CI Config Audit`**：只要 diff 碰了 `.github/workflows/**`，**PR 标题**必须带 `[CONFIG]` 或 `[INFRA]` 前缀。
+   ⚠️ 加在 commit message 上**不算**——它读的是 PR title。本次就是只在 commit 里写了 `[CONFIG]`、标题没写，被卡。
+2. **`Lint — GP Anchor`**：PR body 里 `GP-Anchor:` 行的值**不能用反引号包裹**。写成带反引号的形式会让
+   lint 把反引号算进值里，报 `GP-ANCHOR-FORMAT-INVALID`。正确是裸值：
+   `GP-Anchor: line02/keyword_acquisition keep-green`
+
+> 🔧 **改完标题/body 后必须推一个新 commit，不能只 `gh run rerun`**：Actions 的 rerun 复用原始事件
+> payload，读不到更新后的 PR 元数据，重跑照样红（本次实测重跑仍 fail）。
+
+另外 rog self-hosted runner 上偶发 `Failed to download action 'actions/checkout' ... 429 (Too Many Requests)`
+——国内网络拉 GitHub 被限流，连 checkout 都没做、脚本压根没跑。这类失败与改动无关，重跑即可。
+
 ## 不在范围
 
 - **判定链 flaky 本身**（3 视频全 pending / `media_projection: null`）→ 单独立项。本次只让守卫可信，好让这个问题第一次能被稳定观测
