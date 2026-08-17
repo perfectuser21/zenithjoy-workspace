@@ -25,10 +25,21 @@ fake_adb() {
 
 echo "== select_adb_device：mDNS 双 transport 场景 =="
 
+# ⚠️ 关键：endpoint 必须放在**非第一行**，否则本条断言没有区分能力——
+# "取第一个 device 行"的退化实现也会碰巧通过（08-17 proven-to-fire 实测踩到：
+# 删掉 endpoint 优先分支后测试仍全绿，因为 mock 里 endpoint 恰好在第一行）。
+# 真机上顺序确实不确定：rog 实测 transport_id:3 排在 transport_id:2 前面。
+FAKE_DEVICES='List of devices attached
+adb-ANGYVB4311010223-yPCLHP._adb-tls-connect._tcp	device
+192.168.1.96:5555	device'
+check "双 transport 且 endpoint 不在首行时仍选中 endpoint" "192.168.1.96:5555" \
+  "$(select_adb_device fake_adb 192.168.1.96:5555)"
+
+# 顺序反过来也要成立（防止把断言写成依赖某个特定顺序）
 FAKE_DEVICES='List of devices attached
 192.168.1.96:5555	device
 adb-ANGYVB4311010223-yPCLHP._adb-tls-connect._tcp	device'
-check "双 transport 时选中 endpoint" "192.168.1.96:5555" \
+check "双 transport 且 endpoint 在首行时选中 endpoint" "192.168.1.96:5555" \
   "$(select_adb_device fake_adb 192.168.1.96:5555)"
 
 echo "== select_adb_device：endpoint 未在线 → fallback 第一个 device 行 =="
