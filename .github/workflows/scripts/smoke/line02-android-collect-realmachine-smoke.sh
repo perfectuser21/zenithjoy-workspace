@@ -241,12 +241,29 @@ _tap_by_text() {   # _tap_by_text <设备上的dump路径> <文案...>
 "$ADB" -s "$DEV" shell monkey -p com.zenithjoy.agent -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
 sleep 4
 
+# 判定链的两个前置授权，能用 adb 做的先自动做掉（08-17 真机逐条实测）：
+#   ✅ RECORD_AUDIO —— 判定走 20 秒音频转写，缺它视频类判定必然 pending
+#      （实测 pm grant 后 agent 界面的「⚠️ 录音未授权」警告消失）。
+#      有些 ROM 是 permission + appop 双闸，两个都放开。
+#   ⚠️ PROJECT_MEDIA appop —— 设成 allow 是必要条件之一，但**不足以**让 app 认为
+#      已授权：MediaProjection 是 session-based consent（每次要 token），不是
+#      permission，实测设完界面仍显示「⚠️ 截图未授权」。
+for _p in com.zenithjoy.agent com.zenithjoy.agent.e2e; do
+  "$ADB" -s "$DEV" shell pm grant "$_p" android.permission.RECORD_AUDIO >/dev/null 2>&1 || true
+  "$ADB" -s "$DEV" shell cmd appops set "$_p" RECORD_AUDIO allow >/dev/null 2>&1 || true
+  "$ADB" -s "$DEV" shell cmd appops set "$_p" PROJECT_MEDIA allow >/dev/null 2>&1 || true
+done
+
 if _tap_by_text /sdcard/zj_ui.xml '授权截屏'; then
   sleep 2
-  # 系统截屏授权弹框：中文机型是「立即开始」，部分 ROM/语言是「允许」/英文
-  _tap_by_text /sdcard/zj_allow.xml '立即开始' '允许' 'Allow' 'Start now' || true
+  # 点开后会弹出系统的「是否允许录制/投射屏幕」窗口。**这一步自动点不掉**：
+  # 该弹框是系统安全窗口，对 uiautomator 不可见——08-17 真机实测，点击后
+  # mCurrentFocus 确实变成了那个弹框，但 dump 出来的仍是底层 agent 界面
+  # （长度与点击前一致），拿不到按钮 bounds。这是 Android 防恶意 app 自动
+  # 授权的强制设计，不是本脚本能绕的。PR #1312 原版这一步从设计上就不可能生效。
+  _tap_by_text /sdcard/zj_allow.xml '立即开始' '允许' 'Allow' 'Start now' \
+    || echo "  [MediaProjection] 系统授权弹框已弹出但无法自动确认（系统安全窗口对 uiautomator 不可见）——需要人在设备上点一次「立即开始」，否则判定链会持续 pending"
   sleep 2
-  ok "MediaProjection 授权流程已触发（judged>0 即为授权成功）"
 else
   echo "  [MediaProjection] 未见「授权截屏」按钮（可能已授权，或当前界面不符）"
 fi

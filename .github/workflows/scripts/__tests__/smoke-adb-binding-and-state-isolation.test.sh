@@ -75,10 +75,34 @@ check "dump 带重试（应对 could not get idle state）" "yes" \
   "$(grep -B6 -A2 'uiautomator dump' "$COLLECT" | grep -qE 'for [a-z]+ in 1 2 3' && echo yes || echo no)"
 check "用 exec-out 读 dump（shell cat 拿不到内容）" "yes" \
   "$(grep -q 'exec-out cat' "$COLLECT" && echo yes || echo no)"
-# 同理：monkey 在「调用 _tap_by_text」之前，而 dump 在函数体内（行号更靠前），
-# 所以锚点要选调用处而不是 dump 处。
-check "授权前把 agent 拉到前台（否则 dump 的是别的 app）" "yes" \
-  "$(grep -B6 "if _tap_by_text /sdcard/zj_ui.xml" "$COLLECT" | grep -q 'monkey -p com.zenithjoy.agent' && echo yes || echo no)"
+# ⚠️ 这里**故意不加**"授权前把 agent 拉到前台"的静态断言。
+# 试过三种写法（grep -B 窗口 / 关键词 / 行号比较），变异验证全部无法报红——因为
+# 脚本在授权段之前本来就有一处 `monkey -p com.zenithjoy.agent`（:112 的"主动拉起
+# agent"），删掉授权段那处后断言仍会命中它。要守的其实是"dump 那一刻 agent 在
+# 前台"，这是**运行时状态，静态断言天然守不住**。
+# 按本 PR 自己的原则——守不住就别装守得住，假守卫比没守卫更糟——不留这条，
+# 改由代码注释说明意图 + 真机验证兜（真机实测过：不拉前台时 dump 到的是
+# aweme/SplashActivity，界面里没有「授权截屏」按钮）。
+
+echo "== D. 判定链前置授权：能 adb 做的必须自动做（08-17 真机实测哪些可行）=="
+# 真机实测三条结论：
+#   ✅ pm grant RECORD_AUDIO      有效——granted=true 后 agent 界面「录音未授权」警告消失。
+#      判定走 20 秒音频转写，缺它视频类判定必然 pending。
+#   ✅ appops RECORD_AUDIO allow  有些 ROM 是双闸（permission + appop），一并放开。
+#   ❌ appops PROJECT_MEDIA allow 不足以让 app 认为已授权（MediaProjection 是
+#      session-based consent、每次要 token，不是 permission）。仍设它是必要条件之一、
+#      无害，但**替代不了人点弹窗**——见下方 E 组关于措辞的断言。
+check "自动授予 RECORD_AUDIO（判定用 20s 音频转写）" "yes" \
+  "$(grep -q 'pm grant .* android.permission.RECORD_AUDIO' "$COLLECT" && echo yes || echo no)"
+check "同时放开 RECORD_AUDIO 的 appop（双闸 ROM）" "yes" \
+  "$(grep -q 'appops set .* RECORD_AUDIO allow' "$COLLECT" && echo yes || echo no)"
+
+echo "== E. 授权段措辞不得撒谎（假绿治理的一部分）=="
+# 第一版写「MediaProjection 授权流程已触发」——真机实测那只是点开了系统弹框，
+# 而该弹框是系统安全窗口、对 uiautomator 不可见（dump 拿到的仍是底层 agent 界面），
+# 点不掉。措辞必须明说"需要人确认"，否则又是一句让人误以为搞定了的假话。
+check "授权段措辞明示需人工确认" "yes" \
+  "$(grep -qE '需(要)?人|人工确认|人点' "$COLLECT" && echo yes || echo no)"
 
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"
