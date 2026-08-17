@@ -55,6 +55,23 @@ else
   check "复位出现在 fire 广播之前" "yes" "no(定位失败 reset=$RESET_LINE fire=$FIRE_LINE)"
 fi
 
+echo "== C. uiautomator dump 的三个真机必需条件（08-17 真机实测踩出）=="
+# 这三条都是 PR #1312 那段从未真机跑过的代码缺的，不补上授权段等于死代码：
+#   1) MSYS_NO_PATHCONV=1 —— workflow 用 git bash，/sdcard/xxx 会被 MSYS 路径转换
+#      成 C:/Program Files/Git/sdcard/xxx，dump 根本没落到设备上（实测 ls 报
+#      "ls: C:/Program: No such file or directory"）
+#   2) 带重试 —— 界面在动时 dump 报 "ERROR: could not get idle state."（实测抖音
+#      SplashActivity 动画期间必失败）
+#   3) exec-out 而非 shell cat 读取 —— 实测 shell cat 拿到 0 字节，exec-out 才拿到完整 xml
+check "授权段用 MSYS_NO_PATHCONV 防路径转换" "yes" \
+  "$(grep -q 'MSYS_NO_PATHCONV' "$COLLECT" && echo yes || echo no)"
+check "dump 带重试（应对 could not get idle state）" "yes" \
+  "$(grep -A6 'uiautomator dump' "$COLLECT" | grep -qE 'for [a-z]+ in 1 2 3|retry' && echo yes || echo no)"
+check "用 exec-out 读 dump（shell cat 拿不到内容）" "yes" \
+  "$(grep -q 'exec-out cat' "$COLLECT" && echo yes || echo no)"
+check "授权前把 agent 拉到前台（否则 dump 的是别的 app）" "yes" \
+  "$(grep -B12 'uiautomator dump' "$COLLECT" | grep -q 'monkey -p com.zenithjoy.agent' && echo yes || echo no)"
+
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1
