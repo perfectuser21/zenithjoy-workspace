@@ -67,6 +67,24 @@ resolve_live_agent_id() {
   [ -n "$out" ]
 }
 
+# parse_ui_bounds UI_XML TEXT
+#   从 uiautomator dump 的 xml 里找**含 TEXT 的那个节点**，输出其 bounds 中心 "x y"。
+#   无匹配 / 节点缺 bounds → 输出空（调用方跳过点击，不崩）。
+#   必须按 bounds 解析而非截图估坐标：同一页面常有多个同类控件，估坐标必点错
+#   （08-17 实测——目标开关上方就有另一个开关）。也必须按文案定位而非取第一个节点。
+parse_ui_bounds() {
+  local xml="${1:-}" want="${2:-}" line nums x1 y1 x2 y2
+  line=$(printf '%s\n' "$xml" | tr '<' '\n' | grep -F "$want" | head -1)
+  [ -n "$line" ] || return 0
+  nums=$(printf '%s' "$line" \
+    | grep -oE 'bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' | head -1 \
+    | grep -oE '[0-9]+')
+  [ -n "$nums" ] || return 0
+  read -r x1 y1 x2 y2 <<< "$(printf '%s' "$nums" | tr '\n' ' ')"
+  [ -n "${x2:-}" ] && [ -n "${y2:-}" ] || return 0
+  printf '%s %s' "$(( (x1 + x2) / 2 ))" "$(( (y1 + y2) / 2 ))"
+}
+
 # `source line02-android-collect-realmachine-smoke.sh --source-only` 时到此为止，不跑真机主流程。
 if [ "${1:-}" = "--source-only" ]; then
   return 0 2>/dev/null || exit 0
@@ -175,6 +193,43 @@ ok "seed 自愈 OK (tenant=$TENANT)"
 sleep 6
 ACC=$("$ADB" -s "$DEV" shell settings get secure enabled_accessibility_services 2>/dev/null)
 case "$ACC" in *com.zenithjoy.agent*) ok "无障碍已开";; *) envfail "无障碍未开(采集依赖):$ACC";; esac
+
+# ── 1.5 MediaProjection 自动授权（Seg2 判定截图的前提，承接未合的 PR #1312）──
+# 判定链要逐视频截图，依赖 MediaProjection 授权；该授权在 app 进程重启后必然丢失
+# （08-17 实测第四台与小黄的 dumpsys media_projection 都是 null，而小黄从未被
+# force-stop 过 → 说明这是普遍长期状态，不是某次操作的后果）。agent MainActivity
+# 上有「授权截屏」按钮，这里用 uiautomator 定位并自动点掉它 + 随后的系统弹框，
+# 省掉此前"必须有人在手机上点一次"的人工步骤。
+#
+# 失败只警告、**不 envfail**：采集主链路不依赖截图授权（见上方注释"截图授权是
+# 判定链的事,不影响采集"），judged=0 该由下方 Seg2 判定闸去报——授权段抢先把
+# 整个 job 判死只会造出一个新的假红源，那正是本次修复要消灭的东西。
+_tap_by_text() {   # _tap_by_text <设备上的dump路径> <文案...>
+  local dump="$1"; shift
+  local xml word xy
+  "$ADB" -s "$DEV" shell uiautomator dump "$dump" >/dev/null 2>&1 || return 1
+  xml=$("$ADB" -s "$DEV" shell cat "$dump" 2>/dev/null)
+  for word in "$@"; do
+    xy=$(parse_ui_bounds "$xml" "$word")
+    if [ -n "$xy" ]; then
+      echo "  [MediaProjection] 点击「$word」at ($xy)"
+      # shellcheck disable=SC2086
+      "$ADB" -s "$DEV" shell input tap $xy >/dev/null 2>&1 || true
+      return 0
+    fi
+  done
+  return 1
+}
+
+if _tap_by_text /sdcard/zj_ui.xml '授权截屏'; then
+  sleep 2
+  # 系统截屏授权弹框：中文机型是「立即开始」，部分 ROM/语言是「允许」/英文
+  _tap_by_text /sdcard/zj_allow.xml '立即开始' '允许' 'Allow' 'Start now' || true
+  sleep 2
+  ok "MediaProjection 授权流程已触发（judged>0 即为授权成功）"
+else
+  echo "  [MediaProjection] 未见「授权截屏」按钮（可能已授权，或当前界面不符）"
+fi
 
 # ── 2. 派"装修"任务(collect/start) ───────────────────────────────────
 RESP=$(curl -fsSk -m 15 -X POST "$API_BASE/api/acquisition/collect/start" \
