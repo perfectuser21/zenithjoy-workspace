@@ -32,6 +32,65 @@ ok()      { echo "✅ $1"; }
 fail()    { echo "❌ 采集验证失败: $1"; exit 1; }   # 采集真坏 → 硬红,阻塞 PR
 envfail() { echo "🟠 环境未就绪(非采集 bug,查设备/staging/agent): $1"; exit 3; }  # 环境噪音 → 红但可辨
 
+# ── 判据纯函数区（可 source，变异测试锚点）──────────────────────────────
+# 放在 --source-only guard 之前，供 __tests__/ 下的变异测试单独加载做 mock 测试。
+# 结构照抄 dm-send-realmachine-smoke.sh（:41-71）的既有模式。
+# 之所以要抽出来：这些判据此前混在主流程里无法被测，退化了没人知道——
+# e2e-line02-android-collect 连红 12+ 晚全部停在环境自检、从未跑到业务逻辑，
+# 就是因为判据坏了却没有任何守卫能发现（2026-08-17 诊断）。
+
+# extract_agent_id LOGCAT_TEXT
+#   从 logcat 文本提取最后一条 `agent started — agentId=<uuid>` 的 uuid，无匹配输出空。
+#   只认 `agentId=<uuid>`、**不匹配那个 em dash**：rog 上经 PowerShell 看日志时
+#   codepage 936 会把它破坏成 U+9225 U+003F（08-17 实测），判据不该建立在这种字符上。
+extract_agent_id() {
+  printf '%s\n' "${1:-}" \
+    | grep -oE 'agentId=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' \
+    | tail -1 | sed -E 's/^agentId=//'
+}
+
+# resolve_live_agent_id FETCH_CMD COLDSTART_CMD
+#   两阶段取 agent_id：
+#     ① 先用 FETCH_CMD 读当前 logcat —— 设备刚启动过时零副作用命中；
+#     ② 读不到说明启动日志已被环形缓冲冲掉（第四台实测 16MB 缓冲但 98MB readable，
+#        load avg 11.6 刷屏极快，几小时前的日志必然没了），此时调 COLDSTART_CMD
+#        重启 agent 让日志重新产生，再读一次。
+#   两次都读不到 → 输出空并返回非 0，由调用方 envfail。绝不返回假 uuid：任务派给
+#   错的 agent_id 会让采集永远 status=pending 卡死，表面像"采集坏了"实则派错对象
+#   （2026-07-09 / 07-16 两次真机踩过）。
+resolve_live_agent_id() {
+  local fetch_cmd="$1" coldstart_cmd="$2" out
+  out=$(extract_agent_id "$("$fetch_cmd")")
+  if [ -n "$out" ]; then printf '%s' "$out"; return 0; fi
+  out=$(extract_agent_id "$("$coldstart_cmd")")
+  printf '%s' "$out"
+  [ -n "$out" ]
+}
+
+# parse_ui_bounds UI_XML TEXT
+#   从 uiautomator dump 的 xml 里找**含 TEXT 的那个节点**，输出其 bounds 中心 "x y"。
+#   无匹配 / 节点缺 bounds → 输出空（调用方跳过点击，不崩）。
+#   必须按 bounds 解析而非截图估坐标：同一页面常有多个同类控件，估坐标必点错
+#   （08-17 实测——目标开关上方就有另一个开关）。也必须按文案定位而非取第一个节点。
+parse_ui_bounds() {
+  local xml="${1:-}" want="${2:-}" line nums x1 y1 x2 y2
+  line=$(printf '%s\n' "$xml" | tr '<' '\n' | grep -F "$want" | head -1)
+  [ -n "$line" ] || return 0
+  nums=$(printf '%s' "$line" \
+    | grep -oE 'bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' | head -1 \
+    | grep -oE '[0-9]+')
+  [ -n "$nums" ] || return 0
+  read -r x1 y1 x2 y2 <<< "$(printf '%s' "$nums" | tr '\n' ' ')"
+  [ -n "${x2:-}" ] && [ -n "${y2:-}" ] || return 0
+  printf '%s %s' "$(( (x1 + x2) / 2 ))" "$(( (y1 + y2) / 2 ))"
+}
+
+# `source line02-android-collect-realmachine-smoke.sh --source-only` 时到此为止，不跑真机主流程。
+if [ "${1:-}" = "--source-only" ]; then
+  return 0 2>/dev/null || exit 0
+fi
+
+main() {
 ADB="${ADB:-adb}"
 API_BASE="${API_BASE:-https://staging-autopilot.zenjoymedia.media}"
 TENANT="${SMOKE_TENANT:-455a8ca9-5f63-4286-83ce-c5cca04cfd58}"
@@ -48,10 +107,15 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 command -v jq >/dev/null 2>&1 || envfail "runner 缺 jq"
 # WiFi-adb 掉线自愈(task c0efdb69)：四号机夜里息屏后掉线，先重连再判在线，止住 nightly 连红。
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/ensure-device-online.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/adb-target.sh"
 ensure_device_online "$ADB" "${ANDROID_ADB_ENDPOINT:-}" \
   || envfail "无 Android 设备在线(adb devices 无 'device' 行；重连 ${ANDROID_ADB_ENDPOINT:-未配端点} 后仍失败)"
-DEV=$("$ADB" devices 2>/dev/null | awk '/[[:space:]]device$/{print $1; exit}')
-ok "设备在线: $DEV"
+# 绑定唯一目标设备后再动手：adb server 每次重启会通过 mDNS 自动为同一台手机再加
+# 一个 transport，此时任何不带 -s 的调用都返回 more than one device/emulator，
+# 被 grep 吃成空值 → 误报"包未安装/无障碍未开"（2026-08-17 实测，且清理后会复发）。
+DEV=$(select_adb_device "$ADB" "${ANDROID_ADB_ENDPOINT:-}") \
+  || envfail "select_adb_device 未选出在线设备(adb devices 无 device 行)"
+ok "设备在线: $DEV（后续所有 adb 调用绑定 -s）"
 
 curl -fsSk -m 10 "$API_BASE/api/acquisition/overview" -H "X-Tenant-Id: $TENANT" >/dev/null 2>&1 \
   || envfail "staging API 不可达: $API_BASE"
@@ -65,12 +129,44 @@ ok "staging API 可达"
 # (AgentService.kt 收尾日志),从这里动态取当前真实身份;只有显式传了 SMOKE_AGENT 才用
 # 固定值(供调试锁定某台设备用)。
 if [ -z "${SMOKE_AGENT:-}" ]; then
-  LIVE_AGENT=$("$ADB" logcat -d 2>/dev/null | grep -oE 'agent started — agentId=[a-f0-9-]{36}' | tail -1 | sed -E 's/.*agentId=//')
+  # 阶段①：直读当前 logcat（设备刚启动过时命中，零副作用）
+  _fetch_agent_log() { "$ADB" -s "$DEV" logcat -d 2>/dev/null; }
+
+  # 阶段②：冷启动 agent 让 initAgent 重跑，把 `agent started` 日志重新打出来。
+  # 之所以需要这一步：logcat 是环形缓冲，设备跑久了旧启动日志必然被冲掉
+  # （第四台实测 uptime 11 天、16MB 缓冲却有 98MB readable），而
+  # 「读不到日志」并不等于「agent 没跑」——它 pid 在、心跳 online、无障碍已授权。
+  # 三件事必须按序做，缺一即引入新的假红：
+  #   a) 先清空并放大 logcat 缓冲：该设备刷屏极快，不清就可能刚打出来又被淹掉
+  #      （dm-send-realmachine-smoke.sh :100-101 早有同样处置）
+  #   b) 存下无障碍授权：荣耀在 force-stop 后会**撤销**它（08-17 实测变 null，
+  #      随后 collect 与 dm 两个 job 都误报"无障碍未开"）
+  #   c) 拉起后写回授权，再轮询等日志（initAgent 含中台注册往返，实测 3~20s，
+  #      故用 2s 步长轮询而非固定 sleep——固定值要么白等要么不够）
+  _coldstart_agent() {
+    local acc_backup i
+    acc_backup=$("$ADB" -s "$DEV" shell settings get secure enabled_accessibility_services 2>/dev/null | tr -d '\r')
+    "$ADB" -s "$DEV" logcat -c >/dev/null 2>&1 || true
+    "$ADB" -s "$DEV" logcat -G 16M >/dev/null 2>&1 || true
+    "$ADB" -s "$DEV" shell am force-stop com.zenithjoy.agent >/dev/null 2>&1 || true
+    "$ADB" -s "$DEV" shell monkey -p com.zenithjoy.agent -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+    if [ -n "$acc_backup" ] && [ "$acc_backup" != "null" ]; then
+      "$ADB" -s "$DEV" shell settings put secure enabled_accessibility_services "$acc_backup" >/dev/null 2>&1 || true
+      "$ADB" -s "$DEV" shell settings put secure accessibility_enabled 1 >/dev/null 2>&1 || true
+    fi
+    for i in $(seq 1 15); do   # 15×2s = 30s 上限
+      sleep 2
+      if "$ADB" -s "$DEV" logcat -d 2>/dev/null | grep -q 'agent started'; then break; fi
+    done
+    "$ADB" -s "$DEV" logcat -d 2>/dev/null
+  }
+
+  LIVE_AGENT=$(resolve_live_agent_id _fetch_agent_log _coldstart_agent)
   if [ -n "$LIVE_AGENT" ]; then
     AGENT_ID="$LIVE_AGENT"
     ok "动态取到设备当前真实 agent_id=$AGENT_ID（非硬编码默认值）"
   else
-    envfail "logcat 里找不到 'agent started — agentId=' 记录，设备可能从没跑完 initAgent（无障碍/截图授权后需强杀重启 App 让 initAgent 冷启动跑一遍，重启AGENT服务按钮在进程存活时不会重跑已初始化的轮询循环）"
+    envfail "取不到 agent_id：直读 logcat 无 'agent started' 记录，冷启动 agent 后 30s 内仍未打出（查 initAgent 是否卡在中台注册，或无障碍授权是否被撤销未写回）"
   fi
 fi
 
@@ -89,14 +185,88 @@ ok "seed 自愈 OK (tenant=$TENANT)"
 
 # 覆盖安装 / 息屏后 agent 进程可能是空壳(无采集轮询)——今天真机踩过的坑,主动拉起。
 # 无障碍权限覆盖安装后保留,无需重新授权采集(截图授权是判定链的事,不影响采集)。
-"$ADB" shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
-"$ADB" shell input swipe 540 2000 540 600 200 >/dev/null 2>&1 || true
-"$ADB" shell monkey -p com.zenithjoy.agent -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+"$ADB" -s "$DEV" shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+"$ADB" -s "$DEV" shell input swipe 540 2000 540 600 200 >/dev/null 2>&1 || true
+"$ADB" -s "$DEV" shell monkey -p com.zenithjoy.agent -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
 # 采集前把抖音复位到干净态(根治前一轮残留栈导致的 NO_SEARCH_INPUT/SEARCH_TIMEOUT)
-"$ADB" shell am force-stop com.ss.android.ugc.aweme >/dev/null 2>&1 || true
+"$ADB" -s "$DEV" shell am force-stop com.ss.android.ugc.aweme >/dev/null 2>&1 || true
 sleep 6
-ACC=$("$ADB" shell settings get secure enabled_accessibility_services 2>/dev/null)
+ACC=$("$ADB" -s "$DEV" shell settings get secure enabled_accessibility_services 2>/dev/null)
 case "$ACC" in *com.zenithjoy.agent*) ok "无障碍已开";; *) envfail "无障碍未开(采集依赖):$ACC";; esac
+
+# ── 1.5 MediaProjection 自动授权（Seg2 判定截图的前提，承接未合的 PR #1312）──
+# 判定链要逐视频截图，依赖 MediaProjection 授权；该授权在 app 进程重启后必然丢失
+# （08-17 实测第四台与小黄的 dumpsys media_projection 都是 null，而小黄从未被
+# force-stop 过 → 说明这是普遍长期状态，不是某次操作的后果）。agent MainActivity
+# 上有「授权截屏」按钮，这里用 uiautomator 定位并自动点掉它 + 随后的系统弹框，
+# 省掉此前"必须有人在手机上点一次"的人工步骤。
+#
+# 失败只警告、**不 envfail**：采集主链路不依赖截图授权（见上方注释"截图授权是
+# 判定链的事,不影响采集"），judged=0 该由下方 Seg2 判定闸去报——授权段抢先把
+# 整个 job 判死只会造出一个新的假红源，那正是本次修复要消灭的东西。
+# _tap_by_text <设备上的dump路径> <文案...>
+#   dump 当前界面 → 按文案找节点 → 点它的 bounds 中心。任一文案命中即返回 0。
+#
+# 三个真机必需条件（2026-08-17 真机实测踩出，PR #1312 原版都缺，缺了授权段就是死代码）：
+#   1) MSYS_NO_PATHCONV=1：workflow 用 git bash，`/sdcard/xxx` 会被 MSYS 路径转换成
+#      `C:/Program Files/Git/sdcard/xxx`，dump 压根没落到设备上（实测 ls 报
+#      "ls: C:/Program: No such file or directory"）
+#   2) 带重试：界面在动时 dump 报 "ERROR: could not get idle state."（实测抖音
+#      SplashActivity 动画期间必失败），需等它静下来再试
+#   3) 用 exec-out 读而非 shell cat：实测 shell cat 拿到 0 字节，exec-out 拿到 8537 字节
+_tap_by_text() {   # _tap_by_text <设备上的dump路径> <文案...>
+  local dump="$1"; shift
+  local xml word xy i out
+  for i in 1 2 3; do
+    out=$(MSYS_NO_PATHCONV=1 "$ADB" -s "$DEV" shell uiautomator dump "$dump" 2>&1 | tr -d '\r')
+    case "$out" in *"dumped to"*) break ;; esac
+    sleep 3   # could not get idle state —— 界面还在动，等一下重试
+  done
+  xml=$(MSYS_NO_PATHCONV=1 "$ADB" -s "$DEV" exec-out cat "$dump" 2>/dev/null)
+  [ -n "$xml" ] || { echo "  [MediaProjection] dump 读不到界面（$out）"; return 1; }
+  for word in "$@"; do
+    xy=$(parse_ui_bounds "$xml" "$word")
+    if [ -n "$xy" ]; then
+      echo "  [MediaProjection] 点击「$word」at ($xy)"
+      # shellcheck disable=SC2086
+      "$ADB" -s "$DEV" shell input tap $xy >/dev/null 2>&1 || true
+      return 0
+    fi
+  done
+  return 1
+}
+
+# 「授权截屏」按钮在 agent 自己的 MainActivity 上——dump 前必须把它拉到前台，否则
+# dump 到的是抖音（真机实测当时前台是 aweme/SplashActivity，界面里根本没这个按钮）。
+"$ADB" -s "$DEV" shell monkey -p com.zenithjoy.agent -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+sleep 4
+
+# 判定链的两个前置授权，能用 adb 做的先自动做掉（08-17 真机逐条实测）：
+#   ✅ RECORD_AUDIO —— 判定走 20 秒音频转写，缺它视频类判定必然 pending
+#      （实测 pm grant 后 agent 界面的「⚠️ 录音未授权」警告消失）。
+#      有些 ROM 是 permission + appop 双闸，两个都放开。
+#   ⚠️ PROJECT_MEDIA appop —— 设成 allow 是必要条件之一，但**不足以**让 app 认为
+#      已授权：MediaProjection 是 session-based consent（每次要 token），不是
+#      permission，实测设完界面仍显示「⚠️ 截图未授权」。
+for _p in com.zenithjoy.agent com.zenithjoy.agent.e2e; do
+  "$ADB" -s "$DEV" shell pm grant "$_p" android.permission.RECORD_AUDIO >/dev/null 2>&1 || true
+  "$ADB" -s "$DEV" shell cmd appops set "$_p" RECORD_AUDIO allow >/dev/null 2>&1 || true
+  "$ADB" -s "$DEV" shell cmd appops set "$_p" PROJECT_MEDIA allow >/dev/null 2>&1 || true
+done
+
+if _tap_by_text /sdcard/zj_ui.xml '授权截屏'; then
+  sleep 2
+  # 点开后会弹出系统的「是否允许录制/投射屏幕」窗口。**这一步自动点不掉**：
+  # 该弹框是系统安全窗口，对 uiautomator 不可见——08-17 真机实测，点击后
+  # mCurrentFocus 确实变成了那个弹框，但 dump 出来的仍是底层 agent 界面
+  # （长度与点击前一致），拿不到按钮 bounds。这是 Android 防恶意 app 自动
+  # 授权的强制设计，不是本脚本能绕的。PR #1312 原版这一步从设计上就不可能生效。
+  _tap_by_text /sdcard/zj_allow.xml '立即开始' '允许' 'Allow' 'Start now' \
+    || echo "  [MediaProjection] 系统授权弹框已弹出但无法自动确认（系统安全窗口对 uiautomator 不可见）——需要人在设备上点一次「立即开始」，否则判定链会持续 pending"
+  sleep 2
+else
+  echo "  [MediaProjection] 未见「授权截屏」按钮（可能已授权，或当前界面不符）"
+fi
 
 # ── 2. 派"装修"任务(collect/start) ───────────────────────────────────
 RESP=$(curl -fsSk -m 15 -X POST "$API_BASE/api/acquisition/collect/start" \
@@ -252,3 +422,6 @@ if [ "${MATCHED:-0}" -ge 1 ]; then
 else
   echo "🎉 PASS: agent-android 挖客链路 Seg1-2 验证通过(task=$TASK)——Seg3/4(抓评论/私信派单)因本轮无 matched 视频未触发验证，判定链本身工作正常，只是没命中"
 fi
+}
+
+[ "${BASH_SOURCE[0]}" = "${0}" ] && main "$@"
