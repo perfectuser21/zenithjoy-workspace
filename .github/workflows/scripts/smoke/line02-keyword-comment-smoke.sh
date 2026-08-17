@@ -20,6 +20,35 @@ set -euo pipefail
 ok()   { echo "✅ $1"; }
 fail() { echo "❌ $1"; exit 1; }
 
+# ── 诊断分级纯函数（可 source，变异测试锚点）──────────────────────────────
+# classify_node_failure NODE_OUTPUT
+#   把 node 脚本（可能非 0 退出）的输出分级成 "<verdict>:<reason>"：
+#     skip:<ERR>   已知环境限制，不算产品缺陷（DOUYIN_SESSION_EXPIRED：CI 以 SYSTEM
+#                  运行、DPAPI 解不开 asus 账号的 Chrome cookie）
+#     fail:<ERR>   真失败，且必须带上具体 error 便于定位（如 NO_HEADFUL_CHROME）
+#     fail:NO_JSON 连 JSON 都没输出（node 本身没起来）——也要给结论，不能静默
+#
+# 为什么需要它：本脚本 set -euo pipefail，而下方 `KW_OUT=$(node ...)` 在 node 非 0
+# 退出时会**静默杀死整个脚本**，让其后的 fail「完整输出」与 skip 分支永远执行不到。
+# 08-17 实测：Step 1 两秒 exit 1、零输出，手动跑 node 才看到 NO_HEADFUL_CHROME。
+classify_node_failure() {
+  local out="${1:-}" json err
+  json=$(printf '%s\n' "$out" | grep '^{' | tail -1)
+  [ -n "$json" ] || { printf 'fail:NO_JSON'; return 0; }
+  err=$(printf '%s' "$json" \
+    | grep -oE '"error"[[:space:]]*:[[:space:]]*"[^":]+' | head -1 | sed -E 's/.*"//')
+  case "$err" in
+    DOUYIN_SESSION_EXPIRED) printf 'skip:%s' "$err" ;;
+    '')                     printf 'fail:UNKNOWN' ;;
+    *)                      printf 'fail:%s' "$err" ;;
+  esac
+}
+
+# `source line02-keyword-comment-smoke.sh --source-only` 时到此为止，不跑真机主流程。
+if [ "${1:-}" = "--source-only" ]; then
+  return 0 2>/dev/null || exit 0
+fi
+
 SMOKE_KW="${SMOKE_KW:-美甲}"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -67,10 +96,12 @@ node_parse() {
 # ── 3. 关键词搜索 ─────────────────────────────────────────────────
 echo ""
 echo "=== Step 1: 关键词搜索 kw=$SMOKE_KW ==="
-KW_OUT=$("$NODE_EXE" "$KW_SCRIPT" "$SMOKE_KW" 2>&1)
+# || true 是必须的：set -e 下 node 非 0 退出会静默杀死脚本，下面的 fail「完整输出」
+# 与 DOUYIN_SESSION_EXPIRED skip 分支就永远执行不到（08-17 实测 exit 1 零输出）。
+KW_OUT=$("$NODE_EXE" "$KW_SCRIPT" "$SMOKE_KW" 2>&1) || true
 echo "$KW_OUT" | grep -v '^{' | head -20
 KW_JSON=$(echo "$KW_OUT" | grep '^{' | tail -1)
-[ -n "$KW_JSON" ] || fail "keyword-search 无 JSON 输出 — 完整输出: $KW_OUT"
+[ -n "$KW_JSON" ] || fail "keyword-search 无 JSON 输出（分级=$(classify_node_failure "$KW_OUT")）— 完整输出: $KW_OUT"
 
 KW_OK=$(node_parse "$KW_JSON" "String(d.ok)")
 [ "$KW_OK" = "true" ] || {
@@ -107,10 +138,10 @@ echo ""
 echo "=== Step 2: 评论抓取 url=$FIRST_VIDEO ==="
 # 参数：<video_url> <task_id> <apiBase=''> <cdpPort=''> <mode=--stdout-only>
 # task_id 传 'smoke-test'（非空字符串，避免脚本提前退出，--stdout-only 不用 apiBase）
-CM_OUT=$("$NODE_EXE" "$CM_SCRIPT" "$FIRST_VIDEO" "smoke-test" "" "" "--stdout-only" 2>&1)
+CM_OUT=$("$NODE_EXE" "$CM_SCRIPT" "$FIRST_VIDEO" "smoke-test" "" "" "--stdout-only" 2>&1) || true
 echo "$CM_OUT" | grep -v '^{' | head -20
 CM_JSON=$(echo "$CM_OUT" | grep '^{' | tail -1)
-[ -n "$CM_JSON" ] || fail "crawl-comments 无 JSON 输出 — 完整输出: $CM_OUT"
+[ -n "$CM_JSON" ] || fail "crawl-comments 无 JSON 输出（分级=$(classify_node_failure "$CM_OUT")）— 完整输出: $CM_OUT"
 
 CM_OK=$(node_parse "$CM_JSON" "String(d.ok)")
 [ "$CM_OK" = "true" ] || {
