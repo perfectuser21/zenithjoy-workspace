@@ -130,7 +130,14 @@ ok "staging API 可达"
 # 固定值(供调试锁定某台设备用)。
 if [ -z "${SMOKE_AGENT:-}" ]; then
   # 阶段①：直读当前 logcat（设备刚启动过时命中，零副作用）
-  _fetch_agent_log() { "$ADB" -s "$DEV" logcat -d 2>/dev/null; }
+  # ⚠️ 必须窄化：`logcat -d` 全量导出在真机上是 33 倍的代价——四号机实测
+  # 106495 行 / 200 秒（还是被 timeout 截断的），而 `-t 3000 -s AgentService`
+  # 只要 6 秒。本函数在轮询里最多被调 15 次，用全量会把整个 12 分钟 job 预算吃光
+  # （2026-08-18 CI run 32149637369 实测：取 agent_id 花掉 10 分 26 秒，真正的采集
+  # 只跑了 19 秒就撞 timeout 被砍，今天三刀的修复一秒都没被验证到）。
+  # -s AgentService 只留这一个 tag（`agent started — agentId=` 由它打印），
+  # -t 3000 只取最后 3000 行——两者缺一都会把代价放大回去。
+  _fetch_agent_log() { "$ADB" -s "$DEV" logcat -d -t 3000 -s AgentService 2>/dev/null; }
 
   # 阶段②：冷启动 agent 让 initAgent 重跑，把 `agent started` 日志重新打出来。
   # 之所以需要这一步：logcat 是环形缓冲，设备跑久了旧启动日志必然被冲掉
@@ -156,9 +163,10 @@ if [ -z "${SMOKE_AGENT:-}" ]; then
     fi
     for i in $(seq 1 15); do   # 15×2s = 30s 上限
       sleep 2
-      if "$ADB" -s "$DEV" logcat -d 2>/dev/null | grep -q 'agent started'; then break; fi
+      # 同样必须窄化——这里每轮都要读一次，全量的话 15 轮就是 15×200 秒
+      if "$ADB" -s "$DEV" logcat -d -t 3000 -s AgentService 2>/dev/null | grep -q 'agent started'; then break; fi
     done
-    "$ADB" -s "$DEV" logcat -d 2>/dev/null
+    "$ADB" -s "$DEV" logcat -d -t 3000 -s AgentService 2>/dev/null
   }
 
   LIVE_AGENT=$(resolve_live_agent_id _fetch_agent_log _coldstart_agent)

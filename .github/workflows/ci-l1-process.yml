@@ -334,6 +334,7 @@ jobs:
                    .github/workflows/scripts/__tests__/line02-android-collect-realmachine-smoke.agent-id.test.sh \
                    .github/workflows/scripts/__tests__/line02-android-collect-realmachine-smoke.ui-bounds.test.sh \
                    .github/workflows/scripts/__tests__/smoke-adb-binding-and-state-isolation.test.sh \
+                   .github/workflows/scripts/__tests__/smoke-logcat-narrowing.test.sh \
                    .github/workflows/scripts/__tests__/line02-keyword-comment-smoke.diagnostics.test.sh \
                    .github/workflows/scripts/__tests__/lint-shell-var-brace.test.sh \
                    .github/workflows/scripts/smoke/lib/ensure-device-online.test.sh; do
