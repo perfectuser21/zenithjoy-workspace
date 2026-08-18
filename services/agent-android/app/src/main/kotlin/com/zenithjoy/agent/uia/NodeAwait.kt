@@ -209,15 +209,30 @@ suspend fun AccessibilityService.awaitNode(
  *
  * 系统索引是**模糊匹配**（contains），所以命中后仍要精确校验，避免「是否允许」把「允许」也算进来。
  */
-private fun AccessibilityService.probeLabels(): List<String> {
+/**
+ * 一轮只扫一次：返回 (该点的标签, 对应节点)。
+ *
+ * 2026-08-18 真机踩过两次「每轮重复扫描」的代价，第二次尤其惨：初版 probeLabels 里对 8 个候选
+ * 标签各调一次 findLabelAcrossWindows，而后者每次都重新 rootsToSearch()（含 windows 遍历），
+ * 于是每轮实际扫了 8 遍所有窗口——真机日志显示**一轮耗时 67 秒**（设计值 500ms），24 轮要 27 分钟。
+ * 现在每轮只取一次 roots、只走一遍候选表，命中即记下节点，避免二次查找。
+ */
+private fun AccessibilityService.scanForDismiss(): Pair<String?, AccessibilityNodeInfo?> {
+    val roots = rootsToSearch()
+    if (roots.isEmpty()) return null to null
     val found = mutableListOf<String>()
     for (marker in AUTO_JUMP_MARKERS) {
-        if (rootsToSearch().any { it.findAccessibilityNodeInfosByText(marker)?.isNotEmpty() == true }) found.add(marker)
+        if (roots.any { it.findAccessibilityNodeInfosByText(marker)?.isNotEmpty() == true }) found.add(marker)
     }
+    val hits = HashMap<String, AccessibilityNodeInfo>()
     for (label in CANDIDATE_LABELS) {
-        if (findLabelAcrossWindows(label) != null) found.add(label)
+        for (r in roots) {
+            val n = findByLabel(r, label)
+            if (n != null) { hits[label] = n; found.add(label); break }
+        }
     }
-    return found
+    val label = NodeAwait.pickDismissLabel(found)
+    return label to label?.let { hits[it] }
 }
 
 /**
@@ -232,16 +247,13 @@ private fun AccessibilityService.probeLabels(): List<String> {
 private fun AccessibilityService.rootsToSearch(): List<AccessibilityNodeInfo> {
     val out = mutableListOf<AccessibilityNodeInfo>()
     rootInActiveWindow?.let { out.add(it) }
-    windows?.forEach { w -> w.root?.let { if (out.none { o -> o == it }) out.add(it) } }
-    return out
-}
-
-private fun AccessibilityService.findLabelAcrossWindows(label: String): AccessibilityNodeInfo? {
-    for (r in rootsToSearch()) findByLabel(r, label)?.let { return it }
-    return null
+    // 上限保护：窗口列表异常膨胀时不让扫描代价失控（每个 root 上的查询都是跨进程调用）
+    windows?.take(MAX_WINDOWS_TO_SCAN)?.forEach { w -> w.root?.let { if (out.none { o -> o == it }) out.add(it) } }
+    return out.take(MAX_WINDOWS_TO_SCAN)
 }
 
 private val AUTO_JUMP_MARKERS = listOf("想要打开", "是否允许")
+private const val MAX_WINDOWS_TO_SCAN = 6
 private val CANDIDATE_LABELS = listOf("允许", "跳过", "关闭", "稍后", "取消", "我知道了")
 
 /**
@@ -290,8 +302,7 @@ suspend fun AccessibilityService.awaitAppForeground(
     repeat(maxAttempts) {
         val current = rootInActiveWindow?.packageName?.toString()
         // 跨窗口找可消除项：系统对话框常不在 activeWindow 里（真机实证 rootInActiveWindow 为 null）
-        val label = NodeAwait.pickDismissLabel(probeLabels())
-        val target = label?.let { findLabelAcrossWindows(it) }
+        val (label, target) = scanForDismiss()
         when (NodeAwait.decideGateAction(current, packageName, pkg, target != null, blindRounds)) {
             GateAction.DONE -> return true
             GateAction.TAP_DISMISS -> {
