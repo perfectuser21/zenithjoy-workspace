@@ -115,7 +115,7 @@ ensure_device_online "$ADB" "${ANDROID_ADB_ENDPOINT:-}" \
 # 被 grep 吃成空值 → 误报"包未安装/无障碍未开"（2026-08-17 实测，且清理后会复发）。
 DEV=$(select_adb_device "$ADB" "${ANDROID_ADB_ENDPOINT:-}") \
   || envfail "select_adb_device 未选出在线设备(adb devices 无 device 行)"
-ok "设备在线: $DEV（后续所有 adb 调用绑定 -s）"
+ok "设备在线: ${DEV}（后续所有 adb 调用绑定 -s）"
 
 curl -fsSk -m 10 "$API_BASE/api/acquisition/overview" -H "X-Tenant-Id: $TENANT" >/dev/null 2>&1 \
   || envfail "staging API 不可达: $API_BASE"
@@ -164,7 +164,7 @@ if [ -z "${SMOKE_AGENT:-}" ]; then
   LIVE_AGENT=$(resolve_live_agent_id _fetch_agent_log _coldstart_agent)
   if [ -n "$LIVE_AGENT" ]; then
     AGENT_ID="$LIVE_AGENT"
-    ok "动态取到设备当前真实 agent_id=$AGENT_ID（非硬编码默认值）"
+    ok "动态取到设备当前真实 agent_id=${AGENT_ID}（非硬编码默认值）"
   else
     envfail "取不到 agent_id：直读 logcat 无 'agent started' 记录，冷启动 agent 后 30s 内仍未打出（查 initAgent 是否卡在中台注册，或无障碍授权是否被撤销未写回）"
   fi
@@ -223,11 +223,11 @@ _tap_by_text() {   # _tap_by_text <设备上的dump路径> <文案...>
     sleep 3   # could not get idle state —— 界面还在动，等一下重试
   done
   xml=$(MSYS_NO_PATHCONV=1 "$ADB" -s "$DEV" exec-out cat "$dump" 2>/dev/null)
-  [ -n "$xml" ] || { echo "  [MediaProjection] dump 读不到界面（$out）"; return 1; }
+  [ -n "$xml" ] || { echo "  [MediaProjection] dump 读不到界面（${out}）"; return 1; }
   for word in "$@"; do
     xy=$(parse_ui_bounds "$xml" "$word")
     if [ -n "$xy" ]; then
-      echo "  [MediaProjection] 点击「$word」at ($xy)"
+      echo "  [MediaProjection] 点击「${word}」at ($xy)"
       # shellcheck disable=SC2086
       "$ADB" -s "$DEV" shell input tap $xy >/dev/null 2>&1 || true
       return 0
