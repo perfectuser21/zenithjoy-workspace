@@ -19,6 +19,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import com.zenithjoy.agent.uia.NodeAwait
+import com.zenithjoy.agent.uia.awaitNode
 
 /**
  * 安卓设备账号扫描无障碍服务（Sprint 07061301-device-account-scan-wiring）。
@@ -321,14 +323,23 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
                 performGlobalAction(GLOBAL_ACTION_BACK)
                 delay(600L)
             }
-            val preTapRoot = awaitRootInActiveWindow()
-            val meTabNode = preTapRoot?.let {
-                val candidate = findNodeByContentDescContains(it, "我，按钮") ?: findNodeByText(it, "我")
-                // findNodeByText(it, "我") 是精确文本匹配，但触发这一步时抖音大概率停在信息流
-                // 首页——不受控的 UGC 文案/昵称/评论摘要偶然精确等于"我"的概率不为零。用位置
-                // 兜一层：底部导航栏的节点上边界必然落在屏幕最下方，用比例(不是绝对像素)判断，
-                // 不为单一机型写死数值。位置不对就当没找到，退回坐标兜底。
+            // findNodeByText(it, "我") 是精确文本匹配，但触发这一步时抖音大概率停在信息流
+            // 首页——不受控的 UGC 文案/昵称/评论摘要偶然精确等于"我"的概率不为零。用位置
+            // 兜一层：底部导航栏的节点上边界必然落在屏幕最下方，用比例(不是绝对像素)判断，
+            // 不为单一机型写死数值。位置不对就当没找到，退回坐标兜底。
+            // 2026-08-18：位置校验一并放进 finder —— 等「位置正确的我tab」出现，而不是
+            // 「有窗口了」就查一次（底部导航在冷启动/页面切换时并非立刻进无障碍树）。
+            val meTabOutcome = awaitNode(AWAIT_TAB_ATTEMPTS, AWAIT_POLL_MS) { r ->
+                val candidate = findNodeByContentDescContains(r, "我，按钮") ?: findNodeByText(r, "我")
                 candidate?.takeIf { node -> isInBottomNavArea(node, sh) }
+            }
+            val meTabNode = meTabOutcome.value
+            if (meTabNode == null) {
+                android.util.Log.w(
+                    TAG,
+                    "我tab 等待超时 failure=${NodeAwait.classifyFailure(meTabOutcome, DOUYIN_PKG_FOR_WAIT)} " +
+                        "attempts=${meTabOutcome.attempts} waitedMs=${meTabOutcome.waitedMs(AWAIT_POLL_MS)}"
+                )
             }
             if (meTabNode != null) {
                 android.util.Log.i(TAG, "我tab命中无障碍树节点，点节点中心")
@@ -408,15 +419,12 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
     }
 
     /** 点击"切换账号"后轮询等待 recycler_view 面板真正渲染出来，最多4次(共≤3200ms)。 */
-    private suspend fun awaitSwitchAccountPanel(): AccessibilityNodeInfo? {
-        repeat(4) {
-            delay(800L)
-            val checkRoot = rootInActiveWindow
-            val panel = checkRoot?.takeIf { findNodeByIds(it, "com.ss.android.ugc.aweme:id/recycler_view") != null }
-            if (panel != null) return panel
-        }
-        return null
-    }
+    // 2026-08-18：改为委托共享原语（行为等价，仍是 4x800ms），顺带从「先睡再看」变成
+    // 「先看再睡」——面板已经展开时立即返回，不再白等 800ms。
+    private suspend fun awaitSwitchAccountPanel(): AccessibilityNodeInfo? =
+        awaitNode(maxAttempts = 4, intervalMs = 800L) { root ->
+            root.takeIf { findNodeByIds(it, "com.ss.android.ugc.aweme:id/recycler_view") != null }
+        }.value
 
     /**
      * 拉起抖音并【顶回主页 feed】。真机实测：抖音常恢复到上次的搜索/视频子页(SearchResultActivity 等)，
@@ -566,7 +574,18 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
      */
     private suspend fun readAccountListFromPanel(): List<String>? {
         return try {
-            val root = awaitRootInActiveWindow() ?: return null
+            // 等至少一个昵称节点真出现（面板是异步填充的，「有窗口」不代表列表已渲染）
+            val listOutcome = awaitNode(AWAIT_LIST_ATTEMPTS, AWAIT_POLL_MS) { r ->
+                r.takeIf { findNodesByIds(it, "com.ss.android.ugc.aweme:id/tv_nickname").isNotEmpty() }
+            }
+            val root = listOutcome.value ?: run {
+                android.util.Log.w(
+                    TAG,
+                    "账号列表等待超时 failure=" +
+                        "${NodeAwait.classifyFailure(listOutcome, DOUYIN_PKG_FOR_WAIT)} attempts=${listOutcome.attempts}"
+                )
+                return null
+            }
             val nicknames = filterAccountNicknames(
                 findNodesByIds(root, "com.ss.android.ugc.aweme:id/tv_nickname").map { it.text?.toString() }
             )
@@ -591,16 +610,9 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         }
     }
 
-    private suspend fun awaitRootInActiveWindow(
-        attempts: Int = 8,
-        intervalMs: Long = 500L,
-    ): AccessibilityNodeInfo? {
-        repeat(attempts) {
-            delay(intervalMs)
-            rootInActiveWindow?.let { return it }
-        }
-        return rootInActiveWindow
-    }
+    // 2026-08-18 已删除 awaitRootInActiveWindow：「等到有任何窗口就返回」不等于「目标已就绪」。
+    // 本文件 :360 的注释早就诊断出同一根因（它不等 recycler_view 真渲染完就返回，误判面板未出现），
+    // 但当时只在切号面板那一处修了。现统一改用 com.zenithjoy.agent.uia.awaitNode。
 
     private fun findNodeByContentDesc(root: AccessibilityNodeInfo, desc: String): AccessibilityNodeInfo? {
         val queue = ArrayDeque<AccessibilityNodeInfo>()
@@ -704,12 +716,19 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
     /** 从当前态开面板→点该昵称行→回主页 feed。面板行只有 tv_nickname，按昵称精确匹配。 */
     override suspend fun switchToAccountByNickname(nickname: String): Boolean {
         if (!openSwitchAccountPanel()) return false
-        val panel = awaitRootInActiveWindow() ?: return false
-        val row = findNodesByIds(panel, "com.ss.android.ugc.aweme:id/tv_nickname")
-            .firstOrNull { it.text?.toString()?.trim() == nickname } ?: run {
-                android.util.Log.w(TAG, "切换账号面板里找不到昵称=$nickname")
-                return false
-            }
+        // 等这一行真出现，而不是「有窗口了」就断言找不到
+        val rowOutcome = awaitNode(AWAIT_LIST_ATTEMPTS, AWAIT_POLL_MS) { r ->
+            findNodesByIds(r, "com.ss.android.ugc.aweme:id/tv_nickname")
+                .firstOrNull { it.text?.toString()?.trim() == nickname }
+        }
+        val row = rowOutcome.value ?: run {
+            android.util.Log.w(
+                TAG,
+                "切换账号面板里找不到昵称=$nickname failure=" +
+                    "${NodeAwait.classifyFailure(rowOutcome, DOUYIN_PKG_FOR_WAIT)} attempts=${rowOutcome.attempts}"
+            )
+            return false
+        }
         val clickable = findClickableSelfOrAncestor(row)
         if (clickable != null) clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK) else tapNodeCenter(row)
         delay(2500L) // 切号后回主页 feed 沉降
@@ -910,6 +929,12 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
     }
 
     companion object {
+        // 等「目标就绪」的轮询预算（2026-08-18，与 collect/dm 同一套设施）
+        private const val AWAIT_POLL_MS = 500L
+        private const val AWAIT_TAB_ATTEMPTS = 12       // 6s
+        private const val AWAIT_LIST_ATTEMPTS = 8       // 4s
+        private const val DOUYIN_PKG_FOR_WAIT = "com.ss.android.ugc.aweme"
+
         private const val TAG = "DeviceAccountScanSvc"
         internal const val DOUYIN_PKG = DouyinLaunchTrampoline.DEFAULT_TARGET_PACKAGE
         // 真机复现(2026-07-29，客户已交付环境MAA-AN00)：PR#1554新增"检测更换背景误触发浮层→
