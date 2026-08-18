@@ -151,12 +151,13 @@ object NodeAwait {
 ```kotlin
 /**
  * 在本 Service 的活动窗口上轮询等待 finder 命中的节点。
- * expectedPkg 非空时，同时把「前台包名」记进诊断（不阻断——某些步骤本来就允许跨包）。
+ * 前台包名总是记进 PollOutcome（与期望包的比对由调用方在失败时交给 classifyFailure，
+ * 因此扩展函数本身不需要 expectedPkg 参数）。
+ * 默认值对齐 dm 原私有 awaitNode（6 次 × 500ms），使其既有调用点可平滑改名迁移。
  */
 suspend fun AccessibilityService.awaitNode(
-    maxAttempts: Int,
-    intervalMs: Long,
-    expectedPkg: String? = null,
+    maxAttempts: Int = 6,
+    intervalMs: Long = 500L,
     finder: (AccessibilityNodeInfo) -> AccessibilityNodeInfo?,
 ): PollOutcome<AccessibilityNodeInfo> =
     NodeAwait.pollUntilPresent(maxAttempts, intervalMs, { delay(it) }) {
@@ -174,7 +175,7 @@ suspend fun AccessibilityService.awaitNode(
 有的调用点等的不是某个节点出现，而是某个**状态成立**——例如 dm `:262` 的回执判定等的是「输入框已清空」（`isInputCleared(root, message)`）。原语的 `finder` 是 `(AccessibilityNodeInfo) -> AccessibilityNodeInfo?`，这类场景把 root 自身作为命中值即可：
 
 ```kotlin
-awaitNode(maxAttempts = 8, intervalMs = 500, expectedPkg = DOUYIN_PKG) { root ->
+awaitNode(maxAttempts = 8, intervalMs = 500) { root ->
     root.takeIf { isInputCleared(it, message) }
 }
 ```
