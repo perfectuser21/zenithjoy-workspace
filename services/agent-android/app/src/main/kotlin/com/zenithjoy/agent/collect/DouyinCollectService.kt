@@ -23,6 +23,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import com.zenithjoy.agent.account.DouyinLaunchTrampoline
+import com.zenithjoy.agent.uia.NodeAwait
+import com.zenithjoy.agent.uia.WaitFailure
+import com.zenithjoy.agent.uia.awaitNode
+import com.zenithjoy.agent.uia.awaitAppForeground
 import com.zenithjoy.agent.account.ScanMutex
 
 /**
@@ -209,7 +213,16 @@ class DouyinCollectService : AccessibilityService() {
                 finishWithError("LAUNCH_FAILED")
                 return@launch
             }
+            // 第一层：等抖音【真的】铺到前台，期间消除厂商插屏。
+            // 真机实证（荣耀 X30/MagicOS，2026-08-18）：冷启动抖音时
+            // com.hihonor.systemmanager/…AppSplashAdvertiseActivity 会盖在抖音之上，
+            // 只做第二层（等搜索按钮出现）会一直在广告页上找，等满 24 次 11.5 秒仍
+            // fgPkg=com.hihonor.systemmanager。dm 侧早有这层（awaitDouyinForeground），
+            // collect 一直缺，这就是同一个 NO_SEARCH_INPUT 反复复发的另一半原因。
+            val fg = awaitAppForeground(DOUYIN_PKG, AWAIT_FOREGROUND_ATTEMPTS, AWAIT_POLL_MS)
+            android.util.Log.i(TAG, "startCollect: 抖音到前台=$fg")
             delay(RandomDelay.sample(RandomDelay.NAV_MS))
+            // 第二层：等搜索入口这个具体节点就绪（见 openSearchBar）
             openSearchBar()
         }
     }
@@ -382,19 +395,36 @@ class DouyinCollectService : AccessibilityService() {
     private fun openSearchBar() {
         state = State.TYPING_KEYWORD
         scope.launch {
-            val root = awaitRootInActiveWindow() ?: run {
-                finishWithError("NO_WINDOW")
-                return@launch
-            }
             // 真机验证发现：抖音的 resource-id 是混淆过的短乱码（如 "0fs"/"6ia"），
             // 猜测式的人类可读 id（search_btn/iv_search 等）在真实包里根本不存在。
             // content-description（无障碍朗读用的文案，如"搜索"）不受混淆影响，
             // 真机 dump 验证过存在，改为优先按 content-desc 匹配。
-            val searchBtn = findNodeByContentDesc(root, "搜索") ?: findNodeByIds(root,
-                "com.ss.android.ugc.aweme:id/search_btn",
-                "com.ss.android.ugc.aweme:id/iv_search",
-                "com.ss.android.ugc.aweme:id/action_search",
+            //
+            // 2026-08-18 根治：这里原先先 awaitRootInActiveWindow()（语义 = 等到有【任何】窗口就返回）
+            // 再问一次「搜索按钮在不在」。抖音闪屏页、荣耀系统管家 AppSplashAdvertiseActivity 开屏广告页
+            // 都满足「有窗口」，于是在半成品页面上找按钮、找不到就判死——这正是 NO_SEARCH_INPUT 被
+            // 修过四次（#1120/#1375/#1640 各修一处）仍复发的根子。改为轮询等它【真的出现】。
+            // 真机 A/B 对照（荣耀 X30/Android 13/抖音 40.0.0）：抖音进程热 → searchBtn=true 采到 3 张卡；
+            // force-stop 冷启动 → searchBtn=false 必崩。同设备同选择器，差别只在时机。
+            val searchOutcome = awaitNode(AWAIT_SEARCH_ENTRY_ATTEMPTS, AWAIT_POLL_MS) { r ->
+                findNodeByContentDesc(r, "搜索") ?: findNodeByIds(r,
+                    "com.ss.android.ugc.aweme:id/search_btn",
+                    "com.ss.android.ugc.aweme:id/iv_search",
+                    "com.ss.android.ugc.aweme:id/action_search",
+                )
+            }
+            val searchBtn = searchOutcome.value
+            android.util.Log.i(
+                TAG,
+                "openSearchBar: searchBtn=${searchBtn != null} attempts=${searchOutcome.attempts} " +
+                    "waitedMs=${searchOutcome.waitedMs(AWAIT_POLL_MS)} fgPkg=${searchOutcome.lastForegroundPkg}"
             )
+            if (searchBtn == null) {
+                val failure = NodeAwait.classifyFailure(searchOutcome, DOUYIN_PKG)
+                android.util.Log.w(TAG, "openSearchBar: 等待搜索入口超时 failure=$failure")
+                finishWithError(if (failure == WaitFailure.NO_ROOT) "NO_WINDOW" else "NO_SEARCH_INPUT")
+                return@launch
+            }
             // 真机验证发现：点击搜索按钮后页面已经跳转到搜索输入页，但如果这里
             // 继续用点击前的 root 快照调 typeKeyword，那个快照里根本没有输入框，
             // 必然报 NO_SEARCH_INPUT——从没进过搜索页。点击后必须重新抓一次
@@ -404,14 +434,29 @@ class DouyinCollectService : AccessibilityService() {
             // 整条无障碍祖先链 clickable=false，performAction(ACTION_CLICK) 是空操作、
             // 点不动，页面根本不跳转 → 之前恒报 NO_SEARCH_INPUT。改用 clickNodeRobustly
             // （链上无可点击节点时退回坐标手势），对齐 triggerSearch 早已采用的 tapNodeCenter。
-            android.util.Log.i(TAG, "openSearchBar: searchBtn=${searchBtn != null}")
-            val postClickRoot = if (searchBtn != null) {
-                clickNodeRobustly(searchBtn)
-                delay(RandomDelay.sample(RandomDelay.CLICK_MS))
-                awaitRootInActiveWindow(attempts = 4) ?: root
-            } else {
-                root
+            clickNodeRobustly(searchBtn)
+            delay(RandomDelay.sample(RandomDelay.CLICK_MS))
+            // 点击后同样不能「抓一次就用」：等搜索输入框真出现。这里只做诊断、不改控制流——
+            // 输入框没等到时仍交给下面的 state 守卫与 typeKeyword 判空处理，避免动到 #1375 的语义。
+            // ⚠️ finder 每轮都会执行，必须廉价：这里只用 findNodeByIds（走系统的
+            // findAccessibilityNodeInfosByViewId 索引查询），**不能**顺手加 findFirstEditText——
+            // 那是无界 BFS，而 AccessibilityNodeInfo.getChild() 每次都是跨进程 binder 调用，
+            // 在 Lynx 渲染的 SearchResultActivity 巨树上单次遍历就要几十秒，乘以轮询次数会把
+            // 整条协程拖死（2026-08-18 真机实测：日志停在本行之前两分钟无进展）。
+            // 兜底的 findFirstEditText 仍由其后的 typeKeyword 调用一次，行为不变。
+            val inputOutcome = awaitNode(AWAIT_SEARCH_INPUT_ATTEMPTS, AWAIT_POLL_MS) { r ->
+                findNodeByIds(r,
+                    "com.ss.android.ugc.aweme:id/search_input",
+                    "com.ss.android.ugc.aweme:id/search_edit_text",
+                    "com.ss.android.ugc.aweme:id/et_search_kw",
+                )
             }
+            android.util.Log.i(
+                TAG,
+                "openSearchBar: inputReady=${inputOutcome.hit} attempts=${inputOutcome.attempts} " +
+                    "waitedMs=${inputOutcome.waitedMs(AWAIT_POLL_MS)}"
+            )
+            val postClickRoot = rootInActiveWindow ?: searchBtn
             // 真机复现（NO_SEARCH_INPUT 偶发）：上面这段 delay+awaitRootInActiveWindow 期间，
             // TYPE_WINDOW_STATE_CHANGED 事件驱动的 handleTypingKeyword() 常常已经抢先完成打字、
             // 把 state 推进到 SUBMITTING_SEARCH。这里如果不做同样的判断就无条件调用 typeKeyword，
@@ -430,18 +475,11 @@ class DouyinCollectService : AccessibilityService() {
         }
     }
 
-    /** 有限次轮询等待窗口根节点就绪，替代"一次固定延时后抓不到就判死"。 */
-    private suspend fun awaitRootInActiveWindow(
-        attempts: Int = 8,
-        intervalMs: Long = 500L,
-    ): AccessibilityNodeInfo? {
-        repeat(attempts) { attempt ->
-            delay(intervalMs)
-            rootInActiveWindow?.let { return it }
-            android.util.Log.d(TAG, "awaitRootInActiveWindow: attempt ${attempt + 1}/$attempts still null")
-        }
-        return rootInActiveWindow
-    }
+    // 2026-08-18 已删除 awaitRootInActiveWindow：它的语义是「等到屏幕上有任何窗口就返回」，
+    // 抖音闪屏页与厂商开屏广告页都满足，调用方拿它当「目标页面已就绪」用，是 NO_SEARCH_INPUT
+    // 被修四次仍复发的根子；超时还 return rootInActiveWindow 兜底，会退回点击前的旧快照。
+    // 一律改用 com.zenithjoy.agent.uia.awaitNode（等具体条件成立，超时明确失败）。
+    // 保留此说明是为了让后来者不要「顺手加回来」。
 
     // ── 3. 输入关键词 ─────────────────────────────────────────────────────────
 
@@ -722,8 +760,20 @@ class DouyinCollectService : AccessibilityService() {
             }
             tapNodeCenter(card)
             delay(RandomDelay.sample(RandomDelay.NAV_MS))
-            val detailRoot = awaitRootInActiveWindow(attempts = 6) ?: run {
-                android.util.Log.w(TAG, "capture abort card#$index: STEP1_detailRoot_null (tap didn't yield a window)")
+            // 等详情页【真的渲染出可见的分享入口】，而不是「屏幕上有窗口了」就往下走。
+            // 详情页从 tap 到分享按钮进无障碍树有肉眼可见的延迟，慢机器上尤其明显。
+            val detailOutcome = awaitNode(AWAIT_DETAIL_ATTEMPTS, AWAIT_POLL_MS) { r ->
+                findVisibleNodeByContentDescPrefix(r, "分享") ?: findVisibleNodeByContentDescPrefix(r, "转发")
+            }
+            val detailRoot = rootInActiveWindow
+            if (detailRoot == null || !detailOutcome.hit) {
+                val failure = NodeAwait.classifyFailure(detailOutcome, DOUYIN_PKG)
+                android.util.Log.w(
+                    TAG,
+                    "capture abort card#$index: STEP1_detail_not_ready failure=$failure " +
+                        "attempts=${detailOutcome.attempts} waitedMs=${detailOutcome.waitedMs(AWAIT_POLL_MS)} " +
+                        "fgPkg=${detailOutcome.lastForegroundPkg}"
+                )
                 return@withTimeoutOrNull null
             }
             // 详情页树全景：定位分享按钮实际 desc / 是否折叠
@@ -1114,7 +1164,19 @@ class DouyinCollectService : AccessibilityService() {
      * 评论列表虚拟化回收后的 index 漂移。
      */
     private suspend fun resolveDouyinIdForCommenter(nickname: String): String? {
-        val panelRoot = awaitRootInActiveWindow() ?: return null
+        // 等这位评论者的头像/昵称节点【真的出现】再动手：评论面板是异步加载的，
+        // 「有窗口」不代表这一行已经渲染进无障碍树。
+        val panelOutcome = awaitNode(AWAIT_COMMENT_PANEL_ATTEMPTS, AWAIT_POLL_MS) { r ->
+            findNodeByContentDesc(r, avatarContentDesc(nickname)) ?: findNodeByText(r, nickname)
+        }
+        val panelRoot = rootInActiveWindow ?: run {
+            android.util.Log.d(
+                TAG,
+                "resolveDouyinIdForCommenter: 无窗口 failure=" +
+                    "${NodeAwait.classifyFailure(panelOutcome, DOUYIN_PKG)} attempts=${panelOutcome.attempts}"
+            )
+            return null
+        }
         val avatar = findNodeByContentDesc(panelRoot, avatarContentDesc(nickname))
         // 结构定位兜底（28cee213，2026-08-16）：新版评论头像无 desc/无 id，按昵称文本节点的
         // bounds 在其左侧同一行手势点（头像圆心）；昵称贴着面板左缘则判无头像。
@@ -1620,6 +1682,16 @@ class DouyinCollectService : AccessibilityService() {
             state == State.OPENING_COMMENTS
         // Bug C 剪贴板取链：单张卡片全程硬超时 + 各阶段等待预算
         // （internal：PER_LEAD_ENRICH_TIMEOUT_MS 的量级守卫要拿它当参照上界）
+        // ── 等「目标就绪」的轮询预算（2026-08-18，替代旧的「等到有窗口就动手」）──
+        // 上限均低于其所在链路的既有总预算：搜索入口 12s < SUBMIT_SEARCH_TIMEOUT_MS(15s)；
+        // 详情页 6s < PER_CARD_TIMEOUT_MS(25s)；评论面板 4s < PER_LEAD_ENRICH_TIMEOUT_MS(20s)。
+        private const val AWAIT_POLL_MS = 500L
+        private const val AWAIT_FOREGROUND_ATTEMPTS = 24   // 12s：等抖音真到前台+消插屏
+        private const val AWAIT_SEARCH_ENTRY_ATTEMPTS = 24
+        private const val AWAIT_SEARCH_INPUT_ATTEMPTS = 8
+        private const val AWAIT_DETAIL_ATTEMPTS = 12
+        private const val AWAIT_COMMENT_PANEL_ATTEMPTS = 8
+
         internal const val PER_CARD_TIMEOUT_MS = 25_000L
         private const val CLEAR_WAIT_MS = 2_000L
         private const val READ_DELIVER_MS = 4_000L

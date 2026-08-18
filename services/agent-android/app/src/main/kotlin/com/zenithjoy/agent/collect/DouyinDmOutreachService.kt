@@ -17,6 +17,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.zenithjoy.agent.account.DouyinLaunchTrampoline
+import com.zenithjoy.agent.uia.NodeAwait
+import com.zenithjoy.agent.uia.WaitFailure
+import com.zenithjoy.agent.uia.awaitNode
 import com.zenithjoy.agent.account.ScanMutex
 
 /**
@@ -32,7 +35,7 @@ import com.zenithjoy.agent.account.ScanMutex
  *
  * 复用 [DouyinCollectService] 已验证过的真机模式（PR #1119/#1120 教训，同一份纪律不重新发明）：
  *   - 点击后必须重新抓取 root 快照，不能复用点击前的旧引用（用 [SnapshotDiscipline] 判定）
- *   - findNodeByIds / findNodeByContentDesc / findFirstEditText / awaitRootInActiveWindow
+ *   - findNodeByIds / findNodeByContentDesc / findFirstEditText / uia.awaitNode（等条件成立）
  *     同一套无障碍工具函数写法（本类内联一份精简版，避免跨 Service 共享可变状态）
  *   - 频控用 [DmOutreachRateLimiter] 纯函数判定（10 分钟窗口 ≤3 条），由 AgentService 在
  *     dispatchTask 之前先行判定——本类内部只负责"频控已经判过、这次真的要发"之后的执行；
@@ -132,7 +135,7 @@ class DouyinDmOutreachService : AccessibilityService() {
         super.onDestroy()
     }
 
-    // 全流程用轮询等待窗口就绪（awaitRootInActiveWindow），不依赖事件驱动状态切换，
+    // 全流程用轮询等待【目标条件成立】（uia.awaitNode），不依赖事件驱动状态切换，
     // 避免与 DouyinCollectService 共享无障碍事件流时产生状态机交叉污染。
     override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
 
@@ -189,25 +192,33 @@ class DouyinDmOutreachService : AccessibilityService() {
 
             // ── Step 6 起：私信发送（复用既有已验收链路，不改动 classifyOutcome 判定标准）──
             val beforeOpenToken = fetchToken
-            val root = awaitRootInActiveWindow() ?: run {
-                finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_WINDOW")
-                return@launch
-            }
-            fetchToken = SnapshotDiscipline.nextFetchToken(beforeOpenToken)
-
             // 真机(39.4.0)主页私信按钮是文本"发私信"(content-desc 未必是"私信")——补按文本查找，
             // 否则点进主页也会误报 NO_DM_ENTRY。
-            val dmEntryRaw = findNodeByContentDesc(root, "私信")
-                ?: findNodeByText(root, "发私信")
-                ?: findNodeByText(root, "私信")
-                ?: findNodeByIds(
-                    root,
-                    "com.ss.android.ugc.aweme:id/iv_im",
-                    "com.ss.android.ugc.aweme:id/btn_im",
-                    "com.ss.android.ugc.aweme:id/tv_send_msg",
-                )
+            // 2026-08-18：改为等它【真的出现】再判死，而不是「有窗口了」就问一次（主页内容异步加载）。
+            val entryOutcome = awaitNode(AWAIT_ENTRY_ATTEMPTS, AWAIT_POLL_MS) { r ->
+                findNodeByContentDesc(r, "私信")
+                    ?: findNodeByText(r, "发私信")
+                    ?: findNodeByText(r, "私信")
+                    ?: findNodeByIds(
+                        r,
+                        "com.ss.android.ugc.aweme:id/iv_im",
+                        "com.ss.android.ugc.aweme:id/btn_im",
+                        "com.ss.android.ugc.aweme:id/tv_send_msg",
+                    )
+            }
+            fetchToken = SnapshotDiscipline.nextFetchToken(beforeOpenToken)
+            val dmEntryRaw = entryOutcome.value
             if (dmEntryRaw == null) {
-                finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_DM_ENTRY")
+                val failure = NodeAwait.classifyFailure(entryOutcome, DOUYIN_PKG)
+                android.util.Log.w(
+                    TAG,
+                    "dm entry 等待超时 failure=$failure attempts=${entryOutcome.attempts} " +
+                        "waitedMs=${entryOutcome.waitedMs(AWAIT_POLL_MS)} fgPkg=${entryOutcome.lastForegroundPkg}"
+                )
+                finishWithOutcome(
+                    dmEntryFound = false, sendConfirmed = false,
+                    errorCode = if (failure == WaitFailure.NO_ROOT) "NO_WINDOW" else "NO_DM_ENTRY",
+                )
                 return@launch
             }
             // 真机验证发现：content-desc="私信" 命中的往往是图标叶子节点，isClickable=false，
@@ -228,14 +239,20 @@ class DouyinDmOutreachService : AccessibilityService() {
             // （复用 DouyinCollectService openSearchBar() 同一根因修复模式，PR #1119/#1120 教训）。
             fetchToken = SnapshotDiscipline.nextFetchToken(beforeClickToken)
             SnapshotDiscipline.requireFresh(beforeClickToken, fetchToken)
-            val postClickRoot = awaitRootInActiveWindow() ?: run {
-                finishWithOutcome(dmEntryFound = true, sendConfirmed = false, errorCode = "NO_WINDOW_AFTER_DM_CLICK")
-                return@launch
-            }
+            val inputOutcome = awaitNode(AWAIT_WIDGET_ATTEMPTS, AWAIT_POLL_MS) { r -> findFirstEditText(r) }
 
             state = State.TYPING_MESSAGE
-            val input = findFirstEditText(postClickRoot) ?: run {
-                finishWithOutcome(dmEntryFound = true, sendConfirmed = false, errorCode = "NO_MESSAGE_INPUT")
+            val input = inputOutcome.value ?: run {
+                val failure = NodeAwait.classifyFailure(inputOutcome, DOUYIN_PKG)
+                android.util.Log.w(
+                    TAG,
+                    "dm input 等待超时 failure=$failure attempts=${inputOutcome.attempts} " +
+                        "waitedMs=${inputOutcome.waitedMs(AWAIT_POLL_MS)} fgPkg=${inputOutcome.lastForegroundPkg}"
+                )
+                finishWithOutcome(
+                    dmEntryFound = true, sendConfirmed = false,
+                    errorCode = if (failure == WaitFailure.NO_ROOT) "NO_WINDOW_AFTER_DM_CLICK" else "NO_MESSAGE_INPUT",
+                )
                 return@launch
             }
             input.performAction(AccessibilityNodeInfo.ACTION_CLICK)
@@ -243,13 +260,20 @@ class DouyinDmOutreachService : AccessibilityService() {
             delay(RandomDelay.sample(RandomDelay.CLICK_MS))
 
             state = State.SENDING
-            val sendRoot = awaitRootInActiveWindow() ?: postClickRoot
-            val sendBtn = findNodeByContentDesc(sendRoot, "发送") ?: findNodeByIds(
-                sendRoot,
-                "com.ss.android.ugc.aweme:id/btn_send",
-                "com.ss.android.ugc.aweme:id/send_btn",
-            )
+            val sendOutcome = awaitNode(AWAIT_WIDGET_ATTEMPTS, AWAIT_POLL_MS) { r ->
+                findNodeByContentDesc(r, "发送") ?: findNodeByIds(
+                    r,
+                    "com.ss.android.ugc.aweme:id/btn_send",
+                    "com.ss.android.ugc.aweme:id/send_btn",
+                )
+            }
+            val sendBtn = sendOutcome.value
             if (sendBtn == null) {
+                android.util.Log.w(
+                    TAG,
+                    "dm send 按钮等待超时 failure=${NodeAwait.classifyFailure(sendOutcome, DOUYIN_PKG)} " +
+                        "attempts=${sendOutcome.attempts} waitedMs=${sendOutcome.waitedMs(AWAIT_POLL_MS)}"
+                )
                 finishWithOutcome(dmEntryFound = true, sendConfirmed = false, errorCode = "NO_SEND_BUTTON")
                 return@launch
             }
@@ -259,8 +283,17 @@ class DouyinDmOutreachService : AccessibilityService() {
             delay(RandomDelay.sample(RandomDelay.PROFILE_MS))
             // 读回执：发送成功后输入框会被清空（消息已提交进气泡列表），与 Windows 路径
             // "气泡出现才算 sent"同一标准的 Android 等价信号——避免"点了发送按钮就假 sent"。
-            val receiptRoot = awaitRootInActiveWindow()
-            val sendConfirmed = receiptRoot != null && isInputCleared(receiptRoot, message)
+            // 2026-08-18：从「等一下看一眼输入框清没清空」改为「等到它真清空为止」。
+            // 判定标准本身不变（输入框清空 = 消息已提交进气泡列表 = sent）。
+            val receiptOutcome = awaitNode(AWAIT_WIDGET_ATTEMPTS, AWAIT_POLL_MS) { r ->
+                r.takeIf { isInputCleared(it, message) }
+            }
+            val sendConfirmed = receiptOutcome.hit
+            android.util.Log.i(
+                TAG,
+                "dm receipt: confirmed=$sendConfirmed attempts=${receiptOutcome.attempts} " +
+                    "waitedMs=${receiptOutcome.waitedMs(AWAIT_POLL_MS)}"
+            )
             finishWithOutcome(dmEntryFound = true, sendConfirmed = sendConfirmed,
                 errorCode = if (sendConfirmed) "" else "NO_RECEIPT_CONFIRMED")
         }
@@ -359,33 +392,48 @@ class DouyinDmOutreachService : AccessibilityService() {
      * @return true = 已唯一定位到主页（点击后可继续后续流程）；false = 已上报结果，调用方应终止本次 lead。
      */
     private suspend fun locateProfileBySearch(targetDouyinId: String): Boolean {
-        val root = awaitRootInActiveWindow() ?: run {
-            finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_WINDOW_BEFORE_SEARCH")
+        // 2026-08-18：等搜索入口【真的出现】，不再「有窗口了」就问一次（与 collect 同源根因）。
+        val entryOutcome = awaitNode(AWAIT_ENTRY_ATTEMPTS, AWAIT_POLL_MS) { r ->
+            findNodeByContentDesc(r, "搜索") ?: findNodeByIds(
+                r,
+                "com.ss.android.ugc.aweme:id/search_btn",
+                "com.ss.android.ugc.aweme:id/iv_search",
+                "com.ss.android.ugc.aweme:id/action_search",
+            )
+        }
+        val searchBtn = entryOutcome.value
+        if (searchBtn == null) {
+            val failure = NodeAwait.classifyFailure(entryOutcome, DOUYIN_PKG)
+            android.util.Log.w(
+                TAG,
+                "A3-diag: 搜索入口等待超时 failure=$failure attempts=${entryOutcome.attempts} " +
+                    "waitedMs=${entryOutcome.waitedMs(AWAIT_POLL_MS)} fgPkg=${entryOutcome.lastForegroundPkg}"
+            )
+            finishWithOutcome(
+                dmEntryFound = false, sendConfirmed = false,
+                errorCode = if (failure == WaitFailure.NO_ROOT) "NO_WINDOW_BEFORE_SEARCH" else "NO_SEARCH_INPUT",
+            )
             return false
         }
+        searchBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        delay(RandomDelay.sample(RandomDelay.CLICK_MS))
 
-        val searchBtn = findNodeByContentDesc(root, "搜索") ?: findNodeByIds(
-            root,
-            "com.ss.android.ugc.aweme:id/search_btn",
-            "com.ss.android.ugc.aweme:id/iv_search",
-            "com.ss.android.ugc.aweme:id/action_search",
-        )
-        val searchPageRoot = if (searchBtn != null) {
-            searchBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            delay(RandomDelay.sample(RandomDelay.CLICK_MS))
-            awaitRootInActiveWindow(attempts = 4) ?: root
-        } else {
-            root
+        // 点击后等搜索输入框真出现，而不是拿点击前/半成品快照去找。
+        val inputOutcome = awaitNode(AWAIT_WIDGET_ATTEMPTS, AWAIT_POLL_MS) { r ->
+            findNodeByIds(
+                r,
+                "com.ss.android.ugc.aweme:id/search_input",
+                "com.ss.android.ugc.aweme:id/search_edit_text",
+                "com.ss.android.ugc.aweme:id/et_search_kw",
+            ) ?: findFirstEditText(r)
         }
-
-        val searchInput = findNodeByIds(
-            searchPageRoot,
-            "com.ss.android.ugc.aweme:id/search_input",
-            "com.ss.android.ugc.aweme:id/search_edit_text",
-            "com.ss.android.ugc.aweme:id/et_search_kw",
-        ) ?: findFirstEditText(searchPageRoot)
+        val searchInput = inputOutcome.value
         if (searchInput == null) {
-            android.util.Log.w(TAG, "A3-diag: NO_SEARCH_INPUT searchBtnFound=${searchBtn != null}")
+            android.util.Log.w(
+                TAG,
+                "A3-diag: NO_SEARCH_INPUT searchBtnFound=true failure=" +
+                    "${NodeAwait.classifyFailure(inputOutcome, DOUYIN_PKG)} attempts=${inputOutcome.attempts}"
+            )
             finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_SEARCH_INPUT")
             return false
         }
@@ -396,15 +444,19 @@ class DouyinDmOutreachService : AccessibilityService() {
         searchInput.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
         delay(RandomDelay.sample(RandomDelay.CLICK_MS))
 
-        val submitRoot = awaitRootInActiveWindow(attempts = 4) ?: searchPageRoot
+        // 等右上角「搜索」确认按钮出现（打字后它才渲染）。
+        val confirmOutcome = awaitNode(AWAIT_WIDGET_ATTEMPTS, AWAIT_POLL_MS) { r ->
+            findNodeByIds(
+                r,
+                "com.ss.android.ugc.aweme:id/search_confirm",
+                "com.ss.android.ugc.aweme:id/btn_search",
+            ) ?: findNodeByContentDesc(r, "搜索") ?: findNodeByText(r, "搜索")
+        }
+        val submitRoot = rootInActiveWindow ?: searchInput
         // 真机(39.4.0)实测：IME_ENTER 提交常常不触发搜索(结果页空、连结果 tab 都不出)，必须点
         // 右上角"搜索"按钮才真正执行。而该按钮是 clickable=false 的 TextView(content-desc="搜索")——
         // 无障碍 ACTION_CLICK 对它静默无效，只有坐标点它的 bounds 中心才生效(同抖音大量不可点 TextView)。
-        val searchConfirm = findNodeByIds(
-            submitRoot,
-            "com.ss.android.ugc.aweme:id/search_confirm",
-            "com.ss.android.ugc.aweme:id/btn_search",
-        ) ?: findNodeByContentDesc(submitRoot, "搜索") ?: findNodeByText(submitRoot, "搜索")
+        val searchConfirm = confirmOutcome.value
         if (searchConfirm != null) {
             tapNodeCenter(searchConfirm)
         } else {
@@ -412,10 +464,25 @@ class DouyinDmOutreachService : AccessibilityService() {
         }
         delay(RandomDelay.sample(RandomDelay.SEARCH_MS))
 
-        val resultsRoot = awaitRootInActiveWindow() ?: run {
+        // ⚠️ 结果列表是 Lynx 渲染【不进无障碍树】(见下方注释)，所以这里【不能】等结果行；
+        // 但「用户」tab 本身在树里，用它当结果页已渲染的锚点。等不到也不阻断（保持原有容错），
+        // 只有连 root 都没有才判 NO_SEARCH_RESULTS_WINDOW。
+        // ⚠️ finder 每轮执行，必须廉价：这里用系统索引查询 findAccessibilityNodeInfosByText，
+        // 不用手动 BFS——本页正是 Lynx 渲染的巨树，全树遍历（每个 getChild 都是跨进程调用）
+        // 单次就要几十秒（2026-08-18 collect 侧同款写法真机实测把协程拖死两分钟）。
+        val resultsOutcome = awaitNode(AWAIT_PAGE_ATTEMPTS, AWAIT_POLL_MS) { r ->
+            r.findAccessibilityNodeInfosByText("用户")?.firstOrNull()
+        }
+        val resultsRoot = rootInActiveWindow ?: run {
+            android.util.Log.w(
+                TAG,
+                "结果页无窗口 failure=${NodeAwait.classifyFailure(resultsOutcome, DOUYIN_PKG)} " +
+                    "attempts=${resultsOutcome.attempts}"
+            )
             finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_SEARCH_RESULTS_WINDOW")
             return false
         }
+        android.util.Log.i(TAG, "结果页「用户」tab ready=${resultsOutcome.hit} attempts=${resultsOutcome.attempts}")
         // 抖音 39.4.0 真机实测：SearchResultActivity 的搜索结果列表【不进无障碍树】(自定义/Lynx
         // 渲染，dump 只见搜索框+tab)，无法按文本定位结果行——老 matchProfileByDouyinId(搜索结果)
         // 恒失败，还会被搜索框回显的裸 id 骗成假 UNIQUE。改为人手操作路径：
@@ -427,14 +494,35 @@ class DouyinDmOutreachService : AccessibilityService() {
             delay(RandomDelay.sample(RandomDelay.CLICK_MS))
         }
         // 坐标盲点前等结果列表渲染完(用户 tab 结果不在树里，但页面绘制需要时间；点太早会点到空白)。
-        awaitRootInActiveWindow(attempts = 6)
+        // 2026-08-18 修正：原写法是 awaitRootInActiveWindow(attempts = 6)，看着像等 6x500ms=3s，
+        // 但那个函数是「delay 500 → root 非 null 就 return」，此刻 root 一直非空 → 实际只等了 500ms。
+        // 这里的等待对象根本不在无障碍树里（Lynx 渲染），条件式等待无从谈起，只能诚实地等时间。
+        delay(3_000L)
         delay(RandomDelay.sample(RandomDelay.SEARCH_MS))
         val beforeProfileToken = fetchToken
         tapTopUserResult()
         delay(RandomDelay.sample(RandomDelay.NAV_MS))
         fetchToken = SnapshotDiscipline.nextFetchToken(beforeProfileToken)
         SnapshotDiscipline.requireFresh(beforeProfileToken, fetchToken)
-        val profileRoot = awaitRootInActiveWindow() ?: run {
+        // ⚠️ 只等「主页文本已渲染」，绝不能等「匹配成立」——否则「这个主页确实不是目标人」
+        // 会被拖成超时，把 NO_MATCH 这个有意义的判定吃掉（那是不误发私信的最后一道闸）。
+        // ⚠️ finder 必须廉价：不用 collectAllNodeTexts 全树收集（每轮遍历整棵主页树太贵）。
+        // 主页渲染完成的廉价信号：树里出现「关注」或「粉丝」字样（系统索引查询，模糊匹配）。
+        // 拿不到这两个词也不阻断——超时后仍走下面原有的 verifyProfileMatchesDouyinId 判定，
+        // NO_MATCH 语义完全不变。
+        val profileOutcome = awaitNode(AWAIT_PAGE_ATTEMPTS, AWAIT_POLL_MS) { r ->
+            r.findAccessibilityNodeInfosByText("粉丝")?.firstOrNull()
+                ?: r.findAccessibilityNodeInfosByText("关注")?.firstOrNull()
+        }
+        if (!profileOutcome.hit) {
+            android.util.Log.w(
+                TAG,
+                "主页渲染信号未等到 failure=${NodeAwait.classifyFailure(profileOutcome, DOUYIN_PKG)} " +
+                    "attempts=${profileOutcome.attempts} waitedMs=${profileOutcome.waitedMs(AWAIT_POLL_MS)}，" +
+                    "仍按现有逻辑校验主页身份"
+            )
+        }
+        val profileRoot = rootInActiveWindow ?: run {
             finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_PROFILE_WINDOW")
             return false
         }
@@ -498,7 +586,7 @@ class DouyinDmOutreachService : AccessibilityService() {
                     "com.ss.android.ugc.aweme:id/follow_btn",
                     "com.ss.android.ugc.aweme:id/tv_follow",
                 )
-        }
+        }.value
         val followText = followBtn?.text?.toString()?.takeIf { it.isNotBlank() }
             ?: followBtn?.contentDescription?.toString()
         val nowForFollow = System.currentTimeMillis()
@@ -524,16 +612,16 @@ class DouyinDmOutreachService : AccessibilityService() {
         // content-desc 形如"点赞数14"，其可点击祖先=作品cell)；滚动+重试若干次仍找不到才尽力而为跳过。
         // 搜索落地的主页作品网格需数秒才渲染进无障碍树，且过早/过度滚动会滚进虚拟化区域反而丢失。
         // 策略：先在初始位置长等(~10s)；仍无则轻滑一次再等一小会；滚过才需滚回顶部。
-        var firstWork = awaitNode(maxAttempts = 14, delayMs = 700) { root -> findNodeByContentDescContains(root, "点赞数") }
+        var firstWork = awaitNode(maxAttempts = 14, intervalMs = 700) { root -> findNodeByContentDescContains(root, "点赞数") }.value
         var scrolled = false
         if (firstWork == null) {
             swipeContentUp()
             scrolled = true
             delay(RandomDelay.sample(RandomDelay.NAV_MS))
-            firstWork = awaitNode(maxAttempts = 6, delayMs = 700) { root -> findNodeByContentDescContains(root, "点赞数") }
+            firstWork = awaitNode(maxAttempts = 6, intervalMs = 700) { root -> findNodeByContentDescContains(root, "点赞数") }.value
         }
         if (firstWork == null) {
-            val diagRoot = awaitRootInActiveWindow()
+            val diagRoot = rootInActiveWindow
             val texts = diagRoot?.let { collectAllNodeTexts(it).take(40) } ?: emptyList()
             android.util.Log.i(TAG, "warmup like: 未找到作品(点赞数*)，跳过点赞。当前页文本=$texts")
             if (scrolled) restoreProfileTop()
@@ -546,7 +634,7 @@ class DouyinDmOutreachService : AccessibilityService() {
 
         // 视频页红心 content-desc="未点赞/已点赞，喜欢N，按钮"，含"点赞"即命中(含匹配，非精确等于)；
         // awaitNode 轮询等视频详情页红心渲染出来。
-        val likeBtn = awaitNode { root -> findNodeByContentDescContains(root, "点赞") }
+        val likeBtn = awaitNode { root -> findNodeByContentDescContains(root, "点赞") }.value
         val likeDesc = likeBtn?.contentDescription?.toString()
         val nowForLike = System.currentTimeMillis()
         val likeRateLimited = isLikeRateLimited(likeTimestampsMs, nowForLike)
@@ -590,21 +678,11 @@ class DouyinDmOutreachService : AccessibilityService() {
         )
     }
 
-    /**
-     * 轮询等待某节点出现(应对主页/视频页异步加载——内容未必在 locateProfile 落地瞬间就进无障碍树)。
-     * 最多 [maxAttempts] 次、每次间隔 [delayMs]；找到即返回，超时返回 null(尽力而为，调用方跳过不阻塞)。
-     */
-    private suspend fun awaitNode(
-        maxAttempts: Int = 6,
-        delayMs: Long = 500,
-        finder: (AccessibilityNodeInfo) -> AccessibilityNodeInfo?,
-    ): AccessibilityNodeInfo? {
-        repeat(maxAttempts) {
-            awaitRootInActiveWindow()?.let { root -> finder(root)?.let { return it } }
-            delay(delayMs)
-        }
-        return null
-    }
+    // 2026-08-18 已删除本文件私有的 awaitNode：改用共享的 com.zenithjoy.agent.uia.awaitNode。
+    // 原实现每一轮内部还调 awaitRootInActiveWindow()（自带最多 8x500ms），真实上限是
+    // maxAttempts x 4s 而非 maxAttempts x delayMs，超时预算不可控；共享版本只有一层轮询，
+    // 耗时严格等于 maxAttempts x intervalMs，且返回 PollOutcome 带诊断信息。
+    // 注意：Kotlin 里私有成员函数会遮蔽同名扩展函数，所以这里必须删干净，不能只是不用它。
 
 
     private fun collectAllNodeTexts(root: AccessibilityNodeInfo): List<String> {
@@ -642,17 +720,9 @@ class DouyinDmOutreachService : AccessibilityService() {
         return input.text?.toString() != sentMessage
     }
 
-    private suspend fun awaitRootInActiveWindow(
-        attempts: Int = 8,
-        intervalMs: Long = 500L,
-    ): AccessibilityNodeInfo? {
-        repeat(attempts) { attempt ->
-            delay(intervalMs)
-            rootInActiveWindow?.let { return it }
-            android.util.Log.d(TAG, "awaitRootInActiveWindow: attempt ${attempt + 1}/$attempts still null")
-        }
-        return rootInActiveWindow
-    }
+    // 2026-08-18 已删除 awaitRootInActiveWindow：语义是「等到屏幕上有任何窗口就返回」，
+    // 抖音闪屏页与厂商开屏广告页都满足，被当成「目标页面已就绪」用；超时还 return
+    // rootInActiveWindow 兜底过期快照。一律改用 com.zenithjoy.agent.uia.awaitNode。
 
     private fun findNodeByIds(root: AccessibilityNodeInfo, vararg ids: String): AccessibilityNodeInfo? {
         for (id in ids) {
@@ -777,6 +847,12 @@ class DouyinDmOutreachService : AccessibilityService() {
 
     companion object {
         private const val TAG = "DouyinDmOutreachService"
+        // 等「目标就绪」的轮询预算（2026-08-18）。各步累计最坏 ≈44s，低于 lead 90s 熔断。
+        private const val AWAIT_POLL_MS = 500L
+        private const val AWAIT_ENTRY_ATTEMPTS = 24    // 12s：私信/搜索入口，含冷启动与厂商开屏广告余量
+        private const val AWAIT_PAGE_ATTEMPTS = 12     // 6s：结果页/主页等页面级跳转
+        private const val AWAIT_WIDGET_ATTEMPTS = 8    // 4s：输入框/发送按钮等页内控件
+
         private const val DOUYIN_PKG = "com.ss.android.ugc.aweme"
 
         const val ACTION_DM_OUTREACH_TASK = "com.zenithjoy.agent.DM_OUTREACH_TASK"
