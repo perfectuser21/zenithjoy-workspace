@@ -156,35 +156,39 @@ suspend fun AccessibilityService.awaitNode(
 // 二者缺一不可：只有第二层时，厂商开屏广告盖着抖音会让节点永远等不到（真机实证）；
 // 只有第一层时，抖音自己还在加载也会让后续查找扑空。
 
-/** 收集整棵树上的 text 与 content-desc 文案（供 [NodeAwait.pickDismissLabel] 判断）。 */
-private fun collectAllTexts(root: AccessibilityNodeInfo): List<String> {
-    val out = mutableListOf<String>()
-    val queue = ArrayDeque<AccessibilityNodeInfo>()
-    queue.add(root)
-    var visited = 0
-    while (queue.isNotEmpty() && visited < 2_000) {
-        val node = queue.removeFirst()
-        visited++
-        node.text?.toString()?.takeIf { it.isNotBlank() }?.let { out.add(it) }
-        node.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.let { out.add(it) }
-        for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+/**
+ * 用系统索引查询（[AccessibilityNodeInfo.findAccessibilityNodeInfosByText]）探出页面上存在哪些
+ * 关心的文案，**不做全树遍历**。
+ *
+ * 2026-08-18 真机踩过：初版这里用全树 BFS 收集所有文案，而前台闸每轮都要跑一次——厂商插屏页的树
+ * 上每个 getChild() 都是跨进程 binder 调用，account-scan 冷启动实测 144 秒毫无进展。这与本文件
+ * 给 awaitNode 定的「finder 必须廉价」是同一条规矩，前台闸自己也必须守。
+ *
+ * 系统索引是**模糊匹配**（contains），所以命中后仍要精确校验，避免「是否允许」把「允许」也算进来。
+ */
+private fun probeLabels(root: AccessibilityNodeInfo): List<String> {
+    val found = mutableListOf<String>()
+    // auto-jump 上下文标记：这两个只需要「存在即可」，pickDismissLabel 用 contains 判定
+    for (marker in AUTO_JUMP_MARKERS) {
+        if (root.findAccessibilityNodeInfosByText(marker)?.isNotEmpty() == true) found.add(marker)
     }
-    return out
+    for (label in CANDIDATE_LABELS) {
+        if (findByLabel(root, label) != null) found.add(label)
+    }
+    return found
 }
 
-/** 按精确文案或 content-desc 找节点。 */
-private fun findByLabel(root: AccessibilityNodeInfo, label: String): AccessibilityNodeInfo? {
-    val queue = ArrayDeque<AccessibilityNodeInfo>()
-    queue.add(root)
-    var visited = 0
-    while (queue.isNotEmpty() && visited < 2_000) {
-        val node = queue.removeFirst()
-        visited++
-        if (node.text?.toString()?.trim() == label || node.contentDescription?.toString()?.trim() == label) return node
-        for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+private val AUTO_JUMP_MARKERS = listOf("想要打开", "是否允许")
+private val CANDIDATE_LABELS = listOf("允许", "跳过", "关闭", "稍后", "取消", "我知道了")
+
+/**
+ * 按精确文案或 content-desc 找节点：先用系统索引缩小候选（模糊匹配），再精确校验。
+ * 全程不做全树遍历。
+ */
+private fun findByLabel(root: AccessibilityNodeInfo, label: String): AccessibilityNodeInfo? =
+    root.findAccessibilityNodeInfosByText(label)?.firstOrNull { n ->
+        n.text?.toString()?.trim() == label || n.contentDescription?.toString()?.trim() == label
     }
-    return null
-}
 
 /**
  * 手势点击节点中心。
@@ -224,7 +228,7 @@ suspend fun AccessibilityService.awaitAppForeground(
         val current = root?.packageName?.toString()
         if (current == pkg) return true
         if (root != null && current != null) {
-            val label = NodeAwait.pickDismissLabel(collectAllTexts(root))
+            val label = NodeAwait.pickDismissLabel(probeLabels(root))
             val target = label?.let { findByLabel(root, it) }
             if (target != null) {
                 tapNodeCenterByGesture(target)
