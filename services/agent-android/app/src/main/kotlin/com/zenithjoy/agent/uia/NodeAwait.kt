@@ -166,19 +166,40 @@ suspend fun AccessibilityService.awaitNode(
  *
  * 系统索引是**模糊匹配**（contains），所以命中后仍要精确校验，避免「是否允许」把「允许」也算进来。
  */
-private fun probeLabels(root: AccessibilityNodeInfo): List<String> {
+private fun AccessibilityService.probeLabels(): List<String> {
     val found = mutableListOf<String>()
-    // auto-jump 上下文标记：这两个只需要「存在即可」，pickDismissLabel 用 contains 判定
     for (marker in AUTO_JUMP_MARKERS) {
-        if (root.findAccessibilityNodeInfosByText(marker)?.isNotEmpty() == true) found.add(marker)
+        if (rootsToSearch().any { it.findAccessibilityNodeInfosByText(marker)?.isNotEmpty() == true }) found.add(marker)
     }
     for (label in CANDIDATE_LABELS) {
-        if (findByLabel(root, label) != null) found.add(label)
+        if (findLabelAcrossWindows(label) != null) found.add(label)
     }
     return found
 }
 
+/**
+ * 要搜的窗口根节点集合：活动窗口 + 所有可交互窗口。
+ *
+ * **必须跨窗口**：真机截图实证（2026-08-18 荣耀 X30）——系统的 auto-jump 授权框
+ * 「"ZenithJoyAgent" 想要打开 "抖音"，是否允许？」盖在桌面上时，`rootInActiveWindow`
+ * 返回 null（该对话框在独立 window 里，不是 activeWindow），前台闸因此一轮都没进消除分支、
+ * 连日志都打不出来，只能干等到超时报 OPEN_PANEL_FAILED。
+ * 依赖服务配置里的 `flagRetrieveInteractiveWindows`（三个 service 的 xml 均已开）。
+ */
+private fun AccessibilityService.rootsToSearch(): List<AccessibilityNodeInfo> {
+    val out = mutableListOf<AccessibilityNodeInfo>()
+    rootInActiveWindow?.let { out.add(it) }
+    windows?.forEach { w -> w.root?.let { if (out.none { o -> o == it }) out.add(it) } }
+    return out
+}
+
+private fun AccessibilityService.findLabelAcrossWindows(label: String): AccessibilityNodeInfo? {
+    for (r in rootsToSearch()) findByLabel(r, label)?.let { return it }
+    return null
+}
+
 private val AUTO_JUMP_MARKERS = listOf("想要打开", "是否允许")
+private const val BLIND_ROUNDS_BEFORE_BACK = 4
 private val CANDIDATE_LABELS = listOf("允许", "跳过", "关闭", "稍后", "取消", "我知道了")
 
 /**
@@ -223,19 +244,29 @@ suspend fun AccessibilityService.awaitAppForeground(
     maxAttempts: Int = 24,
     intervalMs: Long = 500L,
 ): Boolean {
+    var blindRounds = 0
     repeat(maxAttempts) {
-        val root = rootInActiveWindow
-        val current = root?.packageName?.toString()
+        val current = rootInActiveWindow?.packageName?.toString()
         if (current == pkg) return true
-        if (root != null && current != null) {
-            val label = NodeAwait.pickDismissLabel(probeLabels(root))
-            val target = label?.let { findByLabel(root, it) }
-            if (target != null) {
-                tapNodeCenterByGesture(target)
-                android.util.Log.i("NodeAwait", "awaitAppForeground: 前台=$current 手势点掉「$label」")
-            } else {
+        // 跨窗口找可消除项：系统对话框常不在 activeWindow 里（真机实证 rootInActiveWindow 为 null）
+        val label = NodeAwait.pickDismissLabel(probeLabels())
+        val target = label?.let { findLabelAcrossWindows(it) }
+        if (target != null) {
+            tapNodeCenterByGesture(target)
+            blindRounds = 0
+            android.util.Log.i("NodeAwait", "awaitAppForeground: 前台=$current 手势点掉「$label」")
+        } else if (current != null) {
+            performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+            blindRounds = 0
+            android.util.Log.i("NodeAwait", "awaitAppForeground: 前台=$current 无可消除项，按返回")
+        } else {
+            // 连 activeWindow 都取不到：多半是系统窗口挡着且无可消除项。等几轮再按返回，
+            // 避免目标 App 内部瞬时取不到树时误退。
+            blindRounds++
+            if (blindRounds >= BLIND_ROUNDS_BEFORE_BACK) {
                 performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
-                android.util.Log.i("NodeAwait", "awaitAppForeground: 前台=$current 无可消除项，按返回")
+                blindRounds = 0
+                android.util.Log.i("NodeAwait", "awaitAppForeground: 连续 $BLIND_ROUNDS_BEFORE_BACK 轮取不到窗口树，按返回")
             }
         }
         delay(intervalMs)
