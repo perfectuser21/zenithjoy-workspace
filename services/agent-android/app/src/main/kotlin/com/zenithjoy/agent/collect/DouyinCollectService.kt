@@ -407,7 +407,7 @@ class DouyinCollectService : AccessibilityService() {
             // 真机 A/B 对照（荣耀 X30/Android 13/抖音 40.0.0）：抖音进程热 → searchBtn=true 采到 3 张卡；
             // force-stop 冷启动 → searchBtn=false 必崩。同设备同选择器，差别只在时机。
             val searchOutcome = awaitNode(AWAIT_SEARCH_ENTRY_ATTEMPTS, AWAIT_POLL_MS) { r ->
-                findNodeByContentDesc(r, "搜索") ?: findNodeByIds(r,
+                findNodeByContentDescCheap(r, "搜索") ?: findNodeByIds(r,
                     "com.ss.android.ugc.aweme:id/search_btn",
                     "com.ss.android.ugc.aweme:id/iv_search",
                     "com.ss.android.ugc.aweme:id/action_search",
@@ -763,7 +763,13 @@ class DouyinCollectService : AccessibilityService() {
             // 等详情页【真的渲染出可见的分享入口】，而不是「屏幕上有窗口了」就往下走。
             // 详情页从 tap 到分享按钮进无障碍树有肉眼可见的延迟，慢机器上尤其明显。
             val detailOutcome = awaitNode(AWAIT_DETAIL_ATTEMPTS, AWAIT_POLL_MS) { r ->
-                findVisibleNodeByContentDescPrefix(r, "分享") ?: findVisibleNodeByContentDescPrefix(r, "转发")
+                // finder 每轮执行，必须廉价：先用系统索引拿候选再判可见性，不做全树 BFS
+                (r.findAccessibilityNodeInfosByText("分享").orEmpty() +
+                    r.findAccessibilityNodeInfosByText("转发").orEmpty())
+                    .firstOrNull { n ->
+                        val d = n.contentDescription?.toString().orEmpty()
+                        (d.startsWith("分享") || d.startsWith("转发")) && n.isVisibleToUser
+                    }
             }
             val detailRoot = rootInActiveWindow
             if (detailRoot == null || !detailOutcome.hit) {
@@ -1167,7 +1173,8 @@ class DouyinCollectService : AccessibilityService() {
         // 等这位评论者的头像/昵称节点【真的出现】再动手：评论面板是异步加载的，
         // 「有窗口」不代表这一行已经渲染进无障碍树。
         val panelOutcome = awaitNode(AWAIT_COMMENT_PANEL_ATTEMPTS, AWAIT_POLL_MS) { r ->
-            findNodeByContentDesc(r, avatarContentDesc(nickname)) ?: findNodeByText(r, nickname)
+            findNodeByContentDescCheap(r, avatarContentDesc(nickname))
+                ?: r.findAccessibilityNodeInfosByText(nickname)?.firstOrNull()
         }
         val panelRoot = rootInActiveWindow ?: run {
             android.util.Log.d(
@@ -1341,6 +1348,19 @@ class DouyinCollectService : AccessibilityService() {
         }
         return null
     }
+
+    /**
+     * 廉价版 content-desc 精确匹配：先用系统索引 findAccessibilityNodeInfosByText 缩小候选
+     * （它同时匹配 text 与 contentDescription），再精确校验。
+     *
+     * **轮询用的 finder 必须走这个，不能走 [findNodeByContentDesc]**——后者是手动全树 BFS，
+     * 每个 getChild() 都是跨进程调用，在抖音闪屏/结果页这种大树上单次就要数秒，
+     * 而 finder 每轮都会执行（2026-08-18 真机连踩四次）。
+     */
+    private fun findNodeByContentDescCheap(root: AccessibilityNodeInfo, desc: String): AccessibilityNodeInfo? =
+        root.findAccessibilityNodeInfosByText(desc)?.firstOrNull {
+            it.contentDescription?.toString()?.trim() == desc || it.text?.toString()?.trim() == desc
+        }
 
     /** 按 content-description 精确匹配（不受 resource-id 混淆影响）。 */
     private fun findNodeByContentDesc(root: AccessibilityNodeInfo, desc: String): AccessibilityNodeInfo? {
