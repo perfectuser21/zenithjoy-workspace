@@ -23,7 +23,7 @@ class DeviceAccountScanServiceHomeFeedRecoveryTest {
     // 锚点框住"我tab点击"这一步之前、CLEAR_TOP重试逻辑之后的这一段
     private fun recoverySegment(src: String): String =
         src.substringAfter("launchDouyinApp(); awaitDouyinForeground(maxAttempts = 8); delay(2000L)\n            }", missingDelimiterValue = "")
-            .substringBefore("val preTapRoot = awaitRootInActiveWindow()", missingDelimiterValue = "")
+            .substringBefore("val meTabOutcome = awaitNode(", missingDelimiterValue = "")
 
     @Test
     fun `点我tab前必须先恢复到有底部导航栏的主页feed`() {

@@ -29,9 +29,11 @@ class DeviceAccountScanServicePanelRenderWaitTest {
             .substringBefore("if (panel != null) {\n                    return true", missingDelimiterValue = "")
 
     // 锚点框住 awaitSwitchAccountPanel() 函数体本身
+    // PR(2026-08-18)起该函数改为委托共享轮询原语 com.zenithjoy.agent.uia.awaitNode，
+    // 函数体是表达式体（= awaitNode(...) { ... }.value），故锚点跟着改。
     private fun awaitPanelFnBody(src: String): String =
-        src.substringAfter("private suspend fun awaitSwitchAccountPanel(): AccessibilityNodeInfo? {", missingDelimiterValue = "")
-            .substringBefore("\n    }", missingDelimiterValue = "")
+        src.substringAfter("private suspend fun awaitSwitchAccountPanel(): AccessibilityNodeInfo? =", missingDelimiterValue = "")
+            .substringBefore(".value", missingDelimiterValue = "")
 
     @Test
     fun `点切换账号后等待面板出现必须轮询多次而不是单次检查`() {
@@ -47,8 +49,12 @@ class DeviceAccountScanServicePanelRenderWaitTest {
         val fnBody = awaitPanelFnBody(src)
         assertTrue("awaitSwitchAccountPanel 函数体锚点必须存在", fnBody.isNotEmpty())
         assertTrue(
-            "必须循环多次重新取根节点检查recycler_view是否出现",
-            fnBody.contains("repeat(") || fnBody.contains("for ("),
+            "必须委托共享轮询原语 awaitNode（轮询语义由它保证），不能自己 delay 一次就查一次",
+            fnBody.contains("awaitNode("),
+        )
+        assertTrue(
+            "轮询次数必须多于 1 次——单次检查正是本测试要防的那个真机 bug",
+            Regex("""maxAttempts\s*=\s*([2-9]|[1-9]\d+)""").containsMatchIn(fnBody),
         )
         assertTrue(
             "轮询过程中必须重新检查 recycler_view 是否出现",

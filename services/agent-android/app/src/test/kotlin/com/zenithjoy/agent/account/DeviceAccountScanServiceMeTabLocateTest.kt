@@ -23,7 +23,7 @@ class DeviceAccountScanServiceMeTabLocateTest {
     // 就退化成整个文件"，从而被文件里其它地方同名调用（switchEntry 那段也用了
     // findNodeByContentDescContains/tapNodeCenter）蹭过去。
     private fun lookupExpr(src: String): String =
-        src.substringAfter("val meTabNode = preTapRoot?.let {", missingDelimiterValue = "")
+        src.substringAfter("val meTabOutcome = awaitNode(", missingDelimiterValue = "")
             .substringBefore("if (meTabNode != null) {", missingDelimiterValue = "")
 
     private fun foundBranch(src: String): String =

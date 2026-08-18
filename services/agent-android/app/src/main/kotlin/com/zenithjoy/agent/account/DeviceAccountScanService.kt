@@ -329,8 +329,8 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
             // 不为单一机型写死数值。位置不对就当没找到，退回坐标兜底。
             // 2026-08-18：位置校验一并放进 finder —— 等「位置正确的我tab」出现，而不是
             // 「有窗口了」就查一次（底部导航在冷启动/页面切换时并非立刻进无障碍树）。
-            val meTabOutcome = awaitNode(AWAIT_TAB_ATTEMPTS, AWAIT_POLL_MS) { r ->
-                val candidate = findNodeByContentDescContains(r, "我，按钮") ?: findNodeByText(r, "我")
+            val meTabOutcome = awaitNode(AWAIT_TAB_ATTEMPTS, AWAIT_POLL_MS) {
+                val candidate = findNodeByContentDescContains(it, "我，按钮") ?: findNodeByText(it, "我")
                 candidate?.takeIf { node -> isInBottomNavArea(node, sh) }
             }
             val meTabNode = meTabOutcome.value
