@@ -31,6 +31,9 @@ data class PollOutcome<T : Any>(
     fun waitedMs(intervalMs: Long): Long = (attempts - 1).coerceAtLeast(0) * intervalMs
 }
 
+/** 前台闸一轮的动作。 */
+enum class GateAction { DONE, TAP_DISMISS, PRESS_BACK, WAIT }
+
 /**
  * 等待失败的三种现实原因——让下一次真机排查不必再考古。
  */
@@ -109,6 +112,83 @@ object NodeAwait {
     private val DISMISS_LABELS = listOf("跳过", "关闭", "稍后", "取消", "我知道了")
 
     /**
+     * 前台闸每一轮该做什么。纯决策，便于单测覆盖那些「按错一次就毁掉整条链路」的分支。
+     *
+     * 真机复现（2026-08-18，小黄 MAA-AN00）：初版逻辑是「前台不是目标包就按返回」，结果把
+     * **自家正在转发的 trampoline Activity** 按掉了，一路退到桌面，抖音永远起不来。
+     * 小粉那次「成功」只是因为恰好弹了厂商授权框（前台是 systemmanager），掩盖了这个缺陷。
+     *
+     * 判定顺序（顺序本身就是语义，别随手调换）：
+     * 1. 已经是目标包 → 完成
+     * 2. 有可消除项 → 点掉（即使当前前台是自家包，也可能是系统框盖在自家页面上）
+     * 3. 前台是自己 → **等**，绝不按返回（trampoline 正在把目标 App 拉起来）
+     * 4. 前台是桌面 → **等**，按返回退不出桌面，纯属浪费轮次
+     * 5. 前台是别的 App → 按返回
+     * 6. 连窗口都取不到 → 等够 [BLIND_ROUNDS_BEFORE_BACK] 轮再按返回
+     */
+    fun decideGateAction(
+        currentPkg: String?,
+        selfPkg: String,
+        targetPkg: String,
+        hasDismissTarget: Boolean,
+        blindRounds: Int,
+    ): GateAction = when {
+        currentPkg == targetPkg -> GateAction.DONE
+        hasDismissTarget -> GateAction.TAP_DISMISS
+        currentPkg == selfPkg -> GateAction.WAIT
+        currentPkg != null && isLauncherPkg(currentPkg) -> GateAction.WAIT
+        currentPkg != null -> GateAction.PRESS_BACK
+        blindRounds >= BLIND_ROUNDS_BEFORE_BACK -> GateAction.PRESS_BACK
+        else -> GateAction.WAIT
+    }
+
+    // ── 窗口选择：取无障碍树极贵，必须先筛后取 ──────────────────────────────
+    // 真机实测（小粉 ANY-AN00）：54 个窗口、仅 5 个有 surface、mCurrentFocus=null，
+    // 对 6 个窗口逐个取 root 就要 10 秒/轮（每次跨进程拉一棵树约 1.7s）。
+
+    /** 与 android.view.accessibility.AccessibilityWindowInfo 常量对齐，便于纯函数单测。 */
+    const val WINDOW_TYPE_APPLICATION = 1
+    const val WINDOW_TYPE_INPUT_METHOD = 2
+    const val WINDOW_TYPE_SYSTEM = 3
+    const val WINDOW_TYPE_ACCESSIBILITY_OVERLAY = 4
+
+    /** 窗口的可判定属性（不含 root，避免为了排序就把树全取出来）。 */
+    data class WindowSpec(
+        val type: Int,
+        val isActive: Boolean,
+        val isFocused: Boolean,
+        val areaPx: Long,
+    )
+
+    /**
+     * 选出最多 [max] 个「值得取树」的窗口下标，按可能性从高到低。
+     *
+     * 排序依据：有焦点 > 活动 > 其它；同级时小窗口优先（厂商插屏/授权框通常是小窗口）。
+     * 输入法与无障碍浮层直接排除——那里面不会有厂商插屏，取它们的树纯属浪费。
+     */
+    fun selectWindowIndices(specs: List<WindowSpec>, max: Int): List<Int> =
+        specs.withIndex()
+            .filter { (_, w) ->
+                w.type != WINDOW_TYPE_INPUT_METHOD && w.type != WINDOW_TYPE_ACCESSIBILITY_OVERLAY
+            }
+            .sortedWith(
+                compareByDescending<IndexedValue<WindowSpec>> { it.value.isFocused }
+                    .thenByDescending { it.value.isActive }
+                    .thenBy { it.value.areaPx }
+            )
+            .take(max)
+            .map { it.index }
+
+    /** 连续多少轮取不到任何窗口树后才按返回（避免目标 App 内部瞬时取不到树时误退）。 */
+    const val BLIND_ROUNDS_BEFORE_BACK = 4
+
+    /** 桌面/启动器包名判定：各厂商命名不一（launcher / .home / homescreen）。 */
+    fun isLauncherPkg(pkg: String): Boolean =
+        pkg.contains("launcher", ignoreCase = true) ||
+            pkg.endsWith(".home") ||
+            pkg.contains("homescreen", ignoreCase = true)
+
+    /**
      * 把一次失败的等待归入 [WaitFailure] 三态之一。[expectedPkg] 为 null 表示不校验前台包名。
      */
     fun classifyFailure(outcome: PollOutcome<*>, expectedPkg: String?): WaitFailure = when {
@@ -166,15 +246,30 @@ suspend fun AccessibilityService.awaitNode(
  *
  * 系统索引是**模糊匹配**（contains），所以命中后仍要精确校验，避免「是否允许」把「允许」也算进来。
  */
-private fun AccessibilityService.probeLabels(): List<String> {
+/**
+ * 一轮只扫一次：返回 (该点的标签, 对应节点)。
+ *
+ * 2026-08-18 真机踩过两次「每轮重复扫描」的代价，第二次尤其惨：初版 probeLabels 里对 8 个候选
+ * 标签各调一次 findLabelAcrossWindows，而后者每次都重新 rootsToSearch()（含 windows 遍历），
+ * 于是每轮实际扫了 8 遍所有窗口——真机日志显示**一轮耗时 67 秒**（设计值 500ms），24 轮要 27 分钟。
+ * 现在每轮只取一次 roots、只走一遍候选表，命中即记下节点，避免二次查找。
+ */
+private fun AccessibilityService.scanForDismiss(): Pair<String?, AccessibilityNodeInfo?> {
+    val roots = rootsToSearch()
+    if (roots.isEmpty()) return null to null
     val found = mutableListOf<String>()
     for (marker in AUTO_JUMP_MARKERS) {
-        if (rootsToSearch().any { it.findAccessibilityNodeInfosByText(marker)?.isNotEmpty() == true }) found.add(marker)
+        if (roots.any { it.findAccessibilityNodeInfosByText(marker)?.isNotEmpty() == true }) found.add(marker)
     }
+    val hits = HashMap<String, AccessibilityNodeInfo>()
     for (label in CANDIDATE_LABELS) {
-        if (findLabelAcrossWindows(label) != null) found.add(label)
+        for (r in roots) {
+            val n = findByLabel(r, label)
+            if (n != null) { hits[label] = n; found.add(label); break }
+        }
     }
-    return found
+    val label = NodeAwait.pickDismissLabel(found)
+    return label to label?.let { hits[it] }
 }
 
 /**
@@ -189,17 +284,29 @@ private fun AccessibilityService.probeLabels(): List<String> {
 private fun AccessibilityService.rootsToSearch(): List<AccessibilityNodeInfo> {
     val out = mutableListOf<AccessibilityNodeInfo>()
     rootInActiveWindow?.let { out.add(it) }
-    windows?.forEach { w -> w.root?.let { if (out.none { o -> o == it }) out.add(it) } }
+    // 活动窗口能拿到就够了——绝大多数情况下弹窗就在它里面，不必再枚举 windows。
+    if (out.isNotEmpty()) return out
+    // 拿不到活动窗口（真机实测：授权框盖着时 mCurrentFocus=null）才退而求其次。
+    // 先只读各窗口的廉价属性排序筛选，再对入选的少数几个取树——取树才是贵的那一步。
+    val wins = windows ?: return out
+    val specs = wins.map { w ->
+        val r = Rect()
+        w.getBoundsInScreen(r)
+        NodeAwait.WindowSpec(
+            type = w.type,
+            isActive = w.isActive,
+            isFocused = w.isFocused,
+            areaPx = r.width().toLong() * r.height().toLong(),
+        )
+    }
+    for (i in NodeAwait.selectWindowIndices(specs, MAX_WINDOWS_TO_SCAN)) {
+        wins.getOrNull(i)?.root?.let { if (out.none { o -> o == it }) out.add(it) }
+    }
     return out
 }
 
-private fun AccessibilityService.findLabelAcrossWindows(label: String): AccessibilityNodeInfo? {
-    for (r in rootsToSearch()) findByLabel(r, label)?.let { return it }
-    return null
-}
-
 private val AUTO_JUMP_MARKERS = listOf("想要打开", "是否允许")
-private const val BLIND_ROUNDS_BEFORE_BACK = 4
+private const val MAX_WINDOWS_TO_SCAN = 3
 private val CANDIDATE_LABELS = listOf("允许", "跳过", "关闭", "稍后", "取消", "我知道了")
 
 /**
@@ -247,26 +354,23 @@ suspend fun AccessibilityService.awaitAppForeground(
     var blindRounds = 0
     repeat(maxAttempts) {
         val current = rootInActiveWindow?.packageName?.toString()
-        if (current == pkg) return true
         // 跨窗口找可消除项：系统对话框常不在 activeWindow 里（真机实证 rootInActiveWindow 为 null）
-        val label = NodeAwait.pickDismissLabel(probeLabels())
-        val target = label?.let { findLabelAcrossWindows(it) }
-        if (target != null) {
-            tapNodeCenterByGesture(target)
-            blindRounds = 0
-            android.util.Log.i("NodeAwait", "awaitAppForeground: 前台=$current 手势点掉「$label」")
-        } else if (current != null) {
-            performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
-            blindRounds = 0
-            android.util.Log.i("NodeAwait", "awaitAppForeground: 前台=$current 无可消除项，按返回")
-        } else {
-            // 连 activeWindow 都取不到：多半是系统窗口挡着且无可消除项。等几轮再按返回，
-            // 避免目标 App 内部瞬时取不到树时误退。
-            blindRounds++
-            if (blindRounds >= BLIND_ROUNDS_BEFORE_BACK) {
+        val (label, target) = scanForDismiss()
+        when (NodeAwait.decideGateAction(current, packageName, pkg, target != null, blindRounds)) {
+            GateAction.DONE -> return true
+            GateAction.TAP_DISMISS -> {
+                tapNodeCenterByGesture(target!!)
+                blindRounds = 0
+                android.util.Log.i("NodeAwait", "awaitAppForeground: 前台=$current 手势点掉「$label」")
+            }
+            GateAction.PRESS_BACK -> {
                 performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
                 blindRounds = 0
-                android.util.Log.i("NodeAwait", "awaitAppForeground: 连续 $BLIND_ROUNDS_BEFORE_BACK 轮取不到窗口树，按返回")
+                android.util.Log.i("NodeAwait", "awaitAppForeground: 前台=$current 无可消除项，按返回")
+            }
+            GateAction.WAIT -> {
+                if (current == null) blindRounds++
+                android.util.Log.i("NodeAwait", "awaitAppForeground: 前台=${current ?: "无窗口"} 等待（不按返回）")
             }
         }
         delay(intervalMs)
