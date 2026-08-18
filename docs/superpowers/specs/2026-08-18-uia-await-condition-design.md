@@ -189,6 +189,22 @@ dm 现有的 `awaitNode` 内部调用 `awaitRootInActiveWindow()`（自带 8×50
 
 三个 Service 各有一份 `findNodeByContentDesc` / `findNodeByIds` / `findNodeByText` 等工具函数（重复但行为一致）。**本次不收敛它们**：没有 bug 驱动、会让 diff 面积翻倍、且会把回归风险扩散到与本 bug 无关的路径。原语只负责「什么时候找」，「怎么找」维持各 Service 现状。
 
+
+### 3.4 与既有 `SnapshotDiscipline` 的关系（互补，不重叠）
+
+`collect/SnapshotDiscipline.kt`（Sprint 07052218，源自 #1119/#1120 教训）用单调递增的整型 token 建模「点击后必须重新抓快照」，`requireFresh` 在 token 未推进时直接抛异常。它与本次原语是同一个「快照时机」问题的两个方向：
+
+| 机制 | 防的是 | 时间方向 |
+|---|---|---|
+| `SnapshotDiscipline` | 点击之后复用**旧**快照 | 太晚 |
+| `NodeAwait`（本次） | 目标出现之前就判定 | 太早 |
+
+两者叠加才是完整的「在正确的时刻看正确的页面」。它的实现注释也印证了本 spec 的分层选择：
+
+> 用可测的整型 token（抓取计数器/快照序号）建模该规则，不依赖真实 AccessibilityNodeInfo（本项目单测无 Robolectric/mockk，仅能测纯函数）
+
+**约束**：迁移 dm `:192`/`:231`/`:437` 与 collect `:1117` 时，`SnapshotDiscipline.nextFetchToken` / `requireFresh` 的调用及其相对位置必须原样保留——轮询只替换「怎么拿到 root」，不触碰 token 推进。
+
 ---
 
 ## 4. 逐调用点迁移清单
