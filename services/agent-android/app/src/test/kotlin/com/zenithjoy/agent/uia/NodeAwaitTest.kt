@@ -120,6 +120,19 @@ class NodeAwaitTest {
         )
     }
 
+    // 9. 耗尽 attempts 时只在探测之间睡，最后一次探测后不再多睡
+    //    （proven-to-fire 发现 #3 守不住 `if (attempts < maxAttempts)`：命中时 return 已经
+    //     跳过了 sleep，删掉那个守卫 #3 照样绿。真正能守住它的是本条。）
+    @Test
+    fun `does not sleep after the final attempt`() = runTest {
+        val f = Fixture(listOf(absent()))
+        val outcome = NodeAwait.pollUntilPresent(
+            maxAttempts = 5, intervalMs = 500, sleep = f.sleep, probe = f.probe
+        )
+        assertEquals(5, outcome.attempts)
+        assertEquals(4, f.sleepCalls)
+    }
+
     // 8. waitedMs 是间隔数×interval，不是次数×interval
     @Test
     fun `waitedMs counts intervals not attempts`() = runTest {
