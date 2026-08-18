@@ -1,6 +1,9 @@
 package com.zenithjoy.agent.uia
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.graphics.Path
+import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlinx.coroutines.delay
 
@@ -183,16 +186,22 @@ private fun findByLabel(root: AccessibilityNodeInfo, label: String): Accessibili
     return null
 }
 
-/** 自己不可点时，往上找最近的可点击祖先。 */
-private fun clickableSelfOrAncestor(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-    var cur: AccessibilityNodeInfo? = node
-    var hops = 0
-    while (cur != null && hops < 12) {
-        if (cur.isClickable) return cur
-        cur = cur.parent
-        hops++
-    }
-    return null
+/**
+ * 手势点击节点中心。
+ *
+ * **必须用手势，不能用 performAction(ACTION_CLICK)**：真机复现（2026-07-29，ANY-AN00）证实
+ * 该 App 生态里 ACTION_CLICK 对部分节点无效——点厂商壁纸推荐弹窗的「关闭」毫无反应，弹窗卡到
+ * 超时，最终报 OPEN_PANEL_FAILED。见 DeviceAccountScanServiceVendorPopupDismissTest。
+ */
+private fun AccessibilityService.tapNodeCenterByGesture(node: AccessibilityNodeInfo) {
+    val r = Rect()
+    node.getBoundsInScreen(r)
+    if (r.isEmpty) return
+    val path = Path().apply { moveTo(r.exactCenterX(), r.exactCenterY()) }
+    val gesture = GestureDescription.Builder()
+        .addStroke(GestureDescription.StrokeDescription(path, 0L, 60L))
+        .build()
+    dispatchGesture(gesture, null, null)
 }
 
 /**
@@ -218,8 +227,8 @@ suspend fun AccessibilityService.awaitAppForeground(
             val label = NodeAwait.pickDismissLabel(collectAllTexts(root))
             val target = label?.let { findByLabel(root, it) }
             if (target != null) {
-                (clickableSelfOrAncestor(target) ?: target).performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                android.util.Log.i("NodeAwait", "awaitAppForeground: 前台=$current 点掉「$label」")
+                tapNodeCenterByGesture(target)
+                android.util.Log.i("NodeAwait", "awaitAppForeground: 前台=$current 手势点掉「$label」")
             } else {
                 performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
                 android.util.Log.i("NodeAwait", "awaitAppForeground: 前台=$current 无可消除项，按返回")

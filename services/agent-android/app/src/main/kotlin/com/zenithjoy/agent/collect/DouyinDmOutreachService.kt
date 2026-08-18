@@ -20,6 +20,7 @@ import com.zenithjoy.agent.account.DouyinLaunchTrampoline
 import com.zenithjoy.agent.uia.NodeAwait
 import com.zenithjoy.agent.uia.WaitFailure
 import com.zenithjoy.agent.uia.awaitNode
+import com.zenithjoy.agent.uia.awaitAppForeground
 import com.zenithjoy.agent.account.ScanMutex
 
 /**
@@ -348,31 +349,14 @@ class DouyinDmOutreachService : AccessibilityService() {
      * ==抖音；期间前台是非抖音弹窗则先点"跳过/关闭/稍后/取消/我知道了"、找不到再按返回键消掉；
      * 超时(尽力而为)返回是否已到抖音前台。只在前台非抖音时按返回，绝不在抖音内部误退。
      */
-    private suspend fun awaitDouyinForeground(maxAttempts: Int = 24, delayMs: Long = 500): Boolean {
-        repeat(maxAttempts) {
-            val root = rootInActiveWindow
-            val pkg = root?.packageName?.toString()
-            if (pkg == DOUYIN_PKG) return true
-            if (root != null && pkg != null) {
-                // 荣耀"ZenithJoyAgent 想要打开 抖音，是否允许" auto-jump 拦截框 → 仅此上下文点"允许"
-                // (避免误点其它弹窗的"允许")；随后抖音才会真正铺到前台。
-                val isAutoJump = collectAllNodeTexts(root).any { it.contains("想要打开") || it.contains("是否允许") }
-                val allow = if (isAutoJump) (findNodeByText(root, "允许") ?: findNodeByContentDesc(root, "允许")) else null
-                val dismiss = allow ?: findNodeByText(root, "跳过") ?: findNodeByText(root, "关闭")
-                    ?: findNodeByText(root, "稍后") ?: findNodeByText(root, "取消")
-                    ?: findNodeByText(root, "我知道了") ?: findNodeByContentDesc(root, "跳过")
-                    ?: findNodeByContentDesc(root, "关闭")
-                if (dismiss != null) {
-                    (findClickableSelfOrAncestor(dismiss) ?: dismiss).performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                } else {
-                    performGlobalAction(GLOBAL_ACTION_BACK)
-                }
-                android.util.Log.i(TAG, "awaitDouyinForeground: 非抖音前台 pkg=$pkg dismiss=${dismiss != null}")
-            }
-            delay(delayMs)
-        }
-        return rootInActiveWindow?.packageName?.toString() == DOUYIN_PKG
-    }
+    private suspend fun awaitDouyinForeground(maxAttempts: Int = 24, delayMs: Long = 500): Boolean =
+        // 2026-08-18：改为委托共享前台闸 com.zenithjoy.agent.uia.awaitAppForeground。
+        // 行为等价（轮询前台包名 + 消厂商插屏 + 只在前台非目标包时按返回），但消除弹窗
+        // 改用「可点击祖先 + performAction(ACTION_CLICK)」而不是坐标手势 tapNodeCenter——
+        // 真机实证（荣耀 X30/MagicOS 2026-08-18）：同一台设备上 collect 走共享实现能点掉
+        // 荣耀 auto-jump「想要打开抖音」授权框并成功拉起抖音，而本文件原坐标手势版本在
+        // 同场景下 trampoline Activity 0.3 秒即被销毁、从未可见，最终 OPEN_PANEL_FAILED。
+        awaitAppForeground(DOUYIN_PKG, maxAttempts, delayMs)
 
     /** 90 秒超时熔断检查：命中即上报 timeout 结果并结束本次 lead 处理。 */
     private fun checkLeadTimeout(): Boolean {
