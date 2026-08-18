@@ -438,12 +438,18 @@ class DouyinCollectService : AccessibilityService() {
             delay(RandomDelay.sample(RandomDelay.CLICK_MS))
             // 点击后同样不能「抓一次就用」：等搜索输入框真出现。这里只做诊断、不改控制流——
             // 输入框没等到时仍交给下面的 state 守卫与 typeKeyword 判空处理，避免动到 #1375 的语义。
+            // ⚠️ finder 每轮都会执行，必须廉价：这里只用 findNodeByIds（走系统的
+            // findAccessibilityNodeInfosByViewId 索引查询），**不能**顺手加 findFirstEditText——
+            // 那是无界 BFS，而 AccessibilityNodeInfo.getChild() 每次都是跨进程 binder 调用，
+            // 在 Lynx 渲染的 SearchResultActivity 巨树上单次遍历就要几十秒，乘以轮询次数会把
+            // 整条协程拖死（2026-08-18 真机实测：日志停在本行之前两分钟无进展）。
+            // 兜底的 findFirstEditText 仍由其后的 typeKeyword 调用一次，行为不变。
             val inputOutcome = awaitNode(AWAIT_SEARCH_INPUT_ATTEMPTS, AWAIT_POLL_MS) { r ->
                 findNodeByIds(r,
                     "com.ss.android.ugc.aweme:id/search_input",
                     "com.ss.android.ugc.aweme:id/search_edit_text",
                     "com.ss.android.ugc.aweme:id/et_search_kw",
-                ) ?: findFirstEditText(r)
+                )
             }
             android.util.Log.i(
                 TAG,

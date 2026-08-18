@@ -467,7 +467,12 @@ class DouyinDmOutreachService : AccessibilityService() {
         // ⚠️ 结果列表是 Lynx 渲染【不进无障碍树】(见下方注释)，所以这里【不能】等结果行；
         // 但「用户」tab 本身在树里，用它当结果页已渲染的锚点。等不到也不阻断（保持原有容错），
         // 只有连 root 都没有才判 NO_SEARCH_RESULTS_WINDOW。
-        val resultsOutcome = awaitNode(AWAIT_PAGE_ATTEMPTS, AWAIT_POLL_MS) { r -> findNodeByText(r, "用户") }
+        // ⚠️ finder 每轮执行，必须廉价：这里用系统索引查询 findAccessibilityNodeInfosByText，
+        // 不用手动 BFS——本页正是 Lynx 渲染的巨树，全树遍历（每个 getChild 都是跨进程调用）
+        // 单次就要几十秒（2026-08-18 collect 侧同款写法真机实测把协程拖死两分钟）。
+        val resultsOutcome = awaitNode(AWAIT_PAGE_ATTEMPTS, AWAIT_POLL_MS) { r ->
+            r.findAccessibilityNodeInfosByText("用户")?.firstOrNull()
+        }
         val resultsRoot = rootInActiveWindow ?: run {
             android.util.Log.w(
                 TAG,
@@ -501,15 +506,23 @@ class DouyinDmOutreachService : AccessibilityService() {
         SnapshotDiscipline.requireFresh(beforeProfileToken, fetchToken)
         // ⚠️ 只等「主页文本已渲染」，绝不能等「匹配成立」——否则「这个主页确实不是目标人」
         // 会被拖成超时，把 NO_MATCH 这个有意义的判定吃掉（那是不误发私信的最后一道闸）。
+        // ⚠️ finder 必须廉价：不用 collectAllNodeTexts 全树收集（每轮遍历整棵主页树太贵）。
+        // 主页渲染完成的廉价信号：树里出现「关注」或「粉丝」字样（系统索引查询，模糊匹配）。
+        // 拿不到这两个词也不阻断——超时后仍走下面原有的 verifyProfileMatchesDouyinId 判定，
+        // NO_MATCH 语义完全不变。
         val profileOutcome = awaitNode(AWAIT_PAGE_ATTEMPTS, AWAIT_POLL_MS) { r ->
-            r.takeIf { collectAllNodeTexts(it).isNotEmpty() }
+            r.findAccessibilityNodeInfosByText("粉丝")?.firstOrNull()
+                ?: r.findAccessibilityNodeInfosByText("关注")?.firstOrNull()
         }
-        val profileRoot = profileOutcome.value ?: run {
+        if (!profileOutcome.hit) {
             android.util.Log.w(
                 TAG,
-                "主页未渲染 failure=${NodeAwait.classifyFailure(profileOutcome, DOUYIN_PKG)} " +
-                    "attempts=${profileOutcome.attempts} waitedMs=${profileOutcome.waitedMs(AWAIT_POLL_MS)}"
+                "主页渲染信号未等到 failure=${NodeAwait.classifyFailure(profileOutcome, DOUYIN_PKG)} " +
+                    "attempts=${profileOutcome.attempts} waitedMs=${profileOutcome.waitedMs(AWAIT_POLL_MS)}，" +
+                    "仍按现有逻辑校验主页身份"
             )
+        }
+        val profileRoot = rootInActiveWindow ?: run {
             finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_PROFILE_WINDOW")
             return false
         }

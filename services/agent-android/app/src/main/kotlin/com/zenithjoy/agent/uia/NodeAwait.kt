@@ -126,6 +126,13 @@ object NodeAwait {
  * 默认值对齐 dm 原私有 awaitNode（6 次 × 500ms），使其既有调用点可平滑迁移。
  *
  * 等「状态成立」而非「节点出现」的场景，用 `root.takeIf { ... }` 把 root 自身作为命中值。
+ *
+ * ⚠️ **[finder] 必须廉价**：它每一轮都会执行一次。优先用
+ * `root.findAccessibilityNodeInfosByViewId(...)`（系统索引查询）；避免在 finder 里做全树 BFS
+ * ——`AccessibilityNodeInfo.getChild()` 每次都是跨进程 binder 调用，在 Lynx 渲染的巨树
+ * （如抖音 SearchResultActivity）上单次遍历就要几十秒，乘以轮询次数会把整条协程拖死。
+ * 2026-08-18 真机实测踩过：finder 里带了一个无界 `findFirstEditText`，协程两分钟无进展。
+ * 昂贵的兜底查找放到轮询【之后】只做一次。
  */
 suspend fun AccessibilityService.awaitNode(
     maxAttempts: Int = 6,
