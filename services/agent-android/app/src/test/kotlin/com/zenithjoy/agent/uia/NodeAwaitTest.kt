@@ -133,6 +133,39 @@ class NodeAwaitTest {
         assertEquals(4, f.sleepCalls)
     }
 
+    // ── pickDismissLabel：厂商插屏该点哪个按钮 ────────────────────────────────
+    // 真机(荣耀 X30/MagicOS)实测：冷启动抖音时 com.hihonor.systemmanager 的
+    // AppSplashAdvertiseActivity 会盖在抖音之上，前台包名不是抖音，光等节点等不出来。
+
+    @Test
+    fun `auto jump dialog picks 允许 rather than generic dismiss`() {
+        val texts = listOf("ZenithJoyAgent 想要打开 抖音", "是否允许", "取消", "允许")
+        assertEquals("允许", NodeAwait.pickDismissLabel(texts))
+    }
+
+    @Test
+    fun `vendor splash ad picks 跳过`() {
+        val texts = listOf("广告", "跳过", "了解详情")
+        assertEquals("跳过", NodeAwait.pickDismissLabel(texts))
+    }
+
+    @Test
+    fun `dismiss labels follow priority order`() {
+        // 同时出现「关闭」和「我知道了」时取更靠前的「关闭」
+        assertEquals("关闭", NodeAwait.pickDismissLabel(listOf("我知道了", "关闭")))
+    }
+
+    @Test
+    fun `returns null when nothing dismissable`() {
+        assertNull(NodeAwait.pickDismissLabel(listOf("首页", "朋友", "消息")))
+    }
+
+    @Test
+    fun `允许 only counts inside auto jump dialog`() {
+        // 没有「想要打开/是否允许」上下文时，不能见到「允许」就点——可能是别的应用的权限框
+        assertNull(NodeAwait.pickDismissLabel(listOf("允许", "位置权限")))
+    }
+
     // 8. waitedMs 是间隔数×interval，不是次数×interval
     @Test
     fun `waitedMs counts intervals not attempts`() = runTest {
