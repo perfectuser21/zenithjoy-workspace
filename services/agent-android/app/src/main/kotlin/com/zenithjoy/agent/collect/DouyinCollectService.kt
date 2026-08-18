@@ -770,6 +770,8 @@ class DouyinCollectService : AccessibilityService() {
                         val d = n.contentDescription?.toString().orEmpty()
                         (d.startsWith("分享") || d.startsWith("转发")) && n.isVisibleToUser
                     }
+                    ?: findVisibleNodeByContentDescPrefix(r, "分享")
+                    ?: findVisibleNodeByContentDescPrefix(r, "转发")
             }
             val detailRoot = rootInActiveWindow
             if (detailRoot == null || !detailOutcome.hit) {
@@ -1357,10 +1359,27 @@ class DouyinCollectService : AccessibilityService() {
      * 每个 getChild() 都是跨进程调用，在抖音闪屏/结果页这种大树上单次就要数秒，
      * 而 finder 每轮都会执行（2026-08-18 真机连踩四次）。
      */
-    private fun findNodeByContentDescCheap(root: AccessibilityNodeInfo, desc: String): AccessibilityNodeInfo? =
+    private fun findNodeByContentDescCheap(root: AccessibilityNodeInfo, desc: String): AccessibilityNodeInfo? {
+        // ① 先走系统索引（廉价）。注意：它只保证匹配 text，**不保证匹配 content-desc**——
+        //    2026-08-18 真机踩过：把 content-desc 查找整个换成索引查询后，抖音首页那个只有
+        //    content-desc="搜索"、没有 text 的放大镜按钮就再也找不到了（截图证明它一直在屏幕上），
+        //    报 TARGET_ABSENT。为性能牺牲正确性，是比慢更糟的结果。
         root.findAccessibilityNodeInfosByText(desc)?.firstOrNull {
             it.contentDescription?.toString()?.trim() == desc || it.text?.toString()?.trim() == desc
+        }?.let { return it }
+        // ② 索引没命中才遍历 content-desc，但**带节点上限**，不让单次 probe 失控
+        //    （每个 getChild() 都是跨进程调用）。
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var visited = 0
+        while (queue.isNotEmpty() && visited < MAX_NODES_PER_PROBE) {
+            val node = queue.removeFirst()
+            visited++
+            if (node.contentDescription?.toString()?.trim() == desc) return node
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
         }
+        return null
+    }
 
     /** 按 content-description 精确匹配（不受 resource-id 混淆影响）。 */
     private fun findNodeByContentDesc(root: AccessibilityNodeInfo, desc: String): AccessibilityNodeInfo? {
@@ -1706,6 +1725,8 @@ class DouyinCollectService : AccessibilityService() {
         // 上限均低于其所在链路的既有总预算：搜索入口 12s < SUBMIT_SEARCH_TIMEOUT_MS(15s)；
         // 详情页 6s < PER_CARD_TIMEOUT_MS(25s)；评论面板 4s < PER_LEAD_ENRICH_TIMEOUT_MS(20s)。
         private const val AWAIT_POLL_MS = 500L
+        /** 单次 probe 最多遍历多少节点——每个 getChild() 都是跨进程调用，无界遍历会拖死协程。 */
+        private const val MAX_NODES_PER_PROBE = 1_500
         private const val AWAIT_FOREGROUND_ATTEMPTS = 24   // 12s：等抖音真到前台+消插屏
         private const val AWAIT_SEARCH_ENTRY_ATTEMPTS = 24
         private const val AWAIT_SEARCH_INPUT_ATTEMPTS = 8
