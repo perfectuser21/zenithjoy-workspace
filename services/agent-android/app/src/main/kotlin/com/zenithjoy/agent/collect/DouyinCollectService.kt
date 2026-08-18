@@ -26,6 +26,7 @@ import com.zenithjoy.agent.account.DouyinLaunchTrampoline
 import com.zenithjoy.agent.uia.NodeAwait
 import com.zenithjoy.agent.uia.WaitFailure
 import com.zenithjoy.agent.uia.awaitNode
+import com.zenithjoy.agent.uia.awaitAppForeground
 import com.zenithjoy.agent.account.ScanMutex
 
 /**
@@ -212,7 +213,16 @@ class DouyinCollectService : AccessibilityService() {
                 finishWithError("LAUNCH_FAILED")
                 return@launch
             }
+            // 第一层：等抖音【真的】铺到前台，期间消除厂商插屏。
+            // 真机实证（荣耀 X30/MagicOS，2026-08-18）：冷启动抖音时
+            // com.hihonor.systemmanager/…AppSplashAdvertiseActivity 会盖在抖音之上，
+            // 只做第二层（等搜索按钮出现）会一直在广告页上找，等满 24 次 11.5 秒仍
+            // fgPkg=com.hihonor.systemmanager。dm 侧早有这层（awaitDouyinForeground），
+            // collect 一直缺，这就是同一个 NO_SEARCH_INPUT 反复复发的另一半原因。
+            val fg = awaitAppForeground(DOUYIN_PKG, AWAIT_FOREGROUND_ATTEMPTS, AWAIT_POLL_MS)
+            android.util.Log.i(TAG, "startCollect: 抖音到前台=$fg")
             delay(RandomDelay.sample(RandomDelay.NAV_MS))
+            // 第二层：等搜索入口这个具体节点就绪（见 openSearchBar）
             openSearchBar()
         }
     }
@@ -1670,6 +1680,7 @@ class DouyinCollectService : AccessibilityService() {
         // 上限均低于其所在链路的既有总预算：搜索入口 12s < SUBMIT_SEARCH_TIMEOUT_MS(15s)；
         // 详情页 6s < PER_CARD_TIMEOUT_MS(25s)；评论面板 4s < PER_LEAD_ENRICH_TIMEOUT_MS(20s)。
         private const val AWAIT_POLL_MS = 500L
+        private const val AWAIT_FOREGROUND_ATTEMPTS = 24   // 12s：等抖音真到前台+消插屏
         private const val AWAIT_SEARCH_ENTRY_ATTEMPTS = 24
         private const val AWAIT_SEARCH_INPUT_ATTEMPTS = 8
         private const val AWAIT_DETAIL_ATTEMPTS = 12

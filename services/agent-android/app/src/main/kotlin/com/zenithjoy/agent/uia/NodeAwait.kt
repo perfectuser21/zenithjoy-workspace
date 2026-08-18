@@ -88,6 +88,24 @@ object NodeAwait {
     }
 
     /**
+     * 厂商插屏/授权框该点哪个按钮。纯函数，输入是当前页面上收集到的全部文案。
+     *
+     * 真机实证（荣耀 X30 / MagicOS，2026-08-18）：冷启动抖音时
+     * `com.hihonor.systemmanager/…AppSplashAdvertiseActivity` 会盖在抖音之上，
+     * 此时前台包名不是抖音，只靠「等目标节点出现」永远等不到（实测等满 24 次 11.5 秒）。
+     *
+     * 「允许」只在 auto-jump 上下文（含「想要打开」/「是否允许」）才点——否则见到任何
+     * 应用的权限框里的「允许」都乱点，是危险行为。
+     */
+    fun pickDismissLabel(allTexts: List<String>): String? {
+        val isAutoJump = allTexts.any { it.contains("想要打开") || it.contains("是否允许") }
+        if (isAutoJump && allTexts.any { it.trim() == "允许" }) return "允许"
+        return DISMISS_LABELS.firstOrNull { label -> allTexts.any { it.trim() == label } }
+    }
+
+    private val DISMISS_LABELS = listOf("跳过", "关闭", "稍后", "取消", "我知道了")
+
+    /**
      * 把一次失败的等待归入 [WaitFailure] 三态之一。[expectedPkg] 为 null 表示不校验前台包名。
      */
     fun classifyFailure(outcome: PollOutcome<*>, expectedPkg: String?): WaitFailure = when {
@@ -122,3 +140,85 @@ suspend fun AccessibilityService.awaitNode(
             foregroundPkg = root?.packageName?.toString(),
         )
     }
+
+// ── 前台闸：等目标 App 真的铺到前台，期间主动消除厂商插屏 ────────────────────
+// 这是「两层等待」的第一层。第二层是上面的 awaitNode（等目标节点就绪）。
+// 二者缺一不可：只有第二层时，厂商开屏广告盖着抖音会让节点永远等不到（真机实证）；
+// 只有第一层时，抖音自己还在加载也会让后续查找扑空。
+
+/** 收集整棵树上的 text 与 content-desc 文案（供 [NodeAwait.pickDismissLabel] 判断）。 */
+private fun collectAllTexts(root: AccessibilityNodeInfo): List<String> {
+    val out = mutableListOf<String>()
+    val queue = ArrayDeque<AccessibilityNodeInfo>()
+    queue.add(root)
+    var visited = 0
+    while (queue.isNotEmpty() && visited < 2_000) {
+        val node = queue.removeFirst()
+        visited++
+        node.text?.toString()?.takeIf { it.isNotBlank() }?.let { out.add(it) }
+        node.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.let { out.add(it) }
+        for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+    }
+    return out
+}
+
+/** 按精确文案或 content-desc 找节点。 */
+private fun findByLabel(root: AccessibilityNodeInfo, label: String): AccessibilityNodeInfo? {
+    val queue = ArrayDeque<AccessibilityNodeInfo>()
+    queue.add(root)
+    var visited = 0
+    while (queue.isNotEmpty() && visited < 2_000) {
+        val node = queue.removeFirst()
+        visited++
+        if (node.text?.toString()?.trim() == label || node.contentDescription?.toString()?.trim() == label) return node
+        for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+    }
+    return null
+}
+
+/** 自己不可点时，往上找最近的可点击祖先。 */
+private fun clickableSelfOrAncestor(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+    var cur: AccessibilityNodeInfo? = node
+    var hops = 0
+    while (cur != null && hops < 12) {
+        if (cur.isClickable) return cur
+        cur = cur.parent
+        hops++
+    }
+    return null
+}
+
+/**
+ * 等 [pkg] 真的成为前台包；期间若前台是别的应用（厂商开屏广告/系统提示），
+ * 先尝试点「跳过/关闭/…」消除，找不到可消除项则按返回键。
+ *
+ * **只在前台不是目标包时按返回**，绝不在目标 App 内部误退。
+ * 移植自 DouyinDmOutreachService.awaitDouyinForeground（那是 dm 侧已验证过的实现），
+ * 提到共享设施供 collect / account-scan 一并使用。
+ *
+ * @return 最终前台是否为 [pkg]（尽力而为，超时也返回当前事实而不抛异常）
+ */
+suspend fun AccessibilityService.awaitAppForeground(
+    pkg: String,
+    maxAttempts: Int = 24,
+    intervalMs: Long = 500L,
+): Boolean {
+    repeat(maxAttempts) {
+        val root = rootInActiveWindow
+        val current = root?.packageName?.toString()
+        if (current == pkg) return true
+        if (root != null && current != null) {
+            val label = NodeAwait.pickDismissLabel(collectAllTexts(root))
+            val target = label?.let { findByLabel(root, it) }
+            if (target != null) {
+                (clickableSelfOrAncestor(target) ?: target).performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                android.util.Log.i("NodeAwait", "awaitAppForeground: 前台=$current 点掉「$label」")
+            } else {
+                performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+                android.util.Log.i("NodeAwait", "awaitAppForeground: 前台=$current 无可消除项，按返回")
+            }
+        }
+        delay(intervalMs)
+    }
+    return rootInActiveWindow?.packageName?.toString() == pkg
+}
