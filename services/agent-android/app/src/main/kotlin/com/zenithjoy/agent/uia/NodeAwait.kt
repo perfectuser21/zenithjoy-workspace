@@ -142,6 +142,43 @@ object NodeAwait {
         else -> GateAction.WAIT
     }
 
+    // ── 窗口选择：取无障碍树极贵，必须先筛后取 ──────────────────────────────
+    // 真机实测（小粉 ANY-AN00）：54 个窗口、仅 5 个有 surface、mCurrentFocus=null，
+    // 对 6 个窗口逐个取 root 就要 10 秒/轮（每次跨进程拉一棵树约 1.7s）。
+
+    /** 与 android.view.accessibility.AccessibilityWindowInfo 常量对齐，便于纯函数单测。 */
+    const val WINDOW_TYPE_APPLICATION = 1
+    const val WINDOW_TYPE_INPUT_METHOD = 2
+    const val WINDOW_TYPE_SYSTEM = 3
+    const val WINDOW_TYPE_ACCESSIBILITY_OVERLAY = 4
+
+    /** 窗口的可判定属性（不含 root，避免为了排序就把树全取出来）。 */
+    data class WindowSpec(
+        val type: Int,
+        val isActive: Boolean,
+        val isFocused: Boolean,
+        val areaPx: Long,
+    )
+
+    /**
+     * 选出最多 [max] 个「值得取树」的窗口下标，按可能性从高到低。
+     *
+     * 排序依据：有焦点 > 活动 > 其它；同级时小窗口优先（厂商插屏/授权框通常是小窗口）。
+     * 输入法与无障碍浮层直接排除——那里面不会有厂商插屏，取它们的树纯属浪费。
+     */
+    fun selectWindowIndices(specs: List<WindowSpec>, max: Int): List<Int> =
+        specs.withIndex()
+            .filter { (_, w) ->
+                w.type != WINDOW_TYPE_INPUT_METHOD && w.type != WINDOW_TYPE_ACCESSIBILITY_OVERLAY
+            }
+            .sortedWith(
+                compareByDescending<IndexedValue<WindowSpec>> { it.value.isFocused }
+                    .thenByDescending { it.value.isActive }
+                    .thenBy { it.value.areaPx }
+            )
+            .take(max)
+            .map { it.index }
+
     /** 连续多少轮取不到任何窗口树后才按返回（避免目标 App 内部瞬时取不到树时误退）。 */
     const val BLIND_ROUNDS_BEFORE_BACK = 4
 
@@ -247,13 +284,29 @@ private fun AccessibilityService.scanForDismiss(): Pair<String?, AccessibilityNo
 private fun AccessibilityService.rootsToSearch(): List<AccessibilityNodeInfo> {
     val out = mutableListOf<AccessibilityNodeInfo>()
     rootInActiveWindow?.let { out.add(it) }
-    // 上限保护：窗口列表异常膨胀时不让扫描代价失控（每个 root 上的查询都是跨进程调用）
-    windows?.take(MAX_WINDOWS_TO_SCAN)?.forEach { w -> w.root?.let { if (out.none { o -> o == it }) out.add(it) } }
-    return out.take(MAX_WINDOWS_TO_SCAN)
+    // 活动窗口能拿到就够了——绝大多数情况下弹窗就在它里面，不必再枚举 windows。
+    if (out.isNotEmpty()) return out
+    // 拿不到活动窗口（真机实测：授权框盖着时 mCurrentFocus=null）才退而求其次。
+    // 先只读各窗口的廉价属性排序筛选，再对入选的少数几个取树——取树才是贵的那一步。
+    val wins = windows ?: return out
+    val specs = wins.map { w ->
+        val r = Rect()
+        w.getBoundsInScreen(r)
+        NodeAwait.WindowSpec(
+            type = w.type,
+            isActive = w.isActive,
+            isFocused = w.isFocused,
+            areaPx = r.width().toLong() * r.height().toLong(),
+        )
+    }
+    for (i in NodeAwait.selectWindowIndices(specs, MAX_WINDOWS_TO_SCAN)) {
+        wins.getOrNull(i)?.root?.let { if (out.none { o -> o == it }) out.add(it) }
+    }
+    return out
 }
 
 private val AUTO_JUMP_MARKERS = listOf("想要打开", "是否允许")
-private const val MAX_WINDOWS_TO_SCAN = 6
+private const val MAX_WINDOWS_TO_SCAN = 3
 private val CANDIDATE_LABELS = listOf("允许", "跳过", "关闭", "稍后", "取消", "我知道了")
 
 /**
