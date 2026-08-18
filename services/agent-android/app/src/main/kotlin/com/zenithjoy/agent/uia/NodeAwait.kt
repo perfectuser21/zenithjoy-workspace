@@ -1,6 +1,9 @@
 package com.zenithjoy.agent.uia
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.graphics.Path
+import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlinx.coroutines.delay
 
@@ -153,46 +156,77 @@ suspend fun AccessibilityService.awaitNode(
 // 二者缺一不可：只有第二层时，厂商开屏广告盖着抖音会让节点永远等不到（真机实证）；
 // 只有第一层时，抖音自己还在加载也会让后续查找扑空。
 
-/** 收集整棵树上的 text 与 content-desc 文案（供 [NodeAwait.pickDismissLabel] 判断）。 */
-private fun collectAllTexts(root: AccessibilityNodeInfo): List<String> {
-    val out = mutableListOf<String>()
-    val queue = ArrayDeque<AccessibilityNodeInfo>()
-    queue.add(root)
-    var visited = 0
-    while (queue.isNotEmpty() && visited < 2_000) {
-        val node = queue.removeFirst()
-        visited++
-        node.text?.toString()?.takeIf { it.isNotBlank() }?.let { out.add(it) }
-        node.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.let { out.add(it) }
-        for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+/**
+ * 用系统索引查询（[AccessibilityNodeInfo.findAccessibilityNodeInfosByText]）探出页面上存在哪些
+ * 关心的文案，**不做全树遍历**。
+ *
+ * 2026-08-18 真机踩过：初版这里用全树 BFS 收集所有文案，而前台闸每轮都要跑一次——厂商插屏页的树
+ * 上每个 getChild() 都是跨进程 binder 调用，account-scan 冷启动实测 144 秒毫无进展。这与本文件
+ * 给 awaitNode 定的「finder 必须廉价」是同一条规矩，前台闸自己也必须守。
+ *
+ * 系统索引是**模糊匹配**（contains），所以命中后仍要精确校验，避免「是否允许」把「允许」也算进来。
+ */
+private fun AccessibilityService.probeLabels(): List<String> {
+    val found = mutableListOf<String>()
+    for (marker in AUTO_JUMP_MARKERS) {
+        if (rootsToSearch().any { it.findAccessibilityNodeInfosByText(marker)?.isNotEmpty() == true }) found.add(marker)
     }
+    for (label in CANDIDATE_LABELS) {
+        if (findLabelAcrossWindows(label) != null) found.add(label)
+    }
+    return found
+}
+
+/**
+ * 要搜的窗口根节点集合：活动窗口 + 所有可交互窗口。
+ *
+ * **必须跨窗口**：真机截图实证（2026-08-18 荣耀 X30）——系统的 auto-jump 授权框
+ * 「"ZenithJoyAgent" 想要打开 "抖音"，是否允许？」盖在桌面上时，`rootInActiveWindow`
+ * 返回 null（该对话框在独立 window 里，不是 activeWindow），前台闸因此一轮都没进消除分支、
+ * 连日志都打不出来，只能干等到超时报 OPEN_PANEL_FAILED。
+ * 依赖服务配置里的 `flagRetrieveInteractiveWindows`（三个 service 的 xml 均已开）。
+ */
+private fun AccessibilityService.rootsToSearch(): List<AccessibilityNodeInfo> {
+    val out = mutableListOf<AccessibilityNodeInfo>()
+    rootInActiveWindow?.let { out.add(it) }
+    windows?.forEach { w -> w.root?.let { if (out.none { o -> o == it }) out.add(it) } }
     return out
 }
 
-/** 按精确文案或 content-desc 找节点。 */
-private fun findByLabel(root: AccessibilityNodeInfo, label: String): AccessibilityNodeInfo? {
-    val queue = ArrayDeque<AccessibilityNodeInfo>()
-    queue.add(root)
-    var visited = 0
-    while (queue.isNotEmpty() && visited < 2_000) {
-        val node = queue.removeFirst()
-        visited++
-        if (node.text?.toString()?.trim() == label || node.contentDescription?.toString()?.trim() == label) return node
-        for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
-    }
+private fun AccessibilityService.findLabelAcrossWindows(label: String): AccessibilityNodeInfo? {
+    for (r in rootsToSearch()) findByLabel(r, label)?.let { return it }
     return null
 }
 
-/** 自己不可点时，往上找最近的可点击祖先。 */
-private fun clickableSelfOrAncestor(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-    var cur: AccessibilityNodeInfo? = node
-    var hops = 0
-    while (cur != null && hops < 12) {
-        if (cur.isClickable) return cur
-        cur = cur.parent
-        hops++
+private val AUTO_JUMP_MARKERS = listOf("想要打开", "是否允许")
+private const val BLIND_ROUNDS_BEFORE_BACK = 4
+private val CANDIDATE_LABELS = listOf("允许", "跳过", "关闭", "稍后", "取消", "我知道了")
+
+/**
+ * 按精确文案或 content-desc 找节点：先用系统索引缩小候选（模糊匹配），再精确校验。
+ * 全程不做全树遍历。
+ */
+private fun findByLabel(root: AccessibilityNodeInfo, label: String): AccessibilityNodeInfo? =
+    root.findAccessibilityNodeInfosByText(label)?.firstOrNull { n ->
+        n.text?.toString()?.trim() == label || n.contentDescription?.toString()?.trim() == label
     }
-    return null
+
+/**
+ * 手势点击节点中心。
+ *
+ * **必须用手势，不能用 performAction(ACTION_CLICK)**：真机复现（2026-07-29，ANY-AN00）证实
+ * 该 App 生态里 ACTION_CLICK 对部分节点无效——点厂商壁纸推荐弹窗的「关闭」毫无反应，弹窗卡到
+ * 超时，最终报 OPEN_PANEL_FAILED。见 DeviceAccountScanServiceVendorPopupDismissTest。
+ */
+private fun AccessibilityService.tapNodeCenterByGesture(node: AccessibilityNodeInfo) {
+    val r = Rect()
+    node.getBoundsInScreen(r)
+    if (r.isEmpty) return
+    val path = Path().apply { moveTo(r.exactCenterX(), r.exactCenterY()) }
+    val gesture = GestureDescription.Builder()
+        .addStroke(GestureDescription.StrokeDescription(path, 0L, 60L))
+        .build()
+    dispatchGesture(gesture, null, null)
 }
 
 /**
@@ -210,19 +244,29 @@ suspend fun AccessibilityService.awaitAppForeground(
     maxAttempts: Int = 24,
     intervalMs: Long = 500L,
 ): Boolean {
+    var blindRounds = 0
     repeat(maxAttempts) {
-        val root = rootInActiveWindow
-        val current = root?.packageName?.toString()
+        val current = rootInActiveWindow?.packageName?.toString()
         if (current == pkg) return true
-        if (root != null && current != null) {
-            val label = NodeAwait.pickDismissLabel(collectAllTexts(root))
-            val target = label?.let { findByLabel(root, it) }
-            if (target != null) {
-                (clickableSelfOrAncestor(target) ?: target).performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                android.util.Log.i("NodeAwait", "awaitAppForeground: 前台=$current 点掉「$label」")
-            } else {
+        // 跨窗口找可消除项：系统对话框常不在 activeWindow 里（真机实证 rootInActiveWindow 为 null）
+        val label = NodeAwait.pickDismissLabel(probeLabels())
+        val target = label?.let { findLabelAcrossWindows(it) }
+        if (target != null) {
+            tapNodeCenterByGesture(target)
+            blindRounds = 0
+            android.util.Log.i("NodeAwait", "awaitAppForeground: 前台=$current 手势点掉「$label」")
+        } else if (current != null) {
+            performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+            blindRounds = 0
+            android.util.Log.i("NodeAwait", "awaitAppForeground: 前台=$current 无可消除项，按返回")
+        } else {
+            // 连 activeWindow 都取不到：多半是系统窗口挡着且无可消除项。等几轮再按返回，
+            // 避免目标 App 内部瞬时取不到树时误退。
+            blindRounds++
+            if (blindRounds >= BLIND_ROUNDS_BEFORE_BACK) {
                 performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
-                android.util.Log.i("NodeAwait", "awaitAppForeground: 前台=$current 无可消除项，按返回")
+                blindRounds = 0
+                android.util.Log.i("NodeAwait", "awaitAppForeground: 连续 $BLIND_ROUNDS_BEFORE_BACK 轮取不到窗口树，按返回")
             }
         }
         delay(intervalMs)

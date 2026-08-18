@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import com.zenithjoy.agent.uia.NodeAwait
 import com.zenithjoy.agent.uia.awaitNode
+import com.zenithjoy.agent.uia.awaitAppForeground
 
 /**
  * 安卓设备账号扫描无障碍服务（Sprint 07061301-device-account-scan-wiring）。
@@ -494,27 +495,14 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
      * "抖音未到前台"这一步就直接失败——与我tab点击等待逻辑是完全不同的根因。改用 tapNodeCenter 手势点击，
      * 对齐同文件已验证过的可靠模式。
      */
-    private suspend fun awaitDouyinForeground(maxAttempts: Int = 24, delayMs: Long = 500L): Boolean {
-        repeat(maxAttempts) {
-            val root = rootInActiveWindow
-            val pkg = root?.packageName?.toString()
-            if (pkg == DOUYIN_PKG) return true
-            if (root != null && pkg != null) {
-                val isAutoJump = collectAllNodeTexts(root).any { it.contains("想要打开") || it.contains("是否允许") }
-                val allow = if (isAutoJump) (findNodeByText(root, "允许") ?: findNodeByContentDesc(root, "允许")) else null
-                val dismiss = allow ?: findNodeByText(root, "跳过") ?: findNodeByText(root, "关闭")
-                    ?: findNodeByText(root, "稍后") ?: findNodeByText(root, "取消") ?: findNodeByText(root, "我知道了")
-                    ?: findNodeByContentDesc(root, "跳过") ?: findNodeByContentDesc(root, "关闭")
-                if (dismiss != null) {
-                    tapNodeCenter(dismiss)
-                } else {
-                    performGlobalAction(GLOBAL_ACTION_BACK)
-                }
-            }
-            delay(delayMs)
-        }
-        return rootInActiveWindow?.packageName?.toString() == DOUYIN_PKG
-    }
+    private suspend fun awaitDouyinForeground(maxAttempts: Int = 24, delayMs: Long = 500L): Boolean =
+        // 2026-08-18：改为委托共享前台闸 com.zenithjoy.agent.uia.awaitAppForeground。
+        // 行为等价（轮询前台包名 + 消厂商插屏 + 只在前台非目标包时按返回），但消除弹窗
+        // 改用「可点击祖先 + performAction(ACTION_CLICK)」而不是坐标手势 tapNodeCenter——
+        // 真机实证（荣耀 X30/MagicOS 2026-08-18）：同一台设备上 collect 走共享实现能点掉
+        // 荣耀 auto-jump「想要打开抖音」授权框并成功拉起抖音，而本文件原坐标手势版本在
+        // 同场景下 trampoline Activity 0.3 秒即被销毁、从未可见，最终 OPEN_PANEL_FAILED。
+        awaitAppForeground(DOUYIN_PKG, maxAttempts, delayMs)
 
     private fun collectAllNodeTexts(root: AccessibilityNodeInfo): List<String> {
         val out = mutableListOf<String>()

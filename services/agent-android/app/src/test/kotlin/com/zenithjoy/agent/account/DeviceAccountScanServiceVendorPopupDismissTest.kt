@@ -30,9 +30,11 @@ class DeviceAccountScanServiceVendorPopupDismissTest {
         val fn = fnBody(src)
         assertTrue("awaitDouyinForeground 函数体锚点必须存在（结构被改动会导致这里判空）", fn.isNotEmpty())
         assertTrue(
-            "消除弹窗必须调 tapNodeCenter(dismiss) 走手势点击——同文件已证明 ACTION_CLICK 对该 App 生态" +
-                "部分节点无效(真机复现：厂商壁纸推荐弹窗点\"关闭\"没反应，卡到超时)",
-            fn.contains("tapNodeCenter(dismiss)"),
+            "消除弹窗必须走手势点击——ACTION_CLICK 对该 App 生态部分节点无效(真机复现：厂商壁纸推荐" +
+                "弹窗点\"关闭\"没反应，卡到超时)。2026-08-18 起本函数委托共享前台闸 " +
+                "com.zenithjoy.agent.uia.awaitAppForeground，手势点击这一行为由 " +
+                "NodeAwaitGestureDismissTest 在共享层守住；此处只需确认确实委托了出去。",
+            fn.contains("tapNodeCenter(dismiss)") || fn.contains("awaitAppForeground("),
         )
         assertTrue(
             "不能再用不可靠的 performAction(ACTION_CLICK) 消除弹窗",
