@@ -476,10 +476,13 @@ export FEISHU_API_BASE="http://localhost:$API_PORT/api/_smoke/fake-feishu"
 export FEISHU_APP_ID="e2e-app-id"
 export FEISHU_APP_SECRET="e2e-app-secret"
 export STAFF_EMAILS="$ORGA_EMAIL"
-export STAFF_FEISHU_OPENIDS="$ORGA_OPENID,$NOORG_OPENID"
+export STAFF_FEISHU_OPENIDS="$ORGA_OPENID"
 export STAFF_EMAILS__ORGA="$ORGA_EMAIL"
 export STAFF_FEISHU_OPENIDS__ORGA="$ORGA_OPENID"
 export STAFF_FEISHU_OPENIDS__ORGB="$ORGB_OPENID"
+# NOORG 单列一组：他必须被员工目录声明过（否则 A30-1b 报红），但 STAFF_ORG_MAP 不给他映射
+# —— 这正是 Step 3 要的「是员工、无归属声明」。放进扁平名单会同时破 A30-1a 与 A30-1b，服务起不来。
+export STAFF_FEISHU_OPENIDS__NOORG="$NOORG_OPENID"
 export STAFF_ORG_MAP="ORGA:$ORGA_TENANT_ID,ORGB:$ORGB_TENANT_ID"
 export BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-e2e-knowledge-hub-secret-not-for-prod-32ch}"
 export NODE_ENV=development
