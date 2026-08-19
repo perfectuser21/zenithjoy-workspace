@@ -1,0 +1,50 @@
+{
+  "initiative_id": "6110f348-e3a1-43c4-ab51-b859220b676b",
+  "journey_type": "user_facing",
+  "journey_type_reason": "承诺终态在 Staff Hub 员工可见页面（录入界面 + 「最近沉淀」页），属 apps/staff-hub 前端面；final-e2e 走 windows_cloud 真实浏览器。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "G4 身份底座第零刀 + S1 经验沉淀最小闭环（会话签发 / 员工目录 / knowledgeAuthGuard / 录入与最近沉淀 / A27+A30 守卫）",
+      "scope": "让白名单员工经飞书登录拿到服务端会话并按员工目录声明的那一家企业入驻，知识面只凭会话判身份，员工录入一条经验后 30 秒内在「最近沉淀」页看到它带证据链接；A27 静态守卫与 A30 员工目录一致性自检（四项）先行落地并各自 proven-to-fire。不实现 S2 问答、S3 注入，不改 staffGuard 与 tenant-context，不改 cecelia learnings schema。",
+      "dod": [
+        "[BEHAVIOR] A30 四项成立时服务起得来且启动日志证明自检真跑过；四条变异各自报红并指明违规项",
+        "[BEHAVIOR] 白名单员工登录返回 httpOnly/Secure/SameSite=Lax 会话 cookie，成员行挂声明组织、零 Personal-% 命中、登录未新建租户",
+        "[BEHAVIOR] 员工目录无归属声明的账号登录返 403 NO_ORG_ASSIGNMENT，无 Set-Cookie、零成员行",
+        "[BEHAVIOR] 知识端点无会话返 401 SESSION_REQUIRED；伪造身份头判定不变且账本零新增；有会话无成员行返 403 NO_TENANT，三种文案互不相同",
+        "[BEHAVIOR] 录入返 201 且 data.org_id 等于声明组织，账本本轮真有该行带 org_id 与 author_member_id；缺组织上下文返 403 且零写入",
+        "[BEHAVIOR] 提交后 30 秒内「最近沉淀」按 entry_id 精确读到那一条且证据链接逐字回读，列表零跨组织条目",
+        "[BEHAVIOR] A27 静态守卫正向通过、加回一行读头即报红，源码已还原",
+        "[BEHAVIOR] adminFetch 仍拼两个身份头、staffGuard 相对 base_sha 零 diff、staffGuard 端点计数等于 16",
+        "[BEHAVIOR] 账本不可达时读端返 503 LEDGER_UNREACHABLE，不静默降级成空列表",
+        "[ARTIFACT] apps/api/src/middleware/knowledge-auth.ts 存在且源码零身份头名",
+        "[ARTIFACT] apps/api/src/staff-directory.ts 存在且实现 A30-1a/1b/2/3 四项",
+        "[ARTIFACT] apps/api/db/migrations/*knowledge_entries_projection*.sql 存在，org_id NOT NULL 且 DDL 幂等",
+        "[ARTIFACT] knowledge-hub-path1-smoke.sh 落盘并已登记进 smoke-baseline.txt",
+        "[ARTIFACT] sprint 目录下 e2e-verify.ps1 存在，UI spec 禁 page.route()"
+      ],
+      "files": [
+        "apps/api/src/routes/staff.ts",
+        "apps/api/src/routes/knowledge.ts",
+        "apps/api/src/middleware/knowledge-auth.ts",
+        "apps/api/src/staff-directory.ts",
+        "apps/api/src/index.ts",
+        "apps/api/src/app.ts",
+        "apps/api/src/routes/_smoke-fake-feishu.ts",
+        "apps/api/db/migrations/20260819_knowledge_entries_projection.sql",
+        "apps/staff-hub/src/lib/knowledgeFetch.ts",
+        "apps/staff-hub/src/pages/KnowledgeNewPage.tsx",
+        "apps/staff-hub/src/pages/KnowledgeRecentPage.tsx",
+        "apps/staff-hub/src/App.tsx",
+        "apps/staff-hub/e2e/knowledge-hub-path1.spec.ts",
+        ".github/workflows/scripts/smoke/knowledge-hub-path1-smoke.sh",
+        ".github/workflows/scripts/smoke-baseline.txt",
+        ".github/workflows/scripts/count-staffguard-endpoints.mjs",
+        "sprints/08192114-员工知识中枢-路-经验沉淀与问答-ade79e4e/e2e-verify.ps1"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 120
+    }
+  ]
+}
