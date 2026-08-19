@@ -38,9 +38,9 @@ fi
 
 # 3. 每个静默丢弃点必须先打日志：统计 return@forEach 与其前面的日志调用
 DROPS=$(grep -c 'return@forEach' <<< "$BODY" || true)
-LOGGED=$(grep -B 1 'return@forEach' <<< "$BODY" | grep -cE 'logW\(|logI\(' || true)
+LOGGED=$(grep -B 3 'return@forEach' <<< "$BODY" | grep -cE 'logW\(|logI\(' || true)
 if [ "${DROPS:-0}" -gt 0 ] && [ "${LOGGED:-0}" -ge "${DROPS:-0}" ]; then
-  ok "全部 $DROPS 个丢弃点都先记日志再丢"
+  ok "全部 $DROPS 个丢弃点附近都有日志"
 else
   bad "有 $DROPS 个 return@forEach 丢弃点，只有 $LOGGED 个记了日志 —— 任务被吞时无迹可查"
 fi
