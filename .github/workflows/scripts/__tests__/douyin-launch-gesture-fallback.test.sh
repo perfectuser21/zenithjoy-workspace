@@ -39,12 +39,13 @@ fi
 
 # 3. 手势兜底必须用 dispatchGesture（真手势），不得又回到 startActivity
 GBODY=$(awk '/fun launchDouyinByGesture/{f=1} f{print} f&&/^    \}$/{exit}' "$SRC")
-if [ -n "$GBODY" ] && grep -qE 'dispatchGesture' <<< "$GBODY"; then
-  ok "兜底走 dispatchGesture 真手势"
+# tapNodeCenter 内部就是 dispatchGesture（复用既有手势件，不重复代码）
+if [ -n "$GBODY" ] && grep -qE 'dispatchGesture|tapNodeCenter' <<< "$GBODY"; then
+  ok "兜底走真手势(dispatchGesture / tapNodeCenter)"
 elif [ -z "$GBODY" ]; then
   bad "手势兜底函数体为空/不存在"
 else
-  bad "兜底未用 dispatchGesture —— 再用 startActivity 会被同样拦截"
+  bad "兜底未用真手势 —— 再用 startActivity 会被同样拦截"
 fi
 
 # 4. 兜底结果必须可观测（成功/失败都留痕）

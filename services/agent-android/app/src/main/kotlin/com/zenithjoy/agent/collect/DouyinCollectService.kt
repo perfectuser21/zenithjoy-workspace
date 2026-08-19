@@ -219,8 +219,23 @@ class DouyinCollectService : AccessibilityService() {
             // 只做第二层（等搜索按钮出现）会一直在广告页上找，等满 24 次 11.5 秒仍
             // fgPkg=com.hihonor.systemmanager。dm 侧早有这层（awaitDouyinForeground），
             // collect 一直缺，这就是同一个 NO_SEARCH_INPUT 反复复发的另一半原因。
-            val fg = awaitAppForeground(DOUYIN_PKG, AWAIT_FOREGROUND_ATTEMPTS, AWAIT_POLL_MS)
+            var fg = awaitAppForeground(DOUYIN_PKG, AWAIT_FOREGROUND_ATTEMPTS, AWAIT_POLL_MS)
             android.util.Log.i(TAG, "startCollect: 抖音到前台=$fg")
+            if (!fg) {
+                // 2026-08-19 真机根治（小白 realme RMX3478/ColorOS/安卓14）：
+                // ColorOS 拦截 app 发起的 Activity 启动，且是【静默】拦截——startActivity
+                // 不抛异常，launchDouyin() 的 try/catch 抓不到、直接 return true，调用方以为
+                // 拉起成功，一路走到 openSearchBar 等满 12 秒才报 NO_SEARCH_INPUT：错误码指向
+                // 搜索框，真凶却是拉起，排查被严重误导整整一天。
+                // 对照实验钉死：同一时刻 `adb shell am start` 拉抖音成功（shell 权限不受限）、
+                // agent 自己 startActivity 失败；agent 的 MainActivity 当时就在前台，
+                // 所以不是"缺前台身份"，是 ColorOS 直接禁止 app 间启动。
+                // 荣耀侧已有先例（透明 trampoline 绕 iAware，PR #1637）；ColorOS 需要平行路径。
+                // 最保险的形态是【无障碍手势点击桌面图标】——完全模拟真人，任何 ROM 的后台启动
+                // 限制都拦不住（无障碍服务本就是为替用户操作而生）。荣耀上也能作最终兜底。
+                fg = launchDouyinByGesture()
+                android.util.Log.i(TAG, "startCollect: 手势兜底拉起结果=$fg")
+            }
             delay(RandomDelay.sample(RandomDelay.NAV_MS))
             // 第二层：等搜索入口这个具体节点就绪（见 openSearchBar）
             openSearchBar()
@@ -381,6 +396,47 @@ class DouyinCollectService : AccessibilityService() {
             launchDouyinDirect()
         }
     }
+
+    /**
+     * 最终兜底：回桌面 → 手势点击抖音图标。
+     *
+     * 用于 startActivity 被厂商 ROM 静默拦截时（ColorOS 实证）。走无障碍手势 = 完全模拟真人
+     * 触摸，不受任何后台启动限制约束。
+     *
+     * finder 必须廉价（NodeAwait 的死规矩）：只用系统索引查询
+     * findAccessibilityNodeInfosByText，不做全树遍历——桌面在部分 ROM 上是巨树。
+     */
+    private suspend fun launchDouyinByGesture(): Boolean {
+        performGlobalAction(GLOBAL_ACTION_HOME)
+        delay(RandomDelay.sample(RandomDelay.NAV_MS))
+        val outcome = awaitNode(AWAIT_LAUNCHER_ICON_ATTEMPTS, AWAIT_POLL_MS) { r ->
+            findDouyinIconCheap(r)
+        }
+        val icon = outcome.value
+        android.util.Log.i(
+            TAG,
+            "launchDouyinByGesture: 桌面图标命中=${icon != null} attempts=${outcome.attempts} " +
+                "waitedMs=${outcome.waitedMs(AWAIT_POLL_MS)} fgPkg=${outcome.lastForegroundPkg}"
+        )
+        if (icon == null) {
+            android.util.Log.w(TAG, "launchDouyinByGesture: 桌面上找不到抖音图标，手势兜底放弃")
+            return false
+        }
+        tapNodeCenter(icon)
+        val ok = awaitAppForeground(DOUYIN_PKG, AWAIT_FOREGROUND_ATTEMPTS, AWAIT_POLL_MS)
+        android.util.Log.i(TAG, "launchDouyinByGesture: 手势点击后抖音到前台=$ok")
+        return ok
+    }
+
+    /**
+     * 桌面上找抖音图标。系统索引只保证匹配 text，不保证匹配 content-desc（0818 真机教训），
+     * 所以两者都要校验；命中后仍要精确比对，避免"抖音极速版""抖音火山版"误伤。
+     */
+    private fun findDouyinIconCheap(root: AccessibilityNodeInfo): AccessibilityNodeInfo? =
+        root.findAccessibilityNodeInfosByText(DOUYIN_ICON_LABEL)?.firstOrNull {
+            it.text?.toString()?.trim() == DOUYIN_ICON_LABEL ||
+                it.contentDescription?.toString()?.trim() == DOUYIN_ICON_LABEL
+        }
 
     // 直启回退：trampoline 起不来时的兜底路径，逻辑与改动前的 launchDouyin() 完全一致。
     private fun launchDouyinDirect(): Boolean {
@@ -1746,6 +1802,12 @@ class DouyinCollectService : AccessibilityService() {
          *  深链拉起详情页比搜索页快，但抖音首帧到动作栏渲染完仍有明显间隔，
          *  真机实测原来那一次性探测（0 秒等待）稳定扑空。 */
         private const val AWAIT_COMMENT_BTN_ATTEMPTS = 24
+
+        /** 手势兜底时等桌面抖音图标出现的轮询次数（×500ms → 6 秒，回桌面很快）。 */
+        private const val AWAIT_LAUNCHER_ICON_ATTEMPTS = 12
+
+        /** 桌面抖音图标的文案（精确比对，避免误伤极速版/火山版）。 */
+        private const val DOUYIN_ICON_LABEL = "抖音"
         private const val AWAIT_SEARCH_INPUT_ATTEMPTS = 8
         private const val AWAIT_DETAIL_ATTEMPTS = 12
         private const val AWAIT_COMMENT_PANEL_ATTEMPTS = 8
