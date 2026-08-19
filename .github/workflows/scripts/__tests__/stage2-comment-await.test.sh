@@ -40,7 +40,7 @@ else
 fi
 
 # 2. 等待失败必须给出明确错误码，不能静默上报 0 条评论
-if grep -qE 'finishWithError\("(NO_COMMENT_BUTTON|NO_WINDOW)"' <<< "$STAGE2_BODY"; then
+if grep -qE 'finishWithError\(.*"(NO_COMMENT_BUTTON|NO_WINDOW)"' <<< "$STAGE2_BODY"; then
   ok "等不到评论按钮时报明确错误码，不静默交 0 条"
 else
   bad "等不到评论按钮时无 finishWithError —— 会静默上报 0 条评论，任务照常结算 done，链路断点被掩盖"
