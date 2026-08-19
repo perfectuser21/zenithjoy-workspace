@@ -33,7 +33,12 @@ export async function upsertAgent(p: UpsertAgentParams): Promise<void> {
     await pool.query(
       `INSERT INTO zenithjoy.agents (tenant_id, agent_id, capabilities, version, hostname, status, last_seen)
        VALUES ($1, $2, $3, $4, $5, 'online', now())
-       ON CONFLICT (tenant_id, hostname) WHERE hostname IS NOT NULL AND hostname <> ''
+       -- 2026-08-19：索引条件随 uq_agents_tenant_hostname 收窄同步更新。ON CONFLICT 的
+       -- 推断条件必须与 partial unique index 的 WHERE 逐字匹配，否则 Postgres 报
+       -- "there is no unique or exclusion constraint matching the ON CONFLICT specification"。
+       -- hostname 去重现在只对【没有 machine_id 的行】生效（有指纹的走 uq_agents_tenant_machine_id）。
+       ON CONFLICT (tenant_id, hostname)
+         WHERE (machine_id IS NULL OR machine_id = '') AND hostname IS NOT NULL AND hostname <> ''
        DO UPDATE
          SET agent_id     = EXCLUDED.agent_id,
              capabilities = EXCLUDED.capabilities,
@@ -106,7 +111,9 @@ export async function findOrCreateAgentUuid(
     const upsert = await pool.query<{ id: string }>(
       `INSERT INTO zenithjoy.agents (tenant_id, agent_id, capabilities, version, hostname, status, last_seen)
        VALUES ($1, $2, $3, $4, $5, 'online', now())
-       ON CONFLICT (tenant_id, hostname) WHERE hostname IS NOT NULL AND hostname <> ''
+       -- 同上：条件须与 uq_agents_tenant_hostname 的 partial index WHERE 逐字一致
+       ON CONFLICT (tenant_id, hostname)
+         WHERE (machine_id IS NULL OR machine_id = '') AND hostname IS NOT NULL AND hostname <> ''
        DO UPDATE
          SET agent_id     = EXCLUDED.agent_id,
              capabilities = EXCLUDED.capabilities,
