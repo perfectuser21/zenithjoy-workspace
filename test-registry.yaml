@@ -1159,6 +1159,14 @@ tests:
 
   # ── Agent Fleet（PR #228 引入，drive-by 登记） ─────────────────────────────
 
+  - id: api-agent-identity-machine-id
+    path: apps/api/src/services/__tests__/agent-identity.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "身份唯一化 — resolveAgentIdentityKey 按 machine_id(机器指纹)去重而非 hostname(机型名)：同机型两台物理手机(实证 小黄/四号机 同为荣耀 MAA-AN00)不再共用一行 agents、共用 agent_id；machine_id 缺失回退 hostname 兼容旧 agent；皆空返回 none 不复用既有行防幽灵行。"
+
   - id: api-agent-db-dedup
     path: apps/api/src/services/__tests__/agent-db-dedup.test.ts
     type: unit
