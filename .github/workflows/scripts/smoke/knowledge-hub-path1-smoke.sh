@@ -54,7 +54,19 @@ fi
 run_a27
 
 # ── 环境前置 ────────────────────────────────────────────────────────────────
-PGURL="${E2E_DATABASE_URL:-${DATABASE_URL:-postgresql://postgres@localhost:5432/cecelia}}"
+for bin in psql node python3 curl; do
+  command -v "$bin" >/dev/null 2>&1 || fail "缺少必需命令：$bin"
+done
+
+# 连接串来源要说清楚：静默落到 localhost 默认值而人以为在测 CI 那个库，
+# 是"跑绿了但根本没测到目标"的经典来源，所以把用的是哪一个打出来。
+if [ -n "${E2E_DATABASE_URL:-}" ]; then
+  PGURL="$E2E_DATABASE_URL"; PGSRC="E2E_DATABASE_URL"
+elif [ -n "${DATABASE_URL:-}" ]; then
+  PGURL="$DATABASE_URL"; PGSRC="DATABASE_URL"
+else
+  PGURL="postgresql://postgres@localhost:5432/cecelia"; PGSRC="内置默认（未设 E2E_DATABASE_URL / DATABASE_URL）"
+fi
 API_PORT="${KNOWLEDGE_SMOKE_PORT:-52310}"
 MUT_PORT=$((API_PORT + 1))
 
@@ -64,7 +76,8 @@ psql_q() { psql "$PGURL" -t -A -q -c "$1"; }
 
 # apps/api 只认 DATABASE_* 五个离散变量（不读 DATABASE_URL），从 PGURL 推导出来，
 # 保证被拉起的子进程连的是同一个库。
-python3 - "$PGURL" <<'PY' > /tmp/kh-smoke-dbenv.sh
+DBENV_FILE=$(mktemp)
+python3 - "$PGURL" > "$DBENV_FILE" <<'PY'
 import sys, urllib.parse as up
 u = up.urlparse(sys.argv[1])
 print(f'export DATABASE_HOST={u.hostname or "localhost"}')
@@ -74,17 +87,31 @@ print(f'export DATABASE_USER={up.unquote(u.username or "postgres")}')
 print(f'export DATABASE_PASSWORD={up.unquote(u.password or "")}')
 PY
 # shellcheck source=/dev/null
-. /tmp/kh-smoke-dbenv.sh
+. "$DBENV_FILE"
+
+# 连得上才继续：连不上时后面每一步都会以五花八门的方式失败，不如在这里一次说清
+psql "$PGURL" -v ON_ERROR_STOP=1 -q -c "SELECT 1" >/dev/null 2>&1 \
+  || fail "数据库连不上（来源=${PGSRC} host=${DATABASE_HOST} db=${DATABASE_NAME}）"
+echo "  DB: ${DATABASE_USER}@${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}（连接串来源：${PGSRC}）"
 
 echo "== 0. 前置：dist 就绪 + migration + 两家企业 tenants 行 =="
 if [ ! -f apps/api/dist/index.js ]; then
   echo "  apps/api/dist 缺失，现场构建（CI 正常路径里已 build 过，这里只兜本地直跑）"
   ( cd apps/api && npm run build >/dev/null 2>&1 ) || fail "apps/api build 失败"
 fi
-for f in apps/api/db/migrations/20260819_210000_knowledge_entries_projection.sql \
-         apps/api/db/migrations/20260819_210500_tenants_license_key_default.sql; do
-  psql "$PGURL" -v ON_ERROR_STOP=1 -q -f "$f" >/dev/null 2>&1 || fail "migration 应用失败：$f"
-done
+# 本 sprint 的两条 migration：只在"目标状态还没到"时补跑，避免和正规 migration runner
+# （zenithjoy.schema_migrations 追踪）抢着执行同一个文件。两条 DDL 本身也都是幂等的
+# （IF NOT EXISTS / SET DEFAULT），补跑一次不会破坏已有状态。
+if [ -z "$(psql_q "SELECT to_regclass('zenithjoy.knowledge_entries_projection')")" ]; then
+  echo "  投影表不存在，补跑 migration"
+  psql "$PGURL" -v ON_ERROR_STOP=1 -q -f apps/api/db/migrations/20260819_210000_knowledge_entries_projection.sql >/dev/null \
+    || fail "投影表 migration 应用失败"
+fi
+if [ -z "$(psql_q "SELECT column_default FROM information_schema.columns WHERE table_schema='zenithjoy' AND table_name='tenants' AND column_name='license_key'")" ]; then
+  echo "  tenants.license_key 尚无默认值，补跑 migration"
+  psql "$PGURL" -v ON_ERROR_STOP=1 -q -f apps/api/db/migrations/20260819_210500_tenants_license_key_default.sql >/dev/null \
+    || fail "tenants.license_key 默认值 migration 应用失败"
+fi
 NULLABLE=$(psql_q "SELECT is_nullable FROM information_schema.columns WHERE table_schema='zenithjoy' AND table_name='knowledge_entries_projection' AND column_name='org_id'")
 [ "$NULLABLE" = "NO" ] || fail "投影表 org_id 未 NOT NULL（got=${NULLABLE}）"
 ok "投影表就位且 org_id NOT NULL"
@@ -132,6 +159,7 @@ ok "员工目录 env 就位 ORGA=${ORGA_TENANT_ID} ORGB=${ORGB_TENANT_ID}"
 
 API_PID=""
 cleanup() {
+  rm -f "$DBENV_FILE"
   [ -n "$API_PID" ] && kill "$API_PID" 2>/dev/null
   psql "$PGURL" -q -c "DELETE FROM public.learnings WHERE metadata->>'org_id' IN ('$ORGA_TENANT_ID','$ORGB_TENANT_ID')" >/dev/null 2>&1
   psql "$PGURL" -q -c "DELETE FROM zenithjoy.session WHERE \"userId\" IN ('$ORGA_OPENID','$ORGB_OPENID','$NOORG_OPENID')" >/dev/null 2>&1
@@ -143,6 +171,11 @@ trap cleanup EXIT
 
 # ── A30 正向：四项成立 → 起得来，且日志证明自检真跑过 ─────────────────────────
 echo "== 1. A30 正向：四项成立，服务起得来 =="
+# 端口先得是空的：被别的进程占着时，我们起的实例绑不上，而健康检查会打到**那个陌生进程**
+# 并愉快地返回 200 —— 于是整轮 smoke 测的是别人，还看着像绿的。宁可在这里报红。
+if curl -sf -m 2 "http://localhost:$API_PORT/api/health" >/dev/null 2>&1; then
+  fail "端口 $API_PORT 已被占用（改 KNOWLEDGE_SMOKE_PORT 或先停掉那个进程）——继续跑会验到别人的进程上去"
+fi
 PORT="$API_PORT" node apps/api/dist/index.js > /tmp/kh-smoke-api.log 2>&1 &
 API_PID=$!
 UP=0
