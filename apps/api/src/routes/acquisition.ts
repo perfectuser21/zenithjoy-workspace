@@ -30,7 +30,7 @@ const collectCancelTenantContext = (req: Request, res: Response, next: NextFunct
 // 2026-07-28 rescue #1456：PLATFORM_LIMIT/ACCOUNT_OFFLINE 改回 PLATFORM_LIMITED/ACCOUNT_ABNORMAL——
 // 与下方 VALID_COLLECT_ERROR_CODES、以及 Android 端 CollectFailureClassifier.kt 实际吐出的值对齐
 // （原命名和真机不一致会把真实 PLATFORM_LIMITED/ACCOUNT_ABNORMAL 静默降级成 UNKNOWN，白名单形同虚设）。
-const VALID_REPORT_ERROR_CODES = new Set([
+export const VALID_REPORT_ERROR_CODES = new Set([
   'KEYWORD_NO_RESULT',
   'KEYWORD_BANNED',
   'PLATFORM_LIMITED',
@@ -41,10 +41,14 @@ const VALID_REPORT_ERROR_CODES = new Set([
   'STAGE2_DISPATCH_EXHAUSTED',
   'COLLECT_TIMEOUT',
   'stage1_empty',
+  // 2026-08-19 小白真机确诊：设备端队列被永不结束的 currentJob 堵死（「接了但没跑完」
+  // 落在 ack 看门狗的真空区），后续任务只入队不派发。设备端超时自回收后主动上报这个码，
+  // 中台因此能立刻知道"设备哑了"，而不是干等 10 分钟让 sweep-timeouts 收尸。
+  'AGENT_QUEUE_STALLED',
 ]);
 
 /** 非枚举值强制 normalize 为 UNKNOWN，并写日志。历史值保留原值。空/undefined → null。 */
-function normalizeReportErrorCode(code: string | null | undefined): string | null {
+export function normalizeReportErrorCode(code: string | null | undefined): string | null {
   if (!code) return null;
   if (VALID_REPORT_ERROR_CODES.has(code)) return code;
   console.log(`[acquisition] error_code normalized: UNKNOWN (original: ${code})`);
