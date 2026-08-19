@@ -37,6 +37,10 @@
         {
           "id": "line10",
           "name": "Line 10 客户管理"
+        },
+        {
+          "id": "line11",
+          "name": "Line 11 员工知识中枢"
         }
       ]
     }
@@ -484,7 +488,28 @@
       "smoke_files": [
         ".github/workflows/scripts/smoke/customer-admin-backend-smoke.sh"
       ]
+    },
+    {
+      "id": "knowledge_experience_qa",
+      "app_id": "staff_app",
+      "line_id": "line11",
+      "name": "经验沉淀与问答",
+      "status": "proposed",
+      "steps": [
+        {
+          "id": "step1",
+          "name": "经验被留住（人侧自动触发 + agent 干完自动写回，「最近沉淀」立刻可见）"
+        },
+        {
+          "id": "step2",
+          "name": "问得到（大白话提问，答案带出处；「库里没有」与「暂时查不了」两种明确回答）"
+        },
+        {
+          "id": "step3",
+          "name": "干活前被喂到（agent 开工强制注入仍然成立的经验，中台可见注入台账）"
+        }
+      ]
     }
   ],
-  "digest": "50366893e78d50b9b4b09f7007f6ef4e3db0e7cfc5dfb4e9d04ad6e5b24edc7a"
+  "digest": "206c51fed97a129b895f20cea46f01991cdcbe8231bde0270bcbb03ac06ea9e5"
 }
