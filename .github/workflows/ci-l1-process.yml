@@ -338,6 +338,7 @@ jobs:
                    .github/workflows/scripts/__tests__/stage2-comment-await.test.sh \
                    .github/workflows/scripts/__tests__/dm-search-input-await.test.sh \
                    .github/workflows/scripts/__tests__/collect-poll-diagnostics.test.sh \
+                   .github/workflows/scripts/__tests__/douyin-launch-gesture-fallback.test.sh \
                    .github/workflows/scripts/__tests__/line02-keyword-comment-smoke.diagnostics.test.sh \
                    .github/workflows/scripts/__tests__/lint-shell-var-brace.test.sh \
                    .github/workflows/scripts/smoke/lib/ensure-device-online.test.sh; do
