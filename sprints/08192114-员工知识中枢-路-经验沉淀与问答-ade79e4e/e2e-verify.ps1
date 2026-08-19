@@ -168,7 +168,9 @@ try {
   # ── 6. Playwright（真浏览器、真后端、禁 page.route）──
   $env:E2E_BASE_URL = "http://localhost:$VitePort"
   $env:E2E_LOGIN_CODE = "e2e-code-orga"
-  $e2e = Start-Process cmd.exe -ArgumentList "/c npx.cmd playwright test e2e\knowledge-hub-path1.spec.ts --reporter=list" `
+  # 路径必须用正斜杠：playwright 把这个参数当**正则**匹配测试文件，
+  # 反斜杠在正则里是转义符，`e2e\knowledge-...` 会匹配不到任何文件、报 "No tests found"。
+  $e2e = Start-Process cmd.exe -ArgumentList "/c npx.cmd playwright test e2e/knowledge-hub-path1.spec.ts --reporter=list" `
     -WorkingDirectory "$repoRoot\apps\staff-hub" -Wait -PassThru -NoNewWindow
   if ($e2e.ExitCode -ne 0) { throw "FAIL: Playwright E2E exit=$($e2e.ExitCode)" }
 
