@@ -105,12 +105,28 @@ class AcquisitionCollectPollLoop(
         val response = executeOnce(request) ?: return
         val parsed = gson.fromJson(response, PendingCollectTasksResponse::class.java) ?: return
 
+        // 2026-08-19：轮询成功路径此前【完全静默】。小黄(荣耀MAA-AN00/安卓16)出现
+        // 「中台 task=running(说明确实被拉走) 但设备零日志、抖音没起」时，排查数小时
+        // 无从下手——本函数有 5 个丢弃分支，任务被吞在哪一个外部完全看不见。
+        // 叠加服务端 pending-collect-tasks 只返回 pending 状态：任务被拉走标 running 后
+        // 若未执行成功，后续轮询再也看不见它 —— 静默吞任务 = 永久卡死且无迹可查。
+        // 因此每个丢弃点都必须留痕，分发成功也要留痕。
+        val taskCount = parsed.tasks?.size ?: 0
+        if (taskCount > 0) {
+            logI("poll: 拉到 $taskCount 个任务 agent=$currentAgentId")
+        }
+
         parsed.tasks?.forEach { task ->
-            if (task.task_id.isEmpty()) return@forEach
+            if (task.task_id.isEmpty()) {
+                logW("poll: 丢弃一个任务——task_id 为空 stage=${task.stage} status=${task.status}")
+                return@forEach
+            }
+            logI("poll: task=${task.task_id} stage=${task.stage} status=${task.status}")
 
             // cancelling 优先于 stage 检查
             if (task.status == "cancelling") {
                 collectTaskIds.add(task.task_id)
+                logI("poll: 收到取消 task=${task.task_id}")
                 onCancel?.invoke(task.task_id)
                 return@forEach
             }
@@ -118,8 +134,12 @@ class AcquisitionCollectPollLoop(
             when (task.stage) {
                 "stage_1" -> {
                     val keywords = task.keywords ?: emptyList()
-                    if (keywords.isEmpty()) return@forEach
+                    if (keywords.isEmpty()) {
+                        logW("poll: 丢弃 stage_1 任务 ${task.task_id}——keywords 为空")
+                        return@forEach
+                    }
                     collectTaskIds.add(task.task_id)
+                    logI("poll: 派发 stage_1 task=${task.task_id} keywords=${keywords.size}")
                     // 每关键词触发一次回调（每关键词单独一次，与合同 TC-002 对齐）
                     keywords.forEach { keyword ->
                         onStage1Task?.invoke(task.task_id, keyword)
@@ -127,7 +147,10 @@ class AcquisitionCollectPollLoop(
                 }
                 "stage_2" -> {
                     val videoUrls = task.video_urls ?: emptyList()
-                    if (videoUrls.isEmpty()) return@forEach
+                    if (videoUrls.isEmpty()) {
+                        logW("poll: 丢弃 stage_2 任务 ${task.task_id}——video_urls 为空")
+                        return@forEach
+                    }
                     collectTaskIds.add(task.task_id)
 
                     // content-judgment-gate: 判决门——打开视频卡后先截图判决，
@@ -157,8 +180,15 @@ class AcquisitionCollectPollLoop(
                     }
 
                     if (eligibleUrls.isNotEmpty()) {
+                        logI("poll: 派发 stage_2 task=${task.task_id} videos=${eligibleUrls.size}/${videoUrls.size}")
                         onStage2Task?.invoke(task.task_id, eligibleUrls, task.checkpoint)
+                    } else {
+                        logW("poll: stage_2 任务 ${task.task_id} 判决后无可用视频（${videoUrls.size} 个全被 rejected）")
                     }
+                }
+                else -> {
+                    // 未知 stage 此前直接被 when 静默吞掉，连一行日志都没有。
+                    logW("poll: 丢弃任务 ${task.task_id}——未知 stage=${task.stage}")
                 }
             }
         }
@@ -185,6 +215,14 @@ class AcquisitionCollectPollLoop(
     }
 
     /** android.util.Log 在纯 JVM 单元测试下未 mock 会抛 RuntimeException，这里吞掉保证 pollOnce() 不因日志而崩。 */
+    /** 与 logW 同样吞掉 RuntimeException：纯 JVM 单测下 android.util.Log 未 mock 会抛。 */
+    private fun logI(message: String) {
+        try {
+            android.util.Log.i(TAG, message)
+        } catch (_: RuntimeException) {
+        }
+    }
+
     private fun logW(message: String) {
         try {
             android.util.Log.w(TAG, message)
