@@ -1946,6 +1946,14 @@ tests:
     product: 私域运营
     note: "方案 B′：抓评论上报 douyin_id 落库（COALESCE 回填，绝不拿昵称/URL 冒充）。真机实证 sec_uid 不在 UIA 树，改从主页读 抖音号：xxx"
 
+  - id: acquisition-error-code-whitelist
+    path: apps/api/src/routes/acquisition-error-code-whitelist.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "AGENT_QUEUE_STALLED 必须在 error_code 白名单里。设备端队列僵尸回收后靠这个码告诉中台『设备哑了』，不在白名单会被 normalizeReportErrorCode 静默压成 UNKNOWN，等于诊断没发"
+
   - id: seg3-acquisition-dispatch-douyin-id
     path: apps/api/src/services/acquisition-dispatch-douyin-id.test.ts
     type: unit
