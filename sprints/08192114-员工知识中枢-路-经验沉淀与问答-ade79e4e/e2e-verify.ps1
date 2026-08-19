@@ -36,9 +36,13 @@ function Resolve-Psql {
   if ($candidates) { return $candidates[0].FullName }
   throw "FAIL: 找不到 psql.exe —— 设 PGBIN 或把 PostgreSQL bin 加进 PATH"
 }
+$script:LastPsqlOut = ''
 function Invoke-Psql([string]$conn, [string[]]$psqlArgs) {
   $out = & $Psql $conn @psqlArgs 2>&1 | Out-String
-  return $out.Trim()
+  # 留一份原文：失败时不打出 psql 到底说了什么，排查就只剩"应用失败"四个字，
+  # 得再跑一轮 CI 才能看见真正的错误行。
+  $script:LastPsqlOut = $out.Trim()
+  return $script:LastPsqlOut
 }
 
 $Psql = Resolve-Psql
@@ -91,8 +95,14 @@ try {
   # public.learnings 属 cecelia repo，不在本仓 migrations；缺表时用本 sprint committed fixture 建
   $ledger = Invoke-Psql $PgUrl @("-t", "-A", "-q", "-c", "SELECT to_regclass('public.learnings')")
   if (-not $ledger) {
-    Invoke-Psql $PgUrl @("-v", "ON_ERROR_STOP=1", "-q", "-f", "$scriptDir\fixtures\learnings-ledger.sql") | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "FAIL: 账本 fixture DDL 应用失败" }
+    # 先把 fixture 拷到纯 ASCII 临时路径再喂给 psql：本 sprint 目录名含中文，
+    # Windows 上 psql -f 的路径要经过控制台代码页转换，非 ASCII 路径会打不开文件。
+    $fixtureSrc = Join-Path $scriptDir "fixtures\learnings-ledger.sql"
+    if (-not (Test-Path $fixtureSrc)) { throw "FAIL: 账本 fixture 不存在 $fixtureSrc" }
+    $fixtureTmp = Join-Path ([System.IO.Path]::GetTempPath()) "kh-learnings-ledger.sql"
+    Copy-Item $fixtureSrc $fixtureTmp -Force
+    Invoke-Psql $PgUrl @("-v", "ON_ERROR_STOP=1", "-q", "-f", $fixtureTmp) | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "FAIL: 账本 fixture DDL 应用失败 (exit=$LASTEXITCODE)`n$script:LastPsqlOut" }
     $ledger = Invoke-Psql $PgUrl @("-t", "-A", "-q", "-c", "SELECT to_regclass('public.learnings')")
   }
   if (-not $ledger) { throw "FAIL: public.learnings 不存在且 fixture 未建成 — 录入链路无处可写" }
