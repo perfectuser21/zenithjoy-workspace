@@ -208,7 +208,12 @@ sleep 6
 # 三台对照：小粉 3/3、小黄 3/3、小白 3/0。
 # 唯一可信判据是 dumpsys accessibility 的 Bound services —— 它只列真正跑起来的服务。
 ACC_ENABLED=$("$ADB" -s "$DEV" shell settings get secure enabled_accessibility_services 2>/dev/null | tr -d '\r')
-ACC_BOUND=$("$ADB" -s "$DEV" shell "dumpsys accessibility" 2>/dev/null | tr -d '\r' \
+# adb 本身失败(设备掉线/USB 抖动)必须与「服务真没绑定」区分开——前者是环境问题(envfail)，
+# 后者才是设备就绪缺陷。混在一起会把一次 adb 抖动误报成产品红（仓库既有 envfail/fail 分级纪律）。
+ACC_DUMP=$("$ADB" -s "$DEV" shell "dumpsys accessibility" 2>/dev/null | tr -d '\r') \
+  || envfail "adb dumpsys accessibility 执行失败(设备 $DEV 掉线?)——环境不可达，非设备就绪缺陷"
+[ -n "$ACC_DUMP" ] || envfail "adb dumpsys accessibility 返回空(设备 $DEV 掉线?)——环境不可达，非设备就绪缺陷"
+ACC_BOUND=$(printf '%s' "$ACC_DUMP" \
   | awk '/Bound services:/,/Crashed services:/' \
   | grep -oE 'com\.zenithjoy\.agent[a-z.]*/[a-zA-Z.]*Service' | sort -u | wc -l | tr -d ' ')
 if [ "${ACC_BOUND:-0}" -ge 3 ]; then
@@ -322,12 +327,21 @@ esac
 # pending-collect-tasks 只返回 pending 状态：任务被拉走标 running 后若未执行成功，
 # 后续轮询再也看不见它、永久卡死，并占住该 agent 的处理位。0819 清掉 13 条僵尸任务
 # （最早卡了 8 小时），小白三次被这类任务堵住导致新任务全程 pending。
-STALE=$(curl -fsSk -m 10 "$API_BASE/api/acquisition/collect-tasks?status=running&limit=50" \
-  -H "X-Tenant-Id: $TENANT" 2>/dev/null | jq -r '[.data.tasks[]? // empty] | length' 2>/dev/null || echo 0)
-if [ "${STALE:-0}" -gt 5 ]; then
-  echo "  ⚠️ [就绪] 该租户有 ${STALE} 个 running 任务，可能有僵尸堆积（0819 曾清 13 条，最早卡 8 小时）"
+# 阈值可用 SMOKE_STALE_RUNNING_MAX 覆盖：不同租户/机队规模的正常在跑数不同，硬编码会误报。
+STALE_MAX="${SMOKE_STALE_RUNNING_MAX:-5}"
+if STALE_RAW=$(curl -fsSk -m 10 "$API_BASE/api/acquisition/collect-tasks?status=running&limit=50" \
+     -H "X-Tenant-Id: $TENANT" 2>/dev/null); then
+  STALE=$(printf '%s' "$STALE_RAW" | jq -r '[.data.tasks[]? // empty] | length' 2>/dev/null || echo "")
 else
-  ok "队列无明显僵尸堆积(running=${STALE:-0})"
+  # curl 失败不等于「没有僵尸」——不能静默当 0 放行，明确降级为提示（API 不可达属环境问题，
+  # 此处不 envfail 中断，因为主链路后面还会真正调 API，那里失败会给出更准确的诊断）
+  STALE=""
+  echo "  ⚠️ [就绪] 僵尸任务检查跳过：collect-tasks 查询失败(API 暂不可达)"
+fi
+if [ -n "$STALE" ] && [ "$STALE" -gt "$STALE_MAX" ]; then
+  echo "  ⚠️ [就绪] 该租户有 ${STALE} 个 running 任务(阈值 ${STALE_MAX})，可能有僵尸堆积（0819 曾清 13 条，最早卡 8 小时）"
+elif [ -n "$STALE" ]; then
+  ok "队列无明显僵尸堆积(running=${STALE}/阈值${STALE_MAX})"
 fi
 
 # ── 2. 派"装修"任务(collect/start) ───────────────────────────────────
