@@ -9,6 +9,12 @@
 
 ---
 
+## GP-Anchor
+
+line11/knowledge_experience_qa#step1
+
+---
+
 ## 已知约束
 
 ### [仓库实测] 本 sprint 起草前实测到的既有事实（决定合同形状，非猜测）
