@@ -36,6 +36,9 @@ import {
   type SubmitResultItem,
 } from '../services/acceptance';
 import { fetchWorkbenchSummary, submitWorkbenchFeedback } from '../services/workbench';
+import { isDirectoryConfigured, isStaffDeclared, resolveStaffOrg } from '../staff-directory';
+import { issueStaffSession } from '../staff-session';
+import pool from '../db/connection';
 
 const router = Router();
 // 登录端点身份未知，按来源 IP 限流（不能按 tenant/user，此时还没有）：
@@ -56,7 +59,9 @@ function deriveSkillName(originalname: string): string {
 }
 
 // ─── 飞书登录（公开路由，不受 staffGuard 保护 —— 登录前谈不上"已登录"）───────
-const FEISHU_API_BASE = process.env.FEISHU_API_BASE ?? 'https://open.feishu.cn';
+// 每次调用现读 env：测试与 smoke 会在进程起来之后再把上游指向假飞书，
+// 模块加载那一刻取值会把它们全部锁死在真 open.feishu.cn 上。
+const feishuApiBase = (): string => process.env.FEISHU_API_BASE ?? 'https://open.feishu.cn';
 
 function parseStaffEmailsForLogin(): string[] {
   const raw = process.env.STAFF_EMAILS ?? '';
@@ -89,7 +94,7 @@ interface FeishuUserInfoResp {
 
 async function fetchFeishuAppAccessToken(appId: string, appSecret: string): Promise<string> {
   const resp = await axios.post<FeishuAppAccessTokenResp>(
-    `${FEISHU_API_BASE}/open-apis/auth/v3/app_access_token/internal`,
+    `${feishuApiBase()}/open-apis/auth/v3/app_access_token/internal`,
     { app_id: appId, app_secret: appSecret },
     { headers: { 'Content-Type': 'application/json' }, timeout: 10000 }
   );
@@ -105,7 +110,7 @@ async function fetchFeishuUserByCode(
   code: string
 ): Promise<{ openId: string; name: string; email: string; accessToken: string }> {
   const resp = await axios.post<FeishuUserInfoResp>(
-    `${FEISHU_API_BASE}/open-apis/authen/v1/access_token`,
+    `${feishuApiBase()}/open-apis/authen/v1/access_token`,
     { grant_type: 'authorization_code', code },
     {
       headers: {
@@ -151,13 +156,53 @@ router.post('/feishu-login', feishuLoginRateLimit, async (req, res): Promise<voi
     const openIdOk = staffOpenIds.includes(feishuUser.openId);
     const emailOk = feishuUser.email !== '' && staffEmails.includes(feishuUser.email);
 
-    if (!openIdOk && !emailOk) {
+    // 员工目录（分组声明）配了才谈得上归属与会话；没配 = 知识中枢未启用，
+    // 本端点保持既有行为一字不变，免得存量部署一升级就全体登不进来。
+    const directoryOn = isDirectoryConfigured(process.env);
+
+    // 「是不是员工」看整本员工目录（扁平名单 ∪ 所有企业分组），不能只看扁平名单：
+    // A30-1a 要求扁平名单恰好等于主企业那一组，非主企业的员工按定义不在里面。
+    if (!isStaffDeclared(process.env, feishuUser.openId, feishuUser.email)) {
       console.warn(`[feishu-login] 拒绝: openId=${feishuUser.openId} email=${feishuUser.email || '(空)'} 均不在白名单`);
       res.status(403).json({ success: false, error: '该飞书账号不在员工白名单内' });
       return;
     }
 
-    console.log(`[feishu-login] 登录成功: openId=${feishuUser.openId}${emailOk ? ` email=${feishuUser.email}` : ''}`);
+    let orgKey = '(目录未配置)';
+    if (directoryOn) {
+      // 归属只认员工目录里的显式声明。声明缺失 = 无归属，直接拒绝：不建 user、不签会话、
+      // 不写成员行。这里若给个默认组织兜底，这名员工会安静地落进别人家的经验池。
+      const assignment = resolveStaffOrg(process.env, feishuUser.openId, feishuUser.email);
+      if (!assignment) {
+        console.warn(`[feishu-login] 拒绝: openId=${feishuUser.openId} 在员工目录中无企业归属声明`);
+        res.status(403).json({
+          success: false,
+          data: null,
+          error: { code: 'NO_ORG_ASSIGNMENT', message: '你的账号未在员工目录中声明企业归属' },
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+      orgKey = assignment.orgKey;
+
+      // 入驻到**声明的**那家企业。登录只补成员行，不新建租户——
+      // 自动建租户会让每个新员工各自落进一个 Personal-xxx 的独立组织，跨企业隔离看着是绿的，
+      // 实际是每个人都被隔离在自己的孤岛里，谁也看不到同事沉淀的经验。
+      await pool.query(
+        `INSERT INTO zenithjoy.tenant_members (tenant_id, feishu_user_id, role)
+         VALUES ($1::uuid, $2, 'member') ON CONFLICT DO NOTHING`,
+        [assignment.tenantId, feishuUser.openId]
+      );
+      await issueStaffSession(res, {
+        openId: feishuUser.openId,
+        name: feishuUser.name,
+        email: feishuUser.email,
+      });
+    }
+
+    console.log(
+      `[feishu-login] 登录成功: openId=${feishuUser.openId} org=${orgKey}${emailOk ? ` email=${feishuUser.email}` : ''}`
+    );
     res.json({
       success: true,
       user: {
