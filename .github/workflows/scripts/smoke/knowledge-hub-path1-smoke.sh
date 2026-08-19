@@ -89,6 +89,20 @@ NULLABLE=$(psql_q "SELECT is_nullable FROM information_schema.columns WHERE tabl
 [ "$NULLABLE" = "NO" ] || fail "投影表 org_id 未 NOT NULL（got=${NULLABLE}）"
 ok "投影表就位且 org_id NOT NULL"
 
+# Cecelia 账本 public.learnings 属 cecelia repo，**不在本仓 migrations 里**，CI 的库不保证有它
+# （合同「未覆盖真实链路清单」#4 已登记）。缺表时用本 sprint committed 的 fixture 建。
+# 不建的话录入会正确地回 LEDGER_UNREACHABLE，整条业务链无处可写。
+LEDGER=$(psql_q "SELECT to_regclass('public.learnings')")
+if [ -z "$LEDGER" ]; then
+  echo "  public.learnings 不存在，应用 sprint fixture 建表"
+  psql "$PGURL" -v ON_ERROR_STOP=1 -q \
+    -f "sprints/08192114-员工知识中枢-路-经验沉淀与问答-ade79e4e/fixtures/learnings-ledger.sql" >/dev/null \
+    || fail "账本 fixture DDL 应用失败"
+  LEDGER=$(psql_q "SELECT to_regclass('public.learnings')")
+fi
+[ -n "$LEDGER" ] || fail "public.learnings 不存在且 fixture 未建成 —— 录入链路无处可写"
+ok "Cecelia 账本表可达 ${LEDGER}"
+
 SFX=$(date +%s)$RANDOM
 ORGA_TENANT_ID=$(psql_q "INSERT INTO zenithjoy.tenants (name, plan) VALUES ('KH-SMOKE-A-$SFX','free') RETURNING id")
 ORGB_TENANT_ID=$(psql_q "INSERT INTO zenithjoy.tenants (name, plan) VALUES ('KH-SMOKE-B-$SFX','free') RETURNING id")
@@ -194,6 +208,9 @@ C401=$(curl -s -o /tmp/kh-smoke-401.json -w '%{http_code}' "http://localhost:$AP
 [ "$C401" = "401" ] || fail "无会话期望 401 得到 $C401"
 grep -q 'SESSION_REQUIRED' /tmp/kh-smoke-401.json || fail "401 错误码不符"
 LEDGER_BEFORE=$(psql_q "SELECT count(*) FROM public.learnings")
+# 计数必须是个数字：查不动账本时它是空串，前后一比"都空"就假绿了——
+# 「伪造头没写进账本」会在账本根本不存在的情况下自动成立。
+case "$LEDGER_BEFORE" in ''|*[!0-9]*) fail "账本计数不可读（got='${LEDGER_BEFORE}'），零新增断言会假绿";; esac
 CFORGE=$(curl -s -o /dev/null -w '%{http_code}' \
   -H "X-User-Email: $ORGA_EMAIL" -H "X-Feishu-User-Id: $ORGA_OPENID" \
   -X POST "http://localhost:$API_PORT/api/staff/knowledge/entries" \
