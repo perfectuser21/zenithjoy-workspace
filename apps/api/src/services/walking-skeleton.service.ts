@@ -15,6 +15,7 @@
 
 import crypto from 'node:crypto';
 import pool from '../db/connection';
+import { resolveAgentIdentityKey } from './agent-identity';
 import { readInstallPackManifest } from './install-pack-manifest';
 
 /** 标准 UUID（含 nil UUID）格式校验——心跳 agentUuid 精确路径入库前必须先过这一关。 */
@@ -328,22 +329,36 @@ export async function upsertAgentByHeartbeat(args: {
   // 查不到已存在的行，误判"新机器"走 INSERT，直接撞唯一约束抛出未捕获异常，冒泡成
   // 路由层裸 500（真机验证 2026-07-16 复现：测试租户挂 2 个 license，同一 xian-rog
   // 真机换 license 后心跳报 duplicate key value violates unique constraint）。
-  const existing = await pool.query<AgentRow>(
-    `SELECT id, tenant_id, agent_id, hostname, version, license_id,
-            bound_folder_path, last_heartbeat_at, status, last_seen
-       FROM zenithjoy.agents
-      WHERE tenant_id = $1
-        AND ((hostname IS NULL AND $2::text IS NULL) OR hostname = $2)
-      ORDER BY created_at ASC
-      LIMIT 1`,
-    [tenantId, hostname]
-  );
+  // 2026-08-19：去重维度从 hostname 改为 machine_id（机器指纹）。
+  // 安卓端上报的 hostname 是 android.os.Build.MODEL——【机型名】不是机器名，同机型的两台
+  // 物理手机（实证：小黄与四号机同为荣耀 MAA-AN00）会被认成同一台，共用一行、共用 agent_id，
+  // 派任务时哪台真正执行不确定。machine_id 早随心跳上报（上面刷 license_machines 用的就是它），
+  // 只是一直没拿来做 agents 的身份键。
+  // machine_id 缺失时回退 hostname，保住桌面 agent 与旧版安卓 agent（不破坏 2026-06-27 防裂行修复）；
+  // 两者皆空 → 不复用任何既有行，直接走下面的 INSERT，避免所有匿名设备坍缩成同一行。
+  const identity = resolveAgentIdentityKey({ machineId, hostname });
+  const existing =
+    identity.by === 'none'
+      ? { rows: [] as AgentRow[] }
+      : await pool.query<AgentRow>(
+          `SELECT id, tenant_id, agent_id, hostname, version, license_id,
+                  bound_folder_path, last_heartbeat_at, status, last_seen
+             FROM zenithjoy.agents
+            WHERE tenant_id = $1
+              AND ${identity.by === 'machine_id' ? 'machine_id = $2' : "((machine_id IS NULL OR machine_id = '') AND hostname = $2)"}
+            ORDER BY created_at ASC
+            LIMIT 1`,
+          [tenantId, identity.value]
+        );
 
   if (existing.rows[0]) {
     const row = existing.rows[0];
+    // 老行是 hostname 时代建的、没有指纹：本次带了 machine_id 就补写上，
+    // 下一次心跳即可走精确身份，不必等设备重装。
     const updated = await pool.query<AgentRow>(
       `UPDATE zenithjoy.agents
-          SET version = COALESCE($1, version),
+          SET machine_id = COALESCE(NULLIF($5::text, ''), machine_id),
+              version = COALESCE($1, version),
               os_type = COALESCE($3, os_type),
               capabilities = COALESCE($4, capabilities),
               last_heartbeat_at = now(),
@@ -353,7 +368,8 @@ export async function upsertAgentByHeartbeat(args: {
         WHERE id = $2
         RETURNING id, tenant_id, agent_id, hostname, version, license_id,
                   bound_folder_path, last_heartbeat_at, status, last_seen`,
-      [version, row.id, osType ?? null, capabilitiesOverride]
+      [version, row.id, osType ?? null, capabilitiesOverride,
+       identity.by === 'machine_id' ? identity.value : null]
     );
     // 如果 license 还没有 pinned_agent，把这台设为 pinned
     await pool.query(
@@ -368,12 +384,13 @@ export async function upsertAgentByHeartbeat(args: {
   const agentText = `ws1-${crypto.randomBytes(8).toString('hex')}`;
   const inserted = await pool.query<AgentRow>(
     `INSERT INTO zenithjoy.agents
-       (tenant_id, license_id, agent_id, hostname, version, os_type, capabilities, status,
+       (tenant_id, license_id, agent_id, hostname, machine_id, version, os_type, capabilities, status,
         last_heartbeat_at, last_seen)
-     VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, ARRAY['douyin']::text[]), 'online', now(), now())
+     VALUES ($1, $2, $3, $4, $8, $5, $6, COALESCE($7, ARRAY['douyin']::text[]), 'online', now(), now())
      RETURNING id, tenant_id, agent_id, hostname, version, license_id,
                bound_folder_path, last_heartbeat_at, status, last_seen`,
-    [tenantId, licenseId, agentText, hostname, version, osType ?? null, capabilitiesOverride]
+    [tenantId, licenseId, agentText, hostname, version, osType ?? null, capabilitiesOverride,
+     identity.by === 'machine_id' ? identity.value : null]
   );
   // 新机器首次连接，如果 license 还没有 pinned_agent，自动 pin 这台
   await pool.query(
