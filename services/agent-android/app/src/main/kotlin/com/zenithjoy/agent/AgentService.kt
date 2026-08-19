@@ -23,6 +23,7 @@ import com.zenithjoy.agent.collect.CollectReporter
 import com.zenithjoy.agent.collect.AcquisitionCancellationCoordinator
 import com.zenithjoy.agent.collect.CollectResult
 import com.zenithjoy.agent.collect.CollectTaskQueue
+import com.zenithjoy.agent.onboarding.checkSelfAccessibility
 import com.zenithjoy.agent.collect.CommentEntry
 import com.zenithjoy.agent.collect.DmOutreachRateLimiter
 import com.zenithjoy.agent.collect.DouyinCollectService
@@ -193,18 +194,13 @@ class AgentService : Service() {
         // 服务，能做的是让这个状态从"静默"变成"显式可观测"：启动时检查系统已启用的无障碍
         // 服务列表，缺哪个就把哪个记进错误日志，附带手动恢复命令，不再靠"广播发了没人收"
         // 这种隐蔽现象倒推排查。
-        val enabledAccessibilityRaw = android.provider.Settings.Secure.getString(
-            contentResolver, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-        )
-        val missingServices = missingAccessibilityServices(enabledAccessibilityRaw, REQUIRED_ACCESSIBILITY_SERVICES)
-        if (missingServices.isNotEmpty()) {
+        val accessibility = checkSelfAccessibility(this)
+        if (!accessibility.allBound) {
             android.util.Log.e(
                 TAG,
-                "无障碍服务未全部启用(force-stop 重启后常见现象)——以下服务不在系统已启用列表，" +
-                    "对应功能(采集/私信/账号扫描)将静默失效直到手动或 adb 重新开启: $missingServices\n" +
-                    "恢复命令: adb shell settings put secure enabled_accessibility_services " +
-                    "${REQUIRED_ACCESSIBILITY_SERVICES.joinToString(":")} " +
-                    "&& adb shell settings put secure accessibility_enabled 1",
+                "无障碍服务未全部绑定到本进程(packageName=$packageName)——采集/私信/账号扫描的任务广播" +
+                    "会照常发出但没有任何服务在监听，agent 心跳仍报 online，功能却静默全失效。\n" +
+                    accessibility.describe(),
             )
         }
 
@@ -598,9 +594,49 @@ class AgentService : Service() {
 
     /** 从 Job 队列取下一个任务并派发执行（顺序执行，当前任务完成后才取下一个）。 */
     private fun processNextQueuedTask() {
-        if (collectTaskQueue.currentJob != null) return // 已有任务在跑
-        val next = collectTaskQueue.pollNext() ?: return
+        reclaimStaleCurrentJobIfNeeded()
+
+        val busy = collectTaskQueue.currentJob
+        if (busy != null) {
+            // 真机确诊(2026-08-19 小白)：这条早退此前是**静默**的，队列被僵尸 job 堵死后
+            // 后续任务只入队不派发、外部零迹象，烧掉一整天才定位。必须留痕。
+            android.util.Log.i(
+                TAG,
+                "queue: 暂不派发——taskId=${busy.taskId} 仍占用队列(accepted=${collectTaskQueue.currentAccepted} 排队中=${collectTaskQueue.size()})",
+            )
+            return
+        }
+        val next = collectTaskQueue.pollNext()
+        if (next == null) {
+            android.util.Log.i(TAG, "queue: 无待派发任务")
+            return
+        }
         dispatchJob(next)
+    }
+
+    /**
+     * 僵尸 currentJob 兜底回收 + 诚实上报。
+     *
+     * ack 看门狗只管"派发出去没人接"，`currentAccepted = true` 之后它主动放弃；
+     * 「接了但没跑完」因此没有任何超时保护（见 CollectTaskQueue.reclaimStaleCurrent 注释）。
+     * 回收后必须主动上报 AGENT_QUEUE_STALLED——不能静默丢弃干等服务端 10 分钟后
+     * sweep-timeouts 收尸，那 10 分钟里中台以为设备在干活，实际它是哑的。
+     */
+    private fun reclaimStaleCurrentJobIfNeeded() {
+        val stale = collectTaskQueue.reclaimStaleCurrent(STALE_JOB_TIMEOUT_MS) ?: return
+        android.util.Log.e(
+            TAG,
+            "queue: 强制回收僵尸任务 taskId=${stale.taskId}——超过 ${STALE_JOB_TIMEOUT_MS}ms 未结束，" +
+                "队列此前处于死锁状态(后续任务只入队不派发)",
+        )
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            reporter?.reportVideos(
+                taskId = stale.taskId,
+                videos = emptyList(),
+                searchResultEmpty = false,
+                errorCode = "AGENT_QUEUE_STALLED",
+            )
+        }
     }
 
     private fun dispatchJob(next: CollectJob) {
@@ -1038,25 +1074,6 @@ class AgentService : Service() {
         internal fun shouldSkipDuplicateDmTask(taskId: String, alreadySeenTaskIds: Set<String>): Boolean =
             taskId in alreadySeenTaskIds
 
-        /**
-         * 三个无障碍服务在 `Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES` 里的组件标识
-         * （`pkg/.ClassName` 格式，真机实测格式，见 AndroidManifest.xml 对应 `<service>` 声明）。
-         */
-        val REQUIRED_ACCESSIBILITY_SERVICES = listOf(
-            "com.zenithjoy.agent/.collect.DouyinCollectService",
-            "com.zenithjoy.agent/.collect.DouyinDmOutreachService",
-            "com.zenithjoy.agent/.account.DeviceAccountScanService",
-        )
-
-        /**
-         * 判定哪些必需的无障碍服务不在系统已启用列表里。
-         * 真机复现(2026-07-17)：force-stop 重启后 `enabledServicesRaw` 会变成 null
-         * （系统级整体关闭），此时全部必需服务都算缺失。
-         */
-        internal fun missingAccessibilityServices(enabledServicesRaw: String?, requiredServices: List<String>): List<String> {
-            val enabled = enabledServicesRaw?.split(":")?.toSet() ?: emptySet()
-            return requiredServices.filterNot { it in enabled }
-        }
 
         /**
          * dm_outreach 派单 payload → 搜索目标抖音号（Seg3 方案 B′）。
@@ -1120,6 +1137,14 @@ class AgentService : Service() {
             }
 
         // busy 拒绝后的 dispatch 重试参数：覆盖一个最长 Stage 任务的执行时间窗
+        /**
+         * currentJob 僵尸回收阈值。必须 > ack 看门狗最长重试窗口
+         * (DISPATCH_RETRY_DELAY_MS × MAX_DISPATCH_RETRIES = 5 分钟，否则会误杀还在正常重试的 job)，
+         * 又必须 < 服务端 sweep-timeouts 的 10 分钟 stale-running 阈值
+         * (否则设备永远赶不上在中台收尸前诚实上报)。
+         */
+        internal const val STALE_JOB_TIMEOUT_MS = 480_000L
+
         private const val DISPATCH_RETRY_DELAY_MS = 30_000L
         private const val MAX_DISPATCH_RETRIES = 10
 

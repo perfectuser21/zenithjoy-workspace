@@ -15,7 +15,8 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import com.zenithjoy.agent.onboarding.collectServiceEnabled
+import com.zenithjoy.agent.onboarding.checkSelfAccessibility
+import com.zenithjoy.agent.onboarding.collectServiceBound
 import com.zenithjoy.agent.onboarding.parseBindDeepLink
 
 /**
@@ -89,7 +90,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun accessibilityBanner(): android.view.View {
-        val enabled = collectServiceEnabled(this)
+        val enabled = collectServiceBound(this)
         return if (enabled) {
             TextView(this).apply { text = "无障碍 ✅ 已开启" }
         } else {
@@ -206,7 +207,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 appendLine("注册状态: $registerStatus")
                 appendLine("API: ${config.apiUrl}")
-                appendLine("无障碍: ${if (collectServiceEnabled(this@MainActivity)) "已开启" else "未开启"}")
+                appendLine("无障碍: ${checkSelfAccessibility(this@MainActivity).describe()}")
             }
         }
         val startBtn = Button(this).apply { text = "重启 Agent 服务" }

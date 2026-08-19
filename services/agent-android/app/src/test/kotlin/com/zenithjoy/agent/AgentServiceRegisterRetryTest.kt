@@ -2,6 +2,7 @@ package com.zenithjoy.agent
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import java.io.File
 import org.junit.Test
 
 /**
@@ -39,5 +40,39 @@ class AgentServiceRegisterRetryTest {
         assertFalse(
             AgentService.shouldRetryRegister(isRegistered = true, retryInFlight = true)
         )
+    }
+
+    @Test
+    fun `注册重试抢先时也必须在构造请求前补齐机器身份`() {
+        val source = agentServiceSource()
+        val registerStart = source.indexOf("private suspend fun performRegister()")
+        val registerEnd = source.indexOf("\n    private ", registerStart + 1).let {
+            if (it == -1) source.length else it
+        }
+        val registerBody = source.substring(registerStart, registerEnd)
+
+        val lockIndex = registerBody.indexOf("registerCallInFlight.compareAndSet(false, true)")
+        val identityIndex = registerBody.indexOf("ensureRegistrationIdentity()")
+        val requestIndex = registerBody.indexOf("AgentRegistrar.RegisterRequest(")
+
+        assertTrue("performRegister must still own the single-flight lock", lockIndex >= 0)
+        assertTrue(
+            "the winning register call must initialize identity after it owns the lock",
+            identityIndex > lockIndex,
+        )
+        assertTrue(
+            "identity must be initialized before the HTTP register request is constructed",
+            requestIndex > identityIndex,
+        )
+    }
+
+    private fun agentServiceSource(): String {
+        val candidates = listOf(
+            File("src/main/kotlin/com/zenithjoy/agent/AgentService.kt"),
+            File("app/src/main/kotlin/com/zenithjoy/agent/AgentService.kt"),
+        )
+        val file = candidates.firstOrNull { it.exists() }
+            ?: error("AgentService.kt not found in ${candidates.map { it.absolutePath }}")
+        return file.readText()
     }
 }
