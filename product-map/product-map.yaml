@@ -74,6 +74,27 @@ golden_paths:
     smoke_files:
       - .github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh
 
+  # 工厂 · F1 开发闭环（cecelia kernel harness 2.0 自身的 Golden Path，journey e6f803f2）。
+  # 2026-08-19 决策 109dd8eb：cecelia 流水线路径的修复必须锚到本 GP 的某一步，
+  # 守卫落在 tests/gp/f1/step<N>-*.test.* 这条边上（CI lint-gp-anchor-artifact 产物闸）。
+  # 此前 F1 只在 cecelia Brain DB 里有、不在本 map 里 → hook 写不出合法锚 → 人人 none(infra)。
+  - id: f1_dev_loop
+    app_id: staff_app
+    line_id: line00
+    name: 工厂 · F1 开发闭环
+    status: active
+    steps:
+      - id: step1
+        name: 接单进车间即分档
+      - id: step2
+        name: 合同即法律
+      - id: step3
+        name: 造完真验
+      - id: step4
+        name: 交付有回执
+      - id: step5
+        name: kernel-contract-a20
+
   # 客户线GP：业务步骤原样从 .claude/CLAUDE.md 迁移（用户拍板：刀1不做业务审计）。
   # 注：smoke内部实测步数与此处业务step数不对齐是已知记录，不代表数据错误——
   # product-map记业务步骤，smoke脚本内部粒度是实现细节（设计文档非目标②）。

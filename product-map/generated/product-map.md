@@ -1,6 +1,6 @@
 # Product Map
 
-<!-- digest: cf950beee56d2e8e194dbe61cf625a380d17000ac25a3f13f049773f1e060e80 -->
+<!-- digest: 50366893e78d50b9b4b09f7007f6ef4e3db0e7cfc5dfb4e9d04ad6e5b24edc7a -->
 
 > 此文件由 `npm run product-map:generate` 自动生成，请勿手工编辑。
 > 唯一手写源：`product-map/product-map.yaml`
@@ -45,6 +45,7 @@
 | video_editing | customer_app | line05 | active | — | .github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh |
 | viral_video_remake | customer_app | line07 | active | — | .github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh |
 | ability_acceptance | staff_app | line00 | active | — | — |
+| f1_dev_loop | staff_app | line00 | active | step1:接单进车间即分档<br>step2:合同即法律<br>step3:造完真验<br>step4:交付有回执<br>step5:kernel-contract-a20 | — |
 | gp_anchor_enforcement | staff_app | line00 | active | — | .github/workflows/scripts/smoke/golden-path-f1-anchor-smoke.sh |
 | line_health | staff_app | line00 | active | — | — |
 | skill_acceptance | staff_app | line00 | deprecated | — | — |
