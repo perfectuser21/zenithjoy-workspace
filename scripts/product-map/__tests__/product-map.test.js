@@ -47,10 +47,15 @@ test('T2: validateSchema — 缺失 apps 字段时返回非空 errors', () => {
 
 // ─── Test 3: 种子分类精确性 ───────────────────────────────────────────────────
 
-test('T3: staff_app/line00 精确 4 个 GP（含gp_anchor_enforcement），skill_acceptance已deprecated，ability_acceptance status=active（2026-07-31 决策fc7b5dc0覆盖07-29：验收收回自家前端直连Brain；2026-08-12 本sprint收敛skill_acceptance→deprecated，判定点见contract-draft.md）', async () => {
+test('T3: staff_app/line00 精确 5 个 GP（含gp_anchor_enforcement、f1_dev_loop），skill_acceptance已deprecated，ability_acceptance status=active（2026-07-31 决策fc7b5dc0覆盖07-29：验收收回自家前端直连Brain；2026-08-12 本sprint收敛skill_acceptance→deprecated，判定点见contract-draft.md）', async () => {
   const { map } = await loadAndValidateProductMap();
   const line00Gps = map.golden_paths.filter(g => g.app_id === 'staff_app' && g.line_id === 'line00');
-  assert.deepEqual(line00Gps.map(g => g.id).sort(), ['ability_acceptance', 'gp_anchor_enforcement', 'line_health', 'skill_acceptance']);
+  // 2026-08-19 决策 109dd8eb（cecelia）：工厂 F1 开发闭环注册为 line00/f1_dev_loop，
+  // cecelia 流水线修复必须锚到它的某一步（此前 F1 不在 map → hook 写不出合法锚 → 人人 none(infra)）。
+  assert.deepEqual(line00Gps.map(g => g.id).sort(), ['ability_acceptance', 'f1_dev_loop', 'gp_anchor_enforcement', 'line_health', 'skill_acceptance']);
+  const f1 = line00Gps.find(g => g.id === 'f1_dev_loop');
+  assert.equal(f1.status, 'active');
+  assert.equal(f1.steps.length, 5, 'F1 五步：接单进车间即分档/合同即法律/造完真验/交付有回执/kernel-contract-a20');
 
   const abilityGp = line00Gps.find(g => g.id === 'ability_acceptance');
   assert.equal(abilityGp.status, 'active', 'ability_acceptance 2026-07-31 重新实现（Staff Hub 直连 Brain），须为active');
