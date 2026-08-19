@@ -26,22 +26,26 @@ bad() { FAIL=$((FAIL+1)); echo "  ❌ $1"; }
 # 取「等搜索输入框」那段 awaitNode 的 finder 块（inputOutcome 起、到闭合行）
 INPUT_BLOCK=$(awk '/val inputOutcome = awaitNode/{f=1} f{print} f&&/^        \}$/{exit}' "$SRC")
 
-# 1. finder 必须廉价：轮询体内不得出现无界 findFirstEditText
-if grep -q 'findFirstEditText' <<< "$INPUT_BLOCK"; then
-  bad "等输入框的 finder 里含无界 findFirstEditText —— 每轮跨进程全树 BFS，采集链注释明令禁止"
+# 1. finder 必须廉价：findFirstEditText 本身不得是无界全树 BFS
+#    （它被两处 awaitNode 的 finder 调用，每轮都跑；getChild 是跨进程 binder）
+FET_BODY=$(awk '/private fun findFirstEditText/{f=1} f{print} f&&/^    \}$|firstOrNull/{exit}' "$SRC")
+if grep -qE 'while \(queue\.isNotEmpty\(\)\)' <<< "$FET_BODY"; then
+  bad "findFirstEditText 仍是无界 while 队列 BFS —— 每轮跨进程全树遍历，真机曾致协程两分钟无进展"
+elif grep -qE 'NodeTreeFlattener\.flattenDfs|MAX_NODES_PER_PROBE' <<< "$FET_BODY"; then
+  ok "findFirstEditText 用带上限的遍历"
 else
-  ok "等输入框的 finder 只走系统索引查询，廉价"
+  bad "findFirstEditText 既无 while BFS 也无上限工具 —— 无法确认其廉价性"
 fi
 
 # 2. 轮询等不到必须先做一次昂贵兜底，不能直接判死
-if grep -q 'findFirstEditText' "$SRC" && grep -qi '兜底' "$SRC" && ! grep -q 'findFirstEditText' <<< "$INPUT_BLOCK"; then
+if grep -qi '兜底' "$SRC" && grep -q 'rootInActiveWindow?.let { findFirstEditText' "$SRC"; then
   ok "轮询等不到时有一次性昂贵兜底再判死"
 else
   bad "轮询等不到直接 finishWithError —— 与采集链不一致(采集链靠 typeKeyword 兜底才成功)，真机 attempts=8 判死"
 fi
 
 # 3. 跨页面的等待不得用最短的页内控件档
-if grep -qE 'val inputOutcome = awaitNode\(AWAIT_WIDGET_ATTEMPTS' "$SRC"; then
+if awk '/点击后等搜索输入框真出现/{f=1} f&&/val inputOutcome = awaitNode/{print; exit}' "$SRC" | grep -q 'AWAIT_WIDGET_ATTEMPTS'; then
   bad "搜索输入框用 AWAIT_WIDGET_ATTEMPTS(4秒) —— 点搜索按钮会跳转页面，输入框是新页元素，档位给短了"
 else
   ok "搜索输入框未使用最短的页内控件档"
