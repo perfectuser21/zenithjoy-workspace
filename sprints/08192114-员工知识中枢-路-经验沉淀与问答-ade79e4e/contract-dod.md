@@ -171,15 +171,15 @@ target_environment: windows_cloud
 
 ## BEHAVIOR:E2E 条目（user_facing 专属，Mode B final-e2e 在 windows_cloud 跑）
 
-- [ ] [BEHAVIOR:E2E] 员工在真实浏览器走完 Golden Path：登录 → 录入 → 「最近沉淀」页看到本人这条带证据链接
-  Test: manual:bash -c 'D="sprints/08192114-员工知识中枢-路-经验沉淀与问答-ade79e4e"; test -f "$D/e2e-verify.ps1" || { echo "FAIL: 缺 e2e-verify.ps1"; exit 1; }; S="apps/staff-hub/e2e/knowledge-hub-path1.spec.ts"; test -f "$S" || { echo "FAIL: 缺 UI spec"; exit 1; }; grep -q "page.route(" "$S" && { echo "FAIL: spec 含 page.route（禁 stub）"; exit 1; }; for a in "knowledge-session-expired" "knowledge-submit" "toBeVisible" "toHaveAttribute" "page.request.get"; do grep -q "$a" "$S" || { echo "FAIL: spec 缺断言要素 $a"; exit 1; }; done; echo OK'
+- [ ] [BEHAVIOR:E2E] 员工在真实浏览器走完 Golden Path：登录 → 录入 → 「最近沉淀」页看到本人这条带证据链接（**真派发真跑 windows_cloud 车道**，不是静态 grep）
+  Test: manual:bash -c 'set -uo pipefail; D="sprints/08192114-员工知识中枢-路-经验沉淀与问答-ade79e4e"; BR=$(git rev-parse --abbrev-ref HEAD); gh workflow run e2e-windows.yml -f task_id="${TASK_ID:-dod-e2e}" -f sprint_dir="$D" -f pr_branch="$BR" || { echo "FAIL: 派发 e2e-windows.yml 失败"; exit 1; }; sleep 25; RID=$(gh run list --workflow=e2e-windows.yml --branch "$BR" --limit 1 --json databaseId -q ".[0].databaseId"); [ -n "$RID" ] || { echo "FAIL: 拿不到 run id"; exit 1; }; gh run watch "$RID" --exit-status >/dev/null || { echo "FAIL: e2e-windows run=$RID 未成功"; gh run view "$RID" --log-failed | tail -40; exit 1; }; gh run view "$RID" --json conclusion | jq -e ".conclusion == \"success\"" >/dev/null || { echo "FAIL: conclusion 非 success"; exit 1; }; L=$(gh run view "$RID" --log); echo "$L" | grep -q "KH-E2E screenshots-fresh: 3" || { echo "FAIL: 无三张本轮新截图的证明（mtime 闸未跑或未过）"; exit 1; }; UI=$(echo "$L" | grep -o "KH-E2E ui-entry-id=[0-9a-fA-F-]*" | tail -1 | cut -d= -f2); LG=$(echo "$L" | grep -o "KH-E2E ledger-verified entry_id=[0-9a-fA-F-]*" | tail -1 | cut -d= -f2); [ -n "$UI" ] || { echo "FAIL: 日志无 UI 可见条目 entry_id"; exit 1; }; [ "$UI" = "$LG" ] || { echo "FAIL: UI 可见条目与账本回读不是同一条 ui=$UI ledger=$LG"; exit 1; }; echo OK'
   期望: OK
   Screenshots:
     - 01-initial.png   期望：录入界面初始状态，三个输入框（触发条件 / 结论 / 证据链接）与提交按钮可见
     - 02-action.png    期望：提交后过渡状态，成功提示可见（或失败时带原因码文案，二者文案不同）
     - 03-result.png    期望：「最近沉淀」页出现本人刚提交那条，结论文字与证据链接可见且链接 href 等于提交值
   路径格式：sprints/08192114-员工知识中枢-路-经验沉淀与问答-ade79e4e/screenshots/<step>.png
-  期望：三张截图 LastWriteTime 均晚于 `e2e-verify.ps1` 启动时刻（防历史截图冒充，脚本内已断言）
+  期望：三张截图 LastWriteTime 均晚于 `e2e-verify.ps1` 启动时刻（防历史截图冒充）——该要求已 codify：ps1 逐张比对后打印 `KH-E2E screenshots-fresh: 3`，上方 Test 在 run 日志里断言该行存在，缺一张即整段红
 
 ---
 

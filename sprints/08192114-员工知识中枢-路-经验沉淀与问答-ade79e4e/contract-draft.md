@@ -161,6 +161,7 @@ credentials: 'include'   ← 会话 cookie 唯一身份来源
 | 1 | **飞书 OAuth 上游**（`open.feishu.cn` 的 `app_access_token/internal` 与 `authen/v1/access_token`）由本地假上游 `_smoke-fake-feishu` 顶替 | CI/windows_cloud runner 拿不到真实飞书授权 code（一次性、需真人点授权页），且真 `FEISHU_APP_SECRET` 不下发到 GHA | 主理人在 staging（`deploy-staff-hub-staging.yml` 推上后）用真飞书账号真登录一次，人工确认 Set-Cookie 三属性齐全 + `psql` 反查成员行挂声明组织；本 sprint 交付后、prod_hk 人工闸放行前完成 |
 | 2 | **A31 企业B 双向断言**（企业B 真实会话调 16 个既有端点 403 命中率 100%）| PRD 范围限定明确排除：依赖两家企业真实测试账号，本 sprint 只保证既有调用点身份头不被摘除 | 后续 sprint（GP 合同 A31）；本 sprint 以「16 端点计数 + 调用点身份头未摘除」两条静态断言做**前置保护**，防实现期把头全局摘掉 |
 | 3 | **生产环境 zenithjoy API 与 cecelia 账本同库假设**（C9）| 本地/CI 下 `DATABASE_NAME=cecelia` + `search_path=zenithjoy,public` 使 `public.learnings` 直连可达；生产 hk-vps 拓扑未在本 sprint 实测 | 由**运行时 ledger identity preflight**（判定点 J-A）在每次录入前真证明，preflight 不过即 503 拒写——即该假设在生产不成立时不会静默写错表，而是显性失败；生产实测由主理人在 staging/prod_hk 放行前完成 |
+| 4 | **windows_cloud 段的 `public.learnings` 表可能由本 sprint fixture DDL 建**（该表属 cecelia repo，不在本仓 migrations；runner 上缺表时 `e2e-verify.ps1` 应用 `<SPRINT_DIR>/fixtures/learnings-ledger.sql`）| GHA runner 的库不保证有 cecelia 账本表，缺表则 UI 段无处可写、整段跑不到断言 | fixture DDL 必须由 generator 用 `pg_dump -s -t public.learnings` 从**真 cecelia 账本**导出后 commit（不得手写猜列）；列形状的真验由**第一段 bash 在真 cecelia 库上**兜底——两段合看即覆盖：第一段验列形状与写入语义，第二段验 UI 终态 |
 
 ---
 
@@ -680,8 +681,12 @@ echo "→ 第二段 UI E2E 由 e2e-windows.yml 跑 $SPRINT_DIR/e2e-verify.ps1"
 
 由 `.github/workflows/e2e-windows.yml`（`workflow_dispatch`，入参 `task_id` / `sprint_dir=sprints/08192114-员工知识中枢-路-经验沉淀与问答-ade79e4e` / `pr_branch`）在 windows-latest 上执行。**禁止 `page.route()`**（既有 workflow 已内置该守卫），所有请求打真实 `apps/api`。
 
+**本段前置由 `e2e-verify.ps1` 自建，与第一段 bash 对称**（r1 反馈问题 1 的根因是本段缺前置）：`DATABASE_*` 五个离散变量（`apps/api/src/db/connection.ts:7-11` 只读这五个、**不读 `DATABASE_URL`**，C9 实测）、两家企业 `tenants` 行、员工目录分组 env 全套。**本 sprint 不改 `e2e-windows.yml`**（跨 sprint 共用壳；且 GHA 的 `services:` 只支持 Linux runner，windows-latest 上加 postgres service 不成立），前置一律在 ps1 内自建，任一步不成立即 `throw`，绝无空跑。
+
+**前端门禁与服务端会话如何共存**：`apps/staff-hub` 的 `isAuthenticated` 来自 `AuthContext`（客户端态，`App.tsx:47-53` 未登录时除 `/login/feishu` 外一律渲染 `LoginPage`）——它**只决定导航体验，不承担任何授权判定**；知识面的授权判定 100% 在服务端 `knowledgeAuthGuard`（只信会话 cookie）。因此 UI E2E 沿用本仓既有 staff-hub E2E 惯例 `VITE_SKIP_AUTH=true` 构建（见 `apps/staff-hub/playwright.config.ts` 头注释与 `sprints/07281207-*/e2e-verify.ps1`）把**前端门禁**这个变量固定掉，让**服务端会话**成为唯一变量：无服务端会话 → `knowledgeFetch` 收 401 → 页面渲染 `knowledge-session-expired`；有会话 → 列表可见。此举不改 `App.tsx` 的 `!isAuthenticated` 分支结构（与 r1 反馈问题 3 的结构冲突就此消除），`App.tsx` 的改动仅限**在已登录 shell 的 `Routes` 里注册 `/knowledge/new`、`/knowledge/recent` 两条路由 + 侧栏入口**，已列入「预期受影响文件」。
+
 ```powershell
-# e2e-verify.ps1 — 知识中枢路① 第一刀 UI E2E（windows-latest，真后端）
+# e2e-verify.ps1 — 知识中枢路① 第一刀 UI E2E（windows-latest，真后端 + 真 Postgres）
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
@@ -690,89 +695,188 @@ $ApiPort  = 3000
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot  = Resolve-Path "$scriptDir\..\.."
 $ScriptStart = Get-Date
+$StartIso = $ScriptStart.ToUniversalTime().ToString("o")   # 供 psql 时间窗用，避免在双引号 SQL 串里再嵌双引号
+$OrgA = $null; $OrgB = $null; $PgUrl = $null; $apiProc = $null; $viteProc = $null   # StrictMode 下 finally 要能安全读
+$OrgaOpenId = "ou_e2e_orga_member"; $OrgaEmail = "e2e-orga@zenithjoy.local"; $OrgbOpenId = "ou_e2e_orgb_member"
 
-# 1. 依赖
-$p = Start-Process cmd.exe -ArgumentList "/c npm.cmd ci --prefer-offline" -WorkingDirectory $repoRoot -Wait -PassThru -NoNewWindow
-if ($p.ExitCode -ne 0) { throw "FAIL: npm ci exit=$($p.ExitCode)" }
-$p = Start-Process cmd.exe -ArgumentList "/c npx.cmd playwright install chromium --with-deps" -WorkingDirectory "$repoRoot\apps\staff-hub" -Wait -PassThru -NoNewWindow
-if ($p.ExitCode -ne 0) { throw "FAIL: playwright install exit=$($p.ExitCode)" }
+# ── 0. 解析数据库连接 → DATABASE_* 五变量（apps/api 只认这五个）──
+$PgUrl = $env:E2E_DATABASE_URL
+if (-not $PgUrl) {
+  # 退到 windows runner 预装的 PostgreSQL（镜像自带，服务默认停）；两条路都不成立即 throw，不空跑
+  $svc = Get-Service -Name "postgresql*" -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $svc) { throw "FAIL: 既无 E2E_DATABASE_URL，runner 也无预装 PostgreSQL 服务 — 前置不成立" }
+  Set-Service -Name $svc.Name -StartupType Manual
+  Start-Service -Name $svc.Name
+  $u = if ($env:PGUSER) { $env:PGUSER } else { "postgres" }
+  $w = if ($env:PGPASSWORD) { $env:PGPASSWORD } else { "root" }
+  $root = "postgresql://${u}:${w}@localhost:5432/postgres"
+  $has = (& psql $root -t -A -c "SELECT 1 FROM pg_database WHERE datname='cecelia'" 2>&1 | Out-String).Trim()
+  if ($LASTEXITCODE -ne 0) { throw "FAIL: runner 本地 PostgreSQL 起了但连不上" }
+  if ($has -ne "1") { & psql $root -c "CREATE DATABASE cecelia" | Out-Null }
+  $PgUrl = "postgresql://${u}:${w}@localhost:5432/cecelia"
+}
+$uri = [System.Uri]$PgUrl
+if (-not $uri.UserInfo) { throw "FAIL: 连接串缺用户名，无法推导 DATABASE_USER url=$($uri.Host)" }
+$ui = $uri.UserInfo.Split(':')
+$env:DATABASE_HOST = $uri.Host
+$env:DATABASE_PORT = if ($uri.Port -gt 0) { "$($uri.Port)" } else { "5432" }
+$env:DATABASE_NAME = $uri.AbsolutePath.TrimStart('/')
+$env:DATABASE_USER = [System.Uri]::UnescapeDataString($ui[0])
+$env:DATABASE_PASSWORD = if ($ui.Count -gt 1) { [System.Uri]::UnescapeDataString($ui[1]) } else { "" }
+& psql $PgUrl -v ON_ERROR_STOP=1 -c "SELECT 1" | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "FAIL: DATABASE_* 推导后仍连不上 host=$($env:DATABASE_HOST) db=$($env:DATABASE_NAME)" }
+Write-Host "KH-E2E db-ready host=$($env:DATABASE_HOST) db=$($env:DATABASE_NAME)"
 
-# 2. migration（含本 sprint 投影表）
-$p = Start-Process cmd.exe -ArgumentList "/c npm.cmd run migrate" -WorkingDirectory "$repoRoot\apps\api" -Wait -PassThru -NoNewWindow
-if ($p.ExitCode -ne 0) { throw "FAIL: migrate exit=$($p.ExitCode)" }
+try {
+  # ── 1. 依赖 ──
+  $p = Start-Process cmd.exe -ArgumentList "/c npm.cmd ci --prefer-offline" -WorkingDirectory $repoRoot -Wait -PassThru -NoNewWindow
+  if ($p.ExitCode -ne 0) { throw "FAIL: npm ci exit=$($p.ExitCode)" }
+  $p = Start-Process cmd.exe -ArgumentList "/c npx.cmd playwright install chromium --with-deps" -WorkingDirectory "$repoRoot\apps\staff-hub" -Wait -PassThru -NoNewWindow
+  if ($p.ExitCode -ne 0) { throw "FAIL: playwright install exit=$($p.ExitCode)" }
 
-# 3. 起真实 apps/api（假飞书上游由同进程的 _smoke 路由提供，NODE_ENV != production）
-$env:PORT = "$ApiPort"
-$env:NODE_ENV = "development"
-$env:FEISHU_API_BASE = "http://localhost:$ApiPort/api/_smoke/fake-feishu"
-$apiProc = Start-Process cmd.exe -ArgumentList "/c npm.cmd start" -WorkingDirectory "$repoRoot\apps\api" -PassThru -NoNewWindow
-$waited = 0
-do { Start-Sleep -Seconds 1; $waited++
-     $conn = Test-NetConnection -ComputerName localhost -Port $ApiPort -WarningAction SilentlyContinue
-} while (-not $conn.TcpTestSucceeded -and $waited -lt 40)
-if (-not $conn.TcpTestSucceeded) { throw "FAIL: apps/api 未在 40s 内就绪（A30 自检可能拦住了启动，检查 env）" }
+  # ── 2. migration（含本 sprint 投影表）+ 账本表前置 ──
+  $p = Start-Process cmd.exe -ArgumentList "/c npm.cmd run migrate" -WorkingDirectory "$repoRoot\apps\api" -Wait -PassThru -NoNewWindow
+  if ($p.ExitCode -ne 0) { throw "FAIL: migrate exit=$($p.ExitCode)" }
+  $nullable = (& psql $PgUrl -t -A -c "SELECT is_nullable FROM information_schema.columns WHERE table_schema='zenithjoy' AND table_name='knowledge_entries_projection' AND column_name='org_id'" | Out-String).Trim()
+  if ($nullable -ne "NO") { throw "FAIL: 投影表 org_id 未 NOT NULL got=$nullable" }
+  # public.learnings 属 cecelia repo，不在本仓 migrations；缺表时用本 sprint committed fixture 建（登记见「未覆盖真实链路清单」#4）
+  $ledger = (& psql $PgUrl -t -A -c "SELECT to_regclass('public.learnings')" | Out-String).Trim()
+  if (-not $ledger) {
+    & psql $PgUrl -v ON_ERROR_STOP=1 -f "$scriptDir\fixtures\learnings-ledger.sql" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "FAIL: 账本 fixture DDL 应用失败" }
+    $ledger = (& psql $PgUrl -t -A -c "SELECT to_regclass('public.learnings')" | Out-String).Trim()
+  }
+  if (-not $ledger) { throw "FAIL: public.learnings 不存在且 fixture 未建成 — 录入链路无处可写" }
 
-# 4. build + vite preview
-$p = Start-Process cmd.exe -ArgumentList "/c npm.cmd run build" -WorkingDirectory "$repoRoot\apps\staff-hub" -Wait -PassThru -NoNewWindow
-if ($p.ExitCode -ne 0) { throw "FAIL: staff-hub build exit=$($p.ExitCode)" }
-$env:STAFF_HUB_API_TARGET = "http://localhost:$ApiPort"
-$viteProc = Start-Process cmd.exe -ArgumentList "/c npx.cmd vite preview --port $VitePort --host" -WorkingDirectory "$repoRoot\apps\staff-hub" -PassThru -NoNewWindow
-$waited = 0
-do { Start-Sleep -Seconds 1; $waited++
-     $conn = Test-NetConnection -ComputerName localhost -Port $VitePort -WarningAction SilentlyContinue
-} while (-not $conn.TcpTestSucceeded -and $waited -lt 30)
-if (-not $conn.TcpTestSucceeded) { throw "FAIL: vite preview 未在 30s 内就绪" }
+  # ── 3. 两家 tenants 行 + 员工目录分组 env（A30 四项必须成立，否则下一步起不来）──
+  $sfx = [guid]::NewGuid().ToString("N").Substring(0,8)
+  $OrgA = (& psql $PgUrl -t -A -c "INSERT INTO zenithjoy.tenants (name, plan) VALUES ('E2E-UI-A-$sfx','free') RETURNING id" | Out-String).Trim()
+  $OrgB = (& psql $PgUrl -t -A -c "INSERT INTO zenithjoy.tenants (name, plan) VALUES ('E2E-UI-B-$sfx','free') RETURNING id" | Out-String).Trim()
+  if (-not $OrgA -or -not $OrgB) { throw "FAIL: tenants 行未建成 A=$OrgA B=$OrgB" }
+  $env:STAFF_EMAILS = $OrgaEmail
+  $env:STAFF_FEISHU_OPENIDS = $OrgaOpenId
+  $env:STAFF_EMAILS__ORGA = $OrgaEmail
+  $env:STAFF_FEISHU_OPENIDS__ORGA = $OrgaOpenId
+  $env:STAFF_FEISHU_OPENIDS__ORGB = $OrgbOpenId
+  $env:STAFF_ORG_MAP = "ORGA:$OrgA,ORGB:$OrgB"
+  $env:FEISHU_API_BASE = "http://localhost:$ApiPort/api/_smoke/fake-feishu"
+  $env:FEISHU_APP_ID = "e2e-app-id"
+  $env:FEISHU_APP_SECRET = "e2e-app-secret"
+  if (-not $env:BETTER_AUTH_SECRET) { $env:BETTER_AUTH_SECRET = "e2e-knowledge-hub-secret-not-for-prod-32ch" }
+  $env:NODE_ENV = "development"
+  $env:PORT = "$ApiPort"
 
-# 5. Playwright（真浏览器、真后端、禁 page.route）
-$env:E2E_BASE_URL = "http://localhost:$VitePort"
-$e2e = Start-Process cmd.exe -ArgumentList "/c npx.cmd playwright test e2e\knowledge-hub-path1.spec.ts --reporter=list" `
-  -WorkingDirectory "$repoRoot\apps\staff-hub" -Wait -PassThru -NoNewWindow
+  # ── 4. 起真实 apps/api，并证明 A30 自检真跑过（只验端口通是假绿）──
+  $p = Start-Process cmd.exe -ArgumentList "/c npm.cmd run build --workspace=apps/api" -WorkingDirectory $repoRoot -Wait -PassThru -NoNewWindow
+  if ($p.ExitCode -ne 0) { throw "FAIL: apps/api build exit=$($p.ExitCode)" }
+  $apiOut = "$scriptDir\api-stdout.log"; $apiErr = "$scriptDir\api-stderr.log"
+  $apiProc = Start-Process cmd.exe -ArgumentList "/c node dist\index.js" -WorkingDirectory "$repoRoot\apps\api" `
+    -PassThru -NoNewWindow -RedirectStandardOutput $apiOut -RedirectStandardError $apiErr
+  $waited = 0
+  do { Start-Sleep -Seconds 1; $waited++
+       $conn = Test-NetConnection -ComputerName localhost -Port $ApiPort -WarningAction SilentlyContinue
+  } while (-not $conn.TcpTestSucceeded -and $waited -lt 40)
+  if (-not $conn.TcpTestSucceeded) {
+    Write-Host (Get-Content $apiOut,$apiErr -ErrorAction SilentlyContinue | Select-Object -Last 40 | Out-String)
+    throw "FAIL: apps/api 未在 40s 内就绪（A30 自检拦住启动？见上方日志尾部）"
+  }
+  if (-not (Select-String -Path $apiOut,$apiErr -Pattern "A30 staff-directory selfcheck passed" -Quiet)) {
+    throw "FAIL: 启动日志无 A30 自检通过标记 — 自检根本没跑"
+  }
 
-Stop-Process -Id $viteProc.Id -Force -ErrorAction SilentlyContinue
-Stop-Process -Id $apiProc.Id -Force -ErrorAction SilentlyContinue
-if ($e2e.ExitCode -ne 0) { throw "FAIL: Playwright E2E exit=$($e2e.ExitCode)" }
+  # ── 5. build + vite preview（VITE_SKIP_AUTH 固定前端门禁，授权判定仍全在服务端）──
+  $p = Start-Process cmd.exe -ArgumentList "/c npm.cmd run build" -WorkingDirectory "$repoRoot\apps\staff-hub" `
+    -Wait -PassThru -NoNewWindow -Environment @{ VITE_SKIP_AUTH = "true"; VITE_MOCK_USER_EMAIL = $OrgaEmail }
+  if ($p.ExitCode -ne 0) { throw "FAIL: staff-hub build exit=$($p.ExitCode)" }
+  $viteProc = Start-Process cmd.exe -ArgumentList "/c npx.cmd vite preview --port $VitePort --host" `
+    -WorkingDirectory "$repoRoot\apps\staff-hub" -PassThru -NoNewWindow `
+    -Environment @{ STAFF_HUB_API_TARGET = "http://localhost:$ApiPort" }
+  $waited = 0
+  do { Start-Sleep -Seconds 1; $waited++
+       $conn = Test-NetConnection -ComputerName localhost -Port $VitePort -WarningAction SilentlyContinue
+  } while (-not $conn.TcpTestSucceeded -and $waited -lt 30)
+  if (-not $conn.TcpTestSucceeded) { throw "FAIL: vite preview 未在 30s 内就绪" }
 
-# 6. 截图防造假：本轮截图必须是脚本启动后写的
-$shots = Get-ChildItem "$scriptDir\screenshots\*.png" -ErrorAction SilentlyContinue
-if (-not $shots) { throw "FAIL: 未产出任何截图" }
-foreach ($s in $shots) {
-  if ($s.LastWriteTime -lt $ScriptStart.AddMinutes(-1)) {
-    throw "FAIL: $($s.Name) LastWriteTime=$($s.LastWriteTime) 早于脚本启动 $ScriptStart — 疑似历史截图冒充"
+  # ── 6. Playwright（真浏览器、真后端、禁 page.route）──
+  $e2e = Start-Process cmd.exe -ArgumentList "/c npx.cmd playwright test e2e\knowledge-hub-path1.spec.ts --reporter=list" `
+    -WorkingDirectory "$repoRoot\apps\staff-hub" -Wait -PassThru -NoNewWindow `
+    -Environment @{ E2E_BASE_URL = "http://localhost:$VitePort"; E2E_LOGIN_CODE = "e2e-code-orga" }
+  if ($e2e.ExitCode -ne 0) { throw "FAIL: Playwright E2E exit=$($e2e.ExitCode)" }
+
+  # ── 7. 截图防造假：三张都必须是本轮写的 ──
+  $shotDir = "$repoRoot\apps\staff-hub\screenshots"
+  $fresh = 0
+  foreach ($n in @("01-initial.png","02-action.png","03-result.png")) {
+    $f = Join-Path $shotDir $n
+    if (-not (Test-Path $f)) { throw "FAIL: 缺截图 $n" }
+    $mtime = (Get-Item $f).LastWriteTime
+    if ($mtime -lt $ScriptStart) { throw "FAIL: $n LastWriteTime=$mtime 早于脚本启动 $ScriptStart — 疑似历史截图冒充" }
+    $fresh++
+  }
+  New-Item -ItemType Directory -Path "$scriptDir\screenshots" -Force | Out-Null
+  Get-ChildItem "$shotDir\*.png" | Copy-Item -Destination "$scriptDir\screenshots"
+  Write-Host "KH-E2E screenshots-fresh: $fresh"
+
+  # ── 8. 交叉回读：UI 上看到的那条，必须在账本里是同一 entry_id 且带本组织归属 ──
+  $idFile = "$repoRoot\apps\staff-hub\kh-e2e-entry-id.txt"
+  if (-not (Test-Path $idFile)) { throw "FAIL: spec 未落下 UI 可见条目的 entry_id" }
+  $entryId = (Get-Content $idFile -Raw).Trim()
+  if (-not $entryId) { throw "FAIL: entry_id 为空" }
+  $ledgerRows = (& psql $PgUrl -t -A -c "SELECT count(*) FROM public.learnings WHERE id='$entryId' AND metadata->>'org_id'='$OrgA' AND created_at > '$StartIso'" | Out-String).Trim()
+  if ($ledgerRows -ne "1") { throw "FAIL: UI 可见的 entry_id=$entryId 在账本里查不到本轮带归属行 count=$ledgerRows" }
+  Write-Host "KH-E2E ledger-verified entry_id=$entryId"
+  Write-Host "✅ windows_cloud UI E2E 通过"
+}
+finally {
+  if ($apiProc) { Stop-Process -Id $apiProc.Id -Force -ErrorAction SilentlyContinue }
+  if ($viteProc) { Stop-Process -Id $viteProc.Id -Force -ErrorAction SilentlyContinue }
+  if ($PgUrl -and $OrgA) {
+    & psql $PgUrl -c "DELETE FROM public.learnings WHERE metadata->>'org_id' IN ('$OrgA','$OrgB')" | Out-Null
+    & psql $PgUrl -c "DELETE FROM zenithjoy.tenant_members WHERE tenant_id IN ('$OrgA','$OrgB')" | Out-Null
+    & psql $PgUrl -c "DELETE FROM zenithjoy.tenants WHERE id IN ('$OrgA','$OrgB')" | Out-Null
   }
 }
-Write-Host "✅ windows_cloud UI E2E 通过"
 exit 0
 ```
 
-Playwright spec（`apps/staff-hub/e2e/knowledge-hub-path1.spec.ts`）必须含的显式断言：
+Playwright spec（`apps/staff-hub/e2e/knowledge-hub-path1.spec.ts`）必须含的显式断言（`VITE_SKIP_AUTH=true` 已固定前端门禁，故本 spec 唯一变量是**服务端会话**）：
 
 ```javascript
-// 1. 未登录访问「最近沉淀」页 → 页面显示「登录已失效，请重新登录」
+// 1. 有前端门禁但无服务端会话 → 知识页渲染出来，但内容区是会话失效提示
 await page.goto('/knowledge/recent');
 await expect(page.getByTestId('knowledge-session-expired')).toBeVisible({ timeout: 10000 });
 await expect(page.getByTestId('knowledge-session-expired')).toHaveText('登录已失效，请重新登录');
 
-// 2. 走真实 feishu-login（假飞书上游）拿会话 → 录入页提交
-await page.goto('/login/feishu?code=e2e-code-orga');
+// 2. 走真实 feishu-login 拿服务端会话（page.request 与页面共用同一 cookie jar，
+//    经 vite preview 反代打到真 apps/api；不用 /login/feishu 路由——已登录 shell 下它被 Navigate 到 /）
+const login = await page.request.post('/api/staff/feishu-login', { data: { code: process.env.E2E_LOGIN_CODE } });
+expect(login.status()).toBe(200);
+
+// 3. 录入页提交
 await page.goto('/knowledge/new');
 await page.getByTestId('knowledge-trigger-condition').fill('E2E 触发条件');
 await page.getByTestId('knowledge-conclusion').fill(unique);
 await page.getByTestId('knowledge-evidence-url').fill(evidenceUrl);
-await page.screenshot({ path: '../../sprints/.../screenshots/01-initial.png' });
+await page.screenshot({ path: shot('01-initial.png') });
 await page.getByTestId('knowledge-submit').click();
-await page.screenshot({ path: '../../sprints/.../screenshots/02-action.png' });
+await expect(page.getByTestId('knowledge-submit-result')).toBeVisible({ timeout: 10000 });
+await page.screenshot({ path: shot('02-action.png') });
 
-// 3. 「最近沉淀」页 30 秒内可见该条 + 证据链接可点
+// 4. 「最近沉淀」页 30 秒内可见该条 + 证据链接可点
 await page.goto('/knowledge/recent');
-await expect(page.getByTestId('knowledge-entry-' + entryId)).toBeVisible({ timeout: 30000 });
-await expect(page.getByTestId('knowledge-entry-' + entryId)).toContainText(unique);
-await expect(page.getByTestId('knowledge-entry-' + entryId).getByRole('link')).toHaveAttribute('href', evidenceUrl);
-await page.screenshot({ path: '../../sprints/.../screenshots/03-result.png' });
+const row = page.locator('[data-testid^="knowledge-entry-"]').filter({ hasText: unique }).first();
+await expect(row).toBeVisible({ timeout: 30000 });
+await expect(row.getByRole('link')).toHaveAttribute('href', evidenceUrl);
+await page.screenshot({ path: shot('03-result.png') });
 
-// 4. 交叉验证后端（防前端撒谎）
-const api = await page.request.get('http://localhost:3000/api/staff/knowledge/recent');
+// 5. 交叉验证后端 + 落下 entry_id 供 ps1 回读账本（防前端撒谎）
+const api = await page.request.get('/api/staff/knowledge/recent');
 const body = await api.json();
-if (!body.data.items.some(i => i.entry_id === entryId)) { throw new Error('FAIL: 后端未见该条'); }
+const hit = body.data.items.find(i => i.conclusion === unique);
+if (!hit) { throw new Error('FAIL: 后端未见该条'); }
+expect(await row.getAttribute('data-testid')).toBe('knowledge-entry-' + hit.entry_id);
+fs.writeFileSync(path.resolve(process.cwd(), 'kh-e2e-entry-id.txt'), hit.entry_id);
+console.log('KH-E2E ui-entry-id=' + hit.entry_id);
 ```
 
 ---
@@ -820,6 +924,9 @@ if (!body.data.items.some(i => i.entry_id === entryId)) { throw new Error('FAIL:
 | `apps/staff-hub/src/lib/knowledgeFetch.ts` | 新增 | 只带 cookie，零身份头（不得复用 `adminFetch`）|
 | `apps/staff-hub/src/lib/adminFetch.ts` | **不动** | 既有 16 端点靠它带头 |
 | `apps/staff-hub/src/pages/KnowledgeNewPage.tsx` / `KnowledgeRecentPage.tsx` | 新增 | 录入界面 + 「最近沉淀」页，带 `data-testid` |
+| `apps/staff-hub/src/App.tsx` | 改 | **只在已登录 shell 的 `Routes` 里加 `/knowledge/new`、`/knowledge/recent` 两条路由 + 侧栏入口**；`!isAuthenticated` 分支（`App.tsx:47-53`）与既有 16 端点相关结构**一行不动**。前端 `isAuthenticated`（`AuthContext` 客户端态）只管导航体验，知识面授权判定一律在服务端 `knowledgeAuthGuard`（见「第二段」段首说明）|
+| `<SPRINT_DIR>/fixtures/learnings-ledger.sql` | 新增 | windows runner 缺 `public.learnings` 时的账本建表 fixture，**必须 `pg_dump -s -t public.learnings` 从真 cecelia 账本导出**，不得手写猜列（未覆盖清单 #4）|
+| `.github/workflows/e2e-windows.yml` | **不动** | 跨 sprint 共用壳；且 GHA `services:` 只支持 Linux runner，windows 上不能挂 postgres service — 前置一律在 `e2e-verify.ps1` 内自建 |
 | `apps/staff-hub/e2e/knowledge-hub-path1.spec.ts` | 新增 | UI E2E spec，禁 `page.route()` |
 | `.github/workflows/scripts/smoke/knowledge-hub-path1-smoke.sh` | 新增 | 支持 `--a27-only` 子模式；核心断言 = A30 自检 |
 | `.github/workflows/scripts/smoke-baseline.txt` | 改 | 追加上述 smoke 文件名（不加 = 只是 warning 不闸，C11）|
