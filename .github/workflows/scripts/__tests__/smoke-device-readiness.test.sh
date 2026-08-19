@@ -23,16 +23,20 @@ ok()  { PASS=$((PASS+1)); echo "  ✅ $1"; }
 bad() { FAIL=$((FAIL+1)); echo "  ❌ $1"; }
 [ -f "$SRC" ] || { echo "❌ 找不到 $SRC"; exit 1; }
 
-# [1] 无障碍必须查 Bound，且不得再用 settings get 作为「已开」的判据
-if grep -qE 'dumpsys accessibility' "$SRC" && grep -qE 'Bound services' "$SRC"; then
-  ok "无障碍就绪查 dumpsys 的 Bound services"
+# [1] 无障碍就绪判定【本身】必须基于 Bound 计数。
+# 注意：不能只全文 grep 'Bound services' —— 文件别处（如断言[2] 的双包检查）也含该串，
+# 会把「断言[1] 已被退回 settings get」放过去。本守卫自身就踩过这个坑（0819 自查发现），
+# 所以改认只有正确实现才会出现的特征：Bound 计数变量 + 它的 envfail 文案。
+if grep -qE 'ACC_BOUND=' "$SRC" && grep -qE 'ACC_BOUND.*-ge 3|无障碍未真正绑定' "$SRC"; then
+  ok "无障碍就绪基于 Bound 计数判定"
 else
-  bad "无障碍判据未查 Bound —— settings get 会在 Enabled≠Bound 时谎报已开（小白实证）"
+  bad "无障碍就绪未基于 Bound 计数 —— settings get 会在 Enabled≠Bound 时谎报已开（小白 3/0 实证）"
 fi
-if grep -qE 'ok "无障碍已开"' "$SRC" && ! grep -qE 'Bound' "$SRC"; then
-  bad "仍以 settings get 结果直接判「无障碍已开」"
+# 旧判据（settings get 命中包名即判 ok）必须已被移除
+if grep -qE 'case "\$ACC" in \*com\.zenithjoy\.agent\*\) ok' "$SRC"; then
+  bad "仍保留旧判据：settings get 命中包名就判「无障碍已开」——这正是骗了一整天的那行"
 else
-  ok "未用 settings get 单独下「已开」结论"
+  ok "旧的 settings get 直判已移除"
 fi
 
 # [3] 注册真成功：必须排除 fallback 降级
