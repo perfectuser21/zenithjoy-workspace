@@ -68,11 +68,6 @@ function parseStaffEmailsForLogin(): string[] {
   return raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 }
 
-function parseStaffFeishuOpenIdsForLogin(): string[] {
-  const raw = process.env.STAFF_FEISHU_OPENIDS ?? '';
-  return raw.split(',').map((s) => s.trim()).filter(Boolean);
-}
-
 interface FeishuAppAccessTokenResp {
   code: number;
   msg?: string;
@@ -151,10 +146,7 @@ router.post('/feishu-login', feishuLoginRateLimit, async (req, res): Promise<voi
     const feishuUser = await fetchFeishuUserByCode(appAccessToken, code);
     console.log(`[feishu-login] 换到用户信息: openId=${feishuUser.openId} email=${feishuUser.email || '(空)'}`);
 
-    const staffOpenIds = parseStaffFeishuOpenIdsForLogin();
-    const staffEmails = parseStaffEmailsForLogin();
-    const openIdOk = staffOpenIds.includes(feishuUser.openId);
-    const emailOk = feishuUser.email !== '' && staffEmails.includes(feishuUser.email);
+    const emailOk = feishuUser.email !== '' && parseStaffEmailsForLogin().includes(feishuUser.email);
 
     // 员工目录（分组声明）配了才谈得上归属与会话；没配 = 知识中枢未启用，
     // 本端点保持既有行为一字不变，免得存量部署一升级就全体登不进来。
