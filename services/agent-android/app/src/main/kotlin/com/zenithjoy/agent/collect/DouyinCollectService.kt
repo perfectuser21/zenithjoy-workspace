@@ -184,7 +184,7 @@ class DouyinCollectService : AccessibilityService() {
             State.OPENING_FIRST_VIDEO -> handleVideoOpened(event)
             State.OPENING_COMMENTS -> handleCommentsOpened(event)
             State.EXTRACTING_COMMENTS -> Unit
-            State.OPENING_VIDEO_URL -> handleVideoUrlOpened(event)
+            State.OPENING_VIDEO_URL -> Unit  // 在 startStage2Collect() 协程中主动两层等待
             else -> Unit
         }
     }
@@ -245,7 +245,44 @@ class DouyinCollectService : AccessibilityService() {
                 finishWithError("DEEPLINK_LAUNCH_FAILED")
                 return@launch
             }
-            startVideoUrlOpenTimeout()
+            // 2026-08-19 根治：这里原先只 startVideoUrlOpenTimeout()，靠 handleVideoUrlOpened
+            // 这个【事件回调】撞运气——事件来时 rootInActiveWindow 或评论按钮任一拿不到就
+            // `?: return` 静默丢弃，没有任何重试。深链刚拉起抖音时详情页尚未渲染完，这一次
+            // 探测必然扑空，随后 watchdog 兜底在【没打开评论面板的详情页】上抓，稳定 0 条。
+            // 真机实证（0819 四号机 2.1.24-e2e，关键词「装修」，两个视频均判定 matched）：
+            //   09:25:30 stage2 task received → 09:25:38 extracted 0 comments（8 秒）
+            //   09:25:40 stage2 task received → 09:25:48 extracted 0 comments（8 秒）
+            // 与被修四次的 NO_SEARCH_INPUT 同一病根：「拿一次界面快照就当目标页面就绪」。
+            // PR #1651/#1652/#1653 迁的是搜索链，抓评论链是事件回调、不在那 16 个调用点里，
+            // 整条漏网。改为与 startCollect 完全相同的两层等待。
+            //
+            // 第一层：等抖音真的铺到前台（消厂商插屏）
+            val fg = awaitAppForeground(DOUYIN_PKG, AWAIT_FOREGROUND_ATTEMPTS, AWAIT_POLL_MS)
+            android.util.Log.i(TAG, "startStage2Collect: 抖音到前台=$fg videoId=$videoId")
+            delay(RandomDelay.sample(RandomDelay.NAV_MS))
+            // 第二层：等【评论按钮】这个具体节点就绪
+            val outcome = awaitNode(AWAIT_COMMENT_BTN_ATTEMPTS, AWAIT_POLL_MS) { r ->
+                findVisibleCommentButton(r)
+            }
+            val commentBtn = outcome.value
+            android.util.Log.i(
+                TAG,
+                "startStage2Collect: commentBtn=${commentBtn != null} attempts=${outcome.attempts} " +
+                    "waitedMs=${outcome.waitedMs(AWAIT_POLL_MS)} fgPkg=${outcome.lastForegroundPkg}"
+            )
+            if (commentBtn == null) {
+                // 必须报错码，不能静默交 0 条：服务端只看 comments_reported_at 是否落章
+                // （count(comments_reported_at) = videoDone），静默 0 条会让任务照常结算 done，
+                // 把断点掩盖成"抓到了但一条评论都没有"。
+                val failure = NodeAwait.classifyFailure(outcome, DOUYIN_PKG)
+                android.util.Log.w(TAG, "startStage2Collect: 等待评论按钮超时 failure=$failure")
+                finishWithError(if (failure == WaitFailure.NO_ROOT) "NO_WINDOW" else "NO_COMMENT_BUTTON")
+                return@launch
+            }
+            state = State.OPENING_COMMENTS
+            clickCommentButton(commentBtn)
+            startCommentsTimeout()
+            startExtractionWatchdog()
         }
     }
 
@@ -274,31 +311,6 @@ class DouyinCollectService : AccessibilityService() {
         }
     }
 
-    private fun startVideoUrlOpenTimeout() {
-        scope.launch {
-            delay(VIDEO_OPEN_TIMEOUT_MS)
-            if (state == State.OPENING_VIDEO_URL) {
-                finishWithError("VIDEO_URL_OPEN_TIMEOUT")
-            }
-        }
-    }
-
-    // Stage2：等待视频页面加载后点评论按钮（与 handleVideoOpened 逻辑相同）
-    private fun handleVideoUrlOpened(event: AccessibilityEvent) {
-        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
-            event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-        ) return
-        if (state != State.OPENING_VIDEO_URL) return
-        if (event.packageName != DOUYIN_PKG) return
-
-        val root = rootInActiveWindow ?: return
-        val commentBtn = findVisibleCommentButton(root) ?: return
-
-        state = State.OPENING_COMMENTS
-        clickCommentButton(commentBtn)
-        startCommentsTimeout()
-        startExtractionWatchdog()
-    }
 
     /**
      * 找【当前视频、屏幕内可见】的评论按钮（Brain task 28cee213，2026-08-16 4号机真机实证）：
@@ -308,14 +320,14 @@ class DouyinCollectService : AccessibilityService() {
      * resource-id 候选保留兜底（抖音 id 混淆，大概率命中不了）。
      */
     private fun findVisibleCommentButton(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        val matches = ArrayList<AccessibilityNodeInfo>()
-        val queue = ArrayDeque<AccessibilityNodeInfo>()
-        queue.add(root)
-        while (queue.isNotEmpty()) {
-            val node = queue.removeFirst()
-            if (node.contentDescription?.toString()?.startsWith("评论") == true) matches.add(node)
-            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
-        }
+        // 2026-08-19：原为无界 while(queue.isNotEmpty()) 全树 BFS。本函数现在是 awaitNode 的
+        // finder，每轮都会被调用，必须廉价——每个 getChild() 都是跨进程 binder 调用，前台闸
+        // 就因同样的无界遍历在真机上卡死 144 秒（PR #1653）。改用带 maxNodes 上限的既有工具。
+        val matches = NodeTreeFlattener
+            .flattenDfs(root, MAX_NODES_PER_PROBE) { n ->
+                (0 until n.childCount).mapNotNull { n.getChild(it) }
+            }
+            .filter { it.contentDescription?.toString()?.startsWith("评论") == true }
         if (matches.isNotEmpty()) {
             val rect = Rect()
             val cands = matches.mapIndexed { i, n ->
@@ -1729,6 +1741,11 @@ class DouyinCollectService : AccessibilityService() {
         private const val MAX_NODES_PER_PROBE = 1_500
         private const val AWAIT_FOREGROUND_ATTEMPTS = 24   // 12s：等抖音真到前台+消插屏
         private const val AWAIT_SEARCH_ENTRY_ATTEMPTS = 24
+
+        /** Stage2 等评论按钮就绪的轮询次数（×AWAIT_POLL_MS=500ms → 12 秒）。
+         *  深链拉起详情页比搜索页快，但抖音首帧到动作栏渲染完仍有明显间隔，
+         *  真机实测原来那一次性探测（0 秒等待）稳定扑空。 */
+        private const val AWAIT_COMMENT_BTN_ATTEMPTS = 24
         private const val AWAIT_SEARCH_INPUT_ATTEMPTS = 8
         private const val AWAIT_DETAIL_ATTEMPTS = 12
         private const val AWAIT_COMMENT_PANEL_ATTEMPTS = 8
