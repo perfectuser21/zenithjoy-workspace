@@ -71,6 +71,7 @@ import { fakeFeishuRouter, installFakeFeishuAxiosShim } from './routes/_smoke-fa
 import { skillDraftsRouter, skillDraftsInternalRouter } from './routes/skill-drafts';
 import { agentOfflineScanRouter } from './routes/agent-offline-scan';
 import { errorHandler, notFoundHandler } from './middleware/error';
+import { simpleRateLimit, ipKeyFn } from './middleware/simple-rate-limit';
 import { verifyStartupConfig } from './startup-check';
 import { getBuildInfo } from './build-info';
 
@@ -119,7 +120,7 @@ app.get('/health', (req, res) => {
 // D2 FR-3：/api/version 与 /version 同时挂载（capture.mjs fail-loud 路径为 /api/version）。
 // /api/health 与 /health 同挂：反代下 /api 前缀是唯一稳定可达的路径，
 // 部署/E2E 的就绪探测走它。
-app.get('/api/health', (req, res) => {
+app.get('/api/health', simpleRateLimit({ windowMs: 60_000, max: 600, keyFn: ipKeyFn }), (req, res) => {
   const cfg = verifyStartupConfig();
   res.json({
     status: 'ok',

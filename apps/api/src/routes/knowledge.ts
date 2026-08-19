@@ -21,6 +21,7 @@
 import { Router, type Request, type Response } from 'express';
 import pool from '../db/connection';
 import { knowledgeAuthGuard } from '../middleware/knowledge-auth';
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 
 const router = Router();
 
@@ -69,6 +70,10 @@ function readTrimmed(v: unknown): string {
   return typeof v === 'string' ? v.trim() : '';
 }
 
+// 限流排在鉴权闸**之前**：鉴权闸本身就要查一次 tenant_members，放在后面的话
+// 未登录的洪水依然能把库打穿。按来源 IP 计数（此时还没有身份可用）。
+// 300/分钟对真人操作和 E2E 轮询都绰绰有余，只挡机器级刷量。
+router.use(simpleRateLimit({ windowMs: 60_000, max: 300, keyFn: ipKeyFn }));
 router.use(knowledgeAuthGuard);
 
 // ─── 录入一条经验 ────────────────────────────────────────────────────────────
