@@ -5537,3 +5537,43 @@ agent_suite:
   status: active
   product: 中台认证
   note: "W4 四象限合看页+建单页+lib.mjs只读模式 E2E（mac_web，Playwright）。合看页三态断言(matrix/locked/degraded)、建单页7字段+mandatory场景码强制校验、lib.mjs只读规范。workflow: e2e-staff-acceptance-windows.yml"
+
+- id: knowledge-hub-staff-directory-selfcheck
+  path: sprints/08192114-员工知识中枢-路-经验沉淀与问答-ade79e4e/tests/staff-directory-selfcheck.test.ts
+  type: integration
+  ci: L4-INT
+  status: active
+  product: 员工知识中枢
+  note: "路① 第一刀合同测试：A30 员工目录一致性自检四项 + 四条变异 proven-to-fire（1a 扁平==企业A组 / 1b 分组并集⊇扁平 / 2 归属唯一 / 3 STAFF_ORG_MAP uuid 真实存在）。需真 Postgres（A30-3 真查 zenithjoy.tenants）。"
+
+- id: knowledge-hub-auth-guard
+  path: sprints/08192114-员工知识中枢-路-经验沉淀与问答-ade79e4e/tests/knowledge-auth-guard.test.ts
+  type: integration
+  ci: L4-INT
+  status: active
+  product: 员工知识中枢
+  note: "路① 第一刀合同测试：knowledgeAuthGuard 身份只来自会话（401 SESSION_REQUIRED / 伪造身份头判定纹丝不动 / 403 NO_TENANT，三种文案两两不同）。禁 mock 会话与 tenant_members，需真 Postgres。"
+
+- id: knowledge-hub-entries
+  path: sprints/08192114-员工知识中枢-路-经验沉淀与问答-ade79e4e/tests/knowledge-entries.test.ts
+  type: integration
+  ci: L4-INT
+  status: active
+  product: 员工知识中枢
+  note: "路① 第一刀合同测试：录入落 Cecelia 账本带归属 / 请求体 org_id 被忽略 / 缺组织 403 零写入 / 非法 evidence_url 400 / 跨企业隔离 / 账本不可达 503 LEDGER_UNREACHABLE 不静默降级。真 INSERT 真 SELECT public.learnings。"
+
+- id: knowledge-hub-staffguard-endpoints-invariant
+  path: sprints/08192114-员工知识中枢-路-经验沉淀与问答-ade79e4e/tests/staffguard-endpoints-invariant.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: 员工知识中枢
+  note: "A31 前置保护：staffGuard 端点计数字面等于 16、adminFetch 仍拼两个身份头、staffGuard 源码未被改动、知识面用独立 knowledgeFetch 且零身份头名。防实现期为了知识面不拼头而全局摘头（摘头=既有 16 端点对全体用户 403）。"
+
+- id: knowledge-hub-path1-e2e
+  path: apps/staff-hub/e2e/knowledge-hub-path1.spec.ts
+  type: e2e
+  ci: windows_cloud
+  status: active
+  product: 员工知识中枢
+  note: "路① 第一刀 UI E2E：登录 → 录入 → 「最近沉淀」看到本人这条带证据链接，并把 entry_id 落盘供 ps1 回读账本交叉验证。变体C：真实后端、禁请求拦截。workflow: e2e-windows.yml + sprints/08192114-*/e2e-verify.ps1"
