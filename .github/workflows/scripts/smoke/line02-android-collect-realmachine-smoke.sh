@@ -212,14 +212,14 @@ ACC_ENABLED=$("$ADB" -s "$DEV" shell settings get secure enabled_accessibility_s
 # 后者才是设备就绪缺陷。混在一起会把一次 adb 抖动误报成产品红（仓库既有 envfail/fail 分级纪律）。
 ACC_DUMP=$("$ADB" -s "$DEV" shell "dumpsys accessibility" 2>/dev/null | tr -d '\r') \
   || envfail "adb dumpsys accessibility 执行失败(设备 $DEV 掉线?)——环境不可达，非设备就绪缺陷"
-[ -n "$ACC_DUMP" ] || envfail "adb dumpsys accessibility 返回空(设备 $DEV 掉线?)——环境不可达，非设备就绪缺陷"
-ACC_BOUND=$(printf '%s' "$ACC_DUMP" \
+[ -n "${ACC_DUMP}" ] || envfail "adb dumpsys accessibility 返回空(设备 $DEV 掉线?)——环境不可达，非设备就绪缺陷"
+ACC_BOUND=$(printf '%s' "${ACC_DUMP}" \
   | awk '/Bound services:/,/Crashed services:/' \
   | grep -oE 'com\.zenithjoy\.agent[a-z.]*/[a-zA-Z.]*Service' | sort -u | wc -l | tr -d ' ')
 if [ "${ACC_BOUND:-0}" -ge 3 ]; then
-  ok "无障碍真绑定 Bound=$ACC_BOUND (settings 里 Enabled 的服务另计)"
+  ok "无障碍真绑定 Bound=${ACC_BOUND} (settings 里 Enabled 的服务另计)"
 else
-  envfail "无障碍未真正绑定：Bound=$ACC_BOUND (<3)。注意 settings get 可能显示已启用（$ACC_ENABLED）——那是假成功，ColorOS 不认 adb 写入，必须在系统设置里人工开启无障碍"
+  envfail "无障碍未真正绑定：Bound=${ACC_BOUND} (<3)。注意 settings get 可能显示已启用（${ACC_ENABLED}）——那是假成功，ColorOS 不认 adb 写入，必须在系统设置里人工开启无障碍"
 fi
 
 # ── 断言[2] 包与身份唯一 (decision 2dc450f7) ───────────────────────────────
@@ -228,12 +228,12 @@ fi
 PKG_PROD=$("$ADB" -s "$DEV" shell dumpsys package com.zenithjoy.agent 2>/dev/null | grep -m1 versionName | tr -d '\r' | sed 's/.*=//')
 PKG_E2E=$("$ADB" -s "$DEV" shell dumpsys package com.zenithjoy.agent.e2e 2>/dev/null | grep -m1 versionName | tr -d '\r' | sed 's/.*=//')
 echo "  [就绪] prod=${PKG_PROD:-未装} e2e=${PKG_E2E:-未装}"
-if [ -n "$PKG_PROD" ] && [ -n "$PKG_E2E" ]; then
+if [ -n "${PKG_PROD}" ] && [ -n "${PKG_E2E}" ]; then
   BOUND_PKGS=$("$ADB" -s "$DEV" shell "dumpsys accessibility" 2>/dev/null | tr -d '\r' \
     | awk '/Bound services:/,/Crashed services:/' \
     | grep -oE 'com\.zenithjoy\.agent(\.e2e)?/' | sort -u | wc -l | tr -d ' ')
   [ "${BOUND_PKGS:-0}" -le 1 ] \
-    || envfail "prod 与 e2e 两个包同时绑定无障碍($BOUND_PKGS 个包)——会共用/互抢 agent_id，跑出的结果不可信；只保留一个包的无障碍"
+    || envfail "prod 与 e2e 两个包同时绑定无障碍(${BOUND_PKGS} 个包)——会共用/互抢 agent_id，跑出的结果不可信；只保留一个包的无障碍"
 fi
 
 # ── 1.5 MediaProjection 自动授权（Seg2 判定截图的前提，承接未合的 PR #1312）──
@@ -316,7 +316,7 @@ fi
 # 但拿不到 ws_token、收不到任何任务推送，派下去的任务永远 pending。
 # 所以「心跳 online」不能当就绪判据，必须确认注册没走降级分支。
 REG_LOG=$("$ADB" -s "$DEV" logcat -d -t 3000 -s AgentService AgentRegistrar 2>/dev/null | tr -d '\r')
-case "$REG_LOG" in
+case "${REG_LOG}" in
   *"license key fallback"*)
     envfail "agent 注册降级为 license key fallback（拿不到 ws_token，收不到任务推送）——查 apiUrl 是否残留脏字符导致 register URL 拼错（0819 实测 agent-wsa 前缀致 404）";;
   *)
@@ -331,14 +331,14 @@ esac
 STALE_MAX="${SMOKE_STALE_RUNNING_MAX:-5}"
 if STALE_RAW=$(curl -fsSk -m 10 "$API_BASE/api/acquisition/collect-tasks?status=running&limit=50" \
      -H "X-Tenant-Id: $TENANT" 2>/dev/null); then
-  STALE=$(printf '%s' "$STALE_RAW" | jq -r '[.data.tasks[]? // empty] | length' 2>/dev/null || echo "")
+  STALE=$(printf '%s' "${STALE_RAW}" | jq -r '[.data.tasks[]? // empty] | length' 2>/dev/null || echo "")
 else
   # curl 失败不等于「没有僵尸」——不能静默当 0 放行，明确降级为提示（API 不可达属环境问题，
   # 此处不 envfail 中断，因为主链路后面还会真正调 API，那里失败会给出更准确的诊断）
   STALE=""
   echo "  ⚠️ [就绪] 僵尸任务检查跳过：collect-tasks 查询失败(API 暂不可达)"
 fi
-if [ -n "$STALE" ] && [ "$STALE" -gt "$STALE_MAX" ]; then
+if [ -n "$STALE" ] && [ "$STALE" -gt "${STALE_MAX}" ]; then
   echo "  ⚠️ [就绪] 该租户有 ${STALE} 个 running 任务(阈值 ${STALE_MAX})，可能有僵尸堆积（0819 曾清 13 条，最早卡 8 小时）"
 elif [ -n "$STALE" ]; then
   ok "队列无明显僵尸堆积(running=${STALE}/阈值${STALE_MAX})"
@@ -369,7 +369,7 @@ for i in $(seq 1 "$POLL_MAX"); do
       # 搜索框，真凶却是拉起，0819 排查被严重误导。这里把真凶直接从 logcat 挖出来，
       # 免得下一个人又照着 NO_SEARCH_INPUT 去查搜索框。PR #1663 已加无障碍手势兜底。
       FG_LOG=$("$ADB" -s "$DEV" logcat -d -t 3000 -s DouyinCollectService 2>/dev/null | tr -d '\r')
-      case "$FG_LOG" in
+      case "${FG_LOG}" in
         *"抖音到前台=false"*|*WRONG_FOREGROUND*)
           fail "抖音未能拉到前台(WRONG_FOREGROUND)——真凶是拉起被 ROM 拦截，不是搜索框；error_code=$EC 会误导。ColorOS 需确认无障碍真绑定(见断言1)与手势兜底是否生效";;
       esac
