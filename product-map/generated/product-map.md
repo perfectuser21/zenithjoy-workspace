@@ -1,6 +1,6 @@
 # Product Map
 
-<!-- digest: 50366893e78d50b9b4b09f7007f6ef4e3db0e7cfc5dfb4e9d04ad6e5b24edc7a -->
+<!-- digest: 206c51fed97a129b895f20cea46f01991cdcbe8231bde0270bcbb03ac06ea9e5 -->
 
 > 此文件由 `npm run product-map:generate` 自动生成，请勿手工编辑。
 > 唯一手写源：`product-map/product-map.yaml`
@@ -23,6 +23,7 @@
 |---------|------|
 | line00 | Line 00 运营中枢 |
 | line10 | Line 10 客户管理 |
+| line11 | Line 11 员工知识中枢 |
 
 ## Golden Paths
 
@@ -50,6 +51,7 @@
 | line_health | staff_app | line00 | active | — | — |
 | skill_acceptance | staff_app | line00 | deprecated | — | — |
 | customer_management | staff_app | line10 | active | — | .github/workflows/scripts/smoke/customer-admin-backend-smoke.sh |
+| knowledge_experience_qa | staff_app | line11 | proposed | step1:经验被留住（人侧自动触发 + agent 干完自动写回，「最近沉淀」立刻可见）<br>step2:问得到（大白话提问，答案带出处；「库里没有」与「暂时查不了」两种明确回答）<br>step3:干活前被喂到（agent 开工强制注入仍然成立的经验，中台可见注入台账） | — |
 
 ## Surfaces
 

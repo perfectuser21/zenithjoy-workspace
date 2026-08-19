@@ -26,6 +26,10 @@ apps:
         name: Line 00 运营中枢
       - id: line10
         name: Line 10 客户管理
+      # 2026-08-19 主理人拍板（决策 ab866172）：员工知识中枢——替代 Notion 的团队知识底座，
+      # 与 Brain/开发流水线深度打通。三条 GP：经验沉淀与问答 / 协同笔记 / 结构化工作台。
+      - id: line11
+        name: Line 11 员工知识中枢
 
 surfaces:
   - web
@@ -355,3 +359,19 @@ golden_paths:
     status: active
     smoke_files:
       - .github/workflows/scripts/smoke/customer-admin-backend-smoke.sh
+
+  # 2026-08-19 员工知识中枢 路①（golden_path ade79e4e，7 轮 GAN 收敛，合同 v1 已签，
+  # harness 任务 6110f348）：人或 agent 产生经验 → 团队任何人和任何 agent 都问得到、
+  # 干活前被强制喂到，且只喂仍然成立的经验。
+  - id: knowledge_experience_qa
+    app_id: staff_app
+    line_id: line11
+    name: 经验沉淀与问答
+    status: proposed
+    steps:
+      - id: step1
+        name: 经验被留住（人侧自动触发 + agent 干完自动写回，「最近沉淀」立刻可见）
+      - id: step2
+        name: 问得到（大白话提问，答案带出处；「库里没有」与「暂时查不了」两种明确回答）
+      - id: step3
+        name: 干活前被喂到（agent 开工强制注入仍然成立的经验，中台可见注入台账）

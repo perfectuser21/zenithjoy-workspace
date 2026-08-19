@@ -24,7 +24,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ─── Test 1: 结构解析 ─────────────────────────────────────────────────────────
 
-test('T1: loadAndValidateProductMap 解析两个 app，customer_app 有 line01/02/04/05/07，staff_app 有 line00/10', async () => {
+test('T1: loadAndValidateProductMap 解析两个 app，customer_app 有 line01/02/04/05/07，staff_app 有 line00/10/11', async () => {
   const { map, errors } = await loadAndValidateProductMap();
   assert.deepEqual(errors, [], `schema 错误: ${JSON.stringify(errors)}`);
   assert.ok(map !== null, 'map 须非 null');
@@ -35,7 +35,7 @@ test('T1: loadAndValidateProductMap 解析两个 app，customer_app 有 line01/0
   const customerApp = map.apps.find(a => a.id === 'customer_app');
   const staffApp = map.apps.find(a => a.id === 'staff_app');
   assert.deepEqual(customerApp.lines.map(l => l.id).sort(), ['line01', 'line02', 'line04', 'line05', 'line07']);
-  assert.deepEqual(staffApp.lines.map(l => l.id).sort(), ['line00', 'line10']);
+  assert.deepEqual(staffApp.lines.map(l => l.id).sort(), ['line00', 'line10', 'line11']);
 });
 
 // ─── Test 2: 负向 schema 校验 ─────────────────────────────────────────────────
