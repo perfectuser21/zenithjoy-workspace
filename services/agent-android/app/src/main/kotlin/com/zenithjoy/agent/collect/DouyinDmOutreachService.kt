@@ -403,20 +403,40 @@ class DouyinDmOutreachService : AccessibilityService() {
         delay(RandomDelay.sample(RandomDelay.CLICK_MS))
 
         // 点击后等搜索输入框真出现，而不是拿点击前/半成品快照去找。
-        val inputOutcome = awaitNode(AWAIT_WIDGET_ATTEMPTS, AWAIT_POLL_MS) { r ->
+        //
+        // 2026-08-19 真机根治（四号机，目标 dyv14dcofwjz）：
+        //   A3-diag: NO_SEARCH_INPUT searchBtnFound=true failure=TARGET_ABSENT attempts=8
+        // 搜索按钮已点开，卡在这一步 8×500ms=4 秒判死。与采集链对照才看出真差异——
+        // DouyinCollectService.openSearchBar 同样等 8 次，但【等不到不判死】，继续走由
+        // typeKeyword 调 findFirstEditText 昂贵兜底一次，所以它能成功；这里等不到就
+        // finishWithOutcome 直接判死，一次兜底都没有。
+        //
+        // 两处同时修：
+        // ① 档位：点搜索按钮触发的是【页面跳转】（进搜索页），输入框是新页面上的元素，
+        //    归进「页内控件」(WIDGET=4s) 是分档错误，改用页面级 AWAIT_PAGE_ATTEMPTS。
+        // ② finder 必须廉价：原来把 findFirstEditText 放进了每轮都执行的 finder。那是
+        //    无界 BFS，getChild() 每次跨进程 binder，在 Lynx 巨树上单次遍历几十秒
+        //    （2026-08-18 真机实测协程两分钟无进展）。采集链注释早就明令禁止这么写。
+        //    改为轮询体只走系统索引查询，昂贵兜底移到轮询【之后】只做一次——这也正是
+        //    NodeAwait 定的规矩。
+        val inputOutcome = awaitNode(AWAIT_PAGE_ATTEMPTS, AWAIT_POLL_MS) { r ->
             findNodeByIds(
                 r,
                 "com.ss.android.ugc.aweme:id/search_input",
                 "com.ss.android.ugc.aweme:id/search_edit_text",
                 "com.ss.android.ugc.aweme:id/et_search_kw",
-            ) ?: findFirstEditText(r)
+            )
         }
+        // 轮询之后的一次性昂贵兜底：抖音搜索页的输入框 id 常被混淆，索引查不到时用全树
+        // 找第一个 EditText。只跑一次，不进轮询体。
         val searchInput = inputOutcome.value
+            ?: rootInActiveWindow?.let { findFirstEditText(it) }
         if (searchInput == null) {
             android.util.Log.w(
                 TAG,
                 "A3-diag: NO_SEARCH_INPUT searchBtnFound=true failure=" +
-                    "${NodeAwait.classifyFailure(inputOutcome, DOUYIN_PKG)} attempts=${inputOutcome.attempts}"
+                    "${NodeAwait.classifyFailure(inputOutcome, DOUYIN_PKG)} attempts=${inputOutcome.attempts} " +
+                    "waitedMs=${inputOutcome.waitedMs(AWAIT_POLL_MS)} fallbackEditTextAlsoMissing=true"
             )
             finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_SEARCH_INPUT")
             return false
@@ -795,16 +815,22 @@ class DouyinDmOutreachService : AccessibilityService() {
         }
     }
 
-    private fun findFirstEditText(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        val queue = ArrayDeque<AccessibilityNodeInfo>()
-        queue.add(root)
-        while (queue.isNotEmpty()) {
-            val node = queue.removeFirst()
-            if (node.className?.contains("EditText") == true) return node
-            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
-        }
-        return null
-    }
+    /**
+     * 找页面上第一个 EditText。
+     *
+     * 2026-08-19：原为无界 `while (queue.isNotEmpty())` 全树 BFS。本函数被两处 awaitNode 的
+     * finder 直接/间接调用，**每轮都会执行**，而 `AccessibilityNodeInfo.getChild()` 每次都是
+     * 跨进程 binder 调用——在 Lynx 渲染的抖音巨树上单次遍历就要几十秒，乘以轮询次数会把整条
+     * 协程拖死（2026-08-18 真机实测：协程两分钟无进展；前台闸同样的无界遍历卡死 144 秒）。
+     * NodeAwait 与 DouyinCollectService 都写死了「finder 必须廉价」，本函数此前是漏网的一处。
+     * 改用带 [MAX_NODES_PER_PROBE] 上限的既有工具，超出上限即放弃本轮（下一轮还会再探）。
+     */
+    private fun findFirstEditText(root: AccessibilityNodeInfo): AccessibilityNodeInfo? =
+        NodeTreeFlattener
+            .flattenDfs(root, MAX_NODES_PER_PROBE) { n ->
+                (0 until n.childCount).mapNotNull { n.getChild(it) }
+            }
+            .firstOrNull { it.className?.contains("EditText") == true }
 
     // ── 结果上报 ──────────────────────────────────────────────────────────────
 
@@ -835,7 +861,10 @@ class DouyinDmOutreachService : AccessibilityService() {
         private const val AWAIT_POLL_MS = 500L
         private const val AWAIT_ENTRY_ATTEMPTS = 24    // 12s：私信/搜索入口，含冷启动与厂商开屏广告余量
         private const val AWAIT_PAGE_ATTEMPTS = 12     // 6s：结果页/主页等页面级跳转
-        private const val AWAIT_WIDGET_ATTEMPTS = 8    // 4s：输入框/发送按钮等页内控件
+        private const val AWAIT_WIDGET_ATTEMPTS = 8
+
+        /** 单轮探测最多遍历的节点数——finder 必须廉价（getChild 是跨进程 binder）。 */
+        private const val MAX_NODES_PER_PROBE = 1_500    // 4s：输入框/发送按钮等页内控件
 
         private const val DOUYIN_PKG = "com.ss.android.ugc.aweme"
 
