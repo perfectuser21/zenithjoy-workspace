@@ -57,6 +57,23 @@ export async function gradeComments(
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 500,
         temperature: 0.1,
+        // 关掉思考链——这一行是这个功能能不能工作的开关，别删。
+        //
+        // deepseek-v4-flash 是 thinking 模型，TOAPIS 的 max_tokens 是**含 reasoning_tokens
+        // 的 completion 总预算**。真机 0820 实测（decision fa247355）：25 条评论时
+        // reasoning 直接顶到 500 封顶、content 是空字符串、finish_reason=length，
+        // 整批 0/25 全变 null。而且消耗是随机的——同样 8 条评论两次跑分别烧 863/213 tokens，
+        // 所以"再加点预算"救不了（12 条 @2000 连续两次照样全丢）。
+        //
+        // 这是 4 选 1 的短文本分类，本来就不需要思考链。关掉后：42 条评论用现有的
+        // max_tokens=500 就是 42/42，耗时 5.9s → 2.3s，且三次复跑完全稳定。
+        // 判准影响：与开思考的基准答案一致率 22/25，分歧的 3 条都是**关思考给得更低**
+        //（精准→感兴趣、精准→其他、感兴趣→其他），与本文件头部那条已拍板的原则同向
+        //（宁可漏判高意向，不可误判陌生人为高意向去真实打扰）。
+        //
+        // ⚠️ 该参数只有 deepseek 认；gemini-2.5 收到后照样思考（实测 reasoning 仍是 189/577/572），
+        // content-judgment.ts 那边只能靠给够 max_tokens，别照抄这行。
+        reasoning_effort: 'none',
       },
       {
         headers: {
@@ -66,7 +83,20 @@ export async function gradeComments(
         timeout: GRADING_TIMEOUT_MS,
       }
     );
-    const text: string = resp.data?.choices?.[0]?.message?.content ?? '';
+    const choice = resp.data?.choices?.[0];
+    const text: string = choice?.message?.content ?? '';
+
+    // 截断守卫：万一网关哪天不认 reasoning_effort（参数被忽略 → 思考回来 → 预算被吃光），
+    // 表现就是 finish_reason=length + content 空。这种情况必须留下可检索的 error 日志，
+    // 不能只静默返回一批 null 让人以为"这些评论就是没意向"——真机就是这么瞒了一个多月。
+    if (choice?.finish_reason === 'length') {
+      console.error(
+        `[comment-grading] 输出被 max_tokens 截断（finish_reason=length），${comments.length} 条留言整批未分档。` +
+        '大概率是 reasoning_effort=none 没生效导致思考吃光预算，请查网关是否仍支持该参数。'
+      );
+      return comments.map(() => null);
+    }
+
     return parseGrades(text, comments.length);
   } catch (err) {
     console.error('[comment-grading] LLM 调用失败:', (err as Error).message);

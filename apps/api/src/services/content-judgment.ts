@@ -30,6 +30,24 @@ export interface JudgeVideoOptions {
 
 // ── 常量 ─────────────────────────────────────────────────────────────────────
 const JUDGMENT_TIMEOUT_MS = 20_000;  // 带图/音判定较慢，留余量（服务端即便 agent 8s 超时也要写库）
+/**
+ * 主判 max_tokens——**这是含 reasoning_tokens 的 completion 总预算，不是"正文上限"**。
+ *
+ * gemini-2.5-flash-official 是 thinking 模型，TOAPIS 把思考算进 completion_tokens。
+ * 真机 0820 实测（decision fa247355）：同一段 19.6s 音频，reasoning 就要 189~736 tokens，
+ * 而线上写死的 200 连思考都不够 —— 模型必然停在 finish_reason=length，
+ * judgment_raw 落库原文只有 `REJECTED\n`（9 字）。全库 184 条视频只有 11 条有转写（6%）。
+ *
+ * prompt 一字不改、只把 200 抬到 2000，就从 9 字截断变成完整转写（finish=stop，6.7s）。
+ * 2000 = 最大观测 reasoning(736) + 转写正文(~150) 的 2 倍余量。
+ *
+ * ⚠️ 别学 comment-grading 用 reasoning_effort='none' 关思考 —— 那个参数**只有 deepseek 认**，
+ * gemini-2.5 收到后照样思考（实测 reasoning 仍是 189/577/572）。这边只能靠给够预算。
+ */
+const JUDGMENT_MAX_TOKENS = 2000;
+
+/** judgment_raw 落库上限：够诊断解析格式，又不会把库撑爆。 */
+export const JUDGMENT_RAW_MAX_LEN = 4000;
 const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';  // ToAPIs 代理，国内可用（OpenAI 兼容）；api. 子域 2026-07-14 实测全球挂起（gp2 smoke Step8c 真调抓到），默认切主域，可用 TOAPIS_BASE_URL 覆盖
 const JUDGMENT_MODEL = 'gemini-2.5-flash-official';
 // commander（复核官）：主判判"存疑"(UNCERTAIN)时的第二个 AI，走同一个 ToAPIs 代理（OpenAI 兼容，
@@ -169,7 +187,7 @@ async function callGemini(
             content: [{ type: 'text', text: prompt }, mediaPart],
           },
         ],
-        max_tokens: 200,
+        max_tokens: JUDGMENT_MAX_TOKENS,
         temperature: 0.1,
       },
       {
@@ -181,7 +199,24 @@ async function callGemini(
       }
     );
 
-    const text: string = resp.data?.choices?.[0]?.message?.content ?? '';
+    const choice = resp.data?.choices?.[0];
+    const text: string = choice?.message?.content ?? '';
+
+    // 截断守卫：finish_reason==='length' 说明模型被预算砍断，这段文本是残缺的。
+    // 绝不能拿它当正常判定写库——extractVerdict 会从 `MATCHED\n转` 里抓出 MATCHED，
+    // 于是一条什么都没判成的调用被记成 matched。真机 72 行 `matched|无原因|无转写`
+    // 的假绿就是这么来的。宁可诚实标 pending（raw 照样落库供诊断），不可假装判成了。
+    // 字段缺失（老网关不回 finish_reason）时按正常路径走，不误杀。
+    if (choice?.finish_reason === 'length') {
+      console.error(
+        '[content-judgment] 输出被 max_tokens 截断（finish_reason=length）videoId=%s 已判 pending，raw 前 80 字：%s',
+        videoId,
+        text.slice(0, 80),
+      );
+      await markPending(pool, tenantId, videoId, captureType, 'truncated_output', text);
+      return { judgment_status: 'pending', judgment_reason: 'truncated_output' };
+    }
+
     return parseGeminiResponse(pool, tenantId, videoId, captureType, text, targetProfileDesc, title);
   } catch (err) {
     const isTimeout = axios.isAxiosError(err) && err.code === 'ECONNABORTED';
@@ -389,17 +424,19 @@ async function markPending(
   videoId: string,
   captureType: string,
   reason: string,
+  /** AI 原始返回。截断/解析异常时**最需要**它——不落库就永远不知道模型到底吐了什么。
+   *  传 undefined 时保留库里原值（超时/无 key 等根本没拿到返回的路径）。 */
+  raw?: string | null,
 ): Promise<void> {
   await pool.query(
     `UPDATE zenithjoy.acquisition_collect_videos
-        SET judgment_status = 'pending', judgment_reason = $4, capture_type = $3, updated_at = now()
+        SET judgment_status = 'pending', judgment_reason = $4, capture_type = $3,
+            judgment_raw = COALESCE($5, judgment_raw), updated_at = now()
       WHERE tenant_id = $1 AND video_id = $2`,
-    [tenantId, videoId, captureType, reason]
+    [tenantId, videoId, captureType, reason,
+     raw ? raw.slice(0, JUDGMENT_RAW_MAX_LEN) : null]
   );
 }
-
-/** judgment_raw 落库上限：够诊断解析格式，又不会把库撑爆。 */
-export const JUDGMENT_RAW_MAX_LEN = 4000;
 
 async function writeJudgment(
   pool: QueryablePool,
