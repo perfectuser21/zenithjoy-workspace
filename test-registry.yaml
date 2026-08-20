@@ -1962,6 +1962,14 @@ tests:
     product: 私域运营
     note: "设备就绪度三态判定 + fail-open 闸（决策 3a826c45）。客服要能看到客户手机卡在哪一项；总判定必须服务端合成——小白正在发生的 license 配额被拒设备端根本不知道"
 
+  - id: agent-identity-lookup-disambiguation
+    path: apps/api/src/services/agent-identity-lookup.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "x-agent-id 反查消歧：无序 LIMIT 1 遇到交叉污染行会解析到别的租户，把另一个租户的任务发给设备（跨租户泄漏）。同租户确定性择一、跨租户一律 deny"
+
   - id: seg3-acquisition-dispatch-douyin-id
     path: apps/api/src/services/acquisition-dispatch-douyin-id.test.ts
     type: unit
