@@ -1,4 +1,4 @@
-import { Activity, ClipboardCheck, History, LayoutDashboard, LogOut, Wrench } from 'lucide-react';
+import { Activity, BookOpen, ClipboardCheck, History, LayoutDashboard, LogOut, PenLine, Wrench } from 'lucide-react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -13,6 +13,8 @@ import AcceptanceDetailPage from './pages/AcceptanceDetailPage';
 import AcceptanceHistoryPage from './pages/AcceptanceHistoryPage';
 import QuadrantPage from './pages/QuadrantPage';
 import NewRunPage from './pages/NewRunPage';
+import KnowledgeNewPage from './pages/KnowledgeNewPage';
+import KnowledgeRecentPage from './pages/KnowledgeRecentPage';
 import EnvBadge from './components/EnvBadge';
 import { adminFetch } from './lib/adminFetch';
 
@@ -91,6 +93,12 @@ function Shell() {
           <NavLink to="/acceptance-history" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
             <History size={18} /> 验收历史
           </NavLink>
+          <NavLink to="/knowledge/new" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+            <PenLine size={18} /> 沉淀经验
+          </NavLink>
+          <NavLink to="/knowledge/recent" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+            <BookOpen size={18} /> 最近沉淀
+          </NavLink>
         </nav>
         <div className="sidebar-footer">
           <div className="muted">{user?.email || user?.name}</div>
@@ -110,6 +118,8 @@ function Shell() {
           <Route path="/acceptance/:runKey/quadrant" element={<QuadrantPage />} />
           <Route path="/acceptance/:runKey" element={<AcceptanceDetailPage />} />
           <Route path="/acceptance-history" element={<AcceptanceHistoryPage />} />
+          <Route path="/knowledge/new" element={<KnowledgeNewPage />} />
+          <Route path="/knowledge/recent" element={<KnowledgeRecentPage />} />
           <Route path="/login/feishu" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

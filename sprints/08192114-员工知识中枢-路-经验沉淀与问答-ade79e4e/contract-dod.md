@@ -1,6 +1,3 @@
-contract_branch: cp-08192114-knowledge-hub-contract-r1
-sprint_dir: sprints/08192114-员工知识中枢-路-经验沉淀与问答-ade79e4e
-
 ---
 skeleton: false
 journey_type: user_facing

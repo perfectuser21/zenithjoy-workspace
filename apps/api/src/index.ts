@@ -6,6 +6,8 @@ import { startStaleListenerMonitor } from './services/wechat-heartbeat';
 import { startAgentOfflineMonitor } from './services/agent-offline-monitor';
 import { startScheduler } from './services/scheduler';
 import { runStartupConfigCheck } from './startup-check';
+import { assertStaffDirectoryOnStartup } from './staff-directory';
+import pool from './db/connection';
 
 dotenv.config();
 
@@ -28,17 +30,38 @@ const PORT = process.env.PORT || 3000;
 
 const server = http.createServer(app);
 attachAgentWS(server);
-server.listen(PORT, () => {
-  console.log(`🚀 Works Management API + Agent WS running on port ${PORT}`);
-  console.log(`   Health check: http://localhost:${PORT}/health`);
-  console.log(`   API docs: http://localhost:${PORT}/api/works`);
-  console.log(`   Agent WS: ws://localhost:${PORT}/agent-ws`);
-  // 选题池 v1 阶段2：老 pipeline-scheduler 已废除，改由 topic-worker.py LaunchAgent 每日 09:00 触发
-  // 进程守护：每分钟检查微信监听心跳，断 3 分钟无心跳 → 飞书告警（FEISHU_ALERT_WEBHOOK）
-  startStaleListenerMonitor();
-  // 进程守护：每分钟扫描 Windows Agent 心跳，超阈值离线 → 飞书告警（FEISHU_ALERT_WEBHOOK）
-  startAgentOfflineMonitor();
-  // 中台定时调度器：日报结算(23:55北京)/朋友圈草稿(09:00)/warmup养号(10:00北京)/DM派单sweep(每分钟)。
-  // 治根 2026-07-19：startScheduler() 建库以来从未被服务器进程调用过，四个周期任务全部静默不跑。
-  startScheduler();
-});
+
+/**
+ * A30 员工目录一致性自检 —— fail-closed 启动闸，必须在 listen 之前跑完。
+ * 目录声明写错（分组与扁平名单对不上 / 某人被声明在两家 / STAFF_ORG_MAP 指向不存在的租户）
+ * 的后果全是静默的跨企业事故，只能在启动期拦住，绝不能"先起来再说"。
+ *
+ * 注意：unhandledRejection/uncaughtException 两个进程级兜底会把异常拦下来不退出，
+ * 所以这里必须显式 process.exit(1)，否则自检失败照样起服务。
+ */
+async function bootstrap(): Promise<void> {
+  try {
+    await assertStaffDirectoryOnStartup(process.env, pool);
+  } catch (err) {
+    console.error(`🔴 [staff-directory] ${(err as Error).message}`);
+    console.error('🔴 [staff-directory] 员工目录一致性自检未通过，拒绝启动（fail-closed）');
+    process.exit(1);
+  }
+
+  server.listen(PORT, () => {
+    console.log(`🚀 Works Management API + Agent WS running on port ${PORT}`);
+    console.log(`   Health check: http://localhost:${PORT}/health`);
+    console.log(`   API docs: http://localhost:${PORT}/api/works`);
+    console.log(`   Agent WS: ws://localhost:${PORT}/agent-ws`);
+    // 选题池 v1 阶段2：老 pipeline-scheduler 已废除，改由 topic-worker.py LaunchAgent 每日 09:00 触发
+    // 进程守护：每分钟检查微信监听心跳，断 3 分钟无心跳 → 飞书告警（FEISHU_ALERT_WEBHOOK）
+    startStaleListenerMonitor();
+    // 进程守护：每分钟扫描 Windows Agent 心跳，超阈值离线 → 飞书告警（FEISHU_ALERT_WEBHOOK）
+    startAgentOfflineMonitor();
+    // 中台定时调度器：日报结算(23:55北京)/朋友圈草稿(09:00)/warmup养号(10:00北京)/DM派单sweep(每分钟)。
+    // 治根 2026-07-19：startScheduler() 建库以来从未被服务器进程调用过，四个周期任务全部静默不跑。
+    startScheduler();
+  });
+}
+
+void bootstrap();

@@ -64,9 +64,14 @@ import { operatorSessionsRouter } from './routes/operator-sessions';
 // Line 07 — AI 爆款视频翻拍 9节点流水线
 import videoRemakeRouter from './routes/video-remake';
 import staffRouter from './routes/staff';
+// Line11 员工知识中枢 路① — 经验录入/最近沉淀/投影只读（挂 knowledgeAuthGuard，只信会话）
+import { knowledgeRouter } from './routes/knowledge';
+// Line11 路① — DEV-only 假飞书上游（生产不挂载）
+import { fakeFeishuRouter, installFakeFeishuAxiosShim } from './routes/_smoke-fake-feishu';
 import { skillDraftsRouter, skillDraftsInternalRouter } from './routes/skill-drafts';
 import { agentOfflineScanRouter } from './routes/agent-offline-scan';
 import { errorHandler, notFoundHandler } from './middleware/error';
+import { simpleRateLimit, ipKeyFn } from './middleware/simple-rate-limit';
 import { verifyStartupConfig } from './startup-check';
 import { getBuildInfo } from './build-info';
 
@@ -113,6 +118,18 @@ app.get('/health', (req, res) => {
 // Version —— 暴露真正在跑的构建（git sha / version / 构建时间）。
 // 发版脚本干净重启后断言 /version.sha == 刚部署 commit，不一致 = 跑的是旧进程 → 发版红。
 // D2 FR-3：/api/version 与 /version 同时挂载（capture.mjs fail-loud 路径为 /api/version）。
+// /api/health 与 /health 同挂：反代下 /api 前缀是唯一稳定可达的路径，
+// 部署/E2E 的就绪探测走它。
+app.get('/api/health', simpleRateLimit({ windowMs: 60_000, max: 600, keyFn: ipKeyFn }), (req, res) => {
+  const cfg = verifyStartupConfig();
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    config: { ok: cfg.ok, missing: cfg.missing },
+    build: getBuildInfo(),
+  });
+});
+
 app.get('/version', (req, res) => {
   res.json(getBuildInfo());
 });
@@ -125,6 +142,10 @@ app.get('/api/version', (req, res) => {
 // 生产不挂载 → 真 OpenRouter 链路不受影响。router 对未匹配路径会 next() 透传。
 if (process.env.NODE_ENV !== 'production') {
   app.use(fakeLlmRouter);
+  // Line11 路① — 假飞书上游：HTTP 形态供 smoke/E2E，进程内形态供没有真监听端口的单测。
+  // 生产两条都不挂，登录一律走真 open.feishu.cn。
+  app.use('/api/_smoke/fake-feishu', fakeFeishuRouter);
+  installFakeFeishuAxiosShim();
 }
 
 // API routes
@@ -211,6 +232,10 @@ app.use('/api/staff/skill-drafts', skillDraftsRouter);
 app.use('/internal/skill-drafts', skillDraftsInternalRouter);
 // 内部 Agent 离线扫描触发端点（无鉴权，仅内部/smoke 调用）
 app.use('/api/internal/agent-offline-scan', agentOfflineScanRouter);
+// Line11 员工知识中枢 —— 必须排在 staffRouter 之前：staffRouter 内部 router.use(staffGuard)
+// 会拦下 /api/staff/* 的一切后续请求，挂在它后面的话知识端点会被身份头闸接管，
+// 「身份只来自会话」当场作废。
+app.use('/api/staff/knowledge', knowledgeRouter);
 // Line 00 运营中枢 — 员工工具（staff only，受 staffGuard 保护）
 app.use('/api/staff', staffRouter);
 // Line 02 — 公司信息页 + 账号状态
