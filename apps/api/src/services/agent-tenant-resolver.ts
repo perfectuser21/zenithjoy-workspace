@@ -18,6 +18,8 @@
  */
 
 /** 最小可注入的 pg 查询接口（便于单测注入假 db） */
+import { lookupAgentIdentity } from './agent-identity-lookup';
+
 export interface TenantResolverDb {
   query<T = Record<string, unknown>>(
     sql: string,
@@ -59,14 +61,12 @@ export async function resolveTenantForAgent(
   try {
     // 1) agents：按 agent_id 文本列或 id::text（UUID）——保留既有主路径
     if (agentId) {
-      const r = await db.query<TenantRow>(
-        `SELECT tenant_id FROM zenithjoy.agents
-          WHERE agent_id = $1 OR id::text = $1
-          LIMIT 1`,
-        [agentId],
-      );
-      const t = firstTenant(r.rows);
-      if (t) return t;
+      // 反查消歧（agent-identity）：交叉污染行（A.agent_id 存着 B.id）会让无序 LIMIT 1
+      // 返回别的租户。跨租户歧义在这里同样一律 deny——与本文件下方 machine_id
+      // 多租户探测的哲学一致（「选最新必错」）。
+      const identity = await lookupAgentIdentity(db, agentId);
+      if (identity.kind === 'resolved') return identity.tenantId;
+      if (identity.kind === 'cross_tenant_ambiguous') return '';
     }
 
     // 2) service_agents：按 machine_id（客服绑定 SSOT，最权威）

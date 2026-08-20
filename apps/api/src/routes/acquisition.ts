@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { lookupAgentIdentity } from '../services/agent-identity-lookup';
 import { randomUUID } from 'crypto';
 import axios from 'axios';
 import pool from '../db/connection';
@@ -399,20 +400,19 @@ acquisitionRouter.get('/pending-collect-tasks', pendingCollectTasksRateLimit, as
       return res.status(200).json({ tasks: [], total: 0 });
     }
 
-    const agentRes = await pool.query<{ tenant_id: string; agent_id: string | null; id: string }>(
-      `SELECT tenant_id, agent_id, id::text AS id FROM zenithjoy.agents WHERE agent_id = $1 OR id::text = $1 LIMIT 1`,
-      [xAgentId]
-    );
-    const tenantId = agentRes.rows[0]?.tenant_id;
-    if (!tenantId) {
+    // 反查消歧（agent-identity）：绝不再用无序 LIMIT 1——交叉污染行会让这里
+    // 解析到别的租户，把另一个租户的任务发给这台设备。跨租户歧义一律 deny。
+    const identity = await lookupAgentIdentity(pool, xAgentId);
+    if (identity.kind !== 'resolved') {
       return res.status(200).json({ tasks: [], total: 0 });
     }
+    const tenantId = identity.tenantId;
     // 真机复现(2026-07-17)：/collect/start 用 account_label 绑定小号时把 agents.agent_id
     // (文本slug) 写进 acquisition_collect_tasks.agent_id 列，但设备轮询这里发的是
     // agents.id(UUID)。任务表过滤必须同时认这两种形式，否则文本形式的 agent_id 列永远
     // 匹配不上 UUID header，接口静默返回空、真机采集任务永远卡在 pending。
-    const canonicalTextAgentId = agentRes.rows[0]?.agent_id ?? xAgentId;
-    const canonicalUuidId = agentRes.rows[0]?.id ?? xAgentId;
+    const canonicalTextAgentId = identity.agentId ?? xAgentId;
+    const canonicalUuidId = identity.id ?? xAgentId;
 
     const { rows } = await pool.query<{
       id: string;
@@ -768,11 +768,11 @@ acquisitionRouter.post('/collect/start', collectStartRateLimit, tenantContextOpt
 
     // 方案 D：选了抖音小号 → 任务必须派到持有该 session 的机器（物理约束，覆盖手选的 agent_id）
     if (accountLabel) {
-      // TODO(follow-up，见 sprints/07212205-fix-dispatch-dedup-crosstenant)：LIMIT 1 无
-      // ORDER BY，若同租户下同一 account_label 绑了两条 active session，取哪条不确定。
-      // 跟 acquisition-dispatch.ts dispatchDue 那次 P0 修复是同一类问题（那边加了
-      // ORDER BY s.bound_at DESC NULLS LAST 保证确定性），这里租户隔离本身没问题（INNER
-      // JOIN + WHERE 天然排除跨租户），但确定性这半个问题还没堵，留着下次一起处理。
+      // 确定性（2026-08-20 补齐，原 TODO 见 sprints/07212205-fix-dispatch-dedup-crosstenant）：
+      // 同租户下同一 account_label 若绑了两条 active session，无 ORDER BY 取哪条不确定。
+      // 照 acquisition-dispatch.ts dispatchDue 那次 P0 修复的同款做法加
+      // ORDER BY s.bound_at DESC NULLS LAST——取最近绑定那条。租户隔离本身没问题
+      // （INNER JOIN + WHERE 天然排除跨租户），这里只补确定性这半个。
       const sessionRes = await pool.query<{ agent_id: string }>(
         `SELECT a.agent_id AS agent_id
            FROM zenithjoy.agent_platform_sessions s
@@ -781,9 +781,11 @@ acquisitionRouter.post('/collect/start', collectStartRateLimit, tenantContextOpt
             AND s.account_label = $2
             AND s.role = 'burner'
             AND s.status = 'active'
+          ORDER BY s.bound_at DESC NULLS LAST
           LIMIT 1`,
         [tenantId, accountLabel]
       );
+      // 查不到 session（accountLabel 有值但无匹配行）在下面显式 400，不会往下走空值
       const boundAgentId = sessionRes.rows[0]?.agent_id;
       if (!boundAgentId) {
         return fail(res, 400, 'BURNER_SESSION_NOT_FOUND', '该小号未绑定或 session 已过期，请重新扫码绑定');
@@ -919,11 +921,8 @@ acquisitionRouter.post('/collect/report-videos', collectReportVideosRateLimit, a
 
   const xAgentId = req.header('x-agent-id') ?? '';
   if (!xAgentId) return fail(res, 401, 'MISSING_AGENT_ID', '缺 x-agent-id');
-  const agentRes = await pool.query<{ tenant_id: string }>(
-    `SELECT tenant_id FROM zenithjoy.agents WHERE agent_id = $1 OR id::text = $1 LIMIT 1`,
-    [xAgentId]
-  );
-  const tenantId = agentRes.rows[0]?.tenant_id;
+  const identity = await lookupAgentIdentity(pool, xAgentId);
+  const tenantId = identity.kind === 'resolved' ? identity.tenantId : null;
   if (!tenantId) return fail(res, 403, 'UNKNOWN_AGENT', 'agent 未注册');
 
   // 原始上报：保留带 video_id（旧 agent 直传）或 share_url（新 agent 经 share-intent 拿短链）的项
@@ -1647,11 +1646,8 @@ acquisitionRouter.post('/judge-video', async (req: Request, res: Response) => {
   // 与 pending-collect-tasks / report-videos 一致：用 x-agent-id 反查真 tenant_id。
   const xAgentId = req.header('x-agent-id') ?? '';
   if (!xAgentId) return fail(res, 401, 'MISSING_AGENT_ID', '缺 x-agent-id');
-  const agentRes = await pool.query<{ tenant_id: string }>(
-    `SELECT tenant_id FROM zenithjoy.agents WHERE agent_id = $1 OR id::text = $1 LIMIT 1`,
-    [xAgentId]
-  );
-  const tenantId = agentRes.rows[0]?.tenant_id;
+  const identity = await lookupAgentIdentity(pool, xAgentId);
+  const tenantId = identity.kind === 'resolved' ? identity.tenantId : null;
   if (!tenantId) return fail(res, 403, 'AGENT_NOT_FOUND', 'agent 未注册/未知');
 
   const {

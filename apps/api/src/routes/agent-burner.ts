@@ -14,6 +14,7 @@
  *   MISSING_VIDEO_URL / NO_BURNER_SESSION / FEISHU_NOT_BOUND
  */
 import { Router, Request, Response } from 'express';
+import { lookupAgentIdentity } from '../services/agent-identity-lookup';
 import pool from '../db/connection';
 import { writeDmOutreachStatus, type DmStatus } from '../services/lead-writer';
 import { tenantContextOptional } from '../middleware/tenant-context';
@@ -252,11 +253,8 @@ router.post('/uia-signal', uiaSignalRateLimit, async (req: Request, res: Respons
   if (!xAgentId) return res.status(401).json(ERR('MISSING_AGENT_ID', '缺 x-agent-id header'));
 
   // 用 x-agent-id 反查 tenant_id（同 acquisition.ts 等路由的做法）
-  const agentRes = await pool.query<{ tenant_id: string }>(
-    `SELECT tenant_id FROM zenithjoy.agents WHERE agent_id = $1 OR id::text = $1 LIMIT 1`,
-    [xAgentId],
-  );
-  const tenantId = agentRes.rows[0]?.tenant_id ?? null;
+  const identity = await lookupAgentIdentity(pool, xAgentId);
+  const tenantId = identity.kind === 'resolved' ? identity.tenantId : null;
   if (!tenantId) return res.status(401).json(ERR('UNKNOWN_AGENT', 'agent 未注册'));
 
   const { account_label, uia_online, uia_error } = req.body || {};
