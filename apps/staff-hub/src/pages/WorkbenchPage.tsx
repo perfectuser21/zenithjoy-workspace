@@ -12,6 +12,7 @@
  * 一次静默故障就此隐身（三态文案由服务端错误码分：重新登录 / 没有权限 / 暂时不可达）。
  */
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   FIELD_TYPES,
   FIELD_TYPE_LABELS,
@@ -243,6 +244,9 @@ export default function WorkbenchPage() {
                   <td>{t.visibility === 'org' ? '组织可见' : '仅自己'}</td>
                   <td data-testid={`field-count-${t.table_id}`}>{t.field_count}</td>
                   <td>
+                    <Link to={`/workbench/tables/${t.table_id}`} data-testid={`open-table-${t.table_id}`}>
+                      打开表格
+                    </Link>
                     <button
                       type="button"
                       data-testid={`delete-btn-${t.table_id}`}

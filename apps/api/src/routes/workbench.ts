@@ -1,8 +1,13 @@
 /**
- * 路③ 结构化工作台路由 —— 挂在 /api/knowledge/db，九个端点（4 写 + 5 读）
+ * 路③ 结构化工作台路由 —— 挂在 /api/knowledge/db，十七个端点（9 写 + 8 读）
  *
- * 写：POST /tables、POST /tables/:id/fields、DELETE /tables/:id、POST /trash/:id/restore
- * 读：GET /tables、GET /tables/:id、GET /tables/:id/fields、GET /trash、GET /templates
+ * 表层（Sprint A）
+ *   写：POST /tables、POST /tables/:id/fields、DELETE /tables/:id、POST /trash/:id/restore
+ *   读：GET /tables、GET /tables/:id、GET /tables/:id/fields、GET /trash、GET /templates
+ * 行层（Sprint B）
+ *   写：POST /tables/:id/rows、PATCH /rows/:id、DELETE /rows/:id、POST /rows/:id/restore、
+ *       POST /tables/:id/rows/paste
+ *   读：GET /tables/:id/rows、GET /tables/:id/rows/trash、GET /tables/:id/export
  *
  * 全部端点挂 workbenchAuthGuard —— 身份与组织归属只来自服务端会话。本文件**不读任何
  * 请求头**，请求体里出现的 org_id / tenant_id 一律不看（A1 的判据就是这条）。
@@ -27,6 +32,18 @@ import {
   restoreTable,
   WorkbenchValidationError,
 } from '../services/workbench.service';
+import {
+  listRows,
+  listRowTrash,
+  exportTable,
+  createRow,
+  patchRow,
+  softDeleteRow,
+  restoreRow,
+  pasteRows,
+  RowLimitError,
+  RowVersionConflictError,
+} from '../services/workbench-rows.service';
 import { WORKBENCH_TEMPLATES } from '../knowledge/workbench-templates';
 
 const router = Router();
@@ -53,6 +70,27 @@ function serverError(res: Response, scope: string, err: unknown): void {
 
 function badRequest(res: Response, err: WorkbenchValidationError): void {
   res.status(400).json(workbenchErrorBody('VALIDATION_FAILED', err.message));
+}
+
+/** 超上限与"值不合法"是两件事：前者要告诉用户当前上限与已有行数，好让他自己删行或分批 */
+function rowLimitExceeded(res: Response, err: RowLimitError): void {
+  res.status(400).json(workbenchErrorBody('ROW_LIMIT_EXCEEDED', err.message));
+}
+
+/**
+ * 409 在本路有两个持有者：闸层的 MULTI_ORG_MEMBER 与本端点的 ROW_VERSION_CONFLICT，
+ * 所以断言一律查 error.code 而不是裸状态码。
+ */
+function versionConflict(res: Response, err: RowVersionConflictError): void {
+  res.status(409).json(workbenchErrorBody('ROW_VERSION_CONFLICT', err.message));
+}
+
+/** 行端点族的错误分派：顺序即语义（404 已在各 handler 里先行判掉） */
+function rowError(res: Response, scope: string, err: unknown): void {
+  if (err instanceof RowVersionConflictError) return versionConflict(res, err);
+  if (err instanceof RowLimitError) return rowLimitExceeded(res, err);
+  if (err instanceof WorkbenchValidationError) return badRequest(res, err);
+  serverError(res, scope, err);
 }
 
 // ── 读：开箱模板 ─────────────────────────────────────────────────────────────
@@ -184,6 +222,124 @@ router.post('/trash/:id/restore', async (req: Request, res: Response) => {
     ok(res, 200, restored);
   } catch (err) {
     serverError(res, 'restoreTable', err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 行层（Sprint B / S2「数据进得来」）
+//
+// 组织归属仍然只来自 req.workbenchIdentity —— 行端点挂在同一个 router 之下，
+// 顶层的 workbenchAuthGuard 自动覆盖，这里一个请求头都不读。
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── 读：表格视图的行列表（含服务端下发的上限，前端据此硬拦，不自己写 5000）────────
+router.get('/tables/:id/rows', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  try {
+    const out = await listRows(identity.orgId, identity.memberId, req.params.id);
+    if (!out) return notFound(res);
+    ok(res, 200, out);
+  } catch (err) {
+    serverError(res, 'listRows', err);
+  }
+});
+
+// ── 读：行回收站（restorable_until = deleted_at + 30 天，复用表层的保质期常量）──────
+router.get('/tables/:id/rows/trash', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  try {
+    const rows = await listRowTrash(identity.orgId, identity.memberId, req.params.id);
+    if (!rows) return notFound(res);
+    ok(res, 200, { rows });
+  } catch (err) {
+    serverError(res, 'listRowTrash', err);
+  }
+});
+
+// ── 读：单表 JSON 全量导出（数据主权：拿得走，且零他组织数据）────────────────────
+router.get('/tables/:id/export', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  try {
+    const out = await exportTable(identity.orgId, identity.memberId, req.params.id);
+    if (!out) return notFound(res);
+    ok(res, 200, out);
+  } catch (err) {
+    serverError(res, 'exportTable', err);
+  }
+});
+
+// ── 写：新增空行 ─────────────────────────────────────────────────────────────
+router.post('/tables/:id/rows', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  try {
+    // 请求体连读都不读：body 里的 org_id / tenant_id 一律无效，归属永远是会话解析出来的那个
+    const row = await createRow(identity.orgId, identity.memberId, req.params.id);
+    if (!row) return notFound(res);
+    ok(res, 201, row);
+  } catch (err) {
+    rowError(res, 'createRow', err);
+  }
+});
+
+// ── 写：行内改格（增量补丁 + 行级 version 乐观锁）────────────────────────────────
+router.patch('/rows/:id', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  try {
+    const row = await patchRow(
+      identity.orgId,
+      identity.memberId,
+      req.params.id,
+      body.version,
+      body.data
+    );
+    if (!row) return notFound(res);
+    ok(res, 200, row);
+  } catch (err) {
+    rowError(res, 'patchRow', err);
+  }
+});
+
+// ── 写：删行（软删，物理行一条不少）──────────────────────────────────────────
+router.delete('/rows/:id', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  try {
+    const out = await softDeleteRow(identity.orgId, identity.memberId, req.params.id);
+    if (!out) return notFound(res);
+    ok(res, 200, out);
+  } catch (err) {
+    serverError(res, 'softDeleteRow', err);
+  }
+});
+
+// ── 写：从行回收站还原（data 逐字回归，version 不变）─────────────────────────────
+router.post('/rows/:id/restore', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  try {
+    const row = await restoreRow(identity.orgId, identity.memberId, req.params.id);
+    if (!row) return notFound(res);
+    ok(res, 200, row);
+  } catch (err) {
+    serverError(res, 'restoreRow', err);
+  }
+});
+
+// ── 写：粘贴批量导入（未匹配列自动建文本字段；超上限整批拒绝）──────────────────────
+router.post('/tables/:id/rows/paste', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  try {
+    const out = await pasteRows(
+      identity.orgId,
+      identity.memberId,
+      req.params.id,
+      body.header,
+      body.rows
+    );
+    if (!out) return notFound(res);
+    ok(res, 201, out);
+  } catch (err) {
+    rowError(res, 'pasteRows', err);
   }
 });
 

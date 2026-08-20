@@ -10,11 +10,14 @@ on:
       - 'apps/api/src/**'
       - 'apps/staff-hub/**'
       - 'apps/staff-hub/e2e/structured-workbench.spec.ts'
+      - 'apps/staff-hub/e2e/structured-workbench-rows.spec.ts'
       - 'apps/dashboard/e2e/fields-auth-regression.spec.ts'
       - 'apps/api/db/migrations/**'
+      - 'apps/api/vitest.workbench-rows.config.ts'
       - '.github/workflows/e2e-knowledge-hub-path3.yml'
       - '.github/workflows/scripts/smoke/structured-workbench-smoke.sh'
       - 'sprints/08201151-员工知识中枢-路-结构化工作台-c86e37ff/**'
+      - 'sprints/08201850-workbench-sprintB-rows/**'
   workflow_dispatch:
 
 concurrency:
@@ -70,6 +73,20 @@ jobs:
           # A4 段⑤ 的 oracle 在 Brain(cecelia) 库，runner 上不可达 —— 这里跑 ①②③④，
           # 段⑤ 由 evaluator 在宿主机用 --a4-only 验（判据见 contract-dod.md）
           bash "$S" --inv-endpoint-auth
+      - name: 段1b S2 合同测试真被 vitest 收集执行（4 个文件 / ≥20 用例 / 真 Postgres）
+        run: npm run test:workbench-rows --workspace apps/api
+      - name: 段2 S2 行链七段（A12 / A13 / A15 / A16 / A17 / A18-A19 / 行层 A1-A3）
+        run: |
+          S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh
+          # 七段各自 fixture-up：--a15-only 必须以小 WORKBENCH_ROW_LIMIT 起服务才验得动上限闸，
+          # 与其它段共享一个进程就会让前面几段建行建到一半撞上限（理由见 smoke 文件末尾注释）
+          bash "$S" --a12-only
+          bash "$S" --a13-only
+          bash "$S" --a15-only
+          bash "$S" --a16-only
+          bash "$S" --a17-only
+          bash "$S" --a18-a19-only
+          bash "$S" --a1-a3-rows-only
       - name: 段2b G2 恢复演练（真 pg_dump + 真还原 + 五表逐条全等）
         run: bash .github/workflows/scripts/backup/restore-drill.sh
 
@@ -113,3 +130,25 @@ jobs:
           name: path3-screenshots
           path: sprints/08201151-员工知识中枢-路-结构化工作台-c86e37ff/screenshots/
           if-no-files-found: warn
+
+      # ── Sprint B（S2 数据进得来）行链三段 ────────────────────────────────
+      # 三个 step 各自 seed / 起服务 / 跑完停：谁都不指望上一个 step 留下的后台进程还活着。
+      - name: 路③ S2 行链 E2E 准备（依赖 / chromium / migration / apps-api 构建）
+        shell: pwsh
+        run: pwsh -File "sprints/08201850-workbench-sprintB-rows/e2e-rows-prepare.ps1"
+      - name: 路③ S2 行链真浏览器（行内编辑 / 冲突提示 / 断网保留输入 / 粘贴 / 回收站还原）
+        shell: pwsh
+        run: pwsh -File "sprints/08201850-workbench-sprintB-rows/e2e-rows-run.ps1" -Spec "structured-workbench-rows.spec.ts" -Grep "@rows-offline"
+      - name: 路③ S2 行详情面板（字段全集 / 多行编辑区 / 面板开着时该行被删）
+        shell: pwsh
+        run: pwsh -File "sprints/08201850-workbench-sprintB-rows/e2e-rows-run.ps1" -Spec "structured-workbench-rows.spec.ts" -Grep "@rows-detail"
+      - name: 路③ S2 UI 上限硬拦（以小 WORKBENCH_ROW_LIMIT 起服务）
+        shell: pwsh
+        run: pwsh -File "sprints/08201850-workbench-sprintB-rows/e2e-rows-run.ps1" -Spec "structured-workbench-rows.spec.ts" -Grep "@rows-limit" -RowLimit 3
+      - name: 上传本刀截图（S2 行链六张）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: path3-rows-screenshots
+          path: sprints/08201850-workbench-sprintB-rows/screenshots/
+          if-no-files-found: error
