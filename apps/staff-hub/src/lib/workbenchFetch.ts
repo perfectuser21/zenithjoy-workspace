@@ -141,6 +141,24 @@ export interface TableExport {
   exported_at: string;
 }
 
+/**
+ * 编辑器里的字符串 → 服务端要的类型。表格视图与行详情面板共用同一份，
+ * 各写一份就等于给"同一个格在两处被解析成不同东西"开了口子。
+ *
+ * 空串一律当「清空该格」（服务端 null 合法）；数字解析不出来就把原串照发，
+ * 由服务端返 400 VALIDATION_FAILED —— 前端不替用户编一个"看起来合理"的值。
+ */
+export function parseCellInput(fieldType: string, raw: string | string[]): CellValue {
+  if (fieldType === 'multi_select') return Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const text = Array.isArray(raw) ? raw.join('') : raw;
+  if (text === '') return null;
+  if (fieldType === 'number') {
+    const n = Number(text);
+    return Number.isFinite(n) ? n : text;
+  }
+  return text;
+}
+
 /** 上限由服务端下发（row_limit），前端据此硬拦——写死在前端就违反了「禁写死环境假设值」 */
 export const listRows = (tableId: string) =>
   json<{ rows: WorkbenchRow[]; total: number; row_limit: number }>(`/tables/${tableId}/rows`);

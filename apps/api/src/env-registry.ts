@@ -35,6 +35,7 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'SMOKE_TOKEN', reason: 'smoke 测试用临时 token，仅冒烟链路读取' },
   { name: 'CRM_RECONCILE_DRYRUN', reason: 'CRM 采集对账干跑开关，缺则默认干跑（只日志不软删，最安全）；仅字面 false 进真删模式' },
   { name: 'COMMANDER_MODEL', reason: '视频判定存疑复核官(commander)的 ToAPIs 模型名，缺则默认 deepseek-v4-flash；仅覆盖模型时设' },
+  { name: 'WORKBENCH_ROW_LIMIT', reason: '路③ 结构化工作台单表行数上限，缺则默认 5000（产品阈值）；CI/E2E 覆写成小值来证明上限闸真的在，真插 5000 行会把 job 预算烧光' },
 
   // —— LLM / AI 供应商（feature 级，缺则对应模型路径不可用）——
   { name: 'TOAPI_BASE_URL', reason: 'toapi 网关地址，缺则用默认 base url' },

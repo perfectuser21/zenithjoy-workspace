@@ -23,6 +23,9 @@ export default defineConfig({
   test: {
     globals: true,
     include: ['../../sprints/08201850-workbench-sprintB-rows/tests/**/*.test.ts'],
+    // 连接串 → apps/api 认的五个离散 DATABASE_* 变量。必须在测试文件 import app 之前跑，
+    // 否则被测进程连的是缺省库，报出来的是外键冲突而不是"库没配对"（理由见 setup 文件注释）。
+    setupFiles: ['./vitest.workbench-rows.setup.ts'],
     pool: 'forks',
     poolOptions: { forks: { singleFork: true } },
     sequence: { concurrent: false },

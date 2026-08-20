@@ -21,6 +21,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import {
+  parseCellInput,
   patchRow,
   WorkbenchRequestError,
   type CellValue,
@@ -61,19 +62,6 @@ function draftOf(value: CellValue): Draft {
   if (Array.isArray(value)) return value.map((v) => String(v));
   if (value === null || value === undefined) return '';
   return String(value);
-}
-
-/** 编辑器里的字符串 → 服务端要的类型。空串一律当"清空该格"（服务端 null 合法）。 */
-export function parseDraft(fieldType: string, draft: Draft): CellValue {
-  if (fieldType === 'multi_select') return Array.isArray(draft) ? draft : draft ? [draft] : [];
-  const text = Array.isArray(draft) ? draft.join('') : draft;
-  if (text === '') return null;
-  if (fieldType === 'number') {
-    const n = Number(text);
-    // 不是数字就把原串照发：由服务端返 400 VALIDATION_FAILED，前端不替它编一个"合理值"
-    return Number.isFinite(n) ? n : text;
-  }
-  return text;
 }
 
 function CellEditor({ field, active }: { field: WorkbenchField; active: ActiveCell }) {
@@ -257,7 +245,7 @@ export default function WorkbenchRowGrid({
     apply({ ...cur, status: 'saving', message: '' });
     try {
       const saved = await patchRow(cur.rowId, row.version, {
-        [cur.fieldId]: parseDraft(field.field_type, cur.draft),
+        [cur.fieldId]: parseCellInput(field.field_type, cur.draft),
       });
       apply(null);
       onRowSaved(saved);

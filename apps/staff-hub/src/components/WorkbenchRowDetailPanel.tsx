@@ -8,6 +8,7 @@
  */
 import { useState } from 'react';
 import {
+  parseCellInput,
   patchRow,
   WorkbenchRequestError,
   type CellValue,
@@ -27,17 +28,6 @@ function textOf(value: CellValue): string {
   if (value === null || value === undefined) return '';
   if (Array.isArray(value)) return value.join('、');
   return String(value);
-}
-
-function parseValue(fieldType: string, raw: string | string[]): CellValue {
-  if (fieldType === 'multi_select') return Array.isArray(raw) ? raw : raw ? [raw] : [];
-  const text = Array.isArray(raw) ? raw.join('') : raw;
-  if (text === '') return null;
-  if (fieldType === 'number') {
-    const n = Number(text);
-    return Number.isFinite(n) ? n : text;
-  }
-  return text;
 }
 
 export default function WorkbenchRowDetailPanel({
@@ -61,7 +51,7 @@ export default function WorkbenchRowDetailPanel({
     setError('');
     try {
       const saved = await patchRow(row.row_id, row.version, {
-        [fieldId]: parseValue(field.field_type, draft),
+        [fieldId]: parseCellInput(field.field_type, draft),
       });
       setDrafts((prev) => {
         const next = { ...prev };

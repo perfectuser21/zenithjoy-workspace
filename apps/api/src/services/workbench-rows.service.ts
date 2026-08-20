@@ -167,6 +167,17 @@ async function countLiveRows(db: Queryable, tableId: string, orgId: string): Pro
   return Number(c.rows[0].n);
 }
 
+/**
+ * 事务外的审计写入失败**不许把一次已经落库的写变成 5xx**：客户端看到 503 会重发，
+ * 于是多出一行/多写一次。审计断链只打日志（DoD 那条「四种动作全部落 db_audit」会在 CI 抓住它），
+ * 不牵连业务写。事务内的调用（粘贴）不走这条：那里失败本就该整批回滚。
+ */
+function auditBestEffort(p: Promise<void>, scope: string): Promise<void> {
+  return p.catch((err) => {
+    console.error(`[workbench] ${scope} 审计写入失败:`, (err as Error).message);
+  });
+}
+
 async function writeAudit(
   db: Queryable,
   orgId: string,
@@ -333,7 +344,10 @@ export async function createRow(
     [tableId, orgId, memberId]
   );
   const row = toRowOut(r.rows[0]);
-  await writeAudit(pool, orgId, tableId, memberId, 'create_row', { row_id: row.row_id });
+  await auditBestEffort(
+    writeAudit(pool, orgId, tableId, memberId, 'create_row', { row_id: row.row_id }),
+    'create_row'
+  );
   return row;
 }
 
@@ -390,11 +404,14 @@ export async function patchRow(
   if (r.rowCount === 0) throw new RowVersionConflictError();
 
   const row = toRowOut(r.rows[0]);
-  await writeAudit(pool, orgId, current.table_id, memberId, 'update_row', {
-    row_id: row.row_id,
-    // 只记被改了几个格，不记 field_id 更不记正文
-    changed: clears.length + Object.keys(sets).length,
-  });
+  await auditBestEffort(
+    writeAudit(pool, orgId, current.table_id, memberId, 'update_row', {
+      row_id: row.row_id,
+      // 只记被改了几个格，不记 field_id 更不记正文
+      changed: clears.length + Object.keys(sets).length,
+    }),
+    'update_row'
+  );
   return row;
 }
 
@@ -414,7 +431,10 @@ export async function softDeleteRow(
   );
   if (r.rowCount === 0 || !r.rows[0].deleted_at) return null;
   const deletedAt = new Date(r.rows[0].deleted_at as string).toISOString();
-  await writeAudit(pool, orgId, current.table_id, memberId, 'soft_delete_row', { row_id: rowId });
+  await auditBestEffort(
+    writeAudit(pool, orgId, current.table_id, memberId, 'soft_delete_row', { row_id: rowId }),
+    'soft_delete_row'
+  );
   return { row_id: rowId, deleted_at: deletedAt };
 }
 
@@ -434,7 +454,10 @@ export async function restoreRow(
     [rowId, orgId]
   );
   if (r.rowCount === 0) return null;
-  await writeAudit(pool, orgId, current.table_id, memberId, 'restore_row', { row_id: rowId });
+  await auditBestEffort(
+    writeAudit(pool, orgId, current.table_id, memberId, 'restore_row', { row_id: rowId }),
+    'restore_row'
+  );
   return toRowOut(r.rows[0]);
 }
 
