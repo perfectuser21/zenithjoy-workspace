@@ -261,6 +261,17 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/customer-admin-backend-smoke.sh
           bash .github/workflows/scripts/smoke/customer-admin-backend-smoke.sh
 
+      - name: Smoke — 设备就绪度上报（客服看得见客户手机卡在哪一项）
+        env:
+          API_BASE: http://localhost:5200
+          PGHOST: localhost
+          PGUSER: cecelia
+          PGPASSWORD: cecelia
+          PGDATABASE: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/device-readiness-smoke.sh
+          bash .github/workflows/scripts/smoke/device-readiness-smoke.sh
+
       - name: Smoke — Admin Users 超管会员管理 (PR-A)
         env:
           API_BASE: http://localhost:5200

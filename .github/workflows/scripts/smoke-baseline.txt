@@ -109,3 +109,4 @@ release-gate-d5-smoke.sh
 staff-acceptance-quadrant-smoke.sh
 knowledge-hub-path1-smoke.sh
 fields-smoke.sh
+device-readiness-smoke.sh

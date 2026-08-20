@@ -26,6 +26,8 @@ import {
   isValidPublishType,
   ackPublishTask,
   saveModuleStatus,
+  saveReadiness,
+  isMachineBoundToLicense,
   getAllModuleHealth,
   HEARTBEAT_MODULES,
   getRequiredAgentVersion,
@@ -37,6 +39,12 @@ import {
 
 export const heartbeatRouter = Router();   // 挂在 /api/agent
 export const publishWsRouter = Router();   // 挂在 /api/publish
+
+import {
+  normalizeDeviceReadiness,
+  computeReadinessVerdict,
+  type ReadinessMap,
+} from '../services/device-readiness';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -64,13 +72,14 @@ heartbeatRouter.post(
   '/heartbeat',
   licenseAuth,
   async (req: Request, res: Response) => {
-    const { version, hostname, os_type, module_status, agent_uuid, machine_id } = (req.body ?? {}) as {
+    const { version, hostname, os_type, module_status, agent_uuid, machine_id, readiness } = (req.body ?? {}) as {
       version?: unknown;
       hostname?: unknown;
       os_type?: unknown;
       module_status?: unknown;
       agent_uuid?: unknown;
       machine_id?: unknown;
+      readiness?: unknown;
     };
     const lic = req.license!;
     if (!lic.tenant_id) {
@@ -112,6 +121,33 @@ heartbeatRouter.post(
       const normalized = normalizeModuleStatus(module_status);
       if (normalized) {
         await saveModuleStatus(agent.id, normalized);
+      }
+      // 设备就绪度：设备端上报的条目 + 服务端自己知道的 license 绑定，合成一份落库。
+      // 小白正在发生的「license 配额已满绑不上」设备端根本不知道，只有这里知道。
+      // best-effort：就绪度写失败绝不阻断心跳——心跳是客户机上唯一的远程视野。
+      try {
+        const deviceItems = normalizeDeviceReadiness(readiness);
+        const machineIdStr =
+          typeof machine_id === 'string' ? machine_id.slice(0, 200) : undefined;
+        const licenseBound = await isMachineBoundToLicense(lic.id, machineIdStr);
+        if (deviceItems || licenseBound === false) {
+          const merged: ReadinessMap = { ...(deviceItems ?? {}) };
+          if (licenseBound !== null) {
+            merged.license_binding = licenseBound
+              ? { ok: true }
+              : {
+                  ok: false,
+                  detail:
+                    'license 机器配额已满，这台设备没绑上（license_machines 无此 machine_id）——按 machine_id 反查租户的通路是断的',
+                };
+          }
+          await saveReadiness(agent.id, merged);
+        }
+      } catch (e) {
+        console.warn(
+          '[heartbeat] readiness 落库失败（best-effort 忽略）:',
+          e instanceof Error ? e.message : e
+        );
       }
       const queued = await getQueuedTasks(agent.id);
       if (typeof machine_id === 'string' && machine_id.length > 0) {
@@ -168,7 +204,16 @@ heartbeatRouter.get(
   async (_req: Request, res: Response) => {
     try {
       const data = await getAllModuleHealth();
-      return res.status(200).json({ ok: true, data });
+      // 就绪度与模块健康同屏给客服看：一台机器一行，verdict 三态。
+      // licenseBound 已在心跳时合进 readiness 的 license_binding 条目，这里传 null 不重复查。
+      const withReadiness = data.map((row) => ({
+        ...row,
+        readiness_verdict: computeReadinessVerdict({
+          deviceItems: (row as { readiness?: ReadinessMap | null }).readiness ?? null,
+          licenseBound: null,
+        }),
+      }));
+      return res.status(200).json({ ok: true, data: withReadiness });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'unknown';
       return res
