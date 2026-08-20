@@ -103,7 +103,7 @@ else:
 
 echo "▶ [5] 未就绪 → verdict 必须是 not_ready"
 V=$(verdict_of)
-[ "$V" = "not_ready" ] || { echo "  FAIL: verdict=$V（期望 not_ready）"; exit 5; }
+[ "$V" = "not_ready" ] || { echo "  FAIL: verdict=${V}（期望 not_ready）"; exit 5; }
 echo "  OK: verdict=not_ready"
 
 echo "▶ [6] 客户把开关开好 → 下一次心跳 verdict 必须翻成 ready"
@@ -116,7 +116,7 @@ JSON
 curl -fsS -X POST -H "Content-Type: application/json" -d "$READY_BODY" "${API_BASE}/api/agent/heartbeat" >/dev/null
 V=$(verdict_of)
 [ "$V" = "ready" ] || {
-  echo "  FAIL: verdict=$V（期望 ready）——要么覆盖写坏了（旧的 ok=false 还留着），要么三态判定坏了"
+  echo "  FAIL: verdict=${V}（期望 ready）——要么覆盖写坏了（旧的 ok=false 还留着），要么三态判定坏了"
   exit 6; }
 echo "  OK: verdict=ready（覆盖写生效，三态判定通）"
 
