@@ -68,7 +68,11 @@ section "fields (crm_field_management)"
 FIELDS_MEMBER="${ZENITHJOY_SMOKE_MEMBER_ID:-}"
 FIELDS_TENANT=""
 if [[ -z "$FIELDS_MEMBER" ]]; then
+  # 两套 env 写法都认（glob runner 给连接串，API Contract Smoke 只给离散 DATABASE_*）
   FIELDS_PG="${E2E_DATABASE_URL:-${DATABASE_URL:-}}"
+  if [[ -z "$FIELDS_PG" && -n "${DATABASE_HOST:-}" ]]; then
+    FIELDS_PG="postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-}@${DATABASE_HOST}:${DATABASE_PORT:-5432}/${DATABASE_NAME:-postgres}"
+  fi
   if [[ -n "$FIELDS_PG" ]] && command -v psql >/dev/null 2>&1; then
     FIELDS_SFX="$(date +%s)$RANDOM"
     FIELDS_MEMBER="ou_audit_fields_$FIELDS_SFX"
@@ -79,11 +83,10 @@ if [[ -z "$FIELDS_MEMBER" ]]; then
   fi
 fi
 cleanup_fields_seed() {
-  [[ -n "${FIELDS_TENANT:-}" ]] || return 0
-  local pg="${E2E_DATABASE_URL:-${DATABASE_URL:-}}"
-  psql "$pg" -q -c "DELETE FROM zenithjoy.field_definitions WHERE tenant_id = '$FIELDS_TENANT'" >/dev/null 2>&1 || true
-  psql "$pg" -q -c "DELETE FROM zenithjoy.tenant_members WHERE tenant_id = '$FIELDS_TENANT'" >/dev/null 2>&1 || true
-  psql "$pg" -q -c "DELETE FROM zenithjoy.tenants WHERE id = '$FIELDS_TENANT'" >/dev/null 2>&1 || true
+  [[ -n "${FIELDS_TENANT:-}" && -n "${FIELDS_PG:-}" ]] || return 0
+  psql "$FIELDS_PG" -q -c "DELETE FROM zenithjoy.field_definitions WHERE tenant_id = '$FIELDS_TENANT'" >/dev/null 2>&1 || true
+  psql "$FIELDS_PG" -q -c "DELETE FROM zenithjoy.tenant_members WHERE tenant_id = '$FIELDS_TENANT'" >/dev/null 2>&1 || true
+  psql "$FIELDS_PG" -q -c "DELETE FROM zenithjoy.tenants WHERE id = '$FIELDS_TENANT'" >/dev/null 2>&1 || true
 }
 trap cleanup_fields_seed EXIT
 FIELDS_AUTH=(-H "X-Feishu-User-Id: $FIELDS_MEMBER")

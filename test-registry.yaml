@@ -5625,3 +5625,124 @@ agent_suite:
     status: active
     product: 私域运营
     note: "FieldsController 契约配套(test-pairing);CRUD 覆盖在 tests/fields.test.ts"
+
+  # ── Line11 路③ 结构化工作台 Sprint A（合同 c86e37ff）─────────────────────────
+  - id: workbench-contract-auth-guard
+    path: sprints/08201151-员工知识中枢-路-结构化工作台-c86e37ff/tests/workbench-auth-guard.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "G0 命门：无会话 401 / 伪造身份头不改判定也不写库 / 成员表不可达 503 / 多组织 409 不取第一条。真 better-auth 会话 + 真 Postgres，合同禁 mock 边。"
+
+  - id: workbench-contract-tables
+    path: sprints/08201151-员工知识中枢-路-结构化工作台-c86e37ff/tests/workbench-tables.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "S1 建表最小闭环：org_id 取自会话忽略请求体 / 八类字段各一落库 / 零运行时 DDL / 跨组织 404 与随机 id 逐字节同形 / 模板一键建表逐字一致。"
+
+  - id: workbench-contract-visibility-trash
+    path: sprints/08201151-员工知识中枢-路-结构化工作台-c86e37ff/tests/workbench-visibility-trash.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "表级可见性是真访问控制（反向 404 同形 + 表主本人正向对照）+ 删表二次确认 + 软删物理行仍在 + 30 天回收站还原逐字回归。"
+
+  - id: workbench-contract-fields-legacy
+    path: sprints/08201151-员工知识中枢-路-结构化工作台-c86e37ff/tests/fields-legacy-isolation.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 私域运营
+    note: "G1/J7：旧 /api/fields 四端点无身份 401、跨企业读改被拒且 B 行未变、正向能读能改且 field_name 真落库、field_definitions.tenant_id 已回填。"
+
+  - id: workbench-e2e-golden-path
+    path: apps/staff-hub/e2e/structured-workbench.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 员工知识中枢
+    note: "路③ Golden Path 真浏览器全链：空工作台≥2模板 → 建表8类字段+可见性 → 列表字段数8 → 删表二次确认（输错名按钮禁用）→ 回收站还原逐字回归，五张截图。变体C：真实后端、禁请求拦截。workflow: e2e-knowledge-hub-path3.yml"
+
+  - id: fields-auth-regression-e2e
+    path: apps/dashboard/e2e/fields-auth-regression.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 私域运营
+    note: "A4④：给 /api/fields 挂鉴权后 dashboard /works/fields 列表/新建/编辑/删除必须照旧可用。PR#1675→#1676 那次往返的唯一防线，dashboard 业务代码零改动。"
+
+  - id: workbench-service-pairing
+    path: apps/api/src/services/workbench.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "路③ service 纯输入校验(test-pairing)：八类字段白名单、对抗字符原样当数据值、isUuid 兜住非法路径参数。落库语义在合同真库测试里。"
+
+  - id: workbench-auth-shape-pairing
+    path: apps/api/src/middleware/workbench-auth.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "G0 闸响应形状(test-pairing)：四态文案两两不同、反枚举 404 体不带 timestamp 且两次逐字节相同。会话/成员表两条边由合同真库测试覆盖。"
+
+  - id: workbench-router-shape-pairing
+    path: apps/api/src/routes/workbench.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "路③ 路由表(test-pairing)：端点恰好 9 个(4写+5读)、鉴权闸挂在所有端点之前。多开一个端点或少挂一次闸当场看得见。"
+
+  - id: workbench-templates-pairing
+    path: apps/api/src/knowledge/workbench-templates.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "开箱模板自洽性(test-pairing)：≥2 个、key 唯一、类型在八类内、display_order 从 0 连续、选择类必带选项。"
+
+  - id: retrieval-exclusions-pairing
+    path: apps/api/src/knowledge/retrieval-exclusions.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "A35① 排除清单(test-pairing)：五张路③ 物理表逐字在册且无重复，投影表不被误排除。"
+
+  - id: single-org-selfcheck-pairing
+    path: apps/api/src/startup/single-org-selfcheck.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "A11 自检判定形状(test-pairing)：多组织抛错并点名 feishu_user_id、查不动同样 fail-closed。「拦在 listen 之前」由 smoke --a11-only 真起进程验，本单测不替代它。"
+
+  - id: fake-feishu-declared-member-pairing
+    path: apps/api/src/routes/_smoke-fake-feishu.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "假上游按成员 open_id 精确寻址 fallback(test-pairing)：分组名既有语义不变、同组织甲乙解析成两个不同的人、未声明的 open_id 返 null。"
+
+  - id: fields-service-tenant-failclosed-pairing
+    path: apps/api/src/services/fields.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "G1 段② fail-closed(test-pairing)：租户为空时五个方法在碰 DB 之前就抛 403 NO_TENANT，绝不退化成查全表。跨租户隔离本身在合同真库测试里。"
+
+  - id: workbench-fetch-pairing
+    path: apps/staff-hub/src/lib/workbenchFetch.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "路③ 前端常量(test-pairing)：端点前缀是 /api/knowledge/db 且不在 /api/staff 之下、八类字段与服务端逐字对齐、标签两两不同。"

@@ -15,8 +15,13 @@ ok()   { echo "  ✅ $1"; ((PASS++)) || true; }
 fail() { echo "  ❌ $1"; ((FAIL++)) || true; }
 die()  { echo "❌ FAIL: $*"; exit 1; }
 
+# 连接串优先，没有就从离散 DATABASE_* 拼 —— 本仓有两套写法：glob runner 给连接串，
+# ci-l4-e2e-smoke 的 API Contract Smoke 只给离散变量。只认一套等于在另一套上必红。
 PGURL="${E2E_DATABASE_URL:-${DATABASE_URL:-}}"
-[ -n "$PGURL" ] || die "未设 E2E_DATABASE_URL / DATABASE_URL —— 挂鉴权后没有身份就没有可测的路径"
+if [ -z "$PGURL" ] && [ -n "${DATABASE_HOST:-}" ]; then
+  PGURL="postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-}@${DATABASE_HOST}:${DATABASE_PORT:-5432}/${DATABASE_NAME:-postgres}"
+fi
+[ -n "$PGURL" ] || die "未设 E2E_DATABASE_URL / DATABASE_URL / DATABASE_HOST —— 挂鉴权后没有身份就没有可测的路径"
 command -v psql >/dev/null 2>&1 || die "缺少 psql"
 
 psql_q() { psql "$PGURL" -t -A -q -c "$1"; }

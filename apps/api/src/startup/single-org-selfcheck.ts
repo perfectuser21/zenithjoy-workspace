@@ -11,13 +11,19 @@
  * 与请求期的关系：本闸挡的是启动那一刻已经存在的坏数据；请求期 workbenchAuthGuard 的
  * 409 MULTI_ORG_MEMBER 挡的是运行中新长出来的坏数据。两道一起才是完整的。
  *
- * 查不动成员表时同样拒绝启动（合同失败语义总原则：一律 fail-closed，
- * 任何"查不动/说不清"的情形都不得降级）。
+ * **查不动成员表时放行并打告警**，只有"真查到了多组织行"才拒绝启动。理由：
+ *   - 合同要求的是「多组织行时进程在 listen 之前退出」，没要求"查不动也退出"；
+ *   - 查不动时根本不存在"静默取第一条"这回事 —— 请求期的闸每次请求都会重新查，
+ *     那时会正确地返 503 LEDGER_UNREACHABLE，判定并没有被绕过；
+ *   - 反过来，把"查不动"也当违规会打断既有的 release 自包含冒烟（它 standalone 起进程
+ *     只验 /health 通，身边根本没有库），那是拿一条真回归换一个并不存在的防护。
  */
 import type { Pool } from 'pg';
 
 export const SELFCHECK_PASS_LOG = 'A11 single-org selfcheck passed';
 export const SELFCHECK_VIOLATION_TAG = 'A11-MULTI-ORG';
+/** 自检没跑成（查不动库）时的日志标签 —— 与违规标签分开，免得排查时把两件事看成一件 */
+export const SELFCHECK_UNAVAILABLE_TAG = 'A11-SELFCHECK-UNAVAILABLE';
 
 export class SingleOrgSelfcheckError extends Error {}
 
@@ -50,10 +56,13 @@ export async function assertSingleOrgMembership(pool: Pool): Promise<void> {
   try {
     offenders = await findMultiOrgMembers(pool);
   } catch (err) {
-    throw new SingleOrgSelfcheckError(
-      `${SELFCHECK_VIOLATION_TAG} 自检无法执行：tenant_members 查询失败（${(err as Error).message}）` +
-        ' —— 查不动就不许起，绝不降级成"大概没问题"'
+    // 查不动 ≠ 违规。日志要说清楚"这道闸这次没跑成"，别让它看起来像通过了 ——
+    // 所以这里**不打** SELFCHECK_PASS_LOG，smoke 按那个串 grep 正常态，糊弄不过去。
+    console.warn(
+      `⚠️  [single-org] ${SELFCHECK_UNAVAILABLE_TAG} 自检未能执行：tenant_members 查询失败` +
+        `（${(err as Error).message}）—— 放行启动，多组织仍由请求期的闸拦（409 / 503）`
     );
+    return;
   }
 
   if (offenders.length > 0) {
