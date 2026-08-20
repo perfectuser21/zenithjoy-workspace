@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
@@ -16,7 +17,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.zenithjoy.agent.onboarding.checkSelfAccessibility
-import com.zenithjoy.agent.onboarding.collectServiceBound
+import com.zenithjoy.agent.onboarding.VariantVerdict
+import com.zenithjoy.agent.onboarding.checkVariantConflict
 import com.zenithjoy.agent.onboarding.parseBindDeepLink
 
 /**
@@ -89,19 +91,49 @@ class MainActivity : AppCompatActivity() {
         if (config.isConfigured) showStatus() else showLicenseInput()
     }
 
+    /**
+     * 无障碍横幅。**必须全查三个服务**——旧实现只查采集那一个，客户开了采集没开私信时
+     * 横幅显示绿、私信与账号扫描却静默全死（0820 BYOD 场景盘查发现）。
+     * describe() 还会在服务被别的包拿走时直接点名劫持方。
+     */
     private fun accessibilityBanner(): android.view.View {
-        val enabled = collectServiceBound(this)
-        return if (enabled) {
-            TextView(this).apply { text = "无障碍 ✅ 已开启" }
+        val check = checkSelfAccessibility(this)
+        return if (check.allBound) {
+            TextView(this).apply { text = "无障碍 ✅ 三个服务均已开启" }
         } else {
             val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            box.addView(TextView(this).apply { text = "⚠️ 无障碍未开启，采集无法运行" })
+            box.addView(TextView(this).apply { text = "⚠️ " + check.describe() })
             box.addView(Button(this).apply {
                 text = "开启无障碍权限"
                 setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
             })
             box
         }
+    }
+
+    /**
+     * 同族变体包冲突横幅（VariantConflictGuard）。
+     *
+     * BLOCK 时把处置入口顶到最上面，但**绝不停掉 AgentService**——设备不心跳等于中台
+     * 彻底看不见它，比「能看见但未就绪」更糟。客户机上我们唯一的远程视野就是心跳。
+     */
+    private fun variantConflictBanner(): android.view.View? {
+        val conflict = checkVariantConflict(this)
+        if (conflict.verdict == VariantVerdict.OK) return null
+
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val prefix = if (conflict.verdict.blocksUsage()) "🛑 采集无法运行：" else "⚠️ "
+        box.addView(TextView(this).apply { text = prefix + conflict.describe() })
+        conflict.siblingPackages.forEach { sibling ->
+            box.addView(Button(this).apply {
+                text = "卸载 $sibling"
+                setOnClickListener {
+                    // 拉起系统卸载确认框，客户点一下"确定"即可，不用自己去应用列表里翻。
+                    startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:$sibling")))
+                }
+            })
+        }
+        return box
     }
 
     /** 状态自检：MediaProjection 截屏授权是否就绪，方便真机巡检定位"内容判定恒 pending"问题。 */
@@ -181,6 +213,7 @@ class MainActivity : AppCompatActivity() {
             startAgentService()
             showStatus()
         }
+        variantConflictBanner()?.let { layout.addView(it) }
         layout.addView(accessibilityBanner())
         layout.addView(input)
         layout.addView(apiInput)
@@ -220,6 +253,7 @@ class MainActivity : AppCompatActivity() {
             MediaProjectionHolder.clear()
             showLicenseInput()
         }
+        variantConflictBanner()?.let { layout.addView(it) }
         layout.addView(accessibilityBanner())
         layout.addView(mediaProjectionBanner())
         layout.addView(recordAudioBanner())
