@@ -55,6 +55,31 @@ function New-TwoTenantSeed($apiPort) {
   return @{ Sfx = $sfx; Alice = $alice; Bob = $bob; Carol = $carol; OrgA = $orgA; OrgB = $orgB }
 }
 
+# 杀进程**树**：`Start-Process cmd.exe /c npm...` 拿到的是 cmd.exe 的 PID，
+# `Stop-Process` 只杀得掉那层壳，真正监听端口的 node 子进程会活下来。
+function Stop-Tree($procId) {
+  if (-not $procId) { return }
+  & cmd.exe /c "taskkill /PID $procId /T /F >nul 2>&1"
+}
+
+<#
+端口必须在起服务前先空出来。
+
+2026-08-20 首跑实测：上一个 step 结束时只杀了 cmd.exe 外壳，node 还占着 5210；
+本 step 起的新进程 EADDRINUSE 起不来，于是登录请求打到了**上一 step 那个进程**上——
+它的 STAFF_FEISHU_OPENIDS 属于上一次 seed，认不出本次的 code，
+报出来是 `invalid code (fake upstream)`，看着像假上游坏了，其实是打错了进程。
+#>
+function Clear-Port($port) {
+  $conns = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
+  foreach ($c in $conns) { Stop-Tree $c.OwningProcess }
+  for ($i = 0; $i -lt 20; $i++) {
+    if (-not (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)) { return }
+    Start-Sleep -Seconds 1
+  }
+  throw "FAIL: 端口 $port 被占用且 20s 内清不掉"
+}
+
 function Wait-Port($port, $timeoutSec) {
   $waited = 0
   do {
@@ -65,6 +90,7 @@ function Wait-Port($port, $timeoutSec) {
 }
 
 function Start-Api($repoRoot, $port) {
+  Clear-Port $port
   $env:PORT = "$port"
   $p = Start-Process cmd.exe -ArgumentList "/c npm.cmd start" -WorkingDirectory "$repoRoot\apps\api" -PassThru -NoNewWindow
   if (-not (Wait-Port $port 60)) {
@@ -89,6 +115,7 @@ function Get-SessionCookie($apiPort, $openId) {
 # staff-hub 走 vite proxy 打后端 —— 必须**同源**，否则会话 cookie 根本发不出去，
 # 路③ 的闸只认 cookie，跨源直连一定是一片 401。
 function Start-Hub($repoRoot, $hubPort, $apiPort) {
+  Clear-Port $hubPort
   $env:VITE_SKIP_AUTH       = "true"
   $env:STAFF_HUB_API_TARGET = "http://localhost:$apiPort"
   $p = Start-Process cmd.exe -ArgumentList "/c npx.cmd vite --port $hubPort --strictPort" `
@@ -99,6 +126,6 @@ function Start-Hub($repoRoot, $hubPort, $apiPort) {
 
 function Stop-Procs($procs) {
   foreach ($p in $procs) {
-    if ($null -ne $p) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+    if ($null -ne $p) { Stop-Tree $p.Id }
   }
 }
