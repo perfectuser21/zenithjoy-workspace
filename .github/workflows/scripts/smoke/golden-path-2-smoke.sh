@@ -991,9 +991,12 @@ ok "Step 23b ✅ outreach_eligible=true"
 # content 空、finish_reason=length，整批 0/8 全变 null**。生产 404 条留言里 187 条
 # grade=NULL、批量 8+ 的视频成功率只有 44.6%，就是这么来的——而 23b 一条也没拦住。
 #
-# 所以这一步的价值全在"条数"上：10 条跨过了 5→8 那道坎，坏掉时必红。别为了跑得快
-# 把条数调小，调到 5 以下这道闸就退化成 23b 的摆设。
-echo "▶ Step 23c: 批量 10 条留言 → 真实判定必须整批出档（thinking token 饿死输出的回归）"
+# 条数定在 25 是**量出来的，不是拍的**：先写 10 条，实测发现 10 条正好卡在临界线上
+# ——修复前两次跑一次 reasoning=320 过、一次 500 封顶红，是个抛硬币的守卫，
+# 何况下面还有 3 次重试，基本会被重试洗成绿的。加到 25 条后修复前 4/4 必红、
+# 修复后 4/4 必绿，才算确定性守卫。**别把条数调小**，调回 10 以下这道闸就退化成
+# 23b 那样的摆设（生产 p95 批量是 16 条、最大 42 条，25 条也更接近真实负载）。
+echo "▶ Step 23c: 批量 25 条留言 → 真实判定必须整批出档（thinking token 饿死输出的回归）"
 S23C_TMP=$(mktemp)
 S23C_HTTP=$(curl -s -o "$S23C_TMP" -w "%{http_code}" --max-time 15 \
   -X POST "${API_BASE}/api/acquisition/collect/start" \
@@ -1011,15 +1014,11 @@ import json,sys
 prefix = sys.argv[1]
 texts = [
   '求报价，多少钱一平，加个微信详细聊',
-  '这个效果不错',
-  '想了解一下装修流程',
-  '哈哈哈哈',
-  '我家也想弄这种风格',
-  '沙发',
-  '预算大概要多少呢',
-  '路过',
-  '有没有线下门店可以看',
-  '收藏了',
+  '这个效果不错', '想了解一下装修流程', '哈哈哈哈', '我家也想弄这种风格',
+  '沙发', '预算大概要多少呢', '路过', '有没有线下门店可以看', '收藏了',
+  '全包大概多少钱', '设计师怎么收费', '我家90平能做吗', '好看', '支持一下',
+  '什么时候能开工', '用的什么牌子的板材', '太贵了吧', '马住', '想约个上门量房',
+  '这种风格适合小户型吗', '已经在装修了 学到了', '老板电话多少', '图片保存了', '期待更新',
 ]
 print(json.dumps({
   'task_id': sys.argv[2],
@@ -1037,14 +1036,14 @@ for S23C_TRY in 1 2 3; do
     -d "$S23C_BODY")
   [ "$S23C_HTTP" = "200" ] || fail "Step 23c collect/report expected 200, got ${S23C_HTTP}: $(cat "$S23C_TMP")" 23
   S23C_GRADED=$(psq "SELECT count(*) FROM zenithjoy.acquisition_leads WHERE tenant_id='${TENANT_ID}' AND nickname LIKE '${S23C_PREFIX}%' AND grade IS NOT NULL")
-  [ "${S23C_GRADED:-0}" -ge 8 ] && break
-  echo "  ↻ Step 23c 第 ${S23C_TRY} 次真调只出 ${S23C_GRADED}/10 档位，5s 后重试"
+  [ "${S23C_GRADED:-0}" -ge 20 ] && break
+  echo "  ↻ Step 23c 第 ${S23C_TRY} 次真调只出 ${S23C_GRADED}/25 档位，5s 后重试"
   sleep 5
 done
 
 # 主断言：坏掉时这里是 0（整批 null），修好时是 10。留 2 条余量吸收单行解析漂移
-[ "${S23C_GRADED:-0}" -ge 8 ] || fail "Step 23c 10 条留言只有 ${S23C_GRADED} 条拿到档位（期望 >=8）——典型症状是 reasoning_effort=none 失效导致思考吃光 max_tokens，整批返 null，查服务端日志 '[comment-grading] 输出被 max_tokens 截断'" 23
-ok "Step 23c ✅ 批量 10 条真实判定出档 ${S23C_GRADED}/10"
+[ "${S23C_GRADED:-0}" -ge 20 ] || fail "Step 23c 25 条留言只有 ${S23C_GRADED} 条拿到档位（期望 >=20）——典型症状是 reasoning_effort=none 失效导致思考吃光 max_tokens，整批返 null，查服务端日志 '[comment-grading] 输出被 max_tokens 截断'" 23
+ok "Step 23c ✅ 批量 25 条真实判定出档 ${S23C_GRADED}/25"
 
 # 附加断言：批量里那条无歧义高意向必须判高（防"全判其他"式的伪全覆盖）
 S23C_TOP=$(psq "SELECT COALESCE(grade,'<NULL>') FROM zenithjoy.acquisition_leads WHERE tenant_id='${TENANT_ID}' AND nickname='${S23C_PREFIX}0' LIMIT 1")
