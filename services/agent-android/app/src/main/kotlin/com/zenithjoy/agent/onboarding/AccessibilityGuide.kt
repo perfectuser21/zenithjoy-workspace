@@ -92,11 +92,3 @@ fun boundAccessibilityServices(context: Context): List<BoundAccessibilityService
 /** 运行时自检：本进程的三个无障碍服务绑上了没有。 */
 fun checkSelfAccessibility(context: Context): AccessibilitySelfCheck =
     checkSelfAccessibility(boundAccessibilityServices(context), context.packageName)
-
-/** 采集服务是否真的绑定到**本进程**（状态页/横幅用）。 */
-fun collectServiceBound(context: Context): Boolean =
-    checkSelfAccessibility(
-        boundAccessibilityServices(context),
-        context.packageName,
-        listOf(REQUIRED_ACCESSIBILITY_SERVICE_CLASSES.first()),
-    ).allBound

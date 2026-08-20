@@ -17,6 +17,14 @@
     -->
     <queries>
         <package android:name="com.ss.android.ugc.aweme" />
+        <package android:name="com.zenithjoy.agent" />
+        <package android:name="com.zenithjoy.agent.e2e" />
+        <!--
+          同族变体包互斥闸（VariantConflictGuard）需要查"这台机器上是否也装着 .e2e 变体"。
+          同样受安卓 11+ 包可见性限制：不声明就是"合法失败"（getPackageInfo 抛
+          NameNotFoundException），会被误判成"没装"，闸门直接形同虚设。
+          两个包名都列出来：prod 包要查 .e2e，.e2e 变体反过来也要查 prod。
+        -->
     </queries>
 
     <application
