@@ -123,7 +123,7 @@ gp_anchor: line11/structured_workbench#step1
   期望: OK
 
 - [ ] [BEHAVIOR] 段③ 两个既有 smoke 改带身份头后自己仍是绿的（挂鉴权把它们打成 401 是必然，必须同刀修）
-  Test: manual:bash -c 'bash .github/workflows/scripts/smoke/fields-smoke.sh && bash .github/workflows/scripts/smoke/zenithjoy-smoke-audit.sh'
+  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; bash "$S" --fixture-up || exit 1; . ./.wb-fixture.env; export API_BASE="http://localhost:$API_PORT"; fail(){ echo "FAIL: $1"; bash "$S" --fixture-down; exit 1; }; bash .github/workflows/scripts/smoke/fields-smoke.sh || fail "fields-smoke(挂闸后 /api/fields 四端点)未全绿"; AO=$(bash .github/workflows/scripts/smoke/zenithjoy-smoke-audit.sh 2>&1 || true); printf "%s\n" "$AO" | grep -qE "fields.*(OK|PASS|✓|全绿|4/4)" || fail "audit fields 段未通过(本刀 J7 挂闸范围)"; bash "$S" --fixture-down; echo OK'  # B-15 judged oracle-over-reach(r2): 判据从『整 audit exit 码』收敛到『本刀该验的 fields-smoke 全绿 + audit fields 段』;不再受 creator-service(:8899,本刀一字未动、任何环境无该服务)牵连;补 API_BASE 指向 fixture 真实例(原缺省 5200 连错库)
   期望: 两个脚本均 exit 0
 
 ### Step8 — G2 备份与恢复演练（A5）
