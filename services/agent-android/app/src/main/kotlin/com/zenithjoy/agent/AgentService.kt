@@ -24,6 +24,7 @@ import com.zenithjoy.agent.collect.AcquisitionCancellationCoordinator
 import com.zenithjoy.agent.collect.CollectResult
 import com.zenithjoy.agent.collect.CollectTaskQueue
 import com.zenithjoy.agent.onboarding.checkSelfAccessibility
+import com.zenithjoy.agent.onboarding.currentDeviceReadiness
 import com.zenithjoy.agent.collect.CommentEntry
 import com.zenithjoy.agent.collect.DmOutreachRateLimiter
 import com.zenithjoy.agent.collect.DouyinCollectService
@@ -398,6 +399,14 @@ class AgentService : Service() {
                 if (config.agentId.isEmpty() || config.agentId != agentId) {
                     config.agentId = agentId
                 }
+            },
+            // 就绪度每次心跳重算（20 秒一次），不做启动快照：force-stop 后系统整体关闭无障碍
+            // (0717 真机复现)、adb install -r 静默撤销无障碍(0803 真机复现)——快照会一直报绿。
+            readinessProvider = {
+                currentDeviceReadiness(
+                    context = this@AgentService,
+                    screenCaptureAuthorized = MediaProjectionHolder.hasAuthorization(),
+                )
             },
         )
         heartbeatLoop?.start()

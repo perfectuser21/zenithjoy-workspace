@@ -1,6 +1,7 @@
 package com.zenithjoy.agent
 
 import com.google.gson.Gson
+import com.zenithjoy.agent.onboarding.ReadinessItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -29,6 +30,13 @@ class HttpHeartbeatLoop(
     private val onHeartbeat: ((resp: HeartbeatResponse) -> Unit)? = null,
     private val onAgentIdReceived: ((agentId: String) -> Unit)? = null,
     private val httpClient: OkHttpClient = defaultClient(),
+    /**
+     * 设备就绪度求值器。**每次心跳前重新调用**，不是启动时的快照——
+     * 就绪是会掉的状态（force-stop 关无障碍 0717 / adb install -r 静默撤销 0803），
+     * 快照会一直报绿，等于又造一个假绿。心跳本来 20 秒一次，复检借它的车不另起循环。
+     * null = 不上报这个字段（向后兼容，不影响老链路）。
+     */
+    private val readinessProvider: (() -> Map<String, ReadinessItem>)? = null,
 ) {
     private val gson = Gson()
     private var job: Job? = null
@@ -89,6 +97,20 @@ class HttpHeartbeatLoop(
             if (agentIdToSend != null) put("agent_id", agentIdToSend)
             if (params.agentUuid.isNotEmpty()) put("agent_uuid", params.agentUuid)
             if (params.machineId.isNotEmpty()) put("machine_id", params.machineId)
+            // 求值失败绝不阻断心跳——心跳是客户机上唯一的远程视野，丢了它就彻底看不见这台设备
+            val readiness = try {
+                readinessProvider?.invoke()
+            } catch (e: Exception) {
+                // 日志本身也要吞：纯 JVM 单测下 android.util.Log 未 mock 会抛 RuntimeException
+                // （同 AcquisitionCollectPollLoop 的既有约定）。更要紧的是——这行就在 catch 块里，
+                // 它自己抛出来照样会把心跳带崩，而心跳是客户机上唯一的远程视野。
+                try {
+                    android.util.Log.w(TAG, "readiness 求值失败，本次心跳不带该字段: ${e.message}")
+                } catch (_: RuntimeException) {
+                }
+                null
+            }
+            if (readiness != null && readiness.isNotEmpty()) put("readiness", readiness)
         }
 
         val request = Request.Builder()

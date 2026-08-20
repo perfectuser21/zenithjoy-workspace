@@ -15,6 +15,7 @@
 
 import crypto from 'node:crypto';
 import pool from '../db/connection';
+import type { ReadinessMap } from './device-readiness';
 import { resolveAgentIdentityKey } from './agent-identity';
 import { readInstallPackManifest } from './install-pack-manifest';
 
@@ -147,6 +148,8 @@ export function getRequiredAgentVersion(
 
 /** module-health 端点返回的单行（一台机器一行） */
 export interface ModuleHealthRow {
+  readiness: Record<string, { ok: boolean; detail?: string }> | null;
+  readiness_at: string | null;
   agent_id: string;
   hostname: string | null;
   module_status: ModuleStatusMap;
@@ -588,11 +591,50 @@ export async function saveModuleStatus(
  */
 export async function getAllModuleHealth(): Promise<ModuleHealthRow[]> {
   const { rows } = await pool.query<ModuleHealthRow>(
-    `SELECT id AS agent_id, hostname, module_status, updated_at, last_boot_error
+    `SELECT id AS agent_id, hostname, module_status, readiness, readiness_at, updated_at, last_boot_error
        FROM zenithjoy.agents
       ORDER BY updated_at DESC NULLS LAST`
   );
   return rows;
+}
+
+/**
+ * 落库设备就绪度。与 module_status 同款形态（最新一份覆盖写），但独立字段——
+ * module_status 是 per-Line 模块 preflight，本字段是设备级权限就绪，语义不同不能混。
+ */
+export async function saveReadiness(
+  agentId: string,
+  readiness: ReadinessMap
+): Promise<void> {
+  await pool.query(
+    `UPDATE zenithjoy.agents
+        SET readiness = $2::jsonb, readiness_at = now(), updated_at = now()
+      WHERE id = $1`,
+    [agentId, JSON.stringify(readiness)]
+  );
+}
+
+/**
+ * 这台机器在这个 license 下绑上了没有。
+ *
+ * 小白此刻正在发生：心跳每 26 秒被拒一次「license 配额已满(1/1)」，
+ * license_machines 没有它的行 → 靠 machine_id 反查租户的通路是断的。
+ * **设备端不知道自己被拒了，只有服务端知道**，所以这一项必须由服务端合进就绪度。
+ *
+ * @returns true=已绑 / false=确认没绑 / null=查不到（没带 machine_id，老 agent）——
+ *          null 不算坏消息，绝不因此判死（fail-open，决策 3a826c45）
+ */
+export async function isMachineBoundToLicense(
+  licenseId: string,
+  machineId: string | undefined
+): Promise<boolean | null> {
+  if (!machineId || !machineId.trim()) return null;
+  const { rows } = await pool.query(
+    `SELECT 1 FROM zenithjoy.license_machines
+      WHERE license_id = $1 AND machine_id = $2 LIMIT 1`,
+    [licenseId, machineId.trim()]
+  );
+  return (rows?.length ?? 0) > 0;
 }
 
 export class NoAgentError extends Error {
