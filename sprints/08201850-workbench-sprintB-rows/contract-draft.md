@@ -1,4 +1,4 @@
-# Sprint Contract Draft (Round 1) — 路③ 结构化工作台 · Sprint B「数据进得来」
+# Sprint Contract Draft (Round 2) — 路③ 结构化工作台 · Sprint B「数据进得来」
 
 **上位合同**：GP `c86e37ff-3307-4b1a-80d9-3b00b8450554`（line11 员工知识中枢 · 路③ 结构化工作台，v3 已批准）。
 本刀 = **S2 段**，门禁断言 **A12–A19**（上位合同 §8 Sprint B），外加 A1/A3 范式在「行」这一层复跑。
@@ -8,11 +8,11 @@ CONTRACT IS LAW：上位合同的判定点 J1/J2/J5/J9/J10/J11/J12 是本刀的�
 
 ## GP-Anchor
 
-GP-Anchor: line11/structured_workbench#step1
+GP-Anchor: line11/structured_workbench#step2
 
-> 上面这行是 controller 机械检查用的锚串，沿用 A 刀 payload 里既有的 `#step1`（PRD 假设第 3 条已登记该事实）。
-> **本刀实际推进的是 S2 / step2**，因此 generator 建 PR 时 body 里的锚必须写 `GP-Anchor: line11/structured_workbench#step2`——
-> 锚写成 step1 会让棘轮认为本刀在推进已完成的 S1，S2 的 smoke 新增段不会被计入「多过一关」。
+> **本刀唯一对外锚 = `#step2`**（r2 修订：合同、`contract-dod.md` frontmatter、generator 建 PR 时 body 里的锚，三处逐字同一个值，不再一份文件一个值）。
+> 本刀推进的是 GP 合同 S2 段；锚写成 `#step1` 会让棘轮认为在推进已完成的 S1，S2 的 smoke 新增段不计入「多过一关」。
+> `anchor-payload-mismatch`：controller 注入的 payload 里 `gp_anchor` 仍是 A 刀留下的 `#step1`（PRD 假设第 3 条登记的既有事实）。**这一处不由 generator 消化**——请 controller 侧把 payload 改成 `#step2`；在改之前，以本行声明的 `#step2` 为准。
 
 ---
 
@@ -60,6 +60,13 @@ GP-Anchor: line11/structured_workbench#step1
 - `version` (number, 必填)：行级乐观锁基线，建行时 = 1，每次成功 PATCH +1
 - `row_order` (number, 必填) / `created_at` / `updated_at` (string ISO, 必填)
 - **禁用字段名**：`id`、`rowId`、`rev`、`etag`、`updatedAt`、`fields`（本刀 response key 一律 snake_case，与 Sprint A 逐字同族）
+- **keys 完整性**：Row 的顶层 keys **恰好等于** `["created_at","data","row_id","row_order","updated_at","version"]`（多一个少一个都算漂移）。该约束已 codify 成 DoD Step1/Step2 那条里的 `jq -e '(.data | keys) == [...]'` 与 6 个禁用名的反向 `has()` 断言
+
+### 三条实现约束（r2 新增 — 原先只活在测试里，合同没写）
+
+1. **`row_limit` 每请求从 env 解析**：服务端每次处理请求时读 `process.env.WORKBENCH_ROW_LIMIT`（缺省 `5000`），**禁止**在模块加载期固化成常量。判据：同一进程内改 env 后 `GET rows` 的 `row_limit` 必须跟随（DoD Step6 超限条内联断言 `row_limit == 3`；`tests/rows-paste-limit.test.ts` 在 `it()` 内改 env 也依赖此约束）
+2. **错误判定顺序固定为 `404` → `400` → `409`**：不可达/不存在（行不存在、跨组织、行已软删、表已软删）**先于**任何校验与版本比较返回 404 `notFoundBody()`；通过存在性与权限后才做类型校验（400），最后才比对 `version`（409）。判据：对已软删表的行发 `{"version":1,"data":{}}` 必须 404 而不是 400
+3. **空 `data: {}` 合法**：`PATCH` 的 `data` 为空对象时只做存在性 + 权限校验，不返 400；不改任何格，`version` 也不递增（无副作用的空写）
 
 ### Endpoint: GET /api/knowledge/db/tables/:id/rows
 
@@ -373,18 +380,28 @@ psql "$PG" -t -A -q -c "SELECT count(*) FROM zenithjoy.db_fields f WHERE f.table
 
 **可观测行为**: 点行首展开面板 → 看到该行**字段全集**（长文本渲染为多行编辑区）→ 在面板里改值同样失焦即存；面板开着时该行被他人删掉 → 面板出现可见提示，页面不白屏、不崩。
 
-**验证命令**（windows job 内 Playwright）:
+**验证命令**（windows job 内 Playwright；r2：以下断言**必须原样进** `apps/staff-hub/e2e/structured-workbench-rows.spec.ts`，并由该 workflow 里一个名字含「行详情」的 step 真跑 —— DoD Step7 两条以「windows job conclusion + 该 step 真跑」为判据，spec 内容由 ARTIFACT「行 E2E spec…逐字含三组断言」钉住）:
 ```javascript
 await page.getByTestId(`row-expand-${rowId}`).click();
 const panel = page.getByTestId('row-detail-panel');
 await expect(panel).toBeVisible();
 await expect(panel.getByTestId(/^detail-field-/)).toHaveCount(8);        // 字段全集
 await expect(panel.locator('textarea')).toHaveCount(1);                  // long_text 是多行编辑区
-// 他人删掉该行后，面板内改动提交 → 可见提示
+await panel.getByTestId(`detail-field-${fidLongText}`).fill('面板里改的字');
+await panel.getByTestId('detail-save-hint').waitFor();                   // 面板内失焦即存
+// 他人删掉该行后，面板内改动提交 → 可见提示，且页面主体不白屏
 await expect(page.getByTestId('row-gone-notice')).toBeVisible({ timeout: 15000 });
+await expect(page.getByTestId('workbench-table-page')).toBeVisible();
 ```
 
-**硬阈值**: 面板字段数 = 该表字段数（8）；`long_text` 渲染为 `textarea`；面板内改值后库中逐字落库；行被删后出现 `row-gone-notice` 且页面主体仍可见（`workbench-table-page` 仍 visible = 没白屏）
+**UI 侧上限硬拦**（同一 spec，由名字含「上限硬拦」的 step 跑；`WORKBENCH_ROW_LIMIT` 在该 step 的 env 里设成小值，**不写死 5000**）:
+```javascript
+// 行数已达服务端下发的 row_limit 后
+await expect(page.getByTestId('add-row-button')).toBeDisabled();
+await expect(page.getByTestId('row-limit-hint')).toContainText(String(rowLimitFromApi));
+```
+
+**硬阈值**: 面板字段数 = 该表字段数（8）；`long_text` 渲染为 `textarea`；面板内改值后库中逐字落库；行被删后出现 `row-gone-notice` 且 `workbench-table-page` 仍 visible（没白屏）；达上限时「新增行」按钮 `disabled` 且提示文案含**服务端下发的**上限值；本步截图 `06-row-detail-panel.png`
 
 ---
 
@@ -510,6 +527,21 @@ if [ -z "${E2E_DATABASE_URL:-}" ] && [ -z "${DATABASE_URL:-}" ]; then
   exit 1
 fi
 
+echo "== 段1b/3 合同测试真被 vitest 收集执行（4 suite / ≥20 用例 / 零失败）=="
+VITEST_OUT=/tmp/wb-rows-vitest-e2e.json
+rm -f "$VITEST_OUT"
+(cd apps/api && npx vitest run --config vitest.workbench-rows.config.ts --reporter=json --outputFile="$VITEST_OUT") >/tmp/wb-rows-vitest-e2e.log 2>&1
+if [ ! -f "$VITEST_OUT" ]; then
+  echo "FAIL: vitest 未产出报告（零收集 —— 4 个合同测试文件没有执行路径）"
+  tail -30 /tmp/wb-rows-vitest-e2e.log
+  exit 1
+fi
+if ! jq -e '.numTotalTestSuites == 4 and .numTotalTests >= 20 and .numFailedTests == 0 and .success == true' < "$VITEST_OUT" >/dev/null; then
+  echo "FAIL: 合同测试未全绿或收集数不符"
+  jq -c '{suites:.numTotalTestSuites,tests:.numTotalTests,failed:.numFailedTests,ok:.success}' < "$VITEST_OUT"
+  exit 1
+fi
+
 echo "== 段2/3 真 apps/api + 真 Postgres 行链路（A12/A13/A15/A16/A17/A18/A19 + 行层 A1/A3）=="
 for SEG in --a12-only --a13-only --a15-only --a16-only --a17-only --a18-a19-only --a1-a3-rows-only; do
   if ! bash "$SMOKE" "$SEG"; then
@@ -572,25 +604,41 @@ if ! echo "$JOBS" | jq -e '[.jobs[] | select(.name | test("windows")) | select(.
   exit 1
 fi
 
+for STEP_NAME in 断网 行详情 上限硬拦; do
+  if ! echo "$JOBS" | jq -e --arg s "$STEP_NAME" '[.jobs[] | select(.name | test("windows")) | .steps[] | select(.name | test($s)) | select(.conclusion == "success")] | length > 0' >/dev/null; then
+    echo "FAIL: windows job 里没有成功跑「$STEP_NAME」那一段"
+    echo "$JOBS" | jq -r '[.jobs[] | select(.name | test("windows")) | .steps[].name] | @csv'
+    exit 1
+  fi
+done
+
+# 截图取证：从 windows job 的 artifact 下载（宿主机上手工塞的图不算数 —— 那是拿手工产物冒充真机产物）
 SHOTS="sprints/08201850-workbench-sprintB-rows/screenshots"
-if [ ! -d "$SHOTS" ] || [ "$(ls -1 "$SHOTS"/*.png 2>/dev/null | wc -l | tr -d ' ')" -lt 5 ]; then
-  echo "FAIL: 本轮截图不足 5 张（windows job 里的真浏览器链没跑完）"
+TMPSHOTS=$(mktemp -d)
+if ! gh run download "$RUN_ID" -n path3-rows-screenshots -D "$TMPSHOTS"; then
+  echo "FAIL: 下不到本刀截图 artifact path3-rows-screenshots（workflow 缺 upload step 或真浏览器链没跑完）"
   exit 1
 fi
+SHOT_N=$(find "$TMPSHOTS" -name '*.png' | wc -l | tr -d ' ')
+if [ "$SHOT_N" -lt 6 ]; then
+  echo "FAIL: artifact 里只有 $SHOT_N 张截图（需 ≥6，第 6 张是行详情面板）"
+  exit 1
+fi
+for F in $(find "$TMPSHOTS" -name '*.png'); do
+  if [ ! -s "$F" ]; then
+    echo "FAIL: 空截图 $F"
+    exit 1
+  fi
+done
+mkdir -p "$SHOTS"
+find "$TMPSHOTS" -name '*.png' -exec cp {} "$SHOTS"/ \;
 
 echo "路③ Sprint B final-e2e 通过：行 CRUD + 乐观锁 409 + 断网保留输入 + 粘贴上限 + 回收站还原 + 导出"
 ```
 
 ### BEHAVIOR:E2E 截图 DoD
 
-- [ ] [BEHAVIOR:E2E] 员工完整走完 S2 Golden Path，截图可视化验证
-  Screenshots:
-    - 01-grid-empty.png       期望：表格视图打开，列 = 8 类字段，零行，「新增行」可点，可见「已有 0 行 / 上限 N 行」
-    - 02-inline-edit.png      期望：某单元格处于编辑态，编辑器与字段类型匹配（单选是下拉、长文本是多行框）
-    - 03-conflict.png         期望：乙的界面出现冲突提示「该行已被他人修改，你的改动未保存」，乙打的内容仍在编辑器里
-    - 04-paste-limit.png      期望：粘贴超限后的提示，文案里能看到当前上限与已有行数，表格行数未变
-    - 05-row-trash-restore.png 期望：行回收站列表里那行被还原后回到表格，字段值逐字回归
-  路径格式：sprints/08201850-workbench-sprintB-rows/screenshots/<step>.png
+六张截图清单与逐张期望**只住在 `contract-dod.md` 的 `## BEHAVIOR:E2E 条目` 段**（r2 去重：上一版两份文件各抄一遍，改一处就分叉）。取证路径：windows job 上传 `path3-rows-screenshots` artifact → 上面段3 用 `gh run download` 取回并落到 `sprints/08201850-workbench-sprintB-rows/screenshots/`。
 
 ---
 
@@ -605,10 +653,51 @@ echo "路③ Sprint B final-e2e 通过：行 CRUD + 乐观锁 409 + 断网保留
 
 > 「BEHAVIOR 覆盖」列每个名字都是 `tests/*.test.ts` 里对应 `it()` 名的字面子串（写法：先写 `it()` 名再截子串）。
 
+### 执行路径（r2 新增 — 上一版这 4 个文件没有任何运行器会收集，等同于文档）
+
+四个文件都是 **supertest + 真 Postgres** 的集成型合同测试，执行路径三件套，缺一即为孤儿：
+
+1. **收集配置**：新增 `apps/api/vitest.workbench-rows.config.ts`，`include` 只含 `../../sprints/08201850-workbench-sprintB-rows/tests/**/*.test.ts`，`pool: 'forks'` + `singleFork: true` + `sequence.concurrent: false`（双企业种子共用一库，并发跑会互相踩）+ `testTimeout: 30000`
+2. **运行脚本**：`apps/api/package.json` 加 `"test:workbench-rows": "vitest run --config vitest.workbench-rows.config.ts"`
+3. **进 CI**：`e2e-knowledge-hub-path3.yml` 的 **linux job**（已有 postgres:16 service + `E2E_DATABASE_URL` + `npm run migrate`，正是这批测试需要的环境）在 migrate 之后加一步 `npm run test:workbench-rows --workspace apps/api`
+
+> **为什么不塞进 `apps/api/vitest.config.ts` 的 include**：`ci-l4-runtime.yml` 的 `api-test` job 跑的是 `npx vitest run --coverage`（默认 config）且**没有 Postgres service**，塞进去会让这批需要真库的测试在那个 job 里必红——`vitest.config.ts` 自己第 27 行的注释就是同一坑的前例（`07212317-android-signal-reporting` 的 supertest 集成测试被注释掉，理由逐字为「需要真实 DB…不进 L3 CI」）。专用 config + 有库的 job 是同一目的的正确落点：**测试真被收集、真跑、红绿真机械可判**，而不是把一个绿的 job 打红。
+>
+> 判据（DoD Step0 那条）：`npx vitest run --config vitest.workbench-rows.config.ts --reporter=json --outputFile=...` 之后断言 `numTotalTestSuites == 4`、`numTotalTests >= 20`、`numFailedTests == 0`、跑的文件名恰是本刀那 4 个——只看 exit 0 挡不住零收集，所以四项一起断。当前 20 条 `it()`：crud 5 / optimistic-lock 4 / paste-limit 5 / isolation-export 6。
+
 ---
 
 ## 变更边界（external_commitment_changes）
 
-- **改**：`apps/api/src/routes/workbench.ts`（加 8 条行路由）、`apps/api/src/services/workbench.service.ts`（加行服务，或拆 `workbench-rows.service.ts` 并进 A2 扫描域）、`apps/api/src/routes/workbench.test.ts`（端点计数 9 → 17，**改值不删断言**）
-- **加**：`apps/api/db/migrations/<新时间戳>_workbench_rows_version.sql`（`db_rows` 补 `version` / `created_by`，**不回改** A 刀已合并的 migration）、staff-hub 表格视图页与组件、`apps/staff-hub/e2e/structured-workbench-rows.spec.ts`、smoke 的 S2 段与 4 个变异开关
-- **不动**：`apps/dashboard` 一行不改（本刀与 works 家族零交集）；`e2e-knowledge-hub-path3.yml` 的 `on:` 块与 windows job 的触发形态不改（只加 step 与 paths 条目）；Sprint A 的表/字段端点族语义不改
+- **改**：`apps/api/src/routes/workbench.ts`（加 8 条行路由）、`apps/api/src/services/workbench.service.ts`（加行服务，或拆 `workbench-rows.service.ts` 并进 A2 扫描域）、`apps/api/src/routes/workbench.test.ts`（**三条计数断言同步改**：端点清单数组补 8 条 + `toBe(9)`→`toBe(17)`、写端点 `toBe(4)`→`toBe(9)`、读端点 `toBe(5)`→`toBe(8)`，**改值不删断言**）、`apps/api/package.json`（加 `test:workbench-rows` 脚本）、`.github/workflows/e2e-knowledge-hub-path3.yml`（linux job 加「跑 7 个新段 + sprint vitest」两步；windows job 加「行详情面板」「上限硬拦」两步与本刀截图 upload step；`paths` 加本刀 spec）
+- **加**：`apps/api/db/migrations/<新时间戳>_workbench_rows_version.sql`（`db_rows` 补 `version` / `created_by`，**不回改** A 刀已合并的 migration）、`apps/api/vitest.workbench-rows.config.ts`（本刀 tests 的收集配置）、staff-hub 表格视图页与组件、`apps/staff-hub/e2e/structured-workbench-rows.spec.ts`、smoke 的 S2 段与 4 个变异开关
+- **不动**：`apps/dashboard` 一行不改（本刀与 works 家族零交集）；`apps/api/vitest.config.ts` 与 `ci-l4-runtime.yml` 一行不改（理由见 Test Contract「执行路径」小节：那条无库车道加进去必红）；`e2e-knowledge-hub-path3.yml` 的 `on:` 块与 windows job 的触发形态不改（只加 step 与 paths 条目，**绝不加 job 级 `if:`**）；Sprint A 的表/字段端点族语义不改
+
+---
+
+## r1 逐条回应（GAN Round 1 → Round 2）
+
+**P0-1 四个测试文件没有执行路径** — 已修，落点与你给的处方**有一处刻意偏差**。三件套：新增 `apps/api/vitest.workbench-rows.config.ts`（include 只含本 sprint tests）+ `apps/api/package.json` 的 `test:workbench-rows` 脚本 + `e2e-knowledge-hub-path3.yml` 的 **linux job**（已有 postgres:16 + `E2E_DATABASE_URL` + `npm run migrate`）加一步真跑；变更边界三个文件都已列入；DoD 新增 Step0 那条 [BEHAVIOR]，用 `--reporter=json --outputFile` 断言 `numTotalTestSuites == 4` + `numTotalTests >= 20` + `numFailedTests == 0` + 跑的文件名恰是本刀那 4 个（只看 exit 0 确实挡不住零收集，四项一起断）。
+**偏差与依据**：没有加进 `apps/api/vitest.config.ts` 的 include，因为 `ci-l4-runtime.yml` 的 `api-test` job 跑默认 config 且**没有 Postgres service**——这 4 个文件是 supertest + 真 PG，加进去会把一条现在绿的 required 车道打红；`vitest.config.ts` 自己第 27 行就有同一坑的前例（`07212317-android-signal-reporting` 的 supertest 测试被注释掉，理由逐字为「需要真实 DB…不进 L3 CI」）。你要的实质——「有运行器收集、真红真绿、进 CI」——三条全部满足，只是落在有库的那条车道上。
+
+**P0-2 `db_audit` 那条结构性必红** — 已修，改成你说的自持形态：`--fixture-up` → 内联走完建行/改格/删行/还原四个动作 → 同一 shell 内 psql 断言四种 `action` 齐全且 `org_id = $ORGA_TENANT_ID`、外加「本轮零 `org_id IS NULL` 审计行」→ `--fixture-down`。既躲开段末 `cleanup_seed`（`REUSED_FIXTURE=1` 时 `final_down` 直接 return，清理只发生在我最后一行的 `--fixture-down`），也自己产出了 `soft_delete_row` / `restore_row` 两种 `--a12-only` 本来产不出的 action。
+
+**P0-3 行详情面板 / 面板开着时被删 / UI 上限硬拦零 DoD** — 已修，三项各有落点：draft Step 7 的 Playwright 断言写全（补了面板内改动即存与 `workbench-table-page` 仍 visible），并加了「UI 上限硬拦」那段（`add-row-button` `toBeDisabled` + `row-limit-hint` 含服务端下发的上限，`WORKBENCH_ROW_LIMIT` 由 step env 给小值）；DoD 新增两条 [BEHAVIOR]，判据 = windows job conclusion + 名字含「行详情」/「上限硬拦」的 step 真跑成功；spec 内容由 ARTIFACT「行 E2E spec…逐字含三组断言」钉住（`row-detail-panel` / `detail-field-` / `textarea` / `row-gone-notice` / `add-row-button` / `WORKBENCH_ROW_LIMIT` / `toBeDisabled` 九个串逐字必在）——一个空 step 过不了这条 ARTIFACT。截图清单补 `06-row-detail-panel.png`。
+
+**P1-1 回归断言改动清单不全 + ARTIFACT 死分支** — 已修。变更边界写全三条新值（清单数组补 8 条 + `toBe(9)→toBe(17)`、写 `toBe(4)→toBe(9)`、读 `toBe(5)→toBe(8)`）；ARTIFACT-4 重写为：8 条新端点串逐字必在 + `toBe(17)`/`toBe(9)`/`toBe(8)` 三个都在 + `toBe(4)`/`toBe(5)` 旧值零残留，死分支已删。
+
+**P1-2 三段判定整体外包** — 已修，三段都换成自持内联，不再拿 `bash "$S" --xxx-only` 的 exit 码当唯一 oracle：`--a12-only` → 八类字段循环 PATCH，用 `data -> field_id = '<json>'::jsonb` 逐类全等回读（多选数组也能逐字比）且 `version` 1→9 每步断言；`--a17-only` → 先给 B 企业种一个带 `乙企业机密-$SFX` 的行，再断言导出行数/字段数与库相等且导出体 grep 不到 B 的 `org_id` 与那个机密串；`--a18-a19-only` → 五个 payload 逐个断言状态码 ∈ {201,400}（禁 5xx）+ 注入串真作为字段名与单元格值落库 + `information_schema` 表清单前后全等。三个 `--aN-only` 段仍然存在，改由 CI linux job 真跑（见 P1-4）。
+
+**P1-3 截图无取证路径** — 已修。workflow 加本刀专属 upload step（artifact 名 `path3-rows-screenshots`，路径指本刀目录，与 A 刀那个 `path3-screenshots` 并存互不覆盖）；DoD 的 [BEHAVIOR:E2E] 与 final-e2e 段3 都改成 `gh run download <run_id> -n path3-rows-screenshots` 取回后数 png ≥ 6 且逐张非空字节，再落到 `sprints/.../screenshots/`——宿主机上手工塞的图不再能满足这条。
+
+**P1-4 新段与新 spec 没有「进 CI」断言** — 已修，新增 ARTIFACT「workflow 逐字接线」：linux job 的 run 块必须逐字出现 7 个新段 flag 与 `test:workbench-rows`；windows job 的 **run 命令**（不是 step 名）必须出现 `structured-workbench-rows.spec.ts`；windows job 必须出现 `path3-rows-screenshots` 与本刀截图目录。把 spec 名塞进 `paths:` 已经不够用了。
+
+**P1-5 GP-Anchor 双锚** — 已修，`contract-draft.md` 的 GP-Anchor 行、`contract-dod.md` frontmatter、`task-plan.json` 三处统一为 `#step2`，正文不再要求 generator 自己换算。controller payload 里那个 `#step1` 以 `anchor-payload-mismatch` 一行显式登记，请 controller 侧修，合同不替它裁定。
+
+**P1-6 keys 完整性卡与禁用字段反向断言缺失** — 已修，建行那条 DoD 补 `jq -e '(.data | keys) == ["created_at","data","row_id","row_order","updated_at","version"]'` 与 `.data | ([has("id"),has("rowId"),has("rev"),has("etag"),has("updatedAt"),has("fields")] | any | not)` 各一条；Response Schema 段同步写明 keys 完整性口径。
+
+**P1-7 两处实现约束只活在测试里** — 已修，Response Schema 段新增「三条实现约束」：① `row_limit` 每请求从 `process.env.WORKBENCH_ROW_LIMIT` 解析（缺省 5000），禁模块加载期固化——DoD 超限那条内联断言 `row_limit == 3` 会直接抓住固化写法；② 错误判定顺序固定 `404 → 400 → 409`；③ 空 `data:{}` 合法（只做存在性与权限校验）。
+
+**未改（你已核过成立，本轮一字未动）**：行级 version 409 乐观锁那条、组织隔离双向、写回失败可见、软删还原变异、A 刀 oracle 那几处。
+
+**行数**：draft 614 → 674（+60），dod 177 → 198（+21）。增量全部来自三个 P0 的「零验证 → 有验证」与三段内联 oracle；同时删掉了两处冗余（draft 里与 DoD 逐字重复的截图清单块、DoD 里与 Step11 内联断言重复的 INV-7 条目），并把「错误分支零整表重拉」从 [BEHAVIOR] 归位到 [ARTIFACT]（它本就是源码文本断言）。PRD 之外一条没加。
