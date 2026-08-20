@@ -28,7 +28,6 @@ const mockQuery = pool.query as ReturnType<typeof vi.fn>;
 // 必须使用合法 UUID，否则 Zod z.string().uuid() 校验失败
 const WORK_UUID = '11111111-1111-1111-1111-111111111111';
 const LOG_UUID  = '22222222-2222-2222-2222-222222222222';
-const FIELD_UUID = '33333333-3333-3333-3333-333333333333';
 
 const WORK_ROW = {
   id: WORK_UUID,
@@ -47,17 +46,6 @@ const WORK_ROW = {
   archived_at: null,   // DB 实际列名（非 archived），防止字段名回退
   owner_id: TEST_USER,
   tenant_id: 'tttttttt-1111-2222-3333-444444444444', // 匹配 queueTenantMember
-  created_at: '2026-01-01T00:00:00Z',
-  updated_at: '2026-01-01T00:00:00Z',
-};
-
-const FIELD_ROW = {
-  id: FIELD_UUID,
-  field_name: 'test_field',
-  field_type: 'select',
-  options: ['a', 'b'],
-  display_order: 10,
-  is_visible: true,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -178,57 +166,7 @@ describe('API Contract — Works', () => {
 
 // ────────────────────────────────────────────────────────────────────────────
 
-describe('API Contract — Fields', () => {
-  beforeEach(() => vi.resetAllMocks());
-
-  it('GET /api/fields — plain array (not wrapped)', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [FIELD_ROW] });
-
-    const { status, body } = await request(app).get('/api/fields');
-
-    expect(status).toBe(200);
-    // fields 返回裸数组，不像 works 包 {data,total,...}
-    expect(Array.isArray(body)).toBe(true);
-
-    const field = body[0];
-    expect(field).toHaveProperty('id');
-    expect(field).toHaveProperty('field_name');
-    expect(field).toHaveProperty('field_type');
-    expect(field).toHaveProperty('display_order');
-    expect(field).toHaveProperty('is_visible');
-    expect(field).toHaveProperty('created_at');
-    // NOTE: dashboard 期待 display_label / is_required — API 暂无这两个字段
-  });
-
-  it('POST /api/fields — created field shape', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [FIELD_ROW] });
-
-    const { status, body } = await request(app)
-      .post('/api/fields')
-      .send({ field_name: 'test_field', field_type: 'select' });
-
-    expect(status).toBe(201);
-    expect(body).toHaveProperty('id');
-    expect(body).toHaveProperty('field_name');
-    expect(body).toHaveProperty('field_type');
-    expect(body).toHaveProperty('display_order');
-  });
-
-  it('PUT /api/fields/:id — updated field shape', async () => {
-    const updated = { ...FIELD_ROW, field_name: 'renamed' };
-    mockQuery
-      .mockResolvedValueOnce({ rows: [FIELD_ROW] })
-      .mockResolvedValueOnce({ rows: [updated] });
-
-    const { status, body } = await request(app)
-      .put(`/api/fields/${FIELD_UUID}`)
-      .send({ field_name: 'renamed' });
-
-    expect(status).toBe(200);
-    expect(body).toHaveProperty('id');
-    expect(body).toHaveProperty('field_name');
-  });
-});
+// NOTE: /api/fields 端点已于 [c86e37ff/J7] 下线(无鉴权裸奔安全洞),原「API Contract — Fields」describe 块随之移除。
 
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -288,7 +226,7 @@ describe('API Contract — Publish Logs', () => {
 // ────────────────────────────────────────────────────────────────────────────
 
 describe('API Contract — Error Format Consistency', () => {
-  // 不在 beforeEach 自动 queue tenant_member —— 这个 describe 混合 /api/works 和 /api/fields
+  // 不在 beforeEach 自动 queue tenant_member —— 这个 describe 走 /api/works
   // 测试，分别按需 inline queue
   beforeEach(() => vi.resetAllMocks());
 
@@ -323,9 +261,11 @@ describe('API Contract — Error Format Consistency', () => {
       Object.assign(new Error('duplicate'), { code: '23505' })
     );
 
+    queueTenantMember();
     const { status, body } = await request(app)
-      .post('/api/fields')
-      .send({ field_name: 'dup', field_type: 'text' });
+      .post('/api/works')
+      .set('X-Feishu-User-Id', TEST_USER)
+      .send({ title: 'dup', body: 'x' });
 
     expect(status).toBe(409);
     expect(body).toHaveProperty('error');
