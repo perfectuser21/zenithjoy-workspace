@@ -52,9 +52,17 @@ _smoke-fake-feishu.ts 中 "pickDeclaredMember" 命中 0 次 → 按成员寻址�
 | `tests/workbench-auth-guard.test.ts` | `import { workbenchAuthGuard } from '.../middleware/workbench-auth'` 目标文件不存在 → 模块解析失败，整个 suite 红 | 6 |
 | `tests/workbench-tables.test.ts` | `/api/knowledge/db/*` 在 `app.ts` 零挂载 → 全部请求走通用 404；`zenithjoy.db_tables` 表不存在 → 夹具查询报错 | 5 |
 | `tests/workbench-visibility-trash.test.ts` | 同上 + 回收站端点不存在 | 4 |
-| `tests/fields-legacy-isolation.test.ts` | ① 「无身份四端点均返 401」在 `origin/main` 上**返 2xx**（洞记 issue `1ae57f1a`）= **业务真红**；② R2 新增的两条正向对照（读得到自己那行 / 改得动自己那行且 label 真落库）在无鉴权+无租户列时也红；③ `field_definitions.tenant_id` 列不存在 → 夹具 INSERT 报错 | 5 |
+| `tests/fields-legacy-isolation.test.ts` | ① 「无身份四端点均返 401」在 `origin/main` 上**返 2xx**（洞记 issue `1ae57f1a`）= **业务真红**；② R2 新增的两条正向对照（读得到自己那行 / 改得动自己那行且 `field_name` 真落库）在无鉴权+无租户列时也红；③ `field_definitions.tenant_id` 列不存在（`\d zenithjoy.field_definitions` 实测列集 = id/field_name/field_type/options/display_order/is_visible/created_at/updated_at）→ `beforeAll` 的 `mk()` INSERT 报 `column "tenant_id" does not exist`，整个 suite 红 | 5 |
 
-合计 **20 个必红用例**（R1 为 19；+1 = P1-4 新增的「A 企业身份能改自己那一行且 label 真落库」正向对照）。
+合计 **20 个必红用例**（R1 为 19；+1 = P1-4 新增的「A 企业身份能改自己那一行且 `field_name` 真落库」正向对照）。
+**R3 修正**：该正向对照 R2 原写 `label`，但 `field_definitions` 无此列（真库列集如上、建表 migration
+`20260210_000000_create_works_tables.sql:66-75` 同、`models/schemas.ts:30-38` 的 `createFieldSchema` 亦无
+——zod 会把 `{label:x}` strip 成 `{}`，PUT 返 2xx 却什么都没改），而 PRD J7 段② 只要求加 `tenant_id`。
+改用既有可更新列 `field_name`（`VARCHAR(100) NOT NULL`，在 `createFieldSchema` 内，`.partial()` 后可单独 PUT，
+`fields.service.ts:73` 的动态 UPDATE 认它），必红原因不变（无鉴权 → 该 PUT 现在无身份也能过；无 `tenant_id` 列 → 种子先炸）。
+**R3 修正（夹具）**：`_workbench-fixture.ts` 的 `INSERT INTO zenithjoy.tenants` 补上 `license_key`
+（NOT NULL 无默认 + UNIQUE，`\d zenithjoy.tenants` 实测）——漏给会让四个 suite 全部红在 `seedTwoTenants` 抛错上，
+那是**夹具故障**不是业务红，实现写完照样红。补齐后 20 条必红全部红在业务缺失上。
 另：`fields-legacy-isolation.test.ts` 原第 68-71 行的 `GET /api/fields/${orgBFieldId}` 期望 `[403,404]` **已删除**——
 `routes/fields.ts` 全文只有 `GET /`、`POST /`、`PUT /:id`、`DELETE /:id`，**没有 `GET /:id`**，
 Express 对未知路由一律 404，该断言与隔离做没做完全无关，是恒真条目（reviewer P1-4 附带项）。

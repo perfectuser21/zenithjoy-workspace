@@ -90,13 +90,18 @@ export async function seedTwoTenants(prefix: string): Promise<TwoTenantSeed> {
   await client.connect();
   const sfx = `${Date.now()}${Math.floor(Math.random() * 10000)}`;
 
+  // `license_key` 是 NOT NULL 无默认 + UNIQUE（`\d zenithjoy.tenants` 实测：`tenants_license_key_key`），
+  // 漏给则第一条 INSERT 即 `null value in column "license_key"`，四个 suite 的 beforeAll 全部 error——
+  // 20 个必红用例会红在种子上而不是红在业务上，实现写完照样红。
+  // 写法照抄 repo 既有种子（`apps/api/tests/integration/helpers.ts:29`、`apps/api/src/routes/tenants.ts:20`、
+  // `.github/workflows/scripts/smoke/credits-smoke.sh:40`），两家企业带 `sfx` 各取唯一串（UNIQUE 不许同串）。
   const a = await client.query(
-    "INSERT INTO zenithjoy.tenants (name, plan) VALUES ($1, 'free') RETURNING id",
-    [`${prefix}-A-${sfx}`]
+    "INSERT INTO zenithjoy.tenants (name, license_key, plan) VALUES ($1, $2, 'free') RETURNING id",
+    [`${prefix}-A-${sfx}`, `wb-lk-a-${sfx}`]
   );
   const b = await client.query(
-    "INSERT INTO zenithjoy.tenants (name, plan) VALUES ($1, 'free') RETURNING id",
-    [`${prefix}-B-${sfx}`]
+    "INSERT INTO zenithjoy.tenants (name, license_key, plan) VALUES ($1, $2, 'free') RETURNING id",
+    [`${prefix}-B-${sfx}`, `wb-lk-b-${sfx}`]
   );
   const orgATenantId = a.rows[0].id as string;
   const orgBTenantId = b.rows[0].id as string;

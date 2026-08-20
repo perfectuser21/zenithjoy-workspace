@@ -426,13 +426,13 @@ bash "$S" --a2-only; RC=$?; bash "$S" --mutation-revert A2-inject-all; [ "$RC" -
 1. 路③ 新字段元数据表 `db_fields.org_id` 为 `NOT NULL`；A 企业会话读/改 B 企业字段定义 → 4xx 或空集
 2. 不带任何身份头、不带会话逐个调 `/api/fields` 四端点（GET / POST / PUT :id / DELETE :id）**均返 401**（`origin/main @ bdebf9e4` 返 2xx，此判据当前就是红的，转绿即段① 完成）
 3. **反向**：持 A 企业身份读/改 B 企业的 `field_definitions` 行 → 4xx 或空集，且 B 的行前后 `SELECT` diff 为空
-   **正向对照（同段内必须自带，不许只靠 ④ 的 windows job）**：A 持身份 `GET /api/fields` 必须**命中 A 自己那一行**（不只是"不含 B 的"）；`PUT /api/fields/<A 自己的行>` 返 2xx 且 `psql` 复查该行 `label` 真的变成了新值。**理由**：只写反向串会被「一律返空数组 / 一律 403」的实现完全骗过——那三条全绿而 dashboard `/works/fields` 当场瘫痪，正是 PR#1675→#1676 那次往返的形状
+   **正向对照（同段内必须自带，不许只靠 ④ 的 windows job）**：A 持身份 `GET /api/fields` 必须**命中 A 自己那一行**（不只是"不含 B 的"）；`PUT /api/fields/<A 自己的行>` 返 2xx 且 `psql` 复查该行 `field_name` 真的变成了新值（**用 `field_name` 不用 `label`**：`field_definitions` 无 `label` 列——`\d zenithjoy.field_definitions` 实测、`20260210_000000_create_works_tables.sql:66-75` 建表段、`models/schemas.ts:30-38` 的 `createFieldSchema` 三层皆无，且 PRD J7 段② 只要求加 `tenant_id`；拿 `label` 当对照只会永远红，或逼 generator 造一个 PRD 没要求的列）。**理由**：只写反向串会被「一律返空数组 / 一律 403」的实现完全骗过——那三条全绿而 dashboard `/works/fields` 当场瘫痪，正是 PR#1675→#1676 那次往返的形状
 4. 真浏览器带真会话下 dashboard `/works/fields` 列表/新建/编辑/删除 与 `WorkDetailPage` 自定义字段编辑功能不变（`PUT /fields/reorder` 除外）
-5. 处置结果（不下线端点 + `field_definitions` 加租户列的范围扩张，关联 issue `1ae57f1a` 与 PR#1675/#1676）落 `decisions` 表
+5. 处置结果（不下线端点 + `field_definitions` 加租户列的范围扩张，关联 issue `1ae57f1a` 与 PR#1675/#1676）落 `decisions` 表。**该表在 Brain（cecelia）库 `public.decisions`，zenithjoy / zenithjoy_test 两库都没有它**（`\dt *.decisions` 实测皆 `Did not find any relation`）——`--a4-only` 段⑤ 与 INV-10 的 oracle 一律走 `$BRAIN_DATABASE_URL`（psql）或 `GET localhost:5221/api/brain/decisions`（jq），两者皆不可用即报错退出；拿 `$E2E_DATABASE_URL` 查它会得空串再撞 `[ "" -ge 1 ]` 的 `integer expression expected`，恒 FAIL
 
 **验证命令**:
 ```bash
-# ①②③⑤ 段：真 API + 真 PG + decisions 查询
+# ①②③ 段：真 API + 真 PG；⑤ 段查 decisions（在 Brain/cecelia 库，脚本内走 $BRAIN_DATABASE_URL 或 Brain API，不碰 zenithjoy 库）
 bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --a4-only
 # ④ 段：真浏览器（在 windows job 内跑，本地由 workflow 断言代理，见 Step 10）
 node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/fields-auth-regression.spec.ts','utf8');if(c.includes('page.route('))process.exit(1)"
@@ -440,7 +440,7 @@ node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/fields-auth-regr
 bash .github/workflows/scripts/smoke/fields-smoke.sh
 ```
 
-**硬阈值**: `db_fields.org_id` 的 `is_nullable == 'NO'`；`/api/fields` 四端点无身份 → **4×401**；A 持身份读 B 的 `field_definitions` → 行数 0 且 B 行 `md5` 前后全等；**正向对照**：A 持身份 `GET /api/fields` 返 200 且 `ids` 含 A 自己那行的 id、`PUT` A 自己那行返 2xx 且 `psql` 查回的 `label` == 新值（三者缺一即 FAIL——这一条专门堵「一律返空/一律 403」）；`fields-smoke.sh` 与 `zenithjoy-smoke-audit.sh` 改带会话身份后 exit 0；`decisions` 表存在 category 为 `rec` 或 `invariant` 且正文同时含 `1ae57f1a` 与 `field_definitions` 的行；dashboard 回归 spec 存在且**零 `page.route(`**。
+**硬阈值**: `db_fields.org_id` 的 `is_nullable == 'NO'`；`/api/fields` 四端点无身份 → **4×401**；A 持身份读 B 的 `field_definitions` → 行数 0 且 B 行 `md5` 前后全等；**正向对照**：A 持身份 `GET /api/fields` 返 200 且 `ids` 含 A 自己那行的 id、`PUT` A 自己那行返 2xx 且 `psql` 查回的 `field_name` == 新值（三者缺一即 FAIL——这一条专门堵「一律返空/一律 403」）；`fields-smoke.sh` 与 `zenithjoy-smoke-audit.sh` 改带会话身份后 exit 0；**Brain（cecelia）库** `public.decisions` 存在 category 为 `rec` 或 `invariant` 且正文同时含 `1ae57f1a` 与 `field_definitions` 的行（**该表不在 zenithjoy/zenithjoy_test 库**，`\dt *.decisions` 实测两库皆无；oracle 走 `$BRAIN_DATABASE_URL` psql 或 `GET localhost:5221/api/brain/decisions`，两者皆不可用即 FAIL，禁止拿 `$E2E_DATABASE_URL` 兜）；dashboard 回归 spec 存在且**零 `page.route(`**。
 
 ---
 
@@ -670,7 +670,7 @@ exit 0
 | G0 会话鉴权闸 | `tests/workbench-auth-guard.test.ts` | `无会话返 401 SESSION_REQUIRED`、`伪造身份头不改变判定且不写库`、`成员行查询失败返 503 LEDGER_UNREACHABLE`、`多组织行返 409 MULTI_ORG_MEMBER 不取第一条` | 中间件与路由不存在 → 6 failures |
 | S1 建表与字段元数据 | `tests/workbench-tables.test.ts` | `建表返 201 且 org_id 取自会话忽略请求体`、`八类字段各一落 db_fields`、`建表不产生运行时 DDL`、`跨组织 GET 返 404 且与随机 id 逐字节相同` | 端点族不存在 → 4 failures |
 | 可见性与回收站 | `tests/workbench-visibility-trash.test.ts` | `仅自己表对同组织他人不出现在列表`、`表主本人同时刻仍返 2xx 且内容逐字一致`、`确认名不匹配返 400 CONFIRM_MISMATCH 且不删`、`软删后物理行仍在且还原逐字回归` | 同上 → 4 failures |
-| G1 旧 fields 处置（反向 + 正向对照） | `tests/fields-legacy-isolation.test.ts` | `无身份调 /api/fields 四端点均返 401`、`A 企业身份读不到 B 企业 field_definitions`、`A 企业身份能改自己那一行且 label 真落库`、`A 企业身份改不动 B 企业 field_definitions 且 B 行未变` | 四端点当前无鉴权返 2xx + `tenant_id` 列不存在 → 5 failures |
+| G1 旧 fields 处置（反向 + 正向对照） | `tests/fields-legacy-isolation.test.ts` | `无身份调 /api/fields 四端点均返 401`、`A 企业身份读不到 B 企业 field_definitions`、`A 企业身份能改自己那一行且 field_name 真落库`、`A 企业身份改不动 B 企业 field_definitions 且 B 行未变` | 四端点当前无鉴权返 2xx + `tenant_id` 列不存在 → 5 failures |
 
 > 「BEHAVIOR 覆盖」列每个名字都是对应 `it()` 名的字面子串，`grep -F` 可命中。
 > 这些 vitest 是 generator 的 TDD red-green 用；evaluator 的 verdict 只来自 `contract-dod.md` 的 `manual:` 命令。
@@ -701,7 +701,7 @@ exit 0
 写死清单整条删除，改为从挂载事实现算：解析 `app.ts` 里挂到 `/api/knowledge/db` 的 router → 回溯 import → 一层相对 import 闭包 → 并入 `git diff origin/main...HEAD` 中含 `/api/knowledge/db`/`workbench` 字面量的新增源文件。补两条兜底断言：扫描域 ≥3 项且**逐项 `test -f` 命中真实文件**、路③ 新增文件集合**必须是**扫描域子集（漏一个即 FAIL 并打印文件名）。另加 `--mutation-list` 断言 `A2-inject-all` 注入次数 = 7，防"少注入几个字面量假装全过"。
 
 **P1-4 G1 只有反向没有正向 —— 已修（含恒真断言删除）**
-`--a4-only` 段③ 补正向：DoD 新增一条内联命令——psql 种 A 企业一行 → `GET /api/fields` 断言 `map(.id) | index($FID) != null` → `PUT` 该行 → psql 复查 `label` 真变成新值。三条缺一即 FAIL，"一律返空数组 / 一律 403"当场红。`fields-legacy-isolation.test.ts:68-71` 的 `GET /api/fields/${orgBFieldId}` 期望 `[403,404]` **已删除**（核对 `routes/fields.ts` 全文确无 `GET /:id`，Express 未知路由恒 404，与隔离无关），原地换成两条正向对照用例，并把 beforeAll 改为**两家各种一行**（只种 B 的话正向无从对照）。
+`--a4-only` 段③ 补正向：DoD 新增一条内联命令——psql 种 A 企业一行 → `GET /api/fields` 断言 `map(.id) | index($FID) != null` → `PUT` 该行 → psql 复查 `field_name` 真变成新值（r3 改：原写 `label`，该列真库/migration/zod/service 四层皆无）。三条缺一即 FAIL，"一律返空数组 / 一律 403"当场红。`fields-legacy-isolation.test.ts:68-71` 的 `GET /api/fields/${orgBFieldId}` 期望 `[403,404]` **已删除**（核对 `routes/fields.ts` 全文确无 `GET /:id`，Express 未知路由恒 404，与隔离无关），原地换成两条正向对照用例，并把 beforeAll 改为**两家各种一行**（只种 B 的话正向无从对照）。
 
 **溯源错账 —— 已修**
 「12 条变异」改为本刀可核对的确切计数：**9 个开关 / 19 次注入**（段1 静态 14 = A2×7 + A35×5 + INV4×1 + INV7×1；段2 真库 4 = A1/A8/A9/A11；段2b 备份 1 = A5），并注明 12 是上位合同整条 GP 四刀口径、A2/A35 属段1 静态而非段2。A6/A7/A11 三处「对应上位合同断言」全部改为「**本地标签，上位合同无此编号**（A-id 集合已逐个列出），要求实体来自 PRD 的哪一条」；合同抬头那句也改成 `G0/G1/G2 + A1–A5、A8–A10、A30①、A33、A34、A35①`。
@@ -709,3 +709,121 @@ exit 0
 **你标注"不要动"的部分一字未动**：真实调用方 shape（`knowledgeFetch.ts:25-31`）、A33 四段 + `conclusion == success`、判定点登记表 6 条、G2 异地 `logic-done-pending-offsite`、禁 mock 边清单 7 条与飞书唯一豁免。
 
 **行数如实交代（未达"持平或略降"）**：contract-draft 合同正文 606 → 682（+76，本「R1 逐条回应」附录另占 29 行，文件总长 711），contract-dod 193 → 224（+31）。逐项去向：假上游扩展登记 +14（P0-1 要求"合同必须写出确切字面形态"）、夹具供给协议 +14（P1-1 把真 oracle 搬进 DoD 的执行前提）、变异证明协议 +12（P1-1 判据外置）、G2 种数据三层判定 +7（P0-2）、A2 可发现扫描域 +6（P1-3）、G1 正向对照 +3（P1-4）、溯源修正 +3、各 Step 变异命令由 1 行摊成 3 行 +17。已反向压缩假上游/扫描域/G2 三段共 −8。**零新增 scope**：没有加任何 PRD 之外的端点、字段或场景，PRD 覆盖边界与 R1 完全相同。
+
+---
+
+## R2 逐条回应（Round 3 定点修 —— 三处，合计 11 行改动，零新增 scope）
+
+Reviewer 判定「三条改动加起来不到十行；改完这一轮就该 APPROVED」。三条我全部先在真库/真代码上复核了
+reviewer 给的事实，再改，并对每一条做了**修前必炸 / 修后能过**的双向实证（全部在 `zenithjoy_test`
+上以 `BEGIN … ROLLBACK` 跑，零污染）。
+
+### A（P0，`test_is_red`）夹具 `tenants` 漏 `license_key` —— 已修
+
+`\d zenithjoy.tenants` 复核确认 reviewer 无误：`license_key | text | not null`，**无 DEFAULT**，
+且带唯一约束 `tenants_license_key_key`（所以两家企业必须用不同串，reviewer 提示的这一点也照做了）。
+
+`_workbench-fixture.ts` 两条 INSERT 照抄 repo 既有种子写法（`apps/api/tests/integration/helpers.ts:29`、
+`apps/api/src/routes/tenants.ts:20`、`.github/workflows/scripts/smoke/credits-smoke.sh:40` 三处一致）：
+
+```ts
+"INSERT INTO zenithjoy.tenants (name, license_key, plan) VALUES ($1, $2, 'free') RETURNING id",
+[`${prefix}-A-${sfx}`, `wb-lk-a-${sfx}`]   // B 家为 wb-lk-b-${sfx}
+```
+
+**双向实证**（`zenithjoy_test`，事务回滚）：
+
+| 写法 | 真库结果 |
+|---|---|
+| 修前 `(name, plan)` | `ERROR: null value in column "license_key" of relation "tenants" violates not-null constraint` |
+| 修后 `(name, license_key, plan)` | `INSERT 0 1`，返回 uuid |
+
+**顺带做完 reviewer 要求的那条自检**——「夹具依赖的每一张既有表，其 NOT NULL 无默认列是否都给了值」，
+逐表查 `information_schema.columns` 过了一遍，这是本刀 INSERT 触达的全部三张既有表：
+
+| 表 | NOT NULL 且无默认的列 | 夹具/判据是否都给了 |
+|---|---|---|
+| `zenithjoy.tenants` | `name`、`license_key` | ✅ 本轮补齐 `license_key` 后齐全 |
+| `zenithjoy.tenant_members`（`workbench-auth-guard.test.ts:87`）| `tenant_id`、`feishu_user_id` | ✅ 两列都给（`role`/`created_at` 有默认） |
+| `zenithjoy.field_definitions`（`fields-legacy-isolation.test.ts` `mk()`、DoD:121）| `field_name`、`field_type` | ✅ 两列都给（`display_order`/`is_visible`/时间戳均有默认）；`tenant_id` 是本刀段② 新增列，现在缺列报错**属预期必红** |
+
+### B（P0，`test_is_red` / `verification_oracle_completeness`）`label` 列四层皆无 —— 已修，改用 `field_name`
+
+三层事实我逐层复核，与 reviewer 一致：真库列集 `id/field_name/field_type/options/display_order/is_visible/created_at/updated_at`
+无 `label`；`models/schemas.ts:30-38` 的 `createFieldSchema` 亦无（`.partial()` 后 zod strip，`{label:x}` 会被剥成 `{}`，
+PUT 返 2xx 却什么都没改——这条比"永远红"更阴，会**假绿**）；`fields.service.ts` 五处 SQL 不碰它。
+而 PRD J7 段② 逐字只要求加 `tenant_id`，我自己判定点登记表选的也是 B(`tenant_id`)——**这条正向对照确属自伤**。
+
+改用既有可更新列 **`field_name`**：`VARCHAR(100) NOT NULL`，在 `createFieldSchema` 内（`.partial()` 后可单独 PUT），
+`fields.service.ts:73` 的动态 `UPDATE ... SET` 认它，无唯一约束不会撞车。同步改到位的**六处**：
+
+1. `tests/fields-legacy-isolation.test.ts` —— `mk()` 签名去掉 label 参数、正向对照用例改断 `field_name`、
+   越权用例的 `md5(row(...))` 列集改为真实存在的 `(field_name, field_type, display_order, is_visible, tenant_id)`、
+   401 那条的 POST/PUT body 里的 `label` 一并清掉，文件头加一段说明为什么不用 `label`
+2. `contract-dod.md:120/121` —— 条目文字 + 内联命令的 INSERT 列、PUT body、psql 复查列、失败文案全改；
+   `NEW` 值从中文 `A企业字段-改后-$SFX` 换成 ASCII 的 `fwd_a_renamed_$SFX`
+3. `contract-draft.md:429`（可观测行为③）、`:443`（硬阈值）、`:673`（Test Contract 表 it() 名）、`:704`（附录）
+4. `red-evidence.md` 必红原因表 + 合计说明 —— reviewer 指出「现在写的是 tenant_id 列不存在，没提 label，
+   说明这条没被核过」，这条批评成立，本轮把 R3 修正原委写进去了
+5. `task-plan.json` 的 DoD 串
+6. Test Contract 表的「BEHAVIOR 覆盖」名与 `it()` 名保持字面子串一致（改后为
+   `A 企业身份能改自己那一行且 field_name 真落库`，`grep -F` 可命中）
+
+**双向实证**（`zenithjoy_test`，事务回滚）：
+
+| 写法 | 真库结果 |
+|---|---|
+| 修前 `(field_name, field_type, label)` | `ERROR: column "label" of relation "field_definitions" does not exist` |
+| 修后 `(field_name, field_type)` | `INSERT 0 1`，返回 uuid |
+
+必红性不变：该正向对照现在仍红（四端点无鉴权 → 无身份 PUT 也能过；`tenant_id` 列不存在 → 种子先炸）。
+
+### C（P1，`verification_oracle_completeness`）`decisions` 打错库 —— 已修，改走 Brain 库/Brain API
+
+复核确认：`psql -d zenithjoy -c "\dt *.decisions"` 与 `zenithjoy_test` 同样返回
+`Did not find any relation`；`psql -d cecelia -c "\d decisions"` → `Table "public.decisions"` ✓。
+原写法拿 `$PG`（zenithjoy E2E 库）查它，两条 psql 都失败 → `C` 为空串 → `[ "" -ge 1 ]` 报
+`integer expression expected` → 恒 FAIL，reviewer 说的「该 PRD 条目无有效 oracle」成立。
+
+采用 reviewer 的两个选项**合并写死**（优先 ①，②做兜底，两者皆不可用即报错退出——沿用本合同对
+`E2E_DATABASE_URL` 的同一口径，绝不静默落默认库）：
+
+```bash
+if [ -n "${BRAIN_DATABASE_URL:-}" ]; then
+  C=$(psql "$BRAIN_DATABASE_URL" -t -A -c "$Q") || fail "BRAIN_DATABASE_URL 连不上 Brain 库"
+else
+  C=$(curl -sf "http://localhost:5221/api/brain/decisions?limit=1000" | jq "[...]| length") \
+    || fail "未设 BRAIN_DATABASE_URL 且 Brain API localhost:5221 不可达——decisions 在 Brain(cecelia) 库，
+             不在 zenithjoy 库，不许拿 E2E_DATABASE_URL 兜"
+fi
+```
+
+**双向实证**（两条通道各跑两次）：
+
+| 通道 | 查本刀记录（尚未写入） | 把关键词换成库里已存在的组合 |
+|---|---|---|
+| `BRAIN_DATABASE_URL` psql | `FAIL: decisions 无该处置记录` exit 1 | `OK` exit 0 |
+| Brain API + jq | 同上 exit 1 | `OK` exit 0 |
+
+即：这条判据现在**红在业务缺失上**（该 decision 尚未写），不是红在语法或连错库上，且证明它可判别、非恒 FAIL。
+
+reviewer 要求的「把『decisions 在 Brain 库不在 zenithjoy 库』写进合同免得下一刀再踩」也照办，写进了**三处**：
+`contract-dod.md` 顶部环境前置段（新增「两个库别混」一行）、INV-10 条目正文、`contract-draft.md`
+Step 7 可观测行为⑤ 与硬阈值。
+
+### 本轮自查复跑
+
+- Step 2b-check 确定性自查：`BEHAVIOR=34 / manual=34 / e2e_blocks=1 / real_exec=34 / grep_only=0` → ✅ 通过
+- `bash -n`：外层 **34/34**、内层 **22/22** 全过（与 r2 同）
+- 五个测试文件 esbuild TS 语法 **5/5** 通过
+- 行数：contract-draft 正文 682 → 682（本附录另计），contract-dod 224 → 225（+1 = 新增的「两个库别混」口径行；INV-10 的库归属说明是行内追加，不增行）。
+  **零新增 scope**：没有新增任何端点、字段或场景，PRD 覆盖边界与 R1/R2 完全相同；三条全是把已有判据从「指向不存在的东西」改成「指向真实存在的东西」。
+
+### 未动的部分
+
+reviewer 列的「已核验通过、不要动」清单**一字未动**：P0-2 的 G2 三层判定 + `A5-schema-only` 变异、
+P1-① 的判据外置协议与 `PGURL` 取法、P1-② 的扫描器行号断言、P1-③ 的 A2 三路推导扫描域、
+恒真断言删除、溯源 9 开关/19 次注入拆账、P0-1 已修的三条（`wb-code-<open_id>` 形态 / `pickDeclaredMember`
+纯 fallback / `loginAs` 就地抛错）、判定点登记表 6 条、G2 异地 `logic-done-pending-offsite`、
+禁 mock 边清单 7 条与飞书唯一豁免、`## 真实调用方请求 shape`、A33 四段。GP-Anchor 保留
+（`line11/structured_workbench#step1`）。
