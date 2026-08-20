@@ -5697,7 +5697,7 @@ agent_suite:
     ci: L3
     status: active
     product: 员工知识中枢
-    note: "路③ 路由表(test-pairing)：端点恰好 9 个(4写+5读)、鉴权闸挂在所有端点之前。多开一个端点或少挂一次闸当场看得见。"
+    note: "路③ 路由表(test-pairing)：端点恰好 17 个(9写+8读，Sprint B 行层补上八条)、鉴权闸挂在所有端点之前。多开一个端点或少挂一次闸当场看得见。"
 
   - id: workbench-templates-pairing
     path: apps/api/src/knowledge/workbench-templates.test.ts
@@ -5746,3 +5746,52 @@ agent_suite:
     status: active
     product: 员工知识中枢
     note: "路③ 前端常量(test-pairing)：端点前缀是 /api/knowledge/db 且不在 /api/staff 之下、八类字段与服务端逐字对齐、标签两两不同。"
+
+  # ── 路③ Sprint B（S2 数据进得来）────────────────────────────────────────
+  - id: workbench-rows-contract-crud
+    path: sprints/08201850-workbench-sprintB-rows/tests/rows-crud.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "S2 行 CRUD：建行 201 且 version=1 且归属取自会话 / 八类字段各改一次逐字落库(key 是稳定 field_id) / 类型不符 400 且该格逐字未变 / 表已软删后其行读写一律同形 404。真会话 + 真 Postgres，合同禁 mock 边。workflow: e2e-knowledge-hub-path3.yml (linux job, npm run test:workbench-rows)"
+
+  - id: workbench-rows-contract-optimistic-lock
+    path: sprints/08201850-workbench-sprintB-rows/tests/rows-optimistic-lock.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "S2 行级 version 乐观锁：两个真会话同基线**真并发**提交同一格 → 恰一个 200 一个 409 ROW_VERSION_CONFLICT，库中值 = 先提交者（不是后写的赢）；基线缺失/非数字 400 而不是被当成放行。禁伪并发。"
+
+  - id: workbench-rows-contract-paste-limit
+    path: sprints/08201850-workbench-sprintB-rows/tests/rows-paste-limit.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "S2 粘贴导入与行数上限：粘贴 N 行落库恰 N 行 / 未匹配列自动建为 text（不做类型推断）/ 超上限整批原子拒绝且零新增行零新建字段 / 不设 env 时上限默认 5000。"
+
+  - id: workbench-rows-contract-isolation-export
+    path: sprints/08201850-workbench-sprintB-rows/tests/rows-isolation-export.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "S2 行层组织隔离正反双向（跨组织读改删还原导出全 404 且与随机 uuid 逐字节同形、原行逐字未变；同一 suite 内本组织正向 2xx 堵「一律拒绝」假绿）+ 软删物理行仍在 + 还原逐字回归 + 导出零他组织数据 + 对抗输入作为数据值落库。"
+
+  - id: workbench-rows-service-pairing
+    path: apps/api/src/services/workbench-rows.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "路③ 行 service 纯逻辑(test-pairing)：上限默认值逐字 5000、每请求重读 env（固化成模块常量会让 A15 变异证明整条失效）、非法 env 回落不退化成 0、超限判定边界。落库语义在合同真库测试里。"
+
+  - id: workbench-rows-e2e-golden-path
+    path: apps/staff-hub/e2e/structured-workbench-rows.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 员工知识中枢
+    note: "S2 真浏览器行链三段(@rows-offline / @rows-detail / @rows-limit)：行内编辑即存 → 同事改同格看到冲突提示且自己打的内容仍在 → 真断网(setOffline)错误态可见且输入不丢、恢复网络就地重试 → 粘贴导入 → 回收站还原；行详情面板 8 字段 + 长文本多行编辑区 + 面板开着时该行被删有可见提示；达上限「新增行」禁用。六张截图。变体C：真实后端、禁请求拦截。workflow: e2e-knowledge-hub-path3.yml (windows job)"
