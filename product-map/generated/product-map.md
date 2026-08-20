@@ -1,6 +1,6 @@
 # Product Map
 
-<!-- digest: 206c51fed97a129b895f20cea46f01991cdcbe8231bde0270bcbb03ac06ea9e5 -->
+<!-- digest: 2d7faad105fff67b14cfc9ca1711275753a86dcfa0dc6b61eac5be65efc1ce2a -->
 
 > 此文件由 `npm run product-map:generate` 自动生成，请勿手工编辑。
 > 唯一手写源：`product-map/product-map.yaml`
@@ -52,6 +52,7 @@
 | skill_acceptance | staff_app | line00 | deprecated | — | — |
 | customer_management | staff_app | line10 | active | — | .github/workflows/scripts/smoke/customer-admin-backend-smoke.sh |
 | knowledge_experience_qa | staff_app | line11 | proposed | step1:经验被留住（人侧自动触发 + agent 干完自动写回，「最近沉淀」立刻可见）<br>step2:问得到（大白话提问，答案带出处；「库里没有」与「暂时查不了」两种明确回答）<br>step3:干活前被喂到（agent 开工强制注入仍然成立的经验，中台可见注入台账） | — |
+| structured_workbench | staff_app | line11 | proposed | step1:建得出表(自定义字段+组织归属+模板起步+表级可见性)<br>step2:数据进得来(行内编辑+冲突可见+粘贴导入+详情面板+回收站+JSON导出)<br>step3:视图切得开(筛/排/表格↔看板拖拽/视图偏好记住你)<br>step4:关联连得上(Relation+反向可见+引用不悬空) | — |
 
 ## Surfaces
 
