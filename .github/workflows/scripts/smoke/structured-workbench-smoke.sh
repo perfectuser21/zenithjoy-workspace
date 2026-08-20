@@ -920,13 +920,32 @@ run_inv_seam_ledger() {
   echo "✅ INV-6 通过"
 }
 
+# 本 feature 自己的合法写入方——必须排除在 INV-9 之外，理由见下方注释。
+INV9_OWNER='apps/api/src/services/workbench.service.ts'
+
 run_inv_table_claim() {
-  echo "== INV-9 表名认领：五张新表在 origin/main 上零既有写入方 =="
+  echo "== INV-9 表名认领：五张新表在 origin/main 上零**第三方**写入方 =="
+  # 这道闸问的是"这五个表名有没有被别人占用"，防的是 schema 撞车。
+  #
+  # ⚠️ 2026-08-20 修（PR#1684）：原版查的是"零写入方"且不排除自己。它在本 feature 的
+  # PR 上通过，是因为那时 origin/main 还没有 workbench.service.ts；一旦合并进 main，
+  # 自己就成了"既有写入方"，此后**每一个碰 smoke 目录的 PR 都会被它卡死**——一颗
+  # 合并即引爆的自毁地雷（PR#1684 是第一个踩到的）。加 :!OWNER 排除后它继续能抓
+  # 真正的第三方撞车（去掉排除项立刻报出那 3 处并 FAIL，变异验证过），只是不再拦自己人。
+  #
+  # 另修两处可移植性——**正是它们让这颗地雷在本地隐身**：
+  #   1. `\s` 和 `\b` 都是 GNU 扩展，macOS 的 git grep -E 不认 → 本地跑永远 0 处（假绿），
+  #      只有 Linux CI 会真报。改用 POSIX 的 [[:space:]] 与 ([^a-zA-Z0-9_]|$)
+  #      （等价词边界，实测不会误伤 db_tables_backup 这类相似表名）
+  #   2. `apps/**/*.ts` 这个 pathspec 两边 git 行为不一致（本地匹配不到
+  #      apps/api/src/services/*.ts），改用目录前缀 `apps/` —— 两边都覆盖全子树
+  # 改完后本地与 CI 结果一致：排除前 3 处、排除后 0 处。
   for t in db_tables db_fields db_rows db_view_prefs db_audit; do
-    local n
-    n=$(git grep -InE "(INSERT INTO|UPDATE|DELETE FROM)\s+(zenithjoy\.)?$t\b" origin/main -- 'apps/**/*.ts' 'apps/**/*.js' 2>/dev/null | wc -l | tr -d ' ')
-    [ "$n" = "0" ] || { git grep -InE "(INSERT INTO|UPDATE|DELETE FROM)\s+(zenithjoy\.)?$t\b" origin/main -- 'apps/**/*.ts' | head -5; fail "INV-9：$t 在 origin/main 上已有 $n 处写入方 —— schema 撞车"; }
-    ok "$t 在 origin/main 上零既有写入方"
+    local n re
+    re="(INSERT INTO|UPDATE|DELETE FROM)[[:space:]]+(zenithjoy\.)?${t}([^a-zA-Z0-9_]|\$)"
+    n=$(git grep -InE "$re" origin/main -- 'apps/' ":!$INV9_OWNER" 2>/dev/null | wc -l | tr -d ' ')
+    [ "$n" = "0" ] || { git grep -InE "$re" origin/main -- 'apps/' ":!$INV9_OWNER" | head -5; fail "INV-9：$t 在 origin/main 上已有 $n 处**第三方**写入方 —— schema 撞车"; }
+    ok "$t 在 origin/main 上零第三方写入方"
   done
   echo "✅ INV-9 通过"
 }
