@@ -1,9 +1,10 @@
-# Sprint Contract Draft (Round 1) — 员工知识中枢 路③ 结构化工作台 · Sprint A
+# Sprint Contract Draft (Round 2) — 员工知识中枢 路③ 结构化工作台 · Sprint A
 
 **journey_type**: user_facing
 **target_environment**: windows_cloud
 **journey_id**: da60cb26-5635-4f51-a1f3-a80013f6d69d
-**上位合同**: `.harness/gp3-contract-v3.json`（CONTRACT IS LAW，本合同断言全部为其 G0/G1/G2 + A1–A11 的执行化，不新增也不放宽任何一条）
+**上位合同**: `.harness/gp3-contract-v3.json`（CONTRACT IS LAW）。本合同执行化的上位断言 = **G0/G1/G2 + A1–A5、A8–A10、A30①、A33、A34、A35①**，不新增也不放宽任何一条。
+**本地标签 A6 / A7 / A11 上位合同无此编号**（其 A-id 集合为 A1–A5、A8–A10、A13–A16、A18–A19、A21–A25、A27–A28、A30–A36）——这三个是本合同为 **PRD**「Golden Path 第 2/3 条（8 类字段 · 逐字还在）」「范围限定·开箱模板 ≥2」「边界情况第 1 条（多组织 fail-closed）」自建的本地断言编号，范围不越界，溯源以 PRD 为准。
 
 ## GP-Anchor
 
@@ -125,6 +126,26 @@ return fetch(url, {
 - [fields-smoke.sh 全篇] → 当前用 `X-Internal-Token` 调 `/api/fields` 四端点并断言 2xx。J7 段① 挂鉴权后**该脚本必然被打成 401**，属必须同刀改的既有约束，不是回归。
 - [zenithjoy-smoke-audit.sh] → 同上，含 `/api/fields` 探测，同刀改。
 - [apps/dashboard `/works/fields` + `WorkDetailPage`] → dashboard 业务代码零改动前提下功能必须不变（防重演 PR#1675→#1676 的往返）。`PUT /fields/reorder` 除外（main 上本就无对应后端路由，不作基线）。
+- [`apps/api/src/routes/_smoke-fake-feishu.ts`] → 路① 既有资产，本刀**必须扩展**（见下「假上游按成员寻址扩展」）。扩展为纯 fallback，`code-<ORGKEY>` 既有语义一字不改；`knowledge-hub-path1-smoke.sh` 的会话签发段改后仍须全绿（回归断言见 DoD ARTIFACT + INV 段）。
+
+### 假上游按成员寻址扩展（路① 资产改动登记 — 本刀必做，形态定死）
+
+**为什么必须改**：`resolveFakeFeishuIdentity`（`:67-72`）正则 `/code-([A-Za-z0-9_]+)$/` 要求 code **以 `code-<KEY>` 结尾且 KEY 内无 `-`**；`pickGroupMembers`（`:40-49`）只返分组里**第一个**非邮箱成员。① `wb-code-alice-<sfx>` 中间夹 `-` → 解析 NULL → 假上游回 `20021 invalid code` → 拿不到 `set-cookie`，实现写得再对也全部 401（**永久红，不是 TDD red**）；② 甲乙拿不到两个不同身份，A8「同组织他人 404 / 表主本人 200」这条本刀唯一的「可见性是真访问控制」判据没有第二个人可用。
+
+**扩展形态（generator 照此实现，不许现场发挥）**：分组名查不到时回退到「按成员 `open_id` 精确寻址」——
+
+```ts
+if (key.toLowerCase() === 'noorg') return pickNoOrgMember();
+return pickGroupMembers(key) ?? pickDeclaredMember(key);   // ← 新增的 fallback，既有分支一字不改
+// pickDeclaredMember(openId): 遍历 parseOrgGroups(process.env)，某组 members.has(openId) 即返
+//   { open_id: openId, name: `Fake ${orgKey} Member`, email: '' }；全组未命中返 null
+```
+
+**fixture 里 code 的确切字面形态** = `wb-code-<open_id>`，其中 `open_id` 形如 `ou_wb_alice_<sfx>`（`sfx` 为纯数字，全串仅含 `[A-Za-z0-9_]`，正则可整段捕获）。三个身份逐字为：`wb-code-ou_wb_alice_<sfx>` / `wb-code-ou_wb_bob_<sfx>` / `wb-code-ou_wb_carol_<sfx>`。
+
+**同刀必补**：fixture 显式设 `FEISHU_APP_ID` / `FEISHU_APP_SECRET`（`routes/staff.ts:139-142` 两者缺一即返 500）。
+
+**为什么不选方案 (b)**（不走 `/api/staff/feishu-login` 签发第二、三个会话）：那与本合同「禁 mock 边清单」第 1 条（必须真 `auth.api.getSession` + 真签发 cookie）直接冲突；且 Sprint B/C/D 三刀都要用「同组织多人」场景，改假上游一次摊薄四刀。
 
 ### [累积FR] 来源：`GET localhost:5221/api/brain/line/da60cb26-.../context-manifest`
 
@@ -224,6 +245,41 @@ return fetch(url, {
 
 ---
 
+## 夹具供给协议（让 DoD 断言不依赖脚本自述）
+
+**问题**：DoD 里 22/28 条形如「跑 `structured-workbench-smoke.sh --aN-only`，输出含 `A7 通过`」——脚本是 generator 自己写的，`echo "A7 通过"; exit 0` 就能满分（作弊反例清单第 10 条「grep 自己 echo 的串」）。**修法**：脚本只负责**供给环境**（起真 `apps/api`、种双企业、签发三个真会话），**判定一律写在 DoD 命令里**由 evaluator 直接执行。
+
+```bash
+bash "$SMOKE" --fixture-up      # 起真 apps/api + 真 PG 双企业种子 + 三个真会话；把变量写进 ./.wb-fixture.env；不做任何判定
+. ./.wb-fixture.env             # 供给的变量（全部运行时生成，零写死）：
+                                #   API_PORT / SFX / ORGA_TENANT_ID / ORGB_TENANT_ID
+                                #   COOKIE_A（A企业·甲/表主） COOKIE_A2（A企业·乙/同组织他人） COOKIE_B（B企业·丙）
+                                #   EIGHT_FIELDS（八类字段各一的 JSON 数组，建表请求载荷；DoD 用前先自检 unique 长度 == 8）
+bash "$SMOKE" --fixture-down    # 停服务 + 清种子
+```
+
+`--fixture-up` / `--fixture-down` **禁止内含任何 pass/fail 判定与「通过」字样**。DB 侧断言的 `PGURL` **一律直接取 `${E2E_DATABASE_URL:-$DATABASE_URL}`，不从 `.wb-fixture.env` 取**——这样 psql 那一半完全绕开脚本，脚本无从代答。三个 cookie 是真签发的会话（假 cookie 打真 API 只会拿 401，断言当场红）。
+
+SQL 字符串字面量在 DoD 命令里一律用 **PostgreSQL 美元引用 `$$...$$`**（在 `bash -c '...'` 里写作 `\$\$`），避免与外层单引号打架；时间窗用 `NOW() - make_interval(mins => 5)`（等价 5 分钟窗口，同样免单引号）。
+
+---
+
+## 变异证明执行协议（判据外置 — 守卫说自己红了不算数）
+
+**问题**：`--mutation X` 里「施加变异 + 判定是否转红 + 打印 `proven-to-fire`」由同一个脚本自述，空实现 `echo "X proven-to-fire"` 就能满分。**本合同一律改为三步外置**，判据落在「被守卫的那条断言自己真的 exit≠0」：
+
+```bash
+bash "$SMOKE" --mutation-apply <NAME>      # 只改代码/数据，不做任何判定，exit 0 表示"变异已施加"
+bash "$SMOKE" --<aN>-only                  # 判据在这里：必须 exit ≠ 0，等于 0 即守卫是空的
+bash "$SMOKE" --mutation-revert <NAME>     # 还原，exit 0；无论上一步结果如何都必须执行
+```
+
+`--mutation-apply` 与 `--mutation-revert` **禁止内含任何 pass/fail 判定与 `proven-to-fire` 字样**；`--mutation-list` 每行打印 `<变异名><空白><注入次数>`，行数 = 本合同登记的 9 个。`--mutation-apply` 还必须把**本次被注入的目标文件路径**写进 `./.wb-mutation-target`（供 INV-4/INV-7 断言「扫描器输出点名了这个文件与行号」，脚本无从代答）。DoD 每条变异断言均写成上面三步的一行 `bash -c`，中间那步 exit≠0 才算通过。
+
+**本刀变异登记（9 个开关 / 19 次注入）**：段1 静态 14 次 = `A2-inject-all`(7) + `A35-drop-name`(5) + `INV4-inject-secret`(1) + `INV7-inject-hardcoded-env`(1)；段2 真库 4 次 = `A1-header-fallback` / `A8-deny-all` / `A9-hard-delete` / `A11-take-first` 各 1；段2b 备份 1 次 = `A5-schema-only`。**这 19 是本刀可核对的确切计数**（上位合同「12 条变异」是整条 GP 四刀的口径，含 A13/A16/A25/A30②③/A34/A36 等 Sprint B/C/D 项，不是本刀数字）。
+
+---
+
 ## Golden Path
 
 [员工登录 Staff Hub] → [Step1 工作台入口看到 ≥2 模板] → [Step2 新建表 + 8 类字段 + 可见性] → [Step3 本组织列表可见 · 刷新逐字还在 · 跨组织不可达] → [Step4 「仅自己」正反双向] → [Step5 二次确认删表 → 回收站还原逐字回归] → 底座三门 [Step6 G0 闸] / [Step7 G1 旧 fields 处置] / [Step8 G2 备份] → [Step9 单组织自检 fail-closed] → [Step10 A35①/A33 接线]
@@ -232,7 +288,7 @@ return fetch(url, {
 
 ### Step 1: 员工打开结构化工作台，空工作台显示 ≥2 个开箱模板，一键建表结构与模板声明逐字一致
 
-**来源**: `[FROM_PRD]` — PRD「Golden Path（核心场景）」第 1 条 +「范围限定·在范围内」的「开箱模板」；对应上位合同断言 A7
+**来源**: `[FROM_PRD]` — PRD「Golden Path（核心场景）」第 1 条 +「范围限定·在范围内」的「开箱模板」+「假设」第 3 条（模板数取下限 ≥2）。**本地标签 A7，上位合同无此编号**，要求实体来自 PRD。
 
 **可观测行为**: 新组织员工首次进 `/workbench`，页面出现 ≥2 张模板卡片；点其中一张一键建表后，新表的字段集（名/类型/选项/顺序）与该模板声明逐字一致。
 
@@ -251,7 +307,7 @@ bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --a7-only
 
 ### Step 2: 员工新建表，逐个添加 8 类自定义字段并选可见性，提交后建表成功且不产生任何运行时 DDL
 
-**来源**: `[FROM_PRD]` — PRD「Golden Path」第 2、3 条 +「NFR 约束」的「JSONB 行存，不做运行时 DDL」；对应上位合同断言 A6（前半）与 A10
+**来源**: `[FROM_PRD]` — PRD「Golden Path」第 2、3 条（八类字段 · 逐字还在）+「NFR 约束」的「JSONB 行存，不做运行时 DDL」。A10 对应上位合同断言；**本地标签 A6 上位合同无此编号**，要求实体来自 PRD 上述两条。
 
 **可观测行为**: 提交后返回 201 带 `table_id`；`zenithjoy.db_tables` 出现该行且 `org_id` = 会话组织；`db_fields` 出现 8 行覆盖 `text/long_text/number/date/single_select/multi_select/person/url` 八类各一；`information_schema.tables` 的 zenithjoy 表清单**一张都没多**。
 
@@ -288,8 +344,10 @@ bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --a10-only
 ```bash
 # A1 反向 + A3 正向，同一套种子、同一次运行内成对执行（分开跑等于没对照）
 bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --a1-a3-only
-# 变异证明：把闸改回「有头则读头」，A1 必须转红
-bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --mutation A1-header-fallback
+# 变异证明（判据外置）：把闸改回「有头则读头」，A1 段自己必须 exit≠0
+S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh
+bash "$S" --mutation-apply A1-header-fallback
+bash "$S" --a1-a3-only; RC=$?; bash "$S" --mutation-revert A1-header-fallback; [ "$RC" -ne 0 ] || exit 1
 ```
 
 **硬阈值**: 4 个写端点 × 伪造头 → 全部返回码 ∈ {400,401,403,404,409} 或响应 `data` 为空集，**零 2xx**；A 企业行前后 `md5(row)` 全等；9 个读写端点在 A 会话下**全部 2xx**（哪怕一个 403 即 FAIL，因为那说明闸在"一律拒绝"）；变异 `A1-header-fallback` 必须让 A1 段报红（exit≠0 且日志点名 `A1`），未报红即守卫是空的。
@@ -305,8 +363,10 @@ bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --mutation A1
 **验证命令**:
 ```bash
 bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --a8-only
-# 变异证明：把可见性判据改成「一律拒绝」，正向对照必须转红
-bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --mutation A8-deny-all
+# 变异证明（判据外置）：可见性判据改成「一律拒绝」，A8 正向对照段必须 exit≠0
+S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh
+bash "$S" --mutation-apply A8-deny-all
+bash "$S" --a8-only; RC=$?; bash "$S" --mutation-revert A8-deny-all; [ "$RC" -ne 0 ] || exit 1
 ```
 
 **硬阈值**: 乙侧 `GET /tables/T` 与 `GET /tables/<random-uuid>` 两个响应的 **HTTP 码相同（均 404）且响应体 `md5` 全等**；甲侧同时刻 200 且 `data` 与建表返回逐字一致；变异 `A8-deny-all` 必须让**正向段**报红（若正向段仍绿说明正向对照根本没跑）。
@@ -322,8 +382,10 @@ bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --mutation A8
 **验证命令**:
 ```bash
 bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --a9-only
-# 变异证明：把软删改成物理 DELETE，A9 必须转红
-bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --mutation A9-hard-delete
+# 变异证明（判据外置）：软删改成物理 DELETE，A9 段必须 exit≠0
+S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh
+bash "$S" --mutation-apply A9-hard-delete
+bash "$S" --a9-only; RC=$?; bash "$S" --mutation-revert A9-hard-delete; [ "$RC" -ne 0 ] || exit 1
 ```
 
 **硬阈值**: 输错名 → HTTP 400 且 `error.code == "CONFIRM_MISMATCH"` 且 `deleted_at IS NULL`；正确删 → `deleted_at IS NOT NULL` 且删前删后 `SELECT count(*) FROM zenithjoy.db_tables`（含软删行）**相等**；`restorable_until - deleted_at` = 30 天；还原后表名 + 字段元组集合与删除前 `md5` 全等；变异 `A9-hard-delete` 必须报红。
@@ -336,19 +398,23 @@ bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --mutation A9
 
 **可观测行为**: 扫描路③ 全部交付源码，七个字面量 `X-Tenant-Id` / `X-User-Email` / `X-Feishu-User-Id` / `X-Bypass-Tenant` / `tenantContextOptional` / `selfHealOwnerMember` / `staffGuard` 零命中；同时 `app.ts` 中路③ 挂载路径不以 `/api/staff` 开头。
 
-**扫描域（必须在守卫脚本里逐条写死，防止将来漏扫新文件）**：
-`apps/api/src/middleware/workbench-auth.ts`、`apps/api/src/routes/knowledge-db.ts`（路③ 路由，实际文件名以交付为准但必须进扫描域）、`apps/api/src/knowledge/**/*.ts`、`apps/staff-hub/src/lib/workbenchFetch.ts`、`apps/staff-hub/src/pages/Workbench*.tsx`。
+**扫描域必须从挂载事实推导，禁止写死文件名清单**——路③ 路由一旦落成 `routes/workbench.ts` 或拆成两个文件而漏同步清单，守卫扫的全是登记过的旧文件、`A2-inject-all` 注入的也是登记过的文件，真正的路③ 路由从头到尾没被扫过（上位合同 A35 在 v3 被整条改形，理由逐字就是「扫描域为空集 = 零命中恒真 = 假绿」，A2 不许再踩）。守卫按**可发现规则**现算：① 解析 `app.ts` 中 `app.use('/api/knowledge/db', <router>)` 的 router 标识符 → 回溯其 `import` 得路③ 路由源文件；② 从该文件做**一层相对 import 闭包**（`./`/`../` 的 `.ts`），中间件与 service 自动进域；③ 并入 `git diff --name-only origin/main...HEAD` 里含 `/api/knowledge/db` 或 `workbench` 字面量的 `apps/api/src/**`、`apps/staff-hub/src/**` 新增文件。
+
+**兜底断言（缺则整条 A2 作废）**：① 扫描域 ≥3 项且**逐项 `test -f` 命中真实文件**（任一项解析为空 → FAIL，堵空集假绿）；② ③ 算出的路③ 新增文件集合**必须是**扫描域子集（漏一个即 FAIL 并打印文件名）。
+
 **扫描域之外（显式排除，否则守卫会扫到自己）**：守卫脚本 `structured-workbench-smoke.sh` 自身（它必须写出这七个字面量才能去查）、`sprints/**/tests/**`（负向测试必须真伪造头才有意义，见 `workbench-auth-guard.test.ts` 的伪造头用例）。排除项必须在脚本里显式列出并注明理由，不许用「反正 grep 不到」蒙混。
 
 **验证命令**:
 ```bash
-# 无需 DB/服务即可跑
-bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --a2-only
-# 变异证明：七个字面量逐个插入，每次守卫都必须报红（一次都不许漏）
-bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --mutation A2-inject-all
+S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh
+# 无需 DB/服务即可跑；--a2-print-scope 打印现算出的扫描域供人工核对
+bash "$S" --a2-only
+# 变异证明（判据外置）：七个字面量逐个插入到**现算扫描域里的真实文件**，每次 A2 必须 exit≠0
+bash "$S" --mutation-apply A2-inject-all
+bash "$S" --a2-only; RC=$?; bash "$S" --mutation-revert A2-inject-all; [ "$RC" -ne 0 ] || exit 1
 ```
 
-**硬阈值**: 七个字面量命中数 = 0；路③ 挂载路径以 `/api/knowledge/db` 开头；`--mutation A2-inject-all` 必须报告 **7/7 proven-to-fire**（少于 7 即守卫有漏网字面量）；同时既有 `count-staffguard-endpoints.mjs` 仍 = **16**（路③ 端点没被误挂 staffGuard）。
+**硬阈值**: 七个字面量命中数 = 0；路③ 挂载路径以 `/api/knowledge/db` 开头；扫描域 ≥3 项且逐项 `test -f` 通过、路③ 新增文件全在域内；`A2-inject-all` 施加后 `--a2-only` **exit≠0**，且 `--mutation-list` 报告该开关注入次数 = 7（少于 7 即有漏网字面量）；同时既有 `count-staffguard-endpoints.mjs` 仍 = **16**（路③ 端点没被误挂 staffGuard）。
 
 ---
 
@@ -359,7 +425,8 @@ bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --mutation A2
 **可观测行为**:
 1. 路③ 新字段元数据表 `db_fields.org_id` 为 `NOT NULL`；A 企业会话读/改 B 企业字段定义 → 4xx 或空集
 2. 不带任何身份头、不带会话逐个调 `/api/fields` 四端点（GET / POST / PUT :id / DELETE :id）**均返 401**（`origin/main @ bdebf9e4` 返 2xx，此判据当前就是红的，转绿即段① 完成）
-3. 持 A 企业身份读/改 B 企业的 `field_definitions` 行 → 4xx 或空集，且 B 的行前后 `SELECT` diff 为空
+3. **反向**：持 A 企业身份读/改 B 企业的 `field_definitions` 行 → 4xx 或空集，且 B 的行前后 `SELECT` diff 为空
+   **正向对照（同段内必须自带，不许只靠 ④ 的 windows job）**：A 持身份 `GET /api/fields` 必须**命中 A 自己那一行**（不只是"不含 B 的"）；`PUT /api/fields/<A 自己的行>` 返 2xx 且 `psql` 复查该行 `label` 真的变成了新值。**理由**：只写反向串会被「一律返空数组 / 一律 403」的实现完全骗过——那三条全绿而 dashboard `/works/fields` 当场瘫痪，正是 PR#1675→#1676 那次往返的形状
 4. 真浏览器带真会话下 dashboard `/works/fields` 列表/新建/编辑/删除 与 `WorkDetailPage` 自定义字段编辑功能不变（`PUT /fields/reorder` 除外）
 5. 处置结果（不下线端点 + `field_definitions` 加租户列的范围扩张，关联 issue `1ae57f1a` 与 PR#1675/#1676）落 `decisions` 表
 
@@ -373,7 +440,7 @@ node -e "const c=require('fs').readFileSync('apps/dashboard/e2e/fields-auth-regr
 bash .github/workflows/scripts/smoke/fields-smoke.sh
 ```
 
-**硬阈值**: `db_fields.org_id` 的 `is_nullable == 'NO'`；`/api/fields` 四端点无身份 → **4×401**；A 持身份读 B 的 `field_definitions` → 行数 0 且 B 行 `md5` 前后全等；`fields-smoke.sh` 与 `zenithjoy-smoke-audit.sh` 改带会话身份后 exit 0；`decisions` 表存在 category 为 `rec` 或 `invariant` 且正文同时含 `1ae57f1a` 与 `field_definitions` 的行；dashboard 回归 spec 存在且**零 `page.route(`**。
+**硬阈值**: `db_fields.org_id` 的 `is_nullable == 'NO'`；`/api/fields` 四端点无身份 → **4×401**；A 持身份读 B 的 `field_definitions` → 行数 0 且 B 行 `md5` 前后全等；**正向对照**：A 持身份 `GET /api/fields` 返 200 且 `ids` 含 A 自己那行的 id、`PUT` A 自己那行返 2xx 且 `psql` 查回的 `label` == 新值（三者缺一即 FAIL——这一条专门堵「一律返空/一律 403」）；`fields-smoke.sh` 与 `zenithjoy-smoke-audit.sh` 改带会话身份后 exit 0；`decisions` 表存在 category 为 `rec` 或 `invariant` 且正文同时含 `1ae57f1a` 与 `field_definitions` 的行；dashboard 回归 spec 存在且**零 `page.route(`**。
 
 ---
 
@@ -381,31 +448,39 @@ bash .github/workflows/scripts/smoke/fields-smoke.sh
 
 **来源**: `[FROM_PRD]` — PRD「范围限定」的「G2 备份：`pg_dump` 定时 workflow（`schedule` 持久载体）+ 恢复演练脚本与断言」+「E2E 验收」第 5 条；对应上位合同 G2 与断言 A5
 
-**可观测行为**: `.github/workflows/db-backup.yml` 存在且 `on:` 含 `schedule`；同一次运行内 `pg_dump` → 还原到临时库 → 路③五张表（`db_tables`/`db_fields`/`db_rows`/`db_view_prefs`/`db_audit`）行数与关键字段逐条比对全等。
+**可观测行为**: `.github/workflows/db-backup.yml` 存在且 `on:` 含 `schedule`；同一次运行内 **先种可判别数据** → `pg_dump` → 还原到临时库 → 路③五张表（`db_tables`/`db_fields`/`db_rows`/`db_view_prefs`/`db_audit`）行数、**逐行字段值**与源库比对全等。
+
+**演练前必须种数据（P0-2 修复 — 空表上「`0 == 0` 且空集 md5 相等」让 `pg_dump --schema-only` 也全绿）**：`db_rows`/`db_view_prefs`/`db_audit` **本刀根本没有写入路径**（Sprint B/C 才写），演练那一刻必然是空表；`db_tables`/`db_fields` 也可能被 smoke 清了种子。所以 `restore-drill.sh` **必须在 `pg_dump` 之前**用直接 SQL 向五表各插 ≥1 行带本轮标记 `WB-DRILL-$DRILL_RUN_ID`（运行时随机串，不写死）的可判别数据——不必等 Sprint B 的端点。判定三层，缺一层即 A5 作废：① **有得可比**：源库五表逐表 `count(*) > 0`；② **比得相等**：逐表 `count(*)` 全等 + 关键字段排序后 `md5` 全等；③ **逐行可查**：还原库按标记逐表查到那行，**字段值与源库逐字相同**（只比行数漏掉「行在但内容烂」，正是判定点登记表里「`pg_dump` 退出码看不出缺 schema/缺表」的同类洞）。
 
 **验证命令**:
 ```bash
 # workflow 有 schedule 持久载体（非一次性手跑）
 node -e "const y=require('fs').readFileSync('.github/workflows/db-backup.yml','utf8');if(!/^\s{2}schedule:/m.test(y))process.exit(1)"
-# 真 pg_dump + 真 pg_restore + 五表逐条全等（L2 真库真验）
+# 真种数据 + 真 pg_dump + 真 pg_restore + 五表逐行全等（L2 真库真验）
 bash .github/workflows/scripts/backup/restore-drill.sh
+# 变异证明（判据外置，本刀 G2 唯一的守卫证明）：把 pg_dump 换成 --schema-only，演练必须 exit≠0
+S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh
+bash "$S" --mutation-apply A5-schema-only
+bash .github/workflows/scripts/backup/restore-drill.sh; RC=$?; bash "$S" --mutation-revert A5-schema-only; [ "$RC" -ne 0 ] || exit 1
 ```
 
-**硬阈值**: `db-backup.yml` 的 `on:` 块含 `schedule` 且**恢复演练与备份在同一 workflow 同一次运行内**（备份跑了但没还原 = 假绿）；五张表逐表 `count(*)` 全等，且逐表关键字段（`db_tables`: `id,org_id,name,visibility,deleted_at`；`db_fields`: `id,table_id,org_id,name,field_type,display_order`；其余表: `id,org_id`）排序后 `md5` 全等；`restore-drill.sh` exit 0 且**脚本内零 `|| true`、零无条件 `exit 0`**。
+**硬阈值**: `db-backup.yml` 的 `on:` 块含 `schedule` 且**恢复演练与备份在同一 workflow 同一次运行内**（备份跑了但没还原 = 假绿）；源库五表逐表 `count(*) ≥ 1`（**任一表为 0 即 FAIL**）；五张表逐表 `count(*)` 全等，且逐表关键字段（`db_tables`: `id,org_id,name,visibility,deleted_at`；`db_fields`: `id,table_id,org_id,name,field_type,display_order`；其余表: `id,org_id,<标记列>`）排序后 `md5` 全等；还原库五表各查到 1 条 `WB-DRILL-$DRILL_RUN_ID` 标记行且字段值与源库逐字相同；`restore-drill.sh` exit 0 且**脚本内零 `|| true`、零无条件 `exit 0`**；变异 `A5-schema-only` 施加后演练 **exit≠0**。
 
 ---
 
 ### Step 9: 单组织前置自检 fail-closed —— `tenant_members` 同一 `feishu_user_id` 出现多组织行时，进程在 listen 之前退出并输出明确错误码
 
-**来源**: `[FROM_PRD]` — PRD「边界情况」第 1 条 +「E2E 验收」第 11 条；对应上位合同断言 A11
+**来源**: `[FROM_PRD]` — PRD「边界情况」第 1 条（多组织行 → 启动自检 fail-closed，不静默取第一条）+「E2E 验收」第 11 条。**本地标签 A11 上位合同无此编号**（`A11`/`多组织`/`feishu_user_id` 三词在 `gp3-contract-v3.json` 均零命中），要求实体来自 PRD。
 
 **可观测行为**: 正常（每人恰属一组织）时服务起得来，且启动日志出现 `A11 single-org selfcheck passed`；把某员工插入第二个组织的成员行后重启 → 进程**起不来**（在 `listen` 之前退出），日志点名 `A11-MULTI-ORG` 并打印冲突的 `feishu_user_id`；请求期同样情形返 409 `MULTI_ORG_MEMBER`，**不取第一条**。
 
 **验证命令**:
 ```bash
 bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --a11-only
-# 变异证明：把自检改回「取第一条」，A11 必须转红
-bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --mutation A11-take-first
+# 变异证明（判据外置）：自检改回「取第一条」，A11 段必须 exit≠0
+S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh
+bash "$S" --mutation-apply A11-take-first
+bash "$S" --a11-only; RC=$?; bash "$S" --mutation-revert A11-take-first; [ "$RC" -ne 0 ] || exit 1
 ```
 
 **硬阈值**: 正常态 → 服务起得来且日志含 `A11 single-org selfcheck passed`（只验端口通是假绿：没实现自检时服务照样起）；多组织态 → 进程 exit code **∉ {0, 124}**（124 = 被 timeout 杀掉 = 它 listen 住了 = 没拦住）且日志含 `A11-MULTI-ORG`；请求期 → HTTP 409 且 `error.code == "MULTI_ORG_MEMBER"`；变异 `A11-take-first` 必须报红。
@@ -425,15 +500,17 @@ bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --mutation A1
 
 **验证命令**:
 ```bash
+S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh
 # A35①：五表名逐字命中
-bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --a35-only
-# 变异证明：删掉任一表名或删掉整个清单文件，守卫必须报红
-bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --mutation A35-drop-name
+bash "$S" --a35-only
+# 变异证明（判据外置）：逐个删掉表名，每次 A35 段必须 exit≠0
+bash "$S" --mutation-apply A35-drop-name
+bash "$S" --a35-only; RC=$?; bash "$S" --mutation-revert A35-drop-name; [ "$RC" -ne 0 ] || exit 1
 # A33 四段静态判据（YAML 真解析，不是 grep 字符串）
-bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --a33-only
+bash "$S" --a33-only
 ```
 
-**硬阈值**: 五个表名命中 5/5；删任一名 → 守卫报红（5/5 proven-to-fire）；A33 四段全绿（缺一段即 FAIL）；`smoke-baseline.txt` 含 `structured-workbench-smoke.sh`；本分支该 workflow 最近一次运行 `conclusion == success` 且其中 `runs-on: windows-latest` 的 job `conclusion == success`（`skipped` 视为 FAIL）。
+**硬阈值**: 五个表名命中 5/5；`A35-drop-name` 施加后 `--a35-only` **exit≠0**，且 `--mutation-list` 报告该开关注入次数 = 5（五个表名逐个删一遍）；A33 四段全绿（缺一段即 FAIL）；`smoke-baseline.txt` 含 `structured-workbench-smoke.sh`；本分支该 workflow 最近一次运行 `conclusion == success` 且其中 `runs-on: windows-latest` 的 job `conclusion == success`（`skipped` 视为 FAIL）。
 
 ---
 
@@ -442,7 +519,7 @@ bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --a33-only
 **journey_type**: user_facing
 **target_environment**: windows_cloud
 
-> 三段串行：段1 静态守卫（无需 DB/服务）→ 段2 真 `apps/api` + 真 Postgres 双企业种子全链 + 12 条变异 proven-to-fire → 段3 windows-latest 干净 VM 真浏览器（A33 判据 = job 真跑过）。
+> 三段串行：段1 静态守卫（无需 DB/服务，含 14 次静态变异注入）→ 段2 真 `apps/api` + 真 Postgres 双企业种子全链（4 次真库变异注入）+ 段2b 备份演练（1 次）→ 段3 windows-latest 干净 VM 真浏览器（A33 判据 = job 真跑过）。**本刀变异合计 9 个开关 / 19 次注入**，逐个登记在上方「变异证明执行协议」，判据一律外置（施加变异后跑被守卫的那一段，断言其 exit≠0）。
 > 段2 的库来源：`E2E_DATABASE_URL` → `DATABASE_URL` → 报错退出（**不静默落 localhost 默认值**——那会让整轮 E2E 测在一个没人看的库上，跑绿了但根本没测到目标）。
 
 ```bash
@@ -469,7 +546,7 @@ if ! bash "$SMOKE" --static-only; then
   exit 1
 fi
 
-echo "== 段2/3 真 apps/api + 真 Postgres 双企业种子全链 + 12 条变异 =="
+echo "== 段2/3 真 apps/api + 真 Postgres 双企业种子全链 + 4 次真库变异 =="
 if [ -z "${E2E_DATABASE_URL:-}" ] && [ -z "${DATABASE_URL:-}" ]; then
   echo "FAIL: 未设 E2E_DATABASE_URL / DATABASE_URL —— 拒绝落默认库跑成假绿"
   exit 1
@@ -593,7 +670,7 @@ exit 0
 | G0 会话鉴权闸 | `tests/workbench-auth-guard.test.ts` | `无会话返 401 SESSION_REQUIRED`、`伪造身份头不改变判定且不写库`、`成员行查询失败返 503 LEDGER_UNREACHABLE`、`多组织行返 409 MULTI_ORG_MEMBER 不取第一条` | 中间件与路由不存在 → 6 failures |
 | S1 建表与字段元数据 | `tests/workbench-tables.test.ts` | `建表返 201 且 org_id 取自会话忽略请求体`、`八类字段各一落 db_fields`、`建表不产生运行时 DDL`、`跨组织 GET 返 404 且与随机 id 逐字节相同` | 端点族不存在 → 4 failures |
 | 可见性与回收站 | `tests/workbench-visibility-trash.test.ts` | `仅自己表对同组织他人不出现在列表`、`表主本人同时刻仍返 2xx 且内容逐字一致`、`确认名不匹配返 400 CONFIRM_MISMATCH 且不删`、`软删后物理行仍在且还原逐字回归` | 同上 → 4 failures |
-| G1 旧 fields 处置 | `tests/fields-legacy-isolation.test.ts` | `无身份调 /api/fields 四端点均返 401`、`A 企业身份读不到 B 企业 field_definitions`、`A 企业身份改不动 B 企业 field_definitions 且 B 行未变` | 四端点当前无鉴权返 2xx → 3 failures |
+| G1 旧 fields 处置（反向 + 正向对照） | `tests/fields-legacy-isolation.test.ts` | `无身份调 /api/fields 四端点均返 401`、`A 企业身份读不到 B 企业 field_definitions`、`A 企业身份能改自己那一行且 label 真落库`、`A 企业身份改不动 B 企业 field_definitions 且 B 行未变` | 四端点当前无鉴权返 2xx + `tenant_id` 列不存在 → 5 failures |
 
 > 「BEHAVIOR 覆盖」列每个名字都是对应 `it()` 名的字面子串，`grep -F` 可命中。
 > 这些 vitest 是 generator 的 TDD red-green 用；evaluator 的 verdict 只来自 `contract-dod.md` 的 `manual:` 命令。
@@ -603,3 +680,32 @@ exit 0
 ## Contract Gate 备注
 
 `contract-gate: skipped (packages/brain/src/lib/contract-gate.js not found, third-party repo=zenithjoy-workspace)` —— 本 repo 无代码层 Contract Gate，合规按本 skill 内置规则自审（惯用法速查表 + 自查 checklist + Step 2b-check 确定性脚本）。
+
+---
+
+## R1 逐条回应（Reviewer 反馈 `.harness/feedback-gp3a-r1.md`）
+
+**P0-1 测试夹具永不转绿 —— 已修，选方案 (a)**
+按你的倾向扩 `_smoke-fake-feishu.ts`：`resolveFakeFeishuIdentity` 加**纯 fallback** `pickGroupMembers(key) ?? pickDeclaredMember(key)`，`code-<ORGKEY>` 既有分支一字不改，所以路① 会话签发段不会被打断腿。合同「已知约束 → 假上游按成员寻址扩展」写死了实现形态与 **code 的确切字面形态 `wb-code-<open_id>`**（`ou_wb_alice_<数字>` 全串只含 `[A-Za-z0-9_]`，`/code-([A-Za-z0-9_]+)$/` 可整段捕获），不留现场发挥空间。夹具改用 `codeFor(openId)` 唯一出口、显式设 `FEISHU_APP_ID/SECRET`，并给 `loginAs` 加"拿不到 cookie 就地抛错并打印 status/body"——把夹具故障与实现缺失区分开，不再让三个 `"undefined"` cookie 把 401 伪装成"实现没写"。该改动已登记进：合同「已知约束」回归条目、DoD ARTIFACT（`pickDeclaredMember` + fallback 表达式 + 正则原样保留三项机检）、DoD `INV-回归`（路① smoke 仍绿 + staffGuard 计数仍 16）、`task-plan.json` 的 dod/files。**方案 (b) 已明确否决**并在合同里写了理由（与禁 mock 边第 1 条冲突 + Sprint B/C/D 三刀都要用多人同组织场景）。
+
+**P0-2 G2 恢复演练空表恒真 —— 已修**
+`restore-drill.sh` 必须在 `pg_dump` **之前**向五表各插 ≥1 行带 `WB-DRILL-$DRILL_RUN_ID` 标记的可判别数据（`db_rows`/`db_view_prefs`/`db_audit` 直接 SQL 种，不等 Sprint B）。判定改三层：① 源库逐表 `count(*) > 0`（先证"有得可比"）② 逐表 count 全等 + 关键字段 md5 全等 ③ 还原库按标记逐表查到那行且**字段值与源库逐字相同**。新增变异开关 `A5-schema-only`（把 `pg_dump` 换 `--schema-only`）→ 演练必须 `exit≠0`。G2 从"零变异 lifeline"变成有守卫证明。
+
+**P1-1 22/28 条 grep 自 echo —— 已修，判定与供给分家**
+新增「夹具供给协议」：`--fixture-up` 只负责起真 `apps/api` + 种双企业 + 签三个真会话并写 `.wb-fixture.env`（含 `COOKIE_A`/`COOKIE_A2`/`COOKIE_B`/`EIGHT_FIELDS`），**禁含任何 pass/fail 判定**；判定全写在 DoD 命令里由 evaluator 直接跑。你点名的五组已从 `--aN-only` 换成内联真命令：**A1 反向+A3 正向**（伪造头建表 → psql 断 A 企业零新增行 + A 会话读得到自己列表）、**A6**（`jq -e .data.org_id == ORGA` + psql 时间窗 + 八类去重=8）、**A8**（两个 404 响应体 md5 全等 + 列表不泄漏 + 表主同时刻 `.data.name` 逐字）、**A9**（400 CONFIRM_MISMATCH → deleted_at 仍 NULL → 正确删 → deleted_at 非空且组织内行数不减 → 还原回 NULL）、**A5**（见 P0-2）。DB 断言的 `PGURL` 一律直接取 `${E2E_DATABASE_URL:-$DATABASE_URL}`，**不经脚本**，脚本无从代答。变异判据全部外置为 `--mutation-apply → 跑被守卫段断言 exit≠0 → --mutation-revert`，`--mutation-apply/revert` 禁含判定与 `proven-to-fire` 字样。34 条命令已逐条过 `bash -n`（外层 34/34、内层 22/22 全过）。
+
+**P1-2 两个扫描器零变异 —— 已修**
+`scan-hardcoded-secrets.mjs` / `scan-hardcoded-env.mjs` 进 ARTIFACT 清单（并进 `task-plan.json` 的 files），各配 1 条 proven-to-fire 变异（`INV4-inject-secret` / `INV7-inject-hardcoded-env`）。判据不只看 `exit≠0`：`--mutation-apply` 必须把被注入文件路径写进 `./.wb-mutation-target`，DoD 断言扫描器输出**点名该路径且带 `:<行号>`**——空实现连行号都印不出来。
+
+**P1-3 A2 扫描域硬编码 —— 已修**
+写死清单整条删除，改为从挂载事实现算：解析 `app.ts` 里挂到 `/api/knowledge/db` 的 router → 回溯 import → 一层相对 import 闭包 → 并入 `git diff origin/main...HEAD` 中含 `/api/knowledge/db`/`workbench` 字面量的新增源文件。补两条兜底断言：扫描域 ≥3 项且**逐项 `test -f` 命中真实文件**、路③ 新增文件集合**必须是**扫描域子集（漏一个即 FAIL 并打印文件名）。另加 `--mutation-list` 断言 `A2-inject-all` 注入次数 = 7，防"少注入几个字面量假装全过"。
+
+**P1-4 G1 只有反向没有正向 —— 已修（含恒真断言删除）**
+`--a4-only` 段③ 补正向：DoD 新增一条内联命令——psql 种 A 企业一行 → `GET /api/fields` 断言 `map(.id) | index($FID) != null` → `PUT` 该行 → psql 复查 `label` 真变成新值。三条缺一即 FAIL，"一律返空数组 / 一律 403"当场红。`fields-legacy-isolation.test.ts:68-71` 的 `GET /api/fields/${orgBFieldId}` 期望 `[403,404]` **已删除**（核对 `routes/fields.ts` 全文确无 `GET /:id`，Express 未知路由恒 404，与隔离无关），原地换成两条正向对照用例，并把 beforeAll 改为**两家各种一行**（只种 B 的话正向无从对照）。
+
+**溯源错账 —— 已修**
+「12 条变异」改为本刀可核对的确切计数：**9 个开关 / 19 次注入**（段1 静态 14 = A2×7 + A35×5 + INV4×1 + INV7×1；段2 真库 4 = A1/A8/A9/A11；段2b 备份 1 = A5），并注明 12 是上位合同整条 GP 四刀口径、A2/A35 属段1 静态而非段2。A6/A7/A11 三处「对应上位合同断言」全部改为「**本地标签，上位合同无此编号**（A-id 集合已逐个列出），要求实体来自 PRD 的哪一条」；合同抬头那句也改成 `G0/G1/G2 + A1–A5、A8–A10、A30①、A33、A34、A35①`。
+
+**你标注"不要动"的部分一字未动**：真实调用方 shape（`knowledgeFetch.ts:25-31`）、A33 四段 + `conclusion == success`、判定点登记表 6 条、G2 异地 `logic-done-pending-offsite`、禁 mock 边清单 7 条与飞书唯一豁免。
+
+**行数如实交代（未达"持平或略降"）**：contract-draft 合同正文 606 → 682（+76，本「R1 逐条回应」附录另占 29 行，文件总长 711），contract-dod 193 → 224（+31）。逐项去向：假上游扩展登记 +14（P0-1 要求"合同必须写出确切字面形态"）、夹具供给协议 +14（P1-1 把真 oracle 搬进 DoD 的执行前提）、变异证明协议 +12（P1-1 判据外置）、G2 种数据三层判定 +7（P0-2）、A2 可发现扫描域 +6（P1-3）、G1 正向对照 +3（P1-4）、溯源修正 +3、各 Step 变异命令由 1 行摊成 3 行 +17。已反向压缩假上游/扫描域/G2 三段共 −8。**零新增 scope**：没有加任何 PRD 之外的端点、字段或场景，PRD 覆盖边界与 R1 完全相同。

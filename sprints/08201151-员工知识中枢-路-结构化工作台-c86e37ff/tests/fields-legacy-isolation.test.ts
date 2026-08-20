@@ -17,16 +17,22 @@ import app from '../../../apps/api/src/app';
 import { seedTwoTenants, cleanupSeed, type TwoTenantSeed } from './_workbench-fixture';
 
 let seed: TwoTenantSeed;
+let orgAFieldId = '';
 let orgBFieldId = '';
 
 beforeAll(async () => {
   seed = await seedTwoTenants('WB-FIELDS');
-  const r = await seed.client.query(
-    `INSERT INTO zenithjoy.field_definitions (field_name, field_type, label, tenant_id)
-     VALUES ($1, 'text', $2, $3) RETURNING id`,
-    [`legacy_b_${seed.sfx}`, `B企业字段-${seed.sfx}`, seed.orgBTenantId]
-  );
-  orgBFieldId = r.rows[0].id;
+  const mk = async (name: string, label: string, tenantId: string): Promise<string> => {
+    const r = await seed.client.query(
+      `INSERT INTO zenithjoy.field_definitions (field_name, field_type, label, tenant_id)
+       VALUES ($1, 'text', $2, $3) RETURNING id`,
+      [name, label, tenantId]
+    );
+    return r.rows[0].id as string;
+  };
+  // 两家各种一行：只种 B 的话「一律返空/一律 403」的实现会全绿（正向无从对照）。
+  orgAFieldId = await mk(`legacy_a_${seed.sfx}`, `A企业字段-${seed.sfx}`, seed.orgATenantId);
+  orgBFieldId = await mk(`legacy_b_${seed.sfx}`, `B企业字段-${seed.sfx}`, seed.orgBTenantId);
 });
 
 afterAll(async () => {
@@ -57,18 +63,33 @@ describe('G1 旧 /api/fields 处置 [BEHAVIOR]', () => {
     expect(still.rows[0].c).toBe(1);
   });
 
-  it('A 企业身份读不到 B 企业 field_definitions', async () => {
+  it('A 企业身份读不到 B 企业 field_definitions 且能读到自己那一行', async () => {
     const res = await request(app).get('/api/fields').set('Cookie', seed.aliceCookie);
     expect(res.status).toBe(200);
     const ids = (Array.isArray(res.body) ? res.body : res.body.data).map(
       (f: { id: string }) => f.id
     );
+    // 反向：读不到 B 的
     expect(ids).not.toContain(orgBFieldId);
+    // 正向对照：必须读得到 A 自己的。缺这一条，「一律返空数组」的实现会全绿而
+    // dashboard /works/fields 当场瘫痪 —— PR#1675→#1676 那次往返的形状。
+    expect(ids).toContain(orgAFieldId);
+  });
 
-    const direct = await request(app)
-      .get(`/api/fields/${orgBFieldId}`)
-      .set('Cookie', seed.aliceCookie);
-    expect([403, 404]).toContain(direct.status);
+  it('A 企业身份能改自己那一行且 label 真落库（正向对照）', async () => {
+    const newLabel = `A企业字段-改后-${seed.sfx}`;
+    const put = await request(app)
+      .put(`/api/fields/${orgAFieldId}`)
+      .set('Cookie', seed.aliceCookie)
+      .send({ label: newLabel });
+    expect(put.status).toBeGreaterThanOrEqual(200);
+    expect(put.status).toBeLessThan(300);
+
+    const row = await seed.client.query(
+      'SELECT label FROM zenithjoy.field_definitions WHERE id = $1',
+      [orgAFieldId]
+    );
+    expect(row.rows[0].label).toBe(newLabel);
   });
 
   it('A 企业身份改不动 B 企业 field_definitions 且 B 行未变', async () => {

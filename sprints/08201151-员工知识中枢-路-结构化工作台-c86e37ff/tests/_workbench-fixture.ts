@@ -53,10 +53,36 @@ export interface TwoTenantSeed {
   carolCookie: string;
 }
 
+/**
+ * 假上游 code 的**确切字面形态**（合同「假上游按成员寻址扩展」定死）：`wb-code-<open_id>`。
+ *
+ * 为什么不能写 `wb-code-alice-<sfx>`：`_smoke-fake-feishu.ts:68` 的正则是
+ * `/code-([A-Za-z0-9_]+)$/`——KEY 内不许有 `-`，中间夹了 `-` 的 code 一律解析为 NULL，
+ * 假上游回 20021 invalid code，登录拿不到 set-cookie，实现写得再对全部用例也以 401 收场。
+ * open_id 形如 `ou_wb_alice_<数字>`，全串只含 [A-Za-z0-9_]，正则可整段捕获。
+ *
+ * 为什么不能三个人都用 `wb-code-ORGA`：`pickGroupMembers` 只返回分组里第一个非邮箱成员，
+ * 甲乙会解析成同一个人，A8「同组织他人 404 / 表主本人 200」就没有第二个身份可用。
+ * 本刀扩展 `resolveFakeFeishuIdentity` 在分组名未命中时按 open_id 精确寻址（纯 fallback，
+ * `code-<ORGKEY>` 既有语义一字不改），路① smoke 会话签发段仍绿。
+ */
+export function codeFor(openId: string): string {
+  return `wb-code-${openId}`;
+}
+
 async function loginAs(code: string): Promise<string> {
   const res = await request(app).post('/api/staff/feishu-login').send({ code });
   const raw = res.headers['set-cookie'];
-  return Array.isArray(raw) ? raw.join('; ') : String(raw ?? '');
+  const cookie = Array.isArray(raw) ? raw.join('; ') : String(raw ?? '');
+  // 拿不到会话就地炸，别把 "undefined" 当 cookie 传下去：那样每个用例都以 401 收场，
+  // 看着像"实现没写"，实际是夹具签发失败（假上游没认出 code / 缺 FEISHU_APP_ID）。
+  if (!cookie || cookie === 'undefined') {
+    throw new Error(
+      `[fixture] 会话签发失败 code=${code} status=${res.status} body=${JSON.stringify(res.body)} —— ` +
+        '假上游未按成员寻址（见合同「假上游按成员寻址扩展」）或缺 FEISHU_APP_ID/SECRET'
+    );
+  }
+  return cookie;
 }
 
 export async function seedTwoTenants(prefix: string): Promise<TwoTenantSeed> {
@@ -85,6 +111,9 @@ export async function seedTwoTenants(prefix: string): Promise<TwoTenantSeed> {
   process.env.STAFF_FEISHU_OPENIDS__ORGA = [aliceOpenId, bobOpenId].join(',');
   process.env.STAFF_FEISHU_OPENIDS__ORGB = carolOpenId;
   process.env.STAFF_ORG_MAP = `ORGA:${orgATenantId},ORGB:${orgBTenantId}`;
+  // routes/staff.ts:139-142 两者缺一即 500，登录连假上游都走不到。
+  process.env.FEISHU_APP_ID ??= 'fake-feishu-app-id';
+  process.env.FEISHU_APP_SECRET ??= 'fake-feishu-app-secret';
 
   return {
     client,
@@ -92,11 +121,11 @@ export async function seedTwoTenants(prefix: string): Promise<TwoTenantSeed> {
     orgATenantId,
     orgBTenantId,
     aliceOpenId,
-    aliceCookie: await loginAs(`wb-code-alice-${sfx}`),
+    aliceCookie: await loginAs(codeFor(aliceOpenId)),
     bobOpenId,
-    bobCookie: await loginAs(`wb-code-bob-${sfx}`),
+    bobCookie: await loginAs(codeFor(bobOpenId)),
     carolOpenId,
-    carolCookie: await loginAs(`wb-code-carol-${sfx}`),
+    carolCookie: await loginAs(codeFor(carolOpenId)),
   };
 }
 
