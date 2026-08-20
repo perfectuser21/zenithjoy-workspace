@@ -700,4 +700,16 @@ echo "路③ Sprint B final-e2e 通过：行 CRUD + 乐观锁 409 + 断网保留
 
 **未改（你已核过成立，本轮一字未动）**：行级 version 409 乐观锁那条、组织隔离双向、写回失败可见、软删还原变异、A 刀 oracle 那几处。
 
-**行数**：draft 614 → 674（+60），dod 177 → 198（+21）。增量全部来自三个 P0 的「零验证 → 有验证」与三段内联 oracle；同时删掉了两处冗余（draft 里与 DoD 逐字重复的截图清单块、DoD 里与 Step11 内联断言重复的 INV-7 条目），并把「错误分支零整表重拉」从 [BEHAVIOR] 归位到 [ARTIFACT]（它本就是源码文本断言）。PRD 之外一条没加。
+**行数（r2）**：draft 614 → 674（+60），dod 177 → 198（+21）。增量全部来自三个 P0 的「零验证 → 有验证」与三段内联 oracle；同时删掉了两处冗余（draft 里与 DoD 逐字重复的截图清单块、DoD 里与 Step11 内联断言重复的 INV-7 条目），并把「错误分支零整表重拉」从 [BEHAVIOR] 归位到 [ARTIFACT]（它本就是源码文本断言）。PRD 之外一条没加。
+
+---
+
+## r2 三条回应（GAN Round 2 → Round 3）
+
+**① `restorable_until` 30 天校验恒红（我 r2 自己新引入的，性质等同 r1 的 P0-2）** — 已修，两处 `sub("\\..*";"")` 全部换成 `sub("\\.[0-9]+Z$";"Z")`。你的诊断逐字成立：`.123Z` 被 `\\..*` 连 `Z` 一起吃掉，而 `fromdateiso8601` 要的是 `%Y-%m-%dT%H:%M:%SZ`，没 `Z` 直接报错；而带毫秒是**唯一**可能的形态——Sprint A `workbench.service.ts:357-358` 是 `new Date().toISOString()`，JS 恒输出 3 位毫秒。我按真实回收站响应体（`deleted_at=2026-08-20T10:00:00.123Z` / `restorable_until=2026-09-19T10:00:00.456Z`）实跑过两种写法：旧写法 `jq: error ... does not match format` exit=5，新写法 `true` exit=0，与你实测一致。这条我写的时候没拿真形态的时间串跑一遍，是我的漏。
+
+**② 「201|400 都放行」与「注入串必须落库」自相矛盾** — 已修。循环里给 `I=1`（`<img src=x onerror=alert(1)>`）单开一条硬断言：**必须 201**，返 400 直接 fail 并提示「上位合同 A19 要求一律作为数据值，不许拿 400 拒掉当合规」；另四个 payload（`__proto__` / `constructor` / `"; DROP TABLE db_rows; --` / 超长 emoji）保留 `201|400` 二选一（它们可能因字段名长度/字符集校验被合法地 400 掉），但一律禁 5xx。后面那两条「注入串真作为字段名落库」「真作为单元格值落库」的 psql 断言不变，现在与前面的状态码判据同向了。
+
+**③ `org_id IS NULL count == 0` 是恒真死断言** — 已删。核过 A 刀 migration `20260820_120000_structured_workbench.sql:105`：`org_id UUID NOT NULL`，DB 层就不可能存在空值，这条永远真、抓不到任何东西。同条 DoD 里真正有效的归属判据是 `WHERE a.org_id = $ORGA_TENANT_ID` 写进那句 `count(DISTINCT a.action)` 的查询条件——审计行落错组织时该计数直接掉到 0，那条会红。条目标题已同步改写，并把「另查一次非空是恒真死断言」的结论就地留痕，防下一刀再加回来。
+
+**本轮未动**：结构、条目数、判据分工一律不变（BEHAVIOR 23 条 / manual 25 条 / 真执行 25 条 / 文本自证 0 条，与 r2 相同）。三处改动全在行内，`contract-dod.md` 行数不变（198）；`contract-draft.md` 的增量只有本节回应。
