@@ -54,3 +54,37 @@ grep -q "$TMP/nope1" "$TMP/err" && grep -q "$TMP/nope2" "$TMP/err" \
 echo "✅ 场景5通过：失败时明确列出找过的位置"
 
 echo "PASS find-adb-lib-smoke —— 5 个场景全过"
+
+# ── 机械闸：全仓不许再出现「写死 adb 路径当兜底」的写法 ────────────────────
+# 五处复制同一个 bug 的教训（agent 身份反查那次）说明：修好现有的不难，
+# 难的是下次有人再写一遍。lib 自己持有候选清单是合法的（它会验 -x）。
+#
+# ⚠️ 这个闸门第一版自己就是摆设：REPO_ROOT 少算一层，扫的是不存在的 .github/.github，
+# 永远扫不到东西；而当时的自测只验了正则、没验扫描路径。所以下面的自测**必须
+# 连路径一起验**——造一个带坏写法的临时目录，跑同一个扫描函数，要求它真抓到。
+BAD_PATTERN='command -v adb[^|]*\|\|[[:space:]]*echo'
+scan_offenders() {  # $1 = 要扫的根目录
+  grep -rlE "$BAD_PATTERN" "$1" 2>/dev/null | grep -vE 'lib/find-adb\.sh|find-adb-lib-smoke\.sh' || true   # lib 持有候选清单合法；smoke 自己含坏样例 fixture
+}
+
+# smoke 在 .github/workflows/scripts/smoke/ 下 → 上溯 4 层才是仓库根
+REPO_ROOT="$(cd "$DIR/../../../.." && pwd)"
+[ -d "$REPO_ROOT/.github/workflows" ] \
+  || { echo "❌ FAIL 机械闸：REPO_ROOT 算错了（$REPO_ROOT 下没有 .github/workflows）——闸门会扫空目录变成摆设"; exit 1; }
+
+# 自测（连路径一起验）：造一个坏样例，同一个扫描函数必须抓到
+FAKE="$TMP/fakerepo/.github/workflows"; mkdir -p "$FAKE"
+printf 'run: |\n  ADB=$(command -v adb 2>/dev/null || echo "C:/platform-tools/adb.exe")\n' > "$FAKE/bad.yml"
+[ -n "$(scan_offenders "$TMP/fakerepo/.github")" ] \
+  || { echo "❌ FAIL 自测：扫描抓不到坏样例，守卫是摆设"; exit 1; }
+echo "✅ 自测通过：同一个扫描函数确实能抓到坏写法（含路径）"
+
+OFFENDERS=$(scan_offenders "$REPO_ROOT/.github")
+if [ -n "$OFFENDERS" ]; then
+  echo "❌ FAIL 机械闸：下列文件仍在用「找不到 adb 就 echo 一个写死路径」的写法——"
+  echo "   调用方会拿不存在的文件去执行，报 exit 127 且看不出原因（0817-0819 连红三晚）："
+  printf '   - %s\n' $OFFENDERS
+  echo "   改用 find_adb（source lib/find-adb.sh）"
+  exit 1
+fi
+echo "✅ 机械闸通过：无人再写死 adb 兜底路径"
