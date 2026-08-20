@@ -1,0 +1,177 @@
+---
+skeleton: false
+journey_type: user_facing
+target_environment: windows_cloud
+gp_anchor: line11/structured_workbench#step1
+---
+# Contract DoD — Sprint: 路③ 结构化工作台 · Sprint B（S2 数据进得来）
+
+**范围**: `db_rows` 补 `version`/`created_by` 增量 migration / 行 CRUD 端点族（建行·PATCH 走 field_id·软删·行回收站还原·粘贴批量导入·单表 JSON 导出）/ 行级 `version` 乐观锁 409 / staff-hub AG Grid 32.2.1 表格视图 + 8 类字段编辑器 + 行详情面板 + 5000 行 UI 硬拦 / 写回失败可见且保留输入 / 行层跨组织隔离正反双向
+**不在范围**: S3 筛排看板视图偏好、S4 关联、CSV 导出与文件导入、字段类型变更、字段 UPDATE/DELETE 端点、表改名与改可见性、服务端行模型、AG Grid v33
+**大小**: L
+
+> 全部 `manual:` 命令的工作目录 = repo 根。需 `E2E_DATABASE_URL`（或 `DATABASE_URL`），指 **zenithjoy** 库；未设时命令自身报错退出，**不落默认库**。
+> **判定归 DoD、供给归脚本**（沿用 Sprint A「夹具供给协议」）：`--fixture-up` 只起真 `apps/api` + 种双企业 + 签三个真会话并写 `./.wb-fixture.env`，一切 pass/fail 判定写在下面的命令里由 evaluator 直接执行；DB 断言的 `PG` 直接取 `${E2E_DATABASE_URL:-$DATABASE_URL}`，**不经脚本**。
+> **变异一律外置判据**（沿用「变异证明执行协议」）：`--mutation-apply` 只改代码，判据是「被守卫的那一段自己 exit≠0」，不认脚本自述的 `proven-to-fire`。
+> **接缝三条未真验前不得标 done**（见合同 `## 接缝清单`）：乐观锁并发语义 / 断网保留输入 / AG Grid 真浏览器渲染，三条只在 windows job 转绿，linux CI 绿 ≠ done，未真验一律标 `logic-done-pending`。
+
+## ARTIFACT 条目
+
+- [ ] [ARTIFACT] 增量 migration 存在：`db_rows` 补 `version INTEGER NOT NULL DEFAULT 1` 与 `created_by`，DDL 幂等
+  Test: node -e "const fs=require('fs');const d='apps/api/db/migrations';const f=fs.readdirSync(d).filter(n=>n.endsWith('.sql')&&/rows_version|workbench_rows/.test(n));if(!f.length)process.exit(1);const c=f.map(n=>fs.readFileSync(d+'/'+n,'utf8')).join('\n');if(!/ALTER TABLE zenithjoy\.db_rows/i.test(c))process.exit(1);if(!/ADD COLUMN IF NOT EXISTS version\s+INTEGER NOT NULL DEFAULT 1/i.test(c))process.exit(1);if(!/ADD COLUMN IF NOT EXISTS created_by/i.test(c))process.exit(1)"
+
+- [ ] [ARTIFACT] A 刀已合并的 migration 未被回改（PRD 假设第 1 条：A 刀 smoke 对其形状有断言）
+  Test: node -e "const{execSync}=require('child_process');const p='apps/api/db/migrations/20260820_120000_structured_workbench.sql';const a=execSync('git show origin/main:'+p).toString();const b=require('fs').readFileSync(p,'utf8');if(a!==b)process.exit(1)"
+
+- [ ] [ARTIFACT] 行端点族八条挂在路③ router 上，源码零明文身份头字面量（A2 家族口径）
+  Test: node -e "const fs=require('fs');const files=['apps/api/src/routes/workbench.ts','apps/api/src/routes/workbench-rows.ts'].filter(p=>fs.existsSync(p));const c=files.map(p=>fs.readFileSync(p,'utf8')).join('\n');const need=[/router\.get\(['\"]\/tables\/:id\/rows['\"]/,/router\.post\(['\"]\/tables\/:id\/rows['\"]/,/router\.patch\(['\"]\/rows\/:id['\"]/,/router\.delete\(['\"]\/rows\/:id['\"]/,/rows\/trash/,/router\.post\(['\"]\/rows\/:id\/restore['\"]/,/rows\/paste/,/router\.get\(['\"]\/tables\/:id\/export['\"]/];for(const r of need)if(!r.test(c))process.exit(1);if(/X-Tenant-Id|X-User-Email|X-Feishu-User-Id|X-Bypass-Tenant|tenantContextOptional|selfHealOwnerMember|staffGuard/i.test(c))process.exit(1)"
+
+- [ ] [ARTIFACT] A 刀「端点恰好 N 个」的断言仍在且已改成 17（改值不删断言）
+  Test: node -e "const c=require('fs').readFileSync('apps/api/src/routes/workbench.test.ts','utf8');if(!/17/.test(c))process.exit(1);if(/\b9\b/.test(c.replace(/[^\n]*17[^\n]*/g,''))&&!/17/.test(c))process.exit(1);if(!/(toBe|toHaveLength|===)\s*\(?17/.test(c))process.exit(1)"
+
+- [ ] [ARTIFACT] staff-hub 引入 AG Grid **32.2.1 逐字**（合同 NFR 锁版，不跟 v33 主题断代）
+  Test: node -e "const p=require('./apps/staff-hub/package.json');const d={...p.dependencies,...p.devDependencies};for(const k of ['ag-grid-community','ag-grid-react']){if(!d[k])process.exit(1);if(!/32\.2\.1/.test(d[k]))process.exit(1);if(/\^|~/.test(d[k]))process.exit(1)}"
+
+- [ ] [ARTIFACT] 行前端不走 `adminFetch`（那条通道拼明文身份头），且**不写死 5000**（上限来自 API 的 `row_limit`）
+  Test: node -e "const fs=require('fs'),path=require('path');const roots=['apps/staff-hub/src/pages','apps/staff-hub/src/components','apps/staff-hub/src/lib'];const walk=d=>fs.existsSync(d)?fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(d,e.name)):[path.join(d,e.name)]):[];const files=roots.flatMap(walk).filter(f=>/\.(ts|tsx)$/.test(f)&&/[Ww]orkbench|[Rr]ow/.test(f));if(!files.length)process.exit(1);for(const f of files){const c=fs.readFileSync(f,'utf8');if(/adminFetch/.test(c))process.exit(1);if(/\b5000\b/.test(c))process.exit(1)}"
+
+- [ ] [ARTIFACT] E2E workflow：windows job **仍无 job 级事件条件门**（A33(c)），`paths` 已含本刀新增 spec
+  Test: node -e "const c=require('fs').readFileSync('.github/workflows/e2e-knowledge-hub-path3.yml','utf8');if(!/structured-workbench-rows\.spec\.ts/.test(c))process.exit(1);const m=c.split(/\n  windows-real-browser:\n/)[1];if(!m)process.exit(1);const head=m.split(/\n    steps:/)[0];if(/^\s{4}if:/m.test(head))process.exit(1);if(/github\.event_name|workflow_dispatch/.test(head))process.exit(1)"
+
+- [ ] [ARTIFACT] 行 E2E spec 存在且**零请求拦截/改写**（变体C 死规则：全部请求打真后端）
+  Test: node -e "const c=require('fs').readFileSync('apps/staff-hub/e2e/structured-workbench-rows.spec.ts','utf8');if(/page\.route|context\.route|fulfill\(/.test(c))process.exit(1);if(!/setOffline/.test(c))process.exit(1);if(!/conflict/i.test(c))process.exit(1)"
+
+- [ ] [ARTIFACT] smoke 已登记本刀 4 个变异开关与 7 个新段（否则变异证明无处施加）
+  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; L=$(bash "$S" --mutation-list) || exit 1; for m in A13-version-nocheck A16-row-hard-delete A1R-row-org-bypass A15-limit-off; do printf "%s\n" "$L" | grep -q "$m" || { echo "FAIL: 变异未登记 $m"; exit 1; }; done; for f in --a12-only --a13-only --a15-only --a16-only --a17-only --a18-a19-only --a1-a3-rows-only; do grep -q -- "$f" "$S" || { echo "FAIL: smoke 缺段 $f"; exit 1; }; done; echo OK'
+
+## BEHAVIOR 条目
+
+> 每条都能回答「这是 Golden Path 哪一步的用户可观察输出」，且对应代码一行没写时必然 FAIL（`/rows` 端点族与 `version` 列在 `origin/main` 上都不存在）。
+
+### Step1/Step2 — 表格视图列行 + 新增行落库
+
+- [ ] [BEHAVIOR] 空表 `GET rows` 返 200 且 `rows` 为空、`total` = 0、`row_limit` 是数字；建行返 201 `version` = 1 并真落 `db_rows`（5 分钟时间窗防历史行冒充）
+  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; bash "$S" --fixture-up || exit 1; . ./.wb-fixture.env; PG="${E2E_DATABASE_URL:-${DATABASE_URL:-}}"; fail(){ echo "FAIL: $1"; bash "$S" --fixture-down; exit 1; }; [ -n "$PG" ] || fail "缺 E2E_DATABASE_URL/DATABASE_URL"; API="http://localhost:$API_PORT/api/knowledge/db"; TID=$(curl -sf -b "$COOKIE_A" -H "Content-Type: application/json" -X POST "$API/tables" -d "{\"name\":\"WB-B1-$SFX\",\"visibility\":\"org\",\"fields\":$EIGHT_FIELDS}" | jq -r ".data.table_id"); [ -n "$TID" ] && [ "$TID" != "null" ] || fail "建表失败"; curl -sf -b "$COOKIE_A" "$API/tables/$TID/rows" | jq -e ".success == true and (.data.rows | length) == 0 and .data.total == 0 and (.data.row_limit | type) == \"number\"" >/dev/null || fail "空表 rows 端点形状不符"; RID=$(curl -sf -b "$COOKIE_A" -X POST "$API/tables/$TID/rows" | jq -r ".data.row_id"); [ -n "$RID" ] && [ "$RID" != "null" ] || fail "建行未返 row_id"; psql "$PG" -t -A -q -c "SELECT count(*) FROM zenithjoy.db_rows r WHERE r.id = \$\$$RID\$\$ AND r.table_id = \$\$$TID\$\$ AND r.org_id = \$\$$ORGA_TENANT_ID\$\$ AND r.version = 1 AND r.deleted_at IS NULL AND r.created_at > NOW() - make_interval(mins => 5)" | grep -qx 1 || fail "建行未落库或归属/version 不对"; curl -sf -b "$COOKIE_A" "$API/tables/$TID/rows" | jq -e "(.data.rows | length) == 1 and .data.total == 1" >/dev/null || fail "刷新后行不在"; bash "$S" --fixture-down; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] 建行/改行/删行/还原**全部落 `db_audit`**（`org_id NOT NULL`，可观测性 NFR）
+  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; bash "$S" --a12-only || exit 1; . ./.wb-fixture.env 2>/dev/null; PG="${E2E_DATABASE_URL:-${DATABASE_URL:-}}"; [ -n "$PG" ] || { echo "FAIL: 缺 PG"; exit 1; }; N=$(psql "$PG" -t -A -q -c "SELECT count(DISTINCT a.action) FROM zenithjoy.db_audit a WHERE a.action IN (\$\$create_row\$\$, \$\$update_row\$\$, \$\$soft_delete_row\$\$, \$\$restore_row\$\$) AND a.created_at > NOW() - make_interval(mins => 10)"); [ "${N:-0}" -ge 4 ] || { echo "FAIL: db_audit 四个行动作只落了 $N 种"; exit 1; }; echo OK'
+  期望: OK
+
+### Step3 — 行内编辑即存，8 类字段各一次，类型校验（上位合同 A12）
+
+- [ ] [BEHAVIOR] 八类字段各 PATCH 一次全部 200，库中 `data ->> field_id` 与所打内容逐字相等，`version` 每次恰 +1
+  Test: manual:bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --a12-only
+  期望: exit 0
+
+- [ ] [BEHAVIOR] 类型不符的值返 400 `VALIDATION_FAILED` 且**库中该格逐字未变**；`field_id` 不属于该表同样 400 而不是 500
+  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; bash "$S" --fixture-up || exit 1; . ./.wb-fixture.env; PG="${E2E_DATABASE_URL:-${DATABASE_URL:-}}"; fail(){ echo "FAIL: $1"; bash "$S" --fixture-down; exit 1; }; [ -n "$PG" ] || fail "缺 PG"; API="http://localhost:$API_PORT/api/knowledge/db"; TID=$(curl -sf -b "$COOKIE_A" -H "Content-Type: application/json" -X POST "$API/tables" -d "{\"name\":\"WB-B3-$SFX\",\"visibility\":\"org\",\"fields\":$EIGHT_FIELDS}" | jq -r ".data.table_id"); FN=$(curl -sf -b "$COOKIE_A" "$API/tables/$TID/fields" | jq -r ".data.fields[] | select(.field_type == \"number\") | .field_id"); FS=$(curl -sf -b "$COOKIE_A" "$API/tables/$TID/fields" | jq -r ".data.fields[] | select(.field_type == \"single_select\") | .field_id"); RID=$(curl -sf -b "$COOKIE_A" -X POST "$API/tables/$TID/rows" | jq -r ".data.row_id"); BEFORE=$(psql "$PG" -t -A -q -c "SELECT r.data::text FROM zenithjoy.db_rows r WHERE r.id = \$\$$RID\$\$"); for BAD in "{\"$FN\":\"12\"}" "{\"$FS\":\"不在选项里\"}" "{\"00000000-0000-0000-0000-000000000000\":\"x\"}"; do C=$(curl -s -o /tmp/wb-b3.json -w "%{http_code}" -b "$COOKIE_A" -H "Content-Type: application/json" -X PATCH "$API/rows/$RID" -d "{\"version\":1,\"data\":$BAD}"); [ "$C" = "400" ] || fail "非法值返 $C（应 400）payload=$BAD"; jq -e ".error.code == \"VALIDATION_FAILED\"" < /tmp/wb-b3.json >/dev/null || fail "错误码不是 VALIDATION_FAILED"; done; AFTER=$(psql "$PG" -t -A -q -c "SELECT r.data::text FROM zenithjoy.db_rows r WHERE r.id = \$\$$RID\$\$"); [ "$BEFORE" = "$AFTER" ] || fail "校验失败却改了库（$BEFORE -> $AFTER）"; bash "$S" --fixture-down; echo OK'
+  期望: OK
+
+### Step4 — 并发同格 409 乐观锁（上位合同 A13，⚠️ 接缝1）
+
+- [ ] [BEHAVIOR] 双会话同基线 `version` 真并发 PATCH 同一格 → 恰一个 200 一个 **409 `ROW_VERSION_CONFLICT`**，库中该格 = 那个返 200 的会话写的值（不是后写的赢）
+  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; bash "$S" --fixture-up || exit 1; . ./.wb-fixture.env; PG="${E2E_DATABASE_URL:-${DATABASE_URL:-}}"; fail(){ echo "FAIL: $1"; bash "$S" --fixture-down; exit 1; }; [ -n "$PG" ] || fail "缺 PG"; API="http://localhost:$API_PORT/api/knowledge/db"; TID=$(curl -sf -b "$COOKIE_A" -H "Content-Type: application/json" -X POST "$API/tables" -d "{\"name\":\"WB-B4-$SFX\",\"visibility\":\"org\",\"fields\":$EIGHT_FIELDS}" | jq -r ".data.table_id"); FT=$(curl -sf -b "$COOKIE_A" "$API/tables/$TID/fields" | jq -r ".data.fields[] | select(.field_type == \"text\") | .field_id"); RID=$(curl -sf -b "$COOKIE_A" -X POST "$API/tables/$TID/rows" | jq -r ".data.row_id"); VN=$(curl -sf -b "$COOKIE_A" "$API/tables/$TID/rows" | jq -r ".data.rows[0].version"); curl -s -o /tmp/wb-j1.json -w "%{http_code}" -b "$COOKIE_A" -H "Content-Type: application/json" -X PATCH "$API/rows/$RID" -d "{\"version\":$VN,\"data\":{\"$FT\":\"甲写的\"}}" > /tmp/wb-j1.code & curl -s -o /tmp/wb-j2.json -w "%{http_code}" -b "$COOKIE_A2" -H "Content-Type: application/json" -X PATCH "$API/rows/$RID" -d "{\"version\":$VN,\"data\":{\"$FT\":\"乙写的\"}}" > /tmp/wb-j2.code & wait; C1=$(cat /tmp/wb-j1.code); C2=$(cat /tmp/wb-j2.code); OKC=$(printf "%s\n%s\n" "$C1" "$C2" | grep -c "^200$"); CFC=$(printf "%s\n%s\n" "$C1" "$C2" | grep -c "^409$"); [ "$OKC" = "1" ] && [ "$CFC" = "1" ] || fail "并发结果不是恰一 200 一 409（$C1 / $C2）—— 静默覆盖或双双失败"; if [ "$C1" = "409" ]; then LOSER=/tmp/wb-j1.json; WINV="甲写的"; else LOSER=/tmp/wb-j2.json; WINV="乙写的"; fi; if [ "$C1" = "200" ]; then WINV="甲写的"; else WINV="乙写的"; fi; jq -e ".error.code == \"ROW_VERSION_CONFLICT\"" < "$LOSER" >/dev/null || fail "409 体的 error.code 不是 ROW_VERSION_CONFLICT"; GOT=$(psql "$PG" -t -A -q -c "SELECT r.data ->> \$\$$FT\$\$ FROM zenithjoy.db_rows r WHERE r.id = \$\$$RID\$\$"); [ "$GOT" = "$WINV" ] || fail "库中值=$GOT，不等于先提交者的值 $WINV（静默覆盖）"; psql "$PG" -t -A -q -c "SELECT r.version FROM zenithjoy.db_rows r WHERE r.id = \$\$$RID\$\$" | grep -qx "$((VN+1))" || fail "version 未恰好 +1"; bash "$S" --fixture-down; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] 变异证明（判据外置）：注掉 `version` 检查后，`--a13-only` 段必须 `exit ≠ 0`
+  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; bash "$S" --mutation-apply A13-version-nocheck || exit 1; bash "$S" --a13-only; RC=$?; bash "$S" --mutation-revert A13-version-nocheck; [ "$RC" -ne 0 ] || { echo "FAIL: 摘掉 version 条件后 A13 段仍 exit 0 —— 乐观锁守卫是空的"; exit 1; }; echo OK'
+  期望: OK
+
+### Step5 — 写回失败可见且保留输入（上位合同 A14，⚠️ 接缝2）
+
+- [ ] [BEHAVIOR] 真浏览器真断网 → 单元格进可见错误态且编辑器 DOM 取值逐字等于用户所打内容 → 恢复网络就地重试成功且库中该格 = 该内容（判据 = windows job 的 conclusion）
+  Test: manual:bash -c 'WF=e2e-knowledge-hub-path3.yml; B=$(git rev-parse --abbrev-ref HEAD); R=$(gh run list --workflow "$WF" --branch "$B" --limit 1 --json databaseId,conclusion,url) || { echo "FAIL: gh run list 失败"; exit 1; }; echo "$R" | jq -e "length > 0" >/dev/null || { echo "FAIL: 分支 $B 上无 $WF 运行记录 —— spec 成了孤儿"; exit 1; }; ID=$(echo "$R" | jq -r ".[0].databaseId"); J=$(gh run view "$ID" --json jobs); echo "$J" | jq -e "[.jobs[] | select(.name | test(\"windows\")) | select(.conclusion == \"success\")] | length > 0" >/dev/null || { echo "FAIL: windows job 未成功（skipped 也算 FAIL）"; echo "$J" | jq -r ".jobs[] | \"  job=\(.name) conclusion=\(.conclusion)\""; exit 1; }; echo "$J" | jq -e "[.jobs[] | select(.name | test(\"windows\")) | .steps[] | select(.name | test(\"断网|offline|行链\"))] | length > 0" >/dev/null || { echo "FAIL: windows job 里没有跑断网保留输入那一段"; exit 1; }; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] 前端写回失败分支**不触发整表重拉**（禁继承 `CustomerListPage` 的「保存后全量 reload」范式）——错误分支里零全量刷新调用
+  Test: manual:bash -c 'node -e "const fs=require(\"fs\"),path=require(\"path\");const roots=[\"apps/staff-hub/src/pages\",\"apps/staff-hub/src/components\"];const walk=d=>fs.existsSync(d)?fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(d,e.name)):[path.join(d,e.name)]):[];const files=roots.flatMap(walk).filter(f=>/[Rr]ow|[Gg]rid/.test(f)&&/\.(ts|tsx)$/.test(f));if(!files.length)process.exit(1);for(const f of files){const c=fs.readFileSync(f,\"utf8\");const m=c.match(/catch\s*\([^)]*\)\s*\{[\s\S]*?\n  \}/g)||[];for(const b of m){if(/loadRows\(|reloadAll|refetchAll|location\.reload/.test(b))process.exit(1)}}" || { echo "FAIL: 写回失败分支里出现整表重拉"; exit 1; }; echo OK'
+  期望: OK
+
+### Step6 — 粘贴批量导入与行数上限（上位合同 A15 / J9 / J12）
+
+- [ ] [BEHAVIOR] 粘贴 N 行 M 列 → 落库恰 N 行；未匹配列自动建为 `text` 类型字段（不做类型推断）
+  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; bash "$S" --fixture-up || exit 1; . ./.wb-fixture.env; PG="${E2E_DATABASE_URL:-${DATABASE_URL:-}}"; fail(){ echo "FAIL: $1"; bash "$S" --fixture-down; exit 1; }; [ -n "$PG" ] || fail "缺 PG"; API="http://localhost:$API_PORT/api/knowledge/db"; TID=$(curl -sf -b "$COOKIE_A" -H "Content-Type: application/json" -X POST "$API/tables" -d "{\"name\":\"WB-B6-$SFX\",\"visibility\":\"org\",\"fields\":$EIGHT_FIELDS}" | jq -r ".data.table_id"); RESP=$(curl -sf -b "$COOKIE_A" -H "Content-Type: application/json" -X POST "$API/tables/$TID/rows/paste" -d "{\"header\":[\"字段-text\",\"全新列\"],\"rows\":[[\"a1\",\"b1\"],[\"a2\",\"b2\"],[\"a3\",\"b3\"]]}") || fail "粘贴端点非 2xx"; echo "$RESP" | jq -e ".data.inserted == 3 and (.data.created_fields | length) == 1 and .data.created_fields[0].field_type == \"text\" and .data.created_fields[0].name == \"全新列\"" >/dev/null || fail "粘贴返回形状不符 resp=$RESP"; psql "$PG" -t -A -q -c "SELECT count(*) FROM zenithjoy.db_rows r WHERE r.table_id = \$\$$TID\$\$ AND r.deleted_at IS NULL" | grep -qx 3 || fail "落库行数不等于粘贴行数"; psql "$PG" -t -A -q -c "SELECT count(*) FROM zenithjoy.db_fields f WHERE f.table_id = \$\$$TID\$\$ AND f.name = \$\$全新列\$\$ AND f.field_type = \$\$text\$\$" | grep -qx 1 || fail "自动建列未落库或类型不是 text"; NEWF=$(psql "$PG" -t -A -q -c "SELECT f.id::text FROM zenithjoy.db_fields f WHERE f.table_id = \$\$$TID\$\$ AND f.name = \$\$全新列\$\$"); psql "$PG" -t -A -q -c "SELECT count(*) FROM zenithjoy.db_rows r WHERE r.table_id = \$\$$TID\$\$ AND r.data ->> \$\$$NEWF\$\$ = \$\$b2\$\$" | grep -qx 1 || fail "粘贴值未按 field_id 落进 data"; bash "$S" --fixture-down; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] 粘贴使总行数超上限 → 400 `ROW_LIMIT_EXCEEDED`、提示含当前上限与已有行数、**库中零新增行零新建字段**（整批原子拒绝）
+  Test: manual:bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --a15-only
+  期望: exit 0
+
+- [ ] [BEHAVIOR] 变异证明（判据外置）：上限判定改成恒放行后，`--a15-only` 段必须 `exit ≠ 0`
+  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; bash "$S" --mutation-apply A15-limit-off || exit 1; bash "$S" --a15-only; RC=$?; bash "$S" --mutation-revert A15-limit-off; [ "$RC" -ne 0 ] || { echo "FAIL: 上限恒放行下 A15 段仍 exit 0 —— 超限批次落了库也没人红"; exit 1; }; echo OK'
+  期望: OK
+
+### Step7/Step8 — 行详情面板 · 删行进回收站 30 天还原（上位合同 A16）
+
+- [ ] [BEHAVIOR] 删行是软删：`deleted_at` 非空而该表物理行计数不减；回收站列出该行且 `restorable_until` = `deleted_at + 30 天`；还原后 `data` 与删前**逐字相等**
+  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; bash "$S" --fixture-up || exit 1; . ./.wb-fixture.env; PG="${E2E_DATABASE_URL:-${DATABASE_URL:-}}"; fail(){ echo "FAIL: $1"; bash "$S" --fixture-down; exit 1; }; [ -n "$PG" ] || fail "缺 PG"; API="http://localhost:$API_PORT/api/knowledge/db"; TID=$(curl -sf -b "$COOKIE_A" -H "Content-Type: application/json" -X POST "$API/tables" -d "{\"name\":\"WB-B8-$SFX\",\"visibility\":\"org\",\"fields\":$EIGHT_FIELDS}" | jq -r ".data.table_id"); FT=$(curl -sf -b "$COOKIE_A" "$API/tables/$TID/fields" | jq -r ".data.fields[] | select(.field_type == \"text\") | .field_id"); RID=$(curl -sf -b "$COOKIE_A" -X POST "$API/tables/$TID/rows" | jq -r ".data.row_id"); curl -sf -b "$COOKIE_A" -H "Content-Type: application/json" -X PATCH "$API/rows/$RID" -d "{\"version\":1,\"data\":{\"$FT\":\"删前的值\"}}" >/dev/null || fail "预置写入失败"; BEFORE=$(psql "$PG" -t -A -q -c "SELECT r.data::text FROM zenithjoy.db_rows r WHERE r.id = \$\$$RID\$\$"); C0=$(psql "$PG" -t -A -q -c "SELECT count(*) FROM zenithjoy.db_rows r WHERE r.table_id = \$\$$TID\$\$"); curl -sf -b "$COOKIE_A" -X DELETE "$API/rows/$RID" | jq -e ".data.deleted_at != null" >/dev/null || fail "删行非 2xx 或未返 deleted_at"; C1=$(psql "$PG" -t -A -q -c "SELECT count(*) FROM zenithjoy.db_rows r WHERE r.table_id = \$\$$TID\$\$"); [ "$C0" = "$C1" ] || fail "物理行被删了（$C0 -> $C1）不是软删"; curl -sf -b "$COOKIE_A" "$API/tables/$TID/rows" | jq -e "(.data.rows | length) == 0" >/dev/null || fail "软删行仍出现在表格视图"; curl -sf -b "$COOKIE_A" "$API/tables/$TID/rows/trash" | jq -e "[.data.rows[] | select(.row_id == \"$RID\")] | length == 1" >/dev/null || fail "回收站里没有这行"; psql "$PG" -t -A -q -c "SELECT count(*) FROM zenithjoy.db_rows r WHERE r.id = \$\$$RID\$\$ AND r.deleted_at IS NOT NULL" | grep -qx 1 || fail "deleted_at 未打上"; curl -sf -b "$COOKIE_A" -X POST "$API/rows/$RID/restore" >/dev/null || fail "还原非 2xx"; AFTER=$(psql "$PG" -t -A -q -c "SELECT r.data::text FROM zenithjoy.db_rows r WHERE r.id = \$\$$RID\$\$"); [ "$BEFORE" = "$AFTER" ] || fail "还原后数据不逐字相等（$BEFORE -> $AFTER）"; psql "$PG" -t -A -q -c "SELECT count(*) FROM zenithjoy.db_rows r WHERE r.id = \$\$$RID\$\$ AND r.deleted_at IS NULL" | grep -qx 1 || fail "还原后 deleted_at 未清空"; bash "$S" --fixture-down; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] 变异证明（判据外置）：软删行改成物理 `DELETE` 后，`--a16-only` 段必须 `exit ≠ 0`
+  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; bash "$S" --mutation-apply A16-row-hard-delete || exit 1; bash "$S" --a16-only; RC=$?; bash "$S" --mutation-revert A16-row-hard-delete; [ "$RC" -ne 0 ] || { echo "FAIL: 物理删除下 A16 段仍 exit 0 —— 删错的行永远捞不回也没人红"; exit 1; }; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] 表被软删后其行不可读写（`GET rows` / `PATCH` 一律 404，与随机 uuid 逐字节同形）
+  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; bash "$S" --fixture-up || exit 1; . ./.wb-fixture.env; fail(){ echo "FAIL: $1"; bash "$S" --fixture-down; exit 1; }; H(){ openssl dgst -md5 < "$1" | awk "{print \$NF}"; }; API="http://localhost:$API_PORT/api/knowledge/db"; TN="WB-BDEL-$SFX"; TID=$(curl -sf -b "$COOKIE_A" -H "Content-Type: application/json" -X POST "$API/tables" -d "{\"name\":\"$TN\",\"visibility\":\"org\",\"fields\":$EIGHT_FIELDS}" | jq -r ".data.table_id"); RID=$(curl -sf -b "$COOKIE_A" -X POST "$API/tables/$TID/rows" | jq -r ".data.row_id"); curl -sf -b "$COOKIE_A" -H "Content-Type: application/json" -X DELETE "$API/tables/$TID" -d "{\"confirm_name\":\"$TN\"}" >/dev/null || fail "删表失败"; RND=$(uuidgen | tr "A-Z" "a-z"); C1=$(curl -s -b "$COOKIE_A" -o /tmp/wb-bd1.json -w "%{http_code}" "$API/tables/$TID/rows"); C2=$(curl -s -b "$COOKIE_A" -o /tmp/wb-bd2.json -w "%{http_code}" "$API/tables/$RND/rows"); [ "$C1" = "404" ] || fail "已软删表的行列表返 $C1（应 404）"; [ "$C2" = "404" ] || fail "随机 uuid 返 $C2"; [ "$(H /tmp/wb-bd1.json)" = "$(H /tmp/wb-bd2.json)" ] || fail "两个 404 体不同 —— 可靠比对字节分辨表是否真实存在"; C3=$(curl -s -o /dev/null -w "%{http_code}" -b "$COOKIE_A" -H "Content-Type: application/json" -X PATCH "$API/rows/$RID" -d "{\"version\":1,\"data\":{}}"); [ "$C3" = "404" ] || fail "已软删表的行仍可写（返 $C3）"; bash "$S" --fixture-down; echo OK'
+  期望: OK
+
+### Step9 — 单表 JSON 全量导出（上位合同 A17）
+
+- [ ] [BEHAVIOR] 导出体行数 = 库中该表未删行数、字段集与 `db_fields` 一致，且 grep 不到任何他组织数据
+  Test: manual:bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --a17-only
+  期望: exit 0
+
+### Step10 — 行层跨组织隔离正反双向（A1/A3 范式复跑，上位合同 A34）
+
+- [ ] [BEHAVIOR] B 企业会话读/改/删/还原/导出 A 企业的行一律 404 且 A 企业该行逐字未变；**同一次运行内**A 企业自己全部 2xx 且拿到自己的数据（堵「一律拒绝」假绿）
+  Test: manual:bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --a1-a3-rows-only
+  期望: exit 0
+
+- [ ] [BEHAVIOR] 变异证明（判据外置）：行 SQL 去掉 `org_id` 条件后，`--a1-a3-rows-only` 段必须 `exit ≠ 0`
+  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; bash "$S" --mutation-apply A1R-row-org-bypass || exit 1; bash "$S" --a1-a3-rows-only; RC=$?; bash "$S" --mutation-revert A1R-row-org-bypass; [ "$RC" -ne 0 ] || { echo "FAIL: 摘掉 org_id 条件后行隔离段仍 exit 0 —— 隔离断言是空的"; exit 1; }; echo OK'
+  期望: OK
+
+### Step11 — XSS 窄面与对抗输入（上位合同 A18 / A19）
+
+- [ ] [BEHAVIOR] 五个对抗 payload 作为字段名与单元格值写入 → 全部作为数据值落库、服务无 5xx、`information_schema` 表清单前后全等
+  Test: manual:bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --a18-a19-only
+  期望: exit 0
+
+### Invariant 覆盖（PRD 铁律逐条映射）
+
+- [ ] [BEHAVIOR] INV-1 [组织归属] 行写入的 `org_id` 取自会话：请求体塞 B 企业 `org_id` + 伪造 `X-Tenant-Id` 建行/粘贴，落库归属仍是会话所属组织，B 企业零新增行
+  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; bash "$S" --fixture-up || exit 1; . ./.wb-fixture.env; PG="${E2E_DATABASE_URL:-${DATABASE_URL:-}}"; fail(){ echo "FAIL: $1"; bash "$S" --fixture-down; exit 1; }; [ -n "$PG" ] || fail "缺 PG"; API="http://localhost:$API_PORT/api/knowledge/db"; TID=$(curl -sf -b "$COOKIE_A" -H "Content-Type: application/json" -X POST "$API/tables" -d "{\"name\":\"WB-INV1-$SFX\",\"visibility\":\"org\",\"fields\":$EIGHT_FIELDS}" | jq -r ".data.table_id"); B0=$(psql "$PG" -t -A -q -c "SELECT count(*) FROM zenithjoy.db_rows r WHERE r.org_id = \$\$$ORGB_TENANT_ID\$\$"); RID=$(curl -sf -b "$COOKIE_A" -H "X-Tenant-Id: $ORGB_TENANT_ID" -H "Content-Type: application/json" -X POST "$API/tables/$TID/rows" -d "{\"org_id\":\"$ORGB_TENANT_ID\",\"tenant_id\":\"$ORGB_TENANT_ID\"}" | jq -r ".data.row_id"); [ -n "$RID" ] && [ "$RID" != "null" ] || fail "建行失败"; psql "$PG" -t -A -q -c "SELECT count(*) FROM zenithjoy.db_rows r WHERE r.id = \$\$$RID\$\$ AND r.org_id = \$\$$ORGA_TENANT_ID\$\$" | grep -qx 1 || fail "行的 org_id 被请求体/请求头带偏"; B1=$(psql "$PG" -t -A -q -c "SELECT count(*) FROM zenithjoy.db_rows r WHERE r.org_id = \$\$$ORGB_TENANT_ID\$\$"); [ "$B0" = "$B1" ] || fail "B 企业行数变了（$B0 -> $B1）"; bash "$S" --fixture-down; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] INV-2 [禁明文身份头] 路③ 全部源码（含本刀新增行路由/服务/前端）七个字面量零命中，且新增文件**全部在 A2 扫描域内**（漏登记一个 = 空集假绿）
+  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; bash "$S" --a2-only || { echo "FAIL: A2 静态守卫未过"; exit 1; }; SC=$(bash "$S" --a2-print-scope) || { echo "FAIL: --a2-print-scope 非 0"; exit 1; }; for f in $(git diff --name-only origin/main...HEAD -- apps/api/src apps/staff-hub/src | grep -E "\.(ts|tsx)$"); do [ -f "$f" ] || continue; grep -qE "/api/knowledge/db|[Ww]orkbench" "$f" || continue; printf "%s\n" "$SC" | grep -qxF "$f" || { echo "FAIL: 本刀新增的路③ 文件未进 A2 扫描域 $f"; exit 1; }; done; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] INV-7 [无运行时 DDL] 跑完整套行操作（建行/改格/粘贴自动建列/删行/还原/导出）后，`information_schema.tables WHERE table_schema='zenithjoy'` 清单与操作前**完全相同**
+  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; PG="${E2E_DATABASE_URL:-${DATABASE_URL:-}}"; [ -n "$PG" ] || { echo "FAIL: 缺 PG"; exit 1; }; T0=$(psql "$PG" -t -A -q -c "SELECT string_agg(t.table_name, \$\$,\$\$ ORDER BY t.table_name) FROM information_schema.tables t WHERE t.table_schema = \$\$zenithjoy\$\$"); bash "$S" --a12-only >/dev/null || { echo "FAIL: 行链路段未过"; exit 1; }; bash "$S" --a15-only >/dev/null || { echo "FAIL: 粘贴段未过"; exit 1; }; T1=$(psql "$PG" -t -A -q -c "SELECT string_agg(t.table_name, \$\$,\$\$ ORDER BY t.table_name) FROM information_schema.tables t WHERE t.table_schema = \$\$zenithjoy\$\$"); [ "$T0" = "$T1" ] || { echo "FAIL: 表清单变了 —— 用户建列产生了运行时 DDL"; exit 1; }; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] INV-10 [禁写死环境假设值] 行数上限来自服务端且默认逐字为 5000：不设 `WORKBENCH_ROW_LIMIT` 时 API 返 `row_limit` = 5000，设成小值时 API 与 UI 硬拦同步跟随（前端零 5000 字面量由 ARTIFACT 条钉）
+  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; unset WORKBENCH_ROW_LIMIT; bash "$S" --fixture-up || exit 1; . ./.wb-fixture.env; fail(){ echo "FAIL: $1"; bash "$S" --fixture-down; exit 1; }; API="http://localhost:$API_PORT/api/knowledge/db"; TID=$(curl -sf -b "$COOKIE_A" -H "Content-Type: application/json" -X POST "$API/tables" -d "{\"name\":\"WB-INV10-$SFX\",\"visibility\":\"org\",\"fields\":$EIGHT_FIELDS}" | jq -r ".data.table_id"); curl -sf -b "$COOKIE_A" "$API/tables/$TID/rows" | jq -e ".data.row_limit == 5000" >/dev/null || fail "默认上限不是 5000"; bash "$S" --fixture-down; echo OK'
+  期望: OK
+
+- INV-3 [正向对照] → 已由 Step10 的 `--a1-a3-rows-only` 条覆盖（反向 404 与正向 2xx 同一次运行内成对执行），不另设条目
+- INV-4 [禁静默覆盖] → 已由 Step4 两条（409 真并发 + `A13-version-nocheck` 变异）覆盖
+- INV-5 [禁静默吞失败] → 已由 Step5 两条（windows job 真断网 + 错误分支零整表重拉）覆盖
+- INV-6 [软删可还原] → 已由 Step7/Step8 两条（软删物理行仍在 + `A16-row-hard-delete` 变异）覆盖
+- INV-8 [用户输入不进标识符位] → 已由 Step11（对抗输入全作数据值、表清单未变）与 INV-7 覆盖
+- INV-9 [变异证明] → 已由四条变异条目覆盖（A13 / A15 / A16 / A1R），判据一律外置
+- INV-11 [多端完整性] → **N/A**：本刀只有一个展示面（`apps/staff-hub` 浏览器端），不涉及多设备/多 OS 类型；`apps/dashboard` 一行不改，不构成第二端
+
+## BEHAVIOR:E2E 条目
+
+- [ ] [BEHAVIOR:E2E] 员工完整走完 S2 Golden Path，截图可视化验证
+  Screenshots:
+    - 01-grid-empty.png        期望：表格视图打开，列 = 8 类字段，零行，「新增行」可点，可见「已有 0 行 / 上限 N 行」
+    - 02-inline-edit.png       期望：某单元格处于编辑态，编辑器与字段类型匹配（单选是下拉、长文本是多行框）
+    - 03-conflict.png          期望：冲突提示「该行已被他人修改，你的改动未保存」可见，且用户打的内容仍在编辑器里
+    - 04-paste-limit.png       期望：粘贴超限提示可见，文案含当前上限与已有行数，表格行数未变
+    - 05-row-trash-restore.png 期望：被删的行从行回收站还原后回到表格，字段值逐字回归
+  路径格式：sprints/08201850-workbench-sprintB-rows/screenshots/<step>.png
+  期望：evaluator 完成后截图已复制到 sprints/08201850-workbench-sprintB-rows/screenshots/
