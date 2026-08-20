@@ -135,8 +135,8 @@ jobs:
 
       - name: 定位 adb（WinGet scrcpy 版）
         run: |
-          ADB=$(ls "/c/Users/asus/AppData/Local/Microsoft/WinGet/Packages/Genymobile.scrcpy_"*/scrcpy-*/adb.exe 2>/dev/null | head -1 || true)
-          [ -n "$ADB" ] || ADB=$(command -v adb 2>/dev/null || true)
+          source .github/workflows/scripts/smoke/lib/find-adb.sh
+          ADB=$(find_adb || true)
           [ -n "$ADB" ] || { echo "🟠 环境未就绪: runner 上找不到 adb"; exit 3; }
           echo "ADB=$ADB" >> "$GITHUB_ENV"
           echo "adb: $ADB"
@@ -184,8 +184,8 @@ jobs:
 
       - name: 定位 adb（WinGet scrcpy 版）
         run: |
-          ADB=$(ls "/c/Users/asus/AppData/Local/Microsoft/WinGet/Packages/Genymobile.scrcpy_"*/scrcpy-*/adb.exe 2>/dev/null | head -1 || true)
-          [ -n "$ADB" ] || ADB=$(command -v adb 2>/dev/null || true)
+          source .github/workflows/scripts/smoke/lib/find-adb.sh
+          ADB=$(find_adb || true)
           [ -n "$ADB" ] || { echo "🟠 环境未就绪: runner 上找不到 adb"; exit 3; }
           echo "ADB=$ADB" >> "$GITHUB_ENV"
           echo "adb: $ADB"

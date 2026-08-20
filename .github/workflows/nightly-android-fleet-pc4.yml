@@ -68,7 +68,13 @@ jobs:
         run: |
           set -uo pipefail
           source .github/workflows/scripts/smoke/lib/dedupe-adb-devices.sh
-          ADB=$(command -v adb 2>/dev/null || echo "C:/platform-tools/adb.exe")
+          source .github/workflows/scripts/smoke/lib/find-adb.sh
+          # 绝不再用「找不到就 echo 一个写死路径」——那会让调用方拿不存在的文件去执行，
+          # 报 exit 127，日志里完全看不出"其实没找到 adb"（0817-0819 连红三晚的原因）。
+          ADB=$(find_adb) || {
+            echo "::error::找不到可用的 adb（详见上方 stderr 列出的查找位置）——本次夜间回归无法开始"
+            exit 1
+          }
           echo "使用 ADB=$ADB"
           "$ADB" devices
           RAW_IDS=$("$ADB" devices 2>/dev/null | awk '/[[:space:]]device$/{print $1}')
