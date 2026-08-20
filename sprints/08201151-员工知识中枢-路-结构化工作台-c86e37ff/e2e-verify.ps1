@@ -32,8 +32,22 @@ function Invoke-Checked($file, $argline, $cwd, $what) {
 Invoke-Checked "npm.cmd" "ci" $repoRoot "npm ci"
 Invoke-Checked "npx.cmd" "playwright install chromium --with-deps" $repoRoot "playwright install"
 
-# 2. migration（真 PG，禁 mock）
+# 2. 库连接：migration runner 认 DATABASE_URL，但 **apps/api 进程只认离散 DATABASE_* 五个变量**
+#    （不读 DATABASE_URL）。只设连接串的话进程会拿内置默认值去连，报
+#    "password authentication failed for user postgres" —— 看着像库没起来，其实是没告诉它去哪连。
+#    从同一个连接串解析，零写死。
 $env:DATABASE_URL = $env:E2E_DATABASE_URL
+$dbUri = [uri]$env:E2E_DATABASE_URL
+$dbUserInfo = $dbUri.UserInfo -split ':'
+$env:DATABASE_HOST     = $dbUri.Host
+$env:DATABASE_PORT     = if ($dbUri.Port -gt 0) { "$($dbUri.Port)" } else { "5432" }
+$env:DATABASE_NAME     = $dbUri.AbsolutePath.TrimStart('/')
+$env:DATABASE_USER     = [uri]::UnescapeDataString($dbUserInfo[0])
+$env:DATABASE_PASSWORD = if ($dbUserInfo.Count -gt 1) { [uri]::UnescapeDataString($dbUserInfo[1]) } else { "" }
+$env:PGPASSWORD        = $env:DATABASE_PASSWORD
+Write-Host "DB: $($env:DATABASE_USER)@$($env:DATABASE_HOST):$($env:DATABASE_PORT)/$($env:DATABASE_NAME)"
+
+# migration（真 PG，禁 mock）
 Invoke-Checked "npm.cmd" "run migrate" "$repoRoot\apps\api" "migration"
 
 # 3. 种双企业 + 员工目录 —— 三个身份：甲乙同属 A 企业，丙在 B 企业
