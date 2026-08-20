@@ -785,6 +785,7 @@ acquisitionRouter.post('/collect/start', collectStartRateLimit, tenantContextOpt
           LIMIT 1`,
         [tenantId, accountLabel]
       );
+      // 查不到 session（accountLabel 有值但无匹配行）在下面显式 400，不会往下走空值
       const boundAgentId = sessionRes.rows[0]?.agent_id;
       if (!boundAgentId) {
         return fail(res, 400, 'BURNER_SESSION_NOT_FOUND', '该小号未绑定或 session 已过期，请重新扫码绑定');

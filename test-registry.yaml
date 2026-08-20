@@ -1962,6 +1962,14 @@ tests:
     product: 私域运营
     note: "设备就绪度三态判定 + fail-open 闸（决策 3a826c45）。客服要能看到客户手机卡在哪一项；总判定必须服务端合成——小白正在发生的 license 配额被拒设备端根本不知道"
 
+  - id: agent-identity-lookup-sole-owner
+    path: apps/api/src/services/agent-identity-lookup-sole-owner.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "机械闸：agents 双条件反查只许出现在 agent-identity-lookup 里。这条病曾被复制五份，五份同时修好不难，难的是下次有人再复制第六份"
+
   - id: agent-identity-lookup-disambiguation
     path: apps/api/src/services/agent-identity-lookup.test.ts
     type: unit
