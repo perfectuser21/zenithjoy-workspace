@@ -13,11 +13,15 @@ import { Router } from 'express';
 import { FieldsController } from '../controllers/fields.controller';
 import { validate } from '../middleware/validate';
 import { tenantContext } from '../middleware/tenant-context';
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import { createFieldSchema, updateFieldSchema } from '../models/schemas';
 
 const router = Router();
 const controller = new FieldsController();
 
+// 限流在鉴权之前：未鉴权的洪水不该有机会打到身份解析与成员表查询上。
+// dashboard 的字段管理页是低频人工操作，300/分钟 远超真实用量。
+router.use(simpleRateLimit({ windowMs: 60_000, max: 300, keyFn: ipKeyFn }));
 // 四个端点一律先过租户闸：无身份 → 401，有身份无租户 → 403。
 // 挂在 router 顶层而不是逐个端点，是为了让"以后新增端点忘了加闸"这件事不可能发生。
 router.use(tenantContext);

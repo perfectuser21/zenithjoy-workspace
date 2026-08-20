@@ -38,10 +38,15 @@ function isExcluded(f) {
   return EXCLUDE_PATTERNS.some((p) => p.test(f));
 }
 
+/** 正则元字符全量转义（只转斜杠会漏掉 `.`、`$`、`\` 这些，拼出来的模式就不是想要的那个） */
+function escapeRe(s) {
+  return s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+}
+
 /** ① app.use('/api/knowledge/db', X) → X → import 语句 → 源文件 */
 function resolveMountedRouter(appSrc) {
   const mount = new RegExp(
-    `app\\.use\\(\\s*['"\`]${MOUNT_PATH.replace(/\//g, '\\/')}['"\`]\\s*,\\s*([A-Za-z_$][\\w$]*)\\s*\\)`
+    `app\\.use\\(\\s*['"\`]${escapeRe(MOUNT_PATH)}['"\`]\\s*,\\s*([A-Za-z_$][\\w$]*)\\s*\\)`
   ).exec(appSrc);
   if (!mount) return null;
   const ident = mount[1];

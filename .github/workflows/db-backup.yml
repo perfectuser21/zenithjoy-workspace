@@ -26,6 +26,10 @@ on:
       - '.github/workflows/db-backup.yml'
       - '.github/workflows/scripts/backup/**'
 
+# 最小权限：只读代码 + 传备份 artifact，不写任何仓库状态
+permissions:
+  contents: read
+
 jobs:
   backup-and-drill:
     runs-on: ubuntu-latest

@@ -15,6 +15,7 @@
  */
 import { Router, type Request, type Response } from 'express';
 import { workbenchAuthGuard, workbenchErrorBody, notFoundBody } from '../middleware/workbench-auth';
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import {
   createTable,
   listTables,
@@ -30,6 +31,9 @@ import { WORKBENCH_TEMPLATES } from '../knowledge/workbench-templates';
 
 const router = Router();
 
+// 限流在鉴权**之前**：未鉴权的洪水不应该有机会一路打到会话解析和成员表查询上。
+// 300/分钟 对真人操作绰绰有余（建一张表也就几次请求），对脚本化枚举则是道坎。
+router.use(simpleRateLimit({ windowMs: 60_000, max: 300, keyFn: ipKeyFn }));
 router.use(workbenchAuthGuard);
 
 function ok(res: Response, status: number, data: unknown): void {

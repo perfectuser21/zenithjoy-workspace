@@ -21,6 +21,10 @@ concurrency:
   group: e2e-path3-${{ github.ref }}
   cancel-in-progress: true
 
+# 最小权限：这条 workflow 只读代码、跑测试、传截图 artifact，不写任何仓库状态
+permissions:
+  contents: read
+
 jobs:
   # 段1+段2：Linux 上跑静态守卫 + 真 Postgres 全链（真浏览器在下面的 windows job）
   linux-guards-and-db:
@@ -82,14 +86,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: 起本地 Postgres（windows runner 自带 PostgreSQL 服务）
+      - name: 起本地 Postgres（windows runner 自带，默认 Disabled 必须先改 StartupType）
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $svc = Get-Service postgresql* -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($null -ne $svc) { Start-Service $svc.Name }
+          if ($null -eq $svc) { throw "FAIL: windows runner 上找不到 PostgreSQL 服务" }
+          # runner 镜像里这个服务的启动类型是 Disabled，直接 Start-Service 会报
+          # "cannot be started due to the following error"，先改成 Manual 才起得来
+          Set-Service -Name $svc.Name -StartupType Manual
+          Start-Service $svc.Name
           $env:PGPASSWORD = 'root'
           & "$env:PGBIN\psql" -U postgres -c "ALTER USER postgres WITH PASSWORD 'postgres';"
+          $env:PGPASSWORD = 'postgres'
           & "$env:PGBIN\psql" -U postgres -c "CREATE DATABASE zenithjoy_e2e;"
+          & "$env:PGBIN\psql" -U postgres -d zenithjoy_e2e -c "CREATE SCHEMA IF NOT EXISTS zenithjoy; CREATE EXTENSION IF NOT EXISTS pgcrypto;"
+          # PGBIN 里的 psql 得进 PATH，e2e-verify.ps1 直接调 psql
+          "$env:PGBIN" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: 路③ 真浏览器全链（建表 → 8 类字段 → 可见性 → 删表 → 回收站还原）
         shell: pwsh
         run: pwsh -File "sprints/08201151-员工知识中枢-路-结构化工作台-c86e37ff/e2e-verify.ps1"
