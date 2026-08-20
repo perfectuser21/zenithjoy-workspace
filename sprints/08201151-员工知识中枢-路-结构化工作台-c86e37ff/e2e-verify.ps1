@@ -12,7 +12,9 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$ApiPort   = if ($env:PATH3_API_PORT)  { [int]$env:PATH3_API_PORT }  else { 3000 }
+# apps/api 起在 5200 而不是 3000：dashboard 的 vite proxy 把 /api/fields 硬编码指向 5200，
+# 起在别的端口它就代理到一个没人监听的地方，A4④ 回归会红在"连不上"而不是业务上。
+$ApiPort   = if ($env:PATH3_API_PORT)  { [int]$env:PATH3_API_PORT }  else { 5200 }
 $HubPort   = if ($env:PATH3_HUB_PORT)  { [int]$env:PATH3_HUB_PORT }  else { 5175 }
 $DashPort  = if ($env:PATH3_DASH_PORT) { [int]$env:PATH3_DASH_PORT } else { 5174 }
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -106,6 +108,12 @@ $env:E2E_FIELDS_MEMBER_ID  = $alice
 
 # 6. 起前端：staff-hub（路③ 页面）+ dashboard（A4④ 回归对照）
 $env:VITE_SKIP_AUTH = "true"
+# staff-hub 走 vite proxy 打后端 —— 必须**同源**，否则会话 cookie 根本发不出去，
+# 路③ 的闸只认 cookie，跨域直连一定是一片 401。
+$env:STAFF_HUB_API_TARGET = "http://localhost:$ApiPort"
+# dashboard 的 proxy 是硬编码的（本刀不碰 dashboard 配置），让它的 axios 直连 apps/api。
+# 它携带身份靠的是请求头而不是 cookie，跨源没有影响；apps/api 的 CORS 已放行 credentials。
+$env:VITE_API_BASE_URL = "http://localhost:$ApiPort/api"
 $hub  = Start-Process cmd.exe -ArgumentList "/c npx.cmd vite --port $HubPort --strictPort" -WorkingDirectory "$repoRoot\apps\staff-hub" -PassThru -NoNewWindow
 $dash = Start-Process cmd.exe -ArgumentList "/c npx.cmd vite --port $DashPort --strictPort" -WorkingDirectory "$repoRoot\apps\dashboard" -PassThru -NoNewWindow
 foreach ($port in @($HubPort, $DashPort)) {
@@ -126,13 +134,15 @@ $stopAll = {
 try {
   # 7. staff-hub 路③ 真浏览器全链（建表→8类字段→列表→删表→回收站还原）
   $env:E2E_BASE_URL = "http://localhost:$HubPort"
-  Invoke-Checked "npx.cmd" "playwright test e2e\structured-workbench.spec.ts --reporter=list" `
+  # 只传文件名：Playwright 的位置参数是**正则**，Windows 的 `e2e\xxx.spec.ts` 里的反斜杠
+  # 会被当成转义符，于是 "No tests found"（testDir 已经是 ./e2e，不需要再给目录）
+  Invoke-Checked "npx.cmd" "playwright test structured-workbench.spec.ts --reporter=list" `
     "$repoRoot\apps\staff-hub" "staff-hub 路③ E2E"
 
   # 8. A4④ dashboard 回归对照（挂鉴权后 dashboard 功能必须不变）
   $env:E2E_BASE_URL = "http://localhost:$DashPort"
   $env:BASE_URL = "http://localhost:$DashPort"
-  Invoke-Checked "npx.cmd" "playwright test e2e\fields-auth-regression.spec.ts --reporter=list" `
+  Invoke-Checked "npx.cmd" "playwright test fields-auth-regression.spec.ts --reporter=list" `
     "$repoRoot\apps\dashboard" "A4④ dashboard 回归（重演 PR#1675 的形状）"
 } finally {
   & $stopAll
