@@ -421,4 +421,67 @@ describe('content-judgment: 视频三档 + commander 复核', () => {
     expect(body).toContain('今天分享一个提高效率的小方法'); // 转写文案
     expect(body).toContain('中小企业主'); // 画像
   });
+
+  /**
+   * 回归：thinking 模型的 reasoning_tokens 会吃掉 max_tokens 预算
+   *
+   * 真机 0820（decision fa247355）：gemini-2.5-flash-official 是 thinking 模型，
+   * TOAPIS 的 max_tokens 是**含 reasoning_tokens 的 completion 总预算**。线上写死 200，
+   * 而实测 reasoning 就要 189~736 —— 留给正文的预算是负数，模型必然被砍在开头几个字。
+   * staging task bbddb3df 的 judgment_raw 落库原文就是光秃秃一个 `REJECTED\n`（9 字），
+   * 全库 184 条视频只有 11 条有转写（6%）。
+   * 同段 19.6s 音频、prompt 一字不改，只把 max_tokens 200→2000，就从 finish=length
+   * 的 9 字截断变成 finish=stop 的完整转写。
+   */
+  it('max_tokens 必须给到 2000 以上——thinking 模型的 reasoning 会吃掉预算', async () => {
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost.mockResolvedValue({
+      data: { choices: [{ finish_reason: 'stop', message: { content: 'MATCHED' } }] },
+    } as never);
+
+    const pool = makePool({ targetProfileDesc: '健身减脂目标客户' });
+    await judgeVideo(pool, 'tenant-mt', 'video-mt-001', 'audio', btoa('fake-pcm'));
+
+    const [, body] = mockedPost.mock.calls[0] as [string, Record<string, unknown>];
+    expect(body.max_tokens as number).toBeGreaterThanOrEqual(2000);
+  });
+
+  /**
+   * 守卫本体：finish_reason === 'length' 说明模型被预算砍断，输出不完整。
+   * 这种残缺文本**绝不能**当成正常判定写库——72 条 `matched|无原因|无转写` 的假绿
+   * 就是这么来的（extractVerdict 从 `MATCHED\n转` 里抓到 MATCHED 就当判定成功了）。
+   * 正确行为：标 pending + 原样落 raw 供诊断，宁可诚实说"没判成"，不可假装判成了。
+   */
+  it('截断守卫：finish_reason=length 时不得当成功判定，必须标 pending', async () => {
+    const mockedPost = vi.mocked(axios.post);
+    // 真机 judgment_raw 原文：模型正写到「转写：」就被砍
+    mockedPost.mockResolvedValue({
+      data: { choices: [{ finish_reason: 'length', message: { content: 'MATCHED\n转' } }] },
+    } as never);
+
+    const pool = makePool({ targetProfileDesc: '健身减脂目标客户' });
+    const result = await judgeVideo(pool, 'tenant-tr', 'video-tr-001', 'audio', btoa('fake-pcm'));
+
+    expect(result.judgment_status).toBe('pending');
+    expect(result.judgment_reason).toBe('truncated_output');
+    // 关键反向断言：绝不能因为文本里有 MATCHED 就判成 matched
+    expect(result.judgment_status).not.toBe('matched');
+  });
+
+  /**
+   * 不误杀：finish_reason 字段缺失（老网关/代理不回这个字段）时按正常路径判定，
+   * 不能因为读不到字段就把所有判定都拦成 pending。
+   */
+  it('截断守卫不误杀：finish_reason 缺失时走正常判定', async () => {
+    const mockedPost = vi.mocked(axios.post);
+    mockedPost.mockResolvedValue({
+      data: { choices: [{ message: { content: 'MATCHED\n转写：完整的转写内容' } }] },
+    } as never);
+
+    const pool = makePool({ targetProfileDesc: '健身减脂目标客户' });
+    const result = await judgeVideo(pool, 'tenant-nf', 'video-nf-001', 'audio', btoa('fake-pcm'));
+
+    expect(result.judgment_status).toBe('matched');
+  });
+
 });
