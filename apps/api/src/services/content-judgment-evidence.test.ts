@@ -109,8 +109,16 @@ describe('③ AI 原始返回必须落库 [BEHAVIOR]', () => {
 
     await judgeVideo(makePool({ calls }), 'tenant-x', 'video-raw', 'audio', btoa('audio'), undefined, undefined, '标题');
 
+    // 断言必须落的是【原始全文】：同时含「判定：」「转写：」「原因：」三段。
+    // 只断言转写内容是不够的——transcript 参数本身就含它，不落 raw 也能蒙混过关（假守卫）。
     const wroteRaw = updateCalls(calls).some((w) =>
-      w.params.some((p) => typeof p === 'string' && p.includes('这是一段装修报价的口播内容')),
+      w.params.some(
+        (p) =>
+          typeof p === 'string' &&
+          p.includes('判定：匹配') &&
+          p.includes('转写：') &&
+          p.includes('原因：目标受众吻合'),
+      ),
     );
     expect(
       wroteRaw,

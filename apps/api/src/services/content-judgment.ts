@@ -70,12 +70,27 @@ export async function judgeVideo(
     // 不分 task_id——同一热门视频被多个采集任务重复抓到时，新任务 Stage1 刚 INSERT 的
     // 那一行 judgment_status 仍是初始值 'pending'，不写这一步就永远没人碰它，卡死 pending
     // （真机复现 2026-07-16：API 明明返回 cache_hit=true/matched，DB 行却永远 pending）。
-    await writeJudgment(pool, tenantId, videoId, captureType, row.judgment_status, row.judgment_reason);
+    // ⚠️ capture_type 传 null（COALESCE 保留原值）：它记的是"**上次判定**用的采集方式"，
+    // 不是判定结论的一部分。用本次的值覆盖会把成功那次的记录改写成"采集失败"，
+    // DB 于是显示「采集失败却判通过」——2026-08-20 排查时正是被这条带进沟里。
+    await writeJudgment(pool, tenantId, videoId, null, row.judgment_status, row.judgment_reason);
     return {
       judgment_status: row.judgment_status as JudgeVideoResult['judgment_status'],
       judgment_reason: row.judgment_reason,
       cache_hit: true,
     };
+  }
+
+  // § 客户端采集失败：capture_type=skipped_capture_failed → 标 pending 并记原因，不调 Gemini。
+  //   Agent 端 MediaProjection 授权失效（**进程重启即失效，Android 强制设计**）/截图返回 null
+  //   时带这个 capture_type 上报，让 judgment_reason 在 DB 里一眼可辨"采集失败"而非空转 pending。
+  //
+  //   ⚠️ 这段必须排在 INV-6（空画像→matched）**之前**：拿不到任何内容就没资格判"通过"。
+  //   顺序反了就是 fail-open——空画像的租户会把采集失败的视频一律放行。
+  //   真机 0817-0819：38 个视频里 16 个是这个状态，判定链实际 100% 空转。
+  if (captureType === 'skipped_capture_failed') {
+    await markPending(pool, tenantId, videoId, captureType, 'skipped_capture_failed');
+    return { judgment_status: 'pending', judgment_reason: 'skipped_capture_failed' };
   }
 
   // § INV-6：target_profile_desc 为空 → 跳过 Gemini，直接返回 matched
@@ -90,15 +105,6 @@ export async function judgeVideo(
     // 下游任何读库判断——派单/看板——永远读不到这次"匹配"）。
     await writeJudgment(pool, tenantId, videoId, captureType, 'matched', 'empty_profile');
     return { judgment_status: 'matched' };
-  }
-
-  // § 客户端截图失败：capture_type=skipped_capture_failed → 直接标 pending 并记原因，不调 Gemini。
-  //   Agent 端 Android 14 MediaProjection 授权失效/截图返回 null 时会带这个 capture_type 上报，
-  //   目的是让 judgment_reason 落到 acquisition_collect_videos —— 环境守卫：DB 里一眼可辨"截图失败"
-  //   而非空转 pending（此前 Agent 截图失败时本地短路、从不 POST，judgment_reason 永远为空）。
-  if (captureType === 'skipped_capture_failed') {
-    await markPending(pool, tenantId, videoId, captureType, 'skipped_capture_failed');
-    return { judgment_status: 'pending', judgment_reason: 'skipped_capture_failed' };
   }
 
   // § 测试 hook（仅非生产）
@@ -215,6 +221,27 @@ ${targetProfileDesc}
 如果是 REJECTED 或 UNCERTAIN，第二行：原因：...${transcriptInstruction}`;
 }
 
+/**
+ * 从主判输出里找判定关键词——**在全文里找，不要求它在第一行**。
+ *
+ * 病根：prompt 自相矛盾。一边说「请先转写这段音频的内容，再结合标题和转写内容共同判断」，
+ * 一边又说「第一行：MATCHED 或 REJECTED 或 UNCERTAIN」。模型照前一条做就把转写放第一行，
+ * 而旧解析用的是 `upper.startsWith('MATCHED')` → 必然失败 → parse_fallback →
+ * commander「输出无法解析一律保守判 rejected」。
+ * 真机 0817-0819：38 个视频里 20 个 rejected 就是这么来的，**不是视频真的不匹配**。
+ *
+ * 转写行/原因行整行跳过——否则转写正文里出现一个 "REJECTED" 就能翻转判定。
+ */
+function extractVerdict(text: string): 'MATCHED' | 'REJECTED' | 'UNCERTAIN' | null {
+  for (const line of text.trim().split('\n')) {
+    const trimmed = line.trim();
+    if (/^(转写|原因)\s*[：:]/.test(trimmed)) continue;
+    const m = trimmed.toUpperCase().match(/\b(MATCHED|REJECTED|UNCERTAIN)\b/);
+    if (m) return m[1] as 'MATCHED' | 'REJECTED' | 'UNCERTAIN';
+  }
+  return null;
+}
+
 function extractTranscript(text: string): string | null {
   const lines = text.trim().split('\n');
   const transcriptLine = lines.find(l => l.includes('转写：') || l.includes('转写:'));
@@ -237,30 +264,30 @@ function parseGeminiResponse(
   targetProfileDesc: string,
   title?: string,
 ): Promise<JudgeVideoResult> {
-  const upper = text.trim().toUpperCase();
   const transcript = extractTranscript(text);
-  if (upper.startsWith('MATCHED')) {
-    return writeJudgment(pool, tenantId, videoId, captureType, 'matched', null, transcript).then(() => ({
+  const verdict = extractVerdict(text);
+  if (verdict === 'MATCHED') {
+    return writeJudgment(pool, tenantId, videoId, captureType, 'matched', null, transcript, text).then(() => ({
       judgment_status: 'matched' as const,
     }));
   }
-  if (upper.startsWith('REJECTED')) {
+  if (verdict === 'REJECTED') {
     const reason = extractReason(text);
-    return writeJudgment(pool, tenantId, videoId, captureType, 'rejected', reason, transcript).then(() => ({
+    return writeJudgment(pool, tenantId, videoId, captureType, 'rejected', reason, transcript, text).then(() => ({
       judgment_status: 'rejected' as const,
       judgment_reason: reason,
     }));
   }
-  if (upper.startsWith('UNCERTAIN')) {
+  if (verdict === 'UNCERTAIN') {
     // 存疑 → 交 commander(第二个 AI)拿主判理由二次判，不再"保守 matched"直接放行
     const primaryReason = extractReason(text) ?? 'uncertain';
     return commanderReview(
-      pool, tenantId, videoId, captureType, transcript, targetProfileDesc, primaryReason, title,
+      pool, tenantId, videoId, captureType, transcript, targetProfileDesc, primaryReason, title, text,
     );
   }
   // 无法解析主判输出 → 当存疑处理，交 commander（不再直接放行）
   return commanderReview(
-    pool, tenantId, videoId, captureType, transcript, targetProfileDesc, 'parse_fallback', title,
+    pool, tenantId, videoId, captureType, transcript, targetProfileDesc, 'parse_fallback', title, text,
   );
 }
 
@@ -278,13 +305,16 @@ async function commanderReview(
   targetProfileDesc: string,
   primaryReason: string,
   title?: string,
+  /** 主判 AI 的原始返回。解析失败(parse_fallback)时**最需要**它——
+   *  不留就永远不知道模型到底吐了什么格式，也就永远修不对解析。 */
+  primaryRaw?: string | null,
 ): Promise<JudgeVideoResult> {
   const finalize = async (
     status: 'matched' | 'rejected',
     tag: string,
   ): Promise<JudgeVideoResult> => {
     const reason = `via_commander|primary存疑:${primaryReason}|commander:${tag}`;
-    await writeJudgment(pool, tenantId, videoId, captureType, status, reason, transcript);
+    await writeJudgment(pool, tenantId, videoId, captureType, status, reason, transcript, primaryRaw);
     return { judgment_status: status, judgment_reason: reason };
   };
 
@@ -368,20 +398,30 @@ async function markPending(
   );
 }
 
+/** judgment_raw 落库上限：够诊断解析格式，又不会把库撑爆。 */
+export const JUDGMENT_RAW_MAX_LEN = 4000;
+
 async function writeJudgment(
   pool: QueryablePool,
   tenantId: string,
   videoId: string,
-  captureType: string,
+  /** null = 保留库里原值（cache 命中路径用），不覆盖"上次采集怎么样"这个事实 */
+  captureType: string | null,
   status: string,
   reason: string | null,
   transcript?: string | null,
+  /** 判定 AI 的原始返回；不留它就永远修不对解析（judgment_reason 只有碎片） */
+  raw?: string | null,
 ): Promise<void> {
   await pool.query(
     `UPDATE zenithjoy.acquisition_collect_videos
-        SET judgment_status = $3, judgment_reason = $4, capture_type = $5,
-            transcript = COALESCE($6, transcript), updated_at = now()
+        SET judgment_status = $3, judgment_reason = $4,
+            capture_type  = COALESCE($5, capture_type),
+            transcript    = COALESCE($6, transcript),
+            judgment_raw  = COALESCE($7, judgment_raw),
+            updated_at = now()
       WHERE tenant_id = $1 AND video_id = $2`,
-    [tenantId, videoId, status, reason, captureType, transcript ?? null]
+    [tenantId, videoId, status, reason, captureType, transcript ?? null,
+     raw ? raw.slice(0, JUDGMENT_RAW_MAX_LEN) : null]
   );
 }

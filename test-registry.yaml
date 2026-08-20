@@ -1978,6 +1978,14 @@ tests:
     product: 私域运营
     note: "x-agent-id 反查消歧：无序 LIMIT 1 遇到交叉污染行会解析到别的租户，把另一个租户的任务发给设备（跨租户泄漏）。同租户确定性择一、跨租户一律 deny"
 
+  - id: content-judgment-evidence-guards
+    path: apps/api/src/services/content-judgment-evidence.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "内容判定链假绿四件套：采集失败不许判 matched / cache 命中不许覆盖 capture_type / AI 原始返回必须落库 / 判定解析不许依赖行序。真机 0817-0819 38 个视频只有 2 个有转写，判定链 100% 空转而挂片标着 working"
+
   - id: seg3-acquisition-dispatch-douyin-id
     path: apps/api/src/services/acquisition-dispatch-douyin-id.test.ts
     type: unit
