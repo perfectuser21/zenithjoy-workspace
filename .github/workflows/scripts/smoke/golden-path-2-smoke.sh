@@ -1035,7 +1035,13 @@ for S23C_TRY in 1 2 3; do
     -H "Content-Type: application/json" -H "x-agent-id: ${AGENT_PK}" \
     -d "$S23C_BODY")
   [ "$S23C_HTTP" = "200" ] || fail "Step 23c collect/report expected 200, got ${S23C_HTTP}: $(cat "$S23C_TMP")" 23
-  S23C_GRADED=$(psq "SELECT count(*) FROM zenithjoy.acquisition_leads WHERE tenant_id='${TENANT_ID}' AND nickname LIKE '${S23C_PREFIX}%' AND grade IS NOT NULL")
+  # ⚠️ 断言目标必须是 acquisition_lead_comments.grade，**不能用 acquisition_leads.grade**：
+  # lead.grade 取的是该 lead 全部评论里 {高意向,精准,感兴趣} 的最好档（见
+  # acquisition-dispatch.ts rescoreLead），「其他」不在这个列表里 → 灌水评论判成
+  # 「其他」是**正确行为**，但 lead.grade 会是 NULL。第一版就是错在这——CI 报
+  # 「10 条只有 7 条拿到档位」，其实是 3 条灌水被正确判成「其他」而已，不是 bug。
+  # comment.grade 才是 gradeComments() 的直接产物，「其他」在这层是有值的。
+  S23C_GRADED=$(psq "SELECT count(*) FROM zenithjoy.acquisition_lead_comments c JOIN zenithjoy.acquisition_leads l ON l.id = c.lead_id WHERE l.tenant_id='${TENANT_ID}' AND l.nickname LIKE '${S23C_PREFIX}%' AND c.grade IS NOT NULL")
   [ "${S23C_GRADED:-0}" -ge 20 ] && break
   echo "  ↻ Step 23c 第 ${S23C_TRY} 次真调只出 ${S23C_GRADED}/25 档位，5s 后重试"
   sleep 5
