@@ -12,7 +12,7 @@
  * 反枚举：跨组织的 id、他人的 private 表、压根不存在的 id —— 三种情形在本层一律返回
  * null，由路由统一翻译成同一个 404 体。绝不用 403 把「存在但没权限」区分出来。
  */
-import type { PoolClient } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import pool from '../db/connection';
 import { findTemplate, type TemplateField } from '../knowledge/workbench-templates';
 
@@ -252,8 +252,12 @@ export async function getTable(
  * 字段行读取。org_id 条件不能省 —— 调用方已经验过表的归属，但每条 SQL 自带租户条件是
  * 纵深防御：将来多一个调用方忘了先查表，这里仍然漏不出去（INV-1 的静态守卫就钉这一条）。
  */
-async function listFieldRows(tableId: string, orgId: string): Promise<FieldOut[]> {
-  const r = await pool.query(
+export async function listFieldRows(
+  tableId: string,
+  orgId: string,
+  db: Pool | PoolClient = pool
+): Promise<FieldOut[]> {
+  const r = await db.query(
     `SELECT id, name, field_type, options, display_order
        FROM zenithjoy.db_fields WHERE table_id = $1 AND org_id = $2
       ORDER BY display_order ASC, created_at ASC`,

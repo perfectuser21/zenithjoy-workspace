@@ -14,6 +14,7 @@
 #   bash structured-workbench-smoke.sh --static-only   段1 静态守卫（无需 DB/服务）
 #   bash structured-workbench-smoke.sh --a2-only|--a35-only|--a33-only
 #   bash structured-workbench-smoke.sh --a1-a3-only|--a4-only|--a7-only|--a8-only|--a9-only|--a10-only|--a11-only
+#   bash structured-workbench-smoke.sh --a12-only|--a13-only|--a15-only|--a16-only|--a17-only|--a18-a19-only|--a1-a3-rows-only
 #   bash structured-workbench-smoke.sh --inv-<name>
 #   bash structured-workbench-smoke.sh --fixture-up | --fixture-down
 #   bash structured-workbench-smoke.sh --mutation-list|--mutation-apply <N>|--mutation-revert <N>
@@ -33,6 +34,7 @@ SPRINT_DIR="sprints/08201151-员工知识中枢-路-结构化工作台-c86e37ff"
 GUARD_FILE="apps/api/src/middleware/workbench-auth.ts"
 ROUTE_FILE="apps/api/src/routes/workbench.ts"
 SERVICE_FILE="apps/api/src/services/workbench.service.ts"
+ROWS_SERVICE_FILE="apps/api/src/services/workbench-rows.service.ts"
 SELFCHECK_FILE="apps/api/src/startup/single-org-selfcheck.ts"
 EXCLUSIONS_FILE="apps/api/src/knowledge/retrieval-exclusions.ts"
 E2E_WORKFLOW=".github/workflows/e2e-knowledge-hub-path3.yml"
@@ -224,12 +226,13 @@ run_static() {
 # 只改 dist 又会被质疑没碰真代码。两处一起改，revert 时一起还原。
 DIST_GUARD="apps/api/dist/middleware/workbench-auth.js"
 DIST_SERVICE="apps/api/dist/services/workbench.service.js"
+DIST_ROWS_SERVICE="apps/api/dist/services/workbench-rows.service.js"
 DIST_SELFCHECK="apps/api/dist/startup/single-org-selfcheck.js"
 
 INJECT_SECRET_FILE="apps/api/src/knowledge/.wb-mutation-secret.ts"
 
 mutation_list() {
-  # 每行：<变异名><空白><注入次数>。合计 9 开关 / 19 次注入。
+  # 每行：<变异名><空白><注入次数>。合计 13 开关 / 24 次注入（Sprint B 新增末尾四条）。
   cat <<'EOF'
 A2-inject-all	7
 A35-drop-name	5
@@ -240,6 +243,10 @@ A8-deny-all	1
 A9-hard-delete	1
 A11-take-first	1
 A5-schema-only	1
+A13-version-nocheck	1
+A16-row-hard-delete	1
+A1R-row-org-bypass	2
+A15-limit-off	1
 EOF
 }
 
@@ -327,6 +334,44 @@ mutation_apply() {
       perl -0pi -e 's/^DUMP_MODE_ARGS=\(\)$/DUMP_MODE_ARGS=(--schema-only)/m' "$DRILL"
       echo "$DRILL" > "$MUTATION_TARGET_FILE"
       ;;
+    A13-version-nocheck)
+      save_file "$ROWS_SERVICE_FILE"; save_file "$DIST_ROWS_SERVICE"
+      # 把带条件 UPDATE 的 version 检查改成恒真（等价于"注掉 version 检查"）：
+      # `AND r.version = $5` → `AND r.version = r.version AND 0 <> $5`，SQL 依然合法，
+      # 参数一个不少，只是不再拿基线比对 —— 后到的那个 PATCH 会 200 并把先提交者的值盖掉。
+      # perl 表达式一律用**单引号**：双引号里的 $5 会先被 bash 展开成空串，模式就永远匹配不上，
+      # 变异静默失效、守卫看着"证明"过了（Sprint A 的 A8/A9 已经踩过这一脚）。
+      perl -0pi -e 's/AND r\.version = /AND r.version = r.version AND 0 <> /g' "$ROWS_SERVICE_FILE"
+      [ -f "$DIST_ROWS_SERVICE" ] && perl -0pi -e 's/AND r\.version = /AND r.version = r.version AND 0 <> /g' "$DIST_ROWS_SERVICE"
+      echo "$ROWS_SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
+    A16-row-hard-delete)
+      save_file "$ROWS_SERVICE_FILE"; save_file "$DIST_ROWS_SERVICE"
+      # 软删改成物理删：API 层看起来一模一样，只有查库（物理行计数）与"还原拿不拿得回来"分得出。
+      # 整段 UPDATE...SET 换成 DELETE + 行注释，后面的 WHERE / RETURNING 原样留着，SQL 仍合法。
+      perl -0pi -e 's/\QUPDATE zenithjoy.db_rows r SET deleted_at = NOW(), updated_at = NOW()\E/DELETE FROM zenithjoy.db_rows r --/g' "$ROWS_SERVICE_FILE"
+      [ -f "$DIST_ROWS_SERVICE" ] && perl -0pi -e 's/\QUPDATE zenithjoy.db_rows r SET deleted_at = NOW(), updated_at = NOW()\E/DELETE FROM zenithjoy.db_rows r --/g' "$DIST_ROWS_SERVICE"
+      echo "$ROWS_SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
+    A1R-row-org-bypass)
+      save_file "$ROWS_SERVICE_FILE"; save_file "$DIST_ROWS_SERVICE"
+      # 行读写 SQL 的组织条件改成恒真（行侧 + 表侧各一处），B 企业会话就能读到 A 企业的行。
+      # 不是直接删掉 `= $2`：删了参数个数对不上，PG 会报 bind 错，段红在"连不上"而不是隔离上。
+      perl -0pi -e 's/AND r\.org_id = \$2/AND (r.org_id = \$2 OR \$2 IS NOT NULL)/g' "$ROWS_SERVICE_FILE"
+      perl -0pi -e 's/AND t\.org_id = \$2/AND (t.org_id = \$2 OR \$2 IS NOT NULL)/g' "$ROWS_SERVICE_FILE"
+      if [ -f "$DIST_ROWS_SERVICE" ]; then
+        perl -0pi -e 's/AND r\.org_id = \$2/AND (r.org_id = \$2 OR \$2 IS NOT NULL)/g' "$DIST_ROWS_SERVICE"
+        perl -0pi -e 's/AND t\.org_id = \$2/AND (t.org_id = \$2 OR \$2 IS NOT NULL)/g' "$DIST_ROWS_SERVICE"
+      fi
+      echo "$ROWS_SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
+    A15-limit-off)
+      save_file "$ROWS_SERVICE_FILE"; save_file "$DIST_ROWS_SERVICE"
+      # 上限判定改成恒放行：超限批次会整批落库，"整批拒绝"那条断言必须当场红
+      perl -0pi -e 's/return total \+ incoming > limit;/return false;/g' "$ROWS_SERVICE_FILE"
+      [ -f "$DIST_ROWS_SERVICE" ] && perl -0pi -e 's/return total \+ incoming > limit;/return false;/g' "$DIST_ROWS_SERVICE"
+      echo "$ROWS_SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
     *)
       echo "未登记的变异名：$name"; exit 1;;
   esac
@@ -346,6 +391,10 @@ mutation_revert() {
     A11-take-first)     restore_file "$SELFCHECK_FILE"; restore_file "$DIST_SELFCHECK";
                         restore_file "$GUARD_FILE"; restore_file "$DIST_GUARD";;
     A5-schema-only)     restore_file "$DRILL";;
+    A13-version-nocheck)  restore_file "$ROWS_SERVICE_FILE"; restore_file "$DIST_ROWS_SERVICE";;
+    A16-row-hard-delete)  restore_file "$ROWS_SERVICE_FILE"; restore_file "$DIST_ROWS_SERVICE";;
+    A1R-row-org-bypass)   restore_file "$ROWS_SERVICE_FILE"; restore_file "$DIST_ROWS_SERVICE";;
+    A15-limit-off)        restore_file "$ROWS_SERVICE_FILE"; restore_file "$DIST_ROWS_SERVICE";;
     *) echo "未登记的变异名：$name"; exit 1;;
   esac
   rm -f "$MUTATION_TARGET_FILE"
@@ -951,6 +1000,304 @@ run_inv_table_claim() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
+# 段2（Sprint B / S2）行层业务判定
+#
+# 七个段各自 section_up：变异证明会单独调它们，不能依赖外面先 fixture-up；
+# 外面已经 --fixture-up 过时 section_up 会复用那个环境（REUSED_FIXTURE=1，段末不停它）。
+# ═══════════════════════════════════════════════════════════════════════════
+
+# $1=fields 响应体 $2=field_type —— 取稳定 field_id（PATCH 的 data key 一律是它）
+field_id_of() { printf '%s' "$1" | jq -r --arg t "$2" '.data.fields[] | select(.field_type == $t) | .field_id'; }
+
+# $1=cookie $2=table_id
+create_row_as() { curl -sf -b "$1" -X POST "$API/tables/$2/rows" | jq -r '.data.row_id'; }
+
+run_a12() {
+  echo "== A12 行内改格：八类字段各一次逐字落库，version 1→9，类型不符 400 且零改动 =="
+  section_up
+  local tid fld rid ver=1 t fid val resp
+  tid=$(create_table_as "$COOKIE_A" "WB-S2-A12-$SFX" 'org' | jq -r '.data.table_id')
+  [ -n "$tid" ] && [ "$tid" != "null" ] || fail "A12 建表失败"
+  fld=$(curl -sf -b "$COOKIE_A" "$API/tables/$tid/fields") || fail "A12 取字段失败"
+  rid=$(create_row_as "$COOKIE_A" "$tid")
+  [ -n "$rid" ] && [ "$rid" != "null" ] || fail "A12 建行失败"
+
+  for t in text long_text number date single_select multi_select person url; do
+    fid=$(field_id_of "$fld" "$t")
+    [ -n "$fid" ] && [ "$fid" != "null" ] || fail "A12 $t 字段缺 field_id"
+    case "$t" in
+      number)        val='12.5';;
+      date)          val='"2026-08-20"';;
+      single_select) val='"甲"';;
+      multi_select)  val='["甲","乙"]';;
+      person)        val="\"$ALICE_OPENID\"";;
+      url)           val="\"https://example.com/$t\"";;
+      *)             val="\"$t-值-$SFX\"";;
+    esac
+    resp=$(curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X PATCH "$API/rows/$rid" \
+      -d "{\"version\":$ver,\"data\":{\"$fid\":$val}}") || fail "A12 $t PATCH 非 2xx"
+    ver=$((ver + 1))
+    printf '%s' "$resp" | jq -e ".data.version == $ver" >/dev/null || fail "A12 $t 之后 version 不是 $ver"
+    # jsonb 全等回读：多选数组也能逐字比，字符串比对分辨不出 ["甲","乙"] 与 "甲、乙"
+    psql_q "SELECT count(*) FROM zenithjoy.db_rows r WHERE r.id = '$rid' AND r.data -> '$fid' = '$val'::jsonb" \
+      | grep -qx 1 || fail "A12 $t 落库值与所打内容不逐字相等（期望 ${val}）"
+  done
+  [ "$ver" = "9" ] || fail "A12 八次 PATCH 后 version=${ver}（应为 9）"
+  psql_q "SELECT r.version FROM zenithjoy.db_rows r WHERE r.id = '$rid'" | grep -qx 9 \
+    || fail "A12 库中 version 不是 9"
+  ok "八类字段逐字落库，version 1→9"
+
+  local fnum before after code
+  fnum=$(field_id_of "$fld" number)
+  before=$(psql_q "SELECT r.data::text FROM zenithjoy.db_rows r WHERE r.id = '$rid'")
+  code=$(curl -s -o /tmp/wb-a12-bad.json -w '%{http_code}' -b "$COOKIE_A" -H 'Content-Type: application/json' \
+    -X PATCH "$API/rows/$rid" -d "{\"version\":9,\"data\":{\"$fnum\":\"12\"}}")
+  [ "$code" = "400" ] || fail "A12 类型不符返 ${code}（应 400）"
+  jq -e '.error.code == "VALIDATION_FAILED"' < /tmp/wb-a12-bad.json >/dev/null \
+    || fail "A12 错误码不是 VALIDATION_FAILED"
+  after=$(psql_q "SELECT r.data::text FROM zenithjoy.db_rows r WHERE r.id = '$rid'")
+  [ "$before" = "$after" ] || fail "A12 校验失败却改了库（$before -> ${after}）"
+  ok "类型不符 400 VALIDATION_FAILED 且该格逐字未变"
+  section_down
+  echo "✅ A12 通过"
+}
+
+run_a13() {
+  echo "== A13 并发同格：恰一个 200 一个 409，库中值 = 先提交者 =="
+  section_up
+  local tid ft rid vn c1 c2 okc cfc loser winv got p1 p2
+  tid=$(create_table_as "$COOKIE_A" "WB-S2-A13-$SFX" 'org' | jq -r '.data.table_id')
+  ft=$(field_id_of "$(curl -sf -b "$COOKIE_A" "$API/tables/$tid/fields")" text)
+  rid=$(create_row_as "$COOKIE_A" "$tid")
+  [ -n "$rid" ] && [ "$rid" != "null" ] || fail "A13 建行失败"
+  vn=$(curl -sf -b "$COOKIE_A" "$API/tables/$tid/rows" | jq -r ".data.rows[] | select(.row_id == \"$rid\") | .version")
+  [ -n "$vn" ] || fail "A13 取不到基线 version"
+
+  # 真并发：两个真会话、同一基线、后台并行发出，不串行（串行测的是分支不是竞态）。
+  # 裸 `wait` 会连 fixture 起的 apps/api 那个后台子进程一起等 —— 它不会自己退出，段直接挂死。
+  # 只等这两个 curl 的 PID。
+  curl -s -o /tmp/wb-a13-1.json -w '%{http_code}' -b "$COOKIE_A" -H 'Content-Type: application/json' \
+    -X PATCH "$API/rows/$rid" -d "{\"version\":$vn,\"data\":{\"$ft\":\"甲写的\"}}" > /tmp/wb-a13-1.code &
+  p1=$!
+  curl -s -o /tmp/wb-a13-2.json -w '%{http_code}' -b "$COOKIE_A2" -H 'Content-Type: application/json' \
+    -X PATCH "$API/rows/$rid" -d "{\"version\":$vn,\"data\":{\"$ft\":\"乙写的\"}}" > /tmp/wb-a13-2.code &
+  p2=$!
+  wait "$p1"; wait "$p2"
+  c1=$(cat /tmp/wb-a13-1.code); c2=$(cat /tmp/wb-a13-2.code)
+  okc=$(printf '%s\n%s\n' "$c1" "$c2" | grep -c '^200$')
+  cfc=$(printf '%s\n%s\n' "$c1" "$c2" | grep -c '^409$')
+  [ "$okc" = "1" ] && [ "$cfc" = "1" ] \
+    || fail "A13 并发结果不是恰一 200 一 409（$c1 / ${c2}）—— 静默覆盖或双双失败"
+  if [ "$c1" = "200" ]; then loser=/tmp/wb-a13-2.json; winv="甲写的"; else loser=/tmp/wb-a13-1.json; winv="乙写的"; fi
+  jq -e '.error.code == "ROW_VERSION_CONFLICT"' < "$loser" >/dev/null \
+    || fail "A13 409 体的 error.code 不是 ROW_VERSION_CONFLICT"
+  got=$(psql_q "SELECT r.data ->> '$ft' FROM zenithjoy.db_rows r WHERE r.id = '$rid'")
+  [ "$got" = "$winv" ] || fail "A13 库中值=${got}，不等于先提交者的值 ${winv}（静默覆盖）"
+  psql_q "SELECT r.version FROM zenithjoy.db_rows r WHERE r.id = '$rid'" | grep -qx "$((vn + 1))" \
+    || fail "A13 version 未恰好 +1"
+  ok "恰一 200 一 409、409 码正确、库值 = 先提交者、version 恰 +1"
+  section_down
+  echo "✅ A13 通过"
+}
+
+run_a15() {
+  echo "== A15 行数上限：整批原子拒绝，库中零新增行零新建字段 =="
+  # 上限必须是小值才验得动（真插 5000 行会把 CI 预算烧光，已在合同「未覆盖真实链路清单」登记）。
+  # 外面没给就自己给一个，且必须在 section_up **之前** export —— 服务端每请求读 env，
+  # 但进程是 section_up 里起的，起完再改就进不到那个进程了。
+  export WORKBENCH_ROW_LIMIT="${WORKBENCH_ROW_LIMIT:-3}"
+  section_up
+  local tid lim batch r0 f0 r1 f1 code msg
+  tid=$(create_table_as "$COOKIE_A" "WB-S2-A15-$SFX" 'org' | jq -r '.data.table_id')
+  [ -n "$tid" ] && [ "$tid" != "null" ] || fail "A15 建表失败"
+  lim=$(curl -sf -b "$COOKIE_A" "$API/tables/$tid/rows" | jq -r '.data.row_limit')
+  [ -n "$lim" ] && [ "$lim" != "null" ] || fail "A15 行列表未下发 row_limit"
+  [ "$lim" -le 50 ] 2>/dev/null \
+    || fail "A15 row_limit=$lim 太大：本段要求以小值起服务（export WORKBENCH_ROW_LIMIT=3 后再跑），否则只能靠真插几千行"
+  [ "$lim" -ge 2 ] 2>/dev/null || fail "A15 row_limit=$lim 太小，凑不出「先合法再超限」两批"
+
+  batch=$(jq -nc --argjson n "$((lim - 1))" '{header:["字段-text"], rows: [range(0; $n) | ["x\(.)"]]}')
+  curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X POST "$API/tables/$tid/rows/paste" \
+    -d "$batch" >/dev/null || fail "A15 首批 $((lim - 1)) 行粘贴应成功"
+  r0=$(psql_q "SELECT count(*) FROM zenithjoy.db_rows r WHERE r.table_id = '$tid'")
+  f0=$(psql_q "SELECT count(*) FROM zenithjoy.db_fields f WHERE f.table_id = '$tid'")
+
+  code=$(curl -s -o /tmp/wb-a15.json -w '%{http_code}' -b "$COOKIE_A" -H 'Content-Type: application/json' \
+    -X POST "$API/tables/$tid/rows/paste" \
+    -d '{"header":["字段-text","超限新列"],"rows":[["y1","z1"],["y2","z2"]]}')
+  [ "$code" = "400" ] || fail "A15 超限批次返 ${code}（应 400）"
+  jq -e '.error.code == "ROW_LIMIT_EXCEEDED"' < /tmp/wb-a15.json >/dev/null \
+    || fail "A15 错误码不是 ROW_LIMIT_EXCEEDED"
+  msg=$(jq -r '.error.message' < /tmp/wb-a15.json)
+  printf '%s' "$msg" | grep -q "$lim" || fail "A15 提示未含当前上限：$msg"
+  printf '%s' "$msg" | grep -q "已有" || fail "A15 提示未含已有行数：$msg"
+  r1=$(psql_q "SELECT count(*) FROM zenithjoy.db_rows r WHERE r.table_id = '$tid'")
+  f1=$(psql_q "SELECT count(*) FROM zenithjoy.db_fields f WHERE f.table_id = '$tid'")
+  [ "$r0" = "$r1" ] || fail "A15 超限批次落了行（$r0 -> ${r1}）—— 不是整批拒绝"
+  [ "$f0" = "$f1" ] || fail "A15 超限批次建了字段（$f0 -> ${f1}）—— 表上留下孤儿列"
+
+  # 达上限后连单条建行也必须被拒（UI 硬拦之外的服务端兜底）
+  curl -sf -b "$COOKIE_A" -X POST "$API/tables/$tid/rows" >/dev/null || fail "A15 补到上限那一行应能建"
+  code=$(curl -s -o /tmp/wb-a15b.json -w '%{http_code}' -b "$COOKIE_A" -X POST "$API/tables/$tid/rows")
+  [ "$code" = "400" ] || fail "A15 达上限后单条建行返 ${code}（应 400）"
+  jq -e '.error.code == "ROW_LIMIT_EXCEEDED"' < /tmp/wb-a15b.json >/dev/null \
+    || fail "A15 单条建行错误码不是 ROW_LIMIT_EXCEEDED"
+  ok "上限 ${lim}：超限批次 400 且行数/字段数前后完全相等；达上限单条建行同样被拒"
+  section_down
+  echo "✅ A15 通过"
+}
+
+run_a16() {
+  echo "== A16 删行软删：物理行仍在 + 回收站 30 天 + 还原逐字回归 =="
+  section_up
+  local tid ft rid before after c0 c1 days
+  tid=$(create_table_as "$COOKIE_A" "WB-S2-A16-$SFX" 'org' | jq -r '.data.table_id')
+  ft=$(field_id_of "$(curl -sf -b "$COOKIE_A" "$API/tables/$tid/fields")" text)
+  rid=$(create_row_as "$COOKIE_A" "$tid")
+  [ -n "$rid" ] && [ "$rid" != "null" ] || fail "A16 建行失败"
+  curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X PATCH "$API/rows/$rid" \
+    -d "{\"version\":1,\"data\":{\"$ft\":\"删前的值\"}}" >/dev/null || fail "A16 预置写入失败"
+  before=$(psql_q "SELECT r.data::text FROM zenithjoy.db_rows r WHERE r.id = '$rid'")
+  c0=$(psql_q "SELECT count(*) FROM zenithjoy.db_rows r WHERE r.table_id = '$tid'")
+
+  curl -sf -b "$COOKIE_A" -X DELETE "$API/rows/$rid" | jq -e '.data.deleted_at != null' >/dev/null \
+    || fail "A16 删行非 2xx 或未返 deleted_at"
+  c1=$(psql_q "SELECT count(*) FROM zenithjoy.db_rows r WHERE r.table_id = '$tid'")
+  [ "$c0" = "$c1" ] || fail "A16 物理行被删了（$c0 -> ${c1}）不是软删"
+  curl -sf -b "$COOKIE_A" "$API/tables/$tid/rows" | jq -e '(.data.rows | length) == 0' >/dev/null \
+    || fail "A16 软删行仍出现在表格视图"
+  # jq 的 fromdate 不吃毫秒（ISO 里的 .123Z），先削掉再算，否则红在解析上而不是业务上
+  days=$(curl -sf -b "$COOKIE_A" "$API/tables/$tid/rows/trash" \
+    | jq -r "[.data.rows[] | select(.row_id == \"$rid\")][0]
+             | ((.restorable_until | sub(\"\\\\.[0-9]+Z$\"; \"Z\") | fromdate)
+                - (.deleted_at | sub(\"\\\\.[0-9]+Z$\"; \"Z\") | fromdate)) / 86400 | round")
+  [ "$days" = "30" ] || fail "A16 行回收站窗口不是 30 天（got=${days}）"
+
+  curl -sf -b "$COOKIE_A" -X POST "$API/rows/$rid/restore" >/dev/null || fail "A16 还原非 2xx"
+  after=$(psql_q "SELECT r.data::text FROM zenithjoy.db_rows r WHERE r.id = '$rid'")
+  [ "$before" = "$after" ] || fail "A16 还原后数据不逐字相等（$before -> ${after}）"
+  psql_q "SELECT count(*) FROM zenithjoy.db_rows r WHERE r.id = '$rid' AND r.deleted_at IS NULL" | grep -qx 1 \
+    || fail "A16 还原后 deleted_at 未清空"
+  ok "deleted_at 非空而物理行不减；回收站 30 天；还原后 data 逐字相等"
+  section_down
+  echo "✅ A16 通过"
+}
+
+run_a17() {
+  echo "== A17 单表导出：行数/字段数与库相等，导出体零他组织数据 =="
+  section_up
+  local secret bt bf br tid dbn dbf exp i
+  secret="乙企业机密-$SFX"
+  bt=$(create_table_as "$COOKIE_B" "WB-S2-A17B-$SFX" 'org' | jq -r '.data.table_id')
+  bf=$(field_id_of "$(curl -sf -b "$COOKIE_B" "$API/tables/$bt/fields")" text)
+  br=$(create_row_as "$COOKIE_B" "$bt")
+  curl -sf -b "$COOKIE_B" -H 'Content-Type: application/json' -X PATCH "$API/rows/$br" \
+    -d "{\"version\":1,\"data\":{\"$bf\":\"$secret\"}}" >/dev/null || fail "A17 B 企业预置失败"
+
+  tid=$(create_table_as "$COOKIE_A" "WB-S2-A17-$SFX" 'org' | jq -r '.data.table_id')
+  for i in 1 2; do create_row_as "$COOKIE_A" "$tid" >/dev/null || fail "A17 建行失败"; done
+  exp=$(curl -sf -b "$COOKIE_A" "$API/tables/$tid/export") || fail "A17 导出端点非 2xx"
+  dbn=$(psql_q "SELECT count(*) FROM zenithjoy.db_rows r WHERE r.table_id = '$tid' AND r.deleted_at IS NULL")
+  dbf=$(psql_q "SELECT count(*) FROM zenithjoy.db_fields f WHERE f.table_id = '$tid'")
+  printf '%s' "$exp" | jq -e --argjson n "$dbn" '(.data.rows | length) == $n' >/dev/null \
+    || fail "A17 导出行数与库不等（库 ${dbn}）"
+  printf '%s' "$exp" | jq -e --argjson m "$dbf" '(.data.fields | length) == $m' >/dev/null \
+    || fail "A17 导出字段数与库不等（库 ${dbf}）"
+  printf '%s' "$exp" | jq -e ".data.table_id == \"$tid\" and (.data.exported_at | type) == \"string\"" >/dev/null \
+    || fail "A17 导出体缺 table_id/exported_at"
+  printf '%s' "$exp" | grep -q "$ORGB_TENANT_ID" && fail "A17 导出体里出现他组织 org_id"
+  printf '%s' "$exp" | grep -q "$secret" && fail "A17 导出体里出现他组织单元格值"
+  ok "导出行数/字段数与库相等，他组织 org_id 与机密串零命中"
+  section_down
+  echo "✅ A17 通过"
+}
+
+run_a18_a19() {
+  echo "== A18/A19 对抗输入一律作为数据值：零 5xx + 表清单前后全等 =="
+  section_up
+  local t0 t1 tid i p body code n m
+  t0=$(psql_q "SELECT string_agg(table_name, ',' ORDER BY table_name) FROM information_schema.tables WHERE table_schema = 'zenithjoy'")
+  tid=$(create_table_as "$COOKIE_A" "WB-S2-A18-$SFX" 'org' | jq -r '.data.table_id')
+  [ -n "$tid" ] && [ "$tid" != "null" ] || fail "A18 建表失败"
+  for i in 1 2 3 4 5; do
+    case "$i" in
+      1) p='<img src=x onerror=alert(1)>';;
+      2) p='__proto__';;
+      3) p='constructor';;
+      4) p='"; DROP TABLE db_rows; --';;
+      5) p='🧨🧨🧨';;
+    esac
+    body=$(jq -nc --arg p "$p" '{header:[$p],rows:[[$p]]}')
+    code=$(curl -s -o /tmp/wb-a18.json -w '%{http_code}' -b "$COOKIE_A" -H 'Content-Type: application/json' \
+      -X POST "$API/tables/$tid/rows/paste" -d "$body")
+    if [ "$i" = "1" ]; then
+      # 上位合同 A19：一律作为数据值收下，不许拿 400 拒掉当合规
+      [ "$code" = "201" ] || fail "A19 XSS 串必须原样作为数据值落库，实际返 $code"
+    else
+      case "$code" in 201|400) :;; *) fail "A18 对抗 payload 触发 ${code}（禁 5xx）：$p";; esac
+    fi
+  done
+  n=$(psql_q "SELECT count(*) FROM zenithjoy.db_fields f WHERE f.table_id = '$tid' AND f.name LIKE '%onerror%'")
+  [ "${n:-0}" -ge 1 ] || fail "A19 注入串未作为字段名（数据值）落库"
+  m=$(psql_q "SELECT count(*) FROM zenithjoy.db_rows r WHERE r.table_id = '$tid' AND r.data::text LIKE '%onerror%'")
+  [ "${m:-0}" -ge 1 ] || fail "A19 注入串未作为单元格值落库"
+  t1=$(psql_q "SELECT string_agg(table_name, ',' ORDER BY table_name) FROM information_schema.tables WHERE table_schema = 'zenithjoy'")
+  [ "$t0" = "$t1" ] || fail "A18 information_schema 表清单变了 —— 用户输入进了标识符位/产生运行时 DDL"
+  ok "五个 payload 零 5xx、注入串真作为字段名与单元格值落库、表清单前后全等"
+  section_down
+  echo "✅ A18/A19 通过"
+}
+
+run_a1_a3_rows() {
+  echo "== 行层 A1/A3：跨组织五个操作全 404 同形 + 本组织正向 2xx（同一次运行内成对）=="
+  section_up
+  local tid ft rid before after rnd code h1 h2
+  tid=$(create_table_as "$COOKIE_A" "WB-S2-ISO-$SFX" 'org' | jq -r '.data.table_id')
+  ft=$(field_id_of "$(curl -sf -b "$COOKIE_A" "$API/tables/$tid/fields")" text)
+  rid=$(create_row_as "$COOKIE_A" "$tid")
+  [ -n "$rid" ] && [ "$rid" != "null" ] || fail "行隔离段建行失败"
+  curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X PATCH "$API/rows/$rid" \
+    -d "{\"version\":1,\"data\":{\"$ft\":\"A 企业的值\"}}" >/dev/null || fail "行隔离段预置写入失败"
+  before=$(psql_q "SELECT r.data::text FROM zenithjoy.db_rows r WHERE r.id = '$rid'")
+  rnd=$(psql_q "SELECT gen_random_uuid()")
+
+  # 反向五连：丙持真会话（不是没登录），测的是隔离不是鉴权
+  code=$(curl -s -o /tmp/wb-iso-list.json -w '%{http_code}' -b "$COOKIE_B" "$API/tables/$tid/rows")
+  [ "$code" = "404" ] || fail "跨组织读行列表返 ${code}（应 404）"
+  code=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_B" -H 'Content-Type: application/json' \
+    -X PATCH "$API/rows/$rid" -d "{\"version\":2,\"data\":{\"$ft\":\"越权写入\"}}")
+  [ "$code" = "404" ] || fail "跨组织改行返 ${code}（应 404）"
+  code=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_B" -X DELETE "$API/rows/$rid")
+  [ "$code" = "404" ] || fail "跨组织删行返 ${code}（应 404）"
+  code=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_B" -X POST "$API/rows/$rid/restore")
+  [ "$code" = "404" ] || fail "跨组织还原返 ${code}（应 404）"
+  code=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_B" "$API/tables/$tid/export")
+  [ "$code" = "404" ] || fail "跨组织导出返 ${code}（应 404）"
+
+  curl -s -b "$COOKIE_B" -o /tmp/wb-iso-rnd.json "$API/tables/$rnd/rows" >/dev/null
+  h1=$(openssl dgst -md5 < /tmp/wb-iso-list.json | awk '{print $NF}')
+  h2=$(openssl dgst -md5 < /tmp/wb-iso-rnd.json | awk '{print $NF}')
+  [ "$h1" = "$h2" ] || fail "两个 404 体不同 —— 可靠比对字节分辨他企业有没有这张表（$h1 vs ${h2}）"
+  after=$(psql_q "SELECT r.data::text FROM zenithjoy.db_rows r WHERE r.id = '$rid'")
+  [ "$before" = "$after" ] || fail "跨组织写入生效了（$before -> ${after}）"
+  ok "反向五连全 404 且与随机 uuid 逐字节同形；A 企业该行逐字未变"
+
+  # 正向对照（同一次运行内）：一律拒绝的实现会在这里当场翻车
+  curl -sf -b "$COOKIE_A" "$API/tables/$tid/rows" \
+    | jq -e "[.data.rows[].row_id] | index(\"$rid\") != null" >/dev/null \
+    || fail "正向对照：A 企业读不到自己的行"
+  curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X PATCH "$API/rows/$rid" \
+    -d "{\"version\":2,\"data\":{\"$ft\":\"自己写的\"}}" >/dev/null \
+    || fail "正向对照：A 企业改不动自己的行"
+  curl -sf -b "$COOKIE_A" "$API/tables/$tid/export" >/dev/null || fail "正向对照：A 企业导不出自己的表"
+  curl -sf -b "$COOKIE_A" -X DELETE "$API/rows/$rid" >/dev/null || fail "正向对照：A 企业删不了自己的行"
+  curl -sf -b "$COOKIE_A" -X POST "$API/rows/$rid/restore" >/dev/null || fail "正向对照：A 企业还原不了自己的行"
+  ok "正向五连全部 2xx 且拿到自己的数据"
+  section_down
+  echo "✅ 行层 A1/A3 通过"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
 # dispatch
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -978,6 +1325,13 @@ case "${1:-}" in
   --a9-only)                run_a9; exit 0;;
   --a10-only)               run_a10; exit 0;;
   --a11-only)               run_a11; exit 0;;
+  --a12-only)               run_a12; exit 0;;
+  --a13-only)               run_a13; exit 0;;
+  --a15-only)               run_a15; exit 0;;
+  --a16-only)               run_a16; exit 0;;
+  --a17-only)               run_a17; exit 0;;
+  --a18-a19-only)           run_a18_a19; exit 0;;
+  --a1-a3-rows-only)        run_a1_a3_rows; exit 0;;
   --inv-tenant-isolation)   run_inv_tenant_isolation; exit 0;;
   --inv-endpoint-auth)      run_inv_endpoint_auth; exit 0;;
   --inv-two-tenant-seed)    run_inv_two_tenant_seed; exit 0;;
@@ -1001,6 +1355,13 @@ esac
 #                      单这一段就吃掉棘轮闸给每个脚本的大半预算。
 #   --inv-table-claim  要 `git grep origin/main`，而 glob runner 的 checkout 是 depth=1，
 #                      根本没有那个 ref。e2e-knowledge-hub-path3.yml 里用 fetch-depth: 0 跑它。
+#
+# Sprint B 的七个行层段（--a12/--a13/--a15/--a16/--a17/--a18-a19/--a1-a3-rows）同样不进无参数全跑：
+#   * --a15-only 必须以小 WORKBENCH_ROW_LIMIT **起服务**才验得动上限闸，而全跑是一次共享 fixture，
+#     把共享进程的上限压到 3 会让前面几段建行建到一半就撞上限，红在环境上而不是业务上；
+#   * 其余六段是同一条 S2 链路上的段，与 --a15 放在一起才构成完整证明，拆一半进全跑没有意义。
+# 它们由 e2e-knowledge-hub-path3.yml 的 linux job 逐个真跑（ARTIFACT「workflow 逐字接线」钉住），
+# 变异证明也各自显式调用它们（判据见 contract-dod.md）。
 #
 # 共享一次 fixture：起一次 apps/api，十几个段复用，全跑约 40~60 秒。
 SHARED_FIXTURE=1

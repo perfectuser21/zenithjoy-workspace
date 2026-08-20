@@ -106,4 +106,91 @@ export const restoreTable = (id: string) =>
     body: JSON.stringify({}),
   });
 
+// ── 行层（Sprint B / S2「数据进得来」）────────────────────────────────────────
+
+/** 单元格值：key 一律是稳定的 field_id，不是字段名、不是列序号 */
+export type CellValue = string | number | string[] | null;
+
+export interface WorkbenchRow {
+  row_id: string;
+  data: Record<string, CellValue>;
+  /** 行级乐观锁基线：写回带它，服务端不匹配就返 409 而不是静默覆盖 */
+  version: number;
+  row_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RowTrashEntry {
+  row_id: string;
+  deleted_at: string;
+  restorable_until: string;
+}
+
+export interface PasteOutcome {
+  inserted: number;
+  created_fields: Array<{ field_id: string; name: string; field_type: string }>;
+  row_ids: string[];
+}
+
+export interface TableExport {
+  table_id: string;
+  name: string;
+  fields: WorkbenchField[];
+  rows: WorkbenchRow[];
+  exported_at: string;
+}
+
+/**
+ * 编辑器里的字符串 → 服务端要的类型。表格视图与行详情面板共用同一份，
+ * 各写一份就等于给"同一个格在两处被解析成不同东西"开了口子。
+ *
+ * 空串一律当「清空该格」（服务端 null 合法）；数字解析不出来就把原串照发，
+ * 由服务端返 400 VALIDATION_FAILED —— 前端不替用户编一个"看起来合理"的值。
+ */
+export function parseCellInput(fieldType: string, raw: string | string[]): CellValue {
+  if (fieldType === 'multi_select') return Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const text = Array.isArray(raw) ? raw.join('') : raw;
+  if (text === '') return null;
+  if (fieldType === 'number') {
+    const n = Number(text);
+    return Number.isFinite(n) ? n : text;
+  }
+  return text;
+}
+
+/** 上限由服务端下发（row_limit），前端据此硬拦——写死在前端就违反了「禁写死环境假设值」 */
+export const listRows = (tableId: string) =>
+  json<{ rows: WorkbenchRow[]; total: number; row_limit: number }>(`/tables/${tableId}/rows`);
+
+export const createRow = (tableId: string) =>
+  json<WorkbenchRow>(`/tables/${tableId}/rows`, { method: 'POST', body: JSON.stringify({}) });
+
+/** data 是增量补丁，只含被改的那一格；返回的是合并后的整行与递增后的 version */
+export const patchRow = (rowId: string, version: number, data: Record<string, CellValue>) =>
+  json<WorkbenchRow>(`/rows/${rowId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ version, data }),
+  });
+
+export const deleteRow = (rowId: string) =>
+  json<{ row_id: string; deleted_at: string }>(`/rows/${rowId}`, {
+    method: 'DELETE',
+    body: JSON.stringify({}),
+  });
+
+export const restoreRow = (rowId: string) =>
+  json<WorkbenchRow>(`/rows/${rowId}/restore`, { method: 'POST', body: JSON.stringify({}) });
+
+export const listRowTrash = (tableId: string) =>
+  json<{ rows: RowTrashEntry[] }>(`/tables/${tableId}/rows/trash`).then((d) => d.rows);
+
+export const pasteRows = (tableId: string, header: string[], rows: string[][]) =>
+  json<PasteOutcome>(`/tables/${tableId}/rows/paste`, {
+    method: 'POST',
+    body: JSON.stringify({ header, rows }),
+  });
+
+export const exportTable = (tableId: string) => json<TableExport>(`/tables/${tableId}/export`);
+
 export { KnowledgeRequestError as WorkbenchRequestError };

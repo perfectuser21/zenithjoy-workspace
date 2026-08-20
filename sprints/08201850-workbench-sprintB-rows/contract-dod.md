@@ -1,6 +1,3 @@
-contract_branch: cp-08201850-workbench-rows
-sprint_dir: sprints/08201850-workbench-sprintB-rows
-
 ---
 skeleton: false
 journey_type: user_facing

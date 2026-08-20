@@ -16,6 +16,7 @@ import NewRunPage from './pages/NewRunPage';
 import KnowledgeNewPage from './pages/KnowledgeNewPage';
 import KnowledgeRecentPage from './pages/KnowledgeRecentPage';
 import WorkbenchPage from './pages/WorkbenchPage';
+import WorkbenchTablePage from './pages/WorkbenchTablePage';
 import EnvBadge from './components/EnvBadge';
 import { adminFetch } from './lib/adminFetch';
 
@@ -125,6 +126,7 @@ function Shell() {
           <Route path="/knowledge/new" element={<KnowledgeNewPage />} />
           <Route path="/knowledge/recent" element={<KnowledgeRecentPage />} />
           <Route path="/workbench" element={<WorkbenchPage />} />
+          <Route path="/workbench/tables/:tableId" element={<WorkbenchTablePage />} />
           <Route path="/login/feishu" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
