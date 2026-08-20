@@ -1,6 +1,8 @@
 package com.zenithjoy.agent
 
+import java.util.logging.Filter
 import java.util.logging.Level
+import java.util.logging.LogRecord
 import java.util.logging.Logger
 
 /**
@@ -15,8 +17,16 @@ import java.util.logging.Logger
  * 这不是"日志难看"，是**排查瘫痪**：2026-08-19 据此误判出「initAgent 协程挂起不返回」，
  * 实际轮询一直正常（探针任务 31 秒内被拉走），一整天烧在幻觉上。
  *
- * okhttp 每条内部日志都先过 `logger.isLoggable(Level.FINE)`，把对应 logger 显式设成
- * `Level.OFF` 即可从源头掐断，与 ROM 的 log.tag 属性无关。
+ * ⚠️ 只设 `Level.OFF` **挡不住**（2.1.31 真机实测，噪音仍占 93%）：okhttp 的
+ * `Platform$Companion` 在首次使用时调 `AndroidLog.enable()`，其 `enableLogging` 里
+ *     `logger.setLevel(if (Log.isLoggable(tag, DEBUG)) FINE else INFO)`
+ * 会把我们在 `Application.onCreate` 里设的 OFF **覆盖回 FINE**
+ * （tag 映射见 `AndroidLog.knownLoggers`：`okhttp3.internal.concurrent.TaskRunner`
+ * → `okhttp.TaskRunner`，正是 logcat 里刷屏的那个 tag）。
+ *
+ * 正解是 **Filter**：`enable()` 从不碰 filter，而 `Logger.log(record)` 在 level 检查之后
+ * 还会过一道 filter，过不去就不 publish 到 handler → logcat 干净，与 level 被谁改无关。
+ * level 也照设——silence() 万一在 enable() 之后跑，它能省掉 okhttp 那边的字符串拼装。
  */
 object OkHttpDebugLogSilencer {
 
@@ -34,10 +44,15 @@ object OkHttpDebugLogSilencer {
     // 下次 getLogger 会拿到一个 level 复位成 null(继承父级) 的新实例，静音悄悄失效。
     private val strongRefs = mutableListOf<Logger>()
 
+    /** 一律拒绝：okhttp 的内部日志我们一条都不要，SEVERE 也不要。 */
+    private val rejectAll = Filter { _: LogRecord -> false }
+
     @Synchronized
     fun silence() {
         SILENCED_LOGGER_NAMES.forEach { name ->
             val logger = Logger.getLogger(name)
+            logger.filter = rejectAll
+            // filter 是真正管用的那道——AndroidLog.enable() 只改 level/handler，从不碰 filter
             logger.level = Level.OFF
             logger.useParentHandlers = false
             if (strongRefs.none { it === logger }) strongRefs.add(logger)
