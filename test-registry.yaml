@@ -235,6 +235,14 @@ tests:
     product: 新媒体运营
     note: "Works CRUD 路由单元测试（mock DB）"
 
+  - id: api-fields-route
+    path: apps/api/tests/fields.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Fields CRUD 路由单元测试（mock DB）"
+
   - id: api-pipeline-route
     path: apps/api/tests/pipeline.test.ts
     type: unit
@@ -5569,3 +5577,19 @@ agent_suite:
   status: active
   product: 员工知识中枢
   note: "路① 第一刀 UI E2E：登录 → 录入 → 「最近沉淀」看到本人这条带证据链接，并把 entry_id 落盘供 ps1 回读账本交叉验证。变体C：真实后端、禁请求拦截。workflow: e2e-windows.yml + sprints/08192114-*/e2e-verify.ps1"
+
+  - id: api-fields-route-pairing
+    path: apps/api/tests/routes/fields.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "fields 路由配套(test-pairing);端到端覆盖在 tests/fields.test.ts"
+
+  - id: api-fields-controller-pairing
+    path: apps/api/tests/controllers/fields.controller.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "FieldsController 契约配套(test-pairing);CRUD 覆盖在 tests/fields.test.ts"
