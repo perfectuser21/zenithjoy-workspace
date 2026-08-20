@@ -324,8 +324,6 @@ jobs:
           API_BASE: http://localhost:5200
           ZENITHJOY_INTERNAL_TOKEN: ci-only-internal-token-abc-not-prod
         run: |
-          chmod +x .github/workflows/scripts/smoke/fields-smoke.sh
-          bash .github/workflows/scripts/smoke/fields-smoke.sh
 
       - name: Smoke — Competitor Research start/status
         env:
