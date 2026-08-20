@@ -60,8 +60,13 @@ gp_anchor: line11/structured_workbench#step2
 
 ### Step0 — 合同测试文件真被 vitest 收集执行（TDD 红绿的机械载体）
 
-- [ ] [BEHAVIOR] 本刀 4 个测试文件被 vitest **真收集真跑**：4 个 suite 全绿、用例数 ≥ 20、失败数 0（零收集时 vitest 自己报错，不会假绿成 exit 0）
-  Test: manual:bash -c 'PG="${E2E_DATABASE_URL:-${DATABASE_URL:-}}"; [ -n "$PG" ] || { echo "FAIL: 缺 E2E_DATABASE_URL/DATABASE_URL"; exit 1; }; O=/tmp/wb-rows-vitest.json; rm -f "$O"; (cd apps/api && npx vitest run --config vitest.workbench-rows.config.ts --reporter=json --outputFile="$O") >/tmp/wb-rows-vitest.log 2>&1; RC=$?; [ -f "$O" ] || { echo "FAIL: vitest 未产出报告（多半是零收集）"; tail -30 /tmp/wb-rows-vitest.log; exit 1; }; jq -e ".numTotalTestSuites == 4 and .numTotalTests >= 20 and .numFailedTests == 0 and .success == true" < "$O" >/dev/null || { echo "FAIL: 收集/通过数不符"; jq -c "{suites:.numTotalTestSuites,tests:.numTotalTests,failed:.numFailedTests,ok:.success}" < "$O"; exit 1; }; jq -e "[.testResults[].name | select(test(\"rows-(crud|optimistic-lock|paste-limit|isolation-export)\\\\.test\\\\.ts$\"))] | length == 4" < "$O" >/dev/null || { echo "FAIL: 跑的不是本刀那 4 个文件"; exit 1; }; [ "$RC" = "0" ] || { echo "FAIL: vitest exit=$RC"; exit 1; }; echo OK'
+- [ ] [BEHAVIOR] 本刀 4 个测试文件被 vitest **真收集真跑**：4 个文件全绿、用例数 ≥ 20、失败数 0（零收集时 vitest 自己报错，不会假绿成 exit 0）
+  > `[CONTRACT_DEFECT] r3 → generator 实测修正`：原写 `.numTotalTestSuites == 4` 在 vitest 上**恒假**——
+  > json reporter 的 `numTotalTestSuites = getSuites(files).length`，`getSuites()` 把「文件」与「describe」
+  > 各算一个 suite，本刀 4 文件 × 各 1 个 describe = 8（vitest 3.2.6 实测，`npm ci` 装出来的就是它）。
+  > 这不是实现能影响的量。改判据不改意图：`(.testResults | length) == 4` 就是「4 个 suite 文件真被收集」，
+  > 与紧随其后那条「跑的文件名恰是本刀那 4 个」同源；其余三项断言一字未动。
+  Test: manual:bash -c 'PG="${E2E_DATABASE_URL:-${DATABASE_URL:-}}"; [ -n "$PG" ] || { echo "FAIL: 缺 E2E_DATABASE_URL/DATABASE_URL"; exit 1; }; O=/tmp/wb-rows-vitest.json; rm -f "$O"; (cd apps/api && npx vitest run --config vitest.workbench-rows.config.ts --reporter=json --outputFile="$O") >/tmp/wb-rows-vitest.log 2>&1; RC=$?; [ -f "$O" ] || { echo "FAIL: vitest 未产出报告（多半是零收集）"; tail -30 /tmp/wb-rows-vitest.log; exit 1; }; jq -e "(.testResults | length) == 4 and .numTotalTests >= 20 and .numFailedTests == 0 and .success == true" < "$O" >/dev/null || { echo "FAIL: 收集/通过数不符"; jq -c "{files:(.testResults|length),suites:.numTotalTestSuites,tests:.numTotalTests,failed:.numFailedTests,ok:.success}" < "$O"; exit 1; }; jq -e "[.testResults[].name | select(test(\"rows-(crud|optimistic-lock|paste-limit|isolation-export)\\\\.test\\\\.ts$\"))] | length == 4" < "$O" >/dev/null || { echo "FAIL: 跑的不是本刀那 4 个文件"; exit 1; }; [ "$RC" = "0" ] || { echo "FAIL: vitest exit=$RC"; exit 1; }; echo OK'
   期望: OK
 
 ### Step1/Step2 — 表格视图列行 + 新增行落库

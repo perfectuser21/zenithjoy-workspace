@@ -527,7 +527,7 @@ if [ -z "${E2E_DATABASE_URL:-}" ] && [ -z "${DATABASE_URL:-}" ]; then
   exit 1
 fi
 
-echo "== 段1b/3 合同测试真被 vitest 收集执行（4 suite / ≥20 用例 / 零失败）=="
+echo "== 段1b/3 合同测试真被 vitest 收集执行（4 个文件 / ≥20 用例 / 零失败）=="
 VITEST_OUT=/tmp/wb-rows-vitest-e2e.json
 rm -f "$VITEST_OUT"
 (cd apps/api && npx vitest run --config vitest.workbench-rows.config.ts --reporter=json --outputFile="$VITEST_OUT") >/tmp/wb-rows-vitest-e2e.log 2>&1
@@ -536,9 +536,11 @@ if [ ! -f "$VITEST_OUT" ]; then
   tail -30 /tmp/wb-rows-vitest-e2e.log
   exit 1
 fi
-if ! jq -e '.numTotalTestSuites == 4 and .numTotalTests >= 20 and .numFailedTests == 0 and .success == true' < "$VITEST_OUT" >/dev/null; then
+# `(.testResults | length)` 而不是 `.numTotalTestSuites`：后者把「文件」与「describe」各算一个 suite
+# （vitest getSuites()），4 文件恒得 8，写 == 4 是恒假断言。判据意图不变：4 个 suite 文件真被收集。
+if ! jq -e '(.testResults | length) == 4 and .numTotalTests >= 20 and .numFailedTests == 0 and .success == true' < "$VITEST_OUT" >/dev/null; then
   echo "FAIL: 合同测试未全绿或收集数不符"
-  jq -c '{suites:.numTotalTestSuites,tests:.numTotalTests,failed:.numFailedTests,ok:.success}' < "$VITEST_OUT"
+  jq -c '{files:(.testResults|length),suites:.numTotalTestSuites,tests:.numTotalTests,failed:.numFailedTests,ok:.success}' < "$VITEST_OUT"
   exit 1
 fi
 
