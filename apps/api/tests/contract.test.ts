@@ -178,13 +178,17 @@ describe('API Contract — Works', () => {
 
 // ────────────────────────────────────────────────────────────────────────────
 
+// G1 / J7 段②（本刀同步改动）：/api/fields 挂上了 works 家族的租户闸，于是这一组用例
+// 跟 /api/works 那边一样，要先 queue 一次 tenant_members 反查并带上身份头。
+// 响应形状的断言一个都没动 —— 这道闸只管"是谁在问"，不改答什么。
 describe('API Contract — Fields', () => {
   beforeEach(() => vi.resetAllMocks());
 
   it('GET /api/fields — plain array (not wrapped)', async () => {
+    queueTenantMember();
     mockQuery.mockResolvedValueOnce({ rows: [FIELD_ROW] });
 
-    const { status, body } = await request(app).get('/api/fields');
+    const { status, body } = await request(app).get('/api/fields').set('X-Feishu-User-Id', TEST_USER);
 
     expect(status).toBe(200);
     // fields 返回裸数组，不像 works 包 {data,total,...}
@@ -201,10 +205,12 @@ describe('API Contract — Fields', () => {
   });
 
   it('POST /api/fields — created field shape', async () => {
+    queueTenantMember();
     mockQuery.mockResolvedValueOnce({ rows: [FIELD_ROW] });
 
     const { status, body } = await request(app)
       .post('/api/fields')
+      .set('X-Feishu-User-Id', TEST_USER)
       .send({ field_name: 'test_field', field_type: 'select' });
 
     expect(status).toBe(201);
@@ -216,12 +222,14 @@ describe('API Contract — Fields', () => {
 
   it('PUT /api/fields/:id — updated field shape', async () => {
     const updated = { ...FIELD_ROW, field_name: 'renamed' };
+    queueTenantMember();
     mockQuery
       .mockResolvedValueOnce({ rows: [FIELD_ROW] })
       .mockResolvedValueOnce({ rows: [updated] });
 
     const { status, body } = await request(app)
       .put(`/api/fields/${FIELD_UUID}`)
+      .set('X-Feishu-User-Id', TEST_USER)
       .send({ field_name: 'renamed' });
 
     expect(status).toBe(200);
@@ -319,12 +327,14 @@ describe('API Contract — Error Format Consistency', () => {
   });
 
   it('409 CONFLICT — error.code 始终存在', async () => {
+    queueTenantMember(); // /api/fields 现在也走租户闸
     mockQuery.mockRejectedValueOnce(
       Object.assign(new Error('duplicate'), { code: '23505' })
     );
 
     const { status, body } = await request(app)
       .post('/api/fields')
+      .set('X-Feishu-User-Id', TEST_USER)
       .send({ field_name: 'dup', field_type: 'text' });
 
     expect(status).toBe(409);

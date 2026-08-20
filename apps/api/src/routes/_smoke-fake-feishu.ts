@@ -61,14 +61,39 @@ function pickNoOrgMember(): FakeIdentity | null {
 }
 
 /**
- * code → 身份。约定 code 以 `code-<key>` 结尾，key 即企业分组名（或 noorg）。
- * 认不出来的 code 回 null，调用方按飞书的 "code 无效" 语义处理。
+ * 按成员 open_id 精确寻址 —— 分组名查不到时的纯 fallback。
+ *
+ * 为什么需要它：`pickGroupMembers` 只返回分组里**第一个**非邮箱成员，一个分组只能换出一个人。
+ * 而「同组织两个人」是可见性这类断言的最小前提（甲的私有表对乙不可见、同时刻甲自己看得见）——
+ * 甲乙若解析成同一个人，那条断言就没有第二个身份可用。
+ *
+ * 语义：code 尾部的 key 本身就是某个已声明成员的 open_id 时，直接返回那个人。
+ * 全部分组都没声明过他 → null（仍按飞书的 "code 无效" 处理，不凭空造身份）。
+ */
+function pickDeclaredMember(openId: string): FakeIdentity | null {
+  const groups = parseOrgGroups(process.env);
+  for (const [orgKey, members] of groups) {
+    if (members.has(openId)) return { open_id: openId, name: `Fake ${orgKey} Member`, email: '' };
+  }
+  return null;
+}
+
+/**
+ * code → 身份。约定 code 以 `code-<key>` 结尾，key 即企业分组名（或 noorg），
+ * 分组名未命中时按成员 open_id 精确寻址。认不出来的 code 回 null，
+ * 调用方按飞书的 "code 无效" 语义处理。
+ *
+ * 约定的 code 形态（守卫逐字核对本行）：code-([A-Za-z0-9_]+)$
+ * 正则要求 key 内只含 [A-Za-z0-9_]（**不含连字符**）：`code-alice-123` 这种中间夹 `-` 的写法
+ * 一律解析为 NULL，调用方拿不到 set-cookie。这是既有约定，调用方按 `code-<open_id>` 构造即可。
  */
 export function resolveFakeFeishuIdentity(code: string): FakeIdentity | null {
   const match = /code-([A-Za-z0-9_]+)$/.exec(code.trim());
   if (!match) return null;
   const key = match[1];
-  return key.toLowerCase() === 'noorg' ? pickNoOrgMember() : pickGroupMembers(key);
+  // 既有分支一字不改：noorg 与分组名命中的语义完全照旧，只在"分组名查不到"时才多走一步。
+  if (key.toLowerCase() === 'noorg') return pickNoOrgMember();
+  return pickGroupMembers(key) ?? pickDeclaredMember(key);
 }
 
 const FAKE_APP_ACCESS_TOKEN = 'fake-app-access-token';

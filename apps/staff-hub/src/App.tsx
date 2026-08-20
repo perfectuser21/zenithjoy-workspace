@@ -15,6 +15,7 @@ import QuadrantPage from './pages/QuadrantPage';
 import NewRunPage from './pages/NewRunPage';
 import KnowledgeNewPage from './pages/KnowledgeNewPage';
 import KnowledgeRecentPage from './pages/KnowledgeRecentPage';
+import WorkbenchPage from './pages/WorkbenchPage';
 import EnvBadge from './components/EnvBadge';
 import { adminFetch } from './lib/adminFetch';
 
@@ -99,6 +100,9 @@ function Shell() {
           <NavLink to="/knowledge/recent" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
             <BookOpen size={18} /> 最近沉淀
           </NavLink>
+          <NavLink to="/workbench" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+            <Wrench size={16} /> 结构化工作台
+          </NavLink>
         </nav>
         <div className="sidebar-footer">
           <div className="muted">{user?.email || user?.name}</div>
@@ -120,6 +124,7 @@ function Shell() {
           <Route path="/acceptance-history" element={<AcceptanceHistoryPage />} />
           <Route path="/knowledge/new" element={<KnowledgeNewPage />} />
           <Route path="/knowledge/recent" element={<KnowledgeRecentPage />} />
+          <Route path="/workbench" element={<WorkbenchPage />} />
           <Route path="/login/feishu" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -111,3 +111,4 @@ knowledge-hub-path1-smoke.sh
 fields-smoke.sh
 device-readiness-smoke.sh
 find-adb-lib-smoke.sh
+structured-workbench-smoke.sh

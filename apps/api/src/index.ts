@@ -7,6 +7,7 @@ import { startAgentOfflineMonitor } from './services/agent-offline-monitor';
 import { startScheduler } from './services/scheduler';
 import { runStartupConfigCheck } from './startup-check';
 import { assertStaffDirectoryOnStartup } from './staff-directory';
+import { assertSingleOrgMembership } from './startup/single-org-selfcheck';
 import pool from './db/connection';
 
 dotenv.config();
@@ -45,6 +46,16 @@ async function bootstrap(): Promise<void> {
   } catch (err) {
     console.error(`🔴 [staff-directory] ${(err as Error).message}`);
     console.error('🔴 [staff-directory] 员工目录一致性自检未通过，拒绝启动（fail-closed）');
+    process.exit(1);
+  }
+
+  // A11 单组织自检 —— 同上，必须在 listen 之前。一个员工被声明进两家企业时，
+  // "先起来再说"的后果是他建的表进了别人家，而且没有任何信号。
+  try {
+    await assertSingleOrgMembership(pool);
+  } catch (err) {
+    console.error(`🔴 [single-org] ${(err as Error).message}`);
+    console.error('🔴 [single-org] 单组织归属自检未通过，拒绝启动（fail-closed）');
     process.exit(1);
   }
 

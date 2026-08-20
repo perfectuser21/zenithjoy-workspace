@@ -58,23 +58,59 @@ echo "$r" | jq -e '.success == true and .data.id != null' >/dev/null 2>&1 \
   || fail "pipeline-trigger: 创建失败 ($r)"
 
 # ── fields ────────────────────────────────────────────────────────────────────
+# G1 / J7 段②（本刀同步改动）：/api/fields 挂上了 works 家族的租户闸，X-Internal-Token
+# 从此换不到身份，四端点会全被打成 401 —— 这不是回归，是闸生效的证据。改用身份头，
+# 并先断言"无身份必须 401"，让"闸被摘掉"这件事以后再也偷偷发生不了。
 section "fields (crm_field_management)"
 
-r=$(curl -s "$API/api/fields" -H "X-Internal-Token: $INT_TOKEN")
+# 身份得真在 tenant_members 里有归属行，否则闸会正确地回 403 NO_TENANT，
+# 那时红的是"这个 smoke 没给自己准备身份"，不是业务。有 psql 就自己种一个，跑完清掉。
+FIELDS_MEMBER="${ZENITHJOY_SMOKE_MEMBER_ID:-}"
+FIELDS_TENANT=""
+if [[ -z "$FIELDS_MEMBER" ]]; then
+  # 两套 env 写法都认（glob runner 给连接串，API Contract Smoke 只给离散 DATABASE_*）
+  FIELDS_PG="${E2E_DATABASE_URL:-${DATABASE_URL:-}}"
+  if [[ -z "$FIELDS_PG" && -n "${DATABASE_HOST:-}" ]]; then
+    FIELDS_PG="postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-}@${DATABASE_HOST}:${DATABASE_PORT:-5432}/${DATABASE_NAME:-postgres}"
+  fi
+  if [[ -n "$FIELDS_PG" ]] && command -v psql >/dev/null 2>&1; then
+    FIELDS_SFX="$(date +%s)$RANDOM"
+    FIELDS_MEMBER="ou_audit_fields_$FIELDS_SFX"
+    FIELDS_TENANT=$(psql "$FIELDS_PG" -t -A -q -c "INSERT INTO zenithjoy.tenants (name, license_key, plan) VALUES ('AUDIT-FIELDS-$FIELDS_SFX', 'audit-fields-lk-$FIELDS_SFX', 'free') RETURNING id" 2>/dev/null || true)
+    if [[ -n "$FIELDS_TENANT" ]]; then
+      psql "$FIELDS_PG" -q -c "INSERT INTO zenithjoy.tenant_members (tenant_id, feishu_user_id, role) VALUES ('$FIELDS_TENANT', '$FIELDS_MEMBER', 'owner')" >/dev/null 2>&1 || true
+    fi
+  fi
+fi
+cleanup_fields_seed() {
+  [[ -n "${FIELDS_TENANT:-}" && -n "${FIELDS_PG:-}" ]] || return 0
+  psql "$FIELDS_PG" -q -c "DELETE FROM zenithjoy.field_definitions WHERE tenant_id = '$FIELDS_TENANT'" >/dev/null 2>&1 || true
+  psql "$FIELDS_PG" -q -c "DELETE FROM zenithjoy.tenant_members WHERE tenant_id = '$FIELDS_TENANT'" >/dev/null 2>&1 || true
+  psql "$FIELDS_PG" -q -c "DELETE FROM zenithjoy.tenants WHERE id = '$FIELDS_TENANT'" >/dev/null 2>&1 || true
+}
+trap cleanup_fields_seed EXIT
+FIELDS_AUTH=(-H "X-Feishu-User-Id: $FIELDS_MEMBER")
+
+code=$(curl -s -o /dev/null -w '%{http_code}' "$API/api/fields")
+[[ "$code" == "401" ]] \
+  && ok "fields-auth: 无身份 GET /fields 返 401" \
+  || fail "fields-auth: 无身份返 ${code}（应 401 —— 端点还在裸奔）"
+
+r=$(curl -s "$API/api/fields" "${FIELDS_AUTH[@]}")
 echo "$r" | jq -e 'type == "array"' >/dev/null 2>&1 \
   && ok "fields-list: GET /fields 返回数组" \
   || fail "fields-list: 响应异常 ($r)"
 
 r=$(curl -s -X POST "$API/api/fields" \
-    -H "X-Internal-Token: $INT_TOKEN" -H "Content-Type: application/json" \
-    -d "{\"field_name\":\"smoke-audit-$(date +%s)\",\"field_type\":\"text\",\"label\":\"Smoke\"}")
+    "${FIELDS_AUTH[@]}" -H "Content-Type: application/json" \
+    -d "{\"field_name\":\"smoke-audit-$(date +%s)\",\"field_type\":\"text\"}")
 FIELD_ID=$(echo "$r" | jq -r '.id // empty')
 [[ -n "$FIELD_ID" ]] \
   && ok "fields-create: POST /fields 返回 id=$FIELD_ID" \
   || fail "fields-create: 创建失败 ($r)"
 
 [[ -n "$FIELD_ID" ]] && {
-  curl -s -X DELETE "$API/api/fields/$FIELD_ID" -H "X-Internal-Token: $INT_TOKEN" >/dev/null
+  curl -s -X DELETE "$API/api/fields/$FIELD_ID" "${FIELDS_AUTH[@]}" >/dev/null
   ok "fields-delete: DELETE /fields/:id 清理完成"
 }
 

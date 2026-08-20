@@ -28,6 +28,11 @@ module.exports = {
     environment: 'node',
     include: ['sprints/**/tests/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
     exclude: ['node_modules'],
+    // sprint 测试跑在**同一个真 Postgres** 上（合同禁 mock 边要求真库真验），
+    // 文件级并行会让 suite 之间互相污染：路③ 有一条用例故意把 zenithjoy.tenant_members
+    // 临时改名来制造"成员表不可达"，那几百毫秒里任何并发 suite 的鉴权都会拿到 503。
+    // 实测：并行 19/20（那一条红在 503），串行 20/20。共享真库下并行是假设不成立，不是慢。
+    fileParallelism: false,
   },
   resolve: {
     alias: {

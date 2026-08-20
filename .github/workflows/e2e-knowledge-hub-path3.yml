@@ -1,0 +1,115 @@
+name: E2E Knowledge Hub Path3 (structured workbench)
+
+# A33 接线：独立 workflow，on: pull_request 触发。
+# 判据不是"文件存在"，是那个 windows-latest job 的 conclusion == success ——
+# 静态形状为真、job 却被条件门跳过时，spec 就是个孤儿，UI 面的断言全部假绿。
+# 所以本文件里的 windows job **不带任何 job 级 if 门**（见 A33(c)）。
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/**'
+      - 'apps/staff-hub/**'
+      - 'apps/staff-hub/e2e/structured-workbench.spec.ts'
+      - 'apps/dashboard/e2e/fields-auth-regression.spec.ts'
+      - 'apps/api/db/migrations/**'
+      - '.github/workflows/e2e-knowledge-hub-path3.yml'
+      - '.github/workflows/scripts/smoke/structured-workbench-smoke.sh'
+      - 'sprints/08201151-员工知识中枢-路-结构化工作台-c86e37ff/**'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-path3-${{ github.ref }}
+  cancel-in-progress: true
+
+# 最小权限：这条 workflow 只读代码、跑测试、传截图 artifact，不写任何仓库状态
+permissions:
+  contents: read
+
+jobs:
+  # 段1+段2：Linux 上跑静态守卫 + 真 Postgres 全链（真浏览器在下面的 windows job）
+  linux-guards-and-db:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: zenithjoy_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      E2E_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/zenithjoy_e2e
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/zenithjoy_e2e
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install deps
+        run: npm ci
+      - name: Build apps/api
+        run: npm run build --workspace apps/api
+      - name: Run migrations
+        run: npm run migrate --workspace apps/api
+      - name: 段1 静态守卫（A2 / A35 / A33 / INV 扫描器）
+        run: bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh --static-only
+      - name: 段2 真 apps/api + 真 Postgres 双企业全链
+        run: bash .github/workflows/scripts/smoke/structured-workbench-smoke.sh
+      - name: 段2 补跑（无参数全跑不含的三段）
+        run: |
+          S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh
+          # A11 要真起第二个进程验"拦在 listen 之前"；INV-9 要 git grep origin/main
+          # （本 job 的 checkout 是 fetch-depth: 0，有那个 ref）
+          bash "$S" --a11-only
+          bash "$S" --inv-table-claim
+          # A4 段⑤ 的 oracle 在 Brain(cecelia) 库，runner 上不可达 —— 这里跑 ①②③④，
+          # 段⑤ 由 evaluator 在宿主机用 --a4-only 验（判据见 contract-dod.md）
+          bash "$S" --inv-endpoint-auth
+      - name: 段2b G2 恢复演练（真 pg_dump + 真还原 + 五表逐条全等）
+        run: bash .github/workflows/scripts/backup/restore-drill.sh
+
+  # 段3：windows-latest 干净 VM 真浏览器。
+  # **不许加 job 级 if** —— 那正是 A33(c) 要堵的孤儿 spec 形态。
+  windows-real-browser:
+    runs-on: windows-latest
+    needs: linux-guards-and-db
+    services: {}
+    env:
+      E2E_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/zenithjoy_e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 起本地 Postgres（windows runner 自带，默认 Disabled 必须先改 StartupType）
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $svc = Get-Service postgresql* -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $svc) { throw "FAIL: windows runner 上找不到 PostgreSQL 服务" }
+          # runner 镜像里这个服务的启动类型是 Disabled，直接 Start-Service 会报
+          # "cannot be started due to the following error"，先改成 Manual 才起得来
+          Set-Service -Name $svc.Name -StartupType Manual
+          Start-Service $svc.Name
+          $env:PGPASSWORD = 'root'
+          & "$env:PGBIN\psql" -U postgres -c "ALTER USER postgres WITH PASSWORD 'postgres';"
+          $env:PGPASSWORD = 'postgres'
+          & "$env:PGBIN\psql" -U postgres -c "CREATE DATABASE zenithjoy_e2e;"
+          & "$env:PGBIN\psql" -U postgres -d zenithjoy_e2e -c "CREATE SCHEMA IF NOT EXISTS zenithjoy; CREATE EXTENSION IF NOT EXISTS pgcrypto;"
+          # PGBIN 里的 psql 得进 PATH，e2e-verify.ps1 直接调 psql
+          "$env:PGBIN" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: 路③ 真浏览器全链（建表 → 8 类字段 → 可见性 → 删表 → 回收站还原）
+        shell: pwsh
+        run: pwsh -File "sprints/08201151-员工知识中枢-路-结构化工作台-c86e37ff/e2e-verify.ps1"
+      - name: 上传截图（Golden Path 五张）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: path3-screenshots
+          path: sprints/08201151-员工知识中枢-路-结构化工作台-c86e37ff/screenshots/
+          if-no-files-found: warn

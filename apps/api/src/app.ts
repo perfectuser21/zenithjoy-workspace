@@ -66,6 +66,8 @@ import videoRemakeRouter from './routes/video-remake';
 import staffRouter from './routes/staff';
 // Line11 员工知识中枢 路① — 经验录入/最近沉淀/投影只读（挂 knowledgeAuthGuard，只信会话）
 import { knowledgeRouter } from './routes/knowledge';
+// Line11 路③ 结构化工作台 — 建表/字段/可见性/回收站（挂 workbenchAuthGuard，只信会话）
+import { workbenchRouter } from './routes/workbench';
 // Line11 路① — DEV-only 假飞书上游（生产不挂载）
 import { fakeFeishuRouter, installFakeFeishuAxiosShim } from './routes/_smoke-fake-feishu';
 import { skillDraftsRouter, skillDraftsInternalRouter } from './routes/skill-drafts';
@@ -228,15 +230,19 @@ app.use('/api/brain', brainSprintStateRouter);
 // Line 07 — AI 爆款视频翻拍 9节点流水线
 app.use('/api/video-remake', videoRemakeRouter);
 app.use('/api/staff/skill-drafts', skillDraftsRouter);
-// 内部回调端点（子进程完成后通知终态，无 staffGuard，无公网暴露）
+// 内部回调端点（子进程完成后通知终态，不挂员工身份头闸，无公网暴露）
 app.use('/internal/skill-drafts', skillDraftsInternalRouter);
 // 内部 Agent 离线扫描触发端点（无鉴权，仅内部/smoke 调用）
 app.use('/api/internal/agent-offline-scan', agentOfflineScanRouter);
-// Line11 员工知识中枢 —— 必须排在 staffRouter 之前：staffRouter 内部 router.use(staffGuard)
-// 会拦下 /api/staff/* 的一切后续请求，挂在它后面的话知识端点会被身份头闸接管，
+// Line11 员工知识中枢 —— 必须排在 staffRouter 之前：staffRouter 内部有一道全局身份头闸，
+// 会拦下 /api/staff/* 的一切后续请求，挂在它后面的话知识端点会被那道闸接管，
 // 「身份只来自会话」当场作废。
 app.use('/api/staff/knowledge', knowledgeRouter);
-// Line 00 运营中枢 — 员工工具（staff only，受 staffGuard 保护）
+// Line11 路③ 结构化工作台 —— 独立命名空间，**不在 /api/staff 之下**：
+// 那个前缀的身份头闸与本路的命门（身份只来自会话）直接冲突，且挂进去会让既有
+// 16 端点的计数变成 17，路① 的前置保护线当场报红。
+app.use('/api/knowledge/db', workbenchRouter);
+// Line 00 运营中枢 — 员工工具（staff only，受员工身份头闸保护）
 app.use('/api/staff', staffRouter);
 // Line 02 — 公司信息页 + 账号状态
 app.use('/api/company-profile', companyProfileRouter);
