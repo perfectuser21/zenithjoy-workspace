@@ -90,3 +90,37 @@ BC=34 MC=34 E2E_BLOCKS=1 REAL_EXEC=34 GREP_ONLY=0
 34 条 Test: manual: 命令外层 bash -n  → checked=34 bad=0
 其中 22 条 bash -c '<内层脚本>' 内层 bash -n → inner checked=22 bad=0
 ```
+
+---
+
+## Generator 实跑 Red 证据（commit 1，2026-08-20）
+
+合同 tests/ 已随 contract import 存在于本分支（relay 常态），故 commit 1 = `DoD.md` + 本节红证据，
+不重复 checkout 测试文件。**测试文件自 commit 1 起不可修改**（CONTRACT IS LAW）。
+
+执行环境：本机真 Postgres `zenithjoy_test`（`E2E_DATABASE_URL` 显式指向，未落默认库）；
+`apps/api` 先 `tsc` 构建 dist（既有 `src/services/video-remake.service.js` 是 ESM wrapper，
+require `dist/services/video-remake.service.js`，dist 缺失会让四个 suite 红在模块解析上而非业务上，
+掩盖真红——这一步不做，红证据不可信）。
+
+```
+$ npx vitest run sprints/08201151-.../tests/ --reporter=json
+numTotalTests   = 14
+numPassedTests  = 0        ← 全红，无一提前变绿
+numFailedTests  = 0        （用例在 beforeAll 失败时记 skipped，红计入 suite 级）
+numTotalTestSuites  = 4
+numFailedTestSuites = 4    ← 四个 suite 全红
+```
+
+逐 suite 必红原因（与合同 Test Contract「预期红证据」列逐条对应）：
+
+| suite | 实际失败信息（截自本轮运行） | 对应合同预期 |
+|---|---|---|
+| `workbench-auth-guard.test.ts` | `Cannot find module '../../../apps/api/src/middleware/workbench-auth'` | 中间件与路由不存在 |
+| `workbench-tables.test.ts` | `[fixture] 会话签发失败 code=wb-code-ou_wb_alice_<sfx> status=502 body={"success":false,"error":"飞书登录失败：FEISHU_USER_INFO_ERROR: code=20021 msg=invalid code (fake upstream)"}` | 假上游未按成员寻址（`pickDeclaredMember` 未落地）→ 端点族不存在的前一道红 |
+| `workbench-visibility-trash.test.ts` | 同上（fixture 会话签发失败） | 同上 |
+| `fields-legacy-isolation.test.ts` | 同上；且 `field_definitions.tenant_id` 列尚不存在，`mk()` 的 INSERT 亦必炸 | 四端点当前无鉴权返 2xx + `tenant_id` 列不存在 |
+
+三类红覆盖了本刀三处核心缺失：G0 中间件缺失 / 假上游按成员寻址扩展缺失 / G1 段② 租户列缺失。
+夹具的 `loginAs` 就地抛错设计（R1 P0-1 修复）在此生效——502 与错误码被原样打印，
+把「夹具故障」与「实现缺失」区分开，没有退化成三个 `"undefined"` cookie 造出的一片 401。
