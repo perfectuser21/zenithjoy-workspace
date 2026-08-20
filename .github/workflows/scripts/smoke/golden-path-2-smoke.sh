@@ -279,6 +279,14 @@ case "$JUDGE_STATUS" in
 esac
 S8_ROW=$(psq "SELECT count(*) FROM zenithjoy.acquisition_collect_videos WHERE tenant_id='$TENANT_ID' AND video_id='$VIDEO_ID' AND judgment_status IN ('matched','rejected') AND updated_at > NOW() - interval '300 seconds'")
 [ "$S8_ROW" = "1" ] || fail "Step 8c 判定结果未落库 acquisition_collect_videos.judgment_status" 8
+
+# judgment_raw 必须落库——PR#1681 加的这列是判定链唯一的"黑盒记录仪"。
+# 0820 就是靠它才看见模型原话只有一个光秃秃的 `REJECTED`（9 字），从而排除
+# "解析冤枉了模型"这条岔路、定位到 max_tokens 被 reasoning 吃光（decision fa247355）。
+# 它要是哪天悄悄不写了，下次判定链出问题我们又回到纯猜的状态——所以这里钉一条。
+S8_RAW_LEN=$(psq "SELECT COALESCE(length(judgment_raw),0) FROM zenithjoy.acquisition_collect_videos WHERE tenant_id='${TENANT_ID}' AND video_id='${VIDEO_ID}' LIMIT 1")
+[ "${S8_RAW_LEN:-0}" -ge 1 ] || fail "Step 8c judgment_raw 未落库（长度=${S8_RAW_LEN}）——AI 原始返回是判定链唯一的黑盒记录仪，丢了下次排障只能靠猜" 8
+ok "Step 8c ✅ judgment_raw 已落库（${S8_RAW_LEN} 字）"
 ok "Step 8c judge-video 真调 → judgment_status=$JUDGE_STATUS 已落库（LLM 真请求真响应）"
 ok "Step 8 ✅ 采集+判定服务端链路全通"
 
@@ -974,6 +982,78 @@ ok "Step 23b ✅ 真实 DeepSeek 判定 → lead.grade=$S23B_GRADE"
 S23B_ELIGIBLE=$(psq "SELECT COALESCE(outreach_eligible::text,'<NULL>') FROM zenithjoy.acquisition_leads WHERE tenant_id='$TENANT_ID' AND nickname='$S23B_NICK' LIMIT 1")
 [ "$S23B_ELIGIBLE" = "true" ] || fail "Step 23b outreach_eligible='$S23B_ELIGIBLE' 期望 'true'（grade=$S23B_GRADE 理应可触达）" 23
 ok "Step 23b ✅ outreach_eligible=true"
+# 23c：真实批量（10 条）—— 铁律5 回流 PR#1684
+#
+# 为什么必须是"批量"而不是再来一条：23b 只发 1 条留言，prompt 短、模型思考也短，
+# 500 的 max_tokens 装得下，所以**即使判定链整个坏掉它也照样绿**。真机 0820 实测
+# （decision fa247355）：deepseek-v4-flash 是 thinking 模型，reasoning_tokens 算在
+# max_tokens 里，3 条留言 reasoning=187 过、5 条 444 勉强过、**8 条就顶到 500 封顶、
+# content 空、finish_reason=length，整批 0/8 全变 null**。生产 404 条留言里 187 条
+# grade=NULL、批量 8+ 的视频成功率只有 44.6%，就是这么来的——而 23b 一条也没拦住。
+#
+# 所以这一步的价值全在"条数"上：10 条跨过了 5→8 那道坎，坏掉时必红。别为了跑得快
+# 把条数调小，调到 5 以下这道闸就退化成 23b 的摆设。
+echo "▶ Step 23c: 批量 10 条留言 → 真实判定必须整批出档（thinking token 饿死输出的回归）"
+S23C_TMP=$(mktemp)
+S23C_HTTP=$(curl -s -o "$S23C_TMP" -w "%{http_code}" --max-time 15 \
+  -X POST "${API_BASE}/api/acquisition/collect/start" \
+  -H "Content-Type: application/json" -H "X-Tenant-Id: ${TENANT_ID}" \
+  -d '{"keywords":["p2-smoke-gradebatch"]}')
+[ "$S23C_HTTP" = "200" ] || fail "Step 23c collect/start expected 200, got ${S23C_HTTP}: $(cat "$S23C_TMP")" 23
+S23C_TASK=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S23C_TMP" 2>/dev/null)
+[ -n "$S23C_TASK" ] || fail "Step 23c 无 task_id" 23
+
+S23C_VIDEO="p2smokegb${RND//-/}"
+S23C_PREFIX="p2smokegb${RND//-/}"
+# 10 条：第 1 条是无歧义高意向（单独断言），其余 9 条覆盖弱意向/无关，凑够批量跨过 5→8 那道坎
+S23C_BODY=$(python3 -c "
+import json,sys
+prefix = sys.argv[1]
+texts = [
+  '求报价，多少钱一平，加个微信详细聊',
+  '这个效果不错',
+  '想了解一下装修流程',
+  '哈哈哈哈',
+  '我家也想弄这种风格',
+  '沙发',
+  '预算大概要多少呢',
+  '路过',
+  '有没有线下门店可以看',
+  '收藏了',
+]
+print(json.dumps({
+  'task_id': sys.argv[2],
+  'video_id': sys.argv[3],
+  'commenters': [{'nickname': prefix + str(i), 'comment_text': t} for i, t in enumerate(texts)],
+}, ensure_ascii=False))
+" "$S23C_PREFIX" "$S23C_TASK" "$S23C_VIDEO")
+
+# 真调重试范式同 23b（上游偶发 null 被函数内部吞掉）
+S23C_GRADED=0
+for S23C_TRY in 1 2 3; do
+  S23C_HTTP=$(curl -s -o "$S23C_TMP" -w "%{http_code}" --max-time 60 \
+    -X POST "${API_BASE}/api/acquisition/collect/report" \
+    -H "Content-Type: application/json" -H "x-agent-id: ${AGENT_PK}" \
+    -d "$S23C_BODY")
+  [ "$S23C_HTTP" = "200" ] || fail "Step 23c collect/report expected 200, got ${S23C_HTTP}: $(cat "$S23C_TMP")" 23
+  S23C_GRADED=$(psq "SELECT count(*) FROM zenithjoy.acquisition_leads WHERE tenant_id='${TENANT_ID}' AND nickname LIKE '${S23C_PREFIX}%' AND grade IS NOT NULL")
+  [ "${S23C_GRADED:-0}" -ge 8 ] && break
+  echo "  ↻ Step 23c 第 ${S23C_TRY} 次真调只出 ${S23C_GRADED}/10 档位，5s 后重试"
+  sleep 5
+done
+
+# 主断言：坏掉时这里是 0（整批 null），修好时是 10。留 2 条余量吸收单行解析漂移
+[ "${S23C_GRADED:-0}" -ge 8 ] || fail "Step 23c 10 条留言只有 ${S23C_GRADED} 条拿到档位（期望 >=8）——典型症状是 reasoning_effort=none 失效导致思考吃光 max_tokens，整批返 null，查服务端日志 '[comment-grading] 输出被 max_tokens 截断'" 23
+ok "Step 23c ✅ 批量 10 条真实判定出档 ${S23C_GRADED}/10"
+
+# 附加断言：批量里那条无歧义高意向必须判高（防"全判其他"式的伪全覆盖）
+S23C_TOP=$(psq "SELECT COALESCE(grade,'<NULL>') FROM zenithjoy.acquisition_leads WHERE tenant_id='${TENANT_ID}' AND nickname='${S23C_PREFIX}0' LIMIT 1")
+case "$S23C_TOP" in
+  高意向|精准) : ;;
+  *) fail "Step 23c 批量里的高意向留言 grade='${S23C_TOP}' 期望 高意向 或 精准（整批都出了档位但判准塌了）" 23 ;;
+esac
+ok "Step 23c ✅ 批量中高意向留言 grade=${S23C_TOP}"
+
 ok "Step 23 ✅ 评论意向判定 comment-grading.ts 回归通过（画像为空日志 + 真实 DeepSeek 判定链路全通）"
 
 # ───────────────────────────────────────────────────────────────────
