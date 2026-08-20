@@ -235,6 +235,14 @@ tests:
     product: 新媒体运营
     note: "Works CRUD 路由单元测试（mock DB）"
 
+  - id: api-fields-route
+    path: apps/api/tests/fields.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 私域运营
+    note: "Fields CRUD 路由单元测试（mock DB）"
+
   - id: api-pipeline-route
     path: apps/api/tests/pipeline.test.ts
     type: unit

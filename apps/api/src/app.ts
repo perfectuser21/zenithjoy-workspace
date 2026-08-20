@@ -4,6 +4,7 @@ import { toNodeHandler } from 'better-auth/node';
 import { auth } from './auth';
 import worksRouter from './routes/works';
 import workPerformanceRouter from './routes/work-performance';
+import fieldsRouter from './routes/fields';
 import publishRouter from './routes/publish';
 import aiVideoRouter from './routes/ai-video';
 import aiVideoPipelineRouter from './routes/ai-video-pipeline';
@@ -150,6 +151,7 @@ if (process.env.NODE_ENV !== 'production') {
 // API routes
 app.use('/api/works', worksRouter);
 app.use('/api/works/:id/performance', workPerformanceRouter);
+app.use('/api/fields', fieldsRouter);
 app.use('/api', publishRouter);
 app.use('/api/ai-video', aiVideoRouter);
 // Path 1 Step 5 — AI 视频本地流水线（jobs CRUD + AI API 代理）
