@@ -3,7 +3,7 @@
 # 设备就绪度上报 —— 客服要能在中台看到「这台客户手机卡在哪一项」
 #
 # 验证链路（数据写入类功能，按 Contract 规矩必须查 DB 确认记录存在且字段正确）：
-#   1. POST /api/auth/register                注册拿 license
+#   1. POST /api/auth/sign-up/email + GET /api/account/me   注册拿 license
 #   2. POST /api/agent/heartbeat              带 readiness（accessibility ok=false）
 #   3. SQL 反查 zenithjoy.agents              readiness 落库 + readiness_at 非空
 #                                             + 服务端合成的 license_binding 条目存在
@@ -52,11 +52,16 @@ echo "▶ [0] apps/api 活着吗"
 curl -fsS "${API_BASE}/health" >/dev/null || { echo "  ❌ apps/api 没起 (${API_BASE}/health)"; exit 12; }
 echo "  OK"
 
-echo "▶ [1] 注册拿 license"
-RESP=$(curl -fsS -X POST -H "Content-Type: application/json" \
-  -d "{\"email\":\"${EMAIL}\",\"password\":\"${PASSWORD}\"}" \
-  "${API_BASE}/api/auth/register")
-LICENSE=$(echo "$RESP" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('license') or d.get('license_key') or '')")
+echo "▶ [1] 注册拿 license（走 better-auth sign-up + /api/account/me，同 account-me-smoke）"
+COOKIE_JAR=$(mktemp)
+trap 'rm -f "$COOKIE_JAR"' EXIT
+RESP=$(curl -fsS -c "$COOKIE_JAR" -X POST -H "Content-Type: application/json" \
+  -d "{\"email\":\"${EMAIL}\",\"password\":\"${PASSWORD}\",\"name\":\"Readiness Smoke\"}" \
+  "${API_BASE}/api/auth/sign-up/email") || { echo "  FAIL: sign-up 失败"; exit 1; }
+sleep 1  # 等 hooks.after 建 free license
+RESP=$(curl -fsS -b "$COOKIE_JAR" -H "Accept: application/json" "${API_BASE}/api/account/me") \
+  || { echo "  FAIL: /api/account/me 失败"; exit 1; }
+LICENSE=$(echo "$RESP" | python3 -c "import sys,json;d=json.load(sys.stdin);l=d.get('license') or {};print(l.get('license_key') or '')")
 [ -n "$LICENSE" ] || { echo "  FAIL: 拿不到 license — body=$RESP"; exit 1; }
 echo "  OK: license=${LICENSE:0:16}…"
 
