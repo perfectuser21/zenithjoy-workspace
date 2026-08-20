@@ -45,7 +45,7 @@ set +e
 STDOUT=$(FIND_ADB_CANDIDATES=$"$TMP/nope1\n$TMP/nope2" find_adb 2>"$TMP/err"); RC=$?
 set -e
 [ "$RC" -ne 0 ] || { echo "❌ FAIL 场景4: 全找不到时必须非零退出"; exit 1; }
-[ -z "$STDOUT" ] || { echo "❌ FAIL 场景4: 全找不到时 stdout 必须为空，实得「$STDOUT」——吐出路径会被调用方拿去执行"; exit 1; }
+[ -z "$STDOUT" ] || { echo "❌ FAIL 场景4: 全找不到时 stdout 必须为空，实得「${STDOUT}」——吐出路径会被调用方拿去执行"; exit 1; }
 echo "✅ 场景4通过：找不到时非零退出且不吐假路径"
 
 # 场景5：失败信息必须列出找过哪些位置（否则又变成 exit 127 那种查不出原因的红）
