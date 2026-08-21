@@ -23,29 +23,31 @@ import org.junit.Test
  */
 class SplashGateTest {
 
+    private val AWEME = "com.ss.android.ugc.aweme"
+
     @Test
     fun `闪屏页必须判定为不可操作`() {
-        assertFalse(isAppInteractive("com.ss.android.ugc.aweme", "com.ss.android.ugc.aweme.splash.SplashActivity"))
+        assertFalse(isAppInteractive("com.ss.android.ugc.aweme", "com.ss.android.ugc.aweme.splash.SplashActivity", AWEME))
     }
 
     @Test
     fun `简写形式的闪屏类名也要认出来`() {
-        assertFalse(isAppInteractive("com.ss.android.ugc.aweme", ".splash.SplashActivity"))
+        assertFalse(isAppInteractive("com.ss.android.ugc.aweme", ".splash.SplashActivity", AWEME))
     }
 
     @Test
     fun `真正的业务页判定为可操作`() {
-        assertTrue(isAppInteractive("com.ss.android.ugc.aweme", "com.ss.android.ugc.aweme.main.MainActivity"))
-        assertTrue(isAppInteractive("com.ss.android.ugc.aweme", "com.ss.android.ugc.aweme.search.activity.SearchResultActivity"))
+        assertTrue(isAppInteractive("com.ss.android.ugc.aweme", "com.ss.android.ugc.aweme.main.MainActivity", AWEME))
+        assertTrue(isAppInteractive("com.ss.android.ugc.aweme", "com.ss.android.ugc.aweme.search.activity.SearchResultActivity", AWEME))
     }
 
     @Test
     fun `拿不到 Activity 名时不能误判为不可操作——宁可放行也别把正常流程卡死`() {
-        assertTrue(isAppInteractive("com.ss.android.ugc.aweme", null))
+        assertTrue(isAppInteractive("com.ss.android.ugc.aweme", null, AWEME))
     }
 
     @Test
     fun `前台压根不是目标包时直接判不可操作`() {
-        assertFalse(isAppInteractive("com.hihonor.systemmanager", "com.hihonor.x.YActivity"))
+        assertFalse(isAppInteractive("com.hihonor.systemmanager", "com.hihonor.x.YActivity", AWEME))
     }
 }
