@@ -486,17 +486,30 @@ export async function buildAssignments(
           continue;
         }
 
-        const dup = await pool.query(
-          `SELECT 1 FROM zenithjoy.dm_assignments
-             WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3
-           UNION ALL
-           SELECT 1 FROM zenithjoy.dm_outreach_log
-             WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3
-               AND sent_at >= $4::timestamptz - interval '24 hours'
-           LIMIT 1`,
+        // 与下面主路径同一口径（"成功过才不再派"）——两处必须一致，
+        // 否则 pending_dispatch 这条补派路仍会把重投堵死。见 dm-retry-policy.ts。
+        // ⚠️ 这里的 hasActiveAssignment 要排除本行自己（它就是 pending_dispatch），
+        // 否则补派永远被自己挡住。
+        const pStat = await pool.query(
+          `SELECT
+             (SELECT count(*) FROM zenithjoy.dm_outreach_log
+               WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3 AND status = 'sent') AS sent_by_this,
+             (SELECT count(*) FROM zenithjoy.dm_assignments
+               WHERE tenant_id = $1 AND lead_id = $2 AND status IN ('queued','dispatched')) AS active_assign,
+             (SELECT count(*) FROM zenithjoy.dm_outreach_log
+               WHERE tenant_id = $1 AND lead_id = $2 AND status = 'failed') AS failed_cnt,
+             (SELECT EXTRACT(EPOCH FROM ($4::timestamptz - max(sent_at)))/60 FROM zenithjoy.dm_outreach_log
+               WHERE tenant_id = $1 AND lead_id = $2 AND status = 'failed') AS mins_since_fail`,
           [tenantId, pendingRow.lead_id, label, nowIso]
         );
-        if (dup.rows.length > 0) {
+        const pSt = pStat.rows[0] as Record<string, unknown> | undefined;
+        const pDecision = shouldAssignLead({
+          sentByThisAccount: Number(pSt?.sent_by_this ?? 0) > 0,
+          hasActiveAssignment: Number(pSt?.active_assign ?? 0) > 0,
+          failedAttempts: Number(pSt?.failed_cnt ?? 0),
+          minutesSinceLastFailure: pSt?.mins_since_fail == null ? null : Number(pSt.mins_since_fail),
+        });
+        if (!pDecision.assign) {
           skippedDedup += 1;
           continue;
         }
