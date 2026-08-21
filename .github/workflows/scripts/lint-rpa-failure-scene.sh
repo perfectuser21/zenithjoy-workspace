@@ -13,6 +13,10 @@
 #   error_code / foreground_pkg / failure_diag 三者——少一个就 FAIL。
 #   这样新增错误码不用改闸，但"新开一条上报通道却忘了带现场"会被当场拦住。
 #
+# ⚠️ 改了本文件（或任何 .github/workflows/**）的 PR，标题必须带 [CONFIG] 或 [INFRA]，
+#    否则 CI Config Audit 卡红。而且**改标题不会刷新 event payload**——审计读的是
+#    payload 里的旧标题，必须重新 push 一个 commit 才会用新标题（与 lint-gp-anchor 同坑）。
+#
 # 用法: bash lint-rpa-failure-scene.sh
 # 退出码: 0 = 通过，1 = 有上报通道缺现场字段
 set -uo pipefail
