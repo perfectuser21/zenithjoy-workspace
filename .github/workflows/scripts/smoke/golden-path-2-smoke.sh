@@ -1081,16 +1081,23 @@ S24_COL=$(psq "SELECT 1 FROM information_schema.columns WHERE table_schema='zeni
 ok "Step 24 ✅ error_code 列存在"
 
 # 造一条 assignment + outreach_log(dispatched) + publish_task，走真实上报端点
-S24_ASSIGN=$(psq "INSERT INTO zenithjoy.dm_assignments (tenant_id, lead_id, account_label, status, scheduled_for) SELECT '${TENANT_ID}'::uuid, id, 's24-burner', 'dispatched', now() FROM zenithjoy.acquisition_leads WHERE tenant_id='${TENANT_ID}' LIMIT 1 RETURNING id")
+# psq 返回值统一去空白：INSERT..RETURNING 的输出直接拼进下一条 SQL 的引号里，
+# 带上换行就会报 invalid input syntax for type uuid（CI 实测踩过）。
+S24_ASSIGN=$(psq "INSERT INTO zenithjoy.dm_assignments (tenant_id, lead_id, account_label, status, scheduled_for) SELECT '${TENANT_ID}'::uuid, id, 's24-burner', 'dispatched', now() FROM zenithjoy.acquisition_leads WHERE tenant_id='${TENANT_ID}' LIMIT 1 RETURNING id" | tr -d '[:space:]')
 [ -n "$S24_ASSIGN" ] || fail "Step 24 造 dm_assignment 失败（该租户没有任何 lead？）" 24
 psq "INSERT INTO zenithjoy.dm_outreach_log (tenant_id, lead_id, account_label, status, sent_at, assignment_id) SELECT '${TENANT_ID}'::uuid, lead_id, 's24-burner', 'dispatched', now(), id FROM zenithjoy.dm_assignments WHERE id='${S24_ASSIGN}'" >/dev/null
-S24_TASK=$(psq "INSERT INTO zenithjoy.publish_tasks (tenant_id, platform, status, task_type, payload, created_at, updated_at) VALUES ('${TENANT_ID}'::uuid, 'douyin', 'dispatched', 'dm_outreach', jsonb_build_object('assignment_id','${S24_ASSIGN}','tenant_id','${TENANT_ID}','account_label','s24-burner'), now(), now()) RETURNING id")
+# publish_tasks.agent_id 是 NOT NULL（CI 实测踩过），复用本 smoke 已解析出的 AGENT_PK
+S24_TASK=$(psq "INSERT INTO zenithjoy.publish_tasks (tenant_id, agent_id, platform, status, task_type, payload, created_at, updated_at) VALUES ('${TENANT_ID}'::uuid, '${AGENT_PK}'::uuid, 'douyin', 'dispatched', 'dm_outreach', jsonb_build_object('assignment_id','${S24_ASSIGN}','tenant_id','${TENANT_ID}','account_label','s24-burner'), now(), now()) RETURNING id" | tr -d '[:space:]')
 [ -n "$S24_TASK" ] || fail "Step 24 造 publish_task 失败" 24
 
-# [CI-MOCK: real-device-only | nightly_ref: dm-send-realmachine-smoke.sh]
-# 诚实标注：这一步确实是"塞进去什么就断言读回什么"——lint-smoke-mock-honesty 抓得对。
-# 它验证的是**这个值能不能穿过 API 落进正表那一列**（原来正是在这一步被丢掉的），
-# 不验证真机是否真把私信发出去了。真机行为由 dm-send-realmachine-smoke.sh 那条车道覆盖。
+# 关于下面的 gate-allow：本步属于 lint-smoke-mock-honesty
+# 头部自己写明的误伤类型——"确实验证了服务端正确处理某 error_code 参数（触发额外副作用
+# 字段）"。它断言的不是真机行为，而是**服务端数据流**：error_code 进来之后有没有被写进
+# 另一张表的那一列（原来正是在这里被丢掉的，只写了 status）。
+# 真机专用的那个标记是给"本该真机验、这里只能造假"的步骤用的，挂在这里属于错误标注，
+# 而且会顶高 realmachine-unverified 棘轮（实测 baseline=0→1 被拦下）。
+# 真机私信行为由 dm-send-realmachine-smoke.sh 那条车道覆盖，与本步职责不重叠。
+# gate-allow
 S24_TMP=$(mktemp)
 S24_HTTP=$(curl -s -o "$S24_TMP" -w "%{http_code}" --max-time 20 \
   -X POST "${API_BASE}/api/agent/burner/dm-outreach-result" \
