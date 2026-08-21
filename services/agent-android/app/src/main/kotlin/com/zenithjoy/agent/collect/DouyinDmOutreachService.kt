@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import com.zenithjoy.agent.account.DouyinLaunchTrampoline
 import com.zenithjoy.agent.uia.RecoveryAction
 import com.zenithjoy.agent.uia.buildFailureScene
+import com.zenithjoy.agent.uia.isAppInteractive
 import com.zenithjoy.agent.uia.decideRecovery
 import com.zenithjoy.agent.uia.NodeAwait
 import com.zenithjoy.agent.uia.WaitFailure
@@ -141,7 +142,18 @@ class DouyinDmOutreachService : AccessibilityService() {
 
     // 全流程用轮询等待【目标条件成立】（uia.awaitNode），不依赖事件驱动状态切换，
     // 避免与 DouyinCollectService 共享无障碍事件流时产生状态机交叉污染。
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
+    /** 当前前台 Activity 类名——判"闪屏走完没"的唯一可靠信号，见 [isAppInteractive]。
+     *  WINDOW_STATE_CHANGED 是无障碍服务拿 Activity 的标准途径（本服务原来白扔了这个事件）。 */
+    @Volatile
+    private var currentActivityName: String? = null
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val cls = event.className?.toString()
+            // 只记 Activity，不记 Dialog/PopupWindow——它们也发这个事件但不代表页面切换
+            if (cls != null && cls.contains("Activity")) currentActivityName = cls
+        }
+    }
 
     override fun onInterrupt() {
         android.util.Log.w(TAG, "dm outreach service interrupted")
@@ -360,7 +372,27 @@ class DouyinDmOutreachService : AccessibilityService() {
         // 真机实证（荣耀 X30/MagicOS 2026-08-18）：同一台设备上 collect 走共享实现能点掉
         // 荣耀 auto-jump「想要打开抖音」授权框并成功拉起抖音，而本文件原坐标手势版本在
         // 同场景下 trampoline Activity 0.3 秒即被销毁、从未可见，最终 OPEN_PANEL_FAILED。
-        awaitAppForeground(DOUYIN_PKG, maxAttempts, delayMs)
+        awaitAppForeground(DOUYIN_PKG, maxAttempts, delayMs) &&
+            awaitDouyinInteractive(maxAttempts, delayMs)
+
+    /**
+     * 等抖音【真的能操作】——包名对了还不够，闪屏期间点击一律落空。
+     *
+     * 0821 真机实测（冷启动逐 2 秒采样）：闪屏挂满 10 秒，而无障碍树第 2 秒就能看到
+     * 底下首页的搜索按钮。原来只等包名 → 在闪屏上"找到"按钮 → 点击被闪屏吃掉 →
+     * 等输入框超时 → NO_SEARCH_INPUT/TARGET_ABSENT。今天失败分类里这是最大一类（3/7），
+     * 而前两刀（#1687 重试、#1691 消插屏）都打不中它——因为前台确实是抖音。
+     */
+    private suspend fun awaitDouyinInteractive(maxAttempts: Int, delayMs: Long): Boolean {
+        repeat(maxAttempts) {
+            val fg = rootInActiveWindow?.packageName?.toString()
+            if (isAppInteractive(fg, currentActivityName, DOUYIN_PKG)) return true
+            android.util.Log.i(TAG, "awaitDouyinInteractive: 等闪屏走完 activity=$currentActivityName")
+            delay(delayMs)
+        }
+        diag("闪屏未在预算内走完 activity=$currentActivityName")
+        return false
+    }
 
     /** 90 秒超时熔断检查：命中即上报 timeout 结果并结束本次 lead 处理。 */
     /** 本条 lead 已经因"前台被抢"重新拉起过几次（上限见 decideRecovery 的 maxRetries）。
