@@ -1081,13 +1081,14 @@ S24_COL=$(psq "SELECT 1 FROM information_schema.columns WHERE table_schema='zeni
 ok "Step 24 ✅ error_code 列存在"
 
 # 造一条 assignment + outreach_log(dispatched) + publish_task，走真实上报端点
-# psq 返回值统一去空白：INSERT..RETURNING 的输出直接拼进下一条 SQL 的引号里，
-# 带上换行就会报 invalid input syntax for type uuid（CI 实测踩过）。
-S24_ASSIGN=$(psq "INSERT INTO zenithjoy.dm_assignments (tenant_id, lead_id, account_label, status, scheduled_for) SELECT '${TENANT_ID}'::uuid, id, 's24-burner', 'dispatched', now() FROM zenithjoy.acquisition_leads WHERE tenant_id='${TENANT_ID}' LIMIT 1 RETURNING id" | tr -d '[:space:]')
+# psq 的 INSERT..RETURNING 会输出两行：返回值 + "INSERT 0 1" 状态行。
+# 只 tr -d 空白会把两行粘成 "<uuid>INSERT01" 再报 invalid input syntax for type uuid
+# （CI 实测踩过两次）。必须先 head -1 取返回值那行，再去空白。
+S24_ASSIGN=$(psq "INSERT INTO zenithjoy.dm_assignments (tenant_id, lead_id, account_label, status, scheduled_for) SELECT '${TENANT_ID}'::uuid, id, 's24-burner', 'dispatched', now() FROM zenithjoy.acquisition_leads WHERE tenant_id='${TENANT_ID}' LIMIT 1 RETURNING id" | head -1 | tr -d '[:space:]')
 [ -n "$S24_ASSIGN" ] || fail "Step 24 造 dm_assignment 失败（该租户没有任何 lead？）" 24
 psq "INSERT INTO zenithjoy.dm_outreach_log (tenant_id, lead_id, account_label, status, sent_at, assignment_id) SELECT '${TENANT_ID}'::uuid, lead_id, 's24-burner', 'dispatched', now(), id FROM zenithjoy.dm_assignments WHERE id='${S24_ASSIGN}'" >/dev/null
 # publish_tasks.agent_id 是 NOT NULL（CI 实测踩过），复用本 smoke 已解析出的 AGENT_PK
-S24_TASK=$(psq "INSERT INTO zenithjoy.publish_tasks (tenant_id, agent_id, platform, status, task_type, payload, created_at, updated_at) VALUES ('${TENANT_ID}'::uuid, '${AGENT_PK}'::uuid, 'douyin', 'dispatched', 'dm_outreach', jsonb_build_object('assignment_id','${S24_ASSIGN}','tenant_id','${TENANT_ID}','account_label','s24-burner'), now(), now()) RETURNING id" | tr -d '[:space:]')
+S24_TASK=$(psq "INSERT INTO zenithjoy.publish_tasks (tenant_id, agent_id, platform, status, task_type, payload, created_at, updated_at) VALUES ('${TENANT_ID}'::uuid, '${AGENT_PK}'::uuid, 'douyin', 'dispatched', 'dm_outreach', jsonb_build_object('assignment_id','${S24_ASSIGN}','tenant_id','${TENANT_ID}','account_label','s24-burner'), now(), now()) RETURNING id" | head -1 | tr -d '[:space:]')
 [ -n "$S24_TASK" ] || fail "Step 24 造 publish_task 失败" 24
 
 # 关于下面的 gate-allow：本步属于 lint-smoke-mock-honesty
