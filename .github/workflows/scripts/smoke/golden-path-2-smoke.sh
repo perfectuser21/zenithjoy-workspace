@@ -1103,12 +1103,24 @@ S24_TMP=$(mktemp)
 S24_HTTP=$(curl -s -o "$S24_TMP" -w "%{http_code}" --max-time 20 \
   -X POST "${API_BASE}/api/agent/burner/dm-outreach-result" \
   -H "Content-Type: application/json" \
-  -d "{\"task_id\":\"${S24_TASK}\",\"status\":\"failed\",\"error_code\":\"NO_SEARCH_INPUT\",\"dm_assignment_id\":\"${S24_ASSIGN}\"}")
+  -d "{\"task_id\":\"${S24_TASK}\",\"status\":\"failed\",\"error_code\":\"NO_SEARCH_INPUT\",\"foreground_pkg\":\"com.hihonor.systemmanager\",\"failure_diag\":\"searchBtnFound=true failure=WRONG_FOREGROUND attempts=12\",\"dm_assignment_id\":\"${S24_ASSIGN}\"}")
 [ "$S24_HTTP" = "200" ] || fail "Step 24 dm-outreach-result expected 200, got ${S24_HTTP}: $(cat "$S24_TMP")" 24
 
 S24_REASON=$(psq "SELECT COALESCE(error_code,'<NULL>') FROM zenithjoy.dm_outreach_log WHERE assignment_id='${S24_ASSIGN}' LIMIT 1")
 [ "$S24_REASON" = "NO_SEARCH_INPUT" ] || fail "Step 24 dm_outreach_log.error_code='${S24_REASON}' 期望 'NO_SEARCH_INPUT'——失败原因又被丢在 publish_tasks 的 JSONB 里了，看板上只会显示 failed，下次复发照样盲修" 24
 ok "Step 24 ✅ 失败原因已落正表 error_code=${S24_REASON}"
+
+# 现场三件套里的两件（invariant 93ed0761）：只有 error_code 只能说"哪一步死的"，
+# 说不出"当时屏幕上是谁"。0821 正是靠这两件推翻了错判——
+# 前台包名拍到荣耀全局搜索接走输入；诊断行的 searchBtnFound=true 推翻"找不到搜索按钮"。
+S24_FG=$(psq "SELECT COALESCE(foreground_pkg,'<NULL>') FROM zenithjoy.dm_outreach_log WHERE assignment_id='${S24_ASSIGN}' LIMIT 1")
+[ "$S24_FG" = "com.hihonor.systemmanager" ] || fail "Step 24 foreground_pkg='${S24_FG}' 期望 'com.hihonor.systemmanager'——判失败那一刻前台是谁没落库，排查又得回去翻 logcat（重启就没了）" 24
+S24_DIAG=$(psq "SELECT COALESCE(failure_diag,'<NULL>') FROM zenithjoy.dm_outreach_log WHERE assignment_id='${S24_ASSIGN}' LIMIT 1")
+case "$S24_DIAG" in
+  *WRONG_FOREGROUND*) : ;;
+  *) fail "Step 24 failure_diag='${S24_DIAG}' 未包含诊断内容——agent 的诊断行被丢了" 24 ;;
+esac
+ok "Step 24 ✅ 失败现场已落正表 前台=${S24_FG}"
 
 
 
