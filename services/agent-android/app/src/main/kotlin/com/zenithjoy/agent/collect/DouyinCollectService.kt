@@ -276,7 +276,7 @@ class DouyinCollectService : AccessibilityService() {
             android.util.Log.i(TAG, "startStage2Collect: 抖音到前台=$fg videoId=$videoId")
             delay(RandomDelay.sample(RandomDelay.NAV_MS))
             // 第二层：等【评论按钮】这个具体节点就绪
-            val outcome = awaitNode(AWAIT_COMMENT_BTN_ATTEMPTS, AWAIT_POLL_MS) { r ->
+            val outcome = awaitNode(AWAIT_COMMENT_BTN_ATTEMPTS, AWAIT_POLL_MS, expectPkg = DOUYIN_PKG) { r ->
                 findVisibleCommentButton(r)
             }
             val commentBtn = outcome.value
@@ -474,7 +474,7 @@ class DouyinCollectService : AccessibilityService() {
             // 修过四次（#1120/#1375/#1640 各修一处）仍复发的根子。改为轮询等它【真的出现】。
             // 真机 A/B 对照（荣耀 X30/Android 13/抖音 40.0.0）：抖音进程热 → searchBtn=true 采到 3 张卡；
             // force-stop 冷启动 → searchBtn=false 必崩。同设备同选择器，差别只在时机。
-            val searchOutcome = awaitNode(AWAIT_SEARCH_ENTRY_ATTEMPTS, AWAIT_POLL_MS) { r ->
+            val searchOutcome = awaitNode(AWAIT_SEARCH_ENTRY_ATTEMPTS, AWAIT_POLL_MS, expectPkg = DOUYIN_PKG) { r ->
                 findNodeByContentDescCheap(r, "搜索") ?: findNodeByIds(r,
                     "com.ss.android.ugc.aweme:id/search_btn",
                     "com.ss.android.ugc.aweme:id/iv_search",
@@ -512,7 +512,7 @@ class DouyinCollectService : AccessibilityService() {
             // 在 Lynx 渲染的 SearchResultActivity 巨树上单次遍历就要几十秒，乘以轮询次数会把
             // 整条协程拖死（2026-08-18 真机实测：日志停在本行之前两分钟无进展）。
             // 兜底的 findFirstEditText 仍由其后的 typeKeyword 调用一次，行为不变。
-            val inputOutcome = awaitNode(AWAIT_SEARCH_INPUT_ATTEMPTS, AWAIT_POLL_MS) { r ->
+            val inputOutcome = awaitNode(AWAIT_SEARCH_INPUT_ATTEMPTS, AWAIT_POLL_MS, expectPkg = DOUYIN_PKG) { r ->
                 findNodeByIds(r,
                     "com.ss.android.ugc.aweme:id/search_input",
                     "com.ss.android.ugc.aweme:id/search_edit_text",
@@ -830,7 +830,7 @@ class DouyinCollectService : AccessibilityService() {
             delay(RandomDelay.sample(RandomDelay.NAV_MS))
             // 等详情页【真的渲染出可见的分享入口】，而不是「屏幕上有窗口了」就往下走。
             // 详情页从 tap 到分享按钮进无障碍树有肉眼可见的延迟，慢机器上尤其明显。
-            val detailOutcome = awaitNode(AWAIT_DETAIL_ATTEMPTS, AWAIT_POLL_MS) { r ->
+            val detailOutcome = awaitNode(AWAIT_DETAIL_ATTEMPTS, AWAIT_POLL_MS, expectPkg = DOUYIN_PKG) { r ->
                 // finder 每轮执行，必须廉价：先用系统索引拿候选再判可见性，不做全树 BFS
                 (r.findAccessibilityNodeInfosByText("分享").orEmpty() +
                     r.findAccessibilityNodeInfosByText("转发").orEmpty())
@@ -1242,7 +1242,7 @@ class DouyinCollectService : AccessibilityService() {
     private suspend fun resolveDouyinIdForCommenter(nickname: String): String? {
         // 等这位评论者的头像/昵称节点【真的出现】再动手：评论面板是异步加载的，
         // 「有窗口」不代表这一行已经渲染进无障碍树。
-        val panelOutcome = awaitNode(AWAIT_COMMENT_PANEL_ATTEMPTS, AWAIT_POLL_MS) { r ->
+        val panelOutcome = awaitNode(AWAIT_COMMENT_PANEL_ATTEMPTS, AWAIT_POLL_MS, expectPkg = DOUYIN_PKG) { r ->
             findNodeByContentDescCheap(r, avatarContentDesc(nickname))
                 ?: r.findAccessibilityNodeInfosByText(nickname)?.firstOrNull()
         }

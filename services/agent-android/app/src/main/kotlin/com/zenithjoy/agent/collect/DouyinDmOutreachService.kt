@@ -200,7 +200,7 @@ class DouyinDmOutreachService : AccessibilityService() {
             // 真机(39.4.0)主页私信按钮是文本"发私信"(content-desc 未必是"私信")——补按文本查找，
             // 否则点进主页也会误报 NO_DM_ENTRY。
             // 2026-08-18：改为等它【真的出现】再判死，而不是「有窗口了」就问一次（主页内容异步加载）。
-            val entryOutcome = awaitNode(AWAIT_ENTRY_ATTEMPTS, AWAIT_POLL_MS) { r ->
+            val entryOutcome = awaitNode(AWAIT_ENTRY_ATTEMPTS, AWAIT_POLL_MS, expectPkg = DOUYIN_PKG) { r ->
                 findNodeByContentDesc(r, "私信")
                     ?: findNodeByText(r, "发私信")
                     ?: findNodeByText(r, "私信")
@@ -244,7 +244,7 @@ class DouyinDmOutreachService : AccessibilityService() {
             // （复用 DouyinCollectService openSearchBar() 同一根因修复模式，PR #1119/#1120 教训）。
             fetchToken = SnapshotDiscipline.nextFetchToken(beforeClickToken)
             SnapshotDiscipline.requireFresh(beforeClickToken, fetchToken)
-            val inputOutcome = awaitNode(AWAIT_WIDGET_ATTEMPTS, AWAIT_POLL_MS) { r -> findFirstEditText(r) }
+            val inputOutcome = awaitNode(AWAIT_WIDGET_ATTEMPTS, AWAIT_POLL_MS, expectPkg = DOUYIN_PKG) { r -> findFirstEditText(r) }
 
             state = State.TYPING_MESSAGE
             val input = inputOutcome.value ?: run {
@@ -265,7 +265,7 @@ class DouyinDmOutreachService : AccessibilityService() {
             delay(RandomDelay.sample(RandomDelay.CLICK_MS))
 
             state = State.SENDING
-            val sendOutcome = awaitNode(AWAIT_WIDGET_ATTEMPTS, AWAIT_POLL_MS) { r ->
+            val sendOutcome = awaitNode(AWAIT_WIDGET_ATTEMPTS, AWAIT_POLL_MS, expectPkg = DOUYIN_PKG) { r ->
                 findNodeByContentDesc(r, "发送") ?: findNodeByIds(
                     r,
                     "com.ss.android.ugc.aweme:id/btn_send",
@@ -290,7 +290,7 @@ class DouyinDmOutreachService : AccessibilityService() {
             // "气泡出现才算 sent"同一标准的 Android 等价信号——避免"点了发送按钮就假 sent"。
             // 2026-08-18：从「等一下看一眼输入框清没清空」改为「等到它真清空为止」。
             // 判定标准本身不变（输入框清空 = 消息已提交进气泡列表 = sent）。
-            val receiptOutcome = awaitNode(AWAIT_WIDGET_ATTEMPTS, AWAIT_POLL_MS) { r ->
+            val receiptOutcome = awaitNode(AWAIT_WIDGET_ATTEMPTS, AWAIT_POLL_MS, expectPkg = DOUYIN_PKG) { r ->
                 r.takeIf { isInputCleared(it, message) }
             }
             val sendConfirmed = receiptOutcome.hit
@@ -385,7 +385,7 @@ class DouyinDmOutreachService : AccessibilityService() {
      */
     private suspend fun locateProfileBySearch(targetDouyinId: String): Boolean {
         // 2026-08-18：等搜索入口【真的出现】，不再「有窗口了」就问一次（与 collect 同源根因）。
-        val entryOutcome = awaitNode(AWAIT_ENTRY_ATTEMPTS, AWAIT_POLL_MS) { r ->
+        val entryOutcome = awaitNode(AWAIT_ENTRY_ATTEMPTS, AWAIT_POLL_MS, expectPkg = DOUYIN_PKG) { r ->
             findNodeByContentDesc(r, "搜索") ?: findNodeByIds(
                 r,
                 "com.ss.android.ugc.aweme:id/search_btn",
@@ -426,7 +426,7 @@ class DouyinDmOutreachService : AccessibilityService() {
         //    （2026-08-18 真机实测协程两分钟无进展）。采集链注释早就明令禁止这么写。
         //    改为轮询体只走系统索引查询，昂贵兜底移到轮询【之后】只做一次——这也正是
         //    NodeAwait 定的规矩。
-        val inputOutcome = awaitNode(AWAIT_PAGE_ATTEMPTS, AWAIT_POLL_MS) { r ->
+        val inputOutcome = awaitNode(AWAIT_PAGE_ATTEMPTS, AWAIT_POLL_MS, expectPkg = DOUYIN_PKG) { r ->
             findNodeByIds(
                 r,
                 "com.ss.android.ugc.aweme:id/search_input",

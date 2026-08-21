@@ -217,19 +217,55 @@ object NodeAwait {
  * 2026-08-18 真机实测踩过：finder 里带了一个无界 `findFirstEditText`，协程两分钟无进展。
  * 昂贵的兜底查找放到轮询【之后】只做一次。
  */
+/**
+ * @param expectPkg 期望停留的前台包名。**传了它就顺手消插屏**：轮询期间发现前台
+ *   不是它，就点掉「跳过/关闭」或按返回，把盖在上面的东西弄走（上限见
+ *   [InterloperDismiss.MAX_DISMISS_PER_WAIT]）。传 null = 老行为，只轮询不动作。
+ *
+ *   为什么需要：0821 真机现场坐实，等节点期间荣耀系统管家的广告会盖上来，
+ *   而本函数原来只记下前台是谁、干等满 24 轮 12 秒。**加长等待救不了**——
+ *   前台已经不是目标 App，等多久都等不出那个节点（私信剩余 40% 失败全在这）。
+ */
 suspend fun AccessibilityService.awaitNode(
     maxAttempts: Int = 6,
     intervalMs: Long = 500L,
+    expectPkg: String? = null,
     finder: (AccessibilityNodeInfo) -> AccessibilityNodeInfo?,
-): PollOutcome<AccessibilityNodeInfo> =
-    NodeAwait.pollUntilPresent(maxAttempts, intervalMs, { delay(it) }) {
+): PollOutcome<AccessibilityNodeInfo> {
+    var dismissed = 0
+    var blindRounds = 0
+    return NodeAwait.pollUntilPresent(maxAttempts, intervalMs, { delay(it) }) {
         val root = rootInActiveWindow
+        val target = root?.let(finder)
+        val fg = root?.packageName?.toString()
+
+        // 只在【没找到目标】且【调用方声明了期望前台】时才考虑消插屏——
+        // 找到了就别多事，前台是目标包时 decideInterloperAction 也会返回 DONE。
+        if (target == null && expectPkg != null && dismissed < InterloperDismiss.MAX_DISMISS_PER_WAIT) {
+            val (label, dismissTarget) = scanForDismiss()
+            when (decideInterloperAction(fg, packageName, expectPkg, dismissTarget != null, blindRounds)) {
+                GateAction.TAP_DISMISS -> {
+                    tapNodeCenterByGesture(dismissTarget!!)
+                    dismissed++; blindRounds = 0
+                    android.util.Log.i("NodeAwait", "awaitNode: 前台=$fg 非期望($expectPkg)，手势点掉「$label」($dismissed/${InterloperDismiss.MAX_DISMISS_PER_WAIT})")
+                }
+                GateAction.PRESS_BACK -> {
+                    performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+                    dismissed++; blindRounds = 0
+                    android.util.Log.i("NodeAwait", "awaitNode: 前台=$fg 非期望($expectPkg)，无可消除项按返回($dismissed/${InterloperDismiss.MAX_DISMISS_PER_WAIT})")
+                }
+                GateAction.WAIT -> if (fg == null) blindRounds++
+                GateAction.DONE -> Unit
+            }
+        }
+
         ProbeSnapshot(
-            target = root?.let(finder),
+            target = target,
             rootPresent = root != null,
-            foregroundPkg = root?.packageName?.toString(),
+            foregroundPkg = fg,
         )
     }
+}
 
 // ── 前台闸：等目标 App 真的铺到前台，期间主动消除厂商插屏 ────────────────────
 // 这是「两层等待」的第一层。第二层是上面的 awaitNode（等目标节点就绪）。
