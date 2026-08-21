@@ -513,3 +513,92 @@ describe('dispatchDue — gap 期间账号变离线', () => {
     expect(dispatchedCall).toBeTruthy();
   });
 });
+
+// ── Bug 修复：排期游标越过窗口结束后滚雪球式跳到未来几天（clampToWindowStart 钳制失效）──
+// staging 实锤：dm_active_end=22:00 窗口关闭后，同一个号连续几条候选被逐条前移约 1 天，
+// 两条记录被排到了 8/28、8/29（7-8 天后）。根因：clampToWindowStart 只在
+// `d < startToday` 时才钳制，越窗时刻（如 22:03）+1 天后钟点不变，仍 `>= startToday`，
+// 函数原样返回超窗时间，导致下一条候选排期继续判超窗、再滚一天，如此累积。
+describe('acquisition-dispatch buildAssignments 排期越窗钳制（clampToWindowStart 滚雪球修复）', () => {
+  it('本地时刻越过 dm_active_end 后，后续候选应钳制回次日窗口开始，而不是逐日累积漂移到窗口外', async () => {
+    // 本地 21:58（构造方式与生产代码 now.setHours 同款本地语义，不受 CI 进程时区影响）：
+    // 首条候选 +5min 网关间隔后落到 22:03，恰好越过 dm_active_end=22:00，触发滚入次日分支。
+    const now = new Date(2026, 6, 21, 21, 58, 0);
+    const insertedAssignments: { leadId: unknown; scheduledFor: unknown }[] = [];
+
+    const pool: QueryablePool = {
+      query: vi.fn(async (text: string) => {
+        // getConfig：固定 5 分钟间隔（interval_min=max=300s），消除随机性，日配额给够不触发预算闸
+        if (/FROM zenithjoy\.acquisition_config/i.test(text)) {
+          return {
+            rows: [{
+              dm_interval_min_sec: 300, dm_interval_max_sec: 300,
+              dm_per_day: 30, dm_active_start: '09:00', dm_active_end: '22:00',
+            }],
+          };
+        }
+        // Step B：唯一在线 burner
+        if (/FROM\s+zenithjoy\.agent_platform_sessions/i.test(text)) {
+          return { rows: [{ account_label: 'burner-single', day_count: 0 }] };
+        }
+        // Step A：无待重标 queued 行
+        if (/status = 'queued' AND scheduled_for >/i.test(text)) {
+          return { rows: [] };
+        }
+        // Step C：无 pending_dispatch 积压
+        if (/status = 'pending_dispatch'/i.test(text) && /SELECT/i.test(text)) {
+          return { rows: [] };
+        }
+        // 频控预算查询（day_res）
+        if (/AS used/i.test(text)) {
+          return { rows: [{ used: 0 }] };
+        }
+        // Step E 候选线索：3 条待派线索，逼同一个号连续排期多次以体现累积漂移
+        if (/FROM\s+zenithjoy\.acquisition_leads/i.test(text) && /relevance_score/i.test(text) && !/UPDATE/i.test(text)) {
+          return {
+            rows: [
+              { id: 'L1', profile_url: 'https://www.douyin.com/user/L1', relevance_score: 90 },
+              { id: 'L2', profile_url: 'https://www.douyin.com/user/L2', relevance_score: 80 },
+              { id: 'L3', profile_url: 'https://www.douyin.com/user/L3', relevance_score: 70 },
+            ],
+          };
+        }
+        // 单号首次尝试去重判定：全零 → shouldAssignLead 放行
+        if (/AS sent_by_this/i.test(text)) {
+          return { rows: [{ sent_by_this: 0, active_assign: 0, failed_cnt: 0, mins_since_fail: null }] };
+        }
+        if (/INSERT INTO zenithjoy\.dm_assignments/i.test(text)) {
+          return { rows: [], rowCount: 1 };
+        }
+        return { rows: [] };
+      }),
+    };
+    const origQuery = pool.query;
+    pool.query = vi.fn(async (text: string, params?: unknown[]) => {
+      const res = await origQuery(text, params);
+      if (/INSERT INTO zenithjoy\.dm_assignments/i.test(text)) {
+        insertedAssignments.push({ leadId: params?.[1], scheduledFor: params?.[3] });
+      }
+      return res;
+    });
+
+    await buildAssignments(pool, 'tenant-window-clamp-1', now);
+
+    expect(insertedAssignments.length, '3 条候选都应被指派（预算充足、无去重阻挡）').toBe(3);
+
+    for (const row of insertedAssignments) {
+      const scheduled = new Date(row.scheduledFor as string);
+      const minutesOfDay = scheduled.getHours() * 60 + scheduled.getMinutes();
+      // dm_active_start=09:00(540分钟) ~ dm_active_end=22:00(1320分钟)
+      expect(
+        minutesOfDay,
+        `线索 ${row.leadId} 排期 ${scheduled.toISOString()}（本地 ${scheduled.getHours()}:${String(scheduled.getMinutes()).padStart(2, '0')}）必须落在活跃窗口 09:00-22:00 内，不能停在越窗时刻`
+      ).toBeGreaterThanOrEqual(9 * 60);
+      expect(minutesOfDay).toBeLessThanOrEqual(22 * 60);
+    }
+
+    // 三条候选处理完，应该都落在「次日」窗口内一次性收敛，而不是逐条前移到次日/次次日/次三日
+    const days = new Set(insertedAssignments.map((r) => new Date(r.scheduledFor as string).toDateString()));
+    expect(days.size, '3 条候选应能在同一天（次日）窗口内排完，不应逐条累积漂移到不同的未来日期').toBe(1);
+  });
+});
