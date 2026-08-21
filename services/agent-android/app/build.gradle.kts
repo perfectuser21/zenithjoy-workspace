@@ -11,8 +11,8 @@ android {
         applicationId = "com.zenithjoy.agent"
         minSdk = 26
         targetSdk = 34
-        versionCode = 36
-        versionName = "2.1.32"
+        versionCode = 37
+        versionName = "2.1.33"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
