@@ -643,6 +643,8 @@ router.post('/dm-outreach-result', async (req: Request, res: Response) => {
     account_label,
     status,
     error_code,
+    foreground_pkg,
+    failure_diag,
     profile_url,
     screenshot_path,
     device_platform,
@@ -745,10 +747,21 @@ router.post('/dm-outreach-result', async (req: Request, res: Response) => {
       // 看不到"因为等输入框时前台被抢走了"。NO_SEARCH_INPUT 能"修好又复发"四次
       // 没被抓住，就是因为失败原因从来不在人会看的地方（0821 是硬翻 JSON 才
       // 发现连续 6 次全是同一个错误码）。守卫见 agent-burner-dm-error-code.test.ts。
+      // 失败现场（invariant 93ed0761）：前台包名 + 诊断行必须跟着 error_code 一起
+      // 进正表。只有 error_code 只能告诉你"哪一步死的"，告诉不了"当时屏幕上是谁"——
+      // 0821 正是靠这两件推翻了错判（searchBtnFound=true / 前台是荣耀全局搜索）。
+      // 守卫见 agent-burner-failure-scene.test.ts。
       await pool.query(
-        `UPDATE zenithjoy.dm_outreach_log SET status=$2, error_code=$3
+        `UPDATE zenithjoy.dm_outreach_log
+            SET status=$2, error_code=$3, foreground_pkg=$4, failure_diag=$5
            WHERE assignment_id=$1`,
-        [assignmentId, dmStatus, error_code || null],
+        [
+          assignmentId,
+          dmStatus,
+          error_code || null,
+          typeof foreground_pkg === 'string' && foreground_pkg ? foreground_pkg : null,
+          typeof failure_diag === 'string' && failure_diag ? failure_diag.slice(0, 512) : null,
+        ],
       );
       await pool.query(
         `UPDATE zenithjoy.dm_assignments SET status=$2, updated_at=now() WHERE id=$1`,

@@ -18,6 +18,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.zenithjoy.agent.account.DouyinLaunchTrampoline
 import com.zenithjoy.agent.uia.RecoveryAction
+import com.zenithjoy.agent.uia.buildFailureScene
 import com.zenithjoy.agent.uia.decideRecovery
 import com.zenithjoy.agent.uia.NodeAwait
 import com.zenithjoy.agent.uia.WaitFailure
@@ -395,8 +396,7 @@ class DouyinDmOutreachService : AccessibilityService() {
         val searchBtn = entryOutcome.value
         if (searchBtn == null) {
             val failure = NodeAwait.classifyFailure(entryOutcome, DOUYIN_PKG)
-            android.util.Log.w(
-                TAG,
+            diag(
                 "A3-diag: 搜索入口等待超时 failure=$failure attempts=${entryOutcome.attempts} " +
                     "waitedMs=${entryOutcome.waitedMs(AWAIT_POLL_MS)} fgPkg=${entryOutcome.lastForegroundPkg}"
             )
@@ -440,8 +440,7 @@ class DouyinDmOutreachService : AccessibilityService() {
             ?: rootInActiveWindow?.let { findFirstEditText(it) }
         if (searchInput == null) {
             val failure = NodeAwait.classifyFailure(inputOutcome, DOUYIN_PKG)
-            android.util.Log.w(
-                TAG,
+            diag(
                 "A3-diag: NO_SEARCH_INPUT searchBtnFound=true failure=$failure " +
                     "attempts=${inputOutcome.attempts} " +
                     "waitedMs=${inputOutcome.waitedMs(AWAIT_POLL_MS)} fallbackEditTextAlsoMissing=true " +
@@ -856,16 +855,44 @@ class DouyinDmOutreachService : AccessibilityService() {
 
     // ── 结果上报 ──────────────────────────────────────────────────────────────
 
+    /** 最近一条诊断行（各失败点写进来），随失败现场一起上报——见 invariant 93ed0761。 */
+    private var lastDiag: String? = null
+
+    /** 记一条诊断行；同时照常打日志，logcat 与上报两边都有。 */
+    private fun diag(line: String) {
+        lastDiag = line
+        android.util.Log.w(TAG, line)
+    }
+
     private fun finishWithOutcome(dmEntryFound: Boolean, sendConfirmed: Boolean, errorCode: String) {
         val outcome = classifyOutcome(rateLimited = false, dmEntryFound = dmEntryFound, sendConfirmed = sendConfirmed)
         android.util.Log.i(TAG, "dm_outreach outcome=$outcome taskId=$currentTaskId error=$errorCode")
+        // 失败现场必须跟着结果一起走——只写 logcat 等于没写，重启就没了，
+        // 排查的人只能靠猜（0821 私信 NO_SEARCH_INPUT 白猜三轮的教训）。
+        val scene = buildFailureScene(
+            errorCode = errorCode,
+            foregroundPkg = runCatching { currentForegroundPkg() }.getOrNull(),
+            diag = lastDiag,
+        )
         state = State.IDLE
         ScanMutex.busy = false
-        sendResultBroadcast(outcome, errorCode)
+        sendResultBroadcast(outcome, errorCode, scene?.foregroundPkg, scene?.diag)
+        lastDiag = null
     }
 
-    private fun sendResultBroadcast(outcome: Outcome, errorCode: String) {
+    /** 判失败那一刻前台是谁——这一件当天翻过一次结论（拍到荣耀全局搜索接走了输入）。 */
+    private fun currentForegroundPkg(): String? =
+        rootInActiveWindow?.packageName?.toString()
+
+    private fun sendResultBroadcast(
+        outcome: Outcome,
+        errorCode: String,
+        foregroundPkg: String? = null,
+        failureDiag: String? = null,
+    ) {
         val intent = Intent(ACTION_DM_OUTREACH_RESULT).apply {
+            putExtra(EXTRA_FOREGROUND_PKG, foregroundPkg ?: "")
+            putExtra(EXTRA_FAILURE_DIAG, failureDiag ?: "")
             setPackage(applicationContext.packageName)
             putExtra(EXTRA_TASK_ID, currentTaskId)
             putExtra(EXTRA_DM_ASSIGNMENT_ID, currentDmAssignmentId)
@@ -880,6 +907,8 @@ class DouyinDmOutreachService : AccessibilityService() {
     companion object {
         private const val TAG = "DouyinDmOutreachService"
         // 等「目标就绪」的轮询预算（2026-08-18）。各步累计最坏 ≈44s，低于 lead 90s 熔断。
+        const val EXTRA_FOREGROUND_PKG = "foreground_pkg"
+        const val EXTRA_FAILURE_DIAG = "failure_diag"
         private const val AWAIT_POLL_MS = 500L
         private const val AWAIT_ENTRY_ATTEMPTS = 24    // 12s：私信/搜索入口，含冷启动与厂商开屏广告余量
         // 页面级等待预算搬到 DmWaitBudget（单测 DmWaitBudgetTest 钉住下限）——

@@ -25,7 +25,7 @@ class FailureSceneTest {
             errorCode = "NO_SEARCH_INPUT",
             foregroundPkg = "com.hihonor.systemmanager",
             diag = "searchBtnFound=true failure=WRONG_FOREGROUND attempts=12",
-        )
+        )!!
         assertEquals("NO_SEARCH_INPUT", scene.errorCode)
         assertEquals("com.hihonor.systemmanager", scene.foregroundPkg)
         assertTrue(scene.diag!!.contains("WRONG_FOREGROUND"))
