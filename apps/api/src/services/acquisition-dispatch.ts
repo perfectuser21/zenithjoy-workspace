@@ -12,6 +12,7 @@
  */
 
 import { resolveDevicePlatform, type DevicePlatform } from './device-platform';
+import { shouldAssignLead } from './dm-retry-policy';
 
 // 最小 pool 抽象（只用到 query），便于注入 mock
 export interface QueryablePool {
@@ -485,17 +486,30 @@ export async function buildAssignments(
           continue;
         }
 
-        const dup = await pool.query(
-          `SELECT 1 FROM zenithjoy.dm_assignments
-             WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3
-           UNION ALL
-           SELECT 1 FROM zenithjoy.dm_outreach_log
-             WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3
-               AND sent_at >= $4::timestamptz - interval '24 hours'
-           LIMIT 1`,
+        // 与下面主路径同一口径（"成功过才不再派"）——两处必须一致，
+        // 否则 pending_dispatch 这条补派路仍会把重投堵死。见 dm-retry-policy.ts。
+        // ⚠️ 这里的 hasActiveAssignment 要排除本行自己（它就是 pending_dispatch），
+        // 否则补派永远被自己挡住。
+        const pStat = await pool.query(
+          `SELECT
+             (SELECT count(*) FROM zenithjoy.dm_outreach_log
+               WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3 AND status = 'sent') AS sent_by_this,
+             (SELECT count(*) FROM zenithjoy.dm_assignments
+               WHERE tenant_id = $1 AND lead_id = $2 AND status IN ('queued','dispatched')) AS active_assign,
+             (SELECT count(*) FROM zenithjoy.dm_outreach_log
+               WHERE tenant_id = $1 AND lead_id = $2 AND status = 'failed') AS failed_cnt,
+             (SELECT EXTRACT(EPOCH FROM ($4::timestamptz - max(sent_at)))/60 FROM zenithjoy.dm_outreach_log
+               WHERE tenant_id = $1 AND lead_id = $2 AND status = 'failed') AS mins_since_fail`,
           [tenantId, pendingRow.lead_id, label, nowIso]
         );
-        if (dup.rows.length > 0) {
+        const pSt = pStat.rows[0] as Record<string, unknown> | undefined;
+        const pDecision = shouldAssignLead({
+          sentByThisAccount: Number(pSt?.sent_by_this ?? 0) > 0,
+          hasActiveAssignment: Number(pSt?.active_assign ?? 0) > 0,
+          failedAttempts: Number(pSt?.failed_cnt ?? 0),
+          minutesSinceLastFailure: pSt?.mins_since_fail == null ? null : Number(pSt.mins_since_fail),
+        });
+        if (!pDecision.assign) {
           skippedDedup += 1;
           continue;
         }
@@ -589,17 +603,34 @@ export async function buildAssignments(
         continue;
       }
 
-      const dup = await pool.query(
-        `SELECT 1 FROM zenithjoy.dm_assignments
-           WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3
-         UNION ALL
-         SELECT 1 FROM zenithjoy.dm_outreach_log
-           WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3
-             AND sent_at >= $4::timestamptz - interval '24 hours'
-         LIMIT 1`,
+      // 去重口径从"派过就永不再派"改成"成功过才不再派"（invariant: 见 dm-retry-policy.ts）。
+      //
+      // 旧口径的 dm_assignments 那半边**没有状态过滤也没有时间窗**——某个号派过一次
+      // （哪怕失败）就永远不能再试它，3 个小号 = 一条线索一辈子最多 3 次尝试。
+      // 而 0821 真机数据显示失败是**随机的**（多次尝试的 13 条里 6 条先败后成），
+      // 且产能严重过剩（90 次/天配额只用了 30 次，新线索才 15 条）。
+      // 按 32% 单次成功率：3 次累计 69%，6 次累计 90%——这中间的差距是白扔的。
+      const stat = await pool.query(
+        `SELECT
+           (SELECT count(*) FROM zenithjoy.dm_outreach_log
+             WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3 AND status = 'sent') AS sent_by_this,
+           (SELECT count(*) FROM zenithjoy.dm_assignments
+             WHERE tenant_id = $1 AND lead_id = $2
+               AND status IN ('queued','dispatched','pending_dispatch')) AS active_assign,
+           (SELECT count(*) FROM zenithjoy.dm_outreach_log
+             WHERE tenant_id = $1 AND lead_id = $2 AND status = 'failed') AS failed_cnt,
+           (SELECT EXTRACT(EPOCH FROM ($4::timestamptz - max(sent_at)))/60 FROM zenithjoy.dm_outreach_log
+             WHERE tenant_id = $1 AND lead_id = $2 AND status = 'failed') AS mins_since_fail`,
         [tenantId, lead.id, label, nowIso]
       );
-      if (dup.rows.length > 0) {
+      const st = stat.rows[0] as Record<string, unknown> | undefined;
+      const decision = shouldAssignLead({
+        sentByThisAccount: Number(st?.sent_by_this ?? 0) > 0,
+        hasActiveAssignment: Number(st?.active_assign ?? 0) > 0,
+        failedAttempts: Number(st?.failed_cnt ?? 0),
+        minutesSinceLastFailure: st?.mins_since_fail == null ? null : Number(st.mins_since_fail),
+      });
+      if (!decision.assign) {
         skippedDedup += 1;
         continue;
       }

@@ -182,11 +182,32 @@ function makeDispatchPool(seed: {
       }
 
       // dedup check
-      if (sql.includes('FROM zenithjoy.dm_assignments') && sql.includes('UNION ALL') && sql.includes('dm_outreach_log')) {
+      // 去重统计（口径改为"成功过才不再派"后的新查询，见 dm-retry-policy.ts）
+      if (sql.includes('AS sent_by_this') && sql.includes('AS failed_cnt')) {
         const [tenant, leadId, label] = params as string[];
-        const inA = assignments.some((x) => x.tenant_id === tenant && x.lead_id === leadId && x.account_label === label);
-        const inL = logs.some((x) => x.tenant_id === tenant && x.lead_id === leadId && x.account_label === label);
-        return { rows: inA || inL ? [{ '?column?': 1 }] : [] };
+        const sentByThis = logs.filter(
+          (x) => x.tenant_id === tenant && x.lead_id === leadId && x.account_label === label && x.status === 'sent',
+        ).length;
+        // 真实 SQL 有两条：主路径统计 queued/dispatched/pending_dispatch；
+        // pending_dispatch 补派那条**故意排除自己**（否则补派永远被自己挡住）。
+        // 假 pool 照 SQL 文本区分，别用同一个过滤糊弄过去。
+        const activeStatuses = sql.includes("'pending_dispatch'")
+          ? ['queued', 'dispatched', 'pending_dispatch']
+          : ['queued', 'dispatched'];
+        const activeAssign = assignments.filter(
+          (x) => x.tenant_id === tenant && x.lead_id === leadId && activeStatuses.includes(x.status),
+        ).length;
+        const failedLogs = logs.filter(
+          (x) => x.tenant_id === tenant && x.lead_id === leadId && x.status === 'failed',
+        );
+        return {
+          rows: [{
+            sent_by_this: String(sentByThis),
+            active_assign: String(activeAssign),
+            failed_cnt: String(failedLogs.length),
+            mins_since_fail: failedLogs.length > 0 ? '999' : null,
+          }],
+        };
       }
 
       // insert assignment — NEW: must include dispatch_reason
