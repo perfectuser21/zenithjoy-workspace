@@ -286,6 +286,21 @@ jobs:
       - name: Run lint-smoke-mock-honesty
         run: bash .github/workflows/scripts/lint-smoke-mock-honesty.sh .github/workflows/scripts/smoke
 
+  # RPA 失败必须自带现场（invariant 93ed0761）——真机验证车道三层防假绿之外补的第四道。
+  # 前三层管的是"smoke 别假绿"，这一层管的是"失败之后有没有留下能查的东西"：
+  # 私信 NO_SEARCH_INPUT 被"根治"过四次仍复发，结构性原因就是失败原因和现场
+  # 从来不在人会看的地方，排查只能靠猜（0821 白猜三轮）。散文规矩拦不住——
+  # 同类规矩当时就在登记表里，照样被"我只是改个设备设置"绕过去了，所以要机器卡。
+  lint-rpa-failure-scene:
+    if: github.event_name == 'pull_request'
+    name: Lint — RPA Failure Scene
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run lint-rpa-failure-scene
+        run: bash .github/workflows/scripts/lint-rpa-failure-scene.sh
+
   # 真机验证车道三层防假绿 · 第3层棘轮的真正 CI 硬闸（2026-07-30 升级，proven-to-fire
   # 演练实测发现 realmachine-unverified-ratchet.mjs 之前只是 report-only，棘轮升不升
   # 完全靠 ci-patrol 每日巡检"恰好注意到"，没有机械保证——本 job 补上这条硬闸，
@@ -493,7 +508,7 @@ jobs:
     name: L1 Process Gate Passed
     needs: [verify-dev-workflow, pr-title, ci-config-audit, secrets-scan, frontend-browser-dod-check,
             lint-test-pairing, lint-test-quality, lint-tdd-commit-order, lint-no-fake-test, lint-feature-has-smoke,
-            lint-gp-anchor, lint-smoke-mock-honesty, lint-realmachine-unverified-ratchet, test-realmachine-verify-lane,
+            lint-gp-anchor, lint-smoke-mock-honesty, lint-rpa-failure-scene, lint-realmachine-unverified-ratchet, test-realmachine-verify-lane,
             lint-agent-version-bump, lint-line04-manifest-version-bump, lint-wechat-rpa-runner,
             lint-nightly-sparse-checkout-deps,
             lint-contract-test-immutability, lint-workflow-yaml-parse]
@@ -554,6 +569,10 @@ jobs:
             FAILED=true
           fi
 
+          if [ "${{ needs.lint-rpa-failure-scene.result }}" != "success" ]; then
+            echo "FAIL: Lint RPA Failure Scene (${{ needs.lint-rpa-failure-scene.result }})"
+            FAILED=1
+          fi
           if [ "${{ needs.lint-smoke-mock-honesty.result }}" != "success" ]; then
             echo "FAIL: Lint Smoke Mock Honesty (${{ needs.lint-smoke-mock-honesty.result }})"
             FAILED=true

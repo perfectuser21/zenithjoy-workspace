@@ -4875,6 +4875,14 @@ agent_suite:
   product: 微信AI客服
   note: "sprint(07121132): 第二刀 node OverlayHandler——preflight 软检测/熔断/用户关闭不重拉/diag 落盘"
 
+- id: line02-rpa-failure-scene-unit
+  path: apps/api/src/routes/agent-burner-failure-scene.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "invariant 93ed0761：RPA 失败必须自带现场。前台包名+诊断行必须跟 error_code 一起进正表 dm_outreach_log——只有 error_code 只能说'哪一步死的'，说不出'当时屏幕上是谁'。0821 这两件各翻过一次结论。守卫已变异验证 + CI 闸 lint-rpa-failure-scene 接进 l1-passed"
+
 - id: line02-dm-outreach-error-code-unit
   path: apps/api/src/routes/agent-burner-dm-error-code.test.ts
   type: unit

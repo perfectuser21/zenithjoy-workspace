@@ -109,8 +109,15 @@ class AgentService : Service() {
             val accountLabel = intent.getStringExtra(DouyinDmOutreachService.EXTRA_ACCOUNT_LABEL) ?: ""
             val profileUrl = intent.getStringExtra(DouyinDmOutreachService.EXTRA_PROFILE_URL) ?: ""
             val errorCode = intent.getStringExtra(DouyinDmOutreachService.EXTRA_ERROR) ?: ""
+            // 失败现场（invariant 93ed0761）：前台包名 + 诊断行随结果一起上报，
+            // 落进正表供人直接看，不用再回去翻 logcat（重启就没了）。
+            val foregroundPkg = intent.getStringExtra(DouyinDmOutreachService.EXTRA_FOREGROUND_PKG) ?: ""
+            val failureDiag = intent.getStringExtra(DouyinDmOutreachService.EXTRA_FAILURE_DIAG) ?: ""
             scope.launch {
-                reportDmOutreachResult(taskId, status, dmAssignmentId, accountLabel, profileUrl, errorCode)
+                reportDmOutreachResult(
+                    taskId, status, dmAssignmentId, accountLabel, profileUrl, errorCode,
+                    foregroundPkg, failureDiag,
+                )
             }
         }
     }
@@ -881,6 +888,8 @@ class AgentService : Service() {
         accountLabel: String,
         profileUrl: String,
         errorCode: String,
+        foregroundPkg: String = "",
+        failureDiag: String = "",
     ) {
         if (taskId.isEmpty()) return
         val url = "${config.deriveHttpBase()}/api/agent/burner/dm-outreach-result"
@@ -893,6 +902,8 @@ class AgentService : Service() {
             put("device_platform", "android")
             if (dmAssignmentId.isNotBlank()) put("dm_assignment_id", dmAssignmentId)
             if (errorCode.isNotBlank()) put("error_code", errorCode)
+            if (foregroundPkg.isNotBlank()) put("foreground_pkg", foregroundPkg)
+            if (failureDiag.isNotBlank()) put("failure_diag", failureDiag)
         }
         try {
             val request = Request.Builder()
