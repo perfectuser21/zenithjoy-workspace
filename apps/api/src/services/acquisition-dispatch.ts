@@ -519,6 +519,10 @@ export async function buildAssignments(
         if (!withinActiveWindow(when, cfg.dm_active_start, cfg.dm_active_end)) {
           const nextDay = new Date(when);
           nextDay.setDate(nextDay.getDate() + 1);
+          // clampToWindowStart 只在 d < startToday 时才钳制；越窗时刻（如22:03）
+          // 钟点不变地 +1 天后仍 >= startToday，必须先重置到当天零点再传入，
+          // 才能保证钳制生效（否则原样返回超窗时间，逐条候选滚雪球式前移）。
+          nextDay.setHours(0, 0, 0, 0);
           when = clampToWindowStart(nextDay, cfg.dm_active_start);
         }
         cursor.set(label, when);
@@ -640,6 +644,8 @@ export async function buildAssignments(
       if (!withinActiveWindow(when, cfg.dm_active_start, cfg.dm_active_end)) {
         const nextDay = new Date(when);
         nextDay.setDate(nextDay.getDate() + 1);
+        // 同上（Step D 附近注释）：先重置到当天零点，clampToWindowStart 才能钳制生效。
+        nextDay.setHours(0, 0, 0, 0);
         when = clampToWindowStart(nextDay, cfg.dm_active_start);
       }
       cursor.set(label, when);
