@@ -4875,6 +4875,14 @@ agent_suite:
   product: 微信AI客服
   note: "sprint(07121132): 第二刀 node OverlayHandler——preflight 软检测/熔断/用户关闭不重拉/diag 落盘"
 
+- id: line02-dm-retry-policy-unit
+  path: apps/api/src/services/dm-retry-policy.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "失败线索重投策略：旧去重'派过就永不再派'（dm_assignments 那半边无状态过滤无时间窗）导致一条线索一辈子最多 3 次尝试。0821 真机证明失败是随机的（多次尝试的 13 条里 6 条先败后成）且产能过剩（90 次/天配额只用 30 次）。改成'成功过才不再派' + 失败上限 6 + 冷却 20 分钟，按 32% 单次成功率累计送达 69%→90%"
+
 - id: line02-rpa-failure-scene-unit
   path: apps/api/src/routes/agent-burner-failure-scene.test.ts
   type: unit
