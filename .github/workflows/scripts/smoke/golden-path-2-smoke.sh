@@ -1087,6 +1087,10 @@ psq "INSERT INTO zenithjoy.dm_outreach_log (tenant_id, lead_id, account_label, s
 S24_TASK=$(psq "INSERT INTO zenithjoy.publish_tasks (tenant_id, platform, status, task_type, payload, created_at, updated_at) VALUES ('${TENANT_ID}'::uuid, 'douyin', 'dispatched', 'dm_outreach', jsonb_build_object('assignment_id','${S24_ASSIGN}','tenant_id','${TENANT_ID}','account_label','s24-burner'), now(), now()) RETURNING id")
 [ -n "$S24_TASK" ] || fail "Step 24 造 publish_task 失败" 24
 
+# [CI-MOCK: real-device-only | nightly_ref: dm-send-realmachine-smoke.sh]
+# 诚实标注：这一步确实是"塞进去什么就断言读回什么"——lint-smoke-mock-honesty 抓得对。
+# 它验证的是**这个值能不能穿过 API 落进正表那一列**（原来正是在这一步被丢掉的），
+# 不验证真机是否真把私信发出去了。真机行为由 dm-send-realmachine-smoke.sh 那条车道覆盖。
 S24_TMP=$(mktemp)
 S24_HTTP=$(curl -s -o "$S24_TMP" -w "%{http_code}" --max-time 20 \
   -X POST "${API_BASE}/api/agent/burner/dm-outreach-result" \
