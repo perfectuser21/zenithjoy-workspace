@@ -1061,6 +1061,57 @@ ok "Step 23c ✅ 批量中高意向留言 grade=${S23C_TOP}"
 
 ok "Step 23 ✅ 评论意向判定 comment-grading.ts 回归通过（画像为空日志 + 真实 DeepSeek 判定链路全通）"
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Step 24：私信失败原因必须落进正表 dm_outreach_log（铁律5 回流 PR#1686）
+#
+# 为什么值一整步：NO_SEARCH_INPUT 这个 bug 被"根治"过四次（#1120/#1375/#1640/
+# #1651-1655）还在复发，结构性原因不是修得不对，是**失败原因从来不在人会看的地方**。
+# agent 明明上报了 error_code，服务端也收到了，但写 dm_outreach_log（"私信成没成"
+# 的正表、看板读的就是它）的那条 UPDATE 只写 status，原因被丢在旁边
+# publish_tasks.response 的 JSONB 里。于是看板上永远只有"failed"三个字。
+# 0821 排查时是硬翻 JSON 才发现连续 6 次全是同一个错误码——正常没人这么干，
+# 所以四次修复都在盲修。
+#
+# 这一步做一次真往返（不只查列存在）：造任务 → 调真实上报端点 → 查正表拿没拿到原因。
+# 把 agent-burner.ts 那条 UPDATE 里的 error_code 去掉，本步必红（变异验证过）。
+echo "▶ Step 24: 私信失败原因落进 dm_outreach_log 正表"
+
+S24_COL=$(psq "SELECT 1 FROM information_schema.columns WHERE table_schema='zenithjoy' AND table_name='dm_outreach_log' AND column_name='error_code' LIMIT 1")
+[ "$S24_COL" = "1" ] || fail "Step 24 zenithjoy.dm_outreach_log.error_code 列不存在（迁移未跑）——失败原因无处可落，私信 bug 只能靠翻 JSONB 盲修" 24
+ok "Step 24 ✅ error_code 列存在"
+
+# 造一条 assignment + outreach_log(dispatched) + publish_task，走真实上报端点
+# psq 的 INSERT..RETURNING 会输出两行：返回值 + "INSERT 0 1" 状态行。
+# 只 tr -d 空白会把两行粘成 "<uuid>INSERT01" 再报 invalid input syntax for type uuid
+# （CI 实测踩过两次）。必须先 head -1 取返回值那行，再去空白。
+S24_ASSIGN=$(psq "INSERT INTO zenithjoy.dm_assignments (tenant_id, lead_id, account_label, status, scheduled_for) SELECT '${TENANT_ID}'::uuid, id, 's24-burner', 'dispatched', now() FROM zenithjoy.acquisition_leads WHERE tenant_id='${TENANT_ID}' LIMIT 1 RETURNING id" | head -1 | tr -d '[:space:]')
+[ -n "$S24_ASSIGN" ] || fail "Step 24 造 dm_assignment 失败（该租户没有任何 lead？）" 24
+psq "INSERT INTO zenithjoy.dm_outreach_log (tenant_id, lead_id, account_label, status, sent_at, assignment_id) SELECT '${TENANT_ID}'::uuid, lead_id, 's24-burner', 'dispatched', now(), id FROM zenithjoy.dm_assignments WHERE id='${S24_ASSIGN}'" >/dev/null
+# publish_tasks.agent_id 是 NOT NULL（CI 实测踩过），复用本 smoke 已解析出的 AGENT_PK
+S24_TASK=$(psq "INSERT INTO zenithjoy.publish_tasks (tenant_id, agent_id, platform, status, task_type, payload, created_at, updated_at) VALUES ('${TENANT_ID}'::uuid, '${AGENT_PK}'::uuid, 'douyin', 'dispatched', 'dm_outreach', jsonb_build_object('assignment_id','${S24_ASSIGN}','tenant_id','${TENANT_ID}','account_label','s24-burner'), now(), now()) RETURNING id" | head -1 | tr -d '[:space:]')
+[ -n "$S24_TASK" ] || fail "Step 24 造 publish_task 失败" 24
+
+# 关于下面的 gate-allow：本步属于 lint-smoke-mock-honesty
+# 头部自己写明的误伤类型——"确实验证了服务端正确处理某 error_code 参数（触发额外副作用
+# 字段）"。它断言的不是真机行为，而是**服务端数据流**：error_code 进来之后有没有被写进
+# 另一张表的那一列（原来正是在这里被丢掉的，只写了 status）。
+# 真机专用的那个标记是给"本该真机验、这里只能造假"的步骤用的，挂在这里属于错误标注，
+# 而且会顶高 realmachine-unverified 棘轮（实测 baseline=0→1 被拦下）。
+# 真机私信行为由 dm-send-realmachine-smoke.sh 那条车道覆盖，与本步职责不重叠。
+# gate-allow
+S24_TMP=$(mktemp)
+S24_HTTP=$(curl -s -o "$S24_TMP" -w "%{http_code}" --max-time 20 \
+  -X POST "${API_BASE}/api/agent/burner/dm-outreach-result" \
+  -H "Content-Type: application/json" \
+  -d "{\"task_id\":\"${S24_TASK}\",\"status\":\"failed\",\"error_code\":\"NO_SEARCH_INPUT\",\"dm_assignment_id\":\"${S24_ASSIGN}\"}")
+[ "$S24_HTTP" = "200" ] || fail "Step 24 dm-outreach-result expected 200, got ${S24_HTTP}: $(cat "$S24_TMP")" 24
+
+S24_REASON=$(psq "SELECT COALESCE(error_code,'<NULL>') FROM zenithjoy.dm_outreach_log WHERE assignment_id='${S24_ASSIGN}' LIMIT 1")
+[ "$S24_REASON" = "NO_SEARCH_INPUT" ] || fail "Step 24 dm_outreach_log.error_code='${S24_REASON}' 期望 'NO_SEARCH_INPUT'——失败原因又被丢在 publish_tasks 的 JSONB 里了，看板上只会显示 failed，下次复发照样盲修" 24
+ok "Step 24 ✅ 失败原因已落正表 error_code=${S24_REASON}"
+
+
+
 # ───────────────────────────────────────────────────────────────────
 # Step 24：account_label 语义统一回归——绑号占位→扫描归一→差集标离线全链路
 # （2026-07-22 Path2 安卓信号上报 sprint 铁律5回流，agent-burner.ts）

@@ -4875,6 +4875,14 @@ agent_suite:
   product: 微信AI客服
   note: "sprint(07121132): 第二刀 node OverlayHandler——preflight 软检测/熔断/用户关闭不重拉/diag 落盘"
 
+- id: line02-dm-outreach-error-code-unit
+  path: apps/api/src/routes/agent-burner-dm-error-code.test.ts
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "PR#1687 铁律5回流：私信失败原因必须写进正表 dm_outreach_log.error_code。NO_SEARCH_INPUT 被'根治'四次仍复发的结构性原因不是修得不对，是失败原因从来不在人会看的地方——agent 上报了 error_code，但正表 UPDATE 只写 status，原因被丢在 publish_tasks.response 的 JSONB 里。守卫已变异验证（把 error_code 从那条 UPDATE 拿掉即报红）"
+
 - id: line02-comment-grading-unit
   path: apps/api/src/services/comment-grading.test.ts
   type: unit

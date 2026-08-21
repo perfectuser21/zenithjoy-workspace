@@ -17,6 +17,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.zenithjoy.agent.account.DouyinLaunchTrampoline
+import com.zenithjoy.agent.uia.RecoveryAction
+import com.zenithjoy.agent.uia.decideRecovery
 import com.zenithjoy.agent.uia.NodeAwait
 import com.zenithjoy.agent.uia.WaitFailure
 import com.zenithjoy.agent.uia.awaitNode
@@ -165,6 +167,7 @@ class DouyinDmOutreachService : AccessibilityService() {
         // 与账号扫描服务共享的全局互斥标记（Sprint 07061301-device-account-scan-wiring）：
         // 触达任务运行期间置 busy=true，扫描服务据此在本轮跳过，避免共用微信/抖音窗口冲突。
         ScanMutex.busy = true
+        searchRetriesUsed = 0   // 每条 lead 独立计数，别让上一条的重试额度影响这一条
 
         scope.launch {
             if (!launchDouyinApp()) {
@@ -359,6 +362,10 @@ class DouyinDmOutreachService : AccessibilityService() {
         awaitAppForeground(DOUYIN_PKG, maxAttempts, delayMs)
 
     /** 90 秒超时熔断检查：命中即上报 timeout 结果并结束本次 lead 处理。 */
+    /** 本条 lead 已经因"前台被抢"重新拉起过几次（上限见 decideRecovery 的 maxRetries）。
+     *  每条 lead 开始时归零——见 dm_outreach task received 分支。 */
+    private var searchRetriesUsed = 0
+
     private fun checkLeadTimeout(): Boolean {
         val elapsedMs = android.os.SystemClock.elapsedRealtime() - leadStartedAtMs
         if (isLeadTimedOut(elapsedMs)) {
@@ -432,12 +439,27 @@ class DouyinDmOutreachService : AccessibilityService() {
         val searchInput = inputOutcome.value
             ?: rootInActiveWindow?.let { findFirstEditText(it) }
         if (searchInput == null) {
+            val failure = NodeAwait.classifyFailure(inputOutcome, DOUYIN_PKG)
             android.util.Log.w(
                 TAG,
-                "A3-diag: NO_SEARCH_INPUT searchBtnFound=true failure=" +
-                    "${NodeAwait.classifyFailure(inputOutcome, DOUYIN_PKG)} attempts=${inputOutcome.attempts} " +
-                    "waitedMs=${inputOutcome.waitedMs(AWAIT_POLL_MS)} fallbackEditTextAlsoMissing=true"
+                "A3-diag: NO_SEARCH_INPUT searchBtnFound=true failure=$failure " +
+                    "attempts=${inputOutcome.attempts} " +
+                    "waitedMs=${inputOutcome.waitedMs(AWAIT_POLL_MS)} fallbackEditTextAlsoMissing=true " +
+                    "retriesUsed=$searchRetriesUsed"
             )
+            // 前台被别人抢走（WRONG_FOREGROUND）时，再长的等待也等不出输入框——
+            // 那个页面已经不在前台了。正确动作是把抖音拉回前台重来一次，而不是判死。
+            // 这正是前四次修复（只调等待时长）都没治住 NO_SEARCH_INPUT 的原因。
+            if (decideRecovery(failure, searchRetriesUsed) == RecoveryAction.RELAUNCH_RETRY) {
+                searchRetriesUsed += 1
+                android.util.Log.i(TAG, "A3-recover: 前台被抢，重新拉起抖音重试 #$searchRetriesUsed")
+                if (!launchDouyinApp() || !awaitDouyinForeground()) {
+                    finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "DOUYIN_NOT_FOREGROUND")
+                    return false
+                }
+                if (checkLeadTimeout()) return false
+                return locateProfileBySearch(targetDouyinId)
+            }
             finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_SEARCH_INPUT")
             return false
         }
@@ -860,7 +882,9 @@ class DouyinDmOutreachService : AccessibilityService() {
         // 等「目标就绪」的轮询预算（2026-08-18）。各步累计最坏 ≈44s，低于 lead 90s 熔断。
         private const val AWAIT_POLL_MS = 500L
         private const val AWAIT_ENTRY_ATTEMPTS = 24    // 12s：私信/搜索入口，含冷启动与厂商开屏广告余量
-        private const val AWAIT_PAGE_ATTEMPTS = 12     // 6s：结果页/主页等页面级跳转
+        // 页面级等待预算搬到 DmWaitBudget（单测 DmWaitBudgetTest 钉住下限）——
+        // 真机实测抖音冷启动闪屏 10 秒，原来的 12×500ms=6s 先天不够。
+        private val AWAIT_PAGE_ATTEMPTS = DmWaitBudget.PAGE_ATTEMPTS
         private const val AWAIT_WIDGET_ATTEMPTS = 8
 
         /** 单轮探测最多遍历的节点数——finder 必须廉价（getChild 是跨进程 binder）。 */

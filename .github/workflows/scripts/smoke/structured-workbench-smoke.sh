@@ -970,7 +970,10 @@ run_inv_seam_ledger() {
 }
 
 # 本 feature 自己的合法写入方——必须排除在 INV-9 之外，理由见下方注释。
-INV9_OWNER='apps/api/src/services/workbench.service.ts'
+# ⚠️ 用**前缀**而不是逐个文件名：PR#1684 只排了 workbench.service.ts，结果 #1685 新增
+# workbench-rows.service.ts 一合并，这道闸立刻又把所有 PR 卡死一次（PR#1687 踩到）。
+# 本 feature 后面还会继续拆文件，逐个补白名单等于把地雷重新埋一遍。
+INV9_OWNER_PREFIX='apps/api/src/services/workbench'
 
 run_inv_table_claim() {
   echo "== INV-9 表名认领：五张新表在 origin/main 上零**第三方**写入方 =="
@@ -992,8 +995,8 @@ run_inv_table_claim() {
   for t in db_tables db_fields db_rows db_view_prefs db_audit; do
     local n re
     re="(INSERT INTO|UPDATE|DELETE FROM)[[:space:]]+(zenithjoy\.)?${t}([^a-zA-Z0-9_]|\$)"
-    n=$(git grep -InE "$re" origin/main -- 'apps/' ":!$INV9_OWNER" 2>/dev/null | wc -l | tr -d ' ')
-    [ "$n" = "0" ] || { git grep -InE "$re" origin/main -- 'apps/' ":!$INV9_OWNER" | head -5; fail "INV-9：$t 在 origin/main 上已有 $n 处**第三方**写入方 —— schema 撞车"; }
+    n=$(git grep -InE "$re" origin/main -- 'apps/' ":!${INV9_OWNER_PREFIX}*" 2>/dev/null | wc -l | tr -d ' ')
+    [ "$n" = "0" ] || { git grep -InE "$re" origin/main -- 'apps/' ":!${INV9_OWNER_PREFIX}*" | head -5; fail "INV-9：$t 在 origin/main 上已有 $n 处**第三方**写入方 —— schema 撞车"; }
     ok "$t 在 origin/main 上零第三方写入方"
   done
   echo "✅ INV-9 通过"
