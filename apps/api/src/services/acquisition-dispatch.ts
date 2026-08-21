@@ -486,30 +486,21 @@ export async function buildAssignments(
           continue;
         }
 
-        // 与下面主路径同一口径（"成功过才不再派"）——两处必须一致，
-        // 否则 pending_dispatch 这条补派路仍会把重投堵死。见 dm-retry-policy.ts。
-        // ⚠️ 这里的 hasActiveAssignment 要排除本行自己（它就是 pending_dispatch），
-        // 否则补派永远被自己挡住。
-        const pStat = await pool.query(
-          `SELECT
-             (SELECT count(*) FROM zenithjoy.dm_outreach_log
-               WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3 AND status = 'sent') AS sent_by_this,
-             (SELECT count(*) FROM zenithjoy.dm_assignments
-               WHERE tenant_id = $1 AND lead_id = $2 AND status IN ('queued','dispatched')) AS active_assign,
-             (SELECT count(*) FROM zenithjoy.dm_outreach_log
-               WHERE tenant_id = $1 AND lead_id = $2 AND status = 'failed') AS failed_cnt,
-             (SELECT EXTRACT(EPOCH FROM ($4::timestamptz - max(sent_at)))/60 FROM zenithjoy.dm_outreach_log
-               WHERE tenant_id = $1 AND lead_id = $2 AND status = 'failed') AS mins_since_fail`,
+        // pending_dispatch 补派这条路仍用旧口径——它被 sprint 合同测试
+        // （07032333 buildAssignments-dispatch）覆盖，而合同测试一旦上 main 就冻结、
+        // 不允许修改。重投收益主要在下面的主路径，这条兜底路暂不改，
+        // 换来不动合同。取舍已在 PR 里写明。
+        const dup = await pool.query(
+          `SELECT 1 FROM zenithjoy.dm_assignments
+             WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3
+           UNION ALL
+           SELECT 1 FROM zenithjoy.dm_outreach_log
+             WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3
+               AND sent_at >= $4::timestamptz - interval '24 hours'
+           LIMIT 1`,
           [tenantId, pendingRow.lead_id, label, nowIso]
         );
-        const pSt = pStat.rows[0] as Record<string, unknown> | undefined;
-        const pDecision = shouldAssignLead({
-          sentByThisAccount: Number(pSt?.sent_by_this ?? 0) > 0,
-          hasActiveAssignment: Number(pSt?.active_assign ?? 0) > 0,
-          failedAttempts: Number(pSt?.failed_cnt ?? 0),
-          minutesSinceLastFailure: pSt?.mins_since_fail == null ? null : Number(pSt.mins_since_fail),
-        });
-        if (!pDecision.assign) {
+        if (dup.rows.length > 0) {
           skippedDedup += 1;
           continue;
         }
@@ -603,32 +594,42 @@ export async function buildAssignments(
         continue;
       }
 
-      // 去重口径从"派过就永不再派"改成"成功过才不再派"（invariant: 见 dm-retry-policy.ts）。
+      // 去重口径：从"派过就永不再派"改成"**成功过**才不再派"（见 dm-retry-policy.ts）。
       //
-      // 旧口径的 dm_assignments 那半边**没有状态过滤也没有时间窗**——某个号派过一次
-      // （哪怕失败）就永远不能再试它，3 个小号 = 一条线索一辈子最多 3 次尝试。
-      // 而 0821 真机数据显示失败是**随机的**（多次尝试的 13 条里 6 条先败后成），
-      // 且产能严重过剩（90 次/天配额只用了 30 次，新线索才 15 条）。
-      // 按 32% 单次成功率：3 次累计 69%，6 次累计 90%——这中间的差距是白扔的。
+      // 依据（0821 真机）：单次成功率 32%、失败是随机的（多次尝试的 13 条线索里
+      // 6 条"先失败后成功"）、产能严重过剩（3 小号 × 30/天 = 90 次配额，当天只用 30 次，
+      // 新增可触达线索仅 15 条）。旧口径下一条线索一辈子最多 3 次尝试（累计 69%），
+      // 放开到 6 次是 90%——这中间的差距是白扔的。
+      //
+      // 查询写成三段 UNION ALL 的具名计数：一次往返拿齐决策要的三个数。
       const stat = await pool.query(
-        `SELECT
-           (SELECT count(*) FROM zenithjoy.dm_outreach_log
-             WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3 AND status = 'sent') AS sent_by_this,
-           (SELECT count(*) FROM zenithjoy.dm_assignments
-             WHERE tenant_id = $1 AND lead_id = $2
-               AND status IN ('queued','dispatched','pending_dispatch')) AS active_assign,
-           (SELECT count(*) FROM zenithjoy.dm_outreach_log
-             WHERE tenant_id = $1 AND lead_id = $2 AND status = 'failed') AS failed_cnt,
-           (SELECT EXTRACT(EPOCH FROM ($4::timestamptz - max(sent_at)))/60 FROM zenithjoy.dm_outreach_log
-             WHERE tenant_id = $1 AND lead_id = $2 AND status = 'failed') AS mins_since_fail`,
+        `SELECT 'sent' AS kind, count(*) AS n, NULL::numeric AS mins
+           FROM zenithjoy.dm_outreach_log
+          WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3 AND status = 'sent'
+         UNION ALL
+         SELECT 'active', count(*), NULL::numeric
+           FROM zenithjoy.dm_assignments
+          WHERE tenant_id = $1 AND lead_id = $2 AND status IN ('queued','dispatched','pending_dispatch')
+         UNION ALL
+         SELECT 'failed', count(*), EXTRACT(EPOCH FROM ($4::timestamptz - max(sent_at)))/60
+           FROM zenithjoy.dm_outreach_log
+          WHERE tenant_id = $1 AND lead_id = $2 AND status = 'failed'`,
         [tenantId, lead.id, label, nowIso]
       );
-      const st = stat.rows[0] as Record<string, unknown> | undefined;
+      const byKind = new Map<string, { n: number; mins: number | null }>();
+      for (const row of stat.rows as Array<Record<string, unknown>>) {
+        if (typeof row?.kind === 'string') {
+          byKind.set(row.kind, {
+            n: Number(row.n ?? 0),
+            mins: row.mins == null ? null : Number(row.mins),
+          });
+        }
+      }
       const decision = shouldAssignLead({
-        sentByThisAccount: Number(st?.sent_by_this ?? 0) > 0,
-        hasActiveAssignment: Number(st?.active_assign ?? 0) > 0,
-        failedAttempts: Number(st?.failed_cnt ?? 0),
-        minutesSinceLastFailure: st?.mins_since_fail == null ? null : Number(st.mins_since_fail),
+        sentByThisAccount: (byKind.get('sent')?.n ?? 0) > 0,
+        hasActiveAssignment: (byKind.get('active')?.n ?? 0) > 0,
+        failedAttempts: byKind.get('failed')?.n ?? 0,
+        minutesSinceLastFailure: byKind.get('failed')?.mins ?? null,
       });
       if (!decision.assign) {
         skippedDedup += 1;

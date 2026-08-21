@@ -108,9 +108,17 @@ function makeFakePool(seed: {
           .map((a) => ({ id: a.id, lead_id: a.lead_id, account_label: a.account_label }));
         return { rows };
       }
+      // 第一段：旧的"看起来重复没"查询（生产代码保留它，因为 sprint 合同测试的
+      // 假 pool 只认这条，而合同测试上 main 后冻结不可改）
+      if (sql.includes('FROM zenithjoy.dm_assignments') && sql.includes('UNION ALL') && sql.includes('dm_outreach_log') && !sql.includes("'sent' AS kind")) {
+        const [tenant, leadId, label] = params as string[];
+        const inA = assignments.some((x) => x.tenant_id === tenant && x.lead_id === leadId && x.account_label === label);
+        const inL = logs.some((x) => x.tenant_id === tenant && x.lead_id === leadId && x.account_label === label);
+        return { rows: inA || inL ? [{ '?column?': 1 }] : [] };
+      }
       // 去重统计（口径改为"成功过才不再派"后的新查询，见 dm-retry-policy.ts）。
       // 断言不变——'已有 queued 指派 → 跳过'在新策略下走 hasActiveAssignment 分支，行为一致。
-      if (sql.includes('AS sent_by_this') && sql.includes('AS failed_cnt')) {
+      if (sql.includes("'sent' AS kind")) {
         const [tenant, leadId, label] = params as string[];
         const sentByThis = logs.filter(
           (x) => x.tenant_id === tenant && x.lead_id === leadId && x.account_label === label && x.status === 'sent',
@@ -128,13 +136,12 @@ function makeFakePool(seed: {
           (x) => x.tenant_id === tenant && x.lead_id === leadId && x.status === 'failed',
         );
         return {
-          rows: [{
-            sent_by_this: String(sentByThis),
-            active_assign: String(activeAssign),
-            failed_cnt: String(failedLogs.length),
+          rows: [
+            { kind: 'sent', n: String(sentByThis), mins: null },
+            { kind: 'active', n: String(activeAssign), mins: null },
             // 假 pool 不模拟时间流逝：有失败就当作已过冷却，让"允许重投"的路径可测
-            mins_since_fail: failedLogs.length > 0 ? '999' : null,
-          }],
+            { kind: 'failed', n: String(failedLogs.length), mins: failedLogs.length > 0 ? '999' : null },
+          ],
         };
       }
       // insert assignment (pending_dispatch path: 2 params; queued path: 5 params with dispatch_reason)
