@@ -739,10 +739,16 @@ router.post('/dm-outreach-result', async (req: Request, res: Response) => {
     // dm_assignment_id 存在时：把 dm_outreach_log 的对应行(assignment_id 关联)从 dispatched
     // 推进到真实终态 + 同步 dm_assignments.status（幂等去重键，重复回传被上面 isDuplicate 短路）
     if (assignmentId) {
+      // ⚠️ error_code 必须跟着 status 一起写进**正表**。
+      // 它本来只写 status，原因被丢在上面 publish_tasks.response 的 JSONB 里——
+      // 而人和看板看的是 dm_outreach_log，于是永远只看得到"failed"三个字，
+      // 看不到"因为等输入框时前台被抢走了"。NO_SEARCH_INPUT 能"修好又复发"四次
+      // 没被抓住，就是因为失败原因从来不在人会看的地方（0821 是硬翻 JSON 才
+      // 发现连续 6 次全是同一个错误码）。守卫见 agent-burner-dm-error-code.test.ts。
       await pool.query(
-        `UPDATE zenithjoy.dm_outreach_log SET status=$2
+        `UPDATE zenithjoy.dm_outreach_log SET status=$2, error_code=$3
            WHERE assignment_id=$1`,
-        [assignmentId, dmStatus],
+        [assignmentId, dmStatus, error_code || null],
       );
       await pool.query(
         `UPDATE zenithjoy.dm_assignments SET status=$2, updated_at=now() WHERE id=$1`,
