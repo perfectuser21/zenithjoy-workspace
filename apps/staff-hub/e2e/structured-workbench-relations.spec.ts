@@ -60,13 +60,13 @@ async function addRelationField(api: APIRequestContext, tableId: string, targetT
   return rel!.field_id;
 }
 
-/** 建一行并把标题字段设为 title，返回 row_id */
+/** 建一行并把标题字段设为 title，返回 { rowId, version }（建=v1 + 设标题=v2，version 现读避免 409） */
 async function createTitledRow(
   api: APIRequestContext,
   tableId: string,
   titleFieldId: string,
   title: string
-) {
+): Promise<{ rowId: string; version: number }> {
   const created = await api.post(`${BASE_URL}${DB_BASE}/tables/${tableId}/rows`, { data: {} });
   expect(created.status()).toBe(201);
   const rowId = (await created.json()).data.row_id as string;
@@ -74,18 +74,20 @@ async function createTitledRow(
     data: { version: 1, data: { [titleFieldId]: title } },
   });
   expect(patched.status(), `设标题失败：${await patched.text()}`).toBe(200);
-  return rowId;
+  const version = (await patched.json()).data.version as number;
+  return { rowId, version };
 }
 
-/** 把 sourceRow 的 relation 字段关联到 [targetRow]（版本从 API 现读，避免 409） */
+/** 把 sourceRow 的 relation 字段关联到 [targetRow]（传入当前 version 避免乐观锁 409） */
 async function linkRelation(
   api: APIRequestContext,
   sourceRowId: string,
+  version: number,
   relFieldId: string,
   targetRowId: string
 ) {
   const res = await api.patch(`${BASE_URL}${DB_BASE}/rows/${sourceRowId}`, {
-    data: { version: 1, data: { [relFieldId]: [targetRowId] } },
+    data: { version, data: { [relFieldId]: [targetRowId] } },
   });
   expect(res.status(), `建关联失败：${await res.text()}`).toBe(200);
 }
@@ -118,7 +120,7 @@ test.describe('路③ S4 跨表关联链', () => {
     await createTitledRow(api, b.tableId, b.titleFieldId, '目标记录乙');
     const a = await createSimpleTable(api, `A源-${ts}`);
     const relFieldId = await addRelationField(api, a.tableId, b.tableId);
-    const aRow = await createTitledRow(api, a.tableId, a.titleFieldId, '来源行A');
+    const { rowId: aRow } = await createTitledRow(api, a.tableId, a.titleFieldId, '来源行A');
 
     await page.goto(`${BASE_URL}/workbench/tables/${a.tableId}`);
     await expect(page.getByTestId('workbench-table-page')).toBeVisible({ timeout: 20_000 });
@@ -142,11 +144,11 @@ test.describe('路③ S4 跨表关联链', () => {
     const api = page.request;
     const ts = Date.now();
     const b = await createSimpleTable(api, `B目标-${ts}`);
-    const b1 = await createTitledRow(api, b.tableId, b.titleFieldId, '被跳转目标乙');
+    const { rowId: b1 } = await createTitledRow(api, b.tableId, b.titleFieldId, '被跳转目标乙');
     const a = await createSimpleTable(api, `A源-${ts}`);
     const relFieldId = await addRelationField(api, a.tableId, b.tableId);
-    const aRow = await createTitledRow(api, a.tableId, a.titleFieldId, '来源行A');
-    await linkRelation(api, aRow, relFieldId, b1);
+    const { rowId: aRow, version: aVer } = await createTitledRow(api, a.tableId, a.titleFieldId, '来源行A');
+    await linkRelation(api, aRow, aVer, relFieldId, b1);
 
     await page.goto(`${BASE_URL}/workbench/tables/${a.tableId}`);
     await expect(page.getByTestId('workbench-table-page')).toBeVisible({ timeout: 20_000 });
@@ -171,11 +173,16 @@ test.describe('路③ S4 跨表关联链', () => {
     const ts = Date.now();
     const aTableName = `A源-${ts}`;
     const b = await createSimpleTable(api, `B目标-${ts}`);
-    const b1 = await createTitledRow(api, b.tableId, b.titleFieldId, '被引用目标');
+    const { rowId: b1 } = await createTitledRow(api, b.tableId, b.titleFieldId, '被引用目标');
     const a = await createSimpleTable(api, aTableName);
     const relFieldId = await addRelationField(api, a.tableId, b.tableId);
-    const aRow = await createTitledRow(api, a.tableId, a.titleFieldId, '引用它的来源行');
-    await linkRelation(api, aRow, relFieldId, b1);
+    const { rowId: aRow, version: aVer } = await createTitledRow(
+      api,
+      a.tableId,
+      a.titleFieldId,
+      '引用它的来源行'
+    );
+    await linkRelation(api, aRow, aVer, relFieldId, b1);
 
     // 直接进目标表 B，用 ?open= 打开被引用记录 b1 的详情
     await page.goto(`${BASE_URL}/workbench/tables/${b.tableId}?open=${b1}`);
