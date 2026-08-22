@@ -83,4 +83,29 @@ class LocatorAssistClientTest {
         val bad = LocatorAssistClient.buildVerifyBody("aid-123", false)
         assertTrue(bad.contains("false"))
     }
+
+    @Test
+    fun `extract 请求体带 mode=extract`() {
+        val body = LocatorAssistClient.buildAssistBody(
+            step = "collect_read_douyin_id", targetDesc = "这个人的抖音号",
+            uiTree = "d0 x", errorCode = "DOUYIN_ID_NOT_FOUND",
+            deviceModel = "HONOR", osVersion = "12", douyinVersion = "28.5.0", appVersion = "2.1.38",
+            mode = "extract",
+        )
+        assertTrue(body.contains("\"mode\":\"extract\""))
+    }
+
+    @Test
+    fun `extract 响应解析出 extracted_value`() {
+        val json = """{"success":true,"data":{"status":"ok","assist_id":"a","mode":"extract","extracted_value":"dy_zhang_88"}}"""
+        val v = LocatorAssistClient.parseExtractResponse(json)
+        assertEquals("dy_zhang_88", v?.first)
+        assertEquals("a", v?.second)
+    }
+
+    @Test
+    fun `extract unavailable 或畸形解析为 null`() {
+        assertNull(LocatorAssistClient.parseExtractResponse("""{"success":true,"data":{"status":"unavailable"}}"""))
+        assertNull(LocatorAssistClient.parseExtractResponse("garbage"))
+    }
 }

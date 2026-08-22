@@ -25,6 +25,8 @@ import {
   parseLineAnswer,
   selectorFromTreeLine,
   requestLocatorAssist,
+  buildExtractPrompt,
+  parseExtractAnswer,
   type LocatorAssistRequest,
 } from './locator-assist';
 
@@ -175,5 +177,49 @@ describe('requestLocatorAssist（后端调度 + fail-open + 截断守卫）', ()
     expect(ins, '出诊必须留病历——这是刀3周报固化的原材料').toBeTruthy();
     const [, params] = ins!;
     expect(params).toEqual(expect.arrayContaining(['dm_search_input', 'HONOR ANY-AN00', '28.5.0']));
+  });
+});
+
+// ── 铺满刀A：extract 模式（树→AI 抽取文本，如抖音号）──────────────────────
+describe('requestLocatorAssist mode=extract（读取类保底）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.TOAPIS_API_KEY = 'test-key';
+    (pool.query as any).mockResolvedValue({ rows: [{ id: 'aid-x' }], rowCount: 1 });
+  });
+
+  it('extract prompt 要求抽取目标值而非行号', () => {
+    const p = buildExtractPrompt({ ...baseReq(), targetDesc: '这个人的抖音号' });
+    expect(p).toContain('抖音号');
+    expect(p, 'extract 应要 extracted 字段').toMatch(/extracted/i);
+  });
+
+  it('extract 解析 AI 返回的文本值', () => {
+    expect(parseExtractAnswer('{"extracted":"zhang_san_88"}')).toBe('zhang_san_88');
+    expect(parseExtractAnswer('答案：{"extracted": "abc.123"}啰嗦')).toBe('abc.123');
+    expect(parseExtractAnswer('{"extracted":null}')).toBeNull();
+    expect(parseExtractAnswer('胡说')).toBeNull();
+  });
+
+  it('extract 模式返回 extractedValue 且不查缓存（读取值每条不同）', async () => {
+    (axios.post as any).mockResolvedValue({
+      data: { choices: [{ message: { content: '{"extracted":"dy_88"}' }, finish_reason: 'stop' }] },
+    });
+    const r = await requestLocatorAssist({ ...baseReq(), mode: 'extract', targetDesc: '抖音号' });
+    expect(r.status).toBe('ok');
+    expect(r.extractedValue).toBe('dy_88');
+    // 不应有 SELECT 缓存查询
+    const calls = (pool.query as any).mock.calls as Array<[string]>;
+    const cacheSelect = calls.find(([sql]) => /SELECT/i.test(sql) && /rpa_locator_assist/i.test(sql));
+    expect(cacheSelect, 'extract 模式不该查缓存').toBeUndefined();
+  });
+
+  it('extract 截断守卫同样生效', async () => {
+    (axios.post as any).mockResolvedValue({
+      data: { choices: [{ message: { content: '{"extr' }, finish_reason: 'length' }] },
+    });
+    const r = await requestLocatorAssist({ ...baseReq(), mode: 'extract' });
+    expect(r.status).toBe('unavailable');
+    expect(r.reason).toBe('truncated_output');
   });
 });
