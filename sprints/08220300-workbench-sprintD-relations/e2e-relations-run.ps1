@@ -52,8 +52,10 @@ try {
 }
 
 # 防历史产物冒充：本轮产出的截图必须晚于脚本启动
-$shots = Get-ChildItem "$ShotDir\*.png" -ErrorAction SilentlyContinue
-if ($null -eq $shots -or $shots.Count -lt 1) { throw "FAIL: $Grep 这一段没有产出任何截图" }
+# 强制数组包裹：Get-ChildItem 命中单文件时返回标量 FileInfo，Set-StrictMode 下访问 .Count 会抛
+# "The property 'Count' cannot be found"（@relation-build 只产一张图正好踩这个坑）。
+$shots = @(Get-ChildItem "$ShotDir\*.png" -ErrorAction SilentlyContinue)
+if ($shots.Count -lt 1) { throw "FAIL: $Grep 这一段没有产出任何截图" }
 $fresh = @($shots | Where-Object { $_.LastWriteTime -ge $ScriptStart.AddMinutes(-1) })
 if ($fresh.Count -lt 1) { throw "FAIL: $ShotDir 下全是历史遗留产物，本轮一张新图都没有" }
 
