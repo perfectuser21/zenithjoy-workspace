@@ -72,7 +72,7 @@ OLD_TREE=$(psql "$DB" -At -c "SELECT COALESCE(ui_tree_snapshot,'<null>') FROM ze
 NEW_TREE=$(psql "$DB" -At -c "SELECT COALESCE(ui_tree_snapshot,'<null>') FROM zenithjoy.dm_outreach_log WHERE assignment_id='$ASSIGN_ID'")
 [ "$NEW_TREE" != "<null>" ] || fail "保留期闸误伤：30 天内的新快照被清掉了"
 OLD_STATUS=$(psql "$DB" -At -c "SELECT status FROM zenithjoy.dm_outreach_log WHERE assignment_id='$OLD_ASSIGN_ID'")
-[ "$OLD_STATUS" = "failed" ] || fail "保留期闸只许清快照列，不许动其他字段（status 变成了 $OLD_STATUS）"
+[ "$OLD_STATUS" = "failed" ] || fail "保留期闸只许清快照列，不许动其他字段（status 变成了 ${OLD_STATUS}）"
 ok "30 天保留期闸生效：旧快照清、新快照留、其余字段不动"
 
 echo "🎉 rpa-failure-scene-snapshot smoke 全部通过"
