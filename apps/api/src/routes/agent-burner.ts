@@ -30,6 +30,14 @@ const accountScanResultRateLimit = simpleRateLimit({
   max: 60,
   keyFn: (req) => (req.body && req.body.agent_id) || 'anonymous',
 });
+// dm-outreach-result 限流（CodeQL js/missing-rate-limiting——本 PR 新增树快照写库
+// 让"改动过的代码"重新计入告警）。真实节奏：每号 dm_per_hour=20 + 重试，60次/分/agent
+// 给足整机队并发余量；快照最大 64KB，限流同时也是对这条大 body 通道的写入保护。
+const dmOutreachResultRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 60,
+  keyFn: (req) => (req.body && req.body.agent_id) || 'anonymous',
+});
 import { isDuplicateDmOutreachResult } from '../services/device-platform';
 
 const router = Router();
@@ -636,7 +644,7 @@ router.post('/dm-outreach', tenantContextOptional, agentContext, async (req: Req
 });
 
 // ── 8. POST /dm-outreach-result — Agent 回报触达结果 → 写飞书 + 单号停用不连坐 ──
-router.post('/dm-outreach-result', async (req: Request, res: Response) => {
+router.post('/dm-outreach-result', dmOutreachResultRateLimit, async (req: Request, res: Response) => {
   const {
     task_id,
     agent_id,
@@ -645,6 +653,10 @@ router.post('/dm-outreach-result', async (req: Request, res: Response) => {
     error_code,
     foreground_pkg,
     failure_diag,
+    ui_tree_snapshot,
+    device_model,
+    os_version,
+    app_version,
     profile_url,
     screenshot_path,
     device_platform,
@@ -751,9 +763,13 @@ router.post('/dm-outreach-result', async (req: Request, res: Response) => {
       // 进正表。只有 error_code 只能告诉你"哪一步死的"，告诉不了"当时屏幕上是谁"——
       // 0821 正是靠这两件推翻了错判（searchBtnFound=true / 前台是荣耀全局搜索）。
       // 守卫见 agent-burner-failure-scene.test.ts。
+      // 现场第三件 + 设备版本三件套（AI on-call 刀1）：树快照供后续 AI 定位求助
+      // 与周报聚类；设备三件按行落库——机队版本随时间漂移（2.1.32~2.1.35 并存过），
+      // 行内不带版本就没法按机型×版本对账。快照服务端二次截断（不信任客户端）。
       await pool.query(
         `UPDATE zenithjoy.dm_outreach_log
-            SET status=$2, error_code=$3, foreground_pkg=$4, failure_diag=$5
+            SET status=$2, error_code=$3, foreground_pkg=$4, failure_diag=$5,
+                ui_tree_snapshot=$6, device_model=$7, os_version=$8, app_version=$9
            WHERE assignment_id=$1`,
         [
           assignmentId,
@@ -761,7 +777,19 @@ router.post('/dm-outreach-result', async (req: Request, res: Response) => {
           error_code || null,
           typeof foreground_pkg === 'string' && foreground_pkg ? foreground_pkg : null,
           typeof failure_diag === 'string' && failure_diag ? failure_diag.slice(0, 512) : null,
+          typeof ui_tree_snapshot === 'string' && ui_tree_snapshot ? ui_tree_snapshot.slice(0, 65536) : null,
+          typeof device_model === 'string' && device_model ? device_model.slice(0, 128) : null,
+          typeof os_version === 'string' && os_version ? os_version.slice(0, 64) : null,
+          typeof app_version === 'string' && app_version ? app_version.slice(0, 64) : null,
         ],
+      );
+      // 快照 30 天保留期（主理人拍板）：低频端点上惰性清扫，零新增基建。
+      // 只清快照重列——error_code/foreground_pkg/failure_diag 是永久病历，不动。
+      await pool.query(
+        `UPDATE zenithjoy.dm_outreach_log
+            SET ui_tree_snapshot = NULL
+          WHERE ui_tree_snapshot IS NOT NULL
+            AND sent_at < NOW() - INTERVAL '30 days'`,
       );
       await pool.query(
         `UPDATE zenithjoy.dm_assignments SET status=$2, updated_at=now() WHERE id=$1`,

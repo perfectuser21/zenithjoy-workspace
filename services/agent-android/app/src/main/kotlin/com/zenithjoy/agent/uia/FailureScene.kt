@@ -18,6 +18,11 @@ data class FailureScene(
     val foregroundPkg: String?,
     /** 该错误码的诊断行（等待轮数/失败分类/找到了什么没找到什么）。 */
     val diag: String?,
+    /**
+     * 失败那一刻的无障碍树快照（AI on-call 刀1）。截断已在 UiTreeSnapshot 序列化时
+     * 完成（64KB/30层/800节点），这里只做透传；拿不到就是 null，同样不丢现场。
+     */
+    val uiTree: String? = null,
 ) {
     companion object {
         /** 诊断行落库上限：够看清失败形态，又不会把上报请求撑爆。 */
@@ -32,11 +37,13 @@ fun buildFailureScene(
     errorCode: String,
     foregroundPkg: String?,
     diag: String?,
+    uiTree: String? = null,
 ): FailureScene? {
     if (errorCode.isBlank()) return null
     return FailureScene(
         errorCode = errorCode,
         foregroundPkg = foregroundPkg?.takeIf { it.isNotBlank() },
         diag = diag?.takeIf { it.isNotBlank() }?.take(FailureScene.DIAG_MAX_LEN),
+        uiTree = uiTree?.takeIf { it.isNotBlank() },
     )
 }
