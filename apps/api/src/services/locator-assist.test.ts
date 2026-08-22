@@ -150,6 +150,21 @@ describe('requestLocatorAssist（后端调度 + fail-open + 截断守卫）', ()
     expect((axios.post as any).mock.calls.length).toBe(0);
   });
 
+  it('出诊返回 assistId（INSERT RETURNING id）——安卓端回执 verified 靠它', async () => {
+    (pool.query as any).mockImplementation(async (sql: string) => {
+      if (/INSERT INTO zenithjoy\.rpa_locator_assist/i.test(sql)) {
+        return { rows: [{ id: 'aid-returning-1' }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+    (axios.post as any).mockResolvedValue({
+      data: { choices: [{ message: { content: '{"line": 1}' }, finish_reason: 'stop' }] },
+    });
+    const r = await requestLocatorAssist(baseReq());
+    expect(r.status).toBe('ok');
+    expect(r.assistId).toBe('aid-returning-1');
+  });
+
   it('无论成败都落出诊病历（INSERT rpa_locator_assist）', async () => {
     (axios.post as any).mockResolvedValue({
       data: { choices: [{ message: { content: '{"line": 1}' }, finish_reason: 'stop' }] },

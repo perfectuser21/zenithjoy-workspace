@@ -52,6 +52,15 @@ HIT=$(psql "$DB" -At -c "SELECT count(*) FROM zenithjoy.rpa_locator_assist WHERE
 [ "$HIT" -ge 1 ] || fail "缓存命中也必须留病历（刀3 周报要统计命中率），实得 $HIT"
 ok "二问命中缓存（同机型×版本×步骤键不再烧模型钱），命中病历 $HIT 行"
 
+# ── 4. 刀2b：assist_id + verified 回执 roundtrip ──
+AID=$(echo "$R1" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'].get('assist_id',''))")
+[ -n "$AID" ] || fail "首问响应缺 assist_id——安卓端没法回执 verified — $R1"
+curl -sf -X POST "$API_BASE/api/agent/burner/locator-assist/verify" -H "Content-Type: application/json" \
+  -d "{\"assist_id\":\"$AID\",\"verified\":true}" >/dev/null || fail "verify 回执请求失败"
+VER=$(psql "$DB" -At -c "SELECT verified FROM zenithjoy.rpa_locator_assist WHERE id='$AID'")
+[ "$VER" = "t" ] || fail "verified 回执未落库，实得 '$VER'"
+ok "verified 回执 roundtrip（AI 答案过了验证闸的事实已入病历）"
+
 # 清理
 psql "$DB" -c "DELETE FROM zenithjoy.rpa_locator_assist WHERE device_model='$DEV'" >/dev/null
 echo "🎉 rpa-locator-assist smoke 全部通过"
