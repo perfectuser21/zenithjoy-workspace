@@ -159,6 +159,30 @@ test.describe('路③ S3 视图切得开', () => {
     await expect(
       page.getByTestId('kanban-column-__ungrouped__').getByTestId(/^kanban-card-/)
     ).toHaveCount(3);
+
+    // GP #3 的 UI 兑现：分组字段选择器**只列单选字段**，七类非单选在 UI 层就进不了看板
+    // （比「选了非法类型再报错」更优——用户压根选不到；API 层七类 400 是防绕过后端的兜底）。
+    const groupSelect = page.getByTestId('group-field-select');
+    await expect(groupSelect).toBeVisible();
+    const groupOptions = await groupSelect.locator('option').allTextContents();
+    expect(
+      groupOptions.some((t) => t.includes('字段-single_select')),
+      '分组选择器应含单选字段'
+    ).toBe(true);
+    for (const banned of [
+      '字段-number',
+      '字段-date',
+      '字段-text',
+      '字段-long_text',
+      '字段-multi_select',
+      '字段-person',
+      '字段-url',
+    ]) {
+      expect(
+        groupOptions.some((t) => t.includes(banned)),
+        `分组选择器不应出现非单选字段 ${banned}（非法类型在 UI 层进不了看板）`
+      ).toBe(false);
+    }
     await page.screenshot({ path: shot('01-kanban-columns.png'), fullPage: true });
 
     // 02：把「甲」列那张卡拖到「乙」列 → 库中该行分组值改成乙、version +1，刷新仍在新列

@@ -1,6 +1,9 @@
 # Sprint Contract Draft (Round 1) — 路③ 结构化工作台 · Sprint C（S3 视图切得开）
 
-**GP-Anchor**: `line11/structured_workbench#step3`
+## GP-Anchor
+
+GP-Anchor: line11/structured_workbench#step3
+
 **上位合同**: 员工知识中枢 路③「结构化工作台」Golden Path 提案 v3（gp `c86e37ff-3307-4b1a-80d9-3b00b8450554`），**CONTRACT IS LAW**
 **门禁断言**: 上位合同 §8 Sprint C = **A20–A26**（本刀实装 A20–A25；A26 见下方「本刀显式不实装」）
 **journey_type**: user_facing
