@@ -73,4 +73,11 @@ class LocatorAssistWiringTest {
         assertTrue("缺 dm_message_input 步骤键", src.contains("\"dm_message_input\""))
         assertTrue("缺 dm_send_button 步骤键", src.contains("\"dm_send_button\""))
     }
+
+    @Test
+    fun `采集链评论按钮判死点挂 locate 保底（铺满刀C2）`() {
+        val src = collectServiceSource()
+        assertTrue("采集链缺 locate 版 tryLocatorAssist", src.contains("tryLocatorAssist"))
+        assertTrue("缺 collect_comment_button 步骤键", src.contains("collect_comment_button"))
+    }
 }

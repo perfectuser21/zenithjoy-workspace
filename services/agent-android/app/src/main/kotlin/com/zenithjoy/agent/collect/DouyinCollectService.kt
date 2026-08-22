@@ -290,17 +290,24 @@ class DouyinCollectService : AccessibilityService() {
                 "startStage2Collect: commentBtn=${commentBtn != null} attempts=${outcome.attempts} " +
                     "waitedMs=${outcome.waitedMs(AWAIT_POLL_MS)} fgPkg=${outcome.lastForegroundPkg}"
             )
-            if (commentBtn == null) {
+            var commentBtnFinal = commentBtn
+            if (commentBtnFinal == null) {
                 // 必须报错码，不能静默交 0 条：服务端只看 comments_reported_at 是否落章
                 // （count(comments_reported_at) = videoDone），静默 0 条会让任务照常结算 done，
                 // 把断点掩盖成"抓到了但一条评论都没有"。
                 val failure = NodeAwait.classifyFailure(outcome, DOUYIN_PKG)
                 android.util.Log.w(TAG, "startStage2Collect: 等待评论按钮超时 failure=$failure")
-                finishWithError(if (failure == WaitFailure.NO_ROOT) "NO_WINDOW" else "NO_COMMENT_BUTTON")
-                return@launch
+                // AI 保底（铺满刀C2）：评论按钮找不到=这条视频零线索，判死前问一次
+                if (failure != WaitFailure.NO_ROOT) {
+                    commentBtnFinal = tryLocatorAssist("collect_comment_button", "评论按钮（打开这条视频的评论列表）", "NO_COMMENT_BUTTON")
+                }
+                if (commentBtnFinal == null) {
+                    finishWithError(if (failure == WaitFailure.NO_ROOT) "NO_WINDOW" else "NO_COMMENT_BUTTON")
+                    return@launch
+                }
             }
             state = State.OPENING_COMMENTS
-            clickCommentButton(commentBtn)
+            clickCommentButton(commentBtnFinal)
             startCommentsTimeout()
             startExtractionWatchdog()
         }
@@ -1332,6 +1339,45 @@ class DouyinCollectService : AccessibilityService() {
             }
         }
         return if (valid) value else null
+    }
+
+    /**
+     * locate 版 AI 保底（铺满刀C2）：某定位判死前把树发 AI 问"哪个是<目标>"，返回该 node。
+     * 只用带 view_id 的候选。fail-open：任何失败返回 null，调用方走原判死路径。
+     */
+    private suspend fun tryLocatorAssist(step: String, targetDesc: String, errorCode: String): AccessibilityNodeInfo? {
+        val tree = runCatching {
+            rootInActiveWindow?.let { UiTreeSnapshot.serialize(UiTreeSnapshot.fromAccessibilityNode(it)) }
+        }.getOrNull() ?: return null
+        val httpBase = AgentConfig(applicationContext).deriveHttpBase()
+        if (httpBase.isBlank()) return null
+        val douyinVer = runCatching {
+            applicationContext.packageManager.getPackageInfo(DOUYIN_PKG, 0).versionName
+        }.getOrNull()
+        val body = LocatorAssistClient.buildAssistBody(
+            step = step,
+            targetDesc = targetDesc,
+            uiTree = tree,
+            errorCode = errorCode,
+            deviceModel = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim(),
+            osVersion = "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})",
+            douyinVersion = douyinVer,
+            appVersion = BuildConfig.VERSION_NAME,
+        )
+        val answer = withContext(Dispatchers.IO) {
+            LocatorAssistClient.requestAssistBlocking(httpBase, body)
+        } ?: return null
+        val cand = answer.candidates.firstOrNull()
+        android.util.Log.i(TAG, "assist locate step=$step cacheHit=${answer.cacheHit} viewId=${cand?.viewId}")
+        val viewId = cand?.viewId
+        val aid = answer.assistId
+        if (viewId == null) {
+            if (aid != null) scope.launch(Dispatchers.IO) { LocatorAssistClient.reportVerifiedBlocking(httpBase, aid, false) }
+            return null
+        }
+        val node = rootInActiveWindow?.let { findNodeByIds(it, viewId) }
+        if (aid != null) scope.launch(Dispatchers.IO) { LocatorAssistClient.reportVerifiedBlocking(httpBase, aid, node != null) }
+        return node
     }
 
     /**
