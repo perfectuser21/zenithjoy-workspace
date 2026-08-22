@@ -1,0 +1,18 @@
+{"lens":"solo","round":2,
+ "rubric_scores":{"reality_of_status":9,"path_completeness":9,"assertion_verifiability":9,
+                  "judgment_completeness":9,"risk_gates":9,"commitment_purity":9,
+                  "multi_platform_completeness":10},
+ "verdict":"APPROVED",
+ "findings":[
+   {"severity":"P1","finding":"P1-1 CRDT/WS 绕过 XSS 白名单——已核销：命名服务端强制校验点 CV（J10，apply后落库前过与HTTP/AI写回同一白名单，拒绝update+回reject回滚），G1新增CV行、lifeline④扩到CRDT/WS路径、A10断言含裸WS客户端注入+变异守卫（注掉CV必转红）","evidence":"proposal S2挂片J10 + G1行 + A10 + 合同lifeline④；裸socket前提实锤 apps/api/src/services/agent-ws.ts server.on('upgrade') token鉴权非cookie","dimension":"risk_gates","status":"RESOLVED"},
+   {"severity":"P1","finding":"P1-2 陈旧ACL窗口与fail-closed自相矛盾——已核销：采纳(a)query-time live ACL复核，index仅候选生成、召回后按live ACL(tenant_members+live visibility)复核、无权候选喂LLM前丢弃，正确性与索引新鲜度解耦，best_effort⑨降为纯性能项，矛盾消除","evidence":"proposal J6重写 + lifeline② + A4/A5变异(注掉query-time live复核必转红) + 合同lifeline②/best_effort⑨","dimension":"path_completeness","status":"RESOLVED"},
+   {"severity":"P1","finding":"P1-3 AI检索默认策略无人负责+fr超承诺——已核销：J6默认纳入(有权可见即进)+opt-out显式退出，opt-out UI归属S4开关(默认false)、S1回显，documents表加ai_retrieval_opt_out列，fr_summary第4条对齐『有权可见且未opt-out』并同改合同","evidence":"proposal J6/S4挂片/S1挂片 + documents表列 + 合同fr_summary statement4","dimension":"path_completeness","status":"RESOLVED"},
+   {"severity":"P1","finding":"P1-4 WS握手缺多org fail-closed变异守卫——已核销：A3-c硬断言(多org rows.length>1→拒绝不建房,比照409)+变异(握手改取rows[0]必转红)，写进J2/lifeline⑤/S2判定点","evidence":"proposal A3-c + J2 + 合同lifeline⑤；实锤 workbench-auth.ts:88注释『取第一条=把配置事故变成静默的跨企业事故』L92→409","dimension":"risk_gates","status":"RESOLVED"},
+   {"severity":"P1","finding":"P1-5 会话过期长连不静默续命无断言——已核销：A3-e断言(建WS连→服务端删session→下一ping周期/写操作断连重验)+变异(去掉会话失效检查必转红)，触发时机明确，写进S2分支/lifeline⑤verification","evidence":"proposal A3-e + S2分支 + 合同lifeline⑤verification","dimension":"risk_gates","status":"RESOLVED"},
+   {"severity":"P2","finding":"CV拒绝update时的peer-relay时序（若服务端在CV前向其它在线连接转发update，非白名单节点可能瞬时到达其它客户端；A10只钉持久态与AI抽取，未钉transient relay）——非阻塞：客户端TipTap schema同样拒渲染非白名单节点、持久态干净，留实现期evaluator定relay在CV后","evidence":"proposal J10只述apply后落库前校验，未述relay时序","dimension":"risk_gates","status":"OPEN"},
+   {"severity":"P2","finding":"会话失效检测最长滞后一个ping周期(≤30s)只读漂移窗口——非阻塞：写操作即时复核可挡越权写，只读漂移为标准best-effort检测延迟","evidence":"proposal A3-e『下一ping周期或下一写操作』","dimension":"risk_gates","status":"OPEN"}
+ ],
+ "refute_rulings":[],
+ "contract_attack":{"verdict":"PASS","findings":[]},
+ "incident_comparison":{"evidence_status":"unavailable","matched_incidents":[],
+                        "missing_contract_terms":[]}}

@@ -1,0 +1,67 @@
+{
+  "reviewer": "path2-impl2",
+  "role": "harness-contract-reviewer",
+  "round": 2,
+  "sprint": "08221200-line11-path2-collab-notes",
+  "gp_anchor": "line11/collaborative_docs#step1",
+  "target_environment": "windows_cloud",
+  "verdict": "APPROVED",
+  "reviewed_commit": "cfd3223a",
+  "rubric_scores": {
+    "dod_machineability": 8,
+    "scope_match_prd": 8,
+    "test_is_red": 9,
+    "internal_consistency": 8,
+    "risk_registered": 8,
+    "verification_oracle_completeness": 8,
+    "ci_workflow_alignment": 8
+  },
+  "threshold_rule": "windows_cloud → 7 维全部 ≥7 才 APPROVED；本轮 7 维全部 ≥8，达标",
+  "convergence": {
+    "round": 2,
+    "prior_blockers": 2,
+    "resolved": 2,
+    "new_blockers": 0,
+    "trend": "converging（阻塞逐轮归零，非 force），真 APPROVED"
+  },
+  "r1_blockers_resolution": [
+    {
+      "id": "R1-1",
+      "axis": "对抗轴 1 — crdt_state 落库回查",
+      "status": "RESOLVED",
+      "verified_at": "tests/collab-ws.test.ts A3-d 结尾（已核实源码）",
+      "evidence": "size>0 已升级为内容回查：`const restored=new Y.Doc(); Y.applyUpdate(restored, new Uint8Array(crdt_state)); expect(restored.getXmlFragment('default').toString()).toContain('单org写入OK')`。落库 blob 经 apply 还原后派生 fragment 必须逐字含刚写文本——原样写空 doc / 丢内容 re-encode 类实现转红。够硬。"
+    },
+    {
+      "id": "R1-2",
+      "axis": "对抗轴 2 — 断连 resync 合并正确性",
+      "status": "RESOLVED",
+      "verified_at": "contract-draft.md A3-a(42)/E2E脚本描述(154)/PASS标准(194)/未覆盖清单(115) + contract-dod.md BEHAVIOR:E2E(81-86) + spec ARTIFACT 守卫(42)（均已核实）",
+      "evidence": "A3-a 升为硬断言：A `context.setOffline(true)`→A/B 各自离线输入 α/β→A 只读横幅可见→`setOffline(false)` 重连等 resync→断言两 context 最终 DOM 均含 α 与 β 零丢字。E2E 脚本明标 spec 必含四组硬 DOM 断言(③即断连 resync 零丢字)；PASS 标准同步；BEHAVIOR:E2E 加 03-resync-merged.png 且保留 04-private-404.png（私密 404 未丢）；spec ARTIFACT 守卫 token 由 'offline' 收紧为 'setOffline'（证断连步骤真被脚本化）；未覆盖清单澄清仅『多快合并完』延迟阈值豁免，合并正确性/零丢字不豁免（对齐 lifeline⑧铁律）。"
+    },
+    {
+      "id": "N1",
+      "axis": "非阻塞 — A10 断言不对称",
+      "status": "RESOLVED",
+      "evidence": "A10 已交叉断言：crdt_state 与 content 两处产物均不含 onerror + javascript: 两种 payload。"
+    }
+  ],
+  "independent_checks_r2": [
+    "全角标点紧贴 $VAR（第6维 EVA v2 / issue a638f840）：字节级核验 contract-draft.md PowerShell 脚本全部 $ 前引号为 ASCII 0x22，无全角/弯引号；无真实全角紧贴 $VAR。",
+    "7 条 manual:bash 命令全部 `bash -n` 通过（含 documents 表形状 psql 三段回查）。",
+    "截图清单完整无回退：01-two-editors / 02-merged-cursors / 03-resync-merged / 04-private-404，私密 404 断言保留。",
+    "TDD 真红仍成立：collab-ws.ts / document-schema.ts / documents 端点族仍不在 origin/main，改后测试仍编译且 Red（proposer 自查 REAL_EXEC=7 一致）。",
+    "内部一致：截图 03→resync、04→private 重编号在 draft/dod 两文件对齐；spec 守卫 token 与 A3-a 脚本步骤一致。"
+  ],
+  "dimension_evidence": {
+    "dod_machineability": "8 — crdt_state 内容回查 + psql to_regclass/is_nullable/data_type + 404 md5 全等 + 真 DDL 故障注入 fail-closed 503 + exit code；全硬。",
+    "scope_match_prd": "8 — resync 合并正确性(PRD S2 命名行为 + lifeline⑧铁律)现有硬断言覆盖；S4/S5、多 org 正常协同仍正确排除且登记；无 PRD 外膨胀。",
+    "test_is_red": "9 — net-new 模块/端点全缺，动态 import 抛错整 suite 红。",
+    "internal_consistency": "8 — 复用路③ fixture 全字段核实；截图重编号跨文件对齐；dod-run.sh 单源。",
+    "risk_registered": "8 — 失败语义表 + 判定点登记表(3 条真判定) + 未覆盖清单三段齐全。",
+    "verification_oracle_completeness": "8 — CRDT 内容回查 + resync DOM 零丢字 + A10 双 payload 双 store 交叉 + XSS/404/权限 oracle 全硬。",
+    "ci_workflow_alignment": "8 — e2e-knowledge-hub-path2.yml 净新增，规格镜像已存在的 path3 真实范式(linux 真 postgres 跑 test:collab-notes + windows 无 job 级 if 门跑 e2e-verify.ps1)；ARTIFACT 静态守卫强制 windows 无 if 门 + spec token setOffline。"
+  },
+  "judgments_written": 3,
+  "feedback": "APPROVED。r1 两项阻塞(crdt_state 落库回查 size-only、断连 resync 合并正确性无 oracle)与 A10 非阻塞均定点真实修订并经源码/字节级复核确认：A3-d 已改为 Y.applyUpdate 还原后 fragment 逐字含刚写文本；A3-a 及 E2E 脚本/PASS 标准/dod/守卫四处补断连 α/β→重连两 context DOM 均含零丢字硬断言，截图 03-resync-merged 新增且 04-private-404 保留，守卫 token 收紧为 setOffline，未覆盖清单澄清仅延迟阈值豁免非合并正确性。独立复核：无全角紧贴 $VAR、7 条 manual:bash 全过 bash -n、TDD 仍真红。7 维全部 ≥8，收敛(阻塞 2→0，非 force)。"
+}

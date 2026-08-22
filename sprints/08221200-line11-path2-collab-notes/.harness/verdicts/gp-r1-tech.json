@@ -1,0 +1,17 @@
+{"lens":"tech","round":1,
+ "rubric_scores":{"reality_of_status":8,"path_completeness":7,"assertion_verifiability":6,
+                  "judgment_completeness":9,"risk_gates":8,"commitment_purity":9,
+                  "multi_platform_completeness":10},
+ "verdict":"REVISION",
+ "findings":[
+   {"severity":"P1","finding":"XSS 白名单被声明为 lifeline④，但仅对 HTTP编辑器路径与 AI写回路径断言服务端 schema 拒绝；主人协同路径是 CRDT-over-WS 二进制 update，不流经 HTTP schema 校验端点——同org已鉴权者用裸 WS 客户端可把非白名单节点/`href=javascript:` 注进 crdt_state，派生入 content jsonb 后渲染给协作者即存储型XSS，还会被抽取进AI检索。修复：为 /collab-ws 的 CRDT update 命名一个服务端强制点(server端 apply→派生→schema/协议校验后再持久化)，并加断言『裸WS注入 javascript:href/非白名单节点被剥/拒』+ 变异守卫。","evidence":"proposal G1/A2 只覆盖编辑器与AI路径；agent-ws.ts server.on('upgrade') 走裸 socket 不过 Express schema 链(origin/main 已核)；lifeline④ verification 无 CRDT通道条目","dimension":"assertion_verifiability","status":"OPEN"},
+   {"severity":"P1","finding":"AI检索的 intra-org 新鲜权限被同时两处分类冲突：lifeline②把『AI检索』列为七处 fail-closed 前置过滤之一，best_effort⑨/S4分支却把『权限收紧后索引N秒一致』标为尽力项——J6 的 index pre-filter 依赖索引新鲜度，权限从 org可见收紧到仅自己后存在陈旧ACL越权召回窗口，与 fail-closed 直接矛盾。修复：要么在召回后加查询期 live ACL 复核(比照 J5 对直接访问的 live 校验)使 AI检索真正 fail-closed，要么显式承认并降级 AI检索的新鲜权限为 best_effort，二选一消歧。","evidence":"proposal lifeline② vs best_effort⑨ + S4分支『陈旧ACL=越权召回窗口』同一事物两种分级；A5 未测『权限收紧后再查AI检索』竞态","dimension":"assertion_verifiability","status":"OPEN"},
+   {"severity":"P2","finding":"『openrouter 唯一消费者是 Line04 微信客服』不实：消费者还含 acquisition.ts(Line02获客)与 ai-video-pipeline-ai.controller.ts；承重结论(无line11 AI层可复用、openrouter可作library)不受影响，仅现状标注需更正。","evidence":"git grep -lE openrouter origin/main → acquisition.ts / ai-video-pipeline-ai.controller.ts / wechat-*","dimension":"reality_of_status","status":"OPEN"},
+   {"severity":"P2","finding":"CRDT 持久化未提 update log 压缩/写放大：J3 crdt_state 若每次全量重编码=O(档大小)每存写放大，若追加update则需compaction，长命文档下累积。属 best_effort⑩性能面，进实现期账本定策略即可。","evidence":"proposal J3 未涉及 Y.encodeStateAsUpdate 快照压缩/update GC","dimension":"path_completeness","status":"OPEN"}
+ ],
+ "refute_rulings":[],
+ "contract_attack":{"verdict":"REVISION","findings":[
+   {"key":"lifelines_and_nfr","finding":"lifeline④(XSS schema白名单)的 verification 未覆盖 CRDT-over-WS 二进制写路径，声明的命门存在未设强制点的绕过通道","severity":"P1"},
+   {"key":"lifelines_and_nfr","finding":"同一事物(AI检索 intra-org 新鲜权限)在 lifeline②被列 fail-closed、在 best_effort⑨被列 N秒一致，分类互斥须消歧，否则 A5 的 fail-closed 断言不可信","severity":"P1"}
+ ]},
+ "incident_comparison":{"evidence_status":"unavailable","matched_incidents":[],"missing_contract_terms":[]}}

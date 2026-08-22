@@ -1,0 +1,130 @@
+{
+  "fr_summary": {
+    "statements": [
+      "员工在 Staff Hub 文档树某节点新建文档，写富文本正文（标题/段落/列表/勾选/代码块/内嵌图片/@提及），保存刷新后仍在本组织文档树，并可导出 Markdown 拿走",
+      "多个员工在 Staff Hub 同时编辑同一文档，看到彼此的多人光标，改不同段落字符级自动合并互不覆盖，改同一句无静默丢字；断连降级只读+本地暂存并提示，重连自动 resync",
+      "员工在文档/文件夹上设可见与可编辑范围（组织可见/指定成员集合/仅自己 三档），无权者在树/搜索/打开/导出/@提及/协作准入/AI检索 七处均拿不到（统一 404）",
+      "员工在 Staff Hub 让 AI 就本组织自己有权看到的文档答问/摘要，看到带出处的答案；AI 绝不召回请求者无权/他企业/未确认草稿的内容",
+      "员工让 AI 把内容写回文档，看到一个可见的 pending「AI 草稿」块，人工确认后才成正文；AI 写回复用请求者身份、只 additive 插入、绝不以系统身份写他人私密文档"
+    ]
+  },
+  "lifelines_and_nfr": {
+    "items": [
+      {
+        "statement": "cross-tenant 隔离在 文档/文件夹/正文/@提及/协作房/检索域 六层全部成立",
+        "class": "lifeline",
+        "verification": "持 B 企业真实会话对六层任一伪造 org_id 指向 A → 4xx/空集且 A 文档逐字未变；B 会话连 A 的 (org_id,doc_id) 协作房拒绝且无任何在线/正文信号；变异=改回读身份头/注掉 WS 握手鉴权必须转红（A1）",
+        "rationale": "多租户真墙，泄露即企业核心资产跨企业外流，命门"
+      },
+      {
+        "statement": "intra-org 权限三档在 树/搜索/打开/导出/@提及/协作准入/AI检索 七处全部前置过滤，无权=统一404，权限查询失败 fail-closed 503 不降级为可见",
+        "class": "lifeline",
+        "verification": "设文档仅自己后他人七处全拿不到（统一404同文案同形状）；most-restrictive 继承（子档生效范围≤父级）；tenant_members 删 member 后其对成员集合共享文档立即不可达（A4）",
+        "rationale": "越权可见=组织内数据泄露，且陈旧 ACL 是召回投毒面"
+      },
+      {
+        "statement": "AI 读/写回只在请求者本人已鉴权的同步 HTTP 请求内、复用 req.workbenchIdentity（org 维度待 active_org），禁任何后台服务身份的 AI 检索或写库",
+        "class": "lifeline",
+        "verification": "AI 读/写端点无 req.workbenchIdentity 即拒；跨企业/越权写 → 4xx 且目标文档逐字未变；变异=注入无会话回落服务身份必须转红（A5/A6）",
+        "rationale": "workbenchAuthGuard 为 cookie-only，后台 worker 无 cookie；服务身份回落=越权召回/写全租户后门"
+      },
+      {
+        "statement": "富文本渲染 XSS 面由 ProseMirror schema 白名单（含节点/mark 属性协议白名单：link href 仅 http/https/mailto，image src 禁 javascript:/data:）收窄，禁 raw HTML；SQL 注入面由参数化物理为零；AI 写回入库过同一条服务端 schema 校验",
+        "class": "lifeline",
+        "verification": "正文注入 <img onerror>/href=javascript: 渲染后被剥；标题 \"; DROP TABLE 参数化不触发；AI 构造非白名单节点入库被服务端拒（A2/A6）",
+        "rationale": "文档正文可被 AI 检索并被多人渲染，存储型 XSS 传播面大"
+      },
+      {
+        "statement": "WS 协作房握手复用 better-auth cookie 会话解析鉴权、按 (org_id,doc_id) 强隔离、每连接校验 doc 编辑权，无有效会话握手不建房，会话过期即断连重验",
+        "class": "lifeline",
+        "verification": "无有效会话连 /collab-ws 拒绝不建房；B 会话连 A 协作房拒绝；变异=注掉握手鉴权/注掉 doc 权校验必须转红（A1/A3）",
+        "rationale": "WS upgrade 不过 Express 中间件链，workbenchAuthGuard 无法 drop-in，握手鉴权为净新增命门"
+      },
+      {
+        "statement": "未确认的 AI 草稿块不进检索域（pending 标记，索引器跳过）；正文一律当不可信数据（分隔+来源标注，输出不自动执行/落库）",
+        "class": "lifeline",
+        "verification": "构造 pending 未确认草稿在 L3 真检索栈+真 LLM 下不被召回进问答上下文；确认前删草稿块即撤销（A5/A6）",
+        "rationale": "确认闸只挡「成正文」挡不住「进检索」；未确认草稿进检索=投毒真入口"
+      },
+      {
+        "statement": "文档正文(content jsonb)+CRDT state(crdt_state bytea) 有 pg_dump 定时+异地备份，且恢复演练进 cron",
+        "class": "lifeline",
+        "verification": "从备份还原临时库，content JSONB + crdt_state + 关键字段(org_id/visibility/parent_id/deleted_at) 逐条比对一致（A7，L2）",
+        "rationale": "文档正文=企业核心资产，无恢复演练的备份等于没有备份"
+      },
+      {
+        "statement": "无静默数据丢失：CRDT 字符级合并零丢字、自动保存失败编辑器可见并保留本地草稿、断连本地暂存",
+        "class": "lifeline",
+        "verification": "两会话同时改同一句无丢字；自动保存 500/弱网时编辑器可见提示且本地草稿保留（不继承 CustomerListPage 全量重拉掩盖失败）（A2/A3）",
+        "rationale": "静默丢失员工正在写的文档=直接摧毁产品信任"
+      },
+      {
+        "statement": "软删/权限收紧后检索索引 N 秒内一致（收窄越权召回窗口）",
+        "class": "best_effort",
+        "verification": "改权限/软删后计时验证索引在 N 秒内不再召回该内容（A4/A5 延伸）",
+        "rationale": "陈旧 ACL 是越权召回窗口，尽力收窄但非零窗口即失败"
+      },
+      {
+        "statement": "CRDT 实时同步延迟与多人光标顺滑度在可用区间",
+        "class": "best_effort",
+        "verification": "windows_cloud 真浏览器双会话协同，光标/字符更新肉眼实时（A8 观察）",
+        "rationale": "体验维度，慢但不错仍可用，非命门"
+      },
+      {
+        "statement": "AI 答案抓要点准、出处对；注入指令不改变答案（软断言）",
+        "class": "best_effort",
+        "verification": "eval 集 + LLM judge + 人工抽样；3 名非技术员工 20 分钟内独立建档+写200字+分享协作 2/3 达标",
+        "rationale": "生成质量为软指标，走 eval 非硬门，标软"
+      },
+      {
+        "statement": "TipTap 与 Yjs 版本锁定，协作协议版本兼容",
+        "class": "best_effort",
+        "verification": "package.json 版本锁 + 协作协议版本号；升级须回归 A3/A8",
+        "rationale": "平台改版漂移防护，best_effort"
+      }
+    ]
+  },
+  "yield_order": {
+    "order": ["安全/资金正确性", "数据一致性", "功能完整", "性能", "体验顺滑"],
+    "override_reason": null
+  },
+  "external_commitment_changes": {
+    "changes": [],
+    "none": true
+  },
+  "release_and_blast_radius": {
+    "stages": ["internal"],
+    "blast_radius": "仅 line11 员工知识中枢 Staff Hub 内新增文档域（documents 表 + /collab-ws + AI 读写端点），全部挂 workbenchAuthGuard 按 org 隔离；不改路①knowledge.ts 与路③workbench 既有端点，回归面=共享知识/检索基建对路① CRUD 消费链（A9）；对外无 API/定价/公开能力变化",
+    "rollback_triggers": [
+      "A1/A9 任一 cross-tenant 隔离或路①CRUD 回归断言转红 → 自动回滚该 PR",
+      "windows_cloud 真浏览器 E2E（A8）在 required check 转红 → 阻塞合并/回滚",
+      "AI 读/写身份变异守卫（服务身份回落）转红 → 自动回滚",
+      "投毒不召回断言（A5，L3 真检索栈）转红 → 回滚 S4/S5 检索纳入",
+      "WS 握手鉴权变异守卫转红 → 回滚 /collab-ws 挂载"
+    ]
+  },
+  "success_and_close": {
+    "metrics": [
+      "windows_cloud 真浏览器 E2E 全链（A8：建档→写→存→刷新→第二人实时协同字符级合并+多人光标→设仅自己→第三人打不开/搜不到/进不了协作→AI 问答带出处→AI 写回 pending→检索不召回未确认→人工确认）绿",
+      "A1-A9 硬断言全绿 + 变异守卫全部有效（注掉即转红）",
+      "3 名非技术员工 20 分钟内独立建档+写200字+分享协作，2/3 达标（软）"
+    ],
+    "observation_window": "合并后 14 天 internal 灰度观察",
+    "close_conditions": [
+      "A1-A9 全绿且接线三件套（spec 进 workflow 清单+guard 文件名列表、smoke 进 smoke-baseline.txt、聚合进 required check）落地",
+      "14 天内无 cross-tenant/越权召回/静默丢失事故",
+      "单 org 成员端到端可用（多 org 分支显式登记待 active_org，不阻塞关闭）"
+    ],
+    "shutdown_conditions": [
+      "CRDT 实时合并在真机反复出现丢字且无法收口 → 承认失败下线 S2 改回后续刀",
+      "AI 检索投毒防线（A5）在 L3 下无法结构性保证不召回无权内容 → 下线 S4/S5 检索纳入",
+      "active_org 模型长期不定且多 org 成员为主力场景 → S2/S4/S5 多 org 分支挂起待外部依赖"
+    ]
+  },
+  "budget_guard": {
+    "total_cost_cap_usd": 10,
+    "atom_cost_cap_usd": 2,
+    "atom_runtime_sec": 1800,
+    "atom_parallelism": 1
+  }
+}

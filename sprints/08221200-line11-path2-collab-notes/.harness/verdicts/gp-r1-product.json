@@ -1,0 +1,17 @@
+{"lens":"product","round":1,
+ "rubric_scores":{"reality_of_status":9,"path_completeness":6,"assertion_verifiability":8,
+                  "judgment_completeness":8,"risk_gates":9,"commitment_purity":9,
+                  "multi_platform_completeness":10},
+ "verdict":"REVISION",
+ "findings":[
+  {"severity":"P1","finding":"S4「AI读得到」依赖「显式标可被AI检索」才进检索，但该标记的触发点/归属/默认策略无任何步骤或挂片承接，且与 fr_summary 第4句「就自己有权看到的文档答问」范围矛盾——默认下 AI 可能一篇都读不到（AI一等公民打折），或客户以为AI能读全部有权文档却只读到已标记的。建议：J6 补默认策略（推荐『有权可见即默认纳入检索、权限前置过滤兜底投毒』，显式标记仅作退出/排除），或把 fr_summary 收窄为『有权看到且已纳入检索的文档』并给标记一个明确UI归属+默认值。","evidence":"proposal S4挂片『文档进检索域索引(形态见J6)』+J6『显式标可被AI检索才进』vs gp-contract fr_summary[4]『就本组织自己有权看到的文档答问』；retrieval-exclusions.ts 实锤仅有排除清单、无纳入/标记机制","dimension":"path_completeness","status":"OPEN"},
+  {"severity":"P2","finding":"@提及在 fr_summary[1]/S1 仅界定为『@提及其他文档』，@人 及被@者通知（协同文档核心触发器）未进骨干；建议显式声明@提及范围=文档引用，@人通知登记为后续刀，避免客户误期。","evidence":"proposal S1『@提及其他文档』；无人-@通知触发器","dimension":"path_completeness","status":"OPEN"},
+  {"severity":"P2","finding":"多org成员 fail-closed 409 对用户的可感知恢复体验未定义——需一句『你属于多个组织，暂不支持协作/AI』的可见提示而非裸409/破碎页；否则多org员工第一眼即坏体验（虽属既有底座行为，路②未定义其UX）。","evidence":"workbench-auth.ts:92 rows.length>1→409(实读确认)；proposal外部阻塞项只写409下限未写用户可感知形态","dimension":"path_completeness","status":"OPEN"},
+  {"severity":"P2","finding":"从模板建档、文档过期提醒等协同文档常见触发器未登记（导入已拍板除外）；建议在『显式不做清单』中列出，避免默认遗漏被当承诺。","evidence":"proposal S5切刀表后刀行仅列版本回滚/评论/内嵌database/导入","dimension":"path_completeness","status":"OPEN"}
+ ],
+ "refute_rulings":[],
+ "contract_attack":{"verdict":"REVISION","findings":[
+  {"key":"fr_summary","finding":"fr_summary 第4句承诺 AI『就本组织自己有权看到的文档答问』，但检索设计（J6）只纳入『显式标可被AI检索』的文档；客户读 fr 会期望AI能读其全部有权文档，实际被显式标记层静默收窄=优化体验式overpromise。须收窄 fr 措辞或让 J6 默认纳入全部有权文档。","dimension":"fr_summary"}
+ ]},
+ "incident_comparison":{"evidence_status":"unavailable","matched_incidents":[],
+                        "missing_contract_terms":[]}}
