@@ -40,6 +40,8 @@ export interface LocatorAssistRequest {
   appVersion?: string;
   errorCode?: string;
   backend?: 'tree-llm' | 'vision';
+  /** locate（默认，找元素点它）/ extract（从页面抽取文本，如抖音号）。 */
+  mode?: 'locate' | 'extract';
 }
 
 export interface LocatorCandidate {
@@ -58,6 +60,8 @@ export interface LocatorAssistResult {
   candidates?: LocatorCandidate[];
   /** 本次出诊病历 id——安卓端验证闸回执（/verify）靠它定位行。 */
   assistId?: string;
+  /** extract 模式抽取到的文本值（如抖音号）。 */
+  extractedValue?: string;
 }
 
 /** prompt：目标 + 步骤上下文 + 整棵树（行号从 0 起可直接引用），只许回一行 JSON。 */
@@ -80,6 +84,28 @@ export function parseLineAnswer(raw: string, treeLines: number): number | null {
   const line = parseInt(m[1], 10);
   if (!Number.isInteger(line) || line < 0 || line >= treeLines) return null;
   return line;
+}
+
+/** extract prompt：从树里抽取目标文本值（如抖音号），只回 JSON {"extracted": "值"}。 */
+export function buildExtractPrompt(req: LocatorAssistRequest): string {
+  return [
+    `你是安卓 UI 信息抽取专家。下面是无障碍树快照，每行一个节点。`,
+    `当前步骤: ${req.step}（错误码: ${req.errorCode || '-'}）`,
+    `要抽取的信息: ${req.targetDesc}`,
+    `请从树里找出这个信息的值。只回一行 JSON，格式 {"extracted": "值"}，不要任何其他文字。`,
+    `如果树里确实没有这个信息，回 {"extracted": null}。`,
+    ``,
+    req.uiTree,
+  ].join('\n');
+}
+
+/** 从 extract 输出抠 extracted 值；null/非 JSON → null。 */
+export function parseExtractAnswer(raw: string): string | null {
+  const m = raw.match(/\{[^{}]*"extracted"\s*:\s*(null|"([^"]*)")[^{}]*\}/);
+  if (!m) return null;
+  if (m[1] === 'null') return null;
+  const v = (m[2] ?? '').trim();
+  return v.length > 0 ? v : null;
 }
 
 /** 从树第 N 行提取结构化候选（刀1 UiTreeSnapshot 的行格式）。 */
@@ -120,14 +146,14 @@ async function lookupCache(req: LocatorAssistRequest): Promise<LocatorCandidate 
 
 async function recordVisit(
   req: LocatorAssistRequest,
-  opts: { backend: string; model: string | null; answerLine: number | null; selector: LocatorCandidate | null; cacheHit: boolean },
+  opts: { backend: string; model: string | null; answerLine: number | null; selector: LocatorCandidate | null; cacheHit: boolean; mode?: string },
 ): Promise<string | null> {
   try {
     const r = await pool.query(
       `INSERT INTO zenithjoy.rpa_locator_assist
          (tenant_id, step, target_desc, device_model, os_version, douyin_version, app_version,
-          error_code, ui_tree_snapshot, backend, model, answer_line, answer_selector, cache_hit)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          error_code, ui_tree_snapshot, backend, model, answer_line, answer_selector, cache_hit, mode)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
        RETURNING id`,
       [
         req.tenantId, req.step, req.targetDesc,
@@ -138,6 +164,7 @@ async function recordVisit(
         opts.backend, opts.model, opts.answerLine,
         opts.selector ? JSON.stringify(opts.selector) : null,
         opts.cacheHit,
+        opts.mode ?? 'locate',
       ],
     );
     return r.rows[0]?.id ?? null;
@@ -182,7 +209,41 @@ async function askTreeLlm(req: LocatorAssistRequest): Promise<{ line: number | n
   }
 }
 
+async function askExtract(req: LocatorAssistRequest): Promise<{ value: string | null; model: string; failReason?: string }> {
+  const apiKey = process.env.TOAPIS_API_KEY;
+  if (!apiKey) return { value: null, model: ASSIST_MODEL, failReason: 'no_api_key' };
+  try {
+    const resp = await axios.post(
+      `${TOAPIS_BASE}/chat/completions`,
+      {
+        model: ASSIST_MODEL,
+        messages: [{ role: 'user', content: buildExtractPrompt(req) }],
+        max_tokens: ASSIST_MAX_TOKENS,
+        temperature: 0,
+        reasoning_effort: 'none',
+      },
+      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: ASSIST_TIMEOUT_MS },
+    );
+    const choice = resp.data?.choices?.[0];
+    if (choice?.finish_reason === 'length') return { value: null, model: ASSIST_MODEL, failReason: 'truncated_output' };
+    const value = parseExtractAnswer(choice?.message?.content ?? '');
+    return { value, model: ASSIST_MODEL, failReason: value === null ? 'unparseable_answer' : undefined };
+  } catch (err) {
+    const isTimeout = axios.isAxiosError(err) && (err as { code?: string }).code === 'ECONNABORTED';
+    return { value: null, model: ASSIST_MODEL, failReason: isTimeout ? 'llm_timeout' : 'llm_error' };
+  }
+}
+
 export async function requestLocatorAssist(req: LocatorAssistRequest): Promise<LocatorAssistResult> {
+  // extract 模式（读取类保底）：树→AI 抽取文本，不查缓存（读取值每条不同）
+  if (req.mode === 'extract') {
+    const ex = await askExtract(req);
+    const selector = ex.value ? ({ line: -1, view_id: null, text: ex.value, content_desc: null, bounds: null } as LocatorCandidate) : null;
+    const aid = await recordVisit(req, { backend: 'tree-llm', model: ex.model, answerLine: null, selector, cacheHit: false, mode: 'extract' });
+    if (ex.value === null) return { status: 'unavailable', reason: ex.failReason ?? 'no_value' };
+    return { status: 'ok', cacheHit: false, backend: 'tree-llm', extractedValue: ex.value, assistId: aid ?? undefined };
+  }
+
   // vision 插座：显式降级，绝不假装可用
   if (req.backend === 'vision') {
     if (!visionConfigured()) {

@@ -54,16 +54,42 @@ object LocatorAssistClient {
         osVersion: String?,
         douyinVersion: String?,
         appVersion: String?,
+        mode: String = "locate",
     ): String = JSONObject().apply {
         put("step", step)
         put("target_desc", targetDesc)
         put("ui_tree_snapshot", uiTree)
+        if (mode != "locate") put("mode", mode)
         if (!errorCode.isNullOrBlank()) put("error_code", errorCode)
         if (!deviceModel.isNullOrBlank()) put("device_model", deviceModel)
         if (!osVersion.isNullOrBlank()) put("os_version", osVersion)
         if (!douyinVersion.isNullOrBlank()) put("douyin_version", douyinVersion)
         if (!appVersion.isNullOrBlank()) put("app_version", appVersion)
     }.toString()
+
+    /** extract 响应 → (抽取值, assist_id)；unavailable/畸形 → null。 */
+    fun parseExtractResponse(raw: String?): Pair<String, String?>? {
+        if (raw.isNullOrBlank()) return null
+        return try {
+            val data = JSONObject(raw).optJSONObject("data") ?: return null
+            if (data.optString("status") != "ok") return null
+            val v = data.optString("extracted_value").takeIf { it.isNotBlank() && it != "null" } ?: return null
+            Pair(v, data.optString("assist_id").takeIf { it.isNotBlank() && it != "null" })
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** 同步 extract 求助。任何失败返回 null。 */
+    fun requestExtractBlocking(httpBase: String, body: String): Pair<String, String?>? = try {
+        val req = Request.Builder()
+            .url("$httpBase/api/agent/burner/locator-assist")
+            .post(body.toRequestBody("application/json".toMediaType()))
+            .build()
+        http.newCall(req).execute().use { resp -> parseExtractResponse(resp.body?.string()) }
+    } catch (_: Exception) {
+        null
+    }
 
     /** ok 且有候选 → AssistAnswer；unavailable/畸形/异常 → null（fail-open）。 */
     fun parseAssistResponse(raw: String?): AssistAnswer? {

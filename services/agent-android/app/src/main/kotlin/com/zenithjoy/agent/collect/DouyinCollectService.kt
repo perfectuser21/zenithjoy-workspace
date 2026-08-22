@@ -16,6 +16,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelChildren
@@ -23,6 +24,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import com.zenithjoy.agent.account.DouyinLaunchTrampoline
+import com.zenithjoy.agent.AgentConfig
+import com.zenithjoy.agent.BuildConfig
+import com.zenithjoy.agent.uia.LocatorAssistClient
+import com.zenithjoy.agent.uia.UiTreeSnapshot
 import com.zenithjoy.agent.uia.NodeAwait
 import com.zenithjoy.agent.uia.WaitFailure
 import com.zenithjoy.agent.uia.awaitNode
@@ -1287,7 +1292,46 @@ class DouyinCollectService : AccessibilityService() {
             }
             delay(intervalMs)
         }
-        return null
+        // AI 保底（读取类，铺满刀A）：代码正则读不到"抖音号：xxx"行时，把主页树发给 AI 抽一次。
+        // 主页进树（懒加载已轮询穷尽），走 tree-llm extract；格式验证闸挡住 AI 幻觉。
+        // 这是 26/35 缺号死线索的正解——读号失败不再直接 null 放弃。
+        return tryExtractDouyinIdViaAssist()
+    }
+
+    /** extract 保底：AI 从主页树抽抖音号，过格式闸才用。fail-open：任何失败返回 null。 */
+    private suspend fun tryExtractDouyinIdViaAssist(): String? {
+        val tree = runCatching {
+            rootInActiveWindow?.let { UiTreeSnapshot.serialize(UiTreeSnapshot.fromAccessibilityNode(it)) }
+        }.getOrNull() ?: return null
+        val httpBase = AgentConfig(applicationContext).deriveHttpBase()
+        if (httpBase.isBlank()) return null
+        val douyinVer = runCatching {
+            applicationContext.packageManager.getPackageInfo(DOUYIN_PKG, 0).versionName
+        }.getOrNull()
+        val body = LocatorAssistClient.buildAssistBody(
+            step = "collect_read_douyin_id",
+            targetDesc = "这个人主页上的抖音号（形如 抖音号：xxx 那一行的值）",
+            uiTree = tree,
+            errorCode = "DOUYIN_ID_NOT_FOUND",
+            deviceModel = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim(),
+            osVersion = "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})",
+            douyinVersion = douyinVer,
+            appVersion = BuildConfig.VERSION_NAME,
+            mode = "extract",
+        )
+        val (value, assistId) = withContext(Dispatchers.IO) {
+            LocatorAssistClient.requestExtractBlocking(httpBase, body)
+        } ?: return null
+        // 格式验证闸：抖音号是字母数字+._-，2 字符以上。AI 抽出昵称/乱码一律拦掉。
+        val valid = value.matches(Regex("^[a-zA-Z0-9._-]{2,}$"))
+        android.util.Log.i(TAG, "assist extract douyinId=$value valid=$valid")
+        if (assistId != null) {
+            val ok = valid
+            scope.launch(Dispatchers.IO) {
+                LocatorAssistClient.reportVerifiedBlocking(httpBase, assistId, ok)
+            }
+        }
+        return if (valid) value else null
     }
 
     /**

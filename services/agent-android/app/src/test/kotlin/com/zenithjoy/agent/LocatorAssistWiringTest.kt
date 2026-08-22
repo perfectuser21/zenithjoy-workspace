@@ -51,4 +51,18 @@ class LocatorAssistWiringTest {
         val src = dmOutreachServiceSource()
         assertTrue("缺 verified 回执调用", src.contains("reportAssistVerified"))
     }
+
+    private fun collectServiceSource() = readSource(
+        listOf(
+            "src/main/kotlin/com/zenithjoy/agent/collect/DouyinCollectService.kt",
+            "app/src/main/kotlin/com/zenithjoy/agent/collect/DouyinCollectService.kt",
+        )
+    )
+
+    @Test
+    fun `读抖音号失败点接了 extract 保底`() {
+        val src = collectServiceSource()
+        assertTrue("采集链未接 LocatorAssistClient——C17 读号失败没保底(26/35死线索根子)", src.contains("LocatorAssistClient"))
+        assertTrue("缺 collect_read_douyin_id 步骤键", src.contains("collect_read_douyin_id"))
+    }
 }

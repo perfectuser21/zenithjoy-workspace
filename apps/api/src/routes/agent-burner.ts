@@ -656,7 +656,7 @@ router.post('/dm-outreach', tenantContextOptional, agentContext, async (req: Req
 // fail-open：本端点任何内部失败都回 200 + unavailable，安卓端走原失败路径。
 router.post('/locator-assist', locatorAssistRateLimit, async (req: Request, res: Response) => {
   const {
-    step, target_desc, ui_tree_snapshot, error_code, backend,
+    step, target_desc, ui_tree_snapshot, error_code, backend, mode,
     device_model, os_version, douyin_version, app_version,
   } = req.body || {};
   if (!step || !target_desc || typeof ui_tree_snapshot !== 'string' || !ui_tree_snapshot) {
@@ -669,6 +669,7 @@ router.post('/locator-assist', locatorAssistRateLimit, async (req: Request, res:
     uiTree: ui_tree_snapshot.slice(0, TREE_MAX_CHARS),
     errorCode: typeof error_code === 'string' ? error_code : undefined,
     backend: backend === 'vision' ? 'vision' : 'tree-llm',
+    mode: mode === 'extract' ? 'extract' : 'locate',
     deviceModel: typeof device_model === 'string' ? device_model : undefined,
     osVersion: typeof os_version === 'string' ? os_version : undefined,
     douyinVersion: typeof douyin_version === 'string' ? douyin_version : undefined,
@@ -681,7 +682,9 @@ router.post('/locator-assist', locatorAssistRateLimit, async (req: Request, res:
     status: 'ok',
     cache_hit: result.cacheHit === true,
     backend: result.backend,
+    mode: mode === 'extract' ? 'extract' : 'locate',
     candidates: result.candidates,
+    extracted_value: result.extractedValue ?? null,
     assist_id: result.assistId ?? null,
   }));
 });

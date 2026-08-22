@@ -61,6 +61,14 @@ VER=$(psql "$DB" -At -c "SELECT verified FROM zenithjoy.rpa_locator_assist WHERE
 [ "$VER" = "t" ] || fail "verified 回执未落库，实得 '$VER'"
 ok "verified 回执 roundtrip（AI 答案过了验证闸的事实已入病历）"
 
+# ── 5. extract 模式（读取类保底，铺满刀A）：树里给一行抖音号，AI 抽出来 ──
+ETREE='d0 android.widget.FrameLayout id=- text=\"-\" desc=\"-\"\nd1 android.widget.TextView id=com.ss:id/unique_id text=\"抖音号：dy_smoke_88\" desc=\"-\"'
+ER=$(curl -sf -X POST "$API_BASE/api/agent/burner/locator-assist" -H "Content-Type: application/json" \
+  -d "{\"step\":\"collect_read_douyin_id\",\"target_desc\":\"这个人的抖音号\",\"mode\":\"extract\",\"ui_tree_snapshot\":\"$ETREE\",\"device_model\":\"$DEV\",\"error_code\":\"DOUYIN_ID_NOT_FOUND\"}") \
+  || fail "extract 请求失败"
+echo "$ER" | grep -q '"extracted_value":"dy_smoke_88"' || fail "extract 未抽出抖音号 — $ER"
+ok "extract 模式真调抽出抖音号（读取类保底跑通）"
+
 # 清理
 psql "$DB" -c "DELETE FROM zenithjoy.rpa_locator_assist WHERE device_model='$DEV'" >/dev/null
 echo "🎉 rpa-locator-assist smoke 全部通过"
