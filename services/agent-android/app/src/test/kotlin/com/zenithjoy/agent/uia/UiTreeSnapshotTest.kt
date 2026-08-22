@@ -74,12 +74,28 @@ class UiTreeSnapshotTest {
 
     @Test
     fun `超过字节上限截断并带标记`() {
-        val out = UiTreeSnapshot.serialize(FakeNode(text = "x".repeat(100_000)))!!
+        // 单字段另有 120 字符上限（预算花在广度上），所以字节截断要靠"很多中等节点"触发：
+        // 600 个子节点 × 中文 text/desc 各 100 字（UTF-8 各 300 字节）≈ 每行 650B，总量远超 64KB
+        val wide = FakeNode(
+            children = List(600) {
+                FakeNode(text = "文".repeat(100), contentDescription = "描".repeat(100))
+            }
+        )
+        val out = UiTreeSnapshot.serialize(wide)!!
         assertTrue(
             "序列化结果 UTF-8 字节数必须 <= MAX_BYTES（含标记），实得 ${out.toByteArray(Charsets.UTF_8).size}",
             out.toByteArray(Charsets.UTF_8).size <= UiTreeSnapshot.MAX_BYTES,
         )
         assertTrue("截断必须带标记，让读的人知道现场不完整", out.contains(UiTreeSnapshot.TRUNCATION_MARK))
+    }
+
+    @Test
+    fun `单节点超长字段被字段级上限清洗——树的预算花在广度上`() {
+        val out = UiTreeSnapshot.serialize(FakeNode(text = "x".repeat(100_000)))!!
+        assertTrue(
+            "单字段应被截到字段级上限附近，实得整行 ${out.length} 字符",
+            out.length < 1000,
+        )
     }
 
     @Test
