@@ -193,4 +193,78 @@ export const pasteRows = (tableId: string, header: string[], rows: string[][]) =
 
 export const exportTable = (tableId: string) => json<TableExport>(`/tables/${tableId}/export`);
 
+// ── 视图层（Sprint C / S3「视图切得开」）────────────────────────────────────────
+
+export interface ViewFilter {
+  field_id: string;
+  op: string;
+  value: string | number | null;
+}
+export interface ViewSort {
+  field_id: string;
+  dir: string;
+}
+
+/** 视图 = db_view_prefs 的一行；顶层 keys 与服务端 Response Schema 逐字对应（存 field_id 非字段名）。 */
+export interface WorkbenchView {
+  view_id: string;
+  name: string;
+  view_type: 'grid' | 'kanban';
+  filters: ViewFilter[];
+  sorts: ViewSort[];
+  group_field_id: string | null;
+  hidden_field_ids: string[];
+  is_active: boolean;
+  /** 读路径剔除过失效引用即为 true —— 前端据它出降级提示（没有它「降级」就退化成静默） */
+  degraded: boolean;
+  updated_at: string;
+}
+
+export interface ViewPatch {
+  name?: string;
+  view_type?: 'grid' | 'kanban';
+  filters?: ViewFilter[];
+  sorts?: ViewSort[];
+  group_field_id?: string | null;
+  hidden_field_ids?: string[];
+  is_active?: boolean;
+}
+
+export const listViews = (tableId: string) =>
+  json<{ views: WorkbenchView[]; active_view_id: string | null }>(`/tables/${tableId}/views`);
+
+export const createView = (tableId: string, body: ViewPatch) =>
+  json<WorkbenchView>(`/tables/${tableId}/views`, { method: 'POST', body: JSON.stringify(body) });
+
+export const patchView = (viewId: string, body: ViewPatch) =>
+  json<WorkbenchView>(`/views/${viewId}`, { method: 'PATCH', body: JSON.stringify(body) });
+
+export const deleteView = (viewId: string) =>
+  json<{ deleted_view_id: string; remaining: number }>(`/views/${viewId}`, {
+    method: 'DELETE',
+    body: JSON.stringify({}),
+  });
+
+export interface AssignedItem {
+  field_id: string;
+  row_id: string;
+  table_id: string;
+  table_name: string;
+}
+export const assignedToMe = () => json<{ items: AssignedItem[] }>('/assigned-to-me');
+
+/** 带筛/排的行列表：query 参数是 URL-encoded JSON 数组，与 View.filters/View.sorts 逐字同形 */
+export const listRowsWith = (
+  tableId: string,
+  query: { filter?: ViewFilter[]; sort?: ViewSort[] } = {}
+) => {
+  const params = new URLSearchParams();
+  if (query.filter !== undefined) params.set('filter', JSON.stringify(query.filter));
+  if (query.sort !== undefined) params.set('sort', JSON.stringify(query.sort));
+  const qs = params.toString();
+  return json<{ rows: WorkbenchRow[]; total: number; row_limit: number }>(
+    `/tables/${tableId}/rows${qs ? `?${qs}` : ''}`
+  );
+};
+
 export { KnowledgeRequestError as WorkbenchRequestError };

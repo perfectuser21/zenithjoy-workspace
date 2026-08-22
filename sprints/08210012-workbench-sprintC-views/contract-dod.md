@@ -1,6 +1,3 @@
-contract_branch: cp-08210012-workbench-views (relay: 合同随分支)
-sprint_dir: sprints/08210012-workbench-sprintC-views
-
 ---
 skeleton: false
 journey_type: user_facing
@@ -97,6 +94,10 @@ gp_anchor: line11/structured_workbench#step3
 
 - [ ] [BEHAVIOR] 变异证明（判据外置）：摘掉分组字段类型判断后，`--a20-only` 段必须 `exit ≠ 0`
   Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; bash "$S" --mutation-apply A20-group-type-nocheck || exit 1; bash "$S" --a20-only; RC=$?; bash "$S" --mutation-revert A20-group-type-nocheck; [ "$RC" -ne 0 ] || { echo "FAIL: 类型闸摘掉后 A20 段仍 exit 0 —— 分组类型闸是空的"; exit 1; }; echo OK'
+  期望: OK
+
+- [ ] [BEHAVIOR] **UI 层白名单（GP #3 的浏览器兑现）**：真浏览器看板视图的分组字段选择器 `group-field-select` **只列单选字段** —— 选项含「字段-single_select」而七类非单选（`number`/`date`/`text`/`long_text`/`multi_select`/`person`/`url`）一个不出现，用户在 UI 上压根选不到非法类型（比「选了非法类型再报错」更优；API 层七类 400 是防绕过后端的兜底，见上一条）。判据 = windows job「看板拖卡」step conclusion=success（该 step 跑 `@views-kanban`，内含此断言）+ spec 断言原文在案
+  Test: manual:bash -c 'C=apps/staff-hub/e2e/structured-workbench-views.spec.ts; grep -qF "group-field-select" "$C" || { echo "FAIL: spec 缺分组选择器断言"; exit 1; }; grep -qF "只列单选" "$C" || { echo "FAIL: spec 缺 UI 白名单断言注释"; exit 1; }; for b in 字段-single_select 字段-number 字段-date 字段-text 字段-long_text 字段-multi_select 字段-person 字段-url; do grep -qF "$b" "$C" || { echo "FAIL: spec 未覆盖 $b 的白名单断言"; exit 1; }; done; WF=e2e-knowledge-hub-path3.yml; B=$(git rev-parse --abbrev-ref HEAD); R=$(gh run list --workflow "$WF" --branch "$B" --limit 1 --json databaseId,headSha) || { echo "FAIL: gh run list 失败"; exit 1; }; ID=$(echo "$R" | jq -r ".[0].databaseId"); [ -n "$ID" ] && [ "$ID" != "null" ] || { echo "FAIL: 分支 $B 上无 $WF 运行记录"; exit 1; }; [ "$(echo "$R" | jq -r ".[0].headSha")" = "$(git rev-parse HEAD)" ] || { echo "FAIL: 拿到的是陈旧 run —— headSha 与本地 HEAD 不一致"; exit 1; }; J=$(gh run view "$ID" --json jobs); echo "$J" | jq -e "[.jobs[] | select(.name | test(\"windows\")) | .steps[] | select(.name | test(\"看板拖卡\")) | select(.conclusion == \"success\")] | length > 0" >/dev/null || { echo "FAIL: windows job 的「看板拖卡」step 未成功（UI 白名单断言在该 step 内）"; exit 1; }; echo OK'
   期望: OK
 
 ### Step5 — 拖卡换列落库（上位合同 A24 前半，⚠️ 接缝 S3-1/S3-3）

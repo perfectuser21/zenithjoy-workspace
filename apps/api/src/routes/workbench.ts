@@ -43,7 +43,18 @@ import {
   pasteRows,
   RowLimitError,
   RowVersionConflictError,
+  isCrossTableFieldError,
 } from '../services/workbench-rows.service';
+import {
+  listViews,
+  createView,
+  patchView,
+  deleteView,
+  assignedToMe,
+  GroupFieldTypeError,
+  LastViewProtectedError,
+  isViewFieldNotFoundError,
+} from '../services/workbench-views.service';
 import { WORKBENCH_TEMPLATES } from '../knowledge/workbench-templates';
 
 const router = Router();
@@ -89,6 +100,36 @@ function versionConflict(res: Response, err: RowVersionConflictError): void {
 function rowError(res: Response, scope: string, err: unknown): void {
   if (err instanceof RowVersionConflictError) return versionConflict(res, err);
   if (err instanceof RowLimitError) return rowLimitExceeded(res, err);
+  if (err instanceof WorkbenchValidationError) return badRequest(res, err);
+  serverError(res, scope, err);
+}
+
+/** GET rows 的筛/排错误分派：跨表 field_id → 404 同形（不泄露存在性）；形状/白名单 → 400 */
+function rowsListError(res: Response, scope: string, err: unknown): void {
+  if (isCrossTableFieldError(err)) return notFound(res);
+  if (err instanceof WorkbenchValidationError) return badRequest(res, err);
+  serverError(res, scope, err);
+}
+
+/** 分组字段类型不是 single_select（controller concern C2）。 */
+function groupFieldTypeInvalid(res: Response): void {
+  res
+    .status(400)
+    .json(workbenchErrorBody('GROUP_FIELD_TYPE_INVALID', '分组列只能选单选字段'));
+}
+
+/** 删到最后一个视图：至少保留一个。 */
+function lastViewProtected(res: Response): void {
+  res
+    .status(400)
+    .json(workbenchErrorBody('LAST_VIEW_PROTECTED', '至少保留一个视图，删到最后一个被拒'));
+}
+
+/** 视图端点族错误分派：跨表 field_id → 404 同形（优先于 400）/ 类型闸 400 / 保底 400 / 形状 400。 */
+function viewError(res: Response, scope: string, err: unknown): void {
+  if (isViewFieldNotFoundError(err)) return notFound(res);
+  if (err instanceof GroupFieldTypeError) return groupFieldTypeInvalid(res);
+  if (err instanceof LastViewProtectedError) return lastViewProtected(res);
   if (err instanceof WorkbenchValidationError) return badRequest(res, err);
   serverError(res, scope, err);
 }
@@ -233,14 +274,19 @@ router.post('/trash/:id/restore', async (req: Request, res: Response) => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── 读：表格视图的行列表（含服务端下发的上限，前端据此硬拦，不自己写 5000）────────
+//   本刀加 filter/sort 两个可选查询参数：JSONB 路径查询 + field_id 白名单映射。
+//   不传参数时逐字等于 Sprint B 的返回（响应体形状一字不改）。
 router.get('/tables/:id/rows', async (req: Request, res: Response) => {
   const identity = req.workbenchIdentity!;
   try {
-    const out = await listRows(identity.orgId, identity.memberId, req.params.id);
+    const out = await listRows(identity.orgId, identity.memberId, req.params.id, {
+      filter: req.query.filter,
+      sort: req.query.sort,
+    });
     if (!out) return notFound(res);
     ok(res, 200, out);
   } catch (err) {
-    serverError(res, 'listRows', err);
+    rowsListError(res, 'listRows', err);
   }
 });
 
@@ -340,6 +386,73 @@ router.post('/tables/:id/rows/paste', async (req: Request, res: Response) => {
     ok(res, 201, out);
   } catch (err) {
     rowError(res, 'pasteRows', err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 视图层（Sprint C / S3「视图切得开」）
+//
+// 视图 = db_view_prefs 的一行（controller C1，零新增 migration）。组织归属仍只来自
+// req.workbenchIdentity —— 请求体里的 org_id / member_id / tenant_id 连读都不读。
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── 读：本人在该表的视图列表（纯读，零写入副作用）──────────────────────────────
+router.get('/tables/:id/views', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  try {
+    const out = await listViews(identity.orgId, identity.memberId, req.params.id);
+    if (!out) return notFound(res);
+    ok(res, 200, out);
+  } catch (err) {
+    serverError(res, 'listViews', err);
+  }
+});
+
+// ── 写：建视图 ───────────────────────────────────────────────────────────────
+router.post('/tables/:id/views', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  try {
+    const view = await createView(identity.orgId, identity.memberId, req.params.id, body);
+    if (!view) return notFound(res);
+    ok(res, 201, view);
+  } catch (err) {
+    viewError(res, 'createView', err);
+  }
+});
+
+// ── 写：改视图（增量补丁语义）────────────────────────────────────────────────
+router.patch('/views/:id', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  try {
+    const view = await patchView(identity.orgId, identity.memberId, req.params.id, body);
+    if (!view) return notFound(res);
+    ok(res, 200, view);
+  } catch (err) {
+    viewError(res, 'patchView', err);
+  }
+});
+
+// ── 写：删视图（只删偏好，至少保留一个）──────────────────────────────────────
+router.delete('/views/:id', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  try {
+    const out = await deleteView(identity.orgId, identity.memberId, req.params.id);
+    if (!out) return notFound(res);
+    ok(res, 200, out);
+  } catch (err) {
+    viewError(res, 'deleteView', err);
+  }
+});
+
+// ── 读：「指派给我」全局视图（人员字段的归集出口）─────────────────────────────
+router.get('/assigned-to-me', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  try {
+    ok(res, 200, await assignedToMe(identity.orgId, identity.memberId));
+  } catch (err) {
+    serverError(res, 'assignedToMe', err);
   }
 });
 

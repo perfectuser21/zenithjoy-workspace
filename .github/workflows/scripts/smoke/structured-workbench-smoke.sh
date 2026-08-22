@@ -35,6 +35,8 @@ GUARD_FILE="apps/api/src/middleware/workbench-auth.ts"
 ROUTE_FILE="apps/api/src/routes/workbench.ts"
 SERVICE_FILE="apps/api/src/services/workbench.service.ts"
 ROWS_SERVICE_FILE="apps/api/src/services/workbench-rows.service.ts"
+VIEWS_SERVICE_FILE="apps/api/src/services/workbench-views.service.ts"
+KANBAN_FILE="apps/staff-hub/src/lib/workbenchKanban.ts"
 SELFCHECK_FILE="apps/api/src/startup/single-org-selfcheck.ts"
 EXCLUSIONS_FILE="apps/api/src/knowledge/retrieval-exclusions.ts"
 E2E_WORKFLOW=".github/workflows/e2e-knowledge-hub-path3.yml"
@@ -227,12 +229,13 @@ run_static() {
 DIST_GUARD="apps/api/dist/middleware/workbench-auth.js"
 DIST_SERVICE="apps/api/dist/services/workbench.service.js"
 DIST_ROWS_SERVICE="apps/api/dist/services/workbench-rows.service.js"
+DIST_VIEWS_SERVICE="apps/api/dist/services/workbench-views.service.js"
 DIST_SELFCHECK="apps/api/dist/startup/single-org-selfcheck.js"
 
 INJECT_SECRET_FILE="apps/api/src/knowledge/.wb-mutation-secret.ts"
 
 mutation_list() {
-  # 每行：<变异名><空白><注入次数>。合计 13 开关 / 24 次注入（Sprint B 新增末尾四条）。
+  # 每行：<变异名><空白><注入次数>。合计 20 开关（Sprint C 新增末尾七条）。
   cat <<'EOF'
 A2-inject-all	7
 A35-drop-name	5
@@ -247,6 +250,13 @@ A13-version-nocheck	1
 A16-row-hard-delete	1
 A1R-row-org-bypass	2
 A15-limit-off	1
+A25-field-whitelist-off	1
+A20-group-type-nocheck	1
+A20-ungrouped-null-only	1
+A1V-view-org-bypass	1
+A1V-view-member-bypass	1
+VIEW-lastview-off	1
+A24-drag-wrong-row	1
 EOF
 }
 
@@ -372,6 +382,66 @@ mutation_apply() {
       [ -f "$DIST_ROWS_SERVICE" ] && perl -0pi -e 's/return total \+ incoming > limit;/return false;/g' "$DIST_ROWS_SERVICE"
       echo "$ROWS_SERVICE_FILE" > "$MUTATION_TARGET_FILE"
       ;;
+    A25-field-whitelist-off)
+      save_file "$ROWS_SERVICE_FILE"; save_file "$DIST_ROWS_SERVICE"
+      # 摘掉 field_id → 本表字段集的白名单成员判定：belongs 恒真，跨表 field_id 不再 404
+      # （降级成 text 兜底字段照常排序返 200）。--a25-only 的「跨表 UUID → 404」当场红。
+      perl -0pi -e 's/const belongs = known !== undefined;/const belongs = true;/g' "$ROWS_SERVICE_FILE"
+      [ -f "$DIST_ROWS_SERVICE" ] && perl -0pi -e 's/const belongs = known !== undefined;/const belongs = true;/g' "$DIST_ROWS_SERVICE"
+      echo "$ROWS_SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
+    A20-group-type-nocheck)
+      save_file "$VIEWS_SERVICE_FILE"; save_file "$DIST_VIEWS_SERVICE"
+      # 分组字段类型闸摘掉：非单选类型不再 400，--a20-only 的「七类 → 400」当场红。
+      # 锚在 `!== 'single_select'` 上追加 `&& false`，条件恒假 → 永不抛 GroupFieldTypeError。
+      perl -0pi -e "s/!== 'single_select'/!== 'single_select' && false/g" "$VIEWS_SERVICE_FILE"
+      [ -f "$DIST_VIEWS_SERVICE" ] && perl -0pi -e "s/!== 'single_select'/!== 'single_select' && false/g" "$DIST_VIEWS_SERVICE"
+      echo "$VIEWS_SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
+    A20-ungrouped-null-only)
+      save_file "$KANBAN_FILE"
+      # 未分组三态判据改成只判 null：缺键/空串的卡片凭空消失，--a20-only 的三态纯函数用例当场红。
+      # 把「缺键」与「空串」两条 return true 摘掉（只留 null 那条）。
+      perl -0pi -e "s/if \(!\(groupFieldId in row\.data\)\) return true; \/\/ 缺键/\/\/ 缺键判据被摘（变异）/g" "$KANBAN_FILE"
+      perl -0pi -e "s/if \(typeof v === 'string' && v\.length === 0\) return true; \/\/ 空串/\/\/ 空串判据被摘（变异）/g" "$KANBAN_FILE"
+      echo "$KANBAN_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
+    A1V-view-org-bypass)
+      save_file "$VIEWS_SERVICE_FILE"; save_file "$DIST_VIEWS_SERVICE"
+      # 视图归属的 org 维条件改成恒真（读路径 resolveViewRow/listViews 的 v.org_id + 写路径 UPDATE/DELETE 的
+      # 裸 org_id 两处都摘，否则纵深防御里另一层 org 闸会替它挡住、变异静默失效）：
+      # 同 member 跨企业的孪生视图会被够到，--a1-a3-views-only 的 org 探针当场红。
+      for f in "$VIEWS_SERVICE_FILE" "$DIST_VIEWS_SERVICE"; do
+        [ -f "$f" ] || continue
+        perl -0pi -e 's/v\.org_id = \$2/(v.org_id = \$2 OR \$2 IS NOT NULL)/g' "$f"
+        perl -0pi -e 's/AND org_id = \$2 AND member_id = \$3/AND (org_id = \$2 OR \$2 IS NOT NULL) AND member_id = \$3/g' "$f"
+      done
+      echo "$VIEWS_SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
+    A1V-view-member-bypass)
+      save_file "$VIEWS_SERVICE_FILE"; save_file "$DIST_VIEWS_SERVICE"
+      # 视图归属的 member 维条件改成恒真（读路径 v.member_id + 写路径裸 member_id 两处都摘）：
+      # 同组织他人的视图列表会命中本人视图、也能读改本人视图，--a1-a3-views-only 的 member 探针当场红。
+      for f in "$VIEWS_SERVICE_FILE" "$DIST_VIEWS_SERVICE"; do
+        [ -f "$f" ] || continue
+        perl -0pi -e 's/v\.member_id = \$3/(v.member_id = \$3 OR \$3 IS NOT NULL)/g' "$f"
+        perl -0pi -e 's/AND member_id = \$3/AND (member_id = \$3 OR \$3 IS NOT NULL)/g' "$f"
+      done
+      echo "$VIEWS_SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
+    VIEW-lastview-off)
+      save_file "$VIEWS_SERVICE_FILE"; save_file "$DIST_VIEWS_SERVICE"
+      # 「至少保留一个视图」判据摘掉：删到最后一个不再 400，--view-delete-only 当场红。
+      perl -0pi -e 's/Number\(c\.rows\[0\]\.n\) <= 1/Number(c.rows[0].n) <= 0/g' "$VIEWS_SERVICE_FILE"
+      [ -f "$DIST_VIEWS_SERVICE" ] && perl -0pi -e 's/Number\(c\.rows\[0\]\.n\) <= 1/Number(c.rows[0].n) <= 0/g' "$DIST_VIEWS_SERVICE"
+      echo "$VIEWS_SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
+    A24-drag-wrong-row)
+      save_file "$KANBAN_FILE"
+      # 拖卡落库映射恒返 rows[0]：拖到哪张卡都改第一行，--a24-pure-only 的「映射被拖那一行」单测当场红。
+      perl -0pi -e "s/const row = rows\.find\(\(r\) => r\.row_id === activeCardId\);/const row = rows[0];/g" "$KANBAN_FILE"
+      echo "$KANBAN_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
     *)
       echo "未登记的变异名：$name"; exit 1;;
   esac
@@ -395,6 +465,13 @@ mutation_revert() {
     A16-row-hard-delete)  restore_file "$ROWS_SERVICE_FILE"; restore_file "$DIST_ROWS_SERVICE";;
     A1R-row-org-bypass)   restore_file "$ROWS_SERVICE_FILE"; restore_file "$DIST_ROWS_SERVICE";;
     A15-limit-off)        restore_file "$ROWS_SERVICE_FILE"; restore_file "$DIST_ROWS_SERVICE";;
+    A25-field-whitelist-off) restore_file "$ROWS_SERVICE_FILE"; restore_file "$DIST_ROWS_SERVICE";;
+    A20-group-type-nocheck)  restore_file "$VIEWS_SERVICE_FILE"; restore_file "$DIST_VIEWS_SERVICE";;
+    A20-ungrouped-null-only) restore_file "$KANBAN_FILE";;
+    A1V-view-org-bypass)     restore_file "$VIEWS_SERVICE_FILE"; restore_file "$DIST_VIEWS_SERVICE";;
+    A1V-view-member-bypass)  restore_file "$VIEWS_SERVICE_FILE"; restore_file "$DIST_VIEWS_SERVICE";;
+    VIEW-lastview-off)       restore_file "$VIEWS_SERVICE_FILE"; restore_file "$DIST_VIEWS_SERVICE";;
+    A24-drag-wrong-row)      restore_file "$KANBAN_FILE";;
     *) echo "未登记的变异名：$name"; exit 1;;
   esac
   rm -f "$MUTATION_TARGET_FILE"
@@ -1301,6 +1378,231 @@ run_a1_a3_rows() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
+# 段3（Sprint C / S3）视图层业务判定
+#
+# 六段各自 section_up（变异证明单独调它们）；--a24-pure-only 是纯前端单测，不碰 DB/服务。
+# ═══════════════════════════════════════════════════════════════════════════
+
+# $1=cookie $2=表名 → 建视图并返回 view_id（body 直接给 JSON）
+create_view_as() { curl -sf -b "$1" -H 'Content-Type: application/json' -X POST "$API/tables/$2/views" -d "$3" | jq -r '.data.view_id'; }
+
+run_a20() {
+  echo "== A20 分组字段类型闸（七类 400 + single_select 200）+ 未分组三态纯函数 =="
+  section_up
+  local tid fld vid before after fid c fs
+  tid=$(create_table_as "$COOKIE_A" "WB-C-A20-$SFX" 'org' | jq -r '.data.table_id')
+  [ -n "$tid" ] && [ "$tid" != "null" ] || fail "A20 建表失败"
+  fld=$(curl -sf -b "$COOKIE_A" "$API/tables/$tid/fields")
+  vid=$(create_view_as "$COOKIE_A" "$tid" '{"name":"闸","view_type":"grid","is_active":true}')
+  [ -n "$vid" ] && [ "$vid" != "null" ] || fail "A20 建视图失败"
+  before=$(psql_q "SELECT prefs::text FROM zenithjoy.db_view_prefs WHERE id = '$vid'")
+  for T in text long_text number date multi_select person url; do
+    fid=$(field_id_of "$fld" "$T")
+    [ -n "$fid" ] && [ "$fid" != "null" ] || fail "A20 $T 字段缺 field_id"
+    c=$(curl -s -o /tmp/wb-c-a20.json -w '%{http_code}' -b "$COOKIE_A" -H 'Content-Type: application/json' \
+      -X PATCH "$API/views/$vid" -d "{\"view_type\":\"kanban\",\"group_field_id\":\"$fid\"}")
+    [ "$c" = "400" ] || fail "A20 $T 做分组返 ${c}（应 400；controller C2：multi_select 也必须 400）"
+    jq -e '.error.code == "GROUP_FIELD_TYPE_INVALID"' < /tmp/wb-c-a20.json >/dev/null || fail "A20 $T 错误码不是 GROUP_FIELD_TYPE_INVALID"
+  done
+  after=$(psql_q "SELECT prefs::text FROM zenithjoy.db_view_prefs WHERE id = '$vid'")
+  [ "$before" = "$after" ] || fail "A20 400 却改了库（留半截状态）"
+  fs=$(field_id_of "$fld" single_select)
+  curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X PATCH "$API/views/$vid" \
+    -d "{\"view_type\":\"kanban\",\"group_field_id\":\"$fs\"}" \
+    | jq -e --arg fs "$fs" '.data.group_field_id == $fs' >/dev/null || fail "A20 single_select 正向未 200（一律 400 假绿）"
+  ok "七类 400 + prefs 逐字未变 + single_select 正向 200"
+
+  # 未分组三态纯函数（A20-ungrouped-null-only 应让它红）
+  export E2E_DATABASE_URL="$PGURL"
+  ( cd apps/api && npx vitest run --config vitest.workbench-views.config.ts -t "未分组三态" --reporter=dot ) \
+    >/tmp/wb-c-a20-vitest.log 2>&1 || { tail -20 /tmp/wb-c-a20-vitest.log; fail "groupRowsByField 未分组三态用例未通过"; }
+  ok "groupRowsByField 未分组三态纯函数用例通过"
+  section_down
+  echo "✅ A20 通过"
+}
+
+run_a21() {
+  echo "== A21 视图配置持久化只存 field_id + 改显示名不失效 =="
+  section_up
+  local tid fld fs fn ft vid p v1 v2
+  tid=$(create_table_as "$COOKIE_A" "WB-C-A21-$SFX" 'org' | jq -r '.data.table_id')
+  fld=$(curl -sf -b "$COOKIE_A" "$API/tables/$tid/fields")
+  fs=$(field_id_of "$fld" single_select); fn=$(field_id_of "$fld" number); ft=$(field_id_of "$fld" text)
+  vid=$(create_view_as "$COOKIE_A" "$tid" "{\"name\":\"我的视图\",\"view_type\":\"kanban\",\"group_field_id\":\"$fs\",\"sorts\":[{\"field_id\":\"$fn\",\"dir\":\"desc\"}],\"filters\":[{\"field_id\":\"$ft\",\"op\":\"contains\",\"value\":\"甲\"}],\"hidden_field_ids\":[\"$fn\"],\"is_active\":true}")
+  [ -n "$vid" ] && [ "$vid" != "null" ] || fail "A21 建视图失败"
+  p=$(psql_q "SELECT prefs::text FROM zenithjoy.db_view_prefs WHERE id = '$vid'")
+  printf '%s' "$p" | grep -q "$fs" || fail "A21 prefs 里没有 field_id"
+  printf '%s' "$p" | grep -q '字段-single_select' && fail "A21 prefs 里存了字段显示名（改名即失效）"
+  v1=$(curl -sf -b "$COOKIE_A" "$API/tables/$tid/views" | jq -S '.data.views')
+  psql "$PGURL" -q -c "UPDATE zenithjoy.db_fields SET name = '改过名的单选' WHERE id = '$fs'" >/dev/null || fail "A21 改显示名失败"
+  v2=$(curl -sf -b "$COOKIE_A" "$API/tables/$tid/views" | jq -S '.data.views')
+  [ "$v1" = "$v2" ] || fail "A21 改显示名后视图不逐项一致"
+  printf '%s' "$v2" | jq -e --arg fs "$fs" '.[0].group_field_id == $fs and .[0].degraded == false and .[0].view_type == "kanban"' >/dev/null \
+    || fail "A21 视图逐项未复原"
+  ok "prefs 存 field_id 零显示名；改名后 group_field_id 不变、degraded false"
+  section_down
+  echo "✅ A21 通过"
+}
+
+run_a22() {
+  echo "== A22 反查两分支：已删字段降级 degraded=true + 他企业 field_id 404 同形 =="
+  section_up
+  local tid fld fs fn vid bt bfid rnd c1 c2 g
+  tid=$(create_table_as "$COOKIE_A" "WB-C-A22-$SFX" 'org' | jq -r '.data.table_id')
+  fld=$(curl -sf -b "$COOKIE_A" "$API/tables/$tid/fields")
+  fs=$(field_id_of "$fld" single_select); fn=$(field_id_of "$fld" number)
+  vid=$(create_view_as "$COOKIE_A" "$tid" "{\"name\":\"降级验\",\"view_type\":\"kanban\",\"group_field_id\":\"$fs\",\"sorts\":[{\"field_id\":\"$fs\",\"dir\":\"asc\"}],\"hidden_field_ids\":[\"$fs\",\"$fn\"],\"is_active\":true}")
+  [ -n "$vid" ] && [ "$vid" != "null" ] || fail "A22 建视图失败"
+  # 分支②先做（fs 还在）：他企业真实 field_id / 随机 uuid → 404 同形
+  bt=$(create_table_as "$COOKIE_B" "WB-C-A22B-$SFX" 'org' | jq -r '.data.table_id')
+  bfid=$(field_id_of "$(curl -sf -b "$COOKIE_B" "$API/tables/$bt/fields")" single_select)
+  rnd=$(psql_q "SELECT gen_random_uuid()")
+  c1=$(curl -s -b "$COOKIE_A" -o /tmp/wb-c-a22b.json -w '%{http_code}' -H 'Content-Type: application/json' -X PATCH "$API/views/$vid" -d "{\"group_field_id\":\"$bfid\"}")
+  c2=$(curl -s -b "$COOKIE_A" -o /tmp/wb-c-a22r.json -w '%{http_code}' -H 'Content-Type: application/json' -X PATCH "$API/views/$vid" -d "{\"group_field_id\":\"$rnd\"}")
+  [ "$c1" = "404" ] || fail "A22 他企业 field_id 写入返 ${c1}（应 404）"
+  [ "$c2" = "404" ] || fail "A22 随机 uuid field_id 返 ${c2}（应 404）"
+  [ "$(openssl dgst -md5 < /tmp/wb-c-a22b.json | awk '{print $NF}')" = "$(openssl dgst -md5 < /tmp/wb-c-a22r.json | awk '{print $NF}')" ] \
+    || fail "A22 两个 404 体不同 —— 可比对字节分辨他企业 field 是否真实存在"
+  # 分支①：删字段 → GET 200 降级
+  psql "$PGURL" -q -c "DELETE FROM zenithjoy.db_fields WHERE id = '$fs'" >/dev/null || fail "A22 删字段失败"
+  g=$(curl -s -b "$COOKIE_A" -o /tmp/wb-c-a22g.json -w '%{http_code}' "$API/tables/$tid/views")
+  [ "$g" = "200" ] || fail "A22 已删字段的视图反查返 ${g}（应 200 降级，非 5xx）"
+  jq -e --arg v "$vid" --arg fs "$fs" --arg fn "$fn" \
+    '.data.views[] | select(.view_id == $v) | .group_field_id == null and .degraded == true and ([.sorts[].field_id] | index($fs) | not) and ([.hidden_field_ids[]] | index($fs) | not) and ([.hidden_field_ids[]] | index($fn))' \
+    < /tmp/wb-c-a22g.json >/dev/null || fail "A22 降级不彻底（失效 id 未剔除 / degraded 未置 true / 未失效被误删）"
+  ok "degraded=true + 失效 id 剔除 + 未失效留存；他企业 field_id 404 同形"
+  section_down
+  echo "✅ A22 通过"
+}
+
+run_a25() {
+  echo "== A25 field_id 白名单：SQL 片段/坏 dir/坏 op → 400，跨表 UUID → 404，表清单不变 =="
+  section_up
+  local tid ft t0 r0 t1 sp fp c rnd BAD BADD
+  tid=$(create_table_as "$COOKIE_A" "WB-C-A25-$SFX" 'org' | jq -r '.data.table_id')
+  ft=$(field_id_of "$(curl -sf -b "$COOKIE_A" "$API/tables/$tid/fields")" text)
+  [ -n "$ft" ] && [ "$ft" != "null" ] || fail "A25 取 text field_id 失败"
+  curl -sf -b "$COOKIE_A" -X POST "$API/tables/$tid/rows" >/dev/null || fail "A25 建行失败"
+  t0=$(psql_q "SELECT string_agg(table_name, ',' ORDER BY table_name) FROM information_schema.tables WHERE table_schema = 'zenithjoy'")
+  r0=$(psql_q "SELECT count(*) FROM zenithjoy.db_rows")
+  for BAD in "id; DROP TABLE zenithjoy.db_rows; --" "1) OR 1=1 --" "data->>'x'"; do
+    sp=$(jq -nc --arg f "$BAD" '[{field_id:$f,dir:"asc"}]')
+    c=$(curl -s -o /tmp/wb-c-a25.json -w '%{http_code}' -b "$COOKIE_A" --get "$API/tables/$tid/rows" --data-urlencode "sort=$sp")
+    [ "$c" = "400" ] || fail "A25 sort.field_id SQL 片段返 ${c}（应 400）payload=$BAD"
+    jq -e '.error.code == "VALIDATION_FAILED"' < /tmp/wb-c-a25.json >/dev/null || fail "A25 sort 片段错误码不是 VALIDATION_FAILED"
+    fp=$(jq -nc --arg f "$BAD" '[{field_id:$f,op:"contains",value:"x"}]')
+    c=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_A" --get "$API/tables/$tid/rows" --data-urlencode "filter=$fp")
+    [ "$c" = "400" ] || fail "A25 filter.field_id SQL 片段返 ${c}（应 400）payload=$BAD"
+  done
+  for BADD in "asc; DROP TABLE zenithjoy.db_rows; --" "asc NULLS FIRST, 1" "ASC--"; do
+    sp=$(jq -nc --arg f "$ft" --arg d "$BADD" '[{field_id:$f,dir:$d}]')
+    c=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_A" --get "$API/tables/$tid/rows" --data-urlencode "sort=$sp")
+    [ "$c" = "400" ] || fail "A25 dir 位 $BADD 返 ${c}（应 400 —— dir 直接落 ORDER BY 关键字位）"
+  done
+  c=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_A" --get "$API/tables/$tid/rows" \
+    --data-urlencode "filter=$(jq -nc --arg f "$ft" '[{field_id:$f,op:"nosuchop",value:"x"}]')")
+  [ "$c" = "400" ] || fail "A25 非白名单 op 返 ${c}（应 400）"
+  rnd=$(psql_q "SELECT gen_random_uuid()")
+  c=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_A" --get "$API/tables/$tid/rows" \
+    --data-urlencode "sort=$(jq -nc --arg f "$rnd" '[{field_id:$f,dir:"asc"}]')")
+  [ "$c" = "404" ] || fail "A25 跨表合法 UUID 返 ${c}（应 404）"
+  t1=$(psql_q "SELECT string_agg(table_name, ',' ORDER BY table_name) FROM information_schema.tables WHERE table_schema = 'zenithjoy'")
+  [ "$t0" = "$t1" ] || fail "A25 information_schema 表清单变了 —— 用户输入进了标识符位"
+  [ "$r0" -le "$(psql_q "SELECT count(*) FROM zenithjoy.db_rows")" ] || fail "A25 db_rows 行数减少了"
+  ok "SQL 片段/坏 dir/坏 op 全 400，跨表 UUID 404，零 5xx，表清单前后全等"
+  section_down
+  echo "✅ A25 通过"
+}
+
+run_a1_a3_views() {
+  echo "== 视图层 A1/A3：他企业(org维) + 同组织他人(member维) 各 404 同形 + 本人 2xx =="
+  section_up
+  local tid vid before after rnd c bt twinvid v2
+  tid=$(create_table_as "$COOKIE_A" "WB-C-VISO-$SFX" 'org' | jq -r '.data.table_id')
+  vid=$(create_view_as "$COOKIE_A" "$tid" '{"name":"我的视图","view_type":"grid","is_active":true}')
+  [ -n "$vid" ] && [ "$vid" != "null" ] || fail "视图隔离段建视图失败"
+  before=$(psql_q "SELECT prefs::text FROM zenithjoy.db_view_prefs WHERE id = '$vid'")
+  rnd=$(psql_q "SELECT gen_random_uuid()")
+
+  # ── org 维（丙 = 他企业）：表不可达 → GET views 404；PATCH/DELETE view 404，且与随机 uuid 同形
+  c=$(curl -s -b "$COOKIE_B" -o /tmp/wb-viso-clist.json -w '%{http_code}' "$API/tables/$tid/views")
+  [ "$c" = "404" ] || fail "他企业 GET table views 返 ${c}（应 404）"
+  c=$(curl -s -b "$COOKIE_B" -o /tmp/wb-viso-cp.json -w '%{http_code}' -H 'Content-Type: application/json' -X PATCH "$API/views/$vid" -d '{"name":"越权"}')
+  [ "$c" = "404" ] || fail "他企业 PATCH view 返 ${c}（应 404）"
+  c=$(curl -s -b "$COOKIE_B" -o /dev/null -w '%{http_code}' -X DELETE "$API/views/$vid")
+  [ "$c" = "404" ] || fail "他企业 DELETE view 返 ${c}（应 404）"
+  curl -s -b "$COOKIE_B" -o /tmp/wb-viso-crnd.json -X PATCH "$API/views/$rnd" -H 'Content-Type: application/json' -d '{"name":"x"}' >/dev/null
+  [ "$(openssl dgst -md5 < /tmp/wb-viso-cp.json | awk '{print $NF}')" = "$(openssl dgst -md5 < /tmp/wb-viso-crnd.json | awk '{print $NF}')" ] \
+    || fail "他企业 404 体与随机 uuid 不同形"
+
+  # ── org 维隔离探针：INSERT 一个 org=orgB / member=甲 的孪生视图行 —— 甲(orgA)必须够不到它
+  bt=$(create_table_as "$COOKIE_B" "WB-C-VISO-B-$SFX" 'org' | jq -r '.data.table_id')
+  twinvid=$(psql_q "INSERT INTO zenithjoy.db_view_prefs (table_id, org_id, member_id, prefs) VALUES ('$bt','$ORGB_TENANT_ID','$ALICE_OPENID','{\"name\":\"孪生\",\"view_type\":\"grid\",\"is_active\":false}'::jsonb) RETURNING id")
+  [ -n "$twinvid" ] || fail "org 探针孪生行未建成"
+  c=$(curl -s -b "$COOKIE_A" -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -X PATCH "$API/views/$twinvid" -d '{"name":"跨企业越权"}')
+  [ "$c" = "404" ] || fail "org 维探针：甲(orgA)够到了 orgB 的视图返 ${c}（应 404）—— org 维隔离是空的"
+
+  # ── member 维（乙 = 同组织他人）：GET views 200 但零命中甲的视图；PATCH/DELETE view 404 同形
+  c=$(curl -s -b "$COOKIE_A2" -o /tmp/wb-viso-blist.json -w '%{http_code}' "$API/tables/$tid/views")
+  [ "$c" = "200" ] || fail "乙对本表有权访问，视图列表应 200 而不是 $c"
+  jq -e --arg v "$vid" '[.data.views[] | select(.view_id == $v)] | length == 0' < /tmp/wb-viso-blist.json >/dev/null \
+    || fail "member 维：甲的视图出现在乙的列表里 —— member 维隔离没立起来"
+  c=$(curl -s -b "$COOKIE_A2" -o /tmp/wb-viso-bp.json -w '%{http_code}' -H 'Content-Type: application/json' -X PATCH "$API/views/$vid" -d '{"name":"同事越权"}')
+  [ "$c" = "404" ] || fail "member 维：同组织他人 PATCH view 返 ${c}（应 404）"
+  c=$(curl -s -b "$COOKIE_A2" -o /dev/null -w '%{http_code}' -X DELETE "$API/views/$vid")
+  [ "$c" = "404" ] || fail "member 维：同组织他人 DELETE view 返 ${c}（应 404）"
+  curl -s -b "$COOKIE_A2" -o /tmp/wb-viso-brnd.json -X PATCH "$API/views/$rnd" -H 'Content-Type: application/json' -d '{"name":"x"}' >/dev/null
+  [ "$(openssl dgst -md5 < /tmp/wb-viso-bp.json | awk '{print $NF}')" = "$(openssl dgst -md5 < /tmp/wb-viso-brnd.json | awk '{print $NF}')" ] \
+    || fail "member 维 404 体与随机 uuid 不同形"
+
+  after=$(psql_q "SELECT prefs::text FROM zenithjoy.db_view_prefs WHERE id = '$vid'")
+  [ "$before" = "$after" ] || fail "越权请求改动了甲的 prefs"
+
+  # ── 正向对照（甲本人四端点 2xx）
+  curl -sf -b "$COOKIE_A" "$API/tables/$tid/views" | jq -e --arg v "$vid" '[.data.views[] | select(.view_id == $v)] | length == 1' >/dev/null \
+    || fail "正向：甲读不到自己的视图"
+  curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X PATCH "$API/views/$vid" -d '{"name":"甲改名"}' >/dev/null \
+    || fail "正向：甲改不动自己的视图"
+  v2=$(create_view_as "$COOKIE_A" "$tid" '{"name":"第二视图"}')
+  curl -sf -b "$COOKIE_A" -X DELETE "$API/views/$v2" >/dev/null || fail "正向：甲删不了自己的视图"
+  ok "org 维 + member 维各 404 同形、正向 2xx；孪生行探针钉住 org 维、乙列表零命中钉住 member 维"
+  section_down
+  echo "✅ 视图层 A1/A3 通过"
+}
+
+run_view_delete() {
+  echo "== 删视图：只删偏好三表 md5 不变 + 至少保留一个 =="
+  section_up
+  local tid v1 v2 snap0 snap1 c SNAP
+  tid=$(create_table_as "$COOKIE_A" "WB-C-VDEL-$SFX" 'org' | jq -r '.data.table_id')
+  curl -sf -b "$COOKIE_A" -X POST "$API/tables/$tid/rows" >/dev/null || fail "删视图段建行失败"
+  SNAP="SELECT md5(string_agg(x, '|')) FROM (SELECT t.id::text || t.name AS x FROM zenithjoy.db_tables t WHERE t.org_id = '$ORGA_TENANT_ID' UNION ALL SELECT f.id::text || f.name FROM zenithjoy.db_fields f WHERE f.org_id = '$ORGA_TENANT_ID' UNION ALL SELECT r.id::text || r.data::text FROM zenithjoy.db_rows r WHERE r.org_id = '$ORGA_TENANT_ID' ORDER BY 1) s(x)"
+  v1=$(create_view_as "$COOKIE_A" "$tid" '{"name":"视图一","view_type":"grid","is_active":true}')
+  v2=$(create_view_as "$COOKIE_A" "$tid" '{"name":"视图二","view_type":"grid"}')
+  [ -n "$v1" ] && [ -n "$v2" ] && [ "$v1" != "null" ] && [ "$v2" != "null" ] || fail "删视图段建视图失败"
+  snap0=$(psql_q "$SNAP")
+  curl -sf -b "$COOKIE_A" -X DELETE "$API/views/$v2" \
+    | jq -e '(.data | keys) == ["deleted_view_id","remaining"] and .data.remaining == 1' >/dev/null || fail "删视图响应形状不符"
+  snap1=$(psql_q "$SNAP")
+  [ "$snap0" = "$snap1" ] || fail "删视图动了 db_tables / db_fields / db_rows"
+  psql_q "SELECT count(*) FROM zenithjoy.db_view_prefs WHERE id = '$v2'" | grep -qx 0 || fail "偏好行未真删"
+  c=$(curl -s -o /tmp/wb-c-vdel.json -w '%{http_code}' -b "$COOKIE_A" -X DELETE "$API/views/$v1")
+  [ "$c" = "400" ] || fail "删最后一个视图返 ${c}（应 400）"
+  jq -e '.error.code == "LAST_VIEW_PROTECTED"' < /tmp/wb-c-vdel.json >/dev/null || fail "错误码不是 LAST_VIEW_PROTECTED"
+  psql_q "SELECT count(*) FROM zenithjoy.db_view_prefs WHERE id = '$v1'" | grep -qx 1 || fail "被拒的删除却把行删了"
+  ok "删一个 200 三表 md5 前后全等；删最后一个 400 LAST_VIEW_PROTECTED 且行仍在"
+  section_down
+  echo "✅ 删视图段通过"
+}
+
+run_a24_pure() {
+  echo "== A24 拖卡纯函数：resolveDropPatch 映射被拖那一行（staff-hub 单测，不碰 DB/服务）=="
+  ( cd apps/staff-hub && npx vitest run src/lib/workbenchKanban.test.ts --reporter=dot ) \
+    >/tmp/wb-c-a24.log 2>&1 || { tail -20 /tmp/wb-c-a24.log; fail "拖卡纯函数单测未过（A24-drag-wrong-row 应让它红）"; }
+  echo "✅ A24 拖卡纯函数通过"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
 # dispatch
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -1315,6 +1617,7 @@ case "${1:-}" in
   --mutation-revert) mutation_revert "${2:?缺变异名}"; exit 0;;
   --fixture-up)      fixture_up; exit 0;;
   --fixture-down)    fixture_down; exit 0;;
+  --a24-pure-only)   run_a24_pure; exit 0;;
 esac
 
 # 以下都需要 DB
@@ -1335,6 +1638,12 @@ case "${1:-}" in
   --a17-only)               run_a17; exit 0;;
   --a18-a19-only)           run_a18_a19; exit 0;;
   --a1-a3-rows-only)        run_a1_a3_rows; exit 0;;
+  --a20-only)               run_a20; exit 0;;
+  --a21-only)               run_a21; exit 0;;
+  --a22-only)               run_a22; exit 0;;
+  --a25-only)               run_a25; exit 0;;
+  --a1-a3-views-only)       run_a1_a3_views; exit 0;;
+  --view-delete-only)       run_view_delete; exit 0;;
   --inv-tenant-isolation)   run_inv_tenant_isolation; exit 0;;
   --inv-endpoint-auth)      run_inv_endpoint_auth; exit 0;;
   --inv-two-tenant-seed)    run_inv_two_tenant_seed; exit 0;;

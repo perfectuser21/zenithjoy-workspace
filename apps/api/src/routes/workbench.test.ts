@@ -33,7 +33,7 @@ function routes(): Array<{ method: string; path: string }> {
 }
 
 describe('路③ 路由表', () => {
-  it('端点清单恰好 17 个（9 写 + 8 读），与合同逐字一致', () => {
+  it('端点清单恰好 22 个（12 写 + 10 读），与合同逐字一致', () => {
     const got = routes()
       .map((r) => `${r.method} ${r.path}`)
       .sort();
@@ -58,16 +58,22 @@ describe('路③ 路由表', () => {
         'PATCH /rows/:id',
         'DELETE /rows/:id',
         'POST /rows/:id/restore',
+        // Sprint C 视图层五个（3 写 + 2 读）
+        'GET /tables/:id/views',
+        'POST /tables/:id/views',
+        'PATCH /views/:id',
+        'DELETE /views/:id',
+        'GET /assigned-to-me',
       ].sort()
     );
-    expect(got.length).toBe(17);
+    expect(got.length).toBe(22);
   });
 
-  it('写端点 9 个、读端点 8 个', () => {
+  it('写端点 12 个、读端点 10 个', () => {
     const all = routes();
     const writes = all.filter((r) => r.method !== 'GET');
-    expect(writes.length).toBe(9);
-    expect(all.length - writes.length).toBe(8);
+    expect(writes.length).toBe(12);
+    expect(all.length - writes.length).toBe(10);
   });
 
   it('鉴权闸挂在所有端点之前 —— 路由栈第一层是中间件而不是某条 route', () => {
