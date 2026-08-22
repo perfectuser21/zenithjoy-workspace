@@ -1,74 +1,70 @@
 {
-  "phase": "evaluate",
   "verdict": "PASS",
-  "task_id": "c33a0160-53bc-48b5-ac92-4f7ae5cedcd7",
-  "anchor_sha": "39496eb4bcd3de692d1a5ef2c8c1540b0eeda083",
+  "task_id": "08221200-line11-path2-collab-notes",
+  "attempt_id": "",
+  "failed_step": null,
+  "log_excerpt": null,
   "verification_level": "L2",
-  "artifact_gate": "PASS",
-  "contract_gate": "PASS",
-  "unverifiable": [],
+  "screenshots": [
+    "01-two-editors.png (两 context 并排打开同一文档)",
+    "02-merged-cursors.png (字符级合并 + 对方光标可见)",
+    "03-resync-merged.png (断连 α/β→重连 resync 两 context 均含零丢字)",
+    "04-private-404.png (设仅自己后第三 context 404)"
+  ],
   "behavior_tests": [
     {
-      "id": "B-1",
-      "command": "npx playwright test sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts --grep '合看页路由'",
+      "command": "bash sprints/08221200-line11-path2-collab-notes/dod-run.sh a2",
       "exit_code": 0,
-      "log_tail": "2/2 passed. 合看页路由三态渲染: quadrant-locked(降级路径，Brain不可达) PASS",
-      "verification_level": "L2"
+      "log_tail": "Test Files 1 passed (1) / Tests 9 passed (9)（A2 S1写留+XSS/SQL+自动保存不静默）"
     },
     {
-      "id": "B-2",
-      "command": "npx playwright test sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts --grep '合看页矩阵渲染'",
+      "command": "bash sprints/08221200-line11-path2-collab-notes/dod-run.sh a1",
       "exit_code": 0,
-      "log_tail": "2/2 passed. S13-c4格图例文字验证(降级路径) PASS",
-      "verification_level": "L2"
+      "log_tail": "Test Files 1 passed (1) / Tests 9 passed (9)（A1 cross-tenant 六层隔离）"
     },
     {
-      "id": "B-3",
-      "command": "node scripts/acceptance-spec/cli.mjs generate > /tmp/acceptance-gen.html && node -e 'checks...'",
+      "command": "bash sprints/08221200-line11-path2-collab-notes/dod-run.sh a4",
       "exit_code": 0,
-      "log_tail": "PASS: 无 <select> | PASS: 无暂时无法验证",
-      "verification_level": "L2"
+      "log_tail": "Test Files 1 passed (1) / Tests 6 passed (6)（A4 三档权限+六处过滤+member live+fail-closed 503）"
     },
     {
-      "id": "B-4",
-      "command": "npx playwright test sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts --grep 'ai_raw'",
+      "command": "bash sprints/08221200-line11-path2-collab-notes/dod-run.sh ws",
       "exit_code": 0,
-      "log_tail": "1/1 passed. 反代层不透传ai_raw/ai_column PASS",
-      "verification_level": "L2"
+      "log_tail": "Tests 6 passed (6)（A3-b/c/d/e 握手安全 + A10 服务端CV，真 ws 客户端+真 Yjs+真 pg 回查）"
     },
     {
-      "id": "B-5",
-      "command": "npx playwright test sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts --grep '403'",
+      "command": "bash sprints/08221200-line11-path2-collab-notes/dod-run.sh a9",
       "exit_code": 0,
-      "log_tail": "1/1 passed. staff token 403处理，页面不白屏 PASS",
-      "verification_level": "L2"
+      "log_tail": "Test Files 1 passed (1) / Tests 3 passed (3)（A9 路① CRUD 不回归）"
     },
     {
-      "id": "B-6",
-      "command": "npx playwright test sprints/w4-quadrant-page-d4b/tests/quadrant-e2e.spec.ts --grep '建单页'",
+      "command": "psql $DB -tAc to_regclass('zenithjoy.documents') + org_id is_nullable + crdt_state data_type",
       "exit_code": 0,
-      "log_tail": "5/5 passed. MANDATORY_SCENARIOS=[S1,S4,S5,S6,S7] disabled/enabled验证 PASS",
-      "verification_level": "L2"
+      "log_tail": "zenithjoy.documents / org_id=NO / crdt_state=bytea"
+    },
+    {
+      "command": "bash sprints/08221200-line11-path2-collab-notes/backup-restore-drill.sh",
+      "exit_code": 0,
+      "log_tail": "src=8bbadc66476f53beaf8e55a3bedc11d5 dst=8bbadc66476f53beaf8e55a3bedc11d5 / 备份→还原→七字段逐条一致"
+    },
+    {
+      "command": "pwsh -File sprints/08221200-line11-path2-collab-notes/e2e-verify.ps1  (CI windows-latest, run 32597351625 / job 97090469553, workflow=E2E Knowledge Hub Path2)",
+      "exit_code": 0,
+      "log_tail": "Run pwsh -File \"sprints/08221200-line11-path2-collab-notes/e2e-verify.ps1\"\n> @zenithjoy/api@1.0.1 migrate  (真 Postgres zenithjoy_e2e 建 documents/document_members)\nAPI server 就绪 + Vite 就绪（真后端 apps/api + attachCollabWS，无 page.route/stub）\nRunning 1 test using 1 worker\n  ok 1 [chromium] > e2e\\collab-notes-crdt.spec.ts:45:1 > 双人同编：字符级合并 + 多人光标 + 断连 resync 零丢字 + 仅自己 404 (10.4s)\n  1 passed (12.5s)\n✅ windows_cloud 协同笔记 CRDT E2E 通过（真后端 + 真 collab-ws + 四张截图）\n[upload-artifact] path2-collab-screenshots：4 files uploaded, 396466 bytes, Artifact ID 9481998076",
+      "asserts": "单测 collab-notes-crdt.spec.ts:45 一条覆盖四组硬 DOM 断言：①字符级合并双方改动均在②awareness 多人光标可见③断连 setOffline→A/B 离线输入 α/β→重连 resync 后两 context DOM 均含 α 与 β 零丢字④设「仅自己」后第三 context 打开 404；DoD ARTIFACT 静态守卫已核 spec 无 page.route/context.route/fulfill（禁 stub）+ 含 setOffline"
     }
   ],
-  "ci_checks": {
-    "total": 104,
-    "pass": 93,
-    "skipping": 11,
-    "failed": 0,
-    "pending": 0
-  },
-  "playwright_full_run": {
-    "total": 13,
-    "passed": 13,
-    "failed": 0,
+  "mutation_guards": "7/7 proven-to-fire（4 命门 WS握手/多org rows[0]/member live/服务端CV 全转红，另 3 条 doc权/会话失效/身份读头亦转红）；每条注掉守卫→对应 suite exit=1→git checkout 复原",
+  "contract_is_law": "PASS：tests 五文件 fb3c1ab4→437d62ad 空 diff 逐字节一致；禁 mock 边 grep 干净（仅注释）；document-schema 白名单单一实现被 HTTP 保存与 CRDT-CV 两路径同 import",
+  "e2e_windows_cloud": {
+    "ran": true,
+    "environment": "windows_cloud (GHA windows-latest 干净 VM)",
+    "command": "pwsh -File sprints/08221200-line11-path2-collab-notes/e2e-verify.ps1",
     "exit_code": 0,
-    "run_environment": "macOS host playwright chromium headless, baseURL=localhost:5175, VITE_SKIP_AUTH=true, Brain=unreachable"
+    "playwright": "1 passed (12.5s); ok 1 [chromium] collab-notes-crdt.spec.ts:45 双人同编：字符级合并 + 多人光标 + 断连 resync 零丢字 + 仅自己 404 (10.4s)",
+    "real_backend": "真 apps/api + attachCollabWS + Vite preview 真启动，spec 无 page.route/stub（DoD 守卫核过）",
+    "ci_run": "https://github.com/perfectuser21/zenithjoy-workspace/actions/runs/32597351625/job/97090469553",
+    "screenshots_artifact": "path2-collab-screenshots (ID 9481998076, 4 files, 396466 bytes) https://github.com/perfectuser21/zenithjoy-workspace/actions/runs/32597351625/artifacts/9481998076"
   },
-  "notes": [
-    "13/13 Playwright tests passed on macOS host with Vite dev server",
-    "Brain unreachable → degraded path (quadrant-locked/degraded-banner) legally passes per contract",
-    "B-3 bash_node directly executed PASS",
-    "DOD-10 minor: acceptance.spec.ts not updated, main sprint test file covers all behaviors"
-  ]
+  "workspace_clean": true
 }

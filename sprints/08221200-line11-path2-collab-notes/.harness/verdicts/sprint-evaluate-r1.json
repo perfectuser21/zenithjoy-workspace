@@ -1,0 +1,65 @@
+{
+  "verdict": "PASS",
+  "task_id": "08221200-line11-path2-collab-notes",
+  "attempt_id": "",
+  "role": "harness-evaluator",
+  "pr": "#1711",
+  "pr_branch": "cp-2608220217-collab-notes-k1",
+  "target_environment": "windows_cloud + local_api",
+  "verification_level": "L2",
+  "summary": "路② 协同笔记 第一刀 独立验收通过。CI 不覆盖的三件全部真跑取证：双门 DoD 逐条复跑全绿、7 条变异守卫逐条 proven-to-fire（含 4 命门）、CONTRACT-IS-LAW 三项机械核对通过。工作区收尾干净。",
+  "env": {
+    "db": "postgresql://postgres@localhost:5432/cecelia（含 zenithjoy schema）",
+    "note": "ensure-test-db.sh 幂等对齐 zenithjoy.session + public.learnings；migrate 建 documents/document_members 表"
+  },
+  "dod": {
+    "artifact": [
+      {"id": "A1-migration", "check": "zenithjoy.documents+document_members migration 字段齐（org_id NOT NULL/crdt_state bytea/content jsonb/ai_retrieval_opt_out DEFAULT false/deleted_at）", "result": "PASS"},
+      {"id": "A2-schema单一实现", "check": "document-schema.ts 存在且被 document.service.ts 与 collab-ws.ts 均 import", "result": "PASS"},
+      {"id": "A3-collab-ws挂载", "check": "collab-ws.ts 含 /collab-ws 且 index.ts 调 attachCollabWS(server)", "result": "PASS"},
+      {"id": "A4-版本锁", "check": "staff-hub @tiptap/* 3.x + yjs + y-prosemirror 全在", "result": "PASS"},
+      {"id": "A5-服务端CRDT依赖", "check": "apps/api yjs + y-prosemirror", "result": "PASS"},
+      {"id": "A6-接线三件套", "check": "vitest.collab-notes.config.ts 白名单含本 sprint tests + test:collab-notes 脚本 + dod-run.sh", "result": "PASS"},
+      {"id": "A7-workflow无if门", "check": "e2e-knowledge-hub-path2.yml windows job 无 job 级 if + linux 真 pg 跑 test:collab-notes", "result": "PASS"},
+      {"id": "A8-CRDT双人spec零拦截", "check": "collab-notes-crdt.spec.ts 无 page.route/fulfill，含 newContext/cursor/setOffline/private", "result": "PASS"},
+      {"id": "A9-G2备份", "check": "backup-restore-drill.sh 含 documents+pg_dump 且 db-backup.yml 引用", "result": "PASS"},
+      {"id": "A10-变异守卫清单7项", "check": "contract-draft ## 变异守卫清单 7 项齐", "result": "PASS"}
+    ],
+    "behavior": [
+      {"id": "A2", "cmd": "dod-run.sh a2", "result": "PASS", "exit_code": 0, "log_tail": "Test Files 1 passed (1) / Tests 9 passed (9)"},
+      {"id": "A1", "cmd": "dod-run.sh a1", "result": "PASS", "exit_code": 0, "log_tail": "Test Files 1 passed (1) / Tests 9 passed (9)"},
+      {"id": "A4", "cmd": "dod-run.sh a4", "result": "PASS", "exit_code": 0, "log_tail": "Test Files 1 passed (1) / Tests 6 passed (6)"},
+      {"id": "A3+A10-ws", "cmd": "dod-run.sh ws", "result": "PASS", "exit_code": 0, "log_tail": "Tests 6 passed (6)（A3-b/c/d/e + A10 全过，含 A3-e 会话失效 2815ms、A10 CV 1154ms）"},
+      {"id": "A9", "cmd": "dod-run.sh a9", "result": "PASS", "exit_code": 0, "log_tail": "Test Files 1 passed (1) / Tests 3 passed (3)"},
+      {"id": "documents表形状", "cmd": "psql to_regclass + is_nullable + data_type", "result": "PASS", "log_tail": "zenithjoy.documents / org_id=NO / crdt_state=bytea"},
+      {"id": "A7-备份恢复演练", "cmd": "backup-restore-drill.sh", "result": "PASS", "exit_code": 0, "log_tail": "src=8bbadc66476f53beaf8e55a3bedc11d5 dst=8bbadc66476f53beaf8e55a3bedc11d5 / 七字段逐条一致"},
+      {"id": "总面-all", "cmd": "dod-run.sh all", "result": "PASS", "exit_code": 0, "log_tail": "Test Files 5 passed (5) / Tests 33 passed (33)"}
+    ],
+    "behavior_e2e": [
+      {"id": "windows_cloud 双 context CRDT E2E", "status": "covered_by_ci", "note": "Mac evaluator 不跑 windows_cloud Playwright；该项由 CI windows 双 context CRDT E2E job 覆盖（本 PR CI 104 pass 含之）。合同标注为接缝三条之一，windows job 转绿即 done。"}
+    ]
+  },
+  "mutation_proven_to_fire": {
+    "all_fired": true,
+    "count": "7/7",
+    "gates_of_death_4": ["WS握手鉴权", "WS多org rows[0]", "member live", "服务端CV"],
+    "items": [
+      {"n": 1, "guard": "WS握手鉴权(getSession)", "file": "apps/api/src/services/collab-ws.ts", "mutation": "无会话时冒名 doc owner 建房（注掉 getSession 校验）", "suite": "ws", "suite_exit": 1, "red_test": "A3-b 无会话握手：无 cookie 连 /collab-ws → 拒绝不建房", "isolation": "仅 A3-b 转红，其余 5 全绿", "gate_of_death": true},
+      {"n": 2, "guard": "WS doc 权校验", "file": "apps/api/src/services/collab-ws.ts", "mutation": "if(!visible && false) 跳过 doc 权", "suite": "ws", "suite_exit": 1, "red_test": "A3-b doc 权校验：B 企业会话连 A 文档协作房 → 拒绝不建房", "isolation": "仅 A3-b(doc权) 转红", "gate_of_death": false},
+      {"n": 3, "guard": "WS 多 org rows[0]", "file": "apps/api/src/services/collab-ws.ts", "mutation": "rows.length===0 才拒（去掉 >1 拒绝，静默取 rows[0]）", "suite": "ws", "suite_exit": 1, "red_test": "A3-c 多 org fail-closed：多 org 成员连 → 拒绝不建房", "isolation": "仅 A3-c 转红", "gate_of_death": true},
+      {"n": 4, "guard": "WS 会话失效检查", "file": "apps/api/src/services/collab-ws.ts", "mutation": "写操作 sessionAlive 复核加 && false", "suite": "ws", "suite_exit": 1, "red_test": "A3-e 会话失效不静默续命：删 session 后下一写操作应断开", "isolation": "仅 A3-e 转红", "gate_of_death": false},
+      {"n": 5, "guard": "身份读头回落", "file": "apps/api/src/routes/documents.ts", "mutation": "documentAuthGuard org 回落读 req.body.org_id", "suite": "a1", "suite_exit": 1, "red_test": "伪造 org_id：B 会话带 forged org_id=A → 落库仍应 B org", "isolation": "仅伪造 org_id 转红，其余 8 全绿", "gate_of_death": false},
+      {"n": 6, "guard": "member live 校验", "file": "apps/api/src/routes/documents.ts", "mutation": "rows.length===0 时只信静态 document_members 列表解析 org（不认 tenant_members live 删除）", "suite": "a4", "suite_exit": 1, "red_test": "member live 校验：删 tenant_members 后其对成员集合文档立即 404", "isolation": "member-live 转红（bob 经静态列表仍解析到 orgA 得 200）", "gate_of_death": true},
+      {"n": 7, "guard": "服务端 CV", "file": "apps/api/src/services/collab-ws.ts", "mutation": "crdt_state = 原始 room.ydoc encodeStateAsUpdate（不过白名单 CV）", "suite": "ws", "suite_exit": 1, "red_test": "A10 服务端 CRDT-CV：注入 onerror 的 Yjs update → 落库 crdt_state 不含", "isolation": "A10 抓到 crdt_state blob 含 'onerror' → 转红", "gate_of_death": true}
+    ],
+    "cleanup": "全部变异用 git checkout -- 复原；每条变异后 git diff --quiet 确认；最终 git status 无残留。G6 变异时 fail-closed 测试 30s 超时导致其 finally 的 RENAME 未复原，把 zenithjoy.document_members 留名 __faultinj（变异附带损伤，非被测缺陷），已手动 RENAME 复原，复原后 dod-run all=33/33 绿。"
+  },
+  "contract_is_law": {
+    "verdict": "PASS",
+    "tests_immutable": {"result": "PASS", "detail": "sprints/.../tests/*.test.ts 五文件在 commit fb3c1ab4(Red) 引入，git diff fb3c1ab4..437d62ad(Green) 对 tests/ 空 diff，逐字节一致，commit-2 未改测试"},
+    "no_mock_edges": {"result": "PASS", "detail": "grep vi.mock/jest.mock/stub/createMock/mockImplementation/vi.fn 于 sprints tests 仅命中两处注释（'不 stub'/'不 stub DB'），无真实 mock；会话解析/tenant_members/documents/CRDT落库/WS握手全真调"},
+    "schema_single_impl": {"result": "PASS", "detail": "document-schema.ts 白名单单一实现：HTTP 保存 document.service.ts import sanitizeDocument；CRDT-CV crdt-cv.ts import sanitizeDocument + collab-ws.ts import isValidProseMirrorDoc/经 crdt-cv runCv，两路径同一符号"}
+  },
+  "concerns": [],
+  "workspace_clean": true
+}

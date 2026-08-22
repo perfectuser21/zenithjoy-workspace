@@ -4,9 +4,9 @@
 
 ## GP-Anchor
 
-line11/collaborative_docs#step1
+GP-Anchor: line11/collaborative_docs#step1
 
-（锚定 capability collaborative_docs 骨干前 3 步 S1/S2/S3；GP golden_paths=301bd18f-ba56-4e57-b99f-3d0a1e90fad5，journey=da60cb26。行内引用格式：GP-Anchor: line11/collaborative_docs#step1）
+（锚定 capability collaborative_docs 骨干前 3 步 S1/S2/S3；GP golden_paths=301bd18f-ba56-4e57-b99f-3d0a1e90fad5，journey=da60cb26。）
 
 ## journey_type
 
