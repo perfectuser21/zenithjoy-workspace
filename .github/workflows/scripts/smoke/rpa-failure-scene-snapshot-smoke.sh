@@ -39,14 +39,16 @@ ASSIGN_ID=$(psql "$DB" -At -c "INSERT INTO zenithjoy.dm_assignments (tenant_id, 
 psql "$DB" -c "INSERT INTO zenithjoy.dm_outreach_log (tenant_id, account_label, lead_id, profile_url, status, assignment_id) VALUES ('$TENANT_ID', 'snap-号1', '$LEAD_ID', 'https://www.douyin.com/user/sec_snap', 'dispatched', '$ASSIGN_ID')" >/dev/null
 
 # 40 天前的旧失败行：带旧快照，等着被保留期闸清掉
-OLD_ASSIGN_ID=$(psql "$DB" -At -c "INSERT INTO zenithjoy.dm_assignments (tenant_id, lead_id, account_label, status, scheduled_for) VALUES ('$TENANT_ID', '$LEAD_ID', 'snap-号1', 'failed', NOW() - interval '40 days') RETURNING id" | grep -oE '[0-9a-f-]{36}' | head -1)
-psql "$DB" -c "INSERT INTO zenithjoy.dm_outreach_log (tenant_id, account_label, lead_id, status, sent_at, assignment_id, ui_tree_snapshot) VALUES ('$TENANT_ID', 'snap-号1', '$LEAD_ID', 'failed', NOW() - interval '40 days', '$OLD_ASSIGN_ID', 'd0 stale-tree')" >/dev/null
+# （label 用 snap-号2——dm_assignments 有 (tenant,lead,label) 唯一约束）
+OLD_ASSIGN_ID=$(psql "$DB" -At -c "INSERT INTO zenithjoy.dm_assignments (tenant_id, lead_id, account_label, status, scheduled_for) VALUES ('$TENANT_ID', '$LEAD_ID', 'snap-号2', 'failed', NOW() - interval '40 days') RETURNING id" | grep -oE '[0-9a-f-]{36}' | head -1)
+psql "$DB" -c "INSERT INTO zenithjoy.dm_outreach_log (tenant_id, account_label, lead_id, status, sent_at, assignment_id, ui_tree_snapshot) VALUES ('$TENANT_ID', 'snap-号2', '$LEAD_ID', 'failed', NOW() - interval '40 days', '$OLD_ASSIGN_ID', 'd0 stale-tree')" >/dev/null
 
 TASK_ID=$(psql "$DB" -At -c "INSERT INTO zenithjoy.publish_tasks (tenant_id, agent_id, platform, task_type, status, payload) VALUES ('$TENANT_ID', '$AGENT_ID', 'douyin', 'dm_outreach', 'dispatched', jsonb_build_object('account_label','snap-号1','profile_url','https://www.douyin.com/user/sec_snap','dm_assignment_id','$ASSIGN_ID')) RETURNING id" | grep -oE '[0-9a-f-]{36}' | head -1)
 [ -n "$TASK_ID" ] || fail "前置：建 publish_task 失败" 99
 
 # ── 3. 失败回传携带快照 + 设备版本 ──
-SNAP_LINE='d0 android.widget.FrameLayout id=- text="-"'
+# 注意：这串会被内嵌进 JSON 字符串，不能带裸双引号
+SNAP_LINE='d0 android.widget.FrameLayout id=- click bounds=[0,0][1080,2400]'
 curl -sf -X POST "$API_BASE/api/agent/burner/dm-outreach-result" -H "Content-Type: application/json" \
   -d "{\"task_id\":\"$TASK_ID\",\"agent_id\":\"$AGENT_ID\",\"account_label\":\"snap-号1\",\"status\":\"failed\",\"error_code\":\"NO_MATCH\",\"foreground_pkg\":\"com.ss.android.ugc.aweme\",\"failure_diag\":\"matchProfileByDouyinId 零匹配\",\"ui_tree_snapshot\":\"$SNAP_LINE\",\"device_model\":\"HONOR TEST-AN00\",\"os_version\":\"Android 16 (API 36)\",\"app_version\":\"2.1.36\",\"device_platform\":\"android\",\"dm_assignment_id\":\"$ASSIGN_ID\"}" >/dev/null \
   || fail "dm-outreach-result 回传失败"

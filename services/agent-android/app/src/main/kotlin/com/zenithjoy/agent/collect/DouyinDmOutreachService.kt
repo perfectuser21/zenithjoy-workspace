@@ -18,6 +18,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.zenithjoy.agent.account.DouyinLaunchTrampoline
 import com.zenithjoy.agent.uia.RecoveryAction
+import com.zenithjoy.agent.uia.UiTreeSnapshot
 import com.zenithjoy.agent.uia.buildFailureScene
 import com.zenithjoy.agent.uia.isAppInteractive
 import com.zenithjoy.agent.uia.decideRecovery
@@ -905,10 +906,16 @@ class DouyinDmOutreachService : AccessibilityService() {
             errorCode = errorCode,
             foregroundPkg = runCatching { currentForegroundPkg() }.getOrNull(),
             diag = lastDiag,
+            // 现场第三件（AI on-call 刀1）：失败那一刻的无障碍树快照。只在失败时采
+            //（buildFailureScene 成功路径本来就返回 null），序列化自带 64KB/30层/800节点
+            // 截断，广播 extra 不会被撑爆。采不到（树已回收/权限异常）不丢其余现场。
+            uiTree = if (errorCode.isBlank()) null else runCatching {
+                rootInActiveWindow?.let { UiTreeSnapshot.serialize(UiTreeSnapshot.fromAccessibilityNode(it)) }
+            }.getOrNull(),
         )
         state = State.IDLE
         ScanMutex.busy = false
-        sendResultBroadcast(outcome, errorCode, scene?.foregroundPkg, scene?.diag)
+        sendResultBroadcast(outcome, errorCode, scene?.foregroundPkg, scene?.diag, scene?.uiTree)
         lastDiag = null
     }
 
@@ -921,10 +928,12 @@ class DouyinDmOutreachService : AccessibilityService() {
         errorCode: String,
         foregroundPkg: String? = null,
         failureDiag: String? = null,
+        uiTree: String? = null,
     ) {
         val intent = Intent(ACTION_DM_OUTREACH_RESULT).apply {
             putExtra(EXTRA_FOREGROUND_PKG, foregroundPkg ?: "")
             putExtra(EXTRA_FAILURE_DIAG, failureDiag ?: "")
+            putExtra(EXTRA_UI_TREE, uiTree ?: "")
             setPackage(applicationContext.packageName)
             putExtra(EXTRA_TASK_ID, currentTaskId)
             putExtra(EXTRA_DM_ASSIGNMENT_ID, currentDmAssignmentId)
@@ -941,6 +950,7 @@ class DouyinDmOutreachService : AccessibilityService() {
         // 等「目标就绪」的轮询预算（2026-08-18）。各步累计最坏 ≈44s，低于 lead 90s 熔断。
         const val EXTRA_FOREGROUND_PKG = "foreground_pkg"
         const val EXTRA_FAILURE_DIAG = "failure_diag"
+        const val EXTRA_UI_TREE = "ui_tree_snapshot"
         private const val AWAIT_POLL_MS = 500L
         private const val AWAIT_ENTRY_ATTEMPTS = 24    // 12s：私信/搜索入口，含冷启动与厂商开屏广告余量
         // 页面级等待预算搬到 DmWaitBudget（单测 DmWaitBudgetTest 钉住下限）——

@@ -113,10 +113,11 @@ class AgentService : Service() {
             // 落进正表供人直接看，不用再回去翻 logcat（重启就没了）。
             val foregroundPkg = intent.getStringExtra(DouyinDmOutreachService.EXTRA_FOREGROUND_PKG) ?: ""
             val failureDiag = intent.getStringExtra(DouyinDmOutreachService.EXTRA_FAILURE_DIAG) ?: ""
+            val uiTree = intent.getStringExtra(DouyinDmOutreachService.EXTRA_UI_TREE) ?: ""
             scope.launch {
                 reportDmOutreachResult(
                     taskId, status, dmAssignmentId, accountLabel, profileUrl, errorCode,
-                    foregroundPkg, failureDiag,
+                    foregroundPkg, failureDiag, uiTree,
                 )
             }
         }
@@ -890,6 +891,7 @@ class AgentService : Service() {
         errorCode: String,
         foregroundPkg: String = "",
         failureDiag: String = "",
+        uiTree: String = "",
     ) {
         if (taskId.isEmpty()) return
         val url = "${config.deriveHttpBase()}/api/agent/burner/dm-outreach-result"
@@ -900,10 +902,17 @@ class AgentService : Service() {
             put("status", status)
             put("profile_url", profileUrl)
             put("device_platform", "android")
+            // 设备版本三件套恒带（AI on-call 刀1）：机队版本随时间漂移（2.1.32~2.1.35
+            // 并存过），失败行不带版本，事后就没法按机型×版本聚类——这正是周报固化的分组键。
+            put("device_model", "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim())
+            put("os_version", "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
+            put("app_version", BuildConfig.VERSION_NAME)
             if (dmAssignmentId.isNotBlank()) put("dm_assignment_id", dmAssignmentId)
             if (errorCode.isNotBlank()) put("error_code", errorCode)
             if (foregroundPkg.isNotBlank()) put("foreground_pkg", foregroundPkg)
             if (failureDiag.isNotBlank()) put("failure_diag", failureDiag)
+            // 树快照只在失败时非空（现场只为失败服务）；序列化端已截断 64KB
+            if (uiTree.isNotBlank()) put("ui_tree_snapshot", uiTree)
         }
         try {
             val request = Request.Builder()
