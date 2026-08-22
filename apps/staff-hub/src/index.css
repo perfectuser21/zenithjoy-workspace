@@ -439,3 +439,131 @@ select {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── 多组织切换器 ─────────────────────────────────────────────────────────── */
+.org-switcher-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px 14px;
+  border-bottom: 1px solid #eceff2;
+  margin-bottom: 16px;
+}
+
+.org-current-label {
+  font-weight: 600;
+  color: #2c3440;
+}
+
+.org-switcher {
+  position: relative;
+}
+
+.org-switcher-trigger {
+  cursor: pointer;
+}
+
+.org-switcher-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #dfe3e8;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  min-width: 180px;
+  z-index: 20;
+}
+
+.org-switcher-menu li button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.org-switcher-menu li button:hover:not(:disabled) {
+  background: #f2f5f8;
+}
+
+.org-switcher-menu li button:disabled {
+  color: #98a2b3;
+  cursor: default;
+}
+
+.org-role {
+  color: #7a8494;
+  font-size: 12px;
+}
+
+/* 阻断式选择：铺满数据区，未选前不放行 */
+.org-selection-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+}
+
+.org-selection-box {
+  max-width: 420px;
+  width: 100%;
+  padding: 28px;
+  border: 1px solid #dfe3e8;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.org-selection-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  display: grid;
+  gap: 10px;
+}
+
+.org-selection-list li button {
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  border: 1px solid #dfe3e8;
+  border-radius: 10px;
+  background: #fafbfc;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.org-selection-list li button:hover:not(:disabled) {
+  border-color: #3b82f6;
+  background: #f5f9ff;
+}
+
+/* 跨标签页草稿拦截提示 */
+.org-draft-guard-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 26, 34, 0.4);
+  z-index: 100;
+}
+
+.org-draft-guard-box {
+  max-width: 380px;
+  padding: 24px;
+  background: #fff;
+  border-radius: 12px;
+}
+
+.org-draft-guard-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}

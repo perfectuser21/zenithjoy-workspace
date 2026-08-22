@@ -18,10 +18,11 @@ import KnowledgeRecentPage from './pages/KnowledgeRecentPage';
 import WorkbenchPage from './pages/WorkbenchPage';
 import WorkbenchTablePage from './pages/WorkbenchTablePage';
 import EnvBadge from './components/EnvBadge';
+import OrgSwitcher from './components/OrgSwitcher';
 import { adminFetch } from './lib/adminFetch';
 
 function Shell() {
-  const { authLoading, isAuthenticated, logout, user } = useAuth();
+  const { authLoading, isAuthenticated, logout, user, needsOrgSelection, currentOrgId } = useAuth();
   const [acceptanceBadge, setAcceptanceBadge] = useState<number>(0);
 
   useEffect(() => {
@@ -113,6 +114,12 @@ function Shell() {
         </div>
       </aside>
       <main className="main">
+        {/* 顶部常驻：当前企业标识 + 切换器；needsOrgSelection 时它自渲染阻断选择界面 */}
+        <OrgSwitcher />
+        {/* 归属 ≥2 家但未选前，不放进任何数据页（避免每个数据端点各撞一次 409）。
+            key=currentOrgId：切企业后强制整棵路由重挂 → 各页 fetch effect 重跑 → 数据重拉 */}
+        {!needsOrgSelection && (
+        <div key={currentOrgId ?? 'no-org'} className="org-scoped-routes">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/skill-eval" element={<SkillEvalPage />} />
@@ -130,6 +137,8 @@ function Shell() {
           <Route path="/login/feishu" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </div>
+        )}
       </main>
     </div>
   );

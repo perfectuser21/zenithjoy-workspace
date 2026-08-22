@@ -13,20 +13,25 @@
  * A2 静态守卫扫描本文件与路③ 全部路由/service：源码里一旦出现身份头名字面量即报红。
  * 加"没有会话就回落读头"这种兼容代码 = 亲手把命门打开，任何理由都不成立。
  *
- * 判定四态（文案两两不同，前端据此分文案）：
- *   401 SESSION_REQUIRED   无有效会话
- *   403 NO_TENANT          有会话但成员表无归属行
- *   409 MULTI_ORG_MEMBER   同一员工被声明在多家企业（配置事故，绝不静默挑一个）
- *   503 LEDGER_UNREACHABLE 成员行查询本身失败（不静默降级成"没权限"）
+ * 判定态（多组织切换第一刀：受控反转 rows>1 的第四态，其余护栏一行不改；文案两两不同，前端据此分文案）：
+ *   401 SESSION_REQUIRED        无有效会话
+ *   403 NO_TENANT               有会话但成员表无归属行
+ *   409 ORG_SELECTION_REQUIRED  归属 ≥2 家但未选当前企业（停下要求先选，绝不静默挑一个）
+ *   403 ORG_FORBIDDEN           active_org 不在成员集合（伪造 / 会话有效期内被移出，当次挡并清 active_org + deny 审计）
+ *   503 LEDGER_UNREACHABLE      成员行查询本身失败（不静默降级成"没权限"）
+ *   解析成功                     req.workbenchIdentity = { memberId, orgId }（1 家透明 / ≥2 家取选中）
  */
 import type { Request, Response, NextFunction } from 'express';
-import { fromNodeHeaders } from 'better-auth/node';
-import pool from '../db/connection';
-import { auth } from '../auth';
+import {
+  resolveSessionContext,
+  queryMemberOrgIds,
+  resolveActiveOrg,
+  setSessionActiveOrg,
+  auditOrgEvent,
+} from './active-org';
 
 export const SESSION_REQUIRED_MESSAGE = '登录已失效，请重新登录';
 export const NO_TENANT_MESSAGE = '没有权限';
-export const MULTI_ORG_MESSAGE = '账号归属异常：同一员工被声明在多家企业，请联系管理员';
 export const LEDGER_UNREACHABLE_MESSAGE = '账本暂时不可达，未写入';
 
 export interface WorkbenchIdentity {
@@ -57,32 +62,17 @@ export function notFoundBody(): Record<string, unknown> {
   return { success: false, data: null, error: { code: 'NOT_FOUND', message: '表不存在或无权访问' } };
 }
 
-/** 会话 → memberId。cookie 缺失/失效/解析异常一律当没登录，绝不回落到其它来源。 */
-async function resolveSessionMemberId(req: Request): Promise<string | null> {
-  try {
-    const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
-    const id = session?.user?.id;
-    return typeof id === 'string' && id.length > 0 ? id : null;
-  } catch {
-    return null;
-  }
-}
-
 export async function workbenchAuthGuard(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const memberId = await resolveSessionMemberId(req);
-  if (!memberId) {
+  const ctx = await resolveSessionContext(req);
+  if (!ctx) {
     res.status(401).json(workbenchErrorBody('SESSION_REQUIRED', SESSION_REQUIRED_MESSAGE));
     return;
   }
 
-  let rows: Array<{ tenant_id: string }>;
+  let orgIds: string[];
   try {
-    // 不加 LIMIT 1：多组织必须看得见才拦得住。取第一条等于把配置事故变成静默的跨企业事故。
-    const result = await pool.query(
-      'SELECT DISTINCT tenant_id::text AS tenant_id FROM zenithjoy.tenant_members WHERE feishu_user_id = $1',
-      [memberId]
-    );
-    rows = result.rows as Array<{ tenant_id: string }>;
+    // LIVE 成员集合每请求真查（A7），不加 LIMIT：多组织必须看得见才拦得住。
+    orgIds = await queryMemberOrgIds(ctx.memberId);
   } catch (err) {
     // 查不动成员表 ≠ 没权限。吞成 403 会把网络/配置故障当成权限问题，排查方向直接跑偏。
     console.error('[workbench-auth] tenant_members 查询失败:', (err as Error).message);
@@ -90,17 +80,22 @@ export async function workbenchAuthGuard(req: Request, res: Response, next: Next
     return;
   }
 
-  if (rows.length === 0) {
-    res.status(403).json(workbenchErrorBody('NO_TENANT', NO_TENANT_MESSAGE));
+  const resolution = resolveActiveOrg(orgIds, ctx.activeOrg);
+  if (!resolution.ok) {
+    if (resolution.code === 'ORG_FORBIDDEN') {
+      // A7：active_org 已不在成员集合（伪造 / 被移出）→ 当次挡并清 active_org；A11：deny 审计。
+      if (ctx.sessionToken) await setSessionActiveOrg(ctx.sessionToken, null);
+      await auditOrgEvent(
+        'resolve_deny',
+        ctx.memberId,
+        ctx.activeOrg,
+        `workbench active_org=${ctx.activeOrg} 不在成员集合`
+      );
+    }
+    res.status(resolution.status).json(workbenchErrorBody(resolution.code, resolution.message));
     return;
   }
 
-  if (rows.length > 1) {
-    console.error(`[workbench-auth] A11-MULTI-ORG 请求期命中 member=${memberId} orgs=${rows.length}`);
-    res.status(409).json(workbenchErrorBody('MULTI_ORG_MEMBER', MULTI_ORG_MESSAGE));
-    return;
-  }
-
-  req.workbenchIdentity = { memberId, orgId: rows[0].tenant_id };
+  req.workbenchIdentity = { memberId: ctx.memberId, orgId: resolution.orgId };
   next();
 }

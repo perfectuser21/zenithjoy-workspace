@@ -10,15 +10,22 @@
  * 这是唯一能防住实现期回退的机械闸——人会忘记补负向测试，但源码里出现那两个名字会直接报红。
  * 加"回落读头"这种兼容代码 = 亲手把命门打开，任何理由都不成立。
  *
- * 判定三态（文案两两不同，前端据此区分「重新登录」和「找管理员」）：
- *   401 SESSION_REQUIRED  无有效会话
- *   403 NO_TENANT         有会话但 tenant_members 无成员行
- *   503 LEDGER_UNREACHABLE 成员行查询本身失败（不静默降级成"没权限"）
+ * 判定态（多组织切换第一刀：LIMIT1「静默取最早一条」受控反转为按 active_org 解析；文案两两不同）：
+ *   401 SESSION_REQUIRED        无有效会话
+ *   403 NO_TENANT               有会话但 tenant_members 无成员行
+ *   409 ORG_SELECTION_REQUIRED  归属 ≥2 家但未选当前企业（停下要求先选，绝不静默取最早一条）
+ *   403 ORG_FORBIDDEN           active_org 不在成员集合（伪造 / 被移出，当次挡并清 active_org + deny 审计）
+ *   503 LEDGER_UNREACHABLE      成员行查询本身失败（不静默降级成"没权限"）
+ *   解析成功                     req.knowledgeIdentity = { memberId, orgId }（1 家透明 / ≥2 家取选中）
  */
 import type { Request, Response, NextFunction } from 'express';
-import { fromNodeHeaders } from 'better-auth/node';
-import pool from '../db/connection';
-import { auth } from '../auth';
+import {
+  resolveSessionContext,
+  queryMemberOrgIds,
+  resolveActiveOrg,
+  setSessionActiveOrg,
+  auditOrgEvent,
+} from './active-org';
 
 export const SESSION_REQUIRED_MESSAGE = '登录已失效，请重新登录';
 export const NO_TENANT_MESSAGE = '没有权限';
@@ -40,31 +47,17 @@ function errorBody(code: string, message: string) {
   return { success: false, data: null, error: { code, message }, timestamp: new Date().toISOString() };
 }
 
-/** 会话 → memberId。cookie 缺失/失效/解析异常一律当没登录，绝不回落到其它来源。 */
-async function resolveSessionMemberId(req: Request): Promise<string | null> {
-  try {
-    const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
-    const id = session?.user?.id;
-    return typeof id === 'string' && id.length > 0 ? id : null;
-  } catch {
-    return null;
-  }
-}
-
 export async function knowledgeAuthGuard(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const memberId = await resolveSessionMemberId(req);
-  if (!memberId) {
+  const ctx = await resolveSessionContext(req);
+  if (!ctx) {
     res.status(401).json(errorBody('SESSION_REQUIRED', SESSION_REQUIRED_MESSAGE));
     return;
   }
 
-  let rows: Array<{ tenant_id: string }>;
+  let orgIds: string[];
   try {
-    const result = await pool.query(
-      'SELECT tenant_id::text AS tenant_id FROM zenithjoy.tenant_members WHERE feishu_user_id = $1 ORDER BY created_at LIMIT 1',
-      [memberId]
-    );
-    rows = result.rows as Array<{ tenant_id: string }>;
+    // LIVE 成员集合每请求真查（A7），不加 LIMIT：多组织必须看得见才拦得住，绝不静默取最早一条。
+    orgIds = await queryMemberOrgIds(ctx.memberId);
   } catch (err) {
     // 查不动成员表 ≠ 没权限。回 503 让调用方看到"暂时不可达"，
     // 若在这里吞成 403，配置/网络故障会被当成权限问题，排查方向直接跑偏。
@@ -73,11 +66,21 @@ export async function knowledgeAuthGuard(req: Request, res: Response, next: Next
     return;
   }
 
-  if (rows.length === 0) {
-    res.status(403).json(errorBody('NO_TENANT', NO_TENANT_MESSAGE));
+  const resolution = resolveActiveOrg(orgIds, ctx.activeOrg);
+  if (!resolution.ok) {
+    if (resolution.code === 'ORG_FORBIDDEN') {
+      if (ctx.sessionToken) await setSessionActiveOrg(ctx.sessionToken, null);
+      await auditOrgEvent(
+        'resolve_deny',
+        ctx.memberId,
+        ctx.activeOrg,
+        `knowledge active_org=${ctx.activeOrg} 不在成员集合`
+      );
+    }
+    res.status(resolution.status).json(errorBody(resolution.code, resolution.message));
     return;
   }
 
-  req.knowledgeIdentity = { memberId, orgId: rows[0].tenant_id };
+  req.knowledgeIdentity = { memberId: ctx.memberId, orgId: resolution.orgId };
   next();
 }

@@ -63,8 +63,9 @@ describe('Fields API', () => {
     });
 
     it('有身份但不属于任何 tenant 时返 403，不退化成查全表', async () => {
-      // tenant_members 空 → self-heal 查 licenses 也空 → NO_TENANT
-      mockQuery.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [] });
+      // 多组织切换第一刀·Gate 0：self-heal 自动补 owner 行已退役 —— tenant_members 空即 NO_TENANT，
+      // 不再多查一次 licenses（只需 mock 一条空的 tenant_members 反查）。
+      mockQuery.mockResolvedValueOnce({ rows: [] });
       const response = await request(app).get('/api/fields').set(AUTH);
       expect(response.status).toBe(403);
     });

@@ -967,36 +967,46 @@ run_a10() {
 }
 
 run_a11() {
-  echo "== A11 单组织自检 fail-closed（启动期 + 请求期）=="
+  # 多组织切换第一刀·Gate 0：A11 单组织自检受控反转为 A12 维度自检（多组织已合法）。
+  echo "== A12 active_org 维度自检 + 多组织合法（启动期 + 请求期）=="
   section_up
-  grep -q 'A11 single-org selfcheck passed' "$API_LOG" \
-    || { tail -20 "$API_LOG"; fail "启动日志无 A11 自检通过标记 —— 自检根本没跑（只验端口通是假绿）"; }
-  ok "正常态：服务起得来且启动日志含自检通过标记"
+  grep -q 'A12 active-org dimension selfcheck passed' "$API_LOG" \
+    || { tail -20 "$API_LOG"; fail "启动日志无 A12 维度自检通过标记 —— 自检根本没跑（只验端口通是假绿）"; }
+  ok "正常态：服务起得来且启动日志含 A12 维度自检通过标记"
 
-  # 制造多组织行 → 另起一个进程，它必须被拦在 listen 之前
+  # 多组织行 + 维度齐备（migration 已加 session.activeOrg 列）→ 另起进程必须能 listen（多组织已合法，不再拒启动）
   psql "$PGURL" -q -c "INSERT INTO zenithjoy.tenant_members (tenant_id, feishu_user_id) VALUES ('$ORGB_TENANT_ID', '$ALICE_OPENID')" >/dev/null
   local mlog rc=0
   mlog="/tmp/wb-a11-mut.log"
-  PORT="$MUT_PORT" timeout 40 node apps/api/dist/index.js > "$mlog" 2>&1 || rc=$?
-  # rc=0 正常退出、rc=124 被 timeout 杀掉（说明它 listen 住了）—— 两种都是没拦住
-  if [ "$rc" -eq 0 ] || [ "$rc" -eq 124 ]; then
+  PORT="$MUT_PORT" timeout 40 node apps/api/dist/index.js > "$mlog" 2>&1 &
+  local bgpid=$!
+  local up=0
+  for _ in $(seq 1 30); do
+    curl -sf "http://localhost:$MUT_PORT/api/health" >/dev/null 2>&1 && { up=1; break; }
+    kill -0 "$bgpid" 2>/dev/null || break
+    sleep 1
+  done
+  kill "$bgpid" 2>/dev/null; wait "$bgpid" 2>/dev/null || true
+  if grep -q 'A12-DIMENSION-MISSING' "$mlog"; then
     psql "$PGURL" -q -c "DELETE FROM zenithjoy.tenant_members WHERE tenant_id = '$ORGB_TENANT_ID' AND feishu_user_id = '$ALICE_OPENID'" >/dev/null
-    tail -20 "$mlog"
-    fail "多组织行下进程仍起得来（exit=${rc}）—— 启动闸没拦住"
+    tail -20 "$mlog"; fail "多组织行+维度齐备竟拒启动（打了 A12-DIMENSION-MISSING）"
   fi
-  grep -q 'A11-MULTI-ORG' "$mlog" || { tail -20 "$mlog"; psql "$PGURL" -q -c "DELETE FROM zenithjoy.tenant_members WHERE tenant_id = '$ORGB_TENANT_ID' AND feishu_user_id = '$ALICE_OPENID'" >/dev/null; fail "进程退出但日志未点名 A11-MULTI-ORG"; }
-  ok "多组织态：进程 exit=${rc}（∉{0,124}）且日志点名 A11-MULTI-ORG"
+  [ "$up" = "1" ] || { psql "$PGURL" -q -c "DELETE FROM zenithjoy.tenant_members WHERE tenant_id = '$ORGB_TENANT_ID' AND feishu_user_id = '$ALICE_OPENID'" >/dev/null; tail -20 "$mlog"; fail "多组织行下进程未 listen —— 多组织应合法可启动"; }
+  ok "多组织态+维度齐备：进程正常 listen（多组织合法，A11→A12 反转）"
 
-  # 请求期：同一情形必须 409，绝不静默取第一条
+  # 请求期：多组织成员未选 active_org → 409 ORG_SELECTION_REQUIRED（要求先选，绝不静默取第一条）
+  psql "$PGURL" -q -c "UPDATE public.session SET \"activeOrg\" = NULL WHERE \"userId\" = '$ALICE_OPENID'" >/dev/null
   local c409
   c409=$(curl -s -o /tmp/wb-a11-req.json -w '%{http_code}' -b "$COOKIE_A" "$API/tables")
+  # 复原：删 ORGB 行 + 恢复 alice 的 active_org=ORGA（后续段仍用 COOKIE_A）
   psql "$PGURL" -q -c "DELETE FROM zenithjoy.tenant_members WHERE tenant_id = '$ORGB_TENANT_ID' AND feishu_user_id = '$ALICE_OPENID'" >/dev/null
-  [ "$c409" = "409" ] || { cat /tmp/wb-a11-req.json; fail "请求期多组织返 ${c409}（应 409）"; }
-  jq -e '.error.code == "MULTI_ORG_MEMBER" and .data == null' < /tmp/wb-a11-req.json >/dev/null \
-    || fail "请求期错误码不是 MULTI_ORG_MEMBER 或 data 非 null"
-  ok "请求期：409 MULTI_ORG_MEMBER 且 data 为 null"
+  psql "$PGURL" -q -c "UPDATE public.session SET \"activeOrg\" = '$ORGA_TENANT_ID' WHERE \"userId\" = '$ALICE_OPENID'" >/dev/null
+  [ "$c409" = "409" ] || { cat /tmp/wb-a11-req.json; fail "请求期多组织未选返 ${c409}（应 409 ORG_SELECTION_REQUIRED）"; }
+  jq -e '.error.code == "ORG_SELECTION_REQUIRED" and .data == null' < /tmp/wb-a11-req.json >/dev/null \
+    || fail "请求期错误码不是 ORG_SELECTION_REQUIRED 或 data 非 null"
+  ok "请求期：409 ORG_SELECTION_REQUIRED 且 data 为 null"
   section_down
-  echo "✅ A11 通过"
+  echo "✅ A11→A12 通过"
 }
 
 run_a4() {

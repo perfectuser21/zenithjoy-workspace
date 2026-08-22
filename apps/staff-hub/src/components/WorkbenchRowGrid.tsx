@@ -17,8 +17,9 @@
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-quartz.css';
 import type React from 'react';
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
+import { markDraftDirty } from '../lib/draftGuard';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import {
   parseCellInput,
@@ -338,6 +339,23 @@ export default function WorkbenchRowGrid({
     activeRef.current = next;
     setActive(next);
   }, []);
+
+  // 有格子在编辑 = 有未提交草稿：上抛到全局哨兵（跨标签页切企业时据此拦截），
+  // 并挂 beforeunload 守卫，防止编辑到一半整页刷新/关闭把草稿冲掉。
+  useEffect(() => {
+    const dirty = active !== null;
+    markDraftDirty('workbench-row-grid', dirty);
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => {
+      window.removeEventListener('beforeunload', handler);
+      markDraftDirty('workbench-row-grid', false);
+    };
+  }, [active]);
 
   const beginEdit = useCallback(
     (rowId: string, field: WorkbenchField, value: CellValue) => {

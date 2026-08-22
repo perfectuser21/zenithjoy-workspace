@@ -109,18 +109,10 @@ export async function tenantContext(
     );
 
     if (rows.length === 0) {
-      // self-heal（修 partial-bridge 漏网）：没有 tenant_members 行，但用户名下若有「带 tenant 的 license」
-      // （licenses.customer_id = 当前用户 + tenant_id 非空），说明他确实买了/被开了租户，只是某条注册/登录
-      // 路径（飞书 oauth / 历史导入 / 特殊账号）漏补了 owner 成员行 → 在这里自动补一条 owner 并放行。
-      // 正常邮箱注册由 auth-bridge 补 owner，此处覆盖其余路径，使任何路径登录都不再 403 NO_TENANT。
-      const healed = await selfHealOwnerMember(memberId);
-      if (healed) {
-        req.feishuUserId = memberId;
-        req.tenantId = healed;
-        req.tenantRole = 'owner';
-        next();
-        return;
-      }
+      // 【多组织切换第一刀·Gate 0 四处同刀】self-heal 自动补 owner 行已退役：多组织放开后，
+      // 「无成员行则按 license LIMIT1 自动补 owner 行」会在迁移窗口写错企业归属行（LIMIT1 复活在
+      // 成员创建层）。成员行今后只由显式供给（feishu-login / admin / auth-bridge）产生，不再自动补。
+      // 无归属即 fail-closed NO_TENANT。
       res.status(403).json({
         success: false,
         data: null,
@@ -146,33 +138,6 @@ export async function tenantContext(
       timestamp: new Date().toISOString(),
     });
   }
-}
-
-/**
- * self-heal owner member：用户没有 tenant_members 行，但名下有「带 tenant 的 active license」时，
- * 自动补一条 owner 成员行并返回该 tenant_id；查不到符合条件的 license → 返回 null（维持 NO_TENANT）。
- *
- * 只补成员行（与生产手工 INSERT、auth-bridge step4 同语义），不建 license/tenant、不碰别的数据。
- * 一个用户名下多条 license 时取最早一条（created_at ASC，稳定可预期）。ON CONFLICT DO NOTHING 幂等。
- */
-async function selfHealOwnerMember(memberId: string): Promise<string | null> {
-  const lic = await pool.query<{ tenant_id: string }>(
-    `SELECT tenant_id
-       FROM zenithjoy.licenses
-      WHERE customer_id = $1 AND tenant_id IS NOT NULL AND status = 'active'
-      ORDER BY created_at ASC
-      LIMIT 1`,
-    [memberId]
-  );
-  const tenantId = lic?.rows?.[0]?.tenant_id;
-  if (!tenantId) return null;
-  await pool.query(
-    `INSERT INTO zenithjoy.tenant_members (tenant_id, feishu_user_id, role)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (tenant_id, feishu_user_id) DO NOTHING`,
-    [tenantId, memberId, 'owner']
-  );
-  return tenantId;
 }
 
 /**

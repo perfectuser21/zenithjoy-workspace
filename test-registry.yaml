@@ -5989,3 +5989,110 @@ agent_suite:
     status: active
     product: AI员工
     note: "刀2a 路由层：step/target_desc/树必填 400、64KB 服务端截断不信任客户端、unavailable 时 200 fail-open 响应形状(安卓端走原失败路径)"
+
+  # ── 多组织切换第一刀（横切件 组织与权限底座 line11/org_context_switch#step1）──
+  - id: org-context-contract-resolve
+    path: sprints/08221800-org-context-switch-core/tests/org-context-resolve.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "A4 缺失+伪造全挡 / A8 单企业零回归 / orgs 列表 / switch-org：dave 归属两家未选→409 ORG_SELECTION_REQUIRED；伪造 switch→403 ORG_FORBIDDEN；alice 单企业透明。真 PG+真会话。workflow: e2e-knowledge-hub-path3.yml (linux, npm run test:org-context)"
+  - id: org-context-contract-isolation
+    path: sprints/08221800-org-context-switch-core/tests/org-context-isolation.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "A1 反枚举同形404 / A3 正向 psql tenant_id=A / A5 第二家B完整+A隔离 / A6 原子切换旧数据即刻不可见：切到 B 后 GET A 表 id→404、切回→200。真 PG。"
+  - id: org-context-contract-live-audit
+    path: sprints/08221800-org-context-switch-core/tests/org-context-live-audit.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "A7 LIVE 成员实时重校（删 A 归属行→下一请求当次挡 ORG_FORBIDDEN 并清 active_org，非登录快照）+ A11 org 审计（越权 resolve_deny / 切换 switch 各落一条 org_audit 行）。真 PG。"
+  - id: org-context-contract-dimension
+    path: sprints/08221800-org-context-switch-core/tests/org-context-dimension.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "A12 双向维度自检：多组织成员+维度齐备（真 session 有 activeOrg 列）→ 正常通过；多组织成员+维度缺失（指向无列表）→ 拒绝启动抛 A12-DIMENSION-MISSING。真 PG。"
+  - id: org-context-e2e-golden-path
+    path: apps/staff-hub/e2e/org-context-switch.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 员工知识中枢
+    note: "多组织切换真浏览器：dave 未选阻断选择→选定A(顶部标识变A)→切到B(标识变B) / alice 单企业透明不弹选择器(A8)。四张截图。变体C：真实后端、禁请求拦截、不走 VITE_SKIP_AUTH。workflow: e2e-knowledge-hub-path3.yml (windows job, e2e-org-switch-run.ps1)"
+  - id: org-context-active-org-unit
+    path: apps/api/src/middleware/active-org.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "resolveActiveOrg 纯函数判定矩阵：0家NO_TENANT/1家透明/≥2未选 ORG_SELECTION_REQUIRED/active_org 有效解析/伪造或被移出 ORG_FORBIDDEN。无 I/O。"
+  - id: org-context-knowledge-auth-unit
+    path: apps/api/src/middleware/knowledge-auth.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "knowledgeAuthGuard 五态（mock 会话+成员表）：命门② LIMIT1 反转为按 active_org 解析，≥2 未选→409。无 PG。"
+  - id: org-context-org-route-unit
+    path: apps/api/src/routes/org-context.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "GET /orgs（0家403/单企业透明/≥2未选 needs_selection）+ POST /switch（缺 org_id 400/目标∉集合 403 ORG_FORBIDDEN/∈集合 200）。mock 会话+成员表，无 PG。"
+  - id: org-context-admin-org-unit
+    path: apps/api/src/routes/admin-org.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "J8 admin 供给端点校验：缺 feishu_user_id/org_id 非法 uuid→400、目标企业不存在→400 ORG_NOT_FOUND、存在→200 幂等 INSERT。mock super-admin 放行+mock 成员表，无 PG。"
+  - id: org-context-staff-directory-unit
+    path: apps/api/src/staff-directory.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "A30-2 归属唯一退役：A30_CHECKS 只剩三项、同一身份出现在多个分组不再报违规；resolveStaffOrg 命中/无归属。fake db 无 PG。"
+  - id: org-context-frontend-orgcontext-api
+    path: apps/staff-hub/src/api/orgContext.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "fetchOrgs→GET /api/knowledge/org、switchOrg→POST /api/knowledge/org/switch 带 org_id、只带 cookie 不拼身份头。mock fetch，jsdom。"
+  - id: org-context-frontend-draftguard
+    path: apps/staff-hub/src/lib/draftGuard.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "全局草稿哨兵 markDraftDirty/hasUnsavedDraft/clearAllDrafts（切企业前判断是否有未提交草稿要拦截）。纯逻辑。"
+  - id: org-context-frontend-knowledgefetch
+    path: apps/staff-hub/src/lib/knowledgeFetch.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "knowledgeJson 组织态错误哨兵：409 ORG_SELECTION_REQUIRED / 403 ORG_FORBIDDEN 集中上报 AuthContext 逼选/重选，其余码不误触发。mock fetch。"
+  - id: org-context-frontend-orgswitcher
+    path: apps/staff-hub/src/components/OrgSwitcher.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "企业切换器组件：单企业只显当前企业名不出下拉(A8)、≥2未选阻断选择、切换调 switchOrg 更新标识。testing-library+mock useAuth。"
+  - id: org-context-frontend-authcontext
+    path: apps/staff-hub/src/contexts/AuthContext.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "AuthContext org 维度：登录/会话恢复拉归属、switchOrg 更新 currentOrgId+广播、needs_selection 阻断、单企业零回归。真 AuthProvider+mock orgContext/betterAuth。"

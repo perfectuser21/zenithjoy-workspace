@@ -68,6 +68,9 @@ import staffRouter from './routes/staff';
 import { knowledgeRouter } from './routes/knowledge';
 // Line11 路③ 结构化工作台 — 建表/字段/可见性/回收站（挂 workbenchAuthGuard，只信会话）
 import { workbenchRouter } from './routes/workbench';
+// Line11 多组织切换 — 组织上下文端点（列企业 / 切换，session-only）+ 管理员组织供给（super-admin）
+import { orgContextRouter } from './routes/org-context';
+import { adminOrgRouter } from './routes/admin-org';
 // Line11 路① — DEV-only 假飞书上游（生产不挂载）
 import { fakeFeishuRouter, installFakeFeishuAxiosShim } from './routes/_smoke-fake-feishu';
 import { skillDraftsRouter, skillDraftsInternalRouter } from './routes/skill-drafts';
@@ -242,8 +245,14 @@ app.use('/api/staff/knowledge', knowledgeRouter);
 // 那个前缀的身份头闸与本路的命门（身份只来自会话）直接冲突，且挂进去会让既有
 // 16 端点的计数变成 17，路① 的前置保护线当场报红。
 app.use('/api/knowledge/db', workbenchRouter);
+// Line11 多组织切换 —— 组织上下文端点（列企业 / 切换），session-only，挂**独立**命名空间 /api/knowledge/org：
+// 不能挂进 /api/knowledge/db（那里 workbenchRouter 的 blanket 鉴权闸会把未选态下的"看企业/选企业"也 409 挡死），
+// 独立挂载也让路③ 的 A2 扫描域推导保持「workbench 是唯一 /api/knowledge/db 挂载点」不被挤出。
+app.use('/api/knowledge/org', orgContextRouter);
 // Line 00 运营中枢 — 员工工具（staff only，受员工身份头闸保护）
 app.use('/api/staff', staffRouter);
+// Line11 多组织切换 —— 管理员组织供给（J8，super-admin 鉴权，独立挂载不污染路③ 命门守卫扫描域）
+app.use('/api/admin/org', adminOrgRouter);
 // Line 02 — 公司信息页 + 账号状态
 app.use('/api/company-profile', companyProfileRouter);
 app.use('/api/line02', line02Router);

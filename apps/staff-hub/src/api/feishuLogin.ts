@@ -1,3 +1,5 @@
+import type { Org } from './orgContext';
+
 export interface FeishuLoginResult {
   success: boolean;
   user?: {
@@ -7,6 +9,11 @@ export interface FeishuLoginResult {
     feishu_user_id: string;
     access_token: string;
   };
+  // 登录返回体新增的组织上下文三件套（与 GET /api/knowledge/org 同形），可直接用于初始填充，
+  // 省掉登录后再打一次 /org 的往返。
+  orgs?: Org[];
+  active_org_id?: string | null;
+  needs_selection?: boolean;
   error?: string;
 }
 
