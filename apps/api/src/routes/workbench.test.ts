@@ -1,7 +1,8 @@
 /**
  * 路③ 路由表的形状 —— 端点清单固定为 17 个（9 写 + 8 读），且整个 router 前面挂着鉴权闸。
  *
- * Sprint A 时是 9 个（4 写 + 5 读），Sprint B 补上行层八个后是 17。**改值不删断言**：
+ * Sprint A 时是 9 个（4 写 + 5 读），Sprint B 补行层八个后 17，Sprint C 补视图五个后 22，
+ * Sprint D 补关联三个（relation-candidates / backrefs 读 + DELETE fields 写）后 25。**改值不删断言**：
  * 这条断言的价值恰恰在于"多开一个端点必须有人显式认领它"，删掉就等于把认领环节取消了。
  *
  * 为什么值得单独钉：合同把端点数写死，而"少挂一个闸"或"多开一个端点"这两件事
@@ -33,7 +34,7 @@ function routes(): Array<{ method: string; path: string }> {
 }
 
 describe('路③ 路由表', () => {
-  it('端点清单恰好 22 个（12 写 + 10 读），与合同逐字一致', () => {
+  it('端点清单恰好 25 个（13 写 + 12 读），与合同逐字一致', () => {
     const got = routes()
       .map((r) => `${r.method} ${r.path}`)
       .sort();
@@ -64,16 +65,20 @@ describe('路③ 路由表', () => {
         'PATCH /views/:id',
         'DELETE /views/:id',
         'GET /assigned-to-me',
+        // Sprint D 关联层三个（1 写 + 2 读）
+        'GET /tables/:id/fields/:fieldId/relation-candidates',
+        'GET /rows/:id/backrefs',
+        'DELETE /tables/:id/fields/:fieldId',
       ].sort()
     );
-    expect(got.length).toBe(22);
+    expect(got.length).toBe(25);
   });
 
-  it('写端点 12 个、读端点 10 个', () => {
+  it('写端点 13 个、读端点 12 个', () => {
     const all = routes();
     const writes = all.filter((r) => r.method !== 'GET');
-    expect(writes.length).toBe(12);
-    expect(all.length - writes.length).toBe(10);
+    expect(writes.length).toBe(13);
+    expect(all.length - writes.length).toBe(12);
   });
 
   it('鉴权闸挂在所有端点之前 —— 路由栈第一层是中间件而不是某条 route', () => {

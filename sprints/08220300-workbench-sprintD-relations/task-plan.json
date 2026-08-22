@@ -1,0 +1,42 @@
+{
+  "initiative_id": "c86e37ff-3307-4b1a-80d9-3b00b8450554",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 apps/staff-hub 浏览器 UI（relation 字段编辑器/行选择器/反向面板/点击跳转），须真浏览器 windows_cloud 验收",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "路③ Sprint D · S4 跨表 Relation：字段类型+目标表配置+关联值落JSONB+行选择器候选端点+反向引用端点+组织隔离三向+引用完整性三级+接进既有 path3 workflow/vitest/smoke",
+      "scope": "实现 relation 字段类型（migration 加 CHECK + db_fields.deleted_at 软删列 + FIELD_TYPES + cellTypeError）；关联值存 db_rows.data JSONB 目标 row_id 数组、目标配置存 db_fields.options[0]（零新建关联表）；新增 2 只读端点 relation-candidates / backrefs + 字段软删端点；组织隔离（写入校验目标表 org + 读路径二次校验目标行 org + 统一404反枚举 + 私有表零泄露）；引用完整性三级（删行安全失效/删表还原恢复/删字段软删值保留）；前端 relation 单元格渲染+行选择器+反向面板+点击跳转；把 structured-workbench-relations.spec.ts 接进 e2e-knowledge-hub-path3.yml paths+windows job、linux job 加 test:workbench-relations、smoke 加 relation 段+5变异开关进 baseline 棘轮。不重造 A33 workflow / A35 排除清单 / A32/A34 路由族+鉴权闸。",
+      "dod": [
+        "[BEHAVIOR] 本刀 4 个 vitest 文件真收集真跑全绿（≥16 用例，真 PG）",
+        "[BEHAVIOR] relation 字段 201+options[0]==目标表、跨企业目标 400；关联值以数组落 db_rows.data",
+        "[BEHAVIOR] 候选/反查双向可见 + Response Schema keys 完整性 + 禁用字段反向断言",
+        "[BEHAVIOR] A28 反枚举逐字节相同、A27② 读路径二次校验剔除越权行、A31 私有表零泄露",
+        "[BEHAVIOR] A30 三级：删行安全失效不悬空 / 删表还原恢复 / 删字段软删值保留",
+        "[BEHAVIOR] 无运行时 DDL：information_schema 前后全等 + 零 relation 物理表",
+        "[BEHAVIOR] 5 个变异开关 proven-to-fire（A27/A30R/A28/A31/A30F 各让对应段转红）",
+        "[BEHAVIOR:E2E] windows_cloud 真浏览器 relation 链（build/jump/backref）+ 截图 ≥3 张",
+        "[ARTIFACT] relation E2E spec + e2e-relations-run.ps1 + vitest config + workflow/smoke 接线逐字在案，A33(c) windows job 无事件门不回退"
+      ],
+      "files": [
+        "apps/api/db/migrations/2026XXXX_workbench_relations.sql",
+        "apps/api/src/routes/workbench.ts",
+        "apps/api/src/services/workbench.service.ts",
+        "apps/api/src/services/workbench-rows.service.ts",
+        "apps/staff-hub/src/pages/WorkbenchTablePage.tsx",
+        "apps/staff-hub/src/components/WorkbenchRowGrid.tsx",
+        "apps/staff-hub/e2e/structured-workbench-relations.spec.ts",
+        "apps/api/vitest.workbench-relations.config.ts",
+        "apps/api/vitest.workbench-relations.setup.ts",
+        "apps/api/package.json",
+        ".github/workflows/e2e-knowledge-hub-path3.yml",
+        ".github/workflows/scripts/smoke/structured-workbench-smoke.sh",
+        ".github/workflows/scripts/smoke-baseline.txt",
+        "sprints/08220300-workbench-sprintD-relations/e2e-relations-run.ps1"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 120
+    }
+  ]
+}

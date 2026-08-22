@@ -30,6 +30,16 @@ export const FIELD_TYPES = [
 
 export type FieldType = (typeof FIELD_TYPES)[number];
 
+/**
+ * relation 是第九类**内部**字段类型（Sprint D / S4 跨表关联）。它不进 `FIELD_TYPES`
+ * ——那是用户面板里的八类，且被 workbench.service.test.ts 逐字钉死为 8——而是单列一条，
+ * 只在服务端接受它作为合法 field_type、并触发关联目标表的可见性校验。
+ */
+export const RELATION_FIELD_TYPE = 'relation';
+
+/** 建字段/校验时真正放行的类型集合：八类 + relation。库层 CHECK 与之逐字对齐。 */
+export const ACCEPTED_FIELD_TYPES: readonly string[] = [...FIELD_TYPES, RELATION_FIELD_TYPE];
+
 /** 回收站窗口：30 天。restorable_until = deleted_at + TRASH_RETENTION_DAYS */
 export const TRASH_RETENTION_DAYS = 30;
 
@@ -88,7 +98,7 @@ export function normalizeFields(raw: unknown): FieldInput[] {
     const name = typeof f?.name === 'string' ? f.name : '';
     const fieldType = typeof f?.field_type === 'string' ? f.field_type : '';
     if (!name) throw new WorkbenchValidationError(`第 ${idx + 1} 个字段缺 name`);
-    if (!(FIELD_TYPES as readonly string[]).includes(fieldType)) {
+    if (!ACCEPTED_FIELD_TYPES.includes(fieldType)) {
       throw new WorkbenchValidationError(`第 ${idx + 1} 个字段的 field_type 不在八类之内`);
     }
     const options = Array.isArray(f?.options) ? (f.options as unknown[]).map((o) => String(o)) : [];
@@ -159,6 +169,9 @@ export async function createTable(params: {
     fields = templateToFields(tpl.fields);
     templateKey = tpl.template_key;
   }
+
+  // relation 字段（若建表时即声明）的目标表同样必须本组织可见（A27①/A31①）
+  await assertRelationTargetsVisible(params.orgId, params.memberId, fields);
 
   const client = await pool.connect();
   try {
@@ -259,11 +272,34 @@ export async function listFieldRows(
 ): Promise<FieldOut[]> {
   const r = await db.query(
     `SELECT id, name, field_type, options, display_order
-       FROM zenithjoy.db_fields WHERE table_id = $1 AND org_id = $2
+       FROM zenithjoy.db_fields WHERE table_id = $1 AND org_id = $2 AND deleted_at IS NULL
       ORDER BY display_order ASC, created_at ASC`,
     [tableId, orgId]
   );
   return r.rows.map(rowToFieldOut);
+}
+
+/**
+ * relation 字段的目标表可见性校验（A27① 写入侧 / A31① 私有表）。
+ *
+ * 关联目标表（options[0]）必须是**本组织、本会话可见、未软删**的表 —— 跨企业表、他人的
+ * 「仅自己」私有表、不存在的 id 一律不可解析 → 抛校验失败（路由翻 400）。目标 id 全程走
+ * getTable 的绑定参数当数据值，永不进 SQL 标识符位。
+ */
+export async function assertRelationTargetsVisible(
+  orgId: string,
+  memberId: string,
+  fields: FieldInput[]
+): Promise<void> {
+  for (const f of fields) {
+    if (f.field_type !== RELATION_FIELD_TYPE) continue;
+    const target = f.options?.[0];
+    if (!target || typeof target !== 'string' || !isUuid(target)) {
+      throw new WorkbenchValidationError(`关联字段「${f.name}」缺合法的目标表 id`);
+    }
+    const t = await getTable(orgId, memberId, target);
+    if (!t) throw new WorkbenchValidationError(`关联字段「${f.name}」的目标表不可用或不可见`);
+  }
 }
 
 export async function listFields(
@@ -287,6 +323,8 @@ export async function addFields(
   if (!t) return null;
   const incoming = normalizeFields(raw);
   if (incoming.length === 0) throw new WorkbenchValidationError('fields 不能为空');
+  // relation 字段的目标表必须本组织可见（A27①/A31① 写入侧校验），不可解析即整笔拒绝
+  await assertRelationTargetsVisible(orgId, memberId, incoming);
   let nextOrder = t.fields.length;
   const client = await pool.connect();
   try {
@@ -386,6 +424,52 @@ export async function restoreTable(
     )
     .catch(() => undefined);
   return { table_id: tableId, restored_at: new Date(r.rows[0].updated_at).toISOString() };
+}
+
+export type DeleteFieldOutcome =
+  | { kind: 'not_found' }
+  | { kind: 'confirm_mismatch' }
+  | { kind: 'deleted'; fieldId: string; deletedAt: string };
+
+/**
+ * 软删字段（A30③）。二次确认名与字段名逐字不等 → 一个字节都不改（不打 deleted_at）。
+ * 名字对上 → 只 UPDATE db_fields.deleted_at，物理行保留、db_rows.data 里旧关联值一条不动。
+ * 表不可见 / 字段不属该表 / 已软删 → not_found（同 404 口径，不透露存在性）。
+ */
+export async function softDeleteField(
+  orgId: string,
+  memberId: string,
+  tableId: string,
+  fieldId: string,
+  confirmName: unknown
+): Promise<DeleteFieldOutcome> {
+  const t = await getTable(orgId, memberId, tableId);
+  if (!t) return { kind: 'not_found' };
+  if (!isUuid(fieldId)) return { kind: 'not_found' };
+  const f = await pool.query(
+    `SELECT id, name FROM zenithjoy.db_fields
+      WHERE id = $1 AND table_id = $2 AND org_id = $3 AND deleted_at IS NULL`,
+    [fieldId, tableId, orgId]
+  );
+  if (f.rowCount === 0) return { kind: 'not_found' };
+  if (typeof confirmName !== 'string' || confirmName !== String(f.rows[0].name)) {
+    return { kind: 'confirm_mismatch' };
+  }
+  const r = await pool.query(
+    `UPDATE zenithjoy.db_fields SET deleted_at = NOW()
+      WHERE id = $1 AND table_id = $2 AND org_id = $3 AND deleted_at IS NULL
+      RETURNING deleted_at`,
+    [fieldId, tableId, orgId]
+  );
+  if (r.rowCount === 0) return { kind: 'not_found' };
+  await pool
+    .query(
+      `INSERT INTO zenithjoy.db_audit (org_id, table_id, member_id, action, detail)
+       VALUES ($1, $2, $3, 'soft_delete_field', '{}'::jsonb)`,
+      [orgId, tableId, memberId]
+    )
+    .catch(() => undefined);
+  return { kind: 'deleted', fieldId, deletedAt: new Date(r.rows[0].deleted_at).toISOString() };
 }
 
 /** 非 uuid 的路径参数直接当"不存在"，别让它走到 SQL 那里抛 22P02 变成 500。 */

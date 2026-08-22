@@ -14,6 +14,7 @@
     "test:sprint": "vitest run ../../sprints/07212317-android-signal-reporting/tests/",
     "test:workbench-rows": "vitest run --config vitest.workbench-rows.config.ts",
     "test:workbench-views": "vitest run --config vitest.workbench-views.config.ts",
+    "test:workbench-relations": "vitest run --config vitest.workbench-relations.config.ts",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
   },

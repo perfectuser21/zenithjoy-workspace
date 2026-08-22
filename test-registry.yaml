@@ -5876,3 +5876,52 @@ agent_suite:
     status: active
     product: 员工知识中枢
     note: "S3 真浏览器视图链两段(@views-kanban / @views-prefs)：看板分列(单选 options + 未分组三态列 toHaveCount(3)) → 真指针拖卡换列落库 version+1 → 同事先改后拖同卡 409 弹回原列 + 冲突提示 → 真断网(setOffline)拖卡弹回 + kanban-drop-error；表格筛/排/隐藏列 → 断网改视图配置 view-prefs-error 可见且不白屏、恢复就地重试。六张截图。变体C：真实后端、禁请求拦截。workflow: e2e-knowledge-hub-path3.yml (windows job)"
+
+  # ── 路③ Sprint D（S4 关联连得上 / 跨表 Relation）────────────────────────────
+  - id: workbench-relations-contract-field-and-build
+    path: sprints/08220300-workbench-sprintD-relations/tests/relations-field-and-build.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "S4 关联字段配置 + 建关联落 JSONB + 零运行时 DDL：relation 字段 201 且 options[0]==目标表、跨企业目标 400(A27①写入校验)、关联值以目标 row_id 数组落 db_rows.data、建字段+建关联全程 information_schema 逐字节不变、零 %relation% 物理表(concern②不新建关联表)。真会话 + 真 Postgres。workflow: e2e-knowledge-hub-path3.yml (linux job, npm run test:workbench-relations)"
+
+  - id: workbench-relations-contract-bidirectional
+    path: sprints/08220300-workbench-sprintD-relations/tests/relations-bidirectional.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "S4 双向可见 + 行选择器候选 + 反向引用 + Response Schema：候选 data keys 恰[candidates,field_id,target_table_id]、候选项恰[row_id,title]、禁用字段名零命中；backrefs data keys 恰[backrefs,row_id]、项恰五键；A 关联 B → B 侧反查列出 A 表名+A 行标题+field_id；未被引用行 backref 为空数组。真 Postgres JSONB 反查。"
+
+  - id: workbench-relations-contract-isolation-enum
+    path: sprints/08220300-workbench-sprintD-relations/tests/relations-isolation-enum.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "S4 组织隔离三向 + 反枚举 + 仅自己零泄露：carol 真实表 id 与随机 id 各调候选逐字节同形 404 无 timestamp(A28,404优先于400)；篡改目标行 org 后读路径二次校验剔除越权行(A27②)；bob 指 alice 私有表建关联被拒(A31①)；导出含 relation 表 grep 不到目标行标题(A31②)；A29② alice 私有表反向来源 bob 零泄露、表主本人可见(正反成对)；P2 注入 relation 值塞 SQL 片段/非 uuid 返 400 VALIDATION_FAILED 且 db_rows 表未被删。"
+
+  - id: workbench-relations-contract-integrity
+    path: sprints/08220300-workbench-sprintD-relations/tests/relations-integrity.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "S4 引用完整性三级 A30：删被引用行→候选剔除、backref 不含它、来源关联值仍是合法数组不悬空(A30①)；删被引用表→候选 404、还原表后候选恢复且含被引用行(A30②)；删 relation 字段二次确认字段名，confirm 不符 400 字段不删、相符 200 软删(db_fields 行仍在+deleted_at 置位+db_rows.data 旧值保留)(A30③)。真软删真查库。"
+
+  - id: workbench-relations-service-pairing
+    path: apps/api/src/services/workbench-relations.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "路③ 关联 service 纯逻辑(test-pairing)：titleFieldOf 取首个活字段/空集回落 undefined、rowTitle 无值/null/空串一律回落 row_id、非字符串值转字符串。候选/反查/隔离落库语义在合同真库测试里。"
+
+  - id: workbench-relations-e2e-golden-path
+    path: apps/staff-hub/e2e/structured-workbench-relations.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 员工知识中枢
+    note: "S4 真浏览器关联链三段(@relation-build / @relation-jump / @relation-backref)：建 relation 字段配目标表 → 行选择器挑记录 → 单元格显示目标标题；点关联项 chip 跳转到目标表该记录详情面板；打开被引用记录详情反向面板列出引用来源(表名+行标题)。三张截图。变体C：真实后端、禁请求拦截。workflow: e2e-knowledge-hub-path3.yml (windows job, e2e-relations-run.ps1)"

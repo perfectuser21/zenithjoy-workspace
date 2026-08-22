@@ -9,8 +9,8 @@
  * 上限不写死在前端：row_limit 由服务端随行列表下发。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import WorkbenchRowGrid from '../components/WorkbenchRowGrid';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import WorkbenchRowGrid, { type RelationMeta } from '../components/WorkbenchRowGrid';
 import WorkbenchRowDetailPanel from '../components/WorkbenchRowDetailPanel';
 import WorkbenchViewSwitcher from '../components/WorkbenchViewSwitcher';
 import WorkbenchKanbanView from '../components/WorkbenchKanbanView';
@@ -22,6 +22,7 @@ import {
   deleteView,
   exportTable,
   getTable,
+  listRelationCandidates,
   listRowTrash,
   listRows,
   listRowsWith,
@@ -30,6 +31,8 @@ import {
   patchView,
   pasteRows,
   restoreRow,
+  RELATION_FIELD_TYPE,
+  type RelationCandidate,
   WorkbenchRequestError,
   type CellValue,
   type RowTrashEntry,
@@ -39,6 +42,15 @@ import {
   type WorkbenchRow,
   type WorkbenchView,
 } from '../lib/workbenchFetch';
+
+interface RelationPickerState {
+  rowId: string;
+  version: number;
+  field: WorkbenchField;
+  targetTableId: string;
+  candidates: RelationCandidate[];
+  selected: string[];
+}
 
 /** 剪贴板里的一片表格就是 TSV：首行列名，其余是数据行 */
 export function parseClipboardTable(text: string): { header: string[]; rows: string[][] } | null {
@@ -50,6 +62,8 @@ export function parseClipboardTable(text: string): { header: string[]; rows: str
 
 export default function WorkbenchTablePage() {
   const { tableId = '' } = useParams<{ tableId: string }>();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tableName, setTableName] = useState('');
   const [fields, setFields] = useState<WorkbenchField[]>([]);
   const [rows, setRows] = useState<WorkbenchRow[]>([]);
@@ -57,6 +71,10 @@ export default function WorkbenchTablePage() {
   const [trash, setTrash] = useState<RowTrashEntry[]>([]);
   const [detailRow, setDetailRow] = useState<WorkbenchRow | null>(null);
   const [rowGone, setRowGone] = useState('');
+  // ── 关联状态（S4）──────────────────────────────────────────────────────────
+  const [relationMeta, setRelationMeta] = useState<Record<string, RelationMeta>>({});
+  const [relationPicker, setRelationPicker] = useState<RelationPickerState | null>(null);
+  const [relationError, setRelationError] = useState('');
   const [pasteNotice, setPasteNotice] = useState('');
   const [exported, setExported] = useState<{ rows: number; href: string } | null>(null);
   const [error, setError] = useState('');
@@ -89,6 +107,30 @@ export default function WorkbenchTablePage() {
     setTrash(await listRowTrash(tableId));
   }, [tableId]);
 
+  /** relation 字段的渲染元数据：为每个 relation 字段预取候选，建 row_id→标题 映射 + 目标表 id。 */
+  const refreshRelationMeta = useCallback(
+    async (flds: WorkbenchField[]) => {
+      const relFields = flds.filter((f) => f.field_type === RELATION_FIELD_TYPE && f.field_id);
+      if (relFields.length === 0) {
+        setRelationMeta({});
+        return;
+      }
+      const meta: Record<string, RelationMeta> = {};
+      for (const f of relFields) {
+        try {
+          const out = await listRelationCandidates(tableId, f.field_id!);
+          const titleByRow: Record<string, string> = {};
+          for (const c of out.candidates) titleByRow[c.row_id] = c.title;
+          meta[f.field_id!] = { targetTableId: out.target_table_id, titleByRow };
+        } catch {
+          // 单个字段候选拉取失败不拖垮整页：该字段的 chip 回落显示 row_id
+        }
+      }
+      setRelationMeta(meta);
+    },
+    [tableId]
+  );
+
   const refreshViews = useCallback(async (): Promise<WorkbenchView[]> => {
     const out = await listViews(tableId);
     let list = out.views;
@@ -117,17 +159,32 @@ export default function WorkbenchTablePage() {
       await refreshViews();
       await fetchRows();
       await fetchTrash();
+      await refreshRelationMeta(detail.fields);
       setError('');
     } catch (e) {
       setError(e instanceof Error ? e.message : '加载失败');
     } finally {
       setLoading(false);
     }
-  }, [tableId, refreshViews, fetchRows, fetchTrash]);
+  }, [tableId, refreshViews, fetchRows, fetchTrash, refreshRelationMeta]);
 
   useEffect(() => {
     void fetchAll();
   }, [fetchAll]);
+
+  // 跨表跳转落地：?open=<rowId> → 打开该行详情面板（打开后清掉参数，避免关闭后又被拉回）
+  useEffect(() => {
+    const openId = searchParams.get('open');
+    if (!openId || rows.length === 0) return;
+    const hit = rows.find((r) => r.row_id === openId);
+    if (hit) {
+      setDetailRow(hit);
+      setRowGone('');
+      const next = new URLSearchParams(searchParams);
+      next.delete('open');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, rows, setSearchParams]);
 
   // 切换当前视图时，把筛/排控件初值同步成该视图存的值
   useEffect(() => {
@@ -149,6 +206,76 @@ export default function WorkbenchTablePage() {
     setRowGone(rowId);
     setRows((prev) => prev.filter((r) => r.row_id !== rowId));
   }, []);
+
+  // ── 关联：行选择器（配置关联）+ 点关联项跳转（S4）───────────────────────────
+  const openRelationPicker = useCallback(
+    async (rowId: string, field: WorkbenchField) => {
+      const row = rows.find((r) => r.row_id === rowId);
+      if (!row || !field.field_id) return;
+      setRelationError('');
+      try {
+        const out = await listRelationCandidates(tableId, field.field_id);
+        const current = Array.isArray(row.data[field.field_id])
+          ? (row.data[field.field_id] as string[]).map((v) => String(v))
+          : [];
+        setRelationPicker({
+          rowId,
+          version: row.version,
+          field,
+          targetTableId: out.target_table_id,
+          candidates: out.candidates,
+          selected: current,
+        });
+      } catch (e) {
+        setRelationError(e instanceof Error ? e.message : '拉取候选记录失败');
+      }
+    },
+    [rows, tableId]
+  );
+
+  const toggleRelationSelect = useCallback((id: string) => {
+    setRelationPicker((prev) =>
+      prev
+        ? {
+            ...prev,
+            selected: prev.selected.includes(id)
+              ? prev.selected.filter((x) => x !== id)
+              : [...prev.selected, id],
+          }
+        : prev
+    );
+  }, []);
+
+  const saveRelationPicker = useCallback(async () => {
+    if (!relationPicker) return;
+    const { rowId, version, field, selected } = relationPicker;
+    setRelationError('');
+    try {
+      const saved = await patchRow(rowId, version, { [field.field_id!]: selected });
+      applySavedRow(saved);
+      setRelationPicker(null);
+      await refreshRelationMeta(fields);
+    } catch (e) {
+      const err = e instanceof WorkbenchRequestError ? e : null;
+      setRelationError(err ? err.message : '关联保存失败，请重试');
+    }
+  }, [relationPicker, applySavedRow, refreshRelationMeta, fields]);
+
+  /** 点关联项 → 跳转到目标表该记录：同表就地开详情，跨表带 ?open= 导航过去。 */
+  const relationJump = useCallback(
+    (targetTableId: string, targetRowId: string) => {
+      if (targetTableId === tableId) {
+        const hit = rows.find((r) => r.row_id === targetRowId);
+        if (hit) {
+          setRowGone('');
+          setDetailRow(hit);
+        }
+        return;
+      }
+      navigate(`/workbench/tables/${targetTableId}?open=${targetRowId}`);
+    },
+    [tableId, rows, navigate]
+  );
 
   const rereadRow = useCallback(
     async (rowId: string) => {
@@ -472,6 +599,9 @@ export default function WorkbenchTablePage() {
               }}
               onDelete={(id) => void removeRow(id)}
               onPasteText={(text) => void handlePasteText(text)}
+              relationMeta={relationMeta}
+              onRelationEdit={(id, field) => void openRelationPicker(id, field)}
+              onRelationJump={relationJump}
             />
           )}
         </div>
@@ -489,10 +619,54 @@ export default function WorkbenchTablePage() {
               onRowSaved={applySavedRow}
               onRowGone={noteRowGone}
               onClose={() => setDetailRow(null)}
+              relationMeta={relationMeta}
+              onRelationJump={relationJump}
             />
           )}
         </div>
       </div>
+
+      {relationPicker && (
+        <div className="relation-picker-modal" data-testid="relation-picker">
+          <div className="relation-picker-box">
+            <header>
+              <h3>配置关联 · {relationPicker.field.name}</h3>
+              <button
+                type="button"
+                data-testid="relation-picker-close"
+                onClick={() => setRelationPicker(null)}
+              >
+                取消
+              </button>
+            </header>
+            {relationError && (
+              <p className="relation-error" data-testid="relation-picker-error">
+                {relationError}
+              </p>
+            )}
+            <ul data-testid="relation-candidate-list">
+              {relationPicker.candidates.map((c) => (
+                <li key={c.row_id}>
+                  <label data-testid={`relation-pick-${c.row_id}`}>
+                    <input
+                      type="checkbox"
+                      checked={relationPicker.selected.includes(c.row_id)}
+                      onChange={() => toggleRelationSelect(c.row_id)}
+                    />
+                    {c.title}
+                  </label>
+                </li>
+              ))}
+              {relationPicker.candidates.length === 0 && (
+                <li data-testid="relation-candidate-empty">目标表暂无可关联记录</li>
+              )}
+            </ul>
+            <button type="button" data-testid="relation-picker-save" onClick={() => void saveRelationPicker()}>
+              保存关联
+            </button>
+          </div>
+        </div>
+      )}
 
       <section>
         <h2>行回收站</h2>

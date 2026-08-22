@@ -267,4 +267,43 @@ export const listRowsWith = (
   );
 };
 
+// ── 关联层（Sprint D / S4「关联连得上」）────────────────────────────────────────
+
+/** relation 字段是第九类字段：field_type='relation'，options[0] = 目标表 id，值 = 目标 row_id 数组。 */
+export const RELATION_FIELD_TYPE = 'relation';
+
+export interface RelationCandidate {
+  row_id: string;
+  title: string;
+}
+export interface RelationCandidatesOut {
+  field_id: string;
+  target_table_id: string;
+  candidates: RelationCandidate[];
+}
+/** 行选择器候选：目标表里本组织、未软删的记录 + 标题（纯读，无写副作用）。 */
+export const listRelationCandidates = (tableId: string, fieldId: string) =>
+  json<RelationCandidatesOut>(`/tables/${tableId}/fields/${fieldId}/relation-candidates`);
+
+export interface Backref {
+  field_id: string;
+  row_id: string;
+  row_title: string;
+  table_id: string;
+  table_name: string;
+}
+export interface BackrefsOut {
+  row_id: string;
+  backrefs: Backref[];
+}
+/** 反向引用「谁引用了我」：本组织内引用来源，A29② 他人私有来源已在服务端剔除。 */
+export const getBackrefs = (rowId: string) => json<BackrefsOut>(`/rows/${rowId}/backrefs`);
+
+/** 软删 relation 字段（A30③，二次确认字段名）：confirm_name 与字段名逐字不等 → 400 且不删。 */
+export const deleteField = (tableId: string, fieldId: string, confirmName: string) =>
+  json<{ field_id: string; deleted_at: string }>(`/tables/${tableId}/fields/${fieldId}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ confirm_name: confirmName }),
+  });
+
 export { KnowledgeRequestError as WorkbenchRequestError };

@@ -1,6 +1,3 @@
-contract_branch: cp-08220300-workbench-relations
-sprint_dir: sprints/08220300-workbench-sprintD-relations
-
 ---
 skeleton: false
 journey_type: user_facing
@@ -33,10 +30,7 @@ journey_type: user_facing
   期望: OK
 
 - [x] [ARTIFACT] **ART-6 E2E workflow 逐字接线**（concern①：接入不重造）—— `e2e-knowledge-hub-path3.yml` 的 `paths` 含本刀 spec 与 sprint 目录；linux job 含 `test:workbench-relations`；windows job 有真调 `e2e-relations-run.ps1` 的 step；本刀截图有独立 upload step（`path3-relations-screenshots`）；且 windows job **仍无 job 级事件条件门**（A33(c) 不回退）
-  Test: manual:bash -c 'WF=.github/workflows/e2e-knowledge-hub-path3.yml; for P in "structured-workbench-relations.spec.ts" "08220300-workbench-sprintD-relations" "test:workbench-relations" "e2e-relations-run.ps1" "path3-relations-screenshots"; do grep -q "$P" "$WF" || { echo "FAIL: workflow 缺 $P"; exit 1; }; done; node -e "const y=require(\"fs\").readFileSync(\".github/workflows/e2e-knowledge-hub-path3.yml\",\"utf8\");const m=y.match(/windows-real-browser:[\s\S]*?(?=
-  [a-z]|$)/);if(!m)process.exit(1);const head=m[0].split(\"
-\").filter(l=>/^    [a-z_]+:/.test(l)).join(\"
-\");process.exit(/if:.*(workflow_dispatch|github\.event_name)/.test(head)?1:0)" || { echo "FAIL: windows job 加了事件条件门(A33c 回退)"; exit 1; }; echo OK'
+  Test: manual:bash -c 'WF=.github/workflows/e2e-knowledge-hub-path3.yml; for P in "structured-workbench-relations.spec.ts" "08220300-workbench-sprintD-relations" "test:workbench-relations" "e2e-relations-run.ps1" "path3-relations-screenshots"; do grep -q "$P" "$WF" || { echo "FAIL: workflow 缺 $P"; exit 1; }; done; node -e "const y=require(\"fs\").readFileSync(\".github/workflows/e2e-knowledge-hub-path3.yml\",\"utf8\");const m=y.match(/windows-real-browser:[\s\S]*?(?=\n  [a-z]|$)/);if(!m)process.exit(1);const head=m[0].split(\"\n\").filter(l=>/^    [a-z_]+:/.test(l)).join(\"\n\");process.exit(/if:.*(workflow_dispatch|github\.event_name)/.test(head)?1:0)" || { echo "FAIL: windows job 加了事件条件门(A33c 回退)"; exit 1; }; echo OK'
   期望: OK
 
 - [x] [ARTIFACT] **ART-7 relation E2E spec 存在、零请求拦截/改写**（变体C 死规则）—— `structured-workbench-relations.spec.ts` 存在、零 `page.route(`、含 ASCII 标签 `@relation-build`/`@relation-jump`/`@relation-backref`，且含跳转断言与反向面板断言
@@ -44,14 +38,13 @@ journey_type: user_facing
   期望: OK
 
 - [x] [ARTIFACT] **ART-8 smoke 登记本刀 relation 7 段 + 7 个变异开关 + baseline 棘轮** —— `structured-workbench-smoke.sh` 含 relation 各段 flag + `mutation_list` 追加 7 个变异；smoke-baseline.txt 未回退既有登记
-  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; L=$(bash "$S" --mutation-list) || exit 1; for m in A27-rel-org-bypass A30R-rel-dangling-leak A28-rel-enum-leak A31-rel-private-leak A30F-field-hard-delete A29-backref-private-leak A30T-table-hard-delete; do printf "%s
-" "$L" | grep -q "$m" || { echo "FAIL: 变异未登记 $m"; exit 1; }; done; for f in --a27-only --a28-only --a29-backref-only --a30-row-only --a30-table-only --a30-field-only --a31-only; do grep -q -- "$f" "$S" || { echo "FAIL: smoke 缺段 $f"; exit 1; }; done; echo OK'
+  Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; L=$(bash "$S" --mutation-list) || exit 1; for m in A27-rel-org-bypass A30R-rel-dangling-leak A28-rel-enum-leak A31-rel-private-leak A30F-field-hard-delete A29-backref-private-leak A30T-table-hard-delete; do printf "%s\n" "$L" | grep -q "$m" || { echo "FAIL: 变异未登记 $m"; exit 1; }; done; for f in --a27-only --a28-only --a29-backref-only --a30-row-only --a30-table-only --a30-field-only --a31-only; do grep -q -- "$f" "$S" || { echo "FAIL: smoke 缺段 $f"; exit 1; }; done; echo OK'
   期望: OK
 
 ## BEHAVIOR 条目（真 Postgres + 真会话，evaluator 直接跑）
 
 - [x] [BEHAVIOR] 本刀 4 个测试文件被 vitest **真收集真跑**：4 suite 全绿、用例数 ≥ 18（r2 新增 A29② 私有反向 + P2 注入两条后的下限）、失败 0，且跑的**恰是**本刀那 4 个文件（零收集时 vitest 自报错，不假绿）
-  Test: manual:bash -c 'PG="${E2E_DATABASE_URL:-${DATABASE_URL:-}}"; [ -n "$PG" ] || { echo "FAIL: 缺 E2E_DATABASE_URL/DATABASE_URL"; exit 1; }; O=/tmp/wb-rel-vitest.json; rm -f "$O"; (cd apps/api && npx vitest run --config vitest.workbench-relations.config.ts --reporter=json --outputFile="$O") >/tmp/wb-rel-vitest.log 2>&1; RC=$?; [ -f "$O" ] || { echo "FAIL: vitest 未产报告(多半零收集)"; tail -30 /tmp/wb-rel-vitest.log; exit 1; }; jq -e "(.testResults|length)==4 and .numTotalTests>=18 and .numFailedTests==0 and .success==true" < "$O" >/dev/null || { echo "FAIL: 收集/通过数不符"; jq -c "{files:(.testResults|length),tests:.numTotalTests,failed:.numFailedTests,ok:.success}" < "$O"; exit 1; }; jq -e "[.testResults[].name|select(test(\"relations-(field-and-build|bidirectional|isolation-enum|integrity)\\.test\\.ts$\"))]|length==4" < "$O" >/dev/null || { echo "FAIL: 跑的不是本刀那 4 个文件"; exit 1; }; [ "$RC" = "0" ] || { echo "FAIL: vitest exit=$RC"; exit 1; }; echo OK'
+  Test: manual:bash -c 'PG="${E2E_DATABASE_URL:-${DATABASE_URL:-}}"; [ -n "$PG" ] || { echo "FAIL: 缺 E2E_DATABASE_URL/DATABASE_URL"; exit 1; }; O=/tmp/wb-rel-vitest.json; rm -f "$O"; (cd apps/api && npx vitest run --config vitest.workbench-relations.config.ts --reporter=json --outputFile="$O") >/tmp/wb-rel-vitest.log 2>&1; RC=$?; [ -f "$O" ] || { echo "FAIL: vitest 未产报告(多半零收集)"; tail -30 /tmp/wb-rel-vitest.log; exit 1; }; jq -e "(.testResults|length)==4 and .numTotalTests>=18 and .numFailedTests==0 and .success==true" < "$O" >/dev/null || { echo "FAIL: 收集/通过数不符"; jq -c "{files:(.testResults|length),tests:.numTotalTests,failed:.numFailedTests,ok:.success}" < "$O"; exit 1; }; jq -e "[.testResults[].name|select(test(\"relations-(field-and-build|bidirectional|isolation-enum|integrity)\\\\.test\\\\.ts$\"))]|length==4" < "$O" >/dev/null || { echo "FAIL: 跑的不是本刀那 4 个文件"; exit 1; }; [ "$RC" = "0" ] || { echo "FAIL: vitest exit=$RC"; exit 1; }; echo OK'
   期望: OK
 
 - [x] [BEHAVIOR] 建 relation 字段：`POST /tables/A/fields {field_type:"relation",options:[B]}` → 201、`field_type` 逐字 `relation`、`options[0]==B`；跨企业目标表 → 400（不 2xx）
@@ -77,6 +70,7 @@ journey_type: user_facing
 - [x] [BEHAVIOR] A30① 删被引用行安全失效：软删目标行 → 候选剔除它、来源读路径不 5xx、来源关联值仍是合法数组（不悬空可跳）
   Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; bash "$S" --fixture-up || exit 1; . ./.wb-fixture.env; PG="${E2E_DATABASE_URL:-${DATABASE_URL:-}}"; fail(){ echo "FAIL: $1"; bash "$S" --fixture-down; exit 1; }; API="http://localhost:$API_PORT/api/knowledge/db"; sf(){ curl -sf -b "$COOKIE_A" "$@"; }; TA=$(sf -H "Content-Type: application/json" -X POST "$API/tables" -d "{\"name\":\"DA-$SFX\",\"visibility\":\"org\",\"fields\":[{\"name\":\"标题\",\"field_type\":\"text\",\"options\":[],\"display_order\":0}]}" | jq -r ".data.table_id"); TB=$(sf -H "Content-Type: application/json" -X POST "$API/tables" -d "{\"name\":\"DB-$SFX\",\"visibility\":\"org\",\"fields\":[{\"name\":\"标题\",\"field_type\":\"text\",\"options\":[],\"display_order\":0}]}" | jq -r ".data.table_id"); B1=$(sf -X POST "$API/tables/$TB/rows" | jq -r ".data.row_id"); sf -H "Content-Type: application/json" -X POST "$API/tables/$TA/fields" -d "{\"fields\":[{\"name\":\"关联\",\"field_type\":\"relation\",\"options\":[\"$TB\"],\"display_order\":9}]}" >/dev/null; RF=$(sf "$API/tables/$TA/fields" | jq -r ".data.fields[]|select(.field_type==\"relation\")|.field_id"); AR=$(sf -X POST "$API/tables/$TA/rows" | jq -r ".data.row_id"); sf -H "Content-Type: application/json" -X PATCH "$API/rows/$AR" -d "{\"version\":1,\"data\":{\"$RF\":[\"$B1\"]}}" >/dev/null; sf -X DELETE "$API/rows/$B1" >/dev/null || fail "软删目标行失败"; sf "$API/tables/$TA/fields/$RF/relation-candidates" | jq -e --arg b "$B1" "[.data.candidates[].row_id]|index(\$b)==null" >/dev/null || fail "已删行未从候选剔除(悬空)"; CODE=$(curl -s -o /dev/null -w "%{http_code}" -b "$COOKIE_A" "$API/rows/$B1/backrefs"); case "$CODE" in 200|404) :;; *) fail "已删行反查返 $CODE(应 200/404 非 5xx)";; esac; psql "$PG" -t -A -q -c "SELECT jsonb_typeof(data -> \$\$$RF\$\$) FROM zenithjoy.db_rows WHERE id = \$\$$AR\$\$" | grep -qx array || fail "来源关联值不再是数组(结构被写坏)"; bash "$S" --fixture-down; echo OK'
   期望: OK
+  > 注：A30① 服务端「保留数组不悬空」保留不动（上条即证）；GP 横切「置空+可见标记」的**展示层**兑现（删被引用记录后表A单元格示失效标记「记录已删除」、不显示旧标题、点击不跳 404）由 windows 真浏览器 `@relation-stale` 用例验，判据见 `## BEHAVIOR:E2E 条目` 内 A30① 展示层失效标记一条。
 
 - [x] [BEHAVIOR] A30② 删表还原引用恢复：软删目标表 → 候选 404；还原 → 候选恢复且含被引用行
   Test: manual:bash -c 'S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh; bash "$S" --fixture-up || exit 1; . ./.wb-fixture.env; fail(){ echo "FAIL: $1"; bash "$S" --fixture-down; exit 1; }; API="http://localhost:$API_PORT/api/knowledge/db"; sf(){ curl -sf -b "$COOKIE_A" "$@"; }; TA=$(sf -H "Content-Type: application/json" -X POST "$API/tables" -d "{\"name\":\"TA-$SFX\",\"visibility\":\"org\",\"fields\":[{\"name\":\"标题\",\"field_type\":\"text\",\"options\":[],\"display_order\":0}]}" | jq -r ".data.table_id"); TBN="TB2-$SFX"; TB=$(sf -H "Content-Type: application/json" -X POST "$API/tables" -d "{\"name\":\"$TBN\",\"visibility\":\"org\",\"fields\":[{\"name\":\"标题\",\"field_type\":\"text\",\"options\":[],\"display_order\":0}]}" | jq -r ".data.table_id"); B1=$(sf -X POST "$API/tables/$TB/rows" | jq -r ".data.row_id"); sf -H "Content-Type: application/json" -X POST "$API/tables/$TA/fields" -d "{\"fields\":[{\"name\":\"关联\",\"field_type\":\"relation\",\"options\":[\"$TB\"],\"display_order\":9}]}" >/dev/null; RF=$(sf "$API/tables/$TA/fields" | jq -r ".data.fields[]|select(.field_type==\"relation\")|.field_id"); sf -H "Content-Type: application/json" -X DELETE "$API/tables/$TB" -d "{\"confirm_name\":\"$TBN\"}" >/dev/null || fail "软删表失败"; CODE=$(curl -s -o /dev/null -w "%{http_code}" -b "$COOKIE_A" "$API/tables/$TA/fields/$RF/relation-candidates"); [ "$CODE" = "404" ] || fail "删表后候选未 404(得 $CODE)"; sf -X POST "$API/trash/$TB/restore" >/dev/null || fail "还原表失败"; sf "$API/tables/$TA/fields/$RF/relation-candidates" | jq -e --arg b "$B1" "[.data.candidates[].row_id]|index(\$b)!=null" >/dev/null || fail "还原后候选未恢复被引用行"; bash "$S" --fixture-down; echo OK'
@@ -113,5 +107,11 @@ journey_type: user_facing
     - 01-relation-build.png   期望：建 relation 字段配目标表后，表A某行单元格显示所选目标记录标题
     - 02-relation-jump.png    期望：点击关联项后，跳转到目标表该记录详情面板（关键元素可见）
     - 03-relation-backref.png 期望：打开被引用记录详情，反向面板列出引用来源（来源表名+行标题）
+    - 04-relation-stale.png   期望：软删被引用记录后，表A单元格显示「记录已删除」失效标记（不显示旧标题）
   路径格式：sprints/08220300-workbench-sprintD-relations/screenshots/<step>.png
-  期望：e2e-knowledge-hub-path3.yml 的 windows job conclusion==success + 本刀 relation step success + 从 artifact path3-relations-screenshots 取回 ≥3 张非空截图（判据见 contract-draft.md `## E2E 验收` bash 块）
+  期望：e2e-knowledge-hub-path3.yml 的 windows job conclusion==success + 本刀 relation step success + 从 artifact path3-relations-screenshots 取回 ≥4 张非空截图（判据见 contract-draft.md `## E2E 验收` bash 块）
+
+- [x] [BEHAVIOR:E2E] A30① 展示层失效标记（补 GP 横切「删行→引用置空+可见标记」的展示层兑现，服务端 A30① 保留数组行为不动）：真浏览器建关联 → 软删被引用目标记录 → 重载后表A该单元格显示可见失效标记「记录已删除」、**不显示旧标题**、不再有可跳转的活 chip；点失效标记**不跳 404 白屏**（停在原表页）。数据层关联值 row_id 数组仍保留（删错可还原，与 A30② 删表还原语义一致）。
+  Screenshots:
+    - 04-relation-stale.png   期望：单元格「记录已删除」失效标记可见、旧标题不可见
+  判据：e2e-knowledge-hub-path3.yml windows job 有真调 `e2e-relations-run.ps1 -Grep @relation-stale` 的 step 且 conclusion==success + spec 断言原文（`rel-chip-stale-*` 可见 + `not.toContainText(旧标题)` + `rel-chip-*` count==0 + 点击后 URL 仍在表A）；对应 `structured-workbench-relations.spec.ts` 的 `@relation-stale` 用例。
