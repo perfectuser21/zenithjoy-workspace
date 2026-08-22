@@ -37,8 +37,25 @@ export type FieldType = (typeof FIELD_TYPES)[number];
  */
 export const RELATION_FIELD_TYPE = 'relation';
 
-/** 建字段/校验时真正放行的类型集合：八类 + relation。库层 CHECK 与之逐字对齐。 */
-export const ACCEPTED_FIELD_TYPES: readonly string[] = [...FIELD_TYPES, RELATION_FIELD_TYPE];
+/**
+ * rollup / lookup 是第十/十一类**内部**字段类型（Sprint E / S4 加厚聚合）。同 relation，
+ * 它们不进 `FIELD_TYPES`（那是用户面板里的八类、被 workbench.service.test.ts 逐字钉死为 8），
+ * 只在服务端接受为合法 field_type。rollup 配置以位序三元组 `[relation_field_id, target_field_id, fn]`
+ * 存 options；lookup 存 `[relation_field_id, target_field_id]`（fn 隐含为 lookup）。读时计算不落库。
+ */
+export const ROLLUP_FIELD_TYPE = 'rollup';
+export const LOOKUP_FIELD_TYPE = 'lookup';
+
+/** rollup 允许的五个聚合函数（fn 白名单，逐字钉死；lookup 的 fn 隐含为 'lookup' 不在此列）。 */
+export const ROLLUP_AGGREGATE_FNS: readonly string[] = ['count', 'sum', 'min', 'max', 'concat'];
+
+/** 建字段/校验时真正放行的类型集合：八类 + relation + rollup + lookup。库层 CHECK 与之逐字对齐。 */
+export const ACCEPTED_FIELD_TYPES: readonly string[] = [
+  ...FIELD_TYPES,
+  RELATION_FIELD_TYPE,
+  ROLLUP_FIELD_TYPE,
+  LOOKUP_FIELD_TYPE,
+];
 
 /** 回收站窗口：30 天。restorable_until = deleted_at + TRASH_RETENTION_DAYS */
 export const TRASH_RETENTION_DAYS = 30;
@@ -302,6 +319,82 @@ export async function assertRelationTargetsVisible(
   }
 }
 
+/**
+ * rollup / lookup 字段的类型×函数校验（A40 建字段时）。
+ *
+ * 配置三元组 `options = [relation_field_id, target_field_id, fn]`（lookup 无 fn 位，fn 隐含 lookup）。
+ * 逐项校验、任一不过即抛 WorkbenchValidationError（路由翻 400 VALIDATION_FAILED + 明确文案，
+ * 绝不放行成读时静默 NaN/错值）：
+ *   ① relation_field_id 必须是**本表**存活的 relation 字段（不可解析即拒——防把 rollup 挂到不存在
+ *      的关联上）。existingFields 是本表当前活字段清单（addFields 传 t.fields）。
+ *   ② 目标表（relation.options[0]）必须本会话可见（跨企业/私有非表主/软删 → getTable 返 null → 拒）。
+ *   ③ fn 白名单：rollup 的 fn ∈ {count,sum,min,max,concat}；非法（如 avg）→ 拒。
+ *   ④ 类型×函数：sum/min/max 只允 number 目标字段；count 无需目标字段；concat/lookup 允任意
+ *      目标字段类型（但目标字段必须存在）。
+ */
+export async function assertRollupConfigValid(
+  orgId: string,
+  memberId: string,
+  existingFields: FieldOut[],
+  incoming: FieldInput[]
+): Promise<void> {
+  for (const f of incoming) {
+    const isRollup = f.field_type === ROLLUP_FIELD_TYPE;
+    const isLookup = f.field_type === LOOKUP_FIELD_TYPE;
+    if (!isRollup && !isLookup) continue;
+
+    const opts = f.options ?? [];
+    const relFieldId = opts[0];
+    // ① relation_field_id 必须是本表存活 relation 字段
+    const relField = existingFields.find(
+      (x) => x.field_id === relFieldId && x.field_type === RELATION_FIELD_TYPE
+    );
+    if (!relField) {
+      throw new WorkbenchValidationError(
+        `汇总字段「${f.name}」的关联字段无效：必须选本表一个已有的关联字段`
+      );
+    }
+    // ② 目标表可见（跨企业/私有非表主/软删一律不可解析）
+    const targetTableId = relField.options[0];
+    if (typeof targetTableId !== 'string' || !isUuid(targetTableId)) {
+      throw new WorkbenchValidationError(`汇总字段「${f.name}」的关联目标表不可解析`);
+    }
+    const targetTable = await getTable(orgId, memberId, targetTableId);
+    if (!targetTable) {
+      throw new WorkbenchValidationError(`汇总字段「${f.name}」的关联目标表不可用或不可见`);
+    }
+
+    // ③ fn 白名单（rollup）
+    const fn = isLookup ? 'lookup' : opts[2];
+    if (isRollup && !ROLLUP_AGGREGATE_FNS.includes(String(fn))) {
+      throw new WorkbenchValidationError(
+        `汇总字段「${f.name}」的聚合函数「${String(fn)}」不支持：只允许 count/sum/min/max/concat`
+      );
+    }
+
+    // ④ 类型×函数
+    const targetFieldId = opts[1];
+    if (isRollup && fn === 'count') {
+      // count 只数关联行数，不需要目标字段
+      continue;
+    }
+    const targetField = targetTable.fields.find((x) => x.field_id === targetFieldId);
+    if (!targetField) {
+      throw new WorkbenchValidationError(
+        `汇总字段「${f.name}」的目标字段无效：必须选关联目标表的一个已有字段`
+      );
+    }
+    if (isRollup && (fn === 'sum' || fn === 'min' || fn === 'max')) {
+      if (targetField.field_type !== 'number') {
+        throw new WorkbenchValidationError(
+          `汇总字段「${f.name}」的聚合函数与字段类型不匹配：${String(fn)} 只能用于数值字段`
+        );
+      }
+    }
+    // concat / lookup：目标字段任意类型，已确认存在即可
+  }
+}
+
 export async function listFields(
   orgId: string,
   memberId: string,
@@ -325,6 +418,9 @@ export async function addFields(
   if (incoming.length === 0) throw new WorkbenchValidationError('fields 不能为空');
   // relation 字段的目标表必须本组织可见（A27①/A31① 写入侧校验），不可解析即整笔拒绝
   await assertRelationTargetsVisible(orgId, memberId, incoming);
+  // rollup/lookup 字段的类型×函数校验（A40）：关联字段是本表活字段 + 目标表可见 + fn 白名单 +
+  // sum/min/max 只允 number。不过即抛 400，绝不放行成读时静默 NaN。
+  await assertRollupConfigValid(orgId, memberId, t.fields, incoming);
   let nextOrder = t.fields.length;
   const client = await pool.connect();
   try {

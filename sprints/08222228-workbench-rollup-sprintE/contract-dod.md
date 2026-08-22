@@ -1,6 +1,3 @@
-contract_branch: cp-08222240-workbench-rollup
-sprint_dir: sprints/08222228-workbench-rollup-sprintE
-
 ---
 skeleton: false
 journey_type: user_facing

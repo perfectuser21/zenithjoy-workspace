@@ -5926,6 +5926,54 @@ agent_suite:
     product: 员工知识中枢
     note: "S4 真浏览器关联链三段(@relation-build / @relation-jump / @relation-backref)：建 relation 字段配目标表 → 行选择器挑记录 → 单元格显示目标标题；点关联项 chip 跳转到目标表该记录详情面板；打开被引用记录详情反向面板列出引用来源(表名+行标题)。三张截图。变体C：真实后端、禁请求拦截。workflow: e2e-knowledge-hub-path3.yml (windows job, e2e-relations-run.ps1)"
 
+  - id: workbench-rollup-contract-aggregate
+    path: sprints/08222228-workbench-rollup-sprintE/tests/rollup-aggregate.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "S4 加厚 A37 rollup 聚合值+数值规整+多值格式化：count=3、sum=52(含 string 12 Number() 规整计入、绝不字符串拼接冒充)、min=10/max=30、concat/lookup=甲乙丙(row_order 升序逗号拼接)；混入 abc 后 sum 仍 52 且 degraded=true；rollups envelope keys 恰[cells,table_id]、cell 恰五键、禁用字段零命中。读时计算不落库、真 Postgres。workflow: e2e-knowledge-hub-path3.yml (linux job, npm run test:workbench-rollup)"
+
+  - id: workbench-rollup-contract-isolation
+    path: sprints/08222228-workbench-rollup-sprintE/tests/rollup-isolation.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "S4 加厚 A38 聚合隔离只跨本 org + 反枚举：篡改目标行 org 为 B 企业后该行不进聚合基数(count 3→2、sum 60→30)；carol 以 A 企业真实表 id 与随机 id 各调 /rollups 逐字节同形 404 无 timestamp(404 优先 400)。聚合读服务 org 二次校验、真 Postgres。"
+
+  - id: workbench-rollup-contract-degrade
+    path: sprints/08222228-workbench-rollup-sprintE/tests/rollup-degrade.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "S4 加厚 A39 失效降级三支：删 rollup 依赖的 relation 字段(A39①)/删目标字段(A39②)/软删目标表(A39③) → rollup 单元格 value=null+degraded=true、端点 200 非 5xx、单元格仍在不悬空。复用 relation 解析链 getTable 返 null 机制、真软删真查。"
+
+  - id: workbench-rollup-contract-typecheck-ddl
+    path: sprints/08222228-workbench-rollup-sprintE/tests/rollup-type-check-ddl.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "S4 加厚 A40 类型×函数校验 + 零运行时 DDL：sum/min/max 配 text 目标字段 → 400 VALIDATION_FAILED+文案(非静默 NaN)、非法 fn(avg) → 400、relation_field_id 非本表 relation → 400；count 无需目标字段/concat/lookup 配任意 → 201；配置以三元组落 db_fields.options 读回逐字；建 rollup 字段+读聚合全程 information_schema 前后全等、零 %rollup% 物理表。真 Postgres。"
+
+  - id: workbench-rollup-e2e-golden-path
+    path: apps/staff-hub/e2e/structured-workbench-rollup.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 员工知识中枢
+    note: "S4 加厚真浏览器 rollup 链三段(@rollup-build / @rollup-lookup / @rollup-degrade)：建 relation 字段 → 配 rollup 字段(sum/count) → 单元格显示聚合值(40/2)；配 lookup 字段单元格显示多值逗号拼接(甲, 乙)；删 rollup 依赖字段单元格显示可见降级占位(不显示旧值、不白屏)。三张截图。变体C：真实后端、禁请求拦截。workflow: e2e-knowledge-hub-path3.yml (windows job, e2e-rollup-run.ps1)"
+
+  - id: workbench-rollup-service-pairing
+    path: apps/api/src/services/workbench-rollup.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "路③ rollup 读服务纯逻辑(test-pairing)：aggregate 六函数聚合 + Number() 数值规整(string 数字计入 sum、非数值行跳过+degraded、空值静默跳过不算脏) + min/max 全非数值回 null + concat/lookup 多值逗号拼接跳过空 + 未知 fn 安全降级；formatDisplay date 截 YYYY-MM-DD/其余 String()/null 空回 null。org 隔离/失效降级三支落库语义在合同真库测试里。"
+
   - id: line02-rpa-locator-assist-service-unit
     path: apps/api/src/services/locator-assist.test.ts
     type: unit
