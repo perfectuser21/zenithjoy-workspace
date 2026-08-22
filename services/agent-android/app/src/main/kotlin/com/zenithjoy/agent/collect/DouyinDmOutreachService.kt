@@ -229,7 +229,7 @@ class DouyinDmOutreachService : AccessibilityService() {
                     )
             }
             fetchToken = SnapshotDiscipline.nextFetchToken(beforeOpenToken)
-            val dmEntryRaw = entryOutcome.value
+            var dmEntryRaw = entryOutcome.value
             if (dmEntryRaw == null) {
                 val failure = NodeAwait.classifyFailure(entryOutcome, DOUYIN_PKG)
                 android.util.Log.w(
@@ -237,11 +237,17 @@ class DouyinDmOutreachService : AccessibilityService() {
                     "dm entry 等待超时 failure=$failure attempts=${entryOutcome.attempts} " +
                         "waitedMs=${entryOutcome.waitedMs(AWAIT_POLL_MS)} fgPkg=${entryOutcome.lastForegroundPkg}"
                 )
-                finishWithOutcome(
-                    dmEntryFound = false, sendConfirmed = false,
-                    errorCode = if (failure == WaitFailure.NO_ROOT) "NO_WINDOW" else "NO_DM_ENTRY",
-                )
-                return@launch
+                // AI 保底（铺满刀C）：私信入口判死前问一次
+                if (failure != WaitFailure.NO_ROOT) {
+                    dmEntryRaw = tryLocatorAssist("dm_entry", "私信按钮/私信入口（进入与该用户的私信对话）", "NO_DM_ENTRY")
+                }
+                if (dmEntryRaw == null) {
+                    finishWithOutcome(
+                        dmEntryFound = false, sendConfirmed = false,
+                        errorCode = if (failure == WaitFailure.NO_ROOT) "NO_WINDOW" else "NO_DM_ENTRY",
+                    )
+                    return@launch
+                }
             }
             // 真机验证发现：content-desc="私信" 命中的往往是图标叶子节点，isClickable=false，
             // 真正的点击处理挂在它的父容器上——对叶子节点 performAction(ACTION_CLICK) 会静默
@@ -271,11 +277,17 @@ class DouyinDmOutreachService : AccessibilityService() {
                     "dm input 等待超时 failure=$failure attempts=${inputOutcome.attempts} " +
                         "waitedMs=${inputOutcome.waitedMs(AWAIT_POLL_MS)} fgPkg=${inputOutcome.lastForegroundPkg}"
                 )
-                finishWithOutcome(
-                    dmEntryFound = true, sendConfirmed = false,
-                    errorCode = if (failure == WaitFailure.NO_ROOT) "NO_WINDOW_AFTER_DM_CLICK" else "NO_MESSAGE_INPUT",
-                )
-                return@launch
+                // AI 保底（铺满刀C）：消息输入框判死前问一次
+                val assisted = if (failure != WaitFailure.NO_ROOT) {
+                    tryLocatorAssist("dm_message_input", "私信消息输入框（输入要发送的文字）", "NO_MESSAGE_INPUT")
+                } else null
+                assisted ?: run {
+                    finishWithOutcome(
+                        dmEntryFound = true, sendConfirmed = false,
+                        errorCode = if (failure == WaitFailure.NO_ROOT) "NO_WINDOW_AFTER_DM_CLICK" else "NO_MESSAGE_INPUT",
+                    )
+                    return@launch
+                }
             }
             input.performAction(AccessibilityNodeInfo.ACTION_CLICK)
             commitTextRobust(input, message)
@@ -289,15 +301,19 @@ class DouyinDmOutreachService : AccessibilityService() {
                     "com.ss.android.ugc.aweme:id/send_btn",
                 )
             }
-            val sendBtn = sendOutcome.value
+            var sendBtn = sendOutcome.value
             if (sendBtn == null) {
                 android.util.Log.w(
                     TAG,
                     "dm send 按钮等待超时 failure=${NodeAwait.classifyFailure(sendOutcome, DOUYIN_PKG)} " +
                         "attempts=${sendOutcome.attempts} waitedMs=${sendOutcome.waitedMs(AWAIT_POLL_MS)}"
                 )
-                finishWithOutcome(dmEntryFound = true, sendConfirmed = false, errorCode = "NO_SEND_BUTTON")
-                return@launch
+                // AI 保底（铺满刀C）：发送按钮判死前问一次
+                sendBtn = tryLocatorAssist("dm_send_button", "发送按钮（把已输入的私信发出去）", "NO_SEND_BUTTON")
+                if (sendBtn == null) {
+                    finishWithOutcome(dmEntryFound = true, sendConfirmed = false, errorCode = "NO_SEND_BUTTON")
+                    return@launch
+                }
             }
             sendBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
 
