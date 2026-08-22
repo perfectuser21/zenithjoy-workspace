@@ -1,34 +1,43 @@
 /**
- * 表格视图页 —— 员工把数据录进自己组织的一张表（路③ Sprint B / S2「数据进得来」）
+ * 表格视图页 —— 员工把数据录进自己组织的一张表，并按视图筛/排/切看板（路③ S2 + S3）
  *
- * Golden Path 六个用户可观察输出，对应 E2E 的六张截图：
- *   01 表格视图打开：列 = 8 类字段，零行，「新增行」可点，可见「已有 N 行 / 上限 M 行」
- *   02 某单元格处于编辑态，编辑器与字段类型匹配
- *   03 同事同时改了同一格 → 冲突提示可见，且自己打的内容仍在编辑器里
- *   04 粘贴超上限 → 提示含当前上限与已有行数，表格行数未变
- *   05 删掉的行从行回收站还原后回到表格，字段值逐字回归
- *   06 行详情面板展开，字段全集可见、长文本是多行编辑区
+ * Sprint C 新增（S3「视图切得开」）：
+ *   - 视图列表 + 表格/看板切换 + 分组列 + 筛/排 + 隐藏列，配置持久化到 db_view_prefs（存 field_id）
+ *   - 看板：单选字段分组 + 未分组列，指针拖卡改值走 PATCH /rows/:id（乐观锁），失败弹回原列 + 可见提示
+ *   - 视图偏好保存失败 → 工具条可见提示「视图偏好未保存」，页面主体不白屏、可重试（禁静默吞）
  *
- * **上限不写死在前端**：`row_limit` 由服务端随行列表下发，UI 硬拦与提示文案都用它。
- * 写死一个数字就等于前端替服务端做了环境假设，服务端一改配置两边当场分叉。
+ * 上限不写死在前端：row_limit 由服务端随行列表下发。
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import WorkbenchRowGrid from '../components/WorkbenchRowGrid';
 import WorkbenchRowDetailPanel from '../components/WorkbenchRowDetailPanel';
+import WorkbenchViewSwitcher from '../components/WorkbenchViewSwitcher';
+import WorkbenchKanbanView from '../components/WorkbenchKanbanView';
+import type { DropPatch } from '../lib/workbenchKanban';
 import {
   createRow,
+  createView,
   deleteRow,
+  deleteView,
   exportTable,
   getTable,
   listRowTrash,
   listRows,
+  listRowsWith,
+  listViews,
+  patchRow,
+  patchView,
   pasteRows,
   restoreRow,
   WorkbenchRequestError,
+  type CellValue,
   type RowTrashEntry,
+  type ViewFilter,
+  type ViewSort,
   type WorkbenchField,
   type WorkbenchRow,
+  type WorkbenchView,
 } from '../lib/workbenchFetch';
 
 /** 剪贴板里的一片表格就是 TSV：首行列名，其余是数据行 */
@@ -53,6 +62,22 @@ export default function WorkbenchTablePage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // ── 视图状态（S3）──────────────────────────────────────────────────────────
+  const [views, setViews] = useState<WorkbenchView[]>([]);
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const [filterFieldId, setFilterFieldId] = useState('');
+  const [filterValue, setFilterValue] = useState('');
+  const [sortFieldId, setSortFieldId] = useState('');
+  const [sortDir, setSortDir] = useState('asc');
+  const [viewPrefsError, setViewPrefsError] = useState('');
+  const [kanbanError, setKanbanError] = useState('');
+  const [kanbanConflict, setKanbanConflict] = useState('');
+
+  const currentView = useMemo(
+    () => views.find((v) => v.view_id === activeViewId) ?? null,
+    [views, activeViewId]
+  );
+
   const fetchRows = useCallback(async () => {
     const out = await listRows(tableId);
     setRows(out.rows);
@@ -64,12 +89,32 @@ export default function WorkbenchTablePage() {
     setTrash(await listRowTrash(tableId));
   }, [tableId]);
 
+  const refreshViews = useCallback(async (): Promise<WorkbenchView[]> => {
+    const out = await listViews(tableId);
+    let list = out.views;
+    let active = out.active_view_id;
+    // 首次进表没有任何视图 → 建一个默认表格视图（前端建默认视图，S1）
+    if (list.length === 0) {
+      const created = await createView(tableId, {
+        name: '默认视图',
+        view_type: 'grid',
+        is_active: true,
+      });
+      list = [created];
+      active = created.view_id;
+    }
+    setViews(list);
+    setActiveViewId((prev) => (prev && list.some((v) => v.view_id === prev) ? prev : active ?? list[0].view_id));
+    return list;
+  }, [tableId]);
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
       const detail = await getTable(tableId);
       setTableName(detail.name);
       setFields(detail.fields);
+      await refreshViews();
       await fetchRows();
       await fetchTrash();
       setError('');
@@ -78,11 +123,20 @@ export default function WorkbenchTablePage() {
     } finally {
       setLoading(false);
     }
-  }, [tableId, fetchRows, fetchTrash]);
+  }, [tableId, refreshViews, fetchRows, fetchTrash]);
 
   useEffect(() => {
     void fetchAll();
   }, [fetchAll]);
+
+  // 切换当前视图时，把筛/排控件初值同步成该视图存的值
+  useEffect(() => {
+    if (!currentView) return;
+    setFilterFieldId(currentView.filters[0]?.field_id ?? '');
+    setFilterValue(currentView.filters[0]?.value != null ? String(currentView.filters[0].value) : '');
+    setSortFieldId(currentView.sorts[0]?.field_id ?? '');
+    setSortDir(currentView.sorts[0]?.dir ?? 'asc');
+  }, [currentView]);
 
   /** 写回成功：拿服务端返回的整行就地回填（含新 version），不整表重拉 */
   const applySavedRow = useCallback((saved: WorkbenchRow) => {
@@ -96,7 +150,6 @@ export default function WorkbenchTablePage() {
     setRows((prev) => prev.filter((r) => r.row_id !== rowId));
   }, []);
 
-  /** 冲突后由用户显式触发：只把那一行换成服务端的最新值，其余行与编辑态一律不动 */
   const rereadRow = useCallback(
     async (rowId: string) => {
       try {
@@ -160,9 +213,7 @@ export default function WorkbenchTablePage() {
         const out = await pasteRows(tableId, parsed.header, parsed.rows);
         setPasteNotice(
           `已导入 ${out.inserted} 行` +
-            (out.created_fields.length > 0
-              ? `，自动新建 ${out.created_fields.length} 个文本字段`
-              : '')
+            (out.created_fields.length > 0 ? `，自动新建 ${out.created_fields.length} 个文本字段` : '')
         );
         const detail = await getTable(tableId);
         setFields(detail.fields);
@@ -185,7 +236,130 @@ export default function WorkbenchTablePage() {
     }
   }, [tableId]);
 
+  // ── 视图偏好持久化（S3 / A21 / A23）─────────────────────────────────────────
+  // 保存失败 → 可见提示「视图偏好未保存」，页面主体不白屏、本地状态保留可重试（禁静默吞）。
+  const saveView = useCallback(
+    async (patch: Parameters<typeof patchView>[1]) => {
+      if (!activeViewId) return;
+      // 本地先乐观回填，保证保存失败时用户改的东西还在
+      setViews((prev) => prev.map((v) => (v.view_id === activeViewId ? { ...v, ...patch } : v)));
+      try {
+        const updated = await patchView(activeViewId, patch);
+        setViews((prev) => prev.map((v) => (v.view_id === activeViewId ? updated : v)));
+        setViewPrefsError('');
+      } catch (e) {
+        const err = e instanceof WorkbenchRequestError ? e : null;
+        setViewPrefsError(`视图偏好未保存${err ? `（${err.message}）` : ''}，请重试`);
+      }
+    },
+    [activeViewId]
+  );
+
+  const retrySaveView = useCallback(() => {
+    if (!currentView) return;
+    void saveView({
+      view_type: currentView.view_type,
+      group_field_id: currentView.group_field_id,
+      filters: currentView.filters,
+      sorts: currentView.sorts,
+      hidden_field_ids: currentView.hidden_field_ids,
+    });
+  }, [currentView, saveView]);
+
+  const applyQuery = useCallback(async () => {
+    const filters: ViewFilter[] = filterFieldId
+      ? [{ field_id: filterFieldId, op: 'contains', value: filterValue }]
+      : [];
+    const sorts: ViewSort[] = sortFieldId ? [{ field_id: sortFieldId, dir: sortDir }] : [];
+    try {
+      const out = await listRowsWith(tableId, { filter: filters, sort: sorts });
+      setRows(out.rows);
+      setRowLimit(out.row_limit);
+      setError('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '筛选排序失败');
+    }
+    await saveView({ filters, sorts });
+  }, [tableId, filterFieldId, filterValue, sortFieldId, sortDir, saveView]);
+
+  const activateView = useCallback(
+    async (viewId: string) => {
+      setActiveViewId(viewId);
+      try {
+        await patchView(viewId, { is_active: true });
+        await refreshViews();
+        await fetchRows();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : '切换视图失败');
+      }
+    },
+    [refreshViews, fetchRows]
+  );
+
+  const handleCreateView = useCallback(async () => {
+    try {
+      const created = await createView(tableId, {
+        name: `视图 ${views.length + 1}`,
+        view_type: 'grid',
+        is_active: true,
+      });
+      setActiveViewId(created.view_id);
+      await refreshViews();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '新建视图失败');
+    }
+  }, [tableId, views.length, refreshViews]);
+
+  const handleDeleteView = useCallback(
+    async (viewId: string) => {
+      try {
+        await deleteView(viewId);
+        setActiveViewId(null);
+        await refreshViews();
+        setViewPrefsError('');
+      } catch (e) {
+        const err = e instanceof WorkbenchRequestError ? e : null;
+        setViewPrefsError(err ? err.message : '删除视图失败');
+      }
+    },
+    [refreshViews]
+  );
+
+  const toggleHidden = useCallback(
+    (fieldId: string) => {
+      if (!currentView) return;
+      const hidden = currentView.hidden_field_ids.includes(fieldId)
+        ? currentView.hidden_field_ids.filter((x) => x !== fieldId)
+        : [...currentView.hidden_field_ids, fieldId];
+      void saveView({ hidden_field_ids: hidden });
+    },
+    [currentView, saveView]
+  );
+
+  /** 拖卡换列：走 PATCH /rows/:id 乐观锁。409 → 弹回原列 + 冲突提示；断网/5xx → 弹回原列 + 错误提示。 */
+  const onCardMoved = useCallback(
+    async (patch: DropPatch) => {
+      setKanbanError('');
+      setKanbanConflict('');
+      try {
+        const saved = await patchRow(patch.row_id, patch.version, patch.data as Record<string, CellValue>);
+        applySavedRow(saved);
+      } catch (e) {
+        // rows 状态未动，卡片自然留在原列（弹回）；只把可见提示打出来
+        if (e instanceof WorkbenchRequestError && e.status === 409) {
+          setKanbanConflict('该行已被他人修改，你的改动未保存');
+        } else {
+          setKanbanError('拖动未保存，请重试');
+        }
+      }
+    },
+    [applySavedRow]
+  );
+
   const atLimit = rowLimit !== null && rows.length >= rowLimit;
+  const hidden = currentView?.hidden_field_ids ?? [];
+  const visibleFields = fields.filter((f) => !hidden.includes(f.field_id ?? ''));
+  const isKanban = currentView?.view_type === 'kanban';
 
   return (
     <div className="page" data-testid="workbench-table-page">
@@ -197,6 +371,39 @@ export default function WorkbenchTablePage() {
       {error && (
         <div className="error-banner" data-testid="table-page-error">
           {error}
+        </div>
+      )}
+
+      {!loading && (
+        <WorkbenchViewSwitcher
+          views={views}
+          activeViewId={activeViewId}
+          view={currentView}
+          fields={fields}
+          filterFieldId={filterFieldId}
+          filterValue={filterValue}
+          sortFieldId={sortFieldId}
+          sortDir={sortDir}
+          onActivate={(id) => void activateView(id)}
+          onCreateView={() => void handleCreateView()}
+          onDeleteView={(id) => void handleDeleteView(id)}
+          onViewTypeChange={(t) => void saveView({ view_type: t })}
+          onGroupFieldChange={(fid) => void saveView({ group_field_id: fid || null })}
+          onToggleHidden={toggleHidden}
+          onFilterFieldChange={setFilterFieldId}
+          onFilterValueChange={setFilterValue}
+          onSortFieldChange={setSortFieldId}
+          onSortDirChange={setSortDir}
+          onApplyQuery={() => void applyQuery()}
+        />
+      )}
+
+      {viewPrefsError && (
+        <div className="view-prefs-error" data-testid="view-prefs-error">
+          {viewPrefsError}
+          <button type="button" data-testid="view-prefs-retry" onClick={retrySaveView}>
+            重试
+          </button>
         </div>
       )}
 
@@ -226,13 +433,35 @@ export default function WorkbenchTablePage() {
         </div>
       )}
 
+      {isKanban && (
+        <div className="kanban-notices">
+          {kanbanError && (
+            <div className="kanban-drop-error" data-testid="kanban-drop-error">
+              {kanbanError}
+            </div>
+          )}
+          {kanbanConflict && (
+            <div className="kanban-drop-conflict" data-testid="kanban-drop-conflict">
+              {kanbanConflict}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="table-layout">
         <div className="table-main">
           {loading ? (
             <p>加载中…</p>
+          ) : isKanban ? (
+            <WorkbenchKanbanView
+              fields={fields}
+              rows={rows}
+              groupFieldId={currentView?.group_field_id ?? null}
+              onCardMoved={(patch) => void onCardMoved(patch)}
+            />
           ) : (
             <WorkbenchRowGrid
-              fields={fields}
+              fields={visibleFields}
               rows={rows}
               onRowSaved={applySavedRow}
               onRowGone={noteRowGone}

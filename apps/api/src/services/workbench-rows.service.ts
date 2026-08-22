@@ -253,22 +253,166 @@ function validatePatch(
 
 // ── 读 ──────────────────────────────────────────────────────────────────────
 
+/** filter 白名单 op（合同 Response Schema）。落比较运算符选择，非白名单一律 400。 */
+const FILTER_OPS = ['contains', 'equals', 'gt', 'lt'] as const;
+/** sort 白名单 dir。直接落 `ORDER BY … ASC|DESC` 关键字位，坏 dir 一律 400（不是拼进 SQL）。 */
+const SORT_DIRS = ['asc', 'desc'] as const;
+
+interface ParsedFilter {
+  field_id: string;
+  op: string;
+  value: string;
+}
+interface ParsedSort {
+  field_id: string;
+  dir: string;
+  field_type: string;
+}
+
+/** 参数是 URL-encoded JSON 数组。解析不出 JSON / 不是数组一律 400 VALIDATION_FAILED。 */
+function parseQueryArray(raw: unknown, kind: string): unknown[] | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== 'string') throw new WorkbenchValidationError(`${kind} 参数形态非法`);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new WorkbenchValidationError(`${kind} 参数不是合法 JSON`);
+  }
+  if (!Array.isArray(parsed)) throw new WorkbenchValidationError(`${kind} 参数必须是数组`);
+  return parsed;
+}
+
+/**
+ * field_id 白名单映射 —— 用户输入永不进标识符位（上位合同 A25）。
+ * 死顺序 404 优先于 400：field_id 是合法 UUID 但不属本表（含他企业真实 field_id）→ 抛 CrossTable 触发 404；
+ * 非 UUID 形态（含原始 SQL 片段）→ 400（它永远不可能是本表某字段，不牵涉存在性泄露）。
+ */
+class CrossTableFieldError extends Error {
+  constructor() {
+    super('字段不存在或不属于该表');
+    this.name = 'CrossTableFieldError';
+  }
+}
+
+function whitelistField(fieldId: unknown, fieldMap: Map<string, FieldOut>): FieldOut {
+  if (typeof fieldId !== 'string' || fieldId.length === 0) {
+    throw new WorkbenchValidationError('field_id 必填');
+  }
+  if (!isUuid(fieldId)) throw new WorkbenchValidationError('field_id 形态非法');
+  const known = fieldMap.get(fieldId);
+  const fallback: FieldOut = { field_id: fieldId, name: '', field_type: 'text', options: [], display_order: 0 };
+  const belongs = known !== undefined;
+  if (!belongs) throw new CrossTableFieldError();
+  return known ?? fallback;
+}
+
+function normalizeQueryFilters(raw: unknown[], fieldMap: Map<string, FieldOut>): ParsedFilter[] {
+  return raw.map((item) => {
+    const f = (item ?? {}) as Record<string, unknown>;
+    whitelistField(f.field_id, fieldMap);
+    const op = typeof f.op === 'string' ? f.op : '';
+    if (!(FILTER_OPS as readonly string[]).includes(op)) {
+      throw new WorkbenchValidationError('filter.op 不在白名单内');
+    }
+    return { field_id: String(f.field_id), op, value: f.value === null || f.value === undefined ? '' : String(f.value) };
+  });
+}
+
+function normalizeQuerySorts(raw: unknown[], fieldMap: Map<string, FieldOut>): ParsedSort[] {
+  return raw.map((item) => {
+    const s = (item ?? {}) as Record<string, unknown>;
+    const field = whitelistField(s.field_id, fieldMap);
+    const dir = typeof s.dir === 'string' ? s.dir : '';
+    if (!(SORT_DIRS as readonly string[]).includes(dir)) {
+      throw new WorkbenchValidationError('sort.dir 不在白名单内');
+    }
+    return { field_id: String(s.field_id), dir, field_type: field.field_type };
+  });
+}
+
 export async function listRows(
   orgId: string,
   memberId: string,
-  tableId: string
+  tableId: string,
+  query: { filter?: unknown; sort?: unknown } = {}
 ): Promise<{ rows: RowOut[]; total: number; row_limit: number } | null> {
+  // 404 优先于 400：表不可达先于任何参数校验（顺序反了会让「他企业有没有这表」从错误码里漏出去）
   const table = await resolveTable(pool, tableId, orgId, memberId);
   if (!table) return null;
+
+  const rawFilters = parseQueryArray(query.filter, 'filter');
+  const rawSorts = parseQueryArray(query.sort, 'sort');
+
+  // 无参数时逐字等于 Sprint B 的返回（响应体形状一字不改）
+  if (rawFilters === undefined && rawSorts === undefined) {
+    const r = await pool.query(
+      `SELECT ${ROW_COLUMNS}
+         FROM zenithjoy.db_rows r
+        WHERE r.table_id = $1 AND r.org_id = $2 AND r.deleted_at IS NULL
+        ORDER BY r.row_order ASC, r.created_at ASC`,
+      [tableId, orgId]
+    );
+    const rows = r.rows.map(toRowOut);
+    return { rows, total: rows.length, row_limit: resolveRowLimit() };
+  }
+
+  const fieldMap = new Map((await listFieldRows(tableId, orgId)).map((f) => [f.field_id, f]));
+  const filters = rawFilters ? normalizeQueryFilters(rawFilters, fieldMap) : [];
+  const sorts = rawSorts ? normalizeQuerySorts(rawSorts, fieldMap) : [];
+
+  // field_id 走绑定参数当 JSONB 键，dir/cast 由代码按白名单选定——用户输入永不进标识符位
+  const params: unknown[] = [tableId, orgId];
+  const whereParts: string[] = [];
+  for (const f of filters) {
+    const keyIdx = params.push(f.field_id);
+    const valIdx = params.push(f.value);
+    switch (f.op) {
+      case 'contains':
+        whereParts.push(`strpos(COALESCE(r.data ->> $${keyIdx}, ''), $${valIdx}) > 0`);
+        break;
+      case 'equals':
+        whereParts.push(`COALESCE(r.data ->> $${keyIdx}, '') = $${valIdx}`);
+        break;
+      case 'gt':
+        whereParts.push(`(r.data ->> $${keyIdx})::numeric > ($${valIdx})::numeric`);
+        break;
+      case 'lt':
+        whereParts.push(`(r.data ->> $${keyIdx})::numeric < ($${valIdx})::numeric`);
+        break;
+    }
+  }
+
+  let orderClause = 'ORDER BY r.row_order ASC, r.created_at ASC';
+  if (sorts.length > 0) {
+    const parts = sorts.map((s) => {
+      const keyIdx = params.push(s.field_id);
+      const dir = s.dir === 'desc' ? 'DESC' : 'ASC';
+      // 数字字段按数值序（字典序会把 10 排到 9 前），其余按文本序
+      const expr =
+        s.field_type === 'number'
+          ? `NULLIF(r.data ->> $${keyIdx}, '')::numeric`
+          : `r.data ->> $${keyIdx}`;
+      return `${expr} ${dir} NULLS LAST`;
+    });
+    orderClause = `ORDER BY ${parts.join(', ')}, r.row_order ASC`;
+  }
+
+  const whereSql = whereParts.length > 0 ? ` AND ${whereParts.join(' AND ')}` : '';
   const r = await pool.query(
     `SELECT ${ROW_COLUMNS}
        FROM zenithjoy.db_rows r
-      WHERE r.table_id = $1 AND r.org_id = $2 AND r.deleted_at IS NULL
-      ORDER BY r.row_order ASC, r.created_at ASC`,
-    [tableId, orgId]
+      WHERE r.table_id = $1 AND r.org_id = $2 AND r.deleted_at IS NULL${whereSql}
+      ${orderClause}`,
+    params
   );
   const rows = r.rows.map(toRowOut);
   return { rows, total: rows.length, row_limit: resolveRowLimit() };
+}
+
+/** 路由据它把跨表 field_id 翻成 404（与表不可达同一个 notFoundBody）。 */
+export function isCrossTableFieldError(err: unknown): boolean {
+  return err instanceof CrossTableFieldError;
 }
 
 export async function listRowTrash(
