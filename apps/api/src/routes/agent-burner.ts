@@ -30,6 +30,14 @@ const accountScanResultRateLimit = simpleRateLimit({
   max: 60,
   keyFn: (req) => (req.body && req.body.agent_id) || 'anonymous',
 });
+// dm-outreach-result 限流（CodeQL js/missing-rate-limiting——本 PR 新增树快照写库
+// 让"改动过的代码"重新计入告警）。真实节奏：每号 dm_per_hour=20 + 重试，60次/分/agent
+// 给足整机队并发余量；快照最大 64KB，限流同时也是对这条大 body 通道的写入保护。
+const dmOutreachResultRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 60,
+  keyFn: (req) => (req.body && req.body.agent_id) || 'anonymous',
+});
 import { isDuplicateDmOutreachResult } from '../services/device-platform';
 
 const router = Router();
@@ -636,7 +644,7 @@ router.post('/dm-outreach', tenantContextOptional, agentContext, async (req: Req
 });
 
 // ── 8. POST /dm-outreach-result — Agent 回报触达结果 → 写飞书 + 单号停用不连坐 ──
-router.post('/dm-outreach-result', async (req: Request, res: Response) => {
+router.post('/dm-outreach-result', dmOutreachResultRateLimit, async (req: Request, res: Response) => {
   const {
     task_id,
     agent_id,
