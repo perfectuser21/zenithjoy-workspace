@@ -88,3 +88,44 @@ describe('POST /locator-assist', () => {
     expect(res.body.data.reason).toBe('llm_timeout');
   });
 });
+
+// ── 刀2b：assist_id 返回 + verified 回执端点 ──────────────────────────────
+// 安卓端用完候选要回执"验证闸过没过"，刀3 周报靠 verified 判 AI 在该格子的答案
+// 稳不稳、能不能固化进定位器。没有 assist_id 就没法回执。
+describe('POST /locator-assist assist_id 与 /locator-assist/verify 回执', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (pool.query as any).mockResolvedValue({ rows: [], rowCount: 1 });
+  });
+
+  it('assist 响应必须带 assist_id 供后续回执', async () => {
+    (requestLocatorAssist as any).mockResolvedValue({
+      status: 'ok', cacheHit: false, backend: 'tree-llm', assistId: 'aid-777',
+      candidates: [{ line: 1, view_id: 'x', text: null, content_desc: null, bounds: null }],
+    });
+    const res = await request(app())
+      .post('/api/agent/burner/locator-assist')
+      .send({ step: 's', target_desc: 't', ui_tree_snapshot: 'd0 x' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.assist_id).toBe('aid-777');
+  });
+
+  it('verify 回执写 verified 列', async () => {
+    const res = await request(app())
+      .post('/api/agent/burner/locator-assist/verify')
+      .send({ assist_id: 'b2222222-2222-4222-8222-222222222222', verified: true });
+    expect(res.status).toBe(200);
+    const calls = (pool.query as any).mock.calls as Array<[string, unknown[]?]>;
+    const upd = calls.find(([sql]) =>
+      /UPDATE\s+zenithjoy\.rpa_locator_assist/i.test(sql) && /verified/i.test(sql));
+    expect(upd, '缺 verified UPDATE').toBeTruthy();
+    expect(upd![1]).toEqual(expect.arrayContaining(['b2222222-2222-4222-8222-222222222222', true]));
+  });
+
+  it('verify 缺 assist_id 返回 400', async () => {
+    const res = await request(app())
+      .post('/api/agent/burner/locator-assist/verify')
+      .send({ verified: true });
+    expect(res.status).toBe(400);
+  });
+});
