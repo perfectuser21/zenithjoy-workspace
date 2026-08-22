@@ -187,13 +187,14 @@ done
 # 只验端口通是假绿：没实现自检时服务照样起，必须看到自检自己的输出
 grep -q "A30 staff-directory selfcheck passed" /tmp/kh-smoke-api.log \
   || { tail -30 /tmp/kh-smoke-api.log; fail "启动日志无 A30 自检通过标记，自检根本没跑"; }
-for k in A30-1a A30-1b A30-2 A30-3; do
+# A30-2 归属唯一已退役（多组织切换第一刀·Gate 0 四处同刀：一人多企业已合法），只剩三项。
+for k in A30-1a A30-1b A30-3; do
   grep -q "$k" /tmp/kh-smoke-api.log || fail "启动日志未列出检查项 $k"
 done
-ok "服务起来了，且四个检查项都在启动日志里"
+ok "服务起来了，且三个检查项都在启动日志里（A30-2 归属唯一已退役）"
 
-# ── A30 反向：四条变异各自把进程拦在 listen 之前 ──────────────────────────────
-echo "== 2. A30 反向：四条变异 proven-to-fire =="
+# ── A30 反向：三条变异各自把进程拦在 listen 之前 ──────────────────────────────
+echo "== 2. A30 反向：三条变异 proven-to-fire =="
 run_mutation() {
   local name="$1"; shift
   local log="/tmp/kh-smoke-mut-$name.log"
@@ -207,7 +208,8 @@ run_mutation() {
 }
 run_mutation "A30-1a" STAFF_FEISHU_OPENIDS__ORGA="$ORGA_OPENID,ou_khsmoke_ghost"
 run_mutation "A30-1b" STAFF_FEISHU_OPENIDS="$ORGA_OPENID,ou_khsmoke_orphan"
-run_mutation "A30-2"  STAFF_FEISHU_OPENIDS__ORGB="$ORGB_OPENID,$ORGA_OPENID"
+# A30-2 归属唯一变异已删（多组织切换第一刀退役）：同一身份出现在多个分组现在是合法的多组织归属，
+# 不再拦启动，此变异不再 proven-to-fire。
 run_mutation "A30-3"  STAFF_ORG_MAP="ORGA:00000000-0000-4000-8000-000000000000,ORGB:$ORGB_TENANT_ID"
 
 # ── 业务链路 ────────────────────────────────────────────────────────────────

@@ -14,19 +14,24 @@ on:
       - 'apps/staff-hub/e2e/structured-workbench-views.spec.ts'
       - 'apps/staff-hub/e2e/structured-workbench-relations.spec.ts'
       - 'apps/staff-hub/e2e/structured-workbench-rollup.spec.ts'
+      - 'apps/staff-hub/e2e/org-context-switch.spec.ts'
       - 'apps/dashboard/e2e/fields-auth-regression.spec.ts'
       - 'apps/api/db/migrations/**'
       - 'apps/api/vitest.workbench-rows.config.ts'
       - 'apps/api/vitest.workbench-views.config.ts'
       - 'apps/api/vitest.workbench-relations.config.ts'
       - 'apps/api/vitest.workbench-rollup.config.ts'
+      - 'apps/api/vitest.org-context.config.ts'
       - '.github/workflows/e2e-knowledge-hub-path3.yml'
       - '.github/workflows/scripts/smoke/structured-workbench-smoke.sh'
+      - '.github/workflows/scripts/smoke/org-context-switch-smoke.sh'
+      - '.github/workflows/scripts/smoke/knowledge-hub-path1-smoke.sh'
       - 'sprints/08201151-员工知识中枢-路-结构化工作台-c86e37ff/**'
       - 'sprints/08201850-workbench-sprintB-rows/**'
       - 'sprints/08210012-workbench-sprintC-views/**'
       - 'sprints/08220300-workbench-sprintD-relations/**'
       - 'sprints/08222228-workbench-rollup-sprintE/**'
+      - 'sprints/08221800-org-context-switch-core/**'
   workflow_dispatch:
 
 concurrency:
@@ -135,6 +140,27 @@ jobs:
           bash "$S" --rollup-ddl-only
       - name: 段2e A41 墙裁定守卫（rollup 读服务钉死路径 + 检索特征文件零命中，源码级无需 DB）
         run: bash sprints/08222228-workbench-rollup-sprintE/scripts/rollup-wall-guard.sh
+      - name: 段1e 多组织切换合同测试真被 vitest 收集执行（4 文件 / 15 用例 / 真 Postgres）
+        run: npm run test:org-context --workspace apps/api
+      - name: 段2e 多组织切换 A10 静态守卫 + 6 变异 proven-to-fire（A1/A4/A7/A10/A11/A12）
+        run: |
+          S=.github/workflows/scripts/smoke/org-context-switch-smoke.sh
+          bash "$S" --a10-only
+          # 每条变异：注入缺陷 → 对应段必转红 → 复原（先证明因缺陷报红、再证明正确实现转绿）
+          prove() { local M="$1" SEG="$2"; bash "$S" --mutation-apply "$M" || exit 1; \
+            if bash "$S" "$SEG"; then bash "$S" --mutation-revert "$M"; echo "FAIL: $M 下 $SEG 未转红"; exit 1; fi; \
+            bash "$S" --mutation-revert "$M"; }
+          prove A1-404-timestamp   --a1-only
+          prove A4-silent-first    --a4-only
+          prove A7-trust-stale     --a7-only
+          prove A11-no-audit       --a11-only
+          prove A12-nocheck        --a12-only
+          prove A12-reject-multiorg --a12-only
+          # A10 变异（纯静态，无需 DB）
+          bash "$S" --mutation-apply A10-body-org-read
+          if bash "$S" --a10-only; then bash "$S" --mutation-revert A10-body-org-read; echo "FAIL: A10 变异未报红"; exit 1; fi
+          bash "$S" --mutation-revert A10-body-org-read
+          echo "OK: A10 守卫 + 7 变异全部 proven-to-fire"
       - name: 段2b G2 恢复演练（真 pg_dump + 真还原 + 五表逐条全等）
         run: bash .github/workflows/scripts/backup/restore-drill.sh
 
@@ -259,4 +285,17 @@ jobs:
         with:
           name: path3-rollup-screenshots
           path: sprints/08222228-workbench-rollup-sprintE/screenshots/
+      # ── 多组织切换第一刀 组织切换链一段 ────────────────────────────────
+      # 同一 windows job：npm ci / chromium / migration / apps-api 构建由前面 Sprint B 的 prepare 做过一次
+      # （migration 含本刀 20260823 session.activeOrg + org_audit）。本 step 自己 seed（含跨两企业成员 dave）、
+      # 起真 apps/api + 真 hub（**不走 VITE_SKIP_AUTH**，验真 AuthContext 会话恢复→拉企业→切换器）、跑完停。
+      - name: 多组织切换链真浏览器（dave 未选阻断 → 选定A → 切到B / alice 单企业透明）
+        shell: pwsh
+        run: pwsh -File "sprints/08221800-org-context-switch-core/e2e-org-switch-run.ps1" -Grep "@org-"
+      - name: 上传本刀截图（org 切换链四张）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: org-switch-screenshots
+          path: sprints/08221800-org-context-switch-core/screenshots/
           if-no-files-found: error

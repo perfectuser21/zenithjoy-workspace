@@ -22,6 +22,20 @@ export class KnowledgeRequestError extends Error {
   }
 }
 
+/**
+ * 组织态错误的全局哨兵：数据端点在「归属 ≥2 家但未选」时返 409 ORG_SELECTION_REQUIRED，
+ * 在「会话 active_org 失效/被伪造」时返 403 ORG_FORBIDDEN。这两个码不管从哪个页面撞上，
+ * 处理方式都一样（逼选 / 刷新归属重选），所以在解析层集中上报给 AuthContext 一处处理，
+ * 免得每个页面各写一遍。页面自己该出的错误文案照旧出，这里只是额外通知。
+ */
+export type OrgContextErrorCode = 'ORG_SELECTION_REQUIRED' | 'ORG_FORBIDDEN';
+type OrgErrorListener = (code: OrgContextErrorCode) => void;
+let orgErrorListener: OrgErrorListener | null = null;
+
+export function setOrgErrorListener(fn: OrgErrorListener | null): void {
+  orgErrorListener = fn;
+}
+
 export function knowledgeFetch(url: string, init?: RequestInit): Promise<Response> {
   const headers: HeadersInit = {
     ...(init?.headers ?? {}),
@@ -42,10 +56,14 @@ export async function knowledgeJson<T>(url: string, init?: RequestInit): Promise
     | null;
 
   if (!res.ok || !body?.success) {
-    throw new KnowledgeRequestError(res.status, {
+    const err = new KnowledgeRequestError(res.status, {
       code: body?.error?.code ?? 'UNKNOWN',
       message: body?.error?.message ?? `请求失败（HTTP ${res.status}）`,
     });
+    if (err.code === 'ORG_SELECTION_REQUIRED' || err.code === 'ORG_FORBIDDEN') {
+      orgErrorListener?.(err.code);
+    }
+    throw err;
   }
   return body.data as T;
 }

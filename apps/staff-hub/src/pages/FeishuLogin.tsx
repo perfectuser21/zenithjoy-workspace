@@ -44,7 +44,11 @@ export default function FeishuLogin() {
     try {
       const data = await feishuLogin(code);
       if (data.success && data.user) {
-        login(data.user, data.user.access_token);
+        login(data.user, data.user.access_token, {
+          orgs: data.orgs,
+          active_org_id: data.active_org_id,
+          needs_selection: data.needs_selection,
+        });
         navigate('/');
         return;
       }

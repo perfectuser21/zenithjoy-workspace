@@ -41,6 +41,18 @@ function buildAuth() {
     secret: SECRET ?? 'dev-only-secret-change-me-in-production-please-min-32-chars',
     trustedOrigins: TRUSTED_ORIGINS,
 
+    /**
+     * 多组织切换（J7）：active_org 存 better-auth session 附加字段（服务端会话态），
+     * 绝不引入 X-Org-Id 类请求头。input:false —— 客户端不能经 API 直接写这一维度，
+     * 只能走服务端受校验的 POST /switch-org（校验目标 ∈ 成员集合）落库，杜绝客户端伪造。
+     * 列名 activeOrg 对应 20260823 migration 加的 public.session."activeOrg" 列。
+     */
+    session: {
+      additionalFields: {
+        activeOrg: { type: 'string', required: false, input: false },
+      },
+    },
+
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: false, // PR-1：先关掉强制验证（让客户立即可登录测试）；PR-4 接 SMTP 后开

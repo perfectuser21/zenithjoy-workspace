@@ -32,8 +32,14 @@ export interface StaffOrgAssignment {
   tenantId: string;
 }
 
-/** A30 四项检查项名，启动日志逐项打印，变异时用于定位违规项 */
-export const A30_CHECKS = ['A30-1a', 'A30-1b', 'A30-2', 'A30-3'] as const;
+/**
+ * A30 检查项名，启动日志逐项打印，变异时用于定位违规项。
+ *
+ * 【多组织切换第一刀·Gate 0 四处同刀】A30-2「归属唯一」已退役：一个员工归属 ≥2 家企业
+ * 从非法反转为合法，同一身份出现在多个分组不再是违规。剩三项（扁平↔主企业等价 / 分组并集覆盖
+ * 扁平 / STAFF_ORG_MAP uuid 真实存在）仍生效，它们与「多组织合法」不冲突。
+ */
+export const A30_CHECKS = ['A30-1a', 'A30-1b', 'A30-3'] as const;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -135,8 +141,9 @@ function sameSet(a: Set<string>, b: Set<string>): boolean {
  *
  *   A30-1a  扁平名单 == 主企业那一组（分组里多一个不在扁平里的人 → 红）
  *   A30-1b  分组并集 ⊇ 扁平名单（扁平里多一个不在任何分组里的人 → 红）
- *   A30-2   归属唯一（任何人同时出现在两个分组 → 红）
  *   A30-3   STAFF_ORG_MAP 里每个 uuid 在 zenithjoy.tenants 中真实存在
+ *
+ *   （A30-2 归属唯一已退役：多组织切换第一刀反转「一人多企业」为合法，同一身份出现在多个分组不再报红）
  *
  * violations 里放的是检查项名本身，调用方直接打进启动日志即可定位。
  */
@@ -168,21 +175,7 @@ export async function checkStaffDirectory(
     }
   }
 
-  // A30-2：归属唯一 —— 同一身份不得出现在两个分组
-  const seen = new Map<string, string>();
-  let dup = false;
-  for (const [org, members] of groups) {
-    for (const m of members) {
-      const prev = seen.get(m);
-      if (prev !== undefined && prev !== org) {
-        dup = true;
-        break;
-      }
-      seen.set(m, org);
-    }
-    if (dup) break;
-  }
-  if (dup) violations.push('A30-2');
+  // A30-2 归属唯一已退役（多组织切换第一刀）：同一身份出现在多个分组 = 合法的多组织归属，不再报红。
 
   // A30-3：STAFF_ORG_MAP 的 uuid 必须在 tenants 中真实存在（真查 PG，不查格式了事）
   const uuids = [...orgMap.values()];
