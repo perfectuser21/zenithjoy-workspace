@@ -45,12 +45,16 @@ export interface BackrefsOut {
 }
 
 /** 一张表里 display_order 最小的活字段 = 标题字段（渲染候选/来源行的显示文本）。 */
-function titleFieldOf(fields: FieldOut[]): FieldOut | undefined {
+export function titleFieldOf(fields: FieldOut[]): FieldOut | undefined {
   return fields[0]; // listFieldRows 已按 display_order ASC 排序且滤掉软删
 }
 
 /** 取一行的显示标题：标题字段的值（转字符串），无值回落 row_id。 */
-function rowTitle(data: Record<string, unknown>, titleField: FieldOut | undefined, rowId: string): string {
+export function rowTitle(
+  data: Record<string, unknown>,
+  titleField: FieldOut | undefined,
+  rowId: string
+): string {
   if (!titleField) return rowId;
   const v = data?.[titleField.field_id];
   if (v === undefined || v === null || v === '') return rowId;
