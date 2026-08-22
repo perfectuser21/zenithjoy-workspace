@@ -141,18 +141,37 @@ function RelationCell({ rowId, field, value }: { rowId: string; field: Workbench
   return (
     <div data-testid={cellId} className="grid-cell grid-cell-relation">
       {ids.length === 0 && <span className="rel-empty">—</span>}
-      {ids.map((id) => (
-        <button
-          key={id}
-          type="button"
-          className="rel-chip"
-          data-testid={`rel-chip-${rowId}-${fieldId}-${id}`}
-          title="点击跳转到关联记录"
-          onClick={() => meta && ctx.relationJump(meta.targetTableId, id)}
-        >
-          {meta?.titleByRow[id] ?? id}
-        </button>
-      ))}
+      {ids.map((id) => {
+        // 失效判定：候选元数据已加载（meta 存在）但该 row_id 不在其中 = 目标记录被软删/移出可读集。
+        // 数据层仍保留 row_id 数组（删错可还原，和 A30② 删表语义一致）；展示层示以失效标记，
+        // 不显示旧标题、不给可跳转入口（点了也不会跳到已删记录的 404 白屏）。
+        const title = meta?.titleByRow[id];
+        const isStale = meta !== undefined && title === undefined;
+        if (isStale) {
+          return (
+            <span
+              key={id}
+              className="rel-chip rel-chip-stale"
+              data-testid={`rel-chip-stale-${rowId}-${fieldId}-${id}`}
+              title="关联的记录已被删除"
+            >
+              记录已删除
+            </span>
+          );
+        }
+        return (
+          <button
+            key={id}
+            type="button"
+            className="rel-chip"
+            data-testid={`rel-chip-${rowId}-${fieldId}-${id}`}
+            title="点击跳转到关联记录"
+            onClick={() => meta && ctx.relationJump(meta.targetTableId, id)}
+          >
+            {title ?? id}
+          </button>
+        );
+      })}
       <button
         type="button"
         className="rel-edit"

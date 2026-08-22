@@ -199,4 +199,46 @@ test.describe('路③ S4 跨表关联链', () => {
     await expect(entry).toContainText('引用它的来源行');
     await page.screenshot({ path: shot('03-relation-backref.png'), fullPage: true });
   });
+
+  test('删被引用记录后 → 表A单元格显示失效标记（不显示旧标题、点击不跳 404）@relation-stale', async ({
+    page,
+  }) => {
+    const api = page.request;
+    const ts = Date.now();
+    const b = await createSimpleTable(api, `B目标-${ts}`);
+    const { rowId: b1 } = await createTitledRow(api, b.tableId, b.titleFieldId, '会被删的目标标题');
+    const a = await createSimpleTable(api, `A源-${ts}`);
+    const relFieldId = await addRelationField(api, a.tableId, b.tableId);
+    const { rowId: aRow, version: aVer } = await createTitledRow(api, a.tableId, a.titleFieldId, '来源行A');
+    await linkRelation(api, aRow, aVer, relFieldId, b1);
+
+    // 先确认单元格正常显示目标标题
+    await page.goto(`${BASE_URL}/workbench/tables/${a.tableId}`);
+    await expect(page.getByTestId('workbench-table-page')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId(`rel-chip-${aRow}-${relFieldId}-${b1}`)).toContainText(
+      '会被删的目标标题',
+      { timeout: 15_000 }
+    );
+
+    // 软删被引用的目标记录（数据层关联值 row_id 数组保留不变 = 删错可还原）
+    const del = await api.delete(`${BASE_URL}${DB_BASE}/rows/${b1}`);
+    expect(del.status(), `软删目标记录失败：${await del.text()}`).toBe(200);
+
+    // 重新载入：候选元数据剔除已删记录 → 单元格改示失效标记
+    await page.reload();
+    await expect(page.getByTestId('workbench-table-page')).toBeVisible({ timeout: 20_000 });
+    const cell = page.getByTestId(`cell-${aRow}-${relFieldId}`);
+    const stale = page.getByTestId(`rel-chip-stale-${aRow}-${relFieldId}-${b1}`);
+    await expect(stale).toBeVisible({ timeout: 15_000 });
+    await expect(stale).toContainText('记录已删除');
+    // 不显示旧标题、不再有可跳转的活 chip
+    await expect(cell).not.toContainText('会被删的目标标题');
+    await expect(page.getByTestId(`rel-chip-${aRow}-${relFieldId}-${b1}`)).toHaveCount(0);
+    await page.screenshot({ path: shot('04-relation-stale.png'), fullPage: true });
+
+    // 点失效标记不跳 404 白屏：停在原表页、无目标记录详情面板
+    await stale.click({ force: true });
+    await expect(page).toHaveURL(new RegExp(`/workbench/tables/${a.tableId}`));
+    await expect(page.getByTestId('workbench-table-page')).toBeVisible();
+  });
 });

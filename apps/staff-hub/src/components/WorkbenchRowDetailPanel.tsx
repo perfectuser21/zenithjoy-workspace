@@ -17,6 +17,7 @@ import {
   type WorkbenchField,
   type WorkbenchRow,
 } from '../lib/workbenchFetch';
+import type { RelationMeta } from './WorkbenchRowGrid';
 
 export interface WorkbenchRowDetailPanelProps {
   row: WorkbenchRow;
@@ -24,7 +25,9 @@ export interface WorkbenchRowDetailPanelProps {
   onRowSaved: (row: WorkbenchRow) => void;
   onRowGone: (rowId: string) => void;
   onClose: () => void;
-  /** 反向面板里点某条来源 → 跳到来源记录（可选：只读展示不给跳转也成立） */
+  /** relation 字段渲染元数据（目标表 id + row_id→标题；缺项即失效） */
+  relationMeta?: Record<string, RelationMeta>;
+  /** 反向面板 / 关联项里点某条 → 跳到目标记录（可选：只读展示不给跳转也成立） */
   onRelationJump?: (targetTableId: string, targetRowId: string) => void;
 }
 
@@ -40,6 +43,7 @@ export default function WorkbenchRowDetailPanel({
   onRowSaved,
   onRowGone,
   onClose,
+  relationMeta = {},
   onRelationJump,
 }: WorkbenchRowDetailPanelProps) {
   const [drafts, setDrafts] = useState<Record<string, string | string[]>>({});
@@ -125,7 +129,15 @@ export default function WorkbenchRowDetailPanel({
             <div key={fieldId} className="detail-row">
               <dt data-testid={`detail-label-${fieldId}`}>{f.name}</dt>
               <dd>
-                {f.field_type === 'long_text' ? (
+                {f.field_type === 'relation' ? (
+                  <RelationFieldView
+                    rowId={row.row_id}
+                    fieldId={fieldId}
+                    value={row.data[fieldId] ?? null}
+                    meta={relationMeta[fieldId]}
+                    onJump={onRelationJump}
+                  />
+                ) : f.field_type === 'long_text' ? (
                   <textarea
                     data-testid={testId}
                     rows={5}
@@ -203,5 +215,55 @@ export default function WorkbenchRowDetailPanel({
         )}
       </section>
     </aside>
+  );
+}
+
+/** 详情面板里的 relation 字段：只读展示关联记录标题 chip；已删目标示失效标记、不给可跳转入口。 */
+function RelationFieldView({
+  rowId,
+  fieldId,
+  value,
+  meta,
+  onJump,
+}: {
+  rowId: string;
+  fieldId: string;
+  value: CellValue;
+  meta: RelationMeta | undefined;
+  onJump?: (targetTableId: string, targetRowId: string) => void;
+}) {
+  const ids = Array.isArray(value) ? value.map((v) => String(v)) : [];
+  if (ids.length === 0) return <span className="rel-empty">—</span>;
+  return (
+    <div className="detail-relation" data-testid={`detail-relation-${fieldId}`}>
+      {ids.map((id) => {
+        const title = meta?.titleByRow[id];
+        const isStale = meta !== undefined && title === undefined;
+        if (isStale) {
+          return (
+            <span
+              key={id}
+              className="rel-chip rel-chip-stale"
+              data-testid={`detail-rel-chip-stale-${rowId}-${fieldId}-${id}`}
+              title="关联的记录已被删除"
+            >
+              记录已删除
+            </span>
+          );
+        }
+        return (
+          <button
+            key={id}
+            type="button"
+            className="rel-chip"
+            data-testid={`detail-rel-chip-${rowId}-${fieldId}-${id}`}
+            title="点击跳转到关联记录"
+            onClick={() => meta && onJump?.(meta.targetTableId, id)}
+          >
+            {title ?? id}
+          </button>
+        );
+      })}
+    </div>
   );
 }

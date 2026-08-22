@@ -619,6 +619,7 @@ export default function WorkbenchTablePage() {
               onRowSaved={applySavedRow}
               onRowGone={noteRowGone}
               onClose={() => setDetailRow(null)}
+              relationMeta={relationMeta}
               onRelationJump={relationJump}
             />
           )}

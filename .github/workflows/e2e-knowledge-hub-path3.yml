@@ -214,7 +214,10 @@ jobs:
       - name: 路③ S4 反向面板列出引用来源
         shell: pwsh
         run: pwsh -File "sprints/08220300-workbench-sprintD-relations/e2e-relations-run.ps1" -Grep "@relation-backref"
-      - name: 上传本刀截图（S4 关联链三张）
+      - name: 路③ S4 删被引用记录后单元格失效标记（不显示旧标题·点击不跳 404）
+        shell: pwsh
+        run: pwsh -File "sprints/08220300-workbench-sprintD-relations/e2e-relations-run.ps1" -Grep "@relation-stale"
+      - name: 上传本刀截图（S4 关联链四张）
         if: always()
         uses: actions/upload-artifact@v4
         with:
