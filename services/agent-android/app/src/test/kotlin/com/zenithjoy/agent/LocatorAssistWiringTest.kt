@@ -65,4 +65,12 @@ class LocatorAssistWiringTest {
         assertTrue("采集链未接 LocatorAssistClient——C17 读号失败没保底(26/35死线索根子)", src.contains("LocatorAssistClient"))
         assertTrue("缺 collect_read_douyin_id 步骤键", src.contains("collect_read_douyin_id"))
     }
+
+    @Test
+    fun `私信链三个定位判死点全挂保底（铺满刀C）`() {
+        val src = dmOutreachServiceSource()
+        assertTrue("缺 dm_entry 步骤键", src.contains("\"dm_entry\""))
+        assertTrue("缺 dm_message_input 步骤键", src.contains("\"dm_message_input\""))
+        assertTrue("缺 dm_send_button 步骤键", src.contains("\"dm_send_button\""))
+    }
 }
