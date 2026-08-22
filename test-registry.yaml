@@ -5925,3 +5925,19 @@ agent_suite:
     status: active
     product: 员工知识中枢
     note: "S4 真浏览器关联链三段(@relation-build / @relation-jump / @relation-backref)：建 relation 字段配目标表 → 行选择器挑记录 → 单元格显示目标标题；点关联项 chip 跳转到目标表该记录详情面板；打开被引用记录详情反向面板列出引用来源(表名+行标题)。三张截图。变体C：真实后端、禁请求拦截。workflow: e2e-knowledge-hub-path3.yml (windows job, e2e-relations-run.ps1)"
+
+  - id: line02-rpa-locator-assist-service-unit
+    path: apps/api/src/services/locator-assist.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "AI on-call 刀2a 定位求助纯逻辑：prompt 含树可引用行号/行号解析四态(合法/裹废话/越界/胡言)/缓存命中零模型调用/deepseek 关思考+截断守卫(PR#1684)/vision 插座未配置显式降级/fail-open 超时不阻塞/出诊必留病历"
+
+  - id: line02-rpa-locator-assist-route-unit
+    path: apps/api/src/routes/agent-burner-locator-assist.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: AI员工
+    note: "刀2a 路由层：step/target_desc/树必填 400、64KB 服务端截断不信任客户端、unavailable 时 200 fail-open 响应形状(安卓端走原失败路径)"

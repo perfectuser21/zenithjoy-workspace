@@ -113,3 +113,4 @@ device-readiness-smoke.sh
 find-adb-lib-smoke.sh
 structured-workbench-smoke.sh
 rpa-failure-scene-snapshot-smoke.sh
+rpa-locator-assist-smoke.sh

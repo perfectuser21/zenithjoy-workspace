@@ -35,6 +35,9 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'SMOKE_TOKEN', reason: 'smoke 测试用临时 token，仅冒烟链路读取' },
   { name: 'CRM_RECONCILE_DRYRUN', reason: 'CRM 采集对账干跑开关，缺则默认干跑（只日志不软删，最安全）；仅字面 false 进真删模式' },
   { name: 'COMMANDER_MODEL', reason: '视频判定存疑复核官(commander)的 ToAPIs 模型名，缺则默认 deepseek-v4-flash；仅覆盖模型时设' },
+  { name: 'LOCATOR_ASSIST_MODEL', reason: 'AI on-call 定位求助(tree-llm 后端)模型名，缺则默认 deepseek-v4-flash；仅覆盖模型时设' },
+  { name: 'UITARS_BASE_URL', reason: 'UI-TARS 视觉定位后端网关(插座)，缺则 vision 后端显式降级 vision_not_configured——树失明兜底场景才通电' },
+  { name: 'UITARS_API_KEY', reason: 'UI-TARS 视觉定位后端凭据(插座)，缺则 vision 后端显式降级——与 UITARS_BASE_URL 配对' },
   { name: 'WORKBENCH_ROW_LIMIT', reason: '路③ 结构化工作台单表行数上限，缺则默认 5000（产品阈值）；CI/E2E 覆写成小值来证明上限闸真的在，真插 5000 行会把 job 预算烧光' },
 
   // —— LLM / AI 供应商（feature 级，缺则对应模型路径不可用）——

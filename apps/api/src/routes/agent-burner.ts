@@ -38,7 +38,15 @@ const dmOutreachResultRateLimit = simpleRateLimit({
   max: 60,
   keyFn: (req) => (req.body && req.body.agent_id) || 'anonymous',
 });
+// locator-assist 限流（AI on-call 刀2a）：每次求助都可能烧一次模型钱，30次/分/agent
+// 已远超真实失败率（每号 20 条/小时 × 失败率），同时挡住失控循环把模型账单打爆。
+const locatorAssistRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 30,
+  keyFn: (req) => (req.body && req.body.agent_id) || 'anonymous',
+});
 import { isDuplicateDmOutreachResult } from '../services/device-platform';
+import { requestLocatorAssist, TREE_MAX_CHARS } from '../services/locator-assist';
 
 const router = Router();
 
@@ -641,6 +649,40 @@ router.post('/dm-outreach', tenantContextOptional, agentContext, async (req: Req
   );
 
   return res.json(OK({ task_id: r.rows[0].id }));
+});
+
+// ── 8b. POST /locator-assist — AI on-call 定位求助（刀2a，每步通用保底协议）──
+// 安卓 RPA 某步找不到元素 → 树快照+目标发上来 → 缓存/AI 指认候选 node 返回。
+// fail-open：本端点任何内部失败都回 200 + unavailable，安卓端走原失败路径。
+router.post('/locator-assist', locatorAssistRateLimit, async (req: Request, res: Response) => {
+  const {
+    step, target_desc, ui_tree_snapshot, error_code, backend,
+    device_model, os_version, douyin_version, app_version,
+  } = req.body || {};
+  if (!step || !target_desc || typeof ui_tree_snapshot !== 'string' || !ui_tree_snapshot) {
+    return res.status(400).json(ERR('MISSING_FIELDS', 'step / target_desc / ui_tree_snapshot 必填'));
+  }
+  const result = await requestLocatorAssist({
+    tenantId: (req as Request & { tenantId?: string }).tenantId || 'unknown',
+    step: String(step),
+    targetDesc: String(target_desc),
+    uiTree: ui_tree_snapshot.slice(0, TREE_MAX_CHARS),
+    errorCode: typeof error_code === 'string' ? error_code : undefined,
+    backend: backend === 'vision' ? 'vision' : 'tree-llm',
+    deviceModel: typeof device_model === 'string' ? device_model : undefined,
+    osVersion: typeof os_version === 'string' ? os_version : undefined,
+    douyinVersion: typeof douyin_version === 'string' ? douyin_version : undefined,
+    appVersion: typeof app_version === 'string' ? app_version : undefined,
+  });
+  if (result.status === 'unavailable') {
+    return res.json(OK({ status: 'unavailable', reason: result.reason }));
+  }
+  return res.json(OK({
+    status: 'ok',
+    cache_hit: result.cacheHit === true,
+    backend: result.backend,
+    candidates: result.candidates,
+  }));
 });
 
 // ── 8. POST /dm-outreach-result — Agent 回报触达结果 → 写飞书 + 单号停用不连坐 ──
