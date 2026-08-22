@@ -490,6 +490,13 @@
       ]
     },
     {
+      "id": "collaborative_docs",
+      "app_id": "staff_app",
+      "line_id": "line11",
+      "name": "协同笔记",
+      "status": "proposed"
+    },
+    {
       "id": "knowledge_experience_qa",
       "app_id": "staff_app",
       "line_id": "line11",
@@ -509,6 +516,13 @@
           "name": "干活前被喂到（agent 开工强制注入仍然成立的经验，中台可见注入台账）"
         }
       ]
+    },
+    {
+      "id": "org_context_switch",
+      "app_id": "staff_app",
+      "line_id": "line11",
+      "name": "组织与权限底座·多组织切换",
+      "status": "proposed"
     },
     {
       "id": "structured_workbench",
@@ -536,5 +550,5 @@
       ]
     }
   ],
-  "digest": "2d7faad105fff67b14cfc9ca1711275753a86dcfa0dc6b61eac5be65efc1ce2a"
+  "digest": "2fdb9e52b611d1d121a517570f030aca6e6761b70bb61dbb79deced4da00d397"
 }

@@ -392,3 +392,21 @@ golden_paths:
         name: 视图切得开(筛/排/表格↔看板拖拽/视图偏好记住你)
       - id: step4
         name: 关联连得上(Relation+反向可见+引用不悬空)
+
+  # 2026-08-22 员工知识中枢 路②(golden_path 301bd18f):协同笔记/文档协作——
+  # 团队共写文档、块级协同、与经验库/结构化工作台互链。决策 ab866172 第①③条(三条路之一)。
+  - id: collaborative_docs
+    app_id: staff_app
+    line_id: line11
+    name: 协同笔记
+    status: proposed
+
+  # 2026-08-22 员工知识中枢·组织与权限底座(golden_path 9eb535b2):多组织切换——
+  # 主理人/父亲两家企业间上下文切换、跨企业硬隔离、agent 继承任务权限域。
+  # 决策 ab866172 第2条(多组织三层权限)。作为 line11 横切底座,以 capability 形态上图
+  # (product-map-adapter 仅从 golden_paths 生成 capability,crosscut_pool 恒空,故不用 crosscut 节点)。
+  - id: org_context_switch
+    app_id: staff_app
+    line_id: line11
+    name: 组织与权限底座·多组织切换
+    status: proposed
