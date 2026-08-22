@@ -4,7 +4,7 @@
  * 用真 @dnd-kit：PointerSensor（真指针拖拽）+ KeyboardSensor（键盘可达，无障碍）。
  * 分列与拖卡落库映射都走 lib/workbenchKanban.ts 的纯函数（合同变异证明的注入点在那）。
  *
- * A26 结构预留（弱约束）：本组件**不依赖路由上下文**（不 useParams / useNavigate），
+ * A26 结构预留（弱约束）：本组件**不依赖路由上下文**（不读路由参数、不做路由跳转），
  * 所需一切从 props 进来，因此能被路② 页面内嵌 database 直接挂载。
  */
 import {

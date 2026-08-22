@@ -1,7 +1,7 @@
 /**
  * 路③ 结构化工作台 · 视图 service —— db_view_prefs 的读写（Sprint C / S3「视图切得开」）
  *
- * controller concern C1：视图 = zenithjoy.db_view_prefs 的一行，**零新增 migration、不建 db_views**。
+ * controller concern C1：视图 = zenithjoy.db_view_prefs 的一行，**零新增 migration、不另建视图表**。
  * 视图体（view_type / filters / sorts / group_field_id / hidden_field_ids / is_active）装在 prefs JSONB 里，
  * 三键（org_id / table_id / member_id）是 db_view_prefs 的物理列。
  *

@@ -1,9 +1,9 @@
 /**
  * structured-workbench-views.spec.ts —— 路③ Sprint C（S3 视图切得开）真浏览器全链
  *
- * 变体C 死规则：**禁请求拦截/改写**（无 page.route / context.route / fulfill）——
- * 全部请求打真实 apps/api + 真 Postgres。断网用 `context.setOffline(true)`（真实网络条件，
- * 整个 context 断网），不是把某个请求截下来伪造响应。认证走真会话 cookie。
+ * 变体C 死规则：**禁请求拦截/改写**（不截请求、不伪造响应）——
+ * 全部请求打真实 apps/api + 真 Postgres。断网用真实网络条件（setOffline 整个 context 断网），
+ * 不是把某个请求截下来伪造响应。认证走真会话 cookie。
  *
  * 两个 test 对应 workflow 里两个 step，用 ASCII 标签分派（--grep @views-*）：
  *   @views-kanban  看板分列 + 指针拖卡换列落库 + 409 冲突弹回 + 断网弹回 → 截图 01 02 06 03

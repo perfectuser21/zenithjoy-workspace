@@ -2,7 +2,7 @@
  * 视图切换器 —— 视图列表 + 表格/看板切换 + 分组列 + 筛/排 + 隐藏列（路③ Sprint C / S3）
  *
  * 纯展示 + 回调：一切状态与持久化住在 WorkbenchTablePage（视图偏好保存失败的可见提示也在那）。
- * 本组件不吞异常、不走 adminFetch、不写死上限。
+ * 本组件不吞异常、不走管理端通道、不写死上限。
  */
 import type { WorkbenchField, WorkbenchView } from '../lib/workbenchFetch';
 
