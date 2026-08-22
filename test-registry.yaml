@@ -5966,6 +5966,14 @@ agent_suite:
     product: 员工知识中枢
     note: "S4 加厚真浏览器 rollup 链三段(@rollup-build / @rollup-lookup / @rollup-degrade)：建 relation 字段 → 配 rollup 字段(sum/count) → 单元格显示聚合值(40/2)；配 lookup 字段单元格显示多值逗号拼接(甲, 乙)；删 rollup 依赖字段单元格显示可见降级占位(不显示旧值、不白屏)。三张截图。变体C：真实后端、禁请求拦截。workflow: e2e-knowledge-hub-path3.yml (windows job, e2e-rollup-run.ps1)"
 
+  - id: workbench-rollup-service-pairing
+    path: apps/api/src/services/workbench-rollup.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "路③ rollup 读服务纯逻辑(test-pairing)：aggregate 六函数聚合 + Number() 数值规整(string 数字计入 sum、非数值行跳过+degraded、空值静默跳过不算脏) + min/max 全非数值回 null + concat/lookup 多值逗号拼接跳过空 + 未知 fn 安全降级；formatDisplay date 截 YYYY-MM-DD/其余 String()/null 空回 null。org 隔离/失效降级三支落库语义在合同真库测试里。"
+
   - id: line02-rpa-locator-assist-service-unit
     path: apps/api/src/services/locator-assist.test.ts
     type: unit

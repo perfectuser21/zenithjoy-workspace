@@ -41,7 +41,7 @@ export interface RollupsOut {
 }
 
 /** 一个 rollup/lookup 字段解析结果：或降级（依赖失效），或就绪（带目标表/字段/聚合函数）。 */
-interface FieldPlan {
+export interface FieldPlan {
   fieldId: string;
   fn: string;
   degraded: boolean; // 依赖失效（relation 字段/目标字段/目标表软删）→ 全行降级
@@ -131,7 +131,7 @@ async function fetchTargetRows(
 }
 
 /** 目标字段值→展示字符串（J15 多值格式化：date=YYYY-MM-DD、其余 String()）。null/空跳过。 */
-function formatDisplay(raw: unknown, fieldType?: string): string | null {
+export function formatDisplay(raw: unknown, fieldType?: string): string | null {
   if (raw === undefined || raw === null || raw === '') return null;
   if (fieldType === 'date') return String(raw).slice(0, 10);
   return String(raw);
@@ -140,7 +140,7 @@ function formatDisplay(raw: unknown, fieldType?: string): string | null {
 /**
  * 一个 (源行 × rollup 字段) 的聚合值。依赖失效 → null+degraded；数值规整跳过非数值行 → degraded。
  */
-function aggregate(
+export function aggregate(
   plan: FieldPlan,
   targetRows: Array<{ id: string; data: Record<string, unknown> }>
 ): { value: number | string | null; degraded: boolean } {
