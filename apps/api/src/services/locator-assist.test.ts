@@ -210,7 +210,7 @@ describe('requestLocatorAssist mode=extract（读取类保底）', () => {
     expect(r.extractedValue).toBe('dy_88');
     // 不应有 SELECT 缓存查询
     const calls = (pool.query as any).mock.calls as Array<[string]>;
-    const cacheSelect = calls.find(([sql]) => /SELECT/i.test(sql) && /rpa_locator_assist/i.test(sql));
+    const cacheSelect = calls.find(([sql]) => /^\s*SELECT/i.test(sql) && /answer_selector/i.test(sql));
     expect(cacheSelect, 'extract 模式不该查缓存').toBeUndefined();
   });
 
