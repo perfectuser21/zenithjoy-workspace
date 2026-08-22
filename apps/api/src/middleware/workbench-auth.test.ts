@@ -14,9 +14,9 @@ import {
   notFoundBody,
   SESSION_REQUIRED_MESSAGE,
   NO_TENANT_MESSAGE,
-  MULTI_ORG_MESSAGE,
   LEDGER_UNREACHABLE_MESSAGE,
 } from './workbench-auth';
+import { ORG_MESSAGES } from './active-org';
 
 describe('workbench-auth 响应形状', () => {
   it('错误体形状与路① 逐字一致（success/data/error.code/error.message/timestamp）', () => {
@@ -31,15 +31,20 @@ describe('workbench-auth 响应形状', () => {
     expect(new Date(body.timestamp as string).toString()).not.toBe('Invalid Date');
   });
 
-  it('四态文案两两不同 —— 撞车前端就分不出该重新登录还是该找管理员', () => {
+  it('五态文案两两不同 —— 撞车前端就分不出该重新登录 / 找管理员 / 先选企业 / 重选企业', () => {
+    // 多组织切换第一刀：MULTI_ORG_MEMBER（多组织即拒）反转为 ORG_SELECTION_REQUIRED（要求先选）
+    // + 新增 ORG_FORBIDDEN（active_org 伪造/被移出）。文案仍须两两不同，供前端两路共用解析器分派。
     const msgs = [
       SESSION_REQUIRED_MESSAGE,
       NO_TENANT_MESSAGE,
-      MULTI_ORG_MESSAGE,
+      ORG_MESSAGES.ORG_SELECTION_REQUIRED,
+      ORG_MESSAGES.ORG_FORBIDDEN,
       LEDGER_UNREACHABLE_MESSAGE,
     ];
-    expect(new Set(msgs).size).toBe(4);
+    expect(new Set(msgs).size).toBe(5);
     for (const m of msgs) expect(m.length).toBeGreaterThan(0);
+    // NO_TENANT 与 active-org 模块内的 NO_TENANT 文案逐字一致（两闸共用）
+    expect(NO_TENANT_MESSAGE).toBe(ORG_MESSAGES.NO_TENANT);
   });
 
   it('反枚举 404 体不带 timestamp，且两次调用逐字节相同', () => {
