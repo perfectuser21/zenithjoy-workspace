@@ -250,10 +250,18 @@ describe('acquisition-dispatch service — 纯函数', () => {
   it('defaultConfig 全字段 + 默认值正确', () => {
     const c = defaultConfig('x');
     expect(c.dm_per_day).toBe(30);
-    expect(c.dm_per_hour).toBe(5);
+    expect(c.dm_per_hour).toBe(20);
     expect(c.burner_count).toBe(3);
     expect(c.dm_active_start).toBe('09:00');
     expect(c.cookie_check_interval_hours).toBe(6);
+  });
+
+  it('defaultConfig dm_per_hour=20、发送间隔120-180s随机（0821主理人拍板：原5/300-900s是自拍保守值卡住重投产能）', () => {
+    const c = defaultConfig('y');
+    expect(c.dm_per_hour).toBe(20);
+    expect(c.dm_interval_min_sec).toBe(120);
+    expect(c.dm_interval_max_sec).toBe(180);
+    expect(c.dm_interval_min_sec).toBeLessThanOrEqual(c.dm_interval_max_sec);
   });
 
   it('validateConfigPatch — 合法通过/越界拒绝/min>max 拒绝/时段格式', () => {
