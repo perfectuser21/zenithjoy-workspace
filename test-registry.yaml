@@ -5819,3 +5819,60 @@ agent_suite:
     status: active
     product: 员工知识中枢
     note: "S2 真浏览器行链三段(@rows-offline / @rows-detail / @rows-limit)：行内编辑即存 → 同事改同格看到冲突提示且自己打的内容仍在 → 真断网(setOffline)错误态可见且输入不丢、恢复网络就地重试 → 粘贴导入 → 回收站还原；行详情面板 8 字段 + 长文本多行编辑区 + 面板开着时该行被删有可见提示；达上限「新增行」禁用。六张截图。变体C：真实后端、禁请求拦截。workflow: e2e-knowledge-hub-path3.yml (windows job)"
+
+  # ── 路③ Sprint C（S3 视图切得开）────────────────────────────────────────
+  - id: workbench-views-contract-crud
+    path: sprints/08210012-workbench-sprintC-views/tests/views-crud.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "S3 视图 CRUD：视图 = db_view_prefs 一行（不另建 db_views，零新增 migration）。建视图 201 且 keys 恰十个、禁用字段名一个不出现、三键归属取自会话 / GET views 纯读零副作用 / 删视图只删偏好三表逐字不变 + remaining 计数 / 删最后一个 400 LAST_VIEW_PROTECTED + is_active 置一清余。真会话 + 真 Postgres，合同禁 mock 边。workflow: e2e-knowledge-hub-path3.yml (linux job, npm run test:workbench-views)"
+
+  - id: workbench-views-contract-filter-sort
+    path: sprints/08210012-workbench-sprintC-views/tests/views-filter-sort.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "S3 筛/排 + field_id 白名单（A20 前两件 / A25）：文本 contains 返回集合完全一致 / 数字字段数值序而非字典序([2,9,10]) / 不传参数响应与 Sprint B 逐字同形 / SQL 片段 + 坏 dir + 畸形参数 + 非法 op 全 400 且表清单未变 / 跨表 field_id 404 同形。真 Postgres 照数值序 vs 字典序。"
+
+  - id: workbench-views-contract-group-type
+    path: sprints/08210012-workbench-sprintC-views/tests/views-group-type.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "S3 分组字段类型闸（controller C2：仅 single_select）：七类非单选(含 multi_select)一律 400 GROUP_FIELD_TYPE_INVALID 且 prefs 逐字未变 / single_select 正向 200 堵一律 400 假绿 / groupRowsByField 未分组三态(null/缺键/空串)纯函数用例逐字断言分列(判定点 JC3)。"
+
+  - id: workbench-views-contract-isolation-degrade
+    path: sprints/08210012-workbench-sprintC-views/tests/views-isolation-degrade.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "S3 视图层隔离(org+member 两维成对) + 反查两分支 + 存 field_id + 审计：他企业/同组织他人读改删 404 同形且列表零命中、本人正向 2xx；已删字段视图 GET 200 degraded=true 失效 id 剔除；他企业 field_id 写入 404 同形；prefs 存 field_id 改显示名不失效；建/改/删三动作全落 db_audit 且不记视图名正文。"
+
+  - id: workbench-views-service-pairing
+    path: apps/api/src/services/workbench-views.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "路③ 视图 service 纯逻辑(test-pairing)：resolveGroupField 的 404优先于400 死顺序(不属本表 FieldNotFound / 类型不符 GroupFieldType / 形态非法 Validation)、错误分类具名。落库/隔离在合同真库测试里。"
+
+  - id: workbench-kanban-pure-pairing
+    path: apps/staff-hub/src/lib/workbenchKanban.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "路③ 看板纯逻辑(test-pairing)：resolveDropPatch 映射被拖那一行(非 rows[0]，变异 A24-drag-wrong-row 注入点)、拖到未分组列清空该格、groupRowsByField 三态未分组。smoke --a24-pure-only 也跑本文件。"
+
+  - id: workbench-views-e2e-golden-path
+    path: apps/staff-hub/e2e/structured-workbench-views.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 员工知识中枢
+    note: "S3 真浏览器视图链两段(@views-kanban / @views-prefs)：看板分列(单选 options + 未分组三态列 toHaveCount(3)) → 真指针拖卡换列落库 version+1 → 同事先改后拖同卡 409 弹回原列 + 冲突提示 → 真断网(setOffline)拖卡弹回 + kanban-drop-error；表格筛/排/隐藏列 → 断网改视图配置 view-prefs-error 可见且不白屏、恢复就地重试。六张截图。变体C：真实后端、禁请求拦截。workflow: e2e-knowledge-hub-path3.yml (windows job)"

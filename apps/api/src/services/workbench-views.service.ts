@@ -236,7 +236,7 @@ async function writeViewAudit(
  *  - 合法 UUID 但不属本表 → 404（含他企业真实 field_id）
  *  - 属本表但类型 ≠ single_select → 400 GROUP_FIELD_TYPE_INVALID
  */
-function resolveGroupField(
+export function resolveGroupField(
   raw: unknown,
   fieldMap: Map<string, FieldOut>
 ): string | null {
