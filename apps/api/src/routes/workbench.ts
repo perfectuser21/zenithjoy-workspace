@@ -34,6 +34,7 @@ import {
   WorkbenchValidationError,
 } from '../services/workbench.service';
 import { relationCandidates, backrefs } from '../services/workbench-relations.service';
+import { computeRollups } from '../services/workbench-rollup.service';
 import {
   listRows,
   listRowTrash,
@@ -237,6 +238,20 @@ router.get('/tables/:id/fields/:fieldId/relation-candidates', async (req: Reques
     ok(res, 200, out);
   } catch (err) {
     serverError(res, 'relationCandidates', err);
+  }
+});
+
+// ── 读：rollup/lookup 聚合值（S4 加厚，读时计算不落库，纯读无写副作用）────────────
+//   源表跨企业/私有非表主/随机不存在/已软删 → computeRollups 返 null → 统一 404 notFoundBody
+//   （反枚举同 relation-candidates 口径，404 优先于 400、无 timestamp）。
+router.get('/tables/:id/rollups', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  try {
+    const out = await computeRollups(identity.orgId, identity.memberId, req.params.id);
+    if (!out) return notFound(res);
+    ok(res, 200, out);
+  } catch (err) {
+    serverError(res, 'computeRollups', err);
   }
 });
 

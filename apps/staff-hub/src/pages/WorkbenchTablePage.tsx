@@ -10,9 +10,10 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import WorkbenchRowGrid, { type RelationMeta } from '../components/WorkbenchRowGrid';
+import WorkbenchRowGrid, { type RelationMeta, type RollupMeta } from '../components/WorkbenchRowGrid';
 import WorkbenchRowDetailPanel from '../components/WorkbenchRowDetailPanel';
 import WorkbenchViewSwitcher from '../components/WorkbenchViewSwitcher';
+import WorkbenchRollupConfig from '../components/WorkbenchRollupConfig';
 import WorkbenchKanbanView from '../components/WorkbenchKanbanView';
 import type { DropPatch } from '../lib/workbenchKanban';
 import {
@@ -24,6 +25,7 @@ import {
   getTable,
   listRelationCandidates,
   listRowTrash,
+  listRollups,
   listRows,
   listRowsWith,
   listViews,
@@ -32,6 +34,8 @@ import {
   pasteRows,
   restoreRow,
   RELATION_FIELD_TYPE,
+  ROLLUP_FIELD_TYPE,
+  LOOKUP_FIELD_TYPE,
   type RelationCandidate,
   WorkbenchRequestError,
   type CellValue,
@@ -73,6 +77,8 @@ export default function WorkbenchTablePage() {
   const [rowGone, setRowGone] = useState('');
   // ── 关联状态（S4）──────────────────────────────────────────────────────────
   const [relationMeta, setRelationMeta] = useState<Record<string, RelationMeta>>({});
+  // ── rollup/lookup 聚合值（S4 加厚，读时计算不落库）───────────────────────────
+  const [rollupMeta, setRollupMeta] = useState<RollupMeta>({});
   const [relationPicker, setRelationPicker] = useState<RelationPickerState | null>(null);
   const [relationError, setRelationError] = useState('');
   const [pasteNotice, setPasteNotice] = useState('');
@@ -131,6 +137,31 @@ export default function WorkbenchTablePage() {
     [tableId]
   );
 
+  /** rollup/lookup 字段的读时聚合值：拉 /rollups，建 field_id→row_id→{value,degraded,fn} 映射。 */
+  const refreshRollupMeta = useCallback(
+    async (flds: WorkbenchField[]) => {
+      const hasRollup = flds.some(
+        (f) => f.field_type === ROLLUP_FIELD_TYPE || f.field_type === LOOKUP_FIELD_TYPE
+      );
+      if (!hasRollup) {
+        setRollupMeta({});
+        return;
+      }
+      try {
+        const out = await listRollups(tableId);
+        const meta: RollupMeta = {};
+        for (const c of out.cells) {
+          (meta[c.field_id] ??= {})[c.row_id] = { value: c.value, degraded: c.degraded, fn: c.fn };
+        }
+        setRollupMeta(meta);
+      } catch {
+        // 聚合值拉取失败不拖垮整页：rollup 单元格回落显示占位
+        setRollupMeta({});
+      }
+    },
+    [tableId]
+  );
+
   const refreshViews = useCallback(async (): Promise<WorkbenchView[]> => {
     const out = await listViews(tableId);
     let list = out.views;
@@ -160,13 +191,14 @@ export default function WorkbenchTablePage() {
       await fetchRows();
       await fetchTrash();
       await refreshRelationMeta(detail.fields);
+      await refreshRollupMeta(detail.fields);
       setError('');
     } catch (e) {
       setError(e instanceof Error ? e.message : '加载失败');
     } finally {
       setLoading(false);
     }
-  }, [tableId, refreshViews, fetchRows, fetchTrash, refreshRelationMeta]);
+  }, [tableId, refreshViews, fetchRows, fetchTrash, refreshRelationMeta, refreshRollupMeta]);
 
   useEffect(() => {
     void fetchAll();
@@ -552,6 +584,7 @@ export default function WorkbenchTablePage() {
             </a>
           </span>
         )}
+        <WorkbenchRollupConfig tableId={tableId} fields={fields} onCreated={() => void fetchAll()} />
       </div>
 
       {pasteNotice && (
@@ -602,6 +635,7 @@ export default function WorkbenchTablePage() {
               relationMeta={relationMeta}
               onRelationEdit={(id, field) => void openRelationPicker(id, field)}
               onRelationJump={relationJump}
+              rollupMeta={rollupMeta}
             />
           )}
         </div>

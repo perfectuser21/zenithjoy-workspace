@@ -45,6 +45,15 @@ export interface RelationMeta {
   titleByRow: Record<string, string>;
 }
 
+/** 一个 rollup/lookup 单元格的读时聚合值（页面预取 /rollups 后下发）。 */
+export interface RollupCellMeta {
+  value: number | string | null;
+  degraded: boolean;
+  fn: string;
+}
+/** rollupMeta：field_id → row_id → 聚合值。读时计算不落库，单元格只读渲染。 */
+export type RollupMeta = Record<string, Record<string, RollupCellMeta>>;
+
 interface CellContextValue {
   active: ActiveCell | null;
   beginEdit: (rowId: string, field: WorkbenchField, value: CellValue) => void;
@@ -56,6 +65,7 @@ interface CellContextValue {
   relationMeta: Record<string, RelationMeta>;
   relationEdit: (rowId: string, field: WorkbenchField) => void;
   relationJump: (targetTableId: string, targetRowId: string) => void;
+  rollupMeta: RollupMeta;
 }
 
 const CellContext = createContext<CellContextValue | null>(null);
@@ -184,9 +194,49 @@ function RelationCell({ rowId, field, value }: { rowId: string; field: Workbench
   );
 }
 
+/**
+ * rollup / lookup 单元格：读时计算的聚合值，**只读**（不接受用户输入、无编辑器）。
+ * 依赖失效或含非数值跳过 → degraded → 显示可见降级占位（不显示旧值、不白屏）。
+ */
+function RollupCell({ rowId, field }: { rowId: string; field: WorkbenchField }) {
+  const ctx = useContext(CellContext)!;
+  const fieldId = field.field_id ?? '';
+  const cellId = `cell-${rowId}-${fieldId}`;
+  const meta = ctx.rollupMeta[fieldId]?.[rowId];
+  // 依赖失效降级：value 为 null 且 degraded=true → 可见降级占位
+  if (meta && meta.degraded && (meta.value === null || meta.value === undefined)) {
+    return (
+      <div data-testid={cellId} className="grid-cell grid-cell-rollup grid-cell-rollup-degraded">
+        <span
+          className="rollup-degraded"
+          data-testid={`rollup-degraded-${rowId}-${fieldId}`}
+          title="汇总依赖已失效"
+        >
+          汇总已失效
+        </span>
+      </div>
+    );
+  }
+  const text = meta === undefined || meta.value === null || meta.value === '' ? '—' : String(meta.value);
+  return (
+    <div data-testid={cellId} className="grid-cell grid-cell-rollup">
+      <span className="rollup-value" data-testid={`rollup-value-${rowId}-${fieldId}`}>
+        {text}
+      </span>
+      {meta?.degraded && (
+        <span className="rollup-degraded-badge" data-testid={`rollup-degraded-${rowId}-${fieldId}`} title="部分行未计入">
+          !
+        </span>
+      )}
+    </div>
+  );
+}
+
 function RowCell({ rowId, field, value }: { rowId: string; field: WorkbenchField; value: CellValue }) {
   const ctx = useContext(CellContext)!;
   if (field.field_type === 'relation') return <RelationCell rowId={rowId} field={field} value={value} />;
+  if (field.field_type === 'rollup' || field.field_type === 'lookup')
+    return <RollupCell rowId={rowId} field={field} />;
   const cellId = `cell-${rowId}-${field.field_id}`;
   const active =
     ctx.active && ctx.active.rowId === rowId && ctx.active.fieldId === field.field_id ? ctx.active : null;
@@ -258,6 +308,8 @@ export interface WorkbenchRowGridProps {
   onRelationEdit?: (rowId: string, field: WorkbenchField) => void;
   /** 点关联项 → 跳转到目标表该记录 */
   onRelationJump?: (targetTableId: string, targetRowId: string) => void;
+  /** rollup/lookup 字段读时聚合值（页面预取 /rollups 后下发：field_id→row_id→聚合值） */
+  rollupMeta?: RollupMeta;
 }
 
 export default function WorkbenchRowGrid({
@@ -272,6 +324,7 @@ export default function WorkbenchRowGrid({
   relationMeta = {},
   onRelationEdit,
   onRelationJump,
+  rollupMeta = {},
 }: WorkbenchRowGridProps) {
   const [active, setActive] = useState<ActiveCell | null>(null);
   const activeRef = useRef<ActiveCell | null>(null);
@@ -360,8 +413,9 @@ export default function WorkbenchRowGrid({
       relationMeta,
       relationEdit: (rowId, field) => onRelationEdit?.(rowId, field),
       relationJump: (t, r) => onRelationJump?.(t, r),
+      rollupMeta,
     }),
-    [active, beginEdit, setDraft, commit, reread, onExpand, onDelete, relationMeta, onRelationEdit, onRelationJump]
+    [active, beginEdit, setDraft, commit, reread, onExpand, onDelete, relationMeta, onRelationEdit, onRelationJump, rollupMeta]
   );
 
   const columnDefs = useMemo<ColDef<WorkbenchRow>[]>(() => {

@@ -13,17 +13,20 @@ on:
       - 'apps/staff-hub/e2e/structured-workbench-rows.spec.ts'
       - 'apps/staff-hub/e2e/structured-workbench-views.spec.ts'
       - 'apps/staff-hub/e2e/structured-workbench-relations.spec.ts'
+      - 'apps/staff-hub/e2e/structured-workbench-rollup.spec.ts'
       - 'apps/dashboard/e2e/fields-auth-regression.spec.ts'
       - 'apps/api/db/migrations/**'
       - 'apps/api/vitest.workbench-rows.config.ts'
       - 'apps/api/vitest.workbench-views.config.ts'
       - 'apps/api/vitest.workbench-relations.config.ts'
+      - 'apps/api/vitest.workbench-rollup.config.ts'
       - '.github/workflows/e2e-knowledge-hub-path3.yml'
       - '.github/workflows/scripts/smoke/structured-workbench-smoke.sh'
       - 'sprints/08201151-员工知识中枢-路-结构化工作台-c86e37ff/**'
       - 'sprints/08201850-workbench-sprintB-rows/**'
       - 'sprints/08210012-workbench-sprintC-views/**'
       - 'sprints/08220300-workbench-sprintD-relations/**'
+      - 'sprints/08222228-workbench-rollup-sprintE/**'
   workflow_dispatch:
 
 concurrency:
@@ -119,6 +122,19 @@ jobs:
           bash "$S" --a30-table-only
           bash "$S" --a30-field-only
           bash "$S" --a31-only
+      - name: 段1e S4 加厚 rollup 合同测试真被 vitest 收集执行（4 文件 / >=14 用例 / 真 Postgres）
+        run: npm run test:workbench-rollup --workspace apps/api
+      - name: 段2e S4 加厚 rollup 链五段（A37 聚合值 / A38 org 隔离 / A39 降级三支 / A40 类型校验 / 零 DDL）
+        run: |
+          S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh
+          # 五段各自 fixture-up；变异证明也各自显式调用它们（判据见 contract-dod.md）
+          bash "$S" --rollup-a37-only
+          bash "$S" --rollup-a38-only
+          bash "$S" --rollup-a39-only
+          bash "$S" --rollup-a40-only
+          bash "$S" --rollup-ddl-only
+      - name: 段2e A41 墙裁定守卫（rollup 读服务钉死路径 + 检索特征文件零命中，源码级无需 DB）
+        run: bash sprints/08222228-workbench-rollup-sprintE/scripts/rollup-wall-guard.sh
       - name: 段2b G2 恢复演练（真 pg_dump + 真还原 + 五表逐条全等）
         run: bash .github/workflows/scripts/backup/restore-drill.sh
 
@@ -223,4 +239,24 @@ jobs:
         with:
           name: path3-relations-screenshots
           path: sprints/08220300-workbench-sprintD-relations/screenshots/
+          if-no-files-found: error
+
+      # ── Sprint E（S4 加厚 rollup/lookup 聚合）rollup 链三段 ────────────────────
+      # 同一 windows job：npm ci / chromium / migration / apps-api 构建由前面 Sprint B 的 prepare 做过一次，
+      # 这三个 step 各自 seed / 起服务 / 跑完停（e2e-rollup-run.ps1 复用 Sprint B 的 e2e-rows-lib.ps1）。
+      - name: 路③ S4 rollup 建字段配聚合真浏览器（配 sum/count → 单元格显示聚合值）
+        shell: pwsh
+        run: pwsh -File "sprints/08222228-workbench-rollup-sprintE/e2e-rollup-run.ps1" -Grep "@rollup-build"
+      - name: 路③ S4 rollup lookup 多值逗号拼接
+        shell: pwsh
+        run: pwsh -File "sprints/08222228-workbench-rollup-sprintE/e2e-rollup-run.ps1" -Grep "@rollup-lookup"
+      - name: 路③ S4 rollup 删依赖字段后单元格降级占位（不白屏）
+        shell: pwsh
+        run: pwsh -File "sprints/08222228-workbench-rollup-sprintE/e2e-rollup-run.ps1" -Grep "@rollup-degrade"
+      - name: 上传本刀截图（S4 加厚 rollup 链三张）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: path3-rollup-screenshots
+          path: sprints/08222228-workbench-rollup-sprintE/screenshots/
           if-no-files-found: error

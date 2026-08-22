@@ -234,6 +234,9 @@ DIST_SELFCHECK="apps/api/dist/startup/single-org-selfcheck.js"
 # Sprint D S4 关联 service（候选/反查读路径 + A29② 私有反向过滤）
 RELATIONS_SERVICE_FILE="apps/api/src/services/workbench-relations.service.ts"
 DIST_RELATIONS_SERVICE="apps/api/dist/services/workbench-relations.service.js"
+# Sprint E S4 加厚 rollup 读服务（读时聚合 + org 隔离 + 失效降级三支，A41 钉死路径）
+ROLLUP_SERVICE_FILE="apps/api/src/services/workbench-rollup.service.ts"
+DIST_ROLLUP_SERVICE="apps/api/dist/services/workbench-rollup.service.js"
 
 INJECT_SECRET_FILE="apps/api/src/knowledge/.wb-mutation-secret.ts"
 
@@ -267,6 +270,10 @@ A31-rel-private-leak	1
 A30F-field-hard-delete	1
 A29-backref-private-leak	1
 A30T-table-hard-delete	1
+A38-rollup-org-bypass	1
+A39-rollup-degrade-bypass	1
+A40-rollup-typecheck-off	1
+A41-rollup-retrieval-import	1
 EOF
 }
 
@@ -522,6 +529,42 @@ mutation_apply() {
       done
       echo "$SERVICE_FILE" > "$MUTATION_TARGET_FILE"
       ;;
+    # ── Sprint E / S4 加厚 rollup 四条 ──────────────────────────────────────────
+    A38-rollup-org-bypass)
+      save_file "$ROLLUP_SERVICE_FILE"; save_file "$DIST_ROLLUP_SERVICE"
+      # 聚合读服务的行维 org 二次校验摘掉：库里被越权改成他企业的目标行会进聚合基数（A38 泄露）。
+      # 锚只命中 fetchTargetRows 的那条 SQL（`AND r.id = ANY` 独有），不误伤源行查询。
+      for f in "$ROLLUP_SERVICE_FILE" "$DIST_ROLLUP_SERVICE"; do
+        [ -f "$f" ] || continue
+        perl -0pi -e 's/AND r\.org_id = \$2 AND r\.deleted_at IS NULL AND r\.id = ANY/AND (r.org_id = \$2 OR \$2 IS NOT NULL) AND r.deleted_at IS NULL AND r.id = ANY/g' "$f"
+      done
+      echo "$ROLLUP_SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
+    A39-rollup-degrade-bypass)
+      save_file "$ROLLUP_SERVICE_FILE"; save_file "$DIST_ROLLUP_SERVICE"
+      # 依赖失效降级分支全部改成不降级（无视 relation 字段/目标字段/目标表软删）：
+      # planField 里 `plan.degraded = true` 全翻成 false → 三支不再置 null+degraded（A39 三支泄露/悬空）。
+      for f in "$ROLLUP_SERVICE_FILE" "$DIST_ROLLUP_SERVICE"; do
+        [ -f "$f" ] || continue
+        perl -0pi -e 's/plan\.degraded = true;/plan.degraded = false;/g' "$f"
+      done
+      echo "$ROLLUP_SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
+    A40-rollup-typecheck-off)
+      save_file "$SERVICE_FILE"; save_file "$DIST_SERVICE"
+      # 建字段时的 rollup 类型×函数校验摘掉：sum 配 text 能建成 → 读时静默返错值（A40 校验缺失）。
+      for f in "$SERVICE_FILE" "$DIST_SERVICE"; do
+        [ -f "$f" ] || continue
+        perl -0pi -e 's/await assertRollupConfigValid\(orgId, memberId, t\.fields, incoming\);/void 0;/g' "$f"
+      done
+      echo "$SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
+    A41-rollup-retrieval-import)
+      save_file "$EXCLUSIONS_FILE"
+      # 在检索特征文件里 import rollup 读服务 → 墙被穿透 → rollup-wall-guard.sh 判据②③报红。
+      printf "\nimport '../services/workbench-rollup.service';\n" >> "$EXCLUSIONS_FILE"
+      echo "$EXCLUSIONS_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
     *)
       echo "未登记的变异名：$name"; exit 1;;
   esac
@@ -559,6 +602,10 @@ mutation_revert() {
     A30F-field-hard-delete)  restore_file "$SERVICE_FILE"; restore_file "$DIST_SERVICE";;
     A29-backref-private-leak) restore_file "$RELATIONS_SERVICE_FILE"; restore_file "$DIST_RELATIONS_SERVICE";;
     A30T-table-hard-delete)  restore_file "$SERVICE_FILE"; restore_file "$DIST_SERVICE";;
+    A38-rollup-org-bypass)     restore_file "$ROLLUP_SERVICE_FILE"; restore_file "$DIST_ROLLUP_SERVICE";;
+    A39-rollup-degrade-bypass) restore_file "$ROLLUP_SERVICE_FILE"; restore_file "$DIST_ROLLUP_SERVICE";;
+    A40-rollup-typecheck-off)  restore_file "$SERVICE_FILE"; restore_file "$DIST_SERVICE";;
+    A41-rollup-retrieval-import) restore_file "$EXCLUSIONS_FILE";;
     *) echo "未登记的变异名：$name"; exit 1;;
   esac
   rm -f "$MUTATION_TARGET_FILE"
@@ -1878,6 +1925,166 @@ run_a31() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Sprint E / S4 加厚 rollup 段（A37 聚合值 / A38 org 隔离 / A39 降级三支 / A40 类型校验 / 零 DDL）
+# ═══════════════════════════════════════════════════════════════════════════
+
+# 目标表：标题(text, display_order=0) + 金额(number, display_order=1) → 返回 table_id
+roll_target() {
+  curl -sf -b "$1" -H 'Content-Type: application/json' -X POST "$API/tables" \
+    -d "{\"name\":\"$2\",\"visibility\":\"org\",\"fields\":[{\"name\":\"标题\",\"field_type\":\"text\",\"options\":[],\"display_order\":0},{\"name\":\"金额\",\"field_type\":\"number\",\"options\":[],\"display_order\":1}]}" \
+    | jq -r '.data.table_id'
+}
+# 按字段类型/名字取 field_id
+roll_ftype() { curl -sf -b "$1" "$API/tables/$2/fields" | jq -r ".data.fields[]|select(.field_type==\"$3\")|.field_id"; }
+roll_fname() { curl -sf -b "$1" "$API/tables/$2/fields" | jq -r ".data.fields[]|select(.name==\"$3\")|.field_id"; }
+# 建目标行并设 标题+金额 → row_id（$3=titleF $4=title $5=amtF $6=amount）
+roll_trow() {
+  local R; R=$(curl -sf -b "$1" -X POST "$API/tables/$2/rows" | jq -r '.data.row_id')
+  curl -sf -b "$1" -H 'Content-Type: application/json' -X PATCH "$API/rows/$R" \
+    -d "{\"version\":1,\"data\":{\"$3\":\"$4\",\"$5\":$6}}" >/dev/null
+  echo "$R"
+}
+# 读某源行某 rollup 字段的 cell 值（.value）
+roll_cell_val() { echo "$1" | jq -r --arg r "$2" --arg f "$3" '.data.cells[]|select(.row_id==$r and .field_id==$f)|.value'; }
+roll_cell_deg() { echo "$1" | jq -r --arg r "$2" --arg f "$3" '.data.cells[]|select(.row_id==$r and .field_id==$f)|.degraded'; }
+
+run_rollup_a37() {
+  echo "== A37 聚合值+数值规整+多值格式化：sum=52(含string12) / count=3 / concat=甲,乙,丙 =="
+  section_up
+  local TB TITLEF AMTF R0 R1 R2 TA RELF AR SUMF CNTF CCTF RU
+  TB=$(roll_target "$COOKIE_A" "RA37B-$SFX")
+  TITLEF=$(roll_ftype "$COOKIE_A" "$TB" text); AMTF=$(roll_ftype "$COOKIE_A" "$TB" number)
+  R0=$(roll_trow "$COOKIE_A" "$TB" "$TITLEF" 甲 "$AMTF" 10)
+  R1=$(roll_trow "$COOKIE_A" "$TB" "$TITLEF" 乙 "$AMTF" 30)
+  R2=$(roll_trow "$COOKIE_A" "$TB" "$TITLEF" 丙 "$AMTF" 99)
+  # 模拟「粘贴导入一律文本」：金额以 JSONB string "12" 存
+  psql_q "UPDATE zenithjoy.db_rows SET data = jsonb_set(data, ARRAY['$AMTF'], to_jsonb('12'::text)) WHERE id='$R2'" >/dev/null || fail "force string 失败"
+  TA=$(rel_table "$COOKIE_A" "RA37A-$SFX" org)
+  rel_add_rel "$COOKIE_A" "$TA" "$TB"; RELF=$(rel_relfield "$COOKIE_A" "$TA")
+  curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X POST "$API/tables/$TA/fields" \
+    -d "{\"fields\":[{\"name\":\"rsum\",\"field_type\":\"rollup\",\"options\":[\"$RELF\",\"$AMTF\",\"sum\"],\"display_order\":20},{\"name\":\"rcount\",\"field_type\":\"rollup\",\"options\":[\"$RELF\",\"\",\"count\"],\"display_order\":21},{\"name\":\"rconcat\",\"field_type\":\"rollup\",\"options\":[\"$RELF\",\"$TITLEF\",\"concat\"],\"display_order\":22}]}" >/dev/null || fail "建 rollup 字段失败"
+  SUMF=$(roll_fname "$COOKIE_A" "$TA" rsum); CNTF=$(roll_fname "$COOKIE_A" "$TA" rcount); CCTF=$(roll_fname "$COOKIE_A" "$TA" rconcat)
+  AR=$(rel_row "$COOKIE_A" "$TA")
+  curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X PATCH "$API/rows/$AR" \
+    -d "{\"version\":1,\"data\":{\"$RELF\":[\"$R0\",\"$R1\",\"$R2\"]}}" >/dev/null || fail "建关联失败"
+  RU=$(curl -sf -b "$COOKIE_A" "$API/tables/$TA/rollups") || fail "rollups 端点非 2xx"
+  [ "$(roll_cell_val "$RU" "$AR" "$SUMF")" = "52" ] || fail "sum 非 52(string12 未规整或字符串拼接冒充)"
+  [ "$(roll_cell_val "$RU" "$AR" "$CNTF")" = "3" ] || fail "count 非 3"
+  [ "$(roll_cell_val "$RU" "$AR" "$CCTF")" = "甲, 乙, 丙" ] || fail "concat 非 甲, 乙, 丙"
+  ok "A37 聚合值正确：sum=52 count=3 concat=甲, 乙, 丙"
+  section_down
+  echo "✅ A37 通过"
+}
+
+run_rollup_a38() {
+  echo "== A38 聚合隔离只跨本 org：篡改目标行 org → 剔出聚合基数(count 减1/sum 不含) =="
+  section_up
+  local TB TITLEF AMTF R0 R1 R2 TA RELF AR SUMF CNTF RU RU2
+  TB=$(roll_target "$COOKIE_A" "RA38B-$SFX")
+  TITLEF=$(roll_ftype "$COOKIE_A" "$TB" text); AMTF=$(roll_ftype "$COOKIE_A" "$TB" number)
+  R0=$(roll_trow "$COOKIE_A" "$TB" "$TITLEF" 甲 "$AMTF" 10)
+  R1=$(roll_trow "$COOKIE_A" "$TB" "$TITLEF" 乙 "$AMTF" 20)
+  R2=$(roll_trow "$COOKIE_A" "$TB" "$TITLEF" 丙 "$AMTF" 30)
+  TA=$(rel_table "$COOKIE_A" "RA38A-$SFX" org)
+  rel_add_rel "$COOKIE_A" "$TA" "$TB"; RELF=$(rel_relfield "$COOKIE_A" "$TA")
+  curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X POST "$API/tables/$TA/fields" \
+    -d "{\"fields\":[{\"name\":\"rsum\",\"field_type\":\"rollup\",\"options\":[\"$RELF\",\"$AMTF\",\"sum\"],\"display_order\":20},{\"name\":\"rcount\",\"field_type\":\"rollup\",\"options\":[\"$RELF\",\"\",\"count\"],\"display_order\":21}]}" >/dev/null || fail "建 rollup 字段失败"
+  SUMF=$(roll_fname "$COOKIE_A" "$TA" rsum); CNTF=$(roll_fname "$COOKIE_A" "$TA" rcount)
+  AR=$(rel_row "$COOKIE_A" "$TA")
+  curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X PATCH "$API/rows/$AR" \
+    -d "{\"version\":1,\"data\":{\"$RELF\":[\"$R0\",\"$R1\",\"$R2\"]}}" >/dev/null || fail "建关联失败"
+  RU=$(curl -sf -b "$COOKIE_A" "$API/tables/$TA/rollups")
+  [ "$(roll_cell_val "$RU" "$AR" "$SUMF")" = "60" ] || fail "篡改前 sum 非 60"
+  psql_q "UPDATE zenithjoy.db_rows SET org_id='$ORGB_TENANT_ID' WHERE id='$R2'" >/dev/null || fail "篡改 org 失败"
+  RU2=$(curl -sf -b "$COOKIE_A" "$API/tables/$TA/rollups")
+  [ "$(roll_cell_val "$RU2" "$AR" "$CNTF")" = "2" ] || fail "越权行未剔除(count 未减1)"
+  [ "$(roll_cell_val "$RU2" "$AR" "$SUMF")" = "30" ] || fail "sum 含越权行(泄露)"
+  psql_q "UPDATE zenithjoy.db_rows SET org_id='$ORGA_TENANT_ID' WHERE id='$R2'" >/dev/null
+  ok "A38 聚合隔离：越权脏行不进聚合基数"
+  section_down
+  echo "✅ A38 通过"
+}
+
+run_rollup_a39() {
+  echo "== A39 失效降级三支：删 relation 字段/删目标字段/软删目标表 → value=null+degraded =="
+  section_up
+  local i
+  # 三支各建一套，逐支删依赖后断言 value=null + degraded=true + 端点 200
+  for i in rel field table; do
+    local TB TITLEF AMTF BR TA TAN RELF SUMF AR CODE RESP
+    TB=$(roll_target "$COOKIE_A" "RA39B$i-$SFX")
+    TITLEF=$(roll_ftype "$COOKIE_A" "$TB" text); AMTF=$(roll_ftype "$COOKIE_A" "$TB" number)
+    BR=$(roll_trow "$COOKIE_A" "$TB" "$TITLEF" 甲 "$AMTF" 10)
+    TAN="RA39A$i-$SFX"; TA=$(rel_table "$COOKIE_A" "$TAN" org)
+    rel_add_rel "$COOKIE_A" "$TA" "$TB"; RELF=$(rel_relfield "$COOKIE_A" "$TA")
+    curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X POST "$API/tables/$TA/fields" \
+      -d "{\"fields\":[{\"name\":\"rsum\",\"field_type\":\"rollup\",\"options\":[\"$RELF\",\"$AMTF\",\"sum\"],\"display_order\":20}]}" >/dev/null || fail "建 rollup 字段失败"
+    SUMF=$(roll_fname "$COOKIE_A" "$TA" rsum)
+    AR=$(rel_row "$COOKIE_A" "$TA")
+    curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X PATCH "$API/rows/$AR" \
+      -d "{\"version\":1,\"data\":{\"$RELF\":[\"$BR\"]}}" >/dev/null || fail "建关联失败"
+    # 基线：sum=10
+    [ "$(roll_cell_val "$(curl -sf -b "$COOKIE_A" "$API/tables/$TA/rollups")" "$AR" "$SUMF")" = "10" ] || fail "$i 基线 sum 非 10"
+    case "$i" in
+      rel)   curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X DELETE "$API/tables/$TA/fields/$RELF" -d "{\"confirm_name\":\"关联\"}" >/dev/null || fail "删 relation 字段失败";;
+      field) curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X DELETE "$API/tables/$TB/fields/$AMTF" -d "{\"confirm_name\":\"金额\"}" >/dev/null || fail "删目标字段失败";;
+      table) curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X DELETE "$API/tables/$TB" -d "{\"confirm_name\":\"$(psql_q "SELECT name FROM zenithjoy.db_tables WHERE id='$TB'")\"}" >/dev/null || fail "软删目标表失败";;
+    esac
+    CODE=$(curl -s -o /tmp/wb-rollup-a39.json -w '%{http_code}' -b "$COOKIE_A" "$API/tables/$TA/rollups")
+    [ "$CODE" = "200" ] || fail "$i 删依赖后 rollups 端点返 $CODE(应 200 非 5xx)"
+    RESP=$(cat /tmp/wb-rollup-a39.json)
+    [ "$(roll_cell_val "$RESP" "$AR" "$SUMF")" = "null" ] || fail "$i 支未降级(value 非 null)"
+    [ "$(roll_cell_deg "$RESP" "$AR" "$SUMF")" = "true" ] || fail "$i 支未置 degraded=true"
+  done
+  ok "A39 失效降级三支：value=null+degraded、端点 200 非 5xx"
+  section_down
+  echo "✅ A39 通过"
+}
+
+run_rollup_a40() {
+  echo "== A40 类型×函数校验：sum 配 text → 400 VALIDATION_FAILED；count 无需目标字段 → 201 =="
+  section_up
+  local TB TITLEF TA RELF CODE C2
+  TB=$(roll_target "$COOKIE_A" "RA40B-$SFX")
+  TITLEF=$(roll_ftype "$COOKIE_A" "$TB" text)
+  TA=$(rel_table "$COOKIE_A" "RA40A-$SFX" org)
+  rel_add_rel "$COOKIE_A" "$TA" "$TB"; RELF=$(rel_relfield "$COOKIE_A" "$TA")
+  CODE=$(curl -s -o /tmp/wb-rollup-a40.json -w '%{http_code}' -b "$COOKIE_A" -H 'Content-Type: application/json' \
+    -X POST "$API/tables/$TA/fields" -d "{\"fields\":[{\"name\":\"badsum\",\"field_type\":\"rollup\",\"options\":[\"$RELF\",\"$TITLEF\",\"sum\"],\"display_order\":20}]}")
+  [ "$CODE" = "400" ] || fail "sum 配 text 未 400(得 $CODE)"
+  jq -e '.error.code=="VALIDATION_FAILED" and (.error.message|type=="string" and length>0)' < /tmp/wb-rollup-a40.json >/dev/null || fail "非 VALIDATION_FAILED 或缺文案(疑静默 NaN)"
+  C2=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_A" -H 'Content-Type: application/json' \
+    -X POST "$API/tables/$TA/fields" -d "{\"fields\":[{\"name\":\"okcount\",\"field_type\":\"rollup\",\"options\":[\"$RELF\",\"\",\"count\"],\"display_order\":21}]}")
+  [ "$C2" = "201" ] || fail "count 合法配置未 201(得 $C2)"
+  ok "A40 类型×函数校验：sum 配 text 400、count 201"
+  section_down
+  echo "✅ A40 通过"
+}
+
+run_rollup_ddl() {
+  echo "== 无运行时 DDL + 读时计算不落库：information_schema 前后全等、零 %rollup% 物理表、options 三元组 =="
+  section_up
+  local B0 TB AMTF TA RELF B1 N
+  B0=$(psql_q "SELECT string_agg(table_name||'.'||column_name, ',' ORDER BY table_name,column_name) FROM information_schema.columns WHERE table_schema='zenithjoy'")
+  TB=$(roll_target "$COOKIE_A" "RDDLB-$SFX")
+  AMTF=$(roll_ftype "$COOKIE_A" "$TB" number)
+  TA=$(rel_table "$COOKIE_A" "RDDLA-$SFX" org)
+  rel_add_rel "$COOKIE_A" "$TA" "$TB"; RELF=$(rel_relfield "$COOKIE_A" "$TA")
+  curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X POST "$API/tables/$TA/fields" \
+    -d "{\"fields\":[{\"name\":\"rsum\",\"field_type\":\"rollup\",\"options\":[\"$RELF\",\"$AMTF\",\"sum\"],\"display_order\":20}]}" >/dev/null || fail "建 rollup 字段失败"
+  curl -sf -b "$COOKIE_A" "$API/tables/$TA/rollups" >/dev/null || fail "读 rollups 失败"
+  B1=$(psql_q "SELECT string_agg(table_name||'.'||column_name, ',' ORDER BY table_name,column_name) FROM information_schema.columns WHERE table_schema='zenithjoy'")
+  [ "$B0" = "$B1" ] || fail "运行时 information_schema 变了(疑运行时 DDL/落库)"
+  N=$(psql_q "SELECT count(*) FROM information_schema.tables WHERE table_schema='zenithjoy' AND table_name LIKE '%rollup%'")
+  [ "$N" = "0" ] || fail "出现 $N 张 rollup 命名物理表"
+  curl -sf -b "$COOKIE_A" "$API/tables/$TA/fields" \
+    | jq -e --arg rel "$RELF" --arg amt "$AMTF" '.data.fields[]|select(.name=="rsum")|.options==[$rel,$amt,"sum"]' >/dev/null || fail "rollup 配置未以三元组落 options"
+  ok "零运行时 DDL + 读时计算不落库 + options 三元组"
+  section_down
+  echo "✅ 零 DDL 通过"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
 # dispatch
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -1926,6 +2133,11 @@ case "${1:-}" in
   --a30-table-only)         run_a30_table; exit 0;;
   --a30-field-only)         run_a30_field; exit 0;;
   --a31-only)               run_a31; exit 0;;
+  --rollup-a37-only)        run_rollup_a37; exit 0;;
+  --rollup-a38-only)        run_rollup_a38; exit 0;;
+  --rollup-a39-only)        run_rollup_a39; exit 0;;
+  --rollup-a40-only)        run_rollup_a40; exit 0;;
+  --rollup-ddl-only)        run_rollup_ddl; exit 0;;
   --inv-tenant-isolation)   run_inv_tenant_isolation; exit 0;;
   --inv-endpoint-auth)      run_inv_endpoint_auth; exit 0;;
   --inv-two-tenant-seed)    run_inv_two_tenant_seed; exit 0;;

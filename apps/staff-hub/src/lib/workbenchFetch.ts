@@ -299,6 +299,37 @@ export interface BackrefsOut {
 /** 反向引用「谁引用了我」：本组织内引用来源，A29② 他人私有来源已在服务端剔除。 */
 export const getBackrefs = (rowId: string) => json<BackrefsOut>(`/rows/${rowId}/backrefs`);
 
+/**
+ * rollup / lookup 字段（S4 加厚聚合）：读时计算不落库。
+ *   rollup: field_type='rollup'，options=[relation_field_id, target_field_id, fn]，fn∈{count,sum,min,max,concat}
+ *   lookup: field_type='lookup'，options=[relation_field_id, target_field_id]（fn 隐含 'lookup'）
+ */
+export const ROLLUP_FIELD_TYPE = 'rollup';
+export const LOOKUP_FIELD_TYPE = 'lookup';
+
+/** 一个 rollup/lookup 单元格的读时聚合值（degraded=true → 依赖失效/含非数值跳过，可见降级占位）。 */
+export interface RollupCell {
+  row_id: string;
+  field_id: string;
+  fn: string;
+  value: number | string | null;
+  degraded: boolean;
+}
+export interface RollupsOut {
+  table_id: string;
+  cells: RollupCell[];
+}
+/** 拉一张表每条存活源行 × 每个 rollup/lookup 字段的聚合值（纯读，读时计算不落库）。 */
+export const listRollups = (tableId: string) =>
+  json<RollupsOut>(`/tables/${tableId}/rollups`);
+
+/** 给已有表加字段（含 rollup/lookup 配置字段）。类型×函数非法 → 服务端 400 VALIDATION_FAILED。 */
+export const createFields = (tableId: string, fields: WorkbenchField[]) =>
+  json<{ fields: WorkbenchField[] }>(`/tables/${tableId}/fields`, {
+    method: 'POST',
+    body: JSON.stringify({ fields }),
+  });
+
 /** 软删 relation 字段（A30③，二次确认字段名）：confirm_name 与字段名逐字不等 → 400 且不删。 */
 export const deleteField = (tableId: string, fieldId: string, confirmName: string) =>
   json<{ field_id: string; deleted_at: string }>(`/tables/${tableId}/fields/${fieldId}`, {
