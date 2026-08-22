@@ -28,10 +28,12 @@ import {
   listFields,
   addFields,
   softDeleteTable,
+  softDeleteField,
   listTrash,
   restoreTable,
   WorkbenchValidationError,
 } from '../services/workbench.service';
+import { relationCandidates, backrefs } from '../services/workbench-relations.service';
 import {
   listRows,
   listRowTrash,
@@ -220,6 +222,49 @@ router.post('/tables/:id/fields', async (req: Request, res: Response) => {
   }
 });
 
+// ── 读：relation 字段的行选择器候选（S4 关联，纯读无写副作用）────────────────────
+//   解析不到源表/字段/目标表 → 统一 404 notFoundBody（A28 反枚举，404 优先于 400）。
+router.get('/tables/:id/fields/:fieldId/relation-candidates', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  try {
+    const out = await relationCandidates(
+      identity.orgId,
+      identity.memberId,
+      req.params.id,
+      req.params.fieldId
+    );
+    if (!out) return notFound(res);
+    ok(res, 200, out);
+  } catch (err) {
+    serverError(res, 'relationCandidates', err);
+  }
+});
+
+// ── 写：软删 relation 字段（A30③，二次确认字段名 + 值保留）──────────────────────
+router.delete('/tables/:id/fields/:fieldId', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  try {
+    const outcome = await softDeleteField(
+      identity.orgId,
+      identity.memberId,
+      req.params.id,
+      req.params.fieldId,
+      body.confirm_name
+    );
+    if (outcome.kind === 'not_found') return notFound(res);
+    if (outcome.kind === 'confirm_mismatch') {
+      res
+        .status(400)
+        .json(workbenchErrorBody('CONFIRM_MISMATCH', '输入的字段名与要删除的字段不一致，未执行删除'));
+      return;
+    }
+    ok(res, 200, { field_id: outcome.fieldId, deleted_at: outcome.deletedAt });
+  } catch (err) {
+    serverError(res, 'softDeleteField', err);
+  }
+});
+
 // ── 写：软删（二次确认表名） ─────────────────────────────────────────────────
 router.delete('/tables/:id', async (req: Request, res: Response) => {
   const identity = req.workbenchIdentity!;
@@ -311,6 +356,19 @@ router.get('/tables/:id/export', async (req: Request, res: Response) => {
     ok(res, 200, out);
   } catch (err) {
     serverError(res, 'exportTable', err);
+  }
+});
+
+// ── 读：反向引用「谁引用了我」（S4 关联反查，纯读无写副作用）────────────────────
+//   行不可达/跨企业/私有非表主/已软删 → 404 notFoundBody。A29② 私有来源零泄露在 service 内剔除。
+router.get('/rows/:id/backrefs', async (req: Request, res: Response) => {
+  const identity = req.workbenchIdentity!;
+  try {
+    const out = await backrefs(identity.orgId, identity.memberId, req.params.id);
+    if (!out) return notFound(res);
+    ok(res, 200, out);
+  } catch (err) {
+    serverError(res, 'backrefs', err);
   }
 });
 

@@ -225,8 +225,52 @@ function cellTypeError(field: FieldOut, value: unknown): string | null {
       return typeof value === 'string' && /^https?:\/\//.test(value)
         ? null
         : `${label}只接受 http:// 或 https:// 开头的链接`;
+    case 'relation':
+      // 结构校验：必须是**目标 row_id 数组**，每个元素是合法 uuid。用户输入永不进标识符位——
+      // SQL 片段/非 uuid 在这里就被挡回 400（P2 注入对抗面），不会走到深校验的绑定参数上。
+      // 元素是否指向**本组织可见的目标记录**由 patchRow 的异步深校验（validateRelationTargets）二次判。
+      return Array.isArray(value) && value.every((v) => typeof v === 'string' && isUuid(v))
+        ? null
+        : `${label}只接受目标记录 id 数组`;
     default:
       return `${label}的类型未登记`;
+  }
+}
+
+/**
+ * relation 值的深校验（A27②/A31 写入侧）：每个目标 row_id 必须是关联字段目标表
+ * （field.options[0]）里**本组织、未软删**的记录。目标 id 全程走绑定参数当数据值，
+ * 永不拼进 SQL 标识符位。任一不可见 → 抛校验失败（路由翻 400，行 version 不变）。
+ */
+async function validateRelationTargets(
+  db: Queryable,
+  orgId: string,
+  memberId: string,
+  fields: FieldOut[],
+  sets: Record<string, unknown>
+): Promise<void> {
+  for (const field of fields) {
+    if (field.field_type !== 'relation') continue;
+    if (!(field.field_id in sets)) continue;
+    const ids = sets[field.field_id];
+    if (!Array.isArray(ids)) continue; // 结构已由 cellTypeError 保证是 uuid 数组
+    const targetTableId = field.options[0];
+    if (typeof targetTableId !== 'string' || !isUuid(targetTableId)) {
+      throw new WorkbenchValidationError(`关联字段「${field.name}」的目标表配置无效`);
+    }
+    // 目标表必须本组织可见（跨企业/私有非表主/已删 → 不可解析）
+    const target = await resolveTable(db, targetTableId, orgId, memberId);
+    if (!target) throw new WorkbenchValidationError(`关联字段「${field.name}」的目标表不可用`);
+    for (const id of ids as string[]) {
+      const r = await db.query(
+        `SELECT 1 FROM zenithjoy.db_rows r
+          WHERE r.id = $1 AND r.org_id = $2 AND r.table_id = $3 AND r.deleted_at IS NULL`,
+        [id, orgId, targetTableId]
+      );
+      if (r.rowCount === 0) {
+        throw new WorkbenchValidationError(`关联字段「${field.name}」指向不可见或不存在的记录`);
+      }
+    }
   }
 }
 
@@ -521,6 +565,9 @@ export async function patchRow(
 
   const fields = await listFieldRows(current.table_id, orgId);
   const { clears, sets } = validatePatch(patch, fields);
+  // relation 值深校验：结构（uuid 数组）已由 validatePatch→cellTypeError 挡过，这里再验
+  // 每个目标 row_id 是否本组织可见（A27②/A31 写入侧）。不可见即整笔拒绝，行 version 不变。
+  await validateRelationTargets(pool, orgId, memberId, fields, sets);
 
   // 空补丁是合法的无副作用空写：不改任何格，version 也不递增
   if (clears.length === 0 && Object.keys(sets).length === 0) {

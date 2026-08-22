@@ -39,6 +39,12 @@ interface ActiveCell {
   message: string;
 }
 
+/** relation 字段的渲染元数据：目标表 id + 目标 row_id → 标题映射（页面预取候选后下发）。 */
+export interface RelationMeta {
+  targetTableId: string;
+  titleByRow: Record<string, string>;
+}
+
 interface CellContextValue {
   active: ActiveCell | null;
   beginEdit: (rowId: string, field: WorkbenchField, value: CellValue) => void;
@@ -47,6 +53,9 @@ interface CellContextValue {
   reread: (rowId: string) => void;
   expand: (rowId: string) => void;
   remove: (rowId: string) => void;
+  relationMeta: Record<string, RelationMeta>;
+  relationEdit: (rowId: string, field: WorkbenchField) => void;
+  relationJump: (targetTableId: string, targetRowId: string) => void;
 }
 
 const CellContext = createContext<CellContextValue | null>(null);
@@ -122,8 +131,43 @@ function CellEditor({ field, active }: { field: WorkbenchField; active: ActiveCe
   );
 }
 
+/** relation 单元格：把关联的目标 row_id 渲染成可点跳转的标题 chip + 一个「配置关联」入口。 */
+function RelationCell({ rowId, field, value }: { rowId: string; field: WorkbenchField; value: CellValue }) {
+  const ctx = useContext(CellContext)!;
+  const fieldId = field.field_id ?? '';
+  const cellId = `cell-${rowId}-${fieldId}`;
+  const meta = ctx.relationMeta[fieldId];
+  const ids = Array.isArray(value) ? value.map((v) => String(v)) : [];
+  return (
+    <div data-testid={cellId} className="grid-cell grid-cell-relation">
+      {ids.length === 0 && <span className="rel-empty">—</span>}
+      {ids.map((id) => (
+        <button
+          key={id}
+          type="button"
+          className="rel-chip"
+          data-testid={`rel-chip-${rowId}-${fieldId}-${id}`}
+          title="点击跳转到关联记录"
+          onClick={() => meta && ctx.relationJump(meta.targetTableId, id)}
+        >
+          {meta?.titleByRow[id] ?? id}
+        </button>
+      ))}
+      <button
+        type="button"
+        className="rel-edit"
+        data-testid={`rel-edit-${rowId}-${fieldId}`}
+        onClick={() => ctx.relationEdit(rowId, field)}
+      >
+        配置关联
+      </button>
+    </div>
+  );
+}
+
 function RowCell({ rowId, field, value }: { rowId: string; field: WorkbenchField; value: CellValue }) {
   const ctx = useContext(CellContext)!;
+  if (field.field_type === 'relation') return <RelationCell rowId={rowId} field={field} value={value} />;
   const cellId = `cell-${rowId}-${field.field_id}`;
   const active =
     ctx.active && ctx.active.rowId === rowId && ctx.active.fieldId === field.field_id ? ctx.active : null;
@@ -189,6 +233,12 @@ export interface WorkbenchRowGridProps {
   onDelete: (rowId: string) => void;
   /** 剪贴板 TSV 原文；解析与落库由页面统一处理 */
   onPasteText: (text: string) => void;
+  /** relation 字段渲染元数据（页面预取候选后下发：目标表 id + row_id→标题） */
+  relationMeta?: Record<string, RelationMeta>;
+  /** 打开某行某 relation 字段的行选择器（配置关联） */
+  onRelationEdit?: (rowId: string, field: WorkbenchField) => void;
+  /** 点关联项 → 跳转到目标表该记录 */
+  onRelationJump?: (targetTableId: string, targetRowId: string) => void;
 }
 
 export default function WorkbenchRowGrid({
@@ -200,6 +250,9 @@ export default function WorkbenchRowGrid({
   onExpand,
   onDelete,
   onPasteText,
+  relationMeta = {},
+  onRelationEdit,
+  onRelationJump,
 }: WorkbenchRowGridProps) {
   const [active, setActive] = useState<ActiveCell | null>(null);
   const activeRef = useRef<ActiveCell | null>(null);
@@ -277,8 +330,19 @@ export default function WorkbenchRowGrid({
   );
 
   const ctxValue = useMemo<CellContextValue>(
-    () => ({ active, beginEdit, setDraft, commit, reread, expand: onExpand, remove: onDelete }),
-    [active, beginEdit, setDraft, commit, reread, onExpand, onDelete]
+    () => ({
+      active,
+      beginEdit,
+      setDraft,
+      commit,
+      reread,
+      expand: onExpand,
+      remove: onDelete,
+      relationMeta,
+      relationEdit: (rowId, field) => onRelationEdit?.(rowId, field),
+      relationJump: (t, r) => onRelationJump?.(t, r),
+    }),
+    [active, beginEdit, setDraft, commit, reread, onExpand, onDelete, relationMeta, onRelationEdit, onRelationJump]
   );
 
   const columnDefs = useMemo<ColDef<WorkbenchRow>[]>(() => {

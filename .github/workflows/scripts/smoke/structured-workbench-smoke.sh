@@ -231,11 +231,14 @@ DIST_SERVICE="apps/api/dist/services/workbench.service.js"
 DIST_ROWS_SERVICE="apps/api/dist/services/workbench-rows.service.js"
 DIST_VIEWS_SERVICE="apps/api/dist/services/workbench-views.service.js"
 DIST_SELFCHECK="apps/api/dist/startup/single-org-selfcheck.js"
+# Sprint D S4 关联 service（候选/反查读路径 + A29② 私有反向过滤）
+RELATIONS_SERVICE_FILE="apps/api/src/services/workbench-relations.service.ts"
+DIST_RELATIONS_SERVICE="apps/api/dist/services/workbench-relations.service.js"
 
 INJECT_SECRET_FILE="apps/api/src/knowledge/.wb-mutation-secret.ts"
 
 mutation_list() {
-  # 每行：<变异名><空白><注入次数>。合计 20 开关（Sprint C 新增末尾七条）。
+  # 每行：<变异名><空白><注入次数>。合计 27 开关（Sprint D 新增末尾七条 S4 关联）。
   cat <<'EOF'
 A2-inject-all	7
 A35-drop-name	5
@@ -257,6 +260,13 @@ A1V-view-org-bypass	1
 A1V-view-member-bypass	1
 VIEW-lastview-off	1
 A24-drag-wrong-row	1
+A27-rel-org-bypass	1
+A30R-rel-dangling-leak	1
+A28-rel-enum-leak	1
+A31-rel-private-leak	1
+A30F-field-hard-delete	1
+A29-backref-private-leak	1
+A30T-table-hard-delete	1
 EOF
 }
 
@@ -442,6 +452,76 @@ mutation_apply() {
       perl -0pi -e "s/const row = rows\.find\(\(r\) => r\.row_id === activeCardId\);/const row = rows[0];/g" "$KANBAN_FILE"
       echo "$KANBAN_FILE" > "$MUTATION_TARGET_FILE"
       ;;
+    # ── Sprint D / S4 关联七条 ──────────────────────────────────────────────
+    A27-rel-org-bypass)
+      save_file "$RELATIONS_SERVICE_FILE"; save_file "$DIST_RELATIONS_SERVICE"
+      # 候选读路径的行维 org 二次校验摘掉：库里被越权改成他企业的行会回到候选里（A27② 读路径泄露）
+      for f in "$RELATIONS_SERVICE_FILE" "$DIST_RELATIONS_SERVICE"; do
+        [ -f "$f" ] || continue
+        perl -0pi -e 's/WHERE r\.table_id = \$1 AND r\.org_id = \$2 AND r\.deleted_at IS NULL/WHERE r.table_id = \$1 AND (r.org_id = \$2 OR \$2 IS NOT NULL) AND r.deleted_at IS NULL/g' "$f"
+      done
+      echo "$RELATIONS_SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
+    A30R-rel-dangling-leak)
+      save_file "$RELATIONS_SERVICE_FILE"; save_file "$DIST_RELATIONS_SERVICE"
+      # 候选读路径的行维 deleted_at 剔除摘掉：已软删的目标行回魂进候选（悬空可选项）
+      for f in "$RELATIONS_SERVICE_FILE" "$DIST_RELATIONS_SERVICE"; do
+        [ -f "$f" ] || continue
+        perl -0pi -e 's/WHERE r\.table_id = \$1 AND r\.org_id = \$2 AND r\.deleted_at IS NULL/WHERE r.table_id = \$1 AND r.org_id = \$2 AND (r.deleted_at IS NULL OR TRUE)/g' "$f"
+      done
+      echo "$RELATIONS_SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
+    A28-rel-enum-leak)
+      save_file "$SERVICE_FILE"; save_file "$DIST_SERVICE"
+      # 源表 + 字段解析的 org 条件双双摘掉：getTable 与 listFieldRows 都会解析出他企业的真实表/字段
+      # → 候选端点对真实存在 id 返 200、对随机不存在 id 返 404，两者可区分（枚举漏洞）。
+      # 只摘 getTable 一处不够：listFieldRows 仍按 org 过滤把字段清空 → 候选照样 404、变异静默失效。
+      for f in "$SERVICE_FILE" "$DIST_SERVICE"; do
+        [ -f "$f" ] || continue
+        perl -0pi -e 's/WHERE t\.id = \$1 AND t\.org_id = \$2/WHERE t.id = \$1 AND (t.org_id = \$2 OR \$2 IS NOT NULL)/g' "$f"
+        perl -0pi -e 's/WHERE table_id = \$1 AND org_id = \$2 AND deleted_at IS NULL/WHERE table_id = \$1 AND (org_id = \$2 OR \$2 IS NOT NULL) AND deleted_at IS NULL/g' "$f"
+      done
+      echo "$SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
+    A31-rel-private-leak)
+      save_file "$SERVICE_FILE"; save_file "$DIST_SERVICE"
+      # 写入侧可见性判据改成恒真：getTable 放行他人「仅自己」私有表 → bob 能把 relation 指到
+      # alice 私有表（A31① 写入侧泄露）。锚同 A8-deny-all（不含 $N，避开双引号 perl 展开坑）。
+      for f in "$SERVICE_FILE" "$DIST_SERVICE"; do
+        [ -f "$f" ] || continue
+        perl -0pi -e "s/\Q(t.visibility = 'org' OR t.owner_member_id = \E/(1 = 1 OR t.owner_member_id = /g" "$f"
+      done
+      echo "$SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
+    A30F-field-hard-delete)
+      save_file "$SERVICE_FILE"; save_file "$DIST_SERVICE"
+      # 字段软删改物理删：softDeleteField 的 UPDATE...SET deleted_at 换成 DELETE + 行注释，
+      # 后面的 WHERE/RETURNING 原样留着。API 层看着一样，只有查库（db_fields 行还在不在）分得出。
+      for f in "$SERVICE_FILE" "$DIST_SERVICE"; do
+        [ -f "$f" ] || continue
+        perl -0pi -e 's/\QUPDATE zenithjoy.db_fields SET deleted_at = NOW()\E/DELETE FROM zenithjoy.db_fields --/g' "$f"
+      done
+      echo "$SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
+    A29-backref-private-leak)
+      save_file "$RELATIONS_SERVICE_FILE"; save_file "$DIST_RELATIONS_SERVICE"
+      # backref 读路径「来源表 private 且非表主则剔除」过滤摘掉：bob 从 X 的反向面板看到 alice
+      # 私有来源（A29② 面客泄露）。锚在关联 service 的可见性判据（不含 $N）。
+      for f in "$RELATIONS_SERVICE_FILE" "$DIST_RELATIONS_SERVICE"; do
+        [ -f "$f" ] || continue
+        perl -0pi -e "s/\Q(t.visibility = 'org' OR t.owner_member_id = \E/(1 = 1 OR t.owner_member_id = /g" "$f"
+      done
+      echo "$RELATIONS_SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
+    A30T-table-hard-delete)
+      save_file "$SERVICE_FILE"; save_file "$DIST_SERVICE"
+      # 删表软删改物理删：目标表软删后候选返 404 → 但「还原后候选恢复」拿不回来（表真没了）。
+      for f in "$SERVICE_FILE" "$DIST_SERVICE"; do
+        [ -f "$f" ] || continue
+        perl -0pi -e 's/\QUPDATE zenithjoy.db_tables SET deleted_at = NOW(), updated_at = NOW()\E/DELETE FROM zenithjoy.db_tables --/g' "$f"
+      done
+      echo "$SERVICE_FILE" > "$MUTATION_TARGET_FILE"
+      ;;
     *)
       echo "未登记的变异名：$name"; exit 1;;
   esac
@@ -472,6 +552,13 @@ mutation_revert() {
     A1V-view-member-bypass)  restore_file "$VIEWS_SERVICE_FILE"; restore_file "$DIST_VIEWS_SERVICE";;
     VIEW-lastview-off)       restore_file "$VIEWS_SERVICE_FILE"; restore_file "$DIST_VIEWS_SERVICE";;
     A24-drag-wrong-row)      restore_file "$KANBAN_FILE";;
+    A27-rel-org-bypass)      restore_file "$RELATIONS_SERVICE_FILE"; restore_file "$DIST_RELATIONS_SERVICE";;
+    A30R-rel-dangling-leak)  restore_file "$RELATIONS_SERVICE_FILE"; restore_file "$DIST_RELATIONS_SERVICE";;
+    A28-rel-enum-leak)       restore_file "$SERVICE_FILE"; restore_file "$DIST_SERVICE";;
+    A31-rel-private-leak)    restore_file "$SERVICE_FILE"; restore_file "$DIST_SERVICE";;
+    A30F-field-hard-delete)  restore_file "$SERVICE_FILE"; restore_file "$DIST_SERVICE";;
+    A29-backref-private-leak) restore_file "$RELATIONS_SERVICE_FILE"; restore_file "$DIST_RELATIONS_SERVICE";;
+    A30T-table-hard-delete)  restore_file "$SERVICE_FILE"; restore_file "$DIST_SERVICE";;
     *) echo "未登记的变异名：$name"; exit 1;;
   esac
   rm -f "$MUTATION_TARGET_FILE"
@@ -524,6 +611,12 @@ ensure_migration() {
     echo "  路③ 五表或 tenant_id 列缺失，补跑 migration（DDL 幂等）"
     psql "$PGURL" -v ON_ERROR_STOP=1 -q -f apps/api/db/migrations/20260820_120000_structured_workbench.sql >/dev/null \
       || fail "路③ migration 应用失败"
+  fi
+  # Sprint D：db_fields.deleted_at 软删列 + field_type CHECK 纳入 relation（DDL 幂等）
+  if [ -z "$(psql_q "SELECT 1 FROM information_schema.columns WHERE table_schema='zenithjoy' AND table_name='db_fields' AND column_name='deleted_at'")" ]; then
+    echo "  db_fields.deleted_at 缺失，补跑 S4 关联 migration（DDL 幂等）"
+    psql "$PGURL" -v ON_ERROR_STOP=1 -q -f apps/api/db/migrations/20260822_120000_workbench_relations.sql >/dev/null \
+      || fail "路③ S4 关联 migration 应用失败"
   fi
 }
 
@@ -1603,6 +1696,188 @@ run_a24_pure() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
+# 段2d S4 关联链七段（Sprint D）：候选/反查/组织隔离/引用完整性/私有反向零泄露
+#
+# 各段自带 fixture（section_up 复用外部或自起），变异证明各自显式调用它们。
+# 关联表用单 text 字段（display_order=0 = 标题字段）；关联值 = 目标 row_id 数组落 db_rows.data。
+# ═══════════════════════════════════════════════════════════════════════════
+
+# $1=cookie $2=name $3=visibility → 建含一个 text 标题字段的表，返回 table_id
+rel_table() {
+  curl -sf -b "$1" -H 'Content-Type: application/json' -X POST "$API/tables" \
+    -d "{\"name\":\"$2\",\"visibility\":\"$3\",\"fields\":[{\"name\":\"标题\",\"field_type\":\"text\",\"options\":[],\"display_order\":0}]}" \
+    | jq -r '.data.table_id'
+}
+rel_row() { curl -sf -b "$1" -X POST "$API/tables/$2/rows" | jq -r '.data.row_id'; }
+rel_relfield() { curl -sf -b "$1" "$API/tables/$2/fields" | jq -r '.data.fields[]|select(.field_type=="relation")|.field_id'; }
+# $1=cookie $2=table $3=target [$4=name] → 在 table 上加一个 relation 字段配置目标表
+rel_add_rel() {
+  local nm="${4:-关联}"
+  curl -sf -b "$1" -H 'Content-Type: application/json' -X POST "$API/tables/$2/fields" \
+    -d "{\"fields\":[{\"name\":\"$nm\",\"field_type\":\"relation\",\"options\":[\"$3\"],\"display_order\":9}]}" >/dev/null
+}
+# $1=cookie $2=table $3=title → 建一行并把标题字段设为 title，返回 row_id
+rel_titled_row() {
+  local tf rid
+  tf=$(curl -sf -b "$1" "$API/tables/$2/fields" | jq -r '.data.fields[0].field_id')
+  rid=$(curl -sf -b "$1" -X POST "$API/tables/$2/rows" | jq -r '.data.row_id')
+  curl -sf -b "$1" -H 'Content-Type: application/json' -X PATCH "$API/rows/$rid" \
+    -d "{\"version\":1,\"data\":{\"$tf\":\"$3\"}}" >/dev/null
+  echo "$rid"
+}
+
+run_a27() {
+  echo "== A27 关联 org 隔离：跨企业目标拒 + A27② 读路径二次校验剔除越权行 =="
+  section_up
+  local TA TB RF B1 TC CODE
+  TA=$(rel_table "$COOKIE_A" "A27A-$SFX" org); TB=$(rel_table "$COOKIE_A" "A27B-$SFX" org)
+  B1=$(rel_row "$COOKIE_A" "$TB")
+  rel_add_rel "$COOKIE_A" "$TA" "$TB"; RF=$(rel_relfield "$COOKIE_A" "$TA")
+  [ -n "$RF" ] && [ "$RF" != "null" ] || fail "relation 字段未建成"
+  curl -sf -b "$COOKIE_A" "$API/tables/$TA/fields/$RF/relation-candidates" \
+    | jq -e --arg b "$B1" '[.data.candidates[].row_id]|index($b)!=null' >/dev/null || fail "篡改前候选应含 B1"
+  psql_q "UPDATE zenithjoy.db_rows SET org_id='$ORGB_TENANT_ID' WHERE id='$B1'" >/dev/null || fail "篡改 org 失败"
+  curl -sf -b "$COOKIE_A" "$API/tables/$TA/fields/$RF/relation-candidates" \
+    | jq -e --arg b "$B1" '[.data.candidates[].row_id]|index($b)==null' >/dev/null || fail "读路径二次校验未剔除越权行(A27②泄露)"
+  psql_q "UPDATE zenithjoy.db_rows SET org_id='$ORGA_TENANT_ID' WHERE id='$B1'" >/dev/null
+  TC=$(rel_table "$COOKIE_B" "A27C-$SFX" org)
+  CODE=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_A" -H 'Content-Type: application/json' \
+    -X POST "$API/tables/$TA/fields" -d "{\"fields\":[{\"name\":\"跨企业\",\"field_type\":\"relation\",\"options\":[\"$TC\"],\"display_order\":8}]}")
+  case "$CODE" in 4*) :;; *) fail "跨企业目标未被拒(返 $CODE)";; esac
+  ok "A27 org 隔离：跨企业目标拒 + 读路径二次校验剔除越权行"
+  section_down
+  echo "✅ A27 通过"
+}
+
+run_a28() {
+  echo "== A28 反枚举：真实存在 vs 随机 id 两组 404 逐字节相同（404 优先于 400）=="
+  section_up
+  local TA TB RF RND CR CX i
+  TA=$(rel_table "$COOKIE_A" "A28A-$SFX" org); TB=$(rel_table "$COOKIE_A" "A28B-$SFX" org)
+  rel_add_rel "$COOKIE_A" "$TA" "$TB"; RF=$(rel_relfield "$COOKIE_A" "$TA")
+  # 随机不存在 id 走 gen_random_uuid 现生成（禁写死 uuid 字面量，INV-7）
+  RND=$(psql_q "SELECT gen_random_uuid()")
+  declare -A seen
+  for i in $(seq 1 10); do
+    CR=$(curl -s -o /tmp/wb-a28-real.json -w '%{http_code}' -b "$COOKIE_B" "$API/tables/$TA/fields/$RF/relation-candidates")
+    CX=$(curl -s -o /tmp/wb-a28-rnd.json -w '%{http_code}' -b "$COOKIE_B" "$API/tables/$RND/fields/$RF/relation-candidates")
+    [ "$CR" = "404" ] || fail "真实表 id 未 404(得 $CR)"
+    [ "$CX" = "404" ] || fail "随机 id 未 404(得 $CX)"
+    seen["$(cat /tmp/wb-a28-real.json)"]=1; seen["$(cat /tmp/wb-a28-rnd.json)"]=1
+  done
+  [ "${#seen[@]}" = "1" ] || fail "真实/随机响应体可区分(${#seen[@]} 种)"
+  jq -e 'has("timestamp")|not' < /tmp/wb-a28-real.json >/dev/null || fail "404 体带 timestamp(可区分信号)"
+  ok "A28 反枚举：两组 404 逐字节同形、无 timestamp"
+  section_down
+  echo "✅ A28 通过"
+}
+
+run_a29_backref() {
+  echo "== A29② 私有反向零泄露：bob 看不到 alice 私有来源、表主本人能看到（正反成对）=="
+  section_up
+  local T X P RF PR
+  T=$(rel_table "$COOKIE_A" "A29T-$SFX" org)
+  X=$(rel_titled_row "$COOKIE_A" "$T" "被引用行X")
+  P=$(rel_table "$COOKIE_A" "A29P-$SFX" private)
+  rel_add_rel "$COOKIE_A" "$P" "$T" "私有引用"; RF=$(rel_relfield "$COOKIE_A" "$P")
+  PR=$(rel_row "$COOKIE_A" "$P")
+  curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X PATCH "$API/rows/$PR" \
+    -d "{\"version\":1,\"data\":{\"$RF\":[\"$X\"]}}" >/dev/null || fail "私有表建关联失败"
+  curl -sf -b "$COOKIE_A2" "$API/rows/$X/backrefs" \
+    | jq -e --arg p "$P" '[.data.backrefs[].table_id]|index($p)==null' >/dev/null || fail "bob 看到 alice 私有来源(面客泄露)"
+  curl -sf -b "$COOKIE_A" "$API/rows/$X/backrefs" \
+    | jq -e --arg p "$P" '[.data.backrefs[].table_id]|index($p)!=null' >/dev/null || fail "alice 表主本人看不到自己私有来源(一律空假绿)"
+  ok "A29② 私有反向：他人零泄露、表主本人可见"
+  section_down
+  echo "✅ A29② 通过"
+}
+
+run_a30_row() {
+  echo "== A30① 删被引用行安全失效：候选剔除、来源读不 5xx、关联值仍是数组 =="
+  section_up
+  local TA TB B1 RF AR CODE typ
+  TA=$(rel_table "$COOKIE_A" "A30rA-$SFX" org); TB=$(rel_table "$COOKIE_A" "A30rB-$SFX" org)
+  B1=$(rel_row "$COOKIE_A" "$TB")
+  rel_add_rel "$COOKIE_A" "$TA" "$TB"; RF=$(rel_relfield "$COOKIE_A" "$TA")
+  AR=$(rel_row "$COOKIE_A" "$TA")
+  curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X PATCH "$API/rows/$AR" \
+    -d "{\"version\":1,\"data\":{\"$RF\":[\"$B1\"]}}" >/dev/null || fail "建关联失败"
+  curl -sf -b "$COOKIE_A" -X DELETE "$API/rows/$B1" >/dev/null || fail "软删目标行失败"
+  curl -sf -b "$COOKIE_A" "$API/tables/$TA/fields/$RF/relation-candidates" \
+    | jq -e --arg b "$B1" '[.data.candidates[].row_id]|index($b)==null' >/dev/null || fail "已删行未从候选剔除(悬空)"
+  CODE=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_A" "$API/rows/$B1/backrefs")
+  case "$CODE" in 200|404) :;; *) fail "已删行反查返 $CODE(应 200/404 非 5xx)";; esac
+  typ=$(psql_q "SELECT jsonb_typeof(data -> '$RF') FROM zenithjoy.db_rows WHERE id='$AR'")
+  [ "$typ" = "array" ] || fail "来源关联值不再是数组(结构被写坏)"
+  ok "A30① 删被引用行：候选剔除、反查非 5xx、关联值仍数组"
+  section_down
+  echo "✅ A30① 通过"
+}
+
+run_a30_table() {
+  echo "== A30② 删表还原引用恢复：删表候选 404 → 还原后候选含被引用行 =="
+  section_up
+  local TA TBN TB B1 RF CODE
+  TA=$(rel_table "$COOKIE_A" "A30tA-$SFX" org)
+  TBN="A30tB-$SFX"; TB=$(rel_table "$COOKIE_A" "$TBN" org)
+  B1=$(rel_row "$COOKIE_A" "$TB")
+  rel_add_rel "$COOKIE_A" "$TA" "$TB"; RF=$(rel_relfield "$COOKIE_A" "$TA")
+  curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X DELETE "$API/tables/$TB" \
+    -d "{\"confirm_name\":\"$TBN\"}" >/dev/null || fail "软删表失败"
+  CODE=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_A" "$API/tables/$TA/fields/$RF/relation-candidates")
+  [ "$CODE" = "404" ] || fail "删表后候选未 404(得 $CODE)"
+  curl -sf -b "$COOKIE_A" -X POST "$API/trash/$TB/restore" >/dev/null || fail "还原表失败"
+  curl -sf -b "$COOKIE_A" "$API/tables/$TA/fields/$RF/relation-candidates" \
+    | jq -e --arg b "$B1" '[.data.candidates[].row_id]|index($b)!=null' >/dev/null || fail "还原后候选未恢复被引用行"
+  ok "A30② 删表候选 404 → 还原后恢复"
+  section_down
+  echo "✅ A30② 通过"
+}
+
+run_a30_field() {
+  echo "== A30③ 删字段软删+二次确认+值保留 =="
+  section_up
+  local TA TB B1 RF AR relName WRONG isdel has
+  TA=$(rel_table "$COOKIE_A" "A30fA-$SFX" org); TB=$(rel_table "$COOKIE_A" "A30fB-$SFX" org)
+  B1=$(rel_row "$COOKIE_A" "$TB")
+  rel_add_rel "$COOKIE_A" "$TA" "$TB"; RF=$(rel_relfield "$COOKIE_A" "$TA")
+  AR=$(rel_row "$COOKIE_A" "$TA")
+  curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X PATCH "$API/rows/$AR" \
+    -d "{\"version\":1,\"data\":{\"$RF\":[\"$B1\"]}}" >/dev/null || fail "建关联失败"
+  relName=$(psql_q "SELECT name FROM zenithjoy.db_fields WHERE id='$RF'")
+  WRONG=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_A" -H 'Content-Type: application/json' \
+    -X DELETE "$API/tables/$TA/fields/$RF" -d '{"confirm_name":"乱填"}')
+  [ "$WRONG" = "400" ] || fail "confirm 不符未返 400(得 $WRONG)"
+  curl -sf -b "$COOKIE_A" "$API/tables/$TA/fields" \
+    | jq -e --arg f "$RF" '[.data.fields[].field_id]|index($f)!=null' >/dev/null || fail "confirm 不符时字段被误删"
+  curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X DELETE "$API/tables/$TA/fields/$RF" \
+    -d "{\"confirm_name\":\"$relName\"}" >/dev/null || fail "软删字段非 2xx"
+  curl -sf -b "$COOKIE_A" "$API/tables/$TA/fields" \
+    | jq -e --arg f "$RF" '[.data.fields[].field_id]|index($f)==null' >/dev/null || fail "软删后字段仍在列表"
+  isdel=$(psql_q "SELECT deleted_at IS NOT NULL FROM zenithjoy.db_fields WHERE id='$RF'")
+  [ "$isdel" = "t" ] || fail "db_fields 行不在或 deleted_at 未置位(物理删?)"
+  has=$(psql_q "SELECT (data ? '$RF') FROM zenithjoy.db_rows WHERE id='$AR'")
+  [ "$has" = "t" ] || fail "字段软删后 db_rows.data 旧值丢失"
+  ok "A30③ 软删字段：确认闸 + db_fields 行仍在 deleted_at 置位 + 值保留"
+  section_down
+  echo "✅ A30③ 通过"
+}
+
+run_a31() {
+  echo "== A31① 同组织他人不得对「仅自己」私有表建关联 =="
+  section_up
+  local PV BOBT CODE
+  PV=$(rel_table "$COOKIE_A" "A31PV-$SFX" private)
+  BOBT=$(rel_table "$COOKIE_A2" "A31BOB-$SFX" org)
+  CODE=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_A2" -H 'Content-Type: application/json' \
+    -X POST "$API/tables/$BOBT/fields" -d "{\"fields\":[{\"name\":\"偷指私有\",\"field_type\":\"relation\",\"options\":[\"$PV\"],\"display_order\":9}]}")
+  case "$CODE" in 4*) :;; *) fail "bob 指 alice 私有表未被拒(返 $CODE)";; esac
+  ok "A31① 私有表写入侧隔离：bob 指 alice 私有表被拒"
+  section_down
+  echo "✅ A31① 通过"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
 # dispatch
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -1644,6 +1919,13 @@ case "${1:-}" in
   --a25-only)               run_a25; exit 0;;
   --a1-a3-views-only)       run_a1_a3_views; exit 0;;
   --view-delete-only)       run_view_delete; exit 0;;
+  --a27-only)               run_a27; exit 0;;
+  --a28-only)               run_a28; exit 0;;
+  --a29-backref-only)       run_a29_backref; exit 0;;
+  --a30-row-only)           run_a30_row; exit 0;;
+  --a30-table-only)         run_a30_table; exit 0;;
+  --a30-field-only)         run_a30_field; exit 0;;
+  --a31-only)               run_a31; exit 0;;
   --inv-tenant-isolation)   run_inv_tenant_isolation; exit 0;;
   --inv-endpoint-auth)      run_inv_endpoint_auth; exit 0;;
   --inv-two-tenant-seed)    run_inv_two_tenant_seed; exit 0;;

@@ -12,15 +12,18 @@ on:
       - 'apps/staff-hub/e2e/structured-workbench.spec.ts'
       - 'apps/staff-hub/e2e/structured-workbench-rows.spec.ts'
       - 'apps/staff-hub/e2e/structured-workbench-views.spec.ts'
+      - 'apps/staff-hub/e2e/structured-workbench-relations.spec.ts'
       - 'apps/dashboard/e2e/fields-auth-regression.spec.ts'
       - 'apps/api/db/migrations/**'
       - 'apps/api/vitest.workbench-rows.config.ts'
       - 'apps/api/vitest.workbench-views.config.ts'
+      - 'apps/api/vitest.workbench-relations.config.ts'
       - '.github/workflows/e2e-knowledge-hub-path3.yml'
       - '.github/workflows/scripts/smoke/structured-workbench-smoke.sh'
       - 'sprints/08201151-员工知识中枢-路-结构化工作台-c86e37ff/**'
       - 'sprints/08201850-workbench-sprintB-rows/**'
       - 'sprints/08210012-workbench-sprintC-views/**'
+      - 'sprints/08220300-workbench-sprintD-relations/**'
   workflow_dispatch:
 
 concurrency:
@@ -103,6 +106,19 @@ jobs:
           bash "$S" --a1-a3-views-only
           bash "$S" --view-delete-only
           bash "$S" --a24-pure-only
+      - name: 段1d S4 关联合同测试真被 vitest 收集执行（4 文件 / >=18 用例 / 真 Postgres）
+        run: npm run test:workbench-relations --workspace apps/api
+      - name: 段2d S4 关联链七段（A27 / A28 / A29② / A30①②③ / A31）
+        run: |
+          S=.github/workflows/scripts/smoke/structured-workbench-smoke.sh
+          # 七段各自 fixture-up；变异证明也各自显式调用它们（判据见 contract-dod.md）
+          bash "$S" --a27-only
+          bash "$S" --a28-only
+          bash "$S" --a29-backref-only
+          bash "$S" --a30-row-only
+          bash "$S" --a30-table-only
+          bash "$S" --a30-field-only
+          bash "$S" --a31-only
       - name: 段2b G2 恢复演练（真 pg_dump + 真还原 + 五表逐条全等）
         run: bash .github/workflows/scripts/backup/restore-drill.sh
 
@@ -184,4 +200,24 @@ jobs:
         with:
           name: path3-views-screenshots
           path: sprints/08210012-workbench-sprintC-views/screenshots/
+          if-no-files-found: error
+
+      # ── Sprint D（S4 关联连得上）关联链三段 ────────────────────────────────
+      # 同一 windows job：npm ci / chromium / migration / apps-api 构建由前面 Sprint B 的 prepare 做过一次，
+      # 这三个 step 各自 seed / 起服务 / 跑完停（e2e-relations-run.ps1 复用 Sprint B 的 e2e-rows-lib.ps1）。
+      - name: 路③ S4 关联链真浏览器（建关联字段 → 挑记录 → 单元格显示目标标题）
+        shell: pwsh
+        run: pwsh -File "sprints/08220300-workbench-sprintD-relations/e2e-relations-run.ps1" -Grep "@relation-build"
+      - name: 路③ S4 点关联项跳转目标记录详情
+        shell: pwsh
+        run: pwsh -File "sprints/08220300-workbench-sprintD-relations/e2e-relations-run.ps1" -Grep "@relation-jump"
+      - name: 路③ S4 反向面板列出引用来源
+        shell: pwsh
+        run: pwsh -File "sprints/08220300-workbench-sprintD-relations/e2e-relations-run.ps1" -Grep "@relation-backref"
+      - name: 上传本刀截图（S4 关联链三张）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: path3-relations-screenshots
+          path: sprints/08220300-workbench-sprintD-relations/screenshots/
           if-no-files-found: error
