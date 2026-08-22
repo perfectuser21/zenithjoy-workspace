@@ -15,6 +15,7 @@
     "test:workbench-rows": "vitest run --config vitest.workbench-rows.config.ts",
     "test:workbench-views": "vitest run --config vitest.workbench-views.config.ts",
     "test:workbench-relations": "vitest run --config vitest.workbench-relations.config.ts",
+    "test:workbench-rollup": "vitest run --config vitest.workbench-rollup.config.ts",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
   },

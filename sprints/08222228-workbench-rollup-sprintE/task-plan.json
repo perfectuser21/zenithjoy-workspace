@@ -1,0 +1,42 @@
+{
+  "initiative_id": "c86e37ff-3307-4b1a-80d9-3b00b8450554",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 apps/staff-hub 浏览器 UI（rollup 字段配置器 + 聚合值只读单元格渲染），须真浏览器 windows_cloud 验收",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "路③ Sprint E · S4 加厚 rollup/lookup 聚合：rollup/lookup 字段类型+六函数(count/sum/min/max/concat/lookup)+类型×函数校验+读时聚合服务(钉死 workbench-rollup.service.ts)+组织隔离+失效降级三支+数值规整+多值格式化+只读单元格渲染+配置器UI+墙裁定守卫，接进既有 path3 workflow/vitest/smoke",
+      "scope": "新增读时聚合纯读服务 apps/api/src/services/workbench-rollup.service.ts（A41 钉死路径，不并入他文件）；workbench.service.ts FIELD_TYPES 加 rollup/lookup + 建字段类型×函数校验（sum/min/max 只允 number，非法组合 400+文案，非静默 NaN）；workbench-rows.service.ts 读行时挂聚合（顺 relation 目标 row_ids 去目标表捞值，复用 relationCandidates 解析链 + views A22 读时降级范式）；migration CHECK 白名单幂等扩容(+rollup +lookup，DROP-then-ADD)；读时计算不落库、配置存 db_fields.options 三元组（零新建表、聚合值不物化）；组织隔离沿 A27② 聚合基数只含本 org 存活目标行；失效降级三支（删 relation 字段/删目标字段/软删目标表 → null+degraded+可见占位）；数值规整（sum/min/max 前 Number()，string 数字计入、非数值跳过+degraded，绝不字符串拼接冒充 sum）；多值 concat/lookup 按 row_order 升序逗号拼接不截断 + 非文本格式化(date/number/person/select)；前端 rollup 只读单元格渲染 + rollup 字段配置器 UI（无关联表空态不可建）；墙裁定 A41 守卫（rollup 读服务不被 knowledge 检索特征文件 import，固定 grep 靶）；把 structured-workbench-rollup.spec.ts 接进 e2e-knowledge-hub-path3.yml paths+windows job、linux job 加 test:workbench-rollup、smoke 加 rollup 段+变异开关进 baseline 棘轮。不重造 A33 workflow / A35 排除清单 / A32/A34 路由族+鉴权闸 / Sprint D relation 解析链。",
+      "dod": [
+        "[BEHAVIOR] 本刀 vitest 真收集真跑全绿（真 PG，覆盖 A37-A40 双企业种子）",
+        "[BEHAVIOR] A37 聚合值正确：count/sum/min/max/concat/lookup 逐函数与手算期望逐一相等，string 型数字(如\"12\")被正确计入 sum，非数值目标行跳过+degraded 不字符串拼接",
+        "[BEHAVIOR] A38 聚合隔离：目标行 org 篡改为他企业后不进聚合基数(count 减1/sum 不含)，聚合值等于仅本 org 存活行期望值",
+        "[BEHAVIOR] A39 失效降级三支：删 relation 字段/删目标字段/软删目标表 → 值置 null+degraded=true+可见占位，不悬空不 500 不白屏",
+        "[BEHAVIOR] A40 类型×函数校验：sum/min/max 配非数值字段建字段 400+明确文案，非静默返错值/NaN；lookup 多值按 row_order 升序 `, ` 拼接不截断",
+        "[BEHAVIOR] 无运行时 DDL：information_schema 前后全等 + 零 rollup 物理表 + 读时计算不落库（聚合值不物化，配置存 db_fields.options）",
+        "[BEHAVIOR] 4 个变异开关 proven-to-fire：A38 去 org 条件转红 / A39 裸访问已删字段或直接抛错转红 / A40 去校验 sum 配文本建成返错值转红 / A41 检索特征文件 import rollup 服务守卫报红",
+        "[BEHAVIOR:E2E] windows_cloud 真浏览器 rollup 链（配置 rollup 字段→聚合值展示→lookup 多值→失效降级占位）+ 截图 ≥3 张",
+        "[ARTIFACT] rollup 读服务钉死 workbench-rollup.service.ts + rollup E2E spec + e2e-rollup-run.ps1 + vitest config + workflow/smoke 接线逐字在案 + A41 墙裁定守卫脚本，A33(c) windows job 无事件门不回退"
+      ],
+      "files": [
+        "apps/api/src/services/workbench-rollup.service.ts",
+        "apps/api/src/services/workbench.service.ts",
+        "apps/api/src/services/workbench-rows.service.ts",
+        "apps/api/db/migrations/2026XXXX_workbench_rollup.sql",
+        "apps/staff-hub/src/components/WorkbenchRowGrid.tsx",
+        "apps/staff-hub/src/pages/WorkbenchTablePage.tsx",
+        "apps/staff-hub/e2e/structured-workbench-rollup.spec.ts",
+        "apps/api/vitest.workbench-rollup.config.ts",
+        "apps/api/vitest.workbench-rollup.setup.ts",
+        "apps/api/package.json",
+        ".github/workflows/e2e-knowledge-hub-path3.yml",
+        ".github/workflows/scripts/smoke/structured-workbench-smoke.sh",
+        ".github/workflows/scripts/smoke-baseline.txt",
+        "sprints/08222228-workbench-rollup-sprintE/e2e-rollup-run.ps1"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 120
+    }
+  ]
+}
