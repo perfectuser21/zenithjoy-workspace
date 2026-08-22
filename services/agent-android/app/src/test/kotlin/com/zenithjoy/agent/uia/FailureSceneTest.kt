@@ -56,4 +56,38 @@ class FailureSceneTest {
         assertNull(scene!!.foregroundPkg)
         assertEquals("fgPkg 读取失败", scene.diag)
     }
+
+    // ── AI on-call 横切件 · 刀1：现场第三件 = 无障碍树快照 ─────────────────
+
+    @Test
+    fun `失败现场可携带树快照——AI 定位求助与周报聚类的原材料`() {
+        val scene = buildFailureScene(
+            errorCode = "NO_MATCH",
+            foregroundPkg = "com.ss.android.ugc.aweme",
+            diag = "matchProfileByDouyinId 零匹配",
+            uiTree = "d0 android.widget.FrameLayout id=- text=\"-\"",
+        )!!
+        assertEquals("d0 android.widget.FrameLayout id=- text=\"-\"", scene.uiTree)
+    }
+
+    @Test
+    fun `树快照空白时置 null——不带空字段撑胖上报`() {
+        val scene = buildFailureScene(
+            errorCode = "NO_MATCH",
+            foregroundPkg = "com.ss.android.ugc.aweme",
+            diag = "d",
+            uiTree = "  ",
+        )
+        assertNull(scene!!.uiTree)
+    }
+
+    @Test
+    fun `不传树快照时既有调用方行为不变——默认 null`() {
+        val scene = buildFailureScene(
+            errorCode = "NO_SEARCH_INPUT",
+            foregroundPkg = "p",
+            diag = "d",
+        )
+        assertNull(scene!!.uiTree)
+    }
 }
