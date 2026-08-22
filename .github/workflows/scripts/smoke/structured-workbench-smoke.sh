@@ -1401,7 +1401,7 @@ run_a20() {
     [ -n "$fid" ] && [ "$fid" != "null" ] || fail "A20 $T 字段缺 field_id"
     c=$(curl -s -o /tmp/wb-c-a20.json -w '%{http_code}' -b "$COOKIE_A" -H 'Content-Type: application/json' \
       -X PATCH "$API/views/$vid" -d "{\"view_type\":\"kanban\",\"group_field_id\":\"$fid\"}")
-    [ "$c" = "400" ] || fail "A20 $T 做分组返 $c（应 400；controller C2：multi_select 也必须 400）"
+    [ "$c" = "400" ] || fail "A20 $T 做分组返 ${c}（应 400；controller C2：multi_select 也必须 400）"
     jq -e '.error.code == "GROUP_FIELD_TYPE_INVALID"' < /tmp/wb-c-a20.json >/dev/null || fail "A20 $T 错误码不是 GROUP_FIELD_TYPE_INVALID"
   done
   after=$(psql_q "SELECT prefs::text FROM zenithjoy.db_view_prefs WHERE id = '$vid'")
@@ -1459,14 +1459,14 @@ run_a22() {
   rnd=$(psql_q "SELECT gen_random_uuid()")
   c1=$(curl -s -b "$COOKIE_A" -o /tmp/wb-c-a22b.json -w '%{http_code}' -H 'Content-Type: application/json' -X PATCH "$API/views/$vid" -d "{\"group_field_id\":\"$bfid\"}")
   c2=$(curl -s -b "$COOKIE_A" -o /tmp/wb-c-a22r.json -w '%{http_code}' -H 'Content-Type: application/json' -X PATCH "$API/views/$vid" -d "{\"group_field_id\":\"$rnd\"}")
-  [ "$c1" = "404" ] || fail "A22 他企业 field_id 写入返 $c1（应 404）"
-  [ "$c2" = "404" ] || fail "A22 随机 uuid field_id 返 $c2（应 404）"
+  [ "$c1" = "404" ] || fail "A22 他企业 field_id 写入返 ${c1}（应 404）"
+  [ "$c2" = "404" ] || fail "A22 随机 uuid field_id 返 ${c2}（应 404）"
   [ "$(openssl dgst -md5 < /tmp/wb-c-a22b.json | awk '{print $NF}')" = "$(openssl dgst -md5 < /tmp/wb-c-a22r.json | awk '{print $NF}')" ] \
     || fail "A22 两个 404 体不同 —— 可比对字节分辨他企业 field 是否真实存在"
   # 分支①：删字段 → GET 200 降级
   psql "$PGURL" -q -c "DELETE FROM zenithjoy.db_fields WHERE id = '$fs'" >/dev/null || fail "A22 删字段失败"
   g=$(curl -s -b "$COOKIE_A" -o /tmp/wb-c-a22g.json -w '%{http_code}' "$API/tables/$tid/views")
-  [ "$g" = "200" ] || fail "A22 已删字段的视图反查返 $g（应 200 降级，非 5xx）"
+  [ "$g" = "200" ] || fail "A22 已删字段的视图反查返 ${g}（应 200 降级，非 5xx）"
   jq -e --arg v "$vid" --arg fs "$fs" --arg fn "$fn" \
     '.data.views[] | select(.view_id == $v) | .group_field_id == null and .degraded == true and ([.sorts[].field_id] | index($fs) | not) and ([.hidden_field_ids[]] | index($fs) | not) and ([.hidden_field_ids[]] | index($fn))' \
     < /tmp/wb-c-a22g.json >/dev/null || fail "A22 降级不彻底（失效 id 未剔除 / degraded 未置 true / 未失效被误删）"
@@ -1488,24 +1488,24 @@ run_a25() {
   for BAD in "id; DROP TABLE zenithjoy.db_rows; --" "1) OR 1=1 --" "data->>'x'"; do
     sp=$(jq -nc --arg f "$BAD" '[{field_id:$f,dir:"asc"}]')
     c=$(curl -s -o /tmp/wb-c-a25.json -w '%{http_code}' -b "$COOKIE_A" --get "$API/tables/$tid/rows" --data-urlencode "sort=$sp")
-    [ "$c" = "400" ] || fail "A25 sort.field_id SQL 片段返 $c（应 400）payload=$BAD"
+    [ "$c" = "400" ] || fail "A25 sort.field_id SQL 片段返 ${c}（应 400）payload=$BAD"
     jq -e '.error.code == "VALIDATION_FAILED"' < /tmp/wb-c-a25.json >/dev/null || fail "A25 sort 片段错误码不是 VALIDATION_FAILED"
     fp=$(jq -nc --arg f "$BAD" '[{field_id:$f,op:"contains",value:"x"}]')
     c=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_A" --get "$API/tables/$tid/rows" --data-urlencode "filter=$fp")
-    [ "$c" = "400" ] || fail "A25 filter.field_id SQL 片段返 $c（应 400）payload=$BAD"
+    [ "$c" = "400" ] || fail "A25 filter.field_id SQL 片段返 ${c}（应 400）payload=$BAD"
   done
   for BADD in "asc; DROP TABLE zenithjoy.db_rows; --" "asc NULLS FIRST, 1" "ASC--"; do
     sp=$(jq -nc --arg f "$ft" --arg d "$BADD" '[{field_id:$f,dir:$d}]')
     c=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_A" --get "$API/tables/$tid/rows" --data-urlencode "sort=$sp")
-    [ "$c" = "400" ] || fail "A25 dir 位 $BADD 返 $c（应 400 —— dir 直接落 ORDER BY 关键字位）"
+    [ "$c" = "400" ] || fail "A25 dir 位 $BADD 返 ${c}（应 400 —— dir 直接落 ORDER BY 关键字位）"
   done
   c=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_A" --get "$API/tables/$tid/rows" \
     --data-urlencode "filter=$(jq -nc --arg f "$ft" '[{field_id:$f,op:"nosuchop",value:"x"}]')")
-  [ "$c" = "400" ] || fail "A25 非白名单 op 返 $c（应 400）"
+  [ "$c" = "400" ] || fail "A25 非白名单 op 返 ${c}（应 400）"
   rnd=$(psql_q "SELECT gen_random_uuid()")
   c=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_A" --get "$API/tables/$tid/rows" \
     --data-urlencode "sort=$(jq -nc --arg f "$rnd" '[{field_id:$f,dir:"asc"}]')")
-  [ "$c" = "404" ] || fail "A25 跨表合法 UUID 返 $c（应 404）"
+  [ "$c" = "404" ] || fail "A25 跨表合法 UUID 返 ${c}（应 404）"
   t1=$(psql_q "SELECT string_agg(table_name, ',' ORDER BY table_name) FROM information_schema.tables WHERE table_schema = 'zenithjoy'")
   [ "$t0" = "$t1" ] || fail "A25 information_schema 表清单变了 —— 用户输入进了标识符位"
   [ "$r0" -le "$(psql_q "SELECT count(*) FROM zenithjoy.db_rows")" ] || fail "A25 db_rows 行数减少了"
@@ -1526,11 +1526,11 @@ run_a1_a3_views() {
 
   # ── org 维（丙 = 他企业）：表不可达 → GET views 404；PATCH/DELETE view 404，且与随机 uuid 同形
   c=$(curl -s -b "$COOKIE_B" -o /tmp/wb-viso-clist.json -w '%{http_code}' "$API/tables/$tid/views")
-  [ "$c" = "404" ] || fail "他企业 GET table views 返 $c（应 404）"
+  [ "$c" = "404" ] || fail "他企业 GET table views 返 ${c}（应 404）"
   c=$(curl -s -b "$COOKIE_B" -o /tmp/wb-viso-cp.json -w '%{http_code}' -H 'Content-Type: application/json' -X PATCH "$API/views/$vid" -d '{"name":"越权"}')
-  [ "$c" = "404" ] || fail "他企业 PATCH view 返 $c（应 404）"
+  [ "$c" = "404" ] || fail "他企业 PATCH view 返 ${c}（应 404）"
   c=$(curl -s -b "$COOKIE_B" -o /dev/null -w '%{http_code}' -X DELETE "$API/views/$vid")
-  [ "$c" = "404" ] || fail "他企业 DELETE view 返 $c（应 404）"
+  [ "$c" = "404" ] || fail "他企业 DELETE view 返 ${c}（应 404）"
   curl -s -b "$COOKIE_B" -o /tmp/wb-viso-crnd.json -X PATCH "$API/views/$rnd" -H 'Content-Type: application/json' -d '{"name":"x"}' >/dev/null
   [ "$(openssl dgst -md5 < /tmp/wb-viso-cp.json | awk '{print $NF}')" = "$(openssl dgst -md5 < /tmp/wb-viso-crnd.json | awk '{print $NF}')" ] \
     || fail "他企业 404 体与随机 uuid 不同形"
@@ -1540,7 +1540,7 @@ run_a1_a3_views() {
   twinvid=$(psql_q "INSERT INTO zenithjoy.db_view_prefs (table_id, org_id, member_id, prefs) VALUES ('$bt','$ORGB_TENANT_ID','$ALICE_OPENID','{\"name\":\"孪生\",\"view_type\":\"grid\",\"is_active\":false}'::jsonb) RETURNING id")
   [ -n "$twinvid" ] || fail "org 探针孪生行未建成"
   c=$(curl -s -b "$COOKIE_A" -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -X PATCH "$API/views/$twinvid" -d '{"name":"跨企业越权"}')
-  [ "$c" = "404" ] || fail "org 维探针：甲(orgA)够到了 orgB 的视图返 $c（应 404）—— org 维隔离是空的"
+  [ "$c" = "404" ] || fail "org 维探针：甲(orgA)够到了 orgB 的视图返 ${c}（应 404）—— org 维隔离是空的"
 
   # ── member 维（乙 = 同组织他人）：GET views 200 但零命中甲的视图；PATCH/DELETE view 404 同形
   c=$(curl -s -b "$COOKIE_A2" -o /tmp/wb-viso-blist.json -w '%{http_code}' "$API/tables/$tid/views")
@@ -1548,9 +1548,9 @@ run_a1_a3_views() {
   jq -e --arg v "$vid" '[.data.views[] | select(.view_id == $v)] | length == 0' < /tmp/wb-viso-blist.json >/dev/null \
     || fail "member 维：甲的视图出现在乙的列表里 —— member 维隔离没立起来"
   c=$(curl -s -b "$COOKIE_A2" -o /tmp/wb-viso-bp.json -w '%{http_code}' -H 'Content-Type: application/json' -X PATCH "$API/views/$vid" -d '{"name":"同事越权"}')
-  [ "$c" = "404" ] || fail "member 维：同组织他人 PATCH view 返 $c（应 404）"
+  [ "$c" = "404" ] || fail "member 维：同组织他人 PATCH view 返 ${c}（应 404）"
   c=$(curl -s -b "$COOKIE_A2" -o /dev/null -w '%{http_code}' -X DELETE "$API/views/$vid")
-  [ "$c" = "404" ] || fail "member 维：同组织他人 DELETE view 返 $c（应 404）"
+  [ "$c" = "404" ] || fail "member 维：同组织他人 DELETE view 返 ${c}（应 404）"
   curl -s -b "$COOKIE_A2" -o /tmp/wb-viso-brnd.json -X PATCH "$API/views/$rnd" -H 'Content-Type: application/json' -d '{"name":"x"}' >/dev/null
   [ "$(openssl dgst -md5 < /tmp/wb-viso-bp.json | awk '{print $NF}')" = "$(openssl dgst -md5 < /tmp/wb-viso-brnd.json | awk '{print $NF}')" ] \
     || fail "member 维 404 体与随机 uuid 不同形"
@@ -1587,7 +1587,7 @@ run_view_delete() {
   [ "$snap0" = "$snap1" ] || fail "删视图动了 db_tables / db_fields / db_rows"
   psql_q "SELECT count(*) FROM zenithjoy.db_view_prefs WHERE id = '$v2'" | grep -qx 0 || fail "偏好行未真删"
   c=$(curl -s -o /tmp/wb-c-vdel.json -w '%{http_code}' -b "$COOKIE_A" -X DELETE "$API/views/$v1")
-  [ "$c" = "400" ] || fail "删最后一个视图返 $c（应 400）"
+  [ "$c" = "400" ] || fail "删最后一个视图返 ${c}（应 400）"
   jq -e '.error.code == "LAST_VIEW_PROTECTED"' < /tmp/wb-c-vdel.json >/dev/null || fail "错误码不是 LAST_VIEW_PROTECTED"
   psql_q "SELECT count(*) FROM zenithjoy.db_view_prefs WHERE id = '$v1'" | grep -qx 1 || fail "被拒的删除却把行删了"
   ok "删一个 200 三表 md5 前后全等；删最后一个 400 LAST_VIEW_PROTECTED 且行仍在"
