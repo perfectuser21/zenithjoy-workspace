@@ -14,6 +14,13 @@ const apiProxy = {
     target: apiTarget,
     changeOrigin: true,
   },
+  // 路② 协同笔记实时协作房：同源 /collab-ws 反代到 apps/api（ws:true），
+  // 让 WS 握手带上同源 cookie 会话（跨源 WS 不会捎上 HubPort 的 cookie）。
+  '/collab-ws': {
+    target: apiTarget,
+    changeOrigin: true,
+    ws: true,
+  },
 };
 
 export default defineConfig({

@@ -65,6 +65,8 @@ jobs:
         run: npm run migrate --workspace apps/api
       - name: 备份 + 恢复演练（同一次运行内，无 continue-on-error）
         run: bash .github/workflows/scripts/backup/restore-drill.sh
+      - name: 路② 协同笔记 documents 备份恢复演练（content jsonb + crdt_state bytea 七字段全等）
+        run: bash sprints/08221200-line11-path2-collab-notes/backup-restore-drill.sh
       - name: 留存本次备份产物（14 天）
         if: always()
         uses: actions/upload-artifact@v4

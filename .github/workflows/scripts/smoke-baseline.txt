@@ -114,3 +114,4 @@ find-adb-lib-smoke.sh
 structured-workbench-smoke.sh
 rpa-failure-scene-snapshot-smoke.sh
 rpa-locator-assist-smoke.sh
+collab-notes-smoke.sh
