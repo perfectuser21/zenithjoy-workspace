@@ -16,8 +16,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.zenithjoy.agent.account.DouyinLaunchTrampoline
 import com.zenithjoy.agent.uia.RecoveryAction
+import com.zenithjoy.agent.AgentConfig
+import com.zenithjoy.agent.BuildConfig
+import com.zenithjoy.agent.uia.LocatorAssistClient
 import com.zenithjoy.agent.uia.UiTreeSnapshot
 import com.zenithjoy.agent.uia.buildFailureScene
 import com.zenithjoy.agent.uia.isAppInteractive
@@ -400,6 +404,65 @@ class DouyinDmOutreachService : AccessibilityService() {
      *  每条 lead 开始时归零——见 dm_outreach task received 分支。 */
     private var searchRetriesUsed = 0
 
+    /** 最近一次定位求助的病历 id——本步预期状态检查落定后回执 verified 用。 */
+    private var pendingAssistId: String? = null
+
+    /**
+     * AI 保底（横切件刀2b）：某步找不到元素、马上要判死之前，把失败那一刻的树
+     * 发中台 locator-assist 问"应该是哪个"。MVP 只用带 view_id 的候选（真机快照
+     * 实证抖音节点普遍带 resource-id；bounds-only 手势路径留给后续——坐标误触的
+     * 风险先不背）。fail-open：任何失败返回 null，调用方走原判死路径。
+     */
+    private suspend fun tryLocatorAssist(step: String, targetDesc: String, errorCode: String): AccessibilityNodeInfo? {
+        val tree = runCatching {
+            rootInActiveWindow?.let { UiTreeSnapshot.serialize(UiTreeSnapshot.fromAccessibilityNode(it)) }
+        }.getOrNull() ?: return null
+        val httpBase = AgentConfig(applicationContext).deriveHttpBase()
+        if (httpBase.isBlank()) return null
+        val douyinVer = runCatching {
+            applicationContext.packageManager.getPackageInfo(DOUYIN_PKG, 0).versionName
+        }.getOrNull()
+        val body = LocatorAssistClient.buildAssistBody(
+            step = step,
+            targetDesc = targetDesc,
+            uiTree = tree,
+            errorCode = errorCode,
+            deviceModel = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim(),
+            osVersion = "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})",
+            douyinVersion = douyinVer,
+            appVersion = BuildConfig.VERSION_NAME,
+        )
+        val answer = withContext(Dispatchers.IO) {
+            LocatorAssistClient.requestAssistBlocking(httpBase, body)
+        } ?: return null
+        pendingAssistId = answer.assistId
+        val cand = answer.candidates.firstOrNull()
+        diag("assist: step=$step cacheHit=${answer.cacheHit} line=${cand?.line} viewId=${cand?.viewId}")
+        val viewId = cand?.viewId ?: run {
+            // 有出诊但候选没有可用 id（bounds-only）——也要回执 false，周报才看得到这一类
+            reportAssistVerified(false)
+            return null
+        }
+        val node = rootInActiveWindow?.let { findNodeByIds(it, viewId) }
+        if (node == null) {
+            // AI 指的 id 在当前树里找不到 = 没过闸
+            reportAssistVerified(false)
+            return null
+        }
+        return node
+    }
+
+    /** 验证闸回执（fire-and-forget IO）：回执丢了不影响主流程，fail-open。 */
+    private fun reportAssistVerified(verified: Boolean) {
+        val aid = pendingAssistId ?: return
+        pendingAssistId = null
+        val httpBase = AgentConfig(applicationContext).deriveHttpBase()
+        if (httpBase.isBlank()) return
+        scope.launch(Dispatchers.IO) {
+            LocatorAssistClient.reportVerifiedBlocking(httpBase, aid, verified)
+        }
+    }
+
     private fun checkLeadTimeout(): Boolean {
         val elapsedMs = android.os.SystemClock.elapsedRealtime() - leadStartedAtMs
         if (isLeadTimedOut(elapsedMs)) {
@@ -426,18 +489,25 @@ class DouyinDmOutreachService : AccessibilityService() {
                 "com.ss.android.ugc.aweme:id/action_search",
             )
         }
-        val searchBtn = entryOutcome.value
+        var searchBtn = entryOutcome.value
         if (searchBtn == null) {
             val failure = NodeAwait.classifyFailure(entryOutcome, DOUYIN_PKG)
             diag(
                 "A3-diag: 搜索入口等待超时 failure=$failure attempts=${entryOutcome.attempts} " +
                     "waitedMs=${entryOutcome.waitedMs(AWAIT_POLL_MS)} fgPkg=${entryOutcome.lastForegroundPkg}"
             )
-            finishWithOutcome(
-                dmEntryFound = false, sendConfirmed = false,
-                errorCode = if (failure == WaitFailure.NO_ROOT) "NO_WINDOW_BEFORE_SEARCH" else "NO_SEARCH_INPUT",
-            )
-            return false
+            // AI 保底（刀2b，横切件刀2）：判死前先问一次定位求助。NO_ROOT 连树都没有不问。
+            // 入口候选的预期状态 = 点击后搜索输入框真的出现（下方 searchInput 落定处回执）。
+            if (failure != WaitFailure.NO_ROOT) {
+                searchBtn = tryLocatorAssist("dm_search_entry", "搜索入口按钮（放大镜图标，点击进入搜索页）", "NO_SEARCH_INPUT")
+            }
+            if (searchBtn == null) {
+                finishWithOutcome(
+                    dmEntryFound = false, sendConfirmed = false,
+                    errorCode = if (failure == WaitFailure.NO_ROOT) "NO_WINDOW_BEFORE_SEARCH" else "NO_SEARCH_INPUT",
+                )
+                return false
+            }
         }
         searchBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         delay(RandomDelay.sample(RandomDelay.CLICK_MS))
@@ -469,8 +539,10 @@ class DouyinDmOutreachService : AccessibilityService() {
         }
         // 轮询之后的一次性昂贵兜底：抖音搜索页的输入框 id 常被混淆，索引查不到时用全树
         // 找第一个 EditText。只跑一次，不进轮询体。
-        val searchInput = inputOutcome.value
+        var searchInput = inputOutcome.value
             ?: rootInActiveWindow?.let { findFirstEditText(it) }
+        // 入口若是 AI 候选点开的：本步预期（输入框出现）在此落定，回执验证闸结果
+        if (pendingAssistId != null) reportAssistVerified(searchInput != null)
         if (searchInput == null) {
             val failure = NodeAwait.classifyFailure(inputOutcome, DOUYIN_PKG)
             diag(
@@ -492,14 +564,20 @@ class DouyinDmOutreachService : AccessibilityService() {
                 if (checkLeadTimeout()) return false
                 return locateProfileBySearch(targetDouyinId)
             }
-            finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_SEARCH_INPUT")
-            return false
+            // AI 保底（刀2b）：输入框判死前先问一次。候选直接当 searchInput 用，
+            // 本步预期状态 = SET_TEXT 真成功（下方回执）。
+            searchInput = tryLocatorAssist("dm_search_input", "搜索关键词输入框", "NO_SEARCH_INPUT")
+            if (searchInput == null) {
+                finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_SEARCH_INPUT")
+                return false
+            }
         }
         searchInput.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         val args = Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, targetDouyinId)
         }
-        searchInput.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        val setTextOk = searchInput.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        if (pendingAssistId != null) reportAssistVerified(setTextOk)
         delay(RandomDelay.sample(RandomDelay.CLICK_MS))
 
         // 等右上角「搜索」确认按钮出现（打字后它才渲染）。

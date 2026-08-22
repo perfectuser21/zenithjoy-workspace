@@ -46,7 +46,7 @@ const locatorAssistRateLimit = simpleRateLimit({
   keyFn: (req) => (req.body && req.body.agent_id) || 'anonymous',
 });
 import { isDuplicateDmOutreachResult } from '../services/device-platform';
-import { requestLocatorAssist, TREE_MAX_CHARS } from '../services/locator-assist';
+import { requestLocatorAssist, markAssistVerified, TREE_MAX_CHARS } from '../services/locator-assist';
 
 const router = Router();
 
@@ -682,7 +682,26 @@ router.post('/locator-assist', locatorAssistRateLimit, async (req: Request, res:
     cache_hit: result.cacheHit === true,
     backend: result.backend,
     candidates: result.candidates,
+    assist_id: result.assistId ?? null,
   }));
+});
+
+// ── 8c. POST /locator-assist/verify — 验证闸回执（刀2b）──────────────────
+// 安卓端用完候选、跑完本步预期状态检查后回执。verified 是刀3 周报判
+// "AI 在该碎片化格子的答案稳不稳、能不能固化进定位器"的唯一依据。
+router.post('/locator-assist/verify', locatorAssistRateLimit, async (req: Request, res: Response) => {
+  const { assist_id, verified } = req.body || {};
+  if (!assist_id || typeof verified !== 'boolean') {
+    return res.status(400).json(ERR('MISSING_FIELDS', 'assist_id / verified(boolean) 必填'));
+  }
+  try {
+    const updated = await markAssistVerified(String(assist_id), verified);
+    return res.json(OK({ updated }));
+  } catch (e) {
+    // fail-open：回执失败不影响安卓端主流程（它是 fire-and-forget 发的）
+    console.error('[locator-assist/verify] 回执落库失败: %s', (e as Error).message);
+    return res.json(OK({ updated: false }));
+  }
 });
 
 // ── 8. POST /dm-outreach-result — Agent 回报触达结果 → 写飞书 + 单号停用不连坐 ──

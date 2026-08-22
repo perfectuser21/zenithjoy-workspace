@@ -56,6 +56,8 @@ export interface LocatorAssistResult {
   cacheHit?: boolean;
   backend?: string;
   candidates?: LocatorCandidate[];
+  /** 本次出诊病历 id——安卓端验证闸回执（/verify）靠它定位行。 */
+  assistId?: string;
 }
 
 /** prompt：目标 + 步骤上下文 + 整棵树（行号从 0 起可直接引用），只许回一行 JSON。 */
@@ -119,13 +121,14 @@ async function lookupCache(req: LocatorAssistRequest): Promise<LocatorCandidate 
 async function recordVisit(
   req: LocatorAssistRequest,
   opts: { backend: string; model: string | null; answerLine: number | null; selector: LocatorCandidate | null; cacheHit: boolean },
-): Promise<void> {
+): Promise<string | null> {
   try {
-    await pool.query(
+    const r = await pool.query(
       `INSERT INTO zenithjoy.rpa_locator_assist
          (tenant_id, step, target_desc, device_model, os_version, douyin_version, app_version,
           error_code, ui_tree_snapshot, backend, model, answer_line, answer_selector, cache_hit)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+       RETURNING id`,
       [
         req.tenantId, req.step, req.targetDesc,
         req.deviceModel ?? null, req.osVersion ?? null, req.douyinVersion ?? null, req.appVersion ?? null,
@@ -137,9 +140,11 @@ async function recordVisit(
         opts.cacheHit,
       ],
     );
+    return r.rows[0]?.id ?? null;
   } catch (e) {
     // 病历写失败只记日志——不许因为记账问题挡住答案返回（fail-open 同一原则）
     console.error('[locator-assist] 病历落库失败: %s', (e as Error).message);
+    return null;
   }
 }
 
@@ -192,8 +197,8 @@ export async function requestLocatorAssist(req: LocatorAssistRequest): Promise<L
   try {
     const cached = await lookupCache(req);
     if (cached) {
-      await recordVisit(req, { backend: 'cache', model: null, answerLine: cached.line, selector: cached, cacheHit: true });
-      return { status: 'ok', cacheHit: true, backend: 'cache', candidates: [cached] };
+      const aid = await recordVisit(req, { backend: 'cache', model: null, answerLine: cached.line, selector: cached, cacheHit: true });
+      return { status: 'ok', cacheHit: true, backend: 'cache', candidates: [cached], assistId: aid ?? undefined };
     }
   } catch (e) {
     console.error('[locator-assist] 缓存查询失败(降级直问模型): %s', (e as Error).message);
@@ -206,7 +211,16 @@ export async function requestLocatorAssist(req: LocatorAssistRequest): Promise<L
     return { status: 'unavailable', reason: ans.failReason ?? 'no_answer' };
   }
   const selector = selectorFromTreeLine(req.uiTree, ans.line);
-  await recordVisit(req, { backend: 'tree-llm', model: ans.model, answerLine: ans.line, selector, cacheHit: false });
+  const aid = await recordVisit(req, { backend: 'tree-llm', model: ans.model, answerLine: ans.line, selector, cacheHit: false });
   if (!selector) return { status: 'unavailable', reason: 'line_extract_failed' };
-  return { status: 'ok', cacheHit: false, backend: 'tree-llm', candidates: [selector] };
+  return { status: 'ok', cacheHit: false, backend: 'tree-llm', candidates: [selector], assistId: aid ?? undefined };
+}
+
+/** 验证闸回执：安卓端用完候选后回填 verified——刀3 周报判"AI 在该格子的答案稳不稳"的依据。 */
+export async function markAssistVerified(assistId: string, verified: boolean): Promise<boolean> {
+  const r = await pool.query(
+    `UPDATE zenithjoy.rpa_locator_assist SET verified=$2 WHERE id=$1`,
+    [assistId, verified],
+  );
+  return (r.rowCount ?? 0) > 0;
 }
