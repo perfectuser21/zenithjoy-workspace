@@ -27,6 +27,7 @@ import com.zenithjoy.agent.uia.UiTreeSnapshot
 import com.zenithjoy.agent.uia.buildFailureScene
 import com.zenithjoy.agent.uia.isAppInteractive
 import com.zenithjoy.agent.uia.decideRecovery
+import com.zenithjoy.agent.uia.FailureClassifier
 import com.zenithjoy.agent.uia.NodeAwait
 import com.zenithjoy.agent.uia.WaitFailure
 import com.zenithjoy.agent.uia.awaitNode
@@ -239,7 +240,7 @@ class DouyinDmOutreachService : AccessibilityService() {
                         "waitedMs=${entryOutcome.waitedMs(AWAIT_POLL_MS)} fgPkg=${entryOutcome.lastForegroundPkg}"
                 )
                 // AI 保底（铺满刀C）：私信入口判死前问一次
-                if (failure != WaitFailure.NO_ROOT) {
+                if (FailureClassifier.shouldAssist(failure)) {
                     dmEntryRaw = tryLocatorAssist("dm_entry", "私信按钮/私信入口（进入与该用户的私信对话）", "NO_DM_ENTRY")
                 }
                 if (dmEntryRaw == null) {
@@ -279,7 +280,7 @@ class DouyinDmOutreachService : AccessibilityService() {
                         "waitedMs=${inputOutcome.waitedMs(AWAIT_POLL_MS)} fgPkg=${inputOutcome.lastForegroundPkg}"
                 )
                 // AI 保底（铺满刀C）：消息输入框判死前问一次
-                val assisted = if (failure != WaitFailure.NO_ROOT) {
+                val assisted = if (FailureClassifier.shouldAssist(failure)) {
                     tryLocatorAssist("dm_message_input", "私信消息输入框（输入要发送的文字）", "NO_MESSAGE_INPUT")
                 } else null
                 assisted ?: run {
@@ -304,13 +305,17 @@ class DouyinDmOutreachService : AccessibilityService() {
             }
             var sendBtn = sendOutcome.value
             if (sendBtn == null) {
+                val failure = NodeAwait.classifyFailure(sendOutcome, DOUYIN_PKG)
                 android.util.Log.w(
                     TAG,
-                    "dm send 按钮等待超时 failure=${NodeAwait.classifyFailure(sendOutcome, DOUYIN_PKG)} " +
+                    "dm send 按钮等待超时 failure=$failure " +
                         "attempts=${sendOutcome.attempts} waitedMs=${sendOutcome.waitedMs(AWAIT_POLL_MS)}"
                 )
-                // AI 保底（铺满刀C）：发送按钮判死前问一次
-                sendBtn = tryLocatorAssist("dm_send_button", "发送按钮（把已输入的私信发出去）", "NO_SEND_BUTTON")
+                // AI 保底（铺满刀C，门禁补齐于 FailureClassifier 抽取）：发送按钮判死前问一次，
+                // 但 NO_ROOT（连树都没有）不问——问了也是空快照，白打一次 AI。
+                if (FailureClassifier.shouldAssist(failure)) {
+                    sendBtn = tryLocatorAssist("dm_send_button", "发送按钮（把已输入的私信发出去）", "NO_SEND_BUTTON")
+                }
                 if (sendBtn == null) {
                     finishWithOutcome(dmEntryFound = true, sendConfirmed = false, errorCode = "NO_SEND_BUTTON")
                     return@launch
@@ -515,7 +520,7 @@ class DouyinDmOutreachService : AccessibilityService() {
             )
             // AI 保底（刀2b，横切件刀2）：判死前先问一次定位求助。NO_ROOT 连树都没有不问。
             // 入口候选的预期状态 = 点击后搜索输入框真的出现（下方 searchInput 落定处回执）。
-            if (failure != WaitFailure.NO_ROOT) {
+            if (FailureClassifier.shouldAssist(failure)) {
                 searchBtn = tryLocatorAssist("dm_search_entry", "搜索入口按钮（放大镜图标，点击进入搜索页）", "NO_SEARCH_INPUT")
             }
             if (searchBtn == null) {
@@ -581,9 +586,13 @@ class DouyinDmOutreachService : AccessibilityService() {
                 if (checkLeadTimeout()) return false
                 return locateProfileBySearch(targetDouyinId)
             }
-            // AI 保底（刀2b）：输入框判死前先问一次。候选直接当 searchInput 用，
-            // 本步预期状态 = SET_TEXT 真成功（下方回执）。
-            searchInput = tryLocatorAssist("dm_search_input", "搜索关键词输入框", "NO_SEARCH_INPUT")
+            // AI 保底（刀2b，门禁补齐于 FailureClassifier 抽取）：输入框判死前先问一次。
+            // 候选直接当 searchInput 用，本步预期状态 = SET_TEXT 真成功（下方回执）。
+            // 重试已耗尽时 decideRecovery 对任何 failure 都返回 FAIL（含 NO_ROOT），
+            // 这里补上门禁避免对着空快照白问一次。
+            if (FailureClassifier.shouldAssist(failure)) {
+                searchInput = tryLocatorAssist("dm_search_input", "搜索关键词输入框", "NO_SEARCH_INPUT")
+            }
             if (searchInput == null) {
                 finishWithOutcome(dmEntryFound = false, sendConfirmed = false, errorCode = "NO_SEARCH_INPUT")
                 return false
