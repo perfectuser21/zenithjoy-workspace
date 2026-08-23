@@ -578,12 +578,23 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
             val listOutcome = awaitNode(AWAIT_LIST_ATTEMPTS, AWAIT_POLL_MS) { r ->
                 r.takeIf { findNodesByIds(it, "com.ss.android.ugc.aweme:id/tv_nickname").isNotEmpty() }
             }
-            val root = listOutcome.value ?: run {
+            val root = listOutcome.value
+            if (root == null) {
+                val failure = NodeAwait.classifyFailure(listOutcome, DOUYIN_PKG_FOR_WAIT)
                 android.util.Log.w(
                     TAG,
-                    "账号列表等待超时 failure=" +
-                        "${NodeAwait.classifyFailure(listOutcome, DOUYIN_PKG_FOR_WAIT)} attempts=${listOutcome.attempts}"
+                    "账号列表等待超时 failure=$failure attempts=${listOutcome.attempts}"
                 )
+                // AI 保底（铺满收官）：tv_nickname 这个 id 找不到时，先问 AI 从树里读出全部
+                // 账号昵称，读不到/AI不可用再判死。这是唯一一个"读一整份列表"的场景，
+                // 单值 locate/extract 协议表达不了，走 extract_list。
+                if (FailureClassifier.shouldAssist(failure)) {
+                    val assisted = tryExtractAccountListAssist()
+                    if (assisted != null) {
+                        android.util.Log.i(TAG, "readAccountListFromPanel: AI保底读到 ${assisted.size} 个账号(昵称)=$assisted")
+                        return assisted
+                    }
+                }
                 return null
             }
             val nicknames = filterAccountNicknames(
@@ -595,6 +606,41 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
             android.util.Log.e(TAG, "readAccountListFromPanel failed: ${e.message}")
             null
         }
+    }
+
+    /** extract_list 保底：AI 从当前树里读出全部账号昵称。空列表是合法答案（AI 确认没有），
+     *  fail-open：任何失败（网络/未配置/解析失败）返回 null，调用方走原判死路径。 */
+    private suspend fun tryExtractAccountListAssist(): List<String>? {
+        val tree = runCatching {
+            rootInActiveWindow?.let { UiTreeSnapshot.serialize(UiTreeSnapshot.fromAccessibilityNode(it)) }
+        }.getOrNull() ?: return null
+        val httpBase = AgentConfig(applicationContext).deriveHttpBase()
+        if (httpBase.isBlank()) return null
+        val douyinVer = runCatching {
+            applicationContext.packageManager.getPackageInfo(DOUYIN_PKG_FOR_WAIT, 0).versionName
+        }.getOrNull()
+        val body = LocatorAssistClient.buildAssistBody(
+            step = "scan_account_list",
+            targetDesc = "切换账号面板里所有已登录（可切换）账号的昵称",
+            uiTree = tree,
+            errorCode = "NO_ACCOUNT_LIST",
+            deviceModel = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim(),
+            osVersion = "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})",
+            douyinVersion = douyinVer,
+            appVersion = BuildConfig.VERSION_NAME,
+            mode = "extract_list",
+        )
+        val (values, assistId) = withContext(Dispatchers.IO) {
+            LocatorAssistClient.requestExtractListBlocking(httpBase, body)
+        } ?: return null
+        val nicknames = filterAccountNicknames(values)
+        // 验证闸：这里没有"点了核实"的后续动作可回执，能验的只有"AI 到底读没读出东西"——
+        // 有值就算验证通过，空列表也算(AI 诚实说没有)，真失败已经在上面 requestExtractListBlocking
+        // 返回 null 那一步被拦住，走不到这里。
+        if (assistId != null) {
+            scope.launch(Dispatchers.IO) { LocatorAssistClient.reportVerifiedBlocking(httpBase, assistId, true) }
+        }
+        return nicknames
     }
 
     private fun closeSwitchAccountPanel() {
