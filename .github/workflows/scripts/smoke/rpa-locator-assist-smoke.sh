@@ -79,6 +79,16 @@ VNO=$(curl -sf -X POST "$API_BASE/api/agent/burner/locator-assist" -H "Content-T
 echo "$VNO" | grep -q '"reason":"no_screenshot"' || fail "vision_select 缺截图应降级 no_screenshot — $VNO"
 ok "vision_select 缺截图 fail-open 降级（视觉后端接线在位）"
 
+# ── 7. extract_list 模式（多值提取保底，收官扫号链读账号列表）──
+# 树里给两个账号昵称，AI 应该把两个都列出来（不是只抽一个）——这是跟 extract 的关键区别。
+LTREE='d0 android.widget.FrameLayout id=- text=\"-\" desc=\"-\"\nd1 android.widget.TextView id=com.ss:id/tv_nickname text=\"小号A_smoke\" desc=\"-\"\nd2 android.widget.TextView id=com.ss:id/tv_nickname text=\"小号B_smoke\" desc=\"-\"'
+LR=$(curl -sf -X POST "$API_BASE/api/agent/burner/locator-assist" -H "Content-Type: application/json" \
+  -d "{\"step\":\"scan_account_list\",\"target_desc\":\"切换账号面板里所有已登录账号的昵称\",\"mode\":\"extract_list\",\"ui_tree_snapshot\":\"$LTREE\",\"device_model\":\"$DEV\",\"error_code\":\"NO_ACCOUNT_LIST\"}") \
+  || fail "extract_list 请求失败"
+echo "$LR" | grep -q '小号A_smoke' || fail "extract_list 未列出小号A — $LR"
+echo "$LR" | grep -q '小号B_smoke' || fail "extract_list 未列出小号B（应返回全部匹配项，不是只抽一个）— $LR"
+ok "extract_list 模式真调列出全部账号昵称（多值提取保底跑通，15/15 真实等待失败点全覆盖）"
+
 # 清理
 psql "$DB" -c "DELETE FROM zenithjoy.rpa_locator_assist WHERE device_model='$DEV'" >/dev/null
 echo "🎉 rpa-locator-assist smoke 全部通过"

@@ -52,8 +52,9 @@ export interface LocatorAssistRequest {
   appVersion?: string;
   errorCode?: string;
   backend?: 'tree-llm' | 'vision';
-  /** locate（找元素点它）/ extract（抽文本）/ vision_select（截图选结果序号，治 Lynx 失明页）。 */
-  mode?: 'locate' | 'extract' | 'vision_select';
+  /** locate（找元素点它）/ extract（抽单个文本值）/ extract_list（抽一整份列表，如账号
+   *  昵称列表——单值协议表达不了"读出全部匹配项"）/ vision_select（截图选结果序号，治 Lynx 失明页）。 */
+  mode?: 'locate' | 'extract' | 'extract_list' | 'vision_select';
   /** vision_select：屏幕截图 base64（jpeg）。树失明页专用。 */
   screenshotB64?: string;
   /** vision_select：屏幕上候选结果个数（让模型只在 0..N-1 里选）。 */
@@ -78,6 +79,9 @@ export interface LocatorAssistResult {
   assistId?: string;
   /** extract 模式抽取到的文本值（如抖音号）。 */
   extractedValue?: string;
+  /** extract_list 模式抽取到的列表（如账号昵称列表）；空数组是合法答案（确认没有），
+   *  跟 status='unavailable'（AI 读不出来）语义不同。 */
+  extractedValues?: string[];
   /** vision_select：匹配的结果序号（0-based）；-1 = AI 诚实说没匹配。 */
   matchIndex?: number;
 }
@@ -145,6 +149,37 @@ export function parseExtractAnswer(raw: string): string | null {
   if (m[1] === 'null') return null;
   const v = (m[2] ?? '').trim();
   return v.length > 0 ? v : null;
+}
+
+/** extract_list prompt：从树里抽取目标的全部匹配值（如全部账号昵称），
+ *  只回 JSON {"values": ["值1", "值2", ...]}——跟 extract 的区别是这里要的是一整份列表。 */
+export function buildExtractListPrompt(req: LocatorAssistRequest): string {
+  return [
+    `你是安卓 UI 信息抽取专家。下面是无障碍树快照，每行一个节点。`,
+    `当前步骤: ${req.step}（错误码: ${req.errorCode || '-'}）`,
+    `要抽取的信息: ${req.targetDesc}——把树里所有匹配的值都列出来，不是只列一个。`,
+    `请返回一行 JSON，格式 {"values": ["值1", "值2", ...]}，不要任何其他文字。`,
+    `如果树里一个匹配的值都没有，回 {"values": []}——这是合法答案，不要瞎编凑数。`,
+    ``,
+    req.uiTree,
+  ].join('\n');
+}
+
+/** 从 extract_list 输出抠 values 数组；非 JSON/无法解析 → null。空数组 [] 是合法答案，
+ *  跟 null（AI 读不出来）必须区分开——调用方靠这个区分"确认没有"和"问不出来"。 */
+export function parseExtractListAnswer(raw: string): string[] | null {
+  const m = raw.match(/"values"\s*:\s*(\[[^\]]*\])/);
+  if (!m) return null;
+  try {
+    const arr = JSON.parse(m[1]);
+    if (!Array.isArray(arr)) return null;
+    return arr
+      .filter((v): v is string => typeof v === 'string')
+      .map((v) => v.trim())
+      .filter((v) => v.length > 0);
+  } catch {
+    return null;
+  }
 }
 
 /** 从树第 N 行提取结构化候选（刀1 UiTreeSnapshot 的行格式）。 */
@@ -270,6 +305,31 @@ async function askExtract(req: LocatorAssistRequest): Promise<{ value: string | 
   }
 }
 
+async function askExtractList(req: LocatorAssistRequest): Promise<{ values: string[] | null; model: string; failReason?: string }> {
+  const apiKey = process.env.TOAPIS_API_KEY;
+  if (!apiKey) return { values: null, model: ASSIST_MODEL, failReason: 'no_api_key' };
+  try {
+    const resp = await axios.post(
+      `${TOAPIS_BASE}/chat/completions`,
+      {
+        model: ASSIST_MODEL,
+        messages: [{ role: 'user', content: buildExtractListPrompt(req) }],
+        max_tokens: ASSIST_MAX_TOKENS,
+        temperature: 0,
+        reasoning_effort: 'none',
+      },
+      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: ASSIST_TIMEOUT_MS },
+    );
+    const choice = resp.data?.choices?.[0];
+    if (choice?.finish_reason === 'length') return { values: null, model: ASSIST_MODEL, failReason: 'truncated_output' };
+    const values = parseExtractListAnswer(choice?.message?.content ?? '');
+    return { values, model: ASSIST_MODEL, failReason: values === null ? 'unparseable_answer' : undefined };
+  } catch (err) {
+    const isTimeout = axios.isAxiosError(err) && (err as { code?: string }).code === 'ECONNABORTED';
+    return { values: null, model: ASSIST_MODEL, failReason: isTimeout ? 'llm_timeout' : 'llm_error' };
+  }
+}
+
 /** vision_select：截图→通用视觉模型（TOAPIS，同判定链 image_url 调法），选结果序号。 */
 async function askVisionSelect(req: LocatorAssistRequest): Promise<{ matchIndex: number | null; model: string; failReason?: string }> {
   const apiKey = process.env.TOAPIS_API_KEY;
@@ -328,6 +388,19 @@ export async function requestLocatorAssist(req: LocatorAssistRequest): Promise<L
     const aid = await recordVisit(req, { backend: 'tree-llm', model: ex.model, answerLine: null, selector, cacheHit: false, mode: 'extract' });
     if (ex.value === null) return { status: 'unavailable', reason: ex.failReason ?? 'no_value' };
     return { status: 'ok', cacheHit: false, backend: 'tree-llm', extractedValue: ex.value, assistId: aid ?? undefined };
+  }
+
+  // extract_list 模式（多值提取保底）：树→AI 抽取一整份列表（如账号昵称列表），不查缓存。
+  // ⚠️ values === [] 是合法答案（AI 确认没有匹配项），只有 values === null 才是真失败——
+  // 两者判定分开，别把空数组误判成 unavailable（那会掩盖"确认没有账号"这个有意义的结果）。
+  if (req.mode === 'extract_list') {
+    const exl = await askExtractList(req);
+    const selector = exl.values && exl.values.length > 0
+      ? ({ line: -1, view_id: null, text: exl.values.join('|'), content_desc: null, bounds: null } as LocatorCandidate)
+      : null;
+    const aid = await recordVisit(req, { backend: 'tree-llm', model: exl.model, answerLine: null, selector, cacheHit: false, mode: 'extract_list' });
+    if (exl.values === null) return { status: 'unavailable', reason: exl.failReason ?? 'no_value' };
+    return { status: 'ok', cacheHit: false, backend: 'tree-llm', extractedValues: exl.values, assistId: aid ?? undefined };
   }
 
   // 1. 缓存（碎片化格子坐标键）

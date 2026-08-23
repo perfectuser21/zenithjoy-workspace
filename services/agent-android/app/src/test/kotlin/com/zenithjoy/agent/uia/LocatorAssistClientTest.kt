@@ -109,6 +109,42 @@ class LocatorAssistClientTest {
         assertNull(LocatorAssistClient.parseExtractResponse("garbage"))
     }
 
+    // ── 铺满第三批：extract_list（多值提取，如扫号链读账号昵称列表）──────────────
+    @Test
+    fun `extract_list 请求体带 mode=extract_list`() {
+        val body = LocatorAssistClient.buildAssistBody(
+            step = "scan_account_list", targetDesc = "所有已登录账号的昵称",
+            uiTree = "d0 x", errorCode = "NO_ACCOUNT_LIST",
+            deviceModel = "HONOR", osVersion = "12", douyinVersion = "28.5.0", appVersion = "2.1.44",
+            mode = "extract_list",
+        )
+        assertTrue(body.contains("\"mode\":\"extract_list\""))
+    }
+
+    @Test
+    fun `extract_list 响应解析出 extracted_values 列表`() {
+        val json = """{"success":true,"data":{"status":"ok","assist_id":"a","mode":"extract_list","extracted_values":["张三","李四"]}}"""
+        val v = LocatorAssistClient.parseExtractListResponse(json)
+        assertEquals(listOf("张三", "李四"), v?.first)
+        assertEquals("a", v?.second)
+    }
+
+    @Test
+    fun `extract_list 真答出空列表也解析成功——AI确认没有不等于失败`() {
+        val json = """{"success":true,"data":{"status":"ok","assist_id":"a","mode":"extract_list","extracted_values":[]}}"""
+        val v = LocatorAssistClient.parseExtractListResponse(json)
+        assertEquals(emptyList<String>(), v?.first)
+        assertEquals("a", v?.second)
+    }
+
+    @Test
+    fun `extract_list unavailable 或畸形解析为 null`() {
+        assertNull(LocatorAssistClient.parseExtractListResponse("""{"success":true,"data":{"status":"unavailable"}}"""))
+        assertNull(LocatorAssistClient.parseExtractListResponse("garbage"))
+        // extracted_values 字段缺失/为 null（真失败）跟 [](AI确认没有)必须区分
+        assertNull(LocatorAssistClient.parseExtractListResponse("""{"success":true,"data":{"status":"ok","assist_id":"a"}}"""))
+    }
+
     // ── 刀B2：vision_select（截图选结果行）──────────────────────────────────
     @Test
     fun `vision 请求体带 mode=vision_select 与截图`() {

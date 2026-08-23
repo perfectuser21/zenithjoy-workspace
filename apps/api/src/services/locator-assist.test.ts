@@ -27,6 +27,8 @@ import {
   requestLocatorAssist,
   buildExtractPrompt,
   parseExtractAnswer,
+  buildExtractListPrompt,
+  parseExtractListAnswer,
   buildVisionSelectPrompt,
   parseVisionSelectAnswer,
   type LocatorAssistRequest,
@@ -224,6 +226,68 @@ describe('requestLocatorAssist mode=extract（读取类保底）', () => {
       data: { choices: [{ message: { content: '{"extr' }, finish_reason: 'length' }] },
     });
     const r = await requestLocatorAssist({ ...baseReq(), mode: 'extract' });
+    expect(r.status).toBe('unavailable');
+    expect(r.reason).toBe('truncated_output');
+  });
+});
+
+// ── 铺满第三批：extract_list 模式（树→AI 抽取多值列表，如账号昵称列表）─────────
+// 与 extract 的区别：extract 只答一个值（如抖音号），这里目标本身就是"读出一整个
+// 列表"（如切换账号面板里所有已登录昵称），单值协议表达不了。
+// 空列表是"确认没有"的合法答案，跟"AI 读不出来"（unparseable/null）语义不同——
+// 前者 status='ok' + extractedValues=[]，后者 status='unavailable'。
+describe('requestLocatorAssist mode=extract_list（多值提取保底）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.TOAPIS_API_KEY = 'test-key';
+    (pool.query as any).mockResolvedValue({ rows: [{ id: 'aid-list' }], rowCount: 1 });
+  });
+
+  it('extract_list prompt 要求列出全部匹配项而非单个值', () => {
+    const p = buildExtractListPrompt({ ...baseReq(), targetDesc: '所有已登录账号的昵称' });
+    expect(p).toContain('所有已登录账号的昵称');
+    expect(p, 'extract_list 应要 values 数组字段').toMatch(/values/i);
+  });
+
+  it('extract_list 解析 AI 返回的字符串数组', () => {
+    expect(parseExtractListAnswer('{"values":["张三","李四"]}')).toEqual(['张三', '李四']);
+    expect(parseExtractListAnswer('答案：{"values": ["only_one"]}啰嗦')).toEqual(['only_one']);
+  });
+
+  it('extract_list 空数组是合法答案（确认没有），不等于解析失败', () => {
+    expect(parseExtractListAnswer('{"values":[]}')).toEqual([]);
+  });
+
+  it('extract_list 非 JSON 胡言乱语返回 null（区别于合法空数组）', () => {
+    expect(parseExtractListAnswer('胡说')).toBeNull();
+  });
+
+  it('extract_list 模式返回 extractedValues 且不查缓存（读取值每条不同）', async () => {
+    (axios.post as any).mockResolvedValue({
+      data: { choices: [{ message: { content: '{"values":["小号A","小号B"]}' }, finish_reason: 'stop' }] },
+    });
+    const r = await requestLocatorAssist({ ...baseReq(), mode: 'extract_list', targetDesc: '所有已登录账号昵称' });
+    expect(r.status).toBe('ok');
+    expect(r.extractedValues).toEqual(['小号A', '小号B']);
+    const calls = (pool.query as any).mock.calls as Array<[string]>;
+    const cacheSelect = calls.find(([sql]) => /^\s*SELECT/i.test(sql) && /answer_selector/i.test(sql));
+    expect(cacheSelect, 'extract_list 模式不该查缓存').toBeUndefined();
+  });
+
+  it('extract_list 真实答出空列表 → status ok，extractedValues=[]（不是 unavailable）', async () => {
+    (axios.post as any).mockResolvedValue({
+      data: { choices: [{ message: { content: '{"values":[]}' }, finish_reason: 'stop' }] },
+    });
+    const r = await requestLocatorAssist({ ...baseReq(), mode: 'extract_list' });
+    expect(r.status).toBe('ok');
+    expect(r.extractedValues).toEqual([]);
+  });
+
+  it('extract_list 截断守卫同样生效', async () => {
+    (axios.post as any).mockResolvedValue({
+      data: { choices: [{ message: { content: '{"valu' }, finish_reason: 'length' }] },
+    });
+    const r = await requestLocatorAssist({ ...baseReq(), mode: 'extract_list' });
     expect(r.status).toBe('unavailable');
     expect(r.reason).toBe('truncated_output');
   });
