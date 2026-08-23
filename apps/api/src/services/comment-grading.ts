@@ -6,10 +6,11 @@
  *   2. 空画像/空评论 → 直接返回全 null，不调用 LLM（省钱；空画像时无法判断意向，保守不发）
  *   3. 调用失败/超时 → 整批返回全 null，不抛异常（不能拖垮 /collect/report 主流程）
  *
- * LLM 调用：deepseek-v4-flash，通过 TOAPIS_API_KEY 走 ToAPIs 代理（与 content-judgment.ts
- * 同一网关，不同模型——content-judgment.ts 判视频内容仍用 Gemini，未受本次改动影响）。
+ * LLM 调用：通过 TOAPIS_API_KEY 走 ToAPIs 代理（与 content-judgment.ts 同一网关）。
  * 2026-07-21 用户拍板从 gemini-2.5-flash-official 换成 deepseek-v4-flash 降低成本
- * （decision，见本次 bug-fix 记录）；沿用已验证可用的 axios+ToAPIs 通道，不引入 OpenRouter。
+ * （decision 4346c90f）；2026-08-23 TOAPIS 侧 deepseek-v4-flash 所在渠道 #58 上游账户
+ * 欠费（402 Insufficient Balance，无备用渠道），临时切到 gpt-5.6-terra（用户 0823 现场
+ * 拍板，接受成本暂时上升）——渠道修好后可考虑换回，模型名走 env 可覆盖，不必再改代码。
  *
  * 判定点（decision 4e421ae8）：解析失败/无法判断时一律归入"其他"档（本函数里体现为 null，
  * 落库后 gradeWeight(null) 也会落进最低档）——宁可漏判高意向客户，不可误判陌生人为高意向
@@ -20,7 +21,7 @@ import axios from 'axios';
 
 const GRADING_TIMEOUT_MS = 20_000;
 const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';
-const GRADING_MODEL = 'deepseek-v4-flash';
+const GRADING_MODEL = process.env.GRADING_MODEL || 'gpt-5.6-terra';
 
 const VALID_GRADES = ['高意向', '精准', '感兴趣', '其他'] as const;
 
@@ -71,8 +72,9 @@ export async function gradeComments(
         //（精准→感兴趣、精准→其他、感兴趣→其他），与本文件头部那条已拍板的原则同向
         //（宁可漏判高意向，不可误判陌生人为高意向去真实打扰）。
         //
-        // ⚠️ 该参数只有 deepseek 认；gemini-2.5 收到后照样思考（实测 reasoning 仍是 189/577/572），
-        // content-judgment.ts 那边只能靠给够 max_tokens，别照抄这行。
+        // ⚠️ 该参数 deepseek/gpt-5.6-terra 都认（0823 真调实测 gpt-5.6-terra reasoning_tokens=0）；
+        // gemini-2.5 收到后照样思考（实测 reasoning 仍是 189/577/572），
+        // content-judgment.ts/locator-assist.ts 用 gemini 的地方只能靠给够 max_tokens，别照抄这行。
         reasoning_effort: 'none',
       },
       {
