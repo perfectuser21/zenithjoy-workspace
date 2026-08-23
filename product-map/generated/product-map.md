@@ -1,6 +1,6 @@
 # Product Map
 
-<!-- digest: 2fdb9e52b611d1d121a517570f030aca6e6761b70bb61dbb79deced4da00d397 -->
+<!-- digest: 4eef630b093b258b7a9734bccbec3b1280ccdc90fd8a6cb38159143d6af9feec -->
 
 > 此文件由 `npm run product-map:generate` 自动生成，请勿手工编辑。
 > 唯一手写源：`product-map/product-map.yaml`
@@ -34,6 +34,7 @@
 | customer_smart_acquisition | customer_app | line02 | deprecated | — | — |
 | keyword_acquisition | customer_app | line02 | active | step1:中台显示手机上有 N 个可用抖音小号<br>step2:系统按关键词替客户找到符合画像的目标视频，中台可见清单<br>step3:Lead 表出现带抖音号的潜在客户<br>step4:系统用小号给线索发出私信，客户看到每条已发出/被限流/失败/已送达 | .github/workflows/scripts/smoke/golden-path-2-smoke.sh |
 | live_acquisition | customer_app | line02 | proposed | step1:客户指定目标直播间/主播<br>step2:抓直播间互动观众<br>step3:触达带企微号→收好友→AI首答→写Lead表 | — |
+| rpa_ai_oncall_locator | customer_app | line02 | active | — | .github/workflows/scripts/smoke/rpa-locator-assist-smoke.sh<br>.github/workflows/scripts/smoke/rpa-failure-scene-snapshot-smoke.sh |
 | video_link_acquisition | customer_app | line02 | proposed | step1:客户手填目标视频链接<br>step2:抓该视频评论区<br>step3:触达带企微号→收好友→AI首答→写Lead表 | — |
 | active_voice_outreach | customer_app | line04 | active | step1:拨号触发<br>step2:接通判定<br>step3:AI实时对话<br>step4:通话记录回写 | .github/workflows/scripts/smoke/gpa-voice-outreach-smoke.sh |
 | business_report | customer_app | line04 | active | step1:数据齐备<br>step2:报告生成<br>step3:送达老板 | .github/workflows/scripts/smoke/cs-daily-report-smoke.sh |

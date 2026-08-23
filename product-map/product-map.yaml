@@ -192,6 +192,22 @@ golden_paths:
       - id: step3
         name: 触达带企微号→收好友→AI首答→写Lead表
 
+  # AI on-call 定位求助横切件（0822 主理人拍板，判定=横切件非路，格子坐标 line02·横切件池）。
+  # 服务 line02 全部获客 capability 的安卓 RPA：机型×安卓版本×抖音版本碎片化导致的失败，
+  # 代码枚举不完 → AI 保底。product-map adapter 目前只从 capability 生成图节点、crosscut_pool
+  # 恒空（同 line11 知识底座的处理，见本文件 ~406 行注释），故这里以 capability 形态上图，
+  # 借壳让它在地图上可见；本质是横切底座、无单一触发→终点，故不列 steps。
+  # 挂片（8 刀：病历/求助端点/安卓接线/读取extract/私信定位/采集定位/视觉后端/D8视觉）落
+  # Brain journey_features（挂 line02 获客 journey afa6abca），不进本文件（决策 26793221）。
+  - id: rpa_ai_oncall_locator
+    app_id: customer_app
+    line_id: line02
+    name: AI on-call 定位求助（RPA 碎片化失败保底，横切底座）
+    status: active
+    smoke_files:
+      - .github/workflows/scripts/smoke/rpa-locator-assist-smoke.sh
+      - .github/workflows/scripts/smoke/rpa-failure-scene-snapshot-smoke.sh
+
   - id: customer_private_ai
     app_id: customer_app
     line_id: line04
