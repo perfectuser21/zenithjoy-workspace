@@ -170,6 +170,17 @@
       ]
     },
     {
+      "id": "rpa_ai_oncall_locator",
+      "app_id": "customer_app",
+      "line_id": "line02",
+      "name": "AI on-call 定位求助（RPA 碎片化失败保底，横切底座）",
+      "status": "active",
+      "smoke_files": [
+        ".github/workflows/scripts/smoke/rpa-locator-assist-smoke.sh",
+        ".github/workflows/scripts/smoke/rpa-failure-scene-snapshot-smoke.sh"
+      ]
+    },
+    {
       "id": "video_link_acquisition",
       "app_id": "customer_app",
       "line_id": "line02",
@@ -550,5 +561,5 @@
       ]
     }
   ],
-  "digest": "2fdb9e52b611d1d121a517570f030aca6e6761b70bb61dbb79deced4da00d397"
+  "digest": "4eef630b093b258b7a9734bccbec3b1280ccdc90fd8a6cb38159143d6af9feec"
 }
