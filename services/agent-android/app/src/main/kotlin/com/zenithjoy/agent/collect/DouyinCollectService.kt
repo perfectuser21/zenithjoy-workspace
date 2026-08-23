@@ -1388,14 +1388,19 @@ class DouyinCollectService : AccessibilityService() {
             LocatorAssistClient.requestAssistBlocking(httpBase, body)
         } ?: return null
         val cand = answer.candidates.firstOrNull()
-        android.util.Log.i(TAG, "assist locate step=$step cacheHit=${answer.cacheHit} viewId=${cand?.viewId}")
+        android.util.Log.i(TAG, "assist locate step=$step cacheHit=${answer.cacheHit} viewId=${cand?.viewId} bounds=${cand?.bounds}")
         val viewId = cand?.viewId
+        // 真机撞出的真bug（0823）：很多自定义渲染的按钮没有 view_id，AI 答对了纯坐标候选
+        // 却被当"没找到"直接扔掉——加 bounds 兜底匹配，view_id 找不到时按坐标在树里找回节点。
+        val boundsRect = LocatorAssistClient.parseBounds(cand?.bounds)
         val aid = answer.assistId
-        if (viewId == null) {
+        if (viewId == null && boundsRect == null) {
             if (aid != null) scope.launch(Dispatchers.IO) { LocatorAssistClient.reportVerifiedBlocking(httpBase, aid, false) }
             return null
         }
-        val node = rootInActiveWindow?.let { findNodeByIds(it, viewId) }
+        val node = rootInActiveWindow?.let { r ->
+            viewId?.let { findNodeByIds(r, it) } ?: boundsRect?.let { findNodeByBounds(r, it) }
+        }
         if (aid != null) scope.launch(Dispatchers.IO) { LocatorAssistClient.reportVerifiedBlocking(httpBase, aid, node != null) }
         return node
     }
@@ -1525,6 +1530,20 @@ class DouyinCollectService : AccessibilityService() {
         for (id in ids) {
             val list = root.findAccessibilityNodeInfosByViewId(id)
             if (list.isNotEmpty()) return list[0]
+        }
+        return null
+    }
+
+    /** 按候选矩形在当前树里找回节点——view_id 为空时的兜底匹配（0823 真机bug修复）。 */
+    private fun findNodeByBounds(root: AccessibilityNodeInfo, target: LocatorAssistClient.BoundsRect): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        val r = Rect()
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            node.getBoundsInScreen(r)
+            if (r.left == target.left && r.top == target.top && r.right == target.right && r.bottom == target.bottom) return node
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
         }
         return null
     }

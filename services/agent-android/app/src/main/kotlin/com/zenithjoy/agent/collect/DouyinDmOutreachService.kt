@@ -3,6 +3,7 @@ package com.zenithjoy.agent.collect
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
+import android.graphics.Rect
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -459,19 +460,38 @@ class DouyinDmOutreachService : AccessibilityService() {
         } ?: return null
         pendingAssistId = answer.assistId
         val cand = answer.candidates.firstOrNull()
-        diag("assist: step=$step cacheHit=${answer.cacheHit} line=${cand?.line} viewId=${cand?.viewId}")
-        val viewId = cand?.viewId ?: run {
-            // 有出诊但候选没有可用 id（bounds-only）——也要回执 false，周报才看得到这一类
+        diag("assist: step=$step cacheHit=${answer.cacheHit} line=${cand?.line} viewId=${cand?.viewId} bounds=${cand?.bounds}")
+        val viewId = cand?.viewId
+        // 真机撞出的真bug（0823）：很多自定义渲染的按钮没有 view_id，AI 答对了纯坐标候选
+        // 却被当"没找到"直接扔掉——加 bounds 兜底匹配，view_id 找不到时按坐标在树里找回节点。
+        val boundsRect = LocatorAssistClient.parseBounds(cand?.bounds)
+        if (viewId == null && boundsRect == null) {
             reportAssistVerified(false)
             return null
         }
-        val node = rootInActiveWindow?.let { findNodeByIds(it, viewId) }
+        val node = rootInActiveWindow?.let { r ->
+            viewId?.let { findNodeByIds(r, it) } ?: boundsRect?.let { findNodeByBounds(r, it) }
+        }
         if (node == null) {
-            // AI 指的 id 在当前树里找不到 = 没过闸
+            // AI 指的 id/坐标在当前树里找不到 = 没过闸
             reportAssistVerified(false)
             return null
         }
         return node
+    }
+
+    /** 按候选矩形在当前树里找回节点——view_id 为空时的兜底匹配（0823 真机bug修复）。 */
+    private fun findNodeByBounds(root: AccessibilityNodeInfo, target: LocatorAssistClient.BoundsRect): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        val r = Rect()
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            node.getBoundsInScreen(r)
+            if (r.left == target.left && r.top == target.top && r.right == target.right && r.bottom == target.bottom) return node
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return null
     }
 
     /** 验证闸回执（fire-and-forget IO）：回执丢了不影响主流程，fail-open。 */

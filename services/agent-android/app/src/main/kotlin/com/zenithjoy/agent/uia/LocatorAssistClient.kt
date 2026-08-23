@@ -193,6 +193,25 @@ object LocatorAssistClient {
         }
     }
 
+    /** locate 候选没有 view_id 时的矩形（不依赖 android.graphics.Rect，保持 JVM 纯测）。 */
+    data class BoundsRect(val left: Int, val top: Int, val right: Int, val bottom: Int)
+
+    /**
+     * 解析 candidate.bounds 为矩形——调用方在树里按坐标找回节点，绕过"必须有 view_id"
+     * 这条门禁。真机撞出的真bug（0823）：很多自定义渲染的按钮没有 view_id，AI 答对了
+     * 纯坐标候选却被当"没找到"直接扔掉。畸形/空值 → null。
+     */
+    fun parseBounds(bounds: String?): BoundsRect? {
+        if (bounds.isNullOrBlank()) return null
+        val m = Regex("""\[(-?\d+),(-?\d+)]\[(-?\d+),(-?\d+)]""").find(bounds) ?: return null
+        val (l, t, r, b) = m.destructured
+        return try {
+            BoundsRect(l.toInt(), t.toInt(), r.toInt(), b.toInt())
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     fun buildVerifyBody(assistId: String, verified: Boolean): String =
         JSONObject().apply {
             put("assist_id", assistId)
