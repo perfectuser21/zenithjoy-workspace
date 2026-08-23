@@ -11,15 +11,21 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import com.zenithjoy.agent.AgentConfig
 import com.zenithjoy.agent.AgentService
+import com.zenithjoy.agent.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import com.zenithjoy.agent.uia.FailureClassifier
+import com.zenithjoy.agent.uia.LocatorAssistClient
 import com.zenithjoy.agent.uia.NodeAwait
+import com.zenithjoy.agent.uia.UiTreeSnapshot
 import com.zenithjoy.agent.uia.awaitNode
 import com.zenithjoy.agent.uia.awaitAppForeground
 
@@ -334,13 +340,19 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
                 val candidate = findNodeByContentDescContains(it, "我，按钮") ?: findNodeByText(it, "我")
                 candidate?.takeIf { node -> isInBottomNavArea(node, sh) }
             }
-            val meTabNode = meTabOutcome.value
+            var meTabNode = meTabOutcome.value
             if (meTabNode == null) {
+                val failure = NodeAwait.classifyFailure(meTabOutcome, DOUYIN_PKG_FOR_WAIT)
                 android.util.Log.w(
                     TAG,
-                    "我tab 等待超时 failure=${NodeAwait.classifyFailure(meTabOutcome, DOUYIN_PKG_FOR_WAIT)} " +
+                    "我tab 等待超时 failure=$failure " +
                         "attempts=${meTabOutcome.attempts} waitedMs=${meTabOutcome.waitedMs(AWAIT_POLL_MS)}"
                 )
+                // AI 保底（铺满第二批）：坐标兜底本来就在，这里加一步先问 AI 指认真实节点，
+                // 命中就点节点（比盲坐标准），问不到再退回坐标兜底——不改变最坏情况的行为。
+                if (FailureClassifier.shouldAssist(failure)) {
+                    meTabNode = tryLocatorAssist("scan_me_tab", "底部导航栏「我」tab（个人主页入口）", "NO_ME_TAB")
+                }
             }
             if (meTabNode != null) {
                 android.util.Log.i(TAG, "我tab命中无障碍树节点，点节点中心")
@@ -640,6 +652,46 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         return results
     }
 
+    /**
+     * AI on-call 定位求助（铺满第二批，扫号链）：树→AI 指认候选 node，与
+     * [com.zenithjoy.agent.collect.DouyinCollectService]/[com.zenithjoy.agent.collect.DouyinDmOutreachService]
+     * 里的同名私有实现同款——三个 Service 各自持一份，未抽共享是延续既有代码结构，不引入新抽象。
+     */
+    private suspend fun tryLocatorAssist(step: String, targetDesc: String, errorCode: String): AccessibilityNodeInfo? {
+        val tree = runCatching {
+            rootInActiveWindow?.let { UiTreeSnapshot.serialize(UiTreeSnapshot.fromAccessibilityNode(it)) }
+        }.getOrNull() ?: return null
+        val httpBase = AgentConfig(applicationContext).deriveHttpBase()
+        if (httpBase.isBlank()) return null
+        val douyinVer = runCatching {
+            applicationContext.packageManager.getPackageInfo(DOUYIN_PKG_FOR_WAIT, 0).versionName
+        }.getOrNull()
+        val body = LocatorAssistClient.buildAssistBody(
+            step = step,
+            targetDesc = targetDesc,
+            uiTree = tree,
+            errorCode = errorCode,
+            deviceModel = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim(),
+            osVersion = "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})",
+            douyinVersion = douyinVer,
+            appVersion = BuildConfig.VERSION_NAME,
+        )
+        val answer = withContext(Dispatchers.IO) {
+            LocatorAssistClient.requestAssistBlocking(httpBase, body)
+        } ?: return null
+        val cand = answer.candidates.firstOrNull()
+        android.util.Log.i(TAG, "assist locate step=$step cacheHit=${answer.cacheHit} viewId=${cand?.viewId}")
+        val viewId = cand?.viewId
+        val aid = answer.assistId
+        if (viewId == null) {
+            if (aid != null) scope.launch(Dispatchers.IO) { LocatorAssistClient.reportVerifiedBlocking(httpBase, aid, false) }
+            return null
+        }
+        val node = rootInActiveWindow?.let { findNodeByIds(it, viewId) }
+        if (aid != null) scope.launch(Dispatchers.IO) { LocatorAssistClient.reportVerifiedBlocking(httpBase, aid, node != null) }
+        return node
+    }
+
     private fun findNodeByText(root: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         queue.add(root)
@@ -709,14 +761,19 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
             findNodesByIds(r, "com.ss.android.ugc.aweme:id/tv_nickname")
                 .firstOrNull { it.text?.toString()?.trim() == nickname }
         }
-        val row = rowOutcome.value ?: run {
+        var row = rowOutcome.value
+        if (row == null) {
+            val failure = NodeAwait.classifyFailure(rowOutcome, DOUYIN_PKG_FOR_WAIT)
             android.util.Log.w(
                 TAG,
-                "切换账号面板里找不到昵称=$nickname failure=" +
-                    "${NodeAwait.classifyFailure(rowOutcome, DOUYIN_PKG_FOR_WAIT)} attempts=${rowOutcome.attempts}"
+                "切换账号面板里找不到昵称=$nickname failure=$failure attempts=${rowOutcome.attempts}"
             )
-            return false
+            // AI 保底（铺满第二批）：切号是账号管理链路的关键动作，选错人风险高，判死前先问一次。
+            if (FailureClassifier.shouldAssist(failure)) {
+                row = tryLocatorAssist("scan_switch_account_row", "切换账号面板里昵称为「$nickname」的那一行", "NO_ACCOUNT_ROW")
+            }
         }
+        if (row == null) return false
         val clickable = findClickableSelfOrAncestor(row)
         if (clickable != null) clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK) else tapNodeCenter(row)
         delay(2500L) // 切号后回主页 feed 沉降
