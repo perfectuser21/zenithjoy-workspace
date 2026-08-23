@@ -860,6 +860,7 @@ class DouyinCollectService : AccessibilityService() {
                     ?: findVisibleNodeByContentDescPrefix(r, "分享")
                     ?: findVisibleNodeByContentDescPrefix(r, "转发")
             }
+            var shareBtnFromAssist: AccessibilityNodeInfo? = null
             val detailRoot = rootInActiveWindow
             if (detailRoot == null || !detailOutcome.hit) {
                 val failure = NodeAwait.classifyFailure(detailOutcome, DOUYIN_PKG)
@@ -869,17 +870,29 @@ class DouyinCollectService : AccessibilityService() {
                         "attempts=${detailOutcome.attempts} waitedMs=${detailOutcome.waitedMs(AWAIT_POLL_MS)} " +
                         "fgPkg=${detailOutcome.lastForegroundPkg}"
                 )
-                return@withTimeoutOrNull null
+                // AI 保底（铺满第二批）：详情页分享入口迟迟没渲染出来，判死前问一次；
+                // 命中的候选直接当分享按钮用，跳过下面 STEP2 自己的查找。
+                if (FailureClassifier.shouldAssist(failure)) {
+                    shareBtnFromAssist = tryLocatorAssist(
+                        "collect_detail_share_button",
+                        "分享按钮（打开分享面板，用于取得这条视频的分享链接）",
+                        "STEP1_DETAIL_NOT_READY",
+                    )
+                }
+                if (shareBtnFromAssist == null) {
+                    return@withTimeoutOrNull null
+                }
             }
-            // 详情页树全景：定位分享按钮实际 desc / 是否折叠
-            dumpNodeDescs(detailRoot, "detail")
+            // 详情页树全景：定位分享按钮实际 desc / 是否折叠（AI 候选命中时 detailRoot 可能仍为
+            // null，跳过树全景转储——不影响后续点击，dumpNodeDescs 只是诊断用途）
+            detailRoot?.let { dumpNodeDescs(it, "detail") }
 
             // 2. 点分享（只取在屏可见的分享按钮，避开翻页器里相邻视频屏幕外的同名按钮）
-            val shareBtn = findVisibleNodeByContentDescPrefix(detailRoot, "分享")
-                ?: findVisibleNodeByContentDescPrefix(detailRoot, "转发")
+            val shareBtn = shareBtnFromAssist
+                ?: detailRoot?.let { findVisibleNodeByContentDescPrefix(it, "分享") ?: findVisibleNodeByContentDescPrefix(it, "转发") }
                 ?: run {
                     android.util.Log.w(TAG,
-                        "capture abort card#$index: STEP2_no_visible_share_btn (detailChild=${detailRoot.childCount})")
+                        "capture abort card#$index: STEP2_no_visible_share_btn (detailChild=${detailRoot?.childCount})")
                     return@withTimeoutOrNull null
                 }
             tapNodeCenter(shareBtn)
