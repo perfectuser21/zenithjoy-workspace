@@ -27,6 +27,8 @@ import {
   requestLocatorAssist,
   buildExtractPrompt,
   parseExtractAnswer,
+  buildVisionSelectPrompt,
+  parseVisionSelectAnswer,
   type LocatorAssistRequest,
 } from './locator-assist';
 
@@ -144,12 +146,15 @@ describe('requestLocatorAssist（后端调度 + fail-open + 截断守卫）', ()
     expect(r.reason).toBe('llm_timeout');
   });
 
-  it('vision 后端未配置时显式降级（插座已定义未通电）', async () => {
-    delete process.env.UITARS_BASE_URL;
+  it('backend=vision 但非 vision_select 模式（无截图）→ 当普通 locate 走树，不误入视觉', async () => {
+    // 视觉后端由 mode=vision_select 触发（0823 改为 TOAPIS 通用视觉，不再是 UITARS 插座）；
+    // 光带 backend:'vision' 而不给截图/不置 vision_select，按 locate 正常处理即可。
+    (axios.post as any).mockResolvedValue({
+      data: { choices: [{ message: { content: '{"line": 1}' }, finish_reason: 'stop' }] },
+    });
     const r = await requestLocatorAssist(baseReq({ backend: 'vision' }));
-    expect(r.status).toBe('unavailable');
-    expect(r.reason).toBe('vision_not_configured');
-    expect((axios.post as any).mock.calls.length).toBe(0);
+    expect(r.status).toBe('ok');
+    expect(r.backend).toBe('tree-llm');
   });
 
   it('出诊返回 assistId（INSERT RETURNING id）——安卓端回执 verified 靠它', async () => {
@@ -221,5 +226,62 @@ describe('requestLocatorAssist mode=extract（读取类保底）', () => {
     const r = await requestLocatorAssist({ ...baseReq(), mode: 'extract' });
     expect(r.status).toBe('unavailable');
     expect(r.reason).toBe('truncated_output');
+  });
+});
+
+// ── 视觉后端刀B1：截图→4o 选结果序号（治 Lynx 失明页 NO_MATCH）──────────────
+describe('requestLocatorAssist mode=vision_select（视觉后端）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.TOAPIS_API_KEY = 'test-key';
+    (pool.query as any).mockResolvedValue({ rows: [{ id: 'aid-v' }], rowCount: 1 });
+  });
+
+  it('vision prompt 带目标抖音号与候选数，要求返回 match_index', () => {
+    const p = buildVisionSelectPrompt({ ...baseReq(), targetDesc: '抖音号 zz_88', visionCandidateCount: 5 });
+    expect(p).toContain('zz_88');
+    expect(p).toMatch(/match_index/);
+  });
+
+  it('vision 解析 match_index（含 -1 无匹配）', () => {
+    expect(parseVisionSelectAnswer('{"match_index": 2}')).toBe(2);
+    expect(parseVisionSelectAnswer('答案 {"match_index":-1} 无匹配')).toBe(-1);
+    expect(parseVisionSelectAnswer('乱码')).toBeNull();
+  });
+
+  it('vision_select 缺截图返回 unavailable，不调模型', async () => {
+    const r = await requestLocatorAssist({ ...baseReq(), mode: 'vision_select', screenshotB64: undefined });
+    expect(r.status).toBe('unavailable');
+    expect(r.reason).toBe('no_screenshot');
+    expect((axios.post as any).mock.calls.length).toBe(0);
+  });
+
+  it('vision_select 真调返回 matchIndex，走 image_url 多模态', async () => {
+    (axios.post as any).mockResolvedValue({
+      data: { choices: [{ message: { content: '{"match_index": 1}' }, finish_reason: 'stop' }] },
+    });
+    const r = await requestLocatorAssist({ ...baseReq(), mode: 'vision_select', screenshotB64: 'ZmFrZQ==', targetDesc: '抖音号 zz_88', visionCandidateCount: 3 });
+    expect(r.status).toBe('ok');
+    expect(r.matchIndex).toBe(1);
+    const body = (axios.post as any).mock.calls[0][1];
+    const content = body.messages[0].content;
+    expect(Array.isArray(content), 'vision 必须走多模态 content 数组').toBe(true);
+    expect(content.some((c: any) => c.type === 'image_url'), '必须带 image_url').toBe(true);
+  });
+
+  it('vision match_index=-1 → ok 但 matchIndex=-1（AI 诚实说没匹配，不瞎选）', async () => {
+    (axios.post as any).mockResolvedValue({
+      data: { choices: [{ message: { content: '{"match_index": -1}' }, finish_reason: 'stop' }] },
+    });
+    const r = await requestLocatorAssist({ ...baseReq(), mode: 'vision_select', screenshotB64: 'ZmFrZQ==', visionCandidateCount: 3 });
+    expect(r.status).toBe('ok');
+    expect(r.matchIndex).toBe(-1);
+  });
+
+  it('vision fail-open：超时 unavailable', async () => {
+    (axios.post as any).mockRejectedValue(Object.assign(new Error('t'), { isAxiosError: true, code: 'ECONNABORTED' }));
+    const r = await requestLocatorAssist({ ...baseReq(), mode: 'vision_select', screenshotB64: 'ZmFrZQ==' });
+    expect(r.status).toBe('unavailable');
+    expect(r.reason).toBe('llm_timeout');
   });
 });

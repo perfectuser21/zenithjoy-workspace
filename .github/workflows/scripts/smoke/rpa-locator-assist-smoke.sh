@@ -69,6 +69,16 @@ ER=$(curl -sf -X POST "$API_BASE/api/agent/burner/locator-assist" -H "Content-Ty
 echo "$ER" | grep -q '"extracted_value":"dy_smoke_88"' || fail "extract 未抽出抖音号 — $ER"
 ok "extract 模式真调抽出抖音号（读取类保底跑通）"
 
+# ── 6. 视觉后端 vision_select（刀B1）：树失明页专用 ──
+# vision_select 走截图不走树。缺截图这条分支不调模型、无需大图，端点形状可在 CI 稳测；
+# 真截图选目标 index 的真调实证在本地做过（荣耀X30 抖音用户结果页，见 PR#1714），
+# gemini 视觉真调的稳定性/token 由单测 mock 层守（CI 不塞大截图避免 flaky）。
+VNO=$(curl -sf -X POST "$API_BASE/api/agent/burner/locator-assist" -H "Content-Type: application/json" \
+  -d "{\"step\":\"dm_result_select\",\"target_desc\":\"抖音号 xxx\",\"mode\":\"vision_select\",\"ui_tree_snapshot\":\"\",\"vision_candidate_count\":5}") \
+  || fail "vision_select 缺截图请求不应是非 2xx（fail-open）"
+echo "$VNO" | grep -q '"reason":"no_screenshot"' || fail "vision_select 缺截图应降级 no_screenshot — $VNO"
+ok "vision_select 缺截图 fail-open 降级（视觉后端接线在位）"
+
 # 清理
 psql "$DB" -c "DELETE FROM zenithjoy.rpa_locator_assist WHERE device_model='$DEV'" >/dev/null
 echo "🎉 rpa-locator-assist smoke 全部通过"

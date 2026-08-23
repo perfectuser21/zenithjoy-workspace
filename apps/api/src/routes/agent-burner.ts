@@ -657,19 +657,27 @@ router.post('/dm-outreach', tenantContextOptional, agentContext, async (req: Req
 router.post('/locator-assist', locatorAssistRateLimit, async (req: Request, res: Response) => {
   const {
     step, target_desc, ui_tree_snapshot, error_code, backend, mode,
+    screenshot_b64, vision_candidate_count,
     device_model, os_version, douyin_version, app_version,
   } = req.body || {};
-  if (!step || !target_desc || typeof ui_tree_snapshot !== 'string' || !ui_tree_snapshot) {
-    return res.status(400).json(ERR('MISSING_FIELDS', 'step / target_desc / ui_tree_snapshot 必填'));
+  const resolvedMode = mode === 'extract' ? 'extract' : mode === 'vision_select' ? 'vision_select' : 'locate';
+  // vision_select 走截图不走树；其余模式必须有树
+  if (!step || !target_desc) {
+    return res.status(400).json(ERR('MISSING_FIELDS', 'step / target_desc 必填'));
+  }
+  if (resolvedMode !== 'vision_select' && (typeof ui_tree_snapshot !== 'string' || !ui_tree_snapshot)) {
+    return res.status(400).json(ERR('MISSING_FIELDS', 'ui_tree_snapshot 必填（非 vision_select 模式）'));
   }
   const result = await requestLocatorAssist({
     tenantId: (req as Request & { tenantId?: string }).tenantId || 'unknown',
     step: String(step),
     targetDesc: String(target_desc),
-    uiTree: ui_tree_snapshot.slice(0, TREE_MAX_CHARS),
+    uiTree: typeof ui_tree_snapshot === 'string' ? ui_tree_snapshot.slice(0, TREE_MAX_CHARS) : '',
     errorCode: typeof error_code === 'string' ? error_code : undefined,
     backend: backend === 'vision' ? 'vision' : 'tree-llm',
-    mode: mode === 'extract' ? 'extract' : 'locate',
+    mode: resolvedMode,
+    screenshotB64: typeof screenshot_b64 === 'string' && screenshot_b64 ? screenshot_b64 : undefined,
+    visionCandidateCount: typeof vision_candidate_count === 'number' ? vision_candidate_count : undefined,
     deviceModel: typeof device_model === 'string' ? device_model : undefined,
     osVersion: typeof os_version === 'string' ? os_version : undefined,
     douyinVersion: typeof douyin_version === 'string' ? douyin_version : undefined,
@@ -682,9 +690,10 @@ router.post('/locator-assist', locatorAssistRateLimit, async (req: Request, res:
     status: 'ok',
     cache_hit: result.cacheHit === true,
     backend: result.backend,
-    mode: mode === 'extract' ? 'extract' : 'locate',
+    mode: resolvedMode,
     candidates: result.candidates,
     extracted_value: result.extractedValue ?? null,
+    match_index: typeof result.matchIndex === 'number' ? result.matchIndex : null,
     assist_id: result.assistId ?? null,
   }));
 });
