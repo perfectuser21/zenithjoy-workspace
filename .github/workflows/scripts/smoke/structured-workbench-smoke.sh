@@ -1910,6 +1910,39 @@ run_a30_field() {
   echo "✅ A30③ 通过"
 }
 
+run_rename() {
+  echo "== 行内改名 PATCH /tables/:id（改表名）+ PATCH /tables/:id/fields/:fieldId（改字段名）=="
+  section_up
+  local on="WB-RENAME-$SFX" nn="WB-RENAMED-$SFX" resp tid fid fnn empty x404 dbn dbf
+  resp=$(create_table_as "$COOKIE_A" "$on" 'org')
+  tid=$(echo "$resp" | jq -r '.data.table_id')
+  fid=$(echo "$resp" | jq -r '.data.fields[0].field_id')
+  [ -n "$tid" ] && [ "$tid" != "null" ] || fail "改名段建表失败"
+  [ -n "$fid" ] && [ "$fid" != "null" ] || fail "改名段拿不到 field_id"
+  # 改表名：200 且返回体 name 逐字 + 落库 name 逐字
+  curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X PATCH "$API/tables/$tid" \
+    -d "{\"name\":\"$nn\"}" | jq -e --arg n "$nn" '.data.name == $n' >/dev/null || fail "改表名返回体 name 不符"
+  dbn=$(psql_q "SELECT name FROM zenithjoy.db_tables WHERE id='$tid'")
+  [ "$dbn" = "$nn" ] || fail "改表名未落库（db=$dbn 期望=$nn）"
+  # 空名 → 400 且不改
+  empty=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_A" -H 'Content-Type: application/json' \
+    -X PATCH "$API/tables/$tid" -d '{"name":"   "}')
+  [ "$empty" = "400" ] || fail "空表名未返 400（得 $empty）"
+  # 改字段名：200 且落库 name 逐字，field_type 不变
+  fnn="改后的字段名-$SFX"
+  curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X PATCH "$API/tables/$tid/fields/$fid" \
+    -d "{\"name\":\"$fnn\"}" | jq -e --arg n "$fnn" '.data.name == $n' >/dev/null || fail "改字段名返回体 name 不符"
+  dbf=$(psql_q "SELECT name FROM zenithjoy.db_fields WHERE id='$fid'")
+  [ "$dbf" = "$fnn" ] || fail "改字段名未落库（db=$dbf 期望=$fnn）"
+  # 跨企业会话改表名 → 404 同形反枚举（乙改甲的表）
+  x404=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_A2" -H 'Content-Type: application/json' \
+    -X PATCH "$API/tables/$tid" -d '{"name":"越权改名"}')
+  [ "$x404" = "404" ] || fail "跨企业改表名未返 404（得 $x404，会泄漏存在性）"
+  ok "改表名/改字段名 200 落库逐字 + 空名 400 + 跨企业 404 同形"
+  section_down
+  echo "✅ 行内改名通过"
+}
+
 run_a31() {
   echo "== A31① 同组织他人不得对「仅自己」私有表建关联 =="
   section_up
@@ -2132,6 +2165,7 @@ case "${1:-}" in
   --a30-row-only)           run_a30_row; exit 0;;
   --a30-table-only)         run_a30_table; exit 0;;
   --a30-field-only)         run_a30_field; exit 0;;
+  --rename-only)            run_rename; exit 0;;
   --a31-only)               run_a31; exit 0;;
   --rollup-a37-only)        run_rollup_a37; exit 0;;
   --rollup-a38-only)        run_rollup_a38; exit 0;;
@@ -2177,6 +2211,7 @@ run_a7
 run_a8
 run_a9
 run_a10
+run_rename
 run_inv_tenant_isolation
 run_inv_endpoint_auth
 run_inv_two_tenant_seed
