@@ -85,4 +85,13 @@ class LocatorAssistWiringTest {
     fun `采集搜索入口判死点挂 locate 保底（铺满刀C3）`() {
         assertTrue("缺 collect_search_entry 步骤键", collectServiceSource().contains("collect_search_entry"))
     }
+
+    @Test
+    fun `D8 搜索结果盲点接了视觉保底（刀B2）`() {
+        val src = dmOutreachServiceSource()
+        assertTrue("缺 dm_result_select 步骤键——D8 盲赌第一行没被视觉纠正", src.contains("dm_result_select"))
+        assertTrue("缺 vision_select 模式调用", src.contains("vision_select"))
+        assertTrue("缺 requestVisionBlocking / 截图问视觉", src.contains("requestVisionBlocking"))
+        assertTrue("缺按 match_index 算行坐标 rowFractionForIndex", src.contains("rowFractionForIndex"))
+    }
 }

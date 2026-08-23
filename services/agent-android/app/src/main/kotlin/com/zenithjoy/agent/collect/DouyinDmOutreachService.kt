@@ -20,6 +20,7 @@ import kotlinx.coroutines.withContext
 import com.zenithjoy.agent.account.DouyinLaunchTrampoline
 import com.zenithjoy.agent.uia.RecoveryAction
 import com.zenithjoy.agent.AgentConfig
+import com.zenithjoy.agent.AgentService
 import com.zenithjoy.agent.BuildConfig
 import com.zenithjoy.agent.uia.LocatorAssistClient
 import com.zenithjoy.agent.uia.UiTreeSnapshot
@@ -652,7 +653,19 @@ class DouyinDmOutreachService : AccessibilityService() {
         delay(3_000L)
         delay(RandomDelay.sample(RandomDelay.SEARCH_MS))
         val beforeProfileToken = fetchToken
-        tapTopUserResult()
+        // AI 视觉保底（刀B2）：结果列表是 Lynx 失明页，代码只能盲赌"目标排第一行"——
+        // 目标其实没排第一时就点错人、白访问一次主页、最后误判 NO_MATCH（有线索却够不着）。
+        // 改为：截图问视觉模型"目标抖音号排第几"，点对那一行。fail-open：视觉不可用/答不出
+        // 退回原盲赌第一行，verifyProfileMatchesDouyinId 仍是最终闸——最坏等于今天，不退化。
+        val visionIdx = tryVisionSelectResultRow(targetDouyinId)
+        if (visionIdx != null && visionIdx > 0) {
+            tapAtCoordinate(
+                resources.displayMetrics.widthPixels * 0.44f,
+                resources.displayMetrics.heightPixels * LocatorAssistClient.rowFractionForIndex(visionIdx),
+            )
+        } else {
+            tapTopUserResult()
+        }
         delay(RandomDelay.sample(RandomDelay.NAV_MS))
         fetchToken = SnapshotDiscipline.nextFetchToken(beforeProfileToken)
         SnapshotDiscipline.requireFresh(beforeProfileToken, fetchToken)
@@ -692,6 +705,49 @@ class DouyinDmOutreachService : AccessibilityService() {
     private fun tapTopUserResult() {
         val m = resources.displayMetrics
         tapAtCoordinate(m.widthPixels * 0.44f, m.heightPixels * 0.21f)
+    }
+
+    /**
+     * AI 视觉保底（刀B2）：搜索"用户"结果列表是 Lynx 失明页——树里没有结果行，代码盲赌第一行。
+     * 截图问视觉模型"目标抖音号排第几个结果"，返回 0-based 序号；-1/失败/不可用返回 null，
+     * 调用方退回盲赌第一行（verifyProfileMatchesDouyinId 仍是最终闸，最坏等于今天不退化）。
+     * 截图复用进程内唯一的 ScreenCaptureService（同扫号链诊断截图，不新建实例、不撞 A14 纪律）。
+     */
+    private suspend fun tryVisionSelectResultRow(targetDouyinId: String): Int? {
+        val shot = runCatching { AgentService.sharedScreenCaptureService?.captureToBase64() }.getOrNull()
+        if (shot.isNullOrBlank()) {
+            android.util.Log.i(TAG, "vision-select: 截图不可用(未授权MediaProjection?)，退回盲赌第一行")
+            return null
+        }
+        val httpBase = AgentConfig(applicationContext).deriveHttpBase()
+        if (httpBase.isBlank()) return null
+        val douyinVer = runCatching {
+            applicationContext.packageManager.getPackageInfo(DOUYIN_PKG, 0).versionName
+        }.getOrNull()
+        val body = LocatorAssistClient.buildAssistBody(
+            step = "dm_result_select",
+            targetDesc = "抖音号 $targetDouyinId",
+            uiTree = "",
+            errorCode = "NO_MATCH",
+            deviceModel = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim(),
+            osVersion = "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})",
+            douyinVersion = douyinVer,
+            appVersion = BuildConfig.VERSION_NAME,
+            mode = "vision_select",
+            screenshotB64 = shot,
+            visionCandidateCount = null, // 结果列表失明数不出个数，交视觉模型自己看
+        )
+        val (matchIndex, assistId) = withContext(Dispatchers.IO) {
+            LocatorAssistClient.requestVisionBlocking(httpBase, body)
+        } ?: return null
+        android.util.Log.i(TAG, "vision-select: target=$targetDouyinId matchIndex=$matchIndex")
+        // 回执：视觉选到 >=0 视为过闸候选（主页 verify 再终裁）；-1 诚实说没匹配也是有效答复
+        if (assistId != null) {
+            scope.launch(Dispatchers.IO) {
+                LocatorAssistClient.reportVerifiedBlocking(httpBase, assistId, matchIndex >= 0)
+            }
+        }
+        return matchIndex
     }
 
     /** 坐标点节点 bounds 中心。用于抖音那些 clickable=false 的 TextView/Button(ACTION_CLICK 无效)。 */
