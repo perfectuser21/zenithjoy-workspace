@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>员工知识中枢 · 路② 批审</title>
+<style>
+:root{
+  --paper:#fbfaf8; --card:#ffffff; --ink:#16181d; --ink-2:#3f434c; --muted:#767b85;
+  --line:#e6e2db; --line-2:#efece6;
+  --accent:#3b4ee0; --accent-soft:#eef0ff;
+  --ok:#0f7b4f; --ok-soft:#e8f5ee;
+  --warn:#a15c00; --warn-soft:#fdf3e2;
+  --danger:#b42318; --danger-soft:#fdeceb;
+  --slate:#4a5568; --slate-soft:#eef1f5;
+  --violet:#6b3fb0; --violet-soft:#f1ebfb;
+  --radius:14px;
+  --shadow:0 1px 2px rgba(20,22,28,.05), 0 6px 18px rgba(20,22,28,.05);
+}
+*{box-sizing:border-box;-webkit-text-size-adjust:100%}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif;
+  font-size:15px; line-height:1.65; letter-spacing:.01em;
+  padding-bottom:56px;
+}
+.wrap{max-width:720px;margin:0 auto;padding:0 16px}
+
+/* ── 头 ── */
+header.top{
+  background:var(--ink); color:#f6f5f2; padding:20px 0 18px;
+  border-bottom:3px solid var(--accent);
+}
+header.top .eyebrow{font-size:11px;letter-spacing:.18em;color:#a3a8b4;text-transform:uppercase;margin:0 0 6px}
+header.top h1{margin:0;font-size:20px;line-height:1.35;font-weight:700}
+header.top .sub{margin:8px 0 0;font-size:12.5px;color:#b9bec9;line-height:1.6}
+header.top code{background:rgba(255,255,255,.09);padding:1px 5px;border-radius:4px;font-size:11px;color:#dfe3ea}
+
+/* ── Tab ── */
+.tabin{position:absolute;opacity:0;pointer-events:none}
+nav.tabs{
+  position:sticky; top:0; z-index:30; background:rgba(251,250,248,.96);
+  backdrop-filter:saturate(140%) blur(8px);
+  border-bottom:1px solid var(--line); display:flex; overflow-x:auto;
+  scrollbar-width:none;
+}
+nav.tabs::-webkit-scrollbar{display:none}
+nav.tabs label{
+  flex:0 0 auto; padding:13px 14px; font-size:13.5px; font-weight:600; color:var(--muted);
+  cursor:pointer; white-space:nowrap; border-bottom:2.5px solid transparent;
+}
+nav.tabs label .n{font-size:10.5px;color:#b3b7c0;margin-right:4px;font-weight:700}
+.panel{display:none;padding:20px 0 40px;animation:fade .18s ease}
+@keyframes fade{from{opacity:.4}to{opacity:1}}
+#t1:checked~main #p1,#t2:checked~main #p2,#t3:checked~main #p3,#t4:checked~main #p4{display:block}
+#t1:checked~nav label[for=t1],#t2:checked~nav label[for=t2],
+#t3:checked~nav label[for=t3],#t4:checked~nav label[for=t4]{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* ── 通用件 ── */
+h2.sec{
+  font-size:12px;letter-spacing:.14em;color:var(--muted);font-weight:700;
+  margin:30px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--line);text-transform:uppercase;
+}
+h2.sec:first-child{margin-top:4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:15px 16px;margin:0 0 12px;box-shadow:var(--shadow)}
+.card h3{margin:0 0 8px;font-size:15.5px;font-weight:700;line-height:1.4}
+.card p{margin:0 0 8px;font-size:14px;color:var(--ink-2)}
+.card p:last-child{margin-bottom:0}
+.lead{font-size:16.5px;line-height:1.7;font-weight:600;margin:0}
+.lead em{font-style:normal;color:var(--accent);border-bottom:2px solid var(--accent-soft);padding-bottom:1px}
+.small{font-size:12.5px;color:var(--muted);line-height:1.6}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;line-height:1.7;white-space:nowrap}
+.t-ok{background:var(--ok-soft);color:var(--ok)}
+.t-warn{background:var(--warn-soft);color:var(--warn)}
+.t-dan{background:var(--danger-soft);color:var(--danger)}
+.t-acc{background:var(--accent-soft);color:var(--accent)}
+.t-mut{background:var(--slate-soft);color:var(--slate)}
+.t-vio{background:var(--violet-soft);color:var(--violet)}
+.rowsplit{display:flex;gap:8px;align-items:flex-start;justify-content:space-between}
+hr.thin{border:0;border-top:1px dashed var(--line);margin:12px 0}
+
+/* 步骤卡 */
+.step{position:relative;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:12px;padding:14px 15px;margin-bottom:10px;box-shadow:var(--shadow)}
+.step .sid{font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--accent)}
+.step h3{margin:3px 0 6px;font-size:15px;font-weight:700}
+.step p{margin:0;font-size:13.5px;color:var(--ink-2)}
+.step .meta{margin-top:9px;display:flex;gap:6px;flex-wrap:wrap}
+
+/* Gate */
+.gate{display:flex;gap:11px;padding:12px 0;border-bottom:1px dashed var(--line)}
+.gate:last-child{border-bottom:0}
+.gate .gid{flex:0 0 46px;font-weight:800;font-size:13px;color:var(--ink);padding-top:1px}
+.gate .gbody{flex:1;min-width:0}
+.gate .gt{font-size:14px;font-weight:650;margin:0 0 3px}
+.gate .gd{font-size:12.5px;color:var(--muted);margin:0;line-height:1.6}
+
+/* ── 手机模拟 ── */
+.phone{
+  max-width:336px;margin:0 auto 6px;background:#fff;border:1px solid #d9d5cd;border-radius:22px;
+  overflow:hidden;box-shadow:0 2px 4px rgba(20,22,28,.06),0 14px 34px rgba(20,22,28,.10);
+}
+.phone .statusbar{background:#f3f1ec;padding:7px 14px 5px;display:flex;justify-content:space-between;font-size:10.5px;color:#8a8f98;border-bottom:1px solid #e9e5de}
+.phone .appbar{padding:11px 14px;border-bottom:1px solid var(--line-2);display:flex;align-items:center;gap:8px}
+.phone .appbar .back{color:var(--muted);font-size:15px}
+.phone .appbar .ttl{font-size:14.5px;font-weight:700;flex:1}
+.phone .body{padding:12px 13px 15px;background:#fdfdfc}
+.mock-note{max-width:336px;margin:0 auto 26px;font-size:11.5px;color:var(--muted);text-align:center;line-height:1.6}
+
+/* 文档树 */
+.tree{border:1px solid var(--line-2);border-radius:11px;overflow:hidden;margin-bottom:11px;background:#fff}
+.tree .ti{display:flex;align-items:center;gap:7px;padding:8px 11px;font-size:12.5px;color:var(--ink-2);border-top:1px solid var(--line-2)}
+.tree .ti:first-child{border-top:0}
+.tree .ti .ico{width:16px;text-align:center;flex:0 0 auto;opacity:.7}
+.tree .ti.lv2{padding-left:26px}
+.tree .ti.lv3{padding-left:41px}
+.tree .ti.cur{background:var(--accent-soft);color:var(--accent);font-weight:650}
+.tree .ti .lock{margin-left:auto;font-size:10.5px;color:#b0b4bc}
+
+/* 富文本编辑器示意 */
+.editor{border:1px solid var(--line-2);border-radius:11px;overflow:hidden;margin-bottom:10px;background:#fff}
+.editor .etool{display:flex;gap:2px;padding:6px 8px;border-bottom:1px solid var(--line-2);background:#f8f7f4;flex-wrap:wrap}
+.editor .etool span{font-size:11px;color:var(--muted);padding:2px 6px;border-radius:5px;font-weight:600}
+.editor .etool span.b{font-weight:800;color:var(--ink-2)}
+.editor .edoc{padding:12px 13px}
+.editor .h1{font-size:16px;font-weight:800;margin:0 0 8px;color:var(--ink);line-height:1.4}
+.editor .para{font-size:12.5px;color:var(--ink-2);margin:0 0 7px;line-height:1.7;position:relative}
+.editor .li{font-size:12.5px;color:var(--ink-2);margin:0 0 4px 4px;line-height:1.6}
+.editor .chk{font-size:12.5px;color:var(--ink-2);margin:0 0 4px;line-height:1.6}
+.editor .code{background:#f4f4f1;border:1px solid var(--line-2);border-radius:7px;padding:8px 10px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#3a3f48;margin:6px 0;white-space:pre-wrap;line-height:1.55}
+.editor .ment{color:var(--accent);font-weight:600}
+
+/* 协同光标 */
+.caret{display:inline-block;width:2px;height:1.05em;vertical-align:-2px;position:relative;margin:0 1px}
+.caret.c1{background:#e0483b}
+.caret.c2{background:#0f9d6b}
+.caret .flag{position:absolute;top:-15px;left:-1px;font-size:9px;color:#fff;padding:1px 5px;border-radius:4px 4px 4px 0;white-space:nowrap;font-weight:700;line-height:1.5}
+.caret.c1 .flag{background:#e0483b}
+.caret.c2 .flag{background:#0f9d6b}
+.selhi{background:rgba(15,157,107,.16);border-radius:2px;padding:0 1px}
+.presence{display:flex;align-items:center;gap:-4px;padding:2px 0}
+.ava{width:22px;height:22px;border-radius:50%;border:2px solid #fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;margin-left:-6px;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.ava:first-child{margin-left:0}
+.ava.a1{background:#e0483b}
+.ava.a2{background:#0f9d6b}
+.ava.a3{background:#3b4ee0}
+.presbar{display:flex;align-items:center;gap:8px;padding:7px 11px;background:#f8f7f4;border:1px solid var(--line-2);border-radius:10px;margin-bottom:10px}
+.presbar .pt{font-size:11.5px;color:var(--muted);flex:1}
+
+/* AI 气泡 */
+.qbubble{background:var(--accent);color:#fff;border-radius:14px 14px 4px 14px;padding:9px 12px;font-size:13.5px;margin:0 0 10px 34px;line-height:1.55}
+.abubble{background:#f4f4f1;border:1px solid var(--line-2);border-radius:14px 14px 14px 4px;padding:11px 12px;margin:0 34px 10px 0}
+.abubble p{margin:0 0 8px;font-size:13.5px;line-height:1.6}
+.src{border-top:1px dashed #d8d5cd;padding-top:8px;margin-top:8px}
+.src .sl{display:block;font-size:11.5px;color:var(--accent);text-decoration:none;margin-bottom:3px;line-height:1.5}
+.src .sl::before{content:"↗ ";opacity:.6}
+.btnrow{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
+.btn{font-size:11.5px;padding:5px 10px;border-radius:7px;border:1px solid var(--line);background:#fff;color:var(--ink-2);font-weight:600}
+.btn.dis{color:#b6bac2;background:#f7f6f4;border-color:var(--line-2)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+
+/* AI 草稿块 */
+.draft{border:1.5px dashed #c9a86a;background:#fffdf6;border-radius:11px;padding:11px 12px;margin-bottom:10px}
+.draft .dh{display:flex;align-items:center;gap:7px;margin-bottom:6px}
+.draft .dh .dt{font-size:12px;font-weight:800;color:#a15c00}
+.draft .dbody{font-size:12.5px;color:var(--ink-2);line-height:1.65;border-left:2px solid #e3cc96;padding-left:9px}
+.draft .dnote{font-size:11px;color:var(--muted);margin:8px 0 0}
+
+.state{border-radius:11px;padding:11px 12px;margin-bottom:9px;border:1px solid}
+.state .sh{font-size:13.5px;font-weight:700;margin:0 0 4px}
+.state p{margin:0;font-size:12.5px;line-height:1.6}
+.state.down{border-color:#f0cfcc;background:#fff6f5}
+.state.down .sh{color:var(--danger)}
+
+/* 判定点 */
+.jp{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 15px;margin-bottom:11px;box-shadow:var(--shadow)}
+.jp .jh{display:flex;gap:9px;align-items:baseline;margin-bottom:7px}
+.jp .jid{font-size:12px;font-weight:800;color:#fff;background:var(--ink);border-radius:6px;padding:2px 7px;flex:0 0 auto}
+.jp .jid.hot{background:var(--danger)}
+.jp .jid.ext{background:var(--warn)}
+.jp .jt{font-size:14.5px;font-weight:700;line-height:1.45}
+.jp .rec{background:var(--accent-soft);border-radius:9px;padding:9px 11px;margin:0 0 9px}
+.jp .rec b{color:var(--accent);font-size:11px;letter-spacing:.08em;display:block;margin-bottom:2px}
+.jp .rec p{margin:0;font-size:13px;line-height:1.6;color:var(--ink-2)}
+.jp .bad{border-left:3px solid var(--danger);padding:2px 0 2px 10px;margin:0 0 9px}
+.jp .bad b{color:var(--danger);font-size:11px;letter-spacing:.08em;display:block;margin-bottom:2px}
+.jp .bad p{margin:0;font-size:12.5px;line-height:1.6;color:var(--ink-2)}
+.jp .sign{display:flex;gap:8px;padding-top:9px;border-top:1px dashed var(--line)}
+.jp .sign span{flex:1;text-align:center;font-size:12px;font-weight:650;padding:7px;border-radius:8px;border:1px solid var(--line);color:var(--muted)}
+.jp .sign span.y{border-color:#bcd9c9;color:var(--ok);background:var(--ok-soft)}
+
+/* 表 */
+.tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:#fff;margin-bottom:12px;box-shadow:var(--shadow)}
+table{border-collapse:collapse;width:100%;min-width:440px;font-size:12.5px}
+th{background:#f5f4f1;text-align:left;padding:9px 11px;font-weight:700;color:var(--ink-2);white-space:nowrap;border-bottom:1px solid var(--line)}
+td{padding:9px 11px;border-bottom:1px solid var(--line-2);vertical-align:top;color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* Sprint 流 */
+.sp{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 14px;margin-bottom:8px;box-shadow:var(--shadow)}
+.sp .sph{display:flex;gap:8px;align-items:baseline;margin-bottom:6px;flex-wrap:wrap}
+.sp .spn{font-size:13.5px;font-weight:800}
+.sp p{margin:0;font-size:12.5px;color:var(--ink-2);line-height:1.6}
+.arrow{text-align:center;color:#c4c8d0;font-size:15px;line-height:1;margin:0 0 8px}
+
+/* 签字要点 */
+.sign-item{display:flex;gap:11px;padding:12px 0;border-bottom:1px dashed var(--line)}
+.sign-item:last-child{border-bottom:0}
+.sign-item .box{flex:0 0 18px;height:18px;border:2px solid var(--line);border-radius:5px;margin-top:2px}
+.sign-item .sb{flex:1;min-width:0}
+.sign-item .st{font-size:14px;font-weight:650;margin:0 0 3px}
+.sign-item .sd{font-size:12.5px;color:var(--muted);margin:0;line-height:1.6}
+
+footer{border-top:1px solid var(--line);margin-top:34px;padding:18px 0 6px;font-size:11.5px;color:var(--muted);line-height:1.7}
+</style>
+</head>
+<body>
+
+<input class="tabin" type="radio" name="tab" id="t1" checked>
+<input class="tabin" type="radio" name="tab" id="t2">
+<input class="tabin" type="radio" name="tab" id="t3">
+<input class="tabin" type="radio" name="tab" id="t4">
+
+<header class="top">
+  <div class="wrap">
+    <p class="eyebrow">ZenithJoy · 员工知识中枢 line11</p>
+    <h1>路② 协同笔记 / 文档<br>提案批审 · v2 收敛终稿</h1>
+    <p class="sub">Capability <code>collaborative_docs</code> · GP <code>301bd18f</code> · R1 三镜头 GAN（P0=0 · P1×5 全核销）→ R2 solo APPROVED<br>本页为静态模拟，不接后端，仅供主理人在手机上 30 秒看懂后拍板</p>
+  </div>
+</header>
+
+<nav class="tabs">
+  <div class="wrap" style="display:flex;padding:0 8px">
+    <label for="t1"><span class="n">01</span>一图看懂</label>
+    <label for="t2"><span class="n">02</span>体验模拟</label>
+    <label for="t3"><span class="n">03</span>判定点</label>
+    <label for="t4"><span class="n">04</span>汇总与签字</label>
+  </div>
+</nav>
+
+<main class="wrap">
+
+<!-- ══════════ 01 一图看懂 ══════════ -->
+<section class="panel" id="p1">
+
+  <h2 class="sec">这条路是什么</h2>
+  <div class="card">
+    <p class="lead">员工在 Staff Hub 里写协作文档 —— 会议纪要 / SOP / 方案 / wiki —— <em>多人实时同编不打架</em>、<em>按组织权限管得住</em>、<em>AI 一等公民能读能写回且受同一权限约束不投毒</em>。这条路要替代的是<em>飞书文档 / Notion</em>。</p>
+    <hr class="thin">
+    <p class="small">一句话触发器 → 终点：<b>员工要写一篇文档（当前散在飞书/Notion/本地）</b> → <b>建文档、写富文本、组织成文档树、多人 CRDT 实时协同、按组织权限管住、AI 能读能写回、数据按组织隔离可导出、删错可恢复</b>。</p>
+  </div>
+
+  <h2 class="sec">5 步承诺式骨干（客户/老板可感知）</h2>
+
+  <div class="step">
+    <div class="sid">S1 · 文档写得出、留得住</div>
+    <h3>建文档、写富文本、组织成文档树，保存刷新还在</h3>
+    <p>标题/段落/列表/勾选/代码块/内嵌图片/@提及其他文档；可移动/重命名/软删 + 30 天回收站；整篇可导出 Markdown 拿走。</p>
+    <div class="meta"><span class="tag t-warn">现状 半成</span><span class="tag t-acc">验证 L2</span><span class="tag t-mut">TipTap 跨 app 移植</span></div>
+  </div>
+
+  <div class="step">
+    <div class="sid">S2 · 多人实时协同、字符级不打架</div>
+    <h3>多人同编一篇，看得到别人光标在哪、正在改哪里</h3>
+    <p>两人改不同段落<b>字符级自动合并互不覆盖</b>、改同一句也无静默丢字；断连降级只读 + 本地暂存并提示，重连自动 resync。</p>
+    <div class="meta"><span class="tag t-dan">净新增 · 重</span><span class="tag t-acc">验证 L3</span><span class="tag t-vio">CRDT 引擎从零</span></div>
+  </div>
+
+  <div class="step">
+    <div class="sid">S3 · 文档按权限管得住</div>
+    <h3>三档可见/可编辑范围，沿文档树继承取更严者</h3>
+    <p>组织可见 / 指定成员集合 / 仅自己；无权的人看不到标题、不在树、搜不到、打不开、导不走、进不了协作、AI 也检索不到（<b>七处过滤</b>）。</p>
+    <div class="meta"><span class="tag t-warn">现状 半成</span><span class="tag t-acc">验证 L2</span><span class="tag t-mut">most-restrictive-wins</span></div>
+  </div>
+
+  <div class="step">
+    <div class="sid">S4 · AI 读得到、答得准</div>
+    <h3>AI 就你有权看到的文档答问/摘要，答案带出处</h3>
+    <p>只在请求者本人已鉴权的同步请求内、复用其身份检索；绝不召回请求者无权/他企业/未确认草稿的内容。</p>
+    <div class="meta"><span class="tag t-dan">净新增</span><span class="tag t-acc">验证 L3</span><span class="tag t-mut">query-time live ACL</span></div>
+  </div>
+
+  <div class="step">
+    <div class="sid">S5 · AI 写得回、受同一权限约束</div>
+    <h3>AI 把内容写回成可见的「AI 草稿」块，人工确认后才成正文</h3>
+    <p>写回复用请求者身份 + 过 S3 权限校验，只 additive 插入不整档覆盖，绝不以系统身份写他人私密文档。</p>
+    <div class="meta"><span class="tag t-dan">净新增</span><span class="tag t-acc">验证 L3</span><span class="tag t-mut">人工确认闸</span></div>
+  </div>
+
+  <h2 class="sec">4 道 Gate 全景 · 任一不过整条路停</h2>
+  <p class="small" style="margin:-4px 0 12px">本路碰四类真实世界接缝：生产 DB（文档正文=企业核心资产）、真实第三方 LLM、跨企业多租户真墙、WS 长连真机 E2E。故 S2/S4/S5 验证等级承诺<b>必须 L3</b>。</p>
+  <div class="card">
+    <div class="gate">
+      <div class="gid">G0 / G0b</div>
+      <div class="gbody">
+        <p class="gt">组织底座衔接 + WS 握手鉴权 <span class="tag t-dan">本路最大接缝</span></p>
+        <p class="gd">全部文档端点挂 <span class="mono">workbenchAuthGuard</span>：身份/org 只来自服务端会话。<b>但它是纯 Express cookie-session，不能 drop-in 到 WS 握手</b> —— G0b 净新增：WS upgrade 手写复用 better-auth 会话解析，多 org 成员命中 rows>1 <b>拒绝不建房（绝不取 rows[0]）</b>，会话失效即断连重验。</p>
+      </div>
+    </div>
+    <div class="gate">
+      <div class="gid">G1</div>
+      <div class="gbody">
+        <p class="gt">富文本存储与 XSS 面 · 本轮补 CV 校验点 <span class="tag t-acc">P1-1</span></p>
+        <p class="gd">正文存 ProseMirror JSON → <span class="mono">content jsonb</span>，CRDT 存 <span class="mono">crdt_state bytea</span>；三条入库路径（HTTP 编辑器 / AI 写回 / <b>CRDT-WS</b>）过<b>同一条服务端 schema 白名单</b>（含 href/src 协议白名单）。CV = 服务端在 Yjs update apply 后落库前校验，拒绝裸 WS 客户端注入。</p>
+      </div>
+    </div>
+    <div class="gate">
+      <div class="gid">G2</div>
+      <div class="gbody">
+        <p class="gt">备份底线 <span class="tag t-mut">范式可照搬</span></p>
+        <p class="gd">文档正文 + CRDT state = 企业核心资产，pg_dump 定时 + 异地 + <b>恢复演练断言</b>（复用路③ G2 范式，演练进 cron 非一次性）。</p>
+      </div>
+    </div>
+    <div class="gate">
+      <div class="gid">G3</div>
+      <div class="gbody">
+        <p class="gt">文档纳入 AI 检索域 · 路② 独有命门 <span class="tag t-acc">P1-2/P1-3</span></p>
+        <p class="gd">路② 文档<b>进</b> QA 检索域（与路③ 排除相反）。三条不变式：① 权限过滤 = query-time live 复核（索引仅候选生成，召回后按 live ACL 复核，无权候选喂 LLM 前丢弃）；② 未确认 AI 草稿不进检索；③ 正文一律当不可信数据（分隔 + 来源标注）。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="border-color:#f0cfcc;background:#fffafa">
+    <h3 style="color:var(--danger)">一句话风险提要</h3>
+    <p>路② 最危险的不是「多人改冲突」，是<b>三条越权通道</b>：① CRDT/WS 走裸 socket 绕过 HTTP schema 白名单 → 存储型 XSS 还会被抽进 AI 检索（P1-1，已补 CV）；② WS 握手若对多 org 成员取 <span class="mono">rows[0]</span> → 把配置事故变成<b>静默跨企业事故</b>（P1-4，已钉硬断言+变异）；③ AI 检索只信索引态 ACL → 离职成员留下<b>陈旧 ACL 越权召回窗口</b>（P1-2，已改 query-time live 复核，零陈旧窗口）。这三条 R1 三镜头全部打到，v2 已逐条核销。</p>
+  </div>
+
+</section>
+
+<!-- ══════════ 02 体验模拟 ══════════ -->
+<section class="panel" id="p2">
+
+  <h2 class="sec">① 文档树 + 富文本编辑器</h2>
+  <p class="small" style="margin:-4px 0 14px">员工在文档树某节点建文档、写富文本。无权的文档不出现在树里（下图「财务·薪酬方案」带锁 = 仅自己，当前员工看得到条目是因为他是作者）。</p>
+
+  <div class="phone">
+    <div class="statusbar"><span>9:41</span><span>Staff Hub · 文档</span></div>
+    <div class="appbar"><span class="ttl">团队文档</span><span class="tag t-acc">悦升 · 组织可见</span></div>
+    <div class="body">
+
+      <div class="tree">
+        <div class="ti"><span class="ico">📁</span>产品团队</div>
+        <div class="ti lv2"><span class="ico">📁</span>周会纪要</div>
+        <div class="ti lv3 cur"><span class="ico">📄</span>2026-08-22 产品周会纪要</div>
+        <div class="ti lv3"><span class="ico">📄</span>2026-08-15 产品周会纪要</div>
+        <div class="ti lv2"><span class="ico">📁</span>SOP</div>
+        <div class="ti lv3"><span class="ico">📄</span>获客私信话术 SOP</div>
+        <div class="ti"><span class="ico">📁</span>财务<span class="lock">🔒 仅自己</span></div>
+        <div class="ti lv2"><span class="ico">📄</span>薪酬方案 v3<span class="lock">🔒</span></div>
+      </div>
+
+      <div class="editor">
+        <div class="etool"><span class="b">B</span><span style="font-style:italic">I</span><span>H1</span><span>• 列表</span><span>☑ 待办</span><span>&lt;/&gt; 代码</span><span>🖼</span><span>@</span></div>
+        <div class="edoc">
+          <p class="h1">2026-08-22 产品周会纪要</p>
+          <p class="para">与会：产品、运营、获客三组。核心议题：路② 协同文档批审。</p>
+          <div class="chk">☑ 确认 CRDT 库选型（Yjs）</div>
+          <div class="chk">☐ active_org 模型对齐 <span class="ment">@multiorg-agent</span></div>
+          <p class="para" style="margin-top:8px">决议要点：</p>
+          <div class="li">1. 首刀不含 Notion/飞书导入，新文档从零写</div>
+          <div class="li">2. 检索域采「有权可见即默认纳入」+ opt-out</div>
+          <div class="code">相关文档：@获客私信话术 SOP
+参考经验：@路①·荣耀 iAware 拦截</div>
+          <p class="para">图片走对象存储只存引用 <span style="color:#b0b4bc">🖼 架构示意图.png</span></p>
+        </div>
+      </div>
+      <p class="small" style="margin:2px 0 0">自动保存（防抖落库）· 失败时编辑器可见提示且本地草稿保留，禁静默丢失</p>
+    </div>
+  </div>
+  <p class="mock-note">静态模拟。TipTap 编辑器现仅在 dashboard，须像路③ AG Grid 一样跨 app 移植进 staff-hub；<span class="mono">documents</span> 表当前缺失，本刀净新建。</p>
+
+  <h2 class="sec">② 多人实时协同 · CRDT 光标</h2>
+  <p class="small" style="margin:-4px 0 14px">两个员工同时编辑同一篇，看得到别人的彩色光标在哪、正在改哪句；两人改不同段落字符级自动合并、互不覆盖。右上角头像 = 当前在线协作者。</p>
+
+  <div class="phone">
+    <div class="statusbar"><span>9:43</span><span>实时协同中</span></div>
+    <div class="appbar"><span class="back">←</span><span class="ttl">获客私信话术 SOP</span>
+      <span class="presence"><span class="ava a1">王</span><span class="ava a2">李</span><span class="ava a3">你</span></span>
+    </div>
+    <div class="body">
+      <div class="presbar">
+        <span class="ava a1" style="width:18px;height:18px;font-size:9px">王</span>
+        <span class="pt"><b style="color:#e0483b">王工</b> 正在改「开场白」段落 · <b style="color:#0f9d6b">李工</b> 正在改「跟进节奏」段落</span>
+      </div>
+
+      <div class="editor">
+        <div class="edoc">
+          <p class="h1">获客私信话术 SOP</p>
+          <p class="para">开场白：您好，看到您对我们的内容感兴趣<span class="caret c1"><span class="flag">王工</span></span>，想跟您聊聊……</p>
+          <p class="para">首条限制：陌生人首次私信仅限 <b>1 条</b>，触达后等回复再跟进。</p>
+          <p class="para">跟进节奏：<span class="selhi">按线索联系上率控制在 <span class="caret c2"><span class="flag">李工</span></span>合理频次</span>，dm_per_hour 暂按风控值。</p>
+        </div>
+      </div>
+      <p class="small" style="margin:2px 0 0;text-align:center">王工与李工同时在改不同段落 · 字符级合并 · 非 409 · 无丢字</p>
+
+      <div class="state" style="border-color:#dfe3ea;background:#f6f8fa;margin-top:10px">
+        <p class="sh" style="color:var(--slate)">断连降级（示意）</p>
+        <p>网络中断 → 横幅「已降级为只读，你的改动已本地暂存」，重连自动 resync 合并，不丢字。</p>
+      </div>
+    </div>
+  </div>
+  <p class="mock-note">静态模拟。CRDT 引擎（Yjs + y-prosemirror + awareness 多人光标）零现成可复用，是本路净新增的重工程；WS 协作通道抄 <span class="mono">agent-ws.ts</span> 挂载模式，但 cookie 会话握手/协作房/CV 校验全净新增。</p>
+
+  <h2 class="sec">③ AI 读文档 · 带出处问答</h2>
+  <p class="small" style="margin:-4px 0 14px">AI 只答你<b>有权看到且未 opt-out</b> 的文档，答案带出处链接；构造的跨企业/无权/未确认草稿三类投毒文档绝不进你的问答上下文。</p>
+
+  <div class="phone">
+    <div class="statusbar"><span>9:45</span><span>AI 助手</span></div>
+    <div class="appbar"><span class="back">←</span><span class="ttl">问一问团队文档</span></div>
+    <div class="body">
+      <div class="qbubble">我们的获客私信首条有什么限制？跟进节奏怎么定的？</div>
+      <div class="abubble">
+        <p><b>陌生人首次私信仅限 1 条</b>，触达后要等对方回复再跟进，不连发。跟进节奏按「线索联系上率」控制在合理频次，dm_per_hour 暂按平台风控值，未放开。</p>
+        <p>这些写在你们的《获客私信话术 SOP》里，我按你的权限读到了这篇。</p>
+        <div class="src">
+          <span class="sl">获客私信话术 SOP · 产品团队/SOP · 你有权可见</span>
+          <span class="sl">2026-08-22 产品周会纪要 · 决议第 2 条</span>
+        </div>
+        <p class="small" style="margin:8px 0 0">召回后按 live ACL 复核：若你此刻已被移出该成员集合，这两篇当场不再召回，不给 N 秒陈旧窗口。</p>
+      </div>
+    </div>
+  </div>
+  <p class="mock-note">静态模拟。检索器整体净新建：index 仅候选生成，召回后一律 query-time live ACL 复核（查 <span class="mono">tenant_members</span> + live visibility）；未确认草稿不进检索；正文当不可信数据（分隔 + 来源标注）。</p>
+
+  <h2 class="sec">④ AI 写回 · pending 草稿块 + 人工确认闸</h2>
+  <p class="small" style="margin:-4px 0 14px">让 AI 把内容写回文档，只落成<b>可见的「AI 草稿」块</b>（pending，检索不召回），人工确认后才成正文。additive 插入不整档覆盖。</p>
+
+  <div class="phone">
+    <div class="statusbar"><span>9:47</span><span>AI 助手</span></div>
+    <div class="appbar"><span class="back">←</span><span class="ttl">2026-08-22 周会纪要</span></div>
+    <div class="body">
+      <div class="qbubble">帮我把今天关于「检索域纳入策略」的决议补成一段写进纪要</div>
+
+      <div class="draft">
+        <div class="dh"><span>✎</span><span class="dt">AI 草稿（待确认）</span><span class="tag t-warn">pending · 不进检索</span></div>
+        <div class="dbody">决议：文档检索域采「有权可见即默认纳入」策略，权限前置过滤（query-time live ACL）兜底投毒面；员工可在「文档设置 · 排除 AI 检索」显式 opt-out。默认值 = 纳入。</div>
+        <p class="dnote">身份：复用你本人已鉴权会话 · 过 S3 编辑权校验 · additive 插入不覆盖原文 · 过 G1 schema 白名单</p>
+        <div class="btnrow">
+          <span class="btn ok">✓ 确认成正文</span>
+          <span class="btn">编辑后确认</span>
+          <span class="btn dis">丢弃草稿</span>
+        </div>
+      </div>
+
+      <p class="small" style="margin:2px 0 0">确认动作进 <span class="mono">db_audit</span>。确认权归对该 doc 有编辑权的人类，<b>不能是投毒植入者自助确认</b>。</p>
+    </div>
+  </div>
+  <p class="mock-note">静态模拟。确认闸只保证「未确认不成正文」，<b>不是投毒防护</b> —— 真防线是 G3③ 数据分隔 + S4 未确认不进检索。写回无请求者身份即拒；跨企业/越权写 → 4xx 且目标文档逐字未变。</p>
+
+</section>
+
+<!-- ══════════ 03 判定点 ══════════ -->
+<section class="panel" id="p3">
+
+  <p class="small" style="margin:0 0 16px">全表共 10 个判定点（J1-J10），批准即写 <span class="mono">decisions</span> 冻结。下面挑出 5 个最该由主理人亲自看的 —— 挑选标准是「选错的后果不可撤回，或者选错了系统还全绿」。J7 是外部依赖，本轮不裁决只登记。</p>
+
+  <div class="jp">
+    <div class="jh"><span class="jid hot">J1</span><span class="jt">CRDT 库选型：实时同步引擎（净新增重决策）</span></div>
+    <div class="rec"><b>推荐做法</b><p>REC = <b>Yjs</b>。官方 <span class="mono">y-prosemirror</span> + TipTap 官方协作扩展，字符级合并 + 多人光标（awareness）近乎开箱；本仓 TipTap 3.x 已是 dashboard 依赖。二进制增量 update 紧凑，天然适配 WS noServer 增量广播。</p></div>
+    <div class="bad"><b>误判后果</b><p>选 Automerge：TipTap 无一等扩展，绑定/多人光标全部自研，<b>工期翻倍且 merge 正确性风险</b>。仅当首刀就要文档内建全量历史/时间旅行为一等需求才反选。</p></div>
+    <p class="small" style="margin:0 0 9px">现场：CRDT 引擎<b>零现成</b>（<span class="mono">git grep -i yjs\|automerge\|y-websocket</span> 零命中）；路③ 无乐观锁/version 列可复用 —— 主理人 0822 拍板「实时版 CRDT（像腾讯文档）」，这是重决策、工程量大。</p>
+    <div class="sign"><span class="y">采纳 Yjs</span><span>Automerge</span></div>
+  </div>
+
+  <div class="jp">
+    <div class="jh"><span class="jid hot">J2</span><span class="jt">WS 手写握手鉴权（cookie-only 不能 drop-in）</span></div>
+    <div class="rec"><b>推荐做法</b><p>REC = <b>手写</b> upgrade 握手，<span class="mono">auth.api.getSession({headers: fromNodeHeaders(upgradeReq.headers)})</span> → <span class="mono">tenant_members</span> 真查 → memberId+orgId；命中 <span class="mono">rows.length&gt;1</span>（多 org）<b>→ 拒绝不建房，绝不取 rows[0]</b>（比照 workbench-auth.ts:92 的 409 语义）。抄 <span class="mono">agent-ws.ts</span> 的 noServer+upgrade+ping 模式但路径 <span class="mono">/collab-ws</span> 独立、鉴权换 cookie 会话。</p></div>
+    <div class="bad"><b>误判后果（两种都不可逆）</b><p>① 直接复用 workbenchAuthGuard 中间件 → WS upgrade 不过中间件链 → <b>握手无鉴权 → 任意人进任意协作房</b>；② 握手取 rows[0] 静默挑一个 org → <b>把配置事故变成静默跨企业事故</b>。</p></div>
+    <p class="small" style="margin:0 0 9px">现场：<span class="mono">workbench-auth.ts</span> 是纯 Express cookie-session 中间件，WS 握手够不着；<span class="mono">agent-ws.ts</span> 现有鉴权是 agent 机器 token（非 cookie 会话）—— 挂载模式可抄，cookie 会话握手 + 协作房 + 每连接 doc 权校验 + 多 org 拒绝 + 会话失效断连全是净新增。</p>
+    <div class="sign"><span class="y">采纳手写握手</span><span>硬塞中间件（否决）</span></div>
+  </div>
+
+  <div class="jp">
+    <div class="jh"><span class="jid">J4 / J5</span><span class="jt">组织三层权限：显式成员集合 + live 校验</span></div>
+    <div class="rec"><b>推荐做法</b><p>J4 REC = <b>(b) 显式指定成员集合，不建部门表</b>（员工目录只有 org+member 两层，无部门层）。J5 REC = 成员集合命中后<b>必须 live 校验该 member 仍属本 org</b>（查 <span class="mono">tenant_members</span>），禁只信静态 id 列表。</p></div>
+    <div class="bad"><b>误判后果</b><p>建部门表 = 重且与飞书组织结构耦合；只信静态列表 → <b>离职成员 + 未失效会话 = 越权读</b>。</p></div>
+    <p class="small" style="margin:0 0 9px">关键：J5 的 live 复核范式<b>就是</b> J6 AI 检索 query-time live ACL 复核的同一实现基座 —— 权限收紧后即时 fail-closed，读路径与 AI 检索路径共用一套。</p>
+    <div class="sign"><span class="y">采纳 (b) + live 校验</span><span>静态列表（否决）</span></div>
+  </div>
+
+  <div class="jp">
+    <div class="jh"><span class="jid hot">J6 / J10</span><span class="jt">AI 检索投毒防护：live 复核 + CV 服务端校验</span></div>
+    <div class="rec"><b>推荐做法</b><p>J6：默认纳入 =「有权可见即进」，<span class="mono">ai_retrieval_opt_out</span> 显式退出；<b>index 仅候选生成，召回后一律 query-time live ACL 复核，无权候选喂 LLM 前丢弃</b> —— 正确性由 live 复核保证（真 fail-closed、零陈旧窗口），索引新鲜度降级为纯性能项。J10（本轮新增 CV）：服务端在 Yjs update apply 后落库前，对派生 doc 过<b>与 HTTP/AI 写回同一条</b> schema 白名单，非白名单节点/协议拒绝该 update。</p></div>
+    <div class="bad"><b>误判后果</b><p>只信索引态 ACL → <b>陈旧 ACL 越权召回窗口</b>（离职成员内容仍被召回）；不做 CV → 裸 WS 客户端可绕过写白名单外节点 = <b>存储型 XSS + 污染 AI 检索</b>；opt-in 才进 → AI 一篇读不到、「一等公民」当场打折。</p></div>
+    <p class="small" style="margin:0 0 9px">四层投毒防护叠加：① 未确认草稿不进检索；② 权限前置过滤（live ACL）；③ 正文当不可信数据分隔；④ CV 覆盖 CRDT/WS 路径。人工确认闸<b>不是</b>投毒防护。</p>
+    <div class="sign"><span class="y">采纳 live 复核 + CV</span><span>只信索引 ACL（否决）</span></div>
+  </div>
+
+  <div class="jp">
+    <div class="jh"><span class="jid ext">J7</span><span class="jt">active_org 外部依赖（本轮不裁决，仅登记）</span></div>
+    <div class="rec"><b>处置</b><p><b>待 <span class="mono">active_org</span> 定案</b>（另有 multiorg agent 在定「多组织 + AI org 模型」）。现状下限 = 单 org 成员从会话唯一推 org、<b>多 org 成员 fail-closed 409</b>（握手不取 rows[0]，A3-c 硬断言 + 变异钉死）；WS 连接与 AI 读写的 org 维度形态待 multiorg agent 定案后由 controller 补。</p></div>
+    <div class="bad"><b>误判后果</b><p>本路若替 multiorg agent 猜 active_org 语义 → <b>双方模型冲突</b>。故 S2/S4/S5 多 org 分支<b>冻结</b>在「单 org 成员端到端可用 + 多 org fail-closed 409」下限，禁在 active_org 未定时替它猜。</p></div>
+    <p class="small" style="margin:0 0 9px">现场：<span class="mono">active_org/activeOrg/current_org</span> 全 origin/main 零命中；这是<b>不阻塞 S1</b> 但影响 S2/S4/S5 多 org 分支的外部阻塞项，需与 multiorg agent 对齐。</p>
+    <div class="sign"><span>登记依赖，待对齐</span></div>
+  </div>
+
+  <p class="small" style="margin:16px 0 0">另外 4 个判定点（J3 CRDT 持久化形态·update log bytea + JSON 快照双写 / J8 AI 读写身份·只在同步请求复用 req.workbenchIdentity 禁后台服务身份 / J9 AI 写回确认权归属·非植入者自助确认 / 及 J6 内的检索索引形态 thin=关键词倒排 vs embedding 加厚）已在提案 v2 全文列明 REC、备选与两侧误判后果，一并随本次拍板冻结。</p>
+
+</section>
+
+<!-- ══════════ 04 汇总与签字 ══════════ -->
+<section class="panel" id="p4">
+
+  <h2 class="sec">规模评估（净新增在哪、多重）</h2>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>件</th><th>现状</th><th>本刀工作量</th></tr></thead>
+      <tbody>
+        <tr><td>实时协同引擎</td><td>CRDT 零现成（grep 零命中），路③ 无乐观锁可复用</td><td class="num"><b>净新增 · 重</b><br>Yjs + y-prosemirror + awareness + 落库</td></tr>
+        <tr><td>WS 协作通道</td><td>agent-ws.ts 挂载/升级/ping 模式可抄，鉴权是机器 token</td><td class="num">模式可抄<br>cookie 握手/协作房/CV 净新增</td></tr>
+        <tr><td>TipTap 编辑器</td><td>仅 dashboard 有，staff-hub 无</td><td class="num">跨 app 移植<br>+ staff-hub 主题 + schema 白名单</td></tr>
+        <tr><td>AI 检索器</td><td>整体不存在；路① knowledge.ts 纯 CRUD 无检索</td><td class="num">净新增<br>index 候选 + query-time live ACL 复核</td></tr>
+        <tr><td>documents 表</td><td>缺失（git grep zenithjoy.documents 空）</td><td class="num">净新建<br>含 content jsonb + crdt_state bytea</td></tr>
+        <tr><td>可复用底座</td><td colspan="2">workbenchAuthGuard（cross-tenant 六层）/ better-auth 会话 / JSONB 软删回收站 db_audit 范式 / @dnd-kit 树拖拽 —— 均 origin/main 已落地</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="sec">R1 三镜头 GAN 收敛记录</h2>
+  <p class="small" style="margin:-4px 0 12px">路② 提案写了 2 版：v1 过 R1 三镜头对抗（product / tech / risk），v2 定点修订后 R2 solo 复审 APPROVED。处置口径：<b>核销</b> = 已改正文与合同；<b>P2 记账</b> = 不阻塞，登进实现期账本。</p>
+
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>轮次</th><th>抓到的阻塞项</th><th class="num">核销</th><th class="num">剩余</th><th>结论</th></tr></thead>
+      <tbody>
+        <tr><td>R1 三镜头 → v2</td><td><b>P0×0</b> · P1×5 · P2×5</td><td class="num">10</td><td class="num">0</td><td>5 条 P1 全核销无 REFUTE</td></tr>
+        <tr><td>R2 solo 复审</td><td>—</td><td class="num">—</td><td class="num">0</td><td><b>APPROVED · 定为终稿</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>R1 抓到的 5 条 P1 · 全部核销</h3>
+    <p style="margin-bottom:6px"><b>P1-1</b>（tech）CRDT/WS 通道绕过 XSS schema 白名单 → 补服务端 CV 校验点（apply 后落库前，A10 + 变异）。</p>
+    <p style="margin-bottom:6px"><b>P1-2</b>（tech+risk）AI 检索陈旧 ACL 窗口与 fail-closed 自相矛盾 → 改 query-time live 复核，索引降级为纯性能项，零陈旧窗口。</p>
+    <p style="margin-bottom:6px"><b>P1-3</b>（product）AI 检索纳入默认策略无人负责 + fr 超承诺 → 改「有权可见即默认纳入 + opt-out」，UI 归属 S4 开关。</p>
+    <p style="margin-bottom:6px"><b>P1-4</b>（risk）WS 手写握手缺「多 org fail-closed」变异守卫 → A3-c 硬断言 + 变异（改取 rows[0] 必转红）。</p>
+    <p><b>P1-5</b>（risk）「会话过期长连不静默续命」无验证断言 → 补 A3-e（会话失效 → 下一 ping/写操作断连重验）。</p>
+    <hr class="thin">
+    <p class="small"><b>P2 记账 5 条</b>（不阻塞，进实现期账本）：openrouter.ts 现状标注更正 / 多 org 409 用户可感知提示 / @人通知触发器进不做清单 / 模板建档·过期提醒进不做清单 / CRDT update log 压缩·写放大留实现期。</p>
+  </div>
+
+  <h2 class="sec">5 个待拍板问题 · 主理人 0822 已拍板结论</h2>
+  <div class="card">
+    <div class="sign-item">
+      <div class="box" style="border-color:var(--ok);background:var(--ok-soft)"></div>
+      <div class="sb"><p class="st">Q1 协作模型 → <span style="color:var(--ok)">实时版 CRDT（多人光标，像腾讯文档）</span></p><p class="sd">一步到位实时协同，不是乐观锁 thin。重决策、工程量大，实时引擎净新增。</p></div>
+    </div>
+    <div class="sign-item">
+      <div class="box" style="border-color:var(--ok);background:var(--ok-soft)"></div>
+      <div class="sb"><p class="st">Q2/Q4 导入 → <span style="color:var(--ok)">首刀不含导入</span></p><p class="sd">新文档从零写，Notion/飞书批量导入留后续刀。</p></div>
+    </div>
+    <div class="sign-item">
+      <div class="box" style="border-color:var(--ok);background:var(--ok-soft)"></div>
+      <div class="sb"><p class="st">Q2 检索 → <span style="color:var(--ok)">有权可见即默认纳入 + opt-out</span></p><p class="sd">P1-3 修订后由「显式标记才进」改为「默认纳入」，权限前置过滤兜底投毒面。</p></div>
+    </div>
+    <div class="sign-item">
+      <div class="box" style="border-color:var(--ok);background:var(--ok-soft)"></div>
+      <div class="sb"><p class="st">Q3 三层中间层 → <span style="color:var(--ok)">显式指定成员集合，不建部门表</span></p><p class="sd">员工目录只有 org+member 两层，采纳推荐 (b)。</p></div>
+    </div>
+    <div class="sign-item">
+      <div class="box" style="border-color:var(--ok);background:var(--ok-soft)"></div>
+      <div class="sb"><p class="st">Q5 自有 LLM → <span style="color:var(--ok)">line11 横切件</span></p><p class="sd">AI 助手层 S4/S5 共用，openrouter.ts 作 library 复用（现有唯一消费者 = Line04 微信客服）。</p></div>
+    </div>
+    <div class="sign-item">
+      <div class="box" style="border-color:var(--warn);background:var(--warn-soft)"></div>
+      <div class="sb"><p class="st">AI 通道对齐 active_org → <span style="color:var(--warn)">待 multiorg agent 定案对齐</span></p><p class="sd">WS 连接要声明 org，AI 读写身份与 org 归属对齐即将定的 active_org 模型。多 org 分支冻结在 fail-closed 409 下限。</p></div>
+    </div>
+  </div>
+
+  <h2 class="sec">待主理人签字的合同要点</h2>
+  <div class="card">
+    <div class="sign-item">
+      <div class="box"></div>
+      <div class="sb"><p class="st">1 · 认可 CRDT 是净新增重工程</p><p class="sd">实时同步引擎从零（Yjs 选型）+ TipTap 跨 app 移植 + WS 协作通道净新增，S2 验证等级 L3 真机真验。</p></div>
+    </div>
+    <div class="sign-item">
+      <div class="box"></div>
+      <div class="sb"><p class="st">2 · 冻结 J1-J10 全部 10 个判定点</p><p class="sd">批准即写 <span class="mono">decisions</span>。J7（active_org）不在本轮拍板，仅登记为外部依赖待对齐。</p></div>
+    </div>
+    <div class="sign-item">
+      <div class="box"></div>
+      <div class="sb"><p class="st">3 · 冻结 A1-A10 验收断言</p><p class="sd">冻结后 AI 不可改。含多处变异测试 proven-to-fire（CV/多 org rows[0]/会话失效/query-time live ACL 守卫改坏了要真报红）。</p></div>
+    </div>
+    <div class="sign-item">
+      <div class="box"></div>
+      <div class="sb"><p class="st">4 · 认可四道 Gate 全绿方进对应步骤</p><p class="sd">G0/G0b 组织底座 + WS 握手 / G1 XSS + CV / G2 备份恢复演练 / G3 检索域三不变式。任一不过整条路停。</p></div>
+    </div>
+    <div class="sign-item">
+      <div class="box"></div>
+      <div class="sb"><p class="st">5 · 认可 active_org 外部阻塞</p><p class="sd">S2/S4/S5 多 org 分支冻结在 fail-closed 409 下限，待 multiorg agent 定案后由 controller 补 org 声明形态。禁替其猜测。</p></div>
+    </div>
+  </div>
+
+  <h2 class="sec">下一步</h2>
+  <div class="sp">
+    <div class="sph"><span class="spn">签字 → 落账 → harness 实现</span></div>
+    <p>① 主理人签字批准；② Skill(db-update) 写 <span class="mono">golden_paths</span>（status=candidate，journey=da60cb26，capability_code=<span class="mono">collaborative_docs</span>）+ 冻结 J1-J10 / A1-A10 进 decisions；③ 点火 capability-controller 进 harness 实现流水线（按 5 步骨干拆 sprint，S2 CRDT 为最重一刀）。</p>
+  </div>
+
+  <footer>
+    员工知识中枢 · 路② 协同笔记 / 文档 · Capability <span class="mono">collaborative_docs</span> · GP <span class="mono">301bd18f</span><br>
+    依据 <span class="mono">proposal-v2.md</span>（R1 三镜头 P0=0 · P1×5 全核销 → R2 solo APPROVED）· journey <span class="mono">da60cb26</span> · 主理人拍板 <span class="mono">ab866172</span> · 2026-08-22<br>
+    本页为静态模拟，不接后端；界面为手绘示意，非最终视觉稿。
+  </footer>
+
+</section>
+
+</main>
+</body>
+</html>

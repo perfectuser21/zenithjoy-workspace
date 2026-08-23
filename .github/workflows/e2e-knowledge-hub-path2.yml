@@ -1,0 +1,101 @@
+name: E2E Knowledge Hub Path2 (collab notes)
+
+# 接线：独立 workflow，on: pull_request 触发。判据不是"文件存在"，是那个 windows-latest job 的
+# conclusion == success —— 静态形状为真、job 却被条件门跳过时 spec 就是孤儿，UI 面断言全假绿。
+# 所以本文件里的 windows job **不带任何 job 级 if 门**。
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/**'
+      - 'apps/api/db/migrations/**'
+      - 'apps/api/vitest.collab-notes.config.ts'
+      - 'apps/api/vitest.collab-notes.setup.ts'
+      - 'apps/staff-hub/**'
+      - 'apps/staff-hub/e2e/collab-notes-crdt.spec.ts'
+      - '.github/workflows/e2e-knowledge-hub-path2.yml'
+      - '.github/workflows/scripts/smoke/collab-notes-smoke.sh'
+      - 'sprints/08221200-line11-path2-collab-notes/**'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-path2-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # 段1+段2：Linux 上跑静态守卫 + 真 Postgres 全链（真浏览器在下面的 windows job）
+  linux-guards-and-db:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: zenithjoy_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      E2E_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/zenithjoy_e2e
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/zenithjoy_e2e
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install deps
+        run: npm ci
+      - name: Build apps/api
+        run: npm run build --workspace apps/api
+      - name: Run migrations（建 documents / document_members）
+        run: npm run migrate --workspace apps/api
+      - name: 测试库前置（better-auth 会话表对齐 zenithjoy schema + 路① learnings 账本）
+        run: bash sprints/08221200-line11-path2-collab-notes/ensure-test-db.sh "$E2E_DATABASE_URL"
+      - name: 段1 静态守卫（白名单单一实现 / collab-ws 挂载 / 依赖锁 / 接线三件套）
+        run: bash .github/workflows/scripts/smoke/collab-notes-smoke.sh
+      - name: 段2 合同测试真被 vitest 收集执行（5 文件 / 33 用例 / 真 Postgres + 真 collab-ws）
+        run: npm run test:collab-notes --workspace apps/api
+      - name: 段2b G2 备份恢复演练（真 pg_dump + 真还原 + 七字段逐条全等）
+        run: bash sprints/08221200-line11-path2-collab-notes/backup-restore-drill.sh
+
+  # 段3：windows-latest 干净 VM 真浏览器双 context CRDT。**不许加 job 级 if** —— 那正是要堵的孤儿 spec 形态。
+  windows-real-browser:
+    runs-on: windows-latest
+    needs: linux-guards-and-db
+    env:
+      E2E_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/zenithjoy_e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 起本地 Postgres（windows runner 自带，默认 Disabled 须先改 StartupType）
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $svc = Get-Service postgresql* -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $svc) { throw "FAIL: windows runner 上找不到 PostgreSQL 服务" }
+          Set-Service -Name $svc.Name -StartupType Manual
+          Start-Service $svc.Name
+          $env:PGPASSWORD = 'root'
+          & "$env:PGBIN\psql" -U postgres -c "ALTER USER postgres WITH PASSWORD 'postgres';"
+          $env:PGPASSWORD = 'postgres'
+          & "$env:PGBIN\psql" -U postgres -c "CREATE DATABASE zenithjoy_e2e;"
+          & "$env:PGBIN\psql" -U postgres -d zenithjoy_e2e -c "CREATE SCHEMA IF NOT EXISTS zenithjoy; CREATE EXTENSION IF NOT EXISTS pgcrypto;"
+          "$env:PGBIN" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: 路② 协同笔记 CRDT 双人同编真浏览器（字符级合并 / 多人光标 / 断连 resync 零丢字 / 仅自己 404）
+        shell: pwsh
+        run: pwsh -File "sprints/08221200-line11-path2-collab-notes/e2e-verify.ps1"
+      - name: 上传截图（协同笔记四张）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: path2-collab-screenshots
+          path: sprints/08221200-line11-path2-collab-notes/screenshots/
+          if-no-files-found: warn

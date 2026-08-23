@@ -68,6 +68,8 @@ import staffRouter from './routes/staff';
 import { knowledgeRouter } from './routes/knowledge';
 // Line11 路③ 结构化工作台 — 建表/字段/可见性/回收站（挂 workbenchAuthGuard，只信会话）
 import { workbenchRouter } from './routes/workbench';
+// Line11 路② 协同笔记/文档 — 文档 CRUD+树+搜索+软删+导出+可见性（挂 documentAuthGuard，只信会话）
+import { documentsRouter } from './routes/documents';
 // Line11 路① — DEV-only 假飞书上游（生产不挂载）
 import { fakeFeishuRouter, installFakeFeishuAxiosShim } from './routes/_smoke-fake-feishu';
 import { skillDraftsRouter, skillDraftsInternalRouter } from './routes/skill-drafts';
@@ -242,6 +244,9 @@ app.use('/api/staff/knowledge', knowledgeRouter);
 // 那个前缀的身份头闸与本路的命门（身份只来自会话）直接冲突，且挂进去会让既有
 // 16 端点的计数变成 17，路① 的前置保护线当场报红。
 app.use('/api/knowledge/db', workbenchRouter);
+// Line11 路② 协同笔记 —— 独立命名空间 /api/workbench/documents（同路③ 命门：身份只来自会话），
+// 不在 /api/staff 之下（那个前缀的身份头闸与本路命门直接冲突）。
+app.use('/api/workbench/documents', documentsRouter);
 // Line 00 运营中枢 — 员工工具（staff only，受员工身份头闸保护）
 app.use('/api/staff', staffRouter);
 // Line 02 — 公司信息页 + 账号状态

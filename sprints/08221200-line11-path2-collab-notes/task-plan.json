@@ -1,0 +1,39 @@
+{
+  "initiative_id": "line11-collaborative_docs",
+  "journey_type": "user_facing",
+  "journey_type_reason": "头部承诺是 apps/staff-hub 网页端富文本协同编辑器（UI 一等），配套 apps/api 端点与 collab-ws，用户可感知的编辑/协同/权限交互是验收主线",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "路② 协同笔记 第一刀 S1+S2+S3 单 org 端到端可用",
+      "scope": "documents/document_members 表 + migration；/api/workbench/documents CRUD+树+搜索+移动+软删回收站+导出+可见性+@提及；document-schema.ts 白名单单一实现（HTTP+CV 共用）；document.service.ts（DAO+most-restrictive 继承+六处过滤+member live+fail-closed）；collab-ws.ts 手写 cookie 会话握手（单 org 建房/多 org fail-closed/会话失效断连/doc 权校验/服务端 CV/crdt_state 落库）+ index.ts attachCollabWS；staff-hub TipTap 3.x 跨 app 移植 + Yjs collaboration/cursor + 文档树 UI + 权限面板 + 自动保存降级横幅；apps/api yjs+y-prosemirror 依赖；vitest.collab-notes.config.ts + test:collab-notes + dod-run.sh；e2e-knowledge-hub-path2.yml（linux 真 pg vitest + windows Playwright 双 context）+ collab-notes-crdt.spec.ts；G2 backup-restore-drill.sh + cron 接线",
+      "dod": [
+        "[BEHAVIOR] documents-crud-xss / cross-tenant-isolation / permissions / collab-ws / route1-regression 五个合同测试文件真 Postgres 全过（dod-run.sh a2/a1/a4/ws/a9 exit 0）",
+        "[BEHAVIOR] documents 表建成、org_id NOT NULL、crdt_state bytea（psql）",
+        "[BEHAVIOR] windows_cloud 双 context CRDT E2E 全过（e2e-verify.ps1）",
+        "[ARTIFACT] document-schema.ts 白名单被 HTTP 保存与 collab-ws CV 共用；collab-ws 挂 /collab-ws；tiptap 3.x + yjs 版本锁；接线三件套"
+      ],
+      "files": [
+        "apps/api/db/migrations/*_documents.sql",
+        "apps/api/src/routes/documents.ts",
+        "apps/api/src/workbench/document.service.ts",
+        "apps/api/src/workbench/document-schema.ts",
+        "apps/api/src/services/collab-ws.ts",
+        "apps/api/src/index.ts",
+        "apps/api/src/app.ts",
+        "apps/api/package.json",
+        "apps/api/vitest.collab-notes.config.ts",
+        "apps/staff-hub/src/**",
+        "apps/staff-hub/package.json",
+        "apps/staff-hub/e2e/collab-notes-crdt.spec.ts",
+        "sprints/08221200-line11-path2-collab-notes/dod-run.sh",
+        "sprints/08221200-line11-path2-collab-notes/e2e-verify.ps1",
+        "sprints/08221200-line11-path2-collab-notes/backup-restore-drill.sh",
+        ".github/workflows/e2e-knowledge-hub-path2.yml"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 120
+    }
+  ]
+}

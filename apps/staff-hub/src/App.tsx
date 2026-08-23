@@ -17,6 +17,7 @@ import KnowledgeNewPage from './pages/KnowledgeNewPage';
 import KnowledgeRecentPage from './pages/KnowledgeRecentPage';
 import WorkbenchPage from './pages/WorkbenchPage';
 import WorkbenchTablePage from './pages/WorkbenchTablePage';
+import CollabNotesPage from './pages/CollabNotesPage';
 import EnvBadge from './components/EnvBadge';
 import { adminFetch } from './lib/adminFetch';
 
@@ -104,6 +105,9 @@ function Shell() {
           <NavLink to="/workbench" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
             <Wrench size={16} /> 结构化工作台
           </NavLink>
+          <NavLink to="/collab" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+            <PenLine size={16} /> 协同笔记
+          </NavLink>
         </nav>
         <div className="sidebar-footer">
           <div className="muted">{user?.email || user?.name}</div>
@@ -127,6 +131,8 @@ function Shell() {
           <Route path="/knowledge/recent" element={<KnowledgeRecentPage />} />
           <Route path="/workbench" element={<WorkbenchPage />} />
           <Route path="/workbench/tables/:tableId" element={<WorkbenchTablePage />} />
+          <Route path="/collab" element={<CollabNotesPage />} />
+          <Route path="/collab/:docId" element={<CollabNotesPage />} />
           <Route path="/login/feishu" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

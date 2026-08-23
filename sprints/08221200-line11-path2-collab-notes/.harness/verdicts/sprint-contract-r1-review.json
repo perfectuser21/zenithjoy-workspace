@@ -1,0 +1,67 @@
+{
+  "reviewer": "path2-impl2",
+  "role": "harness-contract-reviewer",
+  "round": 1,
+  "sprint": "08221200-line11-path2-collab-notes",
+  "gp_anchor": "line11/collaborative_docs#step1",
+  "target_environment": "windows_cloud",
+  "verdict": "REVISION",
+  "rubric_scores": {
+    "dod_machineability": 6,
+    "scope_match_prd": 6,
+    "test_is_red": 9,
+    "internal_consistency": 8,
+    "risk_registered": 8,
+    "verification_oracle_completeness": 6,
+    "ci_workflow_alignment": 7
+  },
+  "threshold_rule": "windows_cloud → 7 维全部 ≥7 才 APPROVED；dim1/dim2/dim6 < 7 → REVISION",
+  "convergence": {
+    "round": 1,
+    "prior_blockers": 0,
+    "new_blockers": 2,
+    "note": "两条阻塞均命中 lead 点名的对抗轴 1/2，均为 PRD 明确命名行为的验证缺口，非锦上添花"
+  },
+  "dimension_evidence": {
+    "dod_machineability": "多数 DoD 为硬命令（psql to_regclass/is_nullable/data_type 回查、404 md5 全等、exit code、真 DDL 故障注入验 fail-closed 503）。扣分点：A3-d 的 crdt_state 落库回查只断言 length>0（size-only），属 Golden Path 审查第 7 条『只查 .size 无内容验证』——产出物存在≠行为正确。",
+    "scope_match_prd": "1:1 覆盖良好，S4/S5(AI)、多 org 正常协同正确排除且登记未覆盖清单，无 PRD 外膨胀。扣分点：PRD Golden Path S2 明写『重连→自动 resync 合并』且 lifeline⑧无静默丢失为签署铁律，但无任何测试断言离线编辑重连后零丢字合并。",
+    "test_is_red": "collab-ws.ts / document-schema.ts / documents 表 / documents 端点族在 origin/main 均不存在；startCollabServer 动态 import 未实现即抛错整 suite 红；端点 404。真红成立。",
+    "internal_consistency": "_helpers 复用路③ _workbench-fixture 已核实存在且导出 TwoTenantSeed 全部字段(client/orgATenantId/orgBTenantId/aliceOpenId/aliceCookie/bobOpenId/bobCookie/carolCookie/codeFor/seedTwoTenants/cleanupSeed)；判定归 dod-run.sh 单源；术语一致。",
+    "risk_registered": "失败语义表(权限查询失败/自动保存/多org握手/会话失效)+判定点登记表(建房vs拒绝/多org归属/CRDT白名单)+未覆盖真实链路清单三段齐全且真实。",
+    "verification_oracle_completeness": "XSS 双路径 oracle 硬(A2 content jsonb not contain javascript:/onerror；A10 解码 crdt_state latin1 not contain onerror + content not contain javascript:)；反枚举 404 md5 全等硬；权限 fail-closed 503 用真 DDL RENAME 故障注入硬。缺口：A3-d crdt_state 仅 non-empty、S2 resync 合并正确性无 oracle——恰是本刀承诺 L3 真验的 S2 CRDT 核心。",
+    "ci_workflow_alignment": "e2e-knowledge-hub-path2.yml 为 generator 净新增(尚不存在)，但其规格逐条镜像已存在的 e2e-knowledge-hub-path3.yml 真实范式(linux job 真 postgres service 跑 test:collab-notes + windows job 无 job 级 if 门跑 e2e-verify.ps1)；DoD ARTIFACT 静态守卫强制 windows 无 if 门 + linux 含 postgres + test:collab-notes。模式已被 path3 证真，规格自洽。"
+  },
+  "blocking_fixes": [
+    {
+      "id": "R1-1",
+      "axis": "对抗轴 1 — CRDT 一致性 / crdt_state 落库回查",
+      "dimension": "verification_oracle_completeness + dod_machineability",
+      "current_score": "dim1=6 / dim6=6",
+      "locate": "tests/collab-ws.test.ts A3-d 用例(第 71-88 行) + contract-draft.md ### A3-d 行 50-51 + 八要素『效果确认』行 129『crdt_state 非空（落库确认）』",
+      "problem": "A3-d 只断言 `expect(crdt_state.length).toBeGreaterThan(0)` —— 纯 size 检查。发送的 Yjs update 编码了文本『单org写入OK』，但 length>0 无法证明该文本真的经 apply 后落库：一个把 update 原样写入、或初始化空 Y.Doc 后丢内容再 encode 的实现，crdt_state 仍非空即绿。lead 点名『crdt_state 落库回查是否够硬』——当前答案是『不够，停在存在性』。",
+      "fix": "把 non-empty 断言升级为内容回查：读出 crdt_state → 在新 Y.Doc 上 `Y.applyUpdate(ydoc, new Uint8Array(crdt_state))` → 断言 `ydoc.getXmlFragment('default')` 派生文本含『单org写入OK』。即『发进去的字符经服务端 apply+落库+还原后逐字仍在』，而非仅有字节。这也让『update 原样落库不 apply』类实现转红。"
+    },
+    {
+      "id": "R1-2",
+      "axis": "对抗轴 2 — 离线冲突 / 断连 resync 合并正确性",
+      "dimension": "scope_match_prd + verification_oracle_completeness",
+      "current_score": "dim2=6 / dim6=6",
+      "locate": "contract-draft.md ### A3-a 行 42(『断连→只读横幅+本地暂存，重连→自动 resync 合并』) + ## E2E 验收 PASS 标准 行 194 + ## 未覆盖真实链路清单 行 115 + contract-dod.md BEHAVIOR:E2E 行 81-86",
+      "problem": "PRD Golden Path S2 明确命名『重连→自动 resync 合并』，且 gp-contract-v2 lifeline⑧『无静默丢失/断连本地暂存』为签署铁律。但全部验证里：E2E 只断言断连横幅可见(存在性)与并发同编 merged-cursors(在线态，非 resync)；未覆盖清单把 resync 直接降为『肉眼验存在性』。结果=『断连后离线编辑的字符重连后是否零丢字合并』这一 lifeline⑧ 命门无任何正确性 oracle。lead 点名『resync 验证是否只停在存在性而漏了合并正确性』——当前答案是『是，漏了』。",
+      "fix": "在 apps/staff-hub/e2e/collab-notes-crdt.spec.ts 增一条断言(可在 windows_cloud 双 context 真实执行，非硬延迟门)：contextA 用 `context.setOffline(true)` 断连 → A、B 各自离线输入一段可辨识文本 → A 重连 `setOffline(false)` 等 resync → 断言两个 context 最终编辑器 DOM 均含 A 段+B 段两串文本(零丢字)。属 DOM 内容硬断言，落实『重连 resync 合并』这条 PRD 出口行为；同时补一张 04-resync-merged.png 截图或复用第 02 张覆盖 resync 后态。"
+    }
+  ],
+  "non_blocking_observations": [
+    {
+      "id": "N1",
+      "note": "A10 断言不对称：crdt_state 只查 onerror、content 只查 javascript:，未交叉查(crdt_state 不查 javascript:、content 不查 onerror)。合并覆盖已捕两种 payload，非阻塞；若顺手可交叉断言更钉死。"
+    }
+  ],
+  "confirmed_solid": [
+    "对抗轴 3 WS 握手安全：A3-b(无会话)/A3-b(跨企业 doc 权)/A3-c(多 org fail-closed 不取 rows[0]) 三类拒绝均 `outcome==='rejected' && firstFrame===null`；connectCollab 判定 open 需 opened 且未被 close，注掉握手鉴权/doc 权/改取 rows[0] 会让拒绝用例转绿失败(mutation-fires 方向正确)——不是『只看 TCP 连上即建房』。A3-e 会话失效删 session 后下一写操作断连有真断言。",
+    "对抗轴 4 XSS：白名单单一实现被 document.service.ts 与 collab-ws.ts 源码两处 import 同一符号(ARTIFACT 守卫 files.length<2 即红)；A10 裸 WS 注入经服务端 CV 落库前拦，crdt_state/content 解码回查硬断言。HTTP(A2) 与 CRDT-CV(A10) 共用同一白名单已落到源码级守卫。",
+    "禁 mock 边清晰(真 express app+真 better-auth cookie+真 Postgres+真 collab-ws+真 Yjs update+真 pg 回查)；真实调用方请求 shape 段正确锁死『唯一调用方=员工浏览器 cookie 会话，WS 认证零 query/body token 分叉』，堵 #1267 双路径坑。",
+    "A9 路① 回归对象(POST /entries 201 带 entry_id/org_id、GET /recent、GET /projection)已核实为真实既有端点，参照 PR#1676 教训。",
+    "target_environment=windows_cloud 正确(UI 一等 + 双 context CRDT L3)；无微信/Android 真机接缝错配。"
+  ]
+}

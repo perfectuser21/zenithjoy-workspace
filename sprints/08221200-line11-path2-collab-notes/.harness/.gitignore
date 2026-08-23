@@ -1,0 +1,5 @@
+*
+!.gitignore
+!gp-contract-v*.json
+!verdicts/
+!verdicts/**

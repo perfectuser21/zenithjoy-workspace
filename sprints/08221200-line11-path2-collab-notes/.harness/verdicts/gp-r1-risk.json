@@ -1,0 +1,29 @@
+{"lens":"risk","round":1,
+ "rubric_scores":{"reality_of_status":10,"path_completeness":8,"assertion_verifiability":7,
+                  "judgment_completeness":9,"risk_gates":6,"commitment_purity":9,
+                  "multi_platform_completeness":10},
+ "verdict":"REVISION",
+ "findings":[
+  {"severity":"P1",
+   "finding":"AI 检索前置过滤依赖索引内存储的 effective-visibility，与 A4「权限收紧后 AI 检索立即拿不到」硬断言冲突：intra-org 七处前置过滤是 lifeline②，但收紧后索引陈旧窗口(⑨)被降级为 best_effort，窗口内静默 over-召回无权内容",
+   "evidence":"proposal G3① L38「index 行携带 effective-visibility 权限过滤前置于召回」vs A4 L73「立即不可达」vs NFR⑨/J8 L113/L51「索引 N 秒一致=best_effort」",
+   "dimension":"risk_gates","status":"OPEN"},
+  {"severity":"P1",
+   "finding":"WS 手写握手(G0b/J2)为净新增，无变异守卫钉其必须复制 HTTP guard 的多 org rows>1 fail-closed；手写路径若取 rows[0] 即 workbench-auth.ts 明令禁止的『静默挑一个 org』最坏形态，直接跨企业选错房",
+   "evidence":"origin/main:workbench-auth.ts L92 rows.length>1→409（注释：取第一条=把配置事故变成静默跨企业事故）；proposal A3 仅把多 org 列为『验收下限』散文，变异守卫只钉『注掉握手鉴权/doc 权校验』未钉 rows>1",
+   "dimension":"risk_gates","status":"OPEN"},
+  {"severity":"P1",
+   "finding":"G0b/S2 承诺『会话过期即断连重验，长连不静默续命』无任何可验证断言，实现期可静默丢失，致 WS 长连超活于会话=越权在线/正文/光标窗口",
+   "evidence":"proposal G0b L35 / S2 分支 L49 有承诺，A1-A9 无一条测会话过期中途断连；lifeline⑤ verification L38-42 亦未含过期重验",
+   "dimension":"assertion_verifiability","status":"OPEN"}
+ ],
+ "refute_rulings":[],
+ "contract_attack":{"verdict":"REVISION","findings":[
+  {"contract_key":"lifelines_and_nfr",
+   "finding":"item⑨(检索索引 ACL 收紧后 N 秒一致)被分类 best_effort，但它承载 lifeline②(intra-org 七处前置过滤 fail-closed)的 AI 检索一处；除非 query-time 过滤器 live 重导权限(索引仅作候选生成)，否则该 best_effort 分类=对 lifeline 的降级，收紧窗口内静默 over-召回。合同签字前须澄清过滤是 live 还是 stored，若 stored 则 ⑨ 须升为带界 fail-closed lifeline",
+   "severity":"P1"},
+  {"contract_key":"lifelines_and_nfr",
+   "finding":"lifeline⑤(WS 握手鉴权)verification 仅钉『无会话/跨企业/注掉握手』，遗漏多 org 成员进房的 fail-closed 断言；net-new 手写握手须显式钉 rows>1→拒建房+变异，否则命门(静默挑 org)无守卫",
+   "severity":"P1"}
+ ]},
+ "incident_comparison":{"evidence_status":"unavailable","matched_incidents":[],"missing_contract_terms":[]}}

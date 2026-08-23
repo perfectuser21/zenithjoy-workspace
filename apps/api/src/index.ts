@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import http from 'http';
 import app from './app';
 import { attachAgentWS } from './services/agent-ws';
+import { attachCollabWS } from './services/collab-ws';
 import { startStaleListenerMonitor } from './services/wechat-heartbeat';
 import { startAgentOfflineMonitor } from './services/agent-offline-monitor';
 import { startScheduler } from './services/scheduler';
@@ -31,6 +32,8 @@ const PORT = process.env.PORT || 3000;
 
 const server = http.createServer(app);
 attachAgentWS(server);
+// 路② 协同笔记实时协作房（Yjs over WS），路径 /collab-ws，独立于 /agent-ws
+attachCollabWS(server);
 
 /**
  * A30 员工目录一致性自检 —— fail-closed 启动闸，必须在 listen 之前跑完。

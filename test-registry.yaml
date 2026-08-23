@@ -5989,3 +5989,108 @@ agent_suite:
     status: active
     product: AI员工
     note: "刀2a 路由层：step/target_desc/树必填 400、64KB 服务端截断不信任客户端、unavailable 时 200 fail-open 响应形状(安卓端走原失败路径)"
+
+  # ── Line11 路② 协同笔记 第一刀（合同 08221200）─────────────────────────
+  - id: collab-notes-contract-cross-tenant
+    path: sprints/08221200-line11-path2-collab-notes/tests/cross-tenant-isolation.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "A1 cross-tenant 六层隔离：B 会话对 A 文档读/搜/导出/@提及/正文/移动/删全 404 且逐字未变、伪造 org_id 落库仍归 B、无权与不存在 404 md5 全等。真 Postgres。"
+
+  - id: collab-notes-contract-crud-xss
+    path: sprints/08221200-line11-path2-collab-notes/tests/documents-crud-xss.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "A2 S1 写留 + XSS/SQL + 自动保存不静默：建档写存刷新在、导出 Markdown 往返、javascript:/onerror 入库前剥离、DROP TABLE 参数化表仍在、PATCH 已删/畸形返 4xx。"
+
+  - id: collab-notes-contract-permissions
+    path: sprints/08221200-line11-path2-collab-notes/tests/permissions.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "A4 三档可见性六处过滤 + most-restrictive 继承 + member live 校验 + fail-closed 503。真 Postgres + 真 DDL 故障注入。"
+
+  - id: collab-notes-contract-collab-ws
+    path: sprints/08221200-line11-path2-collab-notes/tests/collab-ws.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "A3-b/c/d/e + A10：无 cookie/跨企业/多 org 握手全拒绝不建房、单 org 建房发 Yjs update 落 crdt_state 非空、会话失效下一写断连、服务端 CV 剥 onerror/javascript:。真 http server + 真 ws + 真 PG。"
+
+  - id: collab-notes-contract-route1-regression
+    path: sprints/08221200-line11-path2-collab-notes/tests/route1-regression.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 员工知识中枢
+    note: "A9 路① knowledge CRUD 不回归：POST /entries 201 / GET /recent 含之 / GET /projection 200（参照 PR#1676）。"
+
+  - id: collab-notes-document-schema-pairing
+    path: apps/api/src/workbench/document-schema.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "白名单单一实现(test-pairing)：isSafeUrl 协议闸、sanitizeDocument 剥 onerror/javascript:/非白名单节点、isValidProseMirrorDoc 判畸形。真落库剥离由合同真库测试覆盖。"
+
+  - id: collab-notes-crdt-cv-pairing
+    path: apps/api/src/workbench/crdt-cv.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "CRDT-CV(test-pairing)：Yjs↔PM JSON 往返保留文本、runCv 从干净 JSON 重建后 crdtState/content 均不含 onerror/javascript:。"
+
+  - id: collab-notes-document-service-pairing
+    path: apps/api/src/workbench/document.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "document.service(test-pairing) 纯导出：isUuid 判 tree/search/非法、DocumentValidationError 具名。可见性/继承/fail-closed 由合同真库测试覆盖。"
+
+  - id: collab-notes-documents-route-pairing
+    path: apps/api/src/routes/documents.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "documents 路由表(test-pairing)：树/搜索/CRUD/移动/软删/还原/导出/可见性/@提及端点齐、router 前挂限流+documentAuthGuard。"
+
+  - id: collab-notes-collab-ws-mount-pairing
+    path: apps/api/src/services/collab-ws.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "collab-ws 挂载(test-pairing)：attachCollabWS 返回 noServer WebSocketServer、注册 upgrade 监听器。真握手/CV 由合同真 ws 测试覆盖。"
+
+  - id: collab-notes-provider-pairing
+    path: apps/staff-hub/src/lib/collabProvider.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "RawWsProvider(test-pairing，jsdom 假 WebSocket)：构造回调 connecting、本地 doc update 经 ws.send 发裸 update、destroy 关闭并停发。"
+
+  - id: collab-notes-remote-cursors-pairing
+    path: apps/staff-hub/src/lib/remoteCursors.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 员工知识中枢
+    note: "RemoteCursors 扩展(test-pairing)：扩展名、configure 合并选项、缺省安全兜底。真多人光标渲染由 windows E2E 覆盖。"
+
+  - id: collab-notes-e2e-crdt
+    path: apps/staff-hub/e2e/collab-notes-crdt.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 员工知识中枢
+    note: "路② 协同笔记 CRDT 双人同编真浏览器：字符级合并、多人光标、断连 resync 零丢字 α/β、设仅自己后第三 context 404。变体C 禁请求拦截。workflow: e2e-knowledge-hub-path2.yml"
