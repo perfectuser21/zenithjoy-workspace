@@ -89,6 +89,16 @@ echo "$LR" | grep -q '小号A_smoke' || fail "extract_list 未列出小号A — 
 echo "$LR" | grep -q '小号B_smoke' || fail "extract_list 未列出小号B（应返回全部匹配项，不是只抽一个）— $LR"
 ok "extract_list 模式真调列出全部账号昵称（多值提取保底跑通，15/15 真实等待失败点全覆盖）"
 
+# ── 8. STEP_KNOWLEDGE 回归（0823 真机撞出的真bug）：底部导航栏共用 view_id，
+# AI 曾经选错行(选中"消息"tab 旁边的未读数字徽标而非"我"tab)。复原真实撞坑的树结构，
+# 验证注入的经验确实让 AI 选对行——这是这条真机 bug 的永久回归测试。
+MTREE='d0 android.widget.FrameLayout id=- text=\"-\" desc=\"-\"\nd2 android.widget.TextView id=com.ss.android.ugc.aweme:id/0qm text=\"首页\" desc=\"首页，按钮\" bounds=[65,2183][151,2241]\nd2 android.widget.TextView id=com.ss.android.ugc.aweme:id/0qm text=\"消息\" desc=\"消息，按钮\" bounds=[713,2183][799,2241]\nd2 android.widget.TextView id=com.ss.android.ugc.aweme:id/1u_ text=\"4\" desc=\"-\" bounds=[799,2170][831,2216]\nd2 android.widget.TextView id=com.ss.android.ugc.aweme:id/0qm text=\"我\" desc=\"我，按钮\" bounds=[950,2183][993,2241]'
+MR=$(curl -sf -X POST "$API_BASE/api/agent/burner/locator-assist" -H "Content-Type: application/json" \
+  -d "{\"step\":\"scan_me_tab\",\"target_desc\":\"底部导航栏「我」tab（个人主页入口）\",\"ui_tree_snapshot\":\"$MTREE\",\"device_model\":\"$DEV\",\"error_code\":\"NO_ME_TAB\"}") \
+  || fail "scan_me_tab 请求失败"
+echo "$MR" | grep -q '"text":"我"' || fail "STEP_KNOWLEDGE 回归：AI 没选对「我」tab（0823 真机撞过的坑复发）— $MR"
+ok "STEP_KNOWLEDGE 真调选对「我」tab，未被共用 view_id 的未读徽标带偏（0823 真机bug永久回归测试）"
+
 # 清理
 psql "$DB" -c "DELETE FROM zenithjoy.rpa_locator_assist WHERE device_model='$DEV'" >/dev/null
 echo "🎉 rpa-locator-assist smoke 全部通过"
