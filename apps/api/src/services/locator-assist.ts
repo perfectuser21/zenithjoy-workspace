@@ -86,12 +86,41 @@ export interface LocatorAssistResult {
   matchIndex?: number;
 }
 
+/**
+ * 按 step 记录的 UI 识别经验——真机踩过的坑，喂给 AI 当参考知识，让它越用越准
+ * 而不是每次从零猜。
+ *
+ * 颗粒度是"capability 的具体一步"（如 scan_me_tab），不是整个 value stream：
+ * 这是"先走通 Path、记下每一步该认什么，再转成代码"这条既有开发方法论的延伸——
+ * 经验按 step 归档，只在验证过的那个 step 生效，不污染其它 step 的 prompt；写新
+ * capability 时可以照抄相似 step 已经踩过的经验（人工判断复用，不是自动共享）。
+ * 固化的不是写死的答案（UI 改版就失效），是一条选择依据（UI 改版后依然有参考价值）。
+ *
+ * 新增：往对应 step 的数组末尾加一行，不要改写/删除已有条目（除非确认已过期）。
+ */
+export const STEP_KNOWLEDGE: Record<string, string[]> = {
+  scan_me_tab: [
+    '底部导航栏（首页/朋友/消息/我等 tab）经常共用同一个 view_id（模板复用），仅凭 id 无法区分——必须结合 content_desc（如"我，按钮"这类带明确后缀的完整描述）精确匹配整段文字，不要因为看到 id 相同或位置相近就选错行（真机 0823 撞过：错选成"消息"tab 旁边的未读数字徽标，其 desc 是"-"、text 是"4"，跟目标描述完全对不上却被选中）。',
+  ],
+};
+
+function renderStepKnowledge(step: string): string[] {
+  const notes = STEP_KNOWLEDGE[step];
+  if (!notes || notes.length === 0) return [];
+  return [
+    `这一步（${step}）已知的真机识别经验（供参考，不要机械套用，树里没有类似情况就忽略）:`,
+    ...notes.map((n) => `- ${n}`),
+    ``,
+  ];
+}
+
 /** prompt：目标 + 步骤上下文 + 整棵树（行号从 0 起可直接引用），只许回一行 JSON。 */
 export function buildLocatorPrompt(req: LocatorAssistRequest): string {
   return [
     `你是安卓 UI 自动化的定位专家。下面是无障碍树快照，每行一个节点，行号从 0 开始。`,
     `当前步骤: ${req.step}（错误码: ${req.errorCode || '-'}）`,
     `要找的目标: ${req.targetDesc}`,
+    ...renderStepKnowledge(req.step),
     `请指出最匹配目标的那一行。只回一行 JSON，格式 {"line": 行号}，不要任何其他文字。`,
     `如果树里确实没有匹配的节点，回 {"line": -1}。`,
     ``,
@@ -135,6 +164,7 @@ export function buildExtractPrompt(req: LocatorAssistRequest): string {
     `你是安卓 UI 信息抽取专家。下面是无障碍树快照，每行一个节点。`,
     `当前步骤: ${req.step}（错误码: ${req.errorCode || '-'}）`,
     `要抽取的信息: ${req.targetDesc}`,
+    ...renderStepKnowledge(req.step),
     `请从树里找出这个信息的值。只回一行 JSON，格式 {"extracted": "值"}，不要任何其他文字。`,
     `如果树里确实没有这个信息，回 {"extracted": null}。`,
     ``,
@@ -158,6 +188,7 @@ export function buildExtractListPrompt(req: LocatorAssistRequest): string {
     `你是安卓 UI 信息抽取专家。下面是无障碍树快照，每行一个节点。`,
     `当前步骤: ${req.step}（错误码: ${req.errorCode || '-'}）`,
     `要抽取的信息: ${req.targetDesc}——把树里所有匹配的值都列出来，不是只列一个。`,
+    ...renderStepKnowledge(req.step),
     `请返回一行 JSON，格式 {"values": ["值1", "值2", ...]}，不要任何其他文字。`,
     `如果树里一个匹配的值都没有，回 {"values": []}——这是合法答案，不要瞎编凑数。`,
     ``,
