@@ -660,7 +660,9 @@ router.post('/locator-assist', locatorAssistRateLimit, async (req: Request, res:
     screenshot_b64, vision_candidate_count,
     device_model, os_version, douyin_version, app_version,
   } = req.body || {};
-  const resolvedMode = mode === 'extract' ? 'extract' : mode === 'vision_select' ? 'vision_select' : 'locate';
+  const resolvedMode = mode === 'extract' ? 'extract'
+    : mode === 'extract_list' ? 'extract_list'
+    : mode === 'vision_select' ? 'vision_select' : 'locate';
   // vision_select 走截图不走树；其余模式必须有树
   if (!step || !target_desc) {
     return res.status(400).json(ERR('MISSING_FIELDS', 'step / target_desc 必填'));
@@ -693,6 +695,7 @@ router.post('/locator-assist', locatorAssistRateLimit, async (req: Request, res:
     mode: resolvedMode,
     candidates: result.candidates,
     extracted_value: result.extractedValue ?? null,
+    extracted_values: result.extractedValues ?? null,
     match_index: typeof result.matchIndex === 'number' ? result.matchIndex : null,
     assist_id: result.assistId ?? null,
   }));
