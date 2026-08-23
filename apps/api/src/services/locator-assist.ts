@@ -10,7 +10,8 @@
  *   tree-llm（主力）：树→deepseek-v4-flash via TOAPIS。纯文本任务，树比截图省一个
  *     数量级 token；`reasoning_effort:'none'` 关思考（只有 deepseek 认——PR#1684 教训）
  *   vision（兜底插座）：截图→UI-TARS（树失明页面/二裁/未来 RPA 量产冷启动）。
- *     本刀只定义插座：UITARS_BASE_URL/UITARS_API_KEY 未配置时显式降级，不假装可用。
+ *     视觉后端走 TOAPIS 通用视觉模型（4o/Gemini），同判定链已踩通的 image_url 调法，
+ *     不自托管 UI-TARS、不用火山 endpoint（0823 主理人纠正：任何视觉模型都行，TOAPIS 现成最省）。
  *
  * 铁律：
  *   - fail-open：求助通道自身故障（超时/解析失败/行号越界/未配置）一律返回
@@ -24,9 +25,18 @@ import pool from '../db/connection';
 
 const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';
 const ASSIST_MODEL = process.env.LOCATOR_ASSIST_MODEL || 'deepseek-v4-flash';
+/** 视觉后端模型：治 Lynx 失明页（树是空的）——看截图选结果序号。通用视觉模型即可
+ *  （强于数数读字），走 TOAPIS 同判定链已踩通的 image_url 调法，不自托管不用火山。
+ *  默认用判定链同款 gemini-2.5-flash-official（0823 真调实测：该渠道只开了 -official 后缀
+ *  的模型，gpt-4o/裸 gemini 名报 model_not_found；真截图选目标 index 一次答对）。 */
+const VISION_MODEL = process.env.LOCATOR_VISION_MODEL || 'gemini-2.5-flash-official';
 const ASSIST_TIMEOUT_MS = 20_000;
 /** 行号 JSON 一句话就够；预算含 reasoning_tokens（TOAPIS 口径），deepseek 已关思考。 */
 const ASSIST_MAX_TOKENS = 300;
+/** 视觉后端预算：gemini-2.5-*-official 是 thinking 模型，TOAPIS 把思考算进 completion_tokens
+ *  且关不掉（reasoning_effort:'none' 只 deepseek 认）——预算给不够会被截断（PR#1684 教训）。
+ *  0823 真调实测 2000 够（含思考 ~500-600 + JSON）。 */
+const VISION_MAX_TOKENS = 2000;
 export const TREE_MAX_CHARS = 65536;
 
 export interface LocatorAssistRequest {
@@ -40,8 +50,12 @@ export interface LocatorAssistRequest {
   appVersion?: string;
   errorCode?: string;
   backend?: 'tree-llm' | 'vision';
-  /** locate（默认，找元素点它）/ extract（从页面抽取文本，如抖音号）。 */
-  mode?: 'locate' | 'extract';
+  /** locate（找元素点它）/ extract（抽文本）/ vision_select（截图选结果序号，治 Lynx 失明页）。 */
+  mode?: 'locate' | 'extract' | 'vision_select';
+  /** vision_select：屏幕截图 base64（jpeg）。树失明页专用。 */
+  screenshotB64?: string;
+  /** vision_select：屏幕上候选结果个数（让模型只在 0..N-1 里选）。 */
+  visionCandidateCount?: number;
 }
 
 export interface LocatorCandidate {
@@ -62,6 +76,8 @@ export interface LocatorAssistResult {
   assistId?: string;
   /** extract 模式抽取到的文本值（如抖音号）。 */
   extractedValue?: string;
+  /** vision_select：匹配的结果序号（0-based）；-1 = AI 诚实说没匹配。 */
+  matchIndex?: number;
 }
 
 /** prompt：目标 + 步骤上下文 + 整棵树（行号从 0 起可直接引用），只许回一行 JSON。 */
@@ -75,6 +91,27 @@ export function buildLocatorPrompt(req: LocatorAssistRequest): string {
     ``,
     req.uiTree,
   ].join('\n');
+}
+
+/** vision_select prompt：看搜索结果截图，选出抖音号完全匹配的那一个结果的序号。
+ *  只让模型做它擅长的"数数+读字"，坐标落点交设备端行距逻辑（通用模型不擅长像素定位）。 */
+export function buildVisionSelectPrompt(req: LocatorAssistRequest): string {
+  const n = req.visionCandidateCount ?? 0;
+  return [
+    `这是抖音搜索结果页的截图，从上到下依次排列着${n > 0 ? ` ${n} 个` : '若干个'}用户结果（序号从 0 开始，最上面的是 0）。`,
+    `我要找的目标: ${req.targetDesc}`,
+    `请判断：哪一个结果是我要找的目标（抖音号要完全一致，不是昵称相似）？`,
+    `只回一行 JSON，格式 {"match_index": 序号}，序号从 0 开始。`,
+    `如果截图里没有任何一个结果的抖音号与目标完全一致，回 {"match_index": -1}——绝不要勉强选一个。`,
+  ].join('\n');
+}
+
+/** 抠 match_index（含 -1）；非 JSON → null。 */
+export function parseVisionSelectAnswer(raw: string): number | null {
+  const m = raw.match(/\{[^{}]*"match_index"\s*:\s*(-?\d+)[^{}]*\}/);
+  if (!m) return null;
+  const idx = parseInt(m[1], 10);
+  return Number.isInteger(idx) ? idx : null;
 }
 
 /** 从模型输出抠行号；越界/负数/非 JSON → null（绝不拿坏答案当答案）。 */
@@ -175,10 +212,6 @@ async function recordVisit(
   }
 }
 
-/** vision 插座：UI-TARS。本刀只定义接缝，未配置 env 时显式降级。 */
-function visionConfigured(): boolean {
-  return Boolean(process.env.UITARS_BASE_URL && process.env.UITARS_API_KEY);
-}
 
 async function askTreeLlm(req: LocatorAssistRequest): Promise<{ line: number | null; model: string; failReason?: string }> {
   const apiKey = process.env.TOAPIS_API_KEY;
@@ -234,7 +267,57 @@ async function askExtract(req: LocatorAssistRequest): Promise<{ value: string | 
   }
 }
 
+/** vision_select：截图→通用视觉模型（TOAPIS，同判定链 image_url 调法），选结果序号。 */
+async function askVisionSelect(req: LocatorAssistRequest): Promise<{ matchIndex: number | null; model: string; failReason?: string }> {
+  const apiKey = process.env.TOAPIS_API_KEY;
+  if (!apiKey) return { matchIndex: null, model: VISION_MODEL, failReason: 'no_api_key' };
+  try {
+    const resp = await axios.post(
+      `${TOAPIS_BASE}/chat/completions`,
+      {
+        model: VISION_MODEL,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: buildVisionSelectPrompt(req) },
+              { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${req.screenshotB64}` } },
+            ],
+          },
+        ],
+        max_tokens: VISION_MAX_TOKENS,
+        temperature: 0,
+      },
+      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: ASSIST_TIMEOUT_MS },
+    );
+    const choice = resp.data?.choices?.[0];
+    if (choice?.finish_reason === 'length') return { matchIndex: null, model: VISION_MODEL, failReason: 'truncated_output' };
+    const idx = parseVisionSelectAnswer(choice?.message?.content ?? '');
+    return { matchIndex: idx, model: VISION_MODEL, failReason: idx === null ? 'unparseable_answer' : undefined };
+  } catch (err) {
+    const isTimeout = axios.isAxiosError(err) && (err as { code?: string }).code === 'ECONNABORTED';
+    return { matchIndex: null, model: VISION_MODEL, failReason: isTimeout ? 'llm_timeout' : 'llm_error' };
+  }
+}
+
 export async function requestLocatorAssist(req: LocatorAssistRequest): Promise<LocatorAssistResult> {
+  // vision_select 模式（视觉后端，治 Lynx 失明页 NO_MATCH）：截图→通用视觉模型选序号。
+  // 树在这类页面是空的，只能靠看图。不查缓存（每次结果页内容不同）。
+  if (req.mode === 'vision_select') {
+    if (!req.screenshotB64) return { status: 'unavailable', reason: 'no_screenshot' };
+    const vs = await askVisionSelect(req);
+    // 病历：answer_selector 存 {matchIndex}，答不出/-1 都留档供刀3 周报
+    const selector = vs.matchIndex !== null
+      ? ({ line: vs.matchIndex, view_id: null, text: null, content_desc: `match_index=${vs.matchIndex}`, bounds: null } as LocatorCandidate)
+      : null;
+    const aid = await recordVisit(
+      { ...req, uiTree: '' },
+      { backend: 'vision', model: vs.model, answerLine: vs.matchIndex, selector, cacheHit: false, mode: 'vision_select' },
+    );
+    if (vs.matchIndex === null) return { status: 'unavailable', reason: vs.failReason ?? 'no_answer' };
+    return { status: 'ok', cacheHit: false, backend: 'vision', matchIndex: vs.matchIndex, assistId: aid ?? undefined };
+  }
+
   // extract 模式（读取类保底）：树→AI 抽取文本，不查缓存（读取值每条不同）
   if (req.mode === 'extract') {
     const ex = await askExtract(req);
@@ -242,16 +325,6 @@ export async function requestLocatorAssist(req: LocatorAssistRequest): Promise<L
     const aid = await recordVisit(req, { backend: 'tree-llm', model: ex.model, answerLine: null, selector, cacheHit: false, mode: 'extract' });
     if (ex.value === null) return { status: 'unavailable', reason: ex.failReason ?? 'no_value' };
     return { status: 'ok', cacheHit: false, backend: 'tree-llm', extractedValue: ex.value, assistId: aid ?? undefined };
-  }
-
-  // vision 插座：显式降级，绝不假装可用
-  if (req.backend === 'vision') {
-    if (!visionConfigured()) {
-      await recordVisit(req, { backend: 'vision', model: null, answerLine: null, selector: null, cacheHit: false });
-      return { status: 'unavailable', reason: 'vision_not_configured' };
-    }
-    // UI-TARS 通电属后续接线（插座已留：UITARS_BASE_URL/UITARS_API_KEY + 截图输入）
-    return { status: 'unavailable', reason: 'vision_not_implemented' };
   }
 
   // 1. 缓存（碎片化格子坐标键）
