@@ -84,6 +84,7 @@ test('T3: staff_app/line00 精确 5 个 GP（含gp_anchor_enforcement、f1_dev_l
       'line02/customer_smart_acquisition',
       'line02/keyword_acquisition',
       'line02/live_acquisition',
+      'line02/rpa_ai_oncall_locator',
       'line02/video_link_acquisition',
       'line04/active_voice_outreach',
       'line04/business_report',
@@ -114,10 +115,14 @@ test('T3: staff_app/line00 精确 5 个 GP（含gp_anchor_enforcement、f1_dev_l
   // 非 deprecated 的客户 GP 都必须有非空 steps（占位 proposed 的也要求写出步骤草案）；
   // deprecated 老 GP 的 steps 已迁入拆分后的子 GP，不再要求；
   // line05/line07 新增 GP 不要求 steps（PRD [ASSUMPTION] 只授权定稿 id/name，未授权编造业务步骤内容，
-  // 见 GAN round1 reviewer-feedback-r1.md 阻塞问题1修复结论）
+  // 见 GAN round1 reviewer-feedback-r1.md 阻塞问题1修复结论）；
+  // 横切底座（0822 主理人拍板 AI on-call 定位求助，判定=横切件非路）不要求 steps——它服务多条
+  // capability、无单一触发→终点，因 adapter crosscut_pool 恒空而以 capability 形态借壳上图。
+  const CROSSCUT_CAPABILITY_IDS = new Set(['rpa_ai_oncall_locator']);
   for (const gp of customerGps) {
     if (gp.status === 'deprecated') continue;
     if (['line05', 'line07'].includes(gp.line_id)) continue;
+    if (CROSSCUT_CAPABILITY_IDS.has(gp.id)) continue;
     assert.ok(Array.isArray(gp.steps) && gp.steps.length > 0, `${gp.id} 须含非空 steps 数组`);
   }
 });
