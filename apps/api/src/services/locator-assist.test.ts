@@ -63,6 +63,21 @@ describe('buildLocatorPrompt', () => {
     expect(p).toContain('et_search_kw');
     expect(p, 'prompt 必须要求模型只回行号 JSON').toMatch(/"line"/);
   });
+
+  // 真机撞出的真bug（0823 扫号链"我"tab验证）：AI 在两百来行的树里选错了行，选中
+  // 底部导航栏共用 view_id 的一个不相关节点（未读数字徽标），而不是真正的"我"tab。
+  // 修法：按 capability 的具体 step 记经验（STEP_KNOWLEDGE），只在验证过的那个 step
+  // 生效——不是笼统塞给所有 prompt（会稀释信号、也可能对不上其它 step 的真实情况）。
+  // 这是"先走通 Path 记每一步该认什么，再转代码"这条既有方法论的延伸：经验按 step
+  // 归档，写新 capability 时可以照抄相似 step 已经踩过的经验（人工判断复用）。
+  it('prompt 按 step 注入对应 capability 已踩过的坑——scan_me_tab 命中，不相关 step 不命中', () => {
+    const hit = buildLocatorPrompt({ ...baseReq(), step: 'scan_me_tab', targetDesc: '底部导航栏「我」tab' });
+    expect(hit, '命中 step 必须带上 content_desc 精确匹配的提示').toContain('content_desc');
+    expect(hit, '必须包含底部导航栏共用view_id这条真机经验').toContain('view_id');
+
+    const miss = buildLocatorPrompt(baseReq()); // baseReq 用的是 dm_search_input，跟扫号链无关
+    expect(miss, '不相关的 step 不该被扫号链的经验污染').not.toContain('底部导航栏');
+  });
 });
 
 describe('parseLineAnswer', () => {
