@@ -1923,21 +1923,23 @@ run_rename() {
   curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X PATCH "$API/tables/$tid" \
     -d "{\"name\":\"$nn\"}" | jq -e --arg n "$nn" '.data.name == $n' >/dev/null || fail "改表名返回体 name 不符"
   dbn=$(psql_q "SELECT name FROM zenithjoy.db_tables WHERE id='$tid'")
-  [ "$dbn" = "$nn" ] || fail "改表名未落库（db=$dbn 期望=$nn）"
+  [ "$dbn" = "$nn" ] || fail "改表名未落库（db=${dbn} 期望=${nn}）"
   # 空名 → 400 且不改
   empty=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_A" -H 'Content-Type: application/json' \
     -X PATCH "$API/tables/$tid" -d '{"name":"   "}')
-  [ "$empty" = "400" ] || fail "空表名未返 400（得 $empty）"
+  [ "$empty" = "400" ] || fail "空表名未返 400（得 ${empty}）"
   # 改字段名：200 且落库 name 逐字，field_type 不变
   fnn="改后的字段名-$SFX"
   curl -sf -b "$COOKIE_A" -H 'Content-Type: application/json' -X PATCH "$API/tables/$tid/fields/$fid" \
     -d "{\"name\":\"$fnn\"}" | jq -e --arg n "$fnn" '.data.name == $n' >/dev/null || fail "改字段名返回体 name 不符"
   dbf=$(psql_q "SELECT name FROM zenithjoy.db_fields WHERE id='$fid'")
-  [ "$dbf" = "$fnn" ] || fail "改字段名未落库（db=$dbf 期望=$fnn）"
-  # 跨企业会话改表名 → 404 同形反枚举（乙改甲的表）
-  x404=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_A2" -H 'Content-Type: application/json' \
+  [ "$dbf" = "$fnn" ] || fail "改字段名未落库（db=${dbf} 期望=${fnn}）"
+  # 跨企业会话改表名 → 404 同形反枚举（乙企业 COOKIE_B 改甲企业的表）。
+  # 注意用 COOKIE_B（不同企业）而非 COOKIE_A2（同企业另一成员）：org 可见表本就org内共享，
+  # 同企业成员改它返 200 是正确的；真正要防的是跨企业越权。
+  x404=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_B" -H 'Content-Type: application/json' \
     -X PATCH "$API/tables/$tid" -d '{"name":"越权改名"}')
-  [ "$x404" = "404" ] || fail "跨企业改表名未返 404（得 $x404，会泄漏存在性）"
+  [ "$x404" = "404" ] || fail "跨企业改表名未返 404（得 ${x404}，会泄漏存在性）"
   ok "改表名/改字段名 200 落库逐字 + 空名 400 + 跨企业 404 同形"
   section_down
   echo "✅ 行内改名通过"
