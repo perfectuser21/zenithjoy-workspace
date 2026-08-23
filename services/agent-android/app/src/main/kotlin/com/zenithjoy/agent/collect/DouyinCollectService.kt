@@ -28,6 +28,7 @@ import com.zenithjoy.agent.AgentConfig
 import com.zenithjoy.agent.BuildConfig
 import com.zenithjoy.agent.uia.LocatorAssistClient
 import com.zenithjoy.agent.uia.UiTreeSnapshot
+import com.zenithjoy.agent.uia.FailureClassifier
 import com.zenithjoy.agent.uia.NodeAwait
 import com.zenithjoy.agent.uia.WaitFailure
 import com.zenithjoy.agent.uia.awaitNode
@@ -298,7 +299,7 @@ class DouyinCollectService : AccessibilityService() {
                 val failure = NodeAwait.classifyFailure(outcome, DOUYIN_PKG)
                 android.util.Log.w(TAG, "startStage2Collect: 等待评论按钮超时 failure=$failure")
                 // AI 保底（铺满刀C2）：评论按钮找不到=这条视频零线索，判死前问一次
-                if (failure != WaitFailure.NO_ROOT) {
+                if (FailureClassifier.shouldAssist(failure)) {
                     commentBtnFinal = tryLocatorAssist("collect_comment_button", "评论按钮（打开这条视频的评论列表）", "NO_COMMENT_BUTTON")
                 }
                 if (commentBtnFinal == null) {
@@ -503,7 +504,7 @@ class DouyinCollectService : AccessibilityService() {
                 val failure = NodeAwait.classifyFailure(searchOutcome, DOUYIN_PKG)
                 android.util.Log.w(TAG, "openSearchBar: 等待搜索入口超时 failure=$failure")
                 // AI 保底（铺满刀C3）：搜索入口是采集链门户，找不到=整轮零线索，判死前问一次
-                if (failure != WaitFailure.NO_ROOT) {
+                if (FailureClassifier.shouldAssist(failure)) {
                     searchBtn = tryLocatorAssist("collect_search_entry", "搜索入口按钮（放大镜图标，点击进入搜索页）", "NO_SEARCH_INPUT")
                 }
                 if (searchBtn == null) {
