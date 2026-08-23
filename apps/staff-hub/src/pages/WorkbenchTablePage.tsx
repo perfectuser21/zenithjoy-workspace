@@ -32,6 +32,8 @@ import {
   patchRow,
   patchView,
   pasteRows,
+  renameField,
+  renameTable,
   restoreRow,
   RELATION_FIELD_TYPE,
   ROLLUP_FIELD_TYPE,
@@ -85,6 +87,9 @@ export default function WorkbenchTablePage() {
   const [exported, setExported] = useState<{ rows: number; href: string } | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  // 行内改名（表名双击编辑）
+  const [renamingName, setRenamingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
 
   // ── 视图状态（S3）──────────────────────────────────────────────────────────
   const [views, setViews] = useState<WorkbenchView[]>([]);
@@ -395,6 +400,33 @@ export default function WorkbenchTablePage() {
     }
   }, [tableId]);
 
+  // ── 行内改名（表名 / 字段名，cp-08230010）──────────────────────────────────
+  const commitRenameTable = useCallback(async () => {
+    setRenamingName(false);
+    const next = nameDraft.trim();
+    if (!next || next === tableName) return;
+    try {
+      const updated = await renameTable(tableId, next);
+      setTableName(updated.name);
+      setError('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '改表名失败');
+    }
+  }, [nameDraft, tableName, tableId]);
+
+  const renameFieldInline = useCallback(
+    async (fieldId: string, name: string) => {
+      try {
+        const updated = await renameField(tableId, fieldId, name);
+        setFields((prev) => prev.map((f) => (f.field_id === fieldId ? updated : f)));
+        setError('');
+      } catch (e) {
+        setError(e instanceof Error ? e.message : '改字段名失败');
+      }
+    },
+    [tableId]
+  );
+
   // ── 视图偏好持久化（S3 / A21 / A23）─────────────────────────────────────────
   // 保存失败 → 可见提示「视图偏好未保存」，页面主体不白屏、本地状态保留可重试（禁静默吞）。
   const saveView = useCallback(
@@ -521,14 +553,58 @@ export default function WorkbenchTablePage() {
   const isKanban = currentView?.view_type === 'kanban';
 
   return (
-    <div className="page" data-testid="workbench-table-page">
-      <p>
+    <div className="page wb" data-testid="workbench-table-page">
+      <div className="wb-breadcrumb">
         <Link to="/workbench">← 回到工作台</Link>
-      </p>
-      <h1>{tableName || '表格视图'}</h1>
+      </div>
+      <div className="wb-page-head">
+        <div>
+          <h1 className="wb-title">
+            <span className="wb-title-ico">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                <rect x="3.5" y="4.5" width="17" height="15" rx="2.2" />
+                <path d="M3.5 9.5h17M3.5 14.5h17M9 9.5v10" />
+              </svg>
+            </span>
+            {renamingName ? (
+              <input
+                className="wb-title-input"
+                data-testid="table-name-rename-input"
+                autoFocus
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onBlur={() => void commitRenameTable()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void commitRenameTable();
+                  } else if (e.key === 'Escape') {
+                    setRenamingName(false);
+                  }
+                }}
+              />
+            ) : (
+              <span
+                className="wb-title-text"
+                data-testid="table-name-title"
+                title="双击改表名"
+                onDoubleClick={() => {
+                  setNameDraft(tableName);
+                  setRenamingName(true);
+                }}
+              >
+                {tableName || '表格视图'}
+              </span>
+            )}
+          </h1>
+          <p className="wb-title-meta">
+            {rows.length} 行{rowLimit != null ? ` · 上限 ${rowLimit}` : ''} · {fields.length} 个字段
+          </p>
+        </div>
+      </div>
 
       {error && (
-        <div className="error-banner" data-testid="table-page-error">
+        <div className="wb-notice wb-notice-error" data-testid="table-page-error">
           {error}
         </div>
       )}
@@ -558,26 +634,33 @@ export default function WorkbenchTablePage() {
       )}
 
       {viewPrefsError && (
-        <div className="view-prefs-error" data-testid="view-prefs-error">
+        <div className="wb-notice wb-notice-error" data-testid="view-prefs-error">
           {viewPrefsError}
-          <button type="button" data-testid="view-prefs-retry" onClick={retrySaveView}>
+          <button type="button" className="wb-note-btn" data-testid="view-prefs-retry" onClick={retrySaveView}>
             重试
           </button>
         </div>
       )}
 
-      <div className="row-toolbar">
-        <button type="button" data-testid="add-row-button" disabled={atLimit} onClick={() => void addRow()}>
-          新增行
+      <div className="row-toolbar wb-rowbar">
+        <button
+          type="button"
+          className="wb-btn wb-btn-primary"
+          data-testid="add-row-button"
+          disabled={atLimit}
+          onClick={() => void addRow()}
+        >
+          + 新增行
         </button>
-        <span data-testid="row-limit-hint">
+        <span className="wb-count-hint" data-testid="row-limit-hint">
           已有 {rows.length} 行 / 上限 {rowLimit ?? '…'} 行
         </span>
-        <button type="button" data-testid="export-json-button" onClick={() => void doExport()}>
+        <div className="wb-toolbar-spacer" />
+        <button type="button" className="wb-btn" data-testid="export-json-button" onClick={() => void doExport()}>
           导出 JSON
         </button>
         {exported && (
-          <span data-testid="export-summary">
+          <span className="wb-count-hint" data-testid="export-summary">
             已导出 {exported.rows} 行 ·{' '}
             <a href={exported.href} download={`${tableName || 'table'}.json`}>
               下载
@@ -588,27 +671,27 @@ export default function WorkbenchTablePage() {
       </div>
 
       {pasteNotice && (
-        <div className="paste-notice" data-testid="paste-notice">
+        <div className="wb-notice wb-notice-info" data-testid="paste-notice">
           {pasteNotice}
         </div>
       )}
 
       {isKanban && (
-        <div className="kanban-notices">
+        <div className="wb-kanban-notices">
           {kanbanError && (
-            <div className="kanban-drop-error" data-testid="kanban-drop-error">
+            <div className="wb-notice wb-notice-error" data-testid="kanban-drop-error">
               {kanbanError}
             </div>
           )}
           {kanbanConflict && (
-            <div className="kanban-drop-conflict" data-testid="kanban-drop-conflict">
+            <div className="wb-notice wb-notice-info" data-testid="kanban-drop-conflict">
               {kanbanConflict}
             </div>
           )}
         </div>
       )}
 
-      <div className="table-layout">
+      <div className={`wb-table-layout${!detailRow && !rowGone ? ' no-side' : ''}`}>
         <div className="table-main">
           {loading ? (
             <p>加载中…</p>
@@ -636,13 +719,15 @@ export default function WorkbenchTablePage() {
               onRelationEdit={(id, field) => void openRelationPicker(id, field)}
               onRelationJump={relationJump}
               rollupMeta={rollupMeta}
+              onAddRow={() => void addRow()}
+              onRenameField={(fieldId, name) => void renameFieldInline(fieldId, name)}
             />
           )}
         </div>
 
-        <div className="table-side">
+        <div className="wb-side-col">
           {rowGone && (
-            <div className="row-gone" data-testid="row-gone-notice">
+            <div className="wb-notice wb-notice-error" data-testid="row-gone-notice">
               该行已被删除，你的改动未保存
             </div>
           )}
@@ -667,10 +752,14 @@ export default function WorkbenchTablePage() {
               <h3>配置关联 · {relationPicker.field.name}</h3>
               <button
                 type="button"
+                className="wb-icon-btn"
+                aria-label="取消"
                 data-testid="relation-picker-close"
                 onClick={() => setRelationPicker(null)}
               >
-                取消
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden>
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
               </button>
             </header>
             {relationError && (
@@ -695,30 +784,37 @@ export default function WorkbenchTablePage() {
                 <li data-testid="relation-candidate-empty">目标表暂无可关联记录</li>
               )}
             </ul>
-            <button type="button" data-testid="relation-picker-save" onClick={() => void saveRelationPicker()}>
+            <button type="button" className="wb-btn wb-btn-primary" data-testid="relation-picker-save" onClick={() => void saveRelationPicker()}>
               保存关联
             </button>
           </div>
         </div>
       )}
 
-      <section>
-        <h2>行回收站</h2>
-        <ul data-testid="row-trash-list">
-          {trash.map((t) => (
-            <li key={t.row_id} data-testid={`row-trash-${t.row_id}`}>
-              行 {t.row_id.slice(0, 8)}（可还原至 {t.restorable_until.slice(0, 10)}）
-              <button
-                type="button"
-                data-testid={`row-restore-${t.row_id}`}
-                onClick={() => void restoreFromTrash(t.row_id)}
-              >
-                还原
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
+      {trash.length > 0 && (
+        <section className="wb-section" style={{ marginTop: 28 }}>
+          <div className="wb-section-head">
+            <h2 className="wb-section-title">行回收站</h2>
+            <p className="wb-section-sub">删除的行可在此还原</p>
+          </div>
+          <ul className="wb-trash-list" data-testid="row-trash-list">
+            {trash.map((t) => (
+              <li key={t.row_id} className="wb-trash-row" data-testid={`row-trash-${t.row_id}`}>
+                <span>行 {t.row_id.slice(0, 8)} · 可还原至 {t.restorable_until.slice(0, 10)}</span>
+                <button
+                  type="button"
+                  className="wb-btn"
+                  data-testid={`row-restore-${t.row_id}`}
+                  onClick={() => void restoreFromTrash(t.row_id)}
+                >
+                  还原
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {trash.length === 0 && <ul data-testid="row-trash-list" style={{ display: 'none' }} />}
     </div>
   );
 }

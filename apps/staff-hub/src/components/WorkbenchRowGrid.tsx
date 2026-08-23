@@ -13,13 +13,26 @@
  * 编辑态住在本组件的一处 state（同一时刻只有一格在编辑），通过 React context 下发给
  * AG Grid 的 cellRenderer —— 不放进 cellRenderer 自己的 local state：AG Grid 会因为
  * 行数据更新重建 cell 组件，local state 一重建就没了，"原输入还在"当场作废。
+ *
+ * UI 呈现层（Notion 级重做）：每种 field_type 有专属图标 + 专属显示/编辑器，
+ * 列头带类型图标，行悬浮出操作，空表给引导 —— 但一个字节的写回语义都不动。
  */
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-quartz.css';
 import type React from 'react';
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { AgGridReact } from 'ag-grid-react';
-import type { ColDef, ICellRendererParams } from 'ag-grid-community';
+import type { ColDef, ICellRendererParams, IHeaderParams } from 'ag-grid-community';
 import {
   parseCellInput,
   patchRow,
@@ -28,6 +41,7 @@ import {
   type WorkbenchField,
   type WorkbenchRow,
 } from '../lib/workbenchFetch';
+import { FieldIcon, fieldTypeLabel, personBadge, tagColor } from '../lib/workbenchFieldMeta';
 
 type Draft = string | string[];
 
@@ -70,22 +84,229 @@ interface CellContextValue {
 
 const CellContext = createContext<CellContextValue | null>(null);
 
-/** 展示态文本：多选拼顿号，空值给一个占位，别让空单元格看起来像"这一列坏了" */
-function displayOf(value: CellValue): string {
-  if (value === null || value === undefined || value === '') return '—';
-  if (Array.isArray(value)) return value.join('、');
-  return String(value);
-}
-
 function draftOf(value: CellValue): Draft {
   if (Array.isArray(value)) return value.map((v) => String(v));
   if (value === null || value === undefined) return '';
   return String(value);
 }
 
-function CellEditor({ field, active }: { field: WorkbenchField; active: ActiveCell }) {
+function isEmpty(value: CellValue): boolean {
+  if (value === null || value === undefined || value === '') return true;
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
+}
+
+/** 一枚柔和标签（单选/多选/关联共用的视觉原子）。 */
+function Tag({ label, dot = false }: { label: string; dot?: boolean }) {
+  const c = tagColor(label);
+  return (
+    <span className="wb-tag" style={{ background: c.bg, color: c.fg }}>
+      {dot && <span className="wb-tag-dot" style={{ background: c.dot }} />}
+      {label}
+    </span>
+  );
+}
+
+/** 空单元格的占位：一个极淡的破折号，不喧宾夺主但也不会读成"这列坏了"。 */
+function EmptyDash() {
+  return <span className="wb-cell-empty">—</span>;
+}
+
+/** 按 field_type 分发的只读显示。 */
+function CellDisplay({ field, value }: { field: WorkbenchField; value: CellValue }) {
+  if (isEmpty(value)) return <EmptyDash />;
+  switch (field.field_type) {
+    case 'number':
+      return <span className="wb-cell-number">{String(value)}</span>;
+    case 'url': {
+      const href = String(value);
+      const safe = /^https?:\/\//i.test(href) ? href : `https://${href}`;
+      return (
+        <a
+          className="wb-cell-url"
+          href={safe}
+          target="_blank"
+          rel="noreferrer noopener"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <FieldIcon type="url" className="wb-inline-ico" />
+          {href}
+        </a>
+      );
+    }
+    case 'date':
+      return <span className="wb-cell-date">{String(value)}</span>;
+    case 'single_select':
+      return <Tag label={String(value)} dot />;
+    case 'multi_select': {
+      const arr = Array.isArray(value) ? value : [String(value)];
+      return (
+        <span className="wb-tags">
+          {arr.map((v) => (
+            <Tag key={v} label={String(v)} dot />
+          ))}
+        </span>
+      );
+    }
+    case 'person': {
+      const arr = Array.isArray(value) ? value : [String(value)];
+      return (
+        <span className="wb-persons">
+          {arr.map((v) => {
+            const b = personBadge(String(v));
+            return (
+              <span className="wb-person" key={v}>
+                <span className="wb-avatar" style={{ background: b.color.dot }}>
+                  {b.initial}
+                </span>
+                {String(v)}
+              </span>
+            );
+          })}
+        </span>
+      );
+    }
+    case 'long_text':
+      return <span className="wb-cell-longtext">{String(value)}</span>;
+    default:
+      return <span className="wb-cell-text">{String(value)}</span>;
+  }
+}
+
+/**
+ * 定位在锚点下方的浮层（用 portal 挂到 body，彻底跳出 AG Grid 的 overflow 裁剪与层叠）。
+ * 单选/多选的彩色标签下拉、以及失败/冲突的就地提示都借它逃出格子。
+ */
+function Popover({
+  anchor,
+  onDismiss,
+  className,
+  children,
+}: {
+  anchor: HTMLElement | null;
+  onDismiss: () => void;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!anchor) return;
+    const r = anchor.getBoundingClientRect();
+    setPos({ left: r.left, top: r.bottom + 4, width: r.width });
+  }, [anchor]);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node) && anchor && !anchor.contains(e.target as Node)) {
+        onDismiss();
+      }
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onDismiss();
+    document.addEventListener('mousedown', onDown, true);
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('mousedown', onDown, true);
+      document.removeEventListener('keydown', onKey, true);
+    };
+  }, [anchor, onDismiss]);
+
+  if (!pos) return null;
+  return createPortal(
+    <div
+      ref={ref}
+      className={`wb-popover${className ? ` ${className}` : ''}`}
+      style={{ left: pos.left, top: pos.top, minWidth: pos.width }}
+    >
+      {children}
+    </div>,
+    document.body
+  );
+}
+
+/** 单选/多选的彩色标签下拉编辑器（Notion 招牌）。 */
+function SelectPopoverEditor({
+  field,
+  active,
+  anchor,
+}: {
+  field: WorkbenchField;
+  active: ActiveCell;
+  anchor: HTMLElement | null;
+}) {
+  const ctx = useContext(CellContext)!;
+  const multi = field.field_type === 'multi_select';
+  const selected = Array.isArray(active.draft) ? active.draft : active.draft ? [String(active.draft)] : [];
+
+  const pick = (opt: string) => {
+    if (multi) {
+      const next = selected.includes(opt) ? selected.filter((v) => v !== opt) : [...selected, opt];
+      ctx.setDraft(next);
+    } else {
+      ctx.setDraft(opt);
+      ctx.commit();
+    }
+  };
+
+  return (
+    <Popover anchor={anchor} onDismiss={() => ctx.commit()} className="wb-select-pop">
+      <div className="wb-select-scroll">
+        {!multi && (
+          <button type="button" className="wb-select-opt" onClick={() => pick('')}>
+            <span className="wb-select-clear">清空</span>
+          </button>
+        )}
+        {field.options.map((o) => {
+          const on = selected.includes(o);
+          return (
+            <button type="button" key={o} className={`wb-select-opt${on ? ' on' : ''}`} onClick={() => pick(o)}>
+              <Tag label={o} dot />
+              {on && <span className="wb-select-check">✓</span>}
+            </button>
+          );
+        })}
+        {field.options.length === 0 && <div className="wb-select-none">该字段还没有选项</div>}
+      </div>
+      {multi && (
+        <button type="button" className="wb-select-done" onClick={() => ctx.commit()}>
+          完成
+        </button>
+      )}
+    </Popover>
+  );
+}
+
+function CellEditor({
+  field,
+  active,
+  anchor,
+}: {
+  field: WorkbenchField;
+  active: ActiveCell;
+  anchor: HTMLElement | null;
+}) {
   const ctx = useContext(CellContext)!;
   const testId = `cell-editor-${active.rowId}-${field.field_id}`;
+
+  if (field.field_type === 'single_select' || field.field_type === 'multi_select') {
+    // 锚点仍带 testid（保留可定位性）；真正的选项在 portal 浮层里。
+    return (
+      <div className="wb-inline-editor" data-testid={testId}>
+        <span className="wb-inline-editor-anchor">
+          {Array.isArray(active.draft) && active.draft.length > 0 ? (
+            active.draft.map((v) => <Tag key={v} label={String(v)} dot />)
+          ) : active.draft && !Array.isArray(active.draft) ? (
+            <Tag label={String(active.draft)} dot />
+          ) : (
+            <span className="wb-cell-empty">选择…</span>
+          )}
+        </span>
+        <SelectPopoverEditor field={field} active={active} anchor={anchor} />
+      </div>
+    );
+  }
+
   const common = {
     'data-testid': testId,
     autoFocus: true,
@@ -99,42 +320,14 @@ function CellEditor({ field, active }: { field: WorkbenchField; active: ActiveCe
         ctx.commit();
       }
     },
-    className: 'cell-editor',
+    className: 'wb-input cell-editor',
   };
 
-  if (field.field_type === 'single_select') {
-    return (
-      <select {...common} value={String(active.draft)} onChange={(e) => ctx.setDraft(e.target.value)}>
-        <option value="">（清空）</option>
-        {field.options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-    );
-  }
-  if (field.field_type === 'multi_select') {
-    const selected = Array.isArray(active.draft) ? active.draft : [];
-    return (
-      <select
-        {...common}
-        multiple
-        value={selected}
-        onChange={(e) => ctx.setDraft(Array.from(e.target.selectedOptions).map((o) => o.value))}
-      >
-        {field.options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-    );
-  }
   return (
     <input
       {...common}
-      type={field.field_type === 'date' ? 'date' : 'text'}
+      type={field.field_type === 'date' ? 'date' : field.field_type === 'number' ? 'text' : 'text'}
+      inputMode={field.field_type === 'number' ? 'decimal' : undefined}
       value={Array.isArray(active.draft) ? active.draft.join('') : active.draft}
       onChange={(e) => ctx.setDraft(e.target.value)}
     />
@@ -150,11 +343,9 @@ function RelationCell({ rowId, field, value }: { rowId: string; field: Workbench
   const ids = Array.isArray(value) ? value.map((v) => String(v)) : [];
   return (
     <div data-testid={cellId} className="grid-cell grid-cell-relation">
-      {ids.length === 0 && <span className="rel-empty">—</span>}
+      {ids.length === 0 && <span className="rel-empty wb-cell-empty">—</span>}
       {ids.map((id) => {
         // 失效判定：候选元数据已加载（meta 存在）但该 row_id 不在其中 = 目标记录被软删/移出可读集。
-        // 数据层仍保留 row_id 数组（删错可还原，和 A30② 删表语义一致）；展示层示以失效标记，
-        // 不显示旧标题、不给可跳转入口（点了也不会跳到已删记录的 404 白屏）。
         const title = meta?.titleByRow[id];
         const isStale = meta !== undefined && title === undefined;
         if (isStale) {
@@ -178,6 +369,7 @@ function RelationCell({ rowId, field, value }: { rowId: string; field: Workbench
             title="点击跳转到关联记录"
             onClick={() => meta && ctx.relationJump(meta.targetTableId, id)}
           >
+            <FieldIcon type="relation" className="wb-inline-ico" />
             {title ?? id}
           </button>
         );
@@ -203,12 +395,11 @@ function RollupCell({ rowId, field }: { rowId: string; field: WorkbenchField }) 
   const fieldId = field.field_id ?? '';
   const cellId = `cell-${rowId}-${fieldId}`;
   const meta = ctx.rollupMeta[fieldId]?.[rowId];
-  // 依赖失效降级：value 为 null 且 degraded=true → 可见降级占位
   if (meta && meta.degraded && (meta.value === null || meta.value === undefined)) {
     return (
       <div data-testid={cellId} className="grid-cell grid-cell-rollup grid-cell-rollup-degraded">
         <span
-          className="rollup-degraded"
+          className="rollup-degraded wb-badge-degraded"
           data-testid={`rollup-degraded-${rowId}-${fieldId}`}
           title="汇总依赖已失效"
         >
@@ -217,14 +408,18 @@ function RollupCell({ rowId, field }: { rowId: string; field: WorkbenchField }) 
       </div>
     );
   }
-  const text = meta === undefined || meta.value === null || meta.value === '' ? '—' : String(meta.value);
+  const empty = meta === undefined || meta.value === null || meta.value === '';
   return (
     <div data-testid={cellId} className="grid-cell grid-cell-rollup">
-      <span className="rollup-value" data-testid={`rollup-value-${rowId}-${fieldId}`}>
-        {text}
+      <span className="rollup-value wb-cell-rollup" data-testid={`rollup-value-${rowId}-${fieldId}`}>
+        {empty ? <EmptyDash /> : String(meta!.value)}
       </span>
       {meta?.degraded && (
-        <span className="rollup-degraded-badge" data-testid={`rollup-degraded-${rowId}-${fieldId}`} title="部分行未计入">
+        <span
+          className="rollup-degraded-badge wb-badge-warn"
+          data-testid={`rollup-degraded-${rowId}-${fieldId}`}
+          title="部分行未计入"
+        >
           !
         </span>
       )}
@@ -234,6 +429,8 @@ function RollupCell({ rowId, field }: { rowId: string; field: WorkbenchField }) 
 
 function RowCell({ rowId, field, value }: { rowId: string; field: WorkbenchField; value: CellValue }) {
   const ctx = useContext(CellContext)!;
+  // callback ref → state：portal 浮层要在挂载后才拿得到锚元素做定位，普通 ref 不会触发重渲染
+  const [anchorEl, setAnchorEl] = useState<HTMLDivElement | null>(null);
   if (field.field_type === 'relation') return <RelationCell rowId={rowId} field={field} value={value} />;
   if (field.field_type === 'rollup' || field.field_type === 'lookup')
     return <RollupCell rowId={rowId} field={field} />;
@@ -245,46 +442,106 @@ function RowCell({ rowId, field, value }: { rowId: string; field: WorkbenchField
     return (
       <div
         data-testid={cellId}
-        className="grid-cell"
+        className={`grid-cell wb-display grid-cell-type-${field.field_type}`}
         title="双击编辑"
         onDoubleClick={() => ctx.beginEdit(rowId, field, value)}
       >
-        {displayOf(value)}
+        <CellDisplay field={field} value={value} />
       </div>
     );
   }
 
   return (
-    <div data-testid={cellId} className={`grid-cell grid-cell-${active.status}`}>
-      <CellEditor field={field} active={active} />
+    <div ref={setAnchorEl} data-testid={cellId} className={`grid-cell wb-editing grid-cell-${active.status}`}>
+      <CellEditor field={field} active={active} anchor={anchorEl} />
       {active.status === 'error' && (
-        <span className="cell-note cell-note-error">
-          <span data-testid={`cell-error-${rowId}-${field.field_id}`}>{active.message}</span>
-          <button
-            type="button"
-            data-testid={`cell-retry-${rowId}-${field.field_id}`}
-            // 按下时不让输入框先失焦：失焦会再触发一次写回，重试就成了"重试两次"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => ctx.commit()}
-          >
-            重试
-          </button>
-        </span>
+        <Popover anchor={anchorEl} onDismiss={() => undefined} className="wb-note-pop wb-note-error">
+          <span className="cell-note cell-note-error">
+            <span data-testid={`cell-error-${rowId}-${field.field_id}`}>{active.message}</span>
+            <button
+              type="button"
+              className="wb-note-btn"
+              data-testid={`cell-retry-${rowId}-${field.field_id}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => ctx.commit()}
+            >
+              重试
+            </button>
+          </span>
+        </Popover>
       )}
       {active.status === 'conflict' && (
-        <span className="cell-note cell-note-conflict">
-          <span data-testid={`cell-conflict-${rowId}-${field.field_id}`}>{active.message}</span>
-          <button
-            type="button"
-            data-testid={`cell-reread-${rowId}`}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => ctx.reread(rowId)}
-          >
-            重新读取该行
-          </button>
-        </span>
+        <Popover anchor={anchorEl} onDismiss={() => undefined} className="wb-note-pop wb-note-conflict">
+          <span className="cell-note cell-note-conflict">
+            <span data-testid={`cell-conflict-${rowId}-${field.field_id}`}>{active.message}</span>
+            <button
+              type="button"
+              className="wb-note-btn"
+              data-testid={`cell-reread-${rowId}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => ctx.reread(rowId)}
+            >
+              重新读取该行
+            </button>
+          </span>
+        </Popover>
       )}
     </div>
+  );
+}
+
+/** 列头：类型图标 + 字段名（双击行内改名，真保存）。 */
+function ColumnHeader(
+  props: IHeaderParams & { fieldType: string; fieldId?: string; onRename?: (fieldId: string, name: string) => void }
+) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(props.displayName);
+  const canRename = Boolean(props.fieldId && props.onRename);
+
+  const commit = () => {
+    setEditing(false);
+    const next = draft.trim();
+    if (next && next !== props.displayName && props.fieldId) props.onRename!(props.fieldId, next);
+    else setDraft(props.displayName);
+  };
+
+  if (editing) {
+    return (
+      <input
+        className="wb-colhead-input"
+        data-testid={props.fieldId ? `colhead-input-${props.fieldId}` : undefined}
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            commit();
+          } else if (e.key === 'Escape') {
+            setDraft(props.displayName);
+            setEditing(false);
+          }
+        }}
+      />
+    );
+  }
+
+  return (
+    <span
+      className="wb-colhead"
+      title={`${props.displayName} · ${fieldTypeLabel(props.fieldType)}${canRename ? ' · 双击改名' : ''}`}
+      onDoubleClick={() => {
+        if (!canRename) return;
+        setDraft(props.displayName);
+        setEditing(true);
+      }}
+    >
+      <span className="wb-colhead-ico">
+        <FieldIcon type={props.fieldType} />
+      </span>
+      <span className="wb-colhead-name">{props.displayName}</span>
+    </span>
   );
 }
 
@@ -310,6 +567,10 @@ export interface WorkbenchRowGridProps {
   onRelationJump?: (targetTableId: string, targetRowId: string) => void;
   /** rollup/lookup 字段读时聚合值（页面预取 /rollups 后下发：field_id→row_id→聚合值） */
   rollupMeta?: RollupMeta;
+  /** 空表引导的「新建第一行」入口（回落到工具栏新增行） */
+  onAddRow?: () => void;
+  /** 列头双击改字段名（行内改名，真保存） */
+  onRenameField?: (fieldId: string, name: string) => void;
 }
 
 export default function WorkbenchRowGrid({
@@ -325,6 +586,8 @@ export default function WorkbenchRowGrid({
   onRelationEdit,
   onRelationJump,
   rollupMeta = {},
+  onAddRow,
+  onRenameField,
 }: WorkbenchRowGridProps) {
   const [active, setActive] = useState<ActiveCell | null>(null);
   const activeRef = useRef<ActiveCell | null>(null);
@@ -422,20 +685,23 @@ export default function WorkbenchRowGrid({
     const expandCol: ColDef<WorkbenchRow> = {
       colId: '__expand',
       headerName: '',
-      width: 128,
+      width: 76,
+      pinned: 'left',
       sortable: false,
-      cellRenderer: (p: ICellRendererParams<WorkbenchRow>) => (
-        <RowOpsCell rowId={p.data?.row_id ?? ''} />
-      ),
+      resizable: false,
+      cellClass: 'wb-ops-cell',
+      cellRenderer: (p: ICellRendererParams<WorkbenchRow>) => <RowOpsCell rowId={p.data?.row_id ?? ''} />,
     };
     return [
       expandCol,
       ...fields.map<ColDef<WorkbenchRow>>((f) => ({
         colId: f.field_id ?? f.name,
         headerName: f.name,
-        minWidth: 160,
+        minWidth: 168,
         flex: 1,
         sortable: false,
+        headerComponent: ColumnHeader,
+        headerComponentParams: { fieldType: f.field_type, fieldId: f.field_id, onRename: onRenameField },
         valueGetter: (p) => (p.data ? (p.data.data[f.field_id ?? ''] ?? null) : null),
         cellRenderer: (p: ICellRendererParams<WorkbenchRow>) => (
           <RowCell
@@ -446,7 +712,9 @@ export default function WorkbenchRowGrid({
         ),
       })),
     ];
-  }, [fields]);
+  }, [fields, onRenameField]);
+
+  const empty = rows.length === 0;
 
   return (
     <CellContext.Provider value={ctxValue}>
@@ -457,28 +725,49 @@ export default function WorkbenchRowGrid({
           {active.message}
         </div>
       )}
-      <div
-        data-testid="row-grid"
-        className="ag-theme-quartz workbench-grid"
-        style={{ width: '100%', height: 460 }}
-        onPaste={(e) => {
-          const text = e.clipboardData?.getData('text/plain') ?? '';
-          if (!text) return;
-          e.preventDefault();
-          onPasteText(text);
-        }}
-      >
-        <AgGridReact<WorkbenchRow>
-          rowData={rows}
-          columnDefs={columnDefs}
-          getRowId={(p) => p.data.row_id}
-          rowHeight={64}
-          headerHeight={40}
-          // 八列全量渲染：列虚拟化会让右侧几列不进 DOM，"每一格都能被点到"就不成立了
-          suppressColumnVirtualisation
-          suppressCellFocus
-          animateRows={false}
-        />
+      <div className="wb-grid-frame">
+        <div
+          data-testid="row-grid"
+          className="ag-theme-quartz workbench-grid"
+          style={{ width: '100%', height: empty ? 44 : 480 }}
+          onPaste={(e) => {
+            const text = e.clipboardData?.getData('text/plain') ?? '';
+            if (!text) return;
+            e.preventDefault();
+            onPasteText(text);
+          }}
+        >
+          <AgGridReact<WorkbenchRow>
+            rowData={rows}
+            columnDefs={columnDefs}
+            getRowId={(p) => p.data.row_id}
+            rowHeight={46}
+            headerHeight={42}
+            overlayNoRowsTemplate="<span></span>"
+            // 全量渲染：列虚拟化会让右侧几列不进 DOM，"每一格都能被点到"就不成立了
+            suppressColumnVirtualisation
+            suppressCellFocus
+            animateRows={false}
+          />
+        </div>
+        {empty && (
+          <div className="wb-empty" data-testid="row-grid-empty">
+            <div className="wb-empty-art" aria-hidden>
+              <svg width="72" height="56" viewBox="0 0 72 56" fill="none">
+                <rect x="4" y="6" width="64" height="44" rx="6" stroke="currentColor" strokeWidth="2" />
+                <path d="M4 20h64M26 20v30M4 35h64" stroke="currentColor" strokeWidth="1.6" />
+                <rect x="9" y="10" width="12" height="6" rx="2" fill="currentColor" opacity="0.35" />
+              </svg>
+            </div>
+            <p className="wb-empty-title">这张表还是空的</p>
+            <p className="wb-empty-sub">录入第一行，或直接把一片表格粘贴进来。</p>
+            {onAddRow && (
+              <button type="button" className="wb-btn wb-btn-primary wb-empty-cta" onClick={onAddRow}>
+                + 新建第一行
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </CellContext.Provider>
   );
@@ -487,12 +776,30 @@ export default function WorkbenchRowGrid({
 function RowOpsCell({ rowId }: { rowId: string }) {
   const ctx = useContext(CellContext)!;
   return (
-    <span className="row-ops">
-      <button type="button" data-testid={`row-expand-${rowId}`} onClick={() => ctx.expand(rowId)}>
-        展开
+    <span className="row-ops wb-row-ops">
+      <button
+        type="button"
+        className="wb-icon-btn"
+        title="展开该行"
+        aria-label="展开"
+        data-testid={`row-expand-${rowId}`}
+        onClick={() => ctx.expand(rowId)}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+          <path d="M8 4H5a1 1 0 0 0-1 1v3M16 4h3a1 1 0 0 1 1 1v3M8 20H5a1 1 0 0 1-1-1v-3M16 20h3a1 1 0 0 0 1-1v-3" />
+        </svg>
       </button>
-      <button type="button" data-testid={`row-delete-${rowId}`} onClick={() => ctx.remove(rowId)}>
-        删除
+      <button
+        type="button"
+        className="wb-icon-btn wb-icon-danger"
+        title="删除该行"
+        aria-label="删除"
+        data-testid={`row-delete-${rowId}`}
+        onClick={() => ctx.remove(rowId)}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+          <path d="M5 7h14M10 7V5h4v2M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M10 11v6M14 11v6" />
+        </svg>
       </button>
     </span>
   );
