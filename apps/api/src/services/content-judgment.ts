@@ -23,7 +23,7 @@ export interface JudgeVideoResult {
 
 export interface JudgeVideoOptions {
   // 'uncertain'：仅非生产测试钩子——跳过主判、直接真调 commander，供 smoke 在真环境验证
-  // commander 模型（默认 gpt-5.6-terra，见 COMMANDER_MODEL）可用、能返回终态（环境接缝守卫，单测 mock 测不到）。
+  // commander 模型（默认 gpt-5.4-mini，见 COMMANDER_MODEL）可用、能返回终态（环境接缝守卫，单测 mock 测不到）。
   forceResult?: 'matched' | 'rejected' | 'pending' | 'uncertain';
   forceTimeout?: boolean;
 }
@@ -53,9 +53,12 @@ const JUDGMENT_MODEL = 'gemini-2.5-flash-official';
 // commander（复核官）：主判判"存疑"(UNCERTAIN)时的第二个 AI，走同一个 ToAPIs 代理（OpenAI 兼容，
 // 换 model 字段即可，不新接 key），用不同模型厂商做跨模型交叉验证，只判"准/不准"。
 // 原默认 deepseek-v4-flash；2026-08-23 该模型所在 TOAPIS 渠道 #58 上游欠费（402，无备用渠道），
-// 临时切 gpt-5.6-terra（用户 0823 现场拍板）——依然是与主判 Gemini 不同厂商的模型，交叉验证的
-// 设计意图不受影响；0823 真调实测 reasoning_effort:'none' 对它生效（reasoning_tokens=0）。
-const COMMANDER_MODEL = process.env.COMMANDER_MODEL || 'gpt-5.6-terra';
+// 临时切 gpt-5.6-terra（用户 0823 现场拍板）——真机受控失败验证时发现该渠道本身不稳定
+// （同一 prompt 连续调用 prompt_tokens 从几百跳到 8000+、偶发整段格式错乱/超时，疑似
+// 后端多副本缓存串号），改切 gpt-5.4-mini（同日真调对照：8/8 正确、token 数全程稳定）——
+// 依然是与主判 Gemini 不同厂商的模型，交叉验证的设计意图不受影响；reasoning_effort:'none'
+// 对它同样生效（reasoning_tokens=0）。
+const COMMANDER_MODEL = process.env.COMMANDER_MODEL || 'gpt-5.4-mini';
 
 // ── judgeVideo：核心判决函数 ─────────────────────────────────────────────────
 /**
@@ -371,7 +374,7 @@ async function commanderReview(
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 100,
         temperature: 0.1,
-        // gpt-5.6-terra 认这个参数（0823 真调 reasoning_tokens=0），关思考让短判决更稳更快；
+        // gpt-5.4-mini 认这个参数（0823 真调 reasoning_tokens=0），关思考让短判决更稳更快；
         // 若换回 deepseek 系列同样适用，只有 gemini 不认（那边只能靠给够 max_tokens）。
         reasoning_effort: 'none',
       },

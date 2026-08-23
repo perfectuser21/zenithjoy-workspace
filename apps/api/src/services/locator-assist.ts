@@ -9,8 +9,11 @@
  * 双后端插座（0822 主理人拍板）：
  *   tree-llm（主力）：树→LLM via TOAPIS。纯文本任务，树比截图省一个数量级 token；
  *     `reasoning_effort:'none'` 关思考。原默认 deepseek-v4-flash；2026-08-23 该模型
- *     所在 TOAPIS 渠道 #58 上游欠费（402，无备用渠道），临时切 gpt-5.6-terra
- *     （用户 0823 现场拍板；真调实测该模型也认 reasoning_effort:'none'，reasoning_tokens=0）。
+ *     所在 TOAPIS 渠道 #58 上游欠费（402，无备用渠道），临时切 gpt-5.6-terra（用户
+ *     0823 现场拍板）——真机受控失败验证时发现该渠道本身不稳定（同一 prompt 连续调用
+ *     prompt_tokens 从几百跳到 8000+、偶发整段格式错乱/超时，疑似后端多副本缓存串号，
+ *     真机上实测出现过 AI 已正确指认目标却因为这类抖动被判定不可用的情况），改切
+ *     gpt-5.4-mini（同日真调对照：8/8 正确、token 数全程稳定，也认 reasoning_effort:'none'）。
  *   vision（兜底插座）：截图→UI-TARS（树失明页面/二裁/未来 RPA 量产冷启动）。
  *     视觉后端走 TOAPIS 通用视觉模型（4o/Gemini），同判定链已踩通的 image_url 调法，
  *     不自托管 UI-TARS、不用火山 endpoint（0823 主理人纠正：任何视觉模型都行，TOAPIS 现成最省）。
@@ -26,14 +29,14 @@ import axios from 'axios';
 import pool from '../db/connection';
 
 const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';
-const ASSIST_MODEL = process.env.LOCATOR_ASSIST_MODEL || 'gpt-5.6-terra';
+const ASSIST_MODEL = process.env.LOCATOR_ASSIST_MODEL || 'gpt-5.4-mini';
 /** 视觉后端模型：治 Lynx 失明页（树是空的）——看截图选结果序号。通用视觉模型即可
  *  （强于数数读字），走 TOAPIS 同判定链已踩通的 image_url 调法，不自托管不用火山。
  *  默认用判定链同款 gemini-2.5-flash-official（0823 真调实测：该渠道只开了 -official 后缀
  *  的模型，gpt-4o/裸 gemini 名报 model_not_found；真截图选目标 index 一次答对）。 */
 const VISION_MODEL = process.env.LOCATOR_VISION_MODEL || 'gemini-2.5-flash-official';
 const ASSIST_TIMEOUT_MS = 20_000;
-/** 行号 JSON 一句话就够；预算含 reasoning_tokens（TOAPIS 口径），gpt-5.6-terra 已关思考。 */
+/** 行号 JSON 一句话就够；预算含 reasoning_tokens（TOAPIS 口径），gpt-5.4-mini 已关思考。 */
 const ASSIST_MAX_TOKENS = 300;
 /** 视觉后端预算：gemini-2.5-*-official 是 thinking 模型，TOAPIS 把思考算进 completion_tokens
  *  且关不掉（reasoning_effort:'none' 只 deepseek 认）——预算给不够会被截断（PR#1684 教训）。
@@ -86,12 +89,41 @@ export interface LocatorAssistResult {
   matchIndex?: number;
 }
 
+/**
+ * 按 step 记录的 UI 识别经验——真机踩过的坑，喂给 AI 当参考知识，让它越用越准
+ * 而不是每次从零猜。
+ *
+ * 颗粒度是"capability 的具体一步"（如 scan_me_tab），不是整个 value stream：
+ * 这是"先走通 Path、记下每一步该认什么，再转成代码"这条既有开发方法论的延伸——
+ * 经验按 step 归档，只在验证过的那个 step 生效，不污染其它 step 的 prompt；写新
+ * capability 时可以照抄相似 step 已经踩过的经验（人工判断复用，不是自动共享）。
+ * 固化的不是写死的答案（UI 改版就失效），是一条选择依据（UI 改版后依然有参考价值）。
+ *
+ * 新增：往对应 step 的数组末尾加一行，不要改写/删除已有条目（除非确认已过期）。
+ */
+export const STEP_KNOWLEDGE: Record<string, string[]> = {
+  scan_me_tab: [
+    '底部导航栏（首页/朋友/消息/我等 tab）经常共用同一个 view_id（模板复用），仅凭 id 无法区分——必须结合 content_desc（如"我，按钮"这类带明确后缀的完整描述）精确匹配整段文字，不要因为看到 id 相同或位置相近就选错行（真机 0823 撞过：错选成"消息"tab 旁边的未读数字徽标，其 desc 是"-"、text 是"4"，跟目标描述完全对不上却被选中）。',
+  ],
+};
+
+function renderStepKnowledge(step: string): string[] {
+  const notes = STEP_KNOWLEDGE[step];
+  if (!notes || notes.length === 0) return [];
+  return [
+    `这一步（${step}）已知的真机识别经验（供参考，不要机械套用，树里没有类似情况就忽略）:`,
+    ...notes.map((n) => `- ${n}`),
+    ``,
+  ];
+}
+
 /** prompt：目标 + 步骤上下文 + 整棵树（行号从 0 起可直接引用），只许回一行 JSON。 */
 export function buildLocatorPrompt(req: LocatorAssistRequest): string {
   return [
     `你是安卓 UI 自动化的定位专家。下面是无障碍树快照，每行一个节点，行号从 0 开始。`,
     `当前步骤: ${req.step}（错误码: ${req.errorCode || '-'}）`,
     `要找的目标: ${req.targetDesc}`,
+    ...renderStepKnowledge(req.step),
     `请指出最匹配目标的那一行。只回一行 JSON，格式 {"line": 行号}，不要任何其他文字。`,
     `如果树里确实没有匹配的节点，回 {"line": -1}。`,
     ``,
@@ -135,6 +167,7 @@ export function buildExtractPrompt(req: LocatorAssistRequest): string {
     `你是安卓 UI 信息抽取专家。下面是无障碍树快照，每行一个节点。`,
     `当前步骤: ${req.step}（错误码: ${req.errorCode || '-'}）`,
     `要抽取的信息: ${req.targetDesc}`,
+    ...renderStepKnowledge(req.step),
     `请从树里找出这个信息的值。只回一行 JSON，格式 {"extracted": "值"}，不要任何其他文字。`,
     `如果树里确实没有这个信息，回 {"extracted": null}。`,
     ``,
@@ -158,6 +191,7 @@ export function buildExtractListPrompt(req: LocatorAssistRequest): string {
     `你是安卓 UI 信息抽取专家。下面是无障碍树快照，每行一个节点。`,
     `当前步骤: ${req.step}（错误码: ${req.errorCode || '-'}）`,
     `要抽取的信息: ${req.targetDesc}——把树里所有匹配的值都列出来，不是只列一个。`,
+    ...renderStepKnowledge(req.step),
     `请返回一行 JSON，格式 {"values": ["值1", "值2", ...]}，不要任何其他文字。`,
     `如果树里一个匹配的值都没有，回 {"values": []}——这是合法答案，不要瞎编凑数。`,
     ``,
@@ -261,7 +295,7 @@ async function askTreeLlm(req: LocatorAssistRequest): Promise<{ line: number | n
         messages: [{ role: 'user', content: buildLocatorPrompt(req) }],
         max_tokens: ASSIST_MAX_TOKENS,
         temperature: 0,
-        // deepseek/gpt-5.6-terra 都认这个参数；thinking 模型（如 gemini）不认，
+        // deepseek/gpt-5.4-mini 都认这个参数；thinking 模型（如 gemini）不认，
         // 会把含 reasoning 的总预算吃光（PR#1684）
         reasoning_effort: 'none',
       },

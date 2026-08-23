@@ -48,15 +48,19 @@ import { assembleChatContext } from './wechat/context-assembler';
 // 绝不把思考漏给客户；max_tokens=2000 实测足够（content 不为空）。
 //
 // 2026-08-23：deepseek-v4-flash 所在 TOAPIS 渠道 #58 上游欠费（402 Insufficient Balance，
-// 无备用渠道），临时切 gpt-5.6-terra（用户 0823 现场拍板，接受成本暂时上升）；真调实测
-// 客服回复质量正常、reasoning_tokens=0（该模型不强制思考），max_tokens=2000 预算依旧够用。
+// 无备用渠道），临时切 gpt-5.6-terra（用户 0823 现场拍板）——真机受控失败验证时发现该
+// 渠道本身不稳定（同一 prompt 连续调用 prompt_tokens 从几百跳到 8000+、偶发整段格式
+// 错乱/超时），改切 gpt-5.4-mini（同日真调对照：8/8 正确、token 数全程稳定）。
+// ⚠️ 上面 2026-07-03 那条决策明确说过 gpt-5.4-mini 比 deepseek 慢（5-7s vs 3.2-3.4s）、
+// 更贵——这次是在"deepseek 已挂、gpt-5.6-terra 已证实不稳定"的前提下选最安全的选项，
+// 优先级是"稳定可用"压过"更快更省"；deepseek 渠道恢复后应重新评估是否换回。
 //
 // 端点/模型可被 ENV 覆盖（WECHAT_CS_MODEL）；apiKey 走 TOAPI_API_KEY（1Password「ToAPI」条目，部署机 ENV 必须有）。
 // 惰性读 env（调用时而非模块加载时）：保证测试 beforeAll 设的 env / 部署后改的 env 都生效，
 // 不被 import 时机锁死。
 function csLlm() {
   return {
-    model: process.env.WECHAT_CS_MODEL || 'gpt-5.6-terra',
+    model: process.env.WECHAT_CS_MODEL || 'gpt-5.4-mini',
     baseUrl: process.env.TOAPI_BASE_URL || 'https://toapis.com/v1/chat/completions',
     apiKey: process.env.TOAPI_API_KEY,
     maxTokens: Number(process.env.WECHAT_CS_MAX_TOKENS) || 2000,
