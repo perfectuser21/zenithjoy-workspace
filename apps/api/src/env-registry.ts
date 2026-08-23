@@ -34,9 +34,9 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'ZENITHJOY_INTERNAL_TOKEN', reason: '内部接口/super-admin 鉴权 token，缺则相应内部接口拒绝访问' },
   { name: 'SMOKE_TOKEN', reason: 'smoke 测试用临时 token，仅冒烟链路读取' },
   { name: 'CRM_RECONCILE_DRYRUN', reason: 'CRM 采集对账干跑开关，缺则默认干跑（只日志不软删，最安全）；仅字面 false 进真删模式' },
-  { name: 'GRADING_MODEL', reason: '评论区留言AI意向分档判定的 ToAPIs 模型名，缺则默认 gpt-5.6-terra（原硬编码 deepseek-v4-flash，0823 渠道欠费临时切走）；仅覆盖模型时设' },
-  { name: 'COMMANDER_MODEL', reason: '视频判定存疑复核官(commander)的 ToAPIs 模型名，缺则默认 gpt-5.6-terra（原 deepseek-v4-flash，0823 渠道欠费临时切走）；仅覆盖模型时设' },
-  { name: 'LOCATOR_ASSIST_MODEL', reason: 'AI on-call 定位求助(tree-llm 后端)模型名，缺则默认 gpt-5.6-terra（原 deepseek-v4-flash，0823 渠道欠费临时切走）；仅覆盖模型时设' },
+  { name: 'GRADING_MODEL', reason: '评论区留言AI意向分档判定的 ToAPIs 模型名，缺则默认 gpt-5.4-mini（原硬编码 deepseek-v4-flash，0823 渠道欠费切 gpt-5.6-terra 又因不稳定改切）；仅覆盖模型时设' },
+  { name: 'COMMANDER_MODEL', reason: '视频判定存疑复核官(commander)的 ToAPIs 模型名，缺则默认 gpt-5.4-mini（原 deepseek-v4-flash，0823 渠道欠费切 gpt-5.6-terra 又因不稳定改切）；仅覆盖模型时设' },
+  { name: 'LOCATOR_ASSIST_MODEL', reason: 'AI on-call 定位求助(tree-llm 后端)模型名，缺则默认 gpt-5.4-mini（原 deepseek-v4-flash，0823 渠道欠费切 gpt-5.6-terra 又因不稳定改切）；仅覆盖模型时设' },
   { name: 'LOCATOR_VISION_MODEL', reason: 'AI on-call 视觉后端(vision_select，治 Lynx 失明页 NO_MATCH)模型名，缺则默认 gemini-2.5-flash-official；走 TOAPIS 复用 TOAPIS_API_KEY，仅覆盖模型时设' },
   { name: 'WORKBENCH_ROW_LIMIT', reason: '路③ 结构化工作台单表行数上限，缺则默认 5000（产品阈值）；CI/E2E 覆写成小值来证明上限闸真的在，真插 5000 行会把 job 预算烧光' },
 

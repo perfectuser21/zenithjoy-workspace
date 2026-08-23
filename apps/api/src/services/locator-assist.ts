@@ -9,8 +9,11 @@
  * 双后端插座（0822 主理人拍板）：
  *   tree-llm（主力）：树→LLM via TOAPIS。纯文本任务，树比截图省一个数量级 token；
  *     `reasoning_effort:'none'` 关思考。原默认 deepseek-v4-flash；2026-08-23 该模型
- *     所在 TOAPIS 渠道 #58 上游欠费（402，无备用渠道），临时切 gpt-5.6-terra
- *     （用户 0823 现场拍板；真调实测该模型也认 reasoning_effort:'none'，reasoning_tokens=0）。
+ *     所在 TOAPIS 渠道 #58 上游欠费（402，无备用渠道），临时切 gpt-5.6-terra（用户
+ *     0823 现场拍板）——真机受控失败验证时发现该渠道本身不稳定（同一 prompt 连续调用
+ *     prompt_tokens 从几百跳到 8000+、偶发整段格式错乱/超时，疑似后端多副本缓存串号，
+ *     真机上实测出现过 AI 已正确指认目标却因为这类抖动被判定不可用的情况），改切
+ *     gpt-5.4-mini（同日真调对照：8/8 正确、token 数全程稳定，也认 reasoning_effort:'none'）。
  *   vision（兜底插座）：截图→UI-TARS（树失明页面/二裁/未来 RPA 量产冷启动）。
  *     视觉后端走 TOAPIS 通用视觉模型（4o/Gemini），同判定链已踩通的 image_url 调法，
  *     不自托管 UI-TARS、不用火山 endpoint（0823 主理人纠正：任何视觉模型都行，TOAPIS 现成最省）。
@@ -26,14 +29,14 @@ import axios from 'axios';
 import pool from '../db/connection';
 
 const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';
-const ASSIST_MODEL = process.env.LOCATOR_ASSIST_MODEL || 'gpt-5.6-terra';
+const ASSIST_MODEL = process.env.LOCATOR_ASSIST_MODEL || 'gpt-5.4-mini';
 /** 视觉后端模型：治 Lynx 失明页（树是空的）——看截图选结果序号。通用视觉模型即可
  *  （强于数数读字），走 TOAPIS 同判定链已踩通的 image_url 调法，不自托管不用火山。
  *  默认用判定链同款 gemini-2.5-flash-official（0823 真调实测：该渠道只开了 -official 后缀
  *  的模型，gpt-4o/裸 gemini 名报 model_not_found；真截图选目标 index 一次答对）。 */
 const VISION_MODEL = process.env.LOCATOR_VISION_MODEL || 'gemini-2.5-flash-official';
 const ASSIST_TIMEOUT_MS = 20_000;
-/** 行号 JSON 一句话就够；预算含 reasoning_tokens（TOAPIS 口径），gpt-5.6-terra 已关思考。 */
+/** 行号 JSON 一句话就够；预算含 reasoning_tokens（TOAPIS 口径），gpt-5.4-mini 已关思考。 */
 const ASSIST_MAX_TOKENS = 300;
 /** 视觉后端预算：gemini-2.5-*-official 是 thinking 模型，TOAPIS 把思考算进 completion_tokens
  *  且关不掉（reasoning_effort:'none' 只 deepseek 认）——预算给不够会被截断（PR#1684 教训）。
@@ -292,7 +295,7 @@ async function askTreeLlm(req: LocatorAssistRequest): Promise<{ line: number | n
         messages: [{ role: 'user', content: buildLocatorPrompt(req) }],
         max_tokens: ASSIST_MAX_TOKENS,
         temperature: 0,
-        // deepseek/gpt-5.6-terra 都认这个参数；thinking 模型（如 gemini）不认，
+        // deepseek/gpt-5.4-mini 都认这个参数；thinking 模型（如 gemini）不认，
         // 会把含 reasoning 的总预算吃光（PR#1684）
         reasoning_effort: 'none',
       },
