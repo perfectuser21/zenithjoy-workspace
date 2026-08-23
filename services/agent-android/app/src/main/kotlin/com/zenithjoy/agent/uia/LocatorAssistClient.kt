@@ -55,6 +55,8 @@ object LocatorAssistClient {
         douyinVersion: String?,
         appVersion: String?,
         mode: String = "locate",
+        screenshotB64: String? = null,
+        visionCandidateCount: Int? = null,
     ): String = JSONObject().apply {
         put("step", step)
         put("target_desc", targetDesc)
@@ -65,7 +67,39 @@ object LocatorAssistClient {
         if (!osVersion.isNullOrBlank()) put("os_version", osVersion)
         if (!douyinVersion.isNullOrBlank()) put("douyin_version", douyinVersion)
         if (!appVersion.isNullOrBlank()) put("app_version", appVersion)
+        if (!screenshotB64.isNullOrBlank()) put("screenshot_b64", screenshotB64)
+        if (visionCandidateCount != null) put("vision_candidate_count", visionCandidateCount)
     }.toString()
+
+    /** vision_select 响应 → (matchIndex, assist_id)；unavailable/畸形 → null（fail-open）。 */
+    fun parseVisionResponse(raw: String?): Pair<Int, String?>? {
+        if (raw.isNullOrBlank()) return null
+        return try {
+            val data = JSONObject(raw).optJSONObject("data") ?: return null
+            if (data.optString("status") != "ok") return null
+            if (!data.has("match_index") || data.isNull("match_index")) return null
+            Pair(data.optInt("match_index"), data.optString("assist_id").takeIf { it.isNotBlank() && it != "null" })
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** 用户结果行的屏幕纵向分数：row0 + idx*pitch。
+     *  荣耀X30(1080x2388)实测：现有盲点第一行=0.21h，相邻结果行距≈0.084h（截图量得）。
+     *  其它机型行距会偏，但点偏后 verifyProfileMatchesDouyinId 兜底判 NO_MATCH，不退化。 */
+    fun rowFractionForIndex(index: Int, row0: Float = 0.21f, pitch: Float = 0.084f): Float =
+        row0 + index.coerceAtLeast(0) * pitch
+
+    /** 同步 vision 求助（调用方在 IO 线程）。任何失败返回 null。 */
+    fun requestVisionBlocking(httpBase: String, body: String): Pair<Int, String?>? = try {
+        val req = Request.Builder()
+            .url("$httpBase/api/agent/burner/locator-assist")
+            .post(body.toRequestBody("application/json".toMediaType()))
+            .build()
+        http.newCall(req).execute().use { resp -> parseVisionResponse(resp.body?.string()) }
+    } catch (_: Exception) {
+        null
+    }
 
     /** extract 响应 → (抽取值, assist_id)；unavailable/畸形 → null。 */
     fun parseExtractResponse(raw: String?): Pair<String, String?>? {

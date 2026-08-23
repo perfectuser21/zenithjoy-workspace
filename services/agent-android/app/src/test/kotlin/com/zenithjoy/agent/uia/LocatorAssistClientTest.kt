@@ -108,4 +108,35 @@ class LocatorAssistClientTest {
         assertNull(LocatorAssistClient.parseExtractResponse("""{"success":true,"data":{"status":"unavailable"}}"""))
         assertNull(LocatorAssistClient.parseExtractResponse("garbage"))
     }
+
+    // ── 刀B2：vision_select（截图选结果行）──────────────────────────────────
+    @Test
+    fun `vision 请求体带 mode=vision_select 与截图`() {
+        val body = LocatorAssistClient.buildAssistBody(
+            step = "dm_result_select", targetDesc = "抖音号 zz_88",
+            uiTree = "", errorCode = "NO_MATCH",
+            deviceModel = "HONOR", osVersion = "12", douyinVersion = "40.0.0", appVersion = "2.1.41",
+            mode = "vision_select", screenshotB64 = "ZmFrZQ==", visionCandidateCount = 8,
+        )
+        assertTrue(body.contains("\"mode\":\"vision_select\""))
+        assertTrue(body.contains("\"screenshot_b64\":\"ZmFrZQ==\""))
+        assertTrue(body.contains("\"vision_candidate_count\":8"))
+    }
+
+    @Test
+    fun `vision 响应解析 match_index（含 -1）`() {
+        assertEquals(2, LocatorAssistClient.parseVisionResponse("""{"success":true,"data":{"status":"ok","assist_id":"a","match_index":2}}""")?.first)
+        assertEquals(-1, LocatorAssistClient.parseVisionResponse("""{"success":true,"data":{"status":"ok","match_index":-1}}""")?.first)
+        assertNull(LocatorAssistClient.parseVisionResponse("""{"success":true,"data":{"status":"unavailable"}}"""))
+        assertNull(LocatorAssistClient.parseVisionResponse("garbage"))
+    }
+
+    @Test
+    fun `行坐标 row0 加 idx 乘 pitch`() {
+        assertEquals(0.21f, LocatorAssistClient.rowFractionForIndex(0), 0.0001f)
+        assertEquals(0.21f + 0.084f, LocatorAssistClient.rowFractionForIndex(1), 0.0001f)
+        assertEquals(0.21f + 2 * 0.084f, LocatorAssistClient.rowFractionForIndex(2), 0.0001f)
+        // 负数被夹到 0（row0）
+        assertEquals(0.21f, LocatorAssistClient.rowFractionForIndex(-5), 0.0001f)
+    }
 }
