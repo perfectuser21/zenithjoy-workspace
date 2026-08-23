@@ -75,6 +75,26 @@ class LocatorAssistClientTest {
         assertNull(LocatorAssistClient.boundsCenter(null))
     }
 
+    // ── 真机撞出的真bug（0823）：tryLocatorAssist 之前只认 view_id，AI 答对了纯坐标
+    // 候选（真机常见——很多自定义渲染的按钮没有 view_id）却被当成"没找到"直接扔掉。
+    // parseBounds 是这个修复的纯逻辑核心：把 candidate.bounds 解析成矩形，供调用方
+    // 在树里按坐标匹配节点（不再要求必须有 view_id）。
+    @Test
+    fun `parseBounds 解析候选bounds为矩形——view_id为空时的兜底匹配依据`() {
+        val r = LocatorAssistClient.parseBounds("[673,891][838,1014]")
+        assertEquals(673, r?.left)
+        assertEquals(891, r?.top)
+        assertEquals(838, r?.right)
+        assertEquals(1014, r?.bottom)
+    }
+
+    @Test
+    fun `parseBounds 对畸形-空值返回null`() {
+        assertNull(LocatorAssistClient.parseBounds("garbage"))
+        assertNull(LocatorAssistClient.parseBounds(null))
+        assertNull(LocatorAssistClient.parseBounds(""))
+    }
+
     @Test
     fun `verified 回执体——true-false 都能构造`() {
         val ok = LocatorAssistClient.buildVerifyBody("aid-123", true)
