@@ -493,7 +493,7 @@ class DouyinCollectService : AccessibilityService() {
                     "com.ss.android.ugc.aweme:id/action_search",
                 )
             }
-            val searchBtn = searchOutcome.value
+            var searchBtn = searchOutcome.value
             android.util.Log.i(
                 TAG,
                 "openSearchBar: searchBtn=${searchBtn != null} attempts=${searchOutcome.attempts} " +
@@ -502,8 +502,14 @@ class DouyinCollectService : AccessibilityService() {
             if (searchBtn == null) {
                 val failure = NodeAwait.classifyFailure(searchOutcome, DOUYIN_PKG)
                 android.util.Log.w(TAG, "openSearchBar: 等待搜索入口超时 failure=$failure")
-                finishWithError(if (failure == WaitFailure.NO_ROOT) "NO_WINDOW" else "NO_SEARCH_INPUT")
-                return@launch
+                // AI 保底（铺满刀C3）：搜索入口是采集链门户，找不到=整轮零线索，判死前问一次
+                if (failure != WaitFailure.NO_ROOT) {
+                    searchBtn = tryLocatorAssist("collect_search_entry", "搜索入口按钮（放大镜图标，点击进入搜索页）", "NO_SEARCH_INPUT")
+                }
+                if (searchBtn == null) {
+                    finishWithError(if (failure == WaitFailure.NO_ROOT) "NO_WINDOW" else "NO_SEARCH_INPUT")
+                    return@launch
+                }
             }
             // 真机验证发现：点击搜索按钮后页面已经跳转到搜索输入页，但如果这里
             // 继续用点击前的 root 快照调 typeKeyword，那个快照里根本没有输入框，

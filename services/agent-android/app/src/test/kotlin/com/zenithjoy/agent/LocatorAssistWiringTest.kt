@@ -80,4 +80,9 @@ class LocatorAssistWiringTest {
         assertTrue("采集链缺 locate 版 tryLocatorAssist", src.contains("tryLocatorAssist"))
         assertTrue("缺 collect_comment_button 步骤键", src.contains("collect_comment_button"))
     }
+
+    @Test
+    fun `采集搜索入口判死点挂 locate 保底（铺满刀C3）`() {
+        assertTrue("缺 collect_search_entry 步骤键", collectServiceSource().contains("collect_search_entry"))
+    }
 }
