@@ -125,6 +125,34 @@ object LocatorAssistClient {
         null
     }
 
+    /** extract_list 响应 → (值列表, assist_id)；unavailable/畸形/字段缺失 → null。
+     *  空列表 [] 是合法答案（AI 确认没有匹配项，如扫号链读到"当前没有已登录账号"），
+     *  跟"extracted_values 字段缺失/为 null"（真失败）必须区分——后者才走 null。 */
+    fun parseExtractListResponse(raw: String?): Pair<List<String>, String?>? {
+        if (raw.isNullOrBlank()) return null
+        return try {
+            val data = JSONObject(raw).optJSONObject("data") ?: return null
+            if (data.optString("status") != "ok") return null
+            if (!data.has("extracted_values") || data.isNull("extracted_values")) return null
+            val arr = data.optJSONArray("extracted_values") ?: return null
+            val values = (0 until arr.length()).mapNotNull { i -> arr.optString(i).takeIf { it.isNotBlank() } }
+            Pair(values, data.optString("assist_id").takeIf { it.isNotBlank() && it != "null" })
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** 同步 extract_list 求助。任何失败返回 null。 */
+    fun requestExtractListBlocking(httpBase: String, body: String): Pair<List<String>, String?>? = try {
+        val req = Request.Builder()
+            .url("$httpBase/api/agent/burner/locator-assist")
+            .post(body.toRequestBody("application/json".toMediaType()))
+            .build()
+        http.newCall(req).execute().use { resp -> parseExtractListResponse(resp.body?.string()) }
+    } catch (_: Exception) {
+        null
+    }
+
     /** ok 且有候选 → AssistAnswer；unavailable/畸形/异常 → null（fail-open）。 */
     fun parseAssistResponse(raw: String?): AssistAnswer? {
         if (raw.isNullOrBlank()) return null
