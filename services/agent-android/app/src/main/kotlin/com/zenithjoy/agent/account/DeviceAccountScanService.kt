@@ -341,6 +341,7 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
                 candidate?.takeIf { node -> isInBottomNavArea(node, sh) }
             }
             var meTabNode = meTabOutcome.value
+            var meTabAssist: LocatorAssistOutcome? = null
             if (meTabNode == null) {
                 val failure = NodeAwait.classifyFailure(meTabOutcome, DOUYIN_PKG_FOR_WAIT)
                 android.util.Log.w(
@@ -351,7 +352,8 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
                 // AI 保底（铺满第二批）：坐标兜底本来就在，这里加一步先问 AI 指认真实节点，
                 // 命中就点节点（比盲坐标准），问不到再退回坐标兜底——不改变最坏情况的行为。
                 if (FailureClassifier.shouldAssist(failure)) {
-                    meTabNode = tryLocatorAssist("scan_me_tab", "底部导航栏「我」tab（个人主页入口）", "NO_ME_TAB")
+                    meTabAssist = tryLocatorAssist("scan_me_tab", "底部导航栏「我」tab（个人主页入口）", "NO_ME_TAB")
+                    meTabNode = meTabAssist?.node
                 }
             }
             if (meTabNode != null) {
@@ -376,6 +378,13 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
                     findNodeByContentDescContains(it, "切换账号") ?: findNodeByText(it, "切换账号")
                 }
                 if (switchEntry != null) break
+            }
+            // 真机复现(0824)修复：不在 tryLocatorAssist 里靠 node!=null 上报 verified——这里才
+            // 是真正知道"点我tab有没有达成目的"的地方（switchEntry 出现=真的到了个人页）。
+            meTabAssist?.assistId?.let { aid ->
+                val hb = meTabAssist.httpBase
+                val ok = switchEntry != null
+                scope.launch(Dispatchers.IO) { LocatorAssistClient.reportVerifiedBlocking(hb, aid, ok) }
             }
             if (switchEntry != null) {
                 // "切换账号"是 clickable ImageView，坐标点其中心最稳(ACTION_CLICK 对抖音部分节点无效)。
@@ -698,12 +707,20 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         return results
     }
 
+    /** tryLocatorAssist 的返回壳：node 存在只代表"AI 指认的东西在树里"，不代表点了真的达成
+     * 效果——真实结果由调用方在知道之后上报，见 assistId/httpBase 的用法。 */
+    private data class LocatorAssistOutcome(
+        val node: AccessibilityNodeInfo?,
+        val assistId: String?,
+        val httpBase: String,
+    )
+
     /**
      * AI on-call 定位求助（铺满第二批，扫号链）：树→AI 指认候选 node，与
      * [com.zenithjoy.agent.collect.DouyinCollectService]/[com.zenithjoy.agent.collect.DouyinDmOutreachService]
      * 里的同名私有实现同款——三个 Service 各自持一份，未抽共享是延续既有代码结构，不引入新抽象。
      */
-    private suspend fun tryLocatorAssist(step: String, targetDesc: String, errorCode: String): AccessibilityNodeInfo? {
+    private suspend fun tryLocatorAssist(step: String, targetDesc: String, errorCode: String): LocatorAssistOutcome? {
         val tree = runCatching {
             rootInActiveWindow?.let { UiTreeSnapshot.serialize(UiTreeSnapshot.fromAccessibilityNode(it)) }
         }.getOrNull() ?: return null
@@ -739,8 +756,15 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         val node = rootInActiveWindow?.let { r ->
             viewId?.let { findNodeByIds(r, it) } ?: boundsRect?.let { findNodeByBounds(r, it) }
         }
-        if (aid != null) scope.launch(Dispatchers.IO) { LocatorAssistClient.reportVerifiedBlocking(httpBase, aid, node != null) }
-        return node
+        // 真机复现(0824，HONOR ANY-AN00，request_id r-verify2-final)：AI 答错时指认的候选
+        // 也可能是树里确实存在的某个无关节点（如底部导航未读角标、feed 里的评论文案），
+        // node!=null 只证明"树里有这个东西"，不证明"点它真的达成了这一步该做的事"。此前在
+        // 这里立即以 node!=null 上报 verified=true，把答错也当"验证通过"钉进缓存——此后同一
+        // (step,device,os,douyin版本) 格子永久重放这个错误答案，缓存反而成了错误的放大器。
+        // 改为：这里不再对"node 找到"上报 verified=true，只把结果连同 assistId/httpBase 一起
+        // 交回调用方——调用方等真正知道这一步是否达成了目的（如切换账号面板真的弹出来了）
+        // 才上报。node 确实为 null 时仍是可信的强负信号（AI 指认的东西压根不在树里），照旧立即上报。
+        return LocatorAssistOutcome(node, aid, httpBase)
     }
 
     /** 按候选矩形在当前树里找回节点——view_id 为空时的兜底匹配（0823 真机bug修复）。 */
@@ -835,7 +859,16 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
             )
             // AI 保底（铺满第二批）：切号是账号管理链路的关键动作，选错人风险高，判死前先问一次。
             if (FailureClassifier.shouldAssist(failure)) {
-                row = tryLocatorAssist("scan_switch_account_row", "切换账号面板里昵称为「$nickname」的那一行", "NO_ACCOUNT_ROW")
+                val assist = tryLocatorAssist("scan_switch_account_row", "切换账号面板里昵称为「$nickname」的那一行", "NO_ACCOUNT_ROW")
+                row = assist?.node
+                // 这一步没有像 scan_me_tab 那样现成的"真实结果"信号（点完即返回 true，
+                // 不再校验是否真切成了号），暂沿用旧行为——node 找到即报 verified=true。
+                // 已知与 scan_me_tab 同样的过早验证风险，留作后续技术债（见本次修复的
+                // PrepRD「不包含」段），未在本次一并处理。
+                assist?.assistId?.let { aid ->
+                    val hb = assist.httpBase
+                    scope.launch(Dispatchers.IO) { LocatorAssistClient.reportVerifiedBlocking(hb, aid, row != null) }
+                }
             }
         }
         if (row == null) return false
