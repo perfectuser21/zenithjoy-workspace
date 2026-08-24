@@ -730,8 +730,20 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
      * 里的同名私有实现同款——三个 Service 各自持一份，未抽共享是延续既有代码结构，不引入新抽象。
      */
     private suspend fun tryLocatorAssist(step: String, targetDesc: String, errorCode: String): LocatorAssistOutcome? {
+        // 真机复现(0824)修复：单次抓树可能撞上渲染未稳定的过渡帧——两次独立失败案例里，
+        // 同一容器(id=w5w)的bounds分别是[0,0][1080,2149]和[0,0][1080,0]，同一view在
+        // 不同抓取瞬间天差地别，证明是布局/Lynx渲染还没稳定就被单次快照逮到半成品。
+        // 主查找路径(awaitNode)对这类情况已有轮询防护，这里补上同款思路：抓多次，
+        // 挑序列化字节数最大(更完整渲染帧的低成本代理指标)的那次发给AI，不专门识别
+        // "底部导航"这类目标相关逻辑，保持通用。
         val tree = runCatching {
-            rootInActiveWindow?.let { UiTreeSnapshot.serialize(UiTreeSnapshot.fromAccessibilityNode(it)) }
+            var best: String? = null
+            repeat(TREE_SETTLE_ATTEMPTS) { attempt ->
+                if (attempt > 0) delay(TREE_SETTLE_POLL_MS)
+                val snap = rootInActiveWindow?.let { UiTreeSnapshot.serialize(UiTreeSnapshot.fromAccessibilityNode(it)) }
+                if (snap != null && (best == null || snap.length > best!!.length)) best = snap
+            }
+            best
         }.getOrNull() ?: return null
         val httpBase = AgentConfig(applicationContext).deriveHttpBase()
         if (httpBase.isBlank()) return null
@@ -1085,6 +1097,9 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
         private const val AWAIT_POLL_MS = 500L
         private const val AWAIT_TAB_ATTEMPTS = 12       // 6s
         private const val AWAIT_LIST_ATTEMPTS = 8       // 4s
+        // AI on-call 抓树稳定性重试(2026-08-24)：单次抓拍可能撞上渲染未稳定的过渡帧
+        private const val TREE_SETTLE_ATTEMPTS = 3
+        private const val TREE_SETTLE_POLL_MS = 250L
         private const val DOUYIN_PKG_FOR_WAIT = "com.ss.android.ugc.aweme"
 
         private const val TAG = "DeviceAccountScanSvc"
