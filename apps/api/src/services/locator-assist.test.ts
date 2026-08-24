@@ -78,6 +78,22 @@ describe('buildLocatorPrompt', () => {
     const miss = buildLocatorPrompt(baseReq()); // baseReq 用的是 dm_search_input，跟扫号链无关
     expect(miss, '不相关的 step 不该被扫号链的经验污染').not.toContain('底部导航栏');
   });
+
+  // 真机撞出的真bug第二例(0824，PR#1725/1728/1731/1734修完树捕获问题后复测)：树里
+  // 明明有正确答案(id=0qm desc="我，按钮")，AI 依然选中不相关的推荐文案/评论数
+  // 标签(如"共141人推荐"/"评论736，按钮"这类文本节点)——第一条经验只讲了"共用
+  // view_id"这个坑，没讲"别被主题相关但根本不是按钮的文案节点带偏"这个更常见的坑。
+  it('scan_me_tab 的经验必须同时提醒别被非按钮的推荐/评论文案节点带偏', () => {
+    const hit = buildLocatorPrompt({ ...baseReq(), step: 'scan_me_tab', targetDesc: '底部导航栏「我」tab' });
+    expect(
+      hit,
+      '必须提醒目标的content_desc要以"，按钮"结尾，排除推荐/评论等非按钮文案节点',
+    ).toContain('，按钮');
+    expect(
+      hit,
+      '必须点出真机撞过的具体反例(推荐文案/评论数)，不能只有抽象规则',
+    ).toMatch(/推荐|评论/);
+  });
 });
 
 describe('parseLineAnswer', () => {
