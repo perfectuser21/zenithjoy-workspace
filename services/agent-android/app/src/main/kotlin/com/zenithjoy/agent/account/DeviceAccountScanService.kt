@@ -541,6 +541,15 @@ class DeviceAccountScanService : AccessibilityService(), DouyinUiaOps {
     /** 坐标点节点 bounds 中心（抖音部分 clickable=false/ACTION_CLICK 无效节点用手势点）。 */
     private fun tapNodeCenter(node: AccessibilityNodeInfo) {
         val r = Rect(); node.getBoundsInScreen(r)
+        // 真机复现(0824)修复：AI on-call 指认的 view_id 可能被 RecyclerView/Lynx 同时挂着
+        // 多个实例（一个可见、一个刚划出屏幕外/被回收但仍留在树里，bounds 退化或为负值），
+        // findNodeByIds 无条件取第一个匹配，可能就是这类退化实例。直接用退化 bounds 算中心
+        // 坐标构造 Path 发手势会被 Android 抛未捕获异常("Path bounds must not be negative")，
+        // 崩掉整个扫描任务而不是走已有的坐标兜底降级路径——先校验有效性，无效就跳过不发手势。
+        if (r.isEmpty || r.left < 0 || r.top < 0) {
+            android.util.Log.w(TAG, "tapNodeCenter: 节点bounds退化/屏外($r)，跳过点击避免崩溃")
+            return
+        }
         tapAtCoordinate(r.exactCenterX(), r.exactCenterY())
     }
 
