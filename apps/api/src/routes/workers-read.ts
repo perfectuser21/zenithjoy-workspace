@@ -15,12 +15,16 @@ import { tenantContext } from '../middleware/tenant-context';
 import { listWorkers, getActivity, agentBelongsToTenant } from '../services/worker-tasks-service';
 import { workerLive, type LiveFrame } from '../services/worker-live';
 import { shotPath } from '../services/worker-shots';
+import { simpleRateLimit, tenantKeyFn } from '../middleware/simple-rate-limit';
 
 const ERR = (code: string, message: string) => ({ success: false, error: code, message });
 const OK = (data: unknown) => ({ success: true, data });
 
 export const workersReadRouter = Router();
 workersReadRouter.use(tenantContext);
+// CodeQL js/missing-rate-limiting：读面碰 DB + 文件流；详情页 1s 轮询 + live 长连接，按 tenant 限流
+// 300 次/分钟（留够并发轮询余量）。
+workersReadRouter.use(simpleRateLimit({ windowMs: 60_000, max: 300, keyFn: tenantKeyFn }));
 
 function requireTenant(req: Request, res: Response): string | null {
   const t = req.tenantId;
@@ -46,6 +50,8 @@ workersReadRouter.get('/', async (req: Request, res: Response) => {
 workersReadRouter.get('/shots/:tenant/:task/:file', async (req: Request, res: Response) => {
   const tenantId = requireTenant(req, res); if (!tenantId) return;
   const ref = `${req.params.tenant}/${req.params.task}/${req.params.file}`;
+  // shotPath() 内部已做 root 前缀守卫（CodeQL js/path-injection 认的 resolve+startsWith 模式），
+  // 非法/越界 ref 一律返回 null；这里直接用它的返回值，不再自己拼路径进 createReadStream。
   const p = shotPath(ref);
   if (!p) return res.status(400).json(ERR('BAD_REF', '截图引用非法'));
   if (req.params.tenant !== tenantId) return res.status(404).json(ERR('NOT_FOUND', '截图不存在'));

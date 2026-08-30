@@ -25,7 +25,9 @@ export class WorkerLiveBuffer {
       try {
         l(frame);
       } catch (err) {
-        console.error(`[worker-live] listener 抛错 agentId=${agentId}:`, err);
+        // CodeQL js/tainted-format-string：agentId（用户输入）不进格式串第一参数，
+        // 作为独立结构化字段传给 console.error。
+        console.error('[worker-live] listener 抛错', { agentId, err });
       }
     }
     return frame;

@@ -23,6 +23,10 @@ on:
       - '.github/workflows/e2e-workers-windows.yml'
   workflow_dispatch:
 
+# 最小权限：CodeQL actions/missing-workflow-permissions（安全硬化）
+permissions:
+  contents: read
+
 concurrency:
   group: e2e-workers-windows-${{ github.ref }}
   cancel-in-progress: true
