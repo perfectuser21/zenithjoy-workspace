@@ -34,11 +34,6 @@ function requireAgentUuid(req: Request, res: Response, next: NextFunction) {
 }
 
 export const workersExecutorRouter = Router();
-// internalAuth 只对 POST 生效：本 router 与 workers-read 的读面串联挂在同一前缀
-// /api/workers 下，若无差别拦所有方法，GET 会在到达读面之前先被这里 401 掉。
-workersExecutorRouter.use((req: Request, res: Response, next: NextFunction) =>
-  (req.method === 'POST' ? internalAuth(req, res, next) : next()));
-
 // CodeQL js/missing-rate-limiting：执行器面碰 DB（且 frame 端点无鉴权字段可信任），按机器（agentId）
 // 限流，没有 agentId 参数的路由（steps/complete）退化按 IP；600 次/分钟留够 1-2fps 推帧余量。
 // 限流器只建一次（复用同一个内存计数 store），同理只对 POST 生效，避免拦截落到这个 router
@@ -50,6 +45,13 @@ const executorRateLimit = simpleRateLimit({
 });
 workersExecutorRouter.use((req: Request, res: Response, next: NextFunction) =>
   (req.method === 'POST' ? executorRateLimit(req, res, next) : next()));
+
+// 限流先于鉴权（CodeQL js/missing-rate-limiting：鉴权 handler 本身也要被限流覆盖）。
+// internalAuth 只对 POST 生效：本 router 与 workers-read 的读面串联挂在同一前缀
+// /api/workers 下，若无差别拦所有方法，GET 会在到达读面之前先被这里 401 掉。
+workersExecutorRouter.use((req: Request, res: Response, next: NextFunction) =>
+  (req.method === 'POST' ? internalAuth(req, res, next) : next()));
+
 
 workersExecutorRouter.post('/tasks/:id/steps', requireTaskUuid, async (req: Request, res: Response) => {
   try { return res.json(OK(await reportStep(req.params.id, req.body ?? {}))); }
