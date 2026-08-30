@@ -72,6 +72,8 @@ const autopilotConfig: InstanceConfig = {
     'operator-dashboard': true,  // /operator Session 健康监控（superAdmin only）
     // Sprint 06081603 — 模块健康看板（客户机器 × Line 状态矩阵，superAdmin only）
     'module-health': true,       // /module-health
+    // 工作机控制塔第一刀（决策 e14297d4）— 工作机总览 + 单机实时详情
+    'workers': true,             // /dashboard/workers
   },
 };
 

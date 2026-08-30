@@ -18,6 +18,7 @@ import {
   Building2,
   Briefcase,
   MessageCircle,
+  Monitor,
 } from 'lucide-react';
 
 // ============ 类型定义 ============
@@ -136,6 +137,9 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'CsAccountWorkbenchPage': () => import('../pages/CsAccountWorkbenchPage'),
   // Path4 去飞书 — 朋友圈草稿本地审核台
   'MomentDraftReviewPage': () => import('../pages/MomentDraftReviewPage'),
+  // 工作机控制塔第一刀（决策 e14297d4）— 总览卡片页 + 单机实时详情页
+  'WorkersPage': () => import('../pages/WorkersPage'),
+  'WorkerLivePage': () => import('../pages/WorkerLivePage'),
 };
 
 export const pageComponents = autopilotPageComponents;
@@ -167,6 +171,8 @@ export const autopilotNavGroups: NavGroup[] = [
       { path: '/area/remake', icon: Video, label: '爆款翻拍', featureKey: 'video-remake-pipeline', component: 'AreaHubPage' },
       { path: '/company-profile', icon: Briefcase, label: '公司信息', featureKey: 'acquisition-leads', component: 'CompanyProfilePage' },
       { path: '/area/settings', icon: KeyRound, label: '设置', featureKey: 'license', component: 'AreaHubPage' },
+      // 工作机控制塔第一刀（决策 e14297d4）— 每台工作机（安卓/Windows）在线态 + 正在执行任务 + 实时画面
+      { path: '/dashboard/workers', icon: Monitor, label: '工作机', featureKey: 'workers', component: 'WorkersPage' },
     ]
   },
 
@@ -200,6 +206,9 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/area/acquisition/leads', component: 'LeadsPage', requireAuth: true },
   { path: '/area/acquisition/outreach', component: 'AcquisitionOutreachPage', requireAuth: true },
   { path: '/dashboard/machines', component: 'MachineManagementPage', requireAuth: true },
+  // 工作机控制塔第一刀（决策 e14297d4）— 单机实时详情（画面 + 步骤流 + 历史）
+  // /dashboard/workers 总览页路由已由上方 autopilotNavGroups 的「工作机」菜单项生成，这里只补动态子路由
+  { path: '/dashboard/workers/:agentId', component: 'WorkerLivePage', requireAuth: true },
   { path: '/dashboard/acquisition-config', component: 'AcquisitionConfigPage', requireAuth: true },
   { path: '/company-profile', component: 'CompanyProfilePage', requireAuth: true },
   // 以号为中心 IA 重设计刀2：客服号总览 + 单号工作台（5 Tab 容器）。

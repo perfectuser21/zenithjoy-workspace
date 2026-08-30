@@ -1,0 +1,98 @@
+name: E2E Workers Control Tower (Windows)
+
+# 工作机控制塔（/dashboard/workers 总览 + /dashboard/workers/:id 实时详情）Playwright E2E
+# 在 windows-latest 上起真实 Chrome 走页面（ZenithJoy UI 验收死规则：windows_cloud runner）。
+# workers API 全部 stub（page.route），不依赖外部服务；与 e2e-machine-events-windows.yml 同款。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/src/pages/Workers*'
+      - 'apps/dashboard/src/pages/WorkerLive*'
+      - 'apps/dashboard/src/api/workers.api.ts'
+      - 'apps/dashboard/e2e/workers.spec.ts'
+      - '.github/workflows/e2e-workers-windows.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/dashboard/src/pages/Workers*'
+      - 'apps/dashboard/src/pages/WorkerLive*'
+      - 'apps/dashboard/src/api/workers.api.ts'
+      - 'apps/dashboard/e2e/workers.spec.ts'
+      - '.github/workflows/e2e-workers-windows.yml'
+  workflow_dispatch:
+
+# 最小权限：CodeQL actions/missing-workflow-permissions（安全硬化）
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-workers-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright-windows:
+    name: Playwright — Workers Control Tower (Windows Chrome)
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # 不缓存：npm cache 是 macOS 生成的，缺 Windows optional deps（@rollup/rollup-win32-x64-msvc）
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Install Windows rollup native binding
+        # package-lock.json 由 macOS 生成，不含 @rollup/rollup-win32-x64-msvc。
+        # Vite dev server 启动时无条件加载 rollup native，不装就 crash。
+        # --no-save 避免修改 package.json / lock。
+        run: npm install @rollup/rollup-win32-x64-msvc --no-save
+
+      - name: Install Playwright Chromium
+        working-directory: apps/dashboard
+        run: npx playwright install chromium --with-deps
+
+      - name: Start Vite dev server (VITE_SKIP_AUTH=true)
+        working-directory: apps/dashboard
+        env:
+          VITE_SKIP_AUTH: 'true'
+          VITE_MOCK_USER_ID: 'dev-user-001'
+          VITE_MOCK_USER_NAME: '测试用户'
+        run: |
+          npx vite --port 5173 &
+          echo $! > /tmp/vite.pid
+          # 等待 dev server 就绪
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:5173 >/dev/null 2>&1; then
+              echo "Vite ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:5173 || (echo "Vite failed to start"; exit 1)
+
+      - name: Run Playwright E2E — Workers Control Tower
+        env:
+          E2E_BASE_URL: 'http://localhost:5173'
+        run: npm run -w apps/dashboard e2e -- workers --reporter=list,html
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-workers-report
+          path: |
+            apps/dashboard/playwright-report/
+            apps/dashboard/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
