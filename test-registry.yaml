@@ -6094,3 +6094,107 @@ agent_suite:
     status: active
     product: 员工知识中枢
     note: "路② 协同笔记 CRDT 双人同编真浏览器：字符级合并、多人光标、断连 resync 零丢字 α/β、设仅自己后第三 context 404。变体C 禁请求拦截。workflow: e2e-knowledge-hub-path2.yml"
+
+  - id: worker-control-tower-app-mount
+    path: apps/api/src/__tests__/app-workers-mount.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "workers-read/workers-executor 路由真挂进 app.ts，防止路由文件存在但未接线的静默漏挂。"
+
+  - id: worker-control-tower-executor-route-unit
+    path: apps/api/src/routes/__tests__/workers-executor.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "workers-executor 路由层单测：agent 上报 frame/任务状态端点鉴权与字段校验。"
+
+  - id: worker-control-tower-mount-order-unit
+    path: apps/api/src/routes/__tests__/workers-mount-order.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "workers 路由挂载顺序守卫，防止中间件/路由顺序回归导致鉴权被绕过。"
+
+  - id: worker-control-tower-read-route-unit
+    path: apps/api/src/routes/__tests__/workers-read.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "workers-read 路由层单测：工作机列表/详情/实时帧/截图读接口鉴权与字段校验。"
+
+  - id: worker-control-tower-agent-machines-normalize-unit
+    path: apps/api/src/services/__tests__/agent-machines-normalize.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "agent-machines-normalize 服务单测：工作机字段归一化逻辑。"
+
+  - id: worker-control-tower-lease-sweeper-unit
+    path: apps/api/src/services/__tests__/worker-lease-sweeper.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "worker-lease-sweeper 服务单测：过期租约回收与日志级别。"
+
+  - id: worker-control-tower-live-unit
+    path: apps/api/src/services/__tests__/worker-live.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "worker-live 服务单测：实时帧监听器订阅/广播/异常处理。"
+
+  - id: worker-control-tower-shots-unit
+    path: apps/api/src/services/__tests__/worker-shots.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "worker-shots 服务单测：任务失败现场截图落盘/路径校验。"
+
+  - id: worker-control-tower-tasks-migration-unit
+    path: apps/api/src/services/__tests__/worker-tasks-migration.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "worker_tasks/worker_task_steps 建表 migration 静态守卫：幂等建表、running 唯一索引、失败现场三件套字段。"
+
+  - id: worker-control-tower-tasks-service-unit
+    path: apps/api/src/services/__tests__/worker-tasks-service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "worker-tasks-service 服务单测：任务生命周期/状态流转/历史任务失败现场三件套。"
+
+  - id: worker-control-tower-e2e
+    path: apps/dashboard/e2e/workers.spec.ts
+    type: e2e
+    ci: windows_cloud
+    status: active
+    product: 工作机控制塔
+    note: "/dashboard/workers 总览 + /dashboard/workers/:id 实时详情 Playwright E2E（windows-latest runner，API 全 stub）。workflow: e2e-workers-windows.yml"
+
+  - id: worker-control-tower-live-page-unit
+    path: apps/dashboard/src/pages/__tests__/WorkerLivePage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "工作机实时详情页组件单测：帧渲染/轮询/任务状态展示。"
+
+  - id: worker-control-tower-list-page-unit
+    path: apps/dashboard/src/pages/__tests__/WorkersPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "工作机总览页组件单测：列表渲染/筛选/跳转详情页。"
