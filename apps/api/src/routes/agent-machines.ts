@@ -19,6 +19,7 @@ import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { simpleRateLimit, tenantKeyFn } from '../middleware/simple-rate-limit';
+import { normMachine, VALID_OWNER_TYPES, type OwnerType } from '../services/agent-machines-normalize';
 
 const router = Router();
 
@@ -39,43 +40,6 @@ const OK = (data: unknown) => ({
 });
 
 const VALID_ROLES = ['main', 'sub'];
-
-const VALID_OWNER_TYPES = ['internal_fleet', 'customer'] as const;
-type OwnerType = typeof VALID_OWNER_TYPES[number];
-
-// session_count 由 pg COUNT 返回字符串，统一转 number
-// offline_minutes: 在线时 null，离线时 = Math.floor((now - last_seen_ms) / 60000)
-function normMachine(row: Record<string, unknown>) {
-  const status =
-    typeof row.status === 'string'
-      ? row.status
-      : row.last_seen &&
-          Date.now() - new Date(row.last_seen as string).getTime() <=
-            3 * 60 * 1000
-        ? 'online'
-        : 'offline';
-
-  let offlineMinutes: number | null = null;
-  if (status !== 'online' && row.last_seen) {
-    const lastSeenMs = new Date(row.last_seen as string).getTime();
-    offlineMinutes = Math.floor((Date.now() - lastSeenMs) / 60000);
-  }
-
-  return {
-    id: row.id,
-    agent_id: row.agent_id,
-    hostname: row.hostname,
-    nickname: row.nickname,
-    machine_role: row.machine_role,
-    os_type: row.os_type ?? null,
-    owner_type: (row.owner_type as OwnerType) ?? 'customer',
-    status,
-    version: row.version,
-    last_seen: row.last_seen,
-    session_count: Number(row.session_count ?? 0),
-    offline_minutes: offlineMinutes,
-  };
-}
 
 // ── 1. GET /machines — 列机器 + session_count（LEFT JOIN COUNT）──
 // ?owner_type=internal_fleet|customer  可选过滤（机器管理页双 tab 用）
