@@ -39,6 +39,11 @@ import { fakeLlmRouter } from './routes/_smoke-fake-llm';
 import agentBurnerRouter from './routes/agent-burner';
 import agentMachinesRouter from './routes/agent-machines';
 import agentEventsRouter from './routes/agent-events';
+// 工作机控制塔（决策 e14297d4）：执行器面（内部 token）+ 读面（租户）
+import workersExecutorRouter from './routes/workers-executor';
+import workersReadRouter from './routes/workers-read';
+import { sweepExpiredLeases } from './services/worker-tasks-service';
+import { workerLive } from './services/worker-live';
 import smokeFakeAgentBurnerRouter from './routes/_smoke-fake-agent-burner';
 // Path 2 Sprint B-1 architecture hotfix — DEV-only mock-agent helper
 import smokeMockAgentRouter from './routes/_smoke-mock-agent';
@@ -176,6 +181,22 @@ app.use('/api/agent/tasks', tasksRouter);
 app.use('/api/agent/credit', agentCreditRouter);
 // /api/agent/machines 同样必须在 /api/agent(agentRouter) 之前注册（按顺序匹配，避免被吞）
 app.use('/api/agent/machines', agentMachinesRouter);
+// 工作机控制塔（决策 e14297d4）：执行器面先注册（internalAuth，仅 POST），读面后注册（租户，GET）。
+app.use('/api/workers', workersExecutorRouter);
+app.use('/api/workers', workersReadRouter);
+
+/** 租约 sweeper：过期 running → failed/executor_lost；顺手驱逐闲置帧缓冲 */
+export function startWorkerLeaseSweeper(intervalMs = 60_000): NodeJS.Timeout {
+  const t = setInterval(() => {
+    sweepExpiredLeases()
+      .then((n) => { if (n > 0) console.log(`[workers] sweeper: ${n} 个任务租约过期 → executor_lost`); })
+      .catch((e) => console.error('[workers] sweeper error:', e));
+    workerLive.evictIdle();
+  }, intervalMs);
+  t.unref();
+  return t;
+}
+if (process.env.NODE_ENV !== 'test') startWorkerLeaseSweeper();
 // 观测事件路由：POST /api/agent/events + GET /api/agent/machines/:id/events
 // 必须在 agentMachinesRouter 之后、agentRouter 之前注册（路径写全，避免被吞）
 app.use('/api/agent', agentEventsRouter);

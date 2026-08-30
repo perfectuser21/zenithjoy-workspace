@@ -28,7 +28,10 @@ function requireTaskUuid(req: Request, res: Response, next: NextFunction) {
 }
 
 export const workersExecutorRouter = Router();
-workersExecutorRouter.use(internalAuth);
+// internalAuth 只对 POST 生效：本 router 与 workers-read 的读面串联挂在同一前缀
+// /api/workers 下，若无差别拦所有方法，GET 会在到达读面之前先被这里 401 掉。
+workersExecutorRouter.use((req: Request, res: Response, next: NextFunction) =>
+  (req.method === 'POST' ? internalAuth(req, res, next) : next()));
 
 workersExecutorRouter.post('/tasks/:id/steps', requireTaskUuid, async (req: Request, res: Response) => {
   try { return res.json(OK(await reportStep(req.params.id, req.body ?? {}))); }
