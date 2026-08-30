@@ -3,10 +3,37 @@
 # 用法：API_BASE=http://localhost:5200 AGENT_ID=<zenithjoy.agents.id> FEISHU_USER_ID=<tenant_members.feishu_user_id> [ZENITHJOY_INTERNAL_TOKEN=...] bash worker-activity-smoke.sh
 # 读面（live/activity）挂的是严格 tenantContext：只认 better-auth session 或 X-Feishu-User-Id → tenant_members 反查，
 # 不认客户端自报的 X-Tenant-Id。调用方须先在 zenithjoy.tenant_members 种一条 (tenant_id, feishu_user_id) 再把该 id 传进来。
+#
+# 自适应种子（进 smoke-baseline.txt 后被 ci-smoke-glob-runner.yml 的 glob runner 裸跑，
+# 不像 ci-l4-e2e-smoke.yml 那样有专属 step 先手动种 tenant/agent/tenant_members）：
+#   - 若调用方已传 AGENT_ID/FEISHU_USER_ID → 直接用（ci-l4-e2e-smoke.yml 现状不变）。
+#   - 若未传但 DATABASE_URL 或 PG* 可用（glob runner 有真 Postgres）→ 自己种一条
+#     tenant + agent + tenant_members，种子逻辑照抄 ci-l4-e2e-smoke.yml 里那段。
+#   - 若连 DB 都摸不到 → 明确打印 SKIP 并 exit 0（不假绿：这不是"通过"，是"没法跑"）。
 set -euo pipefail
 API_BASE="${API_BASE:-http://localhost:5200}"
-AGENT_ID="${AGENT_ID:?need AGENT_ID (zenithjoy.agents.id)}"
-FEISHU_USER_ID="${FEISHU_USER_ID:?need FEISHU_USER_ID (zenithjoy.tenant_members.feishu_user_id，该行须属于 AGENT_ID 所在租户)}"
+
+if [ -z "${AGENT_ID:-}" ] || [ -z "${FEISHU_USER_ID:-}" ]; then
+  if [ -z "${DATABASE_URL:-}" ] && [ -z "${PGHOST:-}" ]; then
+    echo "SKIP: 未传 AGENT_ID/FEISHU_USER_ID，且找不到 DATABASE_URL/PGHOST 可自种子——本环境没有可用 DB，跳过"
+    exit 0
+  fi
+  echo "[seed] 未传 AGENT_ID/FEISHU_USER_ID，用本机可用的 Postgres 自种一条 tenant+agent+tenant_members"
+  PSQL=(psql -tA -v ON_ERROR_STOP=1)
+  [ -n "${DATABASE_URL:-}" ] && PSQL=(psql -tA -v ON_ERROR_STOP=1 "$DATABASE_URL")
+  TENANT_ID=$("${PSQL[@]}" -c \
+    "INSERT INTO zenithjoy.tenants (name, license_key, plan) VALUES ('worker-activity-smoke-${RANDOM}', 'wa-smoke-key-${RANDOM}', 'free') RETURNING id" \
+    | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
+  AGENT_ID=$("${PSQL[@]}" -c \
+    "INSERT INTO zenithjoy.agents (tenant_id, agent_id, hostname, os_type, status) VALUES ('${TENANT_ID}', 'smoke-worker-${RANDOM}', 'SMOKE-ANDROID', 'android', 'online') RETURNING id" \
+    | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
+  FEISHU_USER_ID="ou_worker_activity_smoke_${RANDOM}"
+  "${PSQL[@]}" -c \
+    "INSERT INTO zenithjoy.tenant_members (tenant_id, feishu_user_id, role) VALUES ('${TENANT_ID}', '${FEISHU_USER_ID}', 'owner')" >/dev/null
+  echo "[seed] tenant=$TENANT_ID agent=$AGENT_ID member=$FEISHU_USER_ID"
+  export AGENT_ID FEISHU_USER_ID
+fi
+
 AUTH=(); [ -n "${ZENITHJOY_INTERNAL_TOKEN:-}" ] && AUTH=(-H "X-Internal-Token: $ZENITHJOY_INTERNAL_TOKEN")
 TEN=(-H "X-Feishu-User-Id: $FEISHU_USER_ID")
 J='Content-Type: application/json'
