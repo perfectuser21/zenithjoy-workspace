@@ -69,12 +69,18 @@ workersReadRouter.get('/:agentId/activity', async (req: Request, res: Response) 
   try {
     const a = await getActivity(tenantId, req.params.agentId);
     if (!a) return res.status(404).json(ERR('NOT_FOUND', 'worker 不存在'));
-    const withUrl = (s: Record<string, unknown>) => ({ ...s, screenshot_url: s.screenshot_ref ? `/api/workers/shots/${s.screenshot_ref}` : null });
+    const shotUrl = (ref: unknown) => (typeof ref === 'string' && ref ? `/api/workers/shots/${ref}` : null);
+    const withUrl = (s: Record<string, unknown>) => ({ ...s, screenshot_url: shotUrl(s.screenshot_ref) });
+    const historyWithUrl = (h: (typeof a.history)[number]) => ({
+      ...h,
+      evidence_screenshot_url: shotUrl(h.evidence_screenshot_ref),
+      failed_scene: h.failed_scene ? { ...h.failed_scene, screenshot_url: shotUrl(h.failed_scene.screenshot_ref) } : null,
+    });
     // Chrome 对 multipart/x-mixed-replace 的 <img> 只在首帧触发一次 load，前端不能靠 onLoad 计时判断画面是否卡住；
     // 改成后端算好帧龄下发，前端直接比较（避免浏览器/服务端时钟偏差）。
     const latest = workerLive.latest(req.params.agentId);
     const frame_age_ms = latest ? Date.now() - latest.at : null;
-    return res.json(OK({ current: a.current, steps: a.steps.map(withUrl), history: a.history, frame_age_ms }));
+    return res.json(OK({ current: a.current, steps: a.steps.map(withUrl), history: a.history.map(historyWithUrl), frame_age_ms }));
   } catch (e) { console.error('[workers-read] activity error:', e); return res.status(500).json(ERR('DB_ERROR', '查询失败')); }
 });
 

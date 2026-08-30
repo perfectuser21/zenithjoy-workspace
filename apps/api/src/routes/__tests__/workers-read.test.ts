@@ -64,6 +64,21 @@ describe('GET /api/workers/:agentId/activity', () => {
     const r = await request(app).get('/api/workers/a1/activity').set(...asUser('tenant-a'));
     expect(r.status).toBe(200); expect(r.body.data.steps[0].screenshot_url).toBe('/api/workers/shots/t/a/1.jpg');
   });
+  it('history：failed_scene.screenshot_ref 与 evidence_screenshot_ref 都转成 _url，duration_ms 原样透传', async () => {
+    (getActivity as any).mockResolvedValue({ current: null, steps: [], history: [
+      { id: 'h1', title: '失败的', status: 'failed', steps_total: 5, started_at: 's', finished_at: 'f', failed_step: 3, error_code: 'adb_unreachable',
+        duration_ms: 65000, evidence_screenshot_ref: null, failed_scene: { foreground_pkg: 'com.x', diag_line: 'd', screenshot_ref: 't/h1/3.jpg' } },
+      { id: 'h2', title: '完成的', status: 'completed', steps_total: 3, started_at: 's', finished_at: 'f', failed_step: null, error_code: null,
+        duration_ms: 12000, evidence_screenshot_ref: 't/h2/9999.jpg', failed_scene: null },
+    ] });
+    const r = await request(app).get('/api/workers/a1/activity').set(...asUser('t'));
+    expect(r.status).toBe(200);
+    const [h1, h2] = r.body.data.history;
+    expect(h1.failed_scene).toMatchObject({ foreground_pkg: 'com.x', diag_line: 'd', screenshot_url: '/api/workers/shots/t/h1/3.jpg' });
+    expect(h1.evidence_screenshot_url).toBeNull(); expect(h1.duration_ms).toBe(65000);
+    expect(h2.failed_scene).toBeNull();
+    expect(h2.evidence_screenshot_url).toBe('/api/workers/shots/t/h2/9999.jpg'); expect(h2.duration_ms).toBe(12000);
+  });
   it('frame_age_ms：有最新帧时返回距今毫秒数（Chrome MJPEG <img> 只在首帧触发一次 load，不能用 onLoad 计时）', async () => {
     (getActivity as any).mockResolvedValue({ current: null, steps: [], history: [] });
     // mockReturnValueOnce：clearAllMocks 不清 mockReturnValue 的实现，用 Once 避免污染同文件后面依赖默认 latest() 的用例

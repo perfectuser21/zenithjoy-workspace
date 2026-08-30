@@ -53,6 +53,14 @@ export interface WorkerStep {
   updated_at?: string;
 }
 
+/** 失败步的现场三件套（来自 worker_task_steps 失败那一步） */
+export interface WorkerFailedScene {
+  foreground_pkg: string | null;
+  diag_line: string | null;
+  screenshot_ref: string | null;
+  screenshot_url: string | null;
+}
+
 export interface WorkerTaskSummary {
   id: string;
   title: string;
@@ -60,8 +68,15 @@ export interface WorkerTaskSummary {
   steps_total: number;
   started_at: string;
   finished_at: string | null;
+  /** 0-based，与 steps[].step_index 同一索引空间 */
   failed_step: number | null;
   error_code: string | null;
+  /** finished_at - started_at，仅历史条目有；running 无 */
+  duration_ms?: number | null;
+  /** failed_step 非空时才有 */
+  failed_scene?: WorkerFailedScene | null;
+  /** complete 时 evidence 带截图则有（完成截图） */
+  evidence_screenshot_url?: string | null;
 }
 
 export interface WorkerActivity {

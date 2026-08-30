@@ -6,7 +6,7 @@ vi.mock('../worker-shots', () => ({
   shotPath: vi.fn((ref: string) => `/tmp/shots/${ref}`),
 }));
 import pool from '../../db/connection';
-import { validateStepReport, sweepExpiredLeases, LEASE_MS, startTask, completeTask, WorkerTaskError } from '../worker-tasks-service';
+import { validateStepReport, sweepExpiredLeases, LEASE_MS, startTask, completeTask, getActivity, WorkerTaskError } from '../worker-tasks-service';
 beforeEach(() => vi.clearAllMocks());
 describe('validateStepReport', () => {
   it('failed 缺三件套任一 → FAILURE_SCENE_REQUIRED', () => {
@@ -56,5 +56,33 @@ describe('completeTask', () => {
     await expect(completeTask('t1', {
       outcome: 'completed', executor_id: 'ex', evidence: { screenshot_jpeg_b64: big },
     })).rejects.toMatchObject({ code: 'SCREENSHOT_TOO_LARGE' });
+  });
+});
+describe('getActivity · history', () => {
+  it('每条历史带 failed_scene（失败步三件套）/ evidence_screenshot_ref / duration_ms', async () => {
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: 'agent-1' }] }) // agent 归属
+      .mockResolvedValueOnce({ rows: [] }) // 无 running
+      .mockResolvedValueOnce({ rows: [
+        { id: 'h1', title: '失败的', status: 'failed', steps_total: 5, started_at: 's', finished_at: 'f', failed_step: 3, error_code: 'adb_unreachable',
+          evidence_screenshot_ref: null, duration_ms: '65000',
+          failed_foreground_pkg: 'com.ss.android.ugc.aweme', failed_diag_line: 'searchBtnFound=false', failed_screenshot_ref: 'ta/h1/3.jpg' },
+        { id: 'h2', title: '完成的', status: 'completed', steps_total: 3, started_at: 's', finished_at: 'f', failed_step: null, error_code: null,
+          evidence_screenshot_ref: 'ta/h2/9999.jpg', duration_ms: '12000',
+          failed_foreground_pkg: null, failed_diag_line: null, failed_screenshot_ref: null },
+      ] });
+    const a = await getActivity('tenant-a', 'agent-1');
+    expect(a).not.toBeNull();
+    const [h1, h2] = a!.history;
+    expect(h1.failed_scene).toEqual({ foreground_pkg: 'com.ss.android.ugc.aweme', diag_line: 'searchBtnFound=false', screenshot_ref: 'ta/h1/3.jpg' });
+    expect(h1.duration_ms).toBe(65000);
+    expect(h1.evidence_screenshot_ref).toBeNull();
+    expect(h2.failed_scene).toBeNull();
+    expect(h2.evidence_screenshot_ref).toBe('ta/h2/9999.jpg');
+    expect(h2.duration_ms).toBe(12000);
+    // 三件套来自 worker_task_steps 按 task_id + step_index(=failed_step) 关联；截图 ref 从 evidence JSONB 抽
+    const sql = (pool.query as any).mock.calls[2][0] as string;
+    expect(sql).toMatch(/worker_task_steps/); expect(sql).toMatch(/step_index = t\.failed_step/);
+    expect(sql).toMatch(/evidence->>'screenshot_ref'/); expect(sql).toMatch(/finished_at - t\.started_at/);
   });
 });

@@ -18,6 +18,26 @@ function statusLabel(s: string) {
   );
 }
 
+function formatDuration(ms: number | null | undefined): string {
+  if (ms == null || !Number.isFinite(ms) || ms < 0) return '—';
+  const total = Math.round(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = total % 60;
+  if (h > 0) return `${h}时${String(m).padStart(2, '0')}分`;
+  if (m > 0) return `${m}分${String(sec).padStart(2, '0')}秒`;
+  return `${sec}秒`;
+}
+
+function shotThumb(url: string | null | undefined, alt: string) {
+  if (!url) return null;
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="shrink-0">
+      <img src={url} alt={alt} className="h-10 rounded border" />
+    </a>
+  );
+}
+
 function formatDateTime(iso: string): string {
   const t = new Date(iso);
   if (Number.isNaN(t.getTime())) return '—';
@@ -116,17 +136,35 @@ export default function WorkerLivePage() {
                 <th>开始</th>
                 <th>任务</th>
                 <th>结果</th>
-                <th>失败信息</th>
+                <th>耗时</th>
+                <th>失败信息 / 截图</th>
               </tr>
             </thead>
             <tbody>
               {(activity?.history ?? []).map((h) => (
-                <tr key={h.id} className="border-t">
+                <tr key={h.id} className="border-t align-top">
                   <td className="py-1 pr-3 whitespace-nowrap">{formatDateTime(h.started_at)}</td>
                   <td className="py-1 pr-3">{h.title}</td>
-                  <td className="py-1 pr-3">{statusLabel(h.status)}</td>
-                  <td className="py-1 text-red-600">
-                    {h.error_code ? `第 ${h.failed_step ?? '?'} 步 · ${h.error_code}` : ''}
+                  <td className="py-1 pr-3 whitespace-nowrap">{statusLabel(h.status)}</td>
+                  <td className="py-1 pr-3 whitespace-nowrap text-gray-600">{formatDuration(h.duration_ms)}</td>
+                  <td className="py-1">
+                    {h.error_code ? (
+                      <div className="flex items-start gap-2 text-red-600">
+                        {shotThumb(h.failed_scene?.screenshot_url, `${h.title} 失败截图`)}
+                        <span className="break-all">
+                          {[
+                            `第 ${h.failed_step == null ? '?' : h.failed_step + 1} 步`,
+                            h.error_code,
+                            h.failed_scene?.foreground_pkg,
+                            h.failed_scene?.diag_line,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </span>
+                      </div>
+                    ) : (
+                      shotThumb(h.evidence_screenshot_url, `${h.title} 完成截图`)
+                    )}
                   </td>
                 </tr>
               ))}

@@ -158,11 +158,33 @@ export async function getActivity(tenantId: string, agentId: string) {
     ? (await pool.query(`SELECT step_index, title, status, screenshot_ref, foreground_pkg, diag_line, note, updated_at
                            FROM zenithjoy.worker_task_steps WHERE task_id = $1 ORDER BY step_index`, [current.id])).rows
     : [];
-  const history = (await pool.query(
-    `SELECT id, title, status, steps_total, started_at, finished_at, failed_step, error_code, evidence
-       FROM zenithjoy.worker_tasks WHERE agent_id = $1 AND status <> 'running'
-      ORDER BY started_at DESC LIMIT 20`, [agentId])).rows;
+  // 历史每条自带失败现场三件套（失败步的 foreground_pkg/diag_line/screenshot_ref，按 task_id + step_index=failed_step 关联）、
+  // 完成截图 ref（evidence JSONB 抽出）与耗时——运营看历史时不用再点进去翻。
+  const hist = await pool.query<HistoryRow>(
+    `SELECT t.id, t.title, t.status, t.steps_total, t.started_at, t.finished_at, t.failed_step, t.error_code,
+            t.evidence->>'screenshot_ref' AS evidence_screenshot_ref,
+            CASE WHEN t.finished_at IS NOT NULL
+                 THEN (EXTRACT(EPOCH FROM (t.finished_at - t.started_at)) * 1000)::bigint END AS duration_ms,
+            fs.foreground_pkg AS failed_foreground_pkg, fs.diag_line AS failed_diag_line, fs.screenshot_ref AS failed_screenshot_ref
+       FROM zenithjoy.worker_tasks t
+       LEFT JOIN zenithjoy.worker_task_steps fs ON fs.task_id = t.id AND fs.step_index = t.failed_step
+      WHERE t.agent_id = $1 AND t.status <> 'running'
+      ORDER BY t.started_at DESC LIMIT 20`, [agentId]);
+  const history = hist.rows.map(({ failed_foreground_pkg, failed_diag_line, failed_screenshot_ref, duration_ms, ...h }) => ({
+    ...h,
+    duration_ms: duration_ms == null ? null : Number(duration_ms),
+    failed_scene: h.failed_step == null
+      ? null
+      : { foreground_pkg: failed_foreground_pkg ?? null, diag_line: failed_diag_line ?? null, screenshot_ref: failed_screenshot_ref ?? null },
+  }));
   return { current, steps, history };
+}
+
+interface HistoryRow {
+  id: string; title: string; status: string; steps_total: number; started_at: string; finished_at: string | null;
+  failed_step: number | null; error_code: string | null; evidence_screenshot_ref: string | null;
+  duration_ms: string | number | null;
+  failed_foreground_pkg: string | null; failed_diag_line: string | null; failed_screenshot_ref: string | null;
 }
 
 export async function agentBelongsToTenant(tenantId: string, agentId: string): Promise<boolean> {
