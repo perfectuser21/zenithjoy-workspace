@@ -1,4 +1,137 @@
-/** 工作机控制塔 · 实时详情占位（/dashboard/workers/:agentId）—— Task 9 补全 */
+/** 工作机控制塔 · 实时详情（/dashboard/workers/:agentId）：左画面（MJPEG）右步骤流，底部历史 */
+import { useEffect, useRef, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { fetchWorkerActivity, workerLiveUrl, type WorkerActivity, type WorkerStep } from '../api/workers.api';
+
+const POLL_MS = 1000;
+const FRAME_STALE_MS = 15_000;
+
+function icon(s: WorkerStep['status']) {
+  return s === 'done' ? '✅' : s === 'doing' ? '▶️' : s === 'failed' ? '❌' : '⬜';
+}
+
+function statusLabel(s: string) {
+  return (
+    ({ running: '执行中', completed: '已完成', failed: '失败', needs_review: '待人工核实' } as Record<string, string>)[
+      s
+    ] ?? s
+  );
+}
+
+function formatDateTime(iso: string): string {
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return '—';
+  return t.toLocaleString();
+}
+
 export default function WorkerLivePage() {
-  return null;
+  const { agentId = '' } = useParams();
+  const [activity, setActivity] = useState<WorkerActivity | null>(null);
+  const [frameStale, setFrameStale] = useState(false);
+  const lastFrameAt = useRef<number>(Date.now());
+
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      fetchWorkerActivity(agentId)
+        .then((a) => {
+          if (alive) setActivity(a);
+        })
+        .catch(() => {});
+    load();
+    const t = setInterval(load, POLL_MS);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [agentId]);
+
+  // MJPEG <img> 每到一帧触发 load；15s 无 load 视为画面不可用
+  useEffect(() => {
+    const t = setInterval(() => setFrameStale(Date.now() - lastFrameAt.current > FRAME_STALE_MS), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const current = activity?.current ?? null;
+
+  return (
+    <div className="p-6">
+      <div className="mb-3 text-sm">
+        <Link to="/dashboard/workers" className="text-blue-600 hover:underline">
+          ← 工作机
+        </Link>
+      </div>
+      <div className="flex gap-6 flex-col lg:flex-row">
+        <div className="lg:w-[360px] shrink-0">
+          <div className="relative rounded-2xl overflow-hidden bg-black aspect-[9/19.5]">
+            <img
+              alt="实时画面"
+              src={workerLiveUrl(agentId)}
+              className="w-full h-full object-contain"
+              onLoad={() => {
+                lastFrameAt.current = Date.now();
+                setFrameStale(false);
+              }}
+            />
+            {frameStale && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-sm">
+                画面不可用
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-lg font-semibold">{current ? current.title : '空闲'}</h2>
+          {current && (
+            <div className="text-xs text-gray-500 mt-1">
+              第 {current.current_step}/{current.steps_total} 步 · {statusLabel(current.status)}
+            </div>
+          )}
+          <ul className="mt-4 divide-y">
+            {(activity?.steps ?? []).map((s) => (
+              <li key={s.step_index} className="py-2 flex items-center gap-3 text-sm">
+                <span className="w-6 text-center">{icon(s.status)}</span>
+                <span className={s.status === 'doing' ? 'text-amber-700' : s.status === 'pending' ? 'text-gray-400' : ''}>
+                  {s.title}
+                </span>
+                {s.screenshot_url && (
+                  <a href={s.screenshot_url} target="_blank" rel="noreferrer" className="ml-auto">
+                    <img src={s.screenshot_url} alt={`第 ${s.step_index + 1} 步截图`} className="h-10 rounded border" />
+                  </a>
+                )}
+                {s.status === 'failed' && (
+                  <div className="ml-auto text-xs text-red-600">
+                    {s.foreground_pkg} · {s.diag_line}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+          <h3 className="mt-8 text-sm font-semibold text-gray-700">最近任务</h3>
+          <table className="mt-2 w-full text-sm">
+            <thead className="text-left text-gray-500">
+              <tr>
+                <th>开始</th>
+                <th>任务</th>
+                <th>结果</th>
+                <th>失败信息</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(activity?.history ?? []).map((h) => (
+                <tr key={h.id} className="border-t">
+                  <td className="py-1 pr-3 whitespace-nowrap">{formatDateTime(h.started_at)}</td>
+                  <td className="py-1 pr-3">{h.title}</td>
+                  <td className="py-1 pr-3">{statusLabel(h.status)}</td>
+                  <td className="py-1 text-red-600">
+                    {h.error_code ? `第 ${h.failed_step ?? '?'} 步 · ${h.error_code}` : ''}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
 }
