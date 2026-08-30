@@ -12,7 +12,7 @@ vi.mock('../../services/worker-live', () => ({
   workerLive: { pushFrame: vi.fn(), latest: vi.fn(() => null), subscribe: vi.fn(() => () => {}) },
 }));
 vi.mock('../../middleware/tenant-context', () => ({
-  tenantContextOptional: (req: any, _res: any, next: any) => { req.tenantId = req.headers['x-tenant-id'] || ''; next(); },
+  tenantContext: (req: any, _res: any, next: any) => { req.tenantId = req.headers['x-feishu-user-id'] || ''; next(); },
 }));
 import { workersExecutorRouter } from '../workers-executor';
 import { workersReadRouter } from '../workers-read';
@@ -32,7 +32,7 @@ describe('workers 执行器面 + 读面串联挂载', () => {
   afterEach(() => { if (prevToken === undefined) delete process.env.ZENITHJOY_INTERNAL_TOKEN; else process.env.ZENITHJOY_INTERNAL_TOKEN = prevToken; });
 
   it('设置 ZENITHJOY_INTERNAL_TOKEN 后，无 token 的 GET 不被执行器面 401 拦下（应到达读面）', async () => {
-    const r = await request(app).get('/api/workers/a1/activity').set('X-Tenant-Id', 'tenant-a');
+    const r = await request(app).get('/api/workers/a1/activity').set('X-Feishu-User-Id', 'tenant-a');
     // 到达读面：getActivity mock 返回 null → 404（不是执行器面的 401 UNAUTHORIZED）
     expect(r.status).toBe(404);
     expect(r.body.error).not.toBe('UNAUTHORIZED');

@@ -631,8 +631,12 @@ jobs:
           AGENT_ID=$(psql -h localhost -U cecelia -d cecelia -tA -c \
             "INSERT INTO zenithjoy.agents (tenant_id, agent_id, hostname, os_type, status) VALUES ('${TENANT_ID}', 'smoke-worker-${RANDOM}', 'SMOKE-ANDROID', 'android', 'online') RETURNING id" \
             | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
-          echo "tenant=$TENANT_ID agent=$AGENT_ID"
-          AGENT_ID="$AGENT_ID" TENANT_ID="$TENANT_ID" bash .github/workflows/scripts/smoke/worker-activity-smoke.sh
+          # 读面挂严格 tenantContext（不认 X-Tenant-Id）：种一条 tenant_members 行，smoke 用 X-Feishu-User-Id 反查租户
+          FEISHU_USER_ID="ou_worker_activity_smoke_${RANDOM}"
+          psql -h localhost -U cecelia -d cecelia -v ON_ERROR_STOP=1 -c \
+            "INSERT INTO zenithjoy.tenant_members (tenant_id, feishu_user_id, role) VALUES ('${TENANT_ID}', '${FEISHU_USER_ID}', 'owner')"
+          echo "tenant=$TENANT_ID agent=$AGENT_ID member=$FEISHU_USER_ID"
+          AGENT_ID="$AGENT_ID" FEISHU_USER_ID="$FEISHU_USER_ID" bash .github/workflows/scripts/smoke/worker-activity-smoke.sh
           psql -h localhost -U cecelia -d cecelia -c "DELETE FROM zenithjoy.tenants WHERE id='${TENANT_ID}'" >/dev/null 2>&1 || true
 
       - name: Stop fake-feishu-server

@@ -1,5 +1,9 @@
 /**
  * worker 活动协议 · 读面（登录/租户，跨租户一律 404）
+ *
+ * 鉴权挂严格 tenantContext（与 fields.ts 同一闸）：租户只从服务端能解析的身份来——
+ * dashboard 的 better-auth session cookie，或飞书通道的 X-Feishu-User-Id → tenant_members 反查。
+ * 不用 tenantContextOptional：它允许客户端自报 X-Tenant-Id 直通，未登录也能看实时画面/截图。
  *   GET /api/workers                              本租户 worker 卡片
  *   GET /api/workers/:agentId/activity            当前任务+步骤+历史 20 条
  *   GET /api/workers/:agentId/live                MJPEG（multipart/x-mixed-replace）
@@ -7,7 +11,7 @@
  */
 import { Router, Request, Response } from 'express';
 import fs from 'node:fs';
-import { tenantContextOptional } from '../middleware/tenant-context';
+import { tenantContext } from '../middleware/tenant-context';
 import { listWorkers, getActivity, agentBelongsToTenant } from '../services/worker-tasks-service';
 import { workerLive, type LiveFrame } from '../services/worker-live';
 import { shotPath } from '../services/worker-shots';
@@ -16,7 +20,7 @@ const ERR = (code: string, message: string) => ({ success: false, error: code, m
 const OK = (data: unknown) => ({ success: true, data });
 
 export const workersReadRouter = Router();
-workersReadRouter.use(tenantContextOptional);
+workersReadRouter.use(tenantContext);
 
 function requireTenant(req: Request, res: Response): string | null {
   const t = req.tenantId;
