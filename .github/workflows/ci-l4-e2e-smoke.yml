@@ -615,6 +615,26 @@ jobs:
           chmod +x .github/workflows/scripts/smoke/line04-crm-view-prefs-smoke.sh
           bash .github/workflows/scripts/smoke/line04-crm-view-prefs-smoke.sh
 
+      # ─── 工作机控制塔可视化·第一刀（决策 e14297d4）：worker 活动协议全链 smoke ───
+      - name: Smoke — Worker 活动协议（工作机控制塔）
+        env:
+          API_BASE: http://localhost:5200
+          PGPASSWORD: cecelia
+        run: |
+          chmod +x .github/workflows/scripts/smoke/worker-activity-smoke.sh
+          # tenants/agents 建各自专用行（不复用其它 smoke 步骤留下的行，避免顺序耦合）；
+          # -tA 单条 INSERT ... RETURNING 仍会带上 "INSERT 0 1" 命令标签，grep 只取 UUID 那一行
+          # （与 acquisition-dispatch-smoke.sh 等既有 smoke 脚本同一防坑写法）。
+          TENANT_ID=$(psql -h localhost -U cecelia -d cecelia -tA -c \
+            "INSERT INTO zenithjoy.tenants (name, license_key, plan) VALUES ('worker-activity-smoke-${RANDOM}', 'wa-smoke-key-${RANDOM}', 'free') RETURNING id" \
+            | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
+          AGENT_ID=$(psql -h localhost -U cecelia -d cecelia -tA -c \
+            "INSERT INTO zenithjoy.agents (tenant_id, agent_id, hostname, os_type, status) VALUES ('${TENANT_ID}', 'smoke-worker-${RANDOM}', 'SMOKE-ANDROID', 'android', 'online') RETURNING id" \
+            | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
+          echo "tenant=$TENANT_ID agent=$AGENT_ID"
+          AGENT_ID="$AGENT_ID" TENANT_ID="$TENANT_ID" bash .github/workflows/scripts/smoke/worker-activity-smoke.sh
+          psql -h localhost -U cecelia -d cecelia -c "DELETE FROM zenithjoy.tenants WHERE id='${TENANT_ID}'" >/dev/null 2>&1 || true
+
       - name: Stop fake-feishu-server
         if: always()
         run: |
