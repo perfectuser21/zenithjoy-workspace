@@ -1,0 +1,33 @@
+{
+  "initiative_id": "24b76ace-ab66-4332-a896-9c3ff5c7a2e3",
+  "journey_type": "user_facing",
+  "journey_type_reason": "交付面含 apps/dashboard 的 /dashboard/workers 总览页与实时详情页，主理人直接使用的 UI",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "工作机控制塔第一刀：worker 活动协议 8 端点 + 租约 sweeper + 截图落盘 + 总览/实时详情页 + 假执行器 E2E 进 CI",
+      "scope": "新增 worker 活动协议（tasks/steps/complete/frame/live/总览/activity/截图取回）与新表 worker_tasks/worker_task_steps；租约 10min + sweeper 60s；截图落盘 uploads/worker-shots；/dashboard/workers 总览卡片 + 实时详情页（MJPEG/步骤流/历史）+ 侧栏入口；租户隔离跨租户 404；失败必带现场三件套缺一 400；E2E_FAKE_EXECUTORS 假执行器 seed stub agents + worker-activity-smoke.sh 进 CI。不动 publish_tasks，不做任务派发/上传入口/安卓端代码。",
+      "dod": [
+        "[BEHAVIOR] 假执行器 POST tasks + 3 steps(done) → 总览卡片第 3/5 步、详情三步 ✅ 带截图（见 contract-dod.md B-02）",
+        "[BEHAVIOR] steps failed 缺三件套 400、带三件套现场落库（INV-1 / B-05 / B-06）",
+        "[BEHAVIOR] 跨租户 activity/live/截图 404（INV-2 / B-07）",
+        "[BEHAVIOR] 租约过期 sweeper 标 failed/executor_lost 不新增任务（B-09）",
+        "[ARTIFACT] apps/api/src/routes/workers.ts 挂载 /api/workers + 新表迁移 + sweeper + smoke 进 CI"
+      ],
+      "files": [
+        "apps/api/src/routes/workers.ts",
+        "apps/api/src/app.ts",
+        "apps/api/db/migrations/*_worker_tasks.sql",
+        "apps/api/src/services/worker-lease-sweeper.ts",
+        "apps/dashboard/src/pages/WorkersPage.tsx",
+        "apps/dashboard/src/pages/WorkerDetailPage.tsx",
+        "apps/dashboard/src/config/navigation.config.ts",
+        "apps/dashboard/e2e/workers.spec.ts",
+        ".github/workflows/scripts/smoke/worker-activity-smoke.sh"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 120
+    }
+  ]
+}
