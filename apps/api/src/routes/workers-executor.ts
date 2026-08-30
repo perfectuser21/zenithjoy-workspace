@@ -15,7 +15,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 const ERR = (code: string, message: string) => ({ success: false, error: code, message });
 const OK = (data: unknown) => ({ success: true, data });
 /** WorkerTaskError.message 带 "CODE: " 前缀，对外响应去掉以免重复 */
-const stripCode = (e: WorkerTaskError) => e.message.replace(new RegExp(`^${e.code}: `), '');
+const stripCode = (e: WorkerTaskError) => (e.message.startsWith(`${e.code}: `) ? e.message.slice(e.code.length + 2) : e.message);
 
 function sendErr(res: Response, e: unknown, where: string) {
   if (e instanceof WorkerTaskError) return res.status(e.httpStatus).json(ERR(e.code, stripCode(e)));
@@ -54,6 +54,8 @@ workersExecutorRouter.post('/:agentId/tasks', async (req: Request, res: Response
 
 workersExecutorRouter.post('/:agentId/frame',
   express.raw({ type: 'image/jpeg', limit: '120kb' }),
+  (err: Error & { type?: string }, req: Request, res: Response, next: NextFunction) =>
+    err?.type === 'entity.too.large' ? res.status(413).json(ERR('FRAME_TOO_LARGE', '帧 ≤120KB')) : next(err),
   (req: Request, res: Response) => {
     if (!req.is('image/jpeg') || !Buffer.isBuffer(req.body) || req.body.length === 0) {
       return res.status(415).json(ERR('UNSUPPORTED_MEDIA', '需要 image/jpeg 原始字节'));
