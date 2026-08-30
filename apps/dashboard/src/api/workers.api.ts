@@ -68,6 +68,12 @@ export interface WorkerActivity {
   current: (WorkerTaskSummary & { current_step: number }) | null;
   steps: WorkerStep[];
   history: WorkerTaskSummary[];
+  /**
+   * 距最新一帧推送的毫秒数，由后端算好下发；从未推过帧时为 null。
+   * Chrome 对 multipart/x-mixed-replace 的 <img> 只在首帧触发一次 load，前端不能靠 onLoad 计时判断画面卡住，
+   * 也不能自己拿服务端 at 时间戳跟浏览器 Date.now() 比（两端时钟可能有偏差）。
+   */
+  frame_age_ms: number | null;
 }
 
 async function getJson<T>(url: string): Promise<T> {

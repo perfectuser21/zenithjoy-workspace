@@ -1,5 +1,5 @@
 /** 工作机控制塔 · 实时详情（/dashboard/workers/:agentId）：左画面（MJPEG）右步骤流，底部历史 */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { fetchWorkerActivity, workerLiveUrl, type WorkerActivity, type WorkerStep } from '../api/workers.api';
 
@@ -27,17 +27,22 @@ function formatDateTime(iso: string): string {
 export default function WorkerLivePage() {
   const { agentId = '' } = useParams();
   const [activity, setActivity] = useState<WorkerActivity | null>(null);
-  const [frameStale, setFrameStale] = useState(false);
-  const lastFrameAt = useRef<number>(Date.now());
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let alive = true;
+    setActivity(null);
+    setError(false);
     const load = () =>
       fetchWorkerActivity(agentId)
         .then((a) => {
-          if (alive) setActivity(a);
+          if (!alive) return;
+          setActivity(a);
+          setError(false);
         })
-        .catch(() => {});
+        .catch(() => {
+          if (alive) setError(true);
+        });
     load();
     const t = setInterval(load, POLL_MS);
     return () => {
@@ -46,13 +51,11 @@ export default function WorkerLivePage() {
     };
   }, [agentId]);
 
-  // MJPEG <img> 每到一帧触发 load；15s 无 load 视为画面不可用
-  useEffect(() => {
-    const t = setInterval(() => setFrameStale(Date.now() - lastFrameAt.current > FRAME_STALE_MS), 1000);
-    return () => clearInterval(t);
-  }, []);
-
   const current = activity?.current ?? null;
+  // 后端算好帧龄下发（frame_age_ms），不用浏览器 <img> onLoad 计时：Chrome 对 multipart/x-mixed-replace
+  // 的 <img> 只在首帧触发一次 load，之后每帧不会再触发，onLoad 计时法 15s 后会永远显示"画面不可用"。
+  const frameAgeMs = activity?.frame_age_ms ?? null;
+  const frameStale = frameAgeMs == null || frameAgeMs > FRAME_STALE_MS;
 
   return (
     <div className="p-6">
@@ -61,18 +64,13 @@ export default function WorkerLivePage() {
           ← 工作机
         </Link>
       </div>
+      {error ? (
+        <div className="text-sm text-red-600">无法加载该工作机（可能不存在或无权限）</div>
+      ) : (
       <div className="flex gap-6 flex-col lg:flex-row">
         <div className="lg:w-[360px] shrink-0">
           <div className="relative rounded-2xl overflow-hidden bg-black aspect-[9/19.5]">
-            <img
-              alt="实时画面"
-              src={workerLiveUrl(agentId)}
-              className="w-full h-full object-contain"
-              onLoad={() => {
-                lastFrameAt.current = Date.now();
-                setFrameStale(false);
-              }}
-            />
+            <img alt="实时画面" src={workerLiveUrl(agentId)} className="w-full h-full object-contain" />
             {frameStale && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-sm">
                 画面不可用
@@ -94,14 +92,18 @@ export default function WorkerLivePage() {
                 <span className={s.status === 'doing' ? 'text-amber-700' : s.status === 'pending' ? 'text-gray-400' : ''}>
                   {s.title}
                 </span>
-                {s.screenshot_url && (
-                  <a href={s.screenshot_url} target="_blank" rel="noreferrer" className="ml-auto">
-                    <img src={s.screenshot_url} alt={`第 ${s.step_index + 1} 步截图`} className="h-10 rounded border" />
-                  </a>
-                )}
-                {s.status === 'failed' && (
-                  <div className="ml-auto text-xs text-red-600">
-                    {s.foreground_pkg} · {s.diag_line}
+                {(s.screenshot_url || (s.status === 'failed' && (s.foreground_pkg || s.diag_line))) && (
+                  <div className="ml-auto flex items-center gap-2">
+                    {s.screenshot_url && (
+                      <a href={s.screenshot_url} target="_blank" rel="noreferrer">
+                        <img src={s.screenshot_url} alt={`第 ${s.step_index + 1} 步截图`} className="h-10 rounded border" />
+                      </a>
+                    )}
+                    {s.status === 'failed' && (s.foreground_pkg || s.diag_line) && (
+                      <div className="text-xs text-red-600">
+                        {[s.foreground_pkg, s.diag_line].filter(Boolean).join(' · ')}
+                      </div>
+                    )}
                   </div>
                 )}
               </li>
@@ -132,6 +134,7 @@ export default function WorkerLivePage() {
           </table>
         </div>
       </div>
+      )}
     </div>
   );
 }

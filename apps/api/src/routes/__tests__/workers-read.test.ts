@@ -51,6 +51,22 @@ describe('GET /api/workers/:agentId/activity', () => {
     const r = await request(app).get('/api/workers/a1/activity').set('X-Tenant-Id', 'tenant-a');
     expect(r.status).toBe(200); expect(r.body.data.steps[0].screenshot_url).toBe('/api/workers/shots/t/a/1.jpg');
   });
+  it('frame_age_ms：有最新帧时返回距今毫秒数（Chrome MJPEG <img> 只在首帧触发一次 load，不能用 onLoad 计时）', async () => {
+    (getActivity as any).mockResolvedValue({ current: null, steps: [], history: [] });
+    // mockReturnValueOnce：clearAllMocks 不清 mockReturnValue 的实现，用 Once 避免污染同文件后面依赖默认 latest() 的用例
+    (workerLive.latest as any).mockReturnValueOnce({ seq: 1, at: Date.now() - 5000, bytes: Buffer.from('x') });
+    const r = await request(app).get('/api/workers/a1/activity').set('X-Tenant-Id', 'tenant-a');
+    expect(r.status).toBe(200);
+    expect(typeof r.body.data.frame_age_ms).toBe('number');
+    expect(r.body.data.frame_age_ms).toBeGreaterThanOrEqual(5000);
+  });
+  it('frame_age_ms：从未推过帧时为 null', async () => {
+    (getActivity as any).mockResolvedValue({ current: null, steps: [], history: [] });
+    (workerLive.latest as any).mockReturnValueOnce(null);
+    const r = await request(app).get('/api/workers/a1/activity').set('X-Tenant-Id', 'tenant-a');
+    expect(r.status).toBe(200);
+    expect(r.body.data.frame_age_ms).toBeNull();
+  });
 });
 describe('GET /api/workers/:agentId/live', () => {
   it('跨租户 → 404', async () => {

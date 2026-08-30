@@ -1,6 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 vi.mock('../../api/workers.api', () => ({ fetchWorkerActivity: vi.fn(), workerLiveUrl: (id: string) => `/api/workers/${id}/live` }));
 import { fetchWorkerActivity } from '../../api/workers.api';
@@ -20,6 +19,7 @@ describe('WorkerLivePage', () => {
         { step_index: 2, title: '发作品', status: 'pending', screenshot_url: null },
       ],
       history: [{ id: 'h1', title: '昨天的任务', status: 'failed', steps_total: 5, started_at: 'x', finished_at: 'y', failed_step: 3, error_code: 'adb_unreachable' }],
+      frame_age_ms: 500,
     });
     renderAt('a1');
     await waitFor(() => expect(screen.getByText('发布视频到抖音')).toBeInTheDocument());
@@ -29,11 +29,21 @@ describe('WorkerLivePage', () => {
     expect(screen.getByRole('img', { name: /实时画面/ })).toHaveAttribute('src', '/api/workers/a1/live');
     expect(screen.getByText(/adb_unreachable/)).toBeInTheDocument();
   });
-  it('15 秒无新帧显示"画面不可用"', async () => {
-    (fetchWorkerActivity as any).mockResolvedValue({ current: null, steps: [], history: [] });
+  it('frame_age_ms 超过 15 秒显示"画面不可用"（后端下发帧龄，不再靠 <img> onLoad 计时——Chrome 对 MJPEG 只在首帧触发一次 load）', async () => {
+    (fetchWorkerActivity as any).mockResolvedValue({ current: null, steps: [], history: [], frame_age_ms: 20_000 });
     renderAt('a1');
     await waitFor(() => expect(screen.getByText('空闲')).toBeInTheDocument());
-    await act(async () => { vi.advanceTimersByTime(16_000); });
-    expect(screen.getByText('画面不可用')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('画面不可用')).toBeInTheDocument());
+  });
+  it('frame_age_ms 未超过 15 秒不显示"画面不可用"', async () => {
+    (fetchWorkerActivity as any).mockResolvedValue({ current: null, steps: [], history: [], frame_age_ms: 500 });
+    renderAt('a1');
+    await waitFor(() => expect(screen.getByText('空闲')).toBeInTheDocument());
+    expect(screen.queryByText('画面不可用')).not.toBeInTheDocument();
+  });
+  it('fetchWorkerActivity 失败（含 404）时显示错误态，不再吞错', async () => {
+    (fetchWorkerActivity as any).mockRejectedValue(new Error('HTTP 404'));
+    renderAt('a1');
+    await waitFor(() => expect(screen.getByText('无法加载该工作机（可能不存在或无权限）')).toBeInTheDocument());
   });
 });
