@@ -19,7 +19,7 @@ import { Router, Request, Response } from 'express';
 import pool from '../db/connection';
 import { tenantContextOptional } from '../middleware/tenant-context';
 import { simpleRateLimit, tenantKeyFn } from '../middleware/simple-rate-limit';
-import { normMachine, VALID_OWNER_TYPES, type OwnerType } from '../services/agent-machines-normalize';
+import { normMachine, VALID_OWNER_TYPES, ONLINE_WINDOW_SQL, type OwnerType } from '../services/agent-machines-normalize';
 
 const router = Router();
 
@@ -64,7 +64,7 @@ router.get('/', async (req: Request, res: Response) => {
     const r = await pool.query(
       `SELECT a.id, a.agent_id, a.hostname, a.nickname, a.machine_role,
               a.os_type, a.owner_type,
-              CASE WHEN a.last_seen > NOW() - INTERVAL '3 minutes'
+              CASE WHEN ${ONLINE_WINDOW_SQL}
                    THEN 'online' ELSE 'offline' END AS status,
               a.version, a.last_seen,
               COUNT(s.id) AS session_count
@@ -72,7 +72,7 @@ router.get('/', async (req: Request, res: Response) => {
          LEFT JOIN zenithjoy.agent_platform_sessions s ON s.agent_id = a.id
         WHERE a.tenant_id = $1${ownerTypeClause}
         GROUP BY a.id
-        ORDER BY (a.last_seen > NOW() - INTERVAL '3 minutes') DESC, a.hostname ASC`,
+        ORDER BY (${ONLINE_WINDOW_SQL}) DESC, a.hostname ASC`,
       params,
     );
     return res.json(OK(r.rows.map(normMachine)));

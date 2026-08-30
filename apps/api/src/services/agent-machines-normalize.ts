@@ -10,11 +10,29 @@ export interface NormalizedMachine {
   session_count: number; offline_minutes: number | null;
 }
 export function normMachine(row: Record<string, unknown>): NormalizedMachine {
-  const status = typeof row.status === 'string' ? row.status
-    : row.last_seen && Date.now() - new Date(row.last_seen as string).getTime() <= ONLINE_WINDOW_MS ? 'online' : 'offline';
+  const status = typeof row.status === 'string'
+    ? row.status
+    : row.last_seen && Date.now() - new Date(row.last_seen as string).getTime() <= ONLINE_WINDOW_MS
+      ? 'online'
+      : 'offline';
+
   let offlineMinutes: number | null = null;
-  if (status !== 'online' && row.last_seen) offlineMinutes = Math.floor((Date.now() - new Date(row.last_seen as string).getTime()) / 60000);
-  return { id: row.id, agent_id: row.agent_id, hostname: row.hostname, nickname: row.nickname, machine_role: row.machine_role,
-    os_type: row.os_type ?? null, owner_type: (row.owner_type as OwnerType) ?? 'customer', status, version: row.version,
-    last_seen: row.last_seen, session_count: Number(row.session_count ?? 0), offline_minutes: offlineMinutes };
+  if (status !== 'online' && row.last_seen) {
+    offlineMinutes = Math.floor((Date.now() - new Date(row.last_seen as string).getTime()) / 60000);
+  }
+
+  return {
+    id: row.id,
+    agent_id: row.agent_id,
+    hostname: row.hostname,
+    nickname: row.nickname,
+    machine_role: row.machine_role,
+    os_type: row.os_type ?? null,
+    owner_type: (row.owner_type as OwnerType) ?? 'customer',
+    status,
+    version: row.version,
+    last_seen: row.last_seen,
+    session_count: Number(row.session_count ?? 0),
+    offline_minutes: offlineMinutes,
+  };
 }

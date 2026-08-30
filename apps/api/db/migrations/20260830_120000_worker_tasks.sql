@@ -2,8 +2,9 @@
 -- 与 publish_tasks 完全隔离（安卓 Agent 心跳只拉 publish_tasks，不会误领这里的任务）。
 -- 失败信息写正表列（failed_step / error_code），不藏 JSONB——四次盲修的教训。
 -- 全部 DDL 幂等：CI 重放全部 migration。
-
-BEGIN;
+-- 不在此文件内包 BEGIN/COMMIT：run-migration.ts 的 applyMigration 已经把整份文件内容
+-- 包在一个外层事务里执行（BEGIN → client.query(sql) → COMMIT），文件内再嵌套一层
+-- BEGIN/COMMIT 会在外层事务中途提前提交，破坏「整份 migration 要么全上要么全不上」的原子性。
 
 CREATE TABLE IF NOT EXISTS zenithjoy.worker_tasks (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -47,5 +48,3 @@ CREATE TABLE IF NOT EXISTS zenithjoy.worker_task_steps (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (task_id, step_index)
 );
-
-COMMIT;
