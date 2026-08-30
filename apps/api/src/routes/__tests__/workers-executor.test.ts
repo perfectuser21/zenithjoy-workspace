@@ -76,4 +76,9 @@ describe('POST /api/workers/:agentId/frame', () => {
     const r = await request(app).post('/api/workers/a1/frame').set('Content-Type', 'text/plain').send('x');
     expect(r.status).toBe(415);
   });
+  it('帧超过 120KB → 413 FRAME_TOO_LARGE（JSON）', async () => {
+    const big = Buffer.alloc(130 * 1024, 0xff);
+    const r = await request(app).post('/api/workers/a1/frame').set('Content-Type', 'image/jpeg').send(big);
+    expect(r.status).toBe(413); expect(r.body.error).toBe('FRAME_TOO_LARGE');
+  });
 });
