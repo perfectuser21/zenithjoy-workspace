@@ -46,6 +46,18 @@ describe('startWorkerLeaseSweeper', () => {
     expect(workerLive.evictIdle).toHaveBeenCalledTimes(1);
   });
 
+  it('有过期租约时用 console.info 记录条数（不是 console.log）', async () => {
+    (sweepExpiredLeases as ReturnType<typeof vi.fn>).mockResolvedValue(2);
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const t = startWorkerLeaseSweeper(1000);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(infoSpy).toHaveBeenCalledWith(expect.stringMatching(/2 个任务租约过期/));
+    expect(logSpy).not.toHaveBeenCalled();
+    stopWorkerLeaseSweeper(t);
+    infoSpy.mockRestore(); logSpy.mockRestore();
+  });
+
   it('sweepExpiredLeases reject 时不向外抛异常（catch 打日志）', async () => {
     (sweepExpiredLeases as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db down'));
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});

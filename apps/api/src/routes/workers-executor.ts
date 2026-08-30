@@ -26,6 +26,11 @@ function requireTaskUuid(req: Request, res: Response, next: NextFunction) {
   if (!UUID_RE.test(req.params.id ?? '')) return res.status(400).json(ERR('INVALID_TASK_ID', 'task id 须为 uuid'));
   next();
 }
+/** agentId 是 zenithjoy.agents.id（uuid）；非 uuid 直接 400，不让它进 DB 查询 / 帧缓冲 key */
+function requireAgentUuid(req: Request, res: Response, next: NextFunction) {
+  if (!UUID_RE.test(req.params.agentId ?? '')) return res.status(400).json(ERR('INVALID_AGENT_ID', 'agent id 须为 uuid（zenithjoy.agents.id）'));
+  next();
+}
 
 export const workersExecutorRouter = Router();
 // internalAuth 只对 POST 生效：本 router 与 workers-read 的读面串联挂在同一前缀
@@ -43,7 +48,7 @@ workersExecutorRouter.post('/tasks/:id/complete', requireTaskUuid, async (req: R
   catch (e) { return sendErr(res, e, 'complete'); }
 });
 
-workersExecutorRouter.post('/:agentId/tasks', async (req: Request, res: Response) => {
+workersExecutorRouter.post('/:agentId/tasks', requireAgentUuid, async (req: Request, res: Response) => {
   const { title, steps, executor_id } = req.body ?? {};
   if (typeof title !== 'string' || !title || !Array.isArray(steps) || steps.length === 0
       || !steps.every((s) => typeof s === 'string') || typeof executor_id !== 'string' || !executor_id) {
@@ -56,6 +61,7 @@ workersExecutorRouter.post('/:agentId/tasks', async (req: Request, res: Response
 });
 
 workersExecutorRouter.post('/:agentId/frame',
+  requireAgentUuid,
   express.raw({ type: 'image/jpeg', limit: '120kb' }),
   (err: Error & { type?: string }, req: Request, res: Response, next: NextFunction) =>
     err?.type === 'entity.too.large' ? res.status(413).json(ERR('FRAME_TOO_LARGE', '帧 ≤120KB')) : next(err),

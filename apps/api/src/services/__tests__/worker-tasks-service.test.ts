@@ -6,7 +6,7 @@ vi.mock('../worker-shots', () => ({
   shotPath: vi.fn((ref: string) => `/tmp/shots/${ref}`),
 }));
 import pool from '../../db/connection';
-import { validateStepReport, sweepExpiredLeases, LEASE_MS, startTask, completeTask, getActivity, WorkerTaskError } from '../worker-tasks-service';
+import { validateStepReport, sweepExpiredLeases, LEASE_MS, startTask, completeTask, getActivity, reportStep } from '../worker-tasks-service';
 beforeEach(() => vi.clearAllMocks());
 describe('validateStepReport', () => {
   it('failed 缺三件套任一 → FAILURE_SCENE_REQUIRED', () => {
@@ -84,5 +84,24 @@ describe('getActivity · history', () => {
     const sql = (pool.query as any).mock.calls[2][0] as string;
     expect(sql).toMatch(/worker_task_steps/); expect(sql).toMatch(/step_index = t\.failed_step/);
     expect(sql).toMatch(/evidence->>'screenshot_ref'/); expect(sql).toMatch(/finished_at - t\.started_at/);
+  });
+});
+describe('reportStep', () => {
+  it('step_index >= steps_total → STEP_OUT_OF_RANGE 400，不写步骤', async () => {
+    (pool.query as any).mockResolvedValueOnce({
+      rows: [{ id: 't1', tenant_id: 'ta', status: 'running', executor_id: 'ex', steps_total: 3 }],
+    });
+    await expect(reportStep('t1', { step_index: 3, status: 'done', executor_id: 'ex' }))
+      .rejects.toMatchObject({ code: 'STEP_OUT_OF_RANGE', httpStatus: 400 });
+    expect((pool.query as any).mock.calls).toHaveLength(1);
+    expect((pool.query as any).mock.calls[0][0]).toMatch(/steps_total/);
+  });
+  it('step_index < steps_total → 正常写步骤与续租', async () => {
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: 't1', tenant_id: 'ta', status: 'running', executor_id: 'ex', steps_total: 3 }] })
+      .mockResolvedValueOnce({ rowCount: 1 })
+      .mockResolvedValueOnce({ rowCount: 1 });
+    await expect(reportStep('t1', { step_index: 2, status: 'done', executor_id: 'ex' })).resolves.toEqual({ ok: true, screenshot_ref: null });
+    expect((pool.query as any).mock.calls).toHaveLength(3);
   });
 });

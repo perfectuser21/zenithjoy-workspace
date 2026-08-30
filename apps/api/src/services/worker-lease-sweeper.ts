@@ -15,7 +15,7 @@ import { workerLive } from './worker-live';
 export function startWorkerLeaseSweeper(intervalMs = 60_000): NodeJS.Timeout {
   const t = setInterval(() => {
     sweepExpiredLeases()
-      .then((n) => { if (n > 0) console.log(`[workers] sweeper: ${n} 个任务租约过期 → executor_lost`); })
+      .then((n) => { if (n > 0) console.info(`[workers] sweeper: ${n} 个任务租约过期 → executor_lost`); })
       .catch((e) => console.error('[workers] sweeper error:', e));
     workerLive.evictIdle();
   }, intervalMs);

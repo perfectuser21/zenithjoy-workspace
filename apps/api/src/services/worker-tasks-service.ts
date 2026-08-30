@@ -70,17 +70,21 @@ export async function startTask(input: { agentId: string; title: string; steps: 
 }
 
 async function loadRunning(taskId: string, executorId: string) {
-  const r = await pool.query(`SELECT id, tenant_id, status, executor_id FROM zenithjoy.worker_tasks WHERE id = $1`, [taskId]);
+  const r = await pool.query(`SELECT id, tenant_id, status, executor_id, steps_total FROM zenithjoy.worker_tasks WHERE id = $1`, [taskId]);
   if (r.rows.length === 0) throw new WorkerTaskError('TASK_NOT_FOUND', '任务不存在', 404);
   const t = r.rows[0];
   if (t.status !== 'running') throw new WorkerTaskError('TASK_NOT_RUNNING', '任务已结束，执行器必须停手', 409);
   if (t.executor_id !== executorId) throw new WorkerTaskError('EXECUTOR_MISMATCH', '租约不属于该执行器', 409);
-  return t as { id: string; tenant_id: string };
+  return { id: t.id as string, tenant_id: t.tenant_id as string, steps_total: Number(t.steps_total ?? 0) };
 }
 
 export async function reportStep(taskId: string, r: StepReport) {
   validateStepReport(r);
   const t = await loadRunning(taskId, r.executor_id);
+  // 越界的 step_index 在 worker_task_steps 里没有对应行，UPDATE 会静默 0 行、只续租——执行器以为报上了其实没有。
+  if (r.step_index >= t.steps_total) {
+    throw new WorkerTaskError('STEP_OUT_OF_RANGE', `step_index 须 < steps_total（${t.steps_total}）`, 400);
+  }
   const ref = r.screenshot_jpeg_b64 ? await saveShot(t.tenant_id, taskId, r.step_index, r.screenshot_jpeg_b64) : null;
   await pool.query(
     `UPDATE zenithjoy.worker_task_steps SET status = $3, screenshot_ref = COALESCE($4, screenshot_ref),
