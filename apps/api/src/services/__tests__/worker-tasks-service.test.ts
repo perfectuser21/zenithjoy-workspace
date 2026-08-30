@@ -6,7 +6,7 @@ vi.mock('../worker-shots', () => ({
   shotPath: vi.fn((ref: string) => `/tmp/shots/${ref}`),
 }));
 import pool from '../../db/connection';
-import { validateStepReport, sweepExpiredLeases, LEASE_MS, startTask, WorkerTaskError } from '../worker-tasks-service';
+import { validateStepReport, sweepExpiredLeases, LEASE_MS, startTask, completeTask, WorkerTaskError } from '../worker-tasks-service';
 beforeEach(() => vi.clearAllMocks());
 describe('validateStepReport', () => {
   it('failed 缺三件套任一 → FAILURE_SCENE_REQUIRED', () => {
@@ -46,4 +46,15 @@ describe('startTask', () => {
     await expect(startTask({ agentId: 'agent-uuid', title: 't', steps: ['a'], executorId: 'ex' })).rejects.toMatchObject({ code: 'WORKER_BUSY' });
   });
   it('LEASE_MS 为 10 分钟', () => { expect(LEASE_MS).toBe(10 * 60 * 1000); });
+});
+describe('completeTask', () => {
+  it('evidence 截图超限 → rejects SCREENSHOT_TOO_LARGE', async () => {
+    (pool.query as any).mockResolvedValueOnce({
+      rows: [{ id: 't1', tenant_id: 'ta', status: 'running', executor_id: 'ex' }],
+    });
+    const big = 'A'.repeat(200 * 1024 * 4 / 3 + 100);
+    await expect(completeTask('t1', {
+      outcome: 'completed', executor_id: 'ex', evidence: { screenshot_jpeg_b64: big },
+    })).rejects.toMatchObject({ code: 'SCREENSHOT_TOO_LARGE' });
+  });
 });

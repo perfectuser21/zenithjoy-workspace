@@ -19,15 +19,20 @@ export interface StepReport {
   screenshot_jpeg_b64?: string; foreground_pkg?: string; diag_line?: string; note?: string;
 }
 
+/** 截图 base64 超限 → SCREENSHOT_TOO_LARGE；供 validateStepReport 与 completeTask(evidence) 共用 */
+export function assertShotSize(b64?: string): void {
+  if (b64 && b64.length > MAX_SHOT_B64) {
+    throw new WorkerTaskError('SCREENSHOT_TOO_LARGE', '截图 ≤200KB', 400);
+  }
+}
+
 export function validateStepReport(r: StepReport): void {
   if (!r || !Number.isInteger(r.step_index) || r.step_index < 0
       || !['doing', 'done', 'failed'].includes(r.status)
       || typeof r.executor_id !== 'string' || !r.executor_id) {
     throw new WorkerTaskError('INVALID_STEP', 'step_index 须为非负整数，status ∈ doing|done|failed，executor_id 必填', 400);
   }
-  if (r.screenshot_jpeg_b64 && r.screenshot_jpeg_b64.length > MAX_SHOT_B64) {
-    throw new WorkerTaskError('SCREENSHOT_TOO_LARGE', '截图 ≤200KB', 400);
-  }
+  assertShotSize(r.screenshot_jpeg_b64);
   if (r.status === 'failed' && !(r.foreground_pkg && r.diag_line && r.screenshot_jpeg_b64)) {
     throw new WorkerTaskError('FAILURE_SCENE_REQUIRED', '失败上报必须带现场三件套：foreground_pkg + diag_line + screenshot_jpeg_b64', 400);
   }
@@ -104,6 +109,7 @@ export async function completeTask(taskId: string, body: {
   const t = await loadRunning(taskId, body.executor_id);
   let evidence = body.evidence ?? null;
   if (evidence && typeof evidence.screenshot_jpeg_b64 === 'string') {
+    assertShotSize(evidence.screenshot_jpeg_b64 as string);
     const ref = await saveShot(t.tenant_id, taskId, 9999, evidence.screenshot_jpeg_b64 as string);
     evidence = { ...evidence, screenshot_ref: ref, screenshot_jpeg_b64: undefined };
   }
