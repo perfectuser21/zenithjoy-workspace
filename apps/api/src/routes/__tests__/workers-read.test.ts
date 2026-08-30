@@ -3,18 +3,23 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 vi.mock('../../services/worker-tasks-service', () => ({ listWorkers: vi.fn(), getActivity: vi.fn(), agentBelongsToTenant: vi.fn() }));
-vi.mock('../../services/worker-live', () => {
-  const listeners: any[] = [];
-  return { workerLive: {
+vi.mock('../../services/worker-live', () => ({
+  workerLive: {
     latest: vi.fn(() => ({ seq: 1, at: Date.now(), bytes: Buffer.from('JPEG1') })),
-    subscribe: vi.fn((_: string, l: any) => { listeners.push(l); return () => {}; }),
-  } };
-});
-vi.mock('../../services/worker-shots', () => ({ shotPath: vi.fn((ref: string) => (ref === 't/a/1.jpg' ? '/tmp/x.jpg' : null)) }));
+    subscribe: vi.fn(),
+  },
+}));
+vi.mock('../../services/worker-shots', () => ({ shotPath: vi.fn((ref: string) => {
+  if (ref === 't/a/1.jpg') return '/tmp/x.jpg';
+  // 刻意指向一个不存在的文件，用来触发 createReadStream 的 error 事件（流错误兜底路径）
+  if (ref === 't/a/missing.jpg') return '/tmp/zenithjoy-worker-shots-test-missing-file.jpg';
+  return null;
+}) }));
 vi.mock('../../middleware/tenant-context', () => ({
   tenantContextOptional: (req: any, _res: any, next: any) => { req.tenantId = req.headers['x-tenant-id'] || ''; next(); },
 }));
 import { listWorkers, getActivity, agentBelongsToTenant } from '../../services/worker-tasks-service';
+import { workerLive } from '../../services/worker-live';
 import { workersReadRouter } from '../workers-read';
 function makeApp() { const app = express(); app.use('/api/workers', workersReadRouter); return app; }
 const app = makeApp();
@@ -54,10 +59,21 @@ describe('GET /api/workers/:agentId/live', () => {
   });
   it('multipart/x-mixed-replace 且首帧立即输出', async () => {
     (agentBelongsToTenant as any).mockResolvedValue(true);
+    (workerLive.subscribe as any).mockReturnValue(vi.fn());
     const r = await request(app).get('/api/workers/a1/live').set('X-Tenant-Id', 'tenant-a')
       .buffer(true).parse((res, cb) => { let d = ''; res.on('data', (c: Buffer) => { d += c.toString('latin1'); if (d.includes('JPEG1')) { res.destroy(); cb(null, d); } }); });
     expect(r.headers['content-type']).toMatch(/multipart\/x-mixed-replace; boundary=frame/);
     expect(r.body).toContain('Content-Type: image/jpeg'); expect(r.body).toContain('JPEG1');
+  });
+  it('客户端断连后 unsubscribe(off) 被调用（req/res close 退订）', async () => {
+    (agentBelongsToTenant as any).mockResolvedValue(true);
+    const off = vi.fn();
+    (workerLive.subscribe as any).mockReturnValue(off);
+    await request(app).get('/api/workers/a1/live').set('X-Tenant-Id', 'tenant-a')
+      .buffer(true).parse((res, cb) => { let d = ''; res.on('data', (c: Buffer) => { d += c.toString('latin1'); if (d.includes('JPEG1')) { res.destroy(); cb(null, d); } }); });
+    // 服务端 req/res 的 'close' 事件是异步触发的，给事件循环一个 tick
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(off).toHaveBeenCalled();
   });
 });
 describe('GET /api/workers/shots/:ref', () => {
@@ -66,5 +82,10 @@ describe('GET /api/workers/shots/:ref', () => {
   });
   it('ref 租户前缀不匹配 → 404', async () => {
     const r = await request(app).get('/api/workers/shots/t/a/1.jpg').set('X-Tenant-Id', 'other'); expect(r.status).toBe(404);
+  });
+  it('shotPath 合法但文件不存在 → 404（createReadStream error 兜底，不再靠 existsSync 预判）', async () => {
+    const r = await request(app).get('/api/workers/shots/t/a/missing.jpg').set('X-Tenant-Id', 't');
+    expect(r.status).toBe(404);
+    expect(r.body).toEqual({ success: false, error: 'NOT_FOUND', message: '截图不存在' });
   });
 });
