@@ -13,6 +13,7 @@ vi.mock('../db/connection', () => ({ default: { query: vi.fn() } }));
 import { validateLicense } from '../services/walking-skeleton.service';
 import pool from '../db/connection';
 import { workerPostAuth } from './worker-agent-auth';
+import { simpleRateLimit, ipKeyFn } from './simple-rate-limit';
 
 const AID = '22222222-2222-4222-8222-222222222222';
 const TENANT_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -20,6 +21,9 @@ const LICENSE_KEY = 'ZJ-TESTORG-AAAA1111';
 
 const app = express();
 app.use(express.json());
+// 限流先于鉴权 —— 与 workers-executor 的真实接线同序（鉴权 handler 本身也要被限流覆盖，
+// CodeQL js/missing-rate-limiting）。max 取大值，只为保持接线形状，不干扰用例。
+app.use('/api/workers', simpleRateLimit({ windowMs: 60_000, max: 10_000, keyFn: ipKeyFn }));
 app.use('/api/workers', workerPostAuth);
 app.all('/api/workers/*', (_req, res) => { res.status(200).json({ reached: true }); });
 
