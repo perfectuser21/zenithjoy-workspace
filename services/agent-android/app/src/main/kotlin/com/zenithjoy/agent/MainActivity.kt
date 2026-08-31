@@ -181,6 +181,42 @@ class MainActivity : AppCompatActivity() {
         return TextView(this).apply { text = desc }
     }
 
+    /**
+     * 「上墙」开关：把本机屏幕帧推给中台工作机控制塔，运营在 /dashboard/workers 里
+     * 能看到这台机器在动。
+     *
+     * 默认关，且必须先有 MediaProjection 授权才推得动 —— 推屏幕是持续把客户机画面外传，
+     * 只能由用户在这里显式打开。打开时若还没授权，就地弹一次系统截屏授权框，
+     * 不让用户开完开关回头发现一直是黑的。
+     */
+    private fun wallPushBanner(): android.view.View {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val on = config.wallPushEnabled
+        box.addView(TextView(this).apply {
+            text = if (!on) {
+                "上墙（实时画面）：已关闭"
+            } else if (MediaProjectionHolder.hasAuthorization()) {
+                "上墙（实时画面）：已开启 ✅ 中控台可看到本机画面"
+            } else {
+                "⚠️ 上墙已开启，但截屏未授权 —— 画面推不上去，请点下面按钮重新授权"
+            }
+        })
+        box.addView(Button(this).apply {
+            text = if (on) "关闭上墙" else "开启上墙（把本机画面推给中控台）"
+            setOnClickListener {
+                config.wallPushEnabled = !on
+                if (config.wallPushEnabled && !MediaProjectionHolder.hasAuthorization()) {
+                    // 开上墙必须有截屏授权，就地补一次；授权回调里会重启服务让开关生效
+                    requestMediaProjectionThenStart()
+                } else {
+                    startAgentServiceReal()
+                }
+                showStatus()
+            }
+        })
+        return box
+    }
+
     private fun showLicenseInput() {
         val layout = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
@@ -241,6 +277,7 @@ class MainActivity : AppCompatActivity() {
                 appendLine("注册状态: $registerStatus")
                 appendLine("API: ${config.apiUrl}")
                 appendLine("无障碍: ${checkSelfAccessibility(this@MainActivity).describe()}")
+                appendLine("上墙: ${if (config.wallPushEnabled) "开启" else "关闭"}")
             }
         }
         val startBtn = Button(this).apply { text = "重启 Agent 服务" }
@@ -250,6 +287,8 @@ class MainActivity : AppCompatActivity() {
             config.licenseKey = ""
             config.wsToken = ""
             config.lastRegisterError = ""
+            // 换 license 等于换机器/换租户，不能拿旧同意继续把画面往外推
+            config.wallPushEnabled = false
             MediaProjectionHolder.clear()
             showLicenseInput()
         }
@@ -258,6 +297,7 @@ class MainActivity : AppCompatActivity() {
         layout.addView(mediaProjectionBanner())
         layout.addView(recordAudioBanner())
         layout.addView(backgroundPermissionBanner())
+        layout.addView(wallPushBanner())
         layout.addView(status)
         layout.addView(startBtn)
         layout.addView(resetBtn)

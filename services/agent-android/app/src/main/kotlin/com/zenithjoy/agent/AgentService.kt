@@ -66,6 +66,7 @@ class AgentService : Service() {
     private lateinit var config: AgentConfig
     private var wsClient: WsClient? = null
     private var heartbeatLoop: HttpHeartbeatLoop? = null
+    private var framePushLoop: FramePushLoop? = null
     // initAgent 只允许执行一次（真机复现 2026-07-10：多次 onStartCommand 泄漏多套轮询 loop）
     @Volatile private var agentInitialized = false
     // register 重试进行中标志：onStartCommand 重试分支用它避免重复 launch 协程
@@ -296,6 +297,9 @@ class AgentService : Service() {
         // type，这里重跑一次把已授权的服务从纯 DATA_SYNC 升级到 DATA_SYNC|MEDIA_PROJECTION，
         // 不需要重启整个服务。
         startForegroundCompat()
+        // 用户在 App 里拨「上墙」开关会重启服务，但 initAgent 只跑一次（防轮询 loop 泄漏），
+        // 接线段不会再走 —— 开关的生效点必须放在这里，每次交付都按当前配置重评一次。
+        sharedScreenCaptureService?.let { startOrStopFramePush(it) }
         // 真机复现(2026-07-10)：lastStartId=3 → initAgent 跑了 3 次，泄漏 3 套轮询
         // loop（旧 loop 只在 onDestroy 停），同一任务每周期被投递 N 次。只初始化一次。
         if (shouldRunInitAgent(agentInitialized)) {
@@ -318,9 +322,45 @@ class AgentService : Service() {
         return START_STICKY
     }
 
+    /**
+     * 按「上墙」开关启停 [FramePushLoop]。可重复调用（每次 onStartCommand 都会走），
+     * 已在跑就不重复起 —— 重复起会泄漏第二套 8fps 循环，两套一起推等于双倍流量。
+     *
+     * 帧来源复用传入的 [ScreenCaptureService]（进程内唯一那个），JPEG base64 解回字节。
+     * 多这一趟 base64 编解码是有意的取舍：ScreenCaptureReal 的截图路径全进程只有一个
+     * 调用点（A14 纪律），为了省这趟转码而另开一条出字节的路径，等于开第二个调用点。
+     */
+    private fun startOrStopFramePush(screenCaptureService: ScreenCaptureService) {
+        if (!config.wallPushEnabled) {
+            framePushLoop?.let {
+                android.util.Log.i(TAG, "wall push disabled — stopping frame push loop")
+                it.stop()
+            }
+            framePushLoop = null
+            return
+        }
+        if (framePushLoop != null) return
+        if (!MediaProjectionHolder.hasAuthorization()) {
+            android.util.Log.w(TAG, "wall push enabled but MediaProjection not authorized — frames will be skipped until user authorizes")
+        }
+        android.util.Log.i(TAG, "wall push enabled — starting frame push loop (agentUuid=${config.agentUuid})")
+        framePushLoop = FramePushLoop(
+            // 每帧现取参数会更"新"，但 register 收敛 agentUuid 之后服务会被重启一次，
+            // 届时这里重建；未收敛时 SKIPPED_NOT_CONFIGURED 分支自带 5s 退避，不空转。
+            params = config.toFramePushParams(),
+            scope = scope,
+            frameProvider = {
+                screenCaptureService.captureToBase64()?.let {
+                    android.util.Base64.decode(it, android.util.Base64.NO_WRAP)
+                }
+            },
+        ).also { it.start() }
+    }
+
     override fun onDestroy() {
         wsClient?.stop()
         heartbeatLoop?.stop()
+        framePushLoop?.stop()
         collectPollLoop?.stop()
         accountScanLoopJob?.cancel()
         serviceJob.cancel()
@@ -446,6 +486,15 @@ class AgentService : Service() {
         // createVirtualDisplay 崩溃并殃及本类下面 ContentJudgmentService 的截图能力）。
         // DeviceAccountScanService.captureFailureDiagnostics() 复用这个共享引用，不再自建实例。
         sharedScreenCaptureService = screenCaptureService
+
+        // 「上墙」：把同一个 screenCaptureService 的帧循环推给中台工作机控制塔。
+        // 复用共享实例而不是新建一个——ScreenCaptureReal 是进程级单例，第二个调用点会撞上
+        // A14 的「同一 projection 只能 createVirtualDisplay 一次」纪律（见上面那段注释）。
+        // 与内容判定抢同一个 ImageReader 时由 ScreenCaptureService 的单飞锁裁决，撞上的那
+        // 一帧返回 null，FramePushLoop 记 SKIPPED_NO_FRAME 跳过，不重试也不报错。
+        // 开关默认关（config.wallPushEnabled），由用户在 App 里显式打开：推屏幕是持续把
+        // 客户机画面外传，不能装完就默默开始推。
+        startOrStopFramePush(screenCaptureService)
         // 用户2026-07-17拍板（判定点1d078987）：视频类内容判定改用真实音频转写，固定录制
         // 开头20秒系统音频（AudioRecordService.RECORD_DURATION_MS）。复用同一个 MediaProjection
         // 授权换出实例，不额外弹权限框。
