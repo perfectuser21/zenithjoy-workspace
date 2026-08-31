@@ -43,6 +43,15 @@ class AgentConfig(context: Context) {
         get() = prefs.getString(KEY_LAST_REGISTER_ERROR, "") ?: ""
         set(v) = prefs.edit().putString(KEY_LAST_REGISTER_ERROR, v).apply()
 
+    /**
+     * 「上墙」开关：是否把本机屏幕帧循环推给中台工作机控制塔（见 [FramePushLoop]）。
+     * 默认 **关** —— 推屏幕是持续把客户机画面外传，必须由用户在 App 里显式打开，
+     * 不能装完就默默开始推。
+     */
+    var wallPushEnabled: Boolean
+        get() = prefs.getBoolean(KEY_WALL_PUSH_ENABLED, false)
+        set(v) = prefs.edit().putBoolean(KEY_WALL_PUSH_ENABLED, v).apply()
+
     /** apiUrl: wss://autopilot.zenjoymedia.media/agent-ws */
     var apiUrl: String
         get() = prefs.getString(KEY_API_URL, DEFAULT_WS_URL) ?: DEFAULT_WS_URL
@@ -77,6 +86,7 @@ class AgentConfig(context: Context) {
         private const val KEY_API_URL = "api_url"
         private const val KEY_REGISTER_API_URL = "register_api_url"
         private const val KEY_LAST_REGISTER_ERROR = "last_register_error"
+        private const val KEY_WALL_PUSH_ENABLED = "wall_push_enabled"
 
         const val DEFAULT_WS_URL = "wss://autopilot.zenjoymedia.media/agent-ws"
 
