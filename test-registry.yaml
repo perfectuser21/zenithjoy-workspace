@@ -6111,6 +6111,14 @@ agent_suite:
     product: 工作机控制塔
     note: "workers-executor 路由层单测：agent 上报 frame/任务状态端点鉴权与字段校验。"
 
+  - id: worker-control-tower-agent-auth-unit
+    path: apps/api/src/middleware/worker-agent-auth.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "worker POST 面鉴权中间件单测：内部 token 与 agent license 二选一、license 状态分档 401/403、跨租户 403、agent 不存在 404、查询异常 500 不静默放行。"
+
   - id: worker-control-tower-mount-order-unit
     path: apps/api/src/routes/__tests__/workers-mount-order.test.ts
     type: unit

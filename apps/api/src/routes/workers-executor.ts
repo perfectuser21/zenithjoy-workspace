@@ -1,5 +1,5 @@
 /**
- * worker 活动协议 · 执行器面（internalAuth）
+ * worker 活动协议 · 执行器面（POST 鉴权：内部 token 或 agent license 二选一，见 workerPostAuth）
  *   POST /api/workers/:agentId/tasks          开始任务
  *   POST /api/workers/tasks/:id/steps          上报步骤（failed 必带三件套）
  *   POST /api/workers/tasks/:id/complete       完成
@@ -7,7 +7,7 @@
  * 设计：docs/superpowers/specs/2026-08-30-worker-control-tower-design.md
  */
 import express, { Router, Request, Response, NextFunction } from 'express';
-import { internalAuth } from '../middleware/internal-auth';
+import { workerPostAuth } from '../middleware/worker-agent-auth';
 import { startTask, reportStep, completeTask, WorkerTaskError } from '../services/worker-tasks-service';
 import { workerLive } from '../services/worker-live';
 import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
@@ -47,10 +47,9 @@ workersExecutorRouter.use((req: Request, res: Response, next: NextFunction) =>
   (req.method === 'POST' ? executorRateLimit(req, res, next) : next()));
 
 // 限流先于鉴权（CodeQL js/missing-rate-limiting：鉴权 handler 本身也要被限流覆盖）。
-// internalAuth 只对 POST 生效：本 router 与 workers-read 的读面串联挂在同一前缀
-// /api/workers 下，若无差别拦所有方法，GET 会在到达读面之前先被这里 401 掉。
-workersExecutorRouter.use((req: Request, res: Response, next: NextFunction) =>
-  (req.method === 'POST' ? internalAuth(req, res, next) : next()));
+// workerPostAuth 只对 POST 生效（原因见其实现），并在内部 token 之外接受客户机 agent
+// 自带的 X-Agent-License —— agent 拿不到内部编排 token，但要能推自己的屏幕帧。
+workersExecutorRouter.use(workerPostAuth);
 
 
 workersExecutorRouter.post('/tasks/:id/steps', requireTaskUuid, async (req: Request, res: Response) => {

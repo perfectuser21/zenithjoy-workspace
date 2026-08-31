@@ -10,8 +10,12 @@ vi.mock('../../services/worker-live', () => {
   const pushFrame = vi.fn(() => ({ seq: 1, at: Date.now(), bytes: Buffer.alloc(0) }));
   return { workerLive: { pushFrame } };
 });
+vi.mock('../../services/walking-skeleton.service', () => ({ validateLicense: vi.fn() }));
+vi.mock('../../db/connection', () => ({ default: { query: vi.fn() } }));
 import { startTask, reportStep, completeTask, WorkerTaskError } from '../../services/worker-tasks-service';
 import { workerLive } from '../../services/worker-live';
+import { validateLicense } from '../../services/walking-skeleton.service';
+import pool from '../../db/connection';
 import { workersExecutorRouter } from '../workers-executor';
 function makeApp() { const app = express(); app.use(express.json({ limit: '1mb' })); app.use('/api/workers', workersExecutorRouter); return app; }
 const app = makeApp();
@@ -42,6 +46,42 @@ describe('POST /api/workers/:agentId/tasks', () => {
     process.env.ZENITHJOY_INTERNAL_TOKEN = 'secret';
     const r = await request(app).post(`/api/workers/${AID}/tasks`).send({ title: '发布', steps: ['a'], executor_id: 'ex' });
     expect(r.status).toBe(401);
+  });
+});
+// 客户机 agent 用自带 license 推帧/开任务，拿不到内部编排 token；鉴权二选一（任一过即放行）。
+// 鉴权挂在 router.use 层对所有 POST 生效，故测 /:agentId/tasks 等效覆盖 /:agentId/frame。
+describe('POST /api/workers/:agentId/* — agent license 鉴权（与内部 token 二选一）', () => {
+  const LICENSE_KEY = 'ZJ-TESTORG-AAAA1111';
+  const TENANT_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const TENANT_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const licenseOk = (tenantId: string) => ({
+    ok: true as const,
+    license: { id: 'lic-1', license_key: LICENSE_KEY, tenant_id: tenantId, status: 'active', expires_at: '2099-01-01T00:00:00Z' },
+  });
+  const postTask = () => request(app).post(`/api/workers/${AID}/tasks`).set('X-Agent-License', LICENSE_KEY)
+    .send({ title: '发布', steps: ['a'], executor_id: 'ex' });
+
+  it('license 与 agent 同租户 → 放行（201），不需要内部 token', async () => {
+    process.env.ZENITHJOY_INTERNAL_TOKEN = 'secret';
+    (validateLicense as any).mockResolvedValue(licenseOk(TENANT_A));
+    (pool.query as any).mockResolvedValue({ rows: [{ tenant_id: TENANT_A }] });
+    (startTask as any).mockResolvedValue({ task_id: 't1', lease_until: '2026-01-01T00:00:00Z' });
+    const r = await postTask();
+    expect(r.status).toBe(201); expect(r.body.data.task_id).toBe('t1');
+  });
+
+  it('既无内部 token 也无 agent license → 401，不调 service', async () => {
+    process.env.ZENITHJOY_INTERNAL_TOKEN = 'secret';
+    const r = await request(app).post(`/api/workers/${AID}/tasks`).send({ title: '发布', steps: ['a'], executor_id: 'ex' });
+    expect(r.status).toBe(401); expect(startTask).not.toHaveBeenCalled();
+  });
+
+  it('license 属租户 A、agent 属租户 B → 403 TENANT_MISMATCH，不调 service', async () => {
+    process.env.ZENITHJOY_INTERNAL_TOKEN = 'secret';
+    (validateLicense as any).mockResolvedValue(licenseOk(TENANT_A));
+    (pool.query as any).mockResolvedValue({ rows: [{ tenant_id: TENANT_B }] });
+    const r = await postTask();
+    expect(r.status).toBe(403); expect(r.body.error.code).toBe('TENANT_MISMATCH'); expect(startTask).not.toHaveBeenCalled();
   });
 });
 describe('POST /api/workers/tasks/:id/steps', () => {
