@@ -54,6 +54,33 @@ python3 -c "import base64,sys;sys.stdout.buffer.write(base64.b64decode(sys.argv[
 for i in 1 2; do curl -sf "${AUTH[@]}" -H 'Content-Type: image/jpeg' --data-binary "@$TMP" "$API_BASE/api/workers/$AGENT_ID/frame" >/dev/null || fail "frame $i"; done
 ( curl -s -m 4 "${TEN[@]}" "$API_BASE/api/workers/$AGENT_ID/live" > "$TMP.live" ) || true
 N=$(grep -a -c -- '--frame' "$TMP.live" || true); [ "$N" -ge 1 ] || fail "live frames=$N"
+echo "[4c] POST 鉴权二选一：agent 自带 license 放行 / 跨租户 403 / 不认识的 license 401 / 无凭据 401"
+# 客户机 agent 只有装机 license_key，拿不到内部编排 token，但要能推自己的屏幕帧。
+# 两个前提缺一则本段断言不成立 —— 明确 SKIP 不假绿：
+#   ① 服务端未设 ZENITHJOY_INTERNAL_TOKEN 时 POST 面整体 dev 放行，任何请求都 202，测不出鉴权；
+#   ② 没有 DB 就种不出 license 行。
+if [ -z "${ZENITHJOY_INTERNAL_TOKEN:-}" ]; then
+  echo "    SKIP: 未设 ZENITHJOY_INTERNAL_TOKEN → POST 面处于 dev 放行，鉴权断言无意义"
+elif [ -z "${DATABASE_URL:-}" ] && [ -z "${PGHOST:-}" ]; then
+  echo "    SKIP: 无 DATABASE_URL/PGHOST，种不出 license 行"
+else
+  LPSQL=(psql -tA -v ON_ERROR_STOP=1)
+  [ -n "${DATABASE_URL:-}" ] && LPSQL=(psql -tA -v ON_ERROR_STOP=1 "$DATABASE_URL")
+  UUID_RE='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+  OWN_TENANT=$("${LPSQL[@]}" -c "SELECT tenant_id FROM zenithjoy.agents WHERE id = '${AGENT_ID}'" | grep -oE "$UUID_RE" | head -1)
+  [ -n "$OWN_TENANT" ] || fail "查不到 agent ${AGENT_ID} 的 tenant_id"
+  OWN_KEY="ZJ-WASMOKE-OWN${RANDOM}"
+  OTHER_KEY="ZJ-WASMOKE-OTH${RANDOM}"
+  "${LPSQL[@]}" -c "INSERT INTO zenithjoy.licenses (license_key, tier, max_machines, status, tenant_id, expires_at) VALUES ('${OWN_KEY}','free',5,'active','${OWN_TENANT}', now()+interval '1 day')" >/dev/null
+  OTHER_TENANT=$("${LPSQL[@]}" -c "INSERT INTO zenithjoy.tenants (name, license_key, plan) VALUES ('wa-smoke-other-${RANDOM}', 'wa-smoke-other-key-${RANDOM}', 'free') RETURNING id" | grep -oE "$UUID_RE" | head -1)
+  "${LPSQL[@]}" -c "INSERT INTO zenithjoy.licenses (license_key, tier, max_machines, status, tenant_id, expires_at) VALUES ('${OTHER_KEY}','free',5,'active','${OTHER_TENANT}', now()+interval '1 day')" >/dev/null
+  push_frame_as(){ curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: image/jpeg' "$@" --data-binary "@$TMP" "$API_BASE/api/workers/$AGENT_ID/frame"; }
+  C=$(push_frame_as -H "X-Agent-License: $OWN_KEY");   [ "$C" = "202" ] || fail "同租户 license 推帧 expected 202 got $C"
+  C=$(push_frame_as -H "X-Agent-License: $OTHER_KEY"); [ "$C" = "403" ] || fail "跨租户 license expected 403 got $C"
+  C=$(push_frame_as -H "X-Agent-License: ZJ-WASMOKE-NOSUCH0000"); [ "$C" = "401" ] || fail "不存在的 license expected 401 got $C"
+  C=$(push_frame_as);                                  [ "$C" = "401" ] || fail "无任何凭据 expected 401 got $C"
+  echo "    own=202 cross-tenant=403 unknown=401 none=401"
+fi
 echo "[4b] read-side auth: no identity → 401; client-claimed X-Tenant-Id alone → 401"
 C=$(curl -s -o /dev/null -w '%{http_code}' "$API_BASE/api/workers/$AGENT_ID/activity"); [ "$C" = "401" ] || fail "activity without identity expected 401 got $C"
 C=$(curl -s -o /dev/null -w '%{http_code}' -H "X-Tenant-Id: 00000000-0000-4000-8000-000000000000" "$API_BASE/api/workers/$AGENT_ID/activity"); [ "$C" = "401" ] || fail "activity with only X-Tenant-Id expected 401 got $C"
