@@ -11,6 +11,7 @@
 // 会在客户机上静默死掉 —— 这条断言就是拦这个的。
 
 import { describe, it, expect, vi } from 'vitest';
+import { EventEmitter } from 'node:events';
 import {
   buildCaptureScript,
   Base64LineDecoder,
@@ -155,10 +156,9 @@ describe('DesktopFrameSource', () => {
 
 /** 最小 ChildProcess 替身：只需要 stdout/stderr 的 'data' 与 kill()。 */
 function makeFakeChild() {
-  const { EventEmitter } = require('node:events');
   const child = new EventEmitter() as EventEmitter & {
-    stdout: InstanceType<typeof EventEmitter>;
-    stderr: InstanceType<typeof EventEmitter>;
+    stdout: EventEmitter;
+    stderr: EventEmitter;
     kill: () => void;
     killed: boolean;
   };
