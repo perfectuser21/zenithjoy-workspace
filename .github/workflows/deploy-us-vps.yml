@@ -61,17 +61,16 @@ jobs:
           # 用宿主机 bash 直接 ssh（Tailscale daemon 装在宿主机，能到 Tailscale IP）。
           # appleboy/ssh-action 在 Docker 里跑，容器走 bridge 网络，看不到宿主机 Tailscale 接口。
           KEY_FILE=$(mktemp)
+          SCRIPT_FILE=$(mktemp)
           printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
+          # trap 确保无论成功失败都清理临时文件
+          trap 'rm -f "$KEY_FILE" "$SCRIPT_FILE"' EXIT
 
-          # 用 bash -s -- "$DEPLOY_SHA" 把 SHA 作为 $1 传入，避免 heredoc 展开时注入
-          ssh -o StrictHostKeyChecking=no \
-              -o ConnectTimeout=30 \
-              -o ServerAliveInterval=60 \
-              -i "$KEY_FILE" \
-              -p 22 \
-              "${SSH_USER}@${SSH_HOST}" \
-              bash -s -- "$DEPLOY_SHA" << 'REMOTE_EOF'
+          # 将远端脚本写入本地临时文件（规避 GH Actions heredoc+SSH exit-code-swallow bug）：
+          # ssh ... << 'EOF' 模式下，heredoc EOF 触发时 SSH 可能在远端 bash 退出前返回 0，
+          # 导致 notify-failure 永远不触发。改用 < file 重定向可正确传播远端 exit code。
+          cat > "$SCRIPT_FILE" << 'REMOTE_EOF'
           set -euo pipefail
           DEPLOY_SHA="$1"
           REPO=/Users/administrator/perfect21/zenithjoy
@@ -123,7 +122,14 @@ jobs:
           echo "   ▶ 人工打开 staging 看过后，去 Actions 手点 promote-prod.yml 放行到生产 :5200。"
           REMOTE_EOF
 
-          rm -f "$KEY_FILE"
+          # 用文件重定向传入远端脚本，SSH 正确传播远端 exit code
+          ssh -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=30 \
+              -o ServerAliveInterval=60 \
+              -i "$KEY_FILE" \
+              -p 22 \
+              "${SSH_USER}@${SSH_HOST}" \
+              bash -s -- "$DEPLOY_SHA" < "$SCRIPT_FILE"
 
   notify-failure:
     name: Notify Brain on failure
