@@ -103,9 +103,13 @@ export class CommandBridge {
       return Promise.reject(new CommandBridgeError('NOT_CONNECTED', `agent ${agentId} 不在线（ws0 不可达）`));
     }
 
-    // 调用方已 clampTimeoutMs，此处再内联夹逼一次：兜底防未来新调用点漏 clamp，
-    // 也让 CodeQL js/resource-exhaustion 在本函数内看到 sanitizer（跨函数它追不到）
-    const safeTimeoutMs = Math.min(TIMEOUT_MAX_MS, Math.max(TIMEOUT_MIN_MS, timeoutMs));
+    // 调用方已 clampTimeoutMs，此处再显式边界检查一次：兜底防未来新调用点漏 clamp。
+    // 写成比较+常量 fallback 而非 Math.min/max——CodeQL js/resource-exhaustion 跨函数
+    // 追不到 clampTimeoutMs，且对 min/max 链的识别也不稳，只有这种形状它稳定认作 sanitizer
+    const safeTimeoutMs =
+      Number.isFinite(timeoutMs) && timeoutMs >= TIMEOUT_MIN_MS && timeoutMs <= TIMEOUT_MAX_MS
+        ? timeoutMs
+        : TIMEOUT_MAX_MS;
     return new Promise<CmdResultPayload>((resolve, reject) => {
       const timer = setTimeout(() => {
         // 先删 pending（含占位）再动作
