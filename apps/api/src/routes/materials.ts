@@ -20,6 +20,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import pool from '../db/connection';
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import { validateLicense } from '../services/walking-skeleton.service';
 import {
   createMaterialStorage,
@@ -63,6 +64,17 @@ export interface MaterialsRouterDeps {
 export function createMaterialsRouter(deps: MaterialsRouterDeps = {}): Router {
   const router = Router();
   const storage = deps.storage ?? createMaterialStorage();
+
+  // CodeQL js/missing-rate-limiting：这个端点既写 DB 又写文件系统，不限流就是
+  // 一个现成的 DoS 面——不停传大文件能把磁盘和连接池都吃光。
+  // 限流放在鉴权之前（鉴权 handler 本身也要被限流覆盖，同 workers-executor）。
+  // 60 次/分钟：iPhone 一次选几十张分批传够用，又挡得住脚本刷。
+  //
+  // ⚠️ 限流器必须在这里建一次、复用同一个实例。建在请求处理函数里等于每个请求
+  // 都新建一个计数器，限流完全不生效（express-rate-limit 会直接报
+  // ERR_ERL_CREATED_IN_REQUEST_HANDLER）。
+  const uploadRateLimit = simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn });
+  router.use(uploadRateLimit);
 
   router.post('/upload', upload.array('files'), async (req: Request, res: Response) => {
     const files = (req.files as Express.Multer.File[] | undefined) ?? [];
@@ -108,7 +120,10 @@ export function createMaterialsRouter(deps: MaterialsRouterDeps = {}): Router {
       }
 
       // ── 3. 逐个入库 + 上存储 ──
-      const takenAtList = normalizeTakenAt(req.body?.taken_at, files.length);
+      // CodeQL js/type-confusion-through-parameter-tampering：multipart 的同名字段
+      // 可能是字符串也可能是数组（客户端传一个 vs 传多个），下游必须拿到确定类型，
+      // 不能让"有时是 string 有时是 array"的值流进业务逻辑。
+      const takenAtList = normalizeTakenAt(toStringArray(req.body?.taken_at), files.length);
       const results: Array<{ id: string; file_name: string; deduped: boolean }> = [];
 
       for (let i = 0; i < files.length; i++) {
@@ -161,7 +176,7 @@ export function createMaterialsRouter(deps: MaterialsRouterDeps = {}): Router {
       const contentIns = await pool.query(
         `INSERT INTO zenithjoy.contents (tenant_id, title, body, type, platforms, status)
          VALUES ($1,$2,$3,$4,$5,'draft') RETURNING id`,
-        [tenantId, req.body?.title ?? null, req.body?.body ?? null, contentType, platforms],
+        [tenantId, firstString(req.body?.title), firstString(req.body?.body), contentType, platforms],
       );
       const contentId = contentIns.rows[0].id;
 
@@ -192,6 +207,12 @@ export function createMaterialsRouter(deps: MaterialsRouterDeps = {}): Router {
   return router;
 }
 
+/** 取第一个字符串值，拿不到给 null——直接进 SQL 参数，必须是确定类型。 */
+function firstString(raw: unknown): string | null {
+  const [v] = toStringArray(raw);
+  return v && v.trim() ? v.trim() : null;
+}
+
 function extractUploadToken(req: Request): string | null {
   const v = req.headers['x-upload-token'];
   if (typeof v === 'string' && v.trim()) return v.trim();
@@ -200,21 +221,29 @@ function extractUploadToken(req: Request): string | null {
   return typeof alt === 'string' && alt.trim() ? alt.trim() : null;
 }
 
-/** taken_at 可能是单值或数组（多文件时与 files 一一对应），统一成定长数组。 */
-function normalizeTakenAt(raw: unknown, count: number): Array<string | undefined> {
-  const list = Array.isArray(raw) ? raw : raw != null ? [raw] : [];
+/**
+ * 把「可能是 string、可能是 string[]、也可能是别的」的请求字段收窄成确定的 string[]。
+ * multipart 同名字段传一个是 string、传多个是数组——所有 body 字段都先过这里，
+ * 下游只面对一种类型（CodeQL js/type-confusion-through-parameter-tampering）。
+ */
+function toStringArray(raw: unknown): string[] {
+  if (typeof raw === 'string') return [raw];
+  if (Array.isArray(raw)) return raw.filter((v): v is string => typeof v === 'string');
+  return [];
+}
+
+/** taken_at 与 files 一一对应，统一成定长数组。 */
+function normalizeTakenAt(list: string[], count: number): Array<string | undefined> {
   return Array.from({ length: count }, (_, i) => {
     const v = list[i];
     return typeof v === 'string' && v.trim() ? v.trim() : undefined;
   });
 }
 
+/** platforms 同理先收窄；单值时按逗号分隔展开。 */
 function parsePlatforms(raw: unknown): string[] {
-  if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
-  if (typeof raw === 'string' && raw.trim()) {
-    return raw.split(',').map((s) => s.trim()).filter(Boolean);
-  }
-  return [];
+  const list = toStringArray(raw);
+  return list.flatMap((s) => s.split(',')).map((s) => s.trim()).filter(Boolean);
 }
 
 /** 内容 hash 是最可靠的去重键——改了文件名也认得出是同一个文件。 */
