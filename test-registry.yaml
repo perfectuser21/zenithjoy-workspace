@@ -6206,3 +6206,43 @@ agent_suite:
     status: active
     product: 工作机控制塔
     note: "工作机总览页组件单测：列表渲染/筛选/跳转详情页。"
+
+  - id: openclaw-bridge-devices-route-unit
+    path: apps/api/src/routes/__tests__/devices.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: OpenClaw信号桥
+    note: "设备指令桥路由单测：internalAuth-only+prod缺env 503、租户开关 fail-closed、action 白名单、原子频控 429、idempotency 归属 409、504 outcome:unknown、版本检查 409。"
+
+  - id: openclaw-bridge-command-bridge-unit
+    path: apps/api/src/services/__tests__/command-bridge.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: OpenClaw信号桥
+    note: "CommandBridge 单测：pending 时序（先删后动/迟到回执只UPDATE/来源校验）、每设备1在途、unregister 即时 502、timeoutMs clamp。"
+
+  - id: openclaw-bridge-protocol-cmd-unit
+    path: apps/api/src/schemas/__tests__/agent-protocol-cmd.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: OpenClaw信号桥
+    note: "cmd/cmd_result 协议分支单测：能 parse 设备端真实信封形状（inReplyTo 关联键）。"
+
+  - id: openclaw-bridge-registry-race-unit
+    path: apps/api/src/services/__tests__/agent-registry-unregister-race.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: OpenClaw信号桥
+    note: "registry 快速重连竞态回归：unregister 校验 ws 身份，旧 socket close 不误删新连接 entry。"
+
+  - id: openclaw-bridge-agent-ws-cmd-unit
+    path: apps/api/src/services/__tests__/agent-ws-cmd.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: OpenClaw信号桥
+    note: "agent-ws cmd_result 分发单测：上行回执路由到 commandBridge.handleCmdResult。"
