@@ -116,3 +116,4 @@ rpa-failure-scene-snapshot-smoke.sh
 rpa-locator-assist-smoke.sh
 collab-notes-smoke.sh
 worker-activity-smoke.sh
+agent-cmd-executor-smoke.sh
