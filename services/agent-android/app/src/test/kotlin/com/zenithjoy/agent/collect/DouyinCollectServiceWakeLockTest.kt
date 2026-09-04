@@ -49,7 +49,9 @@ class DouyinCollectServiceWakeLockTest {
         val src = serviceSource()
         assertTrue(
             "startCollect（Stage1 关键词搜索入口）必须在启动采集前拿到 wakeLock，否则屏幕一黑协程就可能冻结",
-            Regex("private fun startCollect\\([^)]*\\)[\\s\\S]{0,400}acquireCollectWakeLock").containsMatchIn(src),
+            // 窗口 400→800：OpenClaw 信号桥·件1 在入口最前面加了 lease 拒单守卫（守卫必须在
+            // 一切状态变更之前，包括拿 wakeLock），把 acquire 推后了约 300 字符；断言意图不变。
+            Regex("private fun startCollect\\([^)]*\\)[\\s\\S]{0,800}acquireCollectWakeLock").containsMatchIn(src),
         )
     }
 
@@ -58,7 +60,8 @@ class DouyinCollectServiceWakeLockTest {
         val src = serviceSource()
         assertTrue(
             "startStage2Collect（Stage2 视频URL评论采集入口）同样需要 wakeLock，跟 Stage1 一样会被冻结",
-            Regex("private fun startStage2Collect\\([^)]*\\)[\\s\\S]{0,400}acquireCollectWakeLock").containsMatchIn(src),
+            // 窗口 400→800：同 startCollect，lease 拒单守卫在入口最前，acquire 相应推后。
+            Regex("private fun startStage2Collect\\([^)]*\\)[\\s\\S]{0,800}acquireCollectWakeLock").containsMatchIn(src),
         )
     }
 

@@ -19,6 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.zenithjoy.agent.account.DouyinLaunchTrampoline
+import com.zenithjoy.agent.command.AutomationLease
 import com.zenithjoy.agent.uia.RecoveryAction
 import com.zenithjoy.agent.AgentConfig
 import com.zenithjoy.agent.AgentService
@@ -176,6 +177,12 @@ class DouyinDmOutreachService : AccessibilityService() {
         dmAssignmentId: String,
         accountLabel: String,
     ) {
+        // OpenClaw 信号桥·件1：远程指令会话持租约期间拒单。直接 return 不 ack——
+        // 中台 ack 看门狗会重发 dispatch，租约释放（≤120s 无指令自动过期）后任务自然恢复。
+        if (AutomationLease.isHeldByOther(AutomationLease.OWNER_NATIVE)) {
+            android.util.Log.w(TAG, "task rejected: remote command session holds automation lease")
+            return
+        }
         // 本 sprint 起该字段承载 lead 的精确抖音号（供 Step 2 搜索定位使用），不再是跳转 URL——
         // dm_assignments 派单 payload 字面定义就是"lead 的抖音号"（见 Golden Path Step 1）。
         val targetDouyinId = profileUrl

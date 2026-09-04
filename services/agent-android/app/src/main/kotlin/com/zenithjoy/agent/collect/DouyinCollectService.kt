@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import com.zenithjoy.agent.command.AutomationLease
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -202,6 +203,12 @@ class DouyinCollectService : AccessibilityService() {
     // ── 任务入口 ──────────────────────────────────────────────────────────────
 
     private fun startCollect(keyword: String, taskId: String) {
+        // OpenClaw 信号桥·件1：远程指令会话持租约期间拒单。直接 return 不 ack——
+        // 中台 ack 看门狗会重发 dispatch，租约释放（≤120s 无指令自动过期）后任务自然恢复。
+        if (AutomationLease.isHeldByOther(AutomationLease.OWNER_NATIVE)) {
+            android.util.Log.w(TAG, "task rejected: remote command session holds automation lease")
+            return
+        }
         currentKeyword = keyword
         currentTaskId = taskId
         currentMode = Mode.STAGE1_SEARCH
@@ -250,6 +257,12 @@ class DouyinCollectService : AccessibilityService() {
 
     // Stage2 入口：通过深链打开指定视频，进评论区抓评论
     private fun startStage2Collect(videoUrl: String, videoId: String, taskId: String) {
+        // OpenClaw 信号桥·件1：远程指令会话持租约期间拒单。直接 return 不 ack——
+        // 中台 ack 看门狗会重发 dispatch，租约释放（≤120s 无指令自动过期）后任务自然恢复。
+        if (AutomationLease.isHeldByOther(AutomationLease.OWNER_NATIVE)) {
+            android.util.Log.w(TAG, "task rejected: remote command session holds automation lease")
+            return
+        }
         currentKeyword = videoUrl
         currentTaskId = taskId
         currentMode = Mode.STAGE2_VIDEO_URL
