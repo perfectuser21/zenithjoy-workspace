@@ -24,9 +24,10 @@ import axios from 'axios';
 
 const GRADING_TIMEOUT_MS = 20_000;
 const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';
-// 2026-09-04 默认切 gemini-2.5-flash-official：gpt-5.4-mini 渠道当日对 CI/本机持续慢
-// （同 prompt 42-46s vs gemini 2-6s，gp2 23b/23c 分档全 NULL 实证）；渠道恢复可经 env 切回。
-const GRADING_MODEL = process.env.GRADING_MODEL || 'gemini-2.5-flash-official';
+// 2026-09-04 切回 deepseek-v4-flash：#58 渠道欠费已恢复（实测 200/1.9-4.6s）。当日
+// gpt-5.4-mini 渠道持续慢（42-46s，gp2 23b 三连 NULL）；曾误切 gemini 半小时——本文件
+// 下方注释写明 gemini 思考关不掉且随机吃光预算"加预算救不了"，0820 已淘汰，勿再切。
+const GRADING_MODEL = process.env.GRADING_MODEL || 'deepseek-v4-flash';
 
 const VALID_GRADES = ['高意向', '精准', '感兴趣', '其他'] as const;
 
@@ -61,7 +62,7 @@ export async function gradeComments(
       {
         model: GRADING_MODEL,
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 1500, // gemini 不认 reasoning_effort，思考(观测189~736)吃预算，500 必截断
+        max_tokens: 500,
         temperature: 0.1,
         // 关掉思考链——这一行是这个功能能不能工作的开关，别删。
         //
