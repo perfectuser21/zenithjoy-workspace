@@ -43,3 +43,8 @@ test('PR #1539 真实 DeepSeek 输出格式："没有发现以下问题：\\n- �
   const input = '没有发现以下问题：\n- 🔴 没有逻辑问题或安全风险\n- 🟡 没有需要优化的代码质量问题';
   assert.equal(run(input), 0);
 });
+
+test('PR #1768 真实事故：bullet 是"🔴 无严重逻辑或安全问题"（无+严重+其他词+问题，无冒号无标题）→ 不阻塞', () => {
+  const input = '未发现问题：\n- 🔴 无严重逻辑或安全问题\n- 🟡 无优化建议';
+  assert.equal(run(input), 0);
+});

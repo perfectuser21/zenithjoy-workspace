@@ -66,3 +66,18 @@ test('PR#1539真实事故复现：DeepSeek "没有发现以下问题：\\n- 🔴
   const result = run(review);
   assert.equal(result.status, 0, `应判定通过(exit 0)，实际 exit ${result.status}: ${result.stderr}`);
 });
+
+test('PR#1768真实事故复现：DeepSeek "未发现问题：\\n- 🔴 无严重逻辑或安全问题" 格式不应判为有问题', () => {
+  const review = [
+    '这是一个简单的版本号更新变更，我来进行审查：',
+    '',
+    '🟢 正面反馈：',
+    '- 版本号更新符合语义化版本规范',
+    '',
+    '未发现问题：',
+    '- 🔴 无严重逻辑或安全问题',
+    '- 🟡 无优化建议',
+  ].join('\n');
+  const result = run(review);
+  assert.equal(result.status, 0, `应判定通过(exit 0)，实际 exit ${result.status}: ${result.stderr}`);
+});

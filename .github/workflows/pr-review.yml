@@ -135,6 +135,12 @@ jobs:
             --body "$COMMENT_BODY" 2>/dev/null || \
           echo "评论发布失败（可能权限不足），继续执行严重问题检测"
 
+      - name: 检测器自检（回归测试，防复发——已4次真实事故：PR#1527/1528/1539/1768）
+        run: |
+          echo "检测器本身先跑一遍回归测试，测试红就不该用它去判真实审查结果"
+          node --test scripts/devgate/detect-review-issues.test.js
+          node --test scripts/devgate/__tests__/detect-review-issues.test.js
+
       - name: 检测严重问题（🔴 则 job 失败）
         run: |
           echo "正在检测审查结果中是否包含🔴严重问题..."
