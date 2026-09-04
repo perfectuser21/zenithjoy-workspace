@@ -214,6 +214,21 @@ jobs:
       - name: dashboard 依赖漏洞门禁（含 dev）
         run: bash .github/workflows/scripts/audit-gate.sh apps/dashboard
 
+  # ─── OpenClaw scripts ────────────────────────────────────────────────
+  # phonectl（件3 信号桥薄壳）等 scripts/openclaw/ 下脚本的 Node 单测。这些是根级
+  # 独立脚本，不属于任何 workspace，不会被 apps/api 的 vitest 捡到——不接进某个
+  # 具体闸就是孤儿测试（devgate/detect-review-issues.js 已吃过这个亏，见 PR#1769：
+  # 两份回归测试写了半年从未跑过，同一类误判复发 4 次）。无条件跑（纯 node --test，
+  # 无需装依赖，几秒钟），不按变更路径过滤。
+  openclaw-scripts-test:
+    name: OpenClaw Scripts Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: node --test scripts/openclaw
+        run: node --test scripts/openclaw/**/*.test.js
+
   # ─── Agent Line Modules ──────────────────────────────────────────────
   # 2026-07-12 巡检抓漏：line-module TS 编译此前只在 push main 的 agent-installpack
   # 跑，PR 阶段无闸 → PR#1245 的 TS2459 直接红在主干。此 job 把同一构建脚本前移到 PR 闸。
@@ -251,6 +266,7 @@ jobs:
       - api-typecheck
       - geoai-build
       - security
+      - openclaw-scripts-test
       - line-module-build
     if: always()
     runs-on: ubuntu-latest
@@ -309,6 +325,12 @@ jobs:
           # Security (always)
           if [ "${{ needs.security.result }}" != "success" ]; then
             echo "FAIL: Security Audit (${{ needs.security.result }})"
+            FAILED=true
+          fi
+
+          # OpenClaw scripts (always)
+          if [ "${{ needs.openclaw-scripts-test.result }}" != "success" ]; then
+            echo "FAIL: OpenClaw Scripts Test (${{ needs.openclaw-scripts-test.result }})"
             FAILED=true
           fi
 
