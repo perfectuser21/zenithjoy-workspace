@@ -213,7 +213,8 @@ jobs:
   product-map-contract:
     name: Product Map Contract
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # npm ci 冷缓存实测 >5min（2026-09-04 两连超时 cancel），5 分钟窗口对含 npm ci 的 job 不够
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -235,7 +236,8 @@ jobs:
   acceptance-spec-contract:
     name: Line02 Acceptance Spec Contract
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # 同上：npm ci 冷缓存下 5 分钟不够
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
