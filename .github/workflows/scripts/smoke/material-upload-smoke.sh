@@ -62,14 +62,19 @@ C=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$UP" -H "X-Upload-Token: $BA
 echo "[3] 一次传 2 张图 → 200，1 个 content + 2 个 material"
 R=$(curl -sf -X POST "$UP" -H "X-Upload-Token: $LICENSE_KEY" -F "files=@$IMG1" -F "files=@$IMG2") \
   || fail "上传失败"
+# 断言不用 f-string：f-string 表达式里不能出现反斜杠转义的引号，而这段又嵌在
+# shell 单引号里没法改用单引号——直接字符串拼接最稳（本 PR 首轮 CI 实证）。
 echo "$R" | python3 -c '
 import sys, json
 d = json.load(sys.stdin)["data"]
-assert d["content_id"], "没有 content_id"
-assert d["type"] == "image", f"type 应为 image，实际 {d[\"type\"]}"
-assert len(d["materials"]) == 2, f"应有 2 个 material，实际 {len(d[\"materials\"])}"
-assert all(not m["deduped"] for m in d["materials"]), "首次上传不该被判重"
-print(f"    content_id={d[\"content_id\"]} materials={len(d[\"materials\"])}")
+cid = d["content_id"]
+typ = d["type"]
+mats = d["materials"]
+assert cid, "没有 content_id"
+assert typ == "image", "type 应为 image，实际 " + str(typ)
+assert len(mats) == 2, "应有 2 个 material，实际 " + str(len(mats))
+assert all(not m["deduped"] for m in mats), "首次上传不该被判重"
+print("    content_id=" + str(cid) + " materials=" + str(len(mats)))
 ' || fail "响应内容不符"
 
 echo "[4] 同一批再传一次 → 全部 deduped（服务端去重，重复触发无害）"
