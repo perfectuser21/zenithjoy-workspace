@@ -69,7 +69,7 @@ const JUDGMENT_MODEL = 'gemini-2.5-flash-official';
 // 同一 TOAPIS 下主判 gemini 每轮 7s 稳过是活证据）。代价：与主判同厂商，跨厂商交叉验证
 // 意图暂时让位于可用性——gpt-5.4-mini 渠道恢复后可经 COMMANDER_MODEL env 切回。
 // gemini 不认 reasoning_effort（忽略无害），max_tokens 必须给够（TOAPIS 的 max_tokens
-// 含 reasoning_tokens，PR#1684 前科），故 commander 请求处 max_tokens=600。
+// 含 reasoning_tokens，PR#1684 前科；主判观测 gemini reasoning 189~736），故 commander max_tokens=1000。
 const COMMANDER_MODEL = process.env.COMMANDER_MODEL || 'gemini-2.5-flash-official';
 
 // ── judgeVideo：核心判决函数 ─────────────────────────────────────────────────
@@ -388,7 +388,7 @@ async function commanderReview(
           {
             model: COMMANDER_MODEL,
             messages: [{ role: 'user', content: prompt }],
-            max_tokens: 600,
+            max_tokens: 1000,
             temperature: 0.1,
             // gpt-5.4-mini 认这个参数（0823 真调 reasoning_tokens=0），关思考让短判决更稳更快；
             // 若换回 deepseek 系列同样适用，只有 gemini 不认（那边只能靠给够 max_tokens）。
