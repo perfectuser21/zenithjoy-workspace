@@ -30,10 +30,12 @@ export interface JudgeVideoOptions {
 
 // ── 常量 ─────────────────────────────────────────────────────────────────────
 const JUDGMENT_TIMEOUT_MS = 20_000;  // 带图/音判定较慢，留余量（服务端即便 agent 8s 超时也要写库）
-// commander 单独放宽：2026-09-04 实测 TOAPIS gpt-5.4-mini 单字请求延迟即 12.4s（渠道慢而非死），
-// 20s 窗口下真实判决 prompt 间歇超时（gp2 smoke Step 8d / rpa-locator extract 隔次 timeout_保守拒 同根因）。
-// commander 是"存疑复核"非实时路径，等得起；渠道恢复后此值只影响故障时的失败等待上限。
-const COMMANDER_TIMEOUT_MS = 45_000;
+// commander 超时策略（2026-09-04 两轮实测修订）：TOAPIS gpt-5.4-mini 两个域名都呈
+// "首跑 42-46s、后续 2-3s"的冷启动特征（p50 快 p95 慢）——单次 45s 长等仍卡 p95 边缘
+// 间歇超时（gp2 Step 8d 三连挂实证），改为 20s×2 次：两次独立采样把"双慢"概率平方，
+// 总预算 40s 反而更短更稳。commander 是"存疑复核"非实时路径。
+const COMMANDER_TIMEOUT_MS = 20_000;
+const COMMANDER_ATTEMPTS = 2;
 /**
  * 主判 max_tokens——**这是含 reasoning_tokens 的 completion 总预算，不是"正文上限"**。
  *
@@ -371,22 +373,33 @@ async function commanderReview(
 
   const prompt = buildCommanderPrompt(targetProfileDesc, transcript, primaryReason, title);
   try {
-    const resp = await axios.post(
-      `${TOAPIS_BASE}/chat/completions`,
-      {
-        model: COMMANDER_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 100,
-        temperature: 0.1,
-        // gpt-5.4-mini 认这个参数（0823 真调 reasoning_tokens=0），关思考让短判决更稳更快；
-        // 若换回 deepseek 系列同样适用，只有 gemini 不认（那边只能靠给够 max_tokens）。
-        reasoning_effort: 'none',
-      },
-      {
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        timeout: COMMANDER_TIMEOUT_MS,
+    let resp;
+    // 超时快速重试（仅 ECONNABORTED）：渠道"首慢后快"特征下第二次通常 2-3s 返回
+    for (let attempt = 1; ; attempt++) {
+      try {
+        resp = await axios.post(
+          `${TOAPIS_BASE}/chat/completions`,
+          {
+            model: COMMANDER_MODEL,
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: 100,
+            temperature: 0.1,
+            // gpt-5.4-mini 认这个参数（0823 真调 reasoning_tokens=0），关思考让短判决更稳更快；
+            // 若换回 deepseek 系列同样适用，只有 gemini 不认（那边只能靠给够 max_tokens）。
+            reasoning_effort: 'none',
+          },
+          {
+            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            timeout: COMMANDER_TIMEOUT_MS,
+          }
+        );
+        break;
+      } catch (inner) {
+        const innerTimeout = axios.isAxiosError(inner) && inner.code === 'ECONNABORTED';
+        if (!innerTimeout || attempt >= COMMANDER_ATTEMPTS) throw inner;
+        console.warn('[content-judgment] commander timeout on attempt %d, retrying', attempt);
       }
-    );
+    }
     const text: string = resp.data?.choices?.[0]?.message?.content ?? '';
     const verdict = parseCommanderVerdict(text);
     return finalize(verdict, verdict === 'matched' ? '准' : '不准');
