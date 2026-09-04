@@ -30,6 +30,14 @@ class CommandWiringSourceTest {
         assertTrue(s.contains("AutomationLease.currentOwner()") && s.contains("ScanMutex.busy"))
     }
 
+    @Test fun `tree_dump 回执带 nodeCount`() {
+        val s = src("AgentService.kt")
+        assertTrue(
+            "PrepPRD 指令表：tree_dump 回执必须带 truncated 标志+节点数",
+            s.contains("\"nodeCount\""),
+        )
+    }
+
     @Test fun `远程协助开关存在且默认开`() {
         val s = src("AgentConfig.kt")
         assertTrue(s.contains("remoteControlEnabled"))
