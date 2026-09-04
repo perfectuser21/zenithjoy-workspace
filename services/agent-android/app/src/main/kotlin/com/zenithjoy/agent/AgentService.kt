@@ -615,6 +615,12 @@ class AgentService : Service() {
                         mapOf(
                             "tree" to tree,
                             "truncated" to tree.endsWith(UiTreeSnapshot.TRUNCATION_MARK),
+                            // 格式契约（UiTreeSnapshot.formatLine）：每节点恰好一行，行首为
+                            // `d{深度}`（d+数字）；唯一的非节点行是截断标记 "...[truncated]"，
+                            // 以 '.' 开头不会被误计。按行前缀计数即节点数，不改 serialize 签名。
+                            "nodeCount" to tree.lineSequence().count { line ->
+                                line.firstOrNull() == 'd' && line.getOrNull(1)?.isDigit() == true
+                            },
                         )
                     }
                 }
