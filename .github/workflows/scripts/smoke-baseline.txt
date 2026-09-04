@@ -118,3 +118,4 @@ collab-notes-smoke.sh
 worker-activity-smoke.sh
 agent-cmd-executor-smoke.sh
 device-command-bridge-smoke.sh
+material-upload-smoke.sh

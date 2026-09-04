@@ -815,6 +815,38 @@ tests:
     product: AI员工
     note: "Walking Skeleton #1 — Agent heartbeat 循环 + queued_tasks 派发"
 
+  - id: material-upload-core
+    path: apps/api/src/services/__tests__/material-upload.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 素材上传链路
+    note: "素材上传纯逻辑：作品类型推断（视频图片不能混）、去重键（租户永远进键）、存储 key（路径穿越逃不出租户目录）。"
+
+  - id: material-upload-endpoint
+    path: apps/api/src/routes/__tests__/materials.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 素材上传链路
+    note: "上传端点契约：租户从凭据反查且客户端自报 tenant_id 被忽略（防提权）、一次上传建一个作品、混传 400、重复上传 deduped 且不重复写存储。"
+
+  - id: material-storage-abstraction
+    path: apps/api/src/services/__tests__/material-storage.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 素材上传链路
+    note: "存储抽象层：COS 四个 env 缺一不可、未配置时回落内存实现并打警告不静默假装成功、内存实现真读文件内容。"
+
+  - id: material-storage-cos-slice
+    path: apps/api/src/services/__tests__/material-storage-cos.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 素材上传链路
+    note: "COS 分片决策纯函数：大文件必须走分片（单请求传 2GB 必超时，症状是「偶尔传不上去」最难查）。"
+
   - id: agent-ws1-qr-bind-douyin
     path: services/agent/src/handlers/__tests__/qr-bind-douyin.test.ts
     type: unit
