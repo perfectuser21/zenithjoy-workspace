@@ -30,6 +30,23 @@ import com.zenithjoy.agent.collect.DmOutreachRateLimiter
 import com.zenithjoy.agent.collect.DouyinCollectService
 import com.zenithjoy.agent.collect.DouyinDmOutreachService
 import com.zenithjoy.agent.collect.RandomDelay
+import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.graphics.Path
+import android.os.Bundle
+import android.view.accessibility.AccessibilityNodeInfo
+import com.zenithjoy.agent.account.ScanMutex
+import com.zenithjoy.agent.command.AutomationLease
+import com.zenithjoy.agent.command.CmdOutcome
+import com.zenithjoy.agent.command.CommandExecutor
+import com.zenithjoy.agent.command.CommandProtocol
+import com.zenithjoy.agent.command.CommandQueue
+import com.zenithjoy.agent.command.GestureRunner
+import com.zenithjoy.agent.command.LaunchRunner
+import com.zenithjoy.agent.command.ParseOutcome
+import com.zenithjoy.agent.command.ScreenshotRunner
+import com.zenithjoy.agent.command.TypeRunner
+import com.zenithjoy.agent.uia.UiTreeSnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -83,6 +100,8 @@ class AgentService : Service() {
     private val registerCallInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
     private var collectPollLoop: AcquisitionCollectPollLoop? = null
     private var accountScanLoopJob: kotlinx.coroutines.Job? = null
+    // OpenClaw 信号桥·件1：统一指令队列（initAgent 内装配，onDestroy 清理）
+    private var commandQueue: CommandQueue? = null
 
     private val collectTaskQueue = CollectTaskQueue()
     private var reporter: CollectReporter? = null
@@ -370,6 +389,8 @@ class AgentService : Service() {
         unregisterReceiver(warmupResultReceiver)
         DouyinCollectService.onCollectResult = null
         DouyinCollectService.onVideoCardResult = null
+        commandQueue?.close()
+        commandQueue = null
         sharedScreenCaptureService = null
         super.onDestroy()
     }
@@ -386,9 +407,15 @@ class AgentService : Service() {
         wsClient = WsClient(
             config = config,
             scope = scope,
-            onMessage = { type, payload, _ ->
+            onMessage = { type, payload, msgId ->
                 android.util.Log.d(TAG, "ws0 message: $type")
-                if (type == "collect_task") routeCollectTask(payload)
+                when (type) {
+                    "collect_task" -> routeCollectTask(payload)
+                    "cmd" -> routeCommand(payload, msgId)
+                }
+            },
+            busyProbe = {
+                AutomationLease.currentOwner() != null || ScanMutex.busy
             },
         )
         wsClient?.start()
@@ -486,6 +513,118 @@ class AgentService : Service() {
         // createVirtualDisplay 崩溃并殃及本类下面 ContentJudgmentService 的截图能力）。
         // DeviceAccountScanService.captureFailureDiagnostics() 复用这个共享引用，不再自建实例。
         sharedScreenCaptureService = screenCaptureService
+
+        // ── OpenClaw 信号桥·件1：统一指令处理器装配（sprint 09041528）────────────
+        val cmdWhitelist = setOf(
+            "com.ss.android.ugc.aweme",          // 抖音
+            "com.ss.android.ugc.aweme.lite",     // 抖音极速版
+        )
+        val cmdForegroundPkg: () -> String? = {
+            DouyinCollectService.commandHost()?.rootInActiveWindow?.packageName?.toString()
+        }
+        val executor = CommandExecutor(
+            remoteControlEnabled = { config.remoteControlEnabled },
+            nativeBusy = { ScanMutex.busy },
+            foregroundPkg = cmdForegroundPkg,
+            gesture = GestureRunner(dispatch = { points, durationMs, onResult ->
+                val svc = DouyinCollectService.commandHost()
+                if (svc == null) {
+                    false
+                } else {
+                    val path = Path().apply {
+                        moveTo(points.first().first, points.first().second)
+                        points.drop(1).forEach { lineTo(it.first, it.second) }
+                    }
+                    val g = GestureDescription.Builder()
+                        .addStroke(GestureDescription.StrokeDescription(path, 0, durationMs))
+                        .build()
+                    svc.dispatchGesture(g, object : AccessibilityService.GestureResultCallback() {
+                        override fun onCompleted(gd: GestureDescription?) { onResult(true) }
+                        override fun onCancelled(gd: GestureDescription?) { onResult(false) }
+                    }, null)
+                }
+            }),
+            screenshot = ScreenshotRunner(
+                initialized = { sharedScreenCaptureService != null },
+                hasAuthorization = { MediaProjectionHolder.hasAuthorization() },
+                capture = { sharedScreenCaptureService?.captureToBase64() },
+                screenSize = { resources.displayMetrics.let { it.widthPixels to it.heightPixels } },
+            ),
+            type = TypeRunner(
+                foregroundPkg = cmdForegroundPkg,
+                whitelist = cmdWhitelist,
+                setTextOnFocusedEditable = { text ->
+                    val focus = DouyinCollectService.commandHost()
+                        ?.rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                    if (focus == null || !focus.isEditable) {
+                        null
+                    } else {
+                        val args = Bundle().apply {
+                            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+                        }
+                        focus.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+                    }
+                },
+            ),
+            launch = LaunchRunner(
+                whitelist = cmdWhitelist,
+                packageExists = { pkg ->
+                    try { packageManager.getPackageInfo(pkg, 0); true } catch (e: Exception) { false }
+                },
+                startLaunch = { pkg ->
+                    try {
+                        val li = packageManager.getLaunchIntentForPackage(pkg)
+                            ?.apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+                        if (li == null) {
+                            false
+                        } else {
+                            try {
+                                applicationContext.startActivity(
+                                    DouyinLaunchTrampoline.buildTrampolineIntentForTarget(applicationContext, li),
+                                )
+                            } catch (e: Exception) {
+                                applicationContext.startActivity(li)
+                            }
+                            true
+                        }
+                    } catch (e: Exception) { false }
+                },
+                foregroundPkg = cmdForegroundPkg,
+            ),
+            globalAction = { name ->
+                val svc = DouyinCollectService.commandHost()
+                when {
+                    svc == null -> false
+                    name == "back" -> svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+                    else -> svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
+                }
+            },
+            deviceInfo = {
+                mapOf(
+                    "model" to android.os.Build.MODEL,
+                    "manufacturer" to android.os.Build.MANUFACTURER,
+                    "androidVersion" to android.os.Build.VERSION.RELEASE,
+                    "agentVersion" to BuildConfig.VERSION_NAME,
+                    "screenWidth" to resources.displayMetrics.widthPixels,
+                    "screenHeight" to resources.displayMetrics.heightPixels,
+                )
+            },
+            treeDump = {
+                DouyinCollectService.commandHost()?.rootInActiveWindow?.let { root ->
+                    UiTreeSnapshot.serialize(UiTreeSnapshot.fromAccessibilityNode(root))?.let { tree ->
+                        mapOf(
+                            "tree" to tree,
+                            "truncated" to tree.endsWith(UiTreeSnapshot.TRUNCATION_MARK),
+                        )
+                    }
+                }
+            },
+        )
+        commandQueue = CommandQueue(
+            scope = scope,
+            execute = { req -> executor.execute(req) },
+            sendResult = { payload -> wsClient?.sendResult(payload) ?: false },
+        )
 
         // 「上墙」：把同一个 screenCaptureService 的帧循环推给中台工作机控制塔。
         // 复用共享实例而不是新建一个——ScreenCaptureReal 是进程级单例，第二个调用点会撞上
@@ -809,6 +948,25 @@ class AgentService : Service() {
             .setContentText(getString(R.string.notification_text))
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .build()
+    }
+
+    /** cmd 指令入口：解析→入队。解析失败立即回执（不进队列）。 */
+    private fun routeCommand(payload: Map<*, *>, msgId: String?) {
+        val dm = resources.displayMetrics
+        when (val parsed = CommandProtocol.parse(msgId, payload, dm.widthPixels, dm.heightPixels)) {
+            is ParseOutcome.Ok -> commandQueue?.submit(parsed.request)
+            is ParseOutcome.Err -> {
+                if (msgId != null) {
+                    wsClient?.sendResult(
+                        CommandProtocol.buildResult(
+                            msgId,
+                            CmdOutcome(false, parsed.code, mapOf("detail" to parsed.detail)),
+                            null,
+                        ),
+                    )
+                }
+            }
+        }
     }
 
     private fun routeCollectTask(payload: Map<*, *>) {

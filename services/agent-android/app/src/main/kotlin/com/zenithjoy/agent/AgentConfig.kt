@@ -52,6 +52,15 @@ class AgentConfig(context: Context) {
         get() = prefs.getBoolean(KEY_WALL_PUSH_ENABLED, false)
         set(v) = prefs.edit().putBoolean(KEY_WALL_PUSH_ENABLED, v).apply()
 
+    /**
+     * 「远程协助」开关：是否接受中台下发的设备指令（screenshot/tap/type 等，见 command 包）。
+     * 默认 **开**（Alex 2026-09-04 拍板，全部机型）；保留租户/用户级关闭能力，
+     * 关闭时敏感指令回 REMOTE_CONTROL_DISABLED。
+     */
+    var remoteControlEnabled: Boolean
+        get() = prefs.getBoolean(KEY_REMOTE_CONTROL_ENABLED, true)
+        set(v) = prefs.edit().putBoolean(KEY_REMOTE_CONTROL_ENABLED, v).apply()
+
     /** apiUrl: wss://autopilot.zenjoymedia.media/agent-ws */
     var apiUrl: String
         get() = prefs.getString(KEY_API_URL, DEFAULT_WS_URL) ?: DEFAULT_WS_URL
@@ -87,6 +96,7 @@ class AgentConfig(context: Context) {
         private const val KEY_REGISTER_API_URL = "register_api_url"
         private const val KEY_LAST_REGISTER_ERROR = "last_register_error"
         private const val KEY_WALL_PUSH_ENABLED = "wall_push_enabled"
+        private const val KEY_REMOTE_CONTROL_ENABLED = "remote_control_enabled"
 
         const val DEFAULT_WS_URL = "wss://autopilot.zenjoymedia.media/agent-ws"
 

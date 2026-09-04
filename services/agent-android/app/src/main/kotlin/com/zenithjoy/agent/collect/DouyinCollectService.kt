@@ -1954,6 +1954,9 @@ class DouyinCollectService : AccessibilityService() {
         @Volatile
         private var activeInstance: DouyinCollectService? = null
 
+        /** command 包唯一取用无障碍宿主的入口（GestureRunner/TypeRunner/tree_dump 用）。 */
+        internal fun commandHost(): DouyinCollectService? = activeInstance
+
         /**
          * ShareIngestActivity 读回剪贴板文案后投递；token 校验通过才 complete，防跨卡串号。
          * clipTimestampMs：剪贴板写入时刻（uptimeMillis 时间基），随文案一起带上供服务侧
