@@ -815,6 +815,22 @@ tests:
     product: AI员工
     note: "Walking Skeleton #1 — Agent heartbeat 循环 + queued_tasks 派发"
 
+  - id: worker-control-tower-desktop-frame-source
+    path: services/agent/src/handlers/__tests__/desktop-frame-source.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "Windows 桌面上墙捕获源：截屏脚本文本（含「绝不落盘」的 AMSI 回归守卫）+ stdout 帧解码 + 常驻进程只起一个。"
+
+  - id: worker-control-tower-desktop-frame-pusher
+    path: services/agent/src/handlers/__tests__/frame-pusher.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "桌面帧上墙推送：POST /api/workers/:id/frame + X-Agent-License，四种不发（未配置/过大/在途/被拒退避）与 401·403·500 分档。"
+
   - id: agent-ws1-qr-bind-douyin
     path: services/agent/src/handlers/__tests__/qr-bind-douyin.test.ts
     type: unit

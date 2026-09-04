@@ -59,6 +59,9 @@ import { handleDouyinDmOutreach } from './handlers/douyin-dm-outreach';
 import { handleQrBindOperator } from './handlers/qr-bind-operator';
 import { createFolderWatchManager } from './handlers/folder-watch';
 import { startHealthServer, setWsState } from './handlers/health-server';
+// 工作机控制塔第二刀·件3 — 桌面画面上墙（常驻 PowerShell 截屏 → POST /api/workers/:id/frame）
+import { DesktopFrameSource } from './handlers/desktop-frame-source';
+import { FramePusher } from './handlers/frame-pusher';
 import { startVideoPipelineLoop } from './handlers/video-pipeline';
 import { ensureChromeHeadlessShell, ensureChromiumHeadful } from './handlers/ensure-chrome';
 import { ensureFfmpeg } from './handlers/ensure-ffmpeg';
@@ -1086,6 +1089,11 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
   loop.start();
   console.log(`[ws1] heartbeat-loop started → ${apiBase}/api/agent/heartbeat`);
 
+  // 工作机控制塔·桌面上墙：默认关，靠 ZENITHJOY_WALL_PUSH=1 显式打开。
+  // 持续把桌面画面外传是有代价的行为，不能装完就默默开始推 —— 与安卓端「上墙」开关同义，
+  // 只是 Windows agent 没有 App UI，开关落在装机时的 env 上（由装机方显式设）。
+  startDesktopWallPush(cfg);
+
   // v1.1.34: 本地发现服务器 — Dashboard 访问 localhost:58432/agent-id 拿本机 UUID，精准派 trigger-bind
   startLocalDiscoveryServer(loop);
 
@@ -1095,6 +1103,49 @@ function startWs1HeartbeatLoop(cfg: AgentConfig): void {
   ensureChromiumHeadful().catch((e) => console.warn('[chrome-headful] ensure failed:', e));
 }
 
+
+// ────── 工作机控制塔第二刀·件3：桌面画面上墙 ──────
+//
+// 常驻 PowerShell 截屏（见 desktop-frame-source.ts 头部的 AMSI 实测边界）→ 每帧 POST
+// /api/workers/<agentUuid>/frame，鉴权用 agent 自带 license（中台 PR #1748）。
+// 取不到 agentUuid 时不启动：那是还没 register 成功，服务端只会 400。
+function startDesktopWallPush(cfg: AgentConfig): void {
+  if (process.env.ZENITHJOY_WALL_PUSH !== '1') return;
+  if (process.platform !== 'win32') {
+    console.log('[wall-push] 非 Windows，桌面捕获跳过（安卓端走 agent-android）');
+    return;
+  }
+  const apiBase = deriveHttpApiBase(cfg);
+  if (!apiBase) {
+    console.warn('[wall-push] 无法推导 HTTP apiBase，桌面上墙跳过');
+    return;
+  }
+  if (!cfg.agentUuid) {
+    console.warn('[wall-push] 尚无 agentUuid（register 未成功），桌面上墙跳过');
+    return;
+  }
+
+  const pusher = new FramePusher({
+    apiBase,
+    license: cfg.licenseKey,
+    agentUuid: cfg.agentUuid,
+  });
+  // 同一种结果连着刷屏没意义，变了才打一行——8fps 下日志是会淹死人的
+  let lastLogged = '';
+  const source = new DesktopFrameSource({
+    onFrame: (jpeg) => {
+      void pusher.push(jpeg).then((r) => {
+        if (r !== lastLogged) {
+          lastLogged = r;
+          console.log(`[wall-push] ${r}`);
+        }
+      });
+    },
+    onError: (err) => console.warn('[wall-push] capture:', err instanceof Error ? err.message : err),
+  });
+  source.start();
+  console.log(`[wall-push] 桌面上墙已启动 → ${apiBase}/api/workers/${cfg.agentUuid}/frame`);
+}
 
 // ────── v1.1.34: 本地发现服务器 ──────
 // Dashboard 调 GET localhost:58432/agent-id 拿本机 agent UUID，
