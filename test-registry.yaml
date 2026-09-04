@@ -6246,3 +6246,11 @@ agent_suite:
     status: active
     product: OpenClaw信号桥
     note: "agent-ws cmd_result 分发单测：上行回执路由到 commandBridge.handleCmdResult。"
+
+  - id: openclaw-phonectl-unit
+    path: scripts/openclaw/__tests__/phonectl.test.js
+    type: unit
+    ci: L3
+    status: active
+    product: OpenClaw信号桥
+    note: "phonectl CLI(件3)单测：8 action 参数映射/鉴权头/超时幂等透传/本地校验/错误码/504 outcome透传。"
