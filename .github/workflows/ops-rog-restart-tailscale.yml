@@ -1,0 +1,29 @@
+name: Ops — Restart Tailscale on rog
+
+# 手动触发的运维件：xian-rog 是唯一的微信/安卓真机 CI runner，但走 Tailscale SSH 连接。
+# "在线"不等于"可达"——Tailscale 控制面（HTTPS 长连接）一直好着、GitHub runner 也一直
+# online，但数据面（打洞/DERP 会话）会卡死，SSH 全超时（memory:
+# tailscale_online_but_unreachable_dataplane_stall.md，2026-09-03 rog 实锤第二例）。
+# SSH 进不去时唯一还能用的通道就是这个 runner 本身的 GH Actions 出网连接——
+# 用它跑一条重启 Tailscale 服务的命令，等价于人工"托盘退出重开"。
+#
+# 用法: gh workflow run ops-rog-restart-tailscale.yml --repo perfectuser21/zenithjoy-workspace
+on:
+  workflow_dispatch: {}
+
+jobs:
+  restart-tailscale:
+    name: Restart Tailscale service on xian-rog
+    runs-on: [self-hosted, wechat-capable]
+    timeout-minutes: 5
+    steps:
+      - name: 重启 Tailscale 服务
+        shell: powershell
+        run: |
+          Write-Host "重启前状态："
+          & "C:\Program Files\Tailscale\tailscale.exe" status
+          Restart-Service Tailscale -Force
+          Start-Sleep -Seconds 8
+          Write-Host "重启后状态："
+          & "C:\Program Files\Tailscale\tailscale.exe" status
+          & "C:\Program Files\Tailscale\tailscale.exe" netcheck
