@@ -114,6 +114,22 @@ describe('POST /api/materials/upload — 鉴权与租户隔离', () => {
   });
 });
 
+describe('POST /api/materials/upload — 限流', () => {
+  it('限流器挂在鉴权之前 —— 鉴权 handler 本身也要被限流覆盖', async () => {
+    // CodeQL js/missing-rate-limiting：这个端点既写 DB 又写文件系统，不限流
+    // 就是现成的 DoS 面。这里验它真的挂上了：超过窗口上限后返回 429。
+    const app = makeApp();
+    let last = 0;
+    // 上限 60/分钟，连打 65 次（无凭据，走最短路径）
+    for (let i = 0; i < 65; i++) {
+      const r = await request(app).post('/api/materials/upload');
+      last = r.status;
+      if (last === 429) break;
+    }
+    expect(last).toBe(429);
+  });
+});
+
 describe('POST /api/materials/upload — 上传语义', () => {
   beforeEach(() => {
     (validateLicense as any).mockResolvedValue(licenseOk(TENANT_A));
