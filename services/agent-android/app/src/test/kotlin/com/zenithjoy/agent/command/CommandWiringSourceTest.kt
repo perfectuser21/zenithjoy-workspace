@@ -27,7 +27,22 @@ class CommandWiringSourceTest {
 
     @Test fun `busyProbe 接了租约与 ScanMutex`() {
         val s = src("AgentService.kt")
-        assertTrue(s.contains("AutomationLease.currentOwner()") && s.contains("ScanMutex.busy"))
+        // M7：断言完整表达式在 busyProbe 装配处，防止两个子条件散落在无关位置凑 grep
+        assertTrue(s.contains("AutomationLease.currentOwner() != null || ScanMutex.busy"))
+    }
+
+    @Test fun `装配坐标系用物理分辨率而非 app 可用区`() {
+        val s = src("AgentService.kt")
+        assertTrue(
+            "screenSize/deviceInfo/坐标校验必须用物理分辨率 helper（getRealMetrics 姿势，" +
+                "见 DeviceAccountScanService.realScreenSize 血泪注释）",
+            s.contains("realScreenSize()"),
+        )
+        assertFalse(
+            "resources.displayMetrics 是 app 可用区（不含系统栏，实测 2543<2664），" +
+                "截图/点击基于物理分辨率，混用会错位",
+            s.contains("resources.displayMetrics"),
+        )
     }
 
     @Test fun `tree_dump 回执带 nodeCount`() {

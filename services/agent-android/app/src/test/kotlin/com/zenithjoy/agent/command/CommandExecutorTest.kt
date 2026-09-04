@@ -12,10 +12,11 @@ class CommandExecutorTest {
     private fun executor(
         remoteEnabled: Boolean = true,
         nativeBusy: Boolean = false,
+        nativeBusyProbe: () -> Boolean = { nativeBusy },
         treeDump: () -> Map<String, Any?>? = { mapOf("tree" to "d0 root", "truncated" to false) },
     ) = CommandExecutor(
         remoteControlEnabled = { remoteEnabled },
-        nativeBusy = { nativeBusy },
+        nativeBusy = nativeBusyProbe,
         foregroundPkg = { "com.ss.android.ugc.aweme" },
         gesture = GestureRunner(dispatch = { _, _, onResult -> onResult(true); true }),
         screenshot = ScreenshotRunner({ true }, { true }, { "b64" }, { 1080 to 2400 }, sleep = {}),
@@ -41,6 +42,18 @@ class CommandExecutorTest {
         assertEquals(CommandProtocol.ERR_DEVICE_BUSY_NATIVE, e.execute(req(CmdAction.TAP, mapOf("x" to 1, "y" to 1)))["errorCode"])
         assertEquals(true, e.execute(req(CmdAction.SCREENSHOT))["ok"])
         assertEquals(true, e.execute(req(CmdAction.DEVICE_INFO))["ok"])
+    }
+
+    @Test fun `acquire 后原生忙态复查命中回 DEVICE_BUSY_NATIVE 并释放租约`() = runTest {
+        // TOCTOU 窗口：首查 false 放行 → tryAcquire 成功 → 原生任务恰好起跑。
+        // acquire 后必须复查一次 nativeBusy，命中则让出租约拒单。
+        var calls = 0
+        val e = executor(nativeBusyProbe = { calls++ >= 1 }) // 第一次 false，第二次起 true
+        assertEquals(
+            CommandProtocol.ERR_DEVICE_BUSY_NATIVE,
+            e.execute(req(CmdAction.TAP, mapOf("x" to 1, "y" to 1)))["errorCode"],
+        )
+        assertEquals(null, AutomationLease.currentOwner()) // 租约已释放，不锁死原生流程
     }
 
     @Test fun `变更类指令执行后远程租约被持有`() = runTest {
