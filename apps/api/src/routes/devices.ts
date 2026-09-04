@@ -148,6 +148,9 @@ devicesRouter.post(
     // tap/swipe 双闸。log 不落 args（隐私优先，审计只到 action 名）。
     const msgId = (idempotencyKey as string | undefined) ?? crypto.randomUUID();
     const isTap = TAP_ACTIONS.has(action);
+    // M-1：区分本请求新插的 pending 行 vs idempotencyKey 复用的既有行——
+    // 复用行属于原请求的生命周期，本请求的 rejected 类状态不许写上去（瞬时假状态）。
+    let insertedFresh = false;
     try {
       const ins = await pool.query(
         `INSERT INTO zenithjoy.device_command_log (tenant_id, agent_id, msg_id, action, status)
@@ -162,36 +165,52 @@ devicesRouter.post(
          RETURNING id`,
         [tenantId, agentId, msgId, action, config.actions_per_minute, isTap, config.taps_per_minute]
       );
-      if (!ins.rowCount) {
-        // 没插进去：要么超限，要么 idempotencyKey 重发撞 UNIQUE（复用既有行，不新 INSERT）
+      if (ins.rowCount) {
+        insertedFresh = true;
+      } else {
+        // 没插进去：要么超限，要么 idempotencyKey 重发撞 UNIQUE
         const existing = await pool.query(
-          'SELECT msg_id FROM zenithjoy.device_command_log WHERE msg_id = $1', [msgId]
+          'SELECT agent_id, tenant_id FROM zenithjoy.device_command_log WHERE msg_id = $1', [msgId]
         );
-        if (!existing.rows || existing.rows.length === 0) {
+        const row = existing.rows?.[0];
+        if (!row) {
           return res.status(429).json(ERR('RATE_LIMITED',
             `频控超限（${config.actions_per_minute} 次/分钟${isTap ? `，tap/swipe ${config.taps_per_minute} 次/分钟` : ''}）`));
         }
-        // 同 key 重发 → 复用行，设备端去重缓存会直接回 done 结果（结果重取）
+        // I-1：复用前必须校验行归属——key 属于别的 agent/租户就复用，等于让调用方
+        // 改写/读取别台设备的指令审计与结果（跨租户探测面）。不匹配 → 409。
+        if (row.agent_id !== agentId || row.tenant_id !== tenantId) {
+          return res.status(409).json(ERR('IDEMPOTENCY_CONFLICT',
+            'idempotencyKey 已被其他设备/租户占用，请换 key'));
+        }
+        // 同 key 同归属重发 → 复用行，设备端去重缓存会直接回 done 结果（结果重取）
       }
     } catch (e) {
       console.error('[devices] rate-limit insert failed:', e);
       return res.status(503).json(ERR('RATE_CHECK_FAILED', '频控写入失败，拒绝下发（fail-closed）'));
     }
 
-    const updateLog = (status: string, ok: boolean | null, errorCode: string | null, latencyMs: number | null) =>
+    // M-2：onlyIfPending 时 WHERE 带 AND status='pending'——非终态才允许写入，
+    // 防止 timeout/rejected/failed 覆盖迟到回执已补写的真实结果（'done' 不带守卫：
+    // 真实回执永远赢）。
+    const updateLog = (
+      status: string, ok: boolean | null, errorCode: string | null, latencyMs: number | null,
+      opts?: { onlyIfPending?: boolean }
+    ) =>
       pool.query(
-        'UPDATE zenithjoy.device_command_log SET status = $2, ok = $3, error_code = $4, latency_ms = $5 WHERE msg_id = $1',
+        `UPDATE zenithjoy.device_command_log SET status = $2, ok = $3, error_code = $4, latency_ms = $5
+          WHERE msg_id = $1${opts?.onlyIfPending ? " AND status = 'pending'" : ''}`,
         [msgId, status, ok, errorCode, latencyMs]
       ).catch((e) => console.warn('[devices] log update failed:', e));
 
     // ── 5. 版本检查：旧 agent 对 cmd 静默丢弃，快速 409 不白烧 35s ────
     const entry = agentRegistry.get(agentId);
     if (!entry) {
-      await updateLog('rejected', null, 'NOT_CONNECTED', null);
+      if (insertedFresh) await updateLog('rejected', null, 'NOT_CONNECTED', null, { onlyIfPending: true });
       return res.status(503).json(ERR('NOT_CONNECTED', '设备不在线（ws0 无连接）'));
     }
     if (!agentSupportsCmd(entry.meta)) {
-      await updateLog('rejected', null, 'AGENT_TOO_OLD', null);
+      if (insertedFresh) await updateLog('rejected', null, 'AGENT_TOO_OLD', null, { onlyIfPending: true });
       return res.status(409).json(ERR('AGENT_TOO_OLD',
         `agent 版本 ${entry.meta.version} 无件1 指令能力（需 capabilities 含 cmd 或版本 ≥2.1.48），请先 OTA`));
     }
@@ -214,24 +233,26 @@ devicesRouter.post(
     } catch (e) {
       const code = (e as CommandBridgeError)?.code;
       if (code === 'DEVICE_TIMEOUT') {
-        await updateLog('timeout', null, 'DEVICE_TIMEOUT', null);
+        // M-2：onlyIfPending——迟到真实回执若已把行补成 done，timeout 不许覆盖
+        await updateLog('timeout', null, 'DEVICE_TIMEOUT', null, { onlyIfPending: true });
         // 结果未知 ≠ 未执行：设备无取消机制，指令可能仍在队列里执行。禁止盲重试。
         return res.status(504).json({ ...ERR('DEVICE_TIMEOUT', '等待设备回执超时——结果未知，禁止盲重试（可用同 idempotencyKey 重取结果）'), outcome: 'unknown' });
       }
       if (code === 'DEVICE_BUSY') {
-        await updateLog('rejected', null, 'DEVICE_BUSY', null);
+        // M-1：复用行（非本请求所插）不写 rejected——那是原请求的生命周期
+        if (insertedFresh) await updateLog('rejected', null, 'DEVICE_BUSY', null, { onlyIfPending: true });
         return res.status(409).json(ERR('DEVICE_BUSY', '该设备已有在途指令（每设备同时 1 条）'));
       }
       if (code === 'NOT_CONNECTED') {
-        await updateLog('rejected', null, 'NOT_CONNECTED', null);
+        if (insertedFresh) await updateLog('rejected', null, 'NOT_CONNECTED', null, { onlyIfPending: true });
         return res.status(503).json(ERR('NOT_CONNECTED', '设备不在线（ws0 不可达）'));
       }
       if (code === 'AGENT_DISCONNECTED') {
-        await updateLog('failed', null, 'AGENT_DISCONNECTED', null);
+        await updateLog('failed', null, 'AGENT_DISCONNECTED', null, { onlyIfPending: true });
         return res.status(502).json(ERR('AGENT_DISCONNECTED', '等待回执期间设备连接断开'));
       }
       console.error('[devices] dispatch failed:', e);
-      await updateLog('failed', null, 'INTERNAL_ERROR', null);
+      await updateLog('failed', null, 'INTERNAL_ERROR', null, { onlyIfPending: true });
       return res.status(500).json(ERR('INTERNAL_ERROR', '内部错误'));
     }
   }

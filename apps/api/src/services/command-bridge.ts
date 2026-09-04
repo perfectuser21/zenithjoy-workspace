@@ -81,6 +81,12 @@ export class CommandBridge {
     timeoutMs: number,
     msgId: string = crypto.randomUUID(),
   ): Promise<CmdResultPayload> {
+    // I-1 纵深防线：同 msgId 已在途（跨 agent 撞 idempotencyKey）→ 拒绝。
+    // pending map 以 msgId 为键，不拦会让第二个 dispatch 覆盖第一个的 entry，
+    // 回执关联全乱（第一个永远等不到、第二个可能收到别台设备的结果）。
+    if (this.pending.has(msgId)) {
+      return Promise.reject(new CommandBridgeError('DEVICE_BUSY', `msgId ${msgId} 已在途（idempotencyKey 撞在途指令）`));
+    }
     if (this.inFlight.has(agentId)) {
       return Promise.reject(new CommandBridgeError('DEVICE_BUSY', `agent ${agentId} 已有在途指令`));
     }
@@ -121,7 +127,12 @@ export class CommandBridge {
     }
     const entry = this.pending.get(inReplyTo);
     if (!entry) {
-      this.recordLateResult(inReplyTo, payload);
+      // I-2：迟到回执补审计必须带来源过滤；来源不明（hello 前的连接）一律不写。
+      if (fromAgentId) {
+        this.recordLateResult(inReplyTo, fromAgentId, payload);
+      } else {
+        console.warn('[command-bridge] 迟到回执来源 agentId 为空，不写审计');
+      }
       return false;
     }
     if (entry.agentId !== fromAgentId) {
@@ -147,8 +158,11 @@ export class CommandBridge {
     this.inFlight.delete(agentId);
   }
 
-  /** 迟到回执补审计：只 UPDATE（行由 route 在下发前 INSERT），防 msg_id UNIQUE 炸。 */
-  private recordLateResult(msgId: string, payload: CmdResultPayload): void {
+  /**
+   * 迟到回执补审计：只 UPDATE（行由 route 在下发前 INSERT），防 msg_id UNIQUE 炸。
+   * I-2：WHERE 带 agent_id = 来源设备——伪造/串扰的回执改写不了别台设备的审计行。
+   */
+  private recordLateResult(msgId: string, fromAgentId: string, payload: CmdResultPayload): void {
     try {
       Promise.resolve(pool.query(
         `UPDATE zenithjoy.device_command_log
@@ -156,8 +170,8 @@ export class CommandBridge {
                 ok = $2,
                 error_code = $3,
                 latency_ms = (EXTRACT(EPOCH FROM (now() - created_at)) * 1000)::int
-          WHERE msg_id = $1`,
-        [msgId, payload.ok ?? null, payload.errorCode ?? null],
+          WHERE msg_id = $1 AND agent_id = $4`,
+        [msgId, payload.ok ?? null, payload.errorCode ?? null, fromAgentId],
       )).catch((e) => console.warn('[command-bridge] 迟到回执 UPDATE 失败:', e));
     } catch (e) {
       console.warn('[command-bridge] 迟到回执 UPDATE 失败:', e);
