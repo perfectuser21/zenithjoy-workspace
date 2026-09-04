@@ -50,7 +50,6 @@ class WsClient(
     private val scope: CoroutineScope,
     private val onMessage: ((type: String, payload: Map<*, *>, msgId: String?) -> Unit)? = null,
     private val busyProbe: () -> Boolean = { false },
-    private val onDisconnect: (() -> Unit)? = null,
 ) {
     private val gson = Gson()
     private val startTime = System.currentTimeMillis()
@@ -110,7 +109,6 @@ class WsClient(
                     android.util.Log.i(TAG, "closed: $code $reason")
                     wsRef.set(null)
                     heartbeatJob.getAndSet(null)?.cancel()
-                    onDisconnect?.invoke()
                     latch.countDown()
                 }
 
@@ -118,7 +116,6 @@ class WsClient(
                     android.util.Log.w(TAG, "error: ${t.message}")
                     wsRef.set(null)
                     heartbeatJob.getAndSet(null)?.cancel()
-                    onDisconnect?.invoke()
                     latch.countDown()
                 }
             })

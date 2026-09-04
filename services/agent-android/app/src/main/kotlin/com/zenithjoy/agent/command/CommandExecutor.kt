@@ -25,6 +25,8 @@ class CommandExecutor(
         val outcome = try {
             executeInner(req)
         } catch (e: Exception) {
+            // 取消不是执行失败：吞掉会破坏结构化并发（协程作用域关闭时假装成功兜底）
+            if (e is kotlinx.coroutines.CancellationException) throw e
             CmdOutcome(false, CommandProtocol.ERR_EXEC_EXCEPTION, mapOf("detail" to (e.message ?: e.javaClass.simpleName)))
         }
         val fg = try { foregroundPkg() } catch (_: Exception) { null }
@@ -38,6 +40,12 @@ class CommandExecutor(
         if (req.action in mutating) {
             if (nativeBusy()) return CmdOutcome(false, CommandProtocol.ERR_DEVICE_BUSY_NATIVE)
             if (!AutomationLease.tryAcquire(AutomationLease.OWNER_REMOTE)) {
+                return CmdOutcome(false, CommandProtocol.ERR_DEVICE_BUSY_NATIVE)
+            }
+            // TOCTOU 压窗：首查与 tryAcquire 之间原生任务可能恰好起跑（ScanMutex 与本租约
+            // 是两把独立锁）。acquire 成功后复查一次，命中则让出租约拒单，不与原生流程抢屏。
+            if (nativeBusy()) {
+                AutomationLease.release(AutomationLease.OWNER_REMOTE)
                 return CmdOutcome(false, CommandProtocol.ERR_DEVICE_BUSY_NATIVE)
             }
         }

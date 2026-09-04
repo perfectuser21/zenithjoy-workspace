@@ -20,6 +20,8 @@ class GestureRunner(
         val submitted = try {
             dispatch(points, durationMs) { done.complete(it) }
         } catch (e: Exception) {
+            // 取消不是执行失败：吞掉会破坏结构化并发
+            if (e is kotlinx.coroutines.CancellationException) throw e
             return CmdOutcome(false, CommandProtocol.ERR_EXEC_EXCEPTION, mapOf("detail" to (e.message ?: e.javaClass.simpleName)))
         }
         if (!submitted) return CmdOutcome(false, CommandProtocol.ERR_SERVICE_NOT_READY)

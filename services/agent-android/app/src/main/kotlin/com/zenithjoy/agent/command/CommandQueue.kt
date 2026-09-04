@@ -22,11 +22,17 @@ class CommandQueue(
     private val done = object : LinkedHashMap<String, Map<String, Any?>>(dedupCapacity, 0.75f, false) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Map<String, Any?>>) = size > dedupCapacity
     }
+    // in-flight 去重：done 只在执行完写入，首条还在队列/执行中时同 msgId 重投若只查 done
+    // 会入队两次=动作重放。submit 加入、结果写进 done 时移除，与 done 同一把 lock。
+    private val pending = mutableSetOf<String>()
     private val lock = Any()
     private val consumer: Job = scope.launch {
         for (req in channel) {
             val result = execute(req)
-            synchronized(lock) { done[req.msgId] = result }
+            synchronized(lock) {
+                done[req.msgId] = result
+                pending.remove(req.msgId)
+            }
             if (!sendResult(result)) {
                 logW("result dropped (connection lost) msgId=${req.msgId}; cached for re-delivery")
             }
@@ -34,9 +40,18 @@ class CommandQueue(
     }
 
     fun submit(request: CmdRequest) {
-        val cached = synchronized(lock) { done[request.msgId] }
+        val cached: Map<String, Any?>?
+        synchronized(lock) {
+            cached = done[request.msgId]
+            if (cached == null && !pending.add(request.msgId)) {
+                // 首条还在队列/执行中：静默丢弃，首条完成自然回执
+                return
+            }
+        }
         if (cached != null) { sendResult(cached); return }
         if (!channel.trySend(request).isSuccess) {
+            // 没能入队就不算 in-flight，移除占位，否则同 msgId 后续重投会被永远丢弃
+            synchronized(lock) { pending.remove(request.msgId) }
             sendResult(
                 CommandProtocol.buildResult(
                     request.msgId,

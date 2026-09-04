@@ -548,7 +548,7 @@ class AgentService : Service() {
                 initialized = { sharedScreenCaptureService != null },
                 hasAuthorization = { MediaProjectionHolder.hasAuthorization() },
                 capture = { sharedScreenCaptureService?.captureToBase64() },
-                screenSize = { resources.displayMetrics.let { it.widthPixels to it.heightPixels } },
+                screenSize = { realScreenSize() },
             ),
             type = TypeRunner(
                 foregroundPkg = cmdForegroundPkg,
@@ -600,13 +600,14 @@ class AgentService : Service() {
                 }
             },
             deviceInfo = {
+                val (sw, sh) = realScreenSize()
                 mapOf(
                     "model" to android.os.Build.MODEL,
                     "manufacturer" to android.os.Build.MANUFACTURER,
                     "androidVersion" to android.os.Build.VERSION.RELEASE,
                     "agentVersion" to BuildConfig.VERSION_NAME,
-                    "screenWidth" to resources.displayMetrics.widthPixels,
-                    "screenHeight" to resources.displayMetrics.heightPixels,
+                    "screenWidth" to sw,
+                    "screenHeight" to sh,
                 )
             },
             treeDump = {
@@ -956,10 +957,28 @@ class AgentService : Service() {
             .build()
     }
 
+    /**
+     * 物理屏幕尺寸（含系统栏）。截图（ScreenCaptureReal 用 getRealMetrics 建 VirtualDisplay）
+     * 与手势/点击坐标都基于物理分辨率；Resources 的 metrics 是 app 可用区（不含系统
+     * 导航栏，实测 2543<2664，见 DeviceAccountScanService.realScreenSize 血泪注释），
+     * 混用会让坐标校验/换算整体错位。
+     */
+    private fun realScreenSize(): Pair<Int, Int> {
+        val wm = getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            val b = wm.currentWindowMetrics.bounds
+            b.width() to b.height()
+        } else {
+            val dm = android.util.DisplayMetrics()
+            @Suppress("DEPRECATION") wm.defaultDisplay.getRealMetrics(dm)
+            dm.widthPixels to dm.heightPixels
+        }
+    }
+
     /** cmd 指令入口：解析→入队。解析失败立即回执（不进队列）。 */
     private fun routeCommand(payload: Map<*, *>, msgId: String?) {
-        val dm = resources.displayMetrics
-        when (val parsed = CommandProtocol.parse(msgId, payload, dm.widthPixels, dm.heightPixels)) {
+        val (screenW, screenH) = realScreenSize()
+        when (val parsed = CommandProtocol.parse(msgId, payload, screenW, screenH)) {
             is ParseOutcome.Ok -> commandQueue?.submit(parsed.request)
             is ParseOutcome.Err -> {
                 if (msgId != null) {
