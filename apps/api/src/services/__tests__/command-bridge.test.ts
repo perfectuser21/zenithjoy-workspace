@@ -146,6 +146,40 @@ describe('dispatchAndWait', () => {
     expect(sql).not.toMatch(/INSERT/i);
   });
 
+  it('迟到回执 UPDATE 带来源 agent_id 过滤（I-2：防伪造来源改写别台设备审计行）', async () => {
+    const { bridge } = makeBridge();
+    (pool.query as any).mockResolvedValue({ rows: [], rowCount: 0 });
+    bridge.handleCmdResult(AID, { inReplyTo: 'ghost-msg', ok: true });
+    await vi.waitFor(() => expect(pool.query).toHaveBeenCalled());
+    const [sql, params] = (pool.query as any).mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/AND\s+agent_id\s*=/i);
+    expect(params).toContain(AID);
+  });
+
+  it('迟到回执来源 agentId 为空（hello 前）→ 不写审计（I-2）', async () => {
+    const { bridge } = makeBridge();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(bridge.handleCmdResult(null, { inReplyTo: 'ghost-msg', ok: true })).toBe(false);
+    await new Promise((r) => setImmediate(r));
+    expect(pool.query).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('跨 agent 撞同 msgId（在途）→ 第二个 DEVICE_BUSY，不覆盖第一个 pending（I-1 纵深防线）', async () => {
+    const { bridge, send } = makeBridge();
+    const p1 = bridge.dispatchAndWait(AID, 'tap', {}, 5000, 'shared-key');
+    await expect(bridge.dispatchAndWait(OTHER, 'tap', {}, 5000, 'shared-key'))
+      .rejects.toMatchObject({ code: 'DEVICE_BUSY' });
+    expect(send).toHaveBeenCalledTimes(1); // 第二个没下发
+    // 第一个 pending 未被覆盖，正主回执照常 resolve
+    expect(bridge.handleCmdResult(AID, { inReplyTo: 'shared-key', ok: true })).toBe(true);
+    await expect(p1).resolves.toMatchObject({ ok: true });
+    // OTHER 的占位没有被误占：它还能正常下发
+    const p2 = bridge.dispatchAndWait(OTHER, 'tap', {}, 5000, 'other-key');
+    bridge.handleCmdResult(OTHER, { inReplyTo: 'other-key', ok: true });
+    await expect(p2).resolves.toMatchObject({ ok: true });
+  });
+
   it('CommandBridgeError 携带 code', () => {
     const e = new CommandBridgeError('DEVICE_BUSY', 'busy');
     expect(e.code).toBe('DEVICE_BUSY');

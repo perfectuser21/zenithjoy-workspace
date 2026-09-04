@@ -211,27 +211,55 @@ describe('频控（原子 INSERT...SELECT，count 含 pending）', () => {
     expect(commandBridge.dispatchAndWait).not.toHaveBeenCalled();
   });
 
-  it('tap 走双闸：INSERT 参数带 actions_per_minute=60 和 taps_per_minute=30（默认值）', async () => {
+  // M-4：整数组位置断言（toContain 分不清 $5 actions 闸和 $7 taps 闸写反的假绿）
+  it('tap 走双闸：INSERT 参数按位 [tenant,agent,msgId,action,总闸60,isTap=true,taps闸30]', async () => {
     await post({ action: 'tap', x: 1, y: 2 });
     const params = insertCalls()[0][1] as unknown[];
-    expect(params).toContain(60);
-    expect(params).toContain(30);
-    expect(params).toContain(true); // isTap 双闸开
+    expect(params).toEqual([TENANT, AID, expect.any(String), 'tap', 60, true, 30]);
   });
 
-  it('screenshot 只走 actions_per_minute（防免费投屏计入总闸，taps 闸关闭）', async () => {
+  it('screenshot 只走总闸：INSERT 参数按位 [tenant,agent,msgId,action,总闸60,isTap=false,taps闸30]', async () => {
     await post({ action: 'screenshot' });
     const params = insertCalls()[0][1] as unknown[];
-    expect(params).toContain(60);
-    expect(params).toContain(false); // isTap=false
+    expect(params).toEqual([TENANT, AID, expect.any(String), 'screenshot', 60, false, 30]);
   });
 
-  it('idempotencyKey 重发（msg_id 冲突未插入但行已存在）→ 不 429，复用行继续 dispatch', async () => {
-    mockDb({ insert: { rowCount: 0 }, existingMsg: [{ msg_id: IDEM }] });
+  it('idempotencyKey 重发（msg_id 冲突未插入但行归属匹配）→ 不 429，复用行继续 dispatch', async () => {
+    mockDb({ insert: { rowCount: 0 }, existingMsg: [{ agent_id: AID, tenant_id: TENANT }] });
     const r = await post({ action: 'tap', x: 1, y: 2, idempotencyKey: IDEM });
     expect(r.status).toBe(200);
     expect((commandBridge.dispatchAndWait as any).mock.calls[0][4]).toBe(IDEM);
     expect(insertCalls()).toHaveLength(1); // 只试插一次，不重复 INSERT
+  });
+
+  it('I-1：idempotencyKey 归属另一台 agent → 409 IDEMPOTENCY_CONFLICT，不 dispatch', async () => {
+    mockDb({
+      insert: { rowCount: 0 },
+      existingMsg: [{ agent_id: '55555555-5555-4555-8555-555555555555', tenant_id: TENANT }],
+    });
+    const r = await post({ action: 'tap', x: 1, y: 2, idempotencyKey: IDEM });
+    expect(r.status).toBe(409);
+    expect(r.body.error).toBe('IDEMPOTENCY_CONFLICT');
+    expect(commandBridge.dispatchAndWait).not.toHaveBeenCalled();
+  });
+
+  it('I-1：idempotencyKey 归属另一租户 → 409 IDEMPOTENCY_CONFLICT（防跨租户探测/覆盖）', async () => {
+    mockDb({
+      insert: { rowCount: 0 },
+      existingMsg: [{ agent_id: AID, tenant_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }],
+    });
+    const r = await post({ action: 'tap', x: 1, y: 2, idempotencyKey: IDEM });
+    expect(r.status).toBe(409);
+    expect(r.body.error).toBe('IDEMPOTENCY_CONFLICT');
+    expect(commandBridge.dispatchAndWait).not.toHaveBeenCalled();
+  });
+
+  it('M-1：复用 key 撞 DEVICE_BUSY → 跳过 updateLog（不给共享行写瞬时假状态）', async () => {
+    mockDb({ insert: { rowCount: 0 }, existingMsg: [{ agent_id: AID, tenant_id: TENANT }] });
+    rejectDispatch('DEVICE_BUSY');
+    const r = await post({ action: 'tap', x: 1, y: 2, idempotencyKey: IDEM });
+    expect(r.status).toBe(409);
+    expect(updateCalls()).toHaveLength(0);
   });
 });
 
@@ -301,6 +329,13 @@ describe('dispatch 与回执映射', () => {
     expect(r.body.error).toBe('DEVICE_TIMEOUT');
     expect(r.body.outcome).toBe('unknown');
     expect(updateCalls()[0][1]).toContain('timeout');
+  });
+
+  it("M-2：timeout 的 UPDATE 带 AND status='pending' 守卫（不覆盖迟到真实结果）", async () => {
+    rejectDispatch('DEVICE_TIMEOUT');
+    await post();
+    const sql = updateCalls()[0][0] as string;
+    expect(sql).toMatch(/AND\s+status\s*=\s*'pending'/i);
   });
 
   it('在途占位冲突 → 409 DEVICE_BUSY', async () => {
