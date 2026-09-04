@@ -30,6 +30,10 @@ export interface JudgeVideoOptions {
 
 // ── 常量 ─────────────────────────────────────────────────────────────────────
 const JUDGMENT_TIMEOUT_MS = 20_000;  // 带图/音判定较慢，留余量（服务端即便 agent 8s 超时也要写库）
+// commander 单独放宽：2026-09-04 实测 TOAPIS gpt-5.4-mini 单字请求延迟即 12.4s（渠道慢而非死），
+// 20s 窗口下真实判决 prompt 间歇超时（gp2 smoke Step 8d / rpa-locator extract 隔次 timeout_保守拒 同根因）。
+// commander 是"存疑复核"非实时路径，等得起；渠道恢复后此值只影响故障时的失败等待上限。
+const COMMANDER_TIMEOUT_MS = 45_000;
 /**
  * 主判 max_tokens——**这是含 reasoning_tokens 的 completion 总预算，不是"正文上限"**。
  *
@@ -380,7 +384,7 @@ async function commanderReview(
       },
       {
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        timeout: JUDGMENT_TIMEOUT_MS,
+        timeout: COMMANDER_TIMEOUT_MS,
       }
     );
     const text: string = resp.data?.choices?.[0]?.message?.content ?? '';
