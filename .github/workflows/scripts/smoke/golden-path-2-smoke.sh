@@ -1248,7 +1248,8 @@ curl -s -o "$S26_TMP" --max-time 15 \
 
 # 26c：终态上报（terminal=partial）带 reason.error_code=KEYWORD_NO_RESULT
 S26_NICK="p2smokefr2nick${RND//-/}"
-S26_HTTP=$(curl -s -o "$S26_TMP" -w "%{http_code}" --max-time 20 \
+# --max-time 60：collect/report 同步链含 LLM 真调（评论分档/判定），TOAPIS 渠道慢时 20s 客户端先断（2026-09-04 实测 curl 000）
+S26_HTTP=$(curl -s -o "$S26_TMP" -w "%{http_code}" --max-time 60 \
   -X POST "$API_BASE/api/acquisition/collect/report" \
   -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
   -d "{\"task_id\":\"$S26_TASK\",\"video_id\":\"$S26_VID\",\"commenters\":[{\"nickname\":\"$S26_NICK\",\"comment_text\":\"测试\",\"grade\":\"高意向\"}],\"terminal\":\"partial\",\"partial_reason\":\"stage1_empty\",\"reason\":{\"search_result\":\"empty\",\"error_code\":\"KEYWORD_NO_RESULT\"}}")
