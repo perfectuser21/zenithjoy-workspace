@@ -45,12 +45,19 @@ export class AgentRegistry extends EventEmitter {
     this.emit('register', entry);
   }
 
-  unregister(agentId: string): void {
+  /**
+   * 注销 entry。传 ws 时仅当 entry.ws === ws 才删除 —— 设备快速重连时旧 socket 的
+   * close 迟到，不带校验会误删新连接的 entry（设备"在线却 NOT_CONNECTED"且 DB 被
+   * 误标 offline，对抗 P1-1 顺手修）。不传 ws 保持旧行为（兼容其他调用点）。
+   * @returns 是否真正删除（调用方据此决定要不要 setAgentOffline）
+   */
+  unregister(agentId: string, ws?: WebSocket): boolean {
     const entry = this.agents.get(agentId);
-    if (entry) {
-      this.agents.delete(agentId);
-      this.emit('unregister', entry);
-    }
+    if (!entry) return false;
+    if (ws !== undefined && entry.ws !== ws) return false;
+    this.agents.delete(agentId);
+    this.emit('unregister', entry);
+    return true;
   }
 
   heartbeat(agentId: string, payload: { uptime: number; busy: boolean }): void {

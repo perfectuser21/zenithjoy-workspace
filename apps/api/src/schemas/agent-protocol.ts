@@ -42,11 +42,25 @@ export const TaskResultPayload = z.object({
   error: z.string().optional(),
 });
 
+// OpenClaw 信号桥·件2：设备指令回执（件1 CommandProtocol.buildResult 上行）。
+// 注意关联键不在顶层——设备端 sendResult 的信封 msgId 是新生成的，原请求 id 在
+// payload.inReplyTo（WsClient.kt sendResult / Explore 实证）。payload 宽松 passthrough，
+// 设备端加字段不拒（向前兼容）。
+export const CmdResultPayload = z.object({
+  inReplyTo: z.string().optional(),
+  ok: z.boolean().optional(),
+  errorCode: z.string().optional(),
+  foregroundPkg: z.string().nullable().optional(),
+  data: z.record(z.unknown()).optional(),
+}).passthrough();
+export type CmdResultPayload = z.infer<typeof CmdResultPayload>;
+
 export const AgentMessageSchema = z.discriminatedUnion('type', [
   z.object({ ...Envelope, type: z.literal('hello'), payload: HelloPayload }),
   z.object({ ...Envelope, type: z.literal('heartbeat'), payload: HeartbeatPayload }),
   z.object({ ...Envelope, type: z.literal('task_progress'), payload: TaskProgressPayload }),
   z.object({ ...Envelope, type: z.literal('task_result'), payload: TaskResultPayload }),
+  z.object({ ...Envelope, type: z.literal('cmd_result'), payload: CmdResultPayload }),
 ]);
 
 export type AgentMessage = z.infer<typeof AgentMessageSchema>;
@@ -69,9 +83,15 @@ export const TaskCancelPayload = z.object({
   reason: z.string(),
 });
 
+// OpenClaw 信号桥·件2：指令下行。args 与 action 平铺在 payload 里（设备端
+// CommandProtocol.parse 直接读 payload["action"] / payload["x"] 等），宽松 passthrough。
+export const CmdPayload = z.object({ action: z.string() }).passthrough();
+export type CmdPayload = z.infer<typeof CmdPayload>;
+
 export const ServerMessageSchema = z.discriminatedUnion('type', [
   z.object({ ...Envelope, type: z.literal('publish_request'), payload: PublishRequestPayload }),
   z.object({ ...Envelope, type: z.literal('task_cancel'), payload: TaskCancelPayload }),
+  z.object({ ...Envelope, type: z.literal('cmd'), payload: CmdPayload }),
 ]);
 
 export type ServerMessage = z.infer<typeof ServerMessageSchema>;
