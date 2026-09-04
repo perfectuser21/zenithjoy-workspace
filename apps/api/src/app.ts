@@ -42,6 +42,7 @@ import agentEventsRouter from './routes/agent-events';
 // 工作机控制塔（决策 e14297d4）：执行器面（内部 token）+ 读面（租户）
 import workersExecutorRouter from './routes/workers-executor';
 import workersReadRouter from './routes/workers-read';
+import devicesRouter from './routes/devices';
 import smokeFakeAgentBurnerRouter from './routes/_smoke-fake-agent-burner';
 // Path 2 Sprint B-1 architecture hotfix — DEV-only mock-agent helper
 import smokeMockAgentRouter from './routes/_smoke-mock-agent';
@@ -182,6 +183,8 @@ app.use('/api/agent/machines', agentMachinesRouter);
 // 工作机控制塔（决策 e14297d4）：执行器面先注册（internalAuth，仅 POST），读面后注册（租户，GET）。
 app.use('/api/workers', workersExecutorRouter);
 app.use('/api/workers', workersReadRouter);
+// OpenClaw 信号桥·件2（决策 7a4c0369）：设备指令桥——internalAuth only + prod 缺 token 拒服务
+app.use('/api/devices', devicesRouter);
 
 // 观测事件路由：POST /api/agent/events + GET /api/agent/machines/:id/events
 // 必须在 agentMachinesRouter 之后、agentRouter 之前注册（路径写全，避免被吞）
