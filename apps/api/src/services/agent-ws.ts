@@ -5,6 +5,7 @@ import { AgentMessageSchema, makeMsg } from '../schemas/agent-protocol';
 import { upsertAgent, touchAgentHeartbeat, setAgentOffline, findOrCreateAgentUuid } from './agent-db';
 import { upsertAgentSkillStatuses } from './skill-db';
 import { handleTaskResult } from './task-dispatch';
+import { commandBridge } from './command-bridge';
 import { validateLicense } from './walking-skeleton.service';
 import { verifyWsToken } from './license.service';
 import pool from '../db/connection'; // H-2 Bug 9: resolveAgentUuidFromHello 直接 UPDATE 复用 row
@@ -179,6 +180,10 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
               (e) => console.warn('[agent-ws] handleTaskResult failed:', e)
             );
           }
+        } else if (msg.type === 'cmd_result') {
+          // OpenClaw 信号桥·件2：指令回执，按 payload.inReplyTo 关联 pending。
+          // agentId 用于回执来源校验（桥内 pending.agentId 比对，不符丢弃）。
+          commandBridge.handleCmdResult(agentId, msg.payload);
         }
       } catch (err) {
         console.warn('[agent-ws] invalid message:', err);
@@ -187,8 +192,10 @@ export function attachAgentWS(server: HttpServer): WebSocketServer {
 
     ws.on('close', () => {
       if (agentId) {
-        agentRegistry.unregister(agentId);
-        if (displayName) {
+        // 传 ws：快速重连场景下旧 socket 的 close 不许误删新连接 entry；
+        // 只有真删（本连接就是当前 entry）才把 DB 标 offline。
+        const removed = agentRegistry.unregister(agentId, ws);
+        if (removed && displayName) {
           setAgentOffline(displayName).catch((e) => console.warn('[agent-ws] setAgentOffline failed:', e));
         }
       }

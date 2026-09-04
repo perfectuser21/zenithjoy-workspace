@@ -28,7 +28,7 @@ describe('comment-grading gradeComments', () => {
     warnSpy.mockRestore();
   });
 
-  it('判定模型默认 gpt-5.4-mini（0823 deepseek-v4-flash 渠道#58欠费临时切走，gpt-5.6-terra真机验证发现不稳定后再切，env GRADING_MODEL 可覆盖）', async () => {
+  it('判定模型默认 deepseek-v4-flash（0904 gpt-5.4-mini 渠道持续慢、#58 欠费已恢复切回原配，env GRADING_MODEL 可覆盖）', async () => {
     const mockedPost = vi.mocked(axios.post);
     mockedPost.mockResolvedValue({
       data: { choices: [{ message: { content: '1. 高意向' } }] },
@@ -37,7 +37,7 @@ describe('comment-grading gradeComments', () => {
     await gradeComments('家装目标客户', '标题', null, [{ commentText: '预算10万求推荐' }]);
 
     const [, body] = mockedPost.mock.calls[0] as [string, Record<string, unknown>];
-    expect(body.model).toBe('gpt-5.4-mini');
+    expect(body.model).toBe('deepseek-v4-flash');
   });
 
   it('空评论数组 → 不调用Gemini，返回空数组', async () => {

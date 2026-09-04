@@ -29,15 +29,18 @@ import axios from 'axios';
 import pool from '../db/connection';
 
 const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';
-const ASSIST_MODEL = process.env.LOCATOR_ASSIST_MODEL || 'gpt-5.4-mini';
+// 2026-09-04 默认切 gemini-2.5-flash-official：gpt-5.4-mini 渠道持续慢（llm_timeout 挡
+// rpa-locator smoke），gemini 实测 2-6s；渠道恢复可经 env 切回。预算本就按 thinking 模型给足。
+const ASSIST_MODEL = process.env.LOCATOR_ASSIST_MODEL || 'gemini-2.5-flash-official';
 /** 视觉后端模型：治 Lynx 失明页（树是空的）——看截图选结果序号。通用视觉模型即可
  *  （强于数数读字），走 TOAPIS 同判定链已踩通的 image_url 调法，不自托管不用火山。
  *  默认用判定链同款 gemini-2.5-flash-official（0823 真调实测：该渠道只开了 -official 后缀
  *  的模型，gpt-4o/裸 gemini 名报 model_not_found；真截图选目标 index 一次答对）。 */
 const VISION_MODEL = process.env.LOCATOR_VISION_MODEL || 'gemini-2.5-flash-official';
 const ASSIST_TIMEOUT_MS = 20_000;
-/** 行号 JSON 一句话就够；预算含 reasoning_tokens（TOAPIS 口径），gpt-5.4-mini 已关思考。 */
-const ASSIST_MAX_TOKENS = 300;
+/** 行号 JSON 一句话就够；预算含 reasoning_tokens（TOAPIS 口径）。默认模型已切 gemini
+ *  （thinking 关不掉，观测思考 189~736）——300 必截断，抬到 1200（对齐 VISION 口径留余量）。 */
+const ASSIST_MAX_TOKENS = 1200;
 /** 视觉后端预算：gemini-2.5-*-official 是 thinking 模型，TOAPIS 把思考算进 completion_tokens
  *  且关不掉（reasoning_effort:'none' 只 deepseek 认）——预算给不够会被截断（PR#1684 教训）。
  *  0823 真调实测 2000 够（含思考 ~500-600 + JSON）。 */

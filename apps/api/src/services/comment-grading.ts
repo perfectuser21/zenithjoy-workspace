@@ -24,7 +24,10 @@ import axios from 'axios';
 
 const GRADING_TIMEOUT_MS = 20_000;
 const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';
-const GRADING_MODEL = process.env.GRADING_MODEL || 'gpt-5.4-mini';
+// 2026-09-04 切回 deepseek-v4-flash：#58 渠道欠费已恢复（实测 200/1.9-4.6s）。当日
+// gpt-5.4-mini 渠道持续慢（42-46s，gp2 23b 三连 NULL）；曾误切 gemini 半小时——本文件
+// 下方注释写明 gemini 思考关不掉且随机吃光预算"加预算救不了"，0820 已淘汰，勿再切。
+const GRADING_MODEL = process.env.GRADING_MODEL || 'deepseek-v4-flash';
 
 const VALID_GRADES = ['高意向', '精准', '感兴趣', '其他'] as const;
 
