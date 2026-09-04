@@ -85,6 +85,11 @@ jobs:
           path: services/agent-android/app/build/reports/tests/testDebugUnitTest/
           retention-days: 7
 
+      # job 默认 working-directory 是 services/agent-android，这里回 repo root 跑 smoke
+      - name: Agent command executor smoke（OpenClaw 信号桥·件1）
+        working-directory: ${{ github.workspace }}
+        run: bash .github/workflows/scripts/smoke/agent-cmd-executor-smoke.sh
+
       - name: Prepare signing keystore
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 }}
