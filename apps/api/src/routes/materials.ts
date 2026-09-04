@@ -77,7 +77,10 @@ export function createMaterialsRouter(deps: MaterialsRouterDeps = {}): Router {
   router.use(uploadRateLimit);
 
   router.post('/upload', upload.array('files'), async (req: Request, res: Response) => {
-    const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+    // multer 的 .array() 给数组、.fields() 给对象，所以 req.files 是「数组或对象」。
+    // 必须用 Array.isArray 做**运行时**收窄——类型断言只骗过 TS，骗不过 CodeQL，
+    // 也骗不过真实的畸形请求（js/type-confusion-through-parameter-tampering）。
+    const files: Express.Multer.File[] = Array.isArray(req.files) ? req.files : [];
 
     try {
       // ── 1. 鉴权：租户永远从凭据反查，绝不信客户端自报的 tenant_id ──
@@ -120,10 +123,16 @@ export function createMaterialsRouter(deps: MaterialsRouterDeps = {}): Router {
       }
 
       // ── 3. 逐个入库 + 上存储 ──
-      // CodeQL js/type-confusion-through-parameter-tampering：multipart 的同名字段
-      // 可能是字符串也可能是数组（客户端传一个 vs 传多个），下游必须拿到确定类型，
-      // 不能让"有时是 string 有时是 array"的值流进业务逻辑。
-      const takenAtList = normalizeTakenAt(toStringArray(req.body?.taken_at), files.length);
+      // multipart 同名字段传一个是 string、传多个是数组。收窄必须**就地写**，
+      // 不能藏进 helper——CodeQL 不做跨函数收窄，而且就地写读代码的人也一眼看得见
+      // 这里有两种形态（js/type-confusion-through-parameter-tampering）。
+      const rawTakenAt: unknown = req.body?.taken_at;
+      const takenAtRaw: string[] = Array.isArray(rawTakenAt)
+        ? rawTakenAt.filter((v): v is string => typeof v === 'string')
+        : typeof rawTakenAt === 'string'
+          ? [rawTakenAt]
+          : [];
+      const takenAtList = normalizeTakenAt(takenAtRaw, files.length);
       const results: Array<{ id: string; file_name: string; deduped: boolean }> = [];
 
       for (let i = 0; i < files.length; i++) {
