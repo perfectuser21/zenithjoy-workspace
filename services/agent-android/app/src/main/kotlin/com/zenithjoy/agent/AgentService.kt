@@ -386,7 +386,7 @@ class AgentService : Service() {
         wsClient = WsClient(
             config = config,
             scope = scope,
-            onMessage = { type, payload ->
+            onMessage = { type, payload, _ ->
                 android.util.Log.d(TAG, "ws0 message: $type")
                 if (type == "collect_task") routeCollectTask(payload)
             },

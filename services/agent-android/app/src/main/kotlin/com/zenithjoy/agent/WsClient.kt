@@ -16,12 +16,30 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
+/** 下行消息信封（对齐 agent-protocol.ts {v,type,msgId,ts,payload}），解析抽出便于 JVM 单测。 */
+internal data class WsEnvelope(val type: String, val payload: Map<*, *>, val msgId: String?) {
+    companion object {
+        private val gson = com.google.gson.Gson()
+        fun parse(text: String): WsEnvelope? {
+            return try {
+                @Suppress("UNCHECKED_CAST")
+                val msg = gson.fromJson(text, Map::class.java) as Map<String, Any>
+                val type = msg["type"] as? String ?: return null
+                val payload = msg["payload"] as? Map<*, *> ?: emptyMap<String, Any>()
+                WsEnvelope(type, payload, msg["msgId"] as? String)
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+}
+
 /**
  * WS 客户端（ws0 协议，对齐桌面 agent connect() 函数）。
  *
  * 协议：
  *   - 连接后立刻发 hello 消息
- *   - 每 15s 发 heartbeat（{uptime, busy: false}）
+ *   - 每 15s 发 heartbeat（{uptime, busy}，busy 走 busyProbe 探针）
  *   - 断线指数退避重连（1s → 30s 上限）
  *
  * 消息信封（对齐 apps/api/src/schemas/agent-protocol.ts）：
@@ -30,7 +48,9 @@ import java.util.concurrent.atomic.AtomicReference
 class WsClient(
     private val config: AgentConfig,
     private val scope: CoroutineScope,
-    private val onMessage: ((type: String, payload: Map<*, *>) -> Unit)? = null,
+    private val onMessage: ((type: String, payload: Map<*, *>, msgId: String?) -> Unit)? = null,
+    private val busyProbe: () -> Boolean = { false },
+    private val onDisconnect: (() -> Unit)? = null,
 ) {
     private val gson = Gson()
     private val startTime = System.currentTimeMillis()
@@ -55,7 +75,8 @@ class WsClient(
     private suspend fun connect() {
         while (scope.isActive) {
             val wsUrl = buildWsUrl()
-            android.util.Log.i(TAG, "connecting to $wsUrl")
+            // 日志脱敏：wsUrl 带 token query param，logcat 可读=整机可被冒充遥控，只打 host。
+            android.util.Log.i(TAG, "connecting (ws0) to ${config.apiUrl}")
 
             val client = OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
@@ -89,6 +110,7 @@ class WsClient(
                     android.util.Log.i(TAG, "closed: $code $reason")
                     wsRef.set(null)
                     heartbeatJob.getAndSet(null)?.cancel()
+                    onDisconnect?.invoke()
                     latch.countDown()
                 }
 
@@ -96,6 +118,7 @@ class WsClient(
                     android.util.Log.w(TAG, "error: ${t.message}")
                     wsRef.set(null)
                     heartbeatJob.getAndSet(null)?.cancel()
+                    onDisconnect?.invoke()
                     latch.countDown()
                 }
             })
@@ -116,24 +139,26 @@ class WsClient(
         while (job.isActive && ws.send("")) { // ping to check open
             ws.send(gson.toJson(makeMsg("heartbeat", mapOf(
                 "uptime" to (System.currentTimeMillis() - startTime),
-                "busy" to false,
+                "busy" to busyProbe(),
             ))))
             delay(HEARTBEAT_INTERVAL_MS)
         }
     }
 
     private fun handleMessage(text: String) {
-        try {
-            @Suppress("UNCHECKED_CAST")
-            val msg = gson.fromJson(text, Map::class.java) as Map<String, Any>
-            val type = msg["type"] as? String ?: return
-            @Suppress("UNCHECKED_CAST")
-            val payload = msg["payload"] as? Map<*, *> ?: emptyMap<String, Any>()
-            android.util.Log.d(TAG, "received: $type")
-            onMessage?.invoke(type, payload)
-        } catch (e: Exception) {
-            android.util.Log.w(TAG, "invalid message: ${e.message}")
+        val envelope = WsEnvelope.parse(text)
+        if (envelope == null) {
+            android.util.Log.w(TAG, "invalid message")
+            return
         }
+        android.util.Log.d(TAG, "received: ${envelope.type}")
+        onMessage?.invoke(envelope.type, envelope.payload, envelope.msgId)
+    }
+
+    /** 指令回执上行（cmd_result）。断线（wsRef null）返回 false，由 CommandQueue 记日志并靠去重缓存等重投。 */
+    fun sendResult(payload: Map<String, Any?>): Boolean {
+        val ws = wsRef.get() ?: return false
+        return ws.send(gson.toJson(makeMsg("cmd_result", payload)))
     }
 
     private fun buildWsUrl(): String {
