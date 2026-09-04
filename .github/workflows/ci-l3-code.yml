@@ -198,7 +198,8 @@ jobs:
   security:
     name: Security Audit
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 两段 npm audit（根目录+apps/dashboard）走 registry 网络慢时各 5min 上下，10min 总窗被吃满（2026-09-04 实测被 cancel）
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
