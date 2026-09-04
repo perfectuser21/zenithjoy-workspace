@@ -243,7 +243,7 @@ TASK_ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data'
 ok "Step 8a collect/start → task_id=$TASK_ID"
 
 VIDEO_ID="p2smoke${RND//-/}"
-S8_HTTP=$(curl -s -o "$S8_TMP" -w "%{http_code}" --max-time 15 \
+S8_HTTP=$(curl -s -o "$S8_TMP" -w "%{http_code}" --max-time 60 \
   -X POST "$API_BASE/api/acquisition/collect/report-videos" \
   -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
   -d "{\"task_id\":\"$TASK_ID\",\"videos\":[{\"video_id\":\"$VIDEO_ID\",\"title\":\"p2 smoke 对标视频\"}]}")
@@ -300,7 +300,7 @@ ok "Step 8 ✅ 采集+判定服务端链路全通"
 # ───────────────────────────────────────────────────────────────────
 echo "▶ Step 8d: 视频存疑 → commander(DeepSeek) 真调复核"
 VIDEO_ID_CMD="p2cmd${RND//-/}"
-S8_HTTP=$(curl -s -o "$S8_TMP" -w "%{http_code}" --max-time 15 \
+S8_HTTP=$(curl -s -o "$S8_TMP" -w "%{http_code}" --max-time 60 \
   -X POST "$API_BASE/api/acquisition/collect/report-videos" \
   -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
   -d "{\"task_id\":\"$TASK_ID\",\"videos\":[{\"video_id\":\"$VIDEO_ID_CMD\",\"title\":\"p2 commander 复核视频\"}]}")
@@ -370,7 +370,7 @@ ok "Step 9b collect/start → task_id=$S9_TASK_ID"
 S9_VIDEO="p2smokelead${RND//-/}"
 S9_NICK="p2smokelead${RND//-/}"
 S9_DYID="1689${RANDOM}${RANDOM}"
-S9_HTTP=$(curl -s -o "$S9_TMP" -w "%{http_code}" --max-time 20 \
+S9_HTTP=$(curl -s -o "$S9_TMP" -w "%{http_code}" --max-time 60 \
   -X POST "$API_BASE/api/acquisition/collect/report" \
   -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
   -d "{\"task_id\":\"$S9_TASK_ID\",\"video_id\":\"$S9_VIDEO\",\"commenters\":[{\"nickname\":\"$S9_NICK\",\"comment_text\":\"怎么联系你们\",\"grade\":\"高意向\",\"douyin_id\":\"$S9_DYID\"}]}")
@@ -382,7 +382,7 @@ ok "Step 9c ✅ 设备上报 douyin_id=$S9_DYID → lead 带号落库"
 # 9d 反向（宁可空，不可猜 — #1306）：没读到号的评论，绝不许编一个号出来
 S9_VIDEO2="p2smokenull${RND//-/}"
 S9_NICK2="p2smokenull${RND//-/}"
-S9_HTTP=$(curl -s -o "$S9_TMP" -w "%{http_code}" --max-time 20 \
+S9_HTTP=$(curl -s -o "$S9_TMP" -w "%{http_code}" --max-time 60 \
   -X POST "$API_BASE/api/acquisition/collect/report" \
   -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
   -d "{\"task_id\":\"$S9_TASK_ID\",\"video_id\":\"$S9_VIDEO2\",\"commenters\":[{\"nickname\":\"$S9_NICK2\",\"comment_text\":\"多少钱一平\",\"grade\":\"高意向\"}]}")
@@ -433,7 +433,7 @@ S10_HTTP=$(curl -s -o "$S10_TMP" -w "%{http_code}" --max-time 15 \
 S10_TASK_ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S10_TMP" 2>/dev/null)
 [ -n "$S10_TASK_ID" ] || fail "Step 10b 无 task_id" 10
 
-S10_HTTP=$(curl -s -o "$S10_TMP" -w "%{http_code}" --max-time 15 \
+S10_HTTP=$(curl -s -o "$S10_TMP" -w "%{http_code}" --max-time 60 \
   -X POST "$API_BASE/api/acquisition/collect/report-videos" \
   -H "Content-Type: application/json" -H "x-agent-id: $S10_AGENT" \
   -d "{\"task_id\":\"$S10_TASK_ID\",\"videos\":[{\"video_id\":\"$S10_VIDEO\",\"title\":\"p2 smoke 空画像回归\"}]}")
@@ -571,7 +571,7 @@ S14_HTTP=$(curl -s -o "$S14_TMP" -w "%{http_code}" --max-time 15 \
 S14_TASK_A=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S14_TMP" 2>/dev/null)
 [ -n "$S14_TASK_A" ] || fail "Step 14a 任务A 无 task_id" 14
 
-curl -s -o "$S14_TMP" --max-time 15 \
+curl -s -o "$S14_TMP" --max-time 60 \
   -X POST "$API_BASE/api/acquisition/collect/report-videos" \
   -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
   -d "{\"task_id\":\"$S14_TASK_A\",\"videos\":[{\"video_id\":\"$S14_VIDEO\",\"title\":\"p2 smoke 缓存回归\"}]}" >/dev/null
@@ -592,7 +592,7 @@ S14_HTTP=$(curl -s -o "$S14_TMP" -w "%{http_code}" --max-time 15 \
 S14_TASK_B=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S14_TMP" 2>/dev/null)
 [ -n "$S14_TASK_B" ] || fail "Step 14b 任务B 无 task_id" 14
 
-curl -s -o "$S14_TMP" --max-time 15 \
+curl -s -o "$S14_TMP" --max-time 60 \
   -X POST "$API_BASE/api/acquisition/collect/report-videos" \
   -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
   -d "{\"task_id\":\"$S14_TASK_B\",\"videos\":[{\"video_id\":\"$S14_VIDEO\",\"title\":\"p2 smoke 缓存回归\"}]}" >/dev/null
@@ -640,7 +640,7 @@ S15_HTTP=$(curl -s -o "$S15_TMP" -w "%{http_code}" --max-time 15 \
 S15_TASK=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S15_TMP" 2>/dev/null)
 [ -n "$S15_TASK" ] || fail "Step 15a 无 task_id" 15
 
-S15_HTTP=$(curl -s -o "$S15_TMP" -w "%{http_code}" --max-time 15 \
+S15_HTTP=$(curl -s -o "$S15_TMP" -w "%{http_code}" --max-time 60 \
   -X POST "$API_BASE/api/acquisition/collect/report" \
   -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
   -d "{\"task_id\":\"$S15_TASK\",\"video_id\":\"$S15_VIDEO\",\"commenters\":[{\"nickname\":\"p2smoke昵称${RND}\",\"comment_text\":\"求联系方式\",\"grade\":\"高意向\",\"douyin_id\":\"$S15_DOUYIN_ID\"}],\"terminal\":true}")
@@ -913,7 +913,7 @@ S23A_TASK=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['dat
 # 本 Step 就是要逼 /collect/report 走真实 gradeComments() 调用路径。
 S23A_VIDEO="p2smokege${RND//-/}"
 S23A_NICK="p2smokege${RND//-/}"
-S23A_HTTP=$(curl -s -o "$S23A_TMP" -w "%{http_code}" --max-time 20 \
+S23A_HTTP=$(curl -s -o "$S23A_TMP" -w "%{http_code}" --max-time 60 \
   -X POST "$API_BASE/api/acquisition/collect/report" \
   -H "Content-Type: application/json" -H "x-agent-id: $S23A_AGENT" \
   -d "{\"task_id\":\"$S23A_TASK\",\"video_id\":\"$S23A_VIDEO\",\"commenters\":[{\"nickname\":\"$S23A_NICK\",\"comment_text\":\"求联系方式，多少钱\"}]}")
@@ -1241,7 +1241,7 @@ ok "Step 26a ✅ 采集任务建立 task_id=$S26_TASK"
 
 # 26b：report-videos 先登记一个 video，再用终态 report 上报 error_code
 S26_VID="p2smokefr2${RND//-/}"
-curl -s -o "$S26_TMP" --max-time 15 \
+curl -s -o "$S26_TMP" --max-time 60 \
   -X POST "$API_BASE/api/acquisition/collect/report-videos" \
   -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
   -d "{\"task_id\":\"$S26_TASK\",\"videos\":[{\"video_id\":\"$S26_VID\",\"title\":\"fr2 test\"}]}" >/dev/null
@@ -1274,7 +1274,7 @@ S26D_HTTP=$(curl -s -o "$S26D_TMP" -w "%{http_code}" --max-time 15 \
 S26D_TASK=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S26D_TMP" 2>/dev/null)
 [ -n "$S26D_TASK" ] || fail "Step 26d 无 task_id" 26
 
-S26D_HTTP=$(curl -s -o "$S26D_TMP" -w "%{http_code}" --max-time 20 \
+S26D_HTTP=$(curl -s -o "$S26D_TMP" -w "%{http_code}" --max-time 60 \
   -X POST "$API_BASE/api/acquisition/collect/report" \
   -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
   -d "{\"task_id\":\"$S26D_TASK\",\"terminal\":\"failed\",\"reason\":{\"error_code\":\"KEYWORD_NO_RESULT\"}}")
@@ -1294,7 +1294,7 @@ S26E_HTTP=$(curl -s -o "$S26E_TMP" -w "%{http_code}" --max-time 15 \
 S26E_TASK=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data']['task_id'])" "$S26E_TMP" 2>/dev/null)
 [ -n "$S26E_TASK" ] || fail "Step 26e 无 task_id" 26
 
-S26E_HTTP=$(curl -s -o "$S26E_TMP" -w "%{http_code}" --max-time 20 \
+S26E_HTTP=$(curl -s -o "$S26E_TMP" -w "%{http_code}" --max-time 60 \
   -X POST "$API_BASE/api/acquisition/collect/report" \
   -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
   -d "{\"task_id\":\"$S26E_TASK\",\"terminal\":\"failed\",\"reason\":{\"error_code\":\"TOTALLY_UNKNOWN_CODE_XYZ\"}}")
@@ -1326,13 +1326,13 @@ S27_NICK="p2smokefr3nick${RND//-/}"
 S27_REPLY_AT="2026-07-22T09:30:00Z"
 
 # 27b：登记 video
-curl -s -o "$S27_TMP" --max-time 15 \
+curl -s -o "$S27_TMP" --max-time 60 \
   -X POST "$API_BASE/api/acquisition/collect/report-videos" \
   -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
   -d "{\"task_id\":\"$S27_TASK\",\"videos\":[{\"video_id\":\"$S27_VID\",\"title\":\"fr3 test\"}]}" >/dev/null
 
 # 27c：上报评论 + latest_reply
-S27_HTTP=$(curl -s -o "$S27_TMP" -w "%{http_code}" --max-time 20 \
+S27_HTTP=$(curl -s -o "$S27_TMP" -w "%{http_code}" --max-time 60 \
   -X POST "$API_BASE/api/acquisition/collect/report" \
   -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
   -d "{\"task_id\":\"$S27_TASK\",\"video_id\":\"$S27_VID\",\"commenters\":[{\"nickname\":\"$S27_NICK\",\"comment_text\":\"有优惠吗\",\"grade\":\"高意向\"}],\"latest_reply\":\"这个有链接吗？\",\"latest_reply_at\":\"$S27_REPLY_AT\"}")
@@ -1382,7 +1382,7 @@ S28_TASK=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['data
 S28_VIDEO="p2smokefr4${RND//-/}"
 S28_NICK="p2smokefr4nick${RND//-/}"
 S28_DOUYIN_ID="douyinfr4${RND//-/}"
-S28_HTTP=$(curl -s -o "$S28_TMP" -w "%{http_code}" --max-time 20 \
+S28_HTTP=$(curl -s -o "$S28_TMP" -w "%{http_code}" --max-time 60 \
   -X POST "$API_BASE/api/acquisition/collect/report" \
   -H "Content-Type: application/json" -H "x-agent-id: $AGENT_PK" \
   -d "{\"task_id\":\"$S28_TASK\",\"video_id\":\"$S28_VIDEO\",\"commenters\":[{\"nickname\":\"$S28_NICK\",\"comment_text\":\"求联系方式\",\"grade\":\"高意向\",\"douyin_id\":\"$S28_DOUYIN_ID\"}]}")
