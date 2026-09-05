@@ -184,10 +184,68 @@ cmd_lock_status() {
     '{ok:true, locked:true, owner:$owner, acquired_at:$at, age_seconds:$age}')"
 }
 
+cmd_open_app() {
+  call_phonectl launch com.ss.android.ugc.aweme
+  if [ "$PHONECTL_EXIT" -ne 0 ]; then
+    local err_code detail
+    err_code=$(echo "$PHONECTL_OUT" | jq -r '.data.errorCode // empty' 2>/dev/null)
+    [ -n "$err_code" ] || err_code="LAUNCH_FAILED"
+    detail="$PHONECTL_STDERR"
+    [ -n "$detail" ] || detail="launch 失败"
+    emit_fail "$(jq -n --arg c "$err_code" --arg d "$detail" '{ok:false,errorCode:$c,detail:$d}')" 1
+  fi
+  local fg
+  fg=$(echo "$PHONECTL_OUT" | jq -r '.data.foregroundPkg // "unknown"')
+  emit_ok "$(jq -n --arg fg "$fg" '{ok:true, foregroundPkg:$fg}')"
+}
+
+# EVIDENCE_ID 只允许用作文件名安全字符，防止路径穿越/注入（同 profile 名称校验的风格）。
+validate_evidence_id() {
+  [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]] || die "非法 EVIDENCE_ID: $1"
+}
+
+cmd_snapshot() {
+  local evidence_id="${1:-}"
+  local filename
+  if [ -n "$evidence_id" ]; then
+    validate_evidence_id "$evidence_id"
+    filename="snapshot-${evidence_id}.png"
+  else
+    filename="snapshot-$(date +%s%N).png"
+  fi
+  call_phonectl screenshot
+  if [ "$PHONECTL_EXIT" -ne 0 ]; then
+    local err_code detail
+    err_code=$(echo "$PHONECTL_OUT" | jq -r '.data.errorCode // empty' 2>/dev/null)
+    [ -n "$err_code" ] || err_code="CAPTURE_FAILED"
+    detail="$PHONECTL_STDERR"
+    [ -n "$detail" ] || detail="screenshot 失败"
+    emit_fail "$(jq -n --arg c "$err_code" --arg d "$detail" '{ok:false,errorCode:$c,detail:$d}')" 1
+  fi
+  # 深层取值前先用 `// empty`/`// 0` 兜底：字段不存在时 jq -r 会打印字面量 "null"，
+  # 若不做这层防御，"null" 三个字符会被当 base64 解码，写出一个损坏的 PNG 却仍报 ok:true。
+  local b64 cw ch sw sh out_path
+  b64=$(echo "$PHONECTL_OUT" | jq -r '.data.data.imageBase64 // empty')
+  if [ -z "$b64" ]; then
+    emit_fail "$(jq -n '{ok:false,errorCode:"CAPTURE_FAILED",detail:"imageBase64 缺失或为空"}')" 1
+  fi
+  cw=$(echo "$PHONECTL_OUT" | jq -r '.data.data.captureWidth // 0')
+  ch=$(echo "$PHONECTL_OUT" | jq -r '.data.data.captureHeight // 0')
+  sw=$(echo "$PHONECTL_OUT" | jq -r '.data.data.screenWidth // 0')
+  sh=$(echo "$PHONECTL_OUT" | jq -r '.data.data.screenHeight // 0')
+  out_path="$PROFILE_DIR/$filename"
+  echo "$b64" | base64 -d > "$out_path"
+  emit_ok "$(jq -n --arg path "$out_path" --argjson cw "$cw" --argjson ch "$ch" --argjson sw "$sw" --argjson sh "$sh" \
+    '{ok:true, path:$path, captureWidth:$cw, captureHeight:$ch, screenWidth:$sw, screenHeight:$sh}')"
+}
+
 case "$COMMAND" in
   preflight) cmd_preflight ;;
   lock-acquire) cmd_lock_acquire "$@" ;;
   lock-release) cmd_lock_release "$@" ;;
   lock-status) cmd_lock_status ;;
+  open-app) cmd_open_app ;;
+  snapshot) cmd_snapshot "" ;;
+  snapshot-evidence) cmd_snapshot "${1:-}" ;;
   *) die "命令尚未实现: $COMMAND" ;;
 esac

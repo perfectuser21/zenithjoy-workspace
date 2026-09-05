@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import http from 'node:http';
-import { writeFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, mkdirSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -450,6 +450,108 @@ test('lock-acquire：过期孤儿锁（TTL=0）允许抢占', async () => {
     const out = JSON.parse(r.stdout);
     assert.equal(out.acquired, true);
   } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+// 1x1 红色 PNG，base64（合法最小图片，供 snapshot 落盘断言用）
+const TINY_PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
+test('open-app：调用 phonectl launch 抖音包名', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    let capturedBody = null;
+    server = await startMockServer((req, res, body) => {
+      capturedBody = JSON.parse(body);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data: { ok: true, foregroundPkg: 'com.ss.android.ugc.aweme', outcome: 'completed' } }));
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'open-app'], {
+      PROFILES_FILE: profilesFile, ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 0);
+    assert.equal(capturedBody.action, 'launch');
+    assert.equal(capturedBody.pkg, 'com.ss.android.ugc.aweme');
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.ok, true);
+    assert.equal(out.foregroundPkg, 'com.ss.android.ugc.aweme');
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('snapshot-evidence：成功落盘 PNG 并返回路径+双分辨率', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    server = await startMockServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data: { ok: true, data: {
+        imageBase64: TINY_PNG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664,
+      }, outcome: 'completed' } }));
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'snapshot-evidence', 'ev-001'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 0);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.ok, true);
+    assert.equal(out.captureWidth, 720);
+    assert.equal(out.screenWidth, 1200);
+    const written = readFileSync(out.path);
+    assert.equal(written.toString('base64'), TINY_PNG_B64);
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+test('snapshot-evidence：非法 EVIDENCE_ID 格式 → exit 2，不发请求', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    const r = await runBridge(['--profile', 'test-profile', 'snapshot-evidence', 'has space'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 2);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+test('snapshot-evidence：phonectl screenshot 失败 → 透传错误，不落盘', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    server = await startMockServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data: { ok: false, errorCode: 'CAPTURE_FAILED', outcome: 'completed' } }));
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'snapshot-evidence', 'ev-002'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 1);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.ok, false);
+    assert.equal(existsSync(join(evDir, 'test-profile', 'snapshot-ev-002.png')), false);
+  } finally {
+    server?.close();
     rmSync(dir, { recursive: true, force: true });
     rmSync(evDir, { recursive: true, force: true });
   }
