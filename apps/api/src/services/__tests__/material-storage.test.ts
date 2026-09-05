@@ -113,3 +113,26 @@ describe('InMemoryMaterialStorage', () => {
     expect(DEFAULT_SIGNED_URL_TTL_SECONDS).toBe(3600);
   });
 });
+
+describe('InMemoryMaterialStorage — 直传两个新能力', () => {
+  it('presignPut 返回可辨认的 URL，且带上 key 与过期秒数', async () => {
+    const s = new InMemoryMaterialStorage();
+    const url = await s.presignPut('t1/m1/a.jpg', 7200);
+    expect(url).toContain('t1/m1/a.jpg');
+    expect(url).toContain('7200');
+  });
+
+  it('headObject 对不存在的对象返回 null——绝不假装它在', async () => {
+    const s = new InMemoryMaterialStorage();
+    expect(await s.headObject('t1/m1/missing.jpg')).toBeNull();
+  });
+
+  it('headObject 对已存在的对象返回真实大小', async () => {
+    const s = new InMemoryMaterialStorage();
+    const tmp = path.join(os.tmpdir(), `zj-head-${Date.now()}.bin`);
+    fs.writeFileSync(tmp, Buffer.alloc(1234));
+    await s.putObject({ key: 't1/m1/a.bin', filePath: tmp });
+    expect(await s.headObject('t1/m1/a.bin')).toEqual({ sizeBytes: 1234 });
+    fs.unlinkSync(tmp);
+  });
+});
