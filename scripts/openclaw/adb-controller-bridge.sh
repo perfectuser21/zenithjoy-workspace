@@ -114,15 +114,34 @@ cmd_preflight() {
 
 now_epoch() { date -u +%s; }
 
+# 锁文件是否是合法 JSON。空文件/半截写入/其他损坏内容都判为不合法，
+# 与 cmd_preflight 里 sessions_body 的 `jq empty` 校验模式保持一致。
+lock_file_valid() {
+  [ -f "$LOCK_FILE" ] && jq empty "$LOCK_FILE" >/dev/null 2>&1
+}
+
+# 原子写锁文件：先写同目录下的临时文件，再 mv 到位。
+# mv 在同一文件系统内是原子操作，避免进程被杀在写一半时留下半截 JSON。
+write_lock_file() {
+  local owner="$1" iso="$2" epoch="$3" tmp
+  tmp="${LOCK_FILE}.tmp.$$"
+  jq -n --arg owner "$owner" --arg iso "$iso" --argjson epoch "$epoch" \
+    '{owner:$owner, acquired_at:$iso, acquired_at_epoch:$epoch}' > "$tmp"
+  mv -f "$tmp" "$LOCK_FILE"
+}
+
 cmd_lock_acquire() {
   local run_id="${1:-}"
   [ -n "$run_id" ] || die "lock-acquire 需要 run_id"
-  if [ -f "$LOCK_FILE" ]; then
+  if lock_file_valid; then
     local owner acquired_at age
     owner=$(jq -r '.owner' "$LOCK_FILE")
     acquired_at=$(jq -r '.acquired_at_epoch' "$LOCK_FILE")
     age=$(( $(now_epoch) - acquired_at ))
     if [ "$owner" = "$run_id" ]; then
+      # 重入续期：刷新 acquired_at/acquired_at_epoch，避免长流程多个 stage
+      # 依次调用 lock-acquire 时，锁的年龄仍从第一次获取算起被误判成孤儿锁。
+      write_lock_file "$run_id" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(now_epoch)"
       emit_ok "$(jq -n '{ok:true, acquired:true, already_owned:true}')"
     fi
     if [ "$age" -lt "$LOCK_TTL_SECONDS" ]; then
@@ -130,15 +149,15 @@ cmd_lock_acquire() {
     fi
     # 孤儿锁超时，允许抢占，落到下面正常写入
   fi
-  jq -n --arg owner "$run_id" --arg iso "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson epoch "$(now_epoch)" \
-    '{owner:$owner, acquired_at:$iso, acquired_at_epoch:$epoch}' > "$LOCK_FILE"
+  # 走到这里：锁不存在 / 锁文件损坏（按"没有锁"处理，允许覆盖）/ 孤儿锁超时
+  write_lock_file "$run_id" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(now_epoch)"
   emit_ok "$(jq -n '{ok:true, acquired:true}')"
 }
 
 cmd_lock_release() {
   local run_id="${1:-}"
   [ -n "$run_id" ] || die "lock-release 需要 run_id"
-  if [ ! -f "$LOCK_FILE" ]; then
+  if ! lock_file_valid; then
     emit_fail "$(jq -n '{ok:false,errorCode:"NOT_OWNER",detail:"锁不存在"}')" 1
   fi
   local owner
@@ -151,6 +170,9 @@ cmd_lock_release() {
 }
 
 cmd_lock_status() {
+  if [ -f "$LOCK_FILE" ] && ! lock_file_valid; then
+    emit_ok "$(jq -n '{ok:true, locked:false, warning:"检测到损坏的锁文件，已忽略"}')"
+  fi
   if [ ! -f "$LOCK_FILE" ]; then
     emit_ok "$(jq -n '{ok:true, locked:false}')"
   fi
