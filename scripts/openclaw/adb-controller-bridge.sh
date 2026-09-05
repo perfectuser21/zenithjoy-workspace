@@ -112,7 +112,60 @@ cmd_preflight() {
          + (if $sessions_warning != "" then [$sessions_warning] else [] end))}')"
 }
 
+now_epoch() { date -u +%s; }
+
+cmd_lock_acquire() {
+  local run_id="${1:-}"
+  [ -n "$run_id" ] || die "lock-acquire 需要 run_id"
+  if [ -f "$LOCK_FILE" ]; then
+    local owner acquired_at age
+    owner=$(jq -r '.owner' "$LOCK_FILE")
+    acquired_at=$(jq -r '.acquired_at_epoch' "$LOCK_FILE")
+    age=$(( $(now_epoch) - acquired_at ))
+    if [ "$owner" = "$run_id" ]; then
+      emit_ok "$(jq -n '{ok:true, acquired:true, already_owned:true}')"
+    fi
+    if [ "$age" -lt "$LOCK_TTL_SECONDS" ]; then
+      emit_fail "$(jq -n --arg owner "$owner" '{ok:false,errorCode:"LOCKED",owner:$owner}')" 1
+    fi
+    # 孤儿锁超时，允许抢占，落到下面正常写入
+  fi
+  jq -n --arg owner "$run_id" --arg iso "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson epoch "$(now_epoch)" \
+    '{owner:$owner, acquired_at:$iso, acquired_at_epoch:$epoch}' > "$LOCK_FILE"
+  emit_ok "$(jq -n '{ok:true, acquired:true}')"
+}
+
+cmd_lock_release() {
+  local run_id="${1:-}"
+  [ -n "$run_id" ] || die "lock-release 需要 run_id"
+  if [ ! -f "$LOCK_FILE" ]; then
+    emit_fail "$(jq -n '{ok:false,errorCode:"NOT_OWNER",detail:"锁不存在"}')" 1
+  fi
+  local owner
+  owner=$(jq -r '.owner' "$LOCK_FILE")
+  if [ "$owner" != "$run_id" ]; then
+    emit_fail "$(jq -n --arg owner "$owner" '{ok:false,errorCode:"NOT_OWNER",owner:$owner}')" 1
+  fi
+  rm -f "$LOCK_FILE"
+  emit_ok "$(jq -n '{ok:true, released:true}')"
+}
+
+cmd_lock_status() {
+  if [ ! -f "$LOCK_FILE" ]; then
+    emit_ok "$(jq -n '{ok:true, locked:false}')"
+  fi
+  local owner acquired_at age
+  owner=$(jq -r '.owner' "$LOCK_FILE")
+  acquired_at=$(jq -r '.acquired_at' "$LOCK_FILE")
+  age=$(( $(now_epoch) - $(jq -r '.acquired_at_epoch' "$LOCK_FILE") ))
+  emit_ok "$(jq -n --arg owner "$owner" --arg at "$acquired_at" --argjson age "$age" \
+    '{ok:true, locked:true, owner:$owner, acquired_at:$at, age_seconds:$age}')"
+}
+
 case "$COMMAND" in
   preflight) cmd_preflight ;;
+  lock-acquire) cmd_lock_acquire "$@" ;;
+  lock-release) cmd_lock_release "$@" ;;
+  lock-status) cmd_lock_status ;;
   *) die "命令尚未实现: $COMMAND" ;;
 esac

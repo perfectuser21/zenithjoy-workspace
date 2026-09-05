@@ -263,3 +263,125 @@ test('preflight：sessions 接口返回 200 但 body 非法 JSON → 不 crash�
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('lock-acquire：首次获取成功', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    const r = await runBridge(['--profile', 'test-profile', 'lock-acquire', 'run-1'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 0);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.acquired, true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+test('lock-acquire：同一 run_id 重入返回 already_owned', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    await runBridge(['--profile', 'test-profile', 'lock-acquire', 'run-1'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    const r = await runBridge(['--profile', 'test-profile', 'lock-acquire', 'run-1'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 0);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.already_owned, true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+test('lock-acquire：不同 run_id 冲突 → LOCKED，exit 1', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    await runBridge(['--profile', 'test-profile', 'lock-acquire', 'run-1'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    const r = await runBridge(['--profile', 'test-profile', 'lock-acquire', 'run-2'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 1);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.errorCode, 'LOCKED');
+    assert.equal(out.owner, 'run-1');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+test('lock-release：非 owner 释放 → NOT_OWNER，exit 1', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    await runBridge(['--profile', 'test-profile', 'lock-acquire', 'run-1'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    const r = await runBridge(['--profile', 'test-profile', 'lock-release', 'run-2'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 1);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.errorCode, 'NOT_OWNER');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+test('lock-release：owner 释放成功，release 后 lock-status 显示 locked=false', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    await runBridge(['--profile', 'test-profile', 'lock-acquire', 'run-1'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    const rel = await runBridge(['--profile', 'test-profile', 'lock-release', 'run-1'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(rel.status, 0);
+    const status = await runBridge(['--profile', 'test-profile', 'lock-status'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    const out = JSON.parse(status.stdout);
+    assert.equal(out.locked, false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+test('lock-acquire：过期孤儿锁（TTL=0）允许抢占', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    await runBridge(['--profile', 'test-profile', 'lock-acquire', 'run-1'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    const r = await runBridge(['--profile', 'test-profile', 'lock-acquire', 'run-2'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+      OPENCLAW_LOCK_TTL_SECONDS: '0',
+    });
+    assert.equal(r.status, 0);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.acquired, true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
