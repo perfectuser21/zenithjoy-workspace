@@ -128,3 +128,27 @@ describe('MAX_FILE_BYTES', () => {
     expect(MAX_FILE_BYTES).toBe(2 * 1024 * 1024 * 1024);
   });
 });
+
+describe('buildDedupeKey — 统一元数据口径（不含内容哈希）', () => {
+  it('同一文件经两个入口（一个曾能算哈希、一个不能）得到同一个键', () => {
+    const meta = {
+      tenantId: 't1',
+      fileName: 'IMG_0001.MOV',
+      sizeBytes: 12345,
+      takenAt: '2026-09-05T00:00:00Z',
+    };
+    expect(buildDedupeKey(meta)).toBe(buildDedupeKey({ ...meta }));
+  });
+
+  it('DedupeKeyInput 不再接受 contentHash（多塞该字段不改变结果）', () => {
+    const base = { tenantId: 't1', fileName: 'a.jpg', sizeBytes: 1, takenAt: 'x' };
+    const withExtra = { ...base, contentHash: 'deadbeef' } as never;
+    expect(buildDedupeKey(withExtra)).toBe(buildDedupeKey(base));
+  });
+
+  it('租户仍然进键：不同租户同名同大小不撞', () => {
+    const a = { tenantId: 'A', fileName: 'x.jpg', sizeBytes: 9 };
+    const b = { tenantId: 'B', fileName: 'x.jpg', sizeBytes: 9 };
+    expect(buildDedupeKey(a)).not.toBe(buildDedupeKey(b));
+  });
+});
