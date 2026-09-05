@@ -288,12 +288,22 @@ cmd_snapshot() {
 # 截图成功则在结果里加 action_ok:true，表明"动作+截图"整体成功。
 finish_action_evidence() {
   local evidence_id="$1" wait_ms="$2"
-  sleep "$(awk "BEGIN{print $wait_ms/1000}")"
+  # wait_ms 必须是非负整数：这里曾经把 wait_ms 原样拼进 awk 程序源码文本
+  # （`awk "BEGIN{print $wait_ms/1000}"`），awk 的 system() 能跑任意 shell 命令，
+  # 调用方传入形如 `800; system("...")` 的字符串即可注入命令执行——必须在
+  # 任何 sleep/后续动作之前拦下，不能只做弱校验。
+  [[ "$wait_ms" =~ ^[0-9]+$ ]] || die "wait_ms 必须是非负整数，收到: $wait_ms"
+  local secs=$((wait_ms / 1000)) ms=$((wait_ms % 1000))
+  sleep "${secs}.$(printf '%03d' "$ms")"
   local snap_json rc
   snap_json=$(cmd_snapshot_capture "$evidence_id")
   rc=$?
   if [ "$rc" -ne 0 ]; then
-    emit_fail "$snap_json" 1
+    # 动作（tap/swipe/back）本身已经在调用 finish_action_evidence 之前真实执行成功了，
+    # 这里失败的只是截图存证这一步。必须显式标注 action_already_executed，让调用方
+    # 知道不能把这次失败当成"整条命令从未生效"去盲目重试整条 tap-evidence/
+    # swipe-evidence/back-evidence——重试会造成真实设备上的重复点击/滑动。
+    emit_fail "$(echo "$snap_json" | jq -c '. + {action_ok:false, action_already_executed:true}')" 1
   fi
   emit_ok "$(echo "$snap_json" | jq -c '. + {action_ok:true}')"
 }

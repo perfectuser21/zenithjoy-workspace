@@ -790,6 +790,94 @@ test('back-evidence：成功路径调用 key back 再截图', async () => {
   }
 });
 
+test('tap-evidence：wait_ms 非数字（简单非法值）→ exit 2，不截图', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    let screenshotCalled = false;
+    server = await startMockServer((req, res, body) => {
+      const b = JSON.parse(body);
+      if (b.action === 'screenshot') { screenshotCalled = true; }
+      res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, outcome: 'completed' } }));
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'tap-evidence', '600', '1300', 'ev-tap-illegal', 'abc'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 2);
+    assert.equal(screenshotCalled, false);
+    assert.equal(existsSync(join(evDir, 'test-profile', 'snapshot-ev-tap-illegal.png')), false);
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+test('tap-evidence：wait_ms 命令注入 payload（awk system()）→ exit 2，不执行注入命令，不截图', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  let server;
+  const markerFile = join(tmpdir(), `openclaw-pwn-test-${process.pid}-${Date.now()}`);
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    let screenshotCalled = false;
+    server = await startMockServer((req, res, body) => {
+      const b = JSON.parse(body);
+      if (b.action === 'screenshot') { screenshotCalled = true; }
+      res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, outcome: 'completed' } }));
+    });
+    const { port } = server.address();
+    const injection = `800; system("touch ${markerFile}")`;
+    const r = await runBridge(['--profile', 'test-profile', 'tap-evidence', '600', '1300', 'ev-tap-inject', injection], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 2);
+    assert.equal(screenshotCalled, false);
+    assert.equal(existsSync(markerFile), false, '命令注入 payload 不应被执行，marker 文件不应存在');
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+    rmSync(markerFile, { force: true });
+  }
+});
+
+test('tap-evidence：动作成功但截图失败 → exit 1，返回体带 action_ok:false + action_already_executed:true', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    let tapCalled = false, screenshotCalled = false;
+    server = await startMockServer((req, res, body) => {
+      const b = JSON.parse(body);
+      if (b.action === 'tap') { tapCalled = true; res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, outcome: 'completed' } })); return; }
+      if (b.action === 'screenshot') { screenshotCalled = true; res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: false, errorCode: 'CAPTURE_FAILED', outcome: 'completed' } })); return; }
+      res.writeHead(404); res.end('{}');
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'tap-evidence', '600', '1300', 'ev-tap-capfail', '10'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 1);
+    assert.ok(tapCalled); assert.ok(screenshotCalled);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.ok, false);
+    assert.equal(out.action_ok, false);
+    assert.equal(out.action_already_executed, true);
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
 for (const cmd of ['current-video-link', 'record-start', 'record-stop', 'record-status', 'record-extract-audio', 'ui-evidence']) {
   test(`${cmd}：本次范围不支持，exit 3`, async () => {
     const dir = mkdtempSync(join(tmpdir(), 'acb-'));
