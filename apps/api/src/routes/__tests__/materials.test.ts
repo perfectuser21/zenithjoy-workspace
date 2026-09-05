@@ -337,6 +337,33 @@ describe('POST /api/materials/complete', () => {
     expect(contentInserts.length).toBe(0);
   });
 
+  it('headObject 抛异常（网络故障）→ 502 STORAGE_UNAVAILABLE，绝不当成"文件不存在"，也绝不落库', async () => {
+    // 网络故障不能被误判成对象不存在——那会把传成功的素材当失败丢掉，
+    // 客户端会以为要重传，实际文件已经在 COS 上了。
+    const app = makeApp();
+    const materialId = 'material-storage-down';
+    const storageKey = `${TENANT_A}/${materialId}/photo.jpg`;
+    vi.spyOn(storage, 'headObject').mockRejectedValue(new Error('COS 503 Service Unavailable'));
+
+    const r = await request(app)
+      .post('/api/materials/complete')
+      .set('X-Upload-Token', TOKEN_A)
+      .send({
+        files: [
+          { storage_key: storageKey, material_id: materialId, file_name: 'photo.jpg', mime_type: 'image/jpeg', size_bytes: 10 },
+        ],
+      });
+
+    expect(r.status).toBe(502);
+    expect(r.body.error.code).toBe('STORAGE_UNAVAILABLE');
+    // 不确定的时候什么都别写：既不是 OBJECT_NOT_FOUND，也不能落库
+    expect(r.body.error.code).not.toBe('OBJECT_NOT_FOUND');
+    expect(r.body.data).toBeNull();
+    const contentInserts = (pool.query as any).mock.calls
+      .filter((c: any[]) => /INSERT INTO zenithjoy\.contents/i.test(c[0]));
+    expect(contentInserts.length).toBe(0);
+  });
+
   it('对象在但大小对不上 → 400 SIZE_MISMATCH，绝不落库', async () => {
     const app = makeApp();
     const materialId = 'material-size-mismatch';
