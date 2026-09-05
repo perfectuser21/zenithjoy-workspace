@@ -19,7 +19,6 @@ import multer from 'multer';
 import fs from 'node:fs';
 import os from 'node:os';
 import crypto from 'node:crypto';
-import pool from '../db/connection';
 import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import { validateLicense } from '../services/walking-skeleton.service';
 import {
@@ -34,6 +33,7 @@ import {
   MAX_FILE_BYTES,
   type UploadedFileMeta,
 } from '../services/material-upload';
+import { persistMaterials, type PersistItem } from '../services/material-persist';
 
 function fail(res: Response, status: number, code: string, message: string): void {
   res.status(status).json({
@@ -42,6 +42,36 @@ function fail(res: Response, status: number, code: string, message: string): voi
     error: { code, message },
     timestamp: new Date().toISOString(),
   });
+}
+
+/**
+ * 鉴权：租户永远从凭据反查，绝不信客户端自报的 tenant_id——否则任何人填别人的
+ * ID 就能把素材写进别人的库、也能拿到别人的素材 id。
+ * 失败时已写好响应，调用方拿到 null 直接 return。
+ */
+async function authenticate(
+  req: Request,
+  res: Response,
+): Promise<{ tenantId: string; licenseId: string } | null> {
+  const token = extractUploadToken(req);
+  if (!token) {
+    fail(res, 401, 'UNAUTHORIZED', '缺少上传凭据。请在请求头加 X-Upload-Token: <token>');
+    return null;
+  }
+  let r;
+  try {
+    r = await validateLicense(token);
+  } catch (err) {
+    fail(res, 500, 'LICENSE_LOOKUP_FAILED', err instanceof Error ? err.message : 'unknown');
+    return null;
+  }
+  if (!r.ok) {
+    // INVALID_LICENSE = 认不出这张证 → 401；其余（REVOKED/SUSPENDED/EXPIRED/
+    // NO_TENANT）= 认得出但不给用 → 403。与 worker-agent-auth 口径一致。
+    fail(res, r.code === 'INVALID_LICENSE' ? 401 : 403, r.code, r.message);
+    return null;
+  }
+  return { tenantId: r.license.tenant_id as string, licenseId: r.license.id as string };
 }
 
 /**
@@ -76,6 +106,158 @@ export function createMaterialsRouter(deps: MaterialsRouterDeps = {}): Router {
   const uploadRateLimit = simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn });
   router.use(uploadRateLimit);
 
+  // ── ① POST /upload-urls：客户端裸 PUT 之前，先换一批只对单个对象有效的签名 URL ──
+  router.post('/upload-urls', async (req: Request, res: Response) => {
+    const auth = await authenticate(req, res);
+    if (!auth) return;
+    const { tenantId, licenseId } = auth;
+
+    // body.files 必须是数组——就地收窄，不藏进 helper（CodeQL 不做跨函数收窄）。
+    const rawFiles: unknown = req.body?.files;
+    const fileInputs: unknown[] = Array.isArray(rawFiles) ? rawFiles : [];
+    if (fileInputs.length === 0) {
+      return fail(res, 400, 'NO_FILES', '没有素材：一次上传至少要带一个文件');
+    }
+
+    const metas: UploadedFileMeta[] = [];
+    for (const raw of fileInputs) {
+      const item = raw as Record<string, unknown>;
+      const fileName = typeof item?.file_name === 'string' ? sanitizeFileName(item.file_name) : 'material';
+      const mimeType = typeof item?.mime_type === 'string' ? item.mime_type : '';
+      const sizeBytes = typeof item?.size_bytes === 'number' && Number.isFinite(item.size_bytes) ? item.size_bytes : -1;
+
+      if (sizeBytes <= 0 || sizeBytes > MAX_FILE_BYTES) {
+        return fail(res, 400, 'FILE_TOO_LARGE', `文件 ${fileName} 大小非法或超过上限（${MAX_FILE_BYTES} 字节）`);
+      }
+      metas.push({ fileName, mimeType, sizeBytes });
+    }
+
+    try {
+      inferContentType(metas);
+    } catch (err) {
+      // 类型冲突在签 URL 阶段就拒，别让客户端白传几百兆再报错
+      return fail(res, 400, 'INVALID_MATERIAL_MIX', err instanceof Error ? err.message : 'unknown');
+    }
+
+    try {
+      const files = [];
+      for (const meta of metas) {
+        const materialId = crypto.randomUUID();
+        const storageKey = buildStorageKey({ tenantId, materialId, fileName: meta.fileName });
+        const uploadUrl = await storage.presignPut(storageKey);
+        files.push({
+          material_id: materialId,
+          storage_key: storageKey,
+          file_name: meta.fileName,
+          upload_url: uploadUrl,
+        });
+      }
+      return res.status(200).json({
+        success: true,
+        data: { files, license_id: licenseId },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error('[materials/upload-urls] error:', err);
+      return fail(res, 500, 'PRESIGN_FAILED', err instanceof Error ? err.message : 'unknown');
+    }
+  });
+
+  // ── ② POST /complete：客户端裸 PUT 完之后，服务端 HEAD 每个对象核实再落库 ──
+  router.post('/complete', async (req: Request, res: Response) => {
+    const auth = await authenticate(req, res);
+    if (!auth) return;
+    const { tenantId, licenseId } = auth;
+
+    const rawFiles: unknown = req.body?.files;
+    const fileInputs: unknown[] = Array.isArray(rawFiles) ? rawFiles : [];
+    if (fileInputs.length === 0) {
+      return fail(res, 400, 'NO_FILES', '没有素材：一次上传至少要带一个文件');
+    }
+
+    const items: PersistItem[] = [];
+    const metas: UploadedFileMeta[] = [];
+
+    for (const raw of fileInputs) {
+      const item = raw as Record<string, unknown>;
+      const storageKey = typeof item?.storage_key === 'string' ? item.storage_key : '';
+      const materialId = typeof item?.material_id === 'string' ? item.material_id : '';
+      const fileName = typeof item?.file_name === 'string' ? sanitizeFileName(item.file_name) : '';
+      const mimeType = typeof item?.mime_type === 'string' ? item.mime_type : '';
+      const sizeBytes = typeof item?.size_bytes === 'number' && Number.isFinite(item.size_bytes) ? item.size_bytes : -1;
+      const takenAt = typeof item?.taken_at === 'string' ? item.taken_at : undefined;
+
+      if (!storageKey || !materialId || !fileName || sizeBytes <= 0) {
+        return fail(res, 400, 'INVALID_ITEM', '素材条目缺少必要字段（storage_key/material_id/file_name/size_bytes）');
+      }
+      // storage_key 天然按租户分段——不在自己前缀下就是想认领别人的对象。
+      if (!storageKey.startsWith(`${tenantId}/`)) {
+        return fail(res, 403, 'TENANT_MISMATCH', '素材不属于当前租户，拒绝认领');
+      }
+
+      let head;
+      try {
+        head = await storage.headObject(storageKey);
+      } catch (err) {
+        // 网络故障不能当成"文件不存在"，那会把传成功的素材丢掉
+        return fail(res, 502, 'STORAGE_UNAVAILABLE', err instanceof Error ? err.message : 'unknown');
+      }
+      if (!head) {
+        return fail(res, 400, 'OBJECT_NOT_FOUND', `对象不存在：${storageKey}（客户端可能还没传完，或传到了别的 key）`);
+      }
+      if (head.sizeBytes !== sizeBytes) {
+        return fail(
+          res,
+          400,
+          'SIZE_MISMATCH',
+          `对象大小对不上：申报 ${sizeBytes} 字节，实际 ${head.sizeBytes} 字节（${storageKey}）`,
+        );
+      }
+
+      const meta: UploadedFileMeta = { fileName, mimeType, sizeBytes };
+      metas.push(meta);
+      items.push({
+        materialId,
+        storageKey,
+        fileName,
+        mimeType,
+        sizeBytes,
+        takenAt,
+        dedupeKey: buildDedupeKey({ tenantId, fileName, sizeBytes, takenAt }),
+      });
+    }
+
+    let contentType: string;
+    try {
+      contentType = inferContentType(metas);
+    } catch (err) {
+      return fail(res, 400, 'INVALID_MATERIAL_MIX', err instanceof Error ? err.message : 'unknown');
+    }
+
+    try {
+      const platforms = parsePlatforms(req.body?.platforms);
+      // 不传 onNewMaterial：文件已由客户端直传进 COS，这里不需要再上传一次。
+      const out = await persistMaterials({
+        tenantId,
+        licenseId,
+        contentType: contentType as 'video' | 'image',
+        title: firstString(req.body?.title),
+        body: firstString(req.body?.body),
+        platforms,
+        items,
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: { content_id: out.contentId, type: contentType, materials: out.materials },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error('[materials/complete] error:', err);
+      return fail(res, 500, 'COMPLETE_FAILED', err instanceof Error ? err.message : 'unknown');
+    }
+  });
+
   router.post('/upload', upload.array('files'), async (req: Request, res: Response) => {
     // multer 的 .array() 给数组、.fields() 给对象，所以 req.files 是「数组或对象」。
     // 必须用 Array.isArray 做**运行时**收窄——类型断言只骗过 TS，骗不过 CodeQL，
@@ -84,25 +266,9 @@ export function createMaterialsRouter(deps: MaterialsRouterDeps = {}): Router {
 
     try {
       // ── 1. 鉴权：租户永远从凭据反查，绝不信客户端自报的 tenant_id ──
-      // 否则任何人填别人的 ID 就能把素材写进别人的库、也能拿到别人的素材 id。
-      const token = extractUploadToken(req);
-      if (!token) {
-        return fail(res, 401, 'UNAUTHORIZED', '缺少上传凭据。请在请求头加 X-Upload-Token: <token>');
-      }
-
-      let licenseResult;
-      try {
-        licenseResult = await validateLicense(token);
-      } catch (err) {
-        return fail(res, 500, 'LICENSE_LOOKUP_FAILED', err instanceof Error ? err.message : 'unknown');
-      }
-      if (!licenseResult.ok) {
-        // INVALID_LICENSE = 认不出这张证 → 401；其余（REVOKED/SUSPENDED/EXPIRED/
-        // NO_TENANT）= 认得出但不给用 → 403。与 worker-agent-auth 口径一致。
-        const status = licenseResult.code === 'INVALID_LICENSE' ? 401 : 403;
-        return fail(res, status, licenseResult.code, licenseResult.message);
-      }
-      const tenantId = licenseResult.license.tenant_id as string;
+      const auth = await authenticate(req, res);
+      if (!auth) return;
+      const { tenantId, licenseId } = auth;
 
       // ── 2. 校验素材 ──
       if (files.length === 0) {
@@ -122,7 +288,7 @@ export function createMaterialsRouter(deps: MaterialsRouterDeps = {}): Router {
         return fail(res, 400, 'INVALID_MATERIAL_MIX', err instanceof Error ? err.message : 'unknown');
       }
 
-      // ── 3. 逐个入库 + 上存储 ──
+      // ── 3. 组装落库条目 ──
       // multipart 同名字段传一个是 string、传多个是数组。收窄必须**就地写**，
       // 不能藏进 helper——CodeQL 不做跨函数收窄，而且就地写读代码的人也一眼看得见
       // 这里有两种形态（js/type-confusion-through-parameter-tampering）。
@@ -133,73 +299,50 @@ export function createMaterialsRouter(deps: MaterialsRouterDeps = {}): Router {
           ? [rawTakenAt]
           : [];
       const takenAtList = normalizeTakenAt(takenAtRaw, files.length);
-      const results: Array<{ id: string; file_name: string; deduped: boolean }> = [];
 
-      for (let i = 0; i < files.length; i++) {
-        const f = files[i];
+      const items: PersistItem[] = files.map((f, i) => {
         const meta = metas[i];
-        const contentHash = await hashFile(f.path);
-        const dedupeKey = buildDedupeKey({
-          tenantId,
-          fileName: meta.fileName,
-          sizeBytes: meta.sizeBytes,
-          takenAt: takenAtList[i],
-          contentHash,
-        });
-
         const materialId = crypto.randomUUID();
         const storageKey = buildStorageKey({ tenantId, materialId, fileName: meta.fileName });
+        return {
+          materialId,
+          storageKey,
+          fileName: meta.fileName,
+          mimeType: meta.mimeType,
+          sizeBytes: meta.sizeBytes,
+          takenAt: takenAtList[i],
+          dedupeKey: buildDedupeKey({
+            tenantId,
+            fileName: meta.fileName,
+            sizeBytes: meta.sizeBytes,
+            takenAt: takenAtList[i],
+          }),
+        };
+      });
 
-        // ON CONFLICT DO NOTHING：命中唯一索引说明这个素材已经传过了。
-        // 去重做在服务端而不是让客户端删相册——误删原片不可逆，而服务端去重后
-        // 重复上传完全无害，iOS 定时任务可以放心每小时全量跑一遍。
-        const ins = await pool.query(
-          `INSERT INTO zenithjoy.materials
-             (id, tenant_id, storage_key, file_name, mime_type, size_bytes, content_hash, dedupe_key, taken_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-           ON CONFLICT (dedupe_key) DO NOTHING
-           RETURNING id`,
-          [materialId, tenantId, storageKey, meta.fileName, meta.mimeType, meta.sizeBytes, contentHash, dedupeKey, takenAtList[i] ?? null],
-        );
-
-        if (ins.rows.length === 0) {
-          // 已存在：拿回已有的 id，**不重复往存储写第二份**
-          const existing = await pool.query(
-            `SELECT id FROM zenithjoy.materials WHERE dedupe_key = $1 AND tenant_id = $2`,
-            [dedupeKey, tenantId],
-          );
-          results.push({
-            id: existing.rows[0]?.id ?? materialId,
-            file_name: meta.fileName,
-            deduped: true,
-          });
-          continue;
-        }
-
-        await storage.putObject({ key: storageKey, filePath: f.path, contentType: meta.mimeType });
-        results.push({ id: ins.rows[0].id, file_name: meta.fileName, deduped: false });
-      }
-
-      // ── 4. 建作品 + 挂关联 ──
+      // ── 4. 落库 + 上存储 ──
       const platforms = parsePlatforms(req.body?.platforms);
-      const contentIns = await pool.query(
-        `INSERT INTO zenithjoy.contents (tenant_id, title, body, type, platforms, status)
-         VALUES ($1,$2,$3,$4,$5,'draft') RETURNING id`,
-        [tenantId, firstString(req.body?.title), firstString(req.body?.body), contentType, platforms],
-      );
-      const contentId = contentIns.rows[0].id;
-
-      for (let i = 0; i < results.length; i++) {
-        await pool.query(
-          `INSERT INTO zenithjoy.content_materials (content_id, material_id, sort_order)
-           VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
-          [contentId, results[i].id, i],
-        );
-      }
+      const out = await persistMaterials({
+        tenantId,
+        licenseId,
+        contentType: contentType as 'video' | 'image',
+        title: firstString(req.body?.title),
+        body: firstString(req.body?.body),
+        platforms,
+        items,
+        // 只有【新】素材才上传。命中去重的直接跳过，不重复往存储写第二份。
+        onNewMaterial: async (item, index) => {
+          await storage.putObject({
+            key: item.storageKey,
+            filePath: files[index].path,
+            contentType: item.mimeType,
+          });
+        },
+      });
 
       return res.status(200).json({
         success: true,
-        data: { content_id: contentId, type: contentType, materials: results },
+        data: { content_id: out.contentId, type: contentType, materials: out.materials },
         timestamp: new Date().toISOString(),
       });
     } catch (err) {
@@ -253,18 +396,6 @@ function normalizeTakenAt(list: string[], count: number): Array<string | undefin
 function parsePlatforms(raw: unknown): string[] {
   const list = toStringArray(raw);
   return list.flatMap((s) => s.split(',')).map((s) => s.trim()).filter(Boolean);
-}
-
-/** 内容 hash 是最可靠的去重键——改了文件名也认得出是同一个文件。 */
-async function hashFile(filePath: string): Promise<string> {
-  const hash = crypto.createHash('sha256');
-  await new Promise<void>((resolve, reject) => {
-    fs.createReadStream(filePath)
-      .on('data', (chunk) => hash.update(chunk))
-      .on('end', () => resolve())
-      .on('error', reject);
-  });
-  return hash.digest('hex');
 }
 
 export default createMaterialsRouter;
