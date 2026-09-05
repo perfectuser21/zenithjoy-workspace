@@ -123,6 +123,38 @@ services/agent/src/handlers/ensure-ffmpeg.ts
 
 国内客户下载国内桶，却走跨境加速通道，又慢又贵——2026-07 账单「全球加速下行流量_境内到境内」33.28 元。改为 `cos.ap-guangzhou.myqcloud.com` 直连。
 
+## 身份模型：客户凭据怎么来（拍板 = A 走注册）
+
+上传身份的唯一来源是 `X-Upload-Token`（即 `license_key`）→ `licenses` 表 → `tenant_id`。
+**租户永远从凭据反查，绝不信客户端自报**——否则填别人的 ID 就能写进别人的库。
+
+同一租户下无论从哪个入口进来（快捷指令 / 小程序 / Windows agent），素材都落进同一个池子，
+因为租户由凭据决定、与入口无关。这也是去重键必须含租户的原因。
+
+**客户获取凭据的正确路径 = 注册流程**，三块现成即通，本期不改任何签发代码：
+
+| 步骤 | 承载 | 状态 |
+|---|---|---|
+| 注册 → 建 tenant → 回填 `license.tenant_id` | `auth-bridge.ts` | 已通 |
+| 登录后查看自己的 key | `routes/account.ts` + `LicensePage.tsx` | 已有 |
+| 复制进快捷指令上传 | 本次实现 | 本期 |
+
+### 已知缺口（本期不修，明确记录）
+
+`license.service.ts` 的管理员签发路径**不建 tenant、不写 `tenant_id`**。用它签出来的 key
+拿去传素材会得到 403 `NO_TENANT`。当前 280 张 license 中 279 张处于此状态（种子与管理员
+签发数据）。
+
+拍板结论：**不通过管理员直接发 key 给客户**——租户本应与账号绑定（还要挂人员、权限、账单），
+凭空发一张 key 等于凭空造一个没有主人的租户。若将来产品上确需管理员直发，那是让
+`license.service.ts` 签发时一并建租户的另一个改动，不在本期。
+
+### 记录上传者
+
+`materials` 表当前只记 `tenant_id`，不记是谁传的。同一客户下多名员工各自配了快捷指令时，
+后端分不清素材来自谁。本期加一列 `uploaded_by_license_id`（迁移 + 落库时写入）——现在加
+远比以后回填便宜。
+
 ## 组件划分
 
 | 单元 | 职责 | 依赖 |
@@ -130,7 +162,8 @@ services/agent/src/handlers/ensure-ffmpeg.ts
 | `material-upload.ts`（改） | 纯函数：类型推断、去重键、存储 key。移除 `contentHash` 分支 | 无 |
 | `material-storage.ts`（改） | 抽象新增 `presignPut(key, ttl)` 与 `headObject(key)`；内存实现同步跟上 | 无 |
 | `material-storage-cos.ts`（改） | 上述两方法的 COS 实现 | `cos-nodejs-sdk-v5`（已有，**不新增依赖**） |
-| `material-persist.ts`（新） | 落库：写 materials + contents + content_materials。**直传与老端点共用** | pg |
+| `material-persist.ts`（新） | 落库：写 materials + contents + content_materials，含 `uploaded_by_license_id`。**直传与老端点共用** | pg |
+| `db/migrations/*_materials_uploader.sql`（新） | `materials` 加 `uploaded_by_license_id` 列 | — |
 | `routes/materials.ts`（改） | 三端点：`/upload-urls`、`/complete`、`/upload`（改为调用共用落库） | 以上 |
 
 抽出 `material-persist.ts` 是本次的关键结构变化：落库逻辑现在有两个调用方，留在路由里必然被复制，复制就会漂移。
