@@ -97,9 +97,13 @@ cmd_preflight() {
   local sessions_check_ok="false"
   local sessions_warning=""
   if [ "$sessions_http" = "200" ] && jq empty "$sessions_body" >/dev/null 2>&1; then
+    # 注意：GET /api/agent/burner/sessions 返回的 session 对象没有 platform 这个 key
+    # （apps/api/src/routes/agent-burner.ts 的 SELECT 列表没选它，platform='douyin' 只是
+    # SQL WHERE 条件——该端点本身就是 douyin 专用端点）。此前这里错误判断了 .platform=="douyin"，
+    # 导致永远是 null=="douyin"=false，account_verified 恒为 false（0905 真机验证发现）。
     local verified_calc
     verified_calc=$(jq --arg aid "$AGENT_ID" \
-      '[.data.sessions[]? | select(.agent_id==$aid and .platform=="douyin" and .role=="burner" and .status=="active")] | length > 0' \
+      '[.data.sessions[]? | select(.agent_id==$aid and .role=="burner" and .status=="active")] | length > 0' \
       "$sessions_body" 2>/dev/null)
     if [ "$verified_calc" = "true" ] || [ "$verified_calc" = "false" ]; then
       sessions_check_ok="true"
