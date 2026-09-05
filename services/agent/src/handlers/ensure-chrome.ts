@@ -13,7 +13,7 @@ export const HEADFUL_CHROME_EXE = path.join(
   os.homedir(), '.zenithjoy-agent', 'chrome-win64', 'chrome.exe',
 );
 const HEADFUL_CHROME_ZIP_URL =
-  'https://zenithjoy-static-1333590468.cos.ap-guangzhou.myqcloud.com/install-pack/chromium-win64-1223.zip';
+  'https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/chromium-win64-1223.zip';
 
 export async function ensureChromiumHeadful(): Promise<void> {
   if (process.platform !== 'win32') return;
@@ -66,7 +66,7 @@ const CHROME_EXE = path.join(
 );
 
 const ZIP_URL =
-  'https://zenithjoy-static-1333590468.cos.ap-guangzhou.myqcloud.com/agent-deps/chrome-headless-shell-win64.zip';
+  'https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/agent-deps/chrome-headless-shell-win64.zip';
 
 export async function ensureChromeHeadlessShell(): Promise<void> {
   if (fs.existsSync(CHROME_EXE)) {

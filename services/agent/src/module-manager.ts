@@ -116,7 +116,7 @@ export interface ModuleManagerOptions {
 }
 
 const DEFAULT_COS_BASE =
-  'https://zenithjoy-static-1333590468.cos.ap-guangzhou.myqcloud.com/install-pack/modules';
+  'https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack/modules';
 
 // 模块安装路径：
 //   Windows： %APPDATA%\zenithjoy\modules\
