@@ -39,23 +39,30 @@ COMMAND="$1"; shift
 AGENT_ID=$(jq -r --arg p "$PROFILE" '.[$p].agent_id // empty' "$PROFILES_FILE")
 TENANT_ID=$(jq -r --arg p "$PROFILE" '.[$p].tenant_id // empty' "$PROFILES_FILE")
 [ -n "$AGENT_ID" ] || die "unknown profile: $PROFILE"
+[[ "$PROFILE" =~ ^[A-Za-z0-9_-]+$ ]] || die "profile 名称非法: $PROFILE"
 
 PROFILE_DIR="$EVIDENCE_ROOT/$PROFILE"
 mkdir -p "$PROFILE_DIR"
 LOCK_FILE="$PROFILE_DIR/.lock.json"
 
 call_phonectl() {
-  # 透传 phonectl.sh 的 stdout（JSON），把 exit code 存到 PHONECTL_EXIT
-  local out
-  out=$(bash "$PHONECTL" "$AGENT_ID" "$@" 2>/dev/null)
+  # 透传 phonectl.sh 的 stdout（JSON），把 exit code 存到 PHONECTL_EXIT，
+  # stderr 单独存到 PHONECTL_STDERR（不能吞掉，失败时是唯一能看到具体原因的地方）
+  local out err_file
+  err_file=$(mktemp)
+  out=$(bash "$PHONECTL" "$AGENT_ID" "$@" 2>"$err_file")
   PHONECTL_EXIT=$?
   PHONECTL_OUT="$out"
+  PHONECTL_STDERR=$(cat "$err_file")
+  rm -f "$err_file"
 }
 
 cmd_preflight() {
   call_phonectl device_info
   if [ "$PHONECTL_EXIT" -ne 0 ]; then
-    emit_fail "$(jq -n '{ok:false,errorCode:"DEVICE_UNREACHABLE",detail:"device_info 失败"}')" 1
+    local detail="device_info 失败"
+    [ -n "$PHONECTL_STDERR" ] && detail="$PHONECTL_STDERR"
+    emit_fail "$(jq -n --arg d "$detail" '{ok:false,errorCode:"DEVICE_UNREACHABLE",detail:$d}')" 1
   fi
   local dinfo
   dinfo=$(echo "$PHONECTL_OUT" | jq -c '.data')
@@ -69,20 +76,40 @@ cmd_preflight() {
     "${ZENITHJOY_API_BASE}/api/agent/burner/sessions" \
     -H "X-Tenant-Id: ${TENANT_ID}" \
     -H "Authorization: Bearer ${ZENITHJOY_INTERNAL_TOKEN}")
+
+  # sessions_check_ok 只有在 http=200 且 body 是合法 JSON、且真的能算出布尔值时才为 true；
+  # 任何一环失败都必须把 account_verified 明确钉死成 "false"（不能是空字符串），
+  # 否则下游 --argjson 会因为拿到非法 JSON 字面量而炸掉，导致整个命令 stdout 几乎为空却 exit 0。
   local account_verified="false"
-  if [ "$sessions_http" = "200" ]; then
-    account_verified=$(jq --arg aid "$AGENT_ID" \
+  local sessions_check_ok="false"
+  local sessions_warning=""
+  if [ "$sessions_http" = "200" ] && jq empty "$sessions_body" >/dev/null 2>&1; then
+    local verified_calc
+    verified_calc=$(jq --arg aid "$AGENT_ID" \
       '[.data.sessions[]? | select(.agent_id==$aid and .platform=="douyin" and .role=="burner" and .status=="active")] | length > 0' \
-      "$sessions_body")
+      "$sessions_body" 2>/dev/null)
+    if [ "$verified_calc" = "true" ] || [ "$verified_calc" = "false" ]; then
+      sessions_check_ok="true"
+      account_verified="$verified_calc"
+    fi
+  fi
+  if [ "$sessions_check_ok" != "true" ]; then
+    account_verified="false"
+    # 注意：$var 后面紧跟多字节字符（无 ASCII 分隔）在部分 bash 上会解析错乱，
+    # 必须用 ${var} 显式界定变量名边界
+    sessions_warning="burner sessions 查询失败（http=${sessions_http}），account_verified 无法确认，按 false 保守处理"
   fi
   rm -f "$sessions_body"
 
   emit_ok "$(jq -n \
     --arg profile "$PROFILE" --arg serial "$AGENT_ID" --arg model "$model" \
     --arg fg "$foreground" --argjson verified "$account_verified" \
+    --argjson sessions_check_ok "$sessions_check_ok" --arg sessions_warning "$sessions_warning" \
     '{ok:true, profile:$profile, serial:$serial, model:$model, adb_state:"device",
        call_state:"unknown", foreground_pkg:$fg, account_verified:$verified,
-       warnings:["call_state 检测能力缺失，douyin-phone-runtime skill 要求 call_state!=idle 时安全停止，这里无法提供该判据，调用方需自行决定是否继续"]}')"
+       sessions_check_ok:$sessions_check_ok,
+       warnings: (["call_state 检测能力缺失，douyin-phone-runtime skill 要求 call_state!=idle 时安全停止，这里无法提供该判据，调用方需自行决定是否继续"]
+         + (if $sessions_warning != "" then [$sessions_warning] else [] end))}')"
 }
 
 case "$COMMAND" in
