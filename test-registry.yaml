@@ -853,7 +853,7 @@ tests:
     ci: L3
     status: active
     product: 素材上传链路
-    note: "守卫：agent 源码不许出现 cos.accelerate 全球加速域名（国内下国内桶走跨境通道，2026-07 白花 33.28 元），且必须确实在用广州直连域名——只断言前者的话，把那几行整段删掉也能假绿。"
+    note: "守卫：services/agent/src/ 下不许出现 cos.accelerate 全球加速域名（国内下国内桶走跨境通道，2026-07 白花 33.28 元），且必须确实在用广州直连域名——只断言前者的话，把那几行整段删掉也能假绿。⚠️ 覆盖边界：只扫 src/，全仓库另有 9 处未处理（line04 微信线 + 其构建产物 + 一条把加速域名锁死的断言），本期刻意不动，详见该测试文件头部。"
 
   - id: material-storage-cos-slice
     path: apps/api/src/services/__tests__/material-storage-cos.test.ts
