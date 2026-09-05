@@ -30,6 +30,18 @@ export interface PersistInput {
   body: string | null;
   platforms: string[];
   items: PersistItem[];
+  /**
+   * 每插入一条【新】素材后立刻回调（命中去重的不触发）。
+   *
+   * 老端点 /upload 用它把文件传进存储——**只有新素材才上传**，重复的直接跳过，
+   * 不重复往存储写第二份。直传场景（/complete）文件早已在 COS，不传这个钩子。
+   *
+   * 放在这个位置而不是 persistMaterials 之后，是为了保住两条性质：
+   *  ① 重复文件不被重复上传
+   *  ② 上传失败时异常直接抛出，contents 根本不会被创建——绝不留下一条指向
+   *     空气的作品记录
+   */
+  onNewMaterial?: (item: PersistItem, index: number) => Promise<void>;
 }
 
 export interface PersistedMaterial {
@@ -46,7 +58,8 @@ export interface PersistResult {
 export async function persistMaterials(input: PersistInput): Promise<PersistResult> {
   const materials: PersistedMaterial[] = [];
 
-  for (const it of input.items) {
+  for (let idx = 0; idx < input.items.length; idx++) {
+    const it = input.items[idx];
     // ON CONFLICT DO NOTHING：命中唯一索引说明这个素材已经传过了。
     // 去重做在服务端而不是让客户端删相册——误删原片不可逆，而服务端去重后
     // 重复上传完全无害，iOS 定时任务可以放心每小时全量跑一遍。
@@ -77,6 +90,9 @@ export async function persistMaterials(input: PersistInput): Promise<PersistResu
       continue;
     }
     materials.push({ id: ins.rows[0].id, file_name: it.fileName, deduped: false });
+    if (input.onNewMaterial) {
+      await input.onNewMaterial(it, idx);
+    }
   }
 
   const contentIns = await pool.query(
