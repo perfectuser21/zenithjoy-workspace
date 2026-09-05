@@ -18,8 +18,7 @@ import {
   Building2,
   Briefcase,
   MessageCircle,
-  Monitor,
-} from 'lucide-react';
+  Monitor, ImageIcon,} from 'lucide-react';
 
 // ============ 类型定义 ============
 
@@ -66,6 +65,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'AiEmployeesPage': () => import('../pages/AiEmployeesPage'),
   'WorksListPage': () => import('../pages/WorksListPage'),
   'WorksGalleryPage': () => import('../pages/WorksGalleryPage'),
+  'MaterialsPage': () => import('../pages/MaterialsPage'),
   'WorkDetailPage': () => import('../pages/WorkDetailPage'),
   'FieldManagementPage': () => import('../pages/FieldManagementPage'),
   'AiEmployeeDetailPage': () => import('../pages/AiEmployeeDetailPage'),
@@ -173,6 +173,8 @@ export const autopilotNavGroups: NavGroup[] = [
       { path: '/area/settings', icon: KeyRound, label: '设置', featureKey: 'license', component: 'AreaHubPage' },
       // 工作机控制塔第一刀（决策 e14297d4）— 每台工作机（安卓/Windows）在线态 + 正在执行任务 + 实时画面
       { path: '/dashboard/workers', icon: Monitor, label: '工作机', featureKey: 'workers', component: 'WorkersPage' },
+      // 素材库：iPhone 快捷指令 / 小程序 / 电脑 agent 三个入口传上来的素材，第一次变得看得见
+      { path: '/materials', icon: ImageIcon, label: '素材库', featureKey: 'materials', component: 'MaterialsPage' },
     ]
   },
 

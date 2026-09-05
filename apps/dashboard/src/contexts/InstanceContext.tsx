@@ -37,6 +37,7 @@ const autopilotConfig: InstanceConfig = {
     'accounts': true,        // 账号管理
     'works-management': true, // 作品管理 (Database View)
     'works-gallery': true,   // 作品库 (Gallery View)
+    'materials': true,       // 素材库（三入口上传的素材池）
     'platform-data': true,   // 平台数据展示
     'ai-video-generation': true, // AI 视频生成
     'local-video-pipeline': true, // 本地视频处理（Path 1 Step 5）

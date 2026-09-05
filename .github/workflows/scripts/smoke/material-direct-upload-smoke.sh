@@ -136,4 +136,38 @@ else
   echo "    SKIP: 无 DB 连接，跳过落库校验"
 fi
 
+echo "[7] 列表端点能看到它，且预览 URL 真能下载"
+# 只断言「返回了 preview_url 字段」证明不了它能打开——必须真下载一次。
+R7=$(curl -sS -w $'\n%{http_code}' --max-time 30 \
+  -H "X-Upload-Token: ${LICENSE_KEY}" \
+  "${API_BASE}/api/materials?limit=100")
+C7=$(echo "${R7}" | tail -1)
+BODY7=$(echo "${R7}" | sed '$d')
+[ "${C7}" = "200" ] || fail "列表 expected 200 got ${C7}：${BODY7}"
+
+# 刚传的那条必须在列表里
+echo "${BODY7}" | grep -q "${MATERIAL_ID}" || fail "刚传的素材 ${MATERIAL_ID} 不在列表里：$(echo "${BODY7}" | head -c 300)"
+
+# storage_key 不该外发
+if echo "${BODY7}" | grep -q '"storage_key"'; then
+  fail "列表泄露了 storage_key，应当不外发：$(echo "${BODY7}" | head -c 200)"
+fi
+
+PREVIEW_URL=$(echo "${BODY7}" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+for it in d['data']['items']:
+    if it['id'] == '${MATERIAL_ID}':
+        print(it['preview_url'] or '')
+        break
+")
+[ -n "${PREVIEW_URL}" ] || fail "列表里这条的 preview_url 是空的"
+
+DL="${TMPDIR_LOCAL}/preview.bin"
+C7B=$(curl -sS -o "${DL}" -w '%{http_code}' --max-time 60 "${PREVIEW_URL}")
+[ "${C7B}" = "200" ] || fail "预览 URL 下载失败 HTTP ${C7B}"
+DL_SIZE=$(wc -c < "${DL}" | tr -d ' ')
+[ "${DL_SIZE}" = "${SIZE}" ] || fail "预览下载字节数不符：期望 ${SIZE} 实际 ${DL_SIZE}"
+echo "    列表可见、preview_url 真下载成功、字节数一致（${DL_SIZE}）✓"
+
 echo "✅ material-direct-upload smoke PASS"
