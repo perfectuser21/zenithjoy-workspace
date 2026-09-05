@@ -26,7 +26,7 @@ import crypto from 'node:crypto';
 import { reportEvent, type EventReporterConfig, type AgentEvent } from './shared/event-reporter';
 
 const DEFAULT_COS_BASE =
-  'https://zenithjoy-static-1333590468.cos.accelerate.myqcloud.com/install-pack';
+  'https://zenithjoy-static-1333590468.cos.ap-guangzhou.myqcloud.com/install-pack';
 
 // 核心包名前缀：extracted/zenithjoy-agent-v<ver>
 const CORE_DIR_PREFIX = 'zenithjoy-agent-v';
