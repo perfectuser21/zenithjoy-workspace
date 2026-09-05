@@ -116,9 +116,20 @@ export interface DedupeKeyInput {
  */
 export function buildDedupeKey(input: DedupeKeyInput): string {
   const parts = ['m', input.tenantId, input.fileName, String(input.sizeBytes), input.takenAt ?? ''];
-  return crypto.createHash('sha256').update(parts.join(' ')).digest('hex');
+  return crypto.createHash('sha256').update(parts.join('\x00')).digest('hex');
 }
 ```
+
+> **分隔符必须沿用 `\x00`，不要换成空格。** 两个原因：①文件名里可以有空格，用空格分隔会
+> 产生字段边界碰撞（租户 `A` + 文件名 `x y` 与租户 `A x` + 文件名 `y` 拼出同一个串）；
+> ②换分隔符会让**已有的元数据去重键全部失效**，老素材被重传一遍。
+>
+> 另注：该文件原本混进了一个**真实的 0x00 控制字节**（不是转义序列），导致 git 一直把它当
+> 二进制文件、`git diff` 看不到实际改动。改写这个函数时一并换成规范的 `'\x00'` 转义写法。
+>
+> 同时需要删掉旧 describe 块里断言「contentHash 优先」的两条测试（`有内容 hash 时优先用
+> hash` / `租户不同但 hash 相同`）——它们断言的正是被移除的行为。**但「租户不同 → 一定
+> 不同的键」这条必须保留**，那是租户隔离的安全断言。
 
 - [ ] **Step 5: 跑测试确认通过**
 
