@@ -1007,10 +1007,34 @@ async function authenticate(
 1. 删掉它内部的鉴权段（`extractUploadToken` → `validateLicense` → 取 `tenantId` 那一整块），改成开头调 `authenticate(req, res)`
 2. 删掉 `const contentHash = await hashFile(f.path);` 及 `buildDedupeKey` 里的 `contentHash` 参数
 3. 删掉文件底部的 `hashFile` 函数本身（不再有调用方，留着就是死代码）
-4. 删掉它自己的落库段（materials/contents/content_materials 三段 SQL），改为：先把文件 `putObject` 上去、再调 `persistMaterials`
+4. 删掉它自己的落库段（materials/contents/content_materials 三段 SQL），改为调 `persistMaterials`，**并通过 `onNewMaterial` 钩子传入上传动作**：
 
-> 注意顺序差异：老端点是「先入库再传存储」，直传是「先传存储再入库」。老端点保持
-> 原顺序即可——它手里有真文件，`putObject` 失败会抛异常，不会留下孤儿记录。
+```ts
+const out = await persistMaterials({
+  tenantId, licenseId, contentType,
+  title: firstString(req.body?.title),
+  body: firstString(req.body?.body),
+  platforms: parsePlatforms(req.body?.platforms),
+  items,
+  // 只有【新】素材才上传。命中去重的直接跳过，不重复往存储写第二份。
+  onNewMaterial: async (item, index) => {
+    await storage.putObject({
+      key: item.storageKey,
+      filePath: files[index].path,
+      contentType: item.mimeType,
+    });
+  },
+});
+```
+
+> ⛔ **不要写成「先 putObject、再调 persistMaterials」。** 那会丢掉老代码的两条性质：
+> ① 老代码在 `ON CONFLICT` 命中时 `continue` 跳过上传（原注释：「不重复往存储写第二份」），
+> 先传就等于每个重复文件都白传一遍；
+> ② 老代码是所有素材处理完才建 contents，上传中途失败异常抛出、**contents 根本不会被创建**；
+> 若把上传挪到 persist 之后失败，就会留下一条**指向空气的作品记录**。
+>
+> `onNewMaterial` 的调用点在「成功 insert 之后、去重 continue 分支之外、建 contents 之前」，
+> 正是为了原样保住这两条。直传的 `/complete` 不传这个钩子（文件早已在 COS）。
 
 - [ ] **Step 5: 跑测试确认通过**
 
