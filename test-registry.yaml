@@ -847,6 +847,14 @@ tests:
     product: 素材上传链路
     note: "共用落库层：直传与老端点共用同一套写库逻辑，两个入口的行为不可能漂移。含 uploaded_by_license_id 写入、去重命中拿回已有 id 且必带 tenant_id、按序挂满关联、不再写 content_hash；含 onNewMaterial 钩子只在新插素材时触发（去重命中不重传）、钩子在建 contents 之前跑完、钩子抛异常时整体抛出不建 contents。"
 
+  - id: agent-cos-endpoint-guard
+    path: services/agent/src/__tests__/cos-endpoint.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 素材上传链路
+    note: "守卫：agent 源码不许出现 cos.accelerate 全球加速域名（国内下国内桶走跨境通道，2026-07 白花 33.28 元），且必须确实在用广州直连域名——只断言前者的话，把那几行整段删掉也能假绿。"
+
   - id: material-storage-cos-slice
     path: apps/api/src/services/__tests__/material-storage-cos.test.ts
     type: unit
