@@ -29,6 +29,9 @@ let storage: InMemoryMaterialStorage;
 function makeApp() {
   storage = new InMemoryMaterialStorage();
   const app = express();
+  // upload-urls / complete 是 JSON 端点（老 /upload 是 multipart，multer 自己解析，
+  // 两者互不打架：express.json() 只认 content-type: application/json）
+  app.use(express.json());
   app.use('/api/materials', createMaterialsRouter({ storage }));
   return app;
 }
@@ -220,5 +223,206 @@ describe('POST /api/materials/upload — 上传语义', () => {
     expect(second.body.data.materials[0].deduped).toBe(true);
     // 去重命中时不该再往存储写第二份
     expect(storage.size()).toBe(1);
+  });
+});
+
+describe('POST /api/materials/upload-urls', () => {
+  it('无凭据 → 401', async () => {
+    const app = makeApp();
+    const r = await request(app)
+      .post('/api/materials/upload-urls')
+      .send({ files: [{ file_name: 'a.jpg', size_bytes: 1024, mime_type: 'image/jpeg' }] });
+
+    expect(r.status).toBe(401);
+  });
+
+  it('有效凭据 → 每个文件返回一个 upload_url，且 storage_key 以租户 ID 开头', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk(TENANT_A));
+    const app = makeApp();
+    const r = await request(app)
+      .post('/api/materials/upload-urls')
+      .set('X-Upload-Token', TOKEN_A)
+      .send({ files: [{ file_name: 'a.jpg', size_bytes: 1024, mime_type: 'image/jpeg' }] });
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.files).toHaveLength(1);
+    expect(r.body.data.files[0].upload_url).toBeTruthy();
+    expect(r.body.data.files[0].storage_key.startsWith(`${TENANT_A}/`)).toBe(true);
+  });
+
+  it('客户端自报 tenant_id 被忽略——storage_key 仍在凭据推出的租户下', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk(TENANT_A));
+    const app = makeApp();
+    const r = await request(app)
+      .post('/api/materials/upload-urls')
+      .set('X-Upload-Token', TOKEN_A)
+      .send({
+        tenant_id: 'attacker-tenant',
+        files: [{ file_name: 'a.jpg', size_bytes: 1024, mime_type: 'image/jpeg' }],
+      });
+
+    expect(r.status).toBe(200);
+    const key = r.body.data.files[0].storage_key as string;
+    expect(key.startsWith('attacker-tenant/')).toBe(false);
+    expect(key.startsWith(`${TENANT_A}/`)).toBe(true);
+  });
+
+  it('视频与图片混传 → 400 INVALID_MATERIAL_MIX，在签 URL 阶段就拒', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk(TENANT_A));
+    const app = makeApp();
+    const r = await request(app)
+      .post('/api/materials/upload-urls')
+      .set('X-Upload-Token', TOKEN_A)
+      .send({
+        files: [
+          { file_name: 'v.mp4', size_bytes: 1024, mime_type: 'video/mp4' },
+          { file_name: 'i.jpg', size_bytes: 1024, mime_type: 'image/jpeg' },
+        ],
+      });
+
+    expect(r.status).toBe(400);
+    expect(r.body.error.code).toBe('INVALID_MATERIAL_MIX');
+  });
+
+  it('申报大小超上限 → 400 FILE_TOO_LARGE，不签 URL', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk(TENANT_A));
+    const app = makeApp();
+    const r = await request(app)
+      .post('/api/materials/upload-urls')
+      .set('X-Upload-Token', TOKEN_A)
+      .send({
+        files: [{ file_name: 'big.mp4', size_bytes: 3 * 1024 * 1024 * 1024, mime_type: 'video/mp4' }],
+      });
+
+    expect(r.status).toBe(400);
+    expect(r.body.error.code).toBe('FILE_TOO_LARGE');
+  });
+
+  it('空文件列表 → 400 NO_FILES', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk(TENANT_A));
+    const app = makeApp();
+    const r = await request(app)
+      .post('/api/materials/upload-urls')
+      .set('X-Upload-Token', TOKEN_A)
+      .send({ files: [] });
+
+    expect(r.status).toBe(400);
+    expect(r.body.error.code).toBe('NO_FILES');
+  });
+});
+
+describe('POST /api/materials/complete', () => {
+  beforeEach(() => {
+    (validateLicense as any).mockResolvedValue(licenseOk(TENANT_A));
+  });
+
+  it('对象不存在 → 400 OBJECT_NOT_FOUND，绝不落库', async () => {
+    const app = makeApp();
+    const materialId = 'material-not-uploaded';
+    const storageKey = `${TENANT_A}/${materialId}/missing.jpg`;
+
+    const r = await request(app)
+      .post('/api/materials/complete')
+      .set('X-Upload-Token', TOKEN_A)
+      .send({
+        files: [
+          { storage_key: storageKey, material_id: materialId, file_name: 'missing.jpg', mime_type: 'image/jpeg', size_bytes: 10 },
+        ],
+      });
+
+    expect(r.status).toBe(400);
+    expect(r.body.error.code).toBe('OBJECT_NOT_FOUND');
+    const contentInserts = (pool.query as any).mock.calls
+      .filter((c: any[]) => /INSERT INTO zenithjoy\.contents/i.test(c[0]));
+    expect(contentInserts.length).toBe(0);
+  });
+
+  it('headObject 抛异常（网络故障）→ 502 STORAGE_UNAVAILABLE，绝不当成"文件不存在"，也绝不落库', async () => {
+    // 网络故障不能被误判成对象不存在——那会把传成功的素材当失败丢掉，
+    // 客户端会以为要重传，实际文件已经在 COS 上了。
+    const app = makeApp();
+    const materialId = 'material-storage-down';
+    const storageKey = `${TENANT_A}/${materialId}/photo.jpg`;
+    vi.spyOn(storage, 'headObject').mockRejectedValue(new Error('COS 503 Service Unavailable'));
+
+    const r = await request(app)
+      .post('/api/materials/complete')
+      .set('X-Upload-Token', TOKEN_A)
+      .send({
+        files: [
+          { storage_key: storageKey, material_id: materialId, file_name: 'photo.jpg', mime_type: 'image/jpeg', size_bytes: 10 },
+        ],
+      });
+
+    expect(r.status).toBe(502);
+    expect(r.body.error.code).toBe('STORAGE_UNAVAILABLE');
+    // 不确定的时候什么都别写：既不是 OBJECT_NOT_FOUND，也不能落库
+    expect(r.body.error.code).not.toBe('OBJECT_NOT_FOUND');
+    expect(r.body.data).toBeNull();
+    const contentInserts = (pool.query as any).mock.calls
+      .filter((c: any[]) => /INSERT INTO zenithjoy\.contents/i.test(c[0]));
+    expect(contentInserts.length).toBe(0);
+  });
+
+  it('对象在但大小对不上 → 400 SIZE_MISMATCH，绝不落库', async () => {
+    const app = makeApp();
+    const materialId = 'material-size-mismatch';
+    const storageKey = `${TENANT_A}/${materialId}/photo.jpg`;
+    // 先往注入的内存存储塞一个 999 字节的对象，再申报 10 字节
+    (storage as any).objects.set(storageKey, { bytes: Buffer.alloc(999), contentType: 'image/jpeg' });
+
+    const r = await request(app)
+      .post('/api/materials/complete')
+      .set('X-Upload-Token', TOKEN_A)
+      .send({
+        files: [
+          { storage_key: storageKey, material_id: materialId, file_name: 'photo.jpg', mime_type: 'image/jpeg', size_bytes: 10 },
+        ],
+      });
+
+    expect(r.status).toBe(400);
+    expect(r.body.error.code).toBe('SIZE_MISMATCH');
+    const contentInserts = (pool.query as any).mock.calls
+      .filter((c: any[]) => /INSERT INTO zenithjoy\.contents/i.test(c[0]));
+    expect(contentInserts.length).toBe(0);
+  });
+
+  it('storage_key 不在自己租户下 → 403 TENANT_MISMATCH，防止认领别人的对象', async () => {
+    const app = makeApp();
+    const materialId = 'material-foreign';
+    const storageKey = `${TENANT_B}/${materialId}/photo.jpg`; // 别人租户下的对象
+    (storage as any).objects.set(storageKey, { bytes: Buffer.alloc(10), contentType: 'image/jpeg' });
+
+    const r = await request(app)
+      .post('/api/materials/complete')
+      .set('X-Upload-Token', TOKEN_A)
+      .send({
+        files: [
+          { storage_key: storageKey, material_id: materialId, file_name: 'photo.jpg', mime_type: 'image/jpeg', size_bytes: 10 },
+        ],
+      });
+
+    expect(r.status).toBe(403);
+    expect(r.body.error.code).toBe('TENANT_MISMATCH');
+  });
+
+  it('对象存在且大小一致 → 200，落库并返回 content_id', async () => {
+    const app = makeApp();
+    const materialId = 'material-ok';
+    const storageKey = `${TENANT_A}/${materialId}/photo.jpg`;
+    (storage as any).objects.set(storageKey, { bytes: Buffer.alloc(10), contentType: 'image/jpeg' });
+
+    const r = await request(app)
+      .post('/api/materials/complete')
+      .set('X-Upload-Token', TOKEN_A)
+      .send({
+        files: [
+          { storage_key: storageKey, material_id: materialId, file_name: 'photo.jpg', mime_type: 'image/jpeg', size_bytes: 10 },
+        ],
+      });
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.content_id).toBeTruthy();
+    expect(r.body.data.materials).toHaveLength(1);
   });
 });

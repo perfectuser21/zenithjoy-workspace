@@ -49,16 +49,9 @@ describe('buildDedupeKey — 同一个文件传一百次，库里只有一条', 
     fileName: 'IMG_0001.MOV',
     sizeBytes: 12345,
     takenAt: '2026-09-04T10:00:00Z',
-    contentHash: undefined as string | undefined,
   };
 
-  it('有内容 hash 时优先用 hash —— 改了文件名也认得出是同一个', () => {
-    const a = buildDedupeKey({ ...base, contentHash: 'abc123' });
-    const b = buildDedupeKey({ ...base, fileName: '完全不同的名字.mov', contentHash: 'abc123' });
-    expect(a).toBe(b);
-  });
-
-  it('没有 hash 时退回 文件名+大小+拍摄时间 组合', () => {
+  it('元数据相同 → 同一个键（幂等重传不产生第二条记录）', () => {
     const a = buildDedupeKey(base);
     const b = buildDedupeKey({ ...base });
     expect(a).toBe(b);
@@ -70,12 +63,6 @@ describe('buildDedupeKey — 同一个文件传一百次，库里只有一条', 
 
   it('租户不同 → 一定不同的键（绝不能跨租户命中彼此的素材）', () => {
     expect(buildDedupeKey(base)).not.toBe(buildDedupeKey({ ...base, tenantId: 't2' }));
-  });
-
-  it('租户不同但 hash 相同 → 仍然是不同的键', () => {
-    const a = buildDedupeKey({ ...base, contentHash: 'same' });
-    const b = buildDedupeKey({ ...base, tenantId: 't2', contentHash: 'same' });
-    expect(a).not.toBe(b);
   });
 });
 
@@ -126,5 +113,29 @@ describe('buildStorageKey — 按租户分段，且不可被文件名操纵', ()
 describe('MAX_FILE_BYTES', () => {
   it('单文件上限 2GB —— iPhone 4K 长片够用，又挡得住异常输入', () => {
     expect(MAX_FILE_BYTES).toBe(2 * 1024 * 1024 * 1024);
+  });
+});
+
+describe('buildDedupeKey — 统一元数据口径（不含内容哈希）', () => {
+  it('同一文件经两个入口（一个曾能算哈希、一个不能）得到同一个键', () => {
+    const meta = {
+      tenantId: 't1',
+      fileName: 'IMG_0001.MOV',
+      sizeBytes: 12345,
+      takenAt: '2026-09-05T00:00:00Z',
+    };
+    expect(buildDedupeKey(meta)).toBe(buildDedupeKey({ ...meta }));
+  });
+
+  it('DedupeKeyInput 不再接受 contentHash（多塞该字段不改变结果）', () => {
+    const base = { tenantId: 't1', fileName: 'a.jpg', sizeBytes: 1, takenAt: 'x' };
+    const withExtra = { ...base, contentHash: 'deadbeef' } as never;
+    expect(buildDedupeKey(withExtra)).toBe(buildDedupeKey(base));
+  });
+
+  it('租户仍然进键：不同租户同名同大小不撞', () => {
+    const a = { tenantId: 'A', fileName: 'x.jpg', sizeBytes: 9 };
+    const b = { tenantId: 'B', fileName: 'x.jpg', sizeBytes: 9 };
+    expect(buildDedupeKey(a)).not.toBe(buildDedupeKey(b));
   });
 });

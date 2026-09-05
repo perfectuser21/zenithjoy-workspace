@@ -839,6 +839,15 @@ tests:
     product: 素材上传链路
     note: "存储抽象层：COS 四个 env 缺一不可、未配置时回落内存实现并打警告不静默假装成功、内存实现真读文件内容。"
 
+  - id: material-persist-shared
+    path: apps/api/src/services/__tests__/material-persist.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 素材上传链路
+    note: "共用落库层：直传与老端点共用同一套写库逻辑，两个入口的行为不可能漂移。含 uploaded_by_license_id 写入、去重命中拿回已有 id 且必带 tenant_id、按序挂满关联、不再写 content_hash；含 onNewMaterial 钩子只在新插素材时触发（去重命中不重传）、钩子在建 contents 之前跑完、钩子抛异常时整体抛出不建 contents。"
+
+
   - id: material-storage-cos-slice
     path: apps/api/src/services/__tests__/material-storage-cos.test.ts
     type: unit

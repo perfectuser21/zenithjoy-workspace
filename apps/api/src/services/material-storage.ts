@@ -23,14 +23,35 @@ export interface PutObjectInput {
   contentType?: string;
 }
 
+/** HEAD 结果。对象不存在时返回 null，绝不用 0 或 undefined 蒙混。 */
+export interface HeadObjectResult {
+  sizeBytes: number;
+}
+
 export interface MaterialStorage {
   putObject(input: PutObjectInput): Promise<void>;
   /** 签发临时访问 URL。默认 1 小时——够小程序显示缩略图、够安卓端下完素材。 */
   getSignedUrl(key: string, expiresSeconds?: number): Promise<string>;
   deleteObject(key: string): Promise<void>;
+
+  /**
+   * 签发一个【只对这一个 key 有效】的 PUT 地址。
+   *
+   * 为什么是预签名 URL 而不是下发临时密钥：临时密钥要求客户端自己算 HMAC 签名，
+   * 而 iOS 快捷指令没有这个动作——三个入口会立刻分裂成两套。预签名 URL 让客户端
+   * 只需发一个普通 PUT，能力更弱因而更安全：作用域是单个对象而非租户前缀，
+   * 客户端从不持有密钥，跨租户越权物理上不可能。（decision 03660929）
+   */
+  presignPut(key: string, expiresSeconds?: number): Promise<string>;
+
+  /** 对象存不存在、多大。不存在返回 null。 */
+  headObject(key: string): Promise<HeadObjectResult | null>;
 }
 
 export const DEFAULT_SIGNED_URL_TTL_SECONDS = 3600;
+
+/** 预签名 URL 默认有效期 2 小时——几百兆视频在移动网络上传得慢，给足余量。 */
+export const DEFAULT_PRESIGN_TTL_SECONDS = 7200;
 
 /**
  * 内存实现：单测和本地开发用。不落盘、不联网。
@@ -50,6 +71,15 @@ export class InMemoryMaterialStorage implements MaterialStorage {
 
   async deleteObject(key: string): Promise<void> {
     this.objects.delete(key);
+  }
+
+  async presignPut(key: string, expiresSeconds = DEFAULT_PRESIGN_TTL_SECONDS): Promise<string> {
+    return `memory://put/${key}?expires=${expiresSeconds}`;
+  }
+
+  async headObject(key: string): Promise<HeadObjectResult | null> {
+    const o = this.objects.get(key);
+    return o ? { sizeBytes: o.bytes.length } : null;
   }
 
   // ── 测试辅助 ──
