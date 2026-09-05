@@ -19,6 +19,7 @@ import multer from 'multer';
 import fs from 'node:fs';
 import os from 'node:os';
 import crypto from 'node:crypto';
+import pool from '../db/connection';
 import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 import { validateLicense } from '../services/walking-skeleton.service';
 import {
@@ -34,6 +35,26 @@ import {
   type UploadedFileMeta,
 } from '../services/material-upload';
 import { persistMaterials, type PersistItem } from '../services/material-persist';
+
+/** 一页默认多少条。手机上九宫格，30 条够翻一屏多。 */
+const DEFAULT_PAGE_SIZE = 30;
+
+/**
+ * 一页最多多少条 —— 硬上限，不可绕过。
+ * 没有它的话 ?limit=999999 能一次拖垮 DB，还要逐条签 99 万个预览 URL。
+ */
+const MAX_PAGE_SIZE = 100;
+
+/** 列表查询从库里取出的形状。storage_key 只在服务端用来签 URL，不外发。 */
+interface MaterialRow {
+  id: string;
+  file_name: string;
+  size_bytes: string | number;
+  mime_type: string | null;
+  storage_key: string;
+  taken_at: string | null;
+  created_at: string;
+}
 
 function fail(res: Response, status: number, code: string, message: string): void {
   res.status(status).json({
@@ -105,6 +126,75 @@ export function createMaterialsRouter(deps: MaterialsRouterDeps = {}): Router {
   // ERR_ERL_CREATED_IN_REQUEST_HANDLER）。
   const uploadRateLimit = simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn });
   router.use(uploadRateLimit);
+
+  // ── ⓪ GET /：列出本租户素材，每条带一个临时预览 URL ──────────────────
+  //
+  // 素材传上去看不见等于没传。这个端点是三端共用的地基——网页、小程序、
+  // 桌面端都调它，做小程序时不用回头改。
+  router.get('/', async (req: Request, res: Response) => {
+    const auth = await authenticate(req, res);
+    if (!auth) return;
+    const { tenantId } = auth;
+
+    // 客户端传什么都当敌意输入。就地收窄，不藏进 helper——CodeQL 不做跨函数
+    // 收窄（js/type-confusion-through-parameter-tampering）。
+    const rawLimit = req.query?.limit;
+    const parsedLimit = Number(typeof rawLimit === 'string' ? rawLimit : NaN);
+    // 非法（负数/0/非数字）一律回落默认值；再夹到硬上限。
+    // 没有上限的话 limit=999999 能拖垮 DB，还要签 99 万个 URL。
+    const limit = Number.isFinite(parsedLimit) && parsedLimit > 0
+      ? Math.min(Math.floor(parsedLimit), MAX_PAGE_SIZE)
+      : DEFAULT_PAGE_SIZE;
+
+    const rawOffset = req.query?.offset;
+    const parsedOffset = Number(typeof rawOffset === 'string' ? rawOffset : NaN);
+    const offset = Number.isFinite(parsedOffset) && parsedOffset > 0 ? Math.floor(parsedOffset) : 0;
+
+    let rows: MaterialRow[];
+    try {
+      // 租户永远从凭据反查。绝不读 req.query.tenant_id——否则任何人填别人的
+      // ID 就能列出别人的素材。
+      const q = await pool.query<MaterialRow>(
+        `SELECT id, file_name, size_bytes, mime_type, storage_key, taken_at, created_at
+           FROM zenithjoy.materials
+          WHERE tenant_id = $1
+          ORDER BY created_at DESC
+          LIMIT $2 OFFSET $3`,
+        [tenantId, limit, offset],
+      );
+      rows = q.rows;
+    } catch (err) {
+      console.error('[materials/list] query error:', err);
+      return fail(res, 500, 'LIST_FAILED', err instanceof Error ? err.message : 'unknown');
+    }
+
+    // 逐条签预览 URL。**一条签不出来只让这条为 null，绝不让整页挂掉**——
+    // 一张图坏了不该让整个素材库看不见。
+    // storage_key 不外发：前端不需要它，少暴露一个内部路径。
+    const items = await Promise.all(rows.map(async (m) => {
+      let previewUrl: string | null = null;
+      try {
+        previewUrl = await storage.getSignedUrl(m.storage_key);
+      } catch (err) {
+        console.warn('[materials/list] 预览签名失败，该条返回 null:', m.id, err);
+      }
+      return {
+        id: m.id,
+        file_name: m.file_name,
+        size_bytes: Number(m.size_bytes),
+        mime_type: m.mime_type,
+        taken_at: m.taken_at,
+        created_at: m.created_at,
+        preview_url: previewUrl,
+      };
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data: { items, limit, offset, count: items.length },
+      timestamp: new Date().toISOString(),
+    });
+  });
 
   // ── ① POST /upload-urls：客户端裸 PUT 之前，先换一批只对单个对象有效的签名 URL ──
   router.post('/upload-urls', async (req: Request, res: Response) => {
