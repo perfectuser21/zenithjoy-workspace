@@ -455,8 +455,11 @@ test('lock-acquire：过期孤儿锁（TTL=0）允许抢占', async () => {
   }
 });
 
-// 1x1 红色 PNG，base64（合法最小图片，供 snapshot 落盘断言用）
-const TINY_PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+// 1x1 灰度 JPEG，base64（合法最小图片，供 snapshot 落盘断言用）。
+// 安卓 agent 端截图实际用的是 JPEG（见 ScreenCaptureReal.kt 的
+// Bitmap.CompressFormat.JPEG），不是 PNG——这里的 mock 数据必须跟真机行为一致，
+// 否则测试内部自洽但检测不出真机上的格式假设错误（真机验证发现的 bug）。
+const TINY_JPEG_B64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAAAP/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AP//Z';
 
 test('open-app：调用 phonectl launch 抖音包名', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'acb-'));
@@ -485,7 +488,7 @@ test('open-app：调用 phonectl launch 抖音包名', async () => {
   }
 });
 
-test('snapshot-evidence：成功落盘 PNG 并返回路径+双分辨率', async () => {
+test('snapshot-evidence：成功落盘 JPEG 并返回路径+双分辨率', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'acb-'));
   const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
   let server;
@@ -494,7 +497,7 @@ test('snapshot-evidence：成功落盘 PNG 并返回路径+双分辨率', async 
     server = await startMockServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, data: { ok: true, data: {
-        imageBase64: TINY_PNG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664,
+        imageBase64: TINY_JPEG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664,
       }, outcome: 'completed' } }));
     });
     const { port } = server.address();
@@ -508,7 +511,7 @@ test('snapshot-evidence：成功落盘 PNG 并返回路径+双分辨率', async 
     assert.equal(out.captureWidth, 720);
     assert.equal(out.screenWidth, 1200);
     const written = readFileSync(out.path);
-    assert.equal(written.toString('base64'), TINY_PNG_B64);
+    assert.equal(written.toString('base64'), TINY_JPEG_B64);
   } finally {
     server?.close();
     rmSync(dir, { recursive: true, force: true });
@@ -549,7 +552,7 @@ test('snapshot-evidence：phonectl screenshot 失败 → 透传错误，不落�
     assert.equal(r.status, 1);
     const out = JSON.parse(r.stdout);
     assert.equal(out.ok, false);
-    assert.equal(existsSync(join(evDir, 'test-profile', 'snapshot-ev-002.png')), false);
+    assert.equal(existsSync(join(evDir, 'test-profile', 'snapshot-ev-002.jpg')), false);
   } finally {
     server?.close();
     rmSync(dir, { recursive: true, force: true });
@@ -558,13 +561,13 @@ test('snapshot-evidence：phonectl screenshot 失败 → 透传错误，不落�
 });
 
 // 在合法 base64 中间插入非法字符（不属于 base64 字母表），破坏编码本身（Critical 1 复现用例）。
-const CORRUPTED_ILLEGAL_CHARS_B64 = `${TINY_PNG_B64.slice(0, 10)}!@#${TINY_PNG_B64.slice(13)}`;
+const CORRUPTED_ILLEGAL_CHARS_B64 = `${TINY_JPEG_B64.slice(0, 10)}!@#${TINY_JPEG_B64.slice(13)}`;
 
-// 合法 base64（字符集合法、可正常解码），但解码出来的内容根本不是 PNG，末尾也没有
-// 合法的 IEND chunk —— 用来模拟"base64 -d 退出码是 0 但内容被截断/破坏"的场景
+// 合法 base64（字符集合法、可正常解码），但解码出来的内容根本不是 JPEG，末尾也没有
+// 合法的 EOI marker（FF D9）—— 用来模拟"base64 -d 退出码是 0 但内容被截断/破坏"的场景
 // （Critical 2 复现用例：macOS/BSD 的 base64 在这种输入下不会报任何错误）。
-const FAKE_TRUNCATED_PNG_B64 = Buffer.from(
-  'this looks like it could be image bytes but it is not a real PNG and has no IEND chunk at the end at all'
+const FAKE_TRUNCATED_JPEG_B64 = Buffer.from(
+  'this looks like it could be image bytes but it is not a real JPEG and has no EOI marker at the end at all'
 ).toString('base64');
 
 test('snapshot-evidence：imageBase64 含非法字符（损坏的 base64）→ ok:false，不留垃圾文件', async () => {
@@ -589,7 +592,7 @@ test('snapshot-evidence：imageBase64 含非法字符（损坏的 base64）→ o
     assert.equal(out.ok, false);
     const profileDir = join(evDir, 'test-profile');
     const leftoverFiles = existsSync(profileDir)
-      ? readdirSync(profileDir).filter((f) => f.endsWith('.png') || f.includes('.tmp.'))
+      ? readdirSync(profileDir).filter((f) => f.endsWith('.jpg') || f.includes('.tmp.'))
       : [];
     assert.deepEqual(leftoverFiles, [], `不应留下任何垃圾文件，实际发现: ${leftoverFiles.join(',')}`);
   } finally {
@@ -599,7 +602,7 @@ test('snapshot-evidence：imageBase64 含非法字符（损坏的 base64）→ o
   }
 });
 
-test('snapshot-evidence：base64 可正常解码但内容没有合法 PNG IEND chunk（模拟网络截断）→ ok:false', async () => {
+test('snapshot-evidence：base64 可正常解码但内容没有合法 JPEG EOI marker（模拟网络截断）→ ok:false', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'acb-'));
   const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
   let server;
@@ -608,7 +611,7 @@ test('snapshot-evidence：base64 可正常解码但内容没有合法 PNG IEND c
     server = await startMockServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, data: { ok: true, data: {
-        imageBase64: FAKE_TRUNCATED_PNG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664,
+        imageBase64: FAKE_TRUNCATED_JPEG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664,
       }, outcome: 'completed' } }));
     });
     const { port } = server.address();
@@ -621,7 +624,7 @@ test('snapshot-evidence：base64 可正常解码但内容没有合法 PNG IEND c
     assert.equal(out.ok, false);
     const profileDir = join(evDir, 'test-profile');
     const leftoverFiles = existsSync(profileDir)
-      ? readdirSync(profileDir).filter((f) => f.endsWith('.png') || f.includes('.tmp.'))
+      ? readdirSync(profileDir).filter((f) => f.endsWith('.jpg') || f.includes('.tmp.'))
       : [];
     assert.deepEqual(leftoverFiles, [], `不应留下任何垃圾文件，实际发现: ${leftoverFiles.join(',')}`);
   } finally {
@@ -635,7 +638,7 @@ test('snapshot-evidence：同一 evidence_id 先成功落盘，再用损坏数�
   const dir = mkdtempSync(join(tmpdir(), 'acb-'));
   const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
   let server;
-  let currentImageBase64 = TINY_PNG_B64;
+  let currentImageBase64 = TINY_JPEG_B64;
   try {
     const profilesFile = makeProfilesFile(dir);
     server = await startMockServer((req, res) => {
@@ -654,9 +657,9 @@ test('snapshot-evidence：同一 evidence_id 先成功落盘，再用损坏数�
     const out1 = JSON.parse(r1.stdout);
     const filePath = out1.path;
     const originalContent = readFileSync(filePath);
-    assert.equal(originalContent.toString('base64'), TINY_PNG_B64);
+    assert.equal(originalContent.toString('base64'), TINY_JPEG_B64);
 
-    currentImageBase64 = FAKE_TRUNCATED_PNG_B64;
+    currentImageBase64 = FAKE_TRUNCATED_JPEG_B64;
     const r2 = await runBridge(['--profile', 'test-profile', 'snapshot-evidence', 'ev-reuse'], {
       PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
       ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
@@ -686,7 +689,7 @@ test('tap-evidence：动作成功 → 等待后截图存证，返回 action_ok',
       if (b.action === 'tap') { tapCalled = true; res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, outcome: 'completed' } })); return; }
       if (b.action === 'screenshot') {
         screenshotCalled = true;
-        res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, data: { imageBase64: TINY_PNG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664 }, outcome: 'completed' } }));
+        res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, data: { imageBase64: TINY_JPEG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664 }, outcome: 'completed' } }));
         return;
       }
       res.writeHead(404); res.end('{}');
@@ -744,7 +747,7 @@ test('swipe-evidence：成功路径调用 swipe 再截图', async () => {
     server = await startMockServer((req, res, body) => {
       const b = JSON.parse(body);
       if (b.action === 'swipe') { capturedSwipeBody = b; res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, outcome: 'completed' } })); return; }
-      if (b.action === 'screenshot') { res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, data: { imageBase64: TINY_PNG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664 }, outcome: 'completed' } })); return; }
+      if (b.action === 'screenshot') { res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, data: { imageBase64: TINY_JPEG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664 }, outcome: 'completed' } })); return; }
       res.writeHead(404); res.end('{}');
     });
     const { port } = server.address();
@@ -771,7 +774,7 @@ test('back-evidence：成功路径调用 key back 再截图', async () => {
     server = await startMockServer((req, res, body) => {
       const b = JSON.parse(body);
       if (b.action === 'key') { capturedKeyBody = b; res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, outcome: 'completed' } })); return; }
-      if (b.action === 'screenshot') { res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, data: { imageBase64: TINY_PNG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664 }, outcome: 'completed' } })); return; }
+      if (b.action === 'screenshot') { res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, data: { imageBase64: TINY_JPEG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664 }, outcome: 'completed' } })); return; }
       res.writeHead(404); res.end('{}');
     });
     const { port } = server.address();
@@ -809,7 +812,7 @@ test('tap-evidence：wait_ms 非数字（简单非法值）→ exit 2，不截�
     });
     assert.equal(r.status, 2);
     assert.equal(screenshotCalled, false);
-    assert.equal(existsSync(join(evDir, 'test-profile', 'snapshot-ev-tap-illegal.png')), false);
+    assert.equal(existsSync(join(evDir, 'test-profile', 'snapshot-ev-tap-illegal.jpg')), false);
   } finally {
     server?.close();
     rmSync(dir, { recursive: true, force: true });
@@ -913,7 +916,7 @@ test('tap-evidence：wait_ms="0"（单独的合法零值）→ 正常工作，�
       if (b.action === 'tap') { tapCalled = true; res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, outcome: 'completed' } })); return; }
       if (b.action === 'screenshot') {
         screenshotCalled = true;
-        res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, data: { imageBase64: TINY_PNG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664 }, outcome: 'completed' } }));
+        res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, data: { imageBase64: TINY_JPEG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664 }, outcome: 'completed' } }));
         return;
       }
       res.writeHead(404); res.end('{}');

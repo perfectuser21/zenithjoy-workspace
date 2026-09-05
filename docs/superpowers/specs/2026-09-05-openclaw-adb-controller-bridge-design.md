@@ -82,10 +82,15 @@ adb-controller-bridge.sh --profile <phone_profile> <command> [args...]
 
 1. 调 `phonectl.sh <agent_id> screenshot`
 2. 失败（`ok:false`，如已知的 `CAPTURE_FAILED`）→ 原样透传错误，不落盘，exit 1
-3. 成功 → 从 `data.imageBase64` 解码写入 `${dir}/snapshot-<EVIDENCE_ID 或时间戳>.png`；`EVIDENCE_ID` 若提供必须匹配 `^[A-Za-z0-9._-]+$`（skill 原文要求），否则 exit 2
+3. 成功 → 从 `data.imageBase64` 解码写入 `${dir}/snapshot-<EVIDENCE_ID 或时间戳>.jpg`；`EVIDENCE_ID` 若提供必须匹配 `^[A-Za-z0-9._-]+$`（skill 原文要求），否则 exit 2
 4. 输出 `{"ok":true,"path":"<绝对路径>","captureWidth":N,"captureHeight":N,"screenWidth":N,"screenHeight":N}`（把双分辨率原样透传，供调用方做坐标换算——这是件1 特意加的判定点，不能在这层丢掉）
 
-`snapshot` 不带 EVIDENCE_ID 用当前时间戳命名（`snapshot-$(date +%s%N).png`），仅供一次性状态检查用，不保证不覆盖。
+`snapshot` 不带 EVIDENCE_ID 用当前时间戳命名（`snapshot-$(date +%s%N).jpg`），仅供一次性状态检查用，不保证不覆盖。
+
+> **真机验证修正（2026-09-05）**：设计初版误假设设备端截图是 PNG 格式（校验 PNG IEND chunk）。
+> 真机实测发现安卓 agent 端实际用 `Bitmap.CompressFormat.JPEG` 压缩截图
+> （见 `services/agent-android/app/src/main/kotlin/com/zenithjoy/agent/ScreenCaptureReal.kt`），
+> 落盘扩展名与完整性校验均已改为 JPEG（SOI `FF D8` 开头 / EOI `FF D9` 结尾）。
 
 ### `tap-evidence X Y EVIDENCE_ID [WAIT_MS]` / `swipe-evidence X1 Y1 X2 Y2 MS EVIDENCE_ID [WAIT_MS]` / `back-evidence EVIDENCE_ID [WAIT_MS]`
 
@@ -105,7 +110,7 @@ adb-controller-bridge.sh --profile <phone_profile> <command> [args...]
   - 每个命令的参数解析/校验（含非法 profile、非法 EVIDENCE_ID、缺 token）
   - `preflight` 的 account_verified 判断逻辑（mock 不同的 sessions 响应：有 active / 无 active / agent_id 不匹配）
   - `lock-*` 三态转换（acquire 首次成功、同 run 重入、跨 run 冲突、TTL 过期抢占、release 权限校验）
-  - `snapshot-evidence` 的 base64 落盘正确性（mock 一个已知的小 base64 PNG，断言写出的文件内容匹配）
+  - `snapshot-evidence` 的 base64 落盘正确性（mock 一个已知的小 base64 JPEG，断言写出的文件内容匹配）
   - `tap-evidence` 失败路径不截图（mock tap 返回 ok:false，断言没有调用 screenshot endpoint）
   - `UNSUPPORTED` 命令返回 exit 3
 - **集成/E2E**：对着 staging `realmachine-smoke`（agentId `e017953c-...`）手动跑一遍 `preflight`/`snapshot-evidence`/`tap-evidence`，验证真机可用（不写入自动化 CI，因为依赖真机在线，跟 `phonectl.sh` 目前的验证方式一致——真机验证是 PR 描述里的手动记录，不是 CI gate）

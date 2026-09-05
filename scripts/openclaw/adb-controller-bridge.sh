@@ -212,17 +212,20 @@ validate_evidence_id() {
   [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]] || die "非法 EVIDENCE_ID: $1"
 }
 
-# 文件末尾是否是合法的 PNG IEND chunk：4字节长度0x00000000 + "IEND" + 4字节CRC 0xae426082，
-# 十六进制 0000000049454e44ae426082。
+# 文件是否是完整的 JPEG：以 SOI marker (FF D8) 开头、以 EOI marker (FF D9) 结尾。
+# 安卓 agent 端截图实际用的是 JPEG（Bitmap.CompressFormat.JPEG），不是 PNG——
+# 真机验证发现此前这里错误假设成了 PNG 格式（校验 PNG 的 IEND chunk），导致真机
+# 上每次截图都被误判为"数据损坏"。
 # 这是内容层面的完整性校验，不能只信 base64 -d 的退出码——macOS/BSD 的 base64 在
 # 某些"合法字符但内容被截断/替换"的输入下会 exit=0 且不报任何错误，只是静默写出
-# 一个更短/被破坏的文件；只有校验通过落盘的图片确实是一个完整的 PNG 时才算成功。
-png_has_valid_iend() {
-  local f="$1" sz tail_hex
+# 一个更短/被破坏的文件；只有头尾 marker 都在的图片才算一个完整的 JPEG。
+image_data_intact() {
+  local f="$1" sz head_hex tail_hex
   sz=$(wc -c < "$f" 2>/dev/null | tr -d ' ')
-  [ -n "$sz" ] && [ "$sz" -ge 12 ] || return 1
-  tail_hex=$(tail -c 12 "$f" | od -An -tx1 | tr -d ' \n')
-  [ "$tail_hex" = "0000000049454e44ae426082" ]
+  [ -n "$sz" ] && [ "$sz" -ge 4 ] || return 1
+  head_hex=$(head -c 2 "$f" | od -An -tx1 | tr -d ' \n')
+  tail_hex=$(tail -c 2 "$f" | od -An -tx1 | tr -d ' \n')
+  [ "$head_hex" = "ffd8" ] && [ "$tail_hex" = "ffd9" ]
 }
 
 # 截图核心逻辑：不 exit，把结果 JSON 通过 echo 传给调用方，用返回码区分成功(0)/失败(非0)。
@@ -233,9 +236,9 @@ cmd_snapshot_capture() {
   local evidence_id="${1:-}"
   local filename
   if [ -n "$evidence_id" ]; then
-    filename="snapshot-${evidence_id}.png"
+    filename="snapshot-${evidence_id}.jpg"
   else
-    filename="snapshot-$(date +%s%N).png"
+    filename="snapshot-$(date +%s%N).jpg"
   fi
   call_phonectl screenshot
   if [ "$PHONECTL_EXIT" -ne 0 ]; then
@@ -243,7 +246,7 @@ cmd_snapshot_capture() {
     return 1
   fi
   # 深层取值前先用 `// empty`/`// 0` 兜底：字段不存在时 jq -r 会打印字面量 "null"，
-  # 若不做这层防御，"null" 三个字符会被当 base64 解码，写出一个损坏的 PNG 却仍报 ok:true。
+  # 若不做这层防御，"null" 三个字符会被当 base64 解码，写出一个损坏的 JPEG 却仍报 ok:true。
   local b64 cw ch sw sh out_path tmp_path decode_rc
   b64=$(echo "$PHONECTL_OUT" | jq -r '.data.data.imageBase64 // empty')
   if [ -z "$b64" ]; then
@@ -261,9 +264,9 @@ cmd_snapshot_capture() {
   tmp_path="${out_path}.tmp.$$"
   echo "$b64" | base64 -d > "$tmp_path" 2>/dev/null
   decode_rc=$?
-  if [ "$decode_rc" -ne 0 ] || ! png_has_valid_iend "$tmp_path"; then
+  if [ "$decode_rc" -ne 0 ] || ! image_data_intact "$tmp_path"; then
     rm -f "$tmp_path"
-    jq -n '{ok:false,errorCode:"CAPTURE_FAILED",detail:"截图数据损坏：base64 解码失败或 PNG 完整性校验未通过"}'
+    jq -n '{ok:false,errorCode:"CAPTURE_FAILED",detail:"截图数据损坏：base64 解码失败或 JPEG 完整性校验未通过"}'
     return 1
   fi
   mv -f "$tmp_path" "$out_path"
