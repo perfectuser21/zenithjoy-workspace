@@ -6286,3 +6286,11 @@ agent_suite:
     status: active
     product: OpenClaw信号桥
     note: "phonectl CLI(件3)单测：8 action 参数映射/鉴权头/超时幂等透传/本地校验/错误码/504 outcome透传。"
+
+  - id: openclaw-adb-controller-bridge-unit
+    path: scripts/openclaw/__tests__/adb-controller-bridge.test.js
+    type: unit
+    ci: L3
+    status: active
+    product: OpenClaw信号桥
+    note: "adb_controller→phonectl.sh适配层单测：preflight/lock-*/open-app/snapshot(-evidence)/tap(-evidence)/swipe(-evidence)/back-evidence/UNSUPPORTED命令，含JPEG完整性校验与命令注入回归。"
