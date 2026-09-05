@@ -100,4 +100,75 @@ describe('persistMaterials', () => {
     const ins = query.mock.calls.find((c) => String(c[0]).includes('INSERT INTO zenithjoy.materials'));
     expect(String(ins[0])).not.toContain('content_hash');
   });
+
+  it('新素材才触发 onNewMaterial —— 命中去重的绝不重复往存储写第二份', async () => {
+    // 第 1 个是新的、第 2 个命中去重
+    let call = 0;
+    query.mockImplementation((sql: string) => {
+      if (sql.includes('INSERT INTO zenithjoy.materials')) {
+        call += 1;
+        return call === 1 ? { rows: [{ id: 'new-1' }] } : { rows: [] };
+      }
+      if (sql.includes('SELECT id FROM zenithjoy.materials')) return { rows: [{ id: 'existing-2' }] };
+      if (sql.includes('INSERT INTO zenithjoy.contents')) return { rows: [{ id: 'c1' }] };
+      return { rows: [] };
+    });
+    const seen: string[] = [];
+    const { persistMaterials } = await import('../material-persist');
+    const items = itemsOf(2);
+    const out = await persistMaterials({
+      ...BASE,
+      items,
+      onNewMaterial: async (item, index) => { seen.push(`${index}:${item.materialId}`); },
+    });
+    expect(seen).toEqual(['0:m0']);                    // 只有第 1 个触发
+    expect(out.materials[0].deduped).toBe(false);
+    expect(out.materials[1].deduped).toBe(true);
+  });
+
+  it('onNewMaterial 在建 contents 之前跑完 —— 上传失败就不该留下作品记录', async () => {
+    const order: string[] = [];
+    query.mockImplementation((sql: string) => {
+      if (sql.includes('INSERT INTO zenithjoy.materials')) { order.push('material'); return { rows: [{ id: 'x' }] }; }
+      if (sql.includes('INSERT INTO zenithjoy.contents')) { order.push('contents'); return { rows: [{ id: 'c1' }] }; }
+      return { rows: [] };
+    });
+    const { persistMaterials } = await import('../material-persist');
+    await persistMaterials({
+      ...BASE,
+      items: itemsOf(2),
+      onNewMaterial: async () => { order.push('upload'); },
+    });
+    // 每个素材：先 insert 再 upload；两个都处理完，最后才建 contents
+    expect(order).toEqual(['material', 'upload', 'material', 'upload', 'contents']);
+  });
+
+  it('onNewMaterial 抛异常 → 整体抛出，绝不继续去建 contents', async () => {
+    query.mockImplementation((sql: string) => {
+      if (sql.includes('INSERT INTO zenithjoy.materials')) return { rows: [{ id: 'x' }] };
+      if (sql.includes('INSERT INTO zenithjoy.contents')) return { rows: [{ id: 'c1' }] };
+      return { rows: [] };
+    });
+    const { persistMaterials } = await import('../material-persist');
+    await expect(persistMaterials({
+      ...BASE,
+      items: itemsOf(1),
+      onNewMaterial: async () => { throw new Error('COS 挂了'); },
+    })).rejects.toThrow('COS 挂了');
+    const contentsInserts = query.mock.calls.filter((c) =>
+      String(c[0]).includes('INSERT INTO zenithjoy.contents'));
+    expect(contentsInserts).toHaveLength(0);   // 作品记录一条都不该有
+  });
+
+  it('不传 onNewMaterial 时一切照旧（直传场景，文件已在 COS）', async () => {
+    query.mockImplementation((sql: string) => {
+      if (sql.includes('INSERT INTO zenithjoy.materials')) return { rows: [{ id: 'x' }] };
+      if (sql.includes('INSERT INTO zenithjoy.contents')) return { rows: [{ id: 'c1' }] };
+      return { rows: [] };
+    });
+    const { persistMaterials } = await import('../material-persist');
+    const out = await persistMaterials({ ...BASE, items: itemsOf(1) });
+    expect(out.contentId).toBe('c1');
+    expect(out.materials[0].deduped).toBe(false);
+  });
 });
