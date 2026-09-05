@@ -847,6 +847,93 @@ test('tap-evidence：wait_ms 命令注入 payload（awk system()）→ exit 2，
   }
 });
 
+test('tap-evidence：wait_ms 带前导零（"010"）→ exit 2，不按八进制静默算错，不截图', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    let screenshotCalled = false;
+    server = await startMockServer((req, res, body) => {
+      const b = JSON.parse(body);
+      if (b.action === 'screenshot') { screenshotCalled = true; }
+      res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, outcome: 'completed' } }));
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'tap-evidence', '600', '1300', 'ev-tap-leadingzero', '010'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 2);
+    assert.equal(screenshotCalled, false);
+    assert.match(r.stderr, /wait_ms 必须是非负整数/);
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+test('tap-evidence：wait_ms 带前导零且含 8（"008"）→ exit 2，不触发 bash 算术错误', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    let screenshotCalled = false;
+    server = await startMockServer((req, res, body) => {
+      const b = JSON.parse(body);
+      if (b.action === 'screenshot') { screenshotCalled = true; }
+      res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, outcome: 'completed' } }));
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'tap-evidence', '600', '1300', 'ev-tap-octal8', '008'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 2);
+    assert.equal(screenshotCalled, false);
+    assert.match(r.stderr, /wait_ms 必须是非负整数/);
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+test('tap-evidence：wait_ms="0"（单独的合法零值）→ 正常工作，不被前导零校验误伤', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    let tapCalled = false, screenshotCalled = false;
+    server = await startMockServer((req, res, body) => {
+      const b = JSON.parse(body);
+      if (b.action === 'tap') { tapCalled = true; res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, outcome: 'completed' } })); return; }
+      if (b.action === 'screenshot') {
+        screenshotCalled = true;
+        res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, data: { imageBase64: TINY_PNG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664 }, outcome: 'completed' } }));
+        return;
+      }
+      res.writeHead(404); res.end('{}');
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'tap-evidence', '600', '1300', 'ev-tap-zero', '0'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 0);
+    assert.ok(tapCalled); assert.ok(screenshotCalled);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.action_ok, true);
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
 test('tap-evidence：动作成功但截图失败 → exit 1，返回体带 action_ok:false + action_already_executed:true', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'acb-'));
   const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));

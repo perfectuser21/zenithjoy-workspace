@@ -292,7 +292,11 @@ finish_action_evidence() {
   # （`awk "BEGIN{print $wait_ms/1000}"`），awk 的 system() 能跑任意 shell 命令，
   # 调用方传入形如 `800; system("...")` 的字符串即可注入命令执行——必须在
   # 任何 sleep/后续动作之前拦下，不能只做弱校验。
-  [[ "$wait_ms" =~ ^[0-9]+$ ]] || die "wait_ms 必须是非负整数，收到: $wait_ms"
+  # 正则只接受 "0" 或不含前导零的正整数：bash 的 $(( )) 算术对带前导零的数字
+  # 字面量按八进制解析（"010" 会被当成十进制 8），"008"/"0800" 这种含 8/9 的
+  # 伪八进制数字甚至会直接触发 bash 算术语法错误崩溃。必须在校验层面挡掉，
+  # 不能等到算术阶段才出错。
+  [[ "$wait_ms" =~ ^(0|[1-9][0-9]*)$ ]] || die "wait_ms 必须是非负整数，收到: $wait_ms"
   local secs=$((wait_ms / 1000)) ms=$((wait_ms % 1000))
   sleep "${secs}.$(printf '%03d' "$ms")"
   local snap_json rc
