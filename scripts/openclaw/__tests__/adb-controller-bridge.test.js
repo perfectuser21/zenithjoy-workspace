@@ -102,8 +102,20 @@ test('preflight：device_info 成功 + 有 active burner session → account_ver
       if (req.url === '/api/agent/burner/sessions') {
         assert.equal(req.headers['x-tenant-id'], TENANT_ID);
         res.writeHead(200, { 'Content-Type': 'application/json' });
+        // 注意：真实 GET /api/agent/burner/sessions 响应里 session 对象没有 `platform` 这个 key
+        // （apps/api/src/routes/agent-burner.ts 的 SELECT 列表里没选它，platform='douyin' 只是
+        // SQL WHERE 条件，端点本身就是 douyin 专用的）。这里 mock 必须如实反映真实字段，
+        // 否则测试会掩盖 cmd_preflight 里 `.platform=="douyin"` 这个查不存在字段的 bug。
         res.end(JSON.stringify({ success: true, data: { sessions: [
-          { agent_id: AGENT_ID, platform: 'douyin', role: 'burner', status: 'active', account_label: 'test-burner' },
+          {
+            account_label: 'test-burner', role: 'burner', status: 'active',
+            bound_at: '2026-09-01T00:00:00.000Z', device_type: 'android',
+            created_at: '2026-09-01T00:00:00.000Z', agent_id: AGENT_ID,
+            uia_online: true, uia_checked_at: '2026-09-04T00:00:00.000Z', uia_error: null,
+            agent_hostname: 'rog-01', agent_nickname: 'rog', agent_status: 'online',
+            last_heartbeat_at: '2026-09-04T00:00:00.000Z', heartbeat_online: true,
+            account_nickname: 'test-nickname', computed_online_status: 'online',
+          },
         ] } }));
         return;
       }
@@ -123,6 +135,45 @@ test('preflight：device_info 成功 + 有 active burner session → account_ver
     assert.equal(out.call_state, 'unknown');
     assert.equal(out.model, 'MAA-AN00');
     assert.ok(out.warnings.some((w) => w.includes('call_state')));
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('regression: 真实 API 响应字段（无 platform key）→ account_verified 仍须判定为 true（0905 真机验证发现的 bug）', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    server = await startMockServer((req, res) => {
+      if (req.url === `/api/devices/${AGENT_ID}/actions`) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, data: { ok: true, foregroundPkg: 'com.ss.android.ugc.aweme', data: { model: 'MAA-AN00' }, outcome: 'completed' } }));
+        return;
+      }
+      if (req.url === '/api/agent/burner/sessions') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        // 真机实测拿到的两条真实 session（脱敏自 0905 真机验证），逐字段照抄真实响应形状：
+        // 没有 platform key，只有 role/status/agent_id 等字段。
+        res.end(JSON.stringify({ success: true, data: { sessions: [
+          { account_label: '大湖成长之路（Ai+）', role: 'burner', status: 'active', agent_id: AGENT_ID },
+          { account_label: '秦军餐饮', role: 'burner', status: 'active', agent_id: AGENT_ID },
+        ] } }));
+        return;
+      }
+      res.writeHead(404); res.end('{}');
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'preflight'], {
+      PROFILES_FILE: profilesFile,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`,
+      ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 0);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.sessions_check_ok, true);
+    assert.equal(out.account_verified, true, 'account_verified 不应因为响应里没有 platform 字段就被误判为 false');
   } finally {
     server?.close();
     rmSync(dir, { recursive: true, force: true });
