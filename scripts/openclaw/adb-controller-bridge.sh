@@ -57,6 +57,19 @@ call_phonectl() {
   rm -f "$err_file"
 }
 
+# phonectl 调用失败时的错误提取逻辑，cmd_open_app / cmd_snapshot_capture 共用：
+# 优先从 PHONECTL_OUT 里取 data.errorCode，取不到落回调用方给的默认 errorCode；
+# detail 优先用 PHONECTL_STDERR（真实失败原因），空了落回默认文案。
+extract_phonectl_error() {
+  local default_code="$1" default_detail="$2"
+  local err_code detail
+  err_code=$(echo "$PHONECTL_OUT" | jq -r '.data.errorCode // empty' 2>/dev/null)
+  [ -n "$err_code" ] || err_code="$default_code"
+  detail="$PHONECTL_STDERR"
+  [ -n "$detail" ] || detail="$default_detail"
+  jq -n --arg code "$err_code" --arg d "$detail" '{ok:false,errorCode:$code,detail:$d}'
+}
+
 cmd_preflight() {
   call_phonectl device_info
   if [ "$PHONECTL_EXIT" -ne 0 ]; then
@@ -187,12 +200,7 @@ cmd_lock_status() {
 cmd_open_app() {
   call_phonectl launch com.ss.android.ugc.aweme
   if [ "$PHONECTL_EXIT" -ne 0 ]; then
-    local err_code detail
-    err_code=$(echo "$PHONECTL_OUT" | jq -r '.data.errorCode // empty' 2>/dev/null)
-    [ -n "$err_code" ] || err_code="LAUNCH_FAILED"
-    detail="$PHONECTL_STDERR"
-    [ -n "$detail" ] || detail="launch 失败"
-    emit_fail "$(jq -n --arg c "$err_code" --arg d "$detail" '{ok:false,errorCode:$c,detail:$d}')" 1
+    emit_fail "$(extract_phonectl_error "LAUNCH_FAILED" "launch 失败")" 1
   fi
   local fg
   fg=$(echo "$PHONECTL_OUT" | jq -r '.data.foregroundPkg // "unknown"')
@@ -204,39 +212,74 @@ validate_evidence_id() {
   [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]] || die "非法 EVIDENCE_ID: $1"
 }
 
-cmd_snapshot() {
+# 文件末尾是否是合法的 PNG IEND chunk：4字节长度0x00000000 + "IEND" + 4字节CRC 0xae426082，
+# 十六进制 0000000049454e44ae426082。
+# 这是内容层面的完整性校验，不能只信 base64 -d 的退出码——macOS/BSD 的 base64 在
+# 某些"合法字符但内容被截断/替换"的输入下会 exit=0 且不报任何错误，只是静默写出
+# 一个更短/被破坏的文件；只有校验通过落盘的图片确实是一个完整的 PNG 时才算成功。
+png_has_valid_iend() {
+  local f="$1" sz tail_hex
+  sz=$(wc -c < "$f" 2>/dev/null | tr -d ' ')
+  [ -n "$sz" ] && [ "$sz" -ge 12 ] || return 1
+  tail_hex=$(tail -c 12 "$f" | od -An -tx1 | tr -d ' \n')
+  [ "$tail_hex" = "0000000049454e44ae426082" ]
+}
+
+# 截图核心逻辑：不 exit，把结果 JSON 通过 echo 传给调用方，用返回码区分成功(0)/失败(非0)。
+# 供 cmd_snapshot 直接用，也供未来 tap/swipe/back-evidence 等命令内部复用截图能力，
+# 而不会因为 emit_ok/emit_fail 的 exit 而提前终止整个脚本。
+# evidence_id 的格式校验（validate_evidence_id）由外层调用方负责，这里不重复。
+cmd_snapshot_capture() {
   local evidence_id="${1:-}"
   local filename
   if [ -n "$evidence_id" ]; then
-    validate_evidence_id "$evidence_id"
     filename="snapshot-${evidence_id}.png"
   else
     filename="snapshot-$(date +%s%N).png"
   fi
   call_phonectl screenshot
   if [ "$PHONECTL_EXIT" -ne 0 ]; then
-    local err_code detail
-    err_code=$(echo "$PHONECTL_OUT" | jq -r '.data.errorCode // empty' 2>/dev/null)
-    [ -n "$err_code" ] || err_code="CAPTURE_FAILED"
-    detail="$PHONECTL_STDERR"
-    [ -n "$detail" ] || detail="screenshot 失败"
-    emit_fail "$(jq -n --arg c "$err_code" --arg d "$detail" '{ok:false,errorCode:$c,detail:$d}')" 1
+    extract_phonectl_error "CAPTURE_FAILED" "screenshot 失败"
+    return 1
   fi
   # 深层取值前先用 `// empty`/`// 0` 兜底：字段不存在时 jq -r 会打印字面量 "null"，
   # 若不做这层防御，"null" 三个字符会被当 base64 解码，写出一个损坏的 PNG 却仍报 ok:true。
-  local b64 cw ch sw sh out_path
+  local b64 cw ch sw sh out_path tmp_path decode_rc
   b64=$(echo "$PHONECTL_OUT" | jq -r '.data.data.imageBase64 // empty')
   if [ -z "$b64" ]; then
-    emit_fail "$(jq -n '{ok:false,errorCode:"CAPTURE_FAILED",detail:"imageBase64 缺失或为空"}')" 1
+    jq -n '{ok:false,errorCode:"CAPTURE_FAILED",detail:"imageBase64 缺失或为空"}'
+    return 1
   fi
   cw=$(echo "$PHONECTL_OUT" | jq -r '.data.data.captureWidth // 0')
   ch=$(echo "$PHONECTL_OUT" | jq -r '.data.data.captureHeight // 0')
   sw=$(echo "$PHONECTL_OUT" | jq -r '.data.data.screenWidth // 0')
   sh=$(echo "$PHONECTL_OUT" | jq -r '.data.data.screenHeight // 0')
   out_path="$PROFILE_DIR/$filename"
-  echo "$b64" | base64 -d > "$out_path"
-  emit_ok "$(jq -n --arg path "$out_path" --argjson cw "$cw" --argjson ch "$ch" --argjson sw "$sw" --argjson sh "$sh" \
-    '{ok:true, path:$path, captureWidth:$cw, captureHeight:$ch, screenWidth:$sw, screenHeight:$sh}')"
+  # 原子写：先写临时文件，通过完整性检查后再 mv 到位。任何一环失败都只删临时文件，
+  # 绝不碰 out_path——避免同一 evidence_id 重试时，一次损坏的写入销毁掉之前已经
+  # 成功落盘的好文件。
+  tmp_path="${out_path}.tmp.$$"
+  echo "$b64" | base64 -d > "$tmp_path" 2>/dev/null
+  decode_rc=$?
+  if [ "$decode_rc" -ne 0 ] || ! png_has_valid_iend "$tmp_path"; then
+    rm -f "$tmp_path"
+    jq -n '{ok:false,errorCode:"CAPTURE_FAILED",detail:"截图数据损坏：base64 解码失败或 PNG 完整性校验未通过"}'
+    return 1
+  fi
+  mv -f "$tmp_path" "$out_path"
+  jq -n --arg path "$out_path" --argjson cw "$cw" --argjson ch "$ch" --argjson sw "$sw" --argjson sh "$sh" \
+    '{ok:true, path:$path, captureWidth:$cw, captureHeight:$ch, screenWidth:$sw, screenHeight:$sh}'
+  return 0
+}
+
+cmd_snapshot() {
+  local evidence_id="${1:-}"
+  [ -n "$evidence_id" ] && validate_evidence_id "$evidence_id"
+  local out rc
+  out=$(cmd_snapshot_capture "$evidence_id")
+  rc=$?
+  if [ "$rc" -ne 0 ]; then emit_fail "$out" 1; fi
+  emit_ok "$out"
 }
 
 case "$COMMAND" in

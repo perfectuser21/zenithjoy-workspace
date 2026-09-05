@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import http from 'node:http';
-import { writeFileSync, mkdtempSync, mkdirSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, mkdirSync, readFileSync, existsSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -550,6 +550,123 @@ test('snapshot-evidence：phonectl screenshot 失败 → 透传错误，不落�
     const out = JSON.parse(r.stdout);
     assert.equal(out.ok, false);
     assert.equal(existsSync(join(evDir, 'test-profile', 'snapshot-ev-002.png')), false);
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+// 在合法 base64 中间插入非法字符（不属于 base64 字母表），破坏编码本身（Critical 1 复现用例）。
+const CORRUPTED_ILLEGAL_CHARS_B64 = `${TINY_PNG_B64.slice(0, 10)}!@#${TINY_PNG_B64.slice(13)}`;
+
+// 合法 base64（字符集合法、可正常解码），但解码出来的内容根本不是 PNG，末尾也没有
+// 合法的 IEND chunk —— 用来模拟"base64 -d 退出码是 0 但内容被截断/破坏"的场景
+// （Critical 2 复现用例：macOS/BSD 的 base64 在这种输入下不会报任何错误）。
+const FAKE_TRUNCATED_PNG_B64 = Buffer.from(
+  'this looks like it could be image bytes but it is not a real PNG and has no IEND chunk at the end at all'
+).toString('base64');
+
+test('snapshot-evidence：imageBase64 含非法字符（损坏的 base64）→ ok:false，不留垃圾文件', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    server = await startMockServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data: { ok: true, data: {
+        imageBase64: CORRUPTED_ILLEGAL_CHARS_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664,
+      }, outcome: 'completed' } }));
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'snapshot-evidence', 'ev-corrupt-b64'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 1);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.ok, false);
+    const profileDir = join(evDir, 'test-profile');
+    const leftoverFiles = existsSync(profileDir)
+      ? readdirSync(profileDir).filter((f) => f.endsWith('.png') || f.includes('.tmp.'))
+      : [];
+    assert.deepEqual(leftoverFiles, [], `不应留下任何垃圾文件，实际发现: ${leftoverFiles.join(',')}`);
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+test('snapshot-evidence：base64 可正常解码但内容没有合法 PNG IEND chunk（模拟网络截断）→ ok:false', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    server = await startMockServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data: { ok: true, data: {
+        imageBase64: FAKE_TRUNCATED_PNG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664,
+      }, outcome: 'completed' } }));
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'snapshot-evidence', 'ev-truncated'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 1);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.ok, false);
+    const profileDir = join(evDir, 'test-profile');
+    const leftoverFiles = existsSync(profileDir)
+      ? readdirSync(profileDir).filter((f) => f.endsWith('.png') || f.includes('.tmp.'))
+      : [];
+    assert.deepEqual(leftoverFiles, [], `不应留下任何垃圾文件，实际发现: ${leftoverFiles.join(',')}`);
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+test('snapshot-evidence：同一 evidence_id 先成功落盘，再用损坏数据调用 → 原文件内容不被销毁（原子写）', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  let server;
+  let currentImageBase64 = TINY_PNG_B64;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    server = await startMockServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data: { ok: true, data: {
+        imageBase64: currentImageBase64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664,
+      }, outcome: 'completed' } }));
+    });
+    const { port } = server.address();
+
+    const r1 = await runBridge(['--profile', 'test-profile', 'snapshot-evidence', 'ev-reuse'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r1.status, 0);
+    const out1 = JSON.parse(r1.stdout);
+    const filePath = out1.path;
+    const originalContent = readFileSync(filePath);
+    assert.equal(originalContent.toString('base64'), TINY_PNG_B64);
+
+    currentImageBase64 = FAKE_TRUNCATED_PNG_B64;
+    const r2 = await runBridge(['--profile', 'test-profile', 'snapshot-evidence', 'ev-reuse'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r2.status, 1);
+    const out2 = JSON.parse(r2.stdout);
+    assert.equal(out2.ok, false);
+
+    const afterContent = readFileSync(filePath);
+    assert.deepEqual(afterContent, originalContent, '第二次损坏写入不能销毁第一次成功落盘的好文件');
   } finally {
     server?.close();
     rmSync(dir, { recursive: true, force: true });
