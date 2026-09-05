@@ -282,6 +282,60 @@ cmd_snapshot() {
   emit_ok "$out"
 }
 
+# tap/swipe/back-evidence 共用的收尾逻辑：动作已成功执行，等待 wait_ms 后
+# 调用 cmd_snapshot_capture 截图存证。截图失败就把截图的错误 JSON 透传出去
+# （此时动作本身已经做了，但没有证据，调用方需要知道截图这一步失败了）；
+# 截图成功则在结果里加 action_ok:true，表明"动作+截图"整体成功。
+finish_action_evidence() {
+  local evidence_id="$1" wait_ms="$2"
+  sleep "$(awk "BEGIN{print $wait_ms/1000}")"
+  local snap_json rc
+  snap_json=$(cmd_snapshot_capture "$evidence_id")
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    emit_fail "$snap_json" 1
+  fi
+  emit_ok "$(echo "$snap_json" | jq -c '. + {action_ok:true}')"
+}
+
+cmd_tap_evidence() {
+  local x="${1:-}" y="${2:-}" evidence_id="${3:-}" wait_ms="${4:-800}"
+  [ -n "$x" ] && [ -n "$y" ] && [ -n "$evidence_id" ] || die "tap-evidence 需要 x y evidence_id [wait_ms]"
+  validate_evidence_id "$evidence_id"
+  call_phonectl tap "$x" "$y"
+  if [ "$PHONECTL_EXIT" -ne 0 ]; then
+    emit_fail "$(extract_phonectl_error "TAP_FAILED" "tap 失败")" 1
+  fi
+  finish_action_evidence "$evidence_id" "$wait_ms"
+}
+
+cmd_swipe_evidence() {
+  local x1="${1:-}" y1="${2:-}" x2="${3:-}" y2="${4:-}" duration_ms="${5:-}" evidence_id="${6:-}" wait_ms="${7:-800}"
+  [ -n "$x1" ] && [ -n "$y1" ] && [ -n "$x2" ] && [ -n "$y2" ] && [ -n "$duration_ms" ] && [ -n "$evidence_id" ] \
+    || die "swipe-evidence 需要 x1 y1 x2 y2 duration_ms evidence_id [wait_ms]"
+  validate_evidence_id "$evidence_id"
+  call_phonectl swipe "$x1" "$y1" "$x2" "$y2" "$duration_ms"
+  if [ "$PHONECTL_EXIT" -ne 0 ]; then
+    emit_fail "$(extract_phonectl_error "SWIPE_FAILED" "swipe 失败")" 1
+  fi
+  finish_action_evidence "$evidence_id" "$wait_ms"
+}
+
+cmd_back_evidence() {
+  local evidence_id="${1:-}" wait_ms="${2:-800}"
+  [ -n "$evidence_id" ] || die "back-evidence 需要 evidence_id [wait_ms]"
+  validate_evidence_id "$evidence_id"
+  call_phonectl key back
+  if [ "$PHONECTL_EXIT" -ne 0 ]; then
+    emit_fail "$(extract_phonectl_error "KEY_FAILED" "key back 失败")" 1
+  fi
+  finish_action_evidence "$evidence_id" "$wait_ms"
+}
+
+cmd_unsupported() {
+  emit_fail "$(jq -n --arg c "$COMMAND" '{ok:false,errorCode:"UNSUPPORTED",detail:("本次范围（keyword_acquisition Step②③）不支持: "+$c)}')" 3
+}
+
 case "$COMMAND" in
   preflight) cmd_preflight ;;
   lock-acquire) cmd_lock_acquire "$@" ;;
@@ -290,5 +344,9 @@ case "$COMMAND" in
   open-app) cmd_open_app ;;
   snapshot) cmd_snapshot "" ;;
   snapshot-evidence) cmd_snapshot "${1:-}" ;;
+  tap-evidence) cmd_tap_evidence "$@" ;;
+  swipe-evidence) cmd_swipe_evidence "$@" ;;
+  back-evidence) cmd_back_evidence "$@" ;;
+  current-video-link|record-start|record-stop|record-status|record-extract-audio|ui-evidence) cmd_unsupported ;;
   *) die "命令尚未实现: $COMMAND" ;;
 esac

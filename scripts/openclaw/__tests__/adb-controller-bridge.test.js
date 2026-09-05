@@ -673,3 +673,136 @@ test('snapshot-evidence：同一 evidence_id 先成功落盘，再用损坏数�
     rmSync(evDir, { recursive: true, force: true });
   }
 });
+
+test('tap-evidence：动作成功 → 等待后截图存证，返回 action_ok', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    let tapCalled = false, screenshotCalled = false;
+    server = await startMockServer((req, res, body) => {
+      const b = JSON.parse(body);
+      if (b.action === 'tap') { tapCalled = true; res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, outcome: 'completed' } })); return; }
+      if (b.action === 'screenshot') {
+        screenshotCalled = true;
+        res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, data: { imageBase64: TINY_PNG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664 }, outcome: 'completed' } }));
+        return;
+      }
+      res.writeHead(404); res.end('{}');
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'tap-evidence', '600', '1300', 'ev-tap-1', '10'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 0);
+    assert.ok(tapCalled); assert.ok(screenshotCalled);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.action_ok, true);
+    assert.ok(out.path);
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+test('tap-evidence：动作失败 → 不截图，直接透传错误', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    let screenshotCalled = false;
+    server = await startMockServer((req, res, body) => {
+      const b = JSON.parse(body);
+      if (b.action === 'screenshot') { screenshotCalled = true; }
+      res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: false, errorCode: 'DEVICE_BUSY', outcome: 'completed' } }));
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'tap-evidence', '600', '1300', 'ev-tap-2'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 1);
+    assert.equal(screenshotCalled, false);
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+test('swipe-evidence：成功路径调用 swipe 再截图', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    let capturedSwipeBody = null;
+    server = await startMockServer((req, res, body) => {
+      const b = JSON.parse(body);
+      if (b.action === 'swipe') { capturedSwipeBody = b; res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, outcome: 'completed' } })); return; }
+      if (b.action === 'screenshot') { res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, data: { imageBase64: TINY_PNG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664 }, outcome: 'completed' } })); return; }
+      res.writeHead(404); res.end('{}');
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'swipe-evidence', '600', '2000', '600', '500', '400', 'ev-swipe-1', '10'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 0);
+    assert.equal(capturedSwipeBody.x1, 600); assert.equal(capturedSwipeBody.durationMs, 400);
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+test('back-evidence：成功路径调用 key back 再截图', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    let capturedKeyBody = null;
+    server = await startMockServer((req, res, body) => {
+      const b = JSON.parse(body);
+      if (b.action === 'key') { capturedKeyBody = b; res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, outcome: 'completed' } })); return; }
+      if (b.action === 'screenshot') { res.writeHead(200); res.end(JSON.stringify({ success: true, data: { ok: true, data: { imageBase64: TINY_PNG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664 }, outcome: 'completed' } })); return; }
+      res.writeHead(404); res.end('{}');
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'back-evidence', 'ev-back-1', '10'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 0);
+    // 注意：phonectl.sh 的 key action 把参数包成 {name:$n}，不是 {key:$n}
+    // （见 phonectl.sh:91-96），这里断言实际字段名 name，而非计划文档里过时的 key。
+    assert.equal(capturedKeyBody.name, 'back');
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+for (const cmd of ['current-video-link', 'record-start', 'record-stop', 'record-status', 'record-extract-audio', 'ui-evidence']) {
+  test(`${cmd}：本次范围不支持，exit 3`, async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+    try {
+      const profilesFile = makeProfilesFile(dir);
+      const r = await runBridge(['--profile', 'test-profile', cmd], {
+        PROFILES_FILE: profilesFile, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+      });
+      assert.equal(r.status, 3);
+      const out = JSON.parse(r.stdout);
+      assert.equal(out.errorCode, 'UNSUPPORTED');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
