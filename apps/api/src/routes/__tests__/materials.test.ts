@@ -426,3 +426,109 @@ describe('POST /api/materials/complete', () => {
     expect(r.body.data.materials).toHaveLength(1);
   });
 });
+
+describe('GET /api/materials — 素材库列表', () => {
+  beforeEach(() => {
+    (validateLicense as any).mockResolvedValue(licenseOk(TENANT_A));
+  });
+
+  it('没有凭据 → 401', async () => {
+    const app = makeApp();
+    const r = await request(app).get('/api/materials');
+    expect(r.status).toBe(401);
+  });
+
+  it('只返回本租户的素材 —— 库里有别人的也看不见', async () => {
+    // 查询必须自己带 tenant 过滤：这里断言 SQL 与参数，而不是靠假数据"恰好只有一条"
+    (pool.query as any).mockImplementation(async (sql: string) => {
+      if (/FROM zenithjoy\.materials/i.test(sql)) {
+        return { rows: [{ id: 'm1', file_name: 'a.jpg', size_bytes: 10, mime_type: 'image/jpeg',
+                          storage_key: `${TENANT_A}/m1/a.jpg`, taken_at: null, created_at: new Date().toISOString() }] };
+      }
+      return { rows: [] };
+    });
+    const app = makeApp();
+    const r = await request(app).get('/api/materials').set('X-Upload-Token', TOKEN_A);
+
+    expect(r.status).toBe(200);
+    const call = (pool.query as any).mock.calls.find((c: any[]) => /FROM zenithjoy\.materials/i.test(c[0]));
+    expect(String(call[0])).toContain('tenant_id');
+    expect(call[1]).toContain(TENANT_A);          // 用的是凭据反查出来的租户
+    expect(call[1]).not.toContain(TENANT_B);
+  });
+
+  it('客户端自报 tenant_id 被忽略', async () => {
+    (pool.query as any).mockImplementation(async () => ({ rows: [] }));
+    const app = makeApp();
+    await request(app).get(`/api/materials?tenant_id=${TENANT_B}`).set('X-Upload-Token', TOKEN_A);
+    const call = (pool.query as any).mock.calls.find((c: any[]) => /FROM zenithjoy\.materials/i.test(c[0]));
+    expect(call[1]).toContain(TENANT_A);
+    expect(call[1]).not.toContain(TENANT_B);
+  });
+
+  it('limit 有硬上限 —— 传 999999 也不会真去查 99 万条', async () => {
+    (pool.query as any).mockImplementation(async () => ({ rows: [] }));
+    const app = makeApp();
+    await request(app).get('/api/materials?limit=999999').set('X-Upload-Token', TOKEN_A);
+    const call = (pool.query as any).mock.calls.find((c: any[]) => /FROM zenithjoy\.materials/i.test(c[0]));
+    const limitArg = call[1].find((v: unknown) => typeof v === 'number' && v > 1);
+    expect(limitArg).toBeLessThanOrEqual(100);
+  });
+
+  it('limit 非法（负数/非数字）→ 回落默认值，不是崩掉也不是查全表', async () => {
+    (pool.query as any).mockImplementation(async () => ({ rows: [] }));
+    const app = makeApp();
+    for (const bad of ['-5', 'abc', '0']) {
+      (pool.query as any).mockClear();
+      const r = await request(app).get(`/api/materials?limit=${bad}`).set('X-Upload-Token', TOKEN_A);
+      expect(r.status).toBe(200);
+      const call = (pool.query as any).mock.calls.find((c: any[]) => /FROM zenithjoy\.materials/i.test(c[0]));
+      const limitArg = call[1].find((v: unknown) => typeof v === 'number' && v > 0);
+      expect(limitArg).toBeGreaterThan(0);
+      expect(limitArg).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it('每条带 preview_url，但不返回 storage_key（少暴露内部路径）', async () => {
+    (pool.query as any).mockImplementation(async (sql: string) => {
+      if (/FROM zenithjoy\.materials/i.test(sql)) {
+        return { rows: [{ id: 'm1', file_name: 'a.jpg', size_bytes: 10, mime_type: 'image/jpeg',
+                          storage_key: `${TENANT_A}/m1/a.jpg`, taken_at: null, created_at: new Date().toISOString() }] };
+      }
+      return { rows: [] };
+    });
+    const app = makeApp();
+    const r = await request(app).get('/api/materials').set('X-Upload-Token', TOKEN_A);
+    expect(r.status).toBe(200);
+    const item = r.body.data.items[0];
+    expect(item.preview_url).toBeTruthy();
+    expect(item.storage_key).toBeUndefined();
+    expect(item.id).toBe('m1');
+  });
+
+  it('某条签名失败 → 那条 preview_url 为 null，整页照常返回', async () => {
+    // 一张图坏了，不该让整个素材库看不见
+    (pool.query as any).mockImplementation(async (sql: string) => {
+      if (/FROM zenithjoy\.materials/i.test(sql)) {
+        return { rows: [
+          { id: 'ok', file_name: 'ok.jpg', size_bytes: 10, mime_type: 'image/jpeg',
+            storage_key: `${TENANT_A}/ok/ok.jpg`, taken_at: null, created_at: new Date().toISOString() },
+          { id: 'bad', file_name: 'bad.jpg', size_bytes: 10, mime_type: 'image/jpeg',
+            storage_key: `${TENANT_A}/bad/bad.jpg`, taken_at: null, created_at: new Date().toISOString() },
+        ] };
+      }
+      return { rows: [] };
+    });
+    const app = makeApp();
+    vi.spyOn(storage, 'getSignedUrl').mockImplementation(async (key: string) => {
+      if (key.includes('/bad/')) throw new Error('签名失败');
+      return `signed://${key}`;
+    });
+
+    const r = await request(app).get('/api/materials').set('X-Upload-Token', TOKEN_A);
+    expect(r.status).toBe(200);
+    expect(r.body.data.items).toHaveLength(2);
+    expect(r.body.data.items[0].preview_url).toContain('ok');
+    expect(r.body.data.items[1].preview_url).toBeNull();
+  });
+});
