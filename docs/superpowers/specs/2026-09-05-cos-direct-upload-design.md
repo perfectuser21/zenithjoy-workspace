@@ -21,6 +21,7 @@
 | 断言 | 实测结果 |
 |---|---|
 | 预签名 URL 可被**零签名能力**的客户端直接 PUT | ✅ HTTP 200 |
+| **SDK 的 `getObjectUrl({Method:'PUT',Sign:true})` 签出的 URL 真能用** | ✅ 真 SDK 对真 COS，裸 PUT 得 HTTP 200 |
 | 上传后下载回来逐字节比对 | ✅ 内容完全一致 |
 | 篡改签名一个字符 | ✅ **HTTP 403** |
 | 不带签名裸传 | ✅ **HTTP 403**（桶确为私有） |
@@ -168,7 +169,7 @@ services/agent/src/handlers/ensure-ffmpeg.ts
 
 抽出 `material-persist.ts` 是本次的关键结构变化：落库逻辑现在有两个调用方，留在路由里必然被复制，复制就会漂移。
 
-> 签发实现取向：优先用 SDK 的 `getObjectUrl({ Method: 'PUT', Sign: true, Expires })`。COS 的 URL 签名算法（HMAC-SHA1 + `q-sign-*` 参数）已在本次设计中实测跑通，若 SDK 行为不符预期可直接落地该算法，不构成风险。
+> 签发实现：用 SDK 的 `getObjectUrl({ Method: 'PUT', Sign: true, Expires })`。**已用真 SDK 对真 COS 实测**——签出的 URL 被一个不带任何鉴权头的裸 HTTPS PUT 接受，返回 HTTP 200。不是靠手写签名算法兜底，SDK 本身就支持。
 
 ## 错误路径
 
