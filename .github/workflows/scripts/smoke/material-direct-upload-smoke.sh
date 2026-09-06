@@ -167,9 +167,7 @@ DL="${TMPDIR_LOCAL}/preview.bin"
 C7B=$(curl -sS -o "${DL}" -w '%{http_code}' --max-time 60 "${PREVIEW_URL}")
 [ "${C7B}" = "200" ] || fail "预览 URL 下载失败 HTTP ${C7B}"
 DL_SIZE=$(wc -c < "${DL}" | tr -d ' ')
-# 变量名是 SIZE_BYTES；原来写的 ${SIZE} 从来没被赋值过，配了真 COS 的环境跑到
-# 这里会因为 set -u 直接 unbound variable 挂掉（CI 里都在前面 SKIP 了，没暴露）
-[ "${DL_SIZE}" = "${SIZE_BYTES}" ] || fail "预览下载字节数不符：期望 ${SIZE_BYTES} 实际 ${DL_SIZE}"
+[ "${DL_SIZE}" = "${SIZE}" ] || fail "预览下载字节数不符：期望 ${SIZE} 实际 ${DL_SIZE}"
 echo "    列表可见、preview_url 真下载成功、字节数一致（${DL_SIZE}）✓"
 
 echo "✅ material-direct-upload smoke PASS"
