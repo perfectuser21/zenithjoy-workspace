@@ -57,31 +57,42 @@ IMG="${TMPD}/a.jpg"
 printf '\xff\xd8\xff\xe0\x00\x10JFIF-delete-smoke' > "${IMG}"
 SIZE_BYTES=$(wc -c < "${IMG}" | tr -d ' ')
 
-# 传一张进 A 的库，走的是真实三步（和 iPhone 快捷指令同一条路）
+# ── COS 可用性探测：必须在顶层做，不能藏进函数 ────────────────────────────
+# skip() 里的 exit 0 只退出当前 shell。函数如果是在 $( ) 里被调用的，exit 只
+# 结束那个子 shell，脚本会若无其事地继续跑，而且 SKIP 那句话会被当成返回值
+# 存进变量——第一版就是这么写的，CI 上直接把 "SKIP: ..." 当成了 material_id。
+SIGN_PROBE=$(curl -s -X POST "${API_BASE}/api/materials/upload-urls" \
+  -H "X-Upload-Token: ${KEY_A}" -H "Content-Type: application/json" \
+  -d "{\"files\":[{\"file_name\":\"probe.jpg\",\"mime_type\":\"image/jpeg\",\"size_bytes\":${SIZE_BYTES}}]}")
+PROBE_URL=$(echo "${SIGN_PROBE}" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("data",{}).get("files",[{}])[0].get("upload_url",""))' 2>/dev/null || echo "")
+case "${PROBE_URL}" in
+  https://*) : ;;
+  *) skip "服务端未配置真实 COS（upload_url=${PROBE_URL:-无}），删不掉真对象，本环境验不出真链路" ;;
+esac
+
+# 传一张进 A 的库，走的是真实三步（和 iPhone 快捷指令同一条路）。
+# 到这里 COS 一定是真的，函数里不再需要 skip。
 upload_one() {
   local key="$1" name="$2" r body upload_url storage_key material_id code
   r=$(curl -s -w '\n%{http_code}' -X POST "${API_BASE}/api/materials/upload-urls" \
     -H "X-Upload-Token: ${key}" -H "Content-Type: application/json" \
     -d "{\"files\":[{\"file_name\":\"${name}\",\"mime_type\":\"image/jpeg\",\"size_bytes\":${SIZE_BYTES}}]}")
   code=$(echo "${r}" | tail -1); body=$(echo "${r}" | sed '$d')
-  [ "${code}" = "200" ] || fail "换预签名 URL expected 200 got ${code}：${body}"
+  [ "${code}" = "200" ] || { echo "换预签名 URL expected 200 got ${code}：${body}" >&2; return 1; }
   upload_url=$(echo "${body}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["files"][0]["upload_url"])')
   storage_key=$(echo "${body}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["files"][0]["storage_key"])')
   material_id=$(echo "${body}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["files"][0]["material_id"])')
-  case "${upload_url}" in
-    https://*) : ;;
-    *) skip "服务端未配置真实 COS（upload_url=${upload_url}），删不掉真对象，本环境验不出真链路" ;;
-  esac
-  curl -sf -o /dev/null -X PUT --data-binary "@${IMG}" "${upload_url}" || fail "裸 PUT 失败"
+  curl -sf -o /dev/null -X PUT --data-binary "@${IMG}" "${upload_url}" || { echo "裸 PUT 失败" >&2; return 1; }
   r=$(curl -s -w '\n%{http_code}' -X POST "${API_BASE}/api/materials/complete" \
     -H "X-Upload-Token: ${key}" -H "Content-Type: application/json" \
     -d "{\"files\":[{\"storage_key\":\"${storage_key}\",\"material_id\":\"${material_id}\",\"file_name\":\"${name}\",\"mime_type\":\"image/jpeg\",\"size_bytes\":${SIZE_BYTES}}]}")
   code=$(echo "${r}" | tail -1)
-  [ "${code}" = "200" ] || fail "complete expected 200 got ${code}：$(echo "${r}" | sed '$d')"
+  [ "${code}" = "200" ] || { echo "complete expected 200 got ${code}：$(echo "${r}" | sed '$d')" >&2; return 1; }
   echo "${material_id}"
 }
 
-MAT_A=$(upload_one "${KEY_A}" "del-me.jpg")
+MAT_A=$(upload_one "${KEY_A}" "del-me.jpg") || fail "上传测试素材失败（详见上面 stderr）"
+echo "${MAT_A}" | grep -qE "^${UUID_RE}$" || fail "拿到的 material_id 不是 UUID：'${MAT_A}'"
 echo "[1] A 的素材已就位 material_id=${MAT_A}"
 
 echo "[2] 【租户隔离】B 拿自己的凭据删 A 的素材 → 必须 404（不能是 403）"
