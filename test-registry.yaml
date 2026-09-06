@@ -831,6 +831,14 @@ tests:
     product: 素材上传链路
     note: "上传端点契约：租户从凭据反查且客户端自报 tenant_id 被忽略（防提权）、一次上传建一个作品、混传 400、重复上传 deduped 且不重复写存储。"
 
+  - id: material-delete-endpoint
+    path: apps/api/src/routes/__tests__/materials-delete.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 素材上传链路
+    note: "删素材契约：删别人的回 404 不是 403（403 等于确认 id 存在，白送探测接口）、已发布作品用着的 409 且说清哪个作品挡着、先删存储再删库（反过来会留永久孤儿文件）、存储删失败时 DB 行原样保留。"
+
   - id: material-storage-abstraction
     path: apps/api/src/services/__tests__/material-storage.test.ts
     type: unit

@@ -108,6 +108,9 @@ const upload = multer({
   limits: { fileSize: MAX_FILE_BYTES },
 });
 
+/** 删素材前先验 id 形状：不是 UUID 就别去查库，省一次往返也少一个注入面 */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export interface MaterialsRouterDeps {
   storage?: MaterialStorage;
 }
@@ -444,6 +447,98 @@ export function createMaterialsRouter(deps: MaterialsRouterDeps = {}): Router {
         fs.promises.unlink(f.path).catch(() => {});
       }
     }
+  });
+
+  // ── ④ DELETE /:id：删掉一条素材（对象 + 记录一起删）────────────────────
+  //
+  // 手机上传错了、传重了，得有地方删。删是不可逆的，所以这里有三道闸：
+  //   ① 租户隔离：SELECT 带 tenant_id，别人的素材查出来 0 行 → 404。
+  //      **不能回 403**——403 等于确认「这个 id 存在」，白送一个探测接口。
+  //   ② 已发布的作品用着的素材不许删：删掉会把已经发出去的帖子打断。
+  //      草稿不算——草稿是上传时自动建的，不该拦住人删自己刚传错的东西。
+  //   ③ 先删存储再删库：反过来的话，存储删失败时库里记录已经没了，
+  //      再也拿不到这个 key，必然留下永远收不回来的孤儿文件。
+  router.delete('/:id', async (req: Request, res: Response) => {
+    const auth = await authenticate(req, res);
+    if (!auth) return;
+    const { tenantId } = auth;
+
+    // 就地收窄，不藏进 helper——CodeQL 不做跨函数收窄
+    const rawId = req.params?.id;
+    const id = typeof rawId === 'string' ? rawId : '';
+    if (!UUID_RE.test(id)) {
+      return fail(res, 400, 'BAD_ID', '素材 id 必须是 UUID');
+    }
+
+    let storageKey: string;
+    try {
+      // 租户永远从凭据反查。这里少一个 tenant_id 就是任意越权删。
+      const q = await pool.query<{ id: string; storage_key: string }>(
+        `SELECT id, storage_key FROM zenithjoy.materials WHERE id = $1 AND tenant_id = $2`,
+        [id, tenantId],
+      );
+      if (q.rows.length === 0) {
+        return fail(res, 404, 'NOT_FOUND', '没有这条素材');
+      }
+      storageKey = q.rows[0].storage_key;
+    } catch (err) {
+      console.error('[materials/delete] lookup error:', err);
+      return fail(res, 500, 'DELETE_FAILED', err instanceof Error ? err.message : 'unknown');
+    }
+
+    // 被非草稿作品用着就不能删——已经发出去的帖子不能被拆
+    try {
+      const used = await pool.query<{ id: string; title: string | null; status: string }>(
+        `SELECT c.id, c.title, c.status
+           FROM zenithjoy.contents c
+           JOIN zenithjoy.content_materials cm ON cm.content_id = c.id
+          WHERE cm.material_id = $1 AND c.tenant_id = $2 AND c.status <> 'draft'
+          LIMIT 5`,
+        [id, tenantId],
+      );
+      if (used.rows.length > 0) {
+        // 说清是哪个作品挡着，否则用户只看到「删不掉」，不知道下一步该干嘛
+        const names = used.rows.map((c) => `「${c.title || '无标题'}」(${c.status})`).join('、');
+        return fail(res, 409, 'IN_USE', `这条素材被 ${names} 用着，先处理那个作品再删`);
+      }
+    } catch (err) {
+      console.error('[materials/delete] in-use check error:', err);
+      return fail(res, 500, 'DELETE_FAILED', err instanceof Error ? err.message : 'unknown');
+    }
+
+    // 先删存储。失败就整个中止，DB 行原样留着——宁可留一条能重试的记录，
+    // 也不留一个再也找不到的孤儿文件（它会一直烧存储费）。
+    try {
+      await storage.deleteObject(storageKey);
+    } catch (err) {
+      console.error('[materials/delete] storage delete failed:', id, err);
+      return fail(res, 500, 'STORAGE_DELETE_FAILED',
+        `存储里没删掉，记录保留着可以重试：${err instanceof Error ? err.message : 'unknown'}`);
+    }
+
+    try {
+      // content_materials 上有 ON DELETE CASCADE，关联行跟着走
+      await pool.query(
+        `DELETE FROM zenithjoy.materials WHERE id = $1 AND tenant_id = $2`,
+        [id, tenantId],
+      );
+      // 素材删完后变空的草稿是垃圾，顺手清掉；有素材的、非草稿的一律不动
+      await pool.query(
+        `DELETE FROM zenithjoy.contents c
+          WHERE c.tenant_id = $1 AND c.status = 'draft'
+            AND NOT EXISTS (SELECT 1 FROM zenithjoy.content_materials cm WHERE cm.content_id = c.id)`,
+        [tenantId],
+      );
+    } catch (err) {
+      console.error('[materials/delete] db delete failed:', id, err);
+      return fail(res, 500, 'DELETE_FAILED', err instanceof Error ? err.message : 'unknown');
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: { id, deleted: true },
+      timestamp: new Date().toISOString(),
+    });
   });
 
   return router;

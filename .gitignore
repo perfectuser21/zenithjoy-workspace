@@ -23,6 +23,10 @@ credentials/
 
 # Node.js
 node_modules/
+# 不带斜杠的这条是必须的：`node_modules/` 只匹配目录，匹配不到**软链**。
+# git worktree 里常把 node_modules 软链到主 checkout，之前就因为这个被
+# `git add -A` 连软链一起提交进来，CI 上 npm 要建同名目录直接 ENOTDIR 全红。
+node_modules
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
