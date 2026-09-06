@@ -79,9 +79,10 @@ cmd_preflight() {
   fi
   local dinfo
   dinfo=$(echo "$PHONECTL_OUT" | jq -c '.data')
-  local model foreground
+  local model foreground call_state
   model=$(echo "$dinfo" | jq -r '.data.model // "unknown"')
   foreground=$(echo "$dinfo" | jq -r '.foregroundPkg // "unknown"')
+  call_state=$(echo "$dinfo" | jq -r '.data.callState // "unknown"')
 
   local sessions_http sessions_body
   sessions_body=$(mktemp)
@@ -118,14 +119,19 @@ cmd_preflight() {
   fi
   rm -f "$sessions_body"
 
+  local call_state_warnings="[]"
+  if [ "$call_state" = "unknown" ]; then
+    call_state_warnings='["call_state 无法确认（设备端 callState 字段缺失或读取失败），douyin-phone-runtime skill 要求 call_state!=idle 时安全停止，这里无法提供该判据，调用方需自行决定是否继续"]'
+  fi
   emit_ok "$(jq -n \
     --arg profile "$PROFILE" --arg serial "$AGENT_ID" --arg model "$model" \
-    --arg fg "$foreground" --argjson verified "$account_verified" \
+    --arg fg "$foreground" --arg cs "$call_state" --argjson verified "$account_verified" \
     --argjson sessions_check_ok "$sessions_check_ok" --arg sessions_warning "$sessions_warning" \
+    --argjson call_state_warnings "$call_state_warnings" \
     '{ok:true, profile:$profile, serial:$serial, model:$model, adb_state:"device",
-       call_state:"unknown", foreground_pkg:$fg, account_verified:$verified,
+       call_state:$cs, foreground_pkg:$fg, account_verified:$verified,
        sessions_check_ok:$sessions_check_ok,
-       warnings: (["call_state 检测能力缺失，douyin-phone-runtime skill 要求 call_state!=idle 时安全停止，这里无法提供该判据，调用方需自行决定是否继续"]
+       warnings: ($call_state_warnings
          + (if $sessions_warning != "" then [$sessions_warning] else [] end))}')"
 }
 
@@ -209,6 +215,42 @@ cmd_open_app() {
   local fg
   fg=$(echo "$PHONECTL_OUT" | jq -r '.data.foregroundPkg // "unknown"')
   emit_ok "$(jq -n --arg fg "$fg" '{ok:true, foregroundPkg:$fg}')"
+}
+
+
+
+# close-app: douyin-phone-runtime skill 要求"强制停止抖音并返回桌面"，
+# 验收条件是"前台不再是抖音" + 桌面截图证据。phonectl 没有 force-stop
+# 这种真正杀死进程的能力，本范围内用 key home 回桌面满足上述验收逻辑；
+# 若下次真需要强制终止进程，需在 phonectl.sh/agent-android 底层补 force-stop 能力。
+cmd_close_app() {
+  call_phonectl key home
+  if [ "$PHONECTL_EXIT" -ne 0 ]; then
+    emit_fail "$(extract_phonectl_error "CLOSE_APP_FAILED" "key home 失败")" 1
+  fi
+  call_phonectl device_info
+  if [ "$PHONECTL_EXIT" -ne 0 ]; then
+    emit_fail "$(extract_phonectl_error "CLOSE_APP_VERIFY_FAILED" "回桌面后验证前台失败")" 1
+  fi
+  local fg not_foreground
+  fg=$(echo "$PHONECTL_OUT" | jq -r ".data.foregroundPkg // \"unknown\"")
+  if [ "$fg" = "com.ss.android.ugc.aweme" ]; then
+    not_foreground="false"
+  else
+    not_foreground="true"
+  fi
+  local snap_json snap_rc snap_path=""
+  snap_json=$(cmd_snapshot_capture "close-app-$(date +%s%N)")
+  snap_rc=$?
+  if [ "$snap_rc" -eq 0 ]; then
+    snap_path=$(echo "$snap_json" | jq -r ".path // \"\"")
+  fi
+  if [ "$not_foreground" != "true" ]; then
+    emit_fail "$(jq -n --arg fg "$fg" --arg path "$snap_path" \
+      '{ok:false, errorCode:"DOUYIN_STILL_FOREGROUND", detail:"key home after: douyin still foreground", foregroundPkg:$fg, desktopSnapshotPath:$path}')" 1
+  fi
+  emit_ok "$(jq -n --arg fg "$fg" --arg path "$snap_path" \
+    '{ok:true, foregroundPkg:$fg, douyinNotForeground:true, desktopSnapshotPath:$path}')"
 }
 
 # EVIDENCE_ID 只允许用作文件名安全字符，防止路径穿越/注入（同 profile 名称校验的风格）。
@@ -363,6 +405,7 @@ case "$COMMAND" in
   lock-release) cmd_lock_release "$@" ;;
   lock-status) cmd_lock_status ;;
   open-app) cmd_open_app ;;
+  close-app) cmd_close_app ;;
   snapshot) cmd_snapshot "" ;;
   snapshot-evidence) cmd_snapshot "${1:-}" ;;
   tap-evidence) cmd_tap_evidence "$@" ;;
