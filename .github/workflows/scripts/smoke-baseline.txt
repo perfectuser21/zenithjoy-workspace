@@ -120,3 +120,4 @@ agent-cmd-executor-smoke.sh
 device-command-bridge-smoke.sh
 material-upload-smoke.sh
 material-direct-upload-smoke.sh
+material-delete-smoke.sh
