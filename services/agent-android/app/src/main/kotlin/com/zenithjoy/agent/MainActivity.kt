@@ -66,6 +66,18 @@ class MainActivity : AppCompatActivity() {
         showStatus()
     }
 
+    private val callStatePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            android.util.Log.i(TAG, "READ_PHONE_STATE authorized")
+        } else {
+            android.util.Log.w(TAG, "READ_PHONE_STATE denied — call_state stays permission_denied")
+            Toast.makeText(this, "通话状态授权被拒绝，安全预检将持续拦停", Toast.LENGTH_LONG).show()
+        }
+        showStatus()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         config = AgentConfig(this)
@@ -164,6 +176,25 @@ class MainActivity : AppCompatActivity() {
             box.addView(Button(this).apply {
                 text = "授权录音"
                 setOnClickListener { recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) }
+            })
+            box
+        }
+    }
+
+    /** 状态自检：READ_PHONE_STATE 权限是否就绪，未授权时 call_state 恒为 permission_denied，
+     * douyin-phone-runtime skill 会因此永久安全停止，方便真机巡检定位。 */
+    private fun callStateBanner(): android.view.View {
+        val granted = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.READ_PHONE_STATE,
+        ) == PackageManager.PERMISSION_GRANTED
+        return if (granted) {
+            TextView(this).apply { text = "通话状态授权 ✅ 已授权（call_state 可用）" }
+        } else {
+            val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            box.addView(TextView(this).apply { text = "⚠️ 通话状态未授权，call_state 恒为 permission_denied，获客流程将持续安全停止" })
+            box.addView(Button(this).apply {
+                text = "授权通话状态"
+                setOnClickListener { callStatePermissionLauncher.launch(Manifest.permission.READ_PHONE_STATE) }
             })
             box
         }
@@ -296,6 +327,7 @@ class MainActivity : AppCompatActivity() {
         layout.addView(accessibilityBanner())
         layout.addView(mediaProjectionBanner())
         layout.addView(recordAudioBanner())
+        layout.addView(callStateBanner())
         layout.addView(backgroundPermissionBanner())
         layout.addView(wallPushBanner())
         layout.addView(status)
