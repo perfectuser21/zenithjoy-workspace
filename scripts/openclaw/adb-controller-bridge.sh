@@ -217,6 +217,42 @@ cmd_open_app() {
   emit_ok "$(jq -n --arg fg "$fg" '{ok:true, foregroundPkg:$fg}')"
 }
 
+
+
+# close-app: douyin-phone-runtime skill 要求"强制停止抖音并返回桌面"，
+# 验收条件是"前台不再是抖音" + 桌面截图证据。phonectl 没有 force-stop
+# 这种真正杀死进程的能力，本范围内用 key home 回桌面满足上述验收逻辑；
+# 若下次真需要强制终止进程，需在 phonectl.sh/agent-android 底层补 force-stop 能力。
+cmd_close_app() {
+  call_phonectl key home
+  if [ "$PHONECTL_EXIT" -ne 0 ]; then
+    emit_fail "$(extract_phonectl_error "CLOSE_APP_FAILED" "key home 失败")" 1
+  fi
+  call_phonectl device_info
+  if [ "$PHONECTL_EXIT" -ne 0 ]; then
+    emit_fail "$(extract_phonectl_error "CLOSE_APP_VERIFY_FAILED" "回桌面后验证前台失败")" 1
+  fi
+  local fg not_foreground
+  fg=$(echo "$PHONECTL_OUT" | jq -r ".data.foregroundPkg // \"unknown\"")
+  if [ "$fg" = "com.ss.android.ugc.aweme" ]; then
+    not_foreground="false"
+  else
+    not_foreground="true"
+  fi
+  local snap_json snap_rc snap_path=""
+  snap_json=$(cmd_snapshot_capture "close-app-$(date +%s%N)")
+  snap_rc=$?
+  if [ "$snap_rc" -eq 0 ]; then
+    snap_path=$(echo "$snap_json" | jq -r ".path // \"\"")
+  fi
+  if [ "$not_foreground" != "true" ]; then
+    emit_fail "$(jq -n --arg fg "$fg" --arg path "$snap_path" \
+      '{ok:false, errorCode:"DOUYIN_STILL_FOREGROUND", detail:"key home after: douyin still foreground", foregroundPkg:$fg, desktopSnapshotPath:$path}')" 1
+  fi
+  emit_ok "$(jq -n --arg fg "$fg" --arg path "$snap_path" \
+    '{ok:true, foregroundPkg:$fg, douyinNotForeground:true, desktopSnapshotPath:$path}')"
+}
+
 # EVIDENCE_ID 只允许用作文件名安全字符，防止路径穿越/注入（同 profile 名称校验的风格）。
 validate_evidence_id() {
   [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]] || die "非法 EVIDENCE_ID: $1"
@@ -369,6 +405,7 @@ case "$COMMAND" in
   lock-release) cmd_lock_release "$@" ;;
   lock-status) cmd_lock_status ;;
   open-app) cmd_open_app ;;
+  close-app) cmd_close_app ;;
   snapshot) cmd_snapshot "" ;;
   snapshot-evidence) cmd_snapshot "${1:-}" ;;
   tap-evidence) cmd_tap_evidence "$@" ;;

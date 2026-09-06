@@ -569,6 +569,86 @@ test('open-app：调用 phonectl launch 抖音包名', async () => {
   }
 });
 
+test('close-app：key home 后前台不再是抖音 → ok:true 并落盘桌面截图', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    server = await startMockServer((req, res, body) => {
+      const action = JSON.parse(body).action;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      if (action === 'key') {
+        res.end(JSON.stringify({ success: true, data: { ok: true, outcome: 'completed' } }));
+        return;
+      }
+      if (action === 'device_info') {
+        res.end(JSON.stringify({ success: true, data: { ok: true, foregroundPkg: 'com.hihonor.android.launcher', data: { model: 'MAA-AN00' }, outcome: 'completed' } }));
+        return;
+      }
+      if (action === 'screenshot') {
+        res.end(JSON.stringify({ success: true, data: { ok: true, data: { imageBase64: TINY_JPEG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664 }, outcome: 'completed' } }));
+        return;
+      }
+      res.writeHead(404); res.end('{}');
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'close-app'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 0);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.ok, true);
+    assert.equal(out.douyinNotForeground, true);
+    assert.equal(out.foregroundPkg, 'com.hihonor.android.launcher');
+    assert.ok(out.desktopSnapshotPath);
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
+test('close-app：key home 后前台仍是抖音 → exit 1，报 DOUYIN_STILL_FOREGROUND', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    server = await startMockServer((req, res, body) => {
+      const action = JSON.parse(body).action;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      if (action === 'key') {
+        res.end(JSON.stringify({ success: true, data: { ok: true, outcome: 'completed' } }));
+        return;
+      }
+      if (action === 'device_info') {
+        res.end(JSON.stringify({ success: true, data: { ok: true, foregroundPkg: 'com.ss.android.ugc.aweme', data: { model: 'MAA-AN00' }, outcome: 'completed' } }));
+        return;
+      }
+      if (action === 'screenshot') {
+        res.end(JSON.stringify({ success: true, data: { ok: true, data: { imageBase64: TINY_JPEG_B64, captureWidth: 720, captureHeight: 1598, screenWidth: 1200, screenHeight: 2664 }, outcome: 'completed' } }));
+        return;
+      }
+      res.writeHead(404); res.end('{}');
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'close-app'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: evDir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 1);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.ok, false);
+    assert.equal(out.errorCode, 'DOUYIN_STILL_FOREGROUND');
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(evDir, { recursive: true, force: true });
+  }
+});
+
 test('snapshot-evidence：成功落盘 JPEG 并返回路径+双分辨率', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'acb-'));
   const evDir = mkdtempSync(join(tmpdir(), 'acb-ev-'));
