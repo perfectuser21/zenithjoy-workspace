@@ -1,5 +1,6 @@
 package com.zenithjoy.agent
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -8,10 +9,13 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.IBinder
+import android.telephony.TelephonyManager
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 import com.google.gson.Gson
 import com.zenithjoy.agent.account.DeviceAccountModel
 import com.zenithjoy.agent.account.DeviceAccountRegistry
@@ -608,6 +612,7 @@ class AgentService : Service() {
                     "agentVersion" to BuildConfig.VERSION_NAME,
                     "screenWidth" to sw,
                     "screenHeight" to sh,
+                    "callState" to callStateProbe(),
                 )
             },
             treeDump = {
@@ -972,6 +977,32 @@ class AgentService : Service() {
             val dm = android.util.DisplayMetrics()
             @Suppress("DEPRECATION") wm.defaultDisplay.getRealMetrics(dm)
             dm.widthPixels to dm.heightPixels
+        }
+    }
+
+    /**
+     * 通话状态探测：下游 douyin-phone-runtime skill 的安全停止判断依赖 call_state!=idle
+     * 这个信号，未授权 READ_PHONE_STATE 时必须显式返回 "permission_denied"，
+     * 绝不能静默当 "idle" ——那会让上游误判为"可以继续操作"，
+     * 万一手机正在通话中会被自动化操作打断。
+     */
+    private fun callStateProbe(): String {
+        val granted = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.READ_PHONE_STATE,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) return "permission_denied"
+        return try {
+            val tm = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
+            when (tm.callState) {
+                TelephonyManager.CALL_STATE_IDLE -> "idle"
+                TelephonyManager.CALL_STATE_RINGING -> "ringing"
+                TelephonyManager.CALL_STATE_OFFHOOK -> "offhook"
+                else -> "unknown"
+            }
+        } catch (e: SecurityException) {
+            "permission_denied"
+        } catch (e: Exception) {
+            "unknown"
         }
     }
 

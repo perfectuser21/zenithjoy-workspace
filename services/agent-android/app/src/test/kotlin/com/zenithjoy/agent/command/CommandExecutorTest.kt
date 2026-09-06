@@ -68,6 +68,24 @@ class CommandExecutorTest {
         assertEquals("com.ss.android.ugc.aweme", m["foregroundPkg"])
     }
 
+    @Test fun `deviceInfo 返回的 callState 字段原样透传`() = runTest {
+        val custom = CommandExecutor(
+            remoteControlEnabled = { true },
+            nativeBusy = { false },
+            foregroundPkg = { "com.ss.android.ugc.aweme" },
+            gesture = GestureRunner(dispatch = { _, _, onResult -> onResult(true); true }),
+            screenshot = ScreenshotRunner({ true }, { true }, { "b64" }, { 1080 to 2400 }, sleep = {}),
+            type = TypeRunner({ "com.ss.android.ugc.aweme" }, setOf("com.ss.android.ugc.aweme"), { true }),
+            launch = LaunchRunner(setOf("com.ss.android.ugc.aweme"), { true }, { true }, { "com.ss.android.ugc.aweme" }, sleep = {}),
+            globalAction = { true },
+            deviceInfo = { mapOf("model" to "MAA-AN00", "callState" to "idle") },
+            treeDump = { mapOf("tree" to "d0 root", "truncated" to false) },
+        )
+        val m = custom.execute(req(CmdAction.DEVICE_INFO))
+        val data = m["data"] as Map<*, *>
+        assertEquals("idle", data["callState"])
+    }
+
     @Test fun `treeDump 为 null 回 TREE_UNAVAILABLE`() = runTest {
         val e = executor(treeDump = { null })
         assertEquals(CommandProtocol.ERR_TREE_UNAVAILABLE, e.execute(req(CmdAction.TREE_DUMP))["errorCode"])
