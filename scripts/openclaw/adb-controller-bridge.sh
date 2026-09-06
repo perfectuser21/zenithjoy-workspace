@@ -79,9 +79,10 @@ cmd_preflight() {
   fi
   local dinfo
   dinfo=$(echo "$PHONECTL_OUT" | jq -c '.data')
-  local model foreground
+  local model foreground call_state
   model=$(echo "$dinfo" | jq -r '.data.model // "unknown"')
   foreground=$(echo "$dinfo" | jq -r '.foregroundPkg // "unknown"')
+  call_state=$(echo "$dinfo" | jq -r '.data.callState // "unknown"')
 
   local sessions_http sessions_body
   sessions_body=$(mktemp)
@@ -118,14 +119,19 @@ cmd_preflight() {
   fi
   rm -f "$sessions_body"
 
+  local call_state_warnings="[]"
+  if [ "$call_state" = "unknown" ]; then
+    call_state_warnings='["call_state 无法确认（设备端 callState 字段缺失或读取失败），douyin-phone-runtime skill 要求 call_state!=idle 时安全停止，这里无法提供该判据，调用方需自行决定是否继续"]'
+  fi
   emit_ok "$(jq -n \
     --arg profile "$PROFILE" --arg serial "$AGENT_ID" --arg model "$model" \
-    --arg fg "$foreground" --argjson verified "$account_verified" \
+    --arg fg "$foreground" --arg cs "$call_state" --argjson verified "$account_verified" \
     --argjson sessions_check_ok "$sessions_check_ok" --arg sessions_warning "$sessions_warning" \
+    --argjson call_state_warnings "$call_state_warnings" \
     '{ok:true, profile:$profile, serial:$serial, model:$model, adb_state:"device",
-       call_state:"unknown", foreground_pkg:$fg, account_verified:$verified,
+       call_state:$cs, foreground_pkg:$fg, account_verified:$verified,
        sessions_check_ok:$sessions_check_ok,
-       warnings: (["call_state 检测能力缺失，douyin-phone-runtime skill 要求 call_state!=idle 时安全停止，这里无法提供该判据，调用方需自行决定是否继续"]
+       warnings: ($call_state_warnings
          + (if $sessions_warning != "" then [$sessions_warning] else [] end))}')"
 }
 
