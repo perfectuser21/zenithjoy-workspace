@@ -38,6 +38,25 @@ class CommandProtocolTest {
         assertEquals(CommandProtocol.ERR_UNKNOWN_ACTION, r.code)
     }
 
+    @Test fun `open_search 合法关键词解析成功`() {
+        val r = CommandProtocol.parse("m1", mapOf("action" to "open_search", "keyword" to "装修"), SW, SH)
+        r as ParseOutcome.Ok
+        assertEquals(CmdAction.OPEN_SEARCH, r.request.action)
+        assertEquals("装修", r.request.args["keyword"])
+    }
+
+    @Test fun `open_search 缺 keyword 拒绝`() {
+        val r = CommandProtocol.parse("m1", mapOf("action" to "open_search"), SW, SH)
+        r as ParseOutcome.Err
+        assertEquals(CommandProtocol.ERR_BAD_REQUEST, r.code)
+    }
+
+    @Test fun `open_search keyword 为空字符串拒绝`() {
+        val r = CommandProtocol.parse("m1", mapOf("action" to "open_search", "keyword" to ""), SW, SH)
+        r as ParseOutcome.Err
+        assertEquals(CommandProtocol.ERR_BAD_REQUEST, r.code)
+    }
+
     @Test fun `缺 msgId 报 BAD_REQUEST`() {
         val r = CommandProtocol.parse(null, mapOf("action" to "tap", "x" to 1.0, "y" to 1.0), SW, SH) as ParseOutcome.Err
         assertEquals(CommandProtocol.ERR_BAD_REQUEST, r.code)

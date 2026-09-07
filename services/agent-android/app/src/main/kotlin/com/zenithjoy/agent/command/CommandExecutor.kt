@@ -68,6 +68,7 @@ class CommandExecutor(
             CmdAction.DEVICE_INFO -> CmdOutcome(true, data = deviceInfo())
             CmdAction.TREE_DUMP -> treeDump()?.let { CmdOutcome(true, data = it) }
                 ?: CmdOutcome(false, CommandProtocol.ERR_TREE_UNAVAILABLE)
+            CmdAction.OPEN_SEARCH -> CmdOutcome(false, CommandProtocol.ERR_UNKNOWN_ACTION)
         }
     }
 }

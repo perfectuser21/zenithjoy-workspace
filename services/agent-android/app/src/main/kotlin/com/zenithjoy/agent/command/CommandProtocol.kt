@@ -1,7 +1,7 @@
 package com.zenithjoy.agent.command
 
 /** 指令动作集（对齐设计文档 8 指令）。 */
-enum class CmdAction { SCREENSHOT, TAP, SWIPE, TYPE, KEY, LAUNCH, DEVICE_INFO, TREE_DUMP }
+enum class CmdAction { SCREENSHOT, TAP, SWIPE, TYPE, KEY, LAUNCH, DEVICE_INFO, TREE_DUMP, OPEN_SEARCH }
 
 data class CmdRequest(val msgId: String, val action: CmdAction, val args: Map<String, Any?>)
 
@@ -34,6 +34,8 @@ object CommandProtocol {
     const val ERR_LAUNCH_NOT_FOREGROUND = "LAUNCH_NOT_FOREGROUND"
     const val ERR_EXEC_EXCEPTION = "EXEC_EXCEPTION"
     const val ERR_TREE_UNAVAILABLE = "TREE_UNAVAILABLE"
+    const val ERR_SEARCH_ENTRY_NOT_FOUND = "SEARCH_ENTRY_NOT_FOUND"
+    const val ERR_SEARCH_SUBMIT_FAILED = "SEARCH_SUBMIT_FAILED"
 
     private const val MIN_SWIPE_MS = 50L
     private const val MAX_SWIPE_MS = 10_000L
@@ -50,6 +52,7 @@ object CommandProtocol {
             "launch" -> CmdAction.LAUNCH
             "device_info" -> CmdAction.DEVICE_INFO
             "tree_dump" -> CmdAction.TREE_DUMP
+            "open_search" -> CmdAction.OPEN_SEARCH
             else -> return ParseOutcome.Err(ERR_UNKNOWN_ACTION, "action=${payload["action"]}")
         }
         val args = mutableMapOf<String, Any?>()
@@ -84,6 +87,11 @@ object CommandProtocol {
                 val pkg = payload["pkg"] as? String
                 if (pkg.isNullOrEmpty()) return bad("missing pkg")
                 args["pkg"] = pkg
+            }
+            CmdAction.OPEN_SEARCH -> {
+                val keyword = payload["keyword"] as? String
+                if (keyword.isNullOrEmpty()) return bad("missing keyword")
+                args["keyword"] = keyword
             }
             else -> Unit // screenshot / device_info / tree_dump 无参数
         }
