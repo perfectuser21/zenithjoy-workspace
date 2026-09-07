@@ -2,6 +2,7 @@
 # device-command-bridge-smoke.sh — OpenClaw 信号桥·件2 冒烟（中台设备指令桥）
 # 1) 关键接线存在（grep 源码级断言，防"实现在但没接上"的假绿）
 # 2) 本件全部单测通过（vitest 带 JUnit XML + 退出码双断言）
+# 3) 件3（信号桥转发脚本 phonectl.sh/adb-controller-bridge.sh）open_search 接线 + 单测
 set -euo pipefail
 cd "$(dirname "$0")/../../../.."
 
@@ -50,3 +51,16 @@ if ! grep -qE 'tests="[1-9]' "$RESULTS"; then
   echo "FAIL: JUnit XML 用例数为 0（测试文件没被收集，假绿）"; exit 1
 fi
 echo "✅ device-command-bridge smoke 全绿"
+
+cd - >/dev/null
+
+echo "== [3/3] 件3 open_search 接线断言 + bridge 单测 =="
+grep -q "'open_search'" "$API/src/routes/devices.ts" \
+  || { echo "FAIL: devices.ts ACTION_WHITELIST 缺 open_search"; exit 1; }
+grep -q "open_search)" scripts/openclaw/phonectl.sh \
+  || { echo "FAIL: phonectl.sh 缺 open_search action 分支"; exit 1; }
+grep -q "cmd_open_search_evidence" scripts/openclaw/adb-controller-bridge.sh \
+  || { echo "FAIL: adb-controller-bridge.sh 缺 open-search-evidence 命令实现"; exit 1; }
+node --test scripts/openclaw/__tests__/adb-controller-bridge.test.js \
+  || { echo "FAIL: adb-controller-bridge.sh 单测退出码非零"; exit 1; }
+echo "✅ 件3 open_search 冒烟全绿"

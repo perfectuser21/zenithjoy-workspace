@@ -395,9 +395,27 @@ cmd_back_evidence() {
   finish_action_evidence "$evidence_id" "$wait_ms"
 }
 
+cmd_open_search_evidence() {
+  local keyword="${1:-}" evidence_id="${2:-}" wait_ms="${3:-800}"
+  [ -n "$keyword" ] && [ -n "$evidence_id" ] || die "open-search-evidence 需要 keyword evidence_id [wait_ms]"
+  validate_evidence_id "$evidence_id"
+  call_phonectl open_search "$keyword"
+  if [ "$PHONECTL_EXIT" -ne 0 ]; then
+    emit_fail "$(extract_phonectl_error "OPEN_SEARCH_FAILED" "打开搜索失败")" 1
+  fi
+  finish_action_evidence "$evidence_id" "$wait_ms"
+}
+
 cmd_unsupported() {
   emit_fail "$(jq -n --arg c "$COMMAND" '{ok:false,errorCode:"UNSUPPORTED",detail:("本次范围（keyword_acquisition Step②③）不支持: "+$c)}')" 3
 }
+
+# ── command-trace 留痕（为将来蒸馏铺路）──────────────────────────────────
+# 分桶键用 $PROFILE（脚本入口已校验 ^[A-Za-z0-9_-]+$、每次调用必然存在），不用
+# evidence_id——validate_evidence_id 的正则不允许冒号，且 evidence_id 在不同命令里
+# 的参数位置并不固定（tap-evidence 是第3位，back-evidence 是第1位），没有稳定可提取的位置。
+jq -nc --arg cmd "$COMMAND" --arg args "$*" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '{command:$cmd, args:$args, ts:$ts}' >> "${COMMAND_TRACE_DIR:-/tmp}/${PROFILE}.command-trace.jsonl" 2>/dev/null || true
 
 case "$COMMAND" in
   preflight) cmd_preflight ;;
@@ -411,6 +429,7 @@ case "$COMMAND" in
   tap-evidence) cmd_tap_evidence "$@" ;;
   swipe-evidence) cmd_swipe_evidence "$@" ;;
   back-evidence) cmd_back_evidence "$@" ;;
+  open-search-evidence) cmd_open_search_evidence "$@" ;;
   current-video-link|record-start|record-stop|record-status|record-extract-audio|ui-evidence) cmd_unsupported ;;
   *) die "命令尚未实现: $COMMAND" ;;
 esac

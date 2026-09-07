@@ -14,12 +14,13 @@ class CommandExecutor(
     private val screenshot: ScreenshotRunner,
     private val type: TypeRunner,
     private val launch: LaunchRunner,
+    private val openSearch: OpenSearchRunner,
     private val globalAction: (String) -> Boolean,
     private val deviceInfo: () -> Map<String, Any?>,
     private val treeDump: () -> Map<String, Any?>?,
 ) {
-    private val mutating = setOf(CmdAction.TAP, CmdAction.SWIPE, CmdAction.TYPE, CmdAction.KEY, CmdAction.LAUNCH)
-    private val sensitive = setOf(CmdAction.SCREENSHOT, CmdAction.TYPE, CmdAction.TREE_DUMP)
+    private val mutating = setOf(CmdAction.TAP, CmdAction.SWIPE, CmdAction.TYPE, CmdAction.KEY, CmdAction.LAUNCH, CmdAction.OPEN_SEARCH)
+    private val sensitive = setOf(CmdAction.SCREENSHOT, CmdAction.TYPE, CmdAction.TREE_DUMP, CmdAction.OPEN_SEARCH)
 
     suspend fun execute(req: CmdRequest): Map<String, Any?> {
         val outcome = try {
@@ -68,6 +69,7 @@ class CommandExecutor(
             CmdAction.DEVICE_INFO -> CmdOutcome(true, data = deviceInfo())
             CmdAction.TREE_DUMP -> treeDump()?.let { CmdOutcome(true, data = it) }
                 ?: CmdOutcome(false, CommandProtocol.ERR_TREE_UNAVAILABLE)
+            CmdAction.OPEN_SEARCH -> openSearch.run(req.args["keyword"] as String)
         }
     }
 }

@@ -175,6 +175,12 @@ describe('action 白名单 + 请求体', () => {
     expect(commandBridge.dispatchAndWait).not.toHaveBeenCalled();
   });
 
+  it('action=open_search 且 keyword 非空 → 通过白名单校验（不是 400 UNKNOWN_ACTION）', async () => {
+    const r = await post({ action: 'open_search', keyword: '装修' });
+    expect(r.status).toBe(200);
+    expect(commandBridge.dispatchAndWait).toHaveBeenCalled();
+  });
+
   it('缺 action → 400', async () => {
     const r = await post({});
     expect(r.status).toBe(400);

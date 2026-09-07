@@ -47,10 +47,12 @@ import com.zenithjoy.agent.command.CommandProtocol
 import com.zenithjoy.agent.command.CommandQueue
 import com.zenithjoy.agent.command.GestureRunner
 import com.zenithjoy.agent.command.LaunchRunner
+import com.zenithjoy.agent.command.OpenSearchRunner
 import com.zenithjoy.agent.command.ParseOutcome
 import com.zenithjoy.agent.command.ScreenshotRunner
 import com.zenithjoy.agent.command.TypeRunner
 import com.zenithjoy.agent.uia.UiTreeSnapshot
+import com.zenithjoy.agent.uia.awaitNode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -595,6 +597,97 @@ class AgentService : Service() {
                 },
                 foregroundPkg = cmdForegroundPkg,
             ),
+            openSearch = OpenSearchRunner(
+                foregroundPkg = cmdForegroundPkg,
+                whitelist = cmdWhitelist,
+                openSearchEntry = {
+                    val svc = DouyinCollectService.commandHost()
+                    if (svc == null) {
+                        false
+                    } else {
+                        // content-desc 优先于 resource-id：抖音的 id 是混淆短乱码，
+                        // 人类可读 id 只是兜底（真机根因见 DouyinCollectService.openSearchBar）。
+                        val outcome = svc.awaitNode(24, 500L, expectPkg = "com.ss.android.ugc.aweme") { r ->
+                            openSearchFindNodeByContentDescCheap(r, "搜索") ?: openSearchFindNodeByIds(
+                                r,
+                                "com.ss.android.ugc.aweme:id/search_btn",
+                                "com.ss.android.ugc.aweme:id/iv_search",
+                                "com.ss.android.ugc.aweme:id/action_search",
+                            )
+                        }
+                        val btn = outcome.value
+                        if (btn == null) {
+                            false
+                        } else {
+                            openSearchClickRobustly(svc, btn)
+                            true
+                        }
+                    }
+                },
+                typeKeyword = { keyword ->
+                    val svc = DouyinCollectService.commandHost()
+                    // 点完入口必须先等窗口真的切到搜索页再读 root：OpenSearchRunner 是零延时
+                    // 串起三个回调的，这里若立刻读 rootInActiveWindow 拿到的还是点击前的旧快照，
+                    // 下面的判空短路会直接返回 null，后面 8×500ms 的轮询根本没机会跑
+                    // （参照 DouyinCollectService.openSearchBar 点击后的同款延时）。
+                    delay(RandomDelay.sample(RandomDelay.CLICK_MS))
+                    val root = svc?.rootInActiveWindow
+                    if (svc == null || root == null) {
+                        null
+                    } else {
+                        // finder 每轮都跑，只能用系统索引查询；无界 BFS 的 findFirstEditText
+                        // 放在轮询之外兜底一次（Lynx 巨树上单次遍历要几十秒）。
+                        val inputOutcome = svc.awaitNode(8, 500L, expectPkg = "com.ss.android.ugc.aweme") { r ->
+                            openSearchFindNodeByIds(
+                                r,
+                                "com.ss.android.ugc.aweme:id/search_input",
+                                "com.ss.android.ugc.aweme:id/search_edit_text",
+                                "com.ss.android.ugc.aweme:id/et_search_kw",
+                            )
+                        }
+                        val input = inputOutcome.value
+                            ?: openSearchFindFirstEditText(svc.rootInActiveWindow ?: root)
+                        if (input == null) {
+                            null
+                        } else {
+                            input.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                            val args = Bundle().apply {
+                                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, keyword)
+                            }
+                            input.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+                        }
+                    }
+                },
+                submitSearch = {
+                    // 写完关键词到提交之间留出确认按钮/联想词的渲染窗口（参照
+                    // DouyinCollectService.typeKeyword 调 triggerSearch 前的同款延时）。
+                    // 本回调与 triggerSearch 一样是一次性查询、不轮询，全靠这段延时兜住时机。
+                    delay(RandomDelay.sample(RandomDelay.SEARCH_MS))
+                    val svc = DouyinCollectService.commandHost()
+                    val root = svc?.rootInActiveWindow
+                    if (svc == null || root == null) {
+                        false
+                    } else {
+                        val confirmBtn = openSearchFindNodeByIds(
+                            root,
+                            "com.ss.android.ugc.aweme:id/search_confirm",
+                            "com.ss.android.ugc.aweme:id/btn_search",
+                        )
+                        val searchTextNode = openSearchFindNodeByText(root, "搜索")
+                        when {
+                            confirmBtn != null -> confirmBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                            searchTextNode != null -> {
+                                openSearchTapNodeCenter(svc, searchTextNode)
+                                true
+                            }
+                            else -> {
+                                val input = openSearchFindFirstEditText(root)
+                                input?.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id) ?: false
+                            }
+                        }
+                    }
+                },
+            ),
             globalAction = { name ->
                 val svc = DouyinCollectService.commandHost()
                 when {
@@ -1006,6 +1099,84 @@ class AgentService : Service() {
         }
     }
 
+    // ── open_search 专属节点查找工具 ──────────────────────────────────────────
+    // 算法参照 DouyinCollectService 的同名私有方法（那边是真机踩坑加固过的原型），
+    // 但按本仓库既定模式各持一份：无障碍节点工具不跨服务类共享抽象。
+
+    /**
+     * 廉价版 content-desc 精确匹配：先走系统索引 findAccessibilityNodeInfosByText
+     * （它匹配 text，但**不保证**匹配 content-desc），未命中再带上限 BFS。
+     * 轮询 finder 每轮都执行，无界 BFS 会把协程拖死——getChild() 每次都是跨进程调用。
+     */
+    private fun openSearchFindNodeByContentDescCheap(root: AccessibilityNodeInfo, desc: String): AccessibilityNodeInfo? {
+        root.findAccessibilityNodeInfosByText(desc)?.firstOrNull {
+            it.contentDescription?.toString()?.trim() == desc || it.text?.toString()?.trim() == desc
+        }?.let { return it }
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var visited = 0
+        while (queue.isNotEmpty() && visited < OPEN_SEARCH_MAX_NODES_PER_PROBE) {
+            val node = queue.removeFirst()
+            visited++
+            if (node.contentDescription?.toString()?.trim() == desc) return node
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return null
+    }
+
+    private fun openSearchFindNodeByIds(root: AccessibilityNodeInfo, vararg ids: String): AccessibilityNodeInfo? {
+        for (id in ids) {
+            val list = root.findAccessibilityNodeInfosByViewId(id)
+            if (list.isNotEmpty()) return list[0]
+        }
+        return null
+    }
+
+    private fun openSearchFindNodeByText(root: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            if (node.text?.toString() == text) return node
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return null
+    }
+
+    private fun openSearchFindFirstEditText(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            if (node.className?.contains("EditText") == true) return node
+            for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+        }
+        return null
+    }
+
+    /**
+     * 自身可点击走 ACTION_CLICK，否则退回坐标手势。判据取【命中节点自身】而非祖先链：
+     * ACTION_CLICK 不冒泡，且真机实证对可点击祖先 performAction 也点不动抖音的混淆节点。
+     */
+    private fun openSearchClickRobustly(svc: AccessibilityService, node: AccessibilityNodeInfo) {
+        if (node.isClickable) {
+            node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        } else {
+            openSearchTapNodeCenter(svc, node)
+        }
+    }
+
+    private fun openSearchTapNodeCenter(svc: AccessibilityService, node: AccessibilityNodeInfo) {
+        val bounds = android.graphics.Rect()
+        node.getBoundsInScreen(bounds)
+        if (bounds.isEmpty) return
+        val path = Path().apply { moveTo(bounds.centerX().toFloat(), bounds.centerY().toFloat()) }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 80))
+            .build()
+        svc.dispatchGesture(gesture, null, null)
+    }
+
     /** cmd 指令入口：解析→入队。解析失败立即回执（不进队列）。 */
     private fun routeCommand(payload: Map<*, *>, msgId: String?) {
         val (screenW, screenH) = realScreenSize()
@@ -1307,6 +1478,9 @@ class AgentService : Service() {
 
     companion object {
         private const val TAG = "AgentService"
+
+        /** 单次 content-desc BFS 的节点上限，对齐 DouyinCollectService 真机验证过的取值。 */
+        private const val OPEN_SEARCH_MAX_NODES_PER_PROBE = 1_500
         private const val NOTIFICATION_ID = 1001
 
         /**

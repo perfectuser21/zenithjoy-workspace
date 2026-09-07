@@ -22,6 +22,13 @@ class CommandExecutorTest {
         screenshot = ScreenshotRunner({ true }, { true }, { "b64" }, { 1080 to 2400 }, sleep = {}),
         type = TypeRunner({ "com.ss.android.ugc.aweme" }, setOf("com.ss.android.ugc.aweme"), { true }),
         launch = LaunchRunner(setOf("com.ss.android.ugc.aweme"), { true }, { true }, { "com.ss.android.ugc.aweme" }, sleep = {}),
+        openSearch = OpenSearchRunner(
+            foregroundPkg = { "com.ss.android.ugc.aweme" },
+            whitelist = setOf("com.ss.android.ugc.aweme"),
+            openSearchEntry = { true },
+            typeKeyword = { true },
+            submitSearch = { true },
+        ),
         globalAction = { true },
         deviceInfo = { mapOf("model" to "TEST") },
         treeDump = treeDump,
@@ -56,6 +63,27 @@ class CommandExecutorTest {
         assertEquals(null, AutomationLease.currentOwner()) // 租约已释放，不锁死原生流程
     }
 
+    @Test fun `远程协助关闭时 open_search 拒绝`() = runTest {
+        val e = executor(remoteEnabled = false)
+        assertEquals(
+            CommandProtocol.ERR_REMOTE_CONTROL_DISABLED,
+            e.execute(req(CmdAction.OPEN_SEARCH, mapOf("keyword" to "装修")))["errorCode"],
+        )
+    }
+
+    @Test fun `原生忙时 open_search 拒绝`() = runTest {
+        val e = executor(nativeBusyProbe = { true })
+        assertEquals(
+            CommandProtocol.ERR_DEVICE_BUSY_NATIVE,
+            e.execute(req(CmdAction.OPEN_SEARCH, mapOf("keyword" to "装修")))["errorCode"],
+        )
+    }
+
+    @Test fun `open_search 正常路径 ok`() = runTest {
+        val e = executor()
+        assertEquals(true, e.execute(req(CmdAction.OPEN_SEARCH, mapOf("keyword" to "装修")))["ok"])
+    }
+
     @Test fun `变更类指令执行后远程租约被持有`() = runTest {
         val e = executor()
         e.execute(req(CmdAction.TAP, mapOf("x" to 1, "y" to 1)))
@@ -77,6 +105,13 @@ class CommandExecutorTest {
             screenshot = ScreenshotRunner({ true }, { true }, { "b64" }, { 1080 to 2400 }, sleep = {}),
             type = TypeRunner({ "com.ss.android.ugc.aweme" }, setOf("com.ss.android.ugc.aweme"), { true }),
             launch = LaunchRunner(setOf("com.ss.android.ugc.aweme"), { true }, { true }, { "com.ss.android.ugc.aweme" }, sleep = {}),
+            openSearch = OpenSearchRunner(
+                foregroundPkg = { "com.ss.android.ugc.aweme" },
+                whitelist = setOf("com.ss.android.ugc.aweme"),
+                openSearchEntry = { true },
+                typeKeyword = { true },
+                submitSearch = { true },
+            ),
             globalAction = { true },
             deviceInfo = { mapOf("model" to "MAA-AN00", "callState" to "idle") },
             treeDump = { mapOf("tree" to "d0 root", "truncated" to false) },
