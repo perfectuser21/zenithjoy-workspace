@@ -60,21 +60,19 @@ open-search-evidence <keyword> <evidence_id> [wait_ms]
 
 ### 决策 5：命令留痕（command-trace，横切需求）
 
-在 `adb-controller-bridge.sh` 最外层 `case "$COMMAND" in ... esac` 分发**之前**统一打点（不逐个 `cmd_*` 函数内加），避免遗漏新命令、也不用逐个函数改：
+在 `adb-controller-bridge.sh` 最外层 `case "$COMMAND" in ... esac` 分发**之前**统一打点（不逐个 `cmd_*` 函数内加），避免遗漏新命令、也不用逐个函数改。
+
+**分桶键改用 `$PROFILE`，不用 evidence_id**：`validate_evidence_id()`（`adb-controller-bridge.sh:258`）校验正则是 `^[A-Za-z0-9._-]+$`，**不允许冒号**，所以 evidence_id 不可能是 `search:s1:screen1` 这种带冒号的格式；另外 evidence_id 在不同命令里的参数位置并不固定（`tap-evidence x y evidence_id` 是第 3 位，`back-evidence evidence_id` 是第 1 位，新增的 `open-search-evidence keyword evidence_id` 会是第 2 位），硬编码固定位置提取必然经常提错。`$PROFILE` 是脚本入口 `--profile` 参数、已经过 `^[A-Za-z0-9_-]+$` 校验、且**每次调用都必然存在**（不像 evidence_id 只有部分命令才有），用它做分桶键更稳妥也更完整（连 `preflight`/`lock-*` 这些没有 evidence_id 的命令也能留痕）：
 
 ```bash
 # 在分发 case 之前
-COMMAND_TRACE_RUN_ID=$(echo "${3:-}" | grep -oE '^[a-zA-Z0-9_.-]+' | cut -d: -f1 || echo "no-run-id")
-# evidence_id 通常是第 3 个位置参数（tap-evidence/open-search-evidence 等），约定其前缀含 run_id 语义分段
-if [ -n "$COMMAND_TRACE_RUN_ID" ] && [ "$COMMAND_TRACE_RUN_ID" != "no-run-id" ]; then
-  jq -nc --arg cmd "$COMMAND" --arg args "$*" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    '{command:$cmd, args:$args, ts:$ts}' >> "${COMMAND_TRACE_DIR:-/tmp}/${COMMAND_TRACE_RUN_ID}.command-trace.jsonl" 2>/dev/null || true
-fi
+jq -nc --arg cmd "$COMMAND" --arg args "$*" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '{command:$cmd, args:$args, ts:$ts}' >> "${COMMAND_TRACE_DIR:-/tmp}/${PROFILE}.command-trace.jsonl" 2>/dev/null || true
 ```
 
 **范围声明（YAGNI）**：只记录"调用了什么命令、什么参数、什么时候"，不记录成功/失败结果（结果已经完整存在于 Work Commander 的 `workflow-runs/*.json` evidence 里，不重复记录）。`COMMAND_TRACE_DIR` 环境变量可配置落盘目录（默认 `/tmp`，HK-VPS 部署时配置为持久化目录）；追加失败（如目录不可写）静默降级不阻断主流程（`|| true`）。
 
-**evidence_id 前缀约定说明**：现有命令的 `evidence_id` 参数（如 `search:s1:screen1`）语义上以 run 相关标识开头，用第一个 `:` 前的片段作为 trace 文件名前缀；不含 evidence_id 的命令（`preflight`/`lock-*`）不产生 trace 记录（这些命令本身在 Work Commander 的 stage 级记录里已经完整留痕，不是本次要补的缺口）。
+**跨多次运行的切分**：同一 profile 的 trace 文件会持续追加，蒸馏时靠每行的 `ts` 时间戳按时间邻近性分组即可区分不同的 workflow run，不需要额外的 run_id 字段（YAGNI，够用为止）。
 
 ## 不包含（本次范围外）
 
