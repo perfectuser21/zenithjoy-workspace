@@ -4,7 +4,7 @@
  *
  * 数据流：限流(先于鉴权,CodeQL) → prod 缺内部 token 守卫(503) → internalAuth
  *   → agents.tenant_id 推导租户(绝不信请求体) → remote_control_config 开关(fail-closed)
- *   → action 白名单(8) → 频控原子 INSERT pending 行 → 版本检查 → CommandBridge 下发等待
+ *   → action 白名单(9) → 频控原子 INSERT pending 行 → 版本检查 → CommandBridge 下发等待
  *   → 回执映射 + log UPDATE。
  *
  * 鉴权红线（prep-prd 对抗 P1-3/P1-4）：只走 internalAuth，刻意砍掉 agent license
@@ -27,7 +27,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 const ERR = (code: string, message: string) => ({ success: false, error: code, message });
 const OK = (data: unknown) => ({ success: true, data });
 
-/** 件1 设备端 CommandProtocol 的 8 个已知 action，未知一律 400 不透传 */
+/** 件1 设备端 CommandProtocol 的 9 个已知 action，未知一律 400 不透传 */
 const ACTION_WHITELIST = new Set([
   'screenshot', 'tap', 'swipe', 'type', 'key', 'launch', 'device_info', 'tree_dump', 'open_search',
 ]);
