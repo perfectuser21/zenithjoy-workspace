@@ -1129,6 +1129,89 @@ test('tap-evidence：动作成功但截图失败 → exit 1，返回体带 actio
   }
 });
 
+test('open-search-evidence：调用 phonectl open_search 并落盘证据', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    const capturedBodies = [];
+    const fakeImage = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0xff, 0xd9]).toString('base64');
+    server = await startMockServer((req, res, body) => {
+      capturedBodies.push(JSON.parse(body));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data: { ok: true, foregroundPkg: 'com.ss.android.ugc.aweme', data: { imageBase64: fakeImage } } }));
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'open-search-evidence', '装修', 'search.s1.screen1', '10'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: dir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+    });
+    assert.equal(r.status, 0);
+    const capturedBody = capturedBodies[0];
+    assert.equal(capturedBody.action, 'open_search');
+    assert.equal(capturedBody.keyword, '装修');
+    assert.equal(capturedBodies[1].action, 'screenshot');
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.ok, true);
+    assert.equal(out.action_ok, true);
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('open-search-evidence：缺 keyword 参数报错', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    const r = await runBridge(['--profile', 'test-profile', 'open-search-evidence'], {
+      PROFILES_FILE: profilesFile,
+    });
+    assert.notEqual(r.status, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('command-trace：调用命令后追加一行到 <profile>.command-trace.jsonl', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acb-'));
+  let server;
+  try {
+    const profilesFile = makeProfilesFile(dir);
+    const fakeImage = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0xff, 0xd9]).toString('base64');
+    server = await startMockServer((req, res, body) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data: { ok: true, foregroundPkg: 'com.ss.android.ugc.aweme', data: { imageBase64: fakeImage } } }));
+    });
+    const { port } = server.address();
+    const r = await runBridge(['--profile', 'test-profile', 'open-app'], {
+      PROFILES_FILE: profilesFile, ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+      COMMAND_TRACE_DIR: dir,
+    });
+    assert.equal(r.status, 0);
+    const traceContent = readFileSync(join(dir, 'test-profile.command-trace.jsonl'), 'utf8');
+    const lines = traceContent.trim().split('\n').filter(Boolean);
+    assert.equal(lines.length, 1);
+    const entry = JSON.parse(lines[0]);
+    assert.equal(entry.command, 'open-app');
+    assert.ok(entry.ts);
+
+    const r2 = await runBridge(['--profile', 'test-profile', 'back-evidence', 'search.s1.screen2', '10'], {
+      PROFILES_FILE: profilesFile, OPENCLAW_EVIDENCE_DIR: dir,
+      ZENITHJOY_API_BASE: `http://127.0.0.1:${port}`, ZENITHJOY_INTERNAL_TOKEN: 'tok',
+      COMMAND_TRACE_DIR: dir,
+    });
+    assert.equal(r2.status, 0);
+    const traceContent2 = readFileSync(join(dir, 'test-profile.command-trace.jsonl'), 'utf8');
+    const lines2 = traceContent2.trim().split('\n').filter(Boolean);
+    assert.equal(lines2.length, 2);
+    assert.equal(JSON.parse(lines2[1]).command, 'back-evidence');
+  } finally {
+    server?.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 for (const cmd of ['current-video-link', 'record-start', 'record-stop', 'record-status', 'record-extract-audio', 'ui-evidence']) {
   test(`${cmd}：本次范围不支持，exit 3`, async () => {
     const dir = mkdtempSync(join(tmpdir(), 'acb-'));
