@@ -29,7 +29,7 @@ const OK = (data: unknown) => ({ success: true, data });
 
 /** 件1 设备端 CommandProtocol 的 8 个已知 action，未知一律 400 不透传 */
 const ACTION_WHITELIST = new Set([
-  'screenshot', 'tap', 'swipe', 'type', 'key', 'launch', 'device_info', 'tree_dump',
+  'screenshot', 'tap', 'swipe', 'type', 'key', 'launch', 'device_info', 'tree_dump', 'open_search',
 ]);
 /** 双闸动作：除总闸外还吃 taps_per_minute（防高频点击风控） */
 const TAP_ACTIONS = new Set(['tap', 'swipe']);
