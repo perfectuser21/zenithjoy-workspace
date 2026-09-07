@@ -40,6 +40,10 @@ jobs:
           SSH_KEY: ${{ secrets.HK_VPS_SSH_KEY }}
           SSH_HOST: ${{ vars.HK_VPS_TAILSCALE_IP || '100.86.118.99' }}
           DEPLOY_SHA: ${{ github.sha }}
+          # workflow_dispatch 在非 main 分支（如 PR 分支）触发时，github.sha 是该分支的 head，
+          # 而 hk-vps 只 fetch main，reset 到这个 SHA 会 `Could not parse object`。
+          # 传被部署的 ref 名，remote 端 fetch 它，保证 DEPLOY_SHA 在对象库里。
+          DEPLOY_REF: ${{ github.ref_name }}
         timeout-minutes: 25
         run: |
           KEY_FILE=$(mktemp)
@@ -51,13 +55,15 @@ jobs:
               -o ServerAliveInterval=60 \
               -i "$KEY_FILE" \
               "root@${SSH_HOST}" \
-              bash -s -- "$DEPLOY_SHA" << 'REMOTE_EOF'
+              bash -s -- "$DEPLOY_SHA" "$DEPLOY_REF" << 'REMOTE_EOF'
           set -euo pipefail
           DEPLOY_SHA="$1"
+          DEPLOY_REF="${2:-main}"
           REPO=/opt/zenithjoy/repo
 
-          echo "=== [1/4] git sync → ${DEPLOY_SHA} ==="
-          git -C "$REPO" fetch --force --prune origin main
+          echo "=== [1/4] git sync → ${DEPLOY_REF}@${DEPLOY_SHA} ==="
+          # fetch 被部署的 ref（main 或 PR 分支），保证 DEPLOY_SHA 在对象库；main 仍单独 fetch 保持默认分支新
+          git -C "$REPO" fetch --force --prune origin main "${DEPLOY_REF}"
           git -C "$REPO" reset --hard "$DEPLOY_SHA"
 
           echo "=== [2/4] DB migration（生产镜像不含 db/migrations 且无 devDeps，借一次性 node 容器跑，

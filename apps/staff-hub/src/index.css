@@ -439,3 +439,850 @@ select {
     grid-template-columns: 1fr;
   }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   路③ 结构化工作台 —— Notion 级呈现层（cp-08230010-workbench-ui-notion）
+   设计基调：克制的近白画布、发丝边框、柔和标签色、6px 圆角、图标化操作。
+   仅覆盖工作台作用域（.wb-* / .workbench-grid / .row-detail-panel），不动 app 外壳。
+   ════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --wb-ink: #37352f;
+  --wb-ink-soft: #6b6a64;
+  --wb-ink-faint: #9b9a97;
+  --wb-line: #e9e8e4;
+  --wb-line-strong: #dcdbd6;
+  --wb-surface: #ffffff;
+  --wb-surface-2: #fbfbfa;
+  --wb-hover: #f4f3f0;
+  --wb-accent: #0d7a52;
+  --wb-accent-soft: #e6f2ec;
+  --wb-danger: #b3402e;
+  --wb-warning: #9a6a11;
+  --wb-radius: 6px;
+  --wb-shadow: 0 8px 28px rgba(15, 30, 22, 0.13), 0 1px 3px rgba(15, 30, 22, 0.08);
+}
+
+/* 工作台页整体：白卡承托，收掉 app 外壳的暖色喧闹 */
+.wb {
+  color: var(--wb-ink);
+  font-feature-settings: "tnum" 0;
+}
+.wb-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 2px 0 18px;
+}
+.wb-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--wb-ink-soft);
+  margin-bottom: 10px;
+}
+.wb-breadcrumb a { color: var(--wb-ink-soft); }
+.wb-breadcrumb a:hover { color: var(--wb-ink); }
+.wb-title {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 1.72rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--wb-ink);
+}
+.wb-title-ico {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--wb-accent-soft);
+  color: var(--wb-accent);
+  flex: none;
+}
+.wb-title-meta {
+  margin: 6px 0 0;
+  font-size: 0.86rem;
+  color: var(--wb-ink-faint);
+}
+
+.wb-field-icon { flex: none; color: var(--wb-ink-faint); }
+.wb-inline-ico { width: 13px; height: 13px; opacity: 0.7; }
+
+/* ── 通用控件 ─────────────────────────────────────────────────────────── */
+.wb-btn {
+  border: 1px solid var(--wb-line-strong);
+  background: var(--wb-surface);
+  border-radius: var(--wb-radius);
+  padding: 7px 13px;
+  font-size: 0.9rem;
+  font-weight: 550;
+  color: var(--wb-ink);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+.wb-btn:hover { background: var(--wb-hover); }
+.wb-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.wb-btn-primary {
+  background: var(--wb-accent);
+  border-color: var(--wb-accent);
+  color: #fff;
+}
+.wb-btn-primary:hover { background: #0b6a47; }
+.wb-btn-ghost { border-color: transparent; background: transparent; }
+.wb-btn-ghost:hover { background: var(--wb-hover); }
+
+.wb-input,
+.wb-native-select {
+  width: 100%;
+  border: 1px solid var(--wb-line-strong);
+  border-radius: var(--wb-radius);
+  padding: 7px 10px;
+  font-size: 0.9rem;
+  background: var(--wb-surface);
+  color: var(--wb-ink);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.wb-input:focus,
+.wb-native-select:focus {
+  outline: none;
+  border-color: var(--wb-accent);
+  box-shadow: 0 0 0 3px var(--wb-accent-soft);
+}
+.wb-native-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239b9a97' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 28px;
+  cursor: pointer;
+}
+
+.wb-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--wb-radius);
+  background: transparent;
+  color: var(--wb-ink-soft);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.wb-icon-btn:hover { background: var(--wb-hover); color: var(--wb-ink); }
+.wb-icon-danger:hover { background: #fbeae7; color: var(--wb-danger); }
+
+/* ── 柔和标签 / 头像 / 链接（显示原子） ──────────────────────────────── */
+.wb-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wb-tag-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.wb-tags,
+.wb-persons { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.wb-person { display: inline-flex; align-items: center; gap: 6px; font-size: 0.88rem; }
+.wb-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex: none;
+}
+.wb-cell-url {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--wb-accent);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(13, 122, 82, 0.28);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb-cell-url:hover { border-bottom-color: var(--wb-accent); }
+.wb-cell-number { font-variant-numeric: tabular-nums; }
+.wb-cell-empty { color: #c8c7c2; }
+
+/* ── AG Grid：铺成 Notion database ─────────────────────────────────────── */
+.wb-grid-frame {
+  border: 1px solid var(--wb-line);
+  border-radius: 10px;
+  background: var(--wb-surface);
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(15, 30, 22, 0.04);
+}
+.workbench-grid.ag-theme-quartz {
+  --ag-background-color: var(--wb-surface);
+  --ag-odd-row-background-color: var(--wb-surface);
+  --ag-header-background-color: var(--wb-surface-2);
+  --ag-row-hover-color: var(--wb-hover);
+  --ag-border-color: var(--wb-line);
+  --ag-row-border-color: var(--wb-line);
+  --ag-header-column-separator-display: none;
+  --ag-header-column-resize-handle-display: none;
+  --ag-font-family: inherit;
+  --ag-font-size: 0.9rem;
+  --ag-foreground-color: var(--wb-ink);
+  --ag-secondary-foreground-color: var(--wb-ink-soft);
+  --ag-cell-horizontal-padding: 12px;
+  --ag-borders: none;
+  --ag-wrapper-border-radius: 0;
+  --ag-header-height: 42px;
+  --ag-selected-row-background-color: transparent;
+}
+.workbench-grid.ag-theme-quartz .ag-root-wrapper { border: 0; }
+.workbench-grid.ag-theme-quartz .ag-header {
+  border-bottom: 1px solid var(--wb-line-strong);
+}
+.workbench-grid.ag-theme-quartz .ag-header-cell {
+  border-right: 1px solid var(--wb-line);
+}
+.workbench-grid.ag-theme-quartz .ag-cell {
+  border-right: 1px solid var(--wb-line);
+  display: flex;
+  align-items: center;
+}
+.workbench-grid.ag-theme-quartz .ag-pinned-left-header,
+.workbench-grid.ag-theme-quartz .ag-cell.wb-ops-cell {
+  border-right: 1px solid var(--wb-line);
+  background: var(--wb-surface);
+}
+.workbench-grid.ag-theme-quartz .ag-row-hover .ag-cell.wb-ops-cell { background: var(--wb-hover); }
+
+.wb-colhead {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--wb-ink-soft);
+  letter-spacing: 0.01em;
+}
+.wb-colhead-ico { display: inline-flex; color: var(--wb-ink-faint); }
+.wb-colhead-name { color: var(--wb-ink-soft); }
+.wb-colhead-input {
+  width: 100%;
+  border: 1px solid var(--wb-accent);
+  border-radius: 5px;
+  padding: 3px 7px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--wb-ink);
+  background: var(--wb-surface);
+  box-shadow: 0 0 0 3px var(--wb-accent-soft);
+  outline: none;
+}
+.wb-title-text { cursor: text; border-radius: 6px; padding: 0 4px; margin: 0 -4px; transition: background 0.12s; }
+.wb-title-text:hover { background: var(--wb-hover); }
+.wb-title-input {
+  font: inherit;
+  font-size: 1.72rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--wb-ink);
+  border: 1px solid var(--wb-accent);
+  border-radius: 8px;
+  padding: 2px 8px;
+  background: var(--wb-surface);
+  box-shadow: 0 0 0 3px var(--wb-accent-soft);
+  outline: none;
+  min-width: 240px;
+}
+
+/* 单元格：改成水平居中的一行（覆盖旧的纵向 flex） */
+.workbench-grid .grid-cell.wb-display,
+.workbench-grid .grid-cell.wb-editing {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-size: 0.9rem;
+}
+.workbench-grid .grid-cell.wb-display { cursor: text; }
+.workbench-grid .grid-cell.wb-display .wb-cell-text,
+.workbench-grid .grid-cell.wb-display .wb-cell-longtext {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workbench-grid .grid-cell.wb-editing .wb-input {
+  height: 30px;
+  border-color: var(--wb-accent);
+  box-shadow: 0 0 0 3px var(--wb-accent-soft);
+}
+.wb-inline-editor { display: flex; align-items: center; width: 100%; height: 100%; }
+.wb-inline-editor-anchor { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+
+/* 行操作：常态隐身，悬浮该行才浮现（Notion 的克制手感） */
+.wb-row-ops {
+  display: inline-flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.workbench-grid.ag-theme-quartz .ag-row-hover .wb-row-ops { opacity: 1; }
+
+/* rollup 只读值 + 降级徽标 */
+.wb-cell-rollup { font-variant-numeric: tabular-nums; color: var(--wb-ink); }
+.wb-badge-degraded {
+  font-size: 0.78rem;
+  color: var(--wb-warning);
+  background: #f7ecd0;
+  padding: 1px 7px;
+  border-radius: 4px;
+}
+.wb-badge-warn {
+  display: inline-grid;
+  place-items: center;
+  width: 16px; height: 16px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: #f7ecd0;
+  color: var(--wb-warning);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+/* 关联 chip */
+.rel-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 4px;
+  border: 1px solid var(--wb-line-strong);
+  background: var(--wb-surface);
+  color: var(--wb-ink);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.rel-chip:hover { background: var(--wb-hover); border-color: var(--wb-accent); }
+.rel-chip-stale {
+  background: #f6f4f2;
+  color: var(--wb-ink-faint);
+  border-style: dashed;
+  cursor: default;
+}
+.rel-edit {
+  border: 1px dashed var(--wb-line-strong);
+  background: transparent;
+  color: var(--wb-ink-soft);
+  border-radius: 4px;
+  height: 22px;
+  padding: 0 9px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.rel-edit:hover { color: var(--wb-accent); border-color: var(--wb-accent); }
+.grid-cell-relation { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+
+/* ── portal 浮层（单元格选择器 / 失败提示） ─────────────────────────────── */
+.wb-popover {
+  position: fixed;
+  z-index: 9000;
+  background: var(--wb-surface);
+  border: 1px solid var(--wb-line);
+  border-radius: 8px;
+  box-shadow: var(--wb-shadow);
+  padding: 6px;
+  max-width: 320px;
+}
+.wb-select-scroll { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.wb-select-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  border-radius: 5px;
+  padding: 5px 7px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+.wb-select-opt:hover { background: var(--wb-hover); }
+.wb-select-opt.on { background: var(--wb-accent-soft); }
+.wb-select-check { color: var(--wb-accent); font-weight: 700; }
+.wb-select-clear { color: var(--wb-ink-faint); font-size: 0.85rem; padding: 2px 0; }
+.wb-select-none { color: var(--wb-ink-faint); font-size: 0.85rem; padding: 8px; }
+.wb-select-done {
+  margin-top: 4px;
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--wb-line);
+  background: transparent;
+  color: var(--wb-accent);
+  font-weight: 600;
+  padding: 7px;
+  cursor: pointer;
+  border-radius: 0 0 5px 5px;
+}
+.wb-note-pop { padding: 8px 10px; }
+.wb-note-error { border-color: #e7bcb3; background: #fdf3f1; }
+.wb-note-conflict { border-color: #e3cf9a; background: #fdf8ea; }
+.cell-note { display: inline-flex; align-items: center; gap: 8px; font-size: 0.82rem; line-height: 1.3; }
+.cell-note-error { color: var(--wb-danger); }
+.cell-note-conflict { color: var(--wb-warning); }
+.wb-note-btn {
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ── 空状态 ───────────────────────────────────────────────────────────── */
+.wb-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 30px 20px 36px;
+  text-align: center;
+}
+.wb-empty-art { color: var(--wb-line-strong); margin-bottom: 6px; }
+.wb-empty-title { font-size: 1rem; font-weight: 650; color: var(--wb-ink); margin: 0; }
+.wb-empty-sub { font-size: 0.88rem; color: var(--wb-ink-faint); margin: 0 0 6px; }
+.wb-empty-cta { margin-top: 4px; }
+
+/* ── 视图栏 / 工具条 ──────────────────────────────────────────────────── */
+.wb-viewbar { position: relative; margin: 6px 0 14px; }
+.wb-view-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-bottom: 1px solid var(--wb-line);
+  padding-bottom: 0;
+}
+.wb-view-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--wb-ink-soft);
+  font-size: 0.9rem;
+  font-weight: 550;
+  padding: 8px 11px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.12s, border-color 0.12s;
+}
+.wb-view-tab:hover { color: var(--wb-ink); }
+.wb-view-tab.active { color: var(--wb-ink); border-bottom-color: var(--wb-accent); }
+.wb-view-tab-ico { color: currentColor; opacity: 0.65; }
+.wb-view-degraded { font-size: 0.72rem; color: var(--wb-warning); background: #f7ecd0; padding: 1px 6px; border-radius: 999px; }
+.wb-view-add {
+  border: 0;
+  background: transparent;
+  color: var(--wb-ink-faint);
+  font-size: 0.88rem;
+  padding: 8px 10px;
+  cursor: pointer;
+  border-radius: var(--wb-radius);
+}
+.wb-view-add:hover { background: var(--wb-hover); color: var(--wb-ink); }
+
+.wb-toolbar { display: flex; align-items: center; gap: 10px; padding: 10px 0 2px; }
+.wb-toolbar-spacer { flex: 1; }
+.wb-seg { display: inline-flex; background: var(--wb-hover); border-radius: var(--wb-radius); padding: 2px; }
+.wb-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: var(--wb-ink-soft);
+  font-size: 0.85rem;
+  font-weight: 550;
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.wb-seg-btn.active { background: var(--wb-surface); color: var(--wb-ink); box-shadow: 0 1px 2px rgba(15,30,22,0.1); }
+.wb-group-inline { display: inline-flex; align-items: center; gap: 7px; }
+.wb-group-label { font-size: 0.85rem; color: var(--wb-ink-soft); }
+.wb-group-inline .wb-native-select { width: auto; min-width: 150px; }
+
+.wb-tool-group { display: inline-flex; align-items: center; gap: 6px; }
+.wb-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--wb-ink-soft);
+  font-size: 0.85rem;
+  font-weight: 550;
+  padding: 6px 10px;
+  border-radius: var(--wb-radius);
+  cursor: pointer;
+  position: relative;
+}
+.wb-tool-btn:hover { background: var(--wb-hover); color: var(--wb-ink); }
+.wb-tool-btn.on { color: var(--wb-accent); }
+.wb-tool-danger:hover { background: #fbeae7; color: var(--wb-danger); }
+.wb-tool-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--wb-accent); }
+
+.wb-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 60;
+  background: var(--wb-surface);
+  border: 1px solid var(--wb-line);
+  border-radius: 10px;
+  box-shadow: var(--wb-shadow);
+  padding: 14px;
+  width: 340px;
+}
+.wb-panel-title {
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--wb-ink-faint);
+  margin: 2px 0 8px;
+}
+.wb-panel-filtersort .wb-panel-title:not(:first-child) { margin-top: 14px; }
+.wb-panel-row { display: flex; gap: 8px; }
+.wb-panel-row .wb-native-select { flex: 1; }
+.wb-panel-apply { width: 100%; justify-content: center; margin-top: 14px; }
+.wb-prop-list { display: flex; flex-direction: column; gap: 1px; max-height: 320px; overflow-y: auto; }
+.wb-prop-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.wb-prop-row:hover { background: var(--wb-hover); }
+.wb-prop-name { display: inline-flex; align-items: center; gap: 8px; font-size: 0.88rem; color: var(--wb-ink); }
+.wb-prop-toggle { width: 16px; height: 16px; accent-color: var(--wb-accent); cursor: pointer; }
+
+/* ── 行工具条（新增行 / 计数 / 导出） ─────────────────────────────────── */
+.row-toolbar.wb-rowbar { align-items: center; gap: 10px; margin: 4px 0 14px; }
+.wb-count-hint { font-size: 0.85rem; color: var(--wb-ink-faint); }
+.wb-notice {
+  border-radius: 8px;
+  padding: 9px 13px;
+  font-size: 0.88rem;
+  margin-bottom: 12px;
+  border: 1px solid var(--wb-line);
+  background: var(--wb-surface-2);
+}
+.wb-notice-info { border-color: #d8cba0; background: #fdf8ea; color: #6b551f; }
+.wb-notice-error { border-color: #e7bcb3; background: #fdf3f1; color: var(--wb-danger); }
+
+/* ── 行详情面板 ───────────────────────────────────────────────────────── */
+.row-detail-panel.wb-detail {
+  border: 1px solid var(--wb-line);
+  border-radius: 12px;
+  background: var(--wb-surface);
+  padding: 0;
+  box-shadow: 0 6px 22px rgba(15, 30, 22, 0.07);
+  overflow: hidden;
+}
+.wb-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 15px 16px 12px;
+  border-bottom: 1px solid var(--wb-line);
+}
+.wb-detail-eyebrow { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--wb-ink-faint); }
+.wb-detail-title h3 { margin: 3px 0 0; font-size: 1.06rem; font-weight: 650; color: var(--wb-ink); }
+.wb-detail-hint { display: flex; align-items: center; gap: 6px; color: var(--wb-accent); font-size: 0.82rem; margin: 10px 16px 0; }
+.wb-dot-ok { width: 7px; height: 7px; border-radius: 50%; background: var(--wb-accent); }
+.wb-detail-error { color: var(--wb-danger); font-size: 0.82rem; margin: 10px 16px 0; }
+.wb-detail-fields { margin: 8px 0 4px; padding: 0 16px; }
+.wb-detail-row { display: grid; grid-template-columns: 116px 1fr; gap: 10px; align-items: start; padding: 7px 0; }
+.wb-detail-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.85rem;
+  color: var(--wb-ink-soft);
+  padding-top: 7px;
+  overflow: hidden;
+}
+.wb-detail-label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-detail-value { min-width: 0; }
+.wb-detail-readonly { color: var(--wb-ink-soft); font-size: 0.9rem; }
+.wb-textarea { resize: vertical; min-height: 74px; line-height: 1.5; }
+.wb-detail-relation { display: flex; flex-wrap: wrap; gap: 5px; }
+.wb-detail-tagfield { width: 100%; }
+.wb-detail-tagbtn {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--wb-line-strong);
+  background: var(--wb-surface);
+  border-radius: var(--wb-radius);
+  padding: 6px 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.wb-detail-tagbtn:hover { border-color: var(--wb-accent); }
+.wb-detail-tagbtn:focus-visible { outline: none; border-color: var(--wb-accent); box-shadow: 0 0 0 3px var(--wb-accent-soft); }
+.wb-backref { padding: 14px 16px 16px; border-top: 1px solid var(--wb-line); background: var(--wb-surface-2); }
+.wb-backref-title { margin: 0 0 8px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--wb-ink-faint); }
+.wb-backref-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.wb-backref-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--wb-line);
+  background: var(--wb-surface);
+  border-radius: var(--wb-radius);
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  color: var(--wb-ink);
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+.wb-backref-item:hover { border-color: var(--wb-accent); }
+.wb-backref-table { font-weight: 600; }
+.wb-backref-sep { color: var(--wb-ink-faint); }
+.wb-muted-sm { color: var(--wb-ink-faint); font-size: 0.85rem; }
+
+/* ── 模板卡 / 建表表单 / 表列表（工作台首页） ────────────────────────── */
+.wb-section { margin-bottom: 26px; }
+.wb-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.wb-section-title { font-size: 1.02rem; font-weight: 650; margin: 0; color: var(--wb-ink); }
+.wb-section-sub { font-size: 0.85rem; color: var(--wb-ink-faint); margin: 2px 0 0; }
+
+.template-grid.wb-template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.template-card.wb-template-card {
+  border: 1px solid var(--wb-line);
+  border-radius: 10px;
+  background: var(--wb-surface);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.12s, box-shadow 0.12s, transform 0.12s;
+}
+.wb-template-card:hover { border-color: var(--wb-line-strong); box-shadow: 0 6px 18px rgba(15,30,22,0.06); transform: translateY(-1px); }
+.wb-template-card h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 0.98rem; font-weight: 650; }
+.wb-template-emoji { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--wb-accent-soft); color: var(--wb-accent); }
+.wb-template-fields { margin: 0; font-size: 0.83rem; color: var(--wb-ink-faint); line-height: 1.5; flex: 1; }
+.wb-template-card .wb-btn { align-self: flex-start; margin-top: 2px; }
+
+.wb-create-card {
+  border: 1px solid var(--wb-line);
+  border-radius: 12px;
+  background: var(--wb-surface);
+  padding: 18px;
+  margin-top: 12px;
+  display: grid;
+  gap: 14px;
+  box-shadow: 0 1px 2px rgba(15,30,22,0.04);
+}
+.wb-form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.wb-label { display: grid; gap: 6px; font-size: 0.85rem; font-weight: 600; color: var(--wb-ink-soft); }
+.wb-field-editor { display: grid; gap: 8px; }
+.wb-field-editor-head { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--wb-ink-faint); }
+.wb-field-row { display: grid; grid-template-columns: 28px 1fr 150px; gap: 8px; align-items: center; }
+.wb-field-row-ico { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; background: var(--wb-hover); color: var(--wb-ink-soft); }
+
+.wb-table-list { width: 100%; border-collapse: separate; border-spacing: 0; }
+.wb-table-list thead th {
+  text-align: left;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--wb-ink-faint);
+  font-weight: 600;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--wb-line);
+}
+.wb-table-list tbody td { padding: 11px 12px; border-bottom: 1px solid var(--wb-line); font-size: 0.9rem; }
+.wb-table-list tbody tr:hover td { background: var(--wb-surface-2); }
+.wb-table-name-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 0; background: transparent; cursor: pointer;
+  font-size: 0.92rem; font-weight: 550; color: var(--wb-ink);
+}
+.wb-table-name-btn:hover { color: var(--wb-accent); }
+.wb-table-name-btn .wb-title-ico { width: 26px; height: 26px; border-radius: 6px; }
+.wb-vis-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.78rem; padding: 2px 9px; border-radius: 999px;
+  background: var(--wb-hover); color: var(--wb-ink-soft);
+}
+.wb-row-actions { display: inline-flex; gap: 6px; align-items: center; justify-content: flex-end; }
+
+.wb-trash-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.wb-trash-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border: 1px solid var(--wb-line); border-radius: 8px; padding: 9px 13px;
+  font-size: 0.88rem; color: var(--wb-ink-soft);
+}
+
+/* ── 关联选择器模态 / 删表确认 ────────────────────────────────────────── */
+.relation-picker-modal, .wb-modal-scrim {
+  position: fixed; inset: 0; z-index: 8000;
+  background: rgba(20, 30, 24, 0.32);
+  display: grid; place-items: center; padding: 20px;
+}
+.relation-picker-box, .wb-modal-box {
+  background: var(--wb-surface);
+  border-radius: 12px;
+  box-shadow: var(--wb-shadow);
+  width: min(440px, 100%);
+  max-height: 80vh;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.relation-picker-box header, .wb-modal-box header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-bottom: 1px solid var(--wb-line);
+}
+.relation-picker-box header h3, .wb-modal-box header h3 { margin: 0; font-size: 1rem; font-weight: 650; }
+.relation-picker-box ul { list-style: none; margin: 0; padding: 8px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.relation-picker-box li label { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+.relation-picker-box li label:hover { background: var(--wb-hover); }
+.relation-picker-box li label input { accent-color: var(--wb-accent); }
+.relation-picker-box .wb-btn, .relation-picker-box [data-testid="relation-picker-save"] { margin: 8px 16px 16px; }
+.relation-error { color: var(--wb-danger); font-size: 0.85rem; padding: 0 16px; }
+.wb-modal-box p { padding: 0 16px; margin: 14px 0; font-size: 0.92rem; line-height: 1.55; color: var(--wb-ink); }
+.wb-modal-box .wb-input { margin: 0 16px; width: calc(100% - 32px); }
+.wb-modal-actions { display: flex; gap: 8px; justify-content: flex-end; padding: 14px 16px; border-top: 1px solid var(--wb-line); margin-top: 8px; }
+
+/* ── 看板视图 ─────────────────────────────────────────────────────────── */
+.kanban-board {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding: 4px 2px 10px;
+}
+.kanban-column {
+  flex: 0 0 272px;
+  width: 272px;
+  background: var(--wb-surface-2);
+  border: 1px solid var(--wb-line);
+  border-radius: 12px;
+  padding: 10px;
+  transition: background 0.12s, border-color 0.12s;
+}
+.kanban-column-over { background: var(--wb-accent-soft); border-color: var(--wb-accent); }
+.kanban-column-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 10px;
+}
+.kanban-column-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: var(--wb-ink);
+}
+.kanban-col-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.kanban-column-count {
+  font-size: 0.78rem;
+  color: var(--wb-ink-faint);
+  background: var(--wb-hover);
+  padding: 1px 8px;
+  border-radius: 999px;
+  min-width: 22px;
+  text-align: center;
+}
+.kanban-column-body { display: flex; flex-direction: column; gap: 8px; min-height: 40px; }
+.kanban-card {
+  background: var(--wb-surface);
+  border: 1px solid var(--wb-line);
+  border-radius: 9px;
+  padding: 11px 12px;
+  cursor: grab;
+  box-shadow: 0 1px 2px rgba(15, 30, 22, 0.05);
+  transition: box-shadow 0.12s, border-color 0.12s, transform 0.06s;
+}
+.kanban-card:hover { box-shadow: 0 4px 14px rgba(15, 30, 22, 0.1); border-color: var(--wb-line-strong); }
+.kanban-card:active { cursor: grabbing; }
+.kanban-card-dragging { box-shadow: 0 12px 30px rgba(15, 30, 22, 0.18); border-color: var(--wb-accent); }
+.kanban-card-title { font-size: 0.92rem; font-weight: 550; color: var(--wb-ink); line-height: 1.35; }
+.kanban-card-props { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; align-items: center; }
+.kanban-card-tags, .kanban-card-persons { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.kanban-card-meta { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; color: var(--wb-ink-soft); font-variant-numeric: tabular-nums; }
+.kanban-column-empty {
+  border: 1px dashed var(--wb-line-strong);
+  border-radius: 8px;
+  padding: 14px;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--wb-ink-faint);
+}
+
+/* ── rollup 配置器 ────────────────────────────────────────────────────── */
+.wb-rollup-config { flex-basis: 100%; width: 100%; }
+.wb-rollup-panel {
+  border: 1px solid var(--wb-line);
+  border-radius: 12px;
+  background: var(--wb-surface);
+  padding: 16px;
+  margin-top: 12px;
+  display: grid;
+  gap: 12px;
+  box-shadow: 0 1px 2px rgba(15, 30, 22, 0.04);
+  max-width: 620px;
+}
+.wb-rollup-panel h3, .wb-rollup-panel h4 { margin: 0; font-size: 0.98rem; font-weight: 650; color: var(--wb-ink); }
+.wb-rollup-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+
+/* ── 表格页布局 ───────────────────────────────────────────────────────── */
+.wb-table-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 18px; align-items: start; }
+.wb-table-layout.no-side { grid-template-columns: minmax(0, 1fr); }
+.wb-side-col { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 16px; }
+.wb-kanban-notices { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+@media (max-width: 1000px) {
+  .wb-table-layout { grid-template-columns: 1fr; }
+  .wb-side-col { position: static; }
+}
