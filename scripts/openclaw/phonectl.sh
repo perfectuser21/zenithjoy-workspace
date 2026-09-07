@@ -14,6 +14,7 @@
 #   phonectl <agent_id> launch <pkg>
 #   phonectl <agent_id> device_info
 #   phonectl <agent_id> tree_dump
+#   phonectl <agent_id> open_search <keyword>
 #   [--timeout-ms N] [--idempotency-key <uuid>]  可附加在任意 action 之后
 #
 # 环境变量：
@@ -33,7 +34,7 @@ usage() {
   cat <<'EOF'
 用法: phonectl <agent_id> <action> [args...] [--timeout-ms N] [--idempotency-key UUID]
 action: screenshot | tap x y | swipe x1 y1 x2 y2 [durationMs] | type text |
-        key back|home | launch pkg | device_info | tree_dump
+        key back|home | launch pkg | device_info | tree_dump | open_search keyword
 EOF
 }
 
