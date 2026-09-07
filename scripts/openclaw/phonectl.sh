@@ -88,6 +88,11 @@ case "$ACTION" in
     ARGS_JSON=$(jq -n --arg t "$1" '{text:$t}')
     shift 1
     ;;
+  open_search)
+    [ $# -ge 1 ] || die "open_search 需要 keyword"
+    ARGS_JSON=$(jq -n --arg kw "$1" '{keyword:$kw}')
+    shift 1
+    ;;
   key)
     [ $# -ge 1 ] || die "key 需要 back|home"
     case "$1" in back|home) : ;; *) die "key 只认 back|home，收到: $1" ;; esac
