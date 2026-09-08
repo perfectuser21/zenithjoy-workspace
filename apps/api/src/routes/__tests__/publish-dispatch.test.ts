@@ -192,3 +192,67 @@ describe('POST /api/contents/:id/publish', () => {
     expect(calls.filter((c) => /INSERT INTO zenithjoy\.publish_tasks/i.test(c.sql))).toHaveLength(1);
   });
 });
+
+describe('GET /api/publish-tasks（执行器发现作业单）', () => {
+  it('只列本租户 content_publish 任务，支持 status 过滤', async () => {
+    (pool.query as any).mockImplementation(async (sql: string, params: any[]) => {
+      expect(sql).toMatch(/task_type = 'content_publish'/);
+      expect(params[0]).toBe(TENANT_A);
+      if (/AND status = \$2/.test(sql)) expect(params[1]).toBe('queued');
+      return { rows: [{ id: 't1', platform: 'douyin', type: 'image', status: 'queued', created_at: 'now' }] };
+    });
+    const r = await request(makeApp())
+      .get('/api/publish-tasks?status=queued').set('X-Upload-Token', TOKEN_A);
+    expect(r.status).toBe(200);
+    expect(r.body.data.items).toHaveLength(1);
+  });
+
+  it('无凭据 → 401', async () => {
+    (validateLicense as any).mockResolvedValue({ ok: false, code: 'INVALID_LICENSE', message: 'x' });
+    const r = await request(makeApp()).get('/api/publish-tasks');
+    expect(r.status).toBe(401);
+  });
+});
+
+describe('GET /api/publish-tasks/:id/package（执行器领作业单）', () => {
+  const TASK_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  const PAYLOAD = {
+    content_id: CONTENT_ID, title: '今日份的治愈色', body: '生活需要一点渐变 #治愈',
+    content_type: 'image', platform: 'douyin',
+    materials: [{ id: 'm1', storage_key: 'k/a.jpg', file_name: 'a.jpg', mime_type: 'image/jpeg' }],
+  };
+
+  it('跨租户/不存在/非 content_publish → 404', async () => {
+    (pool.query as any).mockResolvedValue({ rows: [] });
+    const r = await request(makeApp())
+      .get(`/api/publish-tasks/${TASK_ID}/package`).set('X-Upload-Token', TOKEN_A);
+    expect(r.status).toBe(404);
+  });
+
+  it('领取成功：领取时现签素材 URL，标题文案原样带出', async () => {
+    (pool.query as any).mockImplementation(async (sql: string) => {
+      if (/FROM zenithjoy\.publish_tasks/i.test(sql)) {
+        return { rows: [{ id: TASK_ID, payload: PAYLOAD }] };
+      }
+      return { rows: [] };
+    });
+    const r = await request(makeApp())
+      .get(`/api/publish-tasks/${TASK_ID}/package`).set('X-Upload-Token', TOKEN_A);
+    expect(r.status).toBe(200);
+    expect(r.body.data).toMatchObject({
+      content_id: CONTENT_ID, title: PAYLOAD.title, body: PAYLOAD.body,
+      content_type: 'image', platform: 'douyin',
+    });
+    expect(r.body.data.media).toHaveLength(1);
+    expect(r.body.data.media[0].file_name).toBe('a.jpg');
+    expect(r.body.data.media[0].url).toBeTruthy();
+    // 签名 URL 必须来自 storage（InMemory 实现的占位串包含 key）
+    expect(r.body.data.media[0].url).toContain('k/a.jpg');
+  });
+
+  it('id 不是 UUID → 404（不查库）', async () => {
+    const r = await request(makeApp())
+      .get('/api/publish-tasks/not-a-uuid/package').set('X-Upload-Token', TOKEN_A);
+    expect(r.status).toBe(404);
+  });
+});
