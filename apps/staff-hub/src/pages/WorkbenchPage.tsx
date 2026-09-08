@@ -29,6 +29,7 @@ import {
   type WorkbenchTable,
   type WorkbenchTemplate,
 } from '../lib/workbenchFetch';
+import { FieldIcon } from '../lib/workbenchFieldMeta';
 
 function blankFields(): WorkbenchField[] {
   return FIELD_TYPES.map((t, i) => ({
@@ -116,24 +117,54 @@ export default function WorkbenchPage() {
   };
 
   return (
-    <div className="page" data-testid="workbench-page">
-      <h1>结构化工作台</h1>
+    <div className="page wb" data-testid="workbench-page">
+      <div className="wb-page-head">
+        <div>
+          <h1 className="wb-title">
+            <span className="wb-title-ico">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                <rect x="3.5" y="4.5" width="17" height="15" rx="2.2" />
+                <path d="M3.5 9.5h17M3.5 14.5h17M9 9.5v10" />
+              </svg>
+            </span>
+            结构化工作台
+          </h1>
+          <p className="wb-title-meta">像 Notion 一样，用一张张表把工作组织起来</p>
+        </div>
+        <button type="button" className="wb-btn wb-btn-primary" data-testid="new-table-btn" onClick={() => setCreating((v) => !v)}>
+          {creating ? '收起' : '+ 新建表'}
+        </button>
+      </div>
       {error && (
-        <div className="error-banner" data-testid="workbench-error">
+        <div className="wb-notice wb-notice-error" data-testid="workbench-error">
           {error}
         </div>
       )}
 
       {/* 01 空工作台：开箱模板 ≥2 */}
-      <section>
-        <h2>开箱模板</h2>
-        <div className="template-grid" data-testid="template-list">
+      <section className="wb-section">
+        <div className="wb-section-head">
+          <h2 className="wb-section-title">开箱模板</h2>
+          <p className="wb-section-sub">选一个模板，一键建好带字段的表</p>
+        </div>
+        <div className="template-grid wb-template-grid" data-testid="template-list">
           {templates.map((t) => (
-            <div className="template-card" key={t.template_key} data-testid={`template-${t.template_key}`}>
-              <h3>{t.name}</h3>
-              <p>{t.fields.length} 个字段：{t.fields.map((f) => f.name).join('、')}</p>
+            <div className="template-card wb-template-card" key={t.template_key} data-testid={`template-${t.template_key}`}>
+              <h3>
+                <span className="wb-template-emoji">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                    <rect x="3.5" y="4.5" width="17" height="15" rx="2.2" />
+                    <path d="M3.5 9.5h17M9 9.5v10" />
+                  </svg>
+                </span>
+                {t.name}
+              </h3>
+              <p className="wb-template-fields">
+                {t.fields.length} 个字段 · {t.fields.map((f) => f.name).join('、')}
+              </p>
               <button
                 type="button"
+                className="wb-btn"
                 data-testid={`use-template-${t.template_key}`}
                 onClick={() =>
                   void submitCreate({
@@ -151,42 +182,50 @@ export default function WorkbenchPage() {
       </section>
 
       {/* 02 建表表单 */}
-      <section>
-        <button type="button" data-testid="new-table-btn" onClick={() => setCreating((v) => !v)}>
-          {creating ? '收起' : '新建表'}
-        </button>
+      <section className="wb-section">
         {creating && (
           <form
+            className="wb-create-card"
             data-testid="create-table-form"
             onSubmit={(e) => {
               e.preventDefault();
               void submitCreate({ name: newName, visibility, fields });
             }}
           >
-            <label>
-              表名
-              <input
-                data-testid="table-name-input"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                required
-              />
-            </label>
-            <label>
-              可见性
-              <select
-                data-testid="visibility-select"
-                value={visibility}
-                onChange={(e) => setVisibility(e.target.value as 'org' | 'private')}
-              >
-                <option value="org">组织可见</option>
-                <option value="private">仅自己</option>
-              </select>
-            </label>
-            <div data-testid="field-editor">
+            <div className="wb-form-row">
+              <label className="wb-label">
+                表名
+                <input
+                  className="wb-input"
+                  data-testid="table-name-input"
+                  placeholder="给这张表起个名字"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  required
+                />
+              </label>
+              <label className="wb-label">
+                可见性
+                <select
+                  className="wb-native-select"
+                  data-testid="visibility-select"
+                  value={visibility}
+                  onChange={(e) => setVisibility(e.target.value as 'org' | 'private')}
+                >
+                  <option value="org">组织可见</option>
+                  <option value="private">仅自己</option>
+                </select>
+              </label>
+            </div>
+            <div className="wb-field-editor" data-testid="field-editor">
+              <div className="wb-field-editor-head">字段（可改名、可换类型）</div>
               {fields.map((f, i) => (
-                <div className="field-row" key={f.field_type} data-testid={`field-row-${f.field_type}`}>
+                <div className="field-row wb-field-row" key={f.field_type} data-testid={`field-row-${f.field_type}`}>
+                  <span className="wb-field-row-ico">
+                    <FieldIcon type={f.field_type} />
+                  </span>
                   <input
+                    className="wb-input"
                     aria-label={`字段${i + 1}名称`}
                     value={f.name}
                     onChange={(e) =>
@@ -194,6 +233,7 @@ export default function WorkbenchPage() {
                     }
                   />
                   <select
+                    className="wb-native-select"
                     aria-label={`字段${i + 1}类型`}
                     value={f.field_type}
                     onChange={(e) =>
@@ -211,20 +251,27 @@ export default function WorkbenchPage() {
                 </div>
               ))}
             </div>
-            <button type="submit" data-testid="submit-table-btn">
-              创建
+            <button type="submit" className="wb-btn wb-btn-primary" data-testid="submit-table-btn" style={{ justifySelf: 'start' }}>
+              创建表
             </button>
           </form>
         )}
       </section>
 
       {/* 03 本组织列表 */}
-      <section>
-        <h2>我的表</h2>
+      <section className="wb-section">
+        <div className="wb-section-head">
+          <h2 className="wb-section-title">我的表</h2>
+        </div>
         {loading ? (
-          <p>加载中…</p>
+          <p className="wb-muted-sm">加载中…</p>
+        ) : tables.length === 0 ? (
+          <div className="wb-empty" data-testid="table-list">
+            <p className="wb-empty-title">还没有任何表</p>
+            <p className="wb-empty-sub">用上面的模板，或点「新建表」建你的第一张。</p>
+          </div>
         ) : (
-          <table data-testid="table-list">
+          <table className="wb-table-list" data-testid="table-list">
             <thead>
               <tr>
                 <th>表名</th>
@@ -237,26 +284,37 @@ export default function WorkbenchPage() {
               {tables.map((t) => (
                 <tr key={t.table_id} data-testid={`table-row-${t.table_id}`}>
                   <td>
-                    <button type="button" onClick={() => void openDetail(t.table_id)}>
+                    <button type="button" className="wb-table-name-btn" onClick={() => void openDetail(t.table_id)}>
+                      <span className="wb-title-ico">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                          <rect x="3.5" y="4.5" width="17" height="15" rx="2.2" />
+                          <path d="M3.5 9.5h17M9 9.5v10" />
+                        </svg>
+                      </span>
                       {t.name}
                     </button>
                   </td>
-                  <td>{t.visibility === 'org' ? '组织可见' : '仅自己'}</td>
+                  <td>
+                    <span className="wb-vis-pill">{t.visibility === 'org' ? '组织可见' : '仅自己'}</span>
+                  </td>
                   <td data-testid={`field-count-${t.table_id}`}>{t.field_count}</td>
                   <td>
-                    <Link to={`/workbench/tables/${t.table_id}`} data-testid={`open-table-${t.table_id}`}>
-                      打开表格
-                    </Link>
-                    <button
-                      type="button"
-                      data-testid={`delete-btn-${t.table_id}`}
-                      onClick={() => {
-                        setDeleteTarget(t);
-                        setConfirmName('');
-                      }}
-                    >
-                      删除
-                    </button>
+                    <div className="wb-row-actions">
+                      <Link className="wb-btn" to={`/workbench/tables/${t.table_id}`} data-testid={`open-table-${t.table_id}`}>
+                        打开表格
+                      </Link>
+                      <button
+                        type="button"
+                        className="wb-btn"
+                        data-testid={`delete-btn-${t.table_id}`}
+                        onClick={() => {
+                          setDeleteTarget(t);
+                          setConfirmName('');
+                        }}
+                      >
+                        删除
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -266,12 +324,19 @@ export default function WorkbenchPage() {
       </section>
 
       {detail && (
-        <section data-testid="table-detail">
-          <h2>{detail.name}</h2>
-          <ul>
+        <section className="wb-section" data-testid="table-detail">
+          <div className="wb-section-head">
+            <h2 className="wb-section-title">{detail.name}</h2>
+            <p className="wb-section-sub">{detail.fields.length} 个字段</p>
+          </div>
+          <ul className="wb-trash-list">
             {detail.fields.map((f) => (
-              <li key={f.field_id ?? `${f.display_order}`} data-testid={`detail-field-${f.display_order}`}>
-                {f.display_order}. {f.name}（{f.field_type}）
+              <li key={f.field_id ?? `${f.display_order}`} className="wb-trash-row" data-testid={`detail-field-${f.display_order}`}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <FieldIcon type={f.field_type} />
+                  {f.name}
+                </span>
+                <span className="wb-vis-pill">{f.field_type}</span>
               </li>
             ))}
           </ul>
@@ -280,42 +345,66 @@ export default function WorkbenchPage() {
 
       {/* 04 删表二次确认：名字没输对，删除按钮就是禁用的 */}
       {deleteTarget && (
-        <div className="modal" data-testid="delete-confirm-modal">
-          <p>
-            删除后进回收站，30 天内可还原。请输入表名 <strong>{deleteTarget.name}</strong> 以确认：
-          </p>
-          <input
-            data-testid="confirm-name-input"
-            value={confirmName}
-            onChange={(e) => setConfirmName(e.target.value)}
-          />
-          <button
-            type="button"
-            data-testid="confirm-delete-btn"
-            disabled={confirmName !== deleteTarget.name}
-            onClick={() => void confirmDelete()}
-          >
-            确认删除
-          </button>
-          <button type="button" data-testid="cancel-delete-btn" onClick={() => setDeleteTarget(null)}>
-            取消
-          </button>
+        <div className="modal wb-modal-scrim" data-testid="delete-confirm-modal">
+          <div className="wb-modal-box">
+            <header>
+              <h3>删除表</h3>
+              <button type="button" className="wb-icon-btn" aria-label="取消" data-testid="cancel-delete-btn" onClick={() => setDeleteTarget(null)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden>
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </header>
+            <p>
+              删除后进回收站，30 天内可还原。请输入表名 <strong>{deleteTarget.name}</strong> 以确认：
+            </p>
+            <input
+              className="wb-input"
+              data-testid="confirm-name-input"
+              placeholder={deleteTarget.name}
+              value={confirmName}
+              onChange={(e) => setConfirmName(e.target.value)}
+            />
+            <div className="wb-modal-actions">
+              <button type="button" className="wb-btn" data-testid="cancel-delete-btn-2" onClick={() => setDeleteTarget(null)}>
+                取消
+              </button>
+              <button
+                type="button"
+                className="wb-btn wb-btn-primary"
+                data-testid="confirm-delete-btn"
+                disabled={confirmName !== deleteTarget.name}
+                onClick={() => void confirmDelete()}
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       {/* 05 回收站 */}
-      <section>
-        <h2>回收站</h2>
-        <ul data-testid="trash-list">
-          {trash.map((t) => (
-            <li key={t.table_id} data-testid={`trash-row-${t.table_id}`}>
-              {t.name}（可还原至 {t.restorable_until.slice(0, 10)}）
-              <button type="button" data-testid={`restore-btn-${t.table_id}`} onClick={() => void doRestore(t.table_id)}>
-                还原
-              </button>
-            </li>
-          ))}
-        </ul>
+      <section className="wb-section">
+        <div className="wb-section-head">
+          <h2 className="wb-section-title">回收站</h2>
+          {trash.length > 0 && <p className="wb-section-sub">删除的表可在此还原</p>}
+        </div>
+        {trash.length === 0 ? (
+          <p className="wb-muted-sm" data-testid="trash-list">
+            回收站是空的
+          </p>
+        ) : (
+          <ul className="wb-trash-list" data-testid="trash-list">
+            {trash.map((t) => (
+              <li key={t.table_id} className="wb-trash-row" data-testid={`trash-row-${t.table_id}`}>
+                <span>{t.name} · 可还原至 {t.restorable_until.slice(0, 10)}</span>
+                <button type="button" className="wb-btn" data-testid={`restore-btn-${t.table_id}`} onClick={() => void doRestore(t.table_id)}>
+                  还原
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   );

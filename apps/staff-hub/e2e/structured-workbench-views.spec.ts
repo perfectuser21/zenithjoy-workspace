@@ -238,11 +238,14 @@ test.describe('路③ S3 视图切得开', () => {
     await expect(page.getByTestId('view-switcher')).toBeVisible({ timeout: 20_000 });
 
     // 04：按文本字段筛「甲」+ 按数字字段升序排 + 隐藏数字列
+    // 工具栏收进弹层（Notion 级 UI 重做 cp-08230010）：筛/排/隐藏列先点开对应面板再操作，testid 不变。
+    await page.getByTestId('filtersort-panel-trigger').click();
     await page.getByTestId('filter-field-select').selectOption(ft);
     await page.getByTestId('filter-value-input').fill('甲');
     await page.getByTestId('sort-field-select').selectOption(fn);
     await page.getByTestId('sort-dir-select').selectOption('asc');
     await page.getByTestId('apply-query-button').click();
+    await page.getByTestId('properties-panel-trigger').click();
     await page.getByTestId(`hide-col-${fn}`).check();
     await expect(page.getByTestId('row-limit-hint')).toContainText('已有 2 行', { timeout: 15_000 });
     await page.screenshot({ path: shot('04-grid-filter-sort.png'), fullPage: true });
