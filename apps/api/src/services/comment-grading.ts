@@ -27,7 +27,11 @@ const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';
 // 2026-09-04 切回 deepseek-v4-flash：#58 渠道欠费已恢复（实测 200/1.9-4.6s）。当日
 // gpt-5.4-mini 渠道持续慢（42-46s，gp2 23b 三连 NULL）；曾误切 gemini 半小时——本文件
 // 下方注释写明 gemini 思考关不掉且随机吃光预算"加预算救不了"，0820 已淘汰，勿再切。
-const GRADING_MODEL = process.env.GRADING_MODEL || 'deepseek-v4-flash';
+// 2026-09-09 再切 gpt-5.6-terra：deepseek-v4-flash 渠道又坏（真调返回 C2PA 二进制垃圾
+// 而非 completion）、gpt-5.4-mini 渠道 #159 403 model unsupported；三模型逐一真调后
+// 只有 gpt-5.6-terra 正常（它认 reasoning_effort:none，0823 实测）。deepseek 渠道
+// 恢复后可评估切回——判据：真调返回正常 JSON completion 且 gp2 Step 23b 连续绿。
+const GRADING_MODEL = process.env.GRADING_MODEL || 'gpt-5.6-terra';
 
 const VALID_GRADES = ['高意向', '精准', '感兴趣', '其他'] as const;
 

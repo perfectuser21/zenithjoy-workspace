@@ -839,6 +839,22 @@ tests:
     product: 素材上传链路
     note: "删素材契约：删别人的回 404 不是 403（403 等于确认 id 存在，白送探测接口）、已发布作品用着的 409 且说清哪个作品挡着、先删存储再删库（反过来会留永久孤儿文件）、存储删失败时 DB 行原样保留。"
 
+  - id: content-publish-dispatch-endpoints
+    path: apps/api/src/routes/__tests__/publish-dispatch.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能发布派发链路
+    note: "作品→发布任务派发契约：租户从凭据反查、跨租户 404、平台白名单+去重、事务内 CAS 幂等（并发抢先 409 且零 INSERT）、发布包字段齐且不存签名 URL、领单时现签素材 URL 与 storage_key 可验证关联。"
+
+  - id: heartbeat-excludes-content-publish
+    path: apps/api/src/services/__tests__/get-queued-tasks-exclusion.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能发布派发链路
+    note: "旧 agent 心跳拉任务守卫：getQueuedTasks 必须 IS DISTINCT FROM 'content_publish'——旧 Windows/安卓 agent 不误领新执行器的作业单，NULL 与既有 task_type 全保留。"
+
   - id: material-storage-abstraction
     path: apps/api/src/services/__tests__/material-storage.test.ts
     type: unit

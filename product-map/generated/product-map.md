@@ -1,6 +1,6 @@
 # Product Map
 
-<!-- digest: 4eef630b093b258b7a9734bccbec3b1280ccdc90fd8a6cb38159143d6af9feec -->
+<!-- digest: 5ff42df9864c9bad46454f166e5b7ac287e9d682e6897e07071c2f2b6f2da067 -->
 
 > 此文件由 `npm run product-map:generate` 自动生成，请勿手工编辑。
 > 唯一手写源：`product-map/product-map.yaml`
@@ -29,7 +29,7 @@
 
 | ID | App | Line | Status | Steps | Smoke Files |
 |----|-----|------|--------|-------|-------------|
-| customer_first_success | customer_app | line01 | active | step1:注册自动登录（含 free license）<br>step2:装客户端 + Agent 自动连中台<br>step3:画像诊断（行业/受众/风格 3 字段）<br>step4:扫码绑定抖音主号（Agent 弹登录窗，session 存本地）<br>step5:AI 生成 1 条内容（接 Claude API）<br>step6:中台派任务 + dryrun 发布 + 回执 | .github/workflows/scripts/smoke/golden-path-1-smoke.sh |
+| customer_first_success | customer_app | line01 | active | step1:注册自动登录（含 free license）<br>step2:装客户端 + Agent 自动连中台<br>step3:画像诊断（行业/受众/风格 3 字段）<br>step4:扫码绑定抖音主号（Agent 弹登录窗，session 存本地）<br>step5:AI 生成 1 条内容（接 Claude API）<br>step6:中台派任务 + dryrun 发布 + 回执 | .github/workflows/scripts/smoke/golden-path-1-smoke.sh<br>.github/workflows/scripts/smoke/content-publish-dispatch-smoke.sh |
 | benchmark_link_acquisition | customer_app | line02 | proposed | step1:客户手填对标账号链接<br>step2:读对标账号视频→抓评论区<br>step3:触达带企微号→收好友→AI首答→写Lead表 | — |
 | customer_smart_acquisition | customer_app | line02 | deprecated | — | — |
 | keyword_acquisition | customer_app | line02 | active | step1:中台显示手机上有 N 个可用抖音小号<br>step2:系统按关键词替客户找到符合画像的目标视频，中台可见清单<br>step3:Lead 表出现带抖音号的潜在客户<br>step4:系统用小号给线索发出私信，客户看到每条已发出/被限流/失败/已送达 | .github/workflows/scripts/smoke/golden-path-2-smoke.sh |
