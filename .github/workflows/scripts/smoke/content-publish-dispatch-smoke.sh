@@ -46,7 +46,8 @@ R=$(curl -sf -X POST "$API_BASE/api/materials/upload" \
   -F "title=今日份的治愈色" \
   -F "body=生活需要一点渐变" \
   -F "platforms=douyin,weibo") || fail "上传失败"
-CONTENT_ID=$(echo "$R" | python3 -c 'import sys,json; print(json.load(sys.stdin)["data"]["content_id"])')
+CONTENT_ID=$(echo "$R" | python3 -c 'import sys,json; print(json.load(sys.stdin)["data"]["content_id"])') \
+  || fail "上传响应解析失败"
 [ -n "$CONTENT_ID" ] || fail "没拿到 content_id"
 
 echo "[2] 无凭据派发 → 401"
@@ -90,11 +91,24 @@ assert len(d["media"]) == 1 and d["media"][0]["url"], "media 签名 URL 缺失"
 print("    package: title/body/media ✓")
 ' || fail "发布包内容不符"
 
-echo "[7] 旧 agent 心跳看不见 content_publish 任务（DB 层面直接验 SQL 语义）"
-N=$("${PSQL[@]}" -c \
-  "SELECT count(*) FROM zenithjoy.publish_tasks \
-    WHERE tenant_id='${TENANT_ID}' AND task_type IS DISTINCT FROM 'content_publish'")
-[ "$N" = "0" ] || fail "本租户不该有非 content_publish 任务（count=${N}）"
+echo "[7] 真调旧 agent 心跳通道 → 确认 getQueuedTasks 排除 content_publish 生效"
+# 种子 agent 用 hostname='smoke-host'、未带 machine_id 注册；心跳走同一 hostname、
+# 同 license（=同租户）且不带 machine_id/agent_uuid，会命中 resolveAgentIdentityKey
+# 的 hostname 兜底路径，精确落回这台种子 agent（walking-skeleton.service.ts
+# upsertAgentByHeartbeat 的「原有路径：按 (tenant_id, hostname) 去重」分支），
+# 而不是新建一台幽灵 agent——这样 queued_tasks 才是这台 agent 真实能拉到的任务。
+R=$(curl -sf -X POST "$API_BASE/api/agent/heartbeat" \
+  -H "X-License-Key: $LICENSE_KEY" -H 'Content-Type: application/json' \
+  -d '{"hostname":"smoke-host"}') || fail "旧 agent 心跳失败"
+echo "$R" | python3 -c '
+import sys, json
+d = json.load(sys.stdin)
+assert d.get("ok") is True, "心跳未成功: " + str(d)
+ids = [t.get("task_id") for t in d.get("queued_tasks", [])]
+assert "'"$TASK_ID"'" not in ids, \
+    "旧 agent 心跳看到了 content_publish 任务（排除逻辑失效）: " + str(ids)
+' || fail "心跳响应不符——旧 agent 通道能看见 content_publish 任务"
+echo "    heartbeat queued_tasks 不含 content_publish 任务 ✓"
 
 echo "[8] 跨租户领单 → 404"
 TENANT_B=$("${PSQL[@]}" -c \
