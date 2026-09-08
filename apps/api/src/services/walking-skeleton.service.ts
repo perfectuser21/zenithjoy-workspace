@@ -411,12 +411,16 @@ export async function upsertAgentByHeartbeat(args: {
  * (canonical per H-1 status enum migration)。本方法旧版仅 status='pending' →
  * 漏 'queued' task → Agent 永远拉不到 → chrome 没弹。今日 ssh rog 真验暴露。
  * 修：扩到 H-1 canonical pre-execution 三态 (pending / queued / dispatched)。
+ *
+ * 刀1(line01)：content_publish 是新执行器（GET /api/publish-tasks）的作业单，
+ * 旧 agent 不认识其 payload——中台侧排除（IS DISTINCT FROM 保住 NULL 与既有 task_type）。
  */
 export async function getQueuedTasks(agentId: string): Promise<PublishTaskRow[]> {
   const { rows } = await pool.query<PublishTaskRow>(
     `SELECT id, agent_id, platform, status, type, task_type, folder_path, result, receipt_at, created_at, payload
        FROM zenithjoy.publish_tasks
       WHERE agent_id = $1 AND status IN ('pending', 'queued', 'dispatched')
+        AND task_type IS DISTINCT FROM 'content_publish'
       ORDER BY created_at ASC`,
     [agentId]
   );
