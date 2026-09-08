@@ -8,6 +8,7 @@ import fieldsRouter from './routes/fields';
 import publishRouter from './routes/publish';
 import aiVideoRouter from './routes/ai-video';
 import { createMaterialsRouter } from './routes/materials';
+import { createContentsPublishRouter, createPublishTasksRouter } from './routes/publish-dispatch';
 import aiVideoPipelineRouter from './routes/ai-video-pipeline';
 import snapshotsRouter from './routes/snapshots';
 import douyinAuthRouter from './routes/douyin-auth';
@@ -165,6 +166,9 @@ app.use('/api', publishRouter);
 app.use('/api/ai-video', aiVideoRouter);
 // 素材上传：iPhone 快捷指令 / 小程序 / 电脑 agent 唯一认识的地址
 app.use('/api/materials', createMaterialsRouter());
+// Line01 刀1 — 作品→发布任务派发接缝 + 统一发布包
+app.use('/api/contents', createContentsPublishRouter());
+app.use('/api/publish-tasks', createPublishTasksRouter());
 // Path 1 Step 5 — AI 视频本地流水线（jobs CRUD + AI API 代理）
 app.use('/api/ai-video/jobs', aiVideoPipelineRouter);
 app.use('/api/ai-video-pipeline', aiVideoPipelineRouter);
