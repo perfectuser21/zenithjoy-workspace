@@ -134,6 +134,9 @@ export function createContentsPublishRouter(): Router {
         return;
       }
 
+      // 去重：同一请求重复平台只拆一条任务
+      const uniquePlatforms = [...new Set(platforms)];
+
       if (!CONTENT_TYPES.includes(content.type)) {
         fail(res, 400, 'INVALID_CONTENT_TYPE', `作品形态 ${content.type} 不可派发`);
         return;
@@ -174,7 +177,7 @@ export function createContentsPublishRouter(): Router {
           await client.query('ROLLBACK');
           alreadyQueued = true;
         } else {
-          for (const platform of platforms) {
+          for (const platform of uniquePlatforms) {
             const payload = JSON.stringify({
               content_id: contentId,
               title: content.title,

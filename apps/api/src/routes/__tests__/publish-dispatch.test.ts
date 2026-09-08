@@ -172,6 +172,19 @@ describe('POST /api/contents/:id/publish', () => {
     expect(insertIdxs.every((i) => i > updateIdx)).toBe(true);
   });
 
+  it('重复平台自动去重：platforms:["douyin","douyin","weibo"] → 只拆 2 条任务（douyin+weibo 各一）', async () => {
+    const { calls } = stubTx();
+    const r = await request(makeApp())
+      .post(`/api/contents/${CONTENT_ID}/publish`).set('X-Upload-Token', TOKEN_A)
+      .send({ platforms: ['douyin', 'douyin', 'weibo'] });
+    expect(r.status).toBe(200);
+    expect(r.body.data.tasks).toHaveLength(2);
+    expect(r.body.data.tasks.map((t: any) => t.platform).sort()).toEqual(['douyin', 'weibo']);
+
+    const inserts = calls.filter((c) => /INSERT INTO zenithjoy\.publish_tasks/i.test(c.sql));
+    expect(inserts).toHaveLength(2);
+  });
+
   it('并发对手抢先：CAS rowCount=0 → 409 ALREADY_QUEUED 且无任何 INSERT', async () => {
     const { calls } = stubTx({ rows: [], rowCount: 0 });
     const r = await request(makeApp())
