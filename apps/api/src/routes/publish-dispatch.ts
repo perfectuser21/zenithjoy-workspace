@@ -21,6 +21,7 @@ import {
   DEFAULT_SIGNED_URL_TTL_SECONDS,
   type MaterialStorage,
 } from '../services/material-storage';
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 
 /** 平台白名单——与安卓真机/网页两条执行通道当前覆盖一致。 */
 export const PUBLISH_PLATFORMS = [
@@ -92,6 +93,10 @@ async function loadMaterials(contentId: string): Promise<PublishPackageMaterial[
 
 export function createContentsPublishRouter(): Router {
   const router = Router();
+
+  // CodeQL js/missing-rate-limiting：端点既做鉴权又写 DB，不限流就是现成的 DoS 面。
+  // 与 materials.ts 同口径：限流放鉴权前、每 router 建一次复用同一实例。
+  router.use(simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }));
 
   router.post('/:id/publish', async (req: Request, res: Response) => {
     const auth = await authenticate(req, res);
@@ -225,6 +230,9 @@ export interface PublishTasksRouterDeps {
 export function createPublishTasksRouter(deps: PublishTasksRouterDeps = {}): Router {
   const router = Router();
   const storage = deps.storage ?? createMaterialStorage();
+
+  // 同上：鉴权+DB 访问端点必须限流（CodeQL js/missing-rate-limiting）。
+  router.use(simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }));
 
   // 执行器发现作业单：只看本租户的 content_publish 任务
   router.get('/', async (req: Request, res: Response) => {
