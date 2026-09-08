@@ -63,7 +63,8 @@
       "name": "客户首次成功",
       "status": "active",
       "smoke_files": [
-        ".github/workflows/scripts/smoke/golden-path-1-smoke.sh"
+        ".github/workflows/scripts/smoke/golden-path-1-smoke.sh",
+        ".github/workflows/scripts/smoke/content-publish-dispatch-smoke.sh"
       ],
       "steps": [
         {
@@ -561,5 +562,5 @@
       ]
     }
   ],
-  "digest": "4eef630b093b258b7a9734bccbec3b1280ccdc90fd8a6cb38159143d6af9feec"
+  "digest": "5ff42df9864c9bad46454f166e5b7ac287e9d682e6897e07071c2f2b6f2da067"
 }
