@@ -18,6 +18,7 @@ import {
 } from '../services/walking-skeleton.service';
 import {
   createMaterialStorage,
+  DEFAULT_SIGNED_URL_TTL_SECONDS,
   type MaterialStorage,
 } from '../services/material-storage';
 
@@ -156,38 +157,53 @@ export function createContentsPublishRouter(): Router {
 
       const client = await pool.connect();
       const tasks: Array<{ id: string; platform: string }> = [];
+      let alreadyQueued = false;
       try {
         await client.query('BEGIN');
-        for (const platform of platforms) {
-          const payload = JSON.stringify({
-            content_id: contentId,
-            title: content.title,
-            body: content.body,
-            content_type: content.type,
-            platform,
-            materials,
-          });
-          const ins = await client.query<{ id: string }>(
-            `INSERT INTO zenithjoy.publish_tasks
-               (agent_id, platform, type, status, task_type, tenant_id, payload)
-             VALUES ($1, $2, $3, 'queued', 'content_publish', $4, $5::jsonb)
-             RETURNING id`,
-            [agent.id, platform, content.type, tenantId, payload],
-          );
-          tasks.push({ id: ins.rows[0].id, platform });
-        }
-        await client.query(
+        // 原子 CAS：事务外的 status === 'queued' 检查只是省一次事务的礼貌拦截，
+        // 真正的并发防线在这里——两个并发请求同时读到 draft 时，只有一个能把
+        // status 从非 queued 改成 queued，rowCount === 0 说明被对手抢先了。
+        const cas = await client.query(
           `UPDATE zenithjoy.contents
               SET status = 'queued', updated_at = now()
-            WHERE id = $1`,
-          [contentId],
+            WHERE id = $1 AND tenant_id = $2 AND status <> 'queued'
+            RETURNING id`,
+          [contentId, tenantId],
         );
-        await client.query('COMMIT');
+        if (cas.rowCount === 0) {
+          await client.query('ROLLBACK');
+          alreadyQueued = true;
+        } else {
+          for (const platform of platforms) {
+            const payload = JSON.stringify({
+              content_id: contentId,
+              title: content.title,
+              body: content.body,
+              content_type: content.type,
+              platform,
+              materials,
+            });
+            const ins = await client.query<{ id: string }>(
+              `INSERT INTO zenithjoy.publish_tasks
+                 (agent_id, platform, type, status, task_type, tenant_id, payload)
+               VALUES ($1, $2, $3, 'queued', 'content_publish', $4, $5::jsonb)
+               RETURNING id`,
+              [agent.id, platform, content.type, tenantId, payload],
+            );
+            tasks.push({ id: ins.rows[0].id, platform });
+          }
+          await client.query('COMMIT');
+        }
       } catch (err) {
         await client.query('ROLLBACK').catch(() => undefined);
         throw err;
       } finally {
         client.release();
+      }
+
+      if (alreadyQueued) {
+        fail(res, 409, 'ALREADY_QUEUED', '作品已在发布队列中，勿重复派发');
+        return;
       }
 
       ok(res, { content_id: contentId, tasks });
@@ -261,7 +277,7 @@ export function createPublishTasksRouter(deps: PublishTasksRouterDeps = {}): Rou
       };
       const media = await Promise.all(
         (p.materials ?? []).map(async (m) => ({
-          url: await storage.getSignedUrl(m.storage_key),
+          url: await storage.getSignedUrl(m.storage_key, DEFAULT_SIGNED_URL_TTL_SECONDS),
           file_name: m.file_name,
           mime_type: m.mime_type,
         })),

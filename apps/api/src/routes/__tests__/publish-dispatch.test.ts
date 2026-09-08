@@ -50,13 +50,14 @@ const MATERIAL_ROWS = [
   { id: 'm2', storage_key: 'k/b.jpg', file_name: 'b.jpg', mime_type: 'image/jpeg' },
 ];
 
-/** 假事务 client：记录事务内所有 SQL 供断言。 */
-function stubTx() {
+/** 假事务 client：记录事务内所有 SQL 供断言。CAS 默认成功（rowCount=1）。 */
+function stubTx(casResult: { rows: any[]; rowCount: number } = { rows: [{ id: CONTENT_ID }], rowCount: 1 }) {
   const calls: Array<{ sql: string; params: any[] }> = [];
   let n = 0;
   const client = {
     query: vi.fn(async (sql: string, params?: any[]) => {
       calls.push({ sql, params: params ?? [] });
+      if (/UPDATE zenithjoy\.contents/i.test(sql)) return casResult;
       if (/INSERT INTO zenithjoy\.publish_tasks/i.test(sql)) return { rows: [{ id: `task-${++n}` }] };
       return { rows: [] };
     }),
@@ -159,9 +160,25 @@ describe('POST /api/contents/:id/publish', () => {
     expect(payload.materials).toHaveLength(2);
     expect(payload.materials[0]).toMatchObject({ id: 'm1', storage_key: 'k/a.jpg', file_name: 'a.jpg', mime_type: 'image/jpeg' });
 
+    const updateIdx = calls.findIndex((c) => /UPDATE zenithjoy\.contents/i.test(c.sql));
+    const insertIdxs = calls
+      .map((c, i) => (/INSERT INTO zenithjoy\.publish_tasks/i.test(c.sql) ? i : -1))
+      .filter((i) => i >= 0);
     const updates = calls.filter((c) => /UPDATE zenithjoy\.contents/i.test(c.sql));
     expect(updates).toHaveLength(1);
     expect(updates[0].sql).toMatch(/queued/);
+    expect(updates[0].sql).toMatch(/status\s*<>\s*'queued'/);
+    expect(updateIdx).toBeGreaterThanOrEqual(0);
+    expect(insertIdxs.every((i) => i > updateIdx)).toBe(true);
+  });
+
+  it('并发对手抢先：CAS rowCount=0 → 409 ALREADY_QUEUED 且无任何 INSERT', async () => {
+    const { calls } = stubTx({ rows: [], rowCount: 0 });
+    const r = await request(makeApp())
+      .post(`/api/contents/${CONTENT_ID}/publish`).set('X-Upload-Token', TOKEN_A).send({});
+    expect(r.status).toBe(409);
+    expect(r.body.error.code).toBe('ALREADY_QUEUED');
+    expect(calls.filter((c) => /INSERT INTO zenithjoy\.publish_tasks/i.test(c.sql))).toHaveLength(0);
   });
 
   it('body.platforms 覆盖作品自带 platforms', async () => {
