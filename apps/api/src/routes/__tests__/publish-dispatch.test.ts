@@ -482,6 +482,15 @@ describe('GET /api/contents 列表（line01 刀5a：我的作品页）', () => {
     expect(receiptCalls).toHaveLength(1);
   });
 
+  it('回执聚合 SQL 必须 latest-wins：DISTINCT ON (content_id, platform) + created_at DESC，防重发后旧回执污染', async () => {
+    const calls = stubList();
+    await request(makeApp()).get('/api/contents').set('X-Upload-Token', TOKEN_A);
+    const receiptCall = calls.find((c) => /payload->>'content_id'\s*=\s*ANY/i.test(c.sql));
+    expect(receiptCall).toBeTruthy();
+    expect(receiptCall!.sql).toMatch(/DISTINCT ON\s*\(\s*payload->>'content_id'\s*,\s*platform\s*\)/i);
+    expect(receiptCall!.sql).toMatch(/ORDER BY\s+payload->>'content_id'\s*,\s*platform\s*,\s*created_at DESC/i);
+  });
+
   it('签名抛错 → 该条 preview_url=null，其余条目不受影响（单条降级不拖垮整页）', async () => {
     const app = makeApp();
     stubList();
@@ -544,12 +553,12 @@ describe('PATCH /api/contents/:id（line01 刀5a：我的作品页编辑）', ()
     expect(r.body.error.code).toBe('INVALID_PLATFORMS');
   });
 
-  it('只给 title → UPDATE SQL 只含 title 与 updated_at（参数化，不拼接其余字段）', async () => {
+  it('只给 title → UPDATE SQL 只含 title 与 updated_at（参数化，不拼接其余字段），且带 status<>queued CAS 谓词', async () => {
     const calls: Array<{ sql: string; params: any[] }> = [];
     (pool.query as any).mockImplementation(async (sql: string, params?: any[]) => {
       calls.push({ sql, params: params ?? [] });
       if (/SELECT status FROM zenithjoy\.contents/i.test(sql)) return { rows: [{ status: 'draft' }] };
-      if (/UPDATE zenithjoy\.contents/i.test(sql)) return { rows: [{ id: CONTENT_ID }] };
+      if (/UPDATE zenithjoy\.contents/i.test(sql)) return { rows: [], rowCount: 1 };
       return { rows: [] };
     });
     const r = await request(makeApp())
@@ -563,7 +572,22 @@ describe('PATCH /api/contents/:id（line01 刀5a：我的作品页编辑）', ()
     expect(updates[0].sql).toMatch(/updated_at\s*=\s*now\(\)/i);
     expect(updates[0].sql).not.toMatch(/\bbody\s*=\s*\$/);
     expect(updates[0].sql).not.toMatch(/platforms\s*=\s*\$/);
+    expect(updates[0].sql).toMatch(/status\s*<>\s*'queued'/);
     expect(updates[0].params).toContain('新标题');
+  });
+
+  it('TOCTOU race：SELECT 时还是 draft，但 UPDATE 落地前已被并发派发抢成 queued → CAS rowCount=0 → 409 EDIT_LOCKED', async () => {
+    const calls: Array<{ sql: string; params: any[] }> = [];
+    (pool.query as any).mockImplementation(async (sql: string, params?: any[]) => {
+      calls.push({ sql, params: params ?? [] });
+      if (/SELECT status FROM zenithjoy\.contents/i.test(sql)) return { rows: [{ status: 'draft' }] };
+      if (/UPDATE zenithjoy\.contents/i.test(sql)) return { rows: [], rowCount: 0 };
+      return { rows: [] };
+    });
+    const r = await request(makeApp())
+      .patch(`/api/contents/${CONTENT_ID}`).set('X-Upload-Token', TOKEN_A).send({ title: '新标题' });
+    expect(r.status).toBe(409);
+    expect(r.body.error.code).toBe('EDIT_LOCKED');
   });
 
   it('跨租户/不存在（查询空）→ 404', async () => {

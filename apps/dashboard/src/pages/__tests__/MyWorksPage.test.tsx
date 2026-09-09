@@ -198,6 +198,61 @@ describe('MyWorksPage', () => {
     );
   });
 
+  it('receipts 同平台新 done 旧 failed（latest-wins 返回单条 done）→ 徽章显示✅不显示❌', async () => {
+    (listMyContents as any).mockResolvedValue({
+      items: [
+        {
+          id: 'c6',
+          title: '重发后已成功',
+          body: '',
+          type: 'video',
+          platforms: ['douyin'],
+          status: 'published',
+          created_at: '2026-09-09T11:00:00Z',
+          materials: [],
+          // 后端已做 latest-wins（DISTINCT ON + created_at DESC），douyin 只应回一条最新的 done。
+          receipts: [{ platform: 'douyin', status: 'done' }],
+        },
+      ],
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText('重发后已成功')).toBeInTheDocument());
+    expect(screen.getByText('✅')).toBeInTheDocument();
+    expect(screen.queryByText('❌')).not.toBeInTheDocument();
+  });
+
+  it('全部平台都已成功的 failed 作品点「重发失败平台」→ publishMyContent 不被调用（空子集守卫）', async () => {
+    (listMyContents as any).mockResolvedValue({
+      items: [
+        {
+          id: 'c7',
+          title: '实际已全部成功',
+          body: '',
+          type: 'video',
+          platforms: ['douyin', 'weibo'],
+          status: 'failed',
+          created_at: '2026-09-09T11:00:00Z',
+          materials: [],
+          receipts: [
+            { platform: 'douyin', status: 'done' },
+            { platform: 'weibo', status: 'done' },
+          ],
+        },
+      ],
+    });
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText('实际已全部成功')).toBeInTheDocument());
+    const resendBtn = screen.getByText('重发失败平台');
+    expect(resendBtn).toBeDisabled();
+    fireEvent.click(resendBtn);
+
+    expect(publishMyContent).not.toHaveBeenCalled();
+  });
+
   it('queued 卡片发布按钮 disabled', async () => {
     (listMyContents as any).mockResolvedValue({
       items: [

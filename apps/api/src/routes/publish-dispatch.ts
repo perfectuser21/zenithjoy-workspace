@@ -161,11 +161,17 @@ export function createContentsPublishRouter(deps: ContentsPublishRouterDeps = {}
             [ids],
           ),
           // 回执聚合：一次查出这页所有作品的所有平台任务，JS 侧 group——避免 N+1。
+          // latest-wins：同一 (content_id, platform) 可能因重发产生多条任务行
+          // （旧 failed + 新 done），DISTINCT ON + created_at DESC 只取最新一条，
+          // 否则 JS 侧 push 会把旧 failed 和新 done 都塞进同一平台的 receipts，
+          // 前端按"存在 failed 就算失败"判定会被过期回执污染。
           pool.query(
-            `SELECT payload->>'content_id' AS cid, platform, status
+            `SELECT DISTINCT ON (payload->>'content_id', platform)
+                    payload->>'content_id' AS cid, platform, status
                FROM zenithjoy.publish_tasks
               WHERE tenant_id = $1 AND task_type = 'content_publish'
-                AND payload->>'content_id' = ANY($2)`,
+                AND payload->>'content_id' = ANY($2)
+              ORDER BY payload->>'content_id', platform, created_at DESC`,
             [tenantId, ids],
           ),
         ]);
@@ -281,10 +287,18 @@ export function createContentsPublishRouter(deps: ContentsPublishRouterDeps = {}
       params.push(tenantId);
       const tenantIdx = params.length;
 
-      await pool.query(
-        `UPDATE zenithjoy.contents SET ${setClauses.join(', ')} WHERE id = $${idIdx} AND tenant_id = $${tenantIdx}`,
+      // TOCTOU 关死：上面 SELECT 判定 draft 之后、这条 UPDATE 落地之前，
+      // 派发请求可能已经把状态抢先改成 queued——UPDATE 必须自带
+      // status <> 'queued' 谓词做 CAS，rowCount=0 说明被抢先，回 409 而不是静默成功。
+      const { rowCount } = await pool.query(
+        `UPDATE zenithjoy.contents SET ${setClauses.join(', ')}
+          WHERE id = $${idIdx} AND tenant_id = $${tenantIdx} AND status <> 'queued'`,
         params,
       );
+      if (rowCount === 0) {
+        fail(res, 409, 'EDIT_LOCKED', '作品正在排队发布中，暂不可编辑');
+        return;
+      }
       ok(res, { id: contentId, updated: true });
     } catch (err) {
       fail(res, 500, 'UPDATE_FAILED', err instanceof Error ? err.message : 'unknown');

@@ -13,6 +13,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import { Image as ImageIcon, Inbox } from 'lucide-react';
 import {
   listMyContents,
@@ -23,6 +24,23 @@ import {
 } from '../api/my-contents.api';
 
 const REFETCH_MS = 30_000;
+
+/**
+ * 终态里代表"成功"的取值——与 apps/api services/notion-orchestrator.ts 的
+ * SUCCESS_STATUSES 同源（该模块派发链路落库时写的是 'done'，但历史/兼容路径可能
+ * 写 completed/success）。两处将来一起改（H-3 sweep 时同改），别再各自手抄二值判断。
+ */
+const SUCCESS_STATUSES = ['done', 'completed', 'success'];
+
+/** 从 axios 错误里抠出后端 { error: { message } } 文案，取不到就退到 err.message。 */
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    const backendMessage = (err.response?.data as { error?: { message?: string } } | undefined)
+      ?.error?.message;
+    return backendMessage || err.message || fallback;
+  }
+  return err instanceof Error ? err.message : fallback;
+}
 
 /** 与 apps/api PUBLISH_PLATFORMS 白名单一致（services/content-publish-dispatch.ts）。 */
 const ALL_PLATFORMS: Array<{ key: string; label: string }> = [
@@ -56,9 +74,9 @@ function statusBadge(status: MyContentStatus): { text: string; className: string
   }
 }
 
-/** 回执徽章：done→✅ failed→❌ 其他（pending/queued/dispatched/in_progress/running）→⏳。 */
+/** 回执徽章：成功三值(done/completed/success)→✅ failed→❌ 其他（pending/queued/dispatched/in_progress/running）→⏳。 */
 function receiptEmoji(status: string | undefined): string {
-  if (status === 'done') return '✅';
+  if (status !== undefined && SUCCESS_STATUSES.includes(status)) return '✅';
   if (status === 'failed') return '❌';
   return '⏳';
 }
@@ -73,6 +91,8 @@ export default function MyWorksPage() {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<EditState | null>(null);
+  /** 顶部 inline 错误红条：编辑保存失败 / 发布失败（含 NO_AGENT 等）在这里露出文案。 */
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['my-contents'],
@@ -85,6 +105,10 @@ export default function MyWorksPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-contents'] });
     },
+    onError: (err) => {
+      // 保存失败不关面板：草稿留在编辑态，用户看到红条后可以重试而不丢改动。
+      setActionError(extractErrorMessage(err, '保存失败'));
+    },
   });
 
   const publishMutation = useMutation({
@@ -93,6 +117,10 @@ export default function MyWorksPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-contents'] });
     },
+    onError: (err) => {
+      // 常见如 NO_AGENT（租户下没有活跃 agent）：文案必须让用户看到，不能静默失败。
+      setActionError(extractErrorMessage(err, '发布失败'));
+    },
   });
 
   const items = data?.items ?? [];
@@ -100,6 +128,7 @@ export default function MyWorksPage() {
   function openEditor(item: MyContent) {
     if (item.status === 'queued') return; // 排队中不可编辑
     if (editingId === item.id) return; // 已经打开
+    setActionError(null);
     setEditingId(item.id);
     setDraft({
       title: item.title ?? '',
@@ -115,8 +144,12 @@ export default function MyWorksPage() {
 
   function saveEditor(id: string) {
     if (!draft) return;
-    updateMutation.mutate({ id, patch: draft });
-    closeEditor();
+    setActionError(null);
+    // 只在成功时关面板：失败要留在编辑态让用户看着红条重试，不能悄悄关掉丢改动。
+    updateMutation.mutate(
+      { id, patch: draft },
+      { onSuccess: () => closeEditor() },
+    );
   }
 
   function togglePlatform(key: string) {
@@ -128,15 +161,27 @@ export default function MyWorksPage() {
   }
 
   function publish(item: MyContent) {
+    setActionError(null);
     publishMutation.mutate({ id: item.id, platforms: undefined });
   }
 
-  function resendFailed(item: MyContent) {
-    // 关键：绝不整单重派，只传 receipts 里 status≠'done' 的平台子集。
-    const failedPlatforms = item.platforms.filter((p) => {
+  /** 关键：绝不整单重派，只算 receipts 里非成功三值(done/completed/success)的平台子集。 */
+  function getFailedPlatforms(item: MyContent): string[] {
+    return item.platforms.filter((p) => {
       const r = item.receipts.find((rr) => rr.platform === p);
-      return r?.status !== 'done';
+      return r ? !SUCCESS_STATUSES.includes(r.status) : true;
     });
+  }
+
+  function resendFailed(item: MyContent) {
+    const failedPlatforms = getFailedPlatforms(item);
+    if (failedPlatforms.length === 0) {
+      // 空子集绝不能落到后端：后端把空数组当"未指定平台"会回落到作品原有 platforms
+      // 整单重派，等于把已经发布成功的平台也重发一遍（双发）。
+      setActionError('没有待重发的平台：所有平台都已发布成功');
+      return;
+    }
+    setActionError(null);
     publishMutation.mutate({ id: item.id, platforms: failedPlatforms });
   }
 
@@ -146,6 +191,20 @@ export default function MyWorksPage() {
         <h1 className="text-xl font-semibold text-gray-900">我的作品</h1>
         <p className="mt-1 text-sm text-gray-500">在这里编辑文案、发布到平台、查看每个平台的回执</p>
       </div>
+
+      {actionError ? (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <span>{actionError}</span>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            className="shrink-0 text-red-500 hover:text-red-700"
+            aria-label="关闭"
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
 
       {isLoading ? (
         <div className="py-16 text-center text-gray-400">加载中…</div>
@@ -267,7 +326,8 @@ export default function MyWorksPage() {
                     <button
                       type="button"
                       onClick={() => resendFailed(item)}
-                      className="rounded-md bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700"
+                      disabled={getFailedPlatforms(item).length === 0}
+                      className="rounded-md bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
                     >
                       重发失败平台
                     </button>
