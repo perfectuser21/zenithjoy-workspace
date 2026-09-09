@@ -66,6 +66,7 @@
         ".github/workflows/scripts/smoke/golden-path-1-smoke.sh",
         ".github/workflows/scripts/smoke/content-publish-dispatch-smoke.sh",
         ".github/workflows/scripts/smoke/notion-orchestrator-selfcheck-smoke.sh",
+        ".github/workflows/scripts/smoke/feishu-orchestrator-selfcheck-smoke.sh",
         ".github/workflows/scripts/smoke/my-works-api-smoke.sh"
       ],
       "steps": [
@@ -564,5 +565,5 @@
       ]
     }
   ],
-  "digest": "710434d9e1855d53e8549acfaf5a7a8afae8b5bcbbef835b6c0cd3ca2404a30a"
+  "digest": "c6492e752de3249a8c92fc038c4a3e81333edaba21ff136d70e569c8f32fa77e"
 }

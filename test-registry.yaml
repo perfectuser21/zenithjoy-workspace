@@ -895,6 +895,38 @@ tests:
     product: 智能发布编排台
     note: "编排台同步器三方向契约：推行（draft→建行回写锚）、拉发（白名单不信 Notion 手加 option/锚失效跳过/AlreadyQueued 幂等/NoAgent 派发失败）、回执（全终态才写+contents 挪出 queued+1900 截断）、启动自检缺 env 红日志跳过。"
 
+  - id: feishu-orchestrator-sync
+    path: apps/api/src/services/__tests__/feishu-orchestrator.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能发布编排台
+    note: "飞书编排台同步器契约：三方向（推行/拉发/回执）+ 启动自检 + 租户互斥 + 频控跳轮。Bitable 值形态合同（多选数组/单选裸字符串/URL 对象/文本裸字符串）、文本长文 segment 数组与裸字符串兼容、频控错误跳过本轮不崩。"
+
+  - id: feishu-client
+    path: apps/api/src/services/__tests__/feishu-client.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能发布编排台
+    note: "飞书 API 客户端：Bitable 请求封装、频控重试、租户令牌管理。"
+
+  - id: publish-receipts
+    path: apps/api/src/services/__tests__/publish-receipts.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能发布编排台
+    note: "发布回执处理：任务终态同步到编排台（Notion/飞书）、回执文本生成、状态映射。"
+
+  - id: publish-rollup
+    path: apps/api/src/services/__tests__/publish-rollup.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能发布编排台
+    note: "发布汇总：跨任务状态聚合、全终态判定、内容状态推进。"
+
   - id: material-storage-abstraction
     path: apps/api/src/services/__tests__/material-storage.test.ts
     type: unit

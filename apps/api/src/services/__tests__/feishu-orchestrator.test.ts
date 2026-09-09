@@ -284,6 +284,44 @@ describe('方向B 拉发（状态=发）', () => {
     await runOnce(ENV, deps());
     expect(call).toBe(2);
   });
+
+  it('长文案 2500 字不被截断：segment 数组形态完整回写 contents', async () => {
+    const longBody = 'A'.repeat(2500);
+    function stubFireRowWithLongBody() {
+      (feishuRequest as any).mockImplementation(async (_m: string, path: string) => {
+        if (path === SEARCH_PATH) {
+          return {
+            code: 0,
+            data: {
+              items: [
+                feishuRow({
+                  '文案': [{ type: 'text', text: longBody }],
+                }),
+              ],
+              has_more: false,
+            },
+          };
+        }
+        return { code: 0, data: {} };
+      });
+      (pool.query as any).mockImplementation(async (sql: string) => {
+        if (/FROM zenithjoy\.contents/i.test(sql) && !/feishu_record_id IS NULL/i.test(sql)) {
+          return { rows: [{ id: CID }] };
+        }
+        return { rows: [] };
+      });
+    }
+
+    stubFireRowWithLongBody();
+    (dispatchContentPublish as any).mockResolvedValue({ content_id: CID, tasks: [{ id: 't1', platform: 'douyin' }] });
+    await runOnce(ENV, deps());
+    const upd = (pool.query as any).mock.calls.find(
+      (c: any[]) => /UPDATE zenithjoy\.contents/i.test(c[0]) && /SET title/i.test(c[0]),
+    );
+    expect(upd).toBeTruthy();
+    expect(upd[1][1]).toBe(longBody);
+    expect(upd[1][1].length).toBe(2500);
+  });
 });
 
 describe('方向C 回执（任务终态→飞书行）', () => {
