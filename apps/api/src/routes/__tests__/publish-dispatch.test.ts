@@ -36,7 +36,7 @@ function makeApp() {
   storage = new InMemoryMaterialStorage();
   const app = express();
   app.use(express.json());
-  app.use('/api/contents', createContentsPublishRouter());
+  app.use('/api/contents', createContentsPublishRouter({ storage }));
   app.use('/api/publish-tasks', createPublishTasksRouter({ storage }));
   return app;
 }
@@ -415,5 +415,177 @@ describe('PATCH /api/publish-tasks/:id/receipt（执行器回执：发完写回�
       .set('X-Upload-Token', TOKEN_A).send({ result: 'failed', detail: '发布失败：网络超时' });
     expect(r.status).toBe(200);
     expect(r.body.data).toMatchObject({ task_id: RECEIPT_TASK_ID, status: 'failed' });
+  });
+});
+
+describe('GET /api/contents 列表（line01 刀5a：我的作品页）', () => {
+  const CONTENT_ID_2 = 'c2222222-cccc-4ccc-8ccc-cccccccccccc';
+  const LIST_ROWS = [
+    {
+      id: CONTENT_ID, title: '今日份的治愈色', body: '生活需要一点渐变 #治愈', type: 'image',
+      platforms: ['douyin'], status: 'draft', created_at: '2026-09-01T00:00:00Z',
+    },
+    {
+      id: CONTENT_ID_2, title: '第二条作品', body: '文案B', type: 'image',
+      platforms: ['weibo'], status: 'failed', created_at: '2026-09-02T00:00:00Z',
+    },
+  ];
+  const FIRST_IMAGE_ROWS = [
+    { content_id: CONTENT_ID, file_name: 'a.jpg', storage_key: 'k/a.jpg' },
+    { content_id: CONTENT_ID_2, file_name: 'c.jpg', storage_key: 'k/c.jpg' },
+  ];
+  const RECEIPT_ROWS = [
+    { cid: CONTENT_ID, platform: 'douyin', status: 'done' },
+    { cid: CONTENT_ID_2, platform: 'weibo', status: 'failed' },
+  ];
+
+  /** 列表场景查询桩：contents / content_materials（首图）/ publish_tasks（回执聚合）三路 SQL。 */
+  function stubList(opts: { imageRows?: any[]; receiptRows?: any[] } = {}) {
+    const calls: Array<{ sql: string; params: any[] }> = [];
+    (pool.query as any).mockImplementation(async (sql: string, params?: any[]) => {
+      calls.push({ sql, params: params ?? [] });
+      if (/FROM zenithjoy\.contents/i.test(sql)) return { rows: LIST_ROWS };
+      if (/FROM zenithjoy\.content_materials/i.test(sql)) return { rows: opts.imageRows ?? FIRST_IMAGE_ROWS };
+      if (/FROM zenithjoy\.publish_tasks/i.test(sql)) return { rows: opts.receiptRows ?? RECEIPT_ROWS };
+      return { rows: [] };
+    });
+    return calls;
+  }
+
+  it('两行 content + 首图行 + 回执聚合行：字段齐全、receipts 分组到对的 content、preview_url 含 storage_key', async () => {
+    stubList();
+    const r = await request(makeApp()).get('/api/contents').set('X-Upload-Token', TOKEN_A);
+    expect(r.status).toBe(200);
+    const items = r.body.data.items;
+    expect(items).toHaveLength(2);
+
+    const first = items.find((i: any) => i.id === CONTENT_ID);
+    expect(first).toMatchObject({
+      id: CONTENT_ID, title: '今日份的治愈色', body: '生活需要一点渐变 #治愈',
+      type: 'image', status: 'draft',
+    });
+    expect(first.platforms).toEqual(['douyin']);
+    expect(first.materials).toHaveLength(1);
+    expect(first.materials[0].file_name).toBe('a.jpg');
+    expect(first.materials[0].preview_url).toContain('k/a.jpg');
+    expect(first.receipts).toEqual([{ platform: 'douyin', status: 'done' }]);
+
+    const second = items.find((i: any) => i.id === CONTENT_ID_2);
+    expect(second.materials[0].preview_url).toContain('k/c.jpg');
+    expect(second.receipts).toEqual([{ platform: 'weibo', status: 'failed' }]);
+  });
+
+  it('回执聚合走一条 SQL（payload->>content_id = ANY），不逐条查', async () => {
+    const calls = stubList();
+    await request(makeApp()).get('/api/contents').set('X-Upload-Token', TOKEN_A);
+    const receiptCalls = calls.filter((c) => /payload->>'content_id'\s*=\s*ANY/i.test(c.sql));
+    expect(receiptCalls).toHaveLength(1);
+  });
+
+  it('签名抛错 → 该条 preview_url=null，其余条目不受影响（单条降级不拖垮整页）', async () => {
+    const app = makeApp();
+    stubList();
+    const originalSign = storage.getSignedUrl.bind(storage);
+    vi.spyOn(storage, 'getSignedUrl').mockImplementation(async (key: string, ttl?: number) => {
+      if (key === 'k/a.jpg') throw new Error('sign failed');
+      return originalSign(key, ttl);
+    });
+    const r = await request(app).get('/api/contents').set('X-Upload-Token', TOKEN_A);
+    expect(r.status).toBe(200);
+    const first = r.body.data.items.find((i: any) => i.id === CONTENT_ID);
+    const second = r.body.data.items.find((i: any) => i.id === CONTENT_ID_2);
+    expect(first.materials[0].preview_url).toBeNull();
+    expect(second.materials[0].preview_url).toContain('k/c.jpg');
+  });
+
+  it('status 过滤参数进 SQL、limit 夹到 100 上限', async () => {
+    const calls = stubList();
+    const r = await request(makeApp())
+      .get('/api/contents?status=failed&limit=500')
+      .set('X-Upload-Token', TOKEN_A);
+    expect(r.status).toBe(200);
+    const contentCall = calls.find((c) => /FROM zenithjoy\.contents/i.test(c.sql));
+    expect(contentCall!.sql).toMatch(/status\s*=\s*\$2/);
+    expect(contentCall!.params).toContain('failed');
+    expect(contentCall!.params).toContain(100);
+  });
+
+  it('无凭据 → 401', async () => {
+    (validateLicense as any).mockResolvedValue({ ok: false, code: 'INVALID_LICENSE', message: 'x' });
+    const r = await request(makeApp()).get('/api/contents');
+    expect(r.status).toBe(401);
+  });
+});
+
+describe('PATCH /api/contents/:id（line01 刀5a：我的作品页编辑）', () => {
+  it('queued 作品 → 409 EDIT_LOCKED 且无 UPDATE', async () => {
+    const calls: Array<{ sql: string; params: any[] }> = [];
+    (pool.query as any).mockImplementation(async (sql: string, params?: any[]) => {
+      calls.push({ sql, params: params ?? [] });
+      if (/SELECT status FROM zenithjoy\.contents/i.test(sql)) return { rows: [{ status: 'queued' }] };
+      return { rows: [] };
+    });
+    const r = await request(makeApp())
+      .patch(`/api/contents/${CONTENT_ID}`).set('X-Upload-Token', TOKEN_A).send({ title: '改标题' });
+    expect(r.status).toBe(409);
+    expect(r.body.error.code).toBe('EDIT_LOCKED');
+    expect(calls.filter((c) => /UPDATE zenithjoy\.contents/i.test(c.sql))).toHaveLength(0);
+  });
+
+  it('platforms 含白名单外平台 → 400 INVALID_PLATFORMS', async () => {
+    (pool.query as any).mockImplementation(async (sql: string) => {
+      if (/SELECT status FROM zenithjoy\.contents/i.test(sql)) return { rows: [{ status: 'draft' }] };
+      return { rows: [] };
+    });
+    const r = await request(makeApp())
+      .patch(`/api/contents/${CONTENT_ID}`).set('X-Upload-Token', TOKEN_A)
+      .send({ platforms: ['douyin', 'myspace'] });
+    expect(r.status).toBe(400);
+    expect(r.body.error.code).toBe('INVALID_PLATFORMS');
+  });
+
+  it('只给 title → UPDATE SQL 只含 title 与 updated_at（参数化，不拼接其余字段）', async () => {
+    const calls: Array<{ sql: string; params: any[] }> = [];
+    (pool.query as any).mockImplementation(async (sql: string, params?: any[]) => {
+      calls.push({ sql, params: params ?? [] });
+      if (/SELECT status FROM zenithjoy\.contents/i.test(sql)) return { rows: [{ status: 'draft' }] };
+      if (/UPDATE zenithjoy\.contents/i.test(sql)) return { rows: [{ id: CONTENT_ID }] };
+      return { rows: [] };
+    });
+    const r = await request(makeApp())
+      .patch(`/api/contents/${CONTENT_ID}`).set('X-Upload-Token', TOKEN_A).send({ title: '新标题' });
+    expect(r.status).toBe(200);
+    expect(r.body.data).toMatchObject({ id: CONTENT_ID, updated: true });
+
+    const updates = calls.filter((c) => /UPDATE zenithjoy\.contents/i.test(c.sql));
+    expect(updates).toHaveLength(1);
+    expect(updates[0].sql).toMatch(/title\s*=\s*\$\d+/);
+    expect(updates[0].sql).toMatch(/updated_at\s*=\s*now\(\)/i);
+    expect(updates[0].sql).not.toMatch(/\bbody\s*=\s*\$/);
+    expect(updates[0].sql).not.toMatch(/platforms\s*=\s*\$/);
+    expect(updates[0].params).toContain('新标题');
+  });
+
+  it('跨租户/不存在（查询空）→ 404', async () => {
+    (pool.query as any).mockImplementation(async (sql: string) => {
+      if (/SELECT status FROM zenithjoy\.contents/i.test(sql)) return { rows: [] };
+      return { rows: [] };
+    });
+    const r = await request(makeApp())
+      .patch(`/api/contents/${CONTENT_ID}`).set('X-Upload-Token', TOKEN_A).send({ title: 'x' });
+    expect(r.status).toBe(404);
+  });
+
+  it('无凭据 → 401', async () => {
+    (validateLicense as any).mockResolvedValue({ ok: false, code: 'INVALID_LICENSE', message: 'x' });
+    const r = await request(makeApp())
+      .patch(`/api/contents/${CONTENT_ID}`).send({ title: 'x' });
+    expect(r.status).toBe(401);
+  });
+
+  it('id 不是 UUID → 404（不查库）', async () => {
+    const r = await request(makeApp())
+      .patch('/api/contents/not-a-uuid').set('X-Upload-Token', TOKEN_A).send({ title: 'x' });
+    expect(r.status).toBe(404);
   });
 });
