@@ -14,7 +14,6 @@ import { Router, type Request, type Response } from 'express';
 import pool from '../db/connection';
 import {
   validateLicense,
-  findActiveAgentByTenantId,
 } from '../services/walking-skeleton.service';
 import {
   createMaterialStorage,
@@ -22,15 +21,16 @@ import {
   type MaterialStorage,
 } from '../services/material-storage';
 import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
+import {
+  dispatchContentPublish,
+  AlreadyQueuedError,
+  DispatchValidationError,
+  NoActiveAgentError,
+  PUBLISH_PLATFORMS,
+} from '../services/content-publish-dispatch';
 
-/** 平台白名单——与安卓真机/网页两条执行通道当前覆盖一致。 */
-export const PUBLISH_PLATFORMS = [
-  'douyin', 'xiaohongshu', 'kuaishou', 'toutiao', 'weibo',
-  'bilibili', 'shipinhao', 'zhihu', 'wechat',
-] as const;
-
-/** publish_tasks.type 有 CHECK IN ('video','image','article')——写库前拦住，别让 CHECK 违约以 500 暴露。 */
-const CONTENT_TYPES = ['video', 'image', 'article'];
+// 向后兼容：既有测试/消费方从本模块 import 白名单
+export { PUBLISH_PLATFORMS };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -79,18 +79,6 @@ async function authenticate(
   return { tenantId: r.license.tenant_id as string };
 }
 
-async function loadMaterials(contentId: string): Promise<PublishPackageMaterial[]> {
-  const { rows } = await pool.query<PublishPackageMaterial>(
-    `SELECT m.id, m.storage_key, m.file_name, m.mime_type
-       FROM zenithjoy.content_materials cm
-       JOIN zenithjoy.materials m ON m.id = cm.material_id
-      WHERE cm.content_id = $1
-      ORDER BY cm.sort_order ASC`,
-    [contentId],
-  );
-  return rows;
-}
-
 export function createContentsPublishRouter(): Router {
   const router = Router();
 
@@ -109,114 +97,27 @@ export function createContentsPublishRouter(): Router {
     }
 
     try {
-      const { rows } = await pool.query(
-        `SELECT id, title, body, type, platforms, status
-           FROM zenithjoy.contents
-          WHERE id = $1 AND tenant_id = $2
-          LIMIT 1`,
-        [contentId, tenantId],
-      );
-      const content = rows[0];
-      if (!content) {
+      const bodyPlatforms: unknown = req.body?.platforms;
+      const platformsOverride =
+        Array.isArray(bodyPlatforms) && bodyPlatforms.length > 0
+          ? bodyPlatforms.map(String)
+          : undefined;
+      const result = await dispatchContentPublish({ contentId, tenantId, platformsOverride });
+      if (result === null) {
         fail(res, 404, 'NOT_FOUND', '作品不存在');
         return;
       }
-
-      const bodyPlatforms: unknown = req.body?.platforms;
-      const platforms: string[] =
-        Array.isArray(bodyPlatforms) && bodyPlatforms.length > 0
-          ? bodyPlatforms.map(String)
-          : (content.platforms as string[] | null) ?? [];
-      if (platforms.length === 0) {
-        fail(res, 400, 'INVALID_PLATFORMS', '未指定发布平台：作品没带 platforms，请求体也没给');
-        return;
-      }
-      const illegal = platforms.filter(
-        (p) => !(PUBLISH_PLATFORMS as readonly string[]).includes(p),
-      );
-      if (illegal.length > 0) {
-        fail(res, 400, 'INVALID_PLATFORMS', `不认识的平台：${illegal.join('、')}`);
-        return;
-      }
-
-      // 去重：同一请求重复平台只拆一条任务
-      const uniquePlatforms = [...new Set(platforms)];
-
-      if (!CONTENT_TYPES.includes(content.type)) {
-        fail(res, 400, 'INVALID_CONTENT_TYPE', `作品形态 ${content.type} 不可派发`);
-        return;
-      }
-      if (content.status === 'queued') {
-        fail(res, 409, 'ALREADY_QUEUED', '作品已在发布队列中，勿重复派发');
-        return;
-      }
-
-      const agent = await findActiveAgentByTenantId(tenantId);
-      if (!agent) {
-        fail(res, 409, 'NO_AGENT', '租户下没有 10 分钟内活跃的 agent，无法派发');
-        return;
-      }
-
-      const materials = await loadMaterials(contentId);
-      if (content.type !== 'article' && materials.length === 0) {
-        fail(res, 400, 'NO_MATERIALS', '作品没有任何素材，无法发布');
-        return;
-      }
-
-      const client = await pool.connect();
-      const tasks: Array<{ id: string; platform: string }> = [];
-      let alreadyQueued = false;
-      try {
-        await client.query('BEGIN');
-        // 原子 CAS：事务外的 status === 'queued' 检查只是省一次事务的礼貌拦截，
-        // 真正的并发防线在这里——两个并发请求同时读到 draft 时，只有一个能把
-        // status 从非 queued 改成 queued，rowCount === 0 说明被对手抢先了。
-        const cas = await client.query(
-          `UPDATE zenithjoy.contents
-              SET status = 'queued', updated_at = now()
-            WHERE id = $1 AND tenant_id = $2 AND status <> 'queued'
-            RETURNING id`,
-          [contentId, tenantId],
-        );
-        if (cas.rowCount === 0) {
-          await client.query('ROLLBACK');
-          alreadyQueued = true;
-        } else {
-          for (const platform of uniquePlatforms) {
-            const payload = JSON.stringify({
-              content_id: contentId,
-              title: content.title,
-              body: content.body,
-              content_type: content.type,
-              platform,
-              materials,
-            });
-            const ins = await client.query<{ id: string }>(
-              `INSERT INTO zenithjoy.publish_tasks
-                 (agent_id, platform, type, status, task_type, tenant_id, payload)
-               VALUES ($1, $2, $3, 'queued', 'content_publish', $4, $5::jsonb)
-               RETURNING id`,
-              [agent.id, platform, content.type, tenantId, payload],
-            );
-            tasks.push({ id: ins.rows[0].id, platform });
-          }
-          await client.query('COMMIT');
-        }
-      } catch (err) {
-        await client.query('ROLLBACK').catch(() => undefined);
-        throw err;
-      } finally {
-        client.release();
-      }
-
-      if (alreadyQueued) {
-        fail(res, 409, 'ALREADY_QUEUED', '作品已在发布队列中，勿重复派发');
-        return;
-      }
-
-      ok(res, { content_id: contentId, tasks });
+      ok(res, result);
     } catch (err) {
-      fail(res, 500, 'DISPATCH_FAILED', err instanceof Error ? err.message : 'unknown');
+      if (err instanceof AlreadyQueuedError) {
+        fail(res, 409, err.code, err.message);
+      } else if (err instanceof NoActiveAgentError) {
+        fail(res, 409, err.code, err.message);
+      } else if (err instanceof DispatchValidationError) {
+        fail(res, 400, err.code, err.message);
+      } else {
+        fail(res, 500, 'DISPATCH_FAILED', err instanceof Error ? err.message : 'unknown');
+      }
     }
   });
 
