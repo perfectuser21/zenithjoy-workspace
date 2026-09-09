@@ -111,6 +111,7 @@ golden_paths:
       - .github/workflows/scripts/smoke/golden-path-1-smoke.sh
       - .github/workflows/scripts/smoke/content-publish-dispatch-smoke.sh
       - .github/workflows/scripts/smoke/notion-orchestrator-selfcheck-smoke.sh
+      - .github/workflows/scripts/smoke/my-works-api-smoke.sh
     steps:
       - id: step1
         name: 注册自动登录（含 free license）
