@@ -292,7 +292,7 @@ async function syncReceipts(env: FeishuOrchEnv) {
 
       const hasFailed = tasks.some((t) => !SUCCESS_STATUSES.includes(t.status));
       const receipt = tasks
-        .map((t) => `${t.platform} ${t.status === 'done' ? '✅' : '❌ ' + JSON.stringify(t.result ?? '')}`)
+        .map((t) => `${t.platform} ${SUCCESS_STATUSES.includes(t.status) ? '✅' : '❌ ' + JSON.stringify(t.result ?? '')}`)
         .join(' / ');
 
       // 回执文本截 1900（与 Notion 版统一口径，写库前在 markRow 里做）。

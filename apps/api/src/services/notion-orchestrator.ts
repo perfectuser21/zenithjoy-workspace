@@ -258,7 +258,7 @@ async function syncReceipts(env: OrchEnv) {
 
       const hasFailed = tasks.some((t) => !SUCCESS_STATUSES.includes(t.status));
       const receipt = tasks
-        .map((t) => `${t.platform} ${t.status === 'done' ? '✅' : '❌ ' + JSON.stringify(t.result ?? '')}`)
+        .map((t) => `${t.platform} ${SUCCESS_STATUSES.includes(t.status) ? '✅' : '❌ ' + JSON.stringify(t.result ?? '')}`)
         .join(' / ');
 
       await markRow(content.notion_page_id, hasFailed ? '部分失败' : '已发', receipt);

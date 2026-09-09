@@ -198,6 +198,18 @@ describe('方向C 回执（任务终态→Notion）', () => {
     expect(upd).toBeTruthy();
   });
 
+  it('全部 completed → 行状态已发 + contents 置 published', async () => {
+    stubQueuedContent([
+      { platform: 'douyin', status: 'completed', result: null },
+      { platform: 'weibo', status: 'completed', result: null },
+    ]);
+    await runOnce(ENV, deps());
+    const patch = (notionRequest as any).mock.calls.find((c: any[]) => c[1] === '/pages/page-1');
+    expect(patch[2].properties['状态'].select.name).toBe('已发');
+    const upd = (pool.query as any).mock.calls.find((c: any[]) => /SET status = 'published'/i.test(c[0]));
+    expect(upd).toBeTruthy();
+  });
+
   it('有 failed → 部分失败 + contents 置 failed；回执截断 ≤1900', async () => {
     stubQueuedContent([
       { platform: 'douyin', status: 'done', result: null },
