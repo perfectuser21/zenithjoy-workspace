@@ -5,9 +5,9 @@
  * 本 sweeper 全租户扫描这批"无锚"作品，靠共享 helper 的终态聚合把它们收敛成
  * published/failed。
  *
- * 注：feishu_record_id 列由刀5b Task 2 的 migration 建出，本 Task 1 阶段该列尚不
- * 存在，候选 SQL 先只按 notion_page_id IS NULL 过滤（TODO 见 publish-rollup.ts），
- * Task 3 建列后再补 AND feishu_record_id IS NULL。
+ * 注：feishu_record_id 列已由刀5b Task 2 的 migration 建出，候选 SQL 同时按
+ * notion_page_id IS NULL 与 feishu_record_id IS NULL 过滤（Task 3 补齐，还清
+ * Task 1 阶段留的 TODO）——只有两边编排台都没锚的作品才算"无锚"。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -44,13 +44,13 @@ beforeEach(() => {
 });
 
 describe('runRollupOnce：候选查询', () => {
-  it('只按 status=queued AND notion_page_id IS NULL 过滤，不引用尚未建表的 feishu_record_id 列', async () => {
+  it('按 status=queued AND notion_page_id IS NULL AND feishu_record_id IS NULL 过滤（两边编排台都无锚才算无锚）', async () => {
     const calls = stubRollup([], {});
     await runRollupOnce();
     const candidateCall = calls.find((c) => /status\s*=\s*'queued'/i.test(c.sql));
     expect(candidateCall).toBeTruthy();
     expect(candidateCall!.sql).toMatch(/notion_page_id IS NULL/i);
-    expect(candidateCall!.sql).not.toMatch(/feishu_record_id/i);
+    expect(candidateCall!.sql).toMatch(/feishu_record_id IS NULL/i);
   });
 
   it('候选查询不按 tenant_id 过滤（全租户扫描——dashboard 直派客户作品不分租户）', async () => {
