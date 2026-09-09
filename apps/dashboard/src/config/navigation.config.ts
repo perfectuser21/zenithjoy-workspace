@@ -18,7 +18,7 @@ import {
   Building2,
   Briefcase,
   MessageCircle,
-  Monitor, ImageIcon,} from 'lucide-react';
+  Monitor, ImageIcon, FileText,} from 'lucide-react';
 
 // ============ 类型定义 ============
 
@@ -140,6 +140,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   // 工作机控制塔第一刀（决策 e14297d4）— 总览卡片页 + 单机实时详情页
   'WorkersPage': () => import('../pages/WorkersPage'),
   'WorkerLivePage': () => import('../pages/WorkerLivePage'),
+  // line01 刀5a — 客户端「我的作品」（dashboard 侧第二发布入口，双入口并存期不回流 Notion）
+  'MyWorksPage': () => import('../pages/MyWorksPage'),
 };
 
 export const pageComponents = autopilotPageComponents;
@@ -175,6 +177,8 @@ export const autopilotNavGroups: NavGroup[] = [
       { path: '/dashboard/workers', icon: Monitor, label: '工作机', featureKey: 'workers', component: 'WorkersPage' },
       // 素材库：iPhone 快捷指令 / 小程序 / 电脑 agent 三个入口传上来的素材，第一次变得看得见
       { path: '/materials', icon: ImageIcon, label: '素材库', featureKey: 'materials', component: 'MaterialsPage' },
+      // line01 刀5a — 我的作品：dashboard 侧第二发布入口（编辑文案/平台、发布、重发失败平台、看回执）
+      { path: '/dashboard/my-works', icon: FileText, label: '我的作品', featureKey: 'my-works', component: 'MyWorksPage' },
     ]
   },
 
