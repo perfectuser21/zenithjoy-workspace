@@ -7,6 +7,7 @@ import { startStaleListenerMonitor } from './services/wechat-heartbeat';
 import { startAgentOfflineMonitor } from './services/agent-offline-monitor';
 import { startScheduler } from './services/scheduler';
 import { startWorkerLeaseSweeper } from './services/worker-lease-sweeper';
+import { startNotionOrchestrator } from './services/notion-orchestrator';
 import { runStartupConfigCheck } from './startup-check';
 import { assertStaffDirectoryOnStartup } from './staff-directory';
 import { assertSingleOrgMembership } from './startup/single-org-selfcheck';
@@ -80,6 +81,8 @@ async function bootstrap(): Promise<void> {
     // 从 app.ts 迁出（2026-08-30 后端审查）：门控用 VITEST（vitest 自动设置）而非 NODE_ENV
     // ——同文件顶部 app.ts 挂 auth 路由用的同一惯例，NODE_ENV=test 在 CI smoke 里也会被设置，不能用它当门控。
     if (!process.env.VITEST) startWorkerLeaseSweeper();
+    // Notion 发布编排台同步 worker（line01 刀2）：env 不齐自己 return null，不阻塞启动。
+    if (!process.env.VITEST) startNotionOrchestrator();
   });
 }
 

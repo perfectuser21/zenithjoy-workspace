@@ -64,7 +64,8 @@
       "status": "active",
       "smoke_files": [
         ".github/workflows/scripts/smoke/golden-path-1-smoke.sh",
-        ".github/workflows/scripts/smoke/content-publish-dispatch-smoke.sh"
+        ".github/workflows/scripts/smoke/content-publish-dispatch-smoke.sh",
+        ".github/workflows/scripts/smoke/notion-orchestrator-selfcheck-smoke.sh"
       ],
       "steps": [
         {
@@ -562,5 +563,5 @@
       ]
     }
   ],
-  "digest": "5ff42df9864c9bad46454f166e5b7ac287e9d682e6897e07071c2f2b6f2da067"
+  "digest": "df9ca59e05a29f261f876fa60f9238552a13b7764ac9ef0dcb5191f234d36349"
 }

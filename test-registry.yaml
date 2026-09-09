@@ -855,6 +855,22 @@ tests:
     product: 智能发布派发链路
     note: "旧 agent 心跳拉任务守卫：getQueuedTasks 必须 IS DISTINCT FROM 'content_publish'——旧 Windows/安卓 agent 不误领新执行器的作业单，NULL 与既有 task_type 全保留。"
 
+  - id: notion-client-contract
+    path: apps/api/src/services/__tests__/notion-client.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能发布编排台
+    note: "Notion 轻客户端契约：鉴权头拼装、缺 token 拒发请求、上游错误收敛后消息含 status/响应体但绝不含 token（AxiosError.config.headers 泄漏面）。"
+
+  - id: notion-orchestrator-sync
+    path: apps/api/src/services/__tests__/notion-orchestrator.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能发布编排台
+    note: "编排台同步器三方向契约：推行（draft→建行回写锚）、拉发（白名单不信 Notion 手加 option/锚失效跳过/AlreadyQueued 幂等/NoAgent 派发失败）、回执（全终态才写+contents 挪出 queued+1900 截断）、启动自检缺 env 红日志跳过。"
+
   - id: material-storage-abstraction
     path: apps/api/src/services/__tests__/material-storage.test.ts
     type: unit
