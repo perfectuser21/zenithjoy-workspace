@@ -141,6 +141,25 @@ async function pullFireRows(env: OrchEnv) {
           continue;
         }
 
+        const { rows: existing } = await pool.query(
+          `SELECT id, status
+             FROM zenithjoy.contents
+            WHERE id = $1 AND tenant_id = $2`,
+          [contentId, env.tenantId],
+        );
+        const existingStatus = (existing as any[])[0]?.status;
+        if (existingStatus === 'published' || existingStatus === 'failed') {
+          console.error(
+            `${LOG} 拒绝重派 page=${page.id}: 作品已终态(${existingStatus})，重试会导致已成功平台重复发帖 content_id=${contentId}`,
+          );
+          await markRow(
+            page.id,
+            '派发失败',
+            '该作品已完成一轮发布，重试会导致已成功平台重复发帖——如需再发请重新上传素材',
+          );
+          continue;
+        }
+
         await pool.query(
           `UPDATE zenithjoy.contents
               SET title = $1, body = $2, platforms = $3, updated_at = now()

@@ -148,6 +148,19 @@ describe('方向B 拉发（状态=发）', () => {
     expect(patch[2].properties['状态'].select.name).toBe('派发失败');
     expect(patch[2].properties['回执'].rich_text[0].text.content).toContain('agent');
   });
+
+  it('作品已终态(published/failed) → 拒绝重派：行置派发失败+原因含已完成一轮发布，dispatch 不被调', async () => {
+    stubFireRow(notionRow());
+    (pool.query as any).mockImplementation(async (sql: string) => {
+      if (/FROM zenithjoy\.contents/i.test(sql)) return { rows: [{ id: CID, status: 'failed' }] };
+      return { rows: [] };
+    });
+    await runOnce(ENV, deps());
+    expect(dispatchContentPublish).not.toHaveBeenCalled();
+    const patch = (notionRequest as any).mock.calls.find((c: any[]) => c[1] === '/pages/page-1');
+    expect(patch[2].properties['状态'].select.name).toBe('派发失败');
+    expect(patch[2].properties['回执'].rich_text[0].text.content).toContain('已完成一轮发布');
+  });
 });
 
 describe('方向C 回执（任务终态→Notion）', () => {
