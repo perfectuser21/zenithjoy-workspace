@@ -23,8 +23,12 @@ DIR="${1:-.}"
 # 2026-08-07：js-yaml CVE-2026-59870（!!omap 二次方 CPU）当天新公布，lock 早于公布、非代码
 # 改动引入；fix 不 backport 4.x，需 js-yaml@5 semver major（传递依赖声明 ^4.1.1）。
 # 已建 issue 366d671d 跟踪，升级合并后删除 js-yaml 这一项。
+# 2026-09-09：@tiptap/core high 当天新公布（同批 multer/svgo 已 npm audit fix 就地修掉），
+# fix 需 tiptap 全家桶 semver major（staff-hub 协同笔记在用）。已建 issue ad98e258 跟踪，
+# 升级合并后删除 @tiptap/core 这一项。
 ALLOWLIST=(
   "js-yaml"
+  "@tiptap/core"
   "astro" "@astrojs/mdx" "sharp" "miniflare" "wrangler" "undici"
   "eslint" "@eslint/config-array" "@eslint/eslintrc"
   "@typescript-eslint/eslint-plugin" "@typescript-eslint/parser"
