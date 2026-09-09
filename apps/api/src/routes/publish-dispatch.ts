@@ -21,6 +21,7 @@ import {
   type MaterialStorage,
 } from '../services/material-storage';
 import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
+import { aggregateLatestReceipts } from '../services/publish-receipts';
 import {
   dispatchContentPublish,
   AlreadyQueuedError,
@@ -150,7 +151,11 @@ export function createContentsPublishRouter(deps: ContentsPublishRouterDeps = {}
       const receiptsByContentId = new Map<string, Array<{ platform: string; status: string }>>();
 
       if (ids.length > 0) {
-        const [{ rows: imageRows }, { rows: receiptRows }] = await Promise.all([
+        // 回执聚合共享 helper（刀5b Task 1 从本文件抽出，notion-orchestrator/
+        // publish-rollup 同款共用）：latest-wins（同一 (content_id, platform)
+        // 可能因重发产生多条任务行——旧 failed + 新 done，只取最新一条，
+        // 否则前端按"存在 failed 就算失败"判定会被过期回执污染）。
+        const [{ rows: imageRows }, receiptsMap] = await Promise.all([
           // DISTINCT ON：每个作品只要首图（sort_order 最小的那条素材）。
           pool.query(
             `SELECT DISTINCT ON (cm.content_id) cm.content_id, m.file_name, m.storage_key
@@ -160,28 +165,15 @@ export function createContentsPublishRouter(deps: ContentsPublishRouterDeps = {}
               ORDER BY cm.content_id, cm.sort_order ASC`,
             [ids],
           ),
-          // 回执聚合：一次查出这页所有作品的所有平台任务，JS 侧 group——避免 N+1。
-          // latest-wins：同一 (content_id, platform) 可能因重发产生多条任务行
-          // （旧 failed + 新 done），DISTINCT ON + created_at DESC 只取最新一条，
-          // 否则 JS 侧 push 会把旧 failed 和新 done 都塞进同一平台的 receipts，
-          // 前端按"存在 failed 就算失败"判定会被过期回执污染。
-          pool.query(
-            `SELECT DISTINCT ON (payload->>'content_id', platform)
-                    payload->>'content_id' AS cid, platform, status
-               FROM zenithjoy.publish_tasks
-              WHERE tenant_id = $1 AND task_type = 'content_publish'
-                AND payload->>'content_id' = ANY($2)
-              ORDER BY payload->>'content_id', platform, created_at DESC`,
-            [tenantId, ids],
-          ),
+          aggregateLatestReceipts(tenantId, ids),
         ]);
         for (const row of imageRows as Array<{ content_id: string; file_name: string; storage_key: string }>) {
           imageByContentId.set(row.content_id, { file_name: row.file_name, storage_key: row.storage_key });
         }
-        for (const row of receiptRows as Array<{ cid: string; platform: string; status: string }>) {
-          const list = receiptsByContentId.get(row.cid) ?? [];
-          list.push({ platform: row.platform, status: row.status });
-          receiptsByContentId.set(row.cid, list);
+        for (const [cid, list] of receiptsMap) {
+          // 列表端点只展示 platform/status，result 详情留给 notion 回执 dump 用——
+          // 显式挑字段而非透传整条，防止 helper 以后加字段悄悄改变这里的响应形状。
+          receiptsByContentId.set(cid, list.map((r) => ({ platform: r.platform, status: r.status })));
         }
       }
 

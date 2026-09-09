@@ -1,0 +1,86 @@
+// apps/api/src/services/publish-receipts.ts
+//
+// 发布回执聚合共享 helper（刀5b Task 1，还刀5a 终审 P2-2/P2-3 债）。
+// 此前 notion-orchestrator.syncReceipts 与 publish-dispatch.ts 列表端点
+// 各自手写了一份"按 (content_id, platform) 取最新任务"的聚合 SQL：前者压根没做
+// latest-wins（历史 failed 行会永久污染"是否成功"判定——P2-3），后者做了但只在
+// 列表端点内联、无法被 notion/rollup 复用（P2-2）。本模块收敛成唯一实现，
+// notion-orchestrator / publish-rollup / publish-dispatch 列表端点三处共用。
+//
+// SQL 与刀5a 列表端点历史实现同款语义（DISTINCT ON + created_at DESC），
+// 守卫见 routes/__tests__/publish-dispatch.test.ts:485 的正则——改这段 SQL
+// 必须保持能过那条正则（DISTINCT ON (payload->>'content_id', platform) /
+// ORDER BY payload->>'content_id', platform, created_at DESC）。
+//
+// JS 层再做一次防御性 latest-wins（按 created_at 取最大值，不依赖行到达顺序）：
+// Postgres 的 DISTINCT ON 已经保证了这一点，这里是双保险——调用方（尤其是单测里
+// 手写的 mock 行）不一定天然去重，双保险让"latest-wins"是本模块自身可验证的契约，
+// 不只是"信任 SQL 会这样跑"。
+
+import pool from '../db/connection';
+import { NON_TERMINAL_TASK_STATUSES } from './content-publish-dispatch';
+
+/** 终态里代表"成功"的取值——发布派发链路（agent-burner.ts）落库时写的是 'done'。 */
+export const SUCCESS_STATUSES = ['done', 'completed', 'success'];
+
+/** 终态判定：非终态集合单一来源见 content-publish-dispatch.ts 的 NON_TERMINAL_TASK_STATUSES。 */
+export function isTerminal(status: string): boolean {
+  return !NON_TERMINAL_TASK_STATUSES.includes(status);
+}
+
+export interface LatestReceipt {
+  platform: string;
+  status: string;
+  result: unknown;
+}
+
+interface RawReceiptRow {
+  cid: string;
+  platform: string;
+  status: string;
+  result: unknown;
+  created_at: string | Date;
+}
+
+/**
+ * 聚合每个作品每个平台"最新一条"发布任务回执（latest-wins）。
+ * 同一 (content_id, platform) 可能因重发产生多条任务行（旧 failed + 新 pending/done），
+ * 只有真正的最新一条才代表当前状态——历史行绝不能参与"是否全成功"的判定。
+ *
+ * @returns Map<content_id, Array<{platform,status,result}>>；某作品若无任务行，
+ *   该 key 在 Map 中不存在（调用方用 `map.get(id) ?? []` 兜底）。
+ */
+export async function aggregateLatestReceipts(
+  tenantId: string,
+  contentIds: string[],
+): Promise<Map<string, LatestReceipt[]>> {
+  const grouped = new Map<string, LatestReceipt[]>();
+  if (contentIds.length === 0) return grouped;
+
+  const { rows } = await pool.query<RawReceiptRow>(
+    `SELECT DISTINCT ON (payload->>'content_id', platform)
+            payload->>'content_id' AS cid, platform, status, result, created_at
+       FROM zenithjoy.publish_tasks
+      WHERE tenant_id = $1 AND task_type = 'content_publish'
+        AND payload->>'content_id' = ANY($2)
+      ORDER BY payload->>'content_id', platform, created_at DESC`,
+    [tenantId, contentIds],
+  );
+
+  // 防御性 latest-wins：按 (cid, platform) 收敛到 created_at 最大的一行。
+  const latestByKey = new Map<string, RawReceiptRow>();
+  for (const row of rows) {
+    const key = `${row.cid}\x00${row.platform}`;
+    const existing = latestByKey.get(key);
+    if (!existing || new Date(row.created_at).getTime() > new Date(existing.created_at).getTime()) {
+      latestByKey.set(key, row);
+    }
+  }
+
+  for (const row of latestByKey.values()) {
+    const list = grouped.get(row.cid) ?? [];
+    list.push({ platform: row.platform, status: row.status, result: row.result });
+    grouped.set(row.cid, list);
+  }
+  return grouped;
+}
