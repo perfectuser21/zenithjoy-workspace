@@ -15,6 +15,16 @@ export const PUBLISH_PLATFORMS = [
   'bilibili', 'shipinhao', 'zhihu', 'wechat',
 ] as const;
 
+/**
+ * publish_tasks.status 非终态集合——单一来源（route 与 notion-orchestrator 共用）。
+ * 对照 20260511_102431_publish_tasks_status_enum_full.sql 的 9 值枚举核准：
+ * canonical 非终态 = pending/queued/dispatched/in_progress；deprecated 兼容期非终态 = running。
+ * 终态（不在此集合里的）= completed/success/done（均等价"成功"）与 failed。
+ */
+export const NON_TERMINAL_TASK_STATUSES = [
+  'pending', 'queued', 'dispatched', 'in_progress', 'running',
+];
+
 /** publish_tasks.type 有 CHECK IN ('video','image','article')——写库前拦住。 */
 const CONTENT_TYPES = ['video', 'image', 'article'];
 

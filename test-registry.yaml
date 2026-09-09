@@ -847,6 +847,14 @@ tests:
     product: 智能发布派发链路
     note: "作品→发布任务派发契约：租户从凭据反查、跨租户 404、平台白名单+去重、事务内 CAS 幂等（并发抢先 409 且零 INSERT）、发布包字段齐且不存签名 URL、领单时现签素材 URL 与 storage_key 可验证关联。"
 
+  - id: content-publish-dispatch-service
+    path: apps/api/src/services/__tests__/content-publish-dispatch.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能发布派发链路
+    note: "dispatchContentPublish 服务层直调契约（补 route 测试之外的服务直调面）：作品不存在返回 null、platforms 空/白名单外/type 非法三种校验错误、status=queued 事务外礼貌拦截、无活跃 agent、事务内 CAS rowCount=0 时 ROLLBACK+AlreadyQueued、成功路径每平台一条 INSERT 且 payload 字段齐+去重、NON_TERMINAL_TASK_STATUSES 常量五值契约。"
+
   - id: heartbeat-excludes-content-publish
     path: apps/api/src/services/__tests__/get-queued-tasks-exclusion.test.ts
     type: unit

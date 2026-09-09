@@ -27,12 +27,20 @@ import {
   DispatchValidationError,
   NoActiveAgentError,
   PUBLISH_PLATFORMS,
+  NON_TERMINAL_TASK_STATUSES,
 } from '../services/content-publish-dispatch';
 
 // 向后兼容：既有测试/消费方从本模块 import 白名单
 export { PUBLISH_PLATFORMS };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// 非终态判定：单一来源见 services/content-publish-dispatch.ts 的 NON_TERMINAL_TASK_STATUSES
+// （与 notion-orchestrator.ts 共用同一份，不再各自手抄）。
+const RECEIPT_NON_TERMINAL = NON_TERMINAL_TASK_STATUSES;
+
+/** 回执 detail 截断长度：避免执行器把整段 stacktrace/日志灌进 result jsonb。 */
+const RECEIPT_DETAIL_MAX_LEN = 2000;
 
 interface PublishPackageMaterial {
   id: string;
@@ -204,6 +212,74 @@ export function createPublishTasksRouter(deps: PublishTasksRouterDeps = {}): Rou
       });
     } catch (err) {
       fail(res, 500, 'PACKAGE_FAILED', err instanceof Error ? err.message : 'unknown');
+    }
+  });
+
+  // 执行器发完回执：发布结果写回，编排台（notion-orchestrator）轮询到终态后自动回写 Notion。
+  router.patch('/:id/receipt', async (req: Request, res: Response) => {
+    const auth = await authenticate(req, res);
+    if (!auth) return;
+    const taskId = req.params.id;
+    if (!UUID_RE.test(taskId)) {
+      fail(res, 404, 'NOT_FOUND', '任务不存在');
+      return;
+    }
+    const result: unknown = req.body?.result;
+    if (result !== 'success' && result !== 'failed') {
+      fail(res, 400, 'INVALID_RESULT', "result 必须是 'success' 或 'failed'");
+      return;
+    }
+    const detailRaw: unknown = req.body?.detail;
+    const detail =
+      typeof detailRaw === 'string' ? detailRaw.slice(0, RECEIPT_DETAIL_MAX_LEN) : null;
+
+    try {
+      const { rows } = await pool.query(
+        `SELECT status FROM zenithjoy.publish_tasks
+          WHERE id = $1 AND tenant_id = $2 AND task_type = 'content_publish'
+          LIMIT 1`,
+        [taskId, auth.tenantId],
+      );
+      const task = rows[0];
+      if (!task) {
+        fail(res, 404, 'NOT_FOUND', '任务不存在');
+        return;
+      }
+      // 已终态：幂等返回当前 status，不改写（防止执行器重试回执把已回写 Notion 的结果覆盖）。
+      if (!RECEIPT_NON_TERMINAL.includes(task.status)) {
+        ok(res, { task_id: taskId, status: task.status });
+        return;
+      }
+
+      const newStatus = result === 'success' ? 'done' : 'failed';
+      const receipt = { result, detail, at: new Date().toISOString() };
+      // CAS：UPDATE 必须带非终态谓词，否则并发重试（重复回执/竞态重放）会在两次
+      // SELECT 之后都判定为"非终态"，谁后写谁赢——已终态可能被翻转、回执被覆盖。
+      // 把"仍是非终态"钉进 WHERE，谁先落库谁定局，后来者 rowCount=0。
+      const { rows: updated } = await pool.query(
+        `UPDATE zenithjoy.publish_tasks
+            SET status = $1,
+                result = COALESCE(result, '{}'::jsonb) || $2::jsonb,
+                receipt_at = now(),
+                updated_at = now()
+          WHERE id = $3 AND tenant_id = $4 AND status = ANY($5)
+          RETURNING status`,
+        [newStatus, JSON.stringify({ receipt }), taskId, auth.tenantId, RECEIPT_NON_TERMINAL],
+      );
+      if (updated.length === 0) {
+        // 并发对手已抢先把任务写成终态：重读当前 status 走幂等返回分支，不二次改写。
+        const { rows: current } = await pool.query(
+          `SELECT status FROM zenithjoy.publish_tasks
+            WHERE id = $1 AND tenant_id = $2 AND task_type = 'content_publish'
+            LIMIT 1`,
+          [taskId, auth.tenantId],
+        );
+        ok(res, { task_id: taskId, status: current[0]?.status ?? task.status });
+        return;
+      }
+      ok(res, { task_id: taskId, status: updated[0].status });
+    } catch (err) {
+      fail(res, 500, 'RECEIPT_FAILED', err instanceof Error ? err.message : 'unknown');
     }
   });
 

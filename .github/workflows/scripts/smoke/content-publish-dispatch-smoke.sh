@@ -110,6 +110,32 @@ assert "'"$TASK_ID"'" not in ids, \
 ' || fail "心跳响应不符——旧 agent 通道能看见 content_publish 任务"
 echo "    heartbeat queued_tasks 不含 content_publish 任务 ✓"
 
+echo "[7b] 回执：PATCH receipt result=success → 该任务 status=done"
+R=$(curl -sf -X PATCH "$API_BASE/api/publish-tasks/$TASK_ID/receipt" \
+  -H "X-Upload-Token: $LICENSE_KEY" -H 'Content-Type: application/json' \
+  -d '{"result":"success","detail":"smoke 真机模拟发布成功"}') || fail "回执失败"
+echo "$R" | python3 -c '
+import sys, json
+d = json.load(sys.stdin)["data"]
+assert d["status"] == "done", "回执后 status 应为 done，实际 " + str(d["status"])
+'
+DB_STATUS=$("${PSQL[@]}" -c "SELECT status FROM zenithjoy.publish_tasks WHERE id = '${TASK_ID}'")
+[ "$DB_STATUS" = "done" ] || fail "DB 断言失败：publish_tasks.status expected done got $DB_STATUS"
+echo "    receipt: status=done（API+DB 均已确认）✓"
+
+echo "[7c] 重复回执 → 200 且 status 仍 done（幂等，不再改写）"
+R=$(curl -sf -X PATCH "$API_BASE/api/publish-tasks/$TASK_ID/receipt" \
+  -H "X-Upload-Token: $LICENSE_KEY" -H 'Content-Type: application/json' \
+  -d '{"result":"failed","detail":"重复回执不应生效"}') || fail "重复回执失败"
+echo "$R" | python3 -c '
+import sys, json
+d = json.load(sys.stdin)["data"]
+assert d["status"] == "done", "重复回执应幂等返回 done，实际 " + str(d["status"])
+'
+DB_STATUS=$("${PSQL[@]}" -c "SELECT status FROM zenithjoy.publish_tasks WHERE id = '${TASK_ID}'")
+[ "$DB_STATUS" = "done" ] || fail "DB 断言失败：重复回执后 status 应仍是 done，实际 $DB_STATUS"
+echo "    重复回执幂等 ✓"
+
 echo "[8] 跨租户领单 → 404"
 TENANT_B=$("${PSQL[@]}" -c \
   "INSERT INTO zenithjoy.tenants (name, license_key, plan) VALUES ('cpd-smoke-b-${RANDOM}', 'cpd-keyb-${RANDOM}', 'free') RETURNING id" \
