@@ -87,12 +87,209 @@ async function authenticate(
   return { tenantId: r.license.tenant_id as string };
 }
 
-export function createContentsPublishRouter(): Router {
+export interface ContentsPublishRouterDeps {
+  storage?: MaterialStorage;
+}
+
+/** 我的作品列表分页：默认 30 条，硬上限 100（同 materials.ts 口径，防止拖垮 DB/签几百个 URL）。 */
+const DEFAULT_LIST_PAGE_SIZE = 30;
+const MAX_LIST_PAGE_SIZE = 100;
+
+export function createContentsPublishRouter(deps: ContentsPublishRouterDeps = {}): Router {
   const router = Router();
+  const storage = deps.storage ?? createMaterialStorage();
 
   // CodeQL js/missing-rate-limiting：端点既做鉴权又写 DB，不限流就是现成的 DoS 面。
   // 与 materials.ts 同口径：限流放鉴权前、每 router 建一次复用同一实例。
   router.use(simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }));
+
+  // 我的作品列表（line01 刀5a）：contents + 首图（一次 DISTINCT ON 查询）+ 回执聚合
+  // （一次 payload->>content_id = ANY 查询，JS group）——30 条列表全程只 3 条 SQL，
+  // 逐条网络调用只剩「签名」，且签名失败单条降级不拖垮整页（照 materials.ts 惯例）。
+  router.get('/', async (req: Request, res: Response) => {
+    const auth = await authenticate(req, res);
+    if (!auth) return;
+    const { tenantId } = auth;
+
+    // 客户端输入一律当敌意：就地收窄，不藏进 helper（CodeQL 不做跨函数收窄）。
+    const rawLimit = req.query?.limit;
+    const parsedLimit = Number(typeof rawLimit === 'string' ? rawLimit : NaN);
+    const limit = Number.isFinite(parsedLimit) && parsedLimit > 0
+      ? Math.min(Math.floor(parsedLimit), MAX_LIST_PAGE_SIZE)
+      : DEFAULT_LIST_PAGE_SIZE;
+
+    const rawOffset = req.query?.offset;
+    const parsedOffset = Number(typeof rawOffset === 'string' ? rawOffset : NaN);
+    const offset = Number.isFinite(parsedOffset) && parsedOffset > 0 ? Math.floor(parsedOffset) : 0;
+
+    const status = typeof req.query?.status === 'string' ? req.query.status : null;
+
+    try {
+      const params: unknown[] = [tenantId];
+      let where = 'tenant_id = $1';
+      if (status) {
+        params.push(status);
+        where += ` AND status = $${params.length}`;
+      }
+      params.push(limit);
+      const limitIdx = params.length;
+      params.push(offset);
+      const offsetIdx = params.length;
+
+      const { rows: contentRows } = await pool.query(
+        `SELECT id, title, body, type, platforms, status, created_at
+           FROM zenithjoy.contents
+          WHERE ${where}
+          ORDER BY created_at DESC
+          LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+        params,
+      );
+
+      const ids = contentRows.map((r: { id: string }) => r.id);
+      const imageByContentId = new Map<string, { file_name: string; storage_key: string }>();
+      const receiptsByContentId = new Map<string, Array<{ platform: string; status: string }>>();
+
+      if (ids.length > 0) {
+        const [{ rows: imageRows }, { rows: receiptRows }] = await Promise.all([
+          // DISTINCT ON：每个作品只要首图（sort_order 最小的那条素材）。
+          pool.query(
+            `SELECT DISTINCT ON (cm.content_id) cm.content_id, m.file_name, m.storage_key
+               FROM zenithjoy.content_materials cm
+               JOIN zenithjoy.materials m ON m.id = cm.material_id
+              WHERE cm.content_id = ANY($1)
+              ORDER BY cm.content_id, cm.sort_order ASC`,
+            [ids],
+          ),
+          // 回执聚合：一次查出这页所有作品的所有平台任务，JS 侧 group——避免 N+1。
+          pool.query(
+            `SELECT payload->>'content_id' AS cid, platform, status
+               FROM zenithjoy.publish_tasks
+              WHERE tenant_id = $1 AND task_type = 'content_publish'
+                AND payload->>'content_id' = ANY($2)`,
+            [tenantId, ids],
+          ),
+        ]);
+        for (const row of imageRows as Array<{ content_id: string; file_name: string; storage_key: string }>) {
+          imageByContentId.set(row.content_id, { file_name: row.file_name, storage_key: row.storage_key });
+        }
+        for (const row of receiptRows as Array<{ cid: string; platform: string; status: string }>) {
+          const list = receiptsByContentId.get(row.cid) ?? [];
+          list.push({ platform: row.platform, status: row.status });
+          receiptsByContentId.set(row.cid, list);
+        }
+      }
+
+      const items = await Promise.all(
+        contentRows.map(async (c: {
+          id: string; title: string | null; body: string | null; type: string;
+          platforms: string[]; status: string; created_at: string;
+        }) => {
+          const img = imageByContentId.get(c.id);
+          let materials: Array<{ file_name: string; preview_url: string | null }> = [];
+          if (img) {
+            let previewUrl: string | null = null;
+            try {
+              previewUrl = await storage.getSignedUrl(img.storage_key);
+            } catch (err) {
+              // 单条签名失败绝不拖垮整页——照 materials.ts 列表端点惯例，降级为 null。
+              console.warn('[contents/list] 预览签名失败，该条返回 null:', c.id, err);
+            }
+            materials = [{ file_name: img.file_name, preview_url: previewUrl }];
+          }
+          return {
+            id: c.id,
+            title: c.title,
+            body: c.body,
+            type: c.type,
+            platforms: c.platforms,
+            status: c.status,
+            created_at: c.created_at,
+            materials,
+            receipts: receiptsByContentId.get(c.id) ?? [],
+          };
+        }),
+      );
+
+      ok(res, { items });
+    } catch (err) {
+      fail(res, 500, 'LIST_FAILED', err instanceof Error ? err.message : 'unknown');
+    }
+  });
+
+  // 编辑作品（line01 刀5a）：queued（排队中）锁编辑，platforms 过白名单，
+  // 只 UPDATE 客户端给到的字段（参数化，绝不拼接值进 SQL 字符串）。
+  router.patch('/:id', async (req: Request, res: Response) => {
+    const auth = await authenticate(req, res);
+    if (!auth) return;
+    const { tenantId } = auth;
+    const contentId = req.params.id;
+    if (!UUID_RE.test(contentId)) {
+      fail(res, 404, 'NOT_FOUND', '作品不存在');
+      return;
+    }
+
+    try {
+      const { rows } = await pool.query(
+        `SELECT status FROM zenithjoy.contents WHERE id = $1 AND tenant_id = $2 LIMIT 1`,
+        [contentId, tenantId],
+      );
+      const current = rows[0];
+      if (!current) {
+        fail(res, 404, 'NOT_FOUND', '作品不存在');
+        return;
+      }
+      if (current.status === 'queued') {
+        fail(res, 409, 'EDIT_LOCKED', '作品正在排队发布中，暂不可编辑');
+        return;
+      }
+
+      const bodyPlatforms: unknown = req.body?.platforms;
+      if (bodyPlatforms !== undefined) {
+        const illegal =
+          !Array.isArray(bodyPlatforms) ||
+          bodyPlatforms.some((p) => !(PUBLISH_PLATFORMS as readonly string[]).includes(p));
+        if (illegal) {
+          fail(res, 400, 'INVALID_PLATFORMS', 'platforms 含未知平台或格式非法');
+          return;
+        }
+      }
+
+      const setClauses: string[] = [];
+      const params: unknown[] = [];
+      if (typeof req.body?.title === 'string') {
+        params.push(req.body.title);
+        setClauses.push(`title = $${params.length}`);
+      }
+      if (typeof req.body?.body === 'string') {
+        params.push(req.body.body);
+        setClauses.push(`body = $${params.length}`);
+      }
+      if (Array.isArray(bodyPlatforms)) {
+        params.push(bodyPlatforms);
+        setClauses.push(`platforms = $${params.length}`);
+      }
+
+      if (setClauses.length === 0) {
+        // 什么都没给：不发 UPDATE，直接幂等返回成功。
+        ok(res, { id: contentId, updated: true });
+        return;
+      }
+
+      setClauses.push('updated_at = now()');
+      params.push(contentId);
+      const idIdx = params.length;
+      params.push(tenantId);
+      const tenantIdx = params.length;
+
+      await pool.query(
+        `UPDATE zenithjoy.contents SET ${setClauses.join(', ')} WHERE id = $${idIdx} AND tenant_id = $${tenantIdx}`,
+        params,
+      );
+      ok(res, { id: contentId, updated: true });
+    } catch (err) {
+      fail(res, 500, 'UPDATE_FAILED', err instanceof Error ? err.message : 'unknown');
+    }
+  });
 
   router.post('/:id/publish', async (req: Request, res: Response) => {
     const auth = await authenticate(req, res);
