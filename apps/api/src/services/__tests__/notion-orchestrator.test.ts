@@ -164,12 +164,24 @@ describe('方向B 拉发（状态=发）', () => {
 });
 
 describe('方向C 回执（任务终态→Notion）', () => {
+  // taskRows 每条自动补 cid=CID（本 describe 全程只有一个作品）与 created_at
+  // 默认值（按数组下标错开，保证同平台多行时 latest-wins 有明确的"最新"）——
+  // 换共享 helper 后聚合 SQL 会 SELECT 出 cid/created_at，mock 桩需要跟上形状；
+  // 显式传 created_at（P2-3 用例）会覆盖这里的默认值。
   function stubQueuedContent(taskRows: any[]) {
     (pool.query as any).mockImplementation(async (sql: string) => {
       if (/status = 'queued'/i.test(sql) && /notion_page_id IS NOT NULL/i.test(sql)) {
         return { rows: [{ id: CID, notion_page_id: 'page-1' }] };
       }
-      if (/FROM zenithjoy\.publish_tasks/i.test(sql)) return { rows: taskRows };
+      if (/FROM zenithjoy\.publish_tasks/i.test(sql)) {
+        return {
+          rows: taskRows.map((t, i) => ({
+            cid: CID,
+            created_at: `2026-09-09T00:00:0${i}Z`,
+            ...t,
+          })),
+        };
+      }
       return { rows: [] };
     });
   }
@@ -207,5 +219,20 @@ describe('方向C 回执（任务终态→Notion）', () => {
     await runOnce(ENV, deps());
     const patch = (notionRequest as any).mock.calls.find((c: any[]) => c[1] === '/pages/page-1');
     expect(patch).toBeFalsy();
+  });
+
+  it('同平台历史 failed+最新 done → 行状态"已发"且 contents→published（修 P2-3：历史失败行不再永锁"部分失败"）', async () => {
+    stubQueuedContent([
+      // 旧的一轮：douyin 失败过（created_at 更早）
+      { platform: 'douyin', status: 'failed', result: { error: '网络超时' }, created_at: '2026-09-01T00:00:00Z' },
+      // 重发后这一轮：douyin 成功了（created_at 更晚）——latest-wins 应只看这条
+      { platform: 'douyin', status: 'done', result: null, created_at: '2026-09-05T00:00:00Z' },
+    ]);
+    await runOnce(ENV, deps());
+    const patch = (notionRequest as any).mock.calls.find((c: any[]) => c[1] === '/pages/page-1');
+    expect(patch).toBeTruthy();
+    expect(patch[2].properties['状态'].select.name).toBe('已发');
+    const upd = (pool.query as any).mock.calls.find((c: any[]) => /SET status = 'published'/i.test(c[0]));
+    expect(upd).toBeTruthy();
   });
 });
