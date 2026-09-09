@@ -164,6 +164,40 @@ describe('MyWorksPage', () => {
     await waitFor(() => expect(publishMyContent).toHaveBeenCalledWith('c3', ['weibo']));
   });
 
+  it('failed 作品边界：platforms[douyin✅/weibo✗/bilibili无回执]→重发[weibo,bilibili]——防退化只看receipts', async () => {
+    (listMyContents as any).mockResolvedValue({
+      items: [
+        {
+          id: 'c5',
+          title: '三平台失败品',
+          body: '',
+          type: 'video',
+          platforms: ['douyin', 'weibo', 'bilibili'],
+          status: 'failed',
+          created_at: '2026-09-09T11:00:00Z',
+          materials: [],
+          receipts: [
+            { platform: 'douyin', status: 'done' },
+            { platform: 'weibo', status: 'failed' },
+            // bilibili 无回执记录，也应视为失败子集
+          ],
+        },
+      ],
+    });
+    (publishMyContent as any).mockResolvedValue({});
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText('三平台失败品')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('重发失败平台'));
+
+    // 关键断言：platforms 里无 receipt 的平台（bilibili）也要包含在重发子集中，
+    // 禁止退化为只 filter receipts（那样就漏掉了 bilibili）。
+    await waitFor(() =>
+      expect(publishMyContent).toHaveBeenCalledWith('c5', expect.arrayContaining(['weibo', 'bilibili'])),
+    );
+  });
+
   it('queued 卡片发布按钮 disabled', async () => {
     (listMyContents as any).mockResolvedValue({
       items: [
