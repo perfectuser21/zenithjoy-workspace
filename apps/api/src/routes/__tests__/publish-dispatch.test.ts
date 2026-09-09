@@ -335,12 +335,69 @@ describe('PATCH /api/publish-tasks/:id/receipt（执行器回执：发完写回�
     expect(updates).toHaveLength(1);
     expect(updates[0].sql).toMatch(/receipt_at/);
     expect(updates[0].sql).toMatch(/COALESCE\(result/i);
+    // CAS 谓词：UPDATE 必须带 status = ANY(...) 非终态判定，否则并发重试会翻转已终态。
+    expect(updates[0].sql).toMatch(/status\s*=\s*ANY\(/i);
     const receiptParam = updates[0].params.find(
       (p: any) => typeof p === 'string' && p.includes('receipt'),
     );
     expect(receiptParam).toBeTruthy();
     const parsed = JSON.parse(receiptParam);
     expect(parsed.receipt).toMatchObject({ result: 'success', detail: 'ok' });
+  });
+
+  it('CAS rowCount=0（并发对手已抢先写终态）→ 200 幂等返回重读到的当前 status，无二次 UPDATE', async () => {
+    const calls: Array<{ sql: string; params: any[] }> = [];
+    let selectCount = 0;
+    (pool.query as any).mockImplementation(async (sql: string, params?: any[]) => {
+      calls.push({ sql, params: params ?? [] });
+      if (/UPDATE zenithjoy\.publish_tasks/i.test(sql)) {
+        // 并发对手已经把任务写成终态：CAS 谓词命中不到行，rowCount=0。
+        return { rows: [] };
+      }
+      if (/SELECT status FROM zenithjoy\.publish_tasks/i.test(sql)) {
+        selectCount += 1;
+        // 第一次 SELECT（判定是否非终态）时任务仍是 dispatched；
+        // UPDATE 落空后重读，此时已被对手写成 done。
+        return { rows: [{ status: selectCount === 1 ? 'dispatched' : 'done' }] };
+      }
+      return { rows: [] };
+    });
+    const r = await request(makeApp())
+      .patch(`/api/publish-tasks/${RECEIPT_TASK_ID}/receipt`)
+      .set('X-Upload-Token', TOKEN_A).send({ result: 'success', detail: 'ok' });
+    expect(r.status).toBe(200);
+    expect(r.body.data).toMatchObject({ task_id: RECEIPT_TASK_ID, status: 'done' });
+
+    const updates = calls.filter((c) => /UPDATE zenithjoy\.publish_tasks/i.test(c.sql));
+    expect(updates).toHaveLength(1);
+    const selects = calls.filter((c) => /SELECT status FROM zenithjoy\.publish_tasks/i.test(c.sql));
+    expect(selects).toHaveLength(2);
+  });
+
+  it('detail 超长 → 落库前截断到 2000 字符', async () => {
+    const calls: Array<{ sql: string; params: any[] }> = [];
+    (pool.query as any).mockImplementation(async (sql: string, params?: any[]) => {
+      calls.push({ sql, params: params ?? [] });
+      if (/SELECT status FROM zenithjoy\.publish_tasks/i.test(sql)) {
+        return { rows: [{ status: 'dispatched' }] };
+      }
+      if (/UPDATE zenithjoy\.publish_tasks/i.test(sql)) {
+        return { rows: [{ status: 'done' }] };
+      }
+      return { rows: [] };
+    });
+    const longDetail = 'x'.repeat(5000);
+    const r = await request(makeApp())
+      .patch(`/api/publish-tasks/${RECEIPT_TASK_ID}/receipt`)
+      .set('X-Upload-Token', TOKEN_A).send({ result: 'success', detail: longDetail });
+    expect(r.status).toBe(200);
+
+    const updates = calls.filter((c) => /UPDATE zenithjoy\.publish_tasks/i.test(c.sql));
+    const receiptParam = updates[0].params.find(
+      (p: any) => typeof p === 'string' && p.includes('receipt'),
+    );
+    const parsed = JSON.parse(receiptParam);
+    expect(parsed.receipt.detail).toHaveLength(2000);
   });
 
   it('failed → status=failed', async () => {

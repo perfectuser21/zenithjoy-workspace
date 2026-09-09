@@ -18,18 +18,14 @@ import {
   NoActiveAgentError,
   DispatchValidationError,
   PUBLISH_PLATFORMS,
+  NON_TERMINAL_TASK_STATUSES,
 } from './content-publish-dispatch';
 import { createMaterialStorage, type MaterialStorage } from './material-storage';
 
 const LOG = '[notion-orch]';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/**
- * 对照 20260511_102431_publish_tasks_status_enum_full.sql 的 9 值枚举核准：
- * canonical 非终态 = pending/queued/dispatched/in_progress；deprecated 兼容期非终态 = running。
- * 骨架原稿漏了 in_progress（canonical 值，语义等价 deprecated 的 running）——已按实际枚举补齐。
- * 终态（不在此集合里的）= completed/success/done（均等价"成功"）与 failed。
- */
-const NON_TERMINAL = ['pending', 'queued', 'dispatched', 'in_progress', 'running'];
+/** 非终态判定：单一来源见 content-publish-dispatch.ts 的 NON_TERMINAL_TASK_STATUSES。 */
+const NON_TERMINAL = NON_TERMINAL_TASK_STATUSES;
 /** 终态里代表"成功"的取值——本编排台派发链路（agent-burner.ts）落库时写的是 'done'。 */
 const SUCCESS_STATUSES = ['done', 'completed', 'success'];
 const RT_LIMIT = 1900;

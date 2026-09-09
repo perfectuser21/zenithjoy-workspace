@@ -27,6 +27,7 @@ import {
   DispatchValidationError,
   NoActiveAgentError,
   PUBLISH_PLATFORMS,
+  NON_TERMINAL_TASK_STATUSES,
 } from '../services/content-publish-dispatch';
 
 // 向后兼容：既有测试/消费方从本模块 import 白名单
@@ -34,9 +35,9 @@ export { PUBLISH_PLATFORMS };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// 非终态判定：与 services/notion-orchestrator.ts 的 NON_TERMINAL 同值常量——
-// 同口径但不跨模块 import（避免循环依赖），改一处务必同步改另一处。
-const RECEIPT_NON_TERMINAL = ['pending', 'queued', 'dispatched', 'in_progress', 'running'];
+// 非终态判定：单一来源见 services/content-publish-dispatch.ts 的 NON_TERMINAL_TASK_STATUSES
+// （与 notion-orchestrator.ts 共用同一份，不再各自手抄）。
+const RECEIPT_NON_TERMINAL = NON_TERMINAL_TASK_STATUSES;
 
 /** 回执 detail 截断长度：避免执行器把整段 stacktrace/日志灌进 result jsonb。 */
 const RECEIPT_DETAIL_MAX_LEN = 2000;
@@ -252,16 +253,30 @@ export function createPublishTasksRouter(deps: PublishTasksRouterDeps = {}): Rou
 
       const newStatus = result === 'success' ? 'done' : 'failed';
       const receipt = { result, detail, at: new Date().toISOString() };
+      // CAS：UPDATE 必须带非终态谓词，否则并发重试（重复回执/竞态重放）会在两次
+      // SELECT 之后都判定为"非终态"，谁后写谁赢——已终态可能被翻转、回执被覆盖。
+      // 把"仍是非终态"钉进 WHERE，谁先落库谁定局，后来者 rowCount=0。
       const { rows: updated } = await pool.query(
         `UPDATE zenithjoy.publish_tasks
             SET status = $1,
                 result = COALESCE(result, '{}'::jsonb) || $2::jsonb,
                 receipt_at = now(),
                 updated_at = now()
-          WHERE id = $3
+          WHERE id = $3 AND tenant_id = $4 AND status = ANY($5)
           RETURNING status`,
-        [newStatus, JSON.stringify({ receipt }), taskId],
+        [newStatus, JSON.stringify({ receipt }), taskId, auth.tenantId, RECEIPT_NON_TERMINAL],
       );
+      if (updated.length === 0) {
+        // 并发对手已抢先把任务写成终态：重读当前 status 走幂等返回分支，不二次改写。
+        const { rows: current } = await pool.query(
+          `SELECT status FROM zenithjoy.publish_tasks
+            WHERE id = $1 AND tenant_id = $2 AND task_type = 'content_publish'
+            LIMIT 1`,
+          [taskId, auth.tenantId],
+        );
+        ok(res, { task_id: taskId, status: current[0]?.status ?? task.status });
+        return;
+      }
       ok(res, { task_id: taskId, status: updated[0].status });
     } catch (err) {
       fail(res, 500, 'RECEIPT_FAILED', err instanceof Error ? err.message : 'unknown');
