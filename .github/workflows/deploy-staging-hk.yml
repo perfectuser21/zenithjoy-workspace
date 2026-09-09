@@ -73,7 +73,11 @@ jobs:
             --network zenithjoy-net \
             --env-file /opt/zenithjoy/staging-api/.env \
             -v "$REPO":/repo -w /repo/apps/api \
+            -e TS_NODE_TRANSPILE_ONLY=1 \
             node:20-alpine sh -c "npm install --silent && npx ts-node db/migrations/run-migration.ts"
+          # TS_NODE_TRANSPILE_ONLY：宿主 repo node_modules 被容器历史写入污染后 @types 解析漂移，
+          # ts-node 类型检查会 TS7016 假红（0909 staging/prod 双实证）；类型闸由 CI tsc 负责，
+          # 部署路径只需转译执行。
 
           echo "=== [3/4] docker build + up（仅 staging，绝不碰生产容器）==="
           cd "$REPO"
