@@ -40,9 +40,6 @@ export interface OrchDeps { storage?: MaterialStorage; }
 function rt(s: string) {
   return [{ type: 'text', text: { content: s.slice(0, RT_LIMIT) } }];
 }
-function titleProp(s: string) {
-  return [{ type: 'text', text: { content: s.slice(0, RT_LIMIT) } }];
-}
 function plain(prop: any): string {
   const arr = prop?.title ?? prop?.rich_text ?? [];
   return arr.map((x: any) => x.plain_text ?? x?.text?.content ?? '').join('');
@@ -80,7 +77,7 @@ async function pushNewContents(env: OrchEnv, storage: MaterialStorage) {
       );
 
       const properties: Record<string, unknown> = {
-        '标题': { title: titleProp(content.title ?? '') },
+        '标题': { title: rt(content.title ?? '') },
         '文案': { rich_text: rt(content.body ?? '') },
         '平台': {
           multi_select: ((content.platforms as string[] | null) ?? [])
@@ -139,6 +136,7 @@ async function pullFireRows(env: OrchEnv) {
         const platforms = whitelistedPlatforms(props['平台']);
 
         if (!UUID_RE.test(contentId)) {
+          console.error(`${LOG} 锚失效跳过 page=${page.id}: content_id 不是合法 UUID`);
           await markRow(page.id, '派发失败', '锚失效：content_id 不是合法 UUID');
           continue;
         }
@@ -157,6 +155,7 @@ async function pullFireRows(env: OrchEnv) {
             platformsOverride: platforms,
           });
           if (!result) {
+            console.error(`${LOG} 锚失效跳过 page=${page.id}: 作品不存在或不属于本租户 content_id=${contentId}`);
             await markRow(page.id, '派发失败', '锚失效：作品不存在或不属于本租户');
           } else {
             await markRow(page.id, '排队中');
