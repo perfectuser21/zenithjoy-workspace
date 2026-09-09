@@ -34,6 +34,13 @@ export { PUBLISH_PLATFORMS };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// 非终态判定：与 services/notion-orchestrator.ts 的 NON_TERMINAL 同值常量——
+// 同口径但不跨模块 import（避免循环依赖），改一处务必同步改另一处。
+const RECEIPT_NON_TERMINAL = ['pending', 'queued', 'dispatched', 'in_progress', 'running'];
+
+/** 回执 detail 截断长度：避免执行器把整段 stacktrace/日志灌进 result jsonb。 */
+const RECEIPT_DETAIL_MAX_LEN = 2000;
+
 interface PublishPackageMaterial {
   id: string;
   storage_key: string;
@@ -204,6 +211,60 @@ export function createPublishTasksRouter(deps: PublishTasksRouterDeps = {}): Rou
       });
     } catch (err) {
       fail(res, 500, 'PACKAGE_FAILED', err instanceof Error ? err.message : 'unknown');
+    }
+  });
+
+  // 执行器发完回执：发布结果写回，编排台（notion-orchestrator）轮询到终态后自动回写 Notion。
+  router.patch('/:id/receipt', async (req: Request, res: Response) => {
+    const auth = await authenticate(req, res);
+    if (!auth) return;
+    const taskId = req.params.id;
+    if (!UUID_RE.test(taskId)) {
+      fail(res, 404, 'NOT_FOUND', '任务不存在');
+      return;
+    }
+    const result: unknown = req.body?.result;
+    if (result !== 'success' && result !== 'failed') {
+      fail(res, 400, 'INVALID_RESULT', "result 必须是 'success' 或 'failed'");
+      return;
+    }
+    const detailRaw: unknown = req.body?.detail;
+    const detail =
+      typeof detailRaw === 'string' ? detailRaw.slice(0, RECEIPT_DETAIL_MAX_LEN) : null;
+
+    try {
+      const { rows } = await pool.query(
+        `SELECT status FROM zenithjoy.publish_tasks
+          WHERE id = $1 AND tenant_id = $2 AND task_type = 'content_publish'
+          LIMIT 1`,
+        [taskId, auth.tenantId],
+      );
+      const task = rows[0];
+      if (!task) {
+        fail(res, 404, 'NOT_FOUND', '任务不存在');
+        return;
+      }
+      // 已终态：幂等返回当前 status，不改写（防止执行器重试回执把已回写 Notion 的结果覆盖）。
+      if (!RECEIPT_NON_TERMINAL.includes(task.status)) {
+        ok(res, { task_id: taskId, status: task.status });
+        return;
+      }
+
+      const newStatus = result === 'success' ? 'done' : 'failed';
+      const receipt = { result, detail, at: new Date().toISOString() };
+      const { rows: updated } = await pool.query(
+        `UPDATE zenithjoy.publish_tasks
+            SET status = $1,
+                result = COALESCE(result, '{}'::jsonb) || $2::jsonb,
+                receipt_at = now(),
+                updated_at = now()
+          WHERE id = $3
+          RETURNING status`,
+        [newStatus, JSON.stringify({ receipt }), taskId],
+      );
+      ok(res, { task_id: taskId, status: updated[0].status });
+    } catch (err) {
+      fail(res, 500, 'RECEIPT_FAILED', err instanceof Error ? err.message : 'unknown');
     }
   });
 
