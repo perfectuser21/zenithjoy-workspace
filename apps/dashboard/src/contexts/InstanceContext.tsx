@@ -75,6 +75,8 @@ const autopilotConfig: InstanceConfig = {
     'module-health': true,       // /module-health
     // 工作机控制塔第一刀（决策 e14297d4）— 工作机总览 + 单机实时详情
     'workers': true,             // /dashboard/workers
+    // line01 刀5a — 我的作品（dashboard 侧第二发布入口；漏加=菜单整项不显示）
+    'my-works': true,            // /dashboard/my-works
   },
 };
 

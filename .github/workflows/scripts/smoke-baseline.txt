@@ -123,3 +123,4 @@ material-upload-smoke.sh
 material-direct-upload-smoke.sh
 material-delete-smoke.sh
 notion-orchestrator-selfcheck-smoke.sh
+my-works-api-smoke.sh
