@@ -5,13 +5,7 @@
  * 检测/建立客户明细表（Database）
  */
 import axios from 'axios';
-
-const NOTION_API_BASE = 'https://api.notion.com/v1';
-const NOTION_VERSION = '2022-06-28';
-
-function getToken(): string {
-  return process.env.NOTION_INTEGRATION_TOKEN || '';
-}
+import { NOTION_API_BASE, NOTION_VERSION, getNotionToken } from './notion-client';
 
 export interface NotionTableInfo {
   database_id: string;
@@ -22,7 +16,7 @@ export async function detectOrCreateNotionTable(
   tenantId: string,
   parentPageId?: string
 ): Promise<{ table_id: string; created: boolean }> {
-  const token = getToken();
+  const token = getNotionToken();
   if (!token) {
     // token 未配置时，token_expired 状态
     const notifyWebhook = process.env.FEISHU_NOTIFY_WEBHOOK;
@@ -88,7 +82,7 @@ export async function updateNotionRowSuggestion(
   pageId: string,
   suggestion: string
 ): Promise<void> {
-  const token = getToken();
+  const token = getNotionToken();
   if (!token) return;
 
   await axios.patch(
