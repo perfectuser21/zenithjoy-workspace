@@ -22,7 +22,10 @@
  */
 import axios from 'axios';
 
-const GRADING_TIMEOUT_MS = 20_000;
+// 0909 真调实测：gpt-5.6-terra 批量 25 条延迟 6-16s 波动（本地），CI 网络更慢——
+// 20s 超时是 gp2 Step 23c 三连 0/25 的元凶（axios timeout → catch → 整批 null，
+// 症状与 thinking 吃预算一模一样但根因不同）。60s 给足余量；单条路径不受影响。
+const GRADING_TIMEOUT_MS = 60_000;
 const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';
 // 2026-09-04 切回 deepseek-v4-flash：#58 渠道欠费已恢复（实测 200/1.9-4.6s）。当日
 // gpt-5.4-mini 渠道持续慢（42-46s，gp2 23b 三连 NULL）；曾误切 gemini 半小时——本文件
