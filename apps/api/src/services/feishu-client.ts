@@ -54,11 +54,24 @@ async function fetchTenantToken(): Promise<TokenCache> {
   if (!appId || !appSecret) {
     throw new Error('FEISHU_APP_ID / FEISHU_APP_SECRET 未配置');
   }
-  const resp = await axios.post<TenantTokenResp>(
-    `${FEISHU_API_BASE()}/open-apis/auth/v3/tenant_access_token/internal`,
-    { app_id: appId, app_secret: appSecret },
-    { headers: { 'Content-Type': 'application/json' }, timeout: 10_000 }
-  );
+
+  let resp: { data: TenantTokenResp };
+  try {
+    resp = await axios.post<TenantTokenResp>(
+      `${FEISHU_API_BASE()}/open-apis/auth/v3/tenant_access_token/internal`,
+      { app_id: appId, app_secret: appSecret },
+      { headers: { 'Content-Type': 'application/json' }, timeout: 10_000 }
+    );
+  } catch (err) {
+    // 与 feishuRequest 同一套脱敏纪律：绝不上抛原始 err（其 config.data 里带明文
+    // app_id/app_secret），新 Error 只含 status/response.data/message。
+    const e = err as { message?: string; response?: { status?: number; data?: unknown } };
+    const detail = e.response
+      ? `${e.response.status} ${JSON.stringify(e.response.data ?? '')}`
+      : (e.message ?? 'unknown');
+    throw new Error(`飞书获取 token 失败: ${detail}`.slice(0, 500));
+  }
+
   const data = resp.data || ({} as TenantTokenResp);
   if (data.code !== 0 || !data.tenant_access_token) {
     throw new Error(`飞书获取 token 失败: code=${data.code ?? 'unknown'}`);
@@ -67,12 +80,22 @@ async function fetchTenantToken(): Promise<TokenCache> {
   return { token: data.tenant_access_token, expiresAt: Date.now() + expireSec * 1000 };
 }
 
-/** 拿有效 tenant_access_token；命中模块级缓存则不发请求。 */
+// 换取中的 in-flight promise：缓存未命中时并发调用者共享同一次 fetch，
+// 不会各发各的 tenant_access_token 请求。无论成功失败都在 settle 后清空，
+// 失败时下一次调用能重新发起请求，不会永久卡坏一个 rejected promise。
+let tokenFetchInFlight: Promise<TokenCache> | null = null;
+
+/** 拿有效 tenant_access_token；命中模块级缓存则不发请求；并发未命中时单飞。 */
 export async function getTenantToken(): Promise<string> {
   if (tokenCache && tokenCache.expiresAt - Date.now() > REFRESH_THRESHOLD_MS) {
     return tokenCache.token;
   }
-  tokenCache = await fetchTenantToken();
+  if (!tokenFetchInFlight) {
+    tokenFetchInFlight = fetchTenantToken().finally(() => {
+      tokenFetchInFlight = null;
+    });
+  }
+  tokenCache = await tokenFetchInFlight;
   return tokenCache.token;
 }
 

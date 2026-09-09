@@ -76,6 +76,48 @@ describe('getTenantToken — 模块级缓存', () => {
   });
 });
 
+describe('getTenantToken — 换取失败脱敏 + 并发单飞', () => {
+  it('换取失败（HTTP 层 reject）→ 抛出的 Error 不含 config，消息不含 app_secret 字面量', async () => {
+    (axios.post as any).mockRejectedValue({
+      message: 'Request failed with status code 400',
+      response: { status: 400, data: { code: 99991663, msg: 'app secret invalid' } },
+      // config.data 里带明文 app_id/app_secret——绝不能被原样上抛
+      config: {
+        data: JSON.stringify({ app_id: 'cli_test_app', app_secret: 'secret_verify_XYZ' }),
+      },
+    });
+
+    const err = await getTenantToken().catch((e) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).not.toContain('secret_verify_XYZ');
+    expect(err.message).toContain('400');
+  });
+
+  it('并发未命中缓存 → 只发起一次换取请求（单飞）', async () => {
+    mockTokenResp('t-inflight');
+    const [a, b] = await Promise.all([getTenantToken(), getTenantToken()]);
+    expect(a).toBe('t-inflight');
+    expect(b).toBe('t-inflight');
+    expect(axios.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('第一次换取失败后，第二次调用能重新发起请求（in-flight 不卡死）', async () => {
+    (axios.post as any)
+      .mockRejectedValueOnce({
+        message: 'network error',
+        response: { status: 500, data: { msg: 'internal error' } },
+      })
+      .mockResolvedValueOnce({
+        data: { code: 0, tenant_access_token: 't-retry', expire: 7200 },
+      });
+
+    await expect(getTenantToken()).rejects.toThrow();
+    const token = await getTenantToken();
+    expect(token).toBe('t-retry');
+    expect(axios.post).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('feishuRequest — 请求封装', () => {
   it('请求带 Authorization 头，method/path 拼装正确', async () => {
     mockTokenResp('t-req');
