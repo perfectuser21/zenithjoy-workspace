@@ -88,6 +88,8 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   // —— Notion ——
   { name: 'NOTION_INTEGRATION_TOKEN', reason: 'Notion 集成 token，缺则 Notion 同步不可用' },
   { name: 'NOTION_PARENT_PAGE_ID', reason: 'Notion 父页面 ID，缺则用默认/跳过' },
+  { name: 'NOTION_PUBLISH_ORCH_DB_ID', reason: 'Notion 发布编排台 database id，缺则编排台同步器红日志跳过启动' },
+  { name: 'NOTION_ORCH_TENANT_ID', reason: '编排台同步的租户范围（v1 仅主理人私人租户），缺则同步器红日志跳过启动' },
 
   // —— GitHub（secret 写入等）——
   { name: 'GH_TOKEN', reason: 'GitHub API 读取 token，缺则 staff-hub path health 走匿名请求，可能遇到 rate limit' },
