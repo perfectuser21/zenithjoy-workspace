@@ -863,6 +863,22 @@ tests:
     product: 智能发布派发链路
     note: "旧 agent 心跳拉任务守卫：getQueuedTasks 必须 IS DISTINCT FROM 'content_publish'——旧 Windows/安卓 agent 不误领新执行器的作业单，NULL 与既有 task_type 全保留。"
 
+  - id: my-contents-api-client
+    path: apps/dashboard/src/api/__tests__/my-contents.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 智能发布客户端
+    note: "Dashboard 我的作品 API 客户端：三个函数都先用登录态换 license_key 再带 X-Upload-Token 调对应端点（漏了整页 401，同 materials.api.ts 的坑）；publishMyContent 的 platforms 子集语义——不传 = 整单按原平台发布，传子集（重发失败平台场景）body 必须只带这个子集，绝不整单重派。"
+
+  - id: my-works-page-component
+    path: apps/dashboard/src/pages/__tests__/MyWorksPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 智能发布客户端
+    note: "我的作品页组件契约：卡片渲染+回执徽章/空态/编辑保存/草稿发布/queued 发布按钮 disabled；failed 作品「重发失败平台」关键断言——按 platforms 减去 status=done 的平台算重发子集（不能退化为只 filter receipts，否则漏掉没有回执记录的平台，如 bilibili）。"
+
   - id: notion-client-contract
     path: apps/api/src/services/__tests__/notion-client.test.ts
     type: unit
