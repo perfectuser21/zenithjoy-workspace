@@ -18,16 +18,12 @@ import {
   NoActiveAgentError,
   DispatchValidationError,
   PUBLISH_PLATFORMS,
-  NON_TERMINAL_TASK_STATUSES,
 } from './content-publish-dispatch';
+import { aggregateLatestReceipts, isTerminal, SUCCESS_STATUSES } from './publish-receipts';
 import { createMaterialStorage, type MaterialStorage } from './material-storage';
 
 const LOG = '[notion-orch]';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** 非终态判定：单一来源见 content-publish-dispatch.ts 的 NON_TERMINAL_TASK_STATUSES。 */
-const NON_TERMINAL = NON_TERMINAL_TASK_STATUSES;
-/** 终态里代表"成功"的取值——本编排台派发链路（agent-burner.ts）落库时写的是 'done'。 */
-const SUCCESS_STATUSES = ['done', 'completed', 'success'];
 const RT_LIMIT = 1900;
 
 export interface OrchEnv { dbId: string; tenantId: string; }
@@ -74,11 +70,6 @@ interface ContentStatusRow {
 interface QueuedContentRow {
   id: string;
   notion_page_id: string;
-}
-interface PublishTaskRow {
-  platform: string;
-  status: string;
-  result: unknown;
 }
 
 function rt(s: string) {
@@ -249,18 +240,20 @@ async function syncReceipts(env: OrchEnv) {
       WHERE tenant_id = $1 AND status = 'queued' AND notion_page_id IS NOT NULL`,
     [env.tenantId],
   );
+  if (rows.length === 0) return;
+
+  // 共享 helper 批量聚合（P2-3 修复点）：此前这里逐条查 publish_tasks 且没做
+  // latest-wins，同一平台的历史 failed 行会和重发后的新 done 行一起进 hasFailed
+  // 判定，永久把"已经成功"的作品判成"部分失败"。helper 按 (content_id, platform)
+  // 收敛到最新一条，历史行不再污染判定。
+  const receiptsMap = await aggregateLatestReceipts(env.tenantId, rows.map((r) => r.id));
 
   for (const content of rows) {
     try {
-      const { rows: tasks } = await pool.query<PublishTaskRow>(
-        `SELECT platform, status, result
-           FROM zenithjoy.publish_tasks
-          WHERE task_type = 'content_publish' AND tenant_id = $1 AND payload->>'content_id' = $2`,
-        [env.tenantId, content.id],
-      );
+      const tasks = receiptsMap.get(content.id) ?? [];
 
       if (tasks.length === 0) continue; // 派发进行中，任务还没落库
-      const allTerminal = tasks.every((t) => !NON_TERMINAL.includes(t.status));
+      const allTerminal = tasks.every((t) => isTerminal(t.status));
       if (!allTerminal) continue;
 
       const hasFailed = tasks.some((t) => !SUCCESS_STATUSES.includes(t.status));
