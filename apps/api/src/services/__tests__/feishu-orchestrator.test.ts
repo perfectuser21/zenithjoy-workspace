@@ -165,7 +165,11 @@ describe('方向B 拉发（状态=发）', () => {
       return { code: 0, data: {} };
     });
     (pool.query as any).mockImplementation(async (sql: string) => {
-      if (/FROM zenithjoy\.contents/i.test(sql)) return { rows: [{ id: CID }] };
+      // 只匹配"锚失效重派检查"的按 id 查 status（不匹配方向A 的 draft 候选查询，
+      // 后者带 feishu_record_id IS NULL，此处刻意排除避免方向A 在本 describe 里空跑）。
+      if (/FROM zenithjoy\.contents/i.test(sql) && !/feishu_record_id IS NULL/i.test(sql)) {
+        return { rows: [{ id: CID }] };
+      }
       return { rows: [] };
     });
   }
@@ -251,7 +255,9 @@ describe('方向B 拉发（状态=发）', () => {
   it('作品已终态(published/failed) → 拒绝重派：行置派发失败+原因含已完成一轮发布，dispatch 不被调', async () => {
     stubFireRow(feishuRow());
     (pool.query as any).mockImplementation(async (sql: string) => {
-      if (/FROM zenithjoy\.contents/i.test(sql)) return { rows: [{ id: CID, status: 'failed' }] };
+      if (/FROM zenithjoy\.contents/i.test(sql) && !/feishu_record_id IS NULL/i.test(sql)) {
+        return { rows: [{ id: CID, status: 'failed' }] };
+      }
       return { rows: [] };
     });
     await runOnce(ENV, deps());

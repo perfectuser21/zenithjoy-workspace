@@ -16,10 +16,9 @@
 // 骨架照 worker-lease-sweeper.ts：setInterval + catch 不逃逸 + unref；
 // 额外 running 互斥（一轮跑不完时防 tick 重叠，同 notion-orchestrator 惯例）。
 //
-// TODO(刀5b Task 2)：feishu_record_id 列由 Task 2 的 migration 建出，本 Task 1
-// 阶段该列还不存在，候选 SQL 加了会直接报错——先只按 notion_page_id IS NULL
-// 过滤。Task 3 建列后改成 WHERE status='queued' AND notion_page_id IS NULL
-// AND feishu_record_id IS NULL。
+// feishu_record_id 列由刀5b Task 2 的 migration 建出，候选 SQL 同时按
+// notion_page_id IS NULL 与 feishu_record_id IS NULL 过滤（Task 3 补齐，还清
+// Task 1 阶段留的 TODO）——只有两边编排台都没锚的作品才算真正"无锚"。
 
 import pool from '../db/connection';
 import { aggregateLatestReceipts, isTerminal, SUCCESS_STATUSES } from './publish-receipts';
@@ -36,7 +35,7 @@ export async function runRollupOnce(): Promise<void> {
   const { rows } = await pool.query<AnchorlessRow>(
     `SELECT id, tenant_id
        FROM zenithjoy.contents
-      WHERE status = 'queued' AND notion_page_id IS NULL
+      WHERE status = 'queued' AND notion_page_id IS NULL AND feishu_record_id IS NULL
       ORDER BY created_at ASC
       LIMIT 200`,
   );

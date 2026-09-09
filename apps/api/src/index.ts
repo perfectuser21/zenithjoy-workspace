@@ -8,6 +8,7 @@ import { startAgentOfflineMonitor } from './services/agent-offline-monitor';
 import { startScheduler } from './services/scheduler';
 import { startWorkerLeaseSweeper } from './services/worker-lease-sweeper';
 import { startNotionOrchestrator } from './services/notion-orchestrator';
+import { startFeishuOrchestrator } from './services/feishu-orchestrator';
 import { startPublishRollup } from './services/publish-rollup';
 import { runStartupConfigCheck } from './startup-check';
 import { assertStaffDirectoryOnStartup } from './staff-directory';
@@ -84,6 +85,9 @@ async function bootstrap(): Promise<void> {
     if (!process.env.VITEST) startWorkerLeaseSweeper();
     // Notion 发布编排台同步 worker（line01 刀2）：env 不齐自己 return null，不阻塞启动。
     if (!process.env.VITEST) startNotionOrchestrator();
+    // 飞书发布编排台同步 worker（line01 刀5b Task 3，镜像 Notion 版）：env 不齐
+    // 或与 Notion 编排台租户冲突自己 return null，不阻塞启动。
+    if (!process.env.VITEST) startFeishuOrchestrator();
     // 通用发布 rollup sweeper（刀5b Task 1）：无 env 依赖，永远启动——收敛 dashboard
     // 直派、从未挂过任何编排台锚的 queued 作品，防止它们永久卡在 queued。
     if (!process.env.VITEST) startPublishRollup();
