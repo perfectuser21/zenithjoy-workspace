@@ -37,15 +37,63 @@ const RT_LIMIT = 1900;
 export interface OrchEnv { dbId: string; tenantId: string; }
 export interface OrchDeps { storage?: MaterialStorage; }
 
+// --- Notion API 返回形状（最小接口，只声明本文件用到的字段） ---
+interface NotionRichTextItem {
+  plain_text?: string;
+  text?: { content?: string };
+}
+interface NotionSelectOption {
+  name: string;
+}
+interface NotionProperty {
+  title?: NotionRichTextItem[];
+  rich_text?: NotionRichTextItem[];
+  multi_select?: NotionSelectOption[];
+}
+interface NotionPage {
+  id: string;
+  properties: Record<string, NotionProperty>;
+}
+interface NotionQueryResponse {
+  results: NotionPage[];
+  has_more: boolean;
+  next_cursor?: string;
+}
+
+// --- DB 行形状 ---
+interface ContentDraftRow {
+  id: string;
+  title: string | null;
+  body: string | null;
+  type: string;
+  platforms: string[] | null;
+}
+interface MaterialRow {
+  file_name: string;
+  storage_key: string;
+}
+interface ContentStatusRow {
+  status: string;
+}
+interface QueuedContentRow {
+  id: string;
+  notion_page_id: string;
+}
+interface PublishTaskRow {
+  platform: string;
+  status: string;
+  result: unknown;
+}
+
 function rt(s: string) {
   return [{ type: 'text', text: { content: s.slice(0, RT_LIMIT) } }];
 }
-function plain(prop: any): string {
+function plain(prop: NotionProperty | undefined): string {
   const arr = prop?.title ?? prop?.rich_text ?? [];
-  return arr.map((x: any) => x.plain_text ?? x?.text?.content ?? '').join('');
+  return arr.map((x: NotionRichTextItem) => x.plain_text ?? x?.text?.content ?? '').join('');
 }
-function whitelistedPlatforms(prop: any): string[] {
-  const names: string[] = (prop?.multi_select ?? []).map((o: any) => o.name);
+function whitelistedPlatforms(prop: NotionProperty | undefined): string[] {
+  const names: string[] = (prop?.multi_select ?? []).map((o: NotionSelectOption) => o.name);
   return names.filter((p) => (PUBLISH_PLATFORMS as readonly string[]).includes(p));
 }
 async function markRow(pageId: string, status: string, receipt?: string) {
@@ -56,7 +104,7 @@ async function markRow(pageId: string, status: string, receipt?: string) {
 
 // 方向A：draft 且未推送的作品 → 建 Notion 行
 async function pushNewContents(env: OrchEnv, storage: MaterialStorage) {
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<ContentDraftRow>(
     `SELECT id, title, body, type, platforms
        FROM zenithjoy.contents
       WHERE tenant_id = $1 AND notion_page_id IS NULL AND status = 'draft'
@@ -65,9 +113,9 @@ async function pushNewContents(env: OrchEnv, storage: MaterialStorage) {
     [env.tenantId],
   );
 
-  for (const content of rows as any[]) {
+  for (const content of rows) {
     try {
-      const { rows: materials } = await pool.query(
+      const { rows: materials } = await pool.query<MaterialRow>(
         `SELECT m.file_name, m.storage_key
            FROM zenithjoy.content_materials cm
            JOIN zenithjoy.materials m ON m.id = cm.material_id
@@ -86,12 +134,12 @@ async function pushNewContents(env: OrchEnv, storage: MaterialStorage) {
         },
         '形态': { select: { name: content.type } },
         '状态': { select: { name: '草稿' } },
-        '素材': { rich_text: rt((materials as any[]).map((m) => m.file_name).join('、')) },
+        '素材': { rich_text: rt(materials.map((m) => m.file_name).join('、')) },
         'content_id': { rich_text: rt(content.id) },
       };
 
-      if ((materials as any[]).length > 0) {
-        const previewUrl = await storage.getSignedUrl((materials as any[])[0].storage_key);
+      if (materials.length > 0) {
+        const previewUrl = await storage.getSignedUrl(materials[0].storage_key);
         properties['预览'] = { url: previewUrl };
       }
 
@@ -121,7 +169,7 @@ async function pullFireRows(env: OrchEnv) {
       page_size: 100,
     };
     if (cursor) body.start_cursor = cursor;
-    const resp = await notionRequest<{ results: any[]; has_more: boolean; next_cursor?: string }>(
+    const resp = await notionRequest<NotionQueryResponse>(
       'post',
       `/databases/${env.dbId}/query`,
       body,
@@ -141,13 +189,13 @@ async function pullFireRows(env: OrchEnv) {
           continue;
         }
 
-        const { rows: existing } = await pool.query(
+        const { rows: existing } = await pool.query<ContentStatusRow>(
           `SELECT id, status
              FROM zenithjoy.contents
             WHERE id = $1 AND tenant_id = $2`,
           [contentId, env.tenantId],
         );
-        const existingStatus = (existing as any[])[0]?.status;
+        const existingStatus = existing[0]?.status;
         if (existingStatus === 'published' || existingStatus === 'failed') {
           console.error(
             `${LOG} 拒绝重派 page=${page.id}: 作品已终态(${existingStatus})，重试会导致已成功平台重复发帖 content_id=${contentId}`,
@@ -199,28 +247,28 @@ async function pullFireRows(env: OrchEnv) {
 
 // 方向C：queued 且有行锚的作品 → 全任务终态才写回执 + contents 挪出 queued
 async function syncReceipts(env: OrchEnv) {
-  const { rows } = await pool.query(
+  const { rows } = await pool.query<QueuedContentRow>(
     `SELECT id, notion_page_id
        FROM zenithjoy.contents
       WHERE tenant_id = $1 AND status = 'queued' AND notion_page_id IS NOT NULL`,
     [env.tenantId],
   );
 
-  for (const content of rows as any[]) {
+  for (const content of rows) {
     try {
-      const { rows: tasks } = await pool.query(
+      const { rows: tasks } = await pool.query<PublishTaskRow>(
         `SELECT platform, status, result
            FROM zenithjoy.publish_tasks
           WHERE task_type = 'content_publish' AND tenant_id = $1 AND payload->>'content_id' = $2`,
         [env.tenantId, content.id],
       );
 
-      if ((tasks as any[]).length === 0) continue; // 派发进行中，任务还没落库
-      const allTerminal = (tasks as any[]).every((t) => !NON_TERMINAL.includes(t.status));
+      if (tasks.length === 0) continue; // 派发进行中，任务还没落库
+      const allTerminal = tasks.every((t) => !NON_TERMINAL.includes(t.status));
       if (!allTerminal) continue;
 
-      const hasFailed = (tasks as any[]).some((t) => !SUCCESS_STATUSES.includes(t.status));
-      const receipt = (tasks as any[])
+      const hasFailed = tasks.some((t) => !SUCCESS_STATUSES.includes(t.status));
+      const receipt = tasks
         .map((t) => `${t.platform} ${t.status === 'done' ? '✅' : '❌ ' + JSON.stringify(t.result ?? '')}`)
         .join(' / ');
 
