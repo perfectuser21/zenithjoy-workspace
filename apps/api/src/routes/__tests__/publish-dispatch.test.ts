@@ -269,3 +269,94 @@ describe('GET /api/publish-tasks/:id/package（执行器领作业单）', () => 
     expect(r.status).toBe(404);
   });
 });
+
+describe('PATCH /api/publish-tasks/:id/receipt（执行器回执：发完写回，编排台自动回写 Notion）', () => {
+  const RECEIPT_TASK_ID = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+
+  it('无凭据 → 401', async () => {
+    (validateLicense as any).mockResolvedValue({ ok: false, code: 'INVALID_LICENSE', message: 'x' });
+    const r = await request(makeApp())
+      .patch(`/api/publish-tasks/${RECEIPT_TASK_ID}/receipt`).send({ result: 'success' });
+    expect(r.status).toBe(401);
+  });
+
+  it('跨租户/不存在 → 404（mock 查询返回空）', async () => {
+    (pool.query as any).mockResolvedValue({ rows: [] });
+    const r = await request(makeApp())
+      .patch(`/api/publish-tasks/${RECEIPT_TASK_ID}/receipt`)
+      .set('X-Upload-Token', TOKEN_A).send({ result: 'success' });
+    expect(r.status).toBe(404);
+  });
+
+  it('result 非法值 → 400 INVALID_RESULT', async () => {
+    const r = await request(makeApp())
+      .patch(`/api/publish-tasks/${RECEIPT_TASK_ID}/receipt`)
+      .set('X-Upload-Token', TOKEN_A).send({ result: 'weird' });
+    expect(r.status).toBe(400);
+    expect(r.body.error.code).toBe('INVALID_RESULT');
+  });
+
+  it('任务已终态(done) → 200 幂等返回当前 status，不发 UPDATE', async () => {
+    const calls: Array<{ sql: string; params: any[] }> = [];
+    (pool.query as any).mockImplementation(async (sql: string, params?: any[]) => {
+      calls.push({ sql, params: params ?? [] });
+      if (/SELECT status FROM zenithjoy\.publish_tasks/i.test(sql)) {
+        return { rows: [{ status: 'done' }] };
+      }
+      return { rows: [] };
+    });
+    const r = await request(makeApp())
+      .patch(`/api/publish-tasks/${RECEIPT_TASK_ID}/receipt`)
+      .set('X-Upload-Token', TOKEN_A).send({ result: 'success' });
+    expect(r.status).toBe(200);
+    expect(r.body.data).toMatchObject({ task_id: RECEIPT_TASK_ID, status: 'done' });
+    expect(calls.filter((c) => /UPDATE zenithjoy\.publish_tasks/i.test(c.sql))).toHaveLength(0);
+  });
+
+  it('success → UPDATE status=done，SQL 含 receipt_at，result 合并不覆盖', async () => {
+    const calls: Array<{ sql: string; params: any[] }> = [];
+    (pool.query as any).mockImplementation(async (sql: string, params?: any[]) => {
+      calls.push({ sql, params: params ?? [] });
+      if (/SELECT status FROM zenithjoy\.publish_tasks/i.test(sql)) {
+        return { rows: [{ status: 'dispatched' }] };
+      }
+      if (/UPDATE zenithjoy\.publish_tasks/i.test(sql)) {
+        return { rows: [{ status: 'done' }] };
+      }
+      return { rows: [] };
+    });
+    const r = await request(makeApp())
+      .patch(`/api/publish-tasks/${RECEIPT_TASK_ID}/receipt`)
+      .set('X-Upload-Token', TOKEN_A).send({ result: 'success', detail: 'ok' });
+    expect(r.status).toBe(200);
+    expect(r.body.data).toMatchObject({ task_id: RECEIPT_TASK_ID, status: 'done' });
+
+    const updates = calls.filter((c) => /UPDATE zenithjoy\.publish_tasks/i.test(c.sql));
+    expect(updates).toHaveLength(1);
+    expect(updates[0].sql).toMatch(/receipt_at/);
+    expect(updates[0].sql).toMatch(/COALESCE\(result/i);
+    const receiptParam = updates[0].params.find(
+      (p: any) => typeof p === 'string' && p.includes('receipt'),
+    );
+    expect(receiptParam).toBeTruthy();
+    const parsed = JSON.parse(receiptParam);
+    expect(parsed.receipt).toMatchObject({ result: 'success', detail: 'ok' });
+  });
+
+  it('failed → status=failed', async () => {
+    (pool.query as any).mockImplementation(async (sql: string) => {
+      if (/SELECT status FROM zenithjoy\.publish_tasks/i.test(sql)) {
+        return { rows: [{ status: 'queued' }] };
+      }
+      if (/UPDATE zenithjoy\.publish_tasks/i.test(sql)) {
+        return { rows: [{ status: 'failed' }] };
+      }
+      return { rows: [] };
+    });
+    const r = await request(makeApp())
+      .patch(`/api/publish-tasks/${RECEIPT_TASK_ID}/receipt`)
+      .set('X-Upload-Token', TOKEN_A).send({ result: 'failed', detail: '发布失败：网络超时' });
+    expect(r.status).toBe(200);
+    expect(r.body.data).toMatchObject({ task_id: RECEIPT_TASK_ID, status: 'failed' });
+  });
+});
