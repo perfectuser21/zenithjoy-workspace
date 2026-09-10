@@ -41,6 +41,7 @@ interface NotionProperty {
   title?: NotionRichTextItem[];
   rich_text?: NotionRichTextItem[];
   multi_select?: NotionSelectOption[];
+  date?: { start?: string | null };
 }
 interface NotionPage {
   id: string;
@@ -83,6 +84,31 @@ function whitelistedPlatforms(prop: NotionProperty | undefined): string[] {
   const names: string[] = (prop?.multi_select ?? []).map((o: NotionSelectOption) => o.name);
   return names.filter((p) => (PUBLISH_PLATFORMS as readonly string[]).includes(p));
 }
+/**
+ * 「定时」闸判定（拉发方向逐行）：
+ * - 无「定时」属性/值为空 → 立即派，镜像 null（清掉 DB 里可能残留的旧定时）。
+ * - 值 <= now → 派，镜像归一化 ISO 进 contents.scheduled_at。
+ * - 值 > now → 本轮跳过（不回写、不派、无副作用），60s 轮询天然构成到点检查循环。
+ * - 解析失败 → fail-closed：跳过 + 红日志，宁可不发不误发。
+ */
+type ScheduleGate = { fire: true; scheduledAt: string | null } | { fire: false };
+function parseScheduledAt(prop: NotionProperty | undefined, pageId: string): ScheduleGate {
+  const start = prop?.date?.start;
+  if (start === undefined || start === null || start === '') {
+    return { fire: true, scheduledAt: null };
+  }
+  const ts = Date.parse(start);
+  if (Number.isNaN(ts)) {
+    console.error(`${LOG} 定时解析失败 page=${pageId}: 「定时」值(${String(start)})不是合法日期，fail-closed 跳过不派`);
+    return { fire: false };
+  }
+  if (ts > Date.now()) {
+    console.debug(`${LOG} 未到定时 page=${pageId}: ${start}，本轮跳过`);
+    return { fire: false };
+  }
+  return { fire: true, scheduledAt: new Date(ts).toISOString() };
+}
+
 async function markRow(pageId: string, status: string, receipt?: string) {
   const properties: Record<string, unknown> = { '状态': { select: { name: status } } };
   if (receipt !== undefined) properties['回执'] = { rich_text: rt(receipt) };
@@ -170,6 +196,10 @@ async function pullFireRows(env: OrchEnv) {
         const contentId = plain(props['content_id']).trim();
         const platforms = whitelistedPlatforms(props['平台']);
 
+        // 定时闸放在所有副作用之前：未到点/坏值的行本轮整体跳过（行留在「发」）。
+        const gate = parseScheduledAt(props['定时'], page.id);
+        if (!gate.fire) continue;
+
         if (!UUID_RE.test(contentId)) {
           console.error(`${LOG} 锚失效跳过 page=${page.id}: content_id 不是合法 UUID`);
           await markRow(page.id, '派发失败', '锚失效：content_id 不是合法 UUID');
@@ -197,9 +227,9 @@ async function pullFireRows(env: OrchEnv) {
 
         await pool.query(
           `UPDATE zenithjoy.contents
-              SET title = $1, body = $2, platforms = $3, updated_at = now()
-            WHERE id = $4 AND tenant_id = $5`,
-          [title, body_, platforms, contentId, env.tenantId],
+              SET title = $1, body = $2, platforms = $3, scheduled_at = $4, updated_at = now()
+            WHERE id = $5 AND tenant_id = $6`,
+          [title, body_, platforms, gate.scheduledAt, contentId, env.tenantId],
         );
 
         try {
