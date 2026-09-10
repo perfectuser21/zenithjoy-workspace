@@ -16,6 +16,9 @@ object DebugE2ERouter {
         ) : Route
         data class Scan(val requestId: String, val tenantId: String, val deviceId: String) : Route
         data class Warmup(val requestId: String, val deviceId: String, val operatorNickname: String) : Route
+
+        /** 刀A：触发 PublishPollLoop 单轮 poll——无参数，任务数据全部走中台接口。 */
+        object Publish : Route
         object Unknown : Route
     }
 
@@ -42,6 +45,7 @@ object DebugE2ERouter {
             deviceId = extra("device_id").orEmpty(),
             operatorNickname = extra("operator_nickname").orEmpty(),
         )
+        "publish" -> Route.Publish
         else -> Route.Unknown
     }
 }

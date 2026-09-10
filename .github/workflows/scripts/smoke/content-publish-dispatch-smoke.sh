@@ -91,6 +91,31 @@ assert len(d["media"]) == 1 and d["media"][0]["url"], "media 签名 URL 缺失"
 print("    package: title/body/media ✓")
 ' || fail "发布包内容不符"
 
+echo "[6b] agent 认领（刀A）：POST claim CAS queued→dispatched，抢到 claimed=true"
+R=$(curl -sf -X POST "$API_BASE/api/publish-tasks/$TASK_ID/claim" \
+  -H "X-Upload-Token: $LICENSE_KEY" -H 'Content-Type: application/json' -d '{}') || fail "claim 失败"
+echo "$R" | python3 -c '
+import sys, json
+d = json.load(sys.stdin)["data"]
+assert d["claimed"] is True, "首次 claim 应抢到 claimed=true，实际 " + str(d)
+' || fail "claim 响应不符"
+DB_STATUS=$("${PSQL[@]}" -c "SELECT status FROM zenithjoy.publish_tasks WHERE id = '${TASK_ID}'")
+[ "$DB_STATUS" = "dispatched" ] || fail "DB 断言失败：claim 后 status expected dispatched got $DB_STATUS"
+echo "    claim: claimed=true，DB status=dispatched ✓"
+
+echo "[6c] 重复 claim → claimed=false + 当前 status（正常竞争语义，200 不是 409）"
+R=$(curl -sf -X POST "$API_BASE/api/publish-tasks/$TASK_ID/claim" \
+  -H "X-Upload-Token: $LICENSE_KEY" -H 'Content-Type: application/json' -d '{}') || fail "重复 claim 请求失败"
+echo "$R" | python3 -c '
+import sys, json
+d = json.load(sys.stdin)["data"]
+assert d["claimed"] is False, "重复 claim 应 claimed=false，实际 " + str(d)
+assert d["status"] == "dispatched", "重复 claim 应带当前 status=dispatched，实际 " + str(d)
+' || fail "重复 claim 响应不符"
+DB_STATUS=$("${PSQL[@]}" -c "SELECT status FROM zenithjoy.publish_tasks WHERE id = '${TASK_ID}'")
+[ "$DB_STATUS" = "dispatched" ] || fail "DB 断言失败：重复 claim 后 status 应仍是 dispatched，实际 $DB_STATUS"
+echo "    重复 claim 不改状态 ✓"
+
 echo "[7] 真调旧 agent 心跳通道 → 确认 getQueuedTasks 排除 content_publish 生效"
 # 种子 agent 用 hostname='smoke-host'、未带 machine_id 注册；心跳走同一 hostname、
 # 同 license（=同租户）且不带 machine_id/agent_uuid，会命中 resolveAgentIdentityKey
@@ -146,5 +171,8 @@ LICENSE_B="ZJ-F-CPB${RANDOM}"
    VALUES ('${LICENSE_B}','free',5,'active','${TENANT_B}', now()+interval '1 day')" >/dev/null
 C=$(curl -s -o /dev/null -w '%{http_code}' "$API_BASE/api/publish-tasks/$TASK_ID/package" -H "X-Upload-Token: $LICENSE_B")
 [ "$C" = "404" ] || fail "跨租户 expected 404 got $C"
+C=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API_BASE/api/publish-tasks/$TASK_ID/claim" \
+  -H "X-Upload-Token: $LICENSE_B" -H 'Content-Type: application/json' -d '{}')
+[ "$C" = "404" ] || fail "跨租户 claim expected 404 got $C"
 
 echo "✅ content-publish-dispatch smoke PASS"
