@@ -435,6 +435,48 @@ export function createPublishTasksRouter(deps: PublishTasksRouterDeps = {}): Rou
     }
   });
 
+  // agent 原子认领（刀A：agent-android 发布基座段）：CAS queued→dispatched。
+  // 多机同租户各自轮询同一批 queued 单，谁的 UPDATE 先落库谁抢到；后来者 rowCount=0
+  // 返回 claimed:false + 当前 status——这是正常竞争不是错误，所以是 200 不是 409。
+  // agent 抢到才下载素材，从根上消除重复下载/重复落相册。
+  router.post('/:id/claim', async (req: Request, res: Response) => {
+    const auth = await authenticate(req, res);
+    if (!auth) return;
+    const taskId = req.params.id;
+    if (!UUID_RE.test(taskId)) {
+      fail(res, 404, 'NOT_FOUND', '任务不存在');
+      return;
+    }
+    try {
+      const { rowCount } = await pool.query(
+        `UPDATE zenithjoy.publish_tasks
+            SET status = 'dispatched', updated_at = NOW()
+          WHERE id = $1 AND tenant_id = $2 AND task_type = 'content_publish'
+            AND status = 'queued'`,
+        [taskId, auth.tenantId],
+      );
+      if (rowCount === 1) {
+        ok(res, { task_id: taskId, claimed: true });
+        return;
+      }
+      // CAS 落空：被抢/非 queued/不存在。重读该单区分——租户隔离下查不到 = 404。
+      const { rows } = await pool.query(
+        `SELECT status FROM zenithjoy.publish_tasks
+          WHERE id = $1 AND tenant_id = $2 AND task_type = 'content_publish'
+          LIMIT 1`,
+        [taskId, auth.tenantId],
+      );
+      const task = rows[0];
+      if (!task) {
+        fail(res, 404, 'NOT_FOUND', '任务不存在');
+        return;
+      }
+      ok(res, { task_id: taskId, claimed: false, status: task.status });
+    } catch (err) {
+      fail(res, 500, 'CLAIM_FAILED', err instanceof Error ? err.message : 'unknown');
+    }
+  });
+
   // 执行器发完回执：发布结果写回，编排台（notion-orchestrator）轮询到终态后自动回写 Notion。
   router.patch('/:id/receipt', async (req: Request, res: Response) => {
     const auth = await authenticate(req, res);

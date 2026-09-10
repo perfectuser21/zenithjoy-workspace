@@ -845,7 +845,7 @@ tests:
     ci: L3
     status: active
     product: 智能发布派发链路
-    note: "作品→发布任务派发契约：租户从凭据反查、跨租户 404、平台白名单+去重、事务内 CAS 幂等（并发抢先 409 且零 INSERT）、发布包字段齐且不存签名 URL、领单时现签素材 URL 与 storage_key 可验证关联。定时发送：PATCH scheduled_at 接受 ISO 字符串或 null（NULL=立即），Date.parse NaN → 400 INVALID_SCHEDULED_AT，GET 列表 SELECT 与响应体透出 scheduled_at。"
+    note: "作品→发布任务派发契约：租户从凭据反查、跨租户 404、平台白名单+去重、事务内 CAS 幂等（并发抢先 409 且零 INSERT）、发布包字段齐且不存签名 URL、领单时现签素材 URL 与 storage_key 可验证关联。定时发送：PATCH scheduled_at 接受 ISO 字符串或 null（NULL=立即），Date.parse NaN → 400 INVALID_SCHEDULED_AT，GET 列表 SELECT 与响应体透出 scheduled_at。claim 原子认领（刀A）：CAS queued→dispatched 抢到 claimed:true、被抢 claimed:false+当前 status（200 非 409）、非法 UUID 404 不查库、跨租户重读为空 404。"
 
   - id: content-publish-dispatch-service
     path: apps/api/src/services/__tests__/content-publish-dispatch.test.ts

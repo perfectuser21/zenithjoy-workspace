@@ -105,6 +105,8 @@ class AgentService : Service() {
     // bug 本身的诱因（License 装机配额限制）更容易被触发。
     private val registerCallInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
     private var collectPollLoop: AcquisitionCollectPollLoop? = null
+    // 刀A（发布基座段）：第 4 条轮询线——发布单 queued 轮询 → claim → 下载 → 落相册。
+    private var publishPollLoop: com.zenithjoy.agent.publish.PublishPollLoop? = null
     private var accountScanLoopJob: kotlinx.coroutines.Job? = null
     // OpenClaw 信号桥·件1：统一指令队列（initAgent 内装配，onDestroy 清理）
     private var commandQueue: CommandQueue? = null
@@ -387,6 +389,7 @@ class AgentService : Service() {
         heartbeatLoop?.stop()
         framePushLoop?.stop()
         collectPollLoop?.stop()
+        publishPollLoop?.stop()
         accountScanLoopJob?.cancel()
         serviceJob.cancel()
         unregisterReceiver(collectResultReceiver)
@@ -821,6 +824,23 @@ class AgentService : Service() {
             },
         )
         collectPollLoop?.start()
+
+        // 刀A（line01 智能发布基座段）：发布单轮询线。30s 轮询 queued → CAS claim →
+        // 领发布包 → 流式下载到 cacheDir → MediaSaver 落相册 → 清 cache。之后 AI 执行器
+        // （android-publish skill）接手 App 内操作时素材已在相册，跳过 ADB push 环节。
+        // 鉴权 X-Upload-Token: licenseKey——与 AI 执行器同一凭据，不新造第四套。
+        publishPollLoop = com.zenithjoy.agent.publish.PublishPollLoop(
+            licenseKey = { config.licenseKey },
+            httpBase = config.deriveHttpBase(),
+            scope = scope,
+            cacheDir = cacheDir,
+            saveToGallery = { file, fileName, mimeType ->
+                com.zenithjoy.agent.publish.MediaSaver.saveToGallery(
+                    this@AgentService, file, fileName, mimeType,
+                )
+            },
+        )
+        publishPollLoop?.start()
 
         // Sprint 07061301-device-account-scan-wiring — 定时触发设备账号扫描（30-60 分钟随机间隔，
         // 与 RandomDelay 一样禁止用固定常量），扫描服务自身会先判互斥锁再决定是否真的执行。

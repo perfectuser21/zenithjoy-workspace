@@ -29,6 +29,8 @@ import com.zenithjoy.agent.collect.DouyinDmOutreachService
  *     --es task_id t2 --es dm_assignment_id a2 --es account_label burner1
  *   adb shell am broadcast -a com.zenithjoy.agent.DEBUG_E2E -p com.zenithjoy.agent \
  *     --es flow scan --es request_id r3 --es device_id dev1
+ *   adb shell am broadcast -a com.zenithjoy.agent.DEBUG_E2E -p com.zenithjoy.agent \
+ *     --es flow publish
  */
 class DebugE2ETriggerReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
@@ -57,6 +59,17 @@ class DebugE2ETriggerReceiver : BroadcastReceiver() {
             is DebugE2ERouter.Route.Warmup -> {
                 Log.i(TAG, "DEBUG_E2E warmup: requestId=${route.requestId} operator=${route.operatorNickname}")
                 DeviceAccountScanService.dispatchWarmupTask(ctx, route.requestId, route.deviceId, route.operatorNickname)
+            }
+            is DebugE2ERouter.Route.Publish -> {
+                // 刀A：触发 PublishPollLoop 单轮 poll。onReceive 跑在主线程，poll 里是
+                // 同步网络 IO（NetworkOnMainThreadException），必须换到工作线程。
+                Log.i(TAG, "DEBUG_E2E publish: 触发发布单单轮轮询")
+                Thread {
+                    val fired = com.zenithjoy.agent.publish.PublishPollLoop.triggerSinglePollForDebug()
+                    if (!fired) {
+                        Log.w(TAG, "DEBUG_E2E publish: 没有活跃的 PublishPollLoop（AgentService 未启动？）")
+                    }
+                }.start()
             }
             DebugE2ERouter.Route.Unknown ->
                 Log.w(TAG, "DEBUG_E2E unknown flow: ${intent.getStringExtra("flow")}")
