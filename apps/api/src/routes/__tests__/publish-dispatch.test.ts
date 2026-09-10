@@ -418,6 +418,73 @@ describe('PATCH /api/publish-tasks/:id/receipt（执行器回执：发完写回�
   });
 });
 
+describe('POST /api/publish-tasks/:id/claim（刀A：agent 原子认领，CAS queued→dispatched）', () => {
+  const CLAIM_TASK_ID = 'abababab-abab-4bab-8bab-abababababab';
+
+  it('抢到：CAS rowCount=1 → 200 claimed:true，UPDATE 带 queued→dispatched CAS 谓词与租户隔离', async () => {
+    const calls: Array<{ sql: string; params: any[] }> = [];
+    (pool.query as any).mockImplementation(async (sql: string, params?: any[]) => {
+      calls.push({ sql, params: params ?? [] });
+      if (/UPDATE zenithjoy\.publish_tasks/i.test(sql)) return { rows: [], rowCount: 1 };
+      return { rows: [] };
+    });
+    const r = await request(makeApp())
+      .post(`/api/publish-tasks/${CLAIM_TASK_ID}/claim`)
+      .set('X-Upload-Token', TOKEN_A).send({});
+    expect(r.status).toBe(200);
+    expect(r.body.data).toMatchObject({ claimed: true });
+
+    const updates = calls.filter((c) => /UPDATE zenithjoy\.publish_tasks/i.test(c.sql));
+    expect(updates).toHaveLength(1);
+    // CAS：只有 queued 才允许翻成 dispatched，谁先落库谁抢到，后来者 rowCount=0——
+    // 多机同租户防重复领单的唯一闸门。
+    expect(updates[0].sql).toMatch(/status\s*=\s*'dispatched'/);
+    expect(updates[0].sql).toMatch(/status\s*=\s*'queued'/);
+    expect(updates[0].sql).toMatch(/task_type\s*=\s*'content_publish'/);
+    expect(updates[0].sql).toMatch(/updated_at\s*=\s*NOW\(\)/i);
+    expect(updates[0].params).toContain(CLAIM_TASK_ID);
+    expect(updates[0].params).toContain(TENANT_A);
+  });
+
+  it('已被抢：CAS rowCount=0 + 重读到 dispatched → 200 claimed:false + 当前 status（正常竞争不是错误，不用 409）', async () => {
+    const calls: Array<{ sql: string; params: any[] }> = [];
+    (pool.query as any).mockImplementation(async (sql: string, params?: any[]) => {
+      calls.push({ sql, params: params ?? [] });
+      if (/UPDATE zenithjoy\.publish_tasks/i.test(sql)) return { rows: [], rowCount: 0 };
+      if (/SELECT status FROM zenithjoy\.publish_tasks/i.test(sql)) {
+        return { rows: [{ status: 'dispatched' }] };
+      }
+      return { rows: [] };
+    });
+    const r = await request(makeApp())
+      .post(`/api/publish-tasks/${CLAIM_TASK_ID}/claim`)
+      .set('X-Upload-Token', TOKEN_A).send({});
+    expect(r.status).toBe(200);
+    expect(r.body.data).toMatchObject({ claimed: false, status: 'dispatched' });
+    // CAS 落空后只允许重读（1 次 UPDATE + 1 次 SELECT），绝不二次改写。
+    expect(calls.filter((c) => /UPDATE zenithjoy\.publish_tasks/i.test(c.sql))).toHaveLength(1);
+    expect(calls.filter((c) => /SELECT status FROM zenithjoy\.publish_tasks/i.test(c.sql))).toHaveLength(1);
+  });
+
+  it('id 不是 UUID → 404（不查库）', async () => {
+    const r = await request(makeApp())
+      .post('/api/publish-tasks/not-a-uuid/claim').set('X-Upload-Token', TOKEN_A).send({});
+    expect(r.status).toBe(404);
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
+  it('跨租户/不存在：CAS rowCount=0 且租户隔离下重读为空 → 404', async () => {
+    (pool.query as any).mockImplementation(async (sql: string) => {
+      if (/UPDATE zenithjoy\.publish_tasks/i.test(sql)) return { rows: [], rowCount: 0 };
+      return { rows: [] };
+    });
+    const r = await request(makeApp())
+      .post(`/api/publish-tasks/${CLAIM_TASK_ID}/claim`)
+      .set('X-Upload-Token', TOKEN_A).send({});
+    expect(r.status).toBe(404);
+  });
+});
+
 describe('GET /api/contents 列表（line01 刀5a：我的作品页）', () => {
   const CONTENT_ID_2 = 'c2222222-cccc-4ccc-8ccc-cccccccccccc';
   const LIST_ROWS = [

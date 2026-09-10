@@ -69,4 +69,9 @@ class InfrequentHttpClientsNoPoolTest {
     fun `ContentJudgmentService 默认客户端不复用连接`() {
         assertNeverReusesConnection(ContentJudgmentService.defaultClient())
     }
+
+    @Test
+    fun `PublishPollLoop 默认客户端不复用连接`() {
+        assertNeverReusesConnection(com.zenithjoy.agent.publish.PublishPollLoop.defaultClient())
+    }
 }

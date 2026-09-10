@@ -61,6 +61,12 @@ class DebugE2ERouterTest {
     }
 
     @Test
+    fun `publish flow routes to Publish`() {
+        // 刀A：publish flow 无参数——只触发 PublishPollLoop 单轮 poll，任务数据全部走中台接口。
+        assertEquals(DebugE2ERouter.Route.Publish, DebugE2ERouter.route("publish", getterOf()))
+    }
+
+    @Test
     fun `missing extras default to empty strings not null`() {
         val route = DebugE2ERouter.route("collect", getterOf())
         assertEquals(DebugE2ERouter.Route.Collect(keyword = "", taskId = ""), route)
