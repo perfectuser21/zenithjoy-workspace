@@ -138,7 +138,7 @@ export function createContentsPublishRouter(deps: ContentsPublishRouterDeps = {}
       const offsetIdx = params.length;
 
       const { rows: contentRows } = await pool.query(
-        `SELECT id, title, body, type, platforms, status, created_at
+        `SELECT id, title, body, type, platforms, status, scheduled_at, created_at
            FROM zenithjoy.contents
           WHERE ${where}
           ORDER BY created_at DESC
@@ -180,7 +180,7 @@ export function createContentsPublishRouter(deps: ContentsPublishRouterDeps = {}
       const items = await Promise.all(
         contentRows.map(async (c: {
           id: string; title: string | null; body: string | null; type: string;
-          platforms: string[]; status: string; created_at: string;
+          platforms: string[]; status: string; scheduled_at: string | null; created_at: string;
         }) => {
           const img = imageByContentId.get(c.id);
           let materials: Array<{ file_name: string; preview_url: string | null }> = [];
@@ -201,6 +201,7 @@ export function createContentsPublishRouter(deps: ContentsPublishRouterDeps = {}
             type: c.type,
             platforms: c.platforms,
             status: c.status,
+            scheduled_at: c.scheduled_at,
             created_at: c.created_at,
             materials,
             receipts: receiptsByContentId.get(c.id) ?? [],
@@ -252,6 +253,18 @@ export function createContentsPublishRouter(deps: ContentsPublishRouterDeps = {}
         }
       }
 
+      // 定时发送时间：ISO 字符串（能过 Date.parse）或 null（=立即），其余一律 400。
+      const bodyScheduledAt: unknown = req.body?.scheduled_at;
+      if (bodyScheduledAt !== undefined) {
+        const legal =
+          bodyScheduledAt === null ||
+          (typeof bodyScheduledAt === 'string' && !Number.isNaN(Date.parse(bodyScheduledAt)));
+        if (!legal) {
+          fail(res, 400, 'INVALID_SCHEDULED_AT', 'scheduled_at 必须是 ISO 时间字符串或 null');
+          return;
+        }
+      }
+
       const setClauses: string[] = [];
       const params: unknown[] = [];
       if (typeof req.body?.title === 'string') {
@@ -265,6 +278,10 @@ export function createContentsPublishRouter(deps: ContentsPublishRouterDeps = {}
       if (Array.isArray(bodyPlatforms)) {
         params.push(bodyPlatforms);
         setClauses.push(`platforms = $${params.length}`);
+      }
+      if (bodyScheduledAt !== undefined) {
+        params.push(bodyScheduledAt);
+        setClauses.push(`scheduled_at = $${params.length}`);
       }
 
       if (setClauses.length === 0) {

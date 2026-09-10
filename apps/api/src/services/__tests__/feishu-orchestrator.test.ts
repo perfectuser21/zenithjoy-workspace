@@ -324,6 +324,85 @@ describe('方向B 拉发（状态=发）', () => {
   });
 });
 
+describe('方向B 拉发定时闸（scheduled_at，Bitable 毫秒时间戳形态）', () => {
+  const FUTURE_MS = Date.now() + 3_600_000;
+  const PAST_MS = Date.now() - 3_600_000;
+
+  function stubFireRow(row: any) {
+    (feishuRequest as any).mockImplementation(async (_m: string, path: string) => {
+      if (path === SEARCH_PATH) return { code: 0, data: { items: [row], has_more: false } };
+      return { code: 0, data: {} };
+    });
+    (pool.query as any).mockImplementation(async (sql: string) => {
+      if (/FROM zenithjoy\.contents/i.test(sql) && !/feishu_record_id IS NULL/i.test(sql)) {
+        return { rows: [{ id: CID }] };
+      }
+      return { rows: [] };
+    });
+  }
+
+  it('「定时」未到点 → 本轮整体跳过：不派、不回写、不动飞书行', async () => {
+    stubFireRow(feishuRow({ '定时': FUTURE_MS }));
+    await runOnce(ENV, deps());
+    expect(dispatchContentPublish).not.toHaveBeenCalled();
+    const upd = (pool.query as any).mock.calls.find(
+      (c: any[]) => /UPDATE zenithjoy\.contents/i.test(c[0]) && /SET title/i.test(c[0]),
+    );
+    expect(upd).toBeFalsy();
+    const patch = (feishuRequest as any).mock.calls.find((c: any[]) => c[1] === ROW_PATCH_PATH);
+    expect(patch).toBeFalsy();
+  });
+
+  it('「定时」已到点 → 照常派，且回写 UPDATE 一并镜像 scheduled_at（毫秒→ISO）', async () => {
+    stubFireRow(feishuRow({ '定时': PAST_MS }));
+    (dispatchContentPublish as any).mockResolvedValue({ content_id: CID, tasks: [{ id: 't1', platform: 'douyin' }] });
+    await runOnce(ENV, deps());
+    expect(dispatchContentPublish).toHaveBeenCalledWith(
+      expect.objectContaining({ contentId: CID, tenantId: TENANT }),
+    );
+    const upd = (pool.query as any).mock.calls.find(
+      (c: any[]) => /UPDATE zenithjoy\.contents/i.test(c[0]) && /SET title/i.test(c[0]),
+    );
+    expect(upd).toBeTruthy();
+    expect(upd[0]).toMatch(/scheduled_at\s*=\s*\$\d+/);
+    expect(upd[1]).toContain(new Date(PAST_MS).toISOString());
+    const patch = (feishuRequest as any).mock.calls.find((c: any[]) => c[1] === ROW_PATCH_PATH);
+    expect(patch[2].fields['状态']).toBe('排队中');
+  });
+
+  it('无「定时」→ 立即派（现行为回归），镜像 scheduled_at=null 清掉旧值', async () => {
+    stubFireRow(feishuRow());
+    (dispatchContentPublish as any).mockResolvedValue({ content_id: CID, tasks: [{ id: 't1', platform: 'douyin' }] });
+    await runOnce(ENV, deps());
+    expect(dispatchContentPublish).toHaveBeenCalled();
+    const upd = (pool.query as any).mock.calls.find(
+      (c: any[]) => /UPDATE zenithjoy\.contents/i.test(c[0]) && /SET title/i.test(c[0]),
+    );
+    expect(upd).toBeTruthy();
+    expect(upd[0]).toMatch(/scheduled_at\s*=\s*\$\d+/);
+    expect(upd[1]).toContain(null);
+    const patch = (feishuRequest as any).mock.calls.find((c: any[]) => c[1] === ROW_PATCH_PATH);
+    expect(patch[2].fields['状态']).toBe('排队中');
+  });
+
+  it('「定时」值不是有限数字 → fail-closed：跳过不派 + 红日志含定时解析失败', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    stubFireRow(feishuRow({ '定时': 'not-a-timestamp' }));
+    await runOnce(ENV, deps());
+    expect(dispatchContentPublish).not.toHaveBeenCalled();
+    const upd = (pool.query as any).mock.calls.find(
+      (c: any[]) => /UPDATE zenithjoy\.contents/i.test(c[0]) && /SET title/i.test(c[0]),
+    );
+    expect(upd).toBeFalsy();
+    const patch = (feishuRequest as any).mock.calls.find((c: any[]) => c[1] === ROW_PATCH_PATH);
+    expect(patch).toBeFalsy();
+    const logged = spy.mock.calls.flat().join(' ');
+    expect(logged).toContain('[feishu-orch]');
+    expect(logged).toContain('定时解析失败');
+    spy.mockRestore();
+  });
+});
+
 describe('方向C 回执（任务终态→飞书行）', () => {
   function stubQueuedContent(taskRows: any[]) {
     (pool.query as any).mockImplementation(async (sql: string) => {

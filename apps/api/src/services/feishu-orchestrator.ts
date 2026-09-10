@@ -46,6 +46,9 @@ interface FeishuRecordFields {
   '文案'?: FeishuTextValue;
   'content_id'?: FeishuTextValue;
   '平台'?: string[];
+  // Bitable 日期字段原生形态=毫秒时间戳 number；声明 unknown 是因为读回值
+  // 不受我们控制（手填/字段类型改动），解析处 fail-closed 兜坏值。
+  '定时'?: unknown;
   [key: string]: unknown;
 }
 interface FeishuRecord {
@@ -88,6 +91,27 @@ function plainText(v: FeishuTextValue | undefined): string {
 function whitelistedPlatforms(v: string[] | undefined): string[] {
   return (v ?? []).filter((p) => (PUBLISH_PLATFORMS as readonly string[]).includes(p));
 }
+/**
+ * 「定时」闸判定（拉发方向逐行，语义与 notion-orchestrator.parseScheduledAt 同一套）：
+ * 无值→立即派镜像 null；毫秒时间戳 <= now→派+镜像 ISO；> now→本轮跳过无副作用；
+ * 非有限数字（手填坏值/字段类型不对）→ fail-closed 跳过+红日志。
+ */
+type ScheduleGate = { fire: true; scheduledAt: string | null } | { fire: false };
+function parseScheduledAt(v: unknown, recordId: string): ScheduleGate {
+  if (v === undefined || v === null || v === '') {
+    return { fire: true, scheduledAt: null };
+  }
+  if (typeof v !== 'number' || !Number.isFinite(v)) {
+    console.error(`${LOG} 定时解析失败 record=${recordId}: 「定时」值(${String(v)})不是毫秒时间戳，fail-closed 跳过不派`);
+    return { fire: false };
+  }
+  if (v > Date.now()) {
+    console.debug(`${LOG} 未到定时 record=${recordId}: ${new Date(v).toISOString()}，本轮跳过`);
+    return { fire: false };
+  }
+  return { fire: true, scheduledAt: new Date(v).toISOString() };
+}
+
 async function markRow(env: FeishuOrchEnv, recordId: string, status: string, receipt?: string) {
   const fields: Record<string, unknown> = { '状态': status };
   if (receipt !== undefined) fields['回执'] = receipt.slice(0, RT_LIMIT);
@@ -200,6 +224,10 @@ async function pullFireRows(env: FeishuOrchEnv) {
         const contentId = plainText(f['content_id']).trim();
         const platforms = whitelistedPlatforms(f['平台']);
 
+        // 定时闸放在所有副作用之前：未到点/坏值的行本轮整体跳过（行留在「发」）。
+        const gate = parseScheduledAt(f['定时'], record.record_id);
+        if (!gate.fire) continue;
+
         if (!UUID_RE.test(contentId)) {
           console.error(`${LOG} 锚失效跳过 record=${record.record_id}: content_id 不是合法 UUID`);
           await markRow(env, record.record_id, '派发失败', '锚失效：content_id 不是合法 UUID');
@@ -229,9 +257,9 @@ async function pullFireRows(env: FeishuOrchEnv) {
         // 拉发回写 contents 的文案不截断——Bitable 无 2000 字限制，别毁长文案。
         await pool.query(
           `UPDATE zenithjoy.contents
-              SET title = $1, body = $2, platforms = $3, updated_at = now()
-            WHERE id = $4 AND tenant_id = $5`,
-          [title, body_, platforms, contentId, env.tenantId],
+              SET title = $1, body = $2, platforms = $3, scheduled_at = $4, updated_at = now()
+            WHERE id = $5 AND tenant_id = $6`,
+          [title, body_, platforms, gate.scheduledAt, contentId, env.tenantId],
         );
 
         try {

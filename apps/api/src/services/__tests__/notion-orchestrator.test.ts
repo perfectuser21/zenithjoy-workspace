@@ -163,6 +163,83 @@ describe('方向B 拉发（状态=发）', () => {
   });
 });
 
+describe('方向B 拉发定时闸（scheduled_at）', () => {
+  const FUTURE = new Date(Date.now() + 3_600_000).toISOString();
+  const PAST = new Date(Date.now() - 3_600_000).toISOString();
+
+  function stubFireRow(row: any) {
+    (notionRequest as any).mockImplementation(async (_m: string, path: string) => {
+      if (path.includes('/query')) return { results: [row], has_more: false };
+      return { id: 'x' };
+    });
+    (pool.query as any).mockImplementation(async (sql: string) => {
+      if (/FROM zenithjoy\.contents/i.test(sql)) return { rows: [{ id: CID }] };
+      return { rows: [] };
+    });
+  }
+
+  it('「定时」未到点 → 本轮整体跳过：不派、不回写、不动 Notion 行', async () => {
+    stubFireRow(notionRow({ '定时': { date: { start: FUTURE } } }));
+    await runOnce(ENV, deps());
+    expect(dispatchContentPublish).not.toHaveBeenCalled();
+    const upd = (pool.query as any).mock.calls.find(
+      (c: any[]) => /UPDATE zenithjoy\.contents/i.test(c[0]) && /SET title/i.test(c[0]),
+    );
+    expect(upd).toBeFalsy();
+    const patch = (notionRequest as any).mock.calls.find((c: any[]) => c[1] === '/pages/page-1');
+    expect(patch).toBeFalsy();
+  });
+
+  it('「定时」已到点 → 照常派，且回写 UPDATE 一并镜像 scheduled_at', async () => {
+    stubFireRow(notionRow({ '定时': { date: { start: PAST } } }));
+    (dispatchContentPublish as any).mockResolvedValue({ content_id: CID, tasks: [{ id: 't1', platform: 'douyin' }] });
+    await runOnce(ENV, deps());
+    expect(dispatchContentPublish).toHaveBeenCalledWith(
+      expect.objectContaining({ contentId: CID, tenantId: TENANT }),
+    );
+    const upd = (pool.query as any).mock.calls.find(
+      (c: any[]) => /UPDATE zenithjoy\.contents/i.test(c[0]) && /SET title/i.test(c[0]),
+    );
+    expect(upd).toBeTruthy();
+    expect(upd[0]).toMatch(/scheduled_at\s*=\s*\$\d+/);
+    expect(upd[1]).toContain(PAST);
+    const patch = (notionRequest as any).mock.calls.find((c: any[]) => c[1] === '/pages/page-1');
+    expect(patch[2].properties['状态'].select.name).toBe('排队中');
+  });
+
+  it('无「定时」→ 立即派（现行为回归），镜像 scheduled_at=null 清掉旧值', async () => {
+    stubFireRow(notionRow());
+    (dispatchContentPublish as any).mockResolvedValue({ content_id: CID, tasks: [{ id: 't1', platform: 'douyin' }] });
+    await runOnce(ENV, deps());
+    expect(dispatchContentPublish).toHaveBeenCalled();
+    const upd = (pool.query as any).mock.calls.find(
+      (c: any[]) => /UPDATE zenithjoy\.contents/i.test(c[0]) && /SET title/i.test(c[0]),
+    );
+    expect(upd).toBeTruthy();
+    expect(upd[0]).toMatch(/scheduled_at\s*=\s*\$\d+/);
+    expect(upd[1]).toContain(null);
+    const patch = (notionRequest as any).mock.calls.find((c: any[]) => c[1] === '/pages/page-1');
+    expect(patch[2].properties['状态'].select.name).toBe('排队中');
+  });
+
+  it('「定时」解析失败 → fail-closed：跳过不派 + 红日志含定时解析失败', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    stubFireRow(notionRow({ '定时': { date: { start: 'not-a-date' } } }));
+    await runOnce(ENV, deps());
+    expect(dispatchContentPublish).not.toHaveBeenCalled();
+    const upd = (pool.query as any).mock.calls.find(
+      (c: any[]) => /UPDATE zenithjoy\.contents/i.test(c[0]) && /SET title/i.test(c[0]),
+    );
+    expect(upd).toBeFalsy();
+    const patch = (notionRequest as any).mock.calls.find((c: any[]) => c[1] === '/pages/page-1');
+    expect(patch).toBeFalsy();
+    const logged = spy.mock.calls.flat().join(' ');
+    expect(logged).toContain('[notion-orch]');
+    expect(logged).toContain('定时解析失败');
+    spy.mockRestore();
+  });
+});
+
 describe('方向C 回执（任务终态→Notion）', () => {
   // taskRows 每条自动补 cid=CID（本 describe 全程只有一个作品）与 created_at
   // 默认值（按数组下标错开，保证同平台多行时 latest-wins 有明确的"最新"）——
