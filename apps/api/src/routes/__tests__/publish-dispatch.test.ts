@@ -524,6 +524,33 @@ describe('GET /api/contents 列表（line01 刀5a：我的作品页）', () => {
     const r = await request(makeApp()).get('/api/contents');
     expect(r.status).toBe(401);
   });
+
+  it('SELECT 与响应体透出 scheduled_at（定时发送时间，NULL=立即）', async () => {
+    const SCHEDULED = '2026-09-15T10:00:00.000Z';
+    const calls: Array<{ sql: string; params: any[] }> = [];
+    (pool.query as any).mockImplementation(async (sql: string, params?: any[]) => {
+      calls.push({ sql, params: params ?? [] });
+      if (/FROM zenithjoy\.contents/i.test(sql)) {
+        return {
+          rows: [
+            { ...LIST_ROWS[0], scheduled_at: SCHEDULED },
+            { ...LIST_ROWS[1], scheduled_at: null },
+          ],
+        };
+      }
+      if (/FROM zenithjoy\.content_materials/i.test(sql)) return { rows: FIRST_IMAGE_ROWS };
+      if (/FROM zenithjoy\.publish_tasks/i.test(sql)) return { rows: RECEIPT_ROWS };
+      return { rows: [] };
+    });
+    const r = await request(makeApp()).get('/api/contents').set('X-Upload-Token', TOKEN_A);
+    expect(r.status).toBe(200);
+    const contentCall = calls.find((c) => /FROM zenithjoy\.contents/i.test(c.sql));
+    expect(contentCall!.sql).toMatch(/scheduled_at/);
+    const first = r.body.data.items.find((i: any) => i.id === CONTENT_ID);
+    const second = r.body.data.items.find((i: any) => i.id === CONTENT_ID_2);
+    expect(first.scheduled_at).toBe(SCHEDULED);
+    expect(second.scheduled_at).toBeNull();
+  });
 });
 
 describe('PATCH /api/contents/:id（line01 刀5a：我的作品页编辑）', () => {
@@ -588,6 +615,61 @@ describe('PATCH /api/contents/:id（line01 刀5a：我的作品页编辑）', ()
       .patch(`/api/contents/${CONTENT_ID}`).set('X-Upload-Token', TOKEN_A).send({ title: '新标题' });
     expect(r.status).toBe(409);
     expect(r.body.error.code).toBe('EDIT_LOCKED');
+  });
+
+  it('scheduled_at 合法（ISO 字符串或 null）→ 参数化写入且带 CAS 谓词', async () => {
+    const SCHEDULED = '2026-09-15T10:00:00.000Z';
+    const calls: Array<{ sql: string; params: any[] }> = [];
+    (pool.query as any).mockImplementation(async (sql: string, params?: any[]) => {
+      calls.push({ sql, params: params ?? [] });
+      if (/SELECT status FROM zenithjoy\.contents/i.test(sql)) return { rows: [{ status: 'draft' }] };
+      if (/UPDATE zenithjoy\.contents/i.test(sql)) return { rows: [], rowCount: 1 };
+      return { rows: [] };
+    });
+    const app = makeApp();
+
+    const r1 = await request(app)
+      .patch(`/api/contents/${CONTENT_ID}`).set('X-Upload-Token', TOKEN_A)
+      .send({ scheduled_at: SCHEDULED });
+    expect(r1.status).toBe(200);
+    const upd1 = calls.filter((c) => /UPDATE zenithjoy\.contents/i.test(c.sql));
+    expect(upd1).toHaveLength(1);
+    expect(upd1[0].sql).toMatch(/scheduled_at\s*=\s*\$\d+/);
+    expect(upd1[0].sql).toMatch(/status\s*<>\s*'queued'/);
+    expect(upd1[0].params).toContain(SCHEDULED);
+
+    const r2 = await request(app)
+      .patch(`/api/contents/${CONTENT_ID}`).set('X-Upload-Token', TOKEN_A)
+      .send({ scheduled_at: null });
+    expect(r2.status).toBe(200);
+    const upd2 = calls.filter((c) => /UPDATE zenithjoy\.contents/i.test(c.sql));
+    expect(upd2).toHaveLength(2);
+    expect(upd2[1].sql).toMatch(/scheduled_at\s*=\s*\$\d+/);
+    expect(upd2[1].params).toContain(null);
+  });
+
+  it('scheduled_at 非法（Date.parse NaN 或非字符串非 null）→ 400 INVALID_SCHEDULED_AT 且无 UPDATE', async () => {
+    const calls: Array<{ sql: string; params: any[] }> = [];
+    (pool.query as any).mockImplementation(async (sql: string, params?: any[]) => {
+      calls.push({ sql, params: params ?? [] });
+      if (/SELECT status FROM zenithjoy\.contents/i.test(sql)) return { rows: [{ status: 'draft' }] };
+      return { rows: [] };
+    });
+    const app = makeApp();
+
+    const r1 = await request(app)
+      .patch(`/api/contents/${CONTENT_ID}`).set('X-Upload-Token', TOKEN_A)
+      .send({ scheduled_at: 'not-a-date' });
+    expect(r1.status).toBe(400);
+    expect(r1.body.error.code).toBe('INVALID_SCHEDULED_AT');
+
+    const r2 = await request(app)
+      .patch(`/api/contents/${CONTENT_ID}`).set('X-Upload-Token', TOKEN_A)
+      .send({ scheduled_at: 12345 });
+    expect(r2.status).toBe(400);
+    expect(r2.body.error.code).toBe('INVALID_SCHEDULED_AT');
+
+    expect(calls.filter((c) => /UPDATE zenithjoy\.contents/i.test(c.sql))).toHaveLength(0);
   });
 
   it('跨租户/不存在（查询空）→ 404', async () => {
