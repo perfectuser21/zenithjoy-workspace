@@ -229,6 +229,20 @@ jobs:
       - name: node --test scripts/openclaw
         run: node --test scripts/openclaw/**/*.test.js
 
+  # ─── apps/api/scripts ────────────────────────────────────────────────
+  # apps/api/scripts/ 下的独立 Python 脚本（如 wechat-mp-freepublish.py）不属于任何
+  # npm workspace，不会被 apps/api 的 vitest 捡到——同 openclaw-scripts-test 的教训
+  # （PR#1769：孤儿回归测试写了半年从未跑过，同一类误判复发 4 次）。无条件跑（纯
+  # stdlib unittest，无需装依赖，几秒钟），不按变更路径过滤。
+  api-scripts-test:
+    name: API Scripts Test (Python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: unittest apps/api/scripts/tests
+        run: python3 -m unittest discover -s apps/api/scripts/tests -p 'test_*.py' -v
+
   # ─── Agent Line Modules ──────────────────────────────────────────────
   # 2026-07-12 巡检抓漏：line-module TS 编译此前只在 push main 的 agent-installpack
   # 跑，PR 阶段无闸 → PR#1245 的 TS2459 直接红在主干。此 job 把同一构建脚本前移到 PR 闸。
@@ -267,6 +281,7 @@ jobs:
       - geoai-build
       - security
       - openclaw-scripts-test
+      - api-scripts-test
       - line-module-build
     if: always()
     runs-on: ubuntu-latest
@@ -331,6 +346,12 @@ jobs:
           # OpenClaw scripts (always)
           if [ "${{ needs.openclaw-scripts-test.result }}" != "success" ]; then
             echo "FAIL: OpenClaw Scripts Test (${{ needs.openclaw-scripts-test.result }})"
+            FAILED=true
+          fi
+
+          # API scripts (always)
+          if [ "${{ needs.api-scripts-test.result }}" != "success" ]; then
+            echo "FAIL: API Scripts Test (${{ needs.api-scripts-test.result }})"
             FAILED=true
           fi
 
