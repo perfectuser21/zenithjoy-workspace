@@ -57,7 +57,7 @@ class TestWechatMpPublish(unittest.TestCase):
         with mock.patch.object(self.wmf, '_get', side_effect=self._fake_get), \
              mock.patch.object(self.wmf, '_post_file', side_effect=self._fake_post_file), \
              mock.patch.object(self.wmf, '_post_json', side_effect=self._fake_post_json):
-            self.wmf.publish('/fake/cover.png', '测试标题', '测试正文', appid='fake-appid', secret='fake-secret')
+            self.wmf.publish('/fake/cover.png', '测试标题', '测试正文', appid='TEST_APPID_NOT_REAL', secret='TEST_SECRET_NOT_REAL')
 
     def test_publish_must_call_mass_sendall_to_be_visible_on_homepage(self):
         self._run_publish_with_mocks()
