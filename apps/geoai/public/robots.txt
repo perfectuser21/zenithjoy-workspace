@@ -2,6 +2,8 @@
 
 User-agent: *
 Allow: /
+# OAuth 回调等动态端点不是内容页，禁止抓取（端点本身另带 X-Robots-Tag: noindex）
+Disallow: /api/
 
 # Sitemap
 Sitemap: https://zenithjoyai.com/sitemap-index.xml
