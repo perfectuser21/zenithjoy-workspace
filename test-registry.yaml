@@ -6406,3 +6406,11 @@ agent_suite:
     status: active
     product: OpenClaw信号桥
     note: "adb_controller→phonectl.sh适配层单测：preflight/lock-*/open-app/snapshot(-evidence)/tap(-evidence)/swipe(-evidence)/back-evidence/UNSUPPORTED命令，含JPEG完整性校验与命令注入回归。"
+
+  - id: tiktok-oauth-pages-functions-unit
+    path: sprints/09121356-tiktok-oauth-callback/tests/tiktok-oauth.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "zenithjoyai.com 上 TikTok OAuth 两端点（start/callback，Cloudflare Pages Functions）的错误路径回归：state 三重校验（HMAC签名/TTL/cookie nonce 绑定，防 account confusion）、凭据未配置返200非5xx（审核员访问时刻）、TikTok 出错仍返HTTP200故以 body.error 优先判定、code 末尾%2A还原、error_description 转义防反射型XSS、noindex/no-store/no-referrer 响应头。"
