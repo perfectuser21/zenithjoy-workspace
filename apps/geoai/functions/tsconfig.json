@@ -1,0 +1,14 @@
+{
+  "//": "Cloudflare Pages Functions 跑在 Workers runtime，不参与 Astro 构建，故不继承 astro/tsconfigs/*。",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "WebWorker"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["**/*.ts"]
+}
