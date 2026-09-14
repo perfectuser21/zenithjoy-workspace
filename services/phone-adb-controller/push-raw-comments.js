@@ -1,0 +1,45 @@
+// push-raw-comments.js <harvest_tsv> <运行批次> —— 采收产出全量落「原始评论池」(异步分拣进水口)
+// 架构(主理人 0914 拍板): 采收(手机侧,锁独占)与分拣(纯文本判断)解耦——
+// 采收 worker 只管倒池,分拣 agent 异步消费池子,合格线索再进线索表。
+// LEAD 12列: _,昵称,抖音号,类型,评论,日期,地区,标题,关键词,IP,主页链接,作品链接
+const fs = require("fs");
+const cfg = JSON.parse(fs.readFileSync("/root/.openclaw/clawdbot.json"));
+const acc = cfg.channels.feishu.accounts.jinoshengyuan;
+const [,, TSV, BATCH] = process.argv;
+const B = "GNuwbzY0da8GP0sv6MGcOTu9ntd", POOL = "tblmrJTyVgzTj89P";
+(async () => {
+  const tr = await fetch("https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ app_id: acc.appId, app_secret: acc.appSecret }) });
+  const tok = (await tr.json()).tenant_access_token;
+  const H = { Authorization: "Bearer " + tok, "Content-Type": "application/json" };
+  const seen = new Set(); let pt = "";
+  do {
+    const r = await (await fetch(`https://open.feishu.cn/open-apis/bitable/v1/apps/${B}/tables/${POOL}/records?page_size=100${pt?"&page_token="+pt:""}`, { headers: H })).json();
+    for (const it of r.data.items||[]) {
+      const v = it.fields["原始评论ID"];
+      const s = Array.isArray(v)?v.map(x=>x.text||x).join(""):String(v||"");
+      if (s) seen.add(s);
+    }
+    pt = r.data.has_more ? r.data.page_token : "";
+  } while (pt);
+  const now = new Date(Date.now()+8*3600e3).toISOString().replace("T"," ").slice(0,16)+"(UTC+8)";
+  const lines = fs.readFileSync(TSV,"utf8").trim().split("\n").filter(l=>l.startsWith("LEAD\t"));
+  let created = 0, dup = 0;
+  for (const ln of lines) {
+    const f = ln.split("\t");
+    const [, nick, id, atype, comment, cdate, region, video, kw, pip, purl] = f;
+    const rid = `${nick}|${id||"noid"}|${(comment||"").slice(0,20)}`;
+    if (seen.has(rid)) { dup++; continue; }
+    const body = { fields: {
+      "原始评论ID": rid, "运行批次": BATCH || "manual",
+      "采集时间": now, "命中关键词": kw || "",
+      "来源视频": (video||"").slice(0,100),
+      "评论原文": comment || "", "评论者昵称": nick || "",
+      "用户主页标识": [id||"", purl||"", atype||""].filter(Boolean).join(" | "),
+      "地区": region || "", "处理状态": "待分拣",
+    }};
+    const res = await (await fetch(`https://open.feishu.cn/open-apis/bitable/v1/apps/${B}/tables/${POOL}/records`, { method: "POST", headers: H, body: JSON.stringify(body) })).json();
+    if (res.code === 0) { created++; seen.add(rid); }
+    else console.log("FAIL", nick, JSON.stringify(res).slice(0,100));
+  }
+  console.log(`落池 ${created} | 去重 ${dup} | 输入 ${lines.length}`);
+})();
