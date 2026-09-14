@@ -74,12 +74,13 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
   if (MODE === "write") {
     // 输入: [{id, rel:"相关|不相关", grade:"A|B|C", reason:"一句真实理由"}]
     const items = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
-    // 线索表去重集(昵称/抖音号 token)——池→线索表搬运的防重闸
-    const seen = new Set(); let lp = "";
+    // 线索表去重映射(token→record) —— 0914 主理人拍板: 重复≠噪音,是强意向信号,要高亮不要扔
+    const seen = new Map(); let lp = "";
     do {
       const r = await feishu(`/tables/${LEADS}/records?page_size=100${lp ? "&page_token=" + lp : ""}`, "GET", null, tok);
       for (const it of r.data.items || []) {
-        txt(it.fields["抖音昵称/主页链接"]).split("/").forEach(s => { const t = s.trim(); if (t) seen.add(t); });
+        const dup = it.fields["重复命中次数"] || 0;
+        txt(it.fields["抖音昵称/主页链接"]).split("/").forEach(s => { const t = s.trim(); if (t) seen.set(t, { id: it.record_id, dup }); });
       }
       lp = r.data.has_more ? r.data.page_token : "";
     } while (lp);
@@ -100,7 +101,18 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
       const f = row.data ? row.data.record.fields : row.record ? row.record.fields : {};
       const nick = txt(f["评论者昵称"]), ident = txt(f["用户主页标识"]);
       const [dyid, purl] = ident.split(" | ");
-      if ((dyid && seen.has(dyid.trim())) || seen.has(nick)) continue;
+      const hit = (dyid && seen.get(dyid.trim())) || seen.get(nick);
+      if (hit) {
+        // 重复客户 = 强意向信号: 高亮回写已有行(次数+1 + 轨迹追加),不新建不静默
+        const newDup = (hit.dup || 0) + 1;
+        await feishu(`/tables/${LEADS}/records/${hit.id}`, "PUT", { fields: {
+          "重复命中次数": newDup,
+          "重复轨迹": `[再现${newDup}] 又在《${txt(f["来源视频"]).slice(0,40)}》评论: ${txt(f["评论原文"]).slice(0,50)} (${it.grade}级判定)`,
+        }}, tok);
+        hit.dup = newDup;
+        console.log("DUP_HIGHLIGHT", nick, "x" + newDup);
+        continue;
+      }
       const key = nick + " / " + (dyid || "id待核验");
       const res = await feishu(`/tables/${LEADS}/records`, "POST", { fields: {
         "抖音获客-线索表": key,
