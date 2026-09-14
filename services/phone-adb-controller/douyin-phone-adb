@@ -1,0 +1,2306 @@
+#!/bin/zsh
+
+set -euo pipefail
+setopt EXTENDED_GLOB
+
+ADB="${DOUYIN_ADB_BIN:-/opt/homebrew/bin/adb}"
+# 需自带 Pillow。用无版本号软链（现指向 3.14.5），Python 升级不再断链。
+# 不要改成裸 python3：本机另有不含 Pillow 的 python3.12，且节点按绝对路径审批命令。
+PYTHON_BIN="${DOUYIN_PYTHON_BIN:-/opt/homebrew/bin/python3}"
+# 受控录制链（qualification / 参考转写的唯一录制入口）。绝对路径 = 节点按可执行文件审批的安全设计。
+SCRCPY="${DOUYIN_SCRCPY_BIN:-/opt/homebrew/bin/scrcpy}"
+FFMPEG="${DOUYIN_FFMPEG_BIN:-/opt/homebrew/bin/ffmpeg}"
+FFPROBE="${DOUYIN_FFPROBE_BIN:-/opt/homebrew/bin/ffprobe}"
+# 视觉定位（vision grounding）：截图→模型报归一化坐标→点击。根治无障碍树的机型/版本适配病。
+LOCATE_KEY_FILE="${DOUYIN_LOCATE_KEY_FILE:-$HOME/.config/openclaw/locate-api.key}"
+LOCATE_ENDPOINT="${DOUYIN_LOCATE_ENDPOINT:-https://toapis.com/v1/chat/completions}"
+LOCATE_MODEL="${DOUYIN_LOCATE_MODEL:-gemini-2.5-flash-lite-official}"
+REGISTRY="${DOUYIN_PHONE_REGISTRY:-${HOME}/.config/openclaw/douyin-phone-profiles.tsv}"
+ACCOUNT_REGISTRY="${DOUYIN_ACCOUNT_REGISTRY:-${HOME}/.config/openclaw/douyin-account-routes.tsv}"
+
+die() {
+  # 0914 融合(抄 Kotlin WaitFailure 三态归因): 可选第二参 NO_ROOT/WRONG_FOREGROUND/TARGET_ABSENT,
+  # 让上游脚本/Commander 不用猜死因就能选对策(重试/救前台/换目标)。
+  print -u2 -- "$1"
+  [[ -n "${2:-}" ]] && print -u2 -- "failure_class=$2"
+  exit 2
+}
+
+require_uint() {
+  [[ "$1" == <-> ]] || die "expected non-negative integer"
+}
+
+[[ "${1:-}" == "--profile" && "$#" -ge 3 ]] || die "usage: douyin-phone-adb --profile PROFILE COMMAND [ARGS...]"
+PROFILE="$2"
+shift 2
+
+[[ -r "$REGISTRY" ]] || die "phone profile registry is not readable"
+# registry 按列名解析，v1(5列无表头) 与 v2(带表头,列可增) 双兼容。
+# 不按位置读：shell 的 read 会把多余列全挤进最后一个变量，registry 一加列
+# require_uint "$MAX_Y" 就会失败而 die，导致所有设备停摆。
+# 输出固定 11 列、用 US(0x1F) 分隔——TAB 是空白类 IFS，连续两个会被折叠，
+# v1 缺 density 那一空列会让后面所有列左移。
+_registry_row="$(/usr/bin/awk -F'\t' -v profile="$PROFILE" '
+BEGIN{sc=1;hh=0;fd=0}
+/^#[ \t]*schema=/{if($0~/v2/)sc=2;next}
+/^#registry_version/{n=split($0,a,/[ \t]+/);if(n>=2)sc=a[2]+0;next}
+!hh&&($1=="profile"||$1=="#profile"){for(i=1;i<=NF;i++){nm=$i;sub(/^#/,"",nm);c[nm]=i}hh=1;if(sc<2)sc=2;next}
+/^#/{next}
+/^[ \t]*$/{next}
+$1==profile&&!fd{fd=1
+ if(hh){p=g("profile");s=g("serial");m=g("model");w=g("width");h=g("height");
+        if(w=="")w=g("screen_w");if(h=="")h=g("screen_h");
+        d=g("density");sd=g("sdk");lo=g("locale");av=g("app_version");en=g("enabled");if(en=="")en="true"}
+ else  {p=$1;s=$2;m=$3;w=($4==""?"":$4+1);h=($5==""?"":$5+1);d="";sd="";lo="";av="";en="true"}}
+END{if(!fd){print "NOTFOUND";exit}
+ U=sprintf("%c",31)
+ printf "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n",sc,U,cl(p),U,cl(s),U,cl(m),U,cl(w),U,cl(h),U,cl(d),U,cl(sd),U,cl(lo),U,cl(av),U,cl(en)}
+function g(n,  i,v){i=c[n];if(i==0||i>NF)return "";v=$i;gsub(/^[ \t]+|[ \t]+$/,"",v);return v}
+function cl(v){gsub(/[\t\r\n\037]/," ",v);return v}
+' "$REGISTRY")"
+[[ "$_registry_row" != "NOTFOUND" && -n "$_registry_row" ]] || die "unknown phone profile: $PROFILE"
+IFS=$'\037' read -r REGISTRY_SCHEMA registry_profile SERIAL MODEL SCREEN_W SCREEN_H \
+  DEVICE_DENSITY DEVICE_SDK DEVICE_LOCALE DEVICE_APP_VERSION PROFILE_ENABLED <<< "$_registry_row"
+[[ "$registry_profile" == "$PROFILE" && -n "$SERIAL" && -n "$MODEL" ]] || die "invalid phone profile registry row"
+[[ "$PROFILE_ENABLED" != "false" ]] || die "phone profile is disabled in registry: $PROFILE"
+require_uint "$SCREEN_W"
+require_uint "$SCREEN_H"
+# registry 统一存真实分辨率；坐标上限由此处派生，不再让人手工在表里减一。
+MAX_X=$(( SCREEN_W - 1 ))
+MAX_Y=$(( SCREEN_H - 1 ))
+# density 决定 dp↔px 换算。v1 registry 没有这一列：留空并由调用方判断，
+# 绝不填默认值——猜一个 density 会让坐标静默偏移，比直接报错危险得多。
+if [[ -n "$DEVICE_DENSITY" ]]; then require_uint "$DEVICE_DENSITY"; fi
+
+REMOTE_SHOT="/sdcard/douyin-leadgen-shot-${PROFILE}.png"
+LOCAL_SHOT="/private/tmp/openclaw-phone/douyin-leadgen-shot-${PROFILE}.png"
+REMOTE_UI="/sdcard/douyin-leadgen-ui-${PROFILE}.xml"
+EVIDENCE_ROOT="/private/tmp/openclaw-phone/evidence/${PROFILE}"
+EVIDENCE_BUNDLE_ROOT="/private/tmp/openclaw-phone/evidence-bundles/${PROFILE}"
+DOUYIN_PACKAGE="com.ss.android.ugc.aweme"
+LOCK_ROOT="/private/tmp/openclaw-phone/locks"
+LOCK_DIR="$LOCK_ROOT/${SERIAL}.lock"
+
+check_target_fast() {
+  local state
+  state="$($ADB -s "$SERIAL" get-state 2>/dev/null || print -- offline)"
+  if [[ "$state" != "device" ]]; then
+    "$ADB" start-server >/dev/null 2>&1 || true
+    state="$($ADB -s "$SERIAL" get-state 2>/dev/null || print -- offline)"
+  fi
+  [[ "$state" == "device" ]] || die "target phone is offline after adb auto-refresh"
+}
+
+check_target() {
+  local actual_model
+  check_target_fast
+  actual_model="$($ADB -s "$SERIAL" shell getprop ro.product.model | tr -d '\r')"
+  [[ "$actual_model" == "$MODEL" ]] || die "target model mismatch"
+}
+
+# 波间长等待：wait_ms 硬顶 5 秒（防手滑写成分钟级，保留该限制），
+# 这里单独提供一个受控的长等待，上限 120 秒。
+wait_seconds() {
+  local total i
+  total="$1"
+  require_uint "$total"
+  (( total <= 120 )) || die "long wait must be <= 120 s"
+  for (( i = 0; i < total; i++ )); do /bin/sleep 1; done
+}
+
+wait_ms() {
+  local milliseconds seconds
+  milliseconds="$1"
+  require_uint "$milliseconds"
+  (( milliseconds <= 5000 )) || die "wait must be <= 5000 ms"
+  seconds="$(/usr/bin/printf '%d.%03d' $(( milliseconds / 1000 )) $(( milliseconds % 1000 )))"
+  /bin/sleep "$seconds"
+}
+
+snapshot() {
+  "$ADB" -s "$SERIAL" shell screencap -p "$REMOTE_SHOT"
+  /bin/mkdir -p "${LOCAL_SHOT:h}"
+  "$ADB" -s "$SERIAL" pull "$REMOTE_SHOT" "$LOCAL_SHOT" >/dev/null
+  print -- "$LOCAL_SHOT"
+}
+
+require_evidence_id() {
+  [[ "$1" == [A-Za-z0-9._-]## ]] || die "evidence id contains unsupported characters"
+  (( ${#1} <= 160 )) || die "evidence id is too long"
+}
+
+snapshot_evidence() {
+  local evidence_id local_path
+  evidence_id="$1"
+  require_evidence_id "$evidence_id"
+  local_path="$EVIDENCE_ROOT/${evidence_id}.png"
+  "$ADB" -s "$SERIAL" shell screencap -p "$REMOTE_SHOT"
+  /bin/mkdir -p "$EVIDENCE_ROOT"
+  "$ADB" -s "$SERIAL" pull "$REMOTE_SHOT" "$local_path" >/dev/null
+  print -- "$local_path"
+}
+
+_ui_evidence_wave() {
+  local evidence_id local_path dump_output remote_size dump_attempt dump_status
+  evidence_id="$1"
+  require_evidence_id "$evidence_id"
+  local_path="$EVIDENCE_ROOT/${evidence_id}.xml"
+  /bin/mkdir -p "$EVIDENCE_ROOT"
+
+  # Douyin video pages keep animating even when the user is not interacting.
+  # uiautomator can report that it did not reach idle while still producing a
+  # fresh, complete hierarchy. Remove both copies before every attempt so an
+  # earlier XML can never be accepted, then validate the newly generated XML
+  # structurally instead of treating the idle warning itself as fatal.
+  # 20260903: 旧注释声称的"Worker 30秒 node_exec 天花板"已查明是 OpenClaw gateway
+  # node.invoke 顶层漏传 timeoutMs 的 bug（默认30s），已打补丁拆除；worker 显式 timeout
+  # 现在真实生效(120-180s)。此处仍保持快速失败，交给 stage 级重试策略。
+  for dump_attempt in 1 2 3; do
+    /bin/rm -f "$local_path"
+    "$ADB" -s "$SERIAL" shell rm -f "$REMOTE_UI" >/dev/null
+    dump_status=0
+    if dump_output="$("$ADB" -s "$SERIAL" shell uiautomator dump --compressed "$REMOTE_UI" 2>&1)"; then
+      dump_status=0
+    else
+      dump_status=$?
+    fi
+    remote_size="$("$ADB" -s "$SERIAL" shell stat -c %s "$REMOTE_UI" 2>/dev/null | tr -d '\r' || print -- 0)"
+    if [[ "$remote_size" == <-> ]] && (( remote_size > 0 )); then
+      "$ADB" -s "$SERIAL" pull "$REMOTE_UI" "$local_path" >/dev/null
+      if [[ -s "$local_path" ]] \
+        && /usr/bin/grep -q '<hierarchy' "$local_path" \
+        && /usr/bin/grep -q '</hierarchy>' "$local_path"; then
+        if (( dump_status != 0 )) || [[ "$dump_output" == *"ERROR:"* ]]; then
+          print -u2 -- "warning: accepted fresh complete hierarchy despite dynamic-page idle warning (attempt $dump_attempt)"
+        fi
+        print -- "$local_path"
+        return 0
+      fi
+    fi
+    # 波内也要留时间：背靠背瞬发三次，页面还在动的话必然三次同样失败。
+    (( dump_attempt < 3 )) && wait_ms 900
+  done
+  # 详情页自动播放机型（HONOR 实测）：暂停→抓→恢复三连兜底，总耗时 ~13s。
+  if [[ "$dump_output" == *"could not get idle state"* ]]; then
+    # 改用媒体键：详情页可暂停视频，其它页面无副作用——绝不制造导航（a7 案卷：点击版把搜索页点飞）。
+    "$ADB" -s "$SERIAL" shell input keyevent 85
+    wait_ms 500
+    "$ADB" -s "$SERIAL" shell rm -f "$REMOTE_UI" >/dev/null
+    dump_output="$("$ADB" -s "$SERIAL" shell uiautomator dump --compressed "$REMOTE_UI" 2>&1)" || true
+    remote_size="$("$ADB" -s "$SERIAL" shell stat -c %s "$REMOTE_UI" 2>/dev/null | tr -d $'\r' || print -- 0)"
+    "$ADB" -s "$SERIAL" shell input keyevent 85
+    if [[ "$remote_size" == <-> ]] && (( remote_size > 0 )); then
+      "$ADB" -s "$SERIAL" pull "$REMOTE_UI" "$local_path" >/dev/null
+      if [[ -s "$local_path" ]] && /usr/bin/grep -q "<hierarchy" "$local_path" && /usr/bin/grep -q "</hierarchy>" "$local_path"; then
+        print -u2 -- "warning: hierarchy captured via pause-dump-resume fallback (single-shot)"
+        print -- "$local_path"
+        return 0
+      fi
+    fi
+  fi
+  return 1
+}
+
+# 已知存在的东西，不该一次读不到就放弃（0912 主理人定的原则）：
+# 分三波，波内 3 次（间隔 0.9s）+ 暂停抓取兜底，波间分别等 20s / 40s，
+# 给页面加载、动画、网络真正留出时间。最坏约 80 秒，仍在 worker 120-180s 预算内。
+ui_evidence() {
+  local evidence_id wave out
+  evidence_id="$1"
+  require_evidence_id "$evidence_id"
+  # 已知存在的东西不该一次读不到就放弃：三波，波内 3 次 + 暂停抓取兜底，
+  # 波间 10s / 20s。成功路径不受影响（实测 2.8 秒返回，其中 2.7 秒是设备端
+  # uiautomator dump 本身的地板耗时，封装只占 0.15 秒）。
+  # 最坏约 180 秒——skill 侧的 exec timeout 下限已同步抬到 300000ms。
+  for wave in 1 2 3; do
+    if out="$(_ui_evidence_wave "$evidence_id")"; then
+      (( wave > 1 )) && print -u2 -- "warning: ui hierarchy obtained on wave $wave/3"
+      print -- "$out"
+      return 0
+    fi
+    if (( wave < 3 )); then
+      print -u2 -- "warning: ui hierarchy unavailable (wave $wave/3); waiting before the next wave"
+      (( wave == 1 )) && wait_seconds 10
+      (( wave == 2 )) && wait_seconds 20
+    fi
+  done
+  die "uiautomator dump did not produce a fresh complete hierarchy after 3 waves (~180s); use current screenshot evidence instead"
+}
+
+# 0914 融合刀1: 已删除死函数 ui_evidence_retry(零调用者)。其中的 pause-dump-resume
+# 兜底段在某次补丁中被变量提前展开毁成死代码(空串 -s 空串 形态,字面模式勿写出——smoke 烂死守卫会命中)。健康的媒体键版兜底
+# 一直活在 _ui_evidence_wave 里,统一走 ui_evidence 三波协议。
+
+# 0914 融合刀2(抄 Kotlin clearClipboardBaseline 教义): ADB 无法进程内清剪贴板,
+# 等价防线 = 每 profile 记录上次成功取到的短链;本次读数与上次相同 → 本次"复制"动作
+# 大概率静默失败,剪贴板里是上一个目标的旧链接。张冠李戴比取不到更毒,当场拒收。
+# 同目标重试天然安全:上次记录的是上一个目标的链接,同目标重拷出的链接与它不同。
+clip_state_file() { print -- "$LOCATE_CACHE_DIR/${registry_profile}-last-clip.txt" }
+clip_guard_check() {
+  local _prev _f
+  _f="$(clip_state_file)"
+  [[ -r "$_f" ]] || return 0
+  _prev="$(<"$_f")"
+  [[ -n "$_prev" && "$_prev" == "$1" ]] && die "COPY_STALE: clipboard still holds the previous target's link ($1); the copy tap likely failed silently — refusing to attribute it to this target" TARGET_ABSENT
+  return 0
+}
+clip_guard_record() {
+  /bin/mkdir -p "$LOCATE_CACHE_DIR" 2>/dev/null || true
+  print -- "$1" > "$(clip_state_file)"
+}
+
+node_center() {
+  local node_line bounds x1 y1 x2 y2
+  node_line="$1"
+  bounds="$(print -- "$node_line" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
+  read x1 y1 x2 y2 <<< "$bounds"
+  require_uint "$x1"; require_uint "$y1"; require_uint "$x2"; require_uint "$y2"
+  (( x2 > x1 && y2 > y1 && x1 <= MAX_X && y1 <= MAX_Y && x2 <= MAX_X + 1 && y2 <= MAX_Y + 1 )) || die "semantic node bounds are outside target screen"
+  print -- "$(( (x1 + x2) / 2 )) $(( (y1 + y2) / 2 ))"
+}
+
+# 视频详情页的确定性判据：分享按钮存在。搜索结果页 / 用户主页都没有它。
+# 0912 实证：worker 在搜索结果页直接调 current-video-link，找不到分享按钮后盲按两次返回，
+# 把设备一路退到用户主页、最后退出抖音，后续 4 次重试全部注定失败且越退越偏。
+# 所以"根本不在详情页"必须当硬错误立即报出，不许进重试、不许按返回键。
+# 返回码三态，绝不把"读不到树"和"读到了但不是详情页"混为一谈（那会把瞬态问题
+# 误报成结构性问题，害人往错方向修）：0=在详情页 1=不在详情页 2=树读不到(瞬态,可重试)
+_on_video_detail() {
+  local probe_id="$1" probe_xml probe_line w
+  for w in 1 2; do
+    probe_xml="$EVIDENCE_ROOT/${probe_id}-w${w}.xml"
+    if _ui_evidence_wave "${probe_id}-w${w}" >/dev/null 2>&1; then
+      probe_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="分享[^"]*，按钮"[^>]*>' "$probe_xml" | /usr/bin/head -1 || true)"
+      [[ -n "$probe_line" && "$probe_line" == *'clickable="true"'* ]] && return 0
+      return 1
+    fi
+    (( w == 1 )) && wait_ms 2500
+  done
+  return 2
+}
+
+# 取链接偶发失败(面板没弹/剪贴板没同步/超时)不该一击致死：整体包重试，连试到成功。
+# 每次在干净的详情页重来(die在subshell里只退出子壳,外层捕获重试)。
+current_video_link() {
+  local eid="$1" tries=5 i rc _g
+  require_evidence_id "$eid"
+  _g=0; _on_video_detail "${eid}-detail-guard" || _g=$?   # 必须用 || 捕获：set -e 下裸调用返回非零会静默终止脚本，错误信息一个字都不打
+  (( _g == 2 )) && die "UI_TREE_UNAVAILABLE: could not read the UI hierarchy to verify the video detail page; transient, safe to retry" NO_ROOT
+  (( _g == 1 )) && die "NOT_ON_VIDEO_DETAIL: current-video-link requires an opened video detail page (share button absent); open the video card first"
+  for i in {1..$tries}; do
+    if ( _current_video_link_once "${eid}-t${i}" ); then return 0; fi
+    rc=$?
+    print -u2 -- "warning: current-video-link attempt $i/$tries failed (rc=$rc); recovering to detail page"
+    # 回退到详情页干净态：连按返回收掉可能半开的分享面板/临时搜索框
+    "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1
+    wait_ms 600
+    "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1
+    wait_ms 800
+    [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin left foreground during link retry recovery" WRONG_FOREGROUND
+    _g=0; _on_video_detail "${eid}-t${i}-recovery-guard" || _g=$?
+    (( _g == 2 )) && die "UI_TREE_UNAVAILABLE after recovery attempt $i; transient, safe to retry" NO_ROOT
+    (( _g == 1 )) && die "recovery after attempt $i did not land on a video detail page; aborting instead of drifting the device further"
+  done
+  die "current-video-link failed after $tries attempts"
+}
+
+_current_video_link_once() {
+  local evidence_id share_xml share_line share_center share_x share_y panel_xml panel_line link_line link_bounds
+  local link_x1 link_y1 link_x2 link_y2 link_x link_y
+  local copied_path scratch_xml search_line search_center search_x search_y
+  local result_xml result_line escaped_text short_url resolved_url video_id note_id content_type content_id reopen_url
+  evidence_id="$1"
+  require_evidence_id "$evidence_id"
+
+  [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
+  # 详情页自动播放会让部分机型（HONOR 实测）uiautomator 永不 idle：
+  # 先中央点击暂停播放再取证；流程末尾跳离本页，无需恢复播放。
+  "$ADB" -s "$SERIAL" shell input tap $(( SCREEN_W / 2 )) $(( SCREEN_H * 45 / 100 ))
+  wait_ms 600
+  # 分享按钮是详情页上"已知存在"的东西，一次读不到不该放弃（0913 实证：前置守卫刚放行、
+  # 正式取证却报找不到，两者之间只隔了上面那次中央点击）。有界重抓，并区分两种死因：
+  #   a) 中央点击把页面点飞了 → 已不在详情页
+  #   b) 还在详情页但按钮没渲染出来 → 纯时序问题，重抓即可
+  share_xml="$EVIDENCE_ROOT/${evidence_id}-share.xml"
+  share_line=""
+  local _st _sg
+  for _st in 1 2 3; do
+    ui_evidence "${evidence_id}-share" >/dev/null
+    share_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="分享[^"]*，按钮"[^>]*>' "$share_xml" | /usr/bin/head -1 || true)"
+    [[ -n "$share_line" && "$share_line" == *'clickable="true"'* ]] && break
+    share_line=""
+    print -u2 -- "warning: share button absent from hierarchy (try $_st/3); recapturing"
+    (( _st < 3 )) && wait_ms 1500
+  done
+  if [[ -z "$share_line" ]]; then
+    _sg=0; _on_video_detail "${evidence_id}-share-diag" || _sg=$?
+    (( _sg == 1 )) && die "the centre tap navigated away from the video detail page (share button gone); this is not a missing-button problem"
+    die "verified share button was not found after 3 captures while still on the video detail page" TARGET_ABSENT
+  fi
+  share_center="$(node_center "$share_line")" || die "share button bounds could not be parsed"
+  read share_x share_y <<< "$share_center"
+  "$ADB" -s "$SERIAL" shell input tap "$share_x" "$share_y"
+  wait_ms 700
+
+  panel_xml="$EVIDENCE_ROOT/${evidence_id}-panel.xml"
+  ui_evidence "${evidence_id}-panel" >/dev/null
+  panel_line="$(/usr/bin/grep -oE '<node[^>]+text="分享给"[^>]*>' "$panel_xml" | /usr/bin/head -1 || true)"
+  [[ -n "$panel_line" ]] || die "verified share panel was not found"
+
+  link_line="$(/usr/bin/grep -oE '<node[^>]+text="分享链接"[^>]*>' "$panel_xml" | /usr/bin/head -1 || true)"
+  [[ -n "$link_line" ]] || die "share-link action was not present in the verified panel"
+  link_bounds="$(print -- "$link_line" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
+  read link_x1 link_y1 link_x2 link_y2 <<< "$link_bounds"
+  require_uint "$link_x1"; require_uint "$link_y1"; require_uint "$link_x2"; require_uint "$link_y2"
+  (( link_x2 > link_x1 && link_y2 > link_y1 && link_x1 <= MAX_X && link_y1 > 200 && link_y2 <= MAX_Y + 1 )) || die "share-link action bounds are outside target screen"
+  link_x=$(( (link_x1 + link_x2) / 2 ))
+  link_y=$(( link_y1 - 96 ))
+  (( link_y > 0 && link_y <= MAX_Y )) || die "share-link action tap point is outside target screen"
+  "$ADB" -s "$SERIAL" shell input tap "$link_x" "$link_y"
+  wait_ms 800
+  copied_path="$(snapshot_evidence "${evidence_id}-link-copied")"
+
+  "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "snssdk1128://search/tabs?keyword=%20" >/dev/null
+  wait_ms 900
+  scratch_xml="$EVIDENCE_ROOT/${evidence_id}-scratch.xml"
+  ui_evidence "${evidence_id}-scratch" >/dev/null
+  search_line="$(/usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/et_search_kw"[^>]*>' "$scratch_xml" | /usr/bin/head -1 || true)"
+  [[ -n "$search_line" && "$search_line" == *'clickable="true"'* ]] || die "safe scratch search field was not found"
+  search_center="$(node_center "$search_line")" || die "scratch field bounds could not be parsed"
+  read search_x search_y <<< "$search_center"
+  "$ADB" -s "$SERIAL" shell input tap "$search_x" "$search_y"
+  wait_ms 200
+  "$ADB" -s "$SERIAL" shell input keyevent 123
+  "$ADB" -s "$SERIAL" shell input keyevent 67
+  "$ADB" -s "$SERIAL" shell input keyevent 67
+  "$ADB" -s "$SERIAL" shell input keyevent 279
+  wait_ms 500
+  result_xml="$EVIDENCE_ROOT/${evidence_id}-scratch-result.xml"
+  ui_evidence "${evidence_id}-scratch-result" >/dev/null
+  result_line="$(/usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/et_search_kw"[^>]*>' "$result_xml" | /usr/bin/head -1 || true)"
+  [[ -n "$result_line" ]] || die "clipboard verification field was not found"
+  escaped_text="$(print -- "$result_line" | /usr/bin/sed -E 's/.* text="([^"]*)" resource-id=.*/\1/' | /usr/bin/sed 's/&amp;/\&/g; s/&#47;/\//g')"
+  short_url="$(print -- "$escaped_text" | /usr/bin/grep -oE 'https://v\.douyin\.com/[A-Za-z0-9_/-]+' | /usr/bin/head -1 || true)"
+  [[ "$short_url" == https://v.douyin.com/* ]] || die "copied text did not contain a verified Douyin short link" TARGET_ABSENT
+  clip_guard_check "$short_url"
+  resolved_url="$(/usr/bin/curl -sSIL --max-time 20 -A 'Mozilla/5.0' "$short_url" | /usr/bin/awk -F ': ' 'tolower($1) == "location" { gsub(/\r/, "", $2); location=$2 } END { print location }' || true)"
+  video_id="$(print -- "$resolved_url" | /usr/bin/grep -oE '/video/[0-9]+' | /usr/bin/tail -1 | /usr/bin/cut -d/ -f3 || true)"
+  note_id="$(print -- "$resolved_url" | /usr/bin/grep -oE '/note/[0-9]+' | /usr/bin/tail -1 | /usr/bin/cut -d/ -f3 || true)"
+  if [[ "$video_id" == <-> && ${#video_id} -ge 16 && ${#video_id} -le 24 ]]; then
+    content_type="video"
+    content_id="$video_id"
+  elif [[ "$note_id" == <-> && ${#note_id} -ge 16 && ${#note_id} -le 24 ]]; then
+    content_type="note"
+    content_id="$note_id"
+  else
+    die "resolved link did not contain a valid video or note id"
+  fi
+  reopen_url="snssdk1128://aweme/detail/$content_id"
+
+  if [[ "$content_type" == "video" ]]; then
+    "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "$reopen_url" >/dev/null
+    wait_ms 900
+  else
+    # The scratch search field still has keyboard focus. First back hides the
+    # keyboard; the second leaves the scratch route so the Worker can reopen
+    # the frozen keyword and continue after excluding the note.
+    "$ADB" -s "$SERIAL" shell input keyevent 4
+    wait_ms 250
+    "$ADB" -s "$SERIAL" shell input keyevent 4
+    wait_ms 900
+  fi
+  [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "resolved content did not restore to Douyin" WRONG_FOREGROUND
+  clip_guard_record "$short_url"
+  print -- "content_type=$content_type"
+  if [[ "$content_type" == "video" ]]; then
+    print -- "content_id=$content_id"
+    print -- "video_id=$video_id"
+    print -- "short_url=$short_url"
+    print -- "resolved_url=$resolved_url"
+    print -- "reopen_url=$reopen_url"
+  else
+    print -- "excluded_non_video=true"
+    print -- "note_id=$note_id"
+    print -- "short_url=$short_url"
+    print -- "resolved_url=$resolved_url"
+  fi
+  print -- "evidence=$copied_path"
+}
+
+filter_option_grid_index() {
+  case "$1:$2" in
+    sort:comprehensive) print -- "0 0" ;;
+    sort:latest) print -- "0 1" ;;
+    sort:most_liked) print -- "0 2" ;;
+    sort:most_commented) print -- "0 3" ;;
+    sort:most_favorited) print -- "1 0" ;;
+    time:unlimited) print -- "2 0" ;;
+    time:one_day) print -- "2 1" ;;
+    time:one_week) print -- "2 2" ;;
+    time:six_months) print -- "2 3" ;;
+    duration:unlimited) print -- "3 0" ;;
+    duration:under_one_minute) print -- "3 1" ;;
+    duration:one_to_five_minutes) print -- "3 2" ;;
+    duration:over_five_minutes) print -- "3 3" ;;
+    scope:unlimited) print -- "4 0" ;;
+    scope:watched) print -- "4 1" ;;
+    scope:not_watched) print -- "4 2" ;;
+    scope:following) print -- "4 3" ;;
+    location:unlimited) print -- "5 0" ;;
+    location:same_city) print -- "5 1" ;;
+    *) return 1 ;;
+  esac
+}
+
+locate_filter_option() {
+  local screenshot_path grid_index row_index column_index
+  screenshot_path="$1"
+  grid_index="$(filter_option_grid_index "$2" "$3")" || die "unsupported search filter option: $2=$3"
+  read row_index column_index <<< "$grid_index"
+  "$PYTHON_BIN" - "$screenshot_path" "$row_index" "$column_index" <<'PY'
+import sys
+from PIL import Image
+
+path, row_arg, column_arg = sys.argv[1:]
+row_index, column_index = int(row_arg), int(column_arg)
+image = Image.open(path).convert("RGB")
+w, h = image.size
+if w < 480 or h < 800:
+    raise SystemExit("filter option locator failed: screenshot dimensions are unexpected")
+
+def is_chip(pixel):
+    r, g, b = pixel
+    return r >= 235 and g >= 232 and b >= 232 and (min(r, g, b) < 253 or r - g > 4 or r - b > 4)
+
+def groups(flags, max_gap, min_size):
+    found, start, last = [], None, None
+    for index, enabled in enumerate(flags):
+        if enabled:
+            if start is None:
+                start = index
+            last = index
+        elif start is not None and index - last > max_gap:
+            if last - start + 1 >= min_size:
+                found.append((start, last))
+            start = last = None
+    if start is not None and last - start + 1 >= min_size:
+        found.append((start, last))
+    return found
+
+x0, x1 = int(w * 0.02), int(w * 0.98)
+y0, y1 = int(h * 0.16), int(h * 0.69)
+row_flags = []
+for y in range(y0, y1):
+    chip_pixels = sum(is_chip(image.getpixel((x, y))) for x in range(x0, x1, 3))
+    row_flags.append(chip_pixels >= (x1 - x0) * 0.07 / 3)
+row_bands = [(a + y0, b + y0) for a, b in groups(row_flags, max_gap=10, min_size=max(24, int(h * 0.018)))]
+if len(row_bands) < 5:
+    raise SystemExit(f"filter option locator failed: expected at least five visual chip rows, found {len(row_bands)}")
+
+def _drop_button_row(bands):
+    """尾部若是「重置选项/查看结果」按钮行（含大片红色），从筛选行里剔除。"""
+    out = list(bands)
+    while out:
+        top, bottom = out[-1]
+        patch = image.crop((int(w * 0.02), top, int(w * 0.98), bottom + 1))
+        px = list(patch.getdata())
+        red = sum(1 for r, g, b in px if r > 220 and g < 125 and b < 165) / len(px)
+        if red >= 0.10:
+            out.pop()
+            continue
+        break
+    return out
+
+
+def _resolve_row(bands, logical_row):
+    """逻辑行 → 实际检测行：从底部锚定，抗抖音增删排序选项导致的整体位移。
+    逻辑约定 0/1=排序 2=时间 3=时长 4=范围 5=位置；位置永远是最后一个筛选行。"""
+    rows = _drop_button_row(bands)
+    n = len(rows)
+    # 0914 实证(小诺机):部分账号/版本无「位置距离」组=4行布局,授权定位也不出现
+    has_location = n >= 5
+    if n < 4:
+        raise SystemExit(f"filter grid failed: expected at least four filter rows, found {n}")
+    if logical_row == 5 and not has_location:
+        raise SystemExit("NO_LOCATION_ROW: 4-row filter panel without 位置距离")
+    tail = ({5: n - 1, 4: n - 2, 3: n - 3, 2: n - 4} if has_location else {4: n - 1, 3: n - 2, 2: n - 3})
+    if logical_row in tail:
+        return rows[tail[logical_row]]
+    sort_rows = rows[: n - (4 if has_location else 3)]
+    if logical_row >= len(sort_rows):
+        raise SystemExit(f"filter grid failed: sort row {logical_row} missing (only {len(sort_rows)} sort rows)")
+    return rows[logical_row]
+
+
+top, bottom = _resolve_row(row_bands, row_index)
+column_flags = []
+row_height = bottom - top + 1
+for x in range(x0, x1):
+    chip_pixels = sum(is_chip(image.getpixel((x, y))) for y in range(top, bottom + 1, 2))
+    column_flags.append(chip_pixels >= row_height * 0.32 / 2)
+column_bands = [(a + x0, b + x0) for a, b in groups(column_flags, max_gap=12, min_size=max(45, int(w * 0.10)))]
+if column_index >= len(column_bands):
+    raise SystemExit(f"filter option locator failed: row {row_index} has {len(column_bands)} visual chips")
+left, right = column_bands[column_index]
+print(f"{(left + right) // 2} {(top + bottom) // 2}")
+PY
+}
+
+tap_filter_option() {
+  local screenshot_path position tap_x tap_y
+  screenshot_path="$1"
+  position="$(locate_filter_option "$screenshot_path" "$2" "$3")" || die "could not locate search filter option: $2=$3"
+  read tap_x tap_y <<< "$position"
+  "$ADB" -s "$SERIAL" shell input tap "$tap_x" "$tap_y"
+  wait_ms 300
+}
+
+locate_filter_action_button() {
+  "$PYTHON_BIN" - "$1" <<'PY'
+import statistics
+import sys
+from PIL import Image
+
+image = Image.open(sys.argv[1]).convert("RGB")
+w, h = image.size
+# 「查看结果」按钮的纵向位置随面板高度变化（抖音增删排序选项即整体位移）。
+# 不写死区间：在下半屏扫描红色像素，按行聚成带，取点数最多的一带的中位点。
+points = []
+for y in range(int(h * 0.40), int(h * 0.95), 3):
+    for x in range(int(w * 0.45), int(w * 0.98), 3):
+        r, g, b = image.getpixel((x, y))
+        if r > 220 and g < 115 and b < 160:
+            points.append((x, y))
+if len(points) < 500:
+    raise SystemExit("filter action locator failed: red result-button signature missing")
+
+by_row = {}
+for x, y in points:
+    by_row.setdefault(y, []).append(x)
+rows = sorted(by_row)
+bands, current = [], [rows[0]]
+for prev, cur in zip(rows, rows[1:]):
+    if cur - prev <= 9:
+        current.append(cur)
+    else:
+        bands.append(current)
+        current = [cur]
+bands.append(current)
+best = max(bands, key=lambda band: sum(len(by_row[y]) for y in band))
+cluster = [(x, y) for y in best for x in by_row[y]]
+if len(cluster) < 500:
+    raise SystemExit("filter action locator failed: red result-button signature missing")
+print(f"{int(statistics.median(x for x, _ in cluster))} {int(statistics.median(y for _, y in cluster))}")
+PY
+}
+
+verify_filter_visual() {
+  local phase screenshot_path sort_mode time_layer duration scope location
+  phase="$1"
+  screenshot_path="$2"
+  sort_mode="${3:-comprehensive}"
+  time_layer="${4:-unlimited}"
+  duration="${5:-unlimited}"
+  scope="${6:-unlimited}"
+  location="${7:-unlimited}"
+  "$PYTHON_BIN" - \
+    "$phase" "$screenshot_path" "$sort_mode" "$time_layer" "$duration" "$scope" "$location" <<'PY'
+import sys
+from PIL import Image, ImageStat
+
+phase, path, sort_mode, time_layer, duration, scope, location = sys.argv[1:]
+image = Image.open(path).convert("RGB")
+w, h = image.size
+if w < 700 or h < 1200:
+    raise SystemExit("filter visual verification failed: screenshot dimensions are unexpected")
+
+def crop(box):
+    x1, y1, x2, y2 = box
+    return image.crop((int(w*x1), int(h*y1), int(w*x2), int(h*y2)))
+
+def _red_fraction(box):
+    pixels = list(crop(box).getdata())
+    return sum(1 for r, g, b in pixels if r > 220 and g < 125 and b < 165) / len(pixels)
+
+# 红色「查看结果」按钮的纵向位置随抖音版本/面板高度漂移（0911 实测在 0.619~0.658，
+# 而旧代码写死 0.675~0.725，两者完全不重叠 → 永远判为未打开）。
+# 改为在下半屏滑窗扫描取最大红占比，对布局位移免疫。
+red_fraction = 0.0
+_top = 0.55
+while _top <= 0.80:
+    red_fraction = max(red_fraction, _red_fraction((0.52, _top, 0.94, _top + 0.05)))
+    _top += 0.01
+below = crop((0.03, 0.75, 0.97, 0.93))
+below_pixels = list(below.getdata())
+dark_fraction = sum(1 for r, g, b in below_pixels if (r + g + b) / 3 < 185) / len(below_pixels)
+panel_open = red_fraction >= 0.28 and dark_fraction >= 0.45
+
+if phase == "results":
+    if panel_open:
+        raise SystemExit("filter visual verification failed: filter panel is still open")
+    raise SystemExit(0)
+if phase not in {"panel", "selected"}:
+    raise SystemExit("filter visual verification failed: unsupported phase")
+if not panel_open:
+    raise SystemExit(f"filter visual verification failed: panel signature missing ({red_fraction:.3f}, {dark_fraction:.3f})")
+if phase == "panel":
+    raise SystemExit(0)
+
+# 选中态验收改为「结构检测」，与 locate_filter_option 同一套算法：按 chip 色块自动
+# 找出六行选项网格及每行的列，在检测到的格子里取样。不写死任何位置。
+# 0911 实证：旧的千分比表整体漂移约 0.056（约 150px），导致此步永远判失败。
+CHIP_GRID = {
+    ("sort", "comprehensive"): (0, 0), ("sort", "latest"): (0, 1),
+    ("sort", "most_liked"): (0, 2), ("sort", "most_commented"): (0, 3),
+    ("sort", "most_favorited"): (1, 0),
+    ("time", "unlimited"): (2, 0), ("time", "one_day"): (2, 1),
+    ("time", "one_week"): (2, 2), ("time", "six_months"): (2, 3),
+    ("duration", "unlimited"): (3, 0), ("duration", "under_one_minute"): (3, 1),
+    ("duration", "one_to_five_minutes"): (3, 2), ("duration", "over_five_minutes"): (3, 3),
+    ("scope", "unlimited"): (4, 0), ("scope", "watched"): (4, 1),
+    ("scope", "not_watched"): (4, 2), ("scope", "following"): (4, 3),
+    ("location", "unlimited"): (5, 0), ("location", "same_city"): (5, 1),
+}
+
+def _is_chip(pixel):
+    r, g, b = pixel
+    return r >= 235 and g >= 232 and b >= 232 and (min(r, g, b) < 253 or r - g > 4 or r - b > 4)
+
+def _groups(flags, max_gap, min_size):
+    found, start, last = [], None, None
+    for index, enabled in enumerate(flags):
+        if enabled:
+            if start is None:
+                start = index
+            last = index
+        elif start is not None and index - last > max_gap:
+            if last - start + 1 >= min_size:
+                found.append((start, last))
+            start = last = None
+    if start is not None and last - start + 1 >= min_size:
+        found.append((start, last))
+    return found
+
+_x0, _x1 = int(w * 0.02), int(w * 0.98)
+_y0, _y1 = int(h * 0.16), int(h * 0.69)
+_row_flags = []
+for _y in range(_y0, _y1):
+    _hit = sum(_is_chip(image.getpixel((_x, _y))) for _x in range(_x0, _x1, 3))
+    _row_flags.append(_hit >= (_x1 - _x0) * 0.07 / 3)
+_row_bands = [(a + _y0, b + _y0) for a, b in _groups(_row_flags, 10, max(24, int(h * 0.018)))]
+if len(_row_bands) < 5:
+    raise SystemExit(f"filter visual verification failed: expected at least five visual chip rows, found {len(_row_bands)}")
+
+def _v_drop_button_row(bands):
+    """尾部若是「重置选项/查看结果」按钮行（含大片红色），从筛选行里剔除。"""
+    out = list(bands)
+    while out:
+        top, bottom = out[-1]
+        patch = image.crop((int(w * 0.02), top, int(w * 0.98), bottom + 1))
+        px = list(patch.getdata())
+        red = sum(1 for r, g, b in px if r > 220 and g < 125 and b < 165) / len(px)
+        if red >= 0.10:
+            out.pop()
+            continue
+        break
+    return out
+
+
+def _v_resolve_row(bands, logical_row):
+    """逻辑行 → 实际检测行：从底部锚定，抗抖音增删排序选项导致的整体位移。
+    逻辑约定 0/1=排序 2=时间 3=时长 4=范围 5=位置；位置永远是最后一个筛选行。"""
+    rows = _v_drop_button_row(bands)
+    n = len(rows)
+    # 0914 实证(小诺机):部分账号/版本无「位置距离」组=4行布局,授权定位也不出现
+    has_location = n >= 5
+    if n < 4:
+        raise SystemExit(f"filter grid failed: expected at least four filter rows, found {n}")
+    if logical_row == 5 and not has_location:
+        raise SystemExit("NO_LOCATION_ROW: 4-row filter panel without 位置距离")
+    tail = ({5: n - 1, 4: n - 2, 3: n - 3, 2: n - 4} if has_location else {4: n - 1, 3: n - 2, 2: n - 3})
+    if logical_row in tail:
+        return rows[tail[logical_row]]
+    sort_rows = rows[: n - (4 if has_location else 3)]
+    if logical_row >= len(sort_rows):
+        raise SystemExit(f"filter grid failed: sort row {logical_row} missing (only {len(sort_rows)} sort rows)")
+    return rows[logical_row]
+
+
+
+def _column_bands(top, bottom):
+    height = bottom - top + 1
+    flags = []
+    for x in range(_x0, _x1):
+        hit = sum(_is_chip(image.getpixel((x, y))) for y in range(top, bottom + 1, 2))
+        flags.append(hit >= height * 0.32 / 2)
+    return [(a + _x0, b + _x0) for a, b in _groups(flags, 12, max(45, int(w * 0.10)))]
+
+for category, value in (("sort", sort_mode), ("time", time_layer), ("duration", duration), ("scope", scope), ("location", location)):
+    row_index, column_index = CHIP_GRID[(category, value)]
+    try:
+        top, bottom = _v_resolve_row(_row_bands, row_index)
+    except SystemExit as _e:
+        if "NO_LOCATION_ROW" in str(_e) and category == "location" and value == "unlimited":
+            continue
+        raise
+    bands = _column_bands(top, bottom)
+    if column_index >= len(bands):
+        raise SystemExit(f"filter visual verification failed: row {row_index} has {len(bands)} visual chips for {category}={value}")
+    left, right = bands[column_index]
+    patch = image.crop((left, top, right + 1, bottom + 1))
+    pixels = list(patch.getdata())
+    red_fraction = sum(1 for r, g, b in pixels if r > 190 and r - g > 35 and r - b > 15) / len(pixels)
+    if red_fraction < 0.03:
+        raise SystemExit(f"filter visual verification failed: selected state missing for {category}={value}")
+PY
+}
+
+search_time_layer() {
+  local time_layer evidence_id sort_mode duration scope location
+  local pretab_xml video_line video_center video_x video_y
+  local before_xml filter_line filter_center filter_x filter_y
+  local panel_path selected_path results_path results_xml result_position result_x result_y
+  time_layer="$1"
+  evidence_id="$2"
+  sort_mode="${3:-comprehensive}"
+  duration="${4:-unlimited}"
+  scope="${5:-unlimited}"
+  location="${6:-unlimited}"
+  require_evidence_id "$evidence_id"
+  filter_option_grid_index time "$time_layer" >/dev/null || die "unsupported search time layer"
+  filter_option_grid_index sort "$sort_mode" >/dev/null || die "unsupported search sort mode"
+  filter_option_grid_index duration "$duration" >/dev/null || die "unsupported search duration"
+  filter_option_grid_index scope "$scope" >/dev/null || die "unsupported search scope"
+  filter_option_grid_index location "$location" >/dev/null || die "unsupported search location"
+
+  [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
+  before_xml="$EVIDENCE_ROOT/${evidence_id}-before.xml"
+  snapshot_evidence "${evidence_id}-pretab" >/dev/null
+  pretab_xml="$EVIDENCE_ROOT/${evidence_id}-pretab-ui.xml"
+  # 0912 前置校验 v2：Worker 曾在「我」个人主页上直接调本命令，点空+白烧四次重试。
+  # v1 的 bug（当日已翻车实锤）：grep 了 snapshot_evidence 根本不会生成的 -pretab-ui.xml，
+  # 文件永远不存在 → 永远判"不在搜索页"。教训 = 校验器自己也要被校验（清单 C2）。
+  # v2 用机会性单波读树：树读得到 → 必须含搜索 tab 栏，否则准确报错；
+  # 树读不到 → 不下结论直接放行（综合 tab 的 feed 永不 idle，读不到是这里的合法状态，
+  # 后续步骤本来就走视觉切视频 tab）。个人主页的树总是可读的，所以该抓的场景抓得住。
+  if pretab_xml="$(_ui_evidence_wave "${evidence_id}-pretab-guard" 2>/dev/null)"; then
+    if ! /usr/bin/grep -q 'text="综合"' "$pretab_xml" || ! /usr/bin/grep -q 'text="视频"' "$pretab_xml"; then
+      die "not on a Douyin search results page (tab bar missing in readable UI tree); call open-search first"
+    fi
+  fi
+  # v3: 视觉定位取代 XML（自动播放页 XML 攻防每次烧 20-35s，是宏超时主因）
+  video_center="$(locate_cached vtab "顶部搜索结果标签栏中的「视频」标签" "${evidence_id}-vtab")" || die "video tab locate failed"
+  read video_x video_y <<< "$video_center"
+  "$ADB" -s "$SERIAL" shell input tap "$video_x" "$video_y"
+  wait_ms 1200
+  filter_center="$(locate_cached fbtn "右上角的筛选按钮（漏斗图标）" "${evidence_id}-fbtn")" || die "filter button locate failed"
+  read filter_x filter_y <<< "$filter_center"
+
+  # 0911 实测：结果页还挂着「加载中，请稍后~」时点筛选会被吞掉，
+  # 单次点击 + 900ms 必然失败。改为「先验证面板是否已打开、没打开才点」的有界重试，
+  # 这个顺序同时避免了重复点击把已经打开的面板又关掉。
+  # 0912 实测根因：worker 侧 panel signature=0.003（面板根本没弹出），而同一张证据图
+  # 手工复算红占比 0.815——说明它验证的是"点之前"的截图。原循环是「先截图→验证→再点」，
+  # 首轮必然截到无面板的结果页；更糟的是每轮点的都是同一个缓存坐标（fbtn），坐标一旦
+  # 因布局漂移点歪，面板永远弹不出、4 轮全废（A6 缓存坐标 + B1 顺序双重问题）。
+  # 修：先点后验；每轮点击前重新定位（不吃缓存），点完等动画 stabilize 再截图验证。
+  local _fp_try=0
+  while true; do
+    _fp_try=$(( _fp_try + 1 ))
+    if (( _fp_try > 4 )); then
+      locate_cache_clear vtab; locate_cache_clear fbtn
+      die "filter panel did not open after $(( _fp_try - 1 )) attempts; locate cache cleared for fresh retry"
+    fi
+    # 每轮重新定位漏斗图标（跳过缓存），避免用一个点歪的坐标反复空点。
+    locate_cache_clear fbtn
+    filter_center="$(locate_cached fbtn "右上角的筛选按钮（漏斗图标）" "${evidence_id}-fbtn-r${_fp_try}")" || { wait_ms 1500; continue; }
+    read filter_x filter_y <<< "$filter_center"
+    "$ADB" -s "$SERIAL" shell input tap "$filter_x" "$filter_y"
+    wait_ms 2200
+    panel_path="$(snapshot_evidence "${evidence_id}-panel${_fp_try}")"
+    verify_filter_visual panel "$panel_path" && break
+  done
+
+  tap_filter_option "$panel_path" sort "$sort_mode"
+  tap_filter_option "$panel_path" time "$time_layer"
+  tap_filter_option "$panel_path" duration "$duration"
+  tap_filter_option "$panel_path" scope "$scope"
+  _loc_err="$(mktemp)"
+  if ! ( tap_filter_option "$panel_path" location "$location" ) 2>"$_loc_err"; then
+    if /usr/bin/grep -q NO_LOCATION_ROW "$_loc_err" && [[ "$location" == "unlimited" ]]; then
+      print -u2 -- "warning: 本机面板无「位置距离」组,location=unlimited 天然成立,跳过点选"
+    else
+      cat "$_loc_err" >&2; rm -f "$_loc_err"; die "location filter option failed"
+    fi
+  fi
+  rm -f "$_loc_err"
+  wait_ms 600
+  selected_path="$(snapshot_evidence "${evidence_id}-selected")"
+  verify_filter_visual selected "$selected_path" "$sort_mode" "$time_layer" "$duration" "$scope" "$location"
+
+  result_position="$(locate_filter_action_button "$selected_path")" || die "could not locate verified result action"
+  read result_x result_y <<< "$result_position"
+  "$ADB" -s "$SERIAL" shell input tap "$result_x" "$result_y"
+  wait_ms 1400
+  results_path="$(snapshot_evidence "${evidence_id}-results")"
+  verify_filter_visual results "$results_path"
+  results_xml="$EVIDENCE_ROOT/${evidence_id}-results-ui.xml"
+  # v3: 结果页验证走截图（verify_filter_visual results）+前台校验，XML 不再参与。
+  [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin search results are not foreground after filter selection"
+  print -- "sort=$sort_mode"
+  print -- "time_layer=$time_layer"
+  print -- "duration=$duration"
+  print -- "scope=$scope"
+  print -- "location=$location"
+  print -- "panel_evidence=$panel_path"
+  print -- "selected_evidence=$selected_path"
+  print -- "results_evidence=$results_path"
+}
+
+evidence_bundle() {
+  local evidence_prefix bundle_dir archive_path source_path target_path bundle_kib archive_kib matched_count bundle_file archive_sha256
+  evidence_prefix="$1"
+  require_evidence_id "$evidence_prefix"
+  bundle_dir="$EVIDENCE_BUNDLE_ROOT/$evidence_prefix"
+  archive_path="$EVIDENCE_BUNDLE_ROOT/${evidence_prefix}.tar.gz"
+  # 重试幂等（20260904）：同 prefix 重新打包时清掉旧产物重建，证据以最新为准；拒绝重复曾杀死 yue21 attempt2
+  [[ ! -e "$bundle_dir" ]] || /bin/rm -rf "$bundle_dir"
+  [[ ! -e "$archive_path" ]] || /bin/rm -f "$archive_path"
+  /bin/mkdir -p "$EVIDENCE_BUNDLE_ROOT"
+  /bin/mkdir "$bundle_dir"
+  matched_count=0
+
+  # XML stays lossless. PNG screenshots are converted to bounded JPEG review
+  # copies so OpenClaw dir_fetch can move the complete stage evidence set under
+  # its 16 MB hard limit. Source evidence remains untouched on the phone node.
+  for source_path in "$EVIDENCE_ROOT"/${evidence_prefix}*.xml(N); do
+    target_path="$bundle_dir/${source_path:t}"
+    /bin/cp -p "$source_path" "$target_path"
+    matched_count=$(( matched_count + 1 ))
+  done
+  for source_path in "$EVIDENCE_ROOT"/${evidence_prefix}*.png(N); do
+    target_path="$bundle_dir/${source_path:t:r}.jpg"
+    /usr/bin/sips -Z 1100 -s format jpeg -s formatOptions 60 "$source_path" --out "$target_path" >/dev/null
+    [[ -s "$target_path" ]] || die "evidence review image conversion failed"
+    matched_count=$(( matched_count + 1 ))
+  done
+  (( matched_count > 0 )) || die "no evidence files matched the requested prefix"
+
+  bundle_kib="$(/usr/bin/du -sk "$bundle_dir" | /usr/bin/awk '{print $1}')"
+  require_uint "$bundle_kib"
+  (( bundle_kib <= 15360 )) || die "evidence bundle exceeds the 15 MiB transfer budget"
+  for bundle_file in "$bundle_dir"/*(N); do
+    /usr/bin/shasum -a 256 "$bundle_file"
+  done > "$bundle_dir/manifest.sha256"
+  /usr/bin/tar -czf "$archive_path" -C "$EVIDENCE_BUNDLE_ROOT" "$evidence_prefix"
+  [[ -s "$archive_path" ]] || die "evidence bundle archive creation failed"
+  archive_kib="$(/usr/bin/du -k "$archive_path" | /usr/bin/awk '{print $1}')"
+  require_uint "$archive_kib"
+  (( archive_kib <= 15360 )) || die "evidence bundle archive exceeds the 15 MiB transfer budget"
+  archive_sha256="$(/usr/bin/shasum -a 256 "$archive_path" | /usr/bin/awk '{print $1}')"
+  print -- "bundle_path=$bundle_dir"
+  print -- "bundle_archive=$archive_path"
+  print -- "files=$matched_count"
+  print -- "bundle_kib=$bundle_kib"
+  print -- "archive_kib=$archive_kib"
+  print -- "archive_sha256=$archive_sha256"
+  print -- "manifest=$bundle_dir/manifest.sha256"
+}
+
+foreground_package() {
+  "$ADB" -s "$SERIAL" shell dumpsys window 2>/dev/null \
+    | /usr/bin/awk '/mCurrentFocus|mFocusedApp/ && $0 !~ /=null([[:space:]]|$)/ { print; exit }' \
+    | tr -d '\r'
+}
+
+# 0914 融合刀4(抄 Kotlin NodeAwait.decideGateAction / pickDismissLabel):
+# 启动/深链后过前台闸——插屏广告/更新弹窗/青少年模式弹窗按白名单点掉。
+# 「允许」绝不进白名单: 它只出现在"跳转到第三方"授权语境,点了=亲手放走前台。
+# 树读不到时不拦路(闸是保护不是关卡);三轮后前台仍非抖音 → WRONG_FOREGROUND。
+FG_DISMISS_LABELS=("跳过" "关闭" "稍后" "取消" "我知道了" "以后再说" "暂不")
+foreground_gate() {
+  local eid="$1" round fg gate_xml lbl line c gx gy acted
+  require_evidence_id "$eid"
+  for round in 1 2 3; do
+    fg="$(foreground_package)"
+    if [[ "$fg" == *"$DOUYIN_PACKAGE"* ]]; then
+      gate_xml="$(_ui_evidence_wave "${eid}-fg${round}" 2>/dev/null)" || return 0
+      acted=0
+      for lbl in "${FG_DISMISS_LABELS[@]}"; do
+        line="$(/usr/bin/grep -oE "<node[^>]+text=\"${lbl}[^\"]*\"[^>]*clickable=\"true\"[^>]*>" "$gate_xml" | /usr/bin/head -1 || true)"
+        [[ -n "$line" ]] || continue
+        c="$(node_center "$line")" || continue
+        read gx gy <<< "$c"
+        print -u2 -- "warning: foreground gate dismissing interstitial via [${lbl}] (round $round)"
+        "$ADB" -s "$SERIAL" shell input tap "$gx" "$gy"
+        wait_ms 900
+        acted=1
+        break
+      done
+      (( acted )) || return 0
+    else
+      print -u2 -- "warning: foreground gate: douyin not foreground (round $round): ${fg}"
+      "$ADB" -s "$SERIAL" shell monkey -p "$DOUYIN_PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+      wait_ms 1500
+    fi
+  done
+  fg="$(foreground_package)"
+  [[ "$fg" == *"$DOUYIN_PACKAGE"* ]] || die "WRONG_FOREGROUND: douyin did not hold foreground after 3 gate rounds (${fg})" WRONG_FOREGROUND
+  return 0
+}
+
+call_state() {
+  local state
+  state="$($ADB -s "$SERIAL" shell dumpsys telephony.registry 2>/dev/null \
+    | /usr/bin/awk -F= '/mCallState=/{ gsub(/\r/, "", $2); print $2; exit }')"
+  case "$state" in
+    0) print -- "idle" ;;
+    1) print -- "ringing" ;;
+    2) print -- "offhook" ;;
+    *) print -- "unknown" ;;
+  esac
+}
+
+# run_id 与 execution_id 只差 ":aN" 后缀；Worker 两种都可能传。
+# 统一归一化到冒号前的部分当锁 owner，acquire/release 才对称（否则一种形式拿锁、
+# 另一种形式放锁，会留下永远放不掉的孤儿锁）。首字符必须字母数字，挡掉 "--help" 这类选项串。
+# 归一到「run 根」：剥掉 execution_id 的 ":a1" 与阶段后缀 "-a<数字>-<阶段>-<次数>"。
+# 这样 preflight / discovery / cleanup 各自传的标识都落到同一个 owner。
+normalize_run_id() {
+  local _v="${1%%:*}"
+  _v="${_v%%[-_]a<->[-_]*}"
+  print -- "$_v"
+}
+# Worker 各阶段传的锁标识不统一：run_id、execution_id("<run_id>:a1")、
+# 或 "<run_id>-a1-<stage>-<n>"。同一轮的这些变体必须互认，否则 preflight 拿的锁
+# discovery 认不出（0911 实测 discovery 因此 blocked）、cleanup 也放不掉留下孤儿锁。
+# run_id 自带 14 位时间戳，跨轮次不可能出现严格前缀关系，故前缀等价是安全的。
+same_run_lock() {
+  local _a _b
+  _a="$(normalize_run_id "$1")"
+  _b="$(normalize_run_id "$2")"
+  [[ "$_a" == "$_b" ]] && return 0
+  [[ "$_a" == "$_b"* ]] && return 0
+  [[ "$_b" == "$_a"* ]] && return 0
+  return 1
+}
+
+# 设备锁 TTL（秒）：一轮获客的合理上限。超过它且持有者不是同一轮 → 判过期可安全抢占。
+# 这解决 0909/0911 反复出现的孤儿锁（进程死了裸 mkdir 锁永不释放，卡死后续所有轮次）。
+LOCK_TTL_SECONDS=1800
+# 锁是否已过期（持有者写的时间戳距今 > TTL）。无时间戳的旧锁一律视为过期，安全兜底。
+lock_is_stale() {
+  local _ts _now
+  [[ -r "$LOCK_DIR/acquired_at" ]] || return 0
+  _ts="$(<"$LOCK_DIR/acquired_at")"
+  [[ "$_ts" == <-> ]] || return 0
+  _now="$(/bin/date +%s)"
+  (( _now - _ts > LOCK_TTL_SECONDS ))
+}
+require_run_id() {
+  local _rid_base _rid_rest
+  # 不把 ":" 放进方括号（zsh 里会被当 POSIX 字符类），改为分段校验。
+  _rid_base="${1%%:*}"
+  [[ "$_rid_base" == [A-Za-z0-9][A-Za-z0-9._-]# ]] || die "run id contains unsupported characters"
+  if [[ "$1" == *:* ]]; then
+    _rid_rest="${1#*:}"
+    [[ "$_rid_rest" == [A-Za-z0-9][A-Za-z0-9._-]# ]] || die "run id contains unsupported characters"
+  fi
+  (( ${#1} <= 120 )) || die "run id is too long"
+  # 0913 实证：worker 把 attempt_id("a1") 当 run_id 传进来，锁就被 owner=a1 占住，
+  # 之后同一条 run 的每一次尝试都被自己的错锁挡在门外，四次预算全废、还查不出是谁占的。
+  # attempt_id 形状(a+数字 / attempt+数字)永远不可能是合法 run_id，当场报死比静默占锁强得多。
+  [[ "$_rid_base" == a<-> || "$_rid_base" == attempt<-> ]] \
+    && die "WRONG_ID_SHAPE: got attempt_id \"$_rid_base\"; this command takes the run_id (e.g. social-keyword-leadgen-<ts>-<tenant>), not the attempt id"
+  return 0
+}
+
+require_account_id() {
+  [[ "$1" == [A-Za-z0-9._-]## ]] || die "account id contains unsupported characters"
+  (( ${#1} <= 80 )) || die "account id is too long"
+}
+
+account_registry_row() {
+  local account_id row
+  account_id="$1"
+  require_account_id "$account_id"
+  [[ -r "$ACCOUNT_REGISTRY" ]] || die "Douyin account registry is not readable"
+  row="$(/usr/bin/awk -F '\t' -v profile="$PROFILE" -v id="$account_id" '$1 == profile && $2 == id { print; exit }' "$ACCOUNT_REGISTRY")"
+  [[ -n "$row" ]] || die "account is not registered for profile: $account_id"
+  print -- "$row"
+}
+
+# 从个人主页 profile XML 提取账号身份，输出两行 nickname= / douyin_id=。
+# 昵称解析对抖音版本鲁棒：优先旧 resource-id tqn（向后兼容旧版本），取空则回退到
+# 以稳定的"抖音号："文本节点为锚、取其前一个兄弟 TextView 的文本（该结构不随版本漂移，
+# 而 tqn 这类内部 resource-id 会随抖音升级变化，2026-09 实测漂移为 ttw）。
+# douyin_id 用"抖音号："文本前缀提取（跨版本极稳）。任一为空由调用方按语义判定。
+extract_account_identity() {
+  local xml nickname douyin_id
+  xml="$1"
+  [[ -r "$xml" ]] || return 1
+  douyin_id="$(/usr/bin/xmllint --xpath 'string(//node[starts-with(@text,"抖音号：")]/@text)' "$xml" 2>/dev/null | /usr/bin/sed 's/^抖音号：//' || true)"
+  nickname="$(/usr/bin/xmllint --xpath 'string(//node[@resource-id="com.ss.android.ugc.aweme:id/tqn"]/@text)' "$xml" 2>/dev/null || true)"
+  if [[ -z "$nickname" ]]; then
+    nickname="$(/usr/bin/xmllint --xpath 'string(//node[starts-with(@text,"抖音号：")]/preceding-sibling::node[@class="android.widget.TextView"][1]/@text)' "$xml" 2>/dev/null || true)"
+  fi
+  print -- "nickname=$nickname"
+  print -- "douyin_id=$douyin_id"
+}
+
+read_current_account() {
+  local evidence_id first_xml me_line me_center me_x me_y profile_xml ident nickname douyin_id
+  evidence_id="$1"
+  require_evidence_id "$evidence_id"
+  [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || {
+    "$ADB" -s "$SERIAL" shell monkey -p "$DOUYIN_PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null
+    wait_ms 1200
+  }
+  # 0912 教训：dump 成功 ≠ 树完整。抖音底部导航是 Lynx 渲染，挂进无障碍树有延迟，
+  # 抓早了会拿到一棵结构合法但缺底部导航的半成品（实测 9214 字节 vs 正常 40KB），
+  # 旧实现单抓一次、grep 不到就 die，把"树还没长齐"误报成"页面不对"。
+  # 两条改进：① 若当前页本来就是主页（有"抖音号："），根本不需要「我」tab，直接读身份；
+  #          ② 否则有界重抓，等底部导航挂上来。
+  local _try _sz
+  first_xml="$EVIDENCE_ROOT/${evidence_id}-before.xml"
+  me_line=""
+  for _try in 1 2 3 4; do
+    ui_evidence "${evidence_id}-before" >/dev/null
+    if /usr/bin/grep -q '抖音号：' "$first_xml" 2>/dev/null; then
+      me_line="ALREADY_ON_PROFILE"; break
+    fi
+    me_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="我，按钮"[^>]*>' "$first_xml" | /usr/bin/head -1 || true)"
+    [[ -n "$me_line" ]] && break
+    _sz="$(/usr/bin/wc -c < "$first_xml" 2>/dev/null || print -- 0)"
+    print -u2 -- "warning: Me tab absent from hierarchy (try $_try/4, ${_sz} bytes) — bottom nav likely not attached yet; recapturing"
+    (( _try == 1 )) && wait_ms 1500
+    (( _try == 2 )) && wait_ms 3000
+    (( _try == 3 )) && wait_ms 5000
+  done
+  # 底部导航一直没出现，多半不是"没长齐"，而是**当前根本停在没有底部导航的全屏页**
+  # （搜索结果页就是这种：0913 实测树 23295 字节、结构完整，但确实没有「我」tab）。
+  # 恢复方式必须是幂等跳转回主界面，不能盲按返回键（返回会把设备越推越偏，见 current-video-link 案卷）。
+  if [[ -z "$me_line" ]]; then
+    # 实测结论（0913，别再重试这些路）：LAUNCHER intent 只把已有任务栈提到前台、页面不变；
+    # snssdk1128 的 feed/main/home/profile/mine 等 deeplink 都到不了自己的主页。
+    # 可行的只有逐步返回，但**每按一次都必须复验**——无验证的连按正是把设备推乱的老毛病。
+    print -u2 -- "warning: no bottom nav after 4 captures — likely a full-screen page (e.g. search results); stepping back with verification"
+    for _try in 1 2 3; do
+      [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin left foreground while returning to a page with the bottom nav"
+      "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1
+      wait_ms 2000
+      [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "back navigation exited Douyin; aborting instead of drifting further"
+      ui_evidence "${evidence_id}-before" >/dev/null
+      if /usr/bin/grep -q '抖音号：' "$first_xml" 2>/dev/null; then me_line="ALREADY_ON_PROFILE"; break; fi
+      me_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="我，按钮"[^>]*>' "$first_xml" | /usr/bin/head -1 || true)"
+      [[ -n "$me_line" ]] && { print -u2 -- "info: bottom nav reached after $_try verified back step(s)"; break; }
+    done
+  fi
+  [[ -n "$me_line" ]] || die "verified Me tab was not found after 4 captures plus up to 3 verified back steps (last size ${_sz} bytes)"
+  profile_xml="$EVIDENCE_ROOT/${evidence_id}-profile.xml"
+  if [[ "$me_line" == "ALREADY_ON_PROFILE" ]]; then
+    /bin/cp "$first_xml" "$profile_xml"
+  else
+    me_center="$(node_center "$me_line")" || die "Me tab bounds could not be parsed"
+    read me_x me_y <<< "$me_center"
+    "$ADB" -s "$SERIAL" shell input tap "$me_x" "$me_y"
+    wait_ms 1200
+    ui_evidence "${evidence_id}-profile" >/dev/null
+  fi
+  ident="$(extract_account_identity "$profile_xml")"
+  douyin_id="$(print -- "$ident" | /usr/bin/sed -n 's/^douyin_id=//p')"
+  nickname="$(print -- "$ident" | /usr/bin/sed -n 's/^nickname=//p')"
+  # 账号身份以 douyin_id 为准（"抖音号："前缀跨版本极稳）；昵称 best-effort，缺失不致命。
+  [[ -n "$douyin_id" ]] || die "current Douyin account identity was not visible on the verified Me page"
+  [[ -n "$nickname" ]] || nickname="$douyin_id"
+  print -- "nickname=$nickname"
+  print -- "douyin_id=$douyin_id"
+  print -- "evidence=$profile_xml"
+}
+
+switch_account() {
+  local account_id evidence_id row registered_profile registered_id target_nickname target_role
+  local current current_id profile_xml switch_line switch_center switch_x switch_y panel_xml target_line target_center target_x target_y verified verified_id
+  account_id="$1"
+  evidence_id="$2"
+  require_account_id "$account_id"
+  require_evidence_id "$evidence_id"
+  row="$(account_registry_row "$account_id")"
+  IFS=$'\t' read -r registered_profile registered_id target_nickname target_role <<< "$row"
+  [[ "$registered_profile" == "$PROFILE" && "$registered_id" == "$account_id" && -n "$target_nickname" ]] || die "invalid account registry row"
+
+  current="$(read_current_account "${evidence_id}-current")"
+  current_id="$(print -- "$current" | /usr/bin/awk -F= '$1 == "douyin_id" { print $2; exit }')"
+  if [[ "$current_id" == "$account_id" ]]; then
+    print -- "account=verified"
+    print -- "nickname=$target_nickname"
+    print -- "douyin_id=$account_id"
+    print -- "role=$target_role"
+    print -- "switched=false"
+    print -- "$current"
+    return 0
+  fi
+
+  profile_xml="$EVIDENCE_ROOT/${evidence_id}-current-profile.xml"
+  switch_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="切换账号"[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
+  [[ -n "$switch_line" && "$switch_line" == *'clickable="true"'* ]] || die "verified account switch action was not found"
+  switch_center="$(node_center "$switch_line")" || die "account switch bounds could not be parsed"
+  read switch_x switch_y <<< "$switch_center"
+  "$ADB" -s "$SERIAL" shell input tap "$switch_x" "$switch_y"
+  wait_ms 1000
+  panel_xml="$EVIDENCE_ROOT/${evidence_id}-panel.xml"
+  ui_evidence "${evidence_id}-panel" >/dev/null
+  target_line="$(/usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/tv_nickname"[^>]*>' "$panel_xml" | /usr/bin/grep -F "text=\"$target_nickname\"" | /usr/bin/head -1 || true)"
+  [[ -n "$target_line" ]] || die "registered target account was not visible in the account switch panel"
+  target_center="$(node_center "$target_line")" || die "target account bounds could not be parsed"
+  read target_x target_y <<< "$target_center"
+  "$ADB" -s "$SERIAL" shell input tap "$target_x" "$target_y"
+  wait_ms 1800
+  verified="$(read_current_account "${evidence_id}-verified")"
+  verified_id="$(print -- "$verified" | /usr/bin/awk -F= '$1 == "douyin_id" { print $2; exit }')"
+  [[ "$verified_id" == "$account_id" ]] || die "account switch readback did not match the registered target"
+  print -- "account=verified"
+  print -- "nickname=$target_nickname"
+  print -- "douyin_id=$account_id"
+  print -- "role=$target_role"
+  print -- "switched=true"
+  print -- "$verified"
+}
+
+send_private_message() {
+  local expected_account_id target_douyin_id message_b64 evidence_id message original_ime current current_id
+  local search_xml user_tab_line user_tab_center user_tab_x user_tab_y users_xml follow_line follow_bounds fx1 fy1 fx2 fy2 target_x target_y
+  local profile_xml target_id_line observed_target_id dm_line dm_center dm_x dm_y chat_xml input_line input_center input_x input_y
+  local typed_xml typed_value before_path send_line send_center send_x send_y sent_xml sent_path
+  expected_account_id="$1"
+  target_douyin_id="$2"
+  message_b64="$3"
+  evidence_id="$4"
+  require_account_id "$expected_account_id"
+  require_account_id "$target_douyin_id"
+  require_evidence_id "$evidence_id"
+  [[ "$message_b64" == [A-Za-z0-9+/=]## ]] || die "message must be standard base64"
+  (( ${#message_b64} <= 4000 )) || die "message base64 is too long"
+  message="$(print -n -- "$message_b64" | /usr/bin/base64 -D 2>/dev/null)" || die "message base64 could not be decoded"
+  [[ -n "$message" && "$message" != *$'\n'* && "$message" != *$'\r'* ]] || die "message must be one non-empty line"
+  (( ${#message} <= 600 )) || die "message is longer than the verified private-message limit"
+  [[ "$message" != *'"'* && "$message" != *'&'* && "$message" != *'<'* && "$message" != *'>'* ]] || die "message contains unsupported XML-sensitive characters"
+
+  current="$(read_current_account "${evidence_id}-sender")"
+  current_id="$(print -- "$current" | /usr/bin/awk -F= '$1 == "douyin_id" { print $2; exit }')"
+  [[ "$current_id" == "$expected_account_id" ]] || die "current sender account does not match the claimed distribution account"
+
+  "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "snssdk1128://search/tabs?keyword=$target_douyin_id" >/dev/null
+  wait_ms 1400
+  search_xml="$EVIDENCE_ROOT/${evidence_id}-search.xml"
+  ui_evidence "${evidence_id}-search" >/dev/null
+  user_tab_line="$(/usr/bin/grep -oE '<node[^>]+text="用户"[^>]*>' "$search_xml" | /usr/bin/head -1 || true)"
+  [[ -n "$user_tab_line" ]] || die "verified user-search tab was not found" TARGET_ABSENT
+  user_tab_center="$(node_center "$user_tab_line")" || die "user-search tab bounds could not be parsed"
+  read user_tab_x user_tab_y <<< "$user_tab_center"
+  "$ADB" -s "$SERIAL" shell input tap "$user_tab_x" "$user_tab_y"
+  wait_ms 1200
+  users_xml="$EVIDENCE_ROOT/${evidence_id}-users.xml"
+  ui_evidence "${evidence_id}-users" >/dev/null
+  # 0914 融合刀3: 用户结果列表是 Lynx 渲染,无障碍树里读不到(回填脚本双机实证),
+  # 老写法在树里找"关注按钮"必死。改回填同款:首卡固定比例位轻点;
+  # 认错人不怕——下方主页"抖音号:强校验"不匹配即拒发,安全性零下降。
+  follow_line=""
+  target_x=$(( SCREEN_W * 28 / 100 ))
+  target_y=$(( SCREEN_H * 24 / 100 ))
+  "$ADB" -s "$SERIAL" shell input tap "$target_x" "$target_y"
+  wait_ms 1400
+  profile_xml="$EVIDENCE_ROOT/${evidence_id}-target-profile.xml"
+  ui_evidence "${evidence_id}-target-profile" >/dev/null
+  target_id_line="$(/usr/bin/grep -oE '<node[^>]+text="抖音号：[^\"]+"[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
+  [[ -n "$target_id_line" ]] || die "target profile identity was not visible" TARGET_ABSENT
+  observed_target_id="$(print -- "$target_id_line" | /usr/bin/sed -E 's/.* text="抖音号：([^"]*)" resource-id=.*/\1/')"
+  [[ "$observed_target_id" == "$target_douyin_id" ]] || die "first exact-id search result did not match the claimed target"
+  dm_line="$(/usr/bin/grep -oE '<node[^>]+(text="发私信"|content-desc="私信")[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
+  [[ -n "$dm_line" && "$dm_line" == *'clickable="true"'* ]] || die "verified private-message action is unavailable for target"
+  dm_center="$(node_center "$dm_line")" || die "private-message action bounds could not be parsed"
+  read dm_x dm_y <<< "$dm_center"
+  "$ADB" -s "$SERIAL" shell input tap "$dm_x" "$dm_y"
+  wait_ms 1200
+  chat_xml="$EVIDENCE_ROOT/${evidence_id}-chat.xml"
+  ui_evidence "${evidence_id}-chat" >/dev/null
+  input_line="$(/usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/msg_et"[^>]*>' "$chat_xml" | /usr/bin/head -1 || true)"
+  [[ -n "$input_line" && "$input_line" == *'clickable="true"'* ]] || die "verified private-message input was not found"
+  input_center="$(node_center "$input_line")" || die "private-message input bounds could not be parsed"
+  read input_x input_y <<< "$input_center"
+  "$ADB" -s "$SERIAL" shell input tap "$input_x" "$input_y"
+  wait_ms 400
+
+  original_ime="$($ADB -s "$SERIAL" shell settings get secure default_input_method | tr -d '\r')"
+  [[ -n "$original_ime" && "$original_ime" != "null" ]] || die "original input method could not be read"
+  restore_ime() { "$ADB" -s "$SERIAL" shell ime set "$original_ime" >/dev/null 2>&1 || true }
+  trap restore_ime EXIT INT TERM
+  "$ADB" -s "$SERIAL" shell ime enable com.android.adbkeyboard/.AdbIME >/dev/null
+  "$ADB" -s "$SERIAL" shell ime set com.android.adbkeyboard/.AdbIME >/dev/null
+  "$ADB" -s "$SERIAL" shell input tap "$input_x" "$input_y"
+  wait_ms 300
+  "$ADB" -s "$SERIAL" shell am broadcast -a ADB_CLEAR_TEXT >/dev/null
+  "$ADB" -s "$SERIAL" shell am broadcast -a ADB_INPUT_B64 --es msg "$message_b64" >/dev/null
+  wait_ms 700
+  typed_xml="$EVIDENCE_ROOT/${evidence_id}-typed.xml"
+  ui_evidence "${evidence_id}-typed" >/dev/null
+  typed_value="$(/usr/bin/xmllint --xpath 'string(//node[@resource-id="com.ss.android.ugc.aweme:id/msg_et"]/@text)' "$typed_xml" 2>/dev/null || true)"
+  [[ "$typed_value" == "$message" ]] || die "private-message text readback did not exactly match approved text"
+  before_path="$(snapshot_evidence "${evidence_id}-before-send")"
+  send_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="发送"[^>]*>' "$typed_xml" | /usr/bin/head -1 || true)"
+  [[ -n "$send_line" && "$send_line" == *'clickable="true"'* ]] || die "verified send action was not found after exact text readback"
+  send_center="$(node_center "$send_line")" || die "send action bounds could not be parsed"
+  read send_x send_y <<< "$send_center"
+  "$ADB" -s "$SERIAL" shell input tap "$send_x" "$send_y"
+  wait_ms 1200
+  restore_ime
+  trap - EXIT INT TERM
+  sent_xml="$EVIDENCE_ROOT/${evidence_id}-sent.xml"
+  ui_evidence "${evidence_id}-sent" >/dev/null
+  /usr/bin/grep -F "text=\"$message\"" "$sent_xml" >/dev/null || die "send outcome is unknown because the exact sent bubble was not readable"
+  sent_path="$(snapshot_evidence "${evidence_id}-sent")"
+  print -- "send_status=sent"
+  print -- "sender_douyin_id=$expected_account_id"
+  print -- "target_douyin_id=$target_douyin_id"
+  print -- "message_sha256=$(print -n -- "$message" | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')"
+  print -- "before_send_evidence=$before_path"
+  print -- "sent_ui_evidence=$sent_xml"
+  print -- "sent_evidence=$sent_path"
+}
+
+read_commenter_identity() {
+  local tap_x tap_y nickname_b64 evidence_id expected_nickname before_xml profile_xml ident observed_nickname observed_id back_xml
+  tap_x="$1"
+  tap_y="$2"
+  nickname_b64="$3"
+  evidence_id="$4"
+  require_uint "$tap_x"; require_uint "$tap_y"
+  (( tap_x <= MAX_X && tap_y <= MAX_Y )) || die "commenter target is outside screen"
+  [[ "$nickname_b64" == [A-Za-z0-9+/=]## ]] || die "commenter nickname must be standard base64"
+  (( ${#nickname_b64} <= 800 )) || die "commenter nickname base64 is too long"
+  require_evidence_id "$evidence_id"
+  expected_nickname="$(print -n -- "$nickname_b64" | /usr/bin/base64 -D 2>/dev/null)" || die "commenter nickname base64 could not be decoded"
+  [[ -n "$expected_nickname" && "$expected_nickname" != *$'\n'* && "$expected_nickname" != *$'\r'* ]] || die "commenter nickname must be one non-empty line"
+  [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
+  before_xml="$EVIDENCE_ROOT/${evidence_id}-comments.xml"
+  ui_evidence "${evidence_id}-comments" >/dev/null
+  /usr/bin/grep -Eq '评论|comment' "$before_xml" || die "verified comment context was not found"
+  "$ADB" -s "$SERIAL" shell input tap "$tap_x" "$tap_y"
+  wait_ms 1200
+  profile_xml="$EVIDENCE_ROOT/${evidence_id}-profile.xml"
+  ui_evidence "${evidence_id}-profile" >/dev/null
+  ident="$(extract_account_identity "$profile_xml")"
+  observed_nickname="$(print -- "$ident" | /usr/bin/sed -n 's/^nickname=//p')"
+  observed_id="$(print -- "$ident" | /usr/bin/sed -n 's/^douyin_id=//p')"
+  # 0913：企业/组织号主页没有「抖音号：」也没有 tqn 昵称节点，两条提取路都空。
+  # 第三条确定性回退：树里存在与期望昵称**逐字相等**的文本节点，即昵称已核验
+  # （-F 定字面匹配，昵称含正则元字符也安全）。
+  if [[ -z "$observed_nickname" ]] && /usr/bin/grep -qF "text=\"$expected_nickname\"" "$profile_xml"; then
+    observed_nickname="$expected_nickname"
+  fi
+  if [[ "$observed_nickname" != "$expected_nickname" ]]; then
+    "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1 || true
+    die "commenter profile readback did not match the selected comment identity (nickname mismatch)"
+  fi
+  # 0913 实证：企业/组织认证号的主页不显示「抖音号：」（树里只有"抖音组织认证：…"），
+  # 旧逻辑把 id 缺失当身份不匹配，一颗老鼠屎毒死整批采集。昵称已严格匹配即身份成立；
+  # id 缺失时区分两种情况：有组织认证标记 = 企业号（几乎必然是同行蹭评论，不是客资），
+  # 无标记则如实报 id_not_visible，都不再当作失败。
+  account_type="personal"
+  if [[ -z "$observed_id" ]]; then
+    if /usr/bin/grep -qE '组织认证|企业认证' "$profile_xml"; then
+      account_type="organization"
+    else
+      account_type="id_not_visible"
+    fi
+  fi
+  "$ADB" -s "$SERIAL" shell input keyevent 4
+  wait_ms 900
+  back_xml="$EVIDENCE_ROOT/${evidence_id}-returned.xml"
+  ui_evidence "${evidence_id}-returned" >/dev/null
+  /usr/bin/grep -Eq '评论|comment' "$back_xml" || die "comment context was not restored after identity readback"
+  # 0914 主理人要求:主页 IP 属地随身份一并输出(树里现成,text="IP：陕西" 全角冒号)
+  profile_ip="$(/usr/bin/grep -oE 'text="IP：[^"]+"' "$profile_xml" | /usr/bin/head -1 | /usr/bin/sed -E 's/text="IP：([^"]+)"/\1/' || true)"
+  print -- "nickname=$observed_nickname"
+  print -- "douyin_id=$observed_id"
+  print -- "account_type=$account_type"
+  print -- "profile_ip=${profile_ip:-}"
+  print -- "profile_evidence=$profile_xml"
+  print -- "return_evidence=$back_xml"
+}
+
+command="${1:-}"
+# ── 受控录制：scrcpy 封装 ─────────────────────────────────────────────
+# 约束：证据不可覆盖；时长 5..1800s 硬上限；大文件留在节点 evidence 目录不回传 Gateway；
+# 结束必须 ffprobe 双流验证——有视频没音频要明报失败，不得静默当成功（ASR 靠的就是音频）。
+record_pid_file() { print -- "$EVIDENCE_ROOT/$1.rec.pid" }
+record_out_file() { print -- "$EVIDENCE_ROOT/$1.rec.mkv" }
+
+# set_playback_speed <倍速值如3.0> <evidence_id>：抖音详情页长按调菜单→视觉定位对应倍速档→点。
+# 详情页录制前调用可 N 倍速缩短录制时长（3倍速实测转写清晰）。单手机、零登录依赖。
+set_playback_speed() {
+  local spd eid center sx sy
+  spd="$1"; eid="$2"
+  require_evidence_id "$eid"
+  [[ "$spd" == (0.75|1.0|1.25|1.5|2.0|3.0) ]] || die "speed must be one of 0.75/1.0/1.25/1.5/2.0/3.0"
+  [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
+  # 长按屏幕中央调出播放菜单
+  "$ADB" -s "$SERIAL" shell input swipe $(( SCREEN_W / 2 )) $(( SCREEN_H / 2 )) $(( SCREEN_W / 2 )) $(( SCREEN_H / 2 )) 1500
+  wait_ms 1800
+  center="$(locate_element "播放速度菜单中的「'$spd'」倍速选项数字" "${eid}-spd")" || die "playback speed option locate failed"
+  read sx sy <<< "$center"
+  "$ADB" -s "$SERIAL" shell input tap "$sx" "$sy"
+  wait_ms 1200
+  print -- "playback_speed_set=$spd"
+}
+
+record_start() {
+  local eid max out pidf pid
+  eid="$1"; max="${2:-110}"
+  require_evidence_id "$eid"
+  require_uint "$max"
+  (( max >= 5 && max <= 1800 )) || die "record max seconds must be 5..1800"
+  # 5分钟封顶（Alex 拍板 20260903）：判意向只需视频前5分钟，录制时长=min(视频时长,300)/3(倍速)。
+  # 320 = 1倍速5分钟+20s缓冲的硬顶；正常3倍速调用应传 ceil(min(视频时长,300)/3)+5 ≤ 105。
+  if (( max > 320 )); then
+    print -u2 -- "warning: record max clamped $max -> 320 (5-minute source cap)"
+    max=320
+  fi
+  out="$(record_out_file "$eid")"; pidf="$(record_pid_file "$eid")"
+  [[ -e "$out" ]] && die "recording artifact already exists: $out"
+  if [[ -f "$pidf" ]] && kill -0 "$(cat "$pidf")" 2>/dev/null; then
+    die "another recording is already running for this evidence id"
+  fi
+  /bin/mkdir -p "$EVIDENCE_ROOT"
+  # 取消静音（0912 根治判定阶段静音空转）：通过外部链接/详情页打开的抖音视频默认静音播放，
+  # scrcpy output 源录到的是 -91dB 死寂 → 通义 ASR 报 ASR_RESPONSE_HAVE_NO_WORDS → 判定必失败。
+  # 抖音视频静音时按物理音量键会触发 unmute（详情页无可点的静音控件，自绘不进无障碍树）。
+  # 连按两次 KEYCODE_VOLUME_UP 确定性取消静音；实测 unmute 后稳定录到 -37dB，通义逐字转写成功。
+  "$ADB" -s "$SERIAL" shell input keyevent KEYCODE_VOLUME_UP >/dev/null 2>&1
+  wait_ms 400
+  "$ADB" -s "$SERIAL" shell input keyevent KEYCODE_VOLUME_UP >/dev/null 2>&1
+  wait_ms 600
+  # --no-window：无头 Mac 上禁止起 Metal 渲染窗口。实测教训：带窗口连录数轮后整机离网
+  # （m4 于 20260831 录制中失联 1 小时+），无头图形渲染是 Mac mini 经典死法。
+  ADB="$ADB" "$SCRCPY" -s "$SERIAL" --no-window --no-playback --record="$out" --time-limit="$max" \
+    > "$EVIDENCE_ROOT/$eid.rec.log" 2>&1 &
+  pid=$!
+  print -- "$pid" > "$pidf"
+  wait_ms 1500
+  if ! kill -0 "$pid" 2>/dev/null; then
+    /bin/rm -f "$pidf"
+    die "scrcpy failed to start; see $EVIDENCE_ROOT/$eid.rec.log"
+  fi
+  print -- "record_started pid=$pid path=$out max_seconds=$max"
+}
+
+record_status() {
+  local eid pidf out state size
+  eid="$1"; require_evidence_id "$eid"
+  pidf="$(record_pid_file "$eid")"; out="$(record_out_file "$eid")"
+  state=stopped
+  if [[ -f "$pidf" ]] && kill -0 "$(cat "$pidf")" 2>/dev/null; then state=recording; fi
+  size=0
+  [[ -f "$out" ]] && size="$(/usr/bin/stat -f %z "$out")"
+  print -- "state=$state bytes=$size path=$out"
+}
+
+record_stop() {
+  local eid pidf out pid i dur vstreams astreams
+  eid="$1"; require_evidence_id "$eid"
+  pidf="$(record_pid_file "$eid")"; out="$(record_out_file "$eid")"
+  if [[ -f "$pidf" ]]; then
+    pid="$(cat "$pidf")"
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -INT "$pid" 2>/dev/null
+      for i in {1..20}; do
+        kill -0 "$pid" 2>/dev/null || break
+        wait_ms 500
+      done
+    fi
+    if kill -0 "$pid" 2>/dev/null; then
+      # SIGINT 未退（HONOR 长录实测）：升级 TERM→KILL，绝不留僵尸录制进程；文件靠下方 remux 救活。
+      kill -TERM "$pid" 2>/dev/null; wait_ms 2000
+      kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null
+      wait_ms 500
+    fi
+    /bin/rm -f "$pidf"
+  fi
+  [[ -f "$out" ]] || die "no recording artifact at $out"
+  vstreams="$("$FFPROBE" -v error -select_streams v -show_entries stream=codec_type -of csv=p=0 "$out" 2>/dev/null | /usr/bin/grep -c video || true)"
+  astreams="$("$FFPROBE" -v error -select_streams a -show_entries stream=codec_type -of csv=p=0 "$out" 2>/dev/null | /usr/bin/grep -c audio || true)"
+  dur="$("$FFPROBE" -v error -show_entries format=duration -of csv=p=0 "$out" 2>/dev/null || true)"
+  if [[ -z "$dur" || "$dur" == "N/A" ]]; then
+    # 未封尾 mkv（scrcpy 被硬杀）：无损 remux 重建索引即可救活（实测有效）。
+    "$FFMPEG" -v error -y -i "$out" -c copy "${out}.fixed.mkv" 2>/dev/null && /bin/mv -f "${out}.fixed.mkv" "$out"
+    vstreams="$("$FFPROBE" -v error -select_streams v -show_entries stream=codec_type -of csv=p=0 "$out" 2>/dev/null | /usr/bin/grep -c video || true)"
+    astreams="$("$FFPROBE" -v error -select_streams a -show_entries stream=codec_type -of csv=p=0 "$out" 2>/dev/null | /usr/bin/grep -c audio || true)"
+    dur="$("$FFPROBE" -v error -show_entries format=duration -of csv=p=0 "$out" 2>/dev/null || true)"
+    print -u2 -- "warning: recording remuxed to recover unfinalized container (duration=${dur:-unknown})"
+  fi
+  (( vstreams >= 1 )) || die "recording has no video stream: $out"
+  print -- "record_stopped path=$out duration_seconds=${dur:-0} video_streams=$vstreams audio_streams=$astreams"
+  (( astreams >= 1 )) || die "recording has NO audio stream; full-transcript ASR cannot proceed"
+}
+
+record_extract_audio() {
+  local eid out wav dur
+  eid="$1"; require_evidence_id "$eid"
+  out="$(record_out_file "$eid")"; wav="$EVIDENCE_ROOT/$eid.16k.wav"
+  [[ -f "$out" ]] || die "no recording artifact at $out"
+  [[ -e "$wav" ]] && die "audio artifact already exists: $wav"
+  "$FFMPEG" -v error -i "$out" -vn -ac 1 -ar 16000 "$wav" || die "audio extraction failed"
+  dur="$("$FFPROBE" -v error -show_entries format=duration -of csv=p=0 "$wav" 2>/dev/null || true)"
+  print -- "audio_extracted path=$wav duration_seconds=${dur:-0} sample_rate=16000 channels=1"
+}
+
+# ── 视觉定位 ─────────────────────────────────────────────────────────
+# locate_element <元素描述> <evidence_id>：截当前屏→视觉模型→输出 "cx cy"（像素）。
+# 失败明报不猜测；调用方决定重试或降级（XML/比例点位仍在，作为下层兜底）。
+# 视觉定位偶发失败(API抖动/截图没抓好)整体重试;每次重新截图(页面可能已刷新)。
+# 视频页右侧竖排图标里的评论图标——固化的消歧义描述。
+# 2026-09-09 教训：把"评论入口"这种模糊描述交给 LLM 自由发挥，视觉模型会定位到
+# 屏幕底部的评论输入框（实测 1035,2453），点下去弹键盘触发风控护栏、整轮作废。
+COMMENT_ICON_DESC="视频右侧竖排图标中的评论图标：对话气泡形状，在红心点赞图标的正下方，气泡下方有评论数字。不要选屏幕最底部那条评论输入框。"
+
+# 评论图标坐标合理性护栏（纯逻辑，可单测）。
+# 右侧竖排图标必然落在屏幕右侧、且在纵向中段——底部输入框与顶部搜索栏都要拒绝。
+# 返回 0=坐标合理可点，1=不合理必须拒点。
+comment_icon_coord_ok() {
+  local x="$1" y="$2" w="$3" h="$4"
+  [[ "$x" == <-> && "$y" == <-> && "$w" == <-> && "$h" == <-> ]] || return 1
+  (( w > 0 && h > 0 )) || return 1
+  (( x * 100 >= w * 70 )) || return 1   # 必须在右侧 30% 内（竖排图标区）
+  (( y * 100 <= h * 85 )) || return 1   # 底部 15% 是评论输入框/导航，拒绝
+  (( y * 100 >= h * 20 )) || return 1   # 顶部 20% 是搜索栏区，拒绝
+  return 0
+}
+
+# 从 UI 树里取评论按钮中心坐标（纯逻辑，可单测）。
+# 2026-09-09 实测：抖音视频页右侧竖排图标在无障碍树里是有真实 bounds 且 clickable=true 的，
+# content-desc 形如「评论5902，按钮」。所以这一步不必靠视觉模型猜——读树是确定性的、更稳。
+# 只认语义化的 content-desc，不认 resource-id（实测 e5x 这类内部 id 会随抖音版本漂移，
+# 正是账号昵称 tqn→ttw 那个 bug 的同款病）。
+comment_button_center_from_xml() {
+  local xml="$1" line coords x1 y1 x2 y2
+  [[ -r "$xml" ]] || return 1
+  line="$(/usr/bin/grep -oE '<node[^>]*content-desc="评论[^"]*"[^>]*clickable="true"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$xml" | /usr/bin/head -1)"
+  [[ -n "$line" ]] || return 1
+  coords="$(print -- "$line" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
+  read x1 y1 x2 y2 <<< "$coords"
+  [[ "$x1" == <-> && "$y1" == <-> && "$x2" == <-> && "$y2" == <-> ]] || return 1
+  (( x2 > x1 && y2 > y1 )) || return 1
+  print -- "$(( (x1 + x2) / 2 )) $(( (y1 + y2) / 2 ))"
+}
+
+# 读评论按钮上的计数标签（纯逻辑，可单测）。有评论返回计数文本，零评论返回 1。
+# 2026-09-09 真机实测两种形态：
+#   content-desc="评论5902，按钮" → 有 5902 条
+#   content-desc="评论评论，按钮" → 计数位被「评论」二字占位 ⇒ 这条视频 0 条评论
+# 为什么重要：零评论视频点开后，面板直接是「分享你此刻的想法／发送／同时发布为作品」
+# 的发布框——带发送按钮的高危状态。所以点之前就要能判出来，根本不去点。
+comment_count_label_from_xml() {
+  local xml="$1" line label
+  [[ -r "$xml" ]] || return 1
+  line="$(/usr/bin/grep -oE '<node[^>]*content-desc="评论[^"]*"[^>]*clickable="true"[^>]*>' "$xml" | /usr/bin/head -1)"
+  [[ -n "$line" ]] || return 1
+  label="$(print -- "$line" | /usr/bin/sed -E 's/.*content-desc="评论([^"]*)，按钮".*/\1/')"
+  [[ -n "$label" && "$label" != "评论" ]] || return 1
+  print -- "$label"
+}
+
+# 树是否是一个可用的视频页（右侧竖排图标已渲染出来）。纯逻辑，可单测。
+# 用「喜欢/点赞」按钮做锚：它和评论按钮同属右侧竖排，且任何视频都有。
+
+# ── 关11：评论采集（2026-09-11 真机探雷补齐）────────────────────────────────
+# 背景：这条获客链 18 轮「评论数」全是 0，因为**根本没有采评论的命令**——
+# skill 只定义了批次/游标/哈希的记账协议，把「从屏幕上读出评论」整件事留给
+# LLM 看截图自由发挥。真机实测：评论在无障碍树里是完全结构化的，能确定性抽。
+#
+# 一条评论 = 一个整行宽容器节点：
+#   text="" content-desc="昵称,正文,日期, · 地区,回复 按钮[,作者赞过]" bounds="[0,Y1][屏宽,Y2]"
+# 三条判据必须同时成立，缺一条就误收（都是真机 fixture 里的真实干扰项）：
+#   · text 必须为空      → 挡掉「发条评论，和大家一起讨论」「查看地址/用户评价/优惠团购」
+#   · bounds 必须整行宽  → 挡掉「赞1,未选中」（含逗号但只占右侧一小块）、「XXX的头像」
+#   · desc 必须含逗号    → 挡掉「放大评论区」「关闭」「插入图片」等纯功能键
+# 只认语义化 content-desc，绝不用 resource-id（沿用 0909 昵称 tqn→ttw 漂移教训）。
+# 输出每行：昵称<TAB>正文<TAB>日期<TAB>地区（后两列取不到时为空）。
+comments_from_xml() {
+  local xml="$1" width="$2" line desc nick rest body date region author
+  [[ -r "$xml" ]] || return 1
+  [[ "$width" == <-> ]] || return 1
+  (( width > 0 )) || return 1
+  /usr/bin/grep -oE "<node[^>]*text=\"\"[^>]*content-desc=\"[^\"]*,[^\"]*\"[^>]*bounds=\"\\[0,[0-9]+\\]\\[${width},[0-9]+\\]\"" "$xml" \
+  | while IFS= read -r line; do
+      desc="$(print -- "$line" | /usr/bin/sed -E 's/.*content-desc="([^"]*)".*/\1/')"
+      [[ -n "$desc" ]] || continue
+      nick="${desc%%,*}"
+      rest="${desc#*,}"
+      [[ -n "$nick" && -n "$rest" && "$rest" != "$desc" ]] || continue
+      # 视频作者本人的评论：昵称后紧跟「作者」字段。必须标出来——2026-09-11 真机实测
+      # 采到的 2 条里就有 1 条是作者本人在引导互动，把它当客户线索会直接污染线索池。
+      author=""
+      if [[ "$rest" == "作者,"* ]]; then author="author"; rest="${rest#作者,}"; fi
+      # 尾部固定结构：,<日期>, · <地区>,回复 按钮[,作者赞过]
+      # 日期两种形态都真机见过：2025-06-27（跨年）与 08-14（当年）⇒ 不能只认 YYYY-MM-DD，
+      # 用「, · 地区,回复 按钮」这个锚反向定位日期字段，形态无关。
+      date="$(print -- "$rest" | /usr/bin/sed -nE 's/.*,([^,]*), · [^,]*,回复 按钮.*/\1/p')"
+      region="$(print -- "$rest" | /usr/bin/sed -nE 's/.*, · ([^,]*),回复 按钮.*/\1/p')"
+      body="$(print -- "$rest" | /usr/bin/sed -E 's/,[^,]*, · [^,]*,回复 按钮.*$//')"
+      [[ -n "$body" ]] || continue
+      # 0913：附带头像中心坐标 + 昵称 base64，供 commenter-identity 逐字复制。
+      # 以前只给昵称明文，worker 要自己猜点击坐标、自己转 base64——两样都错过
+      # （真机实证：把 "3011" 当坐标、把昵称转出错误 base64，整整三次尝试烧光）。
+      # 头像节点 content-desc="<昵称>的头像" 是树里的确定性锚点，用 -F 定字面匹配防正则注入。
+      av_node="$(/usr/bin/grep -oE '<node[^>]*>' "$xml" | /usr/bin/grep -F "content-desc=\"${nick}的头像\"" | /usr/bin/head -1 || true)"
+      tap_x=""; tap_y=""
+      if [[ -n "$av_node" ]]; then
+        av_b="$(print -- "$av_node" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
+        read av_x1 av_y1 av_x2 av_y2 <<< "$av_b"
+        if [[ "$av_x1" == <-> && "$av_y2" == <-> ]]; then
+          tap_x=$(( (av_x1 + av_x2) / 2 )); tap_y=$(( (av_y1 + av_y2) / 2 ))
+        fi
+      fi
+      nick_b64="$(print -n -- "$nick" | /usr/bin/base64 | tr -d '\n')"
+      print -- "$nick\t$body\t${date:-}\t${region:-}\t${author:-}\ttap=${tap_x:-} ${tap_y:-}\tb64=$nick_b64"
+    done
+}
+
+# 评论区是否已翻到底（纯逻辑，可单测）。
+# 真机实测终点文案是「暂时没有更多了」；识别不到会导致无限翻页烧时间。
+comments_exhausted() {
+  local xml="$1"
+  [[ -r "$xml" ]] || return 1
+  /usr/bin/grep -q '暂时没有更多了' "$xml"
+}
+
+# ── 关8：搜索结果视频卡片抽取（2026-09-11 真机探雷补齐）─────────────────────
+# 背景：搜索结果**综合 tab** 上 uiautomator dump 永远 `could not get idle state`
+# （内嵌视频自动播放；wrapper 现有的 keyevent 85 媒体键对它无效，实测连抓 3 次全 0
+# 节点）。切到**视频 tab** 后是静态缩略图网格，同一台机同一秒 dump 出 182 节点。
+# ⇒ 搜索阶段必须先切视频 tab 再读树，这个函数只在视频 tab 的树上工作。
+#
+# 判据：真视频卡的标题节点正下方 80px 内必有配套的「未点赞，喜欢N，按钮」，
+# 且该按钮水平落在标题范围内。用它挡掉「相关搜索」区块的推荐词条——那些词条
+# 长度、样式都像标题，但底下没有喜欢按钮（真机 fixture 里的真实干扰项）。
+# 输出每行：x<TAB>y<TAB>标题（x,y = 标题中心，可直接 tap 进入视频）。
+video_cards_from_xml() {
+  local xml="$1" line b t x1 y1 x2 y2 lx1 ly1 lx2 ly2 dx1 dy1 dx2 dy2 dt matched dur
+  [[ -r "$xml" ]] || return 1
+  local likes_f="${TMPDIR:-/tmp}/.dpa-likes.$$" durs_f="${TMPDIR:-/tmp}/.dpa-durs.$$"
+  /usr/bin/grep -oE '<node[^>]*content-desc="[^"]*喜欢[^"]*"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$xml" \
+  | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/' > "$likes_f"
+  # 时长标签（形如 04:01），贴在缩略图右下角，即标题正上方。ASR 判定阶段靠它优先选短视频。
+  /usr/bin/grep -oE '<node[^>]*text="[0-9]{1,2}:[0-9]{2}"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$xml" \
+  | /usr/bin/sed -E 's/.*text="([^"]*)".*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4 \5/' > "$durs_f"
+  /usr/bin/grep -oE '<node[^>]*text="[^"]{8,}"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$xml" \
+  | while IFS= read -r line; do
+      t="$(print -- "$line" | /usr/bin/sed -E 's/.*text="([^"]*)".*/\1/')"
+      b="$(print -- "$line" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
+      read x1 y1 x2 y2 <<< "$b"
+      [[ "$x1" == <-> && "$y2" == <-> ]] || continue
+      matched=0
+      while read lx1 ly1 lx2 ly2; do
+        [[ "$lx1" == <-> ]] || continue
+        (( ly1 >= y2 && ly1 - y2 <= 80 && lx1 >= x1 && lx2 <= x2 )) && { matched=1; break; }
+      done < "$likes_f"
+      (( matched )) || continue
+      dur=""
+      while read dt dx1 dy1 dx2 dy2; do
+        [[ "$dx1" == <-> ]] || continue
+        (( y1 >= dy2 && y1 - dy2 <= 100 && dx1 >= x1 && dx2 <= x2 )) && { dur="$dt"; break; }
+      done < "$durs_f"
+      print -- "$(( (x1 + x2) / 2 ))\t$(( (y1 + y2) / 2 ))\t${dur:-}\t$t"
+    done
+  /bin/rm -f "$likes_f" "$durs_f"
+}
+video_page_ready() {
+  local xml="$1"
+  [[ -r "$xml" ]] || return 1
+  /usr/bin/grep -qE 'content-desc="[^"]*(喜欢|点赞)[^"]*按钮"' "$xml"
+}
+
+# 判断评论面板是否真的打开（纯逻辑，可单测）。
+# 2026-09-09 真机实测的信号（多路取或，任一命中即算已打开）：
+#   text="评论 5969"（头部计数，注意是「评论␣数字」不是「数字条评论」，早前按后者写导致误判没开）
+#   发条评论 / 放大评论区 / 回复 按钮 / 展开N条回复（都只在评论抽屉里出现）
+# ⚠️ 陷阱：视频页右侧按钮的 content-desc 是「评论5902，按钮」，绝不能拿它当已打开信号，
+# 否则没点开也会被判成已打开。故不匹配「评论<数字>，按钮」这种形态。
+comment_panel_open() {
+  local xml="$1"
+  [[ -r "$xml" ]] || return 1
+  /usr/bin/grep -qE '发条评论|放大评论区|回复 按钮|展开[0-9]+条回复|text="评论 ?[0-9]+"|[0-9]+ ?条评论|暂无评论' "$xml"
+}
+
+locate_element() {
+  local desc="$1" eid="$2" i out
+  require_evidence_id "$eid"
+  for i in {1..3}; do
+    if out="$( _locate_element_once "$desc" "${eid}-l${i}" )"; then print -- "$out"; return 0; fi
+    print -u2 -- "warning: locate attempt $i/3 failed for: $desc"
+    wait_ms 800
+  done
+  die "locate failed after 3 attempts for: $desc"
+}
+
+_locate_element_once() {
+  local desc eid shot out
+  desc="$1"; eid="$2"
+  require_evidence_id "$eid"
+  /bin/mkdir -p "$EVIDENCE_ROOT"
+  shot="$EVIDENCE_ROOT/${eid}-locate.png"
+  "$ADB" -s "$SERIAL" exec-out screencap -p > "$shot" || die "locate screenshot failed"
+  [[ -s "$shot" ]] || die "locate screenshot is empty"
+  [[ -r "$LOCATE_KEY_FILE" ]] || die "locate api key file missing: $LOCATE_KEY_FILE"
+  out="$(/usr/bin/python3 - "$shot" "$desc" "$SCREEN_W" "$SCREEN_H" "$LOCATE_ENDPOINT" "$LOCATE_MODEL" "$LOCATE_KEY_FILE" <<'PYLOC'
+import base64, json, sys, urllib.request
+shot, desc, w, h, endpoint, model, keyfile = sys.argv[1:8]
+w, h = int(w) + 1, int(h) + 1
+key = open(keyfile).read().strip()
+img = base64.b64encode(open(shot, "rb").read()).decode()
+body = {"model": model, "max_tokens": 120, "messages": [{"role": "user", "content": [
+  {"type": "image_url", "image_url": {"url": "data:image/png;base64," + img}},
+  {"type": "text", "text": "定位截图中的『" + desc + "』。只返回一个JSON数组（不要对象不要键名），坐标0-1000归一化：[ymin,xmin,ymax,xmax]"}]}]}
+req = urllib.request.Request(endpoint, data=json.dumps(body).encode(),
+  headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+r = json.load(urllib.request.urlopen(req, timeout=45))
+txt = r["choices"][0]["message"]["content"].strip().strip("`")
+if txt.startswith("json"): txt = txt[4:]
+parsed = json.loads(txt)
+def _nums(o, acc):
+    if isinstance(o, (int, float)): acc.append(float(o))
+    elif isinstance(o, list):
+        for v in o: _nums(v, acc)
+    elif isinstance(o, dict):
+        for v in o.values(): _nums(v, acc)
+    return acc
+nums = _nums(parsed, [])
+if len(nums) != 4:
+    raise SystemExit(chr(108)+chr(111)+chr(99)+chr(97)+chr(116)+chr(101)+" parse: expected 4 numbers, got " + str(len(nums)))
+ymin, xmin, ymax, xmax = nums
+if ymin > ymax: ymin, ymax = ymax, ymin
+if xmin > xmax: xmin, xmax = xmax, xmin
+if not (0 <= xmin <= xmax <= 1000 and 0 <= ymin <= ymax <= 1000):
+    raise SystemExit("locate box out of range")
+print(int((xmin + xmax) / 2 / 1000 * w), int((ymin + ymax) / 2 / 1000 * h))
+PYLOC
+)" || die "locate model call failed for: $desc"
+  print -- "$out"
+}
+
+# locate_cached <key> <desc> <eid>: 静态元素坐标缓存（首跑定位，后续零成本；验证失败清缓存）
+LOCATE_CACHE_DIR="$HOME/.config/openclaw/locate-cache"
+locate_cached() {
+  local ckey="$1" desc="$2" eid="$3" cfile pos
+  cfile="$LOCATE_CACHE_DIR/${registry_profile}-${ckey}.xy"
+  if [[ -r "$cfile" ]]; then
+    pos="$(cat "$cfile")"
+    [[ "$pos" == <->" "<-> ]] && { print -- "$pos"; return 0; }
+  fi
+  pos="$(locate_element "$desc" "$eid")" || return 1
+  /bin/mkdir -p "$LOCATE_CACHE_DIR"
+  print -- "$pos" > "$cfile"
+  print -- "$pos"
+}
+locate_cache_clear() { /bin/rm -f "$LOCATE_CACHE_DIR/${registry_profile}-$1.xy" }
+
+# 打开当前视频的评论区（确定性命令，不把这步交给 LLM 自由描述）。
+# 视频页右侧图标是自绘的：无障碍树里 content-desc="评论" 存在但 bounds 恒为 [0,0][0,0]
+# 且 clickable=false，取不到真实坐标，只能视觉定位。故本命令＝固化描述＋坐标护栏＋
+# 点击后验证面板真开＋没开就安全 back 恢复（绝不留在已聚焦输入框的状态触发风控）。
+open_comments() {
+  local evidence_id pos cx cy panel_xml tree_xml src count_label i
+  evidence_id="$1"
+  require_evidence_id "$evidence_id"
+  [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
+  cx=""; cy=""; src=""
+  # 首选：读无障碍树拿确定性坐标。
+  tree_xml="$EVIDENCE_ROOT/${evidence_id}-before.xml"
+  # 同为「机会性读树」：读得到就用确定性坐标，读不到立刻退视觉兜底，
+  # 所以用单波；用带三波重试的 ui_evidence 会白烧约 180 秒。
+  if _ui_evidence_wave "${evidence_id}-before" >/dev/null 2>&1; then
+    if pos="$(comment_button_center_from_xml "$tree_xml")"; then
+      # 零评论视频不点：点开就是带「发送」的发布框，属风控高危，且本来也没评论可采。
+      if ! count_label="$(comment_count_label_from_xml "$tree_xml")"; then
+        print -- "comments_opened=0"
+        print -- "reason=no_comments_on_this_video"
+        print -- "evidence=$tree_xml"
+        return 0
+      fi
+      read cx cy <<< "$pos"
+      src="tree"
+    elif video_page_ready "$tree_xml"; then
+      # 树已经把右侧竖排渲染出来了（喜欢/点赞在），却没有评论按钮
+      # ⇒ 这条视频关闭了评论。2026-09-09 实测：此时若退到视觉去猜，模型会指到底部
+      # 评论输入框、点开输入法（插入图片/语音评论那套），是风控高危动作。
+      # 所以这里必须干净跳过，绝不猜。
+      print -- "comments_opened=0"
+      print -- "reason=comments_disabled_on_this_video"
+      print -- "evidence=$tree_xml"
+      return 0
+    fi
+  fi
+  # 兜底：树本身不可用（如结果页 Lynx 渲染）才用视觉定位。
+  if [[ -z "$cx" ]]; then
+    for i in 1 2; do
+      pos="$(locate_element "$COMMENT_ICON_DESC" "${evidence_id}-icon${i}")" || die "comment icon locate failed"
+      read cx cy <<< "$pos"
+      comment_icon_coord_ok "$cx" "$cy" "$SCREEN_W" "$SCREEN_H" && { src="vision"; break; }
+      print -u2 -- "warning: rejected implausible comment icon coords ${cx},${cy} (attempt ${i}/2)"
+      cx=""; cy=""
+      wait_ms 800
+    done
+  fi
+  [[ -n "$cx" && -n "$cy" ]] || die "comment icon coordinates failed the plausibility guard; refused to tap"
+  # 无论坐标来自树还是视觉，都过同一道护栏——树也可能给出退化 bounds。
+  comment_icon_coord_ok "$cx" "$cy" "$SCREEN_W" "$SCREEN_H" \
+    || die "comment icon coords ${cx},${cy} (src=$src) failed the plausibility guard; refused to tap"
+  "$ADB" -s "$SERIAL" shell input tap "$cx" "$cy"
+  wait_ms 1500
+  panel_xml="$EVIDENCE_ROOT/${evidence_id}-panel.xml"
+  ui_evidence "${evidence_id}-panel" >/dev/null
+  if comment_panel_open "$panel_xml"; then
+    print -- "comments_opened=1"
+    print -- "comment_count=${count_label:-unknown}"
+    print -- "coord_source=$src"
+    print -- "tapped=$cx $cy"
+    print -- "evidence=$panel_xml"
+    return 0
+  fi
+  "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1 || true
+  wait_ms 900
+  die "comment panel did not open after tap at ${cx},${cy} (src=$src); recovered with back; evidence=$panel_xml"
+}
+
+case "$command" in
+  status)
+    check_target
+    print -- "$SERIAL device $MODEL"
+    ;;
+  diagnose)
+    print -- "profile=$PROFILE serial=$SERIAL expected_model=$MODEL"
+    print -- "target_state=$($ADB -s "$SERIAL" get-state 2>/dev/null || print -- offline)"
+    print -- "target_model=$($ADB -s "$SERIAL" shell getprop ro.product.model 2>/dev/null | tr -d '\r' || print -- unknown)"
+    exec "$ADB" devices -l
+    ;;
+  preflight)
+    [[ "$#" == 1 ]] || die "usage: douyin-phone-adb --profile PROFILE preflight"
+    check_target
+    print -- "profile=$PROFILE"
+    print -- "serial=$SERIAL"
+    print -- "model=$MODEL"
+    print -- "state=device"
+    print -- "call_state=$(call_state)"
+    print -- "foreground=$(foreground_package)"
+    ;;
+  foreground)
+    [[ "$#" == 1 ]] || die "usage: douyin-phone-adb --profile PROFILE foreground"
+    check_target_fast
+    print -- "foreground=$(foreground_package)"
+    ;;
+  lock-acquire)
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE lock-acquire RUN_ID"
+    require_run_id "$2"
+    lock_owner_id="$(normalize_run_id "$2")"
+    /bin/mkdir -p "$LOCK_ROOT"
+    # 0914 竞态实证：上一轮 release 的 rm -rf 与本次 acquire 并发时,mkdir 失败后目录又消失,
+    # 旧 stale 分支直接写 owner 报 no such file。修法:一切"抢占/重建"都回到 mkdir 原子原语重试。
+    _lk_ok=0
+    for _lk_try in 1 2 3; do
+      if /bin/mkdir "$LOCK_DIR" 2>/dev/null; then
+        /usr/bin/printf '%s\n' "$lock_owner_id" > "$LOCK_DIR/owner"
+        /bin/date +%s > "$LOCK_DIR/acquired_at"
+        print -- "lock=acquired owner=$lock_owner_id"
+        _lk_ok=1; break
+      elif [[ -r "$LOCK_DIR/owner" ]] && same_run_lock "$(<"$LOCK_DIR/owner")" "$lock_owner_id"; then
+        print -- "lock=held owner=$(<"$LOCK_DIR/owner") idempotent=true"
+        _lk_ok=1; break
+      elif lock_is_stale; then
+        owner="unknown"; [[ -r "$LOCK_DIR/owner" ]] && owner="$(<"$LOCK_DIR/owner")"
+        print -u2 -- "warning: reclaiming stale lock (prev owner=$owner); retrying atomic acquire"
+        /bin/rm -rf "$LOCK_DIR" 2>/dev/null
+        /bin/sleep 0.2
+        continue
+      else
+        break
+      fi
+    done
+    if (( ! _lk_ok )); then
+      owner="unknown"
+      [[ -r "$LOCK_DIR/owner" ]] && owner="$(<"$LOCK_DIR/owner")"
+      _age=""; [[ -r "$LOCK_DIR/acquired_at" ]] && _age="age=$(( $(/bin/date +%s) - $(<"$LOCK_DIR/acquired_at") ))s/ttl=${LOCK_TTL_SECONDS}s"
+      die "lock is held by another run: $owner $_age"
+    fi
+    ;;
+  lock-status)
+    [[ "$#" == 1 ]] || die "usage: douyin-phone-adb --profile PROFILE lock-status"
+    if [[ -r "$LOCK_DIR/owner" ]]; then
+      _age="?"; [[ -r "$LOCK_DIR/acquired_at" ]] && _age="$(( $(/bin/date +%s) - $(<"$LOCK_DIR/acquired_at") ))"
+      if lock_is_stale; then
+        print -- "lock=held owner=$(<"$LOCK_DIR/owner") age=${_age}s stale=true ttl=${LOCK_TTL_SECONDS}s"
+      else
+        print -- "lock=held owner=$(<"$LOCK_DIR/owner") age=${_age}s stale=false ttl=${LOCK_TTL_SECONDS}s"
+      fi
+    else
+      print -- "lock=free"
+    fi
+    ;;
+  lock-refresh)
+    # 0914 融合刀6: 活锁心跳续期。长任务(采收/回填)每处理若干目标续一次,
+    # 免得 TTL(1800s)到点被别的轮次判 stale 抢占;只有同 run 才允许续。
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE lock-refresh RUN_ID"
+    require_run_id "$2"
+    lock_owner_id="$(normalize_run_id "$2")"
+    [[ -r "$LOCK_DIR/owner" ]] || die "lock is not held; acquire it first"
+    owner="$(<"$LOCK_DIR/owner")"
+    same_run_lock "$owner" "$lock_owner_id" || die "refusing to refresh lock owned by another run: $owner"
+    /bin/date +%s > "$LOCK_DIR/acquired_at"
+    print -- "lock=refreshed owner=$owner ttl=${LOCK_TTL_SECONDS}s"
+    ;;
+  lock-release)
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE lock-release RUN_ID"
+    require_run_id "$2"
+    lock_owner_id="$(normalize_run_id "$2")"
+    [[ -r "$LOCK_DIR/owner" ]] || { print -- "lock=free"; exit 0; }
+    owner="$(<"$LOCK_DIR/owner")"
+    same_run_lock "$owner" "$lock_owner_id" || die "refusing to release lock owned by another run: $owner"
+    # 整目录删除：owner + acquired_at 一起清（0912 加 TTL 后 rmdir 遇 acquired_at 残留会失败）。
+    /bin/rm -rf "$LOCK_DIR"
+    print -- "lock=released owner=$lock_owner_id"
+    ;;
+  refresh)
+    "$ADB" kill-server
+    "$ADB" start-server
+    exec "$ADB" devices -l
+    ;;
+  telecom)
+    check_target
+    exec "$ADB" -s "$SERIAL" shell dumpsys telecom
+    ;;
+  window)
+    check_target
+    exec "$ADB" -s "$SERIAL" shell dumpsys window
+    ;;
+  open-app)
+    [[ "$#" == 1 ]] || die "usage: douyin-phone-adb --profile PROFILE open-app"
+    check_target
+    "$ADB" -s "$SERIAL" shell monkey -p "$DOUYIN_PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null
+    # 融合刀7(先探后睡): 500ms 步进探前台,快机 1s 就位,慢机预算放宽到 5s
+    for _p in 1 2 3 4 5 6 7 8 9 10; do
+      wait_ms 500
+      [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] && break
+    done
+    foreground_gate "openapp-$(/bin/date +%H%M%S)"
+    print -- "foreground=$(foreground_package)"
+    snapshot
+    ;;
+  screencap)
+    check_target_fast
+    exec "$ADB" -s "$SERIAL" shell screencap -p "$REMOTE_SHOT"
+    ;;
+  pull)
+    check_target_fast
+    /bin/mkdir -p "${LOCAL_SHOT:h}"
+    exec "$ADB" -s "$SERIAL" pull "$REMOTE_SHOT" "$LOCAL_SHOT"
+    ;;
+  snapshot)
+    check_target_fast
+    snapshot
+    ;;
+  snapshot-evidence)
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE snapshot-evidence EVIDENCE_ID"
+    check_target_fast
+    snapshot_evidence "$2"
+    ;;
+  ui-evidence)
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE ui-evidence EVIDENCE_ID"
+    check_target_fast
+    ui_evidence "$2"
+    ;;
+  tap)
+    [[ "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE tap X Y"
+    require_uint "$2"; require_uint "$3"
+    (( $2 <= MAX_X && $3 <= MAX_Y )) || die "tap is outside target screen"
+    check_target_fast
+    exec "$ADB" -s "$SERIAL" shell input tap "$2" "$3"
+    ;;
+  tap-snapshot)
+    [[ "$#" == 3 || "$#" == 4 ]] || die "usage: douyin-phone-adb --profile PROFILE tap-snapshot X Y [WAIT_MS]"
+    require_uint "$2"; require_uint "$3"
+    (( $2 <= MAX_X && $3 <= MAX_Y )) || die "tap is outside target screen"
+    check_target_fast
+    "$ADB" -s "$SERIAL" shell input tap "$2" "$3"
+    wait_ms "${4:-800}"
+    snapshot
+    ;;
+  tap-evidence)
+    [[ "$#" == 4 || "$#" == 5 ]] || die "usage: douyin-phone-adb --profile PROFILE tap-evidence X Y EVIDENCE_ID [WAIT_MS]"
+    require_uint "$2"; require_uint "$3"
+    (( $2 <= MAX_X && $3 <= MAX_Y )) || die "tap is outside target screen"
+    require_evidence_id "$4"
+    check_target_fast
+    "$ADB" -s "$SERIAL" shell input tap "$2" "$3"
+    wait_ms "${5:-800}"
+    snapshot_evidence "$4"
+    ;;
+  swipe)
+    [[ "$#" == 6 ]] || die "usage: douyin-phone-adb --profile PROFILE swipe X1 Y1 X2 Y2 MS"
+    require_uint "$2"; require_uint "$3"; require_uint "$4"; require_uint "$5"; require_uint "$6"
+    (( $2 <= MAX_X && $4 <= MAX_X && $3 <= MAX_Y && $5 <= MAX_Y && $6 <= 5000 )) || die "swipe arguments are outside limits"
+    check_target_fast
+    exec "$ADB" -s "$SERIAL" shell input swipe "$2" "$3" "$4" "$5" "$6"
+    ;;
+  swipe-snapshot)
+    [[ "$#" == 6 || "$#" == 7 ]] || die "usage: douyin-phone-adb --profile PROFILE swipe-snapshot X1 Y1 X2 Y2 MS [WAIT_MS]"
+    require_uint "$2"; require_uint "$3"; require_uint "$4"; require_uint "$5"; require_uint "$6"
+    (( $2 <= MAX_X && $4 <= MAX_X && $3 <= MAX_Y && $5 <= MAX_Y && $6 <= 5000 )) || die "swipe arguments are outside limits"
+    check_target_fast
+    "$ADB" -s "$SERIAL" shell input swipe "$2" "$3" "$4" "$5" "$6"
+    wait_ms "${7:-800}"
+    snapshot
+    ;;
+  swipe-evidence)
+    [[ "$#" == 7 || "$#" == 8 ]] || die "usage: douyin-phone-adb --profile PROFILE swipe-evidence X1 Y1 X2 Y2 MS EVIDENCE_ID [WAIT_MS]"
+    require_uint "$2"; require_uint "$3"; require_uint "$4"; require_uint "$5"; require_uint "$6"
+    (( $2 <= MAX_X && $4 <= MAX_X && $3 <= MAX_Y && $5 <= MAX_Y && $6 <= 5000 )) || die "swipe arguments are outside limits"
+    require_evidence_id "$7"
+    check_target_fast
+    "$ADB" -s "$SERIAL" shell input swipe "$2" "$3" "$4" "$5" "$6"
+    wait_ms "${8:-800}"
+    snapshot_evidence "$7"
+    ;;
+  back)
+    check_target_fast
+    exec "$ADB" -s "$SERIAL" shell input keyevent 4
+    ;;
+  back-snapshot)
+    [[ "$#" == 1 || "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE back-snapshot [WAIT_MS]"
+    check_target_fast
+    "$ADB" -s "$SERIAL" shell input keyevent 4
+    wait_ms "${2:-600}"
+    snapshot
+    ;;
+  back-evidence)
+    [[ "$#" == 2 || "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE back-evidence EVIDENCE_ID [WAIT_MS]"
+    require_evidence_id "$2"
+    check_target_fast
+    "$ADB" -s "$SERIAL" shell input keyevent 4
+    wait_ms "${3:-600}"
+    snapshot_evidence "$2"
+    ;;
+  wake)
+    check_target
+    exec "$ADB" -s "$SERIAL" shell input keyevent 224
+    ;;
+  unlock)
+    check_target
+    "$ADB" -s "$SERIAL" shell input keyevent 224
+    exec "$ADB" -s "$SERIAL" shell wm dismiss-keyguard
+    ;;
+  open-search)
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE open-search URL_ENCODED_KEYWORD"
+    [[ "$2" == [A-Za-z0-9._%+-]## ]] || die "keyword must be URL encoded"
+    check_target
+    exec "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "snssdk1128://search/tabs?keyword=$2"
+    ;;
+  current-video-link)
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE current-video-link EVIDENCE_ID"
+    check_target
+    current_video_link "$2"
+    ;;
+  account-current)
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE account-current EVIDENCE_ID"
+    check_target
+    read_current_account "$2"
+    ;;
+  account-switch)
+    [[ "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE account-switch DOUYIN_ID EVIDENCE_ID"
+    check_target
+    switch_account "$2" "$3"
+    ;;
+  private-message-send)
+    [[ "$#" == 5 ]] || die "usage: douyin-phone-adb --profile PROFILE private-message-send SENDER_DOUYIN_ID TARGET_DOUYIN_ID MESSAGE_B64 EVIDENCE_ID"
+    check_target
+    send_private_message "$2" "$3" "$4" "$5"
+    ;;
+  commenter-card-link)
+    # 0914 主理人亲授路径:他人主页 更多→(图标排横滑)→分享名片→复制链接→剪贴板回读→sec_uid 主页直链。
+    # 前置:当前必须已在目标用户主页(通常由 commenter-identity 流程停留,或调用方自行导航)。
+    # 输出 card_short_url= 与 profile_url=(标准 douyin.com/user/<sec_uid>)。
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE commenter-card-link EVIDENCE_ID"
+    check_target
+    require_evidence_id "$2"
+    cl_xml="$EVIDENCE_ROOT/$2-more.xml"
+    ui_evidence "$2-more" >/dev/null
+    cl_more="$(/usr/bin/grep -oE '<node[^>]+content-desc="更多"[^>]*>' "$cl_xml" | /usr/bin/head -1)"
+    [[ -n "$cl_more" ]] || die "CARD_LINK: 更多 button not found (are you on a user profile page?)"
+    cl_c="$(node_center "$cl_more")" || die "CARD_LINK: 更多 bounds unparsable"
+    read cl_x cl_y <<< "$cl_c"
+    "$ADB" -s "$SERIAL" shell input tap "$cl_x" "$cl_y"; wait_ms 1800
+    # 图标排定位:以 发私信 文本节点为锚,横滑一格宽出「分享名片」
+    cl_xml2="$EVIDENCE_ROOT/$2-panel.xml"
+    ui_evidence "$2-panel" >/dev/null
+    cl_pm="$(/usr/bin/grep -oE '<node[^>]+text="发私信"[^>]*>' "$cl_xml2" | /usr/bin/head -1)"
+    [[ -n "$cl_pm" ]] || die "CARD_LINK: panel row anchor 发私信 not found"
+    cl_b="$(print -- "$cl_pm" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
+    read bx1 by1 bx2 by2 <<< "$cl_b"
+    cl_ry=$(( (by1 + by2) / 2 ))
+    cl_w=$(( bx2 - bx1 ))
+    "$ADB" -s "$SERIAL" shell input swipe 1000 "$cl_ry" 200 "$cl_ry" 400; wait_ms 1500
+    # 滑后重定位发私信,分享名片=其左侧一格(格宽+格距,格距按格宽 12% 估但用两锚校准优先)
+    ui_evidence "$2-panel2" >/dev/null
+    cl_xml3="$EVIDENCE_ROOT/$2-panel2.xml"
+    cl_pm2="$(/usr/bin/grep -oE '<node[^>]+text="发私信"[^>]*>' "$cl_xml3" | /usr/bin/head -1)"
+    cl_rp="$(/usr/bin/grep -oE '<node[^>]+text="举报"[^>]*>' "$cl_xml3" | /usr/bin/head -1)"
+    [[ -n "$cl_pm2" && -n "$cl_rp" ]] || die "CARD_LINK: post-swipe anchors missing" TARGET_ABSENT
+    read px1 py1 px2 py2 <<< "$(print -- "$cl_pm2" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
+    read rx1 ry1 rx2 ry2 <<< "$(print -- "$cl_rp" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
+    cl_pitch=$(( rx1 - px1 ))   # 相邻两格文本左缘间距 = 格距
+    (( cl_pitch > 50 )) || die "CARD_LINK: grid pitch implausible ($cl_pitch)"
+    cl_cx=$(( (px1 + px2) / 2 - cl_pitch ))
+    cl_cy=$(( (py1 + py2) / 2 - cl_pitch / 2 ))   # 图标在文字上方约半格
+    (( cl_cx > 0 )) || die "CARD_LINK: 分享名片 slot out of screen"
+    "$ADB" -s "$SERIAL" shell input tap "$cl_cx" "$cl_cy"; wait_ms 2000
+    # 分享面板:点「复制链接」
+    ui_evidence "$2-share" >/dev/null
+    cl_xml4="$EVIDENCE_ROOT/$2-share.xml"
+    /usr/bin/grep -q 'text="分享给"' "$cl_xml4" || die "CARD_LINK: share panel did not open" TARGET_ABSENT
+    cl_cp="$(/usr/bin/grep -oE '<node[^>]+text="复制链接"[^>]*>' "$cl_xml4" | /usr/bin/head -1)"
+    [[ -n "$cl_cp" ]] || die "CARD_LINK: 复制链接 not found in share panel"
+    cl_cc="$(node_center "$cl_cp")" || die "CARD_LINK: 复制链接 bounds unparsable"
+    read cl_kx cl_ky <<< "$cl_cc"
+    "$ADB" -s "$SERIAL" shell input tap "$cl_kx" "$cl_ky"; wait_ms 1200
+    # 剪贴板回读(暂存搜索框大法)
+    "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "snssdk1128://search/tabs?keyword=%20" >/dev/null; wait_ms 2500
+    ui_evidence "$2-scratch" >/dev/null
+    cl_xml5="$EVIDENCE_ROOT/$2-scratch.xml"
+    cl_sf="$(/usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/et_search_kw"[^>]*>' "$cl_xml5" | /usr/bin/head -1)"
+    [[ -n "$cl_sf" ]] || die "CARD_LINK: scratch search field missing" TARGET_ABSENT
+    cl_sc="$(node_center "$cl_sf")"; read cl_sx cl_sy <<< "$cl_sc"
+    "$ADB" -s "$SERIAL" shell input tap "$cl_sx" "$cl_sy"; wait_ms 400
+    "$ADB" -s "$SERIAL" shell input keyevent 279; wait_ms 800
+    ui_evidence "$2-scratch2" >/dev/null
+    cl_txt="$(/usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/et_search_kw"[^>]*>' "$EVIDENCE_ROOT/$2-scratch2.xml" | /usr/bin/head -1 | /usr/bin/grep -oE 'text="[^"]*"' | /usr/bin/sed 's/^text="//;s/"$//' | /usr/bin/sed 's/&amp;/\&/g; s/&#47;/\//g')"
+    cl_short="$(print -- "$cl_txt" | /usr/bin/grep -oE 'https://v\.douyin\.com/[A-Za-z0-9_/-]+' | /usr/bin/head -1)"
+    [[ -n "$cl_short" ]] || die "CARD_LINK: clipboard had no douyin short link (got: ${cl_txt:0:60})" TARGET_ABSENT
+    clip_guard_check "$cl_short"
+    cl_sec="$(/usr/bin/curl -sSIL --max-time 20 -A 'Mozilla/5.0' "$cl_short" 2>/dev/null | /usr/bin/grep -ioE 'sec_uid=[A-Za-z0-9_-]{30,}' | /usr/bin/head -1 | /usr/bin/cut -d= -f2)"
+    print -- "card_short_url=$cl_short"
+    if [[ -n "$cl_sec" ]]; then
+      print -- "sec_uid=$cl_sec"
+      print -- "profile_url=https://www.douyin.com/user/$cl_sec"
+    else
+      print -- "profile_url=$cl_short"
+      print -u2 -- "warning: short link resolved without sec_uid; kept short url"
+    fi
+    clip_guard_record "$cl_short"
+    # 现场恢复:暂存搜索页 → back 回主页 → back 回评论区(批量循环依赖此收尾)
+    "$ADB" -s "$SERIAL" shell input keyevent 4; wait_ms 1200
+    "$ADB" -s "$SERIAL" shell input keyevent 4; wait_ms 1500
+    ui_evidence "$2-restored" >/dev/null 2>&1 || true
+    /usr/bin/grep -Eq '评论|comment' "$EVIDENCE_ROOT/$2-restored.xml" 2>/dev/null       || print -u2 -- "warning: comment context not confirmed after card-link restore"
+    ;;
+  commenter-identity)
+    [[ "$#" == 5 ]] || die "usage: douyin-phone-adb --profile PROFILE commenter-identity X Y NICKNAME_B64 EVIDENCE_ID"
+    check_target
+    read_commenter_identity "$2" "$3" "$4" "$5"
+    ;;
+  search-time-layer)
+    [[ "$#" == 3 || "$#" == 7 ]] || die "usage: douyin-phone-adb --profile PROFILE search-time-layer TIME_LAYER EVIDENCE_ID [SORT DURATION SCOPE LOCATION]"
+    check_target
+    search_time_layer "$2" "$3" "${4:-comprehensive}" "${5:-unlimited}" "${6:-unlimited}" "${7:-unlimited}"
+    ;;
+  evidence-bundle)
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE evidence-bundle EVIDENCE_PREFIX"
+    check_target_fast
+    evidence_bundle "$2"
+    ;;
+  set-playback-speed)
+    [[ "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE set-playback-speed SPEED EVIDENCE_ID"
+    check_target
+    set_playback_speed "$2" "$3"
+    ;;
+  record-start)
+    [[ "$#" == 2 || "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE record-start EVIDENCE_ID [MAX_SECONDS]"
+    check_target_fast
+    record_start "$2" "${3:-110}"
+    ;;
+  record-status)
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE record-status EVIDENCE_ID"
+    record_status "$2"
+    ;;
+  record-stop)
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE record-stop EVIDENCE_ID"
+    record_stop "$2"
+    ;;
+  record-extract-audio)
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE record-extract-audio EVIDENCE_ID"
+    record_extract_audio "$2"
+    ;;
+  locate)
+    [[ "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE locate DESC_B64 EVIDENCE_ID"
+    check_target_fast
+    desc_txt="$(print -- "$2" | /usr/bin/base64 -d 2>/dev/null)" || die "DESC must be base64"
+    locate_element "$desc_txt" "$3"
+    ;;
+  locate-tap)
+    [[ "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE locate-tap DESC_B64 EVIDENCE_ID"
+    check_target
+    desc_txt="$(print -- "$2" | /usr/bin/base64 -d 2>/dev/null)" || die "DESC must be base64"
+    pos="$(locate_element "$desc_txt" "$3")" || exit 1
+    read lx ly <<< "$pos"
+    "$ADB" -s "$SERIAL" shell input tap "$lx" "$ly"
+    wait_ms 800
+    "$ADB" -s "$SERIAL" exec-out screencap -p > "$EVIDENCE_ROOT/$3-after.png"
+    print -- "tapped $lx $ly evidence=$EVIDENCE_ROOT/$3-after.png"
+    ;;
+  open-video)
+    # 0913：collection 阶段要回到 discovery 已验证的那条视频。以前没有这条命令，
+    # worker 只能重走搜索（撞上综合 tab 永不 idle 的墙，三次尝试全废）。
+    # 正解=用平台 deeplink 确定性直开详情页，再用分享按钮守卫复验落点。
+    [[ "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE open-video VIDEO_ID EVIDENCE_ID"
+    check_target
+    ov_id="$2"
+    [[ "$ov_id" == <-> && ${#ov_id} -ge 16 && ${#ov_id} -le 24 ]] || die "VIDEO_ID must be the 16-24 digit platform video id"
+    require_evidence_id "$3"
+    "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "snssdk1128://aweme/detail/$ov_id" >/dev/null
+    # 融合刀7(先探后睡): 500ms 步进探前台,快机省 ~1.5s,慢机预算放宽到 4s
+    ov_fg=0
+    for _p in 1 2 3 4 5 6 7 8; do
+      wait_ms 500
+      [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] && { ov_fg=1; break }
+    done
+    (( ov_fg )) || die "Douyin did not come to foreground after the detail deeplink" WRONG_FOREGROUND
+    foreground_gate "$3-gate"
+    ov_g=0; _on_video_detail "$3-openvideo" || ov_g=$?
+    if (( ov_g == 2 )); then
+      wait_ms 3000
+      ov_g=0; _on_video_detail "$3-openvideo-w2" || ov_g=$?
+    fi
+    (( ov_g == 0 )) || die "detail deeplink for $ov_id did not land on a verified video detail page (guard rc=$ov_g)"
+    snapshot_evidence "$3-openvideo-ok" >/dev/null
+    # 0913 主理人拍板：评论数是详情页树上零成本的字段，必须随开页输出——
+    # 零评论的视频不许流向录屏/ASR（最贵工序不该排在最便宜的过滤器前面）。
+    # 有数字形态：评论3，按钮 / 评论736，按钮 / 评论1.2万，按钮；
+    # 零评论实测形态：评论评论，按钮（无数字）⇒ comment_count=0。
+    ov_cc_xml="$EVIDENCE_ROOT/$3-openvideo-w1.xml"
+    [[ -s "$EVIDENCE_ROOT/$3-openvideo-w2-w1.xml" ]] && ov_cc_xml="$EVIDENCE_ROOT/$3-openvideo-w2-w1.xml"
+    ov_cc="$(/usr/bin/grep -oE 'content-desc="评论[0-9][^，"]*，按钮"' "$ov_cc_xml" 2>/dev/null | /usr/bin/head -1 | /usr/bin/sed -E 's/.*评论([0-9][^，"]*)，按钮.*/\1/' || true)"
+    print -- "video_opened=1"
+    print -- "video_id=$ov_id"
+    print -- "comment_count=${ov_cc:-0}"
+    ;;
+  open-comments)
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE open-comments EVIDENCE_ID"
+    check_target
+    open_comments "$2"
+    ;;
+  search-video-tab)
+    # 关8前置：把搜索结果切到「视频」tab。
+    # 为什么必须切：综合 tab 是内嵌自动播放的 feed，uiautomator dump 永远
+    # `could not get idle state`（2026-09-11 真机连抓 3 次全 0 节点；wrapper 现有的
+    # keyevent 85 媒体键对 feed 内嵌播放器无效，那招只在视频详情页管用）。
+    # 视频 tab 是静态缩略图网格，同一台机同一秒 dump 出 182 节点。
+    #
+    # 树优先 → 视觉兜底（主理人拍板的定位顺序）：
+    #   先试读树取「视频」tab 的 bounds；综合 tab 读不出树时才退到视觉定位。
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE search-video-tab EVIDENCE_ID"
+    check_target
+    vt_src=""
+    # 这里是「机会性读树」：综合 tab 上明知读不到（feed 永不 idle），
+    # 所以只用单波快速失败，立刻退到视觉兜底；不能用带三波重试的 ui_evidence，
+    # 否则每次切 tab 都要先白烧约 180 秒（0912 我改三波时引入的回归，已修）。
+    if vt_xml="$(_ui_evidence_wave "$2-tabs" 2>/dev/null)"; then
+      vt_line="$(/usr/bin/grep -oE '<node[^>]*text="视频"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$vt_xml" | /usr/bin/head -1)"
+      if [[ -n "$vt_line" ]]; then
+        read vt_x1 vt_y1 vt_x2 vt_y2 <<< "$(print -- "$vt_line" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
+        vt_x=$(( (vt_x1 + vt_x2) / 2 )); vt_y=$(( (vt_y1 + vt_y2) / 2 )); vt_src=tree
+      fi
+    fi
+    if [[ -z "$vt_src" ]]; then
+      vt_center="$(locate_cached vtab "顶部搜索结果标签栏中的「视频」标签" "$2-vtab")" || die "video tab locate failed (tree unreadable and vision fallback failed)"
+      read vt_x vt_y <<< "$vt_center"; vt_src=vision
+    fi
+    "$ADB" -s "$SERIAL" shell input tap "$vt_x" "$vt_y"
+    wait_ms 1500
+    # 打开后验证：切成功的标志是树能读出来且「视频」处于 selected
+    vt_after="$(ui_evidence "$2-aftertab")" || die "video tab tap did not settle into a readable page"
+    /usr/bin/grep -qE '<node[^>]*text="视频"[^>]*selected="true"' "$vt_after" \
+      || die "video tab is not selected after tap"
+    print -- "video_tab=1"
+    print -- "coord_source=$vt_src"
+    print -- "tapped=$vt_x $vt_y"
+    print -- "evidence=$vt_after"
+    ;;
+  collect-comments)
+    # 关11：把当前已打开的评论面板里的评论读出来（须先 open-comments 成功）。
+    # 输出 TSV：昵称 正文 日期 地区 作者标记 tap=<头像中心x y> b64=<昵称base64>；
+    # 末行 exhausted=0|1。验证身份时把 tap 坐标与 b64 逐字复制给 commenter-identity，绝不自算。
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE collect-comments EVIDENCE_ID"
+    check_target
+    cc_xml="$(ui_evidence "$2-comments")" || die "could not capture comment panel hierarchy"
+    comment_panel_open "$cc_xml" || die "comment panel is not open; run open-comments first"
+    cc_w="$("$ADB" -s "$SERIAL" shell wm size | /usr/bin/sed -E 's/.*: ([0-9]+)x[0-9]+.*/\1/' | tr -d '\r' | /usr/bin/head -1)"
+    [[ "$cc_w" == <-> ]] || die "could not read screen width"
+    comments_from_xml "$cc_xml" "$cc_w"
+    if comments_exhausted "$cc_xml"; then print -- "exhausted=1"; else print -- "exhausted=0"; fi
+    print -- "evidence=$cc_xml"
+    ;;
+  search-video-cards)
+    # 关8：读搜索结果「视频」tab 的静态网格，输出可点击的视频卡片。
+    # 前置：必须已在视频 tab（综合 tab 内嵌自动播放，dump 永远 could not get idle state）。
+    # 输出 TSV：x y 标题
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE search-video-cards EVIDENCE_ID"
+    check_target
+    # 已知存在的东西不该一次读不到就放弃（0912 主理人定的原则）。
+    # ui_evidence 自身已分三波重试；这里再补一层业务级重试：只要页面没有明确
+    # 说「搜索结果为空」，就隔 15 秒重抓，共 3 轮。页面确实说空了，则明确输出
+    # empty_results=true（这是「已穷尽」的证据），而不是抛一个含糊的错误。
+    svc_out=""
+    for svc_try in 1 2 3; do
+      # 先用单波快速探一下：综合 tab 上重试是可证明无效的（同屏连抓 5 次全失败），
+      # 先花 180 秒三波再切 tab 等于白烧掉 worker 的大半预算（0913 实测 183 秒 vs 优化后约 13 秒）。
+      if svc_xml="$(_ui_evidence_wave "$2-grid" 2>/dev/null)"; then
+        :
+      else
+        # 在搜索结果页读不到树，几乎必然意味着还停在综合 tab：那是内嵌自动播放的 feed，
+        # uiautomator 永远 could not get idle state（0913 实测同一屏连抓 5 次全失败、每次 11.7 秒）。
+        # 这是确定性信号而不是猜测，所以此处自愈：视觉兜底切到视频 tab 再读一次，
+        # 而不是像以前那样在错误文案里说一句"likely still on 综合 tab"就放弃。
+        print -u2 -- "warning: hierarchy unreadable on the results page — almost certainly still on 综合 tab; auto-switching to 视频 tab"
+        svc_c="$(locate_cached vtab "顶部搜索结果标签栏中的「视频」标签" "$2-autotab")" || die "could not capture search grid hierarchy and the 视频 tab could not be located visually"
+        read svc_tx svc_ty <<< "$svc_c"
+        "$ADB" -s "$SERIAL" shell input tap "$svc_tx" "$svc_ty"
+        wait_ms 1800
+        svc_xml="$(ui_evidence "$2-grid-after-autotab")" || die "still could not capture the search grid hierarchy after auto-switching to the 视频 tab"
+      fi
+      svc_out="$(video_cards_from_xml "$svc_xml")"
+      [[ -n "$svc_out" ]] && break
+      if /usr/bin/grep -q "搜索结果为空" "$svc_xml"; then
+        print -- "cards=0"
+        print -- "empty_results=true"
+        print -- "evidence=$svc_xml"
+        exit 0
+      fi
+      print -u2 -- "warning: no video cards in hierarchy (business retry $svc_try/3); page did not report 搜索结果为空"
+      (( svc_try < 3 )) && wait_seconds 15
+    done
+    [[ -n "$svc_out" ]] || die "no video cards found after 3 business retries and the page never reported 搜索结果为空; likely still on 综合 tab (auto-playing feed never reaches idle)"
+    print -- "$svc_out"
+    print -- "evidence=$svc_xml"
+    ;;
+  close-app)
+    [[ "$#" == 1 ]] || die "usage: douyin-phone-adb --profile PROFILE close-app"
+    check_target_fast
+    "$ADB" -s "$SERIAL" shell am force-stop "$DOUYIN_PACKAGE"
+    "$ADB" -s "$SERIAL" shell input keyevent 3
+    wait_ms 500
+    focus="$(foreground_package)"
+    [[ "$focus" != *"$DOUYIN_PACKAGE"* ]] || die "douyin is still foreground after close-app"
+    print -- "foreground=${focus:-unknown}"
+    snapshot
+    ;;
+  *)
+    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link account-current account-switch commenter-identity private-message-send close-app record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap open-comments collect-comments search-video-cards search-video-tab"
+    ;;
+esac
