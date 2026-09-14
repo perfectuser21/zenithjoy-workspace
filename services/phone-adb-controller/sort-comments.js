@@ -11,23 +11,24 @@ const acc = cfg.channels.feishu.accounts.jinoshengyuan;
 const B = "GNuwbzY0da8GP0sv6MGcOTu9ntd", POOL = "tblmrJTyVgzTj89P", LEADS = "tblTLFj69CflUqSr";
 const MODE = process.argv[2] || "rules";
 
-// —— 规则表(判例提炼,改这里不用改逻辑) ——
+// —— 规则表(0914 主理人理念修正: 能看到视频还留言的=天然画像内人群,**分级不丢弃**) ——
+// 只有两类真排除: 同行企业号 / 广告引流号。寒暄表情=C级(精准低意向),不是垃圾。
 const GOLD = /怎么考|如何报|报名|多少钱|多少米|费用|价格|求资料|要资料|领资料|证书有用|好考吗|报考|想学|想考|怎么报|哪里申请|已经投递|怎么用|考下来|难不难|有用吗|靠谱吗|通过率|含金量/;
-const JUNK_WORDS = /打卡|拍同款|接单|引流|互关|互粉|回关|广告|加微|软件推广/;
+const JUNK_WORDS = /接单|引流|互关|互粉|回关|广告|加微|软件推广|拍同款/;
 const CHITCHAT = /^(哈哈+|呵呵+|笑死|太难了|加油|支持|厉害|漂亮|真棒|老乡|沙发|路过|顶|赞)[!!。.~]*$/;
-const WRONG_AI = /音标|英语|插画|illustrator|修图|绘画课/i; // 同名陷阱: AI≠人工智能语境
+const WRONG_AI = /音标|英语|插画|illustrator|修图|绘画课/i; // 同名陷阱: 该信号也说明词/视频吸错人,回流关键词效果
 
 function ruleJudge(row) {
   const c = (row.comment || "").trim();
   const ident = row.ident || "";
   if (ident.includes("organization")) return { verdict: "弃", reason: "企业号(同行)", rel: "不相关", grade: "C" };
+  if (JUNK_WORDS.test(c)) return { verdict: "弃", reason: "广告/引流号", rel: "不相关", grade: "C" };
+  if (WRONG_AI.test(c)) return { verdict: "弃", reason: "同名陷阱(非人工智能语境,关键词效果信号)", rel: "不相关", grade: "C" };
+  if (GOLD.test(c)) return { verdict: "留", reason: "主动问价/问报名/求资料", rel: "相关", grade: "A" };
   const noEmoji = c.replace(/\[[^\]]{1,8}\]/g, "").replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "").trim();
-  if (noEmoji.length < 2) return { verdict: "弃", reason: "纯表情/过短", rel: "不相关", grade: "C" };
-  if (JUNK_WORDS.test(c)) return { verdict: "弃", reason: "推广/引流类", rel: "不相关", grade: "C" };
-  if (CHITCHAT.test(noEmoji)) return { verdict: "弃", reason: "寒暄/打卡类", rel: "不相关", grade: "C" };
-  if (WRONG_AI.test(c)) return { verdict: "弃", reason: "同名陷阱(非人工智能语境)", rel: "不相关", grade: "C" };
-  if (GOLD.test(c)) return { verdict: "留", reason: "命中高意向信号词", rel: "相关", grade: "A" };
-  return null; // 拿不准 → 交给 agent
+  if (noEmoji.length < 2) return { verdict: "留", reason: "纯表情互动——画像内人群,低意向留档", rel: "相关", grade: "C" };
+  if (CHITCHAT.test(noEmoji)) return { verdict: "留", reason: "寒暄互动——画像内人群,低意向留档", rel: "相关", grade: "C" };
+  return null; // 中间地带 → 判定agent(输入=原视频文案+目标人群+留言)
 }
 
 async function feishu(path, method, body, tok) {
@@ -49,7 +50,7 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
         const st = it.fields["处理状态"];
         const sv = typeof st === "string" ? st : (st && st.name) ? st.name : txt(st);
         if (sv !== "待分拣") continue;
-        pend.push({ id: it.record_id, comment: txt(it.fields["评论原文"]), nick: txt(it.fields["评论者昵称"]), ident: txt(it.fields["用户主页标识"]), kw: txt(it.fields["命中关键词"]), region: txt(it.fields["地区"]) });
+        pend.push({ id: it.record_id, comment: txt(it.fields["评论原文"]), nick: txt(it.fields["评论者昵称"]), ident: txt(it.fields["用户主页标识"]), kw: txt(it.fields["命中关键词"]), region: txt(it.fields["地区"]), video: txt(it.fields["来源视频"]) });
       }
       pt = r.data.has_more ? r.data.page_token : "";
     } while (pt);
@@ -62,6 +63,7 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
         "AI判定理由": "[规则闸] " + j.reason,
         "排除原因": j.verdict === "弃" ? j.reason : "",
         "进入最终线索": j.verdict === "留",
+        "目标人群": "AI人工智能训练师考证意向人群",
       }}, tok);
       ruled++;
     }
@@ -74,7 +76,7 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
     const items = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
     let n = 0;
     for (const it of items) {
-      const keep = it.rel === "相关" && (it.grade === "A" || it.grade === "B");
+      const keep = it.rel === "相关"; // 0914理念: 相关即留档(含C级低意向),触达按等级排序;仅不相关(同行/广告)排除
       await feishu(`/tables/${POOL}/records/${it.id}`, "PUT", { fields: {
         "处理状态": "已分拣", "业务相关性": it.rel, "意向等级": it.grade,
         "AI判定理由": "[模型] " + (it.reason || ""),
