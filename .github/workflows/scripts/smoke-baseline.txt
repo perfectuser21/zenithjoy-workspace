@@ -41,6 +41,7 @@ path4-sprint-1-ws2-smoke.sh
 path4-sprint-1-ws3-smoke.sh
 path4-sprint-1-ws4-smoke.sh
 path4-sprint-1-ws5-smoke.sh
+phone-adb-controller-smoke.sh
 preflight-delivery-selfcheck-smoke.sh
 release-selfcontained-smoke.sh
 require-core-2023-smoke.sh
