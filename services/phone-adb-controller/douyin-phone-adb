@@ -953,29 +953,25 @@ foreground_gate() {
 # 搜索页(综合tab自动播放永不idle)会毒死后续所有读树。机械退栈回 feed(MainActivity):
 # back 循环,退出抖音则 monkey 拉回,6 轮不收敛 → WRONG_FOREGROUND。
 ensure_feed() {
-  # 判据(0914 定案): 荣耀 ROM 的 mCurrentFocus/topResumedActivity 会一直挂着 SplashActivity
-  # 不更新(截图实证 feed 已在跑),activity 名不可用。唯一可靠的 feed 判据 = 无障碍树里
-  # 有底部导航「我，按钮」。搜索页(综合tab自动播放)树读不到——读不到本身就是"不在 feed"
-  # 的证据,back 一步即回。feed 树偶有半成品缺底导(0912),故两连拍都无导航才 back。
-  local _ef _probe fg feed_xml
-  for _ef in 1 2 3 4 5 6 7 8; do
-    fg="$(foreground_package)"
-    if [[ "$fg" != *"$DOUYIN_PACKAGE"* ]]; then
-      "$ADB" -s "$SERIAL" shell monkey -p "$DOUYIN_PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
-      wait_ms 2500
-      continue
-    fi
+  # v3(0914 三修): ① 归位手段=显式启 MainActivity(launcher activity,singleTask 清顶,
+  # 一步归位,不再靠 back 链猜栈深)。② feed 判据=树里有底部导航「我，按钮」——grep 不带
+  # 右引号:feed 页 desc="我，按钮",「我」页 desc="我，按钮，已选中",都算在 app 主框架内。
+  # ③ 荣耀 ROM mCurrentFocus/topResumedActivity 永挂 SplashActivity(截图实证),activity 名不可用。
+  local _ef feed_xml
+  "$ADB" -s "$SERIAL" shell am start -n "$DOUYIN_PACKAGE/com.ss.android.ugc.aweme.main.MainActivity" >/dev/null 2>&1
+  wait_ms 2000
+  for _ef in 1 2 3 4 5 6; do
     feed_xml="$EVIDENCE_ROOT/ensure-feed-${_ef}.xml"
-    for _probe in 1 2; do
-      if _ui_evidence_wave "ensure-feed-${_ef}" >/dev/null 2>&1         && /usr/bin/grep -q 'content-desc="我，按钮"' "$feed_xml" 2>/dev/null; then
-        return 0
-      fi
-      (( _probe == 1 )) && wait_ms 1500
-    done
+    if _ui_evidence_wave "ensure-feed-${_ef}" >/dev/null 2>&1 \
+      && /usr/bin/grep -q 'content-desc="我，按钮' "$feed_xml" 2>/dev/null; then
+      return 0
+    fi
     "$ADB" -s "$SERIAL" shell input keyevent 4
-    wait_ms 900
+    wait_ms 800
+    "$ADB" -s "$SERIAL" shell am start -n "$DOUYIN_PACKAGE/com.ss.android.ugc.aweme.main.MainActivity" >/dev/null 2>&1
+    wait_ms 1500
   done
-  die "could not return to the Douyin feed after 8 rounds (foreground: $(foreground_package))" WRONG_FOREGROUND
+  die "could not return to the Douyin feed after 6 rounds (foreground: $(foreground_package))" WRONG_FOREGROUND
 }
 
 call_state() {
