@@ -23,7 +23,7 @@ node --check "$D/push-leads.js" || fail "push-leads.js 语法错误"
 node --check "$D/update-profile-links.js" || fail "update-profile-links.js 语法错误"
 
 # 层2: 融合刀函数/命令存在性(六刀签名)
-for pat in 'clip_guard_check' 'clip_guard_record' 'foreground_gate' 'FG_DISMISS_LABELS' 'lock-refresh)' 'failure_class=' ; do
+for pat in 'clip_guard_check' 'clip_guard_record' 'foreground_gate' 'FG_DISMISS_LABELS' 'lock-refresh)' 'failure_class=' 'ensure_feed' 'locate_cached utab' ; do
   grep -qF "$pat" "$C" || fail "融合刀签名缺失: $pat"
 done
 # harvest 必须接了心跳与作品地址
