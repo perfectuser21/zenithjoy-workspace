@@ -74,17 +74,48 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
   if (MODE === "write") {
     // 输入: [{id, rel:"相关|不相关", grade:"A|B|C", reason:"一句真实理由"}]
     const items = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
-    let n = 0;
+    // 线索表去重集(昵称/抖音号 token)——池→线索表搬运的防重闸
+    const seen = new Set(); let lp = "";
+    do {
+      const r = await feishu(`/tables/${LEADS}/records?page_size=100${lp ? "&page_token=" + lp : ""}`, "GET", null, tok);
+      for (const it of r.data.items || []) {
+        txt(it.fields["抖音昵称/主页链接"]).split("/").forEach(s => { const t = s.trim(); if (t) seen.add(t); });
+      }
+      lp = r.data.has_more ? r.data.page_token : "";
+    } while (lp);
+    const now = new Date(Date.now() + 8*3600e3).toISOString().replace("T", " ").slice(0, 16) + "(UTC+8)";
+    let n = 0, moved = 0;
     for (const it of items) {
-      const keep = it.rel === "相关"; // 0914理念: 相关即留档(含C级低意向),触达按等级排序;仅不相关(同行/广告)排除
+      const keep = it.rel === "相关"; // 0914理念: 相关即留档(含C级),触达按等级排序;仅同行/广告排除
       await feishu(`/tables/${POOL}/records/${it.id}`, "PUT", { fields: {
         "处理状态": "已分拣", "业务相关性": it.rel, "意向等级": it.grade,
         "AI判定理由": "[模型] " + (it.reason || ""),
-        "排除原因": keep ? "" : (it.reason || "模型判不相关/低意向"),
+        "排除原因": keep ? "" : (it.reason || "模型判不相关"),
         "进入最终线索": keep,
       }}, tok);
       n++;
+      if (!keep) continue;
+      // 搬运: 池行 → 线索表(读回池行拿完整字段)
+      const row = await feishu(`/tables/${POOL}/records/${it.id}`, "GET", null, tok);
+      const f = row.data ? row.data.record.fields : row.record ? row.record.fields : {};
+      const nick = txt(f["评论者昵称"]), ident = txt(f["用户主页标识"]);
+      const [dyid, purl] = ident.split(" | ");
+      if ((dyid && seen.has(dyid.trim())) || seen.has(nick)) continue;
+      const key = nick + " / " + (dyid || "id待核验");
+      const res = await feishu(`/tables/${LEADS}/records`, "POST", { fields: {
+        "抖音获客-线索表": key,
+        "抖音昵称/主页链接": key + (purl && purl.startsWith("http") ? " / " + purl : ""),
+        "业务线": "AI人工智能训练师", "命中关键词": txt(f["命中关键词"]), "关键词层级": "精准词",
+        "评论原文": txt(f["评论原文"]),
+        "AI判断理由": `[${it.grade}级] ` + (it.reason || ""),
+        "状态": "待触达", "发送状态": "未发送",
+        "来源视频": txt(f["来源视频"]).slice(0, 80), "搜索账号": "池转入(异步判定)",
+        "搜索意图": "证书/学习/求职", "目标人群": "考证人群", "采集时间": now,
+        "合规核验状态": "异步判定agent分级入表(" + now + ")｜评论区采集｜仅内部写入,未触达。",
+      }}, tok);
+      if (res.code === 0) { moved++; seen.add(nick); if (dyid) seen.add(dyid.trim()); }
+      else console.log("LEAD_FAIL", nick, JSON.stringify(res).slice(0, 100));
     }
-    console.log(`模型判定写回 ${n} 条`);
+    console.log(`模型判定写回 ${n} 条 | 搬入线索表 ${moved} 条`);
   }
 })();
