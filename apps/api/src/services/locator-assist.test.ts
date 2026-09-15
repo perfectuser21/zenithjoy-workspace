@@ -159,7 +159,8 @@ describe('requestLocatorAssist（后端调度 + fail-open + 截断守卫）', ()
     expect(r.status).toBe('ok');
     expect(r.candidates![0].view_id).toBe('com.ss.android.ugc.aweme:id/search_btn');
     const body = (axios.post as any).mock.calls[0][1];
-    expect(body.reasoning_effort, 'deepseek 必须 reasoning_effort=none（PR#1684 教训）').toBe('none');
+    expect(body.enable_thinking, 'deepseek 必须 enable_thinking=false（PR#1684 教训;0915 TOAPIS 拒收 reasoning_effort=none 后换开关）').toBe(false);
+    expect(body.reasoning_effort, '0915起请求体禁带 reasoning_effort(任何值都 400)').toBeUndefined();
     expect(body.max_tokens).toBeGreaterThan(0);
   });
 

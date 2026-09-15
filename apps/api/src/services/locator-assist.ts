@@ -301,7 +301,7 @@ async function askTreeLlm(req: LocatorAssistRequest): Promise<{ line: number | n
         temperature: 0,
         // deepseek/gpt-5.4-mini 都认这个参数；thinking 模型（如 gemini）不认，
         // 会把含 reasoning 的总预算吃光（PR#1684）
-        reasoning_effort: 'none',
+        enable_thinking: false, // 0915 TOAPIS 拒收 reasoning_effort=none(400),实测此开关 terra/deepseek 都零思考
       },
       { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: ASSIST_TIMEOUT_MS },
     );
@@ -329,7 +329,7 @@ async function askExtract(req: LocatorAssistRequest): Promise<{ value: string | 
         messages: [{ role: 'user', content: buildExtractPrompt(req) }],
         max_tokens: ASSIST_MAX_TOKENS,
         temperature: 0,
-        reasoning_effort: 'none',
+        enable_thinking: false, // 0915 TOAPIS 拒收 reasoning_effort=none(400),实测此开关 terra/deepseek 都零思考
       },
       { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: ASSIST_TIMEOUT_MS },
     );
@@ -354,7 +354,7 @@ async function askExtractList(req: LocatorAssistRequest): Promise<{ values: stri
         messages: [{ role: 'user', content: buildExtractListPrompt(req) }],
         max_tokens: ASSIST_MAX_TOKENS,
         temperature: 0,
-        reasoning_effort: 'none',
+        enable_thinking: false, // 0915 TOAPIS 拒收 reasoning_effort=none(400),实测此开关 terra/deepseek 都零思考
       },
       { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: ASSIST_TIMEOUT_MS },
     );
