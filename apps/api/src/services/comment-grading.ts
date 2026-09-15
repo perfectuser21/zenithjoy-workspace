@@ -88,10 +88,14 @@ export async function gradeComments(
         //（精准→感兴趣、精准→其他、感兴趣→其他），与本文件头部那条已拍板的原则同向
         //（宁可漏判高意向，不可误判陌生人为高意向去真实打扰）。
         //
-        // ⚠️ 该参数 deepseek/gpt-5.4-mini 都认（0823 真调实测 gpt-5.4-mini reasoning_tokens=0）；
-        // gemini-2.5 收到后照样思考（实测 reasoning 仍是 189/577/572），
-        // content-judgment.ts/locator-assist.ts 用 gemini 的地方只能靠给够 max_tokens，别照抄这行。
-        reasoning_effort: 'none',
+        // ⚠️ 开关的写法随上游变过一次，别抄旧文:
+        // 0820-0914 用 reasoning_effort:'none'(当时 deepseek/gpt-5.4-mini 都认);
+        // 0915 TOAPIS 上游变更把 none 从合法值移除(带上=400 invalid_parameter_error→axios
+        // 抛错→整批 null,gp2 Step23c 0/25 连续红),合法值只剩 low..max 而 low 真调实测
+        // 照样 reasoning 吃满预算。0915 真调实测 enable_thinking:false 在现役 gpt-5.6-terra
+        // 与 deepseek-v4-flash 上都零思考出正文(finish=stop),遂切此开关。
+        // gemini-2.5 两种开关都不认(照样思考),用 gemini 的地方只能靠给够 max_tokens,别照抄这行。
+        enable_thinking: false,
       },
       {
         headers: {
