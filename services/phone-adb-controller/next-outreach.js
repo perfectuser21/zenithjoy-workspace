@@ -5,6 +5,7 @@
 //   done <rid> sent|failed <备注b64> → 按结果回写(已触达/发送状态/触达时间/分发号/话术四件)
 // 话术分配(话术库表规则近似): 每10单 B=5 / A1=3 / A2=2;账号轮流: 主号/小诺各半。
 const fs = require("fs");
+const lib = require("./next-outreach-lib.js");
 const cfg = JSON.parse(fs.readFileSync("/root/.openclaw/clawdbot.json"));
 const acc = cfg.channels.feishu.accounts.jinoshengyuan;
 const B = "GNuwbzY0da8GP0sv6MGcOTu9ntd", LEADS = "tblTLFj69CflUqSr", SCRIPTS = "tblZZWdv0YUNojqI";
@@ -28,13 +29,21 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : (
     const [,,, rid, result, noteB64] = process.argv;
     const note = noteB64 ? Buffer.from(noteB64, "base64").toString() : "";
     const now = new Date(Date.now()+8*3600e3).toISOString().replace("T"," ").slice(0,16)+"(UTC+8)";
-    // 0915: 失败单转「触达受阻」——不回待触达,防高优先级单(重复高亮)无限重选死循环;
-    // 受阻单人工复核或走"来源视频评论区反向进主页"路线(字母号搜索不可达实证: LHJ20001024 首屏8卡全是近似号)
-    const fields = result === "sent"
-      ? { "状态": "已触达", "发送状态": "已发送", "触达时间": now }
-      : result === "requeue"
-      ? { "状态": "待触达" }  // 环境性失败(锁忙/设备离线): 回队列,不算受阻
-      : { "状态": "触达受阻", "发送状态": "发送失败", "回复结果": ("[受阻]" + note).slice(0,200) };
+    let fields;
+    if (result === "sent") {
+      fields = { "状态": "已触达", "发送状态": "已发送", "触达时间": now };
+    } else if (result === "requeue") {
+      fields = { "状态": "待触达" };  // 环境性失败(锁忙/设备离线): 回队列,不算受阻
+    } else if (result === "requeue_transient") {
+      // 瞬时失败(IME/前台波动)执行内10次用尽: 1轮回队/2轮受阻(决策 c5828297)
+      const cur = await (await fetch(`https://open.feishu.cn/open-apis/bitable/v1/apps/${B}/tables/${LEADS}/records/${rid}`, { headers: H })).json();
+      const prev = txt(cur?.data?.record?.fields?.["回复结果"]);
+      fields = lib.requeueTransientFields(prev, note, now);
+    } else {
+      // 0915: 失败单转「触达受阻」——不回待触达,防高优先级单(重复高亮)无限重选死循环;
+      // 受阻单人工复核或走"来源视频评论区反向进主页"路线(字母号搜索不可达实证: LHJ20001024 首屏8卡全是近似号)
+      fields = { "状态": "触达受阻", "发送状态": "发送失败", "回复结果": ("[受阻]" + note).slice(0,200) };
+    }
     const res = await (await fetch(`https://open.feishu.cn/open-apis/bitable/v1/apps/${B}/tables/${LEADS}/records/${rid}`, { method: "PUT", headers: H, body: JSON.stringify({ fields }) })).json();
     console.log(res.code === 0 ? "MARKED " + result : "MARK_FAIL " + JSON.stringify(res).slice(0,120));
     return;
@@ -43,19 +52,32 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : (
   // next: 选单
   const [leads, scripts] = await Promise.all([all(LEADS), all(SCRIPTS)]);
   const sent = leads.filter(r => txt(r.fields["状态"]) === "已触达").length;
-  const pending = leads.filter(r => {
-    const st = txt(r.fields["状态"]);
-    if (st !== "待触达") return false;
-    // 必须有抖音号(第二段 token 非"id待核验")
-    const parts = txt(r.fields["抖音昵称/主页链接"]).split("/").map(s=>s.trim());
-    return parts[1] && parts[1] !== "id待核验" && /^[A-Za-z0-9._]{4,}$/.test(parts[1]);
-  });
+  const pending = [], noLink = [];
+  for (const r of leads) {
+    if (txt(r.fields["状态"]) !== "待触达") continue;
+    const raw = txt(r.fields["抖音昵称/主页链接"]);
+    (lib.classifyPending(raw) === "ok" ? pending : noLink).push(r);
+  }
+  // 缺链接上游闸(决策 c5828297): 链接=出单必备件,缺件单标「待补链」交回采集补链,
+  // 不再送搜索路线撞墙。写新 select 值失败(字段选项受限)降级只写备注,不阻塞选单。
+  let gated = 0;
+  for (const r of noLink) {
+    gated++;
+    const reply = txt(r.fields["回复结果"]);
+    if (reply.includes("[待补链]")) continue; // 降级标记过的行不重写
+    const mark = { "回复结果": ("[待补链]" + reply).slice(0, 200) };
+    const res = await (await fetch(`https://open.feishu.cn/open-apis/bitable/v1/apps/${B}/tables/${LEADS}/records/${r.record_id}`, { method: "PUT", headers: H, body: JSON.stringify({ fields: { "状态": "待补链", ...mark } }) })).json();
+    if (res.code !== 0) {
+      await fetch(`https://open.feishu.cn/open-apis/bitable/v1/apps/${B}/tables/${LEADS}/records/${r.record_id}`, { method: "PUT", headers: H, body: JSON.stringify({ fields: mark }) });
+    }
+  }
+  if (gated) console.error("gated_no_link=" + gated);
   if (!pending.length) { console.log("NO_PENDING"); return; }
   const grade = r => { const j = txt(r.fields["AI判断理由"]); return j.startsWith("[A") ? 0 : j.startsWith("[B") ? 1 : 2; };
   pending.sort((a, b) => (Number(b.fields["重复命中次数"])||0) - (Number(a.fields["重复命中次数"])||0) || grade(a) - grade(b));
   const pick = pending[0];
-  const parts = txt(pick.fields["抖音昵称/主页链接"]).split("/").map(s=>s.trim());
-  const nick = parts[0], dyid = parts[1];
+  const lead = lib.extractLead(txt(pick.fields["抖音昵称/主页链接"]));
+  const nick = lead.nick, dyid = lead.dyid;
   // 话术分配: 序号n(已触达数): n%10∈{0,2,4,6,8}→B; {1,5,9}→A1; {3,7}→A2
   const slot = sent % 10;
   const ver = [0,2,4,6,8].includes(slot) ? "B" : [1,5,9].includes(slot) ? "A1" : "A2";
@@ -72,6 +94,6 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : (
     "话术内容": msg, "客服编号": txt(sc.fields["客服编号"]) || "无", "客服电话": txt(sc.fields["客服电话"]) || "",
     "实际分发号": sender.label + "(" + sender.id + ")", "分配序号": sent + 1,
   }}) });
-  console.log(JSON.stringify({ rid: pick.record_id, nick, dyid, ver, script_id: txt(sc.fields["话术ID"]),
+  console.log(JSON.stringify({ rid: pick.record_id, nick, dyid, profile_url: lead.profileUrl, ver, script_id: txt(sc.fields["话术ID"]),
     msg_b64: Buffer.from(msg).toString("base64"), profile: sender.profile, sender_id: sender.id, seq: sent + 1, dup: Number(pick.fields["重复命中次数"])||0 }));
 })();
