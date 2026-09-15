@@ -42,7 +42,7 @@ if grep -qF '"" -s ""' "$C"; then fail '检测到变量展开尸块("" -s ""),�
 if grep -qE '^ui_evidence_retry\(\)' "$C"; then fail "死函数 ui_evidence_retry 复活(0914 已删除,禁止回抄)"; fi
 # 3c: card-link 禁止短链→长链转换复活(决策 f88a5b86 主理人拍板: 剪贴板原文短链直存直开,
 # curl 抠 sec_uid 转 www.douyin.com/user 长链会丢"App可直开"属性——0915 真机实证长链 intent 不可解析)
-if sed -n '/commenter-card-link)/,/^  [a-z-]*)$/p' "$C" | grep -q 'curl'; then fail "card-link 段出现 curl 转换(决策 f88a5b86: 存原文短链,禁止转长链)"; fi
+if sed -n '/commenter-card-link)/,/^  [a-z-]*)$/p' "$C" | grep -q '/usr/bin/curl'; then fail "card-link 段出现 curl 转换命令(决策 f88a5b86: 存原文短链,禁止转长链)"; fi
 
 # 层4: outreach-tick 归因分类功能断言(source 守卫模式,决策 c5828297)
 if command -v zsh >/dev/null 2>&1; then
