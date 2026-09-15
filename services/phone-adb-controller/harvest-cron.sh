@@ -42,7 +42,7 @@ esac
 # 加 --timeout 90000 + 重试3次(间隔30s)。仍失败=不阻塞采收,Commander缺岗由值守cron兜底。
 ESCORT_ID=""
 for _ea in 1 2 3; do
-  ESCORT_ID=$(ssh -o ConnectTimeout=20 us-vps "docker exec openclaw-gateway openclaw cron add --timeout 90000 --name 'escort-$TAG' --agent media --session isolated --every 10m --announce --channel feishu --to 'chat:oc_ef60d6e3f199d90dd695b6ecc213d662' --account main --best-effort-deliver --message '先读 /root/.openclaw/cmdr-escort.txt 作为你的SOP并严格遵守辅佐三原则。本轮上下文: TAG=$TAG 机器=$HOSTKEY serial=$SERIAL profile=$P 词数=$NWORDS 起跑=$(date +%H:%M) 日志=/root/.openclaw/m4-logs/${HOSTKEY}-harvest.log escort名=escort-$TAG'" 2>>$LOG | grep -oE '"id": "[a-f0-9-]+"' | head -1 | cut -d'"' -f4)
+  ESCORT_ID=$(ssh -o ConnectTimeout=20 us-vps "docker exec openclaw-gateway openclaw cron add --timeout 90000 --name 'escort-$TAG' --agent media --session 'session:escort-$TAG' --every 10m --announce --channel feishu --to 'chat:oc_ef60d6e3f199d90dd695b6ecc213d662' --account main --best-effort-deliver --message '先读 /root/.openclaw/cmdr-escort.txt 作为你的SOP并严格遵守辅佐三原则。本轮上下文: TAG=$TAG 机器=$HOSTKEY serial=$SERIAL profile=$P 词数=$NWORDS 起跑=$(date +%H:%M) 日志=/root/.openclaw/m4-logs/${HOSTKEY}-harvest.log escort名=escort-$TAG'" 2>>$LOG | grep -oE '"id": "[a-f0-9-]+"' | head -1 | cut -d'"' -f4)
   [[ -n "$ESCORT_ID" ]] && break
   log "escort拉起第${_ea}次失败,30s后重试"
   /bin/sleep 30
