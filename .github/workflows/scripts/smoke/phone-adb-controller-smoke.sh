@@ -74,4 +74,17 @@ if grep -qF 'seen.add' "$D/sort-comments.js"; then fail "sort-comments seen.add�
 grep -qF 'outreach-tick.lock' "$D/outreach-tick.sh" || fail "tick 未接 mkdir 互斥锁"
 grep -qF 'profile_url' "$D/next-outreach.js" || fail "选单器未出 profile_url"
 
+
+# 层5: escort 跨轮记忆契约(决策 c2901aff, 0915 主理人拍板修老Commander失忆病)
+# 5a: harvest-cron.sh 必须在管(存在+zsh语法)
+[[ -s "$D/harvest-cron.sh" ]] || fail "harvest-cron.sh 缺失或为空"
+if command -v zsh >/dev/null 2>&1; then
+  zsh -n "$D/harvest-cron.sh" || fail "harvest-cron.sh zsh 语法错误"
+fi
+# 5b: escort 拉起必须用 custom session(session:escort-$TAG=同夜tick共享上下文),禁回退 isolated 失忆形态
+grep -qF -- "--session 'session:escort-" "$D/harvest-cron.sh" || fail "escort 拉起未用 session:escort-\$TAG 跨轮记忆会话(失忆形态回归)"
+if grep -F -- "--session isolated" "$D/harvest-cron.sh" | grep -qF "escort-"; then fail "escort 拉起回退成 --session isolated(失忆形态复活)"; fi
+# 5c: SOP 必须带 FINDINGS 夜际记忆条款(读历史判例+追加新判例)
+grep -qF "escort-findings.md" "$D/cmdr-escort.txt" || fail "cmdr-escort.txt 缺 escort-findings.md 夜际记忆条款"
+
 echo "phone-adb-controller-smoke: PASS"
