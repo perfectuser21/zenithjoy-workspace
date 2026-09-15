@@ -37,7 +37,12 @@ const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';
 // 而非 completion）、gpt-5.4-mini 渠道 #159 403 model unsupported；三模型逐一真调后
 // 只有 gpt-5.6-terra 正常（它认 reasoning_effort:none，0823 实测）。deepseek 渠道
 // 恢复后可评估切回——判据：真调返回正常 JSON completion 且 gp2 Step 23b 连续绿。
-const GRADING_MODEL = process.env.GRADING_MODEL || 'gpt-5.6-terra';
+// 2026-09-15 切回 deepseek-v4-flash：terra 渠道批量请求源站超时（25条 prompt 100s 出不来,
+// Cloudflare 524 HTML,小请求正常——gp2 Step23c 连续 0/25 的真凶,axios 40s 超时先兜住表现为
+// catch null）。同日真调判据全过: deepseek@toapis.com 批量 25 条 200/2.3s/25 行全出档/
+// finish=stop/零思考(enable_thinking:false)。0909 的"C2PA 垃圾"复测确认是 api.toapis.com
+// 域名的行为,默认域名 toapis.com 不复现。terra 渠道恢复与否不再重要,deepseek 快 3 倍。
+const GRADING_MODEL = process.env.GRADING_MODEL || 'deepseek-v4-flash';
 
 const VALID_GRADES = ['高意向', '精准', '感兴趣', '其他'] as const;
 
