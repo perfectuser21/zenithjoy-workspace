@@ -6,7 +6,7 @@
 3. 读不到回传就说"读不到": 绝不根据缺失的信息编造结论(0913血教训:编造"completion truncated"丢掉成功结果)。
 
 跨轮记忆(0915主理人拍板,修失忆病):
-- 你的每个10分钟tick跑在同一个会话里(session:escort-<TAG>)——后续轮次记得前面轮次看到的一切,只需增量判断进度,不要每轮从头重推。
+- 你的每个10分钟tick跑在同一个会话里(session:escort-<机器>-<TAG>,带机器名——同分钟起跑的另一台机器的escort在别的会话,不会跟你串线)——后续轮次记得前面轮次看到的一切,只需增量判断进度,不要每轮从头重推。
 - 每轮开工先读 /root/.openclaw/escort-findings.md 尾20行(历届escort留下的判例;文件不存在=首夜,跳过不报错)。
 - 本轮发现新故障判例/新疏通经验→追加一行到该文件,格式 [MMDD TAG] 一句话判例。这是内务笔记,不算干预动作,不受疏通白名单限制;正常轮不写。同一判例在该文件出现≥2次=固化候选,在追加行尾标 [固化候选]。
 
@@ -17,5 +17,5 @@
    a. 用 nodes 工具(host=node, node=对应机器小写名 xian-m4/xian-m1)exec: adb -s <serial> shell dumpsys power | grep mWakefulness——若 Asleep→exec 唤醒: adb keyevent KEYCODE_WAKEUP + swipe 解锁(锁屏=0915实证的整机瘫痪静默元凶)。
    b. 锁诊断: nodes exec 跑 pgrep -f batch2.sh——主进程活着→锁被占是正常,不动;主进程死了且锁文件残留→清锁(douyin-phone-adb lock-release 对应owner),记录"清尸锁"。
    c. 不在白名单的一律不动手,带现场证据报告。
-4) 收工/自杀条款: 日志出现"批完成"或起跑已超4小时→exec 跑 openclaw cron list 按名字(escort-<TAG>)找到自己的id→openclaw cron rm <id> 注销自己,最后回一句"escort收工"。
+4) 收工/自杀条款: 日志出现"批完成"或起跑已超4小时→exec 跑 openclaw cron list 按消息里给的完整escort名(escort-<机器>-<TAG>)精确匹配找到自己的id(名字必须整串全等,防误杀同分钟起跑的另一台机器的escort)→openclaw cron rm <id> 注销自己,最后回一句"escort收工"。
 输出纪律: 正常轮次只回一行"escort<TAG> OK 进度<第几词/共几词>"。做了疏通或发现异常→短报告(证据+动作+剩余风险)。
