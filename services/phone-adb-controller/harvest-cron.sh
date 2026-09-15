@@ -27,7 +27,21 @@ if (( H >= 8 && H < 22 )); then log "白天触达时窗,采收退让"; exit 0; f
 WF=/tmp/kw-$TAG.txt
 ssh -o ConnectTimeout=20 us-vps "docker exec openclaw-gateway node /root/.openclaw/next-keywords.js '$BIZ' $N" > $WF 2>>$LOG
 [[ -s $WF ]] || { log "词单为空,退出"; exit 0 }
-log "词单 $(wc -l < $WF | tr -d ' ')词: $(tr '\n' '/' < $WF)"
+NWORDS=$(wc -l < $WF | tr -d ' ')
+log "词单 ${NWORDS}词: $(tr '\n' '/' < $WF)"
+
+# ── 0915 伴随Commander(决策dcdaa83e): run第一步拉起专属escort每10分钟看护,收工注销 ──
+# 辅佐姿态(帮不拦/先动手后汇报/读不到就说读不到),SOP=网关 /root/.openclaw/cmdr-escort.txt
+# 节点名映射(0915真机核实: hostname是mac-mini-m4-xian/mac-mini-m1-us,与日志桥/nodes名不同,禁直推)
+case "$(hostname -s)" in
+  *m4-xian*) HOSTKEY=xian-m4 ;;
+  *m1-us*)   HOSTKEY=xian-m1 ;;
+  *)         HOSTKEY=$(hostname -s | tr '[:upper:]' '[:lower:]') ;;
+esac
+ESCORT_ID=$(ssh -o ConnectTimeout=20 us-vps "docker exec openclaw-gateway openclaw cron add --name 'escort-$TAG' --agent media --session isolated --every 10m --announce --channel feishu --to 'chat:oc_ef60d6e3f199d90dd695b6ecc213d662' --account main --best-effort-deliver --message '先读 /root/.openclaw/cmdr-escort.txt 作为你的SOP并严格遵守辅佐三原则。本轮上下文: TAG=$TAG 机器=$HOSTKEY serial=$SERIAL profile=$P 词数=$NWORDS 起跑=$(date +%H:%M) 日志=/root/.openclaw/m4-logs/${HOSTKEY}-harvest.log escort名=escort-$TAG'" 2>>$LOG | grep -oE '"id": "[a-f0-9-]+"' | head -1 | cut -d'"' -f4)
+[[ -n "$ESCORT_ID" ]] && log "escort已拉起: $ESCORT_ID" || log "escort拉起失败(不阻塞采收)"
+escort_dismiss() { [[ -n "$ESCORT_ID" ]] && ssh -o ConnectTimeout=20 us-vps "docker exec openclaw-gateway openclaw cron rm $ESCORT_ID" >>$LOG 2>&1 && log "escort已注销" }
+trap escort_dismiss EXIT INT TERM
 
 /bin/zsh ~/bin-harvest/batch2.sh "$P" "$WF" "$TAG" "$PUSH" "$SERIAL"
 log "批完成: $(grep -c '^LEAD' ~/night-$TAG.tsv 2>/dev/null || echo 0) LEAD"
