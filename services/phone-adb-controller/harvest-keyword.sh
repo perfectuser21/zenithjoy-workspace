@@ -79,8 +79,14 @@ for CARDLINE in "${(f)CARDS}"; do
       ONICK="$(print -- "$IDOUT" | sed -n "s/^nickname=//p")"
       [[ -n "$ONICK" ]] && break
       log "  行$j 身份验证第${IDTRY}次失败: $(tail -1 $IDERR 2>/dev/null | head -c 120)"
+      # 0915 真凶: card-link收尾恢复不可靠→评论面板丢失→后续行全灭。恢复=back+重开评论面板
       $C --profile "$P" back >/dev/null 2>&1
-      /bin/sleep $(( 2 + IDTRY ))
+      /bin/sleep 2
+      if ! $C --profile "$P" open-comments "$TAG-v$i-u$j-ro$IDTRY" </dev/null >/dev/null 2>&1; then
+        $C --profile "$P" back >/dev/null 2>&1; /bin/sleep 2
+        $C --profile "$P" open-comments "$TAG-v$i-u$j-ro${IDTRY}b" </dev/null >/dev/null 2>&1 || true
+      fi
+      /bin/sleep 2
     done
     OID="$(print -- "$IDOUT" | sed -n "s/^douyin_id=//p")"
     ATYPE="$(print -- "$IDOUT" | sed -n "s/^account_type=//p")"

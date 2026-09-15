@@ -966,10 +966,19 @@ ensure_feed() {
       && /usr/bin/grep -q 'content-desc="我，按钮' "$feed_xml" 2>/dev/null; then
       return 0
     fi
-    "$ADB" -s "$SERIAL" shell input keyevent 4
-    wait_ms 800
-    "$ADB" -s "$SERIAL" shell am start -n "$DOUYIN_PACKAGE/com.ss.android.ugc.aweme.main.MainActivity" >/dev/null 2>&1
-    wait_ms 1500
+    if (( _ef >= 3 )); then
+      # 0915 实证: DetailActivity 等独立task栈页面 MainActivity 直启清不掉——第3轮起 force-stop 冷启(batch2 清场同款有效)
+      print -u2 -- "warning: ensure_feed round ${_ef}: escalating to force-stop cold start"
+      "$ADB" -s "$SERIAL" shell am force-stop "$DOUYIN_PACKAGE"
+      wait_ms 2500
+      "$ADB" -s "$SERIAL" shell am start -n "$DOUYIN_PACKAGE/com.ss.android.ugc.aweme.main.MainActivity" >/dev/null 2>&1
+      wait_ms 5000
+    else
+      "$ADB" -s "$SERIAL" shell input keyevent 4
+      wait_ms 800
+      "$ADB" -s "$SERIAL" shell am start -n "$DOUYIN_PACKAGE/com.ss.android.ugc.aweme.main.MainActivity" >/dev/null 2>&1
+      wait_ms 1500
+    fi
   done
   die "could not return to the Douyin feed after 6 rounds (foreground: $(foreground_package))" WRONG_FOREGROUND
 }
