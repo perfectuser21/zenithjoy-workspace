@@ -6,8 +6,8 @@ D="services/phone-adb-controller"
 C="$D/douyin-phone-adb"
 fail() { echo "::error::phone-adb-controller-smoke: $1"; exit 1; }
 
-# 层0: 五件套存在
-for f in douyin-phone-adb harvest-keyword.sh refill-profile-links.sh push-leads.js update-profile-links.js; do
+# 层0: 八件套存在
+for f in douyin-phone-adb harvest-keyword.sh refill-profile-links.sh push-leads.js update-profile-links.js next-outreach.js next-outreach-lib.js outreach-tick.sh; do
   [[ -s "$D/$f" ]] || fail "$f 缺失或为空"
 done
 
@@ -16,11 +16,14 @@ if command -v zsh >/dev/null 2>&1; then
   zsh -n "$C" || fail "控制器 zsh 语法错误"
   zsh -n "$D/harvest-keyword.sh" || fail "harvest zsh 语法错误"
   zsh -n "$D/refill-profile-links.sh" || fail "refill zsh 语法错误"
+  zsh -n "$D/outreach-tick.sh" || fail "outreach-tick zsh 语法错误"
 else
   echo "::warning::zsh 不可用,语法闸跳过(部署侧会跑)"
 fi
 node --check "$D/push-leads.js" || fail "push-leads.js 语法错误"
 node --check "$D/update-profile-links.js" || fail "update-profile-links.js 语法错误"
+node --check "$D/next-outreach.js" || fail "next-outreach.js 语法错误"
+node --check "$D/next-outreach-lib.js" || fail "next-outreach-lib.js 语法错误"
 
 # 层2: 融合刀函数/命令存在性(六刀签名)
 for pat in 'clip_guard_check' 'clip_guard_record' 'foreground_gate' 'FG_DISMISS_LABELS' 'lock-refresh)' 'failure_class=' 'ensure_feed' 'locate_cached utab' 'profile url shape not allowed' 'link route:' '"$#" == 5 || "$#" == 6' ; do
