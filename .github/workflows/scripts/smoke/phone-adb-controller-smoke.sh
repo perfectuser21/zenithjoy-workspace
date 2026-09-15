@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# phone-adb-controller-smoke.sh — ADB 控制器五件套守卫(0914 融合刀 F1 回流)
+# phone-adb-controller-smoke.sh — ADB 控制器八件套守卫(0914 融合刀 F1 回流)
 # 三层: 1) 语法闸(zsh 可用才跑,CI ubuntu 无 zsh 降级 warning) 2) 融合刀函数存在性 3) 烂死模式检测
 set -euo pipefail
 D="services/phone-adb-controller"

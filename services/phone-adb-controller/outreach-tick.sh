@@ -30,18 +30,23 @@ H=$(date +%H)
 (( RANDOM % 10 < 3 )) && { log "拟人跳过本tick"; exit 0 }
 
 # ── tick 互斥(mkdir 原子锁,家法同 douyin-phone-adb lock-acquire): 重试拉长运行时长后防重入 ──
+# 活性说明: mtime=最后活动时间(重试循环每轮 touch 刷新,防真在跑的tick被误判为尸锁);
+#          owner(pid文件)=归属校验,trap 只删自己抢到的锁,防旧tick退出时误删新tick的锁
 TICK_LOCK=/tmp/outreach-tick.lock
 if ! /bin/mkdir "$TICK_LOCK" 2>/dev/null; then
   # stale 回收: 目录 mtime 超 35 分钟视为上轮尸锁
   if [[ -n "$(find "$TICK_LOCK" -maxdepth 0 -mmin +35 2>/dev/null)" ]]; then
-    /bin/rmdir "$TICK_LOCK" 2>/dev/null
+    /bin/rm -rf "$TICK_LOCK" 2>/dev/null
     /bin/mkdir "$TICK_LOCK" 2>/dev/null || { log "锁竞争,跳过"; exit 0 }
+    echo $$ > "$TICK_LOCK/pid"
     log "回收尸锁后继续"
   else
     log "上轮tick在跑,跳过"; exit 0
   fi
+else
+  echo $$ > "$TICK_LOCK/pid"
 fi
-trap '/bin/rmdir "$TICK_LOCK" 2>/dev/null' EXIT INT TERM
+trap '[[ "$(cat "$TICK_LOCK/pid" 2>/dev/null)" == "$$" ]] && /bin/rm -rf "$TICK_LOCK"' EXIT INT TERM
 
 # 拟人②: 随机延迟 0-480 秒
 DELAY=$(( RANDOM % 480 ))
@@ -71,6 +76,7 @@ MAX_ATTEMPTS=10
 LOOP_START=$SECONDS
 ATTEMPT=1
 while true; do
+  /usr/bin/touch "$TICK_LOCK"
   TAG="outreach-$(date +%m%d%H%M)-a${ATTEMPT}"
   if ! $C --profile "$PROFILE" lock-acquire "$TAG" >>$LOG 2>&1; then
     log "锁被占(采收在用),回队列待下轮"; mark "$RID" requeue "lock busy"; exit 0
