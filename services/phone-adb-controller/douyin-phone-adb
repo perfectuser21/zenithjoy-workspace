@@ -2208,15 +2208,11 @@ case "$command" in
     cl_short="$(print -- "$cl_txt" | /usr/bin/grep -oE 'https://v\.douyin\.com/[A-Za-z0-9_/-]+' | /usr/bin/head -1)"
     [[ -n "$cl_short" ]] || die "CARD_LINK: clipboard had no douyin short link (got: ${cl_txt:0:60})" TARGET_ABSENT
     clip_guard_check "$cl_short"
-    cl_sec="$(/usr/bin/curl -sSIL --max-time 20 -A 'Mozilla/5.0' "$cl_short" 2>/dev/null | /usr/bin/grep -ioE 'sec_uid=[A-Za-z0-9_-]{30,}' | /usr/bin/head -1 | /usr/bin/cut -d= -f2)"
+    # 0915 主理人拍板(决策 f88a5b86): 剪贴板原文短链直存直开,不再 curl 抠 sec_uid 转长链——
+    # 短链是抖音 App 全路径认领的形态可直接打开;长链 App 不认领,真机实证 intent 不可解析
+    # 只能走 AppLinkHandler+网页版中转绕道(存量长链单仍由该绕道兜底)。字段名 profile_url 不变,下游零改动。
     print -- "card_short_url=$cl_short"
-    if [[ -n "$cl_sec" ]]; then
-      print -- "sec_uid=$cl_sec"
-      print -- "profile_url=https://www.douyin.com/user/$cl_sec"
-    else
-      print -- "profile_url=$cl_short"
-      print -u2 -- "warning: short link resolved without sec_uid; kept short url"
-    fi
+    print -- "profile_url=$cl_short"
     clip_guard_record "$cl_short"
     # 现场恢复:暂存搜索页 → back 回主页 → back 回评论区(批量循环依赖此收尾)
     "$ADB" -s "$SERIAL" shell input keyevent 4; wait_ms 1200
