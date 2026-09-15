@@ -38,4 +38,22 @@ if grep -qF '"" -s ""' "$C"; then fail '检测到变量展开尸块("" -s ""),�
 # 3b: 死函数复活(ui_evidence_retry 已删,再出现=有人从旧版本抄回来了)
 if grep -qE '^ui_evidence_retry\(\)' "$C"; then fail "死函数 ui_evidence_retry 复活(0914 已删除,禁止回抄)"; fi
 
+# 层4: outreach-tick 归因分类功能断言(source 守卫模式,决策 c5828297)
+if command -v zsh >/dev/null 2>&1; then
+  CF() { zsh -c "OUTREACH_TICK_SOURCED=1 source '$D/outreach-tick.sh'; classify_failure \"\$1\"" _ "$1"; }
+  [[ "$(CF 'blah
+failure_class=TARGET_ABSENT')" == "terminal" ]] || fail "classify: TARGET_ABSENT 应 terminal"
+  [[ "$(CF 'Unknown input method com.android.adbkeyboard/.AdbIME cannot be enabled for user #0')" == "transient" ]] || fail "classify: AdbIME 应 transient"
+  [[ "$(CF 'restore_ime: original_ime: parameter not set')" == "transient" ]] || fail "classify: restore_ime 应 transient"
+  [[ "$(CF 'warning: foreground gate: douyin not foreground (round 1)
+no card matched
+failure_class=TARGET_ABSENT')" == "terminal" ]] || fail "classify: warning:foreground 不得污染 TARGET_ABSENT 判终止"
+  [[ "$(CF 'some other die message')" == "other" ]] || fail "classify: 未知失败应 other"
+else
+  echo "::warning::zsh 不可用,层4 归因断言跳过(部署侧会跑)"
+fi
+grep -qF 'requeue_transient' "$D/outreach-tick.sh" || fail "tick 未接 requeue_transient"
+grep -qF 'outreach-tick.lock' "$D/outreach-tick.sh" || fail "tick 未接 mkdir 互斥锁"
+grep -qF 'profile_url' "$D/next-outreach.js" || fail "选单器未出 profile_url"
+
 echo "phone-adb-controller-smoke: PASS"
