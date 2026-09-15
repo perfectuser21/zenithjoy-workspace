@@ -226,8 +226,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: node --test scripts/openclaw
-        run: node --test scripts/openclaw/**/*.test.js
+      - name: node --test scripts/openclaw + services/phone-adb-controller
+        run: node --test scripts/openclaw/**/*.test.js services/phone-adb-controller/__tests__/*.test.mjs
 
   # ─── apps/api/scripts ────────────────────────────────────────────────
   # apps/api/scripts/ 下的独立 Python 脚本（如 wechat-mp-freepublish.py）不属于任何
