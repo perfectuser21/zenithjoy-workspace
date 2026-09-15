@@ -26,7 +26,7 @@ node --check "$D/next-outreach.js" || fail "next-outreach.js 语法错误"
 node --check "$D/next-outreach-lib.js" || fail "next-outreach-lib.js 语法错误"
 
 # 层2: 融合刀函数/命令存在性(六刀签名)
-for pat in 'clip_guard_check' 'clip_guard_record' 'foreground_gate' 'FG_DISMISS_LABELS' 'lock-refresh)' 'failure_class=' 'ensure_feed' 'locate_cached utab' 'profile url shape not allowed' 'link route:' '"$#" == 5 || "$#" == 6' ; do
+for pat in 'clip_guard_check' 'clip_guard_record' 'foreground_gate' 'FG_DISMISS_LABELS' 'lock-refresh)' 'failure_class=' 'ensure_feed' 'locate_cached utab' 'profile url shape not allowed' 'link route:' '"$#" == 5 || "$#" == 6' 'AppLinkHandler' '打开抖音看更多内容' ; do
   grep -qF "$pat" "$C" || fail "融合刀签名缺失: $pat"
 done
 # harvest 必须接了心跳与作品地址
