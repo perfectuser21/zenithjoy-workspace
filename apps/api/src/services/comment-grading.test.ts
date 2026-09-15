@@ -171,12 +171,14 @@ describe('comment-grading gradeComments', () => {
    * 所以任何固定预算都可能被坏运气击穿（实测 12 条 @2000 连续两次全丢）。
    *
    * 真正的解法不是加预算而是**关掉思考**：这个任务是 4 选 1 的短文本分类，不需要思考链。
-   * 实测 reasoning_effort='none' 后，42 条评论用现有的 max_tokens=500 就是 42/42，
-   * 耗时 5.9s → 2.3s。（注：该参数只对 deepseek 生效，gemini-2.5 不认，见 content-judgment.ts）
+   * 0820 用 reasoning_effort='none'；0915 TOAPIS 上游变更把 none 从合法值里移除
+   *（400 invalid_parameter_error，合法值只剩 low..max，而 low 实测照样吃光预算），
+   * 关思考的开关换成 enable_thinking:false（0915 真调实测 gpt-5.6-terra 与
+   * deepseek-v4-flash 都零思考出正文）。
    *
-   * 这条断言就是守卫本体——把 reasoning_effort 去掉，本测试必须报红。
+   * 这条断言就是守卫本体——把 enable_thinking 去掉，本测试必须报红。
    */
-  it('必须关闭思考链（reasoning_effort=none）——否则 reasoning 吃光预算整批返 null', async () => {
+  it('必须关闭思考链（enable_thinking=false）——否则 reasoning 吃光预算整批返 null', async () => {
     const mockedPost = vi.mocked(axios.post);
     mockedPost.mockResolvedValue({
       data: { choices: [{ finish_reason: 'stop', message: { content: '1. 高意向' } }] },
@@ -185,7 +187,9 @@ describe('comment-grading gradeComments', () => {
     await gradeComments('健身减脂目标客户', '标题', null, [{ commentText: '多少钱一份' }]);
 
     const [, body] = mockedPost.mock.calls[0] as [string, Record<string, unknown>];
-    expect(body.reasoning_effort).toBe('none');
+    expect(body.enable_thinking).toBe(false);
+    // 0915 上游拒收史: 请求体里绝不能再带 reasoning_effort(任何值)——带=400 整批 null
+    expect(body.reasoning_effort).toBeUndefined();
   });
 
   /**
