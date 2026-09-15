@@ -38,7 +38,7 @@ TAG="outreach-$(date +%m%d%H%M)"
 mark(){ ssh -o ConnectTimeout=15 us-vps "docker exec openclaw-gateway node /root/.openclaw/next-outreach.js done $1 $2 $(print -n -- "$3" | /usr/bin/base64)" >>$LOG 2>&1 }
 
 if ! $C --profile "$PROFILE" lock-acquire "$TAG" >>$LOG 2>&1; then
-  log "锁被占,回退待触达"; mark "$RID" failed "device lock busy"; exit 0
+  log "锁被占(采收在用),回队列待下轮"; mark "$RID" requeue "lock busy"; exit 0
 fi
 # 拟人③: 发送前 3-8 秒停顿
 /bin/sleep $(( 3 + RANDOM % 6 ))

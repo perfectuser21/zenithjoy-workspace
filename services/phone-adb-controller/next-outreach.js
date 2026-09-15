@@ -28,9 +28,13 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : (
     const [,,, rid, result, noteB64] = process.argv;
     const note = noteB64 ? Buffer.from(noteB64, "base64").toString() : "";
     const now = new Date(Date.now()+8*3600e3).toISOString().replace("T"," ").slice(0,16)+"(UTC+8)";
+    // 0915: 失败单转「触达受阻」——不回待触达,防高优先级单(重复高亮)无限重选死循环;
+    // 受阻单人工复核或走"来源视频评论区反向进主页"路线(字母号搜索不可达实证: LHJ20001024 首屏8卡全是近似号)
     const fields = result === "sent"
       ? { "状态": "已触达", "发送状态": "已发送", "触达时间": now }
-      : { "状态": "待触达", "发送状态": "发送失败", "回复结果": ("[失败]" + note).slice(0,200) };
+      : result === "requeue"
+      ? { "状态": "待触达" }  // 环境性失败(锁忙/设备离线): 回队列,不算受阻
+      : { "状态": "触达受阻", "发送状态": "发送失败", "回复结果": ("[受阻]" + note).slice(0,200) };
     const res = await (await fetch(`https://open.feishu.cn/open-apis/bitable/v1/apps/${B}/tables/${LEADS}/records/${rid}`, { method: "PUT", headers: H, body: JSON.stringify({ fields }) })).json();
     console.log(res.code === 0 ? "MARKED " + result : "MARK_FAIL " + JSON.stringify(res).slice(0,120));
     return;

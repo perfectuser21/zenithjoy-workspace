@@ -1256,16 +1256,29 @@ send_private_message() {
   # 老写法在树里找"关注按钮"必死。改回填同款:首卡固定比例位轻点;
   # 认错人不怕——下方主页"抖音号:强校验"不匹配即拒发,安全性零下降。
   follow_line=""
+  # 0915 实证: 字母开头抖音号搜索不精确置顶——首卡不中就试前3卡位(强校验兜底,认错人绝不发)
   target_x=$(( SCREEN_W * 25 / 100 ))
-  target_y=$(( SCREEN_H * 214 / 1000 ))
-  "$ADB" -s "$SERIAL" shell input tap "$target_x" "$target_y"
-  wait_ms 1400
-  profile_xml="$EVIDENCE_ROOT/${evidence_id}-target-profile.xml"
-  ui_evidence "${evidence_id}-target-profile" >/dev/null
-  target_id_line="$(/usr/bin/grep -oE '<node[^>]+text="抖音号：[^\"]+"[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
-  [[ -n "$target_id_line" ]] || die "target profile identity was not visible" TARGET_ABSENT
-  observed_target_id="$(print -- "$target_id_line" | /usr/bin/sed -E 's/.* text="抖音号：([^"]*)" resource-id=.*/\1/')"
-  [[ "$observed_target_id" == "$target_douyin_id" ]] || die "first exact-id search result did not match the claimed target"
+  _tp_found=0
+  local _card observed_target_id
+  for _card in 1 2 3; do
+    target_y=$(( SCREEN_H * ( 214 + (_card - 1) * 95 ) / 1000 ))
+    "$ADB" -s "$SERIAL" shell input tap "$target_x" "$target_y"
+    wait_ms 1600
+    profile_xml="$EVIDENCE_ROOT/${evidence_id}-target-profile-c${_card}.xml"
+    ui_evidence "${evidence_id}-target-profile-c${_card}" >/dev/null
+    target_id_line="$(/usr/bin/grep -oE '<node[^>]+text="抖音号：[^\"]+"[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
+    if [[ -n "$target_id_line" ]]; then
+      observed_target_id="$(print -- "$target_id_line" | /usr/bin/sed -E 's/.* text="抖音号：([^"]*)" resource-id=.*/\1/')"
+      if [[ "$observed_target_id" == "$target_douyin_id" ]]; then _tp_found=1; break; fi
+      print -u2 -- "warning: card ${_card} is ${observed_target_id}, not target; trying next card"
+    else
+      print -u2 -- "warning: card ${_card} profile identity not visible; trying next card"
+    fi
+    "$ADB" -s "$SERIAL" shell input keyevent 4
+    wait_ms 1400
+  done
+  (( _tp_found )) || die "no card in top-3 user results matched the claimed target id ${target_douyin_id}" TARGET_ABSENT
+  profile_xml="$EVIDENCE_ROOT/${evidence_id}-target-profile-c${_card}.xml"
   dm_line="$(/usr/bin/grep -oE '<node[^>]+(text="发私信"|content-desc="私信")[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
   if [[ -n "$dm_line" && "$dm_line" == *'clickable="true"'* ]]; then
     dm_center="$(node_center "$dm_line")" || die "private-message action bounds could not be parsed"
