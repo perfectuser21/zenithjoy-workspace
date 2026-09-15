@@ -38,8 +38,16 @@ case "$(hostname -s)" in
   *m1-us*)   HOSTKEY=xian-m1 ;;
   *)         HOSTKEY=$(hostname -s | tr '[:upper:]' '[:lower:]') ;;
 esac
-ESCORT_ID=$(ssh -o ConnectTimeout=20 us-vps "docker exec openclaw-gateway openclaw cron add --name 'escort-$TAG' --agent media --session isolated --every 10m --announce --channel feishu --to 'chat:oc_ef60d6e3f199d90dd695b6ecc213d662' --account main --best-effort-deliver --message '先读 /root/.openclaw/cmdr-escort.txt 作为你的SOP并严格遵守辅佐三原则。本轮上下文: TAG=$TAG 机器=$HOSTKEY serial=$SERIAL profile=$P 词数=$NWORDS 起跑=$(date +%H:%M) 日志=/root/.openclaw/m4-logs/${HOSTKEY}-harvest.log escort名=escort-$TAG'" 2>>$LOG | grep -oE '"id": "[a-f0-9-]+"' | head -1 | cut -d'"' -f4)
-[[ -n "$ESCORT_ID" ]] && log "escort已拉起: $ESCORT_ID" || log "escort拉起失败(不阻塞采收)"
+# 0915 真测实证: 网关重启窗口 ECONNREFUSED、拥堵期握手30s超时都会让单发拉起静默失败——
+# 加 --timeout 90000 + 重试3次(间隔30s)。仍失败=不阻塞采收,Commander缺岗由值守cron兜底。
+ESCORT_ID=""
+for _ea in 1 2 3; do
+  ESCORT_ID=$(ssh -o ConnectTimeout=20 us-vps "docker exec openclaw-gateway openclaw cron add --timeout 90000 --name 'escort-$TAG' --agent media --session isolated --every 10m --announce --channel feishu --to 'chat:oc_ef60d6e3f199d90dd695b6ecc213d662' --account main --best-effort-deliver --message '先读 /root/.openclaw/cmdr-escort.txt 作为你的SOP并严格遵守辅佐三原则。本轮上下文: TAG=$TAG 机器=$HOSTKEY serial=$SERIAL profile=$P 词数=$NWORDS 起跑=$(date +%H:%M) 日志=/root/.openclaw/m4-logs/${HOSTKEY}-harvest.log escort名=escort-$TAG'" 2>>$LOG | grep -oE '"id": "[a-f0-9-]+"' | head -1 | cut -d'"' -f4)
+  [[ -n "$ESCORT_ID" ]] && break
+  log "escort拉起第${_ea}次失败,30s后重试"
+  /bin/sleep 30
+done
+[[ -n "$ESCORT_ID" ]] && log "escort已拉起: $ESCORT_ID" || log "escort拉起3次均失败(不阻塞采收,值守cron兜底)"
 escort_dismiss() { [[ -n "$ESCORT_ID" ]] && ssh -o ConnectTimeout=20 us-vps "docker exec openclaw-gateway openclaw cron rm $ESCORT_ID" >>$LOG 2>&1 && log "escort已注销" }
 trap escort_dismiss EXIT INT TERM
 
