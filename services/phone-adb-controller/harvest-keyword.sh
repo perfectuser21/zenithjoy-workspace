@@ -46,9 +46,13 @@ for CARDLINE in "${(f)CARDS}"; do
   VID="$(print -- "$VLINK" | sed -n "s/^video_id=//p")"
   [[ -n "$VURL" ]] && log "  作品链接: $VURL"
   if ! $C --profile "$P" open-comments "$TAG-v$i-oc" >/dev/null 2>&1; then
-    log "  评论区打不开,跳过"
-    $C --profile "$P" back >/dev/null 2>&1; sleep 2
-    continue
+    log "  评论区打不开,3秒后重试1次"
+    /bin/sleep 3
+    if ! $C --profile "$P" open-comments "$TAG-v$i-oc2" >/dev/null 2>&1; then
+      log "  评论区重试仍打不开,跳过"
+      $C --profile "$P" back >/dev/null 2>&1; sleep 2
+      continue
+    fi
   fi
   CC="$($C --profile "$P" collect-comments "$TAG-v$i-cc" 2>/dev/null | grep -E "	tap=" || true)"
   if [[ -z "$CC" ]]; then
@@ -69,12 +73,26 @@ for CARDLINE in "${(f)CARDS}"; do
     TX="${TAPF#tap=}"; TXX="${TX%% *}"; TXY="${TX##* }"
     NB="${B64F#b64=}"
     [[ "$TXX" == <-> && "$TXY" == <-> && -n "$NB" ]] || { log "  行$j 坐标缺失($TAPF),跳过"; continue; }
-    IDOUT="$($C --profile "$P" commenter-identity "$TXX" "$TXY" "$NB" "$TAG-v$i-u$j" </dev/null 2>/dev/null || true)"
-    ONICK="$(print -- "$IDOUT" | sed -n "s/^nickname=//p")"
+    # 0915: 评论者是真实存在的,一次读不到只说明时序/网络抖——3次重试+死因留档(0912原则)
+    IDOUT=""; IDERR=/tmp/iderr-$$.txt
+    for IDTRY in 1 2 3; do
+      IDOUT="$($C --profile "$P" commenter-identity "$TXX" "$TXY" "$NB" "$TAG-v$i-u$j-t$IDTRY" </dev/null 2>$IDERR || true)"
+      ONICK="$(print -- "$IDOUT" | sed -n "s/^nickname=//p")"
+      [[ -n "$ONICK" ]] && break
+      log "  行$j 身份验证第${IDTRY}次失败: $(tail -1 $IDERR 2>/dev/null | head -c 120)"
+      # 0915 真凶: card-link收尾恢复不可靠→评论面板丢失→后续行全灭。恢复=back+重开评论面板
+      $C --profile "$P" back >/dev/null 2>&1
+      /bin/sleep 2
+      if ! $C --profile "$P" open-comments "$TAG-v$i-u$j-ro$IDTRY" </dev/null >/dev/null 2>&1; then
+        $C --profile "$P" back >/dev/null 2>&1; /bin/sleep 2
+        $C --profile "$P" open-comments "$TAG-v$i-u$j-ro${IDTRY}b" </dev/null >/dev/null 2>&1 || true
+      fi
+      /bin/sleep 2
+    done
     OID="$(print -- "$IDOUT" | sed -n "s/^douyin_id=//p")"
     ATYPE="$(print -- "$IDOUT" | sed -n "s/^account_type=//p")"
     PIP="$(print -- "$IDOUT" | sed -n "s/^profile_ip=//p")"
-    if [[ -z "$ONICK" ]]; then log "  行$j 身份验证失败: $NICK"; continue; fi
+    if [[ -z "$ONICK" ]]; then log "  行$j 身份验证3次仍失败,弃: $NICK"; continue; fi
     # 0914 主理人验收:每人顺取名片主页直链(identity已回评论区,重进主页跑card-link,其自带恢复)
     "$C" --profile "$P" tap-evidence "$TXX" "$TXY" "$TAG-v$i-u$j-re" </dev/null >/dev/null 2>&1
     sleep 3
