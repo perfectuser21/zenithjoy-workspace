@@ -59,6 +59,12 @@ else
   echo "::warning::zsh 不可用,层4 归因断言跳过(部署侧会跑)"
 fi
 grep -qF 'requeue_transient' "$D/outreach-tick.sh" || fail "tick 未接 requeue_transient"
+# 层6: 夜批run伴随Commander(决策dcdaa83e: 起跑拉起escort,收工注销,辅佐姿态)
+grep -qF 'escort-' "$D/harvest-cron.sh" || fail "harvest 未拉起伴随escort"
+grep -qF 'cron rm' "$D/harvest-cron.sh" || fail "harvest 未注销escort(泄漏cron)"
+[[ -s "$D/cmdr-escort.txt" ]] || fail "escort SOP文件缺失"
+grep -qF '帮不拦' "$D/cmdr-escort.txt" || fail "escort SOP缺辅佐三原则"
+
 # 层5: 落表独立字段(主理人0915逐列验收拍板: 昵称/抖音号/主页链接/IP/留言时间独立成列)
 grep -qF '"留言时间"' "$D/push-raw-comments.js" || fail "push-raw-comments 未写留言时间列"
 grep -qF '"主页IP"' "$D/push-raw-comments.js" || fail "push-raw-comments 未写主页IP列"
