@@ -43,6 +43,7 @@ for CARDLINE in "${(f)CARDS}"; do
     $C --profile "$P" back >/dev/null 2>&1; sleep 2
     continue
   fi
+  VID="$(print -- "$VLINK" | sed -n "s/^video_id=//p")"
   [[ -n "$VURL" ]] && log "  作品链接: $VURL"
   if ! $C --profile "$P" open-comments "$TAG-v$i-oc" >/dev/null 2>&1; then
     log "  评论区打不开,跳过"
@@ -82,6 +83,8 @@ for CARDLINE in "${(f)CARDS}"; do
     print -- "LEAD	$ONICK	${OID:-}	${ATYPE:-personal}	$BODY	$DATE	$REGION	$TITLE	$KWTXT	${PIP:-}	${PURL:-}	${VURL:-}"
     sleep 4
   done
+  # 视频落「视频池」行(全链可观察: VIDEO\tid\t短链\t标题\t关键词\t采到评论数)
+  print -- "VIDEO	${VID:-}	${VURL:-}	$TITLE	$KWTXT	$(print -- "$CC" | wc -l | tr -d " ")"
   # 收评论面板+回搜索结果
   $C --profile "$P" back >/dev/null 2>&1; sleep 1
   $C --profile "$P" back >/dev/null 2>&1; sleep 2
