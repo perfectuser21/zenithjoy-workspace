@@ -115,7 +115,10 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
       }
       const key = nick + " / " + (dyid || "id待核验");
       const res = await feishu(`/tables/${LEADS}/records`, "POST", { fields: {
-        "抖音获客-线索表": key,
+        // 0915 主理人逐列验收拍板: 首列=纯昵称;独立字段成列;混合列保留双写(next-outreach 选单器在读)
+        "抖音获客-线索表": nick,
+        "昵称": nick, "抖音号": dyid || "", "主页链接": (purl && purl.startsWith("http")) ? purl : "",
+        "IP属地": txt(f["地区"]), "留言时间": txt(f["留言时间"]),
         "抖音昵称/主页链接": key + (purl && purl.startsWith("http") ? " / " + purl : ""),
         "业务线": "AI人工智能训练师", "命中关键词": txt(f["命中关键词"]), "关键词层级": "精准词",
         "评论原文": txt(f["评论原文"]),
@@ -125,7 +128,8 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
         "搜索意图": "证书/学习/求职", "目标人群": "考证人群", "采集时间": now,
         "合规核验状态": "异步判定agent分级入表(" + now + ")｜评论区采集｜仅内部写入,未触达。",
       }}, tok);
-      if (res.code === 0) { moved++; seen.add(nick); if (dyid) seen.add(dyid.trim()); }
+      // 0915 修真bug: seen 是 Map,原代码误用 Set 的 add 方法抛 TypeError,使每轮搬运第一条成功后即断
+      if (res.code === 0) { moved++; seen.set(nick, { id: res.data?.record?.record_id, dup: 0 }); if (dyid) seen.set(dyid.trim(), { id: res.data?.record?.record_id, dup: 0 }); }
       else console.log("LEAD_FAIL", nick, JSON.stringify(res).slice(0, 100));
     }
     console.log(`模型判定写回 ${n} 条 | 搬入线索表 ${moved} 条`);

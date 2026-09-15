@@ -34,7 +34,10 @@ const B = "GNuwbzY0da8GP0sv6MGcOTu9ntd", POOL = "tblmrJTyVgzTj89P";
       "采集时间": now, "命中关键词": kw || "",
       "来源视频": (video||"").slice(0,100),
       "评论原文": comment || "", "评论者昵称": nick || "",
+      // 0915 主理人逐列验收拍板: 独立字段成列;「用户主页标识」拼串保留双写(存量兼容,勿再新增读取方)
       "用户主页标识": [id||"", purl||"", atype||""].filter(Boolean).join(" | "),
+      "抖音号": id || "", "主页链接": purl || "", "账号类型": atype || "",
+      "留言时间": cdate || "", "主页IP": (pip||"").trim(),
       "地区": region || "", "处理状态": "待分拣",
     }};
     const res = await (await fetch(`https://open.feishu.cn/open-apis/bitable/v1/apps/${B}/tables/${POOL}/records`, { method: "POST", headers: H, body: JSON.stringify(body) })).json();
