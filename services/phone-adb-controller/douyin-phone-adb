@@ -1202,7 +1202,7 @@ switch_account() {
 }
 
 send_private_message() {
-  local expected_account_id target_douyin_id message_b64 evidence_id message original_ime current current_id
+  local expected_account_id target_douyin_id message_b64 evidence_id profile_url message original_ime current current_id
   local search_xml user_tab_line user_tab_center user_tab_x user_tab_y users_xml follow_line follow_bounds fx1 fy1 fx2 fy2 target_x target_y
   local profile_xml target_id_line observed_target_id dm_line dm_center dm_x dm_y chat_xml input_line input_center input_x input_y
   local typed_xml typed_value before_path send_line send_center send_x send_y sent_xml sent_path
@@ -1210,6 +1210,7 @@ send_private_message() {
   target_douyin_id="$2"
   message_b64="$3"
   evidence_id="$4"
+  profile_url="${5:-}"
   require_account_id "$expected_account_id"
   require_account_id "$target_douyin_id"
   require_evidence_id "$evidence_id"
@@ -1225,6 +1226,28 @@ send_private_message() {
   current_id="$(print -- "$current" | /usr/bin/awk -F= '$1 == "douyin_id" { print $2; exit }')"
   [[ "$current_id" == "$expected_account_id" ]] || die "current sender account does not match the claimed distribution account"
 
+  if [[ -n "$profile_url" ]]; then
+    # 0915 链接直达路线(决策 c5e600a4/c5828297): 有主页直链禁走搜索——字母号搜索
+    # 不可达实证(LHJ20001024/P0ten, 0915 三单撞墙)。链接打不开/校验不过=受阻类,
+    # 不做搜索兜底(搜索正是被否掉的路线)。
+    [[ "$profile_url" == https://(v|www).douyin.com/[A-Za-z0-9._/-]## ]] || die "profile url shape not allowed"
+    "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "$profile_url" com.ss.android.ugc.aweme >/dev/null
+    # 落页节奏沿用先探后睡: 每 3.5s 一拍,3 轮预算,读到「抖音号：」即走
+    profile_xml="$EVIDENCE_ROOT/${evidence_id}-target-profile-link.xml"
+    target_id_line=""
+    local _lp
+    for _lp in 1 2 3; do
+      wait_ms 3500
+      if _ui_evidence_wave "${evidence_id}-target-profile-link" >/dev/null 2>&1; then
+        target_id_line="$(/usr/bin/grep -oE '<node[^>]+text="抖音号：[^"]+"[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
+        [[ -n "$target_id_line" ]] && break
+      fi
+    done
+    [[ -n "$target_id_line" ]] || die "link route: profile identity was not readable after deeplink" TARGET_ABSENT
+    observed_target_id="$(print -- "$target_id_line" | /usr/bin/sed -E 's/.* text="抖音号：([^"]*)" resource-id=.*/\1/')"
+    # 强校验闸原样: 认错人绝不发
+    [[ "$observed_target_id" == "$target_douyin_id" ]] || die "link route: profile id ${observed_target_id} does not match claimed ${target_douyin_id}" TARGET_ABSENT
+  else
   "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "snssdk1128://search/tabs?keyword=$target_douyin_id" >/dev/null
   # 0914 真机实证: 搜索落地页加载+自动播放,1400ms 后一锤子读树必死(三波全废)。
   # 改 refill 同款节奏: 先探后睡,每 3.5s 一拍单波快探,4 轮预算(~14s),拍到「用户」tab 即走。
@@ -1279,6 +1302,7 @@ send_private_message() {
   done
   (( _tp_found )) || die "no card in top-3 user results matched the claimed target id ${target_douyin_id}" TARGET_ABSENT
   profile_xml="$EVIDENCE_ROOT/${evidence_id}-target-profile-c${_card}.xml"
+  fi
   dm_line="$(/usr/bin/grep -oE '<node[^>]+(text="发私信"|content-desc="私信")[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
   if [[ -n "$dm_line" && "$dm_line" == *'clickable="true"'* ]]; then
     dm_center="$(node_center "$dm_line")" || die "private-message action bounds could not be parsed"
@@ -2104,9 +2128,9 @@ case "$command" in
     switch_account "$2" "$3"
     ;;
   private-message-send)
-    [[ "$#" == 5 ]] || die "usage: douyin-phone-adb --profile PROFILE private-message-send SENDER_DOUYIN_ID TARGET_DOUYIN_ID MESSAGE_B64 EVIDENCE_ID"
+    [[ "$#" == 5 || "$#" == 6 ]] || die "usage: douyin-phone-adb --profile PROFILE private-message-send SENDER_DOUYIN_ID TARGET_DOUYIN_ID MESSAGE_B64 EVIDENCE_ID [PROFILE_URL]"
     check_target
-    send_private_message "$2" "$3" "$4" "$5"
+    send_private_message "$2" "$3" "$4" "$5" "${6:-}"
     ;;
   commenter-card-link)
     # 0914 主理人亲授路径:他人主页 更多→(图标排横滑)→分享名片→复制链接→剪贴板回读→sec_uid 主页直链。
