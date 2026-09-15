@@ -81,8 +81,11 @@ grep -qF 'profile_url' "$D/next-outreach.js" || fail "选单器未出 profile_ur
 if command -v zsh >/dev/null 2>&1; then
   zsh -n "$D/harvest-cron.sh" || fail "harvest-cron.sh zsh 语法错误"
 fi
-# 5b: escort 拉起必须用 custom session(session:escort-$TAG=同夜tick共享上下文),禁回退 isolated 失忆形态
-grep -qF -- "--session 'session:escort-" "$D/harvest-cron.sh" || fail "escort 拉起未用 session:escort-\$TAG 跨轮记忆会话(失忆形态回归)"
+# 5b: escort 拉起必须用 custom session 且带机器名(0915首夜实证: M4/M1同分钟起跑TAG撞名,
+#     session 不带 HOSTKEY=两机escort共享会话互相污染,name 不带=SOP自杀条款按名找id误杀对方)
+grep -qF -- "--session 'session:escort-\$HOSTKEY-\$TAG'" "$D/harvest-cron.sh" || fail "escort 会话未带 HOSTKEY(session:escort-\$HOSTKEY-\$TAG),同分钟跨机撞名串线"
+grep -qF -- "--name 'escort-\$HOSTKEY-\$TAG'" "$D/harvest-cron.sh" || fail "escort cron名未带 HOSTKEY(escort-\$HOSTKEY-\$TAG),自杀条款按名找id会误杀对方"
+if grep -F -- "--session isolated" "$D/harvest-cron.sh" | grep -qF "escort-"; then fail "escort 拉起回退成 --session isolated(失忆形态复活)"; fi
 if grep -F -- "--session isolated" "$D/harvest-cron.sh" | grep -qF "escort-"; then fail "escort 拉起回退成 --session isolated(失忆形态复活)"; fi
 # 5c: SOP 必须带 FINDINGS 夜际记忆条款(读历史判例+追加新判例)
 grep -qF "escort-findings.md" "$D/cmdr-escort.txt" || fail "cmdr-escort.txt 缺 escort-findings.md 夜际记忆条款"
