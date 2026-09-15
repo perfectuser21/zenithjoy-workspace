@@ -1,7 +1,8 @@
-// next-outreach-lib.js —— 选单器纯函数。与 next-outreach.js 同目录同批部署:
+// next-outreach-lib.js —— 选单器纯函数(CJS)。与 next-outreach.js 同目录同批部署:
 // 网关副本 /opt/openclaw/state/ 漏发本文件 = 首个 tick MODULE_NOT_FOUND 全线选单挂。
 // 「抖音昵称/主页链接」实况: `昵称 / dyid / https://www.douyin.com/user/MS4w...`
 // URL 自身含 "/" —— 取链接必须整体正则,禁止 split("/") 位置切段(parts[2]==="https:")。
+"use strict";
 
 const URL_RE = /https?:\/\/\S+/;
 const DYID_RE = /^[A-Za-z0-9._]{4,}$/;
@@ -43,5 +44,4 @@ function requeueTransientFields(prevReply, note, now) {
   };
 }
 
-export default { extractLead, isValidDyid, classifyPending, requeueTransientFields, TRANSIENT_MARK, URL_RE };
-export { extractLead, isValidDyid, classifyPending, requeueTransientFields, TRANSIENT_MARK, URL_RE };
+module.exports = { extractLead, isValidDyid, classifyPending, requeueTransientFields, TRANSIENT_MARK, URL_RE };
