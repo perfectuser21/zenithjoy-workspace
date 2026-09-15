@@ -37,7 +37,12 @@ const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';
 // 而非 completion）、gpt-5.4-mini 渠道 #159 403 model unsupported；三模型逐一真调后
 // 只有 gpt-5.6-terra 正常（它认 reasoning_effort:none，0823 实测）。deepseek 渠道
 // 恢复后可评估切回——判据：真调返回正常 JSON completion 且 gp2 Step 23b 连续绿。
-const GRADING_MODEL = process.env.GRADING_MODEL || 'gpt-5.6-terra';
+// 2026-09-15 切回 deepseek-v4-flash：terra 渠道批量请求源站超时（25条 prompt 100s 出不来,
+// Cloudflare 524 HTML,小请求正常——gp2 Step23c 连续 0/25 的真凶,axios 40s 超时先兜住表现为
+// catch null）。同日真调判据全过: deepseek@toapis.com 批量 25 条 200/2.3s/25 行全出档/
+// finish=stop/零思考(enable_thinking:false)。0909 的"C2PA 垃圾"复测确认是 api.toapis.com
+// 域名的行为,默认域名 toapis.com 不复现。terra 渠道恢复与否不再重要,deepseek 快 3 倍。
+const GRADING_MODEL = process.env.GRADING_MODEL || 'deepseek-v4-flash';
 
 const VALID_GRADES = ['高意向', '精准', '感兴趣', '其他'] as const;
 
@@ -88,10 +93,14 @@ export async function gradeComments(
         //（精准→感兴趣、精准→其他、感兴趣→其他），与本文件头部那条已拍板的原则同向
         //（宁可漏判高意向，不可误判陌生人为高意向去真实打扰）。
         //
-        // ⚠️ 该参数 deepseek/gpt-5.4-mini 都认（0823 真调实测 gpt-5.4-mini reasoning_tokens=0）；
-        // gemini-2.5 收到后照样思考（实测 reasoning 仍是 189/577/572），
-        // content-judgment.ts/locator-assist.ts 用 gemini 的地方只能靠给够 max_tokens，别照抄这行。
-        reasoning_effort: 'none',
+        // ⚠️ 开关的写法随上游变过一次，别抄旧文:
+        // 0820-0914 用 reasoning_effort:'none'(当时 deepseek/gpt-5.4-mini 都认);
+        // 0915 TOAPIS 上游变更把 none 从合法值移除(带上=400 invalid_parameter_error→axios
+        // 抛错→整批 null,gp2 Step23c 0/25 连续红),合法值只剩 low..max 而 low 真调实测
+        // 照样 reasoning 吃满预算。0915 真调实测 enable_thinking:false 在现役 gpt-5.6-terra
+        // 与 deepseek-v4-flash 上都零思考出正文(finish=stop),遂切此开关。
+        // gemini-2.5 两种开关都不认(照样思考),用 gemini 的地方只能靠给够 max_tokens,别照抄这行。
+        enable_thinking: false,
       },
       {
         headers: {

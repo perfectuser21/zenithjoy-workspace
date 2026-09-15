@@ -392,7 +392,7 @@ async function commanderReview(
             temperature: 0.1,
             // gpt-5.4-mini 认这个参数（0823 真调 reasoning_tokens=0），关思考让短判决更稳更快；
             // 若换回 deepseek 系列同样适用，只有 gemini 不认（那边只能靠给够 max_tokens）。
-            reasoning_effort: 'none',
+            enable_thinking: false, // 0915 TOAPIS 拒收 reasoning_effort=none(400),实测此开关 terra/deepseek 都零思考
           },
           {
             headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
