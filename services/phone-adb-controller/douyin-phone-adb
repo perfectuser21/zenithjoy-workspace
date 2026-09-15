@@ -1231,16 +1231,31 @@ send_private_message() {
     # 不可达实证(LHJ20001024/P0ten, 0915 三单撞墙)。链接打不开/校验不过=受阻类,
     # 不做搜索兜底(搜索正是被否掉的路线)。
     [[ "$profile_url" == https://(v|www).douyin.com/[A-Za-z0-9._/-]## ]] || die "profile url shape not allowed"
-    "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "$profile_url" com.ss.android.ugc.aweme >/dev/null
-    # 落页节奏沿用先探后睡: 每 3.5s 一拍,3 轮预算,读到「抖音号：」即走
+    # 0915 真机实证(主号机): 抖音只给 www.douyin.com 的 /share|/redirect 前缀注册 intent-filter,
+    # 标准 /user/<sec_uid> 用隐式 VIEW+包名钉死必报 unable to resolve;/share/user 形态被吞回「我」页。
+    # 唯一可开路线=显式组件直呼 AppLinkHandler: 落「网页浏览」应用内网页版主页(树可读"抖音号 <id>"
+    # 空格无冒号,先做预校验),再点「打开抖音看更多内容」跳原生主页,原生「抖音号：」强校验闸不变。
+    "$ADB" -s "$SERIAL" shell am start -n "$DOUYIN_PACKAGE/.app.AppLinkHandler" -a android.intent.action.VIEW -d "$profile_url" >/dev/null
+    # 落页节奏沿用先探后睡: 每 3.5s 一拍,4 轮预算(含网页版中转一跳),读到原生「抖音号：」即走
     profile_xml="$EVIDENCE_ROOT/${evidence_id}-target-profile-link.xml"
     target_id_line=""
-    local _lp
-    for _lp in 1 2 3; do
+    local _lp _web_line _web_id _open_line _oc _ox _oy
+    for _lp in 1 2 3 4; do
       wait_ms 3500
-      if _ui_evidence_wave "${evidence_id}-target-profile-link" >/dev/null 2>&1; then
-        target_id_line="$(/usr/bin/grep -oE '<node[^>]+text="抖音号：[^"]+"[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
-        [[ -n "$target_id_line" ]] && break
+      _ui_evidence_wave "${evidence_id}-target-profile-link" >/dev/null 2>&1 || continue
+      target_id_line="$(/usr/bin/grep -oE '<node[^>]+text="抖音号：[^"]+"[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
+      [[ -n "$target_id_line" ]] && break
+      # 网页版中转页: 预校验身份(认错人在网页层就拒),再点跳原生
+      _web_line="$(/usr/bin/grep -oE '<node[^>]+text="抖音号 [A-Za-z0-9._]+"[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
+      if [[ -n "$_web_line" ]]; then
+        _web_id="$(print -- "$_web_line" | /usr/bin/sed -E 's/.*text="抖音号 ([A-Za-z0-9._]+)".*/\1/')"
+        [[ "$_web_id" == "$target_douyin_id" ]] || die "link route: web profile id ${_web_id} does not match claimed ${target_douyin_id}" TARGET_ABSENT
+      fi
+      _open_line="$(/usr/bin/grep -oE '<node[^>]+text="打开抖音看更多内容"[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
+      if [[ -n "$_open_line" ]]; then
+        _oc="$(node_center "$_open_line")" || continue
+        read _ox _oy <<< "$_oc"
+        "$ADB" -s "$SERIAL" shell input tap "$_ox" "$_oy"
       fi
     done
     [[ -n "$target_id_line" ]] || die "link route: profile identity was not readable after deeplink" TARGET_ABSENT
