@@ -6414,3 +6414,11 @@ agent_suite:
     status: active
     product: 新媒体运营
     note: "zenithjoyai.com 上 TikTok OAuth 两端点（start/callback，Cloudflare Pages Functions）的错误路径回归：state 三重校验（HMAC签名/TTL/cookie nonce 绑定，防 account confusion）、凭据未配置返200非5xx（审核员访问时刻）、TikTok 出错仍返HTTP200故以 body.error 优先判定、code 末尾%2A还原、error_description 转义防反射型XSS、noindex/no-store/no-referrer 响应头。"
+
+  - id: meta-publishing-pages-functions-unit
+    path: sprints/09161245-meta-publishing/tests/meta-publishing.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "zenithjoyai.com Meta 自建发布桥：Page/Instagram 资产核验、Bearer 鉴权、默认预览、发布双重确认、KV 幂等防重复、Facebook 文本/图片与 Instagram 单图发布、Token 不进 URL/响应。"
