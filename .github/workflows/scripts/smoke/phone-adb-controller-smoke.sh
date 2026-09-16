@@ -188,5 +188,17 @@ if grep -E 'ime enable com\.android\.adbkeyboard.*>/dev/null$' "$C" >/dev/null 2
 fi
 grep -qF 'AdbIME 未安装' "$C" || fail "AdbIME 失败时未区分'未安装'(该机需装 ADBKeyboard.apk)"
 grep -qF 'AdbIME 切换未生效' "$C" || fail "ime set 后未回读校验真生效(切换失败会静默继续,后面才炸)"
+_H_CODE_C=$(grep -vE '^[[:space:]]*#' "$C")
+
+# 层12: 触达路线单一化(0916主理人拍板)
+# ①采收已拿短链,触达直接开链即可;缺链单在选单器(next-outreach.js 缺链闸)就被标「待补链」拦掉,
+#   搜索路线永远走不到=死代码。留着只是多一条没人验证、还会把"搜不到人"混进归因的岔路。
+# ②私信入口统一走右上「更多」面板选「发私信」——官方号/旗舰店/个人号都有该入口;
+#   主页直挂 DM 按钮因号型而异,先找它=多一个失败面,且面板里必须区分「发私信」与「联系客服」。
+grep -qF 'profile_url is required' "$C" || fail "PROFILE_URL 仍可选(应必填:无链单不该进发送,选单器已在上游闸掉)"
+if echo "$_H_CODE_C" | grep -q 'snssdk1128://search/tabs'; then fail "搜索路线未删除(死代码+把'搜不到人'混进归因)"; fi
+if echo "$_H_CODE_C" | grep -q 'no card in top-3 user results'; then fail "搜索路线的前3卡兜底未删除"; fi
+grep -qF '统一走「更多」面板' "$C" || fail "私信入口未统一走更多面板(应去掉先找直挂DM按钮的分支)"
+grep -qF '联系客服' "$C" || fail "更多面板未区分「发私信」与「联系客服」(选错=发到客服通道)"
 
 echo "phone-adb-controller-smoke: PASS"
