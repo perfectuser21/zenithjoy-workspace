@@ -6422,3 +6422,11 @@ agent_suite:
     status: active
     product: 新媒体运营
     note: "zenithjoyai.com Meta 自建发布桥：Page/Instagram 资产核验、Bearer 鉴权、默认预览、发布双重确认、KV 幂等防重复、Facebook 文本/图片与 Instagram 单图发布、Token 不进 URL/响应。"
+
+  - id: meta-preview-gate-unit
+    path: sprints/09161245-meta-publishing/tests/meta-preview-gate.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "PR#1845 preview 门禁回归：preview 不需 Meta 凭据（否则凭据到位前无法做内容审批）但真实发布门禁一个不少——未配凭据发布仍503、凭据齐全但 META_PUBLISH_ENABLED=false 仍403、未授权401、preview 不回显密钥。独立文件，因 meta-publishing.test.ts 是已落盘合同测试受 lint-contract-test-immutability 保护不可改。"
