@@ -1362,8 +1362,22 @@ send_private_message() {
   [[ -n "$_ORIG_IME" && "$_ORIG_IME" != "null" ]] || die "original input method could not be read"
   restore_ime() { [[ -n "${_ORIG_IME:-}" ]] && "$ADB" -s "$SERIAL" shell ime set "$_ORIG_IME" >/dev/null 2>&1 || true }
   trap restore_ime EXIT INT TERM
-  "$ADB" -s "$SERIAL" shell ime enable com.android.adbkeyboard/.AdbIME >/dev/null
+  # 0916 判例固化: 原来 enable 结果被 >/dev/null 吞掉且不校验,失败要拖到"输入不进字/回读不匹配"
+  # 才暴露,首因丢失。实例: M1悦升机装了ADBKeyboard但未启用,生产只报 "cannot be enabled for user #0",
+  # 无从判断是没装/没启用/被ROM拦。现在当场校验并报明到底是哪一种。
+  ime_enable_out="$("$ADB" -s "$SERIAL" shell ime enable com.android.adbkeyboard/.AdbIME 2>&1 | tr -d '\r')"
+  case "$ime_enable_out" in
+    *"now enabled"*|*"already enabled"*) : ;;
+    *)
+      if ! "$ADB" -s "$SERIAL" shell pm list packages 2>/dev/null | /usr/bin/grep -q adbkeyboard; then
+        die "AdbIME 未安装(pm list 无 com.android.adbkeyboard)——该机需先装 ADBKeyboard.apk 才能发送"
+      fi
+      die "AdbIME 已安装但启用失败(疑 ROM 限制): $ime_enable_out"
+      ;;
+  esac
   "$ADB" -s "$SERIAL" shell ime set com.android.adbkeyboard/.AdbIME >/dev/null
+  cur_ime_now="$("$ADB" -s "$SERIAL" shell settings get secure default_input_method | tr -d '\r')"
+  [[ "$cur_ime_now" == *adbkeyboard* ]] || die "AdbIME 切换未生效(当前仍为 $cur_ime_now),后续输入必然失败"
   "$ADB" -s "$SERIAL" shell input tap "$input_x" "$input_y"
   wait_ms 300
   "$ADB" -s "$SERIAL" shell am broadcast -a ADB_CLEAR_TEXT >/dev/null
