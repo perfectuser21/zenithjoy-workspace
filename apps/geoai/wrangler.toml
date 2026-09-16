@@ -2,3 +2,16 @@
 name = "zenithjoyai"
 pages_build_output_dir = "dist"
 compatibility_date = "2024-12-01"
+
+# ⚠️ 非机密运行参数必须写在这里，不能只在 Cloudflare 后台 PATCH。
+# 原因：`wrangler pages deploy` 会以本地配置为准覆盖远端 env_vars，
+# 后台单独 PATCH 的 plain_text 变量会在下一次部署时被清掉
+# （2026-09-16 实测：PATCH 写入的 META_GRAPH_API_VERSION / META_PUBLISH_ENABLED
+#  部署后消失，只有 secret_text 类型幸存）。
+#
+# 机密（secret_text）仍只存在于 Cloudflare 后台与 1Password，绝不入库：
+#   META_PUBLISH_API_KEY, META_PAGE_ACCESS_TOKEN, META_APP_SECRET
+[vars]
+META_GRAPH_API_VERSION = "v24.0"
+# 初次上线保持关闭。开启前需徐啸对具体内容与账号逐次批准。
+META_PUBLISH_ENABLED = "false"
