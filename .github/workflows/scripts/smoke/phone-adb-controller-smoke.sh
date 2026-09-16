@@ -127,8 +127,10 @@ grep -qE '^escalate\(\)' "$H" || fail "harvest-cron.sh 缺 escalate() 报警函�
 grep -qF 'escalation.log' "$H" || fail "escalate 未写 escalation.log(三级响应断链)"
 if grep -A6 '^escalate()' "$H" | grep -q 'docker exec'; then fail "escalate 走了 docker exec(容器死时必失效),必须直写宿主文件"; fi
 # 7c: 静默退出死绝——设备离线/词单为空必须先报警再退
-grep -A1 '设备离线' "$H" | grep -q 'escalate' || fail "设备离线仍是静默exit(无人知晓)"
-grep -B2 -A2 '词单为空' "$H" | grep -q 'escalate' || fail "词单为空仍是静默exit(昨晚凌晨三批正是这样全灭)"
+# 注:必须先剔注释行再 grep——否则把 escalate 注释掉守卫照样绿(0916 变异测试实测到的假守卫)
+_H_CODE=$(grep -vE '^[[:space:]]*#' "$H")
+echo "$_H_CODE" | grep -A2 '设备离线' | grep -q 'escalate' || fail "设备离线仍是静默exit(无人知晓)"
+echo "$_H_CODE" | grep -A3 '词单为空' | grep -q 'escalate' || fail "词单为空仍是静默exit(0915凌晨三批正是这样全灭)"
 # 7d: 宪法必须给分身"救活已死容器"的权力(永远救活不弄死),且带取证前提
 grep -qF '已确认死亡' "$D/COMMANDER.md" || fail "COMMANDER.md 未授权分身救活已死容器(网关死则workflow无人能救)"
 grep -qF '已确认死亡' "$D/escort-claude-escalation.sh" || fail "分身唤起词未同步救活授权(宪法投影不同步)"
