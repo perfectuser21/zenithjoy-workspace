@@ -182,10 +182,6 @@ export async function onRequestPost(context: {
     return jsonResponse({ ok: false, error: 'unauthorized' }, 401);
   }
 
-  const missing = missingMetaConfig(env);
-  if (missing.length > 0) {
-    return jsonResponse({ ok: false, error: 'not_configured', missing }, 503);
-  }
   if (!request.headers.get('Content-Type')?.toLowerCase().includes('application/json')) {
     return jsonResponse({ ok: false, error: 'content_type_must_be_json' }, 415);
   }
@@ -203,8 +199,17 @@ export async function onRequestPost(context: {
   if (!parsed.ok) return jsonResponse({ ok: false, error: parsed.error }, 400);
   const input = parsed.value;
 
+  // preview 不触碰 Graph API、不需要任何 Meta 凭据，故刻意放在配置闸之前：
+  // 否则「先审内容、后配凭据」的审批流程无法进行（凭据到位前连预览都做不了）。
+  // 真实发布的门禁一个不少，全在下面。
   if (input.mode === 'preview') {
     return jsonResponse({ ok: true, mode: 'preview', request: publicPreview(input) });
+  }
+
+  // ↓↓↓ 以下为真实发布路径，配置必须齐全 ↓↓↓
+  const missing = missingMetaConfig(env);
+  if (missing.length > 0) {
+    return jsonResponse({ ok: false, error: 'not_configured', missing }, 503);
   }
   if (env.META_PUBLISH_ENABLED !== 'true' || input.confirm !== 'PUBLISH') {
     return jsonResponse({ ok: false, error: 'publishing_not_confirmed' }, 403);
