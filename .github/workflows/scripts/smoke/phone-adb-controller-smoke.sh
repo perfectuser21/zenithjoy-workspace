@@ -179,4 +179,14 @@ echo "$_H10" | grep -q '兜底词单' || fail "取词单失败未走缓存兜底
 _fb=$(echo "$_H10" | grep -A6 '兜底词单' | grep -c 'escalate\|log ')
 [[ "$_fb" -ge 1 ]] || fail "走兜底词单未留痕/未告知(静默降级=看不见的腐烂)"
 
+# 层11: AdbIME 启用/切换必须当场校验并报明原因(0916判例固化)
+# 判例: M1悦升机装了ADBKeyboard但未启用→生产只报 "cannot be enabled for user #0",
+#       要人去猜是"没装"还是"没启用"还是"ROM拦了"。代码原本把 enable 结果 >/dev/null 吞掉且不校验,
+#       失败被拖到后面(输入不进字/回读不匹配)才暴露,首因丢失。
+if grep -E 'ime enable com\.android\.adbkeyboard.*>/dev/null$' "$C" >/dev/null 2>&1; then
+  fail "AdbIME enable 结果仍被 >/dev/null 吞掉且无校验(失败时首因丢失,要人去猜)"
+fi
+grep -qF 'AdbIME 未安装' "$C" || fail "AdbIME 失败时未区分'未安装'(该机需装 ADBKeyboard.apk)"
+grep -qF 'AdbIME 切换未生效' "$C" || fail "ime set 后未回读校验真生效(切换失败会静默继续,后面才炸)"
+
 echo "phone-adb-controller-smoke: PASS"
