@@ -90,4 +90,27 @@ if grep -F -- "--session isolated" "$D/harvest-cron.sh" | grep -qF "escort-"; th
 # 5c: SOP 必须带 FINDINGS 夜际记忆条款(读历史判例+追加新判例)
 grep -qF "escort-findings.md" "$D/cmdr-escort.txt" || fail "cmdr-escort.txt 缺 escort-findings.md 夜际记忆条款"
 
+# 层6: Commander三层值守件在管(0916主理人拍板"值守者须有头级全能力",COMMANDER.md=身份宪法SSOT)
+for f in COMMANDER.md cmdr-stream.txt log-stream-push.sh escort-claude-escalation.sh disk-gateway-guard.sh com.zenithjoy.logstreampush.plist; do
+  [[ -s "$D/$f" ]] || fail "Commander件缺失或为空: $f"
+done
+if command -v zsh >/dev/null 2>&1; then
+  zsh -n "$D/log-stream-push.sh" || fail "log-stream-push.sh zsh 语法错误"
+  zsh -n "$D/escort-claude-escalation.sh" || fail "escort-claude-escalation.sh zsh 语法错误"
+fi
+bash -n "$D/disk-gateway-guard.sh" || fail "disk-gateway-guard.sh bash 语法错误"
+# 6a: 宪法五条必须在 COMMANDER.md 里(改宪法改这里,禁止只改投影)
+for pat in '帮不拦' '无杀权' '读不到就说读不到' '不改代码' '危险动作绝不做'; do
+  grep -qF "$pat" "$D/COMMANDER.md" || fail "COMMANDER.md 宪法缺条款: $pat"
+done
+# 6b: 分身唤起词必须内嵌宪法(headless无人监督,宪法不在prompt里=没有约束)
+for pat in '无杀权' '永远救活不弄死' '读不到就说读不到' '不修改任何代码' 'escalation-reports.log'; do
+  grep -qF "$pat" "$D/escort-claude-escalation.sh" || fail "分身唤起词缺宪法约束: $pat"
+done
+# 6c: 推流必须打机器标签(0916实证:不打标签哨兵会把M4事件报成M1)
+grep -qF 's/^/[$HOST] /' "$D/log-stream-push.sh" || fail "推流未给每行打[机器]标签(哨兵会认错机器)"
+# 6d: 哨兵SOP必须带升级条款+机器识别铁律
+grep -qF 'escalation.log' "$D/cmdr-stream.txt" || fail "cmdr-stream.txt 缺升级条款(三级响应断链)"
+grep -qF 'escalation.log' "$D/cmdr-escort.txt" || fail "cmdr-escort.txt 缺升级条款(三级响应断链)"
+
 echo "phone-adb-controller-smoke: PASS"
