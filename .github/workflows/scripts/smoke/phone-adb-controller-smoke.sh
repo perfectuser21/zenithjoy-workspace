@@ -165,4 +165,16 @@ _ln_kpi=$(grep -n 'kpi-gate.js' "$D/harvest-cron.sh" | head -1 | cut -d: -f1)
 _ln_kw9=$(grep -n 'next-keywords.js' "$D/harvest-cron.sh" | head -1 | cut -d: -f1)
 [[ -n "$_ln_kpi" && -n "$_ln_kw9" ]] && (( _ln_kpi < _ln_kw9 )) || fail "KPI闸(${_ln_kpi}行)未排在取词单(${_ln_kw9}行)之前"
 
+# 层10: 词单本地兜底(0916主理人追问"为何100%跑不完"的根因修复)
+# 采收六步中只有取词单是"网关挂=批次夭折"的死步(0915凌晨三批同型全灭),其余要么不依赖网关要么fail-open
+_H10=$(grep -vE '^[[:space:]]*#' "$D/harvest-cron.sh")
+# 10a: 取词单成功必须落本地缓存
+echo "$_H10" | grep -q 'KWCACHE' || fail "harvest-cron.sh 无词单本地缓存(KWCACHE),网关挂即批次夭折"
+echo "$_H10" | grep -qE 'cp .*\$WF.*KWCACHE|cp .*KWCACHE' || fail "取词单成功后未写入缓存"
+# 10b: 取词单失败必须尝试缓存续跑(而不是直接 exit)
+echo "$_H10" | grep -q '兜底词单' || fail "取词单失败未走缓存兜底(仍是直接夭折)"
+# 10c: 走兜底必须留痕+告知分身(不能静默用旧词单)
+_fb=$(echo "$_H10" | grep -A6 '兜底词单' | grep -c 'escalate\|log ')
+[[ "$_fb" -ge 1 ]] || fail "走兜底词单未留痕/未告知(静默降级=看不见的腐烂)"
+
 echo "phone-adb-controller-smoke: PASS"
