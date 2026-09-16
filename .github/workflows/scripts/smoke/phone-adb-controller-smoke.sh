@@ -26,7 +26,8 @@ node --check "$D/next-outreach.js" || fail "next-outreach.js 语法错误"
 node --check "$D/next-outreach-lib.js" || fail "next-outreach-lib.js 语法错误"
 
 # 层2: 融合刀函数/命令存在性(六刀签名)
-for pat in 'clip_guard_check' 'clip_guard_record' 'foreground_gate' 'FG_DISMISS_LABELS' 'lock-refresh)' 'failure_class=' 'ensure_feed' 'locate_cached utab' 'profile url shape not allowed' 'link route:' '"$#" == 5 || "$#" == 6' 'AppLinkHandler' '打开抖音看更多内容' ; do
+# 注: 'locate_cached utab' 于 0916 随搜索路线一并删除(见层12),故不再要求存在
+for pat in 'clip_guard_check' 'clip_guard_record' 'foreground_gate' 'FG_DISMISS_LABELS' 'lock-refresh)' 'failure_class=' 'ensure_feed' 'profile url shape not allowed' 'link route:' '"$#" == 5 || "$#" == 6' 'AppLinkHandler' '打开抖音看更多内容' ; do
   grep -qF "$pat" "$C" || fail "融合刀签名缺失: $pat"
 done
 # harvest 必须接了心跳与作品地址
@@ -188,5 +189,23 @@ if grep -E 'ime enable com\.android\.adbkeyboard.*>/dev/null$' "$C" >/dev/null 2
 fi
 grep -qF 'AdbIME 未安装' "$C" || fail "AdbIME 失败时未区分'未安装'(该机需装 ADBKeyboard.apk)"
 grep -qF 'AdbIME 切换未生效' "$C" || fail "ime set 后未回读校验真生效(切换失败会静默继续,后面才炸)"
+_H_CODE_C=$(grep -vE '^[[:space:]]*#' "$C")
+
+# 层12: 触达路线单一化(0916主理人拍板)
+# ①采收已拿短链,触达直接开链即可;缺链单在选单器(next-outreach.js 缺链闸)就被标「待补链」拦掉,
+#   搜索路线永远走不到=死代码。留着只是多一条没人验证、还会把"搜不到人"混进归因的岔路。
+# ②私信入口统一走右上「更多」面板选「发私信」——官方号/旗舰店/个人号都有该入口;
+#   主页直挂 DM 按钮因号型而异,先找它=多一个失败面,且面板里必须区分「发私信」与「联系客服」。
+grep -qF 'profile_url is required' "$C" || fail "PROFILE_URL 仍可选(应必填:无链单不该进发送,选单器已在上游闸掉)"
+if echo "$_H_CODE_C" | grep -q 'snssdk1128://search/tabs'; then fail "搜索路线未删除(死代码+把'搜不到人'混进归因)"; fi
+if echo "$_H_CODE_C" | grep -q 'no card in top-3 user results'; then fail "搜索路线的前3卡兜底未删除"; fi
+grep -qF '统一走「更多」面板' "$C" || fail "私信入口未统一走更多面板(应去掉先找直挂DM按钮的分支)"
+grep -qF '联系客服' "$C" || fail "更多面板未区分「发私信」与「联系客服」(选错=发到客服通道)"
+# 12b: 身份强校验必须大小写不敏感(0916真机实测: 主页显示 Zenithjoyai / 搜索页显示 zenithjoyai,
+#      抖音号本身大小写不敏感,裸 == 比较会把同一个人判成"不是他"而静默拒发——开闸即大面积失败)
+if echo "$_H_CODE_C" | grep -qE '\[\[ "\$(observed_target_id|_web_id)" == "\$target_douyin_id" \]\]'; then
+  fail "身份校验仍是大小写敏感的裸比较(0916实测 Zenithjoyai≠zenithjoyai 致误拒)"
+fi
+grep -qF 'tr "[:upper:]" "[:lower:]"' "$C" || fail "身份校验未做大小写归一"
 
 echo "phone-adb-controller-smoke: PASS"

@@ -1211,6 +1211,10 @@ send_private_message() {
   message_b64="$3"
   evidence_id="$4"
   profile_url="${5:-}"
+  # 0916 主理人拍板: 采收已拿短链,触达直接开链即可。无链单在选单器(next-outreach.js 缺链闸)
+  # 就被标「待补链」拦掉,不该走到这里;搜索路线已随之删除,故此处必填——宁可当场停,
+  # 也不要悄悄退回一条没人验证、还会把"搜不到人"混进归因的岔路。
+  [[ -n "$profile_url" ]] || die "profile_url is required (no-link orders are gated upstream; search route has been removed)"
   require_account_id "$expected_account_id"
   require_account_id "$target_douyin_id"
   require_evidence_id "$evidence_id"
@@ -1249,7 +1253,9 @@ send_private_message() {
       _web_line="$(/usr/bin/grep -oE '<node[^>]+text="抖音号 [A-Za-z0-9._]+"[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
       if [[ -n "$_web_line" ]]; then
         _web_id="$(print -- "$_web_line" | /usr/bin/sed -E 's/.*text="抖音号 ([A-Za-z0-9._]+)".*/\1/')"
-        [[ "$_web_id" == "$target_douyin_id" ]] || die "link route: web profile id ${_web_id} does not match claimed ${target_douyin_id}" TARGET_ABSENT
+        # 0916 真机实测: 同一个号在主页显示 Zenithjoyai、搜索页显示 zenithjoyai——抖音号本身
+        # 大小写不敏感,裸 == 会把同一个人判成"不是他"而静默拒发。归一后再比,认错人仍绝不发。
+        [[ "$(print -- "$_web_id" | tr "[:upper:]" "[:lower:]")" == "$(print -- "$target_douyin_id" | tr "[:upper:]" "[:lower:]")" ]] || die "link route: web profile id ${_web_id} does not match claimed ${target_douyin_id}" TARGET_ABSENT
       fi
       _open_line="$(/usr/bin/grep -oE '<node[^>]+text="打开抖音看更多内容"[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
       if [[ -n "$_open_line" ]]; then
@@ -1261,91 +1267,29 @@ send_private_message() {
     [[ -n "$target_id_line" ]] || die "link route: profile identity was not readable after deeplink" TARGET_ABSENT
     observed_target_id="$(print -- "$target_id_line" | /usr/bin/sed -E 's/.* text="抖音号：([^"]*)" resource-id=.*/\1/')"
     # 强校验闸原样: 认错人绝不发
-    [[ "$observed_target_id" == "$target_douyin_id" ]] || die "link route: profile id ${observed_target_id} does not match claimed ${target_douyin_id}" TARGET_ABSENT
-  else
-  "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "snssdk1128://search/tabs?keyword=$target_douyin_id" >/dev/null
-  # 0914 真机实证: 搜索落地页加载+自动播放,1400ms 后一锤子读树必死(三波全废)。
-  # 改 refill 同款节奏: 先探后睡,每 3.5s 一拍单波快探,4 轮预算(~14s),拍到「用户」tab 即走。
-  search_xml="$EVIDENCE_ROOT/${evidence_id}-search.xml"
-  user_tab_line=""
-  local _sp
-  for _sp in 1 2; do
-    wait_ms 3500
-    if _ui_evidence_wave "${evidence_id}-search" >/dev/null 2>&1; then
-      user_tab_line="$(/usr/bin/grep -oE '<node[^>]+text="用户"[^>]*>' "$search_xml" | /usr/bin/head -1 || true)"
-      [[ -n "$user_tab_line" ]] && break
-    fi
-  done
-  if [[ -n "$user_tab_line" ]]; then
-    user_tab_center="$(node_center "$user_tab_line")" || die "user-search tab bounds could not be parsed"
-  else
-    # 0914 真机实证: 综合tab自动播放让 uiautomator 永不 idle(dump rc=0 但零产出,媒体键兜底无效)
-    # ——正是 0913 定案的两处合法视觉兜底之一。同 search-video-tab 的 vtab 惯例走 locate_cached。
-    print -u2 -- "warning: search hierarchy unreadable (combined-tab autoplay); vision fallback for 用户 tab"
-    user_tab_center="$(locate_cached utab "顶部搜索结果标签栏中的「用户」标签" "${evidence_id}-utab")" || die "user tab locate failed (tree unreadable and vision fallback failed)" TARGET_ABSENT
+    # 同上: 大小写归一后比较(0916 实测 Zenithjoyai vs zenithjoyai 误拒)
+    [[ "$(print -- "$observed_target_id" | tr "[:upper:]" "[:lower:]")" == "$(print -- "$target_douyin_id" | tr "[:upper:]" "[:lower:]")" ]] || die "link route: profile id ${observed_target_id} does not match claimed ${target_douyin_id}" TARGET_ABSENT
   fi
-  read user_tab_x user_tab_y <<< "$user_tab_center"
-  "$ADB" -s "$SERIAL" shell input tap "$user_tab_x" "$user_tab_y"
-  wait_ms 4000
-  users_xml="$EVIDENCE_ROOT/${evidence_id}-users.xml"
-  # 用户tab列表是 Lynx 渲染,树大概率读不到——证据尽力而为,绝不拦路(下游=首卡固定位+主页强校验)
-  _ui_evidence_wave "${evidence_id}-users" >/dev/null 2>&1 || print -u2 -- "warning: user-list hierarchy unavailable (Lynx); proceeding with fixed-position first card"
-  # 0914 融合刀3: 用户结果列表是 Lynx 渲染,无障碍树里读不到(回填脚本双机实证),
-  # 老写法在树里找"关注按钮"必死。改回填同款:首卡固定比例位轻点;
-  # 认错人不怕——下方主页"抖音号:强校验"不匹配即拒发,安全性零下降。
-  follow_line=""
-  # 0915 实证: 字母开头抖音号搜索不精确置顶——首卡不中就试前3卡位(强校验兜底,认错人绝不发)
-  target_x=$(( SCREEN_W * 25 / 100 ))
-  _tp_found=0
-  local _card observed_target_id
-  for _card in 1 2 3; do
-    target_y=$(( SCREEN_H * ( 214 + (_card - 1) * 95 ) / 1000 ))
-    "$ADB" -s "$SERIAL" shell input tap "$target_x" "$target_y"
-    wait_ms 1600
-    profile_xml="$EVIDENCE_ROOT/${evidence_id}-target-profile-c${_card}.xml"
-    ui_evidence "${evidence_id}-target-profile-c${_card}" >/dev/null
-    target_id_line="$(/usr/bin/grep -oE '<node[^>]+text="抖音号：[^\"]+"[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
-    if [[ -n "$target_id_line" ]]; then
-      observed_target_id="$(print -- "$target_id_line" | /usr/bin/sed -E 's/.* text="抖音号：([^"]*)" resource-id=.*/\1/')"
-      if [[ "$observed_target_id" == "$target_douyin_id" ]]; then _tp_found=1; break; fi
-      print -u2 -- "warning: card ${_card} is ${observed_target_id}, not target; trying next card"
-    else
-      print -u2 -- "warning: card ${_card} profile identity not visible; trying next card"
-    fi
-    "$ADB" -s "$SERIAL" shell input keyevent 4
-    wait_ms 1400
-  done
-  (( _tp_found )) || die "no card in top-3 user results matched the claimed target id ${target_douyin_id}" TARGET_ABSENT
-  profile_xml="$EVIDENCE_ROOT/${evidence_id}-target-profile-c${_card}.xml"
-  fi
-  dm_line="$(/usr/bin/grep -oE '<node[^>]+(text="发私信"|content-desc="私信")[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
-  if [[ -n "$dm_line" && "$dm_line" == *'clickable="true"'* ]]; then
-    dm_center="$(node_center "$dm_line")" || die "private-message action bounds could not be parsed"
-    read dm_x dm_y <<< "$dm_center"
-    "$ADB" -s "$SERIAL" shell input tap "$dm_x" "$dm_y"
-    wait_ms 1200
-  else
-    # 0914 真机实证: 陌生人(未关注)主页没有直挂的发私信按钮,入口在「更多」面板
-    # (card-link 同款面板,面板里有 text="发私信" 格子,文字在树里可读)。
-    print -u2 -- "warning: no direct DM button on profile (stranger layout); using 更多 panel route"
-    local more_line more_c more_x more_y dm_panel_xml pm_line pmx1 pmy1 pmx2 pmy2
-    more_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="更多"[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
-    [[ -n "$more_line" ]] || die "neither DM button nor 更多 entry was found on target profile" TARGET_ABSENT
-    more_c="$(node_center "$more_line")" || die "更多 bounds could not be parsed"
-    read more_x more_y <<< "$more_c"
-    "$ADB" -s "$SERIAL" shell input tap "$more_x" "$more_y"
-    wait_ms 1800
-    dm_panel_xml="$EVIDENCE_ROOT/${evidence_id}-dmpanel.xml"
-    ui_evidence "${evidence_id}-dmpanel" >/dev/null
-    pm_line="$(/usr/bin/grep -oE '<node[^>]+text="发私信"[^>]*>' "$dm_panel_xml" | /usr/bin/head -1 || true)"
-    [[ -n "$pm_line" ]] || die "发私信 was not present in the 更多 panel" TARGET_ABSENT
-    read pmx1 pmy1 pmx2 pmy2 <<< "$(print -- "$pm_line" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
-    require_uint "$pmx1"; require_uint "$pmy1"; require_uint "$pmx2"; require_uint "$pmy2"
-    # 面板格子热区含图标+文字整块,先点文字中心;图标在文字上方约半格(card-link 实证),
-    # 若后续 msg_et 未出现由下方 chat 校验兜住并 die,不会误发。
-    "$ADB" -s "$SERIAL" shell input tap $(( (pmx1 + pmx2) / 2 )) $(( (pmy1 + pmy2) / 2 - (pmx2 - pmx1) / 2 ))
-    wait_ms 1500
-  fi
+  # 0916 主理人拍板: 私信入口统一走「更多」面板 —— 官方号/旗舰店/个人号主页都有右上三个点,
+  # 而主页直挂的私信按钮因号型而异(陌生人布局压根没有),先找它只是多一个失败面。
+  # 面板里同时有「发私信」与「联系客服」,只认前者(选错会发进客服通道,对方看不到)。
+  local more_line more_c more_x more_y dm_panel_xml pm_line pmx1 pmy1 pmx2 pmy2
+  more_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="更多"[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
+  [[ -n "$more_line" ]] || die "更多 entry was not found on target profile" TARGET_ABSENT
+  more_c="$(node_center "$more_line")" || die "更多 bounds could not be parsed"
+  read more_x more_y <<< "$more_c"
+  "$ADB" -s "$SERIAL" shell input tap "$more_x" "$more_y"
+  wait_ms 1800
+  dm_panel_xml="$EVIDENCE_ROOT/${evidence_id}-dmpanel.xml"
+  ui_evidence "${evidence_id}-dmpanel" >/dev/null
+  pm_line="$(/usr/bin/grep -oE '<node[^>]+text="发私信"[^>]*>' "$dm_panel_xml" | /usr/bin/head -1 || true)"
+  [[ -n "$pm_line" ]] || die "发私信 was not present in the 更多 panel" TARGET_ABSENT
+  read pmx1 pmy1 pmx2 pmy2 <<< "$(print -- "$pm_line" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
+  require_uint "$pmx1"; require_uint "$pmy1"; require_uint "$pmx2"; require_uint "$pmy2"
+  # 面板格子热区含图标+文字整块,先点文字中心;图标在文字上方约半格(card-link 实证),
+  # 若后续 msg_et 未出现由下方 chat 校验兜住并 die,不会误发。
+  "$ADB" -s "$SERIAL" shell input tap $(( (pmx1 + pmx2) / 2 )) $(( (pmy1 + pmy2) / 2 - (pmx2 - pmx1) / 2 ))
+  wait_ms 1500
   chat_xml="$EVIDENCE_ROOT/${evidence_id}-chat.xml"
   ui_evidence "${evidence_id}-chat" >/dev/null
   input_line="$(/usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/msg_et"[^>]*>' "$chat_xml" | /usr/bin/head -1 || true)"
