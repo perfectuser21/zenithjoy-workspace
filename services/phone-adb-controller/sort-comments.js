@@ -1,15 +1,21 @@
 // sort-comments.js —— 异步分拣器·机械部分(规则闸)。分拣 agent(便宜模型)按 SOP 调用本脚本。
 // 用法:
-//   node sort-comments.js rules            → 扫池内「待分拣」行: 规则能直判的当场写回;
+//   node sort-comments.js rules [业务线]     → 扫池内「待分拣」行: 规则能直判的当场写回;
 //                                            拿不准的输出 JSON 清单(NEED_LLM 行)给 agent 逐条判
-//   node sort-comments.js write <json文件>  → 把 agent 的判定批量写回池 + 合格线索写线索表
+//   node sort-comments.js write <json文件> [业务线] → 把 agent 的判定批量写回池 + 合格线索写线索表
 // 判定字段: 业务相关性(相关/不相关) 意向等级(A/B/C) AI判定理由 排除原因 处理状态(已分拣)
 // 规则来源: 0914 KPI 夜 102 条人工判例提炼(memory handoff_0914)。规则闸目标≈判掉 70-80%。
 const fs = require("fs");
 const cfg = JSON.parse(fs.readFileSync("/root/.openclaw/clawdbot.json"));
-const acc = cfg.channels.feishu.accounts.jinoshengyuan;
-const B = "GNuwbzY0da8GP0sv6MGcOTu9ntd", POOL = "tblmrJTyVgzTj89P", LEADS = "tblTLFj69CflUqSr";
+// 0916: 按业务线路由 —— 悦升有独立 base,写死金诺会让它池里的评论永远没人消化(见 line-routes.js)
+const { routeOf } = require("./line-routes.js");
 const MODE = process.argv[2] || "rules";
+// 业务线入参: rules 模式是第3位,write 模式是第4位(第3位是 json 文件)
+const LINE = (MODE === "write" ? process.argv[4] : process.argv[3]) || "";
+const ROUTE = routeOf(LINE);
+const acc = cfg.channels.feishu.accounts[ROUTE.account];
+const B = ROUTE.base, POOL = ROUTE.pool, LEADS = ROUTE.lead;
+console.error("line-route: " + ROUTE.key + " base=" + B + " POOL=" + POOL + " LEADS=" + LEADS);
 
 // —— 规则表(0914 主理人理念修正: 能看到视频还留言的=天然画像内人群,**分级不丢弃**) ——
 // 只有两类真排除: 同行企业号 / 广告引流号。寒暄表情=C级(精准低意向),不是垃圾。
