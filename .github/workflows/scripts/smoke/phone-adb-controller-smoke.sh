@@ -221,10 +221,13 @@ grep -qF 'tr "[:upper:]" "[:lower:]"' "$C" || fail "身份校验未做大小写�
 node --check "$D/line-routes.js" || fail "line-routes.js 语法错误"
 grep -qF 'H3OrbAH49aLNebs7XvOcpS1enec' "$D/line-routes.js" || fail "路由表缺悦升 base"
 grep -qF 'GNuwbzY0da8GP0sv6MGcOTu9ntd' "$D/line-routes.js" || fail "路由表缺金诺 base"
+# 注:不能只 grep 'LINE'——`const LINE = "";` 也含它(0916变异实测的宽松断言)。必须查真读了 argv。
+# 注:也不能只查 argv[3]——write 模式读 json 文件用的也是它。必须是**同一行**里 LINE 赋值读了 argv。
+grep -qE 'LINE *=[^;]*process\.argv' "$D/sort-comments.js" || fail "分拣脚本的 LINE 没真读入参(写死空值=悦升池永远没人消化)"
 [[ -s "$D/batch2.sh" ]] || fail "batch2.sh 未回流 repo(只活在机器上=重装即丢,且无守卫)"
 if command -v zsh >/dev/null 2>&1; then zsh -n "$D/batch2.sh" || fail "batch2.sh zsh 语法错误"; fi
 grep -qE 'push-raw-comments\.js [^ ]+ \$TAG \$P' "$D/batch2.sh" || fail "batch2.sh 落池未把 profile 传下去(路由拿不到业务线,悦升数据会写错表)"
-for f in push-raw-comments.js push-videos.js; do
+for f in push-raw-comments.js push-videos.js sort-comments.js; do
   grep -qF 'line-routes' "$D/$f" || fail "$f 未走业务线路由(写死单一 base = 悦升数据无处可去)"
   # 写死 base 常量必须已移除(允许出现在注释里)
   if grep -vE '^[[:space:]]*(//|\*|/\*)' "$D/$f" | grep -qE 'const B *= *"GNuwbzY'; then
