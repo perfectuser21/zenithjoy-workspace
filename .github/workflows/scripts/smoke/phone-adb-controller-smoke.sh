@@ -148,4 +148,20 @@ echo "$_G8" | grep -q 'docker inspect' || fail "守卫救活前未取证(宪法�
 echo "$_G8" | grep -qE 'exited' || fail "守卫未按 exited 状态判定确已死亡(可能误重启健康容器)"
 grep -qF '回读验证' "$_G" || fail "守卫救活后未回读验证(宪法救活权三前提之一)"
 
+# 层9: KPI 驱动自动获客(0916主理人要求"KPI接入,不是一天三次")
+[[ -s "$D/kpi-gate.js" ]] || fail "kpi-gate.js 缺失(KPI闸=目标表与执行层的唯一接口)"
+node --check "$D/kpi-gate.js" || fail "kpi-gate.js 语法错误"
+_H9=$(grep -vE '^[[:space:]]*#' "$D/harvest-cron.sh")
+# 9a: 执行层必须过 KPI 闸(否则达标了照跑、缺口大了也不补=KPI形同虚设)
+echo "$_H9" | grep -q 'kpi-gate.js' || fail "harvest-cron.sh 未接 KPI 闸(执行层不知道KPI存在)"
+echo "$_H9" | grep -q 'verdict' || fail "harvest-cron.sh 未读 KPI 闸裁决"
+echo "$_H9" | grep -qE 'done' || fail "harvest-cron.sh 未处理达标退让(done)裁决"
+# 9b: KPI 闸必须 fail-open(宪法帮不拦: 闸自身故障绝不能停掉生产)
+grep -qF 'fail-open' "$D/kpi-gate.js" || fail "kpi-gate.js 无 fail-open 兜底(闸故障会停产)"
+grep -qF 'catch' "$D/kpi-gate.js" || fail "kpi-gate.js 无异常捕获"
+# 9c: KPI 闸顺序必须在取词单之前(先判跑不跑,再决定取几词)——否则达标也白取一次词
+_ln_kpi=$(grep -n 'kpi-gate.js' "$D/harvest-cron.sh" | head -1 | cut -d: -f1)
+_ln_kw9=$(grep -n 'next-keywords.js' "$D/harvest-cron.sh" | head -1 | cut -d: -f1)
+[[ -n "$_ln_kpi" && -n "$_ln_kw9" ]] && (( _ln_kpi < _ln_kw9 )) || fail "KPI闸(${_ln_kpi}行)未排在取词单(${_ln_kw9}行)之前"
+
 echo "phone-adb-controller-smoke: PASS"
