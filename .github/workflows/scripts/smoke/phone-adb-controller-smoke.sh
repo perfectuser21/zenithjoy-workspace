@@ -130,7 +130,8 @@ if grep -A6 '^escalate()' "$H" | grep -q 'docker exec'; then fail "escalate 走�
 # 注:必须先剔注释行再 grep——否则把 escalate 注释掉守卫照样绿(0916 变异测试实测到的假守卫)
 _H_CODE=$(grep -vE '^[[:space:]]*#' "$H")
 echo "$_H_CODE" | grep -A2 '设备离线' | grep -q 'escalate' || fail "设备离线仍是静默exit(无人知晓)"
-echo "$_H_CODE" | grep -A3 '词单为空' | grep -q 'escalate' || fail "词单为空仍是静默exit(0915凌晨三批正是这样全灭)"
+# 0916: 措辞从"词单为空"改为"取词单失败"(加了兜底词单分支),断言跟着改为匹配结构而非措辞
+echo "$_H_CODE" | grep -A8 'KWERR' | grep -q 'escalate' || fail "取词单失败路径仍是静默exit(0915凌晨三批正是这样全灭)"
 # 7d: 宪法必须给分身"救活已死容器"的权力(永远救活不弄死),且带取证前提
 grep -qF '已确认死亡' "$D/COMMANDER.md" || fail "COMMANDER.md 未授权分身救活已死容器(网关死则workflow无人能救)"
 grep -qF '已确认死亡' "$D/escort-claude-escalation.sh" || fail "分身唤起词未同步救活授权(宪法投影不同步)"
@@ -164,5 +165,18 @@ grep -qF 'catch' "$D/kpi-gate.js" || fail "kpi-gate.js 无异常捕获"
 _ln_kpi=$(grep -n 'kpi-gate.js' "$D/harvest-cron.sh" | head -1 | cut -d: -f1)
 _ln_kw9=$(grep -n 'next-keywords.js' "$D/harvest-cron.sh" | head -1 | cut -d: -f1)
 [[ -n "$_ln_kpi" && -n "$_ln_kw9" ]] && (( _ln_kpi < _ln_kw9 )) || fail "KPI闸(${_ln_kpi}行)未排在取词单(${_ln_kw9}行)之前"
+
+# 层10: 词单本地兜底(0916主理人追问"为何100%跑不完"的根因修复)
+# 采收六步中只有取词单是"网关挂=批次夭折"的死步(0915凌晨三批同型全灭),其余要么不依赖网关要么fail-open
+_H10=$(grep -vE '^[[:space:]]*#' "$D/harvest-cron.sh")
+# 10a: 取词单成功必须落本地缓存
+echo "$_H10" | grep -q 'KWCACHE' || fail "harvest-cron.sh 无词单本地缓存(KWCACHE),网关挂即批次夭折"
+# 注:必须精确到复制方向——反向的 cp $KWCACHE $WF(兜底读缓存)也含KWCACHE,松匹配会放行(0916变异实测)
+echo "$_H10" | grep -qF 'cp $WF $KWCACHE' || fail "取词单成功后未写入缓存(方向须为 WF→CACHE)"
+# 10b: 取词单失败必须尝试缓存续跑(而不是直接 exit)
+echo "$_H10" | grep -q '兜底词单' || fail "取词单失败未走缓存兜底(仍是直接夭折)"
+# 10c: 走兜底必须留痕+告知分身(不能静默用旧词单)
+_fb=$(echo "$_H10" | grep -A6 '兜底词单' | grep -c 'escalate\|log ')
+[[ "$_fb" -ge 1 ]] || fail "走兜底词单未留痕/未告知(静默降级=看不见的腐烂)"
 
 echo "phone-adb-controller-smoke: PASS"
