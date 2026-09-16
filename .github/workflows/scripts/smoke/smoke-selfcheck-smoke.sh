@@ -25,13 +25,18 @@ PROOF=$(bash -c '
   BIG="NEEDLE_AT_FRONT
 $BIG"
   set +e
-  echo "$BIG" | grep -q "NEEDLE_AT_FRONT"; PIPE_RC=$?
+  echo "$BIG" 2>/dev/null | grep -q "NEEDLE_AT_FRONT"; PIPE_RC=$?
   grep -q "NEEDLE_AT_FRONT" <<< "$BIG"; HS_RC=$?
   echo "pipe=$PIPE_RC hs=$HS_RC"
 ') || true
+# 退出码跨平台不同,但只要非 0,pipefail 就会把整条管道判失败 → 假绿成立:
+#   macOS: echo 被 SIGPIPE 杀死 → 141
+#   Linux(GitHub runner): bash 内建 echo 处理 EPIPE,打印 "write error: Broken pipe" → 1
+# 故判据是「非 0」而不是某个具体值(0916 首版写死 141,CI 上即以 pipe=1 翻车——
+# 这条翻车本身又一次证明了陷阱真实存在)。
 case "$PROOF" in
-  "pipe=141 hs=0") : ;;   # 陷阱如期复现
-  "pipe=0 hs=0")   echo "::warning::smoke-selfcheck: 本机未复现 SIGPIPE(缓冲区差异),源码闸仍然生效" ;;
+  "pipe=0 hs=0")   echo "::warning::smoke-selfcheck: 本机未复现管道中断(缓冲区差异),源码闸仍然生效" ;;
+  "pipe="*" hs=0") : ;;   # 任何非 0 退出码都算陷阱复现
   *) fail "自检行为层异常: $PROOF" ;;
 esac
 
