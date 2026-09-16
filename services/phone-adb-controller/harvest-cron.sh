@@ -68,6 +68,25 @@ H=$(date +%H)
 if (( H >= 8 && H < 22 )); then log "白天触达时窗,采收退让"; exit 0; fi
 
 # ── ③ 词单←网关(关键词表 SSOT) ──
+# ── ③ KPI 闸(0916 主理人要求"KPI驱动自动获客,不是一天三次") ──
+# 目标表是 SSOT(飞书「获客｜经营目标」tblpwc9GF9mIhdAG): 改目标改表,不改代码不改 crontab。
+# 达标即退让(省设备省额度),未达标按缺口放大词数。闸自身故障 fail-open(宪法帮不拦)。
+KPI_JSON=$(ssh -o ConnectTimeout=20 us-vps "docker exec openclaw-gateway node /root/.openclaw/kpi-gate.js '$BIZ' $N" 2>>$LOG)
+KPI_VERDICT=$(print -r -- "$KPI_JSON" | sed -n 's/.*"verdict":"\([a-z]*\)".*/\1/p')
+KPI_REASON=$(print -r -- "$KPI_JSON" | sed -n 's/.*"reason":"\([^"]*\)".*/\1/p')
+KPI_WORDS=$(print -r -- "$KPI_JSON" | sed -n 's/.*"words":\([0-9]*\).*/\1/p')
+if [[ "$KPI_VERDICT" == "done" ]]; then
+  log "KPI已达标,本批退让: $KPI_REASON"
+  exit 0
+fi
+if [[ -z "$KPI_VERDICT" ]]; then
+  # 闸不可达(ssh/网关故障)——不停产,按默认词数继续,但留痕
+  log "KPI闸不可达,按默认${N}词继续(fail-open)"
+else
+  [[ -n "$KPI_WORDS" && "$KPI_WORDS" -gt 0 ]] && N=$KPI_WORDS
+  log "KPI闸: $KPI_REASON"
+fi
+
 # 0916 分身实弹报告提案: 必须区分"网关容器停摆"与"真的词单为空"——0916凌晨两批真凶是前者,
 # 却因两者都表现为空输出而被误报成后者,害得排查方向指向关键词表(白查)。stderr 才是判据。
 WF=/tmp/kw-$TAG.txt
