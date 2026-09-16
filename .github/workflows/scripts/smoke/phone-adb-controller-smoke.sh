@@ -135,4 +135,17 @@ echo "$_H_CODE" | grep -A3 '词单为空' | grep -q 'escalate' || fail "词单�
 grep -qF '已确认死亡' "$D/COMMANDER.md" || fail "COMMANDER.md 未授权分身救活已死容器(网关死则workflow无人能救)"
 grep -qF '已确认死亡' "$D/escort-claude-escalation.sh" || fail "分身唤起词未同步救活授权(宪法投影不同步)"
 
+# 层8: 网关停摆单独识别 + 救活权代码化(0916分身首战实弹报告提案,熟化:判例→代码)
+_H8=$(grep -vE '^[[:space:]]*#' "$D/harvest-cron.sh")
+# 8a: 取词单失败必须区分"网关容器停摆"与"真词单为空"——0916凌晨两批真凶是前者却被误报成后者
+echo "$_H8" | grep -q 'is not running' || fail "取词单失败未识别容器停摆(is not running),网关死会被误报成词单为空"
+echo "$_H8" | grep -q '网关容器停摆' || fail "缺'网关容器停摆'专属升级分支(根因指向错=分身查错方向)"
+# 8b: 救活权代码化——守卫检测到容器 exited 必须取证+自动重启+回读验证(能写死的判据不该留给LLM)
+_G="$D/disk-gateway-guard.sh"
+_G8=$(grep -vE '^[[:space:]]*#' "$_G")
+echo "$_G8" | grep -q 'docker start\|docker restart' || fail "守卫无救活动作(网关死6h无人救的0916事故未根治)"
+echo "$_G8" | grep -q 'docker inspect' || fail "守卫救活前未取证(宪法救活权三前提之一)"
+echo "$_G8" | grep -qE 'exited' || fail "守卫未按 exited 状态判定确已死亡(可能误重启健康容器)"
+grep -qF '回读验证' "$_G" || fail "守卫救活后未回读验证(宪法救活权三前提之一)"
+
 echo "phone-adb-controller-smoke: PASS"
