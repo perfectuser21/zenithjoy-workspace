@@ -15,3 +15,13 @@ compatibility_date = "2024-12-01"
 META_GRAPH_API_VERSION = "v24.0"
 # 初次上线保持关闭。开启前需徐啸对具体内容与账号逐次批准。
 META_PUBLISH_ENABLED = "false"
+
+# D1 绑定同样必须写在这里，理由与上面的 [vars] 一致。
+# 2026-09-16 实测：只在 Cloudflare 后台 PATCH 出来的 d1_databases，
+# 在下一次 `wrangler pages deploy` 之后变成 null（整块配置被本地配置覆盖）。
+# 绑定一旦丢失，publish 接口会退化为"无幂等存储"，重复发帖风险直接回归，
+# 因此这段不是可选优化，是防重复发布的必要条件。
+[[d1_databases]]
+binding = "META_PUBLISH_DB"
+database_name = "zenithjoy-meta-publish"
+database_id = "f93ff6f6-7976-4b9b-9ea4-0842653a927b"
