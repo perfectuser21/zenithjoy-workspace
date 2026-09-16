@@ -5,6 +5,9 @@ set -euo pipefail
 D="services/phone-adb-controller"
 C="$D/douyin-phone-adb"
 fail() { echo "::error::phone-adb-controller-smoke: $1"; exit 1; }
+# 0916 死规矩: 对变量做 grep 一律用 here-string `grep ... <<< "$VAR"`。
+# 禁止 `echo "$VAR" | grep`——本文件头部是 set -euo pipefail,大变量下 grep 命中即退、
+# echo 收 SIGPIPE 退 141,pipefail 把整条管道判失败 → `if...then fail` 永不触发(实锤假绿)。
 
 # 层0: 八件套存在
 for f in douyin-phone-adb harvest-keyword.sh refill-profile-links.sh push-leads.js update-profile-links.js next-outreach.js next-outreach-lib.js outreach-tick.sh; do
@@ -130,9 +133,9 @@ if grep -A6 '^escalate()' "$H" | grep -q 'docker exec'; then fail "escalate 走�
 # 7c: 静默退出死绝——设备离线/词单为空必须先报警再退
 # 注:必须先剔注释行再 grep——否则把 escalate 注释掉守卫照样绿(0916 变异测试实测到的假守卫)
 _H_CODE=$(grep -vE '^[[:space:]]*#' "$H")
-echo "$_H_CODE" | grep -A2 '设备离线' | grep -q 'escalate' || fail "设备离线仍是静默exit(无人知晓)"
+grep -A2 '设备离线' <<< "$_H_CODE" | grep -q 'escalate' || fail "设备离线仍是静默exit(无人知晓)"
 # 0916: 措辞从"词单为空"改为"取词单失败"(加了兜底词单分支),断言跟着改为匹配结构而非措辞
-echo "$_H_CODE" | grep -A8 'KWERR' | grep -q 'escalate' || fail "取词单失败路径仍是静默exit(0915凌晨三批正是这样全灭)"
+grep -A8 'KWERR' <<< "$_H_CODE" | grep -q 'escalate' || fail "取词单失败路径仍是静默exit(0915凌晨三批正是这样全灭)"
 # 7d: 宪法必须给分身"救活已死容器"的权力(永远救活不弄死),且带取证前提
 grep -qF '已确认死亡' "$D/COMMANDER.md" || fail "COMMANDER.md 未授权分身救活已死容器(网关死则workflow无人能救)"
 grep -qF '已确认死亡' "$D/escort-claude-escalation.sh" || fail "分身唤起词未同步救活授权(宪法投影不同步)"
@@ -140,14 +143,14 @@ grep -qF '已确认死亡' "$D/escort-claude-escalation.sh" || fail "分身唤�
 # 层8: 网关停摆单独识别 + 救活权代码化(0916分身首战实弹报告提案,熟化:判例→代码)
 _H8=$(grep -vE '^[[:space:]]*#' "$D/harvest-cron.sh")
 # 8a: 取词单失败必须区分"网关容器停摆"与"真词单为空"——0916凌晨两批真凶是前者却被误报成后者
-echo "$_H8" | grep -q 'is not running' || fail "取词单失败未识别容器停摆(is not running),网关死会被误报成词单为空"
-echo "$_H8" | grep -q '网关容器停摆' || fail "缺'网关容器停摆'专属升级分支(根因指向错=分身查错方向)"
+grep -q 'is not running' <<< "$_H8" || fail "取词单失败未识别容器停摆(is not running),网关死会被误报成词单为空"
+grep -q '网关容器停摆' <<< "$_H8" || fail "缺'网关容器停摆'专属升级分支(根因指向错=分身查错方向)"
 # 8b: 救活权代码化——守卫检测到容器 exited 必须取证+自动重启+回读验证(能写死的判据不该留给LLM)
 _G="$D/disk-gateway-guard.sh"
 _G8=$(grep -vE '^[[:space:]]*#' "$_G")
-echo "$_G8" | grep -q 'docker start\|docker restart' || fail "守卫无救活动作(网关死6h无人救的0916事故未根治)"
-echo "$_G8" | grep -q 'docker inspect' || fail "守卫救活前未取证(宪法救活权三前提之一)"
-echo "$_G8" | grep -qE 'exited' || fail "守卫未按 exited 状态判定确已死亡(可能误重启健康容器)"
+grep -q 'docker start\|docker restart' <<< "$_G8" || fail "守卫无救活动作(网关死6h无人救的0916事故未根治)"
+grep -q 'docker inspect' <<< "$_G8" || fail "守卫救活前未取证(宪法救活权三前提之一)"
+grep -qE 'exited' <<< "$_G8" || fail "守卫未按 exited 状态判定确已死亡(可能误重启健康容器)"
 grep -qF '回读验证' "$_G" || fail "守卫救活后未回读验证(宪法救活权三前提之一)"
 
 # 层9: KPI 驱动自动获客(0916主理人要求"KPI接入,不是一天三次")
@@ -155,10 +158,10 @@ grep -qF '回读验证' "$_G" || fail "守卫救活后未回读验证(宪法救�
 node --check "$D/kpi-gate.js" || fail "kpi-gate.js 语法错误"
 _H9=$(grep -vE '^[[:space:]]*#' "$D/harvest-cron.sh")
 # 9a: 执行层必须过 KPI 闸(否则达标了照跑、缺口大了也不补=KPI形同虚设)
-echo "$_H9" | grep -q 'kpi-gate.js' || fail "harvest-cron.sh 未接 KPI 闸(执行层不知道KPI存在)"
-echo "$_H9" | grep -q 'verdict' || fail "harvest-cron.sh 未读 KPI 闸裁决"
+grep -q 'kpi-gate.js' <<< "$_H9" || fail "harvest-cron.sh 未接 KPI 闸(执行层不知道KPI存在)"
+grep -q 'verdict' <<< "$_H9" || fail "harvest-cron.sh 未读 KPI 闸裁决"
 # 注:不能裸 grep 'done'——会匹配 shell 的 for...done 关键字(0916变异测试实测到的假守卫)
-echo "$_H9" | grep -q 'KPI_VERDICT" == "done"' || fail "harvest-cron.sh 未处理达标退让(done)裁决"
+grep -q 'KPI_VERDICT" == "done"' <<< "$_H9" || fail "harvest-cron.sh 未处理达标退让(done)裁决"
 # 9b: KPI 闸必须 fail-open(宪法帮不拦: 闸自身故障绝不能停掉生产)
 grep -qF 'fail-open' "$D/kpi-gate.js" || fail "kpi-gate.js 无 fail-open 兜底(闸故障会停产)"
 grep -qF 'catch' "$D/kpi-gate.js" || fail "kpi-gate.js 无异常捕获"
@@ -171,13 +174,13 @@ _ln_kw9=$(grep -n 'next-keywords.js' "$D/harvest-cron.sh" | head -1 | cut -d: -f
 # 采收六步中只有取词单是"网关挂=批次夭折"的死步(0915凌晨三批同型全灭),其余要么不依赖网关要么fail-open
 _H10=$(grep -vE '^[[:space:]]*#' "$D/harvest-cron.sh")
 # 10a: 取词单成功必须落本地缓存
-echo "$_H10" | grep -q 'KWCACHE' || fail "harvest-cron.sh 无词单本地缓存(KWCACHE),网关挂即批次夭折"
+grep -q 'KWCACHE' <<< "$_H10" || fail "harvest-cron.sh 无词单本地缓存(KWCACHE),网关挂即批次夭折"
 # 注:必须精确到复制方向——反向的 cp $KWCACHE $WF(兜底读缓存)也含KWCACHE,松匹配会放行(0916变异实测)
-echo "$_H10" | grep -qF 'cp $WF $KWCACHE' || fail "取词单成功后未写入缓存(方向须为 WF→CACHE)"
+grep -qF 'cp $WF $KWCACHE' <<< "$_H10" || fail "取词单成功后未写入缓存(方向须为 WF→CACHE)"
 # 10b: 取词单失败必须尝试缓存续跑(而不是直接 exit)
-echo "$_H10" | grep -q '兜底词单' || fail "取词单失败未走缓存兜底(仍是直接夭折)"
+grep -q '兜底词单' <<< "$_H10" || fail "取词单失败未走缓存兜底(仍是直接夭折)"
 # 10c: 走兜底必须留痕+告知分身(不能静默用旧词单)
-_fb=$(echo "$_H10" | grep -A6 '兜底词单' | grep -c 'escalate\|log ')
+_fb=$(grep -A6 '兜底词单' <<< "$_H10" | grep -c 'escalate\|log ' || true)
 [[ "$_fb" -ge 1 ]] || fail "走兜底词单未留痕/未告知(静默降级=看不见的腐烂)"
 
 # 层11: AdbIME 启用/切换必须当场校验并报明原因(0916判例固化)
@@ -197,13 +200,15 @@ _H_CODE_C=$(grep -vE '^[[:space:]]*#' "$C")
 # ②私信入口统一走右上「更多」面板选「发私信」——官方号/旗舰店/个人号都有该入口;
 #   主页直挂 DM 按钮因号型而异,先找它=多一个失败面,且面板里必须区分「发私信」与「联系客服」。
 grep -qF 'profile_url is required' "$C" || fail "PROFILE_URL 仍可选(应必填:无链单不该进发送,选单器已在上游闸掉)"
-if echo "$_H_CODE_C" | grep -q 'snssdk1128://search/tabs'; then fail "搜索路线未删除(死代码+把'搜不到人'混进归因)"; fi
-if echo "$_H_CODE_C" | grep -q 'no card in top-3 user results'; then fail "搜索路线的前3卡兜底未删除"; fi
+# 注: 不能裸禁 snssdk1128://search/tabs——采收正当地用它搜关键词找视频(open-search/复位各处)。
+# 只禁「私信发送里按抖音号搜人」这一段,其特征是 keyword=$target_douyin_id。
+if grep -q 'search/tabs?keyword=$target_douyin_id' <<< "$_H_CODE_C"; then fail "私信发送仍保留按抖音号搜人的路线(死代码+把'搜不到人'混进归因)"; fi
+if grep -q 'no card in top-3 user results' <<< "$_H_CODE_C"; then fail "搜索路线的前3卡兜底未删除"; fi
 grep -qF '统一走「更多」面板' "$C" || fail "私信入口未统一走更多面板(应去掉先找直挂DM按钮的分支)"
 grep -qF '联系客服' "$C" || fail "更多面板未区分「发私信」与「联系客服」(选错=发到客服通道)"
 # 12b: 身份强校验必须大小写不敏感(0916真机实测: 主页显示 Zenithjoyai / 搜索页显示 zenithjoyai,
 #      抖音号本身大小写不敏感,裸 == 比较会把同一个人判成"不是他"而静默拒发——开闸即大面积失败)
-if echo "$_H_CODE_C" | grep -qE '\[\[ "\$(observed_target_id|_web_id)" == "\$target_douyin_id" \]\]'; then
+if grep -qE '\[\[ "\$(observed_target_id|_web_id)" == "\$target_douyin_id" \]\]' <<< "$_H_CODE_C"; then
   fail "身份校验仍是大小写敏感的裸比较(0916实测 Zenithjoyai≠zenithjoyai 致误拒)"
 fi
 grep -qF 'tr "[:upper:]" "[:lower:]"' "$C" || fail "身份校验未做大小写归一"
