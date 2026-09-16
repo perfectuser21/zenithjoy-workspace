@@ -1,0 +1,80 @@
+---
+import Base from '../../layouts/Base.astro';
+
+const updated = '2026年9月12日';
+const email = 'zenithjoycloud@gmail.com';
+---
+
+<Base
+  title="服务条款 - ZenithJoyAI"
+  description="ZenithJoyAI 服务条款：使用本网站及相关内容与服务时适用的规则、知识产权约定与免责声明。"
+>
+  <section class="pt-32 pb-8 px-4">
+    <div class="max-w-3xl mx-auto">
+      <h1 class="text-4xl font-bold mb-3">服务条款</h1>
+      <p class="text-[var(--color-text-secondary)]">最后更新：{updated}</p>
+    </div>
+  </section>
+
+  <div class="max-w-3xl mx-auto px-4 pb-20 space-y-8 leading-relaxed">
+    <section>
+      <h2 class="text-2xl font-semibold mb-3">1. 条款的接受</h2>
+      <p>访问或使用 zenithjoyai.com（以下称"本站"）即表示你同意本条款。如不同意，请停止使用本站。</p>
+    </section>
+
+    <section>
+      <h2 class="text-2xl font-semibold mb-3">2. 服务内容</h2>
+      <p>本站由 ZenithJoyAI（顶峰悦 AI）运营，提供与 AI 工具使用、工作流自动化、内容生产相关的
+      文章、视频与服务信息。本站内容可能随时更新、调整或下线。</p>
+    </section>
+
+    <section>
+      <h2 class="text-2xl font-semibold mb-3">3. 使用规范</h2>
+      <p>使用本站（包括发表评论）时，你同意不进行以下行为：</p>
+      <ul class="list-disc pl-6 space-y-1 mt-2">
+        <li>发布违反所适用法律法规的内容；</li>
+        <li>发布侵犯他人知识产权、名誉权、隐私权的内容；</li>
+        <li>发布垃圾广告、恶意链接或欺诈信息；</li>
+        <li>以自动化手段大量抓取本站内容或干扰本站正常运行。</li>
+      </ul>
+      <p class="mt-2">我们有权在不事先通知的情况下删除违反上述规范的内容。</p>
+    </section>
+
+    <section>
+      <h2 class="text-2xl font-semibold mb-3">4. 知识产权</h2>
+      <p>本站的原创文章、视频及其他材料的著作权归 ZenithJoyAI 所有。
+      你可以出于个人学习目的阅读与引用，转载请注明来源；未经书面许可，不得用于商业用途。</p>
+      <p class="mt-2">你在本站发表的评论，其内容由你自行负责；你授权我们在本站展示该内容。</p>
+    </section>
+
+    <section>
+      <h2 class="text-2xl font-semibold mb-3">5. 免责声明</h2>
+      <p>本站内容（包括 AI 工具使用建议、工作流方案等）<strong>仅供参考，不构成专业意见</strong>。
+      AI 技术与第三方平台规则变化较快，你在采纳任何做法前应自行评估其适用性与合规性。
+      对因使用本站内容而产生的任何直接或间接损失，我们不承担责任。</p>
+      <p class="mt-2">本站按"现状"提供，我们不保证服务不中断或完全无错误。</p>
+    </section>
+
+    <section>
+      <h2 class="text-2xl font-semibold mb-3">6. 第三方服务与链接</h2>
+      <p>本站可能包含指向第三方网站或服务（如 TikTok、Google 等）的链接或集成。
+      这些服务由其各自运营方负责，适用其自身的条款与政策，我们不对其内容或行为承担责任。</p>
+    </section>
+
+    <section>
+      <h2 class="text-2xl font-semibold mb-3">7. 隐私</h2>
+      <p>我们如何处理信息，请参见 <a href="/zh/privacy-policy" class="underline">隐私政策</a>。</p>
+    </section>
+
+    <section>
+      <h2 class="text-2xl font-semibold mb-3">8. 条款变更</h2>
+      <p>我们可能不时修订本条款，修订后会更新本页顶部的"最后更新"日期。
+      继续使用本站即视为接受修订后的条款。</p>
+    </section>
+
+    <section>
+      <h2 class="text-2xl font-semibold mb-3">9. 联系我们</h2>
+      <p>邮箱：<a href={`mailto:${email}`} class="underline">{email}</a></p>
+    </section>
+  </div>
+</Base>

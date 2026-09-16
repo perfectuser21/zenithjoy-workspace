@@ -1,0 +1,98 @@
+---
+import Base from '../../layouts/Base.astro';
+
+const updated = 'September 12, 2026';
+const email = 'zenithjoycloud@gmail.com';
+---
+
+<Base
+  title="Privacy Policy - ZenithJoyAI"
+  description="ZenithJoyAI Privacy Policy: what information this site and our tools collect, how it is used, which third parties are involved, and how to exercise your rights."
+>
+  <section class="pt-32 pb-8 px-4">
+    <div class="max-w-3xl mx-auto">
+      <h1 class="text-4xl font-bold mb-3">Privacy Policy</h1>
+      <p class="text-[var(--color-text-secondary)]">Last updated: {updated}</p>
+    </div>
+  </section>
+
+  <div class="max-w-3xl mx-auto px-4 pb-20 space-y-8 leading-relaxed">
+    <section>
+      <h2 class="text-2xl font-semibold mb-3">1. Who we are</h2>
+      <p>This policy applies to zenithjoyai.com, operated by ZenithJoyAI, and to the first-party
+      content publishing tools we build for our own accounts. Questions may be sent to
+      <a href={`mailto:${email}`} class="underline">{email}</a>.</p>
+    </section>
+
+    <section>
+      <h2 class="text-2xl font-semibold mb-3">2. Information we collect</h2>
+      <h3 class="font-semibold mt-4 mb-2">2.1 Information you provide</h3>
+      <p>If you leave a comment on an article, we store the nickname you enter (optional — blank
+      comments are shown as "Anonymous") and the comment text. We do not ask for your email address,
+      phone number, or legal name. Only the most recent comments are retained per article.</p>
+
+      <h3 class="font-semibold mt-4 mb-2">2.2 Information collected automatically</h3>
+      <ul class="list-disc pl-6 space-y-1">
+        <li><strong>Page counters.</strong> We count <strong>aggregate</strong> views and likes per article to understand which content resonates. These counters do not record your IP address and do not build an individual profile.</li>
+        <li><strong>Analytics.</strong> This site may enable Google Analytics (GA4) to understand overall traffic. That service is provided by Google and processes data under its own policies.</li>
+        <li><strong>Fonts.</strong> Pages load Google Fonts, so your browser makes a request to Google's servers.</li>
+      </ul>
+
+      <h3 class="font-semibold mt-4 mb-2">2.3 What we do not collect</h3>
+      <p>We do not collect government identification, payment details, or precise location data.</p>
+    </section>
+
+    <section>
+      <h2 class="text-2xl font-semibold mb-3">3. TikTok authorization</h2>
+      <p>Our publishing tool uses TikTok's official OAuth flow <strong>solely to publish our own
+      content to accounts we own and have authorized</strong>. Specifically:</p>
+      <ul class="list-disc pl-6 space-y-1 mt-2">
+        <li>Access tokens returned after authorization are displayed once in the browser and are <strong>not stored by this site</strong>;</li>
+        <li>We do not read, collect, or analyze personal data of any other TikTok user;</li>
+        <li>We do not sell or share any information obtained through this authorization;</li>
+        <li>You may revoke this application's access at any time in your TikTok account settings.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 class="text-2xl font-semibold mb-3">4. How information is used</h2>
+      <p>The information above is used only to display comments and counters, to understand which
+      content performs well so we can improve it, and to complete authorization actions you initiate.
+      <strong>We do not sell personal information and do not use it for third-party ad targeting.</strong></p>
+    </section>
+
+    <section>
+      <h2 class="text-2xl font-semibold mb-3">5. Third-party services</h2>
+      <ul class="list-disc pl-6 space-y-1">
+        <li>Cloudflare (hosting and data storage)</li>
+        <li>Google Analytics and Google Fonts (where enabled)</li>
+        <li>TikTok (publishing authorization)</li>
+      </ul>
+      <p class="mt-2">Each operates under its own privacy policy.</p>
+    </section>
+
+    <section>
+      <h2 class="text-2xl font-semibold mb-3">6. Your rights</h2>
+      <p>You may ask us to delete a comment you posted. For any other request to access, correct, or
+      delete information relating to you, contact <a href={`mailto:${email}`} class="underline">{email}</a>
+      and we will respond within a reasonable period.</p>
+    </section>
+
+    <section>
+      <h2 class="text-2xl font-semibold mb-3">7. Children</h2>
+      <p>This site is intended for adults. We do not knowingly collect personal information from
+      minors. If you believe a minor has provided us information, please contact us and we will delete it.</p>
+    </section>
+
+    <section>
+      <h2 class="text-2xl font-semibold mb-3">8. Changes</h2>
+      <p>We may update this policy from time to time. The "Last updated" date at the top of this page
+      will change accordingly.</p>
+    </section>
+
+    <section>
+      <h2 class="text-2xl font-semibold mb-3">9. Contact</h2>
+      <p>Email: <a href={`mailto:${email}`} class="underline">{email}</a></p>
+    </section>
+  </div>
+</Base>
