@@ -30,6 +30,24 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : (
   for (const r of pool) bump(txt(r.fields["命中关键词"]), "comments");
   for (const r of vids) bump(txt(r.fields["命中关键词"]), "videos");
   const now = new Date(Date.now()+8*3600e3).toISOString().replace("T"," ").slice(0,16)+"(UTC+8)";
+  // 0916 bugfix: 原来给 stat 里**每个**词都写 now,而 stat 是从池全量重算的(含所有历史词),
+  // 于是每跑一次,全表「最后测试时间」被刷成同一时刻 → next-keywords 的"最久未测优先"
+  // 排序彻底失效,词表轮换退化成瞎转(0916 实测: 35 个词的最后测试时间全是同一天)。
+  // 修: 只给**本轮真跑过**的词打时间戳 —— 判据是评论池里该词有最近 RECENT_H 小时的新行。
+  // 拿不到入表时间(字段缺失/全为空)时回落"全量打戳"以保持历史行为,不静默丢失统计。
+  const RECENT_H = Number(process.env.KWSTATS_RECENT_HOURS || 4);
+  const RECENT = new Set();
+  let sawTs = false;
+  for (const r of pool) {
+    const raw = r.fields["入表时间"] ?? r.fields["采集时间"];
+    if (raw == null || raw === "") continue;
+    const ms = typeof raw === "number" ? raw : Date.parse(String(raw).replace("(UTC+8)", "").trim());
+    if (!Number.isFinite(ms)) continue;
+    sawTs = true;
+    if (Date.now() - ms <= RECENT_H * 3600e3) RECENT.add(txt(r.fields["命中关键词"]));
+  }
+  const stampAll = !sawTs || RECENT.size === 0;
+  console.error(`lasttest: 本轮判定跑过 ${RECENT.size} 词 (窗口${RECENT_H}h)` + (stampAll ? " —— 判据不可用,回落全量打戳" : ""));
   const kwIndex = {};
   for (const r of kws) kwIndex[txt(r.fields["抖音获客-关键词配置"])] = r.record_id;
   let upd = 0, created = 0;
@@ -37,7 +55,8 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : (
     const fields = {
       "有效线索数": s.leads, "重复线索数": s.dup,
       "查看评论数": s.comments, "搜索视频数": s.videos,
-      "最后测试时间": now,
+      // 只有本轮真跑过的词才更新时间戳(判据不可用时回落全量,见上)
+      ...(stampAll || RECENT.has(kw) ? { "最后测试时间": now } : {}),
       "最近效果": `线索${s.leads}(重现${s.dup})/评论${s.comments}/视频${s.videos}`,
     };
     if (kwIndex[kw]) {

@@ -235,4 +235,15 @@ for f in push-raw-comments.js push-videos.js sort-comments.js; do
   fi
 done
 
+# 层14: 词表轮换不许被刷平(0916查明的静默bug)
+# update-keyword-stats 的 stat 从池全量重算,含**所有历史词**,却给每个词都写当前 now →
+# 所有词「最后测试时间」相同 → next-keywords 的"最久未测优先"排序完全失效,轮换退化成瞎转。
+# 死规矩: 只给**本轮真跑过**的词打时间戳。
+_KS="$D/update-keyword-stats.js"
+[[ -s "$_KS" ]] || fail "update-keyword-stats.js 缺失"
+node --check "$_KS" || fail "update-keyword-stats.js 语法错误"
+grep -qF 'RECENT' "$_KS" || fail "未区分本轮跑过的词(全量刷时间戳=毁掉最久未测轮换)"
+# 时间戳必须是条件写入,不能无条件盖
+grep -qE '最后测试时间.*RECENT|RECENT.*最后测试时间' "$_KS" || fail "「最后测试时间」仍是无条件写入"
+
 echo "phone-adb-controller-smoke: PASS"
