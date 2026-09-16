@@ -155,7 +155,8 @@ _H9=$(grep -vE '^[[:space:]]*#' "$D/harvest-cron.sh")
 # 9a: 执行层必须过 KPI 闸(否则达标了照跑、缺口大了也不补=KPI形同虚设)
 echo "$_H9" | grep -q 'kpi-gate.js' || fail "harvest-cron.sh 未接 KPI 闸(执行层不知道KPI存在)"
 echo "$_H9" | grep -q 'verdict' || fail "harvest-cron.sh 未读 KPI 闸裁决"
-echo "$_H9" | grep -qE 'done' || fail "harvest-cron.sh 未处理达标退让(done)裁决"
+# 注:不能裸 grep 'done'——会匹配 shell 的 for...done 关键字(0916变异测试实测到的假守卫)
+echo "$_H9" | grep -q 'KPI_VERDICT" == "done"' || fail "harvest-cron.sh 未处理达标退让(done)裁决"
 # 9b: KPI 闸必须 fail-open(宪法帮不拦: 闸自身故障绝不能停掉生产)
 grep -qF 'fail-open' "$D/kpi-gate.js" || fail "kpi-gate.js 无 fail-open 兜底(闸故障会停产)"
 grep -qF 'catch' "$D/kpi-gate.js" || fail "kpi-gate.js 无异常捕获"
