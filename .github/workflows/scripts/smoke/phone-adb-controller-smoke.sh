@@ -213,4 +213,23 @@ if grep -qE '\[\[ "\$(observed_target_id|_web_id)" == "\$target_douyin_id" \]\]'
 fi
 grep -qF 'tr "[:upper:]" "[:lower:]"' "$C" || fail "身份校验未做大小写归一"
 
+# 层13: 业务线路由(0916主理人问"悦升客资表咋不见了"→查明表一直在,是链路没接)
+# 悦升有独立 base H3OrbAH49aLNebs7XvOcpS1enec(17张表齐全),但落池脚本写死金诺 base,
+# 且 M1 crontab PUSH=0 → 采收数据既不进悦升也不进金诺,只躺本地 tsv(当时已攒35条)。
+# 死规矩: 凡写库脚本必须按业务线取 base/table,禁止写死单一 base。
+[[ -s "$D/line-routes.js" ]] || fail "缺业务线路由表 line-routes.js(base/table 的 SSOT)"
+node --check "$D/line-routes.js" || fail "line-routes.js 语法错误"
+grep -qF 'H3OrbAH49aLNebs7XvOcpS1enec' "$D/line-routes.js" || fail "路由表缺悦升 base"
+grep -qF 'GNuwbzY0da8GP0sv6MGcOTu9ntd' "$D/line-routes.js" || fail "路由表缺金诺 base"
+[[ -s "$D/batch2.sh" ]] || fail "batch2.sh 未回流 repo(只活在机器上=重装即丢,且无守卫)"
+if command -v zsh >/dev/null 2>&1; then zsh -n "$D/batch2.sh" || fail "batch2.sh zsh 语法错误"; fi
+grep -qE 'push-raw-comments\.js [^ ]+ \$TAG \$P' "$D/batch2.sh" || fail "batch2.sh 落池未把 profile 传下去(路由拿不到业务线,悦升数据会写错表)"
+for f in push-raw-comments.js push-videos.js; do
+  grep -qF 'line-routes' "$D/$f" || fail "$f 未走业务线路由(写死单一 base = 悦升数据无处可去)"
+  # 写死 base 常量必须已移除(允许出现在注释里)
+  if grep -vE '^[[:space:]]*(//|\*|/\*)' "$D/$f" | grep -qE 'const B *= *"GNuwbzY'; then
+    fail "$f 仍写死金诺 base 常量"
+  fi
+done
+
 echo "phone-adb-controller-smoke: PASS"

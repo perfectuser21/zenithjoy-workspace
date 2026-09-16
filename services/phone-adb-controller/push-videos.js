@@ -2,9 +2,14 @@
 // VIDEO 行: _,视频ID,短链,标题,关键词,采到评论数;按视频ID去重(今天搜明天又搜到=跳过,只吃增量)
 const fs = require("fs");
 const cfg = JSON.parse(fs.readFileSync("/root/.openclaw/clawdbot.json"));
-const acc = cfg.channels.feishu.accounts.jinoshengyuan;
-const [,, TSV, BATCH] = process.argv;
-const B = "GNuwbzY0da8GP0sv6MGcOTu9ntd", VPOOL = "tblKHYTMZceFBwHr";
+// 0916: 按业务线路由 base/table(悦升有独立 base,写死会让它的数据无处可去——见 line-routes.js)
+const { routeOf } = require("./line-routes.js");
+const [,, TSV, BATCH, LINE] = process.argv;
+const ROUTE = routeOf(LINE);
+const acc = cfg.channels.feishu.accounts[ROUTE.account];
+const B = ROUTE.base, VPOOL = ROUTE.video;
+if (!B || !VPOOL) { console.error("line-route: 该业务线未配视频池(业务线=" + (LINE||"(空)") + "),跳过写视频"); process.exit(0); }
+console.error("line-route: " + ROUTE.key + " base=" + B + " VPOOL=" + VPOOL);
 (async () => {
   const tr = await fetch("https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ app_id: acc.appId, app_secret: acc.appSecret }) });
   const tok = (await tr.json()).tenant_access_token;

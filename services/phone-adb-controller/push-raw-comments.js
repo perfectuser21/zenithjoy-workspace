@@ -4,13 +4,26 @@
 // LEAD 12列: _,昵称,抖音号,类型,评论,日期,地区,标题,关键词,IP,主页链接,作品链接
 const fs = require("fs");
 const cfg = JSON.parse(fs.readFileSync("/root/.openclaw/clawdbot.json"));
-const acc = cfg.channels.feishu.accounts.jinoshengyuan;
-const [,, TSV, BATCH] = process.argv;
-const B = "GNuwbzY0da8GP0sv6MGcOTu9ntd", POOL = "tblmrJTyVgzTj89P";
+// 0916: 按业务线路由 base/table(悦升有独立 base,写死会让它的数据无处可去——见 line-routes.js)
+const { routeOf } = require("./line-routes.js");
+const [,, TSV, BATCH, LINE] = process.argv;
+const ROUTE = routeOf(LINE);
+const acc = cfg.channels.feishu.accounts[ROUTE.account];
+const B = ROUTE.base, POOL = ROUTE.pool;
+if (!B || !POOL) { console.error("line-route: pool 表未配置(业务线=" + (LINE||"(空)") + "),跳过"); process.exit(0); }
+console.error("line-route: " + ROUTE.key + " base=" + B + " POOL=" + POOL);
 (async () => {
   const tr = await fetch("https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ app_id: acc.appId, app_secret: acc.appSecret }) });
   const tok = (await tr.json()).tenant_access_token;
   const H = { Authorization: "Bearer " + tok, "Content-Type": "application/json" };
+  // 0916: 两条线的表结构有历史差异(悦升「采集时间」是日期型 type5,金诺是文本)。
+  // 读一次字段类型,写入时按类型自适应——避免 DatetimeFieldConvFail 把整批打回。
+  const FT = {};
+  try {
+    const fr = await (await fetch("https://open.feishu.cn/open-apis/bitable/v1/apps/" + B + "/tables/" + POOL + "/fields?page_size=100", { headers: H })).json();
+    for (const f of (fr.data && fr.data.items) || []) FT[f.field_name] = f.type;
+  } catch (e) { console.error("字段类型读取失败,按文本写入: " + String(e).slice(0, 60)); }
+  const asTime = (name, v) => (FT[name] === 5 ? Date.now() : v);
   const seen = new Set(); let pt = "";
   do {
     const r = await (await fetch(`https://open.feishu.cn/open-apis/bitable/v1/apps/${B}/tables/${POOL}/records?page_size=100${pt?"&page_token="+pt:""}`, { headers: H })).json();
@@ -31,7 +44,7 @@ const B = "GNuwbzY0da8GP0sv6MGcOTu9ntd", POOL = "tblmrJTyVgzTj89P";
     if (seen.has(rid)) { dup++; continue; }
     const body = { fields: {
       "原始评论ID": rid, "运行批次": BATCH || "manual",
-      "采集时间": now, "命中关键词": kw || "",
+      "采集时间": asTime("采集时间", now), "命中关键词": kw || "",
       "来源视频": (video||"").slice(0,100),
       "评论原文": comment || "", "评论者昵称": nick || "",
       // 0915 主理人逐列验收拍板: 独立字段成列;「用户主页标识」拼串保留双写(存量兼容,勿再新增读取方)
