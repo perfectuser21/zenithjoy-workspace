@@ -113,4 +113,26 @@ grep -qF 's/^/[$HOST] /' "$D/log-stream-push.sh" || fail "推流未给每行打[
 grep -qF 'escalation.log' "$D/cmdr-stream.txt" || fail "cmdr-stream.txt 缺升级条款(三级响应断链)"
 grep -qF 'escalation.log' "$D/cmdr-escort.txt" || fail "cmdr-escort.txt 缺升级条款(三级响应断链)"
 
+# 层7: Commander第一步上岗+失败不静默(0916主理人指出;昨晚凌晨三批静默全灭6小时无告警的根治)
+H="$D/harvest-cron.sh"
+# 7a: escort 拉起必须排在 preflight(设备检查)与取词单之前——Commander是第一步,不是第三步
+_ln_escort=$(grep -n 'openclaw cron add' "$H" | head -1 | cut -d: -f1)
+_ln_pre=$(grep -n 'mWakefulness' "$H" | head -1 | cut -d: -f1)
+_ln_kw=$(grep -n 'next-keywords.js' "$H" | head -1 | cut -d: -f1)
+[[ -n "$_ln_escort" && -n "$_ln_pre" && -n "$_ln_kw" ]] || fail "harvest-cron.sh 关键锚点缺失(escort拉起/preflight/取词单)"
+(( _ln_escort < _ln_pre )) || fail "escort拉起(${_ln_escort}行)排在设备preflight(${_ln_pre}行)之后——前置失败无人看护(0915凌晨三批静默全灭)"
+(( _ln_escort < _ln_kw )) || fail "escort拉起(${_ln_escort}行)排在取词单(${_ln_kw}行)之后——取词单失败无人看护"
+# 7b: 必须有 escalate 函数,且走 us-vps 宿主文件(容器死了也能写——昨晚容器死/宿主活)
+grep -qE '^escalate\(\)' "$H" || fail "harvest-cron.sh 缺 escalate() 报警函数"
+grep -qF 'escalation.log' "$H" || fail "escalate 未写 escalation.log(三级响应断链)"
+if grep -A6 '^escalate()' "$H" | grep -q 'docker exec'; then fail "escalate 走了 docker exec(容器死时必失效),必须直写宿主文件"; fi
+# 7c: 静默退出死绝——设备离线/词单为空必须先报警再退
+# 注:必须先剔注释行再 grep——否则把 escalate 注释掉守卫照样绿(0916 变异测试实测到的假守卫)
+_H_CODE=$(grep -vE '^[[:space:]]*#' "$H")
+echo "$_H_CODE" | grep -A2 '设备离线' | grep -q 'escalate' || fail "设备离线仍是静默exit(无人知晓)"
+echo "$_H_CODE" | grep -A3 '词单为空' | grep -q 'escalate' || fail "词单为空仍是静默exit(0915凌晨三批正是这样全灭)"
+# 7d: 宪法必须给分身"救活已死容器"的权力(永远救活不弄死),且带取证前提
+grep -qF '已确认死亡' "$D/COMMANDER.md" || fail "COMMANDER.md 未授权分身救活已死容器(网关死则workflow无人能救)"
+grep -qF '已确认死亡' "$D/escort-claude-escalation.sh" || fail "分身唤起词未同步救活授权(宪法投影不同步)"
+
 echo "phone-adb-controller-smoke: PASS"
