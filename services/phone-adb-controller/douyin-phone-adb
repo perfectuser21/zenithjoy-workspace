@@ -1202,7 +1202,7 @@ switch_account() {
 }
 
 send_private_message() {
-  local expected_account_id target_douyin_id message_b64 evidence_id profile_url message original_ime current current_id
+  local expected_account_id target_douyin_id message_b64 evidence_id profile_url message current current_id
   local search_xml user_tab_line user_tab_center user_tab_x user_tab_y users_xml follow_line follow_bounds fx1 fy1 fx2 fy2 target_x target_y
   local profile_xml target_id_line observed_target_id dm_line dm_center dm_x dm_y chat_xml input_line input_center input_x input_y
   local typed_xml typed_value before_path send_line send_center send_x send_y sent_xml sent_path
@@ -1355,9 +1355,12 @@ send_private_message() {
   "$ADB" -s "$SERIAL" shell input tap "$input_x" "$input_y"
   wait_ms 400
 
-  original_ime="$($ADB -s "$SERIAL" shell settings get secure default_input_method | tr -d '\r')"
-  [[ -n "$original_ime" && "$original_ime" != "null" ]] || die "original input method could not be read"
-  restore_ime() { "$ADB" -s "$SERIAL" shell ime set "$original_ime" >/dev/null 2>&1 || true }
+  # 0916 bugfix: 原输入法必须存**全局**变量——zsh 函数内设的 EXIT trap 在函数返回时才触发,
+  # 那时 local 变量已销毁,叠加 set -u 会抛 "original_ime: parameter not set"。该次生错误既让
+  # 输入法没真正恢复(下一单继续踩),又会**覆盖真正的首因**(如文字回读不匹配),把排查带偏。
+  _ORIG_IME="$($ADB -s "$SERIAL" shell settings get secure default_input_method | tr -d '\r')"
+  [[ -n "$_ORIG_IME" && "$_ORIG_IME" != "null" ]] || die "original input method could not be read"
+  restore_ime() { [[ -n "${_ORIG_IME:-}" ]] && "$ADB" -s "$SERIAL" shell ime set "$_ORIG_IME" >/dev/null 2>&1 || true }
   trap restore_ime EXIT INT TERM
   "$ADB" -s "$SERIAL" shell ime enable com.android.adbkeyboard/.AdbIME >/dev/null
   "$ADB" -s "$SERIAL" shell ime set com.android.adbkeyboard/.AdbIME >/dev/null

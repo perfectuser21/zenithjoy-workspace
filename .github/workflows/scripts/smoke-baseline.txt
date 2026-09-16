@@ -126,3 +126,4 @@ notion-orchestrator-selfcheck-smoke.sh
 feishu-orchestrator-selfcheck-smoke.sh
 my-works-api-smoke.sh
 geoai-legal-pages-smoke.sh
+restore-ime-scope-smoke.sh
