@@ -15,3 +15,21 @@ compatibility_date = "2024-12-01"
 META_GRAPH_API_VERSION = "v24.0"
 # 初次上线保持关闭。开启前需徐啸对具体内容与账号逐次批准。
 META_PUBLISH_ENABLED = "false"
+
+# D1 绑定同样必须写在这里，理由与上面的 [vars] 一致。
+# 2026-09-16 实测：只在 Cloudflare 后台 PATCH 出来的 d1_databases，
+# 在下一次 `wrangler pages deploy` 之后变成 null（整块配置被本地配置覆盖）。
+# 绑定一旦丢失，publish 接口会退化为"无幂等存储"，重复发帖风险直接回归，
+# 因此这段不是可选优化，是防重复发布的必要条件。
+#
+# 关于 database_id 入库的安全性说明（勿按"疑似泄密"处理）：
+# database_id 是 Cloudflare 的资源标识符，不是凭据，也不含任何鉴权材料。
+# 单独持有它无法读写数据库——所有 D1 访问都要求账号级 API Token，
+# 而 Token 只存在于 1Password 与 Cloudflare 后台，从不进代码库。
+# Cloudflare 官方的 Pages/Workers 配置规范本身就要求它明文写在 wrangler.toml，
+# 与 account_id 同属一类。把它挪进 secret 既无安全收益，
+# 又会让部署依赖运行期注入而更易断。
+[[d1_databases]]
+binding = "META_PUBLISH_DB"
+database_name = "zenithjoy-meta-publish"
+database_id = "f93ff6f6-7976-4b9b-9ea4-0842653a927b"
