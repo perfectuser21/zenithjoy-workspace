@@ -68,11 +68,20 @@ H=$(date +%H)
 if (( H >= 8 && H < 22 )); then log "白天触达时窗,采收退让"; exit 0; fi
 
 # ── ③ 词单←网关(关键词表 SSOT) ──
+# 0916 分身实弹报告提案: 必须区分"网关容器停摆"与"真的词单为空"——0916凌晨两批真凶是前者,
+# 却因两者都表现为空输出而被误报成后者,害得排查方向指向关键词表(白查)。stderr 才是判据。
 WF=/tmp/kw-$TAG.txt
-ssh -o ConnectTimeout=20 us-vps "docker exec openclaw-gateway node /root/.openclaw/next-keywords.js '$BIZ' $N" > $WF 2>>$LOG
+KWERR=/tmp/kwerr-$TAG.txt
+ssh -o ConnectTimeout=20 us-vps "docker exec openclaw-gateway node /root/.openclaw/next-keywords.js '$BIZ' $N" > $WF 2>$KWERR
+[[ -s $KWERR ]] && cat $KWERR >> $LOG
 if [[ ! -s $WF ]]; then
-  log "词单为空,退出"
-  escalate "取词单失败(next-keywords 返回空),本批无词可采直接夭折;0915凌晨三批同型(网关容器死),请先查网关容器状态再查关键词表启用行"
+  if grep -qE 'is not running|No such container|Cannot connect to the Docker daemon' $KWERR 2>/dev/null; then
+    log "网关容器停摆,退出"
+    escalate "**网关容器停摆**($(head -c 120 $KWERR | tr -d '\n'))——这是基础设施故障不是业务故障,本批及后续所有批次都会连环夭折(0916凌晨实例)。请按宪法救活权:先 docker inspect 取证,确认 exited 后重启 openclaw-gateway,重启后回读验证 health"
+  else
+    log "词单为空,退出"
+    escalate "取词单失败(容器正常但 next-keywords 返回空),请查关键词表启用行/业务线匹配是否为 $BIZ"
+  fi
   exit 0
 fi
 NWORDS=$(wc -l < $WF | tr -d ' ')
