@@ -89,19 +89,32 @@ fi
 
 # 0916 分身实弹报告提案: 必须区分"网关容器停摆"与"真的词单为空"——0916凌晨两批真凶是前者,
 # 却因两者都表现为空输出而被误报成后者,害得排查方向指向关键词表(白查)。stderr 才是判据。
+# 0916 主理人追问"为何100%跑不完"的根因修复: 采收六步中,只有取词单是"网关挂=批次夭折"的死步
+# (拉Commander/KPI闸都已 fail-open,采收主体纯本机,落池失败数据留本地可补)。
+# 故给词单加本地缓存: 成功即存,失败用上次的词单顶上——网关病了也照跑,不白瞎一个夜间窗口。
 WF=/tmp/kw-$TAG.txt
 KWERR=/tmp/kwerr-$TAG.txt
+KWCACHE=~/.kw-cache-$P.txt
 ssh -o ConnectTimeout=20 us-vps "docker exec openclaw-gateway node /root/.openclaw/next-keywords.js '$BIZ' $N" > $WF 2>$KWERR
 [[ -s $KWERR ]] && cat $KWERR >> $LOG
-if [[ ! -s $WF ]]; then
+if [[ -s $WF ]]; then
+  cp $WF $KWCACHE 2>/dev/null && log "词单已存本地缓存"
+else
+  # 取词单失败 → 先判根因(供分身排查),再尝试兜底词单续跑
   if grep -qE 'is not running|No such container|Cannot connect to the Docker daemon' $KWERR 2>/dev/null; then
-    log "网关容器停摆,退出"
-    escalate "**网关容器停摆**($(head -c 120 $KWERR | tr -d '\n'))——这是基础设施故障不是业务故障,本批及后续所有批次都会连环夭折(0916凌晨实例)。请按宪法救活权:先 docker inspect 取证,确认 exited 后重启 openclaw-gateway,重启后回读验证 health"
+    WHY="网关容器停摆($(head -c 100 $KWERR | tr -d '\n'))"
   else
-    log "词单为空,退出"
-    escalate "取词单失败(容器正常但 next-keywords 返回空),请查关键词表启用行/业务线匹配是否为 $BIZ"
+    WHY="容器正常但 next-keywords 返回空(查关键词表启用行/业务线是否匹配 $BIZ)"
   fi
-  exit 0
+  if [[ -s $KWCACHE ]]; then
+    cp $KWCACHE $WF
+    log "取词单失败,改用兜底词单(本地缓存 $(wc -l < $WF | tr -d ' ')词)续跑"
+    escalate "取词单失败已走**兜底词单**续跑(本批不夭折,但用的是上次缓存的词、效果轮换暂停)。根因: $WHY。请尽快恢复网关,否则后续批次会一直吃旧词单"
+  else
+    log "取词单失败且无本地缓存,退出"
+    escalate "取词单失败**且无兜底词单**(首次跑或缓存丢失),本批夭折。根因: $WHY"
+    exit 0
+  fi
 fi
 NWORDS=$(wc -l < $WF | tr -d ' ')
 log "词单 ${NWORDS}词: $(tr '\n' '/' < $WF)"
