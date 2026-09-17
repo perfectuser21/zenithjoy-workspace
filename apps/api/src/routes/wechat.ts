@@ -578,6 +578,87 @@ wechatRouter.post('/moment-drafts/:taskId/reject', async (req: Request, res: Res
   }
 });
 
+// ─── 朋友圈发布派单桥（PrepPRD sprints/09171039-moments-publish-openclaw）───────────────
+// 两轴状态设计：approval_status=人工审核轴(pending_review/approved/rejected，既有不动)，
+// status=执行调度轴(draft/claimed/executing/sent/failed，新增)。两轴独立，互不覆写。
+// 领单用 UPDATE...WHERE...RETURNING 一条 SQL 完成"查询+加锁+标记"，天然原子，
+// 防两个调度周期抢到同一条工单（判定点：跨调度实例并发领单）。
+
+// POST /api/wechat/moment-drafts/next-dispatch — OpenClaw 调度脚本领取下一条待发布工单
+// claimed_by 必填（哪个设备/账号在领，供追责）；孤儿回收：claimed/executing 超过10分钟
+// 未转终态视为孤儿，允许被重新领取。
+wechatRouter.post('/moment-drafts/next-dispatch', async (req: Request, res: Response) => {
+  try {
+    const tenantId = await resolveTenantId(req);
+    if (!tenantId) {
+      return res.status(400).json({ error: 'NO_TENANT_CONTEXT', message: '缺租户上下文' });
+    }
+    const claimedBy = String(req.body?.claimed_by ?? '').trim();
+    if (!claimedBy) {
+      return res.status(400).json({ error: 'MISSING_CLAIMED_BY', message: 'claimed_by 必填' });
+    }
+    const result = await pool.query(
+      `UPDATE zenithjoy.wechat_publish_task
+         SET status = 'claimed', claimed_at = now(), claimed_by = $2, updated_at = now()
+       WHERE id = (
+         SELECT id FROM zenithjoy.wechat_publish_task
+          WHERE tenant_id = $1 AND type = 'moment' AND approval_status = 'approved'
+            AND (
+              status IS NULL OR status = 'draft'
+              OR (status IN ('claimed', 'executing') AND claimed_at < now() - interval '10 minutes')
+            )
+          ORDER BY created_at ASC
+          LIMIT 1
+          FOR UPDATE SKIP LOCKED
+       )
+       RETURNING id, task_id, target_user AS customer, content_draft AS content, claimed_at`,
+      [tenantId, claimedBy]
+    );
+    if (result.rows.length === 0) {
+      return res.json({ task: null, message: 'NO_PENDING' });
+    }
+    return res.json({ task: result.rows[0] });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/moment-drafts/next-dispatch] 失败:', errMsg);
+    return res.status(500).json({ error: 'NEXT_DISPATCH_FAILED', message: errMsg });
+  }
+});
+
+// POST /api/wechat/moment-drafts/:taskId/complete — 调度脚本回报执行结果
+// result: sent|failed。sent 必须已经过 verify-latest-post 视觉核验才能报，
+// 不确定成功一律报 failed（判定点：坐标定位失败处置——failed 是安全默认）。
+// dispatch_meta 落最小可观测字段集（dump/vision 各用几次、卡在哪步）。
+wechatRouter.post('/moment-drafts/:taskId/complete', async (req: Request, res: Response) => {
+  try {
+    const tenantId = await resolveTenantId(req);
+    if (!tenantId) {
+      return res.status(400).json({ error: 'NO_TENANT_CONTEXT', message: '缺租户上下文' });
+    }
+    const { taskId } = req.params;
+    const result = String(req.body?.result ?? '');
+    if (result !== 'sent' && result !== 'failed') {
+      return res.status(400).json({ error: 'INVALID_RESULT', message: 'result 必须是 sent 或 failed' });
+    }
+    const dispatchMeta = req.body?.dispatch_meta ?? {};
+    const updated = await pool.query(
+      `UPDATE zenithjoy.wechat_publish_task
+         SET status = $3, dispatch_meta = dispatch_meta || $4::jsonb, updated_at = now()
+       WHERE task_id = $1 AND tenant_id = $2
+       RETURNING *`,
+      [taskId, tenantId, result, JSON.stringify(dispatchMeta)]
+    );
+    if (updated.rows.length === 0) {
+      return res.status(404).json({ error: 'TASK_NOT_FOUND', message: 'Task not found' });
+    }
+    return res.json({ task: updated.rows[0] });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[wechat/moment-drafts/complete] 失败:', errMsg);
+    return res.status(500).json({ error: 'COMPLETE_FAILED', message: errMsg });
+  }
+});
+
 // ─── GET /api/wechat/customer-profile — 客户画像卡（BEHAVIOR-5, Line04 里程碑B）───────────────
 // 从既有 CRM 表（crm_customers + wechat_cs_account_config）组装六字段，禁新建表。
 // 六字段：level / nickname / source / contact_count / recent_actions / ai_profile
