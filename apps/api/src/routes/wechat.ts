@@ -584,10 +584,18 @@ wechatRouter.post('/moment-drafts/:taskId/reject', async (req: Request, res: Res
 // 领单用 UPDATE...WHERE...RETURNING 一条 SQL 完成"查询+加锁+标记"，天然原子，
 // 防两个调度周期抢到同一条工单（判定点：跨调度实例并发领单）。
 
+// CodeQL js/missing-rate-limiting：按 claimed_by(设备/账号) 限流，正常节奏是 moments-tick.sh
+// 每 20 分钟一次，10次/60s 留足调度脚本重试余量，同时挡住异常高频轮询。
+const momentsDispatchRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 10,
+  keyFn: (req) => (typeof req.body?.claimed_by === 'string' && req.body.claimed_by) || 'anonymous',
+});
+
 // POST /api/wechat/moment-drafts/next-dispatch — OpenClaw 调度脚本领取下一条待发布工单
 // claimed_by 必填（哪个设备/账号在领，供追责）；孤儿回收：claimed/executing 超过10分钟
 // 未转终态视为孤儿，允许被重新领取。
-wechatRouter.post('/moment-drafts/next-dispatch', async (req: Request, res: Response) => {
+wechatRouter.post('/moment-drafts/next-dispatch', momentsDispatchRateLimit, async (req: Request, res: Response) => {
   try {
     const tenantId = await resolveTenantId(req);
     if (!tenantId) {
@@ -625,11 +633,19 @@ wechatRouter.post('/moment-drafts/next-dispatch', async (req: Request, res: Resp
   }
 });
 
+// CodeQL js/missing-rate-limiting：按 taskId 限流，每个任务正常只回报一次终态，
+// 10次/60s 留足网络重试余量。
+const momentsCompleteRateLimit = simpleRateLimit({
+  windowMs: 60_000,
+  max: 10,
+  keyFn: (req) => req.params.taskId || 'anonymous',
+});
+
 // POST /api/wechat/moment-drafts/:taskId/complete — 调度脚本回报执行结果
 // result: sent|failed。sent 必须已经过 verify-latest-post 视觉核验才能报，
 // 不确定成功一律报 failed（判定点：坐标定位失败处置——failed 是安全默认）。
 // dispatch_meta 落最小可观测字段集（dump/vision 各用几次、卡在哪步）。
-wechatRouter.post('/moment-drafts/:taskId/complete', async (req: Request, res: Response) => {
+wechatRouter.post('/moment-drafts/:taskId/complete', momentsCompleteRateLimit, async (req: Request, res: Response) => {
   try {
     const tenantId = await resolveTenantId(req);
     if (!tenantId) {
