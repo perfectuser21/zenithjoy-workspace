@@ -48,4 +48,22 @@ if grep -qE 'input tap [0-9]+ [0-9]+"' "$C"; then
   fail "检测到硬编码坐标 tap（违反「坐标永远现场判定」铁律，见 PrepPRD 判定点表）"
 fi
 
+# 层6: 点赞链路命令面存在性（0917 GP-E step3 互动执行与留痕——真机验证过的完整点赞链）
+for pat in \
+  'open-contact-moments)' \
+  'read-moments-list)' \
+  'open-moment-card-by-text)' \
+  'like-current-card)' \
+  'vision_judge()' \
+  ; do
+  grep -qF "$pat" "$C" || fail "点赞链路命令/函数缺失: $pat"
+done
+
+# 层7: like-current-card 必须先做「悬浮条是否已可见」的显式视觉状态判定，
+# 不能靠 resolve_coord 对「赞」的成功/失败来判断走哪条路——0917 真机实测过
+# 视觉模型在目标不存在时仍可能"蒙"出一个坐标，导致误判走错分支（真实复现过一次）。
+if ! sed -n '/^  like-current-card)/,/^  ;;$/p' "$C" | grep -qF 'bar_visible'; then
+  fail "like-current-card 缺失显式悬浮条可见性判定（bar_visible），可能重蹈 0917 误判覆盖"
+fi
+
 echo "wechat-moments-controller-smoke: OK"
