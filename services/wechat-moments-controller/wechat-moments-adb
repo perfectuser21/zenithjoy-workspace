@@ -273,7 +273,11 @@ locate_cache_clear() { /bin/rm -f "$LOCATE_CACHE_DIR/${registry_profile}-moments
 # die（调用方决定是走 failed 状态还是别的，本函数不负责失败语义，只负责"找坐标"）。
 # 输出：一行 "x y" + 一行 "coord_source=tree|vision"。
 resolve_coord() {
-  local text_or_desc="$1" vision_desc="$2" ckey="$3" eid="$4" xml center
+  # $5(可选)="nocache" → 视觉兜底不落坐标缓存，每次现场重新定位。
+  # 静态UI元素(导航tab/固定按钮，同一版本下位置不会变)才该缓存；聊天列表里某联系人的
+  # 位置、朋友圈某条动态的位置这类**会随内容动态排序变化**的目标，缓存了就是缓存一个
+  # 错误坐标——调用方必须显式传 nocache，防止踩这个坑（0917 二次实测发现并修复）。
+  local text_or_desc="$1" vision_desc="$2" ckey="$3" eid="$4" cache_mode="${5:-cache}" xml center
   if xml="$(ui_evidence "${eid}-tree")" 2>/dev/null; then
     if center="$(find_node_by_text "$xml" "$text_or_desc")"; then
       print -- "$center"
@@ -284,7 +288,11 @@ resolve_coord() {
   else
     print -u2 -- "warning: uiautomator tree unreadable after 3 attempts — falling back to vision"
   fi
-  center="$(locate_cached "$ckey" "$vision_desc" "$eid")" || return 1
+  if [[ "$cache_mode" == "nocache" ]]; then
+    center="$(locate_element "$vision_desc" "$eid")" || return 1
+  else
+    center="$(locate_cached "$ckey" "$vision_desc" "$eid")" || return 1
+  fi
   print -- "$center"
   print -- "coord_source=vision"
 }
@@ -602,47 +610,140 @@ PYDONE
 
   open-contact-moments)
     # 通讯录/聊天列表 → 目标联系人 → 头像 → 「朋友圈」行 → 该联系人的朋友圈时间线。
-    # 只做导航，不做"哪条能点赞"的判断——那是内容安全判断，应该在上层用截图交给
-    # 模型做，不是这个脚本的职责。
+    # 只做导航，不做"哪条能点赞/能跟发"的判断——那是内容安全判断，应该在上层用截图交给
+    # 模型做，不是这个脚本的职责。0917 二次实测修复：原实现全程 dump-only、无视觉兜底，
+    # 按当前"微信对本设备uiautomator持续返回空树"的现状完全跑不通；改走 resolve_coord
+    # 统一协议（dump优先，找精确文字匹配→找不到/读不到转视觉，视觉这里只做"找到这个
+    # 精确姓名字符串在哪"这种OCR定位任务，不是猜测身份，风险可控）。
     [[ "$#" == 3 ]] || die "usage: wechat-moments-adb --profile PROFILE open-contact-moments CONTACT_NAME EVIDENCE_ID"
     check_target
     contact="$2"; local_eid="$3"
     foreground_gate "${local_eid}-pre"
-    xml="$(ui_evidence "${local_eid}-chatlist")" || die "could not read chat list (tree unreadable after 3 attempts, no vision fallback for contact search — contact name text is required for safety, refusing to guess)" NO_ROOT
-    center="$(find_node_by_text "$xml" "$contact")" || die "contact not found in visible chat list: $contact" TARGET_ABSENT
-    read ct_x ct_y <<< "$center"
+    if ! _rcc="$(resolve_coord "$contact" "聊天列表里昵称精确等于「${contact}」的那一行" "contact-${contact}" "${local_eid}-chatlist" nocache)"; then
+      die "contact not found in visible chat list: $contact (tree and vision both failed)" TARGET_ABSENT
+    fi
+    read ct_x ct_y <<< "$(print -- "$_rcc" | /usr/bin/head -1)"
     "$ADB" -s "$SERIAL" shell input tap "$ct_x" "$ct_y"
     wait_ms 1200
     foreground_gate "${local_eid}-chat"
-    xml2="$(ui_evidence "${local_eid}-chatopen")" || die "could not read opened chat window" NO_ROOT
-    avatar_line="$(/usr/bin/grep -oE "<node[^>]+content-desc=\"${contact}头像\"[^>]*bounds=\"\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]\"[^>]*>" "$xml2" | /usr/bin/head -1 || true)"
-    [[ -n "$avatar_line" ]] || die "could not find contact avatar in chat window" TARGET_ABSENT
-    read av_x av_y <<< "$(node_center "$avatar_line")"
+    # 0917 二次实测踩坑：直接在聊天气泡里找"对方头像"会歧义——一对一聊天没有群聊那种
+    # 昵称标签，靠"左侧=对方/右侧=自己"这条版式规则让模型去判断，实测模型仍会认错
+    # （连续两次都点成了自己发的消息旁边那个头像，误开自己的资料页）。改走更稳的路径：
+    # 点右上角「···」进「聊天信息」页——这个页面一对一聊天下只显示对方一个头像，
+    # 物理上不存在认错的可能，且这两步都是固定UI位置（不随聊天内容变化），走缓存无妨。
+    if ! _rcm="$(resolve_coord "更多" "聊天窗口右上角的「···」更多选项按钮" more-menu-btn "${local_eid}-moremenu")"; then
+      die "could not locate 更多 (···) button in chat window" TARGET_ABSENT
+    fi
+    read mm_x mm_y <<< "$(print -- "$_rcm" | /usr/bin/head -1)"
+    "$ADB" -s "$SERIAL" shell input tap "$mm_x" "$mm_y"
+    wait_ms 1000
+    foreground_gate "${local_eid}-chatinfo"
+    if ! _rca="$(resolve_coord "$contact" "「聊天信息」页顶部唯一的那个头像（一对一聊天这里只显示对方一个头像）" chatinfo-avatar "${local_eid}-chatinfoavatar")"; then
+      die "could not find contact avatar on 聊天信息 page (tree and vision both failed)" TARGET_ABSENT
+    fi
+    read av_x av_y <<< "$(print -- "$_rca" | /usr/bin/head -1)"
     "$ADB" -s "$SERIAL" shell input tap "$av_x" "$av_y"
     wait_ms 1200
     foreground_gate "${local_eid}-profile"
-    xml3="$(ui_evidence "${local_eid}-profile")" || die "could not read contact profile page" NO_ROOT
-    row_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="朋友圈个人相册[^"]*"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"[^>]*>' "$xml3" | /usr/bin/head -1 || true)"
-    [[ -n "$row_line" ]] || die "contact profile has no 朋友圈 row (may have hidden moments from us)" TARGET_ABSENT
-    read fr_x fr_y <<< "$(node_center "$row_line")"
+    # 核验落地页确实是目标联系人的资料页而不是别的什么页，防止上面的定位链路悄悄
+    # 走偏又没有明确报错（比如又落回自己资料页）——用视觉是非判断兜底一次，便宜且关键。
+    verify_out="$(vision_judge "这个页面顶部显示的姓名/昵称是不是『${contact}』（或者明显是同一个人，允许有备注名差异）？" "${local_eid}-profileverify")" || die "profile identity verify call failed" TARGET_ABSENT
+    [[ "$verify_out" == "YES" ]] || die "SAFETY_ABORT: landed profile does not appear to belong to ${contact} (verify=$verify_out) — refusing to proceed to avoid acting on the wrong person's moments" TARGET_ABSENT
+    if ! _rcf="$(resolve_coord "朋友圈" "个人资料页里的「朋友圈」这一行（旁边通常有几张缩略图预览）" "moments-row-${contact}" "${local_eid}-profile" nocache)"; then
+      die "contact profile has no 朋友圈 row / could not locate it (may have hidden moments from us, or tree and vision both failed)" TARGET_ABSENT
+    fi
+    read fr_x fr_y <<< "$(print -- "$_rcf" | /usr/bin/head -1)"
     "$ADB" -s "$SERIAL" shell input tap "$fr_x" "$fr_y"
     wait_ms 1200
     print -- "evidence=$(snapshot_evidence "${local_eid}-contact-moments")"
     ;;
 
+  read-moments-list)
+    # 读取当前屏幕上"某联系人朋友圈摘要列表"页面的内容，输出JSON数组供上层做判断
+    # （能不能点赞/能不能跟发）——本命令只读不判断，判断逻辑不属于这个脚本。
+    # 前置：已执行过 open-contact-moments。
+    [[ "$#" == 2 ]] || die "usage: wechat-moments-adb --profile PROFILE read-moments-list EVIDENCE_ID"
+    check_target
+    local_eid="$2"
+    shot="$EVIDENCE_ROOT/${local_eid}-list.png"
+    /bin/mkdir -p "$EVIDENCE_ROOT"
+    "$ADB" -s "$SERIAL" exec-out screencap -p > "$shot" || die "read-moments-list screenshot failed"
+    [[ -r "$LOCATE_KEY_FILE" ]] || die "locate api key file missing: $LOCATE_KEY_FILE"
+    out="$("$PYTHON_BIN" - "$shot" "$LOCATE_ENDPOINT" "$LOCATE_MODEL" "$LOCATE_KEY_FILE" <<'PYLIST'
+import base64, json, sys, urllib.request
+shot, endpoint, model, keyfile = sys.argv[1:5]
+key = open(keyfile).read().strip()
+img = base64.b64encode(open(shot, "rb").read()).decode()
+prompt = ("这是微信朋友圈动态摘要列表（每条含日期+文字摘要+可能的缩略图）。把当前截图里可见的"
+          "每一条动态都列出来，输出JSON数组，每个元素是{\"date\":\"日期文字，如原样抄\",\"text\":\"该条文字摘要\","
+          "\"has_image\":true或false}。只输出JSON数组本身，不要markdown代码块，不要额外说明。")
+body = {"model": model, "max_tokens": 800, "messages": [{"role": "user", "content": [
+  {"type": "image_url", "image_url": {"url": "data:image/png;base64," + img}},
+  {"type": "text", "text": prompt}]}]}
+req = urllib.request.Request(endpoint, data=json.dumps(body).encode(),
+  headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+r = json.load(urllib.request.urlopen(req, timeout=45))
+txt = r["choices"][0]["message"]["content"].strip().strip("`")
+if txt.startswith("json"): txt = txt[4:]
+json.loads(txt)  # 校验确实是合法JSON，非法直接抛错让shell层die
+print(txt)
+PYLIST
+)" || die "read-moments-list model call failed or returned invalid JSON"
+    print -- "$out"
+    print -- "evidence=$shot"
+    ;;
+
+  open-moment-card-by-text)
+    # 在当前朋友圈摘要列表里，找到文字匹配给定片段的那一条，点开进入可互动卡片视图
+    # （带赞/评论/详情按钮的那个页面）。match_text 应该来自 read-moments-list 的输出，
+    # 不要凭空传一个猜的片段。
+    [[ "$#" == 3 ]] || die "usage: wechat-moments-adb --profile PROFILE open-moment-card-by-text MATCH_TEXT_B64 EVIDENCE_ID"
+    check_target
+    match_text="$(print -- "$2" | /usr/bin/base64 -d)"
+    local_eid="$3"
+    if ! _rcm="$(resolve_coord "$match_text" "朋友圈摘要列表里文字内容包含『${match_text:0:20}』的那一条" "moment-card-${local_eid}" "${local_eid}-findcard" nocache)"; then
+      die "could not locate the moment matching given text (tree and vision both failed)" TARGET_ABSENT
+    fi
+    read mc_x mc_y <<< "$(print -- "$_rcm" | /usr/bin/head -1)"
+    "$ADB" -s "$SERIAL" shell input tap "$mc_x" "$mc_y"
+    wait_ms 1200
+    print -- "evidence=$(snapshot_evidence "${local_eid}-card-opened")"
+    ;;
+
   like-current-card)
-    # 前置：已经点开某条具体动态进入卡片视图（上层用截图判断了内容安全、点了那一条）。
-    # 本命令只负责：找到「赞」按钮 → 点 → 核验心形变红+计数变化。
+    # 前置：已经点开某条具体动态进入卡片/详情视图（上层用截图判断了内容安全、点了那一条）。
+    # 本命令只负责：找到「赞」按钮 → 点 → 核验点赞列表里出现自己头像。
+    # 0917 实证：同为单条动态详情页，存在两种布局——
+    #   A) 直接可见「赞 评论 详情」三按钮条；
+    #   B)「详情」页默认只显示评论输入框，赞/评论按钮被折叠进日期旁边的「···」小图标，
+    #      需先点它弹出悬浮条（♡赞｜评论）才能继续点赞。
+    #   ⚠️ 不能靠 resolve_coord 对「赞」的成功/失败来判断走哪条路——0917 实测发现视觉模型
+    #      在目标尚不存在时仍可能"蒙"出一个坐标（碰巧点中「···」触发弹出，或点到无关处），
+    #      让失败判断失真。必须先用 vision_judge 显式问一句"现在看不看得见"，用明确的
+    #      YES/NO 决定要不要先展开，而不是拿 locate 的 return code 当信号。
     [[ "$#" == 2 ]] || die "usage: wechat-moments-adb --profile PROFILE like-current-card EVIDENCE_ID"
     check_target
     local_eid="$2"
-    if ! _rc7="$(resolve_coord "赞" "动态卡片左下角的「赞」按钮" like-btn "${local_eid}-likebtn")"; then
+    bar_visible="$(vision_judge "这张截图下半部分是否已经直接显示一个包含心形「赞」和「评论」字样的操作条/按钮（不需要点任何东西就已经看得见）？" "${local_eid}-barcheck")" || die "bar visibility check call failed" TARGET_ABSENT
+    if [[ "$bar_visible" != "YES" ]]; then
+      print -u2 -- "info: 赞/评论 not directly visible — 详情页布局B，先展开「···」(0917 实证)"
+      if ! _rcmore="$(resolve_coord "更多" "这条动态发布日期文字右边紧贴着的一个很小的「···」或两个圆点的更多选项图标" detail-more-btn "${local_eid}-detailmore" nocache)"; then
+        die "could not locate the「···」expand icon (tree and vision both failed)" TARGET_ABSENT
+      fi
+      read dm_x dm_y <<< "$(print -- "$_rcmore" | /usr/bin/head -1)"
+      "$ADB" -s "$SERIAL" shell input tap "$dm_x" "$dm_y"
+      wait_ms 900
+    fi
+    if ! _rc7="$(resolve_coord "赞" "「赞」这个按钮/选项（心形图标+文字赞，可能在卡片底部固定按钮条里，也可能在刚弹出的悬浮条里，和「评论」并列）" like-btn "${local_eid}-likebtn" nocache)"; then
       die "could not locate 赞 button (tree and vision both failed)" TARGET_ABSENT
     fi
     read lk_x lk_y <<< "$(print -- "$_rc7" | /usr/bin/head -1)"
     "$ADB" -s "$SERIAL" shell input tap "$lk_x" "$lk_y"
     wait_ms 1200
+    verify_out="$(vision_judge "这张截图里，这条朋友圈下方是否出现了一个点赞列表（显示点赞者头像，前面通常有个心形图标）？" "${local_eid}-likeverify")" || die "like verify call failed" TARGET_ABSENT
+    [[ "$verify_out" == "YES" ]] || die "SAFETY_ABORT: tapped 赞 but no like-list/avatar appeared afterward — cannot confirm the like actually registered" TARGET_ABSENT
     print -- "like_tapped=1"
+    print -- "like_verified=1"
     print -- "evidence=$(snapshot_evidence "${local_eid}-after-like")"
     ;;
 
