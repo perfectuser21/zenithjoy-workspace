@@ -26,7 +26,7 @@ describe('wechat.ts — router export', () => {
     expect(paths).not.toContain('/draft-review-poll');
   });
 
-  it('registers exactly 16 unique endpoints (15 原有 + 1 Line04 里程碑B customer-profile)', () => {
+  it('registers exactly 18 unique endpoints (16 原有 + 2 朋友圈发布派单桥 next-dispatch/complete)', () => {
     const stack = (wechatRouter as any).stack;
     const paths = [...new Set(stack.filter((l: any) => l.route).map((l: any) => l.route.path))];
     // 原有 4：qr-bind / scheduler-tick / draft-generate / listener-heartbeat（draft-review-poll 已删）
@@ -53,6 +53,9 @@ describe('wechat.ts — router export', () => {
     expect(paths).toContain('/moment-drafts/:taskId/reject');
     // Line04 里程碑B：会话跟随画像卡 overlay 接口（BEHAVIOR-5，task:c4518759）
     expect(paths).toContain('/customer-profile');
-    expect(paths.length).toBe(16);
+    // 朋友圈发布派单桥（PrepPRD sprints/09171039-moments-publish-openclaw，task:1ca6f61a）
+    expect(paths).toContain('/moment-drafts/next-dispatch');
+    expect(paths).toContain('/moment-drafts/:taskId/complete');
+    expect(paths.length).toBe(18);
   });
 });

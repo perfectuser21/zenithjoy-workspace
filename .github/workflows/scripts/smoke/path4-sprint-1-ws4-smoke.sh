@@ -56,6 +56,32 @@ grep -q "wechat_marketing_profile" "$MIGRATION_FILE" \
   || { echo "FAIL: 迁移文件缺 wechat_marketing_profile 建表语句"; exit 1; }
 echo "  PASS migration 文件存在且含建表语句"
 
+# ── 0917 新增：发布上圈（moments_publish step2）派单桥静态校验 ──────────────
+# 审核台批准之后此前完全没有机制把任务发给设备执行——本段验证这个空白已经补上，
+# 且真机验证过（services/wechat-moments-controller README + PR 描述）。
+
+grep -q "/moment-drafts/next-dispatch" "$ROUTE_FILE" \
+  || { echo "FAIL: wechat.ts 缺 /moment-drafts/next-dispatch 派单接口"; exit 1; }
+grep -q "/moment-drafts/:taskId/complete" "$ROUTE_FILE" \
+  || { echo "FAIL: wechat.ts 缺 /moment-drafts/:taskId/complete 回报接口"; exit 1; }
+echo "  PASS wechat.ts 派单桥 next-dispatch + complete 路由已注册"
+
+DISPATCH_MIGRATION="apps/api/db/migrations/20260917_190000_wechat_publish_task_dispatch_states.sql"
+[ -f "$DISPATCH_MIGRATION" ] \
+  || { echo "FAIL: $DISPATCH_MIGRATION 迁移文件不存在"; exit 1; }
+grep -q "claimed" "$DISPATCH_MIGRATION" && grep -q "executing" "$DISPATCH_MIGRATION" \
+  || { echo "FAIL: 迁移文件缺 claimed/executing 执行调度轴状态"; exit 1; }
+echo "  PASS 派单调度状态迁移文件存在且含 claimed/executing"
+
+CONTROLLER_DIR="services/wechat-moments-controller"
+[ -x "$CONTROLLER_DIR/wechat-moments-adb" ] \
+  || { echo "FAIL: $CONTROLLER_DIR/wechat-moments-adb 不存在或不可执行"; exit 1; }
+[ -x "$CONTROLLER_DIR/moments-tick.sh" ] \
+  || { echo "FAIL: $CONTROLLER_DIR/moments-tick.sh 不存在或不可执行"; exit 1; }
+grep -q "坐标永远现场判定" "$CONTROLLER_DIR/wechat-moments-adb" \
+  || { echo "FAIL: wechat-moments-adb 缺坐标判定协议签名（不绑机型铁律）"; exit 1; }
+echo "  PASS wechat-moments-adb 真机控制器 + moments-tick.sh 调度脚本已交付"
+
 # 真凭据 / 服务模式（CI 跳过）
 if [ "${CI:-}" = "true" ] || [ -z "${OPENROUTER_API_KEY:-}${SKIP_LIVE:-}" ]; then
   echo "=== CI 或缺凭据：跳过真调用 happy path ==="

@@ -1,0 +1,710 @@
+#!/bin/zsh
+
+set -euo pipefail
+setopt EXTENDED_GLOB
+
+# wechat-moments-adb —— 微信朋友圈 ADB 控制器（line04，0917 首版）
+#
+# 引擎层（die/wait/registry/dump三波/视觉定位/前台闸）照抄
+# services/phone-adb-controller/douyin-phone-adb 的现成生产架构，两条线共用同一套
+# 设备档案登记表（同一部手机，不同 app）。命令层是微信朋友圈专属的：不绑机型，
+# 坐标永远现场判定——dump 优先，dump 返回空节点/读不到树 → 自动切视觉模型判定，
+# 两条路都不行才判 failed，不重试、不硬点、不转人工（决策见 Brain strategic-decisions
+# 「判定点: 朋友圈发布坐标定位失败处置」）。
+
+ADB="${WECHAT_ADB_BIN:-/opt/homebrew/bin/adb}"
+PYTHON_BIN="${WECHAT_PYTHON_BIN:-/opt/homebrew/bin/python3}"
+# 视觉定位复用抖音线同一套 toapis 配置（同一份凭据，同一个模型）。
+LOCATE_KEY_FILE="${WECHAT_LOCATE_KEY_FILE:-$HOME/.config/openclaw/locate-api.key}"
+LOCATE_ENDPOINT="${WECHAT_LOCATE_ENDPOINT:-https://toapis.com/v1/chat/completions}"
+LOCATE_MODEL="${WECHAT_LOCATE_MODEL:-gemini-2.5-flash-lite-official}"
+# 设备档案表：默认复用抖音线同一张登记表（同一批物理手机，只是这次开的是另一个 app）。
+REGISTRY="${WECHAT_PHONE_REGISTRY:-${DOUYIN_PHONE_REGISTRY:-${HOME}/.config/openclaw/douyin-phone-profiles.tsv}}"
+WECHAT_PACKAGE="com.tencent.mm"
+
+die() {
+  # 三态归因（抄六刀融合刀5）：NO_ROOT=树读不到(瞬态) / WRONG_FOREGROUND=前台不对 /
+  # TARGET_ABSENT=目标控件确实不存在。上层不用猜死因就能选对策。
+  print -u2 -- "$1"
+  [[ -n "${2:-}" ]] && print -u2 -- "failure_class=$2"
+  exit 2
+}
+
+require_uint() {
+  [[ "$1" == <-> ]] || die "expected non-negative integer"
+}
+
+[[ "${1:-}" == "--profile" && "$#" -ge 3 ]] || die "usage: wechat-moments-adb --profile PROFILE COMMAND [ARGS...]"
+PROFILE="$2"
+shift 2
+
+[[ -r "$REGISTRY" ]] || die "phone profile registry is not readable: $REGISTRY"
+# 复用抖音线的双格式(v1/v2)解析器——同一张表，不重复造轮子。
+_registry_row="$(/usr/bin/awk -F'\t' -v profile="$PROFILE" '
+BEGIN{sc=1;hh=0;fd=0}
+/^#[ \t]*schema=/{if($0~/v2/)sc=2;next}
+/^#registry_version/{n=split($0,a,/[ \t]+/);if(n>=2)sc=a[2]+0;next}
+!hh&&($1=="profile"||$1=="#profile"){for(i=1;i<=NF;i++){nm=$i;sub(/^#/,"",nm);c[nm]=i}hh=1;if(sc<2)sc=2;next}
+/^#/{next}
+/^[ \t]*$/{next}
+$1==profile&&!fd{fd=1
+ if(hh){p=g("profile");s=g("serial");m=g("model");w=g("width");h=g("height");
+        if(w=="")w=g("screen_w");if(h=="")h=g("screen_h");
+        d=g("density");sd=g("sdk");lo=g("locale");av=g("app_version");en=g("enabled");if(en=="")en="true"}
+ else  {p=$1;s=$2;m=$3;w=($4==""?"":$4+1);h=($5==""?"":$5+1);d="";sd="";lo="";av="";en="true"}}
+END{if(!fd){print "NOTFOUND";exit}
+ U=sprintf("%c",31)
+ printf "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n",sc,U,cl(p),U,cl(s),U,cl(m),U,cl(w),U,cl(h),U,cl(d),U,cl(sd),U,cl(lo),U,cl(av),U,cl(en)}
+function g(n,  i,v){i=c[n];if(i==0||i>NF)return "";v=$i;gsub(/^[ \t]+|[ \t]+$/,"",v);return v}
+function cl(v){gsub(/[\t\r\n\037]/," ",v);return v}
+' "$REGISTRY")"
+[[ "$_registry_row" != "NOTFOUND" && -n "$_registry_row" ]] || die "unknown phone profile: $PROFILE"
+IFS=$'\037' read -r REGISTRY_SCHEMA registry_profile SERIAL MODEL SCREEN_W SCREEN_H \
+  DEVICE_DENSITY DEVICE_SDK DEVICE_LOCALE DEVICE_APP_VERSION PROFILE_ENABLED <<< "$_registry_row"
+[[ "$registry_profile" == "$PROFILE" && -n "$SERIAL" && -n "$MODEL" ]] || die "invalid phone profile registry row"
+[[ "$PROFILE_ENABLED" != "false" ]] || die "phone profile is disabled in registry: $PROFILE"
+require_uint "$SCREEN_W"
+require_uint "$SCREEN_H"
+MAX_X=$(( SCREEN_W - 1 ))
+MAX_Y=$(( SCREEN_H - 1 ))
+
+REMOTE_UI="/sdcard/wechat-moments-ui-${PROFILE}.xml"
+EVIDENCE_ROOT="/private/tmp/openclaw-phone/evidence-moments/${PROFILE}"
+LOCATE_CACHE_DIR="$HOME/.config/openclaw/locate-cache"
+# 设备锁：跟 douyin-phone-adb 共用同一套 LOCK_ROOT，锁键=物理设备 SERIAL（不分 app）。
+# 同一部手机如果同时跑抖音获客+朋友圈自动化，两边互认这把锁，谁先拿到谁独占前台，
+# 防止两个任务互抢同一部手机（判定点：设备被其他任务占用前台）。
+LOCK_ROOT="/private/tmp/openclaw-phone/locks"
+LOCK_DIR="$LOCK_ROOT/${SERIAL}.lock"
+LOCK_TTL_SECONDS=1800
+
+# ── 引擎层：设备/等待/证据（原样照搬 douyin-phone-adb，命名去 DOUYIN 化）──────
+
+check_target_fast() {
+  local state
+  state="$($ADB -s "$SERIAL" get-state 2>/dev/null || print -- offline)"
+  if [[ "$state" != "device" ]]; then
+    "$ADB" start-server >/dev/null 2>&1 || true
+    state="$($ADB -s "$SERIAL" get-state 2>/dev/null || print -- offline)"
+  fi
+  [[ "$state" == "device" ]] || die "target phone is offline after adb auto-refresh" NO_ROOT
+}
+
+check_target() {
+  local actual_model
+  check_target_fast
+  actual_model="$($ADB -s "$SERIAL" shell getprop ro.product.model | tr -d '\r')"
+  [[ "$actual_model" == "$MODEL" ]] || die "target model mismatch"
+}
+
+wait_seconds() {
+  local total i
+  total="$1"
+  require_uint "$total"
+  (( total <= 120 )) || die "long wait must be <= 120 s"
+  for (( i = 0; i < total; i++ )); do /bin/sleep 1; done
+}
+
+wait_ms() {
+  local milliseconds seconds
+  milliseconds="$1"
+  require_uint "$milliseconds"
+  (( milliseconds <= 5000 )) || die "wait must be <= 5000 ms"
+  seconds="$(/usr/bin/printf '%d.%03d' $(( milliseconds / 1000 )) $(( milliseconds % 1000 )))"
+  /bin/sleep "$seconds"
+}
+
+require_evidence_id() {
+  [[ "$1" == [A-Za-z0-9._-]## ]] || die "evidence id contains unsupported characters"
+  (( ${#1} <= 160 )) || die "evidence id is too long"
+}
+
+snapshot_evidence() {
+  # 0917 真机实证的严重坑：曾经写 screencap → /sdcard/xxx.png → pull 这条路径，
+  # 该文件被系统媒体扫描器收进相册、且反复覆盖导致 mtime 一直是"刚刚"，在朋友圈相册
+  # 选图这一步长期霸占"最新一张"位置，把选图逻辑带偏、真正选中了一张自己截的编辑页
+  # 截图（带真实客户信息）。改用 exec-out 直接流式落地到执行机本地，全程不落盘到
+  # 手机存储，从根上不会出现在相册里，也不需要事后清理。
+  local evidence_id local_path
+  evidence_id="$1"
+  require_evidence_id "$evidence_id"
+  local_path="$EVIDENCE_ROOT/${evidence_id}.png"
+  /bin/mkdir -p "$EVIDENCE_ROOT"
+  "$ADB" -s "$SERIAL" exec-out screencap -p > "$local_path" || die "snapshot_evidence exec-out failed"
+  [[ -s "$local_path" ]] || die "snapshot_evidence produced an empty file"
+  print -- "$local_path"
+}
+
+foreground_package() {
+  "$ADB" -s "$SERIAL" shell dumpsys window 2>/dev/null \
+    | /usr/bin/awk '/mCurrentFocus|mFocusedApp/ && $0 !~ /=null([[:space:]]|$)/ { print; exit }' \
+    | tr -d '\r'
+}
+
+# 0917 实测：微信在会话内累积高频操作后会持续返回空 hierarchy（force-stop 重启微信
+# 进程也不恢复，对照系统桌面 dump 正常——精确针对微信，非 ADB/uiautomator 本身故障）。
+# 只做一波尝试（不像抖音线那样三波~180s 硬等）：微信这个空树不是"慢"，是"拒绝"，
+# 硬等三波只会白烧时间，读不到立刻交给上层判定要不要转视觉。
+_ui_evidence_once() {
+  local evidence_id local_path
+  evidence_id="$1"
+  require_evidence_id "$evidence_id"
+  local_path="$EVIDENCE_ROOT/${evidence_id}.xml"
+  /bin/mkdir -p "$EVIDENCE_ROOT"
+  "$ADB" -s "$SERIAL" shell uiautomator dump --compressed "$REMOTE_UI" >/dev/null 2>&1 || true
+  "$ADB" -s "$SERIAL" pull "$REMOTE_UI" "$local_path" >/dev/null 2>&1 || return 1
+  [[ -s "$local_path" ]] || return 1
+  # 空树特征：唯一一个 bounds=[0,0][0,0] 的占位 node，没有任何真实控件。
+  if ! /usr/bin/grep -q 'bounds="\[0,0\]\[[1-9]' "$local_path" 2>/dev/null; then
+    return 1
+  fi
+  print -- "$local_path"
+}
+
+# 微信专属 dump 协议：重试 3 次（跟视觉判定的重试次数对齐，见 Brain 判定点决策），
+# 每次间隔 1.5 秒；3 次都空 → 返回非零，上层据此转视觉，不当错误处理。
+ui_evidence() {
+  local evidence_id i out
+  evidence_id="$1"
+  for i in 1 2 3; do
+    if out="$(_ui_evidence_once "${evidence_id}-d${i}")"; then
+      print -- "$out"
+      return 0
+    fi
+    print -u2 -- "warning: uiautomator dump empty (attempt $i/3) — possible anti-automation block, see Learning 0917"
+    (( i < 3 )) && wait_ms 1500
+  done
+  return 1
+}
+
+node_center() {
+  local node_line bounds x1 y1 x2 y2
+  node_line="$1"
+  bounds="$(print -- "$node_line" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
+  read x1 y1 x2 y2 <<< "$bounds"
+  require_uint "$x1"; require_uint "$y1"; require_uint "$x2"; require_uint "$y2"
+  (( x2 > x1 && y2 > y1 && x1 <= MAX_X && y1 <= MAX_Y && x2 <= MAX_X + 1 && y2 <= MAX_Y + 1 )) || die "semantic node bounds are outside target screen"
+  print -- "$(( (x1 + x2) / 2 )) $(( (y1 + y2) / 2 ))"
+}
+
+# 按 text/content-desc 精确匹配在 dump 里找控件中心。找不到返回非零（不是错误，
+# 调用方按此决定是否转视觉）。
+find_node_by_text() {
+  local xml="$1" text="$2" line
+  line="$(/usr/bin/grep -oE "<node[^>]*(text|content-desc)=\"${text}[^\"]*\"[^>]*bounds=\"\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]\"[^>]*>" "$xml" | /usr/bin/head -1 || true)"
+  [[ -n "$line" ]] || return 1
+  node_center "$line"
+}
+
+# ── 视觉定位（vision grounding）：照抄 douyin-phone-adb 原样，模型/端点/协议不变 ──
+
+_locate_element_once() {
+  local desc eid shot out
+  desc="$1"; eid="$2"
+  require_evidence_id "$eid"
+  /bin/mkdir -p "$EVIDENCE_ROOT"
+  shot="$EVIDENCE_ROOT/${eid}-locate.png"
+  "$ADB" -s "$SERIAL" exec-out screencap -p > "$shot" || die "locate screenshot failed"
+  [[ -s "$shot" ]] || die "locate screenshot is empty"
+  [[ -r "$LOCATE_KEY_FILE" ]] || die "locate api key file missing: $LOCATE_KEY_FILE"
+  out="$("$PYTHON_BIN" - "$shot" "$desc" "$SCREEN_W" "$SCREEN_H" "$LOCATE_ENDPOINT" "$LOCATE_MODEL" "$LOCATE_KEY_FILE" <<'PYLOC'
+import base64, json, sys, urllib.request
+shot, desc, w, h, endpoint, model, keyfile = sys.argv[1:8]
+w, h = int(w) + 1, int(h) + 1
+key = open(keyfile).read().strip()
+img = base64.b64encode(open(shot, "rb").read()).decode()
+body = {"model": model, "max_tokens": 120, "messages": [{"role": "user", "content": [
+  {"type": "image_url", "image_url": {"url": "data:image/png;base64," + img}},
+  {"type": "text", "text": "定位截图中的『" + desc + "』。只返回一个JSON数组（不要对象不要键名），坐标0-1000归一化：[ymin,xmin,ymax,xmax]"}]}]}
+req = urllib.request.Request(endpoint, data=json.dumps(body).encode(),
+  headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+r = json.load(urllib.request.urlopen(req, timeout=45))
+txt = r["choices"][0]["message"]["content"].strip().strip("`")
+if txt.startswith("json"): txt = txt[4:]
+parsed = json.loads(txt)
+def _nums(o, acc):
+    if isinstance(o, (int, float)): acc.append(float(o))
+    elif isinstance(o, list):
+        for v in o: _nums(v, acc)
+    elif isinstance(o, dict):
+        for v in o.values(): _nums(v, acc)
+    return acc
+nums = _nums(parsed, [])
+if len(nums) != 4:
+    raise SystemExit("locate parse: expected 4 numbers, got " + str(len(nums)))
+ymin, xmin, ymax, xmax = nums
+if ymin > ymax: ymin, ymax = ymax, ymin
+if xmin > xmax: xmin, xmax = xmax, xmin
+if not (0 <= xmin <= xmax <= 1000 and 0 <= ymin <= ymax <= 1000):
+    raise SystemExit("locate box out of range")
+print(int((xmin + xmax) / 2 / 1000 * w), int((ymin + ymax) / 2 / 1000 * h))
+PYLOC
+)" || return 1
+  print -- "$out"
+}
+
+# 视觉定位重试 3 次（对齐 Brain 判定点决策：dump×3→视觉×3→仍失败判 failed）。
+locate_element() {
+  local desc="$1" eid="$2" i out
+  require_evidence_id "$eid"
+  for i in 1 2 3; do
+    if out="$( _locate_element_once "$desc" "${eid}-l${i}" )"; then print -- "$out"; return 0; fi
+    print -u2 -- "warning: locate attempt $i/3 failed for: $desc"
+    wait_ms 800
+  done
+  return 1
+}
+
+locate_cached() {
+  local ckey="$1" desc="$2" eid="$3" cfile pos
+  cfile="$LOCATE_CACHE_DIR/${registry_profile}-moments-${ckey}.xy"
+  if [[ -r "$cfile" ]]; then
+    pos="$(cat "$cfile")"
+    [[ "$pos" == <->" "<-> ]] && { print -- "$pos"; return 0; }
+  fi
+  pos="$(locate_element "$desc" "$eid")" || return 1
+  /bin/mkdir -p "$LOCATE_CACHE_DIR"
+  print -- "$pos" > "$cfile"
+  print -- "$pos"
+}
+locate_cache_clear() { /bin/rm -f "$LOCATE_CACHE_DIR/${registry_profile}-moments-$1.xy" }
+
+# 坐标判定统一入口：dump 优先，返回空/找不到 → 自动转视觉。两条路都不行才让调用方
+# die（调用方决定是走 failed 状态还是别的，本函数不负责失败语义，只负责"找坐标"）。
+# 输出：一行 "x y" + 一行 "coord_source=tree|vision"。
+resolve_coord() {
+  local text_or_desc="$1" vision_desc="$2" ckey="$3" eid="$4" xml center
+  if xml="$(ui_evidence "${eid}-tree")" 2>/dev/null; then
+    if center="$(find_node_by_text "$xml" "$text_or_desc")"; then
+      print -- "$center"
+      print -- "coord_source=tree"
+      return 0
+    fi
+    print -u2 -- "warning: tree readable but node not found by text: $text_or_desc — falling back to vision"
+  else
+    print -u2 -- "warning: uiautomator tree unreadable after 3 attempts — falling back to vision"
+  fi
+  center="$(locate_cached "$ckey" "$vision_desc" "$eid")" || return 1
+  print -- "$center"
+  print -- "coord_source=vision"
+}
+
+# ── 前台闸：微信专属弹窗白名单（今天真机实录：首次用相册/朋友圈会弹引导提示）──
+
+FG_DISMISS_LABELS=("我知道了" "以后再说" "暂不" "知道了" "取消")
+foreground_gate() {
+  local eid="$1" round fg gate_xml lbl line c gx gy acted
+  require_evidence_id "$eid"
+  for round in 1 2 3; do
+    fg="$(foreground_package)"
+    if [[ "$fg" == *"$WECHAT_PACKAGE"* ]]; then
+      gate_xml="$(_ui_evidence_once "${eid}-fg${round}" 2>/dev/null)" || return 0
+      acted=0
+      for lbl in "${FG_DISMISS_LABELS[@]}"; do
+        line="$(/usr/bin/grep -oE "<node[^>]+text=\"${lbl}[^\"]*\"[^>]*clickable=\"true\"[^>]*>" "$gate_xml" | /usr/bin/head -1 || true)"
+        [[ -n "$line" ]] || continue
+        c="$(node_center "$line")" || continue
+        read gx gy <<< "$c"
+        print -u2 -- "warning: foreground gate dismissing interstitial via [${lbl}] (round $round)"
+        "$ADB" -s "$SERIAL" shell input tap "$gx" "$gy"
+        wait_ms 900
+        acted=1
+        break
+      done
+      (( acted )) || return 0
+    else
+      print -u2 -- "warning: foreground gate: wechat not foreground (round $round): ${fg}"
+      "$ADB" -s "$SERIAL" shell monkey -p "$WECHAT_PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+      wait_ms 1500
+    fi
+  done
+  fg="$(foreground_package)"
+  [[ "$fg" == *"$WECHAT_PACKAGE"* ]] || die "WRONG_FOREGROUND: wechat did not hold foreground after 3 gate rounds (${fg})" WRONG_FOREGROUND
+  return 0
+}
+
+# ── 视觉内容核验（跟"定位坐标"是两回事——这是"读文字判断对不对"，几乎不失败，
+#    不走 dump/坐标那条判定链，单独一个函数）─────────────────────────────────
+
+verify_content_match() {
+  local expected="$1" eid="$2" shot out
+  require_evidence_id "$eid"
+  /bin/mkdir -p "$EVIDENCE_ROOT"
+  shot="$EVIDENCE_ROOT/${eid}-verify.png"
+  "$ADB" -s "$SERIAL" exec-out screencap -p > "$shot" || die "verify screenshot failed"
+  [[ -r "$LOCATE_KEY_FILE" ]] || die "locate api key file missing: $LOCATE_KEY_FILE"
+  out="$("$PYTHON_BIN" - "$shot" "$expected" "$LOCATE_ENDPOINT" "$LOCATE_MODEL" "$LOCATE_KEY_FILE" <<'PYVER'
+import base64, json, sys, urllib.request
+shot, expected, endpoint, model, keyfile = sys.argv[1:6]
+key = open(keyfile).read().strip()
+img = base64.b64encode(open(shot, "rb").read()).decode()
+prompt = ("这张截图是微信朋友圈时间线。判断顶部第一条动态的文字内容是否与下面这段吻合"
+          "（大意相同即可，不要求逐字一致）：\n『" + expected + "』\n"
+          "只回答一个词：MATCH 或 NOMATCH")
+body = {"model": model, "max_tokens": 10, "messages": [{"role": "user", "content": [
+  {"type": "image_url", "image_url": {"url": "data:image/png;base64," + img}},
+  {"type": "text", "text": prompt}]}]}
+req = urllib.request.Request(endpoint, data=json.dumps(body).encode(),
+  headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+r = json.load(urllib.request.urlopen(req, timeout=45))
+txt = r["choices"][0]["message"]["content"].strip().upper()
+print("MATCH" if "MATCH" in txt and "NOMATCH" not in txt else "NOMATCH")
+PYVER
+)" || die "content verify model call failed"
+  print -- "$out"
+  print -- "evidence=$shot"
+}
+
+# 通用视觉是非判断：截图 + 一句话问题，模型只答 YES/NO。0917 真机实证专用：
+# 相册选图这一步曾经选错(误选了一张带真实客户信息的聊天截图)，加一道"这真的是预期
+# 素材吗"的视觉复核，晚一步发现比不发现强——这是发布前最后一道内容安全闸。
+vision_judge() {
+  local question="$1" eid="$2" shot out
+  require_evidence_id "$eid"
+  /bin/mkdir -p "$EVIDENCE_ROOT"
+  shot="$EVIDENCE_ROOT/${eid}-judge.png"
+  "$ADB" -s "$SERIAL" exec-out screencap -p > "$shot" || die "judge screenshot failed"
+  [[ -r "$LOCATE_KEY_FILE" ]] || die "locate api key file missing: $LOCATE_KEY_FILE"
+  out="$("$PYTHON_BIN" - "$shot" "$question" "$LOCATE_ENDPOINT" "$LOCATE_MODEL" "$LOCATE_KEY_FILE" <<'PYJUDGE'
+import base64, json, sys, urllib.request
+shot, question, endpoint, model, keyfile = sys.argv[1:6]
+key = open(keyfile).read().strip()
+img = base64.b64encode(open(shot, "rb").read()).decode()
+body = {"model": model, "max_tokens": 10, "messages": [{"role": "user", "content": [
+  {"type": "image_url", "image_url": {"url": "data:image/png;base64," + img}},
+  {"type": "text", "text": question + "\n只回答一个词：YES 或 NO"}]}]}
+req = urllib.request.Request(endpoint, data=json.dumps(body).encode(),
+  headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+r = json.load(urllib.request.urlopen(req, timeout=45))
+txt = r["choices"][0]["message"]["content"].strip().upper()
+print("YES" if "YES" in txt and "NO" not in txt else "NO")
+PYJUDGE
+)" || die "vision judge model call failed"
+  print -- "$out"
+}
+
+# ── 设备锁（跟 douyin-phone-adb 逐字段对齐，共享同一把锁）────────────────────
+
+normalize_run_id() {
+  local _v="${1%%:*}"
+  _v="${_v%%[-_]a<->[-_]*}"
+  print -- "$_v"
+}
+same_run_lock() {
+  local _a _b
+  _a="$(normalize_run_id "$1")"
+  _b="$(normalize_run_id "$2")"
+  [[ "$_a" == "$_b" ]] && return 0
+  [[ "$_a" == "$_b"* ]] && return 0
+  [[ "$_b" == "$_a"* ]] && return 0
+  return 1
+}
+lock_is_stale() {
+  local _ts _now
+  [[ -r "$LOCK_DIR/acquired_at" ]] || return 0
+  _ts="$(<"$LOCK_DIR/acquired_at")"
+  [[ "$_ts" == <-> ]] || return 0
+  _now="$(/bin/date +%s)"
+  (( _now - _ts > LOCK_TTL_SECONDS ))
+}
+require_run_id() {
+  local _rid_base _rid_rest
+  _rid_base="${1%%:*}"
+  [[ "$_rid_base" == [A-Za-z0-9][A-Za-z0-9._-]# ]] || die "run id contains unsupported characters"
+  if [[ "$1" == *:* ]]; then
+    _rid_rest="${1#*:}"
+    [[ "$_rid_rest" == [A-Za-z0-9][A-Za-z0-9._-]# ]] || die "run id contains unsupported characters"
+  fi
+  (( ${#1} <= 120 )) || die "run id is too long"
+}
+
+# ── 命令层 ───────────────────────────────────────────────────────────────
+
+case "${1:-}" in
+  status)
+    [[ "$#" == 1 ]] || die "usage: wechat-moments-adb --profile PROFILE status"
+    check_target_fast
+    print -- "profile=$registry_profile"
+    print -- "serial=$SERIAL"
+    print -- "model=$MODEL"
+    print -- "foreground=$(foreground_package)"
+    ;;
+
+  open-wechat)
+    # 起微信，过前台闸（首次用会弹引导提示），落在聊天列表。
+    [[ "$#" == 2 ]] || die "usage: wechat-moments-adb --profile PROFILE open-wechat EVIDENCE_ID"
+    check_target
+    "$ADB" -s "$SERIAL" shell monkey -p "$WECHAT_PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+    wait_ms 1500
+    foreground_gate "$2"
+    print -- "foreground=$(foreground_package)"
+    ;;
+
+  open-moments)
+    # 发现 → 朋友圈。两跳都走 resolve_coord（dump优先/视觉兜底）。
+    [[ "$#" == 2 ]] || die "usage: wechat-moments-adb --profile PROFILE open-moments EVIDENCE_ID"
+    check_target
+    foreground_gate "$2-pre"
+    if ! _rc="$(resolve_coord "发现" "微信底部导航栏的「发现」标签" discover-tab "$2-discover")"; then
+      die "could not locate 发现 tab (tree and vision both failed)" TARGET_ABSENT
+    fi
+    read om_x om_y <<< "$(print -- "$_rc" | /usr/bin/head -1)"
+    "$ADB" -s "$SERIAL" shell input tap "$om_x" "$om_y"
+    wait_ms 1200
+    foreground_gate "$2-mid"
+    if ! _rc2="$(resolve_coord "朋友圈" "发现页里的「朋友圈」入口" moments-entry "$2-entry")"; then
+      die "could not locate 朋友圈 entry (tree and vision both failed)" TARGET_ABSENT
+    fi
+    read me_x me_y <<< "$(print -- "$_rc2" | /usr/bin/head -1)"
+    "$ADB" -s "$SERIAL" shell input tap "$me_x" "$me_y"
+    wait_ms 1500
+    foreground_gate "$2-post"
+    print -- "foreground=$(foreground_package)"
+    print -- "evidence=$(snapshot_evidence "$2-moments-timeline")"
+    ;;
+
+  compose-photo-post)
+    # 参数：本地已 push 到 /sdcard/DCIM/Camera 的文件名（相机风格 IMG_yyyymmdd_hhmmss.jpg）
+    # + 文案 base64 + evidence_id。前置：已在朋友圈时间线（open-moments 之后）。
+    # 序列见 android-moments-publish skill：单击拍照分享(不可长按，那是隐藏纯文字入口)
+    # → 从手机相册选择 → 按文件名对应的时间戳在相册 content-desc 里精确匹配 → 完成
+    # → ADBKeyboard 填文案 → 停在编辑页不点发表（发表是独立命令，单次铁律）。
+    [[ "$#" == 4 ]] || die "usage: wechat-moments-adb --profile PROFILE compose-photo-post FILENAME CAPTION_B64 EVIDENCE_ID"
+    check_target
+    local_fname="$2"; local_caption_b64="$3"; local_eid="$4"
+    foreground_gate "${local_eid}-pre"
+    if ! _rc3="$(resolve_coord "拍照分享" "朋友圈时间线右上角的相机图标「拍照分享」" camera-btn "${local_eid}-camera")"; then
+      die "could not locate 拍照分享 button" TARGET_ABSENT
+    fi
+    read cp_x cp_y <<< "$(print -- "$_rc3" | /usr/bin/head -1)"
+    "$ADB" -s "$SERIAL" shell input tap "$cp_x" "$cp_y"
+    wait_ms 1200
+    foreground_gate "${local_eid}-menu"
+    if ! _rc4="$(resolve_coord "从手机相册选择" "弹出菜单里的「从手机相册选择」选项" album-menu-item "${local_eid}-albummenu")"; then
+      die "could not locate 从手机相册选择 menu item" TARGET_ABSENT
+    fi
+    read am_x am_y <<< "$(print -- "$_rc4" | /usr/bin/head -1)"
+    "$ADB" -s "$SERIAL" shell input tap "$am_x" "$am_y"
+    wait_ms 1500
+    # 首次可能弹"用朋友圈记录生活"引导，foreground_gate 白名单能点掉。
+    foreground_gate "${local_eid}-albumtip"
+    # 相册网格 dump 常返回空（0917 实测 AlbumPreviewUI 渲染层不走标准 a11y tree），
+    # 这里不走 resolve_coord 的常规路径：优先尝试用文件时间戳在 dump content-desc
+    # 里精确匹配（比数格子位置可靠），失败则退化成截图问视觉模型"哪一张是刚才这个文件"。
+    fname_ts="$(print -- "$local_fname" | /usr/bin/sed -E 's/^IMG_([0-9]{8})_([0-9]{2})([0-9]{2})([0-9]{2})\.jpg$/\1 \2:\3/')"
+    picked=0
+    if grid_xml="$(_ui_evidence_once "${local_eid}-grid")" 2>/dev/null; then
+      grid_line="$(/usr/bin/grep -oE "<node[^>]+content-desc=\"[^\"]*${fname_ts:0:8}[^\"]*\"[^>]*bounds=\"\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]\"[^>]*>" "$grid_xml" | /usr/bin/head -1 || true)"
+      if [[ -n "$grid_line" ]]; then
+        read gp_x gp_y <<< "$(node_center "$grid_line")"
+        "$ADB" -s "$SERIAL" shell input tap "$gp_x" "$gp_y"
+        picked=1
+      fi
+    fi
+    if (( ! picked )); then
+      # 0917 真机实证：让视觉模型凭"内容像不像刚拍的"去猜会选错(选中了一张聊天截图，
+      # 不是真的刚推送的素材)——相册按新到旧排列是确定性事实，不该问模型"哪张最新"这种
+      # 主观判断题，只问它"左上角第一个缩略图的位置"，把问题从"内容识别"降级成
+      # "纯几何定位"，模型在这类任务上准得多。
+      print -u2 -- "warning: album grid tree unreadable or filename not matched by timestamp — vision fallback (position-only, not content-based)"
+      pick_c="$(locate_element "相册网格里左上角第一个（最靠左上）缩略图的中心点，不用管缩略图内容是什么" "${local_eid}-pickvision")" || die "could not identify target photo in album (tree and vision both failed)" TARGET_ABSENT
+      read gp_x gp_y <<< "$pick_c"
+      "$ADB" -s "$SERIAL" shell input tap "$gp_x" "$gp_y"
+    fi
+    wait_ms 1200
+    # 内容安全闸（0917 真机实证补）：点开的这张图会先进全屏预览，这是发布前最后一次
+    # 能廉价核实"选中的到底是不是预期素材"的机会——之前在这一步选错过一张带真实客户
+    # 信息的聊天截图，此处若确认不是预期内容就立刻中止，不带着错图往下走。
+    judge_out="$(vision_judge "当前全屏预览的这张图片，是不是一张单纯的渐变色/抽象图案图片？如果它看起来像聊天记录截图、文档截图、或包含真实人物/文字对话内容，回答NO。" "${local_eid}-safetyjudge")" || die "content safety judge failed" TARGET_ABSENT
+    if [[ "$judge_out" != "YES" ]]; then
+      die "SAFETY_ABORT: previewed photo does not look like the expected gradient asset (judge=$judge_out) — likely picked the wrong photo, refusing to proceed" TARGET_ABSENT
+    fi
+    # 相册网格里点缩略图本体永远会先打开全屏预览(计数器 N/M 那种)而不是直接勾选，
+    # 必须再点一次预览页右上角的"选择"圆圈才是真选中——这一步不是"可能发生"，是
+    # 每次都会发生，之前写成 dump-only 条件分支、dump 空时被整段跳过导致图片没选中、
+    # "完成"按钮还是灰的（0917 真机实测踩到，补视觉兜底修复，不可再退化成 if 条件）。
+    if ! _rc8="$(resolve_coord "选择" "预览页右上角的「选择」圆圈按钮" preview-select "${local_eid}-select")"; then
+      die "could not locate 选择 button on preview page (tree and vision both failed)" TARGET_ABSENT
+    fi
+    read sc_x sc_y <<< "$(print -- "$_rc8" | /usr/bin/head -1)"
+    "$ADB" -s "$SERIAL" shell input tap "$sc_x" "$sc_y"
+    wait_ms 800
+    # 完成按钮：颜色特征扫描优先于 dump/视觉估算（0917 实测更准）——微信绿 RGB(88,190,106)。
+    done_coord="$("$PYTHON_BIN" - <<PYDONE
+from PIL import Image
+img = Image.open("$(snapshot_evidence "${local_eid}-beforedone")")
+w, h = img.size
+target = (88, 190, 106)
+hits = []
+for y in range(h - 1, int(h * 0.7), -4):
+    for x in range(w - 1, int(w * 0.5), -4):
+        px = img.getpixel((x, y))[:3]
+        if all(abs(a - b) <= 10 for a, b in zip(px, target)):
+            hits.append((x, y))
+    if len(hits) >= 20:
+        break
+if not hits:
+    raise SystemExit(1)
+xs = [p[0] for p in hits]; ys = [p[1] for p in hits]
+print(sum(xs) // len(xs), sum(ys) // len(ys))
+PYDONE
+)" || die "could not locate 完成 button via color scan" TARGET_ABSENT
+    read df_x df_y <<< "$done_coord"
+    "$ADB" -s "$SERIAL" shell input tap "$df_x" "$df_y"
+    wait_ms 1500
+    # 文案输入：ADBKeyboard，进编辑页后先点文字框聚焦。
+    foreground_gate "${local_eid}-composed"
+    if ! _rc5="$(resolve_coord "这一刻的想法" "顶部文字输入框(占位文字\"这一刻的想法\")" caption-box "${local_eid}-captionbox")"; then
+      die "could not locate caption input box" TARGET_ABSENT
+    fi
+    read cb_x cb_y <<< "$(print -- "$_rc5" | /usr/bin/head -1)"
+    "$ADB" -s "$SERIAL" shell input tap "$cb_x" "$cb_y"
+    wait_ms 500
+    "$ADB" -s "$SERIAL" shell ime enable com.android.adbkeyboard/.AdbIME >/dev/null 2>&1 || true
+    "$ADB" -s "$SERIAL" shell ime set com.android.adbkeyboard/.AdbIME >/dev/null 2>&1 || true
+    "$ADB" -s "$SERIAL" shell am broadcast -a ADB_INPUT_B64 --es msg "$local_caption_b64" >/dev/null 2>&1
+    wait_ms 800
+    print -- "composed=1"
+    print -- "evidence=$(snapshot_evidence "${local_eid}-final")"
+    ;;
+
+  publish)
+    # 单次铁律：本命令只允许对同一个 evidence_id 前缀调用一次，用锁文件硬挡重复调用。
+    # 点完不重试、不二次点击——判不出结果就是 failed，绝不因为"没看到确认"就再点一次。
+    [[ "$#" == 2 ]] || die "usage: wechat-moments-adb --profile PROFILE publish EVIDENCE_ID"
+    check_target
+    local_eid="$2"
+    require_evidence_id "$local_eid"
+    lockfile="/private/tmp/openclaw-phone/publish-once/${SERIAL}-${local_eid}.lock"
+    /bin/mkdir -p "${lockfile:h}"
+    if [[ -e "$lockfile" ]]; then
+      die "publish already attempted for this evidence_id — refusing to click 发表 twice (single-publish iron law)" TARGET_ABSENT
+    fi
+    if ! _rc6="$(resolve_coord "发表" "编辑页右上角的绿色「发表」按钮" publish-btn "${local_eid}-publishbtn")"; then
+      die "could not locate 发表 button" TARGET_ABSENT
+    fi
+    read pb_x pb_y <<< "$(print -- "$_rc6" | /usr/bin/head -1)"
+    /bin/mkdir -p "${lockfile:h}"; : > "$lockfile"
+    "$ADB" -s "$SERIAL" shell input tap "$pb_x" "$pb_y"
+    print -- "publish_tapped=1"
+    print -- "tapped_at=$(/bin/date -u +%FT%TZ)"
+    wait_seconds 15
+    ;;
+
+  verify-latest-post)
+    # 发布后核验：纯视觉读图，跟坐标判定无关，几乎不会"判不出来"。
+    # expected_b64 = 期望出现的文案片段（base64），确保跟发布内容比对而不是随便一条动态。
+    [[ "$#" == 3 ]] || die "usage: wechat-moments-adb --profile PROFILE verify-latest-post EXPECTED_B64 EVIDENCE_ID"
+    check_target
+    expected="$(print -- "$2" | /usr/bin/base64 -d)"
+    verify_content_match "$expected" "$3"
+    ;;
+
+  open-contact-moments)
+    # 通讯录/聊天列表 → 目标联系人 → 头像 → 「朋友圈」行 → 该联系人的朋友圈时间线。
+    # 只做导航，不做"哪条能点赞"的判断——那是内容安全判断，应该在上层用截图交给
+    # 模型做，不是这个脚本的职责。
+    [[ "$#" == 3 ]] || die "usage: wechat-moments-adb --profile PROFILE open-contact-moments CONTACT_NAME EVIDENCE_ID"
+    check_target
+    contact="$2"; local_eid="$3"
+    foreground_gate "${local_eid}-pre"
+    xml="$(ui_evidence "${local_eid}-chatlist")" || die "could not read chat list (tree unreadable after 3 attempts, no vision fallback for contact search — contact name text is required for safety, refusing to guess)" NO_ROOT
+    center="$(find_node_by_text "$xml" "$contact")" || die "contact not found in visible chat list: $contact" TARGET_ABSENT
+    read ct_x ct_y <<< "$center"
+    "$ADB" -s "$SERIAL" shell input tap "$ct_x" "$ct_y"
+    wait_ms 1200
+    foreground_gate "${local_eid}-chat"
+    xml2="$(ui_evidence "${local_eid}-chatopen")" || die "could not read opened chat window" NO_ROOT
+    avatar_line="$(/usr/bin/grep -oE "<node[^>]+content-desc=\"${contact}头像\"[^>]*bounds=\"\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]\"[^>]*>" "$xml2" | /usr/bin/head -1 || true)"
+    [[ -n "$avatar_line" ]] || die "could not find contact avatar in chat window" TARGET_ABSENT
+    read av_x av_y <<< "$(node_center "$avatar_line")"
+    "$ADB" -s "$SERIAL" shell input tap "$av_x" "$av_y"
+    wait_ms 1200
+    foreground_gate "${local_eid}-profile"
+    xml3="$(ui_evidence "${local_eid}-profile")" || die "could not read contact profile page" NO_ROOT
+    row_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="朋友圈个人相册[^"]*"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"[^>]*>' "$xml3" | /usr/bin/head -1 || true)"
+    [[ -n "$row_line" ]] || die "contact profile has no 朋友圈 row (may have hidden moments from us)" TARGET_ABSENT
+    read fr_x fr_y <<< "$(node_center "$row_line")"
+    "$ADB" -s "$SERIAL" shell input tap "$fr_x" "$fr_y"
+    wait_ms 1200
+    print -- "evidence=$(snapshot_evidence "${local_eid}-contact-moments")"
+    ;;
+
+  like-current-card)
+    # 前置：已经点开某条具体动态进入卡片视图（上层用截图判断了内容安全、点了那一条）。
+    # 本命令只负责：找到「赞」按钮 → 点 → 核验心形变红+计数变化。
+    [[ "$#" == 2 ]] || die "usage: wechat-moments-adb --profile PROFILE like-current-card EVIDENCE_ID"
+    check_target
+    local_eid="$2"
+    if ! _rc7="$(resolve_coord "赞" "动态卡片左下角的「赞」按钮" like-btn "${local_eid}-likebtn")"; then
+      die "could not locate 赞 button (tree and vision both failed)" TARGET_ABSENT
+    fi
+    read lk_x lk_y <<< "$(print -- "$_rc7" | /usr/bin/head -1)"
+    "$ADB" -s "$SERIAL" shell input tap "$lk_x" "$lk_y"
+    wait_ms 1200
+    print -- "like_tapped=1"
+    print -- "evidence=$(snapshot_evidence "${local_eid}-after-like")"
+    ;;
+
+  lock-acquire)
+    [[ "$#" == 2 ]] || die "usage: wechat-moments-adb --profile PROFILE lock-acquire RUN_ID"
+    require_run_id "$2"
+    lock_owner_id="$(normalize_run_id "$2")"
+    /bin/mkdir -p "$LOCK_ROOT"
+    _lk_ok=0
+    for _lk_try in 1 2 3; do
+      if /bin/mkdir "$LOCK_DIR" 2>/dev/null; then
+        /usr/bin/printf '%s\n' "$lock_owner_id" > "$LOCK_DIR/owner"
+        /bin/date +%s > "$LOCK_DIR/acquired_at"
+        print -- "lock=acquired owner=$lock_owner_id"
+        _lk_ok=1; break
+      elif [[ -r "$LOCK_DIR/owner" ]] && same_run_lock "$(<"$LOCK_DIR/owner")" "$lock_owner_id"; then
+        print -- "lock=held owner=$(<"$LOCK_DIR/owner") idempotent=true"
+        _lk_ok=1; break
+      elif lock_is_stale; then
+        owner="unknown"; [[ -r "$LOCK_DIR/owner" ]] && owner="$(<"$LOCK_DIR/owner")"
+        print -u2 -- "warning: reclaiming stale lock (prev owner=$owner); retrying atomic acquire"
+        /bin/rm -rf "$LOCK_DIR" 2>/dev/null
+        /bin/sleep 0.2
+        continue
+      else
+        break
+      fi
+    done
+    if (( ! _lk_ok )); then
+      owner="unknown"
+      [[ -r "$LOCK_DIR/owner" ]] && owner="$(<"$LOCK_DIR/owner")"
+      _age=""; [[ -r "$LOCK_DIR/acquired_at" ]] && _age="age=$(( $(/bin/date +%s) - $(<"$LOCK_DIR/acquired_at") ))s/ttl=${LOCK_TTL_SECONDS}s"
+      die "lock is held by another run: $owner $_age"
+    fi
+    ;;
+
+  lock-status)
+    [[ "$#" == 1 ]] || die "usage: wechat-moments-adb --profile PROFILE lock-status"
+    if [[ -r "$LOCK_DIR/owner" ]]; then
+      _age="?"; [[ -r "$LOCK_DIR/acquired_at" ]] && _age="$(( $(/bin/date +%s) - $(<"$LOCK_DIR/acquired_at") ))"
+      if lock_is_stale; then
+        print -- "lock=held owner=$(<"$LOCK_DIR/owner") age=${_age}s stale=true ttl=${LOCK_TTL_SECONDS}s"
+      else
+        print -- "lock=held owner=$(<"$LOCK_DIR/owner") age=${_age}s stale=false ttl=${LOCK_TTL_SECONDS}s"
+      fi
+    else
+      print -- "lock=free"
+    fi
+    ;;
+
+  lock-release)
+    [[ "$#" == 2 ]] || die "usage: wechat-moments-adb --profile PROFILE lock-release RUN_ID"
+    require_run_id "$2"
+    lock_owner_id="$(normalize_run_id "$2")"
+    [[ -r "$LOCK_DIR/owner" ]] || { print -- "lock=free"; exit 0; }
+    owner="$(<"$LOCK_DIR/owner")"
+    same_run_lock "$owner" "$lock_owner_id" || die "refusing to release lock owned by another run: $owner"
+    /bin/rm -rf "$LOCK_DIR"
+    print -- "lock=released owner=$lock_owner_id"
+    ;;
+
+  *)
+    die "allowed commands: status open-wechat open-moments compose-photo-post publish verify-latest-post open-contact-moments like-current-card lock-acquire lock-status lock-release"
+    ;;
+esac
