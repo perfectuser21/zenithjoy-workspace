@@ -1,0 +1,135 @@
+{
+  "fr_summary": {
+    "statements": [
+      "客户在素材上传入口提交≥10段自有素材后，系统在素材库页面对每条素材显示'已识别/处理失败/人工复核中'状态，客户可见",
+      "客户在套路选择页选定钩子/产品/证据/CTA模板后，系统显示槶位分配结果，客户可确认或调整",
+      "客户在候选方案页看到50-300条候选缩略图/低清预览，点击任一候选可放大查看并选定",
+      "客户选定候选并点击导出后，系统生成通过内容安全+水印自查的1080P高清成片，客户可下载"
+    ]
+  },
+  "lifelines_and_nfr": {
+    "items": [
+      {
+        "statement": "内容安全+水印自查未通过的成片禁止导出",
+        "class": "lifeline",
+        "verification": "psql查询contents表：对应content_id若safety_check_status或watermark_check_status非'passed'，则export_url/download_url字段必须为NULL，导出接口拒绝返回文件",
+        "rationale": "失败即产生对外发布违规/侵权风险，命门约束，fail-closed不可协商"
+      },
+      {
+        "statement": "S1上传阶段版权/水印判不出的素材，默认拦截转人工复核，不直接放行进入候选池（J2，前置闸，区别于S4末端Gate）",
+        "class": "lifeline",
+        "verification": "psql查询materials表：对应material_id若copyright_check_status为'uncertain'或'flagged'，则该素材的is_available_for_candidate字段必须为false，不进入S2/S3候选生成的素材池；同时review_queue表存在对应待复核行",
+        "rationale": "v2新增（核销Round1反馈P2）。S1前置闸与S4末端闸(J7)是tech镜头指出的两道独立Gate；J2误判后果同为法律/侵权级不可逆风险，若只把S4登记为lifeline，实现期存在'悄悄跳过S1前置闸'的风险窗口，两道闸都必须是lifeline级别"
+      },
+      {
+        "statement": "声音克隆功能未获客户逐次授权确认不可调用",
+        "class": "lifeline",
+        "verification": "API层校验voice_clone_consent字段：consent!=true时POST /voice-clone恒返回403并落审计日志；已授权请求需在voice_clone_consent_record表存在对应授权凭据行",
+        "rationale": "未经授权使用他人声音属法律风险，责任严重且不可逆，命门约束"
+      },
+      {
+        "statement": "第三方付费API累计调用花费达到预算上限后自动暂停，不静默继续扣费",
+        "class": "lifeline",
+        "verification": "budget_guard生效：累计花费触达total_cost_cap_usd后新任务状态置为paused_budget，日志证明后续无对应provider出站请求；解除需主理人在Brain任务里显式批准，批准记录写入decisions表",
+        "rationale": "失控调用会导致资金损失且难以追责，命门约束；v2补充解除责任人=主理人，防止无人负责的静默解除"
+      },
+      {
+        "statement": "候选生成量控制在50-300条区间，防组合爆炸也防候选过少",
+        "class": "best_effort",
+        "verification": "候选生成API返回的候选列表长度期望落在[50,300]区间；超出记录告警日志+计入观测指标（candidate_count_out_of_range_total），不阻断主流程、不判定为测试fail——口径与proposal-v2.md A4的软断言/告警式验证方式统一",
+        "rationale": "体验与成本优化项，超限不产生安全/资金后果，非命门，允许渐进优化。v2澄清：若实现期发现候选量失控本身会引发安全/资金后果，需先把本条升级为lifeline，再把proposal的A4改回硬断言，两处必须同步改"
+      },
+      {
+        "statement": "语义级去重防止同一素材内容在多个候选方案间过度重复出现",
+        "class": "best_effort",
+        "verification": "抽样候选集合，统计同一material_id在候选池中的出现频次分布，超阈值告警",
+        "rationale": "影响体验多样性，非阻断安全/资金，允许渐进优化"
+      }
+    ]
+  },
+  "yield_order": {
+    "order": ["安全/资金正确性", "数据一致性", "功能完整", "性能", "体验顺滑"],
+    "override_reason": null
+  },
+  "external_commitment_changes": {
+    "changes": [
+      "新增'批量混剪'客户可见能力：客户上传≥10段自有素材后可批量生成候选短视频方案并导出1080P高清成片（Line05视频剪辑新增Golden Path，非替换现有能力）"
+    ],
+    "none": false
+  },
+  "release_and_blast_radius": {
+    "stages": ["internal", "canary_seed_customers"],
+    "blast_radius": "仅影响开通'批量混剪'功能的租户级素材库、候选生成计算资源与第三方付费API预算；不影响其他Golden Path（Line05既有video-remake翻拍流水线为独立机制，验证过不复用不受影响）",
+    "canary_gate": {
+      "stage": "canary_seed_customers",
+      "scope": "首批≥3个种子客户，观察窗30天（对齐success_and_close.observation_window），v2新增（核销Round1反馈F3：v1的stages只写internal，与success_and_close/rollback_triggers反复提及的灰度期自相矛盾）",
+      "entry_criteria": [
+        "Gate 0结论为A或B（技术可行性验证通过，语义检索延迟/成本可接受）",
+        "internal阶段完成端到端自测：4步骨干全链路至少跑通1次，A1/A2/A5断言在内部环境全部通过",
+        "声音克隆(voice_clone_feature_gate)与内容安全(content_safety_feature_gate)两项功能各自独立满足下方feature_gates的admission条件后才对种子客户开放，未达成的功能对该批客户保持关闭，不影响其余步骤上线"
+      ],
+      "exit_criteria": [
+        "首批≥3个种子客户完成至少1次端到端导出且成片通过人工验收（对齐close_conditions）",
+        "灰度期内容安全Gate人工抽样复核0次漏判（对齐close_conditions）",
+        "30天观察窗到期且未触发shutdown_conditions任一项"
+      ],
+      "feature_gates": {
+        "voice_clone_feature_gate": {
+          "admission": [
+            "Gate1客户授权文书模板已上线，逐次勾选授权流程真实可用（非UI mock）",
+            "首版默认关闭，需主理人显式为该客户白名单开启才对该客户可见",
+            "内部环境已完成至少1次全链路声音克隆生成+授权记录psql验证（A3断言通过）"
+          ],
+          "exit_to_ga": [
+            "灰度期内0次'未授权误放行'事故",
+            "灰度期至少3个种子客户完成过声音克隆授权+生成，且授权记录审计可查",
+            "若灰度期发生任意1次授权缺失误放行 → 立即退出灰度（仅该功能，不影响整条GP），回internal阶段修复Gate1后重新走一轮canary准入"
+          ]
+        },
+        "content_safety_feature_gate": {
+          "admission": [
+            "J7内容安全Gate已接入真实第三方API（非规则占位），fail-closed模式在内部环境验证通过（模拟违规素材，A1断言通过：非passed恒不给下载链接）",
+            "人工复核队列已就位并有响应时长记录机制（具体SLA阈值留待灰度期真实数据校准，P2记账）"
+          ],
+          "exit_to_ga": [
+            "灰度期人工抽样复核0次漏判（对齐close_conditions）",
+            "若灰度期发生1次'侵权/违规内容被实际导出'的漏判事故 → 立即退出灰度，触发proposal-v2.md『事故SOP』章节动作，回internal阶段修复后重新走一轮canary准入"
+          ]
+        }
+      }
+    },
+    "rollback_triggers": [
+      "Gate 0技术可行性探索结论为C（核心语义检索/候选生成不可行）→整条GP暂停回退主理人重新拍板scope",
+      "灰度期人工抽样复核发现有实际违规/侵权内容被导出（内容安全Gate误判放行）→立即下线导出入口熔断，并按proposal-v2.md『事故SOP：内容安全Gate失守』章节执行下架（系统入口+第三方平台侧下架/客户书面要求自行下架）、报备（主理人+合规法务）、24小时内客户书面通知三项动作，不止是入口熔断",
+      "单租户第三方付费API调用超出atom_cost_cap_usd或total_cost_cap_usd→自动暂停等待人工确认（人工确认责任人=主理人，批准记录写入decisions表）",
+      "声音克隆功能被调用但对应授权记录缺失→立即熔断该功能入口"
+    ]
+  },
+  "success_and_close": {
+    "metrics": [
+      "灰度期客户从上传素材到导出成片的端到端成功率（数值阈值留待实现期真实数据校准）",
+      "候选生成平均耗时",
+      "内容安全Gate人工抽样复核误判率（漏判数/总导出数）"
+    ],
+    "observation_window": "灰度期首批种子客户30天",
+    "close_conditions": [
+      "Gate 0技术可行性验证通过（语义检索延迟/成本可接受，四个第三方API账号额度到位）",
+      "首批≥3个种子客户完成至少1次端到端导出且成片通过人工验收",
+      "灰度期内容安全Gate人工复核0次漏判"
+    ],
+    "shutdown_conditions": [
+      "Gate 0结论为不可行（方案C）且无可行降级路径",
+      "灰度期发生1次侵权/违规内容被实际导出的漏判事故",
+      "第三方API成本远超预算护栏且无法优化到可持续水平"
+    ]
+  },
+  "budget_guard": {
+    "total_cost_cap_usd": 200,
+    "atom_cost_cap_usd": 20,
+    "atom_runtime_sec": 3600,
+    "atom_parallelism": 2,
+    "gate0_exploration_reserved_usd": 60,
+    "gate0_budget_exhaustion_note": "v2新增（核销Round1反馈P2，tech+risk镜头命中）。此预留额度从total_cost_cap_usd中单独划出，专供Gate0四个第三方API（Seedance/Happy Horse/阿里云超分/CosyVoice）+embedding候选生成的试跑消耗。若Gate0在此预留额度耗尽而中断——且中断原因是'钱不够'而非'语义检索延迟/成本本身被证明不可接受'——判定为'预算不足需追加'，回主理人申请追加预留额度后重跑，不得直接下Gate0结论C（技术不可行），避免把预算问题误判成技术可行性问题",
+    "paused_budget_resume_owner": "主理人（本GP拍板人），解除paused_budget需主理人在Brain任务里显式批准继续，批准记录写入decisions表"
+  }
+}
