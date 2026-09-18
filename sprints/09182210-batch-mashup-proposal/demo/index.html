@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>批量混剪 Golden Path 提案 · 审批 Demo</title>
+<style>
+  :root{
+    --bg:#f5f6f8;
+    --card:#ffffff;
+    --ink:#1c2230;
+    --ink-soft:#5b6472;
+    --line:#e3e6eb;
+    --brand:#2456e0;
+    --brand-soft:#eaf0ff;
+    --good:#1a8a5a;
+    --good-soft:#e7f7ee;
+    --warn:#b9720a;
+    --warn-soft:#fff3e0;
+    --danger:#c23b3b;
+    --danger-soft:#fde9e9;
+    --gray-soft:#eef0f3;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    padding:0 16px;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Helvetica,Arial,"Microsoft YaHei",sans-serif;
+    font-size:15px;
+    line-height:1.55;
+  }
+  .wrap{max-width:640px;margin:0 auto;}
+
+  /* top nav */
+  nav.tabs{
+    position:sticky;top:0;z-index:10;
+    display:flex;gap:6px;
+    background:var(--bg);
+    padding:10px 0 8px;
+    border-bottom:1px solid var(--line);
+    margin-bottom:0;
+    overflow-x:auto;
+  }
+  nav.tabs a{
+    flex:1 0 auto;
+    text-align:center;
+    font-size:12.5px;
+    font-weight:600;
+    color:var(--ink-soft);
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:8px 6px;
+    text-decoration:none;
+    white-space:nowrap;
+  }
+  nav.tabs a b{color:var(--brand);font-weight:800;margin-right:2px;}
+
+  header.top{padding:18px 0 6px;}
+  header.top h1{font-size:19px;margin:0 0 4px;}
+  header.top p.meta{margin:0;color:var(--ink-soft);font-size:12.5px;}
+
+  section{
+    padding:26px 0 8px;
+    border-top:1px solid var(--line);
+    scroll-margin-top:64px;
+  }
+  section:first-of-type{border-top:none;}
+  section .sec-tag{
+    display:inline-block;
+    font-size:11.5px;
+    font-weight:700;
+    color:var(--brand);
+    background:var(--brand-soft);
+    border-radius:6px;
+    padding:2px 8px;
+    margin-bottom:8px;
+  }
+  section h2{font-size:17px;margin:0 0 10px;}
+  section h3{font-size:14px;margin:18px 0 8px;color:var(--ink);}
+
+  /* screen 1: pitch + flow */
+  .pitch-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:16px;
+    font-size:15.5px;
+    font-weight:600;
+    line-height:1.6;
+    margin-bottom:16px;
+  }
+  .pitch-card .who{color:var(--ink-soft);font-weight:500;font-size:12.5px;display:block;margin-bottom:6px;}
+
+  .flow{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  .flow-step{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-left:5px solid var(--brand);
+    border-radius:12px;
+    padding:12px 14px;
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+  }
+  .flow-step .idx{
+    flex:0 0 auto;
+    width:26px;height:26px;
+    border-radius:50%;
+    background:var(--brand);
+    color:#fff;
+    font-size:13px;
+    font-weight:800;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .flow-step .body{flex:1;min-width:0;}
+  .flow-step .body .t{font-weight:700;font-size:14.5px;margin-bottom:2px;}
+  .flow-step .body .d{font-size:12.5px;color:var(--ink-soft);}
+  .flow-arrow{
+    align-self:center;
+    color:var(--ink-soft);
+    font-size:13px;
+    padding:2px 0 2px 36px;
+  }
+  .badge{
+    display:inline-block;
+    font-size:11px;
+    font-weight:700;
+    border-radius:5px;
+    padding:1px 6px;
+    margin-left:6px;
+  }
+  .b-half{background:var(--warn-soft);color:var(--warn);}
+  .b-missing{background:var(--danger-soft);color:var(--danger);}
+  .b-done{background:var(--good-soft);color:var(--good);}
+
+  /* screen 2: phone mockups */
+  .scene-note{
+    font-size:12.5px;
+    color:var(--ink-soft);
+    background:var(--gray-soft);
+    border-radius:10px;
+    padding:10px 12px;
+    margin-bottom:16px;
+  }
+  .phone{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:14px;
+    margin-bottom:14px;
+    position:relative;
+  }
+  .phone .ph-head{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-bottom:10px;
+  }
+  .phone .ph-head .ph-title{font-weight:700;font-size:13.5px;}
+  .phone .ph-head .ph-step{
+    font-size:10.5px;font-weight:700;color:#fff;
+    background:var(--brand);
+    border-radius:5px;padding:2px 7px;
+  }
+  .mock-row{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:8px 10px;
+    background:var(--gray-soft);
+    border-radius:8px;
+    margin-bottom:6px;
+    font-size:12.5px;
+  }
+  .mock-row .name{color:var(--ink);}
+  .status{
+    font-size:11px;font-weight:700;
+    border-radius:5px;padding:2px 7px;
+  }
+  .s-ok{background:var(--good-soft);color:var(--good);}
+  .s-warn{background:var(--warn-soft);color:var(--warn);}
+  .s-bad{background:var(--danger-soft);color:var(--danger);}
+
+  .slot-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+  }
+  .slot{
+    background:var(--gray-soft);
+    border-radius:8px;
+    padding:9px 10px;
+    font-size:12px;
+  }
+  .slot .k{font-weight:700;display:block;margin-bottom:3px;}
+
+  .cand-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:6px;
+  }
+  .cand{
+    aspect-ratio:9/13;
+    background:linear-gradient(135deg,#dfe6f5,#c9d4ee);
+    border-radius:7px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:10px;color:var(--ink-soft);
+    border:1px solid var(--line);
+  }
+  .cand.picked{
+    border:2px solid var(--brand);
+    background:linear-gradient(135deg,#cfe0ff,#a9c6ff);
+    color:var(--brand);
+    font-weight:800;
+  }
+  .cand.more{background:none;border:1px dashed #b8c0cc;color:var(--ink-soft);}
+
+  .gate-card{
+    border-radius:12px;
+    padding:12px 14px;
+    margin-bottom:14px;
+    border:1px solid #f0c6c6;
+    background:var(--danger-soft);
+  }
+  .gate-card .g-head{
+    display:flex;align-items:center;gap:6px;
+    font-weight:800;color:var(--danger);
+    font-size:13.5px;margin-bottom:6px;
+  }
+  .gate-card .g-body{font-size:12.5px;color:#7a2c2c;}
+  .gate-card code{
+    background:rgba(0,0,0,0.06);
+    border-radius:4px;padding:1px 4px;font-size:11.5px;
+  }
+
+  .export-card{
+    border-radius:12px;
+    padding:12px 14px;
+    border:1px solid #bfe6cf;
+    background:var(--good-soft);
+  }
+  .export-card .g-head{
+    display:flex;align-items:center;gap:6px;
+    font-weight:800;color:var(--good);
+    font-size:13.5px;margin-bottom:6px;
+  }
+  .export-card .g-body{font-size:12.5px;color:#175f42;}
+
+  /* screen 3: judgment table -> cards */
+  .jcard{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:12px 14px;
+    margin-bottom:10px;
+  }
+  .jcard.hot{border-color:#f0d2a0;background:#fffaf0;}
+  .jcard .j-head{
+    display:flex;align-items:center;gap:6px;
+    margin-bottom:6px;
+  }
+  .jcard .j-id{
+    font-size:11.5px;font-weight:800;color:#fff;
+    background:var(--ink-soft);
+    border-radius:5px;padding:1px 7px;
+  }
+  .jcard.hot .j-id{background:var(--warn);}
+  .jcard .j-name{font-weight:700;font-size:13.5px;}
+  .jcard .j-warn{color:var(--warn);font-size:13px;}
+  .jrow{font-size:12.5px;margin-top:4px;}
+  .jrow .lbl{color:var(--ink-soft);font-weight:600;margin-right:4px;}
+  .jrow.consequence{color:#8a5a10;}
+  .jcard.hot .jrow.consequence{font-weight:600;}
+
+  .filter-hint{
+    font-size:12px;color:var(--ink-soft);
+    margin:2px 0 14px;
+  }
+
+  /* screen 4: summary */
+  .verdict-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:14px 16px;
+    margin-bottom:14px;
+  }
+  .verdict-row{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:8px 0;
+    border-bottom:1px solid var(--line);
+    font-size:13px;
+  }
+  .verdict-row:last-child{border-bottom:none;}
+  .verdict-row .vk{color:var(--ink-soft);}
+  .verdict-row .vv{font-weight:700;}
+  .vv.pass{color:var(--good);}
+  .vv.zero{color:var(--good);}
+
+  .open-list{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:6px 16px 4px;
+    margin-bottom:14px;
+  }
+  .open-item{
+    padding:10px 0;
+    border-bottom:1px solid var(--line);
+    font-size:12.5px;
+  }
+  .open-item:last-child{border-bottom:none;}
+  .open-item .oi-t{font-weight:700;display:block;margin-bottom:2px;color:var(--ink);}
+  .open-item .oi-d{color:var(--ink-soft);}
+
+  .next-card{
+    background:var(--brand-soft);
+    border:1px solid #c9d8fb;
+    border-radius:14px;
+    padding:14px 16px;
+    margin-bottom:14px;
+  }
+  .next-card .nk{font-weight:800;color:var(--brand);font-size:14px;margin-bottom:6px;display:block;}
+  .next-card .nd{font-size:12.5px;color:#33477a;}
+
+  footer{
+    padding:20px 0 40px;
+    font-size:11.5px;
+    color:var(--ink-soft);
+    text-align:center;
+    border-top:1px solid var(--line);
+    margin-top:10px;
+  }
+
+  @media (max-width:380px){
+    .cand-grid{grid-template-columns:repeat(3,1fr);}
+    nav.tabs a{font-size:11.5px;padding:7px 4px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1>批量混剪 Golden Path 提案 · 审批 Demo</h1>
+    <p class="meta">Line05 视频剪辑 · gp-contract-v2 · 2026-09-18 · 供主理人手机审阅签字</p>
+  </header>
+
+  <nav class="tabs">
+    <a href="#s1"><b>1</b>30秒看懂</a>
+    <a href="#s2"><b>2</b>体验模拟</a>
+    <a href="#s3"><b>3</b>判定点</a>
+    <a href="#s4"><b>4</b>汇总</a>
+  </nav>
+
+  <!-- ============ 屏1：30秒看懂 ============ -->
+  <section id="s1">
+    <span class="sec-tag">屏 1 / 4 · 30 秒看懂</span>
+    <h2>一句话是什么</h2>
+    <div class="pitch-card">
+      <span class="who">客户视角</span>
+      客户已有一批（≥10 段）自有素材时，系统自动批量组合出上百份候选短视频方案，客户挑中后导出通过内容安全自查的 1080P 高清成片。
+    </div>
+
+    <h3>四步骨干</h3>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="idx">1</div>
+        <div class="body">
+          <div class="t">素材变成系统认得出内容的可用库<span class="badge b-half">半成</span></div>
+          <div class="d">上传/存储/数据模型已有；转码/切镜头/打标签/embedding/语义去重全部待建</div>
+        </div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step">
+        <div class="idx">2</div>
+        <div class="body">
+          <div class="t">定下这批视频按什么套路剪<span class="badge b-missing">缺失</span></div>
+          <div class="d">钩子/产品/证据/CTA 槶位模板库全新设计；补拍能力依赖 Gate 0 结论</div>
+        </div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step">
+        <div class="idx">3</div>
+        <div class="body">
+          <div class="t">刷到一屏候选方案任选<span class="badge b-missing">缺失</span></div>
+          <div class="d">核心壁垒：语义检索匹配引擎 + 候选量控制 [50,300] + 候选级去重</div>
+        </div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step">
+        <div class="idx">4</div>
+        <div class="body">
+          <div class="t">选中方案变成能直接发的高清成片<span class="badge b-half">半成</span></div>
+          <div class="d">FFmpeg 有先例但停在抽帧级；内容安全 Gate / 声音克隆 / 剪映导出待建</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 屏2：关键体验模拟 ============ -->
+  <section id="s2">
+    <span class="sec-tag">屏 2 / 4 · 关键体验模拟</span>
+    <h2>主线：上传素材 → 选模板 → 刷候选 → 选中导出</h2>
+    <div class="scene-note">以下为界面 mockup 卡片，模拟客户实际会看到的状态与文案，非真实可点击交互；用于确认"这就是我们要做的体验"。</div>
+
+    <div class="phone">
+      <div class="ph-head"><span class="ph-title">素材库 · Step 1</span><span class="ph-step">S1</span></div>
+      <div class="mock-row"><span class="name">开箱实拍_04.mp4</span><span class="status s-ok">已识别</span></div>
+      <div class="mock-row"><span class="name">客户证言_02.mp4</span><span class="status s-ok">已识别</span></div>
+      <div class="mock-row"><span class="name">产品特写_07.mp4</span><span class="status s-warn">人工复核中</span></div>
+      <div class="mock-row"><span class="name">素材_11.mp4</span><span class="status s-bad">处理失败·可重试</span></div>
+    </div>
+
+    <div class="phone">
+      <div class="ph-head"><span class="ph-title">套路模板 · Step 2</span><span class="ph-step">S2</span></div>
+      <div class="slot-grid">
+        <div class="slot"><span class="k">钩子槶位</span>开箱实拍_04.mp4</div>
+        <div class="slot"><span class="k">产品槶位</span>产品特写_07.mp4</div>
+        <div class="slot"><span class="k">证据槶位</span>客户证言_02.mp4</div>
+        <div class="slot"><span class="k">CTA 槶位</span>补拍生成中…</div>
+      </div>
+    </div>
+
+    <div class="phone">
+      <div class="ph-head"><span class="ph-title">候选方案 · Step 3</span><span class="ph-step">S3</span></div>
+      <div class="cand-grid">
+        <div class="cand">候选</div><div class="cand">候选</div><div class="cand picked">已选</div><div class="cand">候选</div>
+        <div class="cand">候选</div><div class="cand">候选</div><div class="cand">候选</div><div class="cand more">+186</div>
+      </div>
+    </div>
+
+    <div class="gate-card">
+      <div class="g-head">内容安全 Gate 拦截（fail-closed）</div>
+      <div class="g-body">
+        某候选成片 <code>safety_check_status ≠ passed</code>：导出接口恒拒绝返回文件，<code>export_url</code> 保持 NULL。<br>
+        客户侧文案：「该方案内容安全自查未通过，已转人工复核，暂不可下载」。
+      </div>
+    </div>
+
+    <div class="export-card">
+      <div class="g-head">导出成功 · Step 4</div>
+      <div class="g-body">
+        已选候选通过安全 + 水印自查 → 生成 1080P 高清成片，客户可下载。<br>
+        <code>ffprobe</code> 验证：含视频流 + 分辨率 ≥1920×1080 + 时长误差 ≤1 秒。
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 屏3：判定点向导 ============ -->
+  <section id="s3">
+    <span class="sec-tag">屏 3 / 4 · 判定点向导</span>
+    <h2>J1–J10 判定点表</h2>
+    <div class="filter-hint">⚠️ = 法律/不可逆级误判后果，优先审阅</div>
+
+    <div class="jcard hot">
+      <div class="j-head"><span class="j-id">J2</span><span class="j-name">版权/水印判不出默认拦人工复核</span><span class="j-warn">⚠️</span></div>
+      <div class="jrow"><span class="lbl">候选方法</span>AI自动放行/拦截 · AI主判+低置信度转人工(REC) · 上传时全量人工</div>
+      <div class="jrow"><span class="lbl">所选</span>AI 主判 + 低置信度默认转人工复核（前置闸，区别于 S4 末端 Gate）</div>
+      <div class="jrow consequence"><span class="lbl">误判后果</span>漏判→侵权素材混入成片对外发布，法律/平台处罚风险；错杀→人工复核队列积压</div>
+    </div>
+
+    <div class="jcard hot">
+      <div class="j-head"><span class="j-id">J7</span><span class="j-name">下载前内容安全+水印自查 Gate</span><span class="j-warn">⚠️</span></div>
+      <div class="jrow"><span class="lbl">候选方法</span>全靠平台事后审核 · 第三方内容安全API主动预检(REC) · 纯规则关键词过滤</div>
+      <div class="jrow"><span class="lbl">所选</span>接入第三方内容安全 API 主动预检，不确定默认拦截转人工（fail-closed）</div>
+      <div class="jrow consequence"><span class="lbl">误判后果</span>漏判→违规内容对外发布，封号/法律责任（触发事故 SOP）；错杀→复核队列拖慢交付</div>
+    </div>
+
+    <div class="jcard hot">
+      <div class="j-head"><span class="j-id">J8</span><span class="j-name">声音克隆客户明确授权确认</span><span class="j-warn">⚠️</span></div>
+      <div class="jrow"><span class="lbl">候选方法</span>默认允许事后打免责水印 · 逐次勾选授权后开启(REC) · 声纹相似度自动检测</div>
+      <div class="jrow"><span class="lbl">所选</span>客户逐次勾选授权后才开启该次生成（Gate 1，首版默认关闭）</div>
+      <div class="jrow consequence"><span class="lbl">误判后果</span>误判"已授权"→对外发布使用他人声音，法律追责且不可逆</div>
+    </div>
+
+    <div class="jcard">
+      <div class="j-head"><span class="j-id">J1</span><span class="j-name">语义级去重（S1，材料级）</span></div>
+      <div class="jrow"><span class="lbl">所选</span>embedding 向量相似度（文件哈希对转码失效，感知哈希识别力不足）</div>
+      <div class="jrow consequence"><span class="lbl">误判后果</span>漏判→同素材重复出现在多候选；错杀→有效素材永远进不了候选库</div>
+    </div>
+
+    <div class="jcard">
+      <div class="j-head"><span class="j-id">J3</span><span class="j-name">追加素材索引更新方式（S1）</span></div>
+      <div class="jrow"><span class="lbl">所选</span>增量索引（全量重建成本不可持续，定时批处理延迟高）</div>
+      <div class="jrow consequence"><span class="lbl">误判后果</span>增量出错→新素材"隐身"，客户以为已加入实际永不出现，无报错</div>
+    </div>
+
+    <div class="jcard">
+      <div class="j-head"><span class="j-id">J4</span><span class="j-name">槶位缺素材处置（S2）</span></div>
+      <div class="jrow"><span class="lbl">所选</span>优先 AI 生成补拍，补拍失败/成本超限则跳过该候选（不顶替，避免叙事错乱）</div>
+      <div class="jrow consequence"><span class="lbl">误判后果</span>错误顶替→候选叙事混乱；补拍质量判不好→AI 痕迹/穿帮混入</div>
+    </div>
+
+    <div class="jcard">
+      <div class="j-head"><span class="j-id">J5</span><span class="j-name">候选量控制阈值（S3）</span></div>
+      <div class="jrow"><span class="lbl">所选</span>语义匹配分排序 + 动态截断到 [50,300]（暴力枚举会组合爆炸，固定硬截断不考虑规模差异）</div>
+      <div class="jrow consequence"><span class="lbl">误判后果</span>截断有偏差→客户总刷不到某类排列，隐藏的候选多样性缺陷</div>
+    </div>
+
+    <div class="jcard">
+      <div class="j-head"><span class="j-id">J6</span><span class="j-name">候选初筛的内容安全维度（S3）</span></div>
+      <div class="jrow"><span class="lbl">所选</span>候选生成阶段轻量初筛 + S4 末端仍保留完整终审（双闸）</div>
+      <div class="jrow consequence"><span class="lbl">误判后果</span>初筛漏判→客户选中后才在 S4 拦下，体验受损；初筛错杀→候选多样性减少</div>
+    </div>
+
+    <div class="jcard">
+      <div class="j-head"><span class="j-id">J9</span><span class="j-name">剪映路径失效降级（S4）</span></div>
+      <div class="jrow"><span class="lbl">所选</span>自动降级 FFmpeg 直出 + 显式提示（剪映精修非刚需，交付优先于精修）</div>
+      <div class="jrow consequence"><span class="lbl">误判后果</span>不显式提示→客户误判"功能不稳定"而非"走的是标准渠道"</div>
+    </div>
+
+    <div class="jcard">
+      <div class="j-head"><span class="j-id">J10</span><span class="j-name">候选级去重（S3，区别于 J1 材料级）</span></div>
+      <div class="jrow"><span class="lbl">所选</span>候选组合签名（素材ID集合+排列顺序）相似度/Jaccard 阈值比较</div>
+      <div class="jrow consequence"><span class="lbl">误判后果</span>漏判→大量近似候选，多样性缺陷被隐藏；错杀→挤占 [50,300] 候选名额</div>
+    </div>
+  </section>
+
+  <!-- ============ 屏4：汇总 ============ -->
+  <section id="s4">
+    <span class="sec-tag">屏 4 / 4 · 汇总</span>
+    <h2>对抗历史 · 待拍板 · 下一步</h2>
+
+    <h3>对抗历史一句话总结</h3>
+    <div class="verdict-card">
+      <div class="verdict-row"><span class="vk">Round1 三镜头（tech/product/risk）</span><span class="vv">REVISION</span></div>
+      <div class="verdict-row"><span class="vk">P0 数量</span><span class="vv zero">0</span></div>
+      <div class="verdict-row"><span class="vk">P1（F1-F6）</span><span class="vv pass">v2 全部核销，无 REFUTE</span></div>
+      <div class="verdict-row"><span class="vk">Round2 复审（solo）</span><span class="vv pass">APPROVED</span></div>
+      <div class="verdict-row"><span class="vk">Round2 遗留</span><span class="vv">仅 2 条 P2（表述精度，不影响结论）</span></div>
+    </div>
+
+    <h3>待拍板 / 留待实现期问题清单</h3>
+    <div class="open-list">
+      <div class="open-item">
+        <span class="oi-t">转码编码参数</span>
+        <span class="oi-d">分辨率梯度/码率具体取值，本版不拍死，按客户素材实际分布校准</span>
+      </div>
+      <div class="open-item">
+        <span class="oi-t">候选量阈值精确取值</span>
+        <span class="oi-d">[50,300] 区间边界、A4 软断言"连续 N 次超区间才升级告警"的 N 值，按实现期真实数据回填</span>
+      </div>
+      <div class="open-item">
+        <span class="oi-t">断言字段占位命名</span>
+        <span class="oi-d">A1/A2 涉及的 safety_check_status / export_url 等为提案期占位命名，实现期以实际迁移 DDL 为准</span>
+      </div>
+      <div class="open-item">
+        <span class="oi-t">内容安全第三方 API 选型</span>
+        <span class="oi-d">复用现有 ToAPIs/Gemini 代理 vs 新增专用内容安全供应商，留给 Gate 0/Gate 2 探索阶段定案</span>
+      </div>
+      <div class="open-item">
+        <span class="oi-t">人工复核队列 SLA</span>
+        <span class="oi-d">客户等待可接受时长阈值本版不拍死，按灰度期真实数据校准</span>
+      </div>
+    </div>
+
+    <h3>下一步</h3>
+    <div class="next-card">
+      <span class="nk">主理人签字后 → 走 /dev harness_initiative 真实开工</span>
+      <span class="nd">本页为静态审阅稿，不承担在线签字功能；拍板确认请在对话/Brain 任务里显式批准，批准记录写入 decisions 表（六去向宪法②）。</span>
+    </div>
+  </section>
+
+  <footer>
+    sprints/09182210-batch-mashup-proposal · proposal-v2.md / gp-contract-v2.json · 生成于 2026-09-18
+  </footer>
+
+</div>
+</body>
+</html>
