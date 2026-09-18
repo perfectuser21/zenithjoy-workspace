@@ -1,0 +1,88 @@
+{
+  "fr_summary": {
+    "statements": [
+      "客户在素材上传入口提交≥10段自有素材后，系统在素材库页面对每条素材显示'已识别/处理失败/人工复核中'状态，客户可见",
+      "客户在套路选择页选定钩子/产品/证据/CTA模板后，系统显示槶位分配结果，客户可确认或调整",
+      "客户在候选方案页看到50-300条候选缩略图/低清预览，点击任一候选可放大查看并选定",
+      "客户选定候选并点击导出后，系统生成通过内容安全+水印自查的1080P高清成片，客户可下载"
+    ]
+  },
+  "lifelines_and_nfr": {
+    "items": [
+      {
+        "statement": "内容安全+水印自查未通过的成片禁止导出",
+        "class": "lifeline",
+        "verification": "psql查询contents表：对应content_id若safety_check_status或watermark_check_status非'passed'，则export_url/download_url字段必须为NULL，导出接口拒绝返回文件",
+        "rationale": "失败即产生对外发布违规/侵权风险，命门约束，fail-closed不可协商"
+      },
+      {
+        "statement": "声音克隆功能未获客户逐次授权确认不可调用",
+        "class": "lifeline",
+        "verification": "API层校验voice_clone_consent字段：consent!=true时POST /voice-clone恒返回403并落审计日志；已授权请求需在voice_clone_consent_record表存在对应授权凭据行",
+        "rationale": "未经授权使用他人声音属法律风险，责任严重且不可逆，命门约束"
+      },
+      {
+        "statement": "第三方付费API累计调用花费达到预算上限后自动暂停，不静默继续扣费",
+        "class": "lifeline",
+        "verification": "budget_guard生效：累计花费触达total_cost_cap_usd后新任务状态置为paused_budget，日志证明后续无对应provider出站请求",
+        "rationale": "失控调用会导致资金损失且难以追责，命门约束"
+      },
+      {
+        "statement": "候选生成量控制在50-300条区间，防组合爆炸也防候选过少",
+        "class": "best_effort",
+        "verification": "候选生成API返回的候选列表长度落在[50,300]区间，超出记录告警但不阻断主流程",
+        "rationale": "体验与成本优化项，超限不产生安全/资金后果，非命门"
+      },
+      {
+        "statement": "语义级去重防止同一素材内容在多个候选方案间过度重复出现",
+        "class": "best_effort",
+        "verification": "抽样候选集合，统计同一material_id在候选池中的出现频次分布，超阈值告警",
+        "rationale": "影响体验多样性，非阻断安全/资金，允许渐进优化"
+      }
+    ]
+  },
+  "yield_order": {
+    "order": ["安全/资金正确性", "数据一致性", "功能完整", "性能", "体验顺滑"],
+    "override_reason": null
+  },
+  "external_commitment_changes": {
+    "changes": [
+      "新增'批量混剪'客户可见能力：客户上传≥10段自有素材后可批量生成候选短视频方案并导出1080P高清成片（Line05视频剪辑新增Golden Path，非替换现有能力）"
+    ],
+    "none": false
+  },
+  "release_and_blast_radius": {
+    "stages": ["internal"],
+    "blast_radius": "仅影响开通'批量混剪'功能的租户级素材库、候选生成计算资源与第三方付费API预算；不影响其他Golden Path（Line05既有video-remake翻拍流水线为独立机制，验证过不复用不受影响）",
+    "rollback_triggers": [
+      "Gate 0技术可行性探索结论为C（核心语义检索/候选生成不可行）→整条GP暂停回退主理人重新拍板scope",
+      "灰度期人工抽样复核发现有实际违规/侵权内容被导出（内容安全Gate误判放行）→立即下线导出入口熔断",
+      "单租户第三方付费API调用超出atom_cost_cap_usd或total_cost_cap_usd→自动暂停等待人工确认",
+      "声音克隆功能被调用但对应授权记录缺失→立即熔断该功能入口"
+    ]
+  },
+  "success_and_close": {
+    "metrics": [
+      "灰度期客户从上传素材到导出成片的端到端成功率（数值阈值留待实现期真实数据校准）",
+      "候选生成平均耗时",
+      "内容安全Gate人工抽样复核误判率（漏判数/总导出数）"
+    ],
+    "observation_window": "灰度期首批种子客户30天",
+    "close_conditions": [
+      "Gate 0技术可行性验证通过（语义检索延迟/成本可接受，四个第三方API账号额度到位）",
+      "首批≥3个种子客户完成至少1次端到端导出且成片通过人工验收",
+      "灰度期内容安全Gate人工复核0次漏判"
+    ],
+    "shutdown_conditions": [
+      "Gate 0结论为不可行（方案C）且无可行降级路径",
+      "灰度期发生1次侵权/违规内容被实际导出的漏判事故",
+      "第三方API成本远超预算护栏且无法优化到可持续水平"
+    ]
+  },
+  "budget_guard": {
+    "total_cost_cap_usd": 200,
+    "atom_cost_cap_usd": 20,
+    "atom_runtime_sec": 3600,
+    "atom_parallelism": 2
+  }
+}
