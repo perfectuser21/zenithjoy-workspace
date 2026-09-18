@@ -12,7 +12,7 @@
 - 探索项：①embedding 检索候选生成在客户级素材规模（≥10 段起步）下的延迟与成本是否可接受；②Seedance/Happy Horse/阿里云超分/CosyVoice 四个第三方 API 的账号/额度/SLA 是否可开通并达到可用响应时间。
 - 结论三选一：**A** = 全部可行 → 按现有骨干继续；**B** = 部分不可行（例如补拍 API 不可用）→ 降级方案（S2 槶位缺素材分支改为"直接跳过该候选"，去掉 AI 补拍），回主理人重新拍板缩水后的 scope；**C** = 语义检索本身不可行（成本/延迟不可接受）→ 暂停，本 GP 需重新设计核心机制，不得强行上线。
 - 预授权规则：结论 A/B 按对应方案继续；结论 C 暂停并升级主理人。
-- **预算隔离（v2 新增，核销 P2）**：Gate 0 探索本身要真实调用四个第三方 API 试跑，从 `gp-contract-v2.json` 的 `budget_guard.gate0_exploration_reserved_usd` 单独划出预留额度，不与上线后运营预算混用。若 Gate 0 因预留额度耗尽而中断（不是因为延迟/成本本身判定不可接受），判定为**「预算不足需追加」**，回主理人申请追加预留额度重跑，**不得**直接下 Gate 0 结论 C（技术不可行）——避免把"钱没到位"误判成"技术不可行"。
+- **预算隔离（v2 新增，核销 P2）**：Gate 0 探索本身要真实调用四个第三方 API 试跑，须从 `budget_guard.total_cost_cap_usd`（$200）里单独划出约 $60 预留额度专供试跑消耗，不与上线后运营预算混用（合同 schema 为 `.strict()`，此预留额度记在本文档不写进合同结构化字段）。若 Gate 0 因预留额度耗尽而中断（不是因为延迟/成本本身判定不可接受），判定为**「预算不足需追加」**，回主理人申请追加预留额度重跑，**不得**直接下 Gate 0 结论 C（技术不可行）——避免把"钱没到位"误判成"技术不可行"。
 
 ## Gate 1 · 内容安全与声音克隆授权文书（碰对外发布 + 真实人物声音，S4）
 
@@ -173,6 +173,32 @@ Gate1/J7/A1 拦的是"未来的下载请求"；本节是万一 Gate **已经**�
 
 ---
 
+## 灰度期 Gate（canary_seed_customers）——声音克隆/内容安全准入退出条件（核销 F3 的详细展开）
+
+`gp-contract-v2.json` 的合同 schema 是 `.strict()` 约束的签字文档，不承载这层展开细节（结构化字段仅限 `stages`/`blast_radius`/`rollback_triggers`），本节是 `release_and_blast_radius.stages` 里 `canary_seed_customers` 阶段的完整准入/退出条件，供实现期直接执行。
+
+**准入 internal→canary_seed_customers（三条全过才能进灰度）**：
+1. Gate 0 结论为 A 或 B（技术可行性验证通过，语义检索延迟/成本可接受）
+2. internal 阶段完成端到端自测：4 步骨干全链路至少跑通 1 次，A1/A2/A5 断言在内部环境全部通过
+3. 声音克隆、内容安全两项功能各自独立满足下方对应 admission 条件后，才对种子客户开放该项功能；未达成的功能对该批客户保持关闭，不影响其余步骤上线（不是"全部功能齐了才能灰度"，是"哪项功能齐了哪项先开"）
+
+**退出 canary_seed_customers→GA（三条全过）**：
+1. 首批 ≥3 个种子客户完成至少 1 次端到端导出且成片通过人工验收（对齐 `success_and_close.close_conditions`）
+2. 灰度期内容安全 Gate 人工抽样复核 0 次漏判（对齐 `close_conditions`）
+3. 30 天观察窗到期且未触发 `shutdown_conditions` 任一项
+
+**声音克隆功能灰度门槛（voice_clone_feature_gate）**：
+- admission：①Gate 1 客户授权文书模板已上线，逐次勾选授权流程真实可用（非 UI mock）②首版默认关闭，需主理人显式为该客户白名单开启才对该客户可见 ③内部环境已完成至少 1 次全链路声音克隆生成+授权记录 psql 验证（A3 断言通过）
+- exit_to_ga：灰度期 0 次"未授权误放行"事故 + 至少 3 个种子客户完成过声音克隆授权+生成且审计可查
+- 若灰度期发生任意 1 次授权缺失误放行 → 立即退出灰度（仅该功能，不影响整条 GP），回 internal 阶段修复 Gate 1 后重新走一轮准入
+
+**内容安全功能灰度门槛（content_safety_feature_gate）**：
+- admission：①J7 内容安全 Gate 已接入真实第三方 API（非规则占位），fail-closed 模式在内部环境验证通过（模拟违规素材，A1 断言通过：非 passed 恒不给下载链接）②人工复核队列已就位并有响应时长记录机制（具体 SLA 阈值留待灰度期真实数据校准，见下方 P2 记账）
+- exit_to_ga：灰度期人工抽样复核 0 次漏判（对齐 `close_conditions`）
+- 若灰度期发生 1 次"侵权/违规内容被实际导出"的漏判事故 → 立即退出灰度，触发本文档「事故 SOP：内容安全 Gate 失守」章节动作，回 internal 阶段修复后重新走一轮准入
+
+---
+
 ## P2 记账（不阻塞，进账本留给实现期）
 
 - 转码流水线的具体编码参数（分辨率梯度/码率）本版不拍死，实现期按客户素材实际分布校准。
@@ -192,7 +218,7 @@ Gate1/J7/A1 拦的是"未来的下载请求"；本节是万一 Gate **已经**�
 |---|---|---|---|
 | F1 | tech+product+risk | **核销**。补齐「切刀记录表」，对 S1→S2、S2→S3、S3→S4 三个边界逐一跑 T1-T4 四测，全部✔，结论"切"，与 v1 骨干四步结论一致（证明不是拍脑袋，是真按方法论扫出来的） | proposal-v2.md『切刀记录表』章节 |
 | F2 | tech+product | **核销**。新增『外部依赖运行时故障：客户可见与恢复路径』表，按实际步骸（非反馈原文的 S2/S3 标注，经核对 proposal 实际对应关系为 S1 打标签/embedding、S2 补拍、S3 候选生成引擎、S4 CosyVoice）逐一补齐"客户怎么发现失败+客户能做什么恢复"，并补上 CosyVoice"已授权但服务故障"分支（区别于 Gate1/J8/A3 的"未授权拒绝"分支，降级为原声交付不阻断主链路） | proposal-v2.md『外部依赖运行时故障』章节 + Gate1/Step1-4 判定点行的指针 + A3 澄清句 |
-| F3 | tech+risk | **核销**。`gp-contract-v2.json` 的 `release_and_blast_radius.stages` 补入 `canary_seed_customers` 阶段并新增 `canary_gate` 字段，声音克隆与内容安全两项功能各自补上独立的准入/退出条件，与 `success_and_close`/`rollback_triggers` 里"灰度期首批种子客户30天"对齐，不再自相矛盾 | gp-contract-v2.json `release_and_blast_radius` |
+| F3 | tech+risk | **核销**。`gp-contract-v2.json` 的 `release_and_blast_radius.stages` 补入 `canary_seed_customers` 阶段，与 `success_and_close`/`rollback_triggers` 里"灰度期首批种子客户30天"对齐，不再自相矛盾；声音克隆与内容安全两项功能各自的准入/退出条件详细展开写在本文档「灰度期 Gate」章节（合同 schema `.strict()` 不承载这层结构化细节） | gp-contract-v2.json `release_and_blast_radius`；proposal-v2.md「灰度期 Gate」章节 |
 | F4 | product | **核销**。A4 改为软断言/告警式验证（超限记录告警+计数器，不判 fail、不阻断主流程），口径与合同 `lifelines_and_nfr` 里候选量控制的 `best_effort` 分级统一；同时写明"若要恢复硬断言，须先把合同分级升级为 lifeline，两处必须同步改"，防止未来再度分叉 | proposal-v2.md A4 + gp-contract-v2.json `lifelines_and_nfr` 对应项文字对齐 |
 | F5 | tech | **核销**。判定点登记表新增 J10「候选级去重」，与 J1「材料级去重」明确区分判断对象（内容级 vs 组合排列级），给出候选方法/REC/依据/误判后果四项完整登记，并在 Step3【分支/判定点】行挂上 J10 引用 | proposal-v2.md 判定点登记表 J10 + Step 3 章节 |
 | F6 | risk | **核销**。新增『事故 SOP：内容安全 Gate 失守』章节，定义违规内容已下载/发布后的下架方式（系统入口熔断+平台侧程序化下架/客户自行下架书面要求）、报备对象（主理人+合规法务）、客户通知方式（24小时内书面通知+功能临时收紧为人工全量复核），事后记账挂钩既有 `shutdown_conditions`，不另造新阈值 | proposal-v2.md『事故 SOP』章节 + gp-contract-v2.json `rollback_triggers` 对应项补充下架/通知细节 |
@@ -200,4 +226,4 @@ Gate1/J7/A1 拦的是"未来的下载请求"；本节是万一 Gate **已经**�
 P2（三条顺手处理，不强制）：
 - J2/J7/J8 误判后果统一标注 ⚠️（法律/不可逆级）——已在判定点登记表落地。
 - S1 前置人工复核（J2）与 S4 末端 Gate（J7）两道独立闸，`lifelines_and_nfr` 补上 S1 一条独立 lifeline——已在 gp-contract-v2.json 落地。
-- `budget_guard` 可能在 Gate 0 纯探索阶段就耗尽、被误判成"技术不可行"——已在 Gate 2 章节 + `budget_guard.gate0_exploration_reserved_usd` 落地预算隔离；顺手多做一条：`paused_budget` 解除责任人明确为主理人（risk 镜头另一条 P2，未强制要求但成本低，一并处理）。
+- `budget_guard` 可能在 Gate 0 纯探索阶段就耗尽、被误判成"技术不可行"——已在 Gate 2 章节落地预算隔离（从 `total_cost_cap_usd` 里划出预留额度，见上文说明）；顺手多做一条：`paused_budget` 解除责任人明确为主理人（已写进 `lifelines_and_nfr` 对应条目的 rationale，risk 镜头另一条 P2，未强制要求但成本低，一并处理）。

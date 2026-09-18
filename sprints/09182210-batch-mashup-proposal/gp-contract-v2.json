@@ -59,45 +59,7 @@
   },
   "release_and_blast_radius": {
     "stages": ["internal", "canary_seed_customers"],
-    "blast_radius": "仅影响开通'批量混剪'功能的租户级素材库、候选生成计算资源与第三方付费API预算；不影响其他Golden Path（Line05既有video-remake翻拍流水线为独立机制，验证过不复用不受影响）",
-    "canary_gate": {
-      "stage": "canary_seed_customers",
-      "scope": "首批≥3个种子客户，观察窗30天（对齐success_and_close.observation_window），v2新增（核销Round1反馈F3：v1的stages只写internal，与success_and_close/rollback_triggers反复提及的灰度期自相矛盾）",
-      "entry_criteria": [
-        "Gate 0结论为A或B（技术可行性验证通过，语义检索延迟/成本可接受）",
-        "internal阶段完成端到端自测：4步骨干全链路至少跑通1次，A1/A2/A5断言在内部环境全部通过",
-        "声音克隆(voice_clone_feature_gate)与内容安全(content_safety_feature_gate)两项功能各自独立满足下方feature_gates的admission条件后才对种子客户开放，未达成的功能对该批客户保持关闭，不影响其余步骤上线"
-      ],
-      "exit_criteria": [
-        "首批≥3个种子客户完成至少1次端到端导出且成片通过人工验收（对齐close_conditions）",
-        "灰度期内容安全Gate人工抽样复核0次漏判（对齐close_conditions）",
-        "30天观察窗到期且未触发shutdown_conditions任一项"
-      ],
-      "feature_gates": {
-        "voice_clone_feature_gate": {
-          "admission": [
-            "Gate1客户授权文书模板已上线，逐次勾选授权流程真实可用（非UI mock）",
-            "首版默认关闭，需主理人显式为该客户白名单开启才对该客户可见",
-            "内部环境已完成至少1次全链路声音克隆生成+授权记录psql验证（A3断言通过）"
-          ],
-          "exit_to_ga": [
-            "灰度期内0次'未授权误放行'事故",
-            "灰度期至少3个种子客户完成过声音克隆授权+生成，且授权记录审计可查",
-            "若灰度期发生任意1次授权缺失误放行 → 立即退出灰度（仅该功能，不影响整条GP），回internal阶段修复Gate1后重新走一轮canary准入"
-          ]
-        },
-        "content_safety_feature_gate": {
-          "admission": [
-            "J7内容安全Gate已接入真实第三方API（非规则占位），fail-closed模式在内部环境验证通过（模拟违规素材，A1断言通过：非passed恒不给下载链接）",
-            "人工复核队列已就位并有响应时长记录机制（具体SLA阈值留待灰度期真实数据校准，P2记账）"
-          ],
-          "exit_to_ga": [
-            "灰度期人工抽样复核0次漏判（对齐close_conditions）",
-            "若灰度期发生1次'侵权/违规内容被实际导出'的漏判事故 → 立即退出灰度，触发proposal-v2.md『事故SOP』章节动作，回internal阶段修复后重新走一轮canary准入"
-          ]
-        }
-      }
-    },
+    "blast_radius": "仅影响开通'批量混剪'功能的租户级素材库、候选生成计算资源与第三方付费API预算；不影响其他Golden Path（Line05既有video-remake翻拍流水线为独立机制，验证过不复用不受影响）。canary_seed_customers阶段（首批≥3个种子客户，观察窗30天，对齐success_and_close.observation_window）的完整准入/退出条件与声音克隆/内容安全两项功能各自的灰度门槛，详见proposal-v2.md「灰度期Gate」章节（v2新增，核销Round1反馈F3：v1的stages只写internal，与success_and_close/rollback_triggers反复提及的灰度期自相矛盾；本合同schema为.strict()不承载这层结构化细节，故展开写在提案文档）",
     "rollback_triggers": [
       "Gate 0技术可行性探索结论为C（核心语义检索/候选生成不可行）→整条GP暂停回退主理人重新拍板scope",
       "灰度期人工抽样复核发现有实际违规/侵权内容被导出（内容安全Gate误判放行）→立即下线导出入口熔断，并按proposal-v2.md『事故SOP：内容安全Gate失守』章节执行下架（系统入口+第三方平台侧下架/客户书面要求自行下架）、报备（主理人+合规法务）、24小时内客户书面通知三项动作，不止是入口熔断",
@@ -127,9 +89,6 @@
     "total_cost_cap_usd": 200,
     "atom_cost_cap_usd": 20,
     "atom_runtime_sec": 3600,
-    "atom_parallelism": 2,
-    "gate0_exploration_reserved_usd": 60,
-    "gate0_budget_exhaustion_note": "v2新增（核销Round1反馈P2，tech+risk镜头命中）。此预留额度从total_cost_cap_usd中单独划出，专供Gate0四个第三方API（Seedance/Happy Horse/阿里云超分/CosyVoice）+embedding候选生成的试跑消耗。若Gate0在此预留额度耗尽而中断——且中断原因是'钱不够'而非'语义检索延迟/成本本身被证明不可接受'——判定为'预算不足需追加'，回主理人申请追加预留额度后重跑，不得直接下Gate0结论C（技术不可行），避免把预算问题误判成技术可行性问题",
-    "paused_budget_resume_owner": "主理人（本GP拍板人），解除paused_budget需主理人在Brain任务里显式批准继续，批准记录写入decisions表"
+    "atom_parallelism": 2
   }
 }
