@@ -134,3 +134,4 @@ my-works-api-smoke.sh
 geoai-legal-pages-smoke.sh
 restore-ime-scope-smoke.sh
 smoke-selfcheck-smoke.sh
+nginx-materials-redirect-smoke.sh
