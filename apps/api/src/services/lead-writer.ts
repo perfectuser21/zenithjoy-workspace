@@ -47,6 +47,13 @@ const DM_STATUS_TO_FEISHU: Record<DmStatus, string> = {
   failed: '失败',
 };
 
+// 0919: 「成功触达」是真实送达的强判定字段，limited/failed 一律写"否"（禁止假"是"）。
+const DM_STATUS_TO_SUCCESS: Record<DmStatus, '是' | '否'> = {
+  sent: '是',
+  limited: '否',
+  failed: '否',
+};
+
 export interface WriteDmOutreachParams {
   tenant_id: string;
   table_id_leads: string;
@@ -70,6 +77,7 @@ export async function writeDmOutreachStatus(
 
   const fields: Record<string, unknown> = {
     触达状态: DM_STATUS_TO_FEISHU[dm_status] ?? '失败',
+    成功触达: DM_STATUS_TO_SUCCESS[dm_status] ?? '否',
     '触达主页 URL': profile_url,
     触达时间: now,
     触达小号: account_label,

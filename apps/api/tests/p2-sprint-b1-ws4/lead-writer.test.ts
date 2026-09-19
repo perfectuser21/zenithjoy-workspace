@@ -45,6 +45,46 @@ describe('Path 2 抖音私信主动触达 — writeDmOutreachStatus [BEHAVIOR]',
     expect(fields['失败原因']).toBe('');
   });
 
+  it('sent → 成功触达=是', async () => {
+    (writeRecord as any).mockResolvedValue({ record_id: 'rec_dm' });
+    await writeDmOutreachStatus({
+      tenant_id: tenantId,
+      table_id_leads: tableIdLeads,
+      profile_url: dmProfile,
+      account_label: '装修小号1',
+      dm_status: 'sent',
+    });
+    const fields = (writeRecord as any).mock.calls[0][2];
+    expect(fields['成功触达']).toBe('是');
+  });
+
+  it('limited → 成功触达=否（禁止假是）', async () => {
+    (writeRecord as any).mockResolvedValue({ record_id: 'rec_dm' });
+    await writeDmOutreachStatus({
+      tenant_id: tenantId,
+      table_id_leads: tableIdLeads,
+      profile_url: dmProfile,
+      account_label: '装修小号1',
+      dm_status: 'limited',
+    });
+    const fields = (writeRecord as any).mock.calls[0][2];
+    expect(fields['成功触达']).toBe('否');
+  });
+
+  it('failed → 成功触达=否', async () => {
+    (writeRecord as any).mockResolvedValue({ record_id: 'rec_dm' });
+    await writeDmOutreachStatus({
+      tenant_id: tenantId,
+      table_id_leads: tableIdLeads,
+      profile_url: dmProfile,
+      account_label: '装修小号1',
+      dm_status: 'failed',
+      error_code: 'SESSION_EXPIRED',
+    });
+    const fields = (writeRecord as any).mock.calls[0][2];
+    expect(fields['成功触达']).toBe('否');
+  });
+
   it('limited → 触达状态=未送达-仅互关（禁止假 sent）', async () => {
     (writeRecord as any).mockResolvedValue({ record_id: 'rec_dm' });
     await writeDmOutreachStatus({
