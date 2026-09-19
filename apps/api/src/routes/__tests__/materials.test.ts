@@ -531,4 +531,25 @@ describe('GET /api/materials — 素材库列表', () => {
     expect(r.body.data.items[0].preview_url).toContain('ok');
     expect(r.body.data.items[1].preview_url).toBeNull();
   });
+
+  it('每条带 tag_status/ai_tags（批量混剪 S2 挑素材要靠这两个字段筛"已识别"的）', async () => {
+    (pool.query as any).mockImplementation(async (sql: string) => {
+      if (/FROM zenithjoy\.materials/i.test(sql)) {
+        return { rows: [
+          { id: 'm1', file_name: 'a.mp4', size_bytes: 10, mime_type: 'video/mp4',
+            storage_key: `${TENANT_A}/m1/a.mp4`, taken_at: null, created_at: new Date().toISOString(),
+            tag_status: 'tagged', ai_tags: ['产品特写', '厨房场景'] },
+          { id: 'm2', file_name: 'b.mp4', size_bytes: 10, mime_type: 'video/mp4',
+            storage_key: `${TENANT_A}/m2/b.mp4`, taken_at: null, created_at: new Date().toISOString(),
+            tag_status: 'pending', ai_tags: null },
+        ] };
+      }
+      return { rows: [] };
+    });
+    const app = makeApp();
+    const r = await request(app).get('/api/materials').set('X-Upload-Token', TOKEN_A);
+    expect(r.status).toBe(200);
+    expect(r.body.data.items[0]).toMatchObject({ tag_status: 'tagged', ai_tags: ['产品特写', '厨房场景'] });
+    expect(r.body.data.items[1]).toMatchObject({ tag_status: 'pending', ai_tags: [] });
+  });
 });
