@@ -12,8 +12,11 @@ log(){ print -u2 -- "[$(date +%H:%M:%S)] $*"; }
 find /Volumes/EvidenceRAM/openclaw-phone/evidence -type f \( -name "*.png" -o -name "*.mkv" -o -name "*.wav" \) -mmin +30 -delete 2>/dev/null
 
 # 0919 同视频去重: 采集前拉一次「视频池」已存在的视频ID,采集中命中就跳过该视频
+# 真机验证(0919)发现: 本脚本跑在手机机(xian-m4/xian-m1),不持有飞书凭据——
+# fetch-seen-videos.js 需要凭据+联网,必须像 next-outreach.js 一样经 SSH 到
+# us-vps 的 openclaw-gateway 容器执行,不能直接在本机跑(会因缺 clawdbot.json 静默拿到空表)。
 SEENVIDS="$(mktemp -t seen-videos)"
-node "$(dirname "$0")/fetch-seen-videos.js" "$LINE" > "$SEENVIDS" 2>/dev/null
+ssh -o ConnectTimeout=15 us-vps "docker exec openclaw-gateway node /root/.openclaw/fetch-seen-videos.js '$LINE'" > "$SEENVIDS" 2>/dev/null
 
 $C --profile "$P" lock-acquire "$TAG" >/dev/null 2>&1 || { log "锁被占,退出"; rm -f "$SEENVIDS"; exit 3; }
 trap '$C --profile "$P" lock-release "$TAG" >/dev/null 2>&1; rm -f "$SEENVIDS"' EXIT

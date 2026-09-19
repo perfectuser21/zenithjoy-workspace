@@ -82,6 +82,13 @@ node --check "$D/lead-fields-lib.js" || fail "lead-fields-lib.js 语法错误"
 if grep -qF 'seen.add' "$D/sort-comments.js"; then fail "sort-comments seen.add复活(Map无add方法,每轮搬运第一条后必崩)"; fi
 grep -qF 'outreach-tick.lock' "$D/outreach-tick.sh" || fail "tick 未接 mkdir 互斥锁"
 grep -qF 'profile_url' "$D/next-outreach.js" || fail "选单器未出 profile_url"
+# 0919 真机验证实锤: harvest-keyword.sh 跑在手机机(xian-m4/xian-m1)不持有飞书凭据,
+# fetch-seen-videos.js 需要凭据+联网,必须经 SSH 到 us-vps 的 openclaw-gateway 容器执行，
+# 禁止在本机直接 node 调用(会因缺 clawdbot.json 静默拿到空表,去重形同虚设)。
+grep -qF 'docker exec openclaw-gateway node /root/.openclaw/fetch-seen-videos.js' "$D/harvest-keyword.sh" || fail "同视频去重未经SSH路由到网关(会在手机机因缺凭据静默失效)"
+if grep -E '^[^#]*\bnode "\$\(dirname "\$0"\)/fetch-seen-videos\.js"' "$D/harvest-keyword.sh" | grep -qv 'ssh'; then
+  fail "fetch-seen-videos.js 被本机直接调用(手机机无飞书凭据,已实锤会静默失效)"
+fi
 
 
 # 层5: escort 跨轮记忆契约(决策 c2901aff, 0915 主理人拍板修老Commander失忆病)
