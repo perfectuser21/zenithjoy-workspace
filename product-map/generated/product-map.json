@@ -428,11 +428,16 @@
         {
           "id": "step2",
           "name": "客户定下这批视频要按什么套路剪（槽位模板分配）"
+        },
+        {
+          "id": "step3",
+          "name": "客户刷到一屏候选方案任选（语义检索候选生成）"
         }
       ],
       "smoke_files": [
         ".github/workflows/scripts/smoke/material-tagging-smoke.sh",
-        ".github/workflows/scripts/smoke/mashup-slot-assignment-smoke.sh"
+        ".github/workflows/scripts/smoke/mashup-slot-assignment-smoke.sh",
+        ".github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh"
       ]
     },
     {
@@ -586,5 +591,5 @@
       ]
     }
   ],
-  "digest": "d6fb016581bc415505da0ebb60e155ffbfdab357d1a7a12ba7fd2ee340d0c641"
+  "digest": "e014231240c8969f6c948bc2061ef22c23f57edd28d7bda67e6546506c20dd1d"
 }

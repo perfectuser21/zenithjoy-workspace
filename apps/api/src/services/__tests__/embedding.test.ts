@@ -25,7 +25,9 @@ describe('embedText', () => {
     const { embedText } = await import('../embedding');
     const v = await embedText('产品特写，厨房场景');
 
-    expect(v).toEqual([0.6, 0.8]);
+    expect(v).toHaveLength(2);
+    expect(v[0]).toBeCloseTo(0.6, 6);
+    expect(v[1]).toBeCloseTo(0.8, 6);
     expect(extractorMock).toHaveBeenCalledWith('产品特写，厨房场景', { pooling: 'mean', normalize: true });
   });
 

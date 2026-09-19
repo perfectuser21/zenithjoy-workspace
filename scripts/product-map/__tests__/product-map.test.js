@@ -111,14 +111,16 @@ test('T3: staff_app/line00 精确 5 个 GP（含gp_anchor_enforcement、f1_dev_l
   assert.equal(videoEditing.status, 'active');
   assert.deepEqual(videoEditing.smoke_files, ['.github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh']);
   // 2026-09-18 批量混剪提案（GP f6f96e17，三镜头GAN收敛，合同v2已签）：line05 新增独立 GP，
-  // 非替换 video_editing。S1 素材打标签第一刀、S2 槽位模板分配第二刀已落地并各自锚定 smoke。
+  // 非替换 video_editing。S1 素材打标签、S2 槽位模板分配、S3 语义检索候选生成三刀已落地
+  // 并各自锚定 smoke。
   const batchMashup = customerGps.find(g => g.id === 'batch_mashup');
   assert.equal(batchMashup.status, 'active');
   assert.deepEqual(batchMashup.smoke_files, [
     '.github/workflows/scripts/smoke/material-tagging-smoke.sh',
     '.github/workflows/scripts/smoke/mashup-slot-assignment-smoke.sh',
+    '.github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh',
   ]);
-  assert.deepEqual(batchMashup.steps.map(s => s.id), ['step1', 'step2']);
+  assert.deepEqual(batchMashup.steps.map(s => s.id), ['step1', 'step2', 'step3']);
   const viralRemake = customerGps.find(g => g.id === 'viral_video_remake');
   assert.equal(viralRemake.status, 'active');
   assert.deepEqual(viralRemake.smoke_files, ['.github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh']);

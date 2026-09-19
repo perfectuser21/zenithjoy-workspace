@@ -125,6 +125,7 @@ material-direct-upload-smoke.sh
 material-delete-smoke.sh
 material-tagging-smoke.sh
 mashup-slot-assignment-smoke.sh
+mashup-candidate-generation-smoke.sh
 notion-orchestrator-selfcheck-smoke.sh
 feishu-orchestrator-selfcheck-smoke.sh
 my-works-api-smoke.sh
