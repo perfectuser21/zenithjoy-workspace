@@ -364,6 +364,21 @@ golden_paths:
     smoke_files:
       - .github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh
 
+  # 2026-09-18 批量混剪提案（GP f6f96e17，三镜头 GAN 收敛，合同 v2 已签，
+  # sprints/09182210-batch-mashup-proposal/）：Line05 视频剪辑新增能力，非替换
+  # 既有 video_editing 翻拍流水线。人工驱动 walking skeleton 第一刀（S1 素材
+  # 打标签）已落地，S2/S3/S4（套路选择/候选生成/导出）待后续 sprint 补 step。
+  - id: batch_mashup
+    app_id: customer_app
+    line_id: line05
+    name: 批量混剪
+    status: active
+    steps:
+      - id: step1
+        name: 客户的素材变成系统认得出内容的可用库（素材打标签）
+    smoke_files:
+      - .github/workflows/scripts/smoke/material-tagging-smoke.sh
+
   - id: viral_video_remake
     app_id: customer_app
     line_id: line07

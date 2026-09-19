@@ -114,6 +114,13 @@ jobs:
         run: npm ci --no-audit --no-fund
         working-directory: services/agent
 
+      # material-tagging-smoke.sh（批量混剪 S1）需要真 ffmpeg 抽帧——runner 镜像不保证自带，
+      # 显式装，不能像 golden-path-7-video-remake-smoke.sh 那样绕过（那条本来就没测真抽帧）。
+      - name: Install ffmpeg (material-tagging-smoke.sh 真抽帧需要)
+        run: |
+          command -v ffmpeg >/dev/null 2>&1 || (sudo apt-get update -y && sudo apt-get install -y ffmpeg)
+          ffmpeg -version | head -1
+
       - name: Create zenithjoy schema + pgcrypto
         run: |
           psql -h localhost -U cecelia -d cecelia -c "CREATE SCHEMA IF NOT EXISTS zenithjoy;"

@@ -1,8 +1,9 @@
 import { randomUUID } from 'crypto';
 import { spawnSync } from 'child_process';
-import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
+import { writeFileSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { extractFrameBase64 } from './video-frame-extract';
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 
@@ -50,21 +51,6 @@ function makeNodes(): VideoNode[] {
   }));
 }
 
-function _extractFrameBase64(buffer: Buffer): string | null {
-  const tmpVideo = join(tmpdir(), `vr-in-${randomUUID()}.mp4`);
-  const tmpFrame = join(tmpdir(), `vr-frm-${randomUUID()}.jpg`);
-  try {
-    writeFileSync(tmpVideo, buffer);
-    const r = spawnSync('ffmpeg', ['-i', tmpVideo, '-vframes', '1', '-q:v', '2', tmpFrame, '-y'], { encoding: 'utf8' });
-    if (r.status !== 0 || !existsSync(tmpFrame)) return null;
-    return `data:image/jpeg;base64,${readFileSync(tmpFrame).toString('base64')}`;
-  } catch { return null; }
-  finally {
-    try { unlinkSync(tmpVideo); } catch { /* ignore */ }
-    try { unlinkSync(tmpFrame); } catch { /* ignore */ }
-  }
-}
-
 function _getVideoMeta(buffer: Buffer): { duration: number; width: number; height: number } {
   const tmpVideo = join(tmpdir(), `vr-meta-${randomUUID()}.mp4`);
   try {
@@ -105,7 +91,7 @@ async function _runPipelineBackground(jobId: string): Promise<void> {
     n02.status = 'running';
     let frameUrl = `fixture://frame-${jobId}-0.jpg`;
     if (rawBuf.length > 0) {
-      const extracted = _extractFrameBase64(rawBuf);
+      const extracted = extractFrameBase64(rawBuf);
       if (extracted) frameUrl = extracted;
     }
     const frames = [{ frame_url: frameUrl, timestamp_seconds: 0.0 }];

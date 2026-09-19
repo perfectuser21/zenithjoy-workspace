@@ -943,6 +943,22 @@ tests:
     product: 素材上传链路
     note: "共用落库层：直传与老端点共用同一套写库逻辑，两个入口的行为不可能漂移。含 uploaded_by_license_id 写入、去重命中拿回已有 id 且必带 tenant_id、按序挂满关联、不再写 content_hash；含 onNewMaterial 钩子只在新插素材时触发（去重命中不重传）、钩子在建 contents 之前跑完、钩子抛异常时整体抛出不建 contents。"
 
+  - id: material-tagging-service
+    path: apps/api/src/services/__tests__/material-tagging.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 素材上传链路
+    note: "批量混剪 S1（GP f6f96e17）素材打标签：假 pool+假 storage+mock axios 打桩。三态覆盖——真调 Gemini 成功写回 tagged、未配置 TOAPIS_API_KEY 落 failed_pending_review 不抛异常、抽帧失败落 failed_pending_review 不调 Gemini、Gemini 超时/网络错误落 failed_pending_review、素材 id 不存在 loud-fail 抛异常不静默返回空结果。"
+
+  - id: video-frame-extract-shared
+    path: apps/api/src/services/__tests__/video-frame-extract.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 素材上传链路
+    note: "从 video-remake.service.ts 抽出的共享抽帧工具（video-remake N02 抽帧 + material-tagging 打标签两处复用）：非视频/损坏 buffer 与空 buffer 均返回 null 不抛异常；真调 ffmpeg（testsrc 合成源现场生成，不依赖外部文件）验证返回合法 data:image/jpeg;base64 URL 且可解码非空。"
+
 
   - id: materials-api-client
     path: apps/dashboard/src/api/__tests__/materials.api.test.ts
