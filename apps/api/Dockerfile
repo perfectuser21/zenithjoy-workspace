@@ -50,7 +50,12 @@ RUN mkdir -p dist/templates && cp src/templates/*.jsx dist/templates/
 # Production stage
 FROM node:20-bookworm-slim
 # tzdata：TZ=Asia/Shanghai 生效依赖（无 tzdata 时 date 恒 UTC，日志/调度时区全错）
-RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
+# ffmpeg：批量混剪 S4（mashup-render-ffmpeg.ts concatAndScale）用 spawnSync('ffmpeg',...)
+# 合成成片。0919 真机复现：这里从换 bookworm 基础镜像起就漏装了，找不到可执行文件时
+# spawnSync 不抛异常，concatAndScale 静默返回 false，上层 fail-closed 成
+# failed_pending_review——界面显示"内容安全审核处理中"，实际跟审核毫无关系，是这一行
+# 缺失。dockerfile-ffmpeg.test.ts 固化这个断言，谁再删这行 CI 直接红。
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /repo
 
 # 直接复用 builder 阶段已经跑过 npm ci + tsc 编译验证过的 node_modules，不再单独

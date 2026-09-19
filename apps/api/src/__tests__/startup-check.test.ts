@@ -15,6 +15,9 @@ import {
   REQUIRED_ENV_GROUPS,
   verifyStartupConfig,
   CRITICAL_ENV_USAGE,
+  REQUIRED_BINARIES,
+  verifyStartupBinaries,
+  type RequiredBinary,
 } from '../startup-check';
 
 // 测试用：给一份"DB 连接满足"的底料（拆分式参数齐），再叠加各 case。
@@ -127,5 +130,43 @@ describe('startup-check：启动 env 自检', () => {
         `关键 env ${key}（${file} 在读）未登记进 REQUIRED_ENV → 启动自检会漏，必须补进去`,
       ).toBe(true);
     }
+  });
+});
+
+/**
+ * 启动二进制依赖自检（哨兵扩展——从"关键 env"扩到"关键可执行文件"）
+ *
+ * 真机复现（2026-09-19）：apps/api/Dockerfile 换 node:20-bookworm-slim 基础镜像后
+ * 从未装过 ffmpeg，批量混剪 S4 的 concatAndScale() 用 spawnSync('ffmpeg',...) 找不到
+ * 可执行文件时不抛异常（status=null），静默 fail-closed 成 failed_pending_review，
+ * 界面显示"内容安全审核处理中"——跟审核毫无关系，是二进制缺失，长期没人发现。
+ * 用可注入的 spawn 函数测试逻辑本身，不依赖测试机是否真装了 ffmpeg。
+ */
+describe('startup-check：启动二进制依赖自检', () => {
+  const fakeBin: RequiredBinary = { name: 'ffmpeg', versionArgs: ['-version'], consequence: '测试用' };
+
+  it('test_missing_binary_detected：找不到可执行文件（spawn 抛异常）必被检出', () => {
+    const spawnThrows = () => { throw new Error('ENOENT'); };
+    const res = verifyStartupBinaries([fakeBin], spawnThrows as never);
+    expect(res.ok).toBe(false);
+    expect(res.missing).toContain('ffmpeg');
+  });
+
+  it('test_missing_binary_nonzero_status_detected：spawn 不抛但 status 非 0 也算缺失', () => {
+    const spawnFails = () => ({ status: 1 });
+    const res = verifyStartupBinaries([fakeBin], spawnFails as never);
+    expect(res.ok).toBe(false);
+    expect(res.missing).toContain('ffmpeg');
+  });
+
+  it('test_binary_present_ok：spawn 返回 status=0 → present', () => {
+    const spawnOk = () => ({ status: 0 });
+    const res = verifyStartupBinaries([fakeBin], spawnOk as never);
+    expect(res.ok).toBe(true);
+    expect(res.present).toContain('ffmpeg');
+  });
+
+  it('REQUIRED_BINARIES 含 ffmpeg（批量混剪 S4 渲染依赖）', () => {
+    expect(REQUIRED_BINARIES.map((b) => b.name)).toContain('ffmpeg');
   });
 });
