@@ -3,7 +3,8 @@
  *
  * Sprint A 时是 9 个（4 写 + 5 读），Sprint B 补行层八个后 17，Sprint C 补视图五个后 22，
  * Sprint D 补关联三个（relation-candidates / backrefs 读 + DELETE fields 写）后 25，
- * Sprint E 补 rollup 聚合读端点一个（GET /tables/:id/rollups）后 26。**改值不删断言**：
+ * Sprint E 补 rollup 聚合读端点一个（GET /tables/:id/rollups）后 26，
+ * cp-08230010 UI 重做补行内改名两个 PATCH（改表名 + 改字段名）后 28。**改值不删断言**：
  * 这条断言的价值恰恰在于"多开一个端点必须有人显式认领它"，删掉就等于把认领环节取消了。
  *
  * 为什么值得单独钉：合同把端点数写死，而"少挂一个闸"或"多开一个端点"这两件事
@@ -72,16 +73,25 @@ describe('路③ 路由表', () => {
         'DELETE /tables/:id/fields/:fieldId',
         // Sprint E 加厚 rollup 聚合读端点一个（0 写 + 1 读）
         'GET /tables/:id/rollups',
+        // 行内改名（cp-08230010 UI 重做）两个 PATCH（2 写 + 0 读）
+        'PATCH /tables/:id',
+        'PATCH /tables/:id/fields/:fieldId',
       ].sort()
     );
-    expect(got.length).toBe(26);
+    expect(got.length).toBe(28);
   });
 
-  it('写端点 13 个、读端点 13 个', () => {
+  it('写端点 15 个、读端点 13 个', () => {
     const all = routes();
     const writes = all.filter((r) => r.method !== 'GET');
-    expect(writes.length).toBe(13);
+    expect(writes.length).toBe(15);
     expect(all.length - writes.length).toBe(13);
+  });
+
+  it('行内改名两个 PATCH 端点已挂载（cp-08230010 UI 重做）', () => {
+    const paths = routes().map((r) => `${r.method} ${r.path}`);
+    expect(paths).toContain('PATCH /tables/:id');
+    expect(paths).toContain('PATCH /tables/:id/fields/:fieldId');
   });
 
   it('鉴权闸挂在所有端点之前 —— 路由栈第一层是中间件而不是某条 route', () => {

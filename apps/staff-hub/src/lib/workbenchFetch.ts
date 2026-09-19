@@ -337,4 +337,18 @@ export const deleteField = (tableId: string, fieldId: string, confirmName: strin
     body: JSON.stringify({ confirm_name: confirmName }),
   });
 
+/** 改表名（行内改名 cp-08230010）：空名 → 400；表不可见 → 404。返回整表详情供就地回填。 */
+export const renameTable = (tableId: string, name: string) =>
+  json<WorkbenchTableDetail>(`/tables/${tableId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name }),
+  });
+
+/** 改字段名（行内改名 cp-08230010）：空名 → 400；表/字段不可见 → 404。返回改后字段供就地回填。 */
+export const renameField = (tableId: string, fieldId: string, name: string) =>
+  json<WorkbenchField>(`/tables/${tableId}/fields/${fieldId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name }),
+  });
+
 export { KnowledgeRequestError as WorkbenchRequestError };
