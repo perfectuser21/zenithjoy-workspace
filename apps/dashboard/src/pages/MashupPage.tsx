@@ -401,7 +401,7 @@ function CandidatesStep(props: {
 
 // ============ Step 4：成片结果 ============
 
-function ResultStep({ result, onBack }: { result: RenderResult; onBack: () => void }) {
+export function ResultStep({ result, onBack }: { result: RenderResult; onBack: () => void }) {
   const passed = result.safetyCheckStatus === 'passed' && result.watermarkCheckStatus === 'passed';
 
   return (
