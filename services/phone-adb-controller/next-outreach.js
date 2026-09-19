@@ -55,8 +55,7 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : (
   const pending = [], noLink = [];
   for (const r of leads) {
     if (txt(r.fields["状态"]) !== "待触达") continue;
-    const raw = txt(r.fields["抖音昵称/主页链接"]);
-    (lib.classifyPending(raw) === "ok" ? pending : noLink).push(r);
+    (lib.classifyPending(r.fields) === "ok" ? pending : noLink).push(r);
   }
   // 缺链接上游闸(决策 c5828297): 链接=出单必备件,缺件单标「待补链」交回采集补链,
   // 不再送搜索路线撞墙。写新 select 值失败(字段选项受限)降级只写备注,不阻塞选单。
@@ -76,7 +75,7 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : (
   const grade = r => { const j = txt(r.fields["AI判断理由"]); return j.startsWith("[A") ? 0 : j.startsWith("[B") ? 1 : 2; };
   pending.sort((a, b) => (Number(b.fields["重复命中次数"])||0) - (Number(a.fields["重复命中次数"])||0) || grade(a) - grade(b));
   const pick = pending[0];
-  const lead = lib.extractLead(txt(pick.fields["抖音昵称/主页链接"]));
+  const lead = lib.extractLead(pick.fields);
   const nick = lead.nick, dyid = lead.dyid;
   // 话术分配: 序号n(已触达数): n%10∈{0,2,4,6,8}→B; {1,5,9}→A1; {3,7}→A2
   const slot = sent % 10;

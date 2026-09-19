@@ -1,18 +1,19 @@
 // next-outreach-lib.js —— 选单器纯函数(CJS)。与 next-outreach.js 同目录同批部署:
 // 网关副本 /opt/openclaw/state/ 漏发本文件 = 首个 tick MODULE_NOT_FOUND 全线选单挂。
-// 「抖音昵称/主页链接」实况: `昵称 / dyid / https://www.douyin.com/user/MS4w...`
-// URL 自身含 "/" —— 取链接必须整体正则,禁止 split("/") 位置切段(parts[2]==="https:")。
+// 0919 字段收敛: 「抖音昵称/主页链接」合并列已删,选单器直接读线索表独立字段
+// 客户昵称/抖音号/主页链接,不再拼串解析。
 "use strict";
 
-const URL_RE = /https?:\/\/\S+/;
 const DYID_RE = /^[A-Za-z0-9._]{4,}$/;
 const TRANSIENT_MARK = "[瞬时败]";
 
-function extractLead(raw) {
-  const s = String(raw || "");
-  const parts = s.split("/").map((x) => x.trim());
-  const m = s.match(URL_RE);
-  return { nick: parts[0] || "", dyid: parts[1] || "", profileUrl: m ? m[0] : "" };
+function extractLead(fields) {
+  const f = fields || {};
+  return {
+    nick: String(f["客户昵称"] || ""),
+    dyid: String(f["抖音号"] || ""),
+    profileUrl: String(f["主页链接"] || ""),
+  };
 }
 
 function isValidDyid(dyid) {
@@ -20,8 +21,8 @@ function isValidDyid(dyid) {
 }
 
 // 出单资格(决策 c5828297): 主页链接=必备件;dyid 供主页强校验闸,同为必备。
-function classifyPending(raw) {
-  const { dyid, profileUrl } = extractLead(raw);
+function classifyPending(fields) {
+  const { dyid, profileUrl } = extractLead(fields);
   if (!profileUrl.startsWith("https://")) return "no_link";
   if (!isValidDyid(dyid)) return "no_link";
   return "ok";
@@ -44,4 +45,4 @@ function requeueTransientFields(prevReply, note, now) {
   };
 }
 
-module.exports = { extractLead, isValidDyid, classifyPending, requeueTransientFields, TRANSIENT_MARK, URL_RE };
+module.exports = { extractLead, isValidDyid, classifyPending, requeueTransientFields, TRANSIENT_MARK };
