@@ -73,7 +73,10 @@ grep -qF '帮不拦' "$D/cmdr-escort.txt" || fail "escort SOP缺辅佐三原则"
 grep -qF '"留言时间"' "$D/push-raw-comments.js" || fail "push-raw-comments 未写留言时间列"
 grep -qF '"主页IP"' "$D/push-raw-comments.js" || fail "push-raw-comments 未写主页IP列"
 grep -qF '"IP属地"' "$D/sort-comments.js" || fail "sort-comments 搬运未写IP属地列"
-grep -qF '"昵称"' "$D/sort-comments.js" || fail "sort-comments 搬运未写纯昵称列"
+# 0919 字段收敛(主理人拍板): 纯昵称列改名"客户昵称"，且抽到 lead-fields-lib.js 共享构造，
+# 不再是 sort-comments.js 自己的字面量——检查点跟着挪到构造库+接入点两处。
+grep -qF '"客户昵称"' "$D/lead-fields-lib.js" || fail "lead-fields-lib 未写客户昵称列"
+grep -qF 'buildLeadCoreFields' "$D/sort-comments.js" || fail "sort-comments 搬运未接入字段构造库"
 if grep -qF 'seen.add' "$D/sort-comments.js"; then fail "sort-comments seen.add复活(Map无add方法,每轮搬运第一条后必崩)"; fi
 grep -qF 'outreach-tick.lock' "$D/outreach-tick.sh" || fail "tick 未接 mkdir 互斥锁"
 grep -qF 'profile_url' "$D/next-outreach.js" || fail "选单器未出 profile_url"
