@@ -93,6 +93,15 @@ for CARDLINE in "${(f)CARDS}"; do
     ATYPE="$(print -- "$IDOUT" | sed -n "s/^account_type=//p")"
     PIP="$(print -- "$IDOUT" | sed -n "s/^profile_ip=//p")"
     if [[ -z "$ONICK" ]]; then log "  行$j 身份验证3次仍失败,弃: $NICK"; continue; fi
+    # 0919 自有账号过滤: 命中自有名单的评论不当线索;若命中的是视频作者本人,整条视频其余评论不再采集
+    if node "$(dirname "$0")/check-own-account.js" "$ONICK" "${OID:-}" >/dev/null 2>&1; then
+      if [[ "$AUTHOR" == "author" ]]; then
+        log "  视频作者是自有账号($ONICK),本视频其余评论不再采集"
+        break
+      fi
+      log "  跳过自有账号: $ONICK"
+      continue
+    fi
     # 0914 主理人验收:每人顺取名片主页直链(identity已回评论区,重进主页跑card-link,其自带恢复)
     "$C" --profile "$P" tap-evidence "$TXX" "$TXY" "$TAG-v$i-u$j-re" </dev/null >/dev/null 2>&1
     sleep 3
