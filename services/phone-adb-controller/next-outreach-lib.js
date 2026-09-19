@@ -1,7 +1,7 @@
 // next-outreach-lib.js —— 选单器纯函数(CJS)。与 next-outreach.js 同目录同批部署:
 // 网关副本 /opt/openclaw/state/ 漏发本文件 = 首个 tick MODULE_NOT_FOUND 全线选单挂。
 // 0919 字段收敛: 「抖音昵称/主页链接」合并列已删,选单器直接读线索表独立字段
-// 客户昵称/抖音号/主页链接,不再拼串解析。
+// 抖音昵称/抖音号/主页链接,不再拼串解析。
 "use strict";
 
 const DYID_RE = /^[A-Za-z0-9._]{4,}$/;
@@ -10,7 +10,7 @@ const TRANSIENT_MARK = "[瞬时败]";
 function extractLead(fields) {
   const f = fields || {};
   return {
-    nick: String(f["客户昵称"] || ""),
+    nick: String(f["抖音昵称"] || ""),
     dyid: String(f["抖音号"] || ""),
     profileUrl: String(f["主页链接"] || ""),
   };

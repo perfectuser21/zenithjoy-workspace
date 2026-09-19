@@ -73,9 +73,9 @@ grep -qF '帮不拦' "$D/cmdr-escort.txt" || fail "escort SOP缺辅佐三原则"
 grep -qF '"留言时间"' "$D/push-raw-comments.js" || fail "push-raw-comments 未写留言时间列"
 grep -qF '"主页IP"' "$D/push-raw-comments.js" || fail "push-raw-comments 未写主页IP列"
 grep -qF '"IP属地"' "$D/sort-comments.js" || fail "sort-comments 搬运未写IP属地列"
-# 0919 字段收敛(主理人拍板): 纯昵称列改名"客户昵称"，且抽到 lead-fields-lib.js 共享构造，
+# 0919 字段收敛(主理人拍板): 纯昵称列改名"抖音昵称"，且抽到 lead-fields-lib.js 共享构造，
 # 不再是 sort-comments.js 自己的字面量——检查点跟着挪到构造库+接入点两处。
-grep -qF '"客户昵称"' "$D/lead-fields-lib.js" || fail "lead-fields-lib 未写客户昵称列"
+grep -qF '"抖音昵称"' "$D/lead-fields-lib.js" || fail "lead-fields-lib 未写抖音昵称列"
 grep -qF 'buildLeadCoreFields' "$D/sort-comments.js" || fail "sort-comments 搬运未接入字段构造库"
 grep -qF 'buildLeadCoreFields' "$D/push-leads.js" || fail "push-leads 未接入字段构造库"
 node --check "$D/lead-fields-lib.js" || fail "lead-fields-lib.js 语法错误"

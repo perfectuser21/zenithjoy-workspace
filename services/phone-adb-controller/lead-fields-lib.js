@@ -5,7 +5,7 @@
 
 function buildLeadCoreFields({ nick, dyid, purl, comment, video, vurl }) {
   return {
-    "客户昵称": nick || "",
+    "抖音昵称": nick || "",
     "抖音号": dyid || "",
     "主页链接": (purl && purl.startsWith("http")) ? purl : "",
     "原始评论": comment || "",
@@ -22,7 +22,7 @@ function defaultTxt(v) {
 function extractSeenEntries(records, txt) {
   const t = txt || defaultTxt;
   return (records || []).map((it) => ({
-    nick: t(it.fields["客户昵称"]),
+    nick: t(it.fields["抖音昵称"]),
     dyid: t(it.fields["抖音号"]),
     record_id: it.record_id,
     dup: Number(it.fields["重复命中次数"]) || 0,

@@ -2,10 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import lib from "../next-outreach-lib.js";
 
-const F_OK = { "客户昵称": "沉", "抖音号": "LHJ20001024", "主页链接": "https://www.douyin.com/user/MS4wLjABAAAAtest-_x" };
-const F_SHORT = { "客户昵称": "板烧鸡腿堡", "抖音号": "P0ten", "主页链接": "https://v.douyin.com/AbCd123/" };
-const F_NOLINK = { "客户昵称": "砚秋", "抖音号": "", "主页链接": "" };
-const F_PENDING = { "客户昵称": "你脸红了诶~", "抖音号": "31225819860", "主页链接": "https://www.douyin.com/user/MS4wq" };
+const F_OK = { "抖音昵称": "沉", "抖音号": "LHJ20001024", "主页链接": "https://www.douyin.com/user/MS4wLjABAAAAtest-_x" };
+const F_SHORT = { "抖音昵称": "板烧鸡腿堡", "抖音号": "P0ten", "主页链接": "https://v.douyin.com/AbCd123/" };
+const F_NOLINK = { "抖音昵称": "砚秋", "抖音号": "", "主页链接": "" };
+const F_PENDING = { "抖音昵称": "你脸红了诶~", "抖音号": "31225819860", "主页链接": "https://www.douyin.com/user/MS4wq" };
 
 test("extractLead: 直接读独立字段", () => {
   const r = lib.extractLead(F_OK);
@@ -24,8 +24,8 @@ test("classifyPending: 无链=no_link", () => {
   assert.equal(lib.classifyPending(F_NOLINK), "no_link");
 });
 test("classifyPending: 有链但dyid非法=no_link", () => {
-  assert.equal(lib.classifyPending({ "客户昵称": "某人", "抖音号": "id待核验", "主页链接": "https://v.douyin.com/x1/" }), "no_link");
-  assert.equal(lib.classifyPending({ "客户昵称": "某人", "抖音号": "中文号", "主页链接": "https://v.douyin.com/x1/" }), "no_link");
+  assert.equal(lib.classifyPending({ "抖音昵称": "某人", "抖音号": "id待核验", "主页链接": "https://v.douyin.com/x1/" }), "no_link");
+  assert.equal(lib.classifyPending({ "抖音昵称": "某人", "抖音号": "中文号", "主页链接": "https://v.douyin.com/x1/" }), "no_link");
 });
 test("requeueTransientFields: 首轮回队待触达+标记", () => {
   const f = lib.requeueTransientFields("", "AdbIME cannot be enabled", "0915 12:00(UTC+8)");
