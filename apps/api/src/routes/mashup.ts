@@ -8,6 +8,7 @@ import { Router, type Request, type Response } from 'express';
 import pool from '../db/connection';
 import { validateLicense } from '../services/walking-skeleton.service';
 import { assignSlots } from '../services/mashup-slot-assignment';
+import { generateCandidates } from '../services/mashup-candidate-generation';
 import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 
 function extractUploadToken(req: Request): string | null {
@@ -117,6 +118,75 @@ export function createMashupRouter(): Router {
         reason: r.reason ?? undefined,
       })),
     });
+  });
+
+  router.post('/runs/:id/candidates', async (req: Request, res: Response) => {
+    const auth = await authenticate(req, res);
+    if (!auth) return;
+
+    const { targetCount } = req.body ?? {};
+    if (targetCount !== undefined && (typeof targetCount !== 'number' || targetCount <= 0)) {
+      return fail(res, 400, 'INVALID_BODY', 'targetCount 必须是正数');
+    }
+
+    try {
+      const result = await generateCandidates({ tenantId: auth.tenantId, runId: req.params.id, targetCount });
+      ok(res, result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'unknown';
+      if (/run not found/i.test(message)) {
+        return fail(res, 404, 'RUN_NOT_FOUND', message);
+      }
+      fail(res, 500, 'GENERATE_CANDIDATES_FAILED', message);
+    }
+  });
+
+  router.get('/runs/:id/candidates', async (req: Request, res: Response) => {
+    const auth = await authenticate(req, res);
+    if (!auth) return;
+
+    const { rows: runRows } = await pool.query(
+      `SELECT id, selected_candidate_id FROM zenithjoy.mashup_runs WHERE id = $1 AND tenant_id = $2`,
+      [req.params.id, auth.tenantId],
+    );
+    const run = runRows[0];
+    if (!run) return fail(res, 404, 'RUN_NOT_FOUND', 'run 不存在或不属于当前租户');
+
+    const { rows: candidateRows } = await pool.query(
+      `SELECT id, slot_fill, score FROM zenithjoy.mashup_candidates WHERE run_id = $1 ORDER BY score DESC`,
+      [run.id],
+    );
+
+    ok(res, {
+      runId: run.id,
+      selectedCandidateId: run.selected_candidate_id ?? undefined,
+      candidates: candidateRows.map((c: { id: string; slot_fill: Record<string, string>; score: string | number }) => ({
+        id: c.id,
+        score: Number(c.score),
+        slotFill: c.slot_fill,
+      })),
+    });
+  });
+
+  router.post('/candidates/:id/select', async (req: Request, res: Response) => {
+    const auth = await authenticate(req, res);
+    if (!auth) return;
+
+    const { rows: candidateRows } = await pool.query(
+      `SELECT c.id, c.run_id FROM zenithjoy.mashup_candidates c
+         JOIN zenithjoy.mashup_runs r ON r.id = c.run_id
+        WHERE c.id = $1 AND r.tenant_id = $2`,
+      [req.params.id, auth.tenantId],
+    );
+    const candidate = candidateRows[0];
+    if (!candidate) return fail(res, 404, 'CANDIDATE_NOT_FOUND', '候选不存在或不属于当前租户');
+
+    const { rows: updated } = await pool.query(
+      `UPDATE zenithjoy.mashup_runs SET selected_candidate_id = $2 WHERE id = $1 RETURNING id, selected_candidate_id`,
+      [candidate.run_id, candidate.id],
+    );
+
+    ok(res, { runId: updated[0].id, selectedCandidateId: updated[0].selected_candidate_id });
   });
 
   return router;

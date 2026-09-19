@@ -967,6 +967,22 @@ tests:
     product: 批量混剪
     note: "批量混剪 S2 端点契约：GET /api/mashup/templates、POST /api/mashup/runs、GET /api/mashup/runs/:id。租户永远从凭据反查，口径与 materials.ts 一致；覆盖 401 无凭据、400 缺 templateId、200 正常分配、404 模板不存在、404 跨租户不可见。"
 
+  - id: embedding-service
+    path: apps/api/src/services/__tests__/embedding.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪 S3（GP f6f96e17）本地 embedding 服务：mock @xenova/transformers 的 pipeline，验证 embedText 归一化+mean pooling 调用形状、pipeline 单例缓存（多次调用只初始化一次）、cosineSimilarity 数学正确性（同向1/正交0/反向-1）、维度不一致 loud-fail。真模型推理留给 mashup-candidate-generation-smoke.sh。"
+
+  - id: mashup-candidate-generation-service
+    path: apps/api/src/services/__tests__/mashup-candidate-generation.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪 S3 候选生成引擎：mock embedding 模块+假 pool。覆盖——多候选按 score 降序、候选内不重复用素材、S2 reshoot_skipped/unfilled 固定槽位在所有候选里原样透传为空、J10 候选级去重（素材集合相同的候选只保留一条）、targetCount 生效、run 不存在 loud-fail、变量槽位当前无候选素材时透传为空不抛异常。"
+
   - id: video-frame-extract-shared
     path: apps/api/src/services/__tests__/video-frame-extract.test.ts
     type: unit

@@ -378,9 +378,12 @@ golden_paths:
         name: 客户的素材变成系统认得出内容的可用库（素材打标签）
       - id: step2
         name: 客户定下这批视频要按什么套路剪（槽位模板分配）
+      - id: step3
+        name: 客户刷到一屏候选方案任选（语义检索候选生成）
     smoke_files:
       - .github/workflows/scripts/smoke/material-tagging-smoke.sh
       - .github/workflows/scripts/smoke/mashup-slot-assignment-smoke.sh
+      - .github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh
 
   - id: viral_video_remake
     app_id: customer_app
