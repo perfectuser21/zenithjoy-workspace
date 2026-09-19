@@ -7,7 +7,7 @@ import { makeTmp, makeFakeAdb, makePassthroughConvert, startFakeApi, makeEnv, ru
 
 const LIB = new URL('../wall-lib.sh', import.meta.url).pathname;
 // 必须异步：假中台与测试同进程，spawnSync 会阻塞事件循环导致 curl 永远收不到响应
-const run = (script, env) => runBash(`. "${LIB}"; ${script}`, env);
+const run = (script, env, opts) => runBash(`. "${LIB}"; ${script}`, env, opts);
 
 test('profile→serial 与缓存读写', async () => {
   const dir = makeTmp();
@@ -29,6 +29,15 @@ test('缓存并发写：三台同时注册互不覆盖（子进程 $$ 相同不�
     const lines = r.stdout.split('\n').filter(Boolean).sort();
     assert.deepEqual(lines, ['A\t1\tphone-A', 'B\t2\tphone-B', 'C\t3\tphone-C']);
   }
+});
+
+test('缓存状态目录不可用：15s 内返回非 0，不无限自旋', async () => {
+  const dir = makeTmp();
+  const env = makeEnv(dir, { apiBase: 'http://127.0.0.1:1', adb: makeFakeAdb(dir), convert: makePassthroughConvert(dir) });
+  const r = await run('wall_load_env && WALL_AGENTS_TSV="$HOME/nope/x.tsv" && wall_cache_put A 1; echo rc=$?', env, { timeoutMs: 15_000 });
+  assert.equal(r.timedOut, false, '15s 内没返回（无限自旋）');
+  assert.match(r.stdout, /rc=[1-9]/);
+  assert.match(readFileSync(join(dir, 'wall.log'), 'utf8'), /cache 锁不可用/);
 });
 
 test('register 传 license/machine_id/hostname=phone-<序列号>，返回 uuid 并写缓存', async (t) => {

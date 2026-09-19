@@ -8,15 +8,17 @@ import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 
 /** 异步跑一段 bash（假中台与测试同进程，禁用 spawnSync：它会阻塞事件循环，curl 永远等不到响应） */
-export function runBash(script, env, { bash = process.env.WALL_TEST_BASH || 'bash' } = {}) {
+export function runBash(script, env, { bash = process.env.WALL_TEST_BASH || 'bash', timeoutMs = 60_000 } = {}) {
   return new Promise((resolve) => {
     const p = spawn(bash, ['-c', script], { env });
     let stdout = '';
     let stderr = '';
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; p.kill('SIGKILL'); }, timeoutMs); // 脚本自旋时不让测试挂死
     p.stdout.on('data', (d) => { stdout += d; });
     p.stderr.on('data', (d) => { stderr += d; });
-    p.on('error', (e) => resolve({ status: -1, stdout, stderr: String(e) })); // bash 不存在时不挂死
-    p.on('close', (status) => resolve({ status, stdout, stderr }));
+    p.on('error', (e) => { clearTimeout(timer); resolve({ status: -1, stdout, stderr: String(e), timedOut }); }); // bash 不存在时不挂死
+    p.on('close', (status) => { clearTimeout(timer); resolve({ status, stdout, stderr, timedOut }); });
   });
 }
 
