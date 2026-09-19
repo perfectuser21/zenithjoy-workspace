@@ -26,9 +26,19 @@ DIR="${1:-.}"
 # 2026-09-09：@tiptap/core high 当天新公布（同批 multer/svgo 已 npm audit fix 就地修掉），
 # fix 需 tiptap 全家桶 semver major（staff-hub 协同笔记在用）。已建 issue ad98e258 跟踪，
 # 升级合并后删除 @tiptap/core 这一项。
+# 2026-09-19：批量混剪 S3 语义检索引擎选用 @xenova/transformers 跑本地 embedding（决策
+# 98d1fab1，Gate0 实测 TOAPIS/Gemini 代理零 embedding 权限后的选型）。其传递依赖
+# onnxruntime-web/onnx-proto(high)+protobufjs(critical) 全部是"解析不可信 protobuf
+# schema/描述符导致原型污染/代码注入/DoS"类 CVE。实测核实：①npm audit fix 给出的唯一
+# "修复"是把 @xenova/transformers 降到 1.4.2（更旧版本，倒退非修复）；②继任官方包
+# @huggingface/transformers@4.3.0 同样内置 protobufjs 6.x+7.x 两版，问题是 ONNX.js
+# 生态结构性未修复状态，非选型错误；③威胁模型：本仓库只解析固定模型名对应的、来自
+# HuggingFace Hub 的模型文件，不解析任何客户/用户可控 protobuf 字节，注入面为 0。
+# 已建 issue 1db295ce 跟踪，到期条件=ONNX.js 生态任一方发布修复版本后升级删除这四项。
 ALLOWLIST=(
   "js-yaml"
   "@tiptap/core"
+  "@xenova/transformers" "onnx-proto" "onnxruntime-web" "protobufjs"
   "astro" "@astrojs/mdx" "sharp" "miniflare" "wrangler" "undici"
   "eslint" "@eslint/config-array" "@eslint/eslintrc"
   "@typescript-eslint/eslint-plugin" "@typescript-eslint/parser"
