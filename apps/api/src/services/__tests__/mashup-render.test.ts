@@ -69,7 +69,7 @@ describe('renderCandidate', () => {
     process.env.TOAPIS_API_KEY = 'test-key';
     mockDb();
     global.fetch = vi.fn().mockResolvedValue({ ok: true, arrayBuffer: async () => new Uint8Array([1]).buffer }) as unknown as typeof fetch;
-    concatAndScale.mockReturnValue(true);
+    concatAndScale.mockImplementation((_inputs: string[], outPath: string) => { require('fs').writeFileSync(outPath, Buffer.from([0])); return true; });
     extractFrameBase64.mockReturnValue('data:image/jpeg;base64,AAAA');
     axiosPost.mockResolvedValue({
       data: { choices: [{ message: { content: '安全：通过\n水印：无' } }] },
@@ -93,7 +93,7 @@ describe('renderCandidate', () => {
     process.env.TOAPIS_API_KEY = 'test-key';
     mockDb();
     global.fetch = vi.fn().mockResolvedValue({ ok: true, arrayBuffer: async () => new Uint8Array([1]).buffer }) as unknown as typeof fetch;
-    concatAndScale.mockReturnValue(true);
+    concatAndScale.mockImplementation((_inputs: string[], outPath: string) => { require('fs').writeFileSync(outPath, Buffer.from([0])); return true; });
     extractFrameBase64.mockReturnValue('data:image/jpeg;base64,AAAA');
     axiosPost.mockResolvedValue({
       data: { choices: [{ message: { content: '安全：不通过\n水印：无' } }] },
@@ -113,7 +113,7 @@ describe('renderCandidate', () => {
     process.env.TOAPIS_API_KEY = 'test-key';
     mockDb();
     global.fetch = vi.fn().mockResolvedValue({ ok: true, arrayBuffer: async () => new Uint8Array([1]).buffer }) as unknown as typeof fetch;
-    concatAndScale.mockReturnValue(true);
+    concatAndScale.mockImplementation((_inputs: string[], outPath: string) => { require('fs').writeFileSync(outPath, Buffer.from([0])); return true; });
     extractFrameBase64.mockReturnValue('data:image/jpeg;base64,AAAA');
     axiosPost.mockResolvedValue({
       data: { choices: [{ message: { content: '安全：通过\n水印：有' } }] },
@@ -145,7 +145,7 @@ describe('renderCandidate', () => {
   it('未配置 TOAPIS_API_KEY：落 failed_pending_review，不抛异常', async () => {
     mockDb();
     global.fetch = vi.fn().mockResolvedValue({ ok: true, arrayBuffer: async () => new Uint8Array([1]).buffer }) as unknown as typeof fetch;
-    concatAndScale.mockReturnValue(true);
+    concatAndScale.mockImplementation((_inputs: string[], outPath: string) => { require('fs').writeFileSync(outPath, Buffer.from([0])); return true; });
     extractFrameBase64.mockReturnValue('data:image/jpeg;base64,AAAA');
     const storage = fakeStorage();
 

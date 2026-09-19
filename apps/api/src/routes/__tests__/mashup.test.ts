@@ -198,3 +198,34 @@ describe('POST /api/mashup/candidates/:id/select', () => {
     expect(r.body.data.selectedCandidateId).toBe('cand-1');
   });
 });
+
+vi.mock('../../services/mashup-render', () => ({ renderCandidate: vi.fn() }));
+import { renderCandidate } from '../../services/mashup-render';
+
+describe('POST /api/mashup/candidates/:id/render', () => {
+  it('没有凭据 → 401，不触发渲染', async () => {
+    const r = await request(makeApp()).post('/api/mashup/candidates/cand-1/render');
+    expect(r.status).toBe(401);
+    expect(renderCandidate).not.toHaveBeenCalled();
+  });
+
+  it('已认证：触发渲染并返回结果（fail-closed 时 exportUrl 缺省）', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (renderCandidate as any).mockResolvedValue({
+      contentId: 'content-1',
+      safetyCheckStatus: 'flagged',
+      watermarkCheckStatus: 'passed',
+    });
+    const r = await request(makeApp()).post('/api/mashup/candidates/cand-1/render').set('X-Upload-Token', TOKEN_A).send({});
+    expect(r.status).toBe(200);
+    expect(r.body.data.contentId).toBe('content-1');
+    expect(r.body.data.exportUrl).toBeUndefined();
+  });
+
+  it('候选不存在 → 404', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (renderCandidate as any).mockRejectedValue(new Error('candidate not found: cand-x'));
+    const r = await request(makeApp()).post('/api/mashup/candidates/cand-x/render').set('X-Upload-Token', TOKEN_A).send({});
+    expect(r.status).toBe(404);
+  });
+});
