@@ -1015,6 +1015,13 @@ tests:
     status: active
     product: 素材上传链路
     note: "Dashboard 素材 API 客户端：isVideo 在 mime 不可靠时退回看扩展名（快捷指令常传 octet-stream，判错会把视频塞进 img src 渲染成破图）；listMaterials 必须先用登录态换出 license_key 再带 X-Upload-Token（Dashboard 用登录态、素材端点认 token，两套鉴权对不上，不带 header 整页 401）；不提供 tenant_id 参数（租户由服务端从凭据反查）。"
+  - id: mashup-api-client
+    path: apps/dashboard/src/api/__tests__/mashup.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "Dashboard 批量混剪 API 客户端：listTemplates/createRun/getRun/generateCandidates/listCandidates/selectCandidate/renderCandidate 七个函数，与 materials.api.ts 同口径——登录态换 X-Upload-Token 再带 header 调用 /mashup/* 端点。"
   - id: material-storage-cos-slice
     path: apps/api/src/services/__tests__/material-storage-cos.test.ts
     type: unit
