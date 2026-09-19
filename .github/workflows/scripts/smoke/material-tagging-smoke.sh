@@ -100,8 +100,8 @@ tagMaterial('$MATERIAL_ID', { storage: { getSignedUrl: async () => 'http://127.0
 " | grep '^RESULT_JSON:' | sed 's/^RESULT_JSON://') || fail "tagMaterial 调用失败"
 echo "  返回: $RESULT"
 [ -n "$RESULT" ] || fail "未取得调用结果（node 进程异常退出？）"
-echo "$RESULT" | grep -q '"status":"failed_pending_review"' || fail "期望 failed_pending_review，实际 $RESULT"
-echo "$RESULT" | grep -q '"reason":"no_api_key"' || fail "期望 reason=no_api_key，实际 $RESULT"
+grep -q '"status":"failed_pending_review"' <<< "$RESULT" || fail "期望 failed_pending_review，实际 $RESULT"
+grep -q '"reason":"no_api_key"' <<< "$RESULT" || fail "期望 reason=no_api_key，实际 $RESULT"
 ok "服务返回 failed_pending_review(no_api_key)"
 
 DB_STATUS=$(psql_q "SELECT tag_status FROM zenithjoy.materials WHERE id = '$MATERIAL_ID'")
@@ -120,7 +120,7 @@ tagMaterial('$MATERIAL_ID', { storage: { getSignedUrl: async () => 'http://127.0
 " | grep '^RESULT_JSON:' | sed 's/^RESULT_JSON://') || fail "tagMaterial 调用失败(第二次)"
 echo "  返回: $RESULT2"
 [ -n "$RESULT2" ] || fail "未取得第二次调用结果（node 进程异常退出？）"
-echo "$RESULT2" | grep -q '"reason":"frame_extraction_failed"' || fail "期望 reason=frame_extraction_failed，实际 $RESULT2"
+grep -q '"reason":"frame_extraction_failed"' <<< "$RESULT2" || fail "期望 reason=frame_extraction_failed，实际 $RESULT2"
 ok "抽帧失败路径落 failed_pending_review(frame_extraction_failed)"
 
 echo "✅ material-tagging smoke 全部通过"
