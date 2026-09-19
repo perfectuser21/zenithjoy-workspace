@@ -432,12 +432,17 @@
         {
           "id": "step3",
           "name": "客户刷到一屏候选方案任选（语义检索候选生成）"
+        },
+        {
+          "id": "step4",
+          "name": "客户选中的方案变成能直接发的高清成片（渲染+内容安全Gate）"
         }
       ],
       "smoke_files": [
         ".github/workflows/scripts/smoke/material-tagging-smoke.sh",
         ".github/workflows/scripts/smoke/mashup-slot-assignment-smoke.sh",
-        ".github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh"
+        ".github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh",
+        ".github/workflows/scripts/smoke/mashup-render-smoke.sh"
       ]
     },
     {
@@ -591,5 +596,5 @@
       ]
     }
   ],
-  "digest": "e014231240c8969f6c948bc2061ef22c23f57edd28d7bda67e6546506c20dd1d"
+  "digest": "f6b8b3c41445e0c9a9dbdd21f52675f61f18e0ea3d8a23a64b3bc853324d3790"
 }

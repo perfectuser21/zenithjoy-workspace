@@ -983,6 +983,22 @@ tests:
     product: 批量混剪
     note: "批量混剪 S3 候选生成引擎：mock embedding 模块+假 pool。覆盖——多候选按 score 降序、候选内不重复用素材、S2 reshoot_skipped/unfilled 固定槽位在所有候选里原样透传为空、J10 候选级去重（素材集合相同的候选只保留一条）、targetCount 生效、run 不存在 loud-fail、变量槽位当前无候选素材时透传为空不抛异常。"
 
+  - id: mashup-render-ffmpeg
+    path: apps/api/src/services/__tests__/mashup-render-ffmpeg.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪 S4（GP f6f96e17）高清成片合成的 ffmpeg 编排层：真调 ffmpeg（testsrc/testsrc2 合成源现场生成，同 video-frame-extract.test.ts 口径）。覆盖多段不同分辨率素材统一缩放到 1920x1080+时长为各段之和、单段素材边界情况、空输入/输入文件不存在均返回 false 不抛异常。"
+
+  - id: mashup-render-service
+    path: apps/api/src/services/__tests__/mashup-render.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪 S4 渲染+内容安全Gate编排层：mock DB/axios(Gemini)/ffmpeg/抽帧。fail-closed（proposal-v2.md A1）覆盖——安全+水印双通过才上传成片给URL；安全不通过/检测到水印/ffmpeg合成失败/未配置TOAPIS_API_KEY 均落 failed_pending_review 或 flagged，export_url/download_url 恒缺省；候选不存在 loud-fail。"
+
   - id: video-frame-extract-shared
     path: apps/api/src/services/__tests__/video-frame-extract.test.ts
     type: unit
