@@ -10,9 +10,9 @@ const query = vi.fn();
 vi.mock('../../db/connection', () => ({ default: { query } }));
 
 const axiosPost = vi.fn();
+const isAxiosError = (err: unknown) => (err as { isAxiosError?: boolean })?.isAxiosError === true;
 vi.mock('axios', () => ({
-  default: { post: axiosPost },
-  isAxiosError: (err: unknown) => (err as { isAxiosError?: boolean })?.isAxiosError === true,
+  default: { post: axiosPost, isAxiosError },
 }));
 
 const extractFrameBase64 = vi.fn();
