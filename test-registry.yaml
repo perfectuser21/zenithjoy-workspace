@@ -999,6 +999,22 @@ tests:
     product: 批量混剪
     note: "批量混剪 S4 渲染+内容安全Gate编排层：mock DB/axios(Gemini)/ffmpeg/抽帧。fail-closed（proposal-v2.md A1）覆盖——安全+水印双通过才上传成片给URL；安全不通过/检测到水印/ffmpeg合成失败/未配置TOAPIS_API_KEY 均落 failed_pending_review 或 flagged，export_url/download_url 恒缺省；候选不存在 loud-fail。"
 
+  - id: dockerfile-ffmpeg
+    path: apps/api/src/services/__tests__/dockerfile-ffmpeg.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "回归测试(2026-09-19)：真机复现 apps/api/Dockerfile 换 node:20-bookworm-slim 基础镜像起从未装过 ffmpeg，mashup-render-ffmpeg.ts 的 spawnSync('ffmpeg',...) 找不到可执行文件不抛异常、静默 fail-closed 成 failed_pending_review，界面显示内容审核问题实为二进制缺失。断言 Dockerfile 生产阶段的 apt-get install 含 ffmpeg，防止再次漏装。"
+
+  - id: mashup-result-step-preview
+    path: apps/dashboard/src/pages/MashupPage.ResultStep.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "真机反馈(2026-09-19)：用户选完候选渲染通过后只有下载链接看不到成片。断言安全+水印双通过且有 downloadUrl 时内联渲染 <video controls src=downloadUrl>；failed_pending_review/flagged 场景不渲染 video，保留原有文案。"
+
   - id: video-frame-extract-shared
     path: apps/api/src/services/__tests__/video-frame-extract.test.ts
     type: unit
