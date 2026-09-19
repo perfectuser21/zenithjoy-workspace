@@ -152,4 +152,23 @@ renderCandidate({ tenantId: '$TENANT', candidateId: '00000000-0000-4000-8000-000
 " || fail "不存在候选未 loud-fail"
 ok "不存在候选 loud-fail"
 
+echo "== 4. 启动期二进制依赖自检（0919 真机事故：镜像漏 ffmpeg，渲染静默 fail-closed）=="
+BIN_CHECK=$(node -e "
+const { verifyStartupBinaries } = require('./apps/api/dist/startup-check.js');
+console.log(JSON.stringify(verifyStartupBinaries()));
+")
+echo "  当前环境（应装了 ffmpeg）自检结果: $BIN_CHECK"
+grep -q '"ok":true' <<< "$BIN_CHECK" || fail "本 CI 环境已装 ffmpeg 却自检不通过：$BIN_CHECK"
+grep -q '"present":\["ffmpeg"\]' <<< "$BIN_CHECK" || fail "自检结果未把 ffmpeg 列为 present：$BIN_CHECK"
+ok "verifyStartupBinaries() 在真实装了 ffmpeg 的环境里正确判定 ok=true"
+
+MISSING_CHECK=$(node -e "
+const { verifyStartupBinaries } = require('./apps/api/dist/startup-check.js');
+const fakeMissing = () => { throw new Error('ENOENT: 模拟找不到可执行文件'); };
+console.log(JSON.stringify(verifyStartupBinaries([{ name: 'ffmpeg', versionArgs: ['-version'], consequence: 'x' }], fakeMissing)));
+")
+grep -q '"ok":false' <<< "$MISSING_CHECK" || fail "模拟 ffmpeg 缺失时应判定 ok=false：$MISSING_CHECK"
+grep -q '"missing":\["ffmpeg"\]' <<< "$MISSING_CHECK" || fail "模拟缺失时 missing 未含 ffmpeg：$MISSING_CHECK"
+ok "verifyStartupBinaries() 在二进制缺失时正确判定 ok=false（这就是 0919 真机复现的路径）"
+
 echo "✅ mashup-render smoke 全部通过"
