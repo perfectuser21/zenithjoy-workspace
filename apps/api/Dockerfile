@@ -1,7 +1,16 @@
 # Build stage — compiles TypeScript (build context = monorepo root)
-FROM node:20-alpine AS builder
-# npm run build 里的 write-build-info.sh 是 bash 脚本；alpine 默认无 bash
-RUN apk add --no-cache bash
+#
+# 基础镜像用 node:20-bookworm-slim（Debian，真 glibc），不用 node:20-alpine（musl）——
+# 批量混剪 S3(GP f6f96e17) 本地 embedding 依赖 @xenova/transformers 在 Node 环境无条件
+# `import * as ONNX_NODE from 'onnxruntime-node'`（backends/onnx.js 顶层 import，无
+# try/catch、无 WASM 兜底分支），其原生 .node 绑定是 glibc 编译的。0919 真机 staging
+# 部署两轮实测复现：① Alpine 缺 ld-linux-x86-64.so.2，dlopen 直接失败，进程启动即崩；
+# ② 加 gcompat（glibc 兼容 shim）后 dlopen 能过，但 onnxruntime 内部执行路径仍抛
+# `Ort::Exception: No error information` 反复崩溃重启——gcompat 只是部分 glibc 符号
+# 兼容层，撑不住 onnxruntime 这种重度原生库的完整运行时需求。换真 glibc 基础镜像才是
+# 这类"预编译 glibc 原生绑定 + Node 原生插件"组合的根治解法（Prisma/TensorFlow.js 等
+# 同类库官方文档都是这个结论：native addon 多就别用 alpine）。
+FROM node:20-bookworm-slim AS builder
 WORKDIR /repo
 
 # build-info：容器 build 无 .git，sha 必须由 build arg 注入（deploy-staging-hk.yml 传入）
@@ -39,16 +48,9 @@ RUN npm run build
 RUN mkdir -p dist/templates && cp src/templates/*.jsx dist/templates/
 
 # Production stage
-FROM node:20-alpine
+FROM node:20-bookworm-slim
 # tzdata：TZ=Asia/Shanghai 生效依赖（无 tzdata 时 date 恒 UTC，日志/调度时区全错）
-# gcompat：批量混剪 S3(GP f6f96e17) 本地 embedding 依赖 @xenova/transformers，它在 Node
-# 环境下无条件 `import * as ONNX_NODE from 'onnxruntime-node'`（backends/onnx.js 顶层
-# import，无 try/catch、无 WASM 兜底分支），onnxruntime-node 的原生 .node 绑定是 glibc
-# 编译的，Alpine 是 musl，缺 ld-linux-x86-64.so.2 直接 dlopen 失败——不是运行时降级，
-# 是 Node 进程启动时崩溃退出（ERR_DLOPEN_FAILED），整个 API 起不来（0919 真机 staging
-# 部署实测复现：健康检查恒 unhealthy）。gcompat 提供 glibc 兼容 shim，是这类"Alpine +
-# 预编译 glibc 原生绑定"组合的标准解法（Prisma/TensorFlow.js 等同类问题官方推荐做法）。
-RUN apk add --no-cache tzdata gcompat
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
 WORKDIR /repo
 
 # 直接复用 builder 阶段已经跑过 npm ci + tsc 编译验证过的 node_modules，不再单独
