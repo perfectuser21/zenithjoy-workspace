@@ -89,7 +89,8 @@ while true; do
   $C --profile "$PROFILE" lock-release "$TAG" >>$LOG 2>&1 || true
 
   if print -- "$OUT" | grep -q "send_status=sent"; then
-    mark "$RID" sent "ok"
+    RAWTAIL=$(print -- "$OUT" | tail -3 | tr '\n' ' ' | cut -c1-180)
+    mark "$RID" sent "$RAWTAIL"
     log "✅ 单#$SEQ 送达(第${ATTEMPT}次尝试)"
     exit 0
   fi

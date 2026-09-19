@@ -39,13 +39,14 @@ console.error("line-route: " + ROUTE.key + " base=" + B + " POOL=" + POOL);
   let created = 0, dup = 0;
   for (const ln of lines) {
     const f = ln.split("\t");
-    const [, nick, id, atype, comment, cdate, region, video, kw, pip, purl] = f;
+    const [, nick, id, atype, comment, cdate, region, video, kw, pip, purl, vurl] = f;
     const rid = `${nick}|${id||"noid"}|${(comment||"").slice(0,20)}`;
     if (seen.has(rid)) { dup++; continue; }
     const body = { fields: {
       "原始评论ID": rid, "运行批次": BATCH || "manual",
       "采集时间": asTime("采集时间", now), "命中关键词": kw || "",
       "来源视频": (video||"").slice(0,100),
+      "评论作品视频链接": (vurl && vurl.startsWith("http")) ? vurl : "",
       "评论原文": comment || "", "评论者昵称": nick || "",
       // 0915 主理人逐列验收拍板: 独立字段成列;「用户主页标识」拼串保留双写(存量兼容,勿再新增读取方)
       "用户主页标识": [id||"", purl||"", atype||""].filter(Boolean).join(" | "),

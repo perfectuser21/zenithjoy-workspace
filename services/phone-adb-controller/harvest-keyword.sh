@@ -5,14 +5,18 @@
 # 全部动作走 douyin-phone-adb(锁/守卫/频控内建),本脚本只做序列编排。
 set -uo pipefail
 C=~/.local/bin/douyin-phone-adb
-P="$1"; KW="$2"; MAXV="${3:-4}"; TAG="$4"; LOC="${5:-same_city}"
+P="$1"; KW="$2"; MAXV="${3:-4}"; TAG="$4"; LOC="${5:-same_city}"; LINE="${6:-}"
 KWTXT="$(python3 -c "import urllib.parse,sys;print(urllib.parse.unquote(sys.argv[1]))" "$KW")"
 log(){ print -u2 -- "[$(date +%H:%M:%S)] $*"; }
 # RAM盘只有2G,采收截图很快塞爆(0914实证:爆盘让mkdir全军覆没误报锁被占)
 find /Volumes/EvidenceRAM/openclaw-phone/evidence -type f \( -name "*.png" -o -name "*.mkv" -o -name "*.wav" \) -mmin +30 -delete 2>/dev/null
 
-$C --profile "$P" lock-acquire "$TAG" >/dev/null 2>&1 || { log "锁被占,退出"; exit 3; }
-trap '$C --profile "$P" lock-release "$TAG" >/dev/null 2>&1' EXIT
+# 0919 同视频去重: 采集前拉一次「视频池」已存在的视频ID,采集中命中就跳过该视频
+SEENVIDS="$(mktemp -t seen-videos)"
+node "$(dirname "$0")/fetch-seen-videos.js" "$LINE" > "$SEENVIDS" 2>/dev/null
+
+$C --profile "$P" lock-acquire "$TAG" >/dev/null 2>&1 || { log "锁被占,退出"; rm -f "$SEENVIDS"; exit 3; }
+trap '$C --profile "$P" lock-release "$TAG" >/dev/null 2>&1; rm -f "$SEENVIDS"' EXIT
 
 $C --profile "$P" open-app >/dev/null 2>&1; sleep 2
 $C --profile "$P" open-search "$KW" >/dev/null 2>&1 || { log "open-search失败"; exit 1; }
@@ -45,6 +49,11 @@ for CARDLINE in "${(f)CARDS}"; do
   fi
   VID="$(print -- "$VLINK" | sed -n "s/^video_id=//p")"
   [[ -n "$VURL" ]] && log "  作品链接: $VURL"
+  if [[ -n "$VID" ]] && grep -qxF "$VID" "$SEENVIDS" 2>/dev/null; then
+    log "  视频已处理过,跳过: $VID"
+    $C --profile "$P" back >/dev/null 2>&1; sleep 2
+    continue
+  fi
   if ! $C --profile "$P" open-comments "$TAG-v$i-oc" >/dev/null 2>&1; then
     log "  评论区打不开,3秒后重试1次"
     /bin/sleep 3
@@ -93,6 +102,15 @@ for CARDLINE in "${(f)CARDS}"; do
     ATYPE="$(print -- "$IDOUT" | sed -n "s/^account_type=//p")"
     PIP="$(print -- "$IDOUT" | sed -n "s/^profile_ip=//p")"
     if [[ -z "$ONICK" ]]; then log "  行$j 身份验证3次仍失败,弃: $NICK"; continue; fi
+    # 0919 自有账号过滤: 命中自有名单的评论不当线索;若命中的是视频作者本人,整条视频其余评论不再采集
+    if node "$(dirname "$0")/check-own-account.js" "$ONICK" "${OID:-}" >/dev/null 2>&1; then
+      if [[ "$AUTHOR" == "author" ]]; then
+        log "  视频作者是自有账号($ONICK),本视频其余评论不再采集"
+        break
+      fi
+      log "  跳过自有账号: $ONICK"
+      continue
+    fi
     # 0914 主理人验收:每人顺取名片主页直链(identity已回评论区,重进主页跑card-link,其自带恢复)
     "$C" --profile "$P" tap-evidence "$TXX" "$TXY" "$TAG-v$i-u$j-re" </dev/null >/dev/null 2>&1
     sleep 3
