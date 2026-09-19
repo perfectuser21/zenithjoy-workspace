@@ -118,7 +118,9 @@ app.use('/screenshots', express.static(screenshotsDir));
 // Health check —— 含 env 自检状态 + 二进制依赖自检 + 构建信息，让部署后冒烟能看到
 // 配置是否漏 key/漏可执行文件、跑的是哪个构建。二进制自检治根 2026-09-19 事故：
 // 镜像漏 ffmpeg 时批量混剪渲染静默 fail-closed，此前 /health 完全看不出来。
-app.get('/health', (req, res) => {
+// 加限速：verifyStartupBinaries() 用 spawnSync 起子进程，比纯 env 读取重，CodeQL
+// js/missing-rate-limiting 标出这条路由——与 /api/health 同款限速对齐。
+app.get('/health', simpleRateLimit({ windowMs: 60_000, max: 600, keyFn: ipKeyFn }), (req, res) => {
   const cfg = verifyStartupConfig();
   const bin = verifyStartupBinaries();
   res.json({
