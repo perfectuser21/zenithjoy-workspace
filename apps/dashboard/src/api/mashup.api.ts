@@ -66,7 +66,7 @@ export interface RenderResult {
 // （该文件已有同名 helper，这里独立一份而不是共享导入：两个 api 模块各自
 // 独立、不互相依赖，避免以后其中一个改鉴权方式牵连另一个）。
 async function getUploadToken(): Promise<string> {
-  const { data } = await apiClient.get<{ license?: { license_key?: string } | null }>('/account');
+  const { data } = await apiClient.get<{ license?: { license_key?: string } | null }>('/account/me');
   const key = data?.license?.license_key;
   if (!key) {
     throw new Error('当前账号还没有上传凭据。请先在「License」页确认账号已开通。');

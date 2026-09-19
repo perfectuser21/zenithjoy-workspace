@@ -26,7 +26,7 @@ beforeEach(() => {
 
 function mockToken() {
   get.mockImplementation(async (url: string) => {
-    if (url === '/account') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
+    if (url === '/account/me') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
     throw new Error('unexpected GET ' + url);
   });
 }
@@ -34,7 +34,7 @@ function mockToken() {
 describe('listTemplates', () => {
   it('带 X-Upload-Token 调 GET /mashup/templates', async () => {
     get.mockImplementation(async (url: string) => {
-      if (url === '/account') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
+      if (url === '/account/me') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
       if (url === '/mashup/templates') return { data: { data: [{ id: 'tmpl-1', name: '标准四槽位', slots: [] }] } };
       throw new Error('unexpected GET ' + url);
     });
@@ -67,7 +67,7 @@ describe('getRun', () => {
   it('GET /mashup/runs/:id', async () => {
     mockToken();
     get.mockImplementation(async (url: string) => {
-      if (url === '/account') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
+      if (url === '/account/me') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
       if (url === '/mashup/runs/run-1') return { data: { data: { runId: 'run-1', status: 'completed', assignments: [] } } };
       throw new Error('unexpected GET ' + url);
     });
@@ -93,7 +93,7 @@ describe('listCandidates', () => {
   it('GET /mashup/runs/:id/candidates', async () => {
     mockToken();
     get.mockImplementation(async (url: string) => {
-      if (url === '/account') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
+      if (url === '/account/me') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
       if (url === '/mashup/runs/run-1/candidates') return { data: { data: { runId: 'run-1', candidates: [{ id: 'c1', score: 1, slotFill: {} }] } } };
       throw new Error('unexpected GET ' + url);
     });

@@ -29,7 +29,7 @@ beforeEach(() => {
 describe('listMyContents — 先换 token 再列作品', () => {
   it('用登录态调 /account 拿 license_key，再带 X-Upload-Token 调 GET /contents', async () => {
     get.mockImplementation(async (url: string) => {
-      if (url === '/account') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
+      if (url === '/account/me') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
       if (url === '/contents') return { data: { data: { items: [] } } };
       throw new Error('unexpected url ' + url);
     });
@@ -44,7 +44,7 @@ describe('listMyContents — 先换 token 再列作品', () => {
 
   it('账号还没有 license_key → 报可读的错，不去调 /contents', async () => {
     get.mockImplementation(async (url: string) => {
-      if (url === '/account') return { data: { license: null } };
+      if (url === '/account/me') return { data: { license: null } };
       throw new Error('不该走到这里');
     });
     await expect(listMyContents()).rejects.toThrow(/上传凭据/);
@@ -55,7 +55,7 @@ describe('listMyContents — 先换 token 再列作品', () => {
 describe('updateMyContent — 带 X-Upload-Token 调 PATCH /contents/:id', () => {
   beforeEach(() => {
     get.mockImplementation(async (url: string) => {
-      if (url === '/account') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
+      if (url === '/account/me') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
       throw new Error('unexpected url ' + url);
     });
     patch.mockResolvedValue({ data: { data: { id: 'c1', updated: true } } });
@@ -74,7 +74,7 @@ describe('updateMyContent — 带 X-Upload-Token 调 PATCH /contents/:id', () =>
 describe('publishMyContent — platforms 子集语义（重发失败平台的关键断言）', () => {
   beforeEach(() => {
     get.mockImplementation(async (url: string) => {
-      if (url === '/account') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
+      if (url === '/account/me') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
       throw new Error('不该走到这里');
     });
     post.mockResolvedValue({ data: { data: {} } });
