@@ -45,4 +45,19 @@ function requeueTransientFields(prevReply, note, now) {
   };
 }
 
-module.exports = { extractLead, isValidDyid, classifyPending, requeueTransientFields, TRANSIENT_MARK };
+// 0919 真机实证(截图+ui-evidence XML实锤): 消息气泡渲染成功≠真送达——对方设置"仅互关可发消息"
+// 时,气泡照样能发出来(grep 得到 send_status=sent),但对方账号侧收不到,界面会追加一行系统提示
+// "对方设置了仅和他互关的人可发消息...暂无法给对方发送消息"。outreach-tick.sh 发送后二次核验
+// 命中这行提示时调用本函数,不再冒充"是"。
+function restrictedFields(note, now) {
+  const clip = (s) => s.slice(0, 200);
+  return {
+    "状态": "已触达",
+    "发送状态": "已发送",
+    "触达时间": now,
+    "成功触达": "否",
+    "回复结果": clip("[仅互关限制,消息虽发出但对方收不到]" + note),
+  };
+}
+
+module.exports = { extractLead, isValidDyid, classifyPending, requeueTransientFields, restrictedFields, TRANSIENT_MARK };

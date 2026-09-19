@@ -40,3 +40,15 @@ test("requeueTransientFields: 二轮转受阻,保留原文", () => {
   assert.ok(f["回复结果"].includes("2轮转受阻"));
   assert.ok(f["回复结果"].length <= 200);
 });
+test("restrictedFields: 气泡已发但仅互关限制,成功触达=否(0919真机实证)", () => {
+  const f = lib.restrictedFields("对方仅互关可发消息,消息气泡已出但对方收不到", "0919 19:06(UTC+8)");
+  assert.equal(f["状态"], "已触达");
+  assert.equal(f["发送状态"], "已发送");
+  assert.equal(f["成功触达"], "否");
+  assert.equal(f["触达时间"], "0919 19:06(UTC+8)");
+  assert.ok(f["回复结果"].includes("仅互关限制"));
+});
+test("restrictedFields: 回复结果超长截断到200字符", () => {
+  const f = lib.restrictedFields("x".repeat(300), "0919 19:06(UTC+8)");
+  assert.ok(f["回复结果"].length <= 200);
+});

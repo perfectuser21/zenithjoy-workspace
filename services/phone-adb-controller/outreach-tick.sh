@@ -86,15 +86,27 @@ while true; do
   OUT=$($C --profile "$PROFILE" private-message-send "$SENDER" "$DYID" "$MSGB64" "$TAG" ${PURL:+"$PURL"} </dev/null 2>&1)
   RC=$?
   print -- "$OUT" | grep -vE "file pulled" | tail -4 >> $LOG
-  $C --profile "$PROFILE" lock-release "$TAG" >>$LOG 2>&1 || true
 
   if print -- "$OUT" | grep -q "send_status=sent"; then
     RAWTAIL=$(print -- "$OUT" | tail -3 | tr '\n' ' ' | cut -c1-180)
+    # 0919 真机实证(截图+ui-evidence XML实锤): 消息气泡渲染成功≠真送达——对方设置
+    # "仅互关可发消息"时,气泡照样能发出来(send_status=sent),但对方收不到,界面会
+    # 追加系统提示"...暂无法给对方发送消息"。发送后借同一把锁二次核验,不能只信气泡。
+    RESTRICT_TAG="$TAG-restrict"
+    $C --profile "$PROFILE" ui-evidence "$RESTRICT_TAG" >>$LOG 2>&1
+    RESTRICT_XML="/private/tmp/openclaw-phone/evidence/$PROFILE/$RESTRICT_TAG.xml"
+    $C --profile "$PROFILE" lock-release "$TAG" >>$LOG 2>&1 || true
+    if [[ -f "$RESTRICT_XML" ]] && grep -qF "暂无法给对方发送消息" "$RESTRICT_XML" 2>/dev/null; then
+      mark "$RID" restricted "对方仅互关可发消息,消息气泡已出但对方收不到"
+      log "⚠️ 单#$SEQ 气泡已发但仅互关限制,标记受限(不计成功触达)"
+      exit 0
+    fi
     mark "$RID" sent "$RAWTAIL"
     log "✅ 单#$SEQ 送达(第${ATTEMPT}次尝试)"
     exit 0
   fi
 
+  $C --profile "$PROFILE" lock-release "$TAG" >>$LOG 2>&1 || true
   CLS=$(classify_failure "$OUT")
   REASON=$(print -- "$OUT" | grep -E "failure_class=|die|not" | tail -1 | head -c 150)
   if [[ "$CLS" != "transient" ]]; then

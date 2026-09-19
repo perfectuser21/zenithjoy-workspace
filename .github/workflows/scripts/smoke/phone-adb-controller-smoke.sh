@@ -89,6 +89,13 @@ grep -qF 'docker exec openclaw-gateway node /root/.openclaw/fetch-seen-videos.js
 if grep -E '^[^#]*\bnode "\$\(dirname "\$0"\)/fetch-seen-videos\.js"' "$D/harvest-keyword.sh" | grep -qv 'ssh'; then
   fail "fetch-seen-videos.js 被本机直接调用(手机机无飞书凭据,已实锤会静默失效)"
 fi
+# 0919 真机实证(截图+ui-evidence XML): 私信气泡渲染成功≠真送达,对方"仅互关可发消息"
+# 限制生效时气泡照样能发出来但对方收不到——outreach-tick.sh 发送后必须二次核验限制提示，
+# 命中时走 restricted 分支(成功触达=否),不能只信 send_status=sent。
+grep -qF '暂无法给对方发送消息' "$D/outreach-tick.sh" || fail "outreach-tick 未接仅互关限制二次核验(0919真机实证会误判送达成功)"
+grep -qF 'restricted' "$D/outreach-tick.sh" || fail "outreach-tick 未接 restricted 分支"
+grep -qF 'restrictedFields' "$D/next-outreach.js" || fail "next-outreach done模式未接 restrictedFields"
+grep -qF 'restrictedFields' "$D/next-outreach-lib.js" || fail "next-outreach-lib 缺 restrictedFields"
 
 
 # 层5: escort 跨轮记忆契约(决策 c2901aff, 0915 主理人拍板修老Commander失忆病)
