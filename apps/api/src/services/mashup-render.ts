@@ -131,14 +131,22 @@ export async function renderCandidate(
     for (const materialId of orderedMaterialIds) {
       const material = materialsById.get(materialId);
       if (!material) continue;
-      const signedUrl = await deps.storage.getSignedUrl(material.storage_key);
-      const resp = await fetch(signedUrl);
-      if (!resp.ok) continue;
-      const buffer = Buffer.from(await resp.arrayBuffer());
-      const tempPath = join(workDir, `mashup-render-in-${randomUUID()}.mp4`);
-      writeFileSync(tempPath, buffer);
-      tempFiles.push(tempPath);
-      inputPaths.push(tempPath);
+      // 下载单个素材失败（含 fetch() 本身网络层 throw，不只是 !resp.ok 的 HTTP
+      // 错误状态）就跳过这一条，不让整个渲染因为一个素材下不动而裸崩——
+      // 与 material-tagging.ts 的 extractFrame 同一个教训：下载失败要优雅降级，
+      // 不能把网络异常直接冒泡到路由层变成裸 500。
+      try {
+        const signedUrl = await deps.storage.getSignedUrl(material.storage_key);
+        const resp = await fetch(signedUrl);
+        if (!resp.ok) continue;
+        const buffer = Buffer.from(await resp.arrayBuffer());
+        const tempPath = join(workDir, `mashup-render-in-${randomUUID()}.mp4`);
+        writeFileSync(tempPath, buffer);
+        tempFiles.push(tempPath);
+        inputPaths.push(tempPath);
+      } catch (err) {
+        console.error('[mashup-render] 素材下载失败 materialId=%s reason=%s', materialId, (err as Error).message);
+      }
     }
 
     const rendered = inputPaths.length > 0 && concatAndScale(inputPaths, outputPath);
