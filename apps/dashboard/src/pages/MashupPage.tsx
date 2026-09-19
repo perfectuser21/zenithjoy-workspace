@@ -10,6 +10,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import { Film, RefreshCw, CheckCircle2, XCircle, Clock, ArrowLeft, Download } from 'lucide-react';
 import { listMaterials, formatSize, type Material } from '../api/materials.api';
 import {
@@ -37,6 +38,19 @@ const ASSIGNMENT_BADGE: Record<SlotAssignmentStatus, { text: string; className: 
   reshoot_skipped: { text: '暂缺素材，已跳过', className: 'bg-amber-100 text-amber-800' },
   unfilled: { text: '选填，未匹配', className: 'bg-gray-100 text-gray-500' },
 };
+
+/**
+ * 后端 fail() helper 统一落 { error: { code, message } }。axios 的 err.message
+ * 只有"Request failed with status code 500"这种没信息量的话——真机人工验证时
+ * 亲眼看到这坨字出现在界面上，用户根本不知道发生了什么。优先取后端给的原因。
+ */
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    const backendMsg = err.response?.data?.error?.message;
+    if (typeof backendMsg === 'string' && backendMsg) return backendMsg;
+  }
+  return err instanceof Error ? err.message : fallback;
+}
 
 function StepBar({ step }: { step: Step }) {
   const steps: { key: Step; label: string }[] = [
@@ -92,13 +106,13 @@ export default function MashupPage() {
   const createRunMutation = useMutation({
     mutationFn: () => createRun(templateId, Array.from(selectedMaterialIds)),
     onSuccess: (r) => { setRun(r); setErrorMsg(null); setStep('assigned'); },
-    onError: (e) => setErrorMsg(e instanceof Error ? e.message : '生成槽位分配失败'),
+    onError: (e) => setErrorMsg(extractErrorMessage(e, '生成槽位分配失败')),
   });
 
   const generateCandidatesMutation = useMutation({
     mutationFn: () => generateCandidates(run!.runId),
     onSuccess: (r) => { setCandidates(r); setErrorMsg(null); setStep('candidates'); },
-    onError: (e) => setErrorMsg(e instanceof Error ? e.message : '生成候选方案失败'),
+    onError: (e) => setErrorMsg(extractErrorMessage(e, '生成候选方案失败')),
   });
 
   const selectAndRenderMutation = useMutation({
@@ -108,7 +122,7 @@ export default function MashupPage() {
       return renderCandidate(candidateId);
     },
     onSuccess: (r) => { setRenderResult(r); setErrorMsg(null); setStep('result'); },
-    onError: (e) => setErrorMsg(e instanceof Error ? e.message : '渲染成片失败'),
+    onError: (e) => setErrorMsg(extractErrorMessage(e, '渲染成片失败')),
   });
 
   function toggleMaterial(id: string) {
