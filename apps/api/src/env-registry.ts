@@ -47,6 +47,8 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'OPENROUTER_API_KEY', reason: 'OpenRouter 凭据，缺则不走 OpenRouter 路径' },
   { name: 'OPENROUTER_BASE_URL', reason: 'OpenRouter 网关地址，缺则用默认' },
   { name: 'OPENROUTER_MODEL', reason: 'OpenRouter 模型名，缺则用默认模型' },
+  { name: 'SEEDANCE_API_KEY', reason: '批量混剪 S2 补拍(Seedance)凭据，缺则 assignSlots 必填槽位缺素材时落 reshoot_skipped(reshoot_service_not_configured)，不阻断（Gate0 实测=B，决策 98d1fab1）' },
+  { name: 'HAPPYHORSE_API_KEY', reason: '批量混剪 S2 补拍(Happy Horse)凭据，缺则 assignSlots 必填槽位缺素材时落 reshoot_skipped(reshoot_service_not_configured)，不阻断（Gate0 实测=B，决策 98d1fab1）' },
   { name: 'OPENAI_API_KEY', reason: 'OpenAI 凭据，缺则不走 OpenAI 路径' },
   { name: 'DASHSCOPE_API_KEY', reason: '阿里灵积凭据，缺则不走 dashscope 路径' },
   { name: 'PIAPI_API_KEY', reason: 'PiAPI 凭据，缺则对应能力不可用' },
