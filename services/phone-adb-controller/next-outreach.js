@@ -31,7 +31,9 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : (
     const now = new Date(Date.now()+8*3600e3).toISOString().replace("T"," ").slice(0,16)+"(UTC+8)";
     let fields;
     if (result === "sent") {
-      fields = { "状态": "已触达", "发送状态": "已发送", "触达时间": now };
+      // 0919: 真机ADB二进制目前无法探测"对方未加好友",降级写"待确认"而非冒充"是"；
+      // 原始设备输出(note)透传进回复结果供人工核实(判定点 e035dad8 范畴)。
+      fields = { "状态": "已触达", "发送状态": "已发送", "触达时间": now, "成功触达": "待确认", "回复结果": ("[老链路待人工核验]" + note).slice(0, 200) };
     } else if (result === "requeue") {
       fields = { "状态": "待触达" };  // 环境性失败(锁忙/设备离线): 回队列,不算受阻
     } else if (result === "requeue_transient") {
