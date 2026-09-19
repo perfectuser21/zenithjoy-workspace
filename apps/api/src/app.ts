@@ -8,6 +8,7 @@ import fieldsRouter from './routes/fields';
 import publishRouter from './routes/publish';
 import aiVideoRouter from './routes/ai-video';
 import { createMaterialsRouter } from './routes/materials';
+import { createMashupRouter } from './routes/mashup';
 import { createContentsPublishRouter, createPublishTasksRouter } from './routes/publish-dispatch';
 import aiVideoPipelineRouter from './routes/ai-video-pipeline';
 import snapshotsRouter from './routes/snapshots';
@@ -166,6 +167,8 @@ app.use('/api', publishRouter);
 app.use('/api/ai-video', aiVideoRouter);
 // 素材上传：iPhone 快捷指令 / 小程序 / 电脑 agent 唯一认识的地址
 app.use('/api/materials', createMaterialsRouter());
+// 批量混剪 S2 — 槽位模板分配（GP f6f96e17）
+app.use('/api/mashup', createMashupRouter());
 // Line01 刀1 — 作品→发布任务派发接缝 + 统一发布包
 app.use('/api/contents', createContentsPublishRouter());
 app.use('/api/publish-tasks', createPublishTasksRouter());

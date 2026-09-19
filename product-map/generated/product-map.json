@@ -424,10 +424,15 @@
         {
           "id": "step1",
           "name": "客户的素材变成系统认得出内容的可用库（素材打标签）"
+        },
+        {
+          "id": "step2",
+          "name": "客户定下这批视频要按什么套路剪（槽位模板分配）"
         }
       ],
       "smoke_files": [
-        ".github/workflows/scripts/smoke/material-tagging-smoke.sh"
+        ".github/workflows/scripts/smoke/material-tagging-smoke.sh",
+        ".github/workflows/scripts/smoke/mashup-slot-assignment-smoke.sh"
       ]
     },
     {
@@ -581,5 +586,5 @@
       ]
     }
   ],
-  "digest": "6d990301466b58da7790e9e02ac6c23ecb6db362112d936aa74808386682af2c"
+  "digest": "d6fb016581bc415505da0ebb60e155ffbfdab357d1a7a12ba7fd2ee340d0c641"
 }

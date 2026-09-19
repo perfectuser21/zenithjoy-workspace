@@ -951,6 +951,22 @@ tests:
     product: 素材上传链路
     note: "批量混剪 S1（GP f6f96e17）素材打标签：假 pool+假 storage+mock axios 打桩。三态覆盖——真调 Gemini 成功写回 tagged、未配置 TOAPIS_API_KEY 落 failed_pending_review 不抛异常、抽帧失败落 failed_pending_review 不调 Gemini、Gemini 超时/网络错误落 failed_pending_review、素材 id 不存在 loud-fail 抛异常不静默返回空结果。"
 
+  - id: mashup-slot-assignment-service
+    path: apps/api/src/services/__tests__/mashup-slot-assignment.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪 S2（GP f6f96e17）槽位模板分配：假 pool 打桩。覆盖——四槽位全部命中不同素材落 assigned+run completed；必填槽位缺匹配素材且补拍服务未配置(决策 98d1fab1)落 reshoot_skipped+run completed_partial；选填槽位缺素材落 unfilled 不影响 run completed；同一素材不会被分配给两个槽位；模板不存在 loud-fail；candidate pool 为空必填槽位全部 reshoot_skipped 不抛异常。"
+
+  - id: mashup-routes-contract
+    path: apps/api/src/routes/__tests__/mashup.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪 S2 端点契约：GET /api/mashup/templates、POST /api/mashup/runs、GET /api/mashup/runs/:id。租户永远从凭据反查，口径与 materials.ts 一致；覆盖 401 无凭据、400 缺 templateId、200 正常分配、404 模板不存在、404 跨租户不可见。"
+
   - id: video-frame-extract-shared
     path: apps/api/src/services/__tests__/video-frame-extract.test.ts
     type: unit
