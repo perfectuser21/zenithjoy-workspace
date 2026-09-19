@@ -123,3 +123,78 @@ describe('GET /api/mashup/runs/:id', () => {
     expect(r.body.data.assignments).toHaveLength(1);
   });
 });
+
+vi.mock('../../services/mashup-candidate-generation', () => ({ generateCandidates: vi.fn() }));
+import { generateCandidates } from '../../services/mashup-candidate-generation';
+
+describe('POST /api/mashup/runs/:id/candidates', () => {
+  it('没有凭据 → 401，不触发生成', async () => {
+    const r = await request(makeApp()).post('/api/mashup/runs/run-1/candidates');
+    expect(r.status).toBe(401);
+    expect(generateCandidates).not.toHaveBeenCalled();
+  });
+
+  it('已认证：触发候选生成并返回结果', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (generateCandidates as any).mockResolvedValue({
+      runId: 'run-1',
+      candidates: [{ id: 'cand-1', score: 1.8, slotFill: { hook: 'mat-1', product: 'mat-2' } }],
+    });
+    const r = await request(makeApp()).post('/api/mashup/runs/run-1/candidates').set('X-Upload-Token', TOKEN_A).send({});
+    expect(r.status).toBe(200);
+    expect(generateCandidates).toHaveBeenCalledWith({ tenantId: 'tenant-a', runId: 'run-1', targetCount: undefined });
+    expect(r.body.data.candidates).toHaveLength(1);
+  });
+
+  it('run 不存在 → 404', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (generateCandidates as any).mockRejectedValue(new Error('run not found: run-x'));
+    const r = await request(makeApp()).post('/api/mashup/runs/run-x/candidates').set('X-Upload-Token', TOKEN_A).send({});
+    expect(r.status).toBe(404);
+  });
+});
+
+describe('GET /api/mashup/runs/:id/candidates', () => {
+  it('别的租户的 run → 404', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (pool.query as any).mockResolvedValue({ rows: [] });
+    const r = await request(makeApp()).get('/api/mashup/runs/run-x/candidates').set('X-Upload-Token', TOKEN_A);
+    expect(r.status).toBe(404);
+  });
+
+  it('本租户的 run：按 score 降序返回候选列表', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (pool.query as any).mockImplementation((sql: string) => {
+      if (sql.includes('FROM zenithjoy.mashup_runs')) return { rows: [{ id: 'run-1', selected_candidate_id: null }] };
+      if (sql.includes('FROM zenithjoy.mashup_candidates')) {
+        return { rows: [{ id: 'cand-1', score: '1.8', slot_fill: { hook: 'mat-1' } }] };
+      }
+      return { rows: [] };
+    });
+    const r = await request(makeApp()).get('/api/mashup/runs/run-1/candidates').set('X-Upload-Token', TOKEN_A);
+    expect(r.status).toBe(200);
+    expect(r.body.data.candidates[0]).toMatchObject({ id: 'cand-1', slotFill: { hook: 'mat-1' } });
+    expect(r.body.data.selectedCandidateId).toBeUndefined();
+  });
+});
+
+describe('POST /api/mashup/candidates/:id/select', () => {
+  it('候选不属于当前租户 → 404，不写回 run', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (pool.query as any).mockResolvedValue({ rows: [] });
+    const r = await request(makeApp()).post('/api/mashup/candidates/cand-x/select').set('X-Upload-Token', TOKEN_A).send({});
+    expect(r.status).toBe(404);
+  });
+
+  it('合法候选：写回 run.selected_candidate_id', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (pool.query as any).mockImplementation((sql: string) => {
+      if (sql.includes('FROM zenithjoy.mashup_candidates')) return { rows: [{ id: 'cand-1', run_id: 'run-1' }] };
+      if (sql.includes('UPDATE zenithjoy.mashup_runs')) return { rows: [{ id: 'run-1', selected_candidate_id: 'cand-1' }] };
+      return { rows: [] };
+    });
+    const r = await request(makeApp()).post('/api/mashup/candidates/cand-1/select').set('X-Upload-Token', TOKEN_A).send({});
+    expect(r.status).toBe(200);
+    expect(r.body.data.selectedCandidateId).toBe('cand-1');
+  });
+});

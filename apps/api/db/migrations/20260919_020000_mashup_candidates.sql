@@ -34,3 +34,8 @@ CREATE INDEX IF NOT EXISTS mashup_candidates_run_idx
 -- 做了 Jaccard 相似度过滤，这里再加一道唯一约束防重复插入。
 CREATE UNIQUE INDEX IF NOT EXISTS mashup_candidates_run_signature_uniq
   ON zenithjoy.mashup_candidates (run_id, signature);
+
+-- S3 终态="候选已选定"（proposal-v2.md 切刀记录表）：客户从候选池挑一个，
+-- 落这一列，S4 渲染读这里作为输入。NULL=尚未选定。
+ALTER TABLE zenithjoy.mashup_runs
+  ADD COLUMN IF NOT EXISTS selected_candidate_id UUID REFERENCES zenithjoy.mashup_candidates(id);
