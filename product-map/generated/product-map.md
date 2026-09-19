@@ -1,6 +1,6 @@
 # Product Map
 
-<!-- digest: e014231240c8969f6c948bc2061ef22c23f57edd28d7bda67e6546506c20dd1d -->
+<!-- digest: f6b8b3c41445e0c9a9dbdd21f52675f61f18e0ea3d8a23a64b3bc853324d3790 -->
 
 > 此文件由 `npm run product-map:generate` 自动生成，请勿手工编辑。
 > 唯一手写源：`product-map/product-map.yaml`
@@ -44,7 +44,7 @@
 | moments_interaction | customer_app | line04 | active | step1:客户动态被感知<br>step2:互动决策<br>step3:互动执行与留痕 | — |
 | moments_publish | customer_app | line04 | active | step1:内容成稿<br>step2:发布上圈<br>step3:发布确认与留痕 | .github/workflows/scripts/smoke/path4-sprint-1-ws4-smoke.sh |
 | passive_reception | customer_app | line04 | active | step1:消息被感知<br>step2:决定谁来答<br>step3:回复送达<br>step4:留痕与善后 | .github/workflows/scripts/smoke/golden-path-4-smoke.sh<br>.github/workflows/scripts/smoke/line04-wxid-whitelist-smoke.sh<br>.github/workflows/scripts/smoke/line04-cs-memory-smoke.sh<br>.github/workflows/scripts/smoke/line04-cs-tenant-isolation-smoke.sh |
-| batch_mashup | customer_app | line05 | active | step1:客户的素材变成系统认得出内容的可用库（素材打标签）<br>step2:客户定下这批视频要按什么套路剪（槽位模板分配）<br>step3:客户刷到一屏候选方案任选（语义检索候选生成） | .github/workflows/scripts/smoke/material-tagging-smoke.sh<br>.github/workflows/scripts/smoke/mashup-slot-assignment-smoke.sh<br>.github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh |
+| batch_mashup | customer_app | line05 | active | step1:客户的素材变成系统认得出内容的可用库（素材打标签）<br>step2:客户定下这批视频要按什么套路剪（槽位模板分配）<br>step3:客户刷到一屏候选方案任选（语义检索候选生成）<br>step4:客户选中的方案变成能直接发的高清成片（渲染+内容安全Gate） | .github/workflows/scripts/smoke/material-tagging-smoke.sh<br>.github/workflows/scripts/smoke/mashup-slot-assignment-smoke.sh<br>.github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh<br>.github/workflows/scripts/smoke/mashup-render-smoke.sh |
 | video_editing | customer_app | line05 | active | — | .github/workflows/scripts/smoke/ai-video-pipeline-local-smoke.sh |
 | viral_video_remake | customer_app | line07 | active | — | .github/workflows/scripts/smoke/golden-path-7-video-remake-smoke.sh |
 | ability_acceptance | staff_app | line00 | active | — | — |

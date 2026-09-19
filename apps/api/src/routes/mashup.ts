@@ -9,6 +9,8 @@ import pool from '../db/connection';
 import { validateLicense } from '../services/walking-skeleton.service';
 import { assignSlots } from '../services/mashup-slot-assignment';
 import { generateCandidates } from '../services/mashup-candidate-generation';
+import { renderCandidate } from '../services/mashup-render';
+import { createMaterialStorage } from '../services/material-storage';
 import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 
 function extractUploadToken(req: Request): string | null {
@@ -187,6 +189,25 @@ export function createMashupRouter(): Router {
     );
 
     ok(res, { runId: updated[0].id, selectedCandidateId: updated[0].selected_candidate_id });
+  });
+
+  router.post('/candidates/:id/render', async (req: Request, res: Response) => {
+    const auth = await authenticate(req, res);
+    if (!auth) return;
+
+    try {
+      const result = await renderCandidate(
+        { tenantId: auth.tenantId, candidateId: req.params.id },
+        { storage: createMaterialStorage() },
+      );
+      ok(res, result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'unknown';
+      if (/candidate not found/i.test(message)) {
+        return fail(res, 404, 'CANDIDATE_NOT_FOUND', message);
+      }
+      fail(res, 500, 'RENDER_CANDIDATE_FAILED', message);
+    }
   });
 
   return router;
