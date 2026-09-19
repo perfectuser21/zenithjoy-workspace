@@ -10,6 +10,7 @@
  * - 不让进程崩（避免缺个非致命 key 直接挂掉生产），但响亮可见。
  * - 只列"缺了就会让核心功能静默坏掉"的 key，不列可选项（可选项有默认兜底，不进这里）。
  */
+import { spawnSync } from 'child_process';
 
 /**
  * 中台运行必须的【单 key】关键 env。缺任何一个，核心功能会静默坏掉：
@@ -73,6 +74,85 @@ export interface StartupConfigResult {
   ok: boolean;
   missing: string[];
   present: string[];
+}
+
+/**
+ * 必需的运行时二进制依赖（与"关键 env"同一类事故：镜像/部署机缺了它，
+ * 相关功能不抛异常、不打日志，直接静默 fail-closed）。
+ *
+ * ffmpeg：2026-09-19 真实事故根因——apps/api/Dockerfile 换 node:20-bookworm-slim
+ * 基础镜像（onnxruntime glibc 修复，PR #1874）时只装了 tzdata，没带 ffmpeg。
+ * 批量混剪 S4（mashup-render-ffmpeg.ts 的 concatAndScale）用 spawnSync('ffmpeg', ...)，
+ * 找不到可执行文件时 spawnSync 返回 status=null（不抛异常），concatAndScale 按"合成
+ * 失败"静默返回 false，上层 fail-closed 成 failed_pending_review——界面上显示"内容
+ * 安全审核处理中/暂时失败"，实际跟内容安全毫无关系，是二进制缺失，长期不会被发现。
+ */
+export interface RequiredBinary {
+  name: string;             // PATH 里的可执行文件名
+  versionArgs: string[];    // 探测用的参数（一般是 --version/-version）
+  consequence: string;      // 缺失时的后果说明
+}
+
+export const REQUIRED_BINARIES: RequiredBinary[] = [
+  {
+    name: 'ffmpeg',
+    versionArgs: ['-version'],
+    consequence: '批量混剪成片渲染（mashup-render-ffmpeg.ts）会静默失败，界面显示"内容安全审核处理中"实为二进制缺失',
+  },
+];
+
+export interface StartupBinaryResult {
+  ok: boolean;
+  missing: string[];
+  present: string[];
+}
+
+type SpawnSyncFn = (cmd: string, args: string[], opts: { stdio: 'ignore' }) => { status: number | null };
+
+function _binaryAvailable(bin: RequiredBinary, spawn: SpawnSyncFn): boolean {
+  try {
+    const r = spawn(bin.name, bin.versionArgs, { stdio: 'ignore' });
+    return r.status === 0;
+  } catch {
+    return false;
+  }
+}
+
+export function verifyStartupBinaries(
+  binaries: RequiredBinary[] = REQUIRED_BINARIES,
+  spawn: SpawnSyncFn = spawnSync as unknown as SpawnSyncFn,
+): StartupBinaryResult {
+  const missing: string[] = [];
+  const present: string[] = [];
+  for (const bin of binaries) {
+    if (_binaryAvailable(bin, spawn)) present.push(bin.name);
+    else missing.push(bin.name);
+  }
+  return { ok: missing.length === 0, missing, present };
+}
+
+/**
+ * 启动早期调用：自检二进制依赖 + 大声打红日志（缺失列出后果），不崩进程。
+ */
+export function runStartupBinaryCheck(
+  binaries: RequiredBinary[] = REQUIRED_BINARIES,
+  spawn: SpawnSyncFn = spawnSync as unknown as SpawnSyncFn,
+): StartupBinaryResult {
+  const result = verifyStartupBinaries(binaries, spawn);
+  if (result.ok) {
+    console.log(`✅ 启动二进制依赖自检通过（${result.present.join(', ')}）`);
+    return result;
+  }
+  console.error('==================================================================');
+  console.error('🔴🔴🔴 启动二进制依赖自检失败：缺少运行时可执行文件，核心功能会静默坏掉 🔴🔴🔴');
+  for (const name of result.missing) {
+    const bin = binaries.find((b) => b.name === name);
+    console.error(`🔴 缺失 ${name} → ${bin?.consequence ?? '相关功能受影响'}`);
+  }
+  console.error(`🔴 请检查部署镜像（Dockerfile）是否装了：${result.missing.join(', ')}`);
+  console.error('🔴 进程继续运行（避免直接挂生产），但相关功能不可用。');
+  console.error('==================================================================');
+  return result;
 }
 
 // 单个 env key 是否存在且非空（空串/纯空白算缺失）。
