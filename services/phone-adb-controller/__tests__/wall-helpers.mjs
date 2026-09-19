@@ -1,6 +1,6 @@
 // services/phone-adb-controller/__tests__/wall-helpers.mjs
 // 假 adb + 假中台 + 最小合法 JPEG，供三个单测与 smoke harness 共用
-import { mkdtempSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, chmodSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:http';
@@ -15,6 +15,7 @@ export function runBash(script, env, { bash = process.env.WALL_TEST_BASH || 'bas
     let stderr = '';
     p.stdout.on('data', (d) => { stdout += d; });
     p.stderr.on('data', (d) => { stderr += d; });
+    p.on('error', (e) => resolve({ status: -1, stdout, stderr: String(e) })); // bash 不存在时不挂死
     p.on('close', (status) => resolve({ status, stdout, stderr }));
   });
 }
@@ -25,8 +26,15 @@ export const TINY_JPEG = Buffer.from(
   'base64',
 );
 
+const tmpDirs = [];
+process.on('exit', () => {
+  for (const d of tmpDirs) rmSync(d, { recursive: true, force: true });
+});
+
 export function makeTmp() {
-  return mkdtempSync(join(tmpdir(), 'wall-'));
+  const d = mkdtempSync(join(tmpdir(), 'wall-'));
+  tmpDirs.push(d);
+  return d;
 }
 
 /** 造一个假 adb：devices 列出 serials；exec-out screencap 输出 jpegBytes；dumpsys window 给前台包 */
@@ -41,7 +49,7 @@ export function makeFakeAdb(dir, { serials = ['SER1'], jpegBytes = TINY_JPEG, of
 echo "adb $*" >> "${dir}/adb.calls"
 if [ "$1" = "devices" ]; then printf 'List of devices attached\\n${list}\\n'; exit 0; fi
 S="$2"; shift 2
-case "${offline.join(' ')}" in *"$S"*) [ "$1" = "get-state" ] && exit 1;; esac
+case " ${offline.join(' ')} " in *" $S "*) [ "$1" = "get-state" ] && exit 1;; esac
 if [ "$1" = "get-state" ]; then echo device; exit 0; fi
 if [ "$1" = "exec-out" ]; then cat "${img}"; exit 0; fi
 if [ "$1" = "shell" ] && [ "$2" = "dumpsys" ]; then echo '  mCurrentFocus=Window{c2d79ba u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.main.MainActivity}'; exit 0; fi
@@ -52,10 +60,10 @@ exit 0
   return adb;
 }
 
-/** 直通"缩图"：把输入原样拷到输出（输入已是 JPEG） */
+/** 直通"缩图"：把输入原样拷到输出（输入已是 JPEG）；每次调用的 4 个参数追加一行到 <dir>/convert.calls */
 export function makePassthroughConvert(dir) {
   const p = join(dir, 'convert.sh');
-  writeFileSync(p, '#!/usr/bin/env bash\ncp "$1" "$2"\n');
+  writeFileSync(p, `#!/usr/bin/env bash\necho "$1 $2 $3 $4" >> "${dir}/convert.calls"\ncp "$1" "$2"\n`);
   chmodSync(p, 0o755);
   return p;
 }

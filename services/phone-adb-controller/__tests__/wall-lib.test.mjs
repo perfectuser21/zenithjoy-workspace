@@ -16,7 +16,19 @@ test('profile→serial 与缓存读写', async () => {
   assert.equal(r.stdout.trim(), 'SER2');
   r = await run('wall_load_env && wall_cache_put SER1 11111111-1111-4111-8111-111111111111 && wall_cache_put SER1 22222222-2222-4222-8222-222222222222 && wall_cached_uuid SER1 && wc -l < "$WALL_AGENTS_TSV"', env);
   assert.match(r.stdout, /22222222-2222-4222-8222-222222222222/);
-  assert.match(r.stdout, /\b1\b/); // 同一序列号只保留一行
+  const tsv = readFileSync(join(dir, 'cfg', 'wall-agents.tsv'), 'utf8');
+  assert.equal(tsv.split('\n').filter(Boolean).length, 1); // 同一序列号只保留一行
+});
+
+test('缓存并发写：三台同时注册互不覆盖（子进程 $$ 相同不能撞临时文件）', async () => {
+  const dir = makeTmp();
+  const env = makeEnv(dir, { apiBase: 'http://127.0.0.1:1', adb: makeFakeAdb(dir), convert: makePassthroughConvert(dir) });
+  for (let i = 0; i < 5; i++) { // 竞态间歇触发，多跑几轮
+    const r = await run('wall_load_env && rm -f "$WALL_AGENTS_TSV" && ( wall_cache_put A 1 & wall_cache_put B 2 & wall_cache_put C 3 & wait ) && cat "$WALL_AGENTS_TSV"', env);
+    assert.equal(r.status, 0, r.stderr);
+    const lines = r.stdout.split('\n').filter(Boolean).sort();
+    assert.deepEqual(lines, ['A\t1\tphone-A', 'B\t2\tphone-B', 'C\t3\tphone-C']);
+  }
 });
 
 test('register 传 license/machine_id/hostname=phone-<序列号>，返回 uuid 并写缓存', async (t) => {
@@ -45,6 +57,11 @@ test('抓屏压缩：≤上限成功；超上限两次仍超则返回 2', async 
   const envBig = makeEnv(big, { apiBase: 'http://127.0.0.1:1', adb: makeFakeAdb(big, { jpegBytes: Buffer.alloc(130 * 1024, 0xff) }), convert: makePassthroughConvert(big) });
   r = await run('wall_load_env && wall_capture_jpeg SER1 "$ZJ_WALL_TMP/o.jpg" 122880; echo rc=$?', envBig);
   assert.match(r.stdout, /rc=2/);
+  // 两级降质：质量参数依次 55、35
+  const calls = readFileSync(join(big, 'convert.calls'), 'utf8').split('\n').filter(Boolean).map((l) => l.split(' ')[3]);
+  assert.deepEqual(calls, ['55', '35']);
+  // 超限帧清理：文件存在 ⇔ 可发
+  assert.ok(!existsSync(join(big, 'tmp', 'o.jpg')));
 });
 
 test('前台包名从 mCurrentFocus 取', async () => {

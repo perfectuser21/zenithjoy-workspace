@@ -39,10 +39,23 @@ wall_profile_serial() { awk -F'\t' -v p="$1" '$1==p{print $2; exit}' "$ZJ_PROFIL
 wall_cached_uuid() { awk -F'\t' -v s="$1" '$1==s{print $2; exit}' "$WALL_AGENTS_TSV" 2>/dev/null; }
 
 # 原子写缓存：serial \t uuid \t phone-serial（同序列号只留一行）
+# - 读-改-写必须串行：多台手机并发注册时各自读到旧文件再互相 mv 覆盖，只剩最后一行；
+#   macOS 自带无 flock，用 POSIX 原子 mkdir 当锁（5s 拿不到视为陈旧锁清掉重试）
+# - 临时文件用 mktemp 而不是 $$：bash 3.2 后台子进程里 $$ 仍是父进程 PID，会撞同一个 tmp
 wall_cache_put() {
-  local tmp="$WALL_AGENTS_TSV.tmp.$$"
+  local lock="$WALL_AGENTS_TSV.lock" tmp rc i=0
+  until mkdir "$lock" 2>/dev/null; do
+    i=$((i + 1))
+    [ "$i" -lt 50 ] || { wall_log "cache 锁超时，清除陈旧锁 $lock"; rm -rf "$lock"; i=0; }
+    sleep 0.1
+  done
+  tmp=$(mktemp "$WALL_AGENTS_TSV.XXXXXX") || { rmdir "$lock" 2>/dev/null; return 1; }
   { [ -f "$WALL_AGENTS_TSV" ] && awk -F'\t' -v s="$1" '$1!=s' "$WALL_AGENTS_TSV"
     printf '%s\t%s\tphone-%s\n' "$1" "$2" "$1"; } > "$tmp" && mv -f "$tmp" "$WALL_AGENTS_TSV"
+  rc=$?
+  rm -f "$tmp" 2>/dev/null
+  rmdir "$lock" 2>/dev/null
+  return $rc
 }
 
 # 注册兼心跳：POST /api/agent/register（服务端按 tenant+hostname 去重，故 hostname=phone-<serial> 每台唯一）
@@ -80,6 +93,7 @@ wall_capture_jpeg() {
     wall_convert "$png" "$out" "$WALL_WIDTH" "$q" || return 1
     [ "$(wc -c < "$out" | tr -d ' ')" -le "$max" ] && return 0
   done
+  rm -f "$out" # 超限帧不留：文件存在 ⇔ 可发
   return 2
 }
 
