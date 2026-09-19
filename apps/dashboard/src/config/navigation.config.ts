@@ -66,6 +66,7 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   'WorksListPage': () => import('../pages/WorksListPage'),
   'WorksGalleryPage': () => import('../pages/WorksGalleryPage'),
   'MaterialsPage': () => import('../pages/MaterialsPage'),
+  'MashupPage': () => import('../pages/MashupPage'),
   'WorkDetailPage': () => import('../pages/WorkDetailPage'),
   'FieldManagementPage': () => import('../pages/FieldManagementPage'),
   'AiEmployeeDetailPage': () => import('../pages/AiEmployeeDetailPage'),
@@ -239,6 +240,8 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/local-video', component: 'LocalVideoPipelinePage', requireAuth: true },
   { path: '/clips', component: 'ContentClipperPage', requireAuth: true },
   { path: '/video-remake', component: 'VideoRemakePipelinePage', requireAuth: true },
+  // 批量混剪（GP f6f96e17）：素材已打标签 → 选模板分配槽位 → 挑候选 → 渲染成片
+  { path: '/mashup', component: 'MashupPage', requireAuth: true },
   { path: '/dashboard/agent', component: 'AgentDownloadPage', requireAuth: true },
   { path: '/dashboard/android', component: 'AndroidDownloadPage', requireAuth: true },
   { path: '/license', component: 'LicensePage', requireAuth: true },
