@@ -171,7 +171,10 @@ export async function renderCandidate(
       const text: string = resp.data?.choices?.[0]?.message?.content ?? '';
       gate = parseSafetyResponse(text);
     } catch (err) {
-      console.error(`[mashup-render] 内容安全审核调用失败 candidateId=${input.candidateId}:`, (err as Error).message);
+      // candidateId 来自 URL 路径参数（外部可控）：不拼进第一个字符串参数（console.error
+      // 的首参会被当格式串，含 %s 等占位符会被当成格式化指令，CodeQL
+      // js/tainted-format-string 拦此模式），改成独立参数传入。
+      console.error('[mashup-render] 内容安全审核调用失败 candidateId=%s reason=%s', input.candidateId, (err as Error).message);
     }
 
     if (!gate) {
