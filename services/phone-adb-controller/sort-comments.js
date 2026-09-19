@@ -9,6 +9,7 @@ const fs = require("fs");
 const cfg = JSON.parse(fs.readFileSync("/root/.openclaw/clawdbot.json"));
 // 0916: 按业务线路由 —— 悦升有独立 base,写死金诺会让它池里的评论永远没人消化(见 line-routes.js)
 const { routeOf } = require("./line-routes.js");
+const { buildLeadCoreFields, extractSeenEntries } = require("./lead-fields-lib.js");
 const MODE = process.argv[2] || "rules";
 // 业务线入参: rules 模式是第3位,write 模式是第4位(第3位是 json 文件)
 const LINE = (MODE === "write" ? process.argv[4] : process.argv[3]) || "";
@@ -84,9 +85,10 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
     const seen = new Map(); let lp = "";
     do {
       const r = await feishu(`/tables/${LEADS}/records?page_size=100${lp ? "&page_token=" + lp : ""}`, "GET", null, tok);
-      for (const it of r.data.items || []) {
-        const dup = it.fields["重复命中次数"] || 0;
-        txt(it.fields["抖音昵称/主页链接"]).split("/").forEach(s => { const t = s.trim(); if (t) seen.set(t, { id: it.record_id, dup }); });
+      for (const e of extractSeenEntries(r.data.items || [], txt)) {
+        const val = { id: e.record_id, dup: e.dup };
+        if (e.nick) seen.set(e.nick, val);
+        if (e.dyid) seen.set(e.dyid, val);
       }
       lp = r.data.has_more ? r.data.page_token : "";
     } while (lp);
@@ -119,18 +121,14 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
         console.log("DUP_HIGHLIGHT", nick, "x" + newDup);
         continue;
       }
-      const key = nick + " / " + (dyid || "id待核验");
       const res = await feishu(`/tables/${LEADS}/records`, "POST", { fields: {
-        // 0915 主理人逐列验收拍板: 首列=纯昵称;独立字段成列;混合列保留双写(next-outreach 选单器在读)
         "抖音获客-线索表": nick,
-        "昵称": nick, "抖音号": dyid || "", "主页链接": (purl && purl.startsWith("http")) ? purl : "",
+        ...buildLeadCoreFields({ nick, dyid, purl, comment: txt(f["评论原文"]), video: txt(f["来源视频"]), vurl: txt(f["评论作品视频链接"]) }),
         "IP属地": txt(f["地区"]), "留言时间": txt(f["留言时间"]),
-        "抖音昵称/主页链接": key + (purl && purl.startsWith("http") ? " / " + purl : ""),
-        "业务线": "AI人工智能训练师", "命中关键词": txt(f["命中关键词"]), "关键词层级": "精准词",
-        "评论原文": txt(f["评论原文"]),
+        "业务线": "AI人工智能训练师", "关键词层级": "精准词",
         "AI判断理由": `[${it.grade}级] ` + (it.reason || ""),
         "状态": "待触达", "发送状态": "未发送",
-        "来源视频": txt(f["来源视频"]).slice(0, 80), "搜索账号": "池转入(异步判定)",
+        "搜索账号": "池转入(异步判定)",
         "搜索意图": "证书/学习/求职", "目标人群": "考证人群", "采集时间": now,
         "合规核验状态": "异步判定agent分级入表(" + now + ")｜评论区采集｜仅内部写入,未触达。",
       }}, tok);
