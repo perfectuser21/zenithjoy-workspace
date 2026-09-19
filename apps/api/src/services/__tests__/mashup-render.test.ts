@@ -143,6 +143,25 @@ describe('renderCandidate', () => {
     expect(axiosPost).not.toHaveBeenCalled();
   });
 
+  it('素材下载抛网络异常（非HTTP状态错误，如DNS失败/连接被拒）：不崩溃，落 failed_pending_review', async () => {
+    // 真机实测复现（本地人工browser验证批量混剪UI时抓到）：fetch() 对某些URL会直接
+    // throw（不是拿到 !resp.ok 的响应），比如协议不支持/网络层失败。这类异常之前没有
+    // try/catch 兜底，会直接冒泡到路由层变成裸 500，用户在前端只看到
+    // "Request failed with status code 500"，比 S1 material-tagging.ts 早就
+    // 解决过的同类问题（下载失败优雅降级）还退步。
+    process.env.TOAPIS_API_KEY = 'test-key';
+    mockDb();
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed')) as unknown as typeof fetch;
+    const storage = fakeStorage();
+
+    const { renderCandidate } = await import('../mashup-render');
+    const result = await renderCandidate({ tenantId: 'tenant-a', candidateId: 'cand-1' }, { storage });
+
+    expect(result.safetyCheckStatus).toBe('failed_pending_review');
+    expect(result.exportUrl).toBeUndefined();
+    expect(axiosPost).not.toHaveBeenCalled();
+  });
+
   it('未配置 TOAPIS_API_KEY：落 failed_pending_review，不抛异常', async () => {
     mockDb();
     global.fetch = vi.fn().mockResolvedValue({ ok: true, arrayBuffer: async () => new Uint8Array([1]).buffer }) as unknown as typeof fetch;
