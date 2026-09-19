@@ -37,7 +37,7 @@ export const MAX_PAGE_SIZE = 100;
  * license_key 本来就会到浏览器（LicensePage 就在展示它），没有新增暴露面。
  */
 async function getUploadToken(): Promise<string> {
-  const { data } = await apiClient.get<{ license?: { license_key?: string } | null }>('/account');
+  const { data } = await apiClient.get<{ license?: { license_key?: string } | null }>('/account/me');
   const key = data?.license?.license_key;
   if (!key) {
     throw new Error('当前账号还没有上传凭据。请先在「License」页确认账号已开通。');

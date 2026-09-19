@@ -128,6 +128,22 @@ echo "[4] 把作品改回草稿 → 现在可以删了（草稿是上传时自�
 
 # 删之前先拿一个预览 URL——删完要用它证明 COS 里的对象真没了
 LIST=$(curl -sS -H "X-Upload-Token: ${KEY_A}" "${API_BASE}/api/materials?limit=100")
+
+# 批量混剪前端要靠 tag_status/ai_tags 筛"已识别"的素材传给 S2 assignSlots——
+# 这两个字段漏了前端直接选不出素材，锁一下不能悄悄回退。
+TAG_STATUS=$(echo "${LIST}" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+for it in d['data']['items']:
+    if it['id'] == '${MAT_A}':
+        assert 'ai_tags' in it, 'ai_tags 字段缺失'
+        assert isinstance(it['ai_tags'], list), 'ai_tags 应该是数组（null 要归一化成 []）'
+        print(it['tag_status'])
+        break
+")
+[ -n "${TAG_STATUS}" ] || fail "GET /api/materials 缺 tag_status 字段"
+echo "    tag_status/ai_tags 字段已暴露 ✓ (tag_status=${TAG_STATUS})"
+
 PREVIEW_URL=$(echo "${LIST}" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)

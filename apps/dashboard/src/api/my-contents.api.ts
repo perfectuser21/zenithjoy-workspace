@@ -45,7 +45,7 @@ export interface MyContentListResponse {
  * getUploadToken 模式：Dashboard 用登录态换出 license_key 再去调。
  */
 async function getUploadToken(): Promise<string> {
-  const { data } = await apiClient.get<{ license?: { license_key?: string } | null }>('/account');
+  const { data } = await apiClient.get<{ license?: { license_key?: string } | null }>('/account/me');
   const key = data?.license?.license_key;
   if (!key) {
     throw new Error('当前账号还没有上传凭据。请先在「License」页确认账号已开通。');

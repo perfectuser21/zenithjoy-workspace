@@ -11,7 +11,7 @@ import {
   Send, Music2, Folder, Database, Factory, Sparkles,
   Target, KeyRound,
   Scissors, Video, Building2, MonitorCheck, Activity, ShieldCheck,
-  Smartphone,
+  Smartphone, Layers,
 } from 'lucide-react';
 
 interface HubCard {
@@ -63,6 +63,7 @@ export const AREA_HUBS: Record<string, AreaHub> = {
     cards: [
       { label: '本地视频处理', desc: '上传视频走本地剪辑流水线', to: '/local-video', Icon: Scissors, color: 'text-rose-500' },
       { label: '内容采集', desc: '从平台采集视频素材', to: '/clips', Icon: Scissors, color: 'text-amber-500' },
+      { label: '批量混剪', desc: '素材自动分配到套路模板，挑候选出高清成片', to: '/mashup', Icon: Layers, color: 'text-fuchsia-500' },
     ],
   },
   remake: {

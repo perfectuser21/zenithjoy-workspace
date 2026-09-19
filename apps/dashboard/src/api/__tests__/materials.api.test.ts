@@ -55,7 +55,7 @@ describe('listMaterials — 先换 token 再列素材', () => {
 
   it('用登录态调 /account 拿 license_key，再带 X-Upload-Token 调 /materials', async () => {
     get.mockImplementation(async (url: string) => {
-      if (url === '/account') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
+      if (url === '/account/me') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
       if (url === '/materials') return { data: { data: { items: [], limit: 30, offset: 0, count: 0 } } };
       throw new Error('unexpected url ' + url);
     });
@@ -71,7 +71,7 @@ describe('listMaterials — 先换 token 再列素材', () => {
 
   it('账号还没有 license_key → 报可读的错，不是塞个 undefined 进 header', async () => {
     get.mockImplementation(async (url: string) => {
-      if (url === '/account') return { data: { license: null } };
+      if (url === '/account/me') return { data: { license: null } };
       throw new Error('不该走到这里');
     });
     await expect(listMaterials()).rejects.toThrow(/上传凭据/);
@@ -80,7 +80,7 @@ describe('listMaterials — 先换 token 再列素材', () => {
 
   it('不提供 tenant_id 参数 —— 租户由服务端从凭据反查，前端传了也不作数', async () => {
     get.mockImplementation(async (url: string) => {
-      if (url === '/account') return { data: { license: { license_key: 'k' } } };
+      if (url === '/account/me') return { data: { license: { license_key: 'k' } } };
       return { data: { data: { items: [], limit: 30, offset: 0, count: 0 } } };
     });
     await listMaterials();
