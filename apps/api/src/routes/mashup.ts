@@ -8,6 +8,7 @@ import { Router, type Request, type Response } from 'express';
 import pool from '../db/connection';
 import { validateLicense } from '../services/walking-skeleton.service';
 import { assignSlots } from '../services/mashup-slot-assignment';
+import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 
 function extractUploadToken(req: Request): string | null {
   const h = req.header('X-Upload-Token');
@@ -49,6 +50,11 @@ async function authenticate(req: Request, res: Response): Promise<{ tenantId: st
 
 export function createMashupRouter(): Router {
   const router = Router();
+
+  // 与 materials.ts 同口径：限流器建一次、复用同一实例，不建在请求处理函数里
+  // （否则每个请求都新建计数器，express-rate-limit 会直接报
+  // ERR_ERL_CREATED_IN_REQUEST_HANDLER，限流也完全不生效）。
+  router.use(simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }));
 
   router.get('/templates', async (req: Request, res: Response) => {
     const auth = await authenticate(req, res);
