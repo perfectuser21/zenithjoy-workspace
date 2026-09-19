@@ -410,6 +410,11 @@ export function ResultStep({ result, onBack }: { result: RenderResult; onBack: (
         <>
           <CheckCircle2 className="mx-auto h-10 w-10 text-green-500" />
           <p className="mt-3 text-sm font-medium text-gray-800">成片已生成，内容安全审核通过</p>
+          <video
+            src={result.downloadUrl}
+            controls
+            className="mx-auto mt-4 max-h-[480px] w-full max-w-md rounded-lg bg-black"
+          />
           <a
             href={result.downloadUrl}
             target="_blank"
