@@ -54,6 +54,8 @@ interface MaterialRow {
   storage_key: string;
   taken_at: string | null;
   created_at: string;
+  tag_status: string;
+  ai_tags: string[] | null;
 }
 
 function fail(res: Response, status: number, code: string, message: string): void {
@@ -158,7 +160,7 @@ export function createMaterialsRouter(deps: MaterialsRouterDeps = {}): Router {
       // 租户永远从凭据反查。绝不读 req.query.tenant_id——否则任何人填别人的
       // ID 就能列出别人的素材。
       const q = await pool.query<MaterialRow>(
-        `SELECT id, file_name, size_bytes, mime_type, storage_key, taken_at, created_at
+        `SELECT id, file_name, size_bytes, mime_type, storage_key, taken_at, created_at, tag_status, ai_tags
            FROM zenithjoy.materials
           WHERE tenant_id = $1
           ORDER BY created_at DESC
@@ -189,6 +191,8 @@ export function createMaterialsRouter(deps: MaterialsRouterDeps = {}): Router {
         taken_at: m.taken_at,
         created_at: m.created_at,
         preview_url: previewUrl,
+        tag_status: m.tag_status,
+        ai_tags: m.ai_tags ?? [],
       };
     }));
 
