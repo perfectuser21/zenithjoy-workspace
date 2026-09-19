@@ -34,6 +34,9 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : (
       // 0919: 真机ADB二进制目前无法探测"对方未加好友",降级写"待确认"而非冒充"是"；
       // 原始设备输出(note)透传进回复结果供人工核实(判定点 e035dad8 范畴)。
       fields = { "状态": "已触达", "发送状态": "已发送", "触达时间": now, "成功触达": "待确认", "回复结果": ("[老链路待人工核验]" + note).slice(0, 200) };
+    } else if (result === "restricted") {
+      // 0919 真机实证: 气泡渲染成功但对方"仅互关可发消息"限制生效,消息实际收不到,不冒充"是"
+      fields = lib.restrictedFields(note, now);
     } else if (result === "requeue") {
       fields = { "状态": "待触达" };  // 环境性失败(锁忙/设备离线): 回队列,不算受阻
     } else if (result === "requeue_transient") {
