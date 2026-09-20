@@ -25,24 +25,42 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/workers', (r) => r.fulfill({ json: { success: true, data: workers } }));
   await page.route('**/api/workers/a1/live', (r) => r.fulfill({ contentType: 'image/jpeg', body: JPEG }));
 });
-// 0920 改版：卡片网格 → 单张甘特表（左列设备名 sticky、表头 24 小时刻度、可横滑）
-test('总览用甘特表列出设备，设备列显示正在跑第 3/5 步', async ({ page }) => {
+// 0920 改版：卡片网格 → 一台机一张任务表（主理人：「一个机子一个 table，告诉我今天每一天的工作是哪些」）
+test('总览一机一张任务表，设备行显示正在跑第 3/5 步', async ({ page }) => {
   await page.goto('/dashboard/workers');
   await expect(page.getByText('小龙虾')).toBeVisible();
-  await expect(page.getByTestId('schedule-gantt')).toBeVisible();
+  await expect(page.getByTestId('device-task-table')).toHaveCount(2);
   await expect(page.getByText(/正在跑：发布视频到抖音/)).toBeVisible();
   await expect(page.getByText(/第 3\/5 步/)).toBeVisible();
   await expect(page.getByText('空闲')).toBeVisible();
-  // 每台设备一条轨道，时间刻度表头在
-  await expect(page.getByTestId('gantt-row')).toHaveCount(2);
-  await expect(page.getByText('设备', { exact: true })).toBeVisible();
+  // 甘特表已下线，页面上不该再有它
+  await expect(page.getByTestId('schedule-gantt')).toHaveCount(0);
 });
 
-test('日/周切换：周视图把每台展开成 7 条轨道', async ({ page }) => {
+test('排了活的机子把当天每件活列成行，同时段的标出并行', async ({ page }) => {
+  // 用样例排程里真实存在的 agent_id，才能拿到当天的活
+  await page.route('**/api/workers', (r) =>
+    r.fulfill({
+      json: {
+        success: true,
+        data: [
+          { id: '657dfabc-802c-478d-9de3-c05b7db847df', agent_id: 'ag3', hostname: 'MAA-AN00', nickname: null,
+            os_type: 'android', status: 'online', running: null, completed_today: 0, last_seen: null },
+        ],
+      },
+    }),
+  );
   await page.goto('/dashboard/workers');
-  await expect(page.getByTestId('gantt-track')).toHaveCount(2);
-  await page.getByRole('button', { name: '周' }).click();
-  await expect(page.getByTestId('gantt-track')).toHaveCount(14);
+  await expect(page.getByText('悦升工作机')).toBeVisible();
+  // 五列表头 + 当天每件活一行
+  for (const h of ['时间', '任务', '部门', '状态', '说明']) {
+    await expect(page.getByRole('columnheader', { name: h })).toBeVisible();
+  }
+  await expect(page.getByTestId('task-row').first()).toBeVisible();
+  // 触达跑一整天，中间插发布 → 两件活互为并行
+  await expect(page.getByText('触达 · 私信今日额度').first()).toBeVisible();
+  expect(await page.getByTestId('parallel-badge').count()).toBeGreaterThan(0);
+  await expect(page.getByText(/同时在跑：/).first()).toBeVisible();
 });
 test('详情页：3 个 ✅ 1 个 ▶️，画面正常无"画面不可用"', async ({ page }) => {
   await page.route('**/api/workers/a1/activity', (r) => r.fulfill({ json: { success: true, data: activity(500) } }));

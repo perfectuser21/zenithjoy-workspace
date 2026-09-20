@@ -2,10 +2,11 @@
  * 工作机控制塔 · 总览（/dashboard/workers）
  *
  * 主理人 0920：
- *   「应该在工作机页面里直接有个 calendar，24 小时 timeline，每一天、一周我都能看得到，
+ *   「应该在工作机页面里直接有个 calendar，每一天、一周我都能看得到，
  *     而不是再弄个新的页面。」→ 排程内嵌，不做独立排程页
- *   「上面的表和底下的表应该是一个嘛，你现在弄成两个；高度和长度应该不变，应该有个可以滑的进度条。」
- *     → 所有设备在同一张甘特表里，左列与表头固定，横向滑看细节
+ *   「我不是要甘特图，我要 table 那种效果，而且应该是一个机子一个 table，
+ *     告诉我今天每一天的工作是哪些；有的时候它可能是并行好几个工作，你应该这样排出来。」
+ *     → 一台设备一张 DeviceTaskTable，本页只负责选日期、筛部门、出总计
  */
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
