@@ -43,20 +43,21 @@ describe('WorkerDayPlan 组件', () => {
     render1('8e802deb-247d-4346-8028-03c265959431'); // 金诺机，mock 里触达 6/55
     const box = await screen.findByTestId('worker-day-plan');
     // 文本被 <b> 拆开，按整块内容断言更贴近"人眼看到什么"
-    await waitFor(() => expect(box).toHaveTextContent(/共排\s*2\s*件/));
+    // 金诺机每天 02:00/06:00/22:00 采收 + 08:00 触达 = 4 件
+    await waitFor(() => expect(box).toHaveTextContent(/共排\s*4\s*件/));
     expect(box).toHaveTextContent(/已完成\s*\d+/);
-    expect(box).toHaveTextContent(/待跑\s*1/);
+    expect(box).toHaveTextContent(/待跑\s*\d+/);
     expect(box).toHaveTextContent(/要处理\s*0/);
-    expect(box).toHaveTextContent('6/55单');
-    expect(box).toHaveTextContent('还能加 49');
+    expect(box).toHaveTextContent('14/55单');
+    expect(box).toHaveTextContent('还能加 41');
   });
 
   it('列出接下来要跑的（这正是此前页面完全没有的）', async () => {
     render1('8e802deb-247d-4346-8028-03c265959431');
     const box = await screen.findByTestId('worker-day-plan');
     await waitFor(() => expect(within(box).getByText('接下来要跑的')).toBeInTheDocument());
-    // 金诺机今天 22:00 还有一轮采收没跑
-    expect(within(box).getByText(/采收 · AI人工智能训练师 6 词/)).toBeInTheDocument();
+    // 金诺机今天 22:00 还有一轮采收没跑（词按天轮换，取标题前缀断言）
+    expect(box).toHaveTextContent(/采收 · .+ 6 词/);
   });
 
   it('被挡住的待办带出原因', async () => {

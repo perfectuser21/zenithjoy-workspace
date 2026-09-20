@@ -89,8 +89,8 @@ export default function WorkerDayPlan({ agentId }: { agentId: string }) {
       <div className="flex flex-wrap items-baseline gap-2">
         <h3 className="text-sm font-semibold text-gray-700">今日安排</h3>
         {mock && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-800">样例数据</span>}
-        <Link to="/dashboard/schedule" className="ml-auto text-xs text-blue-600 hover:underline">
-          看全部设备排程 →
+        <Link to="/dashboard/workers" className="ml-auto text-xs text-blue-600 hover:underline">
+          看全部设备时间轴 →
         </Link>
       </div>
 

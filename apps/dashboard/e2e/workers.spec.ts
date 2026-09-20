@@ -25,14 +25,24 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/workers', (r) => r.fulfill({ json: { success: true, data: workers } }));
   await page.route('**/api/workers/a1/live', (r) => r.fulfill({ contentType: 'image/jpeg', body: JPEG }));
 });
-test('总览列出安卓与 Windows worker，显示正在执行第 3/5 步', async ({ page }) => {
+// 0920 改版：卡片网格 → 单张甘特表（左列设备名 sticky、表头 24 小时刻度、可横滑）
+test('总览用甘特表列出设备，设备列显示正在跑第 3/5 步', async ({ page }) => {
   await page.goto('/dashboard/workers');
   await expect(page.getByText('小龙虾')).toBeVisible();
-  await expect(page.getByText(/安卓/)).toBeVisible();
-  await expect(page.getByText(/Windows/)).toBeVisible();
-  await expect(page.getByText(/正在执行：发布视频到抖音/)).toBeVisible();
+  await expect(page.getByTestId('schedule-gantt')).toBeVisible();
+  await expect(page.getByText(/正在跑：发布视频到抖音/)).toBeVisible();
   await expect(page.getByText(/第 3\/5 步/)).toBeVisible();
   await expect(page.getByText('空闲')).toBeVisible();
+  // 每台设备一条轨道，时间刻度表头在
+  await expect(page.getByTestId('gantt-row')).toHaveCount(2);
+  await expect(page.getByText('设备', { exact: true })).toBeVisible();
+});
+
+test('日/周切换：周视图把每台展开成 7 条轨道', async ({ page }) => {
+  await page.goto('/dashboard/workers');
+  await expect(page.getByTestId('gantt-track')).toHaveCount(2);
+  await page.getByRole('button', { name: '周' }).click();
+  await expect(page.getByTestId('gantt-track')).toHaveCount(14);
 });
 test('详情页：3 个 ✅ 1 个 ▶️，画面正常无"画面不可用"', async ({ page }) => {
   await page.route('**/api/workers/a1/activity', (r) => r.fulfill({ json: { success: true, data: activity(500) } }));

@@ -6430,13 +6430,29 @@ agent_suite:
     product: 工作机控制塔
     note: "工作机实时详情页组件单测：帧渲染/轮询/任务状态展示；0920 起断言实时画面嵌在 PhoneFrame 屏幕区内。"
 
-  - id: dashboard-schedule-board-unit
-    path: apps/dashboard/src/pages/__tests__/SchedulePage.test.tsx
+  - id: dashboard-dept-colors-unit
+    path: apps/dashboard/src/components/dept-colors.test.ts
     type: unit
     ci: L3
     status: active
     product: 工作机控制塔
-    note: "设备排程看板页面单测：按部门分组、跨部门设备只显示本部门的活与额度、今明后切换、部门筛选、阻塞原因显示。数据为 mock（后端契约见 api/schedule.api.ts）。"
+    note: "部门配色单测：每个部门都有配色（漏一个甘特色块会 undefined 崩）、颜色互不相同、与部门清单不多不少。"
+
+  - id: dashboard-schedule-gantt-unit
+    path: apps/dashboard/src/components/ScheduleGantt.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "排程甘特表单测：色块像素定位与跨日截断、当前时刻线只在今天、左列与表头 sticky、日视图写字周视图不写、无排程设备仍占行、外框固定高度。"
+
+  - id: dashboard-workers-timeline-unit
+    path: apps/dashboard/src/pages/__tests__/WorkersPage.timeline.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "工作机页内嵌排程单测：每台一条时间轴、无排程提示、日/周切换（2 台→14 条轴）、前后翻天与回今天、非今天无红线、部门筛选、行内件数与额度、正在跑第 x/y 步。"
 
   - id: dashboard-worker-day-plan-unit
     path: apps/dashboard/src/components/WorkerDayPlan.test.tsx

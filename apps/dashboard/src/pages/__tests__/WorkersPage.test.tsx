@@ -11,19 +11,19 @@ const workers = [
   { id: 'w1', agent_id: 'ag2', hostname: 'XX-ROG', nickname: null, os_type: 'win32', status: 'offline', running: null, completed_today: 0, last_seen: 'x' },
 ];
 describe('WorkersPage', () => {
-  it('渲染 worker 卡片：类型徽章、在线态、正在执行第 x/y 步、今日完成、实时链接', async () => {
+  // 0920 改版：卡片网格 → 单张甘特表（设备类型徽章挪到详情页，列表只留必要信息）
+  it('用甘特表列出设备：在线态、正在跑第 x/y 步、实时链接', async () => {
     (fetchWorkers as any).mockResolvedValue(workers);
     render(<MemoryRouter><WorkersPage /></MemoryRouter>);
     await waitFor(() => expect(screen.getByText('小龙虾')).toBeInTheDocument());
-    expect(screen.getByText(/安卓/)).toBeInTheDocument();
-    expect(screen.getByText(/Windows/)).toBeInTheDocument();
-    expect(screen.getByText(/正在执行：发布视频到抖音/)).toBeInTheDocument();
+    expect(screen.getByTestId('schedule-gantt')).toBeInTheDocument();
+    expect(screen.getAllByTestId('gantt-row')).toHaveLength(2);
+    expect(screen.getByText(/正在跑：发布视频到抖音/)).toBeInTheDocument();
     expect(screen.getByText(/第 6\/10 步/)).toBeInTheDocument();
     expect(screen.getByText('空闲')).toBeInTheDocument();
-    expect(screen.getByText(/今日完成 2/)).toBeInTheDocument();
-    const links = screen.getAllByRole('link', { name: /实时/ });
-    expect(links[0]).toHaveAttribute('href', '/dashboard/workers/a1');
+    expect(screen.getByRole('link', { name: '小龙虾' })).toHaveAttribute('href', '/dashboard/workers/a1');
   });
+
   it('无 worker → 空态引导', async () => {
     (fetchWorkers as any).mockResolvedValue([]);
     render(<MemoryRouter><WorkersPage /></MemoryRouter>);
