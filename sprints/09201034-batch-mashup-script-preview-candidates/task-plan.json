@@ -1,0 +1,42 @@
+{
+  "initiative_id": "bb75bd91-fdae-4333-bf47-c664522af4e4",
+  "journey_type": "user_facing",
+  "journey_type_reason": "核心场景经 apps/dashboard MashupPage 面向客户（粘贴文案/在线预览/浏览候选/按需渲染），命中 user_facing。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "批量混剪加厚：文案动态分段 + 素材在线预览 + 候选200+缩略图拼贴虚拟滚动 + 渲染并发=1按需渲染",
+      "scope": "①新增 apps/api/src/services/ai-tags.ts（ai_tags 枚举单源）+ mashup-script-segment.ts（文案→动态分段模板落库，AI 不可用降级固定模板，同文案去重，name 截断）与 POST /api/mashup/templates/from-script；②新增 GET /api/materials/:id/preview-url 重签端点 + MashupPage PickStep 素材卡片在线 <video> 预览（signedUrl 过期自动重签）；③generateCandidates 返回 generatedCount + 每候选 thumbnailUrl（抽帧拼贴复用 video-frame-extract），MashupPage 候选缩略图拼贴虚拟滚动（DOM==可视区）；④新增 mashup-render-queue.ts（RENDER_MAX_CONCURRENCY=1 FIFO 自排空队列 + queued/queuePosition + render_failed 态），renderCandidate 接入队列，MashupPage 排队/失败/重试 UI，选中候选才触发渲染；⑤更新 mashup-candidate-generation-smoke.sh / mashup-render-smoke.sh；⑥e2e-verify.ps1 + .github/workflows/e2e-windows-mashup.yml。不改 Step5 内容安全/水印 Gate 逻辑与 J10 去重阈值。",
+      "dod": [
+        "[BEHAVIOR] Step1 文案解析落 mashup_templates 行 + AI 降级 + 去重 + 截断 + 空文案400（tests/mashup-script-segment.test.ts 全绿）",
+        "[BEHAVIOR] Step3 generateCandidates 返回 generatedCount≤200 + 每候选 thumbnailUrl（tests/mashup-candidates-thumbnail.test.ts 全绿）",
+        "[BEHAVIOR] Step4 渲染并发=1 queued/queuePosition + render_failed（tests/mashup-render-queue.test.ts 全绿）",
+        "[BEHAVIOR] Step2 GET /:id/preview-url 200/404/401（tests/mashup-materials-preview.test.ts 全绿）",
+        "[BEHAVIOR] Step1 第三方真调一次（scripts/real-toapis-segment.mjs exit 0）",
+        "[BEHAVIOR:E2E] windows_cloud Playwright：粘贴文案→分段/素材<video>播放/候选虚拟滚动DOM==可视区/选中触发真实ffmpeg出片（ffprobe验视频流）",
+        "[ARTIFACT] apps/api/src/services/ai-tags.ts + mashup-render-queue.ts + e2e-verify.ps1 + .github/workflows/e2e-windows-mashup.yml 存在"
+      ],
+      "files": [
+        "apps/api/src/services/ai-tags.ts",
+        "apps/api/src/services/mashup-script-segment.ts",
+        "apps/api/src/services/mashup-candidate-generation.ts",
+        "apps/api/src/services/mashup-render-queue.ts",
+        "apps/api/src/services/mashup-render.ts",
+        "apps/api/src/routes/mashup.ts",
+        "apps/api/src/routes/materials.ts",
+        "apps/api/db/migrations/",
+        "apps/dashboard/src/pages/MashupPage.tsx",
+        "apps/dashboard/src/api/mashup.api.ts",
+        "apps/dashboard/src/api/materials.api.ts",
+        "apps/dashboard/e2e/mashup-thickening.spec.ts",
+        ".github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh",
+        ".github/workflows/scripts/smoke/mashup-render-smoke.sh",
+        ".github/workflows/e2e-windows-mashup.yml",
+        "sprints/09201034-batch-mashup-script-preview-candidates/e2e-verify.ps1"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 120
+    }
+  ]
+}
