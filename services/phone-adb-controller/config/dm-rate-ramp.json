@@ -2,14 +2,14 @@
   "jinoshengyuan-work": {
     "mode": "daily_step",
     "start_date": "2026-09-20",
-    "base_per_day": 10,
+    "base_per_day": 55,
     "step_per_day": 5,
     "ceiling_per_day": 60
   },
   "legacy": {
     "mode": "intraday_step",
     "start_date": "2026-09-20",
-    "base_per_day": 10,
+    "base_per_day": 50,
     "step_every_hours": 3,
     "step_amount": 5,
     "ceiling_per_day": 60
