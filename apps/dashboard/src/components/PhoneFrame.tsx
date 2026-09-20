@@ -1,7 +1,8 @@
 /**
  * PhoneFrame — iPhone Pro 风格外框（纯 Tailwind，无图片）：
- * 钛色金属边 + 内黑边、屏幕圆角按 393pt 机型比例（约 0.13×宽）、灵动岛 32% 宽、钛色侧键；
- * 屏幕区顶部叠一条 iOS 风格状态栏（时间 + 信号/WiFi/电量），盖住被控安卓机自己的状态栏（USB 调试图标那行）。
+ * 钛色金属边 + 内黑边、屏幕圆角按 393pt 机型比例（46/336≈0.137×屏宽）、灵动岛 32% 宽、钛色侧键；
+ * 屏幕区顶部叠一条 iOS 风格状态栏（时间 + 信号/WiFi/电量），上 32px 纯黑盖住被控安卓机自己的状态栏
+ *（USB 调试图标那行，1200×2664 机型约 100px ≈ 27px），32–48px 渐变透明不吃 App 顶栏；底部 Home 条盖住输入法提示条。
  * children 渲染在 9:19.5 等比的屏幕区里（工作机实时画面用）。
  */
 import { useEffect, useState, type ReactNode } from 'react';
@@ -73,7 +74,7 @@ export default function PhoneFrame({ children, className = '' }: Props) {
             <div
               aria-hidden
               data-testid="phone-statusbar"
-              className="pointer-events-none absolute inset-x-0 top-0 flex h-[48px] items-start bg-black/85 text-white backdrop-blur-sm"
+              className="pointer-events-none absolute inset-x-0 top-0 flex h-[48px] items-start bg-[linear-gradient(to_bottom,#000_0,#000_32px,transparent_48px)] text-white"
             >
               <div className="mt-[8px] flex h-[38px] w-full items-center justify-between px-[26px] text-[15px] font-semibold tracking-tight">
                 <span>{clock}</span>
@@ -84,7 +85,7 @@ export default function PhoneFrame({ children, className = '' }: Props) {
             <div
               aria-hidden
               data-testid="phone-homebar"
-              className="pointer-events-none absolute inset-x-0 bottom-0 flex h-[34px] items-end justify-center bg-black/85 pb-[8px] backdrop-blur-sm"
+              className="pointer-events-none absolute inset-x-0 bottom-0 flex h-[34px] items-end justify-center bg-black pb-[8px]"
             >
               <span className="h-[5px] w-[36%] rounded-full bg-white/90" />
             </div>
