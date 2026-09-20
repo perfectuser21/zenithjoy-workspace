@@ -36,29 +36,28 @@ afterEach(cleanup);
 
 const renderPage = () => render(<MemoryRouter><WorkersPage /></MemoryRouter>);
 
-describe('工作机页内嵌时间轴（主理人：不要再弄个新页面）', () => {
-  it('每台有排程的设备渲染一条 24 小时时间轴', async () => {
+describe('工作机页每台一张任务表（主理人：一个机子一个 table）', () => {
+  it('每台设备各自一张表，不是挤在一起', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('金诺工作机')).toBeInTheDocument());
-    await waitFor(() => expect(screen.getAllByTestId('gantt-track').length).toBeGreaterThanOrEqual(2));
-    expect(screen.getAllByTestId('gantt-block').length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getAllByTestId('device-task-table')).toHaveLength(3));
+    expect(screen.getAllByTestId('task-row').length).toBeGreaterThan(0);
   });
 
-  it('没排程的设备也占一行，只是轨道为空', async () => {
+  it('没排程的设备也有自己的表，给出提示', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('没排程的机')).toBeInTheDocument());
-    await waitFor(() => expect(screen.getAllByTestId('gantt-row').length).toBe(3));
+    await waitFor(() => expect(screen.getByText('这台机还没有排程')).toBeInTheDocument());
   });
 
-  it('日视图一台一条轴；切到周视图变成 7 条', async () => {
+  it('并行的活在表里标出来', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('金诺工作机')).toBeInTheDocument());
-    await waitFor(() => expect(screen.getAllByTestId('gantt-track').length).toBe(3)); // 三台各一条轨道
-    fireEvent.click(screen.getByRole('button', { name: '周' }));
-    await waitFor(() => expect(screen.getAllByTestId('gantt-track').length).toBe(21)); // 3 台 × 7 天
+    // 金诺机 08:00-22:00 触达 与 22:00 采收不重叠，但悦升机的发布落在触达时段内
+    await waitFor(() => expect(screen.getAllByTestId('parallel-badge').length).toBeGreaterThan(0));
   });
 
-  it('能前后翻天，并回到今天', async () => {
+  it('能前后翻天看每一天的活，并回到今天', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByRole('button', { name: '今天' })).toBeInTheDocument());
     fireEvent.click(screen.getByLabelText('后一天'));
@@ -69,12 +68,12 @@ describe('工作机页内嵌时间轴（主理人：不要再弄个新页面）'
     await waitFor(() => expect(screen.getByRole('button', { name: '今天' })).toBeInTheDocument());
   });
 
-  it('翻到昨天时不画当前时刻红线', async () => {
+  it('翻到没有排期的那天，表里给出"这天没有安排"', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getAllByTestId('gantt-now').length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getByText('金诺工作机')).toBeInTheDocument());
     fireEvent.click(screen.getByLabelText('前一天'));
     await waitFor(() => expect(screen.getByRole('button', { name: '昨天' })).toBeInTheDocument());
-    expect(screen.queryByTestId('gantt-now')).toBeNull();
+    await waitFor(() => expect(screen.getAllByText('这天没有安排').length).toBeGreaterThan(0));
   });
 
   it('按部门筛选只留该部门的设备', async () => {
@@ -87,14 +86,13 @@ describe('工作机页内嵌时间轴（主理人：不要再弄个新页面）'
     expect(screen.queryByText('金诺工作机')).toBeNull();
   });
 
-  it('顶部汇总当天件数，设备列给出额度与待跑', async () => {
+  it('顶部汇总与每张表的表头都给出件数与额度', async () => {
     const { container } = renderPage();
     await waitFor(() => expect(screen.getByText('金诺工作机')).toBeInTheDocument());
     await waitFor(() => expect(container).toHaveTextContent(/共\s*\d+\s*件/));
     expect(container).toHaveTextContent(/已完成\s*\d+/);
     expect(container).toHaveTextContent(/待跑\s*\d+/);
-    const cell = screen.getByText('金诺工作机').closest('div') as HTMLElement;
-    expect(cell.parentElement).toHaveTextContent('14/55单');
+    expect(container).toHaveTextContent('14/55单');
   });
 
   it('正在跑的任务在行首显示到第几步', async () => {
@@ -117,19 +115,12 @@ describe('工作机页内嵌时间轴（主理人：不要再弄个新页面）'
     expect(screen.getByRole('link', { name: '金诺工作机' })).toHaveAttribute('href', `/dashboard/workers/${JINO}`);
   });
 
-  it('周视图每条子轨道标出是哪天', async () => {
+  it('表里每行都给出时间段、部门与状态', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByText('金诺工作机')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: '周' }));
-    await waitFor(() => expect(screen.getAllByText('今天').length).toBeGreaterThan(0));
-    expect(screen.getAllByText('明天').length).toBeGreaterThan(0);
-  });
-
-  it('设备名与时间刻度固定（sticky），横滑时不跑掉', async () => {
-    renderPage();
-    await waitFor(() => expect(screen.getByTestId('schedule-gantt')).toBeInTheDocument());
-    expect(screen.getByText('设备').className).toMatch(/sticky/);
-    const cell = screen.getByText('金诺工作机').closest('div')!.parentElement!;
-    expect(cell.className).toMatch(/sticky/);
+    await waitFor(() => expect(screen.getAllByTestId('task-row').length).toBeGreaterThan(0));
+    const row = screen.getAllByTestId('task-row')[0];
+    expect(row.textContent).toMatch(/\d{2}:\d{2}–\d{2}:\d{2}/);
+    expect(row.textContent).toMatch(/智能获客|新媒体部|私域客服|视频剪辑/);
+    expect(row.textContent).toMatch(/待跑|已完成|进行中|失败|被挡住/);
   });
 });

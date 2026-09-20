@@ -46,8 +46,7 @@ PSRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "$PAGE")
 grep -qF '样例数据' <<< "$PSRC" || fail "工作机页缺『样例数据』提示文案"
 
 # 层5: 排程必须内嵌在工作机页（主理人 0920：不要再弄个新页面），且有日/周与翻天
-grep -qF '<ScheduleGantt' <<< "$PSRC" || fail "工作机页未内嵌排程甘特表"
-grep -qF 'setWeek' <<< "$PSRC" || fail "工作机页缺日/周切换"
+grep -qF '<DeviceTaskTable' <<< "$PSRC" || fail "工作机页未内嵌每台设备的任务表"
 grep -qF 'setOffset' <<< "$PSRC" || fail "工作机页缺前后翻天"
 grep -qF 'fetchSchedule' <<< "$PSRC" || fail "工作机页未接排程数据"
 
@@ -78,16 +77,17 @@ done
 [ "$(grep -c "status === 'queued'" <<< "$PSRC2")" -ge 2 ] || fail "queued 取值不足两处（今日盘点与待办清单各需一处）"
 [ "$(grep -c "status === 'blocked'" <<< "$PSRC2")" -ge 2 ] || fail "blocked 取值不足两处（被挡住的既算要处理也算积压）"
 
-# 层8b: 一张表而不是每台一张卡（主理人 0920：上面的表和底下的表应该是一个）
-GANTT="apps/dashboard/src/components/ScheduleGantt.tsx"
-[ -s "$GANTT" ] || fail "甘特表组件缺失"
-GSRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "$GANTT")
-[ "$(grep -c 'sticky left-0' <<< "$GSRC")" -ge 2 ] || fail "设备列/表头左上角未 sticky（横滑会跑掉）"
-grep -qF 'sticky top-0' <<< "$GSRC" || fail "时间刻度表头未 sticky（纵滚会跑掉）"
-grep -qF 'overflow-auto' <<< "$GSRC" || fail "表体不可滚动（主理人要可滑的进度条）"
-grep -qE 'height = 460|height \}' <<< "$GSRC" || fail "表框高度未固定"
-grep -qF 'HOUR_PX' <<< "$GSRC" || fail "时间轴未按小时给宽度，横向滑不起来"
-! grep -qF 'DayTimeline' <<< "$PSRC" || fail "工作机页仍在用旧的每台一卡时间轴"
+# 层8b: 一台机一张表，且并行的活要标出来（主理人 0920：一个机子一个 table；并行要排出来）
+TBL="apps/dashboard/src/components/DeviceTaskTable.tsx"
+[ -s "$TBL" ] || fail "设备任务表组件缺失"
+TSRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "$TBL")
+grep -qF 'parallelWith' <<< "$TSRC" || fail "任务表未算并行（主理人要求并行的活排出来）"
+grep -qF 'parallel-badge' <<< "$TSRC" || fail "并行没有可见标记"
+grep -qF '<table' <<< "$TSRC" || fail "不是表格形态（主理人明确要 table 不要甘特图）"
+for h in 时间 任务 部门 状态 说明; do
+  grep -qF ">${h}<" <<< "$TSRC" || fail "任务表缺「${h}」列"
+done
+[ ! -e "apps/dashboard/src/components/ScheduleGantt.tsx" ] || fail "甘特表仍在，应已换成每台一张任务表"
 
 # 层9: 生产链实际会写的失败码都要有人话，漏一个页面就露机器码
 ESRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "$ERRC")
