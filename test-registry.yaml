@@ -6430,6 +6430,14 @@ agent_suite:
     product: 工作机控制塔
     note: "工作机实时详情页组件单测：帧渲染/轮询/任务状态展示；0920 起断言实时画面嵌在 PhoneFrame 屏幕区内。"
 
+  - id: dashboard-dept-colors-unit
+    path: apps/dashboard/src/components/dept-colors.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "部门配色单测：每个部门都有配色（漏一个甘特色块会 undefined 崩）、颜色互不相同、与部门清单不多不少。"
+
   - id: dashboard-schedule-gantt-unit
     path: apps/dashboard/src/components/ScheduleGantt.test.tsx
     type: unit
