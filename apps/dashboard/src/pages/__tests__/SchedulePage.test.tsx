@@ -2,7 +2,6 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup, waitFor, within, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import SchedulePage from '../SchedulePage';
-import { fetchSchedule, slotsOfDay, backlogCount, headroom, type ScheduleSlot } from '../../api/schedule.api';
 
 afterEach(cleanup);
 
@@ -49,34 +48,5 @@ describe('排程看板', () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('素材待审核')).toBeInTheDocument());
     expect(screen.getByText(/样例数据/)).toBeInTheDocument();
-  });
-});
-
-describe('派生计算', () => {
-  // 不依赖"现在几点"：mock 的状态按当前时刻推断，CI 在 UTC 跑过会翻车（0920 实证）
-  const mk = (status: ScheduleSlot['status']): ScheduleSlot => ({
-    id: `s-${status}`, title: 't', dept: '智能获客', planned_at: new Date().toISOString(),
-    est_minutes: 10, source: 'recurring', status,
-  });
-
-  it('积压只算待跑与被挡住的，不算已完成/进行中/失败', () => {
-    expect(backlogCount([mk('queued'), mk('blocked'), mk('done'), mk('running'), mk('failed')])).toBe(2);
-    expect(backlogCount([mk('done'), mk('running')])).toBe(0);
-  });
-
-  it('按天切片只取当天，且按时刻升序', async () => {
-    const { devices } = await fetchSchedule();
-    const d = devices.find((x) => x.name === '金诺工作机')!;
-    const today = slotsOfDay(d.slots, 0);
-    const tomorrow = slotsOfDay(d.slots, 1);
-    expect(today.length).toBeGreaterThan(0);
-    expect(tomorrow.length).toBeGreaterThan(0);
-    expect(today.every((s) => new Date(s.planned_at).toDateString() === new Date().toDateString())).toBe(true);
-    expect([...today].sort((a, b) => a.planned_at.localeCompare(b.planned_at))).toEqual(today);
-  });
-
-  it('可加量是各业务线剩余之和，且不会为负', () => {
-    expect(headroom([{ dept: '智能获客', used: 6, cap: 55, unit: '单' }, { dept: '新媒体部', used: 1, cap: 3, unit: '条' }])).toBe(51);
-    expect(headroom([{ dept: '智能获客', used: 70, cap: 55, unit: '单' }])).toBe(0);
   });
 });

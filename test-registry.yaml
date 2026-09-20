@@ -6436,7 +6436,15 @@ agent_suite:
     ci: L3
     status: active
     product: 工作机控制塔
-    note: "设备排程看板单测：按部门分组、跨部门设备只显示本部门的活与额度、今明后切换、部门筛选、阻塞原因、积压与可加量派生计算。数据为 mock（后端契约见 api/schedule.api.ts）。"
+    note: "设备排程看板页面单测：按部门分组、跨部门设备只显示本部门的活与额度、今明后切换、部门筛选、阻塞原因显示。数据为 mock（后端契约见 api/schedule.api.ts）。"
+
+  - id: dashboard-schedule-api-unit
+    path: apps/dashboard/src/api/__tests__/schedule.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "排程契约与派生计算单测：积压/可加量/按天切片/dayRange，以及 mock 数据自洽性（业务线与额度一一对应、活不越线、阻塞必带原因）。断言不依赖当前时刻。"
 
   - id: dashboard-phone-frame-unit
     path: apps/dashboard/src/components/PhoneFrame.test.tsx
