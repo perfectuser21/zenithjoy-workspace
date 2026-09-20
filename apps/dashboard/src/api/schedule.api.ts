@@ -122,6 +122,54 @@ function expand(prefix: string, rules: Recur[], days: number): ScheduleSlot[] {
 const HARVEST_WORDS = ['AI人工智能训练师', '转行人工智能', '西安 人工智能训练', '裁员后学什么', '人工智能训练师怎么考', 'AI就业', '学AI'];
 const word = (base: number) => (d: number) => `采收 · ${HARVEST_WORDS[(base + d) % HARVEST_WORDS.length]} 6 词`;
 
+/**
+ * 触达单的昵称池。真机 history 里就长这样：触达·单#103 嶒崚 / 触达·单#99 miki。
+ * 压成一条「今日额度」会把一天二十几单缩成一行——主理人一眼就看出来活变少了。
+ */
+const NICKNAMES = [
+  '嶒崚', 'miki', '叫我二姐姐', 'Lydiii', '骆驼。', '樱树花', '梦醒记', 'Merry',
+  '-色拉油', 'walan周', '不吃香菜的猹', '甜甜菜菜', '海哥', '小满', '阿远', '柚子茶',
+  '晚风', '南山', '一只鹿', '陈同学', '老周', '小鹿乱撞', '芝士就是力量', '打工人小李',
+];
+
+/**
+ * 把一天的触达按真机节奏展开成一单一行。
+ *
+ * 全部确定式（按索引推间隔与时长，不用随机数）：页面每 5 秒轮询一次，用随机数会让
+ * 活每次刷新都换一批；测试里「两次拉取结果一致」也会时好时坏。
+ *
+ * @param prefix  id 前缀，保证跨设备不撞
+ * @param day     相对今天第几天
+ * @param startHh 从几点开始跑
+ * @param count   这天跑多少单
+ * @param seed    同一天不同设备错开节奏用
+ */
+function outreachRuns(prefix: string, day: number, startHh: number, count: number, seed: number): ScheduleSlot[] {
+  const out: ScheduleSlot[] = [];
+  let cursor = new Date(at(day, startHh)).getTime();
+  for (let i = 0; i < count; i++) {
+    const k = i + seed * 7 + day * 3;
+    // 1–13 分钟，多数在 2–5 分钟，偶尔卡一单十几分钟（真机上是等对方页面加载）
+    const minutes = k % 11 === 0 ? 12 + (k % 3) : 1 + (k % 5);
+    const no = 20 + day * 60 + i * 2 + seed;
+    const nick = NICKNAMES[(i + seed * 5 + day) % NICKNAMES.length];
+    // 每 9 单里坏 1 单：真机今天 24 单里有 4 单失败
+    const bad = k % 9 === 4;
+    out.push(
+      slot(`${prefix}-o-${day}-${i}`, `触达 · 单#${no} ${nick}`, '智能获客', new Date(cursor).toISOString(), minutes, 'recurring',
+        bad ? { status: 'failed' } : undefined),
+    );
+    // 单与单之间隔 6–34 分钟
+    cursor += (minutes + 6 + ((k * 13) % 29)) * 60_000;
+  }
+  return out;
+}
+
+/** 把多天的触达串起来 */
+function outreachDays(prefix: string, startHh: number, count: number, seed: number, days: number): ScheduleSlot[] {
+  return Array.from({ length: days }, (_, d) => outreachRuns(prefix, d, startHh, count, seed)).flat();
+}
+
 const DAYS_AHEAD = 7;
 
 function mockPayload(): SchedulePayload {
@@ -141,11 +189,10 @@ function mockPayload(): SchedulePayload {
           [
             { hh: 2, minutes: 90, dept: '智能获客', title: word(0) },
             { hh: 6, minutes: 90, dept: '智能获客', title: word(0) },
-            { hh: 8, minutes: 14 * 60, dept: '智能获客', title: '触达 · 私信今日额度' },
             { hh: 22, minutes: 90, dept: '智能获客', title: word(1) },
           ],
           DAYS_AHEAD,
-        ),
+        ).concat(outreachDays('k', 8, 20, 0, DAYS_AHEAD)),
       },
       {
         agent_id: '657dfabc-802c-478d-9de3-c05b7db847df',
@@ -162,11 +209,11 @@ function mockPayload(): SchedulePayload {
             'y',
             [
               { hh: 2, mm: 30, minutes: 90, dept: '智能获客', title: word(2) },
-              { hh: 8, minutes: 14 * 60, dept: '智能获客', title: '触达 · 私信今日额度' },
               { hh: 22, mm: 30, minutes: 90, dept: '智能获客', title: word(2) },
             ],
             DAYS_AHEAD,
           ),
+          ...outreachDays('y', 9, 17, 1, DAYS_AHEAD),
           slot('y-pub-1', '发布 ·《AI训练师报考全流程》抖音', '新媒体部', at(0, 20), 12, 'oneoff'),
           slot('y-pub-2', '发布 ·《学AI要不要转行》小红书', '新媒体部', at(1, 11), 12, 'oneoff'),
           slot('y-pub-3', '发布 ·《补贴怎么申领》视频号', '新媒体部', at(2, 10), 12, 'oneoff'),

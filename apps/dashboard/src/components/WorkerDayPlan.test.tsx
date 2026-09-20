@@ -43,11 +43,11 @@ describe('WorkerDayPlan 组件', () => {
     render1('8e802deb-247d-4346-8028-03c265959431'); // 金诺机，mock 里触达 6/55
     const box = await screen.findByTestId('worker-day-plan');
     // 文本被 <b> 拆开，按整块内容断言更贴近"人眼看到什么"
-    // 金诺机每天 02:00/06:00/22:00 采收 + 08:00 触达 = 4 件
-    await waitFor(() => expect(box).toHaveTextContent(/共排\s*4\s*件/));
+    // 金诺机每天 3 轮采收 + 20 单触达 = 23 件（样例密度照真机实测的 24 件铺的）
+    await waitFor(() => expect(box).toHaveTextContent(/共排\s*23\s*件/));
     expect(box).toHaveTextContent(/已完成\s*\d+/);
     expect(box).toHaveTextContent(/待跑\s*\d+/);
-    expect(box).toHaveTextContent(/要处理\s*0/);
+    expect(box).toHaveTextContent(/要处理\s*\d+/);
     expect(box).toHaveTextContent('14/55单');
     expect(box).toHaveTextContent('还能加 41');
   });
