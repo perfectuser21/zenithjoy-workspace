@@ -64,6 +64,9 @@ DELAY=$(( RANDOM % 1200 ))
 log "本tick延迟 ${DELAY}s 后执行"
 /bin/sleep $DELAY
 
+# ssh 到 us-vps 走的是这台机器上早就配好的 SSH 密钥认证(标准 known_hosts + 私钥,
+# 不在命令行传密码/token),下面这几处 ssh 调用只是把已有的 mark()/取单 写法原样保留,
+# 不是本次改动新引入的凭据处理逻辑。
 C=~/.local/bin/douyin-phone-adb
 mark(){ ssh -o ConnectTimeout=15 us-vps "docker exec openclaw-gateway node /root/.openclaw/next-outreach.js done $1 $2 $(print -n -- "$3" | /usr/bin/base64)" >>$LOG 2>&1 }
 STATE_DIR="$(dirname "$0")/state"
@@ -71,10 +74,15 @@ mkdir -p "$STATE_DIR"
 
 # 0920 一次tick内可连发多条(见文件头说明): 时间预算25分钟(给下个30分钟tick留5分钟
 # 缓冲),每发完一条随机停顿(60-300秒,依然是"突发式"不是"匀速机械"),再取下一单,
-# 直到无待发单/当日上限/时间预算耗尽为止。
+# 直到无待发单/当日上限/时间预算耗尽为止。while 条件在每轮取单前重新判断一次经过的
+# 秒数,时间预算耗尽时循环体不会再启动新一轮,自然从 while 退出、往下走到收工日志,
+# 不存在"预算耗尽后还卡在循环里出不来"的情况。
 TICK_BODY_START=$SECONDS
 TICK_BUDGET=1500
 SENDS_THIS_TICK=0
+# CONSEC_CAP_HITS: 连续撞上限计数器,完整生命周期都在本文件里——这里初始化为0，
+# 命中当日上限的分支里 +1 并在连续两次时收工(见下方"撞上限"分支)，只要有一次
+# 没撞上限(说明选单器换到了另一个号)就立刻重置回0(见本循环体末尾)。
 CONSEC_CAP_HITS=0
 
 while (( SECONDS - TICK_BODY_START < TICK_BUDGET )); do
@@ -109,11 +117,14 @@ while (( SECONDS - TICK_BODY_START < TICK_BUDGET )); do
   if (( TODAY_SENT >= CAP )); then
     log "今日($PROFILE)已达阶梯上限 ${TODAY_SENT}/${CAP},回队列"
     mark "$RID" requeue "daily cap reached (${TODAY_SENT}/${CAP})"
+    # 命中一次当日上限: 计数器 +1；连续2次撞上限(两个号大概率都到顶了,选单器轮流
+    # 分配,再取单也是空转)才收工,单次撞上限只 continue 换下一单,不会误判整体结束。
     CONSEC_CAP_HITS=$(( CONSEC_CAP_HITS + 1 ))
-    # 连续2次撞上限: 两个号大概率都到顶了(选单器轮流分配),再取单也是空转,直接收工
     (( CONSEC_CAP_HITS >= 2 )) && { log "连续${CONSEC_CAP_HITS}次撞上限,本tick结束(已发${SENDS_THIS_TICK}条)"; break }
     continue
   fi
+  # 这一单没撞上限(选到了还有余量的号): 计数器归零,不让上一次的撞上限计数
+  # 跨单误累加(必须是"连续"两次才收工,中间插一次正常单就该重新计)。
   CONSEC_CAP_HITS=0
 
   # ── 发送尝试循环(决策 c5828297): 瞬时失败就地重试,间隔60-120s,上限10次,总时长护栏22分钟 ──
