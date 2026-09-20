@@ -8,7 +8,7 @@ ZJ_WALL_TMP="${ZJ_WALL_TMP:-/tmp/zj-wall}"
 ZJ_WALL_LOG="${ZJ_WALL_LOG:-$HOME/phone-wall.log}"
 ZJ_PROFILES_TSV="${ZJ_PROFILES_TSV:-$HOME/.config/openclaw/douyin-phone-profiles.tsv}"
 ADB="${ADB:-adb}"
-WALL_WIDTH="${WALL_WIDTH:-360}"
+WALL_WIDTH="${WALL_WIDTH:-720}"   # 帧宽（px）。0920：控制塔屏幕区 360 CSS px × 2 倍屏 = 720，再低就糊
 WALL_AGENTS_TSV="$ZJ_WALL_STATE_DIR/wall-agents.tsv"
 
 wall_log() { printf '[%s] %s\n' "$(date +%m%d-%H:%M:%S)" "$*" >> "$ZJ_WALL_LOG" 2>/dev/null; }
@@ -84,21 +84,23 @@ wall_uuid_for() {
 }
 
 # 缩图：in out width quality。默认 macOS sips；WALL_CONVERT_CMD 可注入（同 4 参）
+# 必须按宽度重采样（--resampleWidth）：-Z 是"最长边"，竖屏 1200×2664 用 -Z 360 只会出 162×360，上墙就是一团糊（0920 实证）
 wall_convert() {
   if [ -n "${WALL_CONVERT_CMD:-}" ]; then "$WALL_CONVERT_CMD" "$1" "$2" "$3" "$4"
-  else sips -Z "$3" -s format jpeg -s formatOptions "$4" "$1" --out "$2" >/dev/null 2>&1; fi
+  else sips --resampleWidth "$3" -s format jpeg -s formatOptions "$4" "$1" --out "$2" >/dev/null 2>&1; fi
 }
 
 # adb 带超时护栏（USB 半死时 adb 会无限挂起）：perl alarm 秒数后 SIGALRM 杀掉，macOS 自带 perl、bash 3.2 可用
 # 包一层 {} 2>/dev/null 同时压掉调用方 shell 打印的 "Alarm clock: 14" 作业提示；adb 的 stderr 各调用点本就丢弃
 wall_adb() { { perl -e 'alarm shift; exec @ARGV' "${WALL_ADB_TIMEOUT:-8}" "$ADB" "$@"; } 2>/dev/null; }
 
-# 抓屏并压到 ≤max 字节：serial out max → 0 成功 / 1 抓屏失败 / 2 两次降质仍超限
+# 抓屏并压到 ≤max 字节：serial out max → 0 成功 / 1 抓屏失败 / 2 三级降质仍超限
+# 阶梯 50/42/36 按 1200×2664 抓屏实测：720 宽约 88KB / 73KB / 64KB，都在服务端 120KB 上限内
 # 中间 PNG 按输出名派生（o.jpg → o.png）且用完即删：推帧器每秒抓屏与报警截图若共用 cap-<serial>.png 会读到半截文件
 wall_capture_jpeg() {
   local serial="$1" out="$2" max="$3" png="${2%.*}.png" q
   if ! wall_adb -s "$serial" exec-out screencap -p > "$png" || [ ! -s "$png" ]; then rm -f "$png"; return 1; fi
-  for q in 55 35; do
+  for q in 50 42 36; do
     if ! wall_convert "$png" "$out" "$WALL_WIDTH" "$q"; then rm -f "$png"; return 1; fi
     if [ "$(wc -c < "$out" | tr -d ' ')" -le "$max" ]; then rm -f "$png"; return 0; fi
   done
