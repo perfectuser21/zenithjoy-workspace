@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, cleanup, waitFor, fireEvent, within } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../api/workers.api', () => ({
@@ -111,7 +111,7 @@ describe('工作机页一屏一台机（主理人：左边一个手机，右边�
     renderPage();
     await waitFor(() => expect(screen.getByTestId('calendar-head')).toBeInTheDocument());
     const head = screen.getByTestId('calendar-head');
-    await waitFor(() => expect(within(head).getByText(/共\s*\d+\s*件/)).toBeInTheDocument());
+    await waitFor(() => expect(head).toHaveTextContent(/共\s*\d+\s*件/));
     expect(head).toHaveTextContent(/已完成\s*\d+/);
     expect(head).toHaveTextContent(/待跑\s*\d+/);
     expect(head).toHaveTextContent('14/55单');

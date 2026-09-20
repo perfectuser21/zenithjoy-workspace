@@ -29,7 +29,7 @@ test.beforeEach(async ({ page }) => {
 // 高度，页面不能随任务变多越来越长；要的是类似 Calendar 的从上到下时间分割」）
 test('工作机页一屏一台：芯片切机，左实时画面右纵向日历', async ({ page }) => {
   await page.goto('/dashboard/workers');
-  await expect(page.getByText('小龙虾')).toBeVisible();
+  await expect(page.getByText('小龙虾').first()).toBeVisible();
   await expect(page.getByTestId('device-chip')).toHaveCount(2);
   // 同时只有一张日历，左边挂着这台机的实时画面
   await expect(page.getByTestId('day-calendar')).toHaveCount(1);
@@ -60,7 +60,7 @@ test('排了活的机子把当天的活画成块，同时段的并排分列', as
     }),
   );
   await page.goto('/dashboard/workers');
-  await expect(page.getByText('悦升工作机')).toBeVisible();
+  await expect(page.getByText('悦升工作机').first()).toBeVisible();
   await expect(page.getByTestId('cal-block').first()).toBeVisible();
   await expect(page.getByText('触达 · 私信今日额度').first()).toBeVisible();
   // 触达跑一整天，中间插发布 → 至少有一块不是满宽

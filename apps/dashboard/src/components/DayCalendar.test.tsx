@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { render, screen, cleanup, within } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import DayCalendar, { layout, HOUR_PX } from './DayCalendar';
 import { dayRange, type ScheduleSlot } from '../api/schedule.api';
 
@@ -148,7 +148,7 @@ describe('日历组件', () => {
   it('头上给出当天件数与已完成、待跑', () => {
     render(<DayCalendar slots={[at(2, 60, { status: 'done' }), at(8, 60)]} dayOffset={0} />);
     const head = screen.getByTestId('calendar-head');
-    expect(within(head).getByText(/共\s*2\s*件/)).toBeInTheDocument();
+    expect(head).toHaveTextContent(/共\s*2\s*件/);
     expect(head).toHaveTextContent(/已完成\s*1/);
     expect(head).toHaveTextContent(/待跑\s*1/);
   });
