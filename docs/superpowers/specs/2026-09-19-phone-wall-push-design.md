@@ -38,11 +38,11 @@ wall-report fail   <serial|--profile P> <idx> <error_code> ["diag_line"]
 
 - `--profile P` → 查 `~/.config/openclaw/douyin-phone-profiles.tsv`（第 1 列 profile、第 2 列 serial）得序列号；序列号 → uuid 查 `wall-agents.tsv`，查不到就自己 register 一次并写入缓存。
 - 执行器面三端点**只用内部 token**（`Authorization: Bearer <ZJ_INTERNAL_TOKEN>`），**绝不带 `X-Agent-License`**（带了会被分流到 license 路径而 401）。
-  - `POST /api/workers/<uuid>/tasks` `{title, steps[], executor_id:"adb-wall"}` → 201 `{task_id}`；409 `WORKER_BUSY` 时：若本机状态文件 `/tmp/zj-wall/task-<serial>` 有旧 task_id，先 `complete {outcome:failed, error_code:"superseded", failed_step:<旧idx>}` 再重试一次；仍 409 则静默降级（本批不上报）。
+  - `POST /api/workers/<uuid>/tasks` `{title, steps[], executor_id:"adb-wall"}` → 201 `{task_id}`；409 `WORKER_BUSY` 时：遍历本机该序列号所有命名空间的状态文件 `/tmp/zj-wall/task-<serial>-*`，对每个旧 task_id 先 `complete {outcome:failed, error_code:"superseded", failed_step:<旧idx>}` 并删除该文件（对方链后续调用退化为"忽略"而非劫持），再重试一次；仍 409 则静默降级（本批不上报）。
   - `POST /api/workers/tasks/<id>/steps` `{step_index, status, executor_id, note?, foreground_pkg?, diag_line?, screenshot_jpeg_b64?}`；`failed` 必带三件套：前台包名 = `adb shell dumpsys window | grep mCurrentFocus` 正则取包名（取不到填 `unknown`），诊断行 = 参数或最近一条日志，截图 = `adb exec-out screencap -p` 经 `$WALL_CONVERT_CMD` 压到 ≤200KB 后 base64（无 data URI 前缀）。
   - `POST /api/workers/tasks/<id>/complete` `{outcome, executor_id, error_code?, failed_step?}`。
 - 状态文件记 `task_id` 与当前 `step_index`；`note` 子命令把当前步再报一次 `doing`（服务端续租 10 分钟）。
-- 命名空间：状态文件按 `WALL_NS` 分开（`task-<ns>-<serial>`），采收链 `harvest-cron.sh` `export WALL_NS=harvest`（batch2/harvest-keyword 子进程继承）、触达链 `outreach-tick.sh` `export WALL_NS=outreach`——同机同序列号的两条链各记各的任务，互不顶状态。
+- 命名空间：状态文件按 `WALL_NS` 分开（`task-<serial>-<WALL_NS>`，默认 `default`），采收链 `harvest-cron.sh` `export WALL_NS=harvest`（batch2/harvest-keyword 子进程继承）、触达链 `outreach-tick.sh` `export WALL_NS=outreach`——同机同序列号的两条链各记各的任务，互不顶状态。
 - 全部 `curl -m 3`，任何失败只写 `~/phone-wall.log`，退出码 0，绝不阻塞主流程；调用方一律 `wall-report ... || true`。
 
 ### 3.3 挂钩（三个 zsh 脚本，只加行不改序）
