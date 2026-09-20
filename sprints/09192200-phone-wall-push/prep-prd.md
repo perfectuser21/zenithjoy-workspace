@@ -10,7 +10,7 @@ Brain task `1f5b9134-cca4-4bf7-a8ab-702ed8797047` · 路径 B · GP-Anchor: `lin
 |---|---|---|
 | 1 推帧器 | `phone-wall-push.sh` + `com.zenithjoy.phonewallpush.plist` | M4/M1 上常驻：对每台 `adb devices` 在线手机，用 license 调 `POST /api/agent/register`（注册在 `apps/api/src/services/license.service.ts`，按 (tenant_id, hostname) 去重，故每台传唯一 hostname=agent_id=`phone-<序列号>`、machine_id=序列号；返回体 `agent_id` 字段即 agents.id UUID，并刷新 last_seen=在线）；每秒 `adb exec-out screencap -p` → 缩到 360 宽 JPEG（≤120KB）→ `POST /api/workers/<uuid>/frame`（头 `X-Agent-License`）。每 60 s 重新 register 当心跳。序列号→uuid 缓存在 `~/.config/zenithjoy/wall-agents.tsv` |
 | 2 上报器 | `wall-report.sh` | 给 zsh 链用的薄壳（序列号或 `--profile P`，后者查 `~/.config/openclaw/douyin-phone-profiles.tsv` 取序列号）：`start <serial> <title> <步骤,逗号分隔>` / `step <serial> <idx> doing\|done\|failed [note]` / `done <serial>` / `fail <serial> <idx> <error_code> [diag]`。走 `/api/workers` 执行器面（只用内部 token `Authorization: Bearer`，绝不带 `X-Agent-License`）。租约 10 分钟：`note`/`step doing` 每次上报即续租，采收按词、按视频上报保活；409 WORKER_BUSY 先把本机记录的旧任务 complete 成 superseded 再试一次，仍 409 静默降级。失败自动补三件套（前台包名 `dumpsys window`、诊断行、screencap）。全部 `curl -m 3`，失败只记日志绝不阻塞主流程 |
-| 3 挂钩 | `harvest-cron.sh` / `batch2.sh` / `outreach-tick.sh` | 采收：start（拉Commander/设备预检/取词单/采收主体/效果回写 5 步）→ 每步 done，batch2 每个词把「采收主体」步 note 更新成"词n: xxx"，退出路径 fail/done。触达：start（取单/拿锁/发送/核验 4 步）→ done/fail |
+| 3 挂钩 | `harvest-cron.sh` / `batch2.sh` / `outreach-tick.sh` | 采收：start（拉Commander/设备预检/取词单/采收主体/效果回写 5 步）→ 每步 done，batch2 每个词把「采收主体」步 note 更新成"词n: xxx"，退出路径 fail/done。触达：拿到锁之后 start（发送/核验 2 步，整个 tick 只 start 一次）→ done/fail |
 
 配置：`~/.config/zenithjoy/wall.env`（chmod 600）：`ZJ_API_BASE`、`ZJ_LICENSE`、`ZJ_INTERNAL_TOKEN`。脚本用 bash（3.2 兼容），CI ubuntu 无 zsh 也能测；图片缩放命令可注入（macOS `sips`，测试用直通）。
 

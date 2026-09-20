@@ -25,6 +25,7 @@ classify_failure() {
 # 可视化旁路(0919): 触达每阶段报给控制塔; 上报失败一律吞掉
 WR=${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}
 wr(){ [[ -x "$WR" ]] && "$WR" "$@" >/dev/null 2>&1; true }
+export WALL_NS=outreach   # 上报器按命名空间分状态文件: 触达链与采收链同机同序列号互不顶状态
 
 # 时窗守卫(冗余保险, crontab 已限时)
 H=$(date +%H)
@@ -85,7 +86,10 @@ while true; do
   /usr/bin/touch "$TICK_LOCK"
   TAG="outreach-$(date +%m%d%H%M)-a${ATTEMPT}"
   if ! $C --profile "$PROFILE" lock-acquire "$TAG" >>$LOG 2>&1; then
-    log "锁被占(采收在用),回队列待下轮"; mark "$RID" requeue "lock busy"; exit 0
+    log "锁被占(采收在用),回队列待下轮"; mark "$RID" requeue "lock busy"
+    # 第 2 次及以后尝试才可能已 start(拿过锁), 此时要把已开的任务收成 fail; 第 1 次未 start 不调
+    (( WR_STARTED == 1 )) && wr fail --profile "$PROFILE" 0 lock_busy "重试中锁被采收占用"
+    exit 0
   fi
   if (( WR_STARTED == 0 )); then wr start --profile "$PROFILE" "触达·单#$SEQ $NICK" "发送,核验"; WR_STARTED=1; fi
   wr step --profile "$PROFILE" 0 doing "第${ATTEMPT}次发送"
