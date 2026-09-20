@@ -8,7 +8,9 @@ ZJ_WALL_TMP="${ZJ_WALL_TMP:-/tmp/zj-wall}"
 ZJ_WALL_LOG="${ZJ_WALL_LOG:-$HOME/phone-wall.log}"
 ZJ_PROFILES_TSV="${ZJ_PROFILES_TSV:-$HOME/.config/openclaw/douyin-phone-profiles.tsv}"
 ADB="${ADB:-adb}"
-WALL_WIDTH="${WALL_WIDTH:-720}"   # 帧宽（px）。0920：控制塔屏幕区 360 CSS px × 2 倍屏 = 720，再低就糊
+# 帧宽（px），默认 720：控制塔屏幕区约 330 CSS px，2 倍屏至少要 660 物理像素才不糊，取 720 留余量。
+# 注意 sips --resampleWidth 对比 720 窄的源会放大（字节白涨）；现役机型都 ≥1080 宽，不触发。
+WALL_WIDTH="${WALL_WIDTH:-720}"
 WALL_AGENTS_TSV="$ZJ_WALL_STATE_DIR/wall-agents.tsv"
 
 wall_log() { printf '[%s] %s\n' "$(date +%m%d-%H:%M:%S)" "$*" >> "$ZJ_WALL_LOG" 2>/dev/null; }
