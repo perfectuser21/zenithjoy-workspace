@@ -20,6 +20,9 @@ else
   echo "::warning::zsh 不可用,四脚本 zsh 语法闸跳过(部署侧会跑)"
 fi
 
+# 层1b: 高清化守卫（0920）：缩图必须按宽度重采样（-Z 是最长边，会把竖屏压成 162×360），默认宽 720
+grep -qF -- '--resampleWidth' "$D/wall-lib.sh" || fail "wall-lib 缩图未用 --resampleWidth（-Z 会把竖屏压糊）"
+grep -qF 'WALL_WIDTH:-720' "$D/wall-lib.sh"     || fail "wall-lib 默认宽度不是 720"
 # 层2: 挂钩存在（删掉任一行即红；先去注释再断言——给挂钩行前加 # 也必须红）
 # 注: 这四个变量是去注释后的脚本正文, 后面全部用 here-string 查, 行号断言也基于同一份文本
 HC=$(grep -vE '^[[:space:]]*#' "$D/harvest-cron.sh")

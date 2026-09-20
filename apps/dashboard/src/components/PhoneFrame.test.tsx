@@ -27,6 +27,14 @@ describe('PhoneFrame', () => {
     expect(screenArea.className).toMatch(/rounded-\[/);
   });
 
+  it('屏幕区顶部叠 iOS 风格状态栏（时间 + 信号/WiFi/电量），盖住安卓状态栏', () => {
+    render(<PhoneFrame>x</PhoneFrame>);
+    const bar = screen.getByTestId('phone-statusbar');
+    expect(screen.getByTestId('phone-screen')).toContainElement(bar);
+    expect(bar).toHaveTextContent(/\d{1,2}:\d{2}/);
+    expect(bar.querySelector('[data-testid="phone-status-icons"]')).not.toBeNull();
+  });
+
   it('外层 className 透传到外框', () => {
     render(<PhoneFrame className="lg:w-[360px]">x</PhoneFrame>);
     expect(screen.getByTestId('phone-frame').className).toContain('lg:w-[360px]');

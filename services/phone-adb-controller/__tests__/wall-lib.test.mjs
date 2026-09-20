@@ -69,9 +69,10 @@ test('抓屏压缩：≤上限成功；超上限两次仍超则返回 2', async 
   const envBig = makeEnv(big, { apiBase: 'http://127.0.0.1:1', adb: makeFakeAdb(big, { jpegBytes: Buffer.alloc(130 * 1024, 0xff) }), convert: makePassthroughConvert(big) });
   r = await run('wall_load_env && wall_capture_jpeg SER1 "$ZJ_WALL_TMP/o.jpg" 122880; echo rc=$?', envBig);
   assert.match(r.stdout, /rc=2/);
-  // 两级降质：质量参数依次 55、35
-  const calls = readFileSync(join(big, 'convert.calls'), 'utf8').split('\n').filter(Boolean).map((l) => l.split(' ')[3]);
-  assert.deepEqual(calls, ['55', '35']);
+  // 三级降质：质量参数依次 50、42、36；宽度默认 720（0920 高清化：原 -Z 360 实际只出 162×360）
+  const lines = readFileSync(join(big, 'convert.calls'), 'utf8').split('\n').filter(Boolean);
+  assert.deepEqual(lines.map((l) => l.split(' ')[3]), ['50', '42', '36']);
+  assert.deepEqual([...new Set(lines.map((l) => l.split(' ')[2]))], ['720']);
   // 超限帧清理：文件存在 ⇔ 可发
   assert.ok(!existsSync(join(big, 'tmp', 'o.jpg')));
 });
