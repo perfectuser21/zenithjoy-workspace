@@ -11,6 +11,8 @@ const WR = new URL('../wall-report.sh', import.meta.url).pathname;
 const q = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
 const wr = (env, ...args) => runBash(`"$BASH" "${WR}" ${args.map(q).join(' ')}`, env, { timeoutMs: 15_000 });
 const body = (r) => JSON.parse(r.body.toString());
+// 与 wall-report.sh 里 PLACEHOLDER_JPEG_B64 同源（1×1 灰 JPEG）
+const PLACEHOLDER_JPEG_B64 = TINY_JPEG.toString('base64');
 
 async function setup(t, opts = {}, adbOpts = {}) {
   const dir = makeTmp();
@@ -81,6 +83,39 @@ test('fail 缺 diag 时 diag_line 退回 error_code；锁屏 mCurrentFocus=null 
   assert.equal(s.screenshot_jpeg_b64, TINY_JPEG.toString('base64'));
   const c = body(api.requests.find((r) => /\/complete$/.test(r.url)));
   assert.deepEqual(c, { outcome: 'failed', executor_id: 'adb-wall', error_code: 'screen_locked', failed_step: 0 });
+});
+
+test('抓屏失败（adb 输出空）→ 占位 JPEG 且 note 截到 170 后仍带标注', async (t) => {
+  const { api, env } = await setup(t, {}, { jpegBytes: Buffer.alloc(0) });
+  await ok(wr(env, 'start', 'SER1', 't', 'a,b'));
+  await ok(wr(env, 'fail', 'SER1', '1', 'x'.repeat(250)));
+  const s = body(api.requests.find((r) => /\/steps$/.test(r.url)));
+  assert.equal(s.status, 'failed');
+  assert.equal(s.screenshot_jpeg_b64, PLACEHOLDER_JPEG_B64);
+  assert.equal(s.note, `${'x'.repeat(170)} [截图失败,占位图]`);
+  assert.equal(s.diag_line, 'x'.repeat(250));
+  const c = body(api.requests.find((r) => /\/complete$/.test(r.url)));
+  assert.equal(c.outcome, 'failed');
+});
+
+test('idx 非数字：step/fail 不 POST 不改状态，只记日志；随后 done 仍能正常收尾', async (t) => {
+  const { dir, api, env } = await setup(t);
+  await ok(wr(env, 'start', 'SER1', 't', 'a,b'));
+  await ok(wr(env, 'step', 'SER1', 'abc', 'doing', 'n'));
+  await ok(wr(env, 'fail', 'SER1', '1x', 'boom'));
+  assert.equal(api.requests.filter((r) => /\/steps$|\/complete$/.test(r.url)).length, 0);
+  assert.match(readFileSync(join(dir, 'wall.log'), 'utf8'), /idx 非数字/);
+  await ok(wr(env, 'done', 'SER1'));
+  assert.equal(api.requests.filter((r) => /\/complete$/.test(r.url)).length, 1);
+});
+
+test('note/fail 无进行中任务：不发请求，记一行日志', async (t) => {
+  const { dir, api, env } = await setup(t);
+  await ok(wr(env, 'note', 'SER1', 'x'));
+  await ok(wr(env, 'fail', 'SER1', '0', 'boom'));
+  assert.equal(api.requests.length, 0);
+  const log = readFileSync(join(dir, 'wall.log'), 'utf8');
+  assert.equal((log.match(/无进行中任务,忽略/g) || []).length, 2);
 });
 
 test('--profile 解析序列号；409 时先把旧任务 complete superseded 再重试', async (t) => {

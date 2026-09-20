@@ -62,6 +62,9 @@ test('抓屏压缩：≤上限成功；超上限两次仍超则返回 2', async 
   let r = await run('wall_load_env && wall_capture_jpeg SER1 "$ZJ_WALL_TMP/o.jpg" 122880; echo rc=$?', env);
   assert.match(r.stdout, /rc=0/);
   assert.ok(existsSync(join(dir, 'tmp', 'o.jpg')));
+  // 中间 PNG 按输出名派生（o.png）且用完即删；不再共用 cap-<serial>.png（会与推帧器每秒抓屏撞路径读到半截文件）
+  assert.ok(!existsSync(join(dir, 'tmp', 'cap-SER1.png')), '仍在用共享的 cap-SER1.png');
+  assert.ok(!existsSync(join(dir, 'tmp', 'o.png')), '中间 PNG 没删');
   const big = makeTmp();
   const envBig = makeEnv(big, { apiBase: 'http://127.0.0.1:1', adb: makeFakeAdb(big, { jpegBytes: Buffer.alloc(130 * 1024, 0xff) }), convert: makePassthroughConvert(big) });
   r = await run('wall_load_env && wall_capture_jpeg SER1 "$ZJ_WALL_TMP/o.jpg" 122880; echo rc=$?', envBig);
@@ -71,6 +74,18 @@ test('抓屏压缩：≤上限成功；超上限两次仍超则返回 2', async 
   assert.deepEqual(calls, ['55', '35']);
   // 超限帧清理：文件存在 ⇔ 可发
   assert.ok(!existsSync(join(big, 'tmp', 'o.jpg')));
+});
+
+test('adb 抓屏卡死：WALL_ADB_TIMEOUT=1 下 wall_capture_jpeg 5s 内返回非 0，不留中间文件', async () => {
+  const dir = makeTmp();
+  const env = { ...makeEnv(dir, { apiBase: 'http://127.0.0.1:1', adb: makeFakeAdb(dir, { hangCapture: true }), convert: makePassthroughConvert(dir) }), WALL_ADB_TIMEOUT: '1' };
+  const t0 = Date.now();
+  const r = await run('wall_load_env && wall_capture_jpeg SER1 "$ZJ_WALL_TMP/o.jpg" 122880; echo rc=$?', env, { timeoutMs: 5000 });
+  assert.equal(r.timedOut, false, '5s 内没返回（adb 无超时护栏）');
+  assert.ok(Date.now() - t0 < 5000);
+  assert.match(r.stdout, /rc=[1-9]/);
+  assert.ok(!existsSync(join(dir, 'tmp', 'o.png')));
+  assert.ok(!existsSync(join(dir, 'tmp', 'o.jpg')));
 });
 
 test('前台包名从 mCurrentFocus 取', async () => {

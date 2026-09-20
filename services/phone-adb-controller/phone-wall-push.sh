@@ -22,7 +22,7 @@ push_loop() {
   local serial="$1" uuid="$2" code last=202 rc
   local jpg="$ZJ_WALL_TMP/frame-$serial.jpg"
   while :; do
-    if ! "$ADB" -s "$serial" get-state >/dev/null 2>&1; then wall_log "$serial 离线,推帧退出"; return 0; fi
+    if ! wall_adb -s "$serial" get-state >/dev/null; then wall_log "$serial 离线,推帧退出"; return 0; fi
     wall_capture_jpeg "$serial" "$jpg" "$FRAME_MAX"; rc=$?
     if [ "$rc" -eq 0 ]; then
       code=$(curl -s -m 5 -o /dev/null -w '%{http_code}' -X POST "$ZJ_API_BASE/api/workers/$uuid/frame" \

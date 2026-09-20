@@ -89,20 +89,24 @@ wall_convert() {
   else sips -Z "$3" -s format jpeg -s formatOptions "$4" "$1" --out "$2" >/dev/null 2>&1; fi
 }
 
+# adb 带超时护栏（USB 半死时 adb 会无限挂起）：perl alarm 秒数后 SIGALRM 杀掉，macOS 自带 perl、bash 3.2 可用
+# 包一层 {} 2>/dev/null 同时压掉调用方 shell 打印的 "Alarm clock: 14" 作业提示；adb 的 stderr 各调用点本就丢弃
+wall_adb() { { perl -e 'alarm shift; exec @ARGV' "${WALL_ADB_TIMEOUT:-8}" "$ADB" "$@"; } 2>/dev/null; }
+
 # 抓屏并压到 ≤max 字节：serial out max → 0 成功 / 1 抓屏失败 / 2 两次降质仍超限
+# 中间 PNG 按输出名派生（o.jpg → o.png）且用完即删：推帧器每秒抓屏与报警截图若共用 cap-<serial>.png 会读到半截文件
 wall_capture_jpeg() {
-  local serial="$1" out="$2" max="$3" png="$ZJ_WALL_TMP/cap-$1.png" q
-  "$ADB" -s "$serial" exec-out screencap -p > "$png" 2>/dev/null || return 1
-  [ -s "$png" ] || return 1
+  local serial="$1" out="$2" max="$3" png="${2%.*}.png" q
+  if ! wall_adb -s "$serial" exec-out screencap -p > "$png" || [ ! -s "$png" ]; then rm -f "$png"; return 1; fi
   for q in 55 35; do
-    wall_convert "$png" "$out" "$WALL_WIDTH" "$q" || return 1
-    [ "$(wc -c < "$out" | tr -d ' ')" -le "$max" ] && return 0
+    if ! wall_convert "$png" "$out" "$WALL_WIDTH" "$q"; then rm -f "$png"; return 1; fi
+    if [ "$(wc -c < "$out" | tr -d ' ')" -le "$max" ]; then rm -f "$png"; return 0; fi
   done
-  rm -f "$out" # 超限帧不留：文件存在 ⇔ 可发
+  rm -f "$png" "$out" # 超限帧不留：文件存在 ⇔ 可发
   return 2
 }
 
-# 前台包名（mCurrentFocus=Window{... u0 <pkg>/<activity>}）
+# 前台包名（mCurrentFocus=Window{... u0 <pkg>/<activity>}）；锁屏/无焦点时输出空串
 wall_foreground_pkg() {
-  "$ADB" -s "$1" shell dumpsys window 2>/dev/null | grep -m1 mCurrentFocus | sed -n 's/.* \([a-zA-Z0-9_.]*\)\/.*/\1/p' | tr -d '\r'
+  wall_adb -s "$1" shell dumpsys window | grep -m1 mCurrentFocus | sed -n 's/.* \([a-zA-Z0-9_.]*\)\/.*/\1/p' | tr -d '\r'
 }
