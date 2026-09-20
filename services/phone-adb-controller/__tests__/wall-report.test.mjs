@@ -168,3 +168,23 @@ test('缺 ZJ_INTERNAL_TOKEN / 中台不可达：都退出 0 不发请求或只�
   assert.match(readFileSync(join(dir, 'wall.log'), 'utf8'), /register 网络失败 SER1/);
   assert.equal(api.requests.length, 0);
 });
+
+// 0920 真机 bug（staging 连丢两单触达）：建任务 curl -m 3 在跨境抖动时超时，服务端其实已 201 建好，
+// 客户端却当失败删状态文件 → 后续 step/done 全「无进行中任务,忽略」→ 服务端孤儿任务 10 分钟后 executor_lost。
+test('建任务响应慢于 3 秒仍能拿到 task_id（写操作超时 8 秒）', async (t) => {
+  const { dir, api, env } = await setup(t, { taskDelaysMs: [5000] });
+  await ok(wr(env, 'start', 'SER1', '触达·单#50', '发送,核验'));
+  assert.equal(api.requests.filter((r) => /\/tasks$/.test(r.url)).length, 1, '不该重试，8 秒内等到即可');
+  assert.ok(existsSync(join(dir, 'tmp', 'task-SER1-default')), '状态文件必须写下，否则整单后续上报全丢');
+  await ok(wr(env, 'step', 'SER1', '0', 'done'));
+  assert.equal(api.requests.filter((r) => /\/steps$/.test(r.url)).length, 1);
+});
+
+test('建任务真超时（超过写超时）→ 重试一次；第二次成功则整单照常上报', async (t) => {
+  const { dir, api, env } = await setup(t, { taskDelaysMs: [3000, 0] });
+  const fast = { ...env, WALL_API_TIMEOUT_WRITE: '1' };
+  await ok(wr(fast, 'start', 'SER1', '触达·单#51', '发送,核验'));
+  assert.equal(api.requests.filter((r) => /\/tasks$/.test(r.url)).length, 2, '第一次超时后必须重试一次');
+  assert.ok(existsSync(join(dir, 'tmp', 'task-SER1-default')));
+  assert.doesNotMatch(readFileSync(join(dir, 'wall.log'), 'utf8'), /静默降级/);
+});
