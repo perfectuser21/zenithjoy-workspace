@@ -1,0 +1,38 @@
+{
+  "initiative_id": "e2c3a1ae-6983-4a10-a174-9b612e36e506",
+  "journey_type": "user_facing",
+  "journey_type_reason": "涉及 apps/dashboard/src/pages/MashupPage.tsx 客户交互（粘贴文案/在线预览/浏览候选/渲染排队），命中 user_facing。",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "批量混剪加厚：文案动态分段模板 + 素材在线预览 + 候选200+缩略图可视化 + 选定后按需渲染（并发=1队列/失败态）",
+      "scope": "新增 POST /api/mashup/templates/from-script（文案→动态分段模板，TOAPIS/Gemini 解析，角色映射 ai_tags，AI 失败静默降级固定模板，落 mashup_templates 行）与 GET /api/materials/:id/preview-url（素材在线预览重签 signedUrl）；扩展候选生成产出 thumbnailCollageUrl（targetCount 至 200，抽帧自 video-frame-extract）；扩展渲染为并发=1 队列 + 失败态（新建 mashup_render_jobs 表 + render-concurrency/enqueueRenderJob）；MashupPage.tsx 增文案粘贴确认、PickStep 在线预览 <video>、候选缩略图虚拟滚动、渲染排队/失败态；回流 candidate-generation/render smoke。不改 S4 内容安全逻辑与声音克隆。",
+      "dod": [
+        "[BEHAVIOR] 文案 POST /templates/from-script 真 TOAPIS 分段并落 mashup_templates（source ai|fallback，segments≥1）",
+        "[BEHAVIOR] 候选 targetCount=200 返回条数≤200 且每条含 thumbnailCollageUrl",
+        "[BEHAVIOR] 渲染并发=1：第二并发进 queued，任一时刻 mashup_render_jobs rendering≤1",
+        "[BEHAVIOR] GET /materials/:id/preview-url 返回非空 signedUrl",
+        "[BEHAVIOR] ffmpeg 渲染产物经 ffprobe 含 video+audio 流",
+        "[BEHAVIOR] error path：空 script → 400 INVALID_BODY；新端点无 token → 401；跨租户候选 render → 404",
+        "[ARTIFACT] 新模块 mashup-script-segment.ts / mashup-thumbnail.ts / render-concurrency.ts + mashup_render_jobs 迁移 + smoke 回流"
+      ],
+      "files": [
+        "apps/api/src/services/mashup-script-segment.ts",
+        "apps/api/src/services/mashup-thumbnail.ts",
+        "apps/api/src/services/render-concurrency.ts",
+        "apps/api/src/services/mashup-candidate-generation.ts",
+        "apps/api/src/services/mashup-render.ts",
+        "apps/api/src/routes/mashup.ts",
+        "apps/api/src/routes/materials.ts",
+        "apps/api/db/migrations/20260920_010000_mashup_render_jobs.sql",
+        "apps/dashboard/src/pages/MashupPage.tsx",
+        "apps/dashboard/src/api/mashup.api.ts",
+        ".github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh",
+        ".github/workflows/scripts/smoke/mashup-render-smoke.sh"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 120
+    }
+  ]
+}
