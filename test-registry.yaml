@@ -6438,13 +6438,13 @@ agent_suite:
     product: 工作机控制塔
     note: "部门配色单测：每个部门都有配色（漏一个甘特色块会 undefined 崩）、颜色互不相同、与部门清单不多不少。"
 
-  - id: dashboard-day-calendar-unit
-    path: apps/dashboard/src/components/DayCalendar.test.tsx
+  - id: dashboard-dept-task-table-unit
+    path: apps/dashboard/src/components/DeptTaskTable.test.tsx
     type: unit
     ci: L3
     status: active
     product: 工作机控制塔
-    note: "纵向 24 小时日历单测：块按时刻与时长定位、重叠分列（含 A/C 不重叠复用同列）、跨天截断到 24 点并标真实结束、整点刻度、固定高度内部滚动、并排块各占等分宽、失败说人话、现在线只在今天、空态与头部件数。"
+    note: "按部门分组的任务表单测：分组顺序照部门清单、组内按开始时刻从早到晚、只取指定那天、组内件数与已完成、跨部门并行判定、时长人话、容器固定高度内部滚动、列头 sticky、并行标记与同时在跑说明、失败说人话、跨天次日结束、空态两种提示。"
 
   - id: dashboard-workers-timeline-unit
     path: apps/dashboard/src/pages/__tests__/WorkersPage.timeline.test.tsx

@@ -5,16 +5,18 @@
  *   「应该在工作机页面里直接有个 calendar，每一天、一周我都能看得到，
  *     而不是再弄个新的页面。」→ 排程内嵌，不做独立排程页
  *   「我要的是一个机子，左边一个手机，右边是一个固定的窗口高度。你现在随着任务
- *     越来越多，这个页面越来越长，不是这个样子……要的是类似 Calendar 那样从上到下
- *     的时间分割，一个页面里面一个机器这样去看。」
- *     → 一屏只看一台：顶部芯片切机，左边该机实时画面，右边当天的纵向日历
+ *     越来越多，这个页面越来越长，不是这个样子……一个页面里面一个机器这样去看。」
+ *     → 一屏只看一台：顶部芯片切机，左边该机实时画面，右边当天的任务表
+ *   「我觉得一个 table 的形式会比较好……每个部门从早到晚是怎么排的，以 table 的形式去分；
+ *     页面的高度是定的就这一页，里面可以加一个上下滑杆。」
+ *     → 右边是按部门分组的 DeptTaskTable，容器高度写死、滚动发生在表里
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { fetchWorkers, workerLiveUrl, type Worker } from '../api/workers.api';
 import { fetchSchedule, slotsOfDay, DEPTS, type Dept, type ScheduleDevice } from '../api/schedule.api';
-import DayCalendar from '../components/DayCalendar';
+import DeptTaskTable from '../components/DeptTaskTable';
 import PhoneFrame from '../components/PhoneFrame';
 import { DEPT_BLOCK } from '../components/dept-colors';
 
@@ -217,7 +219,7 @@ export default function WorkersPage() {
               </div>
             </div>
 
-            <DayCalendar
+            <DeptTaskTable
               slots={current.device?.slots ?? []}
               dayOffset={offset}
               noSchedule={!current.device}

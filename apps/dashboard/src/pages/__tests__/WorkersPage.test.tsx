@@ -14,12 +14,12 @@ const workers = [
   { id: 'w1', agent_id: 'ag2', hostname: 'XX-ROG', nickname: null, os_type: 'win32', status: 'offline', running: null, completed_today: 0, last_seen: 'x' },
 ];
 describe('WorkersPage', () => {
-  // 0920 二改：每台一张表往下堆 → 一屏只看一台，左画面右日历
+  // 0920 三改：一屏只看一台，左画面右「按部门分组、固定高度内部滚动」的任务表
   it('一次只看一台机：顶部芯片列出所有机，正在跑第 x/y 步写在头上', async () => {
     (fetchWorkers as any).mockResolvedValue(workers);
     render(<MemoryRouter><WorkersPage /></MemoryRouter>);
     await waitFor(() => expect(screen.getAllByTestId('device-chip')).toHaveLength(2));
-    expect(screen.getAllByTestId('day-calendar')).toHaveLength(1);
+    expect(screen.getAllByTestId('dept-task-table')).toHaveLength(1);
     expect(screen.getByText(/正在跑：发布视频到抖音/)).toBeInTheDocument();
     expect(screen.getByText(/第 6\/10 步/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '看步骤流 →' })).toHaveAttribute('href', '/dashboard/workers/a1');

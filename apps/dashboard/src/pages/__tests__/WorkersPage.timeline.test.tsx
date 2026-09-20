@@ -38,16 +38,16 @@ afterEach(cleanup);
 
 const renderPage = () => render(<MemoryRouter><WorkersPage /></MemoryRouter>);
 
-describe('工作机页一屏一台机（主理人：左边一个手机，右边固定高度的日历）', () => {
-  it('所有机器只出一排芯片，日历同时只有一张', async () => {
+describe('工作机页一屏一台机（主理人：左边一个手机，右边固定高度、按部门分组的 table）', () => {
+  it('所有机器只出一排芯片，任务表同时只有一张', async () => {
     renderPage();
     await waitFor(() => expect(screen.getAllByTestId('device-chip')).toHaveLength(4));
-    expect(screen.getAllByTestId('day-calendar')).toHaveLength(1);
-    // 表格视图已下线
-    expect(screen.queryAllByTestId('device-task-table')).toHaveLength(0);
+    expect(screen.getAllByTestId('dept-task-table')).toHaveLength(1);
+    // 日历视图已下线
+    expect(screen.queryAllByTestId('day-calendar')).toHaveLength(0);
   });
 
-  it('点另一台芯片就换成那台的画面和日历', async () => {
+  it('点另一台芯片就换成那台的画面和任务表', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByAltText('实时画面')).toHaveAttribute('src', `/api/workers/${JINO}/live`));
     fireEvent.click(screen.getByRole('button', { name: /小龙虾机/ }));
@@ -55,14 +55,15 @@ describe('工作机页一屏一台机（主理人：左边一个手机，右边�
     await waitFor(() => expect(screen.getByText('朋友圈 · 跟圈点赞')).toBeInTheDocument());
   });
 
-  it('日历里当天的活都画成块，重叠的并排分列', async () => {
+  it('当天的活按部门分组，组内从早到晚，重叠的标出并行', async () => {
     renderPage();
     await waitFor(() => expect(screen.getAllByTestId('device-chip')).toHaveLength(4));
     fireEvent.click(screen.getByRole('button', { name: /悦升工作机/ }));
-    // 悦升机触达 08:00-22:00 与 20:00 的发布重叠 → 至少两列
-    await waitFor(() => expect(screen.getAllByTestId('cal-block').length).toBeGreaterThan(1));
-    const widths = screen.getAllByTestId('cal-block').map((b) => b.style.width);
-    expect(widths.some((w) => w !== '100%')).toBe(true);
+    // 悦升机两个部门：智能获客与新媒体部
+    await waitFor(() => expect(screen.getAllByTestId('dept-head').length).toBeGreaterThan(1));
+    expect(screen.getAllByTestId('task-row').length).toBeGreaterThan(1);
+    // 触达 08:00-22:00 与 20:00 的发布重叠 → 并行标记
+    await waitFor(() => expect(screen.getAllByTestId('parallel-badge').length).toBeGreaterThan(0));
   });
 
   it('没排程的机切过去给提示，不是一片空白', async () => {
@@ -83,7 +84,7 @@ describe('工作机页一屏一台机（主理人：左边一个手机，右边�
     await waitFor(() => expect(screen.getByRole('button', { name: '今天' })).toBeInTheDocument());
   });
 
-  it('翻到没排期的那天，日历里写"这天没有安排"', async () => {
+  it('翻到没排期的那天，表里写"这天没有安排"', async () => {
     renderPage();
     await waitFor(() => expect(screen.getAllByTestId('device-chip')).toHaveLength(4));
     fireEvent.click(screen.getByLabelText('前一天'));
@@ -107,22 +108,22 @@ describe('工作机页一屏一台机（主理人：左边一个手机，右边�
     await waitFor(() => expect(screen.getByText('没有匹配的设备')).toBeInTheDocument());
   });
 
-  it('日历头上给出这台机当天的件数与额度', async () => {
+  it('表头给出这台机当天的件数与额度', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByTestId('calendar-head')).toBeInTheDocument());
-    const head = screen.getByTestId('calendar-head');
+    await waitFor(() => expect(screen.getByTestId('table-head')).toBeInTheDocument());
+    const head = screen.getByTestId('table-head');
     await waitFor(() => expect(head).toHaveTextContent(/共\s*\d+\s*件/));
     expect(head).toHaveTextContent(/已完成\s*\d+/);
     expect(head).toHaveTextContent(/待跑\s*\d+/);
     expect(head).toHaveTextContent('14/55单');
   });
 
-  it('日历整块固定高度，页面不随任务变多往下长', async () => {
+  it('表格整块固定高度、内部自己滚，页面不随任务变多往下长', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByTestId('calendar-scroll')).toBeInTheDocument());
-    const box = screen.getByTestId('calendar-scroll');
+    await waitFor(() => expect(screen.getByTestId('table-scroll')).toBeInTheDocument());
+    const box = screen.getByTestId('table-scroll');
     expect(box.className).toMatch(/overflow-y-auto/);
-    expect(box.className).toMatch(/h-\[/);
+    expect(box.className).toMatch(/h-\[\d+px\]/);
   });
 
   it('正在跑的任务写在头上并能跳去看步骤流', async () => {
