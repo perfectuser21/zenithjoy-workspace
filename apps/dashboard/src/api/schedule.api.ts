@@ -97,6 +97,33 @@ function slot(
   return { id, title, dept, planned_at, est_minutes, source, status: autoStatus(planned_at, est_minutes), ...override };
 }
 
+/** 周期规则：每天同一时刻重复的活（采收三轮、触达额度、朋友圈、客服值守…） */
+interface Recur {
+  hh: number;
+  mm?: number;
+  minutes: number;
+  dept: Dept;
+  /** 标题可按天轮换（如采收每天换词） */
+  title: string | ((day: number) => string);
+}
+
+/** 把周期规则展开成 days 天的具体任务 */
+function expand(prefix: string, rules: Recur[], days: number): ScheduleSlot[] {
+  const out: ScheduleSlot[] = [];
+  for (let d = 0; d < days; d++) {
+    rules.forEach((r, i) => {
+      const title = typeof r.title === 'function' ? r.title(d) : r.title;
+      out.push(slot(`${prefix}-${d}-${i}`, title, r.dept, at(d, r.hh, r.mm ?? 0), r.minutes, 'recurring'));
+    });
+  }
+  return out;
+}
+
+const HARVEST_WORDS = ['AI人工智能训练师', '转行人工智能', '西安 人工智能训练', '裁员后学什么', '人工智能训练师怎么考', 'AI就业', '学AI'];
+const word = (base: number) => (d: number) => `采收 · ${HARVEST_WORDS[(base + d) % HARVEST_WORDS.length]} 6 词`;
+
+const DAYS_AHEAD = 7;
+
 function mockPayload(): SchedulePayload {
   return {
     as_of: new Date().toISOString(),
@@ -108,16 +135,17 @@ function mockPayload(): SchedulePayload {
         serial: 'ANGYVB4227006983',
         online: true,
         depts: ['智能获客'],
-        quotas: [{ dept: '智能获客', used: 6, cap: 55, unit: '单' }],
-        slots: [
-          slot('k1', '触达 · 私信今日额度', '智能获客', at(0, 8), 14 * 60, 'recurring'),
-          slot('k2', '采收 · AI人工智能训练师 6 词', '智能获客', at(0, 22), 90, 'recurring'),
-          slot('k3', '采收 · AI人工智能训练师 6 词', '智能获客', at(1, 2), 90, 'recurring'),
-          slot('k4', '采收 · AI人工智能训练师 6 词', '智能获客', at(1, 6), 90, 'recurring'),
-          slot('k5', '触达 · 私信今日额度', '智能获客', at(1, 8), 14 * 60, 'recurring'),
-          slot('k6', '采收 · 转行人工智能 6 词', '智能获客', at(1, 22), 90, 'recurring'),
-          slot('k7', '采收 · 转行人工智能 6 词', '智能获客', at(2, 2), 90, 'recurring'),
-        ],
+        quotas: [{ dept: '智能获客', used: 14, cap: 55, unit: '单' }],
+        slots: expand(
+          'k',
+          [
+            { hh: 2, minutes: 90, dept: '智能获客', title: word(0) },
+            { hh: 6, minutes: 90, dept: '智能获客', title: word(0) },
+            { hh: 8, minutes: 14 * 60, dept: '智能获客', title: '触达 · 私信今日额度' },
+            { hh: 22, minutes: 90, dept: '智能获客', title: word(1) },
+          ],
+          DAYS_AHEAD,
+        ),
       },
       {
         agent_id: '657dfabc-802c-478d-9de3-c05b7db847df',
@@ -126,17 +154,23 @@ function mockPayload(): SchedulePayload {
         online: true,
         depts: ['智能获客', '新媒体部'],
         quotas: [
-          { dept: '智能获客', used: 7, cap: 60, unit: '单' },
+          { dept: '智能获客', used: 15, cap: 60, unit: '单' },
           { dept: '新媒体部', used: 1, cap: 3, unit: '条' },
         ],
         slots: [
-          slot('y1', '触达 · 私信今日额度', '智能获客', at(0, 8), 14 * 60, 'recurring'),
-          slot('y2', '发布 ·《AI训练师报考全流程》抖音', '新媒体部', at(0, 20), 12, 'oneoff'),
-          slot('y3', '采收 · 西安人工智能训练 6 词', '智能获客', at(0, 22, 30), 90, 'recurring'),
-          slot('y4', '发布 ·《学AI要不要转行》小红书', '新媒体部', at(1, 11), 12, 'oneoff'),
-          slot('y5', '采收 · 西安人工智能训练 6 词', '智能获客', at(1, 2, 30), 90, 'recurring'),
-          slot('y6', '触达 · 私信今日额度', '智能获客', at(1, 8), 14 * 60, 'recurring'),
-          slot('y7', '发布 ·《补贴怎么申领》视频号', '新媒体部', at(2, 10), 12, 'oneoff'),
+          ...expand(
+            'y',
+            [
+              { hh: 2, mm: 30, minutes: 90, dept: '智能获客', title: word(2) },
+              { hh: 8, minutes: 14 * 60, dept: '智能获客', title: '触达 · 私信今日额度' },
+              { hh: 22, mm: 30, minutes: 90, dept: '智能获客', title: word(2) },
+            ],
+            DAYS_AHEAD,
+          ),
+          slot('y-pub-1', '发布 ·《AI训练师报考全流程》抖音', '新媒体部', at(0, 20), 12, 'oneoff'),
+          slot('y-pub-2', '发布 ·《学AI要不要转行》小红书', '新媒体部', at(1, 11), 12, 'oneoff'),
+          slot('y-pub-3', '发布 ·《补贴怎么申领》视频号', '新媒体部', at(2, 10), 12, 'oneoff'),
+          slot('y-pub-4', '发布 ·《学员就业回访》抖音', '新媒体部', at(4, 20), 12, 'oneoff'),
         ],
       },
       {
@@ -150,14 +184,19 @@ function mockPayload(): SchedulePayload {
           { dept: '新媒体部', used: 0, cap: 3, unit: '条' },
         ],
         slots: [
-          slot('x1', '朋友圈 · 跟圈点赞', '私域客服', at(0, 9), 30, 'recurring'),
-          slot('x2', '客服 · 会话轮询接管', '私域客服', at(0, 10), 10 * 60, 'recurring'),
-          slot('x3', '朋友圈 · 发布《学员拿证》', '新媒体部', at(0, 19), 10, 'oneoff', {
+          ...expand(
+            'x',
+            [
+              { hh: 9, minutes: 30, dept: '私域客服', title: '朋友圈 · 跟圈点赞' },
+              { hh: 10, minutes: 10 * 60, dept: '私域客服', title: '客服 · 会话轮询接管' },
+            ],
+            DAYS_AHEAD,
+          ),
+          slot('x-mom-1', '朋友圈 · 发布《学员拿证》', '新媒体部', at(0, 19), 10, 'oneoff', {
             status: 'blocked',
             blocked_reason: '素材待审核',
           }),
-          slot('x4', '朋友圈 · 跟圈点赞', '私域客服', at(1, 9), 30, 'recurring'),
-          slot('x5', '客服 · 会话轮询接管', '私域客服', at(1, 10), 10 * 60, 'recurring'),
+          slot('x-mom-2', '朋友圈 · 发布《开班通知》', '新媒体部', at(3, 19), 10, 'oneoff'),
         ],
       },
       {
@@ -168,10 +207,8 @@ function mockPayload(): SchedulePayload {
         depts: ['视频剪辑'],
         quotas: [{ dept: '视频剪辑', used: 0, cap: 2, unit: '条' }],
         slots: [
-          slot('b1', '翻拍 · 爆款视频合成', '视频剪辑', at(0, 14), 45, 'recurring', {
-            status: 'failed',
-          }),
-          slot('b2', '翻拍 · 爆款视频合成', '视频剪辑', at(1, 14), 45, 'recurring'),
+          ...expand('b', [{ hh: 14, minutes: 45, dept: '视频剪辑', title: '翻拍 · 爆款视频合成' }], DAYS_AHEAD).filter((x) => !x.id.startsWith('b-0-')),
+          slot('b-fail', '翻拍 · 爆款视频合成', '视频剪辑', at(0, 14), 45, 'recurring', { status: 'failed' }),
         ],
       },
     ],

@@ -11,16 +11,16 @@ const workers = [
   { id: 'w1', agent_id: 'ag2', hostname: 'XX-ROG', nickname: null, os_type: 'win32', status: 'offline', running: null, completed_today: 0, last_seen: 'x' },
 ];
 describe('WorkersPage', () => {
-  it('渲染 worker 卡片：类型徽章、在线态、正在执行第 x/y 步、今日完成、实时链接', async () => {
+  // 0920 改版：卡片网格换成「每台一行 + 24 小时时间轴」，排程内嵌不再另开页面
+  it('渲染每台设备一行：类型徽章、在线态、正在跑第 x/y 步、实时链接', async () => {
     (fetchWorkers as any).mockResolvedValue(workers);
     render(<MemoryRouter><WorkersPage /></MemoryRouter>);
     await waitFor(() => expect(screen.getByText('小龙虾')).toBeInTheDocument());
     expect(screen.getByText(/安卓/)).toBeInTheDocument();
     expect(screen.getByText(/Windows/)).toBeInTheDocument();
-    expect(screen.getByText(/正在执行：发布视频到抖音/)).toBeInTheDocument();
+    expect(screen.getByText(/正在跑：发布视频到抖音/)).toBeInTheDocument();
     expect(screen.getByText(/第 6\/10 步/)).toBeInTheDocument();
     expect(screen.getByText('空闲')).toBeInTheDocument();
-    expect(screen.getByText(/今日完成 2/)).toBeInTheDocument();
     const links = screen.getAllByRole('link', { name: /实时/ });
     expect(links[0]).toHaveAttribute('href', '/dashboard/workers/a1');
   });
