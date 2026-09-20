@@ -12,6 +12,23 @@
 | `push-leads.js` | 飞书写表:把分拣后的线索 TSV(含 11/12 列 purl 主页直链)写入飞书线索 Bitable |
 | `update-profile-links.js` | 直链回写:把 refill 产出的主页直链批量回写到飞书表已有行 |
 
+## 可视化两件(0919, 决策见 Brain task 1f5b9134)
+
+| 文件 | 用途 |
+| --- | --- |
+| `phone-wall-push.sh` + `wall-lib.sh` + `com.zenithjoy.phonewallpush.plist` | 推帧器(launchd 常驻): 每台 adb 在线手机每秒 `screencap`→JPEG(≤120KB)→`POST /api/workers/<uuid>/frame`(X-Agent-License); 每 60s `POST /api/agent/register` 兼心跳(hostname=phone-<序列号>) |
+| `wall-report.sh` | 上报薄壳: `start/step/note/done/fail`, 采收/触达链每阶段旁路调用(内部 token, curl -m 3, 永不阻塞); `fail` 自动带三件套 |
+
+挂钩落点: `harvest-cron.sh`(start/fail/done) · `batch2.sh`(词级 step) · `harvest-keyword.sh`(视频级 note 续租) · `outreach-tick.sh`(start/fail)。上报器缺失或中台不可达一律吞掉,绝不阻塞采收/触达。
+
+配置 `~/.config/zenithjoy/wall.env`(chmod 600),三个键: `ZJ_API_BASE` / `ZJ_LICENSE` / `ZJ_INTERNAL_TOKEN`(值从 1Password CS Vault 取,不写进 repo)。
+
+部署(xian-m4 / M1 各一遍):
+
+1. `scp wall-lib.sh phone-wall-push.sh wall-report.sh harvest-cron.sh batch2.sh harvest-keyword.sh outreach-tick.sh` → `~/bin-harvest/`(`chmod +x`)
+2. `scp com.zenithjoy.phonewallpush.plist` → `~/Library/LaunchAgents/`,写好 `wall.env` 后 `launchctl load -w ~/Library/LaunchAgents/com.zenithjoy.phonewallpush.plist`(stderr 在 `/tmp/phonewallpush.err`)
+3. 看: Dashboard「工作机」页 `/dashboard/workers`,每台手机一格,帧每秒刷新、当前步/失败三件套随上报变化
+
 ## 六刀融合表
 
 | 刀 | 内容 |

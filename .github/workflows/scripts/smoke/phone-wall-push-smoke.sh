@@ -6,10 +6,11 @@ set -euo pipefail
 D="services/phone-adb-controller"
 fail() { echo "::error::phone-wall-push-smoke: $1"; exit 1; }
 
-# 层0: 三件套存在（launchd plist 归 Task 5，届时补进此列表）
+# 层0: 三件套 + launchd plist 存在
 for f in wall-lib.sh phone-wall-push.sh wall-report.sh; do
   [[ -s "$D/$f" ]] || fail "$f 缺失或为空"
 done
+[ -s "$D/com.zenithjoy.phonewallpush.plist" ] || fail "plist 缺失"
 
 # 层1: 语法闸——上报侧是 bash，被挂钩的四个生产脚本是 zsh
 for f in wall-lib.sh phone-wall-push.sh wall-report.sh; do bash -n "$D/$f" || fail "$f bash 语法错误"; done
