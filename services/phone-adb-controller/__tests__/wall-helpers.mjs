@@ -74,7 +74,7 @@ export function makePassthroughConvert(dir) {
 }
 
 /** 假中台：记录全部请求；tasks 端点可按次序返回 409；frame 端点可按次序返回状态码（默认 202） */
-export function startFakeApi({ busyCodes = [], frameCodes = [], taskIds = [] } = {}) {
+export function startFakeApi({ busyCodes = [], frameCodes = [], taskIds = [], taskDelaysMs = [] } = {}) {
   const requests = [];
   const uuid = randomUUID();
   const taskId = randomUUID();
@@ -95,8 +95,15 @@ export function startFakeApi({ busyCodes = [], frameCodes = [], taskIds = [] } =
         return code === 202 ? send(202, { success: true, data: { seq: requests.length } }) : send(code, { success: false, error: { code: 'FRAME_REJECTED' } });
       }
       if (/^\/api\/workers\/[^/]+\/tasks$/.test(req.url)) {
-        const code = busyCodes[taskCalls++] ?? 201;
-        return code === 201 ? send(201, { success: true, data: { task_id: taskIds[taskCreated++] ?? taskId, lease_until: new Date().toISOString() } }) : send(code, { success: false, error: { code: 'WORKER_BUSY' } });
+        const n = taskCalls++;
+        const code = busyCodes[n] ?? 201;
+        // taskDelaysMs[n]：第 n 次建任务延迟这么久才响应（模拟跨境网络慢：服务端已建好，响应回不来）
+        const reply = () => (code === 201
+          ? send(201, { success: true, data: { task_id: taskIds[taskCreated++] ?? taskId, lease_until: new Date().toISOString() } })
+          : send(code, { success: false, error: { code: 'WORKER_BUSY' } }));
+        const delay = taskDelaysMs[n] ?? 0;
+        if (delay > 0) { const t = setTimeout(reply, delay); t.unref?.(); return; }
+        return reply();
       }
       if (/^\/api\/workers\/tasks\/[^/]+\/steps$/.test(req.url)) return send(200, { success: true, data: {} });
       if (/^\/api\/workers\/tasks\/[^/]+\/complete$/.test(req.url)) return send(200, { success: true, data: {} });
