@@ -117,6 +117,11 @@ fi
 if grep -qE '\btap [0-9]+ [0-9]+\b' "$D/refill-profile-links.sh"; then
   fail "refill-profile-links 出现写死坐标tap(已实锤用户tab位置/卡片位置都不固定,会点错人)"
 fi
+# 0920 实测发现: 每30分钟一次tick+每次最多发1条,理论上限才17条/号/天,天花板配到55/60
+# 根本够不着——outreach-tick 必须能一次tick内连发多条(时间预算内循环取单),否则阶梯
+# 测试的天花板毫无意义。
+grep -qF 'TICK_BUDGET' "$D/outreach-tick.sh" || fail "outreach-tick 未接单tick内连发时间预算(0920实测:单tick单发理论上限仅17条/天,够不着阶梯天花板)"
+grep -qF 'SENDS_THIS_TICK' "$D/outreach-tick.sh" || fail "outreach-tick 未接单tick多发计数"
 
 
 # 层5: escort 跨轮记忆契约(决策 c2901aff, 0915 主理人拍板修老Commander失忆病)
