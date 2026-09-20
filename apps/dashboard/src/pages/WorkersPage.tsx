@@ -18,7 +18,7 @@ import {
   type Dept,
   type ScheduleDevice,
 } from '../api/schedule.api';
-import ScheduleGantt, { type GanttRow } from '../components/ScheduleGantt';
+import DeviceTaskTable from '../components/DeviceTaskTable';
 import { DEPT_BLOCK } from '../components/dept-colors';
 
 const POLL_MS = 5000;
@@ -32,19 +32,12 @@ function dayLabel(offset: number): string {
   return `${d.getMonth() + 1}月${d.getDate()}日 周${'日一二三四五六'[d.getDay()]}`;
 }
 
-function dateText(offset: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + offset);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
-}
-
 export default function WorkersPage() {
   const [workers, setWorkers] = useState<Worker[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sched, setSched] = useState<ScheduleDevice[]>([]);
   const [mock, setMock] = useState(false);
   const [offset, setOffset] = useState(0);
-  const [week, setWeek] = useState(false);
   const [dept, setDept] = useState<Dept | '全部'>('全部');
 
   useEffect(() => {
@@ -80,24 +73,23 @@ export default function WorkersPage() {
     };
   }, []);
 
-  const rows: GanttRow[] = useMemo(() => {
+  const rows = useMemo(() => {
     if (!workers) return [];
-    const days = week ? Array.from({ length: 7 }, (_, i) => offset + i) : [offset];
     return workers
       .map((w) => ({ w, d: sched.find((s) => s.agent_id === w.id) }))
       .filter((r) => dept === '全部' || r.d?.depts.includes(dept))
       .map(({ w, d }) => ({
         key: w.id,
         device: d,
-        name: w.nickname || w.hostname,
+        name: d?.name || w.nickname || w.hostname,
+        serial: d?.serial,
         online: w.status === 'online',
         runningText: w.running
           ? `正在跑：${w.running.title}（第 ${w.running.current_step}/${w.running.steps_total} 步）`
           : undefined,
         href: `/dashboard/workers/${w.id}`,
-        days,
       }));
-  }, [workers, sched, dept, week, offset]);
+  }, [workers, sched, dept]);
 
   const totals = useMemo(() => {
     let planned = 0;
@@ -106,16 +98,14 @@ export default function WorkersPage() {
     let bad = 0;
     for (const r of rows) {
       if (!r.device) continue;
-      for (const d of r.days) {
-        const ss = slotsOfDay(r.device.slots, d);
-        planned += ss.length;
-        done += ss.filter((s) => s.status === 'done').length;
-        left += backlogCount(ss);
-        bad += ss.filter((s) => s.status === 'failed').length;
-      }
+      const ss = slotsOfDay(r.device.slots, offset);
+      planned += ss.length;
+      done += ss.filter((s) => s.status === 'done').length;
+      left += backlogCount(ss);
+      bad += ss.filter((s) => s.status === 'failed').length;
     }
     return { planned, done, left, bad };
-  }, [rows]);
+  }, [rows, offset]);
 
   if (error && !workers)
     return (
@@ -171,30 +161,15 @@ export default function WorkersPage() {
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <div className="flex items-center overflow-hidden rounded-lg border bg-white">
-          <button aria-label="前一天" onClick={() => setOffset((o) => o - (week ? 7 : 1))} className="px-2 py-1.5 text-gray-600 hover:bg-gray-50">
+          <button aria-label="前一天" onClick={() => setOffset((o) => o - 1)} className="px-2 py-1.5 text-gray-600 hover:bg-gray-50">
             <ChevronLeft className="h-4 w-4" />
           </button>
           <button onClick={() => setOffset(0)} className="min-w-[126px] px-3 py-1.5 text-sm text-gray-800 hover:bg-gray-50">
-            {week ? `${dateText(offset)} 起 7 天` : dayLabel(offset)}
+            {dayLabel(offset)}
           </button>
-          <button aria-label="后一天" onClick={() => setOffset((o) => o + (week ? 7 : 1))} className="px-2 py-1.5 text-gray-600 hover:bg-gray-50">
+          <button aria-label="后一天" onClick={() => setOffset((o) => o + 1)} className="px-2 py-1.5 text-gray-600 hover:bg-gray-50">
             <ChevronRight className="h-4 w-4" />
           </button>
-        </div>
-
-        <div className="flex overflow-hidden rounded-lg border">
-          {[
-            { w: false, label: '日' },
-            { w: true, label: '周' },
-          ].map((v) => (
-            <button
-              key={v.label}
-              onClick={() => setWeek(v.w)}
-              className={`px-3 py-1.5 text-sm ${week === v.w ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-            >
-              {v.label}
-            </button>
-          ))}
         </div>
 
         <div className="flex flex-wrap gap-1.5">
@@ -227,12 +202,26 @@ export default function WorkersPage() {
         </div>
       </div>
 
-      <div className="mt-3">
-        <ScheduleGantt rows={rows} week={week} />
+      <div className="mt-3 space-y-3">
+        {rows.length === 0 ? (
+          <div className="rounded-xl border py-10 text-center text-sm text-gray-400">没有匹配的设备</div>
+        ) : (
+          rows.map((r) => (
+            <DeviceTaskTable
+              key={r.key}
+              name={r.name}
+              serial={r.serial}
+              online={r.online}
+              href={r.href}
+              runningText={r.runningText}
+              quotas={r.device?.quotas}
+              slots={r.device?.slots ?? []}
+              dayOffset={offset}
+              noSchedule={!r.device}
+            />
+          ))
+        )}
       </div>
-      <p className="mt-1.5 text-[11px] text-gray-400">
-        表内可左右拖动看全天；设备名与时间刻度固定不动。点设备名进实时画面。
-      </p>
       </div>
     </div>
   );
