@@ -73,7 +73,7 @@ wr step "$SERIAL" 1 done
 # 触达时窗守卫: 8-22点是触达的地盘,采收 cron 不该在白天抢(冗余保险,crontab已限时)
 # 这是**正常退让**不是故障,不升级(升级=狼来了)。
 H=$(date +%H)
-if (( H >= 8 && H < 22 )); then log "白天触达时窗,采收退让"; wr done "$SERIAL"; exit 0; fi
+if (( H >= 8 && H < 22 )); then log "白天触达时窗,采收退让"; wr step "$SERIAL" 1 done "白天时窗退让"; wr done "$SERIAL"; exit 0; fi
 
 # ── ③ 词单←网关(关键词表 SSOT) ──
 # ── ③ KPI 闸(0916 主理人要求"KPI驱动自动获客,不是一天三次") ──
@@ -85,7 +85,7 @@ KPI_REASON=$(print -r -- "$KPI_JSON" | sed -n 's/.*"reason":"\([^"]*\)".*/\1/p')
 KPI_WORDS=$(print -r -- "$KPI_JSON" | sed -n 's/.*"words":\([0-9]*\).*/\1/p')
 if [[ "$KPI_VERDICT" == "done" ]]; then
   log "KPI已达标,本批退让: $KPI_REASON"
-  wr done "$SERIAL"
+  wr step "$SERIAL" 1 done "KPI已达标:$KPI_REASON"; wr done "$SERIAL"
   exit 0
 fi
 if [[ -z "$KPI_VERDICT" ]]; then

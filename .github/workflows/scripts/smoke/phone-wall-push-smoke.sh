@@ -28,7 +28,12 @@ grep -qF 'wr done "$SERIAL"' "$D/harvest-cron.sh"                        || fail
 grep -qF 'wr step "$SERIAL" 3 doing' "$D/batch2.sh"                      || fail "batch2 未挂词级 step"
 grep -qF 'wr note --profile "$P"' "$D/harvest-keyword.sh"                || fail "harvest-keyword 未挂视频级 note(续租)"
 grep -qF 'wr start --profile "$PROFILE"' "$D/outreach-tick.sh"           || fail "outreach-tick 未挂 start"
-grep -qF 'wr fail --profile "$PROFILE" 1' "$D/outreach-tick.sh"          || fail "outreach-tick 未挂 fail"
+grep -qF 'wr fail --profile "$PROFILE" 0' "$D/outreach-tick.sh"          || fail "outreach-tick 未挂 fail"
+# 2c: 触达的 start 必须在拿到锁之后(锁被采收占着时不能 start,否则顶掉同机采收任务)且整个 tick 只 start 一次
+LOCKLN=$(grep -n 'lock-acquire "\$TAG"' "$D/outreach-tick.sh" | head -1 | cut -d: -f1)
+STARTLN=$(grep -n 'wr start --profile "\$PROFILE"' "$D/outreach-tick.sh" | head -1 | cut -d: -f1)
+[[ -n "$LOCKLN" && -n "$STARTLN" && "$STARTLN" -gt "$LOCKLN" ]] || fail "outreach-tick 的 wr start 必须在 lock-acquire 之后"
+grep -qE 'WR_STARTED == 0.*wr start --profile' "$D/outreach-tick.sh" || fail "outreach-tick 的 wr start 未用 WR_STARTED 守一次(重试循环会重复 start)"
 # 2a: 四脚本的 wr 定义必须是"上报器缺失/失败一律吞掉"的形态（有 -x 判断 + 收尾 true），绝不能反过来阻塞采收/触达
 for f in harvest-cron.sh batch2.sh harvest-keyword.sh outreach-tick.sh; do
   grep -qE '^wr\(\)\{ \[\[ .*-x "\$WR" \]\] && "\$WR" "\$@" >/dev/null 2>&1; true \}$' "$D/$f" || fail "$f 的 wr 定义不是吞错形态(缺 -x 判断或收尾 true)"

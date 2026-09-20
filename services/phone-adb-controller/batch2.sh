@@ -28,7 +28,7 @@ for W in "${(f)$(cat $WF)}"; do
   wr step "$SERIAL" 3 doing "词$n: $W"
   ~/bin-harvest/harvest-keyword.sh "$P" "$ENC" 4 "$TAG-w$n" unlimited >> $OUT 2>> $LOG
   print "[$(date +%H:%M:%S)] 词$n 完成 LEAD=$(grep -c '^LEAD' $OUT 2>/dev/null||echo 0)" >> $LOG
-  wr note "$SERIAL" "词$n 完成 LEAD=$(grep -c '^LEAD' $OUT 2>/dev/null||echo 0)"
+  NLEAD=$(grep -c '^LEAD' $OUT 2>/dev/null); wr note "$SERIAL" "词$n 完成 LEAD=${NLEAD:-0}"
   /bin/sleep $(( 20 + RANDOM % 40 ))
 done
 print "[$(date +%H:%M:%S)] v2批完成 LEAD=$(grep -c '^LEAD' $OUT) VIDEO=$(grep -c '^VIDEO' $OUT)" >> $LOG
