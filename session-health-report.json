@@ -1,0 +1,247 @@
+[
+  {
+    "platform": "抖音主号",
+    "secretEnv": "DOUYIN_COOKIES",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "抖音小号1",
+    "secretEnv": "DOUYIN_SUB_1",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "抖音小号2",
+    "secretEnv": "DOUYIN_SUB_2",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "抖音小号3",
+    "secretEnv": "DOUYIN_SUB_3",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "快手主号",
+    "secretEnv": "KUAISHOU_COOKIES",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "快手小号1",
+    "secretEnv": "KUAISHOU_SUB_1",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "快手小号2",
+    "secretEnv": "KUAISHOU_SUB_2",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "快手小号3",
+    "secretEnv": "KUAISHOU_SUB_3",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "小红书主号",
+    "secretEnv": "XIAOHONGSHU_COOKIES",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "小红书小号1",
+    "secretEnv": "XIAOHONGSHU_SUB_1",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "小红书小号2",
+    "secretEnv": "XIAOHONGSHU_SUB_2",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "小红书小号3",
+    "secretEnv": "XIAOHONGSHU_SUB_3",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "视频号主号",
+    "secretEnv": "SHIPINHAO_COOKIES",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "视频号小号1",
+    "secretEnv": "SHIPINHAO_SUB_1",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "视频号小号2",
+    "secretEnv": "SHIPINHAO_SUB_2",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "视频号小号3",
+    "secretEnv": "SHIPINHAO_SUB_3",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "头条主号",
+    "secretEnv": "TOUTIAO_COOKIES",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "头条小号1",
+    "secretEnv": "TOUTIAO_SUB_1",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "头条小号2",
+    "secretEnv": "TOUTIAO_SUB_2",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "头条小号3",
+    "secretEnv": "TOUTIAO_SUB_3",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "微博主号",
+    "secretEnv": "WEIBO_COOKIES",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "微博小号1",
+    "secretEnv": "WEIBO_SUB_1",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "微博小号2",
+    "secretEnv": "WEIBO_SUB_2",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "微博小号3",
+    "secretEnv": "WEIBO_SUB_3",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "知乎主号",
+    "secretEnv": "ZHIHU_COOKIES",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "知乎小号1",
+    "secretEnv": "ZHIHU_SUB_1",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "知乎小号2",
+    "secretEnv": "ZHIHU_SUB_2",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "知乎小号3",
+    "secretEnv": "ZHIHU_SUB_3",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "公众号主号",
+    "secretEnv": "GONGZHONGHAO_COOKIES",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "公众号小号1",
+    "secretEnv": "GONGZHONGHAO_SUB_1",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "公众号小号2",
+    "secretEnv": "GONGZHONGHAO_SUB_2",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "公众号小号3",
+    "secretEnv": "GONGZHONGHAO_SUB_3",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "飞书 API Key",
+    "secretEnv": "FEISHU_API_KEY",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "Notion API Key",
+    "secretEnv": "NOTION_API_KEY",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  },
+  {
+    "platform": "企微 API Key",
+    "secretEnv": "WECOM_API_KEY",
+    "status": "missing",
+    "checkedAt": "2026-09-20T13:11:57.832Z",
+    "expiresAt": null
+  }
+]
