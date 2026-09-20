@@ -107,6 +107,14 @@ grep -qF 'workerLiveUrl' <<< "${PSRC}" || fail "工作机页没接实时画面�
 [ ! -e "apps/dashboard/src/components/DeviceTaskTable.tsx" ] || fail "旧的每台一张表仍在"
 [ ! -e "apps/dashboard/src/components/ScheduleGantt.tsx" ] || fail "甘特表仍在"
 
+# 层8e: 样例排期的密度要对得上真机一天的量（主理人 0920：「我记着原来有那么多工作呢呀，
+#       你现在咋一弄就变得很少了？那一天不是好多个吗？」实测金诺机当天真跑 24 件，
+#       样例却只有 4 行——撑不满固定高度的表格，他要的上下滑杆根本不出现）
+grep -qF 'outreachRuns' <<< "$SRC" || fail "样例没有按单展开的触达（又会压成一条「今日额度」）"
+! grep -qF '今日额度' <<< "$SRC" || fail "样例里还留着把一整天压成一行的「今日额度」"
+grep -qF '触达 · 单#' <<< "$SRC" || fail "触达单没按真机写法带单号与昵称"
+grep -qF 'NICKNAMES' <<< "$SRC" || fail "触达单缺昵称池，单子看起来不像真的"
+
 # 层9: 生产链实际会写的失败码都要有人话，漏一个页面就露机器码
 ESRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "$ERRC")
 for c in executor_lost superseded lock_busy device_offline keywords_unavailable transient_exhausted; do

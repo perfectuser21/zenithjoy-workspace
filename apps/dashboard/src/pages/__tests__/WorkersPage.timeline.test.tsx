@@ -58,12 +58,22 @@ describe('工作机页一屏一台机（主理人：左边一个手机，右边�
   it('当天的活按部门分组，组内从早到晚，重叠的标出并行', async () => {
     renderPage();
     await waitFor(() => expect(screen.getAllByTestId('device-chip')).toHaveLength(4));
-    fireEvent.click(screen.getByRole('button', { name: /悦升工作机/ }));
-    // 悦升机两个部门：智能获客与新媒体部
+    // 小龙虾机横跨私域客服与新媒体部；客服 10:00-20:00 是常驻轮询，
+    // 19:00 那条朋友圈发布落在它区间里 —— 这才是真并行。
+    // （触达是一单一行的前台操作，同一时刻只有一个，本来就不该互相并行）
+    fireEvent.click(screen.getByRole('button', { name: /小龙虾机/ }));
     await waitFor(() => expect(screen.getAllByTestId('dept-head').length).toBeGreaterThan(1));
     expect(screen.getAllByTestId('task-row').length).toBeGreaterThan(1);
-    // 触达 08:00-22:00 与 20:00 的发布重叠 → 并行标记
     await waitFor(() => expect(screen.getAllByTestId('parallel-badge').length).toBeGreaterThan(0));
+  });
+
+  it('触达一单一行，不再压成一条「今日额度」', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getAllByTestId('device-chip')).toHaveLength(4));
+    // 默认选中金诺机：样例照真机实测的量铺，当天二十多件
+    await waitFor(() => expect(screen.getAllByTestId('task-row').length).toBeGreaterThan(15));
+    expect(screen.queryByText(/今日额度/)).toBeNull();
+    expect(screen.getAllByText(/触达 · 单#/).length).toBeGreaterThan(10);
   });
 
   it('没排程的机切过去给提示，不是一片空白', async () => {
