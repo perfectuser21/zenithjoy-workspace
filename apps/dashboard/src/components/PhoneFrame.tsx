@@ -80,6 +80,14 @@ export default function PhoneFrame({ children, className = '' }: Props) {
                 <StatusIcons />
               </div>
             </div>
+            {/* iOS 风格 Home 条：盖住被控机底部导航区（AdbIME 的「ADB Keyboard {ON}」提示条就在这里） */}
+            <div
+              aria-hidden
+              data-testid="phone-homebar"
+              className="pointer-events-none absolute inset-x-0 bottom-0 flex h-[34px] items-end justify-center bg-black/85 pb-[8px] backdrop-blur-sm"
+            >
+              <span className="h-[5px] w-[36%] rounded-full bg-white/90" />
+            </div>
             <div
               aria-hidden
               data-testid="phone-island"
