@@ -45,10 +45,9 @@ grep -qE 'mock[?]?: boolean' <<< "$SRC" || fail "SchedulePayload 缺 mock 标记
 PSRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "$PAGE")
 grep -qF '样例数据' <<< "$PSRC" || fail "工作机页缺『样例数据』提示文案"
 
-# 层5: 排程必须内嵌在工作机页（主理人 0920：不要再弄个新页面），且有日/周与翻天
-grep -qF '<DeviceTaskTable' <<< "$PSRC" || fail "工作机页未内嵌每台设备的任务表"
-grep -qF 'setOffset' <<< "$PSRC" || fail "工作机页缺前后翻天"
+# 层5: 排程必须内嵌在工作机页（主理人 0920：不要再弄个新页面），且能翻天
 grep -qF 'fetchSchedule' <<< "$PSRC" || fail "工作机页未接排程数据"
+grep -qF 'setOffset' <<< "$PSRC" || fail "工作机页缺前后翻天"
 
 # 层6: 独立排程页必须已删除（内容合并进工作机页，留着会两处维护）
 [ ! -e "apps/dashboard/src/pages/SchedulePage.tsx" ] || fail "独立排程页仍在，应已并入工作机页"
@@ -77,17 +76,30 @@ done
 [ "$(grep -c "status === 'queued'" <<< "$PSRC2")" -ge 2 ] || fail "queued 取值不足两处（今日盘点与待办清单各需一处）"
 [ "$(grep -c "status === 'blocked'" <<< "$PSRC2")" -ge 2 ] || fail "blocked 取值不足两处（被挡住的既算要处理也算积压）"
 
-# 层8b: 一台机一张表，且并行的活要标出来（主理人 0920：一个机子一个 table；并行要排出来）
-TBL="apps/dashboard/src/components/DeviceTaskTable.tsx"
-[ -s "$TBL" ] || fail "设备任务表组件缺失"
-TSRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "$TBL")
-grep -qF 'parallelWith' <<< "$TSRC" || fail "任务表未算并行（主理人要求并行的活排出来）"
-grep -qF 'parallel-badge' <<< "$TSRC" || fail "并行没有可见标记"
-grep -qF '<table' <<< "$TSRC" || fail "不是表格形态（主理人明确要 table 不要甘特图）"
-for h in 时间 任务 部门 状态 说明; do
-  grep -qF ">${h}<" <<< "$TSRC" || fail "任务表缺「${h}」列"
-done
-[ ! -e "apps/dashboard/src/components/ScheduleGantt.tsx" ] || fail "甘特表仍在，应已换成每台一张任务表"
+# 层8c: 一屏一台机 —— 左实时画面 + 右纵向 24 小时日历（主理人 0920 二改：
+#       「左边一个手机，右边是固定的窗口高度，页面不能随任务变多越来越长；
+#         要的是类似 Calendar 的从上到下时间分割，一个页面看一个机器」）
+CAL="apps/dashboard/src/components/DayCalendar.tsx"
+[ -s "${CAL}" ] || fail "日历组件缺失"
+CSRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "${CAL}")
+grep -qF 'HOUR_PX' <<< "${CSRC}" || fail "日历没有按小时换算的刻度尺（块的位置就没法按时刻算）"
+grep -qF 'hour-tick' <<< "${CSRC}" || fail "日历缺整点刻度（看不出几点干啥）"
+grep -qF 'cal-block' <<< "${CSRC}" || fail "日历没有把活画成块"
+grep -qF 'now-line' <<< "${CSRC}" || fail "日历缺「现在」这条线"
+grep -qF 'overflow-y-auto' <<< "${CSRC}" || fail "日历不能自己滚，页面会被撑长"
+grep -qE 'h-\[[0-9]+px\]' <<< "${CSRC}" || fail "日历没有固定高度（主理人明确要求固定窗口高度）"
+grep -qF 'endsNextDay' <<< "${CSRC}" || fail "跨天的活没做截断处理"
+grep -qF 'explainError' <<< "${CSRC}" || fail "日历未接失败码翻译（块里会露机器码）"
+# 分列并排 = 同一时段能看出同时在跑几件，这是「并行要排出来」的落点
+grep -qF 'cols' <<< "${CSRC}" || fail "日历没算并排列数（同时段的活会叠在一起）"
+
+# 工作机页必须是一屏一台：芯片切机 + 左画面 + 右日历
+grep -qF 'device-chip' <<< "${PSRC}" || fail "工作机页没有机器切换芯片（又会变成所有机往下堆）"
+grep -qF '<DayCalendar' <<< "${PSRC}" || fail "工作机页没挂日历"
+grep -qF '<PhoneFrame' <<< "${PSRC}" || fail "工作机页左边缺实时画面"
+grep -qF 'workerLiveUrl' <<< "${PSRC}" || fail "工作机页没接实时画面地址"
+[ ! -e "apps/dashboard/src/components/DeviceTaskTable.tsx" ] || fail "每台一张表仍在，应已换成一屏一台的日历"
+[ ! -e "apps/dashboard/src/components/ScheduleGantt.tsx" ] || fail "甘特表仍在，应已换成日历"
 
 # 层9: 生产链实际会写的失败码都要有人话，漏一个页面就露机器码
 ESRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "$ERRC")
