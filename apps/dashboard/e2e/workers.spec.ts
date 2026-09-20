@@ -71,9 +71,13 @@ test('排了活的机子按部门分组，组内从早到晚，同时段的标�
   // 触达跑一整天，中间插发布 → 并行标记
   expect(await page.getByTestId('parallel-badge').count()).toBeGreaterThan(0);
   await expect(page.getByText(/同时在跑：/).first()).toBeVisible();
-  // 滚动条真的在表格里：内容比窗口高
-  const scrollable = await page.getByTestId('table-scroll').evaluate((el) => el.scrollHeight > el.clientHeight);
-  expect(scrollable).toBe(true);
+  // 高度钉死在表格上：活再多也只在这块里滚，页面本身不变长
+  const box = await page.getByTestId('table-scroll').evaluate((el) => ({
+    clientH: el.clientHeight,
+    overflowY: getComputedStyle(el).overflowY,
+  }));
+  expect(box.clientH).toBeLessThanOrEqual(620);
+  expect(box.overflowY).toBe('auto');
 });
 test('详情页：3 个 ✅ 1 个 ▶️，画面正常无"画面不可用"', async ({ page }) => {
   await page.route('**/api/workers/a1/activity', (r) => r.fulfill({ json: { success: true, data: activity(500) } }));
