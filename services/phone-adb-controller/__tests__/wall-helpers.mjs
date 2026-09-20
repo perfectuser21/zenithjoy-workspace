@@ -39,8 +39,11 @@ export function makeTmp() {
   return d;
 }
 
-/** 造一个假 adb：devices 列出 serials；exec-out screencap 输出 jpegBytes；dumpsys window 给前台包 */
-export function makeFakeAdb(dir, { serials = ['SER1'], jpegBytes = TINY_JPEG, offline = [] } = {}) {
+/** 造一个假 adb：devices 列出 serials；exec-out screencap 输出 jpegBytes；dumpsys window 给前台包（focusLine 可覆盖，如锁屏 mCurrentFocus=null） */
+export function makeFakeAdb(dir, {
+  serials = ['SER1'], jpegBytes = TINY_JPEG, offline = [],
+  focusLine = '  mCurrentFocus=Window{c2d79ba u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.main.MainActivity}',
+} = {}) {
   const img = join(dir, 'cap.bin');
   writeFileSync(img, jpegBytes);
   const adb = join(dir, 'adb');
@@ -54,7 +57,7 @@ S="$2"; shift 2
 case " ${offline.join(' ')} " in *" $S "*) [ "$1" = "get-state" ] && exit 1;; esac
 if [ "$1" = "get-state" ]; then echo device; exit 0; fi
 if [ "$1" = "exec-out" ]; then cat "${img}"; exit 0; fi
-if [ "$1" = "shell" ] && [ "$2" = "dumpsys" ]; then echo '  mCurrentFocus=Window{c2d79ba u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.main.MainActivity}'; exit 0; fi
+if [ "$1" = "shell" ] && [ "$2" = "dumpsys" ]; then echo '${focusLine}'; exit 0; fi
 exit 0
 `,
   );
