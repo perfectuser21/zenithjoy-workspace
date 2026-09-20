@@ -6446,6 +6446,14 @@ agent_suite:
     product: 工作机控制塔
     note: "样例排期密度单测：最忙的机一天 >=20 件对得上真机实测、触达一单一行带单号昵称、单耗时 1-15 分钟、有失败单、后几天也排满、同机触达不重叠、id 唯一、部门在清单内、两次拉取结果一致（不随机）。"
 
+  - id: dashboard-schedule-gaps-unit
+    path: apps/dashboard/src/components/schedule-gaps.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "空档计算单测：两活之间/一天头尾都算空档、排满则无空档、碎到塞不下一单的不显示、重叠不出负数、已过去的标 past 且 canFit=0、横跨此刻只算剩下半截、往后的日子整天可用、过去的日子全已过、空白天是一个大空档；还能加多少与部门额度取小并说清被时间还是额度卡住。"
+
   - id: dashboard-dept-task-table-unit
     path: apps/dashboard/src/components/DeptTaskTable.test.tsx
     type: unit
