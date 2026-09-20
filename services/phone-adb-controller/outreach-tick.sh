@@ -1,16 +1,22 @@
 #!/bin/zsh
 # outreach-tick.sh —— 触达心跳(M4/M1 crontab 每30分钟, 全天0-23点)
-# 拟人纪律: ①30%概率本tick安静跳过(发送时刻不规律) ②tick内随机延迟0-20分钟(不卡半点)
-#          ③发送前5-25秒停留(private-message-send内部已有主页浏览过程) ④两号轮流分摊
+# 拟人纪律: ①5%概率本tick安静跳过 ②tick内随机延迟0-5分钟 ③发送前5-25秒停留
+#          (private-message-send内部已有主页浏览过程) ④两号轮流分摊
 # 0920 主理人拍板: 员工反映人工触达28次左右被限,但系统里从未真实测过平台阈值,现用两个号
 #   各测一种升量方式找真实上限(见 dm-rate-ramp-lib.js + config/dm-rate-ramp.json):
 #   jinoshengyuan-work=逐日阶梯, legacy=单日内快速阶梯,都设理智天花板60/天。
 #   连续2次遇到未识别的新失败模式(classify_failure=other)自动熔断该号,防止真把号测坏
 #   (熔断标记 ~/bin-harvest/state/dm-paused-<profile>.flag,需人工核查后手动删除)。
-# 0920 实测发现结构性瓶颈: 每30分钟一次tick、每次最多发1条、两号轮流,理论上限只有
+# 0920 实测发现结构性瓶颈①: 每30分钟一次tick、每次最多发1条、两号轮流,理论上限只有
 #   ~48tick/天×70%执行率÷2号≈17条/号/天,天花板配到55/60也够不着——不是账号被限,是
 #   节奏设计把自己锁死了。改成一次tick内可连发多条(每条之间随机停顿,而不是死等到下个
 #   30分钟tick),直到当日上限/无待发单/tick时间预算耗尽为止,天花板才有意义被真正测到。
+# 0920 实测发现结构性瓶颈②: 修完①之后当天实测(12:36-16:09发13条)仍然够不着上限,
+#   拉日志发现原30%拟人跳过+0-20分钟tick延迟+60-300秒单间停顿,在同一天内多次连续
+#   撞跳过,累计出现40-74分钟的空窗期——熔断安全网(判定真实限流用)跟"拟人不规律"这两
+#   件事被绑在一起调,前者要保守、后者当天要冲量。拍板结果: 拟人跳过降到5%、tick延迟
+#   降到0-5分钟、单间停顿降到30-90秒,腾出空窗期去真实测上限；熔断阈值(连续2次未识别
+#   失败)不变,这才是真正防止把号测坏的那道闸,跟拟人节奏无关,不能因为冲量就放松。
 # 0915 三刀(决策 c5e600a4/c5828297): 链接直达出单 + 瞬时失败执行内密集重试(1-2min×10) + mkdir互斥锁
 set -uo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -38,7 +44,7 @@ export WALL_NS=outreach   # 上报器按命名空间分状态文件: 触达链�
 # 0920 时窗已放开到全天(阶梯测试拍板),不再卡8-22点
 
 # 拟人①: 30% 概率安静跳过
-(( RANDOM % 10 < 3 )) && { log "拟人跳过本tick"; exit 0 }
+(( RANDOM % 20 < 1 )) && { log "拟人跳过本tick"; exit 0 }
 
 # ── tick 互斥(mkdir 原子锁,家法同 douyin-phone-adb lock-acquire): 重试拉长运行时长后防重入 ──
 # 活性说明: mtime=最后活动时间(重试循环每轮 touch 刷新,防真在跑的tick被误判为尸锁);
@@ -60,7 +66,7 @@ fi
 trap '[[ "$(cat "$TICK_LOCK/pid" 2>/dev/null)" == "$$" ]] && /bin/rm -rf "$TICK_LOCK"' EXIT INT TERM
 
 # 拟人②: 随机延迟 0-1200 秒(0920 拉宽区间,弱化"整点/半点必发"的规律感)
-DELAY=$(( RANDOM % 1200 ))
+DELAY=$(( RANDOM % 300 ))
 log "本tick延迟 ${DELAY}s 后执行"
 /bin/sleep $DELAY
 
@@ -218,7 +224,7 @@ while (( SECONDS - TICK_BODY_START < TICK_BUDGET )); do
 
   # 本单已有结果(不是因为设备被占用而收工整个tick),继续取下一单前随机停顿——
   # 一个tick里可能连发好几条,但不是不停顿地机器人式连发。
-  BETWEEN_ORDERS_PAUSE=$(( 60 + RANDOM % 241 ))
+  BETWEEN_ORDERS_PAUSE=$(( 30 + RANDOM % 61 ))
   log "本单处理完(${ORDER_RESULT:-unknown}),${BETWEEN_ORDERS_PAUSE}s 后看下一单"
   /bin/sleep $BETWEEN_ORDERS_PAUSE
 done
