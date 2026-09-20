@@ -10,6 +10,10 @@ P="$1"; SERIAL="$2"; BIZ="${3:-AI人工智能训练师}"; N="${4:-6}"; PUSH="${5
 TAG="auto$(date +%m%d%H%M)"
 LOG=~/harvest-cron.log
 log(){ print -- "[$(date +%m%d-%H:%M:%S)] [$TAG] $*" >> $LOG }
+# 可视化旁路(0919): 每阶段报给控制塔工作机页; 上报器缺失/失败一律吞掉, 绝不影响采收
+WR=${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}
+wr(){ [[ -x "$WR" ]] && "$WR" "$@" >/dev/null 2>&1; true }
+export WALL_NS=harvest   # 上报器按命名空间分状态文件: 采收链(含 batch2/harvest-keyword 子进程)与触达链同机同序列号互不顶状态
 
 # 节点名映射(0915 真机核实: hostname 是 mac-mini-m4-xian/mac-mini-m1-us,与日志桥/nodes名不同,禁直推)
 case "$(hostname -s)" in
@@ -27,6 +31,8 @@ escalate() {
   ssh -o ConnectTimeout=20 us-vps "echo '[$(date +%m%d-%H:%M)][$HOSTKEY][采收$TAG] $msg' >> /opt/openclaw/state/m4-logs/escalation.log" 2>>$LOG \
     || log "升级通道也不可达(us-vps ssh 失败),仅留本地日志"
 }
+wr start "$SERIAL" "获客采收·$BIZ" "拉Commander,设备预检,取词单,采收主体,效果回写"
+wr step "$SERIAL" 0 doing
 
 # ── ① Commander 上岗(第一步,0916 改序) ──
 # 辅佐姿态(帮不拦/先动手后汇报/读不到就说读不到),宪法 SSOT=COMMANDER.md,SOP=网关 /root/.openclaw/cmdr-escort.txt
@@ -47,11 +53,13 @@ else
   log "escort拉起3次均失败(不阻塞采收)"
   escalate "escort拉起3次均失败,本批全程无陪跑;网关可能不可达或容器异常,请查网关健康"
 fi
+wr step "$SERIAL" 0 done; wr step "$SERIAL" 1 doing
 
 # ── ② 设备 preflight: 在线 + 屏幕亮 + 解锁(0915 锁屏=整机瘫痪且静默的教训) ──
 if ! adb -s $SERIAL get-state >/dev/null 2>&1; then
   log "设备离线,退出"
   escalate "设备 $SERIAL 离线,本批无法起跑(adb get-state 失败);请查 USB/无线调试/机器是否关机"
+  wr fail "$SERIAL" 1 device_offline "adb get-state 失败"
   exit 0
 fi
 W=$(adb -s $SERIAL shell dumpsys power | grep -oE "mWakefulness=[A-Za-z]+" | head -1 | tr -d "\r")
@@ -61,11 +69,12 @@ if [[ "$W" != *Awake* ]]; then
   adb -s $SERIAL shell input swipe 600 2200 600 800 300; /bin/sleep 1
 fi
 adb -s $SERIAL shell svc power stayon true 2>/dev/null
+wr step "$SERIAL" 1 done
 
 # 触达时窗守卫: 8-22点是触达的地盘,采收 cron 不该在白天抢(冗余保险,crontab已限时)
 # 这是**正常退让**不是故障,不升级(升级=狼来了)。
 H=$(date +%H)
-if (( H >= 8 && H < 22 )); then log "白天触达时窗,采收退让"; exit 0; fi
+if (( H >= 8 && H < 22 )); then log "白天触达时窗,采收退让"; wr step "$SERIAL" 1 done "白天时窗退让"; wr done "$SERIAL"; exit 0; fi
 
 # ── ③ 词单←网关(关键词表 SSOT) ──
 # ── ③ KPI 闸(0916 主理人要求"KPI驱动自动获客,不是一天三次") ──
@@ -77,6 +86,7 @@ KPI_REASON=$(print -r -- "$KPI_JSON" | sed -n 's/.*"reason":"\([^"]*\)".*/\1/p')
 KPI_WORDS=$(print -r -- "$KPI_JSON" | sed -n 's/.*"words":\([0-9]*\).*/\1/p')
 if [[ "$KPI_VERDICT" == "done" ]]; then
   log "KPI已达标,本批退让: $KPI_REASON"
+  wr step "$SERIAL" 1 done "KPI已达标:$KPI_REASON"; wr done "$SERIAL"
   exit 0
 fi
 if [[ -z "$KPI_VERDICT" ]]; then
@@ -86,6 +96,7 @@ else
   [[ -n "$KPI_WORDS" && "$KPI_WORDS" -gt 0 ]] && N=$KPI_WORDS
   log "KPI闸: $KPI_REASON"
 fi
+wr step "$SERIAL" 2 doing
 
 # 0916 分身实弹报告提案: 必须区分"网关容器停摆"与"真的词单为空"——0916凌晨两批真凶是前者,
 # 却因两者都表现为空输出而被误报成后者,害得排查方向指向关键词表(白查)。stderr 才是判据。
@@ -113,18 +124,26 @@ else
   else
     log "取词单失败且无本地缓存,退出"
     escalate "取词单失败**且无兜底词单**(首次跑或缓存丢失),本批夭折。根因: $WHY"
+    wr fail "$SERIAL" 2 keywords_unavailable "$WHY"
     exit 0
   fi
 fi
 NWORDS=$(wc -l < $WF | tr -d ' ')
 log "词单 ${NWORDS}词: $(tr '\n' '/' < $WF)"
+wr step "$SERIAL" 2 done; wr step "$SERIAL" 3 doing "${NWORDS}词"
 
 # ── ④ 采收主体 ──
 /bin/zsh ~/bin-harvest/batch2.sh "$P" "$WF" "$TAG" "$PUSH" "$SERIAL"
 log "批完成: $(grep -c '^LEAD' ~/night-$TAG.tsv 2>/dev/null || echo 0) LEAD"
+wr step "$SERIAL" 3 done
 
 # ── ⑤ 效果回写(词赛马数据闭环) ──
 if [[ "$PUSH" == "1" ]]; then
+  wr step "$SERIAL" 4 doing
   ssh -o ConnectTimeout=20 us-vps "docker exec openclaw-gateway node /root/.openclaw/update-keyword-stats.js" >> $LOG 2>&1
   log "效果已回写关键词表"
+  wr step "$SERIAL" 4 done
+else
+  wr step "$SERIAL" 4 done "PUSH=0 跳过回写"
 fi
+wr done "$SERIAL"

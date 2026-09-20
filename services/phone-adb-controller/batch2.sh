@@ -6,6 +6,9 @@
 set -uo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 P="$1"; WF="$2"; TAG="$3"; PUSH="${4:-0}"; SERIAL="${5:-}"
+# 可视化旁路(0919): 词级进度报给控制塔; 无序列号/上报器缺失/失败一律吞掉
+WR=${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}
+wr(){ [[ -n "$SERIAL" && -x "$WR" ]] && "$WR" "$@" >/dev/null 2>&1; true }
 OUT=~/night-$TAG.tsv; LOG=~/night-$TAG.log
 : > $OUT
 print "[$(date +%H:%M:%S)] v2批开始 profile=$P $(wc -l < $WF)词 push=$PUSH" >> $LOG
@@ -22,8 +25,10 @@ for W in "${(f)$(cat $WF)}"; do
   fi
   ENC=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$W")
   print "[$(date +%H:%M:%S)] 词$n: $W" >> $LOG
+  wr step "$SERIAL" 3 doing "词$n: $W"
   ~/bin-harvest/harvest-keyword.sh "$P" "$ENC" 4 "$TAG-w$n" unlimited >> $OUT 2>> $LOG
   print "[$(date +%H:%M:%S)] 词$n 完成 LEAD=$(grep -c '^LEAD' $OUT 2>/dev/null||echo 0)" >> $LOG
+  NLEAD=$(grep -c '^LEAD' $OUT 2>/dev/null); wr note "$SERIAL" "词$n 完成 LEAD=${NLEAD:-0}"
   /bin/sleep $(( 20 + RANDOM % 40 ))
 done
 print "[$(date +%H:%M:%S)] v2批完成 LEAD=$(grep -c '^LEAD' $OUT) VIDEO=$(grep -c '^VIDEO' $OUT)" >> $LOG

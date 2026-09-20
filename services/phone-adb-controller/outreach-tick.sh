@@ -26,6 +26,11 @@ classify_failure() {
 # source 守卫: smoke 层4 以 OUTREACH_TICK_SOURCED=1 source 本文件只取函数,不执行主体
 [[ -n "${OUTREACH_TICK_SOURCED:-}" ]] && return 0
 
+# 可视化旁路(0919): 触达每阶段报给控制塔; 上报失败一律吞掉
+WR=${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}
+wr(){ [[ -x "$WR" ]] && "$WR" "$@" >/dev/null 2>&1; true }
+export WALL_NS=outreach   # 上报器按命名空间分状态文件: 触达链与采收链同机同序列号互不顶状态
+
 # 0920 时窗已放开到全天(阶梯测试拍板),不再卡8-22点
 
 # 拟人①: 30% 概率安静跳过
@@ -69,6 +74,8 @@ SEQ=$(print -- "$ORDER"     | python3 -c "import json,sys;print(json.load(sys.st
 NICK=$(print -- "$ORDER"    | python3 -c "import json,sys;print(json.load(sys.stdin)['nick'])")
 PURL=$(print -- "$ORDER"    | python3 -c "import json,sys;print(json.load(sys.stdin).get('profile_url',''))")
 log "单#$SEQ: $NICK($DYID) via $SENDER [$PROFILE] ${PURL:+link}"
+# 可视化: 任务 start 放在拿到锁之后——锁被采收占着时不 start,否则会把同机正在跑的采收任务顶掉(409 superseded)
+WR_STARTED=0
 
 C=~/.local/bin/douyin-phone-adb
 mark(){ ssh -o ConnectTimeout=15 us-vps "docker exec openclaw-gateway node /root/.openclaw/next-outreach.js done $1 $2 $(print -n -- "$3" | /usr/bin/base64)" >>$LOG 2>&1 }
@@ -100,8 +107,13 @@ while true; do
   /usr/bin/touch "$TICK_LOCK"
   TAG="outreach-$(date +%m%d%H%M)-a${ATTEMPT}"
   if ! $C --profile "$PROFILE" lock-acquire "$TAG" >>$LOG 2>&1; then
-    log "锁被占(采收在用),回队列待下轮"; mark "$RID" requeue "lock busy"; exit 0
+    log "锁被占(采收在用),回队列待下轮"; mark "$RID" requeue "lock busy"
+    # 第 2 次及以后尝试才可能已 start(拿过锁), 此时要把已开的任务收成 fail; 第 1 次未 start 不调
+    (( WR_STARTED == 1 )) && wr fail --profile "$PROFILE" 0 lock_busy "重试中锁被采收占用"
+    exit 0
   fi
+  if (( WR_STARTED == 0 )); then wr start --profile "$PROFILE" "触达·单#$SEQ $NICK" "发送,核验"; WR_STARTED=1; fi
+  wr step --profile "$PROFILE" 0 doing "第${ATTEMPT}次发送"
   # 拟人③: 发送前 5-25 秒停顿(0920 拉宽区间)
   /bin/sleep $(( 5 + RANDOM % 21 ))
   OUT=$($C --profile "$PROFILE" private-message-send "$SENDER" "$DYID" "$MSGB64" "$TAG" ${PURL:+"$PURL"} </dev/null 2>&1)
@@ -110,6 +122,7 @@ while true; do
 
   if print -- "$OUT" | grep -q "send_status=sent"; then
     RAWTAIL=$(print -- "$OUT" | tail -3 | tr '\n' ' ' | cut -c1-180)
+    wr step --profile "$PROFILE" 0 done; wr step --profile "$PROFILE" 1 doing "核验仅互关"
     # 0920: 计入今日发送计数(不管后面判成功还是仅互关受限,都是一次真实发送尝试);
     # 且证明账号还能正常发送,清掉连续异常计数(熔断只认"连续"未识别失败)。
     echo $(( $(cat "$COUNT_FILE" 2>/dev/null || echo 0) + 1 )) > "$COUNT_FILE"
@@ -124,10 +137,12 @@ while true; do
     if [[ -f "$RESTRICT_XML" ]] && grep -qF "暂无法给对方发送消息" "$RESTRICT_XML" 2>/dev/null; then
       mark "$RID" restricted "对方仅互关可发消息,消息气泡已出但对方收不到"
       log "⚠️ 单#$SEQ 气泡已发但仅互关限制,标记受限(不计成功触达)"
+      wr step --profile "$PROFILE" 1 done "受限"; wr done --profile "$PROFILE"
       exit 0
     fi
     mark "$RID" sent "$RAWTAIL"
     log "✅ 单#$SEQ 送达(第${ATTEMPT}次尝试)"
+    wr step --profile "$PROFILE" 1 done; wr done --profile "$PROFILE"
     exit 0
   fi
 
@@ -150,15 +165,18 @@ while true; do
     fi
     mark "$RID" failed "${REASON:-rc=$RC}"
     log "❌ 单#$SEQ 失败($CLS): ${REASON:-rc=$RC}"
+    wr fail --profile "$PROFILE" 0 "$CLS" "${REASON:-rc=$RC}"
     exit 0
   fi
   if (( ATTEMPT >= MAX_ATTEMPTS )) || (( SECONDS - LOOP_START > 1320 )); then
     mark "$RID" requeue_transient "${REASON:-rc=$RC} (attempts=$ATTEMPT)"
     log "🔁 单#$SEQ 瞬时失败${ATTEMPT}次用尽,回队列: ${REASON:-rc=$RC}"
+    wr fail --profile "$PROFILE" 0 transient_exhausted "${REASON:-rc=$RC}"
     exit 0
   fi
   BACKOFF=$(( 60 + RANDOM % 61 ))
   log "⏳ 单#$SEQ 瞬时失败(第${ATTEMPT}次): ${REASON:-rc=$RC},${BACKOFF}s 后重试"
+  wr note --profile "$PROFILE" "第${ATTEMPT}次瞬时失败,${BACKOFF}s后重试"
   /bin/sleep $BACKOFF
   ATTEMPT=$(( ATTEMPT + 1 ))
 done

@@ -8,6 +8,9 @@ C=~/.local/bin/douyin-phone-adb
 P="$1"; KW="$2"; MAXV="${3:-4}"; TAG="$4"; LOC="${5:-same_city}"; LINE="${6:-}"
 KWTXT="$(python3 -c "import urllib.parse,sys;print(urllib.parse.unquote(sys.argv[1]))" "$KW")"
 log(){ print -u2 -- "[$(date +%H:%M:%S)] $*"; }
+# 可视化旁路(0919): 每视频续报一次(与下方 lock-refresh 同理); 上报器缺失/失败一律吞掉
+WR=${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}
+wr(){ [[ -x "$WR" ]] && "$WR" "$@" >/dev/null 2>&1; true }
 # RAM盘只有2G,采收截图很快塞爆(0914实证:爆盘让mkdir全军覆没误报锁被占)
 find /Volumes/EvidenceRAM/openclaw-phone/evidence -type f \( -name "*.png" -o -name "*.mkv" -o -name "*.wav" \) -mmin +30 -delete 2>/dev/null
 
@@ -37,6 +40,7 @@ for CARDLINE in "${(f)CARDS}"; do
   X="$(print -- "$CARDLINE" | cut -f1)"; Y="$(print -- "$CARDLINE" | cut -f2)"
   DUR="$(print -- "$CARDLINE" | cut -f3)"; TITLE="$(print -- "$CARDLINE" | cut -f4)"
   log "视频$i: ${TITLE:0:40}"
+  wr note --profile "$P" "视频$i: ${TITLE:0:40}"
   # 0914 融合刀6: 活锁心跳——每视频续一次,长采收绝不再被 TTL 判 stale 抢占
   $C --profile "$P" lock-refresh "$TAG" </dev/null >/dev/null 2>&1 || true
   $C --profile "$P" tap-evidence "$X" "$Y" "$TAG-v$i" >/dev/null 2>&1
