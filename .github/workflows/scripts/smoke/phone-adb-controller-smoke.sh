@@ -96,6 +96,16 @@ grep -qF '暂无法给对方发送消息' "$D/outreach-tick.sh" || fail "outreac
 grep -qF 'restricted' "$D/outreach-tick.sh" || fail "outreach-tick 未接 restricted 分支"
 grep -qF 'restrictedFields' "$D/next-outreach.js" || fail "next-outreach done模式未接 restrictedFields"
 grep -qF 'restrictedFields' "$D/next-outreach-lib.js" || fail "next-outreach-lib 缺 restrictedFields"
+# 0920 阶梯测试安全网: 当日发送上限闸 + 连续未识别失败自动熔断，缺任一个都不能上线
+# (往真实账号加压测阈值,没有熔断=有可能真把号测坏)。
+[[ -s "$D/dm-rate-ramp-lib.js" ]] || fail "dm-rate-ramp-lib.js 缺失或为空"
+[[ -s "$D/dm-daily-cap.js" ]] || fail "dm-daily-cap.js 缺失或为空"
+[[ -s "$D/config/dm-rate-ramp.json" ]] || fail "dm-rate-ramp.json 配置缺失"
+node --check "$D/dm-rate-ramp-lib.js" || fail "dm-rate-ramp-lib.js 语法错误"
+node --check "$D/dm-daily-cap.js" || fail "dm-daily-cap.js 语法错误"
+grep -qF 'dm-daily-cap.js' "$D/outreach-tick.sh" || fail "outreach-tick 未接当日发送上限闸"
+grep -qF 'dm-paused-' "$D/outreach-tick.sh" || fail "outreach-tick 未接熔断标记读取"
+grep -qF 'ANOMALY_COUNT >= 2' "$D/outreach-tick.sh" || fail "outreach-tick 未接连续未识别失败自动熔断"
 
 
 # 层5: escort 跨轮记忆契约(决策 c2901aff, 0915 主理人拍板修老Commander失忆病)

@@ -47,10 +47,26 @@ WORKDIR /repo/apps/api
 RUN npm run build
 RUN mkdir -p dist/templates && cp src/templates/*.jsx dist/templates/
 
+# 静态 ffmpeg 二进制来源——不用 apt-get install ffmpeg。
+# 0919 真机复现两轮：① 第一轮漏装 ffmpeg（换 bookworm 基础镜像时忘了），批量混剪渲染
+# 静默 fail-closed；② 补 `apt-get install ffmpeg` 后重新部署，Debian 包管理器把 ffmpeg
+# 完整依赖树（libaom/libx264/libx265/pango/cairo/librsvg/X11 等约 70+ 个包，很多是我们
+# 完全用不到的桌面/GUI 相关编解码器)一起拉下来，hk-vps 到 deb.debian.org 官方源速度
+# 奇慢（单包几十秒到十几分钟），部署 15+ 分钟仍未装完，buildkit RPC 超时直接中断。
+# 换成社区维护的静态编译 ffmpeg 镜像，多阶段 COPY 两个二进制文件（几十MB，来自 Docker
+# Hub，拉取速度和其它基础镜像一样正常），不装 apt 包、不占用 apt 源、几秒钟拷贝完成。
+FROM mwader/static-ffmpeg:7.1 AS ffmpeg
+
 # Production stage
 FROM node:20-bookworm-slim
 # tzdata：TZ=Asia/Shanghai 生效依赖（无 tzdata 时 date 恒 UTC，日志/调度时区全错）
 RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
+# ffmpeg/ffprobe：批量混剪 S4（mashup-render-ffmpeg.ts concatAndScale）用
+# spawnSync('ffmpeg',...) 合成成片。/usr/local/bin 已在 node 官方镜像默认 PATH 里，
+# spawnSync 无需改代码即可找到。dockerfile-ffmpeg.test.ts 固化这个断言，谁再删这两行
+# CI 直接红。
+COPY --from=ffmpeg /ffmpeg /usr/local/bin/ffmpeg
+COPY --from=ffmpeg /ffprobe /usr/local/bin/ffprobe
 WORKDIR /repo
 
 # 直接复用 builder 阶段已经跑过 npm ci + tsc 编译验证过的 node_modules，不再单独

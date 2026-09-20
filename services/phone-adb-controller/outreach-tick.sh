@@ -1,8 +1,12 @@
 #!/bin/zsh
-# outreach-tick.sh —— 触达心跳(M4 crontab 每30分钟, 08:00-22:00 主理人拍板窗口)
-# 拟人纪律: ①30%概率本tick安静跳过(发送时刻不规律) ②tick内随机延迟0-8分钟(不卡半点)
-#          ③发送前3-8秒停留(private-message-send内部已有主页浏览过程) ④两号轮流分摊
-# 风控账: 28 tick/天 × 70% ≈ 19发/天, 两号各~10, 间隔≥30min —— 远低于0821决策20/时上限
+# outreach-tick.sh —— 触达心跳(M4/M1 crontab 每30分钟, 全天0-23点)
+# 拟人纪律: ①30%概率本tick安静跳过(发送时刻不规律) ②tick内随机延迟0-20分钟(不卡半点)
+#          ③发送前5-25秒停留(private-message-send内部已有主页浏览过程) ④两号轮流分摊
+# 0920 主理人拍板: 员工反映人工触达28次左右被限,但系统里从未真实测过平台阈值,现用两个号
+#   各测一种升量方式找真实上限(见 dm-rate-ramp-lib.js + config/dm-rate-ramp.json):
+#   jinoshengyuan-work=逐日阶梯, legacy=单日内快速阶梯,都设理智天花板60/天。
+#   连续2次遇到未识别的新失败模式(classify_failure=other)自动熔断该号,防止真把号测坏
+#   (熔断标记 ~/bin-harvest/state/dm-paused-<profile>.flag,需人工核查后手动删除)。
 # 0915 三刀(决策 c5e600a4/c5828297): 链接直达出单 + 瞬时失败执行内密集重试(1-2min×10) + mkdir互斥锁
 set -uo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -27,9 +31,7 @@ WR=${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}
 wr(){ [[ -x "$WR" ]] && "$WR" "$@" >/dev/null 2>&1; true }
 export WALL_NS=outreach   # 上报器按命名空间分状态文件: 触达链与采收链同机同序列号互不顶状态
 
-# 时窗守卫(冗余保险, crontab 已限时)
-H=$(date +%H)
-(( H >= 8 && H < 22 )) || { log "时窗外,跳过"; exit 0 }
+# 0920 时窗已放开到全天(阶梯测试拍板),不再卡8-22点
 
 # 拟人①: 30% 概率安静跳过
 (( RANDOM % 10 < 3 )) && { log "拟人跳过本tick"; exit 0 }
@@ -53,8 +55,8 @@ else
 fi
 trap '[[ "$(cat "$TICK_LOCK/pid" 2>/dev/null)" == "$$" ]] && /bin/rm -rf "$TICK_LOCK"' EXIT INT TERM
 
-# 拟人②: 随机延迟 0-480 秒
-DELAY=$(( RANDOM % 480 ))
+# 拟人②: 随机延迟 0-1200 秒(0920 拉宽区间,弱化"整点/半点必发"的规律感)
+DELAY=$(( RANDOM % 1200 ))
 log "本tick延迟 ${DELAY}s 后执行"
 /bin/sleep $DELAY
 
@@ -78,6 +80,25 @@ WR_STARTED=0
 C=~/.local/bin/douyin-phone-adb
 mark(){ ssh -o ConnectTimeout=15 us-vps "docker exec openclaw-gateway node /root/.openclaw/next-outreach.js done $1 $2 $(print -n -- "$3" | /usr/bin/base64)" >>$LOG 2>&1 }
 
+# ── 0920 阶梯测试: 熔断标记 + 当日发送上限闸(在真发之前拦,别浪费一次真实发送尝试) ──
+STATE_DIR="$(dirname "$0")/state"
+mkdir -p "$STATE_DIR"
+PAUSE_FLAG="$STATE_DIR/dm-paused-$PROFILE.flag"
+if [[ -f "$PAUSE_FLAG" ]]; then
+  log "⛔ $PROFILE 已熔断(见 $PAUSE_FLAG),本tick跳过,回队列"
+  mark "$RID" requeue "circuit breaker paused, see $PAUSE_FLAG"
+  exit 0
+fi
+DATE_TAG=$(TZ=Asia/Shanghai date +%Y%m%d)
+COUNT_FILE="$STATE_DIR/dm-count-$PROFILE-$DATE_TAG.txt"
+TODAY_SENT=$(cat "$COUNT_FILE" 2>/dev/null || echo 0)
+CAP=$(node "$(dirname "$0")/dm-daily-cap.js" "$PROFILE")
+if (( TODAY_SENT >= CAP )); then
+  log "今日($PROFILE)已达阶梯上限 ${TODAY_SENT}/${CAP},回队列"
+  mark "$RID" requeue "daily cap reached (${TODAY_SENT}/${CAP})"
+  exit 0
+fi
+
 # ── 发送尝试循环(决策 c5828297): 瞬时失败就地重试,间隔60-120s,上限10次,总时长护栏22分钟 ──
 MAX_ATTEMPTS=10
 LOOP_START=$SECONDS
@@ -93,8 +114,8 @@ while true; do
   fi
   if (( WR_STARTED == 0 )); then wr start --profile "$PROFILE" "触达·单#$SEQ $NICK" "发送,核验"; WR_STARTED=1; fi
   wr step --profile "$PROFILE" 0 doing "第${ATTEMPT}次发送"
-  # 拟人③: 发送前 3-8 秒停顿
-  /bin/sleep $(( 3 + RANDOM % 6 ))
+  # 拟人③: 发送前 5-25 秒停顿(0920 拉宽区间)
+  /bin/sleep $(( 5 + RANDOM % 21 ))
   OUT=$($C --profile "$PROFILE" private-message-send "$SENDER" "$DYID" "$MSGB64" "$TAG" ${PURL:+"$PURL"} </dev/null 2>&1)
   RC=$?
   print -- "$OUT" | grep -vE "file pulled" | tail -4 >> $LOG
@@ -102,6 +123,10 @@ while true; do
   if print -- "$OUT" | grep -q "send_status=sent"; then
     RAWTAIL=$(print -- "$OUT" | tail -3 | tr '\n' ' ' | cut -c1-180)
     wr step --profile "$PROFILE" 0 done; wr step --profile "$PROFILE" 1 doing "核验仅互关"
+    # 0920: 计入今日发送计数(不管后面判成功还是仅互关受限,都是一次真实发送尝试);
+    # 且证明账号还能正常发送,清掉连续异常计数(熔断只认"连续"未识别失败)。
+    echo $(( $(cat "$COUNT_FILE" 2>/dev/null || echo 0) + 1 )) > "$COUNT_FILE"
+    rm -f "$STATE_DIR/dm-anomaly-$PROFILE.txt"
     # 0919 真机实证(截图+ui-evidence XML实锤): 消息气泡渲染成功≠真送达——对方设置
     # "仅互关可发消息"时,气泡照样能发出来(send_status=sent),但对方收不到,界面会
     # 追加系统提示"...暂无法给对方发送消息"。发送后借同一把锁二次核验,不能只信气泡。
@@ -125,6 +150,19 @@ while true; do
   CLS=$(classify_failure "$OUT")
   REASON=$(print -- "$OUT" | grep -E "failure_class=|die|not" | tail -1 | head -c 150)
   if [[ "$CLS" != "transient" ]]; then
+    if [[ "$CLS" == "other" ]]; then
+      # 0920 自动熔断安全网: "other"=classify_failure认不出的新失败模式,连续2次判定
+      # 可能撞上了真实平台限流/封号,自动停发该号,防止在真实账号上继续加压测坏。
+      ANOMALY_FILE="$STATE_DIR/dm-anomaly-$PROFILE.txt"
+      ANOMALY_COUNT=$(( $(cat "$ANOMALY_FILE" 2>/dev/null || echo 0) + 1 ))
+      echo "$ANOMALY_COUNT" > "$ANOMALY_FILE"
+      print -- "$OUT" >> ~/anomaly-$PROFILE.log
+      log "🚨 单#$SEQ 未识别新失败模式(第${ANOMALY_COUNT}次连续),原始输出已存 ~/anomaly-$PROFILE.log"
+      if (( ANOMALY_COUNT >= 2 )); then
+        touch "$PAUSE_FLAG"
+        log "⛔⛔ $PROFILE 连续${ANOMALY_COUNT}次未识别失败,自动熔断——这可能就是真实限流阈值,人工核查 ~/anomaly-$PROFILE.log 后手动删除 $PAUSE_FLAG 才会恢复"
+      fi
+    fi
     mark "$RID" failed "${REASON:-rc=$RC}"
     log "❌ 单#$SEQ 失败($CLS): ${REASON:-rc=$RC}"
     wr fail --profile "$PROFILE" 0 "$CLS" "${REASON:-rc=$RC}"
