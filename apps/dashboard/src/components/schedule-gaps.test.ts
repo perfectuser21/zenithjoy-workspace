@@ -114,9 +114,11 @@ describe('找空档', () => {
 
 describe('还能加多少这句话', () => {
   it('空档够但额度不够时，报额度那个数', () => {
-    const t = headroomText(30, [{ dept: '智能获客', used: 14, cap: 55, unit: '单' }]);
+    // 时间能塞 60 单，额度只剩 41 → 卡住的是额度
+    const t = headroomText(60, [{ dept: '智能获客', used: 14, cap: 55, unit: '单' }]);
     expect(t.limitedBy).toBe('额度');
-    expect(t.canAdd).toBe(30 > 41 ? 41 : 30);
+    expect(t.canAdd).toBe(41);
+    expect(t.quotaLeft).toBe(41);
   });
 
   it('额度够但时间不够时，报时间那个数', () => {

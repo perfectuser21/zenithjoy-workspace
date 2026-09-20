@@ -56,8 +56,16 @@ describe('WorkerDayPlan 组件', () => {
     render1('8e802deb-247d-4346-8028-03c265959431');
     const box = await screen.findByTestId('worker-day-plan');
     await waitFor(() => expect(within(box).getByText('接下来要跑的')).toBeInTheDocument());
-    // 金诺机今天 22:00 还有一轮采收没跑（词按天轮换，取标题前缀断言）
-    expect(box).toHaveTextContent(/采收 · .+ 6 词/);
+    // 「待跑」的件数与清单必须自洽：还有活就逐条列出来，跑完了就明说跑完了。
+    // 不能断言某条具体的活——半夜跑测试时当天的活可能已经全部结束（0921 实测在 23:39 翻车）。
+    const pending = Number(box.textContent?.match(/待跑\s*(\d+)/)?.[1] ?? '-1');
+    expect(pending).toBeGreaterThanOrEqual(0);
+    if (pending > 0) {
+      expect(box).toHaveTextContent(/\d{2}:\d{2}/);
+      expect(box).not.toHaveTextContent('今天的活都跑完了');
+    } else {
+      expect(box).toHaveTextContent('今天的活都跑完了');
+    }
   });
 
   it('被挡住的待办带出原因', async () => {

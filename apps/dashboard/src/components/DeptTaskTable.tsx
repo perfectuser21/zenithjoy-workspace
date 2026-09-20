@@ -11,6 +11,7 @@
 import { slotsOfDay, backlogCount, dayRange, DEPTS, type Dept, type ScheduleSlot } from '../api/schedule.api';
 import { DEPT_BLOCK } from './dept-colors';
 import { explainError } from '../api/error-codes';
+import { findGaps, headroomText, gapText, type Gap } from './schedule-gaps';
 
 /** 表格露出来的高度。内容再多也只在这块里滚，页面总高不变。 */
 const VIEW_H = 620;
@@ -96,6 +97,34 @@ export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, qu
   const bad = today.filter((s) => s.status === 'failed').length;
   const dayEnd = dayRange(dayOffset).end;
 
+  // 主理人要的「还能往哪加」：空档单独成行，表头给当天合计
+  const gaps = findGaps(slots, dayOffset);
+  const fitByTime = gaps.reduce((n, g) => n + g.canFit, 0);
+  const room = headroomText(fitByTime, quotas as never);
+  const openGaps = gaps.filter((g) => !g.past);
+  const openMinutes = openGaps.reduce((n, g) => n + g.usableMinutes, 0);
+  /** 空档的结束时刻正好是下一件活的开始，所以按开始时刻就能把它挂到那件活前面 */
+  const gapBefore = (startMs: number): Gap | undefined => gaps.find((g) => g.end === startMs);
+  /** 最后一件活跑完到 24:00 的那段，挂在表尾 */
+  const tailGap = gaps.length > 0 && gaps[gaps.length - 1].endText === '24:00' ? gaps[gaps.length - 1] : undefined;
+
+  const gapRow = (g: Gap, key: string) => (
+    <tr key={key} data-testid="gap-row" data-past={g.past ? '1' : '0'} className="align-top">
+      <td className={`whitespace-nowrap border-b border-dashed px-4 py-1.5 text-xs tabular-nums ${g.past ? 'text-gray-300' : 'text-blue-600'}`}>
+        {g.startText}–{g.endText}
+      </td>
+      <td colSpan={3} className={`border-b border-dashed px-2 py-1.5 text-xs ${g.past ? 'text-gray-300' : 'text-blue-600'}`}>
+        {g.past ? (
+          <>空 {gapText(g.minutes)} · 已过</>
+        ) : (
+          <>
+            空 {gapText(g.usableMinutes)} · 还能插 <b>{g.canFit}</b> 单
+          </>
+        )}
+      </td>
+    </tr>
+  );
+
   return (
     <section data-testid="dept-task-table" className="flex min-w-0 flex-1 flex-col rounded-xl border bg-white">
       <div
@@ -113,14 +142,25 @@ export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, qu
             <span className="ml-1 text-gray-400">还能加 {Math.max(0, q.cap - q.used)}</span>
           </span>
         ))}
-        <span className="ml-auto">
-          共 <b className="text-gray-800">{today.length}</b> 件 · 已完成 <b className="text-emerald-700">{done}</b> ·
-          待跑 <b className="text-gray-800">{left}</b>
-          {bad > 0 && (
-            <>
-              {' '}
-              · 失败 <b className="text-red-600">{bad}</b>
-            </>
+        <span className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span>
+            共 <b className="text-gray-800">{today.length}</b> 件 · 已完成 <b className="text-emerald-700">{done}</b> ·
+            待跑 <b className="text-gray-800">{left}</b>
+            {bad > 0 && (
+              <>
+                {' '}
+                · 失败 <b className="text-red-600">{bad}</b>
+              </>
+            )}
+          </span>
+          {openGaps.length === 0 ? (
+            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600">排满了，没空档</span>
+          ) : (
+            <span className="rounded bg-blue-50 px-1.5 py-0.5 text-blue-700 ring-1 ring-blue-200">
+              空档 <b>{openGaps.length}</b> 处 · 合计 {gapText(openMinutes)} · 还能加{' '}
+              <b>{room.canAdd}</b> 单
+              <span className="ml-1 text-blue-500/70">（卡在{room.limitedBy}）</span>
+            </span>
           )}
         </span>
       </div>
@@ -153,13 +193,15 @@ export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, qu
                       </span>
                     </td>
                   </tr>,
-                  ...g.items.map((s) => {
+                  ...g.items.flatMap((s) => {
                     const sp = span(s);
+                    const lead = gapBefore(sp.start);
                     const par = parallelWith(s, today);
                     const st = STATUS_STYLE[s.status];
                     const err = s.status === 'failed' ? explainError('executor_lost') : null;
                     const crossesDay = sp.end > dayEnd;
-                    return (
+                    return [
+                      ...(lead ? [gapRow(lead, `gap-${s.id}`)] : []),
                       <tr key={s.id} data-testid="task-row" data-status={s.status} className="align-top">
                         <td className="whitespace-nowrap border-b px-4 py-2 tabular-nums text-gray-700">
                           {hhmm(sp.start)}–{crossesDay ? `次日 ${hhmm(sp.end)}` : hhmm(sp.end)}
@@ -194,11 +236,12 @@ export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, qu
                             <span className="text-gray-400">同时在跑：{par.map((p) => p.title).join('、')}</span>
                           )}
                         </td>
-                      </tr>
-                    );
+                      </tr>,
+                    ];
                   }),
                 ];
               })}
+              {tailGap && gapRow(tailGap, 'gap-tail')}
             </tbody>
           </table>
         )}
