@@ -15,6 +15,9 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=wall-lib.sh
 . "$DIR/wall-lib.sh"
 EXECUTOR="adb-wall"
+# 建任务/收尾这类"丢了就整单失联"的写操作给 8 秒（与 register 同档）；step/note 是高频心跳，丢一次无害，仍用 3 秒。
+# 0920 staging 实证：3 秒在跨境抖动时不够，服务端已 201 建好任务而客户端当失败，整单后续上报全丢。
+API_TIMEOUT_WRITE="${WALL_API_TIMEOUT_WRITE:-8}"
 SHOT_MAX=204000   # 服务端 base64 上限对应的原图上限（204800 差一会被拒）
 # 最小合法 JPEG(1×1)，真机截图失败时的占位（服务端 failed 步必须带截图）
 PLACEHOLDER_JPEG_B64='/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDA0MDAsLDBEODw0RFRUWFhURFBQXGh0dHRoaGRkcHSAgICAeIiIiIiIiIiIiIiIiIiL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAAB//EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AN//Z'
@@ -47,14 +50,20 @@ do_complete() { # task_id completed | task_id failed error_code failed_step
   else
     b=$(python3 -c 'import json,sys;print(json.dumps({"outcome":sys.argv[2],"executor_id":sys.argv[1]}))' "$EXECUTOR" "$2" 2>/dev/null)
   fi
-  api "/api/workers/tasks/$1/complete" "$b" >/dev/null
+  api "/api/workers/tasks/$1/complete" "$b" "$API_TIMEOUT_WRITE" >/dev/null
 }
 
 do_start() { # title steps_csv
   local uuid body r code tid old
   uuid=$(wall_uuid_for "$SERIAL") || { wall_log "start $SERIAL: 无 uuid"; return 0; }
   body=$(python3 -c 'import json,sys;print(json.dumps({"title":sys.argv[1][:80],"steps":[s for s in sys.argv[2].split(",") if s],"executor_id":sys.argv[3]}))' "$1" "$2" "$EXECUTOR" 2>/dev/null)
-  r=$(api "/api/workers/$uuid/tasks" "$body"); code=${r%% *}
+  r=$(api "/api/workers/$uuid/tasks" "$body" "$API_TIMEOUT_WRITE"); code=${r%% *}
+  # 000 = 连不上或超时。服务端可能已经建好任务只是响应回不来（0920 staging 实证：连丢两单触达），
+  # 所以重试一次：第一次真失败则这次成功；第一次其实成功则这次拿 409，落到下面的清扫分支。
+  if [ "$code" = "000" ]; then
+    wall_log "start $SERIAL 首次无响应,重试一次"
+    r=$(api "/api/workers/$uuid/tasks" "$body" "$API_TIMEOUT_WRITE"); code=${r%% *}
+  fi
   if [ "$code" = "409" ]; then
     # 同设备已有 running：把本机所有命名空间（含自己）的进行中任务收尾成 superseded 并删状态文件，再试一次
     for f in "$ZJ_WALL_TMP"/task-"$SERIAL"-*; do
@@ -63,7 +72,7 @@ do_start() { # title steps_csv
       [ -n "$old" ] && do_complete "$old" failed superseded "$(sed -n 2p "$f" 2>/dev/null)"
       rm -f "$f"
     done
-    r=$(api "/api/workers/$uuid/tasks" "$body"); code=${r%% *}
+    r=$(api "/api/workers/$uuid/tasks" "$body" "$API_TIMEOUT_WRITE"); code=${r%% *}
   fi
   if [ "$code" = "201" ]; then
     tid=$(printf '%s' "${r#* }" | wall_json_get data.task_id)
