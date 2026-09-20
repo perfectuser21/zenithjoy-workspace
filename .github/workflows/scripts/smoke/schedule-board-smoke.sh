@@ -54,4 +54,34 @@ grep -qF 'q.dept === dept' <<< "$PSRC" || fail "DeviceCard 未按部门过滤 qu
 grep -qF "'/dashboard/schedule'" "$NAV" || fail "导航未注册 /dashboard/schedule"
 grep -qF "'SchedulePage'" "$NAV" || fail "导航未注册 SchedulePage 组件"
 
+# ── 手机详情页的今日安排与失败码人话化（Brain task 3bbdb025）──
+# 主理人：「安排了50个任务、执行了25个，下面还有哪些我看不到，只能看到已完成和失败的」
+#         「触达失败了没跟我说为啥」
+PLAN="apps/dashboard/src/components/WorkerDayPlan.tsx"
+ERRC="apps/dashboard/src/api/error-codes.ts"
+LIVE="apps/dashboard/src/pages/WorkerLivePage.tsx"
+for f in "$PLAN" "$ERRC" "$LIVE"; do [ -s "$f" ] || fail "${f} 缺失或为空"; done
+
+# 层7: 详情页必须挂今日安排（此前只有 current/steps/history，没有待办队列）
+LSRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "$LIVE")
+grep -qF '<WorkerDayPlan' <<< "$LSRC" || fail "详情页未挂 WorkerDayPlan（待办队列会再次消失）"
+grep -qF 'explainError' <<< "$LSRC" || fail "详情页未接失败码翻译（会重新甩 executor_lost 这种机器码）"
+grep -qF 'h.error_code' <<< "$LSRC" || fail "详情页丢了机器码灰字，排查时无从下手"
+
+# 层8: 今日安排四件套缺一不可
+PSRC2=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "$PLAN")
+for t in 共排 已完成 待跑 要处理 接下来要跑的; do
+  grep -qF "$t" <<< "$PSRC2" || fail "今日安排缺「${t}」"
+done
+# queued/blocked 两处都要：tally 算「待跑 N」，groupPending 列「接下来要跑的」，删任一处功能就残
+[ "$(grep -c "status === 'queued'" <<< "$PSRC2")" -ge 2 ] || fail "queued 取值不足两处（今日盘点与待办清单各需一处）"
+[ "$(grep -c "status === 'blocked'" <<< "$PSRC2")" -ge 2 ] || fail "blocked 取值不足两处（被挡住的既算要处理也算积压）"
+
+# 层9: 生产链实际会写的失败码都要有人话，漏一个页面就露机器码
+ESRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "$ERRC")
+for c in executor_lost superseded lock_busy device_offline keywords_unavailable transient_exhausted; do
+  grep -qE "^[[:space:]]*${c}:" <<< "$ESRC" || fail "失败码 ${c} 没登记人话（页面会露机器码）"
+done
+grep -qF 'needsHuman' <<< "$ESRC" || fail "失败码缺「要不要人处理」判定"
+
 echo "schedule-board-smoke: OK"

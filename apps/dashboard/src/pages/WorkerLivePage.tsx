@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { fetchWorkerActivity, workerLiveUrl, type WorkerActivity, type WorkerStep } from '../api/workers.api';
 import PhoneFrame from '../components/PhoneFrame';
+import WorkerDayPlan from '../components/WorkerDayPlan';
+import { explainError } from '../api/error-codes';
 
 const POLL_MS = 1000;
 const FRAME_STALE_MS = 15_000;
@@ -128,6 +130,7 @@ export default function WorkerLivePage() {
               </li>
             ))}
           </ul>
+          <WorkerDayPlan agentId={agentId} />
           <h3 className="mt-8 text-sm font-semibold text-gray-700">最近任务</h3>
           <table className="mt-2 w-full text-sm">
             <thead className="text-left text-gray-500">
@@ -148,18 +151,25 @@ export default function WorkerLivePage() {
                   <td className="py-1 pr-3 whitespace-nowrap text-gray-600">{formatDuration(h.duration_ms)}</td>
                   <td className="py-1">
                     {h.error_code ? (
-                      <div className="flex items-start gap-2 text-red-600">
+                      <div className="flex items-start gap-2">
                         {shotThumb(h.failed_scene?.screenshot_url, `${h.title} 失败截图`)}
-                        <span className="break-all">
-                          {[
-                            `第 ${h.failed_step == null ? '?' : h.failed_step + 1} 步`,
-                            h.error_code,
-                            h.failed_scene?.foreground_pkg,
-                            h.failed_scene?.diag_line,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </span>
+                        <div className="min-w-0">
+                          {/* 失败码翻成人话：此前直接甩 executor_lost 这种码，看的人得去翻代码 */}
+                          <div className="flex flex-wrap items-center gap-1.5 text-red-600">
+                            <span>第 {h.failed_step == null ? '?' : h.failed_step + 1} 步</span>
+                            <span className="font-medium">{explainError(h.error_code)?.label}</span>
+                            {explainError(h.error_code)?.needsHuman && (
+                              <span className="rounded bg-red-50 px-1 py-0.5 text-[11px] ring-1 ring-red-200">要人处理</span>
+                            )}
+                          </div>
+                          <div className="mt-0.5 text-xs text-gray-500">{explainError(h.error_code)?.hint}</div>
+                          {/* 机器码始终保留：人话给人看，码给排查用，没有现场信息时也不能让它消失 */}
+                          <div className="mt-0.5 break-all text-[11px] text-gray-400">
+                            {[h.error_code, h.failed_scene?.foreground_pkg, h.failed_scene?.diag_line]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </div>
+                        </div>
                       </div>
                     ) : (
                       shotThumb(h.evidence_screenshot_url, `${h.title} 完成截图`)
