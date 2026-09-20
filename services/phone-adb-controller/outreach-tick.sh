@@ -142,10 +142,26 @@ while (( SECONDS - TICK_BODY_START < TICK_BUDGET )); do
     /usr/bin/touch "$TICK_LOCK"
     TAG="outreach-$(date +%m%d%H%M)-a${ATTEMPT}"
     if ! $C --profile "$PROFILE" lock-acquire "$TAG" >>$LOG 2>&1; then
-      log "锁被占(采收在用),回队列待下轮,本tick结束(已发${SENDS_THIS_TICK}条)"; mark "$RID" requeue "lock busy"
-      # 第 2 次及以后尝试才可能已 start(拿过锁), 此时要把已开的任务收成 fail; 第 1 次未 start 不调
-      (( WR_STARTED == 1 )) && wr fail --profile "$PROFILE" 0 lock_busy "重试中锁被采收占用"
-      break 2   # 设备被占用是环境性问题(通常是采收在跑,一时半会不会解除),直接收工整个tick
+      # 0920 锁忙重试: 先在本tick预算内短重试(15-30s间隔,最多180s),扛住"手工临时任务/
+      # 短构建"这类几十秒到几分钟就释放的瞬时占用——否则直接收工整个tick要等下一个
+      # 30分钟cron点才能再摸这一单,一次瞬时锁碰撞就白扔半小时吞吐量。
+      LOCK_WAIT_START=$SECONDS
+      LOCK_RETRY_BUDGET=180
+      LOCK_ACQUIRED=0
+      while (( SECONDS - LOCK_WAIT_START < LOCK_RETRY_BUDGET )); do
+        sleep $(( 15 + RANDOM % 16 ))
+        if $C --profile "$PROFILE" lock-acquire "$TAG" >>$LOG 2>&1; then
+          LOCK_ACQUIRED=1
+          log "锁重试后已获取(等待$(( SECONDS - LOCK_WAIT_START ))s)"
+          break
+        fi
+      done
+      if (( LOCK_ACQUIRED == 0 )); then
+        log "锁被占(采收在用),重试${LOCK_RETRY_BUDGET}s仍未获取,回队列待下轮,本tick结束(已发${SENDS_THIS_TICK}条)"; mark "$RID" requeue "lock busy"
+        # 第 2 次及以后尝试才可能已 start(拿过锁), 此时要把已开的任务收成 fail; 第 1 次未 start 不调
+        (( WR_STARTED == 1 )) && wr fail --profile "$PROFILE" 0 lock_busy "重试中锁被采收占用"
+        break 2   # 长时间占用是环境性问题(通常是采收在跑一整轮),直接收工整个tick
+      fi
     fi
     if (( WR_STARTED == 0 )); then wr start --profile "$PROFILE" "触达·单#$SEQ $NICK" "发送,核验"; WR_STARTED=1; fi
     wr step --profile "$PROFILE" 0 doing "第${ATTEMPT}次发送"
