@@ -1,0 +1,35 @@
+{
+  "initiative_id": "2f8bfab9-7b8a-4bf8-a16b-399045401125",
+  "journey_type": "user_facing",
+  "journey_type_reason": "变更落在 apps/dashboard/MashupPage.tsx 前端交互（粘贴文案/在线预览/候选虚拟滚动/渲染队列态），面向客户可见流程",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "批量混剪加厚：文案动态分段 + 素材在线预览 + 候选200+缩略图可视化 + 选中才渲染(并发=1队列+失败态)",
+      "scope": "新增 POST /api/mashup/templates/from-script(文案→动态分段模板，AI 不可用静默降级固定模板)；新增 GET /api/materials/:id/signed-url(在线预览重签+租户隔离)；改造候选接口返回 generatedCount 与每条 thumbnailUrl(抽帧拼贴，非真渲染)+前端虚拟滚动；改造渲染接口为并发=1 队列(queued/queuePosition)+render_failed 可重试；新增 migration(mashup_render_jobs 表 + mashup_candidates.thumbnail_url 列)。渲染响应向后兼容 ResultStep。",
+      "dod": [
+        "[BEHAVIOR] 冻结测试 mashup-thicken.test.ts 9 条用例全绿(真 app+真 PG)",
+        "[BEHAVIOR] Golden Path 1-4 API 层 E2E 脚本(## E2E 验收 bash 块)在真 PG 跑通",
+        "[BEHAVIOR:E2E] (R1-1) mashup.spec.ts 含虚拟滚动 DOM 节点数硬断言(domCards<generatedCount 且≤40)",
+        "[ARTIFACT] mashup_render_jobs 表 + thumbnail_url 列 migration 存在",
+        "[ARTIFACT] MashupPage.tsx 文案粘贴/在线预览/候选虚拟滚动(candidate-card testid)/渲染队列态 UI",
+        "[ARTIFACT] (R1-2) sprints/.../e2e-verify.ps1 落盘(e2e-windows.yml 唯一入口) + apps/dashboard/e2e/mashup.spec.ts 落盘"
+      ],
+      "files": [
+        "apps/api/db/migrations/20260920_*_mashup_render_jobs.sql",
+        "apps/api/src/routes/mashup.ts",
+        "apps/api/src/routes/materials.ts",
+        "apps/api/src/services/mashup-template-from-script.ts",
+        "apps/api/src/services/mashup-candidate-generation.ts",
+        "apps/api/src/services/mashup-render.ts",
+        "apps/dashboard/src/pages/MashupPage.tsx",
+        "apps/dashboard/src/api/mashup.api.ts",
+        "apps/dashboard/e2e/mashup.spec.ts",
+        "sprints/09201034-batch-mashup-script-preview-candidates/e2e-verify.ps1"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 120
+    }
+  ]
+}
