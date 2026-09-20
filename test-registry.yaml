@@ -1038,6 +1038,34 @@ tests:
     status: active
     product: 批量混剪
     note: "Dashboard 批量混剪 API 客户端：listTemplates/createRun/getRun/generateCandidates/listCandidates/selectCandidate/renderCandidate 七个函数，与 materials.api.ts 同口径——登录态换 X-Upload-Token 再带 header 调用 /mashup/* 端点。"
+  - id: mashup-render-queue-service
+    path: apps/api/src/services/__tests__/mashup-render-queue.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪加厚 Step4（GP f6f96e17/line05）渲染队列，真 Postgres 覆盖：渲染并发上限=1，第2个候选入队为 queued；render_failed 可重新入队非死路。决策 d6bedf80（hk-vps 4核硬约束）。"
+  - id: mashup-candidates-lazy-render
+    path: sprints/09201034-batch-mashup-script-preview-candidates/tests/mashup-candidates-lazy.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪加厚 Step3（GP f6f96e17/line05）候选200+懒渲染：真 Postgres 覆盖候选生成期 render_status 恒为 pending（选定前不真实渲染，避免 hk-vps 4核CPU 过载）、候选带 thumbnailUrl 与 generatedCount。"
+  - id: mashup-material-preview-endpoint
+    path: sprints/09201034-batch-mashup-script-preview-candidates/tests/mashup-material-preview.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪加厚 Step2（GP f6f96e17/line05）素材在线预览重签端点契约（GET /api/materials/:id/preview）：端点形状与租户隔离，读路径按仓库惯例桩掉 license 鉴权与 storage 叶子。"
+  - id: mashup-script-segment-template
+    path: sprints/09201034-batch-mashup-script-preview-candidates/tests/mashup-script-segment.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪加厚 Step1（GP f6f96e17/line05）文案动态分段模板生成：真 Postgres 覆盖 from-script 返回动态 slots 并落库 mashup_templates、AI(TOAPIS)不可用时统一降级 degraded fallback。"
   - id: material-storage-cos-slice
     path: apps/api/src/services/__tests__/material-storage-cos.test.ts
     type: unit
