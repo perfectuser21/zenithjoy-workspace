@@ -28,14 +28,29 @@ export interface GenerateCandidatesInput {
   targetCount?: number;
 }
 
+/** 候选生成期的渲染态恒为 'pending'（懒渲染，此刻绝不真实渲染）。 */
+export type CandidateRenderStatus = 'pending';
+
+/**
+ * 缩略图构造依赖（可注入）。默认不生成（返回 null）——真实抽帧需 storage + ffmpeg，
+ * 由 HTTP 路由层注入 buildThumbnail（见 routes/mashup.ts），单测/冻结测试不注入时
+ * thumbnailUrl 恒为 null（合同：抽帧失败/无素材 → null，真实缩略图由 L3 E2E 覆盖）。
+ */
+export interface GenerateCandidatesDeps {
+  buildThumbnail?: (materialIds: string[], tenantId: string) => Promise<string | null>;
+}
+
 export interface CandidateResult {
   id: string;
   score: number;
   slotFill: Record<string, string | undefined>;
+  thumbnailUrl: string | null;
+  renderStatus: CandidateRenderStatus;
 }
 
 export interface GenerateCandidatesResult {
   runId: string;
+  generatedCount: number;
   candidates: CandidateResult[];
 }
 
@@ -83,7 +98,10 @@ function jaccard(a: Set<string>, b: Set<string>): number {
   return union === 0 ? 1 : intersection / union;
 }
 
-export async function generateCandidates(input: GenerateCandidatesInput): Promise<GenerateCandidatesResult> {
+export async function generateCandidates(
+  input: GenerateCandidatesInput,
+  deps: GenerateCandidatesDeps = {},
+): Promise<GenerateCandidatesResult> {
   const targetCount = Math.min(input.targetCount ?? DEFAULT_TARGET_COUNT, HARD_MAX_TARGET_COUNT);
 
   const { rows: runRows } = await pool.query(
@@ -171,20 +189,40 @@ export async function generateCandidates(input: GenerateCandidatesInput): Promis
     if (accepted.length >= targetCount) break;
   }
 
+  // 缩略图缓存：同一素材集合的候选共享抽帧结果，避免对同一素材重复抽帧。
+  const thumbnailCache = new Map<string, string | null>();
+  async function thumbnailFor(fills: Record<string, string>): Promise<string | null> {
+    if (!deps.buildThumbnail) return null;
+    const materialIds = Object.values(fills);
+    if (materialIds.length === 0) return null;
+    const cacheKey = [...materialIds].sort().join('|');
+    if (thumbnailCache.has(cacheKey)) return thumbnailCache.get(cacheKey) ?? null;
+    let url: string | null = null;
+    try {
+      url = await deps.buildThumbnail(materialIds, input.tenantId);
+    } catch {
+      url = null; // 抽帧失败 → null（合同：不阻断，前端占位）
+    }
+    thumbnailCache.set(cacheKey, url);
+    return url;
+  }
+
   const results: CandidateResult[] = [];
   for (const beam of accepted) {
+    // 懒渲染：生成期此刻绝不真实渲染，render_status 恒 'pending'（列默认也是 pending）。
+    const thumbnailUrl = await thumbnailFor(beam.fills);
     const { rows } = await pool.query(
-      `INSERT INTO zenithjoy.mashup_candidates (run_id, tenant_id, slot_fill, score, signature)
-       VALUES ($1, $2, $3::jsonb, $4, $5)
+      `INSERT INTO zenithjoy.mashup_candidates (run_id, tenant_id, slot_fill, score, signature, render_status, thumbnail_url)
+       VALUES ($1, $2, $3::jsonb, $4, $5, 'pending', $6)
        ON CONFLICT (run_id, signature) DO NOTHING
        RETURNING id`,
-      [run.id, input.tenantId, JSON.stringify(beam.fills), beam.score, signatureOf(beam.fills)],
+      [run.id, input.tenantId, JSON.stringify(beam.fills), beam.score, signatureOf(beam.fills), thumbnailUrl],
     );
     const id = rows[0]?.id;
     if (id) {
-      results.push({ id, score: beam.score, slotFill: beam.fills });
+      results.push({ id, score: beam.score, slotFill: beam.fills, thumbnailUrl, renderStatus: 'pending' });
     }
   }
 
-  return { runId: run.id, candidates: results };
+  return { runId: run.id, generatedCount: results.length, candidates: results };
 }

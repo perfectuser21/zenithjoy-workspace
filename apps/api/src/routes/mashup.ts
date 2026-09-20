@@ -7,11 +7,42 @@
 import { Router, type Request, type Response } from 'express';
 import pool from '../db/connection';
 import { validateLicense } from '../services/walking-skeleton.service';
-import { assignSlots } from '../services/mashup-slot-assignment';
+import { assignSlots, generateTemplateFromScript } from '../services/mashup-slot-assignment';
 import { generateCandidates } from '../services/mashup-candidate-generation';
-import { renderCandidate } from '../services/mashup-render';
+import { enqueueRender } from '../services/mashup-render-queue';
 import { createMaterialStorage } from '../services/material-storage';
+import { extractFrameBase64 } from '../services/video-frame-extract';
 import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
+
+/**
+ * 候选缩略图拼贴：取候选首个填充素材，重签 → 下载 → 抽一帧编成 data URL。
+ * 尽力而为——任何一步失败返回 null（前端占位，不阻断，合同 Step3）。真实缩略图
+ * 由 hk-vps L3 E2E 覆盖；单进程内共享 storage 实例避免每次新建。
+ */
+function makeThumbnailBuilder(): (materialIds: string[], tenantId: string) => Promise<string | null> {
+  const storage = createMaterialStorage();
+  return async (materialIds: string[]): Promise<string | null> => {
+    for (const materialId of materialIds) {
+      try {
+        const { rows } = await pool.query(
+          `SELECT storage_key FROM zenithjoy.materials WHERE id = $1`,
+          [materialId],
+        );
+        const key: string | undefined = rows[0]?.storage_key;
+        if (!key) continue;
+        const signedUrl = await storage.getSignedUrl(key);
+        const resp = await fetch(signedUrl);
+        if (!resp.ok) continue;
+        const buffer = Buffer.from(await resp.arrayBuffer());
+        const dataUrl = extractFrameBase64(buffer);
+        if (dataUrl) return dataUrl;
+      } catch {
+        // 单个素材抽帧失败继续试下一个，不裸崩
+      }
+    }
+    return null;
+  };
+}
 
 function extractUploadToken(req: Request): string | null {
   const h = req.header('X-Upload-Token');
@@ -67,6 +98,24 @@ export function createMashupRouter(): Router {
       [auth.tenantId],
     );
     ok(res, rows);
+  });
+
+  // Step1 文案动态分段：客户粘贴文案 → 动态分段模板落库（AI 不可用降级固定模板，非阻断）
+  router.post('/templates/from-script', async (req: Request, res: Response) => {
+    const auth = await authenticate(req, res);
+    if (!auth) return;
+
+    const { script } = req.body ?? {};
+    if (typeof script !== 'string' || !script.trim()) {
+      return fail(res, 400, 'INVALID_BODY', 'script 必填且不能为空');
+    }
+
+    try {
+      const result = await generateTemplateFromScript({ tenantId: auth.tenantId, script });
+      ok(res, result);
+    } catch (err) {
+      fail(res, 500, 'FROM_SCRIPT_FAILED', err instanceof Error ? err.message : 'unknown');
+    }
   });
 
   router.post('/runs', async (req: Request, res: Response) => {
@@ -132,7 +181,10 @@ export function createMashupRouter(): Router {
     }
 
     try {
-      const result = await generateCandidates({ tenantId: auth.tenantId, runId: req.params.id, targetCount });
+      const result = await generateCandidates(
+        { tenantId: auth.tenantId, runId: req.params.id, targetCount },
+        { buildThumbnail: makeThumbnailBuilder() },
+      );
       ok(res, result);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown';
@@ -155,17 +207,20 @@ export function createMashupRouter(): Router {
     if (!run) return fail(res, 404, 'RUN_NOT_FOUND', 'run 不存在或不属于当前租户');
 
     const { rows: candidateRows } = await pool.query(
-      `SELECT id, slot_fill, score FROM zenithjoy.mashup_candidates WHERE run_id = $1 ORDER BY score DESC`,
+      `SELECT id, slot_fill, score, thumbnail_url, render_status FROM zenithjoy.mashup_candidates WHERE run_id = $1 ORDER BY score DESC`,
       [run.id],
     );
 
     ok(res, {
       runId: run.id,
+      generatedCount: candidateRows.length,
       selectedCandidateId: run.selected_candidate_id ?? undefined,
-      candidates: candidateRows.map((c: { id: string; slot_fill: Record<string, string>; score: string | number }) => ({
+      candidates: candidateRows.map((c: { id: string; slot_fill: Record<string, string>; score: string | number; thumbnail_url: string | null; render_status: string }) => ({
         id: c.id,
         score: Number(c.score),
         slotFill: c.slot_fill,
+        thumbnailUrl: c.thumbnail_url ?? null,
+        renderStatus: c.render_status,
       })),
     });
   });
@@ -191,15 +246,15 @@ export function createMashupRouter(): Router {
     ok(res, { runId: updated[0].id, selectedCandidateId: updated[0].selected_candidate_id });
   });
 
+  // Step4 按需渲染：并发上限=1 队列（决策 d6bedf80），第 2 个请求进排队；
+  // 失败落 render_failed 可重新入队（非死路，INV-6）。真实渲染在后台推进，
+  // 本端点即时回当前渲染态供前端轮询呈现「排队第 N 位 / 渲染中 / 渲染失败可重试」。
   router.post('/candidates/:id/render', async (req: Request, res: Response) => {
     const auth = await authenticate(req, res);
     if (!auth) return;
 
     try {
-      const result = await renderCandidate(
-        { tenantId: auth.tenantId, candidateId: req.params.id },
-        { storage: createMaterialStorage() },
-      );
+      const result = await enqueueRender({ tenantId: auth.tenantId, candidateId: req.params.id });
       ok(res, result);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown';
