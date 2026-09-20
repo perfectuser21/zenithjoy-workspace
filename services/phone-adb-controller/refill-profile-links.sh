@@ -1,10 +1,12 @@
 #!/bin/zsh
 # refill-profile-links.sh PROFILE IDLIST_FILE OUT_TSV — 按抖音号回填主页直链
-# 每号: open-search → 用户tab(树) → 点首卡(固定位) → 主页校验抖音号 → card-link → 记录
+# 每号: open-search → locate-tap点"用户"标签 → locate-tap按抖音号定位目标卡片 → 主页校验抖音号 → card-link → 记录
+# (0920: 全程视觉定位,不依赖 uiautomator dump/固定坐标,见下方两条真机实证注释)
 set -uo pipefail
 C=~/.local/bin/douyin-phone-adb
 P="$1"; LIST="$2"; OUT="$3"
 TAG="refill-$(date +%H%M%S)"
+EVROOT="/private/tmp/openclaw-phone/evidence/$P"
 log(){ print -u2 -- "[$(date +%H:%M:%S)] $*"; }
 find /Volumes/EvidenceRAM/openclaw-phone/evidence -type f \( -name "*.png" -o -name "*.xml" \) -mmin +30 -delete 2>/dev/null
 $C --profile "$P" lock-acquire "$TAG" >/dev/null 2>&1 || { log "锁被占"; exit 3; }
@@ -16,17 +18,28 @@ for DYID in "${(f)$(cat $LIST)}"; do
   n=$((n+1)); log "[$n] $DYID"
   ENC=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$DYID")
   $C --profile "$P" open-search "$ENC" </dev/null >/dev/null 2>&1; sleep 4
-  # 切用户tab(树锚点)
-  UX=$($C --profile "$P" ui-evidence "$TAG-$n-tabs" </dev/null 2>/dev/null | tail -1)
-  UT=$(grep -oE "<node[^>]*text=\"用户\"[^>]*>" "$UX" 2>/dev/null | head -1 | sed -E "s/.*bounds=\"\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]\".*/\1 \2 \3 \4/")
-  if [[ -z "$UT" ]]; then log "  用户tab未见,跳过"; continue; fi
-  read x1 y1 x2 y2 <<< "$UT"
-  $C --profile "$P" tap $(( (x1+x2)/2 )) $(( (y1+y2)/2 )) </dev/null >/dev/null 2>&1; sleep 4
-  # 首卡固定位(1200宽机型: 300,570) — 进主页后强校验抖音号,认错人即弃
-  $C --profile "$P" tap 300 570 </dev/null >/dev/null 2>&1; sleep 3
-  PX=$($C --profile "$P" ui-evidence "$TAG-$n-prof" </dev/null 2>/dev/null | tail -1)
-  if ! grep -qF "抖音号：$DYID" "$PX" 2>/dev/null; then
-    log "  主页校验失败(首卡非本人或未进入),跳过"
+  # 0920 真机实证两个根因:
+  # ① 搜索落地页默认停在"综合"tab,内嵌自动播放feed,uiautomator dump 必挂
+  #    ("did not produce a fresh complete hierarchy",跟 harvest-keyword.sh 已知的
+  #    "综合tab采不到"是同一个坑)。
+  # ② "用户"tab在标签栏里的位置不固定(观察到"综合/视频/用户/图文/商品"和
+  #    "综合/用户/视频/商品/直播"两种真实顺序,取决于搜索词是昵称还是纯数字ID),
+  #    列表里目标账号是不是"第一张卡"也不固定,写死坐标(300,570)会点错人。
+  # 两个问题的共同解法: 改用 locate-tap(视觉定位,截图喂给识图模型找坐标,完全不
+  # 依赖 uiautomator dump,也不依赖固定位置假设),先点"用户"标签,再直接按抖音号
+  # 文本定位目标卡片。
+  UTAB_DESC=$(print -n -- "搜索结果页顶部横向标签栏里文字为用户二字的那个标签" | /usr/bin/base64)
+  UTAB_OUT=$($C --profile "$P" locate-tap "$UTAB_DESC" "$TAG-$n-utab" </dev/null 2>&1)
+  if ! print -- "$UTAB_OUT" | grep -q "^tapped"; then log "  用户tab定位失败,跳过"; continue; fi
+  sleep 3
+  CARD_DESC=$(print -n -- "用户列表里抖音号显示为${DYID}的那一条用户卡片" | /usr/bin/base64)
+  CARD_OUT=$($C --profile "$P" locate-tap "$CARD_DESC" "$TAG-$n-card" </dev/null 2>&1)
+  if ! print -- "$CARD_OUT" | grep -q "^tapped"; then log "  未找到抖音号=$DYID的卡片,跳过"; continue; fi
+  sleep 3
+  $C --profile "$P" ui-evidence "$TAG-$n-prof" </dev/null >/dev/null 2>&1
+  PX="$EVROOT/$TAG-$n-prof.xml"
+  if [[ ! -s "$PX" ]] || ! grep -qF "抖音号：$DYID" "$PX" 2>/dev/null; then
+    log "  主页校验失败(定位到的卡片非本人或未进入),跳过"
     $C --profile "$P" back </dev/null >/dev/null 2>&1; sleep 1
     continue
   fi

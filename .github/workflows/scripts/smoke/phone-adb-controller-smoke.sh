@@ -106,6 +106,17 @@ node --check "$D/dm-daily-cap.js" || fail "dm-daily-cap.js 语法错误"
 grep -qF 'dm-daily-cap.js' "$D/outreach-tick.sh" || fail "outreach-tick 未接当日发送上限闸"
 grep -qF 'dm-paused-' "$D/outreach-tick.sh" || fail "outreach-tick 未接熔断标记读取"
 grep -qF 'ANOMALY_COUNT >= 2' "$D/outreach-tick.sh" || fail "outreach-tick 未接连续未识别失败自动熔断"
+# 0920 真机三轮实证(综合tab自动播放导致dump必挂→切视频tab发现tab顺序/卡片位置都不
+# 固定→最终改视觉定位彻底绕开这两个假设): refill-profile-links.sh 必须用 locate-tap
+# 视觉定位,禁止再出现"裸ui-evidence接tail -1当文件路径用"或"写死坐标点第一张卡"这两个
+# 已经真机实测证明会 100% 失败的写法。
+grep -qF 'locate-tap' "$D/refill-profile-links.sh" || fail "refill-profile-links 未接 locate-tap 视觉定位(0920真机实证: dump+固定坐标两版都失败)"
+if grep -E '\bui-evidence\b.*\|\s*tail -1' "$D/refill-profile-links.sh" >/dev/null; then
+  fail "refill-profile-links 出现裸ui-evidence接tail -1当路径用(已实锤此写法在综合tab下必挂)"
+fi
+if grep -qE '\btap [0-9]+ [0-9]+\b' "$D/refill-profile-links.sh"; then
+  fail "refill-profile-links 出现写死坐标tap(已实锤用户tab位置/卡片位置都不固定,会点错人)"
+fi
 
 
 # 层5: escort 跨轮记忆契约(决策 c2901aff, 0915 主理人拍板修老Commander失忆病)
