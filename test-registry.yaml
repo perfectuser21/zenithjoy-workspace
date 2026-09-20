@@ -6438,6 +6438,22 @@ agent_suite:
     product: 工作机控制塔
     note: "设备排程看板页面单测：按部门分组、跨部门设备只显示本部门的活与额度、今明后切换、部门筛选、阻塞原因显示。数据为 mock（后端契约见 api/schedule.api.ts）。"
 
+  - id: dashboard-worker-day-plan-unit
+    path: apps/dashboard/src/components/WorkerDayPlan.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "手机详情页今日安排单测：今日盘点（排/完成/待跑/要处理）、待办按部门分组与时刻升序、被挡住带原因、设备不在排程时整块不渲染。此前详情页只有历史、无待办队列。"
+
+  - id: dashboard-error-codes-unit
+    path: apps/dashboard/src/api/__tests__/error-codes.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "失败码人话翻译单测：executor_lost 等码给结论+下一步、区分要人处理与系统自愈、未登记码原样显示并标要人看、生产链实际会写的码都已登记。"
+
   - id: dashboard-schedule-api-unit
     path: apps/dashboard/src/api/__tests__/schedule.api.test.ts
     type: unit

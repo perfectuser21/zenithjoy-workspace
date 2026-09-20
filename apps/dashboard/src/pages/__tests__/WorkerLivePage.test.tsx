@@ -48,7 +48,12 @@ describe('WorkerLivePage', () => {
     await waitFor(() => expect(screen.getByText('失败的任务')).toBeInTheDocument());
     expect(screen.getByRole('columnheader', { name: '耗时' })).toBeInTheDocument();
     const failedRow = screen.getByText('失败的任务').closest('tr')!;
-    expect(failedRow).toHaveTextContent('第 4 步 · adb_unreachable · com.ss.android.ugc.aweme · searchBtnFound=false');
+    // 失败码翻成人话（主理人：没跟我说为啥失败），机器码降级到灰色小字
+    expect(failedRow).toHaveTextContent('第 4 步');
+    expect(failedRow).toHaveTextContent('adb 连不上');
+    expect(failedRow).toHaveTextContent('要人处理');
+    expect(failedRow).toHaveTextContent(/驱动手机的通道断了/);
+    expect(failedRow).toHaveTextContent('adb_unreachable · com.ss.android.ugc.aweme · searchBtnFound=false');
     expect(failedRow).toHaveTextContent('1分05秒');
     const failShot = failedRow.querySelector('img')!;
     expect(failShot).toHaveAttribute('src', '/api/workers/shots/t/h1/3.jpg');
