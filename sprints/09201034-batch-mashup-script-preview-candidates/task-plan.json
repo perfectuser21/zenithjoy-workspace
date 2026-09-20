@@ -1,0 +1,35 @@
+{
+  "initiative_id": "4d26d994-8ed1-4f8b-973a-5859a880dd06",
+  "journey_type": "user_facing",
+  "journey_type_reason": "核心 Golden Path 由客户在 apps/dashboard MashupPage 操作（粘贴文案、在线预览、浏览候选、选中渲染），命中 apps/dashboard/",
+  "tasks": [
+    {
+      "task_id": "ws1",
+      "title": "批量混剪加厚：文案动态分段 + 素材在线预览 + 候选200+懒渲染浏览 + 按需渲染队列",
+      "scope": "apps/api 新增 from-script 动态分段、materials/:id/preview 重签、候选带 generatedCount/thumbnailUrl/renderStatus 懒渲染、渲染队列并发=1+失败态；DB 迁移增 mashup_candidates.render_status/thumbnail_url/render_error 与模板动态段；apps/dashboard MashupPage 文案输入/在线预览video/候选虚拟滚动/渲染队列失败态 UI；回流 candidate-generation 与 render smoke",
+      "dod": [
+        "[BEHAVIOR] from-script 返回动态 slots 落 mashup_templates，AI 不可用 degraded fallback 非阻断（B-01/B-02）",
+        "[BEHAVIOR] materials/:id/preview 返回 previewUrl/previewAvailable/expiresAt 且跨租户 404（B-03/B-04）",
+        "[BEHAVIOR] 候选 targetCount=200 生成期全 renderStatus=pending + generatedCount + thumbnailUrl，无成片产出（B-05）",
+        "[BEHAVIOR] 渲染并发上限=1 第二个 queued，渲染成功真实成片 ffprobe 或失败可重试（B-06/B-07）",
+        "[ARTIFACT] 迁移含 render_status + thumbnail_url，渲染队列并发=1 实现，smoke 回流"
+      ],
+      "files": [
+        "apps/api/src/services/mashup-slot-assignment.ts",
+        "apps/api/src/services/mashup-candidate-generation.ts",
+        "apps/api/src/services/mashup-render.ts",
+        "apps/api/src/services/mashup-render-queue.ts",
+        "apps/api/src/services/video-frame-extract.ts",
+        "apps/api/src/routes/mashup.ts",
+        "apps/api/src/routes/materials.ts",
+        "apps/api/db/migrations/",
+        "apps/dashboard/src/pages/MashupPage.tsx",
+        "apps/dashboard/src/api/mashup.api.ts",
+        ".github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh"
+      ],
+      "depends_on": [],
+      "complexity": "L",
+      "estimated_minutes": 120
+    }
+  ]
+}
