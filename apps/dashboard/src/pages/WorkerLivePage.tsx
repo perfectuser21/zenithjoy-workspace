@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { fetchWorkerActivity, workerLiveUrl, type WorkerActivity, type WorkerStep } from '../api/workers.api';
+import PhoneFrame from '../components/PhoneFrame';
 
 const POLL_MS = 1000;
 const FRAME_STALE_MS = 15_000;
@@ -88,16 +89,14 @@ export default function WorkerLivePage() {
         <div className="text-sm text-red-600">无法加载该工作机（可能不存在或无权限）</div>
       ) : (
       <div className="flex gap-6 flex-col lg:flex-row">
-        <div className="lg:w-[360px] shrink-0">
-          <div className="relative rounded-2xl overflow-hidden bg-black aspect-[9/19.5]">
-            <img alt="实时画面" src={workerLiveUrl(agentId)} className="w-full h-full object-contain" />
-            {frameStale && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-sm">
-                画面不可用
-              </div>
-            )}
-          </div>
-        </div>
+        <PhoneFrame className="lg:w-[360px] shrink-0">
+          <img alt="实时画面" src={workerLiveUrl(agentId)} className="w-full h-full object-contain" />
+          {frameStale && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-sm">
+              画面不可用
+            </div>
+          )}
+        </PhoneFrame>
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-semibold">{current ? current.title : '空闲'}</h2>
           {current && (

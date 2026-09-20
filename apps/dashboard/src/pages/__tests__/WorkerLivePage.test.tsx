@@ -26,7 +26,11 @@ describe('WorkerLivePage', () => {
     expect(screen.getByText('打开抖音').closest('li')).toHaveTextContent('✅');
     expect(screen.getByText('选视频').closest('li')).toHaveTextContent('▶️');
     expect(screen.getByText('发作品').closest('li')).toHaveTextContent('⬜');
-    expect(screen.getByRole('img', { name: /实时画面/ })).toHaveAttribute('src', '/api/workers/a1/live');
+    const live = screen.getByRole('img', { name: /实时画面/ });
+    expect(live).toHaveAttribute('src', '/api/workers/a1/live');
+    // 实时画面必须嵌在手机外框的屏幕区里（主理人 0920 要求"一个 iPhone 的框"）
+    expect(screen.getByTestId('phone-screen')).toContainElement(live);
+    expect(screen.getByTestId('phone-frame')).toBeInTheDocument();
     expect(screen.getByText(/adb_unreachable/)).toBeInTheDocument();
   });
   it('历史：失败行显示 第N步·error_code·foreground_pkg·diag_line + 失败截图，完成行显示完成截图，均带耗时', async () => {
