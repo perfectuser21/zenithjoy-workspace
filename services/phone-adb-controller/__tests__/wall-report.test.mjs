@@ -1,7 +1,7 @@
 // services/phone-adb-controller/__tests__/wall-report.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeTmp, makeFakeAdb, makePassthroughConvert, startFakeApi, makeEnv, runBash, TINY_JPEG } from './wall-helpers.mjs';
 
@@ -127,6 +127,32 @@ test('--profile 解析序列号；409 时先把旧任务 complete superseded 再
   assert.equal(api.requests.filter((r) => /\/tasks$/.test(r.url)).length, 3);
   const reg = body(api.requests.find((r) => r.url === '/api/agent/register'));
   assert.equal(reg.machine_id, 'SER2');
+});
+
+test('两条链交错（WALL_NS）：状态文件按命名空间隔离，409 时收尾对方链并使其退化为忽略', async (t) => {
+  const { dir, api, env } = await setup(t, { busyCodes: [201, 409, 201], taskIds: ['task-h', 'task-o'] });
+  const harvest = { ...env, WALL_NS: 'harvest' };
+  const outreach = { ...env, WALL_NS: 'outreach' };
+  await ok(wr(harvest, 'start', 'SER1', '采收', 'a,b'));                 // 201 → task-h
+  assert.ok(existsSync(join(dir, 'tmp', 'task-SER1-harvest')));
+  await ok(wr(outreach, 'start', 'SER1', '触达', 'c'));                  // 409 → 收尾 task-h → 201 task-o
+  const completes = api.requests.filter((r) => /\/complete$/.test(r.url));
+  assert.equal(completes.length, 1);
+  assert.equal(completes[0].url, '/api/workers/tasks/task-h/complete');
+  assert.deepEqual(body(completes[0]), { outcome: 'failed', executor_id: 'adb-wall', error_code: 'superseded', failed_step: 0 });
+  assert.ok(!existsSync(join(dir, 'tmp', 'task-SER1-harvest')), '对方链状态文件没删');
+  assert.ok(existsSync(join(dir, 'tmp', 'task-SER1-outreach')));
+  const before = api.requests.length;
+  await ok(wr(harvest, 'step', 'SER1', '1', 'done'));                     // 采收链后续退化为忽略，不劫持触达任务
+  await ok(wr(harvest, 'done', 'SER1'));
+  assert.equal(api.requests.length, before);
+  assert.match(readFileSync(join(dir, 'wall.log'), 'utf8'), /无进行中任务,忽略/);
+  assert.ok(existsSync(join(dir, 'tmp', 'task-SER1-outreach')), '触达链状态被采收链误删');
+  await ok(wr(outreach, 'done', 'SER1'));
+  const last = api.requests[api.requests.length - 1];
+  assert.equal(last.url, '/api/workers/tasks/task-o/complete');
+  assert.deepEqual(body(last), { outcome: 'completed', executor_id: 'adb-wall' });
+  assert.ok(!existsSync(join(dir, 'tmp', 'task-SER1-outreach')));
 });
 
 test('缺 ZJ_INTERNAL_TOKEN / 中台不可达：都退出 0 不发请求或只记日志', async (t) => {

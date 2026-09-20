@@ -74,11 +74,12 @@ export function makePassthroughConvert(dir) {
 }
 
 /** 假中台：记录全部请求；tasks 端点可按次序返回 409；frame 端点可按次序返回状态码（默认 202） */
-export function startFakeApi({ busyCodes = [], frameCodes = [] } = {}) {
+export function startFakeApi({ busyCodes = [], frameCodes = [], taskIds = [] } = {}) {
   const requests = [];
   const uuid = randomUUID();
   const taskId = randomUUID();
   let taskCalls = 0;
+  let taskCreated = 0; // 第 n 次成功建任务返回 taskIds[n]（缺省全部返回 taskId），用于区分两条链交错时的任务
   let frameCalls = 0;
   const server = createServer((req, res) => {
     const chunks = [];
@@ -95,7 +96,7 @@ export function startFakeApi({ busyCodes = [], frameCodes = [] } = {}) {
       }
       if (/^\/api\/workers\/[^/]+\/tasks$/.test(req.url)) {
         const code = busyCodes[taskCalls++] ?? 201;
-        return code === 201 ? send(201, { success: true, data: { task_id: taskId, lease_until: new Date().toISOString() } }) : send(code, { success: false, error: { code: 'WORKER_BUSY' } });
+        return code === 201 ? send(201, { success: true, data: { task_id: taskIds[taskCreated++] ?? taskId, lease_until: new Date().toISOString() } }) : send(code, { success: false, error: { code: 'WORKER_BUSY' } });
       }
       if (/^\/api\/workers\/tasks\/[^/]+\/steps$/.test(req.url)) return send(200, { success: true, data: {} });
       if (/^\/api\/workers\/tasks\/[^/]+\/complete$/.test(req.url)) return send(200, { success: true, data: {} });

@@ -7,6 +7,9 @@
 #   wall-report done  <目标>
 #   wall-report fail  <目标> <idx> <error_code> ["diag_line"]   # 步骤 note=error_code、diag 缺省=error_code
 # 注意：note 只在 `step N doing` 之后用，不要在 `step N done` 之后调——它会把已完成的第 N 步改回 doing。
+# 命名空间：环境变量 WALL_NS（默认 default）区分同一台手机上并行的链（harvest-cron export WALL_NS=harvest，
+#   outreach-tick export WALL_NS=outreach，子进程继承）。状态文件 task-<serial>-<ns> 各链独立；start 遇 409
+#   会把该手机所有命名空间的进行中任务 complete superseded 并删其状态文件，对方链后续调用退化为"忽略"而非劫持。
 set -u
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=wall-lib.sh
@@ -22,7 +25,7 @@ wall_load_env || exit 0
 if [ "${1:-}" = "--profile" ]; then SERIAL=$(wall_profile_serial "${2:-}"); [ $# -ge 2 ] && shift 2
 else SERIAL="${1:-}"; [ $# -gt 0 ] && shift; fi
 [ -n "$SERIAL" ] || { wall_log "report $cmd: 无法解析序列号"; exit 0; }
-STATE="$ZJ_WALL_TMP/task-$SERIAL"    # 两行: task_id / 当前 step_index
+STATE="$ZJ_WALL_TMP/task-$SERIAL-${WALL_NS:-default}"    # 两行: task_id / 当前 step_index
 
 # 执行器面只用内部 token；绝不带 X-Agent-License（带了会被分流到 license 路径而 401）
 api() { # POST path body [总超时秒,默认 3] → 输出 "<code> <body>"
@@ -53,11 +56,14 @@ do_start() { # title steps_csv
   body=$(python3 -c 'import json,sys;print(json.dumps({"title":sys.argv[1][:80],"steps":[s for s in sys.argv[2].split(",") if s],"executor_id":sys.argv[3]}))' "$1" "$2" "$EXECUTOR" 2>/dev/null)
   r=$(api "/api/workers/$uuid/tasks" "$body"); code=${r%% *}
   if [ "$code" = "409" ]; then
-    old=$(state_task)
-    if [ -n "$old" ]; then
-      do_complete "$old" failed superseded "$(state_step)"
-      r=$(api "/api/workers/$uuid/tasks" "$body"); code=${r%% *}
-    fi
+    # 同设备已有 running：把本机所有命名空间（含自己）的进行中任务收尾成 superseded 并删状态文件，再试一次
+    for f in "$ZJ_WALL_TMP"/task-"$SERIAL"-*; do
+      [ -f "$f" ] || continue
+      old=$(sed -n 1p "$f" 2>/dev/null)
+      [ -n "$old" ] && do_complete "$old" failed superseded "$(sed -n 2p "$f" 2>/dev/null)"
+      rm -f "$f"
+    done
+    r=$(api "/api/workers/$uuid/tasks" "$body"); code=${r%% *}
   fi
   if [ "$code" = "201" ]; then
     tid=$(printf '%s' "${r#* }" | wall_json_get data.task_id)
@@ -94,7 +100,9 @@ case "$cmd" in
   start) do_start "${1:-任务}" "${2:-步骤1}" ;;
   step)  do_step "${1:-0}" "${2:-doing}" "${3:-}" "${4:-}" ;;
   note)  do_step "$(state_step)" doing "${1:-}" ;;
-  done)  tid=$(state_task); [ -n "$tid" ] && { do_complete "$tid" completed; rm -f "$STATE"; } ;;
+  done)  tid=$(state_task)
+         if [ -n "$tid" ]; then do_complete "$tid" completed; rm -f "$STATE"
+         else wall_log "done $SERIAL 无进行中任务,忽略"; fi ;;
   fail)  idx="${1:-0}"; ec="${2:-failed}"
          do_step "$idx" failed "$ec" "${3:-$ec}"
          tid=$(state_task)
