@@ -70,12 +70,13 @@ export function makePassthroughConvert(dir) {
   return p;
 }
 
-/** 假中台：记录全部请求；tasks 端点可按次序返回 409 */
-export function startFakeApi({ busyCodes = [] } = {}) {
+/** 假中台：记录全部请求；tasks 端点可按次序返回 409；frame 端点可按次序返回状态码（默认 202） */
+export function startFakeApi({ busyCodes = [], frameCodes = [] } = {}) {
   const requests = [];
   const uuid = randomUUID();
   const taskId = randomUUID();
   let taskCalls = 0;
+  let frameCalls = 0;
   const server = createServer((req, res) => {
     const chunks = [];
     req.on('data', (c) => chunks.push(c));
@@ -85,7 +86,10 @@ export function startFakeApi({ busyCodes = [] } = {}) {
       requests.push(rec);
       const send = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
       if (req.url === '/api/agent/register') return send(200, { ok: true, success: true, agent_id: uuid, registered_machine_id: JSON.parse(body.toString()).machine_id });
-      if (/^\/api\/workers\/[^/]+\/frame$/.test(req.url)) return send(202, { success: true, data: { seq: requests.length } });
+      if (/^\/api\/workers\/[^/]+\/frame$/.test(req.url)) {
+        const code = frameCodes[frameCalls++] ?? 202;
+        return code === 202 ? send(202, { success: true, data: { seq: requests.length } }) : send(code, { success: false, error: { code: 'FRAME_REJECTED' } });
+      }
       if (/^\/api\/workers\/[^/]+\/tasks$/.test(req.url)) {
         const code = busyCodes[taskCalls++] ?? 201;
         return code === 201 ? send(201, { success: true, data: { task_id: taskId, lease_until: new Date().toISOString() } }) : send(code, { success: false, error: { code: 'WORKER_BUSY' } });
