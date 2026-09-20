@@ -1,0 +1,173 @@
+import { describe, it, expect, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
+import DeptTaskTable, { groupByDept, parallelWith, durationText } from './DeptTaskTable';
+import { dayRange, type ScheduleSlot } from '../api/schedule.api';
+
+afterEach(cleanup);
+
+const HOUR = 3600_000;
+const at = (hh: number, minutes: number, extra: Partial<ScheduleSlot> = {}): ScheduleSlot => ({
+  id: `s-${hh}-${minutes}-${extra.id ?? ''}`,
+  title: `${hh} 点的活`,
+  dept: '智能获客',
+  planned_at: new Date(dayRange(0).start + hh * HOUR).toISOString(),
+  est_minutes: minutes,
+  source: 'recurring',
+  status: 'queued',
+  ...extra,
+});
+
+describe('按部门分组', () => {
+  it('同部门的活归一组，组内按开始时刻从早到晚', () => {
+    const groups = groupByDept(
+      [
+        at(22, 60, { id: 'a', title: '晚的获客' }),
+        at(9, 60, { id: 'b', title: '早的获客' }),
+        at(20, 12, { id: 'c', title: '发布', dept: '新媒体部' }),
+      ],
+      0,
+    );
+    expect(groups.map((g) => g.dept)).toEqual(['智能获客', '新媒体部']);
+    expect(groups[0].items.map((s) => s.title)).toEqual(['早的获客', '晚的获客']);
+    expect(groups[1].items).toHaveLength(1);
+  });
+
+  it('部门顺序照约定的部门清单排，不按字母也不按随机', () => {
+    const groups = groupByDept(
+      [at(9, 60, { id: 'a', dept: '视频剪辑' }), at(10, 60, { id: 'b', dept: '智能获客' })],
+      0,
+    );
+    expect(groups.map((g) => g.dept)).toEqual(['智能获客', '视频剪辑']);
+  });
+
+  it('没活的部门不出现，不留空分组', () => {
+    const groups = groupByDept([at(9, 60)], 0);
+    expect(groups).toHaveLength(1);
+  });
+
+  it('只取指定那天，别的天不混进来', () => {
+    const tomorrow: ScheduleSlot = {
+      ...at(8, 60),
+      id: 'tmr',
+      title: '明天的活',
+      planned_at: new Date(dayRange(1).start + 8 * HOUR).toISOString(),
+    };
+    const groups = groupByDept([at(8, 60, { id: 'today', title: '今天的活' }), tomorrow], 0);
+    expect(groups[0].items.map((s) => s.title)).toEqual(['今天的活']);
+  });
+
+  it('每组带上这组的件数与已完成数', () => {
+    const groups = groupByDept([at(2, 60, { id: 'a', status: 'done' }), at(9, 60, { id: 'b' })], 0);
+    expect(groups[0].total).toBe(2);
+    expect(groups[0].done).toBe(1);
+  });
+});
+
+describe('并行判定与时长写法', () => {
+  it('时间区间有重叠就算并行，贴着结束不算', () => {
+    const 触达 = at(8, 14 * 60, { id: 'a' });
+    const 采收 = at(22, 90, { id: 'b' });
+    const 客服 = at(10, 600, { id: 'c' });
+    const all = [触达, 采收, 客服];
+    expect(parallelWith(触达, all).map((s) => s.id)).toEqual(['c']);
+    expect(parallelWith(采收, all)).toEqual([]);
+  });
+
+  it('跨部门的活也算并行，分组不影响重叠判定', () => {
+    const 触达 = at(8, 14 * 60, { id: 'a' });
+    const 发布 = at(20, 12, { id: 'b', dept: '新媒体部' });
+    expect(parallelWith(触达, [触达, 发布]).map((s) => s.id)).toEqual(['b']);
+  });
+
+  it('时长写成人话', () => {
+    expect(durationText(45)).toBe('45 分钟');
+    expect(durationText(60)).toBe('1 小时');
+    expect(durationText(90)).toBe('1 小时 30 分');
+  });
+});
+
+describe('表格', () => {
+  const renderTable = (slots: ScheduleSlot[], props: Partial<React.ComponentProps<typeof DeptTaskTable>> = {}) =>
+    render(<DeptTaskTable slots={slots} dayOffset={0} {...props} />);
+
+  it('滚动容器高度钉死且自己滚，页面不会被撑长', () => {
+    renderTable([at(8, 60)]);
+    const box = screen.getByTestId('table-scroll');
+    expect(box.className).toMatch(/overflow-y-auto/);
+    expect(box.className).toMatch(/h-\[\d+px\]/);
+  });
+
+  it('每个部门一个分组表头，表头写出部门和件数', () => {
+    renderTable([at(9, 60, { id: 'a' }), at(20, 12, { id: 'b', dept: '新媒体部' })]);
+    const heads = screen.getAllByTestId('dept-head');
+    expect(heads).toHaveLength(2);
+    expect(heads[0]).toHaveTextContent('智能获客');
+    expect(heads[0]).toHaveTextContent(/1\s*件/);
+  });
+
+  it('每件活一行，时间列给出起止与时长', () => {
+    renderTable([at(8, 90)]);
+    const row = screen.getByTestId('task-row');
+    expect(row).toHaveTextContent('08:00–09:30');
+    expect(row).toHaveTextContent('1 小时 30 分');
+  });
+
+  it('列头是时间、任务、状态、说明，且滚动时钉在顶上', () => {
+    renderTable([at(8, 60)]);
+    const head = screen.getByTestId('col-head');
+    for (const h of ['时间', '任务', '状态', '说明']) expect(head).toHaveTextContent(h);
+    expect(head.className).toMatch(/sticky/);
+  });
+
+  it('并行的活标出来，并说明跟谁同时在跑', () => {
+    renderTable([at(8, 14 * 60, { id: 'a', title: '触达 · 私信今日额度' }), at(10, 600, { id: 'c', title: '客服 · 会话轮询' })]);
+    expect(screen.getAllByTestId('parallel-badge')).toHaveLength(2);
+    expect(screen.getAllByText(/同时在跑：/).length).toBeGreaterThan(0);
+  });
+
+  it('不重叠的活不标并行', () => {
+    renderTable([at(2, 90, { id: 'a' }), at(6, 90, { id: 'b' })]);
+    expect(screen.queryAllByTestId('parallel-badge')).toHaveLength(0);
+  });
+
+  it('失败的活说人话而不是机器码', () => {
+    renderTable([at(14, 45, { status: 'failed' })]);
+    const row = screen.getByTestId('task-row');
+    expect(row).toHaveTextContent('机器失联');
+    expect(row.textContent).not.toMatch(/executor_lost/);
+  });
+
+  it('被挡住的活写出原因', () => {
+    renderTable([at(19, 10, { status: 'blocked', blocked_reason: '素材待审核' })]);
+    expect(screen.getByTestId('task-row')).toHaveTextContent('素材待审核');
+  });
+
+  it('已完成的任务名划掉，一眼分得出做没做', () => {
+    renderTable([at(8, 60, { status: 'done', title: '做完的活' })]);
+    expect(screen.getByText('做完的活').className).toMatch(/line-through/);
+  });
+
+  it('跨天的活写出次日结束时刻', () => {
+    renderTable([at(23, 90)]);
+    expect(screen.getByTestId('task-row')).toHaveTextContent('次日 00:30');
+  });
+
+  it('头上给出当天件数、已完成、待跑与额度', () => {
+    renderTable([at(2, 60, { id: 'a', status: 'done' }), at(9, 60, { id: 'b' })], {
+      quotas: [{ dept: '智能获客', used: 14, cap: 55, unit: '单' }],
+    });
+    const head = screen.getByTestId('table-head');
+    expect(head).toHaveTextContent(/共\s*2\s*件/);
+    expect(head).toHaveTextContent(/已完成\s*1/);
+    expect(head).toHaveTextContent(/待跑\s*1/);
+    expect(head).toHaveTextContent('14/55单');
+  });
+
+  it('没排程与这天没安排给不同提示', () => {
+    const { unmount } = renderTable([], { noSchedule: true });
+    expect(screen.getByText('这台机还没有排程')).toBeInTheDocument();
+    unmount();
+    renderTable([]);
+    expect(screen.getByText('这天没有安排')).toBeInTheDocument();
+  });
+});

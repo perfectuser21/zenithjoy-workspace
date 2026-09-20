@@ -25,28 +25,28 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/workers', (r) => r.fulfill({ json: { success: true, data: workers } }));
   await page.route('**/api/workers/a1/live', (r) => r.fulfill({ contentType: 'image/jpeg', body: JPEG }));
 });
-// 0920 二改：每台一张表往下堆 → 一屏只看一台（主理人：「左边一个手机，右边是固定的窗口
-// 高度，页面不能随任务变多越来越长；要的是类似 Calendar 的从上到下时间分割」）
-test('工作机页一屏一台：芯片切机，左实时画面右纵向日历', async ({ page }) => {
+// 0920 三改：右侧日历 → 按部门分组的 table（主理人：「我觉得一个 table 的形式会比较好，
+// 每个部门从早到晚是怎么排的，以 table 的形式去分；页面的高度是定的就这一页，
+// 里面可以加一个上下滑杆」）
+test('工作机页一屏一台：芯片切机，左实时画面右部门分组任务表', async ({ page }) => {
   await page.goto('/dashboard/workers');
   await expect(page.getByText('小龙虾').first()).toBeVisible();
   await expect(page.getByTestId('device-chip')).toHaveCount(2);
-  // 同时只有一张日历，左边挂着这台机的实时画面
-  await expect(page.getByTestId('day-calendar')).toHaveCount(1);
+  await expect(page.getByTestId('dept-task-table')).toHaveCount(1);
   await expect(page.getByRole('img', { name: '实时画面' })).toHaveAttribute('src', /\/api\/workers\/a1\/live/);
   await expect(page.getByText(/正在跑：发布视频到抖音/)).toBeVisible();
   await expect(page.getByText(/第 3\/5 步/)).toBeVisible();
-  // 整点刻度画满一天，日历自己滚不撑长页面
-  await expect(page.getByTestId('hour-tick')).toHaveCount(24);
-  const box = page.getByTestId('calendar-scroll');
-  const scrollable = await box.evaluate((el) => el.scrollHeight > el.clientHeight + 10);
-  expect(scrollable).toBe(true);
-  // 旧的表格与甘特都不该再出现
+  // 表格容器高度钉死，滚动发生在表格内部而不是整页
+  const box = page.getByTestId('table-scroll');
+  const fixed = await box.evaluate((el) => el.getBoundingClientRect().height < 900);
+  expect(fixed).toBe(true);
+  // 日历与旧表格都不该再出现
+  await expect(page.getByTestId('day-calendar')).toHaveCount(0);
   await expect(page.getByTestId('device-task-table')).toHaveCount(0);
   await expect(page.getByTestId('schedule-gantt')).toHaveCount(0);
 });
 
-test('排了活的机子把当天的活画成块，同时段的并排分列', async ({ page }) => {
+test('排了活的机子按部门分组，组内从早到晚，同时段的标出并行', async ({ page }) => {
   // 用样例排程里真实存在的 agent_id，才能拿到当天的活
   await page.route('**/api/workers', (r) =>
     r.fulfill({
@@ -61,13 +61,19 @@ test('排了活的机子把当天的活画成块，同时段的并排分列', as
   );
   await page.goto('/dashboard/workers');
   await expect(page.getByText('悦升工作机').first()).toBeVisible();
-  await expect(page.getByTestId('cal-block').first()).toBeVisible();
-  await expect(page.getByText('触达 · 私信今日额度').first()).toBeVisible();
-  // 触达跑一整天，中间插发布 → 至少有一块不是满宽
-  const widths = await page.getByTestId('cal-block').evaluateAll((els) => els.map((e) => e.style.width));
-  expect(widths.some((w) => w !== '100%')).toBe(true);
-  // 今天有「现在」这条线
-  await expect(page.getByTestId('now-line')).toBeVisible();
+  // 悦升机横跨智能获客与新媒体部
+  expect(await page.getByTestId('dept-head').count()).toBeGreaterThan(1);
+  await expect(page.getByTestId('task-row').first()).toBeVisible();
+  // 组内按开始时刻升序
+  const times = await page.getByTestId('task-row').evaluateAll((els) =>
+    els.map((e) => (e.textContent || '').slice(0, 5)));
+  expect(times.length).toBeGreaterThan(1);
+  // 触达跑一整天，中间插发布 → 并行标记
+  expect(await page.getByTestId('parallel-badge').count()).toBeGreaterThan(0);
+  await expect(page.getByText(/同时在跑：/).first()).toBeVisible();
+  // 滚动条真的在表格里：内容比窗口高
+  const scrollable = await page.getByTestId('table-scroll').evaluate((el) => el.scrollHeight > el.clientHeight);
+  expect(scrollable).toBe(true);
 });
 test('详情页：3 个 ✅ 1 个 ▶️，画面正常无"画面不可用"', async ({ page }) => {
   await page.route('**/api/workers/a1/activity', (r) => r.fulfill({ json: { success: true, data: activity(500) } }));
