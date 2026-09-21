@@ -351,4 +351,61 @@ describe('GET /api/mashup/runs — 历史列表', () => {
     expect(sql).toMatch(/tenant_id\s*=\s*\$1/);
     expect((pool.query as any).mock.calls[0][1][0]).toBe('tenant-a');
   });
+
+  const runRow = (over: Record<string, unknown>) => ({
+    id: 'run-1', template_id: 'tmpl-1', status: 'completed',
+    created_at: '2026-09-20T10:00:00.000Z', selected_candidate_id: null,
+    candidate_count: '0', thumbnail_url: null, has_export: false,
+    ...over,
+  });
+
+  it.each([
+    ['completed', { selected_candidate_id: 'cand-1', has_export: true, candidate_count: '3' }],
+    ['rendering', { selected_candidate_id: 'cand-1', has_export: false, candidate_count: '3' }],
+    ['candidates_pending', { selected_candidate_id: null, has_export: false, candidate_count: '3' }],
+    ['assigned', { selected_candidate_id: null, has_export: false, candidate_count: '0' }],
+  ])('stage 派生为 %s', async (expected, over) => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (pool.query as any).mockResolvedValue({ rows: [runRow(over)] });
+
+    const r = await request(makeApp()).get('/api/mashup/runs').set('X-Upload-Token', TOKEN_A);
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.items[0].stage).toBe(expected);
+  });
+
+  it('渲染跑完但被安全 Gate 拦下（export_url 为空）不算已完成', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    // status 写着 completed，但 contents 没有 export_url ——以 export 为准
+    (pool.query as any).mockResolvedValue({
+      rows: [runRow({ status: 'completed', selected_candidate_id: 'cand-1', has_export: false })],
+    });
+
+    const r = await request(makeApp()).get('/api/mashup/runs').set('X-Upload-Token', TOKEN_A);
+
+    expect(r.body.data.items[0].stage).toBe('rendering');
+    expect(r.body.data.items[0].stage).not.toBe('completed');
+  });
+
+  it('不把成片地址塞进列表响应', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (pool.query as any).mockResolvedValue({
+      rows: [runRow({ selected_candidate_id: 'cand-1', has_export: true, candidate_count: '2' })],
+    });
+
+    const r = await request(makeApp()).get('/api/mashup/runs').set('X-Upload-Token', TOKEN_A);
+
+    expect(JSON.stringify(r.body)).not.toMatch(/exportUrl|downloadUrl/);
+  });
+
+  it('limit 越界夹到 100，不报错', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (pool.query as any).mockResolvedValue({ rows: [] });
+
+    const r = await request(makeApp()).get('/api/mashup/runs?limit=9999').set('X-Upload-Token', TOKEN_A);
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.limit).toBe(100);
+    expect((pool.query as any).mock.calls[0][1][1]).toBe(100);
+  });
 });
