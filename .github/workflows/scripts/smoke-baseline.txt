@@ -139,3 +139,4 @@ smoke-selfcheck-smoke.sh
 nginx-materials-redirect-smoke.sh
 mashup-history-smoke.sh
 schedule-dispatch-smoke.sh
+job-catalog-smoke.sh
