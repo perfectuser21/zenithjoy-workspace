@@ -16,6 +16,7 @@ vi.mock('../api/materials.api', async (importOriginal) => ({
 const VIDEO: Material = {
   id: 'mat-1', file_name: 'clip.mp4', size_bytes: 1024, mime_type: 'video/mp4',
   taken_at: null, created_at: '2026-09-20T10:00:00.000Z', preview_url: 'https://stale.example/old.mp4',
+  tag_status: 'tagged', ai_tags: [],
 };
 
 beforeEach(() => {
