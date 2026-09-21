@@ -64,6 +64,24 @@ test("hash 不一致 → 写 blocked hash_mismatch、打印 BATCH2_ESCALATE、�
   const b = book(ctx);
   assert.equal(b.stages.discovery.status, "blocked");
   assert.equal(b.stages.discovery.items.length, 1);     // 只写了一条 blocked，没继续跑词
+  assert.equal(b.stages.discovery.items[0].n, 0);       // 哨兵 n=0，不与词序号冲突
+});
+
+test("hash 不一致不覆盖上一 attempt 已完成词的 items 记录", { skip: SKIP }, () => {
+  const ctx = setup(["ok", "nocard"]);
+  // 预置：上一 attempt 已把词 "ok" 的 discovery/collection 记为 completed（n=1）
+  for (const stage of ["discovery", "collection"]) {
+    spawnSync(process.execPath, [join(SRC, "ledger.mjs"), "set", "--stage", stage, "--status", "completed", "--n", "1", "--word", "ok", "--run-dir", ctx.kv.WFR_RUN_DIR], { encoding: "utf8" });
+  }
+  writeFileSync(ctx.wf, "ok\ntampered\n");           // init 之后改词单，触发 hash 不一致
+  const r = run(ctx, ctx.wf);
+  assert.match(r.stdout, /BATCH2_ESCALATE=hash_mismatch/);
+  const b = book(ctx);
+  assert.equal(b.stages.discovery.items.find((x) => x.word === "ok").status, "completed"); // 未被覆盖
+  assert.ok(b.stages.discovery.items.some((x) => x.n === 0 && x.status === "blocked"));
+  const na = spawnSync(process.execPath, [join(SRC, "ledger.mjs"), "next-attempt", "--run-dir", ctx.kv.WFR_RUN_DIR], { encoding: "utf8" });
+  const out = JSON.parse(na.stdout);
+  assert.ok(out.skip_words.includes("ok"));
 });
 
 test("skip_words 里的词不跑", { skip: SKIP }, () => {
