@@ -101,3 +101,14 @@ test("harvest-cron-v4: filter_words 按 skip_words 过滤词单，保序", { ski
   assert.equal(r.status, 0, r.stderr);
   assert.equal(readFileSync(outF, "utf8"), "B\n");
 });
+
+test("harvest-cron-v4: finalize_needed 只在 wfr init 跑过后为真", { skip: SKIP }, () => {
+  const envNoRun = { ...process.env };
+  delete envNoRun.WFR_RUN_ID;
+  const r1 = spawnSync(ZSH, ["-c", `HARVEST_CRON_V4_LIB=1 source ${join(SRC, "harvest-cron-v4.sh")}; finalize_needed`], { encoding: "utf8", env: envNoRun });
+  assert.notEqual(r1.status, 0, r1.stderr);
+
+  const envWithRun = { ...process.env, WFR_RUN_ID: "social-keyword-leadgen-crontab-t" };
+  const r2 = spawnSync(ZSH, ["-c", `HARVEST_CRON_V4_LIB=1 source ${join(SRC, "harvest-cron-v4.sh")}; finalize_needed`], { encoding: "utf8", env: envWithRun });
+  assert.equal(r2.status, 0, r2.stderr);
+});
