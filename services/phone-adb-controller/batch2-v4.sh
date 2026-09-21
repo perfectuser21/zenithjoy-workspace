@@ -17,7 +17,8 @@ print "[$(date +%H:%M:%S)] v4批开始 profile=$P $(wc -l < $WF)词 push=$PUSH a
 NOWHASH=$(bash "$WFR" hash "$P" "$WF" "$PUSH" 2>/dev/null | sed -n 's/^WFR_HASH=//p'); NOWHASH=${NOWHASH:-}
 if [[ -n "${WFR_HASH:-}" && "$NOWHASH" != "$WFR_HASH" ]]; then
   print "[$(date +%H:%M:%S)] hash 不一致 init=$WFR_HASH now=$NOWHASH，停跑" >> $LOG
-  bash "$WFR" stage discovery blocked 1 "hash_mismatch init=$WFR_HASH now=$NOWHASH" '[{"type":"log","ref":"'"$LOG"'"}]' '{"candidates":0,"keywords_processed":0,"screens_scanned":0}' "" >/dev/null 2>>$LOG
+  # n=0 哨兵：词序号从 1 起，用 0 避免覆盖上一 attempt 已完成词的 items 记录（ledger.mjs set --n 是按 n 覆盖式写）
+  bash "$WFR" stage discovery blocked 0 "hash_mismatch init=$WFR_HASH now=$NOWHASH" '[{"type":"log","ref":"'"$LOG"'"}]' '{"candidates":0,"keywords_processed":0,"screens_scanned":0}' "" >/dev/null 2>>$LOG
   print "BATCH2_ESCALATE=hash_mismatch"
   exit 0
 fi
