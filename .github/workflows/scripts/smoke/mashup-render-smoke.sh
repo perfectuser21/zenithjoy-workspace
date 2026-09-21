@@ -171,4 +171,49 @@ grep -q '"ok":false' <<< "$MISSING_CHECK" || fail "模拟 ffmpeg 缺失时应判
 grep -q '"missing":\["ffmpeg"\]' <<< "$MISSING_CHECK" || fail "模拟缺失时 missing 未含 ffmpeg：$MISSING_CHECK"
 ok "verifyStartupBinaries() 在二进制缺失时正确判定 ok=false（这就是 0919 真机复现的路径）"
 
-echo "✅ mashup-render smoke 全部通过"
+echo "== 5. Step3 候选真实轻量预览（决策 623a81d7）：renderPreview 真机验证 =="
+PREVIEW_OUT="$WORKDIR/preview-captured.mp4"
+PREVIEW_RESULT=$(node -e "
+const { renderPreview } = require('./apps/api/dist/services/mashup-preview-render.js');
+const pool = require('./apps/api/dist/db/connection.js').default;
+const fs = require('fs');
+const storage = {
+  getSignedUrl: async () => 'http://127.0.0.1:$HTTP_PORT/a.mp4',
+  putObject: async ({ filePath }) => { fs.copyFileSync(filePath, '$PREVIEW_OUT'); },
+  deleteObject: async () => {}, presignPut: async () => '', headObject: async () => null,
+};
+renderPreview({ tenantId: '$TENANT', candidateId: '$CAND_ID' }, { storage })
+  .then((r) => { console.log('RESULT_JSON:' + JSON.stringify(r)); })
+  .catch((err) => { console.error('意外异常: ' + err.message); process.exitCode = 1; })
+  .finally(() => pool.end());
+" | grep '^RESULT_JSON:' | sed 's/^RESULT_JSON://') || fail "renderPreview 调用失败"
+[ -n "$PREVIEW_RESULT" ] || fail "未取得调用结果"
+echo "  返回: $PREVIEW_RESULT"
+grep -q '"previewUrl"' <<< "$PREVIEW_RESULT" || fail "期望产出 previewUrl，实际 $PREVIEW_RESULT"
+[ -s "$PREVIEW_OUT" ] || fail "预览产物未落盘"
+PREVIEW_DIMS=$(ffprobe -v error -select_streams v -show_entries stream=width,height -of csv=p=0 "$PREVIEW_OUT")
+[ "$PREVIEW_DIMS" != "1920,1080" ] || fail "预览档位输出分辨率与终版相同(1920x1080)，轻量档位未生效"
+ok "预览真实产出 previewUrl，输出分辨率=${PREVIEW_DIMS}（轻量档位，非终版 1920x1080）"
+
+echo "== 6. 候选真实轻量预览队列：真实入队并落库 preview_status =="
+QUEUE_RESULT=$(node -e "
+const { enqueuePreview } = require('./apps/api/dist/services/mashup-preview-queue.js');
+const pool = require('./apps/api/dist/db/connection.js').default;
+enqueuePreview({ tenantId: '$TENANT', candidateId: '$CAND_ID' }, { render: async () => ({ previewUrl: 'https://smoke.example/p.mp4' }) })
+  .then(async (r) => {
+    console.log('RESULT_JSON:' + JSON.stringify(r));
+    // enqueuePreview 内部渲染是 fire-and-forget（不 await 后台 runItem），入队 promise
+    // resolve 时后台 DB 落态还没写完——留时间窗让它跑完，否则 pool.end() 在它前头把
+    // 连接关了，落库永远追不上（这是踩过的坑，不是真实业务逻辑的 bug）。
+    await new Promise((res) => setTimeout(res, 800));
+  })
+  .catch((err) => { console.error('意外异常: ' + err.message); process.exitCode = 1; })
+  .finally(() => pool.end());
+" | grep '^RESULT_JSON:' | sed 's/^RESULT_JSON://') || fail "enqueuePreview 调用失败"
+echo "  返回: $QUEUE_RESULT"
+grep -q '"previewStatus":"generating"' <<< "$QUEUE_RESULT" || fail "期望入队后立即回 generating，实际 $QUEUE_RESULT"
+DB_PREVIEW_STATUS=$(psql_q "SELECT preview_status FROM zenithjoy.mashup_candidates WHERE id = '$CAND_ID'")
+[ "$DB_PREVIEW_STATUS" = "ready" ] || fail "队列异步渲染完成后 preview_status 应落库为 ready，实际=$DB_PREVIEW_STATUS"
+ok "预览队列真实入队→异步渲染→落库 preview_status=ready"
+
+echo "✅ mashup-render smoke 全部通过（含 Step3 候选真实轻量预览）"

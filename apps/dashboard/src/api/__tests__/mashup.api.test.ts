@@ -17,6 +17,8 @@ import {
   listCandidates,
   selectCandidate,
   renderCandidate,
+  previewCandidate,
+  getCandidateDetail,
 } from '../mashup.api';
 
 beforeEach(() => {
@@ -114,14 +116,53 @@ describe('selectCandidate', () => {
 });
 
 describe('renderCandidate', () => {
-  it('POST /mashup/candidates/:id/render', async () => {
+  it('POST /mashup/candidates/:id/render，回的是队列态不是终版结果（决策 d6bedf80 并发=1队列）', async () => {
     mockToken();
     post.mockResolvedValue({
-      data: { data: { contentId: 'content-1', safetyCheckStatus: 'passed', watermarkCheckStatus: 'passed', exportUrl: 'https://x', downloadUrl: 'https://x' } },
+      data: { data: { candidateId: 'c1', renderStatus: 'queued', queuePosition: 1, contentId: null } },
     });
 
     const result = await renderCandidate('c1');
-    expect(result.contentId).toBe('content-1');
-    expect(result.exportUrl).toBe('https://x');
+    expect(result.renderStatus).toBe('queued');
+    expect(result.queuePosition).toBe(1);
+  });
+});
+
+describe('previewCandidate', () => {
+  it('POST /mashup/candidates/:id/preview', async () => {
+    mockToken();
+    post.mockResolvedValue({
+      data: { data: { candidateId: 'c1', previewStatus: 'generating', queuePosition: 0, previewUrl: null } },
+    });
+
+    const result = await previewCandidate('c1');
+    expect(result.previewStatus).toBe('generating');
+    const call = post.mock.calls.find((c) => c[0] === '/mashup/candidates/c1/preview');
+    expect(call).toBeTruthy();
+  });
+});
+
+describe('getCandidateDetail', () => {
+  it('GET /mashup/candidates/:id，渲染完成时带出 content', async () => {
+    mockToken();
+    get.mockImplementation(async (url: string) => {
+      if (url === '/account/me') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
+      if (url === '/mashup/candidates/c1') {
+        return {
+          data: {
+            data: {
+              id: 'c1', runId: 'run-1', score: 1.5, slotFill: {}, thumbnailUrl: null,
+              renderStatus: 'rendered', previewStatus: 'ready', previewUrl: 'https://preview.example/c1.mp4',
+              content: { contentId: 'content-1', safetyCheckStatus: 'passed', watermarkCheckStatus: 'passed', exportUrl: 'https://x', downloadUrl: 'https://x' },
+            },
+          },
+        };
+      }
+      throw new Error('unexpected GET ' + url);
+    });
+
+    const detail = await getCandidateDetail('c1');
+    expect(detail.renderStatus).toBe('rendered');
+    expect(detail.content?.exportUrl).toBe('https://x');
   });
 });

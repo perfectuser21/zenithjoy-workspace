@@ -83,4 +83,20 @@ describe('concatAndScale', () => {
     const ok = concatAndScale([join(workDir, 'does-not-exist.mp4')], out);
     expect(ok).toBe(false);
   });
+
+  // 候选真实轻量预览（决策 623a81d7）需要更小/更快的编码档位，不能沿用终版 1920x1080。
+  runIfFfmpeg('传入轻量档位 opts（width/height/fps）：输出按指定分辨率，不是默认 1920x1080', () => {
+    workDir = mkdtempSync(join(tmpdir(), 'mashup-render-test-'));
+    const clip1 = join(workDir, 'a.mp4');
+    const out = join(workDir, 'out.mp4');
+    makeTestClip(clip1, '640x480');
+
+    const ok = concatAndScale([clip1], out, { width: 640, height: 360, fps: 24, preset: 'ultrafast', crf: 32 });
+    expect(ok).toBe(true);
+
+    const probe = spawnSync('ffprobe', [
+      '-v', 'error', '-select_streams', 'v', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', out,
+    ]);
+    expect(probe.stdout.toString().trim()).toBe('640,360');
+  });
 });

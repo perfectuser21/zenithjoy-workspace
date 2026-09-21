@@ -1045,6 +1045,27 @@ tests:
     status: active
     product: 批量混剪
     note: "批量混剪加厚 Step4（GP f6f96e17/line05）渲染队列 mock DB 单测（同目录惯例桩掉 db/connection，因默认 L3 API Test job 无 Postgres）：渲染并发上限=1，第2个候选入队为 queued；render_failed 可重新入队非死路。决策 d6bedf80（hk-vps 4核硬约束）。真 Postgres 覆盖见 mashup-render-queue-integration。"
+  - id: mashup-preview-render-service
+    path: apps/api/src/services/__tests__/mashup-preview-render.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪加厚 Step3（GP f6f96e17/line05）候选真实轻量预览渲染叶子 mock DB 单测（决策 623a81d7 纠偏 d6bedf80）：产出 previewUrl、用轻量 ffmpeg 档位（480p/ultrafast）、不调 Gemini 安全审核、不写 contents 表。"
+  - id: mashup-preview-queue-service
+    path: apps/api/src/services/__tests__/mashup-preview-queue.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪加厚 Step3（GP f6f96e17/line05）候选真实轻量预览队列 mock DB 单测：并发上限=1（与终版渲染队列各自独立一把锁），已就绪幂等回、failed 可重新入队非死路。决策 623a81d7。"
+  - id: mashup-candidates-step-preview-ui
+    path: apps/dashboard/src/pages/MashupPage.CandidatesStep.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪加厚 Step3（GP f6f96e17/line05）候选卡片真实轻量预览 UI 三态（未预览显示缩略图/生成中禁用按钮/就绪内联 video 播放），修复纯缩略图盲选不满足用户诉求（决策 623a81d7）。"
   - id: mashup-render-queue-integration
     path: sprints/09201034-batch-mashup-script-preview-candidates/tests/mashup-render-queue.test.ts
     type: integration

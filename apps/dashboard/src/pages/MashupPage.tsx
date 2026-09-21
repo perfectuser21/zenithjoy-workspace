@@ -19,11 +19,28 @@ import {
   generateCandidates,
   selectCandidate,
   renderCandidate,
+  previewCandidate,
+  getCandidateDetail,
   type MashupRun,
   type CandidatesResult,
   type RenderResult,
   type SlotAssignmentStatus,
+  type PreviewStatus,
 } from '../api/mashup.api';
+
+/** 轮询候选详情直到（渲染或预览）落终态，或超过最大次数放弃（避免网络异常时无限空转）。 */
+async function pollCandidateUntil(
+  candidateId: string,
+  isTerminal: (detail: Awaited<ReturnType<typeof getCandidateDetail>>) => boolean,
+  opts: { intervalMs: number; maxAttempts: number },
+) {
+  for (let attempt = 0; attempt < opts.maxAttempts; attempt += 1) {
+    const detail = await getCandidateDetail(candidateId);
+    if (isTerminal(detail)) return detail;
+    await new Promise((r) => setTimeout(r, opts.intervalMs));
+  }
+  throw new Error('处理耗时过长，请稍后刷新查看');
+}
 
 type TaggedMaterial = Material & { tag_status?: string; ai_tags?: string[] };
 
@@ -82,6 +99,7 @@ export default function MashupPage() {
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [renderResult, setRenderResult] = useState<RenderResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [previewByCandidate, setPreviewByCandidate] = useState<Record<string, { status: PreviewStatus; url: string | null }>>({});
 
   const templatesQuery = useQuery({ queryKey: ['mashup', 'templates'], queryFn: listTemplates, staleTime: 5 * 60 * 1000 });
   const materialsQuery = useQuery({
@@ -115,15 +133,59 @@ export default function MashupPage() {
     onError: (e) => setErrorMsg(extractErrorMessage(e, '生成候选方案失败')),
   });
 
+  // 决策 d6bedf80：渲染并发=1队列，POST /render 立即回队列态而非终版结果——
+  // 这里入队后轮询候选详情直到渲染落终态，再取 content 呈现（修复 PR#1905
+  // 引入的"点了选这个之后一直显示旧的失败态"契约断层）。
   const selectAndRenderMutation = useMutation({
     mutationFn: async (candidateId: string) => {
       setSelectedCandidateId(candidateId);
       await selectCandidate(candidateId);
-      return renderCandidate(candidateId);
+      const enqueued = await renderCandidate(candidateId);
+      if (enqueued.renderStatus === 'rendered' || enqueued.renderStatus === 'render_failed') {
+        return getCandidateDetail(candidateId);
+      }
+      return pollCandidateUntil(
+        candidateId,
+        (d) => d.renderStatus === 'rendered' || d.renderStatus === 'render_failed',
+        { intervalMs: 1500, maxAttempts: 80 },
+      );
     },
-    onSuccess: (r) => { setRenderResult(r); setErrorMsg(null); setStep('result'); },
+    onSuccess: (detail) => {
+      if (detail.content) {
+        setRenderResult(detail.content);
+      } else {
+        // 落 render_failed 但还没来得及写 contents 行——按未通过口径呈现，不是裸崩。
+        setRenderResult({ contentId: '', safetyCheckStatus: 'failed_pending_review', watermarkCheckStatus: 'failed_pending_review' });
+      }
+      setErrorMsg(null);
+      setStep('result');
+    },
     onError: (e) => setErrorMsg(extractErrorMessage(e, '渲染成片失败')),
   });
+
+  // 候选真实轻量预览（决策 623a81d7）：点击才现渲染，渲染完内联播放，客户看完
+  // 再决定要不要选它合成终版——不再是纯缩略图盲选。
+  async function handlePreview(candidateId: string) {
+    setPreviewByCandidate((prev) => ({ ...prev, [candidateId]: { status: 'generating', url: null } }));
+    try {
+      const enqueued = await previewCandidate(candidateId);
+      if (enqueued.previewStatus === 'ready' && enqueued.previewUrl) {
+        setPreviewByCandidate((prev) => ({ ...prev, [candidateId]: { status: 'ready', url: enqueued.previewUrl } }));
+        return;
+      }
+      const detail = await pollCandidateUntil(
+        candidateId,
+        (d) => d.previewStatus === 'ready' || d.previewStatus === 'failed',
+        { intervalMs: 1000, maxAttempts: 40 },
+      );
+      setPreviewByCandidate((prev) => ({
+        ...prev,
+        [candidateId]: { status: detail.previewStatus, url: detail.previewUrl },
+      }));
+    } catch {
+      setPreviewByCandidate((prev) => ({ ...prev, [candidateId]: { status: 'failed', url: null } }));
+    }
+  }
 
   function toggleMaterial(id: string) {
     setSelectedMaterialIds((prev) => {
@@ -141,6 +203,7 @@ export default function MashupPage() {
     setSelectedCandidateId(null);
     setRenderResult(null);
     setErrorMsg(null);
+    setPreviewByCandidate({});
     qc.invalidateQueries({ queryKey: ['materials', 'mashup-pick'] });
   }
 
@@ -201,6 +264,8 @@ export default function MashupPage() {
           onSelect={(id) => selectAndRenderMutation.mutate(id)}
           rendering={selectAndRenderMutation.isPending}
           renderingCandidateId={selectedCandidateId}
+          previewByCandidate={previewByCandidate}
+          onPreview={handlePreview}
         />
       ) : null}
 
@@ -352,14 +417,16 @@ function AssignedStep(props: {
 
 // ============ Step 3：候选方案 ============
 
-function CandidatesStep(props: {
+export function CandidatesStep(props: {
   candidates: CandidatesResult;
   materialsById: Map<string, TaggedMaterial>;
   onSelect: (candidateId: string) => void;
   rendering: boolean;
   renderingCandidateId: string | null;
+  previewByCandidate: Record<string, { status: PreviewStatus; url: string | null }>;
+  onPreview: (candidateId: string) => void;
 }) {
-  const { candidates, materialsById, onSelect, rendering, renderingCandidateId } = props;
+  const { candidates, materialsById, onSelect, rendering, renderingCandidateId, previewByCandidate, onPreview } = props;
 
   if (candidates.candidates.length === 0) {
     return (
@@ -373,8 +440,20 @@ function CandidatesStep(props: {
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {candidates.candidates.map((c) => {
         const filledSlots = Object.entries(c.slotFill).filter(([, v]) => v);
+        const preview = previewByCandidate[c.id];
+        const previewing = preview?.status === 'generating';
         return (
           <div key={c.id} className="rounded-lg border border-gray-200 p-3">
+            {preview?.status === 'ready' && preview.url ? (
+              <video src={preview.url} controls className="mb-2 aspect-video w-full rounded-md bg-black" />
+            ) : c.thumbnailUrl ? (
+              <img src={c.thumbnailUrl} alt="候选缩略图" className="mb-2 aspect-video w-full rounded-md bg-gray-100 object-cover" />
+            ) : (
+              <div className="mb-2 flex aspect-video w-full items-center justify-center rounded-md bg-gray-100 text-gray-300">
+                <Film className="h-6 w-6" />
+              </div>
+            )}
+
             <div className="mb-2 text-xs text-gray-400">匹配分 {c.score.toFixed(2)}</div>
             <div className="space-y-1">
               {filledSlots.map(([slotKey, materialId]) => (
@@ -384,14 +463,25 @@ function CandidatesStep(props: {
                 </div>
               ))}
             </div>
-            <button
-              type="button"
-              disabled={rendering}
-              onClick={() => onSelect(c.id)}
-              className="mt-3 w-full rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {rendering && renderingCandidateId === c.id ? '渲染中…' : '选这个，渲染成片'}
-            </button>
+
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                disabled={previewing || preview?.status === 'ready'}
+                onClick={() => onPreview(c.id)}
+                className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {previewing ? '预览生成中…' : preview?.status === 'ready' ? '已预览' : preview?.status === 'failed' ? '预览失败，重试' : '先看看效果'}
+              </button>
+              <button
+                type="button"
+                disabled={rendering}
+                onClick={() => onSelect(c.id)}
+                className="flex-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {rendering && renderingCandidateId === c.id ? '渲染中…' : '选这个，合成正式成片'}
+              </button>
+            </div>
           </div>
         );
       })}
