@@ -6662,6 +6662,30 @@ agent_suite:
     product: 新媒体运营
     note: "PR#1845 preview 门禁回归：preview 不需 Meta 凭据（否则凭据到位前无法做内容审批）但真实发布门禁一个不少——未配凭据发布仍503、凭据齐全但 META_PUBLISH_ENABLED=false 仍403、未授权401、preview 不回显密钥。独立文件，因 meta-publishing.test.ts 是已落盘合同测试受 lint-contract-test-immutability 保护不可改。"
 
+  - id: tiktok-private-publishing-unit
+    path: sprints/09162201-tiktok-private-publishing/tests/tiktok-publishing.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "zenithjoyai.com TikTok 私密发布桥（/api/tiktok/{creator,publish,status}）：Bearer 鉴权、creator_info 强制 SELF_ONLY、超出创作者时长上限则在初始化前拦下、幂等重放只初始化一次、TikTok 侧 HTTP200 携错误码仍判失败、Token 不进 URL/响应。源码 2026-09-19 曾只存在于本地 dirty worktree 直传的线上部署中，PR#恢复时连同测试一并入库。"
+
+  - id: tiktok-draft-upload-unit
+    path: sprints/09171700-tiktok-draft-upload/tests/tiktok-draft-upload.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "zenithjoyai.com TikTok 草稿/收件箱上传桥（/api/tiktok/draft）：video_url 必须来自 TIKTOK_MEDIA_HOSTS 白名单（防把凭据带去任意主机拉取）、TIKTOK_DRAFT_UPLOAD_ENABLED+confirm 双闸、幂等重放、缺 publish_id 判 502。"
+
+  - id: tiktok-d1-concurrent-claim-unit
+    path: sprints/09211748-tiktok-d1-idempotency/tests/tiktok-concurrent-claim.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "TikTok 幂等防重复发帖守卫（proven-to-fire）：用栅栏把「两个请求同时越过读取阶段」变成确定性，断言 D1 原子声明只放行一个赢家、上游 init/inbox 各只被调用一次、operation 参与主键使 publish 与 draft 同 key 互不遮蔽；并固化 KV 形态在同条件下会放行两个赢家这一事实。实测把 claim 的原子性打掉后本文件 4 条立刻报红（expected 2 to be 1 = 重复发帖）。"
+
   - id: mashup-history-step
     path: apps/dashboard/src/pages/MashupPage.HistoryStep.test.tsx
     type: unit
