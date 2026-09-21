@@ -6,14 +6,12 @@ import {
   missingTikTokPublishConfig,
   tiktokRequest,
   type TikTokCreatorInfo,
-  type TikTokIdempotencyStore,
+  resolveTikTokStore,
   type TikTokPublishEnv,
 } from './_lib';
 
 const MAX_BODY_BYTES = 32 * 1024;
 const MAX_TITLE_LENGTH = 2_200;
-const PENDING_TTL_SECONDS = 24 * 60 * 60;
-const INITIALIZED_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 interface PublishInput {
   mode: 'preview' | 'publish';
@@ -102,24 +100,6 @@ function validIdempotencyKey(value: string | undefined): value is string {
   return Boolean(value && /^[A-Za-z0-9._:-]{8,128}$/.test(value));
 }
 
-async function loadAttempt(store: TikTokIdempotencyStore, key: string): Promise<StoredAttempt | null> {
-  const raw = await store.get(`tiktok-publish:${key}`);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as StoredAttempt;
-  } catch {
-    return { state: 'pending', fingerprint: 'corrupt', createdAt: new Date().toISOString() };
-  }
-}
-
-async function saveAttempt(
-  store: TikTokIdempotencyStore,
-  key: string,
-  attempt: StoredAttempt,
-  ttl: number,
-): Promise<void> {
-  await store.put(`tiktok-publish:${key}`, JSON.stringify(attempt), { expirationTtl: ttl });
-}
 
 export async function onRequestPost(context: {
   request: Request;
@@ -169,20 +149,24 @@ export async function onRequestPost(context: {
   if (!validIdempotencyKey(input.idempotencyKey)) {
     return jsonResponse({ ok: false, error: 'valid_idempotency_key_required' }, 400);
   }
-  const store = env.TIKTOK_IDEMPOTENCY;
+  const store = resolveTikTokStore(env);
   if (!store) {
     return jsonResponse({ ok: false, error: 'idempotency_store_not_configured' }, 503);
   }
 
   const digest = await fingerprint(preview);
-  const existing = await loadAttempt(store, input.idempotencyKey);
-  if (existing && existing.fingerprint !== digest) {
-    return jsonResponse({ ok: false, error: 'idempotency_key_conflict' }, 409);
-  }
-  if (existing?.state === 'initialized' && existing.publishId) {
-    return jsonResponse({ ok: true, replayed: true, result: { publishId: existing.publishId } });
-  }
-  if (existing?.state === 'pending') {
+
+  // 快路径：结果已经确定的（重放 / 指纹冲突 / 待人工复核）直接返回，
+  // 省掉一次 creator_info 往返。这只是优化——真正的互斥在下面的 claim，
+  // 读到空并不代表可以发布。
+  const known = await store.read('publish', input.idempotencyKey);
+  if (known) {
+    if (known.fingerprint !== digest) {
+      return jsonResponse({ ok: false, error: 'idempotency_key_conflict' }, 409);
+    }
+    if (known.state === 'initialized' && known.publishId) {
+      return jsonResponse({ ok: true, replayed: true, result: { publishId: known.publishId } });
+    }
     return jsonResponse({ ok: false, error: 'publish_outcome_requires_review' }, 409);
   }
 
@@ -211,12 +195,26 @@ export async function onRequestPost(context: {
     );
   }
 
-  await saveAttempt(
-    store,
-    input.idempotencyKey,
-    { state: 'pending', fingerprint: digest, createdAt: new Date().toISOString() },
-    PENDING_TTL_SECONDS,
-  );
+  // 原子声明：同一 (operation, key) 只有一个调用者能拿到 claimed=true。
+  // 绝不能改回「先 read 再 write」——那之间的窗口会让并发请求各自调一次
+  // TikTok 发布接口，也就是重复发帖。
+  const claimed = await store.claim('publish', input.idempotencyKey, {
+    state: 'pending',
+    fingerprint: digest,
+    createdAt: new Date().toISOString(),
+  });
+  if (!claimed.claimed) {
+    const existing = claimed.existing;
+    if (existing.fingerprint !== digest) {
+      return jsonResponse({ ok: false, error: 'idempotency_key_conflict' }, 409);
+    }
+    if (existing.state === 'initialized' && existing.publishId) {
+      return jsonResponse({ ok: true, replayed: true, result: { publishId: existing.publishId } });
+    }
+    // 已被他人声明但尚未收敛：可能正在发布、也可能上次结果丢失。
+    // 一律要求人工复核，绝不盲目重试（重试会重复发帖）。
+    return jsonResponse({ ok: false, error: 'publish_outcome_requires_review' }, 409);
+  }
 
   const result = await tiktokRequest<InitResponse>(env, '/v2/post/publish/video/init/', {
     post_info: {
@@ -241,16 +239,11 @@ export async function onRequestPost(context: {
     return jsonResponse({ ok: false, error: 'missing_publish_id' }, 502);
   }
 
-  await saveAttempt(
-    store,
-    input.idempotencyKey,
-    {
-      state: 'initialized',
-      fingerprint: digest,
-      createdAt: new Date().toISOString(),
-      publishId: result.data.publish_id,
-    },
-    INITIALIZED_TTL_SECONDS,
-  );
+  await store.update('publish', input.idempotencyKey, {
+    state: 'initialized',
+    fingerprint: digest,
+    createdAt: new Date().toISOString(),
+    publishId: result.data.publish_id,
+  });
   return jsonResponse({ ok: true, replayed: false, result: { publishId: result.data.publish_id } });
 }

@@ -13,15 +13,164 @@ export interface TikTokIdempotencyStore {
   put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
 }
 
+/**
+ * 发布尝试的持久化记录。`operation` 区分 publish / draft——两者共用调用方传来的
+ * idempotencyKey 是合法的，必须靠 operation 隔离，否则草稿会把私密发布误判成重放。
+ */
+export type TikTokOperation = 'publish' | 'draft';
+
+export interface TikTokAttemptRecord {
+  state: 'pending' | 'initialized';
+  fingerprint: string;
+  createdAt: string;
+  publishId?: string;
+}
+
+/**
+ * 原子声明式幂等存储。
+ *
+ * 为什么不能用 KV：KV 只有 get / put，没有条件写。`先 get 再 put` 之间存在窗口，
+ * 两个并发请求会同时读到空、同时往下走，最终各自调一次 TikTok 发布接口 = 重复发帖。
+ * D1 的主键约束让 `INSERT ... ON CONFLICT DO NOTHING` 成为一次原子操作：
+ * 只有 changes===1 的那个调用者拿到 claimed:true，其余一律 claimed:false。
+ */
+export interface TikTokClaimStore {
+  claim(
+    operation: TikTokOperation,
+    key: string,
+    attempt: TikTokAttemptRecord,
+  ): Promise<{ claimed: true } | { claimed: false; existing: TikTokAttemptRecord }>;
+  read(operation: TikTokOperation, key: string): Promise<TikTokAttemptRecord | null>;
+  update(operation: TikTokOperation, key: string, attempt: TikTokAttemptRecord): Promise<void>;
+}
+
+export interface D1Like {
+  prepare(query: string): {
+    bind(...values: unknown[]): {
+      run(): Promise<{ meta?: { changes?: number } }>;
+      first<T = unknown>(): Promise<T | null>;
+    };
+  };
+}
+
+export function d1TikTokIdempotencyStore(db: D1Like): TikTokClaimStore {
+  const rowToAttempt = (row: Record<string, unknown> | null): TikTokAttemptRecord | null => {
+    if (!row) return null;
+    return {
+      state: row.state === 'initialized' ? 'initialized' : 'pending',
+      fingerprint: String(row.fingerprint ?? ''),
+      createdAt: String(row.created_at ?? ''),
+      ...(row.publish_id ? { publishId: String(row.publish_id) } : {}),
+    };
+  };
+
+  const read = async (
+    operation: TikTokOperation,
+    key: string,
+  ): Promise<TikTokAttemptRecord | null> => {
+    const row = await db
+      .prepare(
+        'SELECT state, fingerprint, created_at, publish_id FROM tiktok_publish_attempts WHERE operation = ? AND idempotency_key = ?',
+      )
+      .bind(operation, key)
+      .first<Record<string, unknown>>();
+    return rowToAttempt(row);
+  };
+
+  return {
+    read,
+    async claim(operation, key, attempt) {
+      const res = await db
+        .prepare(
+          `INSERT INTO tiktok_publish_attempts
+             (operation, idempotency_key, state, fingerprint, created_at, publish_id)
+           VALUES (?, ?, ?, ?, ?, NULL)
+           ON CONFLICT(operation, idempotency_key) DO NOTHING`,
+        )
+        .bind(operation, key, attempt.state, attempt.fingerprint, attempt.createdAt)
+        .run();
+      if (res?.meta?.changes === 1) return { claimed: true };
+      const existing = await read(operation, key);
+      // 理论上声明失败必然读得到记录；读不到说明记录刚被清理，
+      // 用一个不可能匹配的 fingerprint 让调用方走冲突分支，绝不放行发布。
+      return { claimed: false, existing: existing ?? { ...attempt, fingerprint: 'unknown' } };
+    },
+    async update(operation, key, attempt) {
+      await db
+        .prepare(
+          `UPDATE tiktok_publish_attempts
+              SET state = ?, fingerprint = ?, created_at = ?, publish_id = ?
+            WHERE operation = ? AND idempotency_key = ?`,
+        )
+        .bind(
+          attempt.state,
+          attempt.fingerprint,
+          attempt.createdAt,
+          attempt.publishId ?? null,
+          operation,
+          key,
+        )
+        .run();
+    },
+  };
+}
+
 export interface TikTokPublishEnv {
   TIKTOK_ACCESS_TOKEN?: string;
   TIKTOK_PUBLISH_API_KEY?: string;
   TIKTOK_PUBLISH_ENABLED?: string;
   TIKTOK_DRAFT_UPLOAD_ENABLED?: string;
   TIKTOK_MEDIA_HOSTS?: string;
+  /** 生产幂等存储：D1 原子声明。 */
+  TIKTOK_PUBLISH_DB?: D1Like;
+  /** KV 形态，仅供单测注入；无原子声明，不得作为生产实现。 */
   TIKTOK_IDEMPOTENCY?: TikTokIdempotencyStore;
 }
 
+
+const PENDING_TTL_SECONDS = 24 * 60 * 60;
+const INITIALIZED_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+/**
+ * 把仅供单测注入的 KV 形态包装成 claim 接口。
+ *
+ * ⚠️ 这里的 claim 是「先读再写」，**没有原子性**——它只用于单测。
+ * 生产路径必须走 D1（见 resolveStore），否则并发会重复发帖。
+ */
+export function kvClaimStore(store: TikTokIdempotencyStore): TikTokClaimStore {
+  const k = (operation: string, key: string) => `tiktok-${operation}:${key}`;
+  const read = async (operation: TikTokOperation, key: string) => {
+    const raw = await store.get(k(operation, key));
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as TikTokAttemptRecord;
+    } catch {
+      return { state: 'pending', fingerprint: 'corrupt', createdAt: new Date().toISOString() } as TikTokAttemptRecord;
+    }
+  };
+  const write = async (operation: TikTokOperation, key: string, attempt: TikTokAttemptRecord, ttl: number) => {
+    await store.put(k(operation, key), JSON.stringify(attempt), { expirationTtl: ttl });
+  };
+  return {
+    read,
+    async claim(operation, key, attempt) {
+      const existing = await read(operation, key);
+      if (existing) return { claimed: false, existing };
+      await write(operation, key, attempt, PENDING_TTL_SECONDS);
+      return { claimed: true };
+    },
+    async update(operation, key, attempt) {
+      await write(operation, key, attempt, INITIALIZED_TTL_SECONDS);
+    },
+  };
+}
+
+export function resolveTikTokStore(env: TikTokPublishEnv): TikTokClaimStore | null {
+  // D1 优先：只有它能提供原子声明。KV 形态仅供单测注入。
+  if (env.TIKTOK_PUBLISH_DB) return d1TikTokIdempotencyStore(env.TIKTOK_PUBLISH_DB);
+  if (env.TIKTOK_IDEMPOTENCY) return kvClaimStore(env.TIKTOK_IDEMPOTENCY);
+  return null;
+}
 export interface TikTokCreatorInfo {
   creator_username?: string;
   creator_nickname?: string;
