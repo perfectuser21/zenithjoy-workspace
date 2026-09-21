@@ -1045,7 +1045,14 @@ tests:
     ci: L3
     status: active
     product: 批量混剪
-    note: "Dashboard 批量混剪 API 客户端：listTemplates/createRun/getRun/generateCandidates/listCandidates/selectCandidate/renderCandidate 七个函数，与 materials.api.ts 同口径——登录态换 X-Upload-Token 再带 header 调用 /mashup/* 端点。"
+    note: "Dashboard 批量混剪 API 客户端：listTemplates/createTemplateFromScript/createRun/getRun/generateCandidates/listCandidates/selectCandidate/renderCandidate 八个函数，与 materials.api.ts 同口径——登录态换 X-Upload-Token 再带 header 调用 /mashup/* 端点。createTemplateFromScript 覆盖 AI 分段成功（degraded=false）、AI 不可用降级固定四槽位（degraded=true 原样透出不吞掉）、后端报错向上抛出三态。"
+  - id: mashup-pickstep-script-entry
+    path: apps/dashboard/src/pages/MashupPage.PickStep.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪主线入口补齐（GP line05/batch_mashup#step2）：客户原话「我肯定是给你一个文案，你拿我的素材去帮我做混剪，你现在文案也没有」——PickStep 之前只有内置模板下拉，没有文案输入框。断言：文案输入框先于套路模板下拉渲染（主路径优先但不强制）、不写文案直接用内置模板下拉仍可提交（现有路径不退化）、文案为空生成按钮禁用、请求中禁用按钮显示分段中且模板下拉不卡死、失败态展示错误提示、degraded=true 如实展示「AI 分段没跑成，已用固定四槽位继续」绝不假装成功、AI 分段成功展示分成几段+每段 match_tags。"
   - id: mashup-render-queue-service
     path: apps/api/src/services/__tests__/mashup-render-queue.test.ts
     type: unit

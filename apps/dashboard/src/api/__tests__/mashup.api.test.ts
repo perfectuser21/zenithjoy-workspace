@@ -11,6 +11,7 @@ vi.mock('../client', () => ({ apiClient: { get, post } }));
 
 import {
   listTemplates,
+  createTemplateFromScript,
   createRun,
   getRun,
   generateCandidates,
@@ -47,6 +48,65 @@ describe('listTemplates', () => {
     expect(templates).toHaveLength(1);
     const call = get.mock.calls.find((c) => c[0] === '/mashup/templates');
     expect(call![1].headers['X-Upload-Token']).toBe('ZJ-F-TESTKEY');
+  });
+});
+
+describe('createTemplateFromScript', () => {
+  it('POST /mashup/templates/from-script 带 X-Upload-Token 与 script 请求体，AI 分段成功回 degraded=false', async () => {
+    mockToken();
+    post.mockResolvedValue({
+      data: {
+        data: {
+          templateId: 'tmpl-ai-1',
+          name: '文案动态分段',
+          slots: [
+            { key: 'hook', required: true, match_tags: ['开场', '悬念'], suggestedCount: 2, tagMapping: 'matched' },
+          ],
+          degraded: false,
+          source: 'ai',
+        },
+      },
+    });
+
+    const result = await createTemplateFromScript('这是一段带货文案');
+
+    expect(result.templateId).toBe('tmpl-ai-1');
+    expect(result.degraded).toBe(false);
+    expect(result.slots).toHaveLength(1);
+    const call = post.mock.calls.find((c) => c[0] === '/mashup/templates/from-script');
+    expect(call![1]).toEqual({ script: '这是一段带货文案' });
+    expect(call![2].headers['X-Upload-Token']).toBe('ZJ-F-TESTKEY');
+  });
+
+  it('AI 不可用时后端降级固定四槽位，degraded=true 必须原样透出，不能吞掉', async () => {
+    mockToken();
+    post.mockResolvedValue({
+      data: {
+        data: {
+          templateId: 'tmpl-fallback-1',
+          name: '固定四槽位（AI 降级）',
+          slots: [
+            { key: 'hook', required: true, match_tags: ['开场'], suggestedCount: 3, tagMapping: 'matched' },
+            { key: 'product', required: true, match_tags: ['产品展示'], suggestedCount: 5, tagMapping: 'matched' },
+          ],
+          degraded: true,
+          source: 'fallback',
+        },
+      },
+    });
+
+    const result = await createTemplateFromScript('随便一段文案');
+
+    expect(result.degraded).toBe(true);
+    expect(result.source).toBe('fallback');
+    expect(result.slots).toHaveLength(2);
+  });
+
+  it('后端报错时向上抛出，不在客户端吞掉', async () => {
+    mockToken();
+    post.mockRejectedValue(new Error('Request failed with status code 500'));
+
+    await expect(createTemplateFromScript('x')).rejects.toThrow();
   });
 });
 

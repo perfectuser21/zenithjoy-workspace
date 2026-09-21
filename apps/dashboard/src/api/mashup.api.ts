@@ -15,6 +15,28 @@ export interface MashupTemplate {
   slots: MashupTemplateSlot[];
 }
 
+export type SlotTagMapping = 'matched' | 'fallback';
+
+/** 文案分段出的动态槽位，比内置模板的 MashupTemplateSlot 多两个字段：
+ *  suggestedCount（该段建议素材数）、tagMapping（match_tags 是否命中固定标签枚举，
+ *  越界标签被过滤后落 fallback——与后端 apps/api/src/services/mashup-slot-assignment.ts 同口径）。 */
+export interface DynamicSlot {
+  key: string;
+  required: boolean;
+  match_tags: string[];
+  suggestedCount: number;
+  tagMapping: SlotTagMapping;
+}
+
+export interface CreateTemplateFromScriptResult {
+  templateId: string;
+  name: string;
+  slots: DynamicSlot[];
+  /** true = AI 分段不可用，已降级成固定四槽位。调用方必须原样展示，不能假装分段成功。 */
+  degraded: boolean;
+  source: 'ai' | 'fallback';
+}
+
 export type SlotAssignmentStatus = 'assigned' | 'reshoot_skipped' | 'unfilled';
 
 export interface SlotAssignment {
@@ -144,6 +166,21 @@ async function authHeaders(): Promise<{ headers: { 'X-Upload-Token': string } }>
 export async function listTemplates(): Promise<MashupTemplate[]> {
   const opts = await authHeaders();
   const { data } = await apiClient.get<{ data: MashupTemplate[] }>('/mashup/templates', opts);
+  return data.data;
+}
+
+/**
+ * 客户主线入口（proposal-v2.md Step1）：粘贴一段带货文案，后端 AI 拆成有序镜头
+ * 分段落成专属 mashup_template。degraded=true 时后端已降级固定四槽位——这是
+ * 唯一真相，调用方（MashupPage）必须原样透出给客户，不能吞掉或假装成功。
+ */
+export async function createTemplateFromScript(script: string): Promise<CreateTemplateFromScriptResult> {
+  const opts = await authHeaders();
+  const { data } = await apiClient.post<{ data: CreateTemplateFromScriptResult }>(
+    '/mashup/templates/from-script',
+    { script },
+    opts,
+  );
   return data.data;
 }
 

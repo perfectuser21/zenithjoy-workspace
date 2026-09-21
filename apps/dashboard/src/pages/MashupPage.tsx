@@ -15,6 +15,7 @@ import { Film, RefreshCw, CheckCircle2, XCircle, Clock, ArrowLeft, Download, Lay
 import { listMaterials, formatSize, type Material } from '../api/materials.api';
 import {
   listTemplates,
+  createTemplateFromScript,
   createRun,
   getRun,
   generateCandidates,
@@ -31,6 +32,8 @@ import {
   type PreviewStatus,
   type MashupRunSummary,
   type CandidateDetail,
+  type CreateTemplateFromScriptResult,
+  type DynamicSlot,
 } from '../api/mashup.api';
 
 /** 轮询候选详情直到（渲染或预览）落终态，或超过最大次数放弃（避免网络异常时无限空转）。 */
@@ -106,6 +109,9 @@ export default function MashupPage() {
   const [renderResult, setRenderResult] = useState<RenderResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [previewByCandidate, setPreviewByCandidate] = useState<Record<string, { status: PreviewStatus; url: string | null }>>({});
+  const [scriptText, setScriptText] = useState('');
+  const [scriptResult, setScriptResult] = useState<CreateTemplateFromScriptResult | null>(null);
+  const [scriptError, setScriptError] = useState<string | null>(null);
 
   const templatesQuery = useQuery({ queryKey: ['mashup', 'templates'], queryFn: listTemplates, staleTime: 5 * 60 * 1000 });
   const materialsQuery = useQuery({
@@ -126,6 +132,21 @@ export default function MashupPage() {
       setTemplateId(templates[0].id);
     }
   }, [templateId, templates]);
+
+  // 客户主线入口（proposal-v2.md Step1）：粘贴文案 → AI 分段落成专属模板 → 自动
+  // 选中，继续走原有挑素材流程。degraded 原样存进 scriptResult，PickStep 如实
+  // 展示，绝不假装分段成功——本仓库硬性要求。
+  const createTemplateFromScriptMutation = useMutation({
+    mutationFn: () => createTemplateFromScript(scriptText),
+    onSuccess: (r) => {
+      setScriptResult(r);
+      setScriptError(null);
+      setTemplateId(r.templateId);
+      // 新模板已落库但不在当前已拉取的模板列表缓存里，刷新后下拉才能选中它。
+      qc.invalidateQueries({ queryKey: ['mashup', 'templates'] });
+    },
+    onError: (e) => setScriptError(extractErrorMessage(e, '文案分段失败')),
+  });
 
   const createRunMutation = useMutation({
     mutationFn: () => createRun(templateId, Array.from(selectedMaterialIds)),
@@ -210,6 +231,9 @@ export default function MashupPage() {
     setRenderResult(null);
     setErrorMsg(null);
     setPreviewByCandidate({});
+    setScriptText('');
+    setScriptResult(null);
+    setScriptError(null);
     qc.invalidateQueries({ queryKey: ['materials', 'mashup-pick'] });
   }
 
@@ -298,6 +322,12 @@ export default function MashupPage() {
           onToggle={toggleMaterial}
           onSubmit={() => createRunMutation.mutate()}
           submitting={createRunMutation.isPending}
+          scriptText={scriptText}
+          onScriptChange={setScriptText}
+          onGenerateFromScript={() => createTemplateFromScriptMutation.mutate()}
+          scriptSubmitting={createTemplateFromScriptMutation.isPending}
+          scriptError={scriptError}
+          scriptResult={scriptResult}
         />
       ) : null}
 
@@ -329,7 +359,7 @@ export default function MashupPage() {
 
 // ============ Step 1：选模板 + 选素材 ============
 
-function PickStep(props: {
+export function PickStep(props: {
   templates: { id: string; name: string }[];
   templateId: string;
   onTemplateChange: (id: string) => void;
@@ -341,15 +371,73 @@ function PickStep(props: {
   onToggle: (id: string) => void;
   onSubmit: () => void;
   submitting: boolean;
+  scriptText: string;
+  onScriptChange: (v: string) => void;
+  onGenerateFromScript: () => void;
+  scriptSubmitting: boolean;
+  scriptError: string | null;
+  scriptResult: { degraded: boolean; slots: DynamicSlot[] } | null;
 }) {
   const {
     templates, templateId, onTemplateChange, templatesLoading,
     materials, materialsLoading, materialsError,
     selectedMaterialIds, onToggle, onSubmit, submitting,
+    scriptText, onScriptChange, onGenerateFromScript, scriptSubmitting, scriptError, scriptResult,
   } = props;
 
   return (
     <div>
+      {/* 主路径：粘贴带货文案，AI 按镜头分段落成专属模板——放在模板下拉之前，
+          但不强制，不写文案直接用内置模板的路径原样保留在下面。 */}
+      <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50/40 p-4">
+        <label className="mb-1 block text-sm font-medium text-gray-700">
+          带货文案（主路径：粘贴文案，AI 自动按镜头分段匹配素材）
+        </label>
+        <textarea
+          value={scriptText}
+          onChange={(e) => onScriptChange(e.target.value)}
+          rows={4}
+          placeholder="粘贴一段带货文案，AI 会按镜头拆成有序分段…"
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+        />
+        <div className="mt-2 flex items-center gap-3">
+          <button
+            type="button"
+            disabled={!scriptText.trim() || scriptSubmitting}
+            onClick={onGenerateFromScript}
+            className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {scriptSubmitting ? 'AI 分段中…' : '按文案生成分段模板'}
+          </button>
+          <span className="text-xs text-gray-400">不写文案也可以，直接用下面的内置模板</span>
+        </div>
+
+        {scriptError ? (
+          <div className="mt-2 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">{scriptError}</div>
+        ) : null}
+
+        {scriptResult ? (
+          <div className="mt-3">
+            {scriptResult.degraded ? (
+              <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                AI 分段没跑成，已用固定四槽位继续
+              </div>
+            ) : (
+              <div className="mb-2 text-xs text-green-700">AI 已把文案分成 {scriptResult.slots.length} 段</div>
+            )}
+            <div className="space-y-1">
+              {scriptResult.slots.map((s, i) => (
+                <div key={`${s.key}-${i}`} className="rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700">
+                  <span className="font-medium">{SLOT_LABEL[s.key] ?? s.key}</span>
+                  {!s.required ? '（选填）' : ''}
+                  ：{s.match_tags.length > 0 ? s.match_tags.join('、') : '未匹配到标签'}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+
       <div className="mb-4">
         <label className="mb-1 block text-sm font-medium text-gray-700">套路模板</label>
         {templatesLoading ? (
