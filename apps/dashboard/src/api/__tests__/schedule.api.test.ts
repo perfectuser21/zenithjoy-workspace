@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  __mockSchedulePayloadForDemo,
   fetchSchedule,
   slotsOfDay,
   backlogCount,
@@ -60,13 +61,13 @@ describe('派生计算', () => {
   });
 });
 
-describe('mock 数据（后端接入前的样例）', () => {
+describe('样例数据（演示/测试用，不再进生产路径）', () => {
   it('显式标注 mock，避免被当成真实数据', async () => {
-    expect((await fetchSchedule()).mock).toBe(true);
+    expect(__mockSchedulePayloadForDemo().mock).toBe(true);
   });
 
   it('每台设备的业务线、额度、活三者对得上', async () => {
-    const { devices } = await fetchSchedule();
+    const { devices } = __mockSchedulePayloadForDemo();
     expect(devices.length).toBeGreaterThan(0);
     for (const d of devices) {
       expect(d.agent_id).toMatch(/^[0-9a-f-]{36}$/);
@@ -80,7 +81,7 @@ describe('mock 数据（后端接入前的样例）', () => {
   });
 
   it('部门取值都在约定清单内（与 Notion OPC 经营对象的所属部门对齐）', async () => {
-    const { devices } = await fetchSchedule();
+    const { devices } = __mockSchedulePayloadForDemo();
     for (const d of devices) {
       for (const x of d.depts) expect(DEPTS).toContain(x);
       for (const s of d.slots) expect(DEPTS).toContain(s.dept);
@@ -88,7 +89,7 @@ describe('mock 数据（后端接入前的样例）', () => {
   });
 
   it('被挡住的活必须给出原因，否则页面只能显示干巴巴的"被挡住"', async () => {
-    const { devices } = await fetchSchedule();
+    const { devices } = __mockSchedulePayloadForDemo();
     const blocked = devices.flatMap((d) => d.slots).filter((s) => s.status === 'blocked');
     expect(blocked.length).toBeGreaterThan(0);
     for (const s of blocked) expect(s.blocked_reason).toBeTruthy();
