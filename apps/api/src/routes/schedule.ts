@@ -34,13 +34,15 @@ const OK = (data: unknown) => ({ success: true, data });
 const DEPTS: Dept[] = ['智能获客', '新媒体部', '私域客服', '视频剪辑'];
 /** 对外动作的部门：这些部门的活会碰平台，受铁律 27bb6d1a 的窗口约束 */
 const OUTBOUND_DEPTS = new Set<Dept>(['智能获客', '新媒体部', '私域客服']);
-export const scheduleRouter = Router();
-scheduleRouter.use(tenantContext);
 // 读面 1 分钟轮询 + 写面是对外动作的扳机，按租户限流。
-// 中间件直接挂在每条路由上而不是只 router.use()：CodeQL 的 js/missing-rate-limiting
-// 不追 router 级 use，挂在路由上它才认得出来（也更难被后来人误删）。
+// 顺序有意为之：**限流排在鉴权之前**，否则未授权的请求照样要消耗一次鉴权开销；
+// CodeQL 的 js/missing-rate-limiting 也正是按"授权前有没有限流"判的。
+// 同时挂在每条路由上：它不追 router 级 use，挂在路由上才认得出来，也更难被误删。
 const rateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: tenantKeyFn });
+
+export const scheduleRouter = Router();
 scheduleRouter.use(rateLimit);
+scheduleRouter.use(tenantContext);
 
 function requireTenant(req: Request, res: Response): string | null {
   const t = req.tenantId;
