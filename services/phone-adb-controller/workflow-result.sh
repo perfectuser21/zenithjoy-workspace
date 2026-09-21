@@ -65,7 +65,7 @@ write_stage(){
   for k in $keys; do jqf="$jqf and (.metrics.\"$k\"|type==\"number\")"; done
   if ! "$WFR_JQ" -e --argjson allowed "$allowed_json" "$jqf" "$f" >/dev/null 2>&1; then warn "stage=$stage artifact invalid, removed: $f"; rm -f "$f"; return 0; fi
   if [[ -n "$word" ]]; then led1 set --stage "$stage" --status "$status" --n "$n" --word "$word" --note "$summary" >/dev/null
-  else led1 set --stage "$stage" --status "$status" --note "$summary" >/dev/null; fi
+  else led1 set --stage "$stage" --status "$status" --n "$n" --note "$summary" >/dev/null; fi
 }
 
 cmd="${1:-}"; shift || true
