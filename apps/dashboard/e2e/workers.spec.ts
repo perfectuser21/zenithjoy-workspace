@@ -99,6 +99,34 @@ test('活铺满一天时表格里真的出现滑杆，页面本身不变长', as
   const pageGrew = await page.evaluate(() => document.body.scrollHeight > window.innerHeight + 40);
   expect(pageGrew).toBe(false); // 页面本身没被撑长
 });
+test('表里看得出哪儿还空着、还能塞几单', async ({ page }) => {
+  await page.route('**/api/workers', (r) =>
+    r.fulfill({
+      json: {
+        success: true,
+        data: [
+          { id: '8e802deb-247d-4346-8028-03c265959431', agent_id: 'ag1', hostname: 'MAA-AN00', nickname: null,
+            os_type: 'android', status: 'online', running: null, completed_today: 0, last_seen: null },
+        ],
+      },
+    }),
+  );
+  await page.goto('/dashboard/workers');
+  await expect(page.getByText('金诺工作机').first()).toBeVisible();
+  // 活与活之间的空档单独成行，写出空多久、还能插几单
+  expect(await page.getByTestId('gap-row').count()).toBeGreaterThan(0);
+  await expect(page.getByText(/还能插 \d+ 单/).first()).toBeVisible();
+  // 表头直接回答今天还能加多少，并说清被什么卡住
+  const head = (await page.getByTestId('table-head').textContent()) || '';
+  expect(head).toMatch(/空档 \d+ 处/);
+  expect(head).toMatch(/还能加 \d+ 单/);
+  expect(head).toMatch(/卡在(时间|额度)/);
+  // 翻到明天：整天都能加，没有「已过」的空档
+  await page.getByLabel('后一天').click();
+  await expect(page.getByRole('button', { name: '明天' })).toBeVisible();
+  await expect(page.locator('[data-testid="gap-row"][data-past="1"]')).toHaveCount(0);
+});
+
 test('详情页：3 个 ✅ 1 个 ▶️，画面正常无"画面不可用"', async ({ page }) => {
   await page.route('**/api/workers/a1/activity', (r) => r.fulfill({ json: { success: true, data: activity(500) } }));
   await page.goto('/dashboard/workers/a1');

@@ -115,6 +115,22 @@ grep -qF 'outreachRuns' <<< "$SRC" || fail "样例没有按单展开的触达（
 grep -qF '触达 · 单#' <<< "$SRC" || fail "触达单没按真机写法带单号与昵称"
 grep -qF 'NICKNAMES' <<< "$SRC" || fail "触达单缺昵称池，单子看起来不像真的"
 
+# 层8f: 表里必须答得出「还能往哪加」（主理人 0921：「你让我感觉不到一个点——我的空白
+#       时间在哪？我这台手机还有哪些能给我安排进去的？哪些是空白点我可以再往里加的？」）
+GAP="apps/dashboard/src/components/schedule-gaps.ts"
+[ -s "${GAP}" ] || fail "空档计算缺失"
+GSRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "${GAP}")
+grep -qF 'export function findGaps' <<< "${GSRC}" || fail "没有找空档的函数"
+grep -qF 'usableMinutes' <<< "${GSRC}" || fail "横跨此刻的空档没扣掉已过去那半截"
+grep -qF 'past' <<< "${GSRC}" || fail "没区分已过去与还能用的空档"
+grep -qF 'canFit' <<< "${GSRC}" || fail "没算空档能塞几单"
+grep -qF 'export function headroomText' <<< "${GSRC}" || fail "没把「还能加多少」算成一句话"
+grep -qF 'limitedBy' <<< "${GSRC}" || fail "没说清是被时间卡住还是被额度卡住"
+grep -qF 'gap-row' <<< "${TSRC}" || fail "表里没把空档单独成行（空白点还是看不见）"
+grep -qF '还能插' <<< "${TSRC}" || fail "空档行没写还能塞几单"
+grep -qF '还能加' <<< "${TSRC}" || fail "表头没回答今天还能加多少"
+grep -qF '排满了' <<< "${TSRC}" || fail "排满的一天没明说没空档了"
+
 # 层9: 生产链实际会写的失败码都要有人话，漏一个页面就露机器码
 ESRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "$ERRC")
 for c in executor_lost superseded lock_busy device_offline keywords_unavailable transient_exhausted; do

@@ -17,6 +17,12 @@ const at = (hh: number, minutes: number, extra: Partial<ScheduleSlot> = {}): Sch
   ...extra,
 });
 
+/** 指定第几天的活。空档相关的用例都排在明天，整天都是未来，能塞几单才不跟着时钟漂 */
+const atDay = (day: number, hh: number, minutes: number, extra: Partial<ScheduleSlot> = {}): ScheduleSlot => ({
+  ...at(hh, minutes, extra),
+  planned_at: new Date(dayRange(day).start + hh * HOUR).toISOString(),
+});
+
 describe('按部门分组', () => {
   it('同部门的活归一组，组内按开始时刻从早到晚', () => {
     const groups = groupByDept(
@@ -161,6 +167,39 @@ describe('表格', () => {
     expect(head).toHaveTextContent(/已完成\s*1/);
     expect(head).toHaveTextContent(/待跑\s*1/);
     expect(head).toHaveTextContent('14/55单');
+  });
+
+  it('活与活之间的空档单独成行，写出空多久、还能塞几单', () => {
+    renderTable([atDay(1, 8, 60, { id: 'a' }), atDay(1, 20, 60, { id: 'b' })], { dayOffset: 1 });
+    const gaps = screen.getAllByTestId('gap-row');
+    expect(gaps.length).toBeGreaterThan(0);
+    const mid = gaps.find((g) => g.textContent?.includes('09:00'))!;
+    expect(mid).toBeDefined();
+    expect(mid).toHaveTextContent('11 小时');
+    expect(mid.textContent).toMatch(/还能插\s*\d+\s*单/);
+  });
+
+  it('空档行跟任务行分得开，不会被当成一件活', () => {
+    renderTable([atDay(1, 8, 60, { id: 'a' }), atDay(1, 20, 60, { id: 'b' })], { dayOffset: 1 });
+    expect(screen.getAllByTestId('task-row')).toHaveLength(2);
+    expect(screen.getAllByTestId('gap-row').length).toBeGreaterThan(0);
+  });
+
+  it('表头直接回答还能加多少，以及被什么卡住', () => {
+    renderTable([atDay(1, 8, 60, { id: 'a' })], {
+      dayOffset: 1,
+      quotas: [{ dept: '智能获客', used: 14, cap: 55, unit: '单' }],
+    });
+    const head = screen.getByTestId('table-head');
+    expect(head.textContent).toMatch(/还能加\s*\d+\s*单/);
+    expect(head.textContent).toMatch(/空档/);
+  });
+
+  it('排满的一天明说没有空档了', () => {
+    const full = Array.from({ length: 24 }, (_, h) => atDay(1, h, 60, { id: `h${h}` }));
+    renderTable(full, { dayOffset: 1 });
+    expect(screen.queryAllByTestId('gap-row')).toHaveLength(0);
+    expect(screen.getByTestId('table-head')).toHaveTextContent('排满了');
   });
 
   it('没排程与这天没安排给不同提示', () => {
