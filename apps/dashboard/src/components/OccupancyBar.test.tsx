@@ -145,6 +145,33 @@ describe('占用条组件', () => {
     expect(typeof onPick.mock.calls[0][0]).toBe('number');
   });
 
+  it('已经跑完的占用块压暗，没跑的保持实色，一眼看出进度到哪', () => {
+    // 08:00-09:00 已过（现在按真实时钟，dayOffset=-1 整天都已过；dayOffset=1 整天都没跑）
+    const { unmount } = renderBar([atDay(-1, 8, 60)], -1);
+    const gone = screen.getAllByTestId('bar-busy')[0];
+    unmount();
+    renderBar([atDay(1, 8, 60)], 1);
+    const future = screen.getAllByTestId('bar-busy')[0];
+    expect(gone.className).not.toBe(future.className);
+    expect(gone.getAttribute('data-past')).toBe('1');
+    expect(future.getAttribute('data-past')).toBe('0');
+  });
+
+  it('划到某一段会告诉外面是哪个时刻，用来联动表格', () => {
+    const onHover = vi.fn();
+    render(<OccupancyBar slots={[atDay(1, 8, 60)]} dayOffset={1} onHoverAt={onHover} />);
+    fireEvent.mouseEnter(screen.getAllByTestId('bar-busy')[0]);
+    expect(typeof onHover.mock.calls[0][0]).toBe('number');
+    fireEvent.mouseLeave(screen.getAllByTestId('bar-busy')[0]);
+    expect(onHover).toHaveBeenLastCalledWith(null);
+  });
+
+  it('外面告诉它划到了哪个时刻，对应那一段亮起来', () => {
+    const start = dayRange(1).start + 8 * HOUR;
+    render(<OccupancyBar slots={[atDay(1, 8, 60)]} dayOffset={1} highlightAt={start + 10 * 60_000} />);
+    expect(screen.getAllByTestId('bar-busy')[0].getAttribute('data-hot')).toBe('1');
+  });
+
   it('条子顶上一句话给出空了多少、还能加多少', () => {
     renderBar([atDay(1, 8, 60)]);
     const head = screen.getByTestId('bar-head');

@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import DeptTaskTable, { groupByDept, parallelWith, durationText } from './DeptTaskTable';
 import { dayRange, type ScheduleSlot } from '../api/schedule.api';
 
@@ -205,6 +205,32 @@ describe('表格', () => {
     renderTable(full, { dayOffset: 1 });
     expect(screen.queryAllByTestId('gap-row')).toHaveLength(0);
     expect(screen.getByTestId('table-head')).toHaveTextContent('排满了');
+  });
+
+  it('说明列不再写死宽度，空着的时候把地方让给任务名', () => {
+    renderTable([at(8, 60)]);
+    const head = screen.getByTestId('col-head');
+    const cols = head.querySelectorAll('th');
+    const last = cols[cols.length - 1];
+    expect(last).toHaveTextContent('说明');
+    expect(last.className).not.toMatch(/w-\[\d+%\]/);
+  });
+
+  it('划过某一行会告诉外面那件活是几点的，用来联动条子', () => {
+    const onHover = vi.fn();
+    renderTable([at(8, 60)], { onHoverAt: onHover });
+    fireEvent.mouseEnter(screen.getByTestId('task-row'));
+    expect(typeof onHover.mock.calls[0][0]).toBe('number');
+    fireEvent.mouseLeave(screen.getByTestId('task-row'));
+    expect(onHover).toHaveBeenLastCalledWith(null);
+  });
+
+  it('外面告诉它划到了哪个时刻，对应那一行亮起来', () => {
+    const start = dayRange(0).start + 8 * HOUR;
+    renderTable([at(8, 60, { id: 'hit' }), at(20, 60, { id: 'miss' })], { highlightAt: start + 5 * 60_000 });
+    const rows = screen.getAllByTestId('task-row');
+    expect(rows[0].getAttribute('data-hot')).toBe('1');
+    expect(rows[1].getAttribute('data-hot')).toBe('0');
   });
 
   it('没排程与这天没安排给不同提示', () => {

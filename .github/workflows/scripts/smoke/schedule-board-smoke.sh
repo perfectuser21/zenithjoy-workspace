@@ -146,6 +146,25 @@ grep -qF 'showLabel' <<< "${BSRC}" || fail "大块空白没直接标时长"
 grep -qF 'data-testid="bar-now"' <<< "${BSRC}" || fail "占用条缺现在线"
 grep -qE '<OccupancyBar([[:space:]/>]|$)' <<< "${TSRC}" || fail "任务表右边没挂占用条"
 
+# 层8h: 左栏是小窗加数字、条表双向联动（主理人 0921 二轮：「手机框你改了我也没觉得
+#       改得很好看」→ 形态三选一里选了「缩小成小窗，下面补数据」；四条整体优化选了全做）
+RAIL="apps/dashboard/src/components/DeviceRail.tsx"
+[ -s "${RAIL}" ] || fail "设备左栏组件缺失"
+RSRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "${RAIL}")
+grep -qF 'data-testid="rail-live"' <<< "${RSRC}" || fail "左栏没有画面小窗"
+grep -qF 'data-testid="rail-stats"' <<< "${RSRC}" || fail "左栏没有今天的关键数字（画面省出来的地方白省了）"
+grep -qF 'data-testid="live-modal"' <<< "${RSRC}" || fail "画面不能点开放大"
+grep -qE 'w-\[1[0-9][0-9]px\]' <<< "${RSRC}" || fail "画面不是小窗尺寸（又长回占满一列了）"
+grep -qF 'Escape' <<< "${RSRC}" || fail "放大的画面按 Esc 关不掉"
+grep -qE '<DeviceRail([[:space:]/>]|$)' <<< "${PSRC}" || fail "工作机页没挂设备左栏"
+
+# 条表双向联动：两边都要既能报出划到哪、又能接收外面划到哪
+grep -qF 'onHoverAt' <<< "${TSRC}" || fail "表格不报划到哪一行（联动断一半）"
+grep -qF 'highlightAt' <<< "${TSRC}" || fail "表格不接收高亮时刻（联动断一半）"
+grep -qF 'onHoverAt' <<< "${BSRC}" || fail "占用条不报划到哪一段（联动断一半）"
+grep -qF 'highlightAt' <<< "${BSRC}" || fail "占用条不接收高亮时刻（联动断一半）"
+grep -qF 'data-past' <<< "${BSRC}" || fail "占用块不分已跑完与没跑（看不出进度到哪）"
+
 # 层9: 生产链实际会写的失败码都要有人话，漏一个页面就露机器码
 ESRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "$ERRC")
 for c in executor_lost superseded lock_busy device_offline keywords_unavailable transient_exhausted; do

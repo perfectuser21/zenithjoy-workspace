@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../api/workers.api', () => ({
@@ -143,7 +143,25 @@ describe('工作机页一屏一台机（主理人：左边一个手机，右边�
     renderPage();
     await waitFor(() => expect(screen.getByText(/正在跑：触达·单#77/)).toBeInTheDocument());
     expect(screen.getByText(/第 1\/2 步/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '看步骤流 →' })).toHaveAttribute('href', `/dashboard/workers/${JINO}`);
+    expect(screen.getByRole('link', { name: /步骤流/ })).toHaveAttribute('href', `/dashboard/workers/${JINO}`);
+  });
+
+  it('顶部压成两行：芯片与部门筛选同排，设备名只在左栏出现一次', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getAllByTestId('device-chip')).toHaveLength(4));
+    // 设备名以前芯片一次、左栏标题一次，共两处；现在只留左栏那处 + 芯片
+    expect(screen.getByTestId('rail-head')).toHaveTextContent('金诺工作机');
+    // 芯片与部门筛选在同一排容器里
+    const bar = screen.getByTestId('filter-bar');
+    expect(bar.querySelectorAll('[data-testid="device-chip"]').length).toBe(4);
+    expect(within(bar).getByRole('button', { name: '智能获客' })).toBeInTheDocument();
+  });
+
+  it('左栏是小窗加数字，不再是占满一列的大画面', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('rail-live')).toBeInTheDocument());
+    expect(screen.getByTestId('rail-stats')).toBeInTheDocument();
+    expect(screen.getByAltText('实时画面')).toHaveAttribute('src', `/api/workers/${JINO}/live`);
   });
 
   it('样例数据期间挂提示', async () => {

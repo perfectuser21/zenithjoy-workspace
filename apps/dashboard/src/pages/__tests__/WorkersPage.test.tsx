@@ -22,7 +22,7 @@ describe('WorkersPage', () => {
     expect(screen.getAllByTestId('dept-task-table')).toHaveLength(1);
     expect(screen.getByText(/正在跑：发布视频到抖音/)).toBeInTheDocument();
     expect(screen.getByText(/第 6\/10 步/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '看步骤流 →' })).toHaveAttribute('href', '/dashboard/workers/a1');
+    expect(screen.getByRole('link', { name: /步骤流/ })).toHaveAttribute('href', '/dashboard/workers/a1');
   });
 
   it('左边是这台机的实时画面', async () => {
