@@ -14,6 +14,7 @@ filter_words(){ # in out "skip|list" —— 续跑：去掉上一 attempt 已完
     print -- "$w" >> "$out"
   done < "$in"
 }
+finalize_needed(){ [[ -n "${WFR_RUN_ID:-}" ]]; }   # 只有 wfr init 跑过(导出了 WFR_RUN_ID)才需要收工记账
 [[ "${HARVEST_CRON_V4_LIB:-0}" == "1" ]] && return 0
 WFR=${WFR:-$HOME/bin-harvest/workflow-result.sh}
 BATCH2=${BATCH2:-$HOME/bin-harvest/batch2-v4.sh}
@@ -80,6 +81,7 @@ else
   escalate "escort拉起3次均失败,本批全程无陪跑;网关可能不可达或容器异常,请查网关健康"
 fi
 run_finalize(){
+  finalize_needed || { log "账本finalize: skipped(not_initialized, 正常退让)"; return 0; }
   eval "$(bash "$WFR" finalize 2>>$LOG)" 2>/dev/null || true
   log "账本finalize: ok=${WFR_FINALIZE_OK:-?} ${WFR_FINALIZE_MSG:-}"
   [[ "${WFR_FINALIZE_OK:-0}" == "1" ]] || escalate "账本收工自检未通过: ${WFR_FINALIZE_MSG:-unknown}"
