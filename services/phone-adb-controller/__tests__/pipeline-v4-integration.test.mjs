@@ -92,3 +92,12 @@ test("skip_words 里的词不跑", { skip: SKIP }, () => {
   const b = book(ctx);
   assert.deepEqual(b.stages.discovery.items.map((x) => x.word), ["nocard"]);
 });
+
+test("harvest-cron-v4: filter_words 按 skip_words 过滤词单，保序", { skip: SKIP }, () => {
+  const d = mkdtempSync(join(tmpdir(), "hcv4-"));
+  const inF = join(d, "in.txt"), outF = join(d, "out.txt");
+  writeFileSync(inF, "A\nB\nC\n");
+  const r = spawnSync(ZSH, ["-c", `HARVEST_CRON_V4_LIB=1 source ${join(SRC, "harvest-cron-v4.sh")}; filter_words ${inF} ${outF} "A|C"`], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(readFileSync(outF, "utf8"), "B\n");
+});
