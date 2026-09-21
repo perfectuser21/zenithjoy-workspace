@@ -951,6 +951,14 @@ tests:
     product: 素材上传链路
     note: "批量混剪 S1（GP f6f96e17）素材打标签：假 pool+假 storage+mock axios 打桩。三态覆盖——真调 Gemini 成功写回 tagged、未配置 TOAPIS_API_KEY 落 failed_pending_review 不抛异常、抽帧失败落 failed_pending_review 不调 Gemini、Gemini 超时/网络错误落 failed_pending_review、素材 id 不存在 loud-fail 抛异常不静默返回空结果。"
 
+  - id: material-tagging-queue-service
+    path: apps/api/src/services/__tests__/material-tagging-queue.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 素材上传链路
+    note: "补断链（tagMaterial 已实现但全仓库无调用方）新增的打标签触发编排层：并发上限=2，第3/4条必须等前面让出名额才真正启动；某一条 tagMaterial reject/同步throw 不影响其余排队项继续跑完，也不让 enqueueTagging 本身拒绝或同步抛出（上传路由据此可安全 fire-and-forget）。"
+
   - id: mashup-slot-assignment-service
     path: apps/api/src/services/__tests__/mashup-slot-assignment.test.ts
     type: unit

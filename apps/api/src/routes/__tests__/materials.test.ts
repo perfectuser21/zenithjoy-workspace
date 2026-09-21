@@ -12,9 +12,14 @@ import request from 'supertest';
 
 vi.mock('../../services/walking-skeleton.service', () => ({ validateLicense: vi.fn() }));
 vi.mock('../../db/connection', () => ({ default: { query: vi.fn(), connect: vi.fn() } }));
+// 打标签触发本身有独立单测（material-tagging-queue.test.ts），这里只验证
+// "上传成功后有没有被调用"，不重复覆盖并发/重试细节——桩成默认成功的 Promise，
+// 否则路由里 `.catch()` 会因为拿到 undefined 而抛 TypeError。
+vi.mock('../../services/material-tagging-queue', () => ({ enqueueTagging: vi.fn(() => Promise.resolve()) }));
 
 import { validateLicense } from '../../services/walking-skeleton.service';
 import pool from '../../db/connection';
+import { enqueueTagging } from '../../services/material-tagging-queue';
 import { InMemoryMaterialStorage } from '../../services/material-storage';
 import { createMaterialsRouter } from '../materials';
 
@@ -224,6 +229,37 @@ describe('POST /api/materials/upload — 上传语义', () => {
     // 去重命中时不该再往存储写第二份
     expect(storage.size()).toBe(1);
   });
+
+  it('批量上传（3 个文件）→ 每个新素材都各自触发一次打标签排队', async () => {
+    const app = makeApp();
+    const r = await request(app)
+      .post('/api/materials/upload')
+      .set('X-Upload-Token', TOKEN_A)
+      .attach('files', Buffer.from('a'), 'a.jpg')
+      .attach('files', Buffer.from('b'), 'b.jpg')
+      .attach('files', Buffer.from('c'), 'c.jpg');
+
+    expect(r.status).toBe(200);
+    expect(enqueueTagging).toHaveBeenCalledTimes(3);
+    const taggedIds = (enqueueTagging as any).mock.calls.map((c: any[]) => c[0]).sort();
+    const returnedIds = r.body.data.materials.map((m: any) => m.id).sort();
+    expect(taggedIds).toEqual(returnedIds);
+    // 并发上限本身由 material-tagging-queue.test.ts 直接验证（并发=2）；
+    // 这里只确认路由把每个新素材都送进了同一条排队入口，没有绕过去各打各的。
+  });
+
+  it('打标签排队 reject 不影响 /upload 返回成功', async () => {
+    (enqueueTagging as any).mockImplementationOnce(() => Promise.reject(new Error('Gemini 网关超时')));
+    const app = makeApp();
+
+    const r = await request(app)
+      .post('/api/materials/upload')
+      .set('X-Upload-Token', TOKEN_A)
+      .attach('files', Buffer.from('x'), 'x.jpg');
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.content_id).toBeTruthy();
+  });
 });
 
 describe('POST /api/materials/upload-urls', () => {
@@ -424,6 +460,84 @@ describe('POST /api/materials/complete', () => {
     expect(r.status).toBe(200);
     expect(r.body.data.content_id).toBeTruthy();
     expect(r.body.data.materials).toHaveLength(1);
+  });
+
+  it('落库成功后触发打标签——断链修复：tagMaterial 早就实现好了，但此前没有任何调用方', async () => {
+    const app = makeApp();
+    const materialId = 'material-trigger-tag';
+    const storageKey = `${TENANT_A}/${materialId}/photo.jpg`;
+    (storage as any).objects.set(storageKey, { bytes: Buffer.alloc(10), contentType: 'image/jpeg' });
+
+    const r = await request(app)
+      .post('/api/materials/complete')
+      .set('X-Upload-Token', TOKEN_A)
+      .send({
+        files: [
+          { storage_key: storageKey, material_id: materialId, file_name: 'photo.jpg', mime_type: 'image/jpeg', size_bytes: 10 },
+        ],
+      });
+
+    expect(r.status).toBe(200);
+    expect(enqueueTagging).toHaveBeenCalledTimes(1);
+    const [taggedId] = (enqueueTagging as any).mock.calls[0];
+    expect(taggedId).toBe(r.body.data.materials[0].id);
+  });
+
+  it('去重命中（deduped）的素材不重复触发打标签', async () => {
+    let seen = 0;
+    (pool.query as any).mockImplementation(async (sql: string) => {
+      if (/INSERT INTO zenithjoy\.materials/i.test(sql)) {
+        seen += 1;
+        return seen === 1 ? { rows: [{ id: 'mat-dedupe-1' }] } : { rows: [] };
+      }
+      if (/SELECT id FROM zenithjoy\.materials/i.test(sql)) return { rows: [{ id: 'mat-dedupe-1' }] };
+      if (/INSERT INTO zenithjoy\.contents/i.test(sql)) return { rows: [{ id: 'content-1' }] };
+      return { rows: [] };
+    });
+
+    const app = makeApp();
+    const send = (materialId: string) => {
+      const storageKey = `${TENANT_A}/${materialId}/same.jpg`;
+      (storage as any).objects.set(storageKey, { bytes: Buffer.alloc(10), contentType: 'image/jpeg' });
+      return request(app)
+        .post('/api/materials/complete')
+        .set('X-Upload-Token', TOKEN_A)
+        .send({
+          files: [
+            { storage_key: storageKey, material_id: materialId, file_name: 'same.jpg', mime_type: 'image/jpeg', size_bytes: 10 },
+          ],
+        });
+    };
+
+    const first = await send('material-dedupe-a');
+    const second = await send('material-dedupe-b');
+
+    expect(first.body.data.materials[0].deduped).toBe(false);
+    expect(second.body.data.materials[0].deduped).toBe(true);
+    // 只有第一次（真正新素材）触发打标签，第二次命中去重不该再打一遍
+    expect(enqueueTagging).toHaveBeenCalledTimes(1);
+  });
+
+  it('打标签排队本身抛异常/reject 不影响上传成功返回', async () => {
+    (enqueueTagging as any).mockImplementationOnce(() => {
+      throw new Error('排队模块炸了');
+    });
+    const app = makeApp();
+    const materialId = 'material-tag-throws';
+    const storageKey = `${TENANT_A}/${materialId}/photo.jpg`;
+    (storage as any).objects.set(storageKey, { bytes: Buffer.alloc(10), contentType: 'image/jpeg' });
+
+    const r = await request(app)
+      .post('/api/materials/complete')
+      .set('X-Upload-Token', TOKEN_A)
+      .send({
+        files: [
+          { storage_key: storageKey, material_id: materialId, file_name: 'photo.jpg', mime_type: 'image/jpeg', size_bytes: 10 },
+        ],
+      });
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.content_id).toBeTruthy();
   });
 });
 

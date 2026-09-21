@@ -35,6 +35,7 @@ import {
   type UploadedFileMeta,
 } from '../services/material-upload';
 import { persistMaterials, type PersistItem } from '../services/material-persist';
+import { enqueueTagging } from '../services/material-tagging-queue';
 
 /** 一页默认多少条。手机上九宫格，30 条够翻一屏多。 */
 const DEFAULT_PAGE_SIZE = 30;
@@ -60,6 +61,40 @@ interface MaterialRow {
   created_at: string;
   tag_status: string;
   ai_tags: string[] | null;
+}
+
+/**
+ * 落库成功后触发打标签——两个上传入口（/complete 直传回调、/upload multipart）
+ * 共用同一份逻辑，防止像素材落库那样出现"两个入口各写一份、行为漂移"。
+ *
+ * 只对【新】素材（非 deduped）触发：去重命中的素材要么已经打过标签、要么已经
+ * 在排队里，不需要也不该再打一遍。
+ *
+ * 铁律（对齐 material-tagging-queue.ts 的编排约定）：
+ *   ① 从不 await——上传响应不能等 Gemini。
+ *   ② 排队本身抛异常/reject 一律吞掉只打日志——素材已经存好了，打标签失败
+ *      只能反映在 tag_status 上，绝不能让客户端的上传请求跟着报错。
+ */
+function triggerTaggingForNewMaterials(
+  materials: PersistedMaterialLike[],
+  storage: MaterialStorage,
+  logPrefix: string,
+): void {
+  for (const m of materials) {
+    if (m.deduped) continue;
+    try {
+      void enqueueTagging(m.id, { storage }).catch((err) => {
+        console.error(`${logPrefix} 打标签排队异常（不影响上传结果，素材已落库）:`, m.id, err);
+      });
+    } catch (err) {
+      console.error(`${logPrefix} 触发打标签失败（不影响上传结果，素材已落库）:`, m.id, err);
+    }
+  }
+}
+
+interface PersistedMaterialLike {
+  id: string;
+  deduped: boolean;
 }
 
 function fail(res: Response, status: number, code: string, message: string): void {
@@ -404,6 +439,8 @@ export function createMaterialsRouter(deps: MaterialsRouterDeps = {}): Router {
         items,
       });
 
+      triggerTaggingForNewMaterials(out.materials, storage, '[materials/complete]');
+
       return res.status(200).json({
         success: true,
         data: { content_id: out.contentId, type: contentType, materials: out.materials },
@@ -496,6 +533,8 @@ export function createMaterialsRouter(deps: MaterialsRouterDeps = {}): Router {
           });
         },
       });
+
+      triggerTaggingForNewMaterials(out.materials, storage, '[materials/upload]');
 
       return res.status(200).json({
         success: true,
