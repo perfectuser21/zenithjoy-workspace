@@ -33,14 +33,22 @@ export interface MashupRun {
   assignments: SlotAssignment[];
 }
 
+export type RenderStatus = 'pending' | 'queued' | 'rendering' | 'rendered' | 'render_failed';
+export type PreviewStatus = 'none' | 'generating' | 'ready' | 'failed';
+
 export interface MashupCandidate {
   id: string;
   score: number;
   slotFill: Record<string, string | undefined>;
+  thumbnailUrl?: string | null;
+  renderStatus?: RenderStatus;
+  previewStatus?: PreviewStatus;
+  previewUrl?: string | null;
 }
 
 export interface CandidatesResult {
   runId: string;
+  generatedCount?: number;
   selectedCandidateId?: string;
   candidates: MashupCandidate[];
 }
@@ -58,6 +66,37 @@ export interface RenderResult {
   watermarkCheckStatus: GateStatus;
   exportUrl?: string;
   downloadUrl?: string;
+}
+
+/**
+ * 候选渲染改并发=1队列后（决策 d6bedf80），POST /candidates/:id/render 立即回的
+ * 是队列态，不是终版结果——终版结果（RenderResult）要轮询 getCandidateDetail
+ * 拿 content 字段（修复 PR#1905 引入的契约断层：旧类型误标成同步拿到 RenderResult）。
+ */
+export interface EnqueueRenderResult {
+  candidateId: string;
+  renderStatus: RenderStatus;
+  queuePosition: number;
+  contentId: string | null;
+}
+
+export interface EnqueuePreviewResult {
+  candidateId: string;
+  previewStatus: PreviewStatus;
+  queuePosition: number;
+  previewUrl: string | null;
+}
+
+export interface CandidateDetail {
+  id: string;
+  runId: string;
+  score: number;
+  slotFill: Record<string, string | undefined>;
+  thumbnailUrl: string | null;
+  renderStatus: RenderStatus;
+  previewStatus: PreviewStatus;
+  previewUrl: string | null;
+  content: RenderResult | null;
 }
 
 // ============ 鉴权 ============
@@ -129,12 +168,31 @@ export async function selectCandidate(candidateId: string): Promise<SelectCandid
   return data.data;
 }
 
-export async function renderCandidate(candidateId: string): Promise<RenderResult> {
+/** 入队渲染，立即回队列态（不是终版结果，见 EnqueueRenderResult 注释）。 */
+export async function renderCandidate(candidateId: string): Promise<EnqueueRenderResult> {
   const opts = await authHeaders();
-  const { data } = await apiClient.post<{ data: RenderResult }>(
+  const { data } = await apiClient.post<{ data: EnqueueRenderResult }>(
     `/mashup/candidates/${candidateId}/render`,
     {},
     opts,
   );
+  return data.data;
+}
+
+/** 入队候选真实轻量预览渲染（决策 623a81d7），立即回队列态。 */
+export async function previewCandidate(candidateId: string): Promise<EnqueuePreviewResult> {
+  const opts = await authHeaders();
+  const { data } = await apiClient.post<{ data: EnqueuePreviewResult }>(
+    `/mashup/candidates/${candidateId}/preview`,
+    {},
+    opts,
+  );
+  return data.data;
+}
+
+/** 候选详情：预览态 + 终版渲染态一起给，选中候选触发渲染后轮询这个端点。 */
+export async function getCandidateDetail(candidateId: string): Promise<CandidateDetail> {
+  const opts = await authHeaders();
+  const { data } = await apiClient.get<{ data: CandidateDetail }>(`/mashup/candidates/${candidateId}`, opts);
   return data.data;
 }

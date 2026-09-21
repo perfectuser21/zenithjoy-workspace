@@ -10,6 +10,7 @@ import { validateLicense } from '../services/walking-skeleton.service';
 import { assignSlots, generateTemplateFromScript } from '../services/mashup-slot-assignment';
 import { generateCandidates } from '../services/mashup-candidate-generation';
 import { enqueueRender } from '../services/mashup-render-queue';
+import { enqueuePreview } from '../services/mashup-preview-queue';
 import { createMaterialStorage } from '../services/material-storage';
 import { extractFrameBase64 } from '../services/video-frame-extract';
 import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
@@ -207,7 +208,7 @@ export function createMashupRouter(): Router {
     if (!run) return fail(res, 404, 'RUN_NOT_FOUND', 'run 不存在或不属于当前租户');
 
     const { rows: candidateRows } = await pool.query(
-      `SELECT id, slot_fill, score, thumbnail_url, render_status FROM zenithjoy.mashup_candidates WHERE run_id = $1 ORDER BY score DESC`,
+      `SELECT id, slot_fill, score, thumbnail_url, render_status, preview_status, preview_url FROM zenithjoy.mashup_candidates WHERE run_id = $1 ORDER BY score DESC`,
       [run.id],
     );
 
@@ -215,13 +216,81 @@ export function createMashupRouter(): Router {
       runId: run.id,
       generatedCount: candidateRows.length,
       selectedCandidateId: run.selected_candidate_id ?? undefined,
-      candidates: candidateRows.map((c: { id: string; slot_fill: Record<string, string>; score: string | number; thumbnail_url: string | null; render_status: string }) => ({
+      candidates: candidateRows.map((c: { id: string; slot_fill: Record<string, string>; score: string | number; thumbnail_url: string | null; render_status: string; preview_status: string; preview_url: string | null }) => ({
         id: c.id,
         score: Number(c.score),
         slotFill: c.slot_fill,
         thumbnailUrl: c.thumbnail_url ?? null,
         renderStatus: c.render_status,
+        previewStatus: c.preview_status,
+        previewUrl: c.preview_url ?? null,
       })),
+    });
+  });
+
+  // Step3 候选真实轻量预览：并发上限=1 独立队列（决策 623a81d7），点击才现渲染，
+  // 不阻塞候选生成/终版渲染。返回当前预览态供前端轮询呈现「生成中 / 可播放」。
+  router.post('/candidates/:id/preview', async (req: Request, res: Response) => {
+    const auth = await authenticate(req, res);
+    if (!auth) return;
+
+    try {
+      const result = await enqueuePreview({ tenantId: auth.tenantId, candidateId: req.params.id });
+      ok(res, result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'unknown';
+      if (/candidate not found/i.test(message)) {
+        return fail(res, 404, 'CANDIDATE_NOT_FOUND', message);
+      }
+      fail(res, 500, 'PREVIEW_CANDIDATE_FAILED', message);
+    }
+  });
+
+  // 候选详情：合成前预览态 + 合成后终版态一起给，前端选中候选触发渲染后
+  // 轮询这一个端点直到 renderStatus 落终态（rendered/render_failed），
+  // 再从 content 字段拿 safety/watermark/exportUrl——修复候选渲染改异步队列
+  // （PR#1905）后前端仍假设同步拿到终版结果的契约断层。
+  router.get('/candidates/:id', async (req: Request, res: Response) => {
+    const auth = await authenticate(req, res);
+    if (!auth) return;
+
+    const { rows: candidateRows } = await pool.query(
+      `SELECT c.id, c.run_id, c.score, c.slot_fill, c.thumbnail_url, c.render_status, c.preview_status, c.preview_url
+         FROM zenithjoy.mashup_candidates c
+         JOIN zenithjoy.mashup_runs r ON r.id = c.run_id
+        WHERE c.id = $1 AND r.tenant_id = $2`,
+      [req.params.id, auth.tenantId],
+    );
+    const candidate = candidateRows[0];
+    if (!candidate) return fail(res, 404, 'CANDIDATE_NOT_FOUND', '候选不存在或不属于当前租户');
+
+    const { rows: contentRows } = await pool.query(
+      `SELECT id, safety_check_status, watermark_check_status, export_url, download_url
+         FROM zenithjoy.contents
+        WHERE source_candidate_id = $1
+        ORDER BY created_at DESC LIMIT 1`,
+      [candidate.id],
+    );
+    const content = contentRows[0];
+
+    ok(res, {
+      id: candidate.id,
+      runId: candidate.run_id,
+      score: Number(candidate.score),
+      slotFill: candidate.slot_fill,
+      thumbnailUrl: candidate.thumbnail_url ?? null,
+      renderStatus: candidate.render_status,
+      previewStatus: candidate.preview_status,
+      previewUrl: candidate.preview_url ?? null,
+      content: content
+        ? {
+            contentId: content.id,
+            safetyCheckStatus: content.safety_check_status,
+            watermarkCheckStatus: content.watermark_check_status,
+            exportUrl: content.export_url ?? undefined,
+            downloadUrl: content.download_url ?? undefined,
+          }
+        : null,
     });
   });
 

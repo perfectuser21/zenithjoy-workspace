@@ -48,6 +48,55 @@ interface MaterialRow {
   storage_key: string;
 }
 
+export interface OrderedMaterial {
+  id: string;
+  storageKey: string;
+}
+
+/**
+ * 候选 → run → 模板槽位 → 按槽位顺序取回填充素材（预览档/终版档共用这一步，
+ * 避免两条渲染路径的候选解析逻辑分叉走样）。候选不存在时抛错，其余情况尽力
+ * 而为（缺素材的槽位直接跳过，不阻断）。
+ */
+export async function resolveOrderedMaterials(input: RenderCandidateInput): Promise<OrderedMaterial[]> {
+  const { rows: candidateRows } = await pool.query(
+    `SELECT c.id, c.run_id, c.slot_fill FROM zenithjoy.mashup_candidates c
+       JOIN zenithjoy.mashup_runs r ON r.id = c.run_id
+      WHERE c.id = $1 AND r.tenant_id = $2`,
+    [input.candidateId, input.tenantId],
+  );
+  const candidate = candidateRows[0];
+  if (!candidate) {
+    throw new Error(`candidate not found: ${input.candidateId}`);
+  }
+
+  const { rows: runRows } = await pool.query(
+    `SELECT id, template_id FROM zenithjoy.mashup_runs WHERE id = $1`,
+    [candidate.run_id],
+  );
+  const run = runRows[0];
+
+  const { rows: tmplRows } = await pool.query(
+    `SELECT slots FROM zenithjoy.mashup_templates WHERE id = $1`,
+    [run.template_id],
+  );
+  const slots: { key: string }[] = tmplRows[0]?.slots ?? [];
+
+  const slotFill: Record<string, string> = candidate.slot_fill;
+  const orderedMaterialIds = slots.map((s) => slotFill[s.key]).filter((id): id is string => Boolean(id));
+
+  const { rows: materialRows } = await pool.query(
+    `SELECT id, storage_key FROM zenithjoy.materials WHERE id = ANY($1::uuid[])`,
+    [orderedMaterialIds],
+  );
+  const materialsById = new Map<string, MaterialRow>(materialRows.map((m: MaterialRow) => [m.id, m]));
+
+  return orderedMaterialIds
+    .map((id) => materialsById.get(id))
+    .filter((m): m is MaterialRow => Boolean(m))
+    .map((m) => ({ id: m.id, storageKey: m.storage_key }));
+}
+
 async function insertContent(
   tenantId: string,
   candidateId: string,
@@ -89,37 +138,7 @@ export async function renderCandidate(
   input: RenderCandidateInput,
   deps: RenderCandidateDeps,
 ): Promise<RenderCandidateResult> {
-  const { rows: candidateRows } = await pool.query(
-    `SELECT c.id, c.run_id, c.slot_fill FROM zenithjoy.mashup_candidates c
-       JOIN zenithjoy.mashup_runs r ON r.id = c.run_id
-      WHERE c.id = $1 AND r.tenant_id = $2`,
-    [input.candidateId, input.tenantId],
-  );
-  const candidate = candidateRows[0];
-  if (!candidate) {
-    throw new Error(`candidate not found: ${input.candidateId}`);
-  }
-
-  const { rows: runRows } = await pool.query(
-    `SELECT id, template_id FROM zenithjoy.mashup_runs WHERE id = $1`,
-    [candidate.run_id],
-  );
-  const run = runRows[0];
-
-  const { rows: tmplRows } = await pool.query(
-    `SELECT slots FROM zenithjoy.mashup_templates WHERE id = $1`,
-    [run.template_id],
-  );
-  const slots: { key: string }[] = tmplRows[0]?.slots ?? [];
-
-  const slotFill: Record<string, string> = candidate.slot_fill;
-  const orderedMaterialIds = slots.map((s) => slotFill[s.key]).filter((id): id is string => Boolean(id));
-
-  const { rows: materialRows } = await pool.query(
-    `SELECT id, storage_key FROM zenithjoy.materials WHERE id = ANY($1::uuid[])`,
-    [orderedMaterialIds],
-  );
-  const materialsById = new Map<string, MaterialRow>(materialRows.map((m: MaterialRow) => [m.id, m]));
+  const orderedMaterials = await resolveOrderedMaterials(input);
 
   const workDir = tmpdir();
   const tempFiles: string[] = [];
@@ -128,15 +147,13 @@ export async function renderCandidate(
 
   try {
     const inputPaths: string[] = [];
-    for (const materialId of orderedMaterialIds) {
-      const material = materialsById.get(materialId);
-      if (!material) continue;
+    for (const material of orderedMaterials) {
       // 下载单个素材失败（含 fetch() 本身网络层 throw，不只是 !resp.ok 的 HTTP
       // 错误状态）就跳过这一条，不让整个渲染因为一个素材下不动而裸崩——
       // 与 material-tagging.ts 的 extractFrame 同一个教训：下载失败要优雅降级，
       // 不能把网络异常直接冒泡到路由层变成裸 500。
       try {
-        const signedUrl = await deps.storage.getSignedUrl(material.storage_key);
+        const signedUrl = await deps.storage.getSignedUrl(material.storageKey);
         const resp = await fetch(signedUrl);
         if (!resp.ok) continue;
         const buffer = Buffer.from(await resp.arrayBuffer());
@@ -145,7 +162,7 @@ export async function renderCandidate(
         tempFiles.push(tempPath);
         inputPaths.push(tempPath);
       } catch (err) {
-        console.error('[mashup-render] 素材下载失败 materialId=%s reason=%s', materialId, (err as Error).message);
+        console.error('[mashup-render] 素材下载失败 materialId=%s reason=%s', material.id, (err as Error).message);
       }
     }
 
