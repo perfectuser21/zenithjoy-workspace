@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { Film, RefreshCw, CheckCircle2, XCircle, Clock, ArrowLeft, Download } from 'lucide-react';
+import { Film, RefreshCw, CheckCircle2, XCircle, Clock, ArrowLeft, Download, Layers } from 'lucide-react';
 import { listMaterials, formatSize, type Material } from '../api/materials.api';
 import {
   listTemplates,
@@ -26,6 +26,7 @@ import {
   type RenderResult,
   type SlotAssignmentStatus,
   type PreviewStatus,
+  type MashupRunSummary,
 } from '../api/mashup.api';
 
 /** 轮询候选详情直到（渲染或预览）落终态，或超过最大次数放弃（避免网络异常时无限空转）。 */
@@ -540,6 +541,90 @@ export function ResultStep({ result, onBack }: { result: RenderResult; onBack: (
         <RefreshCw className="h-4 w-4" />
         换个候选再试
       </button>
+    </div>
+  );
+}
+
+// ============ 历史记录 ============
+
+const STAGE_LABEL: Record<MashupRunSummary['stage'], string> = {
+  completed: '已完成',
+  rendering: '渲染中',
+  candidates_pending: '候选待选定',
+  assigned: '待生成候选',
+};
+
+const STAGE_CLASS: Record<MashupRunSummary['stage'], string> = {
+  completed: 'bg-green-100 text-green-700',
+  rendering: 'bg-amber-100 text-amber-700',
+  candidates_pending: 'bg-blue-100 text-blue-700',
+  assigned: 'bg-gray-100 text-gray-600',
+};
+
+function formatRunTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+export function HistoryStep(props: {
+  runs: MashupRunSummary[];
+  loading: boolean;
+  onOpen: (run: MashupRunSummary) => void;
+  onNew: () => void;
+}) {
+  const { runs, loading, onOpen, onNew } = props;
+
+  if (loading) {
+    return <div className="py-16 text-center text-sm text-gray-400">加载中…</div>;
+  }
+
+  if (runs.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-gray-300 py-12 text-center">
+        <p className="text-sm text-gray-500">还没有混剪记录</p>
+        <button
+          type="button"
+          onClick={onNew}
+          className="mt-3 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          新建一次混剪
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {runs.map((r) => (
+        <button
+          key={r.runId}
+          type="button"
+          onClick={() => onOpen(r)}
+          className="flex w-full items-center gap-3 rounded-lg border border-gray-200 p-3 text-left hover:border-blue-400 hover:bg-blue-50/40"
+        >
+          <div className="h-14 w-20 shrink-0 overflow-hidden rounded bg-gray-100">
+            {r.thumbnailUrl ? (
+              <img src={r.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-gray-300">
+                <Layers className="h-5 w-5" />
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className={`rounded px-1.5 py-0.5 text-[11px] ${STAGE_CLASS[r.stage]}`}>
+                {STAGE_LABEL[r.stage]}
+              </span>
+              <span className="text-xs text-gray-400">{formatRunTime(r.createdAt)}</span>
+            </div>
+            <div className="mt-1 text-xs text-gray-500">
+              {r.candidateCount > 0 ? `${r.candidateCount} 个候选方案` : '尚未生成候选'}
+            </div>
+          </div>
+        </button>
+      ))}
     </div>
   );
 }
