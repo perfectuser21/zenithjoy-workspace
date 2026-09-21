@@ -148,9 +148,14 @@ describe('表格', () => {
     expect(screen.getByTestId('task-row')).toHaveTextContent('素材待审核');
   });
 
-  it('已完成的任务名划掉，一眼分得出做没做', () => {
-    renderTable([at(8, 60, { status: 'done', title: '做完的活' })]);
-    expect(screen.getByText('做完的活').className).toMatch(/line-through/);
+  it('已完成的活压暗，跟还没跑的分得出来', () => {
+    // 不划删除线：一屏二十多行里划掉一大片，读起来像全都作废了（0921 主理人说「不好看」后改）
+    renderTable([at(8, 60, { id: 'd', status: 'done', title: '做完的活' }), at(9, 60, { id: 'q', title: '没跑的活' })]);
+    const done = screen.getByText('做完的活').className;
+    const queued = screen.getByText('没跑的活').className;
+    expect(done).not.toMatch(/line-through/);
+    expect(done).not.toBe(queued);
+    expect(done).toMatch(/text-neutral-400/);
   });
 
   it('跨天的活写出次日结束时刻', () => {

@@ -5,7 +5,7 @@ import PhoneFrame from './PhoneFrame';
 afterEach(cleanup);
 
 describe('PhoneFrame', () => {
-  it('把 children 渲染在屏幕区内，外框带灵动岛与侧键', () => {
+  it('把 children 渲染在屏幕区内，带灵动岛', () => {
     render(
       <PhoneFrame>
         <img alt="画面" src="/x.jpg" />
@@ -16,7 +16,14 @@ describe('PhoneFrame', () => {
     expect(frame).toContainElement(screenArea);
     expect(screenArea).toContainElement(screen.getByRole('img', { name: '画面' }));
     expect(screen.getByTestId('phone-island')).toBeInTheDocument();
-    expect(frame.querySelectorAll('[data-testid="phone-side-button"]').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('不再是拟物手机模型：没有侧键，也没有金属渐变边', () => {
+    // 主理人 0921：「感觉硬加了个壳上去了」——拟物重壳在浅色卡片界面里格格不入，
+    // 收成单层深边。这条守住，免得以后又把壳加回来。
+    const { container } = render(<PhoneFrame>x</PhoneFrame>);
+    expect(container.querySelectorAll('[data-testid="phone-side-button"]')).toHaveLength(0);
+    expect(container.innerHTML).not.toMatch(/from-zinc|via-zinc|bg-gradient-to-br/);
   });
 
   it('屏幕区保持手机等比（9:19.5）且裁圆角', () => {

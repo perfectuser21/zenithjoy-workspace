@@ -20,11 +20,11 @@ const VIEW_H = 620;
 const MINUTE = 60_000;
 
 const STATUS_STYLE: Record<ScheduleSlot['status'], { label: string; cls: string }> = {
-  queued: { label: '待跑', cls: 'bg-gray-100 text-gray-600' },
-  running: { label: '进行中', cls: 'bg-amber-100 text-amber-800' },
-  done: { label: '已完成', cls: 'bg-emerald-100 text-emerald-800' },
-  failed: { label: '失败', cls: 'bg-red-100 text-red-800' },
-  blocked: { label: '被挡住', cls: 'bg-orange-100 text-orange-800' },
+  queued: { label: '待跑', cls: 'bg-neutral-100 text-neutral-500 ring-neutral-200' },
+  running: { label: '进行中', cls: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  done: { label: '已完成', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  failed: { label: '失败', cls: 'bg-rose-50 text-rose-700 ring-rose-200' },
+  blocked: { label: '被挡住', cls: 'bg-orange-50 text-orange-700 ring-orange-200' },
 };
 
 function hhmm(t: number): string {
@@ -113,10 +113,10 @@ export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, qu
 
   const gapRow = (g: Gap, key: string) => (
     <tr key={key} data-testid="gap-row" data-past={g.past ? '1' : '0'} data-start={g.start} className="align-top">
-      <td className={`whitespace-nowrap border-b border-dashed px-4 py-1.5 text-xs tabular-nums ${g.past ? 'text-gray-300' : 'text-blue-600'}`}>
+      <td className={`whitespace-nowrap border-b border-dashed border-neutral-200 px-4 py-1.5 text-[11px] tabular-nums ${g.past ? 'text-neutral-300' : 'text-sky-600'}`}>
         {g.startText}–{g.endText}
       </td>
-      <td colSpan={3} className={`border-b border-dashed px-2 py-1.5 text-xs ${g.past ? 'text-gray-300' : 'text-blue-600'}`}>
+      <td colSpan={3} className={`border-b border-dashed border-neutral-200 px-2 py-1.5 text-[11px] ${g.past ? 'text-neutral-300' : 'text-sky-600'}`}>
         {g.past ? (
           <>空 {gapText(g.minutes)} · 已过</>
         ) : (
@@ -129,12 +129,12 @@ export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, qu
   );
 
   return (
-    <section data-testid="dept-task-table" className="flex min-w-0 flex-1 flex-col rounded-xl border bg-white">
+    <section data-testid="dept-task-table" className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-white ring-1 ring-neutral-200/80">
       <div
         data-testid="table-head"
-        className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-4 py-2.5 text-xs text-gray-500"
+        className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-neutral-100 px-4 py-3 text-xs text-neutral-500"
       >
-        <span className="text-sm font-medium text-gray-900">这天的安排</span>
+        <span className="text-[13px] font-semibold text-neutral-900">这天的安排</span>
         {quotas.map((q) => (
           <span key={q.dept}>
             {q.dept}{' '}
@@ -157,12 +157,12 @@ export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, qu
             )}
           </span>
           {openGaps.length === 0 ? (
-            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600">排满了，没空档</span>
+            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-500">排满了，没空档</span>
           ) : (
-            <span className="rounded bg-blue-50 px-1.5 py-0.5 text-blue-700 ring-1 ring-blue-200">
+            <span className="rounded-full bg-sky-50 px-2 py-0.5 text-sky-700 ring-1 ring-sky-100">
               空档 <b>{openGaps.length}</b> 处 · 合计 {gapText(openMinutes)} · 还能加{' '}
               <b>{room.canAdd}</b> 单
-              <span className="ml-1 text-blue-500/70">（卡在{room.limitedBy}）</span>
+              <span className="ml-1 text-sky-600/70">（卡在{room.limitedBy}）</span>
             </span>
           )}
         </span>
@@ -172,17 +172,17 @@ export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, qu
       <div className="flex min-h-0 flex-1 gap-3 p-3 pt-0">
       <div ref={scrollRef} data-testid="table-scroll" className="h-[620px] flex-1 overflow-y-auto" style={{ maxHeight: VIEW_H }}>
         {noSchedule || groups.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-sm text-gray-400">
+          <div className="flex h-full items-center justify-center text-sm text-neutral-400">
             {noSchedule ? '这台机还没有排程' : '这天没有安排'}
           </div>
         ) : (
           <table className="w-full border-separate border-spacing-0 text-sm">
-            <thead data-testid="col-head" className="sticky top-0 z-20 bg-white">
-              <tr className="text-left text-xs text-gray-500">
-                <th className="w-[150px] border-b bg-white px-4 py-2 font-medium">时间</th>
-                <th className="border-b bg-white px-2 py-2 font-medium">任务</th>
-                <th className="w-[84px] border-b bg-white px-2 py-2 font-medium">状态</th>
-                <th className="w-[38%] border-b bg-white px-2 py-2 font-medium">说明</th>
+            <thead data-testid="col-head" className="sticky top-0 z-20 bg-white/95 backdrop-blur">
+              <tr className="text-left text-[11px] uppercase tracking-wide text-neutral-400">
+                <th className="w-[150px] border-b border-neutral-100 px-4 py-2 font-medium">时间</th>
+                <th className="border-b border-neutral-100 px-2 py-2 font-medium">任务</th>
+                <th className="w-[84px] border-b border-neutral-100 px-2 py-2 font-medium">状态</th>
+                <th className="w-[30%] border-b border-neutral-100 px-2 py-2 font-medium">说明</th>
               </tr>
             </thead>
             <tbody>
@@ -190,9 +190,12 @@ export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, qu
                 const tone = DEPT_BLOCK[g.dept];
                 return [
                   <tr key={`h-${g.dept}`} data-testid="dept-head" className="sticky top-[33px] z-10">
-                    <td colSpan={4} className={`border-b border-t px-4 py-1.5 text-xs ${tone.bg} ${tone.text}`}>
-                      <span className="font-medium">{g.dept}</span>
-                      <span className="ml-2 opacity-75">
+                    <td colSpan={4} className="border-b border-neutral-100 bg-neutral-50/80 px-4 py-2 text-xs">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className={`h-2 w-2 rounded-full ${tone.bar}`} />
+                        <span className="font-semibold text-neutral-700">{g.dept}</span>
+                      </span>
+                      <span className="ml-2 text-neutral-400">
                         {g.total} 件 · 已完成 {g.done}
                       </span>
                     </td>
@@ -207,37 +210,37 @@ export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, qu
                     return [
                       ...(lead ? [gapRow(lead, `gap-${s.id}`)] : []),
                       <tr key={s.id} data-testid="task-row" data-status={s.status} className="align-top">
-                        <td className="whitespace-nowrap border-b px-4 py-2 tabular-nums text-gray-700">
+                        <td className="whitespace-nowrap border-b border-neutral-100 px-4 py-2.5 text-[13px] tabular-nums text-neutral-700">
                           {hhmm(sp.start)}–{crossesDay ? `次日 ${hhmm(sp.end)}` : hhmm(sp.end)}
-                          <div className="text-[11px] text-gray-400">{durationText(s.est_minutes)}</div>
+                          <div className="mt-0.5 text-[11px] text-neutral-400">{durationText(s.est_minutes)}</div>
                         </td>
-                        <td className="border-b px-2 py-2">
-                          <span className={s.status === 'done' ? 'text-gray-400 line-through' : 'text-gray-900'}>
+                        <td className="border-b border-neutral-100 px-2 py-2.5 text-[13px]">
+                          <span className={s.status === 'done' ? 'text-neutral-400' : 'text-neutral-800'}>
                             {s.title}
                           </span>
                           {s.source === 'oneoff' && (
-                            <span className="ml-1.5 rounded bg-gray-100 px-1 py-0.5 text-[11px] text-gray-500">单据</span>
+                            <span className="ml-1.5 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500">单据</span>
                           )}
                           {par.length > 0 && (
                             <span
                               data-testid="parallel-badge"
                               title={`与 ${par.map((p) => p.title).join('、')} 同时进行`}
-                              className="ml-1.5 rounded bg-indigo-50 px-1 py-0.5 text-[11px] text-indigo-700 ring-1 ring-indigo-200"
+                              className="ml-1.5 whitespace-nowrap rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] text-indigo-600 ring-1 ring-indigo-100"
                             >
                               并行 {par.length}
                             </span>
                           )}
                         </td>
-                        <td className="border-b px-2 py-2">
-                          <span className={`whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] ${st.cls}`}>
+                        <td className="border-b border-neutral-100 px-2 py-2.5">
+                          <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] ring-1 ${st.cls}`}>
                             {st.label}
                           </span>
                         </td>
-                        <td className="border-b px-2 py-2 text-xs text-gray-500">
+                        <td className="border-b border-neutral-100 px-2 py-2.5 text-[11px] leading-relaxed text-neutral-500">
                           {s.status === 'blocked' && (s.blocked_reason || '前置条件没满足')}
                           {err && `${err.label}：${err.hint}`}
                           {par.length > 0 && s.status !== 'blocked' && s.status !== 'failed' && (
-                            <span className="text-gray-400">同时在跑：{par.map((p) => p.title).join('、')}</span>
+                            <span className="text-neutral-400">同时在跑：{par.map((p) => p.title).join('、')}</span>
                           )}
                         </td>
                       </tr>,
