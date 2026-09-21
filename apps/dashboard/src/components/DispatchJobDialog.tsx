@@ -81,7 +81,6 @@ export default function DispatchJobDialog({ devices, defaultAgentId, onClose, on
   const presets = useMemo(() => windowPresets(dept), [dept]);
   const preset = presets[Math.min(presetIdx, presets.length - 1)];
   const actionMeta = ACTIONS.find((a) => a.value === action) ?? ACTIONS[0];
-  const device = devices.find((d) => d.agent_id === agentId);
 
   const submit = async () => {
     setBusy(true);
@@ -97,8 +96,8 @@ export default function DispatchJobDialog({ devices, defaultAgentId, onClose, on
         est_minutes: 2,
         params: {
           action,
-          // 领单器缺 profile 时用机身序列号兜底，这里能给就给准的
-          profile: device?.serial,
+          // 不传 profile：那是工作机本地 registry 里的名字（douyin-phone-adb 的概念），
+          // 中台只知道机身序列号。领单器会拿 serial 去本地 registry 现查 profile。
           arg: arg || undefined,
         },
       });

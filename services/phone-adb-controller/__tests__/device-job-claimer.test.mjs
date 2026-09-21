@@ -52,7 +52,23 @@ function makeFakePhoneCtl(dir, { exitCode = 0 } = {}) {
   return { path: p, argsFile };
 }
 
-function makeEnv(dir, { apiBase, adb, phoneCtl, lockDir }) {
+/** 假的 profile registry：<profile名>\t<serial>\t<机型>… */
+function makeRegistry(dir, rows = [['legacy', 'SER1']]) {
+  const p = join(dir, 'douyin-phone-profiles.tsv');
+  writeFileSync(p, rows.map((r) => r.join('\t')).join('\n') + '\n');
+  return p;
+}
+
+/** 假的 wall-report：把每次调用的参数记下来，用来断言上报是否合规 */
+function makeFakeReporter(dir) {
+  const p = join(dir, 'wall-report.sh');
+  const argsFile = join(dir, 'wr-args.txt');
+  writeFileSync(p, `#!/bin/sh\necho "$@" >> ${argsFile}\nexit 0\n`);
+  chmodSync(p, 0o755);
+  return { path: p, argsFile };
+}
+
+function makeEnv(dir, { apiBase, adb, phoneCtl, lockDir, registry, reporter }) {
   const conf = join(dir, 'wall.env');
   writeFileSync(conf, `ZJ_API_BASE=${apiBase}\nZJ_INTERNAL_TOKEN=tok-test\n`);
   return {
@@ -63,7 +79,8 @@ function makeEnv(dir, { apiBase, adb, phoneCtl, lockDir }) {
     ZJ_PHONE_CTL: phoneCtl,
     ZJ_CLAIMER_LOG: join(dir, 'claimer.log'),
     ZJ_CLAIMER_LOCK: lockDir ?? join(dir, 'lock.d'),
-    WALL_REPORT: join(dir, 'no-such-reporter'), // 上报器缺失必须被吞掉，不影响主流程
+    WALL_REPORT: reporter ?? join(dir, 'no-such-reporter'), // 上报器缺失必须被吞掉，不影响主流程
+    DOUYIN_PHONE_REGISTRY: registry ?? join(dir, 'no-such-registry.tsv'),
     HOME: dir,
   };
 }
@@ -184,4 +201,64 @@ test('缺内部 token 时安静跳过，不裸奔发请求', async (t) => {
   }, { timeoutMs: 20_000 });
   assert.equal(r.status, 0);
   assert.equal(api.requests.length, 0);
+});
+
+test('profile 由本机 registry 按序列号现查 —— 中台传来的 profile 不可信', async (t) => {
+  // 生产事故：中台传的 profile 是 agents.agent_id（phone-<序列号>），
+  // douyin-phone-adb 直接报 "unknown phone profile: phone-…" rc=2（单 03aa758d）。
+  const dir = makeTmp();
+  const api = await startFakeApi({ job: { ...JOB, params: { action: 'open-search', profile: 'phone-SER1', arg: 'x' } } });
+  t.after(() => api.close());
+  const ctl = makeFakePhoneCtl(dir);
+  const reg = makeRegistry(dir, [['jinoshengyuan-work', 'SER9'], ['legacy', 'SER1']]);
+  await run(makeEnv(dir, { apiBase: api.url, adb: makeFakeAdb(dir, { serials: ['SER1'] }), phoneCtl: ctl.path, registry: reg }));
+  const args = readFileSync(ctl.argsFile, 'utf8');
+  assert.match(args, /--profile legacy /, '没按序列号查 registry，仍用了中台传来的 profile');
+  assert.ok(!/phone-SER1/.test(args), 'phone- 形态被原样传给了真机');
+});
+
+test('registry 查不到时退回中台给的值，并记一行日志（不静默）', async (t) => {
+  const dir = makeTmp();
+  const api = await startFakeApi({ job: { ...JOB, params: { action: 'open-search', profile: 'fallback-p' } } });
+  t.after(() => api.close());
+  const ctl = makeFakePhoneCtl(dir);
+  const reg = makeRegistry(dir, [['other', 'SER-NOPE']]);
+  const env = makeEnv(dir, { apiBase: api.url, adb: makeFakeAdb(dir, { serials: ['SER1'] }), phoneCtl: ctl.path, registry: reg });
+  await run(env);
+  assert.match(readFileSync(ctl.argsFile, 'utf8'), /--profile fallback-p/);
+  assert.match(readFileSync(env.ZJ_CLAIMER_LOG, 'utf8'), /查不到 profile/);
+});
+
+test('失败上报必须带步骤号 —— 少传会让控制塔那条永远挂在 running 并误报"机器失联"', async (t) => {
+  // wall-report 的签名是 fail <目标> <idx> <error_code>。少传 idx，error_code 会被
+  // 当成 idx，非数字则不执行收尾 → 10 分钟后被判 executor_lost，
+  // 把"参数错、2 秒失败"伪装成"跨境网络抖动"（生产实证 03aa758d）。
+  const dir = makeTmp();
+  const api = await startFakeApi({ job: JOB });
+  t.after(() => api.close());
+  const ctl = makeFakePhoneCtl(dir, { exitCode: 3 });
+  const rep = makeFakeReporter(dir);
+  const reg = makeRegistry(dir, [['legacy', 'SER1']]);
+  await run(makeEnv(dir, { apiBase: api.url, adb: makeFakeAdb(dir, { serials: ['SER1'] }), phoneCtl: ctl.path, registry: reg, reporter: rep.path }));
+  const lines = readFileSync(rep.argsFile, 'utf8').trim().split('\n');
+  const failLine = lines.find((l) => l.startsWith('fail '));
+  assert.ok(failLine, '失败时没调 wall-report fail');
+  const parts = failLine.split(/\s+/);
+  // fail <目标> <idx> <error_code>
+  assert.equal(parts.length >= 4, true, `fail 少传参数：${failLine}`);
+  assert.match(parts[2], /^\d+$/, `第三个参数必须是步骤号，实得「${parts[2]}」`);
+  assert.match(parts[3], /EXEC_RC_3/);
+});
+
+test('成功时照常 done，不误报失败', async (t) => {
+  const dir = makeTmp();
+  const api = await startFakeApi({ job: JOB });
+  t.after(() => api.close());
+  const ctl = makeFakePhoneCtl(dir, { exitCode: 0 });
+  const rep = makeFakeReporter(dir);
+  const reg = makeRegistry(dir, [['legacy', 'SER1']]);
+  await run(makeEnv(dir, { apiBase: api.url, adb: makeFakeAdb(dir, { serials: ['SER1'] }), phoneCtl: ctl.path, registry: reg, reporter: rep.path }));
+  const out = readFileSync(rep.argsFile, 'utf8');
+  assert.match(out, /^done /m);
+  assert.ok(!/^fail /m.test(out));
 });

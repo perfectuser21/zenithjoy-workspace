@@ -33,6 +33,9 @@ API_BASE="${ZJ_API_BASE:-}"
 TOKEN="${ZJ_INTERNAL_TOKEN:-}"
 ADB="${ZJ_ADB:-adb}"
 PHONE_CTL="${ZJ_PHONE_CTL:-$HOME/bin-harvest/douyin-phone-adb}"
+# profile 是**工作机本地**的概念（douyin-phone-adb 的 registry：<profile名>\t<serial>\t…），
+# 中台不知道也不该知道。派单只给机身序列号，profile 在这里按 serial 现查。
+PHONE_REGISTRY="${DOUYIN_PHONE_REGISTRY:-$HOME/.config/openclaw/douyin-phone-profiles.tsv}"
 WR="${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}"
 LOG="${ZJ_CLAIMER_LOG:-$HOME/device-job-claimer.log}"
 LOCK_DIR="${ZJ_CLAIMER_LOCK:-/tmp/zj-device-job-claimer.lock}"
@@ -113,8 +116,17 @@ elif [[ ! -x "${PHONE_CTL}" ]]; then
   ERR_CODE="NO_PHONE_CTL"
   log "找不到 ${PHONE_CTL}"
 else
-  # douyin-phone-adb 按 profile 选设备；派单没给 profile 时用序列号兜底
-  P="${JOB_PROFILE:-${JOB_SERIAL}}"
+  # 按序列号在本地 registry 查 profile 名。中台传来的 profile 不可信：它那边只有
+  # agents.agent_id（形态是 phone-<序列号>），直接当 profile 用会 "unknown phone profile"
+  # （生产实证：单 03aa758d，rc=2）。查得到就用查到的，查不到才退回中台给的值。
+  P=""
+  if [[ -r "${PHONE_REGISTRY}" && -n "${JOB_SERIAL}" ]]; then
+    P=$(awk -F'\t' -v s="${JOB_SERIAL}" '$2 == s { print $1; exit }' "${PHONE_REGISTRY}")
+  fi
+  if [[ -z "${P}" ]]; then
+    P="${JOB_PROFILE:-${JOB_SERIAL}}"
+    log "registry 里按序列号 ${JOB_SERIAL} 查不到 profile，退回用 ${P}"
+  fi
   if [[ -n "${JOB_ARG}" ]]; then
     OUT=$("${PHONE_CTL}" --profile "${P}" "${JOB_ACTION}" "${JOB_ARG}" </dev/null 2>&1)
   else
@@ -155,6 +167,9 @@ if [[ "${OK}" == "true" ]]; then
   wr step "${JOB_SERIAL}" 0 done
   wr done "${JOB_SERIAL}"
 else
-  wr fail "${JOB_SERIAL}" "${ERR_CODE}"
+  # 签名是 fail <目标> <idx> <error_code>：少传 idx 会让 error_code 被当成 idx，
+  # 非数字则不执行收尾，控制塔那条永远挂在 running，10 分钟后被判「机器失联」——
+  # 把"参数错、2 秒就失败"伪装成"跨境网络抖动"，把人往完全错误的方向带（生产实证 03aa758d）。
+  wr fail "${JOB_SERIAL}" 0 "${ERR_CODE}"
 fi
 exit 0
