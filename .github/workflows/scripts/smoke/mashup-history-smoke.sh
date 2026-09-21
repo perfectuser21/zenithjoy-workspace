@@ -82,26 +82,28 @@ ok "种子 run 已建成（候选待选定 1 条、被 Gate 拦下 1 条、B 租
 
 BODY_A=$(curl -sf -H "X-Upload-Token: $KEY_A" "$API_BASE/api/mashup/runs") || fail "GET /api/mashup/runs 请求失败"
 
-echo "$BODY_A" | grep -q "$RUN_A_PENDING" || fail "A 租户看不到自己的 run $RUN_A_PENDING"
+# 对变量做 grep 一律 here-string：管道会在大 body 时被截断，grep 提前退出，
+# 断言变成假绿（本仓库 smoke-selfcheck 的源码闸就是守这个）。
+grep -q "$RUN_A_PENDING" <<< "$BODY_A" || fail "A 租户看不到自己的 run $RUN_A_PENDING"
 ok "A 租户看得到自己的 run"
 
-echo "$BODY_A" | grep -q "$RUN_B" && fail "租户隔离破了：A 的凭据看到了 B 的 run $RUN_B"
+grep -q "$RUN_B" <<< "$BODY_A" && fail "租户隔离破了：A 的凭据看到了 B 的 run $RUN_B"
 ok "A 租户看不到 B 租户的 run（租户隔离成立）"
 
-STAGE_GATED=$(echo "$BODY_A" | node -e "
+STAGE_GATED=$(node -e "
 const d=JSON.parse(require('fs').readFileSync(0,'utf8'));
 const r=d.data.items.find(i=>i.runId==='$RUN_A_GATED');
 process.stdout.write(r?r.stage:'MISSING');
-")
+" <<< "$BODY_A")
 [ "$STAGE_GATED" = "rendering" ] \
   || fail "被安全 Gate 拦下的 run 应为 rendering（export_url 为空），实际 $STAGE_GATED"
 ok "status=completed 但 export_url 为空 → stage=rendering，没被误报成已完成"
 
-STAGE_PENDING=$(echo "$BODY_A" | node -e "
+STAGE_PENDING=$(node -e "
 const d=JSON.parse(require('fs').readFileSync(0,'utf8'));
 const r=d.data.items.find(i=>i.runId==='$RUN_A_PENDING');
 process.stdout.write(r?r.stage:'MISSING');
-")
+" <<< "$BODY_A")
 [ "$STAGE_PENDING" = "candidates_pending" ] \
   || fail "有候选未选定的 run 应为 candidates_pending，实际 $STAGE_PENDING"
 ok "有候选未选定 → stage=candidates_pending"
