@@ -12,9 +12,20 @@ compatibility_date = "2024-12-01"
 # 机密（secret_text）仍只存在于 Cloudflare 后台与 1Password，绝不入库：
 #   META_PUBLISH_API_KEY, META_PAGE_ACCESS_TOKEN, META_APP_SECRET
 [vars]
-META_GRAPH_API_VERSION = "v24.0"
+# ⚠️ 这里必须囊括**全部**非机密运行变量，漏一个就会在下次部署时被抹掉。
+# 2026-09-21 实测：线上有 5 个 plain_text 变量，而本段当时只声明 2 个——
+# 若照此部署，TIKTOK_MEDIA_HOSTS 会消失，draft.ts 的 host 白名单随之失效，
+# 所有草稿上传当场被拒。补齐后此段与线上逐项对齐。
+META_GRAPH_API_VERSION = "v26.0"
 # 初次上线保持关闭。开启前需徐啸对具体内容与账号逐次批准。
 META_PUBLISH_ENABLED = "false"
+META_DRAFT_ENABLED = "true"
+# TikTok 公开直发需 app audit 通过，默认关闭；草稿上传不受该限制。
+TIKTOK_PUBLISH_ENABLED = "false"
+TIKTOK_DRAFT_UPLOAD_ENABLED = "true"
+# draft.ts 只接受来自这些 host 的 video_url——TikTok 服务端会去拉这个地址，
+# 不设白名单等于允许调用方指定任意抓取目标。
+TIKTOK_MEDIA_HOSTS = "zenithjoyai.com,www.zenithjoyai.com"
 
 # D1 绑定同样必须写在这里，理由与上面的 [vars] 一致。
 # 2026-09-16 实测：只在 Cloudflare 后台 PATCH 出来的 d1_databases，
