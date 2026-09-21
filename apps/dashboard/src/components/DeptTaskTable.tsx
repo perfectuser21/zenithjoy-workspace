@@ -89,9 +89,20 @@ export interface DeptTaskTableProps {
   /** 这台机还没有排程数据（后端未接，或没给它排） */
   noSchedule?: boolean;
   quotas?: { dept: string; used: number; cap: number; unit: string }[];
+  /** 鼠标划到某一行时报出那件活的开始时刻，页面拿去高亮条子对应段 */
+  onHoverAt?: (ms: number | null) => void;
+  /** 外面划到了哪个时刻，落在这个时刻里的行亮起来 */
+  highlightAt?: number | null;
 }
 
-export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, quotas = [] }: DeptTaskTableProps) {
+export default function DeptTaskTable({
+  slots,
+  dayOffset,
+  noSchedule = false,
+  quotas = [],
+  onHoverAt,
+  highlightAt,
+}: DeptTaskTableProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const today = slotsOfDay(slots, dayOffset);
   const groups = groupByDept(slots, dayOffset);
@@ -112,7 +123,18 @@ export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, qu
   const tailGap = gaps.length > 0 && gaps[gaps.length - 1].endText === '24:00' ? gaps[gaps.length - 1] : undefined;
 
   const gapRow = (g: Gap, key: string) => (
-    <tr key={key} data-testid="gap-row" data-past={g.past ? '1' : '0'} data-start={g.start} className="align-top">
+    <tr
+      key={key}
+      data-testid="gap-row"
+      data-past={g.past ? '1' : '0'}
+      data-start={g.start}
+      data-hot={highlightAt != null && highlightAt >= g.start && highlightAt < g.end ? '1' : '0'}
+      onMouseEnter={() => onHoverAt?.(g.start)}
+      onMouseLeave={() => onHoverAt?.(null)}
+      className={`align-top transition-colors ${
+        highlightAt != null && highlightAt >= g.start && highlightAt < g.end ? 'bg-sky-50/70' : ''
+      }`}
+    >
       <td className={`whitespace-nowrap border-b border-dashed border-neutral-200 px-4 py-1.5 text-[11px] tabular-nums ${g.past ? 'text-neutral-300' : 'text-sky-600'}`}>
         {g.startText}–{g.endText}
       </td>
@@ -179,10 +201,10 @@ export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, qu
           <table className="w-full border-separate border-spacing-0 text-sm">
             <thead data-testid="col-head" className="sticky top-0 z-20 bg-white/95 backdrop-blur">
               <tr className="text-left text-[11px] uppercase tracking-wide text-neutral-400">
-                <th className="w-[150px] border-b border-neutral-100 px-4 py-2 font-medium">时间</th>
-                <th className="border-b border-neutral-100 px-2 py-2 font-medium">任务</th>
-                <th className="w-[84px] border-b border-neutral-100 px-2 py-2 font-medium">状态</th>
-                <th className="w-[30%] border-b border-neutral-100 px-2 py-2 font-medium">说明</th>
+                <th className="w-[136px] border-b border-neutral-100 px-4 py-2 font-medium">时间</th>
+                <th className="w-[40%] border-b border-neutral-100 px-2 py-2 font-medium">任务</th>
+                <th className="w-[76px] border-b border-neutral-100 px-2 py-2 font-medium">状态</th>
+                <th className="border-b border-neutral-100 px-2 py-2 font-medium">说明</th>
               </tr>
             </thead>
             <tbody>
@@ -209,7 +231,19 @@ export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, qu
                     const crossesDay = sp.end > dayEnd;
                     return [
                       ...(lead ? [gapRow(lead, `gap-${s.id}`)] : []),
-                      <tr key={s.id} data-testid="task-row" data-status={s.status} className="align-top">
+                      <tr
+                        key={s.id}
+                        data-testid="task-row"
+                        data-status={s.status}
+                        data-hot={highlightAt != null && highlightAt >= sp.start && highlightAt < sp.end ? '1' : '0'}
+                        onMouseEnter={() => onHoverAt?.(sp.start)}
+                        onMouseLeave={() => onHoverAt?.(null)}
+                        className={`align-top transition-colors ${
+                          highlightAt != null && highlightAt >= sp.start && highlightAt < sp.end
+                            ? 'bg-sky-50/70'
+                            : 'hover:bg-neutral-50/70'
+                        }`}
+                      >
                         <td className="whitespace-nowrap border-b border-neutral-100 px-4 py-2.5 text-[13px] tabular-nums text-neutral-700">
                           {hhmm(sp.start)}–{crossesDay ? `次日 ${hhmm(sp.end)}` : hhmm(sp.end)}
                           <div className="mt-0.5 text-[11px] text-neutral-400">{durationText(s.est_minutes)}</div>
@@ -258,6 +292,8 @@ export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, qu
       <OccupancyBar
         slots={slots}
         dayOffset={dayOffset}
+        onHoverAt={onHoverAt}
+        highlightAt={highlightAt}
         onPickGap={(ms) => {
           const el = scrollRef.current;
           if (!el) return;

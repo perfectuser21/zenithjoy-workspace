@@ -101,7 +101,8 @@ grep -qF 'sticky' <<< "${TSRC}" || fail "列头没钉住，滚下去就不知道
 # 工作机页必须是一屏一台：芯片切机 + 左画面 + 右任务表
 grep -qF 'device-chip' <<< "${PSRC}" || fail "工作机页没有机器切换芯片（又会变成所有机往下堆）"
 grep -qF '<DeptTaskTable' <<< "${PSRC}" || fail "工作机页没挂部门分组任务表"
-grep -qF '<PhoneFrame' <<< "${PSRC}" || fail "工作机页左边缺实时画面"
+# 左边的实时画面 0921 二轮起由 DeviceRail 承载（画面缩成小窗 + 今天的数字），
+# 层 8h 会逐项验它；这里只保证画面地址仍然接着
 grep -qF 'workerLiveUrl' <<< "${PSRC}" || fail "工作机页没接实时画面地址"
 [ ! -e "apps/dashboard/src/components/DayCalendar.tsx" ] || fail "日历仍在，应已换成按部门分组的任务表"
 [ ! -e "apps/dashboard/src/components/DeviceTaskTable.tsx" ] || fail "旧的每台一张表仍在"
@@ -145,6 +146,29 @@ grep -qF 'data-testid="bar-free"' <<< "${BSRC}" || fail "空白段没画出来�
 grep -qF 'showLabel' <<< "${BSRC}" || fail "大块空白没直接标时长"
 grep -qF 'data-testid="bar-now"' <<< "${BSRC}" || fail "占用条缺现在线"
 grep -qE '<OccupancyBar([[:space:]/>]|$)' <<< "${TSRC}" || fail "任务表右边没挂占用条"
+
+# 层8h: 左栏是小窗加数字、条表双向联动（主理人 0921 二轮：「手机框你改了我也没觉得
+#       改得很好看」→ 形态三选一里选了「缩小成小窗，下面补数据」；四条整体优化选了全做）
+RAIL="apps/dashboard/src/components/DeviceRail.tsx"
+[ -s "${RAIL}" ] || fail "设备左栏组件缺失"
+RSRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "${RAIL}")
+grep -qF 'data-testid="rail-live"' <<< "${RSRC}" || fail "左栏没有画面小窗"
+grep -qF 'data-testid="rail-stats"' <<< "${RSRC}" || fail "左栏没有今天的关键数字（画面省出来的地方白省了）"
+grep -qF 'data-testid="live-modal"' <<< "${RSRC}" || fail "画面不能点开放大"
+# 只看画面那个按钮自己的 class，不然左栏容器的 lg:w-[176px] 会替它蒙混过关
+LIVE_BLOCK=$(grep -A6 'data-testid="rail-live"' "${RAIL}")
+grep -qE 'w-\[1[0-9][0-9]px\]' <<< "${LIVE_BLOCK}" || fail "画面不是小窗尺寸（又长回占满一列了）"
+if grep -qE 'w-\[[2-9][0-9][0-9]px\]' <<< "${LIVE_BLOCK}"; then fail "画面尺寸又放大到 200px 以上了"; fi
+grep -qF "'Escape'" <<< "${RSRC}" || fail "放大的画面按 Esc 关不掉"
+grep -qE '<DeviceRail([[:space:]/>]|$)' <<< "${PSRC}" || fail "工作机页没挂设备左栏"
+
+# 条表双向联动：两边都要既能报出划到哪、又能接收外面划到哪。
+# 用词边界断言——写成子串的话 onHoverAtX 这种改名也能蒙混过关（0921 变异测试实证）
+grep -qE 'onHoverAt[^A-Za-z0-9_]' <<< "${TSRC}" || fail "表格不报划到哪一行（联动断一半）"
+grep -qE 'highlightAt[^A-Za-z0-9_]' <<< "${TSRC}" || fail "表格不接收高亮时刻（联动断一半）"
+grep -qE 'onHoverAt[^A-Za-z0-9_]' <<< "${BSRC}" || fail "占用条不报划到哪一段（联动断一半）"
+grep -qE 'highlightAt[^A-Za-z0-9_]' <<< "${BSRC}" || fail "占用条不接收高亮时刻（联动断一半）"
+grep -qF 'data-past=' <<< "${BSRC}" || fail "占用块不分已跑完与没跑（看不出进度到哪）"
 
 # 层9: 生产链实际会写的失败码都要有人话，漏一个页面就露机器码
 ESRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "$ERRC")

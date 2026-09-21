@@ -36,8 +36,10 @@ export interface BarSegment {
   endText: string;
   /** 这段占用里排头那件活的部门，用来上色 */
   dept?: Dept;
-  /** 空白段：已经过去了，加不进去 */
+  /** 已经过去了（空白段：加不进去；占用段：已经跑完） */
   past?: boolean;
+  /** 段结束的毫秒时刻 */
+  endMs: number;
   /** 空白段：还能塞几单 */
   canFit?: number;
   /** 空白段：够大到能在条上写字 */
@@ -89,19 +91,22 @@ export function segments(slots: ScheduleSlot[], dayOffset: number, now: number =
       endText: hhmm(end, dayEnd),
       dept,
       startMs: start,
+      endMs: end,
+      // 占用段也分已跑完/没跑：整条绿得一样就看不出进度到哪
+      past: kind === 'busy' ? end <= now : past,
       ...(kind === 'free'
-        ? { past, canFit: past ? 0 : fitCount(minutes), showLabel: minutes >= BAR_LABEL_MIN_MINUTES }
+        ? { canFit: past ? 0 : fitCount(minutes), showLabel: minutes >= BAR_LABEL_MIN_MINUTES }
         : {}),
     });
   };
-  /** 横跨此刻的空白切成两截：灰的是过去了的，蓝的才是还能加的 */
+  /** 横跨此刻的段切成两截：前半截是过去了的，后半截才是还没发生的 */
   const push = (kind: 'busy' | 'free', start: number, end: number, dept?: Dept) => {
-    if (kind === 'free' && now > start && now < end) {
-      emit('free', start, now, true);
-      emit('free', now, end, false);
+    if (now > start && now < end) {
+      emit(kind, start, now, true, dept);
+      emit(kind, now, end, false, dept);
       return;
     }
-    emit(kind, start, end, kind === 'free' && end <= now, dept);
+    emit(kind, start, end, end <= now, dept);
   };
 
   let cursor = dayStart;
@@ -119,15 +124,21 @@ export interface OccupancyBarProps {
   dayOffset: number;
   /** 点空白段时把表格滚到这个时刻 */
   onPickGap?: (startMs: number) => void;
+  /** 鼠标划到某一段时报出那个时刻，页面拿去高亮表格对应行 */
+  onHoverAt?: (ms: number | null) => void;
+  /** 外面划到了哪个时刻，落在这个时刻里的段亮起来 */
+  highlightAt?: number | null;
 }
 
-export default function OccupancyBar({ slots, dayOffset, onPickGap }: OccupancyBarProps) {
+export default function OccupancyBar({ slots, dayOffset, onPickGap, onHoverAt, highlightAt }: OccupancyBarProps) {
   const segs = segments(slots, dayOffset);
   const free = segs.filter((s) => s.kind === 'free' && !s.past);
   const freeMinutes = free.reduce((n, s) => n + s.minutes, 0);
   const canAdd = free.reduce((n, s) => n + (s.canFit ?? 0), 0);
   const isToday = dayOffset === 0;
   const nowPct = ((Date.now() - dayRange(0).start) / (DAY_MINUTES * MINUTE)) * 100;
+  /** 外面划到的时刻落在这一段里 */
+  const hot = (s: BarSegment) => highlightAt != null && highlightAt >= s.startMs && highlightAt < s.endMs;
 
   return (
     <div className="flex w-[132px] shrink-0 flex-col">
@@ -161,8 +172,14 @@ export default function OccupancyBar({ slots, dayOffset, onPickGap }: OccupancyB
               <div
                 key={`b-${s.startMs}`}
                 data-testid="bar-busy"
-                title={`${s.startText}–${s.endText} 排了活`}
-                className={`absolute inset-x-0 opacity-85 ${s.dept ? DEPT_BLOCK[s.dept].bar : 'bg-neutral-400'}`}
+                data-past={s.past ? '1' : '0'}
+                data-hot={hot(s) ? '1' : '0'}
+                onMouseEnter={() => onHoverAt?.(s.startMs)}
+                onMouseLeave={() => onHoverAt?.(null)}
+                title={`${s.startText}–${s.endText} ${s.past ? '已跑完' : '排了活'}`}
+                className={`absolute inset-x-0 transition-opacity ${s.dept ? DEPT_BLOCK[s.dept].bar : 'bg-neutral-400'} ${
+                  hot(s) ? 'opacity-100 ring-2 ring-neutral-900/30' : s.past ? 'opacity-30' : 'opacity-90'
+                }`}
                 style={{ top: `${s.topPct}%`, height: `${s.heightPct}%` }}
               />
             ) : (
@@ -175,11 +192,16 @@ export default function OccupancyBar({ slots, dayOffset, onPickGap }: OccupancyB
                     ? `${s.startText}–${s.endText} 空 ${gapText(s.minutes)}（已过）`
                     : `${s.startText}–${s.endText} 空 ${gapText(s.minutes)}，还能插 ${s.canFit} 单`
                 }
+                data-hot={hot(s) ? '1' : '0'}
                 onClick={() => onPickGap?.(s.startMs)}
+                onMouseEnter={() => onHoverAt?.(s.startMs)}
+                onMouseLeave={() => onHoverAt?.(null)}
                 className={`absolute inset-x-0 flex items-center justify-center px-1 text-[10px] leading-tight transition-colors ${
                   s.past
                     ? 'cursor-default bg-neutral-100/70 text-neutral-300'
-                    : 'bg-sky-50 text-sky-700 hover:bg-sky-100'
+                    : hot(s)
+                      ? 'bg-sky-100 text-sky-800 ring-2 ring-sky-300'
+                      : 'bg-sky-50 text-sky-700 hover:bg-sky-100'
                 }`}
                 style={{ top: `${s.topPct}%`, height: `${s.heightPct}%` }}
               >
