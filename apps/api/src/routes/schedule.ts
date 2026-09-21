@@ -23,7 +23,6 @@ import {
   validateWindow,
   isStale,
   buildCasUpdate,
-  quotaHeadroomByDept,
   STALE_AFTER_MS,
   type BrainDeviceJob,
   type Dept,
@@ -35,9 +34,6 @@ const OK = (data: unknown) => ({ success: true, data });
 const DEPTS: Dept[] = ['智能获客', '新媒体部', '私域客服', '视频剪辑'];
 /** 对外动作的部门：这些部门的活会碰平台，受铁律 27bb6d1a 的窗口约束 */
 const OUTBOUND_DEPTS = new Set<Dept>(['智能获客', '新媒体部', '私域客服']);
-/** 单次派单硬顶（主理人拍板：不超当日剩余额度且 ≤30 单） */
-const MAX_BATCH = 30;
-
 export const scheduleRouter = Router();
 scheduleRouter.use(tenantContext);
 // CodeQL js/missing-rate-limiting：读面 1 分钟轮询 + 写面是对外动作的扳机，按租户限流。
@@ -174,8 +170,9 @@ scheduleRouter.post('/jobs', async (req: Request, res: Response) => {
   if (!v.ok) return res.status(400).json(ERR('WINDOW_TOO_TIGHT', v.reason));
 
   const agents = await tenantAgents(tenantId).catch(() => []);
+  const target = agents.find((a) => a.id === agent_id);
   // 跨租户表现为"不存在"，不是 403 —— 403 会确认资源存在，可被枚举。
-  if (!agents.some((a) => a.id === agent_id)) return res.status(404).json(ERR('NOT_FOUND', '设备不存在'));
+  if (!target) return res.status(404).json(ERR('NOT_FOUND', '设备不存在'));
 
   const brain = getBrainPool();
   if (!brain) return res.status(503).json(ERR('BRAIN_UNAVAILABLE', '排程后台未连通（缺 BRAIN_DATABASE_HOST），暂时不能派单'));
@@ -198,6 +195,9 @@ scheduleRouter.post('/jobs', async (req: Request, res: Response) => {
       headed_manual: true,
       source: 'oneoff',
       tenant_id: tenantId,
+      // 领单器按机身序列号认领（它在工作机上，手边只有 adb devices 的序列号，
+      // 没有中台的 agent UUID）。这个字段是派单与真机之间唯一的握手。
+      serial: target.agent_id,
       window_start, window_end,
       idempotency_key: key,
       est_minutes: typeof est_minutes === 'number' ? est_minutes : 15,

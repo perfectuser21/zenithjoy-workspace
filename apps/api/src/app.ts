@@ -46,6 +46,7 @@ import agentEventsRouter from './routes/agent-events';
 import workersExecutorRouter from './routes/workers-executor';
 import workersReadRouter from './routes/workers-read';
 import scheduleRouter from './routes/schedule';
+import scheduleExecutorRouter from './routes/schedule-executor';
 import devicesRouter from './routes/devices';
 import smokeFakeAgentBurnerRouter from './routes/_smoke-fake-agent-burner';
 // Path 2 Sprint B-1 architecture hotfix — DEV-only mock-agent helper
@@ -202,6 +203,9 @@ app.use('/api/workers', workersExecutorRouter);
 app.use('/api/workers', workersReadRouter);
 // 排程看板读写面（task 3abb7f8c）：读 Brain 的 device_job（真身在 us-vps），
 // 派单/改时间/取消都在这里；租户隔离靠中台自己（Brain tasks 表无租户维度）。
+// 执行器面先注册（internalAuth，工作机领单器用），读写面后注册（租户）——
+// 与 /api/workers 同一套顺序约定，避免 GET 被执行器面的鉴权拦下。
+app.use('/api/schedule', scheduleExecutorRouter);
 app.use('/api/schedule', scheduleRouter);
 // OpenClaw 信号桥·件2（决策 7a4c0369）：设备指令桥——internalAuth only + prod 缺 token 拒服务
 app.use('/api/devices', devicesRouter);
