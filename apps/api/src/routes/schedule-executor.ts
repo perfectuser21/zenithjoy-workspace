@@ -38,6 +38,24 @@ function requireTokenInProd(_req: Request, res: Response, next: NextFunction) {
 const execRateLimit = simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn });
 
 export const scheduleExecutorRouter = Router();
+
+/**
+ * 只认领自己的两条路径，其余原样让给后面的读写面（app.ts 里本 router 挂在它前面）。
+ *
+ * 不加这道让路，`router.use(internalAuth)` 会对 /api/schedule 下**所有方法所有路径**
+ * 生效：主理人带登录态 GET /api/schedule 先撞上内部 token 校验 → 401，
+ * 页面整块显示「读取失败（HTTP 401）」；派单/改时间/取消同样全被吃掉。
+ * （/api/workers 早踩过同款坑，那边执行器面只对 POST 生效；这里两边都有 POST——
+ * `POST /jobs` 是派单、`POST /jobs/:id/finish` 是回执——所以必须按路径分。）
+ *
+ * next('router') = 跳出本 router 的剩余中间件，交给下一个挂载者。
+ */
+const EXEC_PATHS = [/^\/claim\/?$/, /^\/jobs\/[^/]+\/finish\/?$/];
+scheduleExecutorRouter.use((req: Request, _res: Response, next: NextFunction) => {
+  if (req.method === 'POST' && EXEC_PATHS.some((re) => re.test(req.path))) return next();
+  return next('router');
+});
+
 scheduleExecutorRouter.use(execRateLimit);
 scheduleExecutorRouter.use(requireTokenInProd);
 scheduleExecutorRouter.use(internalAuth);

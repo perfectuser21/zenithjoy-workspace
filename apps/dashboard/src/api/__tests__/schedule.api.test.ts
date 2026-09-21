@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   __mockSchedulePayloadForDemo,
+  cancelJob,
+  dispatchJob,
   fetchSchedule,
+  updateJobTime,
   slotsOfDay,
   backlogCount,
   headroom,
@@ -126,5 +129,67 @@ describe('fetchSchedule 的降级：读不到不能装成"今天没活"', () => 
     const payload = { as_of: '2026-09-21T07:00:00.000Z', mock: false, stale: false, devices: [] };
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ success: true, data: payload }) })) as unknown as typeof fetch);
     expect(await fetchSchedule()).toEqual(payload);
+  });
+});
+
+describe('派单 / 改时间 / 取消 的客户端', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('派单把窗口与动作参数一并发过去，并带幂等键（超时重试不产生第二批）', async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      return { ok: true, status: 201, json: async () => ({ success: true, data: { id: 'new-1' } }) };
+    }) as unknown as typeof fetch);
+
+    const r = await dispatchJob({
+      agent_id: 'a1', dept: '智能获客', title: '触达一单',
+      window_start: '2026-09-21T12:00:00.000Z', window_end: '2026-09-21T13:00:00.000Z',
+      params: { action: 'open-search', profile: 'legacy', arg: 'AI训练师' },
+    });
+    expect(r.id).toBe('new-1');
+    const body = JSON.parse(String(calls[0].init.body));
+    expect(calls[0].url).toMatch(/\/schedule\/jobs$/);
+    expect(body.params.action).toBe('open-search');
+    expect(body.idempotency_key, '没带幂等键，跨境超时重试会派出第二批').toBeTruthy();
+  });
+
+  it('派单失败时把后端给的人话原因抛出来（而不是吞掉只说"失败"）', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false, status: 400,
+      json: async () => ({ success: false, error: 'WINDOW_TOO_TIGHT', message: '对外动作至少留 30 分钟窗口' }),
+    })) as unknown as typeof fetch);
+    await expect(dispatchJob({
+      agent_id: 'a1', dept: '智能获客', title: 'x',
+      window_start: '2026-09-21T12:00:00.000Z', window_end: '2026-09-21T12:10:00.000Z',
+    })).rejects.toThrow(/30 分钟/);
+  });
+
+  it('改时间必须回传 row_version（乐观锁）', async () => {
+    const calls: Array<{ init: RequestInit }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (_u: string, init: RequestInit) => {
+      calls.push({ init });
+      return { ok: true, status: 200, json: async () => ({ success: true, data: { id: 'j1', row_version: 4 } }) };
+    }) as unknown as typeof fetch);
+    await updateJobTime('j1', '2026-09-21T13:00:00.000Z', 3);
+    expect(JSON.parse(String(calls[0].init.body)).row_version).toBe(3);
+  });
+
+  it('版本冲突（409）把后端的当前值一并带出来，好让页面提示"基于最新值重试"', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false, status: 409,
+      json: async () => ({ success: false, error: 'CONFLICT', message: '这条活刚被改过，请基于最新值重试', current: { row_version: 9 } }),
+    })) as unknown as typeof fetch);
+    await expect(updateJobTime('j1', '2026-09-21T13:00:00.000Z', 3)).rejects.toThrow(/最新值/);
+  });
+
+  it('取消走 POST /cancel', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      calls.push(url);
+      return { ok: true, status: 200, json: async () => ({ success: true, data: { id: 'j1' } }) };
+    }) as unknown as typeof fetch);
+    await cancelJob('j1');
+    expect(calls[0]).toMatch(/\/schedule\/jobs\/j1\/cancel$/);
   });
 });
