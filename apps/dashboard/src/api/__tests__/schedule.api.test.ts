@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   __mockSchedulePayloadForDemo,
   fetchSchedule,
@@ -93,5 +93,38 @@ describe('样例数据（演示/测试用，不再进生产路径）', () => {
     const blocked = devices.flatMap((d) => d.slots).filter((s) => s.status === 'blocked');
     expect(blocked.length).toBeGreaterThan(0);
     for (const s of blocked) expect(s.blocked_reason).toBeTruthy();
+  });
+});
+
+describe('fetchSchedule 的降级：读不到不能装成"今天没活"', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('HTTP 非 2xx → stale=true 带原因，而不是抛异常', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 502, json: async () => ({}) })) as unknown as typeof fetch);
+    const p = await fetchSchedule();
+    expect(p.stale).toBe(true);
+    expect(p.stale_reason).toContain('502');
+    expect(p.devices).toEqual([]);
+    expect(p.mock).toBe(false);
+  });
+
+  it('网络直接抛错 → 同样 stale=true，调用方不需要 catch', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('ECONNREFUSED'); }) as unknown as typeof fetch);
+    const p = await fetchSchedule();
+    expect(p.stale).toBe(true);
+    expect(p.stale_reason).toContain('ECONNREFUSED');
+  });
+
+  it('返回体形状不对（没有 devices 数组）→ 按读不到处理，不让页面崩在 .map 上', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ success: true, data: {} }) })) as unknown as typeof fetch);
+    const p = await fetchSchedule();
+    expect(p.stale).toBe(true);
+    expect(p.devices).toEqual([]);
+  });
+
+  it('正常返回时原样透出后端数据', async () => {
+    const payload = { as_of: '2026-09-21T07:00:00.000Z', mock: false, stale: false, devices: [] };
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ success: true, data: payload }) })) as unknown as typeof fetch);
+    expect(await fetchSchedule()).toEqual(payload);
   });
 });

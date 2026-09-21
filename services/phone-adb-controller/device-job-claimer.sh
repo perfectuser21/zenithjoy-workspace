@@ -48,8 +48,10 @@ if [[ -z "${API_BASE}" || -z "${TOKEN}" ]]; then log "缺 ZJ_API_BASE 或 ZJ_INT
 if ! mkdir "${LOCK_DIR}" 2>/dev/null; then
   # 锁超过 30 分钟视为上一轮崩了没清，夺锁继续；否则安静退出（每分钟一轮，不刷屏）
   if [[ -d "${LOCK_DIR}" ]]; then
-    # stat 的参数 macOS 与 Linux 不同：先试 BSD 形态，再退 GNU 形态
-    lock_mtime=$(stat -f %m "${LOCK_DIR}" 2>/dev/null || stat -c %Y "${LOCK_DIR}" 2>/dev/null || echo 0)
+    # 取锁目录 mtime。不能用 `stat -f %m || stat -c %Y`：GNU 的 -f 是 --file-system，
+    # 在 Linux 上**不会失败**，会返回文件系统信息，算术表达式当场炸（CI 实证）。
+    # python3 本脚本已经依赖，用它一次跨平台。
+    lock_mtime=$(python3 -c 'import os,sys; print(int(os.path.getmtime(sys.argv[1])))' "${LOCK_DIR}" 2>/dev/null || echo 0)
     local_age=$(( $(date +%s) - lock_mtime ))
     if (( local_age > 1800 )); then
       log "锁已存在 ${local_age}s，判定为上一轮残留，夺锁"

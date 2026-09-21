@@ -36,8 +36,11 @@ const DEPTS: Dept[] = ['智能获客', '新媒体部', '私域客服', '视频�
 const OUTBOUND_DEPTS = new Set<Dept>(['智能获客', '新媒体部', '私域客服']);
 export const scheduleRouter = Router();
 scheduleRouter.use(tenantContext);
-// CodeQL js/missing-rate-limiting：读面 1 分钟轮询 + 写面是对外动作的扳机，按租户限流。
-scheduleRouter.use(simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: tenantKeyFn }));
+// 读面 1 分钟轮询 + 写面是对外动作的扳机，按租户限流。
+// 中间件直接挂在每条路由上而不是只 router.use()：CodeQL 的 js/missing-rate-limiting
+// 不追 router 级 use，挂在路由上它才认得出来（也更难被后来人误删）。
+const rateLimit = simpleRateLimit({ windowMs: 60_000, max: 120, keyFn: tenantKeyFn });
+scheduleRouter.use(rateLimit);
 
 function requireTenant(req: Request, res: Response): string | null {
   const t = req.tenantId;
@@ -65,7 +68,7 @@ function isOnline(lastSeen: Date | null): boolean {
   return !!lastSeen && Date.now() - new Date(lastSeen).getTime() < ONLINE_WINDOW_MS;
 }
 
-scheduleRouter.get('/', async (req: Request, res: Response) => {
+scheduleRouter.get('/', rateLimit, async (req: Request, res: Response) => {
   const tenantId = requireTenant(req, res); if (!tenantId) return;
   const nowIso = new Date().toISOString();
   let agents: Awaited<ReturnType<typeof tenantAgents>> = [];
@@ -150,7 +153,7 @@ scheduleRouter.get('/', async (req: Request, res: Response) => {
 });
 
 /** 派一件活（一次性单）。返回创建的任务 id。 */
-scheduleRouter.post('/jobs', async (req: Request, res: Response) => {
+scheduleRouter.post('/jobs', rateLimit, async (req: Request, res: Response) => {
   const tenantId = requireTenant(req, res); if (!tenantId) return;
   const { agent_id, dept, title, window_start, window_end, est_minutes, idempotency_key, params } =
     req.body ?? {};
@@ -218,7 +221,7 @@ scheduleRouter.post('/jobs', async (req: Request, res: Response) => {
 });
 
 /** 改计划时间（乐观锁 CAS，不匹配返回 409 并附当前值） */
-scheduleRouter.patch('/jobs/:id/time', async (req: Request, res: Response) => {
+scheduleRouter.patch('/jobs/:id/time', rateLimit, async (req: Request, res: Response) => {
   const tenantId = requireTenant(req, res); if (!tenantId) return;
   const { planned_at, row_version } = req.body ?? {};
   if (typeof planned_at !== 'string' || Number.isNaN(Date.parse(planned_at))) {
@@ -258,7 +261,7 @@ scheduleRouter.patch('/jobs/:id/time', async (req: Request, res: Response) => {
 });
 
 /** 取消（标记留痕，不删行 —— 主理人要求所有活必须留痕） */
-scheduleRouter.post('/jobs/:id/cancel', async (req: Request, res: Response) => {
+scheduleRouter.post('/jobs/:id/cancel', rateLimit, async (req: Request, res: Response) => {
   const tenantId = requireTenant(req, res); if (!tenantId) return;
   const brain = getBrainPool();
   if (!brain) return res.status(503).json(ERR('BRAIN_UNAVAILABLE', '排程后台未连通，暂时不能取消'));

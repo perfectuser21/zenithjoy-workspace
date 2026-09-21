@@ -35,12 +35,14 @@ function requireTokenInProd(_req: Request, res: Response, next: NextFunction) {
 }
 
 /** 领单器每分钟一轮 × 少数几台工作机，60/分钟足够且能挡住失控重试 */
+const execRateLimit = simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn });
+
 export const scheduleExecutorRouter = Router();
-scheduleExecutorRouter.use(simpleRateLimit({ windowMs: 60_000, max: 60, keyFn: ipKeyFn }));
+scheduleExecutorRouter.use(execRateLimit);
 scheduleExecutorRouter.use(requireTokenInProd);
 scheduleExecutorRouter.use(internalAuth);
 
-scheduleExecutorRouter.post('/claim', async (req: Request, res: Response) => {
+scheduleExecutorRouter.post('/claim', execRateLimit, async (req: Request, res: Response) => {
   const { serials, claimer } = req.body ?? {};
   if (!Array.isArray(serials) || serials.length === 0 || !serials.every((s) => typeof s === 'string')) {
     return res.status(400).json(ERR('BAD_SERIALS', '缺本机手机序列号列表'));
@@ -94,7 +96,7 @@ scheduleExecutorRouter.post('/claim', async (req: Request, res: Response) => {
   }
 });
 
-scheduleExecutorRouter.post('/jobs/:id/finish', async (req: Request, res: Response) => {
+scheduleExecutorRouter.post('/jobs/:id/finish', execRateLimit, async (req: Request, res: Response) => {
   const { ok, error_code, evidence } = req.body ?? {};
   if (typeof ok !== 'boolean') return res.status(400).json(ERR('BAD_OUTCOME', '缺 ok'));
   const brain = getBrainPool();
