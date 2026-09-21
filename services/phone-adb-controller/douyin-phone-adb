@@ -12,9 +12,14 @@ SCRCPY="${DOUYIN_SCRCPY_BIN:-/opt/homebrew/bin/scrcpy}"
 FFMPEG="${DOUYIN_FFMPEG_BIN:-/opt/homebrew/bin/ffmpeg}"
 FFPROBE="${DOUYIN_FFPROBE_BIN:-/opt/homebrew/bin/ffprobe}"
 # 视觉定位（vision grounding）：截图→模型报归一化坐标→点击。根治无障碍树的机型/版本适配病。
-LOCATE_KEY_FILE="${DOUYIN_LOCATE_KEY_FILE:-$HOME/.config/openclaw/locate-api.key}"
-LOCATE_ENDPOINT="${DOUYIN_LOCATE_ENDPOINT:-https://toapis.com/v1/chat/completions}"
-LOCATE_MODEL="${DOUYIN_LOCATE_MODEL:-gemini-2.5-flash-lite-official}"
+# 视觉定位改走 UI-TARS（0921：原 ToAPIs gemini-2.5-flash-lite 配额耗尽 429，整条链视觉点击全挂；
+# 且通用模型本就弱于像素定位——决策 1e8ffaa1 的原话。UI-TARS 是字节专为 GUI 定位训练的模型，
+# 真机实测两台机两种 UI 共 8 个元素全命中，最大偏差 25px）。
+# 实现抽到 locate-element.py，与朋友圈控制器共用一份，改一次不用改两处。
+LOCATE_KEY_FILE="${DOUYIN_LOCATE_KEY_FILE:-$HOME/.credentials/openrouter.env}"
+LOCATE_SCRIPT="${DOUYIN_LOCATE_SCRIPT:-${0:A:h}/locate-element.py}"
+LOCATE_ENDPOINT="${DOUYIN_LOCATE_ENDPOINT:-https://openrouter.ai/api/v1/chat/completions}"
+LOCATE_MODEL="${DOUYIN_LOCATE_MODEL:-bytedance/ui-tars-1.5-7b}"
 REGISTRY="${DOUYIN_PHONE_REGISTRY:-${HOME}/.config/openclaw/douyin-phone-profiles.tsv}"
 ACCOUNT_REGISTRY="${DOUYIN_ACCOUNT_REGISTRY:-${HOME}/.config/openclaw/douyin-account-routes.tsv}"
 
@@ -1737,39 +1742,9 @@ _locate_element_once() {
   "$ADB" -s "$SERIAL" exec-out screencap -p > "$shot" || die "locate screenshot failed"
   [[ -s "$shot" ]] || die "locate screenshot is empty"
   [[ -r "$LOCATE_KEY_FILE" ]] || die "locate api key file missing: $LOCATE_KEY_FILE"
-  out="$(/usr/bin/python3 - "$shot" "$desc" "$SCREEN_W" "$SCREEN_H" "$LOCATE_ENDPOINT" "$LOCATE_MODEL" "$LOCATE_KEY_FILE" <<'PYLOC'
-import base64, json, sys, urllib.request
-shot, desc, w, h, endpoint, model, keyfile = sys.argv[1:8]
-w, h = int(w) + 1, int(h) + 1
-key = open(keyfile).read().strip()
-img = base64.b64encode(open(shot, "rb").read()).decode()
-body = {"model": model, "max_tokens": 120, "messages": [{"role": "user", "content": [
-  {"type": "image_url", "image_url": {"url": "data:image/png;base64," + img}},
-  {"type": "text", "text": "定位截图中的『" + desc + "』。只返回一个JSON数组（不要对象不要键名），坐标0-1000归一化：[ymin,xmin,ymax,xmax]"}]}]}
-req = urllib.request.Request(endpoint, data=json.dumps(body).encode(),
-  headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
-r = json.load(urllib.request.urlopen(req, timeout=45))
-txt = r["choices"][0]["message"]["content"].strip().strip("`")
-if txt.startswith("json"): txt = txt[4:]
-parsed = json.loads(txt)
-def _nums(o, acc):
-    if isinstance(o, (int, float)): acc.append(float(o))
-    elif isinstance(o, list):
-        for v in o: _nums(v, acc)
-    elif isinstance(o, dict):
-        for v in o.values(): _nums(v, acc)
-    return acc
-nums = _nums(parsed, [])
-if len(nums) != 4:
-    raise SystemExit(chr(108)+chr(111)+chr(99)+chr(97)+chr(116)+chr(101)+" parse: expected 4 numbers, got " + str(len(nums)))
-ymin, xmin, ymax, xmax = nums
-if ymin > ymax: ymin, ymax = ymax, ymin
-if xmin > xmax: xmin, xmax = xmax, xmin
-if not (0 <= xmin <= xmax <= 1000 and 0 <= ymin <= ymax <= 1000):
-    raise SystemExit("locate box out of range")
-print(int((xmin + xmax) / 2 / 1000 * w), int((ymin + ymax) / 2 / 1000 * h))
-PYLOC
-)" || die "locate model call failed for: $desc"
+  # OPENROUTER_API_KEY 优先走环境变量；没有就从 key 文件读（文件里是 KEY=VALUE 形态）
+  [[ -z "${OPENROUTER_API_KEY:-}" && -r "$LOCATE_KEY_FILE" ]] && export OPENROUTER_API_KEY="$(grep -m1 '^OPENROUTER_API_KEY=' "$LOCATE_KEY_FILE" | cut -d= -f2-)"
+  out="$(LOCATE_ENDPOINT="$LOCATE_ENDPOINT" LOCATE_MODEL="$LOCATE_MODEL" /usr/bin/python3 "$LOCATE_SCRIPT" "$shot" "$desc" "$SCREEN_W" "$SCREEN_H" "$LOCATE_KEY_FILE")" || die "locate model call failed for: $desc"
   print -- "$out"
 }
 

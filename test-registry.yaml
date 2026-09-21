@@ -6795,3 +6795,11 @@ agent_suite:
     status: active
     product: 工作机排程
     note: "工作目录（主理人要的「这个部门有哪些活、每件活要填什么」）：断言**只列真能跑的活**——目前只有智能获客一条线有（采收/私信/触达三件的脚本在工作机 ~/bin-harvest 下），其余部门返回空让页面明说「还没有可派的活」而不是给会失败的假菜单；每件活必须写清「派下去会发生什么」、id 唯一（领单器按它分派，撞车会派错脚本）、碰平台的标 outbound（决定 30 分钟窗口约束）；每个输入框有 label，非必填项要么有默认值要么有说明；组装的 params 只含 job_type 与用户填的值，**不含 profile/action**（工作机本地概念，中台猜必错，见单 03aa758d）。"
+
+  - id: locate-element
+    path: services/phone-adb-controller/__tests__/locate-element.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "视觉定位（截图+一句话→像素坐标）的守卫。此前这段逻辑内嵌在抖音/朋友圈两个 shell 里、零测试覆盖，0921 晚它整条挂掉（ToAPIs 上 gemini-2.5-flash-lite 配额耗尽 429）时没有任何东西提前报警。断言：**提问必须用 UI-TARS 官方 agent 协议**（实测同图同元素随意问会把「商品」标签定偏 925px，换 Thought/Action 协议后 8/8 命中，这是死规矩不是风格）、坐标取最后一个 (x,y)（Thought 段里也有数字对）、越界坐标一律判失败绝不盲点（RPA 里一次错点会让后面每步都在错页面上继续错）、模型没给坐标时不静默返回空值、图片按 data:image/png;base64 传、默认模型是 ui-tars。"

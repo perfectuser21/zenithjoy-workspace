@@ -14,10 +14,20 @@ setopt EXTENDED_GLOB
 
 ADB="${WECHAT_ADB_BIN:-/opt/homebrew/bin/adb}"
 PYTHON_BIN="${WECHAT_PYTHON_BIN:-/opt/homebrew/bin/python3}"
-# 视觉定位复用抖音线同一套 toapis 配置（同一份凭据，同一个模型）。
-LOCATE_KEY_FILE="${WECHAT_LOCATE_KEY_FILE:-$HOME/.config/openclaw/locate-api.key}"
-LOCATE_ENDPOINT="${WECHAT_LOCATE_ENDPOINT:-https://toapis.com/v1/chat/completions}"
-LOCATE_MODEL="${WECHAT_LOCATE_MODEL:-gemini-2.5-flash-lite-official}"
+# 两类活分开用模型，各用所长（决策 1e8ffaa1 的原话：通用模型强于数数读字、弱于像素定位）：
+#  · 定位（截图→点哪儿）走 UI-TARS：字节专为 GUI 定位训练，真机实测 8/8 命中、误差 3px。
+#    实现与抖音线共用 phone-adb-controller/locate-element.py，改一次不用改两处。
+#  · 读字（判断朋友圈文案是否吻合）仍走通用模型：那是阅读理解不是定位，UI-TARS 被训练成
+#    输出 Thought/Action，不适合答 MATCH/NOMATCH。
+# 0921 起原 gemini-2.5-flash-lite-official 在 ToAPIs 上配额耗尽（429），读字这路一并换成
+# 同系列非 lite 的 flash-official（实测可用）。
+LOCATE_KEY_FILE="${WECHAT_LOCATE_KEY_FILE:-$HOME/.credentials/openrouter.env}"
+LOCATE_SCRIPT="${WECHAT_LOCATE_SCRIPT:-${0:A:h}/../phone-adb-controller/locate-element.py}"
+LOCATE_ENDPOINT="${WECHAT_LOCATE_ENDPOINT:-https://openrouter.ai/api/v1/chat/completions}"
+LOCATE_MODEL="${WECHAT_LOCATE_MODEL:-bytedance/ui-tars-1.5-7b}"
+VERIFY_KEY_FILE="${WECHAT_VERIFY_KEY_FILE:-$HOME/.config/openclaw/locate-api.key}"
+VERIFY_ENDPOINT="${WECHAT_VERIFY_ENDPOINT:-https://toapis.com/v1/chat/completions}"
+VERIFY_MODEL="${WECHAT_VERIFY_MODEL:-gemini-2.5-flash-official}"
 # 设备档案表：默认复用抖音线同一张登记表（同一批物理手机，只是这次开的是另一个 app）。
 REGISTRY="${WECHAT_PHONE_REGISTRY:-${DOUYIN_PHONE_REGISTRY:-${HOME}/.config/openclaw/douyin-phone-profiles.tsv}}"
 WECHAT_PACKAGE="com.tencent.mm"
@@ -207,39 +217,8 @@ _locate_element_once() {
   "$ADB" -s "$SERIAL" exec-out screencap -p > "$shot" || die "locate screenshot failed"
   [[ -s "$shot" ]] || die "locate screenshot is empty"
   [[ -r "$LOCATE_KEY_FILE" ]] || die "locate api key file missing: $LOCATE_KEY_FILE"
-  out="$("$PYTHON_BIN" - "$shot" "$desc" "$SCREEN_W" "$SCREEN_H" "$LOCATE_ENDPOINT" "$LOCATE_MODEL" "$LOCATE_KEY_FILE" <<'PYLOC'
-import base64, json, sys, urllib.request
-shot, desc, w, h, endpoint, model, keyfile = sys.argv[1:8]
-w, h = int(w) + 1, int(h) + 1
-key = open(keyfile).read().strip()
-img = base64.b64encode(open(shot, "rb").read()).decode()
-body = {"model": model, "max_tokens": 120, "messages": [{"role": "user", "content": [
-  {"type": "image_url", "image_url": {"url": "data:image/png;base64," + img}},
-  {"type": "text", "text": "定位截图中的『" + desc + "』。只返回一个JSON数组（不要对象不要键名），坐标0-1000归一化：[ymin,xmin,ymax,xmax]"}]}]}
-req = urllib.request.Request(endpoint, data=json.dumps(body).encode(),
-  headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
-r = json.load(urllib.request.urlopen(req, timeout=45))
-txt = r["choices"][0]["message"]["content"].strip().strip("`")
-if txt.startswith("json"): txt = txt[4:]
-parsed = json.loads(txt)
-def _nums(o, acc):
-    if isinstance(o, (int, float)): acc.append(float(o))
-    elif isinstance(o, list):
-        for v in o: _nums(v, acc)
-    elif isinstance(o, dict):
-        for v in o.values(): _nums(v, acc)
-    return acc
-nums = _nums(parsed, [])
-if len(nums) != 4:
-    raise SystemExit("locate parse: expected 4 numbers, got " + str(len(nums)))
-ymin, xmin, ymax, xmax = nums
-if ymin > ymax: ymin, ymax = ymax, ymin
-if xmin > xmax: xmin, xmax = xmax, xmin
-if not (0 <= xmin <= xmax <= 1000 and 0 <= ymin <= ymax <= 1000):
-    raise SystemExit("locate box out of range")
-print(int((xmin + xmax) / 2 / 1000 * w), int((ymin + ymax) / 2 / 1000 * h))
-PYLOC
-)" || return 1
+  [[ -z "${OPENROUTER_API_KEY:-}" && -r "$LOCATE_KEY_FILE" ]] && export OPENROUTER_API_KEY="$(grep -m1 '^OPENROUTER_API_KEY=' "$LOCATE_KEY_FILE" | cut -d= -f2-)"
+  out="$(LOCATE_ENDPOINT="$LOCATE_ENDPOINT" LOCATE_MODEL="$LOCATE_MODEL" "$PYTHON_BIN" "$LOCATE_SCRIPT" "$shot" "$desc" "$SCREEN_W" "$SCREEN_H" "$LOCATE_KEY_FILE")"
   print -- "$out"
 }
 
