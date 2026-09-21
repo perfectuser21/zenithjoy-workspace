@@ -1,0 +1,84 @@
+name: Diag — ToAPIs Reachability from CI
+
+# CI 侧第三方网关可达性探针。
+#
+# 起因（2026-09-21）：golden-path-2-smoke.sh 的 Step 8c/8d 在 GHA runner 上连续超时，
+# 挡住所有 PR 合并；而同一个网关、同一个模型从本机调返回 200。症状经过 API 层包装，
+# 只看得到「commander:timeout_保守拒 / gemini_timeout」，看不到原始 HTTP 状态，
+# 分不清是「CI 那把 key 失效」还是「runner 出网被拦」。这个 workflow 就是把这层
+# 包装剥掉，直接从 runner 裸打一次。
+#
+# 只打印状态码与错误类别，绝不打印 key、绝不打印完整响应体。
+#
+# 长期价值：以后任何「本地好好的、CI 上第三方调不通」都先跑它一次定性，
+# 不用再靠重跑碰运气。
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/diag-toapis-reachability.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: ToAPIs 可达性探针
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: DNS 与 TCP 连通性（不带凭据，先定性出网）
+        run: |
+          echo "── DNS ──"
+          getent hosts toapis.com || echo "DNS 解析失败"
+          echo "── TCP/TLS 握手（只要握上手就打印 000 以外的码）──"
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://toapis.com/v1/models || echo "curl_exit_$?")
+          echo "GET /v1/models 无凭据 → $code"
+          echo "（401/403 = 出网通、要凭据；000/curl_exit = 出网就不通）"
+
+      - name: 带凭据裸调 commander 模型（只打印状态码与错误类别）
+        env:
+          TOAPIS_API_KEY: ${{ secrets.TOAPIS_API_KEY }}
+        run: |
+          if [ -z "${TOAPIS_API_KEY:-}" ]; then
+            echo "::error::secrets.TOAPIS_API_KEY 在本仓库为空——这本身就是根因"
+            exit 1
+          fi
+          echo "key 长度=${#TOAPIS_API_KEY}（只打长度，不打值）"
+
+          # 与 content-judgment.ts 的 commander 同口径：COMMANDER_MODEL 默认 gpt-5.4-mini
+          start=$(date +%s)
+          code=$(curl -s -o /tmp/resp.json -w '%{http_code}' --max-time 60 \
+            -X POST https://toapis.com/v1/chat/completions \
+            -H "Authorization: Bearer $TOAPIS_API_KEY" \
+            -H 'Content-Type: application/json' \
+            -d '{"model":"gpt-5.4-mini","messages":[{"role":"user","content":"ping"}],"max_tokens":8}' \
+            || echo "curl_exit_$?")
+          elapsed=$(( $(date +%s) - start ))
+          echo "POST /v1/chat/completions → HTTP=$code  耗时=${elapsed}s"
+
+          # 只抽错误类别/码，不吐完整响应（响应可能回显请求内容）
+          python3 - <<'PY' || true
+          import json
+          try:
+              d = json.load(open('/tmp/resp.json'))
+          except Exception as e:
+              print('响应非 JSON（前 200 字节）:', open('/tmp/resp.json','rb').read()[:200])
+              raise SystemExit(0)
+          err = d.get('error')
+          if err:
+              print('error.type =', err.get('type'))
+              print('error.code =', err.get('code'))
+              print('error.message =', str(err.get('message'))[:200])
+          else:
+              print('成功：choices 数 =', len(d.get('choices') or []))
+              print('model =', d.get('model'))
+          PY
+
+          case "$code" in
+            200) echo "✅ CI 侧 key 有效且网关可达 —— 那么 8c/8d 的超时另有原因（API 层超时设置 / 并发）" ;;
+            401|403) echo "::error::❌ 根因锁定：CI 那把 TOAPIS_API_KEY 无效或欠费（出网是通的）" ; exit 1 ;;
+            000|curl_exit_*) echo "::error::❌ 根因锁定：runner 出网打不到 toapis.com（凭据无关）" ; exit 1 ;;
+            *) echo "::error::❌ 非预期状态 $code，见上方 error 字段" ; exit 1 ;;
+          esac
