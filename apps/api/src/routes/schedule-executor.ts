@@ -87,7 +87,10 @@ scheduleExecutorRouter.post('/claim', execRateLimit, async (req: Request, res: R
            WHERE task_type = 'device_job'
              AND status = 'queued'
              AND payload->>'source' = 'oneoff'
-             AND payload->>'serial' = ANY($1::text[])
+             -- 两种形态都认：裸序列号（领单器发的）与 'phone-<序列号>'（中台 agents.agent_id
+             -- 的形态）。派单侧已统一存裸值，这里兜住历史数据与其它命名习惯。
+             AND (payload->>'serial' = ANY($1::text[])
+                  OR payload->>'serial' = ANY(SELECT 'phone-' || unnest($1::text[])))
              AND (due_at IS NULL OR due_at <= NOW())
            ORDER BY due_at NULLS FIRST
            FOR UPDATE SKIP LOCKED

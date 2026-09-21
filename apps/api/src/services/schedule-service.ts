@@ -172,3 +172,16 @@ export function buildCasUpdate(input: { taskId: string; rowVersion: number; dueA
     RETURNING id, row_version, due_at`;
   return { sql, params: [input.taskId, input.rowVersion, input.dueAt] };
 }
+
+/**
+ * 中台 `agents.agent_id` → 工作机上 `adb devices` 看到的裸序列号。
+ *
+ * 两边对不上就永远派不下去：推帧器注册设备时用的是 `phone-<序列号>`，而领单器跑在
+ * 工作机上，手边只有 adb 吐出来的裸序列号。这个字段是派单与真机之间唯一的握手，
+ * 存错了页面上会显示排着、却谁也不领（生产实证：单 550326e5 卡在 queued 领不走）。
+ *
+ * 只剥已知前缀，不认识的形态原样返回 —— 宁可保持原值让人能查，也不猜。
+ */
+export function toDeviceSerial(agentIdOrSerial: string): string {
+  return agentIdOrSerial.replace(/^phone-/, '');
+}

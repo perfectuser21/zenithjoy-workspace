@@ -23,6 +23,7 @@ import {
   validateWindow,
   isStale,
   buildCasUpdate,
+  toDeviceSerial,
   STALE_AFTER_MS,
   type BrainDeviceJob,
   type Dept,
@@ -201,8 +202,10 @@ scheduleRouter.post('/jobs', rateLimit, async (req: Request, res: Response) => {
       source: 'oneoff',
       tenant_id: tenantId,
       // 领单器按机身序列号认领（它在工作机上，手边只有 adb devices 的序列号，
-      // 没有中台的 agent UUID）。这个字段是派单与真机之间唯一的握手。
-      serial: target.agent_id,
+      // 没有中台的 agent UUID）。这个字段是派单与真机之间唯一的握手，所以必须存
+      // **adb 看得到的那个形态** —— agents.agent_id 是 `phone-<序列号>`，直接存进来
+      // 会和领单器发的裸序列号对不上，单子永远领不走（生产实证 550326e5）。
+      serial: toDeviceSerial(target.agent_id),
       window_start, window_end,
       idempotency_key: key,
       est_minutes: typeof est_minutes === 'number' ? est_minutes : 15,

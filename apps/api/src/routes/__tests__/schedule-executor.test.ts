@@ -80,6 +80,13 @@ describe('认领', () => {
     expect(sql).toMatch(/payload->>'source'\s*=\s*'oneoff'/i);
   });
 
+  it('认领同时认裸序列号与 phone- 形态（兜住历史数据与其它命名）', async () => {
+    await request(app).post('/api/schedule/claim').set(AUTH).send({ serials: ['S1'], claimer: 'm4' });
+    const [sql] = brainQuery.mock.calls[0];
+    expect(sql).toMatch(/payload->>'serial'\s*=\s*ANY/i);
+    expect(sql, '只认一种形态，另一种永远领不走').toMatch(/'phone-'\s*\|\|/i);
+  });
+
   it('只领到点的活（due_at <= now），不提前动手', async () => {
     await request(app).post('/api/schedule/claim').set(AUTH).send({ serials: ['S1'], claimer: 'm4' });
     const [sql] = brainQuery.mock.calls[0];
