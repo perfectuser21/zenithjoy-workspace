@@ -108,7 +108,7 @@ export default function WorkersPage() {
   if (workers.length === 0) {
     return (
       <div className="p-6">
-        <div className="rounded-2xl bg-white p-5 shadow-sm">
+        <div className="rounded-2xl bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,.06),0_8px_24px_-16px_rgba(15,23,42,.18)]">
           <h1 className="mb-2 text-xl font-semibold text-gray-900">工作机</h1>
           <p className="text-gray-600">还没有工作机。安装 Agent 并用你的 license 注册后，它会出现在这里。</p>
         </div>
@@ -118,16 +118,16 @@ export default function WorkersPage() {
 
   return (
     <div className="p-6">
-      <div className="rounded-2xl bg-white p-5 shadow-sm">
+      <div className="rounded-2xl bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,.06),0_8px_24px_-16px_rgba(15,23,42,.18)]">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-xl font-semibold text-gray-900">工作机</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-neutral-900">工作机</h1>
           {mock && (
-            <span className="rounded bg-amber-50 px-2 py-0.5 text-xs text-amber-800 ring-1 ring-amber-200">
+            <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] text-amber-700 ring-1 ring-amber-100">
               排期为样例数据，后端接入前仅供看形
             </span>
           )}
 
-          <div className="ml-auto flex items-center overflow-hidden rounded-lg border">
+          <div className="ml-auto flex items-center overflow-hidden rounded-lg ring-1 ring-neutral-200">
             <button aria-label="前一天" onClick={() => setOffset((o) => o - 1)} className="px-2 py-1.5 text-gray-600 hover:bg-gray-50">
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -154,13 +154,15 @@ export default function WorkersPage() {
                 key={r.id}
                 data-testid="device-chip"
                 onClick={() => setPicked(r.id)}
-                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs ring-1 ${
-                  on ? 'bg-gray-900 text-white ring-gray-900' : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-colors ${
+                  on
+                    ? 'bg-neutral-900 text-white shadow-sm'
+                    : 'bg-neutral-50 text-neutral-600 ring-1 ring-neutral-200 hover:bg-neutral-100'
                 }`}
               >
                 <span className={`h-1.5 w-1.5 rounded-full ${r.online ? 'bg-emerald-400' : 'bg-gray-300'}`} />
                 {r.name}
-                <span className={on ? 'text-gray-300' : 'text-gray-400'}>{r.todayCount} 件</span>
+                <span className={on ? 'text-neutral-400' : 'text-neutral-400'}>{r.todayCount} 件</span>
               </button>
             );
           })}
@@ -175,8 +177,10 @@ export default function WorkersPage() {
                   setDept(x);
                   setPicked(null);
                 }}
-                className={`rounded-full px-3 py-1 text-xs ring-1 ${
-                  dept === x ? 'bg-blue-600 text-white ring-blue-600' : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50'
+                className={`rounded-full px-3 py-1 text-[11px] transition-colors ${
+                  dept === x
+                    ? 'bg-sky-600 text-white'
+                    : 'text-neutral-500 ring-1 ring-neutral-200 hover:bg-neutral-50'
                 }`}
               >
                 {x}
@@ -194,13 +198,13 @@ export default function WorkersPage() {
         </div>
 
         {!current ? (
-          <div className="mt-3 rounded-xl border py-10 text-center text-sm text-gray-400">没有匹配的设备</div>
+          <div className="mt-4 rounded-2xl py-12 text-center text-sm text-neutral-400 ring-1 ring-neutral-200/80">没有匹配的设备</div>
         ) : (
-          <div className="mt-3 flex flex-col gap-4 lg:flex-row">
-            <div className="shrink-0 lg:w-[300px]">
+          <div className="mt-4 flex flex-col gap-5 lg:flex-row">
+            <div className="shrink-0 lg:w-[272px]">
               <div className="mb-2 flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium text-gray-900">{current.name}</span>
-                {current.serial && <span className="text-xs text-gray-400">{current.serial}</span>}
+                <span className="text-[13px] font-semibold text-neutral-900">{current.name}</span>
+                {current.serial && <span className="text-[11px] tabular-nums text-neutral-400">{current.serial}</span>}
                 <Link to={`/dashboard/workers/${current.id}`} className="ml-auto text-xs text-blue-600 hover:underline">
                   看步骤流 →
                 </Link>
@@ -210,7 +214,7 @@ export default function WorkersPage() {
               </PhoneFrame>
               <div className="mt-2 text-xs text-gray-500">
                 {current.running ? (
-                  <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-700 ring-1 ring-amber-200">
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700 ring-1 ring-amber-100">
                     正在跑：{current.running.title}（第 {current.running.current_step}/{current.running.steps_total} 步）
                   </span>
                 ) : (

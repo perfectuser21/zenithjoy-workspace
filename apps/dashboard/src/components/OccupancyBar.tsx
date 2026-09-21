@@ -130,13 +130,13 @@ export default function OccupancyBar({ slots, dayOffset, onPickGap }: OccupancyB
   const nowPct = ((Date.now() - dayRange(0).start) / (DAY_MINUTES * MINUTE)) * 100;
 
   return (
-    <div className="flex w-[124px] shrink-0 flex-col">
-      <div data-testid="bar-head" className="mb-1 px-1 text-[11px] leading-tight text-gray-500">
-        <div>
-          空 <b className="text-blue-600">{gapText(freeMinutes)}</b>
+    <div className="flex w-[132px] shrink-0 flex-col">
+      <div data-testid="bar-head" className="mb-2 px-1 text-[11px] leading-snug text-neutral-400">
+        <div className="text-neutral-500">
+          空 <b className="text-sky-600">{gapText(freeMinutes)}</b>
         </div>
-        <div>
-          还能加 <b className="text-blue-600">{canAdd}</b> 单
+        <div className="text-neutral-500">
+          还能加 <b className="text-sky-600">{canAdd}</b> 单
         </div>
       </div>
 
@@ -147,7 +147,7 @@ export default function OccupancyBar({ slots, dayOffset, onPickGap }: OccupancyB
             <span
               key={h}
               data-testid="bar-tick"
-              className="absolute right-0 -translate-y-1/2 text-[10px] tabular-nums text-gray-400"
+              className="absolute right-0 -translate-y-1/2 text-[10px] tabular-nums text-neutral-300"
               style={{ top: `${(h / 24) * 100}%` }}
             >
               {String(h).padStart(2, '0')}
@@ -155,14 +155,14 @@ export default function OccupancyBar({ slots, dayOffset, onPickGap }: OccupancyB
           ))}
         </div>
 
-        <div className="absolute inset-y-0 left-[22px] right-0 overflow-hidden rounded-md border bg-white">
+        <div className="absolute inset-y-0 left-[22px] right-0 overflow-hidden rounded-lg bg-neutral-50 ring-1 ring-neutral-200/70">
           {segs.map((s) =>
             s.kind === 'busy' ? (
               <div
                 key={`b-${s.startMs}`}
                 data-testid="bar-busy"
                 title={`${s.startText}–${s.endText} 排了活`}
-                className={`absolute inset-x-0 ${s.dept ? DEPT_BLOCK[s.dept].bar : 'bg-gray-400'}`}
+                className={`absolute inset-x-0 opacity-85 ${s.dept ? DEPT_BLOCK[s.dept].bar : 'bg-neutral-400'}`}
                 style={{ top: `${s.topPct}%`, height: `${s.heightPct}%` }}
               />
             ) : (
@@ -176,8 +176,10 @@ export default function OccupancyBar({ slots, dayOffset, onPickGap }: OccupancyB
                     : `${s.startText}–${s.endText} 空 ${gapText(s.minutes)}，还能插 ${s.canFit} 单`
                 }
                 onClick={() => onPickGap?.(s.startMs)}
-                className={`absolute inset-x-0 flex items-center justify-center px-1 text-[10px] leading-tight ${
-                  s.past ? 'cursor-default bg-gray-50 text-gray-300' : 'bg-blue-50/60 text-blue-700 hover:bg-blue-100'
+                className={`absolute inset-x-0 flex items-center justify-center px-1 text-[10px] leading-tight transition-colors ${
+                  s.past
+                    ? 'cursor-default bg-neutral-100/70 text-neutral-300'
+                    : 'bg-sky-50 text-sky-700 hover:bg-sky-100'
                 }`}
                 style={{ top: `${s.topPct}%`, height: `${s.heightPct}%` }}
               >
@@ -186,7 +188,7 @@ export default function OccupancyBar({ slots, dayOffset, onPickGap }: OccupancyB
                     <span className="whitespace-nowrap">空 {gapText(s.minutes)}</span>
                     {/* 块够高才写第二行，不然两行会把块撑出边界 */}
                     {!s.past && s.canFit ? (
-                      s.minutes >= 90 ? <span className="font-medium">能插 {s.canFit} 单</span> : null
+                      s.minutes >= 90 ? <span className="font-semibold">能插 {s.canFit} 单</span> : null
                     ) : null}
                   </span>
                 )}
