@@ -115,11 +115,15 @@ test('T3: staff_app/line00 精确 5 个 GP（含gp_anchor_enforcement、f1_dev_l
   // 渲染+内容安全Gate 四刀已落地并各自锚定 smoke。
   const batchMashup = customerGps.find(g => g.id === 'batch_mashup');
   assert.equal(batchMashup.status, 'active');
+  // 2026-09-21 混剪历史记录：横切件，服务四个 step 而不属于其中任何一个——客户跑完
+  // 一轮候选生成离开页面，run 全丢（前端组件内存态），回来只能从头再跑。新增第 5 条
+  // smoke 锁 GET /mashup/runs 的租户隔离与 stage 事实判定。
   assert.deepEqual(batchMashup.smoke_files, [
     '.github/workflows/scripts/smoke/material-tagging-smoke.sh',
     '.github/workflows/scripts/smoke/mashup-slot-assignment-smoke.sh',
     '.github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh',
     '.github/workflows/scripts/smoke/mashup-render-smoke.sh',
+    '.github/workflows/scripts/smoke/mashup-history-smoke.sh',
   ]);
   assert.deepEqual(batchMashup.steps.map(s => s.id), ['step1', 'step2', 'step3', 'step4']);
   const viralRemake = customerGps.find(g => g.id === 'viral_video_remake');
