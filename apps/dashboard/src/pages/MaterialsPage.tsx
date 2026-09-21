@@ -7,17 +7,19 @@
  *
  * 两条刻意的取舍（decision 1a20f778）：
  *  ① 预览地址 1 小时有效，不做自动续签。开着超过 1 小时刷新页面即可。
- *  ② 视频只显示图标 + 文件名，不出缩略图——抽帧转码要 ffmpeg + 异步任务 +
- *     缩略图存储，是独立的一件事，硬塞进来会把这一刀撑成两周。
+ *  ② 网格里视频只显示图标 + 文件名，不出缩略图——抽帧转码要 ffmpeg + 异步任务 +
+ *     缩略图存储，是独立的一件事。点开播放不需要抽帧（后端签的 URL 直接能喂
+ *     <video>），所以弹窗里是能播的，被 1a20f778 挡住的只有网格缩略图。
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Image as ImageIcon, Film, X, AlertTriangle, RefreshCw } from 'lucide-react';
 import {
   listMaterials,
   isVideo,
   formatSize,
+  getMaterialPreview,
   type Material,
 } from '../api/materials.api';
 
@@ -69,9 +71,38 @@ function Tile({ item, onOpen }: { item: Material; onOpen: (m: Material) => void 
   );
 }
 
-/** 点开看大图。视频不内嵌播放器——第一版只给下载入口，播放是另一件事。 */
-function Lightbox({ item, onClose }: { item: Material; onClose: () => void }) {
+/**
+ * 点开看大图 / 看视频。
+ *
+ * 视频用 GET /materials/:id/preview 现签地址，不复用列表里的 preview_url——后者
+ * 签发时就在走 1 小时 TTL、前端还缓存 5 分钟，点开那一刻可能已过期。
+ *
+ * 播放与否只看"签出了地址"，不看服务端的 previewAvailable：后者只认
+ * mime video/*，而 iPhone 快捷指令常把 .mov 传成 octet-stream——按它拦截就等于
+ * 把能播的素材判死。播不动最多 onError 降级一次，拦错了客户永远看不到。
+ */
+export function Lightbox({ item, onClose }: { item: Material; onClose: () => void }) {
   const video = isVideo(item);
+  const [preview, setPreview] = useState<{ status: 'loading' | 'ready' | 'unavailable'; url: string | null }>(
+    video ? { status: 'loading', url: null } : { status: 'ready', url: item.preview_url },
+  );
+
+  useEffect(() => {
+    if (!video) return;
+    let alive = true;
+    getMaterialPreview(item.id)
+      .then((p) => {
+        if (!alive) return;
+        setPreview(p.previewUrl ? { status: 'ready', url: p.previewUrl } : { status: 'unavailable', url: null });
+      })
+      .catch(() => {
+        if (alive) setPreview({ status: 'unavailable', url: null });
+      });
+    return () => { alive = false; };
+  }, [video, item.id]);
+
+  const [playbackFailed, setPlaybackFailed] = useState(false);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
@@ -88,14 +119,34 @@ function Lightbox({ item, onClose }: { item: Material; onClose: () => void }) {
       </button>
 
       <div className="max-h-full max-w-4xl" onClick={(e) => e.stopPropagation()} role="presentation">
-        {!video && item.preview_url ? (
+        {video ? (
+          preview.status === 'loading' ? (
+            <div className="rounded-lg bg-gray-900 px-8 py-12 text-center text-gray-300">
+              <Film className="mx-auto h-12 w-12 animate-pulse" />
+              <p className="mt-3 text-sm">预览地址获取中…</p>
+            </div>
+          ) : preview.status === 'ready' && preview.url && !playbackFailed ? (
+            <video
+              src={preview.url}
+              controls
+              autoPlay={false}
+              onError={() => setPlaybackFailed(true)}
+              className="max-h-[80vh] w-full rounded-lg bg-black"
+            />
+          ) : (
+            <div className="rounded-lg bg-gray-900 px-8 py-12 text-center text-gray-300">
+              <Film className="mx-auto h-12 w-12" />
+              <p className="mt-3 text-sm">
+                {playbackFailed ? '这个视频浏览器放不了，用下面的链接下载后看' : '这条素材的预览地址签发失败'}
+              </p>
+            </div>
+          )
+        ) : item.preview_url ? (
           <img src={item.preview_url} alt={item.file_name} className="max-h-[80vh] rounded-lg object-contain" />
         ) : (
           <div className="rounded-lg bg-gray-900 px-8 py-12 text-center text-gray-300">
-            {video ? <Film className="mx-auto h-12 w-12" /> : <AlertTriangle className="mx-auto h-12 w-12" />}
-            <p className="mt-3 text-sm">
-              {video ? '视频暂不支持在线预览' : '这条素材的预览地址签发失败'}
-            </p>
+            <AlertTriangle className="mx-auto h-12 w-12" />
+            <p className="mt-3 text-sm">这条素材的预览地址签发失败</p>
           </div>
         )}
         <div className="mt-3 text-center text-sm text-white">
@@ -105,9 +156,9 @@ function Lightbox({ item, onClose }: { item: Material; onClose: () => void }) {
             {item.taken_at ? ` · 拍摄于 ${formatTime(item.taken_at)}` : ''}
             {` · 上传于 ${formatTime(item.created_at)}`}
           </div>
-          {item.preview_url ? (
+          {preview.url ?? item.preview_url ? (
             <a
-              href={item.preview_url}
+              href={preview.url ?? item.preview_url ?? undefined}
               target="_blank"
               rel="noreferrer"
               className="mt-2 inline-block text-blue-300 underline"

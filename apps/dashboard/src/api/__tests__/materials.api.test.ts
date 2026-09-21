@@ -14,7 +14,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const { get } = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock('../client', () => ({ apiClient: { get } }));
 
-import { listMaterials, isVideo, formatSize, MAX_PAGE_SIZE } from '../materials.api';
+import { listMaterials, isVideo, formatSize, MAX_PAGE_SIZE, getMaterialPreview } from '../materials.api';
 
 describe('isVideo — mime 不可靠时退回看扩展名', () => {
   it('mime 是 video/* → 是视频', () => {
@@ -90,5 +90,34 @@ describe('listMaterials — 先换 token 再列素材', () => {
 
   it('MAX_PAGE_SIZE 与服务端硬上限一致', () => {
     expect(MAX_PAGE_SIZE).toBe(100);
+  });
+});
+
+describe('getMaterialPreview', () => {
+  beforeEach(() => { get.mockReset(); });
+
+  it('带 X-Upload-Token 调 GET /materials/:id/preview 并解包', async () => {
+    get.mockImplementation(async (url: string) => {
+      if (url === '/account/me') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
+      if (url === '/materials/mat-1/preview') {
+        return {
+          data: {
+            data: {
+              materialId: 'mat-1',
+              previewUrl: 'https://cos.example/mat-1.mp4?sig=x',
+              previewAvailable: true,
+              expiresAt: '2026-09-21T12:00:00.000Z',
+            },
+          },
+        };
+      }
+      throw new Error('unexpected GET ' + url);
+    });
+
+    const result = await getMaterialPreview('mat-1');
+
+    expect(result.previewUrl).toBe('https://cos.example/mat-1.mp4?sig=x');
+    const call = get.mock.calls.find((c: unknown[]) => c[0] === '/materials/mat-1/preview');
+    expect((call?.[1] as { headers: Record<string, string> }).headers['X-Upload-Token']).toBe('ZJ-F-TESTKEY');
   });
 });

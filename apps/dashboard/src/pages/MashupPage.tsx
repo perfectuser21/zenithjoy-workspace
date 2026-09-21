@@ -11,21 +11,26 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { Film, RefreshCw, CheckCircle2, XCircle, Clock, ArrowLeft, Download } from 'lucide-react';
+import { Film, RefreshCw, CheckCircle2, XCircle, Clock, ArrowLeft, Download, Layers } from 'lucide-react';
 import { listMaterials, formatSize, type Material } from '../api/materials.api';
 import {
   listTemplates,
   createRun,
+  getRun,
   generateCandidates,
+  listCandidates,
   selectCandidate,
   renderCandidate,
   previewCandidate,
   getCandidateDetail,
+  listRuns,
   type MashupRun,
   type CandidatesResult,
   type RenderResult,
   type SlotAssignmentStatus,
   type PreviewStatus,
+  type MashupRunSummary,
+  type CandidateDetail,
 } from '../api/mashup.api';
 
 /** 轮询候选详情直到（渲染或预览）落终态，或超过最大次数放弃（避免网络异常时无限空转）。 */
@@ -44,7 +49,7 @@ async function pollCandidateUntil(
 
 type TaggedMaterial = Material & { tag_status?: string; ai_tags?: string[] };
 
-type Step = 'pick' | 'assigned' | 'candidates' | 'result';
+type Step = 'pick' | 'assigned' | 'candidates' | 'result' | 'history';
 
 const SLOT_LABEL: Record<string, string> = {
   hook: '钩子', product: '产品', evidence: '证据', cta: '行动号召',
@@ -70,6 +75,7 @@ function extractErrorMessage(err: unknown, fallback: string): string {
 }
 
 function StepBar({ step }: { step: Step }) {
+  if (step === 'history') return null;
   const steps: { key: Step; label: string }[] = [
     { key: 'pick', label: '① 选素材' },
     { key: 'assigned', label: '② 槽位分配' },
@@ -207,6 +213,27 @@ export default function MashupPage() {
     qc.invalidateQueries({ queryKey: ['materials', 'mashup-pick'] });
   }
 
+  const runsQuery = useQuery({
+    queryKey: ['mashup', 'runs'],
+    queryFn: () => listRuns({ limit: 50 }),
+    enabled: step === 'history',
+    staleTime: 30 * 1000,
+  });
+
+  const openHistoryMutation = useMutation({
+    mutationFn: (summary: MashupRunSummary) =>
+      resolveHistoryTarget(summary, { getRun, listCandidates, getCandidateDetail, generateCandidates }),
+    onSuccess: (target) => {
+      if (target.run) setRun(target.run);
+      if (target.candidates) setCandidates(target.candidates);
+      if (target.renderResult) setRenderResult(target.renderResult);
+      if (target.selectedCandidateId !== undefined) setSelectedCandidateId(target.selectedCandidateId);
+      setErrorMsg(null);
+      setStep(target.step);
+    },
+    onError: (e) => setErrorMsg(extractErrorMessage(e, '打开历史记录失败')),
+  });
+
   return (
     <div className="p-4 sm:p-6">
       <div className="mb-4 flex items-center justify-between">
@@ -230,6 +257,32 @@ export default function MashupPage() {
 
       {errorMsg ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMsg}</div>
+      ) : null}
+
+      <div className="mb-4 flex gap-2">
+        <button
+          type="button"
+          onClick={() => { resetAll(); setStep('pick'); }}
+          className={`rounded-md px-3 py-1.5 text-sm ${step === 'history' ? 'text-gray-600 hover:bg-gray-100' : 'bg-blue-600 text-white'}`}
+        >
+          新建
+        </button>
+        <button
+          type="button"
+          onClick={() => setStep('history')}
+          className={`rounded-md px-3 py-1.5 text-sm ${step === 'history' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+        >
+          历史记录
+        </button>
+      </div>
+
+      {step === 'history' ? (
+        <HistoryStep
+          runs={runsQuery.data?.items ?? []}
+          loading={runsQuery.isLoading || openHistoryMutation.isPending}
+          onOpen={(r) => openHistoryMutation.mutate(r)}
+          onNew={() => { resetAll(); setStep('pick'); }}
+        />
       ) : null}
 
       {step === 'pick' ? (
@@ -540,6 +593,140 @@ export function ResultStep({ result, onBack }: { result: RenderResult; onBack: (
         <RefreshCw className="h-4 w-4" />
         换个候选再试
       </button>
+    </div>
+  );
+}
+
+// ============ 历史记录 ============
+
+/** 恢复历史 run 时要调的接口集合。显式传入而不是直接 import，便于单测锁"没调生成接口"。 */
+export interface HistoryDeps {
+  getRun: (runId: string) => Promise<MashupRun>;
+  listCandidates: (runId: string) => Promise<CandidatesResult>;
+  getCandidateDetail: (candidateId: string) => Promise<CandidateDetail>;
+  generateCandidates: (runId: string, targetCount?: number) => Promise<CandidatesResult>;
+}
+
+export interface HistoryTarget {
+  step: Step;
+  run?: MashupRun;
+  candidates?: CandidatesResult;
+  renderResult?: RenderResult;
+  selectedCandidateId?: string | null;
+}
+
+/**
+ * 历史记录点进去落到哪一步。
+ *
+ * 要害在候选态走 listCandidates（GET）而不是 generateCandidates（POST）——客户
+ * 等的就是不用重算向量、不用重拼缩略图。deps 显式传进来，测试才能断言
+ * "生成接口一次都没被调用"。
+ */
+export async function resolveHistoryTarget(
+  summary: MashupRunSummary,
+  deps: HistoryDeps,
+): Promise<HistoryTarget> {
+  if (summary.selectedCandidateId) {
+    const detail = await deps.getCandidateDetail(summary.selectedCandidateId);
+    return {
+      step: 'result',
+      selectedCandidateId: summary.selectedCandidateId,
+      // 落 render_failed 但还没写 contents 行——按未通过口径呈现，与
+      // selectAndRenderMutation 同口径，不裸崩。
+      renderResult: detail.content ?? {
+        contentId: '',
+        safetyCheckStatus: 'failed_pending_review',
+        watermarkCheckStatus: 'failed_pending_review',
+      },
+    };
+  }
+
+  const run = await deps.getRun(summary.runId);
+  if (summary.candidateCount > 0) {
+    const candidates = await deps.listCandidates(summary.runId);
+    return { step: 'candidates', run, candidates };
+  }
+  return { step: 'assigned', run };
+}
+
+const STAGE_LABEL: Record<MashupRunSummary['stage'], string> = {
+  completed: '已完成',
+  rendering: '渲染中',
+  candidates_pending: '候选待选定',
+  assigned: '待生成候选',
+};
+
+const STAGE_CLASS: Record<MashupRunSummary['stage'], string> = {
+  completed: 'bg-green-100 text-green-700',
+  rendering: 'bg-amber-100 text-amber-700',
+  candidates_pending: 'bg-blue-100 text-blue-700',
+  assigned: 'bg-gray-100 text-gray-600',
+};
+
+function formatRunTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+export function HistoryStep(props: {
+  runs: MashupRunSummary[];
+  loading: boolean;
+  onOpen: (run: MashupRunSummary) => void;
+  onNew: () => void;
+}) {
+  const { runs, loading, onOpen, onNew } = props;
+
+  if (loading) {
+    return <div className="py-16 text-center text-sm text-gray-400">加载中…</div>;
+  }
+
+  if (runs.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-gray-300 py-12 text-center">
+        <p className="text-sm text-gray-500">还没有混剪记录</p>
+        <button
+          type="button"
+          onClick={onNew}
+          className="mt-3 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          新建一次混剪
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {runs.map((r) => (
+        <button
+          key={r.runId}
+          type="button"
+          onClick={() => onOpen(r)}
+          className="flex w-full items-center gap-3 rounded-lg border border-gray-200 p-3 text-left hover:border-blue-400 hover:bg-blue-50/40"
+        >
+          <div className="h-14 w-20 shrink-0 overflow-hidden rounded bg-gray-100">
+            {r.thumbnailUrl ? (
+              <img src={r.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-gray-300">
+                <Layers className="h-5 w-5" />
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className={`rounded px-1.5 py-0.5 text-[11px] ${STAGE_CLASS[r.stage]}`}>
+                {STAGE_LABEL[r.stage]}
+              </span>
+              <span className="text-xs text-gray-400">{formatRunTime(r.createdAt)}</span>
+            </div>
+            <div className="mt-1 text-xs text-gray-500">
+              {r.candidateCount > 0 ? `${r.candidateCount} 个候选方案` : '尚未生成候选'}
+            </div>
+          </div>
+        </button>
+      ))}
     </div>
   );
 }

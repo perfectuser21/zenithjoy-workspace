@@ -24,6 +24,15 @@ export interface MaterialListResponse {
   count: number;
 }
 
+export interface MaterialPreview {
+  materialId: string;
+  /** 现签的临时地址；null = 签发失败（storage_key 失效/未配存储）。 */
+  previewUrl: string | null;
+  /** 服务端按 mime 判的"可播"。前端不拿它当播放开关——见 getMaterialPreview 注释。 */
+  previewAvailable: boolean;
+  expiresAt: string;
+}
+
 /** 服务端硬上限，传更大也会被夹到这个值。 */
 export const MAX_PAGE_SIZE = 100;
 
@@ -58,6 +67,21 @@ export async function listMaterials(
     params: { limit: params.limit, offset: params.offset },
     headers: { 'X-Upload-Token': token },
   });
+  return data.data;
+}
+
+/**
+ * 打开详情弹窗时现签一个预览地址。
+ *
+ * 不复用列表里的 preview_url：那是列表渲染时签的，TTL 1 小时、前端还缓存 5 分钟，
+ * 弹窗打开那一刻可能已经过期，<video> 拿到过期 URL 只会黑屏。
+ */
+export async function getMaterialPreview(materialId: string): Promise<MaterialPreview> {
+  const token = await getUploadToken();
+  const { data } = await apiClient.get<{ data: MaterialPreview }>(
+    `/materials/${materialId}/preview`,
+    { headers: { 'X-Upload-Token': token } },
+  );
   return data.data;
 }
 

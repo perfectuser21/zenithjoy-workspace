@@ -63,6 +63,23 @@ function ok(res: Response, data: unknown) {
   res.status(200).json({ success: true, data, error: null, timestamp: new Date().toISOString() });
 }
 
+export type MashupRunStage = 'completed' | 'rendering' | 'candidates_pending' | 'assigned';
+
+/**
+ * 「已完成」以 contents.export_url 非空为准，不看 mashup_runs.status——status 列
+ * 没有 CHECK 约束、由应用层写，而 export_url 是内容安全 Gate fail-closed 之后
+ * 才写入的（20260919_030000_mashup_export_gate.sql）。用 status 判会把「渲染跑完
+ * 但被 Gate 拦下」的 run 显示成已完成，客户点进去看不到片子。
+ */
+export function deriveStage(
+  selectedCandidateId: string | null,
+  hasExport: boolean,
+  candidateCount: number,
+): MashupRunStage {
+  if (selectedCandidateId) return hasExport ? 'completed' : 'rendering';
+  return candidateCount > 0 ? 'candidates_pending' : 'assigned';
+}
+
 async function authenticate(req: Request, res: Response): Promise<{ tenantId: string } | null> {
   const token = extractUploadToken(req);
   if (!token) {
@@ -141,6 +158,65 @@ export function createMashupRouter(): Router {
       }
       fail(res, 500, 'ASSIGN_SLOTS_FAILED', message);
     }
+  });
+
+  // ── GET /runs：本租户混剪历史（GP line05/batch_mashup 横切）──────────────
+  //
+  // 客户跑完一轮候选生成（真 LLM + 向量检索）离开页面就全丢了——run/candidates
+  // 全是前端组件内存态。这个端点让历史找得回来：列表一次带出 stage 判定所需的
+  // 全部事实，点进去的恢复走既有端点，不重跑生成。
+  router.get('/runs', async (req: Request, res: Response) => {
+    const auth = await authenticate(req, res);
+    if (!auth) return;
+
+    const rawLimit = Number(req.query.limit);
+    const rawOffset = Number(req.query.offset);
+    // 越界夹取不报错，与 materials.ts 同口径
+    const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 100) : 20;
+    const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? Math.trunc(rawOffset) : 0;
+
+    // Express 4 没有全局 async 错误中间件，未捕获的 rejection 不会被转成响应——
+    // DB 一报错请求就挂到客户端超时，而不是干净地回 500。与 materials.ts 同口径包起来。
+    let rows;
+    try {
+      ({ rows } = await pool.query(
+        `SELECT r.id, r.template_id, r.status, r.created_at, r.selected_candidate_id,
+                (SELECT COUNT(*) FROM zenithjoy.mashup_candidates c WHERE c.run_id = r.id) AS candidate_count,
+                (SELECT c.thumbnail_url FROM zenithjoy.mashup_candidates c
+                  WHERE c.run_id = r.id AND c.thumbnail_url IS NOT NULL
+                  ORDER BY c.score DESC LIMIT 1) AS thumbnail_url,
+                EXISTS (SELECT 1 FROM zenithjoy.contents ct
+                         WHERE ct.source_candidate_id = r.selected_candidate_id
+                           AND ct.export_url IS NOT NULL) AS has_export
+           FROM zenithjoy.mashup_runs r
+          WHERE r.tenant_id = $1
+          ORDER BY r.created_at DESC
+          LIMIT $2 OFFSET $3`,
+        [auth.tenantId, limit, offset],
+      ));
+    } catch (err) {
+      return fail(res, 500, 'LIST_RUNS_FAILED', err instanceof Error ? err.message : 'unknown');
+    }
+
+    const items = rows.map((r: {
+      id: string; template_id: string; status: string; created_at: Date | string;
+      selected_candidate_id: string | null; candidate_count: string | number;
+      thumbnail_url: string | null; has_export: boolean;
+    }) => {
+      const candidateCount = Number(r.candidate_count);
+      return {
+        runId: r.id,
+        templateId: r.template_id,
+        status: r.status,
+        stage: deriveStage(r.selected_candidate_id, r.has_export, candidateCount),
+        createdAt: new Date(r.created_at).toISOString(),
+        candidateCount,
+        thumbnailUrl: r.thumbnail_url ?? null,
+        selectedCandidateId: r.selected_candidate_id ?? null,
+      };
+    });
+
+    ok(res, { items, limit, offset, count: items.length });
   });
 
   router.get('/runs/:id', async (req: Request, res: Response) => {

@@ -19,6 +19,7 @@ import {
   renderCandidate,
   previewCandidate,
   getCandidateDetail,
+  listRuns,
 } from '../mashup.api';
 
 beforeEach(() => {
@@ -164,5 +165,34 @@ describe('getCandidateDetail', () => {
     const detail = await getCandidateDetail('c1');
     expect(detail.renderStatus).toBe('rendered');
     expect(detail.content?.exportUrl).toBe('https://x');
+  });
+});
+
+describe('listRuns', () => {
+  it('带 X-Upload-Token 调 GET /mashup/runs 并解包 data.data', async () => {
+    get.mockImplementation(async (url: string) => {
+      if (url === '/account/me') return { data: { license: { license_key: 'ZJ-F-TESTKEY' } } };
+      if (url === '/mashup/runs') {
+        return {
+          data: {
+            data: {
+              items: [{
+                runId: 'run-1', templateId: 'tmpl-1', status: 'completed',
+                stage: 'candidates_pending', createdAt: '2026-09-20T10:00:00.000Z',
+                candidateCount: 3, thumbnailUrl: null, selectedCandidateId: null,
+              }],
+              limit: 20, offset: 0, count: 1,
+            },
+          },
+        };
+      }
+      throw new Error('unexpected GET ' + url);
+    });
+
+    const result = await listRuns();
+
+    expect(result.items[0].stage).toBe('candidates_pending');
+    const call = get.mock.calls.find((c: unknown[]) => c[0] === '/mashup/runs');
+    expect((call?.[1] as { headers: Record<string, string> }).headers['X-Upload-Token']).toBe('ZJ-F-TESTKEY');
   });
 });

@@ -33,6 +33,27 @@ export interface MashupRun {
   assignments: SlotAssignment[];
 }
 
+/** 历史列表里一条 run 的摘要。stage 由服务端按库里事实派生，前端不再自己判。 */
+export type MashupRunStage = 'completed' | 'rendering' | 'candidates_pending' | 'assigned';
+
+export interface MashupRunSummary {
+  runId: string;
+  templateId: string;
+  status: RunStatus;
+  stage: MashupRunStage;
+  createdAt: string;
+  candidateCount: number;
+  thumbnailUrl: string | null;
+  selectedCandidateId: string | null;
+}
+
+export interface MashupRunListResult {
+  items: MashupRunSummary[];
+  limit: number;
+  offset: number;
+  count: number;
+}
+
 export type RenderStatus = 'pending' | 'queued' | 'rendering' | 'rendered' | 'render_failed';
 export type PreviewStatus = 'none' | 'generating' | 'ready' | 'failed';
 
@@ -139,6 +160,16 @@ export async function createRun(templateId: string, materialIds: string[]): Prom
 export async function getRun(runId: string): Promise<MashupRun> {
   const opts = await authHeaders();
   const { data } = await apiClient.get<{ data: MashupRun }>(`/mashup/runs/${runId}`, opts);
+  return data.data;
+}
+
+/** 本租户的混剪历史，最新的在前。租户由服务端从凭据反查，前端传什么都不作数。 */
+export async function listRuns(params: { limit?: number; offset?: number } = {}): Promise<MashupRunListResult> {
+  const opts = await authHeaders();
+  const { data } = await apiClient.get<{ data: MashupRunListResult }>('/mashup/runs', {
+    ...opts,
+    params: { limit: params.limit, offset: params.offset },
+  });
   return data.data;
 }
 

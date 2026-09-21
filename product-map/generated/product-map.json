@@ -442,7 +442,8 @@
         ".github/workflows/scripts/smoke/material-tagging-smoke.sh",
         ".github/workflows/scripts/smoke/mashup-slot-assignment-smoke.sh",
         ".github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh",
-        ".github/workflows/scripts/smoke/mashup-render-smoke.sh"
+        ".github/workflows/scripts/smoke/mashup-render-smoke.sh",
+        ".github/workflows/scripts/smoke/mashup-history-smoke.sh"
       ]
     },
     {
@@ -596,5 +597,5 @@
       ]
     }
   ],
-  "digest": "f6b8b3c41445e0c9a9dbdd21f52675f61f18e0ea3d8a23a64b3bc853324d3790"
+  "digest": "edf3e5deb4b69a4ec29d56f2928b53d27b6aa13b43544a5d0b7d430a037d9c5a"
 }

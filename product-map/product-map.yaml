@@ -387,6 +387,7 @@ golden_paths:
       - .github/workflows/scripts/smoke/mashup-slot-assignment-smoke.sh
       - .github/workflows/scripts/smoke/mashup-candidate-generation-smoke.sh
       - .github/workflows/scripts/smoke/mashup-render-smoke.sh
+      - .github/workflows/scripts/smoke/mashup-history-smoke.sh
 
   - id: viral_video_remake
     app_id: customer_app

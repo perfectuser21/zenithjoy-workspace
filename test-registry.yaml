@@ -6661,3 +6661,19 @@ agent_suite:
     status: active
     product: 新媒体运营
     note: "PR#1845 preview 门禁回归：preview 不需 Meta 凭据（否则凭据到位前无法做内容审批）但真实发布门禁一个不少——未配凭据发布仍503、凭据齐全但 META_PUBLISH_ENABLED=false 仍403、未授权401、preview 不回显密钥。独立文件，因 meta-publishing.test.ts 是已落盘合同测试受 lint-contract-test-immutability 保护不可改。"
+
+  - id: mashup-history-step
+    path: apps/dashboard/src/pages/MashupPage.HistoryStep.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪历史记录（GP line05/batch_mashup 横切）：run 过去全是组件内存态，刷新即丢，客户跑完候选生成离开就得从头再来。断言四态徽章渲染、缩略图为 null 时不渲染破图、点击把整个 run 交回页面；以及 resolveHistoryTarget 的四条恢复落点——候选待选定走 listCandidates 且 generateCandidates 一次都不调（重跑意味着重算向量重拼缩略图）、已完成取 getCandidateDetail.content 落成片页、渲染中 content 为 null 按待复核降级不裸崩、只分槽位无候选回分配页。"
+
+  - id: materials-lightbox-video-preview
+    path: apps/dashboard/src/pages/MaterialsPage.Lightbox.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "素材视频在线预览（GP line05/batch_mashup step2）：决策 1a20f778 否掉的是网格里每条都 ffmpeg 抽帧，不是点开播放，但代码把两件事并成了一件。断言弹窗渲染 <video controls> 且 src 来自 /materials/:id/preview 现签地址而非列表里会过期的 preview_url；previewAvailable=false 但签出了地址仍然播（后端只认 mime video/*，快捷指令常传 octet-stream，按它拦截等于把能播的判死）；previewUrl 为 null 落占位绝不塞进 src；onError 降级不留黑屏；图片素材不受影响且不调预览接口。"
