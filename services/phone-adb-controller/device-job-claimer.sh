@@ -36,6 +36,11 @@ PHONE_CTL="${ZJ_PHONE_CTL:-$HOME/bin-harvest/douyin-phone-adb}"
 # profile 是**工作机本地**的概念（douyin-phone-adb 的 registry：<profile名>\t<serial>\t…），
 # 中台不知道也不该知道。派单只给机身序列号，profile 在这里按 serial 现查。
 PHONE_REGISTRY="${DOUYIN_PHONE_REGISTRY:-$HOME/.config/openclaw/douyin-phone-profiles.tsv}"
+# 发送方账号也是本机概念：<profile>\t<抖音号>\t<昵称>\t<角色标签>，私信用带 distribution 的那个
+ACCOUNT_REGISTRY="${DOUYIN_ACCOUNT_REGISTRY:-$HOME/.config/openclaw/douyin-account-routes.tsv}"
+# 业务脚本落点（都在本机 ~/bin-harvest 下；测试用 env 覆盖）
+HARVEST_KEYWORD="${ZJ_HARVEST_KEYWORD:-$HOME/bin-harvest/harvest-keyword.sh}"
+OUTREACH_TICK="${ZJ_OUTREACH_TICK:-$HOME/bin-harvest/outreach-tick.sh}"
 WR="${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}"
 LOG="${ZJ_CLAIMER_LOG:-$HOME/device-job-claimer.log}"
 LOCK_DIR="${ZJ_CLAIMER_LOCK:-/tmp/zj-device-job-claimer.lock}"
@@ -99,6 +104,9 @@ JOB_TITLE=$(printf '%s' "${RESP}" | python3 -c 'import sys,json;d=json.load(sys.
 JOB_ACTION=$(printf '%s' "${RESP}" | python3 -c 'import sys,json;d=json.load(sys.stdin);print((d["data"]["job"].get("params") or {}).get("action",""))' 2>/dev/null)
 JOB_PROFILE=$(printf '%s' "${RESP}" | python3 -c 'import sys,json;d=json.load(sys.stdin);print((d["data"]["job"].get("params") or {}).get("profile",""))' 2>/dev/null)
 JOB_ARG=$(printf '%s' "${RESP}" | python3 -c 'import sys,json;d=json.load(sys.stdin);print((d["data"]["job"].get("params") or {}).get("arg",""))' 2>/dev/null)
+# 业务工作（主理人在页面上派的"活"）。没有 job_type 的是老的 adb 原语单，走下面的兼容分支。
+jp() { printf '%s' "${RESP}" | python3 -c "import sys,json;d=json.load(sys.stdin);print((d['data']['job'].get('params') or {}).get('$1',''))" 2>/dev/null; }
+JOB_TYPE=$(jp job_type)
 
 log "领到单 ${JOB_ID}｜${JOB_TITLE}｜设备 ${JOB_SERIAL}｜动作 ${JOB_ACTION:-未指定}"
 export WALL_NS=devicejob
@@ -109,24 +117,81 @@ wr step "${JOB_SERIAL}" 0 doing
 OK=false
 ERR_CODE=""
 OUT=""
-if [[ -z "${JOB_ACTION}" ]]; then
+
+# 先把 profile 解出来：业务工作和 adb 原语都要用
+resolve_profile() {
+  local p=""
+  if [[ -r "${PHONE_REGISTRY}" && -n "${JOB_SERIAL}" ]]; then
+    p=$(awk -F'\t' -v s="${JOB_SERIAL}" '$2 == s { print $1; exit }' "${PHONE_REGISTRY}")
+  fi
+  if [[ -z "${p}" ]]; then
+    p="${JOB_PROFILE:-${JOB_SERIAL}}"
+    log "registry 里按序列号 ${JOB_SERIAL} 查不到 profile，退回用 ${p}"
+  fi
+  printf '%s' "${p}"
+}
+
+if [[ -n "${JOB_TYPE}" ]]; then
+  # ── 业务工作：主理人在页面上派的"活" ──────────────────────────
+  P=$(resolve_profile)
+  case "${JOB_TYPE}" in
+    harvest_keyword)
+      KW=$(jp keyword); MAXV=$(jp max_videos)
+      if [[ ! -x "${HARVEST_KEYWORD}" ]]; then
+        ERR_CODE="NO_SCRIPT"; log "找不到采收脚本 ${HARVEST_KEYWORD}"
+      elif [[ -z "${KW}" ]]; then
+        ERR_CODE="NO_KEYWORD"; log "采收单没带关键词"
+      else
+        # 脚本要的是 URL 编码后的词（它自己不编码）
+        KW_ENC=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]))' "${KW}" 2>/dev/null)
+        OUT=$("${HARVEST_KEYWORD}" "${P}" "${KW_ENC}" "${MAXV:-6}" "dj$(date +%m%d%H%M%S)" </dev/null 2>&1)
+        RC=$?; (( RC == 0 )) && OK=true || { ERR_CODE="EXEC_RC_${RC}"; log "采收失败 rc=${RC}: $(printf '%s' "${OUT}" | tail -3)"; }
+      fi
+      ;;
+    outreach_round)
+      if [[ ! -x "${OUTREACH_TICK}" ]]; then
+        ERR_CODE="NO_SCRIPT"; log "找不到触达脚本 ${OUTREACH_TICK}"
+      else
+        OUT=$("${OUTREACH_TICK}" </dev/null 2>&1)
+        RC=$?; (( RC == 0 )) && OK=true || { ERR_CODE="EXEC_RC_${RC}"; log "触达失败 rc=${RC}: $(printf '%s' "${OUT}" | tail -3)"; }
+      fi
+      ;;
+    dm_one)
+      TARGET=$(jp target); MSG=$(jp message)
+      # 发送方账号由本机路由表定：取该 profile 下带 distribution 角色的第一个号。
+      # 中台不知道这台机绑了哪些号，也不该知道（同 profile，上一轮的教训）。
+      SENDER=""
+      if [[ -r "${ACCOUNT_REGISTRY}" ]]; then
+        SENDER=$(awk -F'\t' -v p="${P}" '$1 == p && $4 ~ /distribution/ { print $2; exit }' "${ACCOUNT_REGISTRY}")
+        [[ -z "${SENDER}" ]] && SENDER=$(awk -F'\t' -v p="${P}" '$1 == p { print $2; exit }' "${ACCOUNT_REGISTRY}")
+      fi
+      if [[ ! -x "${PHONE_CTL}" ]]; then
+        ERR_CODE="NO_PHONE_CTL"; log "找不到 ${PHONE_CTL}"
+      elif [[ -z "${SENDER}" ]]; then
+        # 宁可判失败说清楚，也不拿个不确定的号去发——发错号比不发更糟
+        ERR_CODE="NO_SENDER"; log "本机账号路由表里查不到 ${P} 的发送号，不发"
+      elif [[ -z "${TARGET}" || -z "${MSG}" ]]; then
+        ERR_CODE="NO_TARGET_OR_MSG"; log "私信单缺发给谁或发什么"
+      else
+        # 话术走 base64：引号、$、换行都不会在传参路上被吃掉
+        MSG_B64=$(printf '%s' "${MSG}" | /usr/bin/base64 | tr -d '\n')
+        OUT=$("${PHONE_CTL}" --profile "${P}" private-message-send "${SENDER}" "${TARGET}" "${MSG_B64}" "dj$(date +%m%d%H%M%S)" </dev/null 2>&1)
+        RC=$?; (( RC == 0 )) && OK=true || { ERR_CODE="EXEC_RC_${RC}"; log "私信失败 rc=${RC}: $(printf '%s' "${OUT}" | tail -3)"; }
+      fi
+      ;;
+    *)
+      ERR_CODE="UNKNOWN_JOB_TYPE"
+      log "不认识的活：${JOB_TYPE}（页面上的工作目录与本机分派对不上，八成是有一边没更新）"
+      ;;
+  esac
+elif [[ -z "${JOB_ACTION}" ]]; then
   ERR_CODE="NO_ACTION"
-  log "单 ${JOB_ID} 没带动作，直接判失败（派单方必须给 params.action）"
+  log "单 ${JOB_ID} 既没带 job_type 也没带动作，直接判失败"
 elif [[ ! -x "${PHONE_CTL}" ]]; then
   ERR_CODE="NO_PHONE_CTL"
   log "找不到 ${PHONE_CTL}"
 else
-  # 按序列号在本地 registry 查 profile 名。中台传来的 profile 不可信：它那边只有
-  # agents.agent_id（形态是 phone-<序列号>），直接当 profile 用会 "unknown phone profile"
-  # （生产实证：单 03aa758d，rc=2）。查得到就用查到的，查不到才退回中台给的值。
-  P=""
-  if [[ -r "${PHONE_REGISTRY}" && -n "${JOB_SERIAL}" ]]; then
-    P=$(awk -F'\t' -v s="${JOB_SERIAL}" '$2 == s { print $1; exit }' "${PHONE_REGISTRY}")
-  fi
-  if [[ -z "${P}" ]]; then
-    P="${JOB_PROFILE:-${JOB_SERIAL}}"
-    log "registry 里按序列号 ${JOB_SERIAL} 查不到 profile，退回用 ${P}"
-  fi
+  P=$(resolve_profile)
   if [[ -n "${JOB_ARG}" ]]; then
     OUT=$("${PHONE_CTL}" --profile "${P}" "${JOB_ACTION}" "${JOB_ARG}" </dev/null 2>&1)
   else

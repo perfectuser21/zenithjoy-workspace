@@ -344,15 +344,16 @@ export function headroom(quotas: DeptQuota[]): number {
 
 // ─────────────────────── 派单 / 改时间 / 取消 ───────────────────────
 
-/** 一件活的动作参数：交给工作机上的领单器执行 */
-export interface JobParams {
-  /** douyin-phone-adb 的子命令，如 open-search / open-app / screencap */
-  action: string;
-  /** 设备 profile（如 legacy / jinoshengyuan-work）；缺省时领单器用机身序列号兜底 */
-  profile?: string;
-  /** 动作的参数，如搜索关键词 */
-  arg?: string;
-}
+/**
+ * 交给工作机上领单器的参数。两种形态：
+ *  - **业务工作**（页面派活走这条）：`job_type` + 该工作声明的输入字段，
+ *    见 job-catalog.ts。领单器按 job_type 分派到本机的业务脚本。
+ *  - **adb 原语**（老形态，留作调试/兼容）：`action` + `arg`。
+ *
+ * 两边都不带 profile：那是工作机本地 registry 里的名字，中台不知道也不该知道
+ * （生产实证：中台猜 profile 导致 "unknown phone profile"，单 03aa758d）。
+ */
+export type JobParams = Record<string, string>;
 
 export interface DispatchInput {
   agent_id: string;

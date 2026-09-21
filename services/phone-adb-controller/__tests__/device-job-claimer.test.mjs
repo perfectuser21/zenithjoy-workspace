@@ -59,6 +59,22 @@ function makeRegistry(dir, rows = [['legacy', 'SER1']]) {
   return p;
 }
 
+/** 假的业务脚本：把收到的参数记下来（采收/触达都用这个） */
+function makeFakeScript(dir, name, { exitCode = 0 } = {}) {
+  const p = join(dir, name);
+  const argsFile = join(dir, `${name}-args.txt`);
+  writeFileSync(p, `#!/bin/sh\necho "$@" >> ${argsFile}\necho fake\nexit ${exitCode}\n`);
+  chmodSync(p, 0o755);
+  return { path: p, argsFile };
+}
+
+/** 假的账号路由表：<profile>\t<抖音号>\t<昵称>\t<角色标签> */
+function makeAccountRoutes(dir, rows = [['legacy', 'langzi63485', '躺赢AI学姐', 'search-primary,distribution']]) {
+  const p = join(dir, 'douyin-account-routes.tsv');
+  writeFileSync(p, rows.map((r) => r.join('\t')).join('\n') + '\n');
+  return p;
+}
+
 /** 假的 wall-report：把每次调用的参数记下来，用来断言上报是否合规 */
 function makeFakeReporter(dir) {
   const p = join(dir, 'wall-report.sh');
@@ -68,7 +84,7 @@ function makeFakeReporter(dir) {
   return { path: p, argsFile };
 }
 
-function makeEnv(dir, { apiBase, adb, phoneCtl, lockDir, registry, reporter }) {
+function makeEnv(dir, { apiBase, adb, phoneCtl, lockDir, registry, reporter, harvest, outreach, accounts }) {
   const conf = join(dir, 'wall.env');
   writeFileSync(conf, `ZJ_API_BASE=${apiBase}\nZJ_INTERNAL_TOKEN=tok-test\n`);
   return {
@@ -81,6 +97,9 @@ function makeEnv(dir, { apiBase, adb, phoneCtl, lockDir, registry, reporter }) {
     ZJ_CLAIMER_LOCK: lockDir ?? join(dir, 'lock.d'),
     WALL_REPORT: reporter ?? join(dir, 'no-such-reporter'), // 上报器缺失必须被吞掉，不影响主流程
     DOUYIN_PHONE_REGISTRY: registry ?? join(dir, 'no-such-registry.tsv'),
+    DOUYIN_ACCOUNT_REGISTRY: accounts ?? join(dir, 'no-such-accounts.tsv'),
+    ZJ_HARVEST_KEYWORD: harvest ?? join(dir, 'no-such-harvest.sh'),
+    ZJ_OUTREACH_TICK: outreach ?? join(dir, 'no-such-outreach.sh'),
     HOME: dir,
   };
 }
@@ -261,4 +280,100 @@ test('成功时照常 done，不误报失败', async (t) => {
   const out = readFileSync(rep.argsFile, 'utf8');
   assert.match(out, /^done /m);
   assert.ok(!/^fail /m.test(out));
+});
+
+// ── 业务工作（job_type）：主理人在页面上派的是"活"，不是 adb 原语 ──
+
+const withReg = (dir) => makeRegistry(dir, [['legacy', 'SER1']]);
+
+test('按关键词采收线索 → 调采收脚本，关键词按 URL 编码传下去', async (t) => {
+  const dir = makeTmp();
+  const api = await startFakeApi({
+    job: { ...JOB, title: '按关键词采收线索 · AI训练师', params: { job_type: 'harvest_keyword', keyword: 'AI训练师', max_videos: '6' } },
+  });
+  t.after(() => api.close());
+  const harvest = makeFakeScript(dir, 'harvest-keyword.sh');
+  const ctl = makeFakePhoneCtl(dir);
+  await run(makeEnv(dir, { apiBase: api.url, adb: makeFakeAdb(dir, { serials: ['SER1'] }), phoneCtl: ctl.path, registry: withReg(dir), harvest: harvest.path }));
+  const args = readFileSync(harvest.argsFile, 'utf8').trim();
+  const parts = args.split(/\s+/);
+  // harvest-keyword.sh PROFILE KEYWORD_URLENC MAX_VIDEOS RUN_TAG
+  assert.equal(parts[0], 'legacy', '没用 registry 查出来的 profile');
+  assert.match(parts[1], /^AI%E8%AE%AD%E7%BB%83%E5%B8%88$/, `关键词没做 URL 编码：${parts[1]}`);
+  assert.equal(parts[2], '6');
+  assert.ok(parts[3] && parts[3].length > 0, '缺 RUN_TAG');
+  assert.equal(existsSync(ctl.argsFile), false, '业务活不该走 adb 原语');
+});
+
+test('跑一轮触达 → 调触达脚本，不用任何参数', async (t) => {
+  const dir = makeTmp();
+  const api = await startFakeApi({ job: { ...JOB, title: '跑一轮触达', params: { job_type: 'outreach_round' } } });
+  t.after(() => api.close());
+  const outreach = makeFakeScript(dir, 'outreach-tick.sh');
+  await run(makeEnv(dir, { apiBase: api.url, adb: makeFakeAdb(dir, { serials: ['SER1'] }), phoneCtl: makeFakePhoneCtl(dir).path, registry: withReg(dir), outreach: outreach.path }));
+  assert.equal(existsSync(outreach.argsFile), true, '没调触达脚本');
+});
+
+test('发一条私信 → 发送方账号由本机路由表查出来，话术走 base64 不怕引号', async (t) => {
+  const dir = makeTmp();
+  const api = await startFakeApi({
+    job: { ...JOB, title: '给指定的人发一条私信 · someone', params: { job_type: 'dm_one', target: 'someone', message: '你好"世界" $HOME' } },
+  });
+  t.after(() => api.close());
+  const ctl = makeFakePhoneCtl(dir);
+  const accounts = makeAccountRoutes(dir);
+  await run(makeEnv(dir, { apiBase: api.url, adb: makeFakeAdb(dir, { serials: ['SER1'] }), phoneCtl: ctl.path, registry: withReg(dir), accounts }));
+  const args = readFileSync(ctl.argsFile, 'utf8').trim().split(/\s+/);
+  // --profile legacy private-message-send SENDER TARGET MSG_B64 TAG
+  assert.equal(args[0], '--profile');
+  assert.equal(args[1], 'legacy');
+  assert.equal(args[2], 'private-message-send');
+  assert.equal(args[3], 'langzi63485', '发送方没从账号路由表查出来');
+  assert.equal(args[4], 'someone');
+  assert.equal(Buffer.from(args[5], 'base64').toString(), '你好"世界" $HOME', '话术没按 base64 传');
+});
+
+test('私信但本机查不到发送方账号 → 判失败并说明白，不瞎发', async (t) => {
+  const dir = makeTmp();
+  const api = await startFakeApi({ job: { ...JOB, params: { job_type: 'dm_one', target: 'x', message: 'hi' } } });
+  t.after(() => api.close());
+  const ctl = makeFakePhoneCtl(dir);
+  await run(makeEnv(dir, { apiBase: api.url, adb: makeFakeAdb(dir, { serials: ['SER1'] }), phoneCtl: ctl.path, registry: withReg(dir) }));
+  const fin = api.requests.find((q) => /\/finish$/.test(q.url));
+  const body = JSON.parse(fin.body);
+  assert.equal(body.ok, false);
+  assert.match(body.error_code, /NO_SENDER/);
+  assert.equal(existsSync(ctl.argsFile), false, '没有发送方却还是动了手机');
+});
+
+test('不认识的 job_type → 判失败并回执，不静默当成功', async (t) => {
+  const dir = makeTmp();
+  const api = await startFakeApi({ job: { ...JOB, params: { job_type: 'no_such_job' } } });
+  t.after(() => api.close());
+  const ctl = makeFakePhoneCtl(dir);
+  await run(makeEnv(dir, { apiBase: api.url, adb: makeFakeAdb(dir, { serials: ['SER1'] }), phoneCtl: ctl.path, registry: withReg(dir) }));
+  const fin = api.requests.find((q) => /\/finish$/.test(q.url));
+  const body = JSON.parse(fin.body);
+  assert.equal(body.ok, false);
+  assert.match(body.error_code, /UNKNOWN_JOB_TYPE/);
+});
+
+test('业务脚本缺失时判失败并指名缺哪个，不当成功混过去', async (t) => {
+  const dir = makeTmp();
+  const api = await startFakeApi({ job: { ...JOB, params: { job_type: 'harvest_keyword', keyword: 'x', max_videos: '2' } } });
+  t.after(() => api.close());
+  await run(makeEnv(dir, { apiBase: api.url, adb: makeFakeAdb(dir, { serials: ['SER1'] }), phoneCtl: makeFakePhoneCtl(dir).path, registry: withReg(dir) }));
+  const fin = api.requests.find((q) => /\/finish$/.test(q.url));
+  const body = JSON.parse(fin.body);
+  assert.equal(body.ok, false);
+  assert.match(body.error_code, /NO_SCRIPT/);
+});
+
+test('老的 adb 原语单仍然能跑（不破坏已在跑的东西）', async (t) => {
+  const dir = makeTmp();
+  const api = await startFakeApi({ job: JOB }); // JOB 用的是 params.action
+  t.after(() => api.close());
+  const ctl = makeFakePhoneCtl(dir);
+  await run(makeEnv(dir, { apiBase: api.url, adb: makeFakeAdb(dir, { serials: ['SER1'] }), phoneCtl: ctl.path, registry: withReg(dir) }));
+  assert.match(readFileSync(ctl.argsFile, 'utf8'), /open-search/);
 });
