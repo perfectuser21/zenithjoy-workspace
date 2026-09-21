@@ -81,7 +81,6 @@ export default function DispatchJobDialog({ devices, defaultAgentId, onClose, on
   const presets = useMemo(() => windowPresets(dept), [dept]);
   const preset = presets[Math.min(presetIdx, presets.length - 1)];
   const actionMeta = ACTIONS.find((a) => a.value === action) ?? ACTIONS[0];
-  const device = devices.find((d) => d.agent_id === agentId);
 
   const submit = async () => {
     setBusy(true);
