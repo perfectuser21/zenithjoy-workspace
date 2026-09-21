@@ -29,7 +29,20 @@ import axios from 'axios';
 // 预算是 60s，60s 网关超时会把 9d 顶成 000（0909 CI 实证）。40s = 观测峰值 16s
 // 的 2.5 倍余量，且给 curl 留 20s 头寸。
 const GRADING_TIMEOUT_MS = 40_000;
-const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';
+// 2026-09-22 判定链从 ToAPIs 迁到 OpenRouter。ToAPIs 侧当晚逐一真调，没有一个模型
+// 能同时过三关（不被内容过滤 / 25 条批量稳定在 40s 内 / 全出档）：
+//   deepseek-v4-flash  渠道 #170 上游 403 SUBSCRIPTION_INACTIVE，且无备用渠道
+//   deepseek-v4-pro    同渠道，同样 403
+//   gpt-5.4-mini       走 Azure，本链的营销类 prompt 触发 Azure 内容管理策略 → 400
+//                      （"求报价，多少钱一平，加个微信详细聊" 必中；AI 培训类评论不中，
+//                        所以只挑顺手的样本测会看不出来——别再只测一种评论）
+//   gpt-5.6-terra      25 条批量 46.9s，越过 GRADING_TIMEOUT_MS=40s
+//   glm-5.3-flash      25 条批量 5 轮只过 2 轮（三次 40s 超时）
+//   deepseek-flash     25 条 finish=length 全丢；qwen3.7-flash 未配置渠道；kimi-k2.5 单条 500
+// OpenRouter 上 openai/gpt-4o-mini 两种 prompt 各 5 轮 10/10 全过：
+//   单条 0.7-1.8s，25 条批量 1.9-3.6s，全部 finish=stop、全出档。
+// 旧的 TOAPIS_* 保留为回退，已经配好它的环境不会当场断供。
+const GRADING_BASE = process.env.GRADING_BASE_URL || process.env.TOAPIS_BASE_URL || 'https://openrouter.ai/api/v1';
 // 2026-09-04 切回 deepseek-v4-flash：#58 渠道欠费已恢复（实测 200/1.9-4.6s）。当日
 // gpt-5.4-mini 渠道持续慢（42-46s，gp2 23b 三连 NULL）；曾误切 gemini 半小时——本文件
 // 下方注释写明 gemini 思考关不掉且随机吃光预算"加预算救不了"，0820 已淘汰，勿再切。
@@ -55,7 +68,7 @@ const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';
 // ⚠️ gemini 系列仍然禁用——本文件下方注释写明思考关不掉且随机吃光预算，加预算救不了。
 // ⚠️ 换模型时连开关一起换：gpt-5.4-mini 收到 enable_thinking 直接 400
 //    Unknown parameter（0922 实证）。见 thinkingOffParam()。
-const GRADING_MODEL = process.env.GRADING_MODEL || 'gpt-5.4-mini';
+const GRADING_MODEL = process.env.GRADING_MODEL || 'openai/gpt-4o-mini';
 
 // 关思考的开关名**随模型而不同**，硬编码一个必然在下次换模型时炸。
 // 0922 实证：gpt-5.4-mini 认 reasoning_effort:'none'（200/零思考），
@@ -64,6 +77,11 @@ const GRADING_MODEL = process.env.GRADING_MODEL || 'gpt-5.4-mini';
 // 这条链两年换了五次模型（0823/0904/0909/0915/0922），每次都在开关上绊一跤——
 // 所以开关跟着模型走，别再写死。
 export function thinkingOffParam(model: string): Record<string, unknown> {
+  // OpenRouter 风格模型名（vendor/model）：gpt-4o-mini 本来就不是 thinking 模型，
+  // 不需要任何开关（实测两种开关它都容忍，但没必要往请求里塞看不懂的参数）。
+  if (model.includes('/')) return {};
+  // ToAPIs 侧：gpt-* 只认 reasoning_effort，deepseek/terra 只认 enable_thinking，
+  // 发错那一个直接 400 Unknown parameter（0922 实证）。
   return model.startsWith('gpt-') ? { reasoning_effort: 'none' } : { enable_thinking: false };
 }
 
@@ -86,7 +104,8 @@ export async function gradeComments(
   if (comments.length === 0) {
     return [];
   }
-  const apiKey = process.env.TOAPIS_API_KEY;
+  // 凭据跟着网关走：迁到 OpenRouter 后先认 OPENROUTER_API_KEY，回退旧的 TOAPIS_API_KEY。
+  const apiKey = process.env.GRADING_API_KEY || process.env.OPENROUTER_API_KEY || process.env.TOAPIS_API_KEY;
   if (!apiKey) {
     console.error('[comment-grading] TOAPIS_API_KEY 未配置，跳过判定');
     return comments.map(() => null);
@@ -96,7 +115,7 @@ export async function gradeComments(
 
   try {
     const resp = await axios.post(
-      `${TOAPIS_BASE}/chat/completions`,
+      `${GRADING_BASE}/chat/completions`,
       {
         model: GRADING_MODEL,
         messages: [{ role: 'user', content: prompt }],

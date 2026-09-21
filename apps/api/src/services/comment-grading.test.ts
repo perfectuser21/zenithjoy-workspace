@@ -28,7 +28,7 @@ describe('comment-grading gradeComments', () => {
     warnSpy.mockRestore();
   });
 
-  it('判定模型默认 gpt-5.4-mini（0922 deepseek 渠道欠费 403 SUBSCRIPTION_INACTIVE 且无备用渠道;批量25条真调 3.8-5.0s/25-25全出档/零思考,三轮稳定;env GRADING_MODEL 可覆盖）', async () => {
+  it('判定链默认走 OpenRouter + openai/gpt-4o-mini（0922 ToAPIs 侧无一模型能同时过「不被内容过滤/批量不超时/全出档」三关;OpenRouter 两种 prompt 各 5 轮 10/10 全过;env 可覆盖）', async () => {
     const mockedPost = vi.mocked(axios.post);
     mockedPost.mockResolvedValue({
       data: { choices: [{ message: { content: '1. 高意向' } }] },
@@ -37,7 +37,10 @@ describe('comment-grading gradeComments', () => {
     await gradeComments('家装目标客户', '标题', null, [{ commentText: '预算10万求推荐' }]);
 
     const [, body] = mockedPost.mock.calls[0] as [string, Record<string, unknown>];
-    expect(body.model).toBe('gpt-5.4-mini');
+    expect(body.model).toBe('openai/gpt-4o-mini');
+    // 网关也一起迁了——只改模型名不改 base 会打到 ToAPIs 上去，那边没有这个模型
+    const [url] = mockedPost.mock.calls[0] as [string, unknown];
+    expect(url).toContain('openrouter.ai');
   });
 
   it('空评论数组 → 不调用Gemini，返回空数组', async () => {
@@ -193,7 +196,8 @@ describe('comment-grading gradeComments', () => {
     expect(body).toMatchObject(thinkingOffParam(body.model as string));
     // 而且只带一个——两个都塞会在不认的那一侧 400
     const switches = ['enable_thinking', 'reasoning_effort'].filter((k) => k in body);
-    expect(switches).toHaveLength(1);
+    // OpenRouter 侧一个都不带；ToAPIs 侧必须恰好带一个（两个都塞会在不认的那侧 400）
+    expect(switches).toHaveLength((body.model as string).includes('/') ? 0 : 1);
   });
 
   /**
@@ -231,7 +235,13 @@ describe('comment-grading gradeComments', () => {
  * 锁住它：开关必须跟着模型走。
  */
 describe('thinkingOffParam — 关思考开关按模型分派', () => {
-  it('gpt 系列用 reasoning_effort，绝不能发 enable_thinking（会 400）', async () => {
+  it('OpenRouter 风格模型名（vendor/model）不带任何关思考开关', async () => {
+    const { thinkingOffParam } = await import('./comment-grading');
+    expect(thinkingOffParam('openai/gpt-4o-mini')).toEqual({});
+    expect(thinkingOffParam('deepseek/deepseek-chat-v3.1')).toEqual({});
+  });
+
+  it('ToAPIs 侧 gpt 系列用 reasoning_effort，绝不能发 enable_thinking（会 400）', async () => {
     const { thinkingOffParam } = await import('./comment-grading');
     expect(thinkingOffParam('gpt-5.4-mini')).toEqual({ reasoning_effort: 'none' });
     expect(thinkingOffParam('gpt-5.4-mini')).not.toHaveProperty('enable_thinking');
@@ -278,6 +288,31 @@ describe('thinkingOffParam — 关思考开关按模型分派', () => {
     } finally {
       if (prev === undefined) delete process.env.GRADING_MODEL;
       else process.env.GRADING_MODEL = prev;
+      vi.resetModules();
+    }
+  });
+
+  it('只配 OPENROUTER_API_KEY（没有 TOAPIS_API_KEY）也必须能调——迁网关就得连凭据一起迁', async () => {
+    // 迁到 OpenRouter 之后，新环境不会再配 TOAPIS_API_KEY。凭据读取要是还只认旧变量，
+    // 就会走到"未配置 → 跳过判定 → 整批 null"那条静默分支上，症状跟渠道欠费一模一样。
+    vi.resetModules();
+    const prevT = process.env.TOAPIS_API_KEY;
+    const prevO = process.env.OPENROUTER_API_KEY;
+    delete process.env.TOAPIS_API_KEY;
+    process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
+    try {
+      const axiosMod = (await import('axios')).default;
+      vi.mocked(axiosMod.post).mockResolvedValue({
+        data: { choices: [{ message: { content: '1. 高意向' }, finish_reason: 'stop' }] },
+      } as never);
+      const mod = await import('./comment-grading');
+      const out = await mod.gradeComments('想考证的在职人员', 't', null, [{ commentText: '怎么报名' }]);
+      expect(out).toEqual(['高意向']);
+      const call = vi.mocked(axiosMod.post).mock.calls.at(-1) as [string, unknown, { headers: Record<string, string> }];
+      expect(call[2].headers.Authorization).toBe('Bearer test-openrouter-key');
+    } finally {
+      if (prevT === undefined) delete process.env.TOAPIS_API_KEY; else process.env.TOAPIS_API_KEY = prevT;
+      if (prevO === undefined) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = prevO;
       vi.resetModules();
     }
   });
