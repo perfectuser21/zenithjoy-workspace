@@ -6709,3 +6709,19 @@ agent_suite:
     status: active
     product: 工作机排程
     note: "Brain 库连接池（task 3abb7f8c）：要害是未配置时返回 null 而不是抛错或退回连本地库——连错库比连不上更毒，排程会写进 zenithjoy 库的另一张 tasks 表且没人知道（2026-07-13 P0 事故正是 zenithjoy.tasks 抢先解析了 Brain 的 public.tasks）。另断言按 BRAIN_* 而非 DATABASE_* 建池（两套库绝不能串）、跨境连接超时 8 秒（3 秒不够，PR#1892 丢单教训）、search_path 钉死 public、同进程只建一次。"
+
+  - id: schedule-mount-order
+    path: apps/api/src/routes/__tests__/schedule-mount-order.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机排程
+    note: "生产 401 事故的回归守卫：执行器面（internalAuth）挂在读写面之前，而鉴权是 router.use()，对所有方法所有路径生效——主理人带登录态 GET /api/schedule 先撞上内部 token 校验直接 401，页面整块显示「读取失败（HTTP 401）」；跑出来发现不止 GET，派单/改时间/取消全被吃掉，整条读写面等于没挂。断言两个 router 按 app.ts 同序串联时：GET 落读写面返 200、无登录态时是读写面的 NO_TENANT 而非执行器面的 UNAUTHORIZED、POST /jobs（派单，认租户）与 POST /jobs/:id/finish（回执，认内部 token）互不吃掉、PATCH /time 与 POST /cancel 也不被误吃。"
+
+  - id: dispatch-job-dialog
+    path: apps/dashboard/src/components/DispatchJobDialog.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机排程
+    note: "派活面板（主理人点「派活」弹出的框）：断言排的是**窗口不是时刻**——对外动作（获客/新媒体/私域）的窗口预设一律不窄于 30 分钟（铁律 27bb6d1a：固定整点发送=向平台自首），对内动作（视频剪辑）才有「就现在」；离线设备允许排但选项里标出「到点可能不跑」；提交把窗口换算成起止时刻并带动作参数；后端拒绝理由（窗口太窄/额度不够）原样显示给用户而不是吞成一句「失败」；提交中按钮禁用防手抖连点派出两批；无设备时说明白而不是给空下拉。"

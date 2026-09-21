@@ -12,9 +12,10 @@
  *     → 右边是按部门分组的 DeptTaskTable，容器高度写死、滚动发生在表里
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { fetchWorkers, workerLiveUrl, type Worker } from '../api/workers.api';
 import { fetchSchedule, slotsOfDay, DEPTS, type Dept, type ScheduleDevice } from '../api/schedule.api';
+import DispatchJobDialog from '../components/DispatchJobDialog';
 import DeptTaskTable from '../components/DeptTaskTable';
 import DeviceRail from '../components/DeviceRail';
 import { DEPT_BLOCK } from '../components/dept-colors';
@@ -37,6 +38,9 @@ export default function WorkersPage() {
   const [mock, setMock] = useState(false);
   // 读不到 ≠ 今天没活：后台断了要说"读取失败"，不能让空排期冒充"今天没安排"
   const [staleMsg, setStaleMsg] = useState<string | null>(null);
+  const [dispatchOpen, setDispatchOpen] = useState(false);
+  // 派完单立刻重拉一次，不用等下一轮轮询
+  const [reloadKey, setReloadKey] = useState(0);
   const [asOf, setAsOf] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [dept, setDept] = useState<Dept | '全部'>('全部');
@@ -83,7 +87,7 @@ export default function WorkersPage() {
       alive = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [reloadKey]);
 
   const rows = useMemo(() => {
     if (!workers) return [];
@@ -149,7 +153,15 @@ export default function WorkersPage() {
             </span>
           )}
 
-          <div className="ml-auto flex items-center overflow-hidden rounded-lg ring-1 ring-neutral-200">
+          <button
+            onClick={() => setDispatchOpen(true)}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-3 py-1.5 text-sm text-white hover:bg-neutral-800"
+          >
+            <Plus className="h-4 w-4" />
+            派活
+          </button>
+
+          <div className="flex items-center overflow-hidden rounded-lg ring-1 ring-neutral-200">
             <button aria-label="前一天" onClick={() => setOffset((o) => o - 1)} className="px-2 py-1.5 text-gray-600 hover:bg-gray-50">
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -247,6 +259,15 @@ export default function WorkersPage() {
           </div>
         )}
       </div>
+
+      {dispatchOpen && (
+        <DispatchJobDialog
+          devices={sched}
+          defaultAgentId={current?.id ?? null}
+          onClose={() => setDispatchOpen(false)}
+          onDone={() => setReloadKey((k) => k + 1)}
+        />
+      )}
     </div>
   );
 }

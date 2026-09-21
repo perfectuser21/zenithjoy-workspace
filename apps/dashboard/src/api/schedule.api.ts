@@ -341,3 +341,69 @@ export function backlogCount(slots: ScheduleSlot[]): number {
 export function headroom(quotas: DeptQuota[]): number {
   return quotas.reduce((n, q) => n + Math.max(0, q.cap - q.used), 0);
 }
+
+// ─────────────────────── 派单 / 改时间 / 取消 ───────────────────────
+
+/** 一件活的动作参数：交给工作机上的领单器执行 */
+export interface JobParams {
+  /** douyin-phone-adb 的子命令，如 open-search / open-app / screencap */
+  action: string;
+  /** 设备 profile（如 legacy / jinoshengyuan-work）；缺省时领单器用机身序列号兜底 */
+  profile?: string;
+  /** 动作的参数，如搜索关键词 */
+  arg?: string;
+}
+
+export interface DispatchInput {
+  agent_id: string;
+  dept: Dept;
+  title: string;
+  /** 排的是窗口不是时刻：对外动作不得窄于 30 分钟（铁律 27bb6d1a），系统在窗口内随机落点 */
+  window_start: string;
+  window_end: string;
+  est_minutes?: number;
+  params?: JobParams;
+}
+
+/** 把后端给的人话原因抛出来，不要吞成一句"失败" —— 用户得知道是窗口太窄还是额度不够 */
+async function postJson<T>(url: string, body: unknown, method = 'POST'): Promise<T> {
+  const r = await fetch(url, {
+    method,
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j?.success === false) {
+    const err = new Error(j?.message || j?.error || `请求失败（HTTP ${r.status}）`) as Error & { current?: unknown };
+    if (j?.current) err.current = j.current;
+    throw err;
+  }
+  return j.data as T;
+}
+
+/**
+ * 派一件活。
+ *
+ * 幂等键由客户端生成：跨境写请求 8 秒超时后的重试不能派出第二批
+ * （wall-report 踩过这个坑，PR#1892）。
+ */
+export function dispatchJob(input: DispatchInput): Promise<{ id: string; planned_at?: string; deduped?: boolean }> {
+  const idempotency_key =
+    globalThis.crypto?.randomUUID?.() ?? `dj-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return postJson(`${API_BASE}/schedule/jobs`, { ...input, idempotency_key });
+}
+
+/** 改计划时间。必须回传读到的 row_version 做 CAS —— 冲突时后端返 409 并附当前值。 */
+export function updateJobTime(id: string, planned_at: string, row_version: number) {
+  return postJson<{ id: string; row_version: number; planned_at: string }>(
+    `${API_BASE}/schedule/jobs/${encodeURIComponent(id)}/time`,
+    { planned_at, row_version },
+    'PATCH',
+  );
+}
+
+/** 取消（后端标记留痕，不删行） */
+export function cancelJob(id: string) {
+  return postJson<{ id: string }>(`${API_BASE}/schedule/jobs/${encodeURIComponent(id)}/cancel`, {});
+}
