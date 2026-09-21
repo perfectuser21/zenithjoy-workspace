@@ -2,6 +2,24 @@ import { apiClient } from './client';
 
 // ============ 类型定义 ============
 
+/**
+ * 素材 AI 打标签状态三态（与 apps/api/db/migrations/20260919_000000_materials_ai_tags.sql
+ * 及 material-tagging.ts 的 TagStatus 对齐）。没有"识别中"这一态——服务端排队处理完
+ * 直接落终态：
+ *  - pending                = 还没处理（刚上传/还在排队）
+ *  - tagged                 = 已识别，ai_tags/ai_description 有值
+ *  - failed_pending_review  = 处理失败/人工复核中（抽帧失败、缺 key、超时、解析不出标签）
+ *
+ * 只有 tag_status === 'tagged' 的素材能进混剪选择页（MashupPage taggedMaterials 过滤），
+ * 所以这个字段客户必须在素材库页面上看得见。
+ *
+ * Material.tag_status 字段本身仍按 string 收纳（而不是这个字面量联合类型）——
+ * MashupPage.tsx 已有 `TaggedMaterial = Material & { tag_status?: string }` 这层历史
+ * 类型叠加，字段类型收得太窄会在那边（不属于本次改动范围）炸出交叉类型冲突。
+ * 展示层（getTagStatusMeta）按这三个字面量值做 switch，未知值兜底按"待识别"处理。
+ */
+export type TagStatus = 'pending' | 'tagged' | 'failed_pending_review';
+
 export interface Material {
   id: string;
   file_name: string;
@@ -15,6 +33,10 @@ export interface Material {
    * 否则会渲染成破图。一条坏了不影响整页，这是服务端刻意的降级。
    */
   preview_url: string | null;
+  /** AI 打标签状态三态，见 TagStatus 的说明。 */
+  tag_status: string;
+  /** 识别出的标签列表。tag_status 不是 tagged 时通常是空数组（服务端保证不返回 null）。 */
+  ai_tags: string[];
 }
 
 export interface MaterialListResponse {

@@ -6724,6 +6724,13 @@ agent_suite:
     status: active
     product: 批量混剪
     note: "素材视频在线预览（GP line05/batch_mashup step2）：决策 1a20f778 否掉的是网格里每条都 ffmpeg 抽帧，不是点开播放，但代码把两件事并成了一件。断言弹窗渲染 <video controls> 且 src 来自 /materials/:id/preview 现签地址而非列表里会过期的 preview_url；previewAvailable=false 但签出了地址仍然播（后端只认 mime video/*，快捷指令常传 octet-stream，按它拦截等于把能播的判死）；previewUrl 为 null 落占位绝不塞进 src；onError 降级不留黑屏；图片素材不受影响且不调预览接口。"
+  - id: materials-tag-status-visibility
+    path: apps/dashboard/src/pages/MaterialsPage.TagStatus.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "素材识别状态可见化（GP line05/batch_mashup#step1）：客户原话「我也不知道你把我的这个素材有没有 embedding，有没有打标签什么的」，且只有 tag_status=tagged 的素材能进混剪选择页，看不到状态=不知道为什么选不到素材。断言网格 Tile 三态（pending/tagged/failed_pending_review）都渲染人话徽章（待识别/已识别/识别失败），不裸露英文枚举值；详情弹窗 Lightbox 展示识别出的 ai_tags；pending/failed_pending_review 态在弹窗里说明「进不了混剪」。"
 
   - id: schedule-service
     path: apps/api/src/services/__tests__/schedule-service.test.ts

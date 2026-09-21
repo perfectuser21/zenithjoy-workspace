@@ -14,7 +14,7 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Image as ImageIcon, Film, X, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Image as ImageIcon, Film, X, AlertTriangle, RefreshCw, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import {
   listMaterials,
   isVideo,
@@ -32,18 +32,64 @@ function formatTime(iso: string | null): string {
   return d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+/**
+ * 识别状态三态 → 人话文案 + 图标 + 配色。
+ *
+ * 客户原话："我也不知道你把我的这个素材有没有 embedding，有没有打标签什么的，
+ * 我都不清楚呀。" 只有 tagged 才能进混剪选择页（MashupPage taggedMaterials 过滤），
+ * 所以"未识别的素材进不了混剪"必须在文案里说清楚，不能只给个英文枚举值。
+ */
+function getTagStatusMeta(status: string): {
+  label: string;
+  detail: string;
+  Icon: typeof Clock;
+  badgeClass: string;
+} {
+  switch (status) {
+    case 'tagged':
+      return {
+        label: '已识别',
+        detail: '系统已经识别过这条素材，可以用于混剪。',
+        Icon: CheckCircle2,
+        badgeClass: 'bg-green-600/90 text-white',
+      };
+    case 'failed_pending_review':
+      return {
+        label: '识别失败',
+        detail: '识别失败，人工复核中，这条素材暂时进不了混剪，稍后再来看看。',
+        Icon: XCircle,
+        badgeClass: 'bg-red-600/90 text-white',
+      };
+    case 'pending':
+    default:
+      return {
+        label: '待识别',
+        detail: '系统还在排队识别这条素材，识别完成前进不了混剪，请稍等。',
+        Icon: Clock,
+        badgeClass: 'bg-amber-500/90 text-white',
+      };
+  }
+}
+
 /** 单个格子。预览地址为 null 时显示占位，绝不把 null 塞进 img src 渲染成破图。 */
-function Tile({ item, onOpen }: { item: Material; onOpen: (m: Material) => void }) {
+export function Tile({ item, onOpen }: { item: Material; onOpen: (m: Material) => void }) {
   const video = isVideo(item);
   const canPreview = !video && Boolean(item.preview_url);
+  const tagMeta = getTagStatusMeta(item.tag_status);
 
   return (
     <button
       type="button"
       onClick={() => onOpen(item)}
       className="group relative aspect-square overflow-hidden rounded-lg bg-gray-100 text-left focus:outline-none focus:ring-2 focus:ring-blue-500"
-      title={item.file_name}
+      title={`${item.file_name} · ${tagMeta.label} · ${tagMeta.detail}`}
     >
+      <div
+        className={`absolute left-1 top-1 z-10 flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${tagMeta.badgeClass}`}
+      >
+        <tagMeta.Icon className="h-3 w-3" />
+        {tagMeta.label}
+      </div>
       {canPreview ? (
         <img
           src={item.preview_url as string}
@@ -68,6 +114,36 @@ function Tile({ item, onOpen }: { item: Material; onOpen: (m: Material) => void 
         </div>
       </div>
     </button>
+  );
+}
+
+/**
+ * Lightbox 底部的识别状态说明：tagged 展示识别出的 ai_tags（这直接决定这条
+ * 素材会被匹配到文案的哪一段）；pending/failed_pending_review 说清"进不了混剪"。
+ */
+function TagStatusInfo({ item }: { item: Material }) {
+  const tagMeta = getTagStatusMeta(item.tag_status);
+
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2 text-left">
+      <div className="flex items-center justify-center gap-1 text-xs text-white/80">
+        <tagMeta.Icon className="h-3.5 w-3.5" />
+        <span>{tagMeta.label}</span>
+      </div>
+      <p className="mt-1 text-center text-xs text-white/50">{tagMeta.detail}</p>
+      {item.tag_status === 'tagged' && item.ai_tags.length > 0 ? (
+        <div className="mt-2 flex flex-wrap justify-center gap-1">
+          {item.ai_tags.map((tag) => (
+            <span
+              key={tag}
+              className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-white/90"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -156,6 +232,7 @@ export function Lightbox({ item, onClose }: { item: Material; onClose: () => voi
             {item.taken_at ? ` · 拍摄于 ${formatTime(item.taken_at)}` : ''}
             {` · 上传于 ${formatTime(item.created_at)}`}
           </div>
+          <TagStatusInfo item={item} />
           {preview.url ?? item.preview_url ? (
             <a
               href={preview.url ?? item.preview_url ?? undefined}

@@ -121,3 +121,43 @@ describe('getMaterialPreview', () => {
     expect((call?.[1] as { headers: Record<string, string> }).headers['X-Upload-Token']).toBe('ZJ-F-TESTKEY');
   });
 });
+
+describe('listMaterials — tag_status/ai_tags 透传', () => {
+  beforeEach(() => { get.mockReset(); });
+
+  it('后端返回的 tag_status 与 ai_tags 原样透出，不被这一层丢掉', async () => {
+    get.mockImplementation(async (url: string) => {
+      if (url === '/account/me') return { data: { license: { license_key: 'k' } } };
+      if (url === '/materials') {
+        return {
+          data: {
+            data: {
+              items: [
+                {
+                  id: 'mat-1',
+                  file_name: 'clip.mp4',
+                  size_bytes: 1024,
+                  mime_type: 'video/mp4',
+                  taken_at: null,
+                  created_at: '2026-09-20T10:00:00.000Z',
+                  preview_url: null,
+                  tag_status: 'tagged',
+                  ai_tags: ['开场', '产品特写'],
+                },
+              ],
+              limit: 30,
+              offset: 0,
+              count: 1,
+            },
+          },
+        };
+      }
+      throw new Error('unexpected url ' + url);
+    });
+
+    const result = await listMaterials();
+
+    expect(result.items[0].tag_status).toBe('tagged');
+    expect(result.items[0].ai_tags).toEqual(['开场', '产品特写']);
+  });
+});
