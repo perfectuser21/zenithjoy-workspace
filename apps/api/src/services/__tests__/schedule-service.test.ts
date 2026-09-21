@@ -20,6 +20,7 @@ import {
   validateWindow,
   isStale,
   buildCasUpdate,
+  toDeviceSerial,
   type BrainDeviceJob,
 } from '../schedule-service';
 
@@ -171,5 +172,23 @@ describe('改时间走乐观锁 CAS（updated_at 被 tick 定时 touch，不能�
       dueAt: '2026-09-21T13:00:00.000Z',
     });
     expect(sql).toMatch(/status\s*=\s*'queued'/i);
+  });
+});
+
+describe('派单与真机之间唯一的握手：机身序列号', () => {
+  it('中台的 phone-<序列号> 要还原成 adb 看得到的裸序列号', () => {
+    expect(toDeviceSerial('phone-ANGYVB4402004137')).toBe('ANGYVB4402004137');
+  });
+
+  it('本来就是裸序列号的原样返回', () => {
+    expect(toDeviceSerial('ANGYVB4402004137')).toBe('ANGYVB4402004137');
+  });
+
+  it('不认识的形态原样返回 —— 宁可留原值让人能查，也不猜', () => {
+    expect(toDeviceSerial('ws1-6bb220cdd01fc82a')).toBe('ws1-6bb220cdd01fc82a');
+  });
+
+  it('只剥开头的前缀，不误伤中间含 phone- 的值', () => {
+    expect(toDeviceSerial('SER-phone-1')).toBe('SER-phone-1');
   });
 });

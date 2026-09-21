@@ -45,7 +45,8 @@ const app = makeApp();
 /** 本租户只有 MINE 这台设备 */
 function localReturnsMyAgent() {
   localQuery.mockResolvedValue({
-    rows: [{ id: MINE, nickname: '金诺工作机', agent_id: 'ANGYVB4227006983', status: 'online', last_seen: new Date() }],
+    // agents.agent_id 在中台的真实形态就是 phone-<序列号>（推帧器注册时写的）
+    rows: [{ id: MINE, nickname: '金诺工作机', agent_id: 'phone-ANGYVB4227006983', status: 'online', last_seen: new Date() }],
   });
 }
 
@@ -141,6 +142,17 @@ describe('派单', () => {
       .send({ ...base, window_start: past, window_end: new Date(Date.now() - 3600_000).toISOString() });
     expect(r.status).toBe(400);
     expect(r.body.error).toBe('WINDOW_PAST');
+  });
+
+  it('payload.serial 存的必须是 adb 看得到的裸序列号，不是中台的 phone- 形态', async () => {
+    // 这是派单与真机之间唯一的握手。存成 phone-XXX 会和领单器发的裸序列号对不上，
+    // 单子永远领不走 —— 页面上显示排着、谁也不动（生产实证：单 550326e5 卡 queued）。
+    brainQuery.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [{ id: 'new-1', row_version: 0 }] });
+    await request(app).post('/api/schedule/jobs').set('x-feishu-user-id', 'tenant-1')
+      .send({ ...base, ...futureWindow() });
+    const insertCall = brainQuery.mock.calls.find(([sql]: any[]) => /INSERT INTO tasks/i.test(sql));
+    const payload = JSON.parse(insertCall[1][5]);
+    expect(payload.serial, 'serial 存成了中台形态，领单器认不出').toBe('ANGYVB4227006983');
   });
 
   it('建单必须标 trigger_source=manual —— 这是人派的活，不是系统自产的', async () => {
