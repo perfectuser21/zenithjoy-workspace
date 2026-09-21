@@ -12,6 +12,15 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 
+# 这批单测里有一条要直接跑 douyin-phone-adb（zsh 脚本）——取完作品链接后的详情页
+# 恢复守卫，见 __tests__/video-link-restore.test.mjs。它刻意设计成「缺 zsh 就报红、
+# 绝不 skip」（在 CI 里永远跳过的守卫等于没有守卫），所以这里得先把 zsh 装上。
+# 装在脚本里而不是逐个 workflow 里：这套单测被多个闸引用，逐个补必漏一个。
+if ! command -v zsh >/dev/null 2>&1; then
+  echo "  zsh 缺失，安装中（video-link-restore 守卫需要它直接跑 douyin-phone-adb）"
+  sudo apt-get update -qq && sudo apt-get install -y -qq zsh
+fi
+
 echo "[1/3] phone-adb-controller 纯函数库单测（own-accounts-lib/lead-fields-lib/next-outreach-lib）"
 node --test "$ROOT"/services/phone-adb-controller/__tests__/*.test.mjs
 
