@@ -6765,3 +6765,11 @@ agent_suite:
     status: active
     product: 批量混剪
     note: "Final E2E（GP line05/batch_mashup，PR#1912 的验收）：windows-latest 真 Postgres+真 apps/api+真 Chrome。五条——①素材弹窗内联播放，判据是 readyState>=2 且 duration>0（元素在但黑屏正是要防的假绿）②mime=octet-stream 的 .MOV 照样播，先用 page.request 直接证明后端 previewAvailable=false，再证界面照播（播放只看签出了地址，不看 previewAvailable）③历史三态与库里事实一致，重点锁 status=completed 但 contents.export_url 为 NULL 的 run 必须报 rendering 不报已完成 ④点候选待选定走 listCandidates(GET)，POST 生成接口一次都不调 ⑤点已完成直接看成片+下载。两处替身写在文件头：/account/me 短路登录态换凭据（返回种子里真实存在的 license_key，鉴权链没绕）、memory:// 签名地址换成真 mp4 的 data URI（CI 无 COS 凭据）。三个守卫均 proven-to-fire。"
+
+  - id: job-catalog
+    path: apps/dashboard/src/api/__tests__/job-catalog.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机排程
+    note: "工作目录（主理人要的「这个部门有哪些活、每件活要填什么」）：断言**只列真能跑的活**——目前只有智能获客一条线有（采收/私信/触达三件的脚本在工作机 ~/bin-harvest 下），其余部门返回空让页面明说「还没有可派的活」而不是给会失败的假菜单；每件活必须写清「派下去会发生什么」、id 唯一（领单器按它分派，撞车会派错脚本）、碰平台的标 outbound（决定 30 分钟窗口约束）；每个输入框有 label，非必填项要么有默认值要么有说明；组装的 params 只含 job_type 与用户填的值，**不含 profile/action**（工作机本地概念，中台猜必错，见单 03aa758d）。"
