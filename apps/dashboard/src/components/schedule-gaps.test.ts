@@ -66,20 +66,31 @@ describe('找空档', () => {
   it('已经过去的空档标成已过，剩下的才算能加', () => {
     const gaps = findGaps([at(8, 60, { id: 'a' }), at(20, 60, { id: 'b' })], 0, NOON);
     const morning = gaps.find((g) => g.startText === '00:00')!;
-    const afternoon = gaps.find((g) => g.startText === '09:00')!;
     expect(morning.past).toBe(true);
     expect(morning.canFit).toBe(0); // 过去的加不进去了
-    expect(afternoon.past).toBe(false);
-    expect(afternoon.canFit).toBeGreaterThan(0);
+    // 09:00–20:00 横跨此刻（12:00），被切成已过的一截和还能用的一截
+    const gone = gaps.find((g) => g.startText === '09:00')!;
+    const usable = gaps.find((g) => g.startText === '12:00')!;
+    expect(gone.past).toBe(true);
+    expect(gone.endText).toBe('12:00');
+    expect(usable.past).toBe(false);
+    expect(usable.canFit).toBeGreaterThan(0);
   });
 
-  it('横跨此刻的空档只算剩下那半截', () => {
-    // 11:00-14:00 空着，现在 12:00 → 只剩 2 小时可用
+  it('横跨此刻的空档切成两截，各自的区间与时长自洽', () => {
+    // 11:00-14:00 空着，现在 12:00 → 切成 11:00-12:00（已过）与 12:00-14:00（还能用）
+    // 不切会出现「11:00–14:00 空 2 小时」这种区间写三小时、数字写两小时的行
     const gaps = findGaps([at(10, 60, { id: 'a' }), at(14, 60, { id: 'b' })], 0, NOON);
-    const g = gaps.find((x) => x.startText === '11:00')!;
-    expect(g.minutes).toBe(180);
-    expect(g.usableMinutes).toBe(120);
-    expect(g.canFit).toBe(fitCount(120));
+    const gone = gaps.find((x) => x.startText === '11:00')!;
+    const usable = gaps.find((x) => x.startText === '12:00')!;
+    expect(gone.endText).toBe('12:00');
+    expect(gone.minutes).toBe(60);
+    expect(gone.past).toBe(true);
+    expect(gone.canFit).toBe(0);
+    expect(usable.endText).toBe('14:00');
+    expect(usable.minutes).toBe(120);
+    expect(usable.usableMinutes).toBe(120);
+    expect(usable.canFit).toBe(fitCount(120));
   });
 
   it('看往后的日子时整天都算能加，不受此刻影响', () => {

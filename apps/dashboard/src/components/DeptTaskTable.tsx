@@ -8,10 +8,12 @@
  *
  * 所以：一张表、按部门分段、组内从早到晚；容器高度写死、列头钉住、滚动发生在表里。
  */
+import { useRef } from 'react';
 import { slotsOfDay, backlogCount, dayRange, DEPTS, type Dept, type ScheduleSlot } from '../api/schedule.api';
 import { DEPT_BLOCK } from './dept-colors';
 import { explainError } from '../api/error-codes';
 import { findGaps, headroomText, gapText, type Gap } from './schedule-gaps';
+import OccupancyBar from './OccupancyBar';
 
 /** 表格露出来的高度。内容再多也只在这块里滚，页面总高不变。 */
 const VIEW_H = 620;
@@ -90,6 +92,7 @@ export interface DeptTaskTableProps {
 }
 
 export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, quotas = [] }: DeptTaskTableProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
   const today = slotsOfDay(slots, dayOffset);
   const groups = groupByDept(slots, dayOffset);
   const done = today.filter((s) => s.status === 'done').length;
@@ -109,7 +112,7 @@ export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, qu
   const tailGap = gaps.length > 0 && gaps[gaps.length - 1].endText === '24:00' ? gaps[gaps.length - 1] : undefined;
 
   const gapRow = (g: Gap, key: string) => (
-    <tr key={key} data-testid="gap-row" data-past={g.past ? '1' : '0'} className="align-top">
+    <tr key={key} data-testid="gap-row" data-past={g.past ? '1' : '0'} data-start={g.start} className="align-top">
       <td className={`whitespace-nowrap border-b border-dashed px-4 py-1.5 text-xs tabular-nums ${g.past ? 'text-gray-300' : 'text-blue-600'}`}>
         {g.startText}–{g.endText}
       </td>
@@ -166,7 +169,8 @@ export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, qu
       </div>
 
       {/* 主理人反复强调：页面高度是定的，滑杆在表格里 */}
-      <div data-testid="table-scroll" className="h-[620px] overflow-y-auto" style={{ maxHeight: VIEW_H }}>
+      <div className="flex min-h-0 flex-1 gap-3 p-3 pt-0">
+      <div ref={scrollRef} data-testid="table-scroll" className="h-[620px] flex-1 overflow-y-auto" style={{ maxHeight: VIEW_H }}>
         {noSchedule || groups.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm text-gray-400">
             {noSchedule ? '这台机还没有排程' : '这天没有安排'}
@@ -245,6 +249,19 @@ export default function DeptTaskTable({ slots, dayOffset, noSchedule = false, qu
             </tbody>
           </table>
         )}
+      </div>
+
+      {/* 主理人：「右边能看出这几个地方是空的、空的、空的」——涂色是占住的，留白是空的 */}
+      <OccupancyBar
+        slots={slots}
+        dayOffset={dayOffset}
+        onPickGap={(ms) => {
+          const el = scrollRef.current;
+          if (!el) return;
+          const row = el.querySelector(`[data-start="${ms}"]`) as HTMLElement | null;
+          if (row) el.scrollTop = Math.max(0, row.offsetTop - 60);
+        }}
+      />
       </div>
     </section>
   );
