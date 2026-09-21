@@ -6725,3 +6725,11 @@ agent_suite:
     status: active
     product: 工作机排程
     note: "派活面板（主理人点「派活」弹出的框）：断言排的是**窗口不是时刻**——对外动作（获客/新媒体/私域）的窗口预设一律不窄于 30 分钟（铁律 27bb6d1a：固定整点发送=向平台自首），对内动作（视频剪辑）才有「就现在」；离线设备允许排但选项里标出「到点可能不跑」；提交把窗口换算成起止时刻并带动作参数；后端拒绝理由（窗口太窄/额度不够）原样显示给用户而不是吞成一句「失败」；提交中按钮禁用防手抖连点派出两批；无设备时说明白而不是给空下拉。"
+
+  - id: mashup-history-material-video-e2e
+    path: apps/dashboard/e2e/mashup-history-video-preview.spec.ts
+    type: e2e
+    ci: L4
+    status: active
+    product: 批量混剪
+    note: "Final E2E（GP line05/batch_mashup，PR#1912 的验收）：windows-latest 真 Postgres+真 apps/api+真 Chrome。五条——①素材弹窗内联播放，判据是 readyState>=2 且 duration>0（元素在但黑屏正是要防的假绿）②mime=octet-stream 的 .MOV 照样播，先用 page.request 直接证明后端 previewAvailable=false，再证界面照播（播放只看签出了地址，不看 previewAvailable）③历史三态与库里事实一致，重点锁 status=completed 但 contents.export_url 为 NULL 的 run 必须报 rendering 不报已完成 ④点候选待选定走 listCandidates(GET)，POST 生成接口一次都不调 ⑤点已完成直接看成片+下载。两处替身写在文件头：/account/me 短路登录态换凭据（返回种子里真实存在的 license_key，鉴权链没绕）、memory:// 签名地址换成真 mp4 的 data URI（CI 无 COS 凭据）。三个守卫均 proven-to-fire。"

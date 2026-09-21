@@ -1,0 +1,203 @@
+name: E2E Mashup History + Material Video (Windows)
+
+# 批量混剪历史记录 + 素材视频在线预览的 Final E2E（GP line05/batch_mashup，PR #1912）。
+#
+# 为什么是 windows-latest：ZenithJoy 的任何 UI/Dashboard E2E 都走 windows_cloud
+# 干净 sandbox（环境路由死规则），不用本地 mac。
+#
+# 为什么起真 Postgres + 真 apps/api：这四条验收里有三条问的是"库里的事实有没有如实
+# 走完整条链路呈现到界面上"——尤其"被安全 Gate 拦下的 run 不能报成已完成"，全 stub
+# 的话这条断言等于没写。所以 runner 自带的 Postgres 起来、跑真 migration、种真数据、
+# 起真 API 进程，Playwright 只在两处放替身（登录态换凭据、对象存储地址），spec 文件头
+# 写清了边界。
+#
+# 不带 job 级 if 门：静态形状为真、job 被条件跳过 = 孤儿 spec，UI 面断言全假绿
+# （与 e2e-knowledge-hub-path2.yml 同一条教训）。
+#
+# 引入本文件的 PR 声明的是 `GP-Anchor: line05/batch_mashup keep-green` 而不是
+# `#step2`：补验收不推进业务步骤，也没碰 batch_mashup 已登记的 smoke_files——
+# 声明推进却触碰不到 smoke_files，lint-gp-anchor 会直接拦，那样的声明也不诚实。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/src/routes/mashup.ts'
+      - 'apps/api/src/routes/materials.ts'
+      - 'apps/dashboard/src/pages/MashupPage.tsx'
+      - 'apps/dashboard/src/pages/MaterialsPage.tsx'
+      - 'apps/dashboard/src/api/mashup.api.ts'
+      - 'apps/dashboard/src/api/materials.api.ts'
+      - 'apps/dashboard/e2e/mashup-history-video-preview.spec.ts'
+      - 'apps/dashboard/e2e/seed-mashup-history.sql'
+      - '.github/workflows/e2e-mashup-history-windows.yml'
+  pull_request:
+    paths:
+      - 'apps/api/src/routes/mashup.ts'
+      - 'apps/api/src/routes/materials.ts'
+      - 'apps/dashboard/src/pages/MashupPage.tsx'
+      - 'apps/dashboard/src/pages/MaterialsPage.tsx'
+      - 'apps/dashboard/src/api/mashup.api.ts'
+      - 'apps/dashboard/src/api/materials.api.ts'
+      - 'apps/dashboard/e2e/mashup-history-video-preview.spec.ts'
+      - 'apps/dashboard/e2e/seed-mashup-history.sql'
+      - '.github/workflows/e2e-mashup-history-windows.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-mashup-history-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  playwright-windows:
+    name: Playwright — Mashup History + Material Video (Windows Chrome)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      # 两套 env 都要给，缺一不可：run-migration.ts 认 DATABASE_URL，
+      # 而 apps/api 的 db/connection.ts 只认 DATABASE_NAME/HOST/PORT/USER/PASSWORD
+      # （不读 DATABASE_URL，缺了就默默连 default 的 'cecelia' 库——本地实跑踩到过）。
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/zenithjoy_e2e
+      E2E_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/zenithjoy_e2e
+      DATABASE_NAME: zenithjoy_e2e
+      DATABASE_HOST: localhost
+      DATABASE_PORT: '5432'
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      E2E_BASE_URL: http://localhost:5173
+      E2E_API_BASE_URL: http://localhost:5200/api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          # 不缓存：npm cache 由 macOS 生成，缺 Windows optional deps
+
+      - name: 起本地 Postgres（runner 自带，默认 Disabled 须先改 StartupType）
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $svc = Get-Service postgresql* -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $svc) { throw "FAIL: windows runner 上找不到 PostgreSQL 服务" }
+          Set-Service -Name $svc.Name -StartupType Manual
+          Start-Service $svc.Name
+          $env:PGPASSWORD = 'root'
+          & "$env:PGBIN\psql" -U postgres -c "ALTER USER postgres WITH PASSWORD 'postgres';"
+          $env:PGPASSWORD = 'postgres'
+          & "$env:PGBIN\psql" -U postgres -c "CREATE DATABASE zenithjoy_e2e;"
+          & "$env:PGBIN\psql" -U postgres -d zenithjoy_e2e -c "CREATE SCHEMA IF NOT EXISTS zenithjoy; CREATE EXTENSION IF NOT EXISTS pgcrypto;"
+          "$env:PGBIN" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Install Windows rollup native binding
+        # package-lock.json 由 macOS 生成，不含 @rollup/rollup-win32-x64-msvc；
+        # Vite dev server 启动时无条件加载 rollup native，不装就 crash。
+        run: npm install @rollup/rollup-win32-x64-msvc --no-save
+
+      - name: Build apps/api
+        run: npm run build --workspace apps/api
+
+      - name: Run migrations
+        run: npm run migrate --workspace apps/api
+
+      - name: 种子数据（1 条视频素材 + 三态 run）
+        run: |
+          export PGPASSWORD=postgres
+          psql -U postgres -h localhost -d zenithjoy_e2e -v ON_ERROR_STOP=1 \
+            -f apps/dashboard/e2e/seed-mashup-history.sql
+
+      - name: 起 apps/api（真进程，无 COS 凭据 → 存储回落 InMemory，签名地址由 spec 替身）
+        env:
+          # 必须显式给：apps/api 默认监听 3000，不给就起在 3000，
+          # 而下面所有探活/前端/spec 都打 5200，症状是"API 起不来"但日志里
+          # 明明写着 running on port 3000（首次 CI 实跑踩到）
+          PORT: '5200'
+        run: |
+          node apps/api/dist/index.js > /tmp/api.log 2>&1 &
+          echo $! > /tmp/api.pid
+          for i in $(seq 1 60); do
+            if curl -fs http://localhost:5200/health >/dev/null 2>&1; then
+              echo "API ready after ${i}s"; break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:5200/health || { echo "API 起不来："; cat /tmp/api.log; exit 1; }
+
+      - name: 后端契约自检（界面之前先确认库里事实经 API 出来是对的）
+        run: |
+          # 凭据从库里查，不写字面量——「ZJ-F-xxx」写死在认证头里会被 gitleaks 拦下
+          export PGPASSWORD=postgres
+          LICENSE_KEY=$(psql -U postgres -h localhost -d zenithjoy_e2e -t -A -c \
+            "SELECT license_key FROM zenithjoy.licenses WHERE tenant_id = 'e2e11111-1111-4111-8111-111111111111'")
+          [ -n "$LICENSE_KEY" ] || { echo "种子凭据没查到"; exit 1; }
+          BODY=$(curl -sf -H "X-Upload-Token: $LICENSE_KEY" http://localhost:5200/api/mashup/runs) \
+            || { echo "GET /api/mashup/runs 失败"; cat /tmp/api.log; exit 1; }
+          node -e "
+            const d = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+            const s = Object.fromEntries(d.data.items.map(i => [i.runId, i.stage]));
+            const want = {
+              'e2e44444-4444-4444-8444-444444444444': 'candidates_pending',
+              'e2e55555-5555-4555-8555-555555555555': 'completed',
+              'e2e66666-6666-4666-8666-666666666666': 'rendering',
+            };
+            for (const [id, stage] of Object.entries(want)) {
+              if (s[id] !== stage) {
+                console.error('FAIL: run ' + id + ' 期望 ' + stage + '，实际 ' + s[id]);
+                process.exit(1);
+              }
+            }
+            console.log('三态 stage 与库里事实一致');
+          " <<< "$BODY"
+
+      - name: Install Playwright Chromium
+        working-directory: apps/dashboard
+        run: npx playwright install chromium --with-deps
+
+      - name: 起 Vite dev server
+        working-directory: apps/dashboard
+        env:
+          VITE_SKIP_AUTH: 'true'
+          VITE_MOCK_USER_ID: 'e2e-user-001'
+          VITE_MOCK_USER_NAME: 'E2E 测试用户'
+          VITE_API_BASE_URL: 'http://localhost:5200/api'
+        run: |
+          npx vite --port 5173 > /tmp/vite.log 2>&1 &
+          echo $! > /tmp/vite.pid
+          for i in $(seq 1 60); do
+            if curl -fs http://localhost:5173 >/dev/null 2>&1; then
+              echo "Vite ready after ${i}s"; break
+            fi
+            sleep 1
+          done
+          curl -fs http://localhost:5173 || { echo "Vite 起不来："; cat /tmp/vite.log; exit 1; }
+
+      - name: Run Playwright E2E
+        working-directory: apps/dashboard
+        env:
+          E2E_BASE_URL: http://localhost:5173
+          E2E_API_BASE_URL: http://localhost:5200/api
+        run: npx playwright test e2e/mashup-history-video-preview.spec.ts --reporter=list
+
+      - name: 失败时打印服务端日志
+        if: failure()
+        run: |
+          echo "───── api.log ─────"; tail -100 /tmp/api.log || true
+          echo "───── vite.log ─────"; tail -50 /tmp/vite.log || true
+
+      - name: 上传失败截图/录像
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mashup-history-e2e-artifacts
+          path: apps/dashboard/test-results/
+          if-no-files-found: warn

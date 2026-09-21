@@ -76,6 +76,8 @@ log/
 !packages/db/migrations/*.sql
 # 例外：sprint E2E 种子 SQL 是 CI 工件，必须入库
 !sprints/**/*.sql
+# 例外：dashboard E2E 种子 SQL 同理——CI 上 checkout 后没有它，种子步骤会直接失败
+!apps/dashboard/e2e/*.sql
 
 # Backup files
 *.bak
