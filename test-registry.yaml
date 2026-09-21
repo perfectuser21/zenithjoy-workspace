@@ -1007,6 +1007,14 @@ tests:
     product: 批量混剪
     note: "批量混剪 S4 渲染+内容安全Gate编排层：mock DB/axios(Gemini)/ffmpeg/抽帧。fail-closed（proposal-v2.md A1）覆盖——安全+水印双通过才上传成片给URL；安全不通过/检测到水印/ffmpeg合成失败/未配置TOAPIS_API_KEY 均落 failed_pending_review 或 flagged，export_url/download_url 恒缺省；候选不存在 loud-fail。"
 
+  - id: tts-volcengine-service
+    path: apps/api/src/services/__tests__/tts-volcengine.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪配音刀（GP line05/batch_mashup#step4）火山引擎 TTS 服务封装：mock axios，不真调火山。覆盖——成功路径音频落地成 mp3 文件+addition.frontend 逐字时间戳归一化为 startMs/endMs；code!=3000 抛 VolcengineTtsError(code,message)；缺 VOLCENGINE_TTS_APP_ID/ACCESS_KEY 抛 missing_credentials 不静默；网关类错误(ECONNABORTED/502/503/504/520-524)退避重试后成功、重试到上限仍失败则抛错；4xx(400/401/403/404)确定性故障绝不重试（口径对齐 content-judgment.ts issue f3b6ba7c）；addition.frontend 缺失/非法 JSON 均不抛异常、words 退化为空数组。"
+
   - id: dockerfile-ffmpeg
     path: apps/api/src/services/__tests__/dockerfile-ffmpeg.test.ts
     type: unit
