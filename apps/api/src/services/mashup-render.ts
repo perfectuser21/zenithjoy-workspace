@@ -16,7 +16,10 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import pool from '../db/connection';
 import type { MaterialStorage } from './material-storage';
-import { concatAndScale } from './mashup-render-ffmpeg';
+import { concatAndScale, renderMashupWithAudio } from './mashup-render-ffmpeg';
+import { synthesize } from './tts-volcengine';
+import { writeSrtFile } from './mashup-subtitle';
+import { checkCopy } from './copy-compliance';
 import { extractFrameBase64 } from './video-frame-extract';
 
 export type GateStatus = 'passed' | 'flagged' | 'failed_pending_review';
@@ -54,6 +57,26 @@ export interface OrderedMaterial {
 }
 
 /**
+ * 取这个候选对应的客户文案原文（口播刀，决策 f10195d7）。
+ *
+ * 没有文案的情况是常态而非异常：内置「标准四槽位」模板本来就没文案，
+ * 口播刀之前建的老 run 也没有。这两种一律返回 null，让渲染退回无声档，
+ * 不能因为拿不到文案就把出片判死。
+ */
+export async function resolveScriptText(input: RenderCandidateInput): Promise<string | null> {
+  const { rows } = await pool.query(
+    `SELECT t.script_text
+       FROM zenithjoy.mashup_candidates c
+       JOIN zenithjoy.mashup_runs r ON r.id = c.run_id
+       JOIN zenithjoy.mashup_templates t ON t.id = r.template_id
+      WHERE c.id = $1 AND r.tenant_id = $2`,
+    [input.candidateId, input.tenantId],
+  );
+  const text = rows[0]?.script_text;
+  return typeof text === 'string' && text.trim() ? text : null;
+}
+
+/**
  * 候选 → run → 模板槽位 → 按槽位顺序取回填充素材（预览档/终版档共用这一步，
  * 避免两条渲染路径的候选解析逻辑分叉走样）。候选不存在时抛错，其余情况尽力
  * 而为（缺素材的槽位直接跳过，不阻断）。
@@ -77,7 +100,7 @@ export async function resolveOrderedMaterials(input: RenderCandidateInput): Prom
   const run = runRows[0];
 
   const { rows: tmplRows } = await pool.query(
-    `SELECT slots FROM zenithjoy.mashup_templates WHERE id = $1`,
+    `SELECT slots, script_text FROM zenithjoy.mashup_templates WHERE id = $1`,
     [run.template_id],
   );
   const slots: { key: string }[] = tmplRows[0]?.slots ?? [];
@@ -166,7 +189,54 @@ export async function renderCandidate(
       }
     }
 
-    const rendered = inputPaths.length > 0 && concatAndScale(inputPaths, outputPath);
+    // ── 口播成片（决策 f10195d7）────────────────────────────────────────
+    // 有文案就走「配音 + 字幕 + 声画对齐」，没有则退回原来的无声拼接。
+    // 顺序很重要：合规检查必须在 TTS 之前——配音和字幕会把违规词从"藏在文案里"
+    // 放大成"念出来 + 写在屏幕上"，客户卖蟑螂药属农药类目，极限词是账号级风险，
+    // 绝不能等成片出来再补救。
+    const scriptText = await resolveScriptText(input);
+    let voice: { audioPath: string; durationMs: number } | null = null;
+    let srtPath: string | null = null;
+
+    if (scriptText) {
+      const compliance = checkCopy(scriptText);
+      if (!compliance.passed) {
+        const terms = compliance.issues.map((i) => i.term).join('、');
+        console.error('[mashup-render] 文案命中违规宣称，拒绝合成 candidateId=%s terms=%s', input.candidateId, terms);
+        const contentId = await insertContent(input.tenantId, input.candidateId, 'failed_pending_review', 'failed_pending_review');
+        return { contentId, safetyCheckStatus: 'failed_pending_review', watermarkCheckStatus: 'failed_pending_review' };
+      }
+      try {
+        const tts = await synthesize(scriptText);
+        voice = { audioPath: tts.audioPath, durationMs: tts.durationMs };
+        tempFiles.push(tts.audioPath);
+        const srt = join(workDir, `mashup-sub-${randomUUID()}.srt`);
+        writeSrtFile(tts.words, srt);
+        tempFiles.push(srt);
+        srtPath = srt;
+      } catch (err) {
+        // TTS 是增强项不是阻断项：火山挂了/欠费/网关 520 都只该让这一条退回
+        // 无声成片，不能连累整个渲染失败——客户至少还能拿到画面。
+        console.error('[mashup-render] TTS 不可用，退回无声成片 reason=%s', (err as Error).message);
+        voice = null;
+        srtPath = null;
+      }
+    }
+
+    let rendered: boolean;
+    if (inputPaths.length === 0) {
+      rendered = false;
+    } else if (voice) {
+      // 配音时长均分到各段：每段画面放多久由声音决定，而不是素材原时长硬凑。
+      const perSegSec = voice.durationMs / 1000 / inputPaths.length;
+      rendered = renderMashupWithAudio(
+        inputPaths.map((path) => ({ path, durationSec: perSegSec })),
+        outputPath,
+        { audioPath: voice.audioPath, srtPath: srtPath ?? undefined },
+      );
+    } else {
+      rendered = concatAndScale(inputPaths, outputPath);
+    }
     if (!rendered) {
       const contentId = await insertContent(input.tenantId, input.candidateId, 'failed_pending_review', 'failed_pending_review');
       return { contentId, safetyCheckStatus: 'failed_pending_review', watermarkCheckStatus: 'failed_pending_review' };
