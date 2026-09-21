@@ -164,7 +164,22 @@ test('凭据文件是裸 key 形态时也认（老的 locate-api.key）', async 
   assert.equal(r.out, '9 10', r.err);
 });
 
+/** JPEG 转码依赖 Pillow：工作机自带（douyin-phone-adb 注释里写明"需自带 Pillow"），
+ *  CI 的 runner 不一定有。没有就跳过并说清楚——脚本本身在缺 Pillow 时原样上传，
+ *  行为是明确的，不该在这里假红。 */
+async function hasPillow() {
+  return new Promise((resolve) => {
+    const p = spawn('python3', ['-c', 'import PIL']);
+    p.on('close', (c) => resolve(c === 0));
+    p.on('error', () => resolve(false));
+  });
+}
+
 test('大截图转 JPEG 上传，但**分辨率绝不变**——坐标必须仍对应原图', async (t) => {
+  if (!(await hasPillow())) {
+    t.skip('本机没有 Pillow，JPEG 转码路径跳过（工作机自带，脚本缺它时原样上传）');
+    return;
+  }
   // 国内机器把 3.5MB 的 PNG（base64 后 4.7MB）传到境外会 write timeout（M1 实测）。
   // 转 JPEG 是为了传得动；一旦顺手缩放，模型给的像素坐标就整体错位，
   // 而这种错位不报错，只会让点击悄悄点偏——比传不上去更危险。
