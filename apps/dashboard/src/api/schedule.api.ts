@@ -280,7 +280,9 @@ function mockPayload(): SchedulePayload {
   };
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
+// 用可选链读 import.meta.env：Playwright 的测试进程在 node 下 import 本模块
+// （为了拿 __mockSchedulePayloadForDemo 当 E2E 桩数据），那里没有 import.meta.env。
+const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_BASE_URL || '/api';
 
 /** 读不到时给出的空壳：devices 为空 + stale=true，页面据此显示"读取失败"而不是"今天没活" */
 function unreachablePayload(reason: string): SchedulePayload {
