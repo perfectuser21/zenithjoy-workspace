@@ -2,7 +2,7 @@
 // 0916 主理人要求"KPI驱动自动获客"。表是 SSOT: 改目标改表,不改代码不改 cron。
 // 输出单行 JSON 供 harvest-cron.sh 消费: {verdict:"go"|"done"|"off", target, actual, gap, words, reason}
 const fs = require("fs");
-const cfg = JSON.parse(fs.readFileSync("/root/.openclaw/clawdbot.json"));
+const cfg = JSON.parse(fs.readFileSync("/Users/administrator/.openclaw/clawdbot.json"));
 const acc = cfg.channels.feishu.accounts.jinoshengyuan;
 const BIZ = process.argv[2] || "AI人工智能训练师";
 const DEFAULT_WORDS = parseInt(process.argv[3] || "6", 10);

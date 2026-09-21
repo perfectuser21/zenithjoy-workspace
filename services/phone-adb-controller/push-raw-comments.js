@@ -3,7 +3,7 @@
 // 采收 worker 只管倒池,分拣 agent 异步消费池子,合格线索再进线索表。
 // LEAD 12列: _,昵称,抖音号,类型,评论,日期,地区,标题,关键词,IP,主页链接,作品链接
 const fs = require("fs");
-const cfg = JSON.parse(fs.readFileSync("/root/.openclaw/clawdbot.json"));
+const cfg = JSON.parse(fs.readFileSync("/Users/administrator/.openclaw/clawdbot.json"));
 // 0916: 按业务线路由 base/table(悦升有独立 base,写死会让它的数据无处可去——见 line-routes.js)
 const { routeOf } = require("./line-routes.js");
 const [,, TSV, BATCH, LINE] = process.argv;

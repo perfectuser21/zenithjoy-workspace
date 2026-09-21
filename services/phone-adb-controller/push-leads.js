@@ -1,6 +1,6 @@
 // push-leads.js <tsv路径> <搜索账号标识> —— KPI夜写表器
 const fs = require("fs");
-const cfg = JSON.parse(fs.readFileSync("/root/.openclaw/clawdbot.json"));
+const cfg = JSON.parse(fs.readFileSync("/Users/administrator/.openclaw/clawdbot.json"));
 const acc = cfg.channels.feishu.accounts.jinoshengyuan;
 const { buildLeadCoreFields, extractSeenEntries } = require("./lead-fields-lib.js");
 const [,, TSV, SRCACC] = process.argv;

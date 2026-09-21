@@ -1,7 +1,7 @@
 // push-videos.js <harvest_tsv> <采收批次> —— 视频落「视频池」表(全链可观察的 discovery 节点)
 // VIDEO 行: _,视频ID,短链,标题,关键词,采到评论数;按视频ID去重(今天搜明天又搜到=跳过,只吃增量)
 const fs = require("fs");
-const cfg = JSON.parse(fs.readFileSync("/root/.openclaw/clawdbot.json"));
+const cfg = JSON.parse(fs.readFileSync("/Users/administrator/.openclaw/clawdbot.json"));
 // 0916: 按业务线路由 base/table(悦升有独立 base,写死会让它的数据无处可去——见 line-routes.js)
 const { routeOf } = require("./line-routes.js");
 const [,, TSV, BATCH, LINE] = process.argv;

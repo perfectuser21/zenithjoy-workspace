@@ -2,7 +2,7 @@
 // fetch-seen-videos.js [业务线] —— 拉取「视频池」表已存在的视频ID,逐行打印到 stdout
 // 供 harvest-keyword.sh 采集前查重用。不传业务线时按 line-routes.js 默认路由(金诺)。
 const fs = require("fs");
-const cfg = JSON.parse(fs.readFileSync("/root/.openclaw/clawdbot.json"));
+const cfg = JSON.parse(fs.readFileSync("/Users/administrator/.openclaw/clawdbot.json"));
 const { routeOf } = require("./line-routes.js");
 const LINE = process.argv[2] || "";
 const ROUTE = routeOf(LINE);

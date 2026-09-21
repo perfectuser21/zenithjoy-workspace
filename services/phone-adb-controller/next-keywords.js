@@ -2,7 +2,7 @@
 // 选词策略: 仅启用词;按 (有效线索数 / max(1,已测轮次)) 效率降序 + 最久未测优先轮换;
 // 输出纯文本词单(一行一词),供 M4/M1 夜间采收 cron 直接消费。表是 SSOT: 改表=改策略。
 const fs = require("fs");
-const cfg = JSON.parse(fs.readFileSync("/root/.openclaw/clawdbot.json"));
+const cfg = JSON.parse(fs.readFileSync("/Users/administrator/.openclaw/clawdbot.json"));
 const acc = cfg.channels.feishu.accounts.jinoshengyuan;
 const BIZ = process.argv[2] || "AI人工智能训练师";
 const N = parseInt(process.argv[3] || "6", 10);

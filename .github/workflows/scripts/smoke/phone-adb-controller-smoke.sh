@@ -83,9 +83,12 @@ if grep -qF 'seen.add' "$D/sort-comments.js"; then fail "sort-comments seen.add�
 grep -qF 'outreach-tick.lock' "$D/outreach-tick.sh" || fail "tick 未接 mkdir 互斥锁"
 grep -qF 'profile_url' "$D/next-outreach.js" || fail "选单器未出 profile_url"
 # 0919 真机验证实锤: harvest-keyword.sh 跑在手机机(xian-m4/xian-m1)不持有飞书凭据,
-# fetch-seen-videos.js 需要凭据+联网,必须经 SSH 到 us-vps 的 openclaw-gateway 容器执行，
+# fetch-seen-videos.js 需要凭据+联网,必须经 SSH 到网关机执行，
 # 禁止在本机直接 node 调用(会因缺 clawdbot.json 静默拿到空表,去重形同虚设)。
-grep -qF 'docker exec openclaw-gateway node /root/.openclaw/fetch-seen-videos.js' "$D/harvest-keyword.sh" || fail "同视频去重未经SSH路由到网关(会在手机机因缺凭据静默失效)"
+# 0921 网关迁移(决策 96054a8b): us-vps 那份 openclaw-gateway 容器已退役,脚本随迁移落到
+# MMV 原生跑(不再经 docker exec)——守卫改认新地址,同时禁止旧 docker exec 写法复活。
+grep -qF 'ssh -o ConnectTimeout=15 mmv "node /Users/administrator/.openclaw/leadgen-scripts/fetch-seen-videos.js' "$D/harvest-keyword.sh" || fail "同视频去重未经SSH路由到网关(会在手机机因缺凭据静默失效)"
+if grep -qF 'docker exec openclaw-gateway' "$D/harvest-keyword.sh"; then fail "fetch-seen-videos.js 调用复活了已退役的 us-vps docker exec 写法(决策 96054a8b)"; fi
 if grep -E '^[^#]*\bnode "\$\(dirname "\$0"\)/fetch-seen-videos\.js"' "$D/harvest-keyword.sh" | grep -qv 'ssh'; then
   fail "fetch-seen-videos.js 被本机直接调用(手机机无飞书凭据,已实锤会静默失效)"
 fi
@@ -186,10 +189,12 @@ grep -qF '已确认死亡' "$D/COMMANDER.md" || fail "COMMANDER.md 未授权分�
 grep -qF '已确认死亡' "$D/escort-claude-escalation.sh" || fail "分身唤起词未同步救活授权(宪法投影不同步)"
 
 # 层8: 网关停摆单独识别 + 救活权代码化(0916分身首战实弹报告提案,熟化:判例→代码)
+# 0921 网关迁移(决策 96054a8b): 判据从"容器 is not running"改成"MMV ssh 不可达"的信号词,
+# 术语从"网关容器停摆"改成"网关机(MMV)不可达"——同一条铁律(区分基建死了vs真词单为空),换了地址。
 _H8=$(grep -vE '^[[:space:]]*#' "$D/harvest-cron.sh")
-# 8a: 取词单失败必须区分"网关容器停摆"与"真词单为空"——0916凌晨两批真凶是前者却被误报成后者
-grep -q 'is not running' <<< "$_H8" || fail "取词单失败未识别容器停摆(is not running),网关死会被误报成词单为空"
-grep -q '网关容器停摆' <<< "$_H8" || fail "缺'网关容器停摆'专属升级分支(根因指向错=分身查错方向)"
+# 8a: 取词单失败必须区分"网关机不可达"与"真词单为空"——0916凌晨两批真凶是前者却被误报成后者
+grep -q 'Connection refused' <<< "$_H8" || fail "取词单失败未识别网关机不可达(Connection refused),网关死会被误报成词单为空"
+grep -q '网关机(MMV)不可达' <<< "$_H8" || fail "缺'网关机(MMV)不可达'专属升级分支(根因指向错=分身查错方向)"
 # 8b: 救活权代码化——守卫检测到容器 exited 必须取证+自动重启+回读验证(能写死的判据不该留给LLM)
 _G="$D/disk-gateway-guard.sh"
 _G8=$(grep -vE '^[[:space:]]*#' "$_G")
@@ -290,5 +295,17 @@ node --check "$_KS" || fail "update-keyword-stats.js 语法错误"
 grep -qF 'RECENT' "$_KS" || fail "未区分本轮跑过的词(全量刷时间戳=毁掉最久未测轮换)"
 # 时间戳必须是条件写入,不能无条件盖
 grep -qE '最后测试时间.*RECENT|RECENT.*最后测试时间' "$_KS" || fail "「最后测试时间」仍是无条件写入"
+
+# 层15: 网关迁移(0921,决策 96054a8b) ratchet——us-vps 那份 openclaw-gateway 容器已退役
+# (/root/.openclaw-gateway-retired),取单/去重/落池/词单/KPI闸/escort拉起全部改经 MMV
+# 原生 node/openclaw 调用。禁止任何触达/采收/落池脚本复活 docker exec openclaw-gateway
+# 写法——复活了就是又在死容器上取单,会静默失败大半天却只报"无待触达单"。
+for f in outreach-tick.sh harvest-keyword.sh harvest-cron.sh batch2.sh; do
+  if grep -qF 'docker exec openclaw-gateway' "$D/$f"; then
+    fail "$f 复活了已退役的 us-vps docker exec openclaw-gateway 写法(决策 96054a8b),必须走 ssh mmv 原生调用"
+  fi
+done
+grep -qF "ssh -o ConnectTimeout=15 mmv 'node /Users/administrator/.openclaw/leadgen-scripts/next-outreach.js next'" "$D/outreach-tick.sh" \
+  || fail "outreach-tick.sh 取单未走迁移后的 MMV 原生地址"
 
 echo "phone-adb-controller-smoke: PASS"

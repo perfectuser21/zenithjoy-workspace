@@ -6,7 +6,7 @@
 // 话术分配(话术库表规则近似): 每10单 B=5 / A1=3 / A2=2;账号轮流: 主号/小诺各半。
 const fs = require("fs");
 const lib = require("./next-outreach-lib.js");
-const cfg = JSON.parse(fs.readFileSync("/root/.openclaw/clawdbot.json"));
+const cfg = JSON.parse(fs.readFileSync("/Users/administrator/.openclaw/clawdbot.json"));
 const acc = cfg.channels.feishu.accounts.jinoshengyuan;
 const B = "GNuwbzY0da8GP0sv6MGcOTu9ntd", LEADS = "tblTLFj69CflUqSr", SCRIPTS = "tblZZWdv0YUNojqI";
 const MODE = process.argv[2] || "next";

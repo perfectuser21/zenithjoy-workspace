@@ -35,19 +35,21 @@ wr start "$SERIAL" "获客采收·$BIZ" "拉Commander,设备预检,取词单,采
 wr step "$SERIAL" 0 doing
 
 # ── ① Commander 上岗(第一步,0916 改序) ──
-# 辅佐姿态(帮不拦/先动手后汇报/读不到就说读不到),宪法 SSOT=COMMANDER.md,SOP=网关 /root/.openclaw/cmdr-escort.txt
+# 辅佐姿态(帮不拦/先动手后汇报/读不到就说读不到),宪法 SSOT=COMMANDER.md,SOP=网关 /Users/administrator/.openclaw/cmdr-escort.txt
 # 0915 真测实证: 网关重启窗口 ECONNREFUSED、拥堵期握手 30s 超时都会让单发拉起静默失败——
 # 加 --timeout 90000 + 重试 3 次(间隔 30s)。3 次仍失败=升级分身(网关多半有病),不阻塞采收。
+# 0921 网关迁移: us-vps 那份 openclaw-gateway 容器已退役(决策 96054a8b),openclaw CLI
+# 原生跑在 MMV,直接 ssh+openclaw 调用,不再经 docker exec。
 ESCORT_ID=""
 for _ea in 1 2 3; do
-  ESCORT_ID=$(ssh -o ConnectTimeout=20 us-vps "docker exec openclaw-gateway openclaw cron add --timeout 90000 --name 'escort-$HOSTKEY-$TAG' --agent media --session 'session:escort-$HOSTKEY-$TAG' --every 10m --announce --channel feishu --to 'chat:oc_ef60d6e3f199d90dd695b6ecc213d662' --account main --best-effort-deliver --message '先读 /root/.openclaw/cmdr-escort.txt 作为你的SOP并严格遵守辅佐三原则。本轮上下文: TAG=$TAG 机器=$HOSTKEY serial=$SERIAL profile=$P 起跑=$(date +%H:%M) 日志=/root/.openclaw/m4-logs/${HOSTKEY}-live.log escort名=escort-$HOSTKEY-$TAG。注意:你上岗时本批尚未做设备preflight与取词单,这两步失败会升级给分身,你看到日志里没有词单行属正常早期阶段。'" 2>>$LOG | grep -oE '"id": "[a-f0-9-]+"' | head -1 | cut -d'"' -f4)
+  ESCORT_ID=$(ssh -o ConnectTimeout=20 mmv "openclaw cron add --timeout 90000 --name 'escort-$HOSTKEY-$TAG' --agent media --session 'session:escort-$HOSTKEY-$TAG' --every 10m --announce --channel feishu --to 'chat:oc_ef60d6e3f199d90dd695b6ecc213d662' --account main --best-effort-deliver --message '先读 /Users/administrator/.openclaw/cmdr-escort.txt 作为你的SOP并严格遵守辅佐三原则。本轮上下文: TAG=$TAG 机器=$HOSTKEY serial=$SERIAL profile=$P 起跑=$(date +%H:%M) 日志=/Users/administrator/.openclaw/m4-logs/${HOSTKEY}-live.log escort名=escort-$HOSTKEY-$TAG。注意:你上岗时本批尚未做设备preflight与取词单,这两步失败会升级给分身,你看到日志里没有词单行属正常早期阶段。'" 2>>$LOG | grep -oE '"id": "[a-f0-9-]+"' | head -1 | cut -d'"' -f4)
   [[ -n "$ESCORT_ID" ]] && break
   log "escort拉起第${_ea}次失败,30s后重试"
   /bin/sleep 30
 done
 if [[ -n "$ESCORT_ID" ]]; then
   log "escort已拉起: $ESCORT_ID"
-  escort_dismiss() { [[ -n "$ESCORT_ID" ]] && ssh -o ConnectTimeout=20 us-vps "docker exec openclaw-gateway openclaw cron rm $ESCORT_ID" >>$LOG 2>&1 && log "escort已注销" }
+  escort_dismiss() { [[ -n "$ESCORT_ID" ]] && ssh -o ConnectTimeout=20 mmv "openclaw cron rm $ESCORT_ID" >>$LOG 2>&1 && log "escort已注销" }
   trap escort_dismiss EXIT INT TERM
 else
   log "escort拉起3次均失败(不阻塞采收)"
@@ -80,7 +82,7 @@ if (( H >= 8 && H < 22 )); then log "白天触达时窗,采收退让"; wr step "
 # ── ③ KPI 闸(0916 主理人要求"KPI驱动自动获客,不是一天三次") ──
 # 目标表是 SSOT(飞书「获客｜经营目标」tblpwc9GF9mIhdAG): 改目标改表,不改代码不改 crontab。
 # 达标即退让(省设备省额度),未达标按缺口放大词数。闸自身故障 fail-open(宪法帮不拦)。
-KPI_JSON=$(ssh -o ConnectTimeout=20 us-vps "docker exec openclaw-gateway node /root/.openclaw/kpi-gate.js '$BIZ' $N" 2>>$LOG)
+KPI_JSON=$(ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/kpi-gate.js '$BIZ' $N" 2>>$LOG)
 KPI_VERDICT=$(print -r -- "$KPI_JSON" | sed -n 's/.*"verdict":"\([a-z]*\)".*/\1/p')
 KPI_REASON=$(print -r -- "$KPI_JSON" | sed -n 's/.*"reason":"\([^"]*\)".*/\1/p')
 KPI_WORDS=$(print -r -- "$KPI_JSON" | sed -n 's/.*"words":\([0-9]*\).*/\1/p')
@@ -106,16 +108,17 @@ wr step "$SERIAL" 2 doing
 WF=/tmp/kw-$TAG.txt
 KWERR=/tmp/kwerr-$TAG.txt
 KWCACHE=~/.kw-cache-$P.txt
-ssh -o ConnectTimeout=20 us-vps "docker exec openclaw-gateway node /root/.openclaw/next-keywords.js '$BIZ' $N" > $WF 2>$KWERR
+ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/next-keywords.js '$BIZ' $N" > $WF 2>$KWERR
 [[ -s $KWERR ]] && cat $KWERR >> $LOG
 if [[ -s $WF ]]; then
   cp $WF $KWCACHE 2>/dev/null && log "词单已存本地缓存"
 else
   # 取词单失败 → 先判根因(供分身排查),再尝试兜底词单续跑
-  if grep -qE 'is not running|No such container|Cannot connect to the Docker daemon' $KWERR 2>/dev/null; then
-    WHY="网关容器停摆($(head -c 100 $KWERR | tr -d '\n'))"
+  # 0921 网关迁移(决策 96054a8b): 判据从"容器停摆"改成"网关机(MMV)不可达/脚本报错"
+  if grep -qE 'Connection refused|Connection timed out|Could not resolve hostname|No such file or directory|Permission denied' $KWERR 2>/dev/null; then
+    WHY="网关机(MMV)不可达或脚本路径异常($(head -c 100 $KWERR | tr -d '\n'))"
   else
-    WHY="容器正常但 next-keywords 返回空(查关键词表启用行/业务线是否匹配 $BIZ)"
+    WHY="网关机正常但 next-keywords 返回空(查关键词表启用行/业务线是否匹配 $BIZ)"
   fi
   if [[ -s $KWCACHE ]]; then
     cp $KWCACHE $WF
@@ -140,7 +143,7 @@ wr step "$SERIAL" 3 done
 # ── ⑤ 效果回写(词赛马数据闭环) ──
 if [[ "$PUSH" == "1" ]]; then
   wr step "$SERIAL" 4 doing
-  ssh -o ConnectTimeout=20 us-vps "docker exec openclaw-gateway node /root/.openclaw/update-keyword-stats.js" >> $LOG 2>&1
+  ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/update-keyword-stats.js" >> $LOG 2>&1
   log "效果已回写关键词表"
   wr step "$SERIAL" 4 done
 else

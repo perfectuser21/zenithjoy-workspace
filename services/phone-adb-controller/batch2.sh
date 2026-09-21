@@ -34,11 +34,13 @@ done
 print "[$(date +%H:%M:%S)] v2批完成 LEAD=$(grep -c '^LEAD' $OUT) VIDEO=$(grep -c '^VIDEO' $OUT)" >> $LOG
 if [[ "$PUSH" == "1" && -s $OUT ]]; then
   # 安全前提(回应 0916 AI review 对 ssh/scp 的中间人告警——本段是既有链路,非本次新增):
-  #  ① us-vps 是 ~/.ssh/config 里的固定别名,走 tailscale 内网(100.x),不经公网
+  #  ① mmv 是 ~/.ssh/config 里的固定别名,走 tailscale 内网(100.x),不经公网
   #  ② 密钥对认证(无密码登录),私钥在本机 600
   #  ③ 未加 StrictHostKeyChecking=no —— host key 校验保持默认开启,首次连接已固化进 known_hosts
   #  故不存在"未验证远程身份"。若将来要改成公网直连,必须先补 host key pin 再动。
-  scp -o ConnectTimeout=20 $OUT us-vps:/tmp/$TAG.tsv >> $LOG 2>&1
-  ssh -o ConnectTimeout=20 us-vps "docker cp /tmp/$TAG.tsv openclaw-gateway:/root/.openclaw/ && docker exec openclaw-gateway node /root/.openclaw/push-videos.js /root/.openclaw/$TAG.tsv $TAG $P && docker exec openclaw-gateway node /root/.openclaw/push-raw-comments.js /root/.openclaw/$TAG.tsv $TAG $P" >> $LOG 2>&1
+  # 0921 网关迁移: us-vps 那份 openclaw-gateway 容器已退役(决策 96054a8b),落池脚本随迁移
+  # 落到 MMV 原生跑(不再经 docker cp/docker exec)。
+  scp -o ConnectTimeout=20 $OUT mmv:/tmp/$TAG.tsv >> $LOG 2>&1
+  ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/push-videos.js /tmp/$TAG.tsv $TAG $P && node /Users/administrator/.openclaw/leadgen-scripts/push-raw-comments.js /tmp/$TAG.tsv $TAG $P" >> $LOG 2>&1
   print "[$(date +%H:%M:%S)] 已落池(视频+评论)" >> $LOG
 fi
