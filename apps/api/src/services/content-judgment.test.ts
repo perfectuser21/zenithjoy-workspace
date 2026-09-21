@@ -484,4 +484,106 @@ describe('content-judgment: 视频三档 + commander 复核', () => {
     expect(result.judgment_status).toBe('matched');
   });
 
+
+  /**
+   * 网关类错误退避重试（2026-09-21，issue f3b6ba7c）
+   *
+   * 真实事故：ToAPIs 对 GHA runner 返回 HTTP 520（Cloudflare 源站错误，41s 后才回），
+   * 本机同 key 同模型 200。主判当时完全没有重试，一发 520 整条判定链就断，
+   * golden-path-2 的 Step 8c/8d 连挂三次挡住所有 PR 合并。
+   *
+   * 分寸：只重试"网关自己崩了"这类瞬时错误（ECONNABORTED / 502 / 503 / 504 / 520-524）。
+   * 4xx 一律不重试——key 失效(401)、模型名错(404)、参数错(400) 是确定性故障，
+   * 重试既没用又会把守卫的判别力磨掉（那正是这套 smoke 存在的意义）。
+   */
+  describe('ToAPIs 网关类错误重试 [BEHAVIOR]', () => {
+    // 退避调到 1ms：这里验的是"重试了没有、重试几次"，不是真去等那 1s/2s
+    beforeEach(() => {
+      process.env.TOAPIS_RETRY_BASE_MS = '1';
+    });
+
+    function gatewayError(status: number) {
+      const err = new Error(`Request failed with status code ${status}`) as Error & {
+        isAxiosError: boolean; response: { status: number; data: string };
+      };
+      err.isAxiosError = true;
+      err.response = { status, data: `error code: ${status}` };
+      return err;
+    }
+
+    it('主判遇 520 → 重试后成功，不再是 pending', async () => {
+      const mockedPost = vi.mocked(axios.post);
+      mockedPost.mockReset();
+      mockedPost
+        .mockRejectedValueOnce(gatewayError(520))
+        .mockResolvedValueOnce({
+          data: { choices: [{ message: { content: 'MATCHED\n转写：完整内容' } }] },
+        } as never);
+
+      const pool = makePool({ targetProfileDesc: '健身减脂目标客户' });
+      const result = await judgeVideo(pool, 'tenant-520', 'video-520-001', 'audio', btoa('fake-pcm'));
+
+      expect(mockedPost).toHaveBeenCalledTimes(2);
+      expect(result.judgment_status).toBe('matched');
+    });
+
+    it.each([502, 503, 504, 521, 524])('主判遇 %d 同样重试', async (status) => {
+      const mockedPost = vi.mocked(axios.post);
+      mockedPost.mockReset();
+      mockedPost
+        .mockRejectedValueOnce(gatewayError(status))
+        .mockResolvedValueOnce({
+          data: { choices: [{ message: { content: 'MATCHED\n转写：完整内容' } }] },
+        } as never);
+
+      const pool = makePool({ targetProfileDesc: '健身减脂目标客户' });
+      const result = await judgeVideo(pool, 'tenant-gw', `video-gw-${status}`, 'audio', btoa('fake-pcm'));
+
+      expect(mockedPost).toHaveBeenCalledTimes(2);
+      expect(result.judgment_status).toBe('matched');
+    });
+
+    it.each([400, 401, 403, 404])('主判遇 %d 绝不重试——确定性故障要如实报出来', async (status) => {
+      const mockedPost = vi.mocked(axios.post);
+      mockedPost.mockReset();
+      mockedPost.mockRejectedValue(gatewayError(status));
+
+      const pool = makePool({ targetProfileDesc: '健身减脂目标客户' });
+      const result = await judgeVideo(pool, 'tenant-4xx', `video-4xx-${status}`, 'audio', btoa('fake-pcm'));
+
+      expect(mockedPost).toHaveBeenCalledTimes(1);
+      expect(result.judgment_status).toBe('pending');
+      expect(result.judgment_reason).toBe('gemini_error');
+    });
+
+    it('主判 520 重试到上限仍失败 → 老老实实 pending，不假装判成了', async () => {
+      const mockedPost = vi.mocked(axios.post);
+      mockedPost.mockReset();
+      mockedPost.mockRejectedValue(gatewayError(520));
+
+      const pool = makePool({ targetProfileDesc: '健身减脂目标客户' });
+      const result = await judgeVideo(pool, 'tenant-520x', 'video-520-exhaust', 'audio', btoa('fake-pcm'));
+
+      expect(mockedPost.mock.calls.length).toBeGreaterThan(1);
+      expect(result.judgment_status).toBe('pending');
+      expect(result.judgment_reason).toBe('gemini_error');
+    });
+
+    it('commander 遇 520 → 重试后出终态，不落 error_保守拒', async () => {
+      const mockedPost = vi.mocked(axios.post);
+      mockedPost.mockReset();
+      mockedPost
+        .mockResolvedValueOnce(UNCERTAIN_RESP)
+        .mockRejectedValueOnce(gatewayError(520))
+        .mockResolvedValueOnce({ data: { choices: [{ message: { content: '准' } }] } } as never);
+
+      const pool = makePool({ targetProfileDesc: '健身减脂目标客户' });
+      const result = await judgeVideo(pool, 'tenant-c520', 'video-c520-001', 'audio', btoa('fake-pcm'));
+
+      expect(result.judgment_status).toBe('matched');
+      expect(result.judgment_reason).toContain('via_commander');
+      expect(result.judgment_reason).not.toContain('error_保守拒');
+    });
+  });
+
 });
