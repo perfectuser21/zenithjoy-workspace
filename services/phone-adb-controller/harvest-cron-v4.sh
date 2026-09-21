@@ -5,6 +5,10 @@
 #   因为 0915 凌晨三批正是死在这两步、静默 exit、全线 6 小时无人知晓。
 # 失败不静默(同上): 任何非正常退出都先 escalate 再退,报警走 us-vps 宿主文件(容器死了照样能写)。
 # v4(基座1/7): +账本/阶段工件/续跑/escort真活复核/孤儿清扫。原 harvest-cron.sh 不动，影子跑 2 晚后切 crontab。
+# 库块默认值必须在 wfr_bootstrap 之前定义——source 模式(HARVEST_CRON_V4_LIB=1)下不会走到
+# 下面 set -uo pipefail 之后的赋值，wfr_bootstrap 找不到 $WFR/$BATCH2 就会裸调失败。
+WFR=${WFR:-$HOME/bin-harvest/workflow-result.sh}
+BATCH2=${BATCH2:-$HOME/bin-harvest/batch2-v4.sh}
 filter_words(){ # in out "skip|list" —— 续跑：去掉上一 attempt 已完成的词，保序
   local in="$1" out="$2" skip="${3:-}"
   : > "$out"
@@ -15,9 +19,16 @@ filter_words(){ # in out "skip|list" —— 续跑：去掉上一 attempt 已完
   done < "$in"
 }
 finalize_needed(){ [[ -n "${WFR_RUN_ID:-}" ]]; }   # 只有 wfr init 跑过(导出了 WFR_RUN_ID)才需要收工记账
+# wfr_bootstrap: TAG P WF PUSH SERIAL HOSTKEY —— init 后立刻 export 再 enter，子进程(bash "$WFR" /
+#   bash "$BATCH2")才看得到账本位置。终审 C1: 原代码 init→enter 之间不 export，enter 子进程走
+#   not_initialized 分支，账本 attempt_id 永远 null、skip_words 恒空——两步接成一个库函数堵死这个洞。
+wfr_bootstrap(){
+  eval "$(bash "$WFR" init "$1" "$2" "$3" "$4" "$5" "$6" 2>>${LOG:-/dev/null})" 2>/dev/null || true
+  export WFR_RUN_ID WFR_HASH WFR_RUN_DIR WFR_ART_DIR
+  eval "$(bash "$WFR" enter 2>>${LOG:-/dev/null})" 2>/dev/null || true
+  export WFR_ATTEMPT WFR_SKIP_WORDS
+}
 [[ "${HARVEST_CRON_V4_LIB:-0}" == "1" ]] && return 0
-WFR=${WFR:-$HOME/bin-harvest/workflow-result.sh}
-BATCH2=${BATCH2:-$HOME/bin-harvest/batch2-v4.sh}
 set -uo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 P="$1"; SERIAL="$2"; BIZ="${3:-AI人工智能训练师}"; N="${4:-6}"; PUSH="${5:-1}"
@@ -166,16 +177,18 @@ fi
 NWORDS=$(wc -l < $WF | tr -d ' ')
 log "词单 ${NWORDS}词: $(tr '\n' '/' < $WF)"
 wr step "$SERIAL" 2 done; wr step "$SERIAL" 3 doing "${NWORDS}词"
-eval "$(bash "$WFR" init "$TAG" "$P" "$WF" "$PUSH" "$SERIAL" "$HOSTKEY" 2>>$LOG)" 2>/dev/null || true
+wfr_bootstrap "$TAG" "$P" "$WF" "$PUSH" "$SERIAL" "$HOSTKEY"
 log "账本init: run=${WFR_RUN_ID:-?} hash=${WFR_HASH:-?}"
+log "账本enter: attempt=${WFR_ATTEMPT:-?} skip=${WFR_SKIP_WORDS:-}"
 
 # ── ④ 采收主体 ──
-eval "$(bash "$WFR" enter 2>>$LOG)" 2>/dev/null || true
-log "账本enter: attempt=${WFR_ATTEMPT:-?} skip=${WFR_SKIP_WORDS:-}"
+# 终审 I3: batch2-v4 本就按 WFR_SKIP_WORDS 逐词跳过；这里若再传过滤后的 $WF2(与 init 时算 hash
+# 用的 $WF 不同) 会让 batch2-v4 的 hash 校验判成 hash_mismatch 误报停跑。传原词单 $WF，filter_words
+# 只用来打一行续跑跳过数的日志。
 WF2=/tmp/kw-$TAG.run.txt
 filter_words "$WF" "$WF2" "${WFR_SKIP_WORDS:-}"
-export WFR_RUN_ID WFR_HASH WFR_RUN_DIR WFR_ART_DIR WFR_ATTEMPT WFR_SKIP_WORDS
-B2OUT=$(/bin/zsh "$BATCH2" "$P" "$WF2" "$TAG" "$PUSH" "$SERIAL" 2>&1 | tee -a $LOG || true)
+log "续跑跳过 $(( $(wc -l < $WF) - $(wc -l < $WF2) )) 词"
+B2OUT=$(/bin/zsh "$BATCH2" "$P" "$WF" "$TAG" "$PUSH" "$SERIAL" 2>&1 | tee -a $LOG || true)
 if print -r -- "$B2OUT" | grep -q 'BATCH2_ESCALATE=hash_mismatch'; then escalate "词单在 init 后被改动(hash 不一致)，本批已停(fail-closed)"; fi
 log "批完成: $(grep -c '^LEAD' ~/night-$TAG.tsv 2>/dev/null || echo 0) LEAD"
 wr step "$SERIAL" 3 done

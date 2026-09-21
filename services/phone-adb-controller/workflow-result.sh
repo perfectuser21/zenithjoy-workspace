@@ -106,12 +106,15 @@ case "$cmd" in
       book="$(led show)"
       n_stages=$(printf '%s' "$book" | "$WFR_JQ" '[.stages[] | select(.status!="pending")] | length' 2>/dev/null || echo 0)
       n_items=$(printf '%s' "$book" | "$WFR_JQ" '[.stages[].items[]?] | length' 2>/dev/null || echo 0)
-      expected=$(( n_stages + n_items ))
       if [[ -n "${WFR_SCP_TARGET:-}" ]]; then
         scp -q -o ConnectTimeout=20 "${WFR_ART_DIR:-}"/"${WFR_RUN_ID:-}"__*.worker-result.json "$WFR_SCP_TARGET" 2>/dev/null || warn "scp to MMV failed; artifacts kept locally"
       fi
-      if (( n_files >= n_stages )); then echo "WFR_FINALIZE_OK=1"; echo "WFR_FINALIZE_MSG=artifacts=$n_files stages=$n_stages items=$n_items"
-      else echo "WFR_FINALIZE_OK=0"; echo "WFR_FINALIZE_MSG=artifact_count_mismatch files=$n_files stages=$n_stages expected>=$expected"; fi
+      # 判据用产物(判定点 544cd6a3): 每条成功 write_stage 同时产 1 文件 + 1 账本 items 条目，
+      # 故正常应有 n_files >= n_items。终审 C2 实证: 工件目录若从起跑前就不可写，write_stage
+      # 全程写不进文件、也就全程没调 led1 set，n_files 与 n_stages 会一起停在 0，旧判据
+      # n_files>=n_stages 在 0>=0 时假绿 OK=1；改用 n_items(而非 n_stages) 且要求其 >0 堵死这条假绿。
+      if (( n_items > 0 && n_files >= n_items )); then echo "WFR_FINALIZE_OK=1"; echo "WFR_FINALIZE_MSG=artifacts=$n_files stages=$n_stages items=$n_items"
+      else echo "WFR_FINALIZE_OK=0"; echo "WFR_FINALIZE_MSG=artifact_count_mismatch files=$n_files items=$n_items stages=$n_stages"; fi
     fi;;
   *) warn "unknown subcommand: $cmd";;
 esac
