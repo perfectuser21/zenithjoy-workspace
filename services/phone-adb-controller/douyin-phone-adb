@@ -83,6 +83,10 @@ REMOTE_UI="/sdcard/douyin-leadgen-ui-${PROFILE}.xml"
 EVIDENCE_ROOT="/private/tmp/openclaw-phone/evidence/${PROFILE}"
 EVIDENCE_BUNDLE_ROOT="/private/tmp/openclaw-phone/evidence-bundles/${PROFILE}"
 DOUYIN_PACKAGE="com.ss.android.ugc.aweme"
+# 搜索结果页（卡片网格所在的 Activity）。采收循环每处理完一个视频都要回到这里，
+# 它是本链唯一稳定的"归位点"——结果页里的 resource-id 全是混淆短名（rej/dp7/pkr…），
+# 只有 Activity 名可靠。
+SEARCH_RESULT_ACTIVITY="search.activity.SearchResultActivity"
 LOCK_ROOT="/private/tmp/openclaw-phone/locks"
 LOCK_DIR="$LOCK_ROOT/${SERIAL}.lock"
 
@@ -270,6 +274,39 @@ node_center() {
 # 所以"根本不在详情页"必须当硬错误立即报出，不许进重试、不许按返回键。
 # 返回码三态，绝不把"读不到树"和"读到了但不是详情页"混为一谈（那会把瞬态问题
 # 误报成结构性问题，害人往错方向修）：0=在详情页 1=不在详情页 2=树读不到(瞬态,可重试)
+# 纯判定：一个前台串（dumpsys window 那行）是不是搜索结果页。抽出来是为了能被 CI 测
+# （子命令 on-search-results）。
+_is_search_results_fg() {
+  local fg="$1"
+  [[ "$fg" == *"$DOUYIN_PACKAGE"* && "$fg" == *"$SEARCH_RESULT_ACTIVITY"* ]]
+}
+
+# 回到搜索结果页。**不靠数 back 次数**——0922 夜批实证：取完作品链接后
+# current_video_link 用 deep link 重开视频，栈里比"直接点开卡片"多压一层，
+# 调用方那句写死的 `back` 一次退不回结果页，人落在暂存解析页上；
+# 于是后面每个视频的 tap 坐标都打在错页面，评论区连着打不开。
+# 数字写死在任何一条路径上都会退多或退少，改成退到"真的看见结果页"为止。
+back_to_results() {
+  local max="${1:-4}" i fg
+  for i in {1..$max}; do
+    fg="$(foreground_package)"
+    if _is_search_results_fg "$fg"; then
+      print -- "back_to_results=1 backs=$((i-1))"
+      return 0
+    fi
+    "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1 || true
+    wait_ms 1500
+  done
+  fg="$(foreground_package)"
+  if _is_search_results_fg "$fg"; then
+    print -- "back_to_results=1 backs=$max"
+    return 0
+  fi
+  # 退不回去就明说，别让调用方以为已经归位——那正是这个 bug 的形状。
+  print -u2 -- "back-to-results: still off the search result page after ${max} backs (fg=${fg})"
+  return 1
+}
+
 # 纯判定：一份 UI 树到底是不是「已就绪的视频详情页」。不碰设备，故可被 CI 直接测
 # （子命令 detail-restored / __tests__/video-link-restore.test.mjs）。
 #
@@ -2135,6 +2172,19 @@ case "$command" in
     check_target
     current_video_link "$2"
     ;;
+  back-to-results)
+    # 退回搜索结果页（采收循环处理完一个视频后的归位动作）。
+    [[ "$#" == 1 || "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE back-to-results [MAX_BACKS]"
+    check_target
+    back_to_results "${2:-4}"
+    ;;
+  on-search-results)
+    # 纯判定，不碰设备：给定前台串是不是搜索结果页。排障与 CI 用。
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE on-search-results FOREGROUND"
+    if _is_search_results_fg "$2"; then print -- "on_search_results=1"; exit 0; fi
+    print -- "on_search_results=0"
+    exit 1
+    ;;
   detail-restored)
     # 纯判定，不碰设备：一份 UI 树是不是「已就绪的视频详情页」。
     # 排障时能对着证据文件手工复核，CI 也能直接拿它当守卫跑。
@@ -2432,6 +2482,6 @@ case "$command" in
     snapshot
     ;;
   *)
-    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link account-current account-switch commenter-identity private-message-send close-app record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored open-comments collect-comments search-video-cards search-video-tab"
+    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link account-current account-switch commenter-identity private-message-send close-app record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-video-tab"
     ;;
 esac

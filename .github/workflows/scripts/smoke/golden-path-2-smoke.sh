@@ -1738,6 +1738,39 @@ if (!detail.includes('content-desc="分享')) process.exit(1);
 NODE
 ok "Step 33 ✅ 取链接后的详情页恢复守卫在位（判据=分享按钮，出口真的验、没过就 die）"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 34：处理完一个视频后的归位必须是确定性的，不能自己数 back 次数
+#
+# 0922 02:00 夜批实证（Step 33 那一刀已上机后的第一批）：内部恢复守卫已生效、
+# 链路能自我恢复了，但掉页仍在发生——调用方几个「跳过」分支只 back 一次，
+# 而取过链接的视频栈里比"直接点开卡片"多压一层（deep link 重开），
+# 一次退不回结果页，人落在暂存解析页，后面每个视频的 tap 全打在错页面上。
+node - <<'NODE' || fail "Step 34 采收归位退化成数 back 次数" 34
+const fs = require('fs');
+const ctl = fs.readFileSync('services/phone-adb-controller/douyin-phone-adb', 'utf8');
+const harvest = fs.readFileSync('services/phone-adb-controller/harvest-keyword.sh', 'utf8');
+
+// ① 归位函数必须验前台并在退不回去时报错（退完 N 次就返回成功 = 没守卫）
+const fn = ctl.slice(ctl.indexOf('back_to_results() {'));
+if (!fn.includes('_is_search_results_fg')) process.exit(1);
+if (!/return 1/.test(fn.slice(0, fn.indexOf('\n}\n')))) process.exit(1);
+
+// ② 判定不能只看包名——暂存解析页、搜索输入页都是抖音自己的页面
+const judge = ctl.slice(ctl.indexOf('_is_search_results_fg() {'), ctl.indexOf('_is_video_detail_xml'));
+if (!judge.includes('SEARCH_RESULT_ACTIVITY')) process.exit(1);
+
+// ③ 采收循环里不许再出现"自己数 back 次数"的归位
+const lines = harvest.split('\n');
+const bad = lines.filter((l, i) => {
+  if (!/--profile "\$P" back\b/.test(l) || /back-to-results/.test(l)) return false;
+  const ctx = lines.slice(Math.max(0, i - 5), i).join('\n');
+  return !/open-comments|评论面板|card-link/.test(ctx);   // 面板层的恢复不算归位
+});
+if (bad.length > 0) process.exit(1);
+if (!harvest.includes('back-to-results')) process.exit(1);
+NODE
+ok "Step 34 ✅ 采收归位是确定性的（退到看见结果页为止，退不回去就报错）"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S5B_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" \
       "$S22_TMP" "$S23A_TMP" "$S23A_COOKIES" "$S23B_TMP" "$S24_TMP" \

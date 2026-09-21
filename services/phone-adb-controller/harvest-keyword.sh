@@ -53,14 +53,14 @@ for CARDLINE in "${(f)CARDS}"; do
   VURL="$(print -- "$VLINK" | sed -n "s/^short_url=//p")"
   if print -- "$VLINK" | grep -q "^excluded_non_video=true"; then
     log "  图文帖,跳过"
-    $C --profile "$P" back >/dev/null 2>&1; sleep 2
+    $C --profile "$P" back-to-results >/dev/null 2>&1 || true
     continue
   fi
   VID="$(print -- "$VLINK" | sed -n "s/^video_id=//p")"
   [[ -n "$VURL" ]] && log "  作品链接: $VURL"
   if [[ -n "$VID" ]] && grep -qxF "$VID" "$SEENVIDS" 2>/dev/null; then
     log "  视频已处理过,跳过: $VID"
-    $C --profile "$P" back >/dev/null 2>&1; sleep 2
+    $C --profile "$P" back-to-results >/dev/null 2>&1 || true
     continue
   fi
   if ! $C --profile "$P" open-comments "$TAG-v$i-oc" >/dev/null 2>&1; then
@@ -68,15 +68,15 @@ for CARDLINE in "${(f)CARDS}"; do
     /bin/sleep 3
     if ! $C --profile "$P" open-comments "$TAG-v$i-oc2" >/dev/null 2>&1; then
       log "  评论区重试仍打不开,跳过"
-      $C --profile "$P" back >/dev/null 2>&1; sleep 2
+      $C --profile "$P" back-to-results >/dev/null 2>&1 || true
       continue
     fi
   fi
   CC="$($C --profile "$P" collect-comments "$TAG-v$i-cc" 2>/dev/null | grep -E "	tap=" || true)"
   if [[ -z "$CC" ]]; then
     log "  零评论"
-    $C --profile "$P" back >/dev/null 2>&1; sleep 1
-    $C --profile "$P" back >/dev/null 2>&1; sleep 2
+    # 评论面板开着也不用先 back 一次再归位——back-to-results 自己退到看见结果页为止
+    $C --profile "$P" back-to-results >/dev/null 2>&1 || true
     continue
   fi
   log "  评论数: $(print -- "$CC" | wc -l | tr -d " ")"
@@ -131,8 +131,9 @@ for CARDLINE in "${(f)CARDS}"; do
   # 视频落「视频池」行(全链可观察: VIDEO\tid\t短链\t标题\t关键词\t采到评论数)
   print -- "VIDEO	${VID:-}	${VURL:-}	$TITLE	$KWTXT	$(print -- "$CC" | wc -l | tr -d " ")"
   # 收评论面板+回搜索结果
-  $C --profile "$P" back >/dev/null 2>&1; sleep 1
-  $C --profile "$P" back >/dev/null 2>&1; sleep 2
+  # 归位不数 back 次数：取过链接的视频栈里多一层，写死的次数必然退多或退少
+  # （0922 实证：跳过分支 back 一次落在暂存解析页，后面每个视频都在错页面上瞎点）。
+  $C --profile "$P" back-to-results >/dev/null 2>&1 || true
   sleep 3
 done
 log "关键词完成: $KWTXT"
