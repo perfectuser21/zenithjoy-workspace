@@ -236,3 +236,97 @@ describe('POST /api/mashup/candidates/:id/render', () => {
     expect(r.status).toBe(404);
   });
 });
+
+// 候选真实轻量预览（决策 623a81d7）：并发=1 独立队列，路由只透传队列态；
+// 桩掉 enqueuePreview 验路由契约，与终版渲染路由同口径。
+vi.mock('../../services/mashup-preview-queue', () => ({ enqueuePreview: vi.fn() }));
+import { enqueuePreview } from '../../services/mashup-preview-queue';
+
+describe('POST /api/mashup/candidates/:id/preview', () => {
+  it('没有凭据 → 401，不触发预览渲染', async () => {
+    const r = await request(makeApp()).post('/api/mashup/candidates/cand-1/preview');
+    expect(r.status).toBe(401);
+    expect(enqueuePreview).not.toHaveBeenCalled();
+  });
+
+  it('已认证：入队预览并返回队列态', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (enqueuePreview as any).mockResolvedValue({
+      candidateId: 'cand-1',
+      previewStatus: 'generating',
+      queuePosition: 0,
+      previewUrl: null,
+    });
+    const r = await request(makeApp()).post('/api/mashup/candidates/cand-1/preview').set('X-Upload-Token', TOKEN_A).send({});
+    expect(r.status).toBe(200);
+    expect(r.body.data.previewStatus).toBe('generating');
+    expect(enqueuePreview).toHaveBeenCalledWith({ tenantId: 'tenant-a', candidateId: 'cand-1' });
+  });
+
+  it('候选不存在 → 404', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (enqueuePreview as any).mockRejectedValue(new Error('candidate not found: cand-x'));
+    const r = await request(makeApp()).post('/api/mashup/candidates/cand-x/preview').set('X-Upload-Token', TOKEN_A).send({});
+    expect(r.status).toBe(404);
+  });
+});
+
+describe('GET /api/mashup/candidates/:id', () => {
+  it('候选不属于当前租户 → 404', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (pool.query as any).mockResolvedValue({ rows: [] });
+    const r = await request(makeApp()).get('/api/mashup/candidates/cand-x').set('X-Upload-Token', TOKEN_A);
+    expect(r.status).toBe(404);
+  });
+
+  it('渲染中（未产出终版内容）：content 为 null，前端据此继续轮询', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (pool.query as any).mockImplementation((sql: string) => {
+      if (sql.includes('FROM zenithjoy.mashup_candidates')) {
+        return {
+          rows: [{
+            id: 'cand-1', run_id: 'run-1', score: '1.5', slot_fill: { hook: 'mat-1' },
+            thumbnail_url: null, render_status: 'rendering', preview_status: 'ready', preview_url: 'https://preview.example/cand-1.mp4',
+          }],
+        };
+      }
+      if (sql.includes('FROM zenithjoy.contents')) return { rows: [] };
+      return { rows: [] };
+    });
+    const r = await request(makeApp()).get('/api/mashup/candidates/cand-1').set('X-Upload-Token', TOKEN_A);
+    expect(r.status).toBe(200);
+    expect(r.body.data.renderStatus).toBe('rendering');
+    expect(r.body.data.previewStatus).toBe('ready');
+    expect(r.body.data.previewUrl).toBe('https://preview.example/cand-1.mp4');
+    expect(r.body.data.content).toBeNull();
+  });
+
+  it('已渲染完成：带出终版 content 的安全/水印/导出链接', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (pool.query as any).mockImplementation((sql: string) => {
+      if (sql.includes('FROM zenithjoy.mashup_candidates')) {
+        return {
+          rows: [{
+            id: 'cand-1', run_id: 'run-1', score: '1.5', slot_fill: { hook: 'mat-1' },
+            thumbnail_url: null, render_status: 'rendered', preview_status: 'ready', preview_url: 'https://preview.example/cand-1.mp4',
+          }],
+        };
+      }
+      if (sql.includes('FROM zenithjoy.contents')) {
+        return {
+          rows: [{
+            id: 'content-1', safety_check_status: 'passed', watermark_check_status: 'passed',
+            export_url: 'https://export.example/cand-1.mp4', download_url: 'https://export.example/cand-1.mp4',
+          }],
+        };
+      }
+      return { rows: [] };
+    });
+    const r = await request(makeApp()).get('/api/mashup/candidates/cand-1').set('X-Upload-Token', TOKEN_A);
+    expect(r.status).toBe(200);
+    expect(r.body.data.content).toMatchObject({
+      contentId: 'content-1', safetyCheckStatus: 'passed', watermarkCheckStatus: 'passed',
+      exportUrl: 'https://export.example/cand-1.mp4',
+    });
+  });
+});
