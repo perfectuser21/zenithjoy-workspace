@@ -26,6 +26,15 @@ export { REQUIRED_ENV };
  * 每个必须写 reason —— 强制开发者想清楚"为什么这个可选"。
  */
 export const OPTIONAL_ENV: { name: string; reason: string }[] = [
+  // —— 排程看板：Brain 库（真身在 us-vps，走 tailscale 内网）——
+  // 五个都是可选：缺了不影响中台起服务，只让排程读面标 stale（页面显示"读取失败"）、
+  // 写面返回 503。这是刻意的降级 —— 本地与 CI 不配也要能跑，但绝不把"没连上"
+  // 伪装成"今天没活"。见 db/brain-pool.ts。
+  { name: 'BRAIN_DATABASE_HOST', reason: 'Brain 库地址，缺则排程读面 stale、写面 503（不影响其余功能）' },
+  { name: 'BRAIN_DATABASE_PORT', reason: 'Brain 库端口，缺则用 5432' },
+  { name: 'BRAIN_DATABASE_NAME', reason: 'Brain 库名，缺则用 cecelia' },
+  { name: 'BRAIN_DATABASE_USER', reason: 'Brain 库用户，缺则用 cecelia' },
+  { name: 'BRAIN_DATABASE_PASSWORD', reason: 'Brain 库口令，内网 tailscale 场景可为空' },
   // —— 认证 / 安全（有兜底或 feature 级，非全平台静默坏）——
   { name: 'BETTER_AUTH_URL', reason: 'better-auth 站点 URL，缺则用请求 host 推导' },
   { name: 'BETTER_AUTH_TRUSTED_ORIGINS', reason: '受信任跨域来源，缺则用内置默认白名单' },
