@@ -61,7 +61,10 @@ export async function onRequestGet(context: {
     ok: true,
     graphApiVersion: env.META_GRAPH_API_VERSION,
     publishingEnabled: env.META_PUBLISH_ENABLED === 'true',
-    idempotencyConfigured: Boolean(env.META_IDEMPOTENCY),
+    // 必须与 publish.ts 的 resolveStore 同一套优先级：D1 优先、KV 兜底。
+    // 只看 KV 会在 D1 迁移后误报"没配幂等"，诱使运维把不安全的 KV 加回来。
+    idempotencyConfigured: Boolean(env.META_PUBLISH_DB || env.META_IDEMPOTENCY),
+    idempotencyBackend: env.META_PUBLISH_DB ? 'd1' : (env.META_IDEMPOTENCY ? 'kv' : null),
     assets: {
       page: { id: actualPageId, name: result.data.name || null },
       instagram: {
