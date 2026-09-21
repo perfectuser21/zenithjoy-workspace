@@ -308,4 +308,30 @@ done
 grep -qF "ssh -o ConnectTimeout=15 mmv 'node /Users/administrator/.openclaw/leadgen-scripts/next-outreach.js next'" "$D/outreach-tick.sh" \
   || fail "outreach-tick.sh 取单未走迁移后的 MMV 原生地址"
 
+# 层16: 0921真机实证——zsh(set -u)下变量名紧跟CJK字符会被当成一个变量名的一部分
+# (如 $DYID的卡片 被解析成变量"DYID的卡片"而非 $DYID + 字面量"的卡片"),
+# 实测 refill-profile-links.sh 第37行真崩过("DYID的卡片: parameter not set")。
+# 全仓禁止"$变量名紧跟中日韩统一表意文字、无花括号分隔"这个写法。
+# 注: 不用 grep -P + \x{4e00}-\x{9fff}——系统自带 BSD grep 不支持 PCRE,这条会静默永远不
+# 命中(假绿,曾亲手在此踩中并用变异测试揪出来),改用 python3(CI/本机都保证有) 判定。
+_CJK_HIT=$(python3 - "$D" <<'PYEOF'
+import re, sys, glob, os
+D = sys.argv[1]
+pat = re.compile(r'\$[A-Za-z_][A-Za-z0-9_]*[一-鿿]')
+hits = []
+for path in glob.glob(os.path.join(D, "*.sh")):
+    with open(path, encoding="utf-8", errors="ignore") as f:
+        for i, line in enumerate(f, 1):
+            if line.lstrip().startswith("#"):
+                continue
+            if pat.search(line):
+                hits.append(f"{path}:{i}:{line.rstrip()}")
+print("\n".join(hits))
+PYEOF
+)
+if [[ -n "$_CJK_HIT" ]]; then
+  echo "$_CJK_HIT"
+  fail "检测到未加花括号的shell变量紧跟CJK字符(0921真机实锤: zsh set -u下会被解析成一整个未定义变量名崩溃),必须写成\${VAR}中文"
+fi
+
 echo "phone-adb-controller-smoke: PASS"

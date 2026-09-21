@@ -34,7 +34,7 @@ for DYID in "${(f)$(cat $LIST)}"; do
   sleep 3
   CARD_DESC=$(print -n -- "用户列表里抖音号显示为${DYID}的那一条用户卡片" | /usr/bin/base64)
   CARD_OUT=$($C --profile "$P" locate-tap "$CARD_DESC" "$TAG-$n-card" </dev/null 2>&1)
-  if ! print -- "$CARD_OUT" | grep -q "^tapped"; then log "  未找到抖音号=$DYID的卡片,跳过"; continue; fi
+  if ! print -- "$CARD_OUT" | grep -q "^tapped"; then log "  未找到抖音号=${DYID}的卡片,跳过"; continue; fi
   sleep 3
   $C --profile "$P" ui-evidence "$TAG-$n-prof" </dev/null >/dev/null 2>&1
   PX="$EVROOT/$TAG-$n-prof.xml"
