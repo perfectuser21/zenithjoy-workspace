@@ -270,13 +270,41 @@ node_center() {
 # 所以"根本不在详情页"必须当硬错误立即报出，不许进重试、不许按返回键。
 # 返回码三态，绝不把"读不到树"和"读到了但不是详情页"混为一谈（那会把瞬态问题
 # 误报成结构性问题，害人往错方向修）：0=在详情页 1=不在详情页 2=树读不到(瞬态,可重试)
+# 纯判定：一份 UI 树到底是不是「已就绪的视频详情页」。不碰设备，故可被 CI 直接测
+# （子命令 detail-restored / __tests__/video-link-restore.test.mjs）。
+#
+# 正向：分享按钮存在且 clickable——这把尺子本函数入口一直在用，出口必须同一把。
+# 负向：树里不能有暂存搜索框 et_search_kw。取完链接后人常留在那个粘贴解析页上，
+#   而它同样是抖音包名；0921 夜批实证，出口只验包名的守卫会把它直接放行，
+#   调用方以为已回到视频页，此后每个视频都在错的页面上瞎点（auto09212230 整批 0 LEAD）。
+# 每条否决都说明是哪一关没过：排障时「树没读到」和「人还在暂存页」是两种完全不同的处置，
+# 混成一个静默的非零退出码，下次又得从头猜一遍。
+_is_video_detail_xml() {
+  local xml="$1" probe_line
+  [[ -r "$xml" ]] || { print -u2 -- "detail-restore: ui tree unreadable (${xml})"; return 1 }
+  # 负向一票否决：即使分享按钮也在（两页叠着没退干净），只要暂存搜索框还在就不算回来了。
+  if /usr/bin/grep -q 'et_search_kw' "$xml"; then
+    print -u2 -- "detail-restore: scratch search box still present (not back on the video page)"
+    return 1
+  fi
+  probe_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="分享[^"]*，按钮"[^>]*>' "$xml" | /usr/bin/head -1 || true)"
+  if [[ -z "$probe_line" ]]; then
+    print -u2 -- "detail-restore: share button absent (not a video detail page)"
+    return 1
+  fi
+  if [[ "$probe_line" != *'clickable="true"'* ]]; then
+    print -u2 -- "detail-restore: share button not clickable yet (page still loading)"
+    return 1
+  fi
+  return 0
+}
+
 _on_video_detail() {
-  local probe_id="$1" probe_xml probe_line w
+  local probe_id="$1" probe_xml w
   for w in 1 2; do
     probe_xml="$EVIDENCE_ROOT/${probe_id}-w${w}.xml"
     if _ui_evidence_wave "${probe_id}-w${w}" >/dev/null 2>&1; then
-      probe_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="分享[^"]*，按钮"[^>]*>' "$probe_xml" | /usr/bin/head -1 || true)"
-      [[ -n "$probe_line" && "$probe_line" == *'clickable="true"'* ]] && return 0
+      _is_video_detail_xml "$probe_xml" && return 0
       return 1
     fi
     (( w == 1 )) && wait_ms 2500
@@ -403,8 +431,36 @@ _current_video_link_once() {
   reopen_url="snssdk1128://aweme/detail/$content_id"
 
   if [[ "$content_type" == "video" ]]; then
-    "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "$reopen_url" >/dev/null
-    wait_ms 900
+    # deep link 重开视频后**必须验证真的回到了详情页**。
+    # 0921 夜批 auto09212230 实证：deep link 会间歇性不生效，人留在暂存搜索页；
+    # 那里同样是抖音包名，旧的「只验包名」守卫直接放行 → 调用方以为已回到视频页 →
+    # back 一次落到搜索输入页 → 此后每个视频的 tap 坐标都打在错的页面上
+    # （w12 的 v2/v3/v4 连续三次「评论区打不开」，整批 0 LEAD）。
+    # 固定 wait_ms 900 也一并改掉：deep link 生效快慢随机型/负载漂移，等死数字必然间歇踩空。
+    local _vr_try _vr_poll _vr_fg="" _vr_xml _vr_ok=0
+    for _vr_try in 1 2; do
+      "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "$reopen_url" >/dev/null
+      for _vr_poll in 1 2 3; do
+        wait_ms 900
+        _vr_fg="$(foreground_package)"
+        # 前台这关便宜，先过；过不了就不必花约 3 秒去 dump 整棵树。
+        [[ "$_vr_fg" == *"$DOUYIN_PACKAGE"* ]] || continue
+        _vr_xml="$EVIDENCE_ROOT/${evidence_id}-restore-t${_vr_try}p${_vr_poll}.xml"
+        _ui_evidence_wave "${evidence_id}-restore-t${_vr_try}p${_vr_poll}" >/dev/null 2>&1 || continue
+        if _is_video_detail_xml "$_vr_xml"; then _vr_ok=1; break; fi
+      done
+      (( _vr_ok )) && break
+      print -u2 -- "warning: deep link restore attempt ${_vr_try}/2 did not land on the video detail page (fg=${_vr_fg})"
+    done
+    if (( ! _vr_ok )); then
+      # 没恢复就必须自己把现场收拾干净再报错：调用方大多 `|| true` 吞掉返回值，
+      # 留一个脏页面等于把后面每个视频一起拖下水——宁可丢当前这一个。
+      "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1 || true
+      wait_ms 1200
+      "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1 || true
+      wait_ms 1200
+      die "deep link did not restore the video detail page (fg=${_vr_fg}); recovered with back" WRONG_FOREGROUND
+    fi
   else
     # The scratch search field still has keyboard focus. First back hides the
     # keyboard; the second leaves the scratch route so the Worker can reopen
@@ -413,8 +469,9 @@ _current_video_link_once() {
     wait_ms 250
     "$ADB" -s "$SERIAL" shell input keyevent 4
     wait_ms 900
+    # 图文帖走的是"离开暂存页回到关键词"，目标不是详情页，故仍只验包名。
+    [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "resolved content did not restore to Douyin" WRONG_FOREGROUND
   fi
-  [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "resolved content did not restore to Douyin" WRONG_FOREGROUND
   clip_guard_record "$short_url"
   print -- "content_type=$content_type"
   if [[ "$content_type" == "video" ]]; then
@@ -2068,6 +2125,14 @@ case "$command" in
     check_target
     current_video_link "$2"
     ;;
+  detail-restored)
+    # 纯判定，不碰设备：一份 UI 树是不是「已就绪的视频详情页」。
+    # 排障时能对着证据文件手工复核，CI 也能直接拿它当守卫跑。
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE detail-restored UI_XML"
+    if _is_video_detail_xml "$2"; then print -- "detail_restored=1"; exit 0; fi
+    print -- "detail_restored=0"
+    exit 1
+    ;;
   account-current)
     [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE account-current EVIDENCE_ID"
     check_target
@@ -2357,6 +2422,6 @@ case "$command" in
     snapshot
     ;;
   *)
-    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link account-current account-switch commenter-identity private-message-send close-app record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap open-comments collect-comments search-video-cards search-video-tab"
+    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link account-current account-switch commenter-identity private-message-send close-app record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored open-comments collect-comments search-video-cards search-video-tab"
     ;;
 esac

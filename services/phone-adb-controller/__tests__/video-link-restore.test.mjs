@@ -19,12 +19,21 @@
 // 宁可误判成「没恢复」丢掉当前这一个视频，也绝不能误判成「已恢复」污染后面所有视频。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { writeFileSync, mkdtempSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { writeFileSync, mkdtempSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const SCRIPT = new URL('../douyin-phone-adb', import.meta.url).pathname;
+
+// douyin-phone-adb 是 zsh 脚本。缺 zsh 时**报红而不是 skip**——
+// 一个在 CI 里永远跳过的守卫等于没有守卫，而它恰恰是这里最不能出的事
+// （CI 装 zsh 的步骤在 .github/workflows/ci-l3-code.yml 的 openclaw-scripts-test）。
+test('前置：zsh 可用（缺了就报红，绝不静默跳过）', () => {
+  const r = spawnSync('zsh', ['-c', 'exit 0']);
+  assert.equal(r.error, undefined,
+    '没有 zsh —— 本文件所有守卫都会静默失效，请在 CI 里装上（别改成 skip）');
+});
 const PKG = 'com.ss.android.ugc.aweme';
 
 const wrap = (inner) => `<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation="0">`
@@ -108,7 +117,37 @@ test('真回到视频详情页 → 判已恢复', async () => {
   assert.equal(r.code, 0, `正常恢复被判成失败会白丢视频: ${r.err}`);
 });
 
-test('树文件读不到时判没恢复，不靠猜', async () => {
+test('树文件读不到时判没恢复，且说明是「读不到」不是「在暂存页」', async () => {
+  // 断言到具体原因，这条才抓得住"去掉可读性检查"的变异：不然 grep 对不存在的文件
+  // 本就会失败，判定顺带返回非 0，测试永远是绿的（假绿）。
+  // 排障上也是必要的——树没读到和人还在暂存页，是两种完全不同的处置。
   const r = await restored('', { writeFile: false });
   assert.notEqual(r.code, 0, '拿不到树就该判没恢复——宁可丢一个视频也不能盲目继续');
+  assert.match(r.err, /ui tree unreadable/, `没说明是树读不到: ${r.err}`);
+});
+
+test('每条否决都说明是哪一关没过（排障不用再猜）', async () => {
+  assert.match((await restored(XML_SCRATCH)).err, /scratch search box still present/);
+  assert.match((await restored(XML_SHARE_NOT_CLICKABLE)).err, /not clickable yet/);
+  assert.match((await restored(wrap('<node index="0" text="x" />'))).err, /share button absent/);
+});
+
+// ── 接线守卫 ──────────────────────────────────────────────────────────────
+// 上面那些用例锁的是「判定对不对」。但本 bug 的形状恰恰是：判定能力一直都在
+// （入口 _on_video_detail 用的就是它），**出口没用它**。所以只测判定函数是漏的——
+// 把恢复段改回「不验证直接判成功」，上面 7 条依然全绿。
+// 这条守卫锁的是接线：deep link 重开视频之后，必须真的拿判定函数验过。
+test('接线守卫：deep link 恢复段必须真的调判定，不能只验包名', () => {
+  const src = readFileSync(SCRIPT, 'utf8');
+  const start = src.indexOf('if [[ "$content_type" == "video" ]]; then');
+  assert.ok(start > 0, '没找到 deep link 恢复段——函数被重构了？这条守卫要跟着改');
+  const end = src.indexOf('\n  else\n', start);
+  assert.ok(end > start, '恢复段结构变了');
+  const branch = src.slice(start, end);
+
+  assert.match(branch, /am start .*android\.intent\.action\.VIEW/, '恢复段不再用 deep link 重开？');
+  assert.match(branch, /_is_video_detail_xml/,
+    'deep link 重开后没有用判定函数验证——这就是 0921 整批 0 LEAD 的原样复现');
+  assert.match(branch, /die .*did not restore/,
+    '验证没过却不 die：调用方大多 `|| true` 吞返回值，静默放行等于把后面每个视频一起拖下水');
 });
