@@ -1,96 +1,78 @@
 /**
- * Step4 渲染队列并发=1 + 失败态（真 Postgres — 禁 mock 边：渲染队列 ↔ mashup_candidates 状态迁移）。
+ * Step4 渲染队列并发=1 + 失败态（mock DB 纯单测，符合本目录既有惯例：
+ * mashup-render.test.ts / mashup-candidate-generation.test.ts / mashup-slot-assignment.test.ts
+ * 均 vi.mock('../../db/connection', ...) 桩掉 DB，因为本文件被默认 L3 "API Test" job
+ * 用 `npx vitest run --coverage` 收集，该 job 无 Postgres 服务容器，真连接必 ECONNREFUSED）。
  *
- * 覆盖：渲染并发上限为 1 第二个入队 queued / render_failed 可重新入队。
- * 真实 ffmpeg 渲染叶子由注入的 renderFn 顶替（允许的外层叶子），真实 ffmpeg 成片由 hk-vps L3 E2E 覆盖；
- * 被改的边（队列并发原语 + DB render_status 迁移）全程真跑，不 mock。
- *
- * 与 sprints/09201034-batch-mashup-script-preview-candidates/tests/mashup-render-queue.test.ts
- * 同源（sprint 阶段 TDD Red/Green 产物毕业到源码同级 __tests__，供 lint-test-pairing 配对）。
+ * 真 Postgres 覆盖（禁 mock 边：渲染队列 ↔ mashup_candidates 状态迁移的真实 SQL 语义）
+ * 由同源 sprint 集成测试跑：sprints/09201034-batch-mashup-script-preview-candidates/tests/mashup-render-queue.test.ts
+ * （已注册 test-registry.yaml，type=integration/ci=L4，同 07212317-android-signal-reporting 惯例，
+ * 不进默认 L3 vitest include，避免污染无 DB 的单测 job）。
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { Client } from 'pg';
-import { enqueueRender } from '../mashup-render-queue';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const PGURL = process.env.E2E_DATABASE_URL ?? process.env.DB_URL ?? 'postgresql://postgres@localhost:5432/cecelia';
-const TENANT = 'q-tenant-' + Math.random().toString(16).slice(2, 8);
-let client: Client;
-let templateId = '';
-let runId = '';
-let candA = '';
-let candB = '';
+const query = vi.fn();
+vi.mock('../../db/connection', () => ({ default: { query } }));
+vi.mock('../mashup-render', () => ({ renderCandidate: vi.fn() }));
+vi.mock('../material-storage', () => ({ createMaterialStorage: vi.fn() }));
 
 function deferred<T>() {
   let resolve!: (v: T) => void;
-  let reject!: (e: unknown) => void;
-  const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
-  return { promise, resolve, reject };
+  const promise = new Promise<T>((res) => { resolve = res; });
+  return { promise, resolve };
 }
 
-async function seedCandidate(sig: string): Promise<string> {
-  const r = await client.query(
-    `INSERT INTO zenithjoy.mashup_candidates (run_id, tenant_id, slot_fill, score, signature)
-     VALUES ($1, $2, '{}'::jsonb, 1.0, $3) RETURNING id`,
-    [runId, TENANT, sig],
-  );
-  return r.rows[0].id;
-}
+const candidates = new Map<string, { render_status: string }>();
 
-beforeAll(async () => {
-  client = new Client({ connectionString: PGURL });
-  await client.connect();
-  templateId = (
-    await client.query(
-      `INSERT INTO zenithjoy.mashup_templates (tenant_id, name, slots) VALUES ($1, 'q-test', '[]'::jsonb) RETURNING id`,
-      [TENANT],
-    )
-  ).rows[0].id;
-  runId = (
-    await client.query(
-      `INSERT INTO zenithjoy.mashup_runs (tenant_id, template_id, status) VALUES ($1, $2, 'pending') RETURNING id`,
-      [TENANT, templateId],
-    )
-  ).rows[0].id;
-  candA = await seedCandidate('sigA-' + runId);
-  candB = await seedCandidate('sigB-' + runId);
-});
-
-afterAll(async () => {
-  await client.query(`DELETE FROM zenithjoy.mashup_runs WHERE id = $1`, [runId]).catch(() => {});
-  await client.query(`DELETE FROM zenithjoy.mashup_templates WHERE id = $1`, [templateId]).catch(() => {});
-  await client.end();
+beforeEach(() => {
+  candidates.clear();
+  query.mockReset();
+  query.mockImplementation(async (sql: string, params: unknown[] = []) => {
+    if (sql.includes('SELECT id, render_status FROM')) {
+      const id = params[0] as string;
+      const row = candidates.get(id);
+      return { rows: row ? [{ id, render_status: row.render_status }] : [] };
+    }
+    if (sql.includes('UPDATE zenithjoy.mashup_candidates SET render_status')) {
+      const [id, , status] = params as [string, string, string];
+      candidates.set(id, { render_status: status });
+      return { rows: [] };
+    }
+    if (sql.includes('SELECT id FROM zenithjoy.contents')) {
+      return { rows: [] };
+    }
+    return { rows: [] };
+  });
 });
 
 describe('Step4 渲染队列并发=1', () => {
-  it('渲染并发上限为 1 第二个入队 queued', async () => {
-    const gate = deferred<void>();
-    const slowRender = async () => { await gate.promise; return { contentId: 'c', renderStatus: 'rendered' as const }; };
+  it('渲染并发上限为 1，第二个入队 queued', async () => {
+    const { enqueueRender } = await import('../mashup-render-queue');
+    candidates.set('cand-a', { render_status: 'pending' });
+    candidates.set('cand-b', { render_status: 'pending' });
 
-    const a = await enqueueRender({ tenantId: TENANT, candidateId: candA }, { render: slowRender });
-    expect(['rendering', 'queued']).toContain(a.renderStatus);
+    const gate = deferred<void>();
+    const slowRender = async () => { await gate.promise; return { renderStatus: 'rendered' as const }; };
+
+    const a = await enqueueRender({ tenantId: 't1', candidateId: 'cand-a' }, { render: slowRender });
+    expect(a.renderStatus).toBe('rendering');
 
     // A 的渲染被 gate 卡住占用唯一 slot 时，B 入队必须是 queued（并发=1）
-    const b = await enqueueRender({ tenantId: TENANT, candidateId: candB }, { render: slowRender });
+    const b = await enqueueRender({ tenantId: 't1', candidateId: 'cand-b' }, { render: slowRender });
     expect(b.renderStatus).toBe('queued');
     expect(b.queuePosition).toBeGreaterThanOrEqual(1);
 
     gate.resolve();
-    // 放行后 DB 里 A 终态应流转出 pending（rendering/rendered），验状态机真写库
-    await new Promise((r) => setTimeout(r, 50));
-    const row = await client.query(`SELECT render_status FROM zenithjoy.mashup_candidates WHERE id = $1`, [candA]);
-    expect(['rendering', 'rendered', 'queued']).toContain(row.rows[0].render_status);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(candidates.get('cand-a')?.render_status).toBe('rendered');
   });
 
   it('render_failed 可重新入队（非死路）', async () => {
-    const failRender = async () => { throw new Error('ffmpeg boom'); };
-    await enqueueRender({ tenantId: TENANT, candidateId: candA }, { render: failRender });
-    await new Promise((r) => setTimeout(r, 50));
-    const failed = await client.query(`SELECT render_status FROM zenithjoy.mashup_candidates WHERE id = $1`, [candA]);
-    expect(failed.rows[0].render_status).toBe('render_failed');
+    const { enqueueRender } = await import('../mashup-render-queue');
+    candidates.set('cand-c', { render_status: 'render_failed' });
+    const okRender = async () => ({ renderStatus: 'rendered' as const });
 
-    // 从 render_failed 再次入队应被接受（重新入队），不报错
-    const okRender = async () => ({ contentId: 'c2', renderStatus: 'rendered' as const });
-    const retry = await enqueueRender({ tenantId: TENANT, candidateId: candA }, { render: okRender });
-    expect(['queued', 'rendering', 'rendered']).toContain(retry.renderStatus);
+    const retry = await enqueueRender({ tenantId: 't1', candidateId: 'cand-c' }, { render: okRender });
+    expect(['queued', 'rendering']).toContain(retry.renderStatus);
   });
 });

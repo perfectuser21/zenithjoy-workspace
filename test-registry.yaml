@@ -1044,7 +1044,14 @@ tests:
     ci: L3
     status: active
     product: 批量混剪
-    note: "批量混剪加厚 Step4（GP f6f96e17/line05）渲染队列，真 Postgres 覆盖：渲染并发上限=1，第2个候选入队为 queued；render_failed 可重新入队非死路。决策 d6bedf80（hk-vps 4核硬约束）。"
+    note: "批量混剪加厚 Step4（GP f6f96e17/line05）渲染队列 mock DB 单测（同目录惯例桩掉 db/connection，因默认 L3 API Test job 无 Postgres）：渲染并发上限=1，第2个候选入队为 queued；render_failed 可重新入队非死路。决策 d6bedf80（hk-vps 4核硬约束）。真 Postgres 覆盖见 mashup-render-queue-integration。"
+  - id: mashup-render-queue-integration
+    path: sprints/09201034-batch-mashup-script-preview-candidates/tests/mashup-render-queue.test.ts
+    type: integration
+    ci: L4
+    status: active
+    product: 批量混剪
+    note: "批量混剪加厚 Step4（GP f6f96e17/line05）渲染队列同源集成测试，真 Postgres 覆盖队列并发原语与 mashup_candidates.render_status 状态迁移真实 SQL 语义（不 mock）；同 07212317-android-signal-reporting 惯例不进默认 L3 vitest include，避免无 DB 的单测 job 里 ECONNREFUSED。"
   - id: mashup-candidates-lazy-render
     path: sprints/09201034-batch-mashup-script-preview-candidates/tests/mashup-candidates-lazy.test.ts
     type: unit
