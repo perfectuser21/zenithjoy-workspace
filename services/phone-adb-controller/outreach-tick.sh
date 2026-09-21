@@ -70,11 +70,12 @@ DELAY=$(( RANDOM % 300 ))
 log "本tick延迟 ${DELAY}s 后执行"
 /bin/sleep $DELAY
 
-# ssh 到 us-vps 走的是这台机器上早就配好的 SSH 密钥认证(标准 known_hosts + 私钥,
-# 不在命令行传密码/token),下面这几处 ssh 调用只是把已有的 mark()/取单 写法原样保留,
-# 不是本次改动新引入的凭据处理逻辑。
+# 0921 网关迁移: us-vps 那份 openclaw-gateway 容器已退役(决策 96054a8b 零执行铁律,
+# 迁移见 /root/.openclaw-gateway-retired),取单/去重脚本随迁移落到 MMV 原生跑(不再
+# 经 docker exec),下面 ssh 走的是这台机器上早就配好的 SSH 密钥认证(标准 known_hosts
+# + 私钥,不在命令行传密码/token)。
 C=~/.local/bin/douyin-phone-adb
-mark(){ ssh -o ConnectTimeout=15 us-vps "docker exec openclaw-gateway node /root/.openclaw/next-outreach.js done $1 $2 $(print -n -- "$3" | /usr/bin/base64)" >>$LOG 2>&1 }
+mark(){ ssh -o ConnectTimeout=15 mmv "node /Users/administrator/.openclaw/leadgen-scripts/next-outreach.js done $1 $2 $(print -n -- "$3" | /usr/bin/base64)" >>$LOG 2>&1 }
 STATE_DIR="$(dirname "$0")/state"
 mkdir -p "$STATE_DIR"
 
@@ -93,7 +94,7 @@ CONSEC_CAP_HITS=0
 
 while (( SECONDS - TICK_BODY_START < TICK_BUDGET )); do
   # 取单(网关选单器: 重复高亮优先→A级→B级, 预写触达中防重)
-  ORDER=$(ssh -o ConnectTimeout=15 us-vps 'docker exec openclaw-gateway node /root/.openclaw/next-outreach.js next' 2>>$LOG)
+  ORDER=$(ssh -o ConnectTimeout=15 mmv 'node /Users/administrator/.openclaw/leadgen-scripts/next-outreach.js next' 2>>$LOG)
   [[ "$ORDER" == "NO_PENDING" || -z "$ORDER" ]] && { log "无待触达单,本tick结束(已发${SENDS_THIS_TICK}条)"; break }
   [[ "$ORDER" == NO_SCRIPT* ]] && { log "话术缺失: $ORDER,本tick结束(已发${SENDS_THIS_TICK}条)"; break }
 

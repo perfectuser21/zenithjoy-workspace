@@ -1,7 +1,7 @@
 // update-keyword-stats.js —— 效果回写:线索表/评论池/视频池 按词统计 → 回写「关键词配置」表
 // Manager 层的地基:关键词表从输入表变成经营仪表盘(词的赛马数据),上游出词 Agent 与 Manager 都吃它。
 const fs = require("fs");
-const cfg = JSON.parse(fs.readFileSync("/root/.openclaw/clawdbot.json"));
+const cfg = JSON.parse(fs.readFileSync("/Users/administrator/.openclaw/clawdbot.json"));
 const acc = cfg.channels.feishu.accounts.jinoshengyuan;
 const B = "GNuwbzY0da8GP0sv6MGcOTu9ntd";
 const KW = "tbleP4LgzkcwAhiZ", LEADS = "tblTLFj69CflUqSr", POOL = "tblmrJTyVgzTj89P", VPOOL = "tblKHYTMZceFBwHr";

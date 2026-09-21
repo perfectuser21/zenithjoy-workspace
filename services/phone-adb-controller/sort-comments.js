@@ -6,7 +6,7 @@
 // 判定字段: 业务相关性(相关/不相关) 意向等级(A/B/C) AI判定理由 排除原因 处理状态(已分拣)
 // 规则来源: 0914 KPI 夜 102 条人工判例提炼(memory handoff_0914)。规则闸目标≈判掉 70-80%。
 const fs = require("fs");
-const cfg = JSON.parse(fs.readFileSync("/root/.openclaw/clawdbot.json"));
+const cfg = JSON.parse(fs.readFileSync("/Users/administrator/.openclaw/clawdbot.json"));
 // 0916: 按业务线路由 —— 悦升有独立 base,写死金诺会让它池里的评论永远没人消化(见 line-routes.js)
 const { routeOf } = require("./line-routes.js");
 const { buildLeadCoreFields, extractSeenEntries } = require("./lead-fields-lib.js");

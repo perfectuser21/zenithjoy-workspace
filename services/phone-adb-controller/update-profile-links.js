@@ -1,6 +1,6 @@
 // update-profile-links.js <refill_tsv> —— 按抖音号把主页直链回写进「主页链接」字段
 const fs = require("fs");
-const cfg = JSON.parse(fs.readFileSync("/root/.openclaw/clawdbot.json"));
+const cfg = JSON.parse(fs.readFileSync("/Users/administrator/.openclaw/clawdbot.json"));
 const acc = cfg.channels.feishu.accounts.jinoshengyuan;
 const { findByDyid } = require("./lead-fields-lib.js");
 const TSV = process.argv[2];
