@@ -177,3 +177,32 @@ describe('renderMashupWithAudio', () => {
     expect(args).toEqual(expect.arrayContaining(['-preset', 'ultrafast', '-crf', '28']));
   });
 });
+
+/**
+ * 转义顺序回归（CodeQL js/incomplete-sanitization 在 PR#1931 抓到）
+ *
+ * escapeForceStyleCommas 原本只转义逗号、不转义反斜杠。这是经典的转义顺序错误：
+ * 必须先转义转义符本身、再转义其它字符，否则输入里已有的反斜杠会与新插入的
+ * 反斜杠混淆，ffmpeg filtergraph 解析出来的结果和预期不符。
+ *
+ * 当前 forceStyle 由 buildSubtitleForceStyle 自己拼、字体名里没有反斜杠，实际
+ * 触发不了；但这是个通用转义工具，下一个人传带反斜杠的样式进来就会踩。
+ */
+describe('escapeForceStyleCommas — 转义顺序 [BEHAVIOR]', () => {
+  it('反斜杠必须先被转义，否则与逗号转义混淆', async () => {
+    const { escapeForceStyleCommas } = await import('../mashup-render-ffmpeg');
+    // 输入里本来就有一个反斜杠：它必须变成两个，而不是原样漏过去
+    expect(escapeForceStyleCommas('Fontname=A\\B')).toBe('Fontname=A\\\\B');
+  });
+
+  it('反斜杠与逗号同时出现时，两者都要正确转义且不互相污染', async () => {
+    const { escapeForceStyleCommas } = await import('../mashup-render-ffmpeg');
+    // 'A\,B' 里的反斜杠和逗号是两个独立字符，转义后应是 'A\\\,B'
+    expect(escapeForceStyleCommas('A\\,B')).toBe('A\\\\\\,B');
+  });
+
+  it('普通样式串行为不变（不许为了修转义把正常case弄坏）', async () => {
+    const { escapeForceStyleCommas } = await import('../mashup-render-ffmpeg');
+    expect(escapeForceStyleCommas('FontSize=16,Outline=3')).toBe('FontSize=16\\,Outline=3');
+  });
+});

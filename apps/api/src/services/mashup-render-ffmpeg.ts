@@ -111,8 +111,11 @@ function escapeSubtitlesPath(p: string): string {
  * ffmpeg 的 filtergraph 解析器，它会先按 '\,' 还原出字面逗号再交给 subtitles 滤镜自己的
  * force_style 解析器切分 K=V 对。
  */
-function escapeForceStyleCommas(style: string): string {
-  return style.replace(/,/g, '\\,');
+export function escapeForceStyleCommas(style: string): string {
+  // 顺序不能反：必须先转义反斜杠本身，再转义逗号。
+  // 先转逗号的话，新插入的那个反斜杠会被后一步再转一次，解析出来对不上
+  // （CodeQL js/incomplete-sanitization 在 PR#1931 抓到的就是漏了反斜杠这一步）。
+  return style.replace(/\\/g, '\\\\').replace(/,/g, '\\,');
 }
 
 /** 抖音带货字幕标准：画面下方约 1/4 处、黑色粗描边 + 白字、字号随分辨率按比例缩放。 */
