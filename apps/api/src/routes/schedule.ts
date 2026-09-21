@@ -209,11 +209,17 @@ scheduleRouter.post('/jobs', rateLimit, async (req: Request, res: Response) => {
       updated_by: tenantId,
       params: params && typeof params === 'object' ? params : {},
     };
+    // trigger_source 必须显式标成人工来源。tasks.trigger_source 的库默认值是 'brain_auto'，
+    // 而 Brain 的 escalation「优雅降级」会在压力下暂停低优先级的**系统自产**任务
+    // （trigger_source ∈ SYSTEM_AUTO_TRIGGER_SOURCES，含 brain_auto）。不标的话，主理人
+    // 手动派的活会被归进系统自产桶、静默变成 paused，而领单器只认 queued —— 这条活
+    // 从此谁也不跑，页面上看着像排着却永远不动。
+    // 生产实证：单 0f6f26e3 被 [Escalation] Paused，error_message=escalation_graceful_degrade。
     const { rows } = await brain.query(
-      `INSERT INTO tasks (title, description, task_type, status, priority, dept, assigned_to, due_at, payload)
-       VALUES ($1, $2, 'device_job', 'queued', 'P2', $3, $4, $5, $6::jsonb)
+      `INSERT INTO tasks (title, description, task_type, status, priority, dept, assigned_to, due_at, payload, trigger_source)
+       VALUES ($1, $2, 'device_job', 'queued', 'P2', $3, $4, $5, $6::jsonb, $7)
        RETURNING id, row_version`,
-      [title, `工作机页派单 · ${dept}`, dept, agent_id, plannedAt, JSON.stringify(payload)],
+      [title, `工作机页派单 · ${dept}`, dept, agent_id, plannedAt, JSON.stringify(payload), 'manual'],
     );
     return res.status(201).json(OK({ id: rows[0].id, row_version: rows[0].row_version, planned_at: plannedAt }));
   } catch (e) {

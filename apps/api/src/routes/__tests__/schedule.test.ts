@@ -143,6 +143,20 @@ describe('派单', () => {
     expect(r.body.error).toBe('WINDOW_PAST');
   });
 
+  it('建单必须标 trigger_source=manual —— 这是人派的活，不是系统自产的', async () => {
+    // Brain 的 escalation「优雅降级」会在压力下暂停低优先级任务，但它只碰系统自产的
+    // （trigger_source ∈ SYSTEM_AUTO_TRIGGER_SOURCES）。tasks.trigger_source 的库默认值
+    // 恰恰是 'brain_auto'，不显式指定的话主理人手动派的活会被归进系统自产桶，
+    // 被 escalation 静默暂停成 paused，领单器（只认 queued）从此永远领不到。
+    // 生产实证：单 0f6f26e3 被 [Escalation] Paused，error_message=escalation_graceful_degrade。
+    brainQuery.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [{ id: 'new-1', row_version: 0 }] });
+    await request(app).post('/api/schedule/jobs').set('x-feishu-user-id', 'tenant-1')
+      .send({ ...base, ...futureWindow() });
+    const insertCall = brainQuery.mock.calls.find(([sql]: any[]) => /INSERT INTO tasks/i.test(sql));
+    expect(insertCall[0], 'INSERT 没写 trigger_source，会落进库默认的 brain_auto').toMatch(/trigger_source/i);
+    expect(insertCall[1]).toContain('manual');
+  });
+
   it('建单必须带 headed_manual=true —— 少了它这条活会被 tick 抢去当编码任务跑', async () => {
     brainQuery.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [{ id: 'new-1', row_version: 0 }] });
     await request(app).post('/api/schedule/jobs').set('x-feishu-user-id', 'tenant-1')
