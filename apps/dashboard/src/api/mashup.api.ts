@@ -48,11 +48,21 @@ export interface SlotAssignment {
 
 export type RunStatus = 'pending' | 'completed' | 'completed_partial';
 
+/**
+ * 横竖屏（GP line05/batch_mashup#step4，客户原话"抖音横屏和竖屏是我们要选择的
+ * 呀，有的是横屏，有的是竖屏"）。与后端 apps/api/src/routes/mashup.ts /
+ * apps/api/src/services/mashup-render.ts 同名类型保持字面量一致——本仓库既有
+ * 惯例是前后端各自维护同名 union type（GateStatus/RenderStatus 皆如此），不共享
+ * 一份跨 workspace 的类型文件。
+ */
+export type AspectRatio = 'landscape' | 'portrait';
+
 export interface MashupRun {
   runId: string;
   templateId?: string;
   status: RunStatus;
   assignments: SlotAssignment[];
+  aspectRatio?: AspectRatio;
 }
 
 /** 历史列表里一条 run 的摘要。stage 由服务端按库里事实派生，前端不再自己判。 */
@@ -184,11 +194,17 @@ export async function createTemplateFromScript(script: string): Promise<CreateTe
   return data.data;
 }
 
-export async function createRun(templateId: string, materialIds: string[]): Promise<MashupRun> {
+/**
+ * aspectRatio 不传时请求体里完全不出现该键（而不是补一个默认值再发）——保持
+ * 向后兼容：老调用方 / 老口径的请求体形状原样不变，默认值由后端 DB 列兜底
+ * （见 20260921_110000_mashup_run_aspect_ratio.sql）。Dashboard 主路径
+ * （MashupPage.tsx）会显式传，只有测试/未来其它调用方省略时才吃得到这个兜底。
+ */
+export async function createRun(templateId: string, materialIds: string[], aspectRatio?: AspectRatio): Promise<MashupRun> {
   const opts = await authHeaders();
   const { data } = await apiClient.post<{ data: MashupRun }>(
     '/mashup/runs',
-    { templateId, materialIds },
+    aspectRatio !== undefined ? { templateId, materialIds, aspectRatio } : { templateId, materialIds },
     opts,
   );
   return data.data;

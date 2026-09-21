@@ -24,6 +24,19 @@ import { extractFrameBase64 } from './video-frame-extract';
 
 export type GateStatus = 'passed' | 'flagged' | 'failed_pending_review';
 
+/**
+ * 横竖屏（GP line05/batch_mashup#step4，客户原话"抖音横屏和竖屏是我们要选择的
+ * 呀"）。存在 mashup_runs.aspect_ratio（见同名 migration），渲染时按它翻译成
+ * width/height 喂给 mashup-render-ffmpeg.ts——那边早就支持传，只是这里之前
+ * 从未传过，永远吃硬编码默认横屏。
+ */
+export type AspectRatio = 'landscape' | 'portrait';
+
+const ASPECT_RATIO_DIMENSIONS: Record<AspectRatio, { width: number; height: number }> = {
+  landscape: { width: 1920, height: 1080 },
+  portrait: { width: 1080, height: 1920 },
+};
+
 export interface RenderCandidateInput {
   tenantId: string;
   candidateId: string;
@@ -74,6 +87,23 @@ export async function resolveScriptText(input: RenderCandidateInput): Promise<st
   );
   const text = rows[0]?.script_text;
   return typeof text === 'string' && text.trim() ? text : null;
+}
+
+/**
+ * 取这个候选对应 run 的横竖屏选择。列有 NOT NULL DEFAULT，正常情况恒有值；
+ * 这里仍做防御性兜底——库里出现空值/未知字面值（老数据、手工改库）一律退回
+ * landscape，绝不因为一个枚举读不出来就把整条渲染链路搞崩。
+ */
+export async function resolveAspectRatio(input: RenderCandidateInput): Promise<AspectRatio> {
+  const { rows } = await pool.query(
+    `SELECT r.aspect_ratio
+       FROM zenithjoy.mashup_candidates c
+       JOIN zenithjoy.mashup_runs r ON r.id = c.run_id
+      WHERE c.id = $1 AND r.tenant_id = $2`,
+    [input.candidateId, input.tenantId],
+  );
+  const value = rows[0]?.aspect_ratio;
+  return value === 'portrait' ? 'portrait' : 'landscape';
 }
 
 /**
@@ -162,6 +192,8 @@ export async function renderCandidate(
   deps: RenderCandidateDeps,
 ): Promise<RenderCandidateResult> {
   const orderedMaterials = await resolveOrderedMaterials(input);
+  const aspectRatio = await resolveAspectRatio(input);
+  const dimensions = ASPECT_RATIO_DIMENSIONS[aspectRatio];
 
   const workDir = tmpdir();
   const tempFiles: string[] = [];
@@ -232,10 +264,10 @@ export async function renderCandidate(
       rendered = renderMashupWithAudio(
         inputPaths.map((path) => ({ path, durationSec: perSegSec })),
         outputPath,
-        { audioPath: voice.audioPath, srtPath: srtPath ?? undefined },
+        { audioPath: voice.audioPath, srtPath: srtPath ?? undefined, width: dimensions.width, height: dimensions.height },
       );
     } else {
-      rendered = concatAndScale(inputPaths, outputPath);
+      rendered = concatAndScale(inputPaths, outputPath, { width: dimensions.width, height: dimensions.height });
     }
     if (!rendered) {
       const contentId = await insertContent(input.tenantId, input.candidateId, 'failed_pending_review', 'failed_pending_review');
