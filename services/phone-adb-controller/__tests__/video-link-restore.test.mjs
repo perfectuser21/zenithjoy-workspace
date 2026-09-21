@@ -11,12 +11,15 @@
 // 此后每个视频的 tap 坐标都打在错的页面上 —— w12 的 v2/v3/v4 连续三次
 // 「评论区打不开」，整批 0 LEAD。
 //
-// 修法的关键不是再发明一把尺子：函数**入口**早就用 `_on_video_detail`
-// （分享按钮存在且可点）判过"在不在详情页"，出口却换成了只验包名。
-// 这里把那把尺子抽成纯判定并补上负向证据（树里不能有暂存搜索框 et_search_kw），
-// 入口出口从此同一把尺。
+// 修法不是再发明一把尺子：函数**入口** _on_video_detail（分享按钮存在且可点）
+// 一直在用，出口却换成了只验包名。这里把那把尺子抽成纯判定，入口出口同一把。
 //
-// 宁可误判成「没恢复」丢掉当前这一个视频，也绝不能误判成「已恢复」污染后面所有视频。
+// ## fixtures/ 全是真机证据，不是编的
+//
+// 第一版实现拿「顶部有搜索框 et_search_kw」当负向判据，自造用例全绿；
+// 拿真机证据一回放，**正常详情页也被判死**——从搜索结果页点进的视频详情页，
+// 顶部本来就保留搜索框，这条判据在所有样本上区分度为零，会让每个视频都跳过，
+// 比原 bug 更糟。所以这里的 fixture 一律取自 evidence 目录的原始 dump。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
@@ -25,6 +28,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const SCRIPT = new URL('../douyin-phone-adb', import.meta.url).pathname;
+const FIXTURES = new URL('./fixtures/', import.meta.url).pathname;
+const PKG = 'com.ss.android.ugc.aweme';
 
 // douyin-phone-adb 是 zsh 脚本。缺 zsh 时**报红而不是 skip**——
 // 一个在 CI 里永远跳过的守卫等于没有守卫，而它恰恰是这里最不能出的事
@@ -34,38 +39,6 @@ test('前置：zsh 可用（缺了就报红，绝不静默跳过）', () => {
   assert.equal(r.error, undefined,
     '没有 zsh —— 本文件所有守卫都会静默失效，请在 CI 里装上（别改成 skip）');
 });
-const PKG = 'com.ss.android.ugc.aweme';
-
-const wrap = (inner) => `<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation="0">`
-  + `<node index="0" text="" class="android.widget.FrameLayout" package="${PKG}" bounds="[0,0][1200,2664]">`
-  + inner + `</node></hierarchy>`;
-
-/** 详情页右侧竖排的分享按钮——入口 _on_video_detail 用的就是这个判据 */
-const SHARE_BTN = `<node index="0" text="" content-desc="分享6379，按钮" class="android.widget.ImageView" `
-  + `clickable="true" bounds="[1060,1890][1140,1970]" />`;
-
-/** 暂存搜索框：取自真实证据 auto09212230-w12-v2-oc-before.xml */
-const SCRATCH_BOX = `<node index="1" text="9.76 复制打开抖音，看看【Brand财经社的作品】文科生的时代来了？ `
-  + `https://v.douyin.com/hoZAsb98YwY/ :5pm" resource-id="${PKG}:id/et_search_kw" `
-  + `class="android.widget.EditText" focused="true" bounds="[144,134][846,265]" />`;
-
-const XML_VIDEO_DETAIL = wrap(SHARE_BTN
-  + `<node index="1" text="@Brand财经社" class="android.widget.TextView" bounds="[40,2300][500,2360]" />`);
-
-const XML_SCRATCH = wrap(`<node index="0" text="" resource-id="${PKG}:id/bz9" content-desc="返回" `
-  + `class="android.widget.ImageView" bounds="[52,160][131,239]" />` + SCRATCH_BOX);
-
-const XML_SEARCH_HOME = wrap(`<node index="0" text="" resource-id="${PKG}:id/et_search_kw" `
-  + `class="android.widget.EditText" bounds="[144,134][846,265]" />`
-  + `<node index="1" text="猜你想看" class="android.widget.TextView" bounds="[0,900][300,980]" />`
-  + `<node index="2" text="展开更多历史" class="android.widget.TextView" bounds="[600,430][900,470]" />`);
-
-/** 分享按钮在、但暂存搜索框也在（页面叠着没退干净） */
-const XML_BOTH = wrap(SHARE_BTN + SCRATCH_BOX);
-
-/** 分享按钮存在但不可点：页面还在加载，此时点下去就是空点 */
-const XML_SHARE_NOT_CLICKABLE = wrap(`<node index="0" text="" content-desc="分享，按钮" `
-  + `class="android.widget.ImageView" clickable="false" bounds="[1060,1890][1140,1970]" />`);
 
 function makeRegistry(dir) {
   const p = join(dir, 'douyin-phone-profiles.tsv');
@@ -74,10 +47,8 @@ function makeRegistry(dir) {
 }
 
 /** 调 detail-restored 子命令：退出码 0 = 判已恢复，非 0 = 判未恢复 */
-function restored(xml, { writeFile = true } = {}) {
+function judge(xmlPath) {
   const dir = mkdtempSync(join(tmpdir(), 'vlrestore-'));
-  const xmlPath = join(dir, 'ui.xml');
-  if (writeFile) writeFileSync(xmlPath, xml);
   return new Promise((resolve) => {
     const p = spawn('zsh', [SCRIPT, '--profile', 'legacy', 'detail-restored', xmlPath], {
       env: { ...process.env, DOUYIN_PHONE_REGISTRY: makeRegistry(dir) },
@@ -89,54 +60,80 @@ function restored(xml, { writeFile = true } = {}) {
   });
 }
 
-test('暂存搜索页必须判成「没恢复」——这正是 0921 夜批整批 0 LEAD 的起点', async () => {
-  const r = await restored(XML_SCRATCH);
-  assert.notEqual(r.code, 0,
-    '取完链接后人还站在暂存搜索页却被判成已恢复 —— 后面每个视频都会在错的页面上瞎点');
+const fixture = (name) => join(FIXTURES, name);
+
+/** 合成树：只用于真机样本覆盖不到的边界（如"分享按钮还没变可点"） */
+const synth = (inner) => {
+  const dir = mkdtempSync(join(tmpdir(), 'vlsynth-'));
+  const p = join(dir, 'ui.xml');
+  writeFileSync(p, `<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation="0">`
+    + `<node index="0" text="" class="android.widget.FrameLayout" package="${PKG}" bounds="[0,0][1200,2664]">`
+    + inner + `</node></hierarchy>`);
+  return p;
+};
+
+// ── 真机证据回放 ──────────────────────────────────────────────────────────
+
+test('真机证据：取完链接后停在暂存解析页 → 判没恢复（整批 0 LEAD 的起点）', async () => {
+  // fixture = auto09212230-w12-v2-oc-before.xml 原样：搜索框里躺着 v1 的复制口令
+  // 「9.76 复制打开抖音…https://v.douyin.com/hoZAsb98YwY/」，focused=true。
+  // 当晚它被「只验包名」的守卫放行，v2/v3/v4 于是全在这个页面上瞎点。
+  const r = await judge(fixture('scratch-page-after-link-copy.xml'));
+  assert.notEqual(r.code, 0, '人还站在暂存解析页却被判成已恢复');
+  assert.match(r.err, /scratch search box still holds the copied link/);
 });
 
-test('搜索输入页也判没恢复（w12 的 v3/v4 就落在这里）', async () => {
-  const r = await restored(XML_SEARCH_HOME);
+test('真机证据：搜索输入页 → 判没恢复（w12 的 v3/v4 就落在这里）', async () => {
+  // fixture = auto09212230-w12-v3-oc-before.xml 原样（猜你想看 / 展开更多历史）
+  const r = await judge(fixture('search-home-page.xml'));
   assert.notEqual(r.code, 0, '搜索输入页被判成视频详情页');
+  assert.match(r.err, /share button absent/);
 });
 
-test('分享按钮在、暂存搜索框也在 → 判没恢复：负向证据一票否决', async () => {
-  // 只看正向判据（有分享按钮）会把这种"页面叠着没退干净"的状态放行。
-  // 树里只要还有 et_search_kw，就说明人没真正离开暂存搜索页。
-  const r = await restored(XML_BOTH);
-  assert.notEqual(r.code, 0, '树里还有暂存搜索框却判成已恢复');
+test('真机证据：从搜索结果进入的视频详情页 → 判已恢复', async () => {
+  // fixture = backprobe-v1-vl-detail-guard-w1.xml 原样。
+  // ⚠️ 这张树**顶部同样有 et_search_kw**——第一版实现正是栽在这里：
+  // 拿"有搜索框"当否决条件，会把每一个正常视频都判死。
+  const r = await judge(fixture('video-detail-from-search.xml'));
+  assert.equal(r.code, 0, `正常详情页被判成失败会让每个视频都白丢: ${r.err}`);
 });
 
-test('分享按钮不可点 → 判没恢复：页面还在加载，这时点下去是空点', async () => {
-  const r = await restored(XML_SHARE_NOT_CLICKABLE);
+test('顶部搜索框本身绝不能成为否决理由（真机样本里它无处不在）', async () => {
+  const detail = readFileSync(fixture('video-detail-from-search.xml'), 'utf8');
+  assert.ok(detail.includes('et_search_kw'),
+    'fixture 变了：这条守卫的前提是「正常详情页也带搜索框」，没有就失去意义');
+  assert.equal((await judge(fixture('video-detail-from-search.xml'))).code, 0);
+});
+
+// ── 合成边界（真机样本覆盖不到的） ────────────────────────────────────────
+
+test('分享按钮还不可点 → 判没恢复：页面还在加载，这时点下去是空点', async () => {
+  const r = await judge(synth(`<node index="0" text="" content-desc="分享，按钮" `
+    + `class="android.widget.ImageView" clickable="false" bounds="[1060,1890][1140,1970]" />`));
   assert.notEqual(r.code, 0, 'clickable=false 的分享按钮被当成详情页就绪');
+  assert.match(r.err, /not clickable yet/);
 });
 
-test('真回到视频详情页 → 判已恢复', async () => {
-  const r = await restored(XML_VIDEO_DETAIL);
-  assert.equal(r.code, 0, `正常恢复被判成失败会白丢视频: ${r.err}`);
+test('分享按钮在、但搜索框里还装着抖音短链 → 判没恢复：负向一票否决', async () => {
+  const r = await judge(synth(`<node index="0" content-desc="分享6379，按钮" clickable="true" bounds="[1060,1890][1140,1970]" />`
+    + `<node index="1" text="9.76 复制打开抖音 https://v.douyin.com/hoZAsb98YwY/" `
+    + `resource-id="${PKG}:id/et_search_kw" class="android.widget.EditText" bounds="[144,134][846,265]" />`));
+  assert.notEqual(r.code, 0, '两页叠着没退干净却判成已恢复');
 });
 
 test('树文件读不到时判没恢复，且说明是「读不到」不是「在暂存页」', async () => {
   // 断言到具体原因，这条才抓得住"去掉可读性检查"的变异：不然 grep 对不存在的文件
   // 本就会失败，判定顺带返回非 0，测试永远是绿的（假绿）。
-  // 排障上也是必要的——树没读到和人还在暂存页，是两种完全不同的处置。
-  const r = await restored('', { writeFile: false });
+  const dir = mkdtempSync(join(tmpdir(), 'vlmissing-'));
+  const r = await judge(join(dir, 'nope.xml'));
   assert.notEqual(r.code, 0, '拿不到树就该判没恢复——宁可丢一个视频也不能盲目继续');
   assert.match(r.err, /ui tree unreadable/, `没说明是树读不到: ${r.err}`);
 });
 
-test('每条否决都说明是哪一关没过（排障不用再猜）', async () => {
-  assert.match((await restored(XML_SCRATCH)).err, /scratch search box still present/);
-  assert.match((await restored(XML_SHARE_NOT_CLICKABLE)).err, /not clickable yet/);
-  assert.match((await restored(wrap('<node index="0" text="x" />'))).err, /share button absent/);
-});
-
 // ── 接线守卫 ──────────────────────────────────────────────────────────────
-// 上面那些用例锁的是「判定对不对」。但本 bug 的形状恰恰是：判定能力一直都在
-// （入口 _on_video_detail 用的就是它），**出口没用它**。所以只测判定函数是漏的——
-// 把恢复段改回「不验证直接判成功」，上面 7 条依然全绿。
-// 这条守卫锁的是接线：deep link 重开视频之后，必须真的拿判定函数验过。
+// 上面那些锁的是「判定对不对」。但本 bug 的形状恰恰是：判定能力一直都在
+// （入口 _on_video_detail 用的就是它），**出口没用它**。只测判定函数是漏的——
+// 把恢复段改回「不验证直接判成功」，上面每一条依然全绿。
 test('接线守卫：deep link 恢复段必须真的调判定，不能只验包名', () => {
   const src = readFileSync(SCRIPT, 'utf8');
   const start = src.indexOf('if [[ "$content_type" == "video" ]]; then');
