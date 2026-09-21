@@ -1109,6 +1109,13 @@ tests:
     status: active
     product: 批量混剪
     note: "批量混剪加厚 Step1（GP f6f96e17/line05）文案动态分段模板生成：真 Postgres 覆盖 from-script 返回动态 slots 并落库 mashup_templates、AI(TOAPIS)不可用时统一降级 degraded fallback。"
+  - id: copy-compliance-service
+    path: apps/api/src/services/__tests__/copy-compliance.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪配音上线前置账号级风险修复（GP line05/batch_mashup#step4）：文案 TTS 念出来+烧字幕前的合规检查，纯本地词库匹配（不调 AI，AI 本身就是违规词来源）。四类词库：《广告法》第九条绝对化用语、农药/卫生杀虫剂类目高危宣称（《农药管理条例》第三十九条）、《广告法》第十七条医疗功效暗示、时效承诺虚假宣传。覆盖真实蟑螂药文案正反例（根治/无毒无害/彻底消灭/三天见效等命中，常规卖点表述不误伤）+ 变体规避（全半角、带圈数字、插入分隔符、大小写）。"
   - id: material-storage-cos-slice
     path: apps/api/src/services/__tests__/material-storage-cos.test.ts
     type: unit
