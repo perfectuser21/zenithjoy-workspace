@@ -34,6 +34,7 @@ import {
   type CandidateDetail,
   type CreateTemplateFromScriptResult,
   type DynamicSlot,
+  type AspectRatio,
 } from '../api/mashup.api';
 
 /** 轮询候选详情直到（渲染或预览）落终态，或超过最大次数放弃（避免网络异常时无限空转）。 */
@@ -102,6 +103,9 @@ export default function MashupPage() {
   const qc = useQueryClient();
   const [step, setStep] = useState<Step>('pick');
   const [templateId, setTemplateId] = useState<string>('');
+  // 默认竖屏——抖音主流是 9:16，横屏先天限流（客户原话"抖音横屏和竖屏是我们要
+  // 选择的呀"）。跟套路模板同一步做决定，属于"这批片子怎么出"的设定。
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('portrait');
   const [selectedMaterialIds, setSelectedMaterialIds] = useState<Set<string>>(new Set());
   const [run, setRun] = useState<MashupRun | null>(null);
   const [candidates, setCandidates] = useState<CandidatesResult | null>(null);
@@ -149,7 +153,7 @@ export default function MashupPage() {
   });
 
   const createRunMutation = useMutation({
-    mutationFn: () => createRun(templateId, Array.from(selectedMaterialIds)),
+    mutationFn: () => createRun(templateId, Array.from(selectedMaterialIds), aspectRatio),
     onSuccess: (r) => { setRun(r); setErrorMsg(null); setStep('assigned'); },
     onError: (e) => setErrorMsg(extractErrorMessage(e, '生成槽位分配失败')),
   });
@@ -224,6 +228,7 @@ export default function MashupPage() {
 
   function resetAll() {
     setStep('pick');
+    setAspectRatio('portrait');
     setSelectedMaterialIds(new Set());
     setRun(null);
     setCandidates(null);
@@ -315,6 +320,8 @@ export default function MashupPage() {
           templateId={templateId}
           onTemplateChange={setTemplateId}
           templatesLoading={templatesQuery.isLoading}
+          aspectRatio={aspectRatio}
+          onAspectRatioChange={setAspectRatio}
           materials={taggedMaterials}
           materialsLoading={materialsQuery.isLoading}
           materialsError={materialsQuery.isError}
@@ -359,11 +366,21 @@ export default function MashupPage() {
 
 // ============ Step 1：选模板 + 选素材 ============
 
+/** 出片比例文案：值 → { label, hint }。hint 只在竖屏上标"抖音推荐"，横屏不给差评式提示，
+ *  客户自己有横屏需求时不该觉得被劝退。 */
+const ASPECT_RATIO_OPTIONS: { value: AspectRatio; label: string; hint?: string }[] = [
+  { value: 'portrait', label: '竖屏 9:16', hint: '抖音推荐' },
+  { value: 'landscape', label: '横屏 16:9' },
+];
+
 export function PickStep(props: {
   templates: { id: string; name: string }[];
   templateId: string;
   onTemplateChange: (id: string) => void;
   templatesLoading: boolean;
+  /** 出片横竖屏。不传按 'portrait'（抖音推荐）显示——保持组件在旧调用点/旧测试下可用。 */
+  aspectRatio?: AspectRatio;
+  onAspectRatioChange?: (v: AspectRatio) => void;
   materials: TaggedMaterial[];
   materialsLoading: boolean;
   materialsError: boolean;
@@ -380,6 +397,7 @@ export function PickStep(props: {
 }) {
   const {
     templates, templateId, onTemplateChange, templatesLoading,
+    aspectRatio = 'portrait', onAspectRatioChange,
     materials, materialsLoading, materialsError,
     selectedMaterialIds, onToggle, onSubmit, submitting,
     scriptText, onScriptChange, onGenerateFromScript, scriptSubmitting, scriptError, scriptResult,
@@ -453,6 +471,33 @@ export function PickStep(props: {
             ))}
           </select>
         )}
+      </div>
+
+      {/* 出片比例：跟套路模板同区域——都是"这批片子怎么出"的一次性设定，客户
+          原话"抖音横屏和竖屏是我们要选择的呀，有的是横屏，有的是竖屏"。 */}
+      <div className="mb-4">
+        <label className="mb-1 block text-sm font-medium text-gray-700">出片比例</label>
+        <div className="flex gap-2">
+          {ASPECT_RATIO_OPTIONS.map((opt) => {
+            const selected = aspectRatio === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => onAspectRatioChange?.(opt.value)}
+                className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm ${
+                  selected ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {opt.label}
+                {opt.hint ? (
+                  <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-800">{opt.hint}</span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="mb-2 text-sm font-medium text-gray-700">

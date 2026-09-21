@@ -999,6 +999,30 @@ tests:
     product: 批量混剪
     note: "批量混剪 S4（GP f6f96e17）高清成片合成的 ffmpeg 编排层：真调 ffmpeg（testsrc/testsrc2 合成源现场生成，同 video-frame-extract.test.ts 口径）。覆盖多段不同分辨率素材统一缩放到 1920x1080+时长为各段之和、单段素材边界情况、空输入/输入文件不存在均返回 false 不抛异常。"
 
+  - id: mashup-render-ffmpeg-audio
+    path: apps/api/src/services/__tests__/mashup-render-ffmpeg-audio.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "配音字幕刀（GP line05/batch_mashup#step4）：renderMashupWithAudio 单测，mock spawnSync/fs.existsSync（不真跑二进制，本机 ffmpeg 无 libass/subtitles 滤镜真跑必炸）。覆盖横竖屏 width/height 可选、每段 durationSec 生成 trim+setpts 裁剪链、未指定 durationSec 向后兼容不裁剪、挂音轨(追加音频输入+map+aac)/未传保持 -an 无音轨、烧字幕(subtitles 滤镜+force_style 逗号转义避免被 filter_complex 误判为下一个滤镜)/未传不加滤镜、素材或 audioPath/srtPath 文件不存在返回 false、ffmpeg 非 0 状态码返回 false、preset/crf 透传。真实字幕烧录效果由 mashup-render-smoke.sh 的字节数静默失效守卫在容器里验证。"
+
+  - id: mashup-subtitle
+    path: apps/api/src/services/__tests__/mashup-subtitle.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "配音字幕刀（GP line05/batch_mashup#step4）：字级时间戳(words: {word,startMs,endMs}[]，对接 TTS 服务契约不改其签名) → srt 字幕文件。纯逻辑无 I/O。覆盖空数组返回空串、短句合成单行且首尾时间戳正确、按标点(。，！？；等)强制断句、单行超 15 汉字无标点时按长度上限强制断行且不跨词拆字(断行拼回与原文逐字一致)、srt 时间戳格式 HH:MM:SS,mmm、序号从 1 连续递增、writeSrtFile 落盘内容与 wordsToSrt 一致含空数组场景。"
+
+  - id: dockerfile-fonts
+    path: apps/api/src/services/__tests__/dockerfile-fonts.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "回归测试(P0 issue 357861c4)：生产容器有 subtitles 滤镜但没装字体，真机实测 fc-list|wc -l=0、Fontconfig error: Cannot load default config file，ffmpeg 退出码仍为 0/文件仍生成，只是字幕字节数与不烧字幕完全一致(静默失效)。断言 Dockerfile 生产阶段装了 fontconfig + fonts-* 中文字体包 + fc-cache 刷新缓存，防止再次漏装。容器实测已验证：修复前 fc-list=0/烧字幕字节数与不烧字幕相同，修复后 fc-list=9/字节数不同(7521 vs 7996)。"
+
   - id: mashup-render-service
     path: apps/api/src/services/__tests__/mashup-render.test.ts
     type: unit
@@ -1006,6 +1030,46 @@ tests:
     status: active
     product: 批量混剪
     note: "批量混剪 S4 渲染+内容安全Gate编排层：mock DB/axios(Gemini)/ffmpeg/抽帧。fail-closed（proposal-v2.md A1）覆盖——安全+水印双通过才上传成片给URL；安全不通过/检测到水印/ffmpeg合成失败/未配置TOAPIS_API_KEY 均落 failed_pending_review 或 flagged，export_url/download_url 恒缺省；候选不存在 loud-fail。"
+
+  - id: mashup-render-aspect-ratio-service
+    path: apps/api/src/services/__tests__/mashup-render-aspect-ratio.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪横竖屏选择（GP line05/batch_mashup#step4，客户原话「抖音横屏和竖屏是我们要选择的呀，有的是横屏，有的是竖屏」）：渲染层 mashup-render-ffmpeg.ts 早支持 width/height 可传，但 mashup-render.ts 调用时从未传过，永远吃硬编码默认横屏。新增 resolveAspectRatio 覆盖 run.aspect_ratio 取值 portrait/landscape 原样返回、老 run 无该列值/库里出现非法值均兜底 landscape 不抛异常；renderCandidate 覆盖 portrait+有配音时 renderMashupWithAudio 收到 width=1080/height=1920、landscape（老 run 默认）+无文案时 concatAndScale 收到 width=1920/height=1080、portrait+无文案时 concatAndScale 也收到竖屏尺寸（无声档同样能出竖屏）。独立成新文件不改现有 mashup-render-service，同口径 mock DB/axios/ffmpeg。"
+
+  - id: mashup-run-aspect-ratio-route
+    path: apps/api/src/routes/__tests__/mashup-run-aspect-ratio.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪横竖屏选择：POST /api/mashup/runs 端点契约。assignSlots（mashup-slot-assignment.ts，任务铁律禁止改动）内部完成 run 的 INSERT 并吃列默认值 landscape；路由层验证——传合法 aspectRatio 成功创建且额外发一条 UPDATE 把选择落到该 run、响应带出 aspectRatio；不传该字段仍 200（老调用方不报错）且不发多余 UPDATE，响应给默认值 landscape；非法值 400 INVALID_BODY 且完全不碰 DB（校验先于一切查询）。独立成新文件不改现有 mashup-routes-contract。"
+
+  - id: mashup-api-client-aspect-ratio
+    path: apps/dashboard/src/api/__tests__/mashup.api.aspect-ratio.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪横竖屏选择：createRun 新增可选第三参 aspectRatio。覆盖传 portrait/landscape 时请求体带上该字段；不传第三参时请求体完全不出现 aspectRatio 键（向后兼容），与既有 mashup-api-client 用例的严格 body toEqual 互补验证，不改那份既有测试。"
+
+  - id: mashup-pickstep-aspect-ratio
+    path: apps/dashboard/src/pages/MashupPage.AspectRatio.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪横竖屏选择（GP line05/batch_mashup#step4）：PickStep 新增出片比例选择区，跟套路模板同区域（都是「这批片子怎么出」的一次性设定）。覆盖默认预选竖屏 9:16 且标出「抖音推荐」、传入 aspectRatio=landscape 时横屏呈选中态、点击横屏/竖屏分别触发 onAspectRatioChange 带正确值、新增区不影响既有「文案输入框先于套路模板下拉」的顺序断言。新增 prop 均可选且有内部默认值，不改既有 MashupPage.PickStep.test.tsx。"
+
+  - id: tts-volcengine-service
+    path: apps/api/src/services/__tests__/tts-volcengine.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪配音刀（GP line05/batch_mashup#step4）火山引擎 TTS 服务封装：mock axios，不真调火山。覆盖——成功路径音频落地成 mp3 文件+addition.frontend 逐字时间戳归一化为 startMs/endMs；code!=3000 抛 VolcengineTtsError(code,message)；缺 VOLCENGINE_TTS_APP_ID/ACCESS_KEY 抛 missing_credentials 不静默；网关类错误(ECONNABORTED/502/503/504/520-524)退避重试后成功、重试到上限仍失败则抛错；4xx(400/401/403/404)确定性故障绝不重试（口径对齐 content-judgment.ts issue f3b6ba7c）；addition.frontend 缺失/非法 JSON 均不抛异常、words 退化为空数组。"
 
   - id: dockerfile-ffmpeg
     path: apps/api/src/services/__tests__/dockerfile-ffmpeg.test.ts
@@ -1109,6 +1173,13 @@ tests:
     status: active
     product: 批量混剪
     note: "批量混剪加厚 Step1（GP f6f96e17/line05）文案动态分段模板生成：真 Postgres 覆盖 from-script 返回动态 slots 并落库 mashup_templates、AI(TOAPIS)不可用时统一降级 degraded fallback。"
+  - id: copy-compliance-service
+    path: apps/api/src/services/__tests__/copy-compliance.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "批量混剪配音上线前置账号级风险修复（GP line05/batch_mashup#step4）：文案 TTS 念出来+烧字幕前的合规检查，纯本地词库匹配（不调 AI，AI 本身就是违规词来源）。四类词库：《广告法》第九条绝对化用语、农药/卫生杀虫剂类目高危宣称（《农药管理条例》第三十九条）、《广告法》第十七条医疗功效暗示、时效承诺虚假宣传。覆盖真实蟑螂药文案正反例（根治/无毒无害/彻底消灭/三天见效等命中，常规卖点表述不误伤）+ 变体规避（全半角、带圈数字、插入分隔符、大小写）。"
   - id: material-storage-cos-slice
     path: apps/api/src/services/__tests__/material-storage-cos.test.ts
     type: unit

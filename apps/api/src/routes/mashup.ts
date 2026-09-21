@@ -66,6 +66,14 @@ function ok(res: Response, data: unknown) {
 export type MashupRunStage = 'completed' | 'rendering' | 'candidates_pending' | 'assigned';
 
 /**
+ * 横竖屏（GP line05/batch_mashup#step4，客户原话"抖音横屏和竖屏是我们要选择的
+ * 呀，有的是横屏，有的是竖屏"）。与 GateStatus/RenderStatus 同口径：TS 字符串
+ * 联合类型 + 路由层 Set 校验已知值，不建 DB CHECK 约束（口径见同名 migration）。
+ */
+export type AspectRatio = 'landscape' | 'portrait';
+const VALID_ASPECT_RATIOS = new Set<string>(['landscape', 'portrait']);
+
+/**
  * 「已完成」以 contents.export_url 非空为准，不看 mashup_runs.status——status 列
  * 没有 CHECK 约束、由应用层写，而 export_url 是内容安全 Gate fail-closed 之后
  * 才写入的（20260919_030000_mashup_export_gate.sql）。用 status 判会把「渲染跑完
@@ -140,17 +148,32 @@ export function createMashupRouter(): Router {
     const auth = await authenticate(req, res);
     if (!auth) return;
 
-    const { templateId, materialIds } = req.body ?? {};
+    const { templateId, materialIds, aspectRatio } = req.body ?? {};
     if (typeof templateId !== 'string' || !templateId) {
       return fail(res, 400, 'INVALID_BODY', 'templateId 必填');
     }
     if (materialIds !== undefined && !Array.isArray(materialIds)) {
       return fail(res, 400, 'INVALID_BODY', 'materialIds 必须是数组');
     }
+    // 只接受已知值，非法值 400——绝不静默退回默认吞掉客户的错误输入（同 admin-users.ts
+    // VALID_ROLES 口径）。不传（undefined）不算非法：老调用方 / 老口径继续走 DB 列默认值
+    // （见 20260921_110000_mashup_run_aspect_ratio.sql），不因为加了新字段就报错。
+    if (aspectRatio !== undefined && !VALID_ASPECT_RATIOS.has(aspectRatio)) {
+      return fail(res, 400, 'INVALID_BODY', 'aspectRatio 必须是 landscape/portrait 之一');
+    }
 
     try {
       const result = await assignSlots({ tenantId: auth.tenantId, templateId, materialIds: materialIds ?? [] });
-      ok(res, result);
+      // assignSlots（mashup-slot-assignment.ts，禁止改动的文件）内部已经 INSERT 了这条
+      // run，落库时吃列默认值 'landscape'。这里只有客户显式传了 aspectRatio 才补一条
+      // UPDATE 把真实选择写回去——省一次空写，也让"没传"与"传了默认值"在审计上可区分。
+      if (aspectRatio !== undefined) {
+        await pool.query(
+          `UPDATE zenithjoy.mashup_runs SET aspect_ratio = $2 WHERE id = $1`,
+          [result.runId, aspectRatio],
+        );
+      }
+      ok(res, { ...result, aspectRatio: (aspectRatio as AspectRatio | undefined) ?? 'landscape' });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown';
       if (/template not found/i.test(message)) {

@@ -17,6 +17,7 @@ import {
   CRITICAL_ENV_USAGE,
   REQUIRED_BINARIES,
   verifyStartupBinaries,
+  verifyStartupFonts,
   type RequiredBinary,
 } from '../startup-check';
 
@@ -168,5 +169,37 @@ describe('startup-check：启动二进制依赖自检', () => {
 
   it('REQUIRED_BINARIES 含 ffmpeg（批量混剪 S4 渲染依赖）', () => {
     expect(REQUIRED_BINARIES.map((b) => b.name)).toContain('ffmpeg');
+  });
+});
+
+/**
+ * P0 issue 357861c4：生产容器有 subtitles 滤镜但没有字体，实测 fc-list | wc -l = 0，
+ * ffmpeg 烧字幕退出码仍为 0、文件仍正常生成，只是字幕没画上——跟"二进制缺失"同一类
+ * 静默失效，纳入同一道启动自检闸：fc-list 数量为 0 就要红日志告警。
+ * 用可注入的 spawn 函数测试逻辑本身，不依赖测试机是否真装了中文字体。
+ */
+describe('startup-check：启动字体自检（批量混剪字幕烧录依赖）', () => {
+  it('test_zero_fonts_detected：fc-list 输出为空（0 条字体）必被检出为 ok=false', () => {
+    const spawnEmpty = () => ({ status: 0, stdout: '' });
+    const res = verifyStartupFonts(spawnEmpty as never);
+    expect(res.ok).toBe(false);
+    expect(res.count).toBe(0);
+  });
+
+  it('test_fonts_present_ok：fc-list 输出若干行 → ok=true，count 等于行数', () => {
+    const spawnOk = () => ({
+      status: 0,
+      stdout: '/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc: WenQuanYi Zen Hei\n',
+    });
+    const res = verifyStartupFonts(spawnOk as never);
+    expect(res.ok).toBe(true);
+    expect(res.count).toBe(1);
+  });
+
+  it('test_fclist_missing_binary：fc-list 命令本身不存在（spawn 抛异常）算 0 条，不抛异常', () => {
+    const spawnThrows = () => { throw new Error('ENOENT: fc-list not found'); };
+    const res = verifyStartupFonts(spawnThrows as never);
+    expect(res.ok).toBe(false);
+    expect(res.count).toBe(0);
   });
 });

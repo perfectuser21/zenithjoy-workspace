@@ -60,7 +60,19 @@ FROM mwader/static-ffmpeg:7.1 AS ffmpeg
 # Production stage
 FROM node:20-bookworm-slim
 # tzdata：TZ=Asia/Shanghai 生效依赖（无 tzdata 时 date 恒 UTC，日志/调度时区全错）
-RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
+# fontconfig + fonts-wqy-zenhei：批量混剪字幕烧录依赖（P0 issue 357861c4 真机复现）。
+# 生产容器曾经装了带 subtitles 滤镜的 ffmpeg 但没装字体：`fc-list | wc -l` = 0，
+# `Fontconfig error: Cannot load default config file`——ffmpeg 退出码仍为 0、
+# 文件仍正常生成，只是字幕一个字都没画上（静默失效，比报错更难发现）。
+# 字体包选 fonts-wqy-zenhei 而不是 fonts-noto-cjk：吸取 dockerfile-ffmpeg.test.ts
+# 记录的同类教训——0919 真机复现过 apt 装大依赖树在 hk-vps 到 deb.debian.org 龟速、
+# buildkit 超时中断（当时是 ffmpeg 完整依赖树 70+ 包）；fonts-noto-cjk 全家族同样
+# 上百 MB，fonts-wqy-zenhei 是单个 ttc 文件（约 9MB），覆盖常用简体中文字形，
+# 体积小、apt 源同样慢的环境下也能装完，与 tzdata 合并进同一条 RUN 不增加新的
+# apt-get update 层。
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata fontconfig fonts-wqy-zenhei \
+  && fc-cache -f \
+  && rm -rf /var/lib/apt/lists/*
 # ffmpeg/ffprobe：批量混剪 S4（mashup-render-ffmpeg.ts concatAndScale）用
 # spawnSync('ffmpeg',...) 合成成片。/usr/local/bin 已在 node 官方镜像默认 PATH 里，
 # spawnSync 无需改代码即可找到。dockerfile-ffmpeg.test.ts 固化这个断言，谁再删这两行

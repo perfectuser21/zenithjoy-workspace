@@ -155,6 +155,64 @@ export function runStartupBinaryCheck(
   return result;
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// 字体自检（同 ffmpeg 二进制自检同一道闸，P0 issue 357861c4）
+//
+// 生产容器实测过"有 subtitles 滤镜但没有字体"的场景：
+//   ffmpeg -vf "subtitles=sub.srt:force_style=FontSize=16"
+//   → Fontconfig error: Cannot load default config file
+//   → 退出码 0、文件正常生成、但字节数与不烧字幕完全一致（静默失效）
+//   → fc-list | wc -l = 0
+// 跟 ffmpeg 二进制缺失同一类事故形状：不抛异常、不报错、长期没人发现。
+// 用 fc-list 输出的字体条数判定，0 条就是这条闸要抓的场景。
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface StartupFontResult {
+  ok: boolean;
+  count: number;
+}
+
+type SpawnSyncFontFn = (cmd: string, args: string[]) => { status: number | null; stdout?: string | Buffer };
+
+/**
+ * 探测 fontconfig 已注册的字体数量（fc-list 每行一条字体记录）。
+ * spawn 可注入，测试不依赖测试机是否真装了字体；命令不存在/执行异常按 0 条处理，不抛异常。
+ */
+export function verifyStartupFonts(
+  spawn: SpawnSyncFontFn = spawnSync as unknown as SpawnSyncFontFn,
+): StartupFontResult {
+  try {
+    const r = spawn('fc-list', []);
+    const stdout = r.stdout ? r.stdout.toString() : '';
+    const count = stdout.split('\n').map((l) => l.trim()).filter(Boolean).length;
+    return { ok: count > 0, count };
+  } catch {
+    return { ok: false, count: 0 };
+  }
+}
+
+/**
+ * 启动早期调用：自检字体注册数量 + 大声打红日志（0 条时），不崩进程。
+ */
+export function runStartupFontCheck(
+  spawn: SpawnSyncFontFn = spawnSync as unknown as SpawnSyncFontFn,
+): StartupFontResult {
+  const result = verifyStartupFonts(spawn);
+  if (result.ok) {
+    console.log(`✅ 启动字体自检通过（fc-list 共 ${result.count} 条）`);
+    return result;
+  }
+  console.error('==================================================================');
+  console.error('🔴🔴🔴 启动字体自检失败：fc-list 返回 0 条字体，字幕烧录会静默失效 🔴🔴🔴');
+  console.error('🔴 批量混剪字幕烧录（mashup-render-ffmpeg.ts renderMashupWithAudio 的 subtitles 滤镜）');
+  console.error('🔴 依赖 fontconfig 已注册字体；缺字体时 ffmpeg 报 Fontconfig 错误但退出码仍为 0、');
+  console.error('🔴 文件仍会生成，只是字幕一个字都没画上（P0 issue 357861c4 真机复现，静默失效）。');
+  console.error('🔴 请检查部署镜像（Dockerfile）是否装了中文字体包（fonts-wqy-zenhei）+ fontconfig。');
+  console.error('🔴 进程继续运行（避免直接挂生产），但字幕烧录功能不可用。');
+  console.error('==================================================================');
+  return result;
+}
+
 // 单个 env key 是否存在且非空（空串/纯空白算缺失）。
 function _hasEnv(env: Record<string, string | undefined>, key: string): boolean {
   const val = env[key];

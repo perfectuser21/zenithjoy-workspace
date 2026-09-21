@@ -155,6 +155,12 @@ export interface DynamicSlot {
   match_tags: string[];
   suggestedCount: number;
   tagMapping: SlotTagMapping;
+  /**
+   * 这一段对应的客户文案原句。声画对齐靠它——TTS 念这句用了多久，这一段画面
+   * 就放多久。只有 match_tags 不够：那是角色标签（"产品特写"），不是要念的话。
+   * AI 没返回时为 undefined，降级模板同理（此时无法做逐段对齐，退回整段配音）。
+   */
+  text?: string;
 }
 
 export interface GenerateTemplateFromScriptInput {
@@ -196,6 +202,7 @@ interface RawSegment {
   match_tags?: unknown;
   suggestedCount?: unknown;
   required?: unknown;
+  text?: unknown;
 }
 
 /** 调 TOAPIS/Gemini 把文案解析成动态分段；缺 key / 任何异常 / 结构非法 → null（触发降级）。 */
@@ -208,7 +215,10 @@ async function segmentScriptWithAI(script: string): Promise<DynamicSlot[] | null
     '每段输出一个对象：key（英文小写短标识，如 hook/product/evidence/cta）、',
     'match_tags（从这个固定枚举里选命中的角色标签，可多选，选不到给空数组）：',
     [...KNOWN_AI_TAGS].join('/') + '。',
-    'suggestedCount（该段建议素材数，正整数）、required（是否必填，布尔）。',
+    'suggestedCount（该段建议素材数，正整数）、required（是否必填，布尔）、',
+    'text（这一段对应的文案原句，必须是原文的连续片段，不要改写不要补字——',
+    '后续要用它做配音和字幕，改了就对不上）。',
+    '各段的 text 拼起来应覆盖原文，不要遗漏句子。',
     '严格只输出 JSON 数组，不要任何解释文字。文案如下：',
     script,
   ].join('\n');
@@ -240,7 +250,8 @@ async function segmentScriptWithAI(script: string): Promise<DynamicSlot[] | null
         ? Math.floor(seg.suggestedCount)
         : 3;
       const required = typeof seg.required === 'boolean' ? seg.required : true;
-      slots.push(enrichTagMapping({ key, required, match_tags: matchTags, suggestedCount }));
+      const text = typeof seg.text === 'string' && seg.text.trim() ? seg.text.trim() : undefined;
+      slots.push(enrichTagMapping({ key, required, match_tags: matchTags, suggestedCount, text }));
     }
     return slots.length > 0 ? slots : null;
   } catch (err) {
@@ -260,10 +271,18 @@ export async function generateTemplateFromScript(
   const name = degraded ? '固定四槽位（AI 降级）' : '文案动态分段';
 
   const { rows } = await pool.query(
-    `INSERT INTO zenithjoy.mashup_templates (tenant_id, name, slots)
-     VALUES ($1, $2, $3::jsonb)
+    `INSERT INTO zenithjoy.mashup_templates (tenant_id, name, slots, script_text, script_segments)
+     VALUES ($1, $2, $3::jsonb, $4, $5::jsonb)
      RETURNING id`,
-    [input.tenantId, name, JSON.stringify(slots)],
+    // script_text 存客户原文、script_segments 存逐段片段：渲染时要靠它们做 TTS
+    // 配音与声画对齐。降级模板也照存原文——客户的文案不能因为 AI 挂了就丢。
+    [
+      input.tenantId,
+      name,
+      JSON.stringify(slots),
+      input.script,
+      JSON.stringify(slots.map((s2) => ({ key: s2.key, text: s2.text ?? null }))),
+    ],
   );
 
   return { templateId: rows[0].id, name, slots, degraded, source };

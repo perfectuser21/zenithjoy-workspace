@@ -13,6 +13,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const query = vi.fn();
 vi.mock('../../db/connection', () => ({ default: { query } }));
 
+// axios 必须在模块顶层 mock：被测模块是 ESM import，事后 vi.spyOn(require('axios'))
+// 挂不上去，会真的打网络（实测会看到 401，测试变成"碰巧走了降级路径"的假绿）。
+const axiosPost = vi.fn();
+vi.mock('axios', () => ({ default: { post: axiosPost }, post: axiosPost }));
+
 function template(slots: unknown) {
   return { id: 'tmpl-1', tenant_id: null, name: '标准四槽位', slots };
 }
@@ -134,5 +139,80 @@ describe('assignSlots', () => {
     expect(result.status).toBe('completed_partial');
     expect(result.assignments.filter((a) => a.status === 'reshoot_skipped')).toHaveLength(3);
     expect(result.assignments.find((a) => a.slotKey === 'evidence')?.status).toBe('unfilled');
+  });
+});
+
+/**
+ * 文案原文落库（口播刀前置，GP line05/batch_mashup#step4，决策 f10195d7）
+ *
+ * 真实事故：客户写了 200 字带货文案，却发现"片子里一个字都没有"。根因是
+ * generateTemplateFromScript 把文案发给 AI 分段后只落 slots，**文案原文直接丢掉**，
+ * 系统里再也找不到——于是渲染时想拿它做 TTS 配音，无从取起。
+ *
+ * 光存整段原文还不够：声画对齐要的是"这一句话配这一个镜头"，所以 AI 必须
+ * 逐段返回它切出来的文案片段（slot.text），一并落库。
+ */
+describe('generateTemplateFromScript — 文案原文必须留底 [BEHAVIOR]', () => {
+  const SCRIPT = '厨房蟑螂反复出没？这瓶喷雾一喷就见效，角落缝隙全覆盖。点击下方链接下单。';
+
+  function mockAiSegments(segments: unknown) {
+    axiosPost.mockResolvedValue({
+      data: { choices: [{ message: { content: JSON.stringify(segments) } }] },
+    });
+  }
+
+  beforeEach(() => {
+    query.mockReset();
+    axiosPost.mockReset();
+    process.env.TOAPIS_API_KEY = 'test-key';
+  });
+
+  it('文案原文与逐段文案片段都要写进 mashup_templates', async () => {
+    mockAiSegments([
+      { key: 'hook', match_tags: ['开场'], suggestedCount: 1, required: true, text: '厨房蟑螂反复出没？' },
+      { key: 'product', match_tags: ['产品特写'], suggestedCount: 1, required: true, text: '这瓶喷雾一喷就见效，角落缝隙全覆盖。' },
+      { key: 'cta', match_tags: ['行动号召'], suggestedCount: 1, required: true, text: '点击下方链接下单。' },
+    ]);
+    query.mockResolvedValue({ rows: [{ id: 'tmpl-new' }] });
+
+    const { generateTemplateFromScript } = await import('../mashup-slot-assignment');
+    await generateTemplateFromScript({ tenantId: 'tenant-a', script: SCRIPT });
+
+    const insert = query.mock.calls.find((c: unknown[]) => /INSERT INTO zenithjoy\.mashup_templates/i.test(String(c[0])));
+    expect(insert, 'INSERT 语句应存在').toBeTruthy();
+    const sql = String(insert![0]);
+    const params = insert![1] as unknown[];
+
+    // 没有这两列，配音和声画对齐就没有数据来源
+    expect(sql).toMatch(/script_text/);
+    expect(sql).toMatch(/script_segments/);
+    expect(params, '文案原文必须原样入参').toContain(SCRIPT);
+
+    const segParam = params.find((p) => typeof p === 'string' && p.includes('一喷就见效'));
+    expect(segParam, '逐段文案片段必须落库（声画对齐靠它）').toBeTruthy();
+  });
+
+  it('AI 没给 text 时不炸，片段落空但原文仍留底', async () => {
+    mockAiSegments([{ key: 'hook', match_tags: ['开场'], suggestedCount: 1, required: true }]);
+    query.mockResolvedValue({ rows: [{ id: 'tmpl-new' }] });
+
+    const { generateTemplateFromScript } = await import('../mashup-slot-assignment');
+    const r = await generateTemplateFromScript({ tenantId: 'tenant-a', script: SCRIPT });
+
+    expect(r.templateId).toBe('tmpl-new');
+    const insert = query.mock.calls.find((c: unknown[]) => /INSERT INTO zenithjoy\.mashup_templates/i.test(String(c[0])));
+    expect((insert![1] as unknown[])).toContain(SCRIPT);
+  });
+
+  it('AI 降级走固定模板时，文案原文照样要留底', async () => {
+    delete process.env.TOAPIS_API_KEY; // 无 key → 降级
+    query.mockResolvedValue({ rows: [{ id: 'tmpl-fb' }] });
+
+    const { generateTemplateFromScript } = await import('../mashup-slot-assignment');
+    const r = await generateTemplateFromScript({ tenantId: 'tenant-a', script: SCRIPT });
+
+    expect(r.degraded).toBe(true);
+    const insert = query.mock.calls.find((c: unknown[]) => /INSERT INTO zenithjoy\.mashup_templates/i.test(String(c[0])));
+    expect((insert![1] as unknown[]), '降级也不能把客户文案弄丢').toContain(SCRIPT);
   });
 });
