@@ -51,9 +51,10 @@ describe('先列出这个部门有哪些活', () => {
     expect(screen.queryAllByTestId('job-option')).toHaveLength(0);
   });
 
-  it('没选活之前不给派——按钮是禁用的', () => {
+  it('没选活之前不给派——两步式下这个按钮压根不出现（比禁用更彻底）', () => {
+    // 旧版是"按钮在但禁用"。改两步后第一步只负责挑活，摆个灰按钮反而让人以为漏填了什么。
     open();
-    expect((screen.getByRole('button', { name: '派下去' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: '派下去' })).toBeNull();
   });
 });
 
@@ -85,14 +86,9 @@ describe('选中一件活之后，告诉我要填什么', () => {
     expect(screen.getByTestId('no-fields')).toHaveTextContent(/不用填什么/);
   });
 
-  it('换部门后已选的活与已填的值一并清掉，不把上一件活的输入带过去', () => {
-    open();
-    pick('按关键词采收线索');
-    fireEvent.change(screen.getByLabelText('关键词'), { target: { value: 'AI训练师' } });
-    fireEvent.change(screen.getByLabelText('部门'), { target: { value: '私域客服' } });
-    fireEvent.change(screen.getByLabelText('部门'), { target: { value: '智能获客' } });
-    expect(screen.queryByLabelText('关键词')).toBeNull();
-  });
+  // 「换部门清空已填的值」这条意图搬到了下面的两步式用例
+  // （'换部门要回到第一步，并把已选的活和值一并清掉'）：两步式下第二步没有部门下拉，
+  // 换部门必须先返回第一步，那条走的才是真实路径。
 });
 
 describe('提交', () => {
