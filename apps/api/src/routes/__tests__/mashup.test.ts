@@ -330,3 +330,25 @@ describe('GET /api/mashup/candidates/:id', () => {
     });
   });
 });
+
+describe('GET /api/mashup/runs — 历史列表', () => {
+  it('没有凭据 → 401', async () => {
+    const r = await request(makeApp()).get('/api/mashup/runs');
+    expect(r.status).toBe(401);
+  });
+
+  it('本租户没有 run → 空列表，不是 404', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (pool.query as any).mockResolvedValue({ rows: [] });
+
+    const r = await request(makeApp()).get('/api/mashup/runs').set('X-Upload-Token', TOKEN_A);
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.items).toEqual([]);
+    expect(r.body.data.count).toBe(0);
+    // 租户永远从凭据反查，SQL 必须按 tenant_id 过滤
+    const sql = (pool.query as any).mock.calls[0][0] as string;
+    expect(sql).toMatch(/tenant_id\s*=\s*\$1/);
+    expect((pool.query as any).mock.calls[0][1][0]).toBe('tenant-a');
+  });
+});
