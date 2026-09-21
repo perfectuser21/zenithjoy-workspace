@@ -67,22 +67,33 @@ export function findGaps(slots: ScheduleSlot[], dayOffset: number, now: number =
     .sort((a, b) => a.start - b.start);
 
   const out: Gap[] = [];
-  const push = (start: number, end: number) => {
+  const emit = (start: number, end: number, past: boolean) => {
     const minutes = Math.round((end - start) / MINUTE);
     if (minutes < MIN_GAP_MINUTES) return;
-    // 此刻之前的部分加不进去了
-    const usableFrom = Math.max(start, now);
-    const usableMinutes = Math.max(0, Math.round((end - usableFrom) / MINUTE));
+    const usableMinutes = past ? 0 : minutes;
     out.push({
       start,
       end,
       startText: hhmm(start, dayEnd),
       endText: hhmm(end, dayEnd),
       minutes,
-      past: usableMinutes === 0,
+      past,
       usableMinutes,
       canFit: fitCount(usableMinutes),
     });
+  };
+  /**
+   * 横跨此刻的空档切成两段：已经过去的那截和还能用的那截。
+   * 不切的话会出现「00:00–09:00 空 16 分钟」这种自相矛盾的行——
+   * 区间写的是九小时，数字写的是剩下的十六分钟。
+   */
+  const push = (start: number, end: number) => {
+    if (now > start && now < end) {
+      emit(start, now, true);
+      emit(now, end, false);
+      return;
+    }
+    emit(start, end, end <= now);
   };
 
   let cursor = dayStart;

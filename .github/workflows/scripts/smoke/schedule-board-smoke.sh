@@ -139,11 +139,12 @@ BAR="apps/dashboard/src/components/OccupancyBar.tsx"
 BSRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "${BAR}")
 grep -qF 'export function segments' <<< "${BSRC}" || fail "没有把一天切成占用/空白两种段"
 grep -qF 'heightPct' <<< "${BSRC}" || fail "段高不是按时长成比例（空多大就看不出来了）"
-grep -qF 'bar-busy' <<< "${BSRC}" || fail "占用段没画出来"
-grep -qF 'bar-free' <<< "${BSRC}" || fail "空白段没画出来（这正是主理人要看的）"
+# 用完整 testid（带引号）断言：只写子串的话 bar-freeX 这种改名也能蒙混过关
+grep -qF 'data-testid="bar-busy"' <<< "${BSRC}" || fail "占用段没画出来"
+grep -qF 'data-testid="bar-free"' <<< "${BSRC}" || fail "空白段没画出来（这正是主理人要看的）"
 grep -qF 'showLabel' <<< "${BSRC}" || fail "大块空白没直接标时长"
-grep -qF 'bar-now' <<< "${BSRC}" || fail "占用条缺现在线"
-grep -qF '<OccupancyBar' <<< "${TSRC}" || fail "任务表右边没挂占用条"
+grep -qF 'data-testid="bar-now"' <<< "${BSRC}" || fail "占用条缺现在线"
+grep -qE '<OccupancyBar([[:space:]/>]|$)' <<< "${TSRC}" || fail "任务表右边没挂占用条"
 
 # 层9: 生产链实际会写的失败码都要有人话，漏一个页面就露机器码
 ESRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "$ERRC")

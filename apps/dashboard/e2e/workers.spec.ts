@@ -127,6 +127,38 @@ test('表里看得出哪儿还空着、还能塞几单', async ({ page }) => {
   await expect(page.locator('[data-testid="gap-row"][data-past="1"]')).toHaveCount(0);
 });
 
+test('表格右边那条 24 小时占用条，涂色是占住的、留白是空的', async ({ page }) => {
+  await page.route('**/api/workers', (r) =>
+    r.fulfill({
+      json: {
+        success: true,
+        data: [
+          { id: '4c6c15fc-0b2f-479f-a32f-98ca33aaed1d', agent_id: 'ag3', hostname: 'MAA-AN00', nickname: null,
+            os_type: 'android', status: 'online', running: null, completed_today: 0, last_seen: null },
+        ],
+      },
+    }),
+  );
+  await page.goto('/dashboard/workers');
+  await expect(page.getByText('小龙虾机').first()).toBeVisible();
+  // 占用段与空白段都画出来了
+  expect(await page.getByTestId('bar-busy').count()).toBeGreaterThan(0);
+  expect(await page.getByTestId('bar-free').count()).toBeGreaterThan(0);
+  // 段高按时长成比例：客服 10:00-20:00 是十小时，应该是条上最高的一块
+  const heights = await page.getByTestId('bar-busy').evaluateAll((els) =>
+    els.map((e) => (e as HTMLElement).getBoundingClientRect().height));
+  expect(Math.max(...heights)).toBeGreaterThan(100);
+  // 大块空白直接写着空多久
+  const labels = await page.getByTestId('bar-free').evaluateAll((els) => els.map((e) => e.textContent || ''));
+  expect(labels.join(' ')).toMatch(/空\s*\d+\s*小时/);
+  // 今天有现在线
+  await expect(page.getByTestId('bar-now')).toBeVisible();
+  // 条顶一句话给出空了多久、还能加几单
+  const head = (await page.getByTestId('bar-head').textContent()) || '';
+  expect(head).toMatch(/空/);
+  expect(head).toMatch(/还能加 \d+ 单/);
+});
+
 test('详情页：3 个 ✅ 1 个 ▶️，画面正常无"画面不可用"', async ({ page }) => {
   await page.route('**/api/workers/a1/activity', (r) => r.fulfill({ json: { success: true, data: activity(500) } }));
   await page.goto('/dashboard/workers/a1');

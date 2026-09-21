@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
-import OccupancyBar, { segments, BAR_LABEL_MIN_MINUTES } from './OccupancyBar';
+import OccupancyBar, { segments, BAR_LABEL_MIN_MINUTES, BAR_MERGE_GAP_MINUTES } from './OccupancyBar';
 import { dayRange, type ScheduleSlot } from '../api/schedule.api';
 
 afterEach(cleanup);
@@ -62,6 +62,25 @@ describe('把一天切成占用与空白两种段', () => {
     const busy = segs.filter((s) => s.kind === 'busy');
     expect(busy).toHaveLength(1);
     expect(busy[0].heightPct).toBeCloseTo((3 / 24) * 100, 3);
+  });
+
+  it('只隔了小缝的活并成一段，条子不会碎成一堆横条纹', () => {
+    // 08:00-08:12 与 08:30-08:35 之间只隔 18 分钟（触达单之间的常态）
+    const a = atDay(1, 8, 12, { id: 'a' });
+    const b: ScheduleSlot = { ...atDay(1, 8, 5, { id: 'b' }), planned_at: new Date(dayRange(1).start + 8 * HOUR + 30 * 60_000).toISOString() };
+    const busy = segments([a, b], 1, NOON).filter((s) => s.kind === 'busy');
+    expect(busy).toHaveLength(1);
+  });
+
+  it('缝大到能塞单了就不合并，该留白还是留白', () => {
+    // 08:00-08:12 与 09:00-09:05 之间隔 48 分钟，超过合并阈值
+    const a = atDay(1, 8, 12, { id: 'a' });
+    const b = atDay(1, 9, 5, { id: 'b' });
+    const segs = segments([a, b], 1, NOON);
+    expect(segs.filter((s) => s.kind === 'busy')).toHaveLength(2);
+    const mid = segs.find((s) => s.kind === 'free' && s.startText === '08:12')!;
+    expect(mid.minutes).toBe(48);
+    expect(mid.minutes).toBeGreaterThan(BAR_MERGE_GAP_MINUTES);
   });
 
   it('重叠的活也只算一段占用，不会把条画出两倍长', () => {
