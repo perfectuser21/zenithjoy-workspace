@@ -6446,6 +6446,14 @@ agent_suite:
     product: 工作机控制塔
     note: "样例排期密度单测：最忙的机一天 >=20 件对得上真机实测、触达一单一行带单号昵称、单耗时 1-15 分钟、有失败单、后几天也排满、同机触达不重叠、id 唯一、部门在清单内、两次拉取结果一致（不随机）。"
 
+  - id: dashboard-occupancy-bar-unit
+    path: apps/dashboard/src/components/OccupancyBar.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机控制塔
+    note: "24 小时占用条单测：占用/空白交替铺满一天、段高按时长成比例、空白天一整条、排满则无空白、挨着的活合成一段、重叠不画两倍长、大块空白带时长与能塞几单、今天已过那截标 past；组件画出两种段、大块空白写时长、0-24 刻度、现在线只在今天、点空白回调时刻、条顶一句话给合计。"
+
   - id: dashboard-schedule-gaps-unit
     path: apps/dashboard/src/components/schedule-gaps.test.ts
     type: unit

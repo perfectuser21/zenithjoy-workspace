@@ -131,6 +131,20 @@ grep -qF '还能插' <<< "${TSRC}" || fail "空档行没写还能塞几单"
 grep -qF '还能加' <<< "${TSRC}" || fail "表头没回答今天还能加多少"
 grep -qF '排满了' <<< "${TSRC}" || fail "排满的一天没明说没空档了"
 
+# 层8g: 空档必须看得见 —— 表格右边一条 24 小时占用条（主理人 0921：「我觉得你这个不是
+#       很明显。应该是左边是已经排的东西，右边能看出这几个地方是空的、空的、空的。
+#       你现在写的这我也不知道能空多少、差多少，很烦，不明显」）
+BAR="apps/dashboard/src/components/OccupancyBar.tsx"
+[ -s "${BAR}" ] || fail "占用条组件缺失"
+BSRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "${BAR}")
+grep -qF 'export function segments' <<< "${BSRC}" || fail "没有把一天切成占用/空白两种段"
+grep -qF 'heightPct' <<< "${BSRC}" || fail "段高不是按时长成比例（空多大就看不出来了）"
+grep -qF 'bar-busy' <<< "${BSRC}" || fail "占用段没画出来"
+grep -qF 'bar-free' <<< "${BSRC}" || fail "空白段没画出来（这正是主理人要看的）"
+grep -qF 'showLabel' <<< "${BSRC}" || fail "大块空白没直接标时长"
+grep -qF 'bar-now' <<< "${BSRC}" || fail "占用条缺现在线"
+grep -qF '<OccupancyBar' <<< "${TSRC}" || fail "任务表右边没挂占用条"
+
 # 层9: 生产链实际会写的失败码都要有人话，漏一个页面就露机器码
 ESRC=$(grep -vE '^[[:space:]]*(//|\*|/\*)' "$ERRC")
 for c in executor_lost superseded lock_busy device_offline keywords_unavailable transient_exhausted; do
