@@ -408,4 +408,46 @@ describe('GET /api/mashup/runs — 历史列表', () => {
     expect(r.body.data.limit).toBe(100);
     expect((pool.query as any).mock.calls[0][1][1]).toBe(100);
   });
+
+  it('offset 为负数 → 夹到 0', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (pool.query as any).mockResolvedValue({ rows: [] });
+
+    await request(makeApp()).get('/api/mashup/runs?offset=-5').set('X-Upload-Token', TOKEN_A);
+
+    expect((pool.query as any).mock.calls[0][1][2]).toBe(0);
+  });
+
+  it('字段映射逐条对上，缺值落 null 不落 undefined', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (pool.query as any).mockResolvedValue({
+      rows: [runRow({
+        id: 'run-x', template_id: 'tmpl-x', created_at: '2026-09-20T10:00:00.000Z',
+        selected_candidate_id: null, thumbnail_url: null, candidate_count: '2',
+      })],
+    });
+
+    const r = await request(makeApp()).get('/api/mashup/runs').set('X-Upload-Token', TOKEN_A);
+
+    expect(r.body.data.items[0]).toMatchObject({
+      runId: 'run-x',
+      templateId: 'tmpl-x',
+      createdAt: '2026-09-20T10:00:00.000Z',
+      candidateCount: 2,
+      thumbnailUrl: null,
+      selectedCandidateId: null,
+    });
+  });
+
+  // DB 报错必须干净回 500。Express 4 没有全局 async 错误中间件，漏掉 try/catch 的
+  // async handler 会让请求一直挂到客户端超时——这条测试就是守这个。
+  it('DB 查询抛错 → 500，不是把请求挂死', async () => {
+    (validateLicense as any).mockResolvedValue(licenseOk('tenant-a'));
+    (pool.query as any).mockRejectedValue(new Error('connection terminated'));
+
+    const r = await request(makeApp()).get('/api/mashup/runs').set('X-Upload-Token', TOKEN_A);
+
+    expect(r.status).toBe(500);
+    expect(r.body.error.code).toBe('LIST_RUNS_FAILED');
+  });
 });

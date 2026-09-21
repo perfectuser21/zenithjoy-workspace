@@ -175,21 +175,28 @@ export function createMashupRouter(): Router {
     const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 100) : 20;
     const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? Math.trunc(rawOffset) : 0;
 
-    const { rows } = await pool.query(
-      `SELECT r.id, r.template_id, r.status, r.created_at, r.selected_candidate_id,
-              (SELECT COUNT(*) FROM zenithjoy.mashup_candidates c WHERE c.run_id = r.id) AS candidate_count,
-              (SELECT c.thumbnail_url FROM zenithjoy.mashup_candidates c
-                WHERE c.run_id = r.id AND c.thumbnail_url IS NOT NULL
-                ORDER BY c.score DESC LIMIT 1) AS thumbnail_url,
-              EXISTS (SELECT 1 FROM zenithjoy.contents ct
-                       WHERE ct.source_candidate_id = r.selected_candidate_id
-                         AND ct.export_url IS NOT NULL) AS has_export
-         FROM zenithjoy.mashup_runs r
-        WHERE r.tenant_id = $1
-        ORDER BY r.created_at DESC
-        LIMIT $2 OFFSET $3`,
-      [auth.tenantId, limit, offset],
-    );
+    // Express 4 没有全局 async 错误中间件，未捕获的 rejection 不会被转成响应——
+    // DB 一报错请求就挂到客户端超时，而不是干净地回 500。与 materials.ts 同口径包起来。
+    let rows;
+    try {
+      ({ rows } = await pool.query(
+        `SELECT r.id, r.template_id, r.status, r.created_at, r.selected_candidate_id,
+                (SELECT COUNT(*) FROM zenithjoy.mashup_candidates c WHERE c.run_id = r.id) AS candidate_count,
+                (SELECT c.thumbnail_url FROM zenithjoy.mashup_candidates c
+                  WHERE c.run_id = r.id AND c.thumbnail_url IS NOT NULL
+                  ORDER BY c.score DESC LIMIT 1) AS thumbnail_url,
+                EXISTS (SELECT 1 FROM zenithjoy.contents ct
+                         WHERE ct.source_candidate_id = r.selected_candidate_id
+                           AND ct.export_url IS NOT NULL) AS has_export
+           FROM zenithjoy.mashup_runs r
+          WHERE r.tenant_id = $1
+          ORDER BY r.created_at DESC
+          LIMIT $2 OFFSET $3`,
+        [auth.tenantId, limit, offset],
+      ));
+    } catch (err) {
+      return fail(res, 500, 'LIST_RUNS_FAILED', err instanceof Error ? err.message : 'unknown');
+    }
 
     const items = rows.map((r: {
       id: string; template_id: string; status: string; created_at: Date | string;
