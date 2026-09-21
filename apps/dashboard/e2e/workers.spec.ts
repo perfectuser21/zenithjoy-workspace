@@ -4,6 +4,9 @@
  * 运行：VITE_SKIP_AUTH=true npm run dev:dashboard && npm run -w apps/dashboard e2e -- workers
  */
 import { test, expect } from '@playwright/test';
+// 排程从此走真实 GET /api/schedule（此前 fetchSchedule 返回内置 mock 不发请求）。
+// E2E 照旧不依赖真后端：把同一份样例 stub 回去，测的仍是页面渲染。
+import { __mockSchedulePayloadForDemo } from '../src/api/schedule.api';
 const workers = [
   { id: 'a1', agent_id: 'ag1', hostname: 'MAA-AN00', nickname: '小龙虾', os_type: 'android', status: 'online',
     running: { task_id: 't1', title: '发布视频到抖音', current_step: 3, steps_total: 5 }, completed_today: 1, last_seen: null },
@@ -22,6 +25,7 @@ const activity = (frameAgeMs: number | null) => ({
 });
 const JPEG = Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/yQALCAABAAEBAREA/8wABgAQEAX/2gAIAQEAAD8A0s8g/9k=', 'base64');
 test.beforeEach(async ({ page }) => {
+  await page.route('**/api/schedule', (r) => r.fulfill({ json: { success: true, data: __mockSchedulePayloadForDemo() } }));
   await page.route('**/api/workers', (r) => r.fulfill({ json: { success: true, data: workers } }));
   await page.route('**/api/workers/a1/live', (r) => r.fulfill({ contentType: 'image/jpeg', body: JPEG }));
 });

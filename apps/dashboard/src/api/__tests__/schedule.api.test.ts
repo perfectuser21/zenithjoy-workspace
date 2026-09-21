@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  __mockSchedulePayloadForDemo,
   fetchSchedule,
   slotsOfDay,
   backlogCount,
@@ -60,13 +61,13 @@ describe('派生计算', () => {
   });
 });
 
-describe('mock 数据（后端接入前的样例）', () => {
+describe('样例数据（演示/测试用，不再进生产路径）', () => {
   it('显式标注 mock，避免被当成真实数据', async () => {
-    expect((await fetchSchedule()).mock).toBe(true);
+    expect(__mockSchedulePayloadForDemo().mock).toBe(true);
   });
 
   it('每台设备的业务线、额度、活三者对得上', async () => {
-    const { devices } = await fetchSchedule();
+    const { devices } = __mockSchedulePayloadForDemo();
     expect(devices.length).toBeGreaterThan(0);
     for (const d of devices) {
       expect(d.agent_id).toMatch(/^[0-9a-f-]{36}$/);
@@ -80,7 +81,7 @@ describe('mock 数据（后端接入前的样例）', () => {
   });
 
   it('部门取值都在约定清单内（与 Notion OPC 经营对象的所属部门对齐）', async () => {
-    const { devices } = await fetchSchedule();
+    const { devices } = __mockSchedulePayloadForDemo();
     for (const d of devices) {
       for (const x of d.depts) expect(DEPTS).toContain(x);
       for (const s of d.slots) expect(DEPTS).toContain(s.dept);
@@ -88,9 +89,42 @@ describe('mock 数据（后端接入前的样例）', () => {
   });
 
   it('被挡住的活必须给出原因，否则页面只能显示干巴巴的"被挡住"', async () => {
-    const { devices } = await fetchSchedule();
+    const { devices } = __mockSchedulePayloadForDemo();
     const blocked = devices.flatMap((d) => d.slots).filter((s) => s.status === 'blocked');
     expect(blocked.length).toBeGreaterThan(0);
     for (const s of blocked) expect(s.blocked_reason).toBeTruthy();
+  });
+});
+
+describe('fetchSchedule 的降级：读不到不能装成"今天没活"', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('HTTP 非 2xx → stale=true 带原因，而不是抛异常', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 502, json: async () => ({}) })) as unknown as typeof fetch);
+    const p = await fetchSchedule();
+    expect(p.stale).toBe(true);
+    expect(p.stale_reason).toContain('502');
+    expect(p.devices).toEqual([]);
+    expect(p.mock).toBe(false);
+  });
+
+  it('网络直接抛错 → 同样 stale=true，调用方不需要 catch', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('ECONNREFUSED'); }) as unknown as typeof fetch);
+    const p = await fetchSchedule();
+    expect(p.stale).toBe(true);
+    expect(p.stale_reason).toContain('ECONNREFUSED');
+  });
+
+  it('返回体形状不对（没有 devices 数组）→ 按读不到处理，不让页面崩在 .map 上', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ success: true, data: {} }) })) as unknown as typeof fetch);
+    const p = await fetchSchedule();
+    expect(p.stale).toBe(true);
+    expect(p.devices).toEqual([]);
+  });
+
+  it('正常返回时原样透出后端数据', async () => {
+    const payload = { as_of: '2026-09-21T07:00:00.000Z', mock: false, stale: false, devices: [] };
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ success: true, data: payload }) })) as unknown as typeof fetch);
+    expect(await fetchSchedule()).toEqual(payload);
   });
 });

@@ -35,6 +35,9 @@ export default function WorkersPage() {
   const [error, setError] = useState<string | null>(null);
   const [sched, setSched] = useState<ScheduleDevice[]>([]);
   const [mock, setMock] = useState(false);
+  // 读不到 ≠ 今天没活：后台断了要说"读取失败"，不能让空排期冒充"今天没安排"
+  const [staleMsg, setStaleMsg] = useState<string | null>(null);
+  const [asOf, setAsOf] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [dept, setDept] = useState<Dept | '全部'>('全部');
   const [picked, setPicked] = useState<string | null>(null);
@@ -64,13 +67,21 @@ export default function WorkersPage() {
 
   useEffect(() => {
     let alive = true;
-    fetchSchedule().then((d) => {
-      if (!alive) return;
-      setSched(d.devices);
-      setMock(d.mock);
-    });
+    const load = () => {
+      fetchSchedule().then((d) => {
+        if (!alive) return;
+        setSched(d.devices);
+        setMock(d.mock);
+        setAsOf(d.as_of);
+        setStaleMsg(d.stale ? (d.stale_reason || '排程数据已停更') : null);
+      });
+    };
+    load();
+    // 排期是给人当天看着用的，开一分钟一次的轮询；停更会通过 stale 条自己冒出来
+    const timer = setInterval(load, 60_000);
     return () => {
       alive = false;
+      clearInterval(timer);
     };
   }, []);
 
@@ -125,6 +136,16 @@ export default function WorkersPage() {
           {mock && (
             <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] text-amber-700 ring-1 ring-amber-100">
               排期为样例数据，后端接入前仅供看形
+            </span>
+          )}
+          {staleMsg && (
+            <span
+              role="alert"
+              className="rounded-full bg-rose-50 px-2.5 py-0.5 text-[11px] text-rose-700 ring-1 ring-rose-100"
+            >
+              读取失败 · {staleMsg}
+              {asOf ? ` · 数据截至 ${new Date(asOf).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}` : ''}
+              —— 下面看到的可能不是真的
             </span>
           )}
 

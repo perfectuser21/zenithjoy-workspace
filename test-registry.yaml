@@ -6677,3 +6677,35 @@ agent_suite:
     status: active
     product: 批量混剪
     note: "素材视频在线预览（GP line05/batch_mashup step2）：决策 1a20f778 否掉的是网格里每条都 ffmpeg 抽帧，不是点开播放，但代码把两件事并成了一件。断言弹窗渲染 <video controls> 且 src 来自 /materials/:id/preview 现签地址而非列表里会过期的 preview_url；previewAvailable=false 但签出了地址仍然播（后端只认 mime video/*，快捷指令常传 octet-stream，按它拦截等于把能播的判死）；previewUrl 为 null 落占位绝不塞进 src；onError 降级不留黑屏；图片素材不受影响且不调预览接口。"
+
+  - id: schedule-service
+    path: apps/api/src/services/__tests__/schedule-service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机排程
+    note: "排程读写的纯计算（task 3abb7f8c）：Brain tasks 表没有租户维度（tenant_id 只在 payload），所以租户隔离必须由中台按本库 agents 白名单过滤——断言白名单为空给零条、assigned_to 为空不算任何人、比对精确不做前缀匹配（截断的 id 片段不能捞到别家的活）。另断言窗口语义（铁律 27bb6d1a：对外动作窗口 <30 分钟一律拒、对内动作允许精确到分）、额度按部门各算不跨线求和（合并会让同一份余量被派两遍）、as_of 缺失一律按 stale（读不到 ≠ 今天没活）、Brain 状态→页面枚举映射（未知状态落 blocked 带原因不静默变'待跑'）、CAS 语句带 row_version 判态与 status='queued' 谓词。"
+
+  - id: schedule-routes
+    path: apps/api/src/routes/__tests__/schedule.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机排程
+    note: "排程读写面路由（task 3abb7f8c）：断言未登录 401；Brain 未配置或跨境读抛错时 payload stale=true 带原因（页面据此说'读取失败'而不是把故障渲染成'今天没活'）；额度未上移时 quotas_stale 不拿空数组冒充'额度为 0'；取数按本租户 agent 收窄且别家的活即便被返回也被二道闸滤掉；派单时对外动作窗口 <30 分钟拒、落点落在窗口内、给别家设备派单表现为 404 而非 403（403 会确认资源存在可被枚举）、必须写 headed_manual=true（少了会被 Brain tick 抢去当编码任务跑）、幂等键重复提交只留一条；改时间 CAS 不匹配 409 且分清'已开跑'与'被人改过'；取消走 UPDATE 标记不 DELETE。"
+
+  - id: schedule-executor-routes
+    path: apps/api/src/routes/__tests__/schedule-executor.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机排程
+    note: "排程执行器面（task 3abb7f8c），工作机领单器调的两个端点：断言无内部 token 401；认领是原子 UPDATE（谓词带 status='queued' + FOR UPDATE SKIP LOCKED，先 SELECT 再 UPDATE 会让两台机器领走同一单、同一个人被私信两次）；只领 source='oneoff'（周期活归 crontab，两套调度盯同一批会跑两遍）；只领 due_at<=now 且一次一条（手机是独占资源）；回执只认还在执行中那条，迟到的回执 409 不覆盖当前状态；回执用 jsonb_build_object 塞固定子键（jsonb || 是浅合并，invariant 55f0d846）。"
+
+  - id: brain-pool
+    path: apps/api/src/db/__tests__/brain-pool.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机排程
+    note: "Brain 库连接池（task 3abb7f8c）：要害是未配置时返回 null 而不是抛错或退回连本地库——连错库比连不上更毒，排程会写进 zenithjoy 库的另一张 tasks 表且没人知道（2026-07-13 P0 事故正是 zenithjoy.tasks 抢先解析了 Brain 的 public.tasks）。另断言按 BRAIN_* 而非 DATABASE_* 建池（两套库绝不能串）、跨境连接超时 8 秒（3 秒不够，PR#1892 丢单教训）、search_path 钉死 public、同进程只建一次。"

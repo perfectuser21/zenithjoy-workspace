@@ -7,9 +7,10 @@
  * 他要的那个上下滑杆根本不出现。
  */
 import { describe, it, expect } from 'vitest';
-import { fetchSchedule, slotsOfDay, DEPTS, type ScheduleSlot } from '../schedule.api';
+import { __mockSchedulePayloadForDemo, slotsOfDay, DEPTS, type ScheduleSlot } from '../schedule.api';
 
-const load = async () => (await fetchSchedule()).devices;
+// fetchSchedule 已接真实后端；样例密度这件事从此直接对样例本身断言
+const load = async () => __mockSchedulePayloadForDemo().devices;
 
 /** 一天里排得最满的那台机 */
 const busiest = (devs: Awaited<ReturnType<typeof load>>, dayOffset: number) =>
@@ -79,8 +80,8 @@ describe('样例排期的密度', () => {
   });
 
   it('两次拉取给出同样的排期，不是每次随机一份', async () => {
-    const a = (await fetchSchedule()).devices.flatMap((d) => d.slots).map((s) => `${s.id}|${s.title}|${s.est_minutes}`);
-    const b = (await fetchSchedule()).devices.flatMap((d) => d.slots).map((s) => `${s.id}|${s.title}|${s.est_minutes}`);
+    const a = __mockSchedulePayloadForDemo().devices.flatMap((d) => d.slots).map((s) => `${s.id}|${s.title}|${s.est_minutes}`);
+    const b = __mockSchedulePayloadForDemo().devices.flatMap((d) => d.slots).map((s) => `${s.id}|${s.title}|${s.est_minutes}`);
     expect(a).toEqual(b);
   });
 });

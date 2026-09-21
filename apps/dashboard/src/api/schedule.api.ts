@@ -29,6 +29,15 @@ export interface ScheduleSlot {
   source: 'recurring' | 'oneoff';
   /** 阻塞原因，status=blocked 时有 */
   blocked_reason?: string;
+  /** 窗口起止（对外动作排的是窗口不是时刻，铁律 27bb6d1a）；对内动作可为空 */
+  window_start?: string | null;
+  window_end?: string | null;
+  /** 真正执行的时刻——"你排的是窗口，我告诉你实际几点跑的" */
+  executed_at?: string | null;
+  /** 乐观锁版本号，改时间时原样回传（updated_at 被后台 tick 定时 touch，不能当锁） */
+  row_version?: number;
+  /** 最后是谁改的，用于条子上显示"你改的 · 12:58" */
+  updated_by?: string | null;
 }
 
 /** 某台设备在某条业务线上的当日配额 */
@@ -55,6 +64,8 @@ export interface ScheduleDevice {
   quotas: DeptQuota[];
   /** 未来几天的活，含今天已完成的 */
   slots: ScheduleSlot[];
+  /** true = 额度数字还没接通（真身在工作机本地），不要把空数组当成"额度为 0" */
+  quotas_stale?: boolean;
 }
 
 export interface SchedulePayload {
@@ -62,6 +73,13 @@ export interface SchedulePayload {
   as_of: string;
   /** true = 后端未就绪，页面展示的是样例数据 */
   mock: boolean;
+  /**
+   * true = 这份数据没读到 / 已陈旧。**读不到 ≠ 今天没活**：页面必须显示"读取失败"，
+   * 绝不能把空排期渲染成"今天没安排"——那会让人以为系统在正常空转。
+   */
+  stale?: boolean;
+  /** stale 的具体原因，直接展示给用户 */
+  stale_reason?: string | null;
   devices: ScheduleDevice[];
 }
 
@@ -262,14 +280,37 @@ function mockPayload(): SchedulePayload {
   };
 }
 
+// 用可选链读 import.meta.env：Playwright 的测试进程在 node 下 import 本模块
+// （为了拿 __mockSchedulePayloadForDemo 当 E2E 桩数据），那里没有 import.meta.env。
+const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_BASE_URL || '/api';
+
+/** 读不到时给出的空壳：devices 为空 + stale=true，页面据此显示"读取失败"而不是"今天没活" */
+function unreachablePayload(reason: string): SchedulePayload {
+  return { as_of: new Date().toISOString(), mock: false, stale: true, stale_reason: reason, devices: [] };
+}
+
 /**
- * 拉排程数据。后端就绪后改为：
- *   const r = await fetch(`${API_BASE}/schedule`, { credentials: 'include' });
- *   return (await r.json()).data;
+ * 拉排程数据。
+ *
+ * 失败**不抛异常**，而是返回 stale 的空壳 —— 调用方过去是裸 `.then()` 没有 catch，
+ * 一抛就变成 devices=[] 渲染成"今天没活"，把"后台断了"伪装成"今天没安排"。
+ * 这里把失败变成一个页面能看见、能说人话的状态。
  */
 export async function fetchSchedule(): Promise<SchedulePayload> {
-  return Promise.resolve(mockPayload());
+  try {
+    const r = await fetch(`${API_BASE}/schedule`, { credentials: 'include' });
+    if (!r.ok) return unreachablePayload(`读取排程失败（HTTP ${r.status}）`);
+    const body = await r.json();
+    const data = body?.data;
+    if (!data || !Array.isArray(data.devices)) return unreachablePayload('排程接口返回了预期外的内容');
+    return data as SchedulePayload;
+  } catch (e) {
+    return unreachablePayload(`连不上排程后台：${e instanceof Error ? e.message : String(e)}`);
+  }
 }
+
+/** 样例数据保留给 Storybook / 本地演示，不再进生产路径 */
+export { mockPayload as __mockSchedulePayloadForDemo };
 
 // ─────────────────────── 看板用的派生计算 ───────────────────────
 

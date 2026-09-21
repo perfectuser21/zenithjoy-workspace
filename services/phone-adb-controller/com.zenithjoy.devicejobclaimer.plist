@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  工作机领单器（task 3abb7f8c）：每分钟认领一条主理人在工作机页派下来的活。
+  与推帧器 com.zenithjoy.phonewallpush 各司其职——那个只管画面，这个管执行。
+  不用 KeepAlive：脚本是一轮即退的（领到就跑、没活就退），靠 StartInterval 拉起；
+  脚本自带宿主级互斥锁，上一轮没跑完时这一轮会自己安静退出。
+  安装：cp 到 ~/Library/LaunchAgents/ 后 launchctl load -w。
+-->
+<plist version="1.0"><dict>
+<key>Label</key><string>com.zenithjoy.devicejobclaimer</string>
+<key>ProgramArguments</key><array><string>/bin/bash</string><string>-c</string><string>export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$HOME/Library/Android/sdk/platform-tools:$PATH"; exec ~/bin-harvest/device-job-claimer.sh</string></array>
+<key>RunAtLoad</key><true/>
+<key>StartInterval</key><integer>60</integer>
+<key>StandardErrorPath</key><string>/tmp/devicejobclaimer.err</string>
+</dict></plist>

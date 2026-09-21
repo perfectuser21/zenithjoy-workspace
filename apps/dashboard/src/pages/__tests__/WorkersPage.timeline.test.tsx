@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, cleanup, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -8,6 +8,19 @@ vi.mock('../../api/workers.api', () => ({
 }));
 import { fetchWorkers } from '../../api/workers.api';
 import WorkersPage from '../WorkersPage';
+
+// fetchSchedule 已接真实后端（本刀）：这里把 fetch 打桩成返回样例排期，
+// 让组件仍走真实的取数代码路径，只是数据来自样例。
+import { __mockSchedulePayloadForDemo } from '../../api/schedule.api';
+beforeAll(() => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ success: true, data: __mockSchedulePayloadForDemo() }),
+  })) as unknown as typeof fetch);
+});
+afterAll(() => { vi.unstubAllGlobals(); });
+
 
 const W = (id: string, nickname: string, running: unknown = null) => ({
   id,
