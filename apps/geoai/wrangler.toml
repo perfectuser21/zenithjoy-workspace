@@ -16,7 +16,11 @@ compatibility_date = "2024-12-01"
 # 2026-09-21 实测：线上有 5 个 plain_text 变量，而本段当时只声明 2 个——
 # 若照此部署，TIKTOK_MEDIA_HOSTS 会消失，draft.ts 的 host 白名单随之失效，
 # 所有草稿上传当场被拒。补齐后此段与线上逐项对齐。
-META_GRAPH_API_VERSION = "v26.0"
+# META_GRAPH_API_VERSION 不在此处声明：它在 Cloudflare 后台是 secret_text
+# 类型（值 v26.0，/api/meta/status 可回读）。同名变量在 [vars] 里再声明一次会让
+# 部署直接失败：Binding name 'META_GRAPH_API_VERSION' already in use。
+# secret_text 本身能跨部署存活，不存在被覆盖丢失的风险，因此维持现状；
+# 若将来要把它改回普通变量，必须先在后台删掉该 secret 再加入本段。
 # 初次上线保持关闭。开启前需徐啸对具体内容与账号逐次批准。
 META_PUBLISH_ENABLED = "false"
 META_DRAFT_ENABLED = "true"
