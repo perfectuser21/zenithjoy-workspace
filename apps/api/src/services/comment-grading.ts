@@ -42,7 +42,30 @@ const TOAPIS_BASE = process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1';
 // catch null）。同日真调判据全过: deepseek@toapis.com 批量 25 条 200/2.3s/25 行全出档/
 // finish=stop/零思考(enable_thinking:false)。0909 的"C2PA 垃圾"复测确认是 api.toapis.com
 // 域名的行为,默认域名 toapis.com 不复现。terra 渠道恢复与否不再重要,deepseek 快 3 倍。
-const GRADING_MODEL = process.env.GRADING_MODEL || 'deepseek-v4-flash';
+// 2026-09-22 切 gpt-5.4-mini：deepseek-v4-flash 渠道 #170 上游 403
+// auth error(kind=2) SUBSCRIPTION_INACTIVE（供应商侧账户欠费/掉订阅），且 TOAPIS
+// 明确报"没有可用备用渠道可重试"——整条判定链死透，gp2 Step 23b 三次真调全 NULL
+// （每次 0.8s 就返回，不是 LLM 随机性，是调用根本没成功）。
+// 批量 25 条真调判据（照 0915 那次的判据逐条过）：
+//   gpt-5.4-mini   3.6s  25/25 全出档  finish=stop  reasoning_tokens=0
+//   gpt-5.6-terra 25.0s  25/25 全出档  finish=stop  reasoning_tokens=196
+// 取 mini：terra 的 25s 已贴到 GRADING_TIMEOUT_MS=40s 的脸上，0915 正是栽在它
+// 批量源站超时（小请求正常、25 条 100s 出不来）。0909 记的"#159 403 model
+// unsupported"复测已不复现。
+// ⚠️ gemini 系列仍然禁用——本文件下方注释写明思考关不掉且随机吃光预算，加预算救不了。
+// ⚠️ 换模型时连开关一起换：gpt-5.4-mini 收到 enable_thinking 直接 400
+//    Unknown parameter（0922 实证）。见 thinkingOffParam()。
+const GRADING_MODEL = process.env.GRADING_MODEL || 'gpt-5.4-mini';
+
+// 关思考的开关名**随模型而不同**，硬编码一个必然在下次换模型时炸。
+// 0922 实证：gpt-5.4-mini 认 reasoning_effort:'none'（200/零思考），
+// 收到 enable_thinking 则 400 "Unknown parameter"；deepseek-v4-flash /
+// gpt-5.6-terra 反过来认 enable_thinking:false。
+// 这条链两年换了五次模型（0823/0904/0909/0915/0922），每次都在开关上绊一跤——
+// 所以开关跟着模型走，别再写死。
+export function thinkingOffParam(model: string): Record<string, unknown> {
+  return model.startsWith('gpt-') ? { reasoning_effort: 'none' } : { enable_thinking: false };
+}
 
 const VALID_GRADES = ['高意向', '精准', '感兴趣', '其他'] as const;
 
@@ -100,7 +123,7 @@ export async function gradeComments(
         // 照样 reasoning 吃满预算。0915 真调实测 enable_thinking:false 在现役 gpt-5.6-terra
         // 与 deepseek-v4-flash 上都零思考出正文(finish=stop),遂切此开关。
         // gemini-2.5 两种开关都不认(照样思考),用 gemini 的地方只能靠给够 max_tokens,别照抄这行。
-        enable_thinking: false,
+        ...thinkingOffParam(GRADING_MODEL),
       },
       {
         headers: {

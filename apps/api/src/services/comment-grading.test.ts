@@ -7,7 +7,7 @@
  * 测的就是"产生grade值"这一步。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { gradeComments } from './comment-grading';
+import { gradeComments, thinkingOffParam } from './comment-grading';
 import axios from 'axios';
 
 vi.mock('axios');
@@ -28,7 +28,7 @@ describe('comment-grading gradeComments', () => {
     warnSpy.mockRestore();
   });
 
-  it('判定模型默认 deepseek-v4-flash（0915 terra 渠道批量524超时切回;0909 的 C2PA 垃圾实证是 api.toapis.com 域名行为,默认域名不复现;env GRADING_MODEL 可覆盖）', async () => {
+  it('判定模型默认 gpt-5.4-mini（0922 deepseek 渠道欠费 403 SUBSCRIPTION_INACTIVE 且无备用渠道;批量25条真调 3.8-5.0s/25-25全出档/零思考,三轮稳定;env GRADING_MODEL 可覆盖）', async () => {
     const mockedPost = vi.mocked(axios.post);
     mockedPost.mockResolvedValue({
       data: { choices: [{ message: { content: '1. 高意向' } }] },
@@ -37,7 +37,7 @@ describe('comment-grading gradeComments', () => {
     await gradeComments('家装目标客户', '标题', null, [{ commentText: '预算10万求推荐' }]);
 
     const [, body] = mockedPost.mock.calls[0] as [string, Record<string, unknown>];
-    expect(body.model).toBe('deepseek-v4-flash');
+    expect(body.model).toBe('gpt-5.4-mini');
   });
 
   it('空评论数组 → 不调用Gemini，返回空数组', async () => {
@@ -178,7 +178,7 @@ describe('comment-grading gradeComments', () => {
    *
    * 这条断言就是守卫本体——把 enable_thinking 去掉，本测试必须报红。
    */
-  it('必须关闭思考链（enable_thinking=false）——否则 reasoning 吃光预算整批返 null', async () => {
+  it('必须关闭思考链（开关随模型走）——否则 reasoning 吃光预算整批返 null', async () => {
     const mockedPost = vi.mocked(axios.post);
     mockedPost.mockResolvedValue({
       data: { choices: [{ finish_reason: 'stop', message: { content: '1. 高意向' } }] },
@@ -187,9 +187,13 @@ describe('comment-grading gradeComments', () => {
     await gradeComments('健身减脂目标客户', '标题', null, [{ commentText: '多少钱一份' }]);
 
     const [, body] = mockedPost.mock.calls[0] as [string, Record<string, unknown>];
-    expect(body.enable_thinking).toBe(false);
-    // 0915 上游拒收史: 请求体里绝不能再带 reasoning_effort(任何值)——带=400 整批 null
-    expect(body.reasoning_effort).toBeUndefined();
+    // 开关名随模型而不同，不能写死任何一个（0922：gpt-5.4-mini 收到 enable_thinking
+    // 直接 400 Unknown parameter；deepseek/terra 反过来不认 reasoning_effort）。
+    // 这里只认一件事：请求体里必须带上**当前模型对应的那个**关思考开关。
+    expect(body).toMatchObject(thinkingOffParam(body.model as string));
+    // 而且只带一个——两个都塞会在不认的那一侧 400
+    const switches = ['enable_thinking', 'reasoning_effort'].filter((k) => k in body);
+    expect(switches).toHaveLength(1);
   });
 
   /**
@@ -214,4 +218,67 @@ describe('comment-grading gradeComments', () => {
     errSpy.mockRestore();
   });
 
+});
+
+/**
+ * 关思考的开关名随模型而不同 —— 0922 生产故障的第二层。
+ *
+ * 当天 deepseek-v4-flash 渠道欠费（403 SUBSCRIPTION_INACTIVE，无备用渠道），整条判定链死透。
+ * 切 gpt-5.4-mini 时才发现：它收到 enable_thinking 直接 400 "Unknown parameter"——
+ * 也就是说，光换模型名会把"渠道欠费"换成"参数不认"，一样全 null，还更难看出原因。
+ *
+ * 这条链已经换了五次模型（0823/0904/0909/0915/0922），每次都在这个开关上绊一跤。
+ * 锁住它：开关必须跟着模型走。
+ */
+describe('thinkingOffParam — 关思考开关按模型分派', () => {
+  it('gpt 系列用 reasoning_effort，绝不能发 enable_thinking（会 400）', async () => {
+    const { thinkingOffParam } = await import('./comment-grading');
+    expect(thinkingOffParam('gpt-5.4-mini')).toEqual({ reasoning_effort: 'none' });
+    expect(thinkingOffParam('gpt-5.4-mini')).not.toHaveProperty('enable_thinking');
+    expect(thinkingOffParam('gpt-5.6-terra')).not.toHaveProperty('enable_thinking');
+  });
+
+  it('非 gpt 系列（deepseek 等）用 enable_thinking', async () => {
+    const { thinkingOffParam } = await import('./comment-grading');
+    expect(thinkingOffParam('deepseek-v4-flash')).toEqual({ enable_thinking: false });
+  });
+
+  it('实际请求体里带的开关必须与当前模型匹配', async () => {
+    // 真正要防的不是函数本身，而是"请求体里写死一个开关"——那才是 0922 踩的形状。
+    const { thinkingOffParam } = await import('./comment-grading');
+    const mockedAxios = vi.mocked(axios);
+    vi.mocked(axios.post).mockResolvedValue({
+      data: { choices: [{ message: { content: '1. 高意向' }, finish_reason: 'stop' }] },
+    } as never);
+    await gradeComments('想考证的在职人员', 't', null, [{ commentText: '怎么报名' }]);
+    const [, body] = vi.mocked(axios.post).mock.calls[0] as [string, Record<string, unknown>];
+    const model = body.model as string;
+    expect(body).toMatchObject(thinkingOffParam(model));
+    if (model.startsWith('gpt-')) expect(body).not.toHaveProperty('enable_thinking');
+  });
+
+  it('env 把模型换成非 gpt 时，请求体的开关必须跟着换（否则那一侧 400 整批 null）', async () => {
+    // 本文件头部写着"模型名走 env 可覆盖，不必再改代码"——那这条路径就必须有人守。
+    // 只测默认模型的话，请求体里写死 reasoning_effort 也能全绿（默认恰好是 gpt），
+    // 等哪天 env 切回 deepseek 才在生产上炸。
+    vi.resetModules();
+    const prev = process.env.GRADING_MODEL;
+    process.env.GRADING_MODEL = 'deepseek-v4-flash';
+    try {
+      const axiosMod = (await import('axios')).default;
+      vi.mocked(axiosMod.post).mockResolvedValue({
+        data: { choices: [{ message: { content: '1. 高意向' }, finish_reason: 'stop' }] },
+      } as never);
+      const mod = await import('./comment-grading');
+      await mod.gradeComments('想考证的在职人员', 't', null, [{ commentText: '怎么报名' }]);
+      const [, body] = vi.mocked(axiosMod.post).mock.calls.at(-1) as [string, Record<string, unknown>];
+      expect(body.model).toBe('deepseek-v4-flash');
+      expect(body.enable_thinking).toBe(false);
+      expect(body).not.toHaveProperty('reasoning_effort');
+    } finally {
+      if (prev === undefined) delete process.env.GRADING_MODEL;
+      else process.env.GRADING_MODEL = prev;
+      vi.resetModules();
+    }
+  });
 });
