@@ -112,3 +112,24 @@ test("harvest-cron-v4: finalize_needed 只在 wfr init 跑过后为真", { skip:
   const r2 = spawnSync(ZSH, ["-c", `HARVEST_CRON_V4_LIB=1 source ${join(SRC, "harvest-cron-v4.sh")}; finalize_needed`], { encoding: "utf8", env: envWithRun });
   assert.equal(r2.status, 0, r2.stderr);
 });
+
+// C1(终审必修): init→eval 出的 WFR_RUN_DIR/ART_DIR/RUN_ID/HASH 是 shell 变量，未 export 就紧接
+// `bash "$WFR" enter`——子进程(bash)看不到，走 not_initialized 分支，账本 attempt_id 永远 null。
+// wfr_bootstrap 把"init → export → enter → export"接成一个库函数来堵住这个洞。
+test("harvest-cron-v4: wfr_bootstrap 后账本 attempt_id=a1（export 早于 enter）", { skip: SKIP }, () => {
+  const home = mkdtempSync(join(tmpdir(), "hcv4-boot-"));
+  const wf = join(home, "kw.txt");
+  writeFileSync(wf, "A\nB\n");
+  const env = {
+    ...process.env, HOME: home, WFR_HOME: join(home, ".config", "zenithjoy"), WFR_NODE: process.execPath, WFR_JQ: JQ,
+    WFR_LEDGER_MJS: join(SRC, "ledger.mjs"), WFR: join(SRC, "workflow-result.sh"), WFR_SCP_TARGET: "",
+  };
+  const r = spawnSync(ZSH, ["-c",
+    `HARVEST_CRON_V4_LIB=1 source ${join(SRC, "harvest-cron-v4.sh")}; wfr_bootstrap t7 p1 ${wf} 0 S h; echo "WFR_ATTEMPT=$WFR_ATTEMPT"; echo "WFR_RUN_DIR=$WFR_RUN_DIR"`
+  ], { encoding: "utf8", env });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /WFR_ATTEMPT=a1/);
+  const runDir = r.stdout.split("\n").find((l) => l.startsWith("WFR_RUN_DIR=")).slice("WFR_RUN_DIR=".length);
+  const book = JSON.parse(readFileSync(join(runDir, "ledger.json"), "utf8"));
+  assert.equal(book.attempt_id, "a1");
+});

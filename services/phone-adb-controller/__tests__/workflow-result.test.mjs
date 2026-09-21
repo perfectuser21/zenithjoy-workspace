@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,6 +21,7 @@ function wfr(home, extra, ...args) {
 }
 function words(dir, list) { const f = join(dir, "kw.txt"); writeFileSync(f, list.join("\n") + "\n"); return f; }
 function artifacts(kv) { return readdirSync(kv.WFR_ART_DIR).filter((f) => f.endsWith(".worker-result.json")).sort(); }
+const IS_ROOT = typeof process.getuid === "function" && process.getuid() === 0; // root 无视权限位，chmod 000 测试对它无意义
 
 test("hash: 同词单不同 TAG 相同；顺序无关；改一词即变；不含 SERIAL", { skip: !JQ && "no jq" }, () => {
   const d = mkdtempSync(join(tmpdir(), "wfr-"));
@@ -123,4 +124,25 @@ test("stage: metrics 含闭集外的键 → 不落文件、exit 0、WFR_WARN", {
     '[{"type":"log","ref":"night.log"}]', '{"candidates":1,"keywords_processed":1,"screens_scanned":0,"bogus":1}', "A");
   assert.equal(s.code, 0); assert.match(s.err, /WFR_WARN/);
   assert.ok(!existsSync(join(i.kv.WFR_ART_DIR, "social-keyword-leadgen-crontab-t6__a1.discovery.1.worker-result.json")));
+});
+
+// C2(终审必修，实测复现): 起跑前工件目录(workflow-runs)已不可写 → init/enter/finalize 全程的
+// write_stage 都写不进文件，因此也都没触发 led1 set，ledger.json 从头到尾停在 fresh(全 pending)。
+// 旧判据 n_files>=n_stages 算出 0>=0 成立 → 假绿 OK=1（终审员脚本实证：files=0 stages=0 → OK=1）。
+// 契约下每条成功 write_stage 同时产 1 文件 + 1 items 条目，改判据为 n_items>0 && n_files>=n_items 后
+// 这种"全程没写成过一个工件"的情况必须判 OK=0。
+test("finalize: 起跑前工件目录不可写(chmod 000) → OK=0，不是假绿 OK=1", { skip: (!JQ && "no jq") || (IS_ROOT && "root 无视权限位") }, () => {
+  const d = mkdtempSync(join(tmpdir(), "wfr-"));
+  const artDir = join(d, "workflow-runs");
+  mkdirSync(artDir);
+  chmodSync(artDir, 0o000);
+  try {
+    const i = wfr(d, {}, "init", "t7", "p1", words(d, ["A"]), "0", "S", "h");
+    const e = wfr(d, i.kv, "enter");
+    const f = wfr(d, { ...i.kv, ...e.kv }, "finalize");
+    assert.equal(f.kv.WFR_FINALIZE_OK, "0");
+    assert.match(f.kv.WFR_FINALIZE_MSG, /artifact_count_mismatch/);
+  } finally {
+    chmodSync(artDir, 0o755);
+  }
 });
