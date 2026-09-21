@@ -88,6 +88,9 @@ jobs:
       SMOKE_TOKEN: smoke-secret-2026
       # Path 2 8步本地版 smoke — judge-video 真调判定（handoff 0714 刀1；无 key = Step 8 真红，不许 mock 兜底）
       TOAPIS_API_KEY: ${{ secrets.TOAPIS_API_KEY }}
+      # 评论意向判定链 0922 迁到 OpenRouter（ToAPIs 侧无一模型能同时过三关，
+      # 见 comment-grading.ts 注释）。TOAPIS_API_KEY 保留为回退凭据。
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4

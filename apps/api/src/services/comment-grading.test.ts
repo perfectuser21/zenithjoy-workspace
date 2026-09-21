@@ -7,7 +7,7 @@
  * 测的就是"产生grade值"这一步。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { gradeComments } from './comment-grading';
+import { gradeComments, thinkingOffParam } from './comment-grading';
 import axios from 'axios';
 
 vi.mock('axios');
@@ -28,7 +28,7 @@ describe('comment-grading gradeComments', () => {
     warnSpy.mockRestore();
   });
 
-  it('判定模型默认 deepseek-v4-flash（0915 terra 渠道批量524超时切回;0909 的 C2PA 垃圾实证是 api.toapis.com 域名行为,默认域名不复现;env GRADING_MODEL 可覆盖）', async () => {
+  it('判定链默认走 OpenRouter + openai/gpt-4o-mini（0922 ToAPIs 侧无一模型能同时过「不被内容过滤/批量不超时/全出档」三关;OpenRouter 两种 prompt 各 5 轮 10/10 全过;env 可覆盖）', async () => {
     const mockedPost = vi.mocked(axios.post);
     mockedPost.mockResolvedValue({
       data: { choices: [{ message: { content: '1. 高意向' } }] },
@@ -37,7 +37,10 @@ describe('comment-grading gradeComments', () => {
     await gradeComments('家装目标客户', '标题', null, [{ commentText: '预算10万求推荐' }]);
 
     const [, body] = mockedPost.mock.calls[0] as [string, Record<string, unknown>];
-    expect(body.model).toBe('deepseek-v4-flash');
+    expect(body.model).toBe('openai/gpt-4o-mini');
+    // 网关也一起迁了——只改模型名不改 base 会打到 ToAPIs 上去，那边没有这个模型
+    const [url] = mockedPost.mock.calls[0] as [string, unknown];
+    expect(url).toContain('openrouter.ai');
   });
 
   it('空评论数组 → 不调用Gemini，返回空数组', async () => {
@@ -178,7 +181,7 @@ describe('comment-grading gradeComments', () => {
    *
    * 这条断言就是守卫本体——把 enable_thinking 去掉，本测试必须报红。
    */
-  it('必须关闭思考链（enable_thinking=false）——否则 reasoning 吃光预算整批返 null', async () => {
+  it('必须关闭思考链（开关随模型走）——否则 reasoning 吃光预算整批返 null', async () => {
     const mockedPost = vi.mocked(axios.post);
     mockedPost.mockResolvedValue({
       data: { choices: [{ finish_reason: 'stop', message: { content: '1. 高意向' } }] },
@@ -187,9 +190,14 @@ describe('comment-grading gradeComments', () => {
     await gradeComments('健身减脂目标客户', '标题', null, [{ commentText: '多少钱一份' }]);
 
     const [, body] = mockedPost.mock.calls[0] as [string, Record<string, unknown>];
-    expect(body.enable_thinking).toBe(false);
-    // 0915 上游拒收史: 请求体里绝不能再带 reasoning_effort(任何值)——带=400 整批 null
-    expect(body.reasoning_effort).toBeUndefined();
+    // 开关名随模型而不同，不能写死任何一个（0922：gpt-5.4-mini 收到 enable_thinking
+    // 直接 400 Unknown parameter；deepseek/terra 反过来不认 reasoning_effort）。
+    // 这里只认一件事：请求体里必须带上**当前模型对应的那个**关思考开关。
+    expect(body).toMatchObject(thinkingOffParam(body.model as string));
+    // 而且只带一个——两个都塞会在不认的那一侧 400
+    const switches = ['enable_thinking', 'reasoning_effort'].filter((k) => k in body);
+    // OpenRouter 侧一个都不带；ToAPIs 侧必须恰好带一个（两个都塞会在不认的那侧 400）
+    expect(switches).toHaveLength((body.model as string).includes('/') ? 0 : 1);
   });
 
   /**
@@ -214,4 +222,98 @@ describe('comment-grading gradeComments', () => {
     errSpy.mockRestore();
   });
 
+});
+
+/**
+ * 关思考的开关名随模型而不同 —— 0922 生产故障的第二层。
+ *
+ * 当天 deepseek-v4-flash 渠道欠费（403 SUBSCRIPTION_INACTIVE，无备用渠道），整条判定链死透。
+ * 切 gpt-5.4-mini 时才发现：它收到 enable_thinking 直接 400 "Unknown parameter"——
+ * 也就是说，光换模型名会把"渠道欠费"换成"参数不认"，一样全 null，还更难看出原因。
+ *
+ * 这条链已经换了五次模型（0823/0904/0909/0915/0922），每次都在这个开关上绊一跤。
+ * 锁住它：开关必须跟着模型走。
+ */
+describe('thinkingOffParam — 关思考开关按模型分派', () => {
+  it('OpenRouter 风格模型名（vendor/model）不带任何关思考开关', async () => {
+    const { thinkingOffParam } = await import('./comment-grading');
+    expect(thinkingOffParam('openai/gpt-4o-mini')).toEqual({});
+    expect(thinkingOffParam('deepseek/deepseek-chat-v3.1')).toEqual({});
+  });
+
+  it('ToAPIs 侧 gpt 系列用 reasoning_effort，绝不能发 enable_thinking（会 400）', async () => {
+    const { thinkingOffParam } = await import('./comment-grading');
+    expect(thinkingOffParam('gpt-5.4-mini')).toEqual({ reasoning_effort: 'none' });
+    expect(thinkingOffParam('gpt-5.4-mini')).not.toHaveProperty('enable_thinking');
+    expect(thinkingOffParam('gpt-5.6-terra')).not.toHaveProperty('enable_thinking');
+  });
+
+  it('非 gpt 系列（deepseek 等）用 enable_thinking', async () => {
+    const { thinkingOffParam } = await import('./comment-grading');
+    expect(thinkingOffParam('deepseek-v4-flash')).toEqual({ enable_thinking: false });
+  });
+
+  it('实际请求体里带的开关必须与当前模型匹配', async () => {
+    // 真正要防的不是函数本身，而是"请求体里写死一个开关"——那才是 0922 踩的形状。
+    const { thinkingOffParam } = await import('./comment-grading');
+    const mockedAxios = vi.mocked(axios);
+    vi.mocked(axios.post).mockResolvedValue({
+      data: { choices: [{ message: { content: '1. 高意向' }, finish_reason: 'stop' }] },
+    } as never);
+    await gradeComments('想考证的在职人员', 't', null, [{ commentText: '怎么报名' }]);
+    const [, body] = vi.mocked(axios.post).mock.calls[0] as [string, Record<string, unknown>];
+    const model = body.model as string;
+    expect(body).toMatchObject(thinkingOffParam(model));
+    if (model.startsWith('gpt-')) expect(body).not.toHaveProperty('enable_thinking');
+  });
+
+  it('env 把模型换成非 gpt 时，请求体的开关必须跟着换（否则那一侧 400 整批 null）', async () => {
+    // 本文件头部写着"模型名走 env 可覆盖，不必再改代码"——那这条路径就必须有人守。
+    // 只测默认模型的话，请求体里写死 reasoning_effort 也能全绿（默认恰好是 gpt），
+    // 等哪天 env 切回 deepseek 才在生产上炸。
+    vi.resetModules();
+    const prev = process.env.GRADING_MODEL;
+    process.env.GRADING_MODEL = 'deepseek-v4-flash';
+    try {
+      const axiosMod = (await import('axios')).default;
+      vi.mocked(axiosMod.post).mockResolvedValue({
+        data: { choices: [{ message: { content: '1. 高意向' }, finish_reason: 'stop' }] },
+      } as never);
+      const mod = await import('./comment-grading');
+      await mod.gradeComments('想考证的在职人员', 't', null, [{ commentText: '怎么报名' }]);
+      const [, body] = vi.mocked(axiosMod.post).mock.calls.at(-1) as [string, Record<string, unknown>];
+      expect(body.model).toBe('deepseek-v4-flash');
+      expect(body.enable_thinking).toBe(false);
+      expect(body).not.toHaveProperty('reasoning_effort');
+    } finally {
+      if (prev === undefined) delete process.env.GRADING_MODEL;
+      else process.env.GRADING_MODEL = prev;
+      vi.resetModules();
+    }
+  });
+
+  it('只配 OPENROUTER_API_KEY（没有 TOAPIS_API_KEY）也必须能调——迁网关就得连凭据一起迁', async () => {
+    // 迁到 OpenRouter 之后，新环境不会再配 TOAPIS_API_KEY。凭据读取要是还只认旧变量，
+    // 就会走到"未配置 → 跳过判定 → 整批 null"那条静默分支上，症状跟渠道欠费一模一样。
+    vi.resetModules();
+    const prevT = process.env.TOAPIS_API_KEY;
+    const prevO = process.env.OPENROUTER_API_KEY;
+    delete process.env.TOAPIS_API_KEY;
+    process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
+    try {
+      const axiosMod = (await import('axios')).default;
+      vi.mocked(axiosMod.post).mockResolvedValue({
+        data: { choices: [{ message: { content: '1. 高意向' }, finish_reason: 'stop' }] },
+      } as never);
+      const mod = await import('./comment-grading');
+      const out = await mod.gradeComments('想考证的在职人员', 't', null, [{ commentText: '怎么报名' }]);
+      expect(out).toEqual(['高意向']);
+      const call = vi.mocked(axiosMod.post).mock.calls.at(-1) as [string, unknown, { headers: Record<string, string> }];
+      expect(call[2].headers.Authorization).toBe('Bearer test-openrouter-key');
+    } finally {
+      if (prevT === undefined) delete process.env.TOAPIS_API_KEY; else process.env.TOAPIS_API_KEY = prevT;
+      if (prevO === undefined) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = prevO;
+      vi.resetModules();
+    }
+  });
 });
