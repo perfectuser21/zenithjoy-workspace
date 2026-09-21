@@ -128,6 +128,13 @@ echo "== 4. 排队器：上传后自动触发这条链（2026-09-21 新接，此
 # pending，而选素材页/候选生成只认 tagged —— 整条混剪链对客户完全不可用，客户实际
 # 撞到了才暴露。这一步锁三件事：排队器真的会跑 tagMaterial、并发不超上限、
 # 打标签抛错绝不冒泡（否则会把上传接口一起带崩）。
+#
+# 关于下面那个写死的 2：它**刻意不从配置读**，别改成 env/参数化。
+# 这不是"随环境调优的性能参数"，而是防 ToAPIs 网关被打爆的安全上限——2026-09-21
+# 刚因网关 520 打穿整条判定链、挡住所有 PR（issue f3b6ba7c）。守卫的职责就是把这个
+# 上限钉死：一旦有人把 CONCURRENCY 调大，这里必须立刻报红。改成读配置 = 谁改配置都能
+# 悄悄放大并发而守卫默不作声，等于废掉它。已验证过它会响：把 CONCURRENCY 改成 8 重跑，
+# 精确报出「并发峰值 5 超过上限 2」。
 psql "$PGURL" -q -c "UPDATE zenithjoy.materials SET tag_status='pending' WHERE id='$MATERIAL_ID'" >/dev/null
 QUEUE_OUT=$(node -e "
 const { enqueueTagging } = require('./apps/api/dist/services/material-tagging-queue.js');
