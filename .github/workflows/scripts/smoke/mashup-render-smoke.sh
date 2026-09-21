@@ -200,13 +200,18 @@ QUEUE_RESULT=$(node -e "
 const { enqueuePreview } = require('./apps/api/dist/services/mashup-preview-queue.js');
 const pool = require('./apps/api/dist/db/connection.js').default;
 enqueuePreview({ tenantId: '$TENANT', candidateId: '$CAND_ID' }, { render: async () => ({ previewUrl: 'https://smoke.example/p.mp4' }) })
-  .then((r) => { console.log('RESULT_JSON:' + JSON.stringify(r)); })
+  .then(async (r) => {
+    console.log('RESULT_JSON:' + JSON.stringify(r));
+    // enqueuePreview 内部渲染是 fire-and-forget（不 await 后台 runItem），入队 promise
+    // resolve 时后台 DB 落态还没写完——留时间窗让它跑完，否则 pool.end() 在它前头把
+    // 连接关了，落库永远追不上（这是踩过的坑，不是真实业务逻辑的 bug）。
+    await new Promise((res) => setTimeout(res, 800));
+  })
   .catch((err) => { console.error('意外异常: ' + err.message); process.exitCode = 1; })
   .finally(() => pool.end());
 " | grep '^RESULT_JSON:' | sed 's/^RESULT_JSON://') || fail "enqueuePreview 调用失败"
 echo "  返回: $QUEUE_RESULT"
 grep -q '"previewStatus":"generating"' <<< "$QUEUE_RESULT" || fail "期望入队后立即回 generating，实际 $QUEUE_RESULT"
-sleep 0.3
 DB_PREVIEW_STATUS=$(psql_q "SELECT preview_status FROM zenithjoy.mashup_candidates WHERE id = '$CAND_ID'")
 [ "$DB_PREVIEW_STATUS" = "ready" ] || fail "队列异步渲染完成后 preview_status 应落库为 ready，实际=$DB_PREVIEW_STATUS"
 ok "预览队列真实入队→异步渲染→落库 preview_status=ready"
