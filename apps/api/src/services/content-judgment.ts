@@ -29,13 +29,81 @@ export interface JudgeVideoOptions {
 }
 
 // ── 常量 ─────────────────────────────────────────────────────────────────────
-const JUDGMENT_TIMEOUT_MS = 20_000;  // 带图/音判定较慢，留余量（服务端即便 agent 8s 超时也要写库）
+const JUDGMENT_TIMEOUT_MS = 20_000;
+// 主判原本一次都不重试，520 一来整条链就断（issue f3b6ba7c）。给到 3 次，只对网关类错误生效。
+const JUDGMENT_ATTEMPTS = 3;  // 带图/音判定较慢，留余量（服务端即便 agent 8s 超时也要写库）
 // commander 超时策略（2026-09-04 两轮实测修订）：TOAPIS gpt-5.4-mini 两个域名都呈
 // "首跑 42-46s、后续 2-3s"的冷启动特征（p50 快 p95 慢）——单次 45s 长等仍卡 p95 边缘
 // 间歇超时（gp2 Step 8d 三连挂实证），改为 20s×2 次：两次独立采样把"双慢"概率平方，
 // 总预算 40s 反而更短更稳。commander 是"存疑复核"非实时路径。
 const COMMANDER_TIMEOUT_MS = 20_000;
 const COMMANDER_ATTEMPTS = 2;
+
+/**
+ * 网关类瞬时错误 —— 只有这些才值得重试（2026-09-21，issue f3b6ba7c）。
+ *
+ * 真实事故：ToAPIs 对 GHA runner 返回 HTTP 520（Cloudflare「源站返回未知错误」，
+ * 41s 后才回，响应体是裸文本 `error code: 520` 而非 JSON），同一把 key、同一个模型
+ * 从本机调却是 200。主判当时完全没有重试，一发 520 整条判定链就断，
+ * golden-path-2 的 Step 8c/8d 连挂三次挡住所有 PR 合并。
+ *
+ * 分寸在于**只重试"网关自己崩了"**：4xx 一概不重试——key 失效(401)、模型名错(404)、
+ * 参数错(400) 都是确定性故障，重试既没用，又会把这套 smoke 好不容易建立的判别力磨掉
+ * （它存在的意义就是把这类环境接缝问题吼出来，而不是悄悄吞掉重试三次）。
+ */
+const RETRYABLE_GATEWAY_STATUS = new Set([502, 503, 504, 520, 521, 522, 523, 524]);
+
+/** 退避基数，测试里调小；生产 1s → 第二次等 1s、第三次等 2s，不打爆正在挣扎的源站。 */
+function retryBaseMs(): number {
+  const v = Number(process.env.TOAPIS_RETRY_BASE_MS);
+  return Number.isFinite(v) && v > 0 ? v : 1000;
+}
+
+/**
+ * 判定用 err.isAxiosError 属性而不是 axios.isAxiosError()：
+ * 单测里 vi.mock('axios') 会把整个模块（含这个判定函数）替换成 mock，
+ * 用它判会恒 false，重试逻辑就永远测不到——那正是"测了个寂寞"的假绿。
+ * 属性是 axios 自己给 AxiosError 打的标记（isAxiosError() 内部也是查它）。
+ */
+function isRetryableToapisError(err: unknown): boolean {
+  const e = err as { isAxiosError?: boolean; code?: string; response?: { status?: number } };
+  if (!e?.isAxiosError) return false;
+  if (e.code === 'ECONNABORTED') return true;             // 超时
+  const status = e.response?.status;
+  if (status === undefined) return true;                  // 连接层失败（无响应）
+  return RETRYABLE_GATEWAY_STATUS.has(status);
+}
+
+/**
+ * 对 ToAPIs 的一次 POST，带网关类错误退避重试。
+ * attempts 是总尝试次数（含首次）；不可重试的错误立刻抛出，不浪费时间也不掩盖真故障。
+ */
+async function postToapisWithRetry<T = unknown>(
+  url: string,
+  body: unknown,
+  config: Parameters<typeof axios.post>[2],
+  attempts: number,
+  label: string,
+): Promise<{ data: T }> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return (await axios.post(url, body, config)) as { data: T };
+    } catch (err) {
+      if (attempt >= attempts || !isRetryableToapisError(err)) throw err;
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      const waitMs = retryBaseMs() * 2 ** (attempt - 1);
+      console.warn(
+        '[content-judgment] %s 第 %d 次失败（status=%s code=%s），%dms 后重试',
+        label,
+        attempt,
+        status ?? '-',
+        (err as { code?: string })?.code ?? '-',
+        waitMs,
+      );
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
+  }
+}
 /**
  * 主判 max_tokens——**这是含 reasoning_tokens 的 completion 总预算，不是"正文上限"**。
  *
@@ -195,7 +263,7 @@ async function callGemini(
       : { type: 'image_url', image_url: { url: `data:${mimeType};base64,${dataB64}` } };
 
   try {
-    const resp = await axios.post(
+    const resp = await postToapisWithRetry<{ choices?: Array<{ message?: { content?: string }; finish_reason?: string }> }>(
       `${TOAPIS_BASE}/chat/completions`,
       {
         model: JUDGMENT_MODEL,
@@ -214,7 +282,9 @@ async function callGemini(
           'Content-Type': 'application/json',
         },
         timeout: JUDGMENT_TIMEOUT_MS,
-      }
+      },
+      JUDGMENT_ATTEMPTS,
+      'primary',
     );
 
     const choice = resp.data?.choices?.[0];
@@ -379,11 +449,9 @@ async function commanderReview(
 
   const prompt = buildCommanderPrompt(targetProfileDesc, transcript, primaryReason, title);
   try {
-    let resp;
-    // 超时快速重试（仅 ECONNABORTED）：渠道"首慢后快"特征下第二次通常 2-3s 返回
-    for (let attempt = 1; ; attempt++) {
-      try {
-        resp = await axios.post(
+    // 原先只认 ECONNABORTED 重试，520 直接穿透成 error_保守拒（issue f3b6ba7c）。
+    // 换成共用的网关类错误重试：超时与 502/503/504/520-524 都退避重试，4xx 仍立刻抛。
+    const resp = await postToapisWithRetry<{ choices?: Array<{ message?: { content?: string } }> }>(
           `${TOAPIS_BASE}/chat/completions`,
           {
             model: COMMANDER_MODEL,
@@ -397,15 +465,10 @@ async function commanderReview(
           {
             headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
             timeout: COMMANDER_TIMEOUT_MS,
-          }
-        );
-        break;
-      } catch (inner) {
-        const innerTimeout = axios.isAxiosError(inner) && inner.code === 'ECONNABORTED';
-        if (!innerTimeout || attempt >= COMMANDER_ATTEMPTS) throw inner;
-        console.warn('[content-judgment] commander timeout on attempt %d, retrying', attempt);
-      }
-    }
+          },
+      COMMANDER_ATTEMPTS,
+      'commander',
+    );
     const text: string = resp.data?.choices?.[0]?.message?.content ?? '';
     const verdict = parseCommanderVerdict(text);
     return finalize(verdict, verdict === 'matched' ? '准' : '不准');
