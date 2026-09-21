@@ -6662,6 +6662,14 @@ agent_suite:
     product: 新媒体运营
     note: "PR#1845 preview 门禁回归：preview 不需 Meta 凭据（否则凭据到位前无法做内容审批）但真实发布门禁一个不少——未配凭据发布仍503、凭据齐全但 META_PUBLISH_ENABLED=false 仍403、未授权401、preview 不回显密钥。独立文件，因 meta-publishing.test.ts 是已落盘合同测试受 lint-contract-test-immutability 保护不可改。"
 
+  - id: meta-status-idempotency-report-unit
+    path: sprints/09211910-meta-status-d1/tests/meta-status-idempotency-report.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "/api/meta/status 的 idempotencyConfigured 必须与 publish.ts 的 resolveStore 同一套优先级(D1优先/KV兜底)。D1 迁移后该健康检查仍只看 env.META_IDEMPOTENCY，线上绑了 D1 却报 false——误报会诱使运维把无原子声明的 KV 加回来。另断言新增 idempotencyBackend 字段区分 d1/kv/null。"
+
   - id: tiktok-private-publishing-unit
     path: sprints/09162201-tiktok-private-publishing/tests/tiktok-publishing.test.ts
     type: unit
