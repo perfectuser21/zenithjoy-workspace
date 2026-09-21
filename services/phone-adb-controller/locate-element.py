@@ -46,10 +46,15 @@ click(start_box='<|box_start|>(x1,y1)<|box_end|>')
 
 DEFAULT_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
 DEFAULT_MODEL = 'bytedance/ui-tars-1.5-7b'
-TIMEOUT_S = 60
+TIMEOUT_S = 90
+# 超过这个大小就转 JPEG 再传。安卓截图 PNG 动辄 3.5MB，base64 后 4.7MB，
+# 从国内机器传到境外会 write timeout（M1 实测）。
+# **只换编码不改分辨率** —— 坐标必须仍然对应原图，缩放会让所有坐标失真。
+MAX_UPLOAD_BYTES = 900_000
+JPEG_QUALITY = 85
 
 
-def build_body(img_b64: str, desc: str, model: str) -> dict:
+def build_body(img_b64: str, desc: str, model: str, mime: str = 'image/png') -> dict:
     """组装请求体。描述会被包成一句「点击 X」的指令——UI-TARS 要的是任务不是名词。"""
     return {
         'model': model,
@@ -57,7 +62,7 @@ def build_body(img_b64: str, desc: str, model: str) -> dict:
         'messages': [
             {'role': 'system', 'content': SYSTEM_PROMPT},
             {'role': 'user', 'content': [
-                {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + img_b64}},
+                {'type': 'image_url', 'image_url': {'url': f'data:{mime};base64,' + img_b64}},
                 {'type': 'text', 'text': f'## User Instruction\n点击{desc}'},
             ]},
         ],
@@ -91,12 +96,32 @@ def check_bounds(xy, width: int, height: int):
     return 0 <= x <= width and 0 <= y <= height
 
 
+def encode_shot(shot_path: str) -> tuple:
+    """
+    读图并 base64。太大就转 JPEG——**只换编码，绝不缩放**：模型给的是像素坐标，
+    分辨率一变所有坐标就错位，而这种错位不会报错，只会让点击悄悄点偏。
+    Pillow 缺失时原样上传（宁可慢，不要静默改图）。
+    """
+    raw = open(shot_path, 'rb').read()
+    if len(raw) <= MAX_UPLOAD_BYTES:
+        return base64.b64encode(raw).decode(), 'image/png'
+    try:
+        import io
+        from PIL import Image
+        im = Image.open(io.BytesIO(raw)).convert('RGB')
+        buf = io.BytesIO()
+        im.save(buf, format='JPEG', quality=JPEG_QUALITY)  # 不传 size/resize：分辨率必须原样
+        return base64.b64encode(buf.getvalue()).decode(), 'image/jpeg'
+    except Exception:  # noqa: BLE001 — 压不了就原样传，别让定位整个失败
+        return base64.b64encode(raw).decode(), 'image/png'
+
+
 def locate(shot_path: str, desc: str, width: int, height: int,
            endpoint: str, model: str, key: str) -> tuple:
-    img = base64.b64encode(open(shot_path, 'rb').read()).decode()
+    img, mime = encode_shot(shot_path)
     req = urllib.request.Request(
         endpoint,
-        data=json.dumps(build_body(img, desc, model)).encode(),
+        data=json.dumps(build_body(img, desc, model, mime)).encode(),
         headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key})
     resp = json.load(urllib.request.urlopen(req, timeout=TIMEOUT_S))
     text = resp['choices'][0]['message']['content']
@@ -117,7 +142,17 @@ def main():
     model = os.environ.get('LOCATE_MODEL', DEFAULT_MODEL)
     key = os.environ.get('OPENROUTER_API_KEY', '')
     if not key and keyfile and os.path.isfile(keyfile):
-        key = open(keyfile).read().strip()
+        # 凭据文件两种形态都认：整份就是 key（老的 locate-api.key），
+        # 或 KEY=VALUE 的 env 形态（~/.credentials/*.env）。调用方不用再自己抠值出来 ——
+        # 少一处在 shell 里传递凭据的地方，就少一处泄漏面。
+        raw = open(keyfile).read().strip()
+        for line in raw.splitlines():
+            if line.startswith('OPENROUTER_API_KEY='):
+                key = line.split('=', 1)[1].strip()
+                break
+        else:
+            # 没有 KEY= 前缀 → 整份文件就是裸 key（老的 locate-api.key 形态）
+            key = raw if '=' not in raw.splitlines()[0] else ''
     if not key:
         raise SystemExit('locate: no api key (OPENROUTER_API_KEY or keyfile)')
     x, y = locate(shot, desc, w, h, endpoint, model, key)

@@ -13,7 +13,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { writeFileSync, mkdtempSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createServer } from 'node:http';
@@ -123,4 +123,86 @@ test('屏幕边界按 宽/高+1 算，贴边坐标算合法', async (t) => {
   const api = await startFakeModel("Action: click(start_box='<|box_start|>(1200,2664)<|box_end|>')");
   t.after(() => api.close());
   assert.equal((await run(api, { w: 1199, h: 2663 })).out, '1200 2664');
+});
+
+test('凭据文件是 KEY=VALUE 形态时也认（~/.credentials/*.env）', async (t) => {
+  // 让脚本自己认两种凭据格式，调用方就不用在 shell 里抠值——少一处传递凭据的地方，
+  // 就少一处泄漏面（bash-guard 也正是拦这种在命令行里读凭据的写法）。
+  const api = await startFakeModel("Action: click(start_box='<|box_start|>(7,8)<|box_end|>')");
+  t.after(() => api.close());
+  const dir = mkdtempSync(join(tmpdir(), 'locate-kf-'));
+  const shot = join(dir, 's.png'); writeFileSync(shot, TINY_PNG);
+  const kf = join(dir, 'openrouter.env'); writeFileSync(kf, 'OPENROUTER_API_KEY=k-from-file\n');
+  const r = await new Promise((resolve) => {
+    const p = spawn('python3', [SCRIPT, shot, 'x', '100', '100', kf], {
+      env: { ...process.env, LOCATE_ENDPOINT: api.url, OPENROUTER_API_KEY: '' },
+    });
+    let out = '', err = '';
+    p.stdout.on('data', (d) => { out += d; });
+    p.stderr.on('data', (d) => { err += d; });
+    p.on('close', (code) => resolve({ code, out: out.trim(), err: err.trim() }));
+  });
+  assert.equal(r.out, '7 8', r.err);
+  assert.match(api.requests[0] ? 'ok' : '', /ok/);
+});
+
+test('凭据文件是裸 key 形态时也认（老的 locate-api.key）', async (t) => {
+  const api = await startFakeModel("Action: click(start_box='<|box_start|>(9,10)<|box_end|>')");
+  t.after(() => api.close());
+  const dir = mkdtempSync(join(tmpdir(), 'locate-kf2-'));
+  const shot = join(dir, 's.png'); writeFileSync(shot, TINY_PNG);
+  const kf = join(dir, 'locate-api.key'); writeFileSync(kf, 'sk-bare-key\n');
+  const r = await new Promise((resolve) => {
+    const p = spawn('python3', [SCRIPT, shot, 'x', '100', '100', kf], {
+      env: { ...process.env, LOCATE_ENDPOINT: api.url, OPENROUTER_API_KEY: '' },
+    });
+    let out = '', err = '';
+    p.stdout.on('data', (d) => { out += d; });
+    p.stderr.on('data', (d) => { err += d; });
+    p.on('close', (code) => resolve({ code, out: out.trim(), err: err.trim() }));
+  });
+  assert.equal(r.out, '9 10', r.err);
+});
+
+test('大截图转 JPEG 上传，但**分辨率绝不变**——坐标必须仍对应原图', async (t) => {
+  // 国内机器把 3.5MB 的 PNG（base64 后 4.7MB）传到境外会 write timeout（M1 实测）。
+  // 转 JPEG 是为了传得动；一旦顺手缩放，模型给的像素坐标就整体错位，
+  // 而这种错位不报错，只会让点击悄悄点偏——比传不上去更危险。
+  const api = await startFakeModel("Action: click(start_box='<|box_start|>(11,12)<|box_end|>')");
+  t.after(() => api.close());
+  const dir = mkdtempSync(join(tmpdir(), 'locate-big-'));
+  const shot = join(dir, 'big.png');
+  const py = "import random,sys\nfrom PIL import Image\nim=Image.new('RGB',(1200,2664))\npx=im.load()\nrandom.seed(1)\nfor y in range(0,2664,2):\n for x in range(0,1200,2):\n  px[x,y]=(random.randint(0,255),random.randint(0,255),random.randint(0,255))\nim.save(sys.argv[1],format='PNG')";
+  await new Promise((res, rej) => {
+    const p = spawn('python3', ['-c', py, shot]);
+    p.on('close', (c) => (c === 0 ? res() : rej(new Error('造图失败，装了 Pillow 吗'))));
+  });
+  assert.ok(statSync(shot).size > 900_000, `测试素材没超过阈值: ${statSync(shot).size}`);
+
+  const r = await new Promise((resolve) => {
+    const p = spawn('python3', [SCRIPT, shot, 'x', '1199', '2663'], {
+      env: { ...process.env, LOCATE_ENDPOINT: api.url, OPENROUTER_API_KEY: 'k' },
+    });
+    let out = '', err = '';
+    p.stdout.on('data', (d) => { out += d; });
+    p.stderr.on('data', (d) => { err += d; });
+    p.on('close', (code) => resolve({ code, out: out.trim(), err: err.trim() }));
+  });
+  assert.equal(r.out, '11 12', r.err);
+
+  const url = api.requests[0].messages.find((m) => m.role === 'user')
+    .content.find((c) => c.type === 'image_url').image_url.url;
+  assert.match(url, /^data:image\/jpeg;base64,/, '超阈值的图没转成 JPEG，或 mime 没跟着改');
+
+  // 解码回来量分辨率：必须还是 1200x2664
+  const b64 = url.split(',')[1];
+  const dims = await new Promise((resolve) => {
+    const p = spawn('python3', ['-c',
+      "import base64,io,sys\nfrom PIL import Image\nprint(*Image.open(io.BytesIO(base64.b64decode(sys.stdin.read()))).size)"]);
+    let o = '';
+    p.stdout.on('data', (d) => { o += d; });
+    p.on('close', () => resolve(o.trim()));
+    p.stdin.end(b64);
+  });
+  assert.equal(dims, '1200 2664', `分辨率被改了：${dims} —— 坐标会整体错位`);
 });
