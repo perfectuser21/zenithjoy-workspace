@@ -1703,6 +1703,41 @@ for (const behavior of ["'/collect/cancel'", 'DEVICE_CANCEL_COOLDOWN', 'CANCEL_N
 NODE
 ok "Step 32 ✅ Path2 不可逆取消入口、稳定设备冷却与回执闸已接入"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 33：取完作品链接后必须验真回到视频详情页（step3「Lead 表出现潜在客户」的命门）
+#
+# 0921 夜批 auto09212230 整批 0 LEAD 的根因回流：current_video_link 用 deep link
+# 重开视频后，收尾守卫只验包名。deep link 没生效时人还停在暂存解析页——它同样是
+# 抖音包名，守卫放行 → 调用方以为已回到视频页 → 此后每个视频的 tap 坐标都打在错
+# 页面上 → 评论采不到 → Lead 表空。
+#
+# 这里不跑真机（本段是服务端 smoke），锁的是三件不能再退回去的事。
+node - <<'NODE' || fail "Step 33 取链接后的详情页恢复守卫缺失/退化" 33
+const fs = require('fs');
+const ctl = fs.readFileSync('services/phone-adb-controller/douyin-phone-adb', 'utf8');
+
+// ① 判定函数在，且用的是「分享按钮存在且可点」这把尺子（入口 _on_video_detail 同款）
+const fn = ctl.slice(ctl.indexOf('_is_video_detail_xml() {'));
+if (!fn.includes('content-desc="分享')) process.exit(1);
+if (!fn.includes("clickable=")) process.exit(1);
+
+// ② deep link 恢复段真的调了它，且没过就 die —— 本 bug 的形状正是「判定在、出口没用」
+const vs = ctl.indexOf('if [[ "$content_type" == "video" ]]; then');
+const branch = ctl.slice(vs, ctl.indexOf('\n  else\n', vs));
+if (!/_is_video_detail_xml/.test(branch)) process.exit(1);
+if (!/die .*did not restore/.test(branch)) process.exit(1);
+
+// ③ 正常详情页的真机 fixture 必须含 et_search_kw。
+//    这条锁的是当时自己踩的坑：第一版拿「顶部有搜索框」当否决条件，自造用例全绿，
+//    真机一回放才发现从搜索结果进入的详情页顶部本来就有搜索框——那样会把每个正常
+//    视频都判死，比原 bug 更糟。fixture 里没有这个反例，这条判据就无人看守了。
+const detail = fs.readFileSync(
+  'services/phone-adb-controller/__tests__/fixtures/video-detail-from-search.xml', 'utf8');
+if (!detail.includes('et_search_kw')) process.exit(1);
+if (!detail.includes('content-desc="分享')) process.exit(1);
+NODE
+ok "Step 33 ✅ 取链接后的详情页恢复守卫在位（判据=分享按钮，出口真的验、没过就 die）"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S5B_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" \
       "$S22_TMP" "$S23A_TMP" "$S23A_COOKIES" "$S23B_TMP" "$S24_TMP" \
