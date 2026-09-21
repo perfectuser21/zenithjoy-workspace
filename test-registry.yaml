@@ -999,6 +999,30 @@ tests:
     product: 批量混剪
     note: "批量混剪 S4（GP f6f96e17）高清成片合成的 ffmpeg 编排层：真调 ffmpeg（testsrc/testsrc2 合成源现场生成，同 video-frame-extract.test.ts 口径）。覆盖多段不同分辨率素材统一缩放到 1920x1080+时长为各段之和、单段素材边界情况、空输入/输入文件不存在均返回 false 不抛异常。"
 
+  - id: mashup-render-ffmpeg-audio
+    path: apps/api/src/services/__tests__/mashup-render-ffmpeg-audio.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "配音字幕刀（GP line05/batch_mashup#step4）：renderMashupWithAudio 单测，mock spawnSync/fs.existsSync（不真跑二进制，本机 ffmpeg 无 libass/subtitles 滤镜真跑必炸）。覆盖横竖屏 width/height 可选、每段 durationSec 生成 trim+setpts 裁剪链、未指定 durationSec 向后兼容不裁剪、挂音轨(追加音频输入+map+aac)/未传保持 -an 无音轨、烧字幕(subtitles 滤镜+force_style 逗号转义避免被 filter_complex 误判为下一个滤镜)/未传不加滤镜、素材或 audioPath/srtPath 文件不存在返回 false、ffmpeg 非 0 状态码返回 false、preset/crf 透传。真实字幕烧录效果由 mashup-render-smoke.sh 的字节数静默失效守卫在容器里验证。"
+
+  - id: mashup-subtitle
+    path: apps/api/src/services/__tests__/mashup-subtitle.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "配音字幕刀（GP line05/batch_mashup#step4）：字级时间戳(words: {word,startMs,endMs}[]，对接 TTS 服务契约不改其签名) → srt 字幕文件。纯逻辑无 I/O。覆盖空数组返回空串、短句合成单行且首尾时间戳正确、按标点(。，！？；等)强制断句、单行超 15 汉字无标点时按长度上限强制断行且不跨词拆字(断行拼回与原文逐字一致)、srt 时间戳格式 HH:MM:SS,mmm、序号从 1 连续递增、writeSrtFile 落盘内容与 wordsToSrt 一致含空数组场景。"
+
+  - id: dockerfile-fonts
+    path: apps/api/src/services/__tests__/dockerfile-fonts.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 批量混剪
+    note: "回归测试(P0 issue 357861c4)：生产容器有 subtitles 滤镜但没装字体，真机实测 fc-list|wc -l=0、Fontconfig error: Cannot load default config file，ffmpeg 退出码仍为 0/文件仍生成，只是字幕字节数与不烧字幕完全一致(静默失效)。断言 Dockerfile 生产阶段装了 fontconfig + fonts-* 中文字体包 + fc-cache 刷新缓存，防止再次漏装。容器实测已验证：修复前 fc-list=0/烧字幕字节数与不烧字幕相同，修复后 fc-list=9/字节数不同(7521 vs 7996)。"
+
   - id: mashup-render-service
     path: apps/api/src/services/__tests__/mashup-render.test.ts
     type: unit

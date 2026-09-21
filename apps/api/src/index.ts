@@ -10,7 +10,7 @@ import { startWorkerLeaseSweeper } from './services/worker-lease-sweeper';
 import { startNotionOrchestrator } from './services/notion-orchestrator';
 import { startFeishuOrchestrator } from './services/feishu-orchestrator';
 import { startPublishRollup } from './services/publish-rollup';
-import { runStartupConfigCheck, runStartupBinaryCheck } from './startup-check';
+import { runStartupConfigCheck, runStartupBinaryCheck, runStartupFontCheck } from './startup-check';
 import { assertStaffDirectoryOnStartup } from './staff-directory';
 import { assertSingleOrgMembership } from './startup/single-org-selfcheck';
 import pool from './db/connection';
@@ -24,6 +24,11 @@ runStartupConfigCheck();
 // 启动早期自检关键运行时二进制（哨兵扩展）：缺可执行文件同样大声打红日志但不崩进程。
 // 治根 2026-09-19 生产/staging 镜像漏 ffmpeg → 批量混剪渲染静默 fail-closed。
 runStartupBinaryCheck();
+
+// 启动早期自检字体注册数量（同一道闸的扩展）：0 条字体大声打红日志但不崩进程。
+// 治根 P0 issue 357861c4——生产容器有 subtitles 滤镜但没有字体，ffmpeg 烧字幕
+// 退出码仍为 0、文件仍生成，只是字幕没画上（静默失效）。
+runStartupFontCheck();
 
 // 进程级安全网：单个路由的未捕获 Promise rejection（Node 15+ 默认行为）会杀死整个进程，
 // 拖垮同机所有其它无关请求/CI smoke（2026-07-09 PR#1207 实测：cookie-health 一次未捕获异常
