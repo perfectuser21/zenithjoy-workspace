@@ -1,6 +1,3 @@
-contract_branch: cp-harness-propose-r1-36dfcb8e-r4d26d994-a7
-sprint_dir: sprints/09201034-batch-mashup-script-preview-candidates
-
 ---
 skeleton: false
 journey_type: user_facing

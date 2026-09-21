@@ -104,6 +104,20 @@ CAND_COUNT=$(node -e "console.log(JSON.parse(process.argv[1]).candidates.length)
 [ "$CAND_COUNT" -ge 1 ] || fail "期望至少 1 条候选，实际 $CAND_COUNT"
 ok "候选已生成 $CAND_COUNT 条"
 
+# 加厚回流（GP line05/batch_mashup step3 懒渲染）：generatedCount + 生成期恒 pending + 缩略图列。
+GEN_COUNT=$(node -e "console.log(JSON.parse(process.argv[1]).generatedCount)" "$RESULT")
+node -e "process.exit(Number.isFinite(Number(process.argv[1])) ? 0 : 1)" "$GEN_COUNT" \
+  || fail "generatedCount 非数字（懒渲染结果形状回退）"
+ok "generatedCount 回流=$GEN_COUNT"
+
+ALL_PENDING=$(node -e "const r=JSON.parse(process.argv[1]); console.log(r.candidates.every((c)=>c.renderStatus==='pending' && ('thumbnailUrl' in c))?'yes':'no')" "$RESULT")
+[ "$ALL_PENDING" = "yes" ] || fail "懒渲染失效：生成期候选存在非 pending 或缺 thumbnailUrl 字段"
+ok "懒渲染：生成期所有候选 render_status=pending 且带 thumbnailUrl 字段"
+
+DB_PENDING=$(psql_q "SELECT count(*) FROM zenithjoy.mashup_candidates WHERE run_id = '$RUN_ID' AND render_status = 'pending'")
+[ "$DB_PENDING" -ge 1 ] || fail "DB 无 pending 候选（懒渲染 render_status/thumbnail_url 落库缺失）"
+ok "DB render_status=pending 落库 $DB_PENDING 条（thumbnail_url 列就绪）"
+
 DB_CAND_COUNT=$(psql_q "SELECT count(*) FROM zenithjoy.mashup_candidates WHERE run_id = '$RUN_ID'")
 [ "$DB_CAND_COUNT" = "$CAND_COUNT" ] || fail "DB 落库候选数($DB_CAND_COUNT)与返回数($CAND_COUNT)不一致"
 ok "DB mashup_candidates 已真的落库 $DB_CAND_COUNT 条"

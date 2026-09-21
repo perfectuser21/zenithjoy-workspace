@@ -45,6 +45,10 @@ const DEFAULT_PAGE_SIZE = 30;
  */
 const MAX_PAGE_SIZE = 100;
 
+/** 素材在线预览签名 URL 有效期（秒）。与 material-storage 默认 TTL 对齐（1 小时），
+ *  就地定义避免依赖 storage 模块的具名导出（预览路径下 storage 常被整体桩掉）。 */
+const PREVIEW_URL_TTL_SECONDS = 3600;
+
 /** 列表查询从库里取出的形状。storage_key 只在服务端用来签 URL，不外发。 */
 interface MaterialRow {
   id: string;
@@ -199,6 +203,62 @@ export function createMaterialsRouter(deps: MaterialsRouterDeps = {}): Router {
     return res.status(200).json({
       success: true,
       data: { items, limit, offset, count: items.length },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ── GET /:id/preview：素材在线预览重签（Step2 GP line05/batch_mashup）──────
+  //
+  // 素材卡片要在线播放，前端需要一个可直接喂给 <video> 的临时 URL。复用
+  // storage.getSignedUrl 重签；签不出（storage_key 失效/损坏）→ previewUrl:null +
+  // previewAvailable:false（前端标「预览不可用」，不阻断选择）。租户隔离：素材不
+  // 属于当前租户 → 404（INV-1，不回 403 免得白送探测面）。expiresAt 供前端过期重签。
+  router.get('/:id/preview', async (req: Request, res: Response) => {
+    const auth = await authenticate(req, res);
+    if (!auth) return;
+    const { tenantId } = auth;
+
+    const rawId = req.params?.id;
+    const id = typeof rawId === 'string' ? rawId : '';
+    if (!UUID_RE.test(id)) {
+      // 非 UUID 一律当「查不到」，语义与租户隔离一致，不泄露 id 是否存在。
+      return fail(res, 404, 'MATERIAL_NOT_FOUND', '素材不存在或不属于当前租户');
+    }
+
+    let material: { id: string; storage_key: string; mime_type: string | null } | undefined;
+    try {
+      const q = await pool.query<{ id: string; storage_key: string; mime_type: string | null }>(
+        `SELECT id, storage_key, mime_type FROM zenithjoy.materials WHERE id = $1 AND tenant_id = $2`,
+        [id, tenantId],
+      );
+      material = q.rows[0];
+    } catch (err) {
+      return fail(res, 500, 'PREVIEW_FAILED', err instanceof Error ? err.message : 'unknown');
+    }
+    if (!material) {
+      return fail(res, 404, 'MATERIAL_NOT_FOUND', '素材不存在或不属于当前租户');
+    }
+
+    let previewUrl: string | null = null;
+    try {
+      previewUrl = await storage.getSignedUrl(material.storage_key);
+    } catch (err) {
+      console.warn('[materials/preview] 重签失败，previewAvailable=false:', material.id, err);
+      previewUrl = null;
+    }
+    const isPlayableVideo = typeof material.mime_type === 'string' && material.mime_type.startsWith('video/');
+    const previewAvailable = previewUrl !== null && isPlayableVideo;
+    const expiresAt = new Date(Date.now() + PREVIEW_URL_TTL_SECONDS * 1000).toISOString();
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        materialId: material.id,
+        previewUrl,
+        previewAvailable,
+        expiresAt,
+      },
+      error: null,
       timestamp: new Date().toISOString(),
     });
   });
