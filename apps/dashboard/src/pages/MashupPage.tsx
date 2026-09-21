@@ -16,17 +16,21 @@ import { listMaterials, formatSize, type Material } from '../api/materials.api';
 import {
   listTemplates,
   createRun,
+  getRun,
   generateCandidates,
+  listCandidates,
   selectCandidate,
   renderCandidate,
   previewCandidate,
   getCandidateDetail,
+  listRuns,
   type MashupRun,
   type CandidatesResult,
   type RenderResult,
   type SlotAssignmentStatus,
   type PreviewStatus,
   type MashupRunSummary,
+  type CandidateDetail,
 } from '../api/mashup.api';
 
 /** 轮询候选详情直到（渲染或预览）落终态，或超过最大次数放弃（避免网络异常时无限空转）。 */
@@ -45,7 +49,7 @@ async function pollCandidateUntil(
 
 type TaggedMaterial = Material & { tag_status?: string; ai_tags?: string[] };
 
-type Step = 'pick' | 'assigned' | 'candidates' | 'result';
+type Step = 'pick' | 'assigned' | 'candidates' | 'result' | 'history';
 
 const SLOT_LABEL: Record<string, string> = {
   hook: '钩子', product: '产品', evidence: '证据', cta: '行动号召',
@@ -71,6 +75,7 @@ function extractErrorMessage(err: unknown, fallback: string): string {
 }
 
 function StepBar({ step }: { step: Step }) {
+  if (step === 'history') return null;
   const steps: { key: Step; label: string }[] = [
     { key: 'pick', label: '① 选素材' },
     { key: 'assigned', label: '② 槽位分配' },
@@ -208,6 +213,27 @@ export default function MashupPage() {
     qc.invalidateQueries({ queryKey: ['materials', 'mashup-pick'] });
   }
 
+  const runsQuery = useQuery({
+    queryKey: ['mashup', 'runs'],
+    queryFn: () => listRuns({ limit: 50 }),
+    enabled: step === 'history',
+    staleTime: 30 * 1000,
+  });
+
+  const openHistoryMutation = useMutation({
+    mutationFn: (summary: MashupRunSummary) =>
+      resolveHistoryTarget(summary, { getRun, listCandidates, getCandidateDetail, generateCandidates }),
+    onSuccess: (target) => {
+      if (target.run) setRun(target.run);
+      if (target.candidates) setCandidates(target.candidates);
+      if (target.renderResult) setRenderResult(target.renderResult);
+      if (target.selectedCandidateId !== undefined) setSelectedCandidateId(target.selectedCandidateId);
+      setErrorMsg(null);
+      setStep(target.step);
+    },
+    onError: (e) => setErrorMsg(extractErrorMessage(e, '打开历史记录失败')),
+  });
+
   return (
     <div className="p-4 sm:p-6">
       <div className="mb-4 flex items-center justify-between">
@@ -231,6 +257,32 @@ export default function MashupPage() {
 
       {errorMsg ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMsg}</div>
+      ) : null}
+
+      <div className="mb-4 flex gap-2">
+        <button
+          type="button"
+          onClick={() => { resetAll(); setStep('pick'); }}
+          className={`rounded-md px-3 py-1.5 text-sm ${step === 'history' ? 'text-gray-600 hover:bg-gray-100' : 'bg-blue-600 text-white'}`}
+        >
+          新建
+        </button>
+        <button
+          type="button"
+          onClick={() => setStep('history')}
+          className={`rounded-md px-3 py-1.5 text-sm ${step === 'history' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+        >
+          历史记录
+        </button>
+      </div>
+
+      {step === 'history' ? (
+        <HistoryStep
+          runs={runsQuery.data?.items ?? []}
+          loading={runsQuery.isLoading || openHistoryMutation.isPending}
+          onOpen={(r) => openHistoryMutation.mutate(r)}
+          onNew={() => { resetAll(); setStep('pick'); }}
+        />
       ) : null}
 
       {step === 'pick' ? (
@@ -546,6 +598,56 @@ export function ResultStep({ result, onBack }: { result: RenderResult; onBack: (
 }
 
 // ============ 历史记录 ============
+
+/** 恢复历史 run 时要调的接口集合。显式传入而不是直接 import，便于单测锁"没调生成接口"。 */
+export interface HistoryDeps {
+  getRun: (runId: string) => Promise<MashupRun>;
+  listCandidates: (runId: string) => Promise<CandidatesResult>;
+  getCandidateDetail: (candidateId: string) => Promise<CandidateDetail>;
+  generateCandidates: (runId: string, targetCount?: number) => Promise<CandidatesResult>;
+}
+
+export interface HistoryTarget {
+  step: Step;
+  run?: MashupRun;
+  candidates?: CandidatesResult;
+  renderResult?: RenderResult;
+  selectedCandidateId?: string | null;
+}
+
+/**
+ * 历史记录点进去落到哪一步。
+ *
+ * 要害在候选态走 listCandidates（GET）而不是 generateCandidates（POST）——客户
+ * 等的就是不用重算向量、不用重拼缩略图。deps 显式传进来，测试才能断言
+ * "生成接口一次都没被调用"。
+ */
+export async function resolveHistoryTarget(
+  summary: MashupRunSummary,
+  deps: HistoryDeps,
+): Promise<HistoryTarget> {
+  if (summary.selectedCandidateId) {
+    const detail = await deps.getCandidateDetail(summary.selectedCandidateId);
+    return {
+      step: 'result',
+      selectedCandidateId: summary.selectedCandidateId,
+      // 落 render_failed 但还没写 contents 行——按未通过口径呈现，与
+      // selectAndRenderMutation 同口径，不裸崩。
+      renderResult: detail.content ?? {
+        contentId: '',
+        safetyCheckStatus: 'failed_pending_review',
+        watermarkCheckStatus: 'failed_pending_review',
+      },
+    };
+  }
+
+  const run = await deps.getRun(summary.runId);
+  if (summary.candidateCount > 0) {
+    const candidates = await deps.listCandidates(summary.runId);
+    return { step: 'candidates', run, candidates };
+  }
+  return { step: 'assigned', run };
+}
 
 const STAGE_LABEL: Record<MashupRunSummary['stage'], string> = {
   completed: '已完成',
