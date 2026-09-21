@@ -154,10 +154,10 @@ Promise.all(ps)
 echo "  返回: $QUEUE_OUT"
 RAN=$(node -e "process.stdout.write(String(JSON.parse(process.argv[1]).ran))" "$QUEUE_OUT")
 PEAK=$(node -e "process.stdout.write(String(JSON.parse(process.argv[1]).peak))" "$QUEUE_OUT")
-[ "$RAN" -ge 5 ] || fail "排队器没把 5 条都跑掉，ran=$RAN（链路又断了）"
-ok "排队器真的执行了 $RAN 条打标签任务"
-[ "$PEAK" -le 2 ] || fail "并发峰值 $PEAK 超过上限 2——会打爆 ToAPIs 网关（已有 520 事故前科）"
-ok "并发峰值 $PEAK ≤ 2，不会打爆网关"
+[ "$RAN" -ge 5 ] || fail "排队器没把 5 条都跑掉，ran=${RAN}（链路又断了）"
+ok "排队器真的执行了 ${RAN} 条打标签任务"
+[ "$PEAK" -le 2 ] || fail "并发峰值 ${PEAK} 超过上限 2——会打爆 ToAPIs 网关（已有 520 事故前科）"
+ok "并发峰值 ${PEAK} ≤ 2，不会打爆网关"
 ok "打标签抛错未冒泡，进程存活（上传接口不会被带崩）"
 
 echo "✅ material-tagging smoke 全部通过"
