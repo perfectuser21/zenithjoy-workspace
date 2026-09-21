@@ -89,7 +89,7 @@ scheduleRouter.get('/', rateLimit, async (req: Request, res: Response) => {
       as_of: nowIso, stale: true, mock: false,
       stale_reason: '未配置 Brain 库连接（BRAIN_DATABASE_HOST）',
       devices: agents.map((a) => ({
-        agent_id: a.id, name: a.nickname ?? a.agent_id, serial: a.agent_id,
+        agent_id: a.id, name: a.nickname ?? a.agent_id, serial: toDeviceSerial(a.agent_id),
         online: isOnline(a.last_seen), depts: [], quotas: [], slots: [],
       })),
     }));
@@ -135,7 +135,9 @@ scheduleRouter.get('/', rateLimit, async (req: Request, res: Response) => {
     return {
       agent_id: a.id,
       name: a.nickname ?? a.agent_id,
-      serial: a.agent_id,
+      // 读面吐给页面的也必须是裸序列号：页面会拿它往下传，带着 phone- 前缀
+      // 工作机认不出（生产实证：单 03aa758d "unknown phone profile: phone-…"）
+      serial: toDeviceSerial(a.agent_id),
       online: isOnline(a.last_seen),
       depts,
       // 额度真身仍在 Mac 本地（dm-count-*.txt），未上移前这里显式给空，

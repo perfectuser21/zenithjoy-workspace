@@ -92,6 +92,19 @@ describe('读面：读不到 ≠ 今天没活', () => {
     expect(r.body.data.devices[0].quotas_stale).toBe(true);
   });
 
+  it('读面吐给页面的 serial 必须是裸序列号——页面会拿它往下传到真机', async () => {
+    // 生产事故：读面返回 phone-<序列号>，页面原样当 profile 传下去，
+    // 工作机报 "unknown phone profile: phone-…" rc=2（单 03aa758d）。
+    const r = await request(app).get('/api/schedule').set('x-feishu-user-id', 'tenant-1');
+    expect(r.body.data.devices[0].serial).toBe('ANGYVB4227006983');
+  });
+
+  it('Brain 不可用的降级分支里，serial 同样是裸值（两条出口不能只修一条）', async () => {
+    brainAvailable = false;
+    const r = await request(app).get('/api/schedule').set('x-feishu-user-id', 'tenant-1');
+    expect(r.body.data.devices[0].serial).toBe('ANGYVB4227006983');
+  });
+
   it('取数按本租户 agent id 收窄（Brain 表无租户维度，必须中台自己拦）', async () => {
     await request(app).get('/api/schedule').set('x-feishu-user-id', 'tenant-1');
     const [sql, params] = brainQuery.mock.calls[0];
