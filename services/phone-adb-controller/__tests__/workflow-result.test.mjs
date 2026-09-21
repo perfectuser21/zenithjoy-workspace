@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, readFileSync, readdirSync, existsSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -86,4 +86,41 @@ test("finalize: 写 cleanup；工件数==已记账阶段数 → OK=1", { skip: !
   const f = wfr(d, { ...i.kv, ...e.kv }, "finalize");
   assert.equal(f.kv.WFR_FINALIZE_OK, "1");
   assert.ok(artifacts(i.kv).some((x) => x.includes(".cleanup.1.")));
+});
+
+test("finalize: 记账阶段多于工件时 OK=0", { skip: !JQ && "no jq" }, () => {
+  const d = mkdtempSync(join(tmpdir(), "wfr-"));
+  const i = wfr(d, {}, "init", "t5", "p1", words(d, ["A"]), "0", "S", "h");
+  const e = wfr(d, i.kv, "enter");
+  const s = wfr(d, { ...i.kv, ...e.kv }, "stage", "discovery", "completed", "1", "word A ok",
+    '[{"type":"log","ref":"night.log"}]', '{"candidates":3,"keywords_processed":1,"screens_scanned":0}', "A");
+  assert.equal(s.code, 0);
+  const discoveryFile = join(i.kv.WFR_ART_DIR, "social-keyword-leadgen-crontab-t5__a1.discovery.1.worker-result.json");
+  assert.ok(existsSync(discoveryFile));
+  rmSync(discoveryFile);
+  const f = wfr(d, { ...i.kv, ...e.kv }, "finalize");
+  assert.equal(f.kv.WFR_FINALIZE_OK, "0");
+  assert.match(f.kv.WFR_FINALIZE_MSG, /artifact_count_mismatch/);
+});
+
+test("stage/enter/finalize 未 init 裸调 → exit 0 且 stderr 有 WFR_WARN", { skip: !JQ && "no jq" }, () => {
+  const d = mkdtempSync(join(tmpdir(), "wfr-"));
+  const s = wfr(d, {}, "stage", "discovery", "completed", "1", "x",
+    '[{"type":"x"}]', '{"candidates":1,"keywords_processed":1,"screens_scanned":0}');
+  assert.equal(s.code, 0); assert.match(s.err, /WFR_WARN/);
+  const e = wfr(d, {}, "enter");
+  assert.equal(e.code, 0); assert.match(e.err, /WFR_WARN/);
+  const f = wfr(d, {}, "finalize");
+  assert.equal(f.code, 0); assert.match(f.err, /WFR_WARN/);
+  assert.equal(f.kv.WFR_FINALIZE_OK, "0");
+});
+
+test("stage: metrics 含闭集外的键 → 不落文件、exit 0、WFR_WARN", { skip: !JQ && "no jq" }, () => {
+  const d = mkdtempSync(join(tmpdir(), "wfr-"));
+  const i = wfr(d, {}, "init", "t6", "p1", words(d, ["A"]), "0", "S", "h");
+  const e = wfr(d, i.kv, "enter");
+  const s = wfr(d, { ...i.kv, ...e.kv }, "stage", "discovery", "completed", "1", "x",
+    '[{"type":"log","ref":"night.log"}]', '{"candidates":1,"keywords_processed":1,"screens_scanned":0,"bogus":1}', "A");
+  assert.equal(s.code, 0); assert.match(s.err, /WFR_WARN/);
+  assert.ok(!existsSync(join(i.kv.WFR_ART_DIR, "social-keyword-leadgen-crontab-t6__a1.discovery.1.worker-result.json")));
 });
