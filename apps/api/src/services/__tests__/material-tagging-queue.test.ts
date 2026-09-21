@@ -11,6 +11,9 @@
  *   ③ 即使传入的 tagMaterial 同步抛错，enqueueTagging 调用本身也不同步抛出。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+// 只引类型：import type 在编译期擦除，不会破坏下面 vi.resetModules() + 动态 import 的隔离
+import type { MaterialStorage } from '../material-storage';
+import type { TagMaterialFn } from '../material-tagging-queue';
 
 function deferred<T>() {
   let resolve!: (v: T) => void;
@@ -18,7 +21,15 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-const fakeStorage = { getSignedUrl: vi.fn(), putObject: vi.fn(), deleteObject: vi.fn(), presignPutUrl: vi.fn(), headObject: vi.fn() } as any;
+// 用 MaterialStorage 而不是 any：eslint 的 no-explicit-any 是棘轮闸（--max-warnings 40，
+// 只许降不许升），测试文件图省事写 any 会把额度吃掉，逼后来的人去动别人的文件。
+const fakeStorage: MaterialStorage = {
+  getSignedUrl: vi.fn(),
+  putObject: vi.fn(),
+  deleteObject: vi.fn(),
+  presignPut: vi.fn(),
+  headObject: vi.fn(),
+};
 
 beforeEach(() => {
   vi.resetModules();
@@ -96,6 +107,6 @@ describe('material-tagging-queue 并发控制', () => {
       throw new Error('同步炸了');
     });
 
-    expect(() => enqueueTagging('mat-sync-throw', { storage: fakeStorage, tagMaterial: throwingTagMaterial as any })).not.toThrow();
+    expect(() => enqueueTagging('mat-sync-throw', { storage: fakeStorage, tagMaterial: throwingTagMaterial as unknown as TagMaterialFn })).not.toThrow();
   });
 });

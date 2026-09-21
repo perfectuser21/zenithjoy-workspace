@@ -123,4 +123,41 @@ echo "  返回: $RESULT2"
 grep -q '"reason":"frame_extraction_failed"' <<< "$RESULT2" || fail "期望 reason=frame_extraction_failed，实际 $RESULT2"
 ok "抽帧失败路径落 failed_pending_review(frame_extraction_failed)"
 
+echo "== 4. 排队器：上传后自动触发这条链（2026-09-21 新接，此前 tagMaterial 全仓无人调用）=="
+# 守的是真实事故：tagMaterial 早就写好了，但没有任何地方调用它，素材传上去永远停在
+# pending，而选素材页/候选生成只认 tagged —— 整条混剪链对客户完全不可用，客户实际
+# 撞到了才暴露。这一步锁三件事：排队器真的会跑 tagMaterial、并发不超上限、
+# 打标签抛错绝不冒泡（否则会把上传接口一起带崩）。
+psql "$PGURL" -q -c "UPDATE zenithjoy.materials SET tag_status='pending' WHERE id='$MATERIAL_ID'" >/dev/null
+QUEUE_OUT=$(node -e "
+const { enqueueTagging } = require('./apps/api/dist/services/material-tagging-queue.js');
+const pool = require('./apps/api/dist/db/connection.js').default;
+let running = 0, peak = 0, ran = 0;
+const fakeTag = async () => {
+  running++; peak = Math.max(peak, running); ran++;
+  await new Promise((r) => setTimeout(r, 40));
+  running--;
+  return { status: 'tagged', reason: null };
+};
+const boom = async () => { throw new Error('打标签炸了'); };
+// 5 条并发入队 + 1 条必炸：进程不能崩，peak 不能超 2
+const ps = [];
+for (let i = 0; i < 5; i++) ps.push(enqueueTagging('m' + i, { storage: {}, tagMaterial: fakeTag }));
+ps.push(enqueueTagging('m-boom', { storage: {}, tagMaterial: boom }));
+// enqueueTagging 自己返回 Promise 且保证不 reject（失败只吞进日志），等它们比定时猜准
+Promise.all(ps)
+  .then(() => { console.log('QUEUE_JSON:' + JSON.stringify({ ran, peak })); })
+  .catch((e) => { console.error('enqueueTagging 竟然 reject 了（不该发生）: ' + e.message); process.exitCode = 1; })
+  .finally(() => pool.end());
+" | grep '^QUEUE_JSON:' | sed 's/^QUEUE_JSON://') || fail "排队器调用失败（进程被未捕获异常带崩？这正是要守的）"
+[ -n "$QUEUE_OUT" ] || fail "未取得排队器结果——很可能是打标签抛错冒泡把进程干掉了"
+echo "  返回: $QUEUE_OUT"
+RAN=$(node -e "process.stdout.write(String(JSON.parse(process.argv[1]).ran))" "$QUEUE_OUT")
+PEAK=$(node -e "process.stdout.write(String(JSON.parse(process.argv[1]).peak))" "$QUEUE_OUT")
+[ "$RAN" -ge 5 ] || fail "排队器没把 5 条都跑掉，ran=$RAN（链路又断了）"
+ok "排队器真的执行了 $RAN 条打标签任务"
+[ "$PEAK" -le 2 ] || fail "并发峰值 $PEAK 超过上限 2——会打爆 ToAPIs 网关（已有 520 事故前科）"
+ok "并发峰值 $PEAK ≤ 2，不会打爆网关"
+ok "打标签抛错未冒泡，进程存活（上传接口不会被带崩）"
+
 echo "✅ material-tagging smoke 全部通过"
