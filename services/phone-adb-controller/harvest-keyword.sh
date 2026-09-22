@@ -69,16 +69,77 @@ for CARDLINE in "${(f)CARDS}"; do
     $C --profile "$P" back-to-results >/dev/null 2>&1 || true
     continue
   fi
-  if ! $C --profile "$P" open-comments "$TAG-v$i-oc" >/dev/null 2>&1; then
+  OCOUT="$($C --profile "$P" open-comments "$TAG-v$i-oc" </dev/null 2>/dev/null || true)"
+  if ! print -- "$OCOUT" | grep -q "^comments_opened=1"; then
     log "  评论区打不开,3秒后重试1次"
     /bin/sleep 3
-    if ! $C --profile "$P" open-comments "$TAG-v$i-oc2" >/dev/null 2>&1; then
+    OCOUT="$($C --profile "$P" open-comments "$TAG-v$i-oc2" </dev/null 2>/dev/null || true)"
+    if ! print -- "$OCOUT" | grep -q "^comments_opened=1"; then
       log "  评论区重试仍打不开,跳过"
       $C --profile "$P" back-to-results >/dev/null 2>&1 || true
       continue
     fi
   fi
-  CC="$($C --profile "$P" collect-comments "$TAG-v$i-cc" 2>/dev/null | grep -E "	tap=" || true)"
+  # 0922拍板"大户分级": comment_count 是 open-comments 免费吐出来的字段(如"评论1.2万"),
+  # 之前这里直接把 open-comments 的输出丢进 /dev/null,没人读过这个字段。
+  # 形态可能是纯数字(158)、带"万"(1.2万)、或没有评论按钮时的 unknown——都要能处理。
+  CCOUNT_RAW="$(print -- "$OCOUT" | sed -n "s/^comment_count=//p")"
+  if [[ "$CCOUNT_RAW" == *万* ]]; then
+    CCOUNT_NUM="$(( int(${CCOUNT_RAW%万} * 10000) ))"
+  elif [[ "$CCOUNT_RAW" == <-> ]]; then
+    CCOUNT_NUM="$CCOUNT_RAW"
+  else
+    CCOUNT_NUM=0  # unknown/解析不出来时按"不是大户"处理,走medium档,不因为没读到数字就不采
+  fi
+  # 大户分级(跟comment-tier-lib.js的commentTier保持同一套阈值,来源同一次0922拍板):
+  #   ≤10条 small:一屏基本够,不特殊处理(下面循环第一轮读完exhausted多半就是true了)
+  #   10-100条 medium:翻屏抓到exhausted为止,不封顶
+  #   >100条 large(大户):标记,翻屏抓到封顶条数或exhausted两者先到为止,不追求抓完
+  LARGE_CAP=50
+  if (( CCOUNT_NUM > 100 )); then
+    TIER="large"; log "  评论数=$CCOUNT_RAW(判定大户,封顶抓${LARGE_CAP}条)"
+  elif (( CCOUNT_NUM > 10 )); then
+    TIER="medium"
+  else
+    TIER="small"
+  fi
+
+  # 翻屏累积:每屏读到的评论用"昵称|抖音号前缀|正文前20字"这个近似key去重(评论者身份
+  # 要等commenter-identity才拿得到,这里只能先用"评论正文行本身"整行去重防止原地重复读
+  # 同一屏——真正的昵称+抖音号精确去重key在下面逐条处理commenter-identity之后再算一次,
+  # 跟push-raw-comments.js现有rid逻辑对齐,两层去重不冲突)。
+  typeset -A SEEN_LINES
+  CC=""
+  EMPTY_ROUNDS=0
+  SCREEN=0
+  while true; do
+    SCREEN=$((SCREEN+1))
+    RAW="$($C --profile "$P" collect-comments "$TAG-v$i-cc$SCREEN" 2>/dev/null || true)"
+    EXHAUSTED=0
+    print -- "$RAW" | grep -q "^exhausted=1" && EXHAUSTED=1
+    NEWLINES=""
+    while IFS= read -r LN; do
+      [[ "$LN" == *"	tap="* ]] || continue
+      if [[ -z "${SEEN_LINES[$LN]:-}" ]]; then
+        SEEN_LINES[$LN]=1
+        NEWLINES="$NEWLINES$LN"$'\n'
+        CC="$CC$LN"$'\n'
+      fi
+    done <<< "$RAW"
+    NEWCOUNT=$(print -- "$NEWLINES" | grep -c "	tap=" || true)
+    if (( NEWCOUNT == 0 )); then EMPTY_ROUNDS=$((EMPTY_ROUNDS+1)); else EMPTY_ROUNDS=0; fi
+    TOTAL=$(print -- "$CC" | grep -c "	tap=" || true)
+    log "  第${SCREEN}屏: 新增${NEWCOUNT}条 累计${TOTAL}条 exhausted=$EXHAUSTED"
+    # 停止条件(跟comment-tier-lib.js的shouldKeepScrolling同一套判据):
+    #   真到底了 / 大户已攒够封顶数 / 连续2屏没有新增(可能卡住了,防死循环) → 停
+    if (( EXHAUSTED == 1 )); then break; fi
+    if [[ "$TIER" == "large" ]] && (( TOTAL >= LARGE_CAP )); then log "  大户已达封顶${LARGE_CAP}条,停止翻屏"; break; fi
+    if (( EMPTY_ROUNDS >= 2 )); then log "  连续2屏无新增,停止翻屏(防卡死)"; break; fi
+    $C --profile "$P" swipe 600 2000 600 900 400 </dev/null >/dev/null 2>&1
+    sleep 1.5
+  done
+  unset SEEN_LINES
+  CC="$(print -- "$CC" | grep -E "	tap=" || true)"
   if [[ -z "$CC" ]]; then
     log "  零评论"
     # 评论面板开着也不用先 back 一次再归位——back-to-results 自己退到看见结果页为止
