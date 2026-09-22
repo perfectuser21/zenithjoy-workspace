@@ -77,6 +77,16 @@ paymentCallbackRouter.post('/:provider', async (req: Request, res: Response) => 
       return;
     }
 
+    if (event.eventType === 'closed') {
+      // 交易关闭（超时未付/主动取消）：既非成功支付也非退款，审计已在上面 recordCallback
+      // 记过，这里不结算、不落 refund_pending，直接确认，避免平台无限重推。
+      console.info('[payment] 收到交易关闭回调，仅记审计不做资金动作', {
+        provider: providerName, out_trade_no: event.outTradeNo,
+      });
+      res.status(200).json({ code: 'SUCCESS' });
+      return;
+    }
+
     // 所有业务结论一律 200（含 credit_conflict / amount_mismatch / not_paid /
     // order_not_found）——见本 task 的 outcome→HTTP 映射表。只有抛异常才 5xx。
     const result = await settleOrder(event.outTradeNo, providerName);

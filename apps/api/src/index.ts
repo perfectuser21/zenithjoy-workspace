@@ -76,7 +76,9 @@ async function bootstrap(): Promise<void> {
     process.exit(1);
   }
 
-  // 积分充值真实支付 provider：缺凭据时不注册，不阻塞启动（getProvider 届时抛 UNKNOWN_PROVIDER）。
+  // 积分充值真实支付 provider：fail-open（C-1）——缺凭据时静默不注册；凭据齐了但加载
+  // 抛异常（证书路径拼错/私钥格式不对等配置错误）同样不注册，但会打红日志并记入
+  // getProviderInitErrors()（经 /health 暴露），两种情况都不阻塞启动、不拖垮进程。
   registerRealProvidersFromEnv();
 
   server.listen(PORT, () => {
@@ -107,4 +109,11 @@ async function bootstrap(): Promise<void> {
   });
 }
 
-void bootstrap();
+// C-1：bootstrap() 内部的支付 provider 加载已 fail-open（不会 reject）；这里补 .catch()
+// 兜底其它真实启动故障（员工目录/单组织自检以外的意外异常）——启动阶段的其它真实故障
+// 仍应让进程退出，但绝不能是因为支付凭据格式问题（那类异常已在 registerRealProvidersFromEnv
+// 内部捕获，不会传播到这里）。
+void bootstrap().catch((err) => {
+  console.error('🔴 [bootstrap] 启动失败，进程退出:', err);
+  process.exit(1);
+});

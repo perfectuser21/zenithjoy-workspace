@@ -85,6 +85,7 @@ import { skillDraftsRouter, skillDraftsInternalRouter } from './routes/skill-dra
 import { agentOfflineScanRouter } from './routes/agent-offline-scan';
 import { paymentCallbackRouter } from './routes/payment-callback';
 import { creditsOrdersRouter } from './routes/credits-orders';
+import { getProviderInitErrors } from './services/payment/provider-registry';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { simpleRateLimit, ipKeyFn } from './middleware/simple-rate-limit';
 import { verifyStartupConfig, verifyStartupBinaries } from './startup-check';
@@ -140,6 +141,9 @@ app.get('/health', simpleRateLimit({ windowMs: 60_000, max: 600, keyFn: ipKeyFn 
     timestamp: new Date().toISOString(),
     config: { ok: cfg.ok && bin.ok, missing: [...cfg.missing, ...bin.missing] },
     build: getBuildInfo(),
+    // C-1：支付 provider 启动加载错误（env 齐了但证书/私钥读取或解析失败）——
+    // 让"响亮报错"在日志之外也能被外部探测/告警看到，不是新端点，是既有字段旁加一个。
+    payment: { providerInitErrors: getProviderInitErrors() },
   });
 });
 
@@ -156,6 +160,7 @@ app.get('/api/health', simpleRateLimit({ windowMs: 60_000, max: 600, keyFn: ipKe
     timestamp: new Date().toISOString(),
     config: { ok: cfg.ok && bin.ok, missing: [...cfg.missing, ...bin.missing] },
     build: getBuildInfo(),
+    payment: { providerInitErrors: getProviderInitErrors() },
   });
 });
 

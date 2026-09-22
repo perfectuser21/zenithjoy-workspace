@@ -17,6 +17,11 @@ import {
 const WECHAT_API_BASE = 'https://api.mch.weixin.qq.com';
 /** 回调时间戳容忍窗，超出视为重放 */
 const TIMESTAMP_TOLERANCE_SEC = 300;
+/**
+ * 微信支付 APIv3 明确要求商户请求携带 User-Agent；Node 18+ 内置 fetch（undici）
+ * 默认不发 UA。签名完全正确的请求仍会被网关拒——自签自验测不出，真实对接才炸（I-2）。
+ */
+const USER_AGENT = 'ZenithJoy-Payment/1.0 (+https://github.com/perfectuser21/zenithjoy-workspace)';
 
 export interface WechatNativeConfig {
   mchId: string;
@@ -66,6 +71,7 @@ export class WechatNativeProvider implements PaymentProvider {
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
+        'User-Agent': USER_AGENT,
         Authorization: this.authorization('POST', urlPath, body),
       },
       body,
@@ -98,7 +104,10 @@ export class WechatNativeProvider implements PaymentProvider {
 
     const publicKey = this.cfg.platformPublicKeys[serial];
     if (!publicKey) {
-      throw new SignatureError(`未知平台证书序列号 ${serial}`);
+      // M-2：serial 是攻击者完全可控的 HTTP header，原样拼进错误消息是日志注入/
+      // 信息泄露面——只记长度与前 8 位（剥离非字母数字字符），不回显完整原始值。
+      const safePrefix = serial.replace(/[^A-Za-z0-9]/g, '').slice(0, 8);
+      throw new SignatureError(`未知平台证书序列号（长度=${serial.length}，前缀=${safePrefix}）`);
     }
 
     const message = `${timestamp}\n${nonce}\n${rawBody.toString('utf8')}\n`;
@@ -119,8 +128,27 @@ export class WechatNativeProvider implements PaymentProvider {
     return {
       outTradeNo: decrypted.out_trade_no,
       providerTransactionId: decrypted.transaction_id,
-      eventType: parsed.event_type === 'REFUND.SUCCESS' ? 'refunded' : 'paid',
+      eventType: this.mapEventType(parsed.event_type),
     };
+  }
+
+  /**
+   * I-4：event_type → CallbackEvent.eventType 映射。
+   * REFUND.ABNORMAL（退款异常，明确需要人工介入）此前被三元式静默归为 'paid'，
+   * 会走 settleOrder 而不是 markRefundPending——一个要求人工介入的事件被完全
+   * 静默、零告警。按前缀显式判定，异常/关闭事件同样落 refund_pending 待人工，
+   * 并打印明确告警；真正未知的事件类型不是验签问题，只 warn，映射为 'closed'
+   * （不做任何资金动作）。
+   */
+  private mapEventType(eventType: string | undefined): CallbackEvent['eventType'] {
+    if (eventType === 'TRANSACTION.SUCCESS') return 'paid';
+    if (eventType === 'REFUND.SUCCESS') return 'refunded';
+    if (eventType === 'REFUND.ABNORMAL' || eventType === 'REFUND.CLOSED') {
+      console.error('[wechat] 收到退款异常/关闭事件，需人工介入', { event_type: eventType });
+      return 'refunded';
+    }
+    console.warn('[wechat] 未知回调事件类型，不做任何资金动作', { event_type: eventType });
+    return 'closed';
   }
 
   /** APIv3 resource 用 AEAD_AES_256_GCM + apiV3Key 解密 */
@@ -161,6 +189,7 @@ export class WechatNativeProvider implements PaymentProvider {
       method: 'GET',
       headers: {
         Accept: 'application/json',
+        'User-Agent': USER_AGENT,
         Authorization: this.authorization('GET', urlPath, ''),
       },
     });

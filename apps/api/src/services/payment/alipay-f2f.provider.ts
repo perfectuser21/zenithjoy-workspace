@@ -17,6 +17,11 @@ export interface AlipayConfig {
   appId: string;
   appPrivateKey: string;
   alipayPublicKey: string;
+  /**
+   * 收款方 PID（支付宝官方通知校验清单里 app_id 与 seller_id 是两条独立项）。
+   * 校验的是"回调声明的收款账号确实是自己"，防同一 appid 下收款账号被改配（I-9）。
+   */
+  sellerId: string;
   notifyUrl: string;
   gateway: string;
 }
@@ -96,6 +101,12 @@ export class AlipayF2FProvider implements PaymentProvider {
       throw new SignatureError('支付宝回调 app_id 不匹配');
     }
 
+    // I-9：seller_id 校验收款方 PID 确实是自己，与 app_id 校验是两条独立项——
+    // 防的是同一 appid 下收款账号被改配（官方通知校验清单要求两者都查）。
+    if (params.seller_id !== this.cfg.sellerId) {
+      throw new SignatureError('支付宝回调 seller_id 不匹配');
+    }
+
     const waitSign = Object.keys(params)
       .filter((k) => k !== 'sign' && k !== 'sign_type' && params[k] !== '')
       .sort()
@@ -107,11 +118,20 @@ export class AlipayF2FProvider implements PaymentProvider {
       .verify(this.cfg.alipayPublicKey, sign, 'base64');
     if (!valid) throw new SignatureError('支付宝回调验签失败');
 
+    // I-3：不能只看 refund_fee 是否存在就判定 paid——超时未付/交易关闭
+    // （TRADE_CLOSED 且无 refund_fee）会被误判成已支付。按 trade_status 白名单判定：
+    // 有 refund_fee → refunded；TRADE_SUCCESS/TRADE_FINISHED → paid；其余（含
+    // TRADE_CLOSED、WAIT_BUYER_PAY 等）→ closed，只记审计不做资金动作。
     const isRefund = params.refund_fee !== undefined && params.refund_fee !== '';
+    const eventType: CallbackEvent['eventType'] = isRefund
+      ? 'refunded'
+      : params.trade_status === 'TRADE_SUCCESS' || params.trade_status === 'TRADE_FINISHED'
+        ? 'paid'
+        : 'closed';
     return {
       outTradeNo: params.out_trade_no,
       providerTransactionId: params.trade_no,
-      eventType: isRefund ? 'refunded' : 'paid',
+      eventType,
     };
   }
 

@@ -55,7 +55,11 @@ export class SignatureError extends Error {
 export interface CallbackEvent {
   providerTransactionId: string;
   outTradeNo: string;
-  eventType: 'paid' | 'refunded';
+  /**
+   * 'closed'：交易关闭（超时未付/主动取消）或未知事件类型，既非成功支付也非退款——
+   * 只记审计，不做任何资金动作（见 payment-callback.ts 对 'closed' 的处理）。
+   */
+  eventType: 'paid' | 'refunded' | 'closed';
 }
 
 export interface QueryResult {
