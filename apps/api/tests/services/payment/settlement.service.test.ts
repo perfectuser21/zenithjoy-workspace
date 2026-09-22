@@ -14,9 +14,10 @@ vi.mock('../../../src/services/credits.service', async (orig) => {
   return { ...actual, rechargeInTx: rechargeMock };
 });
 
-import { settleOrder } from '../../../src/services/payment/settlement.service';
+import { settleOrder, findOrderByOutTradeNo, recordCallback, markRefundPending } from '../../../src/services/payment/settlement.service';
 import { __setProviderForTest } from '../../../src/services/payment/provider-registry';
 import { MockProvider } from '../../../src/services/payment/mock.provider';
+import { DuplicateCreditError } from '../../../src/services/credits.service';
 
 const db = await import('../../../src/db/connection') as any;
 const client = db.__client;
@@ -29,22 +30,31 @@ const ORDER = {
 
 beforeEach(() => {
   client.query.mockReset();
+  db.default.query.mockReset();
+  db.default.connect.mockClear();
   rechargeMock.mockReset().mockResolvedValue({ balance: 100, total_recharged: 100, total_consumed: 0 });
   mp = new MockProvider();
   __setProviderForTest('mock', mp);
 });
 
+/**
+ * 同一份实现要同时挂到 client.query 和 pool.query（db.default.query）上：
+ * F1 之后 SELECT 订单、amount_mismatch 的 UPDATE 走 pool.query（不占连接），
+ * 只有 CAS + 入账那一段才走 client.query（占连接的那一段）。
+ */
 function mockDb(order: any, casRowCount: number) {
-  client.query.mockImplementation(async (sql: string) => {
+  const impl = async (sql: string) => {
     if (/^(BEGIN|COMMIT|ROLLBACK)/.test(sql)) return {};
-    if (/SELECT .* FROM zenithjoy\.payment_orders/i.test(sql)) {
+    if (/SELECT [\s\S]*FROM zenithjoy\.payment_orders/i.test(sql)) {
       return { rows: order ? [order] : [], rowCount: order ? 1 : 0 };
     }
     if (/UPDATE zenithjoy\.payment_orders/i.test(sql)) {
       return { rows: casRowCount ? [{ ...order, status: 'credited' }] : [], rowCount: casRowCount };
     }
     return { rows: [], rowCount: 0 };
-  });
+  };
+  client.query.mockImplementation(impl);
+  db.default.query.mockImplementation(impl);
 }
 
 describe('settleOrder', () => {
@@ -84,7 +94,7 @@ describe('settleOrder', () => {
     expect(rechargeMock).not.toHaveBeenCalled();
   });
 
-  it('金额不符 → 不入账，标 amount_mismatch', async () => {
+  it('金额不符 → 不入账，标 amount_mismatch（生产 SQL 用字面量，不是参数化拼断言）', async () => {
     mp.__setQueryResult('no-1', { status: 'success', amountFen: 1, transactionId: 'txn-1' });
     mockDb(ORDER, 1);
 
@@ -92,10 +102,30 @@ describe('settleOrder', () => {
 
     expect(r.outcome).toBe('amount_mismatch');
     expect(rechargeMock).not.toHaveBeenCalled();
-    const upd = client.query.mock.calls.find((c: any[]) =>
-      /UPDATE zenithjoy\.payment_orders/i.test(c[0]) && String(c[1]).includes('amount_mismatch')
+    // 断言 SQL 文本本身含字面量 'amount_mismatch'，而不是随便在参数数组里含这个词就算数
+    // （参数数组里塞进 failure_reason 文案照样能让弱断言通过，不能证明状态真被改成了 amount_mismatch）
+    const upd = db.default.query.mock.calls.find((c: any[]) =>
+      /UPDATE zenithjoy\.payment_orders/i.test(c[0]) && /SET status = 'amount_mismatch'/.test(c[0])
     );
     expect(upd).toBeDefined();
+    // 且此路径绝不能占用池连接
+    expect(db.default.connect).not.toHaveBeenCalled();
+  });
+
+  it('金额校验 fail-closed：查单没返回金额 → 不入账，标 amount_mismatch（不是 not_paid，也不是直接放行）', async () => {
+    mp.__setQueryResult('no-1', { status: 'success', transactionId: 'txn-1' }); // 无 amountFen
+    mockDb(ORDER, 1);
+
+    const r = await settleOrder('no-1', 'mock');
+
+    expect(r.outcome).toBe('amount_mismatch');
+    expect(rechargeMock).not.toHaveBeenCalled();
+    const upd = db.default.query.mock.calls.find((c: any[]) =>
+      /UPDATE zenithjoy\.payment_orders/i.test(c[0]) && /SET status = 'amount_mismatch'/.test(c[0])
+    );
+    expect(upd).toBeDefined();
+    // 缺失金额与金额不符要能区分文案，便于运营分流
+    expect(String(upd?.[1]).includes('未返回金额') || upd?.[1]?.some?.((v: any) => typeof v === 'string' && v.includes('未返回金额'))).toBeTruthy();
   });
 
   it('平台说没付 → 不入账，不改状态', async () => {
@@ -115,13 +145,34 @@ describe('settleOrder', () => {
     expect(rechargeMock).not.toHaveBeenCalled();
   });
 
-  it('入账抛错 → 事务 ROLLBACK 并向上抛（调用方据此返 5xx 让平台重试）', async () => {
+  it('入账抛错（非重复入账）→ 事务 ROLLBACK 并向上抛（调用方据此返 5xx 让平台重试）', async () => {
     mp.__setQueryResult('no-1', { status: 'success', amountFen: 10000, transactionId: 'txn-1' });
     mockDb(ORDER, 1);
     rechargeMock.mockRejectedValue(new Error('db down'));
 
     await expect(settleOrder('no-1', 'mock')).rejects.toThrow('db down');
     expect(client.query.mock.calls.some((c: any[]) => c[0] === 'ROLLBACK')).toBe(true);
+    // 非重复入账错误：坏连接不能回池子，必须带 err 销毁
+    expect(client.release).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it('入账命中 DuplicateCreditError（积分已入账但订单状态没跟上）→ 自愈补状态，返回 credit_conflict，不再向上抛', async () => {
+    mp.__setQueryResult('no-1', { status: 'success', amountFen: 10000, transactionId: 'txn-1' });
+    mockDb(ORDER, 1);
+    rechargeMock.mockRejectedValue(new (DuplicateCreditError as any)('o-1'));
+
+    const r = await settleOrder('no-1', 'mock');
+
+    expect(r.outcome).toBe('credit_conflict');
+    expect(r.orderId).toBe('o-1');
+    // 必须先 ROLLBACK（事务内语句失败后整个事务已 aborted，不 ROLLBACK 没法再发别的语句）
+    expect(client.query.mock.calls.some((c: any[]) => c[0] === 'ROLLBACK')).toBe(true);
+    // 补状态用独立语句、字面量 'credited'，走 pool 而不是已经作废的 client
+    const heal = db.default.query.mock.calls.find((c: any[]) =>
+      /UPDATE zenithjoy\.payment_orders/i.test(c[0]) && /SET status = 'credited'/.test(c[0]) && /id = \$1/.test(c[0])
+    );
+    expect(heal).toBeDefined();
+    expect(heal![1][0]).toBe('o-1');
   });
 
   it('CAS 语句用 status = ANY 合法前置集合，不是先查后改', async () => {
@@ -133,5 +184,69 @@ describe('settleOrder', () => {
       /UPDATE zenithjoy\.payment_orders[\s\S]*SET status\s*=\s*'credited'/i.test(c[0])
     );
     expect(cas[0]).toMatch(/status\s*=\s*ANY\(/i);
+  });
+
+  it('F1：查单（跨境 HTTP，秒级/可能超时）期间手里不能已经握着池连接，否则回调高峰会钉住连接池', async () => {
+    mp.__setQueryResult('no-1', { status: 'success', amountFen: 10000, transactionId: 'txn-1' });
+    mockDb(ORDER, 1);
+
+    let connectCallsAtQueryTime = -1;
+    const originalQueryOrder = mp.queryOrder.bind(mp);
+    vi.spyOn(mp, 'queryOrder').mockImplementation(async (outTradeNo: string) => {
+      connectCallsAtQueryTime = db.default.connect.mock.calls.length;
+      return originalQueryOrder(outTradeNo);
+    });
+
+    await settleOrder('no-1', 'mock');
+
+    // 查单发生时 connect() 一次都没被调用过——如果有人把 pool.connect() 挪回函数开头，
+    // 这里会从 0 变成 1，本条必红。
+    expect(connectCallsAtQueryTime).toBe(0);
+    // 且全程只在真正要入账时 connect 一次
+    expect(db.default.connect).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('findOrderByOutTradeNo', () => {
+  it('查到订单返回 id/tenantId，走 pool.query 不占连接', async () => {
+    db.default.query.mockResolvedValueOnce({ rows: [{ id: 'o-1', tenant_id: 't-1' }], rowCount: 1 });
+    const r = await findOrderByOutTradeNo('mock', 'no-1');
+    expect(r).toEqual({ id: 'o-1', tenantId: 't-1' });
+    expect(db.default.connect).not.toHaveBeenCalled();
+  });
+
+  it('查不到返回 null', async () => {
+    db.default.query.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    const r = await findOrderByOutTradeNo('mock', 'nope');
+    expect(r).toBeNull();
+  });
+});
+
+describe('recordCallback', () => {
+  it('rowCount=1（首次投递）→ 返回 true', async () => {
+    db.default.query.mockResolvedValueOnce({ rows: [{ id: 'cb-1' }], rowCount: 1 });
+    const r = await recordCallback('mock', 'txn-1', 'paid', 'digest', 'o-1', 't-1');
+    expect(r).toBe(true);
+  });
+
+  it('rowCount=0（ON CONFLICT DO NOTHING 命中，重复投递）→ 返回 false', async () => {
+    db.default.query.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    const r = await recordCallback('mock', 'txn-1', 'paid', 'digest', 'o-1', 't-1');
+    expect(r).toBe(false);
+  });
+});
+
+describe('markRefundPending', () => {
+  it('绝不触碰积分：只对 payment_orders 发一条 UPDATE，SQL 里不含 credit_transactions 或任何 consume 调用', async () => {
+    db.default.query.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+    await markRefundPending('o-1');
+
+    expect(db.default.query).toHaveBeenCalledTimes(1);
+    const [sql] = db.default.query.mock.calls[0];
+    expect(sql).toMatch(/UPDATE zenithjoy\.payment_orders/i);
+    expect(sql).not.toMatch(/credit_transactions/i);
+    expect(sql).not.toMatch(/consume/i);
+    expect(rechargeMock).not.toHaveBeenCalled();
   });
 });
