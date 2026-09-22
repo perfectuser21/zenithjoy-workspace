@@ -51,9 +51,10 @@ describe('先列出这个部门有哪些活', () => {
     expect(screen.queryAllByTestId('job-option')).toHaveLength(0);
   });
 
-  it('没选活之前不给派——按钮是禁用的', () => {
+  it('没选活之前不给派——两步式下这个按钮压根不出现（比禁用更彻底）', () => {
+    // 旧版是"按钮在但禁用"。改两步后第一步只负责挑活，摆个灰按钮反而让人以为漏填了什么。
     open();
-    expect((screen.getByRole('button', { name: '派下去' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: '派下去' })).toBeNull();
   });
 });
 
@@ -85,14 +86,9 @@ describe('选中一件活之后，告诉我要填什么', () => {
     expect(screen.getByTestId('no-fields')).toHaveTextContent(/不用填什么/);
   });
 
-  it('换部门后已选的活与已填的值一并清掉，不把上一件活的输入带过去', () => {
-    open();
-    pick('按关键词采收线索');
-    fireEvent.change(screen.getByLabelText('关键词'), { target: { value: 'AI训练师' } });
-    fireEvent.change(screen.getByLabelText('部门'), { target: { value: '私域客服' } });
-    fireEvent.change(screen.getByLabelText('部门'), { target: { value: '智能获客' } });
-    expect(screen.queryByLabelText('关键词')).toBeNull();
-  });
+  // 「换部门清空已填的值」这条意图搬到了下面的两步式用例
+  // （'换部门要回到第一步，并把已选的活和值一并清掉'）：两步式下第二步没有部门下拉，
+  // 换部门必须先返回第一步，那条走的才是真实路径。
 });
 
 describe('提交', () => {
@@ -166,5 +162,113 @@ describe('设备', () => {
     render(<DispatchJobDialog devices={[]} defaultAgentId={null} onClose={() => {}} onDone={() => {}} />);
     expect(screen.getByText(/没有可派单的设备/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: '派下去' })).toBeNull();
+  });
+});
+
+/**
+ * 两步式（decision c4f24a3d）
+ *
+ * 主理人原话：「所有的任务都挤到一起，都是一个面。你其实应该是让我选择，
+ * 比如说我到底是哪一种任务，**然后才进入它的输入窗口**。」
+ *
+ * 之前的实现逻辑上分了层（选活 → 展开字段），但全在同一屏里从上往下堆，
+ * 视觉上仍是一个面。这组用例守的就是"第一步看不见输入框"。
+ */
+describe('两步：先选活，选完才进入这件活的输入窗口', () => {
+  it('第一步只让选，看不到任何输入框——这条就是"不是一个面"的证据', () => {
+    open();
+    expect(screen.getAllByTestId('job-option').length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText('关键词')).toBeNull();
+    expect(screen.queryByLabelText('什么时候跑')).toBeNull();
+    // 派下去按钮也不该出现在第一步——还没选活，没什么可派
+    expect(screen.queryByRole('button', { name: '派下去' })).toBeNull();
+  });
+
+  it('点一件活才进入第二步，标题变成这件活，且只出现它自己的字段', () => {
+    open();
+    pick('按关键词采收线索');
+    expect(screen.getByText('按关键词采收线索', { selector: 'h2' })).toBeTruthy();
+    expect(screen.getByLabelText('关键词')).toBeTruthy();
+    expect(screen.getByLabelText('什么时候跑')).toBeTruthy();
+    // 另一件活的字段不能串进来
+    expect(screen.queryByLabelText('发给谁')).toBeNull();
+    // 选活的列表已经退场——这才叫"进入"，不是在同一屏往下展开
+    expect(screen.queryAllByTestId('job-option').length).toBe(0);
+  });
+
+  it('第二步不再摆设备和部门下拉，只留一行只读上下文', () => {
+    // 这两个下拉正是"挤在一个面"的来源；要换设备就返回第一步。
+    open();
+    pick('按关键词采收线索');
+    expect(screen.queryByLabelText('设备')).toBeNull();
+    expect(screen.queryByLabelText('部门')).toBeNull();
+    expect(screen.getByTestId('dispatch-context').textContent).toContain('金诺工作机');
+  });
+
+  it('能返回第一步重新挑', () => {
+    open();
+    pick('按关键词采收线索');
+    fireEvent.click(screen.getByRole('button', { name: '返回' }));
+    expect(screen.getAllByTestId('job-option').length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText('关键词')).toBeNull();
+  });
+
+  it('返回后重新点同一件活，刚才填到一半的值还在', () => {
+    // 填了一半回去看一眼再回来，值没了会恼人。
+    open();
+    pick('按关键词采收线索');
+    fireEvent.change(screen.getByLabelText('关键词'), { target: { value: 'AI训练师' } });
+    fireEvent.click(screen.getByRole('button', { name: '返回' }));
+    pick('按关键词采收线索');
+    expect((screen.getByLabelText('关键词') as HTMLInputElement).value).toBe('AI训练师');
+  });
+
+  it('返回后换一件活，绝不把上一件的输入带过去', () => {
+    open();
+    pick('按关键词采收线索');
+    fireEvent.change(screen.getByLabelText('关键词'), { target: { value: 'AI训练师' } });
+    fireEvent.click(screen.getByRole('button', { name: '返回' }));
+    pick('给指定的人发一条私信');
+    expect((screen.getByLabelText('发给谁') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('发什么') as HTMLTextAreaElement).value).toBe('');
+  });
+
+  it('换部门要回到第一步，并把已选的活和值一并清掉', () => {
+    open();
+    pick('按关键词采收线索');
+    fireEvent.change(screen.getByLabelText('关键词'), { target: { value: 'AI训练师' } });
+    fireEvent.click(screen.getByRole('button', { name: '返回' }));
+    fireEvent.change(screen.getByLabelText('部门'), { target: { value: '智能新媒体' } });
+    fireEvent.change(screen.getByLabelText('部门'), { target: { value: '智能获客' } });
+    pick('按关键词采收线索');
+    expect((screen.getByLabelText('关键词') as HTMLInputElement).value).toBe('');
+  });
+
+  it('后端拒绝时停在第二步，让人改了再试，不要打回去重填', async () => {
+    dispatchJob.mockRejectedValue(new Error('窗口太窄：碰平台的活不得短于 30 分钟'));
+    open();
+    pick('按关键词采收线索');
+    fireEvent.change(screen.getByLabelText('关键词'), { target: { value: 'AI训练师' } });
+    fireEvent.click(screen.getByRole('button', { name: '派下去' }));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('窗口太窄'));
+    expect(screen.getByLabelText('关键词')).toBeTruthy();
+    expect((screen.getByLabelText('关键词') as HTMLInputElement).value).toBe('AI训练师');
+  });
+
+  it('提交中返回键禁用——半途退回会让"派下去"落在不确定的状态上', async () => {
+    let release: (v: unknown) => void = () => {};
+    dispatchJob.mockReturnValue(new Promise((r) => { release = r; }));
+    open();
+    pick('按关键词采收线索');
+    fireEvent.change(screen.getByLabelText('关键词'), { target: { value: 'AI训练师' } });
+    fireEvent.click(screen.getByRole('button', { name: '派下去' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: '返回' })).toBeDisabled());
+    release({ id: 'x' });
+  });
+
+  it('窗口语义的说明在第二步还在——改版不能把这条铁律弄丢', () => {
+    open();
+    pick('按关键词采收线索');
+    expect(screen.getByText(/向平台自首/)).toBeTruthy();
   });
 });
