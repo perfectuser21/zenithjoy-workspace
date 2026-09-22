@@ -13,6 +13,7 @@ import { startPublishRollup } from './services/publish-rollup';
 import { runStartupConfigCheck, runStartupBinaryCheck, runStartupFontCheck } from './startup-check';
 import { assertStaffDirectoryOnStartup } from './staff-directory';
 import { assertSingleOrgMembership } from './startup/single-org-selfcheck';
+import { registerRealProvidersFromEnv } from './services/payment/provider-registry';
 import pool from './db/connection';
 
 dotenv.config();
@@ -74,6 +75,9 @@ async function bootstrap(): Promise<void> {
     console.error('🔴 [single-org] 单组织归属自检未通过，拒绝启动（fail-closed）');
     process.exit(1);
   }
+
+  // 积分充值真实支付 provider：缺凭据时不注册，不阻塞启动（getProvider 届时抛 UNKNOWN_PROVIDER）。
+  registerRealProvidersFromEnv();
 
   server.listen(PORT, () => {
     console.log(`🚀 Works Management API + Agent WS running on port ${PORT}`);

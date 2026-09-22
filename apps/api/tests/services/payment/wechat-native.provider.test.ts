@@ -37,7 +37,7 @@ describe('WechatNativeProvider 验签', () => {
   const body = JSON.stringify({ id: 'evt-1', event_type: 'TRANSACTION.SUCCESS' });
 
   it('签名正确 → 通过', () => {
-    const ts = '1700000000';
+    const ts = String(Math.floor(Date.now() / 1000));
     const nonce = 'abc';
     const headers = {
       'wechatpay-timestamp': ts,
@@ -49,7 +49,7 @@ describe('WechatNativeProvider 验签', () => {
   });
 
   it('签名被篡改 → SignatureError', () => {
-    const ts = '1700000000';
+    const ts = String(Math.floor(Date.now() / 1000));
     const nonce = 'abc';
     const headers = {
       'wechatpay-timestamp': ts,
@@ -61,7 +61,7 @@ describe('WechatNativeProvider 验签', () => {
   });
 
   it('body 被篡改（签名对不上）→ SignatureError', () => {
-    const ts = '1700000000';
+    const ts = String(Math.floor(Date.now() / 1000));
     const nonce = 'abc';
     const headers = {
       'wechatpay-timestamp': ts,
@@ -74,7 +74,7 @@ describe('WechatNativeProvider 验签', () => {
   });
 
   it('未知平台证书序列号 → SignatureError（不静默放行）', () => {
-    const ts = '1700000000';
+    const ts = String(Math.floor(Date.now() / 1000));
     const nonce = 'abc';
     const headers = {
       'wechatpay-timestamp': ts,
