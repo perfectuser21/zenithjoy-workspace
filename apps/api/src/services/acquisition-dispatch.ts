@@ -1,0 +1,994 @@
+/**
+ * 智能获客「分析+指派」引擎 service（刀1，架构 A — 薄指挥放中台）
+ * 契约：scratchpad/dispatch-engine-contract.md「引擎 service」节
+ *
+ * 三段链路的中段②：抓(主号,已有) → 【分析+指派(本 service)】 → 执行(小号,复用 dm 派单)。
+ *
+ * 设计：纯函数 + 注入 pool（便于 vitest mock）+ 时钟 now 作参数注入（便于测时段/间隔）。
+ *   - scoreLeads      给未评分 leads 打 relevance_score（thin 启发式，留 TODO 接真 AI comment-score）
+ *   - buildAssignments 按分降序 + 轮换分摊 burner + (tenant,lead,label) 去重 + 频控预算 + 随机排期 → 插 dm_assignments
+ *   - dispatchDue     取到期 queued、过时段闸/上限闸 → 派单 + 写 dm_outreach_log + 标 dispatched
+ *   - cookieHealth    按 status + 陈旧度算 healthy|stale|expired（真 cookie 校验留刀2）
+ */
+
+import { resolveDevicePlatform, type DevicePlatform } from './device-platform';
+import { shouldAssignLead } from './dm-retry-policy';
+
+// 最小 pool 抽象（只用到 query），便于注入 mock
+export interface QueryablePool {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- pg 行结果动态形状，下游各函数自行收窄
+  query: (text: string, params?: unknown[]) => Promise<{ rows: any[]; rowCount?: number | null }>;
+}
+
+// ── 配置默认值（与 migration DEFAULT 对齐，无配置行时返回它）──────────────
+export interface AcquisitionConfig {
+  tenant_id: string;
+  collect_rounds_per_day: number;
+  keywords_per_round_min: number;
+  keywords_per_round_max: number;
+  collect_active_start: string;
+  collect_active_end: string;
+  burner_count: number;
+  dm_per_hour: number;
+  dm_per_day: number;
+  dm_interval_min_sec: number;
+  dm_interval_max_sec: number;
+  dm_active_start: string;
+  dm_active_end: string;
+  nurture_per_day_min: number;
+  nurture_per_day_max: number;
+  cookie_check_interval_hours: number;
+  dm_message: string;
+}
+
+export function defaultConfig(tenantId: string): AcquisitionConfig {
+  return {
+    tenant_id: tenantId,
+    collect_rounds_per_day: 2,
+    keywords_per_round_min: 3,
+    keywords_per_round_max: 5,
+    collect_active_start: '09:00',
+    collect_active_end: '21:00',
+    burner_count: 3,
+    dm_per_hour: 20,
+    dm_per_day: 30,
+    dm_interval_min_sec: 120,
+    dm_interval_max_sec: 180,
+    dm_active_start: '09:00',
+    dm_active_end: '22:00',
+    nurture_per_day_min: 1,
+    nurture_per_day_max: 2,
+    cookie_check_interval_hours: 6,
+    dm_message: '您好，看到您的评论，我们正在做相关品牌，有合作意向欢迎联系企微😊',
+  };
+}
+
+// 配置数值字段范围校验规格（PUT 用；非法 → 400）
+export const CONFIG_RANGES: Record<keyof Omit<AcquisitionConfig, 'tenant_id' | 'collect_active_start' | 'collect_active_end' | 'dm_active_start' | 'dm_active_end' | 'dm_message'>, [number, number]> = {
+  collect_rounds_per_day: [1, 24],
+  keywords_per_round_min: [1, 50],
+  keywords_per_round_max: [1, 50],
+  burner_count: [1, 20],
+  dm_per_hour: [1, 100],
+  dm_per_day: [1, 1000],
+  dm_interval_min_sec: [1, 86400],
+  dm_interval_max_sec: [1, 86400],
+  nurture_per_day_min: [0, 100],
+  nurture_per_day_max: [0, 100],
+  cookie_check_interval_hours: [1, 168],
+};
+
+const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** 校验配置 patch，返回错误信息（null=通过）。只校验存在的字段。 */
+export function validateConfigPatch(patch: Record<string, unknown>): string | null {
+  for (const [key, [lo, hi]] of Object.entries(CONFIG_RANGES)) {
+    if (patch[key] === undefined || patch[key] === null) continue;
+    const v = patch[key];
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < lo || v > hi) {
+      return `${key} 必须是 [${lo}, ${hi}] 内的整数，收到 ${JSON.stringify(v)}`;
+    }
+  }
+  for (const key of ['collect_active_start', 'collect_active_end', 'dm_active_start', 'dm_active_end']) {
+    const v = patch[key];
+    if (v === undefined || v === null) continue;
+    if (typeof v !== 'string' || !HHMM_RE.test(v)) {
+      return `${key} 必须是 HH:MM 格式（00:00–23:59），收到 ${JSON.stringify(v)}`;
+    }
+  }
+  // min/max 自洽
+  if (typeof patch.keywords_per_round_min === 'number' && typeof patch.keywords_per_round_max === 'number'
+      && patch.keywords_per_round_min > patch.keywords_per_round_max) {
+    return 'keywords_per_round_min 不能大于 keywords_per_round_max';
+  }
+  if (typeof patch.dm_interval_min_sec === 'number' && typeof patch.dm_interval_max_sec === 'number'
+      && patch.dm_interval_min_sec > patch.dm_interval_max_sec) {
+    return 'dm_interval_min_sec 不能大于 dm_interval_max_sec';
+  }
+  if (typeof patch.nurture_per_day_min === 'number' && typeof patch.nurture_per_day_max === 'number'
+      && patch.nurture_per_day_min > patch.nurture_per_day_max) {
+    return 'nurture_per_day_min 不能大于 nurture_per_day_max';
+  }
+  return null;
+}
+
+// ── getConfig：读配置（无则返默认）─────────────────────────────────────────
+export async function getConfig(pool: QueryablePool, tenantId: string): Promise<AcquisitionConfig> {
+  const r = await pool.query(
+    `SELECT * FROM zenithjoy.acquisition_config WHERE tenant_id = $1`,
+    [tenantId]
+  );
+  if (!r.rows || r.rows.length === 0) return defaultConfig(tenantId);
+  const row = r.rows[0];
+  return { ...defaultConfig(tenantId), ...row, tenant_id: tenantId };
+}
+
+export function mergeConfigPatch(
+  current: AcquisitionConfig,
+  patch: Record<string, unknown>,
+  tenantId = current.tenant_id
+): AcquisitionConfig {
+  return { ...current, ...sanitizePatch(patch), tenant_id: tenantId };
+}
+
+// ── upsertConfig：写配置（merge 默认 + patch 后整行 upsert）───────────────
+export async function upsertConfig(
+  pool: QueryablePool,
+  tenantId: string,
+  patch: Record<string, unknown>,
+  currentConfig?: AcquisitionConfig
+): Promise<AcquisitionConfig> {
+  const current = currentConfig ?? await getConfig(pool, tenantId);
+  const next = mergeConfigPatch(current, patch, tenantId);
+  await pool.query(
+    `INSERT INTO zenithjoy.acquisition_config (
+       tenant_id, collect_rounds_per_day, keywords_per_round_min, keywords_per_round_max,
+       collect_active_start, collect_active_end, burner_count, dm_per_hour, dm_per_day,
+       dm_interval_min_sec, dm_interval_max_sec, dm_active_start, dm_active_end,
+       nurture_per_day_min, nurture_per_day_max, cookie_check_interval_hours, dm_message, updated_at
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17, now())
+     ON CONFLICT (tenant_id) DO UPDATE SET
+       collect_rounds_per_day = EXCLUDED.collect_rounds_per_day,
+       keywords_per_round_min = EXCLUDED.keywords_per_round_min,
+       keywords_per_round_max = EXCLUDED.keywords_per_round_max,
+       collect_active_start   = EXCLUDED.collect_active_start,
+       collect_active_end     = EXCLUDED.collect_active_end,
+       burner_count           = EXCLUDED.burner_count,
+       dm_per_hour            = EXCLUDED.dm_per_hour,
+       dm_per_day             = EXCLUDED.dm_per_day,
+       dm_interval_min_sec    = EXCLUDED.dm_interval_min_sec,
+       dm_interval_max_sec    = EXCLUDED.dm_interval_max_sec,
+       dm_active_start        = EXCLUDED.dm_active_start,
+       dm_active_end          = EXCLUDED.dm_active_end,
+       nurture_per_day_min    = EXCLUDED.nurture_per_day_min,
+       nurture_per_day_max    = EXCLUDED.nurture_per_day_max,
+       cookie_check_interval_hours = EXCLUDED.cookie_check_interval_hours,
+       dm_message             = EXCLUDED.dm_message,
+       updated_at             = now()`,
+    [
+      tenantId, next.collect_rounds_per_day, next.keywords_per_round_min, next.keywords_per_round_max,
+      next.collect_active_start, next.collect_active_end, next.burner_count, next.dm_per_hour, next.dm_per_day,
+      next.dm_interval_min_sec, next.dm_interval_max_sec, next.dm_active_start, next.dm_active_end,
+      next.nurture_per_day_min, next.nurture_per_day_max, next.cookie_check_interval_hours, next.dm_message,
+    ]
+  );
+  return next;
+}
+
+// 只挑配置已知字段（防注入未知列）
+function sanitizePatch(patch: Record<string, unknown>): Partial<AcquisitionConfig> {
+  const allowed = Object.keys(defaultConfig('x')) as (keyof AcquisitionConfig)[];
+  const out: Record<string, unknown> = {};
+  for (const k of allowed) {
+    if (k === 'tenant_id') continue;
+    if (patch[k] !== undefined && patch[k] !== null) out[k] = patch[k];
+  }
+  return out as Partial<AcquisitionConfig>;
+}
+
+// ── scoreLeads：给未评分 leads 打 relevance_score（thin 启发式）─────────────
+// TODO(刀2)：接真 AI comment-score。
+//   thin 启发式：有 sec_uid + 有 profile_url → 80；只有其一 → 50；partial/都缺 → 20。
+export function heuristicScore(lead: { sec_uid?: string | null; profile_url?: string | null; partial?: boolean }): number {
+  const hasSec = !!(lead.sec_uid && String(lead.sec_uid).trim());
+  const hasUrl = !!(lead.profile_url && String(lead.profile_url).trim());
+  if (lead.partial) return 20;
+  if (hasSec && hasUrl) return 80;
+  if (hasSec || hasUrl) return 50;
+  return 20;
+}
+
+export async function scoreLeads(pool: QueryablePool, tenantId: string): Promise<{ scored: number }> {
+  const r = await pool.query(
+    `SELECT id, sec_uid, profile_url, partial
+       FROM zenithjoy.acquisition_leads
+      WHERE tenant_id = $1 AND relevance_score IS NULL`,
+    [tenantId]
+  );
+  let scored = 0;
+  for (const lead of r.rows) {
+    const score = heuristicScore(lead);
+    await pool.query(
+      `UPDATE zenithjoy.acquisition_leads SET relevance_score = $2, updated_at = now() WHERE id = $1`,
+      [lead.id, score]
+    );
+    scored += 1;
+  }
+  return { scored };
+}
+
+// ── computeRelevanceScore：综合评论意向档位 + 频次 + 时效的真实相关性打分 ─────
+// 三信号公式（替代只看资料完整度的 heuristicScore）：
+//   grade 权重：高意向=100 / 精准=70 / 感兴趣=40 / null 或其他=20（取历史里最高档）
+//   频次加成：每多 1 条 +10，封顶 +50（5 条）
+//   时效衰减：取最新评论距 now 的天数，衰减系数 = max(0.3, 1 - 0.05*天数)（24h 内=1.0）
+//   最终 = min(100, round(最高档权重 × 衰减系数 + 频次加成))
+//   空数组 → 回落 heuristicScore（老数据只有资料完整度可判）
+export interface LeadComment {
+  grade: string | null;
+  commented_at: Date | string;
+}
+
+function gradeWeight(grade: string | null): number {
+  switch (grade) {
+    case '高意向': return 100;
+    case '精准': return 70;
+    case '感兴趣': return 40;
+    default: return 20;
+  }
+}
+
+export function computeRelevanceScore(comments: LeadComment[], now: Date = new Date()): number {
+  if (!comments || comments.length === 0) {
+    return heuristicScore({});
+  }
+  const maxWeight = Math.max(...comments.map((c) => gradeWeight(c.grade)));
+  const freqBonus = Math.min(50, comments.length * 10);
+  const latestMs = Math.max(...comments.map((c) => new Date(c.commented_at).getTime()));
+  const days = Math.max(0, Math.floor((now.getTime() - latestMs) / 86_400_000));
+  const decay = Math.max(0.3, 1 - 0.05 * days);
+  return Math.min(100, Math.round(maxWeight * decay + freqBonus));
+}
+
+// ── rescoreLead：查某 lead 全部评论历史 → 重算 relevance_score + outreach_eligible + 汇总字段 ────
+// 从 acquisition_lead_comments 拉全量记录（用 COUNT/MAX 语义直接从真实行算，
+// 不依赖调用方维护的冗余 comment_count/last_commented_at，防竞态）。
+//
+// outreach_eligible 规则（content-judgment-gate FR-8）：
+//   精准 或 高意向 → true（可发 DM）
+//   仅感兴趣      → false（暂不发 DM）
+//   无评论        → false（暂不发 DM）
+// FR-8：outreach_eligible 从 true → false 时，取消该 lead 的所有 pending/queued dm_assignments
+export async function rescoreLead(
+  pool: QueryablePool,
+  tenantId: string,
+  leadId: string,
+  now: Date = new Date()
+): Promise<{ score: number; comment_count: number; outreach_eligible: boolean }> {
+  // 行锁：两个视频的评论并发上报同一 lead 时，后完成的事务不能用旧快照覆盖先完成的结果。
+  // 只在调用方传入事务 client 时才真正生效——acquisition.ts /collect/report 的两处调用
+  // （line ~1008/~1033）传的是事务 client，锁持续到 COMMIT，受保护。
+  // POST /api/acquisition/rescore-lead 手动重算端点（acquisition.ts ~1313）传的是裸 pool，
+  // 此时 pool.query() 被 Postgres 当成独立隐式事务，锁在这条 SELECT 执行完立刻释放，
+  // 撑不到后面的 UPDATE——该路径上这把锁形同虚设（不是全函数不变量）。
+  await pool.query(
+    `SELECT id FROM zenithjoy.acquisition_leads WHERE tenant_id = $1 AND id = $2 FOR UPDATE`,
+    [tenantId, leadId]
+  );
+
+  const r = await pool.query(
+    `SELECT c.grade, c.commented_at, c.comment_text
+       FROM zenithjoy.acquisition_lead_comments c
+       JOIN zenithjoy.acquisition_leads l ON l.id = c.lead_id AND l.tenant_id = $1
+      WHERE c.lead_id = $2
+      ORDER BY c.commented_at ASC`,
+    [tenantId, leadId]
+  );
+  const comments: (LeadComment & { comment_text?: string | null })[] = r.rows.map((row) => ({
+    grade: row.grade, commented_at: row.commented_at, comment_text: row.comment_text,
+  }));
+  const score = computeRelevanceScore(comments, now);
+  const commentCount = comments.length;
+  const lastCommentedAt = commentCount > 0
+    ? new Date(Math.max(...comments.map((c) => new Date(c.commented_at).getTime()))).toISOString()
+    : null;
+  const latestReplyText = commentCount > 0
+    ? comments.reduce((latest, c) =>
+        new Date(c.commented_at).getTime() > new Date(latest.commented_at).getTime() ? c : latest
+      ).comment_text ?? null
+    : null;
+
+  // outreach_eligible：最高档是精准或高意向 → true，否则 false
+  const highestGrade = commentCount > 0
+    ? comments.reduce((best, c) => {
+        const grades = ['高意向', '精准', '感兴趣'];
+        const ci = grades.indexOf(c.grade ?? '');
+        const bi = grades.indexOf(best ?? '');
+        return ci >= 0 && (bi < 0 || ci < bi) ? c.grade : best;
+      }, null as string | null)
+    : null;
+  const outreachEligible = highestGrade === '高意向' || highestGrade === '精准';
+
+  await pool.query(
+    // latest_reply_at 复用 $5(last_commented_at)——两者是同一个时间戳，改其中一列的取值时另一列会跟着变，勿拆开单独赋值。
+    `UPDATE zenithjoy.acquisition_leads
+        SET relevance_score = $3, comment_count = $4, last_commented_at = $5,
+            outreach_eligible = $6, grade = $7, latest_reply = $8, latest_reply_at = $5,
+            updated_at = now()
+      WHERE tenant_id = $1 AND id = $2`,
+    [tenantId, leadId, score, commentCount, lastCommentedAt, outreachEligible, highestGrade, latestReplyText]
+  );
+
+  // FR-8：outreach_eligible 变 false → 取消该 lead 的 pending/queued dm_assignments
+  if (!outreachEligible) {
+    await pool.query(
+      `UPDATE zenithjoy.dm_assignments
+          SET status = 'cancelled', updated_at = now()
+        WHERE tenant_id = $1 AND lead_id = $2
+          AND status IN ('queued', 'pending_dispatch')`,
+      [tenantId, leadId]
+    );
+  }
+
+  return { score, comment_count: commentCount, outreach_eligible: outreachEligible };
+}
+
+// ── 时段工具：now 是否在 [start,end] HH:MM 区间内（按 now 的本地小时分钟）──
+export function parseHHMM(s: string): number {
+  const m = HHMM_RE.exec(s);
+  if (!m) return -1;
+  const [hh, mm] = s.split(':').map((x) => parseInt(x, 10));
+  return hh * 60 + mm;
+}
+
+export function withinActiveWindow(now: Date, start: string, end: string): boolean {
+  const cur = now.getHours() * 60 + now.getMinutes();
+  const s = parseHHMM(start);
+  const e = parseHHMM(end);
+  if (s < 0 || e < 0) return true; // 配置异常时不阻塞
+  if (s <= e) return cur >= s && cur <= e;
+  // 跨夜区间（如 22:00–02:00）
+  return cur >= s || cur <= e;
+}
+
+/** 把 now 推进到活跃时段内：若已在窗口内返回 now；否则推到当天（或次日）start。 */
+export function clampToWindowStart(now: Date, start: string): Date {
+  const s = parseHHMM(start);
+  if (s < 0) return new Date(now);
+  const d = new Date(now);
+  const startToday = new Date(now);
+  startToday.setHours(Math.floor(s / 60), s % 60, 0, 0);
+  if (d < startToday) return startToday;
+  return d;
+}
+
+// ── buildAssignments：分析+指派 ────────────────────────────────────────────
+export interface BuildResult {
+  assigned: number;
+  skipped_dedup: number;
+  skipped_budget: number;
+  burners: string[];
+  pending: number;
+}
+
+export async function buildAssignments(
+  pool: QueryablePool,
+  tenantId: string,
+  now: Date = new Date()
+): Promise<BuildResult> {
+  const cfg = await getConfig(pool, tenantId);
+  const nowIso = now.toISOString();
+
+  // ★ Step B: 查在线 burner 小号，按当天已派任务量升序（最少负载优先）
+  const burnersRes = await pool.query(
+    `SELECT s.account_label,
+       COALESCE((
+         SELECT count(*) FROM zenithjoy.dm_assignments da2
+          WHERE da2.tenant_id = $1
+            AND da2.account_label = s.account_label
+            AND da2.status IN ('queued','dispatched','sent')
+            AND date_trunc('day', da2.scheduled_for) = date_trunc('day', $3::timestamptz)
+       ), 0) AS day_count
+       FROM zenithjoy.agent_platform_sessions s
+       -- a.tenant_id::text（不是 $1::uuid）：PostgreSQL 对同一个 $1 在整条语句里只推断一种
+       -- 类型；da2.tenant_id 是 text 迫使 $1 定型为 text，若改成 a.tenant_id = $1::uuid，
+       -- 报错只会挪到 da2.tenant_id=$1 那一行（实测验证过），必须转的是 uuid 这一侧。
+       -- 代价：agents 表放弃 idx_agents_tenant_status 索引，可接受——本查询驱动表是
+       -- agent_platform_sessions（先按 role/status 过滤出小候选集），agents 由主键 join，
+       -- 这个 cast 只是 join 到那一行后的后置 filter，不在索引命中路径上。
+       JOIN zenithjoy.agents a ON a.id = s.agent_id AND a.tenant_id::text = $1
+      WHERE s.role = 'burner'
+        AND s.status = 'active'
+        AND a.last_heartbeat_at > $3::timestamptz - INTERVAL '2 minutes'
+      GROUP BY s.account_label
+      ORDER BY day_count ASC
+      LIMIT $2`,
+    [tenantId, cfg.burner_count, nowIso]
+  );
+  const burners: string[] = burnersRes.rows.map((r: { account_label: string }) => r.account_label).filter(Boolean);
+
+  // ★ Step A: 重标离线 burner 的 queued 行为 pending_dispatch
+  // 先 SELECT 所有未到期 queued 行，对不在在线 burner 白名单中的逐行 UPDATE → pending_dispatch
+  const queuedRemapRes = await pool.query(
+    `SELECT id, lead_id, account_label
+       FROM zenithjoy.dm_assignments
+      WHERE tenant_id = $1 AND status = 'queued' AND scheduled_for > $2::timestamptz`,
+    [tenantId, nowIso]
+  );
+  const onlineBurnerSet = new Set(burners);
+  for (const qRow of queuedRemapRes.rows as { id: string; lead_id: string; account_label: string }[]) {
+    if (!onlineBurnerSet.has(qRow.account_label)) {
+      // Fix 3（P0 串台/重复触达附带修复）：dispatch_reason 不再无痕清空成 NULL，
+      // 记录"曾经指派给谁、因为掉线被重标"——这条记录若被 Step D/E 重新指派，
+      // dispatch_reason 会被那时写入的新原因（如 'least_load'）覆盖，属预期行为，
+      // 这里只保住"重标那一刻"的审计轨迹（员工反馈"指派小号与实际触达账号不一致，
+      // 无法排查"的根因就是这里被清空成 NULL）。
+      await pool.query(
+        `UPDATE zenithjoy.dm_assignments
+           SET status = 'pending_dispatch', account_label = '', scheduled_for = NULL,
+               dispatch_reason = $2, updated_at = now()
+         WHERE id = $1 AND status = 'queued'`,
+        [qRow.id, `offline_reassign_from:${qRow.account_label}`]
+      );
+    }
+  }
+
+  // ★ Step C: 获取上一轮积压的 pending_dispatch leads（优先重试，含 Step A 刚重标的行）
+  const pendingRes = await pool.query(
+    `SELECT id, lead_id, account_label
+       FROM zenithjoy.dm_assignments
+      WHERE tenant_id = $1 AND status = 'pending_dispatch'
+      ORDER BY created_at ASC`,
+    [tenantId]
+  );
+  const pendingRows = pendingRes.rows as { id: string; lead_id: string; account_label: string }[];
+  const pendingLeadIds = new Set(pendingRows.map((r) => r.lead_id));
+
+  // 频控预算（天）
+  const perDayUsed = new Map<string, number>();
+  for (const label of burners) {
+    const dayRes = await pool.query(
+      `SELECT
+         (SELECT count(*) FROM zenithjoy.dm_assignments
+            WHERE tenant_id = $1 AND account_label = $2
+              AND status IN ('queued','dispatched','sent')
+              AND scheduled_for >= date_trunc('day', $3::timestamptz)
+              AND scheduled_for <  date_trunc('day', $3::timestamptz) + interval '1 day')
+       + (SELECT count(*) FROM zenithjoy.dm_outreach_log
+            WHERE tenant_id = $1 AND account_label = $2
+              AND sent_at >= date_trunc('day', $3::timestamptz)
+              AND sent_at <  date_trunc('day', $3::timestamptz) + interval '1 day') AS used`,
+      [tenantId, label, nowIso]
+    );
+    perDayUsed.set(label, Number(dayRes.rows[0]?.used ?? 0));
+  }
+
+  // 排期游标
+  const cursor = new Map<string, Date>();
+  const startCursor = clampToWindowStart(now, cfg.dm_active_start);
+  for (const label of burners) cursor.set(label, new Date(startCursor));
+
+  let assigned = 0;
+  let skippedDedup = 0;
+  let skippedBudget = 0;
+  let pending = 0;
+  let rr = 0;
+
+  // ★ Step D: 有在线小号时，优先重试 pending_dispatch leads
+  if (burners.length > 0) {
+    for (const pendingRow of pendingRows) {
+      let placed = false;
+      for (let attempt = 0; attempt < burners.length; attempt++) {
+        const label = burners[(rr + attempt) % burners.length];
+
+        if ((perDayUsed.get(label) ?? 0) >= cfg.dm_per_day) {
+          skippedBudget += 1;
+          continue;
+        }
+
+        // 与下面主路径同一口径（"成功过才不再派"）——两处必须一致，
+        // 否则 pending_dispatch 这条补派路仍会把重投堵死。见 dm-retry-policy.ts。
+        // ⚠️ 这里的 hasActiveAssignment 要排除本行自己（它就是 pending_dispatch），
+        // 否则补派永远被自己挡住。
+        const pStat = await pool.query(
+          `SELECT
+             (SELECT count(*) FROM zenithjoy.dm_outreach_log
+               WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3 AND status = 'sent') AS sent_by_this,
+             (SELECT count(*) FROM zenithjoy.dm_assignments
+               WHERE tenant_id = $1 AND lead_id = $2 AND status IN ('queued','dispatched')) AS active_assign,
+             (SELECT count(*) FROM zenithjoy.dm_outreach_log
+               WHERE tenant_id = $1 AND lead_id = $2 AND status = 'failed') AS failed_cnt,
+             (SELECT EXTRACT(EPOCH FROM ($4::timestamptz - max(sent_at)))/60 FROM zenithjoy.dm_outreach_log
+               WHERE tenant_id = $1 AND lead_id = $2 AND status = 'failed') AS mins_since_fail`,
+          [tenantId, pendingRow.lead_id, label, nowIso]
+        );
+        const pSt = pStat.rows[0] as Record<string, unknown> | undefined;
+        const pDecision = shouldAssignLead({
+          sentByThisAccount: Number(pSt?.sent_by_this ?? 0) > 0,
+          hasActiveAssignment: Number(pSt?.active_assign ?? 0) > 0,
+          failedAttempts: Number(pSt?.failed_cnt ?? 0),
+          minutesSinceLastFailure: pSt?.mins_since_fail == null ? null : Number(pSt.mins_since_fail),
+        });
+        if (!pDecision.assign) {
+          skippedDedup += 1;
+          continue;
+        }
+
+        const gap = randInt(cfg.dm_interval_min_sec, cfg.dm_interval_max_sec);
+        let when = new Date(cursor.get(label)!.getTime() + gap * 1000);
+        if (!withinActiveWindow(when, cfg.dm_active_start, cfg.dm_active_end)) {
+          const nextDay = new Date(when);
+          nextDay.setDate(nextDay.getDate() + 1);
+          // clampToWindowStart 只在 d < startToday 时才钳制；越窗时刻（如22:03）
+          // 钟点不变地 +1 天后仍 >= startToday，必须先重置到当天零点再传入，
+          // 才能保证钳制生效（否则原样返回超窗时间，逐条候选滚雪球式前移）。
+          nextDay.setHours(0, 0, 0, 0);
+          when = clampToWindowStart(nextDay, cfg.dm_active_start);
+        }
+        cursor.set(label, when);
+
+        // 将 pending_dispatch 行升级为 queued
+        await pool.query(
+          `UPDATE zenithjoy.dm_assignments
+           SET status = 'queued', account_label = $2, scheduled_for = $3,
+               dispatch_reason = $4, updated_at = now()
+           WHERE id = $1`,
+          [pendingRow.id, label, when.toISOString(), 'least_load']
+        );
+        perDayUsed.set(label, (perDayUsed.get(label) ?? 0) + 1);
+        assigned += 1;
+        rr = (rr + attempt + 1) % burners.length;
+        placed = true;
+        break;
+      }
+      if (!placed) {
+        pending += 1; // 本轮仍无法派发，保持 pending 计数
+      }
+    }
+  }
+
+  // ★ Step E: 处理已评分且 outreach_eligible=true 的 leads（按分降序）
+  // content-judgment-gate FR-8：只对 outreach_eligible=true 的 leads 派发 DM 任务
+  // outreach_eligible IS NULL 视为旧数据（未跑 rescoreLead），允许通过（向后兼容）
+  // Fix 1（P0 串台/重复触达根治）：加线索级 NOT EXISTS 排除——一条线索只要已经有
+  // 任何非终态指派（不管是哪个 account_label）或已有真实发送记录，这一轮就不再把它
+  // 当候选。原来的过滤只到 outreach_eligible，不看 dm_assignments/dm_outreach_log，
+  // buildAssignments 每次重跑（采集完成/超时清扫/手动派单都会触发）都会把已经处理过
+  // 的线索重新纳入候选池，只要还有小号槽位空着就会真实二次派单——staging 实锤 7 条
+  // 线索被 2-3 个不同小号各派一次。循环内部 (tenant_id, lead_id, account_label) 粒度
+  // 的去重检查（下面 Step D/E 里的 dup 查询）保留不动，作为并发场景下的次要安全网。
+  // cast 约定同 ~380 行 burnersRes 注释：l.tenant_id 是 uuid，da.tenant_id/dol.tenant_id
+  // 都是 text，Postgres 对同一个 $1 全语句只推断一种类型——outer l.tenant_id = $1 在语句里
+  // 最先出现，$1 会被定型为 uuid，两条 NOT EXISTS 子查询里 text 列再拿 $1 比较就报错
+  // "operator does not exist: text = uuid"（CI 真实 Postgres 实测命中）。必须转的还是
+  // uuid 这一侧：l.tenant_id::text = $1，让 $1 定型为 text，子查询原样 text = $1 即可通过；
+  // 反过来在子查询里改成 da.tenant_id = $1::text 只是把 $1 显式钉死成 uuid，报错原地不动。
+  const leadsRes = await pool.query(
+    `SELECT l.id, l.profile_url, COALESCE(l.relevance_score, 0) AS relevance_score
+       FROM zenithjoy.acquisition_leads l
+      WHERE l.tenant_id::text = $1 AND l.relevance_score IS NOT NULL
+        AND (l.outreach_eligible IS NULL OR l.outreach_eligible = true)
+        AND NOT EXISTS (
+          SELECT 1 FROM zenithjoy.dm_assignments da
+           WHERE da.tenant_id = $1 AND da.lead_id = l.id
+             AND da.status IN ('queued', 'dispatched', 'sent', 'pending_dispatch')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM zenithjoy.dm_outreach_log dol
+           WHERE dol.tenant_id = $1 AND dol.lead_id = l.id AND dol.status = 'sent'
+        )
+      ORDER BY l.relevance_score DESC, l.created_at ASC`,
+    [tenantId]
+  );
+
+  for (const lead of leadsRes.rows) {
+    if (burners.length === 0) {
+      // 全离线：写入 pending_dispatch（去重：同 (tenant,lead) 已有 pending 则跳过）
+      if (!pendingLeadIds.has(lead.id)) {
+        await pool.query(
+          `INSERT INTO zenithjoy.dm_assignments (tenant_id, lead_id, account_label, status)
+           VALUES ($1, $2, '', 'pending_dispatch')
+           ON CONFLICT (tenant_id, lead_id, account_label) DO NOTHING`,
+          [tenantId, lead.id]
+        );
+        pending += 1;
+        pendingLeadIds.add(lead.id);
+      }
+      continue;
+    }
+
+    // 有在线小号：轮换选最少负载号
+    let placed = false;
+    for (let attempt = 0; attempt < burners.length; attempt++) {
+      const label = burners[(rr + attempt) % burners.length];
+
+      if ((perDayUsed.get(label) ?? 0) >= cfg.dm_per_day) {
+        skippedBudget += 1;
+        continue;
+      }
+
+      // 去重口径从"派过就永不再派"改成"成功过才不再派"（invariant: 见 dm-retry-policy.ts）。
+      //
+      // 旧口径的 dm_assignments 那半边**没有状态过滤也没有时间窗**——某个号派过一次
+      // （哪怕失败）就永远不能再试它，3 个小号 = 一条线索一辈子最多 3 次尝试。
+      // 而 0821 真机数据显示失败是**随机的**（多次尝试的 13 条里 6 条先败后成），
+      // 且产能严重过剩（90 次/天配额只用了 30 次，新线索才 15 条）。
+      // 按 32% 单次成功率：3 次累计 69%，6 次累计 90%——这中间的差距是白扔的。
+      const stat = await pool.query(
+        `SELECT
+           (SELECT count(*) FROM zenithjoy.dm_outreach_log
+             WHERE tenant_id = $1 AND lead_id = $2 AND account_label = $3 AND status = 'sent') AS sent_by_this,
+           (SELECT count(*) FROM zenithjoy.dm_assignments
+             WHERE tenant_id = $1 AND lead_id = $2
+               AND status IN ('queued','dispatched','pending_dispatch')) AS active_assign,
+           (SELECT count(*) FROM zenithjoy.dm_outreach_log
+             WHERE tenant_id = $1 AND lead_id = $2 AND status = 'failed') AS failed_cnt,
+           (SELECT EXTRACT(EPOCH FROM ($4::timestamptz - max(sent_at)))/60 FROM zenithjoy.dm_outreach_log
+             WHERE tenant_id = $1 AND lead_id = $2 AND status = 'failed') AS mins_since_fail`,
+        [tenantId, lead.id, label, nowIso]
+      );
+      const st = stat.rows[0] as Record<string, unknown> | undefined;
+      const decision = shouldAssignLead({
+        sentByThisAccount: Number(st?.sent_by_this ?? 0) > 0,
+        hasActiveAssignment: Number(st?.active_assign ?? 0) > 0,
+        failedAttempts: Number(st?.failed_cnt ?? 0),
+        minutesSinceLastFailure: st?.mins_since_fail == null ? null : Number(st.mins_since_fail),
+      });
+      if (!decision.assign) {
+        skippedDedup += 1;
+        continue;
+      }
+
+      const gap = randInt(cfg.dm_interval_min_sec, cfg.dm_interval_max_sec);
+      let when = new Date(cursor.get(label)!.getTime() + gap * 1000);
+      if (!withinActiveWindow(when, cfg.dm_active_start, cfg.dm_active_end)) {
+        const nextDay = new Date(when);
+        nextDay.setDate(nextDay.getDate() + 1);
+        // 同上（Step D 附近注释）：先重置到当天零点，clampToWindowStart 才能钳制生效。
+        nextDay.setHours(0, 0, 0, 0);
+        when = clampToWindowStart(nextDay, cfg.dm_active_start);
+      }
+      cursor.set(label, when);
+
+      await pool.query(
+        `INSERT INTO zenithjoy.dm_assignments
+           (tenant_id, lead_id, account_label, status, scheduled_for, dispatch_reason)
+         VALUES ($1, $2, $3, 'queued', $4, $5)
+         ON CONFLICT (tenant_id, lead_id, account_label) DO NOTHING`,
+        [tenantId, lead.id, label, when.toISOString(), 'least_load']
+      );
+      perDayUsed.set(label, (perDayUsed.get(label) ?? 0) + 1);
+      assigned += 1;
+      rr = (rr + attempt + 1) % burners.length;
+      placed = true;
+      break;
+    }
+    if (!placed) {
+      // 所有号都被预算/去重挡住（非离线导致），仍算 skipped
+    }
+  }
+
+  return { assigned, skipped_dedup: skippedDedup, skipped_budget: skippedBudget, burners, pending };
+}
+
+function randInt(lo: number, hi: number): number {
+  if (hi <= lo) return lo;
+  return lo + Math.floor(Math.random() * (hi - lo + 1));
+}
+
+// ── dispatchDue：执行到期指派（时段闸 + per-hour/per-day 上限闸）────────────
+export interface DispatchResult {
+  dispatched: number;
+  skipped_window: number;
+  skipped_limit: number;
+  skipped_stale_heartbeat: number;
+}
+
+/**
+ * 按执行通道判定这条 lead 能不能派 —— 两个通道要的字段【语义相反】，不能共用一个闸。
+ *
+ *  - android : DouyinDmOutreachService.startOutreach() 把收到的字段【当抖音号搜索】
+ *              （agent-android/.../DouyinDmOutreachService.kt:151-153
+ *               `val targetDouyinId = profileUrl`）→ 必须有【裸抖音号】。
+ *              没号还派 = 设备拿 URL 去搜 → matchProfileByDouyinId 零匹配 → NO_MATCH，
+ *              白烧一次频控额度还污染 dm_outreach_log。宁可标 limited 等 Seg3 回填到号。
+ *  - windows : douyin-dm-outreach.cjs:80 `page.goto(profileUrl)` → 必须有【真 URL】，
+ *              喂裸 id 会直接炸。
+ */
+export function isDmDispatchable(
+  devicePlatform: DevicePlatform,
+  lead: { profileUrl: string | null; douyinId: string | null },
+  agentId: string | null
+): boolean {
+  if (!agentId) return false;
+  return devicePlatform === 'android'
+    ? Boolean(lead.douyinId && lead.douyinId.trim())
+    : Boolean(lead.profileUrl && lead.profileUrl.trim());
+}
+
+// FR-4: 辅助函数 getSessionOnlineStatus — 复用三级判定逻辑（同 agent-burner.ts sessions 端点）
+// 查 agent_platform_sessions + agents.last_heartbeat_at，返回 online/offline/unknown。
+// 必须携带 tenant_id 条件（Invariant-6：所有写入路径携带 tenant_id）。
+export async function getSessionOnlineStatus(
+  pool: QueryablePool,
+  tenantId: string,
+  agentId: string,
+  accountLabel: string,
+): Promise<'online' | 'offline' | 'unknown'> {
+  const r = await pool.query(
+    `SELECT s.uia_online, s.uia_error,
+            (a.last_heartbeat_at >= NOW() - INTERVAL '2 minutes') AS heartbeat_online
+       FROM zenithjoy.agent_platform_sessions s
+       LEFT JOIN zenithjoy.agents a ON a.id = s.agent_id
+       WHERE s.agent_id = $1
+         AND s.platform = 'douyin'
+         AND s.account_label = $2
+         AND EXISTS (
+           SELECT 1 FROM zenithjoy.agents a2
+            WHERE a2.id = s.agent_id AND a2.tenant_id::text = $3
+         )
+       LIMIT 1`,
+    [agentId, accountLabel, tenantId],
+  );
+  if (r.rows.length === 0) return 'unknown';
+  const row = r.rows[0];
+  const heartbeatOnline = row.heartbeat_online === true;
+  if (!heartbeatOnline) return 'offline';
+  if (row.uia_online === false) return 'offline';
+  if (row.uia_online === true) return 'online';
+  // uia_online IS NULL，有无 uia_error 都是 unknown
+  return 'unknown';
+}
+
+export async function dispatchDue(
+  pool: QueryablePool,
+  tenantId: string,
+  now: Date = new Date()
+): Promise<DispatchResult> {
+  const cfg = await getConfig(pool, tenantId);
+
+  // 时段闸：当前不在 dm_active 时段 → 一条都不发
+  if (!withinActiveWindow(now, cfg.dm_active_start, cfg.dm_active_end)) {
+    return { dispatched: 0, skipped_window: -1, skipped_limit: 0, skipped_stale_heartbeat: 0 };
+  }
+
+  const dueRes = await pool.query(
+    `SELECT id, lead_id, account_label
+       FROM zenithjoy.dm_assignments
+      WHERE tenant_id = $1 AND status = 'queued' AND scheduled_for <= $2::timestamptz
+      ORDER BY scheduled_for ASC`,
+    [tenantId, now.toISOString()]
+  );
+
+  let dispatched = 0;
+  let skippedLimit = 0;
+  let skippedStaleHeartbeat = 0;
+  const skippedWindow = 0;
+
+  // 每号本轮已发计数（叠加历史 + 本轮），避免一轮内冲破上限
+  const hourUsed = new Map<string, number>();
+  const dayUsed = new Map<string, number>();
+
+  for (const row of dueRes.rows) {
+    const label = row.account_label as string;
+
+    if (!hourUsed.has(label)) {
+      const cntRes = await pool.query(
+        `SELECT
+           (SELECT count(*) FROM zenithjoy.dm_outreach_log
+              WHERE tenant_id = $1 AND account_label = $2 AND sent_at >= $3::timestamptz - interval '1 hour') AS hour,
+           (SELECT count(*) FROM zenithjoy.dm_outreach_log
+              WHERE tenant_id = $1 AND account_label = $2
+                AND sent_at >= date_trunc('day', $3::timestamptz)
+                AND sent_at <  date_trunc('day', $3::timestamptz) + interval '1 day') AS day`,
+        [tenantId, label, now.toISOString()]
+      );
+      hourUsed.set(label, Number(cntRes.rows[0]?.hour ?? 0));
+      dayUsed.set(label, Number(cntRes.rows[0]?.day ?? 0));
+    }
+
+    // 上限闸：per-hour / per-day
+    if ((hourUsed.get(label) ?? 0) >= cfg.dm_per_hour || (dayUsed.get(label) ?? 0) >= cfg.dm_per_day) {
+      skippedLimit += 1;
+      await pool.query(
+        `UPDATE zenithjoy.dm_assignments SET status = 'limited', updated_at = now() WHERE id = $1`,
+        [row.id]
+      );
+      continue;
+    }
+
+    // 取 lead profile_url / douyin_id、agent_id（burner session 为本号绑定的 agent）、
+    // agent capabilities（用于判定 device_platform——按 agents.capabilities 独立判定，
+    // 不派生自 agents.os_type，见 contract-draft.md "device_platform 与既有 agents.os_type
+    // 关系澄清" 段）。douyin_id 是 Seg3 点头像进主页读出的真实抖音号，Android 通道必需。
+    // Fix 2（P0 附带修复，跨租户串号风险）：原查询的 agent_platform_sessions JOIN
+    // 没有 tenant_id 过滤，若两个不同租户恰好有相同 account_label 的小号，理论上会
+    // 查到别的租户的 session/agent；LIMIT 1 又没有 ORDER BY，多行匹配时结果不确定。
+    // 注意：tenant 过滤必须挂在 s（agent_platform_sessions）的 JOIN 条件上，不能只加在
+    // 后面 agents 的 JOIN 上——否则 s.agent_id 本身就可能已经是别的租户的会话，capabilities
+    // 因为 ag 那层过滤不上而变成 NULL，但 resolveDevicePlatform(null) 会默认落到 'windows'
+    // 通道，agentId 依然非空，isDmDispatchable 照样放行，跨租户串号的口子并没有真正堵上。
+    // 用 EXISTS 把 tenant 过滤前移到 s 的 JOIN 条件里，确保 s（进而 s.agent_id）从一开始
+    // 就只会匹配到当前租户（$3）名下的 session；cast 侧沿用 buildAssignments burnersRes
+    // 同款约定（~380 行注释——agents.tenant_id 是 uuid，转 ::text 去跟 $3 比较）。
+    // + 显式 ORDER BY s.bound_at DESC NULLS LAST 兜底 LIMIT 1 的确定性。
+    const leadRes = await pool.query(
+      `SELECT l.profile_url, l.douyin_id, s.agent_id, ag.capabilities, ag.last_heartbeat_at
+         FROM zenithjoy.acquisition_leads l
+         LEFT JOIN zenithjoy.agent_platform_sessions s
+           ON s.account_label = $2 AND s.platform = 'douyin' AND s.role = 'burner' AND s.status = 'active'
+           AND EXISTS (
+             SELECT 1 FROM zenithjoy.agents a3
+              WHERE a3.id = s.agent_id AND a3.tenant_id::text = $3
+           )
+         LEFT JOIN zenithjoy.agents ag ON ag.id = s.agent_id
+         WHERE l.id = $1
+         ORDER BY s.bound_at DESC NULLS LAST
+         LIMIT 1`,
+      [row.lead_id, label, tenantId]
+    );
+    const profileUrl = leadRes.rows[0]?.profile_url ?? null;
+    const douyinId = leadRes.rows[0]?.douyin_id ?? null;
+    const agentId = leadRes.rows[0]?.agent_id ?? null;
+    const devicePlatform = resolveDevicePlatform(leadRes.rows[0]?.capabilities ?? null);
+    const lastHeartbeatAt = leadRes.rows[0]?.last_heartbeat_at ?? null;
+
+    // gap 期间自动 requeue：build 阶段判在线是那一刻的心跳快照，dispatchDue 真正执行
+    // 发送前可能已经过了几小时——这里补上第二次心跳新鲜度检测，跟 buildAssignments
+    // Step B 的 2 分钟阈值保持一致（本文件 ~383 行附近）。离线时回退
+    // pending_dispatch（不是 limited——limited 语义是"配额/字段缺失"，回退到
+    // pending_dispatch 才能让下一轮 buildAssignments 的 Step A/B 重新捡起来正常排期）。
+    const heartbeatFresh = lastHeartbeatAt
+      ? (now.getTime() - new Date(lastHeartbeatAt).getTime()) < 2 * 60 * 1000
+      : false;
+    if (!heartbeatFresh) {
+      await pool.query(
+        `UPDATE zenithjoy.dm_assignments
+            SET status = 'pending_dispatch', account_label = '', scheduled_for = NULL,
+                dispatch_reason = $2, updated_at = now()
+          WHERE id = $1`,
+        [row.id, `offline_reassign_from:${label}`]
+      );
+      skippedStaleHeartbeat += 1;
+      continue;
+    }
+
+    if (!isDmDispatchable(devicePlatform, { profileUrl, douyinId }, agentId)) {
+      // 该号无 active agent，或本通道要的定位字段缺失（android 缺抖音号 / windows 缺主页 URL）
+      // → 跳过，标 limited。派出去必然失败，不如留着等 Seg3 回填到号后下一轮再派。
+      await pool.query(
+        `UPDATE zenithjoy.dm_assignments SET status = 'limited', updated_at = now() WHERE id = $1`,
+        [row.id]
+      );
+      skippedLimit += 1;
+      continue;
+    }
+
+    // FR-4: dispatch 前二次在线检测（UIA 信号覆盖心跳判定）
+    // agentId 非空（isDmDispatchable 已保证），查 UIA 在线状态
+    if (agentId) {
+      const onlineStatus = await getSessionOnlineStatus(pool, tenantId, agentId, label);
+      if (onlineStatus === 'offline') {
+        // 账号 UIA 检测为离线 → 回退 pending_dispatch，不发私信
+        await pool.query(
+          `UPDATE zenithjoy.dm_assignments SET status = 'pending_dispatch', updated_at = now() WHERE id = $1`,
+          [row.id]
+        );
+        console.log(`[dispatch] pre-dispatch check: offline, requeued as pending_dispatch (label=${label})`);
+        skippedLimit += 1;
+        continue;
+      } else if (onlineStatus === 'unknown') {
+        // unknown → 保守策略：允许派单，写日志
+        console.log(`[dispatch] uia_unknown, proceeding with heartbeat-only (label=${label})`);
+      }
+      // online → 正常继续
+    }
+
+    // 真派单：写 publish_tasks → agent 收到后执行 douyin-dm-outreach.cjs
+    await pool.query(
+      `INSERT INTO zenithjoy.publish_tasks
+         (agent_id, platform, status, task_type, payload, tenant_id, created_at, updated_at)
+       VALUES ($1, 'douyin', 'queued', 'dm_outreach', $2, $3, NOW(), NOW())`,
+      [
+        agentId,
+        JSON.stringify({
+          agent_id: agentId,
+          account_label: label,
+          // 两个字段各喂一个通道，语义不同不可互换：
+          //   profile_url : 真主页 URL —— Windows 的 douyin-dm-outreach.cjs `page.goto()` 用
+          //   douyin_id   : 裸抖音号 —— Android 的 DouyinDmOutreachService 拿去搜索框精确定位
+          // 历史 bug：只发 profile_url，Android 把 URL 当抖音号搜 → 必然 NO_MATCH。
+          profile_url: profileUrl,
+          douyin_id: douyinId,
+          message: cfg.dm_message,
+          tenant_id: tenantId,
+          task_type: 'dm_outreach',
+          dm_assignment_id: row.id,
+          device_platform: devicePlatform,
+        }),
+        tenantId,
+      ]
+    );
+    // 记录日志（status=dispatched，等 agent 回报后再改 sent/failed；带 assignment_id 供
+    // outreach-history 联表 + /dm-outreach-result 幂等判定使用）
+    await pool.query(
+      `INSERT INTO zenithjoy.dm_outreach_log (tenant_id, account_label, lead_id, profile_url, status, assignment_id)
+       VALUES ($1, $2, $3, $4, 'dispatched', $5)`,
+      [tenantId, label, row.lead_id, profileUrl, row.id]
+    );
+    await pool.query(
+      `UPDATE zenithjoy.dm_assignments SET status = 'dispatched', agent_id = $2, updated_at = now() WHERE id = $1`,
+      [row.id, agentId]
+    );
+    hourUsed.set(label, (hourUsed.get(label) ?? 0) + 1);
+    dayUsed.set(label, (dayUsed.get(label) ?? 0) + 1);
+    dispatched += 1;
+  }
+
+  return {
+    dispatched,
+    skipped_window: skippedWindow,
+    skipped_limit: skippedLimit,
+    skipped_stale_heartbeat: skippedStaleHeartbeat,
+  };
+}
+
+// ── cookieHealth：按 status + 陈旧度分类 ─────────────────────────────────────
+export type CookieStatus = 'healthy' | 'stale' | 'expired';
+export interface CookieHealthItem {
+  account_label: string;
+  role: string;
+  platform: string;
+  status: CookieStatus;
+  bound_at: string | null;
+  needs_rescan: boolean;
+}
+
+export function classifyCookie(
+  row: { status?: string | null; bound_at?: string | Date | null },
+  staleHours: number,
+  now: Date
+): CookieStatus {
+  if (row.status === 'expired') return 'expired';
+  if (!row.bound_at) return 'stale';
+  const boundMs = new Date(row.bound_at).getTime();
+  if (Number.isNaN(boundMs)) return 'stale';
+  const ageHours = (now.getTime() - boundMs) / 3_600_000;
+  if (ageHours > staleHours) return 'stale';
+  return 'healthy';
+}
+
+export async function cookieHealth(
+  pool: QueryablePool,
+  tenantId: string,
+  now: Date = new Date()
+): Promise<{ items: CookieHealthItem[]; alerts: CookieHealthItem[] }> {
+  const cfg = await getConfig(pool, tenantId);
+  const r = await pool.query(
+    `SELECT s.account_label, s.role, s.platform, s.status, s.bound_at
+       FROM zenithjoy.agent_platform_sessions s
+       JOIN zenithjoy.agents a ON a.id = s.agent_id
+      WHERE a.tenant_id = $1 AND s.role IN ('main','burner')
+      ORDER BY s.role ASC, s.account_label ASC`,
+    [tenantId]
+  );
+  const items: CookieHealthItem[] = r.rows.map((row) => {
+    const status = classifyCookie(row, cfg.cookie_check_interval_hours, now);
+    return {
+      account_label: row.account_label,
+      role: row.role,
+      platform: row.platform,
+      status,
+      bound_at: row.bound_at ? new Date(row.bound_at).toISOString() : null,
+      needs_rescan: status === 'expired',
+    };
+  });
+  const alerts = items.filter((i) => i.status !== 'healthy');
+  return { items, alerts };
+}
+
+/** 按取模轮询从 ASSIGNEE_ROSTER 分配负责人。名单为空返 null，记 warn 日志。 */
+export function pickAssignee(roster: string[], dayLeadCount: number): string | null {
+  if (!Array.isArray(roster) || roster.length === 0) return null;
+  return roster[dayLeadCount % roster.length];
+}
