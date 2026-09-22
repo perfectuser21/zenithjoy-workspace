@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require_ = createRequire(import.meta.url);
-const { routeOf, isFallback, ROUTES } = require_('../line-routes.js');
+const { routeOf, isFallback, ROUTES, devBatchTag } = require_('../line-routes.js');
 
 test('按业务线名路由（活自己带的标记）', () => {
   assert.equal(routeOf('AI人工智能训练师').key, 'jinuo');
@@ -48,17 +48,43 @@ test('空标记也拒收，不猜', () => {
   assert.throws(() => routeOf(undefined), /未配路由|unknown route/);
 });
 
-test('研发活单独一条路由，落测试 base，绝不碰生产表', () => {
-  const dev = routeOf('dev');
-  assert.equal(dev.key, 'dev');
-  assert.notEqual(dev.base, ROUTES.find((r) => r.key === 'jinuo').base, '研发路由指向了金诺的 base');
-  assert.notEqual(dev.base, ROUTES.find((r) => r.key === 'yuesheng').base, '研发路由指向了悦升的 base');
+// ── 研发是标签，不是客户（主理人 0922 纠正）──────────────────────────────
+// 「金诺是一个客户表，悦升云端也是个客户表。研发只是个标签呀。
+//   金诺的研发就在金诺里面，悦升的研发就在悦升里面。
+//   你这个活标记应该就是客户嘛。」
+//
+// 上一版把 dev 做成与 jinuo/yuesheng 并列的第三条路由、base=null，
+// 等于①把研发变成第三个客户 ②金诺的研发活数据直接丢失、无处可查。
+
+test('路由表里只有客户，没有 dev——研发不是客户', () => {
+  const keys = ROUTES.map((r) => r.key);
+  assert.ok(!keys.includes('dev'), 'dev 还在路由表里当客户站着');
+  assert.deepEqual(keys.sort(), ['jinuo', 'yuesheng']);
 });
 
-test('研发路由是可识别的——调用方要能据此决定「不真发私信」', () => {
-  assert.equal(routeOf('dev').isDev, true);
-  assert.ok(!routeOf('AI人工智能训练师').isDev);
-  assert.ok(!routeOf('悦升云端').isDev);
+test('每条客户路由都必须有 base——没有"不落库的客户"这种东西', () => {
+  for (const r of ROUTES) {
+    assert.ok(r.base, `${r.key} 没有 base：数据会静默丢失，无处可查`);
+    assert.ok(r.lead, `${r.key} 没有线索表`);
+  }
+});
+
+test('研发活照样落到它所属客户的库里', () => {
+  // 金诺的研发活 → 金诺的 base；悦升的研发活 → 悦升的 base。不是丢掉。
+  const jinuo = routeOf('AI人工智能训练师');
+  const yue = routeOf('悦升云端');
+  assert.equal(routeOf('AI人工智能训练师', { dev: true }).base, jinuo.base);
+  assert.equal(routeOf('悦升云端', { dev: true }).base, yue.base);
+});
+
+test('研发是正交的标签：同一个客户，标签变了路由不变', () => {
+  assert.equal(routeOf('jinuo').base, routeOf('jinuo', { dev: true }).base);
+});
+
+test('标签落到线索表已有的「实验批次」列，不新造字段', () => {
+  // 两个客户库结构一致、都有这一列（0922 实测各 34 列），复用即可。
+  assert.equal(devBatchTag(true), '研发');
+  assert.equal(devBatchTag(false), '');
 });
 
 test('isFallback 退场：不再有 fallback 这回事', () => {
