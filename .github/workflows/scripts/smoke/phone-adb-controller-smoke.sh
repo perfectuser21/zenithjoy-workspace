@@ -276,7 +276,14 @@ grep -qF 'GNuwbzY0da8GP0sv6MGcOTu9ntd' "$D/line-routes.js" || fail "路由表缺
 grep -qE 'LINE *=[^;]*process\.argv' "$D/sort-comments.js" || fail "分拣脚本的 LINE 没真读入参(写死空值=悦升池永远没人消化)"
 [[ -s "$D/batch2.sh" ]] || fail "batch2.sh 未回流 repo(只活在机器上=重装即丢,且无守卫)"
 if command -v zsh >/dev/null 2>&1; then zsh -n "$D/batch2.sh" || fail "batch2.sh zsh 语法错误"; fi
-grep -qE 'push-raw-comments\.js [^ ]+ \$TAG \$P' "$D/batch2.sh" || fail "batch2.sh 落池未把 profile 传下去(路由拿不到业务线,悦升数据会写错表)"
+# 0922: 载体从 profile 换成业务线标记 ${LINE}——隔离点在「活」上不在「机器」上
+# （主理人原话：生产要求你生产回填哪，研发要求你研发回填哪）。
+# 守的**意图没变**：落池必须拿得到业务线，否则悦升数据会写进金诺表；
+# 变的只是传什么。${LINE} 缺省退回 profile 名，两者 line-routes 都认。
+grep -qE 'push-raw-comments\.js [^ ]+ \$TAG \$(LINE|P)\b' "$D/batch2.sh" || fail "batch2.sh 落池没把业务线标记传下去(路由拿不到业务线,悦升数据会写错表)"
+grep -qE 'push-videos\.js [^ ]+ \$TAG \$(LINE|P)\b' "$D/batch2.sh" || fail "batch2.sh 视频落池没把业务线标记传下去"
+# 认不出的标记必须拒收——旧实现兜底倒进金诺，等于静默污染别人的库
+grep -qE 'throw new Error' "$D/line-routes.js" || fail "line-routes 认不出标记时不再抛错(退回兜底=悦升研发数据会静默写进金诺生产表)"
 for f in push-raw-comments.js push-videos.js sort-comments.js; do
   grep -qF 'line-routes' "$D/$f" || fail "$f 未走业务线路由(写死单一 base = 悦升数据无处可去)"
   # 写死 base 常量必须已移除(允许出现在注释里)
