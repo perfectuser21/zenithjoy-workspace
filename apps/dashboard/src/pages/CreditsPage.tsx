@@ -23,6 +23,13 @@ import {
 // credit_conflict（并发落账冲突但积分已在别处到账）——不能只认 credited，否则会漏报成功。
 const CREDITED_OUTCOMES = new Set(['credited', 'already_credited', 'credit_conflict']);
 
+function formatRemaining(ms: number): string {
+  const totalSeconds = Math.max(Math.ceil(ms / 1000), 0);
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 export default function CreditsPage() {
   const [balance, setBalance] = useState<Balance | null>(null);
   const [tiers, setTiers] = useState<Tier[]>([]);
@@ -30,7 +37,9 @@ export default function CreditsPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [order, setOrder] = useState<CreatedOrder | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [remainingMs, setRemainingMs] = useState<number | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const reload = useCallback(async () => {
     setBalance(await fetchBalance());
@@ -44,15 +53,21 @@ export default function CreditsPage() {
 
   const check = useCallback(
     async (orderId: string) => {
-      const r = await syncOrder(orderId);
-      if (CREDITED_OUTCOMES.has(r.outcome)) {
-        setMessage('充值成功');
-        setOrder(null);
-        if (timer.current) {
-          clearInterval(timer.current);
-          timer.current = null;
+      try {
+        const r = await syncOrder(orderId);
+        if (CREDITED_OUTCOMES.has(r.outcome)) {
+          setMessage('充值成功');
+          setOrder(null);
+          if (timer.current) {
+            clearInterval(timer.current);
+            timer.current = null;
+          }
+          await reload();
         }
-        await reload();
+      } catch {
+        // 不把原始错误码甩给用户；网络抖动/后端 5xx 时给可重试提示，而不是让
+        // Promise 静默 reject（那样手动点「我已支付」的用户会以为按钮坏了）
+        setMessage('查询失败，请稍后重试');
       }
     },
     [reload]
@@ -71,6 +86,42 @@ export default function CreditsPage() {
       }
     };
   }, [order, check]);
+
+  // 倒计时：每秒刷新剩余时间，归零时收口——停止轮询、清空订单退回选档位状态，
+  // 并提示用户重新下单（不自动重新下单，下单会在后端真的创建订单记录）
+  useEffect(() => {
+    if (!order) {
+      setRemainingMs(null);
+      return;
+    }
+    const expireTs = new Date(order.expireAt).getTime();
+    const tick = () => {
+      const remain = expireTs - Date.now();
+      if (remain <= 0) {
+        setRemainingMs(0);
+        if (countdownTimer.current) {
+          clearInterval(countdownTimer.current);
+          countdownTimer.current = null;
+        }
+        if (timer.current) {
+          clearInterval(timer.current);
+          timer.current = null;
+        }
+        setOrder(null);
+        setMessage('二维码已过期，请重新下单');
+        return;
+      }
+      setRemainingMs(remain);
+    };
+    tick();
+    countdownTimer.current = setInterval(tick, 1000);
+    return () => {
+      if (countdownTimer.current) {
+        clearInterval(countdownTimer.current);
+        countdownTimer.current = null;
+      }
+    };
+  }, [order]);
 
   async function pay(provider: 'wechat' | 'alipay') {
     if (!selected) return;
@@ -124,6 +175,9 @@ export default function CreditsPage() {
             <QRCodeSVG value={order.qrCodeUrl} size={220} />
           </div>
           <p className="text-sm">请使用手机扫码支付 ¥{(order.amountFen / 100).toFixed(2)}</p>
+          {remainingMs !== null && (
+            <p className="text-sm text-muted-foreground">剩余 {formatRemaining(remainingMs)}</p>
+          )}
           <button onClick={() => void check(order.orderId)}>我已支付</button>
         </section>
       )}
