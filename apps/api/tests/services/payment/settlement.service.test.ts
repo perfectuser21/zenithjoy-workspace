@@ -5,7 +5,10 @@ vi.mock('../../../src/db/connection', () => {
   return { default: { connect: vi.fn(async () => client), query: vi.fn() }, __client: client };
 });
 
-const rechargeMock = vi.fn();
+// vi.mock 工厂被提升到文件最顶端（先于下方任何 import/const 执行），工厂内引用的
+// 变量必须同样提升，否则命中 TDZ 报 "Cannot access before initialization"。
+// rechargeMock 不以 "mock" 开头，vitest 的自动提升识别不到它，需显式 vi.hoisted。
+const { rechargeMock } = vi.hoisted(() => ({ rechargeMock: vi.fn() }));
 vi.mock('../../../src/services/credits.service', async (orig) => {
   const actual = await (orig() as Promise<any>);
   return { ...actual, rechargeInTx: rechargeMock };
