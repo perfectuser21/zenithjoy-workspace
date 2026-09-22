@@ -58,6 +58,14 @@ export class InsufficientCreditsError extends Error {
   }
 }
 
+/** 同一订单重复入账（命中 credit_transactions.order_id 唯一索引） */
+export class DuplicateCreditError extends Error {
+  constructor(public readonly orderId: string) {
+    super(`DUPLICATE_CREDIT: order ${orderId} 已入过账`);
+    this.name = 'DuplicateCreditError';
+  }
+}
+
 // ==================== getBalance ====================
 
 export async function getBalance(tenantId: string): Promise<BalanceRow | null> {
@@ -84,7 +92,8 @@ export async function recharge(
   tenantId: string,
   amount: number,
   reason: string,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
+  orderId?: string
 ): Promise<BalanceRow> {
   if (!Number.isInteger(amount) || amount <= 0) {
     throw new Error(`INVALID_AMOUNT: 充值 amount 必须是正整数（得到 ${amount}）`);
@@ -109,9 +118,9 @@ export async function recharge(
 
     // INSERT transaction（amount 正数 = 充值）
     await client.query(
-      `INSERT INTO zenithjoy.credit_transactions (tenant_id, amount, reason, metadata)
-       VALUES ($1, $2, $3, $4)`,
-      [tenantId, amount, reason, metadata ? JSON.stringify(metadata) : null]
+      `INSERT INTO zenithjoy.credit_transactions (tenant_id, amount, reason, metadata, order_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [tenantId, amount, reason, metadata ? JSON.stringify(metadata) : null, orderId ?? null]
     );
 
     await client.query('COMMIT');
@@ -123,6 +132,9 @@ export async function recharge(
     };
   } catch (err) {
     await client.query('ROLLBACK');
+    if ((err as { code?: string }).code === '23505' && orderId) {
+      throw new DuplicateCreditError(orderId);
+    }
     throw err;
   } finally {
     client.release();
