@@ -359,4 +359,15 @@ if grep -qE 'sent\s*%\s*2\s*===\s*0' "$_NO"; then
 fi
 grep -qF 'Math.random() < 0.5' "$_NO" || fail "next-outreach.js 缺少随机选号逻辑(账号轮流不能依赖会卡住不动的计数器)"
 
+# 层20: 0922视频文案判定(阶段3)——judge-jev.js的复核官(judgeCommander)是判定链最后
+#一道关卡,真机实测时曾把"httpPost网络异常/超时"这种情况漏处理:异常会直接从
+# judgeCommander往外抛,冲穿judgeContent,让整条视频判定崩溃退出、这一批后面的视频全部
+# 陪跑失败(找到时是靠单测复现的,不是真机踩的坑,提前补上守卫防止真机复发)。
+# 必须在httpPost调用外面包一层try/catch,失败保守判rejected(存疑不放行),不能让异常裸抛。
+_JJ="$D/judge-jev.js"
+[[ -s "$_JJ" ]] || fail "judge-jev.js 缺失或为空"
+_COMMANDER_BODY=$(awk '/^async function judgeCommander/,/^}/' "$_JJ")
+grep -q "try {" <<< "$_COMMANDER_BODY" || fail "judgeCommander 缺少try/catch包裹httpPost调用(网络异常会裸抛,炸穿整条判定链)"
+grep -q "catch" <<< "$_COMMANDER_BODY" || fail "judgeCommander 缺少catch分支"
+
 echo "phone-adb-controller-smoke: PASS"
