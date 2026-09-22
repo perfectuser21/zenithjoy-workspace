@@ -1814,7 +1814,7 @@ const b2 = code('services/phone-adb-controller/batch2.sh');
 if (/LINE="\$\{6:-\}"/.test(hk)) process.exit(1);
 if (!/harvest-keyword\.sh[^\n]*"\$LINE"/.test(b2)) process.exit(1);
 // 收紧：原来写 /push-videos\.js[^\n]*\$LINE/ 太松——同一行后半句还有
-// push-raw-comments.js ... $LINE，把 push-videos 换回 $P 也照样匹配得上（变异实测漏网）。
+// push-raw-comments.js ... ${LINE}，把 push-videos 换回 ${P} 也照样匹配得上（变异实测漏网）。
 if (/push-videos\.js\s+\S+\s+\S+\s+\$P\b/.test(b2)) process.exit(1);
 if (!/push-videos\.js\s+\S+\s+\S+\s+\$LINE\b/.test(b2)) process.exit(1);
 NODE
