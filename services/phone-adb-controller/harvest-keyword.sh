@@ -112,6 +112,8 @@ for CARDLINE in "${(f)CARDS}"; do
   CC=""
   EMPTY_ROUNDS=0
   SCREEN=0
+  j=0
+  AUTHOR_IS_OWN=0
   while true; do
     SCREEN=$((SCREEN+1))
     RAW="$($C --profile "$P" collect-comments "$TAG-v$i-cc$SCREEN" 2>/dev/null || true)"
@@ -130,6 +132,64 @@ for CARDLINE in "${(f)CARDS}"; do
     if (( NEWCOUNT == 0 )); then EMPTY_ROUNDS=$((EMPTY_ROUNDS+1)); else EMPTY_ROUNDS=0; fi
     TOTAL=$(print -- "$CC" | grep -c "	tap=" || true)
     log "  第${SCREEN}屏: 新增${NEWCOUNT}条 累计${TOTAL}条 exhausted=$EXHAUSTED"
+
+    # 0923修复(生产实证:三台并发批次、两条业务线,身份验证逐行100%炸"nickname mismatch"):
+    # 逐条身份验证必须在**本屏还在屏上**时立即做——旧写法是全部翻完屏再回头处理累积列表,
+    # 但那时手机已经滚到最后一屏了,早期屏的tap坐标对应的早就是别的内容,一验证必错。
+    # 现在每屏collect完立刻处理这一屏的新增行,再决定要不要翻下一屏,坐标永远新鲜。
+    if (( NEWCOUNT > 0 )); then
+      for CLINE in "${(f)NEWLINES}"; do
+        [[ -z "$CLINE" ]] && continue
+        j=$((j+1))
+        # 字段可能为空(连续tab),cut 按位取,绝不合并
+        NICK="$(print -- "$CLINE" | cut -f1)"; BODY="$(print -- "$CLINE" | cut -f2)"
+        DATE="$(print -- "$CLINE" | cut -f3)"; REGION="$(print -- "$CLINE" | cut -f4)"
+        AUTHOR="$(print -- "$CLINE" | cut -f5)"; TAPF="$(print -- "$CLINE" | cut -f6)"; B64F="$(print -- "$CLINE" | cut -f7)"
+        [[ "$AUTHOR" == "author" ]] && { log "  跳过作者本人: $NICK"; continue; }
+        TX="${TAPF#tap=}"; TXX="${TX%% *}"; TXY="${TX##* }"
+        NB="${B64F#b64=}"
+        [[ "$TXX" == <-> && "$TXY" == <-> && -n "$NB" ]] || { log "  行$j 坐标缺失($TAPF),跳过"; continue; }
+        # 0915: 评论者是真实存在的,一次读不到只说明时序/网络抖——3次重试+死因留档(0912原则)
+        IDOUT=""; IDERR=/tmp/iderr-$$.txt
+        for IDTRY in 1 2 3; do
+          IDOUT="$($C --profile "$P" commenter-identity "$TXX" "$TXY" "$NB" "$TAG-v$i-u$j-t$IDTRY" </dev/null 2>$IDERR || true)"
+          ONICK="$(print -- "$IDOUT" | sed -n "s/^nickname=//p")"
+          [[ -n "$ONICK" ]] && break
+          log "  行$j 身份验证第${IDTRY}次失败: $(tail -1 $IDERR 2>/dev/null | head -c 120)"
+          # 0915 真凶: card-link收尾恢复不可靠→评论面板丢失→后续行全灭。恢复=back+重开评论面板
+          $C --profile "$P" back >/dev/null 2>&1
+          /bin/sleep 2
+          if ! $C --profile "$P" open-comments "$TAG-v$i-u$j-ro$IDTRY" </dev/null >/dev/null 2>&1; then
+            $C --profile "$P" back >/dev/null 2>&1; /bin/sleep 2
+            $C --profile "$P" open-comments "$TAG-v$i-u$j-ro${IDTRY}b" </dev/null >/dev/null 2>&1 || true
+          fi
+          /bin/sleep 2
+        done
+        OID="$(print -- "$IDOUT" | sed -n "s/^douyin_id=//p")"
+        ATYPE="$(print -- "$IDOUT" | sed -n "s/^account_type=//p")"
+        PIP="$(print -- "$IDOUT" | sed -n "s/^profile_ip=//p")"
+        if [[ -z "$ONICK" ]]; then log "  行$j 身份验证3次仍失败,弃: $NICK"; continue; fi
+        # 0919 自有账号过滤: 命中自有名单的评论不当线索;若命中的是视频作者本人,整条视频其余评论不再采集
+        if node "$(dirname "$0")/check-own-account.js" "$ONICK" "${OID:-}" >/dev/null 2>&1; then
+          if [[ "$AUTHOR" == "author" ]]; then
+            log "  视频作者是自有账号($ONICK),本视频其余评论不再采集"
+            AUTHOR_IS_OWN=1
+            break
+          fi
+          log "  跳过自有账号: $ONICK"
+          continue
+        fi
+        # 0914 主理人验收:每人顺取名片主页直链(identity已回评论区,重进主页跑card-link,其自带恢复)
+        "$C" --profile "$P" tap-evidence "$TXX" "$TXY" "$TAG-v$i-u$j-re" </dev/null >/dev/null 2>&1
+        sleep 3
+        CARD="$("$C" --profile "$P" commenter-card-link "$TAG-v$i-u$j-cl" </dev/null 2>/dev/null || true)"
+        PURL="$(print -- "$CARD" | sed -n "s/^profile_url=//p")"
+        print -- "LEAD	$ONICK	${OID:-}	${ATYPE:-personal}	$BODY	$DATE	$REGION	$TITLE	$KWTXT	${PIP:-}	${PURL:-}	${VURL:-}"
+        sleep 4
+      done
+    fi
+    if (( AUTHOR_IS_OWN == 1 )); then break; fi
+
     # 停止条件(跟comment-tier-lib.js的shouldKeepScrolling同一套判据):
     #   真到底了 / 大户已攒够封顶数 / 连续2屏没有新增(可能卡住了,防死循环) → 停
     if (( EXHAUSTED == 1 )); then break; fi
@@ -147,54 +207,6 @@ for CARDLINE in "${(f)CARDS}"; do
     continue
   fi
   log "  评论数: $(print -- "$CC" | wc -l | tr -d " ")"
-  j=0
-  for CLINE in "${(f)CC}"; do
-    j=$((j+1))
-    # 字段可能为空(连续tab),cut 按位取,绝不合并
-    NICK="$(print -- "$CLINE" | cut -f1)"; BODY="$(print -- "$CLINE" | cut -f2)"
-    DATE="$(print -- "$CLINE" | cut -f3)"; REGION="$(print -- "$CLINE" | cut -f4)"
-    AUTHOR="$(print -- "$CLINE" | cut -f5)"; TAPF="$(print -- "$CLINE" | cut -f6)"; B64F="$(print -- "$CLINE" | cut -f7)"
-    [[ "$AUTHOR" == "author" ]] && { log "  跳过作者本人: $NICK"; continue; }
-    TX="${TAPF#tap=}"; TXX="${TX%% *}"; TXY="${TX##* }"
-    NB="${B64F#b64=}"
-    [[ "$TXX" == <-> && "$TXY" == <-> && -n "$NB" ]] || { log "  行$j 坐标缺失($TAPF),跳过"; continue; }
-    # 0915: 评论者是真实存在的,一次读不到只说明时序/网络抖——3次重试+死因留档(0912原则)
-    IDOUT=""; IDERR=/tmp/iderr-$$.txt
-    for IDTRY in 1 2 3; do
-      IDOUT="$($C --profile "$P" commenter-identity "$TXX" "$TXY" "$NB" "$TAG-v$i-u$j-t$IDTRY" </dev/null 2>$IDERR || true)"
-      ONICK="$(print -- "$IDOUT" | sed -n "s/^nickname=//p")"
-      [[ -n "$ONICK" ]] && break
-      log "  行$j 身份验证第${IDTRY}次失败: $(tail -1 $IDERR 2>/dev/null | head -c 120)"
-      # 0915 真凶: card-link收尾恢复不可靠→评论面板丢失→后续行全灭。恢复=back+重开评论面板
-      $C --profile "$P" back >/dev/null 2>&1
-      /bin/sleep 2
-      if ! $C --profile "$P" open-comments "$TAG-v$i-u$j-ro$IDTRY" </dev/null >/dev/null 2>&1; then
-        $C --profile "$P" back >/dev/null 2>&1; /bin/sleep 2
-        $C --profile "$P" open-comments "$TAG-v$i-u$j-ro${IDTRY}b" </dev/null >/dev/null 2>&1 || true
-      fi
-      /bin/sleep 2
-    done
-    OID="$(print -- "$IDOUT" | sed -n "s/^douyin_id=//p")"
-    ATYPE="$(print -- "$IDOUT" | sed -n "s/^account_type=//p")"
-    PIP="$(print -- "$IDOUT" | sed -n "s/^profile_ip=//p")"
-    if [[ -z "$ONICK" ]]; then log "  行$j 身份验证3次仍失败,弃: $NICK"; continue; fi
-    # 0919 自有账号过滤: 命中自有名单的评论不当线索;若命中的是视频作者本人,整条视频其余评论不再采集
-    if node "$(dirname "$0")/check-own-account.js" "$ONICK" "${OID:-}" >/dev/null 2>&1; then
-      if [[ "$AUTHOR" == "author" ]]; then
-        log "  视频作者是自有账号($ONICK),本视频其余评论不再采集"
-        break
-      fi
-      log "  跳过自有账号: $ONICK"
-      continue
-    fi
-    # 0914 主理人验收:每人顺取名片主页直链(identity已回评论区,重进主页跑card-link,其自带恢复)
-    "$C" --profile "$P" tap-evidence "$TXX" "$TXY" "$TAG-v$i-u$j-re" </dev/null >/dev/null 2>&1
-    sleep 3
-    CARD="$("$C" --profile "$P" commenter-card-link "$TAG-v$i-u$j-cl" </dev/null 2>/dev/null || true)"
-    PURL="$(print -- "$CARD" | sed -n "s/^profile_url=//p")"
-    print -- "LEAD	$ONICK	${OID:-}	${ATYPE:-personal}	$BODY	$DATE	$REGION	$TITLE	$KWTXT	${PIP:-}	${PURL:-}	${VURL:-}"
-    sleep 4
-  done
   # 视频落「视频池」行(全链可观察: VIDEO\tid\t短链\t标题\t关键词\t采到评论数)
   print -- "VIDEO	${VID:-}	${VURL:-}	$TITLE	$KWTXT	$(print -- "$CC" | wc -l | tr -d " ")"
   # 收评论面板+回搜索结果
