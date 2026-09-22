@@ -1267,6 +1267,25 @@ describe('expireStaleOrders', () => {
     expect(marked).toBe(false);
   });
 
+  it('查单返回 credit_conflict（积分已入账、账实分叉）→ 绝不标过期', async () => {
+    pool.query.mockImplementation(async (sql: string) => {
+      if (/SELECT[\s\S]*expire_at\s*<\s*now\(\)/i.test(sql)) {
+        return { rows: [{ id: 'o-3', out_trade_no: 'no-3', provider: 'mock' }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+    settleMock.mockResolvedValue({ outcome: 'credit_conflict' });
+
+    const r = await expireStaleOrders();
+
+    expect(r.credited).toBe(1);
+    expect(r.expired).toBe(0);
+    const marked = pool.query.mock.calls.some((c: any[]) =>
+      /UPDATE zenithjoy\.payment_orders/i.test(c[0]) && String(c[1]).includes('expired')
+    );
+    expect(marked).toBe(false);
+  });
+
   it('查单说没付 → 才 CAS 标 expired', async () => {
     pool.query.mockImplementation(async (sql: string) => {
       if (/SELECT[\s\S]*expire_at\s*<\s*now\(\)/i.test(sql)) {
@@ -1440,10 +1459,17 @@ export async function expireStaleOrders(): Promise<{
     try {
       // 先查单：回调可能在过期边界丢失
       const r = await settleOrder(o.out_trade_no, o.provider);
-      if (r.outcome === 'credited' || r.outcome === 'already_credited') {
+      // credited / already_credited / credit_conflict 三者都意味着积分确已入账，
+      // 绝不能再标过期（credit_conflict = 账实分叉，积分已入、状态刚补齐或待人工）
+      if (
+        r.outcome === 'credited' ||
+        r.outcome === 'already_credited' ||
+        r.outcome === 'credit_conflict'
+      ) {
         credited += 1;
         continue;
       }
+      // 已落待人工的终态，不该被过期覆盖
       if (r.outcome === 'amount_mismatch') continue;
 
       const upd = await pool.query(
@@ -1469,7 +1495,7 @@ export async function expireStaleOrders(): Promise<{
 - [ ] **Step 4: 跑测试确认通过**
 
 Run: `cd apps/api && npx vitest run tests/services/payment/orders.service.test.ts`
-Expected: PASS（7 passed）
+Expected: PASS（8 passed）
 
 - [ ] **Step 5: 提交**
 
