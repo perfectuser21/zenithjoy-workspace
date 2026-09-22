@@ -117,10 +117,12 @@ export const LINE_DEFS: LineDef[] = [
     lineKey: 'line02',
     label: 'Line 02 客户智能获客',
     // 原 Path 健康 PATH_DEFS 的 path2 映射（客户智能获客路径 journey），Path 健康已下线合并进本页面
+    // 0922: 系统①(apps/api的acquisition.ts等)已退役,现役实现是services/phone-adb-controller
+    // (纯shell/node+crontab+飞书表格),relatedPaths跟着挪过来。
     journeyId: 'afa6abca-53c0-4815-8594-b7fb81ca547f',
     journeyName: '客户智能获客路径',
-    relatedPaths: ['apps/api/src/routes/acquisition.ts'],
-    prTitleKeywords: ['line02', 'acquisition'],
+    relatedPaths: ['services/phone-adb-controller'],
+    prTitleKeywords: ['line02', 'leadgen', 'phone-adb-controller'],
   },
   {
     lineKey: 'line04',

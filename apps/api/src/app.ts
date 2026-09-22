@@ -38,8 +38,6 @@ import feishuOauthRouter from './routes/feishu-oauth';
 import crmRouter from './routes/crm';
 // Path 2 Step4 — DEV-only fake-LLM 替身（根路径自托管，仅非生产挂载）
 import { fakeLlmRouter } from './routes/_smoke-fake-llm';
-// Path 2 Sprint B-1 — 抖音小号绑定 + 评论抓取
-import agentBurnerRouter from './routes/agent-burner';
 import agentMachinesRouter from './routes/agent-machines';
 import agentEventsRouter from './routes/agent-events';
 // 工作机控制塔（决策 e14297d4）：执行器面（内部 token）+ 读面（租户）
@@ -48,11 +46,8 @@ import workersReadRouter from './routes/workers-read';
 import scheduleRouter from './routes/schedule';
 import scheduleExecutorRouter from './routes/schedule-executor';
 import devicesRouter from './routes/devices';
-import smokeFakeAgentBurnerRouter from './routes/_smoke-fake-agent-burner';
 // Path 2 Sprint B-1 architecture hotfix — DEV-only mock-agent helper
 import smokeMockAgentRouter from './routes/_smoke-mock-agent';
-// Line02 安卓真机采集 smoke 自愈 — DEV-only 幂等 seed 固定测试租户（抗 DB 重置）
-import smokeAcquisitionSeedRouter from './routes/_smoke-acquisition-seed';
 // Path 4 Sprint 1 WS1 — wechat 3 endpoints (thin stub)
 import { wechatRouter } from './routes/wechat';
 // Path 4 Sprint B — 微信客服中台配置（人设/企业知识库 CRUD + AI 帮填 A1-A5）
@@ -63,8 +58,6 @@ import { wechatMemoryRouter } from './routes/wechat-memory';
 import { panelEventsRouter } from './routes/panel-events';
 import clipsRouter from './routes/clips';
 import clipsAuthRouter from './routes/clips-auth';
-import { acquisitionRouter } from './routes/acquisition';
-import { acquisitionDispatchRouter } from './routes/acquisition-dispatch';
 import { companyProfileRouter } from './routes/company-profile';
 import { line02Router } from './routes/line02';
 import { brainSprintStateRouter } from './routes/brain-sprint-state';
@@ -242,13 +235,8 @@ app.use('/api/credits', creditsRouter);
 app.use('/api/feishu/oauth', feishuOauthRouter);
 // Line04 中台 AI-native CRM·客户列表页（/customers 读名册租户闸 + manage/status/POST 写接口）
 app.use('/api/crm', crmRouter);
-// Path 2 Sprint B-1 — 抖音小号绑定 6 路由 + smoke fake-agent helper
-app.use('/api/agent/burner', agentBurnerRouter);
-app.use('/api/_smoke', smokeFakeAgentBurnerRouter);
 // Path 2 Sprint B-1 architecture hotfix — DEV-only mock-agent helper（lead 自验用）
 app.use('/api/_smoke', smokeMockAgentRouter);
-// Line02 安卓真机采集 smoke 自愈 seed helper（生产 NODE_ENV=production 必返 404）
-app.use('/api/_smoke', smokeAcquisitionSeedRouter);
 // Path 4 — wechat endpoints (qr-bind / scheduler-tick / draft-generate 去飞书自动直发)
 app.use('/api/wechat', wechatRouter);
 // Path 4 Sprint B — 微信客服配置 CRUD（/persona, /business-kb, /business-kb/suggest-audience）
@@ -258,9 +246,10 @@ app.use('/api/wechat', wechatMemoryRouter);
 app.use('/api/panel', panelEventsRouter);
 app.use('/api/clips', clipsRouter);
 app.use('/api/clips/auth', clipsAuthRouter);
-// 智能获客「分析+指派」中台大脑（刀1）— 挂同前缀，路径(/config,/dispatch/*,/cookie-health)不与 acquisitionRouter 冲突
-app.use('/api/acquisition', acquisitionDispatchRouter);
-app.use('/api/acquisition', acquisitionRouter);
+// 0922系统①(抖音获客Kotlin+DB驱动实现)正式退役——acquisitionRouter/acquisitionDispatchRouter/
+// agentBurnerRouter/smokeFakeAgentBurnerRouter/smokeAcquisitionSeedRouter已删除。
+// 已验证长期休眠(acquisition_config 0行、agents心跳停在2026-08-24)。现役实现见
+// services/phone-adb-controller(纯shell/node+crontab+飞书表格,系统②)。
 // Harness Sprint State — Walking Skeleton 本地持久化（Brain DB source of truth）
 app.use('/api/brain', brainSprintStateRouter);
 // Line 07 — AI 爆款视频翻拍 9节点流水线
