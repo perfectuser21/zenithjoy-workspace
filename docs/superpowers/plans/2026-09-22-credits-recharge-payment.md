@@ -2839,11 +2839,9 @@ describe('CreditsPage', () => {
     await waitFor(() => screen.getByText(/100 积分/));
     fireEvent.click(screen.getByText(/100 积分/));
     fireEvent.click(screen.getByRole('button', { name: /微信支付/ }));
-    await waitFor(() =>
-      expect(screen.getByAltText('支付二维码')).toHaveAttribute(
-        'src', expect.stringContaining('pay.example')
-      )
-    );
+    // 二维码本地生成，断言它确实渲染出来了（内容正确性由 createOrder 的返回值保证，
+    // 不去断言 SVG 内部结构——那是 qrcode.react 的实现细节）
+    await waitFor(() => expect(screen.getByLabelText('支付二维码')).toBeInTheDocument());
   });
 
   it('点「我已支付」触发主动查单', async () => {
@@ -2851,7 +2849,7 @@ describe('CreditsPage', () => {
     await waitFor(() => screen.getByText(/100 积分/));
     fireEvent.click(screen.getByText(/100 积分/));
     fireEvent.click(screen.getByRole('button', { name: /微信支付/ }));
-    await waitFor(() => screen.getByAltText('支付二维码'));
+    await waitFor(() => screen.getByLabelText('支付二维码'));
     fireEvent.click(screen.getByRole('button', { name: /我已支付/ }));
     await waitFor(() => expect(api.syncOrder).toHaveBeenCalledWith('o-1'));
   });
@@ -2866,7 +2864,7 @@ describe('CreditsPage', () => {
     await waitFor(() => screen.getByText(/100 积分/));
     fireEvent.click(screen.getByText(/100 积分/));
     fireEvent.click(screen.getByRole('button', { name: /微信支付/ }));
-    await waitFor(() => screen.getByAltText('支付二维码'));
+    await waitFor(() => screen.getByLabelText('支付二维码'));
     fireEvent.click(screen.getByRole('button', { name: /我已支付/ }));
 
     await waitFor(() => expect(screen.getByText('充值成功')).toBeInTheDocument());
@@ -2941,6 +2939,7 @@ export async function syncOrder(orderId: string): Promise<{ outcome: string }> {
 
 ```tsx
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   createOrder, fetchBalance, fetchTiers, fetchTransactions, syncOrder,
   type Balance, type CreatedOrder, type Tier, type Tx,
@@ -3023,10 +3022,14 @@ export default function CreditsPage() {
 
       {order && (
         <section className="space-y-2">
-          <img
-            alt="支付二维码"
-            src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(order.qrCodeUrl)}`}
-          />
+          {/*
+            必须本地生成二维码。绝不能把 order.qrCodeUrl 发给任何第三方图片服务
+            （如 api.qrserver.com）——那是微信支付的 code_url，等于把支付链接
+            交给外部服务器。仓库已有 qrcode.react，AndroidDownloadPage 在用。
+          */}
+          <div role="img" aria-label="支付二维码">
+            <QRCodeSVG value={order.qrCodeUrl} size={220} />
+          </div>
           <p className="text-sm">请使用手机扫码支付 ¥{(order.amountFen / 100).toFixed(2)}</p>
           <button onClick={() => void check(order.orderId)}>我已支付</button>
         </section>
@@ -3053,7 +3056,7 @@ export default function CreditsPage() {
 }
 ```
 
-> 二维码图片源若受 CSP 限制，改用仓库已有的前端二维码组件（`grep -rn "qrcode" apps/dashboard/src` 查现成实现），保持 `alt="支付二维码"` 不变以满足测试。
+> 二维码用仓库已有的 `qrcode.react`（`QRCodeSVG`，`AndroidDownloadPage.tsx:7` 有现成用法），本地渲染，无任何外部请求。
 
 三件套改动：
 
