@@ -63,43 +63,56 @@ export async function createRechargeOrder(
   const outTradeNo = `ZJ${Date.now()}${randomUUID().slice(0, 8)}`;
   const expireAt = new Date(Date.now() + ORDER_TTL_MS);
 
-  const created = await pool.query<{ id: string; out_trade_no: string }>(
+  const created = await pool.query<{ id: string }>(
     `INSERT INTO zenithjoy.payment_orders
        (tenant_id, out_trade_no, provider, amount_fen, credits, status, expire_at)
      VALUES ($1, $2, $3, $4, $5, 'created', $6)
-     RETURNING id, out_trade_no`,
+     RETURNING id`,
     [tenantId, outTradeNo, providerName, tier.amountFen, tier.credits, expireAt]
   );
+  // orderId 由 DB 端 gen_random_uuid() 生成，应用侧拿不到，必须靠 RETURNING 回填；
+  // out_trade_no 是应用生成后传给 DB 的纯 TEXT 列，无 DEFAULT/触发器，DB 只是存储
+  // 介质，直接用本地变量即可，无需再靠 RETURNING 回填一次。
   const orderId = created.rows[0].id;
-  // 以 INSERT RETURNING 回填的 out_trade_no 为准，不信本地生成变量：
-  // 和 orderId 取自 DB 返回同一原则——落库值才是唯一真相，本地变量只是入参。
-  const persistedOutTradeNo = created.rows[0].out_trade_no;
 
   let qrCodeUrl: string;
   try {
     const r = await provider.createOrder({
-      outTradeNo: persistedOutTradeNo,
+      outTradeNo,
       amountFen: tier.amountFen,
       description: `积分充值 ${tier.credits}`,
       expireAt,
     });
     qrCodeUrl = r.qrCodeUrl;
   } catch (err) {
-    await pool.query(
+    const failResult = await pool.query(
       `UPDATE zenithjoy.payment_orders
           SET status = 'create_failed', failure_reason = $2, updated_at = now()
         WHERE id = $1 AND status = ANY($3)`,
       [orderId, (err as Error).message.slice(0, 200), ALLOWED_TRANSITIONS.create_failed]
     );
+    if (failResult.rowCount !== 1) {
+      // 订单已不在 created 状态，CAS 未生效——不吞掉原始下单失败异常，只记录以便排查
+      console.warn('[payment] CAS created→create_failed 未生效，订单已不在 created 状态', {
+        payment_order_id: orderId,
+        reason: (err as Error).message,
+      });
+    }
     throw err;
   }
 
-  await pool.query(
+  const casResult = await pool.query(
     `UPDATE zenithjoy.payment_orders
         SET status = 'pending', qr_code_url = $2, updated_at = now()
       WHERE id = $1 AND status = ANY($3)`,
     [orderId, qrCodeUrl, ALLOWED_TRANSITIONS.pending]
   );
+  if (casResult.rowCount !== 1) {
+    // 二维码已生成但状态未能推进：订单会卡死在 created，永远不被任何流程处理，必须抛错
+    throw new Error(
+      `CAS created→pending 未生效，订单处于异常状态: payment_order_id=${orderId}`
+    );
+  }
 
   return { orderId, qrCodeUrl, expireAt, amountFen: tier.amountFen, credits: tier.credits };
 }
