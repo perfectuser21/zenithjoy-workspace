@@ -1919,7 +1919,8 @@ git commit -m "feat(credits): 支付回调(raw body 前置挂载) + 自助下单
 **Files:**
 - Create: `apps/api/src/services/payment/wechat-native.provider.ts`
 - Create: `apps/api/src/services/payment/alipay-f2f.provider.ts`
-- Modify: `apps/api/src/services/payment/provider-registry.ts`（按 env 条件注册）
+- Modify: `apps/api/src/services/payment/provider-registry.ts`（mock 改为非 production 才注册 + 真实 provider 按 env 条件注册）
+- Modify: `apps/api/tests/services/payment/mock.provider.test.ts`（补一条 production 不注册 mock 的断言）
 - Test: `apps/api/tests/services/payment/wechat-native.provider.test.ts`
 - Test: `apps/api/tests/services/payment/alipay-f2f.provider.test.ts`
 
@@ -2469,7 +2470,35 @@ export class AlipayF2FProvider implements PaymentProvider {
 }
 ```
 
-`apps/api/src/services/payment/provider-registry.ts` 追加条件注册（放在文件末尾）：
+`apps/api/src/services/payment/provider-registry.ts` 的两处改动：
+
+**① 把 mock 的无条件注册改为按环境注册**（Task 4 评审发现：文件注释承诺"绝不在 production 注册"，但代码是模块级无条件 `registry.set('mock', ...)`，承诺与代码对不上。生产环境据此可创建永远 pending 的 mock 订单，污染数据并触发积压告警）：
+
+```typescript
+// 原：registry.set('mock', new MockProvider());
+// 改为：
+if (process.env.NODE_ENV !== 'production') {
+  registry.set('mock', new MockProvider());
+}
+```
+
+对应补一条测试进 `apps/api/tests/services/payment/mock.provider.test.ts` 的 `provider-registry` describe：
+
+```typescript
+  it('production 环境不注册 mock（防止生产下单到假网关）', async () => {
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    vi.resetModules();
+    const { getProvider: freshGetProvider } = await import(
+      '../../../src/services/payment/provider-registry'
+    );
+    expect(() => freshGetProvider('mock')).toThrow('UNKNOWN_PROVIDER');
+    process.env.NODE_ENV = prev;
+    vi.resetModules();
+  });
+```
+
+**② 追加真实 provider 的条件注册**（放在文件末尾）：
 
 ```typescript
 /**
