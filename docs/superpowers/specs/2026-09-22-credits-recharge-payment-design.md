@@ -82,9 +82,13 @@ CREATE INDEX ... ON payment_orders(status, expire_at) WHERE status = 'pending';
 
 ### `zenithjoy.payment_callbacks`（审计 + 乱序识别）
 
-`id / provider / provider_transaction_id / event_type / order_id / raw_digest / received_at`，
+`id / provider / provider_transaction_id / event_type / order_id / tenant_id / raw_digest / received_at`，
 `UNIQUE(provider, provider_transaction_id, event_type)` —— 用 `INSERT ... ON CONFLICT DO NOTHING` 判定首次投递。
 `raw_digest` 只存回调体的 SHA256，**不存原文**（日志红线）。
+
+`tenant_id` 与 `order_id` 均**可空**：回调路由先按 `out_trade_no` 定位订单再写审计，
+定位得到就带上租户归属（租户隔离铁律）；伪造或乱序的回调对不上任何订单，
+此时两列为 null 但审计痕迹照留。
 
 ### `credit_transactions` 增列
 

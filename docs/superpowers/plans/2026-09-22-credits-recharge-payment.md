@@ -787,7 +787,8 @@ git commit -m "feat(credits): MockProvider + provider 注册表"
 - Produces:
   - `settleOrder(outTradeNo: string, provider: string): Promise<SettleResult>`
   - `type SettleResult = { outcome: 'credited'|'already_credited'|'not_paid'|'amount_mismatch'|'order_not_found' }`
-  - `recordCallback(provider, providerTransactionId, eventType, rawDigest, orderId): Promise<boolean>` —— 返回 `true` 表示首次投递
+  - `recordCallback(provider, providerTransactionId, eventType, rawDigest, orderId: string | null, tenantId: string | null): Promise<boolean>` —— 返回 `true` 表示首次投递
+  - `findOrderByOutTradeNo(provider, outTradeNo): Promise<{ id: string; tenantId: string } | null>` —— 供回调路由在记审计前定位订单，拿到 tenant 归属
   - `markRefundPending(orderId: string): Promise<void>`
 
 - [ ] **Step 1: 写失败测试**
@@ -1039,21 +1040,41 @@ export async function settleOrder(
   }
 }
 
-/** 记录回调投递；返回 true 表示首次（ON CONFLICT DO NOTHING 判定，非先查后写） */
+/** 按商户订单号定位订单，供回调路由在记审计前拿到 tenant 归属 */
+export async function findOrderByOutTradeNo(
+  provider: string,
+  outTradeNo: string
+): Promise<{ id: string; tenantId: string } | null> {
+  const r = await pool.query<{ id: string; tenant_id: string }>(
+    `SELECT id, tenant_id FROM zenithjoy.payment_orders
+      WHERE provider = $1 AND out_trade_no = $2`,
+    [provider, outTradeNo]
+  );
+  const row = r.rows[0];
+  return row ? { id: row.id, tenantId: row.tenant_id } : null;
+}
+
+/**
+ * 记录回调投递；返回 true 表示首次（ON CONFLICT DO NOTHING 判定，非先查后写）
+ *
+ * tenantId / orderId 可为 null：伪造或乱序的回调可能对不上任何订单，
+ * 这类回调仍要留审计痕迹，故两列可空。
+ */
 export async function recordCallback(
   provider: string,
   providerTransactionId: string,
   eventType: string,
   rawDigest: string,
-  orderId: string | null
+  orderId: string | null,
+  tenantId: string | null
 ): Promise<boolean> {
   const r = await pool.query(
     `INSERT INTO zenithjoy.payment_callbacks
-       (provider, provider_transaction_id, event_type, order_id, raw_digest)
-     VALUES ($1, $2, $3, $4, $5)
+       (provider, provider_transaction_id, event_type, order_id, tenant_id, raw_digest)
+     VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (provider, provider_transaction_id, event_type) DO NOTHING
      RETURNING id`,
-    [provider, providerTransactionId, eventType, orderId, rawDigest]
+    [provider, providerTransactionId, eventType, orderId, tenantId, rawDigest]
   );
   return r.rowCount === 1;
 }
@@ -1496,10 +1517,12 @@ import request from 'supertest';
 const settleMock = vi.fn();
 const recordMock = vi.fn();
 const refundMock = vi.fn();
+const findOrderMock = vi.fn();
 vi.mock('../../src/services/payment/settlement.service', () => ({
   settleOrder: settleMock,
   recordCallback: recordMock,
   markRefundPending: refundMock,
+  findOrderByOutTradeNo: findOrderMock,
 }));
 
 import { paymentCallbackRouter } from '../../src/routes/payment-callback';
@@ -1520,6 +1543,7 @@ beforeEach(() => {
   settleMock.mockReset().mockResolvedValue({ outcome: 'credited', orderId: 'o-1' });
   recordMock.mockReset().mockResolvedValue(true);
   refundMock.mockReset();
+  findOrderMock.mockReset().mockResolvedValue({ id: 'o-1', tenantId: 't-1' });
   __setProviderForTest('mock', new MockProvider());
 });
 
@@ -1588,6 +1612,33 @@ describe('POST /api/payment/callback/:provider', () => {
     expect(settleMock).not.toHaveBeenCalled();
   });
 
+  it('审计行带上订单与租户归属（租户隔离铁律）', async () => {
+    await request(makeApp())
+      .post('/api/payment/callback/mock')
+      .set('Content-Type', 'application/json')
+      .set('x-mock-signature', 'valid')
+      .send(paidBody);
+
+    expect(recordMock).toHaveBeenCalledWith(
+      'mock', 'txn-1', 'paid', expect.any(String), 'o-1', 't-1'
+    );
+  });
+
+  it('对不上任何订单的回调仍留审计痕迹，租户与订单列为 null', async () => {
+    findOrderMock.mockResolvedValue(null);
+
+    const res = await request(makeApp())
+      .post('/api/payment/callback/mock')
+      .set('Content-Type', 'application/json')
+      .set('x-mock-signature', 'valid')
+      .send(paidBody);
+
+    expect(recordMock).toHaveBeenCalledWith(
+      'mock', 'txn-1', 'paid', expect.any(String), null, null
+    );
+    expect(res.status).toBe(200);
+  });
+
   it('未知 provider → 404，不抛未捕获异常', async () => {
     const res = await request(makeApp())
       .post('/api/payment/callback/paypal')
@@ -1623,6 +1674,7 @@ import { createHash } from 'crypto';
 import { Router, type Request, type Response } from 'express';
 import { getProvider } from '../services/payment/provider-registry';
 import {
+  findOrderByOutTradeNo,
   markRefundPending,
   recordCallback,
   settleOrder,
@@ -1661,8 +1713,17 @@ paymentCallbackRouter.post('/:provider', async (req: Request, res: Response) => 
   const digest = createHash('sha256').update(rawBody).digest('hex');
 
   try {
+    // 先定位订单：审计行要带上 tenant 归属（租户隔离铁律）。
+    // 对不上任何订单的回调（伪造 / 乱序）仍要记审计，此时两列为 null。
+    const order = await findOrderByOutTradeNo(providerName, event.outTradeNo);
+
     const first = await recordCallback(
-      providerName, event.providerTransactionId, event.eventType, digest, null
+      providerName,
+      event.providerTransactionId,
+      event.eventType,
+      digest,
+      order?.id ?? null,
+      order?.tenantId ?? null
     );
     if (!first) {
       // 重复投递：已处理过，直接确认，避免平台无限重推
@@ -1672,8 +1733,7 @@ paymentCallbackRouter.post('/:provider', async (req: Request, res: Response) => 
 
     if (event.eventType === 'refunded') {
       // 退款绝不自动扣回积分（会撞 balance>=0 的 CHECK），落待人工
-      const found = await settleOrderLookupForRefund(providerName, event.outTradeNo);
-      if (found) await markRefundPending(found);
+      if (order) await markRefundPending(order.id);
       console.warn('[payment] 收到退款回调，已落 refund_pending 待人工', {
         provider: providerName, out_trade_no: event.outTradeNo,
       });
@@ -1695,18 +1755,6 @@ paymentCallbackRouter.post('/:provider', async (req: Request, res: Response) => 
     res.status(500).json({ code: 'INTERNAL_ERROR' });
   }
 });
-
-/** 退款场景下按 out_trade_no 找订单 id */
-async function settleOrderLookupForRefund(
-  provider: string, outTradeNo: string
-): Promise<string | null> {
-  const pool = (await import('../db/connection')).default;
-  const r = await pool.query<{ id: string }>(
-    `SELECT id FROM zenithjoy.payment_orders WHERE provider = $1 AND out_trade_no = $2`,
-    [provider, outTradeNo]
-  );
-  return r.rows[0]?.id ?? null;
-}
 ```
 
 `apps/api/src/routes/credits-orders.ts`：
@@ -1834,7 +1882,7 @@ app.use('/api/credits/orders', creditsOrdersRouter);
 - [ ] **Step 4: 跑测试确认通过**
 
 Run: `cd apps/api && npx vitest run tests/routes/payment-callback.test.ts tests/routes/app-mount-order.test.ts`
-Expected: PASS（8 passed）
+Expected: PASS（10 passed —— 回调 8 条 + 挂载顺序 2 条）
 
 - [ ] **Step 5: 提交**
 
