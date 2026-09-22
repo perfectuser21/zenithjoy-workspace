@@ -179,16 +179,24 @@ describe('POST /api/payment/callback/:provider', () => {
     };
     __setProviderForTest('mock', closedProvider);
 
-    const res = await request(makeApp())
-      .post('/api/payment/callback/mock')
-      .set('Content-Type', 'application/json')
-      .send(paidBody);
+    // N-2：这里把注册表里的 'mock' 换成了假 provider，测试完必须换回真 MockProvider——
+    // 否则单例污染会漏到后面追加的用例里，表现为"莫名其妙全 closed"，极难排查（同族
+    // 问题此前在 I-7 的 NODE_ENV 泄漏上出现过）。beforeEach 每次都会重设一次，这里
+    // 用 try/finally 兜底，不依赖"这是不是文件最后一个 it"这种脆弱假设。
+    try {
+      const res = await request(makeApp())
+        .post('/api/payment/callback/mock')
+        .set('Content-Type', 'application/json')
+        .send(paidBody);
 
-    expect(res.status).toBe(200);
-    expect(recordMock).toHaveBeenCalledWith(
-      'mock', 'txn-1', 'closed', expect.any(String), 'o-1', 't-1'
-    );
-    expect(settleMock).not.toHaveBeenCalled();
-    expect(refundMock).not.toHaveBeenCalled();
+      expect(res.status).toBe(200);
+      expect(recordMock).toHaveBeenCalledWith(
+        'mock', 'txn-1', 'closed', expect.any(String), 'o-1', 't-1'
+      );
+      expect(settleMock).not.toHaveBeenCalled();
+      expect(refundMock).not.toHaveBeenCalled();
+    } finally {
+      __setProviderForTest('mock', new MockProvider());
+    }
   });
 });

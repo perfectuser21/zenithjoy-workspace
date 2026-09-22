@@ -197,7 +197,62 @@ describe('WechatNativeProvider APIv3 resource AEAD 解密（I-5，真实生产 1
       'wechatpay-signature': signCallback(ts, nonce, body),
       'wechatpay-serial': 'PLAT-SERIAL-1',
     };
-    expect(() => provider.verifyCallback(Buffer.from(body), headers)).toThrow();
+    // 收紧断言：不只是"抛了点什么"，而是 GCM 认证失败这个可辨识的错误
+    // （Node crypto 对 authTag 校验失败固定抛 "Unsupported state or unable to
+    // authenticate data"）——防止将来有人悄悄改成吞掉异常返回垃圾数据。
+    expect(() => provider.verifyCallback(Buffer.from(body), headers))
+      .toThrow(/unable to authenticate data/i);
+  });
+
+  it('携带非空 associated_data（微信生产固定下发 "transaction"）→ 加解密两侧都带 AAD 时正确解出（I-5 补全，此前该分支零覆盖）', () => {
+    const resource = encryptResource(
+      { out_trade_no: 'aead-no-4', transaction_id: 'aead-txn-4' },
+      'transaction',
+    );
+    const body = JSON.stringify({
+      id: 'evt-aead-4',
+      event_type: 'TRANSACTION.SUCCESS',
+      resource,
+    });
+    const ts = String(Math.floor(Date.now() / 1000));
+    const nonce = 'aeadn4';
+    const headers = {
+      'wechatpay-timestamp': ts,
+      'wechatpay-nonce': nonce,
+      'wechatpay-signature': signCallback(ts, nonce, body),
+      'wechatpay-serial': 'PLAT-SERIAL-1',
+    };
+    const ev = provider.verifyCallback(Buffer.from(body), headers);
+    expect(ev).toEqual({
+      outTradeNo: 'aead-no-4',
+      providerTransactionId: 'aead-txn-4',
+      eventType: 'paid',
+    });
+  });
+
+  it('加密时带 AAD、解密时 AAD 不匹配（associated_data 被篡改）→ 抛错（防 AAD 漏传/被抽换）', () => {
+    const resource = encryptResource(
+      { out_trade_no: 'aead-no-5', transaction_id: 'aead-txn-5' },
+      'transaction',
+    );
+    // 篡改 associated_data：加密时用的是 'transaction'，回调体里被换成别的值——
+    // GCM 的 AAD 参与认证但不参与密文本身，篡改它必须导致 authTag 校验失败。
+    const tamperedResource = { ...resource, associated_data: 'tampered' };
+    const body = JSON.stringify({
+      id: 'evt-aead-5',
+      event_type: 'TRANSACTION.SUCCESS',
+      resource: tamperedResource,
+    });
+    const ts = String(Math.floor(Date.now() / 1000));
+    const nonce = 'aeadn5';
+    const headers = {
+      'wechatpay-timestamp': ts,
+      'wechatpay-nonce': nonce,
+      'wechatpay-signature': signCallback(ts, nonce, body),
+      'wechatpay-serial': 'PLAT-SERIAL-1',
+    };
+    expect(() => provider.verifyCallback(Buffer.from(body), headers))
+      .toThrow(/unable to authenticate data/i);
   });
 });
 
