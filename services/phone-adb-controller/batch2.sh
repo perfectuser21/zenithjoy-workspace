@@ -9,6 +9,9 @@ P="$1"; WF="$2"; TAG="$3"; PUSH="${4:-0}"; SERIAL="${5:-}"
 # 这批活的回填去向（业务线名 / key / 研发用 dev）。不传就按 profile 走——
 # 隔离点在「活」上不在「机器」上（0922 主理人定），所以它是可以被调用方覆盖的。
 LINE="${6:-$P}"
+# 0922拍板:每关键词采几个视频不再写死——之前恒为4,不管KPI缺口大小都一个样。
+# 传MAXV环境变量可覆盖(比如KPI缺口大时想多采几个),不传保持4不变,老行为不受影响。
+MAXV="${MAXV:-4}"
 # 可视化旁路(0919): 词级进度报给控制塔; 无序列号/上报器缺失/失败一律吞掉
 WR=${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}
 wr(){ [[ -n "$SERIAL" && -x "$WR" ]] && "$WR" "$@" >/dev/null 2>&1; true }
@@ -29,7 +32,7 @@ for W in "${(f)$(cat $WF)}"; do
   ENC=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$W")
   print "[$(date +%H:%M:%S)] 词$n: $W" >> $LOG
   wr step "$SERIAL" 3 doing "词$n: $W"
-  ~/bin-harvest/harvest-keyword.sh "$P" "$ENC" 4 "$TAG-w$n" unlimited "$LINE" >> $OUT 2>> $LOG
+  ~/bin-harvest/harvest-keyword.sh "$P" "$ENC" "$MAXV" "$TAG-w$n" unlimited "$LINE" >> $OUT 2>> $LOG
   print "[$(date +%H:%M:%S)] 词$n 完成 LEAD=$(grep -c '^LEAD' $OUT 2>/dev/null||echo 0)" >> $LOG
   NLEAD=$(grep -c '^LEAD' $OUT 2>/dev/null); wr note "$SERIAL" "词$n 完成 LEAD=${NLEAD:-0}"
   /bin/sleep $(( 20 + RANDOM % 40 ))
