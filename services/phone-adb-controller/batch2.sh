@@ -49,4 +49,12 @@ if [[ "$PUSH" == "1" && -s $OUT ]]; then
   scp -o ConnectTimeout=20 $OUT mmv:/tmp/$TAG.tsv >> $LOG 2>&1
   ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/push-videos.js /tmp/$TAG.tsv $TAG $LINE && node /Users/administrator/.openclaw/leadgen-scripts/push-raw-comments.js /tmp/$TAG.tsv $TAG $LINE" >> $LOG 2>&1
   print "[$(date +%H:%M:%S)] 已落池(视频+评论)" >> $LOG
+  # 0923补齐:落池之后紧接着分拣——此前sort-comments.js压根没有任何自动触发点
+  # (既不在cron里,也不在任何批处理链路里,只能靠人/agent手动敲,而agent侧那份
+  # "手跑干预"playbook写的是/root/.openclaw/...这个host上根本不存在的路径,
+  # 从没真正跑通过)。落池跟分拣本就是同一批活的下一步,原地接上即可,不给它
+  # 单独另开一条定时链路(那样反而多一层"两条链步调不一致"的新风险)。
+  # 分拣失败不影响本轮采收已经落池的事实,只吞错不重试(留给下一批/下次人工核)。
+  ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/sort-comments.js $LINE" >> $LOG 2>&1
+  print "[$(date +%H:%M:%S)] 已分拣(判定链)" >> $LOG
 fi
