@@ -62,10 +62,13 @@ describe('createRechargeOrder', () => {
   });
 
   it('新订单：先落 created，下单成功后 CAS 到 pending 并回填二维码', async () => {
-    pool.query.mockImplementation(async (sql: string) => {
+    let insertedOutTradeNo: string | undefined;
+    pool.query.mockImplementation(async (sql: string, params?: any[]) => {
       if (/SELECT[\s\S]*status\s*=\s*'pending'/i.test(sql)) return { rows: [], rowCount: 0 };
       if (/INSERT INTO zenithjoy\.payment_orders/i.test(sql)) {
-        return { rows: [{ id: 'o-new', out_trade_no: 'no-new' }], rowCount: 1 };
+        insertedOutTradeNo = params?.[1];
+        // 真实 Postgres 会原样存下传入的 out_trade_no，mock 也照此回显（params[1] 是 out_trade_no）
+        return { rows: [{ id: 'o-new', out_trade_no: params?.[1] }], rowCount: 1 };
       }
       if (/UPDATE zenithjoy\.payment_orders/i.test(sql)) {
         return { rows: [{ id: 'o-new' }], rowCount: 1 };
@@ -73,17 +76,52 @@ describe('createRechargeOrder', () => {
       return { rows: [], rowCount: 0 };
     });
 
+    // 用 provider.createOrder 的真实调用参数捕获实际下单时用的商户订单号，
+    // 而不是凭空编一个字符串断言——这样如果实现改传别的值给 createOrder，
+    // 下面的断言必须变红。
+    const provider = new MockProvider();
+    const createOrderCalls: Array<{ outTradeNo: string }> = [];
+    const originalCreateOrder = provider.createOrder.bind(provider);
+    provider.createOrder = async (input) => {
+      createOrderCalls.push(input);
+      return originalCreateOrder(input);
+    };
+    __setProviderForTest('mock', provider);
+
     const r = await createRechargeOrder('t-1', 'tier_100', 'mock');
 
     expect(r.orderId).toBe('o-new');
     expect(r.amountFen).toBe(10000);
     expect(r.credits).toBe(100);
-    expect(r.qrCodeUrl).toContain('no-new');
+
+    expect(createOrderCalls).toHaveLength(1);
+    const actualOutTradeNo = createOrderCalls[0].outTradeNo;
+    // 服务端生成格式：ZJ<时间戳><8位hex>
+    expect(actualOutTradeNo).toMatch(/^ZJ\d+[0-9a-f]{8}$/);
+    expect(actualOutTradeNo).toBe(insertedOutTradeNo);
+    expect(r.qrCodeUrl).toContain(actualOutTradeNo);
 
     const cas = pool.query.mock.calls.find((c: any[]) =>
       /UPDATE zenithjoy\.payment_orders[\s\S]*'pending'/i.test(c[0])
     );
     expect(cas[0]).toMatch(/status\s*=\s*ANY\(/i);
+  });
+
+  it('CAS created→pending 未生效（rowCount!==1）→ 抛错，不留卡死的 created 订单', async () => {
+    pool.query.mockImplementation(async (sql: string) => {
+      if (/SELECT[\s\S]*status\s*=\s*'pending'/i.test(sql)) return { rows: [], rowCount: 0 };
+      if (/INSERT INTO zenithjoy\.payment_orders/i.test(sql)) {
+        return { rows: [{ id: 'o-cas' }], rowCount: 1 };
+      }
+      if (/UPDATE zenithjoy\.payment_orders[\s\S]*'pending'/i.test(sql)) {
+        // 模拟订单已不在 created 状态：CAS 影响 0 行
+        return { rows: [], rowCount: 0 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    await expect(createRechargeOrder('t-1', 'tier_100', 'mock'))
+      .rejects.toThrow(/o-cas/);
   });
 
   it('平台下单失败 → 标 create_failed 并抛错，不留死单', async () => {
@@ -107,6 +145,35 @@ describe('createRechargeOrder', () => {
       /UPDATE zenithjoy\.payment_orders/i.test(c[0]) && /SET status = 'create_failed'/.test(c[0])
     );
     expect(failed).toBeDefined();
+  });
+
+  it('CAS create_failed 未生效（rowCount!==1）→ 仅 warn，不吞原始下单失败异常', async () => {
+    pool.query.mockImplementation(async (sql: string) => {
+      if (/SELECT[\s\S]*status\s*=\s*'pending'/i.test(sql)) return { rows: [], rowCount: 0 };
+      if (/INSERT INTO zenithjoy\.payment_orders/i.test(sql)) {
+        return { rows: [{ id: 'o-fail2' }], rowCount: 1 };
+      }
+      if (/UPDATE zenithjoy\.payment_orders[\s\S]*'create_failed'/i.test(sql)) {
+        // 模拟订单已不在 created 状态：CAS 影响 0 行
+        return { rows: [], rowCount: 0 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+    const broken = new MockProvider();
+    broken.createOrder = async () => { throw new Error('gateway 500 again'); };
+    __setProviderForTest('mock', broken);
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // CAS 未生效不能替换或吞掉原始下单失败异常，必须照常上抛
+    await expect(createRechargeOrder('t-1', 'tier_100', 'mock')).rejects.toThrow('gateway 500 again');
+
+    expect(warnSpy).toHaveBeenCalled();
+    const [warnMsg, warnMeta] = warnSpy.mock.calls[0];
+    expect(String(warnMsg)).toMatch(/create_failed/);
+    expect(JSON.stringify(warnMeta)).toContain('o-fail2');
+
+    warnSpy.mockRestore();
   });
 });
 
