@@ -24,6 +24,10 @@ import {
   TIER_QUOTA,
   FREE_TIER_DURATION_DAYS,
 } from './services/license.service';
+import { recharge } from './services/credits.service';
+
+/** 新租户注册赠送积分数（产品决策 2026-04-29"注册即试用"，本次才真正接线） */
+const INITIAL_GRANT_CREDITS = 100;
 
 export interface BridgeArgs {
   /** Better-auth 创建的 user.id（UUID 字符串，写入 tenant_members.feishu_user_id 列） */
@@ -204,6 +208,20 @@ async function createFreeTenantForUser(
       );
 
       await client.query('COMMIT');
+
+      // 5) 注册送积分（赠送失败不得阻断注册：用户仍要能正常登录，余额可由运营补发）
+      try {
+        await recharge(tenantId, INITIAL_GRANT_CREDITS, 'initial_grant', {
+          source: 'auth-bridge-free-fallback',
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'unknown';
+        console.error('[credits] initial_grant 赠送失败', {
+          tenant_id: tenantId,
+          error: msg,
+        });
+      }
+
       return {
         linked: true,
         tenantId,

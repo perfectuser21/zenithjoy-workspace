@@ -18,10 +18,17 @@
  * 完整 BEHAVIOR：
  *   .github/workflows/scripts/smoke/auth-tenant-bridge-smoke.sh（PR-2）
  *   .github/workflows/scripts/smoke/free-tier-onboarding-smoke.sh（PR-B）
+ *
+ * Task 9（2026-09-23）：free fallback 事务 COMMIT 之后会调用 credits.service 的
+ * recharge() 发注册礼包（initial_grant，100 积分）。recharge() 内部自己
+ * pool.connect() 开一个独立事务，与本文件既有断言（mockConnect 调用次数、
+ * client.query 序列长度）无关——这里直接 mock 掉 credits.service，让 auth-bridge
+ * 的单测继续只关心它自己的事务序列，礼包发放的行为断言见 tests/auth-bridge-initial-grant.test.ts。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { bridgeNewUserToTenant } from '../src/auth-bridge';
 import pool from '../src/db/connection';
+import { recharge } from '../src/services/credits.service';
 
 const mockClientQuery = vi.fn();
 const mockClientRelease = vi.fn();
@@ -34,8 +41,13 @@ vi.mock('../src/db/connection', () => ({
   },
 }));
 
+vi.mock('../src/services/credits.service', () => ({
+  recharge: vi.fn(),
+}));
+
 const mockQuery = pool.query as ReturnType<typeof vi.fn>;
 const mockConnect = pool.connect as unknown as ReturnType<typeof vi.fn>;
+const mockRecharge = recharge as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -46,6 +58,7 @@ beforeEach(() => {
     query: mockClientQuery,
     release: mockClientRelease,
   });
+  mockRecharge.mockResolvedValue({ balance: 100, total_recharged: 100, total_consumed: 0 });
 });
 
 describe('auth-bridge / bridgeNewUserToTenant — PR-2 paid path', () => {
@@ -218,6 +231,14 @@ describe('auth-bridge / bridgeNewUserToTenant — PR-B free fallback', () => {
     expect(memberParams).toContain('auth-user-free-1');
     expect(memberParams).toContain(tenantId);
     expect(mockClientRelease).toHaveBeenCalled();
+    // Task 9：free fallback 建租户成功后必须发注册礼包（100 积分，reason=initial_grant）
+    expect(mockRecharge).toHaveBeenCalledTimes(1);
+    expect(mockRecharge).toHaveBeenCalledWith(
+      tenantId,
+      100,
+      'initial_grant',
+      expect.any(Object)
+    );
   });
 
   it('空字符串 license_key → 走 free fallback', async () => {
@@ -287,6 +308,8 @@ describe('auth-bridge / bridgeNewUserToTenant — PR-B free fallback', () => {
     const calls = mockClientQuery.mock.calls.map((c) => c[0]);
     expect(calls.some((q: string) => /ROLLBACK/i.test(q))).toBe(true);
     expect(mockClientRelease).toHaveBeenCalled();
+    // Task 9：租户没建成（COMMIT 都没跑到）不该发礼包
+    expect(mockRecharge).not.toHaveBeenCalled();
   });
 
   it('paid 查 license DB 异常 → 不走 fallback，返回 DB_ERROR（保守）', async () => {

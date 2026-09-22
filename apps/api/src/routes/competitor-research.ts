@@ -4,6 +4,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { randomUUID } from 'crypto';
 import { pushAccountsToBitable } from '../services/feishu-bitable';
+import { tenantContext } from '../middleware/tenant-context';
+import { createCreditCharger } from '../middleware/credit-charge';
 
 const router = Router();
 
@@ -22,7 +24,11 @@ interface Job {
 const jobStore = new Map<string, Job>();
 
 // ─── POST /api/competitor-research/start ─────────────────────────
-router.post('/start', (req: Request, res: Response) => {
+router.post(
+  '/start',
+  tenantContext,
+  createCreditCharger('competitor_research'),
+  (req: Request, res: Response) => {
   const { topic = '一人公司', roundLimit = 20 } = req.body as {
     topic?: string;
     roundLimit?: number;
