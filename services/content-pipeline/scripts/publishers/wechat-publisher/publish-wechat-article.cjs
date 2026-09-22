@@ -375,15 +375,29 @@ async function uploadContentImage(imagePath, accessToken) {
  * @param {string} accessToken
  * @returns {Promise<string>} media_id
  */
+/**
+ * 构建封面永久素材上传 URL
+ *
+ * draft/add 要求 thumb_media_id 引用的素材类型必须是 thumb，
+ * type=image 上传的素材 draft/add 不认。
+ *
+ * @param {string} accessToken
+ * @returns {string}
+ */
+function buildCoverMaterialUploadUrl(accessToken) {
+  return (
+    `${WECHAT_API_BASE}/cgi-bin/material/add_material` +
+    `?access_token=${encodeURIComponent(accessToken)}&type=thumb`
+  );
+}
+
 async function uploadCoverImage(imagePath, accessToken) {
   const imageBuffer = fs.readFileSync(imagePath);
   const filename = path.basename(imagePath);
   const boundary = `----WechatFormBoundary${Date.now().toString(16)}`;
   const body = buildMultipartBody(imageBuffer, filename, getImageMime(filename), boundary);
 
-  const url =
-    `${WECHAT_API_BASE}/cgi-bin/material/add_material` +
-    `?access_token=${encodeURIComponent(accessToken)}&type=image`;
+  const url = buildCoverMaterialUploadUrl(accessToken);
   const response = await httpsPost(url, body, {
     'Content-Type': `multipart/form-data; boundary=${boundary}`,
   });
@@ -401,11 +415,15 @@ async function uploadCoverImage(imagePath, accessToken) {
  * @param {string} accessToken
  * @returns {Promise<string|null>} media_id 或 null
  */
+function buildDefaultThumbQueryPayload() {
+  return JSON.stringify({ type: 'thumb', offset: 0, count: 1 });
+}
+
 async function getDefaultThumbMediaId(accessToken) {
   const url =
     `${WECHAT_API_BASE}/cgi-bin/material/batchget_material` +
     `?access_token=${encodeURIComponent(accessToken)}`;
-  const payload = JSON.stringify({ type: 'image', offset: 0, count: 1 });
+  const payload = buildDefaultThumbQueryPayload();
   try {
     const response = await httpsPost(url, payload, { 'Content-Type': 'application/json' });
     const result = JSON.parse(response.body);
@@ -481,13 +499,19 @@ async function uploadInlineImages(html, accessToken, contentDir) {
 // ============================================================
 
 /**
- * 上传图文消息素材（media/uploadnews），用于群发
+ * 构建创建图文草稿（draft/add）的请求 URL + payload
+ *
+ * 根因：media/uploadnews 是已退役/收紧的旧接口，对生产账号稳定返回
+ * errcode=40007 invalid media_id（裸 curl 复测同样 40007，已排除参数
+ * 问题，是接口本身失效）。正确接口是 draft/add（2026-09-23 真机验证
+ * 通过：draft/add → media_id → message/mass/sendall → msg_id →
+ * message/mass/get 到 SEND_SUCCESS）。
  *
  * @param {{ title: string, content: string, digest: string, author: string, thumbMediaId?: string }} article
  * @param {string} accessToken
- * @returns {Promise<string>} media_id
+ * @returns {{ url: string, payload: string }}
  */
-async function uploadNews(article, accessToken) {
+function buildUploadNewsRequest(article, accessToken) {
   const articleData = {
     title: article.title,
     author: article.author || '',
@@ -496,6 +520,7 @@ async function uploadNews(article, accessToken) {
     content_source_url: '',
     need_open_comment: 0,
     only_fans_can_comment: 0,
+    article_type: 'news',
   };
 
   if (article.thumbMediaId) {
@@ -503,14 +528,26 @@ async function uploadNews(article, accessToken) {
   }
 
   const payload = JSON.stringify({ articles: [articleData] });
-  const url = `${WECHAT_API_BASE}/cgi-bin/media/uploadnews?access_token=${encodeURIComponent(accessToken)}`;
+  const url = `${WECHAT_API_BASE}/cgi-bin/draft/add?access_token=${encodeURIComponent(accessToken)}`;
+  return { url, payload };
+}
+
+/**
+ * 创建图文草稿（draft/add），用于群发
+ *
+ * @param {{ title: string, content: string, digest: string, author: string, thumbMediaId?: string }} article
+ * @param {string} accessToken
+ * @returns {Promise<string>} media_id
+ */
+async function uploadNews(article, accessToken) {
+  const { url, payload } = buildUploadNewsRequest(article, accessToken);
   const response = await httpsPost(url, payload, {
     'Content-Type': 'application/json; charset=utf-8',
   });
 
-  const result = parseWechatResponse(response, '上传图文素材');
+  const result = parseWechatResponse(response, '创建图文草稿');
   if (!result.media_id) {
-    throw new Error(`上传图文素材失败：响应中无 media_id: ${JSON.stringify(result)}`);
+    throw new Error(`创建图文草稿失败：响应中无 media_id: ${JSON.stringify(result)}`);
   }
 
   return result.media_id;
@@ -707,9 +744,9 @@ async function main() {
     const content = await uploadInlineImages(rawContent, accessToken, argContentDir);
     _log('');
 
-    _log('4️⃣  上传图文素材（uploadnews）...\n');
+    _log('4️⃣  创建图文草稿（draft/add）...\n');
     const mediaId = await uploadNews({ title, content, digest, author, thumbMediaId }, accessToken);
-    _log(`   ✅ 图文素材已上传，media_id: ${mediaId}\n`);
+    _log(`   ✅ 图文草稿已创建，media_id: ${mediaId}\n`);
 
     if (dryRun) {
       _log('🧪 dry-run 完成，跳过群发');
@@ -741,4 +778,7 @@ module.exports = {
   textToHtml,
   readContentDir,
   uploadInlineImages,
+  buildUploadNewsRequest,
+  buildCoverMaterialUploadUrl,
+  buildDefaultThumbQueryPayload,
 };
