@@ -5,6 +5,7 @@ import { attachAgentWS } from './services/agent-ws';
 import { attachCollabWS } from './services/collab-ws';
 import { startStaleListenerMonitor } from './services/wechat-heartbeat';
 import { startAgentOfflineMonitor } from './services/agent-offline-monitor';
+import { startPaymentMonitor } from './services/payment/payment-monitor';
 import { startScheduler } from './services/scheduler';
 import { startWorkerLeaseSweeper } from './services/worker-lease-sweeper';
 import { startNotionOrchestrator } from './services/notion-orchestrator';
@@ -113,6 +114,9 @@ async function bootstrap(): Promise<void> {
     startStaleListenerMonitor();
     // 进程守护：每分钟扫描 Windows Agent 心跳，超阈值离线 → 飞书告警（FEISHU_ALERT_WEBHOOK）
     startAgentOfflineMonitor();
+    // 积分充值兜底调度（Task 12）：定时跑过期 pending 订单兜底（回调丢失场景先查单再判过期）
+    // + pending 积压水位告警（笔数/最老订单年龄超阈值 → console.error 结构化告警）。
+    startPaymentMonitor();
     // 中台定时调度器：日报结算(23:55北京)/朋友圈草稿(09:00)/warmup养号(10:00北京)/DM派单sweep(每分钟)。
     // 治根 2026-07-19：startScheduler() 建库以来从未被服务器进程调用过，四个周期任务全部静默不跑。
     startScheduler();

@@ -4,12 +4,17 @@ vi.mock('../../../src/db/connection', () => ({
   default: { query: vi.fn() },
 }));
 
-const expireMock = vi.fn();
+// vi.mock 工厂会被提升到文件顶部（早于普通 const 初始化），工厂里引用的 mock 函数
+// 必须经 vi.hoisted 声明，否则会报 "Cannot access 'xxx' before initialization"。
+const { expireMock, alertMock } = vi.hoisted(() => ({
+  expireMock: vi.fn(),
+  alertMock: vi.fn(),
+}));
+
 vi.mock('../../../src/services/payment/orders.service', () => ({
   expireStaleOrders: expireMock,
 }));
 
-const alertMock = vi.fn();
 vi.mock('../../../src/services/feishu-alert', () => ({
   sendFeishuAlert: alertMock,
 }), { virtual: true });
