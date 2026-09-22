@@ -77,6 +77,8 @@ const autopilotConfig: InstanceConfig = {
     'workers': true,             // /dashboard/workers
     // line01 刀5a — 我的作品（dashboard 侧第二发布入口；漏加=菜单整项不显示）
     'my-works': true,            // /dashboard/my-works
+    // Task 10 — 积分自助充值页（漏加=菜单整项静默不显示）
+    'credits': true,             // /credits
   },
 };
 
