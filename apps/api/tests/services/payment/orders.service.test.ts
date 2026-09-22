@@ -130,11 +130,18 @@ describe('createRechargeOrder', () => {
       if (/INSERT INTO zenithjoy\.payment_orders/i.test(sql)) {
         return { rows: [{ id: 'o-fail', out_trade_no: 'no-fail' }], rowCount: 1 };
       }
+      if (/UPDATE zenithjoy\.payment_orders[\s\S]*'create_failed'/i.test(sql)) {
+        // 正常路径：CAS 生效（这条用例只验证"下单失败→标 create_failed→原错上抛"，
+        // 不是在测 CAS 未生效场景——那个场景有独立用例覆盖，见下方）
+        return { rows: [{ id: 'o-fail' }], rowCount: 1 };
+      }
       return { rows: [], rowCount: 0 };
     });
     const broken = new MockProvider();
     broken.createOrder = async () => { throw new Error('gateway 500'); };
     __setProviderForTest('mock', broken);
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     await expect(createRechargeOrder('t-1', 'tier_100', 'mock')).rejects.toThrow('gateway 500');
 
@@ -145,6 +152,10 @@ describe('createRechargeOrder', () => {
       /UPDATE zenithjoy\.payment_orders/i.test(c[0]) && /SET status = 'create_failed'/.test(c[0])
     );
     expect(failed).toBeDefined();
+    // 正常路径下 CAS 生效，不该有任何 rowCount 异常告警
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
   });
 
   it('CAS create_failed 未生效（rowCount!==1）→ 仅 warn，不吞原始下单失败异常', async () => {
