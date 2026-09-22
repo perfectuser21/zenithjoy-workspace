@@ -37,9 +37,28 @@ const ROUTES = [
     keyword: "tblyKCp5vc7y2S40",       // 悦升云端-关键词配置
     script: "tblvf3t8ZWkOCpe1",        // 悦升云端-话术库
   },
+  {
+    key: "dev",
+    line: "研发",
+    // 研发活不绑机器——任何一台手机闲下来都能跑它（0922 主理人定的模型：
+    // 隔离点在「活」上不在「机器」上）。它跟生产活的区别只有一个：**回填去哪**。
+    profiles: [],
+    account: "main",
+    // base 留 null：四个写入脚本都有 `if (!B) 跳过` 的分支，所以研发活天然不落库，
+    // 只跑流程、留日志。等真开了测试 base 再填这里，其它地方一行都不用改。
+    base: null,
+    lead: null, pool: null, video: null, keyword: null, script: null,
+    isDev: true,
+  },
 ];
 
-// 传入业务线名或 profile 名都能路由；认不出时回落金诺（保持历史行为，避免静默丢数据）
+// 传入业务线名、key、或 profile 名都能路由。
+//
+// ⚠️ 认不出**必须抛错，不能兜底**（0922 改）。
+// 旧实现 `return ROUTES[0]`，注释写的是"避免静默丢数据"，但实际效果是
+// **静默污染别人的库**：小彩(xiaolongxia)不在任何 route 里，它一旦开跑，
+// 悦升研发机采的线索会整批写进金诺的生产飞书表，而且没有任何人会发现。
+// 抛错才是安全的那一侧：数据不会丢（脚本会红、人看得见），也不会写错地方。
 function routeOf(hint) {
   const h = String(hint || "").trim();
   if (h) {
@@ -48,15 +67,18 @@ function routeOf(hint) {
     }
     // 宽松匹配：业务线字段有时带前后缀
     for (const r of ROUTES) {
-      if (h.includes(r.line) || r.line.includes(h)) return r;
+      if (r.line && (h.includes(r.line) || r.line.includes(h))) return r;
     }
   }
-  return ROUTES[0];
+  throw new Error(
+    "未配路由: " + (h || "(空)") +
+    " —— 认不出这批数据该回填给谁。别猜：以前这里兜底倒进金诺，" +
+    "结果是别人的研发数据会静默写进金诺生产表。" +
+    "请在 line-routes.js 的 ROUTES 里补一条，或让调用方传对业务线名/key。"
+  );
 }
 
-function isFallback(hint) {
-  return routeOf(hint) === ROUTES[0] && !ROUTES[0].profiles.includes(String(hint || "").trim())
-    && String(hint || "").trim() !== ROUTES[0].line && String(hint || "").trim() !== ROUTES[0].key;
-}
+// 兜底已经取消，不再有 fallback 这回事。保留导出只为不炸掉老调用方。
+function isFallback() { return false; }
 
 module.exports = { ROUTES, routeOf, isFallback };

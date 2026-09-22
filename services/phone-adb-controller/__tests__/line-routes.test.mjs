@@ -66,3 +66,30 @@ test('isFallback 退场：不再有 fallback 这回事', () => {
   assert.equal(isFallback('xiaolongxia'), false);
   assert.equal(isFallback('AI人工智能训练师'), false);
 });
+
+// ── 接线守卫 ──────────────────────────────────────────────────────────────
+// 路由拒收未知标记之后，调用方就不能再传空值了。0922 实测：harvest-keyword.sh
+// 写的是 LINE="${6:-}"，而 batch2.sh 只传 5 个参数——$LINE 一直是空的，
+// 被旧兜底默默接成金诺。后果：**悦升那台跑夜批时，去重查的是金诺的已采视频列表**，
+// 去重一直是错的，而且没人看得见。
+import { readFileSync } from 'node:fs';
+
+test('接线守卫：采收脚本必须给出真实的回填标记，不能传空', () => {
+  // 只看代码行：注释里会引用旧写法当反面教材，连注释一起扫会把自己绊倒（第一版就是）。
+  const hk = readFileSync(new URL('../harvest-keyword.sh', import.meta.url), 'utf8')
+    .split('\n').filter((l) => !l.trimStart().startsWith('#')).join('\n');
+  assert.ok(!/LINE="\$\{6:-\}"/.test(hk),
+    'harvest-keyword.sh 又把 LINE 缺省成空值了——空值会被路由拒收，整条采收链会红');
+  assert.match(hk, /LINE="\$\{6:-\$P\}"/,
+    'LINE 缺省应退回 profile 名（profile 也能路由），而不是空');
+});
+
+test('接线守卫：batch2 要把回填标记透传给采收与落池', () => {
+  const b2 = readFileSync(new URL('../batch2.sh', import.meta.url), 'utf8');
+  assert.match(b2, /LINE="\$\{6:-\$P\}"/, 'batch2 没有接收业务线标记');
+  assert.match(b2, /harvest-keyword\.sh[^\n]*"\$LINE"/, '没把标记透传给 harvest-keyword');
+  assert.match(b2, /push-videos\.js[^\n]*\$LINE/, '落池仍按 profile 路由，没用标记');
+  assert.match(b2, /push-raw-comments\.js[^\n]*\$LINE/, '评论池仍按 profile 路由');
+  assert.ok(!/push-videos\.js \/tmp\/\$TAG\.tsv \$TAG \$P\b/.test(b2),
+    '落池还在传 profile——回填就还是绑在机器上，不是绑在活上');
+});

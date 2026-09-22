@@ -6,6 +6,9 @@
 set -uo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 P="$1"; WF="$2"; TAG="$3"; PUSH="${4:-0}"; SERIAL="${5:-}"
+# 这批活的回填去向（业务线名 / key / 研发用 dev）。不传就按 profile 走——
+# 隔离点在「活」上不在「机器」上（0922 主理人定），所以它是可以被调用方覆盖的。
+LINE="${6:-$P}"
 # 可视化旁路(0919): 词级进度报给控制塔; 无序列号/上报器缺失/失败一律吞掉
 WR=${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}
 wr(){ [[ -n "$SERIAL" && -x "$WR" ]] && "$WR" "$@" >/dev/null 2>&1; true }
@@ -26,7 +29,7 @@ for W in "${(f)$(cat $WF)}"; do
   ENC=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$W")
   print "[$(date +%H:%M:%S)] 词$n: $W" >> $LOG
   wr step "$SERIAL" 3 doing "词$n: $W"
-  ~/bin-harvest/harvest-keyword.sh "$P" "$ENC" 4 "$TAG-w$n" unlimited >> $OUT 2>> $LOG
+  ~/bin-harvest/harvest-keyword.sh "$P" "$ENC" 4 "$TAG-w$n" unlimited "$LINE" >> $OUT 2>> $LOG
   print "[$(date +%H:%M:%S)] 词$n 完成 LEAD=$(grep -c '^LEAD' $OUT 2>/dev/null||echo 0)" >> $LOG
   NLEAD=$(grep -c '^LEAD' $OUT 2>/dev/null); wr note "$SERIAL" "词$n 完成 LEAD=${NLEAD:-0}"
   /bin/sleep $(( 20 + RANDOM % 40 ))
@@ -41,6 +44,6 @@ if [[ "$PUSH" == "1" && -s $OUT ]]; then
   # 0921 网关迁移: us-vps 那份 openclaw-gateway 容器已退役(决策 96054a8b),落池脚本随迁移
   # 落到 MMV 原生跑(不再经 docker cp/docker exec)。
   scp -o ConnectTimeout=20 $OUT mmv:/tmp/$TAG.tsv >> $LOG 2>&1
-  ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/push-videos.js /tmp/$TAG.tsv $TAG $P && node /Users/administrator/.openclaw/leadgen-scripts/push-raw-comments.js /tmp/$TAG.tsv $TAG $P" >> $LOG 2>&1
+  ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/push-videos.js /tmp/$TAG.tsv $TAG $LINE && node /Users/administrator/.openclaw/leadgen-scripts/push-raw-comments.js /tmp/$TAG.tsv $TAG $LINE" >> $LOG 2>&1
   print "[$(date +%H:%M:%S)] 已落池(视频+评论)" >> $LOG
 fi
