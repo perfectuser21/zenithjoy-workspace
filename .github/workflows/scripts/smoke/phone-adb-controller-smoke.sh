@@ -23,6 +23,14 @@ if command -v zsh >/dev/null 2>&1; then
 else
   echo "::warning::zsh 不可用,语法闸跳过(部署侧会跑)"
 fi
+
+# 层21: commenter-identity 必须在**逐屏**(NEWLINES)上做,不能在**翻完屏后的累积列表**(CC)上做
+# (0923生产实证:三台并发批次、两条业务线,逐行身份验证100%炸"nickname mismatch"——根因是
+# 翻屏累积再统一处理时,早期屏的tap坐标早就对不上手机翻到最后一屏后的实际画面)。
+grep -qE 'for CLINE in "\$\{\(f\)NEWLINES\}"' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 的身份验证循环没有改成逐屏处理(NEWLINES),翻屏后tap坐标必然作废"
+if grep -B3 'commenter-identity' "$D/harvest-keyword.sh" | grep -qE 'for CLINE in "\$\{\(f\)CC\}"'; then
+  fail "harvest-keyword.sh 身份验证仍在累积列表(CC)上做,复发0923的翻屏坐标失效bug"
+fi
 node --check "$D/push-leads.js" || fail "push-leads.js 语法错误"
 node --check "$D/update-profile-links.js" || fail "update-profile-links.js 语法错误"
 node --check "$D/next-outreach.js" || fail "next-outreach.js 语法错误"
