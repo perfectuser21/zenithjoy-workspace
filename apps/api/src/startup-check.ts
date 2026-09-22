@@ -378,7 +378,18 @@ export function checkPaymentEnvSanity(
   const mchId = env.WX_PAY_MCHID;
   const denylist = (env.WX_PAY_PROD_MCHID_DENYLIST ?? '')
     .split(',').map((s) => s.trim()).filter(Boolean);
-  if (!mchId || denylist.length === 0) return [];
+  if (!mchId) return []; // 没接入微信支付的部署，跟这道闸无关，不打任何日志
+  if (denylist.length === 0) {
+    // 闸没配 ≠ 闸生效：这道防止 staging/dev 误用生产商户号的闸目前根本没启用，
+    // 但静默返回空数组会让这件事没有任何人知道（它防的是"配了 denylist 之后还犯错"，
+    // 防不了"压根没人记得配 denylist"）。只 WARN，不 fail-closed——没配支付的部署
+    // 不该被这道闸误伤，判据本身（下面四个条件）一行不动。
+    console.warn('==================================================================');
+    console.warn('⚠️ [payment] 生产商户号误用检测未启用：WX_PAY_PROD_MCHID_DENYLIST 未配置。');
+    console.warn('   配置后可防止 staging/dev 环境误用生产商户号（真实资金风险）。');
+    console.warn('==================================================================');
+    return [];
+  }
   if (env.NODE_ENV !== 'production' && denylist.includes(mchId)) {
     return [
       `非 production 环境(NODE_ENV=${env.NODE_ENV})配置了生产商户号 ${mchId}，拒绝启动`,

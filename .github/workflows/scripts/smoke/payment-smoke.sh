@@ -18,7 +18,14 @@
 #   5xx/000  = 端点不可达（服务没起来 / nginx 配置错误 / 网络不通）
 set -euo pipefail
 
-BASE_URL="${PAYMENT_NOTIFY_BASE_URL:?PAYMENT_NOTIFY_BASE_URL 未设置}"
+# 优雅跳过：secret 尚未配置时不让 CI 变红（判空放在脚本内部，workflow 侧只管调用，
+# 这样 secret 配上去之后自动生效，不需要再开任务回来接线）。
+if [[ -z "${PAYMENT_NOTIFY_BASE_URL:-}" ]]; then
+  echo "⏭️  SKIP: PAYMENT_NOTIFY_BASE_URL 未配置，跳过支付回调可达性 smoke"
+  exit 0
+fi
+
+BASE_URL="${PAYMENT_NOTIFY_BASE_URL}"
 URL="${BASE_URL%/}/api/payment/callback/mock"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
