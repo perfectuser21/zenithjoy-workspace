@@ -17,6 +17,9 @@ const {
   buildTokenCache,
   textToHtml,
   uploadInlineImages,
+  buildUploadNewsRequest,
+  buildCoverMaterialUploadUrl,
+  buildDefaultThumbQueryPayload,
 } = require('../publish-wechat-article.cjs');
 
 // ============================================================
@@ -218,5 +221,63 @@ describe('uploadInlineImages', () => {
     const html = '<img src="https://a.com/1.jpg"><img src="https://b.com/2.png">';
     const result = await uploadInlineImages(html, 'fake-token');
     assert.equal(result, html);
+  });
+});
+
+// ============================================================
+// buildUploadNewsRequest — 回归测试
+//
+// 根因：media/uploadnews 是已退役/收紧的旧接口，对生产账号稳定返回
+// errcode=40007 invalid media_id（裸 curl 复测同样 40007，已排除参数
+// 问题，是接口本身失效）。正确接口是 draft/add（2026-09-23 真机验证：
+// draft/add → media_id → message/mass/sendall → msg_id=1000000049 →
+// message/mass/get 24 秒内到 SEND_SUCCESS，账号"大湖成长之路"）。
+// ============================================================
+describe('buildUploadNewsRequest', () => {
+  const article = { title: '标题', content: '<p>正文</p>', digest: '摘要', author: '作者' };
+
+  test('调用 draft/add，不调用已退役的 media/uploadnews', () => {
+    const { url } = buildUploadNewsRequest(article, 'TOKEN');
+    assert.ok(url.includes('/cgi-bin/draft/add'), `应调用 draft/add，实际: ${url}`);
+    assert.ok(!url.includes('/cgi-bin/media/uploadnews'), 'media/uploadnews 已退役，不应再调用');
+  });
+
+  test('payload 携带 article_type=news（draft/add 图文类型必填）', () => {
+    const { payload } = buildUploadNewsRequest(article, 'TOKEN');
+    const parsed = JSON.parse(payload);
+    assert.equal(parsed.articles[0].article_type, 'news');
+  });
+
+  test('携带 thumbMediaId 时写入 thumb_media_id 字段', () => {
+    const { payload } = buildUploadNewsRequest({ ...article, thumbMediaId: 'THUMB123' }, 'TOKEN');
+    const parsed = JSON.parse(payload);
+    assert.equal(parsed.articles[0].thumb_media_id, 'THUMB123');
+  });
+
+  test('未提供 thumbMediaId 时不写入该字段', () => {
+    const { payload } = buildUploadNewsRequest(article, 'TOKEN');
+    const parsed = JSON.parse(payload);
+    assert.equal('thumb_media_id' in parsed.articles[0], false);
+  });
+});
+
+// ============================================================
+// buildCoverMaterialUploadUrl / buildDefaultThumbQueryPayload
+//
+// draft/add 要求 thumb_media_id 引用的素材类型必须是 thumb，用
+// type=image 上传/查询的素材 draft/add 不认。
+// ============================================================
+describe('buildCoverMaterialUploadUrl', () => {
+  test('素材类型为 thumb，不是 image', () => {
+    const url = buildCoverMaterialUploadUrl('TOKEN');
+    assert.ok(url.includes('type=thumb'), `应为 type=thumb，实际: ${url}`);
+    assert.ok(!url.includes('type=image'), 'draft/add 不认 type=image 的素材');
+  });
+});
+
+describe('buildDefaultThumbQueryPayload', () => {
+  test('查询默认封面时按 thumb 类型查询，不是 image', () => {
+    const parsed = JSON.parse(buildDefaultThumbQueryPayload());
+    assert.equal(parsed.type, 'thumb');
   });
 });
