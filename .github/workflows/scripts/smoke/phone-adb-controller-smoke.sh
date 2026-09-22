@@ -282,6 +282,11 @@ if command -v zsh >/dev/null 2>&1; then zsh -n "$D/batch2.sh" || fail "batch2.sh
 # 变的只是传什么。${LINE} 缺省退回 profile 名，两者 line-routes 都认。
 grep -qE 'push-raw-comments\.js [^ ]+ \$TAG \$(LINE|P)\b' "$D/batch2.sh" || fail "batch2.sh 落池没把业务线标记传下去(路由拿不到业务线,悦升数据会写错表)"
 grep -qE 'push-videos\.js [^ ]+ \$TAG \$(LINE|P)\b' "$D/batch2.sh" || fail "batch2.sh 视频落池没把业务线标记传下去"
+# 0923: 落池之后必须紧接着分拣——sort-comments.js此前压根没有任何自动触发点
+# (不在cron、不在任何批处理链路里，唯一"手跑干预"的playbook写的是host上根本不存在的
+# /root/.openclaw/...路径，从没真正跑通过)。守住"落池后一定调分拣"，不许日后改落池
+# 代码时把这一步漏掉或悄悄删掉。
+grep -qE 'sort-comments\.js \$(LINE|P)\b' "$D/batch2.sh" || fail "batch2.sh 落池后没有紧接着调用 sort-comments.js(分拣链路仍是悬空的,新评论不会被判定)"
 # 认不出的标记必须拒收——旧实现兜底倒进金诺，等于静默污染别人的库
 grep -qE 'throw new Error' "$D/line-routes.js" || fail "line-routes 认不出标记时不再抛错(退回兜底=悦升研发数据会静默写进金诺生产表)"
 for f in push-raw-comments.js push-videos.js sort-comments.js; do
