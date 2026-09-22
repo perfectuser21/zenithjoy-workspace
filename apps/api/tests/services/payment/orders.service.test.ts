@@ -5,7 +5,11 @@ vi.mock('../../../src/db/connection', () => {
   return { default: { connect: vi.fn(async () => client), query: vi.fn() }, __client: client };
 });
 
-const settleMock = vi.fn();
+// vi.mock 工厂被提升到文件最顶端（先于下方任何 import/const 执行），工厂内引用的
+// 变量必须以 "mock" 开头才会被 vitest 自动一并提升，否则 TDZ 报错——
+// settleMock 不以 "mock" 开头，vitest 的自动提升识别不到它，需显式 vi.hoisted。
+// 同仓库先例：tests/services/payment/settlement.service.test.ts 的 rechargeMock。
+const { settleMock } = vi.hoisted(() => ({ settleMock: vi.fn() }));
 vi.mock('../../../src/services/payment/settlement.service', () => ({
   settleOrder: settleMock,
 }));
@@ -96,8 +100,11 @@ describe('createRechargeOrder', () => {
 
     await expect(createRechargeOrder('t-1', 'tier_100', 'mock')).rejects.toThrow('gateway 500');
 
+    // 断言 SQL 文本本身含字面量 'create_failed'，而不是参数数组里随便含这个词就算数
+    // （生产 SQL 用字面量写目标状态，CAS 前置状态集合才是参数——同仓库既有约定见
+    // settlement.service.test.ts「生产 SQL 用字面量，不是参数化拼断言」）
     const failed = pool.query.mock.calls.find((c: any[]) =>
-      /UPDATE zenithjoy\.payment_orders/i.test(c[0]) && String(c[1]).includes('create_failed')
+      /UPDATE zenithjoy\.payment_orders/i.test(c[0]) && /SET status = 'create_failed'/.test(c[0])
     );
     expect(failed).toBeDefined();
   });
@@ -155,8 +162,9 @@ describe('expireStaleOrders', () => {
     const r = await expireStaleOrders();
 
     expect(r.expired).toBe(1);
+    // 同上：断言 SQL 文本含字面量 'expired'，参数数组里只有 CAS 前置状态集合
     const marked = pool.query.mock.calls.find((c: any[]) =>
-      /UPDATE zenithjoy\.payment_orders/i.test(c[0]) && String(c[1]).includes('expired')
+      /UPDATE zenithjoy\.payment_orders/i.test(c[0]) && /SET status = 'expired'/.test(c[0])
     );
     expect(marked[0]).toMatch(/status\s*=\s*ANY\(/i);
   });
