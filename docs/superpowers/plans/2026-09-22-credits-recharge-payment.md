@@ -1492,7 +1492,23 @@ git commit -m "feat(credits): orders.service — 建单/复用/过期兜底"
 - Test: `apps/api/tests/routes/app-mount-order.test.ts`
 
 **Interfaces:**
-- Consumes: Task 5 `settleOrder` / `recordCallback` / `markRefundPending`；Task 6 `createRechargeOrder` / `InvalidTierError`；Task 4 `getProvider`；已有 `tenantContext`、`simpleRateLimit`
+- Consumes: Task 5 `settleOrder` / `recordCallback` / `markRefundPending` / `findOrderByOutTradeNo`；Task 6 `createRechargeOrder` / `InvalidTierError`；Task 4 `getProvider`；已有 `tenantContext`、`simpleRateLimit`
+
+**`SettleOutcome` → HTTP 状态码映射（硬契约，不得靠口头交接）**
+
+Task 5 复审的结论：若接线者按「非 credited 一律 5xx」处理，Task 5 里的自愈逻辑白做、重试风暴照旧。映射必须是：
+
+| outcome | 返回平台 | 理由 |
+|---|---|---|
+| `credited` | **200** | 正常入账 |
+| `already_credited` | **200** | 重复投递，已处理过 |
+| `credit_conflict` | **200** | 积分确已入账、订单状态已自愈或待人工；重试解决不了账实分叉，只会刷屏 |
+| `amount_mismatch` | **200** | 已标记待人工，重试无意义（金额不会自己变对） |
+| `not_paid` | **200** | 平台尚未收款；兜底 job 会继续查，无需平台重推 |
+| `order_not_found` | **200** | 对不上订单（伪造/乱序），已留审计；返 5xx 会招来无限重推 |
+| **抛异常**（DB 断连等己方故障） | **5xx** | 唯一该让平台重试的情况 |
+
+一句话口径：**只有"我方没处理成功"才 5xx；凡是已经得出结论的业务结果，一律 200。**
 - Produces:
   - `paymentCallbackRouter`（`POST /:provider`）
   - `creditsOrdersRouter`（`POST /`、`POST /:id/sync`、`GET /`）
@@ -1656,6 +1672,21 @@ describe('POST /api/payment/callback/:provider', () => {
     expect(res.status).toBe(200);
   });
 
+  it.each([
+    ['credited'], ['already_credited'], ['credit_conflict'],
+    ['amount_mismatch'], ['not_paid'], ['order_not_found'],
+  ])('业务结论 %s 一律返 200（重试解决不了已得出结论的事）', async (outcome) => {
+    settleMock.mockResolvedValue({ outcome });
+
+    const res = await request(makeApp())
+      .post('/api/payment/callback/mock')
+      .set('Content-Type', 'application/json')
+      .set('x-mock-signature', 'valid')
+      .send(paidBody);
+
+    expect(res.status).toBe(200);
+  });
+
   it('未知 provider → 404，不抛未捕获异常', async () => {
     const res = await request(makeApp())
       .post('/api/payment/callback/paypal')
@@ -1758,6 +1789,8 @@ paymentCallbackRouter.post('/:provider', async (req: Request, res: Response) => 
       return;
     }
 
+    // 所有业务结论一律 200（含 credit_conflict / amount_mismatch / not_paid /
+    // order_not_found）——见本 task 的 outcome→HTTP 映射表。只有抛异常才 5xx。
     const result = await settleOrder(event.outTradeNo, providerName);
     console.info('[payment] 回调结算完成', {
       provider: providerName, out_trade_no: event.outTradeNo, outcome: result.outcome,
@@ -1899,7 +1932,7 @@ app.use('/api/credits/orders', creditsOrdersRouter);
 - [ ] **Step 4: 跑测试确认通过**
 
 Run: `cd apps/api && npx vitest run tests/routes/payment-callback.test.ts tests/routes/app-mount-order.test.ts`
-Expected: PASS（10 passed —— 回调 8 条 + 挂载顺序 2 条）
+Expected: PASS（16 passed —— 回调 8 条 + outcome→HTTP 映射 6 条 + 挂载顺序 2 条）
 
 - [ ] **Step 5: 提交**
 

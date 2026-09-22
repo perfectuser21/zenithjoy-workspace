@@ -32,6 +32,7 @@ beforeEach(() => {
   client.query.mockReset();
   db.default.query.mockReset();
   db.default.connect.mockClear();
+  client.release.mockClear();
   rechargeMock.mockReset().mockResolvedValue({ balance: 100, total_recharged: 100, total_consumed: 0 });
   mp = new MockProvider();
   __setProviderForTest('mock', mp);
@@ -248,5 +249,6 @@ describe('markRefundPending', () => {
     expect(sql).not.toMatch(/credit_transactions/i);
     expect(sql).not.toMatch(/consume/i);
     expect(rechargeMock).not.toHaveBeenCalled();
+    expect(db.default.connect).not.toHaveBeenCalled();
   });
 });

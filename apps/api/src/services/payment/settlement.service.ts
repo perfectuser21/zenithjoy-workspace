@@ -140,17 +140,26 @@ export async function settleOrder(
       // 事务里订单状态 CAS 没能一起提交，造成账实分叉。用独立语句（走 pool，
       // 而不是已经因异常作废的 client）把订单状态补齐到 credited，让账实对齐，
       // 并把结果当作成功确认返回——重试解决不了账实分叉，只会刷屏。
-      await pool.query(
+      const healed = await pool.query(
         `UPDATE zenithjoy.payment_orders
-            SET status = 'credited', credited_at = COALESCE(credited_at, now()), updated_at = now()
+            SET status = 'credited', provider_transaction_id = COALESCE($3, provider_transaction_id), credited_at = COALESCE(credited_at, now()), updated_at = now()
           WHERE id = $1 AND status = ANY($2)`,
-        [order.id, ALLOWED_TRANSITIONS.credited]
+        [order.id, ALLOWED_TRANSITIONS.credited, q.transactionId ?? null]
       );
-      console.error('[payment] 账实分叉已自愈：积分已入账但订单状态滞后', {
-        payment_order_id: order.id,
-        tenant_id: order.tenant_id,
-        out_trade_no: order.out_trade_no,
-      });
+      if (healed.rowCount === 1) {
+        console.error('[payment] 账实分叉已自愈：积分已入账，订单状态补齐为 credited', {
+          payment_order_id: order.id,
+          tenant_id: order.tenant_id,
+          out_trade_no: order.out_trade_no,
+        });
+      } else {
+        console.error('[payment] 账实分叉未自愈：积分已入账但订单状态非 pending，需人工核查', {
+          payment_order_id: order.id,
+          tenant_id: order.tenant_id,
+          out_trade_no: order.out_trade_no,
+          outcome: 'credit_conflict',
+        });
+      }
       return { outcome: 'credit_conflict', orderId: order.id };
     }
 
