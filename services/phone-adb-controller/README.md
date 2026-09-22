@@ -106,6 +106,30 @@
 2. `scp harvest-keyword.sh refill-profile-links.sh` → `~/bin-harvest/`
 3. `docker cp push-leads.js update-profile-links.js` → us-vps `openclaw-gateway:/root/.openclaw/`
 
+## 基座 1/7：v4 流水线（账本 + 阶段工件 + 续跑）部署与影子跑
+
+新增件 → 落点（xian-m4 / M1 各一遍）：
+1. `scp ledger.mjs workflow-result.sh harvest-cron-v4.sh batch2-v4.sh` → `~/bin-harvest/`（`chmod +x` 三个 .sh）
+2. 账本/工件目录自动建在 `~/.config/zenithjoy/{ledger,workflow-runs}/`；工件收工 best-effort scp 到 MMV `workflow-runs/`
+3. 依赖：`/opt/homebrew/bin/node`、`/usr/bin/jq`、`python3`（均已在 M4）
+
+影子跑（切 crontab 前必须 2 晚，PrepPRD 拍板）：
+- crontab 加一行（与生产错开 15 分钟、`PUSH=0` 不落池）：`15 22 * * * /bin/zsh ~/bin-harvest/harvest-cron-v4.sh jinoshengyuan-work ANGYVB4227006983 AI人工智能训练师 6 0`
+- 每晚验收：`~/.config/zenithjoy/ledger/social-keyword-leadgen-crontab-auto*/ledger.json` 里 preflight/discovery/collection/delivery/cleanup 为 completed（delivery 在 PUSH=0 时为 blocked，正常）、qualification/scoring 为 blocked not_in_profile；工件每个含 `task_request_hash` 且 `jq -e '.schema_version==2'`；`harvest-cron.log` 有 `escort复核命中` 与 `账本finalize: ok=1`；MMV `~/.openclaw/escort-findings.md` 当晚有新行；`night-auto*.tsv` LEAD ≥ 近 7 天均值
+- 2 晚齐 → 把生产两行 `harvest-cron.sh` 指向 `harvest-cron-v4.sh`
+- 正常退让（设备离线/白天时窗/KPI 达标/词单失败）路径 `harvest-cron.log` 只会出现 `账本finalize: skipped(not_initialized, 正常退让)`，不 escalate、不写工件——这是预期，不是故障
+- hash 不一致时的工件是 `…__aN.discovery.0.worker-result.json`（哨兵 n=0，词序号从 1 起，不会覆盖已完成词的账本记录）
+- 账本里每次阶段写入都记一条 item `{n, word}`（init/finalize 写的 preflight/qualification/scoring/cleanup 的 word 为空串），续跑只看 discovery∩collection 都 completed 的非空 word
+
+环境守卫的 proven-to-fire（影子跑期间各做一次，记录到 PR）：
+- escort 真活：拉起后手动 `ssh mmv openclaw cron rm <id>` → 30s 后 `harvest-cron.log` 出现 `escort复核未命中` 且 escalation.log 新增一行
+- 工件落地：起跑前 `chmod 000 ~/.config/zenithjoy/workflow-runs` → 收工 `账本finalize: ok=0` 且 escalation 新增；恢复 `chmod 755`
+- 孤儿 escort：手动 `ssh mmv openclaw cron add --name escort-xian-m4-fake …` 留一条 → 下批起跑日志出现 `孤儿escort清理: <id>`
+
+harvest-keyword.sh 出口码契约（v4 依赖，勿改）：`3` 锁被占 / `1` open-search 失败 / `0` 正常或无卡片。
+
+后续（不在本 PR）：`workflow-manifest.json` `orchestrator.type` n8n→commander、n8n「Social Leadgen V4」标 inactive（hk-vps，先复核发布版≠草稿）、scoring 闭集键口径修正归基座 7/7、`decisions/match` 疑似写库副作用、escalate 目标主机 us-vps 已退役需评估改 MMV。
+
 ## 安全声明
 
 触达命令 `private-message-send` 机械已修,但 `outreach_policy.enabled=false`(默认关闸)。真实发送需主理人批话术、批发送账号、批频控,AI 不得自行触发。
