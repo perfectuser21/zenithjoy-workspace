@@ -9,7 +9,7 @@
  * checkPaymentEnvSanity：防 staging/dev 误用生产商户号——真实资金风险，比普通配置错误
  * 重一个数量级，必须 fail-closed（拒绝启动），与 checkRequiredFiles 的 fail-open 不同档。
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { writeFileSync, mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -95,5 +95,29 @@ describe('checkPaymentEnvSanity', () => {
       WX_PAY_MCHID: '1900000999',
       WX_PAY_PROD_MCHID_DENYLIST: '1900000109,1900000110',
     })).toEqual([]);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('配了 WX_PAY_MCHID 但 denylist 未配置 → 打 WARN 提示运维配置，且不阻断（问题列表仍为空）', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const problems = checkPaymentEnvSanity({
+      NODE_ENV: 'staging',
+      WX_PAY_MCHID: '1900000109',
+    });
+    expect(problems).toEqual([]);
+    expect(warnSpy).toHaveBeenCalled();
+    expect(warnSpy.mock.calls.flat().join()).toMatch(/WX_PAY_PROD_MCHID_DENYLIST/);
+  });
+
+  it('没配 WX_PAY_MCHID（未接入微信支付的部署）→ 不打这条 WARN，不被噪音打扰', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const problems = checkPaymentEnvSanity({
+      NODE_ENV: 'staging',
+    });
+    expect(problems).toEqual([]);
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
