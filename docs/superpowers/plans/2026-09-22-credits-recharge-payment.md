@@ -783,7 +783,7 @@ git commit -m "feat(credits): MockProvider + provider 注册表"
 - Test: `apps/api/tests/services/payment/settlement.service.test.ts`
 
 **Interfaces:**
-- Consumes: Task 2 `ALLOWED_TRANSITIONS`；Task 3 `recharge(.., orderId)` 与 `DuplicateCreditError`；Task 4 `getProvider`
+- Consumes: Task 2 `ALLOWED_TRANSITIONS`；Task 3 的 **`rechargeInTx(client, tenantId, amount, reason, metadata?, orderId?)`**（事务内版本，不是 `recharge`）与 `DuplicateCreditError`；Task 4 `getProvider`
 - Produces:
   - `settleOrder(outTradeNo: string, provider: string): Promise<SettleResult>`
   - `type SettleResult = { outcome: 'credited'|'already_credited'|'not_paid'|'amount_mismatch'|'order_not_found' }`
@@ -806,7 +806,7 @@ vi.mock('../../../src/db/connection', () => {
 const rechargeMock = vi.fn();
 vi.mock('../../../src/services/credits.service', async (orig) => {
   const actual = await (orig() as Promise<any>);
-  return { ...actual, recharge: rechargeMock };
+  return { ...actual, rechargeInTx: rechargeMock };
 });
 
 import { settleOrder } from '../../../src/services/payment/settlement.service';
@@ -852,8 +852,21 @@ describe('settleOrder', () => {
     expect(r.outcome).toBe('credited');
     expect(rechargeMock).toHaveBeenCalledTimes(1);
     expect(rechargeMock).toHaveBeenCalledWith(
-      't-1', 100, 'recharge', expect.objectContaining({ order_id: 'o-1', provider: 'mock' }), 'o-1'
+      client, 't-1', 100, 'recharge',
+      expect.objectContaining({ order_id: 'o-1', provider: 'mock' }), 'o-1'
     );
+  });
+
+  it('入账必须用 CAS 所在的同一个 client（否则两个独立事务 → 重复入账通道）', async () => {
+    mp.__setQueryResult('no-1', { status: 'success', amountFen: 10000, transactionId: 'txn-1' });
+    mockDb(ORDER, 1);
+
+    await settleOrder('no-1', 'mock');
+
+    const passedClient = rechargeMock.mock.calls[0][0];
+    expect(passedClient).toBe(client);
+    // 且 recharge（自带事务的那个）绝不能被用在这条路径上
+    expect(client.query.mock.calls.filter((c: any[]) => c[0] === 'BEGIN')).toHaveLength(1);
   });
 
   it('重复结算：CAS rowCount=0 → 不入账，返回 already_credited', async () => {
@@ -936,7 +949,7 @@ Expected: FAIL — 无法解析 `settlement.service`
  * 幂等：订单状态 CAS（rowCount=1 才入账）+ credit_transactions.order_id 唯一索引兜底。
  */
 import pool from '../../db/connection';
-import { recharge } from '../credits.service';
+import { rechargeInTx } from '../credits.service';
 import { getProvider } from './provider-registry';
 import { ALLOWED_TRANSITIONS } from './types';
 
@@ -1017,7 +1030,11 @@ export async function settleOrder(
       return { outcome: 'already_credited', orderId: order.id };
     }
 
-    await recharge(
+    // 必须用 rechargeInTx 而非 recharge：后者自己 connect+BEGIN/COMMIT，
+    // 会让「订单状态变更」与「入账」落到两个独立事务——入账已提交而订单回滚时，
+    // 重复回调会再次 CAS 成功并重复加积分（两道幂等闸同时失效）。
+    await rechargeInTx(
+      client,
       order.tenant_id,
       order.credits,
       'recharge',
@@ -1093,7 +1110,7 @@ export async function markRefundPending(orderId: string): Promise<void> {
 - [ ] **Step 4: 跑测试确认通过**
 
 Run: `cd apps/api && npx vitest run tests/services/payment/settlement.service.test.ts`
-Expected: PASS（7 passed）
+Expected: PASS（8 passed）
 
 - [ ] **Step 5: 提交**
 
