@@ -5,13 +5,17 @@
 // 改成评论原文(+视频文案+目标人群)直接送Jev判A/B/C/不相关,拿不准的转大模型终审
 // (终审只能在A/B/C/不相关里选一个,不再有第五态,防止判定死循环)。
 //
-// ⚠️ JEV_MODEL的OpenRouter model slug是占位,部署前需要真实OPENROUTER_API_KEY核对。
+// 0923真机实证修正(同judge-jev.js):Jev不走/chat/completions,走OpenRouter专用的
+// POST /api/alpha/decisions,choice题型直接给四选一的criteria,输出choice+confidence,
+// 不用再拿正则从自由文本里抠档位。已用真实OPENROUTER_API_KEY实测跑通。
 "use strict";
 const fs = require("fs");
 
-const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
-const JEV_MODEL = "typesafe/jev"; // TODO: 部署前核对OpenRouter真实model slug(同judge-jev.js)
+const DECISIONS_ENDPOINT = "https://openrouter.ai/api/alpha/decisions";
+const COMMANDER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+const JEV_MODEL = "typesafe/jev-1.13"; // 0923真机核对过,真实可用
 const COMMANDER_MODEL = "google/gemini-2.5-flash-official";
+const CONFIDENCE_THRESHOLD = 0.6; // 低于此值视为"拿不准",转复核官(与judge-jev.js同一阈值口径)
 const GRADES = ["A", "B", "C", "不相关"];
 
 function resolveOpenRouterKey(env = process.env) {
@@ -35,65 +39,46 @@ async function defaultHttpPost(url, body, apiKey) {
   return r.json();
 }
 
-function buildPrimaryPrompt(comment, videoCaption, targetProfile) {
-  return `你是一个评论意向分档助手。这条评论来自下面这个视频的评论区。
-
-目标客户画像:
-${targetProfile}
-
-视频文案:
-${videoCaption || "(无)"}
-
-评论原文:
-${comment}
-
-判断规则,按意向从强到弱四档:
-A = 主动问价/问报名/求资料/明确求助(高意向)
-B = 表达兴趣/相关讨论但没有明确行动意图(中意向)
-C = 纯寒暄/表情互动,但确实是画像内人群(低意向,不是垃圾,不要丢)
-不相关 = 同行企业号/广告引流号/完全跑题
-
-如果拿不准落在哪一档,回复UNCERTAIN,并说明为什么拿不准(不超过30字)。
-
-请严格按格式回复:
-第一行:A 或 B 或 C 或 不相关 或 UNCERTAIN
-如果不是明确档位,第二行:原因:...`;
-}
-
-function extractGrade(text) {
-  for (const line of (text || "").trim().split("\n")) {
-    const t = line.trim();
-    if (/^UNCERTAIN\b/i.test(t)) return "UNCERTAIN";
-    if (t === "A" || t.startsWith("A ") || t.startsWith("A,") || t.startsWith("A、")) return "A";
-    if (t === "B" || t.startsWith("B ") || t.startsWith("B,") || t.startsWith("B、")) return "B";
-    if (t === "C" || t.startsWith("C ") || t.startsWith("C,") || t.startsWith("C、")) return "C";
-    if (t.startsWith("不相关")) return "不相关";
-  }
-  return null;
-}
-
-function extractReason(text) {
-  const line = (text || "").trim().split("\n").find((l) => l.includes("原因：") || l.includes("原因:"));
-  return line ? line.replace(/^原因[：:]/, "").trim() : null;
-}
-
+// 主判:调Jev的Decisions端点,choice题型四选一(A/B/C/不相关)。
+// confidence低于阈值,或response格式不对(answers.grade缺失/choice不在四档内) → 当UNCERTAIN
+// 处理,转复核官,不直接判死。
 async function judgePrimary(comment, videoCaption, targetProfile, { httpPost = defaultHttpPost, apiKey, env } = {}) {
   const key = apiKey || resolveOpenRouterKey(env);
   if (!key) throw new Error("judgePrimary: 找不到OPENROUTER_API_KEY");
   const resp = await httpPost(
-    OPENROUTER_ENDPOINT,
-    { model: JEV_MODEL, messages: [{ role: "user", content: buildPrimaryPrompt(comment, videoCaption, targetProfile) }] },
+    DECISIONS_ENDPOINT,
+    {
+      model: JEV_MODEL,
+      state: `目标客户画像:\n${targetProfile}\n\n视频文案:\n${videoCaption || "(无)"}\n\n评论原文:\n${comment}`,
+      questions: {
+        grade: {
+          type: "choice",
+          instructions: "这条评论按意向从强到弱分档",
+          criteria: {
+            A: "主动问价/问报名/求资料/明确求助(高意向)",
+            B: "表达兴趣/相关讨论但没有明确行动意图(中意向)",
+            C: "纯寒暄/表情互动,但确实是画像内人群(低意向,不是垃圾,不要丢)",
+            "不相关": "同行企业号/广告引流号/完全跑题",
+          },
+        },
+      },
+    },
     key
   );
-  const raw = resp && resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content;
-  const grade = extractGrade(raw);
-  if (!grade) return { grade: "UNCERTAIN", reason: "parse_fallback" };
-  return { grade, reason: grade === "不相关" ? extractReason(raw) || "不相关" : null };
+  const ans = resp && resp.answers && resp.answers.grade;
+  if (!ans || !GRADES.includes(ans.choice)) {
+    return { grade: "UNCERTAIN", reason: "parse_fallback" };
+  }
+  if ((ans.confidence ?? 0) < CONFIDENCE_THRESHOLD) {
+    return { grade: "UNCERTAIN", reason: `低置信度(${ans.confidence})` };
+  }
+  return { grade: ans.choice, reason: ans.choice === "不相关" ? `confidence=${ans.confidence}` : null };
 }
 
 // 复核官只在A/B/C/不相关四档里选一个,不允许再回UNCERTAIN——终审必须给出终态。
 // 无法解析/调用失败一律保守落在"C"(留档但低优先级,不是直接丢弃也不是冒充高意向,
-// 跟评论判定"相关即留档"的0914理念一致——存疑不代表要扔)。
+// 跟评论判定"相关即留档"的0914理念一致——存疑不代表要扔)。这一段走普通chat completions,
+// 跟Jev的Decisions端点无关,不受本次API修正影响。
 async function judgeCommander(comment, videoCaption, targetProfile, primaryReason, { httpPost = defaultHttpPost, apiKey, env } = {}) {
   const key = apiKey || resolveOpenRouterKey(env);
   if (!key) return { grade: "C", reason: `commander:no_api_key|${primaryReason || ""}` };
@@ -114,7 +99,7 @@ ${comment}
 请严格只回一个词:A 或 B 或 C 或 不相关`;
   let resp;
   try {
-    resp = await httpPost(OPENROUTER_ENDPOINT, { model: COMMANDER_MODEL, messages: [{ role: "user", content: prompt }] }, key);
+    resp = await httpPost(COMMANDER_ENDPOINT, { model: COMMANDER_MODEL, messages: [{ role: "user", content: prompt }] }, key);
   } catch (e) {
     return { grade: "C", reason: `commander:调用失败(${String(e.message || e).slice(0, 60)})|${primaryReason || ""}` };
   }
@@ -144,10 +129,10 @@ module.exports = {
   judgeComment,
   judgePrimary,
   judgeCommander,
-  extractGrade,
-  extractReason,
   resolveOpenRouterKey,
   GRADES,
   JEV_MODEL,
   COMMANDER_MODEL,
+  DECISIONS_ENDPOINT,
+  CONFIDENCE_THRESHOLD,
 };
