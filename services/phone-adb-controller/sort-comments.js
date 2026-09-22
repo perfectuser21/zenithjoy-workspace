@@ -81,6 +81,15 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
   if (MODE === "write") {
     // 输入: [{id, rel:"相关|不相关", grade:"A|B|C", reason:"一句真实理由"}]
     const items = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+    // 0922真机实证: 悦升「采集时间」是日期型(type 5),金诺是文本——写死字符串会在悦升侧
+    // 100%炸(DatetimeFieldConvFail),导致模型判定写回池成功但一条都进不了线索表。
+    // 照 push-raw-comments.js 已有的字段类型自适应模式补齐同一处理。
+    const LT = {};
+    try {
+      const fr = await feishu(`/tables/${LEADS}/fields?page_size=100`, "GET", null, tok);
+      for (const f of (fr.data && fr.data.items) || []) LT[f.field_name] = f.type;
+    } catch (e) { console.error("线索表字段类型读取失败,按文本写入: " + String(e).slice(0, 60)); }
+    const asLeadTime = (name, v) => (LT[name] === 5 ? Date.now() : v);
     // 线索表去重映射(token→record) —— 0914 主理人拍板: 重复≠噪音,是强意向信号,要高亮不要扔
     const seen = new Map(); let lp = "";
     do {
@@ -129,7 +138,7 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
         "AI判断理由": `[${it.grade}级] ` + (it.reason || ""),
         "状态": "待触达", "发送状态": "未发送",
         "搜索账号": "池转入(异步判定)",
-        "搜索意图": "证书/学习/求职", "目标人群": "考证人群", "采集时间": now,
+        "搜索意图": "证书/学习/求职", "目标人群": "考证人群", "采集时间": asLeadTime("采集时间", now),
         "合规核验状态": "异步判定agent分级入表(" + now + ")｜评论区采集｜仅内部写入,未触达。",
       }}, tok);
       // 0915 修真bug: seen 是 Map,原代码误用 Set 的 add 方法抛 TypeError,使每轮搬运第一条成功后即断

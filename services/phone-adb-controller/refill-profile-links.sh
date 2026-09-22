@@ -28,13 +28,32 @@ for DYID in "${(f)$(cat $LIST)}"; do
   # 两个问题的共同解法: 改用 locate-tap(视觉定位,截图喂给识图模型找坐标,完全不
   # 依赖 uiautomator dump,也不依赖固定位置假设),先点"用户"标签,再直接按抖音号
   # 文本定位目标卡片。
-  UTAB_DESC=$(print -n -- "搜索结果页顶部横向标签栏里文字为用户二字的那个标签" | /usr/bin/base64)
-  UTAB_OUT=$($C --profile "$P" locate-tap "$UTAB_DESC" "$TAG-$n-utab" </dev/null 2>&1)
-  if ! print -- "$UTAB_OUT" | grep -q "^tapped"; then log "  用户tab定位失败,跳过"; continue; fi
+  # 0921 真机实锤(28条批量补链0成功后逐张截图排查): 两处此前只试一次就放弃,
+  # 但失败原因都是"再来一次/往下滑一屏就能找到",不是真的定位不出来——
+  # ①用户tab识图偶发漏判(截图给识图模型认,单次调用本就有误判率,retry一次即可);
+  # ②抖音搜索是模糊匹配,目标账号常年不在第一屏(如搜"youyawuxiang"整屏全是
+  #   "youya"开头的相似账号),原脚本从不滚动,永远够不着第一屏以下的正确结果。
+  UTAB_TAPPED=0
+  for _ut in 1 2; do
+    UTAB_DESC=$(print -n -- "搜索结果页顶部横向标签栏里文字为用户二字的那个标签" | /usr/bin/base64)
+    UTAB_OUT=$($C --profile "$P" locate-tap "$UTAB_DESC" "$TAG-$n-utab$_ut" </dev/null 2>&1)
+    if print -- "$UTAB_OUT" | grep -q "^tapped"; then UTAB_TAPPED=1; break; fi
+    log "  用户tab定位第${_ut}次失败,重试一次"
+    sleep 2
+  done
+  if (( UTAB_TAPPED == 0 )); then log "  用户tab定位失败(已重试),跳过"; continue; fi
   sleep 3
-  CARD_DESC=$(print -n -- "用户列表里抖音号显示为${DYID}的那一条用户卡片" | /usr/bin/base64)
-  CARD_OUT=$($C --profile "$P" locate-tap "$CARD_DESC" "$TAG-$n-card" </dev/null 2>&1)
-  if ! print -- "$CARD_OUT" | grep -q "^tapped"; then log "  未找到抖音号=${DYID}的卡片,跳过"; continue; fi
+  CARD_TAPPED=0
+  for _ct in 1 2 3; do
+    CARD_DESC=$(print -n -- "用户列表里抖音号显示为${DYID}的那一条用户卡片" | /usr/bin/base64)
+    CARD_OUT=$($C --profile "$P" locate-tap "$CARD_DESC" "$TAG-$n-card$_ct" </dev/null 2>&1)
+    if print -- "$CARD_OUT" | grep -q "^tapped"; then CARD_TAPPED=1; break; fi
+    (( _ct == 3 )) && break
+    log "  第${_ct}屏未找到抖音号=${DYID}的卡片,下滑一屏再找"
+    $C --profile "$P" swipe 600 2000 600 900 400 </dev/null >/dev/null 2>&1
+    sleep 2
+  done
+  if (( CARD_TAPPED == 0 )); then log "  未找到抖音号=${DYID}的卡片(已滑3屏),跳过"; continue; fi
   sleep 3
   $C --profile "$P" ui-evidence "$TAG-$n-prof" </dev/null >/dev/null 2>&1
   PX="$EVROOT/$TAG-$n-prof.xml"

@@ -334,4 +334,12 @@ if [[ -n "$_CJK_HIT" ]]; then
   fail "检测到未加花括号的shell变量紧跟CJK字符(0921真机实锤: zsh set -u下会被解析成一整个未定义变量名崩溃),必须写成\${VAR}中文"
 fi
 
+# 层17: 0921真机实证——补链28条0成功,逐张截图排查出根因:①用户tab识图偶发漏判
+# 从不重试 ②抖音搜索模糊匹配,目标账号常不在第一屏,脚本从不滚动。禁止这两处
+# retry/滚动逻辑被删掉复活成"一次不中就放弃"。
+_RF="$D/refill-profile-links.sh"
+grep -qF 'for _ut in 1 2' "$_RF" || fail "refill-profile-links 用户tab定位重试逻辑缺失(0921实证:识图单次调用有误判率,不重试=白白放弃能找到的号)"
+grep -qF 'for _ct in 1 2 3' "$_RF" || fail "refill-profile-links 卡片定位滚动重试逻辑缺失(0921实证:抖音模糊匹配目标常不在第一屏,不滚动=永远够不到)"
+grep -qF 'swipe 600 2000 600 900 400' "$_RF" || fail "refill-profile-links 缺少下滑一屏的滚动动作"
+
 echo "phone-adb-controller-smoke: PASS"
