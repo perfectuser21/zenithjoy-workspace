@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MockProvider } from '../../../src/services/payment/mock.provider';
 import { getProvider } from '../../../src/services/payment/provider-registry';
 import { SignatureError } from '../../../src/services/payment/types';
@@ -45,5 +45,17 @@ describe('provider-registry', () => {
 
   it('mock 可取到', () => {
     expect(getProvider('mock').name).toBe('mock');
+  });
+
+  it('production 环境不注册 mock（防止生产下单到假网关）', async () => {
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    vi.resetModules();
+    const { getProvider: freshGetProvider } = await import(
+      '../../../src/services/payment/provider-registry'
+    );
+    expect(() => freshGetProvider('mock')).toThrow('UNKNOWN_PROVIDER');
+    process.env.NODE_ENV = prev;
+    vi.resetModules();
   });
 });
