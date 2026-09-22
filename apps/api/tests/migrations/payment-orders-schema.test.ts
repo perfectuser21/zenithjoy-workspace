@@ -47,4 +47,13 @@ describe('payment_orders migration', () => {
   it('pending 订单有过期扫描索引', () => {
     expect(sql).toMatch(/CREATE INDEX[\s\S]*payment_orders\s*\(\s*status\s*,\s*expire_at\s*\)[\s\S]*WHERE\s+status\s*=\s*'pending'/i);
   });
+
+  it('payment_callbacks 带可空 tenant_id（租户隔离铁律；回调到达时订单可能还没匹配上，故可空）', () => {
+    const cbTable = sql.slice(
+      sql.indexOf('CREATE TABLE IF NOT EXISTS zenithjoy.payment_callbacks'),
+      sql.indexOf('ALTER TABLE')
+    );
+    expect(cbTable).toMatch(/tenant_id\s+UUID\s+REFERENCES\s+zenithjoy\.tenants/i);
+    expect(cbTable).not.toMatch(/tenant_id\s+UUID\s+NOT NULL/i);
+  });
 });

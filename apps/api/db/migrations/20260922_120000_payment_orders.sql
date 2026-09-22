@@ -40,6 +40,7 @@ CREATE INDEX IF NOT EXISTS idx_payment_orders_pending_expire
 -- 回调审计（只存摘要，不存原文 — 日志红线）
 CREATE TABLE IF NOT EXISTS zenithjoy.payment_callbacks (
   id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id               UUID REFERENCES zenithjoy.tenants(id) ON DELETE SET NULL,
   provider                TEXT NOT NULL,
   provider_transaction_id TEXT NOT NULL,
   event_type              TEXT NOT NULL,
@@ -50,7 +51,12 @@ CREATE TABLE IF NOT EXISTS zenithjoy.payment_callbacks (
 );
 
 COMMENT ON TABLE zenithjoy.payment_callbacks IS '支付回调审计；UNIQUE 用于 ON CONFLICT DO NOTHING 判首次投递';
+COMMENT ON COLUMN zenithjoy.payment_callbacks.tenant_id IS '租户隔离；回调验签通过时可能尚未匹配到订单，故可空，匹配到订单后回填';
 COMMENT ON COLUMN zenithjoy.payment_callbacks.raw_digest IS '回调体 SHA256，绝不存原文';
+
+CREATE INDEX IF NOT EXISTS idx_payment_callbacks_tenant
+  ON zenithjoy.payment_callbacks (tenant_id, received_at DESC)
+  WHERE tenant_id IS NOT NULL;
 
 -- 入账幂等第二道闸
 ALTER TABLE zenithjoy.credit_transactions
