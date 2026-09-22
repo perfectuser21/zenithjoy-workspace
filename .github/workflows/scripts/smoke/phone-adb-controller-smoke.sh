@@ -359,4 +359,18 @@ if grep -qE 'sent\s*%\s*2\s*===\s*0' "$_NO"; then
 fi
 grep -qF 'Math.random() < 0.5' "$_NO" || fail "next-outreach.js 缺少随机选号逻辑(账号轮流不能依赖会卡住不动的计数器)"
 
+# 层19: 0922建数据库正本第一刀——leadgen-db-lib.js 是纯逻辑+依赖注入(不 require('pg')),
+# 因为 openclaw-scripts-test job 跑本目录 __tests__/*.test.mjs 时不装任何依赖(纯 node --test,
+# 见 ci-l3-code.yml 注释)。真连接在 leadgen-db-connect.js 里,一旦 leadgen-db-lib.js 不小心
+# require 了 pg,CI 会直接找不到模块炸掉——这道闸把这个风险锁死在源头,而不是等 CI 红了才发现。
+_DBLIB="$D/leadgen-db-lib.js"
+[[ -s "$_DBLIB" ]] || fail "leadgen-db-lib.js 缺失或为空"
+# 只看非注释行(грep会连注释里提到"require('pg')"这几个字的说明性文字一起误判,
+# 0922真机实测踩过:本文件头部注释本身就写了这几个字来解释"为什么不能这么做")。
+_PG_HIT=$(grep -nE "require\(['\"]pg['\"]\)" "$_DBLIB" | grep -vE '^[0-9]+:[[:space:]]*//' || true)
+[[ -z "$_PG_HIT" ]] || fail "leadgen-db-lib.js 不能直接 require('pg')——本目录测试跑在不装依赖的CI job里,必须靠依赖注入的pool参数,真连接放leadgen-db-connect.js"
+for fn in commentDedupKey upsertVideo listPendingVideos markVideoJudgment upsertComment listPendingComments markCommentJudgment upsertLead; do
+  grep -qF "$fn" "$_DBLIB" || fail "leadgen-db-lib.js 缺少导出函数 $fn"
+done
+
 echo "phone-adb-controller-smoke: PASS"

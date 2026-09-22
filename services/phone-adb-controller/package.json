@@ -1,3 +1,7 @@
 {
-  "type": "commonjs"
+  "type": "commonjs",
+  "dependencies": {
+    "pg": "^8.11.3"
+  },
+  "_comment_pg": "只有 leadgen-db-connect.js 惰性require用到,真机部署(mmv)跑生产脚本时才需要npm install;__tests__/*.test.mjs 走依赖注入,CI的node --test不装依赖也能跑,见leadgen-db-lib.js头部注释。"
 }
