@@ -83,6 +83,8 @@ import { documentsRouter } from './routes/documents';
 import { fakeFeishuRouter, installFakeFeishuAxiosShim } from './routes/_smoke-fake-feishu';
 import { skillDraftsRouter, skillDraftsInternalRouter } from './routes/skill-drafts';
 import { agentOfflineScanRouter } from './routes/agent-offline-scan';
+import { paymentCallbackRouter } from './routes/payment-callback';
+import { creditsOrdersRouter } from './routes/credits-orders';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { simpleRateLimit, ipKeyFn } from './middleware/simple-rate-limit';
 import { verifyStartupConfig, verifyStartupBinaries } from './startup-check';
@@ -105,6 +107,14 @@ app.use(
 if (!process.env.VITEST) {
   app.all('/api/auth/*', toNodeHandler(auth));
 }
+
+// 支付回调必须在 express.json() 之前挂载：
+// APIv3 验签基于原始字节，body 被解析后无法还原签名串（同 better-auth 的理由）
+app.use(
+  '/api/payment/callback',
+  express.raw({ type: '*/*' }),
+  paymentCallbackRouter
+);
 
 // 之后才挂 body parser
 // limit: '1mb' —— 真机排查 2026-07-19：/judge-video 的音频判定(capture_type=audio)真实
@@ -238,6 +248,7 @@ app.use('/api/profile', profileRouter);
 app.use('/api/tenants', tenantsRouter);
 app.use('/api/skills', skillsRouter);
 app.use('/api/credits', creditsRouter);
+app.use('/api/credits/orders', creditsOrdersRouter);
 // Path 2 Sprint A — 多租户飞书集成
 app.use('/api/feishu/oauth', feishuOauthRouter);
 // Line04 中台 AI-native CRM·客户列表页（/customers 读名册租户闸 + manage/status/POST 写接口）

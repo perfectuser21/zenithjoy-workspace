@@ -2,20 +2,30 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 
-const settleMock = vi.fn();
-const recordMock = vi.fn();
-const refundMock = vi.fn();
-const findOrderMock = vi.fn();
+// 与仓库既有约定一致（见 admin-license.test.ts 等）：vi.fn() 内联在工厂里创建，
+// 不要在工厂外部 const 声明后再引用——vi.mock 会被提升到文件顶部，若工厂引用了
+// 提升之前才初始化的外部变量会触发 "Cannot access before initialization"。
 vi.mock('../../src/services/payment/settlement.service', () => ({
-  settleOrder: settleMock,
-  recordCallback: recordMock,
-  markRefundPending: refundMock,
-  findOrderByOutTradeNo: findOrderMock,
+  settleOrder: vi.fn(),
+  recordCallback: vi.fn(),
+  markRefundPending: vi.fn(),
+  findOrderByOutTradeNo: vi.fn(),
 }));
 
 import { paymentCallbackRouter } from '../../src/routes/payment-callback';
+import {
+  settleOrder,
+  recordCallback,
+  markRefundPending,
+  findOrderByOutTradeNo,
+} from '../../src/services/payment/settlement.service';
 import { __setProviderForTest } from '../../src/services/payment/provider-registry';
 import { MockProvider } from '../../src/services/payment/mock.provider';
+
+const settleMock = settleOrder as ReturnType<typeof vi.fn>;
+const recordMock = recordCallback as ReturnType<typeof vi.fn>;
+const refundMock = markRefundPending as ReturnType<typeof vi.fn>;
+const findOrderMock = findOrderByOutTradeNo as ReturnType<typeof vi.fn>;
 
 function makeApp() {
   const app = express();
