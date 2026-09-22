@@ -88,8 +88,13 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : (
   const sc = scripts.find(s => txt(s.fields["子版本"]) === ver && txt(s.fields["启用状态"]) === "启用");
   if (!sc) { console.log("NO_SCRIPT " + ver); return; }
   const msg = txt(sc.fields["话术正文"]);
-  // 账号轮流: 偶数单主号,奇数单小诺
-  const sender = sent % 2 === 0
+  // 0922真机实证: 原按 sent(今日已触达数)奇偶轮流分配账号——但 sent 只在真正成功
+  // 触达后才变化,若队首这条(pending[0]确定性排序,失败不会挪到队尾)恰好分给一个
+  // 暂停/故障账号,sent 永远不变→死循环永远选中同一个坏账号,整条队列(含legacy)
+  // 全部卡死(0922实测:同一条记录连续3个tick原地重试,legacy完全轮不上)。
+  // 改成每次调用独立随机选号: 队首记录卡在坏账号上时,下次调用有50%概率随机换到
+  // 健康账号,几次内必然脱困,不再依赖一个会被"卡住不动"的计数器。
+  const sender = Math.random() < 0.5
     ? { profile: "jinoshengyuan-work", id: "langzi63485", label: "小号1 躺赢AI学姐" }
     : { profile: "legacy", id: "44997267357", label: "小号2 人工智能小诺考评" };
   // 预写触达中(防 tick 重入)
