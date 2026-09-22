@@ -128,6 +128,7 @@ describe('recharge() — 仍自己管理事务，行为与修改前一致', () =
       if (/INSERT INTO zenithjoy\.credit_transactions/i.test(sql)) {
         const err: any = new Error('duplicate key');
         err.code = '23505';
+        err.constraint = 'idx_credit_tx_order';
         throw err;
       }
       return { rows: [] };
@@ -140,5 +141,32 @@ describe('recharge() — 仍自己管理事务，行为与修改前一致', () =
     const calledSql = client.query.mock.calls.map((c: any[]) => String(c[0]));
     expect(calledSql).toContain('ROLLBACK');
     expect(client.release).toHaveBeenCalled();
+  });
+
+  // I-6：此前只要「传了 orderId」就把任何 23505 当作"这单已入过账"自愈处理。
+  // 将来给 credit_transactions 加任何其它唯一约束，命中的都会被误判成已入账，
+  // 触发自愈路径吞掉一个本该向上抛出的真实错误。必须核对 err.constraint 确实是
+  // idx_credit_tx_order 才能判定为"重复入账"。
+  it('I-6：命中 23505 但 constraint 不是 idx_credit_tx_order（未来新增的其它唯一约束）→ 不误判为重复入账，原样抛出原始错误', async () => {
+    client.query.mockImplementation(async (sql: string) => {
+      if (/INSERT INTO zenithjoy\.tenant_credits/i.test(sql)) {
+        return { rows: [{ balance: 100, total_recharged: 100, total_consumed: 0 }] };
+      }
+      if (/INSERT INTO zenithjoy\.credit_transactions/i.test(sql)) {
+        const err: any = new Error('duplicate key value violates unique constraint "some_other_idx"');
+        err.code = '23505';
+        err.constraint = 'some_other_idx';
+        throw err;
+      }
+      return { rows: [] };
+    });
+
+    const err: any = await rechargeInTx(
+      client, 't-1', 100, 'settlement', undefined, 'order-dup'
+    ).catch((e) => e);
+
+    expect(err).not.toBeInstanceOf(DuplicateCreditError);
+    expect(err.code).toBe('23505');
+    expect(err.constraint).toBe('some_other_idx');
   });
 });

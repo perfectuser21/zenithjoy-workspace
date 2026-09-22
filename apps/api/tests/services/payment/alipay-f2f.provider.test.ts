@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import { generateKeyPairSync, createSign } from 'crypto';
 import { AlipayF2FProvider } from '../../../src/services/payment/alipay-f2f.provider';
 import { SignatureError } from '../../../src/services/payment/types';
@@ -132,5 +132,107 @@ describe('AlipayF2FProvider 验签', () => {
       'content-type': 'application/x-www-form-urlencoded',
     });
     expect(ev.eventType).toBe('closed');
+  });
+});
+
+describe('AlipayF2FProvider createOrder（C-1：biz_content 必须带 timeout_express，与本地订单 TTL 对称过期，否则商家把码放着、平台侧永久有效，本地却已标 expired，造成钱收了积分却到不了账）', () => {
+  const ORIGINAL_FETCH = global.fetch;
+
+  afterEach(() => {
+    global.fetch = ORIGINAL_FETCH;
+  });
+
+  it('按 expireAt 换算 timeout_express（分钟制），随下单一起发给支付宝网关', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        alipay_trade_precreate_response: { qr_code: 'https://qr.alipay.com/abc' },
+      }),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const expireAt = new Date(Date.now() + 30 * 60 * 1000); // 30 分钟后过期，与 ORDER_TTL_MS 一致
+    await provider.createOrder({
+      outTradeNo: 'no-timeout-1',
+      amountFen: 10000,
+      description: '积分充值',
+      expireAt,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0];
+    const parsedBody = new URLSearchParams(init.body as string);
+    const bizContent = JSON.parse(parsedBody.get('biz_content') as string);
+    expect(bizContent.timeout_express).toBe('30m');
+  });
+
+  it('请求携带 15s 超时 AbortSignal（跨境网关不设超时会钉住调用方）', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        alipay_trade_precreate_response: { qr_code: 'https://qr.alipay.com/abc' },
+      }),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await provider.createOrder({
+      outTradeNo: 'no-timeout-2',
+      amountFen: 10000,
+      description: '积分充值',
+      expireAt: new Date(Date.now() + 60_000),
+    });
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('网关超时 → 抛出可辨识的超时错误（不是裸的 AbortError/TimeoutError 原文）', async () => {
+    const timeoutErr = new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+    global.fetch = vi.fn().mockRejectedValue(timeoutErr) as unknown as typeof fetch;
+
+    await expect(
+      provider.createOrder({
+        outTradeNo: 'no-timeout-3',
+        amountFen: 10000,
+        description: '积分充值',
+        expireAt: new Date(Date.now() + 60_000),
+      })
+    ).rejects.toThrow(/ALIPAY.*TIMEOUT|超时/);
+  });
+});
+
+describe('AlipayF2FProvider queryOrder', () => {
+  const ORIGINAL_FETCH = global.fetch;
+
+  afterEach(() => {
+    global.fetch = ORIGINAL_FETCH;
+  });
+
+  it('低成本项：平台成功但未返回 total_amount → amountFen 为 undefined，不静默当 0 分（会被误判为金额不符）', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        alipay_trade_query_response: { trade_status: 'TRADE_SUCCESS', trade_no: 'txn-9' },
+      }),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const r = await provider.queryOrder('no-9');
+
+    expect(r.status).toBe('success');
+    expect(r.amountFen).toBeUndefined();
+  });
+
+  it('请求携带 15s 超时 AbortSignal', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ alipay_trade_query_response: { trade_status: 'WAIT_BUYER_PAY' } }),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await provider.queryOrder('no-10');
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 });

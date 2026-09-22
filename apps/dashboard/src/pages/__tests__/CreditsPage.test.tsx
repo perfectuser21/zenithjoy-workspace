@@ -15,6 +15,9 @@ async function flush() {
 vi.mock('../../api/credits.api');
 
 beforeEach(() => {
+  // 低成本顺手项：此前只靠单条用例内的 mockClear 兜住跨用例 mock 调用历史累加，
+  // 是脆弱平衡——顶层统一 clearAllMocks 更稳妥。
+  vi.clearAllMocks();
   vi.mocked(api.fetchBalance).mockResolvedValue({
     balance: 250, total_recharged: 500, total_consumed: 250,
   });
@@ -104,6 +107,27 @@ describe('CreditsPage', () => {
 
     await waitFor(() => expect(screen.getByText('充值成功')).toBeInTheDocument());
     await waitFor(() => expect(screen.getByText('350')).toBeInTheDocument());
+  });
+
+  // C-2：CAS 未命中的真实原因不一定是"已入账"。settleOrder 现在会为这种情况返回
+  // not_settlable（而不是谎报 already_credited）。前端绝不能把它当成功：不刷新余额、
+  // 不提示"充值成功"，而是提示订单状态异常、联系客服。
+  it('C-2：查单返回 not_settlable 时显示订单状态异常提示，不刷新余额、不提示充值成功', async () => {
+    vi.mocked(api.syncOrder).mockResolvedValue({ outcome: 'not_settlable' });
+
+    render(<CreditsPage />);
+    await waitFor(() => screen.getByText(/100 积分/));
+    fireEvent.click(screen.getByText(/100 积分/));
+    fireEvent.click(screen.getByRole('button', { name: /微信支付/ }));
+    await waitFor(() => screen.getByLabelText('支付二维码'));
+    fireEvent.click(screen.getByRole('button', { name: /我已支付/ }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/订单状态异常.*联系客服/)).toBeInTheDocument()
+    );
+    expect(screen.queryByText('充值成功')).not.toBeInTheDocument();
+    // 余额没有被刷新过第二次（fetchBalance 只在初次加载时调用一次）
+    expect(api.fetchBalance).toHaveBeenCalledTimes(1);
   });
 
   // F2：手动点「我已支付」这条路径原来没有 try/catch，syncOrder 抛错时是一个

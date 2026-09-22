@@ -73,6 +73,43 @@ describe('startPaymentMonitor', () => {
     await vi.advanceTimersByTimeAsync(5000);
     expect(expireMock).toHaveBeenCalledTimes(1);
   });
+
+  // I-2：expireStaleOrders 串行处理最多 200 单、每单一次跨境 fetch，单个 tick 可能
+  // 远超 interval（此前 provider fetch 无超时，undici 默认 300s）。没有重入闸时，
+  // 下一次 interval 触发会叠加起新一轮 tick，重复扫同一批订单。
+  it('I-2：上一轮 tick 尚未结束时，下一次 interval 触发应跳过本轮，不重入扫描', async () => {
+    let resolveFirstTick!: (v: { scanned: number; credited: number; expired: number }) => void;
+    expireMock.mockReset().mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFirstTick = resolve;
+        })
+    );
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      startPaymentMonitor(1000);
+
+      // 第一轮触发，卡在 expireMock 返回的 pending promise 里（模拟慢查单）
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(expireMock).toHaveBeenCalledTimes(1);
+
+      // 第二个 interval 到点，此时第一轮仍未结束 —— 应被跳过，不应发起第二次 expireStaleOrders
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(expireMock).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalled();
+
+      // 放行第一轮
+      expireMock.mockResolvedValue({ scanned: 0, credited: 0, expired: 0 });
+      resolveFirstTick({ scanned: 0, credited: 0, expired: 0 });
+      await vi.advanceTimersByTimeAsync(0);
+
+      // 第一轮结束后，下一个 interval 应能正常再次触发
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(expireMock).toHaveBeenCalledTimes(2);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
 });
 
 describe('scanPendingBacklog', () => {

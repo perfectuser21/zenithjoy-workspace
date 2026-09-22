@@ -54,6 +54,14 @@ describe('充值档位', () => {
     const ids = RECHARGE_TIERS.map((t) => t.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  // 低成本顺手项：orders.service.ts 的订单复用逻辑靠 amount_fen 反查档位（schema
+  // 无 tier_id 列），三档金额互异是这套复用逻辑成立的隐含前提，此前全靠人记。
+  // 这条断言把前提变成机器卡住的东西——以后谁加了个金额撞车的新档位，这里直接红。
+  it('档位金额互异（订单复用逻辑靠 amount_fen 代理 tier，金额撞车会导致复用逻辑串档）', () => {
+    const amounts = RECHARGE_TIERS.map((t) => t.amountFen);
+    expect(new Set(amounts).size).toBe(amounts.length);
+  });
 });
 
 describe('SignatureError', () => {

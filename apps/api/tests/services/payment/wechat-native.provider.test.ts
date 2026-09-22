@@ -359,3 +359,69 @@ describe('WechatNativeProvider APIv3 请求头（I-2，undici fetch 默认不发
     expect(init.headers['User-Agent']).toBeTruthy();
   });
 });
+
+describe('WechatNativeProvider 请求超时（I-2，跨境网关 fetch 无超时会被单个 tick 钉住到 undici 默认 300s，导致巡检 tick 重入叠加扫同一批订单）', () => {
+  const ORIGINAL_FETCH = global.fetch;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    global.fetch = ORIGINAL_FETCH;
+  });
+
+  it('createOrder 请求携带 15s 超时 AbortSignal', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ code_url: 'weixin://wxpay/bizpayurl?pr=abc' }),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await provider.createOrder({
+      outTradeNo: 'no-timeout-1',
+      amountFen: 100,
+      description: '充值',
+      expireAt: new Date(Date.now() + 60_000),
+    });
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('queryOrder 请求携带 15s 超时 AbortSignal', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ trade_state: 'NOTPAY' }),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await provider.queryOrder('no-timeout-2');
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('createOrder 网关超时 → 抛出可辨识的超时错误', async () => {
+    const timeoutErr = new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+    global.fetch = vi.fn().mockRejectedValue(timeoutErr) as unknown as typeof fetch;
+
+    await expect(
+      provider.createOrder({
+        outTradeNo: 'no-timeout-3',
+        amountFen: 100,
+        description: '充值',
+        expireAt: new Date(Date.now() + 60_000),
+      })
+    ).rejects.toThrow(/WECHAT.*TIMEOUT|超时/);
+  });
+
+  it('queryOrder 网关超时 → 抛出可辨识的超时错误', async () => {
+    const timeoutErr = new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+    global.fetch = vi.fn().mockRejectedValue(timeoutErr) as unknown as typeof fetch;
+
+    await expect(provider.queryOrder('no-timeout-4')).rejects.toThrow(/WECHAT.*TIMEOUT|超时/);
+  });
+});

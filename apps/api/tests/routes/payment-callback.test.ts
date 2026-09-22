@@ -10,6 +10,7 @@ vi.mock('../../src/services/payment/settlement.service', () => ({
   recordCallback: vi.fn(),
   markRefundPending: vi.fn(),
   findOrderByOutTradeNo: vi.fn(),
+  deleteCallbackRecord: vi.fn(),
 }));
 
 import { paymentCallbackRouter } from '../../src/routes/payment-callback';
@@ -18,6 +19,7 @@ import {
   recordCallback,
   markRefundPending,
   findOrderByOutTradeNo,
+  deleteCallbackRecord,
 } from '../../src/services/payment/settlement.service';
 import { __setProviderForTest } from '../../src/services/payment/provider-registry';
 import { MockProvider } from '../../src/services/payment/mock.provider';
@@ -27,6 +29,7 @@ const settleMock = settleOrder as ReturnType<typeof vi.fn>;
 const recordMock = recordCallback as ReturnType<typeof vi.fn>;
 const refundMock = markRefundPending as ReturnType<typeof vi.fn>;
 const findOrderMock = findOrderByOutTradeNo as ReturnType<typeof vi.fn>;
+const deleteMock = deleteCallbackRecord as ReturnType<typeof vi.fn>;
 
 function makeApp() {
   const app = express();
@@ -43,6 +46,7 @@ beforeEach(() => {
   recordMock.mockReset().mockResolvedValue(true);
   refundMock.mockReset();
   findOrderMock.mockReset().mockResolvedValue({ id: 'o-1', tenantId: 't-1' });
+  deleteMock.mockReset().mockResolvedValue(undefined);
   __setProviderForTest('mock', new MockProvider());
 });
 
@@ -93,6 +97,37 @@ describe('POST /api/payment/callback/:provider', () => {
       .send(paidBody);
 
     expect(res.status).toBeGreaterThanOrEqual(500);
+  });
+
+  // I-1：recordCallback（写审计，靠 UNIQUE 判首次）排在 settleOrder 之前。首次投递若
+  // settleOrder 抛错返 5xx，平台重推时 recordCallback 会命中 UNIQUE 返回 false，
+  // 路由直接 200 "duplicate"——结算被永久跳过。必须在本次是首次插入且后续处理失败时，
+  // 把本次刚插入的审计行删掉，让平台重推能重新走完整流程。
+  it('I-1：首次投递但结算抛错(5xx) → 删除本次刚写入的审计行，避免下次重推被误判为重复', async () => {
+    settleMock.mockRejectedValue(new Error('db down'));
+
+    const res = await request(makeApp())
+      .post('/api/payment/callback/mock')
+      .set('Content-Type', 'application/json')
+      .set('x-mock-signature', 'valid')
+      .send(paidBody);
+
+    expect(res.status).toBeGreaterThanOrEqual(500);
+    expect(deleteMock).toHaveBeenCalledWith('mock', 'txn-1', 'paid');
+  });
+
+  it('I-1：重复投递（非首次插入）时即使后面出错也不该走到，也绝不会误删别人的审计行', async () => {
+    recordMock.mockResolvedValue(false);
+
+    const res = await request(makeApp())
+      .post('/api/payment/callback/mock')
+      .set('Content-Type', 'application/json')
+      .set('x-mock-signature', 'valid')
+      .send(paidBody);
+
+    expect(res.status).toBe(200);
+    expect(settleMock).not.toHaveBeenCalled();
+    expect(deleteMock).not.toHaveBeenCalled();
   });
 
   it('退款事件 → 落 refund_pending，不自动扣回积分', async () => {
