@@ -37,19 +37,6 @@ const ROUTES = [
     keyword: "tblyKCp5vc7y2S40",       // 悦升云端-关键词配置
     script: "tblvf3t8ZWkOCpe1",        // 悦升云端-话术库
   },
-  {
-    key: "dev",
-    line: "研发",
-    // 研发活不绑机器——任何一台手机闲下来都能跑它（0922 主理人定的模型：
-    // 隔离点在「活」上不在「机器」上）。它跟生产活的区别只有一个：**回填去哪**。
-    profiles: [],
-    account: "main",
-    // base 留 null：四个写入脚本都有 `if (!B) 跳过` 的分支，所以研发活天然不落库，
-    // 只跑流程、留日志。等真开了测试 base 再填这里，其它地方一行都不用改。
-    base: null,
-    lead: null, pool: null, video: null, keyword: null, script: null,
-    isDev: true,
-  },
 ];
 
 // 传入业务线名、key、或 profile 名都能路由。
@@ -59,7 +46,11 @@ const ROUTES = [
 // **静默污染别人的库**：小彩(xiaolongxia)不在任何 route 里，它一旦开跑，
 // 悦升研发机采的线索会整批写进金诺的生产飞书表，而且没有任何人会发现。
 // 抛错才是安全的那一侧：数据不会丢（脚本会红、人看得见），也不会写错地方。
-function routeOf(hint) {
+// 第二参 opts.dev 只是**标签**，不影响路由到哪个客户——
+// 「金诺的研发就在金诺里面，悦升的研发就在悦升里面」（主理人 0922）。
+// 上一版把 dev 做成第三条路由且 base=null，等于把研发当成第三个客户，
+// 而且让研发活的数据直接丢失、无处可查。客户才是路由，研发是它身上的一个属性。
+function routeOf(hint, opts) {
   const h = String(hint || "").trim();
   if (h) {
     for (const r of ROUTES) {
@@ -81,4 +72,9 @@ function routeOf(hint) {
 // 兜底已经取消，不再有 fallback 这回事。保留导出只为不炸掉老调用方。
 function isFallback() { return false; }
 
-module.exports = { ROUTES, routeOf, isFallback };
+// 研发标签往哪写：线索表已有的「实验批次」列（自由文本，两个客户库都有这一列，
+// 0922 实测各 34 列结构一致）。不新造字段——新造就得在两个 base 上各建一次，
+// 而且老数据没有这一列，筛选时又是一处特例。
+function devBatchTag(isDev) { return isDev ? "研发" : ""; }
+
+module.exports = { ROUTES, routeOf, isFallback, devBatchTag };

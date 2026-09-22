@@ -1781,7 +1781,7 @@ ok "Step 34 ✅ 采收归位是确定性的（退到看见结果页为止，退�
 # 实际是静默污染别人的库：小彩(xiaolongxia)不在任何 route 里，一旦开跑，
 # 悦升研发机的线索会整批写进金诺生产表，没有任何人会发现。
 node - <<'NODE' || fail "Step 35 回填路由退回按机器兜底" 35
-const { routeOf, ROUTES } = require('./services/phone-adb-controller/line-routes.js');
+const { routeOf, ROUTES, devBatchTag } = require('./services/phone-adb-controller/line-routes.js');
 
 // ① 三种历史用法都还认得出（夜批现在传的就是 profile 名，断了整条链会红）
 for (const [hint, key] of [['jinoshengyuan-work','jinuo'], ['legacy','jinuo'],
@@ -1797,13 +1797,16 @@ for (const bad of ['xiaolongxia', '', undefined, '没见过的标记']) {
   if (!threw) process.exit(1);
 }
 
-// ③ 研发路由存在、可识别、且绝不指向任何生产 base
-const dev = routeOf('dev');
-if (dev.isDev !== true) process.exit(1);
-for (const k of ['jinuo', 'yuesheng']) {
-  const prod = ROUTES.find((r) => r.key === k);
-  if (dev.base && dev.base === prod.base) process.exit(1);
-}
+// ③ 研发是**标签**不是客户（主理人 0922 纠正）：
+//    「金诺是一个客户表，悦升云端也是个客户表。研发只是个标签呀。
+//      金诺的研发就在金诺里面，悦升的研发就在悦升里面。」
+//    上一版把 dev 做成第三条路由且 base=null，等于把研发当第三个客户，
+//    而且让研发活的数据直接丢失、无处可查。
+if (ROUTES.some((r) => r.key === 'dev')) process.exit(1);          // 路由表里不许有 dev
+for (const r of ROUTES) { if (!r.base || !r.lead) process.exit(1); } // 没有"不落库的客户"
+// 研发活照样落它所属客户的库，标签走线索表已有的「实验批次」列
+if (routeOf('jinuo', { dev: true }).base !== routeOf('jinuo').base) process.exit(1);
+if (devBatchTag(true) !== '研发' || devBatchTag(false) !== '') process.exit(1);
 
 // ④ 采收链必须把标记透传下去，不能再传空（空值会被 ② 拒收，整条链会红）
 const fs = require('fs');
