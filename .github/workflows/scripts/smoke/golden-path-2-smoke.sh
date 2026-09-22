@@ -1771,6 +1771,55 @@ if (!harvest.includes('back-to-results')) process.exit(1);
 NODE
 ok "Step 34 ✅ 采收归位是确定性的（退到看见结果页为止，退不回去就报错）"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 35：回填按「活」路由，认不出一律拒收（别再静默倒进金诺）
+#
+# 主理人 0922 定的模型：隔离点在「活」上不在「机器」上——
+# 「生产要求你生产回填哪，研发要求你研发回填哪，这两个不一样。」
+#
+# 旧实现认不出 profile 就 return ROUTES[0]（金诺），注释写着"避免静默丢数据"，
+# 实际是静默污染别人的库：小彩(xiaolongxia)不在任何 route 里，一旦开跑，
+# 悦升研发机的线索会整批写进金诺生产表，没有任何人会发现。
+node - <<'NODE' || fail "Step 35 回填路由退回按机器兜底" 35
+const { routeOf, ROUTES } = require('./services/phone-adb-controller/line-routes.js');
+
+// ① 三种历史用法都还认得出（夜批现在传的就是 profile 名，断了整条链会红）
+for (const [hint, key] of [['jinoshengyuan-work','jinuo'], ['legacy','jinuo'],
+                           ['yueshengyun-work','yuesheng'], ['AI人工智能训练师','jinuo'],
+                           ['悦升云端','yuesheng']]) {
+  if (routeOf(hint).key !== key) process.exit(1);
+}
+
+// ② 认不出必须抛错——这是本刀的核心
+for (const bad of ['xiaolongxia', '', undefined, '没见过的标记']) {
+  let threw = false;
+  try { routeOf(bad); } catch { threw = true; }
+  if (!threw) process.exit(1);
+}
+
+// ③ 研发路由存在、可识别、且绝不指向任何生产 base
+const dev = routeOf('dev');
+if (dev.isDev !== true) process.exit(1);
+for (const k of ['jinuo', 'yuesheng']) {
+  const prod = ROUTES.find((r) => r.key === k);
+  if (dev.base && dev.base === prod.base) process.exit(1);
+}
+
+// ④ 采收链必须把标记透传下去，不能再传空（空值会被 ② 拒收，整条链会红）
+const fs = require('fs');
+const code = (f) => fs.readFileSync(f, 'utf8').split('\n')
+  .filter((l) => !l.trimStart().startsWith('#')).join('\n');
+const hk = code('services/phone-adb-controller/harvest-keyword.sh');
+const b2 = code('services/phone-adb-controller/batch2.sh');
+if (/LINE="\$\{6:-\}"/.test(hk)) process.exit(1);
+if (!/harvest-keyword\.sh[^\n]*"\$LINE"/.test(b2)) process.exit(1);
+// 收紧：原来写 /push-videos\.js[^\n]*\$LINE/ 太松——同一行后半句还有
+// push-raw-comments.js ... $LINE，把 push-videos 换回 $P 也照样匹配得上（变异实测漏网）。
+if (/push-videos\.js\s+\S+\s+\S+\s+\$P\b/.test(b2)) process.exit(1);
+if (!/push-videos\.js\s+\S+\s+\S+\s+\$LINE\b/.test(b2)) process.exit(1);
+NODE
+ok "Step 35 ✅ 回填按活路由（认不出拒收、研发不碰生产 base、标记透传到落池）"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S5B_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" \
       "$S22_TMP" "$S23A_TMP" "$S23A_COOKIES" "$S23B_TMP" "$S24_TMP" \
