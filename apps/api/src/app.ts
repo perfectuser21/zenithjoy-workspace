@@ -85,7 +85,7 @@ import { skillDraftsRouter, skillDraftsInternalRouter } from './routes/skill-dra
 import { agentOfflineScanRouter } from './routes/agent-offline-scan';
 import { paymentCallbackRouter } from './routes/payment-callback';
 import { creditsOrdersRouter } from './routes/credits-orders';
-import { getProviderInitErrors } from './services/payment/provider-registry';
+import { getProviderInitErrorsForHealth } from './services/payment/provider-registry';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { simpleRateLimit, ipKeyFn } from './middleware/simple-rate-limit';
 import { verifyStartupConfig, verifyStartupBinaries } from './startup-check';
@@ -143,7 +143,10 @@ app.get('/health', simpleRateLimit({ windowMs: 60_000, max: 600, keyFn: ipKeyFn 
     build: getBuildInfo(),
     // C-1：支付 provider 启动加载错误（env 齐了但证书/私钥读取或解析失败）——
     // 让"响亮报错"在日志之外也能被外部探测/告警看到，不是新端点，是既有字段旁加一个。
-    payment: { providerInitErrors: getProviderInitErrors() },
+    // N-1：这条路由只挂了限速、没有鉴权，用 getProviderInitErrorsForHealth()（只回
+    // provider 名 + 错误类型）而不是 getProviderInitErrors()（含服务器文件系统路径），
+    // 绝不能把完整 reason 挂到无鉴权公网端点上——完整信息在 console.error 红日志里。
+    payment: { providerInitErrors: getProviderInitErrorsForHealth() },
   });
 });
 
@@ -160,7 +163,7 @@ app.get('/api/health', simpleRateLimit({ windowMs: 60_000, max: 600, keyFn: ipKe
     timestamp: new Date().toISOString(),
     config: { ok: cfg.ok && bin.ok, missing: [...cfg.missing, ...bin.missing] },
     build: getBuildInfo(),
-    payment: { providerInitErrors: getProviderInitErrors() },
+    payment: { providerInitErrors: getProviderInitErrorsForHealth() },
   });
 });
 
