@@ -13,6 +13,7 @@
  * 确保余额变更与流水落库原子化。
  */
 
+import type { PoolClient } from 'pg';
 import pool from '../db/connection';
 
 // ==================== 单价常量 ====================
@@ -88,7 +89,23 @@ export async function getBalance(tenantId: string): Promise<BalanceRow | null> {
 
 // ==================== recharge ====================
 
-export async function recharge(
+/**
+ * 事务内入账（供调用方在自己的事务里复用）。
+ *
+ * 为什么需要这个版本：结算流程（支付回调）需要「订单状态 CAS（如
+ * payment_orders.status pending→credited）+ 入账」在同一个事务里原子完成。
+ * 如果调用方直接调 recharge()（自己 pool.connect()+BEGIN/COMMIT），
+ * 就会退化成两个独立事务：订单 CAS 在事务 A（尚未提交），入账在事务 B
+ * （立刻提交）。一旦事务 B 先提交、事务 A 随后因为其他原因回滚，就会
+ * 出现「积分已经加了、订单状态却退回 pending」的分叉——下一次重复回调
+ * 会再次 CAS 成功并重复加积分，两道幂等闸同时失效，直接资损。
+ *
+ * 调用方必须自己管理事务（BEGIN/COMMIT/ROLLBACK）：本函数只执行入账的
+ * 两条 SQL，不 BEGIN、不 COMMIT、也不在出错时自行 ROLLBACK——是否回滚、
+ * 何时回滚由调用方根据自己事务里的其他步骤（如订单 CAS 是否成功）决定。
+ */
+export async function rechargeInTx(
+  client: PoolClient,
   tenantId: string,
   amount: number,
   reason: string,
@@ -99,10 +116,7 @@ export async function recharge(
     throw new Error(`INVALID_AMOUNT: 充值 amount 必须是正整数（得到 ${amount}）`);
   }
 
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-
     // upsert tenant_credits
     const { rows } = await client.query<BalanceRow>(
       `INSERT INTO zenithjoy.tenant_credits
@@ -123,7 +137,6 @@ export async function recharge(
       [tenantId, amount, reason, metadata ? JSON.stringify(metadata) : null, orderId ?? null]
     );
 
-    await client.query('COMMIT');
     const r = rows[0];
     return {
       balance: Number(r.balance),
@@ -131,10 +144,28 @@ export async function recharge(
       total_consumed: Number(r.total_consumed),
     };
   } catch (err) {
-    await client.query('ROLLBACK');
     if ((err as { code?: string }).code === '23505' && orderId) {
       throw new DuplicateCreditError(orderId);
     }
+    throw err;
+  }
+}
+
+export async function recharge(
+  tenantId: string,
+  amount: number,
+  reason: string,
+  metadata?: Record<string, unknown>,
+  orderId?: string
+): Promise<BalanceRow> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await rechargeInTx(client, tenantId, amount, reason, metadata, orderId);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
     throw err;
   } finally {
     client.release();
