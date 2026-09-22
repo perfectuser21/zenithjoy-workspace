@@ -342,4 +342,14 @@ grep -qF 'for _ut in 1 2' "$_RF" || fail "refill-profile-links 用户tab定位�
 grep -qF 'for _ct in 1 2 3' "$_RF" || fail "refill-profile-links 卡片定位滚动重试逻辑缺失(0921实证:抖音模糊匹配目标常不在第一屏,不滚动=永远够不到)"
 grep -qF 'swipe 600 2000 600 900 400' "$_RF" || fail "refill-profile-links 缺少下滑一屏的滚动动作"
 
+# 层18: 0922真机实证——账号轮流分配若按"今日已触达数sent的奇偶性"判断,而sent只在
+# 真正成功后才变化,队首记录(pending[0]确定性排序)一旦分给暂停/故障账号会死循环
+# 永远选中同一个坏账号,legacy完全轮不上,整条队列卡死(0922实测:同一条记录连续
+# 3个tick原地重试)。禁止 sent%2 这种确定性选号复活,必须用不依赖计数器的随机选号。
+_NO="$D/next-outreach.js"
+if grep -qE 'sent\s*%\s*2\s*===\s*0' "$_NO"; then
+  fail "next-outreach.js 账号分配用了sent奇偶判断(0922实测:队首卡坏账号时会死循环,legacy永远轮不上)"
+fi
+grep -qF 'Math.random() < 0.5' "$_NO" || fail "next-outreach.js 缺少随机选号逻辑(账号轮流不能依赖会卡住不动的计数器)"
+
 echo "phone-adb-controller-smoke: PASS"
