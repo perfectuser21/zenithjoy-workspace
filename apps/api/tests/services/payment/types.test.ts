@@ -3,7 +3,6 @@ import {
   ALLOWED_TRANSITIONS,
   RECHARGE_TIERS,
   SignatureError,
-  type OrderStatus,
 } from '../../../src/services/payment/types';
 
 describe('订单状态机', () => {
@@ -27,14 +26,16 @@ describe('订单状态机', () => {
     expect(ALLOWED_TRANSITIONS.created).toEqual([]);
   });
 
-  it('每个状态都在转移表里登记（防新增状态漏定义）', () => {
-    const all: OrderStatus[] = [
-      'created', 'pending', 'credited',
-      'create_failed', 'expired', 'amount_mismatch', 'refund_pending',
-    ];
-    for (const s of all) {
-      expect(ALLOWED_TRANSITIONS[s]).toBeDefined();
-    }
+  it('整张转移表逐条锁死（任一条被改坏或新增状态漏定义都会红）', () => {
+    expect(ALLOWED_TRANSITIONS).toEqual({
+      created: [],
+      pending: ['created'],
+      credited: ['pending'],
+      create_failed: ['created'],
+      expired: ['pending'],
+      amount_mismatch: ['pending'],
+      refund_pending: ['credited'],
+    });
   });
 });
 

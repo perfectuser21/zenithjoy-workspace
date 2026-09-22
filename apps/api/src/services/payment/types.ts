@@ -19,13 +19,13 @@ export type OrderStatus =
  * 直接喂给 CAS：UPDATE ... WHERE id=$1 AND status = ANY($2)
  */
 export const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  created: [],                    // 初始态，不可被转入
-  pending: ['created'],
-  credited: ['pending'],
-  create_failed: ['created'],
-  expired: ['pending'],
-  amount_mismatch: ['pending'],
-  refund_pending: ['credited'],
+  created: [],                    // 初始态，只能由 INSERT 产生，不可被任何状态转入
+  pending: ['created'],           // 仅建单并拿到二维码后进入
+  credited: ['pending'],          // 不含自身：重复回调时 CAS rowCount=0，杜绝重复入账
+  create_failed: ['created'],     // 仅建单阶段可失败，不允许从已下单状态倒退
+  expired: ['pending'],           // 已入账的单永远不可被标过期
+  amount_mismatch: ['pending'],   // 金额核对在入账前，不会误吃已 credited 的单
+  refund_pending: ['credited'],   // 没入过账就不存在退款
 };
 
 /** 充值档位：金额与积分数一律服务端决定，绝不信客户端传值 */
