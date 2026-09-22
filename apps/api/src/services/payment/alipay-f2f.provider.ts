@@ -36,6 +36,24 @@ function yuanToFen(yuan: string): number {
   return Math.round(Number(yuan) * 100);
 }
 
+/**
+ * C-1：expireAt → 支付宝 timeout_express（分钟制，如 '30m'，范围 1m~15d）。
+ * 此前 precreate 没传这个字段，支付宝的码永久有效，与本地 30 分钟 TTL 不对称——
+ * 商家把码放着、40 分钟后扫码付款，钱真的转走了，但本地订单已被兜底巡检标 expired，
+ * 后续任何结算都卡死在 CAS（ALLOWED_TRANSITIONS.credited 只认 pending 前置）。
+ * 向上取整，确保平台侧过期时间不早于本地 TTL（宁可平台晚一点过期，不能早）。
+ */
+function toTimeoutExpress(expireAt: Date): string {
+  const MIN_MINUTES = 1;
+  const MAX_MINUTES = 15 * 24 * 60; // 15 天
+  const minutes = Math.ceil((expireAt.getTime() - Date.now()) / 60_000);
+  const clamped = Math.min(Math.max(minutes, MIN_MINUTES), MAX_MINUTES);
+  return `${clamped}m`;
+}
+
+/** I-2：跨境网关请求超时上限，避免单笔请求把调用方（含巡检 tick）钉住 */
+const HTTP_TIMEOUT_MS = 15_000;
+
 export class AlipayF2FProvider implements PaymentProvider {
   readonly name = 'alipay' as const;
 
@@ -63,11 +81,20 @@ export class AlipayF2FProvider implements PaymentProvider {
     };
     params.sign = this.sign(params);
 
-    const res = await fetch(this.cfg.gateway, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },
-      body: new URLSearchParams(params).toString(),
-    });
+    let res: Response;
+    try {
+      res = await fetch(this.cfg.gateway, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },
+        body: new URLSearchParams(params).toString(),
+        signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name === 'TimeoutError') {
+        throw new Error(`ALIPAY_HTTP_TIMEOUT: ${method} 超时(${HTTP_TIMEOUT_MS}ms)`);
+      }
+      throw err;
+    }
     if (!res.ok) throw new Error(`ALIPAY_HTTP_${res.status}`);
     const json = (await res.json()) as Record<string, Record<string, unknown>>;
     const key = `${method.replace(/\./g, '_')}_response`;
@@ -79,6 +106,7 @@ export class AlipayF2FProvider implements PaymentProvider {
       out_trade_no: input.outTradeNo,
       total_amount: fenToYuan(input.amountFen),
       subject: input.description,
+      timeout_express: toTimeoutExpress(input.expireAt),
     });
     const qr = resp.qr_code as string | undefined;
     if (!qr) throw new Error(`ALIPAY_CREATE_ORDER_FAILED: ${JSON.stringify(resp).slice(0, 200)}`);
@@ -139,9 +167,12 @@ export class AlipayF2FProvider implements PaymentProvider {
     const resp = await this.call('alipay.trade.query', { out_trade_no: outTradeNo });
     const status = resp.trade_status as string | undefined;
     if (status === 'TRADE_SUCCESS' || status === 'TRADE_FINISHED') {
+      // 低成本顺手项：平台没返回金额时绝不能静默当 0 分——那会让 settleOrder 的金额
+      // 校验报"平台金额 0 与订单 X 不符"，运营会误以为金额真的错了。undefined 才能
+      // 命中 settleOrder 里"未返回金额，无法核验"的专属分支，文案才准确。
       return {
         status: 'success',
-        amountFen: yuanToFen(String(resp.total_amount ?? '0')),
+        amountFen: resp.total_amount === undefined ? undefined : yuanToFen(String(resp.total_amount)),
         transactionId: resp.trade_no as string,
       };
     }

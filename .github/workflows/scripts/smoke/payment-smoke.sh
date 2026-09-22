@@ -9,6 +9,12 @@
 # 这一次请求同时证明两件事：① 端点公网可达（能连上、路由确实挂了）
 # ② 验签确实在生效（不是随便什么请求都放行）。
 #
+# I-4：探针原打的是 /callback/mock，但 provider-registry.ts 在 NODE_ENV=production
+# 时不注册 mock provider（假网关绝不能在生产可用）——生产下打 mock 必然 404，
+# 会被下面的判读逻辑误诊成"路由没挂上/部署漏了"，实际只是选错了探针。改打
+# wechat：只要 env 配齐就会在生产环境注册，缺签名头同样会被验签拦下返回 403，
+# 与是否是生产环境无关，不会有这个误诊。
+#
 # 退出码：0 = PASS（403）；1 = FAIL（任何非 403 响应）
 #
 # 判读：
@@ -26,7 +32,7 @@ if [[ -z "${PAYMENT_NOTIFY_BASE_URL:-}" ]]; then
 fi
 
 BASE_URL="${PAYMENT_NOTIFY_BASE_URL}"
-URL="${BASE_URL%/}/api/payment/callback/mock"
+URL="${BASE_URL%/}/api/payment/callback/wechat"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  支付回调可达性 smoke"

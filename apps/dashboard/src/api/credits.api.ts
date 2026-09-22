@@ -39,7 +39,10 @@ export interface SyncOrderResult {
     | 'credit_conflict'
     | 'not_paid'
     | 'amount_mismatch'
-    | 'order_not_found';
+    | 'order_not_found'
+    // C-2：CAS 未命中但当前状态不是 credited（如订单已过期）——钱可能已收但订单
+    // 无法正常结算，前端绝不能当成功处理，需提示用户联系客服人工核查。
+    | 'not_settlable';
 }
 
 interface ApiEnvelope<T> {

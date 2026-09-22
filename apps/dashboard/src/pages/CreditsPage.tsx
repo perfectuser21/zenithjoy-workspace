@@ -63,6 +63,10 @@ export default function CreditsPage() {
             timer.current = null;
           }
           await reload();
+        } else if (r.outcome === 'not_settlable') {
+          // C-2：CAS 未命中但当前状态不是 credited（如订单已过期）——钱可能已收但
+          // 订单无法正常结算，绝不能当成功处理，也不刷新余额，提示用户联系客服。
+          setMessage('订单状态异常，请联系客服核实');
         }
       } catch {
         // 不把原始错误码甩给用户；网络抖动/后端 5xx 时给可重试提示，而不是让

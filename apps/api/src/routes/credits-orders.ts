@@ -52,6 +52,13 @@ creditsOrdersRouter.post(
         res.status(400).json(fail('INVALID_TIER', '未知充值档位'));
         return;
       }
+      // 低成本顺手项：getProvider（provider-registry.ts）对未注册的 provider 名
+      // 抛 `UNKNOWN_PROVIDER: <name>`，此前落进下面的下单失败兜底返 502——语义
+      // 应为 400，客户端传了个系统里压根没有的 provider 名，不是网关/后端故障。
+      if (err instanceof Error && err.message.startsWith('UNKNOWN_PROVIDER')) {
+        res.status(400).json(fail('UNKNOWN_PROVIDER', '未知支付渠道'));
+        return;
+      }
       console.error('[payment] 下单失败', { error: (err as Error).message });
       res.status(502).json(fail('CREATE_ORDER_FAILED', '生成二维码失败，请重试'));
     }

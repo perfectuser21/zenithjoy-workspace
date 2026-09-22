@@ -15,6 +15,12 @@ const BACKLOG_AGE_MS_THRESHOLD = 2 * 60 * 60 * 1000;
 
 let monitorTimer: ReturnType<typeof setInterval> | null = null;
 
+// I-2：expireStaleOrders 串行处理最多 200 单、每单一次跨境 fetch（此前两个 provider
+// 的 fetch 都无超时，undici 默认 headers/body timeout 各 300s）——单个 tick 可能远超
+// 5 分钟的巡检间隔。没有重入闸时，下一次 interval 到点会叠加起新一轮 tick，重复扫
+// 同一批订单。
+let ticking = false;
+
 export interface BacklogResult {
   total: number;
   oldestAgeMs: number | null;
@@ -129,15 +135,26 @@ async function tick(): Promise<void> {
 /**
  * 生产启动时调用：每 intervalMs 跑一次过期兜底 + 积压水位扫描。重复调用幂等。
  */
+function scheduleTick(): void {
+  if (ticking) {
+    console.warn('[payment-monitor] 上一轮 tick 尚未结束，跳过本轮，防止重入扫描同一批订单');
+    return;
+  }
+  ticking = true;
+  void tick()
+    .catch((err) => {
+      console.error('[payment-monitor] tick 异常:', (err as Error).message);
+    })
+    .finally(() => {
+      ticking = false;
+    });
+}
+
 export function startPaymentMonitor(
   intervalMs: number = Number(process.env.PAYMENT_SCAN_INTERVAL_MS ?? 5 * 60_000)
 ): void {
   if (monitorTimer) return;
-  monitorTimer = setInterval(() => {
-    void tick().catch((err) => {
-      console.error('[payment-monitor] tick 异常:', (err as Error).message);
-    });
-  }, intervalMs);
+  monitorTimer = setInterval(scheduleTick, intervalMs);
   // 不阻止进程退出（同 agent-offline-monitor.ts 模式）
   (monitorTimer as { unref?: () => void }).unref?.();
 }
@@ -147,4 +164,7 @@ export function stopPaymentMonitor(): void {
     clearInterval(monitorTimer);
     monitorTimer = null;
   }
+  // 测试隔离：afterEach 调用本函数时顺带复位重入闸，避免上一条用例遗留的
+  // ticking=true 影响下一条用例。
+  ticking = false;
 }

@@ -22,6 +22,8 @@ const TIMESTAMP_TOLERANCE_SEC = 300;
  * 默认不发 UA。签名完全正确的请求仍会被网关拒——自签自验测不出，真实对接才炸（I-2）。
  */
 const USER_AGENT = 'ZenithJoy-Payment/1.0 (+https://github.com/perfectuser21/zenithjoy-workspace)';
+/** I-2：跨境网关请求超时上限，避免单笔请求（含巡检 tick 里的查单）被钉住到 undici 默认 300s */
+const HTTP_TIMEOUT_MS = 15_000;
 
 export interface WechatNativeConfig {
   mchId: string;
@@ -66,16 +68,25 @@ export class WechatNativeProvider implements PaymentProvider {
     };
     const body = JSON.stringify(payload);
 
-    const res = await fetch(`${WECHAT_API_BASE}${urlPath}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'User-Agent': USER_AGENT,
-        Authorization: this.authorization('POST', urlPath, body),
-      },
-      body,
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${WECHAT_API_BASE}${urlPath}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'User-Agent': USER_AGENT,
+          Authorization: this.authorization('POST', urlPath, body),
+        },
+        body,
+        signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name === 'TimeoutError') {
+        throw new Error(`WECHAT_HTTP_TIMEOUT: ${urlPath} 超时(${HTTP_TIMEOUT_MS}ms)`);
+      }
+      throw err;
+    }
     if (!res.ok) {
       throw new Error(`WECHAT_CREATE_ORDER_FAILED: HTTP ${res.status}`);
     }
@@ -185,14 +196,23 @@ export class WechatNativeProvider implements PaymentProvider {
 
   async queryOrder(outTradeNo: string): Promise<QueryResult> {
     const urlPath = `/v3/pay/transactions/out-trade-no/${outTradeNo}?mchid=${this.cfg.mchId}`;
-    const res = await fetch(`${WECHAT_API_BASE}${urlPath}`, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': USER_AGENT,
-        Authorization: this.authorization('GET', urlPath, ''),
-      },
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${WECHAT_API_BASE}${urlPath}`, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': USER_AGENT,
+          Authorization: this.authorization('GET', urlPath, ''),
+        },
+        signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name === 'TimeoutError') {
+        throw new Error(`WECHAT_HTTP_TIMEOUT: ${urlPath} 超时(${HTTP_TIMEOUT_MS}ms)`);
+      }
+      throw err;
+    }
     if (res.status === 404) return { status: 'closed' };
     if (!res.ok) throw new Error(`WECHAT_QUERY_FAILED: HTTP ${res.status}`);
     const data = (await res.json()) as {

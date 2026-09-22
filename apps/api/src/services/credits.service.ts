@@ -144,7 +144,14 @@ export async function rechargeInTx(
       total_consumed: Number(r.total_consumed),
     };
   } catch (err) {
-    if ((err as { code?: string }).code === '23505' && orderId) {
+    // I-6：只有命中「入账幂等第二道闸」idx_credit_tx_order 才是"这单已入过账"。
+    // 此前只要 23505 + 传了 orderId 就当作重复入账，将来给 credit_transactions
+    // 加任何其它唯一约束都会被误判、触发自愈路径吞掉一个本该向上抛出的真实错误。
+    if (
+      (err as { code?: string; constraint?: string }).code === '23505' &&
+      (err as { constraint?: string }).constraint === 'idx_credit_tx_order' &&
+      orderId
+    ) {
       throw new DuplicateCreditError(orderId);
     }
     throw err;

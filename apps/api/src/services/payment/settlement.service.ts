@@ -24,7 +24,14 @@ export type SettleOutcome =
   | 'not_paid'
   | 'amount_mismatch'
   | 'credit_conflict'
-  | 'order_not_found';
+  | 'order_not_found'
+  /**
+   * C-2：CAS 未命中，但补读到的当前状态不是 credited——真实原因可能是 expired /
+   * amount_mismatch / refund_pending / created 等任何非 pending 状态。此前一律
+   * 谎报成 already_credited，会让前端把"钱可能已收但订单无法正常结算，需人工核查"
+   * 的场景误判成充值成功。
+   */
+  | 'not_settlable';
 
 export interface SettleResult {
   outcome: SettleOutcome;
@@ -99,10 +106,35 @@ export async function settleOrder(
     );
 
     if (cas.rowCount !== 1) {
-      // 别人已经处理过这单（并发回调 / 重复投递）：CAS 语句本身就是幂等闸，
-      // rowCount!==1 说明前置状态已不是 pending，不入账、直接回滚。
+      // C-2：CAS 未命中的真实原因不一定是"已入账"（并发回调/重复投递），也可能是
+      // expired/amount_mismatch/refund_pending/created 等任何非 pending 前置状态。
+      // 在同一事务内、ROLLBACK 之前补读一次当前状态，仅用于返回值分类与日志——
+      // CAS 已经完成全部决策，这次补读不参与决策，即使读到瞬时值也不影响正确性。
+      const cur = await client.query<{ status: string }>(
+        `SELECT status FROM zenithjoy.payment_orders WHERE id = $1`,
+        [order.id]
+      );
       await client.query('ROLLBACK');
-      return { outcome: 'already_credited', orderId: order.id };
+      const currentStatus = cur.rows[0]?.status;
+
+      if (currentStatus === 'credited') {
+        return { outcome: 'already_credited', orderId: order.id };
+      }
+
+      // C-1：根因场景是支付宝码此前永不过期，商家在本地订单已过期后才扫码付款——
+      // 钱可能已经收到，但订单已是终态，任何后续结算都会卡在这里。修好 C-1 的根因
+      // （timeout_express）后这条路径应当为零；出现即异常，必须响亮告警要求人工核查。
+      console.error(
+        '[payment] CAS 未命中且当前状态非 credited，钱可能已收但订单无法正常结算，需人工核查',
+        {
+          payment_order_id: order.id,
+          tenant_id: order.tenant_id,
+          out_trade_no: order.out_trade_no,
+          provider_transaction_id: q.transactionId,
+          current_status: currentStatus,
+        }
+      );
+      return { outcome: 'not_settlable', orderId: order.id };
     }
 
     // 必须用 rechargeInTx 而非 recharge：后者自己 connect+BEGIN/COMMIT，
@@ -210,12 +242,50 @@ export async function recordCallback(
   return r.rowCount === 1;
 }
 
-/** 退款一律落待人工，绝不自动扣回积分（会撞 balance>=0 的 CHECK） */
-export async function markRefundPending(orderId: string): Promise<void> {
+/**
+ * I-1：recordCallback 是审计去重闸，排在 settleOrder 之前。首次投递若后续处理
+ * （settleOrder / markRefundPending）失败返 5xx，平台重推时 recordCallback 会
+ * 命中 UNIQUE 返回 false，路由直接判"重复"返 200——结算被永久跳过。
+ * 供路由在"本次是首次插入、后续处理却失败"时删掉本次刚插入的那条审计行，
+ * 让平台重推能重新走完整流程。按三元组精确定位，不会误删其它记录。
+ */
+export async function deleteCallbackRecord(
+  provider: string,
+  providerTransactionId: string,
+  eventType: string
+): Promise<void> {
   await pool.query(
+    `DELETE FROM zenithjoy.payment_callbacks
+      WHERE provider = $1 AND provider_transaction_id = $2 AND event_type = $3`,
+    [provider, providerTransactionId, eventType]
+  );
+}
+
+/**
+ * 退款一律落待人工，绝不自动扣回积分（会撞 balance>=0 的 CHECK）。
+ *
+ * I-3：ALLOWED_TRANSITIONS.refund_pending = ['credited']。退款回调早于入账、
+ * 或订单已是 expired 等终态时，UPDATE 影响 0 行——此前函数静默返回，一笔该
+ * 人工处理的退款就此消失、零告警。必须检查 rowCount，未命中时响亮告警并让
+ * 调用方能感知（返回 false）。
+ */
+export async function markRefundPending(orderId: string): Promise<boolean> {
+  const r = await pool.query(
     `UPDATE zenithjoy.payment_orders
         SET status = 'refund_pending', updated_at = now()
       WHERE id = $1 AND status = ANY($2)`,
     [orderId, ALLOWED_TRANSITIONS.refund_pending]
   );
+  if (r.rowCount !== 1) {
+    const cur = await pool.query<{ status: string }>(
+      `SELECT status FROM zenithjoy.payment_orders WHERE id = $1`,
+      [orderId]
+    );
+    console.error('[payment] markRefundPending CAS 未命中，该退款需人工核查', {
+      payment_order_id: orderId,
+      current_status: cur.rows[0]?.status ?? 'not_found',
+    });
+    return false;
+  }
+  return true;
 }

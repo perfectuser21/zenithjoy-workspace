@@ -10,6 +10,7 @@ import { createHash } from 'crypto';
 import { Router, type Request, type Response } from 'express';
 import { getProvider } from '../services/payment/provider-registry';
 import {
+  deleteCallbackRecord,
   findOrderByOutTradeNo,
   markRefundPending,
   recordCallback,
@@ -48,12 +49,17 @@ paymentCallbackRouter.post('/:provider', async (req: Request, res: Response) => 
 
   const digest = createHash('sha256').update(rawBody).digest('hex');
 
+  // I-1：审计去重闸（recordCallback）排在结算之前。首次投递若后续处理抛错返 5xx，
+  // 平台重推时 recordCallback 会命中 UNIQUE 返回 false，路由直接判"重复"返 200——
+  // 结算被永久跳过。first 记录本次是否真的是首次插入，只有它为 true 时，5xx 分支
+  // 才需要把本次刚插入的审计行删掉，让平台重推能重新走完整流程。
+  let first = false;
   try {
     // 先定位订单：审计行要带上 tenant 归属（租户隔离铁律）。
     // 对不上任何订单的回调（伪造 / 乱序）仍要记审计，此时两列为 null。
     const order = await findOrderByOutTradeNo(providerName, event.outTradeNo);
 
-    const first = await recordCallback(
+    first = await recordCallback(
       providerName,
       event.providerTransactionId,
       event.eventType,
@@ -95,7 +101,18 @@ paymentCallbackRouter.post('/:provider', async (req: Request, res: Response) => 
     });
     res.status(200).json({ code: 'SUCCESS' });
   } catch (err) {
-    // 己方问题：必须让平台重试
+    // 己方问题：必须让平台重试。若本次是首次插入审计行，把它删掉——否则平台重推时
+    // recordCallback 命中 UNIQUE 会被误判为"重复投递"，结算从此永久跳过。
+    if (first) {
+      try {
+        await deleteCallbackRecord(providerName, event.providerTransactionId, event.eventType);
+      } catch (delErr) {
+        console.error('[payment] 删除审计行失败，重复投递可能被误判为已处理', {
+          provider: providerName, out_trade_no: event.outTradeNo,
+          error: (delErr as Error).message,
+        });
+      }
+    }
     console.error('[payment] 回调处理失败，返回 5xx 请求平台重试', {
       provider: providerName, out_trade_no: event.outTradeNo,
       error: (err as Error).message,
