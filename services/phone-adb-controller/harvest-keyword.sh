@@ -5,7 +5,13 @@
 # 全部动作走 douyin-phone-adb(锁/守卫/频控内建),本脚本只做序列编排。
 set -uo pipefail
 C=~/.local/bin/douyin-phone-adb
-P="$1"; KW="$2"; MAXV="${3:-4}"; TAG="$4"; LOC="${5:-same_city}"; LINE="${6:-}"
+P="$1"; KW="$2"; MAXV="${3:-4}"; TAG="$4"; LOC="${5:-same_city}"
+# 这批活回填给谁：优先用调用方传进来的业务线标记（$6），没传就退回 profile 名
+# ——两者 line-routes.js 都认。
+# 0922 修：原来写的是 LINE="${6:-}"，而 batch2.sh 只传 5 个参数，所以 $LINE 一直是空的；
+# 空值被 routeOf 的兜底默默接成金诺，于是**悦升那台跑夜批时，去重查的是金诺的已采视频列表**
+# ——去重一直是错的，而且没人看得见。兜底已改成抛错，这里必须给出真值。
+LINE="${6:-$P}"
 KWTXT="$(python3 -c "import urllib.parse,sys;print(urllib.parse.unquote(sys.argv[1]))" "$KW")"
 log(){ print -u2 -- "[$(date +%H:%M:%S)] $*"; }
 # 可视化旁路(0919): 每视频续报一次(与下方 lock-refresh 同理); 上报器缺失/失败一律吞掉
