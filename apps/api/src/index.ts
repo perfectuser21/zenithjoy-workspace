@@ -10,7 +10,10 @@ import { startWorkerLeaseSweeper } from './services/worker-lease-sweeper';
 import { startNotionOrchestrator } from './services/notion-orchestrator';
 import { startFeishuOrchestrator } from './services/feishu-orchestrator';
 import { startPublishRollup } from './services/publish-rollup';
-import { runStartupConfigCheck, runStartupBinaryCheck, runStartupFontCheck } from './startup-check';
+import {
+  runStartupConfigCheck, runStartupBinaryCheck, runStartupFontCheck,
+  runPaymentFileCheck, checkPaymentEnvSanity,
+} from './startup-check';
 import { assertStaffDirectoryOnStartup } from './staff-directory';
 import { assertSingleOrgMembership } from './startup/single-org-selfcheck';
 import { registerRealProvidersFromEnv } from './services/payment/provider-registry';
@@ -30,6 +33,12 @@ runStartupBinaryCheck();
 // 治根 P0 issue 357861c4——生产容器有 subtitles 滤镜但没有字体，ffmpeg 烧字幕
 // 退出码仍为 0、文件仍生成，只是字幕没画上（静默失效）。
 runStartupFontCheck();
+
+// 启动早期自检支付凭据文件（Task 11，同一道闸的扩展）：私钥/证书文件缺失或损坏
+// 时大声打红日志但不崩进程（fail-open）——支付只是这个 API 的一个子功能，不该
+// 因为证书路径配错拖垮全站其它业务线；具体不可用信号已由 registerRealProvidersFromEnv()
+// 的 providerInitErrors 经 /health 暴露（C-1），这里只是让同一类问题在启动更早期可见。
+runPaymentFileCheck();
 
 // 进程级安全网：单个路由的未捕获 Promise rejection（Node 15+ 默认行为）会杀死整个进程，
 // 拖垮同机所有其它无关请求/CI smoke（2026-07-09 PR#1207 实测：cookie-health 一次未捕获异常
@@ -73,6 +82,19 @@ async function bootstrap(): Promise<void> {
   } catch (err) {
     console.error(`🔴 [single-org] ${(err as Error).message}`);
     console.error('🔴 [single-org] 单组织归属自检未通过，拒绝启动（fail-closed）');
+    process.exit(1);
+  }
+
+  // Task 11：防 staging/dev 误用生产商户号 —— 真实资金风险，与上面两道自检同级
+  // fail-closed（process.exit），而非 registerRealProvidersFromEnv() 内部那种"配置
+  // 格式错误"的 fail-open（C-1）。判据不同：这里挡的是"配置本身不该出现在这个环境"
+  // （用错商户号），不是"配置写错了格式"——前者是真实资金风险，没有"先跑起来再说"的余地。
+  const paymentSanityProblems = checkPaymentEnvSanity(process.env);
+  if (paymentSanityProblems.length > 0) {
+    console.error('==================================================================');
+    console.error('🔴🔴🔴 支付环境自检失败：真实资金风险，拒绝启动（fail-closed）🔴🔴🔴');
+    for (const p of paymentSanityProblems) console.error(`🔴 ${p}`);
+    console.error('==================================================================');
     process.exit(1);
   }
 

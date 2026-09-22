@@ -39,4 +39,7 @@ services:
     volumes:
       - /opt/zenithjoy/prod-api/content-output:/data/content-output
       - /opt/zenithjoy/prod-api/install-pack:/data/install-pack
+      # Task 11：积分充值支付凭据（微信/支付宝私钥+证书）。PEM 绝不进 .env 变量本体，
+      # 只把「文件路径」写进 .env（WX_PAY_PRIVATE_KEY_PATH 等），实际文件走只读卷挂载。
+      - /opt/zenithjoy/prod-api/secrets:/run/secrets/payment:ro
     mem_limit: 1g

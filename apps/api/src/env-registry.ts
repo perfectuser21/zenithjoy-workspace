@@ -178,6 +178,24 @@ export const OPTIONAL_ENV: { name: string; reason: string }[] = [
   { name: 'TEST_MODE', reason: '测试模式开关，仅测试/冒烟读取' },
   { name: 'FORCE_TOAPI_FAIL', reason: '故障注入：强制 toapi 失败，仅测试用' },
   { name: 'OPENROUTER_FORCE_5XX', reason: '故障注入：强制 OpenRouter 5xx，仅测试用' },
+
+  // —— 积分充值支付（provider-registry.ts registerRealProvidersFromEnv，均 feature 级、
+  //     全部走 destructuring/process.env[k] 动态读取，不会被本闸的 process.env.X 字面量
+  //     扫描命中，登记于此纯为文档完整性——真实存在性/合法性由 startup-check.ts 的
+  //     checkRequiredFiles/checkPaymentEnvSanity + provider-registry.ts 自身自检兜底）——
+  { name: 'WX_PAY_MCHID', reason: '微信支付商户号，缺则 wechat provider 不注册（fail-open）' },
+  { name: 'WX_PAY_SERIAL_NO', reason: '商户 API 证书序列号，缺则 wechat provider 不注册' },
+  { name: 'WX_PAY_V3_KEY', reason: 'APIv3 密钥（回调 resource AEAD 解密用），缺则 wechat provider 不注册' },
+  { name: 'WX_PAY_PRIVATE_KEY_PATH', reason: '商户 API 私钥文件路径（PEM，不进 env 本体），缺/损坏 → checkRequiredFiles 启动自检报出，provider 不注册' },
+  { name: 'WX_PAY_PLATFORM_CERT_PATH', reason: '微信支付平台证书文件路径（{serial:pem} JSON，不进 env 本体），缺/损坏 → checkRequiredFiles 报出，provider 不注册' },
+  { name: 'WX_PAY_APPID', reason: '公众号/小程序 appid，缺则 wechat provider 不注册' },
+  { name: 'WX_PAY_PROD_MCHID_DENYLIST', reason: '运维手动维护的已知生产商户号清单（逗号分隔），配合 checkPaymentEnvSanity 防 staging/dev 误用生产商户号；缺则该项 sanity 自检不生效' },
+  { name: 'ALIPAY_APP_ID', reason: '支付宝开放平台应用 ID，缺则 alipay provider 不注册' },
+  { name: 'ALIPAY_PRIVATE_KEY_PATH', reason: '支付宝应用私钥文件路径（PEM，不进 env 本体），缺/损坏 → checkRequiredFiles 报出，provider 不注册' },
+  { name: 'ALIPAY_PUBLIC_KEY_PATH', reason: '支付宝公钥文件路径（PEM，验签用，不进 env 本体），缺/损坏 → checkRequiredFiles 报出，provider 不注册' },
+  { name: 'ALIPAY_SELLER_ID', reason: '卖家支付宝用户 ID（I-9 并入必需项，缺则签名字段缺失），缺则 alipay provider 不注册' },
+  { name: 'ALIPAY_GATEWAY', reason: '支付宝网关地址，缺则用默认 https://openapi.alipay.com/gateway.do' },
+  { name: 'PAYMENT_NOTIFY_BASE_URL', reason: '支付回调基础 URL，微信/支付宝两个 provider 共用，缺则两者都不注册' },
 ];
 
 /**
