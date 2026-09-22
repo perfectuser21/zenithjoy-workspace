@@ -20,6 +20,18 @@ describe('app.ts entry', () => {
     expect(res.body.status).toBe('ok');
   });
 
+  it('GET /health 携带 payment.providerInitErrors 字段（C-1，不改变既有字段）', async () => {
+    const res = await request(app).get('/health');
+    expect(res.status).toBe(200);
+    // 既有字段保持不变
+    expect(res.body.status).toBe('ok');
+    expect(res.body.config).toHaveProperty('ok');
+    expect(res.body.config).toHaveProperty('missing');
+    expect(res.body.build).toBeDefined();
+    // 新字段
+    expect(Array.isArray(res.body.payment?.providerInitErrors)).toBe(true);
+  });
+
   it('未挂载路径返回 404', async () => {
     const res = await request(app).get('/api/this-route-does-not-exist');
     expect(res.status).toBe(404);

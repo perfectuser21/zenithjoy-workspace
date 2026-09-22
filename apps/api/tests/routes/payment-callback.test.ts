@@ -21,6 +21,7 @@ import {
 } from '../../src/services/payment/settlement.service';
 import { __setProviderForTest } from '../../src/services/payment/provider-registry';
 import { MockProvider } from '../../src/services/payment/mock.provider';
+import type { CallbackEvent, PaymentProvider } from '../../src/services/payment/types';
 
 const settleMock = settleOrder as ReturnType<typeof vi.fn>;
 const recordMock = recordCallback as ReturnType<typeof vi.fn>;
@@ -159,5 +160,35 @@ describe('POST /api/payment/callback/:provider', () => {
       .send('{}');
 
     expect(res.status).toBe(404);
+  });
+
+  it('closed 事件（交易关闭，如超时未付）→ 记审计后直接 200，不结算不落 refund_pending（I-3）', async () => {
+    // MockProvider 的 event_type 输入被限定为 'paid'|'refunded'，这里直接注入一个
+    // 返回 'closed' 的假 provider 来驱动路由的 eventType 分支。
+    const closedProvider: PaymentProvider = {
+      name: 'mock',
+      async createOrder() {
+        return { qrCodeUrl: 'mock://x' };
+      },
+      verifyCallback(): CallbackEvent {
+        return { outTradeNo: 'no-1', providerTransactionId: 'txn-1', eventType: 'closed' };
+      },
+      async queryOrder() {
+        return { status: 'closed' };
+      },
+    };
+    __setProviderForTest('mock', closedProvider);
+
+    const res = await request(makeApp())
+      .post('/api/payment/callback/mock')
+      .set('Content-Type', 'application/json')
+      .send(paidBody);
+
+    expect(res.status).toBe(200);
+    expect(recordMock).toHaveBeenCalledWith(
+      'mock', 'txn-1', 'closed', expect.any(String), 'o-1', 't-1'
+    );
+    expect(settleMock).not.toHaveBeenCalled();
+    expect(refundMock).not.toHaveBeenCalled();
   });
 });

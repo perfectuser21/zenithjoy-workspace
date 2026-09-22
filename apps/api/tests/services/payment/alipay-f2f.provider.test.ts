@@ -17,6 +17,7 @@ beforeAll(() => {
     appId: '2021000000000000',
     appPrivateKey: kp.privateKey,
     alipayPublicKey: kp.publicKey,
+    sellerId: '2088000000000000',
     notifyUrl: 'https://example.com/api/payment/callback/alipay',
     gateway: 'https://openapi.alipay.com/gateway.do',
   });
@@ -39,6 +40,7 @@ describe('AlipayF2FProvider 验签', () => {
     trade_status: 'TRADE_SUCCESS',
     total_amount: '100.00',
     app_id: '2021000000000000',
+    seller_id: '2088000000000000',
   };
 
   it('form-urlencoded 回调验签通过并解析出事件', () => {
@@ -87,5 +89,48 @@ describe('AlipayF2FProvider 验签', () => {
       'content-type': 'application/x-www-form-urlencoded',
     });
     expect(ev.eventType).toBe('refunded');
+  });
+
+  it('seller_id 不匹配 → SignatureError（I-9，防同 appid 下收款账号被改配）', () => {
+    const params = { ...base, seller_id: '9999999999999999', sign: '', sign_type: 'RSA2' };
+    params.sign = signForm(params);
+    const body = Buffer.from(new URLSearchParams(params).toString());
+
+    expect(() =>
+      provider.verifyCallback(body, { 'content-type': 'application/x-www-form-urlencoded' })
+    ).toThrow(SignatureError);
+  });
+
+  it('TRADE_CLOSED 且无 refund_fee → closed 事件（超时未付关闭，既非 paid 也非 refunded，I-3）', () => {
+    const params = { ...base, trade_status: 'TRADE_CLOSED', sign: '', sign_type: 'RSA2' };
+    params.sign = signForm(params);
+    const body = Buffer.from(new URLSearchParams(params).toString());
+
+    const ev = provider.verifyCallback(body, {
+      'content-type': 'application/x-www-form-urlencoded',
+    });
+    expect(ev.eventType).toBe('closed');
+  });
+
+  it('TRADE_FINISHED → paid 事件（I-3 白名单）', () => {
+    const params = { ...base, trade_status: 'TRADE_FINISHED', sign: '', sign_type: 'RSA2' };
+    params.sign = signForm(params);
+    const body = Buffer.from(new URLSearchParams(params).toString());
+
+    const ev = provider.verifyCallback(body, {
+      'content-type': 'application/x-www-form-urlencoded',
+    });
+    expect(ev.eventType).toBe('paid');
+  });
+
+  it('WAIT_BUYER_PAY（未付款中间态）→ closed（既非 paid 也非 refunded，不误判为已支付）', () => {
+    const params = { ...base, trade_status: 'WAIT_BUYER_PAY', sign: '', sign_type: 'RSA2' };
+    params.sign = signForm(params);
+    const body = Buffer.from(new URLSearchParams(params).toString());
+
+    const ev = provider.verifyCallback(body, {
+      'content-type': 'application/x-www-form-urlencoded',
+    });
+    expect(ev.eventType).toBe('closed');
   });
 });

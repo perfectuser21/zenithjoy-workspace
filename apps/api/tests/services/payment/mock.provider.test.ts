@@ -48,14 +48,19 @@ describe('provider-registry', () => {
   });
 
   it('production 环境不注册 mock（防止生产下单到假网关）', async () => {
+    // I-7：恢复语句必须在 finally 里——若中间 expect 失败，NODE_ENV='production' 会
+    // 泄漏给同 worker 后续测试文件，制造难排查的连锁失败。
     const prev = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
-    vi.resetModules();
-    const { getProvider: freshGetProvider } = await import(
-      '../../../src/services/payment/provider-registry'
-    );
-    expect(() => freshGetProvider('mock')).toThrow('UNKNOWN_PROVIDER');
-    process.env.NODE_ENV = prev;
-    vi.resetModules();
+    try {
+      process.env.NODE_ENV = 'production';
+      vi.resetModules();
+      const { getProvider: freshGetProvider } = await import(
+        '../../../src/services/payment/provider-registry'
+      );
+      expect(() => freshGetProvider('mock')).toThrow('UNKNOWN_PROVIDER');
+    } finally {
+      process.env.NODE_ENV = prev;
+      vi.resetModules();
+    }
   });
 });
