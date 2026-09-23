@@ -151,3 +151,12 @@ b1221a58be60b2a2173215535ef6a47e8f38e132:apps/api/src/routes/walking-skeleton.te
 0fdbbd29c13decb0bce8fefb1c11010973228634:apps/api/src/services/__tests__/license-register-test-license-prod-guard.test.ts:generic-api-key:27
 0fdbbd29c13decb0bce8fefb1c11010973228634:apps/api/src/services/__tests__/license-register-test-license-prod-guard.test.ts:generic-api-key:66
 0fdbbd29c13decb0bce8fefb1c11010973228634:apps/api/src/services/__tests__/license-register-test-license-prod-guard.test.ts:generic-api-key:91
+
+# 积分充值链路（PR #1954）实现计划文档里的示例代码。628bf451 那版写的是一个
+# 32 位十六进制串当作 apiV3Key 占位（AES-256 要求 key 长度 32 字节），被
+# generic-api-key 规则判为泄露。该值从不是真凭据，也从未用于任何环境；
+# 后续 commit 已把它换成 'TEST_ONLY_NOT_A_REAL_KEY_32BYTES'，但 gitleaks 扫的是
+# commit 范围而非当前文件内容，历史里那一版仍会被命中，故按仓库既有做法登记
+# fingerprint 忽略。真实的微信 APIv3 密钥走 ~/.credentials/wechat-pay.env，
+# 私钥走 secrets 卷挂载的 PEM 文件，均不入库（见 provider-registry.ts 文件头）。
+628bf451d94ca9274aaff970b6a59647284fb7b8:docs/superpowers/plans/2026-09-22-credits-recharge-payment.md:generic-api-key:1891
