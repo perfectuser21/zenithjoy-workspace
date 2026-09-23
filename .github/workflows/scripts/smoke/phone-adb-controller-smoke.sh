@@ -484,4 +484,17 @@ for f in "$D"/*.sh; do
   grep -qF "$bn" "$_DEPLOY" || fail "deploy.sh 清单漏了 $bn(新增/改名的.sh文件必须补进 DEVICE_SH_FILES,否则合并PR后机器上永远是旧版)"
 done
 
+
+# 层23: video-judge接线三件套(0923补齐,真机验证过:录制+提取+转写+判定全链路真实跑通)
+# ①写入端: push-videos.js必须双写Postgres(否则leadgen_videos表永远是空的,judge-video.js
+#   无米下锅) ②真机录制端: harvest-keyword.sh必须真的调record-start/stop/extract-audio
+#   (不能只有title兜底) ③触发端: batch2.sh必须把录到的音频传到mmv并调用judge-video.js。
+grep -qE 'await upsertVideo\(pool' "$D/push-videos.js" || fail "push-videos.js 未接入Postgres双写(judge-video.js会永远无数据可判)"
+grep -qF 'leadgen-db-connect' "$D/push-videos.js" || fail "push-videos.js 未引入leadgen-db-connect(Postgres连接缺失)"
+grep -qF 'record-start' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 未接真机录制(record-start),视频判定只能靠标题兜底"
+grep -qF 'record-extract-audio' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 未接音频提取(record-extract-audio)"
+grep -qE 'print -- "AUDIO' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 录了音频但没输出AUDIO行,batch2.sh收不到"
+grep -qE 'ssh .*node .*judge-video\.js' "$D/batch2.sh" || fail "batch2.sh 未接入judge-video.js触发(视频判定链路悬空)"
+grep -qE "grep '\^AUDIO" "$D/batch2.sh" || fail "batch2.sh 未从采收输出里提取AUDIO行(音频传不到mmv)"
+
 echo "phone-adb-controller-smoke: PASS"

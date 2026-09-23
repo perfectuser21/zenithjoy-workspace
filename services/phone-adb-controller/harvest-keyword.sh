@@ -69,6 +69,41 @@ for CARDLINE in "${(f)CARDS}"; do
     $C --profile "$P" back-to-results >/dev/null 2>&1 || true
     continue
   fi
+  # 0923补齐: 录屏+提取音频,给judge-video.js(此前从建成起就没有任何数据源)供料。
+  # 时长换算: DUR是视频卡片上的"MM:SS"标签(video_cards_from_xml已经在抓,此前没人用)。
+  # 3倍速播放+录制:录制秒数=ceil(min(视频时长,300)/3)+5秒缓冲,跟douyin-phone-adb里
+  # record_start自己的注释("正常3倍速调用应传ceil(min(视频时长,300)/3)+5 ≤ 105")对齐。
+  # 拿不到时长(DUR为空,标签没抓到)就按60秒视频保守估算,不因为一个字段抓失败就整段跳过。
+  AUDIO_PATH=""
+  if [[ -n "$DUR" && "$DUR" == <->:<-> ]]; then
+    DUR_MIN="${DUR%%:*}"; DUR_SEC="${DUR##*:}"
+    VIDEO_SECONDS=$(( 10#$DUR_MIN * 60 + 10#$DUR_SEC ))
+  else
+    VIDEO_SECONDS=60
+  fi
+  (( VIDEO_SECONDS > 300 )) && VIDEO_SECONDS=300
+  REC_SECONDS=$(( (VIDEO_SECONDS + 2) / 3 + 5 ))
+  (( REC_SECONDS < 10 )) && REC_SECONDS=10
+  (( REC_SECONDS > 105 )) && REC_SECONDS=105
+  log "  时长=${DUR:-未知} 录制预算=${REC_SECONDS}s"
+  if $C --profile "$P" set-playback-speed 3.0 "$TAG-v$i-spd" </dev/null >/dev/null 2>&1; then
+    if $C --profile "$P" record-start "$TAG-v$i-rec" "$REC_SECONDS" </dev/null >/dev/null 2>&1; then
+      /bin/sleep "$((REC_SECONDS + 2))"
+      RSOUT="$($C --profile "$P" record-stop "$TAG-v$i-rec" </dev/null 2>&1 || true)"
+      if print -- "$RSOUT" | grep -q "^record_stopped"; then
+        RAOUT="$($C --profile "$P" record-extract-audio "$TAG-v$i-rec" </dev/null 2>&1 || true)"
+        AUDIO_PATH="$(print -- "$RAOUT" | sed -n "s/^audio_extracted path=\([^ ]*\).*/\1/p")"
+        [[ -n "$AUDIO_PATH" ]] && log "  音频已提取: $AUDIO_PATH" || log "  音频提取失败: $(print -- "$RAOUT" | tail -1 | head -c 150)"
+      else
+        log "  录制未产出有效文件: $(print -- "$RSOUT" | tail -1 | head -c 150)"
+      fi
+    else
+      log "  录制启动失败,跳过本视频音频(不影响评论采集)"
+    fi
+  else
+    log "  倍速菜单未找到(可能是视觉定位偶发失败),跳过本视频音频(不影响评论采集)"
+  fi
+  [[ -n "$AUDIO_PATH" && -n "$VID" ]] && print -- "AUDIO	$VID	$AUDIO_PATH"
   OCOUT="$($C --profile "$P" open-comments "$TAG-v$i-oc" </dev/null 2>/dev/null || true)"
   if ! print -- "$OCOUT" | grep -q "^comments_opened=1"; then
     log "  评论区打不开,3秒后重试1次"
