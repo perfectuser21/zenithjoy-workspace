@@ -1948,6 +1948,52 @@ const settled = (calls) => calls.filter(c => c.op === 'putPool' && c.fields['处
 NODE
 ok "Step 37 ✅ 判定通过的评论必须真落成线索行，落不成就留在待分拣等下一轮（不再静默消失）"
 
+# Step 38：词的赛马数据必须真的回写得进去（step2 选词的依据）
+#
+# 0923 实测，悦升关键词表 35 行的四个效果列**一个数都没有**，而金诺同期 39/2/29/52。
+# 三层，每层单独都足以让数据为 0：
+#   ① update-keyword-stats.js 把金诺的 base/table/account 全写死，连 line-routes 都没
+#      require——0916「按业务线路由」改了四个写库脚本，漏了这一个 → 悦升从来没跑过
+#   ② 悦升「最后测试时间」是日期型(type 5)，脚本写文本字符串 → DatetimeFieldConvFail，
+#      飞书是**整条记录**打回，连「有效线索数」这些没问题的列也一起写不进去
+#   ③ 两家线索表都没有「命中关键词」列(各34列逐列查过)，而有效线索数按它统计 →
+#      `if (!kw) return;` 每次命中，这个数永远是 0（金诺那 2 行有值的是人手填的）
+#
+# 词的赛马数据没有 = next-keywords 的「最久未测优先 / 按效果挑词」全是瞎排，
+# 所以这是 step2「按关键词找目标视频」的选词依据闸。
+node - <<'NODE' || fail "Step 38 关键词效果回写退化" 38
+const { buildStatFields, enabledValueFor, tallyFromPool } = require('./services/phone-adb-controller/keyword-stats-lib.js');
+
+// ① 日期型的时间列要写时间戳，文本型写文本，类型读不到退回文本
+const dated = buildStatFields({ stat: { leads: 1, dup: 0, comments: 2, videos: 0 },
+  now: '2026-09-23 12:00(UTC+8)', fieldTypes: { 最后测试时间: 5 }, stamp: true });
+if (typeof dated['最后测试时间'] !== 'number') process.exit(1);
+const texted = buildStatFields({ stat: { leads: 1, dup: 0, comments: 2, videos: 0 },
+  now: '2026-09-23 12:00(UTC+8)', fieldTypes: { 最后测试时间: 1 }, stamp: true });
+if (texted['最后测试时间'] !== '2026-09-23 12:00(UTC+8)') process.exit(1);
+const unknown = buildStatFields({ stat: { leads: 1, dup: 0, comments: 2, videos: 0 },
+  now: '2026-09-23 12:00(UTC+8)', fieldTypes: {}, stamp: true });
+if (unknown['最后测试时间'] !== '2026-09-23 12:00(UTC+8)') process.exit(1);
+
+// ② 本轮没跑过的词不刷时间戳（刷平了「最久未测优先」就废了）
+if ('最后测试时间' in buildStatFields({ stat: { leads: 0, dup: 0, comments: 0, videos: 0 },
+  now: 'x', fieldTypes: { 最后测试时间: 5 }, stamp: false })) process.exit(1);
+
+// ③ 有效线索数从池里数，不从线索表（那列不存在）
+const row = (kw, keep, nick) => ({ fields: { 命中关键词: kw, 进入最终线索: keep, 评论者昵称: nick } });
+const t = tallyFromPool([row('AI获客', true, '甲'), row('AI获客', true, '甲'),
+                         row('AI获客', false, '乙'), row('数字员工', true, '丙')]);
+if (t['AI获客'].leads !== 2 || t['AI获客'].comments !== 3 || t['AI获客'].dup !== 1) process.exit(1);
+if (t['数字员工'].leads !== 1 || t['数字员工'].dup !== 0) process.exit(1);
+if (tallyFromPool([row('', true, '甲')])['']) process.exit(1);
+
+// ④ 自建行的「是否启用」按目标列现状挑，别往单选里塞选项外的值
+if (enabledValueFor({ type: 3, options: ['启用', '停用'] }) !== '启用') process.exit(1);
+if (enabledValueFor({ type: 3, options: ['停用', '暂停'] }) !== '是') process.exit(1);
+if (enabledValueFor({ type: 1, options: [] }) !== '是') process.exit(1);
+NODE
+ok "Step 38 ✅ 词的赛马数据按目标列类型真写得进去，有效线索数从池里数（不再全 0）"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S5B_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" \
       "$S22_TMP" "$S23A_TMP" "$S23A_COOKIES" "$S23B_TMP" "$S24_TMP" \

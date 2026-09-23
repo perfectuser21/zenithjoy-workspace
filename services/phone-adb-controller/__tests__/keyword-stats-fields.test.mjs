@@ -35,7 +35,7 @@
 // 挑不出来再退回文本"是"。判定复用 keyword-enabled-lib.js，不另造一套同义词表。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildStatFields, enabledValueFor } from '../keyword-stats-lib.js';
+import { buildStatFields, enabledValueFor, tallyFromPool } from '../keyword-stats-lib.js';
 
 const STAT = { leads: 3, dup: 1, comments: 40, videos: 5 };
 const NOW = '2026-09-23 12:00(UTC+8)';
@@ -148,4 +148,63 @@ test('接线守卫：update-keyword-stats.js 必须真的读字段类型并走 l
   assert.match(code, /enabledValueFor/, '自建行的「是否启用」还是写死值');
   assert.ok(!/"最后测试时间":\s*now/.test(code),
     'update-keyword-stats.js 仍在直接把文本 now 写进「最后测试时间」——正是悦升全灭的那一行');
+});
+
+// ── 有效线索数从哪儿数 ────────────────────────────────────────────────
+//
+// 0923 实测第三层：`update-keyword-stats.js` 按 `线索表.fields["命中关键词"]` 统计
+// 有效线索数，而**两家的线索表都没有这一列**（各 34 列，逐列查过）。于是
+// `if (!kw) return;` 每次都命中，有效线索数/重复线索数永远是 0——金诺 58 行里只有
+// 2 行有值，那 2 行是人手填的。评论池和视频池有这列，所以「查看评论数」「搜索视频数」
+// 一直是对的，只有这两个数是死的。
+//
+// 修法不动客户的表结构（给线索表加列要在每个 base 各建一次，老数据还没有）：
+// 线索本来就是从池里搬过去的，池里「进入最终线索=true」就是有效线索的定义。
+// PR #1961 之后两本账已经对平（孤儿 0），这么数是准的。
+
+const poolRow = (kw, keep, nick) => ({ fields: { 命中关键词: kw, 进入最终线索: keep, 评论者昵称: nick } });
+
+test('有效线索数 = 池里该词「进入最终线索=true」的条数', () => {
+  const t = tallyFromPool([
+    poolRow('AI获客', true, 'a'), poolRow('AI获客', true, 'b'),
+    poolRow('AI获客', false, 'c'), poolRow('数字员工', true, 'd'),
+  ]);
+  assert.equal(t['AI获客'].leads, 2, '判定不通过的也被算成线索了');
+  assert.equal(t['数字员工'].leads, 1);
+});
+
+test('查看评论数 = 该词下池里的全部条数（不看判定结果）', () => {
+  const t = tallyFromPool([
+    poolRow('AI获客', true, 'a'), poolRow('AI获客', false, 'b'), poolRow('AI获客', false, 'c'),
+  ]);
+  assert.equal(t['AI获客'].comments, 3);
+});
+
+test('重复线索数 = 同一个词下同一个人再次出现的次数（重复是强意向，不是噪音）', () => {
+  const t = tallyFromPool([
+    poolRow('AI获客', true, '小明'), poolRow('AI获客', true, '小明'), poolRow('AI获客', true, '小明'),
+    poolRow('AI获客', true, '小红'),
+  ]);
+  assert.equal(t['AI获客'].leads, 4, '重复的也是有效线索，别少算');
+  assert.equal(t['AI获客'].dup, 2, '小明出现 3 次 = 重复 2 次');
+});
+
+test('跨词不算重复：同一个人在两个词下各出现一次', () => {
+  const t = tallyFromPool([poolRow('AI获客', true, '小明'), poolRow('数字员工', true, '小明')]);
+  assert.equal(t['AI获客'].dup, 0);
+  assert.equal(t['数字员工'].dup, 0);
+});
+
+test('命中关键词为空的行直接跳过，不产生「(空)」这种词', () => {
+  const t = tallyFromPool([poolRow('', true, 'a'), poolRow(null, true, 'b'), poolRow('AI获客', true, 'c')]);
+  assert.deepEqual(Object.keys(t), ['AI获客']);
+});
+
+test('接线守卫：leads 不许再从线索表的「命中关键词」数（那列根本不存在）', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../update-keyword-stats.js', import.meta.url).pathname, 'utf8');
+  const code = src.split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
+  assert.match(code, /tallyFromPool/, '有效线索数没走 tallyFromPool');
+  assert.ok(!/for \(const r of leads\)/.test(code),
+    '还在遍历线索表统计关键词 —— 线索表没有「命中关键词」列，数出来永远是 0');
 });

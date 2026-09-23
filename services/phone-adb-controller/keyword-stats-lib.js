@@ -67,4 +67,43 @@ function enabledValueFor(meta) {
   return hit || '是';
 }
 
-module.exports = { buildStatFields, enabledValueFor, T_SINGLE_SELECT, T_DATETIME };
+const txt = (v) => (Array.isArray(v)
+  ? v.map((x) => x.text || x.name || x).join('')
+  : (v && v.text) || (v && v.name) || String(v == null ? '' : v));
+
+/**
+ * 从评论池按词汇总。
+ *
+ * 0923 实测：原实现按 `线索表.fields["命中关键词"]` 数有效线索，而**两家的线索表都没有
+ * 这一列**（各 34 列，逐列查过）。于是 `if (!kw) return;` 每次都命中，有效线索数和
+ * 重复线索数永远是 0——金诺 58 行里只有 2 行有值，那 2 行是人手填的。
+ *
+ * 不给客户的表加列（要在每个 base 各建一次，老数据还没有）：线索本来就是从池里搬过去的，
+ * 池里「进入最终线索=true」就是有效线索的定义。PR #1961 之后两本账已经对平（孤儿 0），
+ * 这么数是准的。
+ *
+ * @param {Array<{fields:object}>} poolRows 评论池全量行
+ * @returns {Object<string,{leads:number,dup:number,comments:number,videos:number}>}
+ */
+function tallyFromPool(poolRows) {
+  const stat = {};
+  const seenByKw = {}; // 词 → (人 → 出现次数)，用来数"同一个人再次出现"
+  for (const r of poolRows || []) {
+    const kw = txt(r.fields && r.fields['命中关键词']);
+    if (!kw) continue;
+    stat[kw] = stat[kw] || { leads: 0, dup: 0, comments: 0, videos: 0 };
+    stat[kw].comments++;
+    if ((r.fields && r.fields['进入最终线索']) !== true) continue;
+    stat[kw].leads++;
+    // 重复客户 = 强意向信号（0914 主理人拍板：重复≠噪音），照样计入 leads，
+    // 另外单独记一笔 dup。跨词不算重复——同一个人在两个词下出现是两条独立线索。
+    const who = txt(r.fields['评论者昵称']) || txt(r.fields['抖音号']);
+    if (!who) continue;
+    seenByKw[kw] = seenByKw[kw] || {};
+    seenByKw[kw][who] = (seenByKw[kw][who] || 0) + 1;
+    if (seenByKw[kw][who] > 1) stat[kw].dup++;
+  }
+  return stat;
+}
+
+module.exports = { buildStatFields, enabledValueFor, tallyFromPool, T_SINGLE_SELECT, T_DATETIME };
