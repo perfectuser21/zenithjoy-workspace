@@ -5,14 +5,19 @@ import { attachAgentWS } from './services/agent-ws';
 import { attachCollabWS } from './services/collab-ws';
 import { startStaleListenerMonitor } from './services/wechat-heartbeat';
 import { startAgentOfflineMonitor } from './services/agent-offline-monitor';
+import { startPaymentMonitor } from './services/payment/payment-monitor';
 import { startScheduler } from './services/scheduler';
 import { startWorkerLeaseSweeper } from './services/worker-lease-sweeper';
 import { startNotionOrchestrator } from './services/notion-orchestrator';
 import { startFeishuOrchestrator } from './services/feishu-orchestrator';
 import { startPublishRollup } from './services/publish-rollup';
-import { runStartupConfigCheck, runStartupBinaryCheck, runStartupFontCheck } from './startup-check';
+import {
+  runStartupConfigCheck, runStartupBinaryCheck, runStartupFontCheck,
+  runPaymentFileCheck, checkPaymentEnvSanity,
+} from './startup-check';
 import { assertStaffDirectoryOnStartup } from './staff-directory';
 import { assertSingleOrgMembership } from './startup/single-org-selfcheck';
+import { registerRealProvidersFromEnv } from './services/payment/provider-registry';
 import pool from './db/connection';
 
 dotenv.config();
@@ -29,6 +34,12 @@ runStartupBinaryCheck();
 // 治根 P0 issue 357861c4——生产容器有 subtitles 滤镜但没有字体，ffmpeg 烧字幕
 // 退出码仍为 0、文件仍生成，只是字幕没画上（静默失效）。
 runStartupFontCheck();
+
+// 启动早期自检支付凭据文件（Task 11，同一道闸的扩展）：私钥/证书文件缺失或损坏
+// 时大声打红日志但不崩进程（fail-open）——支付只是这个 API 的一个子功能，不该
+// 因为证书路径配错拖垮全站其它业务线；具体不可用信号已由 registerRealProvidersFromEnv()
+// 的 providerInitErrors 经 /health 暴露（C-1），这里只是让同一类问题在启动更早期可见。
+runPaymentFileCheck();
 
 // 进程级安全网：单个路由的未捕获 Promise rejection（Node 15+ 默认行为）会杀死整个进程，
 // 拖垮同机所有其它无关请求/CI smoke（2026-07-09 PR#1207 实测：cookie-health 一次未捕获异常
@@ -75,6 +86,24 @@ async function bootstrap(): Promise<void> {
     process.exit(1);
   }
 
+  // Task 11：防 staging/dev 误用生产商户号 —— 真实资金风险，与上面两道自检同级
+  // fail-closed（process.exit），而非 registerRealProvidersFromEnv() 内部那种"配置
+  // 格式错误"的 fail-open（C-1）。判据不同：这里挡的是"配置本身不该出现在这个环境"
+  // （用错商户号），不是"配置写错了格式"——前者是真实资金风险，没有"先跑起来再说"的余地。
+  const paymentSanityProblems = checkPaymentEnvSanity(process.env);
+  if (paymentSanityProblems.length > 0) {
+    console.error('==================================================================');
+    console.error('🔴🔴🔴 支付环境自检失败：真实资金风险，拒绝启动（fail-closed）🔴🔴🔴');
+    for (const p of paymentSanityProblems) console.error(`🔴 ${p}`);
+    console.error('==================================================================');
+    process.exit(1);
+  }
+
+  // 积分充值真实支付 provider：fail-open（C-1）——缺凭据时静默不注册；凭据齐了但加载
+  // 抛异常（证书路径拼错/私钥格式不对等配置错误）同样不注册，但会打红日志并记入
+  // getProviderInitErrors()（经 /health 暴露），两种情况都不阻塞启动、不拖垮进程。
+  registerRealProvidersFromEnv();
+
   server.listen(PORT, () => {
     console.log(`🚀 Works Management API + Agent WS running on port ${PORT}`);
     console.log(`   Health check: http://localhost:${PORT}/health`);
@@ -85,6 +114,9 @@ async function bootstrap(): Promise<void> {
     startStaleListenerMonitor();
     // 进程守护：每分钟扫描 Windows Agent 心跳，超阈值离线 → 飞书告警（FEISHU_ALERT_WEBHOOK）
     startAgentOfflineMonitor();
+    // 积分充值兜底调度（Task 12）：定时跑过期 pending 订单兜底（回调丢失场景先查单再判过期）
+    // + pending 积压水位告警（笔数/最老订单年龄超阈值 → console.error 结构化告警）。
+    startPaymentMonitor();
     // 中台定时调度器：日报结算(23:55北京)/朋友圈草稿(09:00)/warmup养号(10:00北京)/DM派单sweep(每分钟)。
     // 治根 2026-07-19：startScheduler() 建库以来从未被服务器进程调用过，四个周期任务全部静默不跑。
     startScheduler();
@@ -103,4 +135,11 @@ async function bootstrap(): Promise<void> {
   });
 }
 
-void bootstrap();
+// C-1：bootstrap() 内部的支付 provider 加载已 fail-open（不会 reject）；这里补 .catch()
+// 兜底其它真实启动故障（员工目录/单组织自检以外的意外异常）——启动阶段的其它真实故障
+// 仍应让进程退出，但绝不能是因为支付凭据格式问题（那类异常已在 registerRealProvidersFromEnv
+// 内部捕获，不会传播到这里）。
+void bootstrap().catch((err) => {
+  console.error('🔴 [bootstrap] 启动失败，进程退出:', err);
+  process.exit(1);
+});

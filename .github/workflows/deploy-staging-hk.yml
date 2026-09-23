@@ -95,6 +95,19 @@ jobs:
           curl -fsS http://127.0.0.1:5201/health >/dev/null && echo "✅ staging :5201 /health OK"
           REMOTE_EOF
 
+      - name: Checkout (payment smoke script)
+        uses: actions/checkout@v4
+
+      # 从 GHA runner 公网出口验证部署后的支付回调端点——上面 [4/4] 那步是容器起来了没
+      # （SSH 进 HK 内网 curl 127.0.0.1），这步验的是完全不同的另一件事：公网域名/nginx
+      # 反代路径有没有漂移、验签中间件有没有真的挂上，只有走公网才能测出来。
+      # PAYMENT_NOTIFY_BASE_URL 这个 secret 由刀2 配置（未配置时脚本内部优雅跳过、退出码
+      # 0，不让当前 CI 变红；配置后自动生效，不需要再开任务回来接线）。
+      - name: 支付回调公网可达性 smoke
+        env:
+          PAYMENT_NOTIFY_BASE_URL: ${{ secrets.PAYMENT_NOTIFY_BASE_URL }}
+        run: bash .github/workflows/scripts/smoke/payment-smoke.sh
+
       - name: Notify Brain on failure
         if: failure()
         run: |

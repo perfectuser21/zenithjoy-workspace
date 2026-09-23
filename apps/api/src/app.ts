@@ -83,6 +83,9 @@ import { documentsRouter } from './routes/documents';
 import { fakeFeishuRouter, installFakeFeishuAxiosShim } from './routes/_smoke-fake-feishu';
 import { skillDraftsRouter, skillDraftsInternalRouter } from './routes/skill-drafts';
 import { agentOfflineScanRouter } from './routes/agent-offline-scan';
+import { paymentCallbackRouter } from './routes/payment-callback';
+import { creditsOrdersRouter } from './routes/credits-orders';
+import { getProviderInitErrorsForHealth } from './services/payment/provider-registry';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { simpleRateLimit, ipKeyFn } from './middleware/simple-rate-limit';
 import { verifyStartupConfig, verifyStartupBinaries } from './startup-check';
@@ -105,6 +108,14 @@ app.use(
 if (!process.env.VITEST) {
   app.all('/api/auth/*', toNodeHandler(auth));
 }
+
+// 支付回调必须在 express.json() 之前挂载：
+// APIv3 验签基于原始字节，body 被解析后无法还原签名串（同 better-auth 的理由）
+app.use(
+  '/api/payment/callback',
+  express.raw({ type: '*/*' }),
+  paymentCallbackRouter
+);
 
 // 之后才挂 body parser
 // limit: '1mb' —— 真机排查 2026-07-19：/judge-video 的音频判定(capture_type=audio)真实
@@ -130,6 +141,12 @@ app.get('/health', simpleRateLimit({ windowMs: 60_000, max: 600, keyFn: ipKeyFn 
     timestamp: new Date().toISOString(),
     config: { ok: cfg.ok && bin.ok, missing: [...cfg.missing, ...bin.missing] },
     build: getBuildInfo(),
+    // C-1：支付 provider 启动加载错误（env 齐了但证书/私钥读取或解析失败）——
+    // 让"响亮报错"在日志之外也能被外部探测/告警看到，不是新端点，是既有字段旁加一个。
+    // N-1：这条路由只挂了限速、没有鉴权，用 getProviderInitErrorsForHealth()（只回
+    // provider 名 + 错误类型）而不是 getProviderInitErrors()（含服务器文件系统路径），
+    // 绝不能把完整 reason 挂到无鉴权公网端点上——完整信息在 console.error 红日志里。
+    payment: { providerInitErrors: getProviderInitErrorsForHealth() },
   });
 });
 
@@ -146,6 +163,7 @@ app.get('/api/health', simpleRateLimit({ windowMs: 60_000, max: 600, keyFn: ipKe
     timestamp: new Date().toISOString(),
     config: { ok: cfg.ok && bin.ok, missing: [...cfg.missing, ...bin.missing] },
     build: getBuildInfo(),
+    payment: { providerInitErrors: getProviderInitErrorsForHealth() },
   });
 });
 
@@ -238,6 +256,7 @@ app.use('/api/profile', profileRouter);
 app.use('/api/tenants', tenantsRouter);
 app.use('/api/skills', skillsRouter);
 app.use('/api/credits', creditsRouter);
+app.use('/api/credits/orders', creditsOrdersRouter);
 // Path 2 Sprint A — 多租户飞书集成
 app.use('/api/feishu/oauth', feishuOauthRouter);
 // Line04 中台 AI-native CRM·客户列表页（/customers 读名册租户闸 + manage/status/POST 写接口）

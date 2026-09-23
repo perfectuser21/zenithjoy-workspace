@@ -18,7 +18,7 @@ import {
   Building2,
   Briefcase,
   MessageCircle,
-  Monitor, ImageIcon, FileText,} from 'lucide-react';
+  Monitor, ImageIcon, FileText, Coins,} from 'lucide-react';
 
 // ============ 类型定义 ============
 
@@ -98,6 +98,8 @@ export const autopilotPageComponents: Record<string, () => Promise<{ default: Co
   // Content Clipper
   'ContentClipperPage': () => import('../pages/ContentClipperPage'),
   'ContentClipDetailPage': () => import('../pages/ContentClipDetailPage'),
+  // Task 10 — 积分自助充值页
+  'CreditsPage': () => import('../pages/CreditsPage'),
   // FeatureDashboard and CommandCenter moved to Core features/business
   // Operator Dashboard — Session 状态矩阵（is_operator 权限守卫）
   'OperatorPage': () => import('../pages/OperatorPage'),
@@ -173,6 +175,7 @@ export const autopilotNavGroups: NavGroup[] = [
       { path: '/area/video', icon: Scissors, label: '视频剪辑', featureKey: 'local-video-pipeline', component: 'AreaHubPage' },
       { path: '/area/remake', icon: Video, label: '爆款翻拍', featureKey: 'video-remake-pipeline', component: 'AreaHubPage' },
       { path: '/company-profile', icon: Briefcase, label: '公司信息', featureKey: 'acquisition-leads', component: 'CompanyProfilePage' },
+      { path: '/credits', icon: Coins, label: '积分充值', featureKey: 'credits', component: 'CreditsPage' },
       { path: '/area/settings', icon: KeyRound, label: '设置', featureKey: 'license', component: 'AreaHubPage' },
       // 工作机控制塔第一刀（决策 e14297d4）— 每台工作机（安卓/Windows）在线态 + 正在执行任务 + 实时画面
       { path: '/dashboard/workers', icon: Monitor, label: '工作机', featureKey: 'workers', component: 'WorkersPage' },
@@ -245,6 +248,7 @@ export const additionalRoutes: RouteConfig[] = [
   { path: '/dashboard/agent', component: 'AgentDownloadPage', requireAuth: true },
   { path: '/dashboard/android', component: 'AndroidDownloadPage', requireAuth: true },
   { path: '/license', component: 'LicensePage', requireAuth: true },
+  { path: '/credits', component: 'CreditsPage', requireAuth: true },
   { path: '/admin/customers', component: 'AdminCustomersPage', requireAuth: true, requireSuperAdmin: true },
   { path: '/operator', component: 'OperatorPage', requireAuth: true, requireSuperAdmin: true },
   { path: '/module-health', component: 'ModuleHealthPage', requireAuth: true },

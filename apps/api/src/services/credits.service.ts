@@ -13,6 +13,7 @@
  * 确保余额变更与流水落库原子化。
  */
 
+import type { PoolClient } from 'pg';
 import pool from '../db/connection';
 
 // ==================== 单价常量 ====================
@@ -58,6 +59,14 @@ export class InsufficientCreditsError extends Error {
   }
 }
 
+/** 同一订单重复入账（命中 credit_transactions.order_id 唯一索引） */
+export class DuplicateCreditError extends Error {
+  constructor(public readonly orderId: string) {
+    super(`DUPLICATE_CREDIT: order ${orderId} 已入过账`);
+    this.name = 'DuplicateCreditError';
+  }
+}
+
 // ==================== getBalance ====================
 
 export async function getBalance(tenantId: string): Promise<BalanceRow | null> {
@@ -80,20 +89,34 @@ export async function getBalance(tenantId: string): Promise<BalanceRow | null> {
 
 // ==================== recharge ====================
 
-export async function recharge(
+/**
+ * 事务内入账（供调用方在自己的事务里复用）。
+ *
+ * 为什么需要这个版本：结算流程（支付回调）需要「订单状态 CAS（如
+ * payment_orders.status pending→credited）+ 入账」在同一个事务里原子完成。
+ * 如果调用方直接调 recharge()（自己 pool.connect()+BEGIN/COMMIT），
+ * 就会退化成两个独立事务：订单 CAS 在事务 A（尚未提交），入账在事务 B
+ * （立刻提交）。一旦事务 B 先提交、事务 A 随后因为其他原因回滚，就会
+ * 出现「积分已经加了、订单状态却退回 pending」的分叉——下一次重复回调
+ * 会再次 CAS 成功并重复加积分，两道幂等闸同时失效，直接资损。
+ *
+ * 调用方必须自己管理事务（BEGIN/COMMIT/ROLLBACK）：本函数只执行入账的
+ * 两条 SQL，不 BEGIN、不 COMMIT、也不在出错时自行 ROLLBACK——是否回滚、
+ * 何时回滚由调用方根据自己事务里的其他步骤（如订单 CAS 是否成功）决定。
+ */
+export async function rechargeInTx(
+  client: PoolClient,
   tenantId: string,
   amount: number,
   reason: string,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
+  orderId?: string
 ): Promise<BalanceRow> {
   if (!Number.isInteger(amount) || amount <= 0) {
     throw new Error(`INVALID_AMOUNT: 充值 amount 必须是正整数（得到 ${amount}）`);
   }
 
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-
     // upsert tenant_credits
     const { rows } = await client.query<BalanceRow>(
       `INSERT INTO zenithjoy.tenant_credits
@@ -109,18 +132,45 @@ export async function recharge(
 
     // INSERT transaction（amount 正数 = 充值）
     await client.query(
-      `INSERT INTO zenithjoy.credit_transactions (tenant_id, amount, reason, metadata)
-       VALUES ($1, $2, $3, $4)`,
-      [tenantId, amount, reason, metadata ? JSON.stringify(metadata) : null]
+      `INSERT INTO zenithjoy.credit_transactions (tenant_id, amount, reason, metadata, order_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [tenantId, amount, reason, metadata ? JSON.stringify(metadata) : null, orderId ?? null]
     );
 
-    await client.query('COMMIT');
     const r = rows[0];
     return {
       balance: Number(r.balance),
       total_recharged: Number(r.total_recharged),
       total_consumed: Number(r.total_consumed),
     };
+  } catch (err) {
+    // I-6：只有命中「入账幂等第二道闸」idx_credit_tx_order 才是"这单已入过账"。
+    // 此前只要 23505 + 传了 orderId 就当作重复入账，将来给 credit_transactions
+    // 加任何其它唯一约束都会被误判、触发自愈路径吞掉一个本该向上抛出的真实错误。
+    if (
+      (err as { code?: string; constraint?: string }).code === '23505' &&
+      (err as { constraint?: string }).constraint === 'idx_credit_tx_order' &&
+      orderId
+    ) {
+      throw new DuplicateCreditError(orderId);
+    }
+    throw err;
+  }
+}
+
+export async function recharge(
+  tenantId: string,
+  amount: number,
+  reason: string,
+  metadata?: Record<string, unknown>,
+  orderId?: string
+): Promise<BalanceRow> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await rechargeInTx(client, tenantId, amount, reason, metadata, orderId);
+    await client.query('COMMIT');
+    return result;
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

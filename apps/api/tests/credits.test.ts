@@ -7,11 +7,18 @@ vi.mock('../src/db/connection', () => ({
   default: { query: vi.fn(), end: vi.fn(), connect: vi.fn() },
 }));
 
-vi.mock('../src/services/credits.service', () => ({
-  getBalance: vi.fn(),
-  recharge: vi.fn(),
-  listTransactions: vi.fn(),
-}));
+vi.mock('../src/services/credits.service', async (importOriginal) => {
+  // 部分 mock：CREDIT_COSTS / consume / InsufficientCreditsError 保留真实实现——
+  // app.ts 加载时会一并装配 competitor-research 路由，其 createCreditCharger()
+  // 在模块顶层就要读 CREDIT_COSTS，全量替换会让它读到 undefined 而在 import 期炸掉。
+  const actual = await importOriginal<typeof import('../src/services/credits.service')>();
+  return {
+    ...actual,
+    getBalance: vi.fn(),
+    recharge: vi.fn(),
+    listTransactions: vi.fn(),
+  };
+});
 
 import { getBalance, recharge, listTransactions } from '../src/services/credits.service';
 

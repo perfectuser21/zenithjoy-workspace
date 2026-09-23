@@ -11,6 +11,8 @@
  * - 只列"缺了就会让核心功能静默坏掉"的 key，不列可选项（可选项有默认兜底，不进这里）。
  */
 import { spawnSync } from 'child_process';
+import { existsSync, readFileSync } from 'fs';
+import { createPrivateKey } from 'crypto';
 
 /**
  * 中台运行必须的【单 key】关键 env。缺任何一个，核心功能会静默坏掉：
@@ -266,4 +268,132 @@ export function runStartupConfigCheck(
   console.error('🔴 进程继续运行（避免单个 key 缺失直接挂生产），但相关功能不可用。');
   console.error('==================================================================');
   return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 支付凭据文件自检（Task 11）——同 ffmpeg/字体自检同一道闸的扩展：证书/私钥类凭据
+// 不进 env 变量本体（PEM 绝不进 env——防误 dump 进日志/进程列表），只进 env 存的
+// 「文件路径」。路径指向的文件缺失/为空/无法解析时，registerRealProvidersFromEnv()
+// 已经 fail-open 不注册该 provider（C-1），但那是"注册那一刻才发现"；这里在启动
+// 更早期把同一类问题大声打出来，让部署当天就能看见，而不是等第一笔真实回调打
+// 进来、支付静默不可用了才排查。
+//
+// 与 REQUIRED_ENV 的关系：这些 key 故意不进 REQUIRED_ENV / CRITICAL_ENV_USAGE——
+// 支付是可选子功能，不配支付时服务应照常跑（fail-open）；REQUIRED_ENV 触发的自检
+// 语义是"缺了就是配置事故"，不允许"缺失=未启用=合法"这种情况混进去。
+// ─────────────────────────────────────────────────────────────────────────
+
+/** 需要以「文件」形式提供的凭据（PEM 私钥 / 证书 JSON），绝不进 env 变量本体 */
+const REQUIRED_FILE_ENV = [
+  'WX_PAY_PRIVATE_KEY_PATH',
+  'WX_PAY_PLATFORM_CERT_PATH',
+  'ALIPAY_PRIVATE_KEY_PATH',
+  'ALIPAY_PUBLIC_KEY_PATH',
+] as const;
+
+/** 私钥类 env（需要试解析证明格式合法）；证书/公钥类只需存在且非空——区分同 provider-registry.ts 的两类文件 */
+const PRIVATE_KEY_ENV = new Set<string>(['WX_PAY_PRIVATE_KEY_PATH', 'ALIPAY_PRIVATE_KEY_PATH']);
+
+/**
+ * 纯函数：检查 REQUIRED_FILE_ENV 里配了的路径是否存在、非空、（私钥类）能否解析成私钥。
+ * 未配置该 env = 对应 provider 未启用，合法状态，跳过不报问题（不是"缺失"）。
+ *
+ * 安全纪律：任何一条 problem 文案都只允许含 key 名 / 路径 / 错误类型名，绝不允许带
+ * err.message 原文——Node crypto 的解析错误、fs 的读取错误都可能在消息里回显部分
+ * 输入内容，私钥文件的开头字符一旦拼进日志就是密钥泄露。
+ *
+ * 返回问题列表；空数组 = 通过。本函数绝不 process.exit —— 调用方决定 fail-open 还是
+ * fail-closed（本项是 fail-open：见 runPaymentFileCheck）。
+ */
+export function checkRequiredFiles(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined>,
+): string[] {
+  const problems: string[] = [];
+  for (const key of REQUIRED_FILE_ENV) {
+    const p = env[key];
+    if (!p) continue; // 未配置 = 该 provider 未启用，合法状态
+    if (!existsSync(p)) {
+      problems.push(`${key} 指向的文件不存在: ${p}`);
+      continue;
+    }
+    let content: string;
+    try {
+      content = readFileSync(p, 'utf8');
+    } catch (err) {
+      const name = err instanceof Error ? err.name : typeof err;
+      problems.push(`${key} 指向的文件无法读取(${name}): ${p}`);
+      continue;
+    }
+    if (content.trim().length === 0) {
+      problems.push(`${key} 指向的文件为空: ${p}`);
+      continue;
+    }
+    if (PRIVATE_KEY_ENV.has(key)) {
+      try {
+        createPrivateKey(content);
+      } catch {
+        // 只报"无法解析"，绝不带 err.message（防内容/内容片段泄露到日志）
+        problems.push(`${key} 无法解析为私钥: ${p}`);
+      }
+    }
+  }
+  return problems;
+}
+
+/**
+ * 启动早期调用：自检支付凭据文件 + 大声打红日志，不崩进程。
+ * fail-open：支付只是这个 API 的一个子功能，其它业务线不该因为支付证书路径
+ * 配错就全站不可用——同 registerRealProvidersFromEnv() 的 C-1 口径保持一致。
+ */
+export function runPaymentFileCheck(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): string[] {
+  const problems = checkRequiredFiles(env);
+  if (problems.length === 0) {
+    console.log('✅ 启动支付凭据文件自检通过（未配置支付时视为未启用，同样通过）');
+    return problems;
+  }
+  console.error('==================================================================');
+  console.error('🔴🔴🔴 启动支付凭据文件自检失败：证书/私钥文件缺失或损坏 🔴🔴🔴');
+  for (const p of problems) console.error(`🔴 ${p}`);
+  console.error('🔴 对应 provider 不会被注册（registerRealProvidersFromEnv 已 fail-open），相关支付渠道不可用。');
+  console.error('🔴 进程继续运行（避免支付凭据问题拖垮全站其它业务线），但请尽快修复。');
+  console.error('==================================================================');
+  return problems;
+}
+
+/**
+ * 防 staging/dev 误用生产商户号 —— 真实资金风险，比普通配置错误重一个数量级：
+ * 一旦在非生产环境用真实商户号跑通支付流程，钱是真的会转走的，不是"功能降级"
+ * 这种可以"继续运行但打日志"的问题。与 checkRequiredFiles 不同档：调用方必须
+ * fail-closed（process.exit），绝不能只打红日志继续跑。
+ *
+ * WX_PAY_PROD_MCHID_DENYLIST：运维手动维护的"已知生产商户号"清单（逗号分隔）。
+ * 不给 denylist 或不给 MCHID → 无法判断，视为通过（不误伤没接入这套自检的部署，
+ * 这条闸的前提是运维主动登记过生产商户号，不是强制要求所有部署都配置它）。
+ */
+export function checkPaymentEnvSanity(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined>,
+): string[] {
+  const mchId = env.WX_PAY_MCHID;
+  const denylist = (env.WX_PAY_PROD_MCHID_DENYLIST ?? '')
+    .split(',').map((s) => s.trim()).filter(Boolean);
+  if (!mchId) return []; // 没接入微信支付的部署，跟这道闸无关，不打任何日志
+  if (denylist.length === 0) {
+    // 闸没配 ≠ 闸生效：这道防止 staging/dev 误用生产商户号的闸目前根本没启用，
+    // 但静默返回空数组会让这件事没有任何人知道（它防的是"配了 denylist 之后还犯错"，
+    // 防不了"压根没人记得配 denylist"）。只 WARN，不 fail-closed——没配支付的部署
+    // 不该被这道闸误伤，判据本身（下面四个条件）一行不动。
+    console.warn('==================================================================');
+    console.warn('⚠️ [payment] 生产商户号误用检测未启用：WX_PAY_PROD_MCHID_DENYLIST 未配置。');
+    console.warn('   配置后可防止 staging/dev 环境误用生产商户号（真实资金风险）。');
+    console.warn('==================================================================');
+    return [];
+  }
+  if (env.NODE_ENV !== 'production' && denylist.includes(mchId)) {
+    return [
+      `非 production 环境(NODE_ENV=${env.NODE_ENV})配置了生产商户号 ${mchId}，拒绝启动`,
+    ];
+  }
+  return [];
 }
