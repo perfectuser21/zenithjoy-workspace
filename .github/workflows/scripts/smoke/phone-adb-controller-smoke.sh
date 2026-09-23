@@ -86,6 +86,16 @@ RATELIMIT_BRANCH="$(grep -A6 'grep -qF "发送消息过于频繁"' "$D/outreach-
 grep -qF 'mark "$RID" rate_limited' <<< "$RATELIMIT_BRANCH" || fail "风控检测未真正接到 rate_limited 分支(字符串存在但没接上判定逻辑,守卫一个词≠守卫一个行为)"
 grep -qF 'ORDER_RESULT="rate_limited"' <<< "$RATELIMIT_BRANCH" || fail "风控命中后 ORDER_RESULT 未设为 rate_limited(会被当成 sent 计入成功触达)"
 grep -qF 'rate_limited' "$D/next-outreach.js" || fail "next-outreach done模式未接 rate_limited"
+# 层4d: 0923真机实证——风控分支曾直接`echo "$CAP" > "$COUNT_FILE"`把"已发送计数"和
+# "今日是否该停发"塞进同一个字段,导致legacy号当天真实只发12次(10送达+1受限+1风控)
+# 却在日志/状态文件里显示"今日已达阶梯上限60/60",看起来像真发了60条。必须分成独立的
+# HALT_FILE,COUNT_FILE只许老实累计真实尝试次数。
+grep -qF 'HALT_FILE="$STATE_DIR/dm-halt-$PROFILE-$DATE_TAG.txt"' "$D/outreach-tick.sh" \
+  || fail "outreach-tick 未接独立的HALT_FILE(已发数和停发状态还混在一个字段里)"
+grep -qF '[[ -f "$HALT_FILE" ]]' "$D/outreach-tick.sh" || fail "outreach-tick 取单闸未检查HALT_FILE"
+RATELIMIT_BRANCH2="$(grep -A8 'grep -qF "发送消息过于频繁"' "$D/outreach-tick.sh" || true)"
+grep -qF '> "$HALT_FILE"' <<< "$RATELIMIT_BRANCH2" || fail "风控命中未写HALT_FILE(还在直接改COUNT_FILE,已发数会继续撒谎)"
+grep -qF '> "$COUNT_FILE"' <<< "$RATELIMIT_BRANCH2" && fail "风控分支不该再直接改写COUNT_FILE(已发数字段必须只反映真实尝试次数)"
 grep -qF 'requeue_transient' "$D/outreach-tick.sh" || fail "tick 未接 requeue_transient"
 # 层6: 夜批run伴随Commander(决策dcdaa83e: 起跑拉起escort,收工注销,辅佐姿态)
 grep -qF 'escort-' "$D/harvest-cron.sh" || fail "harvest 未拉起伴随escort"
