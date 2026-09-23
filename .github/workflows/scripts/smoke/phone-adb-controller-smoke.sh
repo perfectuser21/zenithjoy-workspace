@@ -348,8 +348,32 @@ _KS="$D/update-keyword-stats.js"
 [[ -s "$_KS" ]] || fail "update-keyword-stats.js 缺失"
 node --check "$_KS" || fail "update-keyword-stats.js 语法错误"
 grep -qF 'RECENT' "$_KS" || fail "未区分本轮跑过的词(全量刷时间戳=毁掉最久未测轮换)"
-# 时间戳必须是条件写入,不能无条件盖
-grep -qE '最后测试时间.*RECENT|RECENT.*最后测试时间' "$_KS" || fail "「最后测试时间」仍是无条件写入"
+# 时间戳必须是条件写入,不能无条件盖。0923 字段构造抽进 keyword-stats-lib.js 之后,
+# 「最后测试时间」这个字面量不再出现在本文件里,条件变成了传给 lib 的 stamp 参数。
+grep -qE 'stamp:[^,)]*RECENT' "$_KS" || fail "「最后测试时间」仍是无条件写入(stamp 没带上 RECENT 判据)"
+
+# 层14b(0923): 三层真 bug 回流 —— 悦升关键词表四列长期全 0
+_KSL="$D/keyword-stats-lib.js"
+[[ -s "$_KSL" ]] || fail "keyword-stats-lib.js 缺失"
+node --check "$_KSL" || fail "keyword-stats-lib.js 语法错误"
+# 第一层: 0916「按业务线路由」改了四个写库脚本,漏了这一个 → 悦升效果回写从来没跑过
+# ⚠️ 只扫**代码行**: 这个文件的注释里正引用「连 line-routes 都没 require」当反面教材,
+#    扫全文会被自己的注释绊倒(0922 已复发过一次,变异实测这次又中)。
+# 用 herestring 而不是 `echo "$VAR" | grep`——后者是本仓认定的假绿模式，
+# smoke-selfcheck-smoke.sh 会拦（刚写完就被它抓了一次）。
+_KS_CODE=$(grep -vE '^[[:space:]]*//' "$_KS")
+grep -qF 'require("./line-routes.js")' <<< "$_KS_CODE" \
+  || fail "update-keyword-stats 仍写死 base/table(0916 路由漏改的就是它,悦升效果回写从没跑过)"
+if grep -qE '"GNuwbzY0da8[A-Za-z0-9]*"' <<< "$_KS_CODE"; then fail "金诺 base 仍被写死在 update-keyword-stats.js 里"; fi
+# 第二层: 悦升「最后测试时间」是日期型,写文本 → DatetimeFieldConvFail,**整条记录**打回
+grep -qE '/fields\?page_size' "$_KS" || fail "update-keyword-stats 没读字段类型(悦升的日期列会把整批写入打回)"
+grep -qF 'buildStatFields' "$_KS" || fail "字段构造未走 keyword-stats-lib"
+# 第三层: 两家线索表都没有「命中关键词」列,按它数有效线索永远是 0
+grep -qF 'tallyFromPool' "$_KS" || fail "有效线索数未走 tallyFromPool"
+if grep -qE 'for \(const r of leads\)' "$_KS"; then fail "还在遍历线索表统计关键词(线索表没有「命中关键词」列,数出来永远是 0)"; fi
+# 自建行的「是否启用」不许写死(悦升那列是单选,写死会把客户下拉框塞满垃圾选项)
+grep -qF 'enabledValueFor' "$_KS" || fail "自建行的「是否启用」仍是写死值"
+if grep -qE 'fields\["是否启用"\] *= *"是"' "$_KS"; then fail "「是否启用」写死\"是\",悦升单选列会被自动新增选项污染"; fi
 
 # 层15: 网关迁移(0921,决策 96054a8b) ratchet——us-vps 那份 openclaw-gateway 容器已退役
 # (/root/.openclaw-gateway-retired),取单/去重/落池/词单/KPI闸/escort拉起全部改经 MMV
