@@ -6999,13 +6999,13 @@ agent_suite:
     product: 中台认证
     note: "商家自助下单端点。断言 tenantContext → 仅 owner/admin（涉及花钱）→ 按租户限流的中间件链，档位非法返 400、未知 provider 返 400（客户端传错参数不是网关故障，不该报 502）、下单失败只回友好文案不泄漏后端错误码，以及主动查单端点与回调共用同一条结算路径（天然幂等）。"
 
-  - id: competitor-research-credit
-    path: apps/api/tests/routes/competitor-research-credit.test.ts
+  - id: competitor-research-route
+    path: apps/api/tests/routes/competitor-research.test.ts
     type: unit
     ci: L3
     status: active
     product: 新媒体运营
-    note: "积分消费的唯一真实接入点（对标分析 10 分/次）。除源码断言中间件挂载顺序外（charger 读 req.tenantId，必须在 tenantContext 之后否则 500），更要紧的是行为断言：余额充足时 consume 被以正确参数调用且请求走到 handler；余额不足时返 402 **且请求没有到达 handler**（用 jobId 为 undefined + 子进程 spawn 未被调用双重锁定）——钱没扣成，事就不能办。"
+    note: "由 competitor-research-credit.test.ts 改名而来（lint-test-pairing 要求 apps/api/src/routes/competitor-research.ts 的配套测试必须精确落在 apps/api/tests/routes/competitor-research.test.ts，原文件名带 -credit 后缀不匹配这条命名规则）。内容未变：积分消费的唯一真实接入点（对标分析 10 分/次）。除源码断言中间件挂载顺序外（charger 读 req.tenantId，必须在 tenantContext 之后否则 500），更要紧的是行为断言：余额充足时 consume 被以正确参数调用且请求走到 handler；余额不足时返 402 **且请求没有到达 handler**（用 jobId 为 undefined + 子进程 spawn 未被调用双重锁定）——钱没扣成，事就不能办。"
 
   - id: auth-bridge-initial-grant
     path: apps/api/tests/auth-bridge-initial-grant.test.ts
@@ -7030,3 +7030,11 @@ agent_suite:
     status: active
     product: 中台认证
     note: "商家唯一看得见的那部分。断言余额展示、选档位下单出二维码（用 qrcode.react 本地渲染——绝不能把微信 code_url 发给第三方图片服务）、点「我已支付」触发主动查单、到账后刷新余额、下单失败显示可重试文案。关键三条：credited/already_credited/credit_conflict 三者都视为已到账（credit_conflict 是账实分叉自愈，漏认会让商家看到「未完成」而钱已扣）；not_settlable 绝不能当成功；倒计时归零后停止轮询并退回选档位，不自动重新下单。"
+
+  - id: credits-api-client
+    path: apps/dashboard/src/api/__tests__/credits.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "充值页 API 封装层，三条防篡改/防脏数据行为断言：createOrder 请求体只含 tier_id/provider，显式钉死绝不出现 amountFen/amount/credits/price 等金额字段（档位金额只能由服务端 RECHARGE_TIERS 决定，客户端能传金额就是可篡改支付流程的攻击面）；后端 success:false 或 HTTP 非 2xx 时 apiFetch 必须抛错，不能悄悄返回 undefined 让调用方当正常数据往下用；syncOrder 把订单 id 正确拼进 URL 路径。"
