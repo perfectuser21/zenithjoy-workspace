@@ -22,6 +22,7 @@ vi.mock('../../src/middleware/tenant-context', () => ({
 }));
 vi.mock('../../src/middleware/simple-rate-limit', () => ({
   simpleRateLimit: () => (_req: any, _res: any, next: () => void) => next(),
+  ipKeyFn: () => 'test-ip',
 }));
 
 const { createOrderMock } = vi.hoisted(() => ({ createOrderMock: vi.fn() }));

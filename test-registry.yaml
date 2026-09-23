@@ -6983,6 +6983,14 @@ agent_suite:
     product: 中台认证
     note: "支付回调是整条链路唯一对公网开放且无身份鉴权的入口，验签就是它的鉴权。断言验签失败返 403 且**不落库不结算**、重复投递返 200 不重复结算、退款只走 markRefundPending 不走 settleOrder、未知 provider 返 404 不抛未捕获异常、审计行带上订单与租户归属（对不上订单的伪造/乱序回调仍留痕，两列为 null）。outcome→HTTP 映射逐个覆盖：六种业务结论一律 200（重试解决不了已得出结论的事），**只有己方异常才 5xx**——DB 断连时返 200 等于告诉平台已处理，那笔钱就永久丢了。"
 
+  - id: payment-callback-rate-limit
+    path: apps/api/tests/routes/payment-callback-rate-limit.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "CodeQL js/missing-rate-limiting 修复项：支付回调是唯一公网无鉴权入口，每次请求都要做一次 RSA 验签（CPU 开销），不限流等于让匿名扫描白嫖验签成本。断言按 IP 限流（CALLBACK_RATE_LIMIT_MAX 次/分钟，源码导出常量、不在测试里写死 magic number）超限后真的返回 429 RATE_LIMITED，且挡在验签逻辑之前。proven-to-fire 已验证：临时摘掉限流中间件重跑，本测试从 429 断言处真实变红（403 而不是 429）。独立成单文件是因为需要打满真实阈值验证第 N+1 次请求，若跟 payment-callback.test.ts 共用同一个路由单例会被其它用例已消耗的配额污染计数（vitest 默认按文件隔离模块，互不干扰）。"
+
   - id: app-mount-order
     path: apps/api/tests/routes/app-mount-order.test.ts
     type: unit
