@@ -1994,6 +1994,28 @@ if (enabledValueFor({ type: 1, options: [] }) !== '是') process.exit(1);
 NODE
 ok "Step 38 ✅ 词的赛马数据按目标列类型真写得进去，有效线索数从池里数（不再全 0）"
 
+# Step 39：夜批调效果回写时必须把「这批是谁的活」带上（step2 的调用链闸）
+#
+# 0923 实证的最后一层：harvest-cron.sh 调 update-keyword-stats.js 时一个参数都不传。
+# 老实现里脚本内部写死金诺 base，于是 **m1 跑悦升的批次也在往金诺表回写**——
+# 数据没丢，是进错了家。这解释了为什么金诺那几列一直有数（两台机都在写），悦升一直是 0。
+#
+# 改成按 line-routes 路由之后，不传参数会直接抛「未配路由」：不会再静默写错家，
+# 但夜批当晚就会红。所以调用链上的传参必须在 CI 就锁住，不能等事故。
+#
+# 隔离点在「活」上不在机器上（主理人 0922）：手机只管执行，活自己带着「我属于谁」。
+# 这条守的就是「活的归属有没有一路传到写库那一步」。
+_GP2_HC=".github/workflows/scripts/../../../services/phone-adb-controller/harvest-cron.sh"
+[[ -f "$_GP2_HC" ]] || _GP2_HC="services/phone-adb-controller/harvest-cron.sh"
+[[ -s "$_GP2_HC" ]] || fail "Step 39 harvest-cron.sh 缺失" 39
+# zsh 脚本，别用 bash -n（对 `if ... else` 的 zsh 写法会误报 syntax error）
+zsh -n "$_GP2_HC" || fail "Step 39 harvest-cron.sh zsh 语法错误" 39
+# pattern 整体放单引号里：写成双引号的话 ${BIZ} 会被本脚本就地展开成空串，
+# 守卫就变成在找 `...js ''`，永远匹配不上（写完就中了一次）。
+grep -qE 'update-keyword-stats\.js .\$\{BIZ\}.' "$_GP2_HC" \
+  || fail "Step 39 夜批调效果回写没带业务线：不传=当晚抛未配路由；老写法则是把悦升的批次静默回写进金诺表" 39
+ok "Step 39 ✅ 夜批把「这批是谁的活」一路传到了效果回写（不会再写错家，也不会当晚抛路由错）"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S5B_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" \
       "$S22_TMP" "$S23A_TMP" "$S23A_COOKIES" "$S23B_TMP" "$S24_TMP" \
