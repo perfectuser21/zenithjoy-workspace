@@ -373,6 +373,12 @@ grep -qF 'tallyFromPool' "$_KS" || fail "有效线索数未走 tallyFromPool"
 if grep -qE 'for \(const r of leads\)' "$_KS"; then fail "还在遍历线索表统计关键词(线索表没有「命中关键词」列,数出来永远是 0)"; fi
 # 自建行的「是否启用」不许写死(悦升那列是单选,写死会把客户下拉框塞满垃圾选项)
 grep -qF 'enabledValueFor' "$_KS" || fail "自建行的「是否启用」仍是写死值"
+# 调用方必须把业务线传进去。0923 实证:harvest-cron.sh 调它时一个参数都不传,
+# 而脚本内部写死金诺 base —— 于是 m1 跑悦升的批次也在往**金诺**表回写,
+# 悦升关键词表四列长期全 0。改成按 line-routes 路由之后不传参数会直接抛「未配路由」,
+# 夜批当晚就红;但那已经是事故了,这里在 CI 就拦住。
+grep -qF "update-keyword-stats.js '\${BIZ}'" "$D/harvest-cron.sh" \
+  || fail "harvest-cron.sh 调 update-keyword-stats 没传业务线(不传=抛未配路由,夜批当晚炸;老写法则是静默写进金诺表)"
 if grep -qE 'fields\["是否启用"\] *= *"是"' "$_KS"; then fail "「是否启用」写死\"是\",悦升单选列会被自动新增选项污染"; fi
 
 # 层15: 网关迁移(0921,决策 96054a8b) ratchet——us-vps 那份 openclaw-gateway 容器已退役

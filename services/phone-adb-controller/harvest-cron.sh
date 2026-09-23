@@ -143,8 +143,11 @@ wr step "$SERIAL" 3 done
 # ── ⑤ 效果回写(词赛马数据闭环) ──
 if [[ "$PUSH" == "1" ]]; then
   wr step "$SERIAL" 4 doing
-  ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/update-keyword-stats.js" >> $LOG 2>&1
-  log "效果已回写关键词表"
+  # 0923: 必须传 "${BIZ}" —— 此前不传,脚本内部写死金诺的 base,于是 m1 跑悦升的批次
+  # 也在往**金诺**表回写,悦升关键词表四列长期全 0。PR#1962 改成按 line-routes 路由之后,
+  # 不传参数会直接抛「未配路由」——夜批当晚就会在这一步红,不会再静默写错家。
+  ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/update-keyword-stats.js '${BIZ}'" >> $LOG 2>&1
+  log "效果已回写关键词表(${BIZ})"
   wr step "$SERIAL" 4 done
 else
   wr step "$SERIAL" 4 done "PUSH=0 跳过回写"
