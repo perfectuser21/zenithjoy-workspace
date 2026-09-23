@@ -2,12 +2,17 @@
 // 选词策略: 仅启用词;按 (有效线索数 / max(1,已测轮次)) 效率降序 + 最久未测优先轮换;
 // 输出纯文本词单(一行一词),供 M4/M1 夜间采收 cron 直接消费。表是 SSOT: 改表=改策略。
 const fs = require("fs");
+// 判定抽到 keyword-enabled-lib.js：本文件顶层读凭据 + 顶层发网络请求，
+// 不能被测试 require（第一版这么做，CI 直接 ENOENT 报红）。
+const { isKeywordEnabled } = require("./keyword-enabled-lib.js");
 const cfg = JSON.parse(fs.readFileSync("/Users/administrator/.openclaw/clawdbot.json"));
 const acc = cfg.channels.feishu.accounts.jinoshengyuan;
 const BIZ = process.argv[2] || "AI人工智能训练师";
 const N = parseInt(process.argv[3] || "6", 10);
 const B = "GNuwbzY0da8GP0sv6MGcOTu9ntd", KW = "tbleP4LgzkcwAhiZ";
 function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : (v && v.name) ? v.name : String(v || ""); }
+
+
 (async () => {
   const tr = await fetch("https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ app_id: acc.appId, app_secret: acc.appSecret }) });
   const tok = (await tr.json()).tenant_access_token;
@@ -28,7 +33,7 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : (
       videos: Number(f["搜索视频数"]) || 0,
       lastTest: txt(f["最后测试时间"]),
     };
-  }).filter(k => k.word && k.enabled === "是" && (!BIZ || k.biz.includes(BIZ) || BIZ.includes(k.biz)));
+  }).filter(k => k.word && isKeywordEnabled(k.enabled) && (!BIZ || k.biz.includes(BIZ) || BIZ.includes(k.biz)));
   // 效率分 = 线索数/轮次近似(视频数/4≈轮次); 未测词(lastTest空)优先探索
   cand.sort((a, b) => {
     const ea = a.videos ? a.leads / (a.videos / 4) : (a.lastTest ? 0 : 99);

@@ -1823,6 +1823,57 @@ if (!/push-videos\.js\s+\S+\s+\S+\s+\$LINE\b/.test(b2)) process.exit(1);
 NODE
 ok "Step 35 ✅ 回填按活路由（认不出拒收、研发不碰生产 base、标记透传到落池）"
 
+# ───────────────────────────────────────────────────────────────────
+# Step 36：关键词「是否启用」认一类写法，别只认"是"（step2 的入口闸）
+#
+# 这一列是人手填在飞书表里的自由文本。0923 真机实测两家的实际填法：
+#   金诺 58 条：是 37 / 启用 9 / 暂停 7 / 否 5
+#   悦升 35 条：启用 35
+# 原实现写死 `=== "是"`，填「启用」的一律被静默过滤——金诺取词 31 → 40，
+# 9 条词被埋了而且不报错（日志只显示"本批取 N 词"）。
+#
+# 选不出词 = step2「按关键词找目标视频」根本不会开始，所以这是那一步的入口闸。
+node - <<'NODE' || fail "Step 36 关键词启用判定退化" 36
+const { isKeywordEnabled } = require('./services/phone-adb-controller/keyword-enabled-lib.js');
+
+// ① 两家现在的填法都得认，少认一种就有词被静默埋掉
+for (const v of ['是', '启用']) if (!isKeywordEnabled(v)) process.exit(1);
+
+// ② 白名单默认即拒：没列进去的一个都不许放过。金诺表里真有 7 条填「暂停」，
+//    误判会让停掉的词重新开跑、去真发私信。
+//    （注意：挡住它们的是"不在白名单"，不是那两行黑名单/正则——那两行在当前
+//      实现下是冗余的，变异实测删掉也不影响结果，只为防将来改成宽松匹配。）
+for (const v of ['否', '暂停', '停用', '未启用', '暂不启用', '关闭', '待定', '???']) {
+  if (isKeywordEnabled(v)) process.exit(1);
+}
+
+// ③ 空值/未填不跑：没表态就别动客户的号
+for (const v of ['', '   ', null, undefined]) if (isKeywordEnabled(v)) process.exit(1);
+
+// ④ 判定必须住在**可安全 require 的文件**里——不是 grep 有没有 readFileSync
+//    （换个写法就绕过去了），而是真的在一个空目录里 require 一次看它炸不炸。
+//    第一版判定挂在 next-keywords.js 上，那个脚本顶层就读 clawdbot.json、顶层就发飞书请求，
+//    CI 一 require 就 `ENOENT: ~/.openclaw/clawdbot.json` 报红。这里复刻的就是那个现场。
+const { execFileSync } = require('child_process');
+const { mkdtempSync } = require('fs');
+const { tmpdir } = require('os');
+const { resolve } = require('path');
+const LIB = resolve('services/phone-adb-controller/keyword-enabled-lib.js');
+const sandbox = mkdtempSync(`${tmpdir()}/kwlib-`);
+try {
+  execFileSync(process.execPath,
+    ['-e', `const m=require(${JSON.stringify(LIB)}); if (typeof m.isKeywordEnabled!=='function') process.exit(9);`],
+    // cwd 和 HOME 都指向空目录：本机上 ~/.openclaw/clawdbot.json 是存在的，
+    // 只把 cwd 挪空，"顶层读 home 下的配置"这个原样病灶在本地照样能读到 → 守卫假绿。
+    // CI runner 上没有那个文件才会炸。把 HOME 一起架空，守卫才跟宿主环境无关。
+    { cwd: sandbox, env: { PATH: process.env.PATH, HOME: sandbox }, stdio: 'pipe' });
+} catch (e) {
+  process.stderr.write(`判定文件 require 不干净（CI 会当场报红）: ${e.stderr || e.message}\n`);
+  process.exit(1);
+}
+NODE
+ok "Step 36 ✅ 关键词启用判定认一类写法，且住在可安全 require 的纯函数文件里"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S5B_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" \
       "$S22_TMP" "$S23A_TMP" "$S23A_COOKIES" "$S23B_TMP" "$S24_TMP" \
