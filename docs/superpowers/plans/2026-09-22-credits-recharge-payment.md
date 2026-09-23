@@ -2013,7 +2013,7 @@ beforeAll(() => {
   provider = new WechatNativeProvider({
     mchId: '1234567890',
     serialNo: 'ABC123',
-    apiV3Key: '0123456789abcdef0123456789abcdef',
+    apiV3Key: 'TEST_ONLY_NOT_A_REAL_KEY_32BYTES', // 32 字节占位符，非真实密钥（AES-256 要求 key 长度 32）
     merchantPrivateKey: kp.privateKey,
     platformPublicKeys: { 'PLAT-SERIAL-1': platformPublicKey },
     notifyUrl: 'https://example.com/api/payment/callback/wechat',
