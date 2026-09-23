@@ -359,10 +359,12 @@ node --check "$_KSL" || fail "keyword-stats-lib.js 语法错误"
 # 第一层: 0916「按业务线路由」改了四个写库脚本,漏了这一个 → 悦升效果回写从来没跑过
 # ⚠️ 只扫**代码行**: 这个文件的注释里正引用「连 line-routes 都没 require」当反面教材,
 #    扫全文会被自己的注释绊倒(0922 已复发过一次,变异实测这次又中)。
+# 用 herestring 而不是 `echo "$VAR" | grep`——后者是本仓认定的假绿模式，
+# smoke-selfcheck-smoke.sh 会拦（刚写完就被它抓了一次）。
 _KS_CODE=$(grep -vE '^[[:space:]]*//' "$_KS")
-echo "$_KS_CODE" | grep -qF 'require("./line-routes.js")' \
+grep -qF 'require("./line-routes.js")' <<< "$_KS_CODE" \
   || fail "update-keyword-stats 仍写死 base/table(0916 路由漏改的就是它,悦升效果回写从没跑过)"
-if echo "$_KS_CODE" | grep -qE '"GNuwbzY0da8[A-Za-z0-9]*"'; then fail "金诺 base 仍被写死在 update-keyword-stats.js 里"; fi
+if grep -qE '"GNuwbzY0da8[A-Za-z0-9]*"' <<< "$_KS_CODE"; then fail "金诺 base 仍被写死在 update-keyword-stats.js 里"; fi
 # 第二层: 悦升「最后测试时间」是日期型,写文本 → DatetimeFieldConvFail,**整条记录**打回
 grep -qE '/fields\?page_size' "$_KS" || fail "update-keyword-stats 没读字段类型(悦升的日期列会把整批写入打回)"
 grep -qF 'buildStatFields' "$_KS" || fail "字段构造未走 keyword-stats-lib"
