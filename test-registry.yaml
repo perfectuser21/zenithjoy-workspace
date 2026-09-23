@@ -7046,3 +7046,19 @@ agent_suite:
     status: active
     product: 中台认证
     note: "充值页 API 封装层，三条防篡改/防脏数据行为断言：createOrder 请求体只含 tier_id/provider，显式钉死绝不出现 amountFen/amount/credits/price 等金额字段（档位金额只能由服务端 RECHARGE_TIERS 决定，客户端能传金额就是可篡改支付流程的攻击面）；后端 success:false 或 HTTP 非 2xx 时 apiFetch 必须抛错，不能悄悄返回 undefined 让调用方当正常数据往下用；syncOrder 把订单 id 正确拼进 URL 路径。"
+
+  - id: brain-tasks-page
+    path: apps/dashboard/src/pages/__tests__/BrainTasksPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "任务总台（读 Brain task database）。主理人 0923 划的范围：生产前端只显示计划，执行留痕不在这一页。七条断言里两条是防假绿的：接口挂了必须显示「读取失败」而不能退化成空表（空表和读不到长得一模一样，人会以为「今天没排活」而实际是后台断了——工作机领单器当天实测就在报 BRAIN_UNAVAILABLE），真没任务时说「暂无任务」跟读取失败分得清。另五条锁：打的是 /api/brain/tasks 而不是 ZenithJoy 自己的 collect-tasks（两本账不能混）、类型/客户/谁派的/谁在做四列都渲染、数据截至时间标出来。"
+
+  - id: brain-tasks-api-client
+    path: apps/dashboard/src/api/__tests__/brain-tasks.api.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "Brain task database 读取客户端。锁两件会咬人的事：①每个请求必须带 status——/api/brain/tasks 不带过滤参数时只返回 10 个精简字段，带上才返回完整 70+ 字段（0923 实测：不带参数查得出「device_job 有 0 个」，直接查库是 4 条），少了 task_type/tenant_id 页面就分不出哪条是派给手机的活、算哪个客户的；②HTTP 错误必须抛出来绝不 catch 成空数组，任意一个状态取失败整体就算失败——半真的列表比报错更坏。"
