@@ -106,8 +106,11 @@ describe('BrainTasksPage', () => {
     await waitFor(() => expect(screen.getByText(/今晚 22:00 · 金诺/)).toBeInTheDocument());
     expect(screen.getByText('排队中')).toBeInTheDocument();
     expect(screen.getByText('进行中')).toBeInTheDocument();
-    // due_at 落在页面上（格式不强求，但那一天必须看得见）
-    expect(screen.getByText(/09-23/)).toBeInTheDocument();
+    // due_at 落在页面上。用 getAllByText：「数据截至」也可能是同一天（写这条时就撞上了），
+    // getByText 撞到多个会直接抛错，那是测试写松了不是页面错了。
+    // 22:00 是 mock 的 due_at 2026-09-23T14:00Z 在 UTC+8 下的样子。
+    const dues = screen.getAllByText(/09-23 22:00/);
+    expect(dues.length).toBeGreaterThan(0);
   });
 
   it('接口挂了要说"读取失败"，绝不能显示成一张空表', async () => {
