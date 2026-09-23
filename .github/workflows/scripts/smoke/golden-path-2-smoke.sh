@@ -2005,11 +2005,12 @@ ok "Step 38 ✅ 词的赛马数据按目标列类型真写得进去，有效线�
 #
 # 隔离点在「活」上不在机器上（主理人 0922）：手机只管执行，活自己带着「我属于谁」。
 # 这条守的就是「活的归属有没有一路传到写库那一步」。
-_GP2_HC=".github/workflows/scripts/../../../services/phone-adb-controller/harvest-cron.sh"
-[[ -f "$_GP2_HC" ]] || _GP2_HC="services/phone-adb-controller/harvest-cron.sh"
+_GP2_HC="services/phone-adb-controller/harvest-cron.sh"
 [[ -s "$_GP2_HC" ]] || fail "Step 39 harvest-cron.sh 缺失" 39
-# zsh 脚本，别用 bash -n（对 `if ... else` 的 zsh 写法会误报 syntax error）
-zsh -n "$_GP2_HC" || fail "Step 39 harvest-cron.sh zsh 语法错误" 39
+# 不在这里做语法检查：harvest-cron.sh 是 zsh 脚本，而跑本 smoke 的 ubuntu runner
+# **没装 zsh**（实测 `zsh: command not found`，Step 39 当场 exit 39）。
+# bash -n 对它的 zsh 写法又会误报 syntax error near 'else'。
+# 语法检查留给装了 zsh 的 openclaw-scripts-test（ci-l3-code.yml）；这一步只守传参。
 # pattern 整体放单引号里：写成双引号的话 ${BIZ} 会被本脚本就地展开成空串，
 # 守卫就变成在找 `...js ''`，永远匹配不上（写完就中了一次）。
 grep -qE 'update-keyword-stats\.js .\$\{BIZ\}.' "$_GP2_HC" \
