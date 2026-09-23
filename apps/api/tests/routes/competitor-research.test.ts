@@ -24,13 +24,21 @@ describe('对标分析接入积分扣减（源码断言：挂载结构）', () =
     expect(src).toMatch(/createCreditCharger\(\s*['"]competitor_research['"]\s*\)/);
   });
 
-  it('charger 必须挂在 tenantContext 之后（否则拿不到 req.tenantId）', () => {
-    const startLine = src.match(/router\.post\(\s*['"]\/start['"][\s\S]{0,300}?\)/);
+  it('charger 必须挂在 tenantContext 之后（否则拿不到 req.tenantId），限流必须挂在最前面', () => {
+    // 匹配到 handler 的 `=> {` 而不是第一个 `)`——simpleRateLimit(...) 自己就带一层
+    // 括号，非贪婪匹配到第一个 `)` 会在 tenantContext/createCreditCharger 之前截断。
+    const startLine = src.match(/router\.post\(\s*['"]\/start['"][\s\S]{0,400}?=>\s*\{/);
     expect(startLine).not.toBeNull();
     const seg = startLine![0];
+    const rateLimitIdx = seg.indexOf('simpleRateLimit');
     const tenantIdx = seg.indexOf('tenantContext');
     const chargerIdx = seg.indexOf('createCreditCharger');
+    expect(rateLimitIdx).toBeGreaterThan(-1);
     expect(tenantIdx).toBeGreaterThan(-1);
+    expect(chargerIdx).toBeGreaterThan(-1);
+    // CodeQL js/missing-rate-limiting：限流必须是第一个中间件，否则 tenantContext
+    // 自己的 DB 查询（SELECT tenant_members）不受限流保护，照样会被判 high。
+    expect(rateLimitIdx).toBeLessThan(tenantIdx);
     expect(chargerIdx).toBeGreaterThan(tenantIdx);
   });
 });

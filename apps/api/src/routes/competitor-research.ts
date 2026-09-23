@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto';
 import { pushAccountsToBitable } from '../services/feishu-bitable';
 import { tenantContext } from '../middleware/tenant-context';
 import { createCreditCharger } from '../middleware/credit-charge';
+import { ipKeyFn, simpleRateLimit } from '../middleware/simple-rate-limit';
 
 const router = Router();
 
@@ -24,8 +25,14 @@ interface Job {
 const jobStore = new Map<string, Job>();
 
 // ─── POST /api/competitor-research/start ─────────────────────────
+// CodeQL js/missing-rate-limiting：限流必须挂在 tenantContext 之前——tenantContext
+// 自己会查一次 DB，挂在它后面等于放过这条查询不受保护（credits-orders.ts 顶部有
+// 同一模式的详细说明）。tenantId 此时还没解析出来，故按 IP 限流而非按租户。
+// 30 次/分钟/IP：对标分析是重操作（起子进程做采集），且已有积分扣减兜底滥用成本，
+// 限流只做兜底保护，阈值不用卡太死。
 router.post(
   '/start',
+  simpleRateLimit({ windowMs: 60_000, max: 30, keyFn: ipKeyFn }),
   tenantContext,
   createCreditCharger('competitor_research'),
   (req: Request, res: Response) => {
