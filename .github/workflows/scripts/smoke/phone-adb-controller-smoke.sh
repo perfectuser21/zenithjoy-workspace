@@ -497,4 +497,20 @@ grep -qE 'print -- "AUDIO' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh �
 grep -qE 'ssh .*node .*judge-video\.js' "$D/batch2.sh" || fail "batch2.sh 未接入judge-video.js触发(视频判定链路悬空)"
 grep -qE "grep '\^AUDIO" "$D/batch2.sh" || fail "batch2.sh 未从采收输出里提取AUDIO行(音频传不到mmv)"
 
+
+# 层24: batch2.sh里凡是ssh过去会touch Postgres(leadgen-db-connect.js读DATABASE_URL)的
+# 命令,必须在同一条ssh命令里先source凭据(0923真机实测发现:裸ssh过去的shell不会自动
+# source ~/.credentials/,不带这行DATABASE_URL就是空,push-videos.js的双写和judge-video.js
+# 的读取会静默连到pg默认本地库——没有zenithjoy schema,全部静默失败,今天刚部署就撞上)。
+_PV_SSH_LINE="$(grep 'node .*push-videos\.js' "$D/batch2.sh" | grep 'ssh ' || true)"
+grep -qF 'source ~/.credentials/zenithjoy-db.env' <<< "$_PV_SSH_LINE" \
+  || fail "batch2.sh 调用push-videos.js的ssh命令没有source ~/.credentials/zenithjoy-db.env(Postgres双写会静默连错库)"
+_JV_SSH_LINES="$(grep 'node .*judge-video\.js' "$D/batch2.sh" | grep 'ssh ' || true)"
+[[ -z "$_JV_SSH_LINES" ]] && fail "batch2.sh 找不到任何judge-video.js的ssh调用(层23应该已经守住,层24逻辑错了)"
+while IFS= read -r _line; do
+  [[ -z "$_line" ]] && continue
+  grep -qF 'source ~/.credentials/zenithjoy-db.env' <<< "$_line" \
+    || fail "batch2.sh 有一处调用judge-video.js的ssh命令没有source ~/.credentials/zenithjoy-db.env(判定读不到Postgres数据)"
+done <<< "$_JV_SSH_LINES"
+
 echo "phone-adb-controller-smoke: PASS"

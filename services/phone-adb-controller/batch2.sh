@@ -47,7 +47,12 @@ if [[ "$PUSH" == "1" && -s $OUT ]]; then
   # 0921 网关迁移: us-vps 那份 openclaw-gateway 容器已退役(决策 96054a8b),落池脚本随迁移
   # 落到 MMV 原生跑(不再经 docker cp/docker exec)。
   scp -o ConnectTimeout=20 $OUT mmv:/tmp/$TAG.tsv >> $LOG 2>&1
-  ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/push-videos.js /tmp/$TAG.tsv $TAG $LINE && node /Users/administrator/.openclaw/leadgen-scripts/push-raw-comments.js /tmp/$TAG.tsv $TAG $LINE" >> $LOG 2>&1
+  # 0923修正:push-videos.js今天新接的Postgres双写(leadgen-db-connect.js读DATABASE_URL)
+  # 裸ssh过去的shell不会自动source ~/.credentials/,不带这行DATABASE_URL就是空,
+  # 双写会连到pg默认本地库(压根没有zenithjoy.leadgen_videos表)而不是生产库,
+  # 全部静默失败——真机验证时才发现(见0923 handoff)。push-raw-comments.js不碰Postgres,
+  # 不受影响,但为了让两条命令共享同一次ssh session的env,统一放在同一行source。
+  ssh -o ConnectTimeout=20 mmv "set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; node /Users/administrator/.openclaw/leadgen-scripts/push-videos.js /tmp/$TAG.tsv $TAG $LINE && node /Users/administrator/.openclaw/leadgen-scripts/push-raw-comments.js /tmp/$TAG.tsv $TAG $LINE" >> $LOG 2>&1
   print "[$(date +%H:%M:%S)] 已落池(视频+评论)" >> $LOG
   # 0923补齐:落池之后紧接着分拣——此前sort-comments.js压根没有任何自动触发点
   # (既不在cron里,也不在任何批处理链路里,只能靠人/agent手动敲,而agent侧那份
@@ -95,7 +100,7 @@ print(json.dumps(entries))
 " > "${MANIFEST_LOCAL}.remote"
     scp -o ConnectTimeout=20 "${MANIFEST_LOCAL}.remote" "mmv:$REMOTE_MANIFEST" >> $LOG 2>&1
     if [[ "$XFER_OK" == "1" ]]; then
-      ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/judge-video.js $LINE $REMOTE_MANIFEST" >> $LOG 2>&1
+      ssh -o ConnectTimeout=20 mmv "set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; node /Users/administrator/.openclaw/leadgen-scripts/judge-video.js $LINE $REMOTE_MANIFEST" >> $LOG 2>&1
       AUDIO_COUNT=$(print -- "$AUDIO_LINES" | wc -l | tr -d ' ')
       print "[$(date +%H:%M:%S)] 已判定(视频文案链,音频${AUDIO_COUNT}条)" >> $LOG
     else
@@ -106,7 +111,7 @@ print(json.dumps(entries))
     # 没有录到任何音频(可能整批视频都很短命中零评论便宜闸/录制失败)时,manifest传空数组,
     # 让judge-video.js照样跑一遍——它对没有音频来源的视频会退回title_only兜底判定,
     # 总比这一轮完全不调用、Postgres里的pending视频永远堆积要好。
-    ssh -o ConnectTimeout=20 mmv "echo '[]' > /tmp/$TAG-manifest.json && node /Users/administrator/.openclaw/leadgen-scripts/judge-video.js $LINE /tmp/$TAG-manifest.json" >> $LOG 2>&1
+    ssh -o ConnectTimeout=20 mmv "set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; echo '[]' > /tmp/$TAG-manifest.json && node /Users/administrator/.openclaw/leadgen-scripts/judge-video.js $LINE /tmp/$TAG-manifest.json" >> $LOG 2>&1
     print "[$(date +%H:%M:%S)] 已判定(视频文案链,本轮无新音频,走title兜底)" >> $LOG
   fi
 fi
