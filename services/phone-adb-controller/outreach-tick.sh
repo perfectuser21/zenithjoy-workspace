@@ -24,10 +24,18 @@ LOG=~/outreach.log
 log(){ print -- "[$(date +%m%d-%H:%M:%S)] $*" >> $LOG }
 
 # ── 归因分类(决策 c5828297): 按归因行不按整段——warning: foreground 等非致命行禁止污染判定 ──
+# 0923补齐account_mismatch: 0921真实事故(langzi463485被平台登出,设备上实际登的是另一个
+# 不相关账号)复现的原始信号"current sender account does not match the claimed distribution
+# account"/"current Douyin account identity was not visible on the verified Me page"当时被
+# 分类进笼统的"other",要等连续2次+人工翻~/anomaly-*.log肉眼诊断才知道是号掉了——这次改成
+# 一次命中就直接识别、直接停发,不用等第2次撞上、也不用人工再猜一遍原因。
 classify_failure() {
   local out="$1" last_fc tail5
   last_fc=$(print -- "$out" | grep -oE 'failure_class=[A-Z_]+' | tail -1 | cut -d= -f2)
   if [[ "$last_fc" == "TARGET_ABSENT" ]]; then print terminal; return; fi
+  if print -- "$out" | grep -qiE 'sender account does not match the claimed distribution account|Douyin account identity was not visible on the verified Me page'; then
+    print account_mismatch; return
+  fi
   tail5=$(print -- "$out" | tail -5)
   if print -- "$tail5" | grep -qiE 'AdbIME|input method|_ime'; then print transient; return; fi
   print other
@@ -193,6 +201,21 @@ while (( SECONDS - TICK_BODY_START < TICK_BUDGET )); do
         ORDER_RESULT="restricted"
         break
       fi
+      # 0923真机实证(0922-11:54单#172原始XML实锤): 气泡渲染成功≠真送达的第二种情形——
+      # 短期内私信陌生人过于频繁,平台弹出"给陌生人发送消息过于频繁，请稍后再发送陌生人
+      # 消息",气泡照样是send_status=sent,之前这条被直接MARKED sent计成功,主理人肉眼
+      # 回看当天记录才发现是假成功。这跟"仅互关"不是同一件事——那是对方的限制(这个人
+      # 永远发不通),这是**本账号**当下撞了频率闸(换个人多半照样发不通,今天剩下的单
+      # 全部先别发),处理方式也不同:不判"受限"(那是对这条线索的永久性判断),而是让
+      # 今日发送计数直接顶到上限(复用已有的"已达阶梯上限"分支),这一单退回待触达重排。
+      if [[ -f "$RESTRICT_XML" ]] && grep -qF "发送消息过于频繁" "$RESTRICT_XML" 2>/dev/null; then
+        mark "$RID" rate_limited "触发平台风控(短期内发送陌生人消息过于频繁)"
+        echo "$CAP" > "$COUNT_FILE"
+        log "🚦 单#$SEQ 触发平台风控(发送消息过于频繁),$PROFILE 今日发送计数已顶格(${CAP}),本号今日不再发送"
+        wr step --profile "$PROFILE" 1 done "风控"; wr done --profile "$PROFILE"
+        ORDER_RESULT="rate_limited"
+        break
+      fi
       mark "$RID" sent "$RAWTAIL"
       log "✅ 单#$SEQ 送达(第${ATTEMPT}次尝试)"
       wr step --profile "$PROFILE" 1 done; wr done --profile "$PROFILE"
@@ -216,6 +239,18 @@ while (( SECONDS - TICK_BODY_START < TICK_BUDGET )); do
           touch "$PAUSE_FLAG"
           log "⛔⛔ $PROFILE 连续${ANOMALY_COUNT}次未识别失败,自动熔断——这可能就是真实限流阈值,人工核查 ~/anomaly-$PROFILE.log 后手动删除 $PAUSE_FLAG 才会恢复"
         fi
+      elif [[ "$CLS" == "account_mismatch" ]]; then
+        # 0923真机实证(0921晚langzi463485被登出事故复现): 设备上登的账号跟本单要求分发的
+        # 账号对不上,一次就能确定不是偶发抖动(不像"other"要等连续2次才敢下判断)——继续
+        # 用错账号重试只会把消息以错误身份发给真实线索,越试越糟。第一次命中就直接停发,
+        # 且自动把原因写进熔断标记(不用再翻~/anomaly-*.log人工诊断一遍才知道是号掉了)。
+        touch "$PAUSE_FLAG"
+        {
+          echo "$(date '+%Y%m%d %H:%M') 自动检测: 账号身份校验失败,登录账号与本单要求的分发账号($SENDER)不符"
+          echo "原始信号: $(print -- "$OUT" | grep -E 'sender account does not match|account identity was not visible' | tail -1 | head -c 200)"
+          echo "需人工重新登录正确账号后,删除本文件才会恢复自动触达。"
+        } > "$PAUSE_FLAG"
+        log "⛔⛔ $PROFILE 账号身份不符(见 $PAUSE_FLAG),已自动熔断,不再重试(用错身份继续发只会更糟)"
       fi
       mark "$RID" failed "${REASON:-rc=$RC}"
       log "❌ 单#$SEQ 失败($CLS): ${REASON:-rc=$RC}"
