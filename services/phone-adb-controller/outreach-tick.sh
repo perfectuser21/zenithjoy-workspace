@@ -127,8 +127,21 @@ while (( SECONDS - TICK_BODY_START < TICK_BUDGET )); do
   fi
   DATE_TAG=$(TZ=Asia/Shanghai date +%Y%m%d)
   COUNT_FILE="$STATE_DIR/dm-count-$PROFILE-$DATE_TAG.txt"
+  # 0923修正: 此前风控命中会把COUNT_FILE直接改写成CAP值("已发数"和"今日是否该停发"
+  # 两件事共用同一个字段),导致日志里"今日已达阶梯上限60/60"看起来像真发了60条,
+  # 实际当天legacy号只有10条真送达+1条仅互关+1条风控=12次真实尝试。改成独立的
+  # HALT_FILE(风控/异常触发的"今日停发"标记),COUNT_FILE只记真实尝试次数,两件事
+  # 分开存,谁都不撒谎。
+  HALT_FILE="$STATE_DIR/dm-halt-$PROFILE-$DATE_TAG.txt"
   TODAY_SENT=$(cat "$COUNT_FILE" 2>/dev/null || echo 0)
   CAP=$(node "$(dirname "$0")/dm-daily-cap.js" "$PROFILE")
+  if [[ -f "$HALT_FILE" ]]; then
+    log "今日($PROFILE)已因风控停发(见 $HALT_FILE,真实发送${TODAY_SENT}条),回队列"
+    mark "$RID" requeue "halted after rate limit hit today (real sent=${TODAY_SENT})"
+    CONSEC_CAP_HITS=$(( CONSEC_CAP_HITS + 1 ))
+    (( CONSEC_CAP_HITS >= 2 )) && { log "连续${CONSEC_CAP_HITS}次撞上限,本tick结束(已发${SENDS_THIS_TICK}条)"; break }
+    continue
+  fi
   if (( TODAY_SENT >= CAP )); then
     log "今日($PROFILE)已达阶梯上限 ${TODAY_SENT}/${CAP},回队列"
     mark "$RID" requeue "daily cap reached (${TODAY_SENT}/${CAP})"
@@ -207,11 +220,17 @@ while (( SECONDS - TICK_BODY_START < TICK_BUDGET )); do
       # 回看当天记录才发现是假成功。这跟"仅互关"不是同一件事——那是对方的限制(这个人
       # 永远发不通),这是**本账号**当下撞了频率闸(换个人多半照样发不通,今天剩下的单
       # 全部先别发),处理方式也不同:不判"受限"(那是对这条线索的永久性判断),而是让
-      # 今日发送计数直接顶到上限(复用已有的"已达阶梯上限"分支),这一单退回待触达重排。
+      # 今日改走独立的HALT_FILE标记停发(0923修正: 此前直接echo "$CAP" > "$COUNT_FILE"
+      # 会让"已发送计数"和"是否该停发"两件事共用一个字段,COUNT_FILE从此不再反映真实
+      # 发送数——0923实测复现: legacy号当天真实只送达10条+受限1条+本次风控1条=12次
+      # 尝试,但日志此后一直显示"今日已达阶梯上限60/60",误导成"发了60条"。COUNT_FILE
+      # 不再被本分支改写,继续如实累计真实尝试次数;"今天要不要停"改由HALT_FILE单独
+      # 表达,读的时候两件事分开看,谁都不撒谎。
       if [[ -f "$RESTRICT_XML" ]] && grep -qF "发送消息过于频繁" "$RESTRICT_XML" 2>/dev/null; then
         mark "$RID" rate_limited "触发平台风控(短期内发送陌生人消息过于频繁)"
-        echo "$CAP" > "$COUNT_FILE"
-        log "🚦 单#$SEQ 触发平台风控(发送消息过于频繁),$PROFILE 今日发送计数已顶格(${CAP}),本号今日不再发送"
+        REAL_SENT_NOW=$(cat "$COUNT_FILE" 2>/dev/null || echo 0)
+        echo "$(date '+%Y%m%d %H:%M') 触发平台风控(发送消息过于频繁),真实发送${REAL_SENT_NOW}条后停发" > "$HALT_FILE"
+        log "🚦 单#$SEQ 触发平台风控(发送消息过于频繁),$PROFILE 今日真实发送${REAL_SENT_NOW}条后停发(见$HALT_FILE)"
         wr step --profile "$PROFILE" 1 done "风控"; wr done --profile "$PROFILE"
         ORDER_RESULT="rate_limited"
         break
