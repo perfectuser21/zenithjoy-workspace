@@ -182,7 +182,9 @@ export const autopilotNavGroups: NavGroup[] = [
       // 工作机控制塔第一刀（决策 e14297d4）— 每台工作机（安卓/Windows）在线态 + 正在执行任务 + 实时画面
       { path: '/dashboard/workers', icon: Monitor, label: '工作机', featureKey: 'workers', component: 'WorkersPage' },
       // 0923 — 任务总台：Brain task database 里排着的活（只看计划，执行留痕不在这一页）
-      { path: '/tasks', icon: ListChecks, label: '任务总台', featureKey: 'workers', component: 'BrainTasksPage' },
+      // ⚠️ 路径不能用 /tasks —— 那个在下面「旧路由重定向」里已被占（→ /media/publish），
+      //    挂上去会互相打架：要么点进来被重定向走，要么把旧链接打破。
+      { path: '/task-board', icon: ListChecks, label: '任务总台', featureKey: 'workers', component: 'BrainTasksPage' },
       // 素材库：iPhone 快捷指令 / 小程序 / 电脑 agent 三个入口传上来的素材，第一次变得看得见
       { path: '/materials', icon: ImageIcon, label: '素材库', featureKey: 'materials', component: 'MaterialsPage' },
       // line01 刀5a — 我的作品：dashboard 侧第二发布入口（编辑文案/平台、发布、重发失败平台、看回执）
