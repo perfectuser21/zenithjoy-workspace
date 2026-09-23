@@ -67,9 +67,25 @@ failure_class=TARGET_ABSENT')" == "terminal" ]] || fail "classify: TARGET_ABSENT
 no card matched
 failure_class=TARGET_ABSENT')" == "terminal" ]] || fail "classify: warning:foreground 不得污染 TARGET_ABSENT 判终止"
   [[ "$(CF 'some other die message')" == "other" ]] || fail "classify: 未知失败应 other"
+  # 0923真机实证(0921晚langzi463485被登出事故的原始信号): 账号身份不符必须一次就识别,
+  # 不能落进要等连续2次才反应的"other"桶(继续用错账号重试=用错误身份骚扰真实线索)。
+  [[ "$(CF 'current sender account does not match the claimed distribution account')" == "account_mismatch" ]] || fail "classify: 账号身份不符应识别为 account_mismatch,不能落进 other"
+  [[ "$(CF 'current Douyin account identity was not visible on the verified Me page')" == "account_mismatch" ]] || fail "classify: Me页身份不可见应识别为 account_mismatch"
 else
   echo "::warning::zsh 不可用,层4 归因断言跳过(部署侧会跑)"
 fi
+# 层4b: account_mismatch 必须一次命中就熔断(不能像 other 那样等连续2次判定才停)
+grep -qF 'account_mismatch' "$D/outreach-tick.sh" || fail "outreach-tick 未接 account_mismatch 分类"
+ACCT_BRANCH="$(grep -A8 '"$CLS" == "account_mismatch"' "$D/outreach-tick.sh" || true)"
+grep -qF 'touch "$PAUSE_FLAG"' <<< "$ACCT_BRANCH" || fail "account_mismatch 分支未直接熔断(必须一次命中就停,不能等连续2次)"
+grep -q 'ANOMALY_COUNT' <<< "$ACCT_BRANCH" && fail "account_mismatch 分支不该绕经ANOMALY_COUNT计数(必须一次命中就停,不是等连续2次)"
+# 层4c: 0922-11:54单#172原始XML实锤——气泡渲染成功但平台已弹"发送消息过于频繁"限流提示时，
+# 之前会被直接判成功(MARKED sent),这跟"仅互关"是两回事,必须分开识别、分开处理。
+RATELIMIT_BRANCH="$(grep -A6 'grep -qF "发送消息过于频繁"' "$D/outreach-tick.sh" || true)"
+[[ -n "$RATELIMIT_BRANCH" ]] || fail "outreach-tick 未接风控/当日限流二次核验(0922单#172真机实锤:气泡成功但平台限流会被误判送达成功)"
+grep -qF 'mark "$RID" rate_limited' <<< "$RATELIMIT_BRANCH" || fail "风控检测未真正接到 rate_limited 分支(字符串存在但没接上判定逻辑,守卫一个词≠守卫一个行为)"
+grep -qF 'ORDER_RESULT="rate_limited"' <<< "$RATELIMIT_BRANCH" || fail "风控命中后 ORDER_RESULT 未设为 rate_limited(会被当成 sent 计入成功触达)"
+grep -qF 'rate_limited' "$D/next-outreach.js" || fail "next-outreach done模式未接 rate_limited"
 grep -qF 'requeue_transient' "$D/outreach-tick.sh" || fail "tick 未接 requeue_transient"
 # 层6: 夜批run伴随Commander(决策dcdaa83e: 起跑拉起escort,收工注销,辅佐姿态)
 grep -qF 'escort-' "$D/harvest-cron.sh" || fail "harvest 未拉起伴随escort"

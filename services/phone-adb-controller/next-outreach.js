@@ -39,6 +39,12 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : (
       fields = lib.restrictedFields(note, now);
     } else if (result === "requeue") {
       fields = { "状态": "待触达" };  // 环境性失败(锁忙/设备离线): 回队列,不算受阻
+    } else if (result === "rate_limited") {
+      // 0923真机实证(单#172原始XML): 气泡渲染成功≠真送达的第二种情形——短期内私信陌生人
+      // 过于频繁撞平台风控,之前被当"sent"计成功。这是账号级、不是这条线索的问题,状态回
+      // 待触达(下次账号限流解除后能正常重发),但note要落进回复结果留痕,不能只写本机日志
+      // (人工/质检回看这条线索时,要能看出"不是没送到人,是账号那天被限流了"，不是猜的)。
+      fields = { "状态": "待触达", "回复结果": ("[触发风控,待限流解除后重发]" + note).slice(0, 200) };
     } else if (result === "requeue_transient") {
       // 瞬时失败(IME/前台波动)执行内10次用尽: 1轮回队/2轮受阻(决策 c5828297)
       const cur = await (await fetch(`https://open.feishu.cn/open-apis/bitable/v1/apps/${B}/tables/${LEADS}/records/${rid}`, { headers: H })).json();
