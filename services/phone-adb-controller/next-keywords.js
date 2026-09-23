@@ -2,6 +2,9 @@
 // 选词策略: 仅启用词;按 (有效线索数 / max(1,已测轮次)) 效率降序 + 最久未测优先轮换;
 // 输出纯文本词单(一行一词),供 M4/M1 夜间采收 cron 直接消费。表是 SSOT: 改表=改策略。
 const fs = require("fs");
+// 判定抽到 keyword-enabled-lib.js：本文件顶层读凭据 + 顶层发网络请求，
+// 不能被测试 require（第一版这么做，CI 直接 ENOENT 报红）。
+const { isKeywordEnabled } = require("./keyword-enabled-lib.js");
 const cfg = JSON.parse(fs.readFileSync("/Users/administrator/.openclaw/clawdbot.json"));
 const acc = cfg.channels.feishu.accounts.jinoshengyuan;
 const BIZ = process.argv[2] || "AI人工智能训练师";
@@ -9,23 +12,6 @@ const N = parseInt(process.argv[3] || "6", 10);
 const B = "GNuwbzY0da8GP0sv6MGcOTu9ntd", KW = "tbleP4LgzkcwAhiZ";
 function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : (v && v.name) ? v.name : String(v || ""); }
 
-// 「是否启用」怎么判。
-//
-// 这一列是人手填在飞书表里的自由文本，中文里"开着"的写法太多：
-// 金诺填「是/否/暂停」，悦升填「启用」。原来写死 `=== "是"`，结果
-// **悦升 35 条词一条都选不出来，夜批一直空跑**，日志只说"本批取 0 词"，
-// 不报错、没人看得出来（0923 实测）。
-//
-// 所以认一类说法，不认某一个字。但两头都要收住：
-//  · 「暂停」绝不能算启用——金诺表里真有 3 条这么填的，误判会让停掉的词重新开跑
-//  · 空值/未填一律不跑——没表态就别去动客户的号，宁可漏跑一个词
-function isKeywordEnabled(raw) {
-  const v = String(raw == null ? '' : raw).trim().toLowerCase();
-  if (!v) return false;
-  // 先否后是：「暂停」含「停」，必须先被否掉，否则任何含"启"的宽松匹配都可能放过它
-  if (['否', '停', '暂停', '关', '关闭', 'n', 'no', 'false', '0', '✖', '❌'].includes(v)) return false;
-  return ['是', '启用', '开', '开启', 'y', 'yes', 'true', '1', '✅', '√'].includes(v);
-}
 
 (async () => {
   const tr = await fetch("https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ app_id: acc.appId, app_secret: acc.appSecret }) });
@@ -57,5 +43,3 @@ function isKeywordEnabled(raw) {
   });
   cand.slice(0, N).forEach(k => console.log(k.word));
 })();
-
-module.exports = { isKeywordEnabled };

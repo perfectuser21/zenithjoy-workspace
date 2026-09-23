@@ -20,7 +20,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require_ = createRequire(import.meta.url);
-const { isKeywordEnabled } = require_('../next-keywords.js');
+const { isKeywordEnabled } = require_('../keyword-enabled-lib.js');
 
 test('金诺现在填的「是」要认', () => {
   assert.equal(isKeywordEnabled('是'), true);

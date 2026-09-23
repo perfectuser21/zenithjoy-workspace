@@ -33,7 +33,7 @@ MMV_JS_FILES=(
   push-videos.js push-raw-comments.js sort-comments.js next-outreach.js next-outreach-lib.js
   leadgen-db-lib.js leadgen-db-connect.js judge-jev.js judge-comment.js judge-video.js
   judge-video-lib.js transcribe-qwen-audio.js comment-tier-lib.js line-routes.js
-  lead-fields-lib.js kpi-gate.js next-keywords.js update-keyword-stats.js
+  lead-fields-lib.js kpi-gate.js next-keywords.js keyword-enabled-lib.js update-keyword-stats.js
   fetch-seen-videos.js check-own-account.js dm-daily-cap.js dm-rate-ramp-lib.js
   own-accounts-lib.js push-leads.js update-profile-links.js
 )
