@@ -24,6 +24,12 @@ const ROUTES = [
     video: "tblKHYTMZceFBwHr",         // 视频池
     keyword: "tbleP4LgzkcwAhiZ",       // 关键词配置
     script: "tblZZWdv0YUNojqI",        // 话术库
+    // 客户语义（写进线索表那三列）。0923 前这三个值写死在 sort-comments.js 里，
+    // 于是悦升（企业 AI 部署）的线索表每一条都标着"考证人群"——按人群筛选时
+    // 看到的是另一家客户的标签。语义跟客户走，不跟代码走。
+    intent: "证书/学习/求职",
+    audience: "考证人群",
+    tier: "精准词",
   },
   {
     key: "yuesheng",
@@ -36,6 +42,9 @@ const ROUTES = [
     video: null,                       // 悦升 base 暂无视频池，写视频时跳过
     keyword: "tblyKCp5vc7y2S40",       // 悦升云端-关键词配置
     script: "tblvf3t8ZWkOCpe1",        // 悦升云端-话术库
+    intent: "私有化部署/降本/AI办公",
+    audience: "企业AI决策者",
+    tier: "精准词",
   },
 ];
 

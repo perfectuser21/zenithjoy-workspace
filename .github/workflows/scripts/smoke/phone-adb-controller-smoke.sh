@@ -96,11 +96,30 @@ grep -qF '帮不拦' "$D/cmdr-escort.txt" || fail "escort SOP缺辅佐三原则"
 # 层5: 落表独立字段(主理人0915逐列验收拍板: 昵称/抖音号/主页链接/IP/留言时间独立成列)
 grep -qF '"留言时间"' "$D/push-raw-comments.js" || fail "push-raw-comments 未写留言时间列"
 grep -qF '"主页IP"' "$D/push-raw-comments.js" || fail "push-raw-comments 未写主页IP列"
-grep -qF '"IP属地"' "$D/sort-comments.js" || fail "sort-comments 搬运未写IP属地列"
+# 0923 搬运逻辑抽进 sort-comments-lib.js(池状态必须最后推进,顺序只有注入假飞书跑一遍才测得出),
+# 列的字面量跟着挪过去了,检查点也跟着挪——盯着旧文件 grep 会在重构后变成假绿。
+# 认两种写法: "IP属地": 和 ES6 简写 IP属地: —— 只认带引号那种，重构成简写时会假红
+grep -qE '"?IP属地"?[[:space:]]*:' "$D/sort-comments-lib.js" || fail "sort-comments 搬运未写IP属地列"
 # 0919 字段收敛(主理人拍板): 纯昵称列改名"抖音昵称"，且抽到 lead-fields-lib.js 共享构造，
 # 不再是 sort-comments.js 自己的字面量——检查点跟着挪到构造库+接入点两处。
 grep -qF '"抖音昵称"' "$D/lead-fields-lib.js" || fail "lead-fields-lib 未写抖音昵称列"
-grep -qF 'buildLeadCoreFields' "$D/sort-comments.js" || fail "sort-comments 搬运未接入字段构造库"
+grep -qF 'buildLeadCoreFields' "$D/sort-comments-lib.js" || fail "sort-comments 搬运未接入字段构造库"
+grep -qF 'settlePending' "$D/sort-comments.js" || fail "sort-comments 没走 settlePending(顺序保证退回调用方自觉,146条线索就是这么丢的)"
+node --check "$D/sort-comments-lib.js" || fail "sort-comments-lib.js 语法错误"
+# 0923 真 bug 回流: 池状态推进必须在写线索之后。原实现先标「已分拣+进入最终线索=true」
+# 再写线索表,写失败只打日志;下一轮扫池入口是 `处理状态 !== 待分拣 → 跳过`,那条永远捞不回来。
+# 线上对账: 池 true 518 条,线索表对得上 372 条,差 146(金诺41/悦升105)。
+node -e '
+const fs=require("fs");
+const code=fs.readFileSync(process.argv[1],"utf8").split("\n").filter(l=>!l.trimStart().startsWith("//")).join("\n");
+// 契约: 每一次「把池推成 已分拣+进入最终线索=true」之前, 都必须先有一次写线索结果的成功检查。
+// 位置比较行不通——DUP 分支的推进本来就排在 postLead 之前, 一比就误报。
+const DONE=/处理状态:\s*[\x27"]已分拣[\x27"],\s*进入最终线索:\s*true/g;
+let m, n=0, bad=0;
+while((m=DONE.exec(code))){ n++; if(!/okRes\(res\)/.test(code.slice(0,m.index))) bad++; }
+if(n<2){ console.error("只找到 "+n+" 处池推进(期望 DUP + 新客户两处) —— 守卫要跟着改"); process.exit(1); }
+if(bad){ console.error(bad+" 处池推进前没有写线索的成功检查 —— 原 bug 复活"); process.exit(1); }
+' "$D/sort-comments-lib.js" || fail "sort-comments-lib 池状态推进早于线索落地(146条线索就是这么丢的)"
 grep -qF 'buildLeadCoreFields' "$D/push-leads.js" || fail "push-leads 未接入字段构造库"
 node --check "$D/lead-fields-lib.js" || fail "lead-fields-lib.js 语法错误"
 if grep -qF 'seen.add' "$D/sort-comments.js"; then fail "sort-comments seen.add复活(Map无add方法,每轮搬运第一条后必崩)"; fi

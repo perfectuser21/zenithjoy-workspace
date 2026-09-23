@@ -11,7 +11,10 @@ const fs = require("fs");
 const cfg = JSON.parse(fs.readFileSync("/Users/administrator/.openclaw/clawdbot.json"));
 // 0916: 按业务线路由 —— 悦升有独立 base,写死金诺会让它池里的评论永远没人消化(见 line-routes.js)
 const { routeOf } = require("./line-routes.js");
-const { buildLeadCoreFields, extractSeenEntries } = require("./lead-fields-lib.js");
+const { extractSeenEntries } = require("./lead-fields-lib.js");
+// 0923: 「判完之后怎么落账」抽进 sort-comments-lib.js —— 顺序错没错只有注入假飞书
+// 跑一遍才看得出来(池状态必须最后推进,否则写线索失败的那条下轮就扫不到了,146条就是这么丢的)。
+const { settlePending } = require("./sort-comments-lib.js");
 const { judgeComment } = require("./judge-comment.js");
 
 const LINE = process.argv[2] || "";
@@ -79,7 +82,7 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
   } while (lp);
 
   const now = new Date(Date.now() + 8 * 3600e3).toISOString().replace("T", " ").slice(0, 16) + "(UTC+8)";
-  let judged = 0, moved = 0, failed = 0;
+  let judged = 0, moved = 0, failed = 0, duped = 0, parked = 0;
 
   for (const row of pend) {
     const f = row.fields;
@@ -94,43 +97,25 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
       continue;
     }
     judged++;
-    const keep = verdict.relevance === "相关"; // 0914理念: 相关即留档(含C级),仅同行/广告排除
-    await feishu(`/tables/${POOL}/records/${row.id}`, "PUT", { fields: {
-      "处理状态": "已分拣", "业务相关性": verdict.relevance, "意向等级": verdict.grade,
-      "AI判定理由": "[Jev] " + (verdict.reason || ""),
-      "排除原因": keep ? "" : (verdict.reason || "判定不相关"),
-      "进入最终线索": keep,
-    }}, tok);
-    if (!keep) continue;
-
-    const nick = txt(f["评论者昵称"]), ident = txt(f["用户主页标识"]);
-    const [dyid, purl] = ident.split(" | ");
-    const hit = (dyid && seen.get(dyid.trim())) || seen.get(nick);
-    if (hit) {
-      // 重复客户 = 强意向信号: 高亮回写已有行(次数+1 + 轨迹追加),不新建不静默
-      const newDup = (hit.dup || 0) + 1;
-      await feishu(`/tables/${LEADS}/records/${hit.id}`, "PUT", { fields: {
-        "重复命中次数": newDup,
-        "重复轨迹": `[再现${newDup}] 又在《${videoCaption.slice(0, 40)}》评论: ${comment.slice(0, 50)} (${verdict.grade}级判定)`,
-      }}, tok);
-      hit.dup = newDup;
-      console.log("DUP_HIGHLIGHT", nick, "x" + newDup);
-      continue;
+    const r = await settlePending({
+      row, verdict, route: ROUTE, seen, now, asLeadTime,
+      deps: {
+        putPool:  (id, fields) => feishu(`/tables/${POOL}/records/${id}`, "PUT",  { fields }, tok),
+        postLead: (fields)     => feishu(`/tables/${LEADS}/records`,      "POST", { fields }, tok),
+        putLead:  (id, fields) => feishu(`/tables/${LEADS}/records/${id}`, "PUT", { fields }, tok),
+      },
+    });
+    moved += r.moved;
+    duped += r.duped;
+    if (r.retryable) {
+      parked++;
+      // 关键: 池状态没被推进,这条下一轮还在「待分拣」里,会被自然重捞。
+      // 原实现在这里只打一行日志就过,而池早已标成「已分拣+进入最终线索=true」——
+      // 下一轮 `sv !== "待分拣" → continue` 再也扫不到它,线索就这么没了(金诺41 悦升105)。
+      console.log("LEAD_PARKED", txt(row.fields["评论者昵称"]), r.reason, "(留待分拣,下轮重试)");
     }
-    const res = await feishu(`/tables/${LEADS}/records`, "POST", { fields: {
-      "抖音获客-线索表": nick,
-      ...buildLeadCoreFields({ nick, dyid, purl, comment, video: videoCaption, vurl: txt(f["评论作品视频链接"]) }),
-      "IP属地": txt(f["地区"]), "留言时间": txt(f["留言时间"]),
-      "业务线": ROUTE.line, "关键词层级": "精准词",
-      "AI判断理由": `[${verdict.grade}级] ` + (verdict.reason || ""),
-      "状态": "待触达", "发送状态": "未发送",
-      "搜索账号": "池转入(自动判定)",
-      "搜索意图": "证书/学习/求职", "目标人群": "考证人群", "采集时间": asLeadTime("采集时间", now),
-      "合规核验状态": "自动判定分级入表(" + now + ")｜评论区采集｜仅内部写入,未触达。",
-    }}, tok);
-    // 0915 修真bug: seen 是 Map,原代码误用 Set 的 add 方法抛 TypeError,使每轮搬运第一条成功后即断
-    if (res.code === 0) { moved++; seen.set(nick, { id: res.data?.record?.record_id, dup: 0 }); if (dyid) seen.set(dyid.trim(), { id: res.data?.record?.record_id, dup: 0 }); }
-    else console.log("LEAD_FAIL", nick, JSON.stringify(res).slice(0, 100));
   }
-  console.log(`判定完成 ${judged}/${pend.length} | 搬入线索表 ${moved} 条 | 判定异常${failed}条(留待分拣)`);
+  console.log(`判定完成 ${judged}/${pend.length} | 搬入线索表 ${moved} 条 | 重复高亮 ${duped} 条 | 判定异常${failed}条(留待分拣) | 搬运失败${parked}条(留待分拣下轮重试)`);
+  // 搬运失败不再是"打条日志就算了": 池留在待分拣,下一轮必然重来一次。
+  if (parked) console.log(`⚠️ 有 ${parked} 条判定通过但没搬进线索表,已保持待分拣;若连续多轮不降,去查线索表字段/权限`);
 })();
