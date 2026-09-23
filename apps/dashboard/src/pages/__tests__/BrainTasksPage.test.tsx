@@ -106,11 +106,21 @@ describe('BrainTasksPage', () => {
     await waitFor(() => expect(screen.getByText(/今晚 22:00 · 金诺/)).toBeInTheDocument());
     expect(screen.getByText('排队中')).toBeInTheDocument();
     expect(screen.getByText('进行中')).toBeInTheDocument();
-    // due_at 落在页面上。用 getAllByText：「数据截至」也可能是同一天（写这条时就撞上了），
-    // getByText 撞到多个会直接抛错，那是测试写松了不是页面错了。
-    // 22:00 是 mock 的 due_at 2026-09-23T14:00Z 在 UTC+8 下的样子。
-    const dues = screen.getAllByText(/09-23 22:00/);
-    expect(dues.length).toBeGreaterThan(0);
+    // due_at 落在页面上。⚠️ 绝不能硬编码 "09-23 22:00"：那是 mock 的 14:00Z 在 UTC+8 下的
+    // 样子，而 CI runner 跑在 UTC，同一条数据渲染成 "09-23 14:00" —— 本地全绿、CI 当场挂，
+    // 第一版就是这么栽的。这里只断言「渲染成了 MM-DD HH:MM 的时间」，时区无关。
+    const cells = screen.getAllByText(/^\d{2}-\d{2} \d{2}:\d{2}$/);
+    expect(cells.length).toBeGreaterThan(0);
+  });
+
+  it('没有截止时间的任务显示「—」，不是 NaN 也不是空白', async () => {
+    // TASKS 里第 2、3 条 due_at 是 null。Date(null) 会得到 1970 而不是 Invalid Date，
+    // 稍不留神就会在页面上渲染出「01-01 08:00」这种凭空捏造的日期。
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/今晚 22:00 · 金诺/)).toBeInTheDocument());
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/1970/)).not.toBeInTheDocument();
   });
 
   it('接口挂了要说"读取失败"，绝不能显示成一张空表', async () => {
