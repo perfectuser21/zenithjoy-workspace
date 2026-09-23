@@ -1874,6 +1874,80 @@ try {
 NODE
 ok "Step 36 ✅ 关键词启用判定认一类写法，且住在可安全 require 的纯函数文件里"
 
+# Step 37：判定通过的评论，必须真的落成线索行才算办完（step5 的出账闸）
+#
+# 0923 线上对账，两家的评论池和线索表对不上账：
+#   金诺 池true=351 → 线索表 278 池转入 + 21 重复  = 299  差 41
+#   悦升 池true=167 → 线索表  48 池转入 +  7 重复  =  55  差 105
+# 池子账面写着"已进入最终线索"，线索表里查无此人，两本账差 146 条且无人会发现。
+#
+# 不是数据问题也不是判定链问题：把 3 条孤儿原样复刻回写，三条全 code=0 成功；
+# 同日真跑一轮悦升分拣，41 判定 / 29 搬入 / 0 异常。是顺序错了——
+# 先把池推成「已分拣+进入最终线索=true」再写线索表，写失败只打一行日志；
+# 而下一轮扫池的入口是 `处理状态 !== "待分拣" → 跳过`，这条再也捞不回来。
+#
+# 评论判定完却进不了线索表 = step5「线索入库」根本没发生，所以这是那一步的出账闸。
+node - <<'NODE' || fail "Step 37 分拣结算顺序退化，线索会静默消失" 37
+const { settlePending } = require('./services/phone-adb-controller/sort-comments-lib.js');
+
+const mkRow = () => ({ id: 'recP', fields: {
+  评论者昵称: '小小奥', 用户主页标识: '29428203889 | personal',
+  评论原文: '想了解私有化部署', 来源视频: '一人公司怎么用 AI',
+  评论作品视频链接: '', 地区: '陕西', 留言时间: '2026-09-23',
+}});
+const mkDeps = (leadRes) => {
+  const calls = [];
+  return { calls, deps: {
+    putPool: async (id, fields) => { calls.push({ op: 'putPool', fields }); return { code: 0 }; },
+    postLead: async (fields) => { calls.push({ op: 'postLead', fields }); return leadRes; },
+    putLead: async (id, fields) => { calls.push({ op: 'putLead', fields }); return leadRes; },
+  }};
+};
+const args = (deps, over) => Object.assign({
+  row: mkRow(), verdict: { relevance: '相关', grade: 'A', reason: '明确询问' },
+  deps, route: { key: 'yuesheng', line: '悦升云端', intent: '私有化部署', audience: '企业AI决策者' },
+  seen: new Map(), now: '2026-09-23 11:30(UTC+8)', asLeadTime: (_n, v) => v,
+}, over || {});
+const settled = (calls) => calls.filter(c => c.op === 'putPool' && c.fields['处理状态'] === '已分拣');
+
+(async () => {
+  // ① 线索写失败 → 池绝不能被推出「待分拣」，否则下一轮永远扫不到它（146 条就是这么丢的）
+  {
+    const { calls, deps } = mkDeps({ code: 1254045, msg: 'FieldNameNotFound' });
+    const r = await settlePending(args(deps));
+    if (settled(calls).length) process.exit(1);
+    if (r.retryable !== true) process.exit(1);
+  }
+  // ② 线索建成后才推进池，且顺序必须是「先线索、后池」
+  {
+    const { calls, deps } = mkDeps({ code: 0, data: { record: { record_id: 'recL' } } });
+    const r = await settlePending(args(deps));
+    if (r.moved !== 1) process.exit(1);
+    const iLead = calls.findIndex(c => c.op === 'postLead');
+    const iDone = calls.findIndex(c => c.op === 'putPool' && c.fields['处理状态'] === '已分拣');
+    if (!(iLead >= 0 && iDone > iLead)) process.exit(1);
+  }
+  // ③ 重复客户高亮写失败 → 同样不许推进池（原实现连返回值都不看）
+  {
+    const { calls, deps } = mkDeps({ code: 1254043, msg: 'RecordIdNotFound' });
+    const r = await settlePending(args(deps, { seen: new Map([['小小奥', { id: 'recSTALE', dup: 2 }]]) }));
+    if (r.duped !== 0 || settled(calls).length) process.exit(1);
+  }
+  // ④ 客户语义跟着 route 走，未配留空——绝不回落成金诺的"考证人群"
+  {
+    const { calls, deps } = mkDeps({ code: 0, data: { record: { record_id: 'recL' } } });
+    await settlePending(args(deps));
+    const f = calls.find(c => c.op === 'postLead').fields;
+    if (f['目标人群'] !== '企业AI决策者') process.exit(1);
+    const bare = mkDeps({ code: 0, data: { record: { record_id: 'recL2' } } });
+    await settlePending(args(bare.deps, { route: { key: 'x', line: 'X' } }));
+    const g = bare.calls.find(c => c.op === 'postLead').fields;
+    if (g['目标人群'] !== '' || g['搜索意图'] !== '') process.exit(1);
+  }
+})().catch(e => { process.stderr.write(String(e && e.stack || e) + '\n'); process.exit(1); });
+NODE
+ok "Step 37 ✅ 判定通过的评论必须真落成线索行，落不成就留在待分拣等下一轮（不再静默消失）"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S5B_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" \
       "$S22_TMP" "$S23A_TMP" "$S23A_COOKIES" "$S23B_TMP" "$S24_TMP" \
