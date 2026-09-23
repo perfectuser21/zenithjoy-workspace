@@ -141,3 +141,4 @@ mashup-history-smoke.sh
 schedule-dispatch-smoke.sh
 job-catalog-smoke.sh
 dispatch-two-step-smoke.sh
+payment-smoke.sh

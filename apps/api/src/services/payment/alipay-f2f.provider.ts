@@ -113,10 +113,10 @@ export class AlipayF2FProvider implements PaymentProvider {
     return { qrCodeUrl: qr };
   }
 
-  verifyCallback(
-    rawBody: Buffer,
-    _headers: Record<string, string | undefined>
-  ): CallbackEvent {
+  // 支付宝验签只用 body（待签串由表单字段拼成），不读任何 header——
+  // 与微信 APIv3 不同，后者的签名值、时间戳、证书序列号都在 header 里。
+  // 接口签名保留 headers 形参位由 PaymentProvider 定义，此处不声明即可。
+  verifyCallback(rawBody: Buffer): CallbackEvent {
     const params: Record<string, string> = {};
     for (const [k, v] of new URLSearchParams(rawBody.toString('utf8'))) {
       params[k] = v;
