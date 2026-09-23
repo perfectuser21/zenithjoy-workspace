@@ -413,4 +413,26 @@ _COMMANDER_BODY=$(awk '/^async function judgeCommander/,/^}/' "$_JJ")
 grep -q "try {" <<< "$_COMMANDER_BODY" || fail "judgeCommander 缺少try/catch包裹httpPost调用(网络异常会裸抛,炸穿整条判定链)"
 grep -q "catch" <<< "$_COMMANDER_BODY" || fail "judgeCommander 缺少catch分支"
 
+
+# 层22: deploy.sh 清单不能悄悄漂移(0923补建:这套脚本从未有过自动部署,合并进main≠
+# 生产在跑——建了deploy.sh一键同步三台机器,但清单是写死的文件名数组,新增文件不会自动
+# 进清单。守住"仓库里每个顶层.js/.sh都在deploy.sh某个清单里",漏了会在这里报错，
+# 而不是等到某天有人发现"PR明明改了这个新文件，机器上却没有"才追查到清单漏了它。
+_DEPLOY="$D/deploy.sh"
+[[ -s "$_DEPLOY" ]] || fail "deploy.sh 缺失(0923一键同步脚本,别让它跟着别的文件一起悄悄消失)"
+bash -n "$_DEPLOY" || fail "deploy.sh 语法错误"
+# v4实验管线(batch2-v4.sh/harvest-cron-v4.sh)已实测确认未接入任何crontab、目标机上
+# 也不存在,是明确排除项,不算漂移。
+_V4_EXCLUDE="batch2-v4.sh harvest-cron-v4.sh"
+for f in "$D"/*.js; do
+  bn="$(basename "$f")"
+  grep -qF "$bn" "$_DEPLOY" || fail "deploy.sh 清单漏了 $bn(新增/改名的.js文件必须补进 MMV_JS_FILES,否则合并PR后机器上永远是旧版)"
+done
+for f in "$D"/*.sh; do
+  bn="$(basename "$f")"
+  [[ "$bn" == "deploy.sh" ]] && continue
+  case " $_V4_EXCLUDE " in *" $bn "*) continue ;; esac
+  grep -qF "$bn" "$_DEPLOY" || fail "deploy.sh 清单漏了 $bn(新增/改名的.sh文件必须补进 DEVICE_SH_FILES,否则合并PR后机器上永远是旧版)"
+done
+
 echo "phone-adb-controller-smoke: PASS"
