@@ -30,7 +30,7 @@ D="."
 FAILED=0
 
 MMV_JS_FILES=(
-  push-videos.js push-raw-comments.js sort-comments.js next-outreach.js next-outreach-lib.js
+  push-videos.js push-raw-comments.js sort-comments.js sort-comments-lib.js next-outreach.js next-outreach-lib.js
   leadgen-db-lib.js leadgen-db-connect.js judge-jev.js judge-comment.js judge-video.js
   judge-video-lib.js transcribe-qwen-audio.js comment-tier-lib.js line-routes.js
   lead-fields-lib.js kpi-gate.js next-keywords.js keyword-enabled-lib.js update-keyword-stats.js

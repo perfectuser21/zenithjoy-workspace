@@ -207,3 +207,27 @@ test('纯函数文件：在空目录里 require 得干干净净（判定不许�
     ['-e', `const m=require(${JSON.stringify(lib)}); if(typeof m.settlePending!=='function') process.exit(9);`],
     { cwd: sandbox, env: { PATH: process.env.PATH, HOME: sandbox }, stdio: 'pipe' });
 });
+
+// ── 接线守卫 ──────────────────────────────────────────────────────────
+//
+// 上面锁的是 lib「顺序对不对」。但本 bug 的形状是**调用方**把顺序搞反的：
+// 把 sort-comments.js 的循环改回「先 PUT 池已分拣、再 POST 线索」，上面 10 条依然全绿。
+// 所以必须另外锁住接线本身。
+
+test('接线守卫：sort-comments.js 的搬运必须走 settlePending，不许自己直接写线索表', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../sort-comments.js', import.meta.url).pathname, 'utf8');
+  // 只看代码行——注释里正引用旧写法当反面教材，扫全文会被自己绊倒（0922 已栽过一次）
+  const code = src.split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
+
+  assert.match(code, /settlePending\(/, '搬运没走 settlePending —— 顺序保证就回到了调用方自觉');
+
+  // 池状态的推进只能发生在 lib 里。调用方一旦自己写「已分拣」，就绕开了"线索先落地"的保证。
+  assert.ok(!/["\u2018\u2019'`]已分拣["\u2018\u2019'`]/.test(code),
+    'sort-comments.js 自己写了「已分拣」——池状态的推进必须留在 settlePending 里，' +
+    '否则失败路径又会把没搬成的记录推成已分拣，下一轮就再也扫不到了');
+
+  // 建线索行也只能在 lib 里
+  assert.ok(!/\/records`,\s*"POST"/.test(code.replace(/\s+/g, ' ')) || /deps:/.test(code),
+    '调用方在 settlePending 之外自己 POST 线索表');
+});
