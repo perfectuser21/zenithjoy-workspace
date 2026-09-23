@@ -6874,3 +6874,159 @@ agent_suite:
     status: active
     product: 智能获客
     note: "视觉定位（截图+一句话→像素坐标）的守卫。此前这段逻辑内嵌在抖音/朋友圈两个 shell 里、零测试覆盖，0921 晚它整条挂掉（ToAPIs 上 gemini-2.5-flash-lite 配额耗尽 429）时没有任何东西提前报警。断言：**提问必须用 UI-TARS 官方 agent 协议**（实测同图同元素随意问会把「商品」标签定偏 925px，换 Thought/Action 协议后 8/8 命中，这是死规矩不是风格）、坐标取最后一个 (x,y)（Thought 段里也有数字对）、越界坐标一律判失败绝不盲点（RPA 里一次错点会让后面每步都在错页面上继续错）、模型没给坐标时不静默返回空值、图片按 data:image/png;base64 传、默认模型是 ui-tars。"
+
+  # ─── 积分自助充值链路（PR #1954）────────────────────────────────────────────
+  # 商家扫微信/支付宝二维码充积分 → 回调验签 → 主动查单为准 → CAS 幂等入账。
+  # 刀1 用假支付网关验收到数据库为止，不依赖真实商户号；刀2 换真实凭据真扫码验收。
+
+  - id: payment-orders-schema
+    path: apps/api/tests/migrations/payment-orders-schema.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "锁死订单表的 DB 级约束不被后人悄悄改掉：amount_fen 必须是 INTEGER（防改成 NUMERIC 把浮点引进金额）、(provider,out_trade_no) 唯一、provider_transaction_id 与 credit_transactions.order_id 两条部分唯一索引（入账幂等的两道闸）、payment_callbacks 只存 raw_digest 不存回调原文（日志红线，用反向断言守）、pending 订单的过期扫描索引。断言直接读 SQL 文件文本——这类结构性约束行为测试测不到。"
+
+  - id: payment-types-contract
+    path: apps/api/tests/services/payment/types.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "订单状态机是资损防线：ALLOWED_TRANSITIONS 直接喂给 SQL 的 status=ANY($n) 做 CAS，而 payment_orders.status 列无 CHECK 约束，状态合法性全靠这张表。整表 toEqual 精确断言（不是逐个 toBeDefined），任一条被改坏或新增状态漏定义都会红——credited 的前置只含 pending 且不含自身，重复回调才会 rowCount=0 而不是重复加积分。另断言充值档位金额与积分均为正整数、id 唯一、各档金额互异（订单复用逻辑靠 amount_fen 代理 tier，互异是隐含前提）。"
+
+  - id: payment-mock-provider
+    path: apps/api/tests/services/payment/mock.provider.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "假支付网关，后续所有链路测试靠它跑通全流程而无需真实商户号。断言验签失败抛 SignatureError（不是普通 Error——上层据此返 403 而非 400）、getProvider 未知名抛错绝不返 undefined（否则调用方静默走空实现）、以及 production 环境不注册 mock（需 vi.resetModules 重新 import 才能验到模块级代码，否则这条断言是假的）。"
+
+  - id: payment-provider-registry
+    path: apps/api/tests/services/payment/provider-registry.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "provider 注册表的 fail-open 守卫：env 不齐 = 本来就没配支付，静默不注册；env 齐了但证书文件读不出/JSON 解析失败 = 配置错误，红日志 + 进 providerInitErrors 但**不让进程退出**（支付只是子功能，其它业务线不该因它全站不可用）。另断言错误信息只含路径与错误类型名、绝不含 err.message 原文——JSON.parse 的 SyntaxError 会回显文件开头的 -----BEGIN，那是私钥。"
+
+  - id: payment-wechat-native-provider
+    path: apps/api/tests/services/payment/wechat-native.provider.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "微信支付 APIv3 验签与回调解密。用 generateKeyPairSync 自签自验，无需真实商户号。断言签名篡改/body 篡改/未知平台证书序列号/缺签名头/时间戳超 5 分钟窗（防重放）一律抛 SignatureError，以及 AEAD-GCM 解密路径（生产 100% 走这条，associated_data 固定为 transaction）——含 AAD 不匹配与 authTag 篡改必须抛错。注意自签自验对待签串格式错误免疫（少个换行也能自己验自己过），格式正确性靠对照官方规范人工核对，不靠本测试。"
+
+  - id: payment-alipay-f2f-provider
+    path: apps/api/tests/services/payment/alipay-f2f.provider.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "支付宝当面付验签。回调是 form-urlencoded 不是 JSON，待签串为除 sign/sign_type 外按 key 字典序拼的未转义原始值。断言参数篡改、app_id 不符、seller_id 不符（防同 appid 下收款账号被改配）均抛 SignatureError，以及 trade_status 白名单映射（TRADE_SUCCESS/FINISHED→paid、有 refund_fee→refunded、TRADE_CLOSED 无退款→closed，不能把超时关闭当已付）。另断言 precreate 传了 timeout_express——不传则平台侧码永不过期，商家过 30 分钟后付款会撞上本地已标 expired 的订单，钱进了积分永不到账。"
+
+  - id: payment-settlement-service
+    path: apps/api/tests/services/payment/settlement.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "入账核心——真金白银在这里变成积分。断言以 provider.queryOrder() 为权威而非回调内容（只信回调=伪造回调即可骗出积分）、CAS 未命中不入账且补读真实状态后才分类（只有 status=credited 才叫 already_credited，其余返 not_settlable 并告警，否则会向前台谎报成功）、金额不符与查单未返金额都 fail-closed 不入账、退款只标 refund_pending 绝不自动扣回积分（会撞 balance>=0 的 CHECK）、入账抛错必须 ROLLBACK 并上抛让调用方返 5xx。最要紧的一条：入账必须用 CAS 所在的同一个 client（expect(passedClient).toBe(client)）——用自带事务的 recharge() 会退化成两个独立事务，入账已提交而订单回滚时重复回调会再次加积分。"
+
+  - id: payment-orders-service
+    path: apps/api/tests/services/payment/orders.service.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "建单、复用与过期兜底。断言金额与积分数只认服务端档位表（未知档位抛 InvalidTierError，绝不采信客户端传的金额）、同租户同档未过期 pending 单直接复用不重复下单（防连点/多 tab）、平台下单失败标 create_failed 且原始错误上抛不留死单、两处 CAS 都检查 rowCount。过期兜底的关键断言：**先向平台查单再决定是否标过期**——回调丢失是已知常态，直接按时间标过期会把已付款订单判死；credited/already_credited/credit_conflict 三种 outcome 都意味着积分确已入账，绝不能再标 expired。"
+
+  - id: payment-monitor
+    path: apps/api/tests/services/payment/payment-monitor.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "兜底巡检的发条。没有它 expireStaleOrders 永远不会被调用，回调一丢订单就永远卡在 pending——商家钱付了、积分不到账、没人发现。断言定时触发、重复调用幂等、单次 tick 抛错不让定时器停摆、以及 ticking 重入闸（单 tick 串行处理最多 200 单且每单一次跨境 fetch，无闸会 tick 叠加）。积压告警断言：笔数>50 或最老一笔>2h 触发，走 FEISHU_ALERT_WEBHOOK 真发飞书（只打 console.error 等于没人看到），且用进程内 Map 去重——积压是持续状态，不去重会每 5 分钟刷一条。"
+
+  - id: credits-recharge-idempotent
+    path: apps/api/tests/services/credits-recharge-idempotent.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "recharge() 的幂等参数。微信支付会重复投递回调直到收到成功响应，没有幂等键就是同一笔钱重复加积分。断言传 orderId 时写入 credit_transactions.order_id、命中该列唯一索引（23505 且 constraint 匹配）时抛 DuplicateCreditError 且已 ROLLBACK、以及不传 orderId 时行为与改动前完全一致（向后兼容，既有调用方零感知）。"
+
+  - id: credits-recharge-in-tx
+    path: apps/api/tests/services/credits-recharge-in-tx.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "rechargeInTx 是为「订单状态 CAS 与入账必须原子」而拆出来的事务内版本。断言它只用传入的 client、函数体内不发 BEGIN/COMMIT/ROLLBACK（事务归调用方掌控）、23505 抛 DuplicateCreditError 但不自行回滚，以及 recharge() 作为薄包装仍自管事务、对外签名与错误类型不变。若有人把实现退回旧写法（内部自己 connect+BEGIN），这些断言会真实捕获到。"
+
+  - id: startup-check-payment
+    path: apps/api/tests/startup-check-payment.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "支付凭据的启动自检，让配置错误在启动时暴露而不是等真实回调打进来才发现。checkRequiredFiles 断言四态：文件不存在/为空/不是合法私钥各自报出具体缺失项，未配置该 env 则正确跳过（不配支付不该报错）；错误信息不含文件内容原文。checkPaymentEnvSanity 断言非 production 环境用了生产商户号则拒绝启动（真实资金风险，这是全仓唯一因支付配置 exit 的地方），以及 denylist 未配时打 WARN 让「这道闸没生效」本身可见。"
+
+  - id: payment-callback-route
+    path: apps/api/tests/routes/payment-callback.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "支付回调是整条链路唯一对公网开放且无身份鉴权的入口，验签就是它的鉴权。断言验签失败返 403 且**不落库不结算**、重复投递返 200 不重复结算、退款只走 markRefundPending 不走 settleOrder、未知 provider 返 404 不抛未捕获异常、审计行带上订单与租户归属（对不上订单的伪造/乱序回调仍留痕，两列为 null）。outcome→HTTP 映射逐个覆盖：六种业务结论一律 200（重试解决不了已得出结论的事），**只有己方异常才 5xx**——DB 断连时返 200 等于告诉平台已处理，那笔钱就永久丢了。"
+
+  - id: app-mount-order
+    path: apps/api/tests/routes/app-mount-order.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "守住一条会导致真实验签 100% 失败的挂载顺序：支付回调路由必须挂在全局 express.json() 之前并用 express.raw，因为 APIv3 验签基于原始字节，body 被 json 中间件解析后原始串无法还原。断言用 'app.use(express.json(' 精确匹配而非裸 'express.json('——后者会先撞上 better-auth 那段注释里的同名文本，比对到注释位置而不是真实挂载位置。"
+
+  - id: credits-orders-route
+    path: apps/api/tests/routes/credits-orders.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "商家自助下单端点。断言 tenantContext → 仅 owner/admin（涉及花钱）→ 按租户限流的中间件链，档位非法返 400、未知 provider 返 400（客户端传错参数不是网关故障，不该报 502）、下单失败只回友好文案不泄漏后端错误码，以及主动查单端点与回调共用同一条结算路径（天然幂等）。"
+
+  - id: competitor-research-credit
+    path: apps/api/tests/routes/competitor-research-credit.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "积分消费的唯一真实接入点（对标分析 10 分/次）。除源码断言中间件挂载顺序外（charger 读 req.tenantId，必须在 tenantContext 之后否则 500），更要紧的是行为断言：余额充足时 consume 被以正确参数调用且请求走到 handler；余额不足时返 402 **且请求没有到达 handler**（用 jobId 为 undefined + 子进程 spawn 未被调用双重锁定）——钱没扣成，事就不能办。"
+
+  - id: auth-bridge-initial-grant
+    path: apps/api/tests/auth-bridge-initial-grant.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "注册赠送 100 积分。这条产品决策 2026-04-29 就写在 migration 注释里，但生产代码从未真正调用过——initial_grant 至今只存在于测试 mock 和注释里，新租户的 tenant_credits 连行都没有。本测试断言它真的接上了线，且赠送失败不阻断注册（try/catch + 带 tenant_id 的 error 日志，用户仍能登录，余额由运营补发）。"
+
+  - id: credits-nav
+    path: apps/dashboard/src/config/__tests__/credits-nav.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "新页三件套缺一不可（本仓库铁律）：navigation.config.ts 菜单项 + 路由表 + InstanceContext features 映射。漏掉第三处时菜单会**静默不显示且无任何报错**，是最难排查的一类。三条断言都用精确匹配（菜单项锚定 path 后要求 featureKey、路由表用完整对象字面量、features 行精确匹配），删任意一处都会红。"
+
+  - id: credits-page
+    path: apps/dashboard/src/pages/__tests__/CreditsPage.test.tsx
+    type: unit
+    ci: L3
+    status: active
+    product: 中台认证
+    note: "商家唯一看得见的那部分。断言余额展示、选档位下单出二维码（用 qrcode.react 本地渲染——绝不能把微信 code_url 发给第三方图片服务）、点「我已支付」触发主动查单、到账后刷新余额、下单失败显示可重试文案。关键三条：credited/already_credited/credit_conflict 三者都视为已到账（credit_conflict 是账实分叉自愈，漏认会让商家看到「未完成」而钱已扣）；not_settlable 绝不能当成功；倒计时归零后停止轮询并退回选档位，不自动重新下单。"
