@@ -642,11 +642,13 @@ done
 #  die 会误伤真·无声视频,打点则让新机型翻车当场可见。)
 _RSTOP_BODY="$(sed -n '/^record_stop()/,/^}/p' "$C")"
 grep -q 'mean_volume_db=' <<< "$_RSTOP_BODY" || fail "record_stop 的输出行没有 mean_volume_db 打点(新机型录到死寂会静默通过)"
-grep -q 'volumedetect' <<< "$_RSTOP_BODY" || fail "record_stop 没有用 ffmpeg volumedetect 实测电平"
-# 同 ensure_media_volume 那个坑: set -euo pipefail 下函数内命令替换失败会打死整个进程
-_MDB_RAW="$(grep -cE 'mean_db="\$\([^)]*volumedetect' <<< "$_RSTOP_BODY" || true)"
-_MDB_SAFE="$(grep -c '|| true)"' <<< "$_RSTOP_BODY" || true)"
-[[ "$_MDB_SAFE" -ge 1 ]] || fail "record_stop 里算电平的命令替换没带 || true(ffmpeg 一失败就打死整个控制器,连录制结果都拿不到)"
+# 下面两条必须锚定到 mean_db 赋值语句本身,不能在整个函数体里 grep——
+# 0924 自查实锤: 在函数体里 grep 'volumedetect' 会命中注释里的这个词、
+# grep '|| true' 会命中 record_stop 原有的 ffprobe 行,两条守卫双双假绿。
+_MDB_STMT="$(awk '/mean_db="\$\(/{f=1} f{print; if (!/\\$/) exit}' <<< "$_RSTOP_BODY")"
+[[ -n "$_MDB_STMT" ]] || fail "record_stop 找不到 mean_db=\"\$(...)\" 赋值语句(电平不是实测出来的?)"
+grep -q 'volumedetect' <<< "$_MDB_STMT" || fail "mean_db 不是用 ffmpeg volumedetect 实测的(写死值=假打点,新机型翻车照样看不见)"
+grep -q '|| true' <<< "$_MDB_STMT" || fail "mean_db 的命令替换没带 || true(set -e 下 ffmpeg 一失败就打死整个控制器,连 record_stopped 都发不出去)"
 # 打点不进日志 = 等于没打
 grep -q 'mean_volume_db' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 没把 mean_volume_db 写进采收日志(打点没人看得见,等于没做)"
 
