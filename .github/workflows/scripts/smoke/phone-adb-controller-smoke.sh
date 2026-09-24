@@ -406,8 +406,24 @@ _CALL_PATH=$(grep -ohE '[~$][^ ]*/douyin-phone-adb' "$D/harvest-keyword.sh" 2>/d
 if [[ -n "$_CALL_PATH" ]]; then
   # 调用方用的目录（去掉文件名），必须出现在 deploy.sh 的下发目标里
   _CALL_DIR="${_CALL_PATH%/douyin-phone-adb}"
-  grep -qF "$_CALL_DIR/" "$D/deploy.sh" \
-    || fail "deploy.sh 没往 $_CALL_DIR/ 下发 douyin-phone-adb —— 但 harvest-keyword.sh 调的就是它（下发到别处=夜批永远跑旧版）"
+  # 只 grep 路径字符串拦不住「if 条件被改成恒假」——字符串照样躺在文件里。
+  # 所以这里**真跑一遍 deploy.sh**：把 scp/ssh 打桩成只记账不出网，
+  # 看它实际往哪些目标送 douyin-phone-adb。查的是行为，不是措辞。
+  _STUB=$(mktemp -d)
+  printf '#!/bin/sh\nfor a; do printf "%%s\\n" "$a"; done >> "%s/scp.log"\nexit 0\n' "$_STUB" > "$_STUB/scp"
+  printf '#!/bin/sh\nexit 0\n' > "$_STUB/ssh"
+  chmod +x "$_STUB/scp" "$_STUB/ssh"
+  if ! PATH="$_STUB:$PATH" bash "$D/deploy.sh" >/dev/null 2>&1; then
+    rm -rf "$_STUB"
+    fail "deploy.sh 打桩空跑都没跑通(scp/ssh 已打桩不出网,失败=脚本本身坏了)"
+  fi
+  for _h in xian-m4 xian-m1; do
+    if ! grep -qx "$_h:${_CALL_DIR}/douyin-phone-adb" "$_STUB/scp.log"; then
+      rm -rf "$_STUB"
+      fail "deploy.sh 空跑后没往 $_h:${_CALL_DIR}/ 送 douyin-phone-adb —— 夜批调的就是这个路径(harvest-keyword.sh 里写死 ${_CALL_PATH}),下发到别处=手机上永远跑旧版"
+    fi
+  done
+  rm -rf "$_STUB"
 fi
 
 grep -qF 'normalize_nickname' "$D/douyin-phone-adb" \
