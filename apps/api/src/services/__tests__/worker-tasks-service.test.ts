@@ -106,10 +106,11 @@ describe('reportStep', () => {
   });
 });
 
-import { createMirrorJob, attachMirrorJob } from '../brain-device-job-mirror';
+import { createMirrorJob, attachMirrorJob, completeMirrorJob } from '../brain-device-job-mirror';
 vi.mock('../brain-device-job-mirror', () => ({
   createMirrorJob: vi.fn(async () => 'brain-1'),
   attachMirrorJob: vi.fn(async () => undefined),
+  completeMirrorJob: vi.fn(async () => undefined),
 }));
 
 describe('startTask 桥接 Brain', () => {
@@ -168,5 +169,56 @@ describe('startTask 桥接 Brain', () => {
     // 同上：桥接没接进来时"不抛错"天然成立。要先证明它**确实调用了会抛错的那条路**，
     // 这条"抛错也不失败"才有意义。
     expect(createMirrorJob).toHaveBeenCalled();
+  });
+});
+
+describe('completeTask 回写 Brain', () => {
+  it('收尾时按 evidence.brain_task_id 回写 Brain 状态', async () => {
+    (pool as any).query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ id: 'wt-1', tenant_id: 't1', status: 'running', executor_id: 'adb-wall', steps_total: 3, evidence: { brain_task_id: 'brain-1' } }] })
+      .mockResolvedValue({ rows: [] });
+    await completeTask('wt-1', { outcome: 'completed', executor_id: 'adb-wall' });
+    expect(completeMirrorJob).toHaveBeenCalledWith('brain-1', 'completed', expect.anything());
+  });
+
+  it('UPDATE 不能整体覆盖 evidence —— 会把 brain_task_id 抹掉，下次 sweep 就找不到它了', async () => {
+    (pool as any).query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ id: 'wt-1', tenant_id: 't1', status: 'running', executor_id: 'adb-wall', steps_total: 3, evidence: { brain_task_id: 'brain-1' } }] })
+      .mockResolvedValue({ rows: [] });
+    await completeTask('wt-1', { outcome: 'completed', executor_id: 'adb-wall', evidence: { leads: 19 } });
+    const updateCall = (pool as any).query.mock.calls.find((c: any[]) => /UPDATE zenithjoy\.worker_tasks/.test(c[0]));
+    expect(updateCall[0]).toMatch(/evidence\s*=\s*COALESCE\(evidence/i);
+  });
+
+  it('没有 brain_task_id 时不报错，静默跳过', async () => {
+    (pool as any).query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ id: 'wt-9', tenant_id: 't1', status: 'running', executor_id: 'adb-wall', steps_total: 1, evidence: null }] })
+      .mockResolvedValue({ rows: [] });
+    await expect(completeTask('wt-9', { outcome: 'completed', executor_id: 'adb-wall' })).resolves.toEqual({ ok: true });
+    // 光断言"不报错"是假绿：老实现天然满足。必须同时证明它确实判断了没有 brain_task_id 就不去调 Brain。
+    expect(completeMirrorJob).not.toHaveBeenCalled();
+  });
+});
+
+describe('sweepExpiredLeases 同步 Brain', () => {
+  // 注：计划原文把这组用例挂在 worker-lease-sweeper.test.ts，但该文件整体
+  // vi.mock('../worker-tasks-service')（把 sweepExpiredLeases 换成空壳 mock，专测定时器包装层），
+  // 挂在那会让这里断言的"真实现"从未被调用，用例恒假绿/恒失败两难。
+  // sweepExpiredLeases 的真实现单测本就在本文件（见上面 describe('sweepExpiredLeases')），
+  // 这组新增延续同一处。
+  it('执行器丢失时把 Brain 单也置 failed —— 否则 Brain 侧永远 in_progress，还占住 dedup 槽位挡住后续建单', async () => {
+    (pool as any).query = vi.fn(async () => ({
+      rowCount: 1,
+      rows: [{ id: 'wt-1', evidence: { brain_task_id: 'brain-1' } }],
+    }));
+    await sweepExpiredLeases();
+    expect(completeMirrorJob).toHaveBeenCalledWith('brain-1', 'failed', expect.objectContaining({ error_code: 'executor_lost' }));
+  });
+
+  it('没关联 Brain 单的行跳过，不报错', async () => {
+    (pool as any).query = vi.fn(async () => ({ rowCount: 1, rows: [{ id: 'wt-2', evidence: null }] }));
+    await expect(sweepExpiredLeases()).resolves.toBe(1);
+    // 同上：光看 resolves.toBe(1) 老实现也满足，必须证明它确实检查过 evidence 且判断为空跳过。
+    expect(completeMirrorJob).not.toHaveBeenCalled();
   });
 });
