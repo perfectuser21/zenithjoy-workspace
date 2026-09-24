@@ -407,8 +407,11 @@ fi
 # 真跑一遍 zsh 归一函数：静态 grep 抓不住"写了但不生效"（第一版转义写错、去空白用了
 # 需要 extendedglob 的写法，两处都是 grep 全绿、真跑才露馅）
 if command -v zsh >/dev/null 2>&1; then
-  _NICK_OUT=$(zsh -c '
-    eval "$(awk "/^normalize_nickname\(\) \{/,/^\}/" '"$D"'/douyin-phone-adb)"
+  # ⚠️ 用 env -i 剥光环境跑：locale 缺失时 zsh 的 ${(#)n} 按单字节处理，
+  #    码点会被静默截成错的字符（本机有 LANG 看不出来，CI runner 没有就中招——
+  #    实测空环境出「小辣椒6」而非「小辣椒🌶」）。守卫必须在**最差环境**下验。
+  _NICK_OUT=$(env -i PATH=/usr/bin:/bin zsh -c '
+    eval "$(awk "/^normalize_nickname\(\) \{/,/^\}/" '"$PWD/$D"'/douyin-phone-adb)"
     print -n -- "$(normalize_nickname "小辣椒&#127798;️")|$(normalize_nickname "  峥嵘岁月  ")"
   ' 2>/dev/null)
   [[ "$_NICK_OUT" == "小辣椒🌶|峥嵘岁月" ]] \

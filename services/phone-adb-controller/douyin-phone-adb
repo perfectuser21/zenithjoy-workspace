@@ -1197,30 +1197,64 @@ account_registry_row() {
 # 这道检查防的是把 A 的评论配上 B 的抖音号——从「误杀」滑到「误认」，
 # 后果是把私信发给陌生人，比原 bug 危险得多。
 normalize_nickname() {
-  local raw tmp out
+  local raw out rest before body cp
+  # ⚠️ 必须显式 UTF-8：没有 LANG 时 zsh 的 ${(#)n} 按单字节处理，
+  # 码点 127798 会被截成字符 "6" —— **不是解不出，是静默解成错的字符**。
+  # 本机有 LANG=en_US.UTF-8 所以看不出来，CI runner 没有 locale 就中招
+  # （复刻 `env -i PATH=/usr/bin:/bin` 实测：完整环境出「小辣椒🌶」，空环境出「小辣椒6」）。
+  local LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
   raw="$1"
   [[ -n "$raw" ]] || { print -n -- ""; return 0; }
-  # 已经不含实体就只做 trim + 去变体选择符，省一次进程
-  if [[ "$raw" != *"&#"* && "$raw" != *"&amp;"* && "$raw" != *"&lt;"* && "$raw" != *"&gt;"* && "$raw" != *"&quot;"* && "$raw" != *"&apos;"* ]]; then
-    out="$raw"
-  else
-    tmp="$(/usr/bin/mktemp -t nicknorm)" || { print -n -- "$raw"; return 0; }
-    # ⚠️ 只转义 " —— **不能**把 & 转成 &amp;：那会让 &#127798; 变成 &amp;#127798;，
-    # xmllint 解出来正好还原成字面 "&#127798;"，等于什么都没做（第一版就这么写的，
-    # 拿真机样本一跑当场露馅）。& 必须原样留给 xmllint 去解实体。
-    # 代价是裸 & 会让 XML 不合法 → xmllint 返回空 → 下面退回原串，行为跟改之前一样。
-    printf '<r a="%s"/>' "${raw//\"/&quot;}" > "$tmp" 2>/dev/null
-    out="$(/usr/bin/xmllint --xpath 'string(/r/@a)' "$tmp" 2>/dev/null)"
-    /bin/rm -f "$tmp"
-    # 解不出来（拼出的 XML 不合法等）就退回原串，绝不吞成空——
-    # 空会让下面的比对恒不等，等于把人全放弃掉
-    [[ -n "$out" ]] || out="$raw"
-  fi
-  # 去首尾空白 + 去变体选择符（U+FE0E/U+FE0F 只管 emoji 显示成彩色还是黑白）
-  # 去首尾空白。zsh 的 ${var##[[:space:]]##} 要 extendedglob 才认（本脚本没开），
-  # 第一版这么写实测没生效——改用不依赖 setopt 的循环。
+  out=""
+  rest="$raw"
+  # 纯 zsh 解 XML 字符实体，**不依赖 xmllint**：
+  # 第一版用 xmllint（macOS 自带 /usr/bin/xmllint），CI 的 ubuntu runner 上没有，
+  # 解不出就退回原串 → 归一化静默失效，smoke 真跑当场抓出
+  # 「实得[小辣椒&#127798;️] 期望[小辣椒🌶]」。真机只跑 macOS，但归一这种纯文本
+  # 计算不该依赖任何可能缺席的外部命令——本脚本一贯只用 /usr/bin 下系统命令，
+  # 这里连那个都不用。
+  while [[ "$rest" == *"&"*";"* ]]; do
+    before="${rest%%&*}"          # & 之前的部分
+    rest="${rest#*&}"             # & 之后
+    body="${rest%%;*}"            # 到 ; 为止
+    if [[ "$rest" != *";"* || -z "$body" || "$body" == *"&"* ]]; then
+      # 没有配对的 ; 或中间又冒出 & —— 不是实体，原样留着
+      out+="$before&"
+      continue
+    fi
+    cp=""
+    # ⚠️ 不用 case 的 [0-9]## 量词：那要 extendedglob，本脚本没开（第一版这么写，
+    #    数字实体一个都匹配不上，真跑当场露馅——跟去空白那处是同一个坑）。
+    #    改用不依赖 setopt 的判断。
+    case "$body" in
+      amp)  out+="$before&";   rest="${rest#*;}"; continue ;;
+      lt)   out+="$before<";   rest="${rest#*;}"; continue ;;
+      gt)   out+="$before>";   rest="${rest#*;}"; continue ;;
+      quot) out+="$before\"";  rest="${rest#*;}"; continue ;;
+      apos) out+="$before'";   rest="${rest#*;}"; continue ;;
+    esac
+    if [[ "$body" == '#'[xX]* ]]; then
+      # 十六进制：#x1F335
+      [[ -z "${body:2}" || -n "${${body:2}//[0-9a-fA-F]/}" ]] || cp=$(( 16#${body:2} ))
+    elif [[ "$body" == '#'* ]]; then
+      # 十进制：#127798
+      [[ -z "${body:1}" || -n "${${body:1}//[0-9]/}" ]] || cp=$(( ${body:1} ))
+    fi
+    if [[ -z "$cp" ]]; then
+      out+="$before&"; continue   # 认不出的，原样留
+    fi
+    if [[ -n "$cp" ]] && (( cp > 0 && cp <= 0x10FFFF )); then
+      out+="$before${(#)cp}"      # zsh 的 ${(#)n} = 码点转字符
+      rest="${rest#*;}"
+    else
+      out+="$before&"
+    fi
+  done
+  out+="$rest"
+  # 去首尾空白（不用 ${var##[[:space:]]##}：那要 extendedglob，本脚本没开，实测不生效）
   while [[ "$out" == [[:space:]]* ]]; do out="${out#?}"; done
   while [[ "$out" == *[[:space:]] ]]; do out="${out%?}"; done
+  # 去变体选择符（U+FE0E/U+FE0F 只管 emoji 显示成彩色还是黑白，不是另一个人）
   print -n -- "${out//[$'\uFE0E'$'\uFE0F']/}"
 }
 
