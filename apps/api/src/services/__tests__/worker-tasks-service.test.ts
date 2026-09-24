@@ -105,3 +105,61 @@ describe('reportStep', () => {
     expect((pool.query as any).mock.calls).toHaveLength(3);
   });
 });
+
+import { createMirrorJob } from '../brain-device-job-mirror';
+vi.mock('../brain-device-job-mirror', () => ({
+  createMirrorJob: vi.fn(async () => 'brain-1'),
+  attachMirrorJob: vi.fn(async () => undefined),
+}));
+
+describe('startTask 桥接 Brain', () => {
+  it('cron 自发的活会在 Brain 建单', async () => {
+    // pool.connect 返回的 client 依次响应 BEGIN/agents/INSERT/steps/COMMIT
+    const client = {
+      query: vi.fn()
+        .mockResolvedValueOnce({})                                            // BEGIN
+        .mockResolvedValueOnce({ rows: [{ id: 'a1', tenant_id: 't1' }] })      // agents
+        .mockResolvedValueOnce({ rows: [{ id: 'wt-1', lease_until: 'L' }] })   // INSERT worker_tasks
+        .mockResolvedValue({}),
+      release: vi.fn(),
+    };
+    (pool as any).connect = vi.fn(async () => client);
+    (pool as any).query = vi.fn(async () => ({ rows: [{ agent_id: 'phone-S123' }] }));
+
+    await startTask({ agentId: 'a1', title: '获客采收·X', steps: ['s1'], executorId: 'adb-wall' });
+    expect(createMirrorJob).toHaveBeenCalled();
+  });
+
+  it('领单器领 Brain 单产生的活走关联，不重复建单（否则每条真派单都镜像一条，页面重复计数）', async () => {
+    const client = {
+      query: vi.fn()
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({ rows: [{ id: 'a1', tenant_id: 't1' }] })
+        .mockResolvedValueOnce({ rows: [{ id: 'wt-2', lease_until: 'L' }] })
+        .mockResolvedValue({}),
+      release: vi.fn(),
+    };
+    (pool as any).connect = vi.fn(async () => client);
+    (pool as any).query = vi.fn(async () => ({ rows: [{ agent_id: 'phone-S123' }] }));
+
+    await startTask({ agentId: 'a1', title: '[派活演示] 小蓝', steps: ['s1'], executorId: 'adb-wall', brainJobId: 'brain-existing' });
+    expect(createMirrorJob).not.toHaveBeenCalled();
+  });
+
+  it('Brain 建单抛错也不能让 startTask 失败 —— 采收是正事', async () => {
+    (createMirrorJob as any).mockRejectedValueOnce(new Error('boom'));
+    const client = {
+      query: vi.fn()
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({ rows: [{ id: 'a1', tenant_id: 't1' }] })
+        .mockResolvedValueOnce({ rows: [{ id: 'wt-3', lease_until: 'L' }] })
+        .mockResolvedValue({}),
+      release: vi.fn(),
+    };
+    (pool as any).connect = vi.fn(async () => client);
+    (pool as any).query = vi.fn(async () => ({ rows: [{ agent_id: 'phone-S123' }] }));
+
+    await expect(startTask({ agentId: 'a1', title: 'X', steps: ['s'], executorId: 'adb-wall' }))
+      .resolves.toMatchObject({ task_id: 'wt-3' });
+  });
+});
