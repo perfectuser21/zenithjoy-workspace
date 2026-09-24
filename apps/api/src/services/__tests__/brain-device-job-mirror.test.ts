@@ -56,3 +56,57 @@ describe('buildMirrorPayload', () => {
     expect(p.idempotency_key).toBe('wt-1');
   });
 });
+
+import { vi } from 'vitest';
+vi.mock('../../db/brain-pool', () => ({ getBrainPool: vi.fn() }));
+vi.mock('../../db/connection', () => ({ default: { query: vi.fn() } }));
+import { getBrainPool } from '../../db/brain-pool';
+import localPool from '../../db/connection';
+import { createMirrorJob } from '../brain-device-job-mirror';
+
+describe('createMirrorJob', () => {
+  const args = {
+    workerTaskId: 'wt-1', agentId: 'agent-uuid-1', serial: 'ANGYVB4227006983',
+    title: '获客采收·AI人工智能训练师', startedAt: '2026-09-24T14:30:00Z',
+  };
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('建单成功时返回 brain task id', async () => {
+    (getBrainPool as any).mockReturnValue({ query: vi.fn(async () => ({ rows: [{ id: 'brain-1' }] })) });
+    expect(await createMirrorJob(args)).toBe('brain-1');
+  });
+
+  it('due_at 必须传值 —— 传 NULL 页面会渲染成 1970-01-01', async () => {
+    const q = vi.fn(async () => ({ rows: [{ id: 'brain-1' }] }));
+    (getBrainPool as any).mockReturnValue({ query: q });
+    await createMirrorJob(args);
+    const params = q.mock.calls[0][1] as unknown[];
+    expect(params).toContain(args.startedAt);
+    expect(params.some((p) => p === null)).toBe(false);
+  });
+
+  it('trigger_source 不能用库默认的 brain_auto —— 会被 Brain escalation 静默 paused', async () => {
+    const q = vi.fn(async () => ({ rows: [{ id: 'brain-1' }] }));
+    (getBrainPool as any).mockReturnValue({ query: q });
+    await createMirrorJob(args);
+    expect((q.mock.calls[0][1] as unknown[])).toContain('cron');
+    expect((q.mock.calls[0][1] as unknown[])).not.toContain('brain_auto');
+  });
+
+  it('Brain 没配时不崩，落 outbox 返回 null', async () => {
+    (getBrainPool as any).mockReturnValue(null);
+    expect(await createMirrorJob(args)).toBeNull();
+    expect((localPool as any).query).toHaveBeenCalledWith(
+      expect.stringContaining('brain_sync_outbox'), expect.anything(),
+    );
+  });
+
+  it('Brain 写失败时吞掉异常并落 outbox —— 记账绝不能阻断采收', async () => {
+    (getBrainPool as any).mockReturnValue({ query: vi.fn(async () => { throw new Error('ECONNREFUSED'); }) });
+    await expect(createMirrorJob(args)).resolves.toBeNull();
+    expect((localPool as any).query).toHaveBeenCalledWith(
+      expect.stringContaining('brain_sync_outbox'), expect.anything(),
+    );
+  });
+});
