@@ -63,13 +63,18 @@ workersExecutorRouter.post('/tasks/:id/complete', requireTaskUuid, async (req: R
 });
 
 workersExecutorRouter.post('/:agentId/tasks', requireAgentUuid, async (req: Request, res: Response) => {
-  const { title, steps, executor_id } = req.body ?? {};
+  const { title, steps, executor_id, brain_job_id } = req.body ?? {};
   if (typeof title !== 'string' || !title || !Array.isArray(steps) || steps.length === 0
       || !steps.every((s) => typeof s === 'string') || typeof executor_id !== 'string' || !executor_id) {
     return res.status(400).json(ERR('INVALID_TASK', 'title、steps[string]、executor_id 必填'));
   }
   try {
-    const r = await startTask({ agentId: req.params.agentId, title, steps, executorId: executor_id });
+    const r = await startTask({
+      agentId: req.params.agentId, title, steps, executorId: executor_id,
+      // 领单器带它上来时走"关联已有 Brain 单"，不再镜像新建。
+      // 老版本 wall-report 不传 → undefined → 走新建分支，向后兼容（分发滞后不会炸）。
+      brainJobId: typeof brain_job_id === 'string' && brain_job_id ? brain_job_id : undefined,
+    });
     return res.status(201).json(OK(r));
   } catch (e) { return sendErr(res, e, 'tasks'); }
 });

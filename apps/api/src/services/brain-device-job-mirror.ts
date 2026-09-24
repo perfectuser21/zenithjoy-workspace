@@ -111,3 +111,19 @@ export async function createMirrorJob(a: {
     return null;
   }
 }
+
+/** 把 brain task id 记进 worker_tasks.evidence。用 jsonb 合并而非覆盖 —— completeTask
+ *  的 `evidence = $5` 是整体覆盖，直接写会被后续收尾抹掉。 */
+export async function attachMirrorJob(workerTaskId: string, brainTaskId: string): Promise<void> {
+  try {
+    await localPool.query(
+      `UPDATE zenithjoy.worker_tasks
+          SET evidence = COALESCE(evidence, '{}'::jsonb) || jsonb_build_object('brain_task_id', $2::text),
+              updated_at = NOW()
+        WHERE id = $1`,
+      [workerTaskId, brainTaskId],
+    );
+  } catch (e) {
+    console.error('[brain-mirror] 关联 brain_task_id 失败:', e);
+  }
+}
