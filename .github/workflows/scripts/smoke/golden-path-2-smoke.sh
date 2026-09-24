@@ -2017,6 +2017,54 @@ grep -qE 'update-keyword-stats\.js .\$\{BIZ\}.' "$_GP2_HC" \
   || fail "Step 39 夜批调效果回写没带业务线：不传=当晚抛未配路由；老写法则是把悦升的批次静默回写进金诺表" 39
 ok "Step 39 ✅ 夜批把「这批是谁的活」一路传到了效果回写（不会再写错家，也不会当晚抛路由错）"
 
+# Step 40：认人的时候别被名字的写法绊倒（step3 采集评论者身份的活性闸）
+#
+# 采到评论要知道是谁写的：点头像 → 进主页 → 读抖音号。进去后拿主页昵称跟评论区
+# 那条评论的昵称比，一样才算进对人——防的是把 A 的评论配上 B 的抖音号，
+# 将来会给错的人发私信。
+#
+# 0923 悦升夜批：这一步失败 172 次、37 人重试三轮后被放弃，日志说 nickname mismatch，
+# 但**人根本就进对了**。比对的两边编码不一致：
+#   observed 走 xmllint（会解 XML 字符实体）→ '小辣椒🌶️'
+#   expected 是调用方从 content-desc 原样传入（没解）→ '小辣椒&#127798;️'
+# 那批 801 人里 68 人昵称带实体(8.5%)，每人白跑三轮约 3~4 分钟 ≈ 4 小时；
+# 这批跑了 8.5 小时到早上 7 点，把 03:00 那批整个挤掉（12 词全「锁被占」LEAD=0）。
+#
+# 认不出人 = step3「采集评论者身份」拿不到抖音号，线索就是半成品，所以这是那一步的闸。
+node - <<'NODE' || fail "Step 40 昵称比对被编码写法绊倒" 40
+const { sameNickname } = require('./services/phone-adb-controller/nickname-match-lib.js');
+
+// ① 真机原样：实体形式 vs 已解码形式，必须认成同一个人
+if (!sameNickname('小辣椒&#127798;️', '小辣椒🌶️')) process.exit(1);
+if (!sameNickname('陈骆猪&#128055;&#128055;', '陈骆猪🐷🐷')) process.exit(1);
+if (!sameNickname('仙人掌&#x1F335;', '仙人掌🌵')) process.exit(1);
+
+// ② 绝不能认同的 —— 归一化过头会从「误杀」滑到「误认」：
+//    把私信发给陌生人，比原 bug 危险得多
+if (sameNickname('小辣椒🌶️', '大蒜头🧄')) process.exit(1);
+if (sameNickname('叫我二姐姐', '叫我二姐')) process.exit(1);
+if (sameNickname('辣条&#127798;', '辣条&#128055;')) process.exit(1);
+
+// ③ 空昵称永远不算匹配：读不到就是读不到，当成功等于放弃了这道检查
+if (sameNickname('', '')) process.exit(1);
+if (sameNickname('', '小辣椒🌶️')) process.exit(1);
+NODE
+
+# 真机脚本侧（zsh）必须做同样的归一，且**真跑一遍**——
+# 静态 grep 抓不住"写了但不生效"：第一版转义写错（& 转成 &amp; 后 xmllint 又还原成
+# 字面，等于没做）、去空白用了要 extendedglob 才认的写法，两处都是 grep 全绿真跑才露馅。
+if command -v zsh >/dev/null 2>&1; then
+  _GP2_NICK=$(zsh -c '
+    eval "$(awk "/^normalize_nickname\(\) \{/,/^\}/" services/phone-adb-controller/douyin-phone-adb)"
+    print -n -- "$(normalize_nickname "小辣椒&#127798;️")"
+  ' 2>/dev/null)
+  [[ "$_GP2_NICK" == "小辣椒🌶" ]] \
+    || fail "Step 40 真机脚本的 normalize_nickname 没生效: 实得[$_GP2_NICK] 期望[小辣椒🌶]" 40
+else
+  echo "  ⏭ 跳过 zsh 侧真跑（runner 无 zsh，由 openclaw-scripts-test 覆盖）"
+fi
+ok "Step 40 ✅ 认人不被名字写法绊倒（实体/已解码算同一人，不同的人仍判不同）"
+
 rm -f "$S1_TMP" "$S1_COOKIES" "$S2_TMP" "$S3_TMP" "$S5_TMP" "$S5B_TMP" "$S6_TMP" "$S7_TMP" "$S8_TMP" "$S9_TMP" \
       "$S10_TMP" "$S10_COOKIES" "$S11_TMP" "$S12_TMP" "$S13_TMP" "$S13_COOKIES" "$S14_TMP" "$S15_TMP" \
       "$S22_TMP" "$S23A_TMP" "$S23A_COOKIES" "$S23B_TMP" "$S24_TMP" \

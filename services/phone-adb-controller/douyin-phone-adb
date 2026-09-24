@@ -1182,6 +1182,86 @@ account_registry_row() {
 # 以稳定的"抖音号："文本节点为锚、取其前一个兄弟 TextView 的文本（该结构不随版本漂移，
 # 而 tqn 这类内部 resource-id 会随抖音升级变化，2026-09 实测漂移为 ttw）。
 # douyin_id 用"抖音号："文本前缀提取（跨版本极稳）。任一为空由调用方按语义判定。
+# 昵称归一：把 XML 字符实体解成真字符，再去掉变体选择符。
+#
+# 0923 悦升夜批实证——比对的两边编码不一致，同一个人被判成两个人：
+#   observed（xmllint 从主页树取 @text）：'小辣椒🌶️'      ← xmllint 会解实体
+#   expected（调用方从评论区 content-desc 原样传入）：'小辣椒&#127798;️'  ← 没解
+# 字面比不等 → die nickname mismatch → 重试三次全一样 → 放弃这个人。
+# 证据：同一人 t2/t3 两次重试主页昵称都读到「小辣椒🌶️」、抖音号都是 87784291536,
+# 每次都进对了每次都判失败。那批 801 人里 68 人昵称带实体(8.5%)，每人白跑
+# 三轮约 3~4 分钟 ≈ 合计 4 小时，这批跑了 8.5 小时把 03:00 那批整个挤掉。
+#
+# 做法：把待归一的串包进一个临时 XML 属性，用**同一个 xmllint** 取出来——
+# 两边就走了完全相同的解码路径，不会再有一边解一边不解。
+# 不引入 node/python：本脚本一贯只用 /usr/bin 下的系统命令（绝对路径，
+# 不靠 PATH），launchd 起时 homebrew 的东西一概找不到（已栽三次）。
+#
+# ⚠️ 只抹平**编码形式**，绝不抹平**人的区别**：emoji 不同就是不同的人。
+# 这道检查防的是把 A 的评论配上 B 的抖音号——从「误杀」滑到「误认」，
+# 后果是把私信发给陌生人，比原 bug 危险得多。
+normalize_nickname() {
+  local raw out rest before body cp
+  # ⚠️ 必须显式 UTF-8：没有 LANG 时 zsh 的 ${(#)n} 按单字节处理，
+  # 码点 127798 会被截成字符 "6" —— **不是解不出，是静默解成错的字符**。
+  # 本机有 LANG=en_US.UTF-8 所以看不出来，CI runner 没有 locale 就中招
+  # （复刻 `env -i PATH=/usr/bin:/bin` 实测：完整环境出「小辣椒🌶」，空环境出「小辣椒6」）。
+  local LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+  raw="$1"
+  [[ -n "$raw" ]] || { print -n -- ""; return 0; }
+  out=""
+  rest="$raw"
+  # 纯 zsh 解 XML 字符实体，**不依赖 xmllint**：
+  # 第一版用 xmllint（macOS 自带 /usr/bin/xmllint），CI 的 ubuntu runner 上没有，
+  # 解不出就退回原串 → 归一化静默失效，smoke 真跑当场抓出
+  # 「实得[小辣椒&#127798;️] 期望[小辣椒🌶]」。真机只跑 macOS，但归一这种纯文本
+  # 计算不该依赖任何可能缺席的外部命令——本脚本一贯只用 /usr/bin 下系统命令，
+  # 这里连那个都不用。
+  while [[ "$rest" == *"&"*";"* ]]; do
+    before="${rest%%&*}"          # & 之前的部分
+    rest="${rest#*&}"             # & 之后
+    body="${rest%%;*}"            # 到 ; 为止
+    if [[ "$rest" != *";"* || -z "$body" || "$body" == *"&"* ]]; then
+      # 没有配对的 ; 或中间又冒出 & —— 不是实体，原样留着
+      out+="$before&"
+      continue
+    fi
+    cp=""
+    # ⚠️ 不用 case 的 [0-9]## 量词：那要 extendedglob，本脚本没开（第一版这么写，
+    #    数字实体一个都匹配不上，真跑当场露馅——跟去空白那处是同一个坑）。
+    #    改用不依赖 setopt 的判断。
+    case "$body" in
+      amp)  out+="$before&";   rest="${rest#*;}"; continue ;;
+      lt)   out+="$before<";   rest="${rest#*;}"; continue ;;
+      gt)   out+="$before>";   rest="${rest#*;}"; continue ;;
+      quot) out+="$before\"";  rest="${rest#*;}"; continue ;;
+      apos) out+="$before'";   rest="${rest#*;}"; continue ;;
+    esac
+    if [[ "$body" == '#'[xX]* ]]; then
+      # 十六进制：#x1F335
+      [[ -z "${body:2}" || -n "${${body:2}//[0-9a-fA-F]/}" ]] || cp=$(( 16#${body:2} ))
+    elif [[ "$body" == '#'* ]]; then
+      # 十进制：#127798
+      [[ -z "${body:1}" || -n "${${body:1}//[0-9]/}" ]] || cp=$(( ${body:1} ))
+    fi
+    if [[ -z "$cp" ]]; then
+      out+="$before&"; continue   # 认不出的，原样留
+    fi
+    if [[ -n "$cp" ]] && (( cp > 0 && cp <= 0x10FFFF )); then
+      out+="$before${(#)cp}"      # zsh 的 ${(#)n} = 码点转字符
+      rest="${rest#*;}"
+    else
+      out+="$before&"
+    fi
+  done
+  out+="$rest"
+  # 去首尾空白（不用 ${var##[[:space:]]##}：那要 extendedglob，本脚本没开，实测不生效）
+  while [[ "$out" == [[:space:]]* ]]; do out="${out#?}"; done
+  while [[ "$out" == *[[:space:]] ]]; do out="${out%?}"; done
+  # 去变体选择符（U+FE0E/U+FE0F 只管 emoji 显示成彩色还是黑白，不是另一个人）
+  print -n -- "${out//[$'\uFE0E'$'\uFE0F']/}"
+}
+
 extract_account_identity() {
   local xml nickname douyin_id
   xml="$1"
@@ -1493,10 +1573,20 @@ read_commenter_identity() {
   # 0913：企业/组织号主页没有「抖音号：」也没有 tqn 昵称节点，两条提取路都空。
   # 第三条确定性回退：树里存在与期望昵称**逐字相等**的文本节点，即昵称已核验
   # （-F 定字面匹配，昵称含正则元字符也安全）。
-  if [[ -z "$observed_nickname" ]] && /usr/bin/grep -qF "text=\"$expected_nickname\"" "$profile_xml"; then
-    observed_nickname="$expected_nickname"
+  # 回退路也要认两种形式：树里可能存实体、也可能存解码后的字符
+  if [[ -z "$observed_nickname" ]]; then
+    if /usr/bin/grep -qF "text=\"$expected_nickname\"" "$profile_xml" \
+       || /usr/bin/grep -qF "text=\"$(normalize_nickname "$expected_nickname")\"" "$profile_xml"; then
+      observed_nickname="$expected_nickname"
+    fi
   fi
-  if [[ "$observed_nickname" != "$expected_nickname" ]]; then
+  # 两边都归一到「解码后」那一侧再比（见 normalize_nickname 的注释）。
+  # 空值不放水：读不到昵称就是读不到，恒判不匹配——企业号读不到的情形
+  # 由上面第三条回退路处理，不在这里开口子。
+  local norm_observed norm_expected
+  norm_observed="$(normalize_nickname "$observed_nickname")"
+  norm_expected="$(normalize_nickname "$expected_nickname")"
+  if [[ -z "$norm_observed" || -z "$norm_expected" || "$norm_observed" != "$norm_expected" ]]; then
     "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1 || true
     die "commenter profile readback did not match the selected comment identity (nickname mismatch)"
   fi

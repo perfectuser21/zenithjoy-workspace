@@ -383,6 +383,42 @@ grep -qF 'tallyFromPool' "$_KS" || fail "有效线索数未走 tallyFromPool"
 if grep -qE 'for \(const r of leads\)' "$_KS"; then fail "还在遍历线索表统计关键词(线索表没有「命中关键词」列,数出来永远是 0)"; fi
 # 自建行的「是否启用」不许写死(悦升那列是单选,写死会把客户下拉框塞满垃圾选项)
 grep -qF 'enabledValueFor' "$_KS" || fail "自建行的「是否启用」仍是写死值"
+
+# 层16(0924): 昵称比对两边编码不一致 → 把进对了的人判成「进错人」
+# 0923 悦升夜批实证：observed 走 xmllint（会解 XML 字符实体），expected 是调用方
+# 从评论区 content-desc 原样传入（没解），同一个人读出两个串：
+#   xmllint: '小辣椒🌶️'   vs   原始: '小辣椒&#127798;️'
+# 字面比不等 → nickname mismatch → 重试三次全一样 → 放弃。证据：同一人 t2/t3
+# 主页昵称都读到「小辣椒🌶️」、抖音号都是 87784291536，每次都进对了每次都判失败。
+# 代价：那批 801 人里 68 人昵称带实体(8.5%)，每人白跑三轮约 3~4 分钟 ≈ 4 小时，
+# 这批跑了 8.5 小时把 03:00 那批整个挤掉（12 词全「锁被占」LEAD=0）。
+_NICK_LIB="$D/nickname-match-lib.js"
+[[ -s "$_NICK_LIB" ]] || fail "nickname-match-lib.js 缺失"
+node --check "$_NICK_LIB" || fail "nickname-match-lib.js 语法错误"
+grep -qF 'normalize_nickname' "$D/douyin-phone-adb" \
+  || fail "douyin-phone-adb 没有 normalize_nickname —— 昵称比对又回到裸字符串比，带 emoji 的人会被全判成进错人"
+# 比对处必须比归一后的值，不能比原始值
+grep -qE 'norm_observed.*!=.*norm_expected|norm_expected.*!=.*norm_observed' "$D/douyin-phone-adb" \
+  || fail "比对处没用归一后的值"
+# ⚠️ 转义 & 会让 &#127798; 变成 &amp;#127798;，xmllint 解出来还原成字面，等于没做
+if grep -qF 'raw//&/&amp;' "$D/douyin-phone-adb"; then
+  fail "normalize_nickname 又把 & 转义了 —— 实体会被还原成字面，归一化等于没做（第一版原样复现）"
+fi
+# 真跑一遍 zsh 归一函数：静态 grep 抓不住"写了但不生效"（第一版转义写错、去空白用了
+# 需要 extendedglob 的写法，两处都是 grep 全绿、真跑才露馅）
+if command -v zsh >/dev/null 2>&1; then
+  # ⚠️ 用 env -i 剥光环境跑：locale 缺失时 zsh 的 ${(#)n} 按单字节处理，
+  #    码点会被静默截成错的字符（本机有 LANG 看不出来，CI runner 没有就中招——
+  #    实测空环境出「小辣椒6」而非「小辣椒🌶」）。守卫必须在**最差环境**下验。
+  _NICK_OUT=$(env -i PATH=/usr/bin:/bin zsh -c '
+    eval "$(awk "/^normalize_nickname\(\) \{/,/^\}/" '"$PWD/$D"'/douyin-phone-adb)"
+    print -n -- "$(normalize_nickname "小辣椒&#127798;️")|$(normalize_nickname "  峥嵘岁月  ")"
+  ' 2>/dev/null)
+  [[ "$_NICK_OUT" == "小辣椒🌶|峥嵘岁月" ]] \
+    || fail "normalize_nickname 真跑结果不对: 实得[$_NICK_OUT] 期望[小辣椒🌶|峥嵘岁月]"
+else
+  echo "  ⏭ 跳过昵称归一真跑（本机无 zsh）"
+fi
 # 调用方必须把业务线传进去。0923 实证:harvest-cron.sh 调它时一个参数都不传,
 # 而脚本内部写死金诺 base —— 于是 m1 跑悦升的批次也在往**金诺**表回写,
 # 悦升关键词表四列长期全 0。改成按 line-routes 路由之后不传参数会直接抛「未配路由」,
