@@ -6756,6 +6756,14 @@ agent_suite:
     product: 新媒体运营
     note: "/api/meta/status 的 idempotencyConfigured 必须与 publish.ts 的 resolveStore 同一套优先级(D1优先/KV兜底)。D1 迁移后该健康检查仍只看 env.META_IDEMPOTENCY，线上绑了 D1 却报 false——误报会诱使运维把无原子声明的 KV 加回来。另断言新增 idempotencyBackend 字段区分 d1/kv/null。"
 
+  - id: tiktok-token-refresh-unit
+    path: sprints/09241105-tiktok-token-refresh/tests/tiktok-token-refresh.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "TikTok access token 自动刷新（proven-to-fire）：token 只活 24 小时，原实现只读 env.TIKTOK_ACCESS_TOKEN、对 refresh_token 引用为 0，等于每天要人工重新授权。断言过期自动换票并回写轮换后的 refresh_token（不回写=丢掉下次刷新的钥匙）、未过期不打扰上游、D1 无记录时用 env 做种子、上游回 access_token_invalid 时刷新后重试一次且只重试一次、刷新失败如实抛错不把旧票伪装成可用。实测：去掉轮换回写 → expected rft.still-valid to be rft.rotated；去掉 401 重试 → expected false to be true。"
+
   - id: tiktok-private-publishing-unit
     path: sprints/09162201-tiktok-private-publishing/tests/tiktok-publishing.test.ts
     type: unit

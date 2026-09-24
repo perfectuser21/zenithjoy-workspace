@@ -116,7 +116,11 @@ export function d1TikTokIdempotencyStore(db: D1Like): TikTokClaimStore {
 }
 
 export interface TikTokPublishEnv {
+  /** 种子令牌：D1 里还没有记录时用它初始化，之后以 D1 为准。 */
   TIKTOK_ACCESS_TOKEN?: string;
+  TIKTOK_REFRESH_TOKEN?: string;
+  TIKTOK_CLIENT_KEY?: string;
+  TIKTOK_CLIENT_SECRET?: string;
   TIKTOK_PUBLISH_API_KEY?: string;
   TIKTOK_PUBLISH_ENABLED?: string;
   TIKTOK_DRAFT_UPLOAD_ENABLED?: string;
@@ -253,13 +257,153 @@ function safeTikTokError(status: number, envelope: TikTokEnvelope<unknown> | nul
   };
 }
 
+const TIKTOK_TOKEN_ENDPOINT = 'https://open.tiktokapis.com/v2/oauth/token/';
+/** 提前 5 分钟视为过期，避免请求正好卡在到期瞬间。 */
+const TOKEN_EXPIRY_SKEW_MS = 5 * 60 * 1000;
+
+interface StoredTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: string;
+}
+
+async function readTokens(db: D1Like): Promise<StoredTokens | null> {
+  const row = await db
+    .prepare('SELECT access_token, refresh_token, expires_at FROM tiktok_oauth_tokens WHERE id = ?')
+    .bind('default')
+    .first<Record<string, unknown>>();
+  if (!row?.access_token || !row?.refresh_token) return null;
+  return {
+    accessToken: String(row.access_token),
+    refreshToken: String(row.refresh_token),
+    expiresAt: String(row.expires_at ?? ''),
+  };
+}
+
+async function writeTokens(db: D1Like, t: StoredTokens): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO tiktok_oauth_tokens (id, access_token, refresh_token, expires_at, updated_at)
+       VALUES ('default', ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         access_token = excluded.access_token,
+         refresh_token = excluded.refresh_token,
+         expires_at = excluded.expires_at,
+         updated_at = excluded.updated_at`,
+    )
+    .bind(t.accessToken, t.refreshToken, t.expiresAt, new Date().toISOString())
+    .run();
+}
+
+function isExpired(expiresAt: string): boolean {
+  const at = Date.parse(expiresAt);
+  if (Number.isNaN(at)) return true;
+  return at - TOKEN_EXPIRY_SKEW_MS <= Date.now();
+}
+
+/**
+ * 用 refresh_token 换一对新令牌。
+ *
+ * TikTok 会**轮换** refresh_token：响应里带回的那个才是下次能用的。
+ * 不回写就等于把下一次刷新的钥匙丢了，届时只能人工重新授权。
+ */
+async function refreshTokens(env: TikTokPublishEnv, refreshToken: string): Promise<StoredTokens> {
+  if (!env.TIKTOK_CLIENT_KEY || !env.TIKTOK_CLIENT_SECRET) {
+    throw new Error('tiktok_refresh_not_configured');
+  }
+  const res = await fetch(TIKTOK_TOKEN_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_key: env.TIKTOK_CLIENT_KEY,
+      client_secret: env.TIKTOK_CLIENT_SECRET,
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+    }),
+    signal: AbortSignal.timeout(TIKTOK_TIMEOUT_MS),
+  });
+  let body: Record<string, unknown> | null = null;
+  try { body = await res.json() as Record<string, unknown>; } catch { body = null; }
+  const accessToken = typeof body?.access_token === 'string' ? body.access_token : '';
+  if (!res.ok || !accessToken) {
+    // 刷新失败必须如实抛出：把旧票当成可用会让调用方以为通道健康，
+    // 直到真正发布时才炸，那时已分不清是内容问题还是鉴权问题。
+    throw new Error('tiktok_token_refresh_failed');
+  }
+  const expiresIn = typeof body?.expires_in === 'number' ? body.expires_in : 86_400;
+  return {
+    accessToken,
+    refreshToken: typeof body?.refresh_token === 'string' && body.refresh_token
+      ? body.refresh_token
+      : refreshToken,
+    expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
+  };
+}
+
+/**
+ * 取一个当下可用的 access token。
+ *
+ * 顺序：D1 记录 → 没有则用 env 种子落库 → 过期则刷新并回写。
+ * access token 只活 24 小时，没有这一步就得每天人工重新授权。
+ */
+export async function resolveTikTokAccessToken(env: TikTokPublishEnv): Promise<string> {
+  const db = env.TIKTOK_PUBLISH_DB;
+
+  // 读不到就当"还没有记录"。表可能尚未建好（部署与建表之间有窗口），
+  // 这种时候应退回 env 里的种子票继续服务，而不是让整条发布链 503。
+  let stored: StoredTokens | null = null;
+  if (db) {
+    try { stored = await readTokens(db); } catch { stored = null; }
+  }
+
+  if (stored) {
+    if (!isExpired(stored.expiresAt)) return stored.accessToken;
+    // 有记录且已过期：必须换票。换不到就如实抛错，不拿旧票冒充可用。
+    const fresh = await refreshTokens(env, stored.refreshToken);
+    try { await writeTokens(db!, fresh); } catch { /* 落库失败不影响本次调用 */ }
+    return fresh.accessToken;
+  }
+
+  if (!env.TIKTOK_ACCESS_TOKEN) throw new Error('tiktok_access_token_missing');
+  // 有 refresh token 才值得落库——否则存了也刷不了，反而让后续误以为具备刷新能力。
+  if (db && env.TIKTOK_REFRESH_TOKEN) {
+    try {
+      await writeTokens(db, {
+        accessToken: env.TIKTOK_ACCESS_TOKEN,
+        refreshToken: env.TIKTOK_REFRESH_TOKEN,
+        // 种子票真实到期时间未知，先按 24 小时用；真失效由 401 重试路径兜底。
+        expiresAt: new Date(Date.now() + 86_400 * 1000).toISOString(),
+      });
+    } catch { /* 表未就绪，本次仍用种子票 */ }
+  }
+  return env.TIKTOK_ACCESS_TOKEN;
+}
+
+/** 上游明确说票无效时强制刷新一次（不看本地过期时间）。 */
+async function forceRefresh(env: TikTokPublishEnv): Promise<string | null> {
+  const db = env.TIKTOK_PUBLISH_DB;
+  if (!db) return null;
+  const tokens = await readTokens(db);
+  const refreshToken = tokens?.refreshToken || env.TIKTOK_REFRESH_TOKEN;
+  if (!refreshToken) return null;
+  try {
+    const fresh = await refreshTokens(env, refreshToken);
+    await writeTokens(db, fresh);
+    return fresh.accessToken;
+  } catch {
+    return null;
+  }
+}
+
 export async function tiktokRequest<T>(
   env: TikTokPublishEnv,
   path: string,
   body: Record<string, unknown> = {},
 ): Promise<TikTokApiResult<T>> {
-  const token = env.TIKTOK_ACCESS_TOKEN;
-  if (!token) {
+  let token: string;
+  try {
+    token = await resolveTikTokAccessToken(env);
+  } catch {
     return {
       ok: false,
       status: 503,
@@ -267,48 +411,68 @@ export async function tiktokRequest<T>(
     };
   }
 
-  let response: Response;
-  try {
-    response = await fetch(`${TIKTOK_API_ORIGIN}/${path.replace(/^\/+/, '')}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json; charset=UTF-8',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(TIKTOK_TIMEOUT_MS),
-    });
-  } catch {
+  const call = async (bearer: string): Promise<Response | null> => {
+    try {
+      return await fetch(`${TIKTOK_API_ORIGIN}/${path.replace(/^\/+/, '')}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${bearer}`,
+          'Content-Type': 'application/json; charset=UTF-8',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(TIKTOK_TIMEOUT_MS),
+      });
+    } catch {
+      return null;
+    }
+  };
+  const parse = async (r: Response): Promise<TikTokEnvelope<T> | null> => {
+    try { return await r.json() as TikTokEnvelope<T>; } catch { return null; }
+  };
+
+  let response = await call(token);
+  if (!response) {
     return {
       ok: false,
       status: 502,
       error: { code: 'network_error', message: 'TikTok API could not be reached.' },
     };
   }
+  let envelope = await parse(response);
 
-  let envelope: TikTokEnvelope<T> | null = null;
-  try {
-    envelope = await response.json() as TikTokEnvelope<T>;
-  } catch {
-    envelope = null;
+  // 本地以为票没过期、上游却说无效（被提前吊销或时钟偏差）。
+  // 强制刷新后只重试一次，避免刷新本身有问题时打成循环。
+  if (envelope?.error?.code === 'access_token_invalid') {
+    const fresh = await forceRefresh(env);
+    if (fresh && fresh !== token) {
+      token = fresh;
+      const retry = await call(fresh);
+      if (!retry) {
+        return {
+          ok: false,
+          status: 502,
+          error: { code: 'network_error', message: 'TikTok API could not be reached.' },
+        };
+      }
+      response = retry;
+      envelope = await parse(retry);
+    }
   }
+
   const errorCode = envelope?.error?.code;
   if (!response.ok || errorCode !== 'ok' || envelope?.data === undefined) {
     return {
       ok: false,
       status: response.status >= 400 ? response.status : 502,
-      error: safeTikTokError(response.status, envelope),
+      error: {
+        code: errorCode || 'tiktok_error',
+        message: 'TikTok rejected the request.',
+        logId: envelope?.error?.log_id || envelope?.error?.logid || null,
+      },
     };
   }
-
-  const logId = envelope.error?.log_id || envelope.error?.logid;
-  return {
-    ok: true,
-    status: response.status,
-    data: envelope.data,
-    ...(logId ? { logId } : {}),
-  };
+  return { ok: true, status: response.status, data: envelope.data as T };
 }
 
 export function isAllowedTikTokMediaUrl(value: string, env: TikTokPublishEnv): boolean {
