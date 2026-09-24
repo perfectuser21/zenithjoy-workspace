@@ -37,12 +37,18 @@ MMV_JS_FILES=(
   own-accounts-lib.js push-leads.js update-profile-links.js nickname-match-lib.js
 )
 MMV_TOPLEVEL_FILES=(cmdr-escort.txt cmdr-stream.txt)
-# douyin-phone-adb 于 0924 补进本清单: 此前被当成"编译后二进制、单独发版"排除在外,
-# 实测该说法与事实不符——机器上 ~/bin-harvest/douyin-phone-adb 与仓库版字节完全一致
-# (137843), file 判定为 zsh script text executable, 也不存在任何单独构建流程。
-# 不下发 = 改了控制器却永远到不了手机机(0924 音量棘轮修复就差点栽在这)。
-DEVICE_SH_FILES=(
+# 设备控制器单独成组: 它必须同时落到**两个**目录,因为两类消费者各指一个——
+#   ~/.local/bin/  ← harvest-keyword.sh:7 / outreach-tick.sh / refill-profile-links.sh
+#                    的 C= 全部写死这里, 是 cron 真正执行的那份
+#   ~/bin-harvest/ ← device-job-claimer.sh 的 PHONE_CTL 默认值指这里
+# 0924 血的教训: 只发 bin-harvest 时,PR 合并、deploy.sh 全绿、md5 校验也通过,
+# 生产跑的却仍是 ~/.local/bin 的旧版本,音量棘轮修复完全没生效,最后靠人工 scp 才落地。
+# 漏任一目录 = 两份副本版本分叉,且部署过程不会报任何错。层26 smoke 守卫盯这件事。
+DEVICE_CTL_FILES=(
   douyin-phone-adb
+)
+DEVICE_CTL_DIRS=(bin-harvest .local/bin)
+DEVICE_SH_FILES=(
   harvest-keyword.sh batch2.sh harvest-cron.sh outreach-tick.sh
   refill-profile-links.sh wall-report.sh wall-lib.sh phone-wall-push.sh
   disk-gateway-guard.sh device-job-claimer.sh log-stream-push.sh
@@ -88,9 +94,37 @@ for host in xian-m4 xian-m1; do
   done
 done
 
+echo "=== [4/4] 设备控制器 → 每台机器的 ${#DEVICE_CTL_DIRS[@]} 个执行路径 (${#DEVICE_CTL_FILES[@]} 个文件) ==="
+for host in xian-m4 xian-m1; do
+  echo "  --- $host ---"
+  for f in "${DEVICE_CTL_FILES[@]}"; do
+    if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
+    for dir in "${DEVICE_CTL_DIRS[@]}"; do
+      ssh "$host" "mkdir -p ~/$dir"
+      scp -q -p "$D/$f" "$host:~/$dir/$f"
+      ssh "$host" "chmod +x ~/$dir/$f"
+      if ssh "$host" "zsh -n ~/$dir/$f" 2>/tmp/deploy-err-$$; then
+        echo "    ✅ $dir/$f"
+      else
+        echo "    ❌ $dir/$f 语法检查失败: $(head -3 /tmp/deploy-err-$$)"
+        FAILED=1
+      fi
+      rm -f /tmp/deploy-err-$$
+    done
+    # 两个目录必须字节一致,否则两类消费者跑的是不同版本
+    _sums="$(ssh "$host" "md5 -q ~/bin-harvest/$f ~/.local/bin/$f 2>/dev/null | sort -u | wc -l" | tr -d ' ')"
+    if [[ "$_sums" == "1" ]]; then
+      echo "    ✅ $f 两个路径字节一致"
+    else
+      echo "    ❌ $f 两个路径内容不一致(版本分叉,消费者会跑到不同版本)"
+      FAILED=1
+    fi
+  done
+done
+
 echo ""
 if [[ "$FAILED" == "1" ]]; then
   echo "⚠️ 部分文件语法检查失败,见上方 ❌ 标记——已同步的文件里可能有半成品,立刻核查"
   exit 1
 fi
-echo "✅ 全部同步完成(mmv + xian-m4 + xian-m1),每个文件都过了语法检查。"
+echo "✅ 全部同步完成(mmv + xian-m4 + xian-m1,控制器覆盖两个执行路径),每个文件都过了语法检查。"
