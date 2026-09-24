@@ -256,7 +256,11 @@ describe('改时间：乐观锁', () => {
 
 describe('取消：留痕不删', () => {
   it('取消走 UPDATE 标记而不是 DELETE（所有活必须留痕）', async () => {
-    brainQuery.mockResolvedValueOnce({ rows: [{ id: 'j1', row_version: 1 }] });
+    // 两次：第一次是取行做 read_only 判断，第二次才是真正的 UPDATE。
+    // 老实现只查一次也不受影响 —— 反正只消费第一个 Once。
+    brainQuery
+      .mockResolvedValueOnce({ rows: [{ id: 'j1', row_version: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'j1', row_version: 2 }] });
     const r = await request(app).post('/api/schedule/jobs/j1/cancel').set('x-feishu-user-id', 'tenant-1').send({});
     expect(r.status).toBe(200);
     const [sql] = brainQuery.mock.calls.at(-1)!;
@@ -269,5 +273,36 @@ describe('取消：留痕不删', () => {
     brainQuery.mockResolvedValueOnce({ rows: [] });
     const r = await request(app).post('/api/schedule/jobs/j1/cancel').set('x-feishu-user-id', 'tenant-1').send({});
     expect(r.status).toBe(409);
+  });
+});
+
+describe('只读行拒绝写操作', () => {
+  beforeEach(() => {
+    brainQuery.mockResolvedValue({
+      rows: [{ id: 'brain-1', status: 'in_progress', row_version: 1,
+               payload: { read_only: true, source: 'cron', serial: 'ANGYVB4227006983' } }],
+    });
+  });
+
+  it('改时间：镜像行必须拒绝 —— CAS 对真机零作用，让人以为改了其实没改', async () => {
+    const res = await request(app).patch('/api/schedule/jobs/brain-1/time')
+      .set('X-Feishu-User-Id', 'u1')
+      .send({ planned_at: new Date(Date.now() + 3600_000).toISOString(), row_version: 1 });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('READ_ONLY_JOB');
+  });
+
+  it('取消：镜像行必须拒绝 —— 运营点了取消，手机照跑，这比看不见更坏', async () => {
+    const res = await request(app).post('/api/schedule/jobs/brain-1/cancel')
+      .set('X-Feishu-User-Id', 'u1').send({});
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('READ_ONLY_JOB');
+  });
+
+  it('错误信息要说人话，告诉运营该去哪停，不能只甩错误码', async () => {
+    const res = await request(app).post('/api/schedule/jobs/brain-1/cancel')
+      .set('x-feishu-user-id', 'tenant-1').send({});
+    expect(res.body.message).toContain('工作机');
+    expect(res.body.message).toMatch(/cron|自发/);
   });
 });

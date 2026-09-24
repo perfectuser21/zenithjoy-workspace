@@ -23,6 +23,7 @@ const atDay = (day: number, hh: number, minutes: number, extra: Partial<Schedule
   est_minutes: minutes,
   source: 'recurring',
   status: 'queued',
+  read_only: false,
   ...extra,
 });
 

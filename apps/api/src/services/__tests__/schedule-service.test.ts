@@ -151,6 +151,16 @@ describe('Brain 任务 → 页面 slot 的映射', () => {
     expect(toScheduleSlot(job()).source).toBe('oneoff');
     expect(toScheduleSlot(job({ payload: {} })).source).toBe('oneoff');
   });
+
+  it('read_only 必须透到读面 —— 否则前端无从判断，镜像行和真派单长得一样', () => {
+    const slot = toScheduleSlot(job({ status: 'in_progress', payload: { read_only: true, source: 'cron' } }));
+    expect(slot.read_only).toBe(true);
+  });
+
+  it('真派单不带 read_only，默认 false 而不是 undefined（前端好判断）', () => {
+    const slot = toScheduleSlot(job({ payload: { source: 'oneoff' } }));
+    expect(slot.read_only).toBe(false);
+  });
 });
 
 describe('改时间走乐观锁 CAS（updated_at 被 tick 定时 touch，不能当锁）', () => {

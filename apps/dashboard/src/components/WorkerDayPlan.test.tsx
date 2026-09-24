@@ -22,7 +22,7 @@ afterEach(cleanup);
 const mk = (status: ScheduleSlot['status'], dept: ScheduleSlot['dept'] = '智能获客', h = 9): ScheduleSlot => {
   const d = new Date();
   d.setHours(h, 0, 0, 0);
-  return { id: `${status}-${dept}-${h}`, title: `${dept}-${status}`, dept, planned_at: d.toISOString(), est_minutes: 10, source: 'recurring', status };
+  return { id: `${status}-${dept}-${h}`, title: `${dept}-${status}`, dept, planned_at: d.toISOString(), est_minutes: 10, source: 'recurring', status, read_only: false };
 };
 
 describe('今日盘点', () => {

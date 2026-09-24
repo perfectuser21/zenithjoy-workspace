@@ -22,6 +22,7 @@ const mk = (status: ScheduleSlot['status'], planned_at = new Date().toISOString(
   est_minutes: 10,
   source: 'recurring',
   status,
+  read_only: false,
 });
 
 describe('派生计算', () => {

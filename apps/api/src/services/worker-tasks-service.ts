@@ -1,6 +1,7 @@
 import pool from '../db/connection';
 import { saveShot } from './worker-shots';
 import { ONLINE_WINDOW_SQL } from './agent-machines-normalize';
+import { createMirrorJob, attachMirrorJob, completeMirrorJob } from './brain-device-job-mirror';
 
 export const LEASE_MS = 10 * 60 * 1000;
 const MAX_SHOT_B64 = Math.ceil(200 * 1024 * 4 / 3);
@@ -38,13 +39,21 @@ export function validateStepReport(r: StepReport): void {
   }
 }
 
-export async function startTask(input: { agentId: string; title: string; steps: string[]; executorId: string }) {
+export async function startTask(input: {
+  agentId: string; title: string; steps: string[]; executorId: string;
+  /** 领单器领到 Brain device_job 时带上它的 id：此时本 worker_task 是那条单的执行记录，
+   *  只做关联、不再新建，否则每条真派单都会镜像出一条，页面重复计数 + 永久孤儿。 */
+  brainJobId?: string;
+}) {
   const client = await pool.connect();
+  let taskId: string;
+  let leaseUntil: string;
+  let tenantId: string;
   try {
     await client.query('BEGIN');
     const agent = await client.query(`SELECT id, tenant_id FROM zenithjoy.agents WHERE id = $1`, [input.agentId]);
     if (agent.rows.length === 0) throw new WorkerTaskError('AGENT_NOT_FOUND', 'worker 不存在', 404);
-    const tenantId = agent.rows[0].tenant_id as string;
+    tenantId = agent.rows[0].tenant_id as string;
     let task;
     try {
       task = await client.query(
@@ -57,25 +66,50 @@ export async function startTask(input: { agentId: string; title: string; steps: 
       if ((e as { code?: string }).code === '23505') throw new WorkerTaskError('WORKER_BUSY', '该 worker 已有执行中的任务', 409);
       throw e;
     }
-    const taskId = task.rows[0].id as string;
+    taskId = task.rows[0].id as string;
+    leaseUntil = task.rows[0].lease_until as string;
     for (let i = 0; i < input.steps.length; i++) {
       await client.query(`INSERT INTO zenithjoy.worker_task_steps (task_id, step_index, title) VALUES ($1, $2, $3)`, [taskId, i, input.steps[i]]);
     }
     await client.query('COMMIT');
-    return { task_id: taskId, lease_until: task.rows[0].lease_until as string };
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch { /* ignore */ }
     throw e;
   } finally { client.release(); }
+
+  // ── 桥接到 Brain（COMMIT 之后，跨池不能同事务）────────────────────────
+  // 整段 try 包住：记账是附属，采收是正事，桥接出任何问题都不能让 startTask 失败。
+  try {
+    if (input.brainJobId) {
+      await attachMirrorJob(taskId, input.brainJobId);
+    } else {
+      const a = await pool.query(`SELECT agent_id FROM zenithjoy.agents WHERE id = $1`, [input.agentId]);
+      const serial = String(a.rows[0]?.agent_id ?? '').replace(/^phone-/, '');
+      const brainId = await createMirrorJob({
+        workerTaskId: taskId, agentId: input.agentId, serial,
+        title: input.title, startedAt: new Date().toISOString(),
+      });
+      if (brainId) await attachMirrorJob(taskId, brainId);
+    }
+  } catch (e) {
+    console.error('[worker-tasks] Brain 桥接失败（不影响本次执行）:', e);
+  }
+
+  return { task_id: taskId, lease_until: leaseUntil };
 }
 
 async function loadRunning(taskId: string, executorId: string) {
-  const r = await pool.query(`SELECT id, tenant_id, status, executor_id, steps_total FROM zenithjoy.worker_tasks WHERE id = $1`, [taskId]);
+  // evidence 必须一起取：completeTask 收尾要靠 evidence.brain_task_id 找到 Brain 那条单去回写，
+  // 这里不补列，回写就永远拿不到 id、静默不发生（测试会绿，线上没效果）。
+  const r = await pool.query(`SELECT id, tenant_id, status, executor_id, steps_total, evidence FROM zenithjoy.worker_tasks WHERE id = $1`, [taskId]);
   if (r.rows.length === 0) throw new WorkerTaskError('TASK_NOT_FOUND', '任务不存在', 404);
   const t = r.rows[0];
   if (t.status !== 'running') throw new WorkerTaskError('TASK_NOT_RUNNING', '任务已结束，执行器必须停手', 409);
   if (t.executor_id !== executorId) throw new WorkerTaskError('EXECUTOR_MISMATCH', '租约不属于该执行器', 409);
-  return { id: t.id as string, tenant_id: t.tenant_id as string, steps_total: Number(t.steps_total ?? 0) };
+  return {
+    id: t.id as string, tenant_id: t.tenant_id as string, steps_total: Number(t.steps_total ?? 0),
+    evidence: (t.evidence ?? null) as { brain_task_id?: string } | null,
+  };
 }
 
 export async function reportStep(taskId: string, r: StepReport) {
@@ -119,17 +153,42 @@ export async function completeTask(taskId: string, body: {
   }
   await pool.query(
     `UPDATE zenithjoy.worker_tasks SET status = $2, finished_at = NOW(), error_code = $3, failed_step = $4,
-        evidence = $5, updated_at = NOW() WHERE id = $1`,
-    [taskId, body.outcome, body.error_code ?? null, body.failed_step ?? null, evidence ? JSON.stringify(evidence) : null],
+        evidence = COALESCE(evidence, '{}'::jsonb) || $5::jsonb, updated_at = NOW() WHERE id = $1`,
+    [taskId, body.outcome, body.error_code ?? null, body.failed_step ?? null, JSON.stringify(evidence ?? {})],
   );
+
+  // 回写 Brain。整段吞异常：收尾成功与否不取决于记账。
+  try {
+    const brainTaskId = t.evidence?.brain_task_id;
+    if (brainTaskId) {
+      await completeMirrorJob(brainTaskId, body.outcome, {
+        error_code: body.error_code ?? null,
+        leads_local: (evidence as Record<string, unknown> | null)?.leads_local ?? null,
+        leads_persisted: (evidence as Record<string, unknown> | null)?.leads_persisted ?? null,
+      });
+    }
+  } catch (e) {
+    console.error('[worker-tasks] Brain 回写失败（不影响本次收尾）:', e);
+  }
   return { ok: true };
 }
 
 export async function sweepExpiredLeases(): Promise<number> {
   const r = await pool.query(
     `UPDATE zenithjoy.worker_tasks SET status = 'failed', error_code = 'executor_lost', finished_at = NOW(), updated_at = NOW()
-      WHERE status = 'running' AND lease_until < NOW() RETURNING id`,
+      WHERE status = 'running' AND lease_until < NOW() RETURNING id, evidence`,
   );
+  // 本地置了 failed，Brain 侧不同步就会永远挂 in_progress，并持续占住
+  // idx_tasks_dedup_active 的槽位，把后续同名建单全挡在外面。
+  for (const row of r.rows ?? []) {
+    const brainTaskId = (row as { evidence?: { brain_task_id?: string } }).evidence?.brain_task_id;
+    if (!brainTaskId) continue;
+    try {
+      await completeMirrorJob(brainTaskId, 'failed', { error_code: 'executor_lost' });
+    } catch (e) {
+      console.error('[worker-tasks] sweep 回写 Brain 失败:', e);
+    }
+  }
   return r.rowCount ?? 0;
 }
 

@@ -44,6 +44,9 @@ export interface ScheduleSlotOut {
   row_version: number;
   updated_by: string | null;
   blocked_reason?: string;
+  /** 真机自发的活（cron 触发）只能看不能改：source 会被下面那行降级成 'oneoff'，
+   *  前端靠这个字段单独判断能不能出现改时间/取消按钮。 */
+  read_only: boolean;
 }
 
 export interface QuotaIn {
@@ -101,6 +104,9 @@ export function toScheduleSlot(row: BrainDeviceJob): ScheduleSlotOut {
     source: p.source === 'recurring' ? 'recurring' : 'oneoff',
     row_version: Number(row.row_version ?? 0),
     updated_by: typeof p.updated_by === 'string' ? p.updated_by : null,
+    // 真机自发的活（cron 触发）只能看不能改：改这里的 due_at/status 对手机零作用。
+    // source 字段会被上面那行降级成 'oneoff'，所以必须单独透一个标记出去。
+    read_only: p.read_only === true,
   };
   if (!mapped) out.blocked_reason = `未识别的后台状态：${row.status}`;
   return out;
