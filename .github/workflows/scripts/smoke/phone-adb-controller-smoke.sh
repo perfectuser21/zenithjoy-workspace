@@ -523,4 +523,25 @@ while IFS= read -r _line; do
     || fail "batch2.sh 有一处调用judge-video.js的ssh命令没有source ~/.credentials/zenithjoy-db.env(判定读不到Postgres数据)"
 done <<< "$_JV_SSH_LINES"
 
+# 层25: 录制前音量必须幂等驱动到 RECORD_MEDIA_VOLUME,不能再无脑 VOLUME_UP x2
+# (0924 真机复盘: record_start 每条视频无条件按两次 KEYCODE_VOLUME_UP 且录完不复位,
+#  形成 +2 单向棘轮,生产两台实测爬到 12/17 和 10/17,非录制阶段全程大音量外放,
+#  西安办公室不可忍。同轮实测钉死: 媒体音量 0 录到 -91dB 死寂、1 录到 -35.4dB、
+#  4 录到 -35.3dB —— 采集电平是开关行为不随音量衰减,故驱动到 1 即零音质损失。
+#  另证抖音不存在独立 app 内静音标志,稳态零按键安全。)
+grep -qE '^RECORD_MEDIA_VOLUME=' "$C" || fail "douyin-phone-adb 缺 RECORD_MEDIA_VOLUME 常量(录制目标音量没有单一出处)"
+grep -qE '^ensure_media_volume\(\)' "$C" || fail "douyin-phone-adb 缺 ensure_media_volume() 幂等音量驱动函数"
+grep -qE 'ensure_media_volume "\$RECORD_MEDIA_VOLUME"' "$C" || fail "record_start 没有调用 ensure_media_volume \"\$RECORD_MEDIA_VOLUME\"(音量棘轮会复发)"
+_RS_BODY="$(sed -n '/^record_start()/,/^}/p' "$C")"
+_RS_VOLUP_COUNT="$(grep -c 'KEYCODE_VOLUME_UP' <<< "$_RS_BODY" || true)"
+[[ "$_RS_VOLUP_COUNT" == "0" ]] || fail "record_start 里仍有 $_RS_VOLUP_COUNT 处裸 KEYCODE_VOLUME_UP(音量棘轮的病根,必须全部收进 ensure_media_volume)"
+# ensure_media_volume 里读音量的命令替换必须带 || true：本脚本 set -euo pipefail,
+# 函数内命令替换失败会直接打死整个进程,降级分支永远到不了(0924 code-review 实测复现:
+# adb 读不到音量 → record-start 整条命令静默失败 → 判定退化 title-only 且无人察觉)。
+_EMV_BODY="$(sed -n '/^ensure_media_volume()/,/^}/p' "$C")"
+_EMV_RAW_READ="$(grep -c 'cur="\$(media_volume)"' <<< "$_EMV_BODY" || true)"
+[[ "$_EMV_RAW_READ" == "0" ]] || fail "ensure_media_volume 里有 $_EMV_RAW_READ 处裸 \$(media_volume) 未带 || true(set -e 下读不到音量会打死整个控制器,降级分支失效)"
+_DEVICE_LIST="$(sed -n '/^DEVICE_SH_FILES=(/,/^)/p' "$D/deploy.sh")"
+grep -qE '(^|[[:space:]])douyin-phone-adb([[:space:]]|$)' <<< "$_DEVICE_LIST" || fail "deploy.sh 的 DEVICE_SH_FILES 漏了 douyin-phone-adb(改了控制器却到不了手机机)"
+
 echo "phone-adb-controller-smoke: PASS"

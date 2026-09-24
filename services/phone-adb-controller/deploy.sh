@@ -17,7 +17,6 @@
 #   cmdr-escort.txt / cmdr-stream.txt → mmv:~/.openclaw/(agent SOP,按绝对路径引用)
 #
 # 不在本次范围(有意排除,别当成漏了):
-#   - douyin-phone-adb 编译后二进制: 单独构建/发版流程,盲目覆盖有版本不匹配风险
 #   - *.plist: launchd 安装是一次性动作,不是"同步文件"能表达的操作
 #   - config/*.json: 可能含机器本地校准过的实验数据,批量覆盖有丢真实调参的风险
 #   - __tests__/、*.md、package.json: 不需要跑在生产机上
@@ -38,7 +37,12 @@ MMV_JS_FILES=(
   own-accounts-lib.js push-leads.js update-profile-links.js
 )
 MMV_TOPLEVEL_FILES=(cmdr-escort.txt cmdr-stream.txt)
+# douyin-phone-adb 于 0924 补进本清单: 此前被当成"编译后二进制、单独发版"排除在外,
+# 实测该说法与事实不符——机器上 ~/bin-harvest/douyin-phone-adb 与仓库版字节完全一致
+# (137843), file 判定为 zsh script text executable, 也不存在任何单独构建流程。
+# 不下发 = 改了控制器却永远到不了手机机(0924 音量棘轮修复就差点栽在这)。
 DEVICE_SH_FILES=(
+  douyin-phone-adb
   harvest-keyword.sh batch2.sh harvest-cron.sh outreach-tick.sh
   refill-profile-links.sh wall-report.sh wall-lib.sh phone-wall-push.sh
   disk-gateway-guard.sh device-job-claimer.sh log-stream-push.sh
