@@ -1783,7 +1783,23 @@ record_stop() {
     print -u2 -- "warning: recording remuxed to recover unfinalized container (duration=${dur:-unknown})"
   fi
   (( vstreams >= 1 )) || die "recording has no video stream: $out"
-  print -- "record_stopped path=$out duration_seconds=${dur:-0} video_streams=$vstreams audio_streams=$astreams"
+  # 电平打点（0924 扩机护栏）：音量↔采集电平的开关关系只在 HONOR MAA-AN00/Android 15
+  # 实测过（音量0=-91dB 死寂 / 音量1=-35.4dB / 音量4=-35.3dB）。换机型若真录到死寂，
+  # 下面 astreams>=1 照样通过——音轨"存在"但全是静音，通义 ASR 报
+  # ASR_RESPONSE_HAVE_NO_WORDS，判定链静默退化成 title-only，没人会察觉。
+  # 故实测 mean_volume 打进输出行；**只打点不 die**（Alex 0924 拍板）：真·无声视频
+  # 是合法内容，die 会误伤，让它照常走 title-only 兜底即可。
+  # -vn 跳过视频解码（只需音轨，105s 录像也就一两秒）；-v info 不能省——
+  # volumedetect 的结果是 info 级 stderr，用 -v error 会把它一起吞掉。
+  # || true 不可省：本脚本 set -euo pipefail，函数内命令替换失败会直接打死整个进程，
+  # 那样连 record_stopped 这行都发不出去，比没打点更糟。
+  local mean_db
+  mean_db="$("$FFMPEG" -hide_banner -nostats -v info -i "$out" -vn -af volumedetect -f null - 2>&1 \
+    | /usr/bin/grep -o 'mean_volume: [-0-9.]* dB' | /usr/bin/tail -1 | /usr/bin/awk '{print $2}' || true)"
+  print -- "record_stopped path=$out duration_seconds=${dur:-0} video_streams=$vstreams audio_streams=$astreams mean_volume_db=${mean_db:-unknown}"
+  if [[ -n "$mean_db" ]] && (( $(print -- "$mean_db" | /usr/bin/awk '{print ($1 <= -80) ? 1 : 0}') )); then
+    print -u2 -- "warning: recording is near-silent (mean_volume=${mean_db} dB); ASR will likely return no words — check the phone's speaker-stream volume is non-zero"
+  fi
   (( astreams >= 1 )) || die "recording has NO audio stream; full-transcript ASR cannot proceed"
 }
 
