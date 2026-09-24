@@ -70,3 +70,44 @@ export function buildMirrorPayload(a: { serial: string; workerTaskId: string; st
     executed_at: a.startedAt,
   };
 }
+
+import { getBrainPool } from '../db/brain-pool';
+import localPool from '../db/connection';
+
+async function toOutbox(workerTaskId: string, op: 'create' | 'complete' | 'sweep', payload: unknown, err?: unknown) {
+  try {
+    await localPool.query(
+      `INSERT INTO zenithjoy.brain_sync_outbox (worker_task_id, op, payload, last_error)
+       VALUES ($1, $2, $3::jsonb, $4)`,
+      [workerTaskId, op, JSON.stringify(payload ?? {}), err instanceof Error ? err.message : err ? String(err) : null],
+    );
+  } catch (e) {
+    // outbox 都写不进就只剩日志了。绝不再往上抛 —— 这是记账的记账。
+    console.error('[brain-mirror] outbox 写入失败:', e);
+  }
+}
+
+/**
+ * 在 Brain 建一条 device_job。失败一律吞掉并落 outbox，绝不阻断调用方。
+ * 返回 brain task id；没建成返回 null。
+ */
+export async function createMirrorJob(a: {
+  workerTaskId: string; agentId: string; serial: string; title: string; startedAt: string;
+}): Promise<string | null> {
+  const brain = getBrainPool();
+  const payload = buildMirrorPayload({ serial: a.serial, workerTaskId: a.workerTaskId, startedAt: a.startedAt });
+  const title = buildMirrorTitle(a.title, a.serial, a.startedAt, a.workerTaskId);
+  if (!brain) { await toOutbox(a.workerTaskId, 'create', { ...a, title, payload }); return null; }
+  try {
+    const r = await brain.query(
+      `INSERT INTO tasks (title, description, task_type, status, priority, dept, assigned_to, due_at, payload, trigger_source)
+       VALUES ($1, $2, 'device_job', 'in_progress', 'P2', $3, $4, $5, $6::jsonb, $7)
+       RETURNING id`,
+      [title, `工作机自发活 · ${a.serial}`, '智能获客', a.agentId, a.startedAt, JSON.stringify(payload), 'cron'],
+    );
+    return (r.rows[0]?.id as string) ?? null;
+  } catch (e) {
+    await toOutbox(a.workerTaskId, 'create', { ...a, title, payload }, e);
+    return null;
+  }
+}
