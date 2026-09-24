@@ -6756,6 +6756,14 @@ agent_suite:
     product: 新媒体运营
     note: "/api/meta/status 的 idempotencyConfigured 必须与 publish.ts 的 resolveStore 同一套优先级(D1优先/KV兜底)。D1 迁移后该健康检查仍只看 env.META_IDEMPOTENCY，线上绑了 D1 却报 false——误报会诱使运维把无原子声明的 KV 加回来。另断言新增 idempotencyBackend 字段区分 d1/kv/null。"
 
+  - id: tiktok-creator-idempotency-report-unit
+    path: sprints/09241135-tiktok-creator-report/tests/tiktok-creator-idempotency-report.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "/api/tiktok/creator 的 idempotencyConfigured 必须与 publish/draft 的 resolveTikTokStore 同优先级(D1优先/KV兜底)。与 Meta 侧 meta-status-idempotency-report-unit 同一病灶：D1 迁移后健康检查仍只看 KV，线上绑了 D1 却报 false。另断言 idempotencyBackend 区分 d1/kv/null。"
+
   - id: tiktok-token-refresh-unit
     path: sprints/09241105-tiktok-token-refresh/tests/tiktok-token-refresh.test.ts
     type: unit
