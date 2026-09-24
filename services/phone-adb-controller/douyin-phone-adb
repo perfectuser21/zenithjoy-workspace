@@ -83,6 +83,10 @@ REMOTE_UI="/sdcard/douyin-leadgen-ui-${PROFILE}.xml"
 EVIDENCE_ROOT="/private/tmp/openclaw-phone/evidence/${PROFILE}"
 EVIDENCE_BUNDLE_ROOT="/private/tmp/openclaw-phone/evidence-bundles/${PROFILE}"
 DOUYIN_PACKAGE="com.ss.android.ugc.aweme"
+# 录制前把手机媒体音量幂等驱动到这一档（0924 Alex 拍板，decisions invariant）。
+# 1 = 17 档里的最低非零档：办公室已听不见，而采集电平与大音量完全等价
+# （依据见下方 ensure_media_volume 注释）。
+RECORD_MEDIA_VOLUME=1
 # 搜索结果页（卡片网格所在的 Activity）。采收循环每处理完一个视频都要回到这里，
 # 它是本链唯一稳定的"归位点"——结果页里的 resource-id 全是混淆短名（rej/dp7/pkr…），
 # 只有 Activity 名可靠。
@@ -1548,6 +1552,62 @@ set_playback_speed() {
   print -- "playback_speed_set=$spd"
 }
 
+# media_volume：读当前媒体音量（0..max），读不到输出空串。
+# 实测：HONOR MAA-AN00 / Android 15 上 `cmd media_session volume --stream 3 --get`
+# 稳定回 "volume is N in range [0..17]"；dumpsys audio 的格式跨机型差异大，不用它。
+media_volume() {
+  "$ADB" -s "$SERIAL" shell cmd media_session volume --stream 3 --get 2>/dev/null \
+    | /usr/bin/grep -o 'volume is [0-9]*' | /usr/bin/tail -1 | /usr/bin/grep -o '[0-9]*$'
+}
+
+# ensure_media_volume <target>：把媒体音量幂等驱动到 target。
+#
+# 2026-09-24 真机实测（xian-m1 ANGYVB4311010223，scrcpy --audio-source=output 各录 10s）：
+#   媒体音量 0 → mean_volume -91.0 dB（死寂，通义 ASR 报 ASR_RESPONSE_HAVE_NO_WORDS）
+#   媒体音量 1 → mean_volume -35.4 dB
+#   媒体音量 4 → mean_volume -35.3 dB
+# 即 REMOTE_SUBMIX 采集电平是开关行为、不随音量线性衰减：0 录不到，>=1 就是满格。
+#
+# 同轮实测纠正了 0912 写下的一条误判——当时注释称"外链/详情页打开的抖音视频默认静音
+# 播放，按物理音量键触发 unmute"。实际不存在独立的 app 内静音标志：全新进程经外链打开
+# 详情页、音量已在 1、全程不按任何音量键 → 录到 -36.1 dB（另一条视频复测 -37.9 dB）。
+# 当年双击 VOLUME_UP 之所以管用，只是因为把音量从 0 抬起来了。故稳态无需任何 unmute 按键。
+#
+# 旧实现每条视频无条件按两次 VOLUME_UP 且录完不复位 = +2 单向棘轮，生产两台爬到
+# 12/17 和 10/17，非录制阶段全程外放（录制期间反而是静的：--audio-source=output
+# 的语义就是 disables playback on the device）。改为幂等驱动后稳态零按键，
+# 音量浮层也不再弹——那玩意儿本身就是视觉定位的干扰源。
+#
+# 注：该机型上 `--set N` / `--adj raise|lower` 只回显不生效，只能走 input keyevent。
+ensure_media_volume() {
+  local target="$1" cur i=0
+  require_uint "$target"
+  cur="$(media_volume)"
+  if [[ -z "$cur" ]]; then
+    # 读不到音量（ROM 差异 / adb 抖动）：降级按一次 VOLUME_UP 保证不是 0。
+    # 宁可略吵，不可静默录出 -91dB 死寂让整条判定链假绿。
+    print -u2 -- "warning: media volume unreadable; falling back to single VOLUME_UP"
+    "$ADB" -s "$SERIAL" shell input keyevent KEYCODE_VOLUME_UP >/dev/null 2>&1
+    wait_ms 400
+    MEDIA_VOLUME_NOW=unknown
+    return 0
+  fi
+  while [[ "$cur" -ne "$target" && $i -lt 30 ]]; do
+    if [[ "$cur" -gt "$target" ]]; then
+      "$ADB" -s "$SERIAL" shell input keyevent KEYCODE_VOLUME_DOWN >/dev/null 2>&1
+    else
+      "$ADB" -s "$SERIAL" shell input keyevent KEYCODE_VOLUME_UP >/dev/null 2>&1
+    fi
+    wait_ms 250
+    cur="$(media_volume)"
+    [[ -z "$cur" ]] && break
+    i=$((i+1))
+  done
+  MEDIA_VOLUME_NOW="${cur:-unknown}"
+  [[ "$MEDIA_VOLUME_NOW" == "$target" ]] \
+    || print -u2 -- "warning: media volume settled at $MEDIA_VOLUME_NOW (target $target)"
+}
+
 record_start() {
   local eid max out pidf pid
   eid="$1"; max="${2:-110}"
@@ -1566,14 +1626,9 @@ record_start() {
     die "another recording is already running for this evidence id"
   fi
   /bin/mkdir -p "$EVIDENCE_ROOT"
-  # 取消静音（0912 根治判定阶段静音空转）：通过外部链接/详情页打开的抖音视频默认静音播放，
-  # scrcpy output 源录到的是 -91dB 死寂 → 通义 ASR 报 ASR_RESPONSE_HAVE_NO_WORDS → 判定必失败。
-  # 抖音视频静音时按物理音量键会触发 unmute（详情页无可点的静音控件，自绘不进无障碍树）。
-  # 连按两次 KEYCODE_VOLUME_UP 确定性取消静音；实测 unmute 后稳定录到 -37dB，通义逐字转写成功。
-  "$ADB" -s "$SERIAL" shell input keyevent KEYCODE_VOLUME_UP >/dev/null 2>&1
-  wait_ms 400
-  "$ADB" -s "$SERIAL" shell input keyevent KEYCODE_VOLUME_UP >/dev/null 2>&1
-  wait_ms 600
+  # 媒体音量必须非 0，否则录到 -91dB 死寂、ASR 必挂；幂等驱动到最低非零档，
+  # 稳态零按键、不再形成音量棘轮。依据见 ensure_media_volume 注释。
+  ensure_media_volume "$RECORD_MEDIA_VOLUME"
   # --no-window：无头 Mac 上禁止起 Metal 渲染窗口。实测教训：带窗口连录数轮后整机离网
   # （m4 于 20260831 录制中失联 1 小时+），无头图形渲染是 Mac mini 经典死法。
   ADB="$ADB" "$SCRCPY" -s "$SERIAL" --no-window --no-playback --record="$out" --time-limit="$max" \
@@ -1585,7 +1640,7 @@ record_start() {
     /bin/rm -f "$pidf"
     die "scrcpy failed to start; see $EVIDENCE_ROOT/$eid.rec.log"
   fi
-  print -- "record_started pid=$pid path=$out max_seconds=$max"
+  print -- "record_started pid=$pid path=$out max_seconds=$max media_volume=${MEDIA_VOLUME_NOW:-unknown}"
 }
 
 record_status() {
