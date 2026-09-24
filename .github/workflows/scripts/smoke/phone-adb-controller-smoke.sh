@@ -535,6 +535,12 @@ grep -qE 'ensure_media_volume "\$RECORD_MEDIA_VOLUME"' "$C" || fail "record_star
 _RS_BODY="$(sed -n '/^record_start()/,/^}/p' "$C")"
 _RS_VOLUP_COUNT="$(grep -c 'KEYCODE_VOLUME_UP' <<< "$_RS_BODY" || true)"
 [[ "$_RS_VOLUP_COUNT" == "0" ]] || fail "record_start 里仍有 $_RS_VOLUP_COUNT 处裸 KEYCODE_VOLUME_UP(音量棘轮的病根,必须全部收进 ensure_media_volume)"
+# ensure_media_volume 里读音量的命令替换必须带 || true：本脚本 set -euo pipefail,
+# 函数内命令替换失败会直接打死整个进程,降级分支永远到不了(0924 code-review 实测复现:
+# adb 读不到音量 → record-start 整条命令静默失败 → 判定退化 title-only 且无人察觉)。
+_EMV_BODY="$(sed -n '/^ensure_media_volume()/,/^}/p' "$C")"
+_EMV_RAW_READ="$(grep -c 'cur="\$(media_volume)"' <<< "$_EMV_BODY" || true)"
+[[ "$_EMV_RAW_READ" == "0" ]] || fail "ensure_media_volume 里有 $_EMV_RAW_READ 处裸 \$(media_volume) 未带 || true(set -e 下读不到音量会打死整个控制器,降级分支失效)"
 _DEVICE_LIST="$(sed -n '/^DEVICE_SH_FILES=(/,/^)/p' "$D/deploy.sh")"
 grep -qE '(^|[[:space:]])douyin-phone-adb([[:space:]]|$)' <<< "$_DEVICE_LIST" || fail "deploy.sh 的 DEVICE_SH_FILES 漏了 douyin-phone-adb(改了控制器却到不了手机机)"
 

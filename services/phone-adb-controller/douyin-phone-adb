@@ -1582,7 +1582,10 @@ media_volume() {
 ensure_media_volume() {
   local target="$1" cur i=0
   require_uint "$target"
-  cur="$(media_volume)"
+  # || true 不可省：本脚本 set -euo pipefail，函数内命令替换失败会直接打死整个进程，
+  # 下面那条降级分支就永远到不了（实测：adb 读不到音量时 record-start 整条命令静默失败，
+  # 采收端只会记一行"录制启动失败"，判定退化成 title-only 且无人察觉）。
+  cur="$(media_volume || true)"
   if [[ -z "$cur" ]]; then
     # 读不到音量（ROM 差异 / adb 抖动）：降级按一次 VOLUME_UP 保证不是 0。
     # 宁可略吵，不可静默录出 -91dB 死寂让整条判定链假绿。
@@ -1599,7 +1602,7 @@ ensure_media_volume() {
       "$ADB" -s "$SERIAL" shell input keyevent KEYCODE_VOLUME_UP >/dev/null 2>&1
     fi
     wait_ms 250
-    cur="$(media_volume)"
+    cur="$(media_volume || true)"
     [[ -z "$cur" ]] && break
     i=$((i+1))
   done
