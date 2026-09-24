@@ -876,6 +876,47 @@ Expected: FAIL — 收到 200 而非 409
 Run: `cd apps/api && npx vitest run src/routes/__tests__/schedule.test.ts`
 Expected: PASS
 
+- [ ] **Step 4.5: 把 read_only 透到读面（否则前端无从判断）**
+
+探索实证：`schedule-service.ts:101` 是
+`source: p.source === 'recurring' ? 'recurring' : 'oneoff'` ——
+我们写进 payload 的 `'cron'` 会被**降级成 `'oneoff'`** 吐给前端，
+镜像行在页面上和真派单长得一模一样，运营分不清哪条能改。
+
+先写失败测试（追加到 `apps/api/src/services/__tests__/schedule-service.test.ts`）：
+
+```ts
+it('read_only 必须透到读面 —— 否则前端无从判断，镜像行和真派单长得一样', () => {
+  const slot = toScheduleSlot({
+    id: 'b1', title: 'X', task_type: 'device_job', status: 'in_progress', dept: '智能获客',
+    assigned_to: 'a1', due_at: '2026-09-24T14:30:00Z', row_version: 1,
+    payload: { read_only: true, source: 'cron' },
+  } as any);
+  expect(slot.read_only).toBe(true);
+});
+
+it('真派单不带 read_only，默认 false 而不是 undefined（前端好判断）', () => {
+  const slot = toScheduleSlot({
+    id: 'b2', title: 'Y', task_type: 'device_job', status: 'queued', dept: '智能获客',
+    assigned_to: 'a1', due_at: '2026-09-24T14:30:00Z', row_version: 1,
+    payload: { source: 'oneoff' },
+  } as any);
+  expect(slot.read_only).toBe(false);
+});
+```
+
+再实现：`ScheduleSlotOut` 接口加 `read_only: boolean`，`toScheduleSlot` 的返回值加
+
+```ts
+    // 真机自发的活（cron 触发）只能看不能改：改这里的 due_at/status 对手机零作用。
+    // source 字段会被下面那行降级成 'oneoff'，所以必须单独透一个标记出去。
+    read_only: p.read_only === true,
+```
+
+前端 `apps/dashboard/src/api/schedule.api.ts` 的 `ScheduleSlot` 接口同步加
+`read_only: boolean;`（当前 `updateJobTime`/`cancelJob` 还没有组件在调用，
+但接上按钮的那天必须能判断，别留个坑等人踩）。
+
 - [ ] **Step 5: 提交**
 
 ```bash
