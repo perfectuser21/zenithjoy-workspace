@@ -35,7 +35,7 @@ MMV_JS_FILES=(
   judge-video-lib.js transcribe-qwen-audio.js comment-tier-lib.js line-routes.js
   lead-fields-lib.js kpi-gate.js next-keywords.js keyword-enabled-lib.js update-keyword-stats.js keyword-stats-lib.js
   fetch-seen-videos.js check-own-account.js dm-daily-cap.js dm-rate-ramp-lib.js
-  own-accounts-lib.js push-leads.js update-profile-links.js
+  own-accounts-lib.js push-leads.js update-profile-links.js nickname-match-lib.js
 )
 MMV_TOPLEVEL_FILES=(cmdr-escort.txt cmdr-stream.txt)
 DEVICE_SH_FILES=(
