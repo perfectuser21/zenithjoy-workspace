@@ -577,7 +577,26 @@ _RS_VOLUP_COUNT="$(grep -c 'KEYCODE_VOLUME_UP' <<< "$_RS_BODY" || true)"
 _EMV_BODY="$(sed -n '/^ensure_media_volume()/,/^}/p' "$C")"
 _EMV_RAW_READ="$(grep -c 'cur="\$(media_volume)"' <<< "$_EMV_BODY" || true)"
 [[ "$_EMV_RAW_READ" == "0" ]] || fail "ensure_media_volume 里有 $_EMV_RAW_READ 处裸 \$(media_volume) 未带 || true(set -e 下读不到音量会打死整个控制器,降级分支失效)"
-_DEVICE_LIST="$(sed -n '/^DEVICE_SH_FILES=(/,/^)/p' "$D/deploy.sh")"
-grep -qE '(^|[[:space:]])douyin-phone-adb([[:space:]]|$)' <<< "$_DEVICE_LIST" || fail "deploy.sh 的 DEVICE_SH_FILES 漏了 douyin-phone-adb(改了控制器却到不了手机机)"
+# 层26: 部署路径必须覆盖"消费者真正调用的那个路径"(结构性守卫,不是写死字符串)
+# (0924 实证,代价惨痛: deploy.sh 只把 douyin-phone-adb 发到 ~/bin-harvest/,而
+#  harvest-keyword.sh:7 / outreach-tick.sh / refill-profile-links.sh 的 C= 全部写死
+#  ~/.local/bin/douyin-phone-adb —— 那才是 cron 真正执行的副本。结果 PR #1970 合并、
+#  deploy.sh 全绿、md5 校验通过,生产跑的仍是旧版,音量棘轮修复完全没生效。
+#  本守卫从消费者侧反推真实调用目录,再去核 deploy.sh 是否覆盖,
+#  让"部署路径 != 执行路径"这一整类问题被 CI 挡住,而不是靠人记得。)
+_CTL_LINE="$(grep -m1 '^C=' "$D/harvest-keyword.sh" || true)"
+[[ -n "$_CTL_LINE" ]] || fail "harvest-keyword.sh 找不到 C= 控制器路径定义(守卫失去锚点,先修守卫)"
+_CTL_PATH="${_CTL_LINE#C=}"
+_CTL_DIR="${_CTL_PATH%/*}"
+_CTL_DIR="${_CTL_DIR#\~/}"
+[[ -n "$_CTL_DIR" ]] || fail "从 harvest-keyword.sh 的 C= 解析不出控制器目录: $_CTL_LINE"
+grep -qF "$_CTL_DIR/" "$D/deploy.sh" \
+  || fail "deploy.sh 没有覆盖 harvest-keyword.sh 真正调用的控制器目录 '$_CTL_DIR'(部署会全绿但生产跑旧代码——0924 已栽过一次)"
+_CTL_BASE="${_CTL_PATH##*/}"
+grep -qE "(^|[[:space:]])$_CTL_BASE([[:space:]]|$)" <<< "$(sed -n '/^DEVICE_CTL_FILES=(/,/^)/p' "$D/deploy.sh")" \
+  || fail "deploy.sh 的 DEVICE_CTL_FILES 漏了 $_CTL_BASE(控制器不会被下发)"
+for _d in bin-harvest .local/bin; do
+  grep -qF "$_d/" "$D/deploy.sh" || fail "deploy.sh 未覆盖控制器目录 $_d(两个消费者各指一个目录,漏一个就版本分叉)"
+done
 
 echo "phone-adb-controller-smoke: PASS"
