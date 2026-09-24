@@ -81,6 +81,8 @@ for host in xian-m4 xian-m1; do
     # 0924 实测两台机 bin-harvest=新版、.local/bin=旧版，下发"成功"了夜批却跑旧的
     # （昵称归一那次差点就这么白改）。这条路径长期两份不同步，见 memory
     # phone_controller_live_path_is_local_bin_not_repo。
+    # 两处送的是同一次循环里的同一个源文件($D/$f),不是两条独立下发链——
+    # 不存在"两份各自演化再不同步"的风险,恰恰是为了消灭原来那种不同步。
     if [[ "$f" == "douyin-phone-adb" ]]; then
       ssh "$host" "mkdir -p ~/.local/bin"
       scp -q -p "$D/$f" "$host:~/.local/bin/$f"

@@ -414,6 +414,7 @@ if [[ -n "$_CALL_PATH" ]]; then
   # zsh、/tmp 可不可写……），本地绿 CI 红查不动。真正要守的是「送到哪了」，
   # 这条断言本身就拦得住去掉 scp / 条件恒假 / 送错目录 / 漏掉一台四种改法。
   _STUB=$(mktemp -d)
+  trap 'rm -rf "$_STUB"' EXIT   # fail 走 exit 1,显式 rm 够不着,交给 trap 兜底
   printf '#!/bin/bash\nfor a in "$@"; do printf "%%s\\n" "$a"; done >> "%s/scp.log"\nexit 0\n' "$_STUB" > "$_STUB/scp"
   printf '#!/bin/bash\nexit 0\n' > "$_STUB/ssh"
   chmod +x "$_STUB/scp" "$_STUB/ssh"
@@ -425,11 +426,9 @@ if [[ -n "$_CALL_PATH" ]]; then
       tail -15 "$_STUB/run.log" >&2 2>/dev/null || echo "(没有输出)" >&2
       echo "--- 实际送出的目标 ---" >&2
       grep -E '^[a-z0-9-]+:' "$_STUB/scp.log" 2>/dev/null | sort -u >&2 || echo "(scp.log 为空)" >&2
-      rm -rf "$_STUB"
       fail "deploy.sh 空跑后没往 $_h:${_CALL_DIR}/ 送 douyin-phone-adb —— 夜批调的就是这个路径(harvest-keyword.sh 里写死 ${_CALL_PATH})，下发到别处=手机上永远跑旧版"
     fi
   done
-  rm -rf "$_STUB"
 fi
 
 grep -qF 'normalize_nickname' "$D/douyin-phone-adb" \
