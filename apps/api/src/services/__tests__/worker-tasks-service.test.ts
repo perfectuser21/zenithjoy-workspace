@@ -106,7 +106,7 @@ describe('reportStep', () => {
   });
 });
 
-import { createMirrorJob } from '../brain-device-job-mirror';
+import { createMirrorJob, attachMirrorJob } from '../brain-device-job-mirror';
 vi.mock('../brain-device-job-mirror', () => ({
   createMirrorJob: vi.fn(async () => 'brain-1'),
   attachMirrorJob: vi.fn(async () => undefined),
@@ -144,6 +144,10 @@ describe('startTask 桥接 Brain', () => {
 
     await startTask({ agentId: 'a1', title: '[派活演示] 小蓝', steps: ['s1'], executorId: 'adb-wall', brainJobId: 'brain-existing' });
     expect(createMirrorJob).not.toHaveBeenCalled();
+    // 光断言"没建单"是假绿：桥接压根没接进来时它也成立。必须同时证明**真的走了关联分支**，
+    // 否则实现里漏写 attachMirrorJob，这条用例照样绿，而线上表现是 worker_task 和
+    // Brain 单失联 —— 收尾和 sweep 都找不到 brain_task_id。
+    expect(attachMirrorJob).toHaveBeenCalledWith('wt-2', 'brain-existing');
   });
 
   it('Brain 建单抛错也不能让 startTask 失败 —— 采收是正事', async () => {
@@ -161,5 +165,8 @@ describe('startTask 桥接 Brain', () => {
 
     await expect(startTask({ agentId: 'a1', title: 'X', steps: ['s'], executorId: 'adb-wall' }))
       .resolves.toMatchObject({ task_id: 'wt-3' });
+    // 同上：桥接没接进来时"不抛错"天然成立。要先证明它**确实调用了会抛错的那条路**，
+    // 这条"抛错也不失败"才有意义。
+    expect(createMirrorJob).toHaveBeenCalled();
   });
 });
