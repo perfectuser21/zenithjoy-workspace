@@ -153,20 +153,12 @@ describe('Brain 任务 → 页面 slot 的映射', () => {
   });
 
   it('read_only 必须透到读面 —— 否则前端无从判断，镜像行和真派单长得一样', () => {
-    const slot = toScheduleSlot({
-      id: 'b1', title: 'X', task_type: 'device_job', status: 'in_progress', dept: '智能获客',
-      assigned_to: 'a1', due_at: '2026-09-24T14:30:00Z', row_version: 1,
-      payload: { read_only: true, source: 'cron' },
-    } as any);
+    const slot = toScheduleSlot(job({ status: 'in_progress', payload: { read_only: true, source: 'cron' } }));
     expect(slot.read_only).toBe(true);
   });
 
   it('真派单不带 read_only，默认 false 而不是 undefined（前端好判断）', () => {
-    const slot = toScheduleSlot({
-      id: 'b2', title: 'Y', task_type: 'device_job', status: 'queued', dept: '智能获客',
-      assigned_to: 'a1', due_at: '2026-09-24T14:30:00Z', row_version: 1,
-      payload: { source: 'oneoff' },
-    } as any);
+    const slot = toScheduleSlot(job({ payload: { source: 'oneoff' } }));
     expect(slot.read_only).toBe(false);
   });
 });

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from 'vitest';
 import { buildMirrorTitle, mapWorkerStatus, buildMirrorPayload } from '../brain-device-job-mirror';
 
