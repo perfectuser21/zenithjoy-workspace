@@ -127,3 +127,25 @@ export async function attachMirrorJob(workerTaskId: string, brainTaskId: string)
     console.error('[brain-mirror] 关联 brain_task_id 失败:', e);
   }
 }
+
+/** 回写 Brain 单的终态。失败落 outbox，不抛。 */
+export async function completeMirrorJob(
+  brainTaskId: string, workerStatus: string, extra?: Record<string, unknown>,
+): Promise<void> {
+  const brain = getBrainPool();
+  const status = mapWorkerStatus(workerStatus);
+  if (!brain) { await toOutbox(brainTaskId, 'complete', { brainTaskId, status, extra }); return; }
+  try {
+    await brain.query(
+      `UPDATE tasks
+          SET status = $2,
+              completed_at = CASE WHEN $2 IN ('completed','failed') THEN NOW() ELSE completed_at END,
+              payload = COALESCE(payload, '{}'::jsonb) || $3::jsonb,
+              updated_at = NOW()
+        WHERE id = $1`,
+      [brainTaskId, status, JSON.stringify({ finished_at: new Date().toISOString(), ...(extra ?? {}) })],
+    );
+  } catch (e) {
+    await toOutbox(brainTaskId, 'complete', { brainTaskId, status, extra }, e);
+  }
+}

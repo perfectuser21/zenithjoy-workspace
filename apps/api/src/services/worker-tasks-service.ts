@@ -1,7 +1,7 @@
 import pool from '../db/connection';
 import { saveShot } from './worker-shots';
 import { ONLINE_WINDOW_SQL } from './agent-machines-normalize';
-import { createMirrorJob, attachMirrorJob } from './brain-device-job-mirror';
+import { createMirrorJob, attachMirrorJob, completeMirrorJob } from './brain-device-job-mirror';
 
 export const LEASE_MS = 10 * 60 * 1000;
 const MAX_SHOT_B64 = Math.ceil(200 * 1024 * 4 / 3);
@@ -99,12 +99,17 @@ export async function startTask(input: {
 }
 
 async function loadRunning(taskId: string, executorId: string) {
-  const r = await pool.query(`SELECT id, tenant_id, status, executor_id, steps_total FROM zenithjoy.worker_tasks WHERE id = $1`, [taskId]);
+  // evidence 必须一起取：completeTask 收尾要靠 evidence.brain_task_id 找到 Brain 那条单去回写，
+  // 这里不补列，回写就永远拿不到 id、静默不发生（测试会绿，线上没效果）。
+  const r = await pool.query(`SELECT id, tenant_id, status, executor_id, steps_total, evidence FROM zenithjoy.worker_tasks WHERE id = $1`, [taskId]);
   if (r.rows.length === 0) throw new WorkerTaskError('TASK_NOT_FOUND', '任务不存在', 404);
   const t = r.rows[0];
   if (t.status !== 'running') throw new WorkerTaskError('TASK_NOT_RUNNING', '任务已结束，执行器必须停手', 409);
   if (t.executor_id !== executorId) throw new WorkerTaskError('EXECUTOR_MISMATCH', '租约不属于该执行器', 409);
-  return { id: t.id as string, tenant_id: t.tenant_id as string, steps_total: Number(t.steps_total ?? 0) };
+  return {
+    id: t.id as string, tenant_id: t.tenant_id as string, steps_total: Number(t.steps_total ?? 0),
+    evidence: (t.evidence ?? null) as { brain_task_id?: string } | null,
+  };
 }
 
 export async function reportStep(taskId: string, r: StepReport) {
@@ -148,17 +153,42 @@ export async function completeTask(taskId: string, body: {
   }
   await pool.query(
     `UPDATE zenithjoy.worker_tasks SET status = $2, finished_at = NOW(), error_code = $3, failed_step = $4,
-        evidence = $5, updated_at = NOW() WHERE id = $1`,
-    [taskId, body.outcome, body.error_code ?? null, body.failed_step ?? null, evidence ? JSON.stringify(evidence) : null],
+        evidence = COALESCE(evidence, '{}'::jsonb) || $5::jsonb, updated_at = NOW() WHERE id = $1`,
+    [taskId, body.outcome, body.error_code ?? null, body.failed_step ?? null, JSON.stringify(evidence ?? {})],
   );
+
+  // 回写 Brain。整段吞异常：收尾成功与否不取决于记账。
+  try {
+    const brainTaskId = t.evidence?.brain_task_id;
+    if (brainTaskId) {
+      await completeMirrorJob(brainTaskId, body.outcome, {
+        error_code: body.error_code ?? null,
+        leads_local: (evidence as Record<string, unknown> | null)?.leads_local ?? null,
+        leads_persisted: (evidence as Record<string, unknown> | null)?.leads_persisted ?? null,
+      });
+    }
+  } catch (e) {
+    console.error('[worker-tasks] Brain 回写失败（不影响本次收尾）:', e);
+  }
   return { ok: true };
 }
 
 export async function sweepExpiredLeases(): Promise<number> {
   const r = await pool.query(
     `UPDATE zenithjoy.worker_tasks SET status = 'failed', error_code = 'executor_lost', finished_at = NOW(), updated_at = NOW()
-      WHERE status = 'running' AND lease_until < NOW() RETURNING id`,
+      WHERE status = 'running' AND lease_until < NOW() RETURNING id, evidence`,
   );
+  // 本地置了 failed，Brain 侧不同步就会永远挂 in_progress，并持续占住
+  // idx_tasks_dedup_active 的槽位，把后续同名建单全挡在外面。
+  for (const row of r.rows ?? []) {
+    const brainTaskId = (row as { evidence?: { brain_task_id?: string } }).evidence?.brain_task_id;
+    if (!brainTaskId) continue;
+    try {
+      await completeMirrorJob(brainTaskId, 'failed', { error_code: 'executor_lost' });
+    } catch (e) {
+      console.error('[worker-tasks] sweep 回写 Brain 失败:', e);
+    }
+  }
   return r.rowCount ?? 0;
 }
 
