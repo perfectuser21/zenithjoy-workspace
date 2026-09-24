@@ -137,9 +137,14 @@ export async function completeMirrorJob(
   if (!brain) { await toOutbox(brainTaskId, 'complete', { brainTaskId, status, extra }); return; }
   try {
     await brain.query(
+      // $2 必须显式标 ::text：它同时喂给 status（varchar 列）和 IN ('completed','failed')
+      // 的文本比较，不标类型 PG 推不出一致类型，直接报
+      // "inconsistent types deduced for parameter $2"。
+      // 这条 mock 测试验不出来（pool 被 mock，SQL 文本没人真跑）——0924 上生产后
+      // 是 outbox 把它捞出来的，表现为收尾永远不回写、页面停在"执行中"。
       `UPDATE tasks
-          SET status = $2,
-              completed_at = CASE WHEN $2 IN ('completed','failed') THEN NOW() ELSE completed_at END,
+          SET status = $2::text,
+              completed_at = CASE WHEN $2::text IN ('completed','failed') THEN NOW() ELSE completed_at END,
               payload = COALESCE(payload, '{}'::jsonb) || $3::jsonb,
               updated_at = NOW()
         WHERE id = $1`,
