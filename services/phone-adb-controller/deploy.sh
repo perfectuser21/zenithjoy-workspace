@@ -76,6 +76,16 @@ for host in xian-m4 xian-m1; do
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; continue; fi
     scp -q -p "$D/$f" "$host:~/bin-harvest/$f"
     ssh "$host" "chmod +x ~/bin-harvest/$f"
+    # douyin-phone-adb 还要送一份到 ~/.local/bin/ —— **夜批真正调的是那个**：
+    # harvest-keyword.sh 里写的是 `C=~/.local/bin/douyin-phone-adb`。
+    # 0924 实测两台机 bin-harvest=新版、.local/bin=旧版，下发"成功"了夜批却跑旧的
+    # （昵称归一那次差点就这么白改）。这条路径长期两份不同步，见 memory
+    # phone_controller_live_path_is_local_bin_not_repo。
+    if [[ "$f" == "douyin-phone-adb" ]]; then
+      ssh "$host" "mkdir -p ~/.local/bin"
+      scp -q -p "$D/$f" "$host:~/.local/bin/$f"
+      ssh "$host" "chmod +x ~/.local/bin/$f"
+    fi
     if command -v zsh >/dev/null 2>&1 && ssh "$host" "zsh -n ~/bin-harvest/$f" 2>/tmp/deploy-err-$$; then
       echo "    ✅ $f"
     elif [[ -s /tmp/deploy-err-$$ ]]; then

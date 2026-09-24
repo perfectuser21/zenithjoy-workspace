@@ -395,6 +395,21 @@ grep -qF 'enabledValueFor' "$_KS" || fail "自建行的「是否启用」仍是�
 _NICK_LIB="$D/nickname-match-lib.js"
 [[ -s "$_NICK_LIB" ]] || fail "nickname-match-lib.js 缺失"
 node --check "$_NICK_LIB" || fail "nickname-match-lib.js 语法错误"
+# 层17(0924): 下发落点必须是调用方真正用的那个路径
+# deploy.sh 把 douyin-phone-adb 送到 ~/bin-harvest/，而 harvest-keyword.sh 里写的是
+#   C=~/.local/bin/douyin-phone-adb
+# 两台机实测：bin-harvest=新版、.local/bin=旧版 —— 下发"成功"了，夜批却永远跑旧的。
+# deploy.sh 的注释已经写过「不下发 = 改了控制器却永远到不了手机机」，但落点选错了，
+# 等于只把文件搬到了一个没人读的地方（同款形状见 memory
+# phone_controller_live_path_is_local_bin_not_repo：这条路径长期两份不同步）。
+_CALL_PATH=$(grep -ohE '[~$][^ ]*/douyin-phone-adb' "$D/harvest-keyword.sh" 2>/dev/null | sort -u | head -1)
+if [[ -n "$_CALL_PATH" ]]; then
+  # 调用方用的目录（去掉文件名），必须出现在 deploy.sh 的下发目标里
+  _CALL_DIR="${_CALL_PATH%/douyin-phone-adb}"
+  grep -qF "$_CALL_DIR/" "$D/deploy.sh" \
+    || fail "deploy.sh 没往 $_CALL_DIR/ 下发 douyin-phone-adb —— 但 harvest-keyword.sh 调的就是它（下发到别处=夜批永远跑旧版）"
+fi
+
 grep -qF 'normalize_nickname' "$D/douyin-phone-adb" \
   || fail "douyin-phone-adb 没有 normalize_nickname —— 昵称比对又回到裸字符串比，带 emoji 的人会被全判成进错人"
 # 比对处必须比归一后的值，不能比原始值
