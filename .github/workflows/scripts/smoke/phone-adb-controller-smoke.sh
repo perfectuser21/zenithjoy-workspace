@@ -395,6 +395,42 @@ grep -qF 'enabledValueFor' "$_KS" || fail "自建行的「是否启用」仍是�
 _NICK_LIB="$D/nickname-match-lib.js"
 [[ -s "$_NICK_LIB" ]] || fail "nickname-match-lib.js 缺失"
 node --check "$_NICK_LIB" || fail "nickname-match-lib.js 语法错误"
+# 层17(0924): 下发落点必须是调用方真正用的那个路径
+# deploy.sh 把 douyin-phone-adb 送到 ~/bin-harvest/，而 harvest-keyword.sh 里写的是
+#   C=~/.local/bin/douyin-phone-adb
+# 两台机实测：bin-harvest=新版、.local/bin=旧版 —— 下发"成功"了，夜批却永远跑旧的。
+# deploy.sh 的注释已经写过「不下发 = 改了控制器却永远到不了手机机」，但落点选错了，
+# 等于只把文件搬到了一个没人读的地方（同款形状见 memory
+# phone_controller_live_path_is_local_bin_not_repo：这条路径长期两份不同步）。
+_CALL_PATH=$(grep -ohE '[~$][^ ]*/douyin-phone-adb' "$D/harvest-keyword.sh" 2>/dev/null | sort -u | head -1)
+if [[ -n "$_CALL_PATH" ]]; then
+  # 调用方用的目录（去掉文件名），必须出现在 deploy.sh 的下发目标里
+  _CALL_DIR="${_CALL_PATH%/douyin-phone-adb}"
+  # 只 grep 路径字符串拦不住「if 条件被改成恒假」——字符串照样躺在文件里。
+  # 所以这里**真跑一遍 deploy.sh**：把 scp/ssh 打桩成只记账不出网，
+  # 读它实际送出的目标清单。查的是行为，不是措辞。
+  #
+  # 不断言 deploy.sh 的退出码：那受一堆与落点无关的环境差异影响（跑场机有没有
+  # zsh、/tmp 可不可写……），本地绿 CI 红查不动。真正要守的是「送到哪了」，
+  # 这条断言本身就拦得住去掉 scp / 条件恒假 / 送错目录 / 漏掉一台四种改法。
+  _STUB=$(mktemp -d)
+  trap 'rm -rf "$_STUB"' EXIT   # fail 走 exit 1,显式 rm 够不着,交给 trap 兜底
+  printf '#!/bin/bash\nfor a in "$@"; do printf "%%s\\n" "$a"; done >> "%s/scp.log"\nexit 0\n' "$_STUB" > "$_STUB/scp"
+  printf '#!/bin/bash\nexit 0\n' > "$_STUB/ssh"
+  chmod +x "$_STUB/scp" "$_STUB/ssh"
+  PATH="$_STUB:$PATH" bash "$D/deploy.sh" > "$_STUB/run.log" 2>&1 || true
+  for _h in xian-m4 xian-m1; do
+    if ! grep -qx "$_h:${_CALL_DIR}/douyin-phone-adb" "$_STUB/scp.log" 2>/dev/null; then
+      # 带上现场再死，否则下一个人只能靠猜（本仓死规矩：不拿现场不动手）
+      echo "--- deploy.sh 空跑输出(末 15 行) ---" >&2
+      tail -15 "$_STUB/run.log" >&2 2>/dev/null || echo "(没有输出)" >&2
+      echo "--- 实际送出的目标 ---" >&2
+      grep -E '^[a-z0-9-]+:' "$_STUB/scp.log" 2>/dev/null | sort -u >&2 || echo "(scp.log 为空)" >&2
+      fail "deploy.sh 空跑后没往 $_h:${_CALL_DIR}/ 送 douyin-phone-adb —— 夜批调的就是这个路径(harvest-keyword.sh 里写死 ${_CALL_PATH})，下发到别处=手机上永远跑旧版"
+    fi
+  done
+fi
+
 grep -qF 'normalize_nickname' "$D/douyin-phone-adb" \
   || fail "douyin-phone-adb 没有 normalize_nickname —— 昵称比对又回到裸字符串比，带 emoji 的人会被全判成进错人"
 # 比对处必须比归一后的值，不能比原始值
