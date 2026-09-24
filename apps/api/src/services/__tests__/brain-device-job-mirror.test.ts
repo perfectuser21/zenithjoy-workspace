@@ -63,7 +63,7 @@ vi.mock('../../db/brain-pool', () => ({ getBrainPool: vi.fn() }));
 vi.mock('../../db/connection', () => ({ default: { query: vi.fn() } }));
 import { getBrainPool } from '../../db/brain-pool';
 import localPool from '../../db/connection';
-import { createMirrorJob } from '../brain-device-job-mirror';
+import { createMirrorJob, completeMirrorJob } from '../brain-device-job-mirror';
 
 describe('completeMirrorJob 的 SQL 必须给 $2 显式标类型', () => {
   // 0924 生产事故：$2 同时喂给 status（varchar 列）和 IN ('completed','failed') 的文本比较，
