@@ -19,11 +19,6 @@
  * 内部 fetch self-call：用 PORT env 或默认 5200。
  */
 
-import { enqueueWarmupTasks } from './warmup-dispatch';
-import { dispatchDue } from './acquisition-dispatch';
-import { sweepCollectTimeouts } from '../routes/acquisition';
-import pool from '../db/connection';
-
 const CRON_EXPRESSION = '0 9 * * *'; // cron: '0 9 * * *' — 每日 09:00（server 时区）
 const POLL_INTERVAL_MS = 60_000; // 每分钟检查一次
 const SCHEDULER_TICK_PATH = '/api/wechat/scheduler-tick';
@@ -34,16 +29,10 @@ const DAILY_REPORT_SETTLE_PATH = '/api/wechat/cs/daily-report/settle';
 const DAILY_REPORT_HOUR_BJ = 23;
 const DAILY_REPORT_MINUTE_BJ = 55;
 
-// Line02 warmup：每天北京 10:00 给所有在线 android burner agent 下发一次养号验活任务
-// （enqueueWarmupTasks 直接调服务函数，全租户；24h 去重在函数内做）。
-const WARMUP_HOUR_BJ = 10;
-const WARMUP_MINUTE_BJ = 0;
-
 export interface SchedulerHandle {
   timer: NodeJS.Timeout;
   lastFiredYmd: string | null;
   lastReportYmd: string | null;
-  lastWarmupYmd: string | null;
 }
 
 /** 取「北京当前时刻」的 {hour, minute, ymd}（不依赖 server 本地时区）。 */
@@ -124,89 +113,6 @@ export async function triggerDailyReportSettlement(): Promise<void> {
 }
 
 /**
- * Line02 warmup 每日下发：直接调 enqueueWarmupTasks()（全租户，同进程服务函数，无需 HTTP 自调）。
- * 全程容错：出错只 warn 不抛（不拖垮 scheduler 主循环）。24h 去重在 enqueueWarmupTasks 内。
- */
-export async function triggerWarmupEnqueue(): Promise<void> {
-  try {
-    const r = await enqueueWarmupTasks();
-    console.log(`[scheduler] warmup enqueue fired: enqueued=${r.enqueued}`);
-  } catch (err) {
-    console.warn('[scheduler] warmup enqueue 失败:', err);
-  }
-}
-
-// 再入守卫：一轮 sweep（含内部 DB 查询 + 多租户 dispatchDue 遍历）跑不完 60s 时，
-// 防止下一次 setInterval tick 再起一轮重叠 sweep——dispatchDue 内部无行锁，
-// 两轮重叠可能同时读到同一条 status='queued' 的 dm_assignments 并各自派单一次，
-// 造成同一 lead 被重复私信（获客场景下是真实的重复发送/封号风险）。
-let sweepInFlight = false;
-
-/**
- * Path2 Seg4 DM 派单周期扫描：每次 tick（每分钟）都执行，不按时刻门控——
- * dm_assignments.scheduled_for 是当天随机分散的具体时间点，必须随时检查是否有新到期的。
- * 治根 2026-07-19：buildAssignments/dispatchDue 之前只在 /collect/report 的
- * afterCommit 链里同步调用一次，此时 scheduled_for 通常还没到，之后没有任何周期
- * 任务回头检查——queued 的 assignment 会永远卡住，只能靠人工手动 POST /dispatch/run。
- * 全程容错：单租户 dispatchDue 失败只 warn，不影响其它租户 / 不拖垮 scheduler 主循环。
- * 再入守卫：上一轮未完成时本次 tick 直接跳过（见 sweepInFlight 注释）。
- */
-export async function triggerDmDispatchSweep(): Promise<void> {
-  if (sweepInFlight) {
-    console.warn('[scheduler] dm-dispatch-sweep 上一轮尚未完成，本次 tick 跳过（防止重叠派单）');
-    return;
-  }
-  sweepInFlight = true;
-  try {
-    let dueTenants: string[] = [];
-    try {
-      const res = await pool.query(
-        `SELECT DISTINCT tenant_id FROM zenithjoy.dm_assignments
-          WHERE status = 'queued' AND scheduled_for <= now()`,
-      );
-      dueTenants = (res.rows as Array<{ tenant_id: string }>).map((r) => r.tenant_id);
-    } catch (err) {
-      console.warn('[scheduler] dm-dispatch-sweep 查询到期租户失败:', err);
-      return;
-    }
-    for (const tenantId of dueTenants) {
-      try {
-        const r = await dispatchDue(pool, tenantId);
-        console.log(`[scheduler] dm-dispatch-sweep fired for tenant=${tenantId}: dispatched=${r.dispatched}`);
-      } catch (err) {
-        console.warn(`[scheduler] dm-dispatch-sweep tenant=${tenantId} 失败:`, err);
-      }
-    }
-  } finally {
-    sweepInFlight = false;
-  }
-}
-
-// 2026-07-28 issue：collect/sweep-timeouts 端点代码早就写好（10分钟超时把 running/
-// stage_1_done 的采集任务转终态+写 error_code），但此前没有任何调度器调用它，等于摆设——
-// 07-28真机复测有安卓设备的采集任务卡在 running 无限期不收尾。同 sweepInFlight 模式加
-// 再入守卫，防止上一轮没跑完时下一次 tick 重叠。
-let collectSweepInFlight = false;
-
-export async function triggerCollectTimeoutSweep(): Promise<void> {
-  if (collectSweepInFlight) {
-    console.warn('[scheduler] collect-timeout-sweep 上一轮尚未完成，本次 tick 跳过');
-    return;
-  }
-  collectSweepInFlight = true;
-  try {
-    const r = await sweepCollectTimeouts();
-    if (r.swept > 0) {
-      console.log(`[scheduler] collect-timeout-sweep fired: swept=${r.swept}`);
-    }
-  } catch (err) {
-    console.warn('[scheduler] collect-timeout-sweep 失败:', err);
-  } finally {
-    collectSweepInFlight = false;
-  }
-}
-
-/**
  * 启动 cron 轮询：每分钟检查 server 时间是否进入 09:00 那一分钟，进入则 fire。
  * 同一日同一 09:00 分钟只 fire 一次（lastFiredYmd 防抖）。
  * 同一 interval 内还检查「北京 23:55」→ 触发 S4 客服日报结算（lastReportYmd 防抖，按北京自然日去重）。
@@ -240,27 +146,9 @@ export function startScheduler(): SchedulerHandle {
           });
         }
       }
-      // Line02 warmup：北京 10:00 → 给在线 android burner agent 下发养号验活（按北京自然日去重）
-      if (bj.hour === WARMUP_HOUR_BJ && bj.minute === WARMUP_MINUTE_BJ) {
-        if (handle.lastWarmupYmd !== bj.ymd) {
-          handle.lastWarmupYmd = bj.ymd;
-          triggerWarmupEnqueue().catch((err) => {
-            console.warn('[scheduler] interval-fired warmup 异常:', err);
-          });
-        }
-      }
-      // Path2 Seg4 DM 派单：每次 tick 都扫（不按时刻门控，随时检查到期的 queued assignment）
-      triggerDmDispatchSweep().catch((err) => {
-        console.warn('[scheduler] interval-fired dm-dispatch-sweep 异常:', err);
-      });
-      // Path2 采集任务超时收尸：每次 tick 都扫（不按时刻门控，10分钟 cutoff 由函数内部判断）
-      triggerCollectTimeoutSweep().catch((err) => {
-        console.warn('[scheduler] interval-fired collect-timeout-sweep 异常:', err);
-      });
     }, POLL_INTERVAL_MS),
     lastFiredYmd: null,
     lastReportYmd: null,
-    lastWarmupYmd: null,
   };
   return handle;
 }
