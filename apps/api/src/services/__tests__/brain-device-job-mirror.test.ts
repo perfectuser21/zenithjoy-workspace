@@ -65,6 +65,23 @@ import { getBrainPool } from '../../db/brain-pool';
 import localPool from '../../db/connection';
 import { createMirrorJob } from '../brain-device-job-mirror';
 
+describe('completeMirrorJob 的 SQL 必须给 $2 显式标类型', () => {
+  // 0924 生产事故：$2 同时喂给 status（varchar 列）和 IN ('completed','failed') 的文本比较，
+  // 不标 ::text 时 PG 报 "inconsistent types deduced for parameter $2"，收尾永远不回写、
+  // 页面停在"执行中"。1030 个测试全绿也抓不到——pool 是 mock 的，SQL 文本没人真跑。
+  // 所以这里只能直接断言 SQL 文本，这是 mock 测试唯一能守住 SQL 正确性的办法。
+  it('status 与 CASE WHEN 两处的 $2 都带 ::text', async () => {
+    const q = vi.fn(async () => ({ rows: [] }));
+    (getBrainPool as any).mockReturnValue({ query: q });
+    await completeMirrorJob('brain-1', 'completed', {});
+    const sql = q.mock.calls[0][0] as string;
+    expect(sql).toMatch(/SET\s+status\s*=\s*\$2::text/i);
+    expect(sql).toMatch(/CASE\s+WHEN\s+\$2::text\s+IN/i);
+    // 反过来防退化：不允许出现裸的 $2（后面不跟 ::）
+    expect(sql).not.toMatch(/\$2(?!::)/);
+  });
+});
+
 describe('createMirrorJob', () => {
   const args = {
     workerTaskId: 'wt-1', agentId: 'agent-uuid-1', serial: 'ANGYVB4227006983',
