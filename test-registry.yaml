@@ -6548,6 +6548,22 @@ agent_suite:
     product: 工作机控制塔
     note: "worker_tasks/worker_task_steps 建表 migration 静态守卫：幂等建表、running 唯一索引、失败现场三件套字段。"
 
+  - id: brain-device-job-mirror-unit
+    path: apps/api/src/services/__tests__/brain-device-job-mirror.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机排程
+    note: "worker_task→Brain device_job 桥接的纯函数与 IO 分支。断言 title 必须带序列号尾4位+时分（Brain 的 idx_tasks_dedup_active 是 UNIQUE(title,goal_id,project_id) WHERE status IN ('queued','in_progress')，两台机同跑一个词会 23505 被静默咽掉，页面还是 0 条——已在生产库 dry-run 实证）；断言 payload 三道闸：source='cron' 而非 'oneoff'（/claim 只认 oneoff，写错会让领单器把已在跑的活再领一遍，两进程抢同一台手机）、read_only（页面对镜像行做 CAS 对真机零作用，点了取消手机照跑）、headed_manual（防 Brain tick 把这条活派给 LLM 执行体真去跑一轮采收）；断言未知状态落 blocked 不静默变'待跑'；断言 Brain 不可用/写失败时吞异常落 outbox 并返回 null（记账是附属，采收是正事）。"
+
+  - id: brain-sync-outbox-migration
+    path: apps/api/src/services/__tests__/brain-sync-outbox-migration.test.ts
+    type: unit
+    ci: L3
+    status: active
+    product: 工作机排程
+    note: "brain_sync_outbox 建表 migration 静态守卫：幂等建表（IF NOT EXISTS）、无破坏性语句、字段齐（worker_task_id/op/payload/attempts/last_error）。桥接往 Brain 写是 best-effort，丢了会造成系统性偏差——跨境网络坏的那晚恰恰最需要看见，却一条记录都没有，页面从'0 任务'变成'只显示好天气的任务'。"
+
   - id: worker-control-tower-tasks-service-unit
     path: apps/api/src/services/__tests__/worker-tasks-service.test.ts
     type: unit
