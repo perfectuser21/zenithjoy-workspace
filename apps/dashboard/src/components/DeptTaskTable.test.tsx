@@ -14,6 +14,7 @@ const at = (hh: number, minutes: number, extra: Partial<ScheduleSlot> = {}): Sch
   est_minutes: minutes,
   source: 'recurring',
   status: 'queued',
+  read_only: false,
   ...extra,
 });
 

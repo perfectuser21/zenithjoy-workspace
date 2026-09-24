@@ -250,11 +250,18 @@ scheduleRouter.patch('/jobs/:id/time', rateLimit, async (req: Request, res: Resp
     const agents = await tenantAgents(tenantId);
     const ids = agents.map((a) => a.id);
     const owned = await brain.query(
-      `SELECT id, status, row_version FROM tasks
+      `SELECT id, status, row_version, payload FROM tasks
         WHERE id = $1 AND task_type='device_job' AND assigned_to = ANY($2::text[])`,
       [req.params.id, ids],
     );
     if (owned.rows.length === 0) return res.status(404).json(ERR('NOT_FOUND', '这条活不存在'));
+
+    // 真机自发的活（cron 触发）在页面上是只读镜像：它的执行由手机上的 cron 决定，
+    // 改这里的 due_at 或 status 对真机零作用。放行 = 让运营以为取消了，手机照跑。
+    if ((owned.rows[0].payload ?? {}).read_only === true) {
+      return res.status(409).json(ERR('READ_ONLY_JOB',
+        '这是工作机自发执行的活（cron 触发），页面上只能看不能改；要停它得去对应工作机停 cron'));
+    }
 
     const { sql, params } = buildCasUpdate({ taskId: req.params.id, rowVersion: row_version, dueAt: planned_at });
     const r = await brain.query(sql, params);
@@ -281,6 +288,19 @@ scheduleRouter.post('/jobs/:id/cancel', rateLimit, async (req: Request, res: Res
   try {
     const agents = await tenantAgents(tenantId);
     const ids = agents.map((a) => a.id);
+
+    const owned = await brain.query(
+      `SELECT id, status, row_version, payload FROM tasks
+        WHERE id = $1 AND task_type='device_job' AND assigned_to = ANY($2::text[])`,
+      [req.params.id, ids],
+    );
+    // 真机自发的活（cron 触发）在页面上是只读镜像：它的执行由手机上的 cron 决定，
+    // 改这里的 due_at 或 status 对真机零作用。放行 = 让运营以为取消了，手机照跑。
+    if (owned.rows.length > 0 && (owned.rows[0].payload ?? {}).read_only === true) {
+      return res.status(409).json(ERR('READ_ONLY_JOB',
+        '这是工作机自发执行的活（cron 触发），页面上只能看不能改；要停它得去对应工作机停 cron'));
+    }
+
     const r = await brain.query(
       `UPDATE tasks
           SET status = 'cancelled',

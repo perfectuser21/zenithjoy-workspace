@@ -38,6 +38,9 @@ export interface ScheduleSlot {
   row_version?: number;
   /** 最后是谁改的，用于条子上显示"你改的 · 12:58" */
   updated_by?: string | null;
+  /** true = 工作机自发执行的活（cron 触发），页面只能看不能改；
+   *  改这里的 due_at/status 对真机零作用，接上按钮的那天必须靠这个字段隐藏它们 */
+  read_only: boolean;
 }
 
 /** 某台设备在某条业务线上的当日配额 */
@@ -112,7 +115,12 @@ function slot(
   source: ScheduleSlot['source'],
   override?: Partial<ScheduleSlot>,
 ): ScheduleSlot {
-  return { id, title, dept, planned_at, est_minutes, source, status: autoStatus(planned_at, est_minutes), ...override };
+  return {
+    id, title, dept, planned_at, est_minutes, source,
+    status: autoStatus(planned_at, est_minutes),
+    read_only: false,
+    ...override,
+  };
 }
 
 /** 周期规则：每天同一时刻重复的活（采收三轮、触达额度、朋友圈、客服值守…） */
