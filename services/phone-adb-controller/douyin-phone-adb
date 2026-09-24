@@ -1553,6 +1553,7 @@ set_playback_speed() {
 }
 
 # media_volume：读当前媒体音量（0..max），读不到输出空串。
+# stream 3 = Android AudioManager.STREAM_MUSIC（媒体音量），不是铃声/通话流。
 # 实测：HONOR MAA-AN00 / Android 15 上 `cmd media_session volume --stream 3 --get`
 # 稳定回 "volume is N in range [0..17]"；dumpsys audio 的格式跨机型差异大，不用它。
 media_volume() {
@@ -1595,6 +1596,7 @@ ensure_media_volume() {
     MEDIA_VOLUME_NOW=unknown
     return 0
   fi
+  # 上限 30：本机型量程是 0..17，30 是宽松上界，纯粹防按键不生效时死循环。
   while [[ "$cur" -ne "$target" && $i -lt 30 ]]; do
     if [[ "$cur" -gt "$target" ]]; then
       "$ADB" -s "$SERIAL" shell input keyevent KEYCODE_VOLUME_DOWN >/dev/null 2>&1
