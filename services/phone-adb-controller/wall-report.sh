@@ -53,10 +53,15 @@ do_complete() { # task_id completed | task_id failed error_code failed_step
   api "/api/workers/tasks/$1/complete" "$b" "$API_TIMEOUT_WRITE" >/dev/null
 }
 
-do_start() { # title steps_csv
+do_start() { # title steps_csv [reserved] brain_job_id
   local uuid body r code tid old
   uuid=$(wall_uuid_for "$SERIAL") || { wall_log "start $SERIAL: 无 uuid"; return 0; }
-  body=$(python3 -c 'import json,sys;print(json.dumps({"title":sys.argv[1][:80],"steps":[s for s in sys.argv[2].split(",") if s],"executor_id":sys.argv[3]}))' "$1" "$2" "$EXECUTOR" 2>/dev/null)
+  # $4 = brain_job_id（可选）。领单器领到 Brain device_job 时带上它：服务端据此
+  # 把本 worker_task 关联到那条单，而不是再镜像建一条（否则页面重复计数 + 永久孤儿）。
+  body=$(python3 -c 'import json,sys
+d={"title":sys.argv[1][:80],"steps":[s for s in sys.argv[2].split(",") if s],"executor_id":sys.argv[3]}
+if len(sys.argv)>4 and sys.argv[4]: d["brain_job_id"]=sys.argv[4]
+print(json.dumps(d))' "$1" "$2" "$EXECUTOR" "${4:-}" 2>/dev/null)
   r=$(api "/api/workers/$uuid/tasks" "$body" "$API_TIMEOUT_WRITE"); code=${r%% *}
   # 000 = 连不上或超时。服务端可能已经建好任务只是响应回不来（0920 staging 实证：连丢两单触达），
   # 所以重试一次：第一次真失败则这次成功；第一次其实成功则这次拿 409，落到下面的清扫分支。
@@ -106,7 +111,7 @@ print(json.dumps({"step_index":int(sys.argv[1]),"status":"failed","executor_id":
 }
 
 case "$cmd" in
-  start) do_start "${1:-任务}" "${2:-步骤1}" ;;
+  start) do_start "${1:-任务}" "${2:-步骤1}" "" "${3:-}" ;;
   step)  do_step "${1:-0}" "${2:-doing}" "${3:-}" "${4:-}" ;;
   note)  do_step "$(state_step)" doing "${1:-}" ;;
   done)  tid=$(state_task)

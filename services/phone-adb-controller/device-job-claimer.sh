@@ -110,7 +110,7 @@ JOB_TYPE=$(jp job_type)
 
 log "领到单 ${JOB_ID}｜${JOB_TITLE}｜设备 ${JOB_SERIAL}｜动作 ${JOB_ACTION:-未指定}"
 export WALL_NS=devicejob
-wr start "${JOB_SERIAL}" "${JOB_TITLE}" "执行工作机页派下来的活"
+wr start "${JOB_SERIAL}" "${JOB_TITLE}" "执行工作机页派下来的活" "${JOB_ID}"
 wr step "${JOB_SERIAL}" 0 doing
 
 # ── 执行 ─────────────────────────────────────────────────────────
