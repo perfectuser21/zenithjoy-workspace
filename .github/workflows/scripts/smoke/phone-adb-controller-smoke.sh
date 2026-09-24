@@ -635,4 +635,21 @@ for _d in bin-harvest .local/bin; do
   grep -qF "$_d/" "$D/deploy.sh" || fail "deploy.sh 未覆盖控制器目录 $_d(两个消费者各指一个目录,漏一个就版本分叉)"
 done
 
+# 层27: 录制电平必须打点,且必须一路传到采收日志
+# (扩机风险: 音量↔采集电平的开关关系只在 HONOR MAA-AN00/Android15 实测过。若新机型
+#  真录到 -91dB 死寂,record_stop 只校验 audio_streams>=1 不看 dB,会静默通过,
+#  判定链退化成 title-only 且无人察觉。Alex 0924 拍板: 只打点不 die——
+#  die 会误伤真·无声视频,打点则让新机型翻车当场可见。)
+_RSTOP_BODY="$(sed -n '/^record_stop()/,/^}/p' "$C")"
+grep -q 'mean_volume_db=' <<< "$_RSTOP_BODY" || fail "record_stop 的输出行没有 mean_volume_db 打点(新机型录到死寂会静默通过)"
+# 下面两条必须锚定到 mean_db 赋值语句本身,不能在整个函数体里 grep——
+# 0924 自查实锤: 在函数体里 grep 'volumedetect' 会命中注释里的这个词、
+# grep '|| true' 会命中 record_stop 原有的 ffprobe 行,两条守卫双双假绿。
+_MDB_STMT="$(awk '/mean_db="\$\(/{f=1} f{print; if (!/\\$/) exit}' <<< "$_RSTOP_BODY")"
+[[ -n "$_MDB_STMT" ]] || fail "record_stop 找不到 mean_db=\"\$(...)\" 赋值语句(电平不是实测出来的?)"
+grep -q 'volumedetect' <<< "$_MDB_STMT" || fail "mean_db 不是用 ffmpeg volumedetect 实测的(写死值=假打点,新机型翻车照样看不见)"
+grep -q '|| true' <<< "$_MDB_STMT" || fail "mean_db 的命令替换没带 || true(set -e 下 ffmpeg 一失败就打死整个控制器,连 record_stopped 都发不出去)"
+# 打点不进日志 = 等于没打
+grep -q 'mean_volume_db' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 没把 mean_volume_db 写进采收日志(打点没人看得见,等于没做)"
+
 echo "phone-adb-controller-smoke: PASS"

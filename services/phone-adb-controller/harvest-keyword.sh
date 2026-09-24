@@ -93,7 +93,15 @@ for CARDLINE in "${(f)CARDS}"; do
       if print -- "$RSOUT" | grep -q "^record_stopped"; then
         RAOUT="$($C --profile "$P" record-extract-audio "$TAG-v$i-rec" </dev/null 2>&1 || true)"
         AUDIO_PATH="$(print -- "$RAOUT" | sed -n "s/^audio_extracted path=\([^ ]*\).*/\1/p")"
-        [[ -n "$AUDIO_PATH" ]] && log "  音频已提取: $AUDIO_PATH" || log "  音频提取失败: $(print -- "$RAOUT" | tail -1 | head -c 150)"
+        # 电平打点回显（0924 扩机护栏）：record_stop 已实测 mean_volume 并挂在 record_stopped
+        # 行尾。必须写进采收日志——不写就没人看得见，换机型录到 -91dB 死寂时会静默退化成
+        # title-only 判定。-91dB 附近即视为死寂，日志里显式标出来。
+        MEAN_DB="$(print -- "$RSOUT" | sed -n "s/^record_stopped .*mean_volume_db=\([^ ]*\).*/\1/p" | tail -1)"
+        [[ -n "$AUDIO_PATH" ]] && log "  音频已提取: $AUDIO_PATH (电平 ${MEAN_DB:-未知} dB)" || log "  音频提取失败: $(print -- "$RAOUT" | tail -1 | head -c 150)"
+        if [[ -n "$MEAN_DB" && "$MEAN_DB" != unknown ]] \
+           && (( $(print -- "$MEAN_DB" | awk '{print ($1 <= -80) ? 1 : 0}') )); then
+          log "  ⚠️ 录到的几乎是死寂(${MEAN_DB} dB) — 转写多半会空,检查该机 speaker 流音量是否为 0"
+        fi
       else
         log "  录制未产出有效文件: $(print -- "$RSOUT" | tail -1 | head -c 150)"
       fi
