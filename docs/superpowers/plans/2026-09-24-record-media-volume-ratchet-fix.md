@@ -54,7 +54,8 @@ grep -qE 'ensure_media_volume "\$RECORD_MEDIA_VOLUME"' "$C" || fail "record_star
 _RS_BODY="$(sed -n '/^record_start()/,/^}/p' "$C")"
 _RS_VOLUP_COUNT="$(grep -c 'KEYCODE_VOLUME_UP' <<< "$_RS_BODY" || true)"
 [[ "$_RS_VOLUP_COUNT" == "0" ]] || fail "record_start 里仍有 $_RS_VOLUP_COUNT 处裸 KEYCODE_VOLUME_UP(音量棘轮的病根,必须全部收进 ensure_media_volume)"
-grep -qE '^[[:space:]]+douyin-phone-adb|[[:space:]]douyin-phone-adb[[:space:]]' <<< "$(sed -n '/^DEVICE_SH_FILES=(/,/^)/p' "$D/deploy.sh")" || fail "deploy.sh 的 DEVICE_SH_FILES 漏了 douyin-phone-adb(本次修复合并后到不了手机机)"
+_DEVICE_LIST="$(sed -n '/^DEVICE_SH_FILES=(/,/^)/p' "$D/deploy.sh")"
+grep -qE '(^|[[:space:]])douyin-phone-adb([[:space:]]|$)' <<< "$_DEVICE_LIST" || fail "deploy.sh 的 DEVICE_SH_FILES 漏了 douyin-phone-adb(改了控制器却到不了手机机)"
 ```
 
 - [ ] **Step 2: 跑守卫确认它报红**
