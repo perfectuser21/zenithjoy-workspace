@@ -33,6 +33,10 @@ describe('sweepExpiredLeases', () => {
     expect(n).toBe(2);
     const sql = (pool.query as any).mock.calls[0][0] as string;
     expect(sql).toMatch(/status = 'failed'/); expect(sql).toMatch(/error_code = 'executor_lost'/); expect(sql).toMatch(/lease_until < NOW\(\)/);
+    // 必须断言 SQL 本身取了 evidence：pool 是 mock 的，mock 想返回什么就返回什么，
+    // 跟真实 SQL 里有没有这一列毫无关系。漏了这条断言，把 RETURNING 改回只取 id
+    // 测试照样全绿，而线上拿不到 brain_task_id → Brain 侧永远挂 in_progress。
+    expect(sql).toMatch(/RETURNING\s+id,\s*evidence/);
   });
 });
 describe('startTask', () => {
@@ -188,6 +192,11 @@ describe('completeTask 回写 Brain', () => {
     await completeTask('wt-1', { outcome: 'completed', executor_id: 'adb-wall', evidence: { leads: 19 } });
     const updateCall = (pool as any).query.mock.calls.find((c: any[]) => /UPDATE zenithjoy\.worker_tasks/.test(c[0]));
     expect(updateCall[0]).toMatch(/evidence\s*=\s*COALESCE\(evidence/i);
+    // 同理断言 loadRunning 的 SELECT 真取了 evidence 列。mock 的返回值里带 evidence
+    // 不能证明 SQL 里 SELECT 了它 —— 漏掉这列，线上 completeTask 永远拿不到
+    // brain_task_id，回写静默不发生，页面永远停在"执行中"。
+    const selectCall = (pool as any).query.mock.calls.find((c: any[]) => /SELECT id, tenant_id/.test(c[0]));
+    expect(selectCall[0]).toMatch(/evidence/);
   });
 
   it('没有 brain_task_id 时不报错，静默跳过', async () => {
