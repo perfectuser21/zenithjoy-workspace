@@ -113,6 +113,7 @@
 1. `scp ledger.mjs workflow-result.sh harvest-cron-v4.sh batch2-v4.sh` → `~/bin-harvest/`（`chmod +x` 三个 .sh）
 2. 账本/工件目录自动建在 `~/.config/zenithjoy/{ledger,workflow-runs}/`；工件收工 best-effort scp 到 MMV `workflow-runs/`
 3. 依赖：`/opt/homebrew/bin/node`、`/usr/bin/jq`、`python3`（均已在 M4）
+4. 探针读回（棒3b，决策 95e29afd：执行机只读回、Brain 只判定）：`scp verify-step.mjs leadgen-db-connect.js line-routes.js` → `~/bin-harvest/`，`scp -r checks/`（probes-lib.js / schema.json / social-keyword-leadgen.yaml）→ `~/bin-harvest/checks/`；`cd ~/bin-harvest && npm i pg`（sql 探针惰性 require）；凭据 `~/.credentials/zenithjoy-db.env`（`DATABASE_URL=postgres://…/zenithjoy`）+ `~/.credentials/feishu.env`（`FEISHU_APP_ID`/`FEISHU_APP_SECRET`，该业务线 base 对应的飞书应用；缺则退回 `~/.openclaw/clawdbot.json` 的 `accounts[routeOf(line).account]`），均 `chmod 600`。缺任一 → 对应探针条目带 `error` 回执（Brain 判 FAIL(probe_error)），`harvest-cron.log` 有 `verify-step:` 行；采收本身不受影响。自检：`node ~/bin-harvest/verify-step.mjs --stage delivery --run-tag <昨晚TAG> --line-key jinoshengyuan-work` 应打一行含 `observed` 的 JSON
 
 影子跑（切 crontab 前必须 2 晚，PrepPRD 拍板）：
 - crontab 加一行（与生产错开 15 分钟、`PUSH=0` 不落池）：`15 22 * * * /bin/zsh ~/bin-harvest/harvest-cron-v4.sh jinoshengyuan-work ANGYVB4227006983 AI人工智能训练师 6 0`

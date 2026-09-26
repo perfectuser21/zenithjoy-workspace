@@ -664,4 +664,15 @@ grep -qF 'export WFR_BRAIN_TASK_ID' "$D/harvest-cron-v4.sh" || fail "harvest-cro
 grep -qF 'brain_task_id:' apps/api/src/services/worker-tasks-service.ts || fail "startTask 返回体缺 brain_task_id(取数链源头断)"
 grep -qF 'brain.env' "$D/README.md" || fail "README 部署三步缺 brain.env 一行(新机器部署漏凭据=全程 skipped)"
 
+# 层29: 棒3b 探针执行机侧读回(决策 95e29afd)——stage 回执前 verify-step 读回探针填 result.probes;
+# 断任一环(脚本缺/钩子没接/TAG·PROFILE 没 export/部署清单漏)= probes 永远 [],Brain 侧 judge 全判 probe_missing 静默红。
+[[ -s "$D/verify-step.mjs" ]] || fail "verify-step.mjs 缺失或为空"
+node --check "$D/verify-step.mjs" || fail "verify-step.mjs 语法错误"
+grep -qF 'verify-step' "$D/workflow-result.sh" || fail "workflow-result.sh 未接 verify-step 探针读回"
+grep -qF -- '--argjson probes' "$D/workflow-result.sh" || fail "workflow-result.sh 回执 body 未合并 probes(还是写死 [])"
+grep -qF 'WFR_TAG WFR_PROFILE' "$D/harvest-cron-v4.sh" || fail "harvest-cron-v4.sh 未 export WFR_TAG WFR_PROFILE(子进程 wfr 拿不到 --run-tag/--line-key)"
+for pat in 'verify-step.mjs' 'zenithjoy-db.env' 'feishu.env'; do
+  grep -qF "$pat" "$D/README.md" || fail "README 基座 1/7 部署段缺 $pat(新机器部署漏件=探针全程 error)"
+done
+
 echo "phone-adb-controller-smoke: PASS"
