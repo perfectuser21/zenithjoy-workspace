@@ -15,6 +15,41 @@ WFR_JQ="${WFR_JQ:-/usr/bin/jq}"
 WFR_LEDGER_MJS="${WFR_LEDGER_MJS:-$HOME/bin-harvest/ledger.mjs}"
 WFR_SCP_TARGET="${WFR_SCP_TARGET-mmv:/Users/administrator/openclaw-root/workspaces-root/clawd-work-commander/state/workflow-runs/}"
 warn(){ echo "WFR_WARN $(date +%m%d-%H:%M:%S) $*" >&2; }
+# 棒1 回执线(决策 702949b6/280bd091): Brain 凭据照 wall-lib.sh wall_load_env 写法——文件可读才 source,缺了不报错;
+# 环境里已有的 BRAIN_URL/BRAIN_INTERNAL_TOKEN 优先(测试注入/临时覆盖),文件只补空位
+WFR_BRAIN_ENV="${WFR_BRAIN_ENV:-$HOME/.credentials/brain.env}"
+if [[ ( -z "${BRAIN_URL:-}" || -z "${BRAIN_INTERNAL_TOKEN:-}" ) && -r "$WFR_BRAIN_ENV" ]]; then
+  _wfr_u="${BRAIN_URL:-}"; _wfr_t="${BRAIN_INTERNAL_TOKEN:-}"
+  # shellcheck disable=SC1090
+  . "$WFR_BRAIN_ENV"
+  [[ -n "$_wfr_u" ]] && BRAIN_URL="$_wfr_u"; [[ -n "$_wfr_t" ]] && BRAIN_INTERNAL_TOKEN="$_wfr_t"
+fi
+# brain_post: run_id status stage artifact_file extra_evidence_json —— best-effort POST Brain execution-callback。
+# 缺 BRAIN_URL/BRAIN_INTERNAL_TOKEN/WFR_BRAIN_TASK_ID 任一 → 记 skipped 返回; curl 失败记 raw 输出; 任何情况 return 0。
+# result 直接从校验通过的工件派生({stage,stage_status,metrics,evidence,probes}),Brain 侧 task_runs.result 原样保留。
+brain_post(){
+  local run_id="$1" status="$2" stage="$3" f="${4:-}" extra="${5:-[]}" missing="" body out code
+  [[ -n "${BRAIN_URL:-}" ]] || missing="$missing BRAIN_URL"
+  [[ -n "${BRAIN_INTERNAL_TOKEN:-}" ]] || missing="$missing BRAIN_INTERNAL_TOKEN"
+  [[ -n "${WFR_BRAIN_TASK_ID:-}" ]] || missing="$missing WFR_BRAIN_TASK_ID"
+  if [[ -n "$missing" ]]; then warn "brain callback skipped: missing$missing (run_id=$run_id)"; return 0; fi
+  if [[ -n "$f" && -s "$f" ]]; then
+    body=$("$WFR_JQ" -c --arg t "$WFR_BRAIN_TASK_ID" --arg r "$run_id" --arg s "$status" --argjson extra "$extra" \
+      '{task_id:$t,run_id:$r,status:$s,result:{stage:.stage_id,stage_status:.status,metrics:.metrics,evidence:(.evidence+$extra),probes:[]}}' "$f" 2>&1) \
+      || { warn "brain callback body build failed (run_id=$run_id): $body"; return 0; }
+  else
+    # 工件没写成(finalize 的 cleanup 写失败): stage/metrics 取默认, evidence 只剩 extra——终态仍要发,否则 Brain 永远挂 in_progress
+    body=$("$WFR_JQ" -cn --arg t "$WFR_BRAIN_TASK_ID" --arg r "$run_id" --arg s "$status" --arg st "$stage" --argjson extra "$extra" \
+      '{task_id:$t,run_id:$r,status:$s,result:{stage:$st,stage_status:"failed",metrics:{},evidence:$extra,probes:[]}}' 2>&1) \
+      || { warn "brain callback body build failed (run_id=$run_id): $body"; return 0; }
+  fi
+  out=$(curl -s --connect-timeout 3 -m 8 -w '\n%{http_code}' -X POST "${BRAIN_URL%/}/api/brain/execution-callback" \
+        -H "Authorization: Bearer $BRAIN_INTERNAL_TOKEN" -H 'Content-Type: application/json' -d "$body" 2>&1) \
+    || { warn "brain callback curl failed (run_id=$run_id): $out"; return 0; }
+  code=${out##*$'\n'}
+  case "$code" in 2*) ;; *) warn "brain callback HTTP $code (run_id=$run_id): ${out%$'\n'*}";; esac
+  return 0
+}
 # led: 原样透传 stdout，不 tail——供 show（多行美化 JSON，tail -1 会把 JSON 砍成只剩 "}"）
 led(){ "$WFR_NODE" "$WFR_LEDGER_MJS" "$@" --run-dir "${WFR_RUN_DIR:-}"; }
 # led1: 2>&1 | tail -1——供 init/set/next-attempt（单行 JSON，且吞掉夹杂的 stderr 行）
@@ -42,6 +77,7 @@ next_action(){ case "$1" in completed) echo accept;; blocked) echo block;; faile
 
 # 写一个工件：stage status n summary evidence_json metrics_json [word]
 write_stage(){
+  WFR_LAST_ARTIFACT=""   # 本次写成的工件路径(空=没写成); finalize 据此定终态
   if not_initialized; then warn "called before init"; return 0; fi
   local stage="$1" status="$2" n="$3" summary="$4" evidence="$5" metrics="$6" word="${7:-}"
   local attempt="${WFR_ATTEMPT:-a0}"
@@ -66,6 +102,9 @@ write_stage(){
   if ! "$WFR_JQ" -e --argjson allowed "$allowed_json" "$jqf" "$f" >/dev/null 2>&1; then warn "stage=$stage artifact invalid, removed: $f"; rm -f "$f"; return 0; fi
   if [[ -n "$word" ]]; then led1 set --stage "$stage" --status "$status" --n "$n" --word "$word" --note "$summary" >/dev/null
   else led1 set --stage "$stage" --status "$status" --n "$n" --note "$summary" >/dev/null; fi
+  WFR_LAST_ARTIFACT="$f"
+  # 回执 Brain(校验通过+记账之后): run_id=RUN__ATTEMPT.stage, 状态 in_progress; cleanup 段由 finalize 发终态,这里不发
+  [[ "$stage" == cleanup ]] || brain_post "${WFR_RUN_ID:-}__${attempt}.${stage}" in_progress "$stage" "$f" '[]'
 }
 
 cmd="${1:-}"; shift || true
@@ -113,8 +152,13 @@ case "$cmd" in
       # 故正常应有 n_files >= n_items。终审 C2 实证: 工件目录若从起跑前就不可写，write_stage
       # 全程写不进文件、也就全程没调 led1 set，n_files 与 n_stages 会一起停在 0，旧判据
       # n_files>=n_stages 在 0>=0 时假绿 OK=1；改用 n_items(而非 n_stages) 且要求其 >0 堵死这条假绿。
-      if (( n_items > 0 && n_files >= n_items )); then echo "WFR_FINALIZE_OK=1"; echo "WFR_FINALIZE_MSG=artifacts=$n_files stages=$n_stages items=$n_items"
-      else echo "WFR_FINALIZE_OK=0"; echo "WFR_FINALIZE_MSG=artifact_count_mismatch files=$n_files items=$n_items stages=$n_stages"; fi
+      if (( n_items > 0 && n_files >= n_items )); then ok=1; msg="artifacts=$n_files stages=$n_stages items=$n_items"
+      else ok=0; msg="artifact_count_mismatch files=$n_files items=$n_items stages=$n_stages"; fi
+      echo "WFR_FINALIZE_OK=$ok"; echo "WFR_FINALIZE_MSG=$msg"
+      # 终态回执: cleanup 工件写成且自检过 → completed, 否则 failed; run_id 用 cleanup 段规则; evidence 追加自检结果
+      if [[ -n "${WFR_LAST_ARTIFACT:-}" && "$ok" == 1 ]]; then final=completed; else final=failed; fi
+      extra=$("$WFR_JQ" -cn --argjson ok "$ok" --arg msg "$msg" '[{type:"finalize",ok:$ok,msg:$msg}]')
+      brain_post "${WFR_RUN_ID:-}__${WFR_ATTEMPT:-a0}.cleanup" "$final" cleanup "${WFR_LAST_ARTIFACT:-}" "$extra"
     fi;;
   *) warn "unknown subcommand: $cmd";;
 esac

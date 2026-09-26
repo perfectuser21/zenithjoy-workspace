@@ -74,7 +74,7 @@ export function makePassthroughConvert(dir) {
 }
 
 /** 假中台：记录全部请求；tasks 端点可按次序返回 409；frame 端点可按次序返回状态码（默认 202） */
-export function startFakeApi({ busyCodes = [], frameCodes = [], taskIds = [], taskDelaysMs = [] } = {}) {
+export function startFakeApi({ busyCodes = [], frameCodes = [], taskIds = [], taskDelaysMs = [], brainTaskId = null } = {}) {
   const requests = [];
   const uuid = randomUUID();
   const taskId = randomUUID();
@@ -99,7 +99,8 @@ export function startFakeApi({ busyCodes = [], frameCodes = [], taskIds = [], ta
         const code = busyCodes[n] ?? 201;
         // taskDelaysMs[n]：第 n 次建任务延迟这么久才响应（模拟跨境网络慢：服务端已建好，响应回不来）
         const reply = () => (code === 201
-          ? send(201, { success: true, data: { task_id: taskIds[taskCreated++] ?? taskId, lease_until: new Date().toISOString() } })
+          // brainTaskId：服务端 startTask 桥接成功时回的 Brain 单 id（棒1 回执线）；缺省 null 模拟桥接失败/老服务端
+          ? send(201, { success: true, data: { task_id: taskIds[taskCreated++] ?? taskId, lease_until: new Date().toISOString(), brain_task_id: brainTaskId } })
           : send(code, { success: false, error: { code: 'WORKER_BUSY' } }));
         const delay = taskDelaysMs[n] ?? 0;
         if (delay > 0) { const t = setTimeout(reply, delay); t.unref?.(); return; }

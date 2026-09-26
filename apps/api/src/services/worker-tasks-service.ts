@@ -79,9 +79,13 @@ export async function startTask(input: {
 
   // ── 桥接到 Brain（COMMIT 之后，跨池不能同事务）────────────────────────
   // 整段 try 包住：记账是附属，采收是正事，桥接出任何问题都不能让 startTask 失败。
+  // brainTaskId 随返回体带给 wall-report：账本 wfr 回执 Brain execution-callback 只能从这里
+  // 拿到 Brain 单 id（worker_tasks.evidence 没有读 API），桥接失败给 null，执行器据此跳过回执。
+  let brainTaskId: string | null = null;
   try {
     if (input.brainJobId) {
       await attachMirrorJob(taskId, input.brainJobId);
+      brainTaskId = input.brainJobId;
     } else {
       const a = await pool.query(`SELECT agent_id FROM zenithjoy.agents WHERE id = $1`, [input.agentId]);
       const serial = String(a.rows[0]?.agent_id ?? '').replace(/^phone-/, '');
@@ -89,13 +93,13 @@ export async function startTask(input: {
         workerTaskId: taskId, agentId: input.agentId, serial,
         title: input.title, startedAt: new Date().toISOString(),
       });
-      if (brainId) await attachMirrorJob(taskId, brainId);
+      if (brainId) { await attachMirrorJob(taskId, brainId); brainTaskId = brainId; }
     }
   } catch (e) {
     console.error('[worker-tasks] Brain 桥接失败（不影响本次执行）:', e);
   }
 
-  return { task_id: taskId, lease_until: leaseUntil };
+  return { task_id: taskId, lease_until: leaseUntil, brain_task_id: brainTaskId };
 }
 
 async function loadRunning(taskId: string, executorId: string) {

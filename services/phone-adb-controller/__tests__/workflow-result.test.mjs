@@ -12,8 +12,24 @@ const LEDGER = join(HERE, "..", "ledger.mjs");
 const JQ = spawnSync("bash", ["-lc", "command -v jq"], { encoding: "utf8" }).stdout.trim();
 
 function env(home) {
-  return { ...process.env, WFR_HOME: home, WFR_NODE: process.execPath, WFR_JQ: JQ, WFR_LEDGER_MJS: LEDGER, WFR_SCP_TARGET: "" };
+  // WFR_BRAIN_ENV 指向不存在的文件：开发机 ~/.credentials/brain.env 真实存在，不隔离会把测试工件回执到生产 Brain
+  return { ...process.env, WFR_HOME: home, WFR_NODE: process.execPath, WFR_JQ: JQ, WFR_LEDGER_MJS: LEDGER, WFR_SCP_TARGET: "", WFR_BRAIN_ENV: join(home, "no-brain.env"), BRAIN_URL: "", BRAIN_INTERNAL_TOKEN: "", WFR_BRAIN_TASK_ID: "" };
 }
+// 假 curl：PATH 前置，把每次 argv 记成一行 JSON；默认回 body+"\n200"（对应 -w '\n%{http_code}'），fail=true 时模拟连不上（exit 7 + raw 错误）
+function fakeCurl(dir, { fail = false } = {}) {
+  const bin = join(dir, "bin"); mkdirSync(bin, { recursive: true });
+  const calls = join(dir, "curl.calls");
+  writeFileSync(join(bin, "curl"), `#!/usr/bin/env bash
+python3 -c 'import json,sys;print(json.dumps(sys.argv[1:]))' "$@" >> "${calls}"
+${fail ? 'echo "curl: (7) Failed to connect to brain.test port 5221: Connection refused" >&2; exit 7' : "printf '{\"success\":true}\\n200'"}
+`);
+  chmodSync(join(bin, "curl"), 0o755);
+  return { PATH: `${bin}:${process.env.PATH}`, calls };
+}
+function curlCalls(calls) { return existsSync(calls) ? readFileSync(calls, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []; }
+function argAfter(args, flag) { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : undefined; }
+const BRAIN = { BRAIN_URL: "http://brain.test:5221", BRAIN_INTERNAL_TOKEN: "tok-brain", WFR_BRAIN_TASK_ID: "11111111-1111-4111-8111-111111111111" };
+function brainEnv(dir, opts) { const c = fakeCurl(dir, opts); return { env: { ...BRAIN, PATH: c.PATH }, calls: c.calls }; }
 function wfr(home, extra, ...args) {
   const r = spawnSync("bash", [WFR, ...args], { encoding: "utf8", env: { ...env(home), ...extra } });
   const kv = Object.fromEntries(r.stdout.split("\n").filter((l) => /^WFR_[A-Z_]+=/.test(l)).map((l) => { const i = l.indexOf("="); return [l.slice(0, i), l.slice(i + 1)]; }));
@@ -145,4 +161,118 @@ test("finalize: 起跑前工件目录不可写(chmod 000) → OK=0，不是假�
   } finally {
     chmodSync(artDir, 0o755);
   }
+});
+
+// ── 棒1 回执线（决策 702949b6/280bd091）：工件校验通过后 best-effort POST Brain execution-callback ──
+test("stage: 校验通过后 POST execution-callback（url / Bearer / body 五键），run_id=RUN__ATTEMPT.stage", { skip: !JQ && "no jq" }, () => {
+  const d = mkdtempSync(join(tmpdir(), "wfr-"));
+  const i = wfr(d, {}, "init", "t8", "p1", words(d, ["A"]), "0", "S", "h");
+  const e = wfr(d, i.kv, "enter");
+  const b = brainEnv(d);
+  const s = wfr(d, { ...i.kv, ...e.kv, ...b.env }, "stage", "discovery", "completed", "1", "word A ok",
+    '[{"type":"log","ref":"night.log"}]', '{"candidates":3,"keywords_processed":1,"screens_scanned":0}', "A");
+  assert.equal(s.code, 0);
+  const calls = curlCalls(b.calls);
+  assert.equal(calls.length, 1, "恰好一次回执");
+  const args = calls[0];
+  assert.equal(argAfter(args, "POST"), "http://brain.test:5221/api/brain/execution-callback"); // -X POST <url>：精确相等，不做子串判断
+  assert.ok(args.includes("Authorization: Bearer tok-brain"), `Bearer 头缺失: ${args}`);
+  const body = JSON.parse(argAfter(args, "-d"));
+  assert.equal(body.task_id, BRAIN.WFR_BRAIN_TASK_ID);
+  assert.equal(body.run_id, "social-keyword-leadgen-crontab-t8__a1.discovery");
+  assert.equal(body.status, "in_progress");
+  assert.deepEqual(Object.keys(body.result).sort(), ["evidence", "metrics", "probes", "stage", "stage_status"]);
+  assert.equal(body.result.stage, "discovery"); assert.equal(body.result.stage_status, "completed");
+  assert.equal(body.result.metrics.candidates, 3); assert.equal(body.result.metrics.external_interactions, 0);
+  assert.deepEqual(body.result.evidence, [{ type: "log", ref: "night.log" }]); assert.deepEqual(body.result.probes, []);
+});
+
+test("stage: 校验不过（evidence 空）→ 工件不落、也不回执", { skip: !JQ && "no jq" }, () => {
+  const d = mkdtempSync(join(tmpdir(), "wfr-"));
+  const i = wfr(d, {}, "init", "t9", "p1", words(d, ["A"]), "0", "S", "h");
+  const e = wfr(d, i.kv, "enter");
+  const b = brainEnv(d);
+  const s = wfr(d, { ...i.kv, ...e.kv, ...b.env }, "stage", "collection", "completed", "1", "x", "[]", '{"comments_collected":0,"videos_processed":0,"cursor_updates":0}', "A");
+  assert.equal(s.code, 0); assert.match(s.err, /WFR_WARN/);
+  assert.equal(curlCalls(b.calls).length, 0);
+});
+
+test("finalize: 发终态 completed，run_id 用 cleanup 段，evidence 追加 finalize 条目", { skip: !JQ && "no jq" }, () => {
+  const d = mkdtempSync(join(tmpdir(), "wfr-"));
+  const i = wfr(d, {}, "init", "t10", "p1", words(d, ["A"]), "0", "S", "h");
+  const e = wfr(d, i.kv, "enter");
+  const b = brainEnv(d);
+  const f = wfr(d, { ...i.kv, ...e.kv, ...b.env }, "finalize");
+  assert.equal(f.code, 0); assert.equal(f.kv.WFR_FINALIZE_OK, "1");
+  const calls = curlCalls(b.calls);
+  assert.equal(calls.length, 1, "cleanup 工件只发终态一次，不再另发 in_progress");
+  const body = JSON.parse(argAfter(calls[0], "-d"));
+  assert.equal(body.task_id, BRAIN.WFR_BRAIN_TASK_ID);
+  assert.equal(body.run_id, "social-keyword-leadgen-crontab-t10__a1.cleanup");
+  assert.equal(body.status, "completed");
+  assert.equal(body.result.stage, "cleanup"); assert.equal(body.result.stage_status, "completed");
+  assert.equal(typeof body.result.metrics.lock_released, "number");
+  assert.ok(body.result.evidence.some((x) => x.type === "finalize" && x.ok === 1), JSON.stringify(body.result.evidence));
+});
+
+test("finalize: cleanup 工件写不成（目录不可写）→ 终态 failed", { skip: (!JQ && "no jq") || (IS_ROOT && "root 无视权限位") }, () => {
+  const d = mkdtempSync(join(tmpdir(), "wfr-"));
+  const i = wfr(d, {}, "init", "t11", "p1", words(d, ["A"]), "0", "S", "h");
+  const e = wfr(d, i.kv, "enter");
+  const b = brainEnv(d);
+  chmodSync(i.kv.WFR_ART_DIR, 0o500);
+  try {
+    // init 已写成的 3 工件==3 账目,自检仍 OK=1;终态 failed 的判据是"cleanup 工件没写成",不是自检
+    const f = wfr(d, { ...i.kv, ...e.kv, ...b.env }, "finalize");
+    assert.equal(f.code, 0);
+    const calls = curlCalls(b.calls);
+    assert.equal(calls.length, 1);
+    const body = JSON.parse(argAfter(calls[0], "-d"));
+    assert.equal(body.status, "failed"); assert.equal(body.run_id, "social-keyword-leadgen-crontab-t11__a1.cleanup");
+    assert.equal(body.result.stage, "cleanup"); assert.equal(body.result.stage_status, "failed");
+    assert.ok(body.result.evidence.some((x) => x.type === "finalize"));
+  } finally { chmodSync(i.kv.WFR_ART_DIR, 0o755); }
+});
+
+test("缺 BRAIN_URL / BRAIN_INTERNAL_TOKEN / WFR_BRAIN_TASK_ID 任一 → 不 POST，stderr 记 skipped，工件照写", { skip: !JQ && "no jq" }, () => {
+  for (const missing of ["BRAIN_URL", "BRAIN_INTERNAL_TOKEN", "WFR_BRAIN_TASK_ID"]) {
+    const d = mkdtempSync(join(tmpdir(), "wfr-"));
+    const i = wfr(d, {}, "init", "t12", "p1", words(d, ["A"]), "0", "S", "h");
+    const e = wfr(d, i.kv, "enter");
+    const b = brainEnv(d);
+    const s = wfr(d, { ...i.kv, ...e.kv, ...b.env, [missing]: "" }, "stage", "discovery", "completed", "1", "ok",
+      '[{"type":"log","ref":"n.log"}]', '{"candidates":1,"keywords_processed":1,"screens_scanned":0}', "A");
+    assert.equal(s.code, 0);
+    assert.equal(curlCalls(b.calls).length, 0, `缺 ${missing} 仍 POST 了`);
+    assert.match(s.err, /brain callback skipped/, `缺 ${missing} 没记日志`);
+    assert.ok(existsSync(join(i.kv.WFR_ART_DIR, "social-keyword-leadgen-crontab-t12__a1.discovery.1.worker-result.json")));
+  }
+});
+
+test("curl 失败 → stderr 含 raw 错误原文，exit 0，工件照写", { skip: !JQ && "no jq" }, () => {
+  const d = mkdtempSync(join(tmpdir(), "wfr-"));
+  const i = wfr(d, {}, "init", "t13", "p1", words(d, ["A"]), "0", "S", "h");
+  const e = wfr(d, i.kv, "enter");
+  const b = brainEnv(d, { fail: true });
+  const s = wfr(d, { ...i.kv, ...e.kv, ...b.env }, "stage", "discovery", "completed", "1", "ok",
+    '[{"type":"log","ref":"n.log"}]', '{"candidates":1,"keywords_processed":1,"screens_scanned":0}', "A");
+  assert.equal(s.code, 0);
+  assert.match(s.err, /brain callback curl failed.*Connection refused/);
+  assert.ok(existsSync(join(i.kv.WFR_ART_DIR, "social-keyword-leadgen-crontab-t13__a1.discovery.1.worker-result.json")));
+});
+
+test("WFR_BRAIN_ENV 文件（~/.credentials/brain.env 读法）提供 BRAIN_URL/BRAIN_INTERNAL_TOKEN 时可回执", { skip: !JQ && "no jq" }, () => {
+  const d = mkdtempSync(join(tmpdir(), "wfr-"));
+  const i = wfr(d, {}, "init", "t14", "p1", words(d, ["A"]), "0", "S", "h");
+  const e = wfr(d, i.kv, "enter");
+  const c = fakeCurl(d);
+  const envFile = join(d, "brain.env");
+  writeFileSync(envFile, "BRAIN_URL=http://brain.file:5221/\nBRAIN_INTERNAL_TOKEN=tok-file\n");
+  const s = wfr(d, { ...i.kv, ...e.kv, PATH: c.PATH, WFR_BRAIN_ENV: envFile, WFR_BRAIN_TASK_ID: BRAIN.WFR_BRAIN_TASK_ID }, "stage", "discovery", "completed", "1", "ok",
+    '[{"type":"log","ref":"n.log"}]', '{"candidates":1,"keywords_processed":1,"screens_scanned":0}', "A");
+  assert.equal(s.code, 0);
+  const calls = curlCalls(c.calls);
+  assert.equal(calls.length, 1);
+  assert.equal(argAfter(calls[0], "POST"), "http://brain.file:5221/api/brain/execution-callback", "尾部 / 需去掉");
+  assert.ok(calls[0].includes("Authorization: Bearer tok-file"));
 });
