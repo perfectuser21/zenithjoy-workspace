@@ -37,7 +37,7 @@ test("闭集键从 workflow-result.sh 抽出：含 delivery 四键与 COMMON 四
 });
 
 test("STAGES 与 workflow-result.sh req_keys 的 7 个 stage 一致", () => {
-  const stages = [...wfrText.matchAll(/^\s+(\w+)\) echo "/gm)].map((m) => m[1]);
+  const stages = [...wfrText.matchAll(/^\s+(\w+)\) echo "[a-z_ ]+";;$/gm)].map((m) => m[1]);
   assert.deepEqual(stages, [...STAGES]);
 });
 
