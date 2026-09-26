@@ -100,6 +100,11 @@ grep -qF 'requeue_transient' "$D/outreach-tick.sh" || fail "tick 未接 requeue_
 # 层6: 夜批run伴随Commander(决策dcdaa83e: 起跑拉起escort,收工注销,辅佐姿态)
 grep -qF 'escort-' "$D/harvest-cron.sh" || fail "harvest 未拉起伴随escort"
 grep -qF 'cron rm' "$D/harvest-cron.sh" || fail "harvest 未注销escort(泄漏cron)"
+# 0927 决策 711ca6cf: escort 30s 复核只按 id——cron list 表格 Name 列定宽截断(escort-xian-m4-auto09...),
+# 按名字 grep 永不命中,两批误升级分身。复核/注销一律 ESCORT_ID,禁止回抄 name 列 grep。
+if grep -qF 'grep -F "escort-$HOSTKEY-$TAG"' "$D/harvest-cron.sh"; then fail "escort 复核按截断的 name 列 grep 复活(0927 假阳性根因,必须按 ESCORT_ID 判)"; fi
+grep -qF 'escort_alive "$ESCORT_ID"' "$D/harvest-cron.sh" || fail "escort 复核未走 escort_alive 按 id 判"
+grep -qF 'cron list --json' "$D/harvest-cron.sh" || fail "escort_alive 未优先走 cron list --json"
 [[ -s "$D/cmdr-escort.txt" ]] || fail "escort SOP文件缺失"
 grep -qF '帮不拦' "$D/cmdr-escort.txt" || fail "escort SOP缺辅佐三原则"
 
