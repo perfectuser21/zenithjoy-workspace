@@ -175,7 +175,7 @@ test("stage: 校验通过后 POST execution-callback（url / Bearer / body 五�
   const calls = curlCalls(b.calls);
   assert.equal(calls.length, 1, "恰好一次回执");
   const args = calls[0];
-  assert.ok(args.includes("http://brain.test:5221/api/brain/execution-callback"), `url 缺失: ${args}`);
+  assert.equal(argAfter(args, "POST"), "http://brain.test:5221/api/brain/execution-callback"); // -X POST <url>：精确相等，不做子串判断
   assert.ok(args.includes("Authorization: Bearer tok-brain"), `Bearer 头缺失: ${args}`);
   const body = JSON.parse(argAfter(args, "-d"));
   assert.equal(body.task_id, BRAIN.WFR_BRAIN_TASK_ID);
@@ -273,6 +273,6 @@ test("WFR_BRAIN_ENV 文件（~/.credentials/brain.env 读法）提供 BRAIN_URL/
   assert.equal(s.code, 0);
   const calls = curlCalls(c.calls);
   assert.equal(calls.length, 1);
-  assert.ok(calls[0].includes("http://brain.file:5221/api/brain/execution-callback"), "尾部 / 需去掉");
+  assert.equal(argAfter(calls[0], "POST"), "http://brain.file:5221/api/brain/execution-callback", "尾部 / 需去掉");
   assert.ok(calls[0].includes("Authorization: Bearer tok-file"));
 });
