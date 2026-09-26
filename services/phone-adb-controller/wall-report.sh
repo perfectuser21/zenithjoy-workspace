@@ -54,7 +54,7 @@ do_complete() { # task_id completed | task_id failed error_code failed_step
 }
 
 do_start() { # title steps_csv [reserved] brain_job_id
-  local uuid body r code tid old
+  local uuid body r code tid old bid
   uuid=$(wall_uuid_for "$SERIAL") || { wall_log "start $SERIAL: 无 uuid"; return 0; }
   # $4 = brain_job_id（可选）。领单器领到 Brain device_job 时带上它：服务端据此
   # 把本 worker_task 关联到那条单，而不是再镜像建一条（否则页面重复计数 + 永久孤儿）。
@@ -82,6 +82,10 @@ print(json.dumps(d))' "$1" "$2" "$EXECUTOR" "${4:-}" 2>/dev/null)
   if [ "$code" = "201" ]; then
     tid=$(printf '%s' "${r#* }" | wall_json_get data.task_id)
     state_put "$tid" 0; wall_log "start $SERIAL task=$tid"
+    # 棒1 回执线：服务端桥接成功时回 brain_task_id，打到 stdout 一行 KV 供调用方(harvest-cron-v4 wr_start)
+    # 捕获 export 给 workflow-result.sh 回执 Brain。桥接失败/老服务端为空 → 不打行（调用方拿空串=跳过回执）
+    bid=$(printf '%s' "${r#* }" | wall_json_get data.brain_task_id)
+    [ -n "$bid" ] && { printf 'WFR_BRAIN_TASK_ID=%s\n' "$bid"; wall_log "start $SERIAL brain_task=$bid"; }
   else
     rm -f "$STATE"; wall_log "start $SERIAL HTTP $code,静默降级"
   fi

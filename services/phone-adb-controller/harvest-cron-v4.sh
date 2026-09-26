@@ -38,6 +38,9 @@ log(){ print -- "[$(date +%m%d-%H:%M:%S)] [$TAG] $*" >> $LOG }
 # 可视化旁路(0919): 每阶段报给控制塔工作机页; 上报器缺失/失败一律吞掉, 绝不影响采收
 WR=${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}
 wr(){ [[ -x "$WR" ]] && "$WR" "$@" >/dev/null 2>&1; true }
+# wr_start: 同 wr 但保留 stdout——do_start 会打一行 WFR_BRAIN_TASK_ID=<id>(服务端镜像给本批的 Brain 单),
+# 采收链据此 export 给 workflow-result.sh 做 stage/finalize 回执(棒1 回执线,决策 702949b6)。拿不到=空串=回执跳过,不影响采收
+wr_start(){ [[ -x "$WR" ]] && "$WR" start "$@" 2>/dev/null; true }
 export WALL_NS=harvest   # 上报器按命名空间分状态文件: 采收链(含 batch2/harvest-keyword 子进程)与触达链同机同序列号互不顶状态
 
 # 节点名映射(0915 真机核实: hostname 是 mac-mini-m4-xian/mac-mini-m1-us,与日志桥/nodes名不同,禁直推)
@@ -56,7 +59,9 @@ escalate() {
   ssh -o ConnectTimeout=20 us-vps "echo '[$(date +%m%d-%H:%M)][$HOSTKEY][采收$TAG] $msg' >> /opt/openclaw/state/m4-logs/escalation.log" 2>>$LOG \
     || log "升级通道也不可达(us-vps ssh 失败),仅留本地日志"
 }
-wr start "$SERIAL" "获客采收·$BIZ" "拉Commander,设备预检,取词单,采收主体,效果回写"
+WFR_BRAIN_TASK_ID=$(wr_start "$SERIAL" "获客采收·$BIZ" "拉Commander,设备预检,取词单,采收主体,效果回写" | sed -n 's/^WFR_BRAIN_TASK_ID=//p' | head -1)
+export WFR_BRAIN_TASK_ID
+log "Brain单: ${WFR_BRAIN_TASK_ID:-无(回执跳过)}"
 wr step "$SERIAL" 0 doing
 
 # ── ① Commander 上岗(第一步,0916 改序) ──

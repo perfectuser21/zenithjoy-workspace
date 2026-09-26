@@ -222,13 +222,15 @@ test("finalize: cleanup 工件写不成（目录不可写）→ 终态 failed", 
   const b = brainEnv(d);
   chmodSync(i.kv.WFR_ART_DIR, 0o500);
   try {
+    // init 已写成的 3 工件==3 账目,自检仍 OK=1;终态 failed 的判据是"cleanup 工件没写成",不是自检
     const f = wfr(d, { ...i.kv, ...e.kv, ...b.env }, "finalize");
-    assert.equal(f.code, 0); assert.equal(f.kv.WFR_FINALIZE_OK, "0");
+    assert.equal(f.code, 0);
     const calls = curlCalls(b.calls);
     assert.equal(calls.length, 1);
     const body = JSON.parse(argAfter(calls[0], "-d"));
     assert.equal(body.status, "failed"); assert.equal(body.run_id, "social-keyword-leadgen-crontab-t11__a1.cleanup");
-    assert.equal(body.result.stage, "cleanup");
+    assert.equal(body.result.stage, "cleanup"); assert.equal(body.result.stage_status, "failed");
+    assert.ok(body.result.evidence.some((x) => x.type === "finalize"));
   } finally { chmodSync(i.kv.WFR_ART_DIR, 0o755); }
 });
 

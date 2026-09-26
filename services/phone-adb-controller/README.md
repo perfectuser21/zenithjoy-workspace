@@ -105,6 +105,7 @@
 1. `scp douyin-phone-adb` → xian-m4 / M1 的 `~/.local/bin/`(`chmod +x`)
 2. `scp harvest-keyword.sh refill-profile-links.sh` → `~/bin-harvest/`
 3. `docker cp push-leads.js update-profile-links.js` → us-vps `openclaw-gateway:/root/.openclaw/`
+4. `~/.credentials/brain.env`（`chmod 600`，两行 `BRAIN_URL=https://<brain>` / `BRAIN_INTERNAL_TOKEN=<CECELIA_INTERNAL_TOKEN>`，值取自 1Password CS）——账本 `wfr stage|finalize` 据此回执 Brain `execution-callback`；缺文件只是回执跳过（`harvest-cron.log` 无 Brain 单行、stderr `brain callback skipped`），不影响采收
 
 ## 基座 1/7：v4 流水线（账本 + 阶段工件 + 续跑）部署与影子跑
 
