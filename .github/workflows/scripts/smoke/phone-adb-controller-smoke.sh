@@ -552,9 +552,8 @@ grep -q "catch" <<< "$_COMMANDER_BODY" || fail "judgeCommander 缺少catch分支
 _DEPLOY="$D/deploy.sh"
 [[ -s "$_DEPLOY" ]] || fail "deploy.sh 缺失(0923一键同步脚本,别让它跟着别的文件一起悄悄消失)"
 bash -n "$_DEPLOY" || fail "deploy.sh 语法错误"
-# v4实验管线(batch2-v4.sh/harvest-cron-v4.sh)已实测确认未接入任何crontab、目标机上
-# 也不存在,是明确排除项,不算漂移。
-_V4_EXCLUDE="batch2-v4.sh harvest-cron-v4.sh"
+# 0927 棒3b-3: v4 影子副本已删,账本钩子内建进 harvest-cron.sh/batch2.sh,不再有排除项;
+# ledger.mjs(workflow-result.sh 硬依赖)由层30单独钉进 DEVICE_NODE_FILES。
 for f in "$D"/*.js; do
   bn="$(basename "$f")"
   grep -qF "$bn" "$_DEPLOY" || fail "deploy.sh 清单漏了 $bn(新增/改名的.js文件必须补进 MMV_JS_FILES,否则合并PR后机器上永远是旧版)"
@@ -562,7 +561,6 @@ done
 for f in "$D"/*.sh; do
   bn="$(basename "$f")"
   [[ "$bn" == "deploy.sh" ]] && continue
-  case " $_V4_EXCLUDE " in *" $bn "*) continue ;; esac
   grep -qF "$bn" "$_DEPLOY" || fail "deploy.sh 清单漏了 $bn(新增/改名的.sh文件必须补进 DEVICE_SH_FILES,否则合并PR后机器上永远是旧版)"
 done
 
@@ -653,14 +651,16 @@ grep -q '|| true' <<< "$_MDB_STMT" || fail "mean_db 的命令替换没带 || tru
 grep -q 'mean_volume_db' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 没把 mean_volume_db 写进采收日志(打点没人看得见,等于没做)"
 
 # 层28: 棒1 回执线(决策 702949b6/280bd091)——账本 stage/finalize 必须 best-effort 回执 Brain execution-callback,
-# 且 brain_task_id 的整条取数链(服务端返回体 → wall-report stdout → harvest-cron-v4 export)一环都不能断:
+# 且 brain_task_id 的整条取数链(服务端返回体 → wall-report stdout → harvest-cron export)一环都不能断:
 # 断任一环,wfr 全程 "brain callback skipped",工件照写、日志照绿,Brain task_runs 永远空——静默失效形态。
 grep -qF '/api/brain/execution-callback' "$D/workflow-result.sh" || fail "workflow-result.sh 未接 Brain execution-callback 回执"
 grep -qF 'brain_post' "$D/workflow-result.sh" || fail "workflow-result.sh 缺 brain_post(回执函数被删/改名)"
 grep -qF 'Authorization: Bearer $BRAIN_INTERNAL_TOKEN' "$D/workflow-result.sh" || fail "workflow-result.sh 回执未带 Bearer 内部 token(Brain 侧 internalAuthOrLoopback 会 401)"
 grep -qF 'brain callback skipped' "$D/workflow-result.sh" || fail "workflow-result.sh 缺 env 时不记 skipped 日志(静默失效不可见)"
 grep -qF 'WFR_BRAIN_TASK_ID=' "$D/wall-report.sh" || fail "wall-report.sh do_start 未把 brain_task_id 打到 stdout"
-grep -qF 'export WFR_BRAIN_TASK_ID' "$D/harvest-cron-v4.sh" || fail "harvest-cron-v4.sh 未 export WFR_BRAIN_TASK_ID(子进程 wfr 看不到)"
+grep -qF 'export WFR_BRAIN_TASK_ID' "$D/harvest-cron.sh" || fail "harvest-cron.sh 未 export WFR_BRAIN_TASK_ID(子进程 wfr 看不到)"
+grep -qF 'brain-task) state_brain' "$D/wall-report.sh" || fail "wall-report.sh 缺 brain-task 子命令(harvest-cron 的 wr 吞 stdout,只能从状态文件取 brain_task_id)"
+grep -qF 'wr_get brain-task "$SERIAL"' "$D/harvest-cron.sh" || fail "harvest-cron.sh 未经 brain-task 取 Brain 单号(取数链断=回执全程 skipped)"
 grep -qF 'brain_task_id:' apps/api/src/services/worker-tasks-service.ts || fail "startTask 返回体缺 brain_task_id(取数链源头断)"
 grep -qF 'brain.env' "$D/README.md" || fail "README 部署三步缺 brain.env 一行(新机器部署漏凭据=全程 skipped)"
 
@@ -673,9 +673,32 @@ grep -qF -- '--argjson probes' "$D/workflow-result.sh" || fail "workflow-result.
 grep -qF 'WFR_PROBE_HOST="${WFR_PROBE_HOST:-mmv}"' "$D/workflow-result.sh" || fail "workflow-result.sh probe_stage 未经 ssh 到 WFR_PROBE_HOST(默认 mmv)执行(执行机本地跑 PG/飞书探针必 error)"
 grep -qF 'source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; cd $WFR_PROBE_DIR && node verify-step.mjs' "$D/workflow-result.sh" || fail "probe_stage 远端命令形状漂离 batch2.sh:55(须先 source zenithjoy-db.env 再 cd WFR_PROBE_DIR 跑 verify-step)"
 grep -qF 'resolveLineKey(' "$D/verify-step.mjs" || fail "verify-step.mjs 未把 --line-key(profile 名)经 routeOf().key 归一(SQL 按 line_key 过滤会读 0)"
-grep -qF 'WFR_TAG WFR_PROFILE' "$D/harvest-cron-v4.sh" || fail "harvest-cron-v4.sh 未 export WFR_TAG WFR_PROFILE(子进程 wfr 拿不到 --run-tag/--line-key)"
+grep -qF 'WFR_TAG WFR_PROFILE' "$D/harvest-cron.sh" || fail "harvest-cron.sh 未 export WFR_TAG WFR_PROFILE(子进程 wfr 拿不到 --run-tag/--line-key)"
 for pat in 'leadgen-scripts/' 'WFR_PROBE_HOST' 'zenithjoy-db.env'; do
   grep -qF "$pat" "$D/README.md" || fail "README 基座 1/7 部署段缺 $pat(部署漏件/落错机器=探针全程 error)"
 done
+
+# 层30: 棒3b-3(决策 2ca30c4d)——账本钩子必须内建在**现网**脚本本体里,不再有 v4 影子副本。
+# 三条死线: ①钩子在(wfr_on 守卫 + 各 stage) ②现网四处修复没被回退(LINE 第6参/分拣/音频链/按 BIZ 回写由层23/24/其它守着,
+# 这里只钉 harvest-keyword 调用签名) ③孤儿 escort 清理不得复活(09-27 实证误杀在跑生产批的 escort 5b04c346)。
+[[ ! -e "$D/harvest-cron-v4.sh" && ! -e "$D/batch2-v4.sh" ]] || fail "v4 影子副本(harvest-cron-v4.sh/batch2-v4.sh)复活:钩子已内建进现网脚本,两份副本必分叉"
+_B2="$(grep -vE '^[[:space:]]*#' "$D/batch2.sh")"
+grep -qE '^wfr_on\(\)' <<< "$_B2" || fail "batch2.sh 缺 wfr_on() 守卫(钩子没法一键 no-op)"
+grep -qF 'WFR_DISABLED' <<< "$_B2" || fail "batch2.sh 守卫不认 WFR_DISABLED(现场无法关钩子)"
+grep -qF 'BATCH2_ESCALATE=hash_mismatch' <<< "$_B2" || fail "batch2.sh 缺 hash 不一致 fail-closed 停跑"
+for st in discovery collection delivery; do
+  grep -qE "wfr stage $st " <<< "$_B2" || fail "batch2.sh 未写账本 stage $st"
+done
+grep -qF 'harvest-keyword.sh}" "$P" "$ENC" "$MAXV" "$TAG-w$n" unlimited "$LINE"' <<< "$_B2" || fail "batch2.sh 调 harvest-keyword.sh 的签名漂了(必须原样 P ENC MAXV TAG unlimited LINE——LINE 第6参丢了=悦升数据写进金诺表)"
+_HC="$(grep -vE '^[[:space:]]*#' "$D/harvest-cron.sh")"
+grep -qE '^wfr_bootstrap\(\)' <<< "$_HC" || fail "harvest-cron.sh 缺 wfr_bootstrap()(init→export→enter→export,否则账本 attempt_id 永远 null)"
+grep -qE '^run_finalize\(\)' <<< "$_HC" || fail "harvest-cron.sh 缺 run_finalize()(收工不记账)"
+grep -qE "trap .*run_finalize" <<< "$_HC" || fail "harvest-cron.sh 的 trap 没挂 run_finalize(早退路径不收工)"
+grep -qF 'wfr_bootstrap "$TAG" "$P" "$WF" "$PUSH" "$SERIAL" "$HOSTKEY"' <<< "$_HC" || fail "harvest-cron.sh 取词单后没调 wfr_bootstrap"
+grep -qF 'escort复核' <<< "$_HC" || fail "harvest-cron.sh 缺 escort 30s 真活复核"
+grep -qF '孤儿escort清理' <<< "$_HC" && fail "harvest-cron.sh 孤儿 escort 清理复活(cron list 分不清上批遗留与同机在跑批,09-27 已误杀生产 escort)"
+grep -qF 'WFR_DISABLED' "$D/README.md" || fail "README 缺 WFR_DISABLED 关钩子说明"
+grep -qF 'harvest-cron-v4.sh' "$D/README.md" && fail "README 仍引用 harvest-cron-v4.sh(部署会 scp 一个不存在的文件)"
+grep -qF 'ledger.mjs' "$_DEPLOY" || fail "deploy.sh 清单漏 ledger.mjs(workflow-result.sh 硬依赖,少了它账本全程 warn)"
 
 echo "phone-adb-controller-smoke: PASS"

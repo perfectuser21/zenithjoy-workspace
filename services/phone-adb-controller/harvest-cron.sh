@@ -4,6 +4,25 @@
 # 0916 改序(主理人拍板): Commander是第一步不是第三步——它必须看着 preflight 与取词单,
 #   因为 0915 凌晨三批正是死在这两步、静默 exit、全线 6 小时无人知晓。
 # 失败不静默(同上): 任何非正常退出都先 escalate 再退,报警走 us-vps 宿主文件(容器死了照样能写)。
+# 0927 棒3b-3(决策 2ca30c4d): 账本钩子内建(原 harvest-cron-v4.sh 副本已废——与现网分叉、影子跑拿不到设备、
+#   孤儿清理误杀在跑生产批 escort)。WFR_DISABLED=1 / workflow-result.sh 缺失或不可执行 → 钩子全部 no-op。
+#   孤儿 escort 清理**不并入**: openclaw cron list 只有名字,分不清"上批 kill -9 遗留"与"同机另一批仍在跑"
+#   (三批衔接无空窗),kill -9 遗留由 escort 自身 --timeout 与分身值守兜底。
+# ── 库块(HARVEST_CRON_LIB=1 source 只装函数不跑主体,供单测)——默认值必须在 set -u 之前定义 ──
+WFR=${WFR:-$HOME/bin-harvest/workflow-result.sh}
+BATCH2=${BATCH2:-$HOME/bin-harvest/batch2.sh}
+wfr_on(){ [[ "${WFR_DISABLED:-0}" != "1" && -x "$WFR" ]] }
+finalize_needed(){ wfr_on && [[ -n "${WFR_RUN_ID:-}" ]] }   # 只有 wfr init 跑过(导出了 WFR_RUN_ID)才需要收工记账
+# wfr_bootstrap: TAG P WF PUSH SERIAL HOSTKEY —— init 后立刻 export 再 enter,子进程(bash "$WFR" / zsh "$BATCH2")
+#   才看得到账本位置。终审 C1: init→enter 之间不 export,enter 子进程走 not_initialized 分支,账本 attempt_id 永远 null。
+wfr_bootstrap(){
+  wfr_on || return 0
+  eval "$(bash "$WFR" init "$1" "$2" "$3" "$4" "$5" "$6" 2>>${LOG:-/dev/null})" 2>/dev/null || true
+  export WFR_RUN_ID WFR_HASH WFR_RUN_DIR WFR_ART_DIR WFR_TAG WFR_PROFILE   # WFR_TAG/WFR_PROFILE: 棒3b 探针读回的 --run-tag/--line-key
+  eval "$(bash "$WFR" enter 2>>${LOG:-/dev/null})" 2>/dev/null || true
+  export WFR_ATTEMPT WFR_SKIP_WORDS
+}
+[[ "${HARVEST_CRON_LIB:-0}" == "1" ]] && return 0
 set -uo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 P="$1"; SERIAL="$2"; BIZ="${3:-AI人工智能训练师}"; N="${4:-6}"; PUSH="${5:-1}"
@@ -13,6 +32,9 @@ log(){ print -- "[$(date +%m%d-%H:%M:%S)] [$TAG] $*" >> $LOG }
 # 可视化旁路(0919): 每阶段报给控制塔工作机页; 上报器缺失/失败一律吞掉, 绝不影响采收
 WR=${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}
 wr(){ [[ -x "$WR" ]] && "$WR" "$@" >/dev/null 2>&1; true }
+# wr_get: 同 wr 但保留 stdout,只用于读值子命令(brain-task)。wr() 本身按基线守卫必须吞 stdout,
+# 所以 start 打出的 WFR_BRAIN_TASK_ID 行拿不到,改由 wall-report 落状态文件第 3 行、这里用 brain-task 读回
+wr_get(){ [[ -x "$WR" ]] && "$WR" "$@" 2>/dev/null; true }
 export WALL_NS=harvest   # 上报器按命名空间分状态文件: 采收链(含 batch2/harvest-keyword 子进程)与触达链同机同序列号互不顶状态
 
 # 节点名映射(0915 真机核实: hostname 是 mac-mini-m4-xian/mac-mini-m1-us,与日志桥/nodes名不同,禁直推)
@@ -32,6 +54,11 @@ escalate() {
     || log "升级通道也不可达(us-vps ssh 失败),仅留本地日志"
 }
 wr start "$SERIAL" "获客采收·$BIZ" "拉Commander,设备预检,取词单,采收主体,效果回写"
+# 服务端镜像给本批的 Brain 单号(棒1 回执线,决策 702949b6): 紧跟 start 读,export 给 workflow-result.sh 做 stage/finalize 回执;
+# 拿不到=空串=回执跳过,不影响采收
+WFR_BRAIN_TASK_ID=$(wr_get brain-task "$SERIAL" | head -1)
+export WFR_BRAIN_TASK_ID
+wfr_on && log "Brain单: ${WFR_BRAIN_TASK_ID:-无(回执跳过)}"
 wr step "$SERIAL" 0 doing
 
 # ── ① Commander 上岗(第一步,0916 改序) ──
@@ -49,12 +76,25 @@ for _ea in 1 2 3; do
 done
 if [[ -n "$ESCORT_ID" ]]; then
   log "escort已拉起: $ESCORT_ID"
+  # escort 真活复核: 拉起返回了 id 不等于它真在 cron 表里(网关重启窗口会吞掉),30s 后 cron list 对名字
+  /bin/sleep 30
+  ALIVE=$(ssh -o ConnectTimeout=20 mmv "openclaw cron list" 2>>$LOG | grep -F "escort-$HOSTKEY-$TAG" || true)
+  if [[ -n "$ALIVE" ]]; then log "escort复核命中"
+  else log "escort复核未命中"; escalate "escort 拉起返回 id=$ESCORT_ID 但 30s 后 cron list 未命中 escort-$HOSTKEY-$TAG，本批可能无人陪跑"; fi
   escort_dismiss() { [[ -n "$ESCORT_ID" ]] && ssh -o ConnectTimeout=20 mmv "openclaw cron rm $ESCORT_ID" >>$LOG 2>&1 && log "escort已注销" }
-  trap escort_dismiss EXIT INT TERM
 else
   log "escort拉起3次均失败(不阻塞采收)"
   escalate "escort拉起3次均失败,本批全程无陪跑;网关可能不可达或容器异常,请查网关健康"
 fi
+# 账本收工(trap 里跑,正常退让路径也会经过): 未 init 只记 skipped;自检不过 escalate
+run_finalize(){
+  wfr_on || return 0
+  finalize_needed || { log "账本finalize: skipped(not_initialized, 正常退让)"; return 0; }
+  eval "$(bash "$WFR" finalize 2>>$LOG)" 2>/dev/null || true
+  log "账本finalize: ok=${WFR_FINALIZE_OK:-?} ${WFR_FINALIZE_MSG:-}"
+  [[ "${WFR_FINALIZE_OK:-0}" == "1" ]] || escalate "账本收工自检未通过: ${WFR_FINALIZE_MSG:-unknown}"
+}
+if [[ -n "$ESCORT_ID" ]]; then trap 'escort_dismiss; run_finalize' EXIT INT TERM; else trap run_finalize EXIT INT TERM; fi
 wr step "$SERIAL" 0 done; wr step "$SERIAL" 1 doing
 
 # ── ② 设备 preflight: 在线 + 屏幕亮 + 解锁(0915 锁屏=整机瘫痪且静默的教训) ──
@@ -134,9 +174,13 @@ fi
 NWORDS=$(wc -l < $WF | tr -d ' ')
 log "词单 ${NWORDS}词: $(tr '\n' '/' < $WF)"
 wr step "$SERIAL" 2 done; wr step "$SERIAL" 3 doing "${NWORDS}词"
+wfr_bootstrap "$TAG" "$P" "$WF" "$PUSH" "$SERIAL" "$HOSTKEY"
+wfr_on && log "账本init: run=${WFR_RUN_ID:-?} hash=${WFR_HASH:-?} attempt=${WFR_ATTEMPT:-?} skip=${WFR_SKIP_WORDS:-}"
 
 # ── ④ 采收主体 ──
-/bin/zsh ~/bin-harvest/batch2.sh "$P" "$WF" "$TAG" "$PUSH" "$SERIAL"
+# 传原词单 $WF(init 时算 hash 用的就是它,传过滤后的副本会被 batch2 判 hash_mismatch 误报停跑);续跑跳词由 batch2 按 WFR_SKIP_WORDS 逐词做
+B2OUT=$(/bin/zsh "$BATCH2" "$P" "$WF" "$TAG" "$PUSH" "$SERIAL" 2>&1 | tee -a $LOG || true)
+if print -r -- "$B2OUT" | grep -q 'BATCH2_ESCALATE=hash_mismatch'; then escalate "词单在 init 后被改动(hash 不一致)，本批已停(fail-closed)"; fi
 log "批完成: $(grep -c '^LEAD' ~/night-$TAG.tsv 2>/dev/null || echo 0) LEAD"
 wr step "$SERIAL" 3 done
 
