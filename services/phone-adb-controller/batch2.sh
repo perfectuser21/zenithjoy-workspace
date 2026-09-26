@@ -3,6 +3,10 @@
 # 0916: 落池时把 profile 传给 push 脚本 —— 由 line-routes.js 按业务线路由到各自 base,
 # 否则悦升的数据会被写进金诺的表(或像此前那样根本不落库)。
 # batch-harvest v2 — 清场版+批完自动落池(金诺)
+# 0927 棒3b-3(决策 2ca30c4d): 账本钩子内建——每词写 discovery/collection 工件,push 后写 delivery,
+#   起跑 hash 不一致即停(fail-closed)。WFR_DISABLED=1、workflow-result.sh 缺失或不可执行 → 钩子全部 no-op,
+#   采收行为与并入前逐字一致(__tests__ 用并入前快照 fixtures/batch2-pre-wfr.sh 对拍)。
+#   原 v4 副本 batch2-v4.sh 已废: 与现网分叉四处(LINE 第6参/分拣/音频判定链/MAXV),影子跑又拿不到设备。
 set -uo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 P="$1"; WF="$2"; TAG="$3"; PUSH="${4:-0}"; SERIAL="${5:-}"
@@ -15,13 +19,52 @@ MAXV="${MAXV:-4}"
 # 可视化旁路(0919): 词级进度报给控制塔; 无序列号/上报器缺失/失败一律吞掉
 WR=${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}
 wr(){ [[ -n "$SERIAL" && -x "$WR" ]] && "$WR" "$@" >/dev/null 2>&1; true }
+HK=${HARVEST_KEYWORD:-$HOME/bin-harvest/harvest-keyword.sh}
+SLEEP_BASE=${BATCH_SLEEP:-20}   # 词间隔基数(秒),默认与旧行为同(20+随机40);测试传 0
 OUT=~/night-$TAG.tsv; LOG=~/night-$TAG.log
+# ── 账本钩子(基座 1/7 workflow-result.sh): 一行守卫决定全部 no-op ──
+WFR=${WFR:-$HOME/bin-harvest/workflow-result.sh}
+wfr_on(){ [[ "${WFR_DISABLED:-0}" != "1" && -x "$WFR" ]] }
+wfr(){ wfr_on && bash "$WFR" "$@" >/dev/null 2>>$LOG; true }
+count(){ local c; c=$(grep -c "^$1" $OUT 2>/dev/null || true); print -- "${c:-0}"; }
+# 出口码→阶段状态(决策 af061588): 0+有卡 completed / 0 无卡 blocked no_cards / 3 blocked lock_busy / 其它 failed
+# harvest-keyword.sh 出口码契约(勿改): 3 锁被占 / 1 open-search 失败 / 0 正常或无卡片
+wfr_word_stages(){ # n word rc dv dl
+  wfr_on || return 0
+  local n="$1" W="$2" rc="$3" DV="$4" DL="$5"
+  local EV='[{"type":"log","ref":"'"$LOG"'","word":"'"$W"'","rc":'"$rc"'}]'
+  case "$rc" in
+    0) if (( DV > 0 )); then
+         wfr stage discovery completed "$n" "word=$W videos=$DV" "$EV" '{"candidates":'"$DV"',"keywords_processed":1,"screens_scanned":0}' "$W"
+         wfr stage collection completed "$n" "word=$W leads=$DL" "$EV" '{"comments_collected":'"$DL"',"videos_processed":'"$DV"',"cursor_updates":0}' "$W"
+       else
+         wfr stage discovery blocked "$n" "word=$W no_cards" "$EV" '{"candidates":0,"keywords_processed":1,"screens_scanned":0}' "$W"
+       fi;;
+    3) wfr stage discovery blocked "$n" "word=$W lock_busy" "$EV" '{"candidates":0,"keywords_processed":1,"screens_scanned":0}' "$W";;
+    *) wfr stage discovery failed "$n" "word=$W rc=$rc" "$EV" '{"candidates":0,"keywords_processed":1,"screens_scanned":0}' "$W";;
+  esac
+}
 : > $OUT
 print "[$(date +%H:%M:%S)] v2批开始 profile=$P $(wc -l < $WF)词 push=$PUSH" >> $LOG
+# hash 一致性: 词单在 init 之后被改 = 请求身份变了,fail-closed(基座 1/7 PrepPRD 拍板)
+if wfr_on && [[ -n "${WFR_HASH:-}" ]]; then
+  NOWHASH=$(bash "$WFR" hash "$P" "$WF" "$PUSH" 2>/dev/null | sed -n 's/^WFR_HASH=//p'); NOWHASH=${NOWHASH:-}
+  if [[ "$NOWHASH" != "$WFR_HASH" ]]; then
+    print "[$(date +%H:%M:%S)] hash 不一致 init=$WFR_HASH now=$NOWHASH，停跑" >> $LOG
+    # n=0 哨兵: 词序号从 1 起,用 0 避免覆盖上一 attempt 已完成词的 items 记录(ledger.mjs set --n 按 n 覆盖式写)
+    wfr stage discovery blocked 0 "hash_mismatch init=$WFR_HASH now=$NOWHASH" '[{"type":"log","ref":"'"$LOG"'"}]' '{"candidates":0,"keywords_processed":0,"screens_scanned":0}' ""
+    print "BATCH2_ESCALATE=hash_mismatch"
+    exit 0
+  fi
+fi
 n=0
 for W in "${(f)$(cat $WF)}"; do
   [[ -z "$W" ]] && continue
   n=$((n+1))
+  # 续跑: skip_words 里的词已在上一 attempt 完成(只有账本在跑时才有这个概念)
+  if wfr_on && [[ -n "${WFR_SKIP_WORDS:-}" && "|${WFR_SKIP_WORDS}|" == *"|${W}|"* ]]; then
+    print "[$(date +%H:%M:%S)] 词$n: $W 已完成(续跑跳过)" >> $LOG; continue
+  fi
   # 归位清场: 显式回feed(0914铁律: 不假设重开=干净态)
   if [[ -n "$SERIAL" ]]; then
     adb -s $SERIAL shell am force-stop com.ss.android.ugc.aweme 2>/dev/null
@@ -32,12 +75,16 @@ for W in "${(f)$(cat $WF)}"; do
   ENC=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$W")
   print "[$(date +%H:%M:%S)] 词$n: $W" >> $LOG
   wr step "$SERIAL" 3 doing "词$n: $W"
-  ~/bin-harvest/harvest-keyword.sh "$P" "$ENC" "$MAXV" "$TAG-w$n" unlimited "$LINE" >> $OUT 2>> $LOG
+  V0=$(count VIDEO); L0=$(count LEAD)
+  rc=0; "$HK" "$P" "$ENC" "$MAXV" "$TAG-w$n" unlimited "$LINE" >> $OUT 2>> $LOG || rc=$?
+  V1=$(count VIDEO); L1=$(count LEAD)
+  wfr_word_stages "$n" "$W" "$rc" $((V1-V0)) $((L1-L0))
   print "[$(date +%H:%M:%S)] 词$n 完成 LEAD=$(grep -c '^LEAD' $OUT 2>/dev/null||echo 0)" >> $LOG
   NLEAD=$(grep -c '^LEAD' $OUT 2>/dev/null); wr note "$SERIAL" "词$n 完成 LEAD=${NLEAD:-0}"
-  /bin/sleep $(( 20 + RANDOM % 40 ))
+  (( SLEEP_BASE > 0 )) && /bin/sleep $(( SLEEP_BASE + RANDOM % 40 ))
 done
 print "[$(date +%H:%M:%S)] v2批完成 LEAD=$(grep -c '^LEAD' $OUT) VIDEO=$(grep -c '^VIDEO' $OUT)" >> $LOG
+NL=$(count LEAD)
 if [[ "$PUSH" == "1" && -s $OUT ]]; then
   # 安全前提(回应 0916 AI review 对 ssh/scp 的中间人告警——本段是既有链路,非本次新增):
   #  ① mmv 是 ~/.ssh/config 里的固定别名,走 tailscale 内网(100.x),不经公网
@@ -53,6 +100,13 @@ if [[ "$PUSH" == "1" && -s $OUT ]]; then
   # 全部静默失败——真机验证时才发现(见0923 handoff)。push-raw-comments.js不碰Postgres,
   # 不受影响,但为了让两条命令共享同一次ssh session的env,统一放在同一行source。
   ssh -o ConnectTimeout=20 mmv "set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; node /Users/administrator/.openclaw/leadgen-scripts/push-videos.js /tmp/$TAG.tsv $TAG $LINE && node /Users/administrator/.openclaw/leadgen-scripts/push-raw-comments.js /tmp/$TAG.tsv $TAG $LINE" >> $LOG 2>&1
+  prc=$?
+  # 账本 delivery: 落池 ssh 的出口码决定 completed/failed; readback_verified 由探针读回(checks/ YAML)填,这里不硬编码
+  if (( prc == 0 )); then
+    wfr stage delivery completed 1 "pushed $NL leads" '[{"type":"log","ref":"'"$LOG"'"}]' '{"leads_written":'"$NL"',"duplicates_skipped":0,"readback_verified":0,"cursor_updates":0}'
+  else
+    wfr stage delivery failed 1 "push rc=$prc" '[{"type":"log","ref":"'"$LOG"'"}]' '{"leads_written":0,"duplicates_skipped":0,"readback_verified":0,"cursor_updates":0}'
+  fi
   print "[$(date +%H:%M:%S)] 已落池(视频+评论)" >> $LOG
   # 0923补齐:落池之后紧接着分拣——此前sort-comments.js压根没有任何自动触发点
   # (既不在cron里,也不在任何批处理链路里,只能靠人/agent手动敲,而agent侧那份
@@ -114,4 +168,6 @@ print(json.dumps(entries))
     ssh -o ConnectTimeout=20 mmv "set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; echo '[]' > /tmp/$TAG-manifest.json && node /Users/administrator/.openclaw/leadgen-scripts/judge-video.js $LINE /tmp/$TAG-manifest.json" >> $LOG 2>&1
     print "[$(date +%H:%M:%S)] 已判定(视频文案链,本轮无新音频,走title兜底)" >> $LOG
   fi
+else
+  wfr stage delivery blocked 1 "push=$PUSH skipped" '[]' '{"leads_written":0,"duplicates_skipped":0,"readback_verified":0,"cursor_updates":0}'
 fi

@@ -33,7 +33,7 @@ esac`;
 const FAKE_SSH = `#!/bin/sh
 printf '%s' "$(basename "$0")" >> "$HOME/ssh-argv.log"; for a in "$@"; do printf '\\t%s' "$a" >> "$HOME/ssh-argv.log"; done; printf '\\n' >> "$HOME/ssh-argv.log"; exit 0`;
 
-function setup(wordsList, { init = true } = {}) {
+function setup(wordsList, { init = true, push = "0" } = {}) {
   const home = mkdtempSync(join(tmpdir(), "b2wfr-"));
   mkdirSync(join(home, "bin-harvest"), { recursive: true });
   mkdirSync(join(home, ".local", "bin"), { recursive: true });
@@ -46,14 +46,14 @@ function setup(wordsList, { init = true } = {}) {
   delete env.WFR_DISABLED; delete env.WFR_SKIP_WORDS; delete env.WFR_RUN_ID;
   const kv = {};
   if (init) {
-    for (const args of [["init", "t9", "p1", wf, "0", "S", "h"], ["enter"]]) {
+    for (const args of [["init", "t9", "p1", wf, push, "S", "h"], ["enter"]]) {
       const r = spawnSync("bash", [join(SRC, "workflow-result.sh"), ...args], { encoding: "utf8", env: { ...env, ...kv } });
       for (const l of r.stdout.split("\n")) { const m = l.match(/^(WFR_[A-Z_]+)=(.*)$/); if (m) kv[m[1]] = m[2]; }
     }
   }
-  return { home, wf, env: { ...env, ...kv }, kv };
+  return { home, wf, push, env: { ...env, ...kv }, kv };
 }
-function run(ctx, { script = BATCH2, push = "0", line, env = {} } = {}) {
+function run(ctx, { script = BATCH2, push = ctx.push, line, env = {} } = {}) {
   const args = [script, "p1", ctx.wf, "t9", push, ""]; if (line !== undefined) args.push(line);
   return spawnSync(ZSH, args, { encoding: "utf8", env: { ...ctx.env, ...env } });
 }
@@ -64,7 +64,7 @@ function readOr(p) { return existsSync(p) ? readFileSync(p, "utf8") : ""; }
 function nightLog(ctx) { return readOr(join(ctx.home, "night-t9.log")).replace(/^\[\d\d:\d\d:\d\d\] /gm, ""); }
 function outputs(ctx) {
   return { log: nightLog(ctx), tsv: readOr(join(ctx.home, "night-t9.tsv")), hk: readOr(join(ctx.home, "hk-argv.log")),
-    ssh: readOr(join(ctx.home, "ssh-argv.log")).replace(/\S*t9-manifest\S*/g, "<manifest>") };
+    ssh: readOr(join(ctx.home, "ssh-argv.log")).replace(/\S*t9-manifest\S*/g, "<manifest>").split(ctx.home).join("<home>") };
 }
 // 旧版 batch2.sh 逐词 sleep 20-60s（写死 /bin/sleep），测试里只把这一处替换成空操作，其余逐字不动
 function legacyScript(ctx) {
@@ -93,8 +93,8 @@ test("四种出口码 → 阶段状态映射（af061588）；工件 n=词序；c
 });
 
 test("LINE 第 6 参照旧传递：显式传 devline → harvest-keyword 与落池/分拣/判定 ssh 都拿到 devline", { skip: SKIP }, () => {
-  const ctx = setup(["ok"]);
-  const r = run(ctx, { push: "1", line: "devline" });
+  const ctx = setup(["ok"], { push: "1" });
+  const r = run(ctx, { line: "devline" });
   assert.equal(r.status, 0, r.stderr);
   const hk = readFileSync(join(ctx.home, "hk-argv.log"), "utf8").trim().split("\n");
   assert.equal(hk.length, 1);
@@ -113,28 +113,28 @@ test("LINE 不传 → 回落 profile（旧默认 LINE=\"${6:-$P}\"）；MAXV 环
 });
 
 test("delivery：PUSH=1 且落池 ssh 成功 → completed leads_written=真实 LEAD 数；PUSH=0 → blocked", { skip: SKIP }, () => {
-  const ctx = setup(["ok", "ok"]);
-  const r = run(ctx, { push: "1" });
+  const ctx = setup(["ok", "ok"], { push: "1" });
+  const r = run(ctx);
   assert.equal(r.status, 0, r.stderr);
   const dv = art(ctx, "delivery.1");
   assert.equal(dv.status, "completed"); assert.equal(dv.metrics.leads_written, 4);
   assert.equal(book(ctx).stages.delivery.status, "completed");
-  const ctx0 = setup(["ok"]);
-  assert.equal(run(ctx0, { push: "0" }).status, 0);
+  const ctx0 = setup(["ok"], { push: "0" });
+  assert.equal(run(ctx0).status, 0);
   assert.equal(art(ctx0, "delivery.1").status, "blocked");
   assert.match(art(ctx0, "delivery.1").summary, /push=0 skipped/);
 });
 
 for (const [name, env] of [["WFR_DISABLED=1", { WFR_DISABLED: "1" }], ["workflow-result.sh 不存在", { WFR: "/nonexistent/workflow-result.sh" }]]) {
   test(`${name}：不写账本，且日志/产物/子进程 argv 与并入前 batch2.sh 逐字一致`, { skip: SKIP }, () => {
-    const ctxNew = setup(["ok", "nocard", "lock", "fail"]);
-    const rNew = run(ctxNew, { push: "1", line: "devline", env });
+    const ctxNew = setup(["ok", "nocard", "lock", "fail"], { push: "1" });
+    const rNew = run(ctxNew, { line: "devline", env });
     assert.equal(rNew.status, 0, rNew.stderr);
     assert.equal(rNew.stdout, "", "no-op 模式不该往 stdout 打任何东西(旧版也不打)");
     assert.equal(book(ctxNew).stages.discovery.items.length, 0, "账本不该有 discovery 记录");
     assert.equal(arts(ctxNew).filter((f) => /discovery|collection|delivery/.test(f)).length, 0, "不该写任何词级/落池工件");
-    const ctxOld = setup(["ok", "nocard", "lock", "fail"], { init: false });
-    const rOld = run(ctxOld, { script: legacyScript(ctxOld), push: "1", line: "devline" });
+    const ctxOld = setup(["ok", "nocard", "lock", "fail"], { init: false, push: "1" });
+    const rOld = run(ctxOld, { script: legacyScript(ctxOld), line: "devline" });
     assert.equal(rOld.status, 0, rOld.stderr);
     assert.equal(rNew.stdout, rOld.stdout);
     const a = outputs(ctxNew), b = outputs(ctxOld);
@@ -185,7 +185,7 @@ function libEnv(extra = {}) {
   const home = mkdtempSync(join(tmpdir(), "hcwfr-"));
   const env = { ...process.env, HOME: home, WFR_HOME: join(home, ".config", "zenithjoy"), WFR_NODE: process.execPath, WFR_JQ: JQ,
     WFR_LEDGER_MJS: join(SRC, "ledger.mjs"), WFR: join(SRC, "workflow-result.sh"), WFR_SCP_TARGET: "", ...extra };
-  delete env.WFR_RUN_ID; if (!("WFR_DISABLED" in extra)) delete env.WFR_DISABLED;
+  for (const k of ["WFR_RUN_ID", "WFR_DISABLED"]) if (!(k in extra)) delete env[k];
   return { home, env };
 }
 
