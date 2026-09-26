@@ -24,23 +24,49 @@ if [[ ( -z "${BRAIN_URL:-}" || -z "${BRAIN_INTERNAL_TOKEN:-}" ) && -r "$WFR_BRAI
   . "$WFR_BRAIN_ENV"
   [[ -n "$_wfr_u" ]] && BRAIN_URL="$_wfr_u"; [[ -n "$_wfr_t" ]] && BRAIN_INTERNAL_TOKEN="$_wfr_t"
 fi
-# brain_post: run_id status stage artifact_file extra_evidence_json —— best-effort POST Brain execution-callback。
+# 棒3b 探针读回(决策 95e29afd): stage 回执前在执行机跑 verify-step.mjs 把探针 observed 读回, Brain 只判定。
+# 只对 YAML 里有探针的 stage 拉起 node(discovery/collection 每词一次,不值得起进程);读回失败一律 [] + WFR_WARN,永不阻塞。
+WFR_VERIFY_MJS="${WFR_VERIFY_MJS:-$HOME/bin-harvest/verify-step.mjs}"
+WFR_CHECKS_YAML="${WFR_CHECKS_YAML:-$HOME/bin-harvest/checks/social-keyword-leadgen.yaml}"
+WFR_DB_ENV="${WFR_DB_ENV:-$HOME/.credentials/zenithjoy-db.env}"
+WFR_FEISHU_ENV="${WFR_FEISHU_ENV:-$HOME/.credentials/feishu.env}"
+# src_fill: file VAR... —— 文件可读才 source,环境里已有的同名变量优先(与上面 brain.env 读法一致),最后全部 export
+src_fill(){ local f="$1"; shift; local k saved=(); [[ -r "$f" ]] || return 0
+  for k in "$@"; do saved+=("$k=${!k:-}"); done
+  # shellcheck disable=SC1090
+  . "$f"
+  for k in "${saved[@]}"; do [[ -n "${k#*=}" ]] && export "$k"; done
+  for k in "$@"; do export "$k"; done; return 0; }
+stage_has_probes(){ [[ -r "$WFR_CHECKS_YAML" ]] && grep -qE "^[[:space:]]+stage:[[:space:]]*$1[[:space:]]*$" "$WFR_CHECKS_YAML" 2>/dev/null; }
+# probe_stage: stage [word] → stdout 一个 JSON 数组(读回失败一律 []),永远 return 0
+probe_stage(){
+  local stage="$1" word="${2:-}" out arr rc=0
+  stage_has_probes "$stage" || { echo '[]'; return 0; }
+  if [[ ! -s "$WFR_VERIFY_MJS" || ! -x "$WFR_NODE" ]]; then warn "verify-step skipped(stage=$stage): missing $WFR_VERIFY_MJS or node"; echo '[]'; return 0; fi
+  out=$( set +u; src_fill "$WFR_DB_ENV" DATABASE_URL; src_fill "$WFR_FEISHU_ENV" FEISHU_APP_ID FEISHU_APP_SECRET
+         "$WFR_NODE" "$WFR_VERIFY_MJS" --stage "$stage" --run-tag "${WFR_TAG:-${WFR_RUN_ID#social-keyword-leadgen-crontab-}}" \
+           --line-key "${WFR_PROFILE:-}" --word "$word" --checks "$WFR_CHECKS_YAML" ) || rc=$?
+  arr=$(printf '%s\n' "$out" | tail -1 | "$WFR_JQ" -c '.probes | select(type=="array")' 2>/dev/null || true)
+  if (( rc != 0 )) || [[ -z "$arr" ]]; then warn "verify-step failed(stage=$stage rc=$rc), probes=[]: $(printf '%s' "$out" | tail -c 300)"; echo '[]'; return 0; fi
+  printf '%s\n' "$arr"
+}
+# brain_post: run_id status stage artifact_file extra_evidence_json [probes_json] —— best-effort POST Brain execution-callback。
 # 缺 BRAIN_URL/BRAIN_INTERNAL_TOKEN/WFR_BRAIN_TASK_ID 任一 → 记 skipped 返回; curl 失败记 raw 输出; 任何情况 return 0。
 # result 直接从校验通过的工件派生({stage,stage_status,metrics,evidence,probes}),Brain 侧 task_runs.result 原样保留。
 brain_post(){
-  local run_id="$1" status="$2" stage="$3" f="${4:-}" extra="${5:-[]}" missing="" body out code
+  local run_id="$1" status="$2" stage="$3" f="${4:-}" extra="${5:-[]}" probes="${6:-[]}" missing="" body out code
   [[ -n "${BRAIN_URL:-}" ]] || missing="$missing BRAIN_URL"
   [[ -n "${BRAIN_INTERNAL_TOKEN:-}" ]] || missing="$missing BRAIN_INTERNAL_TOKEN"
   [[ -n "${WFR_BRAIN_TASK_ID:-}" ]] || missing="$missing WFR_BRAIN_TASK_ID"
   if [[ -n "$missing" ]]; then warn "brain callback skipped: missing$missing (run_id=$run_id)"; return 0; fi
   if [[ -n "$f" && -s "$f" ]]; then
-    body=$("$WFR_JQ" -c --arg t "$WFR_BRAIN_TASK_ID" --arg r "$run_id" --arg s "$status" --argjson extra "$extra" \
-      '{task_id:$t,run_id:$r,status:$s,result:{stage:.stage_id,stage_status:.status,metrics:.metrics,evidence:(.evidence+$extra),probes:[]}}' "$f" 2>&1) \
+    body=$("$WFR_JQ" -c --arg t "$WFR_BRAIN_TASK_ID" --arg r "$run_id" --arg s "$status" --argjson extra "$extra" --argjson probes "$probes" \
+      '{task_id:$t,run_id:$r,status:$s,result:{stage:.stage_id,stage_status:.status,metrics:.metrics,evidence:(.evidence+$extra),probes:$probes}}' "$f" 2>&1) \
       || { warn "brain callback body build failed (run_id=$run_id): $body"; return 0; }
   else
     # 工件没写成(finalize 的 cleanup 写失败): stage/metrics 取默认, evidence 只剩 extra——终态仍要发,否则 Brain 永远挂 in_progress
-    body=$("$WFR_JQ" -cn --arg t "$WFR_BRAIN_TASK_ID" --arg r "$run_id" --arg s "$status" --arg st "$stage" --argjson extra "$extra" \
-      '{task_id:$t,run_id:$r,status:$s,result:{stage:$st,stage_status:"failed",metrics:{},evidence:$extra,probes:[]}}' 2>&1) \
+    body=$("$WFR_JQ" -cn --arg t "$WFR_BRAIN_TASK_ID" --arg r "$run_id" --arg s "$status" --arg st "$stage" --argjson extra "$extra" --argjson probes "$probes" \
+      '{task_id:$t,run_id:$r,status:$s,result:{stage:$st,stage_status:"failed",metrics:{},evidence:$extra,probes:$probes}}' 2>&1) \
       || { warn "brain callback body build failed (run_id=$run_id): $body"; return 0; }
   fi
   out=$(curl -s --connect-timeout 3 -m 8 -w '\n%{http_code}' -X POST "${BRAIN_URL%/}/api/brain/execution-callback" \
@@ -104,7 +130,11 @@ write_stage(){
   else led1 set --stage "$stage" --status "$status" --n "$n" --note "$summary" >/dev/null; fi
   WFR_LAST_ARTIFACT="$f"
   # 回执 Brain(校验通过+记账之后): run_id=RUN__ATTEMPT.stage, 状态 in_progress; cleanup 段由 finalize 发终态,这里不发
-  [[ "$stage" == cleanup ]] || brain_post "${WFR_RUN_ID:-}__${attempt}.${stage}" in_progress "$stage" "$f" '[]'
+  # 探针读回(棒3b)排在校验之后、POST 之前: 工件都没写成的 stage 不值得读回
+  if [[ "$stage" != cleanup ]]; then
+    local probes; probes=$(probe_stage "$stage" "$word")
+    brain_post "${WFR_RUN_ID:-}__${attempt}.${stage}" in_progress "$stage" "$f" '[]' "$probes"
+  fi
 }
 
 cmd="${1:-}"; shift || true
@@ -115,15 +145,17 @@ case "$cmd" in
     WFR_RUN_ID="social-keyword-leadgen-crontab-$TAG"
     WFR_HASH="$(calc_hash "$P" "$WF" "$PUSH")"
     WFR_RUN_DIR="$WFR_HOME/ledger/$WFR_RUN_ID"; WFR_ART_DIR="$WFR_HOME/workflow-runs"
+    WFR_TAG="$TAG"; WFR_PROFILE="$P"   # 棒3b: 探针占位符 $RUN_TAG / $LINE_KEY(经 line-routes routeOf 由 profile 解析)
     mkdir -p "$WFR_RUN_DIR" "$WFR_ART_DIR" 2>/dev/null || warn "mkdir failed errno: $(mkdir -p "$WFR_RUN_DIR" "$WFR_ART_DIR" 2>&1)"
     led1 init --run-id "$WFR_RUN_ID" --hash "$WFR_HASH" --profile "$P" --serial "$SERIAL" --hostkey "$HOSTKEY" >/dev/null
-    export WFR_RUN_ID WFR_HASH WFR_RUN_DIR WFR_ART_DIR
+    export WFR_RUN_ID WFR_HASH WFR_RUN_DIR WFR_ART_DIR WFR_TAG WFR_PROFILE
     write_stage preflight completed 1 "device+account preflight by harvest-cron" \
       "[{\"type\":\"preflight\",\"serial\":\"$SERIAL\",\"hostkey\":\"$HOSTKEY\"}]" \
       '{"device_verified":1,"account_verified":0,"call_state_idle":1,"lock_acquired":0}'
     write_stage qualification blocked 1 "not_in_profile" '[]' '{"candidates_judged":0,"qualified":0}'
     write_stage scoring blocked 1 "not_in_profile" '[]' '{"comments_scored":0,"strong_intent":0,"weak_intent":0,"peer":0,"irrelevant":0,"spam":0}'
-    echo "WFR_RUN_ID=$WFR_RUN_ID"; echo "WFR_HASH=$WFR_HASH"; echo "WFR_RUN_DIR=$WFR_RUN_DIR"; echo "WFR_ART_DIR=$WFR_ART_DIR";;
+    echo "WFR_RUN_ID=$WFR_RUN_ID"; echo "WFR_HASH=$WFR_HASH"; echo "WFR_RUN_DIR=$WFR_RUN_DIR"; echo "WFR_ART_DIR=$WFR_ART_DIR"
+    echo "WFR_TAG=$WFR_TAG"; echo "WFR_PROFILE=$WFR_PROFILE";;
   enter)
     if not_initialized; then
       warn "called before init"

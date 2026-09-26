@@ -276,3 +276,110 @@ test("WFR_BRAIN_ENV 文件（~/.credentials/brain.env 读法）提供 BRAIN_URL/
   assert.equal(argAfter(calls[0], "POST"), "http://brain.file:5221/api/brain/execution-callback", "尾部 / 需去掉");
   assert.ok(calls[0].includes("Authorization: Bearer tok-file"));
 });
+
+// ── 棒3b 探针执行机侧读回（决策 95e29afd）：stage 回执前调 verify-step.mjs，probes 合进 result.probes ──
+// 假 node：命中 verify-step 走 canned 输出（记录 argv），其余（ledger.mjs）exec 真 node
+function fakeNode(dir, { canned = "", rc = 0 } = {}) {
+  const bin = join(dir, "nodebin"); mkdirSync(bin, { recursive: true });
+  const calls = join(dir, "node.calls");
+  const node = join(bin, "node");
+  writeFileSync(node, `#!/usr/bin/env bash
+case "$*" in
+  *verify-step.mjs*)python3 -c 'import json,sys;print(json.dumps(sys.argv[1:]))' "$@" >> "${calls}"; printf '%s\\n' ${JSON.stringify(canned)}; exit ${rc};;
+  *) exec "${process.execPath}" "$@";;
+esac
+`);
+  chmodSync(node, 0o755);
+  return { WFR_NODE: node, calls };
+}
+function nodeCalls(calls) { return existsSync(calls) ? readFileSync(calls, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []; }
+const VERIFY = join(HERE, "..", "verify-step.mjs");
+const CHECKS = join(HERE, "..", "checks", "social-keyword-leadgen.yaml");
+const PROBE_ENV = (d) => ({ WFR_VERIFY_MJS: VERIFY, WFR_CHECKS_YAML: CHECKS, WFR_DB_ENV: join(d, "no-db.env"), WFR_FEISHU_ENV: join(d, "no-feishu.env") });
+const DELIVERY_ARGS = ["delivery", "completed", "1", "pushed 2 leads", '[{"type":"log","ref":"n.log"}]', '{"leads_written":2,"duplicates_skipped":0,"readback_verified":0,"cursor_updates":0}'];
+
+test("init: 额外导出 WFR_TAG / WFR_PROFILE（stage 钩子据此传 --run-tag/--line-key）", { skip: !JQ && "no jq" }, () => {
+  const d = mkdtempSync(join(tmpdir(), "wfr-"));
+  const i = wfr(d, {}, "init", "t15", "jinoshengyuan-work", words(d, ["A"]), "1", "S", "h");
+  assert.equal(i.kv.WFR_TAG, "t15"); assert.equal(i.kv.WFR_PROFILE, "jinoshengyuan-work");
+});
+
+test("stage delivery: 调 verify-step（--stage/--run-tag/--line-key/--checks）并把 probes 合进回执 result.probes", { skip: !JQ && "no jq" }, () => {
+  const d = mkdtempSync(join(tmpdir(), "wfr-"));
+  const i = wfr(d, {}, "init", "t15", "jinoshengyuan-work", words(d, ["A"]), "1", "S", "h");
+  const e = wfr(d, i.kv, "enter");
+  const b = brainEnv(d);
+  const canned = JSON.stringify({ stage: "delivery", probes: [{ key: "videos_readback", observed: 2, probed_at: "2026-09-26T00:00:00.000Z" }, { key: "comments_readback", probed_at: "2026-09-26T00:00:00.000Z", error: "timeout" }] });
+  const n = fakeNode(d, { canned });
+  const s = wfr(d, { ...i.kv, ...e.kv, ...b.env, ...PROBE_ENV(d), WFR_NODE: n.WFR_NODE }, "stage", ...DELIVERY_ARGS);
+  assert.equal(s.code, 0);
+  const vcalls = nodeCalls(n.calls);
+  assert.equal(vcalls.length, 1, "delivery 恰好拉起一次 verify-step");
+  const av = vcalls[0];
+  assert.equal(argAfter(av, "--stage"), "delivery"); assert.equal(argAfter(av, "--run-tag"), "t15");
+  assert.equal(argAfter(av, "--line-key"), "jinoshengyuan-work"); assert.equal(argAfter(av, "--checks"), CHECKS);
+  const calls = curlCalls(b.calls);
+  assert.equal(calls.length, 1);
+  const body = JSON.parse(argAfter(calls[0], "-d"));
+  assert.deepEqual(body.result.probes, JSON.parse(canned).probes);
+  assert.equal(body.result.stage, "delivery"); assert.equal(body.result.metrics.leads_written, 2);
+});
+
+test("stage discovery: YAML 无该 stage 探针 → 不拉起 verify-step，probes 仍 []", { skip: !JQ && "no jq" }, () => {
+  const d = mkdtempSync(join(tmpdir(), "wfr-"));
+  const i = wfr(d, {}, "init", "t16", "p1", words(d, ["A"]), "0", "S", "h");
+  const e = wfr(d, i.kv, "enter");
+  const b = brainEnv(d);
+  const n = fakeNode(d, { canned: '{"stage":"discovery","probes":[{"key":"bogus","observed":1,"probed_at":"x"}]}' });
+  const s = wfr(d, { ...i.kv, ...e.kv, ...b.env, ...PROBE_ENV(d), WFR_NODE: n.WFR_NODE }, "stage", "discovery", "completed", "1", "ok",
+    '[{"type":"log","ref":"n.log"}]', '{"candidates":1,"keywords_processed":1,"screens_scanned":0}', "A");
+  assert.equal(s.code, 0);
+  assert.equal(nodeCalls(n.calls).length, 0, "discovery 不该拉起 verify-step");
+  assert.deepEqual(JSON.parse(argAfter(curlCalls(b.calls)[0], "-d")).result.probes, []);
+});
+
+test("stage delivery: verify-step 非零退出 / 输出垃圾 / 脚本缺失 → probes 保持 []、记 WFR_WARN、exit 0、回执照发", { skip: !JQ && "no jq" }, () => {
+  const cases = [
+    { name: "非零退出", node: (d) => fakeNode(d, { canned: '{"stage":"delivery","probes":[{"key":"k","observed":1,"probed_at":"x"}]}', rc: 3 }), extra: {} },
+    { name: "输出垃圾", node: (d) => fakeNode(d, { canned: "Segmentation fault" }), extra: {} },
+    { name: "脚本缺失", node: (d) => fakeNode(d, { canned: '{"stage":"delivery","probes":[{"key":"k","observed":1,"probed_at":"x"}]}' }), extra: { WFR_VERIFY_MJS: "/nonexistent/verify-step.mjs" } },
+  ];
+  for (const c of cases) {
+    const d = mkdtempSync(join(tmpdir(), "wfr-"));
+    const i = wfr(d, {}, "init", "t17", "p1", words(d, ["A"]), "1", "S", "h");
+    const e = wfr(d, i.kv, "enter");
+    const b = brainEnv(d);
+    const n = c.node(d);
+    const s = wfr(d, { ...i.kv, ...e.kv, ...b.env, ...PROBE_ENV(d), WFR_NODE: n.WFR_NODE, ...c.extra }, "stage", ...DELIVERY_ARGS);
+    assert.equal(s.code, 0, c.name);
+    assert.match(s.err, /WFR_WARN.*verify-step/, `${c.name}: 缺 WFR_WARN`);
+    const calls = curlCalls(b.calls);
+    assert.equal(calls.length, 1, `${c.name}: 回执仍要发`);
+    assert.deepEqual(JSON.parse(argAfter(calls[0], "-d")).result.probes, [], c.name);
+    assert.ok(existsSync(join(i.kv.WFR_ART_DIR, "social-keyword-leadgen-crontab-t17__a1.delivery.1.worker-result.json")), `${c.name}: 工件照写`);
+  }
+});
+
+test("stage delivery: WFR_DB_ENV / WFR_FEISHU_ENV 文件可读时其变量传给 verify-step；环境里已有的同名变量优先", { skip: !JQ && "no jq" }, () => {
+  const d = mkdtempSync(join(tmpdir(), "wfr-"));
+  const i = wfr(d, {}, "init", "t18", "p1", words(d, ["A"]), "1", "S", "h");
+  const e = wfr(d, i.kv, "enter");
+  const b = brainEnv(d);
+  const dbEnv = join(d, "db.env"); writeFileSync(dbEnv, "DATABASE_URL=postgres://file/zenithjoy\n");
+  const fsEnv = join(d, "feishu.env"); writeFileSync(fsEnv, "FEISHU_APP_ID=id-file\nFEISHU_APP_SECRET=sec-file\n");
+  // 假 node 把看到的三个变量打进 canned probes 的 error 字段，便于断言
+  const bin = join(d, "nodebin2"); mkdirSync(bin, { recursive: true });
+  const node = join(bin, "node");
+  writeFileSync(node, `#!/usr/bin/env bash
+case "$*" in
+  *verify-step.mjs*)printf '{"stage":"delivery","probes":[{"key":"env","probed_at":"x","error":"%s|%s|%s"}]}\\n' "\${DATABASE_URL:-}" "\${FEISHU_APP_ID:-}" "\${FEISHU_APP_SECRET:-}";;
+  *) exec "${process.execPath}" "$@";;
+esac
+`);
+  chmodSync(node, 0o755);
+  // DATABASE_URL/FEISHU_APP_SECRET 显式清空：CI smoke runner 环境里本来就有 DATABASE_URL（apps/api 用），不隔离会按"环境优先"盖掉文件值（#1983 首跑实锤）
+  const s = wfr(d, { ...i.kv, ...e.kv, ...b.env, ...PROBE_ENV(d), WFR_NODE: node, WFR_DB_ENV: dbEnv, WFR_FEISHU_ENV: fsEnv, DATABASE_URL: "", FEISHU_APP_ID: "id-env", FEISHU_APP_SECRET: "" }, "stage", ...DELIVERY_ARGS);
+  assert.equal(s.code, 0);
+  const probes = JSON.parse(argAfter(curlCalls(b.calls)[0], "-d")).result.probes;
+  assert.equal(probes[0].error, "postgres://file/zenithjoy|id-env|sec-file", "文件补空位，环境已有的 FEISHU_APP_ID 优先");
+});
