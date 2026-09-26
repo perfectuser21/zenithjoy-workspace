@@ -285,7 +285,7 @@ function fakeNode(dir, { canned = "", rc = 0 } = {}) {
   const node = join(bin, "node");
   writeFileSync(node, `#!/usr/bin/env bash
 case "$*" in
-  *verify-step*) python3 -c 'import json,sys;print(json.dumps(sys.argv[1:]))' "$@" >> "${calls}"; printf '%s\\n' ${JSON.stringify(canned)}; exit ${rc};;
+  *verify-step.mjs*)python3 -c 'import json,sys;print(json.dumps(sys.argv[1:]))' "$@" >> "${calls}"; printf '%s\\n' ${JSON.stringify(canned)}; exit ${rc};;
   *) exec "${process.execPath}" "$@";;
 esac
 `);
@@ -372,7 +372,7 @@ test("stage delivery: WFR_DB_ENV / WFR_FEISHU_ENV 文件可读时其变量传给
   const node = join(bin, "node");
   writeFileSync(node, `#!/usr/bin/env bash
 case "$*" in
-  *verify-step*) printf '{"stage":"delivery","probes":[{"key":"env","probed_at":"x","error":"%s|%s|%s"}]}\\n' "\${DATABASE_URL:-}" "\${FEISHU_APP_ID:-}" "\${FEISHU_APP_SECRET:-}";;
+  *verify-step.mjs*)printf '{"stage":"delivery","probes":[{"key":"env","probed_at":"x","error":"%s|%s|%s"}]}\\n' "\${DATABASE_URL:-}" "\${FEISHU_APP_ID:-}" "\${FEISHU_APP_SECRET:-}";;
   *) exec "${process.execPath}" "$@";;
 esac
 `);

@@ -24,7 +24,7 @@ finalize_needed(){ [[ -n "${WFR_RUN_ID:-}" ]]; }   # 只有 wfr init 跑过(导�
 #   not_initialized 分支，账本 attempt_id 永远 null、skip_words 恒空——两步接成一个库函数堵死这个洞。
 wfr_bootstrap(){
   eval "$(bash "$WFR" init "$1" "$2" "$3" "$4" "$5" "$6" 2>>${LOG:-/dev/null})" 2>/dev/null || true
-  export WFR_RUN_ID WFR_HASH WFR_RUN_DIR WFR_ART_DIR
+  export WFR_RUN_ID WFR_HASH WFR_RUN_DIR WFR_ART_DIR WFR_TAG WFR_PROFILE   # WFR_TAG/WFR_PROFILE: 棒3b 探针读回的 --run-tag/--line-key
   eval "$(bash "$WFR" enter 2>>${LOG:-/dev/null})" 2>/dev/null || true
   export WFR_ATTEMPT WFR_SKIP_WORDS
 }
