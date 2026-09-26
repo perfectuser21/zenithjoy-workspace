@@ -138,6 +138,15 @@ export async function runProbes({ doc, stage, params, deps = {}, timeoutMs = 600
   return { stage, probes: results.map((r) => (r.probed_at ? r : { ...r, probed_at: now() })) };
 }
 
+// resolveLineKey: --line-key 拿到的是 profile 名（workflow-result.sh 传 WFR_PROFILE=jinoshengyuan-work），而 PG
+// leadgen_videos.line_key 存的是路由键 jinuo（push-videos.js:57 ROUTE.key）——$LINE_KEY 替换前先经 routeOf().key 归一；
+// 认不出（routeOf 抛错）原样透传，让 SQL/飞书那一侧自己报 error，而不是在这里把整段探针吞掉。
+export function resolveLineKey(raw, routeOf = require("./line-routes.js").routeOf) {
+  const s = String(raw || "");
+  if (!s) return s;
+  try { return routeOf(s).key; } catch { return s; }
+}
+
 function parseArgs(argv) {
   const a = {};
   for (let i = 0; i < argv.length; i++) if (argv[i].startsWith("--")) { a[argv[i].slice(2)] = argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") ? argv[++i] : ""; }
@@ -159,7 +168,7 @@ async function main() {
     const { doc, errors } = loadChecks(yamlPath, join(HERE, "checks", "schema.json"));
     if (errors.length) { warn(`探针文件校验失败 ${yamlPath}: ${errors.join("; ")}`); return emit({ stage, probes: [] }); }
     const deps = a.deps ? (await import(a.deps)).default : {};
-    const params = { runTag: a["run-tag"] || "", lineKey: a["line-key"] || "", word: a.word || "" };
+    const params = { runTag: a["run-tag"] || "", lineKey: resolveLineKey(a["line-key"]), word: a.word || "" };
     const timeoutMs = Number(a["timeout-ms"]) > 0 ? Number(a["timeout-ms"]) : 60000;
     const out = await runProbes({ doc, stage, params, deps, timeoutMs });
     for (const p of out.probes) if (p.error) warn(`${p.key}: ${p.error}`);
