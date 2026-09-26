@@ -201,4 +201,17 @@ test('start: 服务端不回 brain_task_id（桥接失败/老服务端）→ std
   const { env } = await setup(t);
   const r = await ok(wr(env, 'start', 'SER1', 't', 'a'));
   assert.equal(r.stdout, '');
+  assert.equal((await ok(wr(env, 'brain-task', 'SER1'))).stdout, '', '无 brain_task_id 时 brain-task 打空');
+});
+
+// 棒3b-3：harvest-cron.sh 的 wr() 按基线守卫必须吞 stdout，brain_task_id 改落状态文件第 3 行，经 brain-task 子命令读回；
+// 且后续 step 重写状态文件时不能把第 3 行丢掉（harvest-cron 紧跟 start 读，但 batch2/harvest-keyword 子进程也可能要读）
+test('brain-task: start 后可读回 brain_task_id，经 step 重写状态文件后仍在', async (t) => {
+  const { env } = await setup(t, { brainTaskId: '33333333-3333-4333-8333-333333333333' });
+  await ok(wr(env, 'start', 'SER1', '获客采收·AI', 'a,b'));
+  assert.equal((await ok(wr(env, 'brain-task', 'SER1'))).stdout, '33333333-3333-4333-8333-333333333333\n');
+  await ok(wr(env, 'step', 'SER1', '1', 'doing'));
+  assert.equal((await ok(wr(env, 'brain-task', 'SER1'))).stdout, '33333333-3333-4333-8333-333333333333\n');
+  await ok(wr(env, 'done', 'SER1'));
+  assert.equal((await ok(wr(env, 'brain-task', 'SER1'))).stdout, '', 'done 后状态文件已删，brain-task 打空');
 });

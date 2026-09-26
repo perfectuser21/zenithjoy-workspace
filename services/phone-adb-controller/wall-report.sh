@@ -28,7 +28,7 @@ wall_load_env || exit 0
 if [ "${1:-}" = "--profile" ]; then SERIAL=$(wall_profile_serial "${2:-}"); [ $# -ge 2 ] && shift 2
 else SERIAL="${1:-}"; [ $# -gt 0 ] && shift; fi
 [ -n "$SERIAL" ] || { wall_log "report $cmd: 无法解析序列号"; exit 0; }
-STATE="$ZJ_WALL_TMP/task-$SERIAL-${WALL_NS:-default}"    # 两行: task_id / 当前 step_index
+STATE="$ZJ_WALL_TMP/task-$SERIAL-${WALL_NS:-default}"    # 三行: task_id / 当前 step_index / brain_task_id(可空,棒3b-3)
 
 # 执行器面只用内部 token；绝不带 X-Agent-License（带了会被分流到 license 路径而 401）
 api() { # POST path body [总超时秒,默认 3] → 输出 "<code> <body>"
@@ -40,7 +40,8 @@ api() { # POST path body [总超时秒,默认 3] → 输出 "<code> <body>"
 }
 state_task() { sed -n 1p "$STATE" 2>/dev/null; }
 state_step() { sed -n 2p "$STATE" 2>/dev/null; }
-state_put()  { printf '%s\n%s\n' "$1" "$2" > "$STATE"; }
+state_brain(){ sed -n 3p "$STATE" 2>/dev/null; }
+state_put()  { local b; b=$(state_brain); printf '%s\n%s\n' "$1" "$2" > "$STATE"; [ -n "$b" ] && printf '%s\n' "$b" >> "$STATE"; return 0; }
 is_idx()     { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
 
 do_complete() { # task_id completed | task_id failed error_code failed_step
@@ -82,10 +83,11 @@ print(json.dumps(d))' "$1" "$2" "$EXECUTOR" "${4:-}" 2>/dev/null)
   if [ "$code" = "201" ]; then
     tid=$(printf '%s' "${r#* }" | wall_json_get data.task_id)
     state_put "$tid" 0; wall_log "start $SERIAL task=$tid"
-    # 棒1 回执线：服务端桥接成功时回 brain_task_id，打到 stdout 一行 KV 供调用方(harvest-cron.sh wr_start)
-    # 捕获 export 给 workflow-result.sh 回执 Brain。桥接失败/老服务端为空 → 不打行（调用方拿空串=跳过回执）
+    # 棒1 回执线：服务端桥接成功时回 brain_task_id，打到 stdout 一行 KV 并落状态文件第 3 行——
+    # 棒3b-3：harvest-cron.sh 的 wr() 按基线守卫必须吞 stdout，所以它经 `brain-task` 子命令从状态文件取，
+    # 再 export 给 workflow-result.sh 回执 Brain。桥接失败/老服务端为空 → 不打行、不落行（调用方拿空串=跳过回执）
     bid=$(printf '%s' "${r#* }" | wall_json_get data.brain_task_id)
-    [ -n "$bid" ] && { printf 'WFR_BRAIN_TASK_ID=%s\n' "$bid"; wall_log "start $SERIAL brain_task=$bid"; }
+    [ -n "$bid" ] && { printf 'WFR_BRAIN_TASK_ID=%s\n' "$bid"; printf '%s\n' "$bid" >> "$STATE"; wall_log "start $SERIAL brain_task=$bid"; }
   else
     rm -f "$STATE"; wall_log "start $SERIAL HTTP $code,静默降级"
   fi
@@ -118,6 +120,7 @@ case "$cmd" in
   start) do_start "${1:-任务}" "${2:-步骤1}" "" "${3:-}" ;;
   step)  do_step "${1:-0}" "${2:-doing}" "${3:-}" "${4:-}" ;;
   note)  do_step "$(state_step)" doing "${1:-}" ;;
+  brain-task) state_brain ;;   # 打印本链进行中任务的 brain_task_id（无则空），供 harvest-cron.sh 取回执单号
   done)  tid=$(state_task)
          if [ -n "$tid" ]; then do_complete "$tid" completed; rm -f "$STATE"
          else wall_log "done $SERIAL 无进行中任务,忽略"; fi ;;

@@ -659,6 +659,8 @@ grep -qF 'Authorization: Bearer $BRAIN_INTERNAL_TOKEN' "$D/workflow-result.sh" |
 grep -qF 'brain callback skipped' "$D/workflow-result.sh" || fail "workflow-result.sh 缺 env 时不记 skipped 日志(静默失效不可见)"
 grep -qF 'WFR_BRAIN_TASK_ID=' "$D/wall-report.sh" || fail "wall-report.sh do_start 未把 brain_task_id 打到 stdout"
 grep -qF 'export WFR_BRAIN_TASK_ID' "$D/harvest-cron.sh" || fail "harvest-cron.sh 未 export WFR_BRAIN_TASK_ID(子进程 wfr 看不到)"
+grep -qF 'brain-task) state_brain' "$D/wall-report.sh" || fail "wall-report.sh 缺 brain-task 子命令(harvest-cron 的 wr 吞 stdout,只能从状态文件取 brain_task_id)"
+grep -qF 'wr_get brain-task "$SERIAL"' "$D/harvest-cron.sh" || fail "harvest-cron.sh 未经 brain-task 取 Brain 单号(取数链断=回执全程 skipped)"
 grep -qF 'brain_task_id:' apps/api/src/services/worker-tasks-service.ts || fail "startTask 返回体缺 brain_task_id(取数链源头断)"
 grep -qF 'brain.env' "$D/README.md" || fail "README 部署三步缺 brain.env 一行(新机器部署漏凭据=全程 skipped)"
 
