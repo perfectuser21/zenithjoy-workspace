@@ -282,9 +282,10 @@ test("WFR_BRAIN_ENV 文件（~/.credentials/brain.env 读法）提供 BRAIN_URL/
 function fakeSsh(dir, { canned = "", rc = 0 } = {}) {
   const bin = join(dir, "sshbin"); mkdirSync(bin, { recursive: true });
   const calls = join(dir, "ssh.calls");
+  const cannedFile = join(dir, "ssh.canned"); writeFileSync(cannedFile, `${canned}\n`); // 走文件回放：canned 可含多行（远端噪音 + 末行 JSON）
   writeFileSync(join(bin, "ssh"), `#!/usr/bin/env bash
 python3 -c 'import json,sys;print(json.dumps(sys.argv[1:]))' "$@" >> "${calls}"
-${rc ? `echo "ssh: connect to host mmv port 22: Operation timed out" >&2; exit ${rc}` : `printf '%s\\n' ${JSON.stringify(canned)}`}
+${rc ? `echo "ssh: connect to host mmv port 22: Operation timed out" >&2; exit ${rc}` : `cat "${cannedFile}"`}
 `);
   chmodSync(join(bin, "ssh"), 0o755);
   return { bin, calls };

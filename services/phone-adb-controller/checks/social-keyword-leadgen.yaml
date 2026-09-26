@@ -9,7 +9,9 @@
 #   $RUN_TAG   本 run 归属键：harvest-cron-v4.sh:35 的 TAG=auto$(date +%m%d%H%M)
 #              → 飞书原始评论池「运行批次」列（push-raw-comments.js:46）
 #              → PG zenithjoy.leadgen_videos.harvest_batch（leadgen-db-lib.js:26）
-#   $LINE_KEY  业务线键 jinuo|yuesheng（line-routes.js:17/36）
+#   $LINE_KEY  业务线键 jinuo|yuesheng（line-routes.js:17/36）。调用方 workflow-result.sh 传的是 profile 名
+#              （jinoshengyuan-work），verify-step.mjs 经 routeOf().key 归一成路由键后才替换进 SQL；
+#              认不出的原样透传。PG 里 leadgen_videos.line_key 存的是路由键（push-videos.js:57 ROUTE.key）。
 #   $WORD      本轮关键词（batch2-v4.sh 循环里的 $W）
 #
 # 取法约定：
@@ -40,7 +42,6 @@ probes:
         SELECT count(*)
           FROM zenithjoy.leadgen_videos
          WHERE harvest_batch = '$RUN_TAG'
-           AND line_key = '$LINE_KEY'
     expect:
       op: ">="
       ref: "metrics.videos_processed"
@@ -50,6 +51,9 @@ probes:
       （ON CONFLICT DO NOTHING，重复视频不计入）。对账基准 videos_processed 是 collection 阶段按词写的
       （batch2-v4.sh:50 每词一个工件），取本 run 所有 collection 工件的 videos_processed 之和；
       delivery 自身工件不带视频数（batch2-v4.sh:68 只有 leads_written）。
+      只按 harvest_batch 归属，与 line_key_not_null 同 WHERE（棒3b-2 决策 8f38f5fd）：一个 run 只跑一个 profile，
+      批次键已唯一定界；09-26 实证多带 line_key='$LINE_KEY' 时 --line-key 传的是 profile 名而库里是路由键（push-videos.js:57），
+      同 TAG 下本条读 0、line_key_not_null 读 7，口径分叉。
 
   - key: comments_readback
     stage: delivery

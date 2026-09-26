@@ -24,30 +24,37 @@ if [[ ( -z "${BRAIN_URL:-}" || -z "${BRAIN_INTERNAL_TOKEN:-}" ) && -r "$WFR_BRAI
   . "$WFR_BRAIN_ENV"
   [[ -n "$_wfr_u" ]] && BRAIN_URL="$_wfr_u"; [[ -n "$_wfr_t" ]] && BRAIN_INTERNAL_TOKEN="$_wfr_t"
 fi
-# 棒3b 探针读回(决策 95e29afd): stage 回执前在执行机跑 verify-step.mjs 把探针 observed 读回, Brain 只判定。
-# 只对 YAML 里有探针的 stage 拉起 node(discovery/collection 每词一次,不值得起进程);读回失败一律 [] + WFR_WARN,永不阻塞。
-WFR_VERIFY_MJS="${WFR_VERIFY_MJS:-$HOME/bin-harvest/verify-step.mjs}"
+# 棒3b 探针读回(决策 95e29afd): stage 回执前把探针 observed 读回, Brain 只判定。
+# 棒3b-2(决策 8f38f5fd): 读回改经 ssh 在 MMV 跑——leadgen PG(zenithjoy 库)只在 MMV 127.0.0.1:5432 监听、飞书凭据
+# ~/.openclaw/clawdbot.json 也只在 MMV,执行机(xian-m4/M1)本地跑 verify-step 三条必 error(09-26 实证)。远端命令形状完全照
+# batch2.sh:55 推 push-videos.js 的同一条 ssh(别名 mmv 走 tailscale 内网+密钥认证,安全说明见该处)。
+# 只对有探针的 stage 起 ssh(discovery/collection 每词一次,不值得);本机有 YAML 按 YAML 判,没有(执行机不再放探针文件)按
+# WFR_PROBE_STAGES 兜底闸(与 YAML 的 stage 集合由 checks 单测钉死)。读回失败一律 [] + WFR_WARN,永不阻塞。
+WFR_PROBE_HOST="${WFR_PROBE_HOST:-mmv}"
+WFR_PROBE_DIR="${WFR_PROBE_DIR:-~/.openclaw/leadgen-scripts}"
+WFR_PROBE_STAGES="${WFR_PROBE_STAGES:-delivery scoring}"
 WFR_CHECKS_YAML="${WFR_CHECKS_YAML:-$HOME/bin-harvest/checks/social-keyword-leadgen.yaml}"
-WFR_DB_ENV="${WFR_DB_ENV:-$HOME/.credentials/zenithjoy-db.env}"
-WFR_FEISHU_ENV="${WFR_FEISHU_ENV:-$HOME/.credentials/feishu.env}"
-# src_fill: file VAR... —— 文件可读才 source,环境里已有的同名变量优先(与上面 brain.env 读法一致),最后全部 export
-src_fill(){ local f="$1"; shift; local k saved=(); [[ -r "$f" ]] || return 0
-  for k in "$@"; do saved+=("$k=${!k:-}"); done
-  # shellcheck disable=SC1090
-  . "$f"
-  for k in "${saved[@]}"; do [[ -n "${k#*=}" ]] && export "$k"; done
-  for k in "$@"; do export "$k"; done; return 0; }
-stage_has_probes(){ [[ -r "$WFR_CHECKS_YAML" ]] && grep -qE "^[[:space:]]+stage:[[:space:]]*$1[[:space:]]*$" "$WFR_CHECKS_YAML" 2>/dev/null; }
+stage_has_probes(){
+  if [[ -r "$WFR_CHECKS_YAML" ]]; then grep -qE "^[[:space:]]+stage:[[:space:]]*$1[[:space:]]*$" "$WFR_CHECKS_YAML" 2>/dev/null; return; fi
+  [[ " $WFR_PROBE_STAGES " == *" $1 "* ]]
+}
+# sq: 远端 shell 单引号包裹(内部单引号→'\'')。bash 3.2 的 printf %q 会把中文拆成八进制转义,不用它
+sq(){ local q=\' s="$1"; s="${s//$q/$q\\$q$q}"; printf "'%s'" "$s"; }
 # probe_stage: stage [word] → stdout 一个 JSON 数组(读回失败一律 []),永远 return 0
 probe_stage(){
-  local stage="$1" word="${2:-}" out arr rc=0
+  local stage="$1" word="${2:-}" out arr rc=0 remote errf
   stage_has_probes "$stage" || { echo '[]'; return 0; }
-  if [[ ! -s "$WFR_VERIFY_MJS" || ! -x "$WFR_NODE" ]]; then warn "verify-step skipped(stage=$stage): missing $WFR_VERIFY_MJS or node"; echo '[]'; return 0; fi
-  out=$( set +u; src_fill "$WFR_DB_ENV" DATABASE_URL; src_fill "$WFR_FEISHU_ENV" FEISHU_APP_ID FEISHU_APP_SECRET
-         "$WFR_NODE" "$WFR_VERIFY_MJS" --stage "$stage" --run-tag "${WFR_TAG:-${WFR_RUN_ID#social-keyword-leadgen-crontab-}}" \
-           --line-key "${WFR_PROFILE:-}" --word "$word" --checks "$WFR_CHECKS_YAML" ) || rc=$?
+  remote="set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; cd $WFR_PROBE_DIR && node verify-step.mjs --stage $(sq "$stage") --run-tag $(sq "${WFR_TAG:-${WFR_RUN_ID#social-keyword-leadgen-crontab-}}") --line-key $(sq "${WFR_PROFILE:-}") --word $(sq "$word")"
+  errf=$(mktemp 2>/dev/null || echo /dev/null)
+  out=$(ssh -o ConnectTimeout=20 -o BatchMode=yes "$WFR_PROBE_HOST" "$remote" 2>"$errf") || rc=$?
+  # 远端 stderr(verify-step: 单条 error / ssh 报错)原样透传到本机 stderr → harvest-cron.log 可查
+  [[ -s "$errf" ]] && cat "$errf" >&2
   arr=$(printf '%s\n' "$out" | tail -1 | "$WFR_JQ" -c '.probes | select(type=="array")' 2>/dev/null || true)
-  if (( rc != 0 )) || [[ -z "$arr" ]]; then warn "verify-step failed(stage=$stage rc=$rc), probes=[]: $(printf '%s' "$out" | tail -c 300)"; echo '[]'; return 0; fi
+  if (( rc != 0 )) || [[ -z "$arr" ]]; then
+    warn "verify-step via ssh $WFR_PROBE_HOST failed(stage=$stage rc=$rc), probes=[]: $(tail -c 200 "$errf" 2>/dev/null | tr '\n' ' ')$(printf '%s' "$out" | tail -c 200)"
+    arr='[]'
+  fi
+  [[ "$errf" != /dev/null ]] && rm -f "$errf"
   printf '%s\n' "$arr"
 }
 # brain_post: run_id status stage artifact_file extra_evidence_json [probes_json] —— best-effort POST Brain execution-callback。

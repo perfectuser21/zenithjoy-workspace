@@ -145,6 +145,15 @@ test("videos_readback 与 line_key_not_null：同 target、同表、同 WHERE（
   assert.ok(!/\$LINE_KEY/.test(a.probe.query), "videos_readback 不得再按 $LINE_KEY 过滤（profile 名 ≠ 库内路由键）");
 });
 
+test("verify-step resolveLineKey：profile 名 / 业务线名 → 路由键；认不出原样透传；空串原样", async () => {
+  const { resolveLineKey } = await import(path.join(ROOT, "verify-step.mjs"));
+  assert.equal(resolveLineKey("jinoshengyuan-work"), "jinuo");
+  assert.equal(resolveLineKey("悦升云端"), "yuesheng");
+  assert.equal(resolveLineKey("jinuo"), "jinuo");
+  assert.equal(resolveLineKey("xiaolongxia"), "xiaolongxia", "routeOf 抛错时原样透传，不吞探针");
+  assert.equal(resolveLineKey(""), "");
+});
+
 test("workflow-result.sh 的 WFR_PROBE_STAGES 兜底闸 == YAML 里出现的 stage 集合（执行机本机无 YAML 时据此决定哪些 stage 走 ssh）", () => {
   const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
   const yamlStages = [...new Set(doc.probes.map((p) => p.stage))].sort();
