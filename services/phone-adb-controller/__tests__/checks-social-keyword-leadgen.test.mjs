@@ -124,6 +124,35 @@ test("sql 探针只打 pg_zenithjoy 且 query 带 $RUN_TAG；http 探针 filter/
   }
 });
 
+// 棒3b-2 口径守卫（决策 8f38f5fd）：09-26 MMV 实跑同 TAG 下 videos_readback=0 而 line_key_not_null 读回 7 行——
+// 前者多了 line_key='$LINE_KEY' 条件，而 --line-key 传的是 profile 名(jinoshengyuan-work)、库里存的是路由键(jinuo，push-videos.js:57 ROUTE.key)。
+// 两条探针查同一张表同一批次，WHERE 必须一字不差，否则同 TAG 一条读到行、另一条读 0 的分叉会再发。
+function sqlShape(query) {
+  const q = query.replace(/\s+/g, " ").trim();
+  const table = (/FROM\s+(\S+)/i.exec(q) || [])[1];
+  const where = (/WHERE\s+(.+?)\s*$/i.exec(q) || [])[1];
+  return { table, where };
+}
+test("videos_readback 与 line_key_not_null：同 target、同表、同 WHERE（只按 $RUN_TAG 归属，不带 line_key 条件）", () => {
+  const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
+  const byKey = Object.fromEntries(doc.probes.map((p) => [p.key, p]));
+  const a = byKey.videos_readback, b = byKey.line_key_not_null;
+  assert.equal(a.probe.target, b.probe.target);
+  const sa = sqlShape(a.probe.query), sb = sqlShape(b.probe.query);
+  assert.equal(sa.table, "zenithjoy.leadgen_videos"); assert.equal(sa.table, sb.table);
+  assert.equal(sa.where, sb.where, `两条 WHERE 分叉：\n  videos_readback: ${sa.where}\n  line_key_not_null: ${sb.where}`);
+  assert.equal(sa.where, "harvest_batch = '$RUN_TAG'");
+  assert.ok(!/\$LINE_KEY/.test(a.probe.query), "videos_readback 不得再按 $LINE_KEY 过滤（profile 名 ≠ 库内路由键）");
+});
+
+test("workflow-result.sh 的 WFR_PROBE_STAGES 兜底闸 == YAML 里出现的 stage 集合（执行机本机无 YAML 时据此决定哪些 stage 走 ssh）", () => {
+  const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
+  const yamlStages = [...new Set(doc.probes.map((p) => p.stage))].sort();
+  const m = /WFR_PROBE_STAGES="\$\{WFR_PROBE_STAGES:-([a-z ]+)\}"/.exec(wfrText);
+  assert.ok(m, "workflow-result.sh 缺 WFR_PROBE_STAGES 默认值声明");
+  assert.deepEqual(m[1].trim().split(/\s+/).sort(), yamlStages);
+});
+
 // ── proven-to-fire：坏文档必须被拒 ────────────────────────────────────────
 function withProbe(patch) {
   const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
