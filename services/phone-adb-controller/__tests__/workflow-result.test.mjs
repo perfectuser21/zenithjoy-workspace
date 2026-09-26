@@ -377,7 +377,8 @@ case "$*" in
 esac
 `);
   chmodSync(node, 0o755);
-  const s = wfr(d, { ...i.kv, ...e.kv, ...b.env, ...PROBE_ENV(d), WFR_NODE: node, WFR_DB_ENV: dbEnv, WFR_FEISHU_ENV: fsEnv, FEISHU_APP_ID: "id-env" }, "stage", ...DELIVERY_ARGS);
+  // DATABASE_URL/FEISHU_APP_SECRET 显式清空：CI smoke runner 环境里本来就有 DATABASE_URL（apps/api 用），不隔离会按"环境优先"盖掉文件值（#1983 首跑实锤）
+  const s = wfr(d, { ...i.kv, ...e.kv, ...b.env, ...PROBE_ENV(d), WFR_NODE: node, WFR_DB_ENV: dbEnv, WFR_FEISHU_ENV: fsEnv, DATABASE_URL: "", FEISHU_APP_ID: "id-env", FEISHU_APP_SECRET: "" }, "stage", ...DELIVERY_ARGS);
   assert.equal(s.code, 0);
   const probes = JSON.parse(argAfter(curlCalls(b.calls)[0], "-d")).result.probes;
   assert.equal(probes[0].error, "postgres://file/zenithjoy|id-env|sec-file", "文件补空位，环境已有的 FEISHU_APP_ID 优先");
