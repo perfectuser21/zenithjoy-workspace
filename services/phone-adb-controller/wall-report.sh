@@ -82,7 +82,7 @@ print(json.dumps(d))' "$1" "$2" "$EXECUTOR" "${4:-}" 2>/dev/null)
   if [ "$code" = "201" ]; then
     tid=$(printf '%s' "${r#* }" | wall_json_get data.task_id)
     state_put "$tid" 0; wall_log "start $SERIAL task=$tid"
-    # 棒1 回执线：服务端桥接成功时回 brain_task_id，打到 stdout 一行 KV 供调用方(harvest-cron-v4 wr_start)
+    # 棒1 回执线：服务端桥接成功时回 brain_task_id，打到 stdout 一行 KV 供调用方(harvest-cron.sh wr_start)
     # 捕获 export 给 workflow-result.sh 回执 Brain。桥接失败/老服务端为空 → 不打行（调用方拿空串=跳过回执）
     bid=$(printf '%s' "${r#* }" | wall_json_get data.brain_task_id)
     [ -n "$bid" ] && { printf 'WFR_BRAIN_TASK_ID=%s\n' "$bid"; wall_log "start $SERIAL brain_task=$bid"; }

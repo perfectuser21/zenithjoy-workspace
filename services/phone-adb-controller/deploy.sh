@@ -54,6 +54,9 @@ DEVICE_SH_FILES=(
   disk-gateway-guard.sh device-job-claimer.sh log-stream-push.sh
   workflow-result.sh escort-claude-escalation.sh
 )
+# 0927 棒3b-3: 账本钩子内建进 harvest-cron.sh/batch2.sh,workflow-result.sh 硬依赖 ledger.mjs(node),
+# 少了它账本全程 WFR_WARN——单独成组,用 node --check 而不是 zsh -n 验语法。
+DEVICE_NODE_FILES=(ledger.mjs)
 
 echo "=== [1/3] mmv:~/.openclaw/leadgen-scripts/ (判定链+数据层, ${#MMV_JS_FILES[@]} 个文件) ==="
 for f in "${MMV_JS_FILES[@]}"; do
@@ -101,6 +104,17 @@ for host in xian-m4 xian-m1; do
       FAILED=1
     else
       echo "    ✅ $f (已复制,本机无zsh跳过语法检查)"
+    fi
+    rm -f /tmp/deploy-err-$$
+  done
+  for f in "${DEVICE_NODE_FILES[@]}"; do
+    if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
+    scp -q -p "$D/$f" "$host:~/bin-harvest/$f"
+    if ssh "$host" "/opt/homebrew/bin/node --check ~/bin-harvest/$f" 2>/tmp/deploy-err-$$; then
+      echo "    ✅ $f"
+    else
+      echo "    ❌ $f 语法检查失败: $(head -3 /tmp/deploy-err-$$)"
+      FAILED=1
     fi
     rm -f /tmp/deploy-err-$$
   done

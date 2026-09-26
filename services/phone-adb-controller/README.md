@@ -25,7 +25,7 @@
 
 部署(xian-m4 / M1 各一遍):
 
-1. `scp wall-lib.sh phone-wall-push.sh wall-report.sh harvest-cron.sh batch2.sh harvest-keyword.sh outreach-tick.sh` → `~/bin-harvest/`(`chmod +x`)
+1. `scp wall-lib.sh phone-wall-push.sh wall-report.sh harvest-cron.sh batch2.sh harvest-keyword.sh outreach-tick.sh workflow-result.sh ledger.mjs` → `~/bin-harvest/`(`chmod +x`)
 2. `scp com.zenithjoy.phonewallpush.plist` → `~/Library/LaunchAgents/`,写好 `wall.env` 后 `launchctl load -w ~/Library/LaunchAgents/com.zenithjoy.phonewallpush.plist`(stderr 在 `/tmp/phonewallpush.err`)
 3. 看: Dashboard「工作机」页 `/dashboard/workers`,每台手机一格,帧每秒刷新、当前步/失败三件套随上报变化
 
@@ -107,28 +107,28 @@
 3. `docker cp push-leads.js update-profile-links.js` → us-vps `openclaw-gateway:/root/.openclaw/`
 4. `~/.credentials/brain.env`（`chmod 600`，两行 `BRAIN_URL=https://<brain>` / `BRAIN_INTERNAL_TOKEN=<CECELIA_INTERNAL_TOKEN>`，值取自 1Password CS）——账本 `wfr stage|finalize` 据此回执 Brain `execution-callback`；缺文件只是回执跳过（`harvest-cron.log` 无 Brain 单行、stderr `brain callback skipped`），不影响采收
 
-## 基座 1/7：v4 流水线（账本 + 阶段工件 + 续跑）部署与影子跑
+## 基座 1/7：账本 + 阶段工件 + 续跑（钩子内建，棒3b-3 决策 2ca30c4d）
 
-新增件 → 落点（xian-m4 / M1 各一遍）：
-1. `scp ledger.mjs workflow-result.sh harvest-cron-v4.sh batch2-v4.sh` → `~/bin-harvest/`（`chmod +x` 三个 .sh）
+钩子直接内建在现网 `harvest-cron.sh` / `batch2.sh` 本体里（一行守卫 `wfr_on()`：`WFR_DISABLED=1`、`workflow-result.sh` 缺失或不可执行 → 全部 no-op，采收行为与并入前逐字一致，`__tests__/pipeline-v4-integration.test.mjs` 用并入前快照 `fixtures/batch2-pre-wfr.sh` 对拍）。原 v4 影子副本已删：与现网分叉四处（LINE 第 6 参 / 分拣 / 音频判定链 / 按 BIZ 回写），影子跑拿不到设备（三批衔接无空窗），起跑"孤儿 escort 清理"09-27 误杀了在跑生产批的 escort——该清理段**不并入**（cron list 分不清上批遗留与同机在跑批，kill -9 遗留由 escort 自身 `--timeout` 与分身值守兜底）。
+
+部署（xian-m4 / M1 各一遍，`deploy.sh` 已含；**crontab 不动**）：
+1. `scp harvest-cron.sh batch2.sh workflow-result.sh wall-report.sh ledger.mjs` → `~/bin-harvest/`（`chmod +x` 四个 .sh）；现场关钩子：crontab 那行前加 `WFR_DISABLED=1`
 2. 账本/工件目录自动建在 `~/.config/zenithjoy/{ledger,workflow-runs}/`；工件收工 best-effort scp 到 MMV `workflow-runs/`
 3. 依赖：`/opt/homebrew/bin/node`、`/usr/bin/jq`、`python3`（均已在 M4）
 4. 探针读回（棒3b，决策 95e29afd：执行机只读回、Brain 只判定；棒3b-2，决策 8f38f5fd：读回**经 ssh 在 MMV 跑**——leadgen PG（zenithjoy 库）只在 MMV `127.0.0.1:5432` 监听、飞书凭据 `~/.openclaw/clawdbot.json` 也只在 MMV，09-26 实证执行机本地跑三条全 error）。落点是 **MMV** `~/.openclaw/leadgen-scripts/`：`scp verify-step.mjs` + `scp -r checks/`（probes-lib.js / schema.json / social-keyword-leadgen.yaml）→ 该目录；`line-routes.js` / `leadgen-db-connect.js` 那里已有（与 push-videos.js 同源，须与 main 一致，`shasum -a 256` 对一下）；`pg` 已随 push-videos.js 装好；凭据 MMV 已有（`~/.credentials/zenithjoy-db.env` 由远端命令 `source`，飞书退回 `clawdbot.json` 的 `accounts[routeOf(line).account]`）。**xian-m4 / M1 不再需要** node 侧探针文件、`checks/`、`zenithjoy-db.env`、`feishu.env`：`workflow-result.sh` 的 `probe_stage` 经 `ssh -o ConnectTimeout=20 mmv "set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; cd ~/.openclaw/leadgen-scripts && node verify-step.mjs …"`（与 batch2.sh:55 推 push-videos.js 同一条）执行，主机/目录可用 `WFR_PROBE_HOST` / `WFR_PROBE_DIR` 覆盖；本机无 YAML 时按 `WFR_PROBE_STAGES`（默认 `delivery scoring`，checks 单测钉住与 YAML 一致）决定哪些 stage 走 ssh。ssh 失败/超时/非 JSON → 该 stage `probes=[]` + stderr `WFR_WARN … verify-step via ssh`（Brain 侧按 probes 缺失判），远端 `verify-step:` 单条 error 行原样透传进 `harvest-cron.log`；采收本身不受影响。自检：`ssh mmv 'cd ~/.openclaw/leadgen-scripts; set -a; . ~/.credentials/zenithjoy-db.env; set +a; node verify-step.mjs --stage delivery --run-tag <昨晚TAG> --line-key jinoshengyuan-work'` 应打一行三条含 `observed` 的 JSON（`--line-key` 传 profile 名即可，verify-step 经 `routeOf().key` 归一成库里的路由键；`videos_readback` 与 `line_key_not_null` 同 WHERE，同 TAG 下前者计数 == 后者行数）
 
-影子跑（切 crontab 前必须 2 晚，PrepPRD 拍板）：
-- crontab 加一行（与生产错开 15 分钟、`PUSH=0` 不落池）：`15 22 * * * /bin/zsh ~/bin-harvest/harvest-cron-v4.sh jinoshengyuan-work ANGYVB4227006983 AI人工智能训练师 6 0`
-- 每晚验收：`~/.config/zenithjoy/ledger/social-keyword-leadgen-crontab-auto*/ledger.json` 里 preflight/discovery/collection/delivery/cleanup 为 completed（delivery 在 PUSH=0 时为 blocked，正常）、qualification/scoring 为 blocked not_in_profile；工件每个含 `task_request_hash` 且 `jq -e '.schema_version==2'`；`harvest-cron.log` 有 `escort复核命中` 与 `账本finalize: ok=1`；MMV `~/.openclaw/escort-findings.md` 当晚有新行；`night-auto*.tsv` LEAD ≥ 近 7 天均值
-- 2 晚齐 → 把生产两行 `harvest-cron.sh` 指向 `harvest-cron-v4.sh`
+账本验收判据（部署后首晚生产批即验，无影子窗口）：
+- `~/.config/zenithjoy/ledger/social-keyword-leadgen-crontab-auto*/ledger.json` 里 preflight/discovery/collection/delivery/cleanup 为 completed（delivery 在 PUSH=0 时为 blocked，正常）、qualification/scoring 为 blocked not_in_profile；工件每个含 `task_request_hash` 且 `jq -e '.schema_version==2'`；`harvest-cron.log` 有 `Brain单:`、`账本init:`、`escort复核命中` 与 `账本finalize: ok=1`；MMV `~/.openclaw/escort-findings.md` 当晚有新行；`night-auto*.tsv` LEAD ≥ 近 7 天均值
 - 正常退让（设备离线/白天时窗/KPI 达标/词单失败）路径 `harvest-cron.log` 只会出现 `账本finalize: skipped(not_initialized, 正常退让)`，不 escalate、不写工件——这是预期，不是故障
+- `WFR_DISABLED=1` 时以上账本行一条都不出现，其余日志与并入前完全一致
 - hash 不一致时的工件是 `…__aN.discovery.0.worker-result.json`（哨兵 n=0，词序号从 1 起，不会覆盖已完成词的账本记录）
 - 账本里每次阶段写入都记一条 item `{n, word}`（init/finalize 写的 preflight/qualification/scoring/cleanup 的 word 为空串），续跑只看 discovery∩collection 都 completed 的非空 word
 
-环境守卫的 proven-to-fire（影子跑期间各做一次，记录到 PR）：
+环境守卫的 proven-to-fire（生产批各做一次，记录到 PR）：
 - escort 真活：拉起后手动 `ssh mmv openclaw cron rm <id>` → 30s 后 `harvest-cron.log` 出现 `escort复核未命中` 且 escalation.log 新增一行
 - 工件落地：起跑前 `chmod 000 ~/.config/zenithjoy/workflow-runs` → 收工 `账本finalize: ok=0` 且 escalation 新增；恢复 `chmod 755`
-- 孤儿 escort：手动 `ssh mmv openclaw cron add --name escort-xian-m4-fake …` 留一条 → 下批起跑日志出现 `孤儿escort清理: <id>`
 
-harvest-keyword.sh 出口码契约（v4 依赖，勿改）：`3` 锁被占 / `1` open-search 失败 / `0` 正常或无卡片。
+harvest-keyword.sh 出口码契约（账本 stage 映射依赖，勿改）：`3` 锁被占 / `1` open-search 失败 / `0` 正常或无卡片。
 
 后续（不在本 PR）：`workflow-manifest.json` `orchestrator.type` n8n→commander、n8n「Social Leadgen V4」标 inactive（hk-vps，先复核发布版≠草稿）、scoring 闭集键口径修正归基座 7/7、`decisions/match` 疑似写库副作用、escalate 目标主机 us-vps 已退役需评估改 MMV。
 
@@ -142,7 +142,7 @@ harvest-keyword.sh 出口码契约（v4 依赖，勿改）：`3` 锁被占 / `1`
 
 ## 探针文件(写完读回的 SSOT,决策 702949b6 / e2cef2c9)
 
-`checks/social-keyword-leadgen.yaml` 是"写完读回"断言的唯一真身(同 dbt tests / Dagster asset checks)。v4 delivery 里 `readback_verified:0` 的硬编码(batch2-v4.sh:68/70/74)由它替代:每条探针声明 `stage / journey_cell / probe(sql|http) / expect / severity / note`,SQL 与飞书取法按真实写入方写(视频双写 PG `leadgen_videos`,评论只落飞书原始评论池),占位 `$RUN_TAG`(=harvest-cron-v4.sh 的 TAG)/`$LINE_KEY`/`$WORD`。
+`checks/social-keyword-leadgen.yaml` 是"写完读回"断言的唯一真身(同 dbt tests / Dagster asset checks)。batch2.sh delivery 段里 `readback_verified:0` 的硬编码由它替代:每条探针声明 `stage / journey_cell / probe(sql|http) / expect / severity / note`,SQL 与飞书取法按真实写入方写(视频双写 PG `leadgen_videos`,评论只落飞书原始评论池),占位 `$RUN_TAG`(=harvest-cron.sh 的 TAG)/`$LINE_KEY`/`$WORD`。
 
 - 形状由 `checks/schema.json` 守:stage 只能是 workflow-result.sh 的 7 个阶段,op ∈ `>= == <= not_null_all`,severity ∈ `warn|error`,`expect.ref` 只能引 workflow-result.sh `req_keys()` 的闭集 metrics 键(单测从脚本实时抽取,不抄副本)。
 - 加载/校验层 `checks/probes-lib.js` 零依赖(CI openclaw-scripts-test 不装依赖),守卫 `__tests__/checks-social-keyword-leadgen.test.mjs`,坏 stage/op/severity/ref 都 proven-to-fire 报红。

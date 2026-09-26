@@ -19,7 +19,6 @@ MAXV="${MAXV:-4}"
 # 可视化旁路(0919): 词级进度报给控制塔; 无序列号/上报器缺失/失败一律吞掉
 WR=${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}
 wr(){ [[ -n "$SERIAL" && -x "$WR" ]] && "$WR" "$@" >/dev/null 2>&1; true }
-HK=${HARVEST_KEYWORD:-$HOME/bin-harvest/harvest-keyword.sh}
 SLEEP_BASE=${BATCH_SLEEP:-20}   # 词间隔基数(秒),默认与旧行为同(20+随机40);测试传 0
 OUT=~/night-$TAG.tsv; LOG=~/night-$TAG.log
 # ── 账本钩子(基座 1/7 workflow-result.sh): 一行守卫决定全部 no-op ──
@@ -76,7 +75,7 @@ for W in "${(f)$(cat $WF)}"; do
   print "[$(date +%H:%M:%S)] 词$n: $W" >> $LOG
   wr step "$SERIAL" 3 doing "词$n: $W"
   V0=$(count VIDEO); L0=$(count LEAD)
-  rc=0; "$HK" "$P" "$ENC" "$MAXV" "$TAG-w$n" unlimited "$LINE" >> $OUT 2>> $LOG || rc=$?
+  rc=0; "${HARVEST_KEYWORD:-$HOME/bin-harvest/harvest-keyword.sh}" "$P" "$ENC" "$MAXV" "$TAG-w$n" unlimited "$LINE" >> $OUT 2>> $LOG || rc=$?
   V1=$(count VIDEO); L1=$(count LEAD)
   wfr_word_stages "$n" "$W" "$rc" $((V1-V0)) $((L1-L0))
   print "[$(date +%H:%M:%S)] 词$n 完成 LEAD=$(grep -c '^LEAD' $OUT 2>/dev/null||echo 0)" >> $LOG
