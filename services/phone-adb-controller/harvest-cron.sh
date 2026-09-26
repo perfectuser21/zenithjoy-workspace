@@ -22,6 +22,27 @@ wfr_bootstrap(){
   eval "$(bash "$WFR" enter 2>>${LOG:-/dev/null})" 2>/dev/null || true
   export WFR_ATTEMPT WFR_SKIP_WORDS
 }
+# escort_alive ESCORT_ID —— 30s 复核只按 id 精确判(决策 711ca6cf,判定点 4f85a74d)。
+#   0927 两批假阳性根因: `openclaw cron list` 表格 Name 列定宽截断, escort-xian-m4-auto09270600 显示为
+#   escort-xian-m4-auto09..., 按名字 grep -F 全名永不命中 → 每批误升级分身而 escort 明明活着。
+#   优先 `cron list --json` 取 .jobs[].id(jq 缺则 grep 精确键值); --json 不可用或回非 JSON → 退回表格首列 awk 精确匹配。
+#   永远不碰 name 列。
+escort_alive(){
+  local id="$1" out rc
+  [[ -n "$id" ]] || return 1
+  if out=$(ssh -o ConnectTimeout=20 mmv "openclaw cron list --json" 2>>${LOG:-/dev/null}) && [[ -n "$out" ]]; then
+    if command -v jq >/dev/null 2>&1; then
+      jq -e --arg id "$id" '[.jobs[]? | select(.id==$id)] | length > 0' <<< "$out" >/dev/null 2>&1; rc=$?
+      (( rc == 0 )) && return 0
+      (( rc == 1 )) && return 1          # 合法 JSON 但没这个 id = 真未命中
+    elif grep -qE "\"id\":[[:space:]]*\"$id\"" <<< "$out"; then
+      return 0
+    fi
+    # jq 解析失败(网关回了非 JSON)或无 jq 且 grep 未命中 → 不信这份输出,退回表格
+  fi
+  out=$(ssh -o ConnectTimeout=20 mmv "openclaw cron list" 2>>${LOG:-/dev/null}) || true
+  [[ -n "$(awk -v id="$id" '$1==id' <<< "$out")" ]]
+}
 [[ "${HARVEST_CRON_LIB:-0}" == "1" ]] && return 0
 set -uo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -76,11 +97,10 @@ for _ea in 1 2 3; do
 done
 if [[ -n "$ESCORT_ID" ]]; then
   log "escort已拉起: $ESCORT_ID"
-  # escort 真活复核: 拉起返回了 id 不等于它真在 cron 表里(网关重启窗口会吞掉),30s 后 cron list 对名字
+  # escort 真活复核: 拉起返回了 id 不等于它真在 cron 表里(网关重启窗口会吞掉),30s 后按 id 复核(escort_alive,禁按名字)
   /bin/sleep 30
-  ALIVE=$(ssh -o ConnectTimeout=20 mmv "openclaw cron list" 2>>$LOG | grep -F "escort-$HOSTKEY-$TAG" || true)
-  if [[ -n "$ALIVE" ]]; then log "escort复核命中"
-  else log "escort复核未命中"; escalate "escort 拉起返回 id=$ESCORT_ID 但 30s 后 cron list 未命中 escort-$HOSTKEY-$TAG，本批可能无人陪跑"; fi
+  if escort_alive "$ESCORT_ID"; then log "escort复核命中(id=$ESCORT_ID)"
+  else log "escort复核未命中(id=$ESCORT_ID)"; escalate "escort 拉起返回 id=$ESCORT_ID 但 30s 后 cron list(按 id)未命中，本批可能无人陪跑"; fi
   escort_dismiss() { [[ -n "$ESCORT_ID" ]] && ssh -o ConnectTimeout=20 mmv "openclaw cron rm $ESCORT_ID" >>$LOG 2>&1 && log "escort已注销" }
 else
   log "escort拉起3次均失败(不阻塞采收)"
