@@ -131,8 +131,10 @@ describe('startTask 桥接 Brain', () => {
     (pool as any).connect = vi.fn(async () => client);
     (pool as any).query = vi.fn(async () => ({ rows: [{ agent_id: 'phone-S123' }] }));
 
-    await startTask({ agentId: 'a1', title: '获客采收·X', steps: ['s1'], executorId: 'adb-wall' });
+    const r = await startTask({ agentId: 'a1', title: '获客采收·X', steps: ['s1'], executorId: 'adb-wall' });
     expect(createMirrorJob).toHaveBeenCalled();
+    // 棒1 回执线：wall-report 只能从这个返回体拿到 Brain 单 id（worker_tasks.evidence 没有读 API），漏了它 wfr 全程 skipped
+    expect(r).toMatchObject({ task_id: 'wt-1', brain_task_id: 'brain-1' });
   });
 
   it('领单器领 Brain 单产生的活走关联，不重复建单（否则每条真派单都镜像一条，页面重复计数）', async () => {
@@ -147,8 +149,9 @@ describe('startTask 桥接 Brain', () => {
     (pool as any).connect = vi.fn(async () => client);
     (pool as any).query = vi.fn(async () => ({ rows: [{ agent_id: 'phone-S123' }] }));
 
-    await startTask({ agentId: 'a1', title: '[派活演示] 小蓝', steps: ['s1'], executorId: 'adb-wall', brainJobId: 'brain-existing' });
+    const r = await startTask({ agentId: 'a1', title: '[派活演示] 小蓝', steps: ['s1'], executorId: 'adb-wall', brainJobId: 'brain-existing' });
     expect(createMirrorJob).not.toHaveBeenCalled();
+    expect(r.brain_task_id).toBe('brain-existing');
     // 光断言"没建单"是假绿：桥接压根没接进来时它也成立。必须同时证明**真的走了关联分支**，
     // 否则实现里漏写 attachMirrorJob，这条用例照样绿，而线上表现是 worker_task 和
     // Brain 单失联 —— 收尾和 sweep 都找不到 brain_task_id。
@@ -169,7 +172,7 @@ describe('startTask 桥接 Brain', () => {
     (pool as any).query = vi.fn(async () => ({ rows: [{ agent_id: 'phone-S123' }] }));
 
     await expect(startTask({ agentId: 'a1', title: 'X', steps: ['s'], executorId: 'adb-wall' }))
-      .resolves.toMatchObject({ task_id: 'wt-3' });
+      .resolves.toMatchObject({ task_id: 'wt-3', brain_task_id: null });
     // 同上：桥接没接进来时"不抛错"天然成立。要先证明它**确实调用了会抛错的那条路**，
     // 这条"抛错也不失败"才有意义。
     expect(createMirrorJob).toHaveBeenCalled();

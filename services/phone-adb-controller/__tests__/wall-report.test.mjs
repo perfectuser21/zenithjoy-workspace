@@ -188,3 +188,17 @@ test('建任务真超时（超过写超时）→ 重试一次；第二次成功�
   assert.ok(existsSync(join(dir, 'tmp', 'task-SER1-default')));
   assert.doesNotMatch(readFileSync(join(dir, 'wall.log'), 'utf8'), /静默降级/);
 });
+
+// 棒1 回执线：do_start 把服务端回的 brain_task_id 打到 stdout（WFR_BRAIN_TASK_ID=…），供 harvest-cron-v4 捕获 export 给 wfr 回执用
+test('start: 服务端 201 带 brain_task_id → stdout 恰好一行 WFR_BRAIN_TASK_ID=<id>', async (t) => {
+  const { api, env } = await setup(t, { brainTaskId: '33333333-3333-4333-8333-333333333333' });
+  const r = await ok(wr(env, 'start', 'SER1', '获客采收·AI', 'a,b'));
+  assert.equal(r.stdout, 'WFR_BRAIN_TASK_ID=33333333-3333-4333-8333-333333333333\n');
+  assert.equal(api.requests.filter((x) => /\/tasks$/.test(x.url)).length, 1);
+});
+
+test('start: 服务端不回 brain_task_id（桥接失败/老服务端）→ stdout 为空，不打半截行', async (t) => {
+  const { env } = await setup(t);
+  const r = await ok(wr(env, 'start', 'SER1', 't', 'a'));
+  assert.equal(r.stdout, '');
+});

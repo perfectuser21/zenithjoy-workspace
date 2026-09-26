@@ -652,4 +652,16 @@ grep -q '|| true' <<< "$_MDB_STMT" || fail "mean_db 的命令替换没带 || tru
 # 打点不进日志 = 等于没打
 grep -q 'mean_volume_db' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 没把 mean_volume_db 写进采收日志(打点没人看得见,等于没做)"
 
+# 层28: 棒1 回执线(决策 702949b6/280bd091)——账本 stage/finalize 必须 best-effort 回执 Brain execution-callback,
+# 且 brain_task_id 的整条取数链(服务端返回体 → wall-report stdout → harvest-cron-v4 export)一环都不能断:
+# 断任一环,wfr 全程 "brain callback skipped",工件照写、日志照绿,Brain task_runs 永远空——静默失效形态。
+grep -qF '/api/brain/execution-callback' "$D/workflow-result.sh" || fail "workflow-result.sh 未接 Brain execution-callback 回执"
+grep -qF 'brain_post' "$D/workflow-result.sh" || fail "workflow-result.sh 缺 brain_post(回执函数被删/改名)"
+grep -qF 'Authorization: Bearer $BRAIN_INTERNAL_TOKEN' "$D/workflow-result.sh" || fail "workflow-result.sh 回执未带 Bearer 内部 token(Brain 侧 internalAuthOrLoopback 会 401)"
+grep -qF 'brain callback skipped' "$D/workflow-result.sh" || fail "workflow-result.sh 缺 env 时不记 skipped 日志(静默失效不可见)"
+grep -qF 'WFR_BRAIN_TASK_ID=' "$D/wall-report.sh" || fail "wall-report.sh do_start 未把 brain_task_id 打到 stdout"
+grep -qF 'export WFR_BRAIN_TASK_ID' "$D/harvest-cron-v4.sh" || fail "harvest-cron-v4.sh 未 export WFR_BRAIN_TASK_ID(子进程 wfr 看不到)"
+grep -qF 'brain_task_id:' apps/api/src/services/worker-tasks-service.ts || fail "startTask 返回体缺 brain_task_id(取数链源头断)"
+grep -qF 'brain.env' "$D/README.md" || fail "README 部署三步缺 brain.env 一行(新机器部署漏凭据=全程 skipped)"
+
 echo "phone-adb-controller-smoke: PASS"

@@ -33,9 +33,10 @@ describe('POST /api/workers/:agentId/tasks', () => {
     expect(r.status).toBe(400); expect(startTask).not.toHaveBeenCalled();
   });
   it('成功 → 201 + task_id', async () => {
-    (startTask as any).mockResolvedValue({ task_id: 't1', lease_until: '2026-01-01T00:00:00Z' });
+    (startTask as any).mockResolvedValue({ task_id: 't1', lease_until: '2026-01-01T00:00:00Z', brain_task_id: 'brain-9' });
     const r = await request(app).post(`/api/workers/${AID}/tasks`).send({ title: '发布', steps: ['a', 'b'], executor_id: 'ex' });
     expect(r.status).toBe(201); expect(r.body.data.task_id).toBe('t1');
+    expect(r.body.data.brain_task_id).toBe('brain-9'); // 棒1 回执线：透传给 wall-report do_start
   });
   it('WORKER_BUSY → 409，message 不重复 code 前缀', async () => {
     (startTask as any).mockRejectedValue(new WorkerTaskError('WORKER_BUSY', 'busy', 409));
