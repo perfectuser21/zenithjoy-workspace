@@ -137,3 +137,12 @@ harvest-keyword.sh 出口码契约（v4 依赖，勿改）：`3` 锁被占 / `1`
 ## 守卫
 
 `.github/workflows/scripts/smoke/phone-adb-controller-smoke.sh`(已在 Smoke Glob Gate 基线内):五件套存在性+zsh/node 语法闸+六刀签名存在性+烂死模式检测(变量展开尸块/死函数复活),proven-to-fire 验证过报红能力。
+
+## 探针文件(写完读回的 SSOT,决策 702949b6 / e2cef2c9)
+
+`checks/social-keyword-leadgen.yaml` 是"写完读回"断言的唯一真身(同 dbt tests / Dagster asset checks)。v4 delivery 里 `readback_verified:0` 的硬编码(batch2-v4.sh:68/70/74)由它替代:每条探针声明 `stage / journey_cell / probe(sql|http) / expect / severity / note`,SQL 与飞书取法按真实写入方写(视频双写 PG `leadgen_videos`,评论只落飞书原始评论池),占位 `$RUN_TAG`(=harvest-cron-v4.sh 的 TAG)/`$LINE_KEY`/`$WORD`。
+
+- 形状由 `checks/schema.json` 守:stage 只能是 workflow-result.sh 的 7 个阶段,op ∈ `>= == <= not_null_all`,severity ∈ `warn|error`,`expect.ref` 只能引 workflow-result.sh `req_keys()` 的闭集 metrics 键(单测从脚本实时抽取,不抄副本)。
+- 加载/校验层 `checks/probes-lib.js` 零依赖(CI openclaw-scripts-test 不装依赖),守卫 `__tests__/checks-social-keyword-leadgen.test.mjs`,坏 stage/op/severity/ref 都 proven-to-fire 报红。
+- Brain 侧:cecelia 仓 `scripts/sync-step-probes.mjs` 读本文件登记 sha256 到 `step_probes`,并把 journey cell 的 `assertion_ref` 写成 `probe:<key>`。**改探针 = 改 YAML 发 PR**,不在 Brain 里手改;哈希漂移由同步脚本发现。
+- 首发五条全 `warn`(观察一轮真实 run 再升 error):delivery `videos_readback` / `comments_readback` / `line_key_not_null`,scoring `pool_advanced` / `effective_count`。

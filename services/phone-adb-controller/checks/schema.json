@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "phone-adb-controller 声明式探针文件（checks/*.yaml）",
+  "description": "决策 702949b6 / e2cef2c9：写完读回的断言以探针文件为 SSOT。Brain 经 cecelia 仓 scripts/sync-step-probes.mjs 登记哈希并把 journey cell 的 assertion_ref 写成 probe:<key>。stage 与 workflow-result.sh req_keys() 的 7 个 stage 一致；expect.ref 只能引 workflow-result.sh 的闭集 metrics 键（形状在此，键集由单测从脚本实时抽取）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "workflow", "probes"],
+  "properties": {
+    "version": { "const": 1 },
+    "workflow": { "type": "string", "pattern": "^[a-z][a-z0-9-]+$" },
+    "probes": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/probe" } }
+  },
+  "definitions": {
+    "stage": { "enum": ["preflight", "discovery", "qualification", "collection", "scoring", "delivery", "cleanup"] },
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "stage", "journey_cell", "probe", "expect", "severity", "note"],
+      "properties": {
+        "key": { "type": "string", "pattern": "^[a-z][a-z0-9_]+$" },
+        "stage": { "$ref": "#/definitions/stage" },
+        "journey_cell": { "type": "string", "pattern": "^stage:(preflight|discovery|qualification|collection|scoring|delivery|cleanup)$" },
+        "probe": { "oneOf": [{ "$ref": "#/definitions/sqlProbe" }, { "$ref": "#/definitions/httpProbe" }] },
+        "expect": { "$ref": "#/definitions/expect" },
+        "severity": { "enum": ["warn", "error"] },
+        "note": { "type": "string", "minLength": 8 }
+      }
+    },
+    "sqlProbe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "target", "query"],
+      "properties": {
+        "type": { "const": "sql" },
+        "target": { "enum": ["pg_zenithjoy"] },
+        "query": { "type": "string", "minLength": 8 }
+      }
+    },
+    "httpSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "filter", "reduce"],
+      "properties": {
+        "url": { "type": "string", "pattern": "^https://open\\.feishu\\.cn/open-apis/bitable/v1/apps/[A-Za-z0-9]+/tables/tbl[A-Za-z0-9]+/records" },
+        "filter": { "type": "object", "minProperties": 1 },
+        "reduce": { "type": "string", "pattern": "^(count|field:.+)$" }
+      }
+    },
+    "httpProbe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "target", "url", "filter", "reduce"],
+      "properties": {
+        "type": { "const": "http" },
+        "target": { "enum": ["feishu_jinuo", "feishu_yuesheng"] },
+        "url": { "$ref": "#/definitions/httpSource/properties/url" },
+        "filter": { "$ref": "#/definitions/httpSource/properties/filter" },
+        "reduce": { "$ref": "#/definitions/httpSource/properties/reduce" },
+        "minus": { "$ref": "#/definitions/httpSource" }
+      }
+    },
+    "expect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op"],
+      "properties": {
+        "op": { "enum": [">=", "==", "<=", "not_null_all"] },
+        "value": { "type": "number" },
+        "ref": { "type": "string", "pattern": "^metrics\\.[a-z][a-z0-9_]*$" }
+      },
+      "if": { "properties": { "op": { "const": "not_null_all" } } },
+      "then": { "not": { "anyOf": [{ "required": ["value"] }, { "required": ["ref"] }] } },
+      "else": { "oneOf": [{ "required": ["value"] }, { "required": ["ref"] }] }
+    }
+  }
+}
