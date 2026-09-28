@@ -79,7 +79,10 @@ fi
 # 层4b: account_mismatch 必须一次命中就熔断(不能像 other 那样等连续2次判定才停)
 grep -qF 'account_mismatch' "$D/outreach-tick.sh" || fail "outreach-tick 未接 account_mismatch 分类"
 ACCT_BRANCH="$(grep -A8 '"$CLS" == "account_mismatch"' "$D/outreach-tick.sh" || true)"
-grep -qF 'touch "$PAUSE_FLAG"' <<< "$ACCT_BRANCH" || fail "account_mismatch 分支未直接熔断(必须一次命中就停,不能等连续2次)"
+grep -qE 'touch "\$PAUSE_FLAG"|auto_pause "\$PROFILE"' <<< "$ACCT_BRANCH" || fail "account_mismatch 分支未直接熔断(必须一次命中就停,不能等连续2次)"
+# 层4c(决策 e08227ee): 自动熔断必须是会到期的软熔断(soft_until),恢复由系统自动试发判定,不再要人工删 flag
+grep -A12 '^auto_pause()' "$D/outreach-tick.sh" | grep -qF 'soft_until=' || fail "auto_pause 未写 soft_until(自动熔断必须到期自动试发恢复)"
+grep -qE '需人工核查.*删除|手动删除 \$PAUSE_FLAG' "$D/outreach-tick.sh" && fail "outreach-tick 仍有要求人工删 flag 才恢复的熔断路径"
 grep -q 'ANOMALY_COUNT' <<< "$ACCT_BRANCH" && fail "account_mismatch 分支不该绕经ANOMALY_COUNT计数(必须一次命中就停,不是等连续2次)"
 # 层4c: 0922-11:54单#172原始XML实锤——气泡渲染成功但平台已弹"发送消息过于频繁"限流提示时，
 # 之前会被直接判成功(MARKED sent),这跟"仅互关"是两回事,必须分开识别、分开处理。

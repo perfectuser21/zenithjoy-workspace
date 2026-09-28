@@ -407,3 +407,101 @@ test("i OUTREACH_TICK_TESTING 只由环境变量开启（脚本内不得默认�
   assert.ok(/OUTREACH_TICK_TESTING/.test(src));
   assert.ok(!/^\s*(export\s+)?OUTREACH_TICK_TESTING=/m.test(src), "脚本内不得给 OUTREACH_TICK_TESTING 赋值");
 });
+
+// ── j. 熔断自动恢复（决策 e08227ee：熔断后恢复由系统自动判定，不再要人工删 flag） ──
+// 冷却 = min(2h × 2^(n-1), 24h)，n = 连续自动熔断次数（dm-pausecount-<p>.txt）；到期由 expire_soft_pauses 自动解除，
+// 到期后的第一单即半开试发：anomaly 计数保留在 1，再遇一次 other 立刻再熔断且冷却翻倍；任一发送成功全部清零。
+const soft = (c, p) => {
+  const lines = readFileSync(join(c.state, `dm-paused-${p}.flag`), "utf8").split("\n");
+  const m = lines[0].match(/^soft_until=(\d+)$/);
+  assert.ok(m, `熔断 flag 第一行应为 soft_until=<epoch>（自动恢复），实际 ${lines[0]}`);
+  return { until: Number(m[1]), rest: lines.slice(1).join("\n") };
+};
+
+test("j1 other 连续第 2 次：写软熔断 2 小时（不再永久）+ 计数 1 + 告警写明自动试发、不要求人工删文件", { skip: SKIP }, () => {
+  const c = setup();
+  c.stateFile("dm-anomaly-legacy.txt", "1\n");
+  writeFileSync(join(c.home, "send.out"), "some brand new failure nobody has seen\n");
+  c.seq("next", [ORDER_LEGACY, "NO_PENDING"]);
+  const before = Math.floor(Date.now() / 1000);
+  const r = c.tickRun();
+  assert.equal(r.status, 0, r.stderr);
+  const { until, rest } = soft(c, "legacy");
+  assert.ok(until >= before + 7000 && until <= before + 7400, `首次自动熔断应约 2 小时，实际差 ${until - before}s`);
+  assert.match(rest, /brand new failure/, "flag 应记录最近一次原始输出片段");
+  assert.equal(readFileSync(join(c.state, "dm-pausecount-legacy.txt"), "utf8").trim(), "1");
+  assert.equal(readFileSync(join(c.state, "dm-anomaly-legacy.txt"), "utf8").trim(), "1", "熔断后 anomaly 留 1：到期后的第一单即半开试发");
+  const barks = barkCalls(c);
+  assert.equal(barks.length, 1);
+  const b = decodeBark(barks[0]);
+  assert.match(b.body, /自动/);
+  assert.ok(!/删除/.test(b.body), `告警不得再要求人工删除 flag：${b.body}`);
+});
+
+test("j2 半开试发再失败：冷却翻倍（第 3 次自动熔断 = 8 小时）", { skip: SKIP }, () => {
+  const c = setup();
+  c.stateFile("dm-anomaly-legacy.txt", "1\n");
+  c.stateFile("dm-pausecount-legacy.txt", "2\n");
+  writeFileSync(join(c.home, "send.out"), "still broken in a new way\n");
+  c.seq("next", [ORDER_LEGACY, "NO_PENDING"]);
+  const before = Math.floor(Date.now() / 1000);
+  assert.equal(c.tickRun().status, 0);
+  const { until } = soft(c, "legacy");
+  const want = 8 * 3600;
+  assert.ok(until >= before + want - 200 && until <= before + want + 200, `应约 8 小时，实际差 ${until - before}s`);
+  assert.equal(readFileSync(join(c.state, "dm-pausecount-legacy.txt"), "utf8").trim(), "3");
+});
+
+test("j3 冷却封顶 24 小时", { skip: SKIP }, () => {
+  const c = setup();
+  c.stateFile("dm-anomaly-legacy.txt", "1\n");
+  c.stateFile("dm-pausecount-legacy.txt", "9\n");
+  writeFileSync(join(c.home, "send.out"), "yet another unknown\n");
+  c.seq("next", [ORDER_LEGACY, "NO_PENDING"]);
+  const before = Math.floor(Date.now() / 1000);
+  assert.equal(c.tickRun().status, 0);
+  const { until } = soft(c, "legacy");
+  assert.ok(until <= before + 24 * 3600 + 200 && until >= before + 24 * 3600 - 200, `应封顶 24 小时，实际差 ${until - before}s`);
+});
+
+test("j4 账号身份不符：软熔断 2 小时自动复查（发送前核验，不会用错身份发出），原因写进 flag", { skip: SKIP }, () => {
+  const c = setup();
+  writeFileSync(join(c.home, "send.out"), "sender account does not match the claimed distribution account\n");
+  c.seq("next", [ORDER_LEGACY, "NO_PENDING"]);
+  const before = Math.floor(Date.now() / 1000);
+  assert.equal(c.tickRun().status, 0);
+  const { until, rest } = soft(c, "legacy");
+  assert.ok(until >= before + 7000 && until <= before + 7400, `应约 2 小时，实际差 ${until - before}s`);
+  assert.match(rest, /账号身份校验失败/);
+  const b = decodeBark(barkCalls(c)[0]);
+  assert.ok(!/删除/.test(b.body), `告警不得再要求人工删除 flag：${b.body}`);
+});
+
+test("j5 到期自动解除保留半开状态：expire 后 flag 消失、pausecount 与 anomaly 保留", { skip: SKIP }, () => {
+  const c = setup();
+  const now = Math.floor(Date.now() / 1000);
+  c.flag("legacy", `soft_until=${now - 5}\n自动熔断\n`);
+  c.stateFile("dm-pausecount-legacy.txt", "2\n");
+  c.stateFile("dm-anomaly-legacy.txt", "1\n");
+  const r = c.fn("expire_soft_pauses");
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(!existsSync(join(c.state, "dm-paused-legacy.flag")));
+  assert.equal(readFileSync(join(c.state, "dm-pausecount-legacy.txt"), "utf8").trim(), "2");
+  assert.equal(readFileSync(join(c.state, "dm-anomaly-legacy.txt"), "utf8").trim(), "1");
+});
+
+test("j6 发送成功清零自动熔断计数", { skip: SKIP }, () => {
+  const c = setup();
+  c.stateFile("dm-pausecount-legacy.txt", "3\n");
+  c.stateFile("dm-anomaly-legacy.txt", "1\n");
+  const adb = join(c.home, ".local", "bin", "douyin-phone-adb");
+  writeFileSync(adb, `#!/bin/sh
+echo "$*" >> "$HOME/adb-calls.log"
+case "$3" in private-message-send) echo "send_status=sent"; exit 0;; esac
+exit 0`);
+  chmodSync(adb, 0o755);
+  c.seq("next", [ORDER_LEGACY, "NO_PENDING"]);
+  assert.equal(c.tickRun().status, 0);
+  assert.ok(!existsSync(join(c.state, "dm-pausecount-legacy.txt")));
+  assert.ok(!existsSync(join(c.state, "dm-anomaly-legacy.txt")));
+});
