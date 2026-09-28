@@ -143,6 +143,20 @@ test("运行时接线 stage（delivery/scoring）的 http 探针 url 用 $BASE/$
   }
 });
 
+test("所有 http 探针（含尚未接线的 outreach）url 都不得写死业务线的 base/表 id，线索表用 $LEAD", () => {
+  const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
+  const https = doc.probes.filter((p) => p.probe.type === "http");
+  assert.ok(https.some((p) => p.stage === "outreach"), "outreach 探针应存在");
+  for (const p of https) {
+    for (const u of [p.probe.url, p.probe.minus && p.probe.minus.url].filter(Boolean)) {
+      assert.ok(!/\/apps\/(?!\$BASE)[A-Za-z0-9]+\//.test(u), `${p.key} url 写死了 base: ${u}`);
+      assert.ok(!/\/tables\/tbl/.test(u), `${p.key} url 写死了表 id: ${u}`);
+    }
+  }
+  const out = https.find((p) => p.key === "out_no_stuck_inflight");
+  assert.match(out.probe.url, /\/apps\/\$BASE\/tables\/\$LEAD\/records/);
+});
+
 test("key 唯一、journey_cell == stage:<stage>、全部 error（拦截）、note 带 文件:行 依据", () => {
   const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
   const keys = doc.probes.map((p) => p.key);

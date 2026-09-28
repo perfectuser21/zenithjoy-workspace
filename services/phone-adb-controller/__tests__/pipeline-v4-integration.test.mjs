@@ -214,6 +214,21 @@ test("scoring：分拣无统计 / ssh 失败 → scoring.1 failed，metrics 全 
   assert.equal(b.status, "failed"); assert.match(b.summary, /no SORT_STATS rc=255/);
 });
 
+test("scoring：有待分拣但一条没判成（judged=0 pending>0，模型/鉴权整批挂了）→ failed，不得记 completed", { skip: SKIP }, () => {
+  const ctx = setup(["ok"], { push: "1", stats: true });
+  const allFailed = 'SORT_STATS {"pending":5,"judged":0,"moved":0,"duped":0,"failed":5,"parked":0,"grades":{"A":0,"B":0,"C":0,"不相关":0}}';
+  assert.equal(run(ctx, { env: { FAKE_PV: PV, FAKE_PC: PC, FAKE_SORT: allFailed } }).status, 0);
+  const sc = art(ctx, "scoring.1");
+  assert.equal(sc.status, "failed");
+  assert.match(sc.summary, /judged=0 pending=5/);
+  assert.equal(book(ctx).stages.scoring.status, "failed");
+  // 对照：没有待分拣（pending=0 judged=0）是正常的空批，仍 completed
+  const ctx0 = setup(["ok"], { push: "1", stats: true });
+  const empty = 'SORT_STATS {"pending":0,"judged":0,"moved":0,"duped":0,"failed":0,"parked":0,"grades":{"A":0,"B":0,"C":0,"不相关":0}}';
+  assert.equal(run(ctx0, { env: { FAKE_PV: PV, FAKE_PC: PC, FAKE_SORT: empty } }).status, 0);
+  assert.equal(art(ctx0, "scoring.1").status, "completed");
+});
+
 test("scoring：PUSH=0 不分拣 → 不写 scoring.1 工件（占位仍在）", { skip: SKIP }, () => {
   const ctx = setup(["ok"], { push: "0", stats: true });
   assert.equal(run(ctx).status, 0);
