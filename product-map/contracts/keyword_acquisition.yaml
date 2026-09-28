@@ -348,8 +348,8 @@ activities:
       - { type: OutreachOrder, cardinality: one, effect: create, fields: [lead_record_id, douyin_id, sender_id, script_id, message, result] }
       - { type: Lead, cardinality: one, effect: update, fields: [status, send_status, script_id, sender_id, reached_at] }
     preconditions:
-      - "账号未熔断（无 state/dm-paused-<profile>.flag）"
-      - "当日真实发送数 < daily_cap（config/dm-rate-ramp.json）"
+      - "发送账号可用：未熔断（无 state/dm-paused-<profile>.flag，软熔断 soft_until 未到期也算熔断）、当日未风控停发（dm-halt）、当日真实发送数 < daily_cap（config/dm-rate-ramp.json）；不可用账号在取单前经 --exclude 排除"
+      - "触达等级 ∈ 该业务线 outreachGrades（选单时过滤，决策 67762358；老数据无等级前缀放行）"
       - "线索有 https 主页链接与合法抖音号（next-outreach-lib.js:24-29）"
       - "话术库有可用话术"
     postconditions:
@@ -362,32 +362,31 @@ activities:
     idempotency: { dedupe_key: "OutreachOrder.lead_record_id", on_duplicate: reject }
     failure:
       empty_ok: ["NO_PENDING 无待触达单", "restricted 对方仅互关（不计成功）"]
-      retryable: ["lock_busy 设备被采收占用 → 回队列", "rate_limited 当天停发", "requeue_transient 两轮后转受阻"]
+      retryable: ["lock_busy 设备被采收占用 → 回队列", "rate_limited 当天停发", "requeue_transient 两轮后转受阻", "device_ui 手机界面读取失败（回队列，不废线索；连续3次软熔断2小时自动恢复）"]
       needs_human:
         cases: ["account_mismatch 登错号（一次即熔断）", "other 连续 2 次未识别失败 → 熔断", "TARGET_ABSENT", "NO_SCRIPT 话术缺失"]
-        alert: { channel: bark, object: "熔断即 Bark（现状无告警，15c9a456）" }
+        alert: { channel: bark, object: "熔断即 Bark（notify-bark.js，去重 24h）" }
       fatal: []
     side_effects:
       - { kind: external_visible, target: "抖音私信", description: "真实向潜在客户发送私信（douyin-phone-adb:2372）" }
     invokers: [code]
     steps:
       - { key: pick_order, name: 取单预写触达中, order: 1, reads: [Lead.status, Lead.repeat_hits, Lead.intent_grade], writes: [OutreachOrder.lead_record_id, OutreachOrder.douyin_id, OutreachOrder.script_id, Lead.status],
-          check: "预写 状态=触达中 成功回读（防重入）", implementation: { status: implemented, ref: "next-outreach.js:86-112" }, uses_llm: false }
+          check: "预写触达中后回读，状态/分发号/话术ID 三项一致，否则 CLAIM_FAILED 不发", implementation: { status: implemented, ref: "next-outreach.js:113-170" }, uses_llm: false }
       - { key: check_breaker_and_cap, name: 熔断与日限额闸, order: 2, reads: [Account.dm_paused, Account.daily_cap], writes: [],
-          check: "无熔断 flag 且 今日计数 < cap，否则回队列", implementation: { status: implemented, ref: "outreach-tick.sh:122-153" }, uses_llm: false }
+          check: "选单时已排除熔断/当日停发/撞上限账号，全部不可用时 NO_SENDER 即停", implementation: { status: implemented, ref: "outreach-tick.sh:218-303" }, uses_llm: false }
       - { key: acquire_device_lock, name: 拿设备锁, order: 3, reads: [Device.serial], writes: [],
-          check: "180s 内拿到锁，否则回队列不计失败", implementation: { status: implemented, ref: "outreach-tick.sh:166-186" }, uses_llm: false }
+          check: "180s 内拿到锁，否则回队列不计失败", implementation: { status: implemented, ref: "outreach-tick.sh:311-335" }, uses_llm: false }
       - { key: verify_sender_account, name: 验发送账号, order: 4, reads: [Account.sender_id], writes: [OutreachOrder.sender_id],
           check: "我页抖音号 == sender_id，不符一次即熔断", implementation: { status: implemented, ref: "outreach-tick.sh account_mismatch" }, uses_llm: false }
       - { key: send_private_message, name: 发私信, order: 5, reads: [OutreachOrder.lead_record_id, Lead.profile_url], writes: [OutreachOrder.message],
           check: "输入框回读 == 审批话术，发送后气泡可见", implementation: { status: implemented, ref: "douyin-phone-adb:2372 private-message-send" }, uses_llm: false }
       - { key: verify_delivery, name: 核验送达, order: 6, reads: [OutreachOrder.message], writes: [OutreachOrder.result],
-          check: "现场无「暂无法给对方发送消息」「发送消息过于频繁」", implementation: { status: implemented, ref: "outreach-tick.sh:206-237" }, uses_llm: false }
+          check: "现场无「暂无法给对方发送消息」「发送消息过于频繁」", implementation: { status: implemented, ref: "outreach-tick.sh:343-391" }, uses_llm: false }
       - { key: write_back_result, name: 结果回写, order: 7, reads: [OutreachOrder.result], writes: [Lead.status, Lead.send_status, Lead.reached_at, Lead.sender_id, Lead.script_id],
-          check: "线索表落 已触达/待触达/触达受阻 之一，不留 触达中", implementation: { status: implemented, ref: "next-outreach.js:33-57" }, uses_llm: false }
+          check: "线索表落 已触达/待触达/触达受阻 之一，不留 触达中", implementation: { status: implemented, ref: "next-outreach.js:40-72" }, uses_llm: false }
     known_gaps:
-      - { gap: "触达不进账本，运行时无探针读回", task: 6b133a81 }
-      - { gap: "熔断无告警；被熔断单约每 20 秒空转回队列（09-24~28 约 9800 次）", task: 15c9a456 }
+      - { gap: "触达仍未进账本，运行时无探针读回；悬空『触达中』改由选单开头 40 分钟回收兜底（任务 6b133a81 接账本后再升为探针判定）", task: 6b133a81 }
 
   # ───────────────────────────── 8 归位 ─────────────────────────────
   - key: cleanup

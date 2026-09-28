@@ -35,6 +35,8 @@ node --check "$D/push-leads.js" || fail "push-leads.js 语法错误"
 node --check "$D/update-profile-links.js" || fail "update-profile-links.js 语法错误"
 node --check "$D/next-outreach.js" || fail "next-outreach.js 语法错误"
 node --check "$D/next-outreach-lib.js" || fail "next-outreach-lib.js 语法错误"
+[[ -s "$D/notify-bark.js" ]] || fail "notify-bark.js 缺失(0928 触达告警通道,熔断/风控/回写失败经它发 Bark)"
+node --check "$D/notify-bark.js" || fail "notify-bark.js 语法错误"
 
 # 层2: 融合刀函数/命令存在性(六刀签名)
 # 注: 'locate_cached utab' 于 0916 随搜索路线一并删除(见层12),故不再要求存在
@@ -421,11 +423,14 @@ if [[ -n "$_CALL_PATH" ]]; then
   _STUB=$(mktemp -d)
   trap 'rm -rf "$_STUB"' EXIT   # fail 走 exit 1,显式 rm 够不着,交给 trap 兜底
   printf '#!/bin/bash\nfor a in "$@"; do printf "%%s\\n" "$a"; done >> "%s/scp.log"\nexit 0\n' "$_STUB" > "$_STUB/scp"
-  printf '#!/bin/bash\nexit 0\n' > "$_STUB/ssh"
+  # 0928 起 deploy.sh 是原子替换(scp 到 .<名>.deploy-new 再 ssh mv -f 换 inode,防运行中脚本被覆盖搞坏):
+  # ssh 桩也要记账,才能断言"最终落到了调用方目录的正式文件名"。
+  printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> "%s/ssh.log"\nexit 0\n' "$_STUB" > "$_STUB/ssh"
   chmod +x "$_STUB/scp" "$_STUB/ssh"
   PATH="$_STUB:$PATH" bash "$D/deploy.sh" > "$_STUB/run.log" 2>&1 || true
   for _h in xian-m4 xian-m1; do
-    if ! grep -qx "$_h:${_CALL_DIR}/douyin-phone-adb" "$_STUB/scp.log" 2>/dev/null; then
+    if ! grep -qx "$_h:${_CALL_DIR}/.douyin-phone-adb.deploy-new" "$_STUB/scp.log" 2>/dev/null \
+       || ! grep -qE "^$_h .*mv -f ${_CALL_DIR}/\.douyin-phone-adb\.deploy-new ${_CALL_DIR}/douyin-phone-adb\$" "$_STUB/ssh.log" 2>/dev/null; then
       # 带上现场再死，否则下一个人只能靠猜（本仓死规矩：不拿现场不动手）
       echo "--- deploy.sh 空跑输出(末 15 行) ---" >&2
       tail -15 "$_STUB/run.log" >&2 2>/dev/null || echo "(没有输出)" >&2
@@ -522,7 +527,10 @@ _NO="$D/next-outreach.js"
 if grep -qE 'sent\s*%\s*2\s*===\s*0' "$_NO"; then
   fail "next-outreach.js 账号分配用了sent奇偶判断(0922实测:队首卡坏账号时会死循环,legacy永远轮不上)"
 fi
-grep -qF 'Math.random() < 0.5' "$_NO" || fail "next-outreach.js 缺少随机选号逻辑(账号轮流不能依赖会卡住不动的计数器)"
+# 0928: 随机选号抽进 next-outreach-lib.js 的 pickSender(rand 注入便于测试,默认 Math.random),
+# 同时支持 --exclude 避开不可用账号；next-outreach.js 必须走 pickSender,lib 里必须是随机(非计数器)。
+grep -qF 'lib.pickSender(SENDERS, excluded)' "$_NO" || fail "next-outreach.js 未走 pickSender 选号(账号轮流不能依赖会卡住不动的计数器,且须支持 --exclude)"
+grep -qF 'rand = Math.random' "$D/next-outreach-lib.js" || fail "next-outreach-lib.js pickSender 缺少随机选号(rand 默认 Math.random)"
 
 # 层19: 0922建数据库正本第一刀——leadgen-db-lib.js 是纯逻辑+依赖注入(不 require('pg')),
 # 因为 openclaw-scripts-test job 跑本目录 __tests__/*.test.mjs 时不装任何依赖(纯 node --test,

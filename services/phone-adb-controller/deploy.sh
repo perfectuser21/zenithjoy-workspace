@@ -23,10 +23,28 @@
 #
 # 每份文件同步后立刻在目标机上跑语法检查(zsh -n / node -c),同步一份验证一份,
 # 不是"复制完就算数"——避免把语法错误的半成品扔到生产机上。
+#
+# 原子替换(0928): 一律先 scp 到同目录临时名 .<文件名>.deploy-new,再 ssh mv -f 到目标名。
+# 原因: scp 原地覆盖是"截断后写入同一个 inode",而 zsh 是边读边执行脚本——正在跑的 outreach-tick /
+# harvest 批次会读到半截新内容(甚至新旧内容拼接)而炸掉。mv 是换 inode,运行中的进程继续读旧 inode
+# 直到自己退出,新一轮才读到新文件。
 set -euo pipefail
 cd "$(dirname "$0")"
 D="."
 FAILED=0
+
+# push_atomic <本地文件> <host> <远端目录(可含~)> <文件名> [x]
+#   先 scp 到同目录临时名,再远端 mv -f 换 inode;带第 5 参 x 时在 mv 之前先 chmod +x(不留"新文件无执行权限"的窗口)。
+push_atomic() {
+  local src="$1" host="$2" rdir="$3" name="$4" mode="${5:-}" tmp
+  tmp="$rdir/.$name.deploy-new"
+  scp -q -p "$src" "$host:$tmp"
+  if [[ "$mode" == "x" ]]; then
+    ssh "$host" "chmod +x $tmp && mv -f $tmp $rdir/$name"
+  else
+    ssh "$host" "mv -f $tmp $rdir/$name"
+  fi
+}
 
 MMV_JS_FILES=(
   push-videos.js push-raw-comments.js sort-comments.js sort-comments-lib.js next-outreach.js next-outreach-lib.js
@@ -35,7 +53,7 @@ MMV_JS_FILES=(
   lead-fields-lib.js kpi-gate.js next-keywords.js keyword-enabled-lib.js update-keyword-stats.js keyword-stats-lib.js
   fetch-seen-videos.js check-own-account.js dm-daily-cap.js dm-rate-ramp-lib.js
   own-accounts-lib.js push-leads.js update-profile-links.js nickname-match-lib.js
-  stats-line.js
+  stats-line.js notify-bark.js
 )
 MMV_TOPLEVEL_FILES=(cmdr-escort.txt cmdr-stream.txt)
 # 设备控制器单独成组: 它必须同时落到**两个**目录,因为两类消费者各指一个——
@@ -62,7 +80,7 @@ DEVICE_NODE_FILES=(ledger.mjs)
 echo "=== [1/3] mmv:~/.openclaw/leadgen-scripts/ (判定链+数据层, ${#MMV_JS_FILES[@]} 个文件) ==="
 for f in "${MMV_JS_FILES[@]}"; do
   if [[ ! -s "$D/$f" ]]; then echo "  ⚠️ 仓库里缺失: $f (跳过)"; continue; fi
-  scp -q -p "$D/$f" "mmv:~/.openclaw/leadgen-scripts/$f"
+  push_atomic "$D/$f" mmv "~/.openclaw/leadgen-scripts" "$f"
   if ssh mmv "node -c ~/.openclaw/leadgen-scripts/$f" 2>/tmp/deploy-err-$$; then
     echo "  ✅ $f"
   else
@@ -75,7 +93,7 @@ done
 echo "=== [2/3] mmv:~/.openclaw/ 顶层(agent SOP, ${#MMV_TOPLEVEL_FILES[@]} 个文件) ==="
 for f in "${MMV_TOPLEVEL_FILES[@]}"; do
   if [[ ! -s "$D/$f" ]]; then echo "  ⚠️ 仓库里缺失: $f (跳过)"; continue; fi
-  scp -q -p "$D/$f" "mmv:~/.openclaw/$f"
+  push_atomic "$D/$f" mmv "~/.openclaw" "$f"
   echo "  ✅ $f"
 done
 
@@ -84,7 +102,7 @@ for host in xian-m4 xian-m1; do
   echo "  --- $host ---"
   for f in "${DEVICE_SH_FILES[@]}"; do
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; continue; fi
-    scp -q -p "$D/$f" "$host:~/bin-harvest/$f"
+    push_atomic "$D/$f" "$host" "~/bin-harvest" "$f" x
     ssh "$host" "chmod +x ~/bin-harvest/$f"
     # douyin-phone-adb 还要送一份到 ~/.local/bin/ —— **夜批真正调的是那个**：
     # harvest-keyword.sh 里写的是 `C=~/.local/bin/douyin-phone-adb`。
@@ -95,7 +113,7 @@ for host in xian-m4 xian-m1; do
     # 不存在"两份各自演化再不同步"的风险,恰恰是为了消灭原来那种不同步。
     if [[ "$f" == "douyin-phone-adb" ]]; then
       ssh "$host" "mkdir -p ~/.local/bin"
-      scp -q -p "$D/$f" "$host:~/.local/bin/$f"
+      push_atomic "$D/$f" "$host" "~/.local/bin" "$f" x
       ssh "$host" "chmod +x ~/.local/bin/$f"
     fi
     if command -v zsh >/dev/null 2>&1 && ssh "$host" "zsh -n ~/bin-harvest/$f" 2>/tmp/deploy-err-$$; then
@@ -110,7 +128,7 @@ for host in xian-m4 xian-m1; do
   done
   for f in "${DEVICE_NODE_FILES[@]}"; do
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
-    scp -q -p "$D/$f" "$host:~/bin-harvest/$f"
+    push_atomic "$D/$f" "$host" "~/bin-harvest" "$f"
     if ssh "$host" "/opt/homebrew/bin/node --check ~/bin-harvest/$f" 2>/tmp/deploy-err-$$; then
       echo "    ✅ $f"
     else
@@ -128,7 +146,7 @@ for host in xian-m4 xian-m1; do
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
     for dir in "${DEVICE_CTL_DIRS[@]}"; do
       ssh "$host" "mkdir -p ~/$dir"
-      scp -q -p "$D/$f" "$host:~/$dir/$f"
+      push_atomic "$D/$f" "$host" "~/$dir" "$f" x
       ssh "$host" "chmod +x ~/$dir/$f"
       if ssh "$host" "zsh -n ~/$dir/$f" 2>/tmp/deploy-err-$$; then
         echo "    ✅ $dir/$f"
