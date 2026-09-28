@@ -2,7 +2,8 @@
 //
 // 探针文件 checks/social-keyword-leadgen.yaml 是 Brain step_probes 的 SSOT（cecelia 仓
 // scripts/sync-step-probes.mjs 按哈希登记）。这份测试卡的是"文件形状不能漂"：
-//   - stage 只能是 workflow-result.sh 的 7 个 stage（Brain 侧 journey cell 就这 7 个）
+//   - stage = 契约 8 个主干活动（设计顺序，决策 f18f56b8）= workflow-result.sh 的 7 个账本 stage + outreach（触达不走账本）
+//   - 全部 severity=error（决策 f18f56b8：每个活动后置条件一律拦截，不设 warn）
 //   - expect.ref 只能引 workflow-result.sh req_keys()/COMMON 的闭集键（运行时从脚本抽，不抄）
 //   - op / severity 枚举、key 唯一、journey_cell 与 stage 一致
 // CI openclaw-scripts-test 是"纯 node --test 不装依赖"，所以解析器/校验器都是仓内零依赖实现。
@@ -36,9 +37,33 @@ test("闭集键从 workflow-result.sh 抽出：含 delivery 四键与 COMMON 四
   assert.ok(!keys.has("leads_writt"), "不该有截断的假键");
 });
 
-test("STAGES 与 workflow-result.sh req_keys 的 7 个 stage 一致", () => {
-  const stages = [...wfrText.matchAll(/^\s+(\w+)\) echo "[a-z_ ]+";;$/gm)].map((m) => m[1]);
-  assert.deepEqual(stages, [...STAGES]);
+const DESIGN_ORDER = ["preflight", "discovery", "qualification", "collection", "scoring", "delivery", "outreach", "cleanup"];
+const reqStages = () => [...wfrText.matchAll(/^\s+(\w+)\) echo "[a-z_ ]+";;$/gm)].map((m) => m[1]);
+function reqKeysOf(stage) {
+  const m = new RegExp(`^\\s+${stage}\\) echo "([a-z_ ]+)";;$`, "m").exec(wfrText);
+  return m ? m[1].split(/\s+/) : [];
+}
+
+test("STAGES = 契约 8 活动设计顺序；账本 req_keys 7 个 stage = STAGES 去掉 outreach（同序）", () => {
+  assert.deepEqual([...STAGES], DESIGN_ORDER);
+  assert.deepEqual(reqStages(), DESIGN_ORDER.filter((s) => s !== "outreach"));
+});
+
+test("8 个活动每个都至少挂 1 条探针（缺探针=后置条件无判定）", () => {
+  const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
+  for (const s of STAGES) assert.ok(doc.probes.some((p) => p.stage === s), `stage ${s} 没有探针`);
+});
+
+test("metric 探针：ref 只能引本 stage 的 req_keys 闭集键；outreach 不在账本不得用 metric", () => {
+  const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
+  const metric = doc.probes.filter((p) => p.probe.type === "metric");
+  assert.ok(metric.length >= 1, "至少一条 metric 探针（preflight/cleanup 只有账本指标可判）");
+  for (const p of metric) {
+    assert.notEqual(p.stage, "outreach", `${p.key} outreach 无账本工件`);
+    const k = /^metrics\.([a-z_]+)$/.exec(p.probe.ref)[1];
+    assert.ok(reqKeysOf(p.stage).includes(k), `${p.key} 引了非本 stage 的键 ${k}`);
+    assert.ok("value" in p.expect, `${p.key} metric 探针必须对常量断言`);
+  }
 });
 
 test("YAML 子集解析器：块映射/块序列/块标量/引号/数字", () => {
@@ -85,13 +110,13 @@ test("首发五条探针键齐全且落在 delivery / scoring", () => {
   }
 });
 
-test("key 唯一、journey_cell == stage:<stage>、首发全 warn、note 带 文件:行 依据", () => {
+test("key 唯一、journey_cell == stage:<stage>、全部 error（拦截）、note 带 文件:行 依据", () => {
   const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
   const keys = doc.probes.map((p) => p.key);
   assert.equal(new Set(keys).size, keys.length, "key 重复");
   for (const p of doc.probes) {
     assert.equal(p.journey_cell, `stage:${p.stage}`, `${p.key} journey_cell 与 stage 不一致`);
-    assert.equal(p.severity, "warn", `${p.key} 首发必须 warn`);
+    assert.equal(p.severity, "error", `${p.key} 必须 error（决策 f18f56b8 每步拦截）`);
     assert.match(p.note, /[\w.-]+\.(js|sh|sql):\d+/, `${p.key} note 缺 文件:行 依据`);
   }
 });
@@ -115,7 +140,7 @@ test("sql 探针只打 pg_zenithjoy 且 query 带 $RUN_TAG；http 探针 filter/
       assert.equal(p.probe.target, "pg_zenithjoy");
       assert.match(p.probe.query, /zenithjoy\.leadgen_/, `${p.key} 必须查 zenithjoy.leadgen_* 表`);
       assert.match(p.probe.query, /\$RUN_TAG/, `${p.key} 必须按本 run 归属`);
-    } else {
+    } else if (p.probe.type === "http") {
       assert.match(p.probe.target, /^feishu_(jinuo|yuesheng)$/);
       assert.match(p.probe.url, /^https:\/\/open\.feishu\.cn\/open-apis\/bitable\/v1\/apps\/[A-Za-z0-9]+\/tables\/tbl[A-Za-z0-9]+\/records/);
       assert.ok(p.probe.filter && Object.keys(p.probe.filter).length > 0, `${p.key} 缺 filter`);
@@ -154,12 +179,18 @@ test("verify-step resolveLineKey：profile 名 / 业务线名 → 路由键；�
   assert.equal(resolveLineKey(""), "");
 });
 
-test("workflow-result.sh 的 WFR_PROBE_STAGES 兜底闸 == YAML 里出现的 stage 集合（执行机本机无 YAML 时据此决定哪些 stage 走 ssh）", () => {
+// 运行时读回接线棘轮：探针定义已补齐 8 个 stage，但 workflow-result.sh 运行时只对 WFR_PROBE_STAGES 读回。
+// 其余 stage 的运行时接线（metric 探针传 --metrics-json、outreach 接账本）挂任务 6b133a81；
+// 接上一个就必须从 RUNTIME_PENDING 删一个——清单与现实不符即红，防"定义了但永远不跑"被遗忘。
+const RUNTIME_PENDING = ["collection", "cleanup", "discovery", "outreach", "preflight", "qualification"];
+test("WFR_PROBE_STAGES ∪ RUNTIME_PENDING(6b133a81) == YAML stage 集合，且两者不相交", () => {
   const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
   const yamlStages = [...new Set(doc.probes.map((p) => p.stage))].sort();
   const m = /WFR_PROBE_STAGES="\$\{WFR_PROBE_STAGES:-([a-z ]+)\}"/.exec(wfrText);
   assert.ok(m, "workflow-result.sh 缺 WFR_PROBE_STAGES 默认值声明");
-  assert.deepEqual(m[1].trim().split(/\s+/).sort(), yamlStages);
+  const wired = m[1].trim().split(/\s+/);
+  assert.ok(!wired.some((s) => RUNTIME_PENDING.includes(s)), "已接线的 stage 还挂在 RUNTIME_PENDING");
+  assert.deepEqual([...wired, ...RUNTIME_PENDING].sort(), yamlStages);
 });
 
 // ── proven-to-fire：坏文档必须被拒 ────────────────────────────────────────
@@ -193,6 +224,18 @@ test("ref 不是 metrics.<key> 形状被拒", () => {
 test("not_null_all 不得带 value/ref", () => {
   const errors = validateSchema(withProbe({ expect: { op: "not_null_all", value: 0 } }), schema);
   assert.ok(errors.length > 0, "not_null_all + value 应被拒");
+});
+
+test("metric 探针缺 ref 被拒；ref 非 metrics.<key> 被拒", () => {
+  let errors = validateSchema(withProbe({ probe: { type: "metric" }, expect: { op: "==", value: 1 } }), schema);
+  assert.ok(errors.length > 0, "metric 缺 ref 应被拒");
+  errors = validateSchema(withProbe({ probe: { type: "metric", ref: "leads_written" }, expect: { op: "==", value: 1 } }), schema);
+  assert.ok(errors.length > 0, "metric ref 形状错应被拒");
+});
+
+test("warn 级探针被 schema 拒（决策 f18f56b8 不设 warn）", () => {
+  const errors = validateSchema(withProbe({ severity: "warn" }), schema);
+  assert.ok(errors.some((e) => /severity/.test(e)), errors.join("\n"));
 });
 
 test("value 与 ref 同时给被拒", () => {
