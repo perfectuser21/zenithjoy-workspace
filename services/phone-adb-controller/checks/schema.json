@@ -50,7 +50,7 @@
       "additionalProperties": false,
       "required": ["url", "filter", "reduce"],
       "properties": {
-        "url": { "type": "string", "pattern": "^https://open\\.feishu\\.cn/open-apis/bitable/v1/apps/[A-Za-z0-9]+/tables/tbl[A-Za-z0-9]+/records" },
+        "url": { "type": "string", "pattern": "^https://open\\.feishu\\.cn/open-apis/bitable/v1/apps/(\\$BASE|[A-Za-z0-9]+)/tables/(\\$POOL|\\$KEYWORD|\\$LEAD|tbl[A-Za-z0-9]+)/records" },
         "filter": { "type": "object", "minProperties": 1 },
         "reduce": { "type": "string", "pattern": "^(count|field:.+)$" }
       }

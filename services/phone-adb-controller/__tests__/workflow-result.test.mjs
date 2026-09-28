@@ -347,17 +347,17 @@ test("stage delivery: 经 ssh 在 MMV 跑 verify-step（形状同 batch2.sh:55 �
 });
 
 test("stage delivery: videos_pushed 是闭集键——缺它工件被拒（不落文件、不回执），带它则通过", { skip: !JQ && "no jq" }, () => {
-  const d = mkdtempSync(join(tmpdir(), "wfr-"));
-  const i = wfr(d, {}, "init", "t30", "p1", words(d, ["A"]), "1", "S", "h");
-  const e = wfr(d, i.kv, "enter");
   const old = ["delivery", "completed", "1", "x", '[{"type":"log","ref":"n.log"}]', '{"leads_written":2,"duplicates_skipped":0,"readback_verified":0,"cursor_updates":0}'];
-  const s1 = wfr(d, { ...i.kv, ...e.kv }, "stage", ...old);
-  assert.match(s1.err, /WFR_WARN.*invalid/);
-  const f = join(i.kv.WFR_ART_DIR, "social-keyword-leadgen-crontab-t30__a1.delivery.1.worker-result.json");
-  assert.ok(!existsSync(f));
-  const s2 = wfr(d, { ...i.kv, ...e.kv }, "stage", ...DELIVERY_ARGS);
-  assert.equal(s2.err.includes("WFR_WARN"), false, s2.err);
-  assert.equal(JSON.parse(readFileSync(f, "utf8")).metrics.videos_pushed, 1);
+  const d1 = mkdtempSync(join(tmpdir(), "wfr-"));
+  const r1 = probeRun(d1, "t30", "p1", { ssh: fakeSsh(d1, { canned: CANNED }), node: fakeNode(d1), stageArgs: old });
+  assert.match(r1.s.err, /WFR_WARN.*invalid/);
+  const f1 = join(r1.i.kv.WFR_ART_DIR, "social-keyword-leadgen-crontab-t30__a1.delivery.1.worker-result.json");
+  assert.ok(!existsSync(f1), "缺 videos_pushed 的旧形状被拒");
+  assert.equal(curlCalls(r1.b.calls).length, 0, "被拒的工件不回执");
+  const d2 = mkdtempSync(join(tmpdir(), "wfr-"));
+  const r2 = probeRun(d2, "t30", "p1", { ssh: fakeSsh(d2, { canned: CANNED }), node: fakeNode(d2), stageArgs: DELIVERY_ARGS });
+  assert.equal(r2.s.err.includes("invalid"), false, r2.s.err);
+  assert.equal(JSON.parse(readFileSync(join(r2.i.kv.WFR_ART_DIR, "social-keyword-leadgen-crontab-t30__a1.delivery.1.worker-result.json"), "utf8")).metrics.videos_pushed, 1);
 });
 
 // 占位工件（init 写的 scoring/qualification not_in_profile、PUSH=0 的 delivery blocked）代表"阶段没跑"，

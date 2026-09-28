@@ -17,7 +17,7 @@
 # 取法约定：
 #   sql  → target pg_zenithjoy（leadgen-db-connect.js：DATABASE_URL 或 PG* env，库 zenithjoy），
 #          query 返回单列；op 为数值比较时取 count/单值，not_null_all 时逐行看是否有空。
-#   http → target feishu_jinuo|feishu_yuesheng（line-routes.js 的 base/table），url 为
+#   http → target feishu_jinuo|feishu_yuesheng（业务线标签；实际读哪个库由 $BASE/$POOL 按 line-key 展开），url 为
 #          bitable records 列表端点，filter = {列名: 值} 全等过滤（现有脚本都是拉全量后在 JS
 #          过滤，同 keyword-stats-lib.js:88-107），reduce = count | field:<列名>；
 #          可选 minus 子查询同形，结果 = 主查询 - minus。
@@ -30,8 +30,12 @@
 # 运行时读回目前只接了 delivery/scoring（workflow-result.sh WFR_PROBE_STAGES），其余 6 个 stage 的运行时接线
 # 挂任务 6b133a81（单测 RUNTIME_PENDING 棘轮）；其中若干探针在执行顺序纠正（8bb3af55）/真实指标（6b133a81）
 # 落地前会如实判红——这是它们该做的事。
-# 只写金诺（feishu_jinuo）：harvest-cron-v4.sh:34 默认 BIZ=AI人工智能训练师；悦升同形状
-# 换 base H3OrbAH49aLNebs7XvOcpS1enec / 评论池 tblQzIHcmGSPUAZm / 关键词表 tblyKCp5vc7y2S40。
+# 业务线无关：http 探针 url 里用占位符 $BASE/$POOL/$KEYWORD/$LEAD 代替 base id 与表 id，由 verify-step.mjs 按
+# routeOf(--line-key) 展开成该业务线（金诺/悦升）自己的 base 与评论池/关键词表/线索表（line-routes.js 是 SSOT，
+# 文件里不再写死任何一家的 id）；认不出业务线时该条探针带 error（fail-open），不会读错库。
+# blocked 占位工件不判探针：阶段没跑（init 的 scoring/qualification not_in_profile 占位、PUSH=0 的 delivery）时
+# 读回 0 == 期望 0 是假绿，workflow-result.sh write_stage 对 status=blocked 不读回（probes 传 []），Brain 侧对
+# stage_status=blocked 也不判；探针只在 completed/failed 的阶段工件上评估。
 
 version: 1
 workflow: social-keyword-leadgen
@@ -185,13 +189,15 @@ probes:
          WHERE harvest_batch = '$RUN_TAG'
     expect:
       op: ">="
-      ref: "metrics.videos_processed"
+      ref: "metrics.videos_pushed"
     severity: error
     note: >
-      push-videos.js:11-12,56 经 leadgen-db-lib.js:25-26 upsertVideo 写 leadgen_videos.harvest_batch=$RUN_TAG
-      （ON CONFLICT DO NOTHING，重复视频不计入）。对账基准 videos_processed 是 collection 阶段按词写的
-      （batch2-v4.sh:50 每词一个工件），取本 run 所有 collection 工件的 videos_processed 之和；
-      delivery 自身工件不带视频数（batch2-v4.sh:68 只有 leads_written）。
+      push-videos.js:57-60 经 leadgen-db-lib.js:25-26 upsertVideo 写 leadgen_videos.harvest_batch=$RUN_TAG
+      （ON CONFLICT DO NOTHING，重复视频不计入）。对账基准 = push-videos.js 本批新增视频数：脚本末行
+      PUSH_VIDEOS_STATS.created（push-videos.js:68，飞书视频池按视频ID去重后真正新建的条数），batch2.sh
+      wfr_delivery_stage 解析后写进 delivery 工件 metrics.videos_pushed（缺统计/悦升无视频池 push-videos.js:18 提前退出 → 0）。
+      PG 里本批行数应 >= 该基准（PG 写入不阻断，飞书失败的视频仍会入 PG）。此前引 videos_processed 是 collection
+      工件的键，delivery 工件里不存在，Brain 判 ref_unresolved 恒败。
       只按 harvest_batch 归属，与 line_key_not_null 同 WHERE（棒3b-2 决策 8f38f5fd）：一个 run 只跑一个 profile，
       批次键已唯一定界；09-26 实证多带 line_key='$LINE_KEY' 时 --line-key 传的是 profile 名而库里是路由键（push-videos.js:57），
       同 TAG 下本条读 0、line_key_not_null 读 7，口径分叉。
@@ -202,7 +208,7 @@ probes:
     probe:
       type: http
       target: feishu_jinuo
-      url: "https://open.feishu.cn/open-apis/bitable/v1/apps/GNuwbzY0da8GP0sv6MGcOTu9ntd/tables/tblmrJTyVgzTj89P/records"
+      url: "https://open.feishu.cn/open-apis/bitable/v1/apps/$BASE/tables/$POOL/records"
       filter:
         运行批次: "$RUN_TAG"
       reduce: count
@@ -212,10 +218,12 @@ probes:
     severity: error
     note: >
       评论只落飞书原始评论池不落 PG：push-raw-comments.js:8 只 require line-routes，不 require
-      leadgen-db-lib（leadgen_comments 表在 v4 链无写入方）。push-raw-comments.js:46 写「运行批次」=$RUN_TAG；
-      leads_written = 本地 TSV ^LEAD 行数（batch2-v4.sh:61,68）。push 端内存 Set 去重（push-raw-comments.js:43-44）
-      会让池内计数 < leads_written，这正是 readback 要暴露的差值（batch2-v4.sh:68 把 duplicates_skipped 硬写 0）。
-      评论池表 id 见 line-routes.js:23。
+      leadgen-db-lib（leadgen_comments 表在 v4 链无写入方）。push-raw-comments.js:47 写「运行批次」=$RUN_TAG。
+      对账基准 leads_written 现为 push-raw-comments.js 本批实际落池数（末行 PUSH_COMMENTS_STATS.created，
+      push-raw-comments.js:63，batch2.sh wfr_delivery_stage 解析后写进 delivery 工件），不含被历史全池去重掉的
+      （push-raw-comments.js:45 按池内全部历史「原始评论ID」去重，去掉的计入 duplicates_skipped=PUSH_COMMENTS_STATS.dup）。
+      此前基准是 TSV 里 ^LEAD 行数（含重复），池内行数天然更少，恒误报。缺统计时回落 TSV LEAD 行数。
+      $BASE/$POOL 按业务线展开（line-routes.js base/pool），悦升批次读悦升自己的评论池。
 
   - key: line_key_not_null
     stage: delivery
@@ -243,7 +251,7 @@ probes:
     probe:
       type: http
       target: feishu_jinuo
-      url: "https://open.feishu.cn/open-apis/bitable/v1/apps/GNuwbzY0da8GP0sv6MGcOTu9ntd/tables/tblmrJTyVgzTj89P/records"
+      url: "https://open.feishu.cn/open-apis/bitable/v1/apps/$BASE/tables/$POOL/records"
       filter:
         运行批次: "$RUN_TAG"
         处理状态: "待分拣"
@@ -254,33 +262,10 @@ probes:
     severity: error
     note: >
       本批评论仍停在「待分拣」的计数。sort-comments-lib.js:61/98/136 三处 putPool 把「处理状态」推到
-      「已分拣」并写「进入最终线索」布尔；本探针的评估时机是 sort-comments 跑完后（batch2.sh:116 落池后同步调起）。
-
-  - key: effective_count
-    stage: scoring
-    journey_cell: "stage:scoring"
-    probe:
-      type: http
-      target: feishu_jinuo
-      url: "https://open.feishu.cn/open-apis/bitable/v1/apps/GNuwbzY0da8GP0sv6MGcOTu9ntd/tables/tbleP4LgzkcwAhiZ/records"
-      filter:
-        抖音获客-关键词配置: "$WORD"
-      reduce: "field:有效线索数"
-      minus:
-        url: "https://open.feishu.cn/open-apis/bitable/v1/apps/GNuwbzY0da8GP0sv6MGcOTu9ntd/tables/tblmrJTyVgzTj89P/records"
-        filter:
-          命中关键词: "$WORD"
-          进入最终线索: true
-        reduce: count
-    expect:
-      op: "=="
-      value: 0
-    severity: error
-    note: >
-      关键词表「有效线索数」由 update-keyword-stats.js:79 PUT 回写；其值定义 = 评论池「进入最终线索」===true
-      按「命中关键词」分组计数（keyword-stats-lib.js:88-107 tallyFromPool）。两边相减应为 0；
-      非 0 = 回写跑在分拣之前或 PUT 失败（update-keyword-stats.js:80 UPD_FAIL 只打日志）。
-      评论池/关键词表 id 见 line-routes.js:23,25。
+      「已分拣」并写「进入最终线索」布尔；scoring 工件由 batch2.sh wfr_scoring_stage 在 sort-comments.js 跑完后写
+      （completed/failed 才评估，blocked 占位不判），所以本探针评估时池已分拣完。
+      （原 effective_count 探针已删：关键词「有效线索数」回写 update-keyword-stats.js 在批次收工后才运行，且评分是批级的、
+      评估时 $WORD 为空，批内无法按词判定；契约里记为 known_gap，任务 6b133a81。）
 
   # ── outreach：tick 结束时没有卡在「触达中」的单（触达不走账本，只能读线索表）──
   - key: out_no_stuck_inflight

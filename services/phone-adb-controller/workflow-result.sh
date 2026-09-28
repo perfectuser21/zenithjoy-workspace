@@ -103,7 +103,7 @@ req_keys(){ case "$1" in
   qualification) echo "candidates_judged qualified";;
   collection) echo "comments_collected videos_processed cursor_updates";;
   scoring) echo "comments_scored strong_intent weak_intent peer irrelevant spam";;
-  delivery) echo "leads_written duplicates_skipped readback_verified cursor_updates";;
+  delivery) echo "leads_written videos_pushed duplicates_skipped readback_verified cursor_updates";;
   cleanup) echo "close_app_attempts lock_released safe_desktop_visible";;
   *) echo "";; esac; }
 next_action(){ case "$1" in completed) echo accept;; blocked) echo block;; failed) echo retry;; *) echo stop;; esac; }
@@ -138,8 +138,11 @@ write_stage(){
   WFR_LAST_ARTIFACT="$f"
   # 回执 Brain(校验通过+记账之后): run_id=RUN__ATTEMPT.stage, 状态 in_progress; cleanup 段由 finalize 发终态,这里不发
   # 探针读回(棒3b)排在校验之后、POST 之前: 工件都没写成的 stage 不值得读回
+  # blocked = 阶段没跑(init 的 scoring/qualification not_in_profile 占位、PUSH=0 的 delivery): 读回 0==期望 0 是假绿,
+  # 不读回(不起 ssh),回执照发、probes 传 []; Brain 侧对 stage_status=blocked 同样不判。completed/failed 行为不变。
   if [[ "$stage" != cleanup ]]; then
-    local probes; probes=$(probe_stage "$stage" "$word")
+    local probes='[]'
+    [[ "$status" == blocked ]] || probes=$(probe_stage "$stage" "$word")
     brain_post "${WFR_RUN_ID:-}__${attempt}.${stage}" in_progress "$stage" "$f" '[]' "$probes"
   fi
 }

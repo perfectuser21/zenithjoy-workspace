@@ -6,6 +6,7 @@ const fs = require("fs");
 const cfg = JSON.parse(fs.readFileSync("/Users/administrator/.openclaw/clawdbot.json"));
 // 0916: 按业务线路由 base/table(悦升有独立 base,写死会让它的数据无处可去——见 line-routes.js)
 const { routeOf } = require("./line-routes.js");
+const { statsLine } = require("./stats-line.js");
 const [,, TSV, BATCH, LINE] = process.argv;
 const ROUTE = routeOf(LINE);
 const acc = cfg.channels.feishu.accounts[ROUTE.account];
@@ -59,4 +60,5 @@ console.error("line-route: " + ROUTE.key + " base=" + B + " POOL=" + POOL);
     else console.log("FAIL", nick, JSON.stringify(res).slice(0,100));
   }
   console.log(`落池 ${created} | 去重 ${dup} | 输入 ${lines.length}`);
+  console.log(statsLine("PUSH_COMMENTS_STATS", { created, dup, input: lines.length }));
 })();

@@ -107,7 +107,7 @@ test("运行时接线的四条探针键齐全且落在 delivery / scoring；effe
   }
   assert.equal(byKey.pool_advanced && byKey.pool_advanced.stage, "scoring", "pool_advanced 应在 scoring");
   assert.ok(!("effective_count" in byKey), "effective_count 用 $WORD，评分是批级的，评估时 $WORD 为空，无意义 → 已删");
-  assert.ok(!doc.probes.some((p) => p.stage === "scoring" && JSON.stringify(p).includes("$WORD")), "scoring 探针不得依赖 $WORD");
+  assert.ok(!doc.probes.some((p) => p.stage === "scoring" && JSON.stringify(p.probe).includes("$WORD")), "scoring 探针不得依赖 $WORD");
 });
 
 test("videos_readback 对账基准 = metrics.videos_pushed（delivery 工件真有的键；videos_processed 只在 collection 工件里，delivery 上 ref_unresolved 恒败）", () => {
@@ -128,7 +128,7 @@ test("comments_readback 对账基准 leads_written = push-raw-comments 本批实
   const p = doc.probes.find((x) => x.key === "comments_readback");
   assert.equal(p.expect.ref, "metrics.leads_written");
   assert.match(p.note, /PUSH_COMMENTS_STATS/);
-  assert.match(p.note, /历史去重/);
+  assert.match(p.note, /历史.*去重/);
 });
 
 test("运行时接线 stage（delivery/scoring）的 http 探针 url 用 $BASE/$POOL 占位，不得写死业务线的 base id（悦升批次会读错库）", () => {

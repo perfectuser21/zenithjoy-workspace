@@ -12,6 +12,7 @@
 //   http → 飞书 Bitable：凭据 env FEISHU_APP_ID/FEISHU_APP_SECRET 优先，否则 CLAWDBOT_JSON（默认 ~/.openclaw/clawdbot.json）
 //          的 channels.feishu.accounts[routeOf(lineKey).account]（同 push-raw-comments.js:6-16）；page_size=500 分页拉全；
 //          filter 每列全等（文本字段经 txt() 归一，布尔直接比）；reduce count | field:<列>（求和）；minus 同形子查询取差。
+//          url 里的 $BASE/$POOL/$KEYWORD/$LEAD 先按 routeOf(lineKey) 展开成该业务线的 base/表 id（认不出业务线 → 该条 error）。
 //   metric → observed = --metrics-json 指向的 stage 工件 .metrics[键]（决策 f18f56b8：preflight/cleanup 无外部数据可查）；
 //          缺 --metrics-json 或缺键 → 该条 error。
 // 单条失败 fail-open（该条带 error 继续其余）；整体超时把已得部分输出、未完成的标 error:"timeout"。
@@ -112,11 +113,28 @@ async function readSource(src, params, headers, fetchFn) {
   return rows.reduce((sum, r) => sum + (Number(txt((r.fields || {})[col])) || 0), 0);
 }
 
+// 业务线无关化：bitable url 里的 $BASE/$POOL/$KEYWORD/$LEAD 按 routeOf(params.lineKey)（line-routes.js SSOT）展开成该业务线的
+// base/表 id——探针文件不再写死金诺的 base，悦升批次读悦升自己的库。lineKey 认不出（routeOf 抛错）→ 整条 http 探针带 error（fail-open），
+// 绝不带着未展开的占位符或别家的 base 去请求飞书。
+const ROUTE_PLACEHOLDER = { BASE: "base", POOL: "pool", KEYWORD: "keyword", LEAD: "lead" };
+export function expandRouteUrl(url, lineKey, routeOf = require("./line-routes.js").routeOf) {
+  if (!/\$(BASE|POOL|KEYWORD|LEAD)\b/.test(url)) return url;
+  const route = routeOf(lineKey);
+  return url.replace(/\$(BASE|POOL|KEYWORD|LEAD)\b/g, (_, n) => {
+    const v = route[ROUTE_PLACEHOLDER[n]];
+    if (!v) throw new Error(`业务线 ${route.key} 未配 ${ROUTE_PLACEHOLDER[n]}（line-routes.js），无法展开 $${n}`);
+    return v;
+  });
+}
+
 async function runHttp(probe, params, deps, getToken) {
+  // 先展开再取 token：认不出业务线时不必碰飞书
+  const src = { ...probe, url: expandRouteUrl(probe.url, params.lineKey) };
+  const minus = probe.minus ? { ...probe.minus, url: expandRouteUrl(probe.minus.url, params.lineKey) } : null;
   const headers = { Authorization: `Bearer ${await getToken()}` };
-  const main = await readSource(probe, params, headers, deps.fetch);
-  if (!probe.minus) return main;
-  return main - (await readSource(probe.minus, params, headers, deps.fetch));
+  const main = await readSource(src, params, headers, deps.fetch);
+  if (!minus) return main;
+  return main - (await readSource(minus, params, headers, deps.fetch));
 }
 
 // metric 探针（决策 f18f56b8）：preflight/cleanup 没有外部数据可查，observed = 本 stage 工件 metrics[键]
