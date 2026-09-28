@@ -82,8 +82,16 @@ wfr_delivery_stage(){ # prc NL push_log_offset
 # 闭集键 peer/spam 这条链没有对应分类,恒 0; strong_intent=A 级, weak_intent=B+C 级(五档分级落地后重新定义)
 wfr_scoring_stage(){ # sort_rc sort_log_offset
   wfr_on || return 0
-  local src="$1" off="$2" ev='[{"type":"log","ref":"'"$LOG"'"}]' ss m="" sum=""
+  local src="$1" off="$2" ev='[{"type":"log","ref":"'"$LOG"'"}]' ss m="" sum="" pend jd
   ss=$(log_stats "$off" SORT_STATS)
+  # 有待分拣却一条没判成(judged=0 pending>0: 模型/鉴权整批挂了)不是"分拣完成"——当作没有有效统计,记 failed;
+  # pending=0 的空批是正常的,仍 completed
+  pend=$(stat_num "$ss" pending); jd=$(stat_num "$ss" judged)
+  if [[ -n "$ss" ]] && (( ${pend:-0} > 0 && ${jd:-0} == 0 )); then
+    sum=$(print -r -- "$ss" | "$JQ_BIN" -r '"sorted judged=\(.judged//0) pending=\(.pending//0) moved=\(.moved//0)"' 2>/dev/null)
+    wfr stage scoring failed 1 "$sum" "$ev" '{"comments_scored":0,"strong_intent":0,"weak_intent":0,"peer":0,"irrelevant":0,"spam":0}'
+    return 0
+  fi
   if [[ -n "$ss" ]]; then
     m=$(print -r -- "$ss" | "$JQ_BIN" -c '{comments_scored:(.judged//0),strong_intent:(.grades.A//0),weak_intent:((.grades.B//0)+(.grades.C//0)),peer:0,irrelevant:(.grades["不相关"]//0),spam:0}' 2>/dev/null)
     sum=$(print -r -- "$ss" | "$JQ_BIN" -r '"sorted judged=\(.judged//0) pending=\(.pending//0) moved=\(.moved//0)"' 2>/dev/null)

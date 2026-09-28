@@ -274,7 +274,7 @@ probes:
     probe:
       type: http
       target: feishu_jinuo
-      url: "https://open.feishu.cn/open-apis/bitable/v1/apps/GNuwbzY0da8GP0sv6MGcOTu9ntd/tables/tblTLFj69CflUqSr/records"
+      url: "https://open.feishu.cn/open-apis/bitable/v1/apps/$BASE/tables/$LEAD/records"
       filter:
         状态: "触达中"
       reduce: count
