@@ -12,8 +12,8 @@
 const fs = require("fs");
 const crypto = require("crypto");
 
-// Brain 侧 journey cell 就这 7 个，与 workflow-result.sh req_keys() 顺序一致
-const STAGES = Object.freeze(["preflight", "discovery", "qualification", "collection", "scoring", "delivery", "cleanup"]);
+// 契约 8 个主干活动（设计顺序，决策 f18f56b8）：workflow-result.sh req_keys() 的 7 个账本 stage（同序）+ outreach（触达不走账本）
+const STAGES = Object.freeze(["preflight", "discovery", "qualification", "collection", "scoring", "delivery", "outreach", "cleanup"]);
 
 // ── 受限 YAML 子集解析 ────────────────────────────────────────────────
 function scalar(raw) {

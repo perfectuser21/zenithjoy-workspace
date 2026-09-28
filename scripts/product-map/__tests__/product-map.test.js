@@ -175,15 +175,18 @@ test('T9: schema 能被当前 ajv 版本成功 compile（供应链版本漂移�
 // ─── Test 10: YAML 语法错误诊断（非裸堆栈崩溃）───────────────────────────────
 
 test('T10: loadAndValidateProductMap 对YAML语法错误返回结构化FAIL，不抛未捕获异常', async () => {
-  const badYamlPath = resolve(__dirname, '../../../product-map/product-map.yaml');
-  const original = readFileSync(badYamlPath, 'utf8');
+  // 坏 YAML 写临时副本，不改仓库真文件——改真文件会让并行跑的测试（contracts.test.js 读 product-map.yaml）偶发读到坏档
+  const original = readFileSync(resolve(__dirname, '../../../product-map/product-map.yaml'), 'utf8');
   const fs = await import('node:fs');
+  const os = await import('node:os');
+  const dir = fs.mkdtempSync(resolve(os.tmpdir(), 'product-map-t10-'));
+  const badYamlPath = resolve(dir, 'product-map.yaml');
   try {
     fs.writeFileSync(badYamlPath, original.replace('apps:', 'apps:\n   bad_indent:'));
     let caught = null;
     let result = null;
     try {
-      result = await loadAndValidateProductMap();
+      result = await loadAndValidateProductMap(badYamlPath);
     } catch (e) {
       caught = e;
     }
@@ -193,7 +196,7 @@ test('T10: loadAndValidateProductMap 对YAML语法错误返回结构化FAIL，�
       assert.ok(result.errors.some(e => /YAML syntax error/i.test(e)), `result.errors须含YAML syntax error，实际: ${JSON.stringify(result.errors)}`);
     }
   } finally {
-    fs.writeFileSync(badYamlPath, original);
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 

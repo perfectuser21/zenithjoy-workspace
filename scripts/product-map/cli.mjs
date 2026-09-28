@@ -20,12 +20,21 @@ import {
   productMapDigest,
   renderProductMapMarkdown,
 } from './lib.mjs';
+import { loadContractsFromDisk, validateContracts, contractsDigest } from './contracts-lib.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../..');
 const GENERATED_DIR = resolve(REPO_ROOT, 'product-map/generated');
 const JSON_OUT = resolve(GENERATED_DIR, 'product-map.json');
 const MD_OUT = resolve(GENERATED_DIR, 'product-map.md');
+const CONTRACTS_OUT = resolve(GENERATED_DIR, 'contracts.json');
+
+// 主干活动契约（决策 3240824c）与能力地图同处同校验：validate/generate/check 一并跑
+function contractsState() {
+  const ctx = loadContractsFromDisk(REPO_ROOT);
+  return { errors: validateContracts(ctx), digest: contractsDigest(ctx) };
+}
+const contractsJson = (digest) => JSON.stringify(digest, null, 2) + '\n';
 
 const [,, command, ...options] = process.argv;
 
@@ -44,7 +53,14 @@ async function cmdValidate() {
     process.exit(1);
   }
 
-  console.log('PASS: product-map.yaml is valid');
+  const contracts = contractsState();
+  if (contracts.errors.length > 0) {
+    console.error('FAIL: Activity contract errors:');
+    for (const e of contracts.errors) console.error(' ', e);
+    process.exit(1);
+  }
+
+  console.log('PASS: product-map.yaml and activity contracts are valid');
 }
 
 async function cmdGenerate() {
@@ -75,10 +91,18 @@ async function cmdGenerate() {
     mkdirSync(GENERATED_DIR, { recursive: true });
   }
 
+  const contracts = contractsState();
+  if (contracts.errors.length > 0) {
+    console.error('FAIL: Cannot generate — activity contract errors:');
+    for (const e of contracts.errors) console.error(' ', e);
+    process.exit(1);
+  }
+
   writeFileSync(JSON_OUT, JSON.stringify(outputJson, null, 2) + '\n', 'utf8');
   writeFileSync(MD_OUT, renderProductMapMarkdown(map, digest), 'utf8');
+  writeFileSync(CONTRACTS_OUT, contractsJson(contracts.digest), 'utf8');
 
-  console.log(`PASS: generated product-map.json and product-map.md (digest: ${digest.slice(0, 8)}...)`);
+  console.log(`PASS: generated product-map.json, product-map.md and contracts.json (digest: ${digest.slice(0, 8)}...)`);
 }
 
 async function cmdCheckJson() {
@@ -166,6 +190,17 @@ async function cmdCheck() {
   if (!smokeResult.ok) {
     console.error('FAIL: smoke_files 校验未通过:');
     for (const e of smokeResult.errors) console.error(' ', e);
+    process.exit(1);
+  }
+
+  const contracts = contractsState();
+  if (contracts.errors.length > 0) {
+    console.error('FAIL: activity contract errors:');
+    for (const e of contracts.errors) console.error(' ', e);
+    process.exit(1);
+  }
+  if (!existsSync(CONTRACTS_OUT) || readFileSync(CONTRACTS_OUT, 'utf8') !== contractsJson(contracts.digest)) {
+    console.error('FAIL: drift — product-map/generated/contracts.json 与当前契约哈希不符。Run npm run product-map:generate.');
     process.exit(1);
   }
 

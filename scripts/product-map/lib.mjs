@@ -69,8 +69,8 @@ export function validateSchema(input) {
  * 通过时 map 为解析后的对象，errors 为 []
  * 失败时 map 为 null，errors 非空
  */
-export async function loadAndValidateProductMap() {
-  const raw = readFileSync(YAML_PATH, 'utf8');
+export async function loadAndValidateProductMap(yamlPath = YAML_PATH) {
+  const raw = readFileSync(yamlPath, 'utf8');
   let parsed;
   try {
     parsed = parseYaml(raw);

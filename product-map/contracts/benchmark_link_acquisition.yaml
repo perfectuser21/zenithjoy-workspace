@@ -1,0 +1,66 @@
+# 对标链接获客 · 主干活动契约（决策 3240824c 验收：只替换「发现」一步即组装成功）
+#
+# 与关键词获客共用 7 个活动契约（ref 原样复用），只把「发现」换成「对标发现」：
+# 输入从 Keyword 换成 BenchmarkAccount，交出的对象同为 Video —— 这就是可替换的前提。
+# 平台差异/获客方法差异落在发现这一个活动的步骤层；共用发生在活动与技能层。
+# 本棒验收 = 契约组装成功；对标发现步骤尚无实现（implementation: missing），不是真机跑通。
+
+version: 1
+capability: benchmark_link_acquisition
+name: 对标链接获客
+workflow: social-benchmark-leadgen
+checks: services/phone-adb-controller/checks/social-benchmark-leadgen.yaml
+trigger_inputs: [BenchmarkAccount, Account, Device]
+
+activities:
+  - ref: keyword_acquisition.preflight
+
+  - key: discovery
+    name: 对标发现
+    order: 2
+    version: 0.1.0
+    compatibility: backward
+    owner: { department: line02 智能获客, agent: 获客采收员 }
+    inputs:
+      - { type: BenchmarkAccount, cardinality: many, fields: [platform, sec_uid, profile_url, line_key] }
+      - { type: Device, cardinality: one, fields: [serial, lock_holder] }
+      - { type: Run, cardinality: one, fields: [run_tag] }
+    outputs:
+      - { type: Video, cardinality: many, effect: create, fields: [line_key, video_id, video_url, title, keyword, comment_count, harvest_batch] }
+    preconditions:
+      - "设备锁由本 run 持有"
+      - "对标账号主页链接可解析出 sec_uid"
+    postconditions:
+      - { probe: bench_candidates_persisted, asserts: "对标账号近期视频全部落 leadgen_videos" }
+    execution: { location: phone, via: "待实现：douyin-phone-adb 主页 deeplink（private-message-send 已有同路径）" }
+    budget: { max_duration_s: 600, heartbeat_s: 60 }
+    resources:
+      locks: ["device:<serial>"]
+      limits: [{ name: max_videos_per_account, value: 10 }]
+    idempotency: { dedupe_key: "Video.line_key+Video.video_id", on_duplicate: skip }
+    failure:
+      empty_ok: ["对标账号无公开作品"]
+      retryable: ["lock_busy", "WRONG_FOREGROUND"]
+      needs_human:
+        cases: ["主页打不开（账号注销/私密）"]
+        alert: { channel: bark, object: "对标主页不可达 → Bark" }
+      fatal: []
+    side_effects:
+      - { kind: internal_write, target: "pg zenithjoy.leadgen_videos", description: "候选视频落库（keyword 记 bench:<sec_uid>）" }
+    invokers: [code]
+    steps:
+      - { key: open_benchmark_profile, name: 打开对标主页, order: 1, reads: [BenchmarkAccount.profile_url, Device.lock_holder], writes: [],
+          check: "deeplink 打开后主页 sec_uid 回读 == BenchmarkAccount.sec_uid", implementation: { status: missing, ref: "douyin-phone-adb 主页 deeplink 待封装" }, uses_llm: false }
+      - { key: list_recent_videos, name: 读作品列表, order: 2, reads: [BenchmarkAccount.sec_uid], writes: [Video.title, Video.comment_count],
+          check: "作品卡片 ≥1，否则判 empty_ok", implementation: { status: missing, ref: "待实现" }, uses_llm: false }
+      - { key: resolve_video_links, name: 取视频链接, order: 3, reads: [Video.title], writes: [Video.video_id, Video.video_url],
+          check: "每张卡取得 video_id（剪贴板守卫）", implementation: { status: missing, ref: "复用 harvest-keyword.sh:45-70 取链法" }, uses_llm: false }
+      - { key: persist_candidates, name: 候选落库, order: 4, reads: [Run.run_tag, Video.video_id, BenchmarkAccount.line_key], writes: [Video.harvest_batch, Video.keyword, Video.line_key],
+          check: "leadgen_videos 本批行数 ≥ 工件 candidates", implementation: { status: missing, ref: "复用 leadgen-db-lib.js upsertVideo" }, uses_llm: false }
+
+  - ref: keyword_acquisition.qualification
+  - ref: keyword_acquisition.collection
+  - ref: keyword_acquisition.scoring
+  - ref: keyword_acquisition.delivery
+  - ref: keyword_acquisition.outreach
+  - ref: keyword_acquisition.cleanup

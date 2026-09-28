@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "phone-adb-controller 声明式探针文件（checks/*.yaml）",
-  "description": "决策 702949b6 / e2cef2c9：写完读回的断言以探针文件为 SSOT。Brain 经 cecelia 仓 scripts/sync-step-probes.mjs 登记哈希并把 journey cell 的 assertion_ref 写成 probe:<key>。stage 与 workflow-result.sh req_keys() 的 7 个 stage 一致；expect.ref 只能引 workflow-result.sh 的闭集 metrics 键（形状在此，键集由单测从脚本实时抽取）。",
+  "description": "决策 702949b6 / e2cef2c9：写完读回的断言以探针文件为 SSOT。Brain 经 cecelia 仓 scripts/sync-step-probes.mjs 登记哈希并把 journey cell 的 assertion_ref 写成 probe:<key>。stage = 契约 8 个主干活动（设计顺序，决策 f18f56b8）：workflow-result.sh req_keys() 的 7 个 stage + outreach；severity 只许 error（每步拦截）；metric 探针 observed 取 stage 工件 metrics[键]；expect.ref 只能引 workflow-result.sh 的闭集 metrics 键（形状在此，键集由单测从脚本实时抽取）。",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "workflow", "probes"],
@@ -11,7 +11,7 @@
     "probes": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/probe" } }
   },
   "definitions": {
-    "stage": { "enum": ["preflight", "discovery", "qualification", "collection", "scoring", "delivery", "cleanup"] },
+    "stage": { "enum": ["preflight", "discovery", "qualification", "collection", "scoring", "delivery", "outreach", "cleanup"] },
     "probe": {
       "type": "object",
       "additionalProperties": false,
@@ -19,10 +19,10 @@
       "properties": {
         "key": { "type": "string", "pattern": "^[a-z][a-z0-9_]+$" },
         "stage": { "$ref": "#/definitions/stage" },
-        "journey_cell": { "type": "string", "pattern": "^stage:(preflight|discovery|qualification|collection|scoring|delivery|cleanup)$" },
-        "probe": { "oneOf": [{ "$ref": "#/definitions/sqlProbe" }, { "$ref": "#/definitions/httpProbe" }] },
+        "journey_cell": { "type": "string", "pattern": "^stage:(preflight|discovery|qualification|collection|scoring|delivery|outreach|cleanup)$" },
+        "probe": { "oneOf": [{ "$ref": "#/definitions/sqlProbe" }, { "$ref": "#/definitions/httpProbe" }, { "$ref": "#/definitions/metricProbe" }] },
         "expect": { "$ref": "#/definitions/expect" },
-        "severity": { "enum": ["warn", "error"] },
+        "severity": { "enum": ["error"] },
         "note": { "type": "string", "minLength": 8 }
       }
     },
@@ -34,6 +34,15 @@
         "type": { "const": "sql" },
         "target": { "enum": ["pg_zenithjoy"] },
         "query": { "type": "string", "minLength": 8 }
+      }
+    },
+    "metricProbe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ref"],
+      "properties": {
+        "type": { "const": "metric" },
+        "ref": { "type": "string", "pattern": "^metrics\\.[a-z][a-z0-9_]*$" }
       }
     },
     "httpSource": {

@@ -21,16 +21,157 @@
 #          bitable records 列表端点，filter = {列名: 值} 全等过滤（现有脚本都是拉全量后在 JS
 #          过滤，同 keyword-stats-lib.js:88-107），reduce = count | field:<列名>；
 #          可选 minus 子查询同形，结果 = 主查询 - minus。
+#   metric → observed = 本 stage 工件的 metrics[键]（verify-step --metrics-json），只能引本 stage req_keys 的键；
+#            用于 preflight/cleanup 这类没有外部数据可查的活动。
 #   expect.ref 只能引 workflow-result.sh:33-41 的闭集 metrics 键（metrics.<key>）。
 #
-# 首发全部 severity=warn：先观察一轮真实 run 的命中情况，再决定哪几条升 error。
-# 首发只写金诺（feishu_jinuo）：harvest-cron-v4.sh:34 默认 BIZ=AI人工智能训练师；悦升同形状
+# 全部 severity=error（决策 f18f56b8：每个活动后置条件一律拦截，不设 warn/观察期）。
+# stage = 契约 product-map/contracts/keyword_acquisition.yaml 的 8 个主干活动（设计顺序：判定在采集之前）。
+# 运行时读回目前只接了 delivery/scoring（workflow-result.sh WFR_PROBE_STAGES），其余 6 个 stage 的运行时接线
+# 挂任务 6b133a81（单测 RUNTIME_PENDING 棘轮）；其中若干探针在执行顺序纠正（8bb3af55）/真实指标（6b133a81）
+# 落地前会如实判红——这是它们该做的事。
+# 只写金诺（feishu_jinuo）：harvest-cron-v4.sh:34 默认 BIZ=AI人工智能训练师；悦升同形状
 # 换 base H3OrbAH49aLNebs7XvOcpS1enec / 评论池 tblQzIHcmGSPUAZm / 关键词表 tblyKCp5vc7y2S40。
 
 version: 1
 workflow: social-keyword-leadgen
 
 probes:
+  # ── preflight：设备/账号/通话/锁四件就绪（无外部数据，判账本指标）──
+  - key: pf_device_verified
+    stage: preflight
+    journey_cell: "stage:preflight"
+    probe:
+      type: metric
+      ref: "metrics.device_verified"
+    expect:
+      op: "=="
+      value: 1
+    severity: error
+    note: >
+      设备 serial 在线且身份对得上。harvest-cron.sh:121-133 做 adb 在线/唤醒，workflow-result.sh:161 写 preflight 工件。
+
+  - key: pf_account_verified
+    stage: preflight
+    journey_cell: "stage:preflight"
+    probe:
+      type: metric
+      ref: "metrics.account_verified"
+    expect:
+      op: "=="
+      value: 1
+    severity: error
+    note: >
+      手机上登录的抖音号 = 本 run 声明的 profile。现状 workflow-result.sh:161 写死 account_verified=0（采收链不读我页），
+      本探针会如实判红，直到任务 6b133a81 让预检真读账号标记（Notion 步骤「读账号标记(我页)」）。
+
+  - key: pf_call_idle
+    stage: preflight
+    journey_cell: "stage:preflight"
+    probe:
+      type: metric
+      ref: "metrics.call_state_idle"
+    expect:
+      op: "=="
+      value: 1
+    severity: error
+    note: >
+      手机不在通话中（通话中操作会误触）。workflow-result.sh:161 写 call_state_idle。
+
+  - key: pf_lock_acquired
+    stage: preflight
+    journey_cell: "stage:preflight"
+    probe:
+      type: metric
+      ref: "metrics.lock_acquired"
+    expect:
+      op: "=="
+      value: 1
+    severity: error
+    note: >
+      拿到设备锁（douyin-phone-adb lock-acquire，TTL 1800s）。现状 workflow-result.sh:161 写死 lock_acquired=0
+      （锁在 harvest-keyword.sh 按词拿），判红直到 6b133a81。
+
+  # ── discovery：候选视频落库（设计顺序下判定要从库里取待判视频）──
+  - key: disc_candidates_persisted
+    stage: discovery
+    journey_cell: "stage:discovery"
+    probe:
+      type: sql
+      target: pg_zenithjoy
+      query: |
+        SELECT count(*)
+          FROM zenithjoy.leadgen_videos
+         WHERE harvest_batch = '$RUN_TAG'
+           AND keyword = '$WORD'
+    expect:
+      op: ">="
+      ref: "metrics.candidates"
+    severity: error
+    note: >
+      发现交出的对象 = 本词候选视频清单，必须落 leadgen_videos（leadgen-db-lib.js:22-31 upsertVideo，带 keyword/harvest_batch），
+      否则判定无米下锅。batch2.sh:37 写 candidates=DV。现状视频在 delivery 才落库（batch2.sh:95-108），
+      本探针在 discovery 时点判红，直到执行顺序纠正（8bb3af55）。
+
+  # ── qualification：本批候选全部判完（设计顺序：判定在采集之前）──
+  - key: qual_none_pending
+    stage: qualification
+    journey_cell: "stage:qualification"
+    probe:
+      type: sql
+      target: pg_zenithjoy
+      query: |
+        SELECT count(*)
+          FROM zenithjoy.leadgen_videos
+         WHERE harvest_batch = '$RUN_TAG'
+           AND judgment_status = 'pending'
+    expect:
+      op: "<="
+      value: 0
+    severity: error
+    note: >
+      判定交出 = 每个候选视频 matched/rejected（CHECK 约束见 20260922_220000_leadgen_ssot_tables.sql:44）。
+      judge-video.js 经 leadgen-db-lib.js:54 回写 judgment_status；仍 pending = 没判完就往下走。
+
+  - key: qual_reason_present
+    stage: qualification
+    journey_cell: "stage:qualification"
+    probe:
+      type: sql
+      target: pg_zenithjoy
+      query: |
+        SELECT judgment_reason
+          FROM zenithjoy.leadgen_videos
+         WHERE harvest_batch = '$RUN_TAG'
+           AND judgment_status <> 'pending'
+    expect:
+      op: not_null_all
+    severity: error
+    note: >
+      判过的视频必须带理由（leadgen-db-lib.js:54 同时写 judgment_reason），无理由的判定不可审计。
+
+  # ── collection：只采判定合格的视频 ──
+  - key: coll_only_matched
+    stage: collection
+    journey_cell: "stage:collection"
+    probe:
+      type: sql
+      target: pg_zenithjoy
+      query: |
+        SELECT count(*)
+          FROM zenithjoy.leadgen_videos
+         WHERE harvest_batch = '$RUN_TAG'
+           AND judgment_status <> 'matched'
+           AND process_status = '评论已采'
+    expect:
+      op: "<="
+      value: 0
+    severity: error
+    note: >
+      设计顺序（决策 f18f56b8）：判定合格才采评论。未 matched 却已「评论已采」= 白采。
+      现状 upsertVideo 一律写 process_status 默认值「评论已采」（20260922_220000_leadgen_ssot_tables.sql:36，
+      leadgen-db-lib.js:26），本探针判红直到 8bb3af55 纠正顺序并按实际写 process_status。
+
   # ── delivery：落池读回（batch2-v4.sh:64-65 scp TSV → push-videos.js + push-raw-comments.js）──
   - key: videos_readback
     stage: delivery
@@ -45,7 +186,7 @@ probes:
     expect:
       op: ">="
       ref: "metrics.videos_processed"
-    severity: warn
+    severity: error
     note: >
       push-videos.js:11-12,56 经 leadgen-db-lib.js:25-26 upsertVideo 写 leadgen_videos.harvest_batch=$RUN_TAG
       （ON CONFLICT DO NOTHING，重复视频不计入）。对账基准 videos_processed 是 collection 阶段按词写的
@@ -68,7 +209,7 @@ probes:
     expect:
       op: ">="
       ref: "metrics.leads_written"
-    severity: warn
+    severity: error
     note: >
       评论只落飞书原始评论池不落 PG：push-raw-comments.js:8 只 require line-routes，不 require
       leadgen-db-lib（leadgen_comments 表在 v4 链无写入方）。push-raw-comments.js:46 写「运行批次」=$RUN_TAG；
@@ -88,7 +229,7 @@ probes:
          WHERE harvest_batch = '$RUN_TAG'
     expect:
       op: not_null_all
-    severity: warn
+    severity: error
     note: >
       leadgen_videos.line_key NOT NULL（apps/api/db/migrations/20260922_220000_leadgen_ssot_tables.sql:28），
       push-videos.js:10 由 routeOf() 解析业务线（line-routes.js:62）。飞书原始评论池没有「业务线」列
@@ -110,11 +251,10 @@ probes:
     expect:
       op: "<="
       value: 0
-    severity: warn
+    severity: error
     note: >
       本批评论仍停在「待分拣」的计数。sort-comments-lib.js:61/98/136 三处 putPool 把「处理状态」推到
-      「已分拣」并写「进入最终线索」布尔；分拣是异步 cron，本探针的评估时机是 sort-comments 跑完后
-      （评估过早必 warn，故首发 warn 不 error）。
+      「已分拣」并写「进入最终线索」布尔；本探针的评估时机是 sort-comments 跑完后（batch2.sh:116 落池后同步调起）。
 
   - key: effective_count
     stage: scoring
@@ -135,9 +275,70 @@ probes:
     expect:
       op: "=="
       value: 0
-    severity: warn
+    severity: error
     note: >
       关键词表「有效线索数」由 update-keyword-stats.js:79 PUT 回写；其值定义 = 评论池「进入最终线索」===true
       按「命中关键词」分组计数（keyword-stats-lib.js:88-107 tallyFromPool）。两边相减应为 0；
       非 0 = 回写跑在分拣之前或 PUT 失败（update-keyword-stats.js:80 UPD_FAIL 只打日志）。
       评论池/关键词表 id 见 line-routes.js:23,25。
+
+  # ── outreach：tick 结束时没有卡在「触达中」的单（触达不走账本，只能读线索表）──
+  - key: out_no_stuck_inflight
+    stage: outreach
+    journey_cell: "stage:outreach"
+    probe:
+      type: http
+      target: feishu_jinuo
+      url: "https://open.feishu.cn/open-apis/bitable/v1/apps/GNuwbzY0da8GP0sv6MGcOTu9ntd/tables/tblTLFj69CflUqSr/records"
+      filter:
+        状态: "触达中"
+      reduce: count
+    expect:
+      op: "<="
+      value: 0
+    severity: error
+    note: >
+      next-outreach.js:106-108 取单时预写「触达中」防重入，done 时回写 已触达/待触达/触达受阻（next-outreach.js:33-57）。
+      tick 收工后仍「触达中」= 单子悬空（进程被杀/回写失败），既不会再被选中也没有结果。线索表 id 见 line-routes.js:21。
+
+  # ── cleanup：关 App、放锁、回安全桌面（无外部数据，判账本指标）──
+  - key: cl_app_closed
+    stage: cleanup
+    journey_cell: "stage:cleanup"
+    probe:
+      type: metric
+      ref: "metrics.close_app_attempts"
+    expect:
+      op: ">="
+      value: 1
+    severity: error
+    note: >
+      收工必须关抖音（douyin-phone-adb close-app）。现状 workflow-result.sh:182 写死 close_app_attempts=0（采收链没调 close-app），
+      判红直到 6b133a81。
+
+  - key: cl_lock_released
+    stage: cleanup
+    journey_cell: "stage:cleanup"
+    probe:
+      type: metric
+      ref: "metrics.lock_released"
+    expect:
+      op: "=="
+      value: 1
+    severity: error
+    note: >
+      设备锁已释放，否则触达拿不到手机。workflow-result.sh:182 当前写死 1（锁实际由 harvest-keyword.sh trap 按词释放），
+      6b133a81 改为真读锁目录。
+
+  - key: cl_safe_desktop_visible
+    stage: cleanup
+    journey_cell: "stage:cleanup"
+    probe:
+      type: metric
+      ref: "metrics.safe_desktop_visible"
+    expect:
+      op: "=="
+      value: 1
+    severity: error
+    note: >
+      手机回到安全桌面（不停在私信/评论页，防误触）。workflow-result.sh:182 写死 0，判红直到 6b133a81。

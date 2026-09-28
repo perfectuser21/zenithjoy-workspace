@@ -12,6 +12,8 @@
 //   http → 飞书 Bitable：凭据 env FEISHU_APP_ID/FEISHU_APP_SECRET 优先，否则 CLAWDBOT_JSON（默认 ~/.openclaw/clawdbot.json）
 //          的 channels.feishu.accounts[routeOf(lineKey).account]（同 push-raw-comments.js:6-16）；page_size=500 分页拉全；
 //          filter 每列全等（文本字段经 txt() 归一，布尔直接比）；reduce count | field:<列>（求和）；minus 同形子查询取差。
+//   metric → observed = --metrics-json 指向的 stage 工件 .metrics[键]（决策 f18f56b8：preflight/cleanup 无外部数据可查）；
+//          缺 --metrics-json 或缺键 → 该条 error。
 // 单条失败 fail-open（该条带 error 继续其余）；整体超时把已得部分输出、未完成的标 error:"timeout"。
 // --deps 只给测试注入 {pool, fetch, feishuCreds, now}，生产不传。
 import { createRequire } from "node:module";
@@ -117,6 +119,14 @@ async function runHttp(probe, params, deps, getToken) {
   return main - (await readSource(probe.minus, params, headers, deps.fetch));
 }
 
+// metric 探针（决策 f18f56b8）：preflight/cleanup 没有外部数据可查，observed = 本 stage 工件 metrics[键]
+function readMetric(probe, params) {
+  const key = probe.ref.slice("metrics.".length);
+  const v = params.metrics?.[key];
+  if (v === undefined) throw new Error(`metrics 缺 ${key}（未传 --metrics-json 或工件无此键）`);
+  return v;
+}
+
 export async function runProbes({ doc, stage, params, deps = {}, timeoutMs = 60000 }) {
   const now = deps.now || (() => new Date().toISOString());
   const fetchFn = deps.fetch || globalThis.fetch;
@@ -126,7 +136,9 @@ export async function runProbes({ doc, stage, params, deps = {}, timeoutMs = 600
   const results = specs.map((p) => ({ key: p.key, error: "timeout" }));
   const jobs = specs.map(async (p, i) => {
     try {
-      const observed = p.probe.type === "sql" ? await runSql(p.probe, params, d) : await runHttp(p.probe, params, d, getToken);
+      const observed = p.probe.type === "sql" ? await runSql(p.probe, params, d)
+        : p.probe.type === "metric" ? readMetric(p.probe, params)
+        : await runHttp(p.probe, params, d, getToken);
       results[i] = { key: p.key, observed, probed_at: now() };
     } catch (e) {
       results[i] = { key: p.key, probed_at: now(), error: String((e && e.message) || e).slice(0, 300) };
@@ -169,6 +181,10 @@ async function main() {
     if (errors.length) { warn(`探针文件校验失败 ${yamlPath}: ${errors.join("; ")}`); return emit({ stage, probes: [] }); }
     const deps = a.deps ? (await import(a.deps)).default : {};
     const params = { runTag: a["run-tag"] || "", lineKey: resolveLineKey(a["line-key"]), word: a.word || "" };
+    if (a["metrics-json"]) {
+      const art = JSON.parse(readFileSync(a["metrics-json"], "utf8"));
+      params.metrics = art.metrics ?? art;
+    }
     const timeoutMs = Number(a["timeout-ms"]) > 0 ? Number(a["timeout-ms"]) : 60000;
     const out = await runProbes({ doc, stage, params, deps, timeoutMs });
     for (const p of out.probes) if (p.error) warn(`${p.key}: ${p.error}`);

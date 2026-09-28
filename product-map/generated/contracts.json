@@ -1,0 +1,31 @@
+{
+  "object_types": "06f4d4bda5a98920fad6eef0c73a908803c529e87e51b28fd624f610078bcd2c",
+  "capabilities": {
+    "benchmark_link_acquisition": {
+      "sha256": "c72df237b5f526df31899fc5e9bbc01427f41fe1ba5f0f2d5c953398462b6b0b",
+      "activities": {
+        "preflight": "4bf43bb627441fafe5d90b6bca1f8dfb65c4b12dc31692e3a161e61d23596913",
+        "discovery": "13e4fb8f5fb598f090b9d6306854b5d338a433593f150cbb344e3ddc6096c924",
+        "qualification": "2a423e1e08be35ea941780786b6c05570c7ec513069b38f53898de60960a4115",
+        "collection": "6aec545fbd93b2004e70216952989848a49d6094d186384e863131477d79a589",
+        "scoring": "16c87776366e31fd1c1e0f47de1d050b337736f8858c983b8ed9140d02f190ab",
+        "delivery": "004a5b693e682bf483d31d5a5baf2e358387aabd56c49838539c2ef06b84e244",
+        "outreach": "4c21a4a4ddf73b02a559141677b5d855954cebe5ba820ab05688ea62abdafbc6",
+        "cleanup": "723632a99d3a9839e67f8da8f73e77910cb595fc32414f2ead49bbb2806d898b"
+      }
+    },
+    "keyword_acquisition": {
+      "sha256": "212be87155aeadc1b419372b2604c2477e65714da4227d45c14df06131f10ae4",
+      "activities": {
+        "preflight": "4bf43bb627441fafe5d90b6bca1f8dfb65c4b12dc31692e3a161e61d23596913",
+        "discovery": "c0a131b9b8fe328ce4aa2473ae014d55e226197d8f51bebbc648f743bc9e7577",
+        "qualification": "2a423e1e08be35ea941780786b6c05570c7ec513069b38f53898de60960a4115",
+        "collection": "6aec545fbd93b2004e70216952989848a49d6094d186384e863131477d79a589",
+        "scoring": "16c87776366e31fd1c1e0f47de1d050b337736f8858c983b8ed9140d02f190ab",
+        "delivery": "004a5b693e682bf483d31d5a5baf2e358387aabd56c49838539c2ef06b84e244",
+        "outreach": "4c21a4a4ddf73b02a559141677b5d855954cebe5ba820ab05688ea62abdafbc6",
+        "cleanup": "723632a99d3a9839e67f8da8f73e77910cb595fc32414f2ead49bbb2806d898b"
+      }
+    }
+  }
+}

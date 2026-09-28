@@ -23,6 +23,17 @@ function fixture() {
       cpSync(resolve(repoRoot, path), resolve(root, path));
     }
   }
+  // 主干活动契约（决策 3240824c）引用的探针文件与账本脚本，check 会一并校验
+  const contracts = JSON.parse(readFileSync(resolve(root, 'product-map/generated/contracts.json'), 'utf8'));
+  const deps = new Set();
+  for (const cap of Object.keys(contracts.capabilities)) {
+    const text = readFileSync(resolve(root, `product-map/contracts/${cap}.yaml`), 'utf8');
+    for (const m of text.matchAll(/^(?:checks|ledger): (\S+)$/gm)) deps.add(m[1]);
+  }
+  for (const path of deps) {
+    mkdirSync(dirname(resolve(root, path)), { recursive: true });
+    cpSync(resolve(repoRoot, path), resolve(root, path));
+  }
   return root;
 }
 

@@ -122,8 +122,10 @@ test("runProbes: 整体超时→已得部分照出，未完成条目 error=timeo
 });
 
 test("runProbes: stage 无探针 → probes 空数组", async () => {
+  // 真 YAML 8 个 stage 都有探针（决策 f18f56b8），这里用只含 delivery 的夹具验空分支
   const { doc } = loadChecks(YAML, SCHEMA);
-  const r = await runProbes({ doc, stage: "discovery", params: PARAMS, deps: deps(fakePool(() => { throw new Error("x"); }), fakeFetch({})) });
+  const only = { ...doc, probes: doc.probes.filter((p) => p.stage === "delivery") };
+  const r = await runProbes({ doc: only, stage: "discovery", params: PARAMS, deps: deps(fakePool(() => { throw new Error("x"); }), fakeFetch({})) });
   assert.deepEqual(r, { stage: "discovery", probes: [] });
 });
 
@@ -166,4 +168,27 @@ test("CLI: 飞书凭据缺失（无 env、CLAWDBOT_JSON 指向不存在）→ ht
   const by = Object.fromEntries(JSON.parse(r.out.trim()).probes.map((p) => [p.key, p]));
   assert.equal(by.videos_readback.observed, 7);
   assert.match(by.comments_readback.error, /clawdbot|ENOENT|凭据/);
+});
+
+// metric 探针（决策 f18f56b8）：preflight/cleanup 只有账本指标可判，observed 取 stage 工件的 metrics[键]
+test("runProbes metric: observed 取 params.metrics[键]；缺键 → 该条 error，不影响其余", async () => {
+  const doc = { probes: [
+    { key: "pf_account_verified", stage: "preflight", probe: { type: "metric", ref: "metrics.account_verified" }, expect: { op: "==", value: 1 } },
+    { key: "pf_lock_acquired", stage: "preflight", probe: { type: "metric", ref: "metrics.lock_acquired" }, expect: { op: "==", value: 1 } },
+  ] };
+  const r = await runProbes({ doc, stage: "preflight", params: { ...PARAMS, metrics: { account_verified: 0 } }, deps: deps(fakePool(() => ({ rows: [] })), fakeFetch({})) });
+  const by = Object.fromEntries(r.probes.map((p) => [p.key, p]));
+  assert.deepEqual(by.pf_account_verified, { key: "pf_account_verified", observed: 0, probed_at: now() });
+  assert.match(by.pf_lock_acquired.error, /lock_acquired/);
+});
+
+test("CLI: --metrics-json 接 stage 工件文件（取 .metrics）喂 metric 探针", () => {
+  const dir = mkdtempSync(join(tmpdir(), "vs-metric-"));
+  const art = join(dir, "a.json");
+  writeFileSync(art, JSON.stringify({ stage_id: "cleanup", metrics: { close_app_attempts: 1, lock_released: 1, safe_desktop_visible: 0 } }));
+  const r = spawnSync(process.execPath, [VERIFY, "--stage", "cleanup", "--run-tag", "t", "--line-key", "jinuo", "--metrics-json", art], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  const by = Object.fromEntries(JSON.parse(r.stdout.trim().split("\n").pop()).probes.map((p) => [p.key, p]));
+  assert.equal(by.cl_lock_released.observed, 1);
+  assert.equal(by.cl_safe_desktop_visible.observed, 0);
 });

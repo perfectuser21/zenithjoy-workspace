@@ -1,0 +1,436 @@
+# 关键词获客 · 主干活动契约（决策 3240824c 步骤契约 / f18f56b8 设计顺序+每步拦截+key 规范）
+#
+# 契约 = 接口；脚本 / 技能 / n8n 节点 = 实现。组装器（scripts/product-map/contracts-lib.mjs）按 order 串活动，
+# 每个活动的输入类型必须由 trigger_inputs 或前序活动交出；账本/探针里出现的 stage 必须在此有契约。
+# 设计顺序：预检 → 发现 → 判定 → 采集 → 评分 → 配送 → 触达 → 归位（判定合格才采集）。
+# 后置条件探针全部 severity=error，定义在 checks（social-keyword-leadgen.yaml）。
+# 步骤 key = 能力.活动.步骤，snake_case 不带序号，顺序靠 order；中文名在 name。
+# 步骤清单底稿 = Notion「Workflow 步骤表」3d9c40c2（1-preflight … 8-cleanup 主线 27 步），按设计语义重排补齐。
+
+version: 1
+capability: keyword_acquisition
+name: 关键词获客
+workflow: social-keyword-leadgen
+checks: services/phone-adb-controller/checks/social-keyword-leadgen.yaml
+ledger: services/phone-adb-controller/workflow-result.sh
+trigger_inputs: [Keyword, Account, Device]
+
+known_gaps:
+  - gap: "执行顺序与契约不符：现状视频判定在落池后才跑（batch2.sh:156/167，PR #1964 接线挂末尾），判定不挡采集"
+    task: 8bb3af55
+  - gap: "运行时只对 delivery/scoring 读回探针；preflight/cleanup 指标写死、qualification/scoring 账本硬写 not_in_profile、outreach 不进账本"
+    task: 6b133a81
+
+activities:
+  # ───────────────────────────── 1 预检 ─────────────────────────────
+  - key: preflight
+    name: 预检
+    order: 1
+    version: 1.0.0
+    compatibility: backward
+    owner: { department: line02 智能获客, agent: 获客采收员 }
+    inputs:
+      - { type: Device, cardinality: one, fields: [serial, host] }
+      - { type: Account, cardinality: one, fields: [platform, profile, sender_id] }
+    outputs:
+      - { type: Device, cardinality: one, effect: update, fields: [online, call_state, lock_holder] }
+      - { type: Account, cardinality: one, effect: update, fields: [logged_in] }
+      - { type: Run, cardinality: one, effect: create, fields: [run_tag, profile, serial] }
+    preconditions:
+      - "不在触达时窗 8-22 点（采收给触达让路，harvest-cron.sh:139）"
+      - "当日 KPI 未达标（kpi-gate.js 经 ssh mmv，harvest-cron.sh:145-149）"
+    postconditions:
+      - { probe: pf_device_verified, asserts: "设备在线且 serial 一致" }
+      - { probe: pf_account_verified, asserts: "手机登录号 = 本 run 声明账号" }
+      - { probe: pf_call_idle, asserts: "不在通话中" }
+      - { probe: pf_lock_acquired, asserts: "本 run 持有设备锁" }
+    execution: { location: xian-m4, via: "crontab → harvest-cron.sh <profile> <serial>（xian-m1 同形）" }
+    budget: { max_duration_s: 300, heartbeat_s: 60 }
+    resources:
+      locks: ["device:<serial>"]
+      limits: []
+    idempotency: { dedupe_key: "Run.run_tag", on_duplicate: reject }
+    failure:
+      empty_ok: []
+      retryable: ["lock_busy 设备锁被占"]
+      needs_human:
+        cases: ["device_offline 设备离线", "account_mismatch 手机登录号不符"]
+        alert: { channel: bark, object: "harvest-cron.sh:121-125 离线升级分身 → Bark" }
+      fatal: ["run_tag 重复"]
+    side_effects:
+      - { kind: internal_write, target: "设备锁目录", description: "持锁期间其它任务（触达/前台派单）不得占用手机" }
+    invokers: [code]
+    steps:
+      - { key: acquire_device_lock, name: 拿设备锁, order: 1, reads: [Device.serial], writes: [Device.lock_holder],
+          check: "lock-acquire rc=0 且锁文件 owner=本 run（TTL 1800s）", implementation: { status: implemented, ref: "douyin-phone-adb:2131" }, uses_llm: false }
+      - { key: refresh_lock_heartbeat, name: 锁心跳续期, order: 2, reads: [Device.lock_holder], writes: [Device.lock_holder],
+          check: "lock-refresh 后锁文件 mtime 更新", implementation: { status: implemented, ref: "douyin-phone-adb:2177-2188" }, uses_llm: false }
+      - { key: verify_device_identity, name: 验设备身份, order: 3, reads: [Device.serial], writes: [Device.online],
+          check: "adb get-state == device 且 serial 与声明一致", implementation: { status: implemented, ref: "harvest-cron.sh:121-133" }, uses_llm: false }
+      - { key: verify_call_idle, name: 验通话空闲, order: 4, reads: [Device.serial], writes: [Device.call_state],
+          check: "telephony call_state == IDLE", implementation: { status: implemented, ref: "douyin-phone-adb:2116 preflight" }, uses_llm: false }
+      - { key: read_account_mark, name: 读账号标记(我页), order: 5, reads: [Account.sender_id], writes: [Account.logged_in],
+          check: "我页抖音号 == Account.sender_id", implementation: { status: missing, ref: "采收链未调，6b133a81" }, uses_llm: false }
+      - { key: open_run_ledger, name: 开账本, order: 6, reads: [Account.profile, Device.serial], writes: [Run.run_tag, Run.profile, Run.serial],
+          check: "ledger init 成功且 preflight 工件通过闭集键校验", implementation: { status: implemented, ref: "workflow-result.sh:150-161" }, uses_llm: false }
+    known_gaps:
+      - { gap: "preflight 指标写死 account_verified=0/lock_acquired=0（workflow-result.sh:161），不是真实判定", task: 6b133a81 }
+
+  # ───────────────────────────── 2 发现 ─────────────────────────────
+  - key: discovery
+    name: 发现
+    order: 2
+    version: 1.0.0
+    compatibility: backward
+    owner: { department: line02 智能获客, agent: 获客采收员 }
+    inputs:
+      - { type: Keyword, cardinality: many, fields: [line_key, word] }
+      - { type: Device, cardinality: one, fields: [serial, lock_holder] }
+      - { type: Run, cardinality: one, fields: [run_tag] }
+    outputs:
+      - { type: Video, cardinality: many, effect: create, fields: [line_key, video_id, video_url, title, keyword, comment_count, harvest_batch] }
+    preconditions:
+      - "设备锁由本 run 持有"
+      - "关键词未在本 run 处理过（ledger skip_words，ledger.mjs:84-94）"
+      - "词单哈希与 init 一致（batch2.sh:49-56）"
+    postconditions:
+      - { probe: disc_candidates_persisted, asserts: "本词候选视频全部落 leadgen_videos" }
+    execution: { location: phone, via: "xian-m4 batch2.sh:78 → harvest-keyword.sh:35-43 → douyin-phone-adb" }
+    budget: { max_duration_s: 600, heartbeat_s: 60 }
+    resources:
+      locks: ["device:<serial>"]
+      limits: [{ name: max_videos_per_word, value: 4 }]
+    idempotency: { dedupe_key: "Video.line_key+Video.video_id", on_duplicate: skip }
+    failure:
+      empty_ok: ["no_cards 本词无视频卡片"]
+      retryable: ["lock_busy", "WRONG_FOREGROUND", "NO_ROOT"]
+      needs_human:
+        cases: ["TARGET_ABSENT 连续出现，疑抖音改版"]
+        alert: { channel: bark, object: "escort 升级（harvest-cron.sh 陪跑员）→ Bark" }
+      fatal: ["hash_mismatch 词单在 run 中被改"]
+    side_effects:
+      - { kind: internal_write, target: "pg zenithjoy.leadgen_videos", description: "候选视频落库（judgment_status=pending）" }
+    invokers: [code, agent]
+    model:
+      - { provider: openrouter, model: bytedance/ui-tars-1.5-7b, purpose: "视频 tab / 筛选按钮视觉定位兜底（douyin-phone-adb:905-909）" }
+    steps:
+      - { key: open_search, name: 打开搜索, order: 1, reads: [Keyword.word, Device.lock_holder], writes: [],
+          check: "搜索框回读 == Keyword.word", implementation: { status: implemented, ref: "harvest-keyword.sh:35 open-search" }, uses_llm: false }
+      - { key: switch_video_tab, name: 切视频tab, order: 2, reads: [Device.lock_holder], writes: [],
+          check: "视频 tab 节点 selected=true", implementation: { status: implemented, ref: "douyin-phone-adb:905" }, uses_llm: true }
+      - { key: open_filter_panel, name: 点筛选按钮开面板, order: 3, reads: [Device.lock_holder], writes: [],
+          check: "筛选面板节点可见", implementation: { status: implemented, ref: "douyin-phone-adb:909" }, uses_llm: true }
+      - { key: choose_filters, name: 选筛选项, order: 4, reads: [Keyword.word], writes: [],
+          check: "面板选中项 == 输入参数（时间窗 six_months / 排序 most_liked）", implementation: { status: implemented, ref: "harvest-keyword.sh:38 search-time-layer" }, uses_llm: false }
+      - { key: apply_filters, name: 点查看结果, order: 5, reads: [Device.lock_holder], writes: [],
+          check: "结果页刷新且筛选标签可见", implementation: { status: implemented, ref: "harvest-keyword.sh:38" }, uses_llm: false }
+      - { key: extract_video_cards, name: 抽视频卡片, order: 6, reads: [Device.lock_holder], writes: [Video.title, Video.comment_count],
+          check: "卡片数 ≥1，否则判 empty_ok（no_cards）", implementation: { status: implemented, ref: "harvest-keyword.sh:40 search-video-cards" }, uses_llm: false }
+      - { key: resolve_video_links, name: 取视频链接, order: 7, reads: [Video.title], writes: [Video.video_id, Video.video_url],
+          check: "每张卡取得 video_id（剪贴板守卫：回读链接含 video_id）", implementation: { status: implemented, ref: "harvest-keyword.sh:45-70" }, uses_llm: false }
+      - { key: persist_candidates, name: 写发现工件+落库, order: 8, reads: [Run.run_tag, Video.video_id, Keyword.line_key], writes: [Video.harvest_batch, Video.keyword, Video.line_key],
+          check: "leadgen_videos 本词行数 ≥ 工件 candidates", implementation: { status: missing, ref: "现状在 delivery 才落库 batch2.sh:95-108，8bb3af55" }, uses_llm: false }
+    known_gaps:
+      - { gap: "candidates 只数有评论的视频（harvest-keyword.sh:246-254），screens_scanned 恒 0", task: 6b133a81 }
+
+  # ───────────────────────────── 3 判定 ─────────────────────────────
+  - key: qualification
+    name: 判定
+    order: 3
+    version: 1.0.0
+    compatibility: backward
+    owner: { department: line02 智能获客, agent: 视频判定员 }
+    inputs:
+      - { type: Video, cardinality: many, fields: [line_key, video_id, video_url, title, comment_count, judgment_status] }
+      - { type: Device, cardinality: one, fields: [serial, lock_holder] }
+    outputs:
+      - { type: Video, cardinality: many, effect: update, fields: [judgment_status, judgment_reason, transcript] }
+    preconditions:
+      - "视频已落库且 judgment_status=pending"
+    postconditions:
+      - { probe: qual_none_pending, asserts: "本批候选全部判完（matched/rejected）" }
+      - { probe: qual_reason_present, asserts: "每个判定都带理由" }
+    execution: { location: mmv, via: "手机录屏 → scp 音频到 mmv → judge-video.js" }
+    budget: { max_duration_s: 1800, heartbeat_s: 60 }
+    resources:
+      locks: ["device:<serial>"]
+      limits: [{ name: record_budget_s_per_video, value: "10-105（(时长+2)/3+5）" }]
+    idempotency: { dedupe_key: "Video.line_key+Video.video_id", on_duplicate: skip }
+    failure:
+      empty_ok: ["本批无 pending 视频"]
+      retryable: ["转写失败留 pending 下轮重判（judge-video.js:54-56）", "录音死寂（harvest-keyword.sh 电平打点）"]
+      needs_human:
+        cases: ["整批转写/判定失败（DashScope/OpenRouter 鉴权或欠费）"]
+        alert: { channel: bark, object: "judge-video.js 整批失败 → Bark" }
+      fatal: []
+    side_effects:
+      - { kind: internal_write, target: "pg zenithjoy.leadgen_videos", description: "写 judgment_status/judgment_reason/transcript" }
+    invokers: [code, agent]
+    model:
+      - { provider: dashscope, model: qwen-audio-3.0-asr-flash, purpose: "视频口播转写（transcribe-qwen-audio.js:19）" }
+      - { provider: openrouter, model: typesafe/jev-1.13, purpose: "文案×目标人群主判（judge-jev.js:16）" }
+      - { provider: openrouter, model: google/gemini-2.5-flash, purpose: "低置信（<0.6）复核（judge-jev.js:17-18）" }
+    steps:
+      - { key: cheap_gate, name: 便宜闸, order: 1, reads: [Video.comment_count], writes: [Video.judgment_status],
+          check: "comment_count==0 或图文 → rejected，不录不转写", implementation: { status: implemented, ref: "judge-video-lib.js:8-10" }, uses_llm: false }
+      - { key: unmute_before_record, name: 录前取消静音, order: 2, reads: [Video.video_url, Device.lock_holder], writes: [],
+          check: "媒体音量回读 >0", implementation: { status: implemented, ref: "harvest-keyword.sh（PR #1964 录制集成）" }, uses_llm: false }
+      - { key: record_triple_speed, name: 3倍速录屏, order: 3, reads: [Video.video_url], writes: [],
+          check: "录屏文件存在且时长 ≥ 预算的 80%", implementation: { status: implemented, ref: "douyin-phone-adb:1638 set-playback-speed / record-start" }, uses_llm: false }
+      - { key: extract_audio, name: 提取16k音频, order: 4, reads: [Video.video_id], writes: [],
+          check: "ffprobe 有 16kHz 音频流且电平非死寂", implementation: { status: implemented, ref: "douyin-phone-adb record-extract-audio" }, uses_llm: false }
+      - { key: transcribe, name: 通义ASR转写, order: 5, reads: [Video.video_id], writes: [Video.transcript],
+          check: "transcript 非空；空/静音 → rejected", implementation: { status: implemented, ref: "transcribe-qwen-audio.js" }, uses_llm: true }
+      - { key: judge_content, name: 意向判定, order: 6, reads: [Video.transcript, Video.title], writes: [Video.judgment_status, Video.judgment_reason],
+          check: "judgment_status ∈ {matched, rejected} 且 judgment_reason 非空", implementation: { status: implemented, ref: "judge-jev.js / leadgen-db-lib.js:54" }, uses_llm: true }
+    known_gaps:
+      - { gap: "现状在落池后才判（batch2.sh:156/167），且账本硬写 qualification blocked not_in_profile（workflow-result.sh:162）", task: 8bb3af55 }
+
+  # ───────────────────────────── 4 采集 ─────────────────────────────
+  - key: collection
+    name: 采集
+    order: 4
+    version: 1.0.0
+    compatibility: backward
+    owner: { department: line02 智能获客, agent: 获客采收员 }
+    inputs:
+      - { type: Video, cardinality: many, fields: [line_key, video_id, video_url, judgment_status] }
+      - { type: Device, cardinality: one, fields: [serial, lock_holder] }
+      - { type: Account, cardinality: one, fields: [sender_id, nickname] }
+    outputs:
+      - { type: Comment, cardinality: many, effect: create, fields: [line_key, dedup_key, nickname, douyin_id, profile_url, body, video_id, harvest_batch] }
+      - { type: Video, cardinality: many, effect: update, fields: [process_status] }
+    preconditions:
+      - "只处理 judgment_status=matched 的视频"
+      - "设备锁由本 run 持有（每个视频 lock-refresh 一次，harvest-keyword.sh:53）"
+    postconditions:
+      - { probe: coll_only_matched, asserts: "未判合格的视频不被采评论" }
+    execution: { location: phone, via: "xian-m4 harvest-keyword.sh:45-260 → douyin-phone-adb" }
+    budget: { max_duration_s: 7200, heartbeat_s: 300 }
+    resources:
+      locks: ["device:<serial>"]
+      limits: [{ name: max_comments_big_video, value: 50 }, { name: stop_after_empty_screens, value: 2 }]
+    idempotency: { dedupe_key: "Comment.line_key+Comment.dedup_key", on_duplicate: skip }
+    failure:
+      empty_ok: ["视频无新评论"]
+      retryable: ["评论区打不开重试 1 次（harvest-keyword.sh:115-125）", "commenter-identity 重试 3 次（harvest-keyword.sh:197-214）"]
+      needs_human:
+        cases: ["评论数>0 却整词 0 评论，疑改版"]
+        alert: { channel: bark, object: "escort 升级 → Bark" }
+      fatal: []
+    side_effects:
+      - { kind: internal_write, target: "执行机 ~/night-$TAG.tsv", description: "LEAD/VIDEO/AUDIO 行" }
+    invokers: [code, agent]
+    model:
+      - { provider: openrouter, model: bytedance/ui-tars-1.5-7b, purpose: "评论图标兜底定位（douyin-phone-adb:2076）" }
+    steps:
+      - { key: open_comment_section, name: 开评论区, order: 1, reads: [Video.video_url, Video.judgment_status], writes: [],
+          check: "评论区面板节点可见", implementation: { status: implemented, ref: "harvest-keyword.sh:115-125" }, uses_llm: true }
+      - { key: collect_comments, name: 采集评论, order: 2, reads: [Video.video_id, Account.nickname], writes: [Comment.body, Comment.nickname, Comment.video_id, Comment.dedup_key, Comment.harvest_batch, Comment.line_key],
+          check: "逐屏整行去重，连续 2 屏无新增即停；过滤作者本人与自有账号", implementation: { status: implemented, ref: "harvest-keyword.sh:154-240" }, uses_llm: false }
+      - { key: verify_commenter_identity, name: 评论人身份验证, order: 3, reads: [Comment.nickname], writes: [Comment.douyin_id],
+          check: "主页强校验：抖音号合法 + 账号三态 + 非自有账号", implementation: { status: implemented, ref: "harvest-keyword.sh:191-216" }, uses_llm: false }
+      - { key: resolve_profile_link, name: 客户主页直链, order: 4, reads: [Comment.douyin_id], writes: [Comment.profile_url],
+          check: "分享名片 → sec_uid，剪贴板守卫回读", implementation: { status: implemented, ref: "harvest-keyword.sh（PR #1952 逐屏处理）" }, uses_llm: false }
+      - { key: mark_video_collected, name: 标记视频已采, order: 5, reads: [Video.video_id], writes: [Video.process_status],
+          check: "process_status=评论已采 只写给 matched 视频", implementation: { status: missing, ref: "现状 upsertVideo 一律写默认值（leadgen-db-lib.js:26），8bb3af55" }, uses_llm: false }
+
+  # ───────────────────────────── 5 评分 ─────────────────────────────
+  - key: scoring
+    name: 评分
+    order: 5
+    version: 1.0.0
+    compatibility: backward
+    owner: { department: line02 智能获客, agent: 评论分拣员 }
+    inputs:
+      - { type: Comment, cardinality: many, fields: [dedup_key, body, nickname, douyin_id, profile_url, process_status] }
+      - { type: Video, cardinality: many, fields: [title, transcript] }
+    outputs:
+      - { type: Comment, cardinality: many, effect: update, fields: [process_status, relevance, intent_grade, promoted] }
+      - { type: Lead, cardinality: many, effect: upsert, fields: [line_key, douyin_id, nickname, profile_url, intent_grade, repeat_hits, status] }
+    preconditions:
+      - "评论 process_status=待分拣"
+    postconditions:
+      - { probe: pool_advanced, asserts: "本批评论全部分拣完" }
+      - { probe: effective_count, asserts: "关键词有效线索数与池内合格数一致" }
+    execution: { location: mmv, via: "sort-comments.js → judge-comment.js" }
+    budget: { max_duration_s: 1800, heartbeat_s: 120 }
+    resources:
+      locks: []
+      limits: []
+    idempotency: { dedupe_key: "Lead.line_key+Lead.douyin_id", on_duplicate: merge }
+    failure:
+      empty_ok: ["本批无待分拣评论"]
+      retryable: ["判定异常/搬运失败留待分拣，下轮重试（sort-comments.js:72-77,94-97）"]
+      needs_human:
+        cases: ["整批判定失败（模型鉴权/额度）"]
+        alert: { channel: bark, object: "sort-comments 整批失败 → Bark" }
+      fatal: []
+    side_effects:
+      - { kind: internal_write, target: "飞书评论池 / 线索表", description: "写分级；A/B 级新建线索或重复命中 +1" }
+    invokers: [code, agent]
+    model:
+      - { provider: openrouter, model: typesafe/jev-1.13, purpose: "评论 A/B/C/不相关分级（judge-comment.js:16）" }
+      - { provider: openrouter, model: google/gemini-2.5-flash, purpose: "复核（judge-comment.js:17）" }
+    steps:
+      - { key: scan_pending, name: 扫池取待分拣, order: 1, reads: [Comment.process_status, Comment.dedup_key], writes: [],
+          check: "取到的行 process_status 全为 待分拣", implementation: { status: implemented, ref: "sort-comments.js:49-59" }, uses_llm: false }
+      - { key: judge_grade, name: 模型三合一判级, order: 2, reads: [Comment.body, Video.transcript, Video.title], writes: [Comment.relevance, Comment.intent_grade],
+          check: "intent_grade ∈ {A, B, C, 不相关}；复核解析失败落 C", implementation: { status: implemented, ref: "judge-comment.js" }, uses_llm: true }
+      - { key: upsert_lead, name: 合格行进线索表, order: 3, reads: [Comment.douyin_id, Comment.nickname, Comment.profile_url, Comment.intent_grade], writes: [Lead.douyin_id, Lead.nickname, Lead.profile_url, Lead.intent_grade, Lead.repeat_hits, Lead.status, Lead.line_key],
+          check: "A/B 级：新建（状态=待触达）或已有行 repeat_hits+1，按抖音号去重", implementation: { status: implemented, ref: "sort-comments-lib.js:55-80" }, uses_llm: false }
+      - { key: advance_pool, name: 推进池状态, order: 4, reads: [Comment.dedup_key], writes: [Comment.process_status, Comment.promoted],
+          check: "线索落地之后才推进 已分拣（永远最后一步）", implementation: { status: implemented, ref: "sort-comments-lib.js:81-82" }, uses_llm: false }
+    known_gaps:
+      - { gap: "现状评分在落池之后对飞书评论池做（batch2.sh:116），设计为对采集产物做、配送一次交付", task: 8bb3af55 }
+
+  # ───────────────────────────── 6 配送 ─────────────────────────────
+  - key: delivery
+    name: 配送
+    order: 6
+    version: 1.0.0
+    compatibility: backward
+    owner: { department: line02 智能获客, agent: 获客采收员 }
+    inputs:
+      - { type: Video, cardinality: many, fields: [line_key, video_id, harvest_batch] }
+      - { type: Comment, cardinality: many, fields: [line_key, dedup_key, harvest_batch] }
+      - { type: Lead, cardinality: many, fields: [douyin_id, status] }
+      - { type: Run, cardinality: one, fields: [run_tag] }
+    outputs:
+      - { type: Video, cardinality: many, effect: update, fields: [feishu_record_id] }
+      - { type: Comment, cardinality: many, effect: upsert, fields: [line_key, dedup_key, harvest_batch] }
+    preconditions:
+      - "批次 TSV 已 scp 到 mmv"
+      - "业务线可由 profile 路由（line-routes.js routeOf）"
+    postconditions:
+      - { probe: videos_readback, asserts: "本批视频全部读回" }
+      - { probe: comments_readback, asserts: "本批评论全部落池读回" }
+      - { probe: line_key_not_null, asserts: "本批视频业务线全非空" }
+    execution: { location: mmv, via: "batch2.sh:95-108 → push-videos.js + push-raw-comments.js" }
+    budget: { max_duration_s: 600, heartbeat_s: 60 }
+    resources:
+      locks: []
+      limits: []
+    idempotency: { dedupe_key: "Comment.line_key+Comment.dedup_key", on_duplicate: skip }
+    failure:
+      empty_ok: ["本批 0 视频 0 评论"]
+      retryable: ["scp/ssh 失败"]
+      needs_human:
+        cases: ["业务线路由认不出（line-routes.js:73 抛错）"]
+        alert: { channel: bark, object: "delivery failed 回执 → Bark" }
+      fatal: []
+    side_effects:
+      - { kind: internal_write, target: "飞书视频池/原始评论池 + pg leadgen_videos", description: "客户可见的池表" }
+    invokers: [code]
+    steps:
+      - { key: push_videos, name: 视频落池, order: 1, reads: [Video.video_id, Video.harvest_batch], writes: [Video.feishu_record_id],
+          check: "PG + 飞书视频池本批行数 ≥ videos_processed", implementation: { status: implemented, ref: "push-videos.js:50-56" }, uses_llm: false }
+      - { key: push_raw_comments, name: 评论落池, order: 2, reads: [Comment.dedup_key, Run.run_tag], writes: [Comment.harvest_batch, Comment.dedup_key, Comment.line_key],
+          check: "评论池「运行批次」计数 ≥ leads_written", implementation: { status: implemented, ref: "push-raw-comments.js:43-57" }, uses_llm: false }
+      - { key: readback_line_key, name: 业务线读回, order: 3, reads: [Video.line_key], writes: [],
+          check: "本批 leadgen_videos.line_key 全非空", implementation: { status: implemented, ref: "verify-step.mjs line_key_not_null" }, uses_llm: false }
+    known_gaps:
+      - { gap: "readback_verified/duplicates_skipped 工件指标写死 0（batch2.sh:105）", task: 6b133a81 }
+
+  # ───────────────────────────── 7 触达 ─────────────────────────────
+  - key: outreach
+    name: 触达
+    order: 7
+    version: 1.0.0
+    compatibility: backward
+    owner: { department: line02 智能获客, agent: 私信触达员 }
+    inputs:
+      - { type: Lead, cardinality: many, fields: [douyin_id, profile_url, intent_grade, repeat_hits, status] }
+      - { type: Account, cardinality: one, fields: [profile, sender_id, dm_paused, daily_cap] }
+      - { type: Device, cardinality: one, fields: [serial, lock_holder] }
+    outputs:
+      - { type: OutreachOrder, cardinality: one, effect: create, fields: [lead_record_id, douyin_id, sender_id, script_id, message, result] }
+      - { type: Lead, cardinality: one, effect: update, fields: [status, send_status, script_id, sender_id, reached_at] }
+    preconditions:
+      - "账号未熔断（无 state/dm-paused-<profile>.flag）"
+      - "当日真实发送数 < daily_cap（config/dm-rate-ramp.json）"
+      - "线索有 https 主页链接与合法抖音号（next-outreach-lib.js:24-29）"
+      - "话术库有可用话术"
+    postconditions:
+      - { probe: out_no_stuck_inflight, asserts: "tick 收工后无悬空「触达中」单" }
+    execution: { location: xian-m4, via: "crontab 每 30 分 outreach-tick.sh → ssh mmv next-outreach.js 取单 → douyin-phone-adb" }
+    budget: { max_duration_s: 1500, heartbeat_s: 60 }
+    resources:
+      locks: ["device:<serial>", "outreach-tick mkdir 锁（35 分钟尸锁）"]
+      limits: [{ name: daily_cap_ceiling, value: 60 }, { name: max_attempts_per_order, value: 10 }]
+    idempotency: { dedupe_key: "OutreachOrder.lead_record_id", on_duplicate: reject }
+    failure:
+      empty_ok: ["NO_PENDING 无待触达单", "restricted 对方仅互关（不计成功）"]
+      retryable: ["lock_busy 设备被采收占用 → 回队列", "rate_limited 当天停发", "requeue_transient 两轮后转受阻"]
+      needs_human:
+        cases: ["account_mismatch 登错号（一次即熔断）", "other 连续 2 次未识别失败 → 熔断", "TARGET_ABSENT", "NO_SCRIPT 话术缺失"]
+        alert: { channel: bark, object: "熔断即 Bark（现状无告警，15c9a456）" }
+      fatal: []
+    side_effects:
+      - { kind: external_visible, target: "抖音私信", description: "真实向潜在客户发送私信（douyin-phone-adb:2372）" }
+    invokers: [code]
+    steps:
+      - { key: pick_order, name: 取单预写触达中, order: 1, reads: [Lead.status, Lead.repeat_hits, Lead.intent_grade], writes: [OutreachOrder.lead_record_id, OutreachOrder.douyin_id, OutreachOrder.script_id, Lead.status],
+          check: "预写 状态=触达中 成功回读（防重入）", implementation: { status: implemented, ref: "next-outreach.js:86-112" }, uses_llm: false }
+      - { key: check_breaker_and_cap, name: 熔断与日限额闸, order: 2, reads: [Account.dm_paused, Account.daily_cap], writes: [],
+          check: "无熔断 flag 且 今日计数 < cap，否则回队列", implementation: { status: implemented, ref: "outreach-tick.sh:122-153" }, uses_llm: false }
+      - { key: acquire_device_lock, name: 拿设备锁, order: 3, reads: [Device.serial], writes: [],
+          check: "180s 内拿到锁，否则回队列不计失败", implementation: { status: implemented, ref: "outreach-tick.sh:166-186" }, uses_llm: false }
+      - { key: verify_sender_account, name: 验发送账号, order: 4, reads: [Account.sender_id], writes: [OutreachOrder.sender_id],
+          check: "我页抖音号 == sender_id，不符一次即熔断", implementation: { status: implemented, ref: "outreach-tick.sh account_mismatch" }, uses_llm: false }
+      - { key: send_private_message, name: 发私信, order: 5, reads: [OutreachOrder.lead_record_id, Lead.profile_url], writes: [OutreachOrder.message],
+          check: "输入框回读 == 审批话术，发送后气泡可见", implementation: { status: implemented, ref: "douyin-phone-adb:2372 private-message-send" }, uses_llm: false }
+      - { key: verify_delivery, name: 核验送达, order: 6, reads: [OutreachOrder.message], writes: [OutreachOrder.result],
+          check: "现场无「暂无法给对方发送消息」「发送消息过于频繁」", implementation: { status: implemented, ref: "outreach-tick.sh:206-237" }, uses_llm: false }
+      - { key: write_back_result, name: 结果回写, order: 7, reads: [OutreachOrder.result], writes: [Lead.status, Lead.send_status, Lead.reached_at, Lead.sender_id, Lead.script_id],
+          check: "线索表落 已触达/待触达/触达受阻 之一，不留 触达中", implementation: { status: implemented, ref: "next-outreach.js:33-57" }, uses_llm: false }
+    known_gaps:
+      - { gap: "触达不进账本，运行时无探针读回", task: 6b133a81 }
+      - { gap: "熔断无告警；被熔断单约每 20 秒空转回队列（09-24~28 约 9800 次）", task: 15c9a456 }
+
+  # ───────────────────────────── 8 归位 ─────────────────────────────
+  - key: cleanup
+    name: 归位
+    order: 8
+    version: 1.0.0
+    compatibility: backward
+    owner: { department: line02 智能获客, agent: 获客采收员 }
+    inputs:
+      - { type: Device, cardinality: one, fields: [serial, lock_holder] }
+      - { type: Run, cardinality: one, fields: [run_tag] }
+    outputs:
+      - { type: Device, cardinality: one, effect: update, fields: [lock_holder] }
+      - { type: Run, cardinality: one, effect: update, fields: [status] }
+    preconditions:
+      - "本 run 各阶段已写工件或已判失败"
+    postconditions:
+      - { probe: cl_app_closed, asserts: "抖音已关闭" }
+      - { probe: cl_lock_released, asserts: "设备锁已释放" }
+      - { probe: cl_safe_desktop_visible, asserts: "手机回到安全桌面" }
+    execution: { location: xian-m4, via: "harvest-cron.sh trap → workflow-result.sh finalize" }
+    budget: { max_duration_s: 120, heartbeat_s: 30 }
+    resources:
+      locks: ["device:<serial>"]
+      limits: []
+    idempotency: { dedupe_key: "Run.run_tag", on_duplicate: skip }
+    failure:
+      empty_ok: []
+      retryable: ["工件 scp 到 mmv 失败（本地保留）"]
+      needs_human:
+        cases: ["finalize 自检 artifact_count_mismatch"]
+        alert: { channel: brain_alert, object: "Brain 终态 failed 回执（workflow-result.sh:200）" }
+      fatal: []
+    side_effects:
+      - { kind: internal_write, target: "Brain 终态回执", description: "run 终态 completed/failed" }
+    invokers: [code]
+    steps:
+      - { key: close_app, name: 关App, order: 1, reads: [Device.serial], writes: [],
+          check: "前台不再是 com.ss.android.ugc.aweme", implementation: { status: missing, ref: "采收链未调 close-app（douyin-phone-adb:2639），6b133a81" }, uses_llm: false }
+      - { key: release_lock, name: 放锁, order: 2, reads: [Device.lock_holder], writes: [Device.lock_holder],
+          check: "锁文件不存在或 owner≠本 run", implementation: { status: implemented, ref: "harvest-keyword.sh:33 trap 按词释放" }, uses_llm: false }
+      - { key: return_safe_desktop, name: 回安全桌面, order: 3, reads: [Device.serial], writes: [],
+          check: "前台 = launcher", implementation: { status: missing, ref: "6b133a81" }, uses_llm: false }
+      - { key: finalize_run, name: 终态回执, order: 4, reads: [Run.run_tag], writes: [Run.status],
+          check: "n_items>0 且 n_files>=n_items（workflow-result.sh:194）", implementation: { status: implemented, ref: "workflow-result.sh:177-201" }, uses_llm: false }
+    known_gaps:
+      - { gap: "cleanup 指标写死 close_app_attempts=0/lock_released=1/safe_desktop_visible=0（workflow-result.sh:182）", task: 6b133a81 }
