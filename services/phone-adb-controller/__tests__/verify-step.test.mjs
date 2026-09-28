@@ -122,8 +122,10 @@ test("runProbes: 整体超时→已得部分照出，未完成条目 error=timeo
 });
 
 test("runProbes: stage 无探针 → probes 空数组", async () => {
+  // 真 YAML 8 个 stage 都有探针（决策 f18f56b8），这里用只含 delivery 的夹具验空分支
   const { doc } = loadChecks(YAML, SCHEMA);
-  const r = await runProbes({ doc, stage: "discovery", params: PARAMS, deps: deps(fakePool(() => { throw new Error("x"); }), fakeFetch({})) });
+  const only = { ...doc, probes: doc.probes.filter((p) => p.stage === "delivery") };
+  const r = await runProbes({ doc: only, stage: "discovery", params: PARAMS, deps: deps(fakePool(() => { throw new Error("x"); }), fakeFetch({})) });
   assert.deepEqual(r, { stage: "discovery", probes: [] });
 });
 

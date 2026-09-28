@@ -117,6 +117,14 @@ async function runHttp(probe, params, deps, getToken) {
   return main - (await readSource(probe.minus, params, headers, deps.fetch));
 }
 
+// metric 探针（决策 f18f56b8）：preflight/cleanup 没有外部数据可查，observed = 本 stage 工件 metrics[键]
+function readMetric(probe, params) {
+  const key = probe.ref.slice("metrics.".length);
+  const v = params.metrics?.[key];
+  if (v === undefined) throw new Error(`metrics 缺 ${key}（未传 --metrics-json 或工件无此键）`);
+  return v;
+}
+
 export async function runProbes({ doc, stage, params, deps = {}, timeoutMs = 60000 }) {
   const now = deps.now || (() => new Date().toISOString());
   const fetchFn = deps.fetch || globalThis.fetch;
@@ -126,7 +134,9 @@ export async function runProbes({ doc, stage, params, deps = {}, timeoutMs = 600
   const results = specs.map((p) => ({ key: p.key, error: "timeout" }));
   const jobs = specs.map(async (p, i) => {
     try {
-      const observed = p.probe.type === "sql" ? await runSql(p.probe, params, d) : await runHttp(p.probe, params, d, getToken);
+      const observed = p.probe.type === "sql" ? await runSql(p.probe, params, d)
+        : p.probe.type === "metric" ? readMetric(p.probe, params)
+        : await runHttp(p.probe, params, d, getToken);
       results[i] = { key: p.key, observed, probed_at: now() };
     } catch (e) {
       results[i] = { key: p.key, probed_at: now(), error: String((e && e.message) || e).slice(0, 300) };
@@ -169,6 +179,10 @@ async function main() {
     if (errors.length) { warn(`探针文件校验失败 ${yamlPath}: ${errors.join("; ")}`); return emit({ stage, probes: [] }); }
     const deps = a.deps ? (await import(a.deps)).default : {};
     const params = { runTag: a["run-tag"] || "", lineKey: resolveLineKey(a["line-key"]), word: a.word || "" };
+    if (a["metrics-json"]) {
+      const art = JSON.parse(readFileSync(a["metrics-json"], "utf8"));
+      params.metrics = art.metrics ?? art;
+    }
     const timeoutMs = Number(a["timeout-ms"]) > 0 ? Number(a["timeout-ms"]) : 60000;
     const out = await runProbes({ doc, stage, params, deps, timeoutMs });
     for (const p of out.probes) if (p.error) warn(`${p.key}: ${p.error}`);
