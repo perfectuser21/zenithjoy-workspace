@@ -10,6 +10,7 @@ const cfg = JSON.parse(fs.readFileSync("/Users/administrator/.openclaw/clawdbot.
 const { routeOf } = require("./line-routes.js");
 const { getPool } = require("./leadgen-db-connect.js");
 const { upsertVideo } = require("./leadgen-db-lib.js");
+const { statsLine } = require("./stats-line.js");
 const [,, TSV, BATCH, LINE] = process.argv;
 const ROUTE = routeOf(LINE);
 const acc = cfg.channels.feishu.accounts[ROUTE.account];
@@ -64,5 +65,6 @@ console.error("line-route: " + ROUTE.key + " base=" + B + " VPOOL=" + VPOOL);
     }
   }
   console.log(`视频落池 ${created} | 去重跳过 ${dup} | 输入 ${lines.length} | PG写入${pgOk}/失败${pgFail}`);
+  console.log(statsLine("PUSH_VIDEOS_STATS", { created, dup, input: lines.length, pg_ok: pgOk, pg_fail: pgFail }));
   await pool.end().catch(() => {});
 })();

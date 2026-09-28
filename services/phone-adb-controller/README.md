@@ -147,4 +147,6 @@ harvest-keyword.sh 出口码契约（账本 stage 映射依赖，勿改）：`3`
 - 形状由 `checks/schema.json` 守:stage 只能是 workflow-result.sh 的 7 个阶段,op ∈ `>= == <= not_null_all`,severity ∈ `warn|error`,`expect.ref` 只能引 workflow-result.sh `req_keys()` 的闭集 metrics 键(单测从脚本实时抽取,不抄副本)。
 - 加载/校验层 `checks/probes-lib.js` 零依赖(CI openclaw-scripts-test 不装依赖),守卫 `__tests__/checks-social-keyword-leadgen.test.mjs`,坏 stage/op/severity/ref 都 proven-to-fire 报红。
 - Brain 侧:cecelia 仓 `scripts/sync-step-probes.mjs` 读本文件登记 sha256 到 `step_probes`,并把 journey cell 的 `assertion_ref` 写成 `probe:<key>`。**改探针 = 改 YAML 发 PR**,不在 Brain 里手改;哈希漂移由同步脚本发现。
-- 首发五条全 `warn`(观察一轮真实 run 再升 error):delivery `videos_readback` / `comments_readback` / `line_key_not_null`,scoring `pool_advanced` / `effective_count`。
+- 运行时接线的四条(全 `error`):delivery `videos_readback` / `comments_readback` / `line_key_not_null`,scoring `pool_advanced`。`effective_count` 已删(评分是批级的,`$WORD` 无意义,回写在批次收工后才跑)。
+- 业务线无关:http 探针 url 用 `$BASE/$POOL/$KEYWORD/$LEAD` 占位,`verify-step.mjs` 按 `routeOf(--line-key)` 展开;blocked 占位工件(init 的 scoring/qualification、PUSH=0 的 delivery)不读回、不判。
+- 对账基准取脚本真实统计:`push-videos.js` / `push-raw-comments.js` / `sort-comments.js` 在人读输出后各多打一行 `PUSH_VIDEOS_STATS` / `PUSH_COMMENTS_STATS` / `SORT_STATS {json}`(`stats-line.js`),batch2.sh 解析后写 delivery(`leads_written`/`duplicates_skipped`/`videos_pushed`)与 scoring 工件。

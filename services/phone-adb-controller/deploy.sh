@@ -35,6 +35,7 @@ MMV_JS_FILES=(
   lead-fields-lib.js kpi-gate.js next-keywords.js keyword-enabled-lib.js update-keyword-stats.js keyword-stats-lib.js
   fetch-seen-videos.js check-own-account.js dm-daily-cap.js dm-rate-ramp-lib.js
   own-accounts-lib.js push-leads.js update-profile-links.js nickname-match-lib.js
+  stats-line.js
 )
 MMV_TOPLEVEL_FILES=(cmdr-escort.txt cmdr-stream.txt)
 # 设备控制器单独成组: 它必须同时落到**两个**目录,因为两类消费者各指一个——

@@ -18,7 +18,7 @@ trigger_inputs: [Keyword, Account, Device]
 known_gaps:
   - gap: "执行顺序与契约不符：现状视频判定在落池后才跑（batch2.sh:156/167，PR #1964 接线挂末尾），判定不挡采集"
     task: 8bb3af55
-  - gap: "运行时只对 delivery/scoring 读回探针；preflight/cleanup 指标写死、qualification/scoring 账本硬写 not_in_profile、outreach 不进账本"
+  - gap: "运行时只对 delivery/scoring 读回探针；preflight/cleanup 指标写死、qualification 账本硬写 not_in_profile（scoring 已在分拣后写真实工件）、outreach 不进账本；blocked 占位工件不判探针"
     task: 6b133a81
 
 activities:
@@ -252,7 +252,6 @@ activities:
       - "评论 process_status=待分拣"
     postconditions:
       - { probe: pool_advanced, asserts: "本批评论全部分拣完" }
-      - { probe: effective_count, asserts: "关键词有效线索数与池内合格数一致" }
     execution: { location: mmv, via: "sort-comments.js → judge-comment.js" }
     budget: { max_duration_s: 1800, heartbeat_s: 120 }
     resources:
@@ -283,6 +282,8 @@ activities:
           check: "线索落地之后才推进 已分拣（永远最后一步）", implementation: { status: implemented, ref: "sort-comments-lib.js:81-82" }, uses_llm: false }
     known_gaps:
       - { gap: "现状评分在落池之后对飞书评论池做（batch2.sh:116），设计为对采集产物做、配送一次交付", task: 8bb3af55 }
+      - { gap: "关键词有效线索数回写（update-keyword-stats）在批次收工后才运行，批内无法判定；改为下一批开头对上一批判定（待做）", task: 6b133a81 }
+      - { gap: "scoring 工件的 peer、spam 两个闭集键这条链没有对应分类，恒为 0；strong_intent=A 级、weak_intent=B+C 级为当前映射，五档分级落地（决策 b93422c6）后重新定义", task: 4ca3b584 }
 
   # ───────────────────────────── 6 配送 ─────────────────────────────
   - key: delivery
@@ -324,13 +325,13 @@ activities:
     invokers: [code]
     steps:
       - { key: push_videos, name: 视频落池, order: 1, reads: [Video.video_id, Video.harvest_batch], writes: [Video.feishu_record_id],
-          check: "PG + 飞书视频池本批行数 ≥ videos_processed", implementation: { status: implemented, ref: "push-videos.js:50-56" }, uses_llm: false }
+          check: "PG 本批行数 ≥ videos_pushed（= push-videos.js 本批新增视频数 PUSH_VIDEOS_STATS.created）", implementation: { status: implemented, ref: "push-videos.js:50-68" }, uses_llm: false }
       - { key: push_raw_comments, name: 评论落池, order: 2, reads: [Comment.dedup_key, Run.run_tag], writes: [Comment.harvest_batch, Comment.dedup_key, Comment.line_key],
-          check: "评论池「运行批次」计数 ≥ leads_written", implementation: { status: implemented, ref: "push-raw-comments.js:43-57" }, uses_llm: false }
+          check: "评论池「运行批次」计数 ≥ leads_written（= push-raw-comments.js 本批实际落池数 PUSH_COMMENTS_STATS.created，不含被历史全池去重掉的）", implementation: { status: implemented, ref: "push-raw-comments.js:43-63" }, uses_llm: false }
       - { key: readback_line_key, name: 业务线读回, order: 3, reads: [Video.line_key], writes: [],
           check: "本批 leadgen_videos.line_key 全非空", implementation: { status: implemented, ref: "verify-step.mjs line_key_not_null" }, uses_llm: false }
     known_gaps:
-      - { gap: "readback_verified/duplicates_skipped 工件指标写死 0（batch2.sh:105）", task: 6b133a81 }
+      - { gap: "readback_verified 工件指标写死 0（batch2.sh wfr_delivery_stage）；leads_written/duplicates_skipped/videos_pushed 已取落池脚本真实统计", task: 6b133a81 }
 
   # ───────────────────────────── 7 触达 ─────────────────────────────
   - key: outreach

@@ -16,6 +16,7 @@ const { extractSeenEntries } = require("./lead-fields-lib.js");
 // 跑一遍才看得出来(池状态必须最后推进,否则写线索失败的那条下轮就扫不到了,146条就是这么丢的)。
 const { settlePending } = require("./sort-comments-lib.js");
 const { judgeComment } = require("./judge-comment.js");
+const { statsLine } = require("./stats-line.js");
 
 const LINE = process.argv[2] || "";
 const ROUTE = routeOf(LINE);
@@ -58,7 +59,11 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
     pt = r.data.has_more ? r.data.page_token : "";
   } while (pt);
   console.log(`待分拣 ${pend.length} 条`);
-  if (!pend.length) return;
+  // 机器可读统计行（batch2.sh 取最后一行写 scoring 账本工件）；grades 只数判定成功的评论
+  let judged = 0, moved = 0, failed = 0, duped = 0, parked = 0;
+  const grades = { A: 0, B: 0, C: 0, 不相关: 0 };
+  const stats = () => statsLine("SORT_STATS", { pending: pend.length, judged, moved, duped, failed, parked, grades });
+  if (!pend.length) { console.log(stats()); return; }
 
   // 0922真机实证: 悦升「采集时间」是日期型(type 5),金诺是文本——写死字符串会在悦升侧
   // 100%炸(DatetimeFieldConvFail),导致判定写回池成功但一条都进不了线索表。
@@ -82,7 +87,6 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
   } while (lp);
 
   const now = new Date(Date.now() + 8 * 3600e3).toISOString().replace("T", " ").slice(0, 16) + "(UTC+8)";
-  let judged = 0, moved = 0, failed = 0, duped = 0, parked = 0;
 
   for (const row of pend) {
     const f = row.fields;
@@ -97,6 +101,7 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
       continue;
     }
     judged++;
+    if (verdict.grade in grades) grades[verdict.grade]++;
     const r = await settlePending({
       row, verdict, route: ROUTE, seen, now, asLeadTime,
       deps: {
@@ -118,4 +123,5 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
   console.log(`判定完成 ${judged}/${pend.length} | 搬入线索表 ${moved} 条 | 重复高亮 ${duped} 条 | 判定异常${failed}条(留待分拣) | 搬运失败${parked}条(留待分拣下轮重试)`);
   // 搬运失败不再是"打条日志就算了": 池留在待分拣,下一轮必然重来一次。
   if (parked) console.log(`⚠️ 有 ${parked} 条判定通过但没搬进线索表,已保持待分拣;若连续多轮不降,去查线索表字段/权限`);
+  console.log(stats());
 })();

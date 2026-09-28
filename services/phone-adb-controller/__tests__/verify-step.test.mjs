@@ -67,7 +67,7 @@ test("runProbes delivery: 真 YAML 三条（sql count / http count / sql not_nul
   for (const c of pool.calls) { assert.ok(c.values.includes("auto0926")); assert.ok(!c.text.includes("auto0926")); assert.match(c.text, /\$1/); }
 });
 
-test("runProbes scoring: http count 双列 filter（布尔/文本）+ field 求和 minus 子查询", async () => {
+test("runProbes scoring: http count 双列 filter（文本/单选）；scoring 只剩 pool_advanced（effective_count 已删）", async () => {
   const { doc } = loadChecks(YAML, SCHEMA);
   const fetch = fakeFetch({
     tblmrJTyVgzTj89P: [[
@@ -75,12 +75,74 @@ test("runProbes scoring: http count 双列 filter（布尔/文本）+ field 求�
       row({ 运行批次: T("auto0926"), 处理状态: "已分拣", 命中关键词: T("AI训练师"), 进入最终线索: true }),
       row({ 运行批次: T("auto0926"), 处理状态: "待分拣", 命中关键词: T("别的词"), 进入最终线索: false }),
     ]],
-    tbleP4LgzkcwAhiZ: [[row({ "抖音获客-关键词配置": T("AI训练师"), 有效线索数: 5 }), row({ "抖音获客-关键词配置": T("别的词"), 有效线索数: 9 })]],
   });
   const r = await runProbes({ doc, stage: "scoring", params: PARAMS, deps: deps(fakePool(() => { throw new Error("no sql here"); }), fetch) });
   const by = Object.fromEntries(r.probes.map((p) => [p.key, p]));
+  assert.deepEqual(Object.keys(by), ["pool_advanced"]);
   assert.equal(by.pool_advanced.observed, 2, "运行批次=auto0926 且 处理状态=待分拣");
-  assert.equal(by.effective_count.observed, 5 - 2, "关键词表 有效线索数(5) − 池内 命中关键词=词 且 进入最终线索=true(2)");
+});
+
+// ── 业务线无关化：http 探针 url 里的 $BASE/$POOL/$KEYWORD/$LEAD 按 routeOf(lineKey) 展开 ──
+const { ROUTES } = require(join(D, "line-routes.js"));
+const JN = ROUTES.find((r) => r.key === "jinuo"), YS = ROUTES.find((r) => r.key === "yuesheng");
+const recUrl = (base, tbl) => `https://open.feishu.cn/open-apis/bitable/v1/apps/${base}/tables/${tbl}/records`;
+
+test("runProbes http: $BASE/$POOL 按业务线展开——jinuo 读金诺 base+池，yuesheng 读悦升 base+池（各自的表 id 回各自的数据）", async () => {
+  const { doc } = loadChecks(YAML, SCHEMA);
+  for (const [route, want] of [[JN, 2], [YS, 1]]) {
+    const log = [];
+    const fetch = fakeFetch({
+      [JN.pool]: [[row({ 运行批次: T("auto0926") }), row({ 运行批次: T("auto0926") })]],
+      [YS.pool]: [[row({ 运行批次: T("auto0926") })]],
+    }, log);
+    const pool = fakePool(() => ({ rows: [{ count: "0" }], fields: [{ name: "count" }] }));
+    const r = await runProbes({ doc, stage: "delivery", params: { ...PARAMS, lineKey: route.key }, deps: deps(pool, fetch) });
+    assert.equal(r.probes.find((p) => p.key === "comments_readback").observed, want, `${route.key} 应读自己的池`);
+    const recs = log.filter((l) => l.url.includes("/records")).map((l) => l.url);
+    assert.ok(recs.length >= 1 && recs.every((u) => u.startsWith(recUrl(route.base, route.pool))), `${route.key} 只该请求 ${route.base}/${route.pool}：${recs}`);
+    assert.ok(recs.every((u) => !u.includes("$")), `占位符必须已展开：${recs}`);
+  }
+});
+
+test("runProbes http: scoring 的 pool_advanced 同样按业务线展开（悦升不读金诺的池）", async () => {
+  const { doc } = loadChecks(YAML, SCHEMA);
+  const log = [];
+  const fetch = fakeFetch({
+    [JN.pool]: [[row({ 运行批次: T("auto0926"), 处理状态: "待分拣" }), row({ 运行批次: T("auto0926"), 处理状态: "待分拣" })]],
+    [YS.pool]: [[row({ 运行批次: T("auto0926"), 处理状态: "已分拣" })]],
+  }, log);
+  const r = await runProbes({ doc, stage: "scoring", params: { ...PARAMS, lineKey: "yuesheng" }, deps: deps(fakePool(() => { throw new Error("x"); }), fetch) });
+  assert.equal(r.probes[0].observed, 0, "悦升池里没有待分拣");
+  assert.ok(log.filter((l) => l.url.includes("/records")).every((l) => l.url.startsWith(recUrl(YS.base, YS.pool))));
+});
+
+test("runProbes http: $KEYWORD/$LEAD 与 minus 子查询同样展开", async () => {
+  const doc = { probes: [{
+    key: "synthetic", stage: "scoring",
+    probe: {
+      type: "http", target: "feishu_yuesheng", url: "https://open.feishu.cn/open-apis/bitable/v1/apps/$BASE/tables/$KEYWORD/records",
+      filter: { k: "v" }, reduce: "field:n",
+      minus: { url: "https://open.feishu.cn/open-apis/bitable/v1/apps/$BASE/tables/$LEAD/records", filter: { k: "v" }, reduce: "count" },
+    },
+    expect: { op: "==", value: 0 },
+  }] };
+  const log = [];
+  const fetch = fakeFetch({ [YS.keyword]: [[row({ k: T("v"), n: 5 })]], [YS.lead]: [[row({ k: T("v") }), row({ k: T("v") })]] }, log);
+  const r = await runProbes({ doc, stage: "scoring", params: { ...PARAMS, lineKey: "yuesheng" }, deps: deps(fakePool(() => { throw new Error("x"); }), fetch) });
+  assert.equal(r.probes[0].observed, 5 - 2);
+  const recs = log.filter((l) => l.url.includes("/records")).map((l) => l.url.split("?")[0]);
+  assert.deepEqual(recs, [recUrl(YS.base, YS.keyword), recUrl(YS.base, YS.lead)]);
+});
+
+test("runProbes http: 认不出业务线（routeOf 抛错）→ http 条目带 error（fail-open），sql 条目照常，不请求飞书", async () => {
+  const { doc } = loadChecks(YAML, SCHEMA);
+  const log = [];
+  const pool = fakePool((text) => (text.includes("count(*)") ? { rows: [{ count: "3" }], fields: [{ name: "count" }] } : { rows: [{ line_key: "x" }], fields: [{ name: "line_key" }] }));
+  const r = await runProbes({ doc, stage: "delivery", params: { ...PARAMS, lineKey: "xiaolongxia" }, deps: deps(pool, fakeFetch({}, log)) });
+  const by = Object.fromEntries(r.probes.map((p) => [p.key, p]));
+  assert.match(by.comments_readback.error, /未配路由/); assert.ok(!("observed" in by.comments_readback));
+  assert.equal(by.videos_readback.observed, 3, "sql 探针不受影响");
+  assert.equal(log.filter((l) => l.url.includes("/records")).length, 0, "不该带着未展开的 url 去请求飞书");
 });
 
 test("runProbes: 飞书分页 has_more 两页全量计数，且带 Bearer token", async () => {

@@ -307,7 +307,7 @@ esac
 }
 // 探针相关 env 全部指向不存在的路径：本机不再需要 checks YAML / 凭据文件，测试也不许碰开发机真实文件
 const PROBE_ENV = (d) => ({ WFR_CHECKS_YAML: join(d, "no-checks.yaml") });
-const DELIVERY_ARGS = ["delivery", "completed", "1", "pushed 2 leads", '[{"type":"log","ref":"n.log"}]', '{"leads_written":2,"duplicates_skipped":0,"readback_verified":0,"cursor_updates":0}'];
+const DELIVERY_ARGS = ["delivery", "completed", "1", "pushed 2 leads", '[{"type":"log","ref":"n.log"}]', '{"leads_written":2,"videos_pushed":1,"duplicates_skipped":0,"readback_verified":0,"cursor_updates":0}'];
 const CANNED = JSON.stringify({ stage: "delivery", probes: [{ key: "videos_readback", observed: 7, probed_at: "2026-09-26T00:00:00.000Z" }, { key: "comments_readback", observed: 22, probed_at: "2026-09-26T00:00:00.000Z" }, { key: "line_key_not_null", observed: ["jinuo"], probed_at: "2026-09-26T00:00:00.000Z" }] });
 function probeRun(d, tag, profile, { ssh, node, extra = {}, stageArgs = DELIVERY_ARGS, push = "1" }) {
   const i = wfr(d, {}, "init", tag, profile, words(d, ["A"]), push, "S", "h");
@@ -344,6 +344,55 @@ test("stage delivery: 经 ssh 在 MMV 跑 verify-step（形状同 batch2.sh:55 �
   const body = JSON.parse(argAfter(curls[0], "-d"));
   assert.deepEqual(body.result.probes, JSON.parse(CANNED).probes);
   assert.equal(body.result.stage, "delivery"); assert.equal(body.result.metrics.leads_written, 2);
+});
+
+test("stage delivery: videos_pushed 是闭集键——缺它工件被拒（不落文件、不回执），带它则通过", { skip: !JQ && "no jq" }, () => {
+  const old = ["delivery", "completed", "1", "x", '[{"type":"log","ref":"n.log"}]', '{"leads_written":2,"duplicates_skipped":0,"readback_verified":0,"cursor_updates":0}'];
+  const d1 = mkdtempSync(join(tmpdir(), "wfr-"));
+  const r1 = probeRun(d1, "t30", "p1", { ssh: fakeSsh(d1, { canned: CANNED }), node: fakeNode(d1), stageArgs: old });
+  assert.match(r1.s.err, /WFR_WARN.*invalid/);
+  const f1 = join(r1.i.kv.WFR_ART_DIR, "social-keyword-leadgen-crontab-t30__a1.delivery.1.worker-result.json");
+  assert.ok(!existsSync(f1), "缺 videos_pushed 的旧形状被拒");
+  assert.equal(curlCalls(r1.b.calls).length, 0, "被拒的工件不回执");
+  const d2 = mkdtempSync(join(tmpdir(), "wfr-"));
+  const r2 = probeRun(d2, "t30", "p1", { ssh: fakeSsh(d2, { canned: CANNED }), node: fakeNode(d2), stageArgs: DELIVERY_ARGS });
+  assert.equal(r2.s.err.includes("invalid"), false, r2.s.err);
+  assert.equal(JSON.parse(readFileSync(join(r2.i.kv.WFR_ART_DIR, "social-keyword-leadgen-crontab-t30__a1.delivery.1.worker-result.json"), "utf8")).metrics.videos_pushed, 1);
+});
+
+// 占位工件（init 写的 scoring/qualification not_in_profile、PUSH=0 的 delivery blocked）代表"阶段没跑"，
+// 读回 0 == 期望 0 是假绿；Brain 侧（stage_status=blocked 不判）已同步。执行机这边不再起 ssh 读回，probes 传 []。
+test("stage blocked: 不调 probe_stage（零 ssh），回执照发且 probes=[]；completed / failed 仍读回", { skip: !JQ && "no jq" }, () => {
+  const blockedArgs = ["delivery", "blocked", "1", "push=0 skipped", "[]", '{"leads_written":0,"videos_pushed":0,"duplicates_skipped":0,"readback_verified":0,"cursor_updates":0}'];
+  const d = mkdtempSync(join(tmpdir(), "wfr-"));
+  const ssh = fakeSsh(d, { canned: CANNED }); const node = fakeNode(d);
+  const { s, b, i } = probeRun(d, "t31", "p1", { ssh, node, stageArgs: blockedArgs });
+  assert.equal(s.code, 0);
+  assert.equal(sshCalls(ssh.calls).length, 0, "blocked 不该起 ssh 读回");
+  const curls = curlCalls(b.calls);
+  assert.equal(curls.length, 1, "回执照发");
+  const body = JSON.parse(argAfter(curls[0], "-d"));
+  assert.equal(body.result.stage_status, "blocked"); assert.deepEqual(body.result.probes, []);
+  assert.ok(existsSync(join(i.kv.WFR_ART_DIR, "social-keyword-leadgen-crontab-t31__a1.delivery.1.worker-result.json")), "工件照写");
+  for (const status of ["completed", "failed"]) {
+    const d2 = mkdtempSync(join(tmpdir(), "wfr-"));
+    const ssh2 = fakeSsh(d2, { canned: CANNED }); const node2 = fakeNode(d2);
+    const r = probeRun(d2, "t32", "p1", { ssh: ssh2, node: node2, stageArgs: [...DELIVERY_ARGS.slice(0, 1), status, ...DELIVERY_ARGS.slice(2)] });
+    assert.equal(r.s.code, 0);
+    assert.equal(sshCalls(ssh2.calls).length, 1, `${status} 仍读回`);
+    assert.deepEqual(JSON.parse(argAfter(curlCalls(r.b.calls)[0], "-d")).result.probes, JSON.parse(CANNED).probes, status);
+  }
+});
+
+test("init: qualification/scoring 的 blocked 占位工件不触发探针读回（零 ssh）", { skip: !JQ && "no jq" }, () => {
+  const d = mkdtempSync(join(tmpdir(), "wfr-"));
+  const ssh = fakeSsh(d, { canned: CANNED });
+  const b = brainEnv(d);
+  const i = wfr(d, { ...b.env, ...PROBE_ENV(d), PATH: `${ssh.bin}:${b.env.PATH}`, WFR_PROBE_STAGES: "delivery scoring" }, "init", "t33", "p1", words(d, ["A"]), "1", "S", "h");
+  assert.equal(i.code, 0);
+  assert.equal(sshCalls(ssh.calls).length, 0, "init 的 scoring blocked 占位不该起 ssh");
+  const stages = curlCalls(b.calls).map((c) => JSON.parse(argAfter(c, "-d")).result);
+  assert.ok(stages.some((r) => r.stage === "scoring" && r.stage_status === "blocked" && r.probes.length === 0));
 });
 
 test("stage delivery: WFR_PROBE_HOST / WFR_PROBE_DIR 可覆盖主机与目录；--word 带中文与单引号照单引号包裹", { skip: !JQ && "no jq" }, () => {

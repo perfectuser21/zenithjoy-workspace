@@ -33,12 +33,25 @@ esac`;
 const FAKE_SSH = `#!/bin/sh
 printf '%s' "$(basename "$0")" >> "$HOME/ssh-argv.log"; for a in "$@"; do printf '\\t%s' "$a" >> "$HOME/ssh-argv.log"; done; printf '\\n' >> "$HOME/ssh-argv.log"; exit 0`;
 
-function setup(wordsList, { init = true, push = "0" } = {}) {
+// 带统计输出的假 ssh：命令含 push-videos.js / push-raw-comments.js / sort-comments.js 时把 env 预设的统计行打到 stdout
+// （batch2.sh 把 ssh 输出追加进 $LOG）。FAKE_PUSH_RC / FAKE_SORT_RC 控制对应命令的出口码。
+const FAKE_SSH_STATS = `#!/bin/sh
+printf '%s' "$(basename "$0")" >> "$HOME/ssh-argv.log"; for a in "$@"; do printf '\\t%s' "$a" >> "$HOME/ssh-argv.log"; done; printf '\\n' >> "$HOME/ssh-argv.log"
+case "$*" in *push-videos.js*) [ -n "$FAKE_PV" ] && echo "$FAKE_PV";; esac
+case "$*" in *push-raw-comments.js*) [ -n "$FAKE_PC" ] && echo "$FAKE_PC";; esac
+case "$*" in *push-videos.js*|*push-raw-comments.js*) exit \${FAKE_PUSH_RC:-0};; esac
+case "$*" in *sort-comments.js*) [ -n "$FAKE_SORT" ] && echo "$FAKE_SORT"; exit \${FAKE_SORT_RC:-0};; esac
+exit 0`;
+const PV = 'PUSH_VIDEOS_STATS {"created":3,"dup":1,"input":4,"pg_ok":3,"pg_fail":0}';
+const PC = 'PUSH_COMMENTS_STATS {"created":5,"dup":2,"input":7}';
+const SORT = 'SORT_STATS {"pending":5,"judged":4,"moved":2,"duped":1,"failed":1,"parked":0,"grades":{"A":1,"B":1,"C":1,"不相关":1}}';
+
+function setup(wordsList, { init = true, push = "0", stats = false } = {}) {
   const home = mkdtempSync(join(tmpdir(), "b2wfr-"));
   mkdirSync(join(home, "bin-harvest"), { recursive: true });
   mkdirSync(join(home, ".local", "bin"), { recursive: true });
   const fake = join(home, "bin-harvest", "harvest-keyword.sh"); writeFileSync(fake, FAKE_HK); chmodSync(fake, 0o755);
-  for (const b of ["ssh", "scp"]) { const p = join(home, ".local", "bin", b); writeFileSync(p, FAKE_SSH); chmodSync(p, 0o755); }
+  for (const b of ["ssh", "scp"]) { const p = join(home, ".local", "bin", b); writeFileSync(p, stats && b === "ssh" ? FAKE_SSH_STATS : FAKE_SSH); chmodSync(p, 0o755); }
   const wf = join(home, "kw.txt"); writeFileSync(wf, wordsList.join("\n") + "\n");
   const env = { ...process.env, HOME: home, WFR_HOME: join(home, ".config", "zenithjoy"), WFR_NODE: process.execPath, WFR_JQ: JQ,
     WFR_LEDGER_MJS: join(SRC, "ledger.mjs"), WFR: join(SRC, "workflow-result.sh"), WFR_SCP_TARGET: "", WFR_PROBE_STAGES: "",
@@ -123,6 +136,119 @@ test("delivery：PUSH=1 且落池 ssh 成功 → completed leads_written=真实 
   assert.equal(run(ctx0).status, 0);
   assert.equal(art(ctx0, "delivery.1").status, "blocked");
   assert.match(art(ctx0, "delivery.1").summary, /push=0 skipped/);
+});
+
+const ZERO_SCORING = { comments_scored: 0, strong_intent: 0, weak_intent: 0, peer: 0, irrelevant: 0, spam: 0 };
+const pick = (m, keys) => Object.fromEntries(keys.map((k) => [k, m[k]]));
+const DELIVERY_KEYS = ["leads_written", "duplicates_skipped", "videos_pushed", "readback_verified", "cursor_updates"];
+
+test("delivery 对账基准 = 落池脚本真实统计（PUSH_COMMENTS_STATS.created / .dup、PUSH_VIDEOS_STATS.created），不再是 TSV LEAD 行数", { skip: SKIP }, () => {
+  const ctx = setup(["ok", "ok"], { push: "1", stats: true });   // TSV 里 LEAD=4
+  const r = run(ctx, { env: { FAKE_PV: PV, FAKE_PC: PC, FAKE_SORT: SORT } });
+  assert.equal(r.status, 0, r.stderr);
+  const dv = art(ctx, "delivery.1");
+  assert.equal(dv.status, "completed");
+  assert.deepEqual(pick(dv.metrics, DELIVERY_KEYS), { leads_written: 5, duplicates_skipped: 2, videos_pushed: 3, readback_verified: 0, cursor_updates: 0 });
+  assert.doesNotMatch(dv.summary, /no push stats/);
+});
+
+test("delivery：缺 PUSH_VIDEOS_STATS（悦升无视频池）→ videos_pushed=0，评论统计照用；两个统计都缺 → leads_written 回落 $NL、dup 0、summary 注明 no push stats", { skip: SKIP }, () => {
+  const ctxA = setup(["ok", "ok"], { push: "1", stats: true });
+  assert.equal(run(ctxA, { env: { FAKE_PC: PC } }).status, 0);
+  const a = art(ctxA, "delivery.1");
+  assert.deepEqual(pick(a.metrics, DELIVERY_KEYS), { leads_written: 5, duplicates_skipped: 2, videos_pushed: 0, readback_verified: 0, cursor_updates: 0 });
+  const ctxB = setup(["ok", "ok"], { push: "1", stats: true });
+  assert.equal(run(ctxB).status, 0);
+  const b = art(ctxB, "delivery.1");
+  assert.equal(b.status, "completed");
+  assert.deepEqual(pick(b.metrics, DELIVERY_KEYS), { leads_written: 4, duplicates_skipped: 0, videos_pushed: 0, readback_verified: 0, cursor_updates: 0 });
+  assert.match(b.summary, /no push stats/);
+});
+
+test("delivery：只取本次新增输出里的统计（日志里更早的旧统计行不算）", { skip: SKIP }, () => {
+  const ctx = setup(["ok"], { push: "1", stats: true });
+  const r = run(ctx, { env: { FAKE_PC: PC } });         // 第一次：日志里留下一行 PUSH_COMMENTS_STATS
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(art(ctx, "delivery.1").metrics.leads_written, 5);
+  // 第二次同 TAG（日志 $LOG 是追加的）：本次 ssh 不再吐统计 → 必须回落到 $NL，而不是读到第一次遗留的旧行
+  const r2 = run(ctx, { env: { FAKE_PC: "" } });
+  assert.equal(r2.status, 0, r2.stderr);
+  assert.ok(nightLog(ctx).includes("PUSH_COMMENTS_STATS"), "前提：日志里确有旧统计行");
+  const dv = art(ctx, "delivery.1");
+  assert.equal(dv.metrics.leads_written, 2, "回落 $NL（本批 TSV 的 LEAD 行数），不是旧行的 5");
+  assert.match(dv.summary, /no push stats/);
+});
+
+test("delivery 落池失败（ssh 非零）→ failed，metrics 全 0（含 videos_pushed），即使输出里有统计", { skip: SKIP }, () => {
+  const ctx = setup(["ok", "ok"], { push: "1", stats: true });
+  const r = run(ctx, { env: { FAKE_PV: PV, FAKE_PC: PC, FAKE_SORT: SORT, FAKE_PUSH_RC: "1" } });
+  assert.equal(r.status, 0, r.stderr);
+  const dv = art(ctx, "delivery.1");
+  assert.equal(dv.status, "failed"); assert.match(dv.summary, /push rc=1/);
+  assert.deepEqual(pick(dv.metrics, DELIVERY_KEYS), { leads_written: 0, duplicates_skipped: 0, videos_pushed: 0, readback_verified: 0, cursor_updates: 0 });
+});
+
+test("scoring：分拣后写真实工件 scoring.1（completed），metrics = judged / A / B+C / 不相关；peer、spam 恒 0；覆盖 init 的 blocked 占位", { skip: SKIP }, () => {
+  const ctx = setup(["ok"], { push: "1", stats: true });
+  assert.equal(book(ctx).stages.scoring.status, "blocked", "前提：init 写的占位");
+  const r = run(ctx, { env: { FAKE_PV: PV, FAKE_PC: PC, FAKE_SORT: SORT } });
+  assert.equal(r.status, 0, r.stderr);
+  const sc = art(ctx, "scoring.1");
+  assert.equal(sc.status, "completed");
+  assert.equal(sc.attempt_id, "a1");
+  assert.deepEqual(pick(sc.metrics, Object.keys(ZERO_SCORING)), { comments_scored: 4, strong_intent: 1, weak_intent: 2, peer: 0, irrelevant: 1, spam: 0 });
+  assert.ok(sc.evidence.length >= 1);
+  assert.equal(book(ctx).stages.scoring.status, "completed");
+  assert.equal(book(ctx).stages.scoring.items.length, 1, "n=1 覆盖占位项，不新增");
+});
+
+test("scoring：分拣无统计 / ssh 失败 → scoring.1 failed，metrics 全 0，summary 带 rc", { skip: SKIP }, () => {
+  const ctxA = setup(["ok"], { push: "1", stats: true });
+  assert.equal(run(ctxA, { env: { FAKE_PV: PV, FAKE_PC: PC } }).status, 0);     // 分拣 ssh 成功但没输出统计
+  const a = art(ctxA, "scoring.1");
+  assert.equal(a.status, "failed"); assert.match(a.summary, /no SORT_STATS rc=0/);
+  assert.deepEqual(pick(a.metrics, Object.keys(ZERO_SCORING)), ZERO_SCORING);
+  const ctxB = setup(["ok"], { push: "1", stats: true });
+  assert.equal(run(ctxB, { env: { FAKE_PV: PV, FAKE_PC: PC, FAKE_SORT_RC: "255" } }).status, 0);
+  const b = art(ctxB, "scoring.1");
+  assert.equal(b.status, "failed"); assert.match(b.summary, /no SORT_STATS rc=255/);
+});
+
+test("scoring：有待分拣但一条没判成（judged=0 pending>0，模型/鉴权整批挂了）→ failed，不得记 completed", { skip: SKIP }, () => {
+  const ctx = setup(["ok"], { push: "1", stats: true });
+  const allFailed = 'SORT_STATS {"pending":5,"judged":0,"moved":0,"duped":0,"failed":5,"parked":0,"grades":{"A":0,"B":0,"C":0,"不相关":0}}';
+  assert.equal(run(ctx, { env: { FAKE_PV: PV, FAKE_PC: PC, FAKE_SORT: allFailed } }).status, 0);
+  const sc = art(ctx, "scoring.1");
+  assert.equal(sc.status, "failed");
+  assert.match(sc.summary, /judged=0 pending=5/);
+  assert.equal(book(ctx).stages.scoring.status, "failed");
+  // 对照：没有待分拣（pending=0 judged=0）是正常的空批，仍 completed
+  const ctx0 = setup(["ok"], { push: "1", stats: true });
+  const empty = 'SORT_STATS {"pending":0,"judged":0,"moved":0,"duped":0,"failed":0,"parked":0,"grades":{"A":0,"B":0,"C":0,"不相关":0}}';
+  assert.equal(run(ctx0, { env: { FAKE_PV: PV, FAKE_PC: PC, FAKE_SORT: empty } }).status, 0);
+  assert.equal(art(ctx0, "scoring.1").status, "completed");
+});
+
+test("scoring：PUSH=0 不分拣 → 不写 scoring.1 工件（占位仍在）", { skip: SKIP }, () => {
+  const ctx = setup(["ok"], { push: "0", stats: true });
+  assert.equal(run(ctx).status, 0);
+  assert.ok(!arts(ctx).some((f) => f.includes(".scoring.")));
+  assert.equal(book(ctx).stages.scoring.status, "blocked");
+});
+
+test("WFR_DISABLED=1 + 假 ssh 吐统计行：日志/产物/子进程 argv 仍与并入前逐字一致（解析代码不写 $LOG、不多发 ssh）", { skip: SKIP }, () => {
+  const env = { WFR_DISABLED: "1", FAKE_PV: PV, FAKE_PC: PC, FAKE_SORT: SORT };
+  const ctxNew = setup(["ok", "nocard"], { push: "1", stats: true });
+  const rNew = run(ctxNew, { line: "devline", env });
+  assert.equal(rNew.status, 0, rNew.stderr);
+  assert.equal(rNew.stdout, "");
+  assert.ok(!arts(ctxNew).some((f) => /scoring\.1|delivery/.test(f) && f.includes("__a1.")), "不该写 a1 工件");
+  const ctxOld = setup(["ok", "nocard"], { init: false, push: "1", stats: true });
+  const rOld = run(ctxOld, { script: legacyScript(ctxOld), line: "devline", env });
+  assert.equal(rOld.status, 0, rOld.stderr);
+  const a = outputs(ctxNew), b = outputs(ctxOld);
+  assert.ok(a.log.includes("PUSH_COMMENTS_STATS"), "前提：统计行确实进了日志");
+  assert.equal(a.log, b.log); assert.equal(a.tsv, b.tsv); assert.equal(a.hk, b.hk); assert.equal(a.ssh, b.ssh);
 });
 
 for (const [name, env] of [["WFR_DISABLED=1", { WFR_DISABLED: "1" }], ["workflow-result.sh 不存在", { WFR: "/nonexistent/workflow-result.sh" }]]) {

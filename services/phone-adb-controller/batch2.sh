@@ -6,6 +6,8 @@
 # 0927 棒3b-3(决策 2ca30c4d): 账本钩子内建——每词写 discovery/collection 工件,push 后写 delivery,
 #   起跑 hash 不一致即停(fail-closed)。WFR_DISABLED=1、workflow-result.sh 缺失或不可执行 → 钩子全部 no-op,
 #   采收行为与并入前逐字一致(__tests__ 用并入前快照 fixtures/batch2-pre-wfr.sh 对拍)。
+#   0928 探针可信化: delivery 的 leads_written/duplicates_skipped/videos_pushed 取 push-*.js 打的 PUSH_*_STATS 真实统计;
+#   分拣后写真实 scoring 工件(取 sort-comments.js 的 SORT_STATS)。统计解析只读 $LOG,wfr 关闭时同样逐字无差。
 #   原 v4 副本 batch2-v4.sh 已废: 与现网分叉四处(LINE 第6参/分拣/音频判定链/MAXV),影子跑又拿不到设备。
 set -uo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -42,6 +44,63 @@ wfr_word_stages(){ # n word rc dv dl
     3) wfr stage discovery blocked "$n" "word=$W lock_busy" "$EV" '{"candidates":0,"keywords_processed":1,"screens_scanned":0}' "$W";;
     *) wfr stage discovery failed "$n" "word=$W rc=$rc" "$EV" '{"candidates":0,"keywords_processed":1,"screens_scanned":0}' "$W";;
   esac
+}
+# ── 落池/分拣统计(棒3b 探针可信化): push-*.js / sort-comments.js 各在人读输出之后再打一行 `TAG {json}`(stats-line.js),
+# 这里只读 $LOG 里"本次 ssh 之前的行数偏移"之后新增的部分取最后一条合法统计,不写 $LOG、不发任何 ssh。
+# 只在 wfr_on 时才会被调用(WFR_DISABLED=1/账本脚本缺失时与并入前逐字一致)。
+JQ_BIN=${WFR_JQ:-/usr/bin/jq}
+log_off(){ wc -l < "$LOG" 2>/dev/null | tr -d ' '; }
+log_stats(){ # offset tag → stdout: 该 tag 最后一条合法 JSON 对象(紧凑单行),没有则空。坏 JSON 行跳过取更早的
+  local off="$1" tag="$2" line js
+  for line in ${(Oa)${(f)"$(tail -n +$(( ${off:-0} + 1 )) "$LOG" 2>/dev/null | grep "^$tag ")"}}; do
+    js=$(print -r -- "${line#$tag }" | "$JQ_BIN" -c 'select(type=="object")' 2>/dev/null)
+    if [[ -n "$js" ]]; then print -r -- "$js"; return 0; fi
+  done
+  return 0
+}
+stat_num(){ # json key → stdout: 该键的整数值,缺失/非数字则空
+  [[ -n "$1" ]] || return 0
+  print -r -- "$1" | "$JQ_BIN" -r --arg k "$2" 'if (.[$k]|type)=="number" then (.[$k]|floor|tostring) else empty end' 2>/dev/null
+  return 0
+}
+# delivery 工件: 对账基准取落池脚本的真实统计(created=本批实际落池数,不含被历史全池去重掉的; 缺统计回落 TSV 的 LEAD 行数)
+wfr_delivery_stage(){ # prc NL push_log_offset
+  wfr_on || return 0
+  local prc="$1" NL="$2" off="$3" ev='[{"type":"log","ref":"'"$LOG"'"}]' pv pc lw dup vp note=""
+  if (( prc != 0 )); then
+    wfr stage delivery failed 1 "push rc=$prc" "$ev" '{"leads_written":0,"videos_pushed":0,"duplicates_skipped":0,"readback_verified":0,"cursor_updates":0}'
+    return 0
+  fi
+  pv=$(log_stats "$off" PUSH_VIDEOS_STATS); pc=$(log_stats "$off" PUSH_COMMENTS_STATS)
+  lw=$(stat_num "$pc" created); dup=$(stat_num "$pc" dup); vp=$(stat_num "$pv" created)
+  if [[ -z "$lw" ]]; then lw=$NL; note=" (no push stats)"; fi
+  [[ -n "$dup" ]] || dup=0
+  if [[ -z "$vp" ]]; then vp=0; [[ -n "$note" ]] || note=" (no video stats)"; fi
+  wfr stage delivery completed 1 "pushed $lw leads, $vp videos$note" "$ev" '{"leads_written":'"$lw"',"videos_pushed":'"$vp"',"duplicates_skipped":'"$dup"',"readback_verified":0,"cursor_updates":0}'
+}
+# scoring 工件: 分拣后才有真实工件(此前只有 init 写的 blocked 占位,探针在开跑时就被判)。
+# 闭集键 peer/spam 这条链没有对应分类,恒 0; strong_intent=A 级, weak_intent=B+C 级(五档分级落地后重新定义)
+wfr_scoring_stage(){ # sort_rc sort_log_offset
+  wfr_on || return 0
+  local src="$1" off="$2" ev='[{"type":"log","ref":"'"$LOG"'"}]' ss m="" sum="" pend jd
+  ss=$(log_stats "$off" SORT_STATS)
+  # 有待分拣却一条没判成(judged=0 pending>0: 模型/鉴权整批挂了)不是"分拣完成"——当作没有有效统计,记 failed;
+  # pending=0 的空批是正常的,仍 completed
+  pend=$(stat_num "$ss" pending); jd=$(stat_num "$ss" judged)
+  if [[ -n "$ss" ]] && (( ${pend:-0} > 0 && ${jd:-0} == 0 )); then
+    sum=$(print -r -- "$ss" | "$JQ_BIN" -r '"sorted judged=\(.judged//0) pending=\(.pending//0) moved=\(.moved//0)"' 2>/dev/null)
+    wfr stage scoring failed 1 "$sum" "$ev" '{"comments_scored":0,"strong_intent":0,"weak_intent":0,"peer":0,"irrelevant":0,"spam":0}'
+    return 0
+  fi
+  if [[ -n "$ss" ]]; then
+    m=$(print -r -- "$ss" | "$JQ_BIN" -c '{comments_scored:(.judged//0),strong_intent:(.grades.A//0),weak_intent:((.grades.B//0)+(.grades.C//0)),peer:0,irrelevant:(.grades["不相关"]//0),spam:0}' 2>/dev/null)
+    sum=$(print -r -- "$ss" | "$JQ_BIN" -r '"sorted judged=\(.judged//0) pending=\(.pending//0) moved=\(.moved//0)"' 2>/dev/null)
+  fi
+  if [[ -n "$m" ]]; then
+    wfr stage scoring completed 1 "$sum" "$ev" "$m"
+  else
+    wfr stage scoring failed 1 "no SORT_STATS rc=$src" "$ev" '{"comments_scored":0,"strong_intent":0,"weak_intent":0,"peer":0,"irrelevant":0,"spam":0}'
+  fi
 }
 : > $OUT
 print "[$(date +%H:%M:%S)] v2批开始 profile=$P $(wc -l < $WF)词 push=$PUSH" >> $LOG
@@ -98,14 +157,12 @@ if [[ "$PUSH" == "1" && -s $OUT ]]; then
   # 双写会连到pg默认本地库(压根没有zenithjoy.leadgen_videos表)而不是生产库,
   # 全部静默失败——真机验证时才发现(见0923 handoff)。push-raw-comments.js不碰Postgres,
   # 不受影响,但为了让两条命令共享同一次ssh session的env,统一放在同一行source。
+  PUSH_OFF=""; wfr_on && PUSH_OFF=$(log_off)   # 本次 ssh 之前的日志行数: 之后新增的输出里才有本批的 PUSH_*_STATS
   ssh -o ConnectTimeout=20 mmv "set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; node /Users/administrator/.openclaw/leadgen-scripts/push-videos.js /tmp/$TAG.tsv $TAG $LINE && node /Users/administrator/.openclaw/leadgen-scripts/push-raw-comments.js /tmp/$TAG.tsv $TAG $LINE" >> $LOG 2>&1
   prc=$?
-  # 账本 delivery: 落池 ssh 的出口码决定 completed/failed; readback_verified 由探针读回(checks/ YAML)填,这里不硬编码
-  if (( prc == 0 )); then
-    wfr stage delivery completed 1 "pushed $NL leads" '[{"type":"log","ref":"'"$LOG"'"}]' '{"leads_written":'"$NL"',"duplicates_skipped":0,"readback_verified":0,"cursor_updates":0}'
-  else
-    wfr stage delivery failed 1 "push rc=$prc" '[{"type":"log","ref":"'"$LOG"'"}]' '{"leads_written":0,"duplicates_skipped":0,"readback_verified":0,"cursor_updates":0}'
-  fi
+  # 账本 delivery: 落池 ssh 的出口码决定 completed/failed; readback_verified 由探针读回(checks/ YAML)填,这里不硬编码;
+  # leads_written/duplicates_skipped/videos_pushed 取落池脚本的真实统计(缺统计回落 $NL),见 wfr_delivery_stage
+  wfr_delivery_stage "$prc" "$NL" "$PUSH_OFF"
   print "[$(date +%H:%M:%S)] 已落池(视频+评论)" >> $LOG
   # 0923补齐:落池之后紧接着分拣——此前sort-comments.js压根没有任何自动触发点
   # (既不在cron里,也不在任何批处理链路里,只能靠人/agent手动敲,而agent侧那份
@@ -113,8 +170,12 @@ if [[ "$PUSH" == "1" && -s $OUT ]]; then
   # 从没真正跑通过)。落池跟分拣本就是同一批活的下一步,原地接上即可,不给它
   # 单独另开一条定时链路(那样反而多一层"两条链步调不一致"的新风险)。
   # 分拣失败不影响本轮采收已经落池的事实,只吞错不重试(留给下一批/下次人工核)。
+  SORT_OFF=""; wfr_on && SORT_OFF=$(log_off)
   ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/sort-comments.js $LINE" >> $LOG 2>&1
+  src=$?
   print "[$(date +%H:%M:%S)] 已分拣(判定链)" >> $LOG
+  # 账本 scoring: 分拣之后才有真实工件(有 SORT_STATS → completed, 否则 failed); n=1 覆盖 init 写的 blocked 占位项
+  wfr_scoring_stage "$src" "$SORT_OFF"
 
   # 0923补齐: 视频文案判定(judge-video.js)——此前从建成起两头都没接:①没人往
   # Postgres leadgen_videos表里写数据(push-videos.js只写飞书,已在本次一并修)
@@ -168,5 +229,5 @@ print(json.dumps(entries))
     print "[$(date +%H:%M:%S)] 已判定(视频文案链,本轮无新音频,走title兜底)" >> $LOG
   fi
 else
-  wfr stage delivery blocked 1 "push=$PUSH skipped" '[]' '{"leads_written":0,"duplicates_skipped":0,"readback_verified":0,"cursor_updates":0}'
+  wfr stage delivery blocked 1 "push=$PUSH skipped" '[]' '{"leads_written":0,"videos_pushed":0,"duplicates_skipped":0,"readback_verified":0,"cursor_updates":0}'
 fi
