@@ -30,6 +30,9 @@ const ROUTES = [
     intent: "证书/学习/求职",
     audience: "考证人群",
     tier: "精准词",
+    // 触达线：只触达这些等级的线索，各组织自行配置（决策 67762358）。等级 A 最强…E 最弱。
+    // 老数据没有等级前缀的线索一律放行（见 next-outreach-lib gradeAllowed）。当前保持「全触达」。
+    outreachGrades: ["A", "B", "C", "D", "E"],
   },
   {
     key: "yuesheng",
@@ -45,6 +48,8 @@ const ROUTES = [
     intent: "私有化部署/降本/AI办公",
     audience: "企业AI决策者",
     tier: "精准词",
+    // 触达线：只触达这些等级，各组织自行配置（决策 67762358）。A 最强…E 最弱。
+    outreachGrades: ["A", "B", "C", "D", "E"],
   },
 ];
 
