@@ -17,6 +17,16 @@ log(){ print -u2 -- "[$(date +%H:%M:%S)] $*"; }
 # 可视化旁路(0919): 每视频续报一次(与下方 lock-refresh 同理); 上报器缺失/失败一律吞掉
 WR=${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}
 wr(){ [[ -x "$WR" ]] && "$WR" "$@" >/dev/null 2>&1; true }
+# video_drifted EXPECTED_VID OBSERVED_VID —— 0929修复:抢救(back+重开评论区)后核对屏幕上
+# 的视频身份是否仍是本视频。OBSERVED为空(读不到)或与EXPECTED不同即为漂移。EXPECTED本身
+# 为空时保守放行(不判定,不是本次修复覆盖的场景)。
+video_drifted() {
+  local expected="$1" observed="$2"
+  [[ -z "$expected" ]] && return 1
+  [[ -z "$observed" || "$observed" != "$expected" ]]
+}
+# source 守卫: 单测以 HARVEST_KEYWORD_LIB=1 source 本文件只取函数,不执行主体
+[[ -n "${HARVEST_KEYWORD_LIB:-}" ]] && return 0
 # RAM盘只有2G,采收截图很快塞爆(0914实证:爆盘让mkdir全军覆没误报锁被占)
 find /Volumes/EvidenceRAM/openclaw-phone/evidence -type f \( -name "*.png" -o -name "*.mkv" -o -name "*.wav" \) -mmin +30 -delete 2>/dev/null
 
