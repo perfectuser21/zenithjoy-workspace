@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zenithjoy.local/product-map/contracts/activity-contract.schema.json",
+  "title": "能力契约（主干活动 15 字段 + 步骤）",
+  "description": "决策 3240824c（步骤契约）/ f18f56b8（设计顺序、每步拦截、key 规范）。契约 = 接口，脚本/技能/n8n 节点 = 实现。交叉引用（对象类型、探针、product-map、账本 stage、组装类型流）由 scripts/product-map/contracts-lib.mjs 校验。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "capability", "name", "workflow", "checks", "trigger_inputs", "activities"],
+  "properties": {
+    "version": { "const": 1 },
+    "capability": { "$ref": "#/$defs/key" },
+    "name": { "type": "string", "minLength": 2 },
+    "workflow": { "type": "string", "pattern": "^[a-z][a-z0-9-]+$" },
+    "checks": { "type": "string", "pattern": "^services/.+\\.yaml$" },
+    "ledger": { "type": "string", "pattern": "^services/.+\\.sh$" },
+    "trigger_inputs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/typeName" } },
+    "activities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "if": { "type": "object", "properties": { "ref": { "type": "string" } }, "required": ["ref"] },
+        "then": { "$ref": "#/$defs/activityRef" },
+        "else": { "$ref": "#/$defs/activity" }
+      }
+    },
+    "known_gaps": { "$ref": "#/$defs/gaps" }
+  },
+  "$defs": {
+    "key": { "type": "string", "pattern": "^[a-z][a-z_]*[a-z]$" },
+    "typeName": { "type": "string", "pattern": "^[A-Z][A-Za-z]+$" },
+    "fieldName": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "typeField": { "type": "string", "pattern": "^[A-Z][A-Za-z]+\\.[a-z][a-z0-9_]*$" },
+    "strings": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gap", "task"],
+        "properties": {
+          "gap": { "type": "string", "minLength": 8 },
+          "task": { "type": "string", "pattern": "^[0-9a-f]{8}$" }
+        }
+      }
+    },
+    "activityRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref"],
+      "properties": {
+        "ref": { "type": "string", "pattern": "^[a-z][a-z_]*[a-z]\\.[a-z][a-z_]*[a-z]$" }
+      }
+    },
+    "io": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "cardinality", "fields"],
+      "properties": {
+        "type": { "$ref": "#/$defs/typeName" },
+        "cardinality": { "enum": ["one", "many"] },
+        "fields": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/fieldName" } }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "cardinality", "effect", "fields"],
+      "properties": {
+        "type": { "$ref": "#/$defs/typeName" },
+        "cardinality": { "enum": ["one", "many"] },
+        "effect": { "enum": ["create", "update", "upsert"] },
+        "fields": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/fieldName" } }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "name", "order", "reads", "writes", "check", "implementation", "uses_llm"],
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "name": { "type": "string", "minLength": 2 },
+        "order": { "type": "number", "exclusiveMinimum": 0 },
+        "reads": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/typeField" } },
+        "writes": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/typeField" } },
+        "check": { "type": "string", "minLength": 6 },
+        "implementation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "ref"],
+          "properties": {
+            "status": { "enum": ["implemented", "missing"] },
+            "ref": { "type": "string", "minLength": 3 }
+          }
+        },
+        "uses_llm": { "type": "boolean" }
+      }
+    },
+    "activity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "name", "order", "version", "compatibility", "owner", "inputs", "outputs", "preconditions",
+        "postconditions", "execution", "budget", "resources", "idempotency", "failure", "side_effects", "invokers", "steps"],
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "name": { "type": "string", "minLength": 2 },
+        "order": { "type": "number", "exclusiveMinimum": 0 },
+        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "compatibility": { "enum": ["backward", "breaking"] },
+        "owner": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["department"],
+          "properties": {
+            "department": { "type": "string", "minLength": 2 },
+            "agent": { "type": "string", "minLength": 2 }
+          }
+        },
+        "inputs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/io" } },
+        "outputs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/output" } },
+        "preconditions": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 4 } },
+        "postconditions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["probe", "asserts"],
+            "properties": {
+              "probe": { "type": "string", "pattern": "^[a-z][a-z0-9_]+$" },
+              "asserts": { "type": "string", "minLength": 4 }
+            }
+          }
+        },
+        "execution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["location", "via"],
+          "properties": {
+            "location": { "enum": ["mmv", "xian-m4", "xian-m1", "phone", "hk-vps"] },
+            "via": { "type": "string", "minLength": 3 }
+          }
+        },
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["max_duration_s", "heartbeat_s"],
+          "properties": {
+            "max_duration_s": { "type": "integer", "minimum": 1 },
+            "heartbeat_s": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "resources": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["locks", "limits"],
+          "properties": {
+            "locks": { "$ref": "#/$defs/strings" },
+            "limits": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "value"],
+                "properties": {
+                  "name": { "type": "string", "minLength": 2 },
+                  "value": { "oneOf": [{ "type": "number" }, { "type": "string", "minLength": 1 }] }
+                }
+              }
+            }
+          }
+        },
+        "idempotency": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["dedupe_key", "on_duplicate"],
+          "properties": {
+            "dedupe_key": { "type": "string", "minLength": 3 },
+            "on_duplicate": { "enum": ["skip", "merge", "reject"] }
+          }
+        },
+        "failure": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["empty_ok", "retryable", "needs_human", "fatal"],
+          "properties": {
+            "empty_ok": { "$ref": "#/$defs/strings" },
+            "retryable": { "$ref": "#/$defs/strings" },
+            "needs_human": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["cases", "alert"],
+              "properties": {
+                "cases": { "$ref": "#/$defs/strings" },
+                "alert": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["channel", "object"],
+                  "properties": {
+                    "channel": { "enum": ["bark", "brain_alert", "feishu"] },
+                    "object": { "type": "string", "minLength": 3 }
+                  }
+                }
+              }
+            },
+            "fatal": { "$ref": "#/$defs/strings" }
+          }
+        },
+        "side_effects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "target", "description"],
+            "properties": {
+              "kind": { "enum": ["external_visible", "internal_write"] },
+              "target": { "type": "string", "minLength": 2 },
+              "description": { "type": "string", "minLength": 4 }
+            }
+          }
+        },
+        "invokers": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["code", "agent", "human"] } },
+        "model": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["provider", "model", "purpose"],
+            "properties": {
+              "provider": { "type": "string", "minLength": 2 },
+              "model": { "type": "string", "minLength": 2 },
+              "purpose": { "type": "string", "minLength": 2 },
+              "cost_ceiling_usd_per_run": { "type": "number", "minimum": 0 }
+            }
+          }
+        },
+        "steps": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/step" } },
+        "known_gaps": { "$ref": "#/$defs/gaps" }
+      }
+    }
+  }
+}

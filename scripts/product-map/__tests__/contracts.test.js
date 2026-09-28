@@ -107,19 +107,19 @@ test('输入类型断链（采集要 Comment 以外的前序未交出类型）�
 
 test('后置条件引用不存在的探针 → 报错', () => {
   const ctx = fresh();
-  act(ctx, 'keyword_acquisition', 'preflight').postconditions.push({ probe: 'no_such_probe', asserts: 'x' });
+  act(ctx, 'keyword_acquisition', 'preflight').postconditions.push({ probe: 'no_such_probe', asserts: '不存在的探针' });
   expectError(ctx, /no_such_probe/);
 });
 
 test('后置条件探针 stage 与活动不符 → 报错', () => {
   const ctx = fresh();
-  act(ctx, 'keyword_acquisition', 'preflight').postconditions.push({ probe: 'videos_readback', asserts: 'x' });
+  act(ctx, 'keyword_acquisition', 'preflight').postconditions.push({ probe: 'videos_readback', asserts: '挂错阶段的探针' });
   expectError(ctx, /videos_readback.*stage/);
 });
 
 test('探针被降成 warn → 报错（每步拦截）', () => {
   const ctx = fresh();
-  const probe = Object.values(ctx.checks)[0].probes.find((p) => p.key === 'pool_advanced');
+  const probe = Object.values(ctx.checks).flatMap((d) => d.probes).find((p) => p.key === 'pool_advanced');
   probe.severity = 'warn';
   expectError(ctx, /pool_advanced.*error/);
 });

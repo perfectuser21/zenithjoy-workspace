@@ -1,0 +1,27 @@
+# social-benchmark-leadgen 声明式探针文件（对标链接获客，决策 3240824c / f18f56b8）
+#
+# 对标链接获客只自带「对标发现」一个活动，其余 7 个活动原样复用关键词获客的契约与探针
+# （social-keyword-leadgen.yaml）。本文件只放对标发现的后置条件。形状同 checks/schema.json。
+# 对标发现尚无实现，探针先定义、全部 error；运行时接线随实现一起做。
+
+version: 1
+workflow: social-benchmark-leadgen
+
+probes:
+  - key: bench_candidates_persisted
+    stage: discovery
+    journey_cell: "stage:discovery"
+    probe:
+      type: sql
+      target: pg_zenithjoy
+      query: |
+        SELECT count(*)
+          FROM zenithjoy.leadgen_videos
+         WHERE harvest_batch = '$RUN_TAG'
+    expect:
+      op: ">="
+      ref: "metrics.candidates"
+    severity: error
+    note: >
+      对标发现交出 = 对标账号近期视频清单，落 leadgen_videos（leadgen-db-lib.js:22-31 upsertVideo，
+      keyword 记 bench:<sec_uid>）。形状与关键词发现 disc_candidates_persisted 相同，只是不按 $WORD 过滤。
