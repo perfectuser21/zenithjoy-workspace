@@ -93,6 +93,22 @@ test('isFallback 退场：不再有 fallback 这回事', () => {
   assert.equal(isFallback('AI人工智能训练师'), false);
 });
 
+// ── 触达等级门槛（决策 67762358：每个组织自己配「触达哪些等级」）─────────────
+test('每条业务线都有合法的 outreachGrades（非空、去重、元素 ⊆ A..E）', () => {
+  for (const r of ROUTES) {
+    assert.ok(Array.isArray(r.outreachGrades), `${r.key} 缺 outreachGrades`);
+    assert.ok(r.outreachGrades.length > 0, `${r.key} 的 outreachGrades 为空——等于整条线不触达`);
+    assert.equal(new Set(r.outreachGrades).size, r.outreachGrades.length, `${r.key} 的 outreachGrades 有重复`);
+    for (const g of r.outreachGrades) {
+      assert.ok(['A', 'B', 'C', 'D', 'E'].includes(g), `${r.key} 的等级 ${g} 不在 A..E`);
+    }
+  }
+});
+
+test('outreachGrades 缺省保持现有「全触达」行为', () => {
+  for (const r of ROUTES) assert.deepEqual(r.outreachGrades, ['A', 'B', 'C', 'D', 'E']);
+});
+
 // ── 接线守卫 ──────────────────────────────────────────────────────────────
 // 路由拒收未知标记之后，调用方就不能再传空值了。0922 实测：harvest-keyword.sh
 // 写的是 LINE="${6:-}"，而 batch2.sh 只传 5 个参数——$LINE 一直是空的，
