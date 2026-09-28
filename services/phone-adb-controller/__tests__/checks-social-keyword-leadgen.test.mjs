@@ -28,9 +28,9 @@ const { parseYaml, validateSchema, loadChecks, extractMetricKeys, STAGES } = lib
 const schema = JSON.parse(fs.readFileSync(SCHEMA_PATH, "utf8"));
 const wfrText = fs.readFileSync(WFR_PATH, "utf8");
 
-test("闭集键从 workflow-result.sh 抽出：含 delivery 四键与 COMMON 四键", () => {
+test("闭集键从 workflow-result.sh 抽出：含 delivery 五键（含 videos_pushed）与 COMMON 四键", () => {
   const keys = extractMetricKeys(wfrText);
-  for (const k of ["leads_written", "duplicates_skipped", "readback_verified", "cursor_updates",
+  for (const k of ["leads_written", "videos_pushed", "duplicates_skipped", "readback_verified", "cursor_updates",
                    "videos_processed", "comments_collected", "external_interactions", "business_writes"]) {
     assert.ok(keys.has(k), `缺闭集键 ${k}`);
   }
@@ -99,14 +99,47 @@ test("探针文件通过 schema.json（形状守卫）", () => {
   assert.ok(Array.isArray(doc.probes) && doc.probes.length >= 5, "首发至少 5 条探针");
 });
 
-test("首发五条探针键齐全且落在 delivery / scoring", () => {
+test("运行时接线的四条探针键齐全且落在 delivery / scoring；effective_count 已删（批级评分无法按词判）", () => {
   const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
   const byKey = Object.fromEntries(doc.probes.map((p) => [p.key, p]));
   for (const k of ["videos_readback", "comments_readback", "line_key_not_null"]) {
     assert.equal(byKey[k] && byKey[k].stage, "delivery", `${k} 应在 delivery`);
   }
-  for (const k of ["pool_advanced", "effective_count"]) {
-    assert.equal(byKey[k] && byKey[k].stage, "scoring", `${k} 应在 scoring`);
+  assert.equal(byKey.pool_advanced && byKey.pool_advanced.stage, "scoring", "pool_advanced 应在 scoring");
+  assert.ok(!("effective_count" in byKey), "effective_count 用 $WORD，评分是批级的，评估时 $WORD 为空，无意义 → 已删");
+  assert.ok(!doc.probes.some((p) => p.stage === "scoring" && JSON.stringify(p).includes("$WORD")), "scoring 探针不得依赖 $WORD");
+});
+
+test("videos_readback 对账基准 = metrics.videos_pushed（delivery 工件真有的键；videos_processed 只在 collection 工件里，delivery 上 ref_unresolved 恒败）", () => {
+  const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
+  const p = doc.probes.find((x) => x.key === "videos_readback");
+  assert.equal(p.expect.ref, "metrics.videos_pushed");
+  assert.ok(reqKeysOf("delivery").includes("videos_pushed"));
+  assert.match(p.note, /PUSH_VIDEOS_STATS/);
+  assert.doesNotMatch(p.note, /videos_processed 之和/);
+  // 所有 delivery 探针的 expect.ref 必须是 delivery 自己的键，否则 Brain 判 ref_unresolved
+  for (const q of doc.probes.filter((x) => x.stage === "delivery" && x.expect.ref)) {
+    assert.ok(reqKeysOf("delivery").includes(q.expect.ref.slice("metrics.".length)), `${q.key} ref ${q.expect.ref} 不在 delivery 闭集`);
+  }
+});
+
+test("comments_readback 对账基准 leads_written = push-raw-comments 本批实际落池数（PUSH_COMMENTS_STATS.created），note 说清不含历史去重掉的", () => {
+  const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
+  const p = doc.probes.find((x) => x.key === "comments_readback");
+  assert.equal(p.expect.ref, "metrics.leads_written");
+  assert.match(p.note, /PUSH_COMMENTS_STATS/);
+  assert.match(p.note, /历史去重/);
+});
+
+test("运行时接线 stage（delivery/scoring）的 http 探针 url 用 $BASE/$POOL 占位，不得写死业务线的 base id（悦升批次会读错库）", () => {
+  const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
+  const wired = doc.probes.filter((p) => p.probe.type === "http" && (p.stage === "delivery" || p.stage === "scoring"));
+  assert.ok(wired.length >= 2);
+  for (const p of wired) {
+    for (const u of [p.probe.url, p.probe.minus && p.probe.minus.url].filter(Boolean)) {
+      assert.ok(!u.includes("GNuwbzY0da8GP0sv6MGcOTu9ntd") && !u.includes("H3OrbAH49aLNebs7XvOcpS1enec"), `${p.key} url 写死了 base: ${u}`);
+    }
+    assert.match(p.probe.url, /\/apps\/\$BASE\/tables\/\$POOL\/records/, `${p.key} 应为 $BASE/$POOL`);
   }
 });
 
@@ -142,7 +175,7 @@ test("sql 探针只打 pg_zenithjoy 且 query 带 $RUN_TAG；http 探针 filter/
       assert.match(p.probe.query, /\$RUN_TAG/, `${p.key} 必须按本 run 归属`);
     } else if (p.probe.type === "http") {
       assert.match(p.probe.target, /^feishu_(jinuo|yuesheng)$/);
-      assert.match(p.probe.url, /^https:\/\/open\.feishu\.cn\/open-apis\/bitable\/v1\/apps\/[A-Za-z0-9]+\/tables\/tbl[A-Za-z0-9]+\/records/);
+      assert.match(p.probe.url, /^https:\/\/open\.feishu\.cn\/open-apis\/bitable\/v1\/apps\/(\$BASE|[A-Za-z0-9]+)\/tables\/(\$POOL|\$KEYWORD|\$LEAD|tbl[A-Za-z0-9]+)\/records/);
       assert.ok(p.probe.filter && Object.keys(p.probe.filter).length > 0, `${p.key} 缺 filter`);
       assert.match(p.probe.reduce, /^(count|field:.+)$/, `${p.key} reduce 非法`);
     }
@@ -241,4 +274,14 @@ test("warn 级探针被 schema 拒（决策 f18f56b8 不设 warn）", () => {
 test("value 与 ref 同时给被拒", () => {
   const errors = validateSchema(withProbe({ expect: { op: ">=", value: 1, ref: "metrics.leads_written" } }), schema);
   assert.ok(errors.length > 0, "value+ref 同给应被拒");
+});
+
+test("http url 占位符：$BASE/$POOL/$KEYWORD/$LEAD 通过；未知占位符（$WORD/$BOGUS）与坏形状被拒", () => {
+  const http = (url, minus) => withProbe({ probe: { type: "http", target: "feishu_jinuo", url, filter: { a: "b" }, reduce: "count", ...(minus ? { minus: { url: minus, filter: { a: "b" }, reduce: "count" } } : {}) } });
+  const base = "https://open.feishu.cn/open-apis/bitable/v1/apps";
+  for (const t of ["$POOL", "$KEYWORD", "$LEAD"]) assert.deepEqual(validateSchema(http(`${base}/$BASE/tables/${t}/records`), schema), [], t);
+  assert.deepEqual(validateSchema(http(`${base}/$BASE/tables/$POOL/records`, `${base}/$BASE/tables/$KEYWORD/records`), schema), [], "minus 同形");
+  assert.deepEqual(validateSchema(http(`${base}/GNuwbzY0da8GP0sv6MGcOTu9ntd/tables/tblmrJTyVgzTj89P/records`), schema), [], "字面 id 仍合法（向后兼容）");
+  assert.ok(validateSchema(http(`${base}/$BOGUS/tables/$POOL/records`), schema).length > 0, "$BOGUS 应被拒");
+  assert.ok(validateSchema(http(`${base}/$BASE/tables/$WORD/records`), schema).length > 0, "$WORD 不是表占位符");
 });
