@@ -6,7 +6,7 @@
 #   各测一种升量方式找真实上限(见 dm-rate-ramp-lib.js + config/dm-rate-ramp.json):
 #   jinoshengyuan-work=逐日阶梯, legacy=单日内快速阶梯,都设理智天花板60/天。
 #   连续2次遇到未识别的新失败模式(classify_failure=other)自动熔断该号,防止真把号测坏
-#   (熔断标记 ~/bin-harvest/state/dm-paused-<profile>.flag,需人工核查后手动删除)。
+#   (熔断标记 ~/bin-harvest/state/dm-paused-<profile>.flag;0928 起自动熔断均为软熔断、到期自动试发恢复,见 auto_pause)。
 # 0920 实测发现结构性瓶颈①: 每30分钟一次tick、每次最多发1条、两号轮流,理论上限只有
 #   ~48tick/天×70%执行率÷2号≈17条/号/天,天花板配到55/60也够不着——不是账号被限,是
 #   节奏设计把自己锁死了。改成一次tick内可连发多条(每条之间随机停顿,而不是死等到下个
@@ -138,6 +138,29 @@ unavailable_detail(){
   done
   print -- "$out"
 }
+# auto_pause <profile> <原因首行> [原始输出片段]: 熔断后的恢复由系统自动判定(决策 e08227ee,0928 触达停摆 4 天无人知)——
+# 写软熔断 flag(第一行 soft_until=<epoch>),冷却 = min(2h × 2^(n-1), 24h),n = 连续自动熔断次数(dm-pausecount-<p>.txt)。
+# 到期由 expire_soft_pauses 自动解除;到期后的第一单即半开试发(调用方把 anomaly 计数留在 1,再失败一次立刻再熔断、冷却翻倍);
+# 任一发送成功清零 pausecount/anomaly。人工放入的永久 flag(无 soft_until)仍绝不自动清。
+auto_pause(){
+  local p="$1" why="$2" raw="${3:-}" cf n cool until_ts hours flag
+  cf="$STATE_DIR/dm-pausecount-$p.txt"
+  n=$(( $(cat "$cf" 2>/dev/null || echo 0) + 1 ))
+  print -- "$n" > "$cf"
+  cool=$(( 7200 * (1 << (n > 5 ? 5 : n - 1)) )); (( cool > 86400 )) && cool=86400
+  until_ts=$(( $(date +%s) + cool )); hours=$(( cool / 3600 ))
+  flag="$STATE_DIR/dm-paused-$p.flag"
+  {
+    echo "soft_until=$until_ts"
+    echo "$(date '+%Y%m%d %H:%M') 自动熔断(第${n}次): ${why}"
+    echo "冷却 ${hours} 小时后自动解除并试发一单:成功即恢复,失败则再熔断且冷却翻倍(封顶 24 小时)。无需人工处理。"
+    [[ -n "$raw" ]] && print -- "$raw" | tail -5 | head -c 600
+  } > "$flag"
+  log "⏸️ $p 自动熔断第${n}次,${hours}小时后自动试发: ${why}"
+  local extra=""; (( n >= 3 )) && extra="已连续${n}次自动试发失败,建议看一眼手机状态。"
+  notify_once "pause-$p-$n" "获客触达熔断" "${p}${why}，已自动暂停${hours}小时，到期自动试发一单，成功即恢复。${extra}" "$cool"
+}
+
 # expire_soft_pauses: 过期的软熔断 flag 删除并重置 dm-uifail 计数;永久熔断绝不自动清
 expire_soft_pauses(){
   local f p until_ts now
@@ -234,7 +257,7 @@ while (( SECONDS - TICK_BODY_START < TICK_BUDGET )); do
     UNAVAIL_DETAIL=$(unavailable_detail)
     log "所有触达账号均不可用(${UNAVAIL_DETAIL:-无}),本tick结束(已发${SENDS_THIS_TICK}条)"
     if [[ "$UNAVAIL_DETAIL" == *=paused* ]]; then
-      notify_once "paused-all-${DATE_TAG}" "获客触达停摆" "触达账号均不可用: ${UNAVAIL_DETAIL}。paused=熔断,核查 ${STATE_DIR}/dm-paused-*.flag(内含原因)与 ~/anomaly-*.log,确认后删除对应 flag 才会恢复;halted=今日风控停发,cap=今日已达发送上限。" 86400
+      notify_once "paused-all-${DATE_TAG}" "获客触达停摆" "触达账号均不可用: ${UNAVAIL_DETAIL}。paused=熔断(原因见 ${STATE_DIR}/dm-paused-*.flag,自动熔断到期自动试发恢复;仅人工放入的永久熔断需人工解除);halted=今日风控停发(明日自动恢复),cap=今日已达发送上限。" 86400
     fi
     break
   fi
@@ -350,7 +373,7 @@ while (( SECONDS - TICK_BODY_START < TICK_BUDGET )); do
       # 0920: 计入今日发送计数(不管后面判成功还是仅互关受限,都是一次真实发送尝试);
       # 且证明账号还能正常发送,清掉连续异常计数(熔断只认"连续"未识别失败)。
       echo $(( $(cat "$COUNT_FILE" 2>/dev/null || echo 0) + 1 )) > "$COUNT_FILE"
-      rm -f "$STATE_DIR/dm-anomaly-$PROFILE.txt" "$STATE_DIR/dm-uifail-$PROFILE.txt"
+      rm -f "$STATE_DIR/dm-anomaly-$PROFILE.txt" "$STATE_DIR/dm-uifail-$PROFILE.txt" "$STATE_DIR/dm-pausecount-$PROFILE.txt"
       # 0919 真机实证(截图+ui-evidence XML实锤): 消息气泡渲染成功≠真送达——对方设置
       # "仅互关可发消息"时,气泡照样能发出来(send_status=sent),但对方收不到,界面会
       # 追加系统提示"...暂无法给对方发送消息"。发送后借同一把锁二次核验,不能只信气泡。
@@ -430,23 +453,14 @@ while (( SECONDS - TICK_BODY_START < TICK_BUDGET )); do
         print -- "$OUT" >> ~/anomaly-$PROFILE.log
         log "🚨 单#$SEQ 未识别新失败模式(第${ANOMALY_COUNT}次连续),原始输出已存 ~/anomaly-$PROFILE.log"
         if (( ANOMALY_COUNT >= 2 )); then
-          touch "$PAUSE_FLAG"
-          log "⛔⛔ $PROFILE 连续${ANOMALY_COUNT}次未识别失败,自动熔断——这可能就是真实限流阈值,人工核查 ~/anomaly-$PROFILE.log 后手动删除 $PAUSE_FLAG 才会恢复"
-          notify_once "pause-$PROFILE" "获客触达熔断" "${PROFILE}因连续${ANOMALY_COUNT}次未识别失败已熔断,需人工核查 ~/anomaly-${PROFILE}.log,确认后删除 ${PAUSE_FLAG} 才会恢复" 86400
+          auto_pause "$PROFILE" "连续${ANOMALY_COUNT}次未识别失败(可能是平台限流,原始输出见 ~/anomaly-$PROFILE.log)" "$OUT"
+          echo 1 > "$ANOMALY_FILE"   # 半开:到期后的第一单再失败一次即再熔断
         fi
       elif [[ "$CLS" == "account_mismatch" ]]; then
-        # 0923真机实证(0921晚langzi463485被登出事故复现): 设备上登的账号跟本单要求分发的
-        # 账号对不上,一次就能确定不是偶发抖动(不像"other"要等连续2次才敢下判断)——继续
-        # 用错账号重试只会把消息以错误身份发给真实线索,越试越糟。第一次命中就直接停发,
-        # 且自动把原因写进熔断标记(不用再翻~/anomaly-*.log人工诊断一遍才知道是号掉了)。
-        touch "$PAUSE_FLAG"
-        {
-          echo "$(date '+%Y%m%d %H:%M') 自动检测: 账号身份校验失败,登录账号与本单要求的分发账号($SENDER)不符"
-          echo "原始信号: $(print -- "$OUT" | grep -E 'sender account does not match|account identity was not visible' | tail -1 | head -c 200)"
-          echo "需人工重新登录正确账号后,删除本文件才会恢复自动触达。"
-        } > "$PAUSE_FLAG"
-        log "⛔⛔ $PROFILE 账号身份不符(见 $PAUSE_FLAG),已自动熔断,不再重试(用错身份继续发只会更糟)"
-        notify_once "pause-$PROFILE" "获客触达熔断" "${PROFILE}因账号身份校验失败(登录账号与分发账号${SENDER}不符)已熔断,需人工核查并重新登录,确认后删除 ${PAUSE_FLAG} 才会恢复" 86400
+        # 0923真机实证(0921晚langzi463485被登出事故复现): 设备上登的账号跟本单要求分发的账号对不上,一次就能确定
+        # 不是偶发抖动——继续用错账号重试只会把消息以错误身份发给真实线索。第一次命中就停发;身份核验在发送前,
+        # 到期试发同样先核验,不会用错身份发出去,故恢复也交给 auto_pause 自动判定(重新登录后下次试发即恢复)。
+        auto_pause "$PROFILE" "账号身份校验失败(登录账号与分发账号${SENDER}不符,可能被登出)" "$(print -- "$OUT" | grep -E 'sender account does not match|account identity was not visible' | tail -1 | head -c 200)"
       fi
       mark "$RID" failed "${REASON:-rc=$RC}"
       log "❌ 单#$SEQ 失败($CLS): ${REASON:-rc=$RC}"
