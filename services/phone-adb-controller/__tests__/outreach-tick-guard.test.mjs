@@ -233,6 +233,20 @@ test("e2 expire_soft_pauses：过期软熔断被清（连同 uifail 计数），
   assert.match(c.log(), /legacy/);
 });
 
+test("e2b 人工清掉熔断 flag 后，该账号的熔断告警去重 marker 被重置（当天再熔断能再响）；flag 仍在则保留", { skip: SKIP }, () => {
+  const c = setup();
+  const now = String(Math.floor(Date.now() / 1000));
+  c.flag("legacy", "永久熔断\n");
+  c.stateFile("notify-pause-legacy.marker", now);              // flag 还在 → 保留
+  c.stateFile("notify-pause-jinoshengyuan-work.marker", now);  // flag 已被人工删 → 重置
+  c.stateFile("notify-halt-legacy-x.marker", now);             // 其它 key 不动
+  const r = c.fn("expire_soft_pauses");
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(existsSync(join(c.state, "notify-pause-legacy.marker")), "flag 仍在，去重 marker 应保留");
+  assert.ok(!existsSync(join(c.state, "notify-pause-jinoshengyuan-work.marker")), "flag 已清，去重 marker 应被重置");
+  assert.ok(existsSync(join(c.state, "notify-halt-legacy-x.marker")), "无关 marker 不得被删");
+});
+
 test("e3 软熔断的可用性：未过期→paused；过期未清→可用；永久熔断→paused", { skip: SKIP }, () => {
   const c = setup();
   const now = Math.floor(Date.now() / 1000);

@@ -158,3 +158,10 @@ test("接线守卫：NO_SENDER 判定必须在预写「触达中」之前", () =
   assert.ok(iSender > 0 && iClaim > 0, "找不到 NO_SENDER 或预写触达中的位置");
   assert.ok(iSender < iClaim, "NO_SENDER 在预写触达中之后——全被排除时线索已被动过");
 });
+
+test("接线守卫：列表请求必须带 automatic_fields=true（飞书默认不返回 last_modified_time，悬空回收会永远空转）", () => {
+  const src = readFileSync(new URL("../next-outreach.js", import.meta.url), "utf8");
+  const listCall = src.split("\n").find((l) => l.includes("/records?page_size="));
+  assert.ok(listCall, "找不到列表请求");
+  assert.match(listCall, /automatic_fields=true/);
+});

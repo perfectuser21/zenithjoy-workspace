@@ -30,7 +30,7 @@ function argValue(name) { const i = process.argv.indexOf(name); return i > 0 ? p
   async function all(table) {
     const rows = []; let pt = "";
     do {
-      const r = await (await fetch(`https://open.feishu.cn/open-apis/bitable/v1/apps/${B}/tables/${table}/records?page_size=100${pt?"&page_token="+pt:""}`, { headers: H })).json();
+      const r = await (await fetch(`https://open.feishu.cn/open-apis/bitable/v1/apps/${B}/tables/${table}/records?page_size=100&automatic_fields=true${pt?"&page_token="+pt:""}`, { headers: H })).json();
       rows.push(...(r.data.items || []));
       pt = r.data.has_more ? r.data.page_token : "";
     } while (pt);

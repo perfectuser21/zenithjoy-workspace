@@ -151,6 +151,10 @@ expire_soft_pauses(){
       log "♻️ ${p} 软熔断已到期自动恢复(界面读取失败计数已重置)"
     fi
   done
+  # 熔断已被人工清除(flag 不在)→ 重置该账号的熔断告警去重 marker,否则当天再次熔断不会再响
+  for p in "${OUTREACH_PROFILES[@]}"; do
+    [[ -e "$STATE_DIR/dm-paused-$p.flag" ]] || /bin/rm -f "$STATE_DIR/notify-pause-$p.marker"
+  done
   return 0
 }
 
