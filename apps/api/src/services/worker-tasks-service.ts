@@ -159,6 +159,24 @@ export async function reportStep(taskId: string, r: StepReport) {
   return { ok: true, screenshot_ref: ref };
 }
 
+/**
+ * 线索数规范化（0929）：采收收尾带 evidence.leads（本批 LEAD 行数）。0 条线索的批次状态仍是 completed
+ * （跑完了、不是故障），但必须显式标 zero_leads=true + result_note，页面/Brain 才能把"白跑"与真出线索分开。
+ * 不带 leads 的任务（退让、非采收）不加任何标记，避免误标。
+ */
+export function normalizeLeads(evidence: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!evidence || !('leads' in evidence) || evidence.leads === undefined || evidence.leads === null) return evidence;
+  const n = evidence.leads;
+  if (typeof n !== 'number' || !Number.isInteger(n) || n < 0) {
+    throw new WorkerTaskError('INVALID_LEADS', 'evidence.leads 须为非负整数', 400);
+  }
+  const zero = n === 0;
+  return {
+    ...evidence, leads: n, zero_leads: zero,
+    ...(zero ? { result_note: '零线索：采收跑完但本批没有产出线索' } : {}),
+  };
+}
+
 export async function completeTask(taskId: string, body: {
   outcome: Outcome; executor_id: string; evidence?: Record<string, unknown>; error_code?: string; failed_step?: number;
 }) {
@@ -168,8 +186,8 @@ export async function completeTask(taskId: string, body: {
   if (body.outcome === 'failed' && (!body.error_code || !Number.isInteger(body.failed_step))) {
     throw new WorkerTaskError('FAILURE_DETAIL_REQUIRED', 'failed 必带 error_code + failed_step', 400);
   }
+  let evidence: Record<string, unknown> | null = normalizeLeads(body.evidence ?? null);
   const t = await loadTask(taskId, body.executor_id, true);
-  let evidence: Record<string, unknown> | null = body.evidence ?? null;
   if (evidence && typeof evidence.screenshot_jpeg_b64 === 'string') {
     assertShotSize(evidence.screenshot_jpeg_b64 as string);
     const ref = await saveShot(t.tenant_id, taskId, 9999, evidence.screenshot_jpeg_b64 as string);
@@ -198,6 +216,7 @@ export async function completeTask(taskId: string, body: {
         error_code: body.error_code ?? null,
         leads_local: (evidence as Record<string, unknown> | null)?.leads_local ?? null,
         leads_persisted: (evidence as Record<string, unknown> | null)?.leads_persisted ?? null,
+        ...(evidence && 'leads' in evidence ? { leads: evidence.leads, zero_leads: evidence.zero_leads } : {}),
         ...(t.misjudgedSweptAt ? { lease_misjudged: true } : {}),
       });
     }
@@ -278,6 +297,8 @@ export async function getActivity(tenantId: string, agentId: string) {
   const hist = await pool.query<HistoryRow>(
     `SELECT t.id, t.title, t.status, t.steps_total, t.started_at, t.finished_at, t.failed_step, t.error_code,
             t.evidence->>'screenshot_ref' AS evidence_screenshot_ref,
+            CASE WHEN jsonb_typeof(t.evidence->'leads') = 'number' THEN (t.evidence->>'leads')::int END AS leads,
+            CASE WHEN jsonb_typeof(t.evidence->'zero_leads') = 'boolean' THEN (t.evidence->>'zero_leads')::boolean END AS zero_leads,
             CASE WHEN t.finished_at IS NOT NULL
                  THEN (EXTRACT(EPOCH FROM (t.finished_at - t.started_at)) * 1000)::bigint END AS duration_ms,
             fs.foreground_pkg AS failed_foreground_pkg, fs.diag_line AS failed_diag_line, fs.screenshot_ref AS failed_screenshot_ref
@@ -298,7 +319,7 @@ export async function getActivity(tenantId: string, agentId: string) {
 interface HistoryRow {
   id: string; title: string; status: string; steps_total: number; started_at: string; finished_at: string | null;
   failed_step: number | null; error_code: string | null; evidence_screenshot_ref: string | null;
-  duration_ms: string | number | null;
+  duration_ms: string | number | null; leads: number | null; zero_leads: boolean | null;
   failed_foreground_pkg: string | null; failed_diag_line: string | null; failed_screenshot_ref: string | null;
 }
 

@@ -242,7 +242,10 @@ lease_heartbeat_start "$SERIAL"
 B2OUT=$(/bin/zsh "$BATCH2" "$P" "$WF" "$TAG" "$PUSH" "$SERIAL" 2>&1 | tee -a $LOG || true)
 lease_heartbeat_stop
 if print -r -- "$B2OUT" | grep -q 'BATCH2_ESCALATE=hash_mismatch'; then escalate "词单在 init 后被改动(hash 不一致)，本批已停(fail-closed)"; fi
-log "批完成: $(grep -c '^LEAD' ~/night-$TAG.tsv 2>/dev/null || echo 0) LEAD"
+# 本批线索数随 done 上报(0929): 0 条线索的批次与出线索的批次不能都只是一个 completed。
+# 不用 `|| echo 0`: grep -c 零命中时已打印 0 且退出 1,再 echo 会变成 "0\n0"。文件缺失时 grep 无输出 → 兜 0
+NLEAD=$(grep -c '^LEAD' ~/night-$TAG.tsv 2>/dev/null); NLEAD=${NLEAD:-0}
+log "批完成: $NLEAD LEAD"
 wr step "$SERIAL" 3 done
 
 # ── ⑤ 效果回写(词赛马数据闭环) ──
@@ -257,4 +260,4 @@ if [[ "$PUSH" == "1" ]]; then
 else
   wr step "$SERIAL" 4 done "PUSH=0 跳过回写"
 fi
-wr done "$SERIAL"
+wr done "$SERIAL" "$NLEAD"
