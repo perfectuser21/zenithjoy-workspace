@@ -20,6 +20,11 @@ if ! command -v zsh >/dev/null 2>&1; then
   echo "  zsh 缺失，安装中（video-link-restore 守卫需要它直接跑 douyin-phone-adb）"
   sudo apt-get update -qq && sudo apt-get install -y -qq zsh
 fi
+# account-current-nickname 守卫要真跑抖音号/昵称提取（/usr/bin/xmllint），同理缺就装，不 skip。
+if [[ ! -x /usr/bin/xmllint ]]; then
+  echo "  xmllint 缺失，安装中（account-current-nickname 守卫需要它）"
+  sudo apt-get update -qq && sudo apt-get install -y -qq libxml2-utils
+fi
 
 echo "[1/3] phone-adb-controller 纯函数库单测（own-accounts-lib/lead-fields-lib/next-outreach-lib）"
 node --test "$ROOT"/services/phone-adb-controller/__tests__/*.test.mjs
