@@ -90,6 +90,34 @@ test("transcribeAudio: 转写结果为空时抛错,不静默返回空字符串",
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("transcribeAudio: 空转写的错误带 emptyTranscript 标记(0929修复——调用方靠此区分'真没内容'和'调用失败')", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "audio-test-"));
+  const audioPath = path.join(dir, "a.wav");
+  fs.writeFileSync(audioPath, Buffer.from("x"));
+  const httpPost = async () => ({ output: { output: {} } });
+  try {
+    await transcribeAudio(audioPath, { httpPost, apiKey: "sk-test" });
+    assert.fail("应该抛错");
+  } catch (e) {
+    assert.equal(e.emptyTranscript, true);
+  }
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("transcribeAudio: 调用本身失败(网络异常)不带 emptyTranscript 标记", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "audio-test-"));
+  const audioPath = path.join(dir, "a.wav");
+  fs.writeFileSync(audioPath, Buffer.from("x"));
+  const httpPost = async () => { throw new Error("network timeout"); };
+  try {
+    await transcribeAudio(audioPath, { httpPost, apiKey: "sk-test" });
+    assert.fail("应该抛错");
+  } catch (e) {
+    assert.notEqual(e.emptyTranscript, true);
+  }
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("transcribeAudio: 找不到apiKey时抛错,不发请求", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "audio-test-"));
   const audioPath = path.join(dir, "a.wav");

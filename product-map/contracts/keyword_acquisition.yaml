@@ -280,13 +280,14 @@ activities:
       - { key: judge_grade, name: 模型三合一判级, order: 2, reads: [Comment.body, Video.transcript, Video.title], writes: [Comment.relevance, Comment.intent_grade],
           check: "intent_grade ∈ {A, B, C, 不相关}；复核解析失败落 C", implementation: { status: implemented, ref: "judge-comment.js" }, uses_llm: true }
       - { key: upsert_lead, name: 合格行进线索表, order: 3, reads: [Comment.douyin_id, Comment.nickname, Comment.profile_url, Comment.intent_grade], writes: [Lead.douyin_id, Lead.nickname, Lead.profile_url, Lead.intent_grade, Lead.repeat_hits, Lead.status, Lead.line_key],
-          check: "A/B 级：新建（状态=待触达）或已有行 repeat_hits+1，按抖音号去重", implementation: { status: implemented, ref: "sort-comments-lib.js:55-80" }, uses_llm: false }
+          check: "相关(A/B/C级)：新建（状态=待触达）或已有行 repeat_hits+1，按抖音号去重；只排除'不相关'(同行/广告)——0914既有决定,含C级都留档(sort-comments-lib.js:57)", implementation: { status: implemented, ref: "sort-comments-lib.js:55-80" }, uses_llm: false }
       - { key: advance_pool, name: 推进池状态, order: 4, reads: [Comment.dedup_key], writes: [Comment.process_status, Comment.promoted],
           check: "线索落地之后才推进 已分拣（永远最后一步）", implementation: { status: implemented, ref: "sort-comments-lib.js:81-82" }, uses_llm: false }
     known_gaps:
       - { gap: "现状评分在落池之后对飞书评论池做（batch2.sh:116），设计为对采集产物做、配送一次交付", task: 8bb3af55 }
       - { gap: "关键词有效线索数回写（update-keyword-stats）在批次收工后才运行，批内无法判定；改为下一批开头对上一批判定（待做）", task: 6b133a81 }
       - { gap: "scoring 工件的 peer、spam 两个闭集键这条链没有对应分类，恒为 0；strong_intent=A 级、weak_intent=B+C 级为当前映射，五档分级落地（决策 b93422c6）后重新定义", task: 4ca3b584 }
+      - { gap: "0929实证: 决策b93422c6的五档分级(A~E)只在触达筛选层落地了(next-outreach-lib.js的GRADE_ORDER/outreachGrades)，评论判级层(judge-comment.js:19 GRADES=[A,B,C,不相关])从未升级到五档——D/E两档在触达筛选里永远筛不出东西，是死档。需要判级层同步升到五档才算真落地，不是两层各干各的", task: 4ca3b584 }
 
   # ───────────────────────────── 6 配送 ─────────────────────────────
   - key: delivery
