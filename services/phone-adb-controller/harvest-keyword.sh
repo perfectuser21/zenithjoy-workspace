@@ -264,7 +264,10 @@ while (( i < ${#CARD_ARR[@]} )); do
   if [[ "$QV" != matched ]]; then
     if [[ "$QV" == rejected ]]; then log "  判定不合格(rejected),不采评论"
     else log "  判定未出结论(pending: $(print -r -- "$QR" | head -c 150)),本视频本轮不采,留待重判"; fi
-    $C --profile "$P" back-to-results >/dev/null 2>&1 || true
+    # 0929修复(DoD审计发现真机复现): back-to-results 不传关键词只核实页面类型，
+    # 分不清"真结果页"和 current-video-link 内部的暂存草稿页(两者同 Activity)——
+    # 12词×3卡实测100%误判。走封装函数核实关键词+命中兜底重搜时重扫卡片。
+    back_to_results_and_maybe_rescan "$TAG-v$i-btr"
     continue
   fi
   log "  判定合格(matched/$QSRC),开采评论"

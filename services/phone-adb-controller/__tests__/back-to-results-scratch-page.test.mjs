@@ -156,9 +156,13 @@ test('接线守卫：harvest-keyword.sh 主循环的6处归位调用必须全部
     + `不会重扫卡片: ${JSON.stringify(bareCalls)}`);
 
   const wrapperCalls = src.match(/back_to_results_and_maybe_rescan "\$TAG-v\$i-btr"/g) || [];
-  assert.equal(wrapperCalls.length, 6,
-    `期望主循环6处归位调用都用封装函数，实际找到 ${wrapperCalls.length} 处`
-    + `(数量对不上说明有调用点被漏改或者脚本结构变了，需要人工核对)`);
+  // 0929 rebase到main后发现主分支并发合并的PR(#2011"先判后采")又新增了一处裸调用——
+  // 数量断言故意留在这里而不是只判断">0"，就是为了让这类"新增调用点没跟上封装函数"
+  // 的情况在CI里报红，不是宽松地"只要有一些走了封装函数就算过"。
+  assert.equal(wrapperCalls.length, 7,
+    `期望主循环7处归位调用都用封装函数，实际找到 ${wrapperCalls.length} 处`
+    + `(数量对不上说明有调用点被漏改、或者脚本结构变了/main并发合并引入了新调用点，`
+    + `需要人工核对每一处)`);
 });
 
 test('接线守卫：back_to_results_and_maybe_rescan 命中兜底重搜必须重扫卡片并重置 i', () => {
