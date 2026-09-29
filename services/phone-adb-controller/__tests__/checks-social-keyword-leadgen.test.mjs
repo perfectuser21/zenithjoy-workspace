@@ -44,9 +44,9 @@ function reqKeysOf(stage) {
   return m ? m[1].split(/\s+/) : [];
 }
 
-test("STAGES = 契约 8 活动设计顺序；账本 req_keys 7 个 stage = STAGES 去掉 outreach（同序）", () => {
+test("STAGES = 契约 8 活动设计顺序；账本 req_keys 8 个 stage 同序（6b133a81 起触达进账本）", () => {
   assert.deepEqual([...STAGES], DESIGN_ORDER);
-  assert.deepEqual(reqStages(), DESIGN_ORDER.filter((s) => s !== "outreach"));
+  assert.deepEqual(reqStages(), DESIGN_ORDER);
 });
 
 test("8 个活动每个都至少挂 1 条探针（缺探针=后置条件无判定）", () => {
@@ -54,12 +54,11 @@ test("8 个活动每个都至少挂 1 条探针（缺探针=后置条件无判�
   for (const s of STAGES) assert.ok(doc.probes.some((p) => p.stage === s), `stage ${s} 没有探针`);
 });
 
-test("metric 探针：ref 只能引本 stage 的 req_keys 闭集键；outreach 不在账本不得用 metric", () => {
+test("metric 探针：ref 只能引本 stage 的 req_keys 闭集键", () => {
   const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
   const metric = doc.probes.filter((p) => p.probe.type === "metric");
   assert.ok(metric.length >= 1, "至少一条 metric 探针（preflight/cleanup 只有账本指标可判）");
   for (const p of metric) {
-    assert.notEqual(p.stage, "outreach", `${p.key} outreach 无账本工件`);
     const k = /^metrics\.([a-z_]+)$/.exec(p.probe.ref)[1];
     assert.ok(reqKeysOf(p.stage).includes(k), `${p.key} 引了非本 stage 的键 ${k}`);
     assert.ok("value" in p.expect, `${p.key} metric 探针必须对常量断言`);
@@ -229,7 +228,7 @@ test("verify-step resolveLineKey：profile 名 / 业务线名 → 路由键；�
 // 运行时读回接线棘轮：探针定义已补齐 8 个 stage，但 workflow-result.sh 运行时只对 WFR_PROBE_STAGES 读回。
 // 其余 stage 的运行时接线（metric 探针传 --metrics-json、outreach 接账本）挂任务 6b133a81；
 // 接上一个就必须从 RUNTIME_PENDING 删一个——清单与现实不符即红，防"定义了但永远不跑"被遗忘。
-const RUNTIME_PENDING = ["collection", "cleanup", "discovery", "outreach", "preflight", "qualification"];
+const RUNTIME_PENDING = [];   // 6b133a81：8 个 stage 全部接上运行时读回+拦截，棘轮清零
 test("WFR_PROBE_STAGES ∪ RUNTIME_PENDING(6b133a81) == YAML stage 集合，且两者不相交", () => {
   const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
   const yamlStages = [...new Set(doc.probes.map((p) => p.stage))].sort();

@@ -191,9 +191,9 @@ test("delivery 落池失败（ssh 非零）→ failed，metrics 全 0（含 vide
   assert.deepEqual(pick(dv.metrics, DELIVERY_KEYS), { leads_written: 0, duplicates_skipped: 0, videos_pushed: 0, readback_verified: 0, cursor_updates: 0 });
 });
 
-test("scoring：分拣后写真实工件 scoring.1（completed），metrics = judged / A / B+C / 不相关；peer、spam 恒 0；覆盖 init 的 blocked 占位", { skip: SKIP }, () => {
+test("scoring：分拣后写真实工件 scoring.1（completed），metrics = judged / A / B+C / 不相关；peer、spam 恒 0（init 不再写占位，6b133a81）", { skip: SKIP }, () => {
   const ctx = setup(["ok"], { push: "1", stats: true });
-  assert.equal(book(ctx).stages.scoring.status, "blocked", "前提：init 写的占位");
+  assert.equal(book(ctx).stages.scoring.status, "pending", "前提：init 不再写 not_in_profile 占位");
   const r = run(ctx, { env: { FAKE_PV: PV, FAKE_PC: PC, FAKE_SORT: SORT } });
   assert.equal(r.status, 0, r.stderr);
   const sc = art(ctx, "scoring.1");
@@ -202,7 +202,7 @@ test("scoring：分拣后写真实工件 scoring.1（completed），metrics = ju
   assert.deepEqual(pick(sc.metrics, Object.keys(ZERO_SCORING)), { comments_scored: 4, strong_intent: 1, weak_intent: 2, peer: 0, irrelevant: 1, spam: 0 });
   assert.ok(sc.evidence.length >= 1);
   assert.equal(book(ctx).stages.scoring.status, "completed");
-  assert.equal(book(ctx).stages.scoring.items.length, 1, "n=1 覆盖占位项，不新增");
+  assert.equal(book(ctx).stages.scoring.items.length, 1, "分拣后恰一项");
 });
 
 test("scoring：分拣无统计 / ssh 失败 → scoring.1 failed，metrics 全 0，summary 带 rc", { skip: SKIP }, () => {
@@ -232,11 +232,11 @@ test("scoring：有待分拣但一条没判成（judged=0 pending>0，模型/鉴
   assert.equal(art(ctx0, "scoring.1").status, "completed");
 });
 
-test("scoring：PUSH=0 不分拣 → 不写 scoring.1 工件（占位仍在）", { skip: SKIP }, () => {
+test("scoring：PUSH=0 不分拣 → batch2 不写 scoring.1 工件（没跑到的阶段由 finalize 补 not_run 并读回）", { skip: SKIP }, () => {
   const ctx = setup(["ok"], { push: "0", stats: true });
   assert.equal(run(ctx).status, 0);
   assert.ok(!arts(ctx).some((f) => f.includes(".scoring.")));
-  assert.equal(book(ctx).stages.scoring.status, "blocked");
+  assert.equal(book(ctx).stages.scoring.status, "pending");
 });
 
 test("WFR_DISABLED=1 + 假 ssh 吐统计行：日志/产物/子进程 argv 仍与并入前逐字一致（解析代码不写 $LOG、不多发 ssh）", { skip: SKIP }, () => {
