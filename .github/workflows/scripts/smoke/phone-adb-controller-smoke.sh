@@ -576,7 +576,8 @@ for f in "$D"/*.js; do
 done
 for f in "$D"/*.sh; do
   bn="$(basename "$f")"
-  [[ "$bn" == "deploy.sh" ]] && continue
+  # drift-check.sh 是 mmv 本机 launchd 跑的对账脚本(不下发设备),由层31单独守
+  [[ "$bn" == "deploy.sh" || "$bn" == "drift-check.sh" ]] && continue
   grep -qF "$bn" "$_DEPLOY" || fail "deploy.sh 清单漏了 $bn(新增/改名的.sh文件必须补进 DEVICE_SH_FILES,否则合并PR后机器上永远是旧版)"
 done
 
@@ -716,5 +717,17 @@ grep -qF '孤儿escort清理' <<< "$_HC" && fail "harvest-cron.sh 孤儿 escort 
 grep -qF 'WFR_DISABLED' "$D/README.md" || fail "README 缺 WFR_DISABLED 关钩子说明"
 grep -qF 'harvest-cron-v4.sh' "$D/README.md" && fail "README 仍引用 harvest-cron-v4.sh(部署会 scp 一个不存在的文件)"
 grep -qF 'ledger.mjs' "$_DEPLOY" || fail "deploy.sh 清单漏 ledger.mjs(workflow-result.sh 硬依赖,少了它账本全程 warn)"
+
+# 层31: 部署漂移对账(0929)——deploy.sh 只能人工触发,09-27 只拷了 xian-m4,xian-m1 跑一天旧版无人发现。
+# drift-check.sh 从 deploy.sh 的数组解析清单,数组改名/改形状会让它 exit 2;launchd 用 /bin/bash 3.2,禁关联数组。
+_DC="$D/drift-check.sh"
+[[ -s "$_DC" ]] || fail "drift-check.sh 缺失(部署漂移对账,mmv 每日 launchd 跑)"
+bash -n "$_DC" || fail "drift-check.sh 语法错误"
+if grep -qE '(declare|local) -A' <<< "$(grep -vE '^[[:space:]]*#' "$_DC")"; then fail "drift-check.sh 用了关联数组(launchd 下 /bin/bash 3.2 不支持,会静默失效)"; fi
+for _arr in MMV_JS_FILES MMV_TOPLEVEL_FILES DEVICE_SH_FILES DEVICE_NODE_FILES DEVICE_CTL_FILES DEVICE_CTL_DIRS; do
+  grep -qE "^${_arr}=\\(" "$_DEPLOY" || fail "deploy.sh 缺数组 ${_arr}(drift-check.sh 按它解析对账清单)"
+  grep -qF "parse_array ${_arr}" "$_DC" || fail "drift-check.sh 未解析 ${_arr}(对账会漏掉这组文件)"
+done
+[[ -s "$D/launchd/com.zenithjoy.leadgen-drift-check.plist" ]] || fail "缺 drift-check 的 launchd 模板"
 
 echo "phone-adb-controller-smoke: PASS"

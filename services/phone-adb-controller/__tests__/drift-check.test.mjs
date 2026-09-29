@@ -67,7 +67,7 @@ function setup() {
   for (const [f, c] of Object.entries(FILES)) writeFileSync(join(d, f), c);
   git(repo, "init", "-q");
   git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "add", "-A");
-  git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init");
+  git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "--no-verify", "-qm", "init");
   const bin = join(fake, "bin");
   mkdirSync(bin);
   writeFileSync(join(bin, "ssh"), FAKE_SSH);
