@@ -233,6 +233,7 @@ C=~/.local/bin/douyin-phone-adb
 TICK_BODY_START=$SECONDS
 TICK_BUDGET=1500
 SENDS_THIS_TICK=0
+ORDERS_PICKED=0; BLOCKED_ORDERS=0   # 6b133a81 触达进账本: outreach 工件闭集 orders_picked/messages_sent/requeued/blocked_orders
 # CONSEC_CAP_HITS: 连续撞上限计数器,完整生命周期都在本文件里——这里初始化为0，
 # 命中当日上限的分支里 +1 并在连续两次时收工(见下方"撞上限"分支)，只要有一次
 # 没撞上限(说明选单器换到了另一个号)就立刻重置回0(见本循环体末尾)。
@@ -281,6 +282,7 @@ while (( SECONDS - TICK_BODY_START < TICK_BUDGET )); do
   NICK=$(print -- "$ORDER"    | python3 -c "import json,sys;print(json.load(sys.stdin)['nick'])")
   PURL=$(print -- "$ORDER"    | python3 -c "import json,sys;print(json.load(sys.stdin).get('profile_url',''))")
   log "单#$SEQ: $NICK($DYID) via $SENDER [$PROFILE] ${PURL:+link}"
+  ORDERS_PICKED=$(( ORDERS_PICKED + 1 ))
   # 可视化: 任务 start 放在拿到锁之后——锁被采收占着时不 start,否则会把同机正在跑的采收任务顶掉(409 superseded)
   WR_STARTED=0
 
@@ -483,6 +485,7 @@ while (( SECONDS - TICK_BODY_START < TICK_BUDGET )); do
   done
 
   [[ "$ORDER_RESULT" == "sent" || "$ORDER_RESULT" == "restricted" ]] && SENDS_THIS_TICK=$(( SENDS_THIS_TICK + 1 ))
+  [[ "$ORDER_RESULT" == "failed" || "$ORDER_RESULT" == "rate_limited" ]] && BLOCKED_ORDERS=$(( BLOCKED_ORDERS + 1 ))
 
   # 本单已有结果(不是因为设备被占用而收工整个tick),继续取下一单前随机停顿——
   # 一个tick里可能连发好几条,但不是不停顿地机器人式连发。
@@ -491,3 +494,19 @@ while (( SECONDS - TICK_BODY_START < TICK_BUDGET )); do
   nap $BETWEEN_ORDERS_PAUSE
 done
 log "本tick收工,累计发送(含受限)${SENDS_THIS_TICK}条"
+# ── 6b133a81 触达进账本: 每 tick 收工写一个 outreach 工件(workflow-result.sh outreach-run),读回 out_no_stuck_inflight
+#   (本 tick 结束后线索表不得留悬空「触达中」);不过按探针失败语义(retryable→本 tick 判失败,由选单 40 分钟回收兜底)。
+#   WFR_DISABLED=1 或账本脚本不在 → no-op(测试把脚本拷到临时目录时即不在)。
+outreach_ledger(){
+  local wfr_sh="${WFR:-$SCRIPT_DIR/workflow-result.sh}" out req
+  [[ "${WFR_DISABLED:-0}" != 1 && -x "$wfr_sh" ]] || return 0
+  req=$(( ORDERS_PICKED - SENDS_THIS_TICK - BLOCKED_ORDERS )); (( req < 0 )) && req=0
+  out=$(bash "$wfr_sh" outreach-run "out$(date +%m%d%H%M)" "${OUTREACH_PROFILES[1]}" "" "$(hostname -s)" "tick picked=$ORDERS_PICKED sent=$SENDS_THIS_TICK" \
+    "{\"orders_picked\":$ORDERS_PICKED,\"messages_sent\":$SENDS_THIS_TICK,\"requeued\":$req,\"blocked_orders\":$BLOCKED_ORDERS}" 2>>$LOG)
+  log "账本(触达): $(print -r -- "$out" | tr '\n' ' ' | head -c 200)"
+  if print -r -- "$out" | grep -q '^WFR_GATE_ALERT=1'; then
+    notify_once "outreach-gate" "获客触达后置条件不过" "$(print -r -- "$out" | sed -n "s/^WFR_GATE_ALERT_MSG=//p")" 3600
+  fi
+  return 0
+}
+outreach_ledger

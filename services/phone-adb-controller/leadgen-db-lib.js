@@ -81,7 +81,8 @@ function markVideoJudgeError(pool, { lineKey, videoId, reason, transcript = null
 // ── 先判后采(任务 8bb3af55,决策 f18f56b8①「判定合格的视频才采集」)────────────
 // 契约 discovery.persist_candidates: 候选视频在「发现」时就落库(pending/待判定),判定才有米下锅;
 // 此前视频要等配送(push-videos.js)才落库,判定只能在评论采完之后跑,判了也挡不住。
-// 再次遇到的视频(以前判过/没判完)把 harvest_batch/keyword 归到本批——探针按本批读回;
+// 再次遇到的视频(以前判过/没判完)把 harvest_batch/keyword 归到本批——探针按本批读回;但已「评论已采」的老视频
+// 不改归属(6b133a81:0929 前先采后判留下的 rejected+评论已采 老行若被搬进本批,coll_only_matched 会误判本批白采而停跑);
 // 已有判定(judgment_status)与转写绝不覆盖,回报给调用方当缓存:rejected 不再录不再判,matched 直接采。
 async function discoverVideo(pool, row) {
   const { lineKey, videoId, videoUrl = null, title = "", keyword = null, harvestBatch = null } = row;
@@ -91,8 +92,10 @@ async function discoverVideo(pool, row) {
        (line_key, video_id, video_url, title, keyword, comment_count, harvest_batch, process_status)
      VALUES ($1,$2,$3,$4,$5,0,$6,$7)
      ON CONFLICT (line_key, video_id) DO UPDATE
-       SET harvest_batch = EXCLUDED.harvest_batch,
-           keyword = COALESCE(EXCLUDED.keyword, zenithjoy.leadgen_videos.keyword),
+       SET harvest_batch = CASE WHEN zenithjoy.leadgen_videos.process_status = '评论已采'
+                                THEN zenithjoy.leadgen_videos.harvest_batch ELSE EXCLUDED.harvest_batch END,
+           keyword = CASE WHEN zenithjoy.leadgen_videos.process_status = '评论已采'
+                          THEN zenithjoy.leadgen_videos.keyword ELSE COALESCE(EXCLUDED.keyword, zenithjoy.leadgen_videos.keyword) END,
            video_url = COALESCE(zenithjoy.leadgen_videos.video_url, EXCLUDED.video_url),
            updated_at = now()
      RETURNING judgment_status, (transcript IS NOT NULL AND transcript <> '') AS has_transcript, (xmax = 0) AS inserted`,

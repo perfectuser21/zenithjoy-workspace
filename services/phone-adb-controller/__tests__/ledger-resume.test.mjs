@@ -12,13 +12,13 @@ function led(dir, ...args) {
   return { code: r.status, out: r.stdout.trim(), err: r.stderr.trim(), json: r.stdout.trim() ? JSON.parse(r.stdout.trim().split("\n").pop()) : null };
 }
 
-test("init: 七阶段 pending，attempt 未分配", () => {
+test("init: 八阶段 pending（6b133a81 起含 outreach），attempt 未分配", () => {
   const d = mkdtempSync(join(tmpdir(), "led-"));
   const r = led(d, "init", "--run-id", "social-keyword-leadgen-crontab-auto1", "--hash", "abc");
   assert.equal(r.code, 0);
   assert.equal(r.json.attempt_id, null);
   const book = JSON.parse(readFileSync(join(d, "ledger.json"), "utf8"));
-  assert.deepEqual(Object.keys(book.stages), ["preflight", "discovery", "qualification", "collection", "scoring", "delivery", "cleanup"]);
+  assert.deepEqual(Object.keys(book.stages), ["preflight", "discovery", "qualification", "collection", "scoring", "delivery", "outreach", "cleanup"]);
   assert.equal(book.task_request_hash, "abc");
 });
 

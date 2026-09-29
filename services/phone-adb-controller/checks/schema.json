@@ -15,7 +15,7 @@
     "probe": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["key", "stage", "journey_cell", "probe", "expect", "severity", "note"],
+      "required": ["key", "stage", "journey_cell", "probe", "expect", "severity", "failure_class", "on_fail", "note"],
       "properties": {
         "key": { "type": "string", "pattern": "^[a-z][a-z0-9_]+$" },
         "stage": { "$ref": "#/definitions/stage" },
@@ -23,6 +23,8 @@
         "probe": { "oneOf": [{ "$ref": "#/definitions/sqlProbe" }, { "$ref": "#/definitions/httpProbe" }, { "$ref": "#/definitions/metricProbe" }] },
         "expect": { "$ref": "#/definitions/expect" },
         "severity": { "enum": ["error"] },
+        "failure_class": { "enum": ["retryable", "needs_human", "fatal"] },
+        "on_fail": { "enum": ["stop_run", "fail_stage"] },
         "note": { "type": "string", "minLength": 8 }
       }
     },
