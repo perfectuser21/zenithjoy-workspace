@@ -91,9 +91,37 @@ CARDS="$($C --profile "$P" search-video-cards "$TAG-cards" 2>/dev/null | grep -E
 [[ -n "$CARDS" ]] || { log "无卡片"; exit 0; }
 log "卡片数: $(print -- "$CARDS" | wc -l | tr -d " ")"
 
+# back_to_results_and_maybe_rescan EVIDENCE_ID_PREFIX —— 0929修复(真机验证补丁):
+# back-to-results 命中 recovered_via=research 说明它是靠"重新发起本次搜索的意图"
+# 才归位成功的(见 douyin-phone-adb back_to_results 函数注释)，这个动作会重置筛选
+# 条件，页面上的卡片顺序/内容会变，本批一开始扫描存下的 CARD_ARR 坐标全部作废——
+# 继续拿着旧坐标点后面的卡只会点到不相干的内容(真机实证过一次:点开"NOT_ON_
+# VIDEO_DETAIL: share button absent")。命中就立刻重新扫描一次，把 CARD_ARR/i
+# 重置到新列表头，让外层循环用新坐标继续处理剩余候选，不是继续拿着废坐标瞎点。
+back_to_results_and_maybe_rescan() {
+  local evid="$1" btr_out newcards
+  btr_out="$($C --profile "$P" back-to-results 4 "$KWTXT" "$evid" </dev/null 2>&1 || true)"
+  if print -- "$btr_out" | grep -q "recovered_via=research"; then
+    log "  归位触发兜底重搜(原卡片坐标已失效)，重新扫描卡片列表"
+    newcards="$($C --profile "$P" search-video-cards "${evid}-rescan" 2>/dev/null | grep -E "^[0-9]+	" | head -"$MAXV")"
+    if [[ -n "$newcards" ]]; then
+      CARD_ARR=("${(@f)newcards}")
+      i=0
+      log "  重新扫描到 ${#CARD_ARR[@]} 张卡片，从头处理剩余候选"
+    else
+      log "  重新扫描未拿到卡片，本关键词候选到此为止"
+      CARD_ARR=()
+      i=0
+    fi
+  fi
+}
+
+typeset -a CARD_ARR
+CARD_ARR=("${(@f)CARDS}")
 i=0
-for CARDLINE in "${(f)CARDS}"; do
+while (( i < ${#CARD_ARR[@]} )); do
   i=$((i+1))
+  CARDLINE="${CARD_ARR[$i]}"
   X="$(print -- "$CARDLINE" | cut -f1)"; Y="$(print -- "$CARDLINE" | cut -f2)"
   DUR="$(print -- "$CARDLINE" | cut -f3)"; TITLE="$(print -- "$CARDLINE" | cut -f4)"
   log "视频$i: ${TITLE:0:40}"
@@ -123,7 +151,7 @@ for CARDLINE in "${(f)CARDS}"; do
     # 0929修复(DoD审计发现真机复现): back-to-results 不传关键词只核实页面类型，
     # 分不清"真结果页"和 current-video-link 内部的暂存草稿页(两者同 Activity)——
     # 12词×3卡实测100%误判。传 $KW 让它多核一遍搜索框文字是不是这次搜的词。
-    $C --profile "$P" back-to-results 4 "$KWTXT" >/dev/null 2>&1 || true
+    back_to_results_and_maybe_rescan "$TAG-v$i-btr"
     continue
   fi
   VID="$(print -- "$VLINK" | sed -n "s/^video_id=//p")"
@@ -136,7 +164,7 @@ for CARDLINE in "${(f)CARDS}"; do
     # 0929修复(DoD审计发现真机复现): back-to-results 不传关键词只核实页面类型，
     # 分不清"真结果页"和 current-video-link 内部的暂存草稿页(两者同 Activity)——
     # 12词×3卡实测100%误判。传 $KW 让它多核一遍搜索框文字是不是这次搜的词。
-    $C --profile "$P" back-to-results 4 "$KWTXT" >/dev/null 2>&1 || true
+    back_to_results_and_maybe_rescan "$TAG-v$i-btr"
     continue
   fi
   log "  作品链接: $VURL"
@@ -145,7 +173,7 @@ for CARDLINE in "${(f)CARDS}"; do
     # 0929修复(DoD审计发现真机复现): back-to-results 不传关键词只核实页面类型，
     # 分不清"真结果页"和 current-video-link 内部的暂存草稿页(两者同 Activity)——
     # 12词×3卡实测100%误判。传 $KW 让它多核一遍搜索框文字是不是这次搜的词。
-    $C --profile "$P" back-to-results 4 "$KWTXT" >/dev/null 2>&1 || true
+    back_to_results_and_maybe_rescan "$TAG-v$i-btr"
     continue
   fi
   # 先判后采①: 候选落库(pending) + 取缓存判定——以前判过的 rejected 不再录不再判,matched 直接采
@@ -250,7 +278,7 @@ for CARDLINE in "${(f)CARDS}"; do
       # 0929修复(DoD审计发现真机复现): back-to-results 不传关键词只核实页面类型，
     # 分不清"真结果页"和 current-video-link 内部的暂存草稿页(两者同 Activity)——
     # 12词×3卡实测100%误判。传 $KW 让它多核一遍搜索框文字是不是这次搜的词。
-    $C --profile "$P" back-to-results 4 "$KWTXT" >/dev/null 2>&1 || true
+    back_to_results_and_maybe_rescan "$TAG-v$i-btr"
       continue
     fi
   fi
@@ -413,7 +441,7 @@ for CARDLINE in "${(f)CARDS}"; do
     # 0929修复(DoD审计发现真机复现): back-to-results 不传关键词只核实页面类型，
     # 分不清"真结果页"和 current-video-link 内部的暂存草稿页(两者同 Activity)——
     # 12词×3卡实测100%误判。传 $KW 让它多核一遍搜索框文字是不是这次搜的词。
-    $C --profile "$P" back-to-results 4 "$KWTXT" >/dev/null 2>&1 || true
+    back_to_results_and_maybe_rescan "$TAG-v$i-btr"
     continue
   fi
   log "  评论数: $(print -- "$CC" | wc -l | tr -d " ")"
@@ -427,7 +455,7 @@ for CARDLINE in "${(f)CARDS}"; do
   # 0929修复(DoD审计发现真机复现): 只核实页面类型分不清"真结果页"和
   # current-video-link 内部的暂存草稿页(两者同 Activity)——12词×3卡实测100%误判。
   # 传 $KWTXT(解码后的可读关键词，搜索框显示的就是这个)多核一遍搜索框文字。
-  $C --profile "$P" back-to-results 4 "$KWTXT" >/dev/null 2>&1 || true
+  back_to_results_and_maybe_rescan "$TAG-v$i-btr"
   nap 3
 done
 log "关键词完成: $KWTXT"

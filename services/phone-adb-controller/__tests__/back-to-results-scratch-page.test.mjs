@@ -142,15 +142,39 @@ test('接线守卫：back_to_results 传了关键词时必须真的调用 _searc
     '核对关键词前必须先真的 dump 一份 UI 树，不能凭空判断');
 });
 
-test('接线守卫：harvest-keyword.sh 里 back-to-results 调用必须带上 $KWTXT', () => {
+test('接线守卫：harvest-keyword.sh 主循环的6处归位调用必须全部走封装函数', () => {
   const kwPath = new URL('../harvest-keyword.sh', import.meta.url).pathname;
   const src = readFileSync(kwPath, 'utf8');
-  // 只匹配真正的调用行(以 $C ... back-to-results 开头)，不匹配注释里提到
-  // "back-to-results"这个词的说明文字。
-  const calls = src.match(/\$C --profile "\$P" back-to-results[^\n]*/g) || [];
-  assert.ok(calls.length > 0, 'harvest-keyword.sh 里找不到 back-to-results 调用——脚本被重构了？');
-  const withoutKeyword = calls.filter((line) => !line.includes('$KWTXT'));
-  assert.equal(withoutKeyword.length, 0,
-    `harvest-keyword.sh 里有 back-to-results 调用没传 $KWTXT，退回去时不会核实关键词，`
-    + `会重新踩到本 bug: ${JSON.stringify(withoutKeyword)}`);
+  // 主循环里所有归位动作都必须走 back_to_results_and_maybe_rescan(不能有裸调
+  // $C ... back-to-results)——裸调不会在命中 recovered_via=research 时重扫卡片，
+  // 会重新踩到"卡片坐标失效后仍在瞎点"这个问题(见下一条测试)。
+  const bareCalls = (src.match(/^\s*\$C --profile "\$P" back-to-results[^\n]*/gm) || []);
+  // 上面这个正则要求行首(允许前导空白)就是裸调——封装函数内部那一处是
+  // `btr_out="$($C --profile "$P" back-to-results ...)"`，行首是 btr_out=，不匹配。
+  assert.equal(bareCalls.length, 0,
+    `harvest-keyword.sh 主循环里有裸调 back-to-results(没走封装函数)，命中兜底重搜时`
+    + `不会重扫卡片: ${JSON.stringify(bareCalls)}`);
+
+  const wrapperCalls = src.match(/back_to_results_and_maybe_rescan "\$TAG-v\$i-btr"/g) || [];
+  assert.equal(wrapperCalls.length, 6,
+    `期望主循环6处归位调用都用封装函数，实际找到 ${wrapperCalls.length} 处`
+    + `(数量对不上说明有调用点被漏改或者脚本结构变了，需要人工核对)`);
+});
+
+test('接线守卫：back_to_results_and_maybe_rescan 命中兜底重搜必须重扫卡片并重置 i', () => {
+  const kwPath = new URL('../harvest-keyword.sh', import.meta.url).pathname;
+  const src = readFileSync(kwPath, 'utf8');
+  const start = src.indexOf('back_to_results_and_maybe_rescan() {');
+  assert.ok(start > 0, '找不到 back_to_results_and_maybe_rescan 函数——被重构了？');
+  const end = src.indexOf('\n}\n', start);
+  const body = src.slice(start, end);
+
+  assert.match(body, /recovered_via=research/,
+    '没有检测 recovered_via=research——兜底重搜发生了也不知道，会继续拿旧坐标瞎点');
+  assert.match(body, /search-video-cards/,
+    '命中兜底重搜后没有重新扫描卡片——原坐标已经跟着重搜动作一起失效了');
+  assert.match(body, /CARD_ARR=\(/,
+    '没有把重扫结果写回 CARD_ARR——外层循环还是用着旧的失效坐标');
+  assert.match(body, /\bi=0\b/,
+    '没有把 i 重置为 0——外层循环会接着旧的索引位置走，跟新扫到的卡片对不上');
 });
