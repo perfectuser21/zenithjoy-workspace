@@ -1,6 +1,6 @@
 // judge-video.js —— 视频文案判定主脚本(阶段3:V1扫池→V2便宜闸→V3转写→V4判定)
 //
-// 用法: node judge-video.js <line_key> <manifest.json>
+// 用法: node judge-video.js <line_key|profile> <manifest.json>  (profile 名经 line-routes.js 归一)
 //   manifest.json: [{videoId, audioPath?, transcript?}, ...] —— 由真机侧(harvest-keyword.sh
 //   配合douyin-phone-adb的record-start/record-stop/record-extract-audio)产出音频文件后,
 //   生成这份清单交给本脚本处理。本脚本自己不碰ADB/真机,只负责"转写+判定+写库"这一段。
@@ -9,10 +9,7 @@
 // 配置表(像GOLD/JUNK_WORDS现在也是写死在sort-comments.js里一样)由主理人后续拍板。
 "use strict";
 const fs = require("fs");
-const { getPool } = require("./leadgen-db-connect.js");
-const { listPendingVideos, markVideoJudgment } = require("./leadgen-db-lib.js");
-const { transcribeAudio } = require("./transcribe-qwen-audio.js");
-const { judgeContent } = require("./judge-jev.js");
+const { routeOf } = require("./line-routes.js");
 const { shouldSkipCheapGate, resolveTranscriptSource } = require("./judge-video-lib.js");
 
 const TARGET_PROFILES = {
@@ -20,37 +17,42 @@ const TARGET_PROFILES = {
   yuesheng: "悦升云端目标客户:企业级AI部署决策者/OPC小微主体主/AI办公入门学习者",
 };
 
-async function main() {
-  const [, , lineKey, manifestPath] = process.argv;
-  if (!lineKey || !manifestPath) {
-    console.error("usage: node judge-video.js <line_key> <manifest.json>");
-    process.exit(1);
-  }
+// 生产依赖惰性加载:单测经 deps 注入假实现,不触发 pg / 网络模块。
+function defaultDeps() {
+  const db = require("./leadgen-db-lib.js");
+  return {
+    listPendingVideos: db.listPendingVideos,
+    markVideoJudgment: db.markVideoJudgment,
+    transcribeAudio: require("./transcribe-qwen-audio.js").transcribeAudio,
+    judgeContent: require("./judge-jev.js").judgeContent,
+  };
+}
+
+// 0929 生产实证: batch2.sh 传的是账号 profile 名(legacy/jinoshengyuan-work/yueshengyun-work),
+// 而画像与 leadgen_videos.line_key 都按路由键(jinuo/yuesheng)——入口不归一,每晚都
+// 「未配置line_key=legacy的目标客户画像」退出,230 条视频从上线起没判过一条。
+// 入口一律经 routeOf() 归一:profile 名、路由键、业务线名都认;认不出就抛错,不猜。
+async function runJudgeVideo({ lineHint, manifest = [], pool, deps = defaultDeps() }) {
+  const lineKey = routeOf(lineHint).key;
   const targetProfile = TARGET_PROFILES[lineKey];
-  if (!targetProfile) {
-    console.error(`judge-video: 未配置line_key=${lineKey}的目标客户画像`);
-    process.exit(1);
-  }
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  if (!targetProfile) throw new Error(`judge-video: 未配置line_key=${lineKey}的目标客户画像`);
   const manifestByVideoId = new Map(manifest.map((m) => [m.videoId, m]));
 
-  const pool = getPool();
-  const pending = await listPendingVideos(pool, lineKey, 200);
+  const pending = await deps.listPendingVideos(pool, lineKey, 200);
 
-  let skipped = 0, matched = 0, rejected = 0, noSource = 0;
+  const stats = { pending: pending.length, skipped: 0, matched: 0, rejected: 0, noSource: 0 };
   for (const video of pending) {
     if (shouldSkipCheapGate(video)) {
-      skipped++;
-      await markVideoJudgment(pool, { lineKey, videoId: video.video_id, verdict: "rejected", reason: "V2便宜闸:零评论" });
+      stats.skipped++;
+      await deps.markVideoJudgment(pool, { lineKey, videoId: video.video_id, verdict: "rejected", reason: "V2便宜闸:零评论" });
       continue;
     }
-    const manifestEntry = manifestByVideoId.get(video.video_id);
-    const src = resolveTranscriptSource(video, manifestEntry);
+    const src = resolveTranscriptSource(video, manifestByVideoId.get(video.video_id));
 
     let transcript = src.text;
     if (src.source === "needs_transcription") {
       try {
-        transcript = await transcribeAudio(src.audioPath);
+        transcript = await deps.transcribeAudio(src.audioPath);
       } catch (e) {
         console.error(`  转写失败 video=${video.video_id}: ${String(e.message || e).slice(0, 120)}`);
         // 0929修复(DoD审计发现,用户拍板): 空转写(死寂/静音音频)不是"没判成"，是"真的没内容"，
@@ -64,19 +66,36 @@ async function main() {
       }
     }
     if (src.source === "none" || !transcript) {
-      noSource++;
+      stats.noSource++;
       console.error(`  video=${video.video_id} 没有任何可判定的文本来源(既无转写也无标题),跳过`);
       continue;
     }
 
-    const verdict = await judgeContent(transcript, targetProfile);
-    await markVideoJudgment(pool, {
+    const verdict = await deps.judgeContent(transcript, targetProfile);
+    await deps.markVideoJudgment(pool, {
       lineKey, videoId: video.video_id, verdict: verdict.verdict, reason: verdict.reason, transcript,
     });
-    if (verdict.verdict === "matched") matched++; else rejected++;
+    if (verdict.verdict === "matched") stats.matched++; else stats.rejected++;
   }
 
-  console.log(`judge-video: 待判定${pending.length} | 便宜闸跳过${skipped} | matched${matched} | rejected${rejected} | 无来源${noSource}`);
+  console.log(`judge-video: 业务线${lineKey}(入参${lineHint}) | 待判定${stats.pending} | 便宜闸跳过${stats.skipped} | matched${stats.matched} | rejected${stats.rejected} | 无来源${stats.noSource}`);
+  return stats;
+}
+
+async function main() {
+  const [, , lineHint, manifestPath] = process.argv;
+  if (!lineHint || !manifestPath) {
+    console.error("usage: node judge-video.js <line_key|profile> <manifest.json>");
+    process.exit(1);
+  }
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const { getPool } = require("./leadgen-db-connect.js");
+  const pool = getPool();
+  try {
+    await runJudgeVideo({ lineHint, manifest, pool });
+  } finally {
+    await pool.end().catch(() => {});
+  }
 }
 
 if (require.main === module) {
@@ -86,4 +105,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main, TARGET_PROFILES };
+module.exports = { main, runJudgeVideo, TARGET_PROFILES };
