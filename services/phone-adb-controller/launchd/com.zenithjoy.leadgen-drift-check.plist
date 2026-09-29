@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  获客脚本部署漂移对账(drift-check.sh)每日定时——装在 mmv 本机。
+  时间: mmv 系统时区 America/Los_Angeles,launchd 按系统时区触发。
+        18:30 PDT = 北京时间次日 09:30;冬令时(PST)期间为北京时间 10:30。
+  安装:
+    cp services/phone-adb-controller/drift-check.sh ~/bin/leadgen-drift-check.sh
+    cp services/phone-adb-controller/launchd/com.zenithjoy.leadgen-drift-check.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.zenithjoy.leadgen-drift-check.plist
+  手动触发: launchctl kickstart gui/$(id -u)/com.zenithjoy.leadgen-drift-check
+  日志: ~/Library/Logs/leadgen-drift-check.log
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.zenithjoy.leadgen-drift-check</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/administrator/bin/leadgen-drift-check.sh</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>HOME</key>
+    <string>/Users/administrator</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>18</integer>
+    <key>Minute</key>
+    <integer>30</integer>
+  </dict>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>StandardOutPath</key>
+  <string>/Users/administrator/Library/Logs/leadgen-drift-check.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/administrator/Library/Logs/leadgen-drift-check.log</string>
+</dict>
+</plist>

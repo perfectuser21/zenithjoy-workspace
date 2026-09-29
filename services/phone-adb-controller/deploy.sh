@@ -11,6 +11,11 @@
 #   cd zenithjoy-workspace仓库根目录
 #   bash services/phone-adb-controller/deploy.sh
 #
+# 对账(0929): 部署完/怀疑有机器跑旧版时跑 bash services/phone-adb-controller/drift-check.sh,
+#   逐文件比对 origin/main 与三台机器的 md5,有漂移经 Bark 告警(同组当天只告一次)。mmv 上由 launchd 每天
+#   北京时间 09:30 自动跑,模板与安装步骤见 launchd/com.zenithjoy.leadgen-drift-check.plist。
+#   改了本文件里的数组名/形状 → drift-check.sh 的 parse_array 也要跟着改(解析为空会 exit 2 拒绝假绿)。
+#
 # 覆盖范围(v1,有意从小做起,见下方"不在本次范围"):
 #   *.js  → mmv:~/.openclaw/leadgen-scripts/(判定链+数据层)
 #   *.sh  → xian-m4:~/bin-harvest/ 和 xian-m1:~/bin-harvest/(设备/ADB层,两台各一份)
