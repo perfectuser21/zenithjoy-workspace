@@ -10,7 +10,7 @@
 // 结果写进工件 step_dod 与账本 step-dod.jsonl（workflow-result.sh 负责落盘）。mode=checkpoint 只记录；
 // mode=hard 且不过 → hard_failed，workflow-result.sh 把该活动判 fail_stage。读不回（error）→ pass=null，不算通过也不算失败。
 // 零依赖（执行机 CI 同样不装包），永远 exit 0，stdout 恰好一行 JSON {steps, hard_failed}。
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -128,4 +128,6 @@ function main() {
   process.stdout.write(`${JSON.stringify(out)}\n`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+// 走软链(/tmp→/private/tmp、部署目录软链)时 argv[1] 与模块 URL 不同形,按真实路径比
+const isMain = () => { try { return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href; } catch { return false; } };
+if (process.argv[1] && isMain()) main();

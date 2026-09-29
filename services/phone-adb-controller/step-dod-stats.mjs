@@ -7,7 +7,7 @@
 // 任何一次不过或读不回都把连续数清零（不过可能是真缺陷也可能是误报，两种都说明这条判定还没证明"稳且不误报"）。
 // 升级本身 = 改契约该步 dod.mode: hard + 重跑 gen-step-dod.mjs 发 PR（契约真身在 git，决策 0834e2fb），本脚本只出清单。
 // 用法: node step-dod-stats.mjs [--dir <工件目录>] [--spec step-dod.json] [--min N] [--json]
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, realpathSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -73,4 +73,6 @@ function main() {
   process.stdout.write(`${lines.join("\n")}\n`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+// 走软链(/tmp→/private/tmp、部署目录软链)时 argv[1] 与模块 URL 不同形,按真实路径比
+const isMain = () => { try { return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href; } catch { return false; } };
+if (process.argv[1] && isMain()) main();
