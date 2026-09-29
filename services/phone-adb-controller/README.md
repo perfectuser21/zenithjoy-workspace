@@ -68,7 +68,7 @@
 ### 证据链
 - `screencap` — 截屏
 - `pull` — 拉取设备文件
-- `snapshot` / `snapshot-evidence` — 截图快照(裸/带证据编号)
+- `snapshot` / `snapshot-evidence` — 截图快照(裸/带证据编号)。0929 起凡产出截图的命令(含 `*-snapshot`/`*-evidence`/`pull`/`locate-tap`/`current-video-link`/`search-time-layer`/`private-message-send`)都在原图旁生成同名 `.jpg`(宽720/质量70,约180KB),输出 `jpg=`/`*_jpg=` 行;agent 回传只 `file_fetch` jpg,原图 PNG 约3MB 会堵死节点 ws 通道。`screencap` 只落手机端,不产本地文件
 - `ui-evidence` — UI 树证据落盘
 - `evidence-bundle` — 按前缀打包一次动作的全部证据
 
@@ -87,7 +87,7 @@
 - `current-video-link` — 取当前视频分享链接(原爆款作品地址)
 
 ### 账号/触达
-- `account-current` — 读当前登录账号
+- `account-current` — 读当前登录账号。昵称只认与「抖音号：」左对齐的上方 TextView(拒绝计数类文本如未读角标 `11`),读不准有界重抓 2 次,仍不准输出 `nickname=unknown`
 - `account-switch` — 切换到指定抖音号
 - `private-message-send` — 私信触达(见下方安全声明,默认关闸)
 

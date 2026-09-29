@@ -11,6 +11,8 @@ PYTHON_BIN="${DOUYIN_PYTHON_BIN:-/opt/homebrew/bin/python3}"
 SCRCPY="${DOUYIN_SCRCPY_BIN:-/opt/homebrew/bin/scrcpy}"
 FFMPEG="${DOUYIN_FFMPEG_BIN:-/opt/homebrew/bin/ffmpeg}"
 FFPROBE="${DOUYIN_FFPROBE_BIN:-/opt/homebrew/bin/ffprobe}"
+# 截图回传用 JPEG 副本的转换器（macOS 自带）。绝对路径同上：节点按可执行文件审批。
+SIPS="${DOUYIN_SIPS_BIN:-/usr/bin/sips}"
 # 视觉定位（vision grounding）：截图→模型报归一化坐标→点击。根治无障碍树的机型/版本适配病。
 # 视觉定位改走 UI-TARS（0921：原 ToAPIs gemini-2.5-flash-lite 配额耗尽 429，整条链视觉点击全挂；
 # 且通用模型本就弱于像素定位——决策 1e8ffaa1 的原话。UI-TARS 是字节专为 GUI 定位训练的模型，
@@ -77,11 +79,13 @@ MAX_Y=$(( SCREEN_H - 1 ))
 # 绝不填默认值——猜一个 density 会让坐标静默偏移，比直接报错危险得多。
 if [[ -n "$DEVICE_DENSITY" ]]; then require_uint "$DEVICE_DENSITY"; fi
 
+# 节点本地落盘根目录。生产恒为默认值；环境变量只给测试用（CI ubuntu 无 /private 且不可建）。
+PHONE_TMP_ROOT="${DOUYIN_PHONE_TMP_ROOT:-/private/tmp/openclaw-phone}"
 REMOTE_SHOT="/sdcard/douyin-leadgen-shot-${PROFILE}.png"
-LOCAL_SHOT="/private/tmp/openclaw-phone/douyin-leadgen-shot-${PROFILE}.png"
+LOCAL_SHOT="$PHONE_TMP_ROOT/douyin-leadgen-shot-${PROFILE}.png"
 REMOTE_UI="/sdcard/douyin-leadgen-ui-${PROFILE}.xml"
-EVIDENCE_ROOT="/private/tmp/openclaw-phone/evidence/${PROFILE}"
-EVIDENCE_BUNDLE_ROOT="/private/tmp/openclaw-phone/evidence-bundles/${PROFILE}"
+EVIDENCE_ROOT="$PHONE_TMP_ROOT/evidence/${PROFILE}"
+EVIDENCE_BUNDLE_ROOT="$PHONE_TMP_ROOT/evidence-bundles/${PROFILE}"
 DOUYIN_PACKAGE="com.ss.android.ugc.aweme"
 # 录制前把手机媒体音量幂等驱动到这一档（0924 Alex 拍板，decisions invariant）。
 # 1 = 17 档里的最低非零档：办公室已听不见，而采集电平与大音量完全等价
@@ -91,7 +95,7 @@ RECORD_MEDIA_VOLUME=1
 # 它是本链唯一稳定的"归位点"——结果页里的 resource-id 全是混淆短名（rej/dp7/pkr…），
 # 只有 Activity 名可靠。
 SEARCH_RESULT_ACTIVITY="search.activity.SearchResultActivity"
-LOCK_ROOT="/private/tmp/openclaw-phone/locks"
+LOCK_ROOT="$PHONE_TMP_ROOT/locks"
 LOCK_DIR="$LOCK_ROOT/${SERIAL}.lock"
 
 check_target_fast() {
@@ -130,11 +134,41 @@ wait_ms() {
   /bin/sleep "$seconds"
 }
 
+# 回传用 JPEG 副本（0929）：原图 PNG（荣耀 1200x2664 约 3MB）经 file_fetch 回传时 base64 约 4MB，
+# 与指令同走一条节点 ws 通道，西安上行约 315KB/s → 30s 超时 → 后续指令排队超时 → 网关判
+# node disconnected。宽 720、质量 70 的 JPEG 约 180KB 且清晰可读。原图保留在原处不动。
+# 成功打印 jpg 路径；失败返回 1 并清掉旧 jpg——固定路径截图会被反复覆盖，
+# 留着上一次的 jpg 等于让 agent 回传一张过期的图。
+jpeg_sidecar() {
+  local png jpg
+  png="$1"
+  jpg="${png:r}.jpg"
+  /bin/rm -f "$jpg"
+  if "$SIPS" -s format jpeg -s formatOptions 70 --resampleWidth 720 "$png" --out "$jpg" >/dev/null 2>&1 \
+    && [[ -s "$jpg" ]]; then
+    print -- "$jpg"
+    return 0
+  fi
+  /bin/rm -f "$jpg"
+  print -u2 -- "warning: jpeg sidecar conversion failed for $png; do not file_fetch the PNG over the node channel"
+  return 1
+}
+
+# 打印 <key>=<同名 jpg 路径>（jpg 不存在就不打印，调用方据此判定无可回传副本）。
+print_jpg_line() {
+  local jpg
+  jpg="${1:r}.jpg"
+  [[ -s "$jpg" ]] && print -- "${2:-jpg}=$jpg"
+  return 0
+}
+
 snapshot() {
   "$ADB" -s "$SERIAL" shell screencap -p "$REMOTE_SHOT"
   /bin/mkdir -p "${LOCAL_SHOT:h}"
   "$ADB" -s "$SERIAL" pull "$REMOTE_SHOT" "$LOCAL_SHOT" >/dev/null
+  jpeg_sidecar "$LOCAL_SHOT" >/dev/null || true
   print -- "$LOCAL_SHOT"
+  print_jpg_line "$LOCAL_SHOT"
 }
 
 require_evidence_id() {
@@ -150,7 +184,17 @@ snapshot_evidence() {
   "$ADB" -s "$SERIAL" shell screencap -p "$REMOTE_SHOT"
   /bin/mkdir -p "$EVIDENCE_ROOT"
   "$ADB" -s "$SERIAL" pull "$REMOTE_SHOT" "$local_path" >/dev/null
+  jpeg_sidecar "$local_path" >/dev/null || true
+  # 只打印 PNG 路径：内部调用方用 $(snapshot_evidence ...) 取单行路径。
+  # jpg= 行由命令层 snapshot_evidence_cmd / 复合命令的 *_jpg= 字段负责打印。
   print -- "$local_path"
+}
+
+snapshot_evidence_cmd() {
+  local shot
+  shot="$(snapshot_evidence "$1")"
+  print -- "$shot"
+  print_jpg_line "$shot"
 }
 
 _ui_evidence_wave() {
@@ -538,6 +582,7 @@ _current_video_link_once() {
     print -- "resolved_url=$resolved_url"
   fi
   print -- "evidence=$copied_path"
+  print_jpg_line "$copied_path" evidence_jpg
 }
 
 filter_option_grid_index() {
@@ -968,6 +1013,9 @@ search_time_layer() {
   print -- "panel_evidence=$panel_path"
   print -- "selected_evidence=$selected_path"
   print -- "results_evidence=$results_path"
+  print_jpg_line "$panel_path" panel_evidence_jpg
+  print_jpg_line "$selected_path" selected_evidence_jpg
+  print_jpg_line "$results_path" results_evidence_jpg
 }
 
 evidence_bundle() {
@@ -1262,14 +1310,60 @@ normalize_nickname() {
   print -n -- "${out//[$'\uFE0E'$'\uFE0F']/}"
 }
 
+# 计数类文本：纯数字、带小数/万/亿/w/k 单位、带 + 的角标（"11"、"1.2万"、"99+"）。
+# 这类文本永远不当昵称——宁可报 unknown，也不输出一个错的昵称。
+is_count_like_text() {
+  [[ "$1" =~ '^[0-9]+([.][0-9]+)?(万|亿|w|W|k|K)?[+]?$' ]]
+}
+
+# 主页昵称节点的 bounds：与「抖音号：」节点左对齐（±16px）、紧挨在它上方（间距 ≤200px）的
+# 最近一个 TextView；跳过 content-desc 含「未读」的角标。只按几何取，不按兄弟顺序、不按 resource-id：
+#   - resource-id 是混淆短名，随抖音版本轮换（tqn → ttw / tj1 / tp6 …，0929 真机实测 tqn 已不存在）；
+#   - 兄弟顺序会被插入的节点打乱：0929 17:20 有未读消息时，昵称与抖音号之间多出一个未读角标
+#     TextView（text="11"，content-desc="切换账号，用户名有11条未读消息"，x=823），旧兜底
+#     「抖音号的紧邻前一个 TextView」正好取到它，读出 nickname=11。
+# 自己主页与他人主页（commenter-identity）布局一致，真机四台样本昵称 x1 均与抖音号 x1 相同。
+profile_nickname_bounds() {
+  local xml
+  xml="$1"
+  /usr/bin/grep -oE '<node [^>]*>' "$xml" 2>/dev/null | /usr/bin/awk '
+    function attr(s, n) {
+      if (match(s, " " n "=\"[^\"]*\"")) return substr(s, RSTART + length(n) + 3, RLENGTH - length(n) - 4)
+      return ""
+    }
+    {
+      N++; txt[N] = attr($0, "text"); cls[N] = attr($0, "class"); bd[N] = attr($0, "bounds"); cd[N] = attr($0, "content-desc")
+      if (!have_id && index(txt[N], "抖音号：") == 1) { split(bd[N], a, /[^0-9]+/); id_x = a[2] + 0; id_y = a[3] + 0; have_id = 1 }
+    }
+    END {
+      if (!have_id) exit
+      best = ""; best_y = -1
+      for (i = 1; i <= N; i++) {
+        if (cls[i] != "android.widget.TextView" || txt[i] == "" || index(txt[i], "抖音号：") == 1 || index(cd[i], "未读") > 0) continue
+        if (split(bd[i], a, /[^0-9]+/) < 5) continue
+        x1 = a[2] + 0; y2 = a[5] + 0
+        dx = x1 - id_x; if (dx < 0) dx = -dx
+        if (dx > 16 || y2 > id_y + 8 || id_y - y2 > 200) continue
+        if (y2 > best_y) { best_y = y2; best = bd[i] }
+      }
+      if (best != "") print best
+    }' || true
+}
+
 extract_account_identity() {
-  local xml nickname douyin_id
+  local xml nickname douyin_id nick_bounds
   xml="$1"
   [[ -r "$xml" ]] || return 1
   douyin_id="$(/usr/bin/xmllint --xpath 'string(//node[starts-with(@text,"抖音号：")]/@text)' "$xml" 2>/dev/null | /usr/bin/sed 's/^抖音号：//' || true)"
-  nickname="$(/usr/bin/xmllint --xpath 'string(//node[@resource-id="com.ss.android.ugc.aweme:id/tqn"]/@text)' "$xml" 2>/dev/null || true)"
-  if [[ -z "$nickname" ]]; then
-    nickname="$(/usr/bin/xmllint --xpath 'string(//node[starts-with(@text,"抖音号：")]/preceding-sibling::node[@class="android.widget.TextView"][1]/@text)' "$xml" 2>/dev/null || true)"
+  nickname=""
+  nick_bounds="$(profile_nickname_bounds "$xml")"
+  # bounds 只含数字/方括号/逗号才拼进 XPath（防注入）；取值交给 xmllint，实体解码行为与旧版一致。
+  if [[ "$nick_bounds" =~ '^\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]$' ]]; then
+    nickname="$(/usr/bin/xmllint --xpath "string(//node[@bounds=\"$nick_bounds\" and @class=\"android.widget.TextView\"]/@text)" "$xml" 2>/dev/null || true)"
+  fi
+  if [[ -n "$nickname" ]] && is_count_like_text "$nickname"; then
+    print -u2 -- "warning: nickname candidate looks like a counter ($nickname); rejected"
+    nickname=""
   fi
   print -- "nickname=$nickname"
   print -- "douyin_id=$douyin_id"
@@ -1339,7 +1433,26 @@ read_current_account() {
   nickname="$(print -- "$ident" | /usr/bin/sed -n 's/^nickname=//p')"
   # 账号身份以 douyin_id 为准（"抖音号："前缀跨版本极稳）；昵称 best-effort，缺失不致命。
   [[ -n "$douyin_id" ]] || die "current Douyin account identity was not visible on the verified Me page"
-  [[ -n "$nickname" ]] || nickname="$douyin_id"
+  # 昵称取不到/被判为计数类（页面未渲染完、角标抢位）→ 有界重抓同一主页（最多 2 次）。
+  # 重抓结果必须是同一个抖音号才采信，并把被采信的那一屏覆盖到 -profile.xml
+  # （account-switch 按 ${evidence_id}-current-profile.xml 这个名字取树，名字不能变）。
+  local _retry _rxml _rident _rid _rnick
+  for _retry in 2 3; do
+    [[ -z "$nickname" ]] || break
+    print -u2 -- "warning: profile nickname not readable (attempt $(( _retry - 1 ))/3); recapturing"
+    wait_ms 1500
+    _rxml="$(ui_evidence "${evidence_id}-profile-r${_retry}")" || continue
+    _rident="$(extract_account_identity "$_rxml")"
+    _rid="$(print -- "$_rident" | /usr/bin/sed -n 's/^douyin_id=//p')"
+    _rnick="$(print -- "$_rident" | /usr/bin/sed -n 's/^nickname=//p')"
+    [[ "$_rid" == "$douyin_id" ]] || { print -u2 -- "warning: recapture shows douyin_id=${_rid:-none}, not $douyin_id; stop retrying"; break; }
+    if [[ -n "$_rnick" ]]; then
+      nickname="$_rnick"
+      /bin/cp "$_rxml" "$profile_xml"
+    fi
+  done
+  # 仍不确定就明说 unknown——绝不输出错值（旧版回填 douyin_id 当昵称，同样是错值）。
+  [[ -n "$nickname" ]] || nickname="unknown"
   print -- "nickname=$nickname"
   print -- "douyin_id=$douyin_id"
   print -- "evidence=$profile_xml"
@@ -1544,6 +1657,8 @@ send_private_message() {
   print -- "before_send_evidence=$before_path"
   print -- "sent_ui_evidence=$sent_xml"
   print -- "sent_evidence=$sent_path"
+  print_jpg_line "$before_path" before_send_evidence_jpg
+  print_jpg_line "$sent_path" sent_evidence_jpg
 }
 
 read_commenter_identity() {
@@ -2231,7 +2346,10 @@ case "$command" in
   pull)
     check_target_fast
     /bin/mkdir -p "${LOCAL_SHOT:h}"
-    exec "$ADB" -s "$SERIAL" pull "$REMOTE_SHOT" "$LOCAL_SHOT"
+    "$ADB" -s "$SERIAL" pull "$REMOTE_SHOT" "$LOCAL_SHOT" >/dev/null
+    jpeg_sidecar "$LOCAL_SHOT" >/dev/null || true
+    print -- "$LOCAL_SHOT"
+    print_jpg_line "$LOCAL_SHOT"
     ;;
   snapshot)
     check_target_fast
@@ -2240,7 +2358,7 @@ case "$command" in
   snapshot-evidence)
     [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE snapshot-evidence EVIDENCE_ID"
     check_target_fast
-    snapshot_evidence "$2"
+    snapshot_evidence_cmd "$2"
     ;;
   ui-evidence)
     [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE ui-evidence EVIDENCE_ID"
@@ -2271,7 +2389,7 @@ case "$command" in
     check_target_fast
     "$ADB" -s "$SERIAL" shell input tap "$2" "$3"
     wait_ms "${5:-800}"
-    snapshot_evidence "$4"
+    snapshot_evidence_cmd "$4"
     ;;
   swipe)
     [[ "$#" == 6 ]] || die "usage: douyin-phone-adb --profile PROFILE swipe X1 Y1 X2 Y2 MS"
@@ -2297,7 +2415,7 @@ case "$command" in
     check_target_fast
     "$ADB" -s "$SERIAL" shell input swipe "$2" "$3" "$4" "$5" "$6"
     wait_ms "${8:-800}"
-    snapshot_evidence "$7"
+    snapshot_evidence_cmd "$7"
     ;;
   back)
     check_target_fast
@@ -2316,7 +2434,7 @@ case "$command" in
     check_target_fast
     "$ADB" -s "$SERIAL" shell input keyevent 4
     wait_ms "${3:-600}"
-    snapshot_evidence "$2"
+    snapshot_evidence_cmd "$2"
     ;;
   wake)
     check_target
@@ -2499,7 +2617,9 @@ case "$command" in
     "$ADB" -s "$SERIAL" shell input tap "$lx" "$ly"
     wait_ms 800
     "$ADB" -s "$SERIAL" exec-out screencap -p > "$EVIDENCE_ROOT/$3-after.png"
+    jpeg_sidecar "$EVIDENCE_ROOT/$3-after.png" >/dev/null || true
     print -- "tapped $lx $ly evidence=$EVIDENCE_ROOT/$3-after.png"
+    print_jpg_line "$EVIDENCE_ROOT/$3-after.png" evidence_jpg
     ;;
   open-video)
     # 0913：collection 阶段要回到 discovery 已验证的那条视频。以前没有这条命令，
