@@ -159,9 +159,16 @@ case "$cmd" in
     mkdir -p "$WFR_RUN_DIR" "$WFR_ART_DIR" 2>/dev/null || warn "mkdir failed errno: $(mkdir -p "$WFR_RUN_DIR" "$WFR_ART_DIR" 2>&1)"
     led1 init --run-id "$WFR_RUN_ID" --hash "$WFR_HASH" --profile "$P" --serial "$SERIAL" --hostkey "$HOSTKEY" >/dev/null
     export WFR_RUN_ID WFR_HASH WFR_RUN_DIR WFR_ART_DIR WFR_TAG WFR_PROFILE
+    # 0929批次4修复(DoD审计发现): account_verified 此前写死0——现在 harvest-cron.sh 在
+    # read_account_mark 真校验(我页抖音号 vs 账号注册表)通过后才会走到这里(不通过已在
+    # 更早的preflight阶段 exit 0),故此处能到达即代表校验为真;仍从env读而非硬编码1，
+    # 防御式地允许非harvest-cron.sh的调用方(如测试)显式传0。lock_acquired 保持写死0——
+    # 设备锁其实在更晚的 harvest-keyword.sh(逐关键词批次)里才真正acquire，这个init调用
+    # 点时序上还没发生，写1才是假的；这是仍未解的已知缺口(6b133a81，需要挪account_verified
+    # 之外那次write_stage的时机或改成事后补写才能治本)。
     write_stage preflight completed 1 "device+account preflight by harvest-cron" \
       "[{\"type\":\"preflight\",\"serial\":\"$SERIAL\",\"hostkey\":\"$HOSTKEY\"}]" \
-      '{"device_verified":1,"account_verified":0,"call_state_idle":1,"lock_acquired":0}'
+      "{\"device_verified\":1,\"account_verified\":${ACCOUNT_VERIFIED:-0},\"call_state_idle\":1,\"lock_acquired\":0}"
     write_stage qualification blocked 1 "not_in_profile" '[]' '{"candidates_judged":0,"qualified":0}'
     write_stage scoring blocked 1 "not_in_profile" '[]' '{"comments_scored":0,"strong_intent":0,"weak_intent":0,"peer":0,"irrelevant":0,"spam":0}'
     echo "WFR_RUN_ID=$WFR_RUN_ID"; echo "WFR_HASH=$WFR_HASH"; echo "WFR_RUN_DIR=$WFR_RUN_DIR"; echo "WFR_ART_DIR=$WFR_ART_DIR"
@@ -182,7 +189,13 @@ case "$cmd" in
       warn "called before init"
       echo "WFR_FINALIZE_OK=0"; echo "WFR_FINALIZE_MSG=not_initialized"
     else
-      write_stage cleanup completed 1 "finalize by harvest-cron trap" '[{"type":"log","ref":"harvest-cron.log"}]' '{"close_app_attempts":0,"lock_released":1,"safe_desktop_visible":0}'
+      # 0929批次4修复(DoD审计发现): close_app_attempts/safe_desktop_visible 此前写死
+      # 0/0——现在 harvest-cron.sh 的 run_finalize 会真的调 close-app/return-safe-desktop
+      # 并导出真实结果,这里从env读(harvest-cron.sh未来得及跑到这两步时env为空,分别
+      # 兜底成0/0，跟旧行为一致，不会比以前更假)。lock_released 仍写死1——设备锁的
+      # release实际发生在更早、更深的 harvest-keyword.sh(逐关键词批次)里，这个
+      # finalize时间点拿不到那次release的真实结果，是仍未解的已知缺口(6b133a81)。
+      write_stage cleanup completed 1 "finalize by harvest-cron trap" '[{"type":"log","ref":"harvest-cron.log"}]' "{\"close_app_attempts\":${WFR_CLOSE_APP_ATTEMPTS:-0},\"lock_released\":1,\"safe_desktop_visible\":${WFR_SAFE_DESKTOP_VISIBLE:-0}}"
       n_files=$(ls "${WFR_ART_DIR:-}"/"${WFR_RUN_ID:-}"__*.worker-result.json 2>/dev/null | wc -l | tr -d ' ' || true)
       book="$(led show)"
       n_stages=$(printf '%s' "$book" | "$WFR_JQ" '[.stages[] | select(.status!="pending")] | length' 2>/dev/null || echo 0)

@@ -70,7 +70,7 @@ activities:
       - { key: verify_call_idle, name: 验通话空闲, order: 4, reads: [Device.serial], writes: [Device.call_state],
           check: "telephony call_state == IDLE", implementation: { status: implemented, ref: "douyin-phone-adb:2116 preflight" }, uses_llm: false }
       - { key: read_account_mark, name: 读账号标记(我页), order: 5, reads: [Account.sender_id], writes: [Account.logged_in],
-          check: "我页抖音号 == Account.sender_id", implementation: { status: missing, ref: "采收链未调，6b133a81" }, uses_llm: false }
+          check: "我页抖音号 in profile 的注册账号列表(account-current + account_registered)", implementation: { status: implemented, ref: "harvest-cron.sh account_registered() + account-current 调用（0929批次4接线）" }, uses_llm: false }
       - { key: open_run_ledger, name: 开账本, order: 6, reads: [Account.profile, Device.serial], writes: [Run.run_tag, Run.profile, Run.serial],
           check: "ledger init 成功且 preflight 工件通过闭集键校验", implementation: { status: implemented, ref: "workflow-result.sh:150-161" }, uses_llm: false }
     known_gaps:
@@ -232,7 +232,7 @@ activities:
       - { key: verify_commenter_identity, name: 评论人身份验证, order: 3, reads: [Comment.nickname], writes: [Comment.douyin_id],
           check: "主页强校验：抖音号合法 + 账号三态 + 非自有账号；验证失败抢救(back+重开评论区)后核对 current-video-link 仍是本视频，漂移即本视频剩余评论作废(0929修，见下 known_gaps)", implementation: { status: implemented, ref: "harvest-keyword.sh:191-233" }, uses_llm: false }
       - { key: resolve_profile_link, name: 客户主页直链, order: 4, reads: [Comment.douyin_id], writes: [Comment.profile_url],
-          check: "分享名片 → sec_uid，剪贴板守卫回读", implementation: { status: implemented, ref: "harvest-keyword.sh（PR #1952 逐屏处理）" }, uses_llm: false }
+          check: "分享名片 → sec_uid，剪贴板守卫回读；失败重试3次(同commenter-identity套路)，3次仍失败才降级为线索保留但链接为空", implementation: { status: implemented, ref: "harvest-keyword.sh（PR #1952 逐屏处理 + 0929批次4加重试）" }, uses_llm: false }
       - { key: mark_video_collected, name: 标记视频已采, order: 5, reads: [Video.video_id], writes: [Video.process_status],
           check: "process_status=评论已采 只写给 matched 视频", implementation: { status: missing, ref: "现状 upsertVideo 一律写默认值（leadgen-db-lib.js:26），8bb3af55" }, uses_llm: false }
     known_gaps:
@@ -429,12 +429,13 @@ activities:
     invokers: [code]
     steps:
       - { key: close_app, name: 关App, order: 1, reads: [Device.serial], writes: [],
-          check: "前台不再是 com.ss.android.ugc.aweme", implementation: { status: missing, ref: "采收链未调 close-app（douyin-phone-adb:2639），6b133a81" }, uses_llm: false }
+          check: "前台不再是 com.ss.android.ugc.aweme", implementation: { status: implemented, ref: "harvest-cron.sh run_finalize() 调 close-app（douyin-phone-adb:2639），0929批次4接线" }, uses_llm: false }
       - { key: release_lock, name: 放锁, order: 2, reads: [Device.lock_holder], writes: [Device.lock_holder],
-          check: "锁文件不存在或 owner≠本 run", implementation: { status: implemented, ref: "harvest-keyword.sh:33 trap 按词释放" }, uses_llm: false }
+          check: "锁文件不存在或 owner≠本 run；失败重试3次(同commenter-identity套路)，3次仍失败才留告警", implementation: { status: implemented, ref: "harvest-keyword.sh trap 按词释放（0929批次4加重试）" }, uses_llm: false }
       - { key: return_safe_desktop, name: 回安全桌面, order: 3, reads: [Device.serial], writes: [],
-          check: "前台 = launcher", implementation: { status: missing, ref: "6b133a81" }, uses_llm: false }
+          check: "前台 = launcher（用 HOME intent resolve-activity 查设备自身默认桌面包名,不 hardcode 厂商launcher）", implementation: { status: implemented, ref: "douyin-phone-adb return-safe-desktop 子命令 + harvest-cron.sh run_finalize() 接线（0929批次4新建）" }, uses_llm: false }
       - { key: finalize_run, name: 终态回执, order: 4, reads: [Run.run_tag], writes: [Run.status],
           check: "n_items>0 且 n_files>=n_items（workflow-result.sh:194）", implementation: { status: implemented, ref: "workflow-result.sh:177-201" }, uses_llm: false }
     known_gaps:
-      - { gap: "cleanup 指标写死 close_app_attempts=0/lock_released=1/safe_desktop_visible=0（workflow-result.sh:182）", task: 6b133a81 }
+      - { gap: "cleanup 指标 lock_released 仍写死1（workflow-result.sh finalize）——设备锁的真实release结果产生于更早、更深的harvest-keyword.sh(逐关键词批次)里，run_finalize这个时间点拿不到那次release的真实结果；close_app_attempts/safe_desktop_visible已改真(0929批次4)", task: 6b133a81 }
+      - { gap: "preflight 指标 lock_acquired 仍写死0（workflow-result.sh init）——设备锁实际在 wfr_bootstrap(init) 之后才由 harvest-keyword.sh 逐关键词acquire，时序上 init 调用点根本还没发生，写1才是假的；account_verified 已改真(0929批次4，读 harvest-cron.sh 导出的 ACCOUNT_VERIFIED)", task: 6b133a81 }
