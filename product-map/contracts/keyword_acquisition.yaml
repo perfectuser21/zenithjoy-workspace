@@ -205,6 +205,7 @@ activities:
       - "设备锁由本 run 持有（每个视频 lock-refresh 一次，harvest-keyword.sh:53）"
     postconditions:
       - { probe: coll_only_matched, asserts: "未判合格的视频不被采评论" }
+      - { probe: coll_video_binding_consistent, asserts: "每条评论归属的视频必须是本 run 验证过仍打开着的视频，不能是抢救后漂移到的别的视频" }
     execution: { location: phone, via: "xian-m4 harvest-keyword.sh:45-260 → douyin-phone-adb" }
     budget: { max_duration_s: 7200, heartbeat_s: 300 }
     resources:
@@ -229,11 +230,13 @@ activities:
       - { key: collect_comments, name: 采集评论, order: 2, reads: [Video.video_id, Account.nickname], writes: [Comment.body, Comment.nickname, Comment.video_id, Comment.dedup_key, Comment.harvest_batch, Comment.line_key],
           check: "逐屏整行去重，连续 2 屏无新增即停；过滤作者本人与自有账号", implementation: { status: implemented, ref: "harvest-keyword.sh:154-240" }, uses_llm: false }
       - { key: verify_commenter_identity, name: 评论人身份验证, order: 3, reads: [Comment.nickname], writes: [Comment.douyin_id],
-          check: "主页强校验：抖音号合法 + 账号三态 + 非自有账号", implementation: { status: implemented, ref: "harvest-keyword.sh:191-216" }, uses_llm: false }
+          check: "主页强校验：抖音号合法 + 账号三态 + 非自有账号；验证失败抢救(back+重开评论区)后核对 current-video-link 仍是本视频，漂移即本视频剩余评论作废(0929修，见下 known_gaps)", implementation: { status: implemented, ref: "harvest-keyword.sh:191-233" }, uses_llm: false }
       - { key: resolve_profile_link, name: 客户主页直链, order: 4, reads: [Comment.douyin_id], writes: [Comment.profile_url],
           check: "分享名片 → sec_uid，剪贴板守卫回读", implementation: { status: implemented, ref: "harvest-keyword.sh（PR #1952 逐屏处理）" }, uses_llm: false }
       - { key: mark_video_collected, name: 标记视频已采, order: 5, reads: [Video.video_id], writes: [Video.process_status],
           check: "process_status=评论已采 只写给 matched 视频", implementation: { status: missing, ref: "现状 upsertVideo 一律写默认值（leadgen-db-lib.js:26），8bb3af55" }, uses_llm: false }
+    known_gaps:
+      - { gap: "0928生产实证: commenter-identity验证失败抢救(back+重开评论区)可能落到别的视频/推荐页，退栈深度不固定(取决于此前逐条评论者主页往返次数，0922已实证退栈次数写死必错)，抢救只解决'面板丢了'不解决'退到了别的视频'——悦升云端线索表 2026-09-28 晚 3 条记录，来源视频/视频链接都标着同一条视频但原始评论内容完全不相关。0929已修行内结构性防线(抢救重开后核对current-video-link是否仍是本视频，漂移即整条视频剩余评论作废，见harvest-keyword.sh video_drifted)。coll_video_binding_consistent 探针目前仅是声明(checks/social-keyword-leadgen.yaml)，没有独立于代码之外的外部只读读回校验——要做到需账本(workflow-result.sh)扩展metrics记录本run验证过打开的video_id集合供探针核对，归入6b133a81(运行时读回目前只接delivery/scoring)范畴", task: 6b133a81 }
 
   # ───────────────────────────── 5 评分 ─────────────────────────────
   - key: scoring

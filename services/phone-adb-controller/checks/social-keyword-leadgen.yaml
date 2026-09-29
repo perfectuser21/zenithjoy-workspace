@@ -176,6 +176,39 @@ probes:
       现状 upsertVideo 一律写 process_status 默认值「评论已采」（20260922_220000_leadgen_ssot_tables.sql:36，
       leadgen-db-lib.js:26），本探针判红直到 8bb3af55 纠正顺序并按实际写 process_status。
 
+  - key: coll_video_binding_consistent
+    stage: collection
+    journey_cell: "stage:collection"
+    probe:
+      type: sql
+      target: pg_zenithjoy
+      query: |
+        SELECT count(*)
+          FROM zenithjoy.leadgen_comments c
+         WHERE c.harvest_batch = '$RUN_TAG'
+           AND c.source_video_url <> ''
+           AND NOT EXISTS (
+             SELECT 1 FROM zenithjoy.leadgen_videos v
+              WHERE v.harvest_batch = c.harvest_batch
+                AND v.video_url = c.source_video_url
+           )
+    expect:
+      op: "<="
+      value: 0
+    severity: error
+    note: >
+      0929修（生产实证：悦升云端线索表 2026-09-28 晚 3 条记录，来源视频/视频链接都标着同一条
+      视频，但原始评论内容完全不相关——commenter-identity 验证失败抢救(back+重开评论区)落到
+      了别的视频/推荐页，退栈深度不固定(取决于此前逐条评论者主页往返次数，0922 已实证退栈
+      次数写死必错)，harvest-keyword.sh:213-231 的 video_drifted 已加行内防线，漂移即整条
+      视频剩余评论作废）。
+      本探针只能核对"孤儿归属"：评论的来源视频链接必须是本批确实开过、已落 leadgen_videos
+      的视频——抓不住"归属到本批内另一条真实存在的视频"这种同批错配（即本次生产实锤的那
+      种，因为漂移到的视频往往也在同一批被正常打开过，通不过孤儿检测）。要抓住这一类需要
+      账本记录每条评论采集时的 commenter-identity 通过序列与视频身份的对应关系做交叉核验，
+      归入 6b133a81（运行时读回目前只接 delivery/scoring）范畴，此处如实注明能力边界，不假
+      装它能查出这种同批内的语义错配。
+
   # ── delivery：落池读回（batch2-v4.sh:64-65 scp TSV → push-videos.js + push-raw-comments.js）──
   - key: videos_readback
     stage: delivery
