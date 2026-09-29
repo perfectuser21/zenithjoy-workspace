@@ -5,7 +5,7 @@
 # xian-m1 跑了一整天旧版无人发现。GitHub Actions 连不到这几台内网机器,只能由 mmv 本机定时对账。
 #
 # 做法: 从 origin/main 上的 deploy.sh 解析应部署清单(MMV_JS_FILES / MMV_TOPLEVEL_FILES /
-# DEVICE_SH_FILES / DEVICE_NODE_FILES / DEVICE_CTL_FILES × DEVICE_CTL_DIRS),逐个用
+# DEVICE_SH_FILES / DEVICE_NODE_FILES / DEVICE_PLAN_FILES / DEVICE_CTL_FILES × DEVICE_CTL_DIRS),逐个用
 # `git show origin/main:<path>` 的 md5 对比三台机器上的实际文件(每台一次 ssh,路径相对 $HOME,
 # 因此 xian-m4 的 /Users/jinnuoshengyuan 与 xian-m1 的 $HOME 天然适配)。
 # 有不一致/缺失/连不上 → 经 mmv 上的 notify-bark.js 发 Bark(参数 base64,BARK_OK 判成败,
@@ -52,12 +52,13 @@ md5_stdin() {
 list_targets() {
   local deploy f h d
   deploy="$(git -C "$REPO" show "$REF:$SUBDIR/deploy.sh" 2>/dev/null)" || { log "读不到 $REF:$SUBDIR/deploy.sh"; return 2; }
-  local -a js top probe sh node ctl dirs
+  local -a js top probe sh node plan ctl dirs
   read -ra js <<< "$(parse_array MMV_JS_FILES <<< "$deploy")"
   read -ra top <<< "$(parse_array MMV_TOPLEVEL_FILES <<< "$deploy")"
   read -ra probe <<< "$(parse_array MMV_PROBE_FILES <<< "$deploy")"
   read -ra sh <<< "$(parse_array DEVICE_SH_FILES <<< "$deploy")"
   read -ra node <<< "$(parse_array DEVICE_NODE_FILES <<< "$deploy")"
+  read -ra plan <<< "$(parse_array DEVICE_PLAN_FILES <<< "$deploy")"
   read -ra ctl <<< "$(parse_array DEVICE_CTL_FILES <<< "$deploy")"
   read -ra dirs <<< "$(parse_array DEVICE_CTL_DIRS <<< "$deploy")"
   if (( ${#js[@]} == 0 || ${#sh[@]} == 0 || ${#ctl[@]} == 0 || ${#dirs[@]} == 0 )); then
@@ -67,7 +68,7 @@ list_targets() {
   for f in ${top[@]+"${top[@]}"}; do echo "$MMV_HOST .openclaw/$f $f"; done
   for f in ${probe[@]+"${probe[@]}"}; do echo "$MMV_HOST .openclaw/leadgen-scripts/$f $f"; done
   for h in "${DEVICE_HOSTS[@]}"; do
-    for f in "${sh[@]}" ${node[@]+"${node[@]}"}; do echo "$h bin-harvest/$f $f"; done
+    for f in "${sh[@]}" ${node[@]+"${node[@]}"} ${plan[@]+"${plan[@]}"}; do echo "$h bin-harvest/$f $f"; done
     for f in "${ctl[@]}"; do
       for d in "${dirs[@]}"; do echo "$h $d/$f $f"; done
     done

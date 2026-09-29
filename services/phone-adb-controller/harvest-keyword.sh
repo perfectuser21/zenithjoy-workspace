@@ -81,13 +81,9 @@ done
 rm -f "$SEENVIDS"
 ' EXIT
 
-$C --profile "$P" open-app >/dev/null 2>&1; nap 2
-$C --profile "$P" open-search "$KW" >/dev/null 2>&1 || { log "open-search失败"; exit 1; }
-nap 3
-$C --profile "$P" search-video-tab "$TAG-vtab" >/dev/null 2>&1 || log "切视频tab失败(可能已在)"
-$C --profile "$P" search-time-layer six_months "$TAG-filter" most_liked unlimited unlimited "$LOC" >/dev/null 2>&1 || { log "筛选失败"; exit 1; }
-nap 2
-CARDS="$($C --profile "$P" search-video-cards "$TAG-cards" 2>/dev/null | grep -E "^[0-9]+	" | head -"$MAXV")"
+# 发现(决策 7f842d12 契约组装执行): 抽成可替换实现,接口见 discover-keyword.sh 头注释;
+# wf-run.sh 按契约 runtime.entry 经 env DISCOVER_CMD 注入(对标获客 = discover-benchmark.sh),不设 = 关键词发现。
+CARDS="$("${DISCOVER_CMD:-${0:A:h}/discover-keyword.sh}" "$P" "$KW" "$MAXV" "$TAG" "$LOC")" || exit 1
 [[ -n "$CARDS" ]] || { log "无卡片"; exit 0; }
 log "卡片数: $(print -- "$CARDS" | wc -l | tr -d " ")"
 

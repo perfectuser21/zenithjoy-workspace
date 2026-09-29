@@ -20,6 +20,7 @@
 #   *.js  → mmv:~/.openclaw/leadgen-scripts/(判定链+数据层)
 #   *.sh  → xian-m4:~/bin-harvest/ 和 xian-m1:~/bin-harvest/(设备/ADB层,两台各一份)
 #   cmdr-escort.txt / cmdr-stream.txt → mmv:~/.openclaw/(agent SOP,按绝对路径引用)
+#   plans/*.plan → xian-m4 / xian-m1:~/bin-harvest/plans/(wf-run.sh 的执行计划,契约生成)
 #
 # 不在本次范围(有意排除,别当成漏了):
 #   - *.plist: launchd 安装是一次性动作,不是"同步文件"能表达的操作
@@ -78,7 +79,7 @@ DEVICE_CTL_FILES=(
 )
 DEVICE_CTL_DIRS=(bin-harvest .local/bin)
 DEVICE_SH_FILES=(
-  harvest-keyword.sh batch2.sh harvest-cron.sh outreach-tick.sh
+  harvest-keyword.sh batch2.sh harvest-cron.sh wf-run.sh discover-keyword.sh outreach-tick.sh
   refill-profile-links.sh wall-report.sh wall-lib.sh phone-wall-push.sh
   disk-gateway-guard.sh device-job-claimer.sh log-stream-push.sh
   workflow-result.sh escort-claude-escalation.sh
@@ -86,6 +87,9 @@ DEVICE_SH_FILES=(
 # 0927 棒3b-3: 账本钩子内建进 harvest-cron.sh/batch2.sh,workflow-result.sh 硬依赖 ledger.mjs(node),
 # 少了它账本全程 WFR_WARN——单独成组,用 node --check 而不是 zsh -n 验语法。
 DEVICE_NODE_FILES=(ledger.mjs)
+# 7f842d12 契约组装执行: wf-run.sh 读 ~/bin-harvest/plans/<能力>.plan(wf-plan.mjs 从契约生成、提交在仓库)。
+# 执行机没有仓库 node_modules,所以计划不在执行机上生成;漏发 = wf-run 拒跑并升级(不会静默跑错)。
+DEVICE_PLAN_FILES=(plans/keyword_acquisition.plan plans/benchmark_link_acquisition.plan)
 
 echo "=== [1/3] mmv:~/.openclaw/leadgen-scripts/ (判定链+数据层, ${#MMV_JS_FILES[@]} 个文件) ==="
 for f in "${MMV_JS_FILES[@]}"; do
@@ -156,6 +160,18 @@ for host in xian-m4 xian-m1; do
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
     push_atomic "$D/$f" "$host" "~/bin-harvest" "$f"
     if ssh "$host" "/opt/homebrew/bin/node --check ~/bin-harvest/$f" 2>/tmp/deploy-err-$$; then
+      echo "    ✅ $f"
+    else
+      echo "    ❌ $f 语法检查失败: $(head -3 /tmp/deploy-err-$$)"
+      FAILED=1
+    fi
+    rm -f /tmp/deploy-err-$$
+  done
+  ssh "$host" "mkdir -p ~/bin-harvest/plans"
+  for f in "${DEVICE_PLAN_FILES[@]}"; do
+    if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
+    push_atomic "$D/$f" "$host" "~/bin-harvest/plans" "$(basename "$f")"
+    if ssh "$host" "zsh -n ~/bin-harvest/$f" 2>/tmp/deploy-err-$$; then
       echo "    ✅ $f"
     else
       echo "    ❌ $f 语法检查失败: $(head -3 /tmp/deploy-err-$$)"

@@ -15,9 +15,11 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HC = join(HERE, "..", "harvest-cron.sh");
+// 7f842d12: harvest-cron.sh 已退成薄壳(exec wf-run.sh keyword_acquisition),源码接线守卫改查实现 wf-run.sh
+const HC_IMPL = join(HERE, "..", "wf-run.sh");
 
 test("接线守卫: run_finalize 必须真调 close-app 和 return-safe-desktop,并把结果导出为 WFR_CLOSE_APP_ATTEMPTS/WFR_SAFE_DESKTOP_VISIBLE 供 finalize 使用", () => {
-  const src = readFileSync(HC, "utf8");
+  const src = readFileSync(HC_IMPL, "utf8");
   const iFn = src.indexOf("run_finalize(){");
   const iEnd = src.indexOf("\n}", iFn);
   assert.ok(iFn > 0, "找不到 run_finalize 函数");

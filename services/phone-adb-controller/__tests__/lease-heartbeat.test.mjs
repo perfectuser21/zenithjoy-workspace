@@ -12,6 +12,8 @@ import { makeTmp, makeFakeAdb, makePassthroughConvert, startFakeApi, makeEnv, ru
 
 const WR = new URL('../wall-report.sh', import.meta.url).pathname;
 const HC = new URL('../harvest-cron.sh', import.meta.url).pathname;
+// 7f842d12: harvest-cron.sh 已退成薄壳(exec wf-run.sh keyword_acquisition),源码接线守卫改查实现 wf-run.sh
+const HC_IMPL = new URL('../wf-run.sh', import.meta.url).pathname;
 const q = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
 const wr = (env, ...args) => runBash(`"$BASH" "${WR}" ${args.map(q).join(' ')}`, env, { timeoutMs: 15_000 });
 const ZSH = spawnSync('bash', ['-lc', 'command -v zsh'], { encoding: 'utf8' }).stdout.trim();
@@ -109,7 +111,7 @@ test('harvest-cron 心跳：父进程死了（kill -9 没走 trap）心跳自行
 });
 
 test('接线守卫：batch2 调用被心跳 start/stop 包住，且 EXIT trap 会停心跳', () => {
-  const src = readFileSync(HC, 'utf8');
+  const src = readFileSync(HC_IMPL, 'utf8');
   const iStart = src.indexOf('lease_heartbeat_start "$SERIAL"');
   const iB2 = src.indexOf('/bin/zsh "$BATCH2"');
   const iStop = src.indexOf('lease_heartbeat_stop', iB2);

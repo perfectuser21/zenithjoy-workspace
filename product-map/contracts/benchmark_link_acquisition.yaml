@@ -48,6 +48,7 @@ activities:
     side_effects:
       - { kind: internal_write, target: "pg zenithjoy.leadgen_videos", description: "候选视频落库（keyword 记 bench:<sec_uid>）" }
     invokers: [code]
+    runtime: { phase: source, entry: discover-benchmark.sh, args: "PROFILE SOURCE_ENC MAXV TAG LOC（SOURCE_ENC=url-encode 过的对标主页链接或 sec_uid）→ 同 discover-keyword.sh 输出约定" }
     steps:
       - { key: open_benchmark_profile, name: 打开对标主页, order: 1, reads: [BenchmarkAccount.profile_url, Device.lock_holder], writes: [],
           check: "deeplink 打开后主页 sec_uid 回读 == BenchmarkAccount.sec_uid", implementation: { status: missing, ref: "douyin-phone-adb 主页 deeplink 待封装" }, uses_llm: false }

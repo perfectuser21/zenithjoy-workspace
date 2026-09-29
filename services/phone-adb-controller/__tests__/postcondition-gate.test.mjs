@@ -335,7 +335,8 @@ test("harvest-cron: release_run_lock 放锁后用 lock-status 真读——free �
 });
 
 test("接线守卫: harvest-cron 预检真读设备/通话并导出、开跑前拿锁、bootstrap 与 batch2 之后查 gate；outreach-tick 收工写账本", () => {
-  const hc = readFileSync(HC, "utf8").split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
+  // 7f842d12: harvest-cron.sh 已退成薄壳(exec wf-run.sh keyword_acquisition),源码接线守卫查实现 wf-run.sh
+  const hc = readFileSync(join(SRC, "wf-run.sh"), "utf8").split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
   assert.match(hc, /DEVICE_VERIFIED=1/);
   assert.match(hc, /CALL_STATE_IDLE=1/);
   assert.match(hc, /export ACCOUNT_VERIFIED DOUYIN_ID DEVICE_VERIFIED CALL_STATE_IDLE/);

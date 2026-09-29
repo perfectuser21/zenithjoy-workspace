@@ -15,6 +15,8 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = join(HERE, "..");
 const HC = join(SRC, "harvest-cron.sh");
+// 7f842d12: harvest-cron.sh 已退成薄壳(exec wf-run.sh keyword_acquisition),源码接线守卫改查实现 wf-run.sh
+const HC_IMPL = join(SRC, "wf-run.sh");
 const ZSH = spawnSync("bash", ["-lc", "command -v zsh"], { encoding: "utf8" }).stdout.trim();
 const SKIP = !ZSH && "no zsh (CI: sudo apt-get install -y zsh)";
 
@@ -91,7 +93,7 @@ test("escort_alive：空 id → 未命中（拉起失败时不该误报活着）
 });
 
 test("harvest-cron.sh 源码：复核与注销都按 ESCORT_ID，不再按 escort 名字 grep", () => {
-  const src = readFileSync(HC, "utf8");
+  const src = readFileSync(HC_IMPL, "utf8");
   assert.ok(!/grep -F "escort-\$HOSTKEY-\$TAG"/.test(src), "旧的按名字 grep -F 复核必须删除");
   assert.ok(/escort_alive "\$ESCORT_ID"/.test(src), "复核主体必须调用 escort_alive 按 id 判");
   assert.ok(/openclaw cron rm \$ESCORT_ID/.test(src), "注销按 id");
