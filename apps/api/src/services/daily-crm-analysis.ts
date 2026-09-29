@@ -10,8 +10,13 @@
  */
 import axios from 'axios';
 
-const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const DEEPSEEK_MODEL = 'deepseek/deepseek-chat';
+// 0929：生产默认改走 TOAPIS（OpenRouter 账户余额耗尽 402，决策 703c1532）。
+// TOAPIS_BASE_URL/TOAPIS_API_KEY 没配时退回 OpenRouter，两边都可能各自坏过（详见
+// comment-grading.ts 两个月的渠道来回切换史），保留双路不写死一条。
+const LLM_API_URL = process.env.TOAPIS_BASE_URL
+  ? `${process.env.TOAPIS_BASE_URL.replace(/\/$/, '')}/chat/completions`
+  : 'https://openrouter.ai/api/v1/chat/completions';
+const DEEPSEEK_MODEL = process.env.TOAPIS_BASE_URL ? 'deepseek-v4-flash' : 'deepseek/deepseek-chat';
 
 export interface CrmCustomer {
   id: string;
@@ -31,17 +36,20 @@ export interface DailyAnalysisResult {
 }
 
 async function callDeepSeek(prompt: string): Promise<string> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = process.env.TOAPIS_API_KEY || process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     return '建议今日主动问候，了解近期需求变化。';
   }
 
   const resp = await axios.post(
-    OPENROUTER_API_URL,
+    LLM_API_URL,
     {
       model: DEEPSEEK_MODEL,
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 200,
+      // deepseek-v4-flash 是 thinking 模型，max_tokens 含 reasoning_tokens——不关会把
+      // 预算吃在思考上，正文变空（同 comment-grading.ts 里踩过的坑）。
+      ...(process.env.TOAPIS_BASE_URL ? { enable_thinking: false } : {}),
     },
     {
       headers: {
