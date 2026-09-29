@@ -5,8 +5,12 @@
  * 面板里的改动同样**失焦即存**，且与表格视图共用一条写回语义：
  * 成功以服务端返回的整行 + 新 version 回填；撞上 404（该行已被他人删除）交给页面出可见提示，
  * 绝不白屏、也不静默把面板关掉——那样用户会以为自己刚才什么都没做。
+ *
+ * UI 呈现层（Notion 级重做）：每个字段一行"图标 + 字段名 + 编辑器"，长文本给大编辑区，
+ * 关联/反向引用做成可点 chip —— 写回语义一字不改。
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   getBackrefs,
   parseCellInput,
@@ -17,7 +21,120 @@ import {
   type WorkbenchField,
   type WorkbenchRow,
 } from '../lib/workbenchFetch';
+import { FieldIcon, fieldTypeLabel, tagColor } from '../lib/workbenchFieldMeta';
 import type { RelationMeta } from './WorkbenchRowGrid';
+
+/** 详情面板里的彩色标签编辑器（单选/多选共用）——点开一个精致浮层，和表格里的观感一致。 */
+function DetailTagField({
+  testId,
+  multi,
+  options,
+  selected,
+  onSave,
+}: {
+  testId: string;
+  multi: boolean;
+  options: string[];
+  selected: string[];
+  onSave: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<string[]>(selected);
+  const anchorRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null);
+  // 始终指向最新 draft，供外部点击的关闭回调读取（闭包快照会拿到陈旧值）
+  const draftRef = useRef<string[]>(draft);
+  draftRef.current = draft;
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+
+  useLayoutEffect(() => {
+    if (!open || !anchorRef.current) return;
+    const r = anchorRef.current.getBoundingClientRect();
+    setPos({ left: r.left, top: r.bottom + 4, width: r.width });
+    setDraft(selected);
+  }, [open, selected]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (popRef.current?.contains(t) || anchorRef.current?.contains(t)) return;
+      setOpen(false);
+      if (multi) onSaveRef.current(draftRef.current);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDown, true);
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('mousedown', onDown, true);
+      document.removeEventListener('keydown', onKey, true);
+    };
+  }, [open, multi]);
+
+  const pick = (opt: string) => {
+    if (multi) {
+      setDraft((d) => (d.includes(opt) ? d.filter((x) => x !== opt) : [...d, opt]));
+    } else {
+      onSave(opt ? [opt] : []);
+      setOpen(false);
+    }
+  };
+
+  return (
+    <div className="wb-detail-tagfield" data-testid={testId}>
+      <button ref={anchorRef} type="button" className="wb-detail-tagbtn" onClick={() => setOpen((v) => !v)}>
+        {selected.length > 0 ? (
+          selected.map((v) => {
+            const c = tagColor(v);
+            return (
+              <span key={v} className="wb-tag" style={{ background: c.bg, color: c.fg }}>
+                <span className="wb-tag-dot" style={{ background: c.dot }} />
+                {v}
+              </span>
+            );
+          })
+        ) : (
+          <span className="wb-cell-empty">选择…</span>
+        )}
+      </button>
+      {open &&
+        pos &&
+        createPortal(
+          <div ref={popRef} className="wb-popover wb-select-pop" style={{ left: pos.left, top: pos.top, minWidth: pos.width }}>
+            <div className="wb-select-scroll">
+              {!multi && (
+                <button type="button" className="wb-select-opt" onClick={() => pick('')}>
+                  <span className="wb-select-clear">清空</span>
+                </button>
+              )}
+              {options.map((o) => {
+                const on = draft.includes(o);
+                const c = tagColor(o);
+                return (
+                  <button type="button" key={o} className={`wb-select-opt${on ? ' on' : ''}`} onClick={() => pick(o)}>
+                    <span className="wb-tag" style={{ background: c.bg, color: c.fg }}>
+                      <span className="wb-tag-dot" style={{ background: c.dot }} />
+                      {o}
+                    </span>
+                    {on && <span className="wb-select-check">✓</span>}
+                  </button>
+                );
+              })}
+              {options.length === 0 && <div className="wb-select-none">该字段还没有选项</div>}
+            </div>
+            {multi && (
+              <button type="button" className="wb-select-done" onClick={() => { setOpen(false); onSave(draft); }}>
+                完成
+              </button>
+            )}
+          </div>,
+          document.body
+        )}
+    </div>
+  );
+}
 
 export interface WorkbenchRowDetailPanelProps {
   row: WorkbenchRow;
@@ -35,6 +152,17 @@ function textOf(value: CellValue): string {
   if (value === null || value === undefined) return '';
   if (Array.isArray(value)) return value.join('、');
   return String(value);
+}
+
+/** 取一行的显示标题：第一个非空文本字段的值，退化到 row_id 前 8 位。 */
+function rowTitle(row: WorkbenchRow, fields: WorkbenchField[]): string {
+  for (const f of fields) {
+    if (f.field_type === 'text' || f.field_type === 'long_text') {
+      const v = row.data[f.field_id ?? ''];
+      if (v != null && v !== '') return String(v);
+    }
+  }
+  return `记录 ${row.row_id.slice(0, 8)}`;
 }
 
 export default function WorkbenchRowDetailPanel({
@@ -102,33 +230,41 @@ export default function WorkbenchRowDetailPanel({
   };
 
   return (
-    <aside data-testid="row-detail-panel" className="row-detail-panel">
-      <header>
-        <h3>行详情</h3>
-        <button type="button" data-testid="detail-close-button" onClick={onClose}>
-          收起
+    <aside data-testid="row-detail-panel" className="row-detail-panel wb-detail">
+      <header className="wb-detail-head">
+        <div className="wb-detail-title">
+          <span className="wb-detail-eyebrow">行详情</span>
+          <h3>{rowTitle(row, fields)}</h3>
+        </div>
+        <button type="button" className="wb-icon-btn" title="收起" aria-label="收起" data-testid="detail-close-button" onClick={onClose}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden>
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
         </button>
       </header>
       {hint && (
-        <p className="detail-hint" data-testid="detail-save-hint">
-          {hint}
+        <p className="detail-hint wb-detail-hint" data-testid="detail-save-hint">
+          <span className="wb-dot-ok" /> {hint}
         </p>
       )}
       {error && (
-        <p className="detail-error" data-testid="detail-error">
+        <p className="detail-error wb-detail-error" data-testid="detail-error">
           {error}
         </p>
       )}
-      <dl>
+      <dl className="wb-detail-fields">
         {fields.map((f) => {
           const fieldId = f.field_id ?? '';
           const testId = `detail-field-${fieldId}`;
           const draft = valueOf(fieldId);
           const onChange = (v: string | string[]) => setDrafts((prev) => ({ ...prev, [fieldId]: v }));
           return (
-            <div key={fieldId} className="detail-row">
-              <dt data-testid={`detail-label-${fieldId}`}>{f.name}</dt>
-              <dd>
+            <div key={fieldId} className="detail-row wb-detail-row">
+              <dt data-testid={`detail-label-${fieldId}`} className="wb-detail-label" title={fieldTypeLabel(f.field_type)}>
+                <FieldIcon type={f.field_type} />
+                <span>{f.name}</span>
+              </dt>
+              <dd className="wb-detail-value">
                 {f.field_type === 'relation' ? (
                   <RelationFieldView
                     rowId={row.row_id}
@@ -137,49 +273,61 @@ export default function WorkbenchRowDetailPanel({
                     meta={relationMeta[fieldId]}
                     onJump={onRelationJump}
                   />
+                ) : f.field_type === 'rollup' || f.field_type === 'lookup' ? (
+                  <span className="wb-detail-readonly">{textOf(row.data[fieldId] ?? null) || '—'}</span>
                 ) : f.field_type === 'long_text' ? (
                   <textarea
+                    className="wb-input wb-textarea"
                     data-testid={testId}
-                    rows={5}
+                    rows={4}
                     value={Array.isArray(draft) ? draft.join('') : draft}
                     onChange={(e) => onChange(e.target.value)}
                     onBlur={() => void save(f)}
+                    placeholder="空"
                   />
-                ) : f.field_type === 'single_select' ? (
-                  <select
-                    data-testid={testId}
-                    value={Array.isArray(draft) ? draft[0] ?? '' : draft}
-                    onChange={(e) => onChange(e.target.value)}
-                    onBlur={() => void save(f)}
-                  >
-                    <option value="">（清空）</option>
-                    {f.options.map((o) => (
-                      <option key={o} value={o}>
-                        {o}
-                      </option>
-                    ))}
-                  </select>
-                ) : f.field_type === 'multi_select' ? (
-                  <select
-                    data-testid={testId}
-                    multiple
-                    value={Array.isArray(draft) ? draft : draft ? draft.split('、') : []}
-                    onChange={(e) => onChange(Array.from(e.target.selectedOptions).map((o) => o.value))}
-                    onBlur={() => void save(f)}
-                  >
-                    {f.options.map((o) => (
-                      <option key={o} value={o}>
-                        {o}
-                      </option>
-                    ))}
-                  </select>
+                ) : f.field_type === 'single_select' || f.field_type === 'multi_select' ? (
+                  <DetailTagField
+                    testId={testId}
+                    multi={f.field_type === 'multi_select'}
+                    options={f.options}
+                    selected={
+                      Array.isArray(draft) ? draft : draft ? (f.field_type === 'multi_select' ? draft.split('、') : [draft]) : []
+                    }
+                    onSave={(next) => {
+                      setDrafts((prev) => ({ ...prev, [fieldId]: f.field_type === 'multi_select' ? next : next[0] ?? '' }));
+                      // 直接用 next 写回，绕开 setState 异步（save 读 drafts[fieldId] 可能还没更新）
+                      void patchRow(row.row_id, row.version, {
+                        [fieldId]: parseCellInput(f.field_type, f.field_type === 'multi_select' ? next : next[0] ?? ''),
+                      })
+                        .then((saved) => {
+                          setDrafts((prev) => {
+                            const n = { ...prev };
+                            delete n[fieldId];
+                            return n;
+                          });
+                          setHint(`已保存 ${new Date(saved.updated_at).toLocaleTimeString()}`);
+                          onRowSaved(saved);
+                        })
+                        .catch((e) => {
+                          const err = e instanceof WorkbenchRequestError ? e : null;
+                          if (err?.status === 404) {
+                            onRowGone(row.row_id);
+                            return;
+                          }
+                          setHint('');
+                          setError(err ? err.message : '写回失败，改动未保存');
+                        });
+                    }}
+                  />
                 ) : (
                   <input
+                    className="wb-input"
                     data-testid={testId}
                     type={f.field_type === 'date' ? 'date' : 'text'}
                     value={Array.isArray(draft) ? draft.join('') : draft}
                     onChange={(e) => onChange(e.target.value)}
                     onBlur={() => void save(f)}
+                    placeholder="空"
                   />
                 )}
               </dd>
@@ -188,26 +336,29 @@ export default function WorkbenchRowDetailPanel({
         })}
       </dl>
 
-      <section className="backref-panel" data-testid="backref-panel">
-        <h4>谁引用了我</h4>
+      <section className="backref-panel wb-backref" data-testid="backref-panel">
+        <h4 className="wb-backref-title">谁引用了我</h4>
         {!backrefLoaded ? (
-          <p className="backref-loading">加载中…</p>
+          <p className="backref-loading wb-muted-sm">加载中…</p>
         ) : backrefs.length === 0 ? (
-          <p className="backref-empty" data-testid="backref-empty">
+          <p className="backref-empty wb-muted-sm" data-testid="backref-empty">
             暂无其他记录引用它
           </p>
         ) : (
-          <ul data-testid="backref-list">
+          <ul className="wb-backref-list" data-testid="backref-list">
             {backrefs.map((b) => (
               <li key={`${b.table_id}-${b.row_id}-${b.field_id}`} data-testid={`backref-${b.row_id}`}>
                 <button
                   type="button"
-                  className="backref-item"
+                  className="backref-item wb-backref-item"
                   data-testid={`backref-jump-${b.row_id}`}
                   title="跳转到引用来源记录"
                   onClick={() => onRelationJump?.(b.table_id, b.row_id)}
                 >
-                  {b.table_name} · {b.row_title}
+                  <FieldIcon type="relation" className="wb-inline-ico" />
+                  <span className="wb-backref-table">{b.table_name}</span>
+                  <span className="wb-backref-sep">·</span>
+                  {b.row_title}
                 </button>
               </li>
             ))}
@@ -233,9 +384,9 @@ function RelationFieldView({
   onJump?: (targetTableId: string, targetRowId: string) => void;
 }) {
   const ids = Array.isArray(value) ? value.map((v) => String(v)) : [];
-  if (ids.length === 0) return <span className="rel-empty">—</span>;
+  if (ids.length === 0) return <span className="rel-empty wb-cell-empty">—</span>;
   return (
-    <div className="detail-relation" data-testid={`detail-relation-${fieldId}`}>
+    <div className="detail-relation wb-detail-relation" data-testid={`detail-relation-${fieldId}`}>
       {ids.map((id) => {
         const title = meta?.titleByRow[id];
         const isStale = meta !== undefined && title === undefined;
@@ -260,6 +411,7 @@ function RelationFieldView({
             title="点击跳转到关联记录"
             onClick={() => meta && onJump?.(meta.targetTableId, id)}
           >
+            <FieldIcon type="relation" className="wb-inline-ico" />
             {title ?? id}
           </button>
         );

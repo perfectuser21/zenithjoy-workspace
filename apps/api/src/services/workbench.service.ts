@@ -522,6 +522,82 @@ export async function restoreTable(
   return { table_id: tableId, restored_at: new Date(r.rows[0].updated_at).toISOString() };
 }
 
+export type RenameTableOutcome =
+  | { kind: 'not_found' }
+  | { kind: 'renamed'; detail: TableDetail };
+
+/**
+ * 改表名（cp-08230010 行内改名）。组织归属只来自入参 orgId（同建/删表口径）。
+ * 表不可见 / 跨企业 / 他人私有 / 已软删 → not_found（同 404，不透露存在性）。
+ * 空名 / 非字符串 → WorkbenchValidationError（路由翻 400）。名字对上 → 只 UPDATE name，
+ * 其余字段一字不动；返回整表详情供前端就地回填。
+ */
+export async function renameTable(
+  orgId: string,
+  memberId: string,
+  tableId: string,
+  rawName: unknown
+): Promise<RenameTableOutcome> {
+  const name = typeof rawName === 'string' ? rawName.trim() : '';
+  if (!name) throw new WorkbenchValidationError('表名不能为空');
+  const t = await getTable(orgId, memberId, tableId);
+  if (!t) return { kind: 'not_found' };
+  const r = await pool.query(
+    `UPDATE zenithjoy.db_tables SET name = $3, updated_at = NOW()
+      WHERE id = $1 AND org_id = $2 AND deleted_at IS NULL
+      RETURNING id`,
+    [tableId, orgId, name]
+  );
+  if (r.rowCount === 0) return { kind: 'not_found' };
+  await pool
+    .query(
+      `INSERT INTO zenithjoy.db_audit (org_id, table_id, member_id, action, detail)
+       VALUES ($1, $2, $3, 'rename_table', '{}'::jsonb)`,
+      [orgId, tableId, memberId]
+    )
+    .catch(() => undefined);
+  const detail = await getTable(orgId, memberId, tableId);
+  return detail ? { kind: 'renamed', detail } : { kind: 'not_found' };
+}
+
+export type RenameFieldOutcome =
+  | { kind: 'not_found' }
+  | { kind: 'renamed'; field: FieldOut };
+
+/**
+ * 改字段名（cp-08230010 行内改名）。表不可见 / 字段不属该表 / 已软删 → not_found。
+ * 空名 → WorkbenchValidationError。只改 db_fields.name，field_type/options/顺序一字不动；
+ * 返回改后的整个字段供前端就地回填。
+ */
+export async function renameField(
+  orgId: string,
+  memberId: string,
+  tableId: string,
+  fieldId: string,
+  rawName: unknown
+): Promise<RenameFieldOutcome> {
+  const name = typeof rawName === 'string' ? rawName.trim() : '';
+  if (!name) throw new WorkbenchValidationError('字段名不能为空');
+  const t = await getTable(orgId, memberId, tableId);
+  if (!t) return { kind: 'not_found' };
+  if (!isUuid(fieldId)) return { kind: 'not_found' };
+  const r = await pool.query(
+    `UPDATE zenithjoy.db_fields SET name = $4
+      WHERE id = $1 AND table_id = $2 AND org_id = $3 AND deleted_at IS NULL
+      RETURNING id, name, field_type, options, display_order`,
+    [fieldId, tableId, orgId, name]
+  );
+  if (r.rowCount === 0) return { kind: 'not_found' };
+  await pool
+    .query(
+      `INSERT INTO zenithjoy.db_audit (org_id, table_id, member_id, action, detail)
+       VALUES ($1, $2, $3, 'rename_field', '{}'::jsonb)`,
+      [orgId, tableId, memberId]
+    )
+    .catch(() => undefined);
+  return { kind: 'renamed', field: rowToFieldOut(r.rows[0]) };
+}
+
 export type DeleteFieldOutcome =
   | { kind: 'not_found' }
   | { kind: 'confirm_mismatch' }
