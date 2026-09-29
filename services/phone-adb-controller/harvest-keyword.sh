@@ -40,7 +40,10 @@ SEENVIDS="$(mktemp -t seen-videos)"
 ssh -o ConnectTimeout=15 mmv "node /Users/administrator/.openclaw/leadgen-scripts/fetch-seen-videos.js '$LINE'" > "$SEENVIDS" 2>/dev/null
 
 $C --profile "$P" lock-acquire "$TAG" >/dev/null 2>&1 || { log "锁被占,退出"; rm -f "$SEENVIDS"; exit 3; }
-trap '$C --profile "$P" lock-release "$TAG" >/dev/null 2>&1; rm -f "$SEENVIDS"' EXIT
+# 0929修复(DoD审计发现): release_lock之前输出全丢进/dev/null,底层"只能释放自己持有的锁"
+# 的真实校验结果完全看不见——释放失败会漏锁,下一批误判"锁被占"或者更糟地跟正在跑的
+# 上一批撞车,之前谁都不知道发生过这种事。现在留痕(不改变trap本身的执行,只是把结果记下来)。
+trap '_RELOUT=$($C --profile "$P" lock-release "$TAG" 2>&1); print -- "$_RELOUT" | grep -qE "^lock=(released|free)" || log "⚠️ 放锁未确认成功: $(print -- "$_RELOUT" | tail -1 | head -c 150)"; rm -f "$SEENVIDS"' EXIT
 
 $C --profile "$P" open-app >/dev/null 2>&1; sleep 2
 $C --profile "$P" open-search "$KW" >/dev/null 2>&1 || { log "open-search失败"; exit 1; }
@@ -60,7 +63,11 @@ for CARDLINE in "${(f)CARDS}"; do
   log "视频$i: ${TITLE:0:40}"
   wr note --profile "$P" "视频$i: ${TITLE:0:40}"
   # 0914 融合刀6: 活锁心跳——每视频续一次,长采收绝不再被 TTL 判 stale 抢占
-  $C --profile "$P" lock-refresh "$TAG" </dev/null >/dev/null 2>&1 || true
+  # 0929修复(DoD审计发现): 之前输出+退出码全丢进/dev/null+`|| true`——TTL(1800s)到点
+  # 没人知道续期一直在失败,直到锁被别的轮次抢走才现形(0928夜实证过一次真实撞车:两条
+  # 并发批次同时驱动同一台设备)。续一次失败不足以整批夭折(有30分钟buffer),但必须留痕。
+  _LROUT=$($C --profile "$P" lock-refresh "$TAG" </dev/null 2>&1)
+  print -- "$_LROUT" | grep -q "^lock=refreshed" || log "⚠️ 锁心跳续期未确认成功(可能已被抢占): $(print -- "$_LROUT" | tail -1 | head -c 150)"
   $C --profile "$P" tap-evidence "$X" "$Y" "$TAG-v$i" >/dev/null 2>&1
   sleep 3
   # 0914 主理人验收字段: 原爆款作品地址。current-video-link 自带 note(图文)检测,
