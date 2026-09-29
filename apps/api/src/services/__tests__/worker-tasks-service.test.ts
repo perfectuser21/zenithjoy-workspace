@@ -287,3 +287,50 @@ describe('completeTask 翻案：晚到的收尾可以推翻 executor_lost 误判
     expect(completeMirrorJob).not.toHaveBeenCalled();
   });
 });
+
+// 0929：采收 done 从不带线索数——0 条线索的批次（auto09270230「批完成: 0」）和出 42 条的批次在页面/Brain 上都是同一个 completed。
+describe('completeTask 线索数：evidence.leads 规范化 + 零线索显式标记', () => {
+  const running = { id: 'wt-1', tenant_id: 't1', status: 'running', executor_id: 'adb-wall', steps_total: 5, evidence: { brain_task_id: 'brain-1' } };
+  const updEvidence = () => {
+    const upd = (pool as any).query.mock.calls.find((c: any[]) => /UPDATE zenithjoy\.worker_tasks/.test(c[0]));
+    return JSON.parse(upd[1][4]);
+  };
+  it('leads=0 → evidence.zero_leads=true + result_note，状态仍是 completed，Brain 同步 zero_leads', async () => {
+    (pool as any).query = vi.fn().mockResolvedValueOnce({ rows: [running] }).mockResolvedValue({ rowCount: 1, rows: [] });
+    await completeTask('wt-1', { outcome: 'completed', executor_id: 'adb-wall', evidence: { leads: 0 } });
+    const ev = updEvidence();
+    expect(ev).toMatchObject({ leads: 0, zero_leads: true });
+    expect(ev.result_note).toMatch(/零线索/);
+    expect(completeMirrorJob).toHaveBeenCalledWith('brain-1', 'completed', expect.objectContaining({ leads: 0, zero_leads: true }));
+  });
+  it('leads=7 → zero_leads=false，无零线索说明', async () => {
+    (pool as any).query = vi.fn().mockResolvedValueOnce({ rows: [running] }).mockResolvedValue({ rowCount: 1, rows: [] });
+    await completeTask('wt-1', { outcome: 'completed', executor_id: 'adb-wall', evidence: { leads: 7 } });
+    expect(updEvidence()).toMatchObject({ leads: 7, zero_leads: false });
+    expect(updEvidence().result_note).toBeUndefined();
+    expect(completeMirrorJob).toHaveBeenCalledWith('brain-1', 'completed', expect.objectContaining({ leads: 7, zero_leads: false }));
+  });
+  it('leads 非法（负数/小数/字符串）→ 400 INVALID_LEADS，不写库', async () => {
+    for (const bad of [-1, 1.5, 'abc']) {
+      (pool as any).query = vi.fn().mockResolvedValueOnce({ rows: [running] }).mockResolvedValue({ rowCount: 1, rows: [] });
+      await expect(completeTask('wt-1', { outcome: 'completed', executor_id: 'adb-wall', evidence: { leads: bad } }))
+        .rejects.toMatchObject({ code: 'INVALID_LEADS', httpStatus: 400 });
+    }
+  });
+  it('不带 leads（退让/非采收任务）→ 不加 zero_leads，不误标', async () => {
+    (pool as any).query = vi.fn().mockResolvedValueOnce({ rows: [running] }).mockResolvedValue({ rowCount: 1, rows: [] });
+    await completeTask('wt-1', { outcome: 'completed', executor_id: 'adb-wall' });
+    expect(updEvidence().zero_leads).toBeUndefined();
+  });
+  it('getActivity 历史带 leads / zero_leads 列（页面据此区分零线索成功）', async () => {
+    (pool as any).query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ id: 'agent-1' }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: 'h1', title: 'x', status: 'completed', steps_total: 5, started_at: 's', finished_at: 'f', failed_step: null, error_code: null,
+        evidence_screenshot_ref: null, duration_ms: '1', leads: 0, zero_leads: true, failed_foreground_pkg: null, failed_diag_line: null, failed_screenshot_ref: null }] });
+    const a = await getActivity('tenant-a', 'agent-1');
+    const sql = (pool as any).query.mock.calls[2][0] as string;
+    expect(sql).toMatch(/AS leads/); expect(sql).toMatch(/AS zero_leads/);
+    expect(a!.history[0]).toMatchObject({ leads: 0, zero_leads: true });
+  });
+});
