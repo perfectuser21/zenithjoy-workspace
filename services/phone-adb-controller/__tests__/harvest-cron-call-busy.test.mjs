@@ -15,6 +15,8 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HC = join(HERE, "..", "harvest-cron.sh");
+// 7f842d12: harvest-cron.sh 已退成薄壳(exec wf-run.sh keyword_acquisition),源码接线守卫改查实现 wf-run.sh
+const HC_IMPL = join(HERE, "..", "wf-run.sh");
 const ZSH = spawnSync("bash", ["-lc", "command -v zsh"], { encoding: "utf8" }).stdout.trim();
 const SKIP = !ZSH && "no zsh (CI: sudo apt-get install -y zsh)";
 
@@ -37,7 +39,7 @@ test("device_call_busy: 空/无法识别的值 → 未占线(非0，fail-open，
 });
 
 test("接线守卫: 设备 preflight 段落必须真的查询 mCallState 并用 device_call_busy 网关，且在 exit 0 之前", { skip: SKIP }, () => {
-  const src = readFileSync(HC, "utf8");
+  const src = readFileSync(HC_IMPL, "utf8");
   const iDumpsys = src.indexOf("dumpsys telephony.registry");
   const iGate = src.indexOf('device_call_busy "$CALLSTATE"');
   const iExit = src.indexOf("call_busy", iGate);

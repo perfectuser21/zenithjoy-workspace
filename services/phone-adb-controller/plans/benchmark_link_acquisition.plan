@@ -1,0 +1,7 @@
+# 由 scripts/product-map/wf-plan.mjs --write 从 product-map/contracts/benchmark_link_acquisition.yaml 生成，勿手改
+WF_CAP='benchmark_link_acquisition'
+WF_WORKFLOW='social-benchmark-leadgen'
+WF_STAGES='拉Commander,预检,取对标源,对标发现·判定·采集·评分·配送,效果回写'
+WF_SOURCE_KIND='benchmark'
+WF_DISCOVER_CMD='discover-benchmark.sh'
+WF_MISSING='discovery.open_benchmark_profile,discovery.list_recent_videos,discovery.resolve_video_links,discovery.persist_candidates'

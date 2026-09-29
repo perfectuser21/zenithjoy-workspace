@@ -2005,7 +2005,8 @@ ok "Step 38 ✅ 词的赛马数据按目标列类型真写得进去，有效线�
 #
 # 隔离点在「活」上不在机器上（主理人 0922）：手机只管执行，活自己带着「我属于谁」。
 # 这条守的就是「活的归属有没有一路传到写库那一步」。
-_GP2_HC="services/phone-adb-controller/harvest-cron.sh"
+# 7f842d12: harvest-cron.sh 已退成 exec wf-run.sh 的薄壳,调用链实现在 wf-run.sh
+_GP2_HC="services/phone-adb-controller/wf-run.sh"
 [[ -s "$_GP2_HC" ]] || fail "Step 39 harvest-cron.sh 缺失" 39
 # 不在这里做语法检查：harvest-cron.sh 是 zsh 脚本，而跑本 smoke 的 ubuntu runner
 # **没装 zsh**（实测 `zsh: command not found`，Step 39 当场 exit 39）。

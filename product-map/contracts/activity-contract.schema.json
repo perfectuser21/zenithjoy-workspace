@@ -236,7 +236,20 @@
           }
         },
         "steps": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/step" } },
+        "runtime": { "$ref": "#/$defs/runtime" },
         "known_gaps": { "$ref": "#/$defs/gaps" }
+      }
+    },
+    "runtime": {
+      "description": "运行时绑定（决策 7f842d12 契约组装执行）：phase=本活动在 wf-run.sh 里的执行时机；entry=执行机 ~/bin-harvest/ 下的脚本名；args=参数约定说明；detached=true 表示由独立定时链执行、不在本 run 内调用。缺 runtime 的能力 wf-plan 拒跑。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phase", "entry"],
+      "properties": {
+        "phase": { "enum": ["setup", "source", "per_item", "batch_end", "finalize"] },
+        "entry": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*\\.sh$" },
+        "args": { "type": "string", "minLength": 3 },
+        "detached": { "type": "boolean" }
       }
     }
   }

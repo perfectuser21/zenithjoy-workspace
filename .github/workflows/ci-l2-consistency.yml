@@ -233,6 +233,10 @@ jobs:
           npm run product-map:generate
           npm run product-map:check
 
+      # 7f842d12 契约组装执行: 执行机 wf-run.sh 读的 plans/*.plan 必须与契约一致(改契约不重生成 = 红)
+      - name: Check wf-plan execution plans drift
+        run: node scripts/product-map/wf-plan.mjs --check
+
   acceptance-spec-contract:
     name: Line02 Acceptance Spec Contract
     runs-on: ubuntu-latest

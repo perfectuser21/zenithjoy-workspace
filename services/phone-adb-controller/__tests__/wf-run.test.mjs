@@ -1,6 +1,6 @@
 // wf-run.sh —— 契约组装执行的通用驱动（决策 7f842d12：Commander 当入口 + 契约组装执行）。
 // harvest-cron.sh 已退成薄壳 `exec wf-run.sh keyword_acquisition "$@"`（现网 crontab 一字不改），
-// 计划由 scripts/product-map/wf-plan.mjs 从契约生成、提交在 plans/<能力>.env。
+// 计划由 scripts/product-map/wf-plan.mjs 从契约生成、提交在 plans/<能力>.plan。
 // 这里钉：①计划缺失/无实现拒跑（且拒跑发生在拉 escort 之前）②对标源文件读取 ③--commander 跳过自拉 escort
 // ④发现入口经 DISCOVER_CMD 注入 ⑤harvest-cron.sh 薄壳把能力名传对、库模式照常可 source。
 import { test } from "node:test";
@@ -43,7 +43,7 @@ test("计划文件缺失 → exit 1 拒跑,不拉 escort", { skip: SKIP }, () =>
   const { home, env } = setup();
   const r = run(WR, ["no_such_cap", "p1", "SER1", "biz"], env);
   assert.equal(r.status, 1, r.stderr);
-  assert.match(read(join(home, "harvest-cron.log")), /无执行计划.*no_such_cap\.env/);
+  assert.match(read(join(home, "harvest-cron.log")), /无执行计划.*no_such_cap\.plan/);
   assert.doesNotMatch(read(join(home, "ssh-argv.log")), /cron add/);
 });
 
@@ -72,7 +72,7 @@ test("harvest-cron.sh 薄壳: 以 keyword_acquisition 调 wf-run.sh(参数原样
   const { home, env } = setup();
   const r = run(HC, ["p1", "SER1", "biz"], { ...env, WF_PLAN_DIR: join(home, "empty-plans") });
   assert.equal(r.status, 1);
-  assert.match(read(join(home, "harvest-cron.log")), /无执行计划.*keyword_acquisition\.env/);
+  assert.match(read(join(home, "harvest-cron.log")), /无执行计划.*keyword_acquisition\.plan/);
 });
 
 test("harvest-cron.sh 库模式仍可 source,wf-run 的函数随之可用", { skip: SKIP }, () => {

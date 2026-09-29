@@ -9,6 +9,8 @@ import { makeTmp, makeFakeAdb, makePassthroughConvert, startFakeApi, makeEnv, ru
 
 const WR = new URL('../wall-report.sh', import.meta.url).pathname;
 const HC = new URL('../harvest-cron.sh', import.meta.url).pathname;
+// 7f842d12: harvest-cron.sh 已退成薄壳(exec wf-run.sh keyword_acquisition),源码接线守卫改查实现 wf-run.sh
+const HC_IMPL = new URL('../wf-run.sh', import.meta.url).pathname;
 const q = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
 const wr = (env, ...args) => runBash(`"$BASH" "${WR}" ${args.map(q).join(' ')}`, env, { timeoutMs: 15_000 });
 
@@ -43,7 +45,7 @@ test('wall-report done 线索数非数字 → 不带 evidence（宁缺勿错）'
 });
 
 test('接线守卫：harvest-cron 采收收尾把本批 LEAD 数传给 wr done', () => {
-  const src = readFileSync(HC, 'utf8');
+  const src = readFileSync(HC_IMPL, 'utf8');
   assert.match(src, /NLEAD=\$\(grep -c '\^LEAD' ~\/night-\$TAG\.tsv/, '必须统计本批 night-$TAG.tsv 的 LEAD 行');
   // `grep -c ... || echo 0` 在 0 命中时会输出 "0\n0"（grep -c 本身已打印 0 且退出 1），上报就成了非法值
   assert.doesNotMatch(src, /NLEAD=\$\(grep -c[^)]*\|\| echo 0\)/);

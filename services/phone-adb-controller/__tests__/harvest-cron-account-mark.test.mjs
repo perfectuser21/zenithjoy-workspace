@@ -16,6 +16,8 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HC = join(HERE, "..", "harvest-cron.sh");
+// 7f842d12: harvest-cron.sh 已退成薄壳(exec wf-run.sh keyword_acquisition),源码接线守卫改查实现 wf-run.sh
+const HC_IMPL = join(HERE, "..", "wf-run.sh");
 const ZSH = spawnSync("bash", ["-lc", "command -v zsh"], { encoding: "utf8" }).stdout.trim();
 const SKIP = !ZSH && "no zsh (CI: sudo apt-get install -y zsh)";
 
@@ -54,7 +56,7 @@ test("account_registered: 登记表文件不可读(挂了) → fail-open,不拦(
 
 // ── 接线守卫: preflight 段落必须真调 account-current 并用 account_registered 网关 ──
 test("接线守卫: preflight 必须调 account-current,读不到号/号不在册都要走 exit 0 的失败记账路径,且发生在 wfr_bootstrap(init 写账本)之前", { skip: SKIP }, () => {
-  const src = readFileSync(HC, "utf8");
+  const src = readFileSync(HC_IMPL, "utf8");
   const iCallState = src.indexOf('device_call_busy "$CALLSTATE"');
   const iAcctCall = src.indexOf('account-current "$TAG');
   const iReadFailed = src.indexOf("account_read_failed");

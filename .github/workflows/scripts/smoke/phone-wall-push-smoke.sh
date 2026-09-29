@@ -15,7 +15,7 @@ done
 # 层1: 语法闸——上报侧是 bash，被挂钩的四个生产脚本是 zsh
 for f in wall-lib.sh phone-wall-push.sh wall-report.sh; do bash -n "$D/$f" || fail "$f bash 语法错误"; done
 if command -v zsh >/dev/null 2>&1; then
-  for f in harvest-cron.sh batch2.sh harvest-keyword.sh outreach-tick.sh; do zsh -n "$D/$f" || fail "$f zsh 语法错误"; done
+  for f in harvest-cron.sh wf-run.sh discover-keyword.sh batch2.sh harvest-keyword.sh outreach-tick.sh; do zsh -n "$D/$f" || fail "$f zsh 语法错误"; done
 else
   echo "::warning::zsh 不可用,四脚本 zsh 语法闸跳过(部署侧会跑)"
 fi
@@ -28,7 +28,8 @@ grep -qF 'sips --resampleWidth "$3"' <<< "$WL" || fail "wall-lib 缩图未用 si
 grep -qF 'WALL_WIDTH:-720' <<< "$WL"             || fail "wall-lib 默认宽度不是 720"
 # 层2: 挂钩存在（删掉任一行即红；先去注释再断言——给挂钩行前加 # 也必须红）
 # 注: 这四个变量是去注释后的脚本正文, 后面全部用 here-string 查, 行号断言也基于同一份文本
-HC=$(grep -vE '^[[:space:]]*#' "$D/harvest-cron.sh")
+# 7f842d12: harvest-cron.sh 已退成 exec wf-run.sh 的薄壳,采收挂钩查实现 wf-run.sh
+HC=$(grep -vE '^[[:space:]]*#' "$D/wf-run.sh")
 B2=$(grep -vE '^[[:space:]]*#' "$D/batch2.sh")
 HK=$(grep -vE '^[[:space:]]*#' "$D/harvest-keyword.sh")
 OT=$(grep -vE '^[[:space:]]*#' "$D/outreach-tick.sh")
@@ -46,7 +47,7 @@ STARTLN=$(grep -n 'wr start --profile "\$PROFILE"' <<< "$OT" | head -1 | cut -d:
 [[ -n "$LOCKLN" && -n "$STARTLN" && "$STARTLN" -gt "$LOCKLN" ]] || fail "outreach-tick 的 wr start 必须在 lock-acquire 之后"
 grep -qE 'WR_STARTED == 0.*wr start --profile' <<< "$OT" || fail "outreach-tick 的 wr start 未用 WR_STARTED 守一次(重试循环会重复 start)"
 # 2a: 四脚本的 wr 定义必须是"上报器缺失/失败一律吞掉"的形态（有 -x 判断 + 收尾 true），绝不能反过来阻塞采收/触达
-for f in harvest-cron.sh batch2.sh harvest-keyword.sh outreach-tick.sh; do
+for f in wf-run.sh batch2.sh harvest-keyword.sh outreach-tick.sh; do
   grep -vE '^[[:space:]]*#' "$D/$f" | grep -qE '^wr\(\)\{ \[\[ .*-x "\$WR" \]\] && "\$WR" "\$@" >/dev/null 2>&1; true \}$' || fail "$f 的 wr 定义不是吞错形态(缺 -x 判断或收尾 true)"
 done
 # 2a': 两条链各自 export WALL_NS（wall-report 按命名空间分状态文件，采收/触达同机同序列号互不顶状态；batch2/harvest-keyword 是子进程自动继承）
@@ -58,7 +59,7 @@ WRDEF=$(grep -n '^wr()' <<< "$OT" | head -1 | cut -d: -f1)
 [[ -n "$GUARD" && -n "$WRDEF" && "$WRDEF" -gt "$GUARD" ]] || fail "outreach-tick 的 wr 定义必须在 source 守卫之后"
 
 # 层3: 既有窗口断言不破（同 phone-adb-controller-smoke 层7c；那边按去注释代码查，这里同口径）
-_H_CODE=$(grep -vE '^[[:space:]]*#' "$D/harvest-cron.sh")
+_H_CODE=$(grep -vE '^[[:space:]]*#' "$D/wf-run.sh")
 grep -A2 '设备离线' <<< "$_H_CODE" | grep -q 'escalate' || fail "harvest-cron 设备离线→escalate 窗口被挤"
 grep -A8 'KWERR' <<< "$_H_CODE" | grep -q 'escalate'    || fail "harvest-cron KWERR→escalate 窗口被挤"
 

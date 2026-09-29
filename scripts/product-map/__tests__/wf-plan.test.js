@@ -3,7 +3,7 @@
  *
  * 钉四件事：①两个能力的计划输出（阶段串/源类型/发现入口）②缺 runtime 拒跑
  * ③步骤 implementation=missing 默认拒跑、--allow-missing 放行但记入 WF_MISSING
- * ④提交进仓库的 plans/*.env 与重新生成的一致（改契约不重生成 = CI 红）。
+ * ④提交进仓库的 plans/*.plan 与重新生成的一致（改契约不重生成 = CI 红）。
  * 运行: node --test scripts/product-map/__tests__/wf-plan.test.js
  */
 
@@ -107,9 +107,9 @@ test('CLI：关键词获客 stdout 可 eval，对标获客默认 exit 1', () => 
   assert.equal(cli('no_such_cap').status, 1);
 });
 
-test('提交的 plans/*.env 与契约重新生成的一致（改契约必须 --write 重生成）', () => {
+test('提交的 plans/*.plan 与契约重新生成的一致（改契约必须 --write 重生成）', () => {
   const r = cli('--check');
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  const kw = readFileSync(resolve(ROOT, PLANS_DIR, 'keyword_acquisition.env'), 'utf8');
+  const kw = readFileSync(resolve(ROOT, PLANS_DIR, 'keyword_acquisition.plan'), 'utf8');
   assert.match(kw, /^WF_DISCOVER_CMD='discover-keyword\.sh'$/m);
 });
