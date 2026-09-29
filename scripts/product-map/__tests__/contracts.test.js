@@ -173,3 +173,15 @@ test('ref 指向不存在的活动 → 报错', () => {
   ctx.contracts.benchmark_link_acquisition.activities.find((a) => a.ref).ref = 'keyword_acquisition.nope';
   expectError(ctx, /keyword_acquisition\.nope/);
 });
+
+// ── 任务 8bb3af55：先判后采落地后，契约不得再把「判定在采集之后」挂成已知缺口 ──
+test('先判后采（8bb3af55）：候选落库/标记已采两步已实现，契约不再挂 8bb3af55 缺口', () => {
+  const ctx = fresh();
+  const step = (a, k) => act(ctx, 'keyword_acquisition', a).steps.find((s) => s.key === k);
+  assert.equal(step('discovery', 'persist_candidates').implementation.status, 'implemented');
+  assert.equal(step('collection', 'mark_video_collected').implementation.status, 'implemented');
+  const doc = ctx.contracts.keyword_acquisition;
+  const gaps = [...(doc.known_gaps || []), ...doc.activities.flatMap((a) => a.known_gaps || [])];
+  assert.deepEqual(gaps.filter((g) => g.task === '8bb3af55').map((g) => g.gap), []);
+  assert.match(act(ctx, 'keyword_acquisition', 'qualification').execution.via, /qualify-video\.js/);
+});

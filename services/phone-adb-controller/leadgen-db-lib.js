@@ -78,6 +78,52 @@ function markVideoJudgeError(pool, { lineKey, videoId, reason, transcript = null
   );
 }
 
+// ── 先判后采(任务 8bb3af55,决策 f18f56b8①「判定合格的视频才采集」)────────────
+// 契约 discovery.persist_candidates: 候选视频在「发现」时就落库(pending/待判定),判定才有米下锅;
+// 此前视频要等配送(push-videos.js)才落库,判定只能在评论采完之后跑,判了也挡不住。
+// 再次遇到的视频(以前判过/没判完)把 harvest_batch/keyword 归到本批——探针按本批读回;
+// 已有判定(judgment_status)与转写绝不覆盖,回报给调用方当缓存:rejected 不再录不再判,matched 直接采。
+async function discoverVideo(pool, row) {
+  const { lineKey, videoId, videoUrl = null, title = "", keyword = null, harvestBatch = null } = row;
+  if (!lineKey || !videoId) throw new Error("discoverVideo: lineKey/videoId 必填");
+  const res = await pool.query(
+    `INSERT INTO zenithjoy.leadgen_videos
+       (line_key, video_id, video_url, title, keyword, comment_count, harvest_batch, process_status)
+     VALUES ($1,$2,$3,$4,$5,0,$6,$7)
+     ON CONFLICT (line_key, video_id) DO UPDATE
+       SET harvest_batch = EXCLUDED.harvest_batch,
+           keyword = COALESCE(EXCLUDED.keyword, zenithjoy.leadgen_videos.keyword),
+           video_url = COALESCE(zenithjoy.leadgen_videos.video_url, EXCLUDED.video_url),
+           updated_at = now()
+     RETURNING judgment_status, (transcript IS NOT NULL AND transcript <> '') AS has_transcript, (xmax = 0) AS inserted`,
+    [lineKey, videoId, videoUrl, title, keyword, harvestBatch, "待判定"]
+  );
+  const r = res.rows[0] || {};
+  return { status: r.judgment_status || "pending", has_transcript: !!r.has_transcript, inserted: !!r.inserted };
+}
+
+async function getVideo(pool, lineKey, videoId) {
+  const res = await pool.query(
+    `SELECT video_id, video_url, title, keyword, comment_count, transcript, judgment_status, judgment_reason, process_status
+       FROM zenithjoy.leadgen_videos
+      WHERE line_key = $1 AND video_id = $2`,
+    [lineKey, videoId]
+  );
+  return res.rows[0] || null;
+}
+
+// 契约 collection.mark_video_collected: process_status=评论已采 只写给 matched 视频(WHERE 兜底),写真实采到的评论数
+async function markVideoCollected(pool, { lineKey, videoId, commentCount = 0 }) {
+  const res = await pool.query(
+    `UPDATE zenithjoy.leadgen_videos
+        SET process_status = '评论已采', comment_count = $3, updated_at = now()
+      WHERE line_key = $1 AND video_id = $2 AND judgment_status = 'matched'
+      RETURNING id`,
+    [lineKey, videoId, commentCount]
+  );
+  return { updated: res.rows.length };
+}
+
 // ── 原始评论池 ──────────────────────────────────────────────────────
 async function upsertComment(pool, row) {
   const {
@@ -176,6 +222,9 @@ module.exports = {
   listPendingVideos,
   markVideoJudgment,
   markVideoJudgeError,
+  discoverVideo,
+  getVideo,
+  markVideoCollected,
   upsertComment,
   listPendingComments,
   markCommentJudgment,

@@ -16,8 +16,6 @@ ledger: services/phone-adb-controller/workflow-result.sh
 trigger_inputs: [Keyword, Account, Device]
 
 known_gaps:
-  - gap: "执行顺序与契约不符：现状视频判定在落池后才跑（batch2.sh:156/167，PR #1964 接线挂末尾），判定不挡采集"
-    task: 8bb3af55
   - gap: "运行时只对 delivery/scoring 读回探针；preflight/cleanup 指标写死、qualification 账本硬写 not_in_profile（scoring 已在分拣后写真实工件）、outreach 不进账本；blocked 占位工件不判探针"
     task: 6b133a81
 
@@ -129,7 +127,7 @@ activities:
       - { key: resolve_video_links, name: 取视频链接, order: 7, reads: [Video.title], writes: [Video.video_id, Video.video_url],
           check: "每张卡取得 video_id（剪贴板守卫：回读链接含 video_id）", implementation: { status: implemented, ref: "harvest-keyword.sh:45-70" }, uses_llm: false }
       - { key: persist_candidates, name: 写发现工件+落库, order: 8, reads: [Run.run_tag, Video.video_id, Keyword.line_key], writes: [Video.harvest_batch, Video.keyword, Video.line_key],
-          check: "leadgen_videos 本词行数 ≥ 工件 candidates", implementation: { status: missing, ref: "现状在 delivery 才落库 batch2.sh:95-108，8bb3af55" }, uses_llm: false }
+          check: "leadgen_videos 本词行数 ≥ 工件 candidates", implementation: { status: implemented, ref: "harvest-keyword.sh qual_remote discover → qualify-video.js discover → leadgen-db-lib.js discoverVideo（8bb3af55：发现即落库 pending/待判定，再遇到的视频归到本批）" }, uses_llm: false }
     known_gaps:
       - { gap: "candidates 只数有评论的视频（harvest-keyword.sh:246-254），screens_scanned 恒 0", task: 6b133a81 }
 
@@ -150,7 +148,7 @@ activities:
     postconditions:
       - { probe: qual_none_pending, asserts: "本批候选全部判完（matched/rejected）" }
       - { probe: qual_reason_present, asserts: "每个判定都带理由" }
-    execution: { location: mmv, via: "手机录屏 → scp 音频到 mmv → judge-video.js" }
+    execution: { location: mmv, via: "harvest-keyword.sh 逐视频开评论区之前：手机录屏 → scp 音频到 mmv → ssh mmv qualify-video.js judge（judge-video.js judgeOneVideo）；只有 matched 才采集（8bb3af55 先判后采）" }
     budget: { max_duration_s: 1800, heartbeat_s: 60 }
     resources:
       locks: ["device:<serial>"]
@@ -172,7 +170,7 @@ activities:
       - { provider: openrouter, model: google/gemini-2.5-flash, purpose: "低置信（<0.6）复核（judge-jev.js:17-18）" }
     steps:
       - { key: cheap_gate, name: 便宜闸, order: 1, reads: [Video.comment_count], writes: [Video.judgment_status],
-          check: "comment_count==0 或图文 → rejected，不录不转写", implementation: { status: implemented, ref: "judge-video-lib.js:8-10" }, uses_llm: false }
+          check: "comment_count==0 或图文 → rejected，不录不转写", implementation: { status: implemented, ref: "图文：harvest-keyword.sh current-video-link excluded_non_video 直接跳过；零评论：批量重判 judge-video-lib.js shouldSkipCheapGate。行内判定时评论数要开评论区才读得到，先判后采不走零评论闸（cheapGate:false），零评论视频判 matched 后 open-comments 回 no_comments 不采" }, uses_llm: false }
       - { key: unmute_before_record, name: 录前取消静音, order: 2, reads: [Video.video_url, Device.lock_holder], writes: [],
           check: "媒体音量回读 >0", implementation: { status: implemented, ref: "harvest-keyword.sh（PR #1964 录制集成）" }, uses_llm: false }
       - { key: record_triple_speed, name: 3倍速录屏, order: 3, reads: [Video.video_url], writes: [],
@@ -184,7 +182,7 @@ activities:
       - { key: judge_content, name: 意向判定, order: 6, reads: [Video.transcript, Video.title], writes: [Video.judgment_status, Video.judgment_reason],
           check: "judgment_status ∈ {matched, rejected} 且 judgment_reason 非空", implementation: { status: implemented, ref: "judge-jev.js / leadgen-db-lib.js:54" }, uses_llm: true }
     known_gaps:
-      - { gap: "现状在落池后才判（batch2.sh:156/167），且账本硬写 qualification blocked not_in_profile（workflow-result.sh:162）", task: 8bb3af55 }
+      - { gap: "判定已前移到采集之前（8bb3af55 已落地），但账本仍硬写 qualification blocked not_in_profile（workflow-result.sh init），判定结果只在 TSV 的 QUAL 行里、没进账本工件", task: 6b133a81 }
 
   # ───────────────────────────── 4 采集 ─────────────────────────────
   - key: collection
@@ -234,7 +232,7 @@ activities:
       - { key: resolve_profile_link, name: 客户主页直链, order: 4, reads: [Comment.douyin_id], writes: [Comment.profile_url],
           check: "分享名片 → sec_uid，剪贴板守卫回读；失败重试3次(同commenter-identity套路)，3次仍失败才降级为线索保留但链接为空", implementation: { status: implemented, ref: "harvest-keyword.sh（PR #1952 逐屏处理 + 0929批次4加重试）" }, uses_llm: false }
       - { key: mark_video_collected, name: 标记视频已采, order: 5, reads: [Video.video_id], writes: [Video.process_status],
-          check: "process_status=评论已采 只写给 matched 视频", implementation: { status: missing, ref: "现状 upsertVideo 一律写默认值（leadgen-db-lib.js:26），8bb3af55" }, uses_llm: false }
+          check: "process_status=评论已采 只写给 matched 视频", implementation: { status: implemented, ref: "harvest-keyword.sh 采完 qual_remote collected → qualify-video.js collected → leadgen-db-lib.js markVideoCollected（WHERE judgment_status=matched 兜底，8bb3af55）" }, uses_llm: false }
     known_gaps:
       - { gap: "0928生产实证: commenter-identity验证失败抢救(back+重开评论区)可能落到别的视频/推荐页，退栈深度不固定(取决于此前逐条评论者主页往返次数，0922已实证退栈次数写死必错)，抢救只解决'面板丢了'不解决'退到了别的视频'——悦升云端线索表 2026-09-28 晚 3 条记录，来源视频/视频链接都标着同一条视频但原始评论内容完全不相关。0929已修行内结构性防线(抢救重开后核对current-video-link是否仍是本视频，漂移即整条视频剩余评论作废，见harvest-keyword.sh video_drifted)。coll_video_binding_consistent 探针目前仅是声明(checks/social-keyword-leadgen.yaml)，没有独立于代码之外的外部只读读回校验——要做到需账本(workflow-result.sh)扩展metrics记录本run验证过打开的video_id集合供探针核对，归入6b133a81(运行时读回目前只接delivery/scoring)范畴", task: 6b133a81 }
 
@@ -284,7 +282,7 @@ activities:
       - { key: advance_pool, name: 推进池状态, order: 4, reads: [Comment.dedup_key], writes: [Comment.process_status, Comment.promoted],
           check: "线索落地之后才推进 已分拣（永远最后一步）", implementation: { status: implemented, ref: "sort-comments-lib.js:81-82" }, uses_llm: false }
     known_gaps:
-      - { gap: "现状评分在落池之后对飞书评论池做（batch2.sh:116），设计为对采集产物做、配送一次交付", task: 8bb3af55 }
+      - { gap: "现状评分在落池之后对飞书评论池做（batch2.sh sort-comments），设计为对采集产物做、配送一次交付（8bb3af55 只纠正了判定→采集顺序，本项拆出单独跟踪）", task: fdf051bd }
       - { gap: "关键词有效线索数回写（update-keyword-stats）在批次收工后才运行，批内无法判定；改为下一批开头对上一批判定（待做）", task: 6b133a81 }
       - { gap: "scoring 工件的 peer、spam 两个闭集键这条链没有对应分类，恒为 0；strong_intent=A 级、weak_intent=B+C 级为当前映射，五档分级落地（决策 b93422c6）后重新定义", task: 4ca3b584 }
       - { gap: "0929实证: 决策b93422c6的五档分级(A~E)只在触达筛选层落地了(next-outreach-lib.js的GRADE_ORDER/outreachGrades)，评论判级层(judge-comment.js:19 GRADES=[A,B,C,不相关])从未升级到五档——D/E两档在触达筛选里永远筛不出东西，是死档。需要判级层同步升到五档才算真落地，不是两层各干各的", task: 4ca3b584 }

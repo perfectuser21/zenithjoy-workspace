@@ -3,6 +3,7 @@
 # 0916: 落池时把 profile 传给 push 脚本 —— 由 line-routes.js 按业务线路由到各自 base,
 # 否则悦升的数据会被写进金诺的表(或像此前那样根本不落库)。
 # batch-harvest v2 — 清场版+批完自动落池(金诺)
+# 注(8bb3af55): 本快照 = 并入账本钩子前的 batch2.sh 逐字版,唯一改动是删掉落池后的 judge-video.js 块(与现网同步)。
 set -uo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 P="$1"; WF="$2"; TAG="$3"; PUSH="${4:-0}"; SERIAL="${5:-}"
@@ -63,55 +64,6 @@ if [[ "$PUSH" == "1" && -s $OUT ]]; then
   ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/sort-comments.js $LINE" >> $LOG 2>&1
   print "[$(date +%H:%M:%S)] 已分拣(判定链)" >> $LOG
 
-  # 0923补齐: 视频文案判定(judge-video.js)——此前从建成起两头都没接:①没人往
-  # Postgres leadgen_videos表里写数据(push-videos.js只写飞书,已在本次一并修)
-  # ②没有任何触发点。这里补触发端:把harvest-keyword.sh录的音频传到mmv,拼成
-  # judge-video.js要的manifest,落池之后紧接着调用(判定失败/无音频不影响本轮
-  # 已经落池的事实,只吞错留给下一轮重试——跟分拣那步同一个容错原则)。
-  AUDIO_LINES="$(grep '^AUDIO	' $OUT 2>/dev/null || true)"
-  if [[ -n "$AUDIO_LINES" ]]; then
-    REMOTE_AUDIO_DIR="/tmp/$TAG-audio"
-    ssh -o ConnectTimeout=20 mmv "mkdir -p $REMOTE_AUDIO_DIR" >> $LOG 2>&1
-    MANIFEST_LOCAL=$(mktemp -t "$TAG-manifest")
-    python3 -c "
-import json, sys
-entries = []
-for line in sys.stdin.read().strip().split(chr(10)):
-    if not line: continue
-    parts = line.split(chr(9))
-    if len(parts) < 3: continue
-    entries.append({'videoId': parts[1], 'audioPath': parts[2]})
-print(json.dumps(entries))
-" <<< "$AUDIO_LINES" > "$MANIFEST_LOCAL"
-    XFER_OK=1
-    while IFS=$'\t' read -r _tag VID LOCAL_AUDIO; do
-      [[ -z "$LOCAL_AUDIO" || ! -f "$LOCAL_AUDIO" ]] && continue
-      scp -o ConnectTimeout=20 "$LOCAL_AUDIO" "mmv:$REMOTE_AUDIO_DIR/" >> $LOG 2>&1 || XFER_OK=0
-    done <<< "$AUDIO_LINES"
-    # manifest里的本机路径改写成mmv上的远端路径(文件名不变,目录换成刚建的REMOTE_AUDIO_DIR)
-    REMOTE_MANIFEST="/tmp/$TAG-manifest.json"
-    python3 -c "
-import json
-with open('$MANIFEST_LOCAL') as f:
-    entries = json.load(f)
-for e in entries:
-    e['audioPath'] = '$REMOTE_AUDIO_DIR/' + e['audioPath'].rsplit('/', 1)[-1]
-print(json.dumps(entries))
-" > "${MANIFEST_LOCAL}.remote"
-    scp -o ConnectTimeout=20 "${MANIFEST_LOCAL}.remote" "mmv:$REMOTE_MANIFEST" >> $LOG 2>&1
-    if [[ "$XFER_OK" == "1" ]]; then
-      ssh -o ConnectTimeout=20 mmv "set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; node /Users/administrator/.openclaw/leadgen-scripts/judge-video.js $LINE $REMOTE_MANIFEST" >> $LOG 2>&1
-      AUDIO_COUNT=$(print -- "$AUDIO_LINES" | wc -l | tr -d ' ')
-      print "[$(date +%H:%M:%S)] 已判定(视频文案链,音频${AUDIO_COUNT}条)" >> $LOG
-    else
-      print "[$(date +%H:%M:%S)] 音频传输部分失败,跳过本轮视频判定(留给下一轮)" >> $LOG
-    fi
-    rm -f "$MANIFEST_LOCAL" "${MANIFEST_LOCAL}.remote"
-  else
-    # 没有录到任何音频(可能整批视频都很短命中零评论便宜闸/录制失败)时,manifest传空数组,
-    # 让judge-video.js照样跑一遍——它对没有音频来源的视频会退回title_only兜底判定,
-    # 总比这一轮完全不调用、Postgres里的pending视频永远堆积要好。
-    ssh -o ConnectTimeout=20 mmv "set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; echo '[]' > /tmp/$TAG-manifest.json && node /Users/administrator/.openclaw/leadgen-scripts/judge-video.js $LINE /tmp/$TAG-manifest.json" >> $LOG 2>&1
-    print "[$(date +%H:%M:%S)] 已判定(视频文案链,本轮无新音频,走title兜底)" >> $LOG
-  fi
+  # [8bb3af55 同步删除] 落池后的 judge-video.js 判定块已随现网 batch2.sh 删除(判定前移到 harvest-keyword.sh 开评论区之前),
+  # 快照同步删掉同一块,WFR 钩子 no-op 时"与并入前逐字一致"的对拍仍然成立。
 fi

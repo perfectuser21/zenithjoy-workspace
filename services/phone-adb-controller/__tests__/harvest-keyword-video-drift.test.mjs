@@ -19,6 +19,7 @@ import { mkdtempSync, writeFileSync, chmodSync, mkdirSync, readFileSync } from "
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { FAKE_SSH_QUAL, FAKE_SCP } from "./qual-fakes.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HK = join(HERE, "..", "harvest-keyword.sh");
@@ -88,9 +89,8 @@ case "$CMD" in
 esac
 exit 0`;
 
-const FAKE_SSH = `#!/bin/sh
-# fetch-seen-videos.js 的假回执: 空表(没有已采视频),不影响本测试
-exit 0`;
+// 先判后采(8bb3af55): 假 ssh 对 qualify-video.js 回 matched,整链路照常采集(判定本身见 harvest-keyword-judge-before-collect)
+const FAKE_SSH = FAKE_SSH_QUAL;
 
 function setup() {
   const home = mkdtempSync(join(tmpdir(), "hkvd-"));
@@ -99,6 +99,8 @@ function setup() {
   chmodSync(join(home, ".local", "bin", "douyin-phone-adb"), 0o755);
   writeFileSync(join(home, ".local", "bin", "ssh"), FAKE_SSH);
   chmodSync(join(home, ".local", "bin", "ssh"), 0o755);
+  writeFileSync(join(home, ".local", "bin", "scp"), FAKE_SCP);
+  chmodSync(join(home, ".local", "bin", "scp"), 0o755);
   // commenter-identity: 第1次失败(空,触发抢救) → 第2次"成功"但其实是抢救后落到的别的视频
   writeFileSync(join(home, "seq-commenter-identity"), "\n" + "nickname=WRONGNICK\\ndouyin_id=wrongid123\n");
   // current-video-link: 第1次(tap进视频后)=VID_A ; 第2次(抢救重开后的漂移核对)=VID_B(漂移)
