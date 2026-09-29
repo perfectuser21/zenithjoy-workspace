@@ -6,12 +6,15 @@
 
 ## 一、Commander 是谁
 
+> **0929 起入口倒转（决策 7f842d12）**：先有 Commander，再有 run。定时与对话都先拉起 Commander，由它发起 workflow（契约组装、wf-run 执行）；Commander 不再只是脚本的第⓪步。
+
 **Commander = Claude 这个身份，不是某个进程。** 它按场景分形成四个执行体，共享同一部宪法、同一份记忆、同一条升级链。它们不是四个 Commander，是一个 Commander 的四只手。
 
 | 层 | 执行体 | 反应 | 职责 | 拉起方式 |
 |---|---|---|---|---|
+| **入口** | **work-commander（OpenClaw agent，Claude）** | 对话即时 | **发起 run 并当 owner**：选能力/机器/手机 → `commander/wf-launch.sh` → 回报；skill `workflow-commander` | 主理人在 OpenClaw 召唤，或定时 cron 发「定时发起 …」（决策 7f842d12）|
 | 反射 | stream 哨兵 | 秒级 | 已知病按 SOP 处置（消化绝大多数杂事）| 24×7 常驻，事件驱动唤醒 |
-| 陪跑 | escort | 10 分钟 | 批内看护、攒 FINDINGS 经验 | workflow 起跑第一步自拉，收工自注销 |
+| 陪跑 | escort | 10 分钟 | 批内看护、攒 FINDINGS 经验 | 入口 Commander 发起 run 时登记（wf-launch.sh），收工由 wf-run 注销；旧 crontab 直跑路径仍由脚本第⓪步自拉 |
 | **真身** | **headless Claude 分身** | 分钟级 | **SOP 外的新病：全能力接管，救到终点** | 被 escalation 事件唤起 |
 | 兜底 | 值守 cron | 半小时 | 静默检测（stream 天生盲区：卡死=无日志=无事件）| 24×7 定时 |
 | 司令部 | 有头 Claude + 主理人 | 白天 | 拍板、改代码、熟化回流 | 人工 |
@@ -67,3 +70,5 @@
 | `cmdr-escort.txt` | 同上 |
 | `escort-claude-escalation.sh` | US-Mac `~/bin/`（**必须用户上下文起**：launchd 拿不到 Keychain 凭据会 401）|
 | `disk-gateway-guard.sh` | us-vps `/root/bin/`（crontab `*/5`）|
+| `commander/wf-launch.sh` / `commander/wf-status.sh` | MMV `/Users/administrator/.openclaw/commander/`（deploy.sh 同步）|
+| `commander/skills/workflow-commander/SKILL.md` | MMV `~/openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander/`（deploy.sh 同步；agent 配置 `agents.entries.work-commander.skills` 含 workflow-commander，模型固定 anthropic/*——codex 运行时会话落在跑场池，exec 位置不固定）|
