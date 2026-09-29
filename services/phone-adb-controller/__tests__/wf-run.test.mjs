@@ -48,9 +48,18 @@ test("计划文件缺失 → exit 1 拒跑,不拉 escort", { skip: SKIP }, () =>
   assert.doesNotMatch(read(join(home, "ssh-argv.log")), /cron add/);
 });
 
+// 对标发现四步已实现(338e3ec7),提交的计划 WF_MISSING 已清空;这里用临时计划把一步标回未实现,守「无实现不得跑」。
+function missingPlanDir(home) {
+  const d = join(home, "plans-missing");
+  mkdirSync(d, { recursive: true });
+  writeFileSync(join(d, "benchmark_link_acquisition.plan"),
+    readFileSync(join(PLANS, "benchmark_link_acquisition.plan"), "utf8").replace(/^WF_MISSING=.*$/m, "WF_MISSING='discovery.open_benchmark_profile'"));
+  return d;
+}
+
 test("对标获客发现未实现 → 默认拒跑(无实现不得跑),不拉 escort", { skip: SKIP }, () => {
   const { home, env } = setup();
-  const r = run(WR, ["benchmark_link_acquisition", "p1", "SER1", "biz", "--sources", "/nonexistent"], env);
+  const r = run(WR, ["benchmark_link_acquisition", "p1", "SER1", "biz", "--sources", "/nonexistent"], { ...env, WF_PLAN_DIR: missingPlanDir(home) });
   assert.equal(r.status, 1, r.stderr);
   const log = read(join(home, "harvest-cron.log"));
   assert.match(log, /拒跑.*未实现.*discovery\.open_benchmark_profile/);
@@ -138,9 +147,12 @@ test("wf_load_plan + wf_discover_cmd: 计划里的发现入口解析到 wf-run.s
   const k = lib(`wf_load_plan keyword_acquisition; echo rc=$? kind=$WF_SOURCE_KIND; wf_discover_cmd`, env);
   assert.match(k.stdout, /rc=0 kind=keyword/, k.stderr);
   assert.ok(k.stdout.trim().endsWith(`${SRC}/discover-keyword.sh`), k.stdout);
-  const b = lib(`wf_load_plan benchmark_link_acquisition; echo rc=$?`, env);
-  assert.match(b.stdout, /rc=2/);
-  const ba = lib(`WF_ALLOW_MISSING=1; wf_load_plan benchmark_link_acquisition; echo rc=$? kind=$WF_SOURCE_KIND; wf_discover_cmd`, env);
+  const ba = lib(`wf_load_plan benchmark_link_acquisition; echo rc=$? kind=$WF_SOURCE_KIND; wf_discover_cmd`, env);
   assert.match(ba.stdout, /rc=0 kind=benchmark/, ba.stderr);
   assert.ok(ba.stdout.trim().endsWith(`${SRC}/discover-benchmark.sh`), ba.stdout);
+  const home = mkdtempSync(join(tmpdir(), "wfplan-"));
+  const b = lib(`wf_load_plan benchmark_link_acquisition; echo rc=$?`, { ...env, WF_PLAN_DIR: missingPlanDir(home) });
+  assert.match(b.stdout, /rc=2/);
+  const bm = lib(`WF_ALLOW_MISSING=1; wf_load_plan benchmark_link_acquisition; echo rc=$?`, { ...env, WF_PLAN_DIR: missingPlanDir(home) });
+  assert.match(bm.stdout, /rc=0/);
 });
