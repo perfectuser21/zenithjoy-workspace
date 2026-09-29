@@ -29,13 +29,46 @@ function resolveOpenRouterKey(env = process.env) {
   }
 }
 
+// 0929: OpenRouter 故障(网络错/402余额耗尽/429限流/错误体)一律抛 JudgeApiError。
+// 旧实现把错误体当"解析不出" → 复核官也失败 → 保守判 rejected 落库:API 故障被写成
+// "内容不相关",误杀线索且充值后捞不回来。故障 ≠ 判定结论,由调用方保持待判状态重试。
+class JudgeApiError extends Error {
+  constructor(message, { status = null, stage = null } = {}) {
+    super(message);
+    this.name = "JudgeApiError";
+    this.status = status;
+    this.stage = stage;
+  }
+}
+
 async function defaultHttpPost(url, body, apiKey) {
   const r = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  if (!r.ok) {
+    let detail = "";
+    try { detail = JSON.stringify(await r.json()); } catch { /* 响应体不是 JSON,只报状态码 */ }
+    throw new JudgeApiError(`HTTP ${r.status} ${detail.slice(0, 160)}`.trim(), { status: r.status });
+  }
   return r.json();
+}
+
+// 统一调用口:把网络异常、非 2xx、200 但带 {error} 的响应都归一成 JudgeApiError(带阶段前缀)。
+async function callOpenRouter(stage, httpPost, url, body, key) {
+  let resp;
+  try {
+    resp = await httpPost(url, body, key);
+  } catch (e) {
+    const msg = String((e && e.message) || e).slice(0, 160);
+    throw new JudgeApiError(`${stage}:调用失败(${msg})`, { status: e && e.status, stage });
+  }
+  if (resp && resp.error) {
+    const code = resp.error.code ?? resp.error.status ?? "";
+    throw new JudgeApiError(`${stage}:API错误 ${code} ${String(resp.error.message || "").slice(0, 120)}`.trim(), { status: code, stage });
+  }
+  return resp;
 }
 
 // 主判:调Jev的Decisions端点,choice题型二选一(matched/rejected)。
@@ -43,8 +76,10 @@ async function defaultHttpPost(url, body, apiKey) {
 // 同样当UNCERTAIN处理,不直接判死。
 async function judgePrimary(text, targetProfile, { httpPost = defaultHttpPost, apiKey, env } = {}) {
   const key = apiKey || resolveOpenRouterKey(env);
-  if (!key) throw new Error("judgePrimary: 找不到OPENROUTER_API_KEY");
-  const resp = await httpPost(
+  if (!key) throw new JudgeApiError("judgePrimary: 找不到OPENROUTER_API_KEY", { stage: "jev" });
+  const resp = await callOpenRouter(
+    "jev",
+    httpPost,
     DECISIONS_ENDPOINT,
     {
       model: JEV_MODEL,
@@ -72,12 +107,13 @@ async function judgePrimary(text, targetProfile, { httpPost = defaultHttpPost, a
   return { verdict: ans.choice.toUpperCase(), reason: `jev:${ans.choice}(confidence=${ans.confidence})` };
 }
 
-// 复核官:大模型,只回答"准"或"不准",无法解析一律保守判"不准"(存疑不放行,
-// 跟系统①content-judgment.ts的commanderReview同一分寸)。这一段走普通chat completions,
+// 复核官:大模型,只回答"准"或"不准",回复无法解析一律保守判"不准"(存疑不放行,
+// 跟系统①content-judgment.ts的commanderReview同一分寸)。调用失败/错误体不是"存疑",
+// 是 API 故障,抛 JudgeApiError(0929)。这一段走普通chat completions,
 // 跟Jev的Decisions端点无关,不受本次API修正影响。
 async function judgeCommander(text, targetProfile, primaryReason, { httpPost = defaultHttpPost, apiKey, env } = {}) {
   const key = apiKey || resolveOpenRouterKey(env);
-  if (!key) return { verdict: "rejected", reason: "no_api_key" };
+  if (!key) throw new JudgeApiError("judgeCommander: 找不到OPENROUTER_API_KEY", { stage: "commander" });
   const prompt = `你是内容判决的复核官。主判对下面这段内容拿不准、判为"存疑",现在交给你终审。
 你只需回答:这段内容是否匹配目标客户画像——只回"准"(匹配)或"不准"(不匹配)。
 
@@ -90,12 +126,9 @@ ${text}
 主判为什么拿不准:${primaryReason || "未知"}
 
 请严格只回一个词:准 或 不准`;
-  let resp;
-  try {
-    resp = await httpPost(COMMANDER_ENDPOINT, { model: COMMANDER_MODEL, messages: [{ role: "user", content: prompt }] }, key);
-  } catch (e) {
-    return { verdict: "rejected", reason: `commander:调用失败(${String(e.message || e).slice(0, 60)})|${primaryReason || ""}` };
-  }
+  const resp = await callOpenRouter(
+    "commander", httpPost, COMMANDER_ENDPOINT, { model: COMMANDER_MODEL, messages: [{ role: "user", content: prompt }] }, key
+  );
   const raw = resp && resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content;
   const t = (raw || "").trim();
   if (t.includes("不准") || t.includes("不匹配")) return { verdict: "rejected", reason: `commander:不准|${primaryReason || ""}` };
@@ -103,7 +136,8 @@ ${text}
   return { verdict: "rejected", reason: `commander:无法解析|${primaryReason || ""}` };
 }
 
-// 对外统一入口:永远只返回 matched 或 rejected 两态,内部处理完UNCERTAIN转复核的逻辑。
+// 对外统一入口:判定成功只返回 matched 或 rejected 两态,内部处理完UNCERTAIN转复核的逻辑;
+// API 故障抛 JudgeApiError(调用方据此保持 pending,不落判定结论)。
 async function judgeContent(text, targetProfile, opts = {}) {
   const primary = await judgePrimary(text, targetProfile, opts);
   if (primary.verdict === "MATCHED") return { verdict: "matched", reason: primary.reason };
@@ -113,6 +147,9 @@ async function judgeContent(text, targetProfile, opts = {}) {
 }
 
 module.exports = {
+  JudgeApiError,
+  callOpenRouter,
+  defaultHttpPost,
   judgeContent,
   judgePrimary,
   judgeCommander,

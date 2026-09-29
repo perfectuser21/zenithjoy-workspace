@@ -2,11 +2,11 @@
   "object_types": "06f4d4bda5a98920fad6eef0c73a908803c529e87e51b28fd624f610078bcd2c",
   "capabilities": {
     "benchmark_link_acquisition": {
-      "sha256": "03536df041f35ee3ddffbff303546e2bf595c7cc8790b4fbd891dce8599a4965",
+      "sha256": "7b319ed3edb7da12592a8b3729784896d28d53e2a53a391a89f973f83987633d",
       "activities": {
         "preflight": "4bf43bb627441fafe5d90b6bca1f8dfb65c4b12dc31692e3a161e61d23596913",
         "discovery": "13e4fb8f5fb598f090b9d6306854b5d338a433593f150cbb344e3ddc6096c924",
-        "qualification": "2a423e1e08be35ea941780786b6c05570c7ec513069b38f53898de60960a4115",
+        "qualification": "e08a3a06c5f7299a4620afb269db3ffd64452c2c0473002bd49c8db9760308fd",
         "collection": "1b0bb6cf47f8c2a26fbcaab6b3cdd05dcdeed4a9e36c66b820c28bdeeeb3cde5",
         "scoring": "5b86ba26c8e484567643b2263baab4bec7596c1b0b8f9429854e0ef2a6eb80ef",
         "delivery": "597e604c9030e142baddb3420d06ce88c87f34a0c8b9903d10a7cc46a358111d",
@@ -15,11 +15,11 @@
       }
     },
     "keyword_acquisition": {
-      "sha256": "285190c668610f4c71147b566f06161fea9e0fb13ec009147f6c16acd9577a54",
+      "sha256": "ca0534d0f745b8474afcf727bea0e9c547b6eb9f29e17c05e65b159b0bd2d537",
       "activities": {
         "preflight": "4bf43bb627441fafe5d90b6bca1f8dfb65c4b12dc31692e3a161e61d23596913",
         "discovery": "c0a131b9b8fe328ce4aa2473ae014d55e226197d8f51bebbc648f743bc9e7577",
-        "qualification": "2a423e1e08be35ea941780786b6c05570c7ec513069b38f53898de60960a4115",
+        "qualification": "e08a3a06c5f7299a4620afb269db3ffd64452c2c0473002bd49c8db9760308fd",
         "collection": "1b0bb6cf47f8c2a26fbcaab6b3cdd05dcdeed4a9e36c66b820c28bdeeeb3cde5",
         "scoring": "5b86ba26c8e484567643b2263baab4bec7596c1b0b8f9429854e0ef2a6eb80ef",
         "delivery": "597e604c9030e142baddb3420d06ce88c87f34a0c8b9903d10a7cc46a358111d",

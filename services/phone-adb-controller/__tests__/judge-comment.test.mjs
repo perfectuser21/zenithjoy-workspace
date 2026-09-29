@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { judgeComment } from "../judge-comment.js";
+import { judgeComment, JudgeApiError } from "../judge-comment.js";
 
 function decisionsResp(choice, confidence) {
   return { answers: { grade: { type: "choice", choice, confidence, probabilities: {} } } };
@@ -47,13 +47,15 @@ test("judgeComment: 主判response格式不对(answers.grade缺失) → 当UNCER
   assert.equal(r.grade, "B");
 });
 
-test("judgeComment: 复核官调用失败 → 保守落C档,不是直接丢弃也不是冒充高意向", async () => {
+// 0929 改口径: 复核官调用失败是 API 故障,不能静默降为 C 档写进线索表——
+// 抛 JudgeApiError,sort-comments.js 计「判定异常N条(留待分拣)」,池行保持「待分拣」下轮重判。
+test("judgeComment: 复核官调用失败 → 抛JudgeApiError(留待分拣),不静默降C档", async () => {
   let call = 0;
   const httpPost = async () => { call++; if (call === 1) return decisionsResp("A", 0.1); throw new Error("timeout"); };
-  const r = await judgeComment("这个", "视频文案", "画像", { httpPost, apiKey: "k" });
-  assert.equal(r.grade, "C");
-  assert.equal(r.relevance, "相关");
-  assert.match(r.reason, /调用失败/);
+  await assert.rejects(
+    () => judgeComment("这个", "视频文案", "画像", { httpPost, apiKey: "k" }),
+    (e) => e instanceof JudgeApiError && /timeout/.test(e.message)
+  );
 });
 
 test("judgeComment: 复核官解析不出来(既不含ABC也不含不相关) → 保守落C档", async () => {
@@ -70,4 +72,44 @@ test("judgeComment: 主判没有key → 抛错,不冒充判成了任何一档", 
     () => judgeComment("x", "y", "z", { httpPost: async () => ({}), env: { OPENROUTER_API_KEY_FILE: "/tmp/nope-xyz" } }),
     /找不到OPENROUTER_API_KEY/
   );
+});
+
+// ── 0929: OpenRouter 故障(402余额耗尽/429)不许静默降为 C 档 ──────────
+
+test("judgeComment: 主判返回OpenRouter错误体(402) → 抛JudgeApiError,不调复核官", async () => {
+  const calls = [];
+  const httpPost = async (url) => { calls.push(url); return { error: { code: 402, message: "Insufficient credits" } }; };
+  await assert.rejects(
+    () => judgeComment("怎么报名", "视频文案", "画像", { httpPost, apiKey: "k" }),
+    (e) => e instanceof JudgeApiError && /402/.test(e.message)
+  );
+  assert.equal(calls.length, 1);
+});
+
+test("judgeComment: 复核官返回错误体(402) → 抛JudgeApiError,不落C档", async () => {
+  const httpPost = fakeHttpPost([
+    decisionsResp("B", 0.2),
+    { error: { code: 402, message: "Insufficient credits" } },
+  ]);
+  await assert.rejects(
+    () => judgeComment("这个", "视频文案", "画像", { httpPost, apiKey: "k" }),
+    (e) => e instanceof JudgeApiError && /402/.test(e.message)
+  );
+});
+
+test("judgeComment: 默认HTTP层遇到非2xx(429) → 抛JudgeApiError", async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: false, status: 429,
+    json: async () => ({ error: { code: 429, message: "Rate limit" } }),
+    text: async () => '{"error":{"code":429}}',
+  });
+  try {
+    await assert.rejects(
+      () => judgeComment("x", "y", "z", { apiKey: "k" }),
+      (e) => e instanceof JudgeApiError && /429/.test(e.message)
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });

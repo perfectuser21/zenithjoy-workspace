@@ -34,7 +34,7 @@ async function upsertVideo(pool, row) {
 
 async function listPendingVideos(pool, lineKey, limit = 50) {
   const res = await pool.query(
-    `SELECT id, video_id, video_url, title, keyword, comment_count
+    `SELECT id, video_id, video_url, title, keyword, comment_count, transcript
        FROM zenithjoy.leadgen_videos
       WHERE line_key = $1 AND judgment_status = 'pending'
       ORDER BY discovered_at ASC
@@ -60,6 +60,21 @@ function markVideoJudgment(pool, { lineKey, videoId, verdict, reason = null, tra
         SET judgment_status = $3, judgment_reason = $4, transcript = COALESCE($5, transcript), updated_at = now()
       WHERE line_key = $1 AND video_id = $2`,
     [lineKey, videoId, verdict, reason, transcript]
+  );
+}
+
+// 0929: 判定 API 故障(OpenRouter 402余额耗尽/429/网络)时不落判定结论——只把失败原因写进
+// judgment_reason(转写文案顺手存下,重判时不再花钱转写),judgment_status 保持 pending,
+// 充值后下一轮 judge-video.js 自然重捞。WHERE 限定 pending,绝不覆盖已判定的行。
+function markVideoJudgeError(pool, { lineKey, videoId, reason, transcript = null }) {
+  if (!reason || !reason.trim()) {
+    throw new Error(`markVideoJudgeError: reason 不能为空(video=${videoId})`);
+  }
+  return pool.query(
+    `UPDATE zenithjoy.leadgen_videos
+        SET judgment_reason = $3, transcript = COALESCE($4, transcript), updated_at = now()
+      WHERE line_key = $1 AND video_id = $2 AND judgment_status = 'pending'`,
+    [lineKey, videoId, reason, transcript]
   );
 }
 
@@ -160,6 +175,7 @@ module.exports = {
   upsertVideo,
   listPendingVideos,
   markVideoJudgment,
+  markVideoJudgeError,
   upsertComment,
   listPendingComments,
   markCommentJudgment,

@@ -5,6 +5,7 @@ import {
   upsertVideo,
   listPendingVideos,
   markVideoJudgment,
+  markVideoJudgeError,
   upsertComment,
   listPendingComments,
   markCommentJudgment,
@@ -144,4 +145,27 @@ test("upsertLead: 重复出现(按昵称命中),dupHitCount递增,不新建", as
 test("upsertLead: lineKey/nickname缺失时抛错", async () => {
   const pool = fakePool([]);
   await assert.rejects(() => upsertLead(pool, { lineKey: "jinuo" }), /lineKey\/nickname 必填/);
+});
+
+// 0929: 判定 API 故障(OpenRouter 402 等)时只记原因,不改状态——视频留 pending 待充值后重判。
+test("markVideoJudgeError: 只写judgment_reason(+transcript),WHERE限定pending,不改judgment_status", async () => {
+  const pool = fakePool([{ rows: [] }]);
+  await markVideoJudgeError(pool, { lineKey: "jinuo", videoId: "v1", reason: "判定异常(待重判): 402", transcript: "文案" });
+  const { sql, params } = pool.calls[0];
+  assert.deepEqual(params, ["jinuo", "v1", "判定异常(待重判): 402", "文案"]);
+  assert.match(sql, /judgment_status\s*=\s*'pending'/, "只能动仍是 pending 的行");
+  const setClause = sql.slice(sql.search(/\bSET\b/i), sql.search(/\bWHERE\b/i));
+  assert.doesNotMatch(setClause, /judgment_status/, "不许改 judgment_status");
+});
+
+test("markVideoJudgeError: reason为空拒绝写库", () => {
+  const pool = fakePool([]);
+  assert.throws(() => markVideoJudgeError(pool, { lineKey: "jinuo", videoId: "v1", reason: " " }));
+  assert.equal(pool.calls.length, 0);
+});
+
+test("listPendingVideos: 带出已存transcript,重判时不重复花钱转写", async () => {
+  const pool = fakePool([{ rows: [] }]);
+  await listPendingVideos(pool, "jinuo", 10);
+  assert.match(pool.calls[0].sql, /\btranscript\b/);
 });
