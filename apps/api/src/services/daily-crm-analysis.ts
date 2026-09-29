@@ -17,9 +17,14 @@ import axios from 'axios';
 // key 判断 TOAPIS_API_KEY——两个环境变量若配置不一致(比如只配了BASE_URL没配KEY)，会出现
 // "URL指向TOAPIS、key却是OpenRouter的"错配。统一成一个 USING_TOAPIS 布尔值，跟
 // acquisition.ts 的 usingToapis 同一个模式。
-const USING_TOAPIS = Boolean(process.env.TOAPIS_BASE_URL);
-const LLM_API_URL = USING_TOAPIS
-  ? `${process.env.TOAPIS_BASE_URL!.replace(/\/$/, '')}/chat/completions`
+// 本文件判断锚点选 TOAPIS_BASE_URL（而不是像 acquisition.ts 那样选 OPENROUTER_BASE_URL）：
+// acquisition.ts 的 OPENROUTER_BASE_URL 是既有的测试桩开关（ci-smoke-glob-runner.yml 指到
+// 本地 FAKE_LLM_BASE，早于本次改动就存在，不能动），本文件没有这层历史包袱，直接用
+// TOAPIS_BASE_URL 判断更直白。两处判断锚点不同是各自历史决定的，不是疏忽。
+const TOAPIS_BASE_URL = process.env.TOAPIS_BASE_URL;
+const USING_TOAPIS = Boolean(TOAPIS_BASE_URL);
+const LLM_API_URL = TOAPIS_BASE_URL
+  ? `${TOAPIS_BASE_URL.replace(/\/$/, '')}/chat/completions`
   : 'https://openrouter.ai/api/v1/chat/completions';
 const DEEPSEEK_MODEL = USING_TOAPIS ? 'deepseek-v4-flash' : 'deepseek/deepseek-chat';
 
