@@ -59,8 +59,10 @@ test("runProbes delivery: 真 YAML 三条（sql count / http count / sql not_nul
   assert.equal(r.stage, "delivery");
   const by = Object.fromEntries(r.probes.map((p) => [p.key, p]));
   assert.deepEqual(Object.keys(by).sort(), ["comments_readback", "line_key_not_null", "videos_readback"]);
-  assert.deepEqual(by.videos_readback, { key: "videos_readback", observed: 2, probed_at: now() });
-  assert.deepEqual(by.comments_readback, { key: "comments_readback", observed: 2, probed_at: now() });
+  // 6b133a81：每条带 pass（按 expect 判）与失败语义；PARAMS 无 metrics → ref 型判不了 pass=null
+  assert.deepEqual(by.videos_readback, { key: "videos_readback", observed: 2, probed_at: now(), pass: null, failure_class: "needs_human", on_fail: "stop_run" });
+  assert.deepEqual(by.comments_readback, { key: "comments_readback", observed: 2, probed_at: now(), pass: null, failure_class: "needs_human", on_fail: "stop_run" });
+  assert.equal(by.line_key_not_null.pass, false, "有 null 行即不过");
   assert.deepEqual(by.line_key_not_null.observed, ["jinuo", null]);
   for (const p of r.probes) assert.ok(!("error" in p), `${p.key} 不该带 error`);
   // sql 全部参数化：values 里有 tag/line，text 里没有
@@ -188,7 +190,7 @@ test("runProbes: stage 无探针 → probes 空数组", async () => {
   const { doc } = loadChecks(YAML, SCHEMA);
   const only = { ...doc, probes: doc.probes.filter((p) => p.stage === "delivery") };
   const r = await runProbes({ doc: only, stage: "discovery", params: PARAMS, deps: deps(fakePool(() => { throw new Error("x"); }), fakeFetch({})) });
-  assert.deepEqual(r, { stage: "discovery", probes: [] });
+  assert.deepEqual(r, { stage: "discovery", probes: [], gate: { verdict: "none", action: "continue", failed: [], unknown: [], alert: false } });
 });
 
 // ── CLI：真进程 ──
@@ -215,7 +217,8 @@ test("CLI: --deps 注入永不返回的 pool + --timeout-ms 300 → 一行 JSON�
 
 test("CLI: 缺 --stage / YAML 不存在 → 仍 exit 0 且 stdout 一行 {stage, probes:[]}", () => {
   const a = cli([]);
-  assert.equal(a.status, 0); assert.deepEqual(JSON.parse(a.out.trim()), { stage: "", probes: [] });
+  const NONE = { verdict: "none", action: "continue", failed: [], unknown: [], alert: false };
+  assert.equal(a.status, 0); assert.deepEqual(JSON.parse(a.out.trim()), { stage: "", probes: [], gate: NONE });
   const b = cli(["--stage", "delivery", "--run-tag", "x", "--line-key", "jinuo", "--checks", "/nonexistent.yaml"]);
   assert.equal(b.status, 0); assert.deepEqual(JSON.parse(b.out.trim()), { stage: "delivery", probes: [] }); assert.match(b.err, /verify-step/);
 });
@@ -240,7 +243,7 @@ test("runProbes metric: observed 取 params.metrics[键]；缺键 → 该条 err
   ] };
   const r = await runProbes({ doc, stage: "preflight", params: { ...PARAMS, metrics: { account_verified: 0 } }, deps: deps(fakePool(() => ({ rows: [] })), fakeFetch({})) });
   const by = Object.fromEntries(r.probes.map((p) => [p.key, p]));
-  assert.deepEqual(by.pf_account_verified, { key: "pf_account_verified", observed: 0, probed_at: now() });
+  assert.deepEqual(by.pf_account_verified, { key: "pf_account_verified", observed: 0, probed_at: now(), pass: false, failure_class: undefined, on_fail: undefined });
   assert.match(by.pf_lock_acquired.error, /lock_acquired/);
 });
 

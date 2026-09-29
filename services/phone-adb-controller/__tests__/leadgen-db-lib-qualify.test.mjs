@@ -20,7 +20,8 @@ test("discoverVideo: 新视频落库为 pending/待判定，带本批 harvest_ba
   const { sql, params } = pool.calls[0];
   assert.match(sql, /INSERT INTO zenithjoy\.leadgen_videos/);
   assert.match(sql, /ON CONFLICT \(line_key, video_id\) DO UPDATE/);
-  assert.match(sql, /harvest_batch = EXCLUDED\.harvest_batch/, "再次遇到的视频归到本批(探针按本批读回)");
+  assert.match(sql, /ELSE EXCLUDED\.harvest_batch END/, "再次遇到的视频归到本批(探针按本批读回)");
+  assert.match(sql, /process_status = '评论已采'\s+THEN zenithjoy\.leadgen_videos\.harvest_batch/, "已评论已采的老视频不改归属(6b133a81 防误判白采)");
   assert.doesNotMatch(sql, /judgment_status\s*=\s*EXCLUDED/, "绝不覆盖已有判定");
   assert.ok(params.includes("待判定"), "新落库的候选不是「评论已采」");
   assert.ok(params.includes("auto1") && params.includes("kw"));

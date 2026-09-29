@@ -15,9 +15,10 @@ checks: services/phone-adb-controller/checks/social-keyword-leadgen.yaml
 ledger: services/phone-adb-controller/workflow-result.sh
 trigger_inputs: [Keyword, Account, Device]
 
-known_gaps:
-  - gap: "运行时只对 delivery/scoring 读回探针；preflight/cleanup 指标写死、qualification 账本硬写 not_in_profile（scoring 已在分拣后写真实工件）、outreach 不进账本；blocked 占位工件不判探针"
-    task: 6b133a81
+# 运行时拦截（任务 6b133a81）：每个活动结束时 workflow-result.sh 经 verify-step.mjs 读回本活动全部后置条件探针并判定；
+# 不过按探针 failure_class（须在本活动 failure 闭集声明）处理——on_fail=stop_run 停后续活动（cleanup 照做）、
+# needs_human/fatal 告警（harvest-cron 升级分身 + Bark）、工件与账本标 failed、Brain 回执 stage_status=failed。
+known_gaps: []
 
 activities:
   # ───────────────────────────── 1 预检 ─────────────────────────────
@@ -52,7 +53,7 @@ activities:
       empty_ok: []
       retryable: ["lock_busy 设备锁被占"]
       needs_human:
-        cases: ["device_offline 设备离线", "account_mismatch 手机登录号不符"]
+        cases: ["device_offline 设备离线", "account_mismatch 手机登录号不符", "call_busy 设备通话中（未挂断的电话）"]
         alert: { channel: bark, object: "harvest-cron.sh:121-125 离线升级分身 → Bark" }
       fatal: ["run_tag 重复"]
     side_effects:
@@ -60,7 +61,7 @@ activities:
     invokers: [code]
     steps:
       - { key: acquire_device_lock, name: 拿设备锁, order: 1, reads: [Device.serial], writes: [Device.lock_holder],
-          check: "lock-acquire rc=0 且锁文件 owner=本 run（TTL 1800s）", implementation: { status: implemented, ref: "douyin-phone-adb:2131" }, uses_llm: false }
+          check: "lock-acquire rc=0 且锁文件 owner=本 run（TTL 1800s）", implementation: { status: implemented, ref: "harvest-cron.sh preflight_lock_acquire（以本批 TAG 持锁，逐词 TAG-wN 同 run 幂等续用）→ douyin-phone-adb lock-acquire" }, uses_llm: false }
       - { key: refresh_lock_heartbeat, name: 锁心跳续期, order: 2, reads: [Device.lock_holder], writes: [Device.lock_holder],
           check: "lock-refresh 后锁文件 mtime 更新", implementation: { status: implemented, ref: "douyin-phone-adb:2177-2188" }, uses_llm: false }
       - { key: verify_device_identity, name: 验设备身份, order: 3, reads: [Device.serial], writes: [Device.online],
@@ -70,9 +71,7 @@ activities:
       - { key: read_account_mark, name: 读账号标记(我页), order: 5, reads: [Account.sender_id], writes: [Account.logged_in],
           check: "我页抖音号 in profile 的注册账号列表(account-current + account_registered)", implementation: { status: implemented, ref: "harvest-cron.sh account_registered() + account-current 调用（0929批次4接线）" }, uses_llm: false }
       - { key: open_run_ledger, name: 开账本, order: 6, reads: [Account.profile, Device.serial], writes: [Run.run_tag, Run.profile, Run.serial],
-          check: "ledger init 成功且 preflight 工件通过闭集键校验", implementation: { status: implemented, ref: "workflow-result.sh:150-161" }, uses_llm: false }
-    known_gaps:
-      - { gap: "preflight 指标写死 account_verified=0/lock_acquired=0（workflow-result.sh:161），不是真实判定", task: 6b133a81 }
+          check: "ledger init 成功且 preflight 工件通过闭集键校验；四项指标取 harvest-cron 真实预检结果（DEVICE_VERIFIED/ACCOUNT_VERIFIED/CALL_STATE_IDLE/LOCK_ACQUIRED，读不到即 0）", implementation: { status: implemented, ref: "workflow-result.sh init + harvest-cron.sh preflight_lock_acquire（6b133a81）" }, uses_llm: false }
 
   # ───────────────────────────── 2 发现 ─────────────────────────────
   - key: discovery
@@ -101,7 +100,7 @@ activities:
     idempotency: { dedupe_key: "Video.line_key+Video.video_id", on_duplicate: skip }
     failure:
       empty_ok: ["no_cards 本词无视频卡片"]
-      retryable: ["lock_busy", "WRONG_FOREGROUND", "NO_ROOT"]
+      retryable: ["lock_busy", "WRONG_FOREGROUND", "NO_ROOT", "候选落库失败（库/ssh 不可达）：视频留 pending 本批不采，下批再遇到重判"]
       needs_human:
         cases: ["TARGET_ABSENT 连续出现，疑抖音改版"]
         alert: { channel: bark, object: "escort 升级（harvest-cron.sh 陪跑员）→ Bark" }
@@ -128,8 +127,6 @@ activities:
           check: "每张卡取得 video_id（剪贴板守卫：回读链接含 video_id）", implementation: { status: implemented, ref: "harvest-keyword.sh:45-70" }, uses_llm: false }
       - { key: persist_candidates, name: 写发现工件+落库, order: 8, reads: [Run.run_tag, Video.video_id, Keyword.line_key], writes: [Video.harvest_batch, Video.keyword, Video.line_key],
           check: "leadgen_videos 本词行数 ≥ 工件 candidates", implementation: { status: implemented, ref: "harvest-keyword.sh qual_remote discover → qualify-video.js discover → leadgen-db-lib.js discoverVideo（8bb3af55：发现即落库 pending/待判定，再遇到的视频归到本批）" }, uses_llm: false }
-    known_gaps:
-      - { gap: "candidates 只数有评论的视频（harvest-keyword.sh:246-254），screens_scanned 恒 0", task: 6b133a81 }
 
   # ───────────────────────────── 3 判定 ─────────────────────────────
   - key: qualification
@@ -181,8 +178,6 @@ activities:
           check: "transcript 非空；空/静音 → rejected", implementation: { status: implemented, ref: "transcribe-qwen-audio.js" }, uses_llm: true }
       - { key: judge_content, name: 意向判定, order: 6, reads: [Video.transcript, Video.title], writes: [Video.judgment_status, Video.judgment_reason],
           check: "judgment_status ∈ {matched, rejected} 且 judgment_reason 非空", implementation: { status: implemented, ref: "judge-jev.js / leadgen-db-lib.js:54" }, uses_llm: true }
-    known_gaps:
-      - { gap: "判定已前移到采集之前（8bb3af55 已落地），但账本仍硬写 qualification blocked not_in_profile（workflow-result.sh init），判定结果只在 TSV 的 QUAL 行里、没进账本工件", task: 6b133a81 }
 
   # ───────────────────────────── 4 采集 ─────────────────────────────
   - key: collection
@@ -216,7 +211,7 @@ activities:
       needs_human:
         cases: ["评论数>0 却整词 0 评论，疑改版"]
         alert: { channel: bark, object: "escort 升级 → Bark" }
-      fatal: []
+      fatal: ["未判合格的视频被采了评论（先采后判复活）", "评论归属到本批没打开过的视频（视频漂移错配）"]
     side_effects:
       - { kind: internal_write, target: "执行机 ~/night-$TAG.tsv", description: "LEAD/VIDEO/AUDIO 行" }
     invokers: [code, agent]
@@ -234,7 +229,7 @@ activities:
       - { key: mark_video_collected, name: 标记视频已采, order: 5, reads: [Video.video_id], writes: [Video.process_status],
           check: "process_status=评论已采 只写给 matched 视频", implementation: { status: implemented, ref: "harvest-keyword.sh 采完 qual_remote collected → qualify-video.js collected → leadgen-db-lib.js markVideoCollected（WHERE judgment_status=matched 兜底，8bb3af55）" }, uses_llm: false }
     known_gaps:
-      - { gap: "0928生产实证: commenter-identity验证失败抢救(back+重开评论区)可能落到别的视频/推荐页，退栈深度不固定(取决于此前逐条评论者主页往返次数，0922已实证退栈次数写死必错)，抢救只解决'面板丢了'不解决'退到了别的视频'——悦升云端线索表 2026-09-28 晚 3 条记录，来源视频/视频链接都标着同一条视频但原始评论内容完全不相关。0929已修行内结构性防线(抢救重开后核对current-video-link是否仍是本视频，漂移即整条视频剩余评论作废，见harvest-keyword.sh video_drifted)。coll_video_binding_consistent 探针目前仅是声明(checks/social-keyword-leadgen.yaml)，没有独立于代码之外的外部只读读回校验——要做到需账本(workflow-result.sh)扩展metrics记录本run验证过打开的video_id集合供探针核对，归入6b133a81(运行时读回目前只接delivery/scoring)范畴", task: 6b133a81 }
+      - { gap: "coll_video_binding_consistent 只能核对孤儿归属（评论来源视频必须是本批落过库的视频），抓不住漂移到同批另一条真实视频的语义错配；行内防线是 harvest-keyword.sh video_drifted（0929）。要抓同批错配需账本记每条评论采集时的视频身份序列做交叉核验", task: 878fe194 }
 
   # ───────────────────────────── 5 评分 ─────────────────────────────
   - key: scoring
@@ -283,7 +278,7 @@ activities:
           check: "线索落地之后才推进 已分拣（永远最后一步）", implementation: { status: implemented, ref: "sort-comments-lib.js:81-82" }, uses_llm: false }
     known_gaps:
       - { gap: "现状评分在落池之后对飞书评论池做（batch2.sh sort-comments），设计为对采集产物做、配送一次交付（8bb3af55 只纠正了判定→采集顺序，本项拆出单独跟踪）", task: fdf051bd }
-      - { gap: "关键词有效线索数回写（update-keyword-stats）在批次收工后才运行，批内无法判定；改为下一批开头对上一批判定（待做）", task: 6b133a81 }
+      - { gap: "关键词有效线索数回写（update-keyword-stats）在批次收工后才运行，scoring 是批级的，批内无法按词判定；改为下一批开头对上一批判定（待做）", task: 34f69930 }
       - { gap: "scoring 工件的 peer、spam 两个闭集键这条链没有对应分类，恒为 0；strong_intent=A 级、weak_intent=B+C 级为当前映射，五档分级落地（决策 b93422c6）后重新定义", task: 4ca3b584 }
       - { gap: "0929实证: 决策b93422c6的五档分级(A~E)只在触达筛选层落地了(next-outreach-lib.js的GRADE_ORDER/outreachGrades)，评论判级层(judge-comment.js:19 GRADES=[A,B,C,不相关])从未升级到五档——D/E两档在触达筛选里永远筛不出东西，是死档。需要判级层同步升到五档才算真落地，不是两层各干各的", task: 4ca3b584 }
 
@@ -319,7 +314,7 @@ activities:
       empty_ok: ["本批 0 视频 0 评论"]
       retryable: ["scp/ssh 失败"]
       needs_human:
-        cases: ["业务线路由认不出（line-routes.js:73 抛错）"]
+        cases: ["业务线路由认不出（line-routes.js:73 抛错）", "落池读回对不上（PG/飞书行数少于落池统计、line_key 为空）"]
         alert: { channel: bark, object: "delivery failed 回执 → Bark" }
       fatal: []
     side_effects:
@@ -332,8 +327,6 @@ activities:
           check: "评论池「运行批次」计数 ≥ leads_written（= push-raw-comments.js 本批实际落池数 PUSH_COMMENTS_STATS.created，不含被历史全池去重掉的）；0929修：同push_videos，全军覆没时 exit 1", implementation: { status: implemented, ref: "push-raw-comments.js:43-63" }, uses_llm: false }
       - { key: readback_line_key, name: 业务线读回, order: 3, reads: [Video.line_key], writes: [],
           check: "本批 leadgen_videos.line_key 全非空", implementation: { status: implemented, ref: "verify-step.mjs line_key_not_null" }, uses_llm: false }
-    known_gaps:
-      - { gap: "readback_verified 工件指标写死 0（batch2.sh wfr_delivery_stage）；leads_written/duplicates_skipped/videos_pushed 已取落池脚本真实统计", task: 6b133a81 }
 
   # ───────────────────────────── 7 触达 ─────────────────────────────
   - key: outreach
@@ -356,7 +349,7 @@ activities:
       - "话术库有可用话术"
     postconditions:
       - { probe: out_no_stuck_inflight, asserts: "tick 收工后无悬空「触达中」单" }
-    execution: { location: xian-m4, via: "crontab 每 30 分 outreach-tick.sh → ssh mmv next-outreach.js 取单 → douyin-phone-adb" }
+    execution: { location: xian-m4, via: "crontab 每 30 分 outreach-tick.sh → ssh mmv next-outreach.js 取单 → douyin-phone-adb；收工经 workflow-result.sh outreach-run 进账本并读回 out_no_stuck_inflight（6b133a81）" }
     budget: { max_duration_s: 1500, heartbeat_s: 60 }
     resources:
       locks: ["device:<serial>", "outreach-tick mkdir 锁（35 分钟尸锁）"]
@@ -387,8 +380,6 @@ activities:
           check: "现场无「暂无法给对方发送消息」「发送消息过于频繁」", implementation: { status: implemented, ref: "outreach-tick.sh:343-391" }, uses_llm: false }
       - { key: write_back_result, name: 结果回写, order: 7, reads: [OutreachOrder.result], writes: [Lead.status, Lead.send_status, Lead.reached_at, Lead.sender_id, Lead.script_id],
           check: "线索表落 已触达/待触达/触达受阻 之一，不留 触达中", implementation: { status: implemented, ref: "next-outreach.js:40-72" }, uses_llm: false }
-    known_gaps:
-      - { gap: "触达仍未进账本，运行时无探针读回；悬空『触达中』改由选单开头 40 分钟回收兜底（任务 6b133a81 接账本后再升为探针判定）", task: 6b133a81 }
 
   # ───────────────────────────── 8 归位 ─────────────────────────────
   - key: cleanup
@@ -429,11 +420,8 @@ activities:
       - { key: close_app, name: 关App, order: 1, reads: [Device.serial], writes: [],
           check: "前台不再是 com.ss.android.ugc.aweme", implementation: { status: implemented, ref: "harvest-cron.sh run_finalize() 调 close-app（douyin-phone-adb:2639），0929批次4接线" }, uses_llm: false }
       - { key: release_lock, name: 放锁, order: 2, reads: [Device.lock_holder], writes: [Device.lock_holder],
-          check: "锁文件不存在或 owner≠本 run；失败重试3次(同commenter-identity套路)，3次仍失败才留告警", implementation: { status: implemented, ref: "harvest-keyword.sh trap 按词释放（0929批次4加重试）" }, uses_llm: false }
+          check: "锁文件不存在或 owner≠本 run；失败重试3次(同commenter-identity套路)，3次仍失败才留告警", implementation: { status: implemented, ref: "harvest-keyword.sh trap 按词释放（0929批次4加重试）+ harvest-cron.sh release_run_lock 收工放本批锁并 lock-status 真读 → WFR_LOCK_RELEASED（6b133a81）" }, uses_llm: false }
       - { key: return_safe_desktop, name: 回安全桌面, order: 3, reads: [Device.serial], writes: [],
           check: "前台 = launcher（用 HOME intent resolve-activity 查设备自身默认桌面包名,不 hardcode 厂商launcher）", implementation: { status: implemented, ref: "douyin-phone-adb return-safe-desktop 子命令 + harvest-cron.sh run_finalize() 接线（0929批次4新建）" }, uses_llm: false }
       - { key: finalize_run, name: 终态回执, order: 4, reads: [Run.run_tag], writes: [Run.status],
           check: "n_items>0 且 n_files>=n_items（workflow-result.sh:194）", implementation: { status: implemented, ref: "workflow-result.sh:177-201" }, uses_llm: false }
-    known_gaps:
-      - { gap: "cleanup 指标 lock_released 仍写死1（workflow-result.sh finalize）——设备锁的真实release结果产生于更早、更深的harvest-keyword.sh(逐关键词批次)里，run_finalize这个时间点拿不到那次release的真实结果；close_app_attempts/safe_desktop_visible已改真(0929批次4)", task: 6b133a81 }
-      - { gap: "preflight 指标 lock_acquired 仍写死0（workflow-result.sh init）——设备锁实际在 wfr_bootstrap(init) 之后才由 harvest-keyword.sh 逐关键词acquire，时序上 init 调用点根本还没发生，写1才是假的；account_verified 已改真(0929批次4，读 harvest-cron.sh 导出的 ACCOUNT_VERIFIED)", task: 6b133a81 }

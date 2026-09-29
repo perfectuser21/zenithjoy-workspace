@@ -232,7 +232,7 @@ const RUNTIME_PENDING = [];   // 6b133a81：8 个 stage 全部接上运行时读
 test("WFR_PROBE_STAGES ∪ RUNTIME_PENDING(6b133a81) == YAML stage 集合，且两者不相交", () => {
   const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
   const yamlStages = [...new Set(doc.probes.map((p) => p.stage))].sort();
-  const m = /WFR_PROBE_STAGES="\$\{WFR_PROBE_STAGES:-([a-z ]+)\}"/.exec(wfrText);
+  const m = /WFR_PROBE_STAGES="\$\{WFR_PROBE_STAGES:?-([a-z ]+)\}"/.exec(wfrText);
   assert.ok(m, "workflow-result.sh 缺 WFR_PROBE_STAGES 默认值声明");
   const wired = m[1].trim().split(/\s+/);
   assert.ok(!wired.some((s) => RUNTIME_PENDING.includes(s)), "已接线的 stage 还挂在 RUNTIME_PENDING");

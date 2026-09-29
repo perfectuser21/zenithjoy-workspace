@@ -750,7 +750,11 @@ _DC="$D/drift-check.sh"
 [[ -s "$_DC" ]] || fail "drift-check.sh 缺失(部署漂移对账,mmv 每日 launchd 跑)"
 bash -n "$_DC" || fail "drift-check.sh 语法错误"
 if grep -qE '(declare|local) -A' <<< "$(grep -vE '^[[:space:]]*#' "$_DC")"; then fail "drift-check.sh 用了关联数组(launchd 下 /bin/bash 3.2 不支持,会静默失效)"; fi
-for _arr in MMV_JS_FILES MMV_TOPLEVEL_FILES DEVICE_SH_FILES DEVICE_NODE_FILES DEVICE_CTL_FILES DEVICE_CTL_DIRS; do
+# 6b133a81: 探针读回(verify-step.mjs + checks/)必须在部署清单里,否则 mmv 跑旧版 verify-step(无 gate)→ 每个 stage 都判 unknown
+for _pf in verify-step.mjs checks/probes-lib.js checks/schema.json checks/social-keyword-leadgen.yaml; do
+  grep -qF "$_pf" <<< "$(sed -n '/^MMV_PROBE_FILES=(/,/)/p' "$_DEPLOY")" || fail "deploy.sh MMV_PROBE_FILES 漏了 $_pf(探针读回/拦截在 mmv 跑旧版)"
+done
+for _arr in MMV_JS_FILES MMV_TOPLEVEL_FILES MMV_PROBE_FILES DEVICE_SH_FILES DEVICE_NODE_FILES DEVICE_CTL_FILES DEVICE_CTL_DIRS; do
   grep -qE "^${_arr}=\\(" "$_DEPLOY" || fail "deploy.sh 缺数组 ${_arr}(drift-check.sh 按它解析对账清单)"
   grep -qF "parse_array ${_arr}" "$_DC" || fail "drift-check.sh 未解析 ${_arr}(对账会漏掉这组文件)"
 done
