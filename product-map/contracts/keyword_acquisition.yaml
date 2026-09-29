@@ -158,7 +158,7 @@ activities:
     idempotency: { dedupe_key: "Video.line_key+Video.video_id", on_duplicate: skip }
     failure:
       empty_ok: ["本批无 pending 视频"]
-      retryable: ["转写失败留 pending 下轮重判（judge-video.js:54-56）", "录音死寂（harvest-keyword.sh 电平打点）"]
+      retryable: ["转写调用失败留 pending 下轮重判（judge-video.js 转写 catch）", "判定 API 故障（OpenRouter 402/429/网络）留 pending，judgment_reason 记「判定异常(待重判)」（judge-video.js markVideoJudgeError）", "录音死寂（harvest-keyword.sh 电平打点）"]
       needs_human:
         cases: ["整批转写/判定失败（DashScope/OpenRouter 鉴权或欠费）"]
         alert: { channel: bark, object: "judge-video.js 整批失败 → Bark" }

@@ -76,3 +76,26 @@ test("runJudgeVideo: judgeContent 抛API错误 → 不写rejected,调markVideoJu
   assert.equal(stats.judgeError, 1);
   assert.equal(stats.matched, 1);
 });
+
+// #1999 空转写分流(死寂音频直接判 rejected)必须走注入依赖——变基合并时曾残留旧的顶层变量引用,
+// 运行到这条分支即 ReferenceError,整批炸穿。
+test("runJudgeVideo: 空转写(emptyTranscript) → 判rejected并计数;转写网络失败 → 留pending不写库", async () => {
+  const marks = [];
+  const deps = {
+    listPendingVideos: async () => [
+      { video_id: "v1", title: "t", comment_count: 5 },
+      { video_id: "v2", title: "t", comment_count: 5 },
+    ],
+    markVideoJudgment: async (_p, a) => { marks.push(a); },
+    markVideoJudgeError: async () => { throw new Error("不该走到判定异常"); },
+    transcribeAudio: async (p) => {
+      if (p === "a1") throw Object.assign(new Error("转写为空"), { emptyTranscript: true });
+      throw new Error("ETIMEDOUT");
+    },
+    judgeContent: async () => { throw new Error("不该走到判定"); },
+  };
+  const manifest = [{ videoId: "v1", audioPath: "a1" }, { videoId: "v2", audioPath: "a2" }];
+  const stats = await runJudgeVideo({ lineHint: "yueshengyun-work", manifest, pool: {}, deps });
+  assert.deepEqual(marks.map((m) => [m.videoId, m.verdict, m.lineKey]), [["v1", "rejected", "yuesheng"]]);
+  assert.equal(stats.rejected, 1);
+});
