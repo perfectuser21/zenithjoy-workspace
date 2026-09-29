@@ -573,7 +573,8 @@ for _jf in judge-jev.js judge-comment.js; do
 done
 _JV_CODE=$(grep -vE '^[[:space:]]*//' "$D/judge-video.js")
 grep -A12 'deps.judgeContent(' <<< "$_JV_CODE" | grep -q 'markVideoJudgeError' || fail "judge-video.js 判定异常未走 markVideoJudgeError 留 pending"
-grep -A14 'deps.judgeContent(' <<< "$_JV_CODE" | grep -q 'continue' || fail "judge-video.js 判定异常后未 continue(一条故障会炸穿整批)"
+# 8bb3af55: 单视频判定抽成 judgeOneVideo(批量重判与先判后采共用),故障分支 return pending 交回调用方继续下一条
+grep -A14 'deps.judgeContent(' <<< "$_JV_CODE" | grep -qE 'continue|return \{ outcome: "pending"' || fail "judge-video.js 判定异常后未 continue/回 pending(一条故障会炸穿整批)"
 grep -q 'routeOf(' <<< "$_JV_CODE" || fail "judge-video.js 入口未经 routeOf 归一业务线(batch2.sh 传 profile 名,0929 前 230 条从未判定)"
 
 
@@ -606,9 +607,20 @@ grep -qE 'await upsertVideo\(pool' "$D/push-videos.js" || fail "push-videos.js �
 grep -qF 'leadgen-db-connect' "$D/push-videos.js" || fail "push-videos.js 未引入leadgen-db-connect(Postgres连接缺失)"
 grep -qF 'record-start' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 未接真机录制(record-start),视频判定只能靠标题兜底"
 grep -qF 'record-extract-audio' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 未接音频提取(record-extract-audio)"
-grep -qE 'print -- "AUDIO' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 录了音频但没输出AUDIO行,batch2.sh收不到"
-grep -qE 'ssh .*node .*judge-video\.js' "$D/batch2.sh" || fail "batch2.sh 未接入judge-video.js触发(视频判定链路悬空)"
-grep -qE "grep '\^AUDIO" "$D/batch2.sh" || fail "batch2.sh 未从采收输出里提取AUDIO行(音频传不到mmv)"
+# 8bb3af55 先判后采(决策 f18f56b8①): 触发端从 batch2.sh 落池之后前移到 harvest-keyword.sh 逐视频开评论区之前——
+#   discover(候选落库) → judge(音频 scp 到 mmv 交给判定) → 只有 matched 才 open-comments → collected(评论已采)。
+#   反向守卫: batch2.sh 落池后不得再跑 judge-video.js(那时评论早已采完,判了也挡不住,先采后判复活)。
+_HK_CODE="$(grep -vE '^[[:space:]]*#' "$D/harvest-keyword.sh")"
+[[ -s "$D/qualify-video.js" ]] || fail "qualify-video.js 缺失(先判后采的远端判定入口)"
+node --check "$D/qualify-video.js" || fail "qualify-video.js 语法错误"
+for _q in 'qual_remote discover' 'qual_remote judge' 'qual_remote collected'; do
+  grep -qF "$_q" <<< "$_HK_CODE" || fail "harvest-keyword.sh 缺 $_q(先判后采链断了)"
+done
+_J_LN=$(grep -nF 'qual_remote judge' <<< "$_HK_CODE" | head -1 | cut -d: -f1)
+_OC_LN=$(grep -nE 'open-comments "\$TAG-v\$i-oc"' <<< "$_HK_CODE" | head -1 | cut -d: -f1)
+[[ -n "$_J_LN" && -n "$_OC_LN" ]] && (( _J_LN < _OC_LN )) || fail "harvest-keyword.sh 判定(qual_remote judge)不在开评论区(open-comments)之前——先采后判复活"
+grep -qF '[[ "$QV" != matched ]]' <<< "$_HK_CODE" || fail "harvest-keyword.sh 缺「非 matched 不采」闸"
+grep -qE 'ssh .*node .*judge-video\.js' "$D/batch2.sh" && fail "batch2.sh 落池后又在跑 judge-video.js(先采后判复活,8bb3af55)"
 
 
 # 层24: batch2.sh里凡是ssh过去会touch Postgres(leadgen-db-connect.js读DATABASE_URL)的
@@ -618,13 +630,11 @@ grep -qE "grep '\^AUDIO" "$D/batch2.sh" || fail "batch2.sh 未从采收输出里
 _PV_SSH_LINE="$(grep 'node .*push-videos\.js' "$D/batch2.sh" | grep 'ssh ' || true)"
 grep -qF 'source ~/.credentials/zenithjoy-db.env' <<< "$_PV_SSH_LINE" \
   || fail "batch2.sh 调用push-videos.js的ssh命令没有source ~/.credentials/zenithjoy-db.env(Postgres双写会静默连错库)"
-_JV_SSH_LINES="$(grep 'node .*judge-video\.js' "$D/batch2.sh" | grep 'ssh ' || true)"
-[[ -z "$_JV_SSH_LINES" ]] && fail "batch2.sh 找不到任何judge-video.js的ssh调用(层23应该已经守住,层24逻辑错了)"
-while IFS= read -r _line; do
-  [[ -z "$_line" ]] && continue
-  grep -qF 'source ~/.credentials/zenithjoy-db.env' <<< "$_line" \
-    || fail "batch2.sh 有一处调用judge-video.js的ssh命令没有source ~/.credentials/zenithjoy-db.env(判定读不到Postgres数据)"
-done <<< "$_JV_SSH_LINES"
+# 8bb3af55: 判定触发端移到 harvest-keyword.sh 的 qual_remote(唯一一条 ssh),同样必须先 source 凭据
+_QR_SSH_LINE="$(grep 'node qualify-video\.js' "$D/harvest-keyword.sh" | grep 'ssh ' || true)"
+[[ -n "$_QR_SSH_LINE" ]] || fail "harvest-keyword.sh 找不到调用 qualify-video.js 的 ssh(层23应该已经守住,层24逻辑错了)"
+grep -qF 'source ~/.credentials/zenithjoy-db.env' <<< "$_QR_SSH_LINE" \
+  || fail "harvest-keyword.sh 调 qualify-video.js 的 ssh 没有 source ~/.credentials/zenithjoy-db.env(判定读写不到 Postgres)"
 
 # 层25: 录制前音量必须幂等驱动到 RECORD_MEDIA_VOLUME,不能再无脑 VOLUME_UP x2
 # (0924 真机复盘: record_start 每条视频无条件按两次 KEYCODE_VOLUME_UP 且录完不复位,

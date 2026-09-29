@@ -31,6 +31,25 @@ video_drifted() {
 # 的几个真机行为集成测试一叠加直接把这一步的时间预算撑爆(exit 124超时,棘轮闸阻断)。
 # 跟 outreach-tick.sh 的 nap() 同一个模式: 测试环境下不真睡,生产不设这个变量不受影响。
 nap(){ [[ -n "${HARVEST_KEYWORD_TESTING:-}" ]] && return 0; /bin/sleep "$1" }
+# ── 先判后采(任务 8bb3af55,决策 f18f56b8①「判定合格的视频才采集」) ──
+# 此前视频判定(judge-video.js)挂在 batch2.sh 落池之后跑——评论早已采完落池,判了也挡不住。
+# 现在每个视频在开评论区之前经 ssh 到 mmv(PG 与模型凭据只在 mmv)调 qualify-video.js:
+#   discover(候选落库 pending,回报缓存判定) → 未判过才录音 → judge → 只有 matched 才采 → collected(评论已采)。
+# 远端命令形状同 batch2.sh 推 push-videos.js 那条 ssh(先 source zenithjoy-db.env,裸 ssh 没有 DATABASE_URL)。
+# 判定出错(库/ssh 不可达、判定接口故障 JudgeApiError 口径)一律按 pending:本视频本轮不采、留待重判,不挡后面的视频。
+# 本批批次键(探针 $RUN_TAG):batch2.sh 传的 TAG 是「批次-w词序」,去掉词后缀;调用方可用 HARVEST_BATCH 显式给
+HBATCH="${HARVEST_BATCH:-${TAG%-w<->}}"
+qsq(){ local q=\' s="$1"; s="${s//$q/$q\\$q$q}"; print -rn -- "'$s'"; }
+b64(){ print -rn -- "$1" | base64 | tr -d '\n'; }
+# qual_remote 子命令 参数... → stdout: 远端最后一条 QUAL_* 行(ssh 不通/无回话 = 空)
+qual_remote(){
+  local sub="$1" args="" a
+  shift
+  for a in "$@"; do args="$args $(qsq "$a")"; done
+  ssh -o ConnectTimeout=20 -o BatchMode=yes mmv "set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; cd ~/.openclaw/leadgen-scripts && node qualify-video.js $sub$args" 2>/dev/null </dev/null | grep '^QUAL_' | tail -1
+}
+# qual_field JSON行 键 → 值(字符串或 true/false)
+qual_field(){ print -r -- "$1" | sed -n "s/.*\"$2\":\"\{0,1\}\([^\",}]*\).*/\1/p" | head -1; }
 # source 守卫: 单测以 HARVEST_KEYWORD_LIB=1 source 本文件只取函数,不执行主体
 [[ -n "${HARVEST_KEYWORD_LIB:-}" ]] && return 0
 # RAM盘只有2G,采收截图很快塞爆(0914实证:爆盘让mkdir全军覆没误报锁被占)
@@ -120,6 +139,17 @@ for CARDLINE in "${(f)CARDS}"; do
     $C --profile "$P" back-to-results >/dev/null 2>&1 || true
     continue
   fi
+  # 先判后采①: 候选落库(pending) + 取缓存判定——以前判过的 rejected 不再录不再判,matched 直接采
+  QD="$(qual_remote discover --line "$LINE" --video-id "$VID" --video-url "$VURL" --title-b64 "$(b64 "$TITLE")" --keyword-b64 "$(b64 "$KWTXT")" --batch "$HBATCH")"
+  QV="$(qual_field "$QD" status)"; QSRC=cached; QR=""
+  case "$QV" in
+    matched|rejected) log "  已判定过($QV),沿用库里结论,不重录不重判";;
+    pending) QSRC=judged;;
+    *) QV=pending; QSRC=discover_failed; QR="候选落库失败(库/ssh不可达): ${QD:-ssh无回话}";;
+  esac
+  # 只有待判且库里没有转写(上轮判定接口故障会把转写存下)才录音
+  NEED_AUDIO=0
+  [[ "$QSRC" == judged && "$(qual_field "$QD" has_transcript)" != true ]] && NEED_AUDIO=1
   # 0923补齐: 录屏+提取音频,给judge-video.js(此前从建成起就没有任何数据源)供料。
   # 时长换算: DUR是视频卡片上的"MM:SS"标签(video_cards_from_xml已经在抓,此前没人用)。
   # 3倍速播放+录制:录制秒数=ceil(min(视频时长,300)/3)+5秒缓冲,跟douyin-phone-adb里
@@ -137,7 +167,9 @@ for CARDLINE in "${(f)CARDS}"; do
   (( REC_SECONDS < 10 )) && REC_SECONDS=10
   (( REC_SECONDS > 105 )) && REC_SECONDS=105
   log "  时长=${DUR:-未知} 录制预算=${REC_SECONDS}s"
-  if $C --profile "$P" set-playback-speed 3.0 "$TAG-v$i-spd" </dev/null >/dev/null 2>&1; then
+  if (( ! NEED_AUDIO )); then
+    :
+  elif $C --profile "$P" set-playback-speed 3.0 "$TAG-v$i-spd" </dev/null >/dev/null 2>&1; then
     if $C --profile "$P" record-start "$TAG-v$i-rec" "$REC_SECONDS" </dev/null >/dev/null 2>&1; then
       nap "$((REC_SECONDS + 2))"
       RSOUT="$($C --profile "$P" record-stop "$TAG-v$i-rec" </dev/null 2>&1 || true)"
@@ -179,6 +211,26 @@ for CARDLINE in "${(f)CARDS}"; do
     log "  倍速菜单未找到(可能是视觉定位偶发失败),跳过本视频音频(不影响评论采集)"
   fi
   [[ -n "$AUDIO_PATH" && -n "$VID" ]] && print -- "AUDIO	$VID	$AUDIO_PATH"
+  # 先判后采②: 判定在开评论区之前。音频有效才 scp 到 mmv 交给判定(无效/没录 → 判定侧退回标题判定)
+  if [[ "$QSRC" == judged ]]; then
+    QAUD=()
+    if [[ -n "$AUDIO_PATH" ]]; then
+      RAUD="/tmp/qa-${HBATCH}-${VID}.${AUDIO_PATH##*.}"
+      if scp -o ConnectTimeout=20 -o BatchMode=yes "$AUDIO_PATH" "mmv:$RAUD" </dev/null >/dev/null 2>&1; then QAUD=(--audio "$RAUD")
+      else log "  音频传 mmv 失败,本视频退回标题判定"; fi
+    fi
+    QR="$(qual_remote judge --line "$LINE" --video-id "$VID" "${QAUD[@]}")"
+    QV="$(qual_field "$QR" verdict)"
+    [[ -n "$QV" ]] || { QV=pending; QR="判定无回话(ssh不通): ${QR:-空}"; }
+  fi
+  print -- "QUAL	$VID	$QV	$QSRC"
+  if [[ "$QV" != matched ]]; then
+    if [[ "$QV" == rejected ]]; then log "  判定不合格(rejected),不采评论"
+    else log "  判定未出结论(pending: $(print -r -- "$QR" | head -c 150)),本视频本轮不采,留待重判"; fi
+    $C --profile "$P" back-to-results >/dev/null 2>&1 || true
+    continue
+  fi
+  log "  判定合格(matched/$QSRC),开采评论"
   OCOUT="$($C --profile "$P" open-comments "$TAG-v$i-oc" </dev/null 2>/dev/null || true)"
   if ! print -- "$OCOUT" | grep -q "^comments_opened=1"; then
     log "  评论区打不开,3秒后重试1次"
@@ -344,6 +396,7 @@ for CARDLINE in "${(f)CARDS}"; do
   CC="$(print -- "$CC" | grep -E "	tap=" || true)"
   if [[ -z "$CC" ]]; then
     log "  零评论"
+    qual_remote collected --line "$LINE" --video-id "$VID" --count 0 >/dev/null
     # 评论面板开着也不用先 back 一次再归位——back-to-results 自己退到看见结果页为止
     $C --profile "$P" back-to-results >/dev/null 2>&1 || true
     continue
@@ -351,6 +404,8 @@ for CARDLINE in "${(f)CARDS}"; do
   log "  评论数: $(print -- "$CC" | wc -l | tr -d " ")"
   # 视频落「视频池」行(全链可观察: VIDEO\tid\t短链\t标题\t关键词\t采到评论数)
   print -- "VIDEO	${VID:-}	${VURL:-}	$TITLE	$KWTXT	$(print -- "$CC" | wc -l | tr -d " ")"
+  # 先判后采③: 采完才标「评论已采」(只写给 matched 视频,库侧 WHERE 兜底)
+  qual_remote collected --line "$LINE" --video-id "$VID" --count "$(print -- "$CC" | wc -l | tr -d " ")" >/dev/null
   # 收评论面板+回搜索结果
   # 归位不数 back 次数：取过链接的视频栈里多一层，写死的次数必然退多或退少
   # （0922 实证：跳过分支 back 一次落在暂存解析页，后面每个视频都在错页面上瞎点）。

@@ -114,8 +114,8 @@ probes:
     severity: error
     note: >
       发现交出的对象 = 本词候选视频清单，必须落 leadgen_videos（leadgen-db-lib.js:22-31 upsertVideo，带 keyword/harvest_batch），
-      否则判定无米下锅。batch2.sh:37 写 candidates=DV。现状视频在 delivery 才落库（batch2.sh:95-108），
-      本探针在 discovery 时点判红，直到执行顺序纠正（8bb3af55）。
+      否则判定无米下锅。batch2.sh:37 写 candidates=DV。8bb3af55 先判后采后，harvest-keyword.sh 在开评论区之前
+      经 qualify-video.js discover 把每个候选视频落库（pending/待判定，harvest_batch=本批、keyword=本词）。
 
   # ── qualification：本批候选全部判完（设计顺序：判定在采集之前）──
   - key: qual_none_pending
@@ -173,8 +173,8 @@ probes:
     severity: error
     note: >
       设计顺序（决策 f18f56b8）：判定合格才采评论。未 matched 却已「评论已采」= 白采。
-      现状 upsertVideo 一律写 process_status 默认值「评论已采」（20260922_220000_leadgen_ssot_tables.sql:36，
-      leadgen-db-lib.js:26），本探针判红直到 8bb3af55 纠正顺序并按实际写 process_status。
+      8bb3af55 先判后采后，候选视频落库时 process_status=待判定，只有 matched 且采完评论才经
+      qualify-video.js collected → markVideoCollected（leadgen-db-lib.js:116）标「评论已采」（WHERE judgment_status='matched' 兜底）。
 
   - key: coll_video_binding_consistent
     stage: collection
