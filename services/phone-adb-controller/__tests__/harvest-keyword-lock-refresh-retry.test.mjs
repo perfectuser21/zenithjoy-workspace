@@ -13,6 +13,7 @@ import { mkdtempSync, writeFileSync, chmodSync, mkdirSync, readFileSync } from "
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { FAKE_SSH_QUAL, FAKE_SCP } from "./qual-fakes.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HK = join(HERE, "..", "harvest-keyword.sh");
@@ -47,8 +48,8 @@ esac
 exit 0`;
 }
 
-const FAKE_SSH = `#!/bin/sh
-exit 0`;
+// 先判后采(8bb3af55): 假 ssh 对 qualify-video.js 回 matched,整链路照常采集(判定本身见 harvest-keyword-judge-before-collect)
+const FAKE_SSH = FAKE_SSH_QUAL;
 
 function setup(failCount) {
   const home = mkdtempSync(join(tmpdir(), "hklr-"));
@@ -57,6 +58,8 @@ function setup(failCount) {
   chmodSync(join(home, ".local", "bin", "douyin-phone-adb"), 0o755);
   writeFileSync(join(home, ".local", "bin", "ssh"), FAKE_SSH);
   chmodSync(join(home, ".local", "bin", "ssh"), 0o755);
+  writeFileSync(join(home, ".local", "bin", "scp"), FAKE_SCP);
+  chmodSync(join(home, ".local", "bin", "scp"), 0o755);
   const env = { ...process.env, HOME: home, PATH: `${join(home, ".local", "bin")}:${process.env.PATH}`, HARVEST_KEYWORD_TESTING: "1" };
   return { home, env };
 }

@@ -1,7 +1,8 @@
 // 账本钩子内建进现网 batch2.sh / harvest-cron.sh（棒3b-3，决策 2ca30c4d）的集成测试。
 // 真跑 zsh 脚本：假 harvest-keyword.sh 按词回 0/1/3 并记录 argv；假 ssh/scp 放在 $HOME/.local/bin
 // （batch2.sh 的 PATH 首位）记录 argv 后 exit 0；账本落在临时 HOME。fixtures/batch2-pre-wfr.sh 是并入前
-// 的 batch2.sh 逐字快照（origin/main 23b0cd8a，md5 2abbb72968b4f8f1f03660425ef2dfa1），用来断言
+// 的 batch2.sh 逐字快照（origin/main 23b0cd8a，md5 2abbb72968b4f8f1f03660425ef2dfa1；8bb3af55 先判后采时与现网同步删掉
+// 落池后的 judge-video.js 块，其余逐字不动），用来断言
 // WFR_DISABLED=1 时新脚本的日志/产物/子进程 argv 与旧版逐字一致。
 import { test } from "node:test";
 import assert from "node:assert/strict";

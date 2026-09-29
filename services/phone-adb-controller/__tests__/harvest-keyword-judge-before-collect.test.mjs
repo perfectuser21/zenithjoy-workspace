@@ -47,7 +47,7 @@ const FAKE_SSH = `#!/bin/sh
 printf 'ssh %s\\n' "$*" >> "$HOME/calls.log"
 case "$*" in
   *qualify-video.js*)
-    vid=$(printf '%s' "$*" | awk '{for(i=1;i<NF;i++) if($i=="--video-id"){v=$(i+1); gsub(/\\047/,"",v); print v}}')
+    vid=$(printf '%s' "$*" | tr -d "\\047" | awk '{for(i=1;i<NF;i++) if($i=="--video-id") print $(i+1)}')
     eval "qd=\\\${QD_$vid:-pending}"; eval "qj=\\\${QJ_$vid:-matched}"
     case "$*" in
       *"qualify-video.js discover"*) [ "$qd" = sshfail ] && exit 255; printf 'QUAL_DISCOVER {"status":"%s","has_transcript":%s}\\n' "$qd" "\${QT:-false}";;
@@ -163,6 +163,6 @@ test("远端判定命令先 source zenithjoy-db.env（裸 ssh 没有 DATABASE_UR
   const r = run({}, "auto09292200-w3");
   for (const l of r.all(/qualify-video\.js/)) assert.match(l, /source ~\/\.credentials\/zenithjoy-db\.env/);
   const d = r.calls[r.idx(/qualify-video\.js discover/)];
-  assert.match(d, /--batch '?auto09292200'? /);
-  assert.match(d, /--line '?jinoshengyuan-work'?/);
+  assert.match(d, /--batch'? '?auto09292200'?( |$)/);
+  assert.match(d, /--line'? '?jinoshengyuan-work'?/);
 });
