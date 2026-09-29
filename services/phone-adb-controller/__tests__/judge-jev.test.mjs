@@ -21,6 +21,9 @@ test("judgeContent: 主判matched且高置信度 → 直接返回,不调复核�
   assert.equal(r.verdict, "matched");
   assert.equal(calls.length, 1, "高置信度matched不应该触发复核官调用");
   assert.equal(calls[0], "https://openrouter.ai/api/alpha/decisions");
+  // 0929修复(DoD审计发现): 之前主判直接matched时reason是null,markVideoJudgment落库时
+  // judgment_reason必为NULL,违反契约"judgment_reason非空"的断言且代码毫无感知。
+  assert.ok(r.reason && r.reason.trim(), `matched也必须有非空reason,实际=${JSON.stringify(r.reason)}`);
 });
 
 test("judgeContent: 主判rejected且高置信度 → 直接返回,不调复核官", async () => {
