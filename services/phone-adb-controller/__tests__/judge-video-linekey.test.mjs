@@ -49,3 +49,30 @@ test("runJudgeVideo: 认不出的业务线 → 抛错(不猜,不兜底进金诺)
   await assert.rejects(() => runJudgeVideo({ lineHint: "xiaolongxia", manifest: [], pool: {}, deps }), /未配路由/);
   assert.equal(calls.list.length, 0, "路由认不出时不该碰库");
 });
+
+// ── 0929: 判定 API 故障 → 视频保持 pending,judgment_reason 写明失败原因 ──────
+// OpenRouter 09-29 余额耗尽(402)。旧链路会把 API 故障判成 rejected 落库,充值后也捞不回来。
+test("runJudgeVideo: judgeContent 抛API错误 → 不写rejected,调markVideoJudgeError留pending并记原因,继续下一条", async () => {
+  const marks = [], errors = [];
+  const apiErr = Object.assign(new Error("openrouter:primary HTTP 402 Insufficient credits"), { name: "JudgeApiError" });
+  let n = 0;
+  const deps = {
+    listPendingVideos: async () => [
+      { video_id: "v1", title: "AI训练师证书", comment_count: 5 },
+      { video_id: "v2", title: "AI训练师报名", comment_count: 5 },
+    ],
+    markVideoJudgment: async (_p, a) => { marks.push(a); },
+    markVideoJudgeError: async (_p, a) => { errors.push(a); },
+    transcribeAudio: async () => "转写",
+    judgeContent: async () => { n++; if (n === 1) throw apiErr; return { verdict: "matched", reason: "jev:matched" }; },
+  };
+  const stats = await runJudgeVideo({ lineHint: "legacy", manifest: [], pool: {}, deps });
+  assert.deepEqual(marks.map((m) => m.videoId), ["v2"], "API 故障那条绝不能写成 matched/rejected");
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].lineKey, "jinuo");
+  assert.equal(errors[0].videoId, "v1");
+  assert.match(errors[0].reason, /判定异常/);
+  assert.match(errors[0].reason, /402/);
+  assert.equal(stats.judgeError, 1);
+  assert.equal(stats.matched, 1);
+});
