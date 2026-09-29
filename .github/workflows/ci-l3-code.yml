@@ -231,8 +231,8 @@ jobs:
       # （0916 自查：279 个 smoke 里 55 个是 pipefail 假绿，同一个病）。
       - name: 装 zsh（video-link-restore 守卫要直接跑 douyin-phone-adb）
         run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh
-      - name: node --test scripts/openclaw + services/phone-adb-controller
-        run: node --test scripts/openclaw/**/*.test.js services/phone-adb-controller/__tests__/*.test.mjs
+      - name: node --test scripts/openclaw + services/phone-adb-controller + deploy-phone-adb-controller workflow 契约测试
+        run: node --test scripts/openclaw/**/*.test.js services/phone-adb-controller/__tests__/*.test.mjs .github/workflows/scripts/__tests__/*.test.mjs
 
   # ─── apps/api/scripts ────────────────────────────────────────────────
   # apps/api/scripts/ 下的独立 Python 脚本（如 wechat-mp-freepublish.py）不属于任何

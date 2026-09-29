@@ -1,0 +1,173 @@
+name: Deploy phone-adb-controller to mmv+xian-m4+xian-m1
+
+# ───────────────────────────────────────────────────────────────────────────
+# 背景（0929）：services/phone-adb-controller/ 的代码合并到 main 之后，此前完全靠人肉记得
+# 手动跑 deploy.sh 才会真的出现在跑它的三台机器（mmv 本机 + 西安 xian-m4/xian-m1）上——
+# DoD 审计批次4(PR #2006) merge 6 小时后三机仍是旧代码就是实锤。决策 639800cc：
+# 合并自动直推三机，不加人工确认闸（这三台物理机本身就是生产，没有等价的 staging 手机）。
+#
+# 连接模式完全复用 deploy-us-vps.yml / promote-prod-hk.yml 已验证过的
+# tailscale/github-action + SSH 到 mmv，不新建任何连接通道。
+# mmv 自己已配置好到 xian-m4/xian-m1 的 SSH 别名，deploy.sh 从 mmv 上跑就能推三机。
+# ───────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/phone-adb-controller/**"
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-phone-adb-controller
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: 部署到 mmv + xian-m4 + xian-m1
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 接入 Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          version: latest
+
+      - name: Tailnet 诊断（status/ping/port22）
+        env:
+          SSH_HOST: ${{ secrets.US_MAC_TAILSCALE_IP }}
+        run: |
+          echo "── tailscale status"
+          sudo tailscale status | head -20 || true
+          echo "── 目标 $SSH_HOST 是否在 peers"
+          sudo tailscale status | grep -F "$SSH_HOST" || echo "⚠️ 目标 IP 不在 peers 列表"
+          echo "── tailscale ping"
+          sudo tailscale ping -c 3 --timeout 5s "$SSH_HOST" || echo "⚠️ tailscale ping 不通"
+
+      - name: SSH 到 mmv 部署三机 + drift-check + Bark 通知
+        env:
+          SSH_KEY: ${{ secrets.US_MAC_SSH_KEY }}
+          SSH_HOST: ${{ secrets.US_MAC_TAILSCALE_IP }}
+          SSH_USER: ${{ secrets.US_MAC_USER }}
+          DEPLOY_SHA: ${{ github.sha }}
+        timeout-minutes: 30
+        run: |
+          KEY_FILE=$(mktemp)
+          printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+
+          ssh -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=30 \
+              -o ServerAliveInterval=60 \
+              -i "$KEY_FILE" \
+              -p 22 \
+              "${SSH_USER}@${SSH_HOST}" \
+              bash -s -- "$DEPLOY_SHA" << 'REMOTE_EOF'
+          set -euo pipefail
+          DEPLOY_SHA="$1"
+          REPO="$HOME/perfect21/zenithjoy-workspace"
+          BARK="$HOME/.openclaw/leadgen-scripts/notify-bark.js"
+
+          b64() { printf '%s' "$1" | base64 | tr -d '\n'; }
+          notify() {
+            # notify TITLE BODY [level]
+            node "$BARK" "$(b64 "$1")" "$(b64 "$2")" "${3:-timeSensitive}" || true
+          }
+
+          echo "=== [0/4] git fetch(只更新引用,不碰工作区) ==="
+          git -C "$REPO" fetch --force --prune origin main
+
+          # 用目标commit版本的lib,不能从当前(未同步)工作区source——
+          # 工作区可能是上一版部署遗留的旧lib,或者第一次跑时这个文件压根还不存在。
+          LIB_TMP=$(mktemp)
+          if ! git -C "$REPO" show "$DEPLOY_SHA:.github/workflows/scripts/deploy-phone-adb-remote-lib.sh" > "$LIB_TMP" 2>/dev/null; then
+            notify "phone-adb自动部署失败" "取不到目标commit的部署lib脚本(sha=${DEPLOY_SHA:0:8})"
+            rm -f "$LIB_TMP"
+            exit 1
+          fi
+          # shellcheck source=/dev/null
+          source "$LIB_TMP"
+          rm -f "$LIB_TMP"
+
+          CURRENT_BRANCH="$(git -C "$REPO" symbolic-ref --short HEAD 2>/dev/null || echo "(detached)")"
+          if [[ "$CURRENT_BRANCH" != "main" ]]; then
+            notify "phone-adb自动部署已跳过" "mmv checkout当前在分支${CURRENT_BRANCH}非main,需人工检查(sha=${DEPLOY_SHA:0:8})"
+            exit 1
+          fi
+
+          if ! check_clean_checkout "$REPO"; then
+            notify "phone-adb自动部署已跳过" "mmv本地checkout不干净,需人工检查(sha=${DEPLOY_SHA:0:8})"
+            exit 1
+          fi
+
+          # 防重跑旧 run 把生产静默回滚(I-B)：DEPLOY_SHA 必须是 origin/main 的祖先，
+          # 且当前 HEAD 必须是 DEPLOY_SHA 的祖先(即 reset 只会前进不会后退)。
+          # 这道闸同时防住 mmv 共享 checkout 上 main 分支有本地未推送 commit 时被 reset --hard 静默冲掉。
+          if ! git -C "$REPO" merge-base --is-ancestor "$DEPLOY_SHA" origin/main || \
+             ! git -C "$REPO" merge-base --is-ancestor HEAD "$DEPLOY_SHA"; then
+            notify "phone-adb自动部署已跳过" "目标SHA不是origin/main的后代,或会让mmv checkout后退(sha=${DEPLOY_SHA:0:8}),可能是重跑了旧run,已阻止"
+            exit 1
+          fi
+
+          echo "=== [1/4] git reset --hard → ${DEPLOY_SHA} ==="
+          git -C "$REPO" reset --hard "$DEPLOY_SHA"
+
+          echo "=== [2/4] deploy.sh（推 mmv + xian-m4 + xian-m1）==="
+          cd "$REPO"
+          if ! DEPLOY_LOG=$(bash services/phone-adb-controller/deploy.sh </dev/null 2>&1); then
+            echo "$DEPLOY_LOG"
+            DEPLOY_FAIL_DETAIL="$(echo "$DEPLOY_LOG" | grep '❌' | head -3 | tr '\n' ';' || true)"
+            [[ -z "$DEPLOY_FAIL_DETAIL" ]] && DEPLOY_FAIL_DETAIL="$(echo "$DEPLOY_LOG" | tail -5 | tr '\n' ';')"
+            notify "phone-adb自动部署失败" "deploy.sh失败(可能已部分部署,三机版本可能不一致): ${DEPLOY_FAIL_DETAIL}(sha=${DEPLOY_SHA:0:8})"
+            exit 1
+          fi
+          echo "$DEPLOY_LOG"
+
+          echo "=== [3/4] drift-check.sh 后验(锁定本次部署的SHA,不重新fetch避免中途又有合并造成误报) ==="
+          if ! DRIFT_LOG=$(DRIFT_REF="$DEPLOY_SHA" DRIFT_SKIP_FETCH=1 bash services/phone-adb-controller/drift-check.sh </dev/null 2>&1); then
+            echo "$DRIFT_LOG"
+            notify "phone-adb自动部署后验失败" "drift-check未通过(sha=${DEPLOY_SHA:0:8}): $(echo "$DRIFT_LOG" | tail -3 | tr '\n' ';')"
+            exit 1
+          fi
+          echo "$DRIFT_LOG"
+
+          # 防第二种假绿(N3)：drift-check.sh 退出码是0不代表真的做了对账，必须确认输出里有 DRIFT_CHECK OK。
+          if ! echo "$DRIFT_LOG" | grep -q "DRIFT_CHECK OK"; then
+            notify "phone-adb自动部署可疑" "drift-check退出码是0但输出里没有DRIFT_CHECK OK,可能没有真的对账(sha=${DEPLOY_SHA:0:8})"
+            exit 1
+          fi
+
+          notify "phone-adb自动部署成功" "已部署到mmv+xian-m4+xian-m1并通过drift-check(sha=${DEPLOY_SHA:0:8})" "active"
+          echo "✅ 全部完成"
+          REMOTE_EOF
+
+          rm -f "$KEY_FILE"
+
+  notify-connect-failure:
+    name: SSH/Tailscale 连接失败兜底通知
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: failure()
+    steps:
+      - name: 接入 Tailscale（复用同一 authkey，仅为了能发通知，不重跑部署）
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          version: latest
+      - name: SSH 到 mmv 发送 Bark 告警（deploy job 内部因连不上/超时而没机会自己发通知时兜底）
+        env:
+          SSH_KEY: ${{ secrets.US_MAC_SSH_KEY }}
+          SSH_HOST: ${{ secrets.US_MAC_TAILSCALE_IP }}
+          SSH_USER: ${{ secrets.US_MAC_USER }}
+        run: |
+          KEY_FILE=$(mktemp)
+          printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          TITLE_B64=$(printf '%s' "phone-adb自动部署workflow失败" | base64 | tr -d '\n')
+          BODY_B64=$(printf '%s' "deploy job本身失败(可能是tailnet/SSH连不上),见GitHub Actions run日志" | base64 | tr -d '\n')
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i "$KEY_FILE" \
+              "${SSH_USER}@${SSH_HOST}" \
+              "node \$HOME/.openclaw/leadgen-scripts/notify-bark.js '$TITLE_B64' '$BODY_B64'" || true
+          rm -f "$KEY_FILE"
