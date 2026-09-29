@@ -2647,7 +2647,29 @@ case "$command" in
     print -- "foreground=${focus:-unknown}"
     snapshot
     ;;
+  return-safe-desktop)
+    # 0929批次4新建(契约"回安全桌面"此前零实现,6b133a81): 契约要求"前台=launcher"。
+    # 不 hardcode 任何厂商 launcher 包名——0929 真机(xian-m4 两台荣耀机)实测是
+    # com.hihonor.android.launcher，但小米/OPPO/vivo各不相同，写死必然在别的机型上炸。
+    # 改成查设备自己声明的默认桌面(HOME intent resolve-activity),这条查询法通用。
+    [[ "$#" == 1 ]] || die "usage: douyin-phone-adb --profile PROFILE return-safe-desktop"
+    check_target_fast
+    launcher_pkg="$("$ADB" -s "$SERIAL" shell cmd package resolve-activity -a android.intent.action.MAIN -c android.intent.category.HOME 2>/dev/null \
+      | /usr/bin/grep -m1 'packageName=' | /usr/bin/sed -E 's/^[[:space:]]*packageName=([^[:space:]]+).*/\1/' | tr -d '\r')"
+    [[ -n "$launcher_pkg" ]] || die "could not resolve default launcher package via HOME intent"
+    rsd_ok=0
+    for rsd_try in 1 2 3; do
+      "$ADB" -s "$SERIAL" shell input keyevent 3
+      wait_ms 1000
+      focus="$(foreground_package)"
+      if [[ "$focus" == *"$launcher_pkg"* ]]; then rsd_ok=1; break; fi
+    done
+    (( rsd_ok )) || die "still not on safe desktop(launcher=$launcher_pkg) after 3 HOME presses; foreground=${focus:-unknown}"
+    print -- "launcher=$launcher_pkg"
+    print -- "foreground=${focus:-unknown}"
+    snapshot
+    ;;
   *)
-    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link account-current account-switch commenter-identity private-message-send close-app record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-video-tab"
+    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-video-tab"
     ;;
 esac
