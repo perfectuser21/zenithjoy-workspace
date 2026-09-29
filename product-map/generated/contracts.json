@@ -2,12 +2,12 @@
   "object_types": "06f4d4bda5a98920fad6eef0c73a908803c529e87e51b28fd624f610078bcd2c",
   "capabilities": {
     "benchmark_link_acquisition": {
-      "sha256": "344e085f5ef64b567e7827551df21937e0fbeb048aebc9ee033c9623d2842a65",
+      "sha256": "22c2f3fc933c450b5f764713ee3e98602e3b38cd84af31a9eb54b718b0139fc5",
       "activities": {
         "preflight": "4bf43bb627441fafe5d90b6bca1f8dfb65c4b12dc31692e3a161e61d23596913",
         "discovery": "13e4fb8f5fb598f090b9d6306854b5d338a433593f150cbb344e3ddc6096c924",
         "qualification": "2a423e1e08be35ea941780786b6c05570c7ec513069b38f53898de60960a4115",
-        "collection": "6aec545fbd93b2004e70216952989848a49d6094d186384e863131477d79a589",
+        "collection": "1b0bb6cf47f8c2a26fbcaab6b3cdd05dcdeed4a9e36c66b820c28bdeeeb3cde5",
         "scoring": "5d77a0ac077cc78e3f4ee9936f53b21bbd02e6e5598ea635c2e7274c997ea662",
         "delivery": "597e604c9030e142baddb3420d06ce88c87f34a0c8b9903d10a7cc46a358111d",
         "outreach": "b561a7a1df64d8a00e42116ca714ad369d1a2140492d6c8f922a9448868e8a9e",
@@ -15,12 +15,12 @@
       }
     },
     "keyword_acquisition": {
-      "sha256": "3672d47fc7e43c072427e0db08849aabfc3335a16ace50c22d4be8d3dea02b36",
+      "sha256": "20db0a59a53f43d35192e4e27e3455c393b93468c22ff91616ba00714ad73b65",
       "activities": {
         "preflight": "4bf43bb627441fafe5d90b6bca1f8dfb65c4b12dc31692e3a161e61d23596913",
         "discovery": "c0a131b9b8fe328ce4aa2473ae014d55e226197d8f51bebbc648f743bc9e7577",
         "qualification": "2a423e1e08be35ea941780786b6c05570c7ec513069b38f53898de60960a4115",
-        "collection": "6aec545fbd93b2004e70216952989848a49d6094d186384e863131477d79a589",
+        "collection": "1b0bb6cf47f8c2a26fbcaab6b3cdd05dcdeed4a9e36c66b820c28bdeeeb3cde5",
         "scoring": "5d77a0ac077cc78e3f4ee9936f53b21bbd02e6e5598ea635c2e7274c997ea662",
         "delivery": "597e604c9030e142baddb3420d06ce88c87f34a0c8b9903d10a7cc46a358111d",
         "outreach": "b561a7a1df64d8a00e42116ca714ad369d1a2140492d6c8f922a9448868e8a9e",
