@@ -665,12 +665,20 @@ function smokeOrAgentGate(req: Request, res: Response, next: NextFunction) {
 // 覆盖时（生产真实环境）的默认落点。
 async function llmExpandKeywords(docText: string): Promise<string[]> {
   const base = process.env.OPENROUTER_BASE_URL;
+  const usingToapis = !base; // 未设 OPENROUTER_BASE_URL(测试专用开关) = 生产真实环境,走 TOAPIS
   const url = base
     ? `${base.replace(/\/$/, '')}/chat/completions`
     : `${(process.env.TOAPIS_BASE_URL || 'https://toapis.com/v1').replace(/\/$/, '')}/chat/completions`;
-  const key = base
-    ? (process.env.OPENROUTER_API_KEY || 'fake-key')
-    : (process.env.TOAPIS_API_KEY || process.env.OPENROUTER_API_KEY || 'fake-key');
+  // 0929 DeepSeek Code Review 真找出的问题(PR#1995)：原来生产环境 key 兜底写的是
+  // TOAPIS_API_KEY || OPENROUTER_API_KEY || 'fake-key' ——TOAPIS_API_KEY 哪天没配上会
+  // 悄悄滑回已经报废的 OpenRouter，且没有任何日志，跟"生产默认走TOAPIS"的意图不一致。
+  // 改成不悄悄兜底：缺 TOAPIS_API_KEY 就显式报警，不再暗中退回 OpenRouter。
+  if (usingToapis && !process.env.TOAPIS_API_KEY) {
+    console.warn('[acquisition] llmExpandKeywords: 生产模式下 TOAPIS_API_KEY 未配置，本次调用大概率失败');
+  }
+  const key = usingToapis
+    ? (process.env.TOAPIS_API_KEY || 'fake-key')
+    : (process.env.OPENROUTER_API_KEY || 'fake-key');
   const prompt =
     `根据下面企业信息，生成 3 个用于在抖音搜索潜在客户的关键词，每行一个，只输出关键词，不加序号或标点：\n${docText}`;
   const MAX_ATTEMPT = 2;
@@ -680,12 +688,12 @@ async function llmExpandKeywords(docText: string): Promise<string[]> {
       const resp = await axios.post(
         url,
         {
-          model: process.env.OPENROUTER_MODEL || (base ? 'deepseek/deepseek-chat' : 'deepseek-v4-flash'),
+          model: process.env.OPENROUTER_MODEL || (usingToapis ? 'deepseek-v4-flash' : 'deepseek/deepseek-chat'),
           messages: [{ role: 'user', content: prompt }],
           max_tokens: 100,
           // deepseek-v4-flash 是 thinking 模型，max_tokens 含 reasoning_tokens——不关会把
           // 100 tokens 的预算吃在思考上，正文变空（同 comment-grading.ts 里踩过的坑）。
-          ...(base ? {} : { enable_thinking: false }),
+          ...(usingToapis ? { enable_thinking: false } : {}),
         },
         { headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, timeout: 8000 }
       );
