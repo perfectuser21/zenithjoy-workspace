@@ -30,7 +30,11 @@ case "$1" in
 esac
 exit 0`;
 // 假发现: 主页网格两张卡(DUR/TITLE 为空——主页网格读不到)
+// DISC_EMPTY_AFTER_FIRST=1: 首次之后(重开主页)扫不到卡片
 const FAKE_DISCOVER = `#!/bin/sh
+echo "$*" >> "$HOME/disc.log"
+n=$(wc -l < "$HOME/disc.log" | tr -d ' ')
+[ "$DISC_EMPTY_AFTER_FIRST" = "1" ] && [ "$n" -gt 1 ] && exit 0
 printf '100\\t200\\t\\t\\n300\\t400\\t\\t\\n'
 exit 0`;
 
@@ -59,13 +63,28 @@ test("对标流(WF_SOURCE_KIND=benchmark): 逐视频归位走 back-to-profile 10
   assert.equal((log.match(/^tap-evidence /gm) || []).length, 2);
 });
 
-test("对标流回主页失败(看见 feed) → 本源剩余卡片不再点(旧坐标已失效),正常收工放锁", { skip: SKIP }, () => {
+test("对标流回主页失败(取链接用 deep link 重开过视频,栈里是 feed) → 用对标链接重开主页重扫,从下一张继续", { skip: SKIP }, () => {
+  // 0930 00:59 真机实证(cmd09290953 视频1): 取链接后 back 退到 feed,旧逻辑直接作废剩余 3 张卡
   const { home, env } = setup({ WF_SOURCE_KIND: "benchmark", BTP_FAIL: "1" });
   const r = run(env);
   assert.equal(r.status, 0, r.stderr);
   const log = ctl(home);
+  assert.equal((log.match(/^tap-evidence /gm) || []).length, 2, "两张卡都应处理到: " + log);
+  const disc = readFileSync(join(home, "disc.log"), "utf8").trim().split("\n");
+  assert.equal(disc.length, 3, "首次发现 + 每张卡后各重开一次主页");
+  assert.match(disc[1], /https%3A%2F%2Fv\.douyin\.com%2Fx/, "重开用的是本对标源链接");
+  assert.match(r.stderr, /重开主页/);
+  assert.doesNotMatch(log, /back-to-results/);
+  assert.match(log, /lock-release T-w1/);
+});
+
+test("对标流重开主页也扫不到卡片 → 本源剩余候选作废,正常收工放锁", { skip: SKIP }, () => {
+  const { home, env } = setup({ WF_SOURCE_KIND: "benchmark", BTP_FAIL: "1", DISC_EMPTY_AFTER_FIRST: "1" });
+  const r = run(env);
+  assert.equal(r.status, 0, r.stderr);
+  const log = ctl(home);
   assert.equal((log.match(/^tap-evidence /gm) || []).length, 1, log);
-  assert.match(r.stderr, /回对标主页失败/);
+  assert.match(r.stderr, /本对标源剩余候选到此为止/);
   assert.match(log, /lock-release T-w1/);
 });
 

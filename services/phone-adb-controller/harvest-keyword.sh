@@ -97,12 +97,21 @@ log "卡片数: $(print -- "$CARDS" | wc -l | tr -d " ")"
 # 对标流(WF_SOURCE_KIND=benchmark,wf-run.sh 下传;决策 7f842d12)卡片在对标账号主页网格上: 归位走 back-to-profile 10
 # (0930 真机实测: 主页点卡+取链后要 7 次 back 才回 UserProfileActivity——取链暂存搜索页 4 + UltraDetail 2 + 1;传 5 每源第 1 个视频后必失败)
 # (一路 back 到 UserProfileActivity,见 feed/splash 立即返回 1)。不能用 back-to-results——它只认搜索结果页,
-# 兜底重搜会拿 KWTXT(此时是主页链接)去搜,人漂走。回主页失败 = 旧坐标作废,本源剩余候选到此为止。
+# 兜底重搜会拿 KWTXT(此时是主页链接)去搜,人漂走。回主页失败 → 用对标链接重开主页重扫(见下)。
 back_to_results_and_maybe_rescan() {
   local evid="$1" btr_out newcards
   if [[ "${WF_SOURCE_KIND:-keyword}" == "benchmark" ]]; then
-    if ! $C --profile "$P" back-to-profile 10 </dev/null >/dev/null 2>&1; then
-      log "  回对标主页失败(看到 feed/splash),本对标源剩余候选到此为止"
+    $C --profile "$P" back-to-profile 10 </dev/null >/dev/null 2>&1 && return 0
+    # 0930 00:59 真机实证(cmd09290953 视频1): 取链接用 deep link 重开过视频,栈里是 feed 不是主页,back 回不去。
+    # 对标版兜底(对应关键词版的兜底重搜): 用本对标源链接重开主页重扫卡片;主页网格按发布时间排序、坐标稳定,
+    # 保留 i 从下一张继续。重开也扫不到 = 本源剩余候选作废(不拿废坐标瞎点)。
+    log "  回对标主页失败(栈里是 feed),用对标链接重开主页重扫卡片"
+    newcards="$("${DISCOVER_CMD:-${0:A:h}/discover-benchmark.sh}" "$P" "$KW" "$MAXV" "${evid}-reopen" "$LOC")"
+    if [[ -n "$newcards" ]]; then
+      CARD_ARR=("${(@f)newcards}")
+      log "  重开主页扫到 ${#CARD_ARR[@]} 张卡片，从第 $((i+1)) 张继续"
+    else
+      log "  重开主页未拿到卡片,本对标源剩余候选到此为止"
       CARD_ARR=()
       i=0
     fi

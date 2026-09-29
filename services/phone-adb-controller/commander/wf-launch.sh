@@ -42,7 +42,9 @@ done
 [[ "$SERIAL" =~ ^[A-Za-z0-9]+$ ]] || die 2 "serial 非法: $SERIAL"
 [[ "$N" =~ ^[0-9]+$ && "$PUSH" =~ ^[01]$ ]] || die 2 "--n 须为整数、--push 须为 0/1"
 
-TAG="cmd$(date +%m%d%H%M)"
+# 网关 MMV 系统时区是美西(us-mac 约定 LA),TAG/起跑时间一律按北京时间,与执行机日志、采收时窗对得上
+bj(){ TZ=Asia/Shanghai date "$@"; }
+TAG="cmd$(bj +%m%d%H%M)"
 
 # ① 能力已部署到执行机（plans/<cap>.plan 由 wf-plan 生成、deploy 同步）
 rsh "test -r ~/bin-harvest/plans/$CAP.plan && test -x ~/bin-harvest/wf-run.sh" \
@@ -63,7 +65,7 @@ fi
 
 # ③ escort 陪跑（Commander 的「陪跑手」，SOP=cmdr-escort.txt；与旧 harvest-cron 同参数，拉起失败不阻塞）
 ESCORT_ID=""
-ESCORT_MSG="先读 $ESCORT_SOP 作为你的SOP并严格遵守辅佐三原则。本轮由 Commander 发起: cap=$CAP TAG=$TAG 机器=$HOST serial=$SERIAL profile=$PROFILE 起跑=$(date +%H:%M) 日志=/Users/administrator/.openclaw/m4-logs/${HOST}-live.log escort名=escort-$HOST-${TAG}。"
+ESCORT_MSG="先读 $ESCORT_SOP 作为你的SOP并严格遵守辅佐三原则。本轮由 Commander 发起: cap=$CAP TAG=$TAG 机器=$HOST serial=$SERIAL profile=$PROFILE 起跑=$(bj +%H:%M) 日志=/Users/administrator/.openclaw/m4-logs/${HOST}-live.log escort名=escort-$HOST-${TAG}。"
 if (( DRY == 0 )); then
   for _try in 1 2 3; do
     ESCORT_ID=$("$OPENCLAW" cron add --timeout 90000 --name "escort-$HOST-$TAG" --agent media \

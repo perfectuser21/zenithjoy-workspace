@@ -335,6 +335,13 @@ CALL_STATE_IDLE=1
 # 定义处注释): 读不到抖音号/登的号不在本profile注册表里,都判定为"账号有问题",升级分身+
 # 记账为需人工处理,不静默继续采(继续采只会产出归属存疑的线索)。
 ACCOUNT_VERIFIED=0
+# 读号前归位清场(0914铁律: 不假设重开=干净态;写法同 batch2.sh 每词开头)。0930 事故: 抖音重开恢复到
+# 触达刚私信过的他人主页,读号子命令读成别人的号→误判账号不符拦整批;22:30 批停在搜索结果页,
+# 3 步 verified back 退不出。冷启动落在首页,读号子命令再自证是自己主页(第一道闸在它里面)。
+adb -s $SERIAL shell am force-stop com.ss.android.ugc.aweme 2>/dev/null
+/bin/sleep 2
+adb -s $SERIAL shell am start -n com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.main.MainActivity >/dev/null 2>&1
+/bin/sleep 4
 ACCTOUT="$($C --profile "$P" account-current "$TAG-preflight-acct" </dev/null 2>&1)"
 DOUYIN_ID="$(print -- "$ACCTOUT" | sed -n "s/^douyin_id=//p")"
 if [[ -z "$DOUYIN_ID" ]]; then
