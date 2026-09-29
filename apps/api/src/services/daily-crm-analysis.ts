@@ -11,12 +11,17 @@
 import axios from 'axios';
 
 // 0929：生产默认改走 TOAPIS（OpenRouter 账户余额耗尽 402，决策 703c1532）。
-// TOAPIS_BASE_URL/TOAPIS_API_KEY 没配时退回 OpenRouter，两边都可能各自坏过（详见
-// comment-grading.ts 两个月的渠道来回切换史），保留双路不写死一条。
-const LLM_API_URL = process.env.TOAPIS_BASE_URL
-  ? `${process.env.TOAPIS_BASE_URL.replace(/\/$/, '')}/chat/completions`
+// TOAPIS_BASE_URL 没配时退回 OpenRouter，两边都可能各自坏过（详见 comment-grading.ts
+// 两个月的渠道来回切换史），保留双路不写死一条。
+// 0929 Code Review 真找出的问题(PR#1995第4轮): URL/model 原来各自独立判断 TOAPIS_BASE_URL，
+// key 判断 TOAPIS_API_KEY——两个环境变量若配置不一致(比如只配了BASE_URL没配KEY)，会出现
+// "URL指向TOAPIS、key却是OpenRouter的"错配。统一成一个 USING_TOAPIS 布尔值，跟
+// acquisition.ts 的 usingToapis 同一个模式。
+const USING_TOAPIS = Boolean(process.env.TOAPIS_BASE_URL);
+const LLM_API_URL = USING_TOAPIS
+  ? `${process.env.TOAPIS_BASE_URL!.replace(/\/$/, '')}/chat/completions`
   : 'https://openrouter.ai/api/v1/chat/completions';
-const DEEPSEEK_MODEL = process.env.TOAPIS_BASE_URL ? 'deepseek-v4-flash' : 'deepseek/deepseek-chat';
+const DEEPSEEK_MODEL = USING_TOAPIS ? 'deepseek-v4-flash' : 'deepseek/deepseek-chat';
 
 export interface CrmCustomer {
   id: string;
@@ -36,7 +41,12 @@ export interface DailyAnalysisResult {
 }
 
 async function callDeepSeek(prompt: string): Promise<string> {
-  const apiKey = process.env.TOAPIS_API_KEY || process.env.OPENROUTER_API_KEY;
+  if (USING_TOAPIS && !process.env.TOAPIS_API_KEY) {
+    console.warn('[daily-crm-analysis] TOAPIS_BASE_URL 已配置但 TOAPIS_API_KEY 未配置，本次调用会失败');
+  }
+  const apiKey = USING_TOAPIS
+    ? process.env.TOAPIS_API_KEY
+    : process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     return '建议今日主动问候，了解近期需求变化。';
   }
@@ -49,7 +59,7 @@ async function callDeepSeek(prompt: string): Promise<string> {
       max_tokens: 200,
       // deepseek-v4-flash 是 thinking 模型，max_tokens 含 reasoning_tokens——不关会把
       // 预算吃在思考上，正文变空（同 comment-grading.ts 里踩过的坑）。
-      ...(process.env.TOAPIS_BASE_URL ? { enable_thinking: false } : {}),
+      ...(USING_TOAPIS ? { enable_thinking: false } : {}),
     },
     {
       headers: {
