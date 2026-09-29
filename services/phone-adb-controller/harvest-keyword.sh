@@ -100,8 +100,17 @@ log "卡片数: $(print -- "$CARDS" | wc -l | tr -d " ")"
 back_to_results_and_maybe_rescan() {
   local evid="$1" btr_out newcards
   if [[ "${WF_SOURCE_KIND:-keyword}" == "benchmark" ]]; then
-    if ! $C --profile "$P" back-to-profile 5 </dev/null >/dev/null 2>&1; then
-      log "  回对标主页失败(看到 feed/splash),本对标源剩余候选到此为止"
+    $C --profile "$P" back-to-profile 5 </dev/null >/dev/null 2>&1 && return 0
+    # 0930 00:59 真机实证(cmd09290953 视频1): 取链接用 deep link 重开过视频,栈里是 feed 不是主页,back 回不去。
+    # 对标版兜底(对应关键词版的兜底重搜): 用本对标源链接重开主页重扫卡片;主页网格按发布时间排序、坐标稳定,
+    # 保留 i 从下一张继续。重开也扫不到 = 本源剩余候选作废(不拿废坐标瞎点)。
+    log "  回对标主页失败(栈里是 feed),用对标链接重开主页重扫卡片"
+    newcards="$("${DISCOVER_CMD:-${0:A:h}/discover-benchmark.sh}" "$P" "$KW" "$MAXV" "${evid}-reopen" "$LOC")"
+    if [[ -n "$newcards" ]]; then
+      CARD_ARR=("${(@f)newcards}")
+      log "  重开主页扫到 ${#CARD_ARR[@]} 张卡片，从第 $((i+1)) 张继续"
+    else
+      log "  重开主页未拿到卡片,本对标源剩余候选到此为止"
       CARD_ARR=()
       i=0
     fi
