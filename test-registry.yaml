@@ -5490,6 +5490,14 @@ agent_suite:
   product: 产品基础设施
   note: "task 5b4605eb（决策 3240824c / f18f56b8）：主干活动契约 schema+交叉引用+组装闸，对标链接获客只换发现即组装成功，7 条反例 proven-to-fire"
 
+- id: product-map-wf-plan
+  path: scripts/product-map/__tests__/wf-plan.test.js
+  type: unit
+  ci: L2
+  status: active
+  product: 产品基础设施
+  note: "task 338e3ec7（决策 7f842d12）：契约组装→执行计划，缺 runtime/未实现步骤拒跑，plans/*.plan 与契约一致性"
+
 - id: product-map-contract
   path: scripts/product-map/__tests__/product-map.test.js
   type: unit
