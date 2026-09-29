@@ -10,7 +10,7 @@ description: "Commander 召唤与发起 workflow run：主理人在对话里说�
 
 ## 一、有哪些 workflow（能力）
 
-workflow = 一份活动契约（git 仓 `product-map/contracts/<能力>.yaml`），按顺序串起共享的主干活动。执行机上已组装通过的能力 = `~/bin-harvest/plans/<能力>.env`：
+workflow = 一份活动契约（git 仓 `product-map/contracts/<能力>.yaml`），按顺序串起共享的主干活动。执行机上已组装通过的能力 = `~/bin-harvest/plans/<能力>.plan`：
 
 ```bash
 ssh xian-m4 'ls ~/bin-harvest/plans/'
@@ -42,6 +42,7 @@ bash /Users/administrator/.openclaw/commander/wf-launch.sh <能力> <机器> <pr
 
 - 对标获客必须带 `--sources`（主理人给的主页链接或 sec_uid，逗号分隔）；没给就问主理人要，不许自己编。
 - `--push 0` = 只采不落库（试跑用）；默认 1。
+- `--allow-missing`：plan 里 `WF_MISSING` 非空（契约有未实现步骤）时 wf-run 默认拒跑；**只有主理人明确说「调试/试跑」才加**，并在回复里写明本次跑的是未验收实现。
 - 读最后一行 `WF_LAUNCHED tag=… escort=…` 回报主理人：跑的哪个能力、哪台机器哪部手机、TAG、陪跑 escort 已上岗。
 
 | 退出码 | 意思 | 你怎么做 |

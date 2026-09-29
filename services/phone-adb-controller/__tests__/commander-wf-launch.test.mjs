@@ -102,6 +102,15 @@ test("起跑后未见 WF_RUN_STARTED → 撤销 escort 并退 5，报错带日�
   assert.match(read(home, "oc-argv.log"), new RegExp(`cron rm ${ESCORT_ID}`));
 });
 
+test("--allow-missing 透传给 wf-run；能力校验认 plans/<cap>.plan", () => {
+  const { home, env } = setup();
+  const r = run([...BASE, "--allow-missing"], env);
+  assert.equal(r.status, 0, r.stderr);
+  const lines = read(home, "ssh-argv.log").split("\n");
+  assert.ok(lines.some((l) => l.includes("test -r ~/bin-harvest/plans/keyword_acquisition.plan")));
+  assert.match(lines.find((l) => l.includes("nohup")), / 6 1 --allow-missing --tag cmd\d{8}/);
+});
+
 test("--dry-run 不写源、不登记 escort、不起跑", () => {
   const { home, env } = setup();
   const r = run([...BASE, "--dry-run"], env);
