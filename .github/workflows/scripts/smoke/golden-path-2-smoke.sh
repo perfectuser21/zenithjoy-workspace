@@ -1762,7 +1762,8 @@ if (!judge.includes('SEARCH_RESULT_ACTIVITY')) process.exit(1);
 // ③ 采收循环里不许再出现"自己数 back 次数"的归位
 const lines = harvest.split('\n');
 const bad = lines.filter((l, i) => {
-  if (!/--profile "\$P" back\b/.test(l) || /back-to-results/.test(l)) return false;
+  // back-to-profile(对标流回主页,7f842d12)同是控制器内核验页面的归位子命令,不是数 back
+  if (!/--profile "\$P" back\b/.test(l) || /back-to-(results|profile)/.test(l)) return false;
   const ctx = lines.slice(Math.max(0, i - 5), i).join('\n');
   return !/open-comments|评论面板|card-link/.test(ctx);   // 面板层的恢复不算归位
 });
