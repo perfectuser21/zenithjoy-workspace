@@ -167,6 +167,7 @@ for CARDLINE in "${(f)CARDS}"; do
   SCREEN=0
   j=0
   AUTHOR_IS_OWN=0
+  VIDEO_DRIFTED=0
   while true; do
     SCREEN=$((SCREEN+1))
     RAW="$($C --profile "$P" collect-comments "$TAG-v$i-cc$SCREEN" 2>/dev/null || true)"
@@ -212,12 +213,31 @@ for CARDLINE in "${(f)CARDS}"; do
           # 0915 真凶: card-link收尾恢复不可靠→评论面板丢失→后续行全灭。恢复=back+重开评论面板
           $C --profile "$P" back >/dev/null 2>&1
           /bin/sleep 2
-          if ! $C --profile "$P" open-comments "$TAG-v$i-u$j-ro$IDTRY" </dev/null >/dev/null 2>&1; then
+          REOPEN_OK=0
+          if $C --profile "$P" open-comments "$TAG-v$i-u$j-ro$IDTRY" </dev/null >/dev/null 2>&1; then
+            REOPEN_OK=1
+          else
             $C --profile "$P" back >/dev/null 2>&1; /bin/sleep 2
-            $C --profile "$P" open-comments "$TAG-v$i-u$j-ro${IDTRY}b" </dev/null >/dev/null 2>&1 || true
+            $C --profile "$P" open-comments "$TAG-v$i-u$j-ro${IDTRY}b" </dev/null >/dev/null 2>&1 && REOPEN_OK=1
           fi
           /bin/sleep 2
+          # 0929修复(生产实证: 悦升3条线索"来源视频"标A、原始评论内容其实是完全不相关的B——
+          # 追溯为本处 back 抢救落到了别的视频/推荐页,commenter-identity 却在错误页面上验证
+          # 成功): 退栈深度不是固定的(取决于此前逐条评论者主页往返次数,0922已实证退栈次数
+          # 写死必错),抢救只解决"面板丢了",不解决"退到了别的视频"。重开成功后必须重新核对
+          # 屏幕上的视频身份,跟本视频的$VID对不上就整条视频剩余评论作废,绝不能带着可能来自
+          # 别的视频的数据继续贴本视频的$TITLE/$VURL标签。
+          if (( REOPEN_OK )); then
+            DRIFT_LINK="$($C --profile "$P" current-video-link "$TAG-v$i-u$j-driftchk$IDTRY" </dev/null 2>/dev/null || true)"
+            DRIFT_VID="$(print -- "$DRIFT_LINK" | sed -n "s/^video_id=//p")"
+            if video_drifted "$VID" "$DRIFT_VID"; then
+              log "  行$j 抢救后视频漂移(当前=${DRIFT_VID:-空},预期=${VID:-空}),本视频剩余评论作废"
+              VIDEO_DRIFTED=1
+              break
+            fi
+          fi
         done
+        if (( VIDEO_DRIFTED == 1 )); then break; fi
         OID="$(print -- "$IDOUT" | sed -n "s/^douyin_id=//p")"
         ATYPE="$(print -- "$IDOUT" | sed -n "s/^account_type=//p")"
         PIP="$(print -- "$IDOUT" | sed -n "s/^profile_ip=//p")"
@@ -241,7 +261,7 @@ for CARDLINE in "${(f)CARDS}"; do
         sleep 4
       done
     fi
-    if (( AUTHOR_IS_OWN == 1 )); then break; fi
+    if (( AUTHOR_IS_OWN == 1 || VIDEO_DRIFTED == 1 )); then break; fi
 
     # 停止条件(跟comment-tier-lib.js的shouldKeepScrolling同一套判据):
     #   真到底了 / 大户已攒够封顶数 / 连续2屏没有新增(可能卡住了,防死循环) → 停
