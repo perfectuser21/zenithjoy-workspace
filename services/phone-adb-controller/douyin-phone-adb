@@ -324,9 +324,34 @@ node_center() {
 # 误报成结构性问题，害人往错方向修）：0=在详情页 1=不在详情页 2=树读不到(瞬态,可重试)
 # 纯判定：一个前台串（dumpsys window 那行）是不是搜索结果页。抽出来是为了能被 CI 测
 # （子命令 on-search-results）。
+#
+# ⚠️ 0929 实证：这把尺子只够分辨"是不是搜索结果这一类 Activity"，分辨不出
+# "是这次搜的关键词的真结果页，还是 current-video-link 内部用来解析剪贴板的
+# 暂存草稿页(search/tabs?keyword=%20)"——**两者是同一个 Activity**，包名+
+# Activity名完全无法区分。真机逐字节比对实证：退回后重新扫描到的 UI 树跟
+# current-video-link 内部草稿页解析步骤的 UI 树完全一致，本函数却判定"是结果页"。
+# 需要更精确的判据时用 _search_kw_matches（见下方），单靠这把尺子不够。
 _is_search_results_fg() {
   local fg="$1"
   [[ "$fg" == *"$DOUYIN_PACKAGE"* && "$fg" == *"$SEARCH_RESULT_ACTIVITY"* ]]
+}
+
+# 纯判定：一份 UI 树里搜索框(et_search_kw)的文字是不是等于预期关键词。不碰设备，
+# 可被 CI 直接测（子命令 search-kw-matches）。
+#
+# 由来(0929)：current-video-link 取链接时会打开一个"暂存草稿页"，把复制的分享文案
+# （形如"6.43 复制打开抖音，看看【作者】标题... https://v.douyin.com/xxx q@e.Bt ...
+# 07/12 :8pm"）粘贴进同一个搜索框控件里解析。这个草稿页和真结果页是同一个 Activity，
+# _is_search_results_fg 分不出来——但搜索框里的**文字**天差地别：真结果页是干净的
+# 原始关键词（如"人工智能"），草稿页是一整段分享文案+短链+追踪码。拿这个当判据，
+# 不需要碰任何 resource-id（那些是混淆过的，跨版本不稳定）。
+_search_kw_matches() {
+  local expected="$1" xml="$2" node actual
+  [[ -r "$xml" ]] || return 2
+  node="$(/usr/bin/grep -oE '<node[^>]+resource-id="com\.ss\.android\.ugc\.aweme:id/et_search_kw"[^>]*>' "$xml" | /usr/bin/head -1)"
+  [[ -n "$node" ]] || return 2
+  actual="$(print -- "$node" | /usr/bin/sed -E 's/.* text="([^"]*)".*/\1/' | /usr/bin/sed 's/&amp;/\&/g; s/&#47;/\//g; s/&quot;/"/g; s/&apos;/'"'"'/g; s/&lt;/</g; s/&gt;/>/g')"
+  [[ "$actual" == "$expected" ]]
 }
 
 # 回到搜索结果页。**不靠数 back 次数**——0922 夜批实证：取完作品链接后
@@ -334,21 +359,41 @@ _is_search_results_fg() {
 # 调用方那句写死的 `back` 一次退不回结果页，人落在暂存解析页上；
 # 于是后面每个视频的 tap 坐标都打在错页面，评论区连着打不开。
 # 数字写死在任何一条路径上都会退多或退少，改成退到"真的看见结果页"为止。
+#
+# ⚠️ 0929 补丁：0922 那次修法(退到 _is_search_results_fg 判真为止)只堵住了
+# "退到完全不相干的页面"，堵不住"退到跟真结果页同一个 Activity 但其实是
+# current-video-link 内部暂存草稿页"这种情况——12词×3卡实证 100% 复现。
+# 传入 KEYWORD 时，Activity 判真之后再核一遍搜索框文字是不是这次搜的词，
+# 两关都过才算真的回到结果页；不传 KEYWORD 时保留旧行为(向后兼容旧调用方)。
 back_to_results() {
-  local max="${1:-4}" i fg
+  local max="${1:-4}" kw="${2:-}" eid="${3:-btr-$$}" i fg xml_path
   for i in {1..$max}; do
     fg="$(foreground_package)"
     if _is_search_results_fg "$fg"; then
-      print -- "back_to_results=1 backs=$((i-1))"
-      return 0
+      if [[ -z "$kw" ]]; then
+        print -- "back_to_results=1 backs=$((i-1))"
+        return 0
+      fi
+      xml_path="$EVIDENCE_ROOT/${eid}-check${i}.xml"
+      if _ui_evidence_wave "${eid}-check${i}" >/dev/null 2>&1 && _search_kw_matches "$kw" "$xml_path"; then
+        print -- "back_to_results=1 backs=$((i-1))"
+        return 0
+      fi
     fi
     "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1 || true
     wait_ms 1500
   done
   fg="$(foreground_package)"
   if _is_search_results_fg "$fg"; then
-    print -- "back_to_results=1 backs=$max"
-    return 0
+    if [[ -z "$kw" ]]; then
+      print -- "back_to_results=1 backs=$max"
+      return 0
+    fi
+    xml_path="$EVIDENCE_ROOT/${eid}-checkfinal.xml"
+    if _ui_evidence_wave "${eid}-checkfinal" >/dev/null 2>&1 && _search_kw_matches "$kw" "$xml_path"; then
+      print -- "back_to_results=1 backs=$max"
+      return 0
+    fi
   fi
   # 退不回去就明说，别让调用方以为已经归位——那正是这个 bug 的形状。
   print -u2 -- "back-to-results: still off the search result page after ${max} backs (fg=${fg})"
@@ -2458,9 +2503,16 @@ case "$command" in
     ;;
   back-to-results)
     # 退回搜索结果页（采收循环处理完一个视频后的归位动作）。
-    [[ "$#" == 1 || "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE back-to-results [MAX_BACKS]"
+    # KEYWORD 传了才会核实搜索框文字，不传保留旧行为(0929前的调用方向后兼容)。
+    [[ "$#" -ge 1 && "$#" -le 4 ]] || die "usage: douyin-phone-adb --profile PROFILE back-to-results [MAX_BACKS] [KEYWORD] [EVIDENCE_ID_PREFIX]"
     check_target
-    back_to_results "${2:-4}"
+    back_to_results "${2:-4}" "${3:-}" "${4:-btr-$$}"
+    ;;
+  search-kw-matches)
+    # 纯判定：一份 UI 树里搜索框文字是不是等于预期关键词。不碰设备，CI 可直接测。
+    [[ "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE search-kw-matches KEYWORD UI_XML"
+    if _search_kw_matches "$2" "$3"; then print -- "kw_matches=1"; exit 0; fi
+    print -- "kw_matches=0"; exit 1
     ;;
   on-search-results)
     # 纯判定，不碰设备：给定前台串是不是搜索结果页。排障与 CI 用。
