@@ -7,7 +7,7 @@
 #   调用时本 run 已持设备锁且 App 已开；执行后屏幕停在对标主页「作品」网格（可点卡片的列表页）；
 #   stdout 每行 X\tY\tDUR\tTITLE，最多 MAXV 行（DUR/TITLE 主页网格树上读不到，留空但列齐）；
 #   对标账号无公开作品 → exit 0 空输出；失败 → exit 1；日志全走 stderr。
-# 逐视频处理完后调用方须用 `douyin-phone-adb back-to-profile` 归位（不是 back-to-results——
+# 逐视频处理完后调用方须用 `douyin-phone-adb back-to-profile`（默认最多 10 次 back，取链后真机要 7 次）归位（不是 back-to-results——
 #   那个只认搜索结果页，在主页上会一路按 back 把人退出抖音）。
 set -uo pipefail
 C="${DOUYIN_PHONE_ADB:-$HOME/.local/bin/douyin-phone-adb}"

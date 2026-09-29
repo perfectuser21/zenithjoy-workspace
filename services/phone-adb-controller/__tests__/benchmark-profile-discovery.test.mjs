@@ -149,6 +149,20 @@ test("back-to-profile：取链后多压两层（详情→暂存搜索→详情�
   assert.equal(readFileSync(cnt, "utf8").trim(), "3");
 });
 
+test("back-to-profile：0930 真机实测取链后要按 7 次 back（暂存搜索页吃 4 次、主页点开的详情页吃 2 次）→ 默认预算够用", () => {
+  const { dir } = registry();
+  const { adb } = backAdb(dir, [
+    "detail.DetailActivity",
+    "search.activity.SearchResultActivity", "search.activity.SearchResultActivity",
+    "search.activity.SearchResultActivity", "search.activity.SearchResultActivity",
+    "detail.ultra.ui.UltraDetailActivity", "detail.ultra.ui.UltraDetailActivity",
+    "profile.ui.UserProfileActivity",
+  ]);
+  const r = ctl(["back-to-profile"], { DOUYIN_ADB_BIN: adb });
+  assert.equal(r.code, 0, r.err);
+  assert.match(r.out, /back_to_profile=1 backs=7/);
+});
+
 test("back-to-profile：已在 feed（主页被顶掉）→ 报错且一次 back 都不按（再按就退出抖音）", () => {
   const { dir } = registry();
   const { adb, cnt } = backAdb(dir, ["main.MainActivity"]);

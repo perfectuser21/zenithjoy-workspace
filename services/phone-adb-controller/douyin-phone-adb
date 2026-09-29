@@ -2242,8 +2242,10 @@ _is_user_profile_fg() {
 # 退回对标主页网格（对标发现版的 back_to_results）。不数 back 次数：
 # current-video-link 取链时栈会多压「暂存搜索页 + deeplink 重开的详情页」两层。
 # 一旦被退出抖音就立刻停，不再盲按（再按只会越退越偏）。
+# 预算 10：0930 真机实测取链后要 7 次（暂存搜索页吃 4 次、主页点开的 UltraDetail 吃 2 次）；
+# 多给的余量不会越界——到主页即停，看见 feed/桌面也即停。
 back_to_profile() {
-  local max="${1:-5}" i fg
+  local max="${1:-10}" i fg
   for i in {1..$max}; do
     fg="$(foreground_package)"
     if _is_user_profile_fg "$fg"; then print -- "back_to_profile=1 backs=$((i-1))"; return 0; fi
@@ -3010,7 +3012,7 @@ case "$command" in
     # 退回对标主页网格（对标发现版采收循环的归位动作，对应关键词版 back-to-results）。
     [[ "$#" == 1 || "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE back-to-profile [MAX_BACKS]"
     check_target
-    back_to_profile "${2:-5}"
+    back_to_profile "${2:-10}"
     ;;
   on-user-profile)
     # 纯判定，不碰设备：给定前台串是不是他人主页。排障与 CI 用。
