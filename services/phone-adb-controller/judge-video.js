@@ -53,7 +53,14 @@ async function main() {
         transcript = await transcribeAudio(src.audioPath);
       } catch (e) {
         console.error(`  转写失败 video=${video.video_id}: ${String(e.message || e).slice(0, 120)}`);
-        continue; // 转写失败先跳过,留pending,下一轮重试,不误判成rejected
+        // 0929修复(DoD审计发现,用户拍板): 空转写(死寂/静音音频)不是"没判成"，是"真的没内容"，
+        // 直接判rejected，不再无限期占pending队列重试；其余(网络/超时/鉴权)仍留pending重试。
+        if (e.emptyTranscript) {
+          await markVideoJudgment(pool, { lineKey, videoId: video.video_id, verdict: "rejected", reason: "转写为空(死寂/静音音频)" });
+          rejected++;
+          continue;
+        }
+        continue; // 转写调用本身失败(网络/超时/鉴权)先跳过,留pending,下一轮重试,不误判成rejected
       }
     }
     if (src.source === "none" || !transcript) {

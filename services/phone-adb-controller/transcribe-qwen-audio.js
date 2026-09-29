@@ -71,7 +71,16 @@ async function transcribeAudio(audioPath, { format = "wav", httpPost = defaultHt
   };
   const resp = await httpPost(ENDPOINT, body, key);
   const text = parseTranscript(resp);
-  if (!text) throw new Error("transcribeAudio: DashScope返回空转写,raw=" + JSON.stringify(resp).slice(0, 200));
+  if (!text) {
+    // 0929修复(DoD审计发现,用户拍板): 空转写(通常是死寂音频/静音)跟"调用本身失败"(网络/
+    // 超时/鉴权)是两类不同性质的问题——前者是"这段音频真的没内容"，该直接判rejected；
+    // 后者是"没判成"，该留pending下一轮重试。之前两者都throw同一种Error，调用方(judge-video.js)
+    // 分不清，一律当成"没判成"留pending，死寂音频会无限期占着pending队列重试到天荒地老。
+    // 加 emptyTranscript 标记让调用方能可靠区分，不靠脆弱的错误文案字符串匹配。
+    const err = new Error("transcribeAudio: DashScope返回空转写(可能是死寂/静音音频),raw=" + JSON.stringify(resp).slice(0, 200));
+    err.emptyTranscript = true;
+    throw err;
+  }
   return text;
 }
 
