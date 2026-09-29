@@ -34,7 +34,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_DIFF=$(gh pr diff ${{ github.event.pull_request.number }} 2>/dev/null | head -150 || echo "无法获取 diff")
+          # 0929实测: 本PR自己的diff(228行)被 head -150 从中间截断,acquisition.ts的真实
+          # 改动被切没了,审查模型看着半截diff误判"变更不完整"——150行对多文件改动明显不够,
+          # 调到400(deepseek-v4-flash上下文够用,大PR真超限时截断提示仍在,不会假装看全了)。
+          PR_DIFF=$(gh pr diff ${{ github.event.pull_request.number }} 2>/dev/null | head -400 || echo "无法获取 diff")
           echo "PR_DIFF<<DIFF_EOF" >> "$GITHUB_ENV"
           echo "$PR_DIFF" >> "$GITHUB_ENV"
           echo "DIFF_EOF" >> "$GITHUB_ENV"
