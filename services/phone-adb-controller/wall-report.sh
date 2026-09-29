@@ -4,6 +4,7 @@
 #   wall-report start <目标> "<title>" "步骤1,步骤2,..."
 #   wall-report step  <目标> <idx> doing|done|failed ["note"] ["diag"]
 #   wall-report note  <目标> "<note>"            # 当前步再报 doing（服务端续租 10 分钟）
+#   wall-report heartbeat <目标>                 # 纯续租（不改步骤 note）；长阶段后台心跳用。老服务端 404 → 退回 note 式续租
 #   wall-report done  <目标>
 #   wall-report fail  <目标> <idx> <error_code> ["diag_line"]   # 步骤 note=error_code、diag 缺省=error_code
 # 注意：note 只在 `step N doing` 之后用，不要在 `step N done` 之后调——它会把已完成的第 N 步改回 doing。
@@ -116,10 +117,24 @@ print(json.dumps({"step_index":int(sys.argv[1]),"status":"failed","executor_id":
   state_put "$tid" "$idx"
 }
 
+do_heartbeat() { # 纯续租：采收主体一跑 1~7 小时，零星的 step/note 间隔超 10 分钟就被 sweep 误判 executor_lost（0929）
+  local tid b r code
+  tid=$(state_task); [ -n "$tid" ] || { wall_log "heartbeat $SERIAL 无进行中任务,忽略"; return 0; }
+  b=$(python3 -c 'import json,sys;print(json.dumps({"executor_id":sys.argv[1]}))' "$EXECUTOR" 2>/dev/null)
+  r=$(api "/api/workers/tasks/$tid/heartbeat" "$b"); code=${r%% *}
+  case "$code" in
+    200) ;;
+    # 服务端还没部署心跳接口（脚本先于 apps/api 发到机器的窗口期）：退回 note 式续租，租约照样续上
+    404) do_step "$(state_step)" doing "心跳续租" ;;
+    *)   wall_log "heartbeat $SERIAL HTTP $code" ;;
+  esac
+}
+
 case "$cmd" in
   start) do_start "${1:-任务}" "${2:-步骤1}" "" "${3:-}" ;;
   step)  do_step "${1:-0}" "${2:-doing}" "${3:-}" "${4:-}" ;;
   note)  do_step "$(state_step)" doing "${1:-}" ;;
+  heartbeat) do_heartbeat ;;
   brain-task) state_brain ;;   # 打印本链进行中任务的 brain_task_id（无则空），供 harvest-cron.sh 取回执单号
   done)  tid=$(state_task)
          if [ -n "$tid" ]; then do_complete "$tid" completed; rm -f "$STATE"

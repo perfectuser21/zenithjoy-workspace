@@ -70,7 +70,7 @@ function fakeWr(dir) {
 test('harvest-cron lease_heartbeat_start/stop：按间隔发 heartbeat，stop 后不再发', { skip: SKIP_ZSH }, async () => {
   const dir = makeTmp();
   const f = fakeWr(dir);
-  const r = await runBash(`HARVEST_CRON_LIB=1 WALL_REPORT=${q(f.p)} LEASE_HB_INTERVAL=1 source ${q(HC)}; lease_heartbeat_start SER1; /bin/sleep 3.5; lease_heartbeat_stop; echo stopped`, process.env, { bash: ZSH, timeoutMs: 20_000 });
+  const r = await runBash(`export WALL_REPORT=${q(f.p)} LEASE_HB_INTERVAL=1; HARVEST_CRON_LIB=1 source ${q(HC)}; lease_heartbeat_start SER1; /bin/sleep 3.5; lease_heartbeat_stop; echo stopped`, process.env, { bash: ZSH, timeoutMs: 20_000 });
   assert.equal(r.timedOut, false);
   assert.match(r.stdout, /stopped/);
   const n = f.count();
@@ -82,9 +82,13 @@ test('harvest-cron lease_heartbeat_start/stop：按间隔发 heartbeat，stop �
 test('harvest-cron 心跳：父进程死了（kill -9 没走 trap）心跳自行退出，不替死掉的采收永久续租', { skip: SKIP_ZSH }, async () => {
   const dir = makeTmp();
   const f = fakeWr(dir);
-  await runBash(`HARVEST_CRON_LIB=1 WALL_REPORT=${q(f.p)} LEASE_HB_INTERVAL=1 source ${q(HC)}; lease_heartbeat_start SER1; exit 0`, process.env, { bash: ZSH, timeoutMs: 10_000 });
+  await runBash(`export WALL_REPORT=${q(f.p)} LEASE_HB_INTERVAL=1; HARVEST_CRON_LIB=1 source ${q(HC)}; lease_heartbeat_start SER1; exit 0`, process.env, { bash: ZSH, timeoutMs: 10_000 });
   await sleep(3500);
   assert.ok(f.count() <= 1, `父进程退出后仍在心跳：${f.count()} 次`);
+  // 反向对照：同样的起法父进程活着时确实会心跳——否则上面这条在"心跳根本没起来"时也恒绿
+  const g = fakeWr(makeTmp());
+  await runBash(`export WALL_REPORT=${q(g.p)} LEASE_HB_INTERVAL=1; HARVEST_CRON_LIB=1 source ${q(HC)}; lease_heartbeat_start SER1; /bin/sleep 2.5; lease_heartbeat_stop`, process.env, { bash: ZSH, timeoutMs: 10_000 });
+  assert.ok(g.count() >= 1, '对照组：父进程活着时应至少心跳 1 次');
 });
 
 test('接线守卫：batch2 调用被心跳 start/stop 包住，且 EXIT trap 会停心跳', () => {

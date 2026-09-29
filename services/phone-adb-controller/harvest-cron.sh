@@ -48,6 +48,32 @@ escort_alive(){
 # mCallState),但从建成起就没有调用链路碰过它,harvest-cron.sh自己的preflight只查
 # 在线+唤醒,从不查通话状态。mCallState: 0=idle 1=ringing 2=offhook,1/2都算占线。
 device_call_busy(){ [[ "$1" == 1 || "$1" == 2 ]]; }
+# lease_heartbeat_start SERIAL / lease_heartbeat_stop —— 0929 修复: 采收主体(batch2)一跑 1~7 小时,
+#   服务端租约 10 分钟只靠逐词/逐视频的零星上报续命,间隔一超 10 分钟就被 sweep 判 failed/executor_lost,
+#   事后 done 也翻不回来(页面/Brain 上一片"失败",实际批完成 7~42 LEAD)。这里起后台循环每 LEASE_HB_INTERVAL 秒
+#   (默认 300,租约的一半)调 wall-report heartbeat 纯续租。父进程没了(kill -9 没走 trap)循环自停——
+#   绝不替已死的采收永久续租,那样 sweep 永远判不出真失联。
+LEASE_HB_PID=""
+lease_heartbeat_start(){
+  local serial="$1" iv="${LEASE_HB_INTERVAL:-300}" parent=$$ hbwr="${WR:-${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}}"
+  [[ -n "$serial" && -x "$hbwr" ]] || return 0
+  lease_heartbeat_stop
+  ( while kill -0 $parent 2>/dev/null; do
+      /bin/sleep $iv
+      kill -0 $parent 2>/dev/null || break
+      "$hbwr" heartbeat "$serial" >/dev/null 2>&1
+    done ) </dev/null >/dev/null 2>&1 &
+  LEASE_HB_PID=$!
+}
+lease_heartbeat_stop(){
+  if [[ -n "$LEASE_HB_PID" ]]; then
+    pkill -P "$LEASE_HB_PID" 2>/dev/null   # 先收掉在睡的 sleep 子进程,免得留 5 分钟孤儿
+    kill "$LEASE_HB_PID" 2>/dev/null
+    wait "$LEASE_HB_PID" 2>/dev/null
+  fi
+  LEASE_HB_PID=""
+  true
+}
 [[ "${HARVEST_CRON_LIB:-0}" == "1" ]] && return 0
 set -uo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -119,7 +145,7 @@ run_finalize(){
   log "账本finalize: ok=${WFR_FINALIZE_OK:-?} ${WFR_FINALIZE_MSG:-}"
   [[ "${WFR_FINALIZE_OK:-0}" == "1" ]] || escalate "账本收工自检未通过: ${WFR_FINALIZE_MSG:-unknown}"
 }
-if [[ -n "$ESCORT_ID" ]]; then trap 'escort_dismiss; run_finalize' EXIT INT TERM; else trap run_finalize EXIT INT TERM; fi
+if [[ -n "$ESCORT_ID" ]]; then trap 'lease_heartbeat_stop; escort_dismiss; run_finalize' EXIT INT TERM; else trap 'lease_heartbeat_stop; run_finalize' EXIT INT TERM; fi
 wr step "$SERIAL" 0 done; wr step "$SERIAL" 1 doing
 
 # ── ② 设备 preflight: 在线 + 屏幕亮 + 解锁(0915 锁屏=整机瘫痪且静默的教训) ──
@@ -211,7 +237,10 @@ wfr_on && log "账本init: run=${WFR_RUN_ID:-?} hash=${WFR_HASH:-?} attempt=${WF
 
 # ── ④ 采收主体 ──
 # 传原词单 $WF(init 时算 hash 用的就是它,传过滤后的副本会被 batch2 判 hash_mismatch 误报停跑);续跑跳词由 batch2 按 WFR_SKIP_WORDS 逐词做
+# 采收主体期间后台心跳续租(0929: 不续租 = 10 分钟后被 sweep 误判 executor_lost)
+lease_heartbeat_start "$SERIAL"
 B2OUT=$(/bin/zsh "$BATCH2" "$P" "$WF" "$TAG" "$PUSH" "$SERIAL" 2>&1 | tee -a $LOG || true)
+lease_heartbeat_stop
 if print -r -- "$B2OUT" | grep -q 'BATCH2_ESCALATE=hash_mismatch'; then escalate "词单在 init 后被改动(hash 不一致)，本批已停(fail-closed)"; fi
 log "批完成: $(grep -c '^LEAD' ~/night-$TAG.tsv 2>/dev/null || echo 0) LEAD"
 wr step "$SERIAL" 3 done

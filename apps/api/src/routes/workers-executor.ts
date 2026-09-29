@@ -2,13 +2,14 @@
  * worker 活动协议 · 执行器面（POST 鉴权：内部 token 或 agent license 二选一，见 workerPostAuth）
  *   POST /api/workers/:agentId/tasks          开始任务
  *   POST /api/workers/tasks/:id/steps          上报步骤（failed 必带三件套）
- *   POST /api/workers/tasks/:id/complete       完成
+ *   POST /api/workers/tasks/:id/complete       完成（允许推翻 executor_lost 误判）
+ *   POST /api/workers/tasks/:id/heartbeat      纯续租（长阶段心跳，不改步骤）
  *   POST /api/workers/:agentId/frame           推画面帧（image/jpeg ≤120KB）
  * 设计：docs/superpowers/specs/2026-08-30-worker-control-tower-design.md
  */
 import express, { Router, Request, Response, NextFunction } from 'express';
 import { workerPostAuth } from '../middleware/worker-agent-auth';
-import { startTask, reportStep, completeTask, WorkerTaskError } from '../services/worker-tasks-service';
+import { startTask, reportStep, completeTask, heartbeatTask, WorkerTaskError } from '../services/worker-tasks-service';
 import { workerLive } from '../services/worker-live';
 import { simpleRateLimit, ipKeyFn } from '../middleware/simple-rate-limit';
 
@@ -60,6 +61,11 @@ workersExecutorRouter.post('/tasks/:id/steps', requireTaskUuid, async (req: Requ
 workersExecutorRouter.post('/tasks/:id/complete', requireTaskUuid, async (req: Request, res: Response) => {
   try { return res.json(OK(await completeTask(req.params.id, req.body ?? {}))); }
   catch (e) { return sendErr(res, e, 'complete'); }
+});
+
+workersExecutorRouter.post('/tasks/:id/heartbeat', requireTaskUuid, async (req: Request, res: Response) => {
+  try { return res.json(OK(await heartbeatTask(req.params.id, { executor_id: req.body?.executor_id }))); }
+  catch (e) { return sendErr(res, e, 'heartbeat'); }
 });
 
 workersExecutorRouter.post('/:agentId/tasks', requireAgentUuid, async (req: Request, res: Response) => {
