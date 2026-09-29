@@ -52,7 +52,7 @@ jobs:
           SSH_HOST: ${{ secrets.US_MAC_TAILSCALE_IP }}
           SSH_USER: ${{ secrets.US_MAC_USER }}
           DEPLOY_SHA: ${{ github.sha }}
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: |
           KEY_FILE=$(mktemp)
           printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
@@ -102,6 +102,15 @@ jobs:
             exit 1
           fi
 
+          # 防重跑旧 run 把生产静默回滚(I-B)：DEPLOY_SHA 必须是 origin/main 的祖先，
+          # 且当前 HEAD 必须是 DEPLOY_SHA 的祖先(即 reset 只会前进不会后退)。
+          # 这道闸同时防住 mmv 共享 checkout 上 main 分支有本地未推送 commit 时被 reset --hard 静默冲掉。
+          if ! git -C "$REPO" merge-base --is-ancestor "$DEPLOY_SHA" origin/main || \
+             ! git -C "$REPO" merge-base --is-ancestor HEAD "$DEPLOY_SHA"; then
+            notify "phone-adb自动部署已跳过" "目标SHA不是origin/main的后代,或会让mmv checkout后退(sha=${DEPLOY_SHA:0:8}),可能是重跑了旧run,已阻止"
+            exit 1
+          fi
+
           echo "=== [1/4] git reset --hard → ${DEPLOY_SHA} ==="
           git -C "$REPO" reset --hard "$DEPLOY_SHA"
 
@@ -109,7 +118,9 @@ jobs:
           cd "$REPO"
           if ! DEPLOY_LOG=$(bash services/phone-adb-controller/deploy.sh </dev/null 2>&1); then
             echo "$DEPLOY_LOG"
-            notify "phone-adb自动部署失败" "deploy.sh语法检查失败(sha=${DEPLOY_SHA:0:8}): $(echo "$DEPLOY_LOG" | grep '❌' | head -3 | tr '\n' ';')"
+            DEPLOY_FAIL_DETAIL="$(echo "$DEPLOY_LOG" | grep '❌' | head -3 | tr '\n' ';')"
+            [[ -z "$DEPLOY_FAIL_DETAIL" ]] && DEPLOY_FAIL_DETAIL="$(echo "$DEPLOY_LOG" | tail -5 | tr '\n' ';')"
+            notify "phone-adb自动部署失败" "deploy.sh失败(可能已部分部署,三机版本可能不一致): ${DEPLOY_FAIL_DETAIL}(sha=${DEPLOY_SHA:0:8})"
             exit 1
           fi
           echo "$DEPLOY_LOG"
@@ -121,6 +132,12 @@ jobs:
             exit 1
           fi
           echo "$DRIFT_LOG"
+
+          # 防第二种假绿(N3)：drift-check.sh 退出码是0不代表真的做了对账，必须确认输出里有 DRIFT_CHECK OK。
+          if ! echo "$DRIFT_LOG" | grep -q "DRIFT_CHECK OK"; then
+            notify "phone-adb自动部署可疑" "drift-check退出码是0但输出里没有DRIFT_CHECK OK,可能没有真的对账(sha=${DEPLOY_SHA:0:8})"
+            exit 1
+          fi
 
           notify "phone-adb自动部署成功" "已部署到mmv+xian-m4+xian-m1并通过drift-check(sha=${DEPLOY_SHA:0:8})" "active"
           echo "✅ 全部完成"

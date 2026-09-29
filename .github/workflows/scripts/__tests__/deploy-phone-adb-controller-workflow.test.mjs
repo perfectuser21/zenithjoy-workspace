@@ -2,44 +2,36 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import YAML from "yaml";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKFLOW_PATH = path.join(__dirname, "..", "..", "deploy-phone-adb-controller.yml");
 
-function loadWorkflow() {
-  const text = fs.readFileSync(WORKFLOW_PATH, "utf8");
-  return YAML.parse(text);
-}
+// 注意：这份测试故意不依赖 `yaml` 包（不做结构化解析），只对文件原始文本做正则/字符串匹配。
+// 原因：本文件由 ci-l3-code.yml 的 openclaw-scripts-test job 直接 node --test，
+// 那个 job 的设计原则是"无需装依赖，几秒钟跑完"（不跑 npm ci）。引入 `import YAML from "yaml"`
+// 会让这个 job 在 import 阶段就失败——修法是把测试改成不依赖 yaml，而不是给这个 job 加 npm ci。
 
-test("workflow 文件存在且是合法 YAML", () => {
-  const doc = loadWorkflow();
-  assert.ok(doc, "解析结果不应为空");
+test("workflow 文件存在", () => {
+  assert.ok(fs.existsSync(WORKFLOW_PATH), `workflow 文件不存在: ${WORKFLOW_PATH}`);
 });
 
 test("push trigger 的 paths 命中 services/phone-adb-controller/**", () => {
-  const doc = loadWorkflow();
-  // YAML 里的裸 key `on` 会被 JS YAML 解析成布尔 key `true`，这里两种都兼容取一下
-  const on = doc.on ?? doc[true];
-  assert.ok(on, "缺少 on 触发器定义");
-  assert.ok(on.push, "缺少 push 触发器");
-  assert.ok(Array.isArray(on.push.paths), "push.paths 必须是数组");
-  assert.ok(
-    on.push.paths.includes("services/phone-adb-controller/**"),
-    `push.paths 必须包含 services/phone-adb-controller/**，实际: ${JSON.stringify(on.push.paths)}`,
+  const yamlText = fs.readFileSync(WORKFLOW_PATH, "utf8");
+  assert.match(
+    yamlText,
+    /paths:\s*\n\s*-\s*["']?services\/phone-adb-controller\/\*\*["']?/,
+    "push.paths 必须包含 services/phone-adb-controller/**",
   );
-  assert.ok(on.push.branches?.includes("main"), "push.branches 必须包含 main");
+  assert.match(yamlText, /branches:\s*\[main\]|branches:\s*\n\s*-\s*main/, "push.branches 必须包含 main");
 });
 
 test("含 workflow_dispatch 手动触发入口", () => {
-  const doc = loadWorkflow();
-  const on = doc.on ?? doc[true];
-  assert.ok("workflow_dispatch" in on, "缺少 workflow_dispatch，dev 阶段无法手动 dry-run");
+  const yamlText = fs.readFileSync(WORKFLOW_PATH, "utf8");
+  assert.match(yamlText, /workflow_dispatch:/, "缺少 workflow_dispatch，dev 阶段无法手动 dry-run");
 });
 
 test("使用 tailscale/github-action@v3 接入 tailnet，复用同名 secrets", () => {
-  const doc = loadWorkflow();
   const yamlText = fs.readFileSync(WORKFLOW_PATH, "utf8");
   assert.match(yamlText, /uses:\s*tailscale\/github-action@v3/, "必须用 tailscale/github-action@v3（与 deploy-us-vps.yml 同版本）");
   assert.match(yamlText, /secrets\.TAILSCALE_AUTHKEY/, "必须复用已有的 TAILSCALE_AUTHKEY secret");
@@ -67,8 +59,29 @@ test("成功和失败都调用 notify-bark.js 通知", () => {
 });
 
 test("失败兜底 job 存在（if: failure()）", () => {
-  const doc = loadWorkflow();
-  const jobs = Object.values(doc.jobs || {});
-  const hasFailureJob = jobs.some((j) => String(j.if || "").includes("failure()"));
-  assert.ok(hasFailureJob, "必须有一个 if: failure() 的兜底通知 job（主 job 内部的 bark 调用可能因为 SSH 连不上而根本没机会跑）");
+  const yamlText = fs.readFileSync(WORKFLOW_PATH, "utf8");
+  assert.match(yamlText, /if:\s*failure\(\)/, "必须有一个 if: failure() 的兜底通知 job（主 job 内部的 bark 调用可能因为 SSH 连不上而根本没机会跑）");
+});
+
+test("deploy.sh 和 drift-check.sh 调用都重定向 stdin（防 heredoc 假绿回归，C1）", () => {
+  const yamlText = fs.readFileSync(WORKFLOW_PATH, "utf8");
+  assert.match(
+    yamlText,
+    /deploy\.sh\s*<\/dev\/null/,
+    "deploy.sh 调用必须加 </dev/null，否则会吃掉heredoc剩余内容导致后续步骤被跳过但job仍是绿的(C1)",
+  );
+  assert.match(
+    yamlText,
+    /drift-check\.sh\s*<\/dev\/null/,
+    "drift-check.sh 调用必须加 </dev/null，同上",
+  );
+});
+
+test("成功判定断言 drift-check 输出里真的含 DRIFT_CHECK OK（防第二种假绿，N3）", () => {
+  const yamlText = fs.readFileSync(WORKFLOW_PATH, "utf8");
+  assert.match(
+    yamlText,
+    /DRIFT_CHECK OK/,
+    "成功通知前必须校验 DRIFT_LOG 里包含 DRIFT_CHECK OK，不能只看 drift-check.sh 的退出码",
+  );
 });
