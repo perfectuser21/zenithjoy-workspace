@@ -2,10 +2,10 @@
   "object_types": "06f4d4bda5a98920fad6eef0c73a908803c529e87e51b28fd624f610078bcd2c",
   "capabilities": {
     "benchmark_link_acquisition": {
-      "sha256": "a854db45e1c5e751b3447bad4e7bbc84b613d3d962af33a8417c0640a92ec5c9",
+      "sha256": "91c876f2518371b60e5216021d5634fbd9dd19baf78573aa493f4d8cba5b9007",
       "activities": {
         "preflight": "bbd8474cd89f4bb46ba476db8737594d5cc9bebe3949ea0580f56f74fa65cc5b",
-        "discovery": "d8e3f34070753afb1194a60719c1c1f956f5bc536ca90d94c08e31f8a9c45ed0",
+        "discovery": "d2c50e3dd35cbad7d26598e29d6fbc02310ef54207abbbf19f4bf9b02f1cd445",
         "qualification": "81dc464286c8b3670af71764b158c5a003f067621857c4c0701e61b5cc958345",
         "collection": "8cd075d21374a2d6fd1fd2131bae707450307135144e49dd5d0c80127221a370",
         "scoring": "c97565e601210efe2a3d611086def8701678a7d945ae04bc9ecaa2f903429212",

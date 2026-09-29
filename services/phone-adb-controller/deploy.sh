@@ -82,7 +82,7 @@ DEVICE_SH_FILES=(
   harvest-keyword.sh batch2.sh harvest-cron.sh wf-run.sh discover-keyword.sh outreach-tick.sh
   refill-profile-links.sh wall-report.sh wall-lib.sh phone-wall-push.sh
   disk-gateway-guard.sh device-job-claimer.sh log-stream-push.sh
-  workflow-result.sh escort-claude-escalation.sh
+  workflow-result.sh escort-claude-escalation.sh discover-benchmark.sh
 )
 # 0927 棒3b-3: 账本钩子内建进 harvest-cron.sh/batch2.sh,workflow-result.sh 硬依赖 ledger.mjs(node),
 # 少了它账本全程 WFR_WARN——单独成组,用 node --check 而不是 zsh -n 验语法。

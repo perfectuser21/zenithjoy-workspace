@@ -4,6 +4,7 @@ set -euo pipefail
 setopt EXTENDED_GLOB
 
 ADB="${DOUYIN_ADB_BIN:-/opt/homebrew/bin/adb}"
+CURL="${DOUYIN_CURL_BIN:-/usr/bin/curl}"
 # 需自带 Pillow。用无版本号软链（现指向 3.14.5），Python 升级不再断链。
 # 不要改成裸 python3：本机另有不含 Pillow 的 python3.12，且节点按绝对路径审批命令。
 PYTHON_BIN="${DOUYIN_PYTHON_BIN:-/opt/homebrew/bin/python3}"
@@ -95,6 +96,8 @@ RECORD_MEDIA_VOLUME=1
 # 它是本链唯一稳定的"归位点"——结果页里的 resource-id 全是混淆短名（rej/dp7/pkr…），
 # 只有 Activity 名可靠。
 SEARCH_RESULT_ACTIVITY="search.activity.SearchResultActivity"
+# 他人主页（对标发现的归位点，0929 真机实测 profile.ui.UserProfileActivity）。
+USER_PROFILE_ACTIVITY="profile.ui.UserProfileActivity"
 LOCK_ROOT="$PHONE_TMP_ROOT/locks"
 LOCK_DIR="$LOCK_ROOT/${SERIAL}.lock"
 
@@ -2157,6 +2160,146 @@ video_cards_from_xml() {
     done
   /bin/rm -f "$likes_f" "$durs_f"
 }
+# ── 对标发现：打开对标主页 + 读主页作品网格（0929 对标链接获客·发现，决策 7f842d12）──
+# 0929 真机探明（xian-m4 legacy 机，抖音 UserProfileActivity）：
+#   · 原生 deeplink `snssdk1128://user/profile/?sec_uid=<sec_uid>` 可直开他人主页；
+#     `aweme://user/profile?sec_uid=` 报 unable to resolve，https 长链隐式 VIEW 也不认（见 send_private_message 注释）。
+#   · v.douyin.com 短链 302 → iesdouyin.com/share/user/<sec_uid>?…&sec_uid=<sec_uid>，curl -sI 跟一跳即可解出。
+#   · 作品网格格子是无文字无描述的 clickable View（资源 id 混淆），只能按几何取：
+#     宽≈屏宽 1/3、位于已选中「作品」tab 下方。标题/时长树上读不到，列留空（列数与 search-video-cards 对齐）。
+SEC_UID_RE='MS4wLjABAAAA[A-Za-z0-9_-]{8,120}'
+
+# 纯函数：从 sec_uid 本身 / 含 sec_uid 的主页链接里抠出 sec_uid。抠不到返回 1。
+sec_uid_from_text() {
+  local s="$1" m
+  if print -r -- "$s" | /usr/bin/grep -qxE "$SEC_UID_RE"; then print -r -- "$s"; return 0; fi
+  m="$(print -r -- "$s" | /usr/bin/grep -oE "(/user/|/share/user/|sec_uid=)${SEC_UID_RE}" | /usr/bin/head -1 | /usr/bin/sed -E 's#^(/user/|/share/user/|sec_uid=)##')"
+  [[ -n "$m" ]] || return 1
+  print -r -- "$m"
+}
+
+# 主页链接或 sec_uid → sec_uid。短链逐跳读 Location（最多 3 跳，不用 -L：落地页可能要登录）。
+resolve_sec_uid() {
+  local src="$1" su url loc hop
+  if su="$(sec_uid_from_text "$src")"; then print -r -- "$su"; return 0; fi
+  [[ "$src" == https://v.douyin.com/[A-Za-z0-9_-]##(/|) ]] || return 1
+  url="$src"
+  for hop in 1 2 3; do
+    loc="$("$CURL" -sSI --max-time 15 -A 'Mozilla/5.0' "$url" 2>/dev/null \
+      | /usr/bin/awk -F': ' 'tolower($1) == "location" { gsub(/\r/, "", $2); print $2; exit }')"
+    [[ -n "$loc" ]] || return 1
+    if su="$(sec_uid_from_text "$loc")"; then print -r -- "$su"; return 0; fi
+    url="$loc"
+  done
+  return 1
+}
+
+# 纯判定：一份 UI 树是不是「已就绪的他人主页」。0=是 1=不是（原因打 stderr）3=主页不可用（私密/注销/封禁）
+# 「我」页同样有「抖音号：」，靠「编辑主页」排除——deeplink 失效时抖音常把人吞回「我」页（0915 /share/user 实证）。
+_profile_check_xml() {
+  local xml="$1"
+  [[ -r "$xml" ]] || { print -u2 -- "profile-check: ui tree unreadable (${xml})"; return 1 }
+  if /usr/bin/grep -q 'text="编辑主页"' "$xml"; then
+    print -u2 -- "profile-check: landed on own 我 page (编辑主页 present), not the benchmark profile"
+    return 1
+  fi
+  if /usr/bin/grep -qE 'text="(私密账号|该账号已注销|账号已注销|帐号已注销|用户不存在|该账号已被封禁|账号已封禁)[^"]*"' "$xml"; then
+    print -u2 -- "profile-check: profile is private / deregistered / banned"
+    return 3
+  fi
+  /usr/bin/grep -qE 'text="抖音号：[^"]+"' "$xml" || { print -u2 -- "profile-check: 抖音号 line absent (not a user profile page)"; return 1 }
+  /usr/bin/grep -q 'content-desc="返回"' "$xml" || { print -u2 -- "profile-check: back button absent (not an other-user profile)"; return 1 }
+  return 0
+}
+
+# 纯函数：主页作品网格 → 每行 x<TAB>y<TAB>时长<TAB>标题（后两列留空）。
+# 只认已选中的「作品」tab 下方、宽≈屏宽 1/3、可见高≥0.6 倍宽的可点格子（被吸顶栏/屏底裁掉大半的不出）。
+# 注意用「␣clickable」匹配：long-clickable="true" 里也含 clickable="true"。
+profile_grid_cards_from_xml() {
+  local xml="$1" sw="$2" tab top line x1 y1 x2 y2 w h
+  [[ -r "$xml" ]] || return 1
+  require_uint "$sw"
+  tab="$(/usr/bin/grep -oE '<node[^>]*content-desc="作品[^"]*"[^>]*selected="true"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$xml" | /usr/bin/head -1)"
+  [[ -n "$tab" ]] || return 1
+  top="$(print -- "$tab" | /usr/bin/sed -E 's/.*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,([0-9]+)\]".*/\1/')"
+  /usr/bin/grep -oE '<node[^>]* clickable="true"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$xml" \
+  | while IFS= read -r line; do
+      read x1 y1 x2 y2 <<< "$(print -- "$line" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
+      [[ "$x1" == <-> && "$y2" == <-> ]] || continue
+      w=$(( x2 - x1 )); h=$(( y2 - y1 ))
+      (( w * 100 >= sw * 28 && w * 100 <= sw * 38 )) || continue
+      (( y1 >= top && h * 10 >= w * 6 )) || continue
+      print -- "$(( (x1 + x2) / 2 ))\t$(( (y1 + y2) / 2 ))\t\t"
+    done
+}
+
+# 纯判定：前台串是不是他人主页 Activity（归位点，同 _is_search_results_fg）。
+_is_user_profile_fg() {
+  local fg="$1"
+  [[ "$fg" == *"$DOUYIN_PACKAGE"* && "$fg" == *"$USER_PROFILE_ACTIVITY"* ]]
+}
+
+# 退回对标主页网格（对标发现版的 back_to_results）。不数 back 次数：
+# current-video-link 取链时栈会多压「暂存搜索页 + deeplink 重开的详情页」两层。
+# 一旦被退出抖音就立刻停，不再盲按（再按只会越退越偏）。
+back_to_profile() {
+  local max="${1:-5}" i fg
+  for i in {1..$max}; do
+    fg="$(foreground_package)"
+    if _is_user_profile_fg "$fg"; then print -- "back_to_profile=1 backs=$((i-1))"; return 0; fi
+    [[ "$fg" == *"$DOUYIN_PACKAGE"* ]] || { print -u2 -- "back-to-profile: left Douyin (fg=${fg}); stop pressing back"; return 1 }
+    # 正常栈里 feed(MainActivity) 在主页之下：看见它说明主页已经被退掉/被顶掉（0929 真机：别的
+    # 进程抢用同一台机时人被切回 feed）。再按 back 只会退出抖音，立刻报错交给调用方重开主页。
+    if [[ "$fg" == *"main.MainActivity"* || "$fg" == *"splash.SplashActivity"* ]]; then
+      print -u2 -- "back-to-profile: on feed/splash (fg=${fg}); profile page is gone, reopen it instead of pressing back"
+      return 1
+    fi
+    "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1 || true
+    wait_ms 1500
+  done
+  fg="$(foreground_package)"
+  if _is_user_profile_fg "$fg"; then print -- "back_to_profile=1 backs=$max"; return 0; fi
+  print -u2 -- "back-to-profile: still off the profile page after ${max} backs (fg=${fg})"
+  return 1
+}
+
+# 打开对标主页并回读校验。先归位 feed 再 deeplink：落地页若是他人主页，只可能来自本次 deeplink
+# （排除「上一轮残留的别人主页被当成本次落点」）；给了 EXPECTED_DOUYIN_ID 再加一道身份强校验。
+open_user_profile() {
+  local src="$1" eid="$2" expect="${3:-}" su try xml="" rc=1 did nick works
+  require_evidence_id "$eid"
+  [[ "$src" == [A-Za-z0-9._/:?=\&%-]## ]] || die "profile link / sec_uid contains unsupported characters"
+  su="$(resolve_sec_uid "$src")" || die "could not resolve sec_uid from: ${src:0:120}" TARGET_ABSENT
+  ensure_feed
+  "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "snssdk1128://user/profile/?sec_uid=$su" >/dev/null
+  for try in 1 2 3 4; do
+    wait_ms 2000
+    [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || continue
+    (( try == 1 )) && foreground_gate "${eid}-gate"
+    xml="$EVIDENCE_ROOT/${eid}-profile.xml"
+    _ui_evidence_wave "${eid}-profile" >/dev/null 2>&1 || continue
+    rc=0; _profile_check_xml "$xml" || rc=$?
+    (( rc == 0 || rc == 3 )) && break
+  done
+  (( rc == 3 )) && die "benchmark profile unavailable (private/deregistered/banned): sec_uid=$su evidence=$xml" TARGET_ABSENT
+  (( rc == 0 )) || die "profile deeplink did not land on a verified user profile (sec_uid=$su)" TARGET_ABSENT
+  did="$(/usr/bin/grep -oE 'text="抖音号：[^"]+"' "$xml" | /usr/bin/head -1 | /usr/bin/sed -E 's/^text="抖音号：//; s/"$//')"
+  if [[ -n "$expect" ]]; then
+    [[ "$(print -- "$did" | tr '[:upper:]' '[:lower:]')" == "$(print -- "$expect" | tr '[:upper:]' '[:lower:]')" ]] \
+      || die "profile identity mismatch: page shows ${did}, expected ${expect}" TARGET_ABSENT
+  fi
+  nick="$(/usr/bin/grep -oE 'content-desc="[^"]+，复制名字和修改备注"' "$xml" | /usr/bin/head -1 | /usr/bin/sed -E 's/^content-desc="//; s/，复制名字和修改备注"$//')"
+  works="$(/usr/bin/grep -oE 'content-desc="作品 [0-9]+' "$xml" | /usr/bin/head -1 | /usr/bin/sed -E 's/.*作品 //')"
+  snapshot_evidence "${eid}-profile-ok" >/dev/null
+  print -- "profile_opened=1"
+  print -- "sec_uid=$su"
+  print -- "douyin_id=$did"
+  print -- "nickname=$nick"
+  print -- "works_count=${works:-unknown}"
+  print -- "evidence=$xml"
+  print -- "screenshot=$EVIDENCE_ROOT/${eid}-profile-ok.png"
+}
+
 video_page_ready() {
   local xml="$1"
   [[ -r "$xml" ]] || return 1
@@ -2831,6 +2974,70 @@ case "$command" in
     print -- "$svc_out"
     print -- "evidence=$svc_xml"
     ;;
+  open-user-profile)
+    # 对标发现 step1：deeplink 打开对标主页并回读校验（0929 对标链接获客·发现）。
+    # TARGET = https://www.douyin.com/user/<sec_uid> | https://v.douyin.com/<code>/ 短链 | 裸 sec_uid
+    [[ "$#" == 3 || "$#" == 4 ]] || die "usage: douyin-phone-adb --profile PROFILE open-user-profile PROFILE_URL_OR_SEC_UID EVIDENCE_ID [EXPECTED_DOUYIN_ID]"
+    check_target
+    open_user_profile "$2" "$3" "${4:-}"
+    ;;
+  profile-video-cards)
+    # 对标发现 step2：读当前主页「作品」网格，输出可点卡片 x<TAB>y<TAB>时长<TAB>标题（同 search-video-cards 格式，
+    # 时长/标题树上读不到，列留空）。前置：已在他人主页（open-user-profile 成功）。
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE profile-video-cards EVIDENCE_ID"
+    check_target
+    require_evidence_id "$2"
+    pvc_out=""
+    for pvc_try in 1 2 3; do
+      pvc_xml="$(ui_evidence "$2-pgrid")" || die "could not capture profile grid hierarchy"
+      /usr/bin/grep -q 'text="编辑主页"' "$pvc_xml" && die "on own 我 page, not a benchmark profile; run open-user-profile first"
+      pvc_out="$(profile_grid_cards_from_xml "$pvc_xml" "$SCREEN_W")"
+      [[ -n "$pvc_out" ]] && break
+      if /usr/bin/grep -qE 'content-desc="作品 0[,，]|text="(暂无作品|还没有作品|还没有发布作品|私密账号)[^"]*"' "$pvc_xml"; then
+        print -- "cards=0"
+        print -- "empty_results=true"
+        print -- "evidence=$pvc_xml"
+        exit 0
+      fi
+      print -u2 -- "warning: no grid cards on profile page (business retry $pvc_try/3)"
+      (( pvc_try < 3 )) && wait_seconds 5
+    done
+    [[ -n "$pvc_out" ]] || die "no profile grid cards after 3 retries and the page never said it has no works (not on a profile 作品 tab?)"
+    print -- "$pvc_out"
+    print -- "evidence=$pvc_xml"
+    ;;
+  back-to-profile)
+    # 退回对标主页网格（对标发现版采收循环的归位动作，对应关键词版 back-to-results）。
+    [[ "$#" == 1 || "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE back-to-profile [MAX_BACKS]"
+    check_target
+    back_to_profile "${2:-5}"
+    ;;
+  on-user-profile)
+    # 纯判定，不碰设备：给定前台串是不是他人主页。排障与 CI 用。
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE on-user-profile FOREGROUND"
+    if _is_user_profile_fg "$2"; then print -- "on_user_profile=1"; exit 0; fi
+    print -- "on_user_profile=0"
+    exit 1
+    ;;
+  profile-check)
+    # 纯判定，不碰设备：一份 UI 树是不是已就绪的他人主页（0=是 1=不是 3=私密/注销/封禁）。
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE profile-check UI_XML"
+    pc_rc=0; _profile_check_xml "$2" || pc_rc=$?
+    print -- "profile_ready=$(( pc_rc == 0 ? 1 : 0 ))"
+    exit "$pc_rc"
+    ;;
+  profile-grid-cards)
+    # 纯函数，不碰设备：从 UI 树抽主页作品网格卡片（CI 对着真机 fixture 跑）。
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE profile-grid-cards UI_XML"
+    profile_grid_cards_from_xml "$2" "$SCREEN_W"
+    ;;
+  resolve-sec-uid)
+    # 主页链接/短链/sec_uid → sec_uid（短链会联网读 302 Location，不碰设备）。
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE resolve-sec-uid PROFILE_URL_OR_SEC_UID"
+    [[ "$2" == [A-Za-z0-9._/:?=\&%-]## ]] || die "profile link / sec_uid contains unsupported characters"
+    rsu="$(resolve_sec_uid "$2")" || die "could not resolve sec_uid" TARGET_ABSENT
+    print -- "sec_uid=$rsu"
+    ;;
   close-app)
     [[ "$#" == 1 ]] || die "usage: douyin-phone-adb --profile PROFILE close-app"
     check_target_fast
@@ -2864,6 +3071,6 @@ case "$command" in
     print -- "foreground=${focus:-unknown}"
     ;;
   *)
-    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-video-tab"
+    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid"
     ;;
 esac

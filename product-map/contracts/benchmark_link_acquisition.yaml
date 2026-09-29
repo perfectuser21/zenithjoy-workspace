@@ -32,7 +32,7 @@ activities:
       - "对标账号主页链接可解析出 sec_uid"
     postconditions:
       - { probe: bench_candidates_persisted, asserts: "对标账号近期视频全部落 leadgen_videos" }
-    execution: { location: phone, via: "待实现：douyin-phone-adb 主页 deeplink（private-message-send 已有同路径）" }
+    execution: { location: phone, via: "xian-m4 discover-benchmark.sh → douyin-phone-adb open-user-profile(snssdk1128://user/profile/?sec_uid=) → profile-video-cards；逐视频归位 back-to-profile" }
     budget: { max_duration_s: 600, heartbeat_s: 60 }
     resources:
       locks: ["device:<serial>"]
@@ -51,13 +51,13 @@ activities:
     runtime: { phase: source, entry: discover-benchmark.sh, args: "PROFILE SOURCE_ENC MAXV TAG LOC（SOURCE_ENC=url-encode 过的对标主页链接或 sec_uid）→ 同 discover-keyword.sh 输出约定" }
     steps:
       - { key: open_benchmark_profile, name: 打开对标主页, order: 1, reads: [BenchmarkAccount.profile_url, Device.lock_holder], writes: [],
-          check: "deeplink 打开后主页 sec_uid 回读 == BenchmarkAccount.sec_uid", implementation: { status: missing, ref: "douyin-phone-adb 主页 deeplink 待封装" }, uses_llm: false }
+          check: "deeplink 打开后主页 sec_uid 回读 == BenchmarkAccount.sec_uid", implementation: { status: implemented, ref: "discover-benchmark.sh:25 → douyin-phone-adb open-user-profile(open_user_profile:2200)" }, uses_llm: false }
       - { key: list_recent_videos, name: 读作品列表, order: 2, reads: [BenchmarkAccount.sec_uid], writes: [Video.title, Video.comment_count],
-          check: "作品卡片 ≥1，否则判 empty_ok", implementation: { status: missing, ref: "待实现" }, uses_llm: false }
+          check: "作品卡片 ≥1，否则判 empty_ok", implementation: { status: implemented, ref: "discover-benchmark.sh:34-50 → douyin-phone-adb profile-video-cards(profile_grid_cards_from_xml:2150)" }, uses_llm: false }
       - { key: resolve_video_links, name: 取视频链接, order: 3, reads: [Video.title], writes: [Video.video_id, Video.video_url],
-          check: "每张卡取得 video_id（剪贴板守卫）", implementation: { status: missing, ref: "复用 harvest-keyword.sh:45-70 取链法" }, uses_llm: false }
+          check: "每张卡取得 video_id（剪贴板守卫）", implementation: { status: implemented, ref: "harvest-keyword.sh:119 current-video-link（主页点卡进详情同样适用）；归位 douyin-phone-adb back-to-profile(back_to_profile:2177)" }, uses_llm: false }
       - { key: persist_candidates, name: 候选落库, order: 4, reads: [Run.run_tag, Video.video_id, BenchmarkAccount.line_key], writes: [Video.harvest_batch, Video.keyword, Video.line_key],
-          check: "leadgen_videos 本批行数 ≥ 工件 candidates", implementation: { status: missing, ref: "复用 leadgen-db-lib.js upsertVideo" }, uses_llm: false }
+          check: "leadgen_videos 本批行数 ≥ 工件 candidates", implementation: { status: implemented, ref: "harvest-keyword.sh:143 qualify-video.js discover（leadgen-db-lib.js upsertVideo）" }, uses_llm: false }
 
   - ref: keyword_acquisition.qualification
   - ref: keyword_acquisition.collection
