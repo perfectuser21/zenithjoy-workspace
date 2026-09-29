@@ -36,21 +36,35 @@ test('关键词获客：计划 = 5 段阶段串 + keyword 源 + discover-keyword
   });
 });
 
-test('对标链接获客：发现未实现 → 默认拒跑（无实现不得跑）', () => {
+test('对标链接获客：发现四步已实现（338e3ec7）→ 默认放行，WF_MISSING 为空', () => {
   const r = planFor(fresh(), 'benchmark_link_acquisition');
+  assert.deepEqual(r.errors, []);
+  assert.ok(r.ok);
+  assert.deepEqual(r.env, {
+    WF_CAP: 'benchmark_link_acquisition',
+    WF_WORKFLOW: 'social-benchmark-leadgen',
+    WF_STAGES: '拉Commander,预检,取对标源,对标发现·判定·采集·评分·配送,效果回写',
+    WF_SOURCE_KIND: 'benchmark',
+    WF_DISCOVER_CMD: 'discover-benchmark.sh',
+    WF_MISSING: '',
+  });
+});
+
+test('任一步骤 implementation=missing → 默认拒跑（无实现不得跑）', () => {
+  const ctx = fresh();
+  act(ctx, 'benchmark_link_acquisition', 'discovery').steps.find((s) => s.key === 'open_benchmark_profile').implementation.status = 'missing';
+  const r = planFor(ctx, 'benchmark_link_acquisition');
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((e) => /implementation=missing/.test(e) && /discovery\.open_benchmark_profile/.test(e)), r.errors.join('\n'));
 });
 
-test('对标链接获客 --allow-missing：benchmark 源 + discover-benchmark.sh，缺口记入 WF_MISSING', () => {
-  const r = planFor(fresh(), 'benchmark_link_acquisition', { allowMissing: true });
+test('--allow-missing：放行未实现步骤但缺口记入 WF_MISSING', () => {
+  const ctx = fresh();
+  act(ctx, 'benchmark_link_acquisition', 'discovery').steps.find((s) => s.key === 'open_benchmark_profile').implementation.status = 'missing';
+  const r = planFor(ctx, 'benchmark_link_acquisition', { allowMissing: true });
   assert.deepEqual(r.errors, []);
-  assert.equal(r.env.WF_CAP, 'benchmark_link_acquisition');
-  assert.equal(r.env.WF_WORKFLOW, 'social-benchmark-leadgen');
-  assert.equal(r.env.WF_STAGES, '拉Commander,预检,取对标源,对标发现·判定·采集·评分·配送,效果回写');
-  assert.equal(r.env.WF_SOURCE_KIND, 'benchmark');
   assert.equal(r.env.WF_DISCOVER_CMD, 'discover-benchmark.sh');
-  assert.match(r.env.WF_MISSING, /discovery\.open_benchmark_profile/);
+  assert.equal(r.env.WF_MISSING, 'discovery.open_benchmark_profile');
 });
 
 test('ref 过来的活动沿用被 ref 活动的 runtime', () => {
@@ -95,15 +109,15 @@ test('renderEnv 输出可被 shell eval，单引号转义正确', () => {
   assert.equal(r.stdout, "x'y|拉Commander,预检");
 });
 
-test('CLI：关键词获客 stdout 可 eval，对标获客默认 exit 1', () => {
+test('CLI：两个能力 stdout 都可 eval，未知能力 exit 1', () => {
   const ok = cli('keyword_acquisition');
   assert.equal(ok.status, 0, ok.stderr);
   const r = spawnSync('bash', ['-c', `${ok.stdout}\nprintf '%s' "$WF_SOURCE_KIND/$WF_DISCOVER_CMD"`], { encoding: 'utf8' });
   assert.equal(r.stdout, 'keyword/discover-keyword.sh');
-  const bad = cli('benchmark_link_acquisition');
-  assert.equal(bad.status, 1);
-  assert.match(bad.stderr, /implementation=missing/);
-  assert.equal(cli('benchmark_link_acquisition', '--allow-missing').status, 0);
+  const bm = cli('benchmark_link_acquisition');
+  assert.equal(bm.status, 0, bm.stderr);
+  const rb = spawnSync('bash', ['-c', `${bm.stdout}\nprintf '%s/%s/[%s]' "$WF_SOURCE_KIND" "$WF_DISCOVER_CMD" "$WF_MISSING"`], { encoding: 'utf8' });
+  assert.equal(rb.stdout, 'benchmark/discover-benchmark.sh/[]');
   assert.equal(cli('no_such_cap').status, 1);
 });
 
