@@ -154,3 +154,58 @@ export async function completeMirrorJob(
     await toOutbox(brainTaskId, 'complete', { brainTaskId, status, extra }, e);
   }
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** 对账窗口：覆盖到"部署前就已不一致"的历史行（0929 生产 10 条最早在 09-24），又不让每轮扫全表 */
+export const RECONCILE_WINDOW_DAYS = 14;
+
+/**
+ * 按本地真身（worker_tasks.status）对账 Brain device_job，不一致就补写。返回补写条数；任何失败都吞掉。
+ *
+ * 为什么单次回写不够（0929 生产实证 10 条 failed/queued）：hk-vps 上旧蓝绿容器共用生产库，各跑旧版
+ * sweeper 抢先把行判死却不回写 Brain；prod 的 sweep 再扫就是 0 行。回写失败、Brain 侧把 in_progress
+ * 重置成 queued 也是同一形态——只有"以本地为准周期补写"能兜住所有旁路。
+ * Brain 侧 cancelled 是人为决定，不覆盖。
+ */
+export async function reconcileBrainMirrors(): Promise<number> {
+  const brain = getBrainPool();
+  if (!brain) return 0;
+  try {
+    const local = await localPool.query(
+      `SELECT id, status, error_code, evidence FROM zenithjoy.worker_tasks
+        WHERE evidence ? 'brain_task_id' AND started_at > NOW() - ($1 || ' days')::interval
+        ORDER BY started_at DESC LIMIT 1000`,
+      [String(RECONCILE_WINDOW_DAYS)],
+    );
+    const rows = (local.rows ?? []) as Array<{ id: string; status: string; error_code: string | null; evidence: Record<string, unknown> | null }>;
+    const byBrain = new Map<string, (typeof rows)[number]>();
+    for (const r of rows) {
+      const bid = String(r.evidence?.brain_task_id ?? '');
+      if (UUID_RE.test(bid)) byBrain.set(bid, r);
+    }
+    if (byBrain.size === 0) return 0;
+    const remote = await brain.query(
+      `SELECT id::text AS id, status FROM tasks WHERE id = ANY($1::uuid[])`,
+      [[...byBrain.keys()]],
+    );
+    let fixed = 0;
+    for (const b of (remote.rows ?? []) as Array<{ id: string; status: string }>) {
+      const r = byBrain.get(b.id);
+      if (!r || b.status === 'cancelled') continue;
+      if (b.status === mapWorkerStatus(r.status)) continue;
+      const ev = r.evidence ?? {};
+      await completeMirrorJob(b.id, r.status, {
+        error_code: r.error_code ?? null,
+        ...(ev.leads !== undefined ? { leads: ev.leads } : {}),
+        ...(ev.zero_leads !== undefined ? { zero_leads: ev.zero_leads } : {}),
+        ...(ev.lease_misjudged ? { lease_misjudged: true } : {}),
+        reconciled: true,
+      });
+      fixed++;
+    }
+    return fixed;
+  } catch (e) {
+    console.error('[brain-mirror] 对账失败（下轮再来）:', e);
+    return 0;
+  }
+}

@@ -7,13 +7,24 @@
  *
  * 每 intervalMs 扫一次：过期 running 任务 → failed/executor_lost；
  * 顺手驱逐闲置帧缓冲（workerLive.evictIdle，无 listener 且超过 maxAgeMs 未推新帧的 agent）。
+ * 首轮起每 RECONCILE_EVERY_TICKS 轮对账一次 Brain device_job（0929：旧容器旁路 sweep 不回写 Brain，见 reconcileBrainMirrors）。
  */
 import { sweepExpiredLeases } from './worker-tasks-service';
 import { workerLive } from './worker-live';
+import { reconcileBrainMirrors } from './brain-device-job-mirror';
+
+/** 对账打的是跨境 Brain 库，每 10 轮（默认 10 分钟）一次足够 */
+export const RECONCILE_EVERY_TICKS = 10;
 
 /** 启动租约 sweeper，返回 timer（unref 过，不阻止进程退出）。intervalMs 默认 60s。 */
 export function startWorkerLeaseSweeper(intervalMs = 60_000): NodeJS.Timeout {
+  let tick = 0;
   const t = setInterval(() => {
+    if (tick++ % RECONCILE_EVERY_TICKS === 0) {
+      reconcileBrainMirrors()
+        .then((n) => { if (n > 0) console.info(`[workers] Brain 对账: 补写 ${n} 条 device_job`); })
+        .catch((e) => console.error('[workers] Brain 对账 error:', e));
+    }
     sweepExpiredLeases()
       .then((n) => { if (n > 0) console.info(`[workers] sweeper: ${n} 个任务租约过期 → executor_lost`); })
       .catch((e) => console.error('[workers] sweeper error:', e));

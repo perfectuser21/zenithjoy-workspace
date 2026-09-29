@@ -102,23 +102,43 @@ export async function startTask(input: {
   return { task_id: taskId, lease_until: leaseUntil, brain_task_id: brainTaskId };
 }
 
-async function loadRunning(taskId: string, executorId: string) {
+interface TaskRow {
+  id: string; tenant_id: string; steps_total: number;
+  evidence: { brain_task_id?: string } | null;
+  /** 仅当本次收尾是在推翻 executor_lost 误判时有值：sweep 判死的时间 */
+  misjudgedSweptAt: string | null;
+}
+
+/**
+ * 取任务并校验执行器。allowLostRevival=true 时（仅收尾用）额外放行 failed/executor_lost：
+ * 采收主体一跑 1~7 小时，租约 10 分钟，续租断档就被 sweep 判死——但执行器其实活着、事后照常发 done。
+ * 这类晚到的收尾是更可信的事实，允许它推翻误判。其它终态（superseded/真失败/已完成）一律不许覆盖。
+ */
+async function loadTask(taskId: string, executorId: string, allowLostRevival = false): Promise<TaskRow> {
   // evidence 必须一起取：completeTask 收尾要靠 evidence.brain_task_id 找到 Brain 那条单去回写，
   // 这里不补列，回写就永远拿不到 id、静默不发生（测试会绿，线上没效果）。
-  const r = await pool.query(`SELECT id, tenant_id, status, executor_id, steps_total, evidence FROM zenithjoy.worker_tasks WHERE id = $1`, [taskId]);
+  const r = await pool.query(
+    `SELECT id, tenant_id, status, executor_id, steps_total, evidence, error_code, finished_at FROM zenithjoy.worker_tasks WHERE id = $1`,
+    [taskId],
+  );
   if (r.rows.length === 0) throw new WorkerTaskError('TASK_NOT_FOUND', '任务不存在', 404);
   const t = r.rows[0];
-  if (t.status !== 'running') throw new WorkerTaskError('TASK_NOT_RUNNING', '任务已结束，执行器必须停手', 409);
+  const revivable = allowLostRevival && t.status === 'failed' && t.error_code === LOST;
+  if (t.status !== 'running' && !revivable) throw new WorkerTaskError('TASK_NOT_RUNNING', '任务已结束，执行器必须停手', 409);
   if (t.executor_id !== executorId) throw new WorkerTaskError('EXECUTOR_MISMATCH', '租约不属于该执行器', 409);
+  const sweptAt = t.finished_at instanceof Date ? t.finished_at.toISOString() : (t.finished_at ?? null);
   return {
     id: t.id as string, tenant_id: t.tenant_id as string, steps_total: Number(t.steps_total ?? 0),
     evidence: (t.evidence ?? null) as { brain_task_id?: string } | null,
+    misjudgedSweptAt: revivable ? (sweptAt as string | null) ?? 'unknown' : null,
   };
 }
 
+const LOST = 'executor_lost';
+
 export async function reportStep(taskId: string, r: StepReport) {
   validateStepReport(r);
-  const t = await loadRunning(taskId, r.executor_id);
+  const t = await loadTask(taskId, r.executor_id);
   // 越界的 step_index 在 worker_task_steps 里没有对应行，UPDATE 会静默 0 行、只续租——执行器以为报上了其实没有。
   if (r.step_index >= t.steps_total) {
     throw new WorkerTaskError('STEP_OUT_OF_RANGE', `step_index 须 < steps_total（${t.steps_total}）`, 400);
@@ -139,6 +159,24 @@ export async function reportStep(taskId: string, r: StepReport) {
   return { ok: true, screenshot_ref: ref };
 }
 
+/**
+ * 线索数规范化（0929）：采收收尾带 evidence.leads（本批 LEAD 行数）。0 条线索的批次状态仍是 completed
+ * （跑完了、不是故障），但必须显式标 zero_leads=true + result_note，页面/Brain 才能把"白跑"与真出线索分开。
+ * 不带 leads 的任务（退让、非采收）不加任何标记，避免误标。
+ */
+export function normalizeLeads(evidence: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!evidence || !('leads' in evidence) || evidence.leads === undefined || evidence.leads === null) return evidence;
+  const n = evidence.leads;
+  if (typeof n !== 'number' || !Number.isInteger(n) || n < 0) {
+    throw new WorkerTaskError('INVALID_LEADS', 'evidence.leads 须为非负整数', 400);
+  }
+  const zero = n === 0;
+  return {
+    ...evidence, leads: n, zero_leads: zero,
+    ...(zero ? { result_note: '零线索：采收跑完但本批没有产出线索' } : {}),
+  };
+}
+
 export async function completeTask(taskId: string, body: {
   outcome: Outcome; executor_id: string; evidence?: Record<string, unknown>; error_code?: string; failed_step?: number;
 }) {
@@ -148,18 +186,27 @@ export async function completeTask(taskId: string, body: {
   if (body.outcome === 'failed' && (!body.error_code || !Number.isInteger(body.failed_step))) {
     throw new WorkerTaskError('FAILURE_DETAIL_REQUIRED', 'failed 必带 error_code + failed_step', 400);
   }
-  const t = await loadRunning(taskId, body.executor_id);
-  let evidence = body.evidence ?? null;
+  let evidence: Record<string, unknown> | null = normalizeLeads(body.evidence ?? null);
+  const t = await loadTask(taskId, body.executor_id, true);
   if (evidence && typeof evidence.screenshot_jpeg_b64 === 'string') {
     assertShotSize(evidence.screenshot_jpeg_b64 as string);
     const ref = await saveShot(t.tenant_id, taskId, 9999, evidence.screenshot_jpeg_b64 as string);
     evidence = { ...evidence, screenshot_ref: ref, screenshot_jpeg_b64: undefined };
   }
-  await pool.query(
+  if (t.misjudgedSweptAt) {
+    // 留痕：这条曾被租约 sweep 误判执行器丢失，页面/复盘据此区分"真失联"与"续租断档"
+    evidence = { ...(evidence ?? {}), lease_misjudged: {
+      previous_error_code: LOST, swept_at: t.misjudgedSweptAt, revived_at: new Date().toISOString(),
+    } };
+  }
+  // 状态守卫写进 WHERE：读-改之间 sweep/别的收尾可能已改过它，0 行 = 输了竞争，按"已结束"处理
+  const upd = await pool.query(
     `UPDATE zenithjoy.worker_tasks SET status = $2, finished_at = NOW(), error_code = $3, failed_step = $4,
-        evidence = COALESCE(evidence, '{}'::jsonb) || $5::jsonb, updated_at = NOW() WHERE id = $1`,
+        evidence = COALESCE(evidence, '{}'::jsonb) || $5::jsonb, updated_at = NOW()
+      WHERE id = $1 AND (status = 'running' OR (status = 'failed' AND error_code = 'executor_lost'))`,
     [taskId, body.outcome, body.error_code ?? null, body.failed_step ?? null, JSON.stringify(evidence ?? {})],
   );
+  if (upd.rowCount === 0) throw new WorkerTaskError('TASK_NOT_RUNNING', '任务已结束，执行器必须停手', 409);
 
   // 回写 Brain。整段吞异常：收尾成功与否不取决于记账。
   try {
@@ -169,12 +216,32 @@ export async function completeTask(taskId: string, body: {
         error_code: body.error_code ?? null,
         leads_local: (evidence as Record<string, unknown> | null)?.leads_local ?? null,
         leads_persisted: (evidence as Record<string, unknown> | null)?.leads_persisted ?? null,
+        ...(evidence && 'leads' in evidence ? { leads: evidence.leads, zero_leads: evidence.zero_leads } : {}),
+        ...(t.misjudgedSweptAt ? { lease_misjudged: true } : {}),
       });
     }
   } catch (e) {
     console.error('[worker-tasks] Brain 回写失败（不影响本次收尾）:', e);
   }
   return { ok: true };
+}
+
+/**
+ * 纯续租（心跳）：只推 lease_until，不碰步骤表——长阶段（采收主体 1~7 小时）期间定时调用，
+ * 不能用 step/note 续租，那会把步骤进度 note（"词3: xxx"）覆盖成心跳文案。
+ */
+export async function heartbeatTask(taskId: string, body: { executor_id: string }) {
+  if (!body || typeof body.executor_id !== 'string' || !body.executor_id) {
+    throw new WorkerTaskError('INVALID_HEARTBEAT', 'executor_id 必填', 400);
+  }
+  await loadTask(taskId, body.executor_id);
+  const r = await pool.query(
+    `UPDATE zenithjoy.worker_tasks SET lease_until = NOW() + ($2 || ' milliseconds')::interval, updated_at = NOW()
+      WHERE id = $1 AND status = 'running' RETURNING lease_until`,
+    [taskId, String(LEASE_MS)],
+  );
+  if (r.rowCount === 0) throw new WorkerTaskError('TASK_NOT_RUNNING', '任务已结束，执行器必须停手', 409);
+  return { ok: true, lease_until: r.rows[0]?.lease_until ?? null };
 }
 
 export async function sweepExpiredLeases(): Promise<number> {
@@ -230,6 +297,8 @@ export async function getActivity(tenantId: string, agentId: string) {
   const hist = await pool.query<HistoryRow>(
     `SELECT t.id, t.title, t.status, t.steps_total, t.started_at, t.finished_at, t.failed_step, t.error_code,
             t.evidence->>'screenshot_ref' AS evidence_screenshot_ref,
+            CASE WHEN jsonb_typeof(t.evidence->'leads') = 'number' THEN (t.evidence->>'leads')::int END AS leads,
+            CASE WHEN jsonb_typeof(t.evidence->'zero_leads') = 'boolean' THEN (t.evidence->>'zero_leads')::boolean END AS zero_leads,
             CASE WHEN t.finished_at IS NOT NULL
                  THEN (EXTRACT(EPOCH FROM (t.finished_at - t.started_at)) * 1000)::bigint END AS duration_ms,
             fs.foreground_pkg AS failed_foreground_pkg, fs.diag_line AS failed_diag_line, fs.screenshot_ref AS failed_screenshot_ref
@@ -250,7 +319,7 @@ export async function getActivity(tenantId: string, agentId: string) {
 interface HistoryRow {
   id: string; title: string; status: string; steps_total: number; started_at: string; finished_at: string | null;
   failed_step: number | null; error_code: string | null; evidence_screenshot_ref: string | null;
-  duration_ms: string | number | null;
+  duration_ms: string | number | null; leads: number | null; zero_leads: boolean | null;
   failed_foreground_pkg: string | null; failed_diag_line: string | null; failed_screenshot_ref: string | null;
 }
 

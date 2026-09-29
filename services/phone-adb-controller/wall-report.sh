@@ -4,7 +4,8 @@
 #   wall-report start <目标> "<title>" "步骤1,步骤2,..."
 #   wall-report step  <目标> <idx> doing|done|failed ["note"] ["diag"]
 #   wall-report note  <目标> "<note>"            # 当前步再报 doing（服务端续租 10 分钟）
-#   wall-report done  <目标>
+#   wall-report heartbeat <目标>                 # 纯续租（不改步骤 note）；长阶段后台心跳用。老服务端 404 → 退回 note 式续租
+#   wall-report done  <目标> [leads]             # leads=本批线索数(非负整数),作为 evidence.leads 上报;0 也要报(零线索标记)
 #   wall-report fail  <目标> <idx> <error_code> ["diag_line"]   # 步骤 note=error_code、diag 缺省=error_code
 # 注意：note 只在 `step N doing` 之后用，不要在 `step N done` 之后调——它会把已完成的第 N 步改回 doing。
 # 命名空间：环境变量 WALL_NS（默认 default）区分同一台手机上并行的链（harvest-cron export WALL_NS=harvest，
@@ -49,7 +50,11 @@ do_complete() { # task_id completed | task_id failed error_code failed_step
   if [ "$2" = "failed" ]; then
     b=$(python3 -c 'import json,sys;print(json.dumps({"outcome":"failed","executor_id":sys.argv[1],"error_code":sys.argv[2],"failed_step":int(sys.argv[3] or 0)}))' "$EXECUTOR" "$3" "${4:-0}" 2>/dev/null)
   else
-    b=$(python3 -c 'import json,sys;print(json.dumps({"outcome":sys.argv[2],"executor_id":sys.argv[1]}))' "$EXECUTOR" "$2" 2>/dev/null)
+    # $3 = 线索数（可选，仅纯数字才带 evidence.leads；非数字宁缺勿错）
+    b=$(python3 -c 'import json,sys
+d={"outcome":sys.argv[2],"executor_id":sys.argv[1]}
+if len(sys.argv)>3 and sys.argv[3].isdigit(): d["evidence"]={"leads":int(sys.argv[3])}
+print(json.dumps(d))' "$EXECUTOR" "$2" "${3:-}" 2>/dev/null)
   fi
   api "/api/workers/tasks/$1/complete" "$b" "$API_TIMEOUT_WRITE" >/dev/null
 }
@@ -116,13 +121,27 @@ print(json.dumps({"step_index":int(sys.argv[1]),"status":"failed","executor_id":
   state_put "$tid" "$idx"
 }
 
+do_heartbeat() { # 纯续租：采收主体一跑 1~7 小时，零星的 step/note 间隔超 10 分钟就被 sweep 误判 executor_lost（0929）
+  local tid b r code
+  tid=$(state_task); [ -n "$tid" ] || { wall_log "heartbeat $SERIAL 无进行中任务,忽略"; return 0; }
+  b=$(python3 -c 'import json,sys;print(json.dumps({"executor_id":sys.argv[1]}))' "$EXECUTOR" 2>/dev/null)
+  r=$(api "/api/workers/tasks/$tid/heartbeat" "$b"); code=${r%% *}
+  case "$code" in
+    200) ;;
+    # 服务端还没部署心跳接口（脚本先于 apps/api 发到机器的窗口期）：退回 note 式续租，租约照样续上
+    404) do_step "$(state_step)" doing "心跳续租" ;;
+    *)   wall_log "heartbeat $SERIAL HTTP $code" ;;
+  esac
+}
+
 case "$cmd" in
   start) do_start "${1:-任务}" "${2:-步骤1}" "" "${3:-}" ;;
   step)  do_step "${1:-0}" "${2:-doing}" "${3:-}" "${4:-}" ;;
   note)  do_step "$(state_step)" doing "${1:-}" ;;
+  heartbeat) do_heartbeat ;;
   brain-task) state_brain ;;   # 打印本链进行中任务的 brain_task_id（无则空），供 harvest-cron.sh 取回执单号
   done)  tid=$(state_task)
-         if [ -n "$tid" ]; then do_complete "$tid" completed; rm -f "$STATE"
+         if [ -n "$tid" ]; then do_complete "$tid" completed "${1:-}"; rm -f "$STATE"
          else wall_log "done $SERIAL 无进行中任务,忽略"; fi ;;
   fail)  idx="${1:-0}"; ec="${2:-failed}"
          do_step "$idx" failed "$ec" "${3:-$ec}"

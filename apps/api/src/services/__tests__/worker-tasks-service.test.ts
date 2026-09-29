@@ -6,7 +6,7 @@ vi.mock('../worker-shots', () => ({
   shotPath: vi.fn((ref: string) => `/tmp/shots/${ref}`),
 }));
 import pool from '../../db/connection';
-import { validateStepReport, sweepExpiredLeases, LEASE_MS, startTask, completeTask, getActivity, reportStep } from '../worker-tasks-service';
+import { validateStepReport, sweepExpiredLeases, LEASE_MS, startTask, completeTask, getActivity, reportStep, heartbeatTask } from '../worker-tasks-service';
 beforeEach(() => vi.clearAllMocks());
 describe('validateStepReport', () => {
   it('failed 缺三件套任一 → FAILURE_SCENE_REQUIRED', () => {
@@ -232,5 +232,105 @@ describe('sweepExpiredLeases 同步 Brain', () => {
     await expect(sweepExpiredLeases()).resolves.toBe(1);
     // 同上：光看 resolves.toBe(1) 老实现也满足，必须证明它确实检查过 evidence 且判断为空跳过。
     expect(completeMirrorJob).not.toHaveBeenCalled();
+  });
+});
+
+// 0929 获客采收误判 executor_lost：采收主体（batch2）一跑 1~7 小时，期间只有逐词/逐视频的零星上报，
+// 两次上报间隔超过 10 分钟租约就被 sweep 判 failed/executor_lost；之后脚本发来的 done 被 TASK_NOT_RUNNING 挡掉，
+// 实际「批完成 7~42 LEAD + 账本 finalize ok」的批次在页面和 Brain 上永久是失败。
+describe('heartbeatTask 纯续租', () => {
+  it('running 且执行器匹配 → 只续租，不碰步骤表（心跳不能覆盖步骤进度 note）', async () => {
+    (pool as any).query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ id: 't1', tenant_id: 'ta', status: 'running', executor_id: 'ex', steps_total: 5, evidence: null }] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ lease_until: 'L2' }] });
+    await expect(heartbeatTask('t1', { executor_id: 'ex' })).resolves.toMatchObject({ ok: true, lease_until: 'L2' });
+    const calls = (pool as any).query.mock.calls.map((c: any[]) => c[0] as string);
+    expect(calls.some((q: string) => /worker_task_steps/.test(q))).toBe(false);
+    const upd = calls.find((q: string) => /UPDATE zenithjoy\.worker_tasks/.test(q))!;
+    expect(upd).toMatch(/lease_until = NOW\(\) \+/);
+    // 续租必须带 status='running' 守卫：sweep 与心跳并发时，已被判终态的任务不能被心跳"续"回租约
+    expect(upd).toMatch(/status = 'running'/);
+  });
+  it('任务已结束 → TASK_NOT_RUNNING 409', async () => {
+    (pool as any).query = vi.fn().mockResolvedValueOnce({ rows: [{ id: 't1', tenant_id: 'ta', status: 'completed', executor_id: 'ex', steps_total: 5 }] });
+    await expect(heartbeatTask('t1', { executor_id: 'ex' })).rejects.toMatchObject({ code: 'TASK_NOT_RUNNING', httpStatus: 409 });
+  });
+  it('缺 executor_id → 400', async () => {
+    await expect(heartbeatTask('t1', {} as any)).rejects.toMatchObject({ httpStatus: 400 });
+  });
+});
+
+describe('completeTask 翻案：晚到的收尾可以推翻 executor_lost 误判', () => {
+  const lost = { id: 'wt-L', tenant_id: 't1', status: 'failed', error_code: 'executor_lost', executor_id: 'adb-wall', steps_total: 5,
+    finished_at: '2026-09-28T14:50:59Z', evidence: { brain_task_id: 'brain-L' } };
+  it('failed/executor_lost + 同执行器 done → 翻回 completed，evidence 记录曾误判，Brain 同步翻回', async () => {
+    (pool as any).query = vi.fn().mockResolvedValueOnce({ rows: [lost] }).mockResolvedValue({ rowCount: 1, rows: [{ id: 'wt-L' }] });
+    await expect(completeTask('wt-L', { outcome: 'completed', executor_id: 'adb-wall' })).resolves.toEqual({ ok: true });
+    const upd = (pool as any).query.mock.calls.find((c: any[]) => /UPDATE zenithjoy\.worker_tasks/.test(c[0]));
+    // 并发守卫：只允许从 running 或 failed/executor_lost 翻，别的终态（superseded/真失败）不许被晚到上报覆盖
+    expect(upd[0]).toMatch(/error_code = 'executor_lost'/);
+    const ev = JSON.parse(upd[1].find((v: any) => typeof v === 'string' && v.includes('lease_misjudged')));
+    expect(ev.lease_misjudged).toMatchObject({ previous_error_code: 'executor_lost', swept_at: '2026-09-28T14:50:59Z' });
+    expect(completeMirrorJob).toHaveBeenCalledWith('brain-L', 'completed', expect.objectContaining({ lease_misjudged: true }));
+  });
+  it('其它失败终态（superseded）仍然 TASK_NOT_RUNNING，不许翻', async () => {
+    (pool as any).query = vi.fn().mockResolvedValueOnce({ rows: [{ ...lost, error_code: 'superseded' }] });
+    await expect(completeTask('wt-L', { outcome: 'completed', executor_id: 'adb-wall' })).rejects.toMatchObject({ code: 'TASK_NOT_RUNNING' });
+  });
+  it('executor_lost 但执行器不匹配 → EXECUTOR_MISMATCH', async () => {
+    (pool as any).query = vi.fn().mockResolvedValueOnce({ rows: [lost] });
+    await expect(completeTask('wt-L', { outcome: 'completed', executor_id: 'other' })).rejects.toMatchObject({ code: 'EXECUTOR_MISMATCH' });
+  });
+  it('UPDATE 0 行（并发下已被别的收尾改掉）→ TASK_NOT_RUNNING，不回写 Brain', async () => {
+    (pool as any).query = vi.fn().mockResolvedValueOnce({ rows: [lost] }).mockResolvedValue({ rowCount: 0, rows: [] });
+    await expect(completeTask('wt-L', { outcome: 'completed', executor_id: 'adb-wall' })).rejects.toMatchObject({ code: 'TASK_NOT_RUNNING' });
+    expect(completeMirrorJob).not.toHaveBeenCalled();
+  });
+});
+
+// 0929：采收 done 从不带线索数——0 条线索的批次（auto09270230「批完成: 0」）和出 42 条的批次在页面/Brain 上都是同一个 completed。
+describe('completeTask 线索数：evidence.leads 规范化 + 零线索显式标记', () => {
+  const running = { id: 'wt-1', tenant_id: 't1', status: 'running', executor_id: 'adb-wall', steps_total: 5, evidence: { brain_task_id: 'brain-1' } };
+  const updEvidence = () => {
+    const upd = (pool as any).query.mock.calls.find((c: any[]) => /UPDATE zenithjoy\.worker_tasks/.test(c[0]));
+    return JSON.parse(upd[1][4]);
+  };
+  it('leads=0 → evidence.zero_leads=true + result_note，状态仍是 completed，Brain 同步 zero_leads', async () => {
+    (pool as any).query = vi.fn().mockResolvedValueOnce({ rows: [running] }).mockResolvedValue({ rowCount: 1, rows: [] });
+    await completeTask('wt-1', { outcome: 'completed', executor_id: 'adb-wall', evidence: { leads: 0 } });
+    const ev = updEvidence();
+    expect(ev).toMatchObject({ leads: 0, zero_leads: true });
+    expect(ev.result_note).toMatch(/零线索/);
+    expect(completeMirrorJob).toHaveBeenCalledWith('brain-1', 'completed', expect.objectContaining({ leads: 0, zero_leads: true }));
+  });
+  it('leads=7 → zero_leads=false，无零线索说明', async () => {
+    (pool as any).query = vi.fn().mockResolvedValueOnce({ rows: [running] }).mockResolvedValue({ rowCount: 1, rows: [] });
+    await completeTask('wt-1', { outcome: 'completed', executor_id: 'adb-wall', evidence: { leads: 7 } });
+    expect(updEvidence()).toMatchObject({ leads: 7, zero_leads: false });
+    expect(updEvidence().result_note).toBeUndefined();
+    expect(completeMirrorJob).toHaveBeenCalledWith('brain-1', 'completed', expect.objectContaining({ leads: 7, zero_leads: false }));
+  });
+  it('leads 非法（负数/小数/字符串）→ 400 INVALID_LEADS，不写库', async () => {
+    for (const bad of [-1, 1.5, 'abc']) {
+      (pool as any).query = vi.fn().mockResolvedValueOnce({ rows: [running] }).mockResolvedValue({ rowCount: 1, rows: [] });
+      await expect(completeTask('wt-1', { outcome: 'completed', executor_id: 'adb-wall', evidence: { leads: bad } }))
+        .rejects.toMatchObject({ code: 'INVALID_LEADS', httpStatus: 400 });
+    }
+  });
+  it('不带 leads（退让/非采收任务）→ 不加 zero_leads，不误标', async () => {
+    (pool as any).query = vi.fn().mockResolvedValueOnce({ rows: [running] }).mockResolvedValue({ rowCount: 1, rows: [] });
+    await completeTask('wt-1', { outcome: 'completed', executor_id: 'adb-wall' });
+    expect(updEvidence().zero_leads).toBeUndefined();
+  });
+  it('getActivity 历史带 leads / zero_leads 列（页面据此区分零线索成功）', async () => {
+    (pool as any).query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ id: 'agent-1' }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: 'h1', title: 'x', status: 'completed', steps_total: 5, started_at: 's', finished_at: 'f', failed_step: null, error_code: null,
+        evidence_screenshot_ref: null, duration_ms: '1', leads: 0, zero_leads: true, failed_foreground_pkg: null, failed_diag_line: null, failed_screenshot_ref: null }] });
+    const a = await getActivity('tenant-a', 'agent-1');
+    const sql = (pool as any).query.mock.calls[2][0] as string;
+    expect(sql).toMatch(/AS leads/); expect(sql).toMatch(/AS zero_leads/);
+    expect(a!.history[0]).toMatchObject({ leads: 0, zero_leads: true });
   });
 });
