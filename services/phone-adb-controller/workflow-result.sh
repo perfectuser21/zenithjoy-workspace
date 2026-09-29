@@ -36,6 +36,12 @@ WFR_PROBE_HOST="${WFR_PROBE_HOST:-mmv}"
 WFR_PROBE_DIR="${WFR_PROBE_DIR:-~/.openclaw/leadgen-scripts}"
 WFR_PROBE_STAGES="${WFR_PROBE_STAGES-preflight discovery qualification collection scoring delivery outreach cleanup}"
 WFR_CHECKS_YAML="${WFR_CHECKS_YAML:-$HOME/bin-harvest/checks/social-keyword-leadgen.yaml}"
+# 步骤 DoD 统一裁判(任务 9032cdad,决策 2a60378a):每写出一个活动工件就判 at==该活动 的步骤,结果写进工件 step_dod
+# 与 $WFR_RUN_DIR/step-dod.jsonl;sql/http 类随探针 ssh 在 mmv 判(verify-step --steps),其余在本机 step-judge.mjs 判。
+# 清单 step-dod.json 由契约生成(scripts/product-map/gen-step-dod.mjs),deploy.sh 下发;缺裁判/清单 → 跳过(不影响采收)。
+WFR_STEP_JUDGE="${WFR_STEP_JUDGE:-$HOME/bin-harvest/step-judge.mjs}"
+WFR_STEP_SPEC="${WFR_STEP_SPEC:-$HOME/bin-harvest/step-dod.json}"
+WFR_EVIDENCE_ROOT="${WFR_EVIDENCE_ROOT:-/Volumes/EvidenceRAM/openclaw-phone/evidence}"
 stage_has_probes(){
   if [[ -r "$WFR_CHECKS_YAML" ]]; then grep -qE "^[[:space:]]+stage:[[:space:]]*$1[[:space:]]*$" "$WFR_CHECKS_YAML" 2>/dev/null; return; fi
   [[ " $WFR_PROBE_STAGES " == *" $1 "* ]]
@@ -47,30 +53,37 @@ sq(){ local q=\' s="$1"; s="${s//$q/$q\\$q$q}"; printf "'%s'" "$s"; }
 GATE_NONE='{"verdict":"none","action":"continue","failed":[],"unknown":[],"alert":false}'
 probe_stage(){
   local stage="$1" word="${2:-}" metrics="${3:-}" out arr gate rc=0 remote errf
-  stage_has_probes "$stage" || { echo "{\"probes\":[],\"gate\":$GATE_NONE}"; return 0; }
+  stage_has_probes "$stage" || { echo "{\"probes\":[],\"gate\":$GATE_NONE,\"steps\":[]}"; return 0; }
   remote="set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; cd $WFR_PROBE_DIR && node verify-step.mjs --stage $(sq "$stage") --run-tag $(sq "${WFR_TAG:-${WFR_RUN_ID#social-keyword-leadgen-crontab-}}") --line-key $(sq "${WFR_PROFILE:-}") --word $(sq "$word")"
   [[ -n "$metrics" ]] && remote="$remote --metrics $(sq "$metrics")"
+  remote="$remote --steps"
   errf=$(mktemp 2>/dev/null || echo /dev/null)
   out=$(ssh -o ConnectTimeout=20 -o BatchMode=yes "$WFR_PROBE_HOST" "$remote" 2>"$errf") || rc=$?
   # 远端 stderr(verify-step: 单条 error / ssh 报错)原样透传到本机 stderr → harvest-cron.log 可查
   [[ -s "$errf" ]] && cat "$errf" >&2
   arr=$(printf '%s\n' "$out" | tail -1 | "$WFR_JQ" -c '.probes | select(type=="array")' 2>/dev/null || true)
+  local steps
+  steps=$(printf '%s\n' "$out" | tail -1 | "$WFR_JQ" -c '.steps | select(type=="array")' 2>/dev/null || true)
   gate=$(printf '%s\n' "$out" | tail -1 | "$WFR_JQ" -c '.gate | select(type=="object")' 2>/dev/null || true)
   if (( rc != 0 )) || [[ -z "$arr" ]]; then
     warn "verify-step via ssh $WFR_PROBE_HOST failed(stage=$stage rc=$rc), probes=[]: $(tail -c 200 "$errf" 2>/dev/null | tr '\n' ' ')$(printf '%s' "$out" | tail -c 200)"
     arr='[]'; gate=''
   fi
   [[ "$errf" != /dev/null ]] && rm -f "$errf"
-  printf '{"probes":%s,"gate":%s}\n' "$arr" "${gate:-null}"
+  printf '{"probes":%s,"gate":%s,"steps":%s}\n' "$arr" "${gate:-null}" "${steps:-[]}"
 }
 # apply_gate: stage n word artifact gate_json —— 6b133a81 运行时拦截(决策 3240824c⑦ 后置条件默认拦截)。
 #   pass → 放行(delivery 额外把 readback_verified 记 1);none → 不动;
 #   fail/unknown(gate=null 即读不回) → 工件改 failed(stop_run→stop / 其余→retry)、summary 追加失败探针、账本记 failed;
 #   每次不过追加一行 $WFR_RUN_DIR/gate.log;on_fail=stop_run → 写 $WFR_RUN_DIR/STOP(batch2/harvest-cron 据此停后续活动)。
 apply_gate(){
-  local stage="$1" n="$2" word="$3" f="$4" gate="${5:-null}" verdict action note tmp rec
+  local stage="$1" n="$2" word="$3" f="$4" gate="${5:-null}" hard="${6:-}" verdict action note tmp rec
   [[ "$gate" == null || -z "$gate" ]] && gate='{"verdict":"unknown","action":"fail_stage","failed":[],"unknown":["probe_unreadable"],"alert":false}'
   verdict=$(printf '%s' "$gate" | "$WFR_JQ" -r '.verdict // "unknown"' 2>/dev/null)
+  # 9032cdad: hard 步骤 DoD 不过 → 本活动至少判 fail_stage(checkpoint 只记录,不进这里)
+  if [[ -n "$hard" && ( "$verdict" == pass || "$verdict" == none ) ]]; then
+    gate=$(printf '%s' "$gate" | "$WFR_JQ" -c '.verdict = "fail" | .action = "fail_stage"' 2>/dev/null); verdict=fail
+  fi
   tmp="$f.gate.tmp"
   case "$verdict" in
     none) return 0;;
@@ -83,6 +96,7 @@ apply_gate(){
   action=$(printf '%s' "$gate" | "$WFR_JQ" -r '.action // "fail_stage"' 2>/dev/null)
   note=$(printf '%s' "$gate" | "$WFR_JQ" -r '"postcondition_failed: " + ((.failed // []) + ((.unknown // []) | map(if . == "probe_unreadable" then . else "unreadable:" + . end)) | join(",")) + " (" + (.action // "fail_stage") + ")"' 2>/dev/null)
   [[ "$verdict" == unknown && "$note" != *probe_unreadable* ]] && note="$note probe_unreadable"
+  [[ -n "$hard" ]] && note="$note step_dod_hard_failed: $hard"
   "$WFR_JQ" --arg note "$note" --arg na "$([[ "$action" == stop_run ]] && echo stop || echo retry)" \
     '.status = "failed" | .recommended_next_action = $na | .summary = (.summary + " | " + $note)' "$f" > "$tmp" 2>/dev/null && mv -f "$tmp" "$f"
   if [[ -n "$word" ]]; then led1 set --stage "$stage" --status failed --n "$n" --word "$word" --note "$note" >/dev/null
@@ -145,6 +159,21 @@ req_keys(){ case "$1" in
   *) echo "";; esac; }
 # zero_metrics stage → 该 stage 闭集键全 0 的 metrics JSON(补 not_run 工件用)
 zero_metrics(){ local k out=""; for k in $(req_keys "$1"); do out="$out${out:+,}\"$k\":0"; done; printf '{%s}' "$out"; }
+# judge_steps stage n word artifact remote_steps_json → 调 step-judge.mjs,把 step_dod 写进工件、追加 step-dod.jsonl;
+#   stdout 输出 hard 不过的步骤 key(逗号分隔,空=无)。任何失败都只 warn,永不阻塞
+judge_steps(){
+  local stage="$1" n="$2" word="$3" f="$4" remote="${5:-[]}" out tmp
+  [[ -r "$WFR_STEP_JUDGE" && -r "$WFR_STEP_SPEC" ]] || return 0
+  out=$("$WFR_NODE" "$WFR_STEP_JUDGE" --spec "$WFR_STEP_SPEC" --stage "$stage" --n "$n" --word "$word" --tag "${WFR_TAG:-}" \
+        --metrics-file "$f" --remote "$remote" --evidence-dir "$WFR_EVIDENCE_ROOT/${WFR_PROFILE:-}" \
+        --log "${WFR_LOG_FILE:-}" --log-from "${WFR_LOG_FROM:-0}" --tsv "${WFR_TSV:-}" --run-dir "${WFR_RUN_DIR:-}" 2>/dev/null | tail -1)
+  printf '%s' "$out" | "$WFR_JQ" -e '.steps | type=="array"' >/dev/null 2>&1 || { warn "step-judge failed(stage=$stage): ${out:0:200}"; return 0; }
+  tmp="$f.steps.tmp"
+  "$WFR_JQ" --argjson sd "$(printf '%s' "$out" | "$WFR_JQ" -c '.steps')" '.step_dod = $sd' "$f" > "$tmp" 2>/dev/null && mv -f "$tmp" "$f"
+  printf '%s' "$out" | "$WFR_JQ" -c --arg run "${WFR_RUN_ID:-}" --arg st "$stage" --argjson n "$n" --arg w "$word" --arg at "$("$WFR_JQ" -r '.observed_at' "$f" 2>/dev/null)" \
+    '.steps[] | {run_id:$run, stage:$st, n:$n, word:$w, observed_at:$at} + .' >> "${WFR_RUN_DIR:-/nonexistent}/step-dod.jsonl" 2>/dev/null
+  printf '%s' "$out" | "$WFR_JQ" -r '.hard_failed // [] | join(",")' 2>/dev/null
+}
 # gate_report: 读 $WFR_RUN_DIR 的 STOP 与 gate.log,输出可 eval 的 WFR_GATE_*;告警行按 gate.acked 行号只报一次
 gate_report(){
   local dir="${WFR_RUN_DIR:-/nonexistent}" stop=0 stage="" keys="" acked total alert=0 msg=""
@@ -153,7 +182,7 @@ gate_report(){
     stage=$("$WFR_JQ" -r '.stage' "$dir/STOP" 2>/dev/null)
     keys=$("$WFR_JQ" -r '(.failed // []) + (.unknown // []) | join(",")' "$dir/STOP" 2>/dev/null)
   fi
-  total=$(wc -l < "$dir/gate.log" 2>/dev/null | tr -d ' '); total=${total:-0}
+  total=0; [[ -f "$dir/gate.log" ]] && total=$(wc -l < "$dir/gate.log" | tr -d ' ')
   acked=$(cat "$dir/gate.acked" 2>/dev/null); [[ "$acked" =~ ^[0-9]+$ ]] || acked=0
   if (( total > acked )); then
     msg=$(tail -n +$((acked + 1)) "$dir/gate.log" | "$WFR_JQ" -r 'select(.alert == true) | .stage + ":" + ((.failed // []) | join(",")) + "(" + .action + ")"' 2>/dev/null | paste -sd' ' - | tr -d "'")
@@ -200,7 +229,9 @@ write_stage(){
   pr=$(probe_stage "$stage" "$word" "$("$WFR_JQ" -c '.metrics' "$f" 2>/dev/null)")
   probes=$(printf '%s' "$pr" | "$WFR_JQ" -c '.probes // []' 2>/dev/null); [[ -n "$probes" ]] || probes='[]'
   gate=$(printf '%s' "$pr" | "$WFR_JQ" -c '.gate' 2>/dev/null); [[ -n "$gate" ]] || gate=null
-  apply_gate "$stage" "$n" "$word" "$f" "$gate"
+  local hard=""
+  [[ "$status" == blocked && "$summary" == not_run* ]] || hard=$(judge_steps "$stage" "$n" "$word" "$f" "$(printf '%s' "$pr" | "$WFR_JQ" -c '.steps // []' 2>/dev/null)")
+  apply_gate "$stage" "$n" "$word" "$f" "$gate" "$hard"
   if [[ "$stage" != cleanup ]]; then
     brain_post "${WFR_RUN_ID:-}__${attempt}.${stage}" in_progress "$stage" "$f" '[]' "$probes"
   fi

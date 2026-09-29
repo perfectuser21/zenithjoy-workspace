@@ -15,6 +15,8 @@ import {
   assemble,
   contractsDigest,
 } from '../contracts-lib.mjs';
+import { stepDodSpec } from '../contracts-lib.mjs';
+import { readFileSync as readFileSyncCt } from 'node:fs';
 
 const DESIGN_ORDER = ['preflight', 'discovery', 'qualification', 'collection', 'scoring', 'delivery', 'outreach', 'cleanup'];
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -211,4 +213,31 @@ test('契约 known_gaps 不再挂 6b133a81（运行时读回+拦截已全部落�
   const doc = fresh().contracts.keyword_acquisition;
   const gaps = [...(doc.known_gaps || []), ...doc.activities.flatMap((a) => a.known_gaps || [])];
   assert.deepEqual(gaps.filter((g) => g.task === '6b133a81').map((g) => g.gap), []);
+});
+
+// ── 任务 9032cdad：步骤 DoD 可执行化（决策 2a60378a）——文字 check 旁挂结构化 dod，生成物随部署下发 ──
+
+test('43 个步骤全部带 dod：mode ∈ checkpoint|hard；none 须写 reason；hard 不得是 none', () => {
+  const steps = fresh().contracts.keyword_acquisition.activities.flatMap((a) => a.steps.map((s) => ({ ...s, act: a.key })));
+  assert.equal(steps.length, 43);
+  for (const s of steps) {
+    assert.ok(s.dod, `${s.act}.${s.key} 缺 dod`);
+    assert.ok(['checkpoint', 'hard'].includes(s.dod.mode));
+    if (s.dod.readback.type === 'none') assert.ok(s.dod.reason, `${s.act}.${s.key} 读不回须写原因`);
+  }
+});
+
+test('生成物 step-dod.json 与契约一致（改契约必须重跑 gen-step-dod.mjs）', () => {
+  const want = stepDodSpec(fresh(), 'keyword_acquisition');
+  const got = JSON.parse(readFileSyncCt(new URL('../../../services/phone-adb-controller/step-dod.json', import.meta.url), 'utf8'));
+  assert.deepEqual(got, want);
+});
+
+test('dod 缺失 / none 无 reason / hard 却 none / sql 不带 $RUN_TAG / at 指向前序活动 → 报错（proven-to-fire）', () => {
+  const s0 = (ctx) => act(ctx, 'keyword_acquisition', 'delivery').steps[0];
+  let ctx = fresh(); delete s0(ctx).dod; expectError(ctx, /dod/);
+  ctx = fresh(); s0(ctx).dod = { mode: 'checkpoint', readback: { type: 'none' } }; expectError(ctx, /reason/);
+  ctx = fresh(); s0(ctx).dod = { mode: 'hard', readback: { type: 'none' }, reason: '读不回的原因写在这里' }; expectError(ctx, /hard.*none/);
+  ctx = fresh(); s0(ctx).dod = { mode: 'checkpoint', readback: { type: 'sql', query: 'SELECT 1', expect: { op: '>=', value: 1 } } }; expectError(ctx, /RUN_TAG/);
+  ctx = fresh(); s0(ctx).dod = { mode: 'checkpoint', at: 'preflight', readback: { type: 'metric', ref: 'metrics.videos_pushed', expect: { op: '>=', value: 0 } } }; expectError(ctx, /at/);
 });

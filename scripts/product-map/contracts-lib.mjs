@@ -124,6 +124,30 @@ function validateActivity(ctx, capId, a, probesByKey, checksPath, errors) {
   }
   const keys = a.steps.map((s) => s.key);
   if (new Set(keys).size !== keys.length) errors.push(`${at}: 步骤 key 重复`);
+  for (const s of a.steps) validateStepDod(ctx, capId, a, s, errors);
+}
+
+// 步骤 DoD（任务 9032cdad，决策 2a60378a）：结构由 schema 守，这里守语义——none 必写原因且不得 hard、
+// 非 none 必有 expect、sql 必按本批归属($RUN_TAG)、at 只能是本活动或其后（判定时产物已存在）
+function validateStepDod(ctx, capId, a, s, errors) {
+  const st = `${capId}.${a.key}.${s.key}`;
+  const d = s.dod;
+  if (!d) return;   // 缺 dod 由 schema 报
+  const rb = d.readback || {};
+  if (rb.type === 'none') {
+    if (!d.reason) errors.push(`${st}: dod readback=none 必须写 reason（为什么确实读不回）`);
+    if (d.mode === 'hard') errors.push(`${st}: dod mode=hard 却 readback=none（读不回的步骤不能硬拦）`);
+    return;
+  }
+  if (!rb.expect) errors.push(`${st}: dod readback 缺 expect`);
+  const need = { evidence: 'glob', log: 'regex', tsv: 'regex', ledger: 'field', metric: 'ref', sql: 'query', http: 'url' }[rb.type];
+  if (need && !rb[need]) errors.push(`${st}: dod readback type=${rb.type} 缺 ${need}`);
+  if (rb.type === 'sql' && !String(rb.query || '').includes('$RUN_TAG')) errors.push(`${st}: dod sql 读回必须按本批 $RUN_TAG 归属`);
+  if (d.at) {
+    const acts = ctx.contracts[capId].activities;
+    const target = acts.find((x) => x.key === d.at);
+    if (!target || (target.order ?? 0) < a.order) errors.push(`${st}: dod at=${d.at} 必须是本活动或其后的活动（判定时产物要已存在）`);
+  }
 }
 
 export function validateContracts(ctx) {
@@ -163,6 +187,27 @@ export function validateContracts(ctx) {
     errors.push(...assemble(ctx, capId).errors.filter((e) => !errors.includes(e)));
   }
   return errors;
+}
+
+// ─── 步骤 DoD 生成物（step-dod.json：随部署下发给统一裁判 step-judge.mjs / verify-step.mjs --steps）────────
+
+export function stepDodSpec(ctx, capId) {
+  const doc = ctx.contracts[capId];
+  const steps = [];
+  for (const a of [...doc.activities].filter((x) => !x.ref).sort((x, y) => x.order - y.order)) {
+    for (const s of [...a.steps].sort((x, y) => x.order - y.order)) {
+      const e = { key: `${capId}.${a.key}.${s.key}`, activity: a.key, at: s.dod.at || a.key, mode: s.dod.mode, readback: s.dod.readback };
+      if (s.dod.reason) e.reason = s.dod.reason;
+      steps.push(e);
+    }
+  }
+  return {
+    version: 1,
+    capability: capId,
+    contract_sha256: contractsDigest(ctx).capabilities[capId].sha256,
+    promotion: doc.dod_promotion || { min_consecutive_pass: 20 },
+    steps,
+  };
 }
 
 // ─── 组装 ──────────────────────────────────────────────────────────────────

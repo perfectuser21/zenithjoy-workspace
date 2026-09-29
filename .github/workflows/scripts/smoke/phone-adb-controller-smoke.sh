@@ -778,4 +778,14 @@ grep -qF 'profile_nickname_bounds "$xml"' "$C" || fail "extract_account_identity
 if grep -qF 'preceding-sibling::node[@class="android.widget.TextView"][1]' "$C"; then fail "旧昵称兜底(紧邻前一个 TextView)复活——0929 会读出未读角标 11"; fi
 grep -qF 'nickname="unknown"' "$C" || fail "read_current_account 取不准昵称时必须输出 unknown,不得输出错值"
 
+# 层32: 步骤 DoD 统一裁判(任务 9032cdad,决策 2a60378a)——裁判/清单/统计必须在,且随部署下发到执行机与 mmv;
+# workflow-result.sh 每写一个活动工件都要调裁判(judge_steps),verify-step 要能带回 sql/http 步骤(--steps)。
+# step-dod.json 与契约一致由 scripts/product-map/__tests__/contracts.test.js 钉(改契约必须重跑 gen-step-dod.mjs)。
+for _sf in step-judge.mjs step-dod-stats.mjs; do [[ -s "$D/$_sf" ]] || fail "$_sf 缺失"; node --check "$D/$_sf" || fail "$_sf 语法错误"; done
+node -e 'const s=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(!Array.isArray(s.steps)||s.steps.length<43) process.exit(1)' "$D/step-dod.json" || fail "step-dod.json 缺失/坏/不足 43 步"
+grep -qE '^DEVICE_NODE_FILES=\(.*step-judge\.mjs.*step-dod\.json' "$_DEPLOY" || fail "deploy.sh DEVICE_NODE_FILES 漏了 step-judge.mjs/step-dod.json(执行机判不了步骤 DoD)"
+grep -qF 'step-judge.mjs step-dod.json step-dod-stats.mjs' <<< "$(sed -n '/^MMV_PROBE_FILES=(/,/)/p' "$_DEPLOY")" || fail "deploy.sh MMV_PROBE_FILES 漏了裁判/清单/统计"
+grep -qF 'judge_steps "$stage"' "$D/workflow-result.sh" || fail "workflow-result.sh 写工件时没调步骤 DoD 裁判"
+grep -qF 'remote="$remote --steps"' "$D/workflow-result.sh" || fail "probe_stage 没带 --steps(sql/http 步骤读不回)"
+
 echo "phone-adb-controller-smoke: PASS"

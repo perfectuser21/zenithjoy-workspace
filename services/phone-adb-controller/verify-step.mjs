@@ -27,6 +27,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
+import { evaluateExpect } from "./step-judge.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -150,25 +151,8 @@ function readMetric(probe, params) {
   return v;
 }
 
-// expect 判定：observed 与 value / metrics[ref] 比较；判不了（ref 缺、observed 非数值）→ null
-export function evaluateExpect(expect, observed, metrics = {}) {
-  if (!expect) return null;
-  if (expect.op === "not_null_all") {
-    const arr = Array.isArray(observed) ? observed : [observed];
-    return arr.every((v) => v !== null && v !== undefined && String(v) !== "");
-  }
-  let want = expect.value;
-  if (expect.ref !== undefined) {
-    want = metrics?.[String(expect.ref).replace(/^metrics\./, "")];
-    if (want === undefined) return null;
-  }
-  const a = Number(observed), b = Number(want);
-  if (observed === null || observed === "" || Array.isArray(observed) || !Number.isFinite(a) || !Number.isFinite(b)) return null;
-  if (expect.op === ">=") return a >= b;
-  if (expect.op === "<=") return a <= b;
-  if (expect.op === "==") return a === b;
-  return null;
-}
+// expect 判定口径与步骤统一裁判共用一份（step-judge.mjs，9032cdad），这里再导出保持既有调用方不变
+export { evaluateExpect };
 
 export function summarizeGate(probes) {
   if (!probes.length) return { verdict: "none", action: "continue", failed: [], unknown: [], alert: false };
@@ -216,6 +200,28 @@ export async function runProbes({ doc, stage, params, deps = {}, timeoutMs = 600
   return { stage, probes, gate: summarizeGate(probes) };
 }
 
+// runSteps（任务 9032cdad）：步骤 DoD 里需要在 mmv 读的两类（sql / http）——at==stage 的步骤按探针同一套取法读回并判 pass，
+// 结果随探针一起带回执行机，由 step-judge.mjs 合并进本活动的 step_dod。其余类型不在这里判。
+export async function runSteps({ spec, stage, params, deps = {}, timeoutMs = 60000 }) {
+  const now = deps.now || (() => new Date().toISOString());
+  const d = { ...deps, fetch: deps.fetch || globalThis.fetch };
+  const getToken = tokenGetter(params, d);
+  const specs = (spec?.steps || []).filter((s) => (s.at || s.activity) === stage && ["sql", "http"].includes(s.readback?.type));
+  const results = specs.map((s) => ({ key: s.key, error: "timeout" }));
+  const jobs = specs.map(async (s, i) => {
+    try {
+      const observed = s.readback.type === "sql" ? await runSql(s.readback, params, d) : await runHttp(s.readback, params, d, getToken);
+      results[i] = { key: s.key, observed, pass: evaluateExpect(s.readback.expect, observed, params.metrics), probed_at: now() };
+    } catch (e) {
+      results[i] = { key: s.key, pass: null, error: String((e && e.message) || e).slice(0, 300), probed_at: now() };
+    }
+  });
+  let timer;
+  await Promise.race([Promise.all(jobs), new Promise((res) => { timer = setTimeout(res, timeoutMs); })]);
+  clearTimeout(timer);
+  return results;
+}
+
 // resolveLineKey: --line-key 拿到的是 profile 名（workflow-result.sh 传 WFR_PROFILE=jinoshengyuan-work），而 PG
 // leadgen_videos.line_key 存的是路由键 jinuo（push-videos.js:57 ROUTE.key）——$LINE_KEY 替换前先经 routeOf().key 归一；
 // 认不出（routeOf 抛错）原样透传，让 SQL/飞书那一侧自己报 error，而不是在这里把整段探针吞掉。
@@ -255,6 +261,13 @@ async function main() {
     const timeoutMs = Number(a["timeout-ms"]) > 0 ? Number(a["timeout-ms"]) : 60000;
     const out = await runProbes({ doc, stage, params, deps, timeoutMs });
     for (const p of out.probes) if (p.error) warn(`${p.key}: ${p.error}`);
+    if (a.steps !== undefined) {
+      // --steps [path]：顺带判本活动步骤 DoD 的 sql/http 读回（默认同目录 step-dod.json）
+      try {
+        const spec = JSON.parse(readFileSync(a.steps || join(HERE, "step-dod.json"), "utf8"));
+        out.steps = await runSteps({ spec, stage, params, deps, timeoutMs });
+      } catch (e) { warn(`steps: ${String((e && e.message) || e)}`); out.steps = []; }
+    }
     emit(out);
   } catch (e) {
     warn(String((e && e.stack) || e));

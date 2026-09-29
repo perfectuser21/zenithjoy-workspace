@@ -24,7 +24,14 @@
         "else": { "$ref": "#/$defs/activity" }
       }
     },
-    "known_gaps": { "$ref": "#/$defs/gaps" }
+    "known_gaps": { "$ref": "#/$defs/gaps" },
+    "dod_promotion": {
+      "description": "任务 9032cdad / 决策 2a60378a：步骤 DoD 由 checkpoint 升 hard 的门槛——统一裁判连续 N 次判定通过（无失败、无读不回）才列为可升，升级本身改契约发 PR",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min_consecutive_pass"],
+      "properties": { "min_consecutive_pass": { "type": "integer", "minimum": 10 } }
+    }
   },
   "$defs": {
     "key": { "type": "string", "pattern": "^[a-z][a-z_]*[a-z]$" },
@@ -76,7 +83,7 @@
     "step": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["key", "name", "order", "reads", "writes", "check", "implementation", "uses_llm"],
+      "required": ["key", "name", "order", "reads", "writes", "check", "implementation", "uses_llm", "dod"],
       "properties": {
         "key": { "$ref": "#/$defs/key" },
         "name": { "type": "string", "minLength": 2 },
@@ -93,7 +100,48 @@
             "ref": { "type": "string", "minLength": 3 }
           }
         },
-        "uses_llm": { "type": "boolean" }
+        "uses_llm": { "type": "boolean" },
+        "dod": { "$ref": "#/$defs/dod" }
+      }
+    },
+    "dod": {
+      "description": "步骤 DoD（任务 9032cdad，决策 2a60378a）：文字 check 的机器可执行读回断言，由外部统一裁判（step-judge.mjs 执行机本地类 + verify-step.mjs --steps 在 mmv 的 sql/http 类）在活动工件写出时判定并写进账本。mode=checkpoint 只记录不拦，hard 不过则本活动判 fail_stage。at=在哪个活动结束时判（默认本活动；只能是本活动或其后）。type=none 表示确实读不回，必须写 reason。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "readback"],
+      "properties": {
+        "mode": { "enum": ["checkpoint", "hard"] },
+        "at": { "$ref": "#/$defs/key" },
+        "reason": { "type": "string", "minLength": 10 },
+        "readback": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "enum": ["metric", "evidence", "log", "tsv", "ledger", "sql", "http", "none"] },
+            "ref": { "type": "string", "pattern": "^metrics\\.[a-z][a-z0-9_]*$" },
+            "glob": { "type": "string", "minLength": 3 },
+            "match": { "type": "string", "minLength": 1 },
+            "regex": { "type": "string", "minLength": 1 },
+            "stage": { "$ref": "#/$defs/key" },
+            "field": { "enum": ["status", "items_total"] },
+            "equals": { "type": "string" },
+            "query": { "type": "string", "minLength": 8 },
+            "url": { "type": "string", "pattern": "^https://open\\.feishu\\.cn/" },
+            "filter": { "type": "object", "minProperties": 1 },
+            "reduce": { "type": "string", "pattern": "^(count|field:.+)$" },
+            "expect": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["op"],
+              "properties": {
+                "op": { "enum": [">=", "<=", "==", "not_null_all"] },
+                "value": { "type": "number" },
+                "ref": { "type": "string", "pattern": "^metrics\\.[a-z][a-z0-9_]*$" }
+              }
+            }
+          }
+        }
       }
     },
     "activity": {
