@@ -118,7 +118,7 @@ jobs:
           cd "$REPO"
           if ! DEPLOY_LOG=$(bash services/phone-adb-controller/deploy.sh </dev/null 2>&1); then
             echo "$DEPLOY_LOG"
-            DEPLOY_FAIL_DETAIL="$(echo "$DEPLOY_LOG" | grep '❌' | head -3 | tr '\n' ';')"
+            DEPLOY_FAIL_DETAIL="$(echo "$DEPLOY_LOG" | grep '❌' | head -3 | tr '\n' ';' || true)"
             [[ -z "$DEPLOY_FAIL_DETAIL" ]] && DEPLOY_FAIL_DETAIL="$(echo "$DEPLOY_LOG" | tail -5 | tr '\n' ';')"
             notify "phone-adb自动部署失败" "deploy.sh失败(可能已部分部署,三机版本可能不一致): ${DEPLOY_FAIL_DETAIL}(sha=${DEPLOY_SHA:0:8})"
             exit 1

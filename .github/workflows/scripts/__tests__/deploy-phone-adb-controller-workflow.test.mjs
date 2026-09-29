@@ -81,7 +81,16 @@ test("成功判定断言 drift-check 输出里真的含 DRIFT_CHECK OK（防第�
   const yamlText = fs.readFileSync(WORKFLOW_PATH, "utf8");
   assert.match(
     yamlText,
-    /DRIFT_CHECK OK/,
-    "成功通知前必须校验 DRIFT_LOG 里包含 DRIFT_CHECK OK，不能只看 drift-check.sh 的退出码",
+    /grep -q ["']DRIFT_CHECK OK["']/,
+    "成功通知前必须校验 DRIFT_LOG 里包含 DRIFT_CHECK OK，不能只看 drift-check.sh 的退出码（必须是 grep -q \"DRIFT_CHECK OK\" 这个判断语句本身，不能只匹配裸字符串，否则判断语句被删掉换成 true 之类的，测试还是绿的）",
+  );
+});
+
+test("DEPLOY_FAIL_DETAIL赋值带 || true(防set -e下grep空匹配杀脚本回归)", () => {
+  const yamlText = fs.readFileSync(WORKFLOW_PATH, "utf8");
+  assert.match(
+    yamlText,
+    /grep '❌' \| head -3 \| tr '\\n' ';' \|\| true\)"/,
+    "DEPLOY_FAIL_DETAIL赋值末尾必须有 || true，否则deploy.sh输出里没有❌时(最常见失败场景之一，比如某台机器连不上)set -e会直接杀死整个脚本，导致连专属Bark告警都发不出去",
   );
 });
