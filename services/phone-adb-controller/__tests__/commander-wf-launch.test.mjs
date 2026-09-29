@@ -111,6 +111,14 @@ test("--allow-missing 透传给 wf-run；能力校验认 plans/<cap>.plan", () =
   assert.match(lines.find((l) => l.includes("nohup")), / 6 1 --allow-missing --tag cmd\d{8}/);
 });
 
+test("TAG 按北京时间生成（网关 MMV 系统时区是美西，0930 实证 00:41 被打成 cmd09290941）", () => {
+  const { env } = setup();
+  const r = run([...BASE, "--dry-run"], { ...env, TZ: "America/Los_Angeles" });
+  assert.equal(r.status, 0, r.stderr);
+  const bj = spawnSync("date", ["+%m%d%H"], { encoding: "utf8", env: { ...process.env, TZ: "Asia/Shanghai" } }).stdout.trim();
+  assert.match(r.stdout, new RegExp(`tag=cmd${bj}\\d{2} `));
+});
+
 test("--dry-run 不写源、不登记 escort、不起跑", () => {
   const { home, env } = setup();
   const r = run([...BASE, "--dry-run"], env);
