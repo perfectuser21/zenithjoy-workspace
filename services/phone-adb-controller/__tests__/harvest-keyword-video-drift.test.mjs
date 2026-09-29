@@ -62,8 +62,8 @@ seq_reply() {
 }
 case "$CMD" in
   lock-acquire) exit 0;;
-  lock-release) exit 0;;
-  lock-refresh) exit 0;;
+  lock-release) printf 'lock=released owner=TAG\\n'; exit 0;;
+  lock-refresh) printf 'lock=refreshed owner=TAG ttl=1800s\\n'; exit 0;;
   open-app) exit 0;;
   open-search) exit 0;;
   search-video-tab) exit 0;;

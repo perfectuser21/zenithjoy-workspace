@@ -66,7 +66,10 @@ async function judgePrimary(text, targetProfile, { httpPost = defaultHttpPost, a
   if ((ans.confidence ?? 0) < CONFIDENCE_THRESHOLD) {
     return { verdict: "UNCERTAIN", reason: `低置信度(${ans.confidence})` };
   }
-  return { verdict: ans.choice.toUpperCase(), reason: ans.choice === "matched" ? null : `confidence=${ans.confidence}` };
+  // 0929修复(DoD审计发现): matched结果之前给的是 reason:null——契约要求judgment_reason
+  // 非空(便于事后追溯"为什么这条视频通过了"),之前代码对此没有任何感知，markVideoJudgment
+  // 也不校验，matched视频的judgment_reason在库里必为NULL。两态都给真实原因，不再留null。
+  return { verdict: ans.choice.toUpperCase(), reason: `jev:${ans.choice}(confidence=${ans.confidence})` };
 }
 
 // 复核官:大模型,只回答"准"或"不准",无法解析一律保守判"不准"(存疑不放行,

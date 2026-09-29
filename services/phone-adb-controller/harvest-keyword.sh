@@ -40,7 +40,10 @@ SEENVIDS="$(mktemp -t seen-videos)"
 ssh -o ConnectTimeout=15 mmv "node /Users/administrator/.openclaw/leadgen-scripts/fetch-seen-videos.js '$LINE'" > "$SEENVIDS" 2>/dev/null
 
 $C --profile "$P" lock-acquire "$TAG" >/dev/null 2>&1 || { log "锁被占,退出"; rm -f "$SEENVIDS"; exit 3; }
-trap '$C --profile "$P" lock-release "$TAG" >/dev/null 2>&1; rm -f "$SEENVIDS"' EXIT
+# 0929修复(DoD审计发现): release_lock之前输出全丢进/dev/null,底层"只能释放自己持有的锁"
+# 的真实校验结果完全看不见——释放失败会漏锁,下一批误判"锁被占"或者更糟地跟正在跑的
+# 上一批撞车,之前谁都不知道发生过这种事。现在留痕(不改变trap本身的执行,只是把结果记下来)。
+trap '_RELOUT=$($C --profile "$P" lock-release "$TAG" 2>&1); print -- "$_RELOUT" | grep -qE "^lock=(released|free)" || log "⚠️ 放锁未确认成功: $(print -- "$_RELOUT" | tail -1 | head -c 150)"; rm -f "$SEENVIDS"' EXIT
 
 $C --profile "$P" open-app >/dev/null 2>&1; sleep 2
 $C --profile "$P" open-search "$KW" >/dev/null 2>&1 || { log "open-search失败"; exit 1; }
@@ -60,7 +63,11 @@ for CARDLINE in "${(f)CARDS}"; do
   log "视频$i: ${TITLE:0:40}"
   wr note --profile "$P" "视频$i: ${TITLE:0:40}"
   # 0914 融合刀6: 活锁心跳——每视频续一次,长采收绝不再被 TTL 判 stale 抢占
-  $C --profile "$P" lock-refresh "$TAG" </dev/null >/dev/null 2>&1 || true
+  # 0929修复(DoD审计发现): 之前输出+退出码全丢进/dev/null+`|| true`——TTL(1800s)到点
+  # 没人知道续期一直在失败,直到锁被别的轮次抢走才现形(0928夜实证过一次真实撞车:两条
+  # 并发批次同时驱动同一台设备)。续一次失败不足以整批夭折(有30分钟buffer),但必须留痕。
+  _LROUT=$($C --profile "$P" lock-refresh "$TAG" </dev/null 2>&1)
+  print -- "$_LROUT" | grep -q "^lock=refreshed" || log "⚠️ 锁心跳续期未确认成功(可能已被抢占): $(print -- "$_LROUT" | tail -1 | head -c 150)"
   $C --profile "$P" tap-evidence "$X" "$Y" "$TAG-v$i" >/dev/null 2>&1
   sleep 3
   # 0914 主理人验收字段: 原爆款作品地址。current-video-link 自带 note(图文)检测,
@@ -73,8 +80,17 @@ for CARDLINE in "${(f)CARDS}"; do
     continue
   fi
   VID="$(print -- "$VLINK" | sed -n "s/^video_id=//p")"
-  [[ -n "$VURL" ]] && log "  作品链接: $VURL"
-  if [[ -n "$VID" ]] && grep -qxF "$VID" "$SEENVIDS" 2>/dev/null; then
+  # 0929修复(DoD审计发现): current-video-link 失败(超时/解析不出)时上面 `|| true` 吞掉
+  # 错误,VID/VURL 就是空字符串——不检查空值会继续往下录屏、采评论、产出 video_id/video_url
+  # 都是空的 LEAD 行(video_drifted 对空 VID 保守放行,拦不住这种情况,是另一道口子)。
+  # 拿不到视频身份就不该动这条视频,同"图文帖跳过"处理。
+  if [[ -z "$VID" || -z "$VURL" ]]; then
+    log "  视频链接解析失败(VID=${VID:-空} VURL=${VURL:-空}),跳过"
+    $C --profile "$P" back-to-results >/dev/null 2>&1 || true
+    continue
+  fi
+  log "  作品链接: $VURL"
+  if grep -qxF "$VID" "$SEENVIDS" 2>/dev/null; then
     log "  视频已处理过,跳过: $VID"
     $C --profile "$P" back-to-results >/dev/null 2>&1 || true
     continue
@@ -257,6 +273,12 @@ for CARDLINE in "${(f)CARDS}"; do
         sleep 3
         CARD="$("$C" --profile "$P" commenter-card-link "$TAG-v$i-u$j-cl" </dev/null 2>/dev/null || true)"
         PURL="$(print -- "$CARD" | sed -n "s/^profile_url=//p")"
+        # 0929修复(DoD审计发现): 底层 commenter-card-link 失败(面板打不开/按钮找不到等)有
+        # 真实 die,但这里 `|| true` 吞掉,PURL 就是空字符串,之前不检查直接照发 LEAD 行。
+        # profile_url 是触达阶段(pick_order 读 Lead.profile_url)定位客户的直链，比 douyin_id
+        # 更可靠——不像视频身份错配那样必须整条作废(nickname/douyin_id仍是有效线索)，
+        # 但缺失必须留痕，不能悄悄发出一条主页链接是空的线索。
+        [[ -z "$PURL" ]] && log "  行$j 主页直链解析失败(douyin_id=${OID:-空})，线索仍保留但触达阶段需退回抖音号搜索"
         print -- "LEAD	$ONICK	${OID:-}	${ATYPE:-personal}	$BODY	$DATE	$REGION	$TITLE	$KWTXT	${PIP:-}	${PURL:-}	${VURL:-}"
         sleep 4
       done

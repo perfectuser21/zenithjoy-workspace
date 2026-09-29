@@ -74,6 +74,14 @@ test("markVideoJudgment: matched/rejected合法写入", async () => {
   assert.deepEqual(pool.calls[0].params, ["jinuo", "v1", "matched", "画像匹配", "转写文案"]);
 });
 
+test("markVideoJudgment: reason为空/null拒绝写库(0929修复——之前matched可以悄悄落NULL)", () => {
+  const pool = fakePool([{ rows: [] }]);
+  assert.throws(() => markVideoJudgment(pool, { lineKey: "jinuo", videoId: "v1", verdict: "matched", reason: null }));
+  assert.throws(() => markVideoJudgment(pool, { lineKey: "jinuo", videoId: "v1", verdict: "matched", reason: "" }));
+  assert.throws(() => markVideoJudgment(pool, { lineKey: "jinuo", videoId: "v1", verdict: "matched", reason: "   " }));
+  assert.equal(pool.calls.length, 0, "任何一次拒绝都不该真的执行了SQL");
+});
+
 test("upsertComment: 用commentDedupKey算出的key去重,写入全部字段", async () => {
   const pool = fakePool([{ rows: [{ id: "c1" }] }]);
   const r = await upsertComment(pool, {

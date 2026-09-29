@@ -43,6 +43,11 @@ escort_alive(){
   out=$(ssh -o ConnectTimeout=20 mmv "openclaw cron list" 2>>${LOG:-/dev/null}) || true
   [[ -n "$(awk -v id="$id" '$1==id' <<< "$out")" ]]
 }
+# device_call_busy MCALLSTATE —— 0929修复(DoD审计发现): 契约"验通话空闲"是死代码,
+# douyin-phone-adb的preflight子命令里有真实call_state检测(telephony.registry的
+# mCallState),但从建成起就没有调用链路碰过它,harvest-cron.sh自己的preflight只查
+# 在线+唤醒,从不查通话状态。mCallState: 0=idle 1=ringing 2=offhook,1/2都算占线。
+device_call_busy(){ [[ "$1" == 1 || "$1" == 2 ]]; }
 [[ "${HARVEST_CRON_LIB:-0}" == "1" ]] && return 0
 set -uo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -131,6 +136,13 @@ if [[ "$W" != *Awake* ]]; then
   adb -s $SERIAL shell input swipe 600 2200 600 800 300; /bin/sleep 1
 fi
 adb -s $SERIAL shell svc power stayon true 2>/dev/null
+CALLSTATE=$(adb -s $SERIAL shell dumpsys telephony.registry 2>/dev/null | awk -F= '/mCallState=/{gsub(/\r/,"",$2); print $2; exit}')
+if device_call_busy "$CALLSTATE"; then
+  log "设备通话中(mCallState=$CALLSTATE),退出"
+  escalate "设备 $SERIAL 通话中(mCallState=$CALLSTATE),本批无法起跑;请查是否有未挂断的电话"
+  wr fail "$SERIAL" 1 call_busy "设备通话中(mCallState=$CALLSTATE)"
+  exit 0
+fi
 wr step "$SERIAL" 1 done
 
 # 触达时窗守卫: 8-22点是触达的地盘,采收 cron 不该在白天抢(冗余保险,crontab已限时)
