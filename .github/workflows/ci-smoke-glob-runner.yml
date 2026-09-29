@@ -84,6 +84,14 @@ jobs:
       # 评论意向判定链 0922 迁到 OpenRouter（ToAPIs 侧无一模型能同时过三关，
       # 见 comment-grading.ts 注释）。TOAPIS_API_KEY 保留为回退凭据。
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      # 0929: OpenRouter 账户余额耗尽(402)阻塞全仓库CI，实测 TOAPIS 账户有余额且
+      # deepseek-v4-flash 真调 25/25 批量全出档/finish=stop/2.7s(决策 703c1532)。
+      # comment-grading.ts 的 apiKey/base 解析都优先取 GRADING_* 三个变量，设了它们
+      # 就绕开 OPENROUTER_API_KEY 优先级，不用等账户充值也不用改代码。哪天 OpenRouter
+      # 恢复/TOAPIS 这条渠道又坏了（本文件两个月内已经来回切了五次），删这三行即可退回。
+      GRADING_API_KEY: ${{ secrets.GRADING_API_KEY }}
+      GRADING_BASE_URL: ${{ secrets.GRADING_BASE_URL }}
+      GRADING_MODEL: ${{ secrets.GRADING_MODEL }}
 
     steps:
       - uses: actions/checkout@v4
