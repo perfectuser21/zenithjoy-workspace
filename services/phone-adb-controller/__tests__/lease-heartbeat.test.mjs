@@ -52,6 +52,23 @@ test('wall-report heartbeat：老服务端没有 /heartbeat（404）→ 退回 n
   assert.equal(last.status, 'doing');
 });
 
+// 0929 上线实测：旧版生产 API 对未知路由先过全局鉴权，回的是 401 而不是 404——只认 404 的退回分支在 promote 前不生效
+test('wall-report heartbeat：旧服务端对未知路由回 401 → 同样退回 note 式续租', async (t) => {
+  const { api, env } = await setup(t, { heartbeatCode: 401 });
+  await wr(env, 'start', 'SER1', 't', 'a,b,c,d');
+  await wr(env, 'step', 'SER1', '3', 'doing', '词1');
+  await wr(env, 'heartbeat', 'SER1');
+  assert.equal(api.requests.filter((x) => /\/steps$/.test(x.url)).length, 2);
+});
+
+test('wall-report heartbeat：409（任务已结束）→ 不退回 note，执行器该停手', async (t) => {
+  const { api, env } = await setup(t, { heartbeatCode: 409 });
+  await wr(env, 'start', 'SER1', 't', 'a,b,c,d');
+  await wr(env, 'step', 'SER1', '3', 'doing', '词1');
+  await wr(env, 'heartbeat', 'SER1');
+  assert.equal(api.requests.filter((x) => /\/steps$/.test(x.url)).length, 1);
+});
+
 test('wall-report heartbeat：无进行中任务 → 不发请求', async (t) => {
   const { api, env } = await setup(t);
   const r = await wr(env, 'heartbeat', 'SER1');
