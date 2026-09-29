@@ -182,3 +182,21 @@ test('接线守卫：back_to_results_and_maybe_rescan 命中兜底重搜必须�
   assert.match(body, /\bi=0\b/,
     '没有把 i 重置为 0——外层循环会接着旧的索引位置走，跟新扫到的卡片对不上');
 });
+
+test('接线守卫：兜底重搜后重扫卡片前必须先切回视频tab(否则永远扫到0张)', () => {
+  // 0929真机复现: douyin-phone-adb的兜底重搜只重新发起了open-search同等的搜索意图，
+  // 落地页默认是"综合"tab不是"视频"tab。search-video-cards前置要求必须在视频tab
+  // (见该子命令自己的注释)，不切tab直接扫永远是空结果——真机实测连续2个关键词
+  // 都命中这条路径，"重新扫描未拿到卡片"。
+  const kwPath = new URL('../harvest-keyword.sh', import.meta.url).pathname;
+  const src = readFileSync(kwPath, 'utf8');
+  const start = src.indexOf('back_to_results_and_maybe_rescan() {');
+  const end = src.indexOf('\n}\n', start);
+  const body = src.slice(start, end);
+
+  // 只看真实调用行(以 $C ... 开头)，不被注释文本里提前出现的关键词误导
+  const vtabIdx = body.indexOf('$C --profile "$P" search-video-tab');
+  const scanIdx = body.indexOf('$C --profile "$P" search-video-cards');
+  assert.ok(vtabIdx > 0, '兜底重搜命中后没有切回视频tab——重新扫描注定扫到0张卡片');
+  assert.ok(vtabIdx < scanIdx, 'search-video-tab 必须在 search-video-cards 之前执行，顺序反了等于没切');
+});

@@ -99,6 +99,14 @@ back_to_results_and_maybe_rescan() {
   btr_out="$($C --profile "$P" back-to-results 4 "$KWTXT" "$evid" </dev/null 2>&1 || true)"
   if print -- "$btr_out" | grep -q "recovered_via=research"; then
     log "  归位触发兜底重搜(原卡片坐标已失效)，重新扫描卡片列表"
+    # 0929真机复现补丁: douyin-phone-adb里的兜底重搜只重新发起了搜索意图(等同于
+    # 脚本最开头的open-search)，落地页默认是"综合"tab，不是"视频"tab——
+    # search-video-cards前置要求必须在视频tab(见该子命令自己的注释)，不切tab直接
+    # 扫永远是空结果。真机实测复现:12词里第1/2词都是这个路径,连续2次
+    # "重新扫描未拿到卡片"。这里补上跟脚本开头对称的 tab 切换+筛选重设，
+    # 不能假设"重新搜索=自动回到视频tab+原筛选条件"。
+    $C --profile "$P" search-video-tab "${evid}-rescan-vtab" >/dev/null 2>&1 || true
+    $C --profile "$P" search-time-layer six_months "${evid}-rescan-filter" most_liked unlimited unlimited "$LOC" >/dev/null 2>&1 || true
     newcards="$($C --profile "$P" search-video-cards "${evid}-rescan" 2>/dev/null | grep -E "^[0-9]+	" | head -"$MAXV")"
     if [[ -n "$newcards" ]]; then
       CARD_ARR=("${(@f)newcards}")
