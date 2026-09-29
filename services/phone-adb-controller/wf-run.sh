@@ -1,5 +1,5 @@
 #!/bin/zsh
-# wf-run.sh <能力> <profile> <serial> <biz> [n] [push] [--sources <文件>] [--commander <标签>] [--allow-missing]
+# wf-run.sh <能力> <profile> <serial> <biz> [n] [push] [--sources <文件>] [--commander <escort cron id>] [--tag <TAG>] [--allow-missing]
 # 契约组装执行的通用驱动(决策 7f842d12: Commander 当入口 + 契约组装执行)。由 harvest-cron.sh 泛化而来——
 #   harvest-cron.sh 现在是薄壳 `exec wf-run.sh keyword_acquisition "$@"`(现网 crontab 一字不改)。
 # 执行计划: ~/bin-harvest/plans/<能力>.plan(scripts/product-map/wf-plan.mjs 从契约生成、deploy.sh 同步),
@@ -7,7 +7,9 @@
 #   计划缺失 / 有未实现步骤(除非 --allow-missing) → 拒跑(无实现不得跑),拒跑发生在拉 escort 之前。
 # 取源: keyword → KPI 闸 + next-keywords 词单(原样);benchmark → 读 --sources 文件(每行一个对标主页链接或 sec_uid),
 #   KPI 达标仍退让但不按缺口放大。发现实现经 env DISCOVER_CMD 传给 batch2 → harvest-keyword。
-# --commander 给了 = 由 Commander 发起、它那边已登记 escort,跳过脚本自拉;没给 = 旧行为自拉 escort。
+# --commander <escort cron id> = 由 Commander 启动器(wf-launch.sh)发起、escort 已登记:跳过自拉,但把它当 ESCORT_ID
+#   (按 id 复核、退出 trap 注销);没给 = 旧行为自拉 escort。--tag 覆盖默认 TAG(autoMMDDHHMM)。
+# 起跑(计划通过后)向 stdout 打一行 `WF_RUN_STARTED tag=<TAG> cap=<能力> serial=<serial>` 供启动器确认。
 # 全自动: Commander上岗 → 设备preflight → 取源 → batch2 采收 → 落池 → 效果回写
 # 0916 改序(主理人拍板): Commander是第一步不是第三步——它必须看着 preflight 与取词单,
 #   因为 0915 凌晨三批正是死在这两步、静默 exit、全线 6 小时无人知晓。
@@ -24,10 +26,11 @@ WF_PLAN_DIR=${WF_PLAN_DIR:-$WF_HOME/plans}
 # wf_parse_args ARGS... —— 位置参数 <能力> <profile> <serial> <biz> [n] [push],选项可出现在任意位置
 wf_parse_args(){
   local -a pos
-  WF_SOURCES=""; WF_COMMANDER=""; WF_ALLOW_MISSING=${WF_ALLOW_MISSING:-0}
+  WF_SOURCES=""; WF_COMMANDER=""; WF_TAG=""; WF_ALLOW_MISSING=${WF_ALLOW_MISSING:-0}
   while (( $# )); do
     case "$1" in
       --sources) WF_SOURCES="${2:-}"; shift; (( $# )) && shift;;
+      --tag) WF_TAG="${2:-}"; shift; (( $# )) && shift;;
       --commander) WF_COMMANDER="${2:-}"; shift; (( $# )) && shift;;
       --allow-missing) WF_ALLOW_MISSING=1; shift;;
       *) pos+=("$1"); shift;;
@@ -179,7 +182,7 @@ gate_check(){
 set -uo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 wf_parse_args "$@"
-TAG="auto$(date +%m%d%H%M)"
+TAG="${WF_TAG:-auto$(date +%m%d%H%M)}"   # --tag 覆盖(启动器传 cmdMMDDHHMM,escort 会话名/日志/账本 run 对得上)
 C=${C:-$HOME/.local/bin/douyin-phone-adb}
 DOUYIN_ACCOUNT_REGISTRY="${DOUYIN_ACCOUNT_REGISTRY:-$HOME/.config/openclaw/douyin-account-routes.tsv}"
 LOG=~/harvest-cron.log
@@ -223,6 +226,8 @@ if [[ ! -x "$DISCOVER_CMD" ]]; then
   exit 1
 fi
 export DISCOVER_CMD
+# 起跑回执(启动器/Commander 看 nohup 日志确认已起跑);计划拒跑时不打
+print -r -- "WF_RUN_STARTED tag=$TAG cap=$WF_CAP serial=$SERIAL"
 log "执行计划: $WF_CAP 源=$WF_SOURCE_KIND 发现=$DISCOVER_CMD${WF_MISSING:+ 未实现(--allow-missing 放行)=$WF_MISSING}"
 WF_TITLE=获客采收; [[ "$WF_SOURCE_KIND" == "benchmark" ]] && WF_TITLE=对标采收
 wr start "$SERIAL" "$WF_TITLE·$BIZ" "$WF_STAGES"
@@ -254,13 +259,19 @@ if [[ -n "$ESCORT_ID" ]]; then
   /bin/sleep 30
   if escort_alive "$ESCORT_ID"; then log "escort复核命中(id=$ESCORT_ID)"
   else log "escort复核未命中(id=$ESCORT_ID)"; escalate "escort 拉起返回 id=$ESCORT_ID 但 30s 后 cron list(按 id)未命中，本批可能无人陪跑"; fi
-  escort_dismiss() { [[ -n "$ESCORT_ID" ]] && ssh -o ConnectTimeout=20 mmv "openclaw cron rm $ESCORT_ID" >>$LOG 2>&1 && log "escort已注销" }
 else
   log "escort拉起3次均失败(不阻塞采收)"
   escalate "escort拉起3次均失败,本批全程无陪跑;网关可能不可达或容器异常,请查网关健康"
 fi
 }
-if [[ -n "$WF_COMMANDER" ]]; then log "由 Commander 发起($WF_COMMANDER),escort 已由 Commander 登记,跳过自拉"
+escort_dismiss() { [[ -n "$ESCORT_ID" ]] && ssh -o ConnectTimeout=20 mmv "openclaw cron rm $ESCORT_ID" >>$LOG 2>&1 && log "escort已注销" }
+if [[ -n "$WF_COMMANDER" ]]; then
+  # --commander 的值 = 启动器(wf-launch.sh)已登记的 escort cron id: 当本批 ESCORT_ID 用——按 id 复核一次(登记在先,不再等 30s),
+  #   退出 trap 照旧 escort_dismiss 注销,生命周期与自拉的 escort 一致
+  ESCORT_ID="$WF_COMMANDER"
+  log "由 Commander 发起,escort=$ESCORT_ID(启动器已登记,跳过自拉)"
+  if escort_alive "$ESCORT_ID"; then log "escort复核命中(id=$ESCORT_ID)"
+  else log "escort复核未命中(id=$ESCORT_ID)"; escalate "Commander 传入的 escort id=$ESCORT_ID 在 cron list(按 id)未命中，本批可能无人陪跑"; fi
 else escort_launch; fi
 # 账本收工(trap 里跑,正常退让路径也会经过): 未 init 只记 skipped;自检不过 escalate
 run_finalize(){
