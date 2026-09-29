@@ -16,7 +16,7 @@ const { JudgeApiError, callOpenRouter, defaultHttpPost } = require("./judge-jev.
 const DECISIONS_ENDPOINT = "https://openrouter.ai/api/alpha/decisions";
 const COMMANDER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 const JEV_MODEL = "typesafe/jev-1.13"; // 0923真机核对过,真实可用
-const COMMANDER_MODEL = "google/gemini-2.5-flash-official";
+const COMMANDER_MODEL = "google/gemini-2.5-flash";
 const CONFIDENCE_THRESHOLD = 0.6; // 低于此值视为"拿不准",转复核官(与judge-jev.js同一阈值口径)
 const GRADES = ["A", "B", "C", "不相关"];
 
