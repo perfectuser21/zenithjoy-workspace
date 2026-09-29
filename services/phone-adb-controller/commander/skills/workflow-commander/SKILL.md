@@ -44,6 +44,7 @@ bash /Users/administrator/.openclaw/commander/wf-launch.sh <能力> <机器> <pr
 - `--push 0` = 只采不落库（试跑用）；默认 1。
 - `--allow-missing`：plan 里 `WF_MISSING` 非空（契约有未实现步骤）时 wf-run 默认拒跑；**只有主理人明确说「调试/试跑」才加**，并在回复里写明本次跑的是未验收实现。
 - 读最后一行 `WF_LAUNCHED tag=… escort=…` 回报主理人：跑的哪个能力、哪台机器哪部手机、TAG、陪跑 escort 已上岗。
+- **退出码 0 只代表「已起跑」**：预检（设备/账号/时窗/KPI）约 1 分钟后才出结果。没用 `wf-status.sh` 查到之前，**禁止说「预检已过」「没再被拦」**（0930 实证：刚发起就宣称账号校验已过，属编造）。想给结论就先等约 90 秒查一次 wf-status 再说。
 
 | 退出码 | 意思 | 你怎么做 |
 |---|---|---|
