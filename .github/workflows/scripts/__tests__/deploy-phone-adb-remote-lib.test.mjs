@@ -61,9 +61,17 @@ test("有未提交改动 → return 1，stderr 带 ABORT 提示", () => {
   assert.match(result.stderr, /ABORT: mmv本地checkout不干净,已跳过自动部署,需人工检查/);
 });
 
-test("有未跟踪新文件 → return 1", () => {
+test("只有未跟踪新文件(无已跟踪改动) → return 0，不阻拦部署", () => {
   const dir = makeTempRepo();
   fs.writeFileSync(path.join(dir, "untracked.txt"), "new\n");
+  const result = runCheck(dir);
+  assert.equal(result.code, 0);
+});
+
+test("未跟踪新文件 + 已跟踪文件改动同时存在 → 仍然 return 1", () => {
+  const dir = makeTempRepo();
+  fs.writeFileSync(path.join(dir, "untracked.txt"), "new\n");
+  fs.writeFileSync(path.join(dir, "a.txt"), "changed\n");
   const result = runCheck(dir);
   assert.equal(result.code, 1);
 });
