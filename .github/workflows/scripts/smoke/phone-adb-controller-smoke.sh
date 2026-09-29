@@ -746,4 +746,18 @@ for _arr in MMV_JS_FILES MMV_TOPLEVEL_FILES DEVICE_SH_FILES DEVICE_NODE_FILES DE
 done
 [[ -s "$D/launchd/com.zenithjoy.leadgen-drift-check.plist" ]] || fail "缺 drift-check 的 launchd 模板"
 
+# 层32: 截图回传 JPEG 副本 + 主页昵称几何提取(0929 真机事故回流)
+# 32a: 截图原图 PNG(约 3MB)经 file_fetch 回传堵死节点 ws 通道 → 截图必须旁生 720 宽/质量 70 的 jpg 并打印路径
+grep -qF 'jpeg_sidecar() {' "$C" || fail "控制器缺 jpeg_sidecar(截图回传 JPEG 副本,0929 节点断连事故)"
+grep -qF -- '-s formatOptions 70 --resampleWidth 720' "$C" || fail "jpeg_sidecar 转换参数被改(宽720/质量70是0929实测约180KB且可读的档位)"
+grep -qF 'jpeg_sidecar "$local_path"' "$C" || fail "snapshot_evidence 未生成 jpg 副本"
+grep -qF 'jpeg_sidecar "$LOCAL_SHOT"' "$C" || fail "snapshot/pull 未生成 jpg 副本"
+for _arm in snapshot-evidence tap-evidence swipe-evidence back-evidence; do
+  sed -n "/^  ${_arm})/,/;;/p" "$C" | grep -qF 'snapshot_evidence_cmd' || fail "${_arm} 未走 snapshot_evidence_cmd(不会打印 jpg= 行)"
+done
+# 32b: 昵称按「与抖音号左对齐的上方 TextView」取;旧兜底「抖音号紧邻前一个 TextView」取到未读角标 11,禁止复活
+grep -qF 'profile_nickname_bounds "$xml"' "$C" || fail "extract_account_identity 未走几何昵称提取"
+if grep -qF 'preceding-sibling::node[@class="android.widget.TextView"][1]' "$C"; then fail "旧昵称兜底(紧邻前一个 TextView)复活——0929 会读出未读角标 11"; fi
+grep -qF 'nickname="unknown"' "$C" || fail "read_current_account 取不准昵称时必须输出 unknown,不得输出错值"
+
 echo "phone-adb-controller-smoke: PASS"
