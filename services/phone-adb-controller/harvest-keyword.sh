@@ -73,8 +73,17 @@ for CARDLINE in "${(f)CARDS}"; do
     continue
   fi
   VID="$(print -- "$VLINK" | sed -n "s/^video_id=//p")"
-  [[ -n "$VURL" ]] && log "  作品链接: $VURL"
-  if [[ -n "$VID" ]] && grep -qxF "$VID" "$SEENVIDS" 2>/dev/null; then
+  # 0929修复(DoD审计发现): current-video-link 失败(超时/解析不出)时上面 `|| true` 吞掉
+  # 错误,VID/VURL 就是空字符串——不检查空值会继续往下录屏、采评论、产出 video_id/video_url
+  # 都是空的 LEAD 行(video_drifted 对空 VID 保守放行,拦不住这种情况,是另一道口子)。
+  # 拿不到视频身份就不该动这条视频,同"图文帖跳过"处理。
+  if [[ -z "$VID" || -z "$VURL" ]]; then
+    log "  视频链接解析失败(VID=${VID:-空} VURL=${VURL:-空}),跳过"
+    $C --profile "$P" back-to-results >/dev/null 2>&1 || true
+    continue
+  fi
+  log "  作品链接: $VURL"
+  if grep -qxF "$VID" "$SEENVIDS" 2>/dev/null; then
     log "  视频已处理过,跳过: $VID"
     $C --profile "$P" back-to-results >/dev/null 2>&1 || true
     continue
@@ -257,6 +266,12 @@ for CARDLINE in "${(f)CARDS}"; do
         sleep 3
         CARD="$("$C" --profile "$P" commenter-card-link "$TAG-v$i-u$j-cl" </dev/null 2>/dev/null || true)"
         PURL="$(print -- "$CARD" | sed -n "s/^profile_url=//p")"
+        # 0929修复(DoD审计发现): 底层 commenter-card-link 失败(面板打不开/按钮找不到等)有
+        # 真实 die,但这里 `|| true` 吞掉,PURL 就是空字符串,之前不检查直接照发 LEAD 行。
+        # profile_url 是触达阶段(pick_order 读 Lead.profile_url)定位客户的直链，比 douyin_id
+        # 更可靠——不像视频身份错配那样必须整条作废(nickname/douyin_id仍是有效线索)，
+        # 但缺失必须留痕，不能悄悄发出一条主页链接是空的线索。
+        [[ -z "$PURL" ]] && log "  行$j 主页直链解析失败(douyin_id=${OID:-空})，线索仍保留但触达阶段需退回抖音号搜索"
         print -- "LEAD	$ONICK	${OID:-}	${ATYPE:-personal}	$BODY	$DATE	$REGION	$TITLE	$KWTXT	${PIP:-}	${PURL:-}	${VURL:-}"
         sleep 4
       done
