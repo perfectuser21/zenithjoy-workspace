@@ -185,3 +185,30 @@ test('先判后采（8bb3af55）：候选落库/标记已采两步已实现，�
   assert.deepEqual(gaps.filter((g) => g.task === '8bb3af55').map((g) => g.gap), []);
   assert.match(act(ctx, 'keyword_acquisition', 'qualification').execution.via, /qualify-video\.js/);
 });
+
+// ── 任务 6b133a81：后置条件运行时拦截——探针的失败语义必须落在所属活动的 failure 闭集里 ──
+test('每条后置条件探针的 failure_class 必须是所属活动 failure 里声明过（非空）的分类', () => {
+  const ctx = fresh();
+  const probes = Object.values(ctx.checks).flatMap((d) => d.probes);
+  for (const a of ctx.contracts.keyword_acquisition.activities) {
+    for (const pc of a.postconditions) {
+      const p = probes.find((x) => x.key === pc.probe);
+      const cls = p.failure_class;
+      const declared = cls === 'needs_human' ? a.failure.needs_human.cases : a.failure[cls];
+      assert.ok(Array.isArray(declared) && declared.length > 0, `${a.key}.${pc.probe} failure_class=${cls} 未在活动 failure 声明`);
+    }
+  }
+});
+
+test('探针 failure_class 落在活动未声明的分类 → 报错（proven-to-fire）', () => {
+  const ctx = fresh();
+  const probe = Object.values(ctx.checks).flatMap((d) => d.probes).find((p) => p.key === 'pool_advanced');
+  probe.failure_class = 'fatal';   // scoring.failure.fatal = []
+  expectError(ctx, /pool_advanced.*fatal/);
+});
+
+test('契约 known_gaps 不再挂 6b133a81（运行时读回+拦截已全部落地）', () => {
+  const doc = fresh().contracts.keyword_acquisition;
+  const gaps = [...(doc.known_gaps || []), ...doc.activities.flatMap((a) => a.known_gaps || [])];
+  assert.deepEqual(gaps.filter((g) => g.task === '6b133a81').map((g) => g.gap), []);
+});

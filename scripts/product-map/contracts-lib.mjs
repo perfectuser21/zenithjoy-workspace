@@ -96,6 +96,10 @@ function validateActivity(ctx, capId, a, probesByKey, checksPath, errors) {
     const p = probesByKey.get(pc.probe);
     if (!p) { errors.push(`${at}: 后置条件探针 ${pc.probe} 不存在于 ${checksPath}`); continue; }
     if (p.stage !== a.key) errors.push(`${at}: 后置条件探针 ${pc.probe} stage=${p.stage} 与活动 ${a.key} 不符`);
+    // 6b133a81 运行时拦截：探针不过时按 failure_class 处理，该分类必须是本活动 failure 闭集里声明过（非空）的
+    const cls = p.failure_class;
+    const declared = cls === 'needs_human' ? a.failure?.needs_human?.cases : a.failure?.[cls];
+    if (!Array.isArray(declared) || declared.length === 0) errors.push(`${at}: 后置条件探针 ${pc.probe} failure_class=${cls} 未在活动 failure 声明（运行时拦截无失败语义可依）`);
   }
   if (a.steps.some((s) => s.uses_llm) && !a.model) errors.push(`${at}: 有 uses_llm 步骤但缺 model（模型与成本字段）`);
   const inTypes = new Set(a.inputs.map((i) => i.type));

@@ -4,7 +4,12 @@
 // 用法（workflow-result.sh stage 钩子在 POST Brain 前调用）：
 //   node verify-step.mjs --stage delivery --run-tag auto0926 --line-key jinoshengyuan-work [--word W]
 //        [--checks checks/social-keyword-leadgen.yaml] [--metrics-json f] [--timeout-ms 60000] [--deps <mjs url>]
-// stdout 恰好一行 JSON：{"stage","probes":[{key, observed, probed_at} | {key, probed_at, error}]}；永远 exit 0。
+// stdout 恰好一行 JSON：{"stage","probes":[{key, observed, probed_at, pass, failure_class, on_fail} | {key, probed_at, error, pass:null, ...}],
+//   "gate":{verdict, action, failed, unknown, alert}}；永远 exit 0。
+// 6b133a81 运行时拦截：读回同时按 expect 判 pass（evaluateExpect），汇总 gate（summarizeGate）——
+//   verdict pass/fail/unknown/none；action continue/fail_stage/stop_run（取失败探针的 on_fail，stop_run 优先）；
+//   alert = 有 failure_class 为 needs_human/fatal 的探针不过。读不回（error）→ pass=null → unknown/fail_stage（不许假绿、不停跑）。
+//   --metrics '<json>'：stage 工件 metrics 直接随命令传（工件在执行机上，mmv 读不到文件），供 metric 探针与 expect.ref。
 //
 // 约定（checks/social-keyword-leadgen.yaml 头注释）：
 //   sql  → leadgen-db-connect.js getPool()；占位符 '$RUN_TAG'/'$LINE_KEY'/'$WORD' 一律替换成 $1/$2 参数化，禁止拼接；
@@ -145,6 +150,43 @@ function readMetric(probe, params) {
   return v;
 }
 
+// expect 判定：observed 与 value / metrics[ref] 比较；判不了（ref 缺、observed 非数值）→ null
+export function evaluateExpect(expect, observed, metrics = {}) {
+  if (!expect) return null;
+  if (expect.op === "not_null_all") {
+    const arr = Array.isArray(observed) ? observed : [observed];
+    return arr.every((v) => v !== null && v !== undefined && String(v) !== "");
+  }
+  let want = expect.value;
+  if (expect.ref !== undefined) {
+    want = metrics?.[String(expect.ref).replace(/^metrics\./, "")];
+    if (want === undefined) return null;
+  }
+  const a = Number(observed), b = Number(want);
+  if (observed === null || observed === "" || Array.isArray(observed) || !Number.isFinite(a) || !Number.isFinite(b)) return null;
+  if (expect.op === ">=") return a >= b;
+  if (expect.op === "<=") return a <= b;
+  if (expect.op === "==") return a === b;
+  return null;
+}
+
+export function summarizeGate(probes) {
+  if (!probes.length) return { verdict: "none", action: "continue", failed: [], unknown: [], alert: false };
+  const bad = probes.filter((p) => p.pass === false);
+  const unknown = probes.filter((p) => p.pass !== true && p.pass !== false).map((p) => p.key);
+  if (bad.length) {
+    return {
+      verdict: "fail",
+      action: bad.some((p) => p.on_fail === "stop_run") ? "stop_run" : "fail_stage",
+      failed: bad.map((p) => p.key),
+      unknown,
+      alert: bad.some((p) => p.failure_class === "needs_human" || p.failure_class === "fatal"),
+    };
+  }
+  if (unknown.length) return { verdict: "unknown", action: "fail_stage", failed: [], unknown, alert: false };
+  return { verdict: "pass", action: "continue", failed: [], unknown: [], alert: false };
+}
+
 export async function runProbes({ doc, stage, params, deps = {}, timeoutMs = 60000 }) {
   const now = deps.now || (() => new Date().toISOString());
   const fetchFn = deps.fetch || globalThis.fetch;
@@ -165,7 +207,13 @@ export async function runProbes({ doc, stage, params, deps = {}, timeoutMs = 600
   let timer;
   await Promise.race([Promise.all(jobs), new Promise((res) => { timer = setTimeout(res, timeoutMs); })]);
   clearTimeout(timer);
-  return { stage, probes: results.map((r) => (r.probed_at ? r : { ...r, probed_at: now() })) };
+  const probes = results.map((r, i) => {
+    const spec = specs[i];
+    const base = r.probed_at ? r : { ...r, probed_at: now() };
+    const pass = base.error ? null : evaluateExpect(spec.expect, base.observed, params.metrics);
+    return { ...base, pass, failure_class: spec.failure_class, on_fail: spec.on_fail };
+  });
+  return { stage, probes, gate: summarizeGate(probes) };
 }
 
 // resolveLineKey: --line-key 拿到的是 profile 名（workflow-result.sh 传 WFR_PROFILE=jinoshengyuan-work），而 PG
@@ -192,13 +240,14 @@ async function main() {
   const stage = a.stage || "";
   const warn = (m) => process.stderr.write(`verify-step: ${m}\n`);
   try {
-    if (!stage) { warn("缺 --stage"); return emit({ stage, probes: [] }); }
+    if (!stage) { warn("缺 --stage"); return emit({ stage, probes: [], gate: summarizeGate([]) }); }
     const yamlPath = a.checks || join(HERE, "checks", "social-keyword-leadgen.yaml");
     const { loadChecks } = require(join(HERE, "checks", "probes-lib.js"));
     const { doc, errors } = loadChecks(yamlPath, join(HERE, "checks", "schema.json"));
     if (errors.length) { warn(`探针文件校验失败 ${yamlPath}: ${errors.join("; ")}`); return emit({ stage, probes: [] }); }
     const deps = a.deps ? (await import(a.deps)).default : {};
     const params = { runTag: a["run-tag"] || "", lineKey: resolveLineKey(a["line-key"]), word: a.word || "" };
+    if (a.metrics) params.metrics = JSON.parse(a.metrics);
     if (a["metrics-json"]) {
       const art = JSON.parse(readFileSync(a["metrics-json"], "utf8"));
       params.metrics = art.metrics ?? art;

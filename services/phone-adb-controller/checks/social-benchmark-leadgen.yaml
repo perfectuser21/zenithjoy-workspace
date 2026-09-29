@@ -22,6 +22,8 @@ probes:
       op: ">="
       ref: "metrics.candidates"
     severity: error
+    failure_class: retryable
+    on_fail: fail_stage
     note: >
       对标发现交出 = 对标账号近期视频清单，落 leadgen_videos（leadgen-db-lib.js:22-31 upsertVideo，
       keyword 记 bench:<sec_uid>）。形状与关键词发现 disc_candidates_persisted 相同，只是不按 $WORD 过滤。

@@ -87,9 +87,37 @@ CARDS="$("${DISCOVER_CMD:-${0:A:h}/discover-keyword.sh}" "$P" "$KW" "$MAXV" "$TA
 [[ -n "$CARDS" ]] || { log "无卡片"; exit 0; }
 log "卡片数: $(print -- "$CARDS" | wc -l | tr -d " ")"
 
+# back_to_results_and_maybe_rescan EVIDENCE_ID_PREFIX —— 0929修复(真机验证补丁):
+# back-to-results 命中 recovered_via=research 说明它是靠"重新发起本次搜索的意图"
+# 才归位成功的(见 douyin-phone-adb back_to_results 函数注释)，这个动作会重置筛选
+# 条件，页面上的卡片顺序/内容会变，本批一开始扫描存下的 CARD_ARR 坐标全部作废——
+# 继续拿着旧坐标点后面的卡只会点到不相干的内容(真机实证过一次:点开"NOT_ON_
+# VIDEO_DETAIL: share button absent")。命中就立刻重新扫描一次，把 CARD_ARR/i
+# 重置到新列表头，让外层循环用新坐标继续处理剩余候选，不是继续拿着废坐标瞎点。
+back_to_results_and_maybe_rescan() {
+  local evid="$1" btr_out newcards
+  btr_out="$($C --profile "$P" back-to-results 4 "$KWTXT" "$evid" </dev/null 2>&1 || true)"
+  if print -- "$btr_out" | grep -q "recovered_via=research"; then
+    log "  归位触发兜底重搜(原卡片坐标已失效)，重新扫描卡片列表"
+    newcards="$($C --profile "$P" search-video-cards "${evid}-rescan" 2>/dev/null | grep -E "^[0-9]+	" | head -"$MAXV")"
+    if [[ -n "$newcards" ]]; then
+      CARD_ARR=("${(@f)newcards}")
+      i=0
+      log "  重新扫描到 ${#CARD_ARR[@]} 张卡片，从头处理剩余候选"
+    else
+      log "  重新扫描未拿到卡片，本关键词候选到此为止"
+      CARD_ARR=()
+      i=0
+    fi
+  fi
+}
+
+typeset -a CARD_ARR
+CARD_ARR=("${(@f)CARDS}")
 i=0
-for CARDLINE in "${(f)CARDS}"; do
+while (( i < ${#CARD_ARR[@]} )); do
   i=$((i+1))
+  CARDLINE="${CARD_ARR[$i]}"
   X="$(print -- "$CARDLINE" | cut -f1)"; Y="$(print -- "$CARDLINE" | cut -f2)"
   DUR="$(print -- "$CARDLINE" | cut -f3)"; TITLE="$(print -- "$CARDLINE" | cut -f4)"
   log "视频$i: ${TITLE:0:40}"
@@ -116,7 +144,10 @@ for CARDLINE in "${(f)CARDS}"; do
   VURL="$(print -- "$VLINK" | sed -n "s/^short_url=//p")"
   if print -- "$VLINK" | grep -q "^excluded_non_video=true"; then
     log "  图文帖,跳过"
-    $C --profile "$P" back-to-results >/dev/null 2>&1 || true
+    # 0929修复(DoD审计发现真机复现): back-to-results 不传关键词只核实页面类型，
+    # 分不清"真结果页"和 current-video-link 内部的暂存草稿页(两者同 Activity)——
+    # 12词×3卡实测100%误判。传 $KW 让它多核一遍搜索框文字是不是这次搜的词。
+    back_to_results_and_maybe_rescan "$TAG-v$i-btr"
     continue
   fi
   VID="$(print -- "$VLINK" | sed -n "s/^video_id=//p")"
@@ -126,13 +157,19 @@ for CARDLINE in "${(f)CARDS}"; do
   # 拿不到视频身份就不该动这条视频,同"图文帖跳过"处理。
   if [[ -z "$VID" || -z "$VURL" ]]; then
     log "  视频链接解析失败(VID=${VID:-空} VURL=${VURL:-空}),跳过"
-    $C --profile "$P" back-to-results >/dev/null 2>&1 || true
+    # 0929修复(DoD审计发现真机复现): back-to-results 不传关键词只核实页面类型，
+    # 分不清"真结果页"和 current-video-link 内部的暂存草稿页(两者同 Activity)——
+    # 12词×3卡实测100%误判。传 $KW 让它多核一遍搜索框文字是不是这次搜的词。
+    back_to_results_and_maybe_rescan "$TAG-v$i-btr"
     continue
   fi
   log "  作品链接: $VURL"
   if grep -qxF "$VID" "$SEENVIDS" 2>/dev/null; then
     log "  视频已处理过,跳过: $VID"
-    $C --profile "$P" back-to-results >/dev/null 2>&1 || true
+    # 0929修复(DoD审计发现真机复现): back-to-results 不传关键词只核实页面类型，
+    # 分不清"真结果页"和 current-video-link 内部的暂存草稿页(两者同 Activity)——
+    # 12词×3卡实测100%误判。传 $KW 让它多核一遍搜索框文字是不是这次搜的词。
+    back_to_results_and_maybe_rescan "$TAG-v$i-btr"
     continue
   fi
   # 先判后采①: 候选落库(pending) + 取缓存判定——以前判过的 rejected 不再录不再判,matched 直接采
@@ -223,7 +260,10 @@ for CARDLINE in "${(f)CARDS}"; do
   if [[ "$QV" != matched ]]; then
     if [[ "$QV" == rejected ]]; then log "  判定不合格(rejected),不采评论"
     else log "  判定未出结论(pending: $(print -r -- "$QR" | head -c 150)),本视频本轮不采,留待重判"; fi
-    $C --profile "$P" back-to-results >/dev/null 2>&1 || true
+    # 0929修复(DoD审计发现真机复现): back-to-results 不传关键词只核实页面类型，
+    # 分不清"真结果页"和 current-video-link 内部的暂存草稿页(两者同 Activity)——
+    # 12词×3卡实测100%误判。走封装函数核实关键词+命中兜底重搜时重扫卡片。
+    back_to_results_and_maybe_rescan "$TAG-v$i-btr"
     continue
   fi
   log "  判定合格(matched/$QSRC),开采评论"
@@ -234,7 +274,10 @@ for CARDLINE in "${(f)CARDS}"; do
     OCOUT="$($C --profile "$P" open-comments "$TAG-v$i-oc2" </dev/null 2>/dev/null || true)"
     if ! print -- "$OCOUT" | grep -q "^comments_opened=1"; then
       log "  评论区重试仍打不开,跳过"
-      $C --profile "$P" back-to-results >/dev/null 2>&1 || true
+      # 0929修复(DoD审计发现真机复现): back-to-results 不传关键词只核实页面类型，
+    # 分不清"真结果页"和 current-video-link 内部的暂存草稿页(两者同 Activity)——
+    # 12词×3卡实测100%误判。传 $KW 让它多核一遍搜索框文字是不是这次搜的词。
+    back_to_results_and_maybe_rescan "$TAG-v$i-btr"
       continue
     fi
   fi
@@ -394,7 +437,10 @@ for CARDLINE in "${(f)CARDS}"; do
     log "  零评论"
     qual_remote collected --line "$LINE" --video-id "$VID" --count 0 >/dev/null
     # 评论面板开着也不用先 back 一次再归位——back-to-results 自己退到看见结果页为止
-    $C --profile "$P" back-to-results >/dev/null 2>&1 || true
+    # 0929修复(DoD审计发现真机复现): back-to-results 不传关键词只核实页面类型，
+    # 分不清"真结果页"和 current-video-link 内部的暂存草稿页(两者同 Activity)——
+    # 12词×3卡实测100%误判。传 $KW 让它多核一遍搜索框文字是不是这次搜的词。
+    back_to_results_and_maybe_rescan "$TAG-v$i-btr"
     continue
   fi
   log "  评论数: $(print -- "$CC" | wc -l | tr -d " ")"
@@ -405,7 +451,10 @@ for CARDLINE in "${(f)CARDS}"; do
   # 收评论面板+回搜索结果
   # 归位不数 back 次数：取过链接的视频栈里多一层，写死的次数必然退多或退少
   # （0922 实证：跳过分支 back 一次落在暂存解析页，后面每个视频都在错页面上瞎点）。
-  $C --profile "$P" back-to-results >/dev/null 2>&1 || true
+  # 0929修复(DoD审计发现真机复现): 只核实页面类型分不清"真结果页"和
+  # current-video-link 内部的暂存草稿页(两者同 Activity)——12词×3卡实测100%误判。
+  # 传 $KWTXT(解码后的可读关键词，搜索框显示的就是这个)多核一遍搜索框文字。
+  back_to_results_and_maybe_rescan "$TAG-v$i-btr"
   nap 3
 done
 log "关键词完成: $KWTXT"

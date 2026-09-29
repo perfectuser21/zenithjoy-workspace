@@ -128,6 +128,53 @@ lease_heartbeat_stop(){
   LEASE_HB_PID=""
   true
 }
+# ── 6b133a81 预检/归位真读 + 活动后置条件运行时拦截 ──
+# preflight_lock_acquire: 以本批 TAG 拿设备锁(契约 preflight.acquire_device_lock),拿到 LOCK_ACQUIRED=1;
+#   被占(触达 tick 在发,单 tick 预算 25 分钟)重试 PF_LOCK_TRIES=10 次(间隔 PF_LOCK_WAIT=60 秒)仍拿不到 → 0(pf_lock_acquired 不过 → stop_run 不开采)。
+#   逐词 harvest-keyword.sh 以 TAG-wN 申请同一把锁,douyin-phone-adb same_run_lock 前缀判同 run → 幂等续用。
+preflight_lock_acquire(){
+  local i tries="${PF_LOCK_TRIES:-10}"
+  LOCK_ACQUIRED=0
+  for (( i = 1; i <= tries; i++ )); do
+    if "$C" --profile "$P" lock-acquire "$TAG" </dev/null >/dev/null 2>>${LOG:-/dev/null}; then LOCK_ACQUIRED=1; break; fi
+    (( i < tries )) && /bin/sleep "${PF_LOCK_WAIT:-60}"
+  done
+  export LOCK_ACQUIRED
+}
+# release_run_lock: 收工放本批锁,再用 lock-status 真读(契约 cleanup.release_lock):free 或已被别的 run 持有 → WFR_LOCK_RELEASED=1;
+#   仍是本 run(TAG / TAG-wN)或读不到 → 0(cl_lock_released 不过 → 告警)。不依赖账本开关,早退路径也放锁。
+release_run_lock(){
+  local st owner
+  WFR_LOCK_RELEASED=0
+  if [[ -n "${C:-}" && -n "${TAG:-}" ]]; then
+    "$C" --profile "$P" lock-release "$TAG" </dev/null >/dev/null 2>&1
+    st=$("$C" --profile "$P" lock-status </dev/null 2>/dev/null)
+    if [[ "$st" == *lock=free* ]]; then WFR_LOCK_RELEASED=1
+    elif [[ "$st" == *owner=* ]]; then
+      owner="${${st#*owner=}%% *}"
+      [[ -n "$owner" && "$owner" != "$TAG" && "$owner" != "$TAG"-* ]] && WFR_LOCK_RELEASED=1
+    fi
+  fi
+  export WFR_LOCK_RELEASED
+}
+# gate_bark 标题 正文: 经 mmv 上的 notify-bark.js 发 Bark(同 outreach-tick.sh notify),失败吞掉
+gate_bark(){
+  local tb bb
+  tb=$(print -rn -- "$1" | base64 | tr -d '\n'); bb=$(print -rn -- "$2" | base64 | tr -d '\n')
+  ssh -o ConnectTimeout=15 -o BatchMode=yes mmv "node /Users/administrator/.openclaw/leadgen-scripts/notify-bark.js $tb $bb timeSensitive" </dev/null >/dev/null 2>&1
+  true
+}
+# gate_check 阶段名: 读账本拦截状态(workflow-result.sh gate)。needs_human/fatal 探针不过的新告警 → 升级分身 + Bark(每条只报一次);
+#   返回 0 = 已被 stop_run 拦截(调用方停后续活动,收工照做),1 = 没停
+gate_check(){
+  wfr_on && [[ -n "${WFR_RUN_ID:-}" ]] || return 1
+  eval "$(bash "$WFR" gate 2>>${LOG:-/dev/null})" 2>/dev/null || return 1
+  if [[ "${WFR_GATE_ALERT:-0}" == 1 ]]; then
+    (( $+functions[escalate] )) && escalate "活动后置条件不过($1): ${WFR_GATE_ALERT_MSG:-}"
+    gate_bark "获客采收被拦截" "${HOSTKEY:-} ${TAG:-} $1: ${WFR_GATE_ALERT_MSG:-}"
+  fi
+  [[ "${WFR_GATE_STOP:-0}" == 1 ]]
+}
 [[ "${WF_RUN_LIB:-0}" == "1" || "${HARVEST_CRON_LIB:-0}" == "1" ]] && return 0
 set -uo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -240,10 +287,11 @@ run_finalize(){
   fi
   export WFR_CLOSE_APP_ATTEMPTS WFR_SAFE_DESKTOP_VISIBLE
   eval "$(bash "$WFR" finalize 2>>$LOG)" 2>/dev/null || true
-  log "账本finalize: ok=${WFR_FINALIZE_OK:-?} ${WFR_FINALIZE_MSG:-}"
+  log "账本finalize: ok=${WFR_FINALIZE_OK:-?} final=${WFR_FINALIZE_FINAL:-?} lock_released=${WFR_LOCK_RELEASED:-?} ${WFR_FINALIZE_MSG:-}"
   [[ "${WFR_FINALIZE_OK:-0}" == "1" ]] || escalate "账本收工自检未通过: ${WFR_FINALIZE_MSG:-unknown}"
+  gate_check "收工" >/dev/null || true
 }
-if [[ -n "$ESCORT_ID" ]]; then trap 'lease_heartbeat_stop; escort_dismiss; run_finalize' EXIT INT TERM; else trap 'lease_heartbeat_stop; run_finalize' EXIT INT TERM; fi
+if [[ -n "$ESCORT_ID" ]]; then trap 'lease_heartbeat_stop; escort_dismiss; release_run_lock; run_finalize' EXIT INT TERM; else trap 'lease_heartbeat_stop; release_run_lock; run_finalize' EXIT INT TERM; fi
 wr step "$SERIAL" 0 done; wr step "$SERIAL" 1 doing
 
 # ── ② 设备 preflight: 在线 + 屏幕亮 + 解锁(0915 锁屏=整机瘫痪且静默的教训) ──
@@ -253,6 +301,7 @@ if ! adb -s $SERIAL get-state >/dev/null 2>&1; then
   wr fail "$SERIAL" 1 device_offline "adb get-state 失败"
   exit 0
 fi
+DEVICE_VERIFIED=1   # 6b133a81: 预检指标取真实结果,不再在 workflow-result.sh 写死
 W=$(adb -s $SERIAL shell dumpsys power | grep -oE "mWakefulness=[A-Za-z]+" | head -1 | tr -d "\r")
 if [[ "$W" != *Awake* ]]; then
   log "屏幕非Awake($W),唤醒解锁"
@@ -267,6 +316,7 @@ if device_call_busy "$CALLSTATE"; then
   wr fail "$SERIAL" 1 call_busy "设备通话中(mCallState=$CALLSTATE)"
   exit 0
 fi
+CALL_STATE_IDLE=1
 # 读账号标记(我页)/验账号身份 —— 0929批次4修复(DoD审计发现的死代码,详见 account_registered
 # 定义处注释): 读不到抖音号/登的号不在本profile注册表里,都判定为"账号有问题",升级分身+
 # 记账为需人工处理,不静默继续采(继续采只会产出归属存疑的线索)。
@@ -287,7 +337,7 @@ else
   ACCOUNT_VERIFIED=1
   log "账号验证通过: 我页抖音号=$DOUYIN_ID (profile=$P)"
 fi
-export ACCOUNT_VERIFIED DOUYIN_ID
+export ACCOUNT_VERIFIED DOUYIN_ID DEVICE_VERIFIED CALL_STATE_IDLE
 wr step "$SERIAL" 1 done
 
 # 触达时窗守卫: 8-22点是触达的地盘,采收 cron 不该在白天抢(冗余保险,crontab已限时)
@@ -363,8 +413,17 @@ fi
 NWORDS=$(wc -l < $WF | tr -d ' ')
 log "词单 ${NWORDS}词: $(tr '\n' '/' < $WF)"
 wr step "$SERIAL" 2 done; wr step "$SERIAL" 3 doing "${NWORDS}词"
+# 预检拿锁(契约 preflight.acquire_device_lock):拿到才算设备就绪,结果随 init 写进 preflight 工件读回
+preflight_lock_acquire
+log "预检拿锁: lock_acquired=$LOCK_ACQUIRED"
 wfr_bootstrap "$TAG" "$P" "$WF" "$PUSH" "$SERIAL" "$HOSTKEY"
 wfr_on && log "账本init: run=${WFR_RUN_ID:-?} hash=${WFR_HASH:-?} attempt=${WFR_ATTEMPT:-?} skip=${WFR_SKIP_WORDS:-}"
+# 6b133a81: 预检后置条件(设备/账号/通话/锁)读回不过 → stop_run,本批不开采(收工 trap 照做)
+if gate_check "预检"; then
+  log "预检后置条件不过,本批不开采: ${WFR_GATE_STAGE:-}:${WFR_GATE_KEYS:-}"
+  wr fail "$SERIAL" 3 preflight_postcondition "${WFR_GATE_KEYS:-}"
+  exit 0
+fi
 
 # ── ④ 采收主体 ──
 # 传原词单 $WF(init 时算 hash 用的就是它,传过滤后的副本会被 batch2 判 hash_mismatch 误报停跑);续跑跳词由 batch2 按 WFR_SKIP_WORDS 逐词做
@@ -373,6 +432,8 @@ lease_heartbeat_start "$SERIAL"
 B2OUT=$(/bin/zsh "$BATCH2" "$P" "$WF" "$TAG" "$PUSH" "$SERIAL" 2>&1 | tee -a $LOG || true)
 lease_heartbeat_stop
 if print -r -- "$B2OUT" | grep -q 'BATCH2_ESCALATE=hash_mismatch'; then escalate "词单在 init 后被改动(hash 不一致)，本批已停(fail-closed)"; fi
+GATE_STOPPED=0
+if gate_check "采收"; then GATE_STOPPED=1; log "活动后置条件拦截停跑: ${WFR_GATE_STAGE:-}:${WFR_GATE_KEYS:-}"; fi
 # 本批线索数随 done 上报(0929): 0 条线索的批次与出线索的批次不能都只是一个 completed。
 # 不用 `|| echo 0`: grep -c 零命中时已打印 0 且退出 1,再 echo 会变成 "0\n0"。文件缺失时 grep 无输出 → 兜 0
 NLEAD=$(grep -c '^LEAD' ~/night-$TAG.tsv 2>/dev/null); NLEAD=${NLEAD:-0}
@@ -383,7 +444,7 @@ wr step "$SERIAL" 3 done
 if [[ "$WF_SOURCE_KIND" != "keyword" ]]; then
   # 词赛马回写只对关键词源有意义;对标源的 keyword 列是 bench:<源>,回写进关键词表是污染
   wr step "$SERIAL" 4 done "对标源无关键词效果回写"
-elif [[ "$PUSH" == "1" ]]; then
+elif [[ "$PUSH" == "1" ]] && (( ! GATE_STOPPED )); then
   wr step "$SERIAL" 4 doing
   # 0923: 必须传 "${BIZ}" —— 此前不传,脚本内部写死金诺的 base,于是 m1 跑悦升的批次
   # 也在往**金诺**表回写,悦升关键词表四列长期全 0。PR#1962 改成按 line-routes 路由之后,
@@ -392,6 +453,7 @@ elif [[ "$PUSH" == "1" ]]; then
   log "效果已回写关键词表(${BIZ})"
   wr step "$SERIAL" 4 done
 else
-  wr step "$SERIAL" 4 done "PUSH=0 跳过回写"
+  wr step "$SERIAL" 4 done "PUSH=$PUSH 拦截=$GATE_STOPPED 跳过回写"
 fi
+(( GATE_STOPPED )) && { wr fail "$SERIAL" 3 postcondition_stop "${WFR_GATE_STAGE:-}:${WFR_GATE_KEYS:-}"; exit 0 }
 wr done "$SERIAL" "$NLEAD"

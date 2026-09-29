@@ -62,6 +62,11 @@ MMV_JS_FILES=(
   stats-line.js notify-bark.js push-stats-lib.js
 )
 MMV_TOPLEVEL_FILES=(cmdr-escort.txt cmdr-stream.txt)
+# 6b133a81: 探针读回+运行时拦截在 mmv 跑(workflow-result.sh probe_stage 经 ssh 调 verify-step.mjs),此前从没进过部署清单——
+# 靠 README 里手工 scp,0929 实测 mmv 上的探针 YAML 已落后 main。路径相对本目录,子目录原样落到 leadgen-scripts/ 下。
+MMV_PROBE_FILES=(
+  verify-step.mjs checks/probes-lib.js checks/schema.json checks/social-keyword-leadgen.yaml checks/social-benchmark-leadgen.yaml
+)
 # 设备控制器单独成组: 它必须同时落到**两个**目录,因为两类消费者各指一个——
 #   ~/.local/bin/  ← harvest-keyword.sh:7 / outreach-tick.sh / refill-profile-links.sh
 #                    的 C= 全部写死这里, 是 cron 真正执行的那份
@@ -96,6 +101,22 @@ for f in "${MMV_JS_FILES[@]}"; do
     echo "  ❌ $f 语法检查失败: $(cat /tmp/deploy-err-$$ | head -3)"
     FAILED=1
   fi
+  rm -f /tmp/deploy-err-$$
+done
+
+echo "=== [1b/3] mmv:~/.openclaw/leadgen-scripts/ 探针读回(${#MMV_PROBE_FILES[@]} 个文件) ==="
+for f in "${MMV_PROBE_FILES[@]}"; do
+  if [[ ! -s "$D/$f" ]]; then echo "  ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
+  _pd="$(dirname "$f")"; _pdir="~/.openclaw/leadgen-scripts"; [[ "$_pd" != "." ]] && _pdir="$_pdir/$_pd"
+  ssh mmv "mkdir -p $_pdir"
+  push_atomic "$D/$f" mmv "$_pdir" "$(basename "$f")"
+  case "$f" in
+    *.js|*.mjs) _chk="node --check ~/.openclaw/leadgen-scripts/$f";;
+    *.json) _chk="node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/.openclaw/leadgen-scripts/$f";;
+    *) _chk="test -s ~/.openclaw/leadgen-scripts/$f";;
+  esac
+  if ssh mmv "$_chk" 2>/tmp/deploy-err-$$; then echo "  ✅ $f"
+  else echo "  ❌ $f 校验失败: $(head -3 /tmp/deploy-err-$$)"; FAILED=1; fi
   rm -f /tmp/deploy-err-$$
 done
 

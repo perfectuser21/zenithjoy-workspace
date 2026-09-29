@@ -28,16 +28,31 @@ WFR=${WFR:-$HOME/bin-harvest/workflow-result.sh}
 wfr_on(){ [[ "${WFR_DISABLED:-0}" != "1" && -x "$WFR" ]] }
 wfr(){ wfr_on && bash "$WFR" "$@" >/dev/null 2>>$LOG; true }
 count(){ local c; c=$(grep -c "^$1" $OUT 2>/dev/null || true); print -- "${c:-0}"; }
-# 出口码→阶段状态(决策 af061588): 0+有卡 completed / 0 无卡 blocked no_cards / 3 blocked lock_busy / 其它 failed
+count_qual(){ local c; c=$(grep -cE "^QUAL	[^	]*	($1)	" $OUT 2>/dev/null || true); print -- "${c:-0}"; }
+# 出口码→阶段状态(决策 af061588): 0+有候选 completed / 0 无候选 blocked no_cards / 3 blocked lock_busy / 其它 failed
 # harvest-keyword.sh 出口码契约(勿改): 3 锁被占 / 1 open-search 失败 / 0 正常或无卡片
-wfr_word_stages(){ # n word rc dv dl
+# 6b133a81: 每词写 discovery→qualification→collection 三个工件(契约设计顺序),各自读回判探针并拦截(workflow-result.sh apply_gate)。
+#   QUAL 行(8bb3af55 先判后采,harvest-keyword.sh 每个进判定的视频一行 QUAL\t视频\t结论\t来源):
+#   discovery.candidates = 进判定的视频数(QUAL 行,缺则回落 VIDEO 行);qualification.candidates_judged = matched+rejected,
+#   qualified = matched(pending = 判定接口故障留待重判,qual_none_pending 判 retryable);collection 只在有合格视频时 completed。
+wfr_word_stages(){ # n word rc dv dl q qj qm
   wfr_on || return 0
-  local n="$1" W="$2" rc="$3" DV="$4" DL="$5"
+  local n="$1" W="$2" rc="$3" DV="$4" DL="$5" Q="${6:-0}" QJ="${7:-0}" QM="${8:-0}" cand
   local EV='[{"type":"log","ref":"'"$LOG"'","word":"'"$W"'","rc":'"$rc"'}]'
+  cand=$(( Q > DV ? Q : DV ))
   case "$rc" in
-    0) if (( DV > 0 )); then
-         wfr stage discovery completed "$n" "word=$W videos=$DV" "$EV" '{"candidates":'"$DV"',"keywords_processed":1,"screens_scanned":0}' "$W"
-         wfr stage collection completed "$n" "word=$W leads=$DL" "$EV" '{"comments_collected":'"$DL"',"videos_processed":'"$DV"',"cursor_updates":0}' "$W"
+    0) if (( cand > 0 )); then
+         wfr stage discovery completed "$n" "word=$W candidates=$cand" "$EV" '{"candidates":'"$cand"',"keywords_processed":1,"screens_scanned":0}' "$W"
+         if (( Q > 0 )); then
+           wfr stage qualification completed "$n" "word=$W judged=$QJ qualified=$QM pending=$((Q-QJ))" "$EV" '{"candidates_judged":'"$QJ"',"qualified":'"$QM"'}' "$W"
+         else
+           wfr stage qualification blocked "$n" "word=$W no_qual_lines" "$EV" '{"candidates_judged":0,"qualified":0}' "$W"
+         fi
+         if (( QM > 0 || DV > 0 )); then
+           wfr stage collection completed "$n" "word=$W leads=$DL" "$EV" '{"comments_collected":'"$DL"',"videos_processed":'"$DV"',"cursor_updates":0}' "$W"
+         else
+           wfr stage collection blocked "$n" "word=$W no_qualified" "$EV" '{"comments_collected":0,"videos_processed":0,"cursor_updates":0}' "$W"
+         fi
        else
          wfr stage discovery blocked "$n" "word=$W no_cards" "$EV" '{"candidates":0,"keywords_processed":1,"screens_scanned":0}' "$W"
        fi;;
@@ -45,6 +60,8 @@ wfr_word_stages(){ # n word rc dv dl
     *) wfr stage discovery failed "$n" "word=$W rc=$rc" "$EV" '{"candidates":0,"keywords_processed":1,"screens_scanned":0}' "$W";;
   esac
 }
+# gate_stopped: 某活动后置条件 on_fail=stop_run 不过 → workflow-result.sh 写了 $WFR_RUN_DIR/STOP(6b133a81)。停后续活动,收工由 harvest-cron 做
+gate_stopped(){ wfr_on && [[ -n "${WFR_RUN_DIR:-}" && -s "$WFR_RUN_DIR/STOP" ]] }
 # ── 落池/分拣统计(棒3b 探针可信化): push-*.js / sort-comments.js 各在人读输出之后再打一行 `TAG {json}`(stats-line.js),
 # 这里只读 $LOG 里"本次 ssh 之前的行数偏移"之后新增的部分取最后一条合法统计,不写 $LOG、不发任何 ssh。
 # 只在 wfr_on 时才会被调用(WFR_DISABLED=1/账本脚本缺失时与并入前逐字一致)。
@@ -116,9 +133,14 @@ if wfr_on && [[ -n "${WFR_HASH:-}" ]]; then
   fi
 fi
 n=0
+STOPPED=0
 for W in "${(f)$(cat $WF)}"; do
   [[ -z "$W" ]] && continue
   n=$((n+1))
+  if gate_stopped; then
+    print "[$(date +%H:%M:%S)] 活动后置条件拦截(STOP),停跑后续词: $(cat "$WFR_RUN_DIR/STOP" 2>/dev/null | head -c 200)" >> $LOG
+    print "BATCH2_ESCALATE=gate_stop"; STOPPED=1; break
+  fi
   # 续跑: skip_words 里的词已在上一 attempt 完成(只有账本在跑时才有这个概念)
   if wfr_on && [[ -n "${WFR_SKIP_WORDS:-}" && "|${WFR_SKIP_WORDS}|" == *"|${W}|"* ]]; then
     print "[$(date +%H:%M:%S)] 词$n: $W 已完成(续跑跳过)" >> $LOG; continue
@@ -133,17 +155,21 @@ for W in "${(f)$(cat $WF)}"; do
   ENC=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$W")
   print "[$(date +%H:%M:%S)] 词$n: $W" >> $LOG
   wr step "$SERIAL" 3 doing "词$n: $W"
-  V0=$(count VIDEO); L0=$(count LEAD)
+  V0=$(count VIDEO); L0=$(count LEAD); Q0=$(count QUAL); QJ0=$(count_qual 'matched|rejected'); QM0=$(count_qual matched)
   rc=0; "${HARVEST_KEYWORD:-$HOME/bin-harvest/harvest-keyword.sh}" "$P" "$ENC" "$MAXV" "$TAG-w$n" unlimited "$LINE" >> $OUT 2>> $LOG || rc=$?
-  V1=$(count VIDEO); L1=$(count LEAD)
-  wfr_word_stages "$n" "$W" "$rc" $((V1-V0)) $((L1-L0))
+  V1=$(count VIDEO); L1=$(count LEAD); Q1=$(count QUAL); QJ1=$(count_qual 'matched|rejected'); QM1=$(count_qual matched)
+  wfr_word_stages "$n" "$W" "$rc" $((V1-V0)) $((L1-L0)) $((Q1-Q0)) $((QJ1-QJ0)) $((QM1-QM0))
   print "[$(date +%H:%M:%S)] 词$n 完成 LEAD=$(grep -c '^LEAD' $OUT 2>/dev/null||echo 0)" >> $LOG
   NLEAD=$(grep -c '^LEAD' $OUT 2>/dev/null); wr note "$SERIAL" "词$n 完成 LEAD=${NLEAD:-0}"
   (( SLEEP_BASE > 0 )) && /bin/sleep $(( SLEEP_BASE + RANDOM % 40 ))
 done
 print "[$(date +%H:%M:%S)] v2批完成 LEAD=$(grep -c '^LEAD' $OUT) VIDEO=$(grep -c '^VIDEO' $OUT)" >> $LOG
 NL=$(count LEAD)
-if [[ "$PUSH" == "1" && -s $OUT ]]; then
+gate_stopped && STOPPED=1
+if (( STOPPED )); then
+  # 6b133a81: 采集阶段后置条件 stop_run 不过(如未判合格却采了评论)→ 不落池、不分拣,脏数据不进客户可见的池表
+  print "[$(date +%H:%M:%S)] 已被活动后置条件拦截,跳过落池/分拣(没跑到的阶段由收工 finalize 补 not_run 读回)" >> $LOG
+elif [[ "$PUSH" == "1" && -s $OUT ]]; then
   # 安全前提(回应 0916 AI review 对 ssh/scp 的中间人告警——本段是既有链路,非本次新增):
   #  ① mmv 是 ~/.ssh/config 里的固定别名,走 tailscale 内网(100.x),不经公网
   #  ② 密钥对认证(无密码登录),私钥在本机 600
@@ -164,6 +190,10 @@ if [[ "$PUSH" == "1" && -s $OUT ]]; then
   # leads_written/duplicates_skipped/videos_pushed 取落池脚本的真实统计(缺统计回落 $NL),见 wfr_delivery_stage
   wfr_delivery_stage "$prc" "$NL" "$PUSH_OFF"
   print "[$(date +%H:%M:%S)] 已落池(视频+评论)" >> $LOG
+  if gate_stopped; then
+    print "[$(date +%H:%M:%S)] 配送读回不过(STOP),跳过分拣: $(cat "$WFR_RUN_DIR/STOP" 2>/dev/null | head -c 200)" >> $LOG
+    print "BATCH2_ESCALATE=gate_stop"
+  else
   # 0923补齐:落池之后紧接着分拣——此前sort-comments.js压根没有任何自动触发点
   # (既不在cron里,也不在任何批处理链路里,只能靠人/agent手动敲,而agent侧那份
   # "手跑干预"playbook写的是/root/.openclaw/...这个host上根本不存在的路径,
@@ -176,6 +206,7 @@ if [[ "$PUSH" == "1" && -s $OUT ]]; then
   print "[$(date +%H:%M:%S)] 已分拣(判定链)" >> $LOG
   # 账本 scoring: 分拣之后才有真实工件(有 SORT_STATS → completed, 否则 failed); n=1 覆盖 init 写的 blocked 占位项
   wfr_scoring_stage "$src" "$SORT_OFF"
+  fi
 
   # 8bb3af55 先判后采(决策 f18f56b8①): 视频文案判定已前移到 harvest-keyword.sh 逐视频开评论区之前
   # (ssh mmv qualify-video.js discover/judge/collected),判定不合格的视频根本不开评论区。

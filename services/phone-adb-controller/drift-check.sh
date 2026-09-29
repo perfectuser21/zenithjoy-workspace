@@ -52,9 +52,10 @@ md5_stdin() {
 list_targets() {
   local deploy f h d
   deploy="$(git -C "$REPO" show "$REF:$SUBDIR/deploy.sh" 2>/dev/null)" || { log "读不到 $REF:$SUBDIR/deploy.sh"; return 2; }
-  local -a js top sh node plan ctl dirs
+  local -a js top probe sh node plan ctl dirs
   read -ra js <<< "$(parse_array MMV_JS_FILES <<< "$deploy")"
   read -ra top <<< "$(parse_array MMV_TOPLEVEL_FILES <<< "$deploy")"
+  read -ra probe <<< "$(parse_array MMV_PROBE_FILES <<< "$deploy")"
   read -ra sh <<< "$(parse_array DEVICE_SH_FILES <<< "$deploy")"
   read -ra node <<< "$(parse_array DEVICE_NODE_FILES <<< "$deploy")"
   read -ra plan <<< "$(parse_array DEVICE_PLAN_FILES <<< "$deploy")"
@@ -65,6 +66,7 @@ list_targets() {
   fi
   for f in "${js[@]}"; do echo "$MMV_HOST .openclaw/leadgen-scripts/$f $f"; done
   for f in ${top[@]+"${top[@]}"}; do echo "$MMV_HOST .openclaw/$f $f"; done
+  for f in ${probe[@]+"${probe[@]}"}; do echo "$MMV_HOST .openclaw/leadgen-scripts/$f $f"; done
   for h in "${DEVICE_HOSTS[@]}"; do
     for f in "${sh[@]}" ${node[@]+"${node[@]}"} ${plan[@]+"${plan[@]}"}; do echo "$h bin-harvest/$f $f"; done
     for f in "${ctl[@]}"; do

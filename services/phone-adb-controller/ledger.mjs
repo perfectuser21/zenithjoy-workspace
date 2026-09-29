@@ -21,7 +21,8 @@ function parseArgs(argv) {
   return out;
 }
 
-const STAGES = ["preflight", "discovery", "qualification", "collection", "scoring", "delivery", "cleanup"];
+// 6b133a81: 触达进账本(outreach-tick 每 tick 一个 run),与契约 8 活动同序
+const STAGES = ["preflight", "discovery", "qualification", "collection", "scoring", "delivery", "outreach", "cleanup"];
 const STATUSES = ["pending", "running", "completed", "blocked", "failed"];
 const emptyStage = () => ({ status: "pending", note: "", updated_at: null, items: [] });
 

@@ -26,16 +26,17 @@
 #   expect.ref 只能引 workflow-result.sh:33-41 的闭集 metrics 键（metrics.<key>）。
 #
 # 全部 severity=error（决策 f18f56b8：每个活动后置条件一律拦截，不设 warn/观察期）。
+# 运行时拦截（任务 6b133a81）：每条探针声明 failure_class（= 契约里所属活动 failure 闭集的分类，contracts-lib 校验必须已声明）
+# 与 on_fail：verify-step.mjs 读回同时按 expect 判 pass 并汇总 gate；workflow-result.sh 对每个 stage（含 blocked）读回，
+#   不过 → 该 stage 工件改 failed、账本 failed；on_fail=stop_run → 写 $WFR_RUN_DIR/STOP，batch2/harvest-cron 停后续活动（cleanup 照做）；
+#   failure_class=needs_human/fatal 不过 → harvest-cron 升级分身 + Bark；读不回（mmv 不通/单条 error）= unknown → 工件 failed、不停跑。
 # stage = 契约 product-map/contracts/keyword_acquisition.yaml 的 8 个主干活动（设计顺序：判定在采集之前）。
-# 运行时读回目前只接了 delivery/scoring（workflow-result.sh WFR_PROBE_STAGES），其余 6 个 stage 的运行时接线
-# 挂任务 6b133a81（单测 RUNTIME_PENDING 棘轮）；其中若干探针在执行顺序纠正（8bb3af55）/真实指标（6b133a81）
-# 落地前会如实判红——这是它们该做的事。
+# 8 个 stage 运行时全部读回并拦截（6b133a81 清零 RUNTIME_PENDING）；outreach 由 outreach-tick.sh 每 tick 收工经 workflow-result.sh outreach-run 进账本。
 # 业务线无关：http 探针 url 里用占位符 $BASE/$POOL/$KEYWORD/$LEAD 代替 base id 与表 id，由 verify-step.mjs 按
 # routeOf(--line-key) 展开成该业务线（金诺/悦升）自己的 base 与评论池/关键词表/线索表（line-routes.js 是 SSOT，
 # 文件里不再写死任何一家的 id）；认不出业务线时该条探针带 error（fail-open），不会读错库。
-# blocked 占位工件不判探针：阶段没跑（init 的 scoring/qualification not_in_profile 占位、PUSH=0 的 delivery）时
-# 读回 0 == 期望 0 是假绿，workflow-result.sh write_stage 对 status=blocked 不读回（probes 传 []），Brain 侧对
-# stage_status=blocked 也不判；探针只在 completed/failed 的阶段工件上评估。
+# blocked 工件同样读回判定（6b133a81）：init 不再写 qualification/scoring 的 not_in_profile 占位，没跑到的阶段由 finalize 补
+# blocked not_run 工件并在收工时读回——读的是收工那一刻的真实数据，不再是开跑时的假绿。
 
 version: 1
 workflow: social-keyword-leadgen
@@ -52,6 +53,8 @@ probes:
       op: "=="
       value: 1
     severity: error
+    failure_class: needs_human
+    on_fail: stop_run
     note: >
       设备 serial 在线且身份对得上。harvest-cron.sh:121-133 做 adb 在线/唤醒，workflow-result.sh:161 写 preflight 工件。
 
@@ -65,6 +68,8 @@ probes:
       op: "=="
       value: 1
     severity: error
+    failure_class: needs_human
+    on_fail: stop_run
     note: >
       手机上登录的抖音号 = 本 run 声明的 profile。现状 workflow-result.sh:161 写死 account_verified=0（采收链不读我页），
       本探针会如实判红，直到任务 6b133a81 让预检真读账号标记（Notion 步骤「读账号标记(我页)」）。
@@ -79,6 +84,8 @@ probes:
       op: "=="
       value: 1
     severity: error
+    failure_class: needs_human
+    on_fail: stop_run
     note: >
       手机不在通话中（通话中操作会误触）。workflow-result.sh:161 写 call_state_idle。
 
@@ -92,6 +99,8 @@ probes:
       op: "=="
       value: 1
     severity: error
+    failure_class: retryable
+    on_fail: stop_run
     note: >
       拿到设备锁（douyin-phone-adb lock-acquire，TTL 1800s）。现状 workflow-result.sh:161 写死 lock_acquired=0
       （锁在 harvest-keyword.sh 按词拿），判红直到 6b133a81。
@@ -112,6 +121,8 @@ probes:
       op: ">="
       ref: "metrics.candidates"
     severity: error
+    failure_class: retryable
+    on_fail: fail_stage
     note: >
       发现交出的对象 = 本词候选视频清单，必须落 leadgen_videos（leadgen-db-lib.js:22-31 upsertVideo，带 keyword/harvest_batch），
       否则判定无米下锅。batch2.sh:37 写 candidates=DV。8bb3af55 先判后采后，harvest-keyword.sh 在开评论区之前
@@ -133,6 +144,8 @@ probes:
       op: "<="
       value: 0
     severity: error
+    failure_class: retryable
+    on_fail: fail_stage
     note: >
       判定交出 = 每个候选视频 matched/rejected（CHECK 约束见 20260922_220000_leadgen_ssot_tables.sql:44）。
       judge-video.js 经 leadgen-db-lib.js:54 回写 judgment_status；仍 pending = 没判完就往下走。
@@ -151,6 +164,8 @@ probes:
     expect:
       op: not_null_all
     severity: error
+    failure_class: needs_human
+    on_fail: fail_stage
     note: >
       判过的视频必须带理由（leadgen-db-lib.js:54 同时写 judgment_reason），无理由的判定不可审计。
 
@@ -171,6 +186,8 @@ probes:
       op: "<="
       value: 0
     severity: error
+    failure_class: fatal
+    on_fail: stop_run
     note: >
       设计顺序（决策 f18f56b8）：判定合格才采评论。未 matched 却已「评论已采」= 白采。
       8bb3af55 先判后采后，候选视频落库时 process_status=待判定，只有 matched 且采完评论才经
@@ -196,6 +213,8 @@ probes:
       op: "<="
       value: 0
     severity: error
+    failure_class: fatal
+    on_fail: stop_run
     note: >
       0929修（生产实证：悦升云端线索表 2026-09-28 晚 3 条记录，来源视频/视频链接都标着同一条
       视频，但原始评论内容完全不相关——commenter-identity 验证失败抢救(back+重开评论区)落到
@@ -224,6 +243,8 @@ probes:
       op: ">="
       ref: "metrics.videos_pushed"
     severity: error
+    failure_class: needs_human
+    on_fail: stop_run
     note: >
       push-videos.js:57-60 经 leadgen-db-lib.js:25-26 upsertVideo 写 leadgen_videos.harvest_batch=$RUN_TAG
       （ON CONFLICT DO NOTHING，重复视频不计入）。对账基准 = push-videos.js 本批新增视频数：脚本末行
@@ -249,6 +270,8 @@ probes:
       op: ">="
       ref: "metrics.leads_written"
     severity: error
+    failure_class: needs_human
+    on_fail: stop_run
     note: >
       评论只落飞书原始评论池不落 PG：push-raw-comments.js:8 只 require line-routes，不 require
       leadgen-db-lib（leadgen_comments 表在 v4 链无写入方）。push-raw-comments.js:47 写「运行批次」=$RUN_TAG。
@@ -271,6 +294,8 @@ probes:
     expect:
       op: not_null_all
     severity: error
+    failure_class: needs_human
+    on_fail: stop_run
     note: >
       leadgen_videos.line_key NOT NULL（apps/api/db/migrations/20260922_220000_leadgen_ssot_tables.sql:28），
       push-videos.js:10 由 routeOf() 解析业务线（line-routes.js:62）。飞书原始评论池没有「业务线」列
@@ -293,6 +318,8 @@ probes:
       op: "<="
       value: 0
     severity: error
+    failure_class: retryable
+    on_fail: fail_stage
     note: >
       本批评论仍停在「待分拣」的计数。sort-comments-lib.js:61/98/136 三处 putPool 把「处理状态」推到
       「已分拣」并写「进入最终线索」布尔；scoring 工件由 batch2.sh wfr_scoring_stage 在 sort-comments.js 跑完后写
@@ -315,6 +342,8 @@ probes:
       op: "<="
       value: 0
     severity: error
+    failure_class: retryable
+    on_fail: fail_stage
     note: >
       next-outreach.js:106-108 取单时预写「触达中」防重入，done 时回写 已触达/待触达/触达受阻（next-outreach.js:33-57）。
       tick 收工后仍「触达中」= 单子悬空（进程被杀/回写失败），既不会再被选中也没有结果。线索表 id 见 line-routes.js:21。
@@ -330,6 +359,8 @@ probes:
       op: ">="
       value: 1
     severity: error
+    failure_class: needs_human
+    on_fail: fail_stage
     note: >
       收工必须关抖音（douyin-phone-adb close-app）。现状 workflow-result.sh:182 写死 close_app_attempts=0（采收链没调 close-app），
       判红直到 6b133a81。
@@ -344,6 +375,8 @@ probes:
       op: "=="
       value: 1
     severity: error
+    failure_class: needs_human
+    on_fail: fail_stage
     note: >
       设备锁已释放，否则触达拿不到手机。workflow-result.sh:182 当前写死 1（锁实际由 harvest-keyword.sh trap 按词释放），
       6b133a81 改为真读锁目录。
@@ -358,5 +391,7 @@ probes:
       op: "=="
       value: 1
     severity: error
+    failure_class: needs_human
+    on_fail: fail_stage
     note: >
       手机回到安全桌面（不停在私信/评论页，防误触）。workflow-result.sh:182 写死 0，判红直到 6b133a81。

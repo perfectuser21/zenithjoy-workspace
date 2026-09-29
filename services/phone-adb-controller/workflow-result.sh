@@ -6,6 +6,8 @@
 #   eval "$(workflow-result.sh enter)"
 #   workflow-result.sh stage <stage> <completed|blocked|failed> <n> <summary> <evidence_json> <metrics_json> [<word>]
 #   eval "$(workflow-result.sh finalize)"
+#   eval "$(workflow-result.sh gate)"          # 6b133a81: 读本 run 的拦截状态(STOP/新告警),告警只报一次
+#   eval "$(workflow-result.sh outreach-run <TAG> <profile> <serial> <hostkey> <summary> <metrics_json>)"  # 触达 tick 进账本
 #   workflow-result.sh hash <profile> <wordfile> <push>
 # 契约: protocol.md WORKER_RESULT（schema_version=2 / evidence 非空 / metrics 闭集）；判定点 544cd6a3 判据用产物。
 set -u
@@ -32,7 +34,7 @@ fi
 # WFR_PROBE_STAGES 兜底闸(与 YAML 的 stage 集合由 checks 单测钉死)。读回失败一律 [] + WFR_WARN,永不阻塞。
 WFR_PROBE_HOST="${WFR_PROBE_HOST:-mmv}"
 WFR_PROBE_DIR="${WFR_PROBE_DIR:-~/.openclaw/leadgen-scripts}"
-WFR_PROBE_STAGES="${WFR_PROBE_STAGES:-delivery scoring}"
+WFR_PROBE_STAGES="${WFR_PROBE_STAGES-preflight discovery qualification collection scoring delivery outreach cleanup}"
 WFR_CHECKS_YAML="${WFR_CHECKS_YAML:-$HOME/bin-harvest/checks/social-keyword-leadgen.yaml}"
 stage_has_probes(){
   if [[ -r "$WFR_CHECKS_YAML" ]]; then grep -qE "^[[:space:]]+stage:[[:space:]]*$1[[:space:]]*$" "$WFR_CHECKS_YAML" 2>/dev/null; return; fi
@@ -40,22 +42,56 @@ stage_has_probes(){
 }
 # sq: 远端 shell 单引号包裹(内部单引号→'\'')。bash 3.2 的 printf %q 会把中文拆成八进制转义,不用它
 sq(){ local q=\' s="$1"; s="${s//$q/$q\\$q$q}"; printf "'%s'" "$s"; }
-# probe_stage: stage [word] → stdout 一个 JSON 数组(读回失败一律 []),永远 return 0
+# probe_stage: stage [word] [metrics_json] → stdout 一行 JSON {probes:[...], gate:{...}|null}(读回失败 probes=[] gate=null),永远 return 0
+# 本 stage 不在读回范围 → {"probes":[],"gate":{"verdict":"none",...}}(不拦);读回失败 gate=null → 调用方按 unknown 处理(工件 failed、不停跑)
+GATE_NONE='{"verdict":"none","action":"continue","failed":[],"unknown":[],"alert":false}'
 probe_stage(){
-  local stage="$1" word="${2:-}" out arr rc=0 remote errf
-  stage_has_probes "$stage" || { echo '[]'; return 0; }
+  local stage="$1" word="${2:-}" metrics="${3:-}" out arr gate rc=0 remote errf
+  stage_has_probes "$stage" || { echo "{\"probes\":[],\"gate\":$GATE_NONE}"; return 0; }
   remote="set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; cd $WFR_PROBE_DIR && node verify-step.mjs --stage $(sq "$stage") --run-tag $(sq "${WFR_TAG:-${WFR_RUN_ID#social-keyword-leadgen-crontab-}}") --line-key $(sq "${WFR_PROFILE:-}") --word $(sq "$word")"
+  [[ -n "$metrics" ]] && remote="$remote --metrics $(sq "$metrics")"
   errf=$(mktemp 2>/dev/null || echo /dev/null)
   out=$(ssh -o ConnectTimeout=20 -o BatchMode=yes "$WFR_PROBE_HOST" "$remote" 2>"$errf") || rc=$?
   # 远端 stderr(verify-step: 单条 error / ssh 报错)原样透传到本机 stderr → harvest-cron.log 可查
   [[ -s "$errf" ]] && cat "$errf" >&2
   arr=$(printf '%s\n' "$out" | tail -1 | "$WFR_JQ" -c '.probes | select(type=="array")' 2>/dev/null || true)
+  gate=$(printf '%s\n' "$out" | tail -1 | "$WFR_JQ" -c '.gate | select(type=="object")' 2>/dev/null || true)
   if (( rc != 0 )) || [[ -z "$arr" ]]; then
     warn "verify-step via ssh $WFR_PROBE_HOST failed(stage=$stage rc=$rc), probes=[]: $(tail -c 200 "$errf" 2>/dev/null | tr '\n' ' ')$(printf '%s' "$out" | tail -c 200)"
-    arr='[]'
+    arr='[]'; gate=''
   fi
   [[ "$errf" != /dev/null ]] && rm -f "$errf"
-  printf '%s\n' "$arr"
+  printf '{"probes":%s,"gate":%s}\n' "$arr" "${gate:-null}"
+}
+# apply_gate: stage n word artifact gate_json —— 6b133a81 运行时拦截(决策 3240824c⑦ 后置条件默认拦截)。
+#   pass → 放行(delivery 额外把 readback_verified 记 1);none → 不动;
+#   fail/unknown(gate=null 即读不回) → 工件改 failed(stop_run→stop / 其余→retry)、summary 追加失败探针、账本记 failed;
+#   每次不过追加一行 $WFR_RUN_DIR/gate.log;on_fail=stop_run → 写 $WFR_RUN_DIR/STOP(batch2/harvest-cron 据此停后续活动)。
+apply_gate(){
+  local stage="$1" n="$2" word="$3" f="$4" gate="${5:-null}" verdict action note tmp rec
+  [[ "$gate" == null || -z "$gate" ]] && gate='{"verdict":"unknown","action":"fail_stage","failed":[],"unknown":["probe_unreadable"],"alert":false}'
+  verdict=$(printf '%s' "$gate" | "$WFR_JQ" -r '.verdict // "unknown"' 2>/dev/null)
+  tmp="$f.gate.tmp"
+  case "$verdict" in
+    none) return 0;;
+    pass)
+      if [[ "$stage" == delivery ]]; then
+        "$WFR_JQ" '.metrics.readback_verified = 1' "$f" > "$tmp" 2>/dev/null && mv -f "$tmp" "$f"
+      fi
+      return 0;;
+  esac
+  action=$(printf '%s' "$gate" | "$WFR_JQ" -r '.action // "fail_stage"' 2>/dev/null)
+  note=$(printf '%s' "$gate" | "$WFR_JQ" -r '"postcondition_failed: " + ((.failed // []) + ((.unknown // []) | map(if . == "probe_unreadable" then . else "unreadable:" + . end)) | join(",")) + " (" + (.action // "fail_stage") + ")"' 2>/dev/null)
+  [[ "$verdict" == unknown && "$note" != *probe_unreadable* ]] && note="$note probe_unreadable"
+  "$WFR_JQ" --arg note "$note" --arg na "$([[ "$action" == stop_run ]] && echo stop || echo retry)" \
+    '.status = "failed" | .recommended_next_action = $na | .summary = (.summary + " | " + $note)' "$f" > "$tmp" 2>/dev/null && mv -f "$tmp" "$f"
+  if [[ -n "$word" ]]; then led1 set --stage "$stage" --status failed --n "$n" --word "$word" --note "$note" >/dev/null
+  else led1 set --stage "$stage" --status failed --n "$n" --note "$note" >/dev/null; fi
+  rec=$("$WFR_JQ" -cn --arg st "$stage" --argjson n "$n" --arg w "$word" --argjson g "$gate" '{stage:$st,n:$n,word:$w} + $g' 2>/dev/null)
+  [[ -n "$rec" ]] && printf '%s\n' "$rec" >> "${WFR_RUN_DIR:-/nonexistent}/gate.log"
+  [[ "$action" == stop_run && -n "$rec" ]] && printf '%s\n' "$rec" > "${WFR_RUN_DIR:-/nonexistent}/STOP"
+  warn "stage=$stage n=$n $note"
+  return 0
 }
 # brain_post: run_id status stage artifact_file extra_evidence_json [probes_json] —— best-effort POST Brain execution-callback。
 # 缺 BRAIN_URL/BRAIN_INTERNAL_TOKEN/WFR_BRAIN_TASK_ID 任一 → 记 skipped 返回; curl 失败记 raw 输出; 任何情况 return 0。
@@ -104,8 +140,29 @@ req_keys(){ case "$1" in
   collection) echo "comments_collected videos_processed cursor_updates";;
   scoring) echo "comments_scored strong_intent weak_intent peer irrelevant spam";;
   delivery) echo "leads_written videos_pushed duplicates_skipped readback_verified cursor_updates";;
+  outreach) echo "orders_picked messages_sent requeued blocked_orders";;
   cleanup) echo "close_app_attempts lock_released safe_desktop_visible";;
   *) echo "";; esac; }
+# zero_metrics stage → 该 stage 闭集键全 0 的 metrics JSON(补 not_run 工件用)
+zero_metrics(){ local k out=""; for k in $(req_keys "$1"); do out="$out${out:+,}\"$k\":0"; done; printf '{%s}' "$out"; }
+# gate_report: 读 $WFR_RUN_DIR 的 STOP 与 gate.log,输出可 eval 的 WFR_GATE_*;告警行按 gate.acked 行号只报一次
+gate_report(){
+  local dir="${WFR_RUN_DIR:-/nonexistent}" stop=0 stage="" keys="" acked total alert=0 msg=""
+  if [[ -s "$dir/STOP" ]]; then
+    stop=1
+    stage=$("$WFR_JQ" -r '.stage' "$dir/STOP" 2>/dev/null)
+    keys=$("$WFR_JQ" -r '(.failed // []) + (.unknown // []) | join(",")' "$dir/STOP" 2>/dev/null)
+  fi
+  total=$(wc -l < "$dir/gate.log" 2>/dev/null | tr -d ' '); total=${total:-0}
+  acked=$(cat "$dir/gate.acked" 2>/dev/null); [[ "$acked" =~ ^[0-9]+$ ]] || acked=0
+  if (( total > acked )); then
+    msg=$(tail -n +$((acked + 1)) "$dir/gate.log" | "$WFR_JQ" -r 'select(.alert == true) | .stage + ":" + ((.failed // []) | join(",")) + "(" + .action + ")"' 2>/dev/null | paste -sd' ' - | tr -d "'")
+    [[ -n "$msg" ]] && alert=1
+    echo "$total" > "$dir/gate.acked" 2>/dev/null
+  fi
+  echo "WFR_GATE_STOP=$stop"; echo "WFR_GATE_STAGE=$stage"; echo "WFR_GATE_KEYS=$keys"
+  echo "WFR_GATE_ALERT=$alert"; echo "WFR_GATE_ALERT_MSG='$msg'"
+}
 next_action(){ case "$1" in completed) echo accept;; blocked) echo block;; failed) echo retry;; *) echo stop;; esac; }
 
 # 写一个工件：stage status n summary evidence_json metrics_json [word]
@@ -136,13 +193,15 @@ write_stage(){
   if [[ -n "$word" ]]; then led1 set --stage "$stage" --status "$status" --n "$n" --word "$word" --note "$summary" >/dev/null
   else led1 set --stage "$stage" --status "$status" --n "$n" --note "$summary" >/dev/null; fi
   WFR_LAST_ARTIFACT="$f"
-  # 回执 Brain(校验通过+记账之后): run_id=RUN__ATTEMPT.stage, 状态 in_progress; cleanup 段由 finalize 发终态,这里不发
-  # 探针读回(棒3b)排在校验之后、POST 之前: 工件都没写成的 stage 不值得读回
-  # blocked = 阶段没跑(init 的 scoring/qualification not_in_profile 占位、PUSH=0 的 delivery): 读回 0==期望 0 是假绿,
-  # 不读回(不起 ssh),回执照发、probes 传 []; Brain 侧对 stage_status=blocked 同样不判。completed/failed 行为不变。
+  # 探针读回(棒3b)排在校验之后、POST 之前: 工件都没写成的 stage 不值得读回。
+  # 6b133a81: 每个 stage 一律读回(含 blocked——没跑到的阶段在收工时补 not_run 工件,读的是收工那刻的真实数据),
+  # 读回同时按 expect 判定并拦截(apply_gate),回执 Brain 的是拦截之后的工件。cleanup 段由 finalize 发终态,这里不发。
+  local pr probes gate
+  pr=$(probe_stage "$stage" "$word" "$("$WFR_JQ" -c '.metrics' "$f" 2>/dev/null)")
+  probes=$(printf '%s' "$pr" | "$WFR_JQ" -c '.probes // []' 2>/dev/null); [[ -n "$probes" ]] || probes='[]'
+  gate=$(printf '%s' "$pr" | "$WFR_JQ" -c '.gate' 2>/dev/null); [[ -n "$gate" ]] || gate=null
+  apply_gate "$stage" "$n" "$word" "$f" "$gate"
   if [[ "$stage" != cleanup ]]; then
-    local probes='[]'
-    [[ "$status" == blocked ]] || probes=$(probe_stage "$stage" "$word")
     brain_post "${WFR_RUN_ID:-}__${attempt}.${stage}" in_progress "$stage" "$f" '[]' "$probes"
   fi
 }
@@ -159,18 +218,13 @@ case "$cmd" in
     mkdir -p "$WFR_RUN_DIR" "$WFR_ART_DIR" 2>/dev/null || warn "mkdir failed errno: $(mkdir -p "$WFR_RUN_DIR" "$WFR_ART_DIR" 2>&1)"
     led1 init --run-id "$WFR_RUN_ID" --hash "$WFR_HASH" --profile "$P" --serial "$SERIAL" --hostkey "$HOSTKEY" >/dev/null
     export WFR_RUN_ID WFR_HASH WFR_RUN_DIR WFR_ART_DIR WFR_TAG WFR_PROFILE
-    # 0929批次4修复(DoD审计发现): account_verified 此前写死0——现在 harvest-cron.sh 在
-    # read_account_mark 真校验(我页抖音号 vs 账号注册表)通过后才会走到这里(不通过已在
-    # 更早的preflight阶段 exit 0),故此处能到达即代表校验为真;仍从env读而非硬编码1，
-    # 防御式地允许非harvest-cron.sh的调用方(如测试)显式传0。lock_acquired 保持写死0——
-    # 设备锁其实在更晚的 harvest-keyword.sh(逐关键词批次)里才真正acquire，这个init调用
-    # 点时序上还没发生，写1才是假的；这是仍未解的已知缺口(6b133a81，需要挪account_verified
-    # 之外那次write_stage的时机或改成事后补写才能治本)。
+    # 6b133a81: preflight 四项指标全部取 harvest-cron.sh 的真实预检结果(DEVICE_VERIFIED=adb get-state 通过 /
+    # ACCOUNT_VERIFIED=我页抖音号在注册表 / CALL_STATE_IDLE=mCallState 空闲 / LOCK_ACQUIRED=preflight_lock_acquire 以本批 TAG
+    # 拿到设备锁),没读到一律 0——不再写死 1/0。读回 pf_* 探针不过 → stop_run,批次不开采。
+    # 不再写 qualification/scoring 的 not_in_profile 占位(开跑时读回是假绿):没跑到的阶段由 finalize 收工时补 not_run 工件并读回。
     write_stage preflight completed 1 "device+account preflight by harvest-cron" \
       "[{\"type\":\"preflight\",\"serial\":\"$SERIAL\",\"hostkey\":\"$HOSTKEY\"}]" \
-      "{\"device_verified\":1,\"account_verified\":${ACCOUNT_VERIFIED:-0},\"call_state_idle\":1,\"lock_acquired\":0}"
-    write_stage qualification blocked 1 "not_in_profile" '[]' '{"candidates_judged":0,"qualified":0}'
-    write_stage scoring blocked 1 "not_in_profile" '[]' '{"comments_scored":0,"strong_intent":0,"weak_intent":0,"peer":0,"irrelevant":0,"spam":0}'
+      "{\"device_verified\":${DEVICE_VERIFIED:-0},\"account_verified\":${ACCOUNT_VERIFIED:-0},\"call_state_idle\":${CALL_STATE_IDLE:-0},\"lock_acquired\":${LOCK_ACQUIRED:-0}}"
     echo "WFR_RUN_ID=$WFR_RUN_ID"; echo "WFR_HASH=$WFR_HASH"; echo "WFR_RUN_DIR=$WFR_RUN_DIR"; echo "WFR_ART_DIR=$WFR_ART_DIR"
     echo "WFR_TAG=$WFR_TAG"; echo "WFR_PROFILE=$WFR_PROFILE";;
   enter)
@@ -184,18 +238,33 @@ case "$cmd" in
       echo "WFR_ATTEMPT=$att"; echo "WFR_SKIP_WORDS=$skip"
     fi;;
   stage) write_stage "$@";;
+  gate)
+    if not_initialized; then echo "WFR_GATE_STOP=0"; echo "WFR_GATE_ALERT=0"; else gate_report; fi;;
+  outreach-run)
+    # 6b133a81 触达进账本: 每个 tick 一个 run(social-keyword-leadgen-outreach-<TAG>),写 outreach 工件并读回 out_no_stuck_inflight
+    TAG="$1"; P="$2"; SERIAL="${3:-}"; HOSTKEY="${4:-}"; SUMMARY="${5:-outreach tick}"; METRICS="${6:-}"
+    WFR_RUN_ID="social-keyword-leadgen-outreach-$TAG"; WFR_HASH=""
+    WFR_RUN_DIR="$WFR_HOME/ledger/$WFR_RUN_ID"; WFR_ART_DIR="$WFR_HOME/workflow-runs"; WFR_TAG="$TAG"; WFR_PROFILE="$P"; WFR_ATTEMPT=a1
+    mkdir -p "$WFR_RUN_DIR" "$WFR_ART_DIR" 2>/dev/null || warn "mkdir failed errno: $(mkdir -p "$WFR_RUN_DIR" "$WFR_ART_DIR" 2>&1)"
+    led1 init --run-id "$WFR_RUN_ID" --profile "$P" --serial "$SERIAL" --hostkey "$HOSTKEY" >/dev/null
+    write_stage outreach completed 1 "$SUMMARY" '[{"type":"log","ref":"outreach.log"}]' "$METRICS"
+    if [[ -n "${WFR_SCP_TARGET:-}" && -n "${WFR_LAST_ARTIFACT:-}" ]]; then
+      scp -q -o ConnectTimeout=20 "$WFR_LAST_ARTIFACT" "$WFR_SCP_TARGET" 2>/dev/null || warn "scp to MMV failed; artifact kept locally"
+    fi
+    echo "WFR_RUN_ID=$WFR_RUN_ID"; gate_report;;
   finalize)
     if not_initialized; then
       warn "called before init"
       echo "WFR_FINALIZE_OK=0"; echo "WFR_FINALIZE_MSG=not_initialized"
     else
-      # 0929批次4修复(DoD审计发现): close_app_attempts/safe_desktop_visible 此前写死
-      # 0/0——现在 harvest-cron.sh 的 run_finalize 会真的调 close-app/return-safe-desktop
-      # 并导出真实结果,这里从env读(harvest-cron.sh未来得及跑到这两步时env为空,分别
-      # 兜底成0/0，跟旧行为一致，不会比以前更假)。lock_released 仍写死1——设备锁的
-      # release实际发生在更早、更深的 harvest-keyword.sh(逐关键词批次)里，这个
-      # finalize时间点拿不到那次release的真实结果，是仍未解的已知缺口(6b133a81)。
-      write_stage cleanup completed 1 "finalize by harvest-cron trap" '[{"type":"log","ref":"harvest-cron.log"}]' "{\"close_app_attempts\":${WFR_CLOSE_APP_ATTEMPTS:-0},\"lock_released\":1,\"safe_desktop_visible\":${WFR_SAFE_DESKTOP_VISIBLE:-0}}"
+      # 6b133a81: 本 attempt 没跑到的阶段(STOP 停跑/PUSH=0/批次早退)补 blocked not_run 工件——收工这一刻读回判探针,
+      # 不留"没写工件=没判定"的空洞。cleanup 三项指标全取 harvest-cron.sh run_finalize 的真实结果(close-app / 放锁后
+      # lock-status 真读 / return-safe-desktop),没给一律 0。
+      for st in discovery qualification collection scoring delivery; do
+        [[ -n "$(ls "${WFR_ART_DIR:-}"/"${WFR_RUN_ID:-}__${WFR_ATTEMPT:-a0}.${st}".*.worker-result.json 2>/dev/null)" ]] && continue
+        write_stage "$st" blocked 1 "not_run" '[]' "$(zero_metrics "$st")"
+      done
+      write_stage cleanup completed 1 "finalize by harvest-cron trap" '[{"type":"log","ref":"harvest-cron.log"}]' "{\"close_app_attempts\":${WFR_CLOSE_APP_ATTEMPTS:-0},\"lock_released\":${WFR_LOCK_RELEASED:-0},\"safe_desktop_visible\":${WFR_SAFE_DESKTOP_VISIBLE:-0}}"
       n_files=$(ls "${WFR_ART_DIR:-}"/"${WFR_RUN_ID:-}"__*.worker-result.json 2>/dev/null | wc -l | tr -d ' ' || true)
       book="$(led show)"
       n_stages=$(printf '%s' "$book" | "$WFR_JQ" '[.stages[] | select(.status!="pending")] | length' 2>/dev/null || echo 0)
@@ -209,9 +278,13 @@ case "$cmd" in
       # n_files>=n_stages 在 0>=0 时假绿 OK=1；改用 n_items(而非 n_stages) 且要求其 >0 堵死这条假绿。
       if (( n_items > 0 && n_files >= n_items )); then ok=1; msg="artifacts=$n_files stages=$n_stages items=$n_items"
       else ok=0; msg="artifact_count_mismatch files=$n_files items=$n_items stages=$n_stages"; fi
-      echo "WFR_FINALIZE_OK=$ok"; echo "WFR_FINALIZE_MSG=$msg"
-      # 终态回执: cleanup 工件写成且自检过 → completed, 否则 failed; run_id 用 cleanup 段规则; evidence 追加自检结果
-      if [[ -n "${WFR_LAST_ARTIFACT:-}" && "$ok" == 1 ]]; then final=completed; else final=failed; fi
+      # 终态回执: cleanup 工件写成、自检过、没有 stop_run 拦截、cleanup 自身读回通过 → completed,否则 failed
+      stopinfo=""
+      [[ -s "${WFR_RUN_DIR:-}/STOP" ]] && stopinfo=" gate_stop=$("$WFR_JQ" -r '.stage + ":" + ((.failed // []) | join(","))' "${WFR_RUN_DIR:-}/STOP" 2>/dev/null)"
+      if [[ -n "${WFR_LAST_ARTIFACT:-}" && "$ok" == 1 && -z "$stopinfo" ]] \
+         && [[ "$("$WFR_JQ" -r '.status' "${WFR_LAST_ARTIFACT:-/nonexistent}" 2>/dev/null)" == completed ]]; then final=completed; else final=failed; fi
+      msg="$msg$stopinfo"
+      echo "WFR_FINALIZE_OK=$ok"; echo "WFR_FINALIZE_MSG='$msg'"; echo "WFR_FINALIZE_FINAL=$final"
       extra=$("$WFR_JQ" -cn --argjson ok "$ok" --arg msg "$msg" '[{type:"finalize",ok:$ok,msg:$msg}]')
       brain_post "${WFR_RUN_ID:-}__${WFR_ATTEMPT:-a0}.cleanup" "$final" cleanup "${WFR_LAST_ARTIFACT:-}" "$extra"
     fi;;
