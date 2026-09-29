@@ -115,7 +115,9 @@ test("LINE 第 6 参照旧传递：显式传 devline → harvest-keyword 与落�
   const ssh = readFileSync(join(ctx.home, "ssh-argv.log"), "utf8");
   assert.match(ssh, /push-videos\.js \/tmp\/t9\.tsv t9 devline && node [^\n]*push-raw-comments\.js \/tmp\/t9\.tsv t9 devline/);
   assert.match(ssh, /sort-comments\.js devline/);
-  assert.match(ssh, /judge-video\.js devline \/tmp\/t9-manifest\.json/);
+  // 8bb3af55 先判后采：视频判定已前移到 harvest-keyword.sh 逐视频开评论区之前(qualify-video.js)，
+  // 落池之后不再跑 judge-video.js（那时评论早采完了，判了也挡不住）
+  assert.doesNotMatch(ssh, /judge-video\.js/);
 });
 
 test("LINE 不传 → 回落 profile（旧默认 LINE=\"${6:-$P}\"）；MAXV 环境变量透传到第 3 参", { skip: SKIP }, () => {
