@@ -172,6 +172,25 @@ for host in xian-m4 xian-m1; do
   done
 done
 
+# Commander 入口(决策 7f842d12): 启动器落 mmv(openclaw CLI 在本机), skill 落 work-commander 工作区
+echo "=== [5/5] mmv Commander 入口(wf-launch/wf-status + skill workflow-commander) ==="
+ssh mmv "mkdir -p ~/.openclaw/commander ~/openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander"
+for f in wf-launch.sh wf-status.sh; do
+  if [[ ! -s "$D/commander/$f" ]]; then echo "  ⚠️ 仓库里缺失: commander/$f"; FAILED=1; continue; fi
+  push_atomic "$D/commander/$f" mmv "~/.openclaw/commander" "$f" x
+  if ssh mmv "bash -n ~/.openclaw/commander/$f" 2>/tmp/deploy-err-$$; then
+    echo "  ✅ commander/$f"
+  else
+    echo "  ❌ commander/$f 语法检查失败: $(head -3 /tmp/deploy-err-$$)"
+    FAILED=1
+  fi
+  rm -f /tmp/deploy-err-$$
+done
+if [[ -s "$D/commander/skills/workflow-commander/SKILL.md" ]]; then
+  push_atomic "$D/commander/skills/workflow-commander/SKILL.md" mmv "~/openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander" SKILL.md
+  echo "  ✅ skills/workflow-commander/SKILL.md"
+fi
+
 echo ""
 if [[ "$FAILED" == "1" ]]; then
   echo "⚠️ 部分文件语法检查失败,见上方 ❌ 标记——已同步的文件里可能有半成品,立刻核查"
