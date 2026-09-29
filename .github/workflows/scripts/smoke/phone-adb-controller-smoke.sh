@@ -551,14 +551,30 @@ done
 
 # 层20: 0922视频文案判定(阶段3)——judge-jev.js的复核官(judgeCommander)是判定链最后
 #一道关卡,真机实测时曾把"httpPost网络异常/超时"这种情况漏处理:异常会直接从
-# judgeCommander往外抛,冲穿judgeContent,让整条视频判定崩溃退出、这一批后面的视频全部
-# 陪跑失败(找到时是靠单测复现的,不是真机踩的坑,提前补上守卫防止真机复发)。
-# 必须在httpPost调用外面包一层try/catch,失败保守判rejected(存疑不放行),不能让异常裸抛。
+# judgeCommander往外抛,冲穿judgeContent,让整条视频判定崩溃退出、这一批后面的视频全部陪跑失败。
+# 0929 改口径(OpenRouter 余额耗尽 402 实证): 旧守卫要求"失败保守判rejected",等于把 API 故障
+# 写成"内容不相关"落库、误杀线索。新契约两半都守:
+#   ① 判定脚本: httpPost 一律经 callOpenRouter(try/catch 归一成 JudgeApiError),不许裸调,
+#      也不许在"调用失败"分支里返回 rejected / C 档冒充判定结论;
+#   ② 调用方 judge-video.js: 逐条 try/catch,故障那条 markVideoJudgeError 留 pending 后 continue,
+#      不炸穿整批。
 _JJ="$D/judge-jev.js"
 [[ -s "$_JJ" ]] || fail "judge-jev.js 缺失或为空"
-_COMMANDER_BODY=$(awk '/^async function judgeCommander/,/^}/' "$_JJ")
-grep -q "try {" <<< "$_COMMANDER_BODY" || fail "judgeCommander 缺少try/catch包裹httpPost调用(网络异常会裸抛,炸穿整条判定链)"
-grep -q "catch" <<< "$_COMMANDER_BODY" || fail "judgeCommander 缺少catch分支"
+_CALL_BODY=$(awk '/^async function callOpenRouter/,/^}/' "$_JJ")
+grep -q "try {" <<< "$_CALL_BODY" || fail "callOpenRouter 缺少try/catch包裹httpPost调用(网络异常会裸抛)"
+grep -q "JudgeApiError" <<< "$_CALL_BODY" || fail "callOpenRouter 未把故障归一成 JudgeApiError"
+for _jf in judge-jev.js judge-comment.js; do
+  for _fn in judgePrimary judgeCommander; do
+    _BODY=$(awk "/^async function $_fn/,/^}/" "$D/$_jf")
+    grep -q "callOpenRouter(" <<< "$_BODY" || fail "$_jf $_fn 未经 callOpenRouter 调 API(故障会被当成解析失败→判死)"
+    grep -qE 'await httpPost\(' <<< "$_BODY" && fail "$_jf $_fn 裸调 httpPost(绕过故障归一)"
+  done
+  grep -F '调用失败' "$D/$_jf" | grep -qE 'verdict: "rejected"|grade: "C"' && fail "$_jf 调用失败又被写成判定结论(rejected/C档),0929 误杀线索形态复活"
+done
+_JV_CODE=$(grep -vE '^[[:space:]]*//' "$D/judge-video.js")
+grep -A12 'deps.judgeContent(' <<< "$_JV_CODE" | grep -q 'markVideoJudgeError' || fail "judge-video.js 判定异常未走 markVideoJudgeError 留 pending"
+grep -A14 'deps.judgeContent(' <<< "$_JV_CODE" | grep -q 'continue' || fail "judge-video.js 判定异常后未 continue(一条故障会炸穿整批)"
+grep -q 'routeOf(' <<< "$_JV_CODE" || fail "judge-video.js 入口未经 routeOf 归一业务线(batch2.sh 传 profile 名,0929 前 230 条从未判定)"
 
 
 # 层22: deploy.sh 清单不能悄悄漂移(0923补建:这套脚本从未有过自动部署,合并进main≠

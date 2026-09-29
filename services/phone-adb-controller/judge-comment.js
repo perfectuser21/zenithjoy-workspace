@@ -10,6 +10,8 @@
 // 不用再拿正则从自由文本里抠档位。已用真实OPENROUTER_API_KEY实测跑通。
 "use strict";
 const fs = require("fs");
+// 0929: API 故障判别与 judge-jev.js 同一套(错误类型+调用口),复用不另写一份。
+const { JudgeApiError, callOpenRouter, defaultHttpPost } = require("./judge-jev.js");
 
 const DECISIONS_ENDPOINT = "https://openrouter.ai/api/alpha/decisions";
 const COMMANDER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
@@ -30,22 +32,15 @@ function resolveOpenRouterKey(env = process.env) {
   }
 }
 
-async function defaultHttpPost(url, body, apiKey) {
-  const r = await fetch(url, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  return r.json();
-}
-
 // 主判:调Jev的Decisions端点,choice题型四选一(A/B/C/不相关)。
 // confidence低于阈值,或response格式不对(answers.grade缺失/choice不在四档内) → 当UNCERTAIN
 // 处理,转复核官,不直接判死。
 async function judgePrimary(comment, videoCaption, targetProfile, { httpPost = defaultHttpPost, apiKey, env } = {}) {
   const key = apiKey || resolveOpenRouterKey(env);
-  if (!key) throw new Error("judgePrimary: 找不到OPENROUTER_API_KEY");
-  const resp = await httpPost(
+  if (!key) throw new JudgeApiError("judgePrimary: 找不到OPENROUTER_API_KEY", { stage: "jev" });
+  const resp = await callOpenRouter(
+    "jev",
+    httpPost,
     DECISIONS_ENDPOINT,
     {
       model: JEV_MODEL,
@@ -76,12 +71,14 @@ async function judgePrimary(comment, videoCaption, targetProfile, { httpPost = d
 }
 
 // 复核官只在A/B/C/不相关四档里选一个,不允许再回UNCERTAIN——终审必须给出终态。
-// 无法解析/调用失败一律保守落在"C"(留档但低优先级,不是直接丢弃也不是冒充高意向,
-// 跟评论判定"相关即留档"的0914理念一致——存疑不代表要扔)。这一段走普通chat completions,
+// 回复无法解析保守落在"C"(留档但低优先级,不是直接丢弃也不是冒充高意向,
+// 跟评论判定"相关即留档"的0914理念一致——存疑不代表要扔)。
+// 0929: 调用失败/错误体(402余额/429限流/网络)不是"存疑",是 API 故障——抛 JudgeApiError,
+// sort-comments.js 计入「判定异常N条(留待分拣)」,池行保持待分拣,下轮重判,不静默降 C 档。这一段走普通chat completions,
 // 跟Jev的Decisions端点无关,不受本次API修正影响。
 async function judgeCommander(comment, videoCaption, targetProfile, primaryReason, { httpPost = defaultHttpPost, apiKey, env } = {}) {
   const key = apiKey || resolveOpenRouterKey(env);
-  if (!key) return { grade: "C", reason: `commander:no_api_key|${primaryReason || ""}` };
+  if (!key) throw new JudgeApiError("judgeCommander: 找不到OPENROUTER_API_KEY", { stage: "commander" });
   const prompt = `你是评论意向分档的复核官。主判对下面这条评论拿不准,现在交给你终审。
 你必须在 A/B/C/不相关 四个里选一个,不能再回答"拿不准"。
 
@@ -97,12 +94,9 @@ ${comment}
 主判为什么拿不准:${primaryReason || "未知"}
 
 请严格只回一个词:A 或 B 或 C 或 不相关`;
-  let resp;
-  try {
-    resp = await httpPost(COMMANDER_ENDPOINT, { model: COMMANDER_MODEL, messages: [{ role: "user", content: prompt }] }, key);
-  } catch (e) {
-    return { grade: "C", reason: `commander:调用失败(${String(e.message || e).slice(0, 60)})|${primaryReason || ""}` };
-  }
+  const resp = await callOpenRouter(
+    "commander", httpPost, COMMANDER_ENDPOINT, { model: COMMANDER_MODEL, messages: [{ role: "user", content: prompt }] }, key
+  );
   const raw = resp && resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content;
   const t = (raw || "").trim();
   if (t.includes("不相关")) return { grade: "不相关", reason: `commander:不相关|${primaryReason || ""}` };
@@ -112,7 +106,8 @@ ${comment}
   return { grade: "C", reason: `commander:无法解析|${primaryReason || ""}` };
 }
 
-// 对外统一入口:永远返回A/B/C/不相关四档之一,relevance派生自grade(不相关=不相关,其余=相关)。
+// 对外统一入口:判定成功返回A/B/C/不相关四档之一,relevance派生自grade(不相关=不相关,其余=相关);
+// API 故障抛 JudgeApiError(留待分拣)。
 async function judgeComment(comment, videoCaption, targetProfile, opts = {}) {
   const primary = await judgePrimary(comment, videoCaption, targetProfile, opts);
   const final = primary.grade === "UNCERTAIN"
@@ -126,6 +121,7 @@ async function judgeComment(comment, videoCaption, targetProfile, opts = {}) {
 }
 
 module.exports = {
+  JudgeApiError,
   judgeComment,
   judgePrimary,
   judgeCommander,

@@ -23,6 +23,7 @@ function defaultDeps() {
   return {
     listPendingVideos: db.listPendingVideos,
     markVideoJudgment: db.markVideoJudgment,
+    markVideoJudgeError: db.markVideoJudgeError,
     transcribeAudio: require("./transcribe-qwen-audio.js").transcribeAudio,
     judgeContent: require("./judge-jev.js").judgeContent,
   };
@@ -40,7 +41,7 @@ async function runJudgeVideo({ lineHint, manifest = [], pool, deps = defaultDeps
 
   const pending = await deps.listPendingVideos(pool, lineKey, 200);
 
-  const stats = { pending: pending.length, skipped: 0, matched: 0, rejected: 0, noSource: 0 };
+  const stats = { pending: pending.length, skipped: 0, matched: 0, rejected: 0, noSource: 0, judgeError: 0 };
   for (const video of pending) {
     if (shouldSkipCheapGate(video)) {
       stats.skipped++;
@@ -71,14 +72,27 @@ async function runJudgeVideo({ lineHint, manifest = [], pool, deps = defaultDeps
       continue;
     }
 
-    const verdict = await deps.judgeContent(transcript, targetProfile);
+    let verdict;
+    try {
+      verdict = await deps.judgeContent(transcript, targetProfile);
+    } catch (e) {
+      // 0929: 判定 API 故障(OpenRouter 402/429/网络)≠内容不相关。不写 rejected,
+      // 保持 pending 并在 judgment_reason 记原因,充值/恢复后下一轮自然重判。
+      stats.judgeError++;
+      const msg = String((e && e.message) || e).slice(0, 200);
+      console.error(`  判定异常 video=${video.video_id}: ${msg}(保持pending,待重判)`);
+      await deps.markVideoJudgeError(pool, {
+        lineKey, videoId: video.video_id, reason: `判定异常(待重判): ${msg}`, transcript,
+      });
+      continue;
+    }
     await deps.markVideoJudgment(pool, {
       lineKey, videoId: video.video_id, verdict: verdict.verdict, reason: verdict.reason, transcript,
     });
     if (verdict.verdict === "matched") stats.matched++; else stats.rejected++;
   }
 
-  console.log(`judge-video: 业务线${lineKey}(入参${lineHint}) | 待判定${stats.pending} | 便宜闸跳过${stats.skipped} | matched${stats.matched} | rejected${stats.rejected} | 无来源${stats.noSource}`);
+  console.log(`judge-video: 业务线${lineKey}(入参${lineHint}) | 待判定${stats.pending} | 便宜闸跳过${stats.skipped} | matched${stats.matched} | rejected${stats.rejected} | 无来源${stats.noSource} | 判定异常${stats.judgeError}条(保持pending待重判)`);
   return stats;
 }
 
