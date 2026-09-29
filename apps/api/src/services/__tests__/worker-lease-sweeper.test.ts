@@ -12,15 +12,20 @@ vi.mock('../worker-tasks-service', () => ({
 vi.mock('../worker-live', () => ({
   workerLive: { evictIdle: vi.fn() },
 }));
+vi.mock('../brain-device-job-mirror', () => ({
+  reconcileBrainMirrors: vi.fn(),
+}));
 
 import { sweepExpiredLeases } from '../worker-tasks-service';
 import { workerLive } from '../worker-live';
+import { reconcileBrainMirrors } from '../brain-device-job-mirror';
 import { startWorkerLeaseSweeper, stopWorkerLeaseSweeper } from '../worker-lease-sweeper';
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
   (sweepExpiredLeases as ReturnType<typeof vi.fn>).mockResolvedValue(0);
+  (reconcileBrainMirrors as ReturnType<typeof vi.fn>).mockResolvedValue(0);
 });
 
 afterEach(() => {
@@ -64,6 +69,27 @@ describe('startWorkerLeaseSweeper', () => {
     const t = startWorkerLeaseSweeper(1000);
     await expect(vi.advanceTimersByTimeAsync(1000)).resolves.not.toThrow();
     expect(errSpy).toHaveBeenCalled();
+    stopWorkerLeaseSweeper(t);
+    errSpy.mockRestore();
+  });
+
+  it('Brain 镜像对账：首轮立刻跑一次，之后每 10 轮跑一次（对账打跨境 Brain 库，不必每分钟）', async () => {
+    const t = startWorkerLeaseSweeper(1000);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(reconcileBrainMirrors).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(9000);
+    expect(reconcileBrainMirrors).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(reconcileBrainMirrors).toHaveBeenCalledTimes(2);
+    stopWorkerLeaseSweeper(t);
+  });
+
+  it('对账 reject 不影响 sweep、不向外抛', async () => {
+    (reconcileBrainMirrors as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('brain down'));
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const t = startWorkerLeaseSweeper(1000);
+    await expect(vi.advanceTimersByTimeAsync(1000)).resolves.not.toThrow();
+    expect(sweepExpiredLeases).toHaveBeenCalledTimes(1);
     stopWorkerLeaseSweeper(t);
     errSpy.mockRestore();
   });
