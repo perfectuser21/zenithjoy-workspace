@@ -128,9 +128,11 @@ do_heartbeat() { # 纯续租：采收主体一跑 1~7 小时，零星的 step/no
   r=$(api "/api/workers/tasks/$tid/heartbeat" "$b"); code=${r%% *}
   case "$code" in
     200) ;;
-    # 服务端还没部署心跳接口（脚本先于 apps/api 发到机器的窗口期）：退回 note 式续租，租约照样续上
-    404) do_step "$(state_step)" doing "心跳续租" ;;
-    *)   wall_log "heartbeat $SERIAL HTTP $code" ;;
+    409) wall_log "heartbeat $SERIAL 任务已结束(409),不再续租" ;;
+    000) wall_log "heartbeat $SERIAL 中台不可达" ;;
+    # 其余（404/401…）= 服务端还没部署心跳接口（脚本先于 apps/api 上生产的窗口期）：退回 note 式续租。
+    # 0929 上线实测：旧版生产 API 未知路由先过全局鉴权，回 401 而不是 404，只认 404 会在 promote 前整段失效
+    *)   wall_log "heartbeat $SERIAL HTTP $code,退回 note 续租"; do_step "$(state_step)" doing "心跳续租" ;;
   esac
 }
 
