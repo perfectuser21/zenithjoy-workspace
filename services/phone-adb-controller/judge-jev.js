@@ -14,7 +14,7 @@ const fs = require("fs");
 const DECISIONS_ENDPOINT = "https://openrouter.ai/api/alpha/decisions";
 const COMMANDER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 const JEV_MODEL = "typesafe/jev-1.13"; // 0923真机核对过,真实可用
-const COMMANDER_MODEL = "google/gemini-2.5-flash-official"; // 复核官,跟系统①content-judgment.ts同款选型
+const COMMANDER_MODEL = "google/gemini-2.5-flash"; // 复核官,跟系统①content-judgment.ts同款选型
 const CONFIDENCE_THRESHOLD = 0.6; // 低于此值视为"拿不准",转复核官(阈值可调,暂无真机统计支撑,先用保守值)
 
 function resolveOpenRouterKey(env = process.env) {
