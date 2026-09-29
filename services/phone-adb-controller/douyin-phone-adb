@@ -1440,6 +1440,22 @@ extract_account_identity() {
   print -- "douyin_id=$douyin_id"
 }
 
+# 一份 UI 树是不是「自己的」主页（0930 事故：抖音重开恢复到他人主页，account-current 见「抖音号：」
+# 就读号，把私信对象的号 1958291263 当成自己的，预检判 account_mismatch 拦掉整批）。判据全取自真机树：
+#   own     —「抖音号：」+ 自己主页标记（text="编辑主页"，或 content-desc 以「切换账号」开头——有未读时
+#             该节点变成「切换账号，用户名有N条未读消息」）+ 没有他人主页才有的「私信」按钮；
+#   foreign —「抖音号：」+ content-desc="私信"（他人主页的私信按钮；「关注」不可用，自己主页的关注数也叫「关注」）；
+#   partial —「抖音号：」在但两类标记都没有（树未长齐），不当自己主页；
+#   none    — 不是主页。
+profile_owner_kind() {
+  local xml
+  xml="$1"
+  /usr/bin/grep -q '抖音号：' "$xml" 2>/dev/null || { print -- none; return 0; }
+  if /usr/bin/grep -q 'content-desc="私信"' "$xml" 2>/dev/null; then print -- foreign; return 0; fi
+  if /usr/bin/grep -qE 'text="编辑主页"|content-desc="切换账号' "$xml" 2>/dev/null; then print -- own; return 0; fi
+  print -- partial
+}
+
 read_current_account() {
   local evidence_id first_xml me_line me_center me_x me_y profile_xml ident nickname douyin_id
   evidence_id="$1"
@@ -1456,11 +1472,13 @@ read_current_account() {
   local _try _sz
   first_xml="$EVIDENCE_ROOT/${evidence_id}-before.xml"
   me_line=""
+  local _kind
   for _try in 1 2 3 4; do
     ui_evidence "${evidence_id}-before" >/dev/null
-    if /usr/bin/grep -q '抖音号：' "$first_xml" 2>/dev/null; then
-      me_line="ALREADY_ON_PROFILE"; break
-    fi
+    _kind="$(profile_owner_kind "$first_xml")"
+    [[ "$_kind" == own ]] && { me_line="ALREADY_ON_PROFILE"; break; }
+    # 他人主页没有底部导航，重抓也等不来「我」tab，直接进下面的 verified back。
+    [[ "$_kind" == foreign ]] && { print -u2 -- "warning: current page is someone else's profile (has 私信 button); stepping back instead of reading its 抖音号"; break; }
     me_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="我，按钮"[^>]*>' "$first_xml" | /usr/bin/head -1 || true)"
     [[ -n "$me_line" ]] && break
     _sz="$(/usr/bin/wc -c < "$first_xml" 2>/dev/null || print -- 0)"
@@ -1476,14 +1494,15 @@ read_current_account() {
     # 实测结论（0913，别再重试这些路）：LAUNCHER intent 只把已有任务栈提到前台、页面不变；
     # snssdk1128 的 feed/main/home/profile/mine 等 deeplink 都到不了自己的主页。
     # 可行的只有逐步返回，但**每按一次都必须复验**——无验证的连按正是把设备推乱的老毛病。
-    print -u2 -- "warning: no bottom nav after 4 captures — likely a full-screen page (e.g. search results); stepping back with verification"
+    [[ "$_kind" == foreign ]] || print -u2 -- "warning: no bottom nav after 4 captures — likely a full-screen page (e.g. search results); stepping back with verification"
     for _try in 1 2 3; do
       [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin left foreground while returning to a page with the bottom nav"
       "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1
       wait_ms 2000
       [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "back navigation exited Douyin; aborting instead of drifting further"
       ui_evidence "${evidence_id}-before" >/dev/null
-      if /usr/bin/grep -q '抖音号：' "$first_xml" 2>/dev/null; then me_line="ALREADY_ON_PROFILE"; break; fi
+      _kind="$(profile_owner_kind "$first_xml")"
+      [[ "$_kind" == own ]] && { me_line="ALREADY_ON_PROFILE"; break; }
       me_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="我，按钮"[^>]*>' "$first_xml" | /usr/bin/head -1 || true)"
       [[ -n "$me_line" ]] && { print -u2 -- "info: bottom nav reached after $_try verified back step(s)"; break; }
     done
@@ -1497,8 +1516,16 @@ read_current_account() {
     read me_x me_y <<< "$me_center"
     "$ADB" -s "$SERIAL" shell input tap "$me_x" "$me_y"
     wait_ms 1200
-    ui_evidence "${evidence_id}-profile" >/dev/null
+    # 点完「我」也要复验落地的是自己主页（有界重抓等树长齐）；宁可读不到，也不能读错。
+    for _try in 1 2 3; do
+      ui_evidence "${evidence_id}-profile" >/dev/null
+      _kind="$(profile_owner_kind "$profile_xml")"
+      [[ "$_kind" == own || "$_kind" == foreign ]] && break
+      wait_ms 1500
+    done
   fi
+  _kind="$(profile_owner_kind "$profile_xml")"
+  [[ "$_kind" == own ]] || die "page reached via the Me tab is not verified as our own profile (kind=${_kind}); refusing to read its 抖音号"
   ident="$(extract_account_identity "$profile_xml")"
   douyin_id="$(print -- "$ident" | /usr/bin/sed -n 's/^douyin_id=//p')"
   nickname="$(print -- "$ident" | /usr/bin/sed -n 's/^nickname=//p')"
@@ -2697,6 +2724,15 @@ case "$command" in
     print -- "detail_restored=0"
     exit 1
     ;;
+  own-profile)
+    # 纯判定，不碰设备：一份 UI 树是不是自己的主页（account-current 读号前的同一判据）。
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE own-profile UI_XML"
+    op_kind="$(profile_owner_kind "$2")"
+    print -- "profile_kind=$op_kind"
+    if [[ "$op_kind" == own ]]; then print -- "own_profile=1"; exit 0; fi
+    print -- "own_profile=0"
+    exit 1
+    ;;
   account-current)
     [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE account-current EVIDENCE_ID"
     check_target
@@ -3073,6 +3109,6 @@ case "$command" in
     print -- "foreground=${focus:-unknown}"
     ;;
   *)
-    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid"
+    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link own-profile account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid"
     ;;
 esac

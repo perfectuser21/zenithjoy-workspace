@@ -30,7 +30,7 @@ test("前置：zsh 与 /usr/bin/xmllint 可用", () => {
   assert.ok(HAS_XMLLINT, "没有 /usr/bin/xmllint（ubuntu 装 libxml2-utils），抖音号提取依赖它");
 });
 
-// 按真机结构合成的主页树（布局坐标取自 0929 真机，不含任何真实用户资料）。
+// 按真机结构合成的自己主页树（布局坐标取自 0929 真机，不含任何真实用户资料）。
 function profileXml({ nickname, badge, nickX = 445 }) {
   const nodes = [
     `<node index="0" text="" resource-id="com.ss.android.ugc.aweme:id/urb" class="android.widget.FrameLayout" content-desc="" bounds="[0,0][1200,704]" />`,
@@ -45,6 +45,8 @@ function profileXml({ nickname, badge, nickX = 445 }) {
     `<node index="3" text="抖音号：test_dy_001" resource-id="com.ss.android.ugc.aweme:id/5-n" class="android.widget.TextView" content-desc="" bounds="[445,456][819,508]" />`,
     `<node index="4" text="7" resource-id="" class="android.widget.TextView" content-desc="" bounds="[82,756][112,816]" />`,
     `<node index="5" text="获赞" resource-id="" class="android.widget.TextView" content-desc="" bounds="[52,816][142,878]" />`,
+    // 自己主页标记（0930 起 account-current 只认带「编辑主页」/「切换账号」的主页，见 account-current-own-profile.test.mjs）
+    `<node index="6" text="编辑主页" resource-id="" class="android.widget.TextView" content-desc="" bounds="[52,1000][580,1080]" />`,
   );
   return `<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation="0"><node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="com.ss.android.ugc.aweme" content-desc="" bounds="[0,0][1200,2664]">${nodes.join("")}</node></hierarchy>`;
 }
