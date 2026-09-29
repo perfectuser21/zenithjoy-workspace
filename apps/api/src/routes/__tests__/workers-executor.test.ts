@@ -4,7 +4,7 @@ import express from 'express';
 import request from 'supertest';
 vi.mock('../../services/worker-tasks-service', async () => {
   const actual = await vi.importActual<any>('../../services/worker-tasks-service');
-  return { ...actual, startTask: vi.fn(), reportStep: vi.fn(), completeTask: vi.fn() };
+  return { ...actual, startTask: vi.fn(), reportStep: vi.fn(), completeTask: vi.fn(), heartbeatTask: vi.fn() };
 });
 vi.mock('../../services/worker-live', () => {
   const pushFrame = vi.fn(() => ({ seq: 1, at: Date.now(), bytes: Buffer.alloc(0) }));
@@ -12,7 +12,7 @@ vi.mock('../../services/worker-live', () => {
 });
 vi.mock('../../services/walking-skeleton.service', () => ({ validateLicense: vi.fn() }));
 vi.mock('../../db/connection', () => ({ default: { query: vi.fn() } }));
-import { startTask, reportStep, completeTask, WorkerTaskError } from '../../services/worker-tasks-service';
+import { startTask, reportStep, completeTask, heartbeatTask, WorkerTaskError } from '../../services/worker-tasks-service';
 import { workerLive } from '../../services/worker-live';
 import { validateLicense } from '../../services/walking-skeleton.service';
 import pool from '../../db/connection';
@@ -111,6 +111,22 @@ describe('POST /api/workers/tasks/:id/complete', () => {
     (completeTask as any).mockResolvedValue({ ok: true });
     const r = await request(app).post(`/api/workers/tasks/${TID}/complete`).send({ outcome: 'completed', executor_id: 'ex' });
     expect(r.status).toBe(200);
+  });
+});
+describe('POST /api/workers/tasks/:id/heartbeat', () => {
+  it('成功 → 200，透传 executor_id', async () => {
+    (heartbeatTask as any).mockResolvedValue({ ok: true, lease_until: 'L' });
+    const r = await request(app).post(`/api/workers/tasks/${TID}/heartbeat`).send({ executor_id: 'ex' });
+    expect(r.status).toBe(200); expect(heartbeatTask).toHaveBeenCalledWith(TID, { executor_id: 'ex' });
+  });
+  it('task id 非 uuid → 400', async () => {
+    const r = await request(app).post('/api/workers/tasks/nope/heartbeat').send({ executor_id: 'ex' });
+    expect(r.status).toBe(400); expect(heartbeatTask).not.toHaveBeenCalled();
+  });
+  it('任务已结束 → 409 TASK_NOT_RUNNING', async () => {
+    (heartbeatTask as any).mockRejectedValue(new WorkerTaskError('TASK_NOT_RUNNING', 'x', 409));
+    const r = await request(app).post(`/api/workers/tasks/${TID}/heartbeat`).send({ executor_id: 'ex' });
+    expect(r.status).toBe(409); expect(r.body.error).toBe('TASK_NOT_RUNNING');
   });
 });
 describe('POST /api/workers/:agentId/frame', () => {

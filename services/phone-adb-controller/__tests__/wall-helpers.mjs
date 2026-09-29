@@ -74,7 +74,7 @@ export function makePassthroughConvert(dir) {
 }
 
 /** 假中台：记录全部请求；tasks 端点可按次序返回 409；frame 端点可按次序返回状态码（默认 202） */
-export function startFakeApi({ busyCodes = [], frameCodes = [], taskIds = [], taskDelaysMs = [], brainTaskId = null } = {}) {
+export function startFakeApi({ busyCodes = [], frameCodes = [], taskIds = [], taskDelaysMs = [], brainTaskId = null, heartbeatCode = 200 } = {}) {
   const requests = [];
   const uuid = randomUUID();
   const taskId = randomUUID();
@@ -108,6 +108,8 @@ export function startFakeApi({ busyCodes = [], frameCodes = [], taskIds = [], ta
       }
       if (/^\/api\/workers\/tasks\/[^/]+\/steps$/.test(req.url)) return send(200, { success: true, data: {} });
       if (/^\/api\/workers\/tasks\/[^/]+\/complete$/.test(req.url)) return send(200, { success: true, data: {} });
+      // heartbeatCode=404 模拟尚未部署心跳接口的老服务端（脚本先于 apps/api 发到机器的窗口期）
+      if (/^\/api\/workers\/tasks\/[^/]+\/heartbeat$/.test(req.url)) return send(heartbeatCode, { success: heartbeatCode === 200, data: {} });
       send(404, { success: false });
     });
   });
