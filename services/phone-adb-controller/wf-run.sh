@@ -297,6 +297,8 @@ run_finalize(){
     escalate "本批收工后未能确认回到安全桌面,设备可能停在异常界面上,请人工查看"
   fi
   export WFR_CLOSE_APP_ATTEMPTS WFR_SAFE_DESKTOP_VISIBLE
+  # 9032cdad: 收工时步骤 DoD 判整批(如锁心跳续期失败次数)——日志与产物取本批 night 文件全段
+  export WFR_LOG_FILE=~/night-$TAG.log WFR_TSV=~/night-$TAG.tsv WFR_LOG_FROM=0
   eval "$(bash "$WFR" finalize 2>>$LOG)" 2>/dev/null || true
   log "账本finalize: ok=${WFR_FINALIZE_OK:-?} final=${WFR_FINALIZE_FINAL:-?} lock_released=${WFR_LOCK_RELEASED:-?} ${WFR_FINALIZE_MSG:-}"
   [[ "${WFR_FINALIZE_OK:-0}" == "1" ]] || escalate "账本收工自检未通过: ${WFR_FINALIZE_MSG:-unknown}"

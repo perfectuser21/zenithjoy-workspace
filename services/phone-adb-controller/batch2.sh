@@ -27,6 +27,8 @@ OUT=~/night-$TAG.tsv; LOG=~/night-$TAG.log
 WFR=${WFR:-$HOME/bin-harvest/workflow-result.sh}
 wfr_on(){ [[ "${WFR_DISABLED:-0}" != "1" && -x "$WFR" ]] }
 wfr(){ wfr_on && bash "$WFR" "$@" >/dev/null 2>>$LOG; true }
+# 9032cdad 步骤 DoD 统一裁判的读回上下文: log 类判本词(或本段)日志,tsv 类判本批采收产物;WFR_LOG_FROM 在每段开始前记日志行偏移
+export WFR_LOG_FILE=$LOG WFR_TSV=$OUT WFR_LOG_FROM=0
 count(){ local c; c=$(grep -c "^$1" $OUT 2>/dev/null || true); print -- "${c:-0}"; }
 count_qual(){ local c; c=$(grep -cE "^QUAL	[^	]*	($1)	" $OUT 2>/dev/null || true); print -- "${c:-0}"; }
 # 出口码→阶段状态(决策 af061588): 0+有候选 completed / 0 无候选 blocked no_cards / 3 blocked lock_busy / 其它 failed
@@ -153,6 +155,7 @@ for W in "${(f)$(cat $WF)}"; do
     /bin/sleep 4
   fi
   ENC=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$W")
+  WFR_LOG_FROM=$(log_off); WFR_LOG_FROM=${WFR_LOG_FROM:-0}
   print "[$(date +%H:%M:%S)] 词$n: $W" >> $LOG
   wr step "$SERIAL" 3 doing "词$n: $W"
   V0=$(count VIDEO); L0=$(count LEAD); Q0=$(count QUAL); QJ0=$(count_qual 'matched|rejected'); QM0=$(count_qual matched)
@@ -184,6 +187,7 @@ elif [[ "$PUSH" == "1" && -s $OUT ]]; then
   # 全部静默失败——真机验证时才发现(见0923 handoff)。push-raw-comments.js不碰Postgres,
   # 不受影响,但为了让两条命令共享同一次ssh session的env,统一放在同一行source。
   PUSH_OFF=""; wfr_on && PUSH_OFF=$(log_off)   # 本次 ssh 之前的日志行数: 之后新增的输出里才有本批的 PUSH_*_STATS
+  WFR_LOG_FROM=${PUSH_OFF:-0}
   ssh -o ConnectTimeout=20 mmv "set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; node /Users/administrator/.openclaw/leadgen-scripts/push-videos.js /tmp/$TAG.tsv $TAG $LINE && node /Users/administrator/.openclaw/leadgen-scripts/push-raw-comments.js /tmp/$TAG.tsv $TAG $LINE" >> $LOG 2>&1
   prc=$?
   # 账本 delivery: 落池 ssh 的出口码决定 completed/failed; readback_verified 由探针读回(checks/ YAML)填,这里不硬编码;
@@ -201,6 +205,7 @@ elif [[ "$PUSH" == "1" && -s $OUT ]]; then
   # 单独另开一条定时链路(那样反而多一层"两条链步调不一致"的新风险)。
   # 分拣失败不影响本轮采收已经落池的事实,只吞错不重试(留给下一批/下次人工核)。
   SORT_OFF=""; wfr_on && SORT_OFF=$(log_off)
+  WFR_LOG_FROM=${SORT_OFF:-0}
   ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/sort-comments.js $LINE" >> $LOG 2>&1
   src=$?
   print "[$(date +%H:%M:%S)] 已分拣(判定链)" >> $LOG

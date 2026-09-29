@@ -66,6 +66,7 @@ MMV_TOPLEVEL_FILES=(cmdr-escort.txt cmdr-stream.txt)
 # 靠 README 里手工 scp,0929 实测 mmv 上的探针 YAML 已落后 main。路径相对本目录,子目录原样落到 leadgen-scripts/ 下。
 MMV_PROBE_FILES=(
   verify-step.mjs checks/probes-lib.js checks/schema.json checks/social-keyword-leadgen.yaml checks/social-benchmark-leadgen.yaml
+  step-judge.mjs step-dod.json step-dod-stats.mjs
 )
 # 设备控制器单独成组: 它必须同时落到**两个**目录,因为两类消费者各指一个——
 #   ~/.local/bin/  ← harvest-keyword.sh:7 / outreach-tick.sh / refill-profile-links.sh
@@ -86,7 +87,8 @@ DEVICE_SH_FILES=(
 )
 # 0927 棒3b-3: 账本钩子内建进 harvest-cron.sh/batch2.sh,workflow-result.sh 硬依赖 ledger.mjs(node),
 # 少了它账本全程 WFR_WARN——单独成组,用 node --check 而不是 zsh -n 验语法。
-DEVICE_NODE_FILES=(ledger.mjs)
+# 9032cdad: 步骤 DoD 统一裁判在执行机本地判 metric/evidence/log/tsv/ledger 类,清单 step-dod.json 由契约生成(json 用 JSON.parse 验)
+DEVICE_NODE_FILES=(ledger.mjs step-judge.mjs step-dod.json)
 # 7f842d12 契约组装执行: wf-run.sh 读 ~/bin-harvest/plans/<能力>.plan(wf-plan.mjs 从契约生成、提交在仓库)。
 # 执行机没有仓库 node_modules,所以计划不在执行机上生成;漏发 = wf-run 拒跑并升级(不会静默跑错)。
 DEVICE_PLAN_FILES=(plans/keyword_acquisition.plan plans/benchmark_link_acquisition.plan)
@@ -159,7 +161,9 @@ for host in xian-m4 xian-m1; do
   for f in "${DEVICE_NODE_FILES[@]}"; do
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
     push_atomic "$D/$f" "$host" "~/bin-harvest" "$f"
-    if ssh "$host" "/opt/homebrew/bin/node --check ~/bin-harvest/$f" 2>/tmp/deploy-err-$$; then
+    if [[ "$f" == *.json ]]; then _nchk="/opt/homebrew/bin/node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f"
+    else _nchk="/opt/homebrew/bin/node --check ~/bin-harvest/$f"; fi
+    if ssh "$host" "$_nchk" 2>/tmp/deploy-err-$$; then
       echo "    ✅ $f"
     else
       echo "    ❌ $f 语法检查失败: $(head -3 /tmp/deploy-err-$$)"

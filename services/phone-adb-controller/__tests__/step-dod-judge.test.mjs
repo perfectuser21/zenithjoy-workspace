@@ -173,3 +173,14 @@ test("step-dod-stats CLI：读工件目录 step_dod 出统计与可升 hard 清�
   assert.match(t.stdout, /acquire_device_lock/);
   assert.match(t.stdout, /可升 hard/);
 });
+
+test("接线守卫：批次/收工/触达三处给裁判读回上下文；部署清单下发裁判与清单到执行机和 mmv", () => {
+  const rd = (f) => readFileSync(join(SRC, f), "utf8");
+  assert.match(rd("batch2.sh"), /export WFR_LOG_FILE=\$LOG WFR_TSV=\$OUT/);
+  assert.match(rd("batch2.sh"), /WFR_LOG_FROM=\$\(log_off\)/);
+  assert.match(rd("wf-run.sh"), /export WFR_LOG_FILE=~\/night-\$TAG\.log/);
+  assert.match(rd("outreach-tick.sh"), /WFR_LOG_FILE=\$LOG WFR_LOG_FROM=/);
+  const dep = rd("deploy.sh");
+  assert.match(dep, /DEVICE_NODE_FILES=\(ledger\.mjs step-judge\.mjs step-dod\.json\)/);
+  assert.match(dep.slice(dep.indexOf("MMV_PROBE_FILES=(")), /step-judge\.mjs step-dod\.json step-dod-stats\.mjs/);
+});

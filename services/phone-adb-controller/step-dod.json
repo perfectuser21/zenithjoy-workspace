@@ -1,0 +1,620 @@
+{
+  "version": 1,
+  "capability": "keyword_acquisition",
+  "contract_sha256": "cb6f6be2ae89db284f013d8bd4cd837a84038968d8aae1fa68673a264e95ca67",
+  "promotion": {
+    "min_consecutive_pass": 20
+  },
+  "steps": [
+    {
+      "key": "keyword_acquisition.preflight.acquire_device_lock",
+      "activity": "preflight",
+      "at": "preflight",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "metric",
+        "ref": "metrics.lock_acquired",
+        "expect": {
+          "op": "==",
+          "value": 1
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.preflight.refresh_lock_heartbeat",
+      "activity": "preflight",
+      "at": "cleanup",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "log",
+        "regex": "锁心跳续期3次仍未确认成功",
+        "expect": {
+          "op": "<=",
+          "value": 0
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.preflight.verify_device_identity",
+      "activity": "preflight",
+      "at": "preflight",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "metric",
+        "ref": "metrics.device_verified",
+        "expect": {
+          "op": "==",
+          "value": 1
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.preflight.verify_call_idle",
+      "activity": "preflight",
+      "at": "preflight",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "metric",
+        "ref": "metrics.call_state_idle",
+        "expect": {
+          "op": "==",
+          "value": 1
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.preflight.read_account_mark",
+      "activity": "preflight",
+      "at": "preflight",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "{tag}-preflight-acct-profile.xml",
+        "match": "抖音号：",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.preflight.open_run_ledger",
+      "activity": "preflight",
+      "at": "preflight",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "ledger",
+        "stage": "preflight",
+        "field": "status",
+        "equals": "completed",
+        "expect": {
+          "op": "==",
+          "value": 1
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.discovery.open_search",
+      "activity": "discovery",
+      "at": "discovery",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "{tag}-w{n}-vtab-tabs.xml",
+        "match": "text=\"综合\"",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.discovery.switch_video_tab",
+      "activity": "discovery",
+      "at": "discovery",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "{tag}-w{n}-vtab-aftertab.xml",
+        "match": "视频[^>]*selected=\"true\"",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.discovery.open_filter_panel",
+      "activity": "discovery",
+      "at": "discovery",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "{tag}-w{n}-filter-panel1.*",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.discovery.choose_filters",
+      "activity": "discovery",
+      "at": "discovery",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "{tag}-w{n}-filter-selected.*",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.discovery.apply_filters",
+      "activity": "discovery",
+      "at": "discovery",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "{tag}-w{n}-filter-results.*",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.discovery.extract_video_cards",
+      "activity": "discovery",
+      "at": "discovery",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "{tag}-w{n}-cards-grid.xml",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.discovery.resolve_video_links",
+      "activity": "discovery",
+      "at": "discovery",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "log",
+        "regex": "视频链接解析失败",
+        "expect": {
+          "op": "<=",
+          "value": 0
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.discovery.persist_candidates",
+      "activity": "discovery",
+      "at": "discovery",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "sql",
+        "query": "SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG' AND keyword = '$WORD'",
+        "expect": {
+          "op": ">=",
+          "ref": "metrics.candidates"
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.qualification.cheap_gate",
+      "activity": "qualification",
+      "at": "qualification",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "none"
+      },
+      "reason": "行内先判后采时评论数要开评论区才读得到，不走零评论闸（cheapGate:false）；图文在进判定前由 current-video-link excluded_non_video 跳过，只留一行自报日志，没有独立于执行者的产物可读回"
+    },
+    {
+      "key": "keyword_acquisition.qualification.unmute_before_record",
+      "activity": "qualification",
+      "at": "qualification",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "log",
+        "regex": "录到的几乎是死寂",
+        "expect": {
+          "op": "<=",
+          "value": 0
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.qualification.record_triple_speed",
+      "activity": "qualification",
+      "at": "qualification",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "log",
+        "regex": "录制时长不足|录制未产出有效文件|录制启动失败",
+        "expect": {
+          "op": "<=",
+          "value": 0
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.qualification.extract_audio",
+      "activity": "qualification",
+      "at": "qualification",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "log",
+        "regex": "音频提取失败",
+        "expect": {
+          "op": "<=",
+          "value": 0
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.qualification.transcribe",
+      "activity": "qualification",
+      "at": "qualification",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "sql",
+        "query": "SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG' AND keyword = '$WORD' AND judgment_status <> 'pending' AND coalesce(transcript, '') = '' AND coalesce(judgment_reason, '') NOT LIKE '转写为空%' AND coalesce(judgment_reason, '') NOT LIKE 'V2便宜闸%'",
+        "expect": {
+          "op": "<=",
+          "value": 0
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.qualification.judge_content",
+      "activity": "qualification",
+      "at": "qualification",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "sql",
+        "query": "SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG' AND keyword = '$WORD' AND judgment_status <> 'pending' AND coalesce(judgment_reason, '') = ''",
+        "expect": {
+          "op": "<=",
+          "value": 0
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.collection.open_comment_section",
+      "activity": "collection",
+      "at": "collection",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "{tag}-w{n}-v*-oc-panel.xml",
+        "match": "[0-9万.]+条评论",
+        "expect": {
+          "op": ">=",
+          "ref": "metrics.videos_processed"
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.collection.collect_comments",
+      "activity": "collection",
+      "at": "collection",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "{tag}-w{n}-v*-cc*-comments.xml",
+        "expect": {
+          "op": ">=",
+          "ref": "metrics.videos_processed"
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.collection.verify_commenter_identity",
+      "activity": "collection",
+      "at": "collection",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "{tag}-w{n}-v*-u*-t*-profile.xml",
+        "match": "抖音号：",
+        "expect": {
+          "op": ">=",
+          "ref": "metrics.comments_collected"
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.collection.resolve_profile_link",
+      "activity": "collection",
+      "at": "collection",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "tsv",
+        "regex": "^LEAD\\t([^\\t]*\\t){7}{word}\\t[^\\t]*\\t\\t",
+        "expect": {
+          "op": "<=",
+          "value": 0
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.collection.mark_video_collected",
+      "activity": "collection",
+      "at": "collection",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "sql",
+        "query": "SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG' AND keyword = '$WORD' AND process_status = '评论已采'",
+        "expect": {
+          "op": ">=",
+          "ref": "metrics.videos_processed"
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.scoring.scan_pending",
+      "activity": "scoring",
+      "at": "scoring",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "log",
+        "regex": "^SORT_STATS ",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.scoring.judge_grade",
+      "activity": "scoring",
+      "at": "scoring",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "http",
+        "url": "https://open.feishu.cn/open-apis/bitable/v1/apps/$BASE/tables/$POOL/records",
+        "filter": {
+          "运行批次": "$RUN_TAG",
+          "处理状态": "已分拣"
+        },
+        "reduce": "count",
+        "expect": {
+          "op": ">=",
+          "ref": "metrics.comments_scored"
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.scoring.upsert_lead",
+      "activity": "scoring",
+      "at": "scoring",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "none"
+      },
+      "reason": "线索表按抖音号去重 upsert（新建或 repeat_hits+1），表上没有本批归属列，读不回本批新增/命中了哪些行；分拣统计 SORT_STATS.moved 是执行者自报，不算读回"
+    },
+    {
+      "key": "keyword_acquisition.scoring.advance_pool",
+      "activity": "scoring",
+      "at": "scoring",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "http",
+        "url": "https://open.feishu.cn/open-apis/bitable/v1/apps/$BASE/tables/$POOL/records",
+        "filter": {
+          "运行批次": "$RUN_TAG",
+          "处理状态": "待分拣"
+        },
+        "reduce": "count",
+        "expect": {
+          "op": "<=",
+          "value": 0
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.delivery.push_videos",
+      "activity": "delivery",
+      "at": "delivery",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "sql",
+        "query": "SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG'",
+        "expect": {
+          "op": ">=",
+          "ref": "metrics.videos_pushed"
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.delivery.push_raw_comments",
+      "activity": "delivery",
+      "at": "delivery",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "http",
+        "url": "https://open.feishu.cn/open-apis/bitable/v1/apps/$BASE/tables/$POOL/records",
+        "filter": {
+          "运行批次": "$RUN_TAG"
+        },
+        "reduce": "count",
+        "expect": {
+          "op": ">=",
+          "ref": "metrics.leads_written"
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.delivery.readback_line_key",
+      "activity": "delivery",
+      "at": "delivery",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "sql",
+        "query": "SELECT line_key FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG'",
+        "expect": {
+          "op": "not_null_all"
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.outreach.pick_order",
+      "activity": "outreach",
+      "at": "outreach",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "log",
+        "regex": "单#[0-9]+:",
+        "expect": {
+          "op": ">=",
+          "ref": "metrics.orders_picked"
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.outreach.check_breaker_and_cap",
+      "activity": "outreach",
+      "at": "outreach",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "log",
+        "regex": "已熔断\\(见|已因风控停发\\(见|已达阶梯上限",
+        "expect": {
+          "op": "<=",
+          "value": 0
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.outreach.acquire_device_lock",
+      "activity": "outreach",
+      "at": "outreach",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "none"
+      },
+      "reason": "触达拿锁是 tick 内 180 秒等待的瞬时状态，拿不到按设计回队列不计失败；锁文件在 tick 收工时早已释放，读不回当时的持有者与等待结果"
+    },
+    {
+      "key": "keyword_acquisition.outreach.verify_sender_account",
+      "activity": "outreach",
+      "at": "outreach",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "log",
+        "regex": "失败\\(account_mismatch\\)",
+        "expect": {
+          "op": "<=",
+          "value": 0
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.outreach.send_private_message",
+      "activity": "outreach",
+      "at": "outreach",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "log",
+        "regex": "✅ 单#[0-9]+ 送达|仅互关限制",
+        "expect": {
+          "op": ">=",
+          "ref": "metrics.messages_sent"
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.outreach.verify_delivery",
+      "activity": "outreach",
+      "at": "outreach",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "none"
+      },
+      "reason": "送达核验在 private-message-send 现场读气泡与提示文案，结果只体现在 ✅/⚠️/🚦 分支；聊天界面没有持久化产物，事后读不回对方是否可收"
+    },
+    {
+      "key": "keyword_acquisition.outreach.write_back_result",
+      "activity": "outreach",
+      "at": "outreach",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "http",
+        "url": "https://open.feishu.cn/open-apis/bitable/v1/apps/$BASE/tables/$LEAD/records",
+        "filter": {
+          "状态": "触达中"
+        },
+        "reduce": "count",
+        "expect": {
+          "op": "<=",
+          "value": 0
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.cleanup.close_app",
+      "activity": "cleanup",
+      "at": "cleanup",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "metric",
+        "ref": "metrics.close_app_attempts",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.cleanup.release_lock",
+      "activity": "cleanup",
+      "at": "cleanup",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "metric",
+        "ref": "metrics.lock_released",
+        "expect": {
+          "op": "==",
+          "value": 1
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.cleanup.return_safe_desktop",
+      "activity": "cleanup",
+      "at": "cleanup",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "metric",
+        "ref": "metrics.safe_desktop_visible",
+        "expect": {
+          "op": "==",
+          "value": 1
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.cleanup.finalize_run",
+      "activity": "cleanup",
+      "at": "cleanup",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "ledger",
+        "field": "items_total",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      }
+    }
+  ]
+}

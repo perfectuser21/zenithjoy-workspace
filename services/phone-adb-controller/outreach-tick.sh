@@ -231,6 +231,7 @@ C=~/.local/bin/douyin-phone-adb
 # 秒数,时间预算耗尽时循环体不会再启动新一轮,自然从 while 退出、往下走到收工日志,
 # 不存在"预算耗尽后还卡在循环里出不来"的情况。
 TICK_BODY_START=$SECONDS
+TICK_LOG_OFF=$(wc -l < $LOG 2>/dev/null | tr -d ' ')   # 9032cdad: 步骤 DoD 的 log 类只判本 tick 的日志段
 TICK_BUDGET=1500
 SENDS_THIS_TICK=0
 ORDERS_PICKED=0; BLOCKED_ORDERS=0   # 6b133a81 触达进账本: outreach 工件闭集 orders_picked/messages_sent/requeued/blocked_orders
@@ -501,7 +502,7 @@ outreach_ledger(){
   local wfr_sh="${WFR:-$SCRIPT_DIR/workflow-result.sh}" out req
   [[ "${WFR_DISABLED:-0}" != 1 && -x "$wfr_sh" ]] || return 0
   req=$(( ORDERS_PICKED - SENDS_THIS_TICK - BLOCKED_ORDERS )); (( req < 0 )) && req=0
-  out=$(bash "$wfr_sh" outreach-run "out$(date +%m%d%H%M)" "${OUTREACH_PROFILES[1]}" "" "$(hostname -s)" "tick picked=$ORDERS_PICKED sent=$SENDS_THIS_TICK" \
+  out=$(WFR_LOG_FILE=$LOG WFR_LOG_FROM=${TICK_LOG_OFF:-0} bash "$wfr_sh" outreach-run "out$(date +%m%d%H%M)" "${OUTREACH_PROFILES[1]}" "" "$(hostname -s)" "tick picked=$ORDERS_PICKED sent=$SENDS_THIS_TICK" \
     "{\"orders_picked\":$ORDERS_PICKED,\"messages_sent\":$SENDS_THIS_TICK,\"requeued\":$req,\"blocked_orders\":$BLOCKED_ORDERS}" 2>>$LOG)
   log "账本(触达): $(print -r -- "$out" | tr '\n' ' ' | head -c 200)"
   if print -r -- "$out" | grep -q '^WFR_GATE_ALERT=1'; then
