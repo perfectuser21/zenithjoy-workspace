@@ -2667,7 +2667,6 @@ case "$command" in
     (( rsd_ok )) || die "still not on safe desktop(launcher=$launcher_pkg) after 3 HOME presses; foreground=${focus:-unknown}"
     print -- "launcher=$launcher_pkg"
     print -- "foreground=${focus:-unknown}"
-    snapshot
     ;;
   *)
     die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-video-tab"
