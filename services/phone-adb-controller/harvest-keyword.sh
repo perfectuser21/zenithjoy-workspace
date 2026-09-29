@@ -46,10 +46,21 @@ SEENVIDS="$(mktemp -t seen-videos)"
 ssh -o ConnectTimeout=15 mmv "node /Users/administrator/.openclaw/leadgen-scripts/fetch-seen-videos.js '$LINE'" > "$SEENVIDS" 2>/dev/null
 
 $C --profile "$P" lock-acquire "$TAG" >/dev/null 2>&1 || { log "锁被占,退出"; rm -f "$SEENVIDS"; exit 3; }
-# 0929修复(DoD审计发现): release_lock之前输出全丢进/dev/null,底层"只能释放自己持有的锁"
-# 的真实校验结果完全看不见——释放失败会漏锁,下一批误判"锁被占"或者更糟地跟正在跑的
-# 上一批撞车,之前谁都不知道发生过这种事。现在留痕(不改变trap本身的执行,只是把结果记下来)。
-trap '_RELOUT=$($C --profile "$P" lock-release "$TAG" 2>&1); print -- "$_RELOUT" | grep -qE "^lock=(released|free)" || log "⚠️ 放锁未确认成功: $(print -- "$_RELOUT" | tail -1 | head -c 150)"; rm -f "$SEENVIDS"' EXIT
+# 0929修复(DoD审计发现,批次4主理人纠正): release_lock之前输出全丢进/dev/null,底层
+# "只能释放自己持有的锁"的真实校验结果完全看不见——释放失败会漏锁,下一批误判"锁被占"
+# 或者更糟地跟正在跑的上一批撞车。批次3先做了留痕,主理人纠正"拿不到确认不代表锁真没
+# 释放,大概率是网络抖/时序问题,该重试"——跟 commenter-identity 同一个病同一个药,
+# 改成最多重试3次(nap短暂等待,测试模式不真睡),3次都失败才留告警。
+trap '
+_REL_OK=0
+for _RELTRY in 1 2 3; do
+  _RELOUT=$($C --profile "$P" lock-release "$TAG" 2>&1)
+  if print -- "$_RELOUT" | grep -qE "^lock=(released|free)"; then _REL_OK=1; break; fi
+  (( _RELTRY < 3 )) && nap 2
+done
+(( _REL_OK )) || log "⚠️ 放锁未确认成功(重试3次): $(print -- "$_RELOUT" | tail -1 | head -c 150)"
+rm -f "$SEENVIDS"
+' EXIT
 
 $C --profile "$P" open-app >/dev/null 2>&1; nap 2
 $C --profile "$P" open-search "$KW" >/dev/null 2>&1 || { log "open-search失败"; exit 1; }
@@ -69,11 +80,19 @@ for CARDLINE in "${(f)CARDS}"; do
   log "视频$i: ${TITLE:0:40}"
   wr note --profile "$P" "视频$i: ${TITLE:0:40}"
   # 0914 融合刀6: 活锁心跳——每视频续一次,长采收绝不再被 TTL 判 stale 抢占
-  # 0929修复(DoD审计发现): 之前输出+退出码全丢进/dev/null+`|| true`——TTL(1800s)到点
-  # 没人知道续期一直在失败,直到锁被别的轮次抢走才现形(0928夜实证过一次真实撞车:两条
-  # 并发批次同时驱动同一台设备)。续一次失败不足以整批夭折(有30分钟buffer),但必须留痕。
-  _LROUT=$($C --profile "$P" lock-refresh "$TAG" </dev/null 2>&1)
-  print -- "$_LROUT" | grep -q "^lock=refreshed" || log "⚠️ 锁心跳续期未确认成功(可能已被抢占): $(print -- "$_LROUT" | tail -1 | head -c 150)"
+  # 0929修复(DoD审计发现,批次4主理人纠正): 之前输出+退出码全丢进/dev/null+`|| true`——
+  # TTL(1800s)到点没人知道续期一直在失败,直到锁被别的轮次抢走才现形(0928夜实证过一次
+  # 真实撞车:两条并发批次同时驱动同一台设备)。批次3先做了留痕,主理人纠正"30分钟buffer
+  # 是故意留的容错余地,不是让单次失败躺平不管——拿不到续期确认大概率是网络抖/时序问题,
+  # 应该跟commenter-identity一样重试"。改成最多重试3次,3次都失败才留告警(仍不中断整批)。
+  _LR_OK=0
+  for LRTRY in 1 2 3; do
+    _LROUT=$($C --profile "$P" lock-refresh "$TAG" </dev/null 2>&1)
+    if print -- "$_LROUT" | grep -q "^lock=refreshed"; then _LR_OK=1; break; fi
+    log "  锁心跳续期第${LRTRY}次失败: $(print -- "$_LROUT" | tail -1 | head -c 120)"
+    (( LRTRY < 3 )) && nap 2
+  done
+  (( _LR_OK )) || log "⚠️ 锁心跳续期3次仍未确认成功(可能已被抢占): $(print -- "$_LROUT" | tail -1 | head -c 150)"
   $C --profile "$P" tap-evidence "$X" "$Y" "$TAG-v$i" >/dev/null 2>&1
   nap 3
   # 0914 主理人验收字段: 原爆款作品地址。current-video-link 自带 note(图文)检测,
@@ -293,14 +312,20 @@ for CARDLINE in "${(f)CARDS}"; do
         # 0914 主理人验收:每人顺取名片主页直链(identity已回评论区,重进主页跑card-link,其自带恢复)
         "$C" --profile "$P" tap-evidence "$TXX" "$TXY" "$TAG-v$i-u$j-re" </dev/null >/dev/null 2>&1
         nap 3
-        CARD="$("$C" --profile "$P" commenter-card-link "$TAG-v$i-u$j-cl" </dev/null 2>/dev/null || true)"
-        PURL="$(print -- "$CARD" | sed -n "s/^profile_url=//p")"
-        # 0929修复(DoD审计发现): 底层 commenter-card-link 失败(面板打不开/按钮找不到等)有
-        # 真实 die,但这里 `|| true` 吞掉,PURL 就是空字符串,之前不检查直接照发 LEAD 行。
-        # profile_url 是触达阶段(pick_order 读 Lead.profile_url)定位客户的直链，比 douyin_id
-        # 更可靠——不像视频身份错配那样必须整条作废(nickname/douyin_id仍是有效线索)，
-        # 但缺失必须留痕，不能悄悄发出一条主页链接是空的线索。
-        [[ -z "$PURL" ]] && log "  行$j 主页直链解析失败(douyin_id=${OID:-空})，线索仍保留但触达阶段需退回抖音号搜索"
+        # 0929修复(DoD审计发现,批次4主理人纠正): 底层 commenter-card-link 失败(面板打不开/
+        # 按钮找不到等)有真实 die,批次3先加了"失败即留痕但仍照发LEAD"的降级路径。主理人
+        # 纠正:"拿不到主页链接不代表线索没中,拿不到主页链接说明你这个网络有问题啊,就
+        # 重试呗"——跟 commenter-identity 同一个病同一个药,先重试3次,3次都拿不到才降级
+        # (线索仍保留，douyin_id 仍是有效线索，但触达阶段需退回抖音号搜索)。
+        PURL=""
+        for CLTRY in 1 2 3; do
+          CARD="$("$C" --profile "$P" commenter-card-link "$TAG-v$i-u$j-cl$CLTRY" </dev/null 2>/dev/null || true)"
+          PURL="$(print -- "$CARD" | sed -n "s/^profile_url=//p")"
+          [[ -n "$PURL" ]] && break
+          log "  行$j 主页直链解析第${CLTRY}次失败(可能网络抖动)"
+          (( CLTRY < 3 )) && nap 2
+        done
+        [[ -z "$PURL" ]] && log "  行$j 主页直链解析3次仍失败(douyin_id=${OID:-空})，线索仍保留但触达阶段需退回抖音号搜索"
         print -- "LEAD	$ONICK	${OID:-}	${ATYPE:-personal}	$BODY	$DATE	$REGION	$TITLE	$KWTXT	${PIP:-}	${PURL:-}	${VURL:-}"
         nap 4
       done
