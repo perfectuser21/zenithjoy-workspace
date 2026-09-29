@@ -50,6 +50,47 @@ qual_remote(){
 }
 # qual_field JSON行 键 → 值(字符串或 true/false)
 qual_field(){ print -r -- "$1" | sed -n "s/.*\"$2\":\"\{0,1\}\([^\",}]*\).*/\1/p" | head -1; }
+# back_to_results_and_maybe_rescan EVIDENCE_ID_PREFIX —— 0929修复(真机验证补丁):
+# back-to-results 命中 recovered_via=research 说明它是靠"重新发起本次搜索的意图"
+# 才归位成功的(见 douyin-phone-adb back_to_results 函数注释)，这个动作会重置筛选
+# 条件，页面上的卡片顺序/内容会变，本批一开始扫描存下的 CARD_ARR 坐标全部作废——
+# 继续拿着旧坐标点后面的卡只会点到不相干的内容(真机实证过一次:点开"NOT_ON_
+# VIDEO_DETAIL: share button absent")。命中就立刻重新扫描一次，把 CARD_ARR/i
+# 重置到新列表头，让外层循环用新坐标继续处理剩余候选，不是继续拿着废坐标瞎点。
+back_to_results_and_maybe_rescan() {
+  local evid="$1" btr_out newcards
+  # 对标发现(决策 7f842d12): 列表页是对标主页作品网格——只能 back-to-profile 归位;back-to-results 只认
+  # 搜索结果页,兜底还会拿对标链接当关键词重搜。归位失败=本对标号剩余候选作废,不重搜不拿废坐标瞎点。
+  if [[ "${${DISCOVER_CMD:-}:t}" == discover-benchmark.sh ]]; then
+    if $C --profile "$P" back-to-profile 5 </dev/null >/dev/null 2>&1; then return 0; fi
+    log "  对标主页归位失败，本对标号剩余候选作废"
+    CARD_ARR=(); i=0
+    return 0
+  fi
+  btr_out="$($C --profile "$P" back-to-results 4 "$KWTXT" "$evid" </dev/null 2>&1 || true)"
+  if print -- "$btr_out" | grep -q "recovered_via=research"; then
+    log "  归位触发兜底重搜(原卡片坐标已失效)，重新扫描卡片列表"
+    # 0929真机复现补丁: douyin-phone-adb里的兜底重搜只重新发起了搜索意图(等同于
+    # 脚本最开头的open-search)，落地页默认是"综合"tab，不是"视频"tab——
+    # search-video-cards前置要求必须在视频tab(见该子命令自己的注释)，不切tab直接
+    # 扫永远是空结果。真机实测复现:12词里第1/2词都是这个路径,连续2次
+    # "重新扫描未拿到卡片"。这里补上跟脚本开头对称的 tab 切换+筛选重设，
+    # 不能假设"重新搜索=自动回到视频tab+原筛选条件"。
+    $C --profile "$P" search-video-tab "${evid}-rescan-vtab" >/dev/null 2>&1 || true
+    $C --profile "$P" search-time-layer six_months "${evid}-rescan-filter" most_liked unlimited unlimited "$LOC" >/dev/null 2>&1 || true
+    newcards="$($C --profile "$P" search-video-cards "${evid}-rescan" 2>/dev/null | grep -E "^[0-9]+	" | head -"$MAXV")"
+    if [[ -n "$newcards" ]]; then
+      CARD_ARR=("${(@f)newcards}")
+      i=0
+      log "  重新扫描到 ${#CARD_ARR[@]} 张卡片，从头处理剩余候选"
+    else
+      log "  重新扫描未拿到卡片，本关键词候选到此为止"
+      CARD_ARR=()
+      i=0
+    fi
+  fi
+}
+
 # source 守卫: 单测以 HARVEST_KEYWORD_LIB=1 source 本文件只取函数,不执行主体
 [[ -n "${HARVEST_KEYWORD_LIB:-}" ]] && return 0
 # RAM盘只有2G,采收截图很快塞爆(0914实证:爆盘让mkdir全军覆没误报锁被占)
@@ -86,39 +127,6 @@ rm -f "$SEENVIDS"
 CARDS="$("${DISCOVER_CMD:-${0:A:h}/discover-keyword.sh}" "$P" "$KW" "$MAXV" "$TAG" "$LOC")" || exit 1
 [[ -n "$CARDS" ]] || { log "无卡片"; exit 0; }
 log "卡片数: $(print -- "$CARDS" | wc -l | tr -d " ")"
-
-# back_to_results_and_maybe_rescan EVIDENCE_ID_PREFIX —— 0929修复(真机验证补丁):
-# back-to-results 命中 recovered_via=research 说明它是靠"重新发起本次搜索的意图"
-# 才归位成功的(见 douyin-phone-adb back_to_results 函数注释)，这个动作会重置筛选
-# 条件，页面上的卡片顺序/内容会变，本批一开始扫描存下的 CARD_ARR 坐标全部作废——
-# 继续拿着旧坐标点后面的卡只会点到不相干的内容(真机实证过一次:点开"NOT_ON_
-# VIDEO_DETAIL: share button absent")。命中就立刻重新扫描一次，把 CARD_ARR/i
-# 重置到新列表头，让外层循环用新坐标继续处理剩余候选，不是继续拿着废坐标瞎点。
-back_to_results_and_maybe_rescan() {
-  local evid="$1" btr_out newcards
-  btr_out="$($C --profile "$P" back-to-results 4 "$KWTXT" "$evid" </dev/null 2>&1 || true)"
-  if print -- "$btr_out" | grep -q "recovered_via=research"; then
-    log "  归位触发兜底重搜(原卡片坐标已失效)，重新扫描卡片列表"
-    # 0929真机复现补丁: douyin-phone-adb里的兜底重搜只重新发起了搜索意图(等同于
-    # 脚本最开头的open-search)，落地页默认是"综合"tab，不是"视频"tab——
-    # search-video-cards前置要求必须在视频tab(见该子命令自己的注释)，不切tab直接
-    # 扫永远是空结果。真机实测复现:12词里第1/2词都是这个路径,连续2次
-    # "重新扫描未拿到卡片"。这里补上跟脚本开头对称的 tab 切换+筛选重设，
-    # 不能假设"重新搜索=自动回到视频tab+原筛选条件"。
-    $C --profile "$P" search-video-tab "${evid}-rescan-vtab" >/dev/null 2>&1 || true
-    $C --profile "$P" search-time-layer six_months "${evid}-rescan-filter" most_liked unlimited unlimited "$LOC" >/dev/null 2>&1 || true
-    newcards="$($C --profile "$P" search-video-cards "${evid}-rescan" 2>/dev/null | grep -E "^[0-9]+	" | head -"$MAXV")"
-    if [[ -n "$newcards" ]]; then
-      CARD_ARR=("${(@f)newcards}")
-      i=0
-      log "  重新扫描到 ${#CARD_ARR[@]} 张卡片，从头处理剩余候选"
-    else
-      log "  重新扫描未拿到卡片，本关键词候选到此为止"
-      CARD_ARR=()
-      i=0
-    fi
-  fi
-}
 
 typeset -a CARD_ARR
 CARD_ARR=("${(@f)CARDS}")
