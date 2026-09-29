@@ -135,7 +135,8 @@ test("wf_read_sources: 去空行/注释,每行一个对标链接或 sec_uid;文�
 
 test("wf_load_plan + wf_discover_cmd: 计划里的发现入口解析到 wf-run.sh 同目录", { skip: SKIP }, () => {
   const env = { ...process.env, WF_PLAN_DIR: PLANS };
-  const k = lib(`wf_load_plan keyword_acquisition; echo rc=$? kind=$WF_SOURCE_KIND; wf_discover_cmd`, env);
+  const k = lib(`wf_load_plan keyword_acquisition; echo rc=$? kind=$WF_SOURCE_KIND; wf_discover_cmd; zsh -c 'echo child_kind=$WF_SOURCE_KIND'`, env);
+  assert.match(k.stdout, /child_kind=keyword/, "WF_SOURCE_KIND 须 export 给 batch2/harvest-keyword 子进程(对标流归位靠它)");
   assert.match(k.stdout, /rc=0 kind=keyword/, k.stderr);
   assert.ok(k.stdout.trim().endsWith(`${SRC}/discover-keyword.sh`), k.stdout);
   const b = lib(`wf_load_plan benchmark_link_acquisition; echo rc=$?`, env);
