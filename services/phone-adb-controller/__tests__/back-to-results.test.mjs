@@ -73,7 +73,8 @@ test('接线守卫：采收循环的归位必须走 back-to-results，不能自�
   const lines = src.split('\n');
   const bad = lines
     .map((l, i) => [i + 1, l])
-    .filter(([, l]) => /--profile "\$P" back\b/.test(l) && !/back-to-results/.test(l))
+    // back-to-profile(对标流回主页,7f842d12)同样是控制器内核验页面的归位子命令,不是自己数 back
+    .filter(([, l]) => /--profile "\$P" back\b/.test(l) && !/back-to-(results|profile)/.test(l))
     // 评论面板内部的恢复（back 一次再重开面板）不算归位，那是面板层的操作
     .filter(([n]) => {
       const ctx = lines.slice(Math.max(0, n - 6), n).join('\n');

@@ -46,6 +46,7 @@ wf_load_plan(){
   [[ -n "$1" && -r "$f" ]] || { WF_LOAD_ERR="无执行计划 $f(契约未生成计划或 plans/ 未部署)"; return 1; }
   source "$f" || { WF_LOAD_ERR="执行计划 $f 读取失败"; return 1; }
   [[ -n "$WF_STAGES" && -n "$WF_SOURCE_KIND" && -n "$WF_DISCOVER_CMD" ]] || { WF_LOAD_ERR="执行计划 $f 缺 WF_STAGES/WF_SOURCE_KIND/WF_DISCOVER_CMD"; return 1; }
+  export WF_SOURCE_KIND   # harvest-keyword.sh 按它选逐视频归位方式(benchmark = back-to-profile)
   if [[ -n "$WF_MISSING" && "${WF_ALLOW_MISSING:-0}" != "1" ]]; then
     WF_LOAD_ERR="拒跑: $1 有步骤未实现(无实现不得跑,真机调试加 --allow-missing): $WF_MISSING"; return 2
   fi

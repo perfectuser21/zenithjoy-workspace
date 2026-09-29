@@ -94,8 +94,19 @@ log "卡片数: $(print -- "$CARDS" | wc -l | tr -d " ")"
 # 继续拿着旧坐标点后面的卡只会点到不相干的内容(真机实证过一次:点开"NOT_ON_
 # VIDEO_DETAIL: share button absent")。命中就立刻重新扫描一次，把 CARD_ARR/i
 # 重置到新列表头，让外层循环用新坐标继续处理剩余候选，不是继续拿着废坐标瞎点。
+# 对标流(WF_SOURCE_KIND=benchmark,wf-run.sh 下传;决策 7f842d12)卡片在对标账号主页网格上: 归位走 back-to-profile 5
+# (一路 back 到 UserProfileActivity,见 feed/splash 立即返回 1)。不能用 back-to-results——它只认搜索结果页,
+# 兜底重搜会拿 KWTXT(此时是主页链接)去搜,人漂走。回主页失败 = 旧坐标作废,本源剩余候选到此为止。
 back_to_results_and_maybe_rescan() {
   local evid="$1" btr_out newcards
+  if [[ "${WF_SOURCE_KIND:-keyword}" == "benchmark" ]]; then
+    if ! $C --profile "$P" back-to-profile 5 </dev/null >/dev/null 2>&1; then
+      log "  回对标主页失败(看到 feed/splash),本对标源剩余候选到此为止"
+      CARD_ARR=()
+      i=0
+    fi
+    return 0
+  fi
   btr_out="$($C --profile "$P" back-to-results 4 "$KWTXT" "$evid" </dev/null 2>&1 || true)"
   if print -- "$btr_out" | grep -q "recovered_via=research"; then
     log "  归位触发兜底重搜(原卡片坐标已失效)，重新扫描卡片列表"
