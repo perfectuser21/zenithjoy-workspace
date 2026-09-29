@@ -2,29 +2,29 @@
   "object_types": "06f4d4bda5a98920fad6eef0c73a908803c529e87e51b28fd624f610078bcd2c",
   "capabilities": {
     "benchmark_link_acquisition": {
-      "sha256": "fca5b38c8db73629f890ccb57e74be938bb1b0bdedc3c62ba95e83a02dbdd3e2",
+      "sha256": "861e4e91477b15fd0e878acd1a66897bd8949ddf4e020c804746d7b126c288a5",
       "activities": {
-        "preflight": "4bf43bb627441fafe5d90b6bca1f8dfb65c4b12dc31692e3a161e61d23596913",
+        "preflight": "f161a80ab0e6d19948adee5fc4244e8a69834627bb27b56a0da716829b56fa45",
         "discovery": "13e4fb8f5fb598f090b9d6306854b5d338a433593f150cbb344e3ddc6096c924",
         "qualification": "e08a3a06c5f7299a4620afb269db3ffd64452c2c0473002bd49c8db9760308fd",
-        "collection": "1b0bb6cf47f8c2a26fbcaab6b3cdd05dcdeed4a9e36c66b820c28bdeeeb3cde5",
+        "collection": "37d592214dd6328cec6bf57ce87438b87874a814db1c5d4353afe92f4dc2566e",
         "scoring": "5b86ba26c8e484567643b2263baab4bec7596c1b0b8f9429854e0ef2a6eb80ef",
         "delivery": "b7b0b16e1bf5567149034c42bc652d23e8309949f5b3919324a19189d8620650",
         "outreach": "b561a7a1df64d8a00e42116ca714ad369d1a2140492d6c8f922a9448868e8a9e",
-        "cleanup": "723632a99d3a9839e67f8da8f73e77910cb595fc32414f2ead49bbb2806d898b"
+        "cleanup": "d355e4617afefb98dcf2bd6b247bcb4053b5006cb823783e6a40f1495a873cf5"
       }
     },
     "keyword_acquisition": {
-      "sha256": "bcbec161e6a090fdf17d409daede0cdaab935669760db18c4ff3dea8b515cae1",
+      "sha256": "93a937796f38b92c7d84a2a4584bf01f36224a7ef29338dd5ed37b28e8b60512",
       "activities": {
-        "preflight": "4bf43bb627441fafe5d90b6bca1f8dfb65c4b12dc31692e3a161e61d23596913",
+        "preflight": "f161a80ab0e6d19948adee5fc4244e8a69834627bb27b56a0da716829b56fa45",
         "discovery": "c0a131b9b8fe328ce4aa2473ae014d55e226197d8f51bebbc648f743bc9e7577",
         "qualification": "e08a3a06c5f7299a4620afb269db3ffd64452c2c0473002bd49c8db9760308fd",
-        "collection": "1b0bb6cf47f8c2a26fbcaab6b3cdd05dcdeed4a9e36c66b820c28bdeeeb3cde5",
+        "collection": "37d592214dd6328cec6bf57ce87438b87874a814db1c5d4353afe92f4dc2566e",
         "scoring": "5b86ba26c8e484567643b2263baab4bec7596c1b0b8f9429854e0ef2a6eb80ef",
         "delivery": "b7b0b16e1bf5567149034c42bc652d23e8309949f5b3919324a19189d8620650",
         "outreach": "b561a7a1df64d8a00e42116ca714ad369d1a2140492d6c8f922a9448868e8a9e",
-        "cleanup": "723632a99d3a9839e67f8da8f73e77910cb595fc32414f2ead49bbb2806d898b"
+        "cleanup": "d355e4617afefb98dcf2bd6b247bcb4053b5006cb823783e6a40f1495a873cf5"
       }
     }
   }

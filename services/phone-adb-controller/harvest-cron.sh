@@ -48,6 +48,16 @@ escort_alive(){
 # mCallState),但从建成起就没有调用链路碰过它,harvest-cron.sh自己的preflight只查
 # 在线+唤醒,从不查通话状态。mCallState: 0=idle 1=ringing 2=offhook,1/2都算占线。
 device_call_busy(){ [[ "$1" == 1 || "$1" == 2 ]]; }
+# account_registered PROFILE DOUYIN_ID REGISTRY_FILE —— 0929批次4修复(DoD审计发现的死代码):
+# 契约"读账号标记(我页)"同样从建成起没有调用链路——douyin-phone-adb的account-current子命令
+# (真读"我"页"抖音号："文本,多版本兼容,底部导航没长齐会自动重试)存在,但没人调它,登错号/
+# 串号全程无人发现,线索会被静默贴上错误账号的标签。REGISTRY_FILE不可读时fail-open(这是
+# "确认账号对不对"的辅助闸,不是账号系统本身,登记表本身挂了不该拦住整批采收)。
+account_registered(){
+  local profile="$1" id="$2" registry="$3"
+  [[ -r "$registry" ]] || return 0
+  awk -F'\t' -v p="$profile" -v id="$id" '$1==p && $2==id {found=1} END{exit !found}' "$registry"
+}
 # lease_heartbeat_start SERIAL / lease_heartbeat_stop —— 0929 修复: 采收主体(batch2)一跑 1~7 小时,
 #   服务端租约 10 分钟只靠逐词/逐视频的零星上报续命,间隔一超 10 分钟就被 sweep 判 failed/executor_lost,
 #   事后 done 也翻不回来(页面/Brain 上一片"失败",实际批完成 7~42 LEAD)。这里起后台循环每 LEASE_HB_INTERVAL 秒
@@ -79,6 +89,8 @@ set -uo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 P="$1"; SERIAL="$2"; BIZ="${3:-AI人工智能训练师}"; N="${4:-6}"; PUSH="${5:-1}"
 TAG="auto$(date +%m%d%H%M)"
+C=${C:-$HOME/.local/bin/douyin-phone-adb}
+DOUYIN_ACCOUNT_REGISTRY="${DOUYIN_ACCOUNT_REGISTRY:-$HOME/.config/openclaw/douyin-account-routes.tsv}"
 LOG=~/harvest-cron.log
 log(){ print -- "[$(date +%m%d-%H:%M:%S)] [$TAG] $*" >> $LOG }
 # 可视化旁路(0919): 每阶段报给控制塔工作机页; 上报器缺失/失败一律吞掉, 绝不影响采收
@@ -141,6 +153,26 @@ fi
 run_finalize(){
   wfr_on || return 0
   finalize_needed || { log "账本finalize: skipped(not_initialized, 正常退让)"; return 0; }
+  # 0929批次4新建(DoD审计发现的死代码,6b133a81): cleanup活动"关App"/"回安全桌面"两步
+  # 从建成起零实现——采收链从没调过 close-app/return-safe-desktop 这两个子命令(前者是
+  # 早就写好的死代码,后者是本批次新建),workflow-result.sh 的 cleanup 段指标一直写死
+  # (close_app_attempts=0/safe_desktop_visible=0),不是真实判定。这里跑真实操作+捕获
+  # 真实结果,供下面 finalize 写进指标。
+  WFR_CLOSE_APP_ATTEMPTS=1
+  if $C --profile "$P" close-app </dev/null >/dev/null 2>>$LOG; then
+    log "cleanup: close-app 成功"
+  else
+    log "cleanup: close-app 失败(设备可能已离线/前台未能关闭,见日志)"
+  fi
+  WFR_SAFE_DESKTOP_VISIBLE=0
+  if $C --profile "$P" return-safe-desktop </dev/null >/dev/null 2>>$LOG; then
+    WFR_SAFE_DESKTOP_VISIBLE=1
+    log "cleanup: 已回到安全桌面"
+  else
+    log "cleanup: 回安全桌面失败,设备可能停在异常界面上"
+    escalate "本批收工后未能确认回到安全桌面,设备可能停在异常界面上,请人工查看"
+  fi
+  export WFR_CLOSE_APP_ATTEMPTS WFR_SAFE_DESKTOP_VISIBLE
   eval "$(bash "$WFR" finalize 2>>$LOG)" 2>/dev/null || true
   log "账本finalize: ok=${WFR_FINALIZE_OK:-?} ${WFR_FINALIZE_MSG:-}"
   [[ "${WFR_FINALIZE_OK:-0}" == "1" ]] || escalate "账本收工自检未通过: ${WFR_FINALIZE_MSG:-unknown}"
@@ -169,6 +201,27 @@ if device_call_busy "$CALLSTATE"; then
   wr fail "$SERIAL" 1 call_busy "设备通话中(mCallState=$CALLSTATE)"
   exit 0
 fi
+# 读账号标记(我页)/验账号身份 —— 0929批次4修复(DoD审计发现的死代码,详见 account_registered
+# 定义处注释): 读不到抖音号/登的号不在本profile注册表里,都判定为"账号有问题",升级分身+
+# 记账为需人工处理,不静默继续采(继续采只会产出归属存疑的线索)。
+ACCOUNT_VERIFIED=0
+ACCTOUT="$($C --profile "$P" account-current "$TAG-preflight-acct" </dev/null 2>&1)"
+DOUYIN_ID="$(print -- "$ACCTOUT" | sed -n "s/^douyin_id=//p")"
+if [[ -z "$DOUYIN_ID" ]]; then
+  log "读账号标记失败(我页读不到抖音号): $(print -- "$ACCTOUT" | tail -1 | head -c 150)"
+  escalate "读账号标记失败,读不到我页抖音号,本批无法确认登录账号: $(print -- "$ACCTOUT" | tail -1 | head -c 150)"
+  wr fail "$SERIAL" 1 account_read_failed "读账号标记失败"
+  exit 0
+elif ! account_registered "$P" "$DOUYIN_ID" "$DOUYIN_ACCOUNT_REGISTRY"; then
+  log "账号不符: 我页抖音号=$DOUYIN_ID 未登记在 profile=$P 下"
+  escalate "手机登录号不符(account_mismatch): 我页抖音号=$DOUYIN_ID 不在 $P 的注册账号列表里,本批可能登错号/串号,线索归属存疑"
+  wr fail "$SERIAL" 1 account_mismatch "我页抖音号=$DOUYIN_ID 不属于profile=$P"
+  exit 0
+else
+  ACCOUNT_VERIFIED=1
+  log "账号验证通过: 我页抖音号=$DOUYIN_ID (profile=$P)"
+fi
+export ACCOUNT_VERIFIED DOUYIN_ID
 wr step "$SERIAL" 1 done
 
 # 触达时窗守卫: 8-22点是触达的地盘,采收 cron 不该在白天抢(冗余保险,crontab已限时)
