@@ -8,7 +8,12 @@
 #   不干净 -> return 1，stderr 打印 ABORT 提示（自动部署绝不 git reset --hard 静默覆盖本地改动）
 check_clean_checkout() {
   local repo_dir="$1"
-  if [[ -n "$(git -C "$repo_dir" status --short)" ]]; then
+  local status_output
+  if ! status_output="$(git -C "$repo_dir" status --short 2>/dev/null)"; then
+    echo "ABORT: mmv本地checkout不干净,已跳过自动部署,需人工检查" >&2
+    return 1
+  fi
+  if [[ -n "$status_output" ]]; then
     echo "ABORT: mmv本地checkout不干净,已跳过自动部署,需人工检查" >&2
     return 1
   fi
