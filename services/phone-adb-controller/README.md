@@ -87,7 +87,8 @@
 - `current-video-link` — 取当前视频分享链接(原爆款作品地址)
 
 ### 账号/触达
-- `account-current` — 读当前登录账号。昵称只认与「抖音号：」左对齐的上方 TextView(拒绝计数类文本如未读角标 `11`),读不准有界重抓 2 次,仍不准输出 `nickname=unknown`
+- `account-current` — 读当前登录账号。昵称只认与「抖音号：」左对齐的上方 TextView(拒绝计数类文本如未读角标 `11`),读不准有界重抓 2 次,仍不准输出 `nickname=unknown`。读号前必须自证是**自己的**主页(「编辑主页」/「切换账号」在且无「私信」按钮),落在他人主页先 verified back 再点「我」,仍不是自己主页就报错退出——宁可读不到不能读错(0930 误读他人号事故)
+- `own-profile UI_XML` — 纯判定(不碰设备):一份 UI 树是否自己主页,输出 `profile_kind=own|foreign|partial|none`
 - `account-switch` — 切换到指定抖音号
 - `private-message-send` — 私信触达(见下方安全声明,默认关闸)
 
