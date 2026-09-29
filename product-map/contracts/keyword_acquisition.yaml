@@ -329,9 +329,9 @@ activities:
     invokers: [code]
     steps:
       - { key: push_videos, name: 视频落池, order: 1, reads: [Video.video_id, Video.harvest_batch], writes: [Video.feishu_record_id],
-          check: "PG 本批行数 ≥ videos_pushed（= push-videos.js 本批新增视频数 PUSH_VIDEOS_STATS.created）", implementation: { status: implemented, ref: "push-videos.js:50-68" }, uses_llm: false }
+          check: "PG 本批行数 ≥ videos_pushed（= push-videos.js 本批新增视频数 PUSH_VIDEOS_STATS.created）；0929修：有新视频要推但一条都没成功(全军覆没)时 exit 1，不再无声无息(push-stats-lib.js pushAllFailed，部分失败仍exit 0避免连累batch2.sh链式调用的下一步)", implementation: { status: implemented, ref: "push-videos.js:50-68" }, uses_llm: false }
       - { key: push_raw_comments, name: 评论落池, order: 2, reads: [Comment.dedup_key, Run.run_tag], writes: [Comment.harvest_batch, Comment.dedup_key, Comment.line_key],
-          check: "评论池「运行批次」计数 ≥ leads_written（= push-raw-comments.js 本批实际落池数 PUSH_COMMENTS_STATS.created，不含被历史全池去重掉的）", implementation: { status: implemented, ref: "push-raw-comments.js:43-63" }, uses_llm: false }
+          check: "评论池「运行批次」计数 ≥ leads_written（= push-raw-comments.js 本批实际落池数 PUSH_COMMENTS_STATS.created，不含被历史全池去重掉的）；0929修：同push_videos，全军覆没时 exit 1", implementation: { status: implemented, ref: "push-raw-comments.js:43-63" }, uses_llm: false }
       - { key: readback_line_key, name: 业务线读回, order: 3, reads: [Video.line_key], writes: [],
           check: "本批 leadgen_videos.line_key 全非空", implementation: { status: implemented, ref: "verify-step.mjs line_key_not_null" }, uses_llm: false }
     known_gaps:

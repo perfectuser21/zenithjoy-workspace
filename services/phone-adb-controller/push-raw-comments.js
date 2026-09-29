@@ -7,6 +7,7 @@ const cfg = JSON.parse(fs.readFileSync("/Users/administrator/.openclaw/clawdbot.
 // 0916: 按业务线路由 base/table(悦升有独立 base,写死会让它的数据无处可去——见 line-routes.js)
 const { routeOf } = require("./line-routes.js");
 const { statsLine } = require("./stats-line.js");
+const { pushAllFailed } = require("./push-stats-lib.js");
 const [,, TSV, BATCH, LINE] = process.argv;
 const ROUTE = routeOf(LINE);
 const acc = cfg.channels.feishu.accounts[ROUTE.account];
@@ -61,4 +62,10 @@ console.error("line-route: " + ROUTE.key + " base=" + B + " POOL=" + POOL);
   }
   console.log(`落池 ${created} | 去重 ${dup} | 输入 ${lines.length}`);
   console.log(statsLine("PUSH_COMMENTS_STATS", { created, dup, input: lines.length }));
+  // 0929修复(DoD审计发现,同push-videos.js同款处理,见push-stats-lib.js头部注释): 单条
+  // 失败之前只记日志继续,哪怕全部失败也照样exit 0。
+  if (pushAllFailed(created, dup, lines.length)) {
+    console.error(`评论落池全部失败(${lines.length - dup}条新评论0条成功) — 大概率飞书接口/凭据出问题,不再继续`);
+    process.exitCode = 1;
+  }
 })();

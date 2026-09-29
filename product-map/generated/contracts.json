@@ -2,27 +2,27 @@
   "object_types": "06f4d4bda5a98920fad6eef0c73a908803c529e87e51b28fd624f610078bcd2c",
   "capabilities": {
     "benchmark_link_acquisition": {
-      "sha256": "7b319ed3edb7da12592a8b3729784896d28d53e2a53a391a89f973f83987633d",
+      "sha256": "fca5b38c8db73629f890ccb57e74be938bb1b0bdedc3c62ba95e83a02dbdd3e2",
       "activities": {
         "preflight": "4bf43bb627441fafe5d90b6bca1f8dfb65c4b12dc31692e3a161e61d23596913",
         "discovery": "13e4fb8f5fb598f090b9d6306854b5d338a433593f150cbb344e3ddc6096c924",
         "qualification": "e08a3a06c5f7299a4620afb269db3ffd64452c2c0473002bd49c8db9760308fd",
         "collection": "1b0bb6cf47f8c2a26fbcaab6b3cdd05dcdeed4a9e36c66b820c28bdeeeb3cde5",
         "scoring": "5b86ba26c8e484567643b2263baab4bec7596c1b0b8f9429854e0ef2a6eb80ef",
-        "delivery": "597e604c9030e142baddb3420d06ce88c87f34a0c8b9903d10a7cc46a358111d",
+        "delivery": "b7b0b16e1bf5567149034c42bc652d23e8309949f5b3919324a19189d8620650",
         "outreach": "b561a7a1df64d8a00e42116ca714ad369d1a2140492d6c8f922a9448868e8a9e",
         "cleanup": "723632a99d3a9839e67f8da8f73e77910cb595fc32414f2ead49bbb2806d898b"
       }
     },
     "keyword_acquisition": {
-      "sha256": "ca0534d0f745b8474afcf727bea0e9c547b6eb9f29e17c05e65b159b0bd2d537",
+      "sha256": "bcbec161e6a090fdf17d409daede0cdaab935669760db18c4ff3dea8b515cae1",
       "activities": {
         "preflight": "4bf43bb627441fafe5d90b6bca1f8dfb65c4b12dc31692e3a161e61d23596913",
         "discovery": "c0a131b9b8fe328ce4aa2473ae014d55e226197d8f51bebbc648f743bc9e7577",
         "qualification": "e08a3a06c5f7299a4620afb269db3ffd64452c2c0473002bd49c8db9760308fd",
         "collection": "1b0bb6cf47f8c2a26fbcaab6b3cdd05dcdeed4a9e36c66b820c28bdeeeb3cde5",
         "scoring": "5b86ba26c8e484567643b2263baab4bec7596c1b0b8f9429854e0ef2a6eb80ef",
-        "delivery": "597e604c9030e142baddb3420d06ce88c87f34a0c8b9903d10a7cc46a358111d",
+        "delivery": "b7b0b16e1bf5567149034c42bc652d23e8309949f5b3919324a19189d8620650",
         "outreach": "b561a7a1df64d8a00e42116ca714ad369d1a2140492d6c8f922a9448868e8a9e",
         "cleanup": "723632a99d3a9839e67f8da8f73e77910cb595fc32414f2ead49bbb2806d898b"
       }

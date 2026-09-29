@@ -11,6 +11,7 @@ const { routeOf } = require("./line-routes.js");
 const { getPool } = require("./leadgen-db-connect.js");
 const { upsertVideo } = require("./leadgen-db-lib.js");
 const { statsLine } = require("./stats-line.js");
+const { pushAllFailed } = require("./push-stats-lib.js");
 const [,, TSV, BATCH, LINE] = process.argv;
 const ROUTE = routeOf(LINE);
 const acc = cfg.channels.feishu.accounts[ROUTE.account];
@@ -66,5 +67,11 @@ console.error("line-route: " + ROUTE.key + " base=" + B + " VPOOL=" + VPOOL);
   }
   console.log(`视频落池 ${created} | 去重跳过 ${dup} | 输入 ${lines.length} | PG写入${pgOk}/失败${pgFail}`);
   console.log(statsLine("PUSH_VIDEOS_STATS", { created, dup, input: lines.length, pg_ok: pgOk, pg_fail: pgFail }));
+  // 0929修复(DoD审计发现): 单条失败之前只console.log("FAIL",...)记日志继续,哪怕全部失败
+  // 也照样exit 0(见 push-stats-lib.js 头部注释)。
+  if (pushAllFailed(created, dup, lines.length)) {
+    console.error(`视频落池全部失败(${lines.length - dup}条新视频0条成功) — 大概率飞书接口/凭据出问题,不再继续`);
+    process.exitCode = 1;
+  }
   await pool.end().catch(() => {});
 })();
