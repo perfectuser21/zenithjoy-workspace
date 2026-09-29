@@ -124,9 +124,25 @@ for CARDLINE in "${(f)CARDS}"; do
         # title-only 判定。-91dB 附近即视为死寂，日志里显式标出来。
         MEAN_DB="$(print -- "$RSOUT" | sed -n "s/^record_stopped .*mean_volume_db=\([^ ]*\).*/\1/p" | tail -1)"
         [[ -n "$AUDIO_PATH" ]] && log "  音频已提取: $AUDIO_PATH (电平 ${MEAN_DB:-未知} dB)" || log "  音频提取失败: $(print -- "$RAOUT" | tail -1 | head -c 150)"
+        # 0929修复(DoD审计发现): 契约要求"实际录制时长≥预算的80%"，之前完全没有这道比对。
+        # 注意基准是 $REC_SECONDS(已经除过3倍速的录制预算,比如原视频60秒→REC_SECONDS≈26秒)，
+        # 不是原视频时长——scrcpy 录的是3倍速播放的屏幕，真实录制秒数量级就是预算这个量级，
+        # 拿原视频秒数当基准比较会让所有录制永远达不到80%(用户0929现场核对过这个计算链路)。
+        REC_DUR="$(print -- "$RSOUT" | sed -n "s/^record_stopped .*duration_seconds=\([^ ]*\).*/\1/p" | tail -1)"
+        if [[ "$REC_DUR" == <->(.<->|) ]] \
+           && (( $(print -- "$REC_DUR $REC_SECONDS" | awk '{print ($1 < $2*0.8) ? 1 : 0}') )); then
+          log "  ⚠️ 录制时长不足(实录${REC_DUR}s / 预算${REC_SECONDS}s,未达80%) — 可能中途被打断,本段音频作废退回title-only判定"
+          AUDIO_PATH=""
+        fi
         if [[ -n "$MEAN_DB" && "$MEAN_DB" != unknown ]] \
            && (( $(print -- "$MEAN_DB" | awk '{print ($1 <= -80) ? 1 : 0}') )); then
-          log "  ⚠️ 录到的几乎是死寂(${MEAN_DB} dB) — 转写多半会空,检查该机 speaker 流音量是否为 0"
+          log "  ⚠️ 录到的几乎是死寂(${MEAN_DB} dB) — 检查该机 speaker 流音量是否为 0,本段音频作废退回title-only判定"
+          # 0929修复(DoD审计发现,用户拍板"那肯定不行呀"): 上面这行注释(0924)写的本来就是
+          # "不写就没人看得见,换机型录到-91dB死寂时会静默退化成title-only判定"——但代码
+          # 从来没真的退化,AUDIO_PATH照样非空,下面140行照样把死寂音频当正常数据吐出去,
+          # 白白烧一次转写API调用,还占着pending队列等重试(死寂不是暂时性问题,重试不会变好)。
+          # 现在真的清空AUDIO_PATH,让judge-video.js走已有的"无音频退回标题"分支。
+          AUDIO_PATH=""
         fi
       else
         log "  录制未产出有效文件: $(print -- "$RSOUT" | tail -1 | head -c 150)"
