@@ -68,7 +68,7 @@ function setup() {
   chmodSync(join(home, ".local", "bin", "douyin-phone-adb"), 0o755);
   writeFileSync(join(home, ".local", "bin", "ssh"), FAKE_SSH);
   chmodSync(join(home, ".local", "bin", "ssh"), 0o755);
-  const env = { ...process.env, HOME: home, PATH: `${join(home, ".local", "bin")}:${process.env.PATH}` };
+  const env = { ...process.env, HOME: home, PATH: `${join(home, ".local", "bin")}:${process.env.PATH}`, HARVEST_KEYWORD_TESTING: "1" };
   return { home, env };
 }
 

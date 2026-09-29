@@ -25,6 +25,12 @@ video_drifted() {
   [[ -z "$expected" ]] && return 1
   [[ -z "$observed" || "$observed" != "$expected" ]]
 }
+# nap SECONDS —— 0929修复(DoD审计测试提速): 本文件原来14处裸 sleep/bin/sleep 加起来
+# 单条测试要跑几十秒(录制预算类的sleep甚至要等REC_SECONDS+2秒真实时间)，CI里
+# leadgen-field-cleanup-smoke.sh 把整个phone-adb-controller测试套件当一步跑,新增
+# 的几个真机行为集成测试一叠加直接把这一步的时间预算撑爆(exit 124超时,棘轮闸阻断)。
+# 跟 outreach-tick.sh 的 nap() 同一个模式: 测试环境下不真睡,生产不设这个变量不受影响。
+nap(){ [[ -n "${HARVEST_KEYWORD_TESTING:-}" ]] && return 0; /bin/sleep "$1" }
 # source 守卫: 单测以 HARVEST_KEYWORD_LIB=1 source 本文件只取函数,不执行主体
 [[ -n "${HARVEST_KEYWORD_LIB:-}" ]] && return 0
 # RAM盘只有2G,采收截图很快塞爆(0914实证:爆盘让mkdir全军覆没误报锁被占)
@@ -45,12 +51,12 @@ $C --profile "$P" lock-acquire "$TAG" >/dev/null 2>&1 || { log "锁被占,退出
 # 上一批撞车,之前谁都不知道发生过这种事。现在留痕(不改变trap本身的执行,只是把结果记下来)。
 trap '_RELOUT=$($C --profile "$P" lock-release "$TAG" 2>&1); print -- "$_RELOUT" | grep -qE "^lock=(released|free)" || log "⚠️ 放锁未确认成功: $(print -- "$_RELOUT" | tail -1 | head -c 150)"; rm -f "$SEENVIDS"' EXIT
 
-$C --profile "$P" open-app >/dev/null 2>&1; sleep 2
+$C --profile "$P" open-app >/dev/null 2>&1; nap 2
 $C --profile "$P" open-search "$KW" >/dev/null 2>&1 || { log "open-search失败"; exit 1; }
-sleep 3
+nap 3
 $C --profile "$P" search-video-tab "$TAG-vtab" >/dev/null 2>&1 || log "切视频tab失败(可能已在)"
 $C --profile "$P" search-time-layer six_months "$TAG-filter" most_liked unlimited unlimited "$LOC" >/dev/null 2>&1 || { log "筛选失败"; exit 1; }
-sleep 2
+nap 2
 CARDS="$($C --profile "$P" search-video-cards "$TAG-cards" 2>/dev/null | grep -E "^[0-9]+	" | head -"$MAXV")"
 [[ -n "$CARDS" ]] || { log "无卡片"; exit 0; }
 log "卡片数: $(print -- "$CARDS" | wc -l | tr -d " ")"
@@ -69,7 +75,7 @@ for CARDLINE in "${(f)CARDS}"; do
   _LROUT=$($C --profile "$P" lock-refresh "$TAG" </dev/null 2>&1)
   print -- "$_LROUT" | grep -q "^lock=refreshed" || log "⚠️ 锁心跳续期未确认成功(可能已被抢占): $(print -- "$_LROUT" | tail -1 | head -c 150)"
   $C --profile "$P" tap-evidence "$X" "$Y" "$TAG-v$i" >/dev/null 2>&1
-  sleep 3
+  nap 3
   # 0914 主理人验收字段: 原爆款作品地址。current-video-link 自带 note(图文)检测,
   # 图文帖直接跳过(评论区结构不同,采了也是脏数据)。
   VLINK="$($C --profile "$P" current-video-link "$TAG-v$i-vl" </dev/null 2>/dev/null || true)"
@@ -114,7 +120,7 @@ for CARDLINE in "${(f)CARDS}"; do
   log "  时长=${DUR:-未知} 录制预算=${REC_SECONDS}s"
   if $C --profile "$P" set-playback-speed 3.0 "$TAG-v$i-spd" </dev/null >/dev/null 2>&1; then
     if $C --profile "$P" record-start "$TAG-v$i-rec" "$REC_SECONDS" </dev/null >/dev/null 2>&1; then
-      /bin/sleep "$((REC_SECONDS + 2))"
+      nap "$((REC_SECONDS + 2))"
       RSOUT="$($C --profile "$P" record-stop "$TAG-v$i-rec" </dev/null 2>&1 || true)"
       if print -- "$RSOUT" | grep -q "^record_stopped"; then
         RAOUT="$($C --profile "$P" record-extract-audio "$TAG-v$i-rec" </dev/null 2>&1 || true)"
@@ -157,7 +163,7 @@ for CARDLINE in "${(f)CARDS}"; do
   OCOUT="$($C --profile "$P" open-comments "$TAG-v$i-oc" </dev/null 2>/dev/null || true)"
   if ! print -- "$OCOUT" | grep -q "^comments_opened=1"; then
     log "  评论区打不开,3秒后重试1次"
-    /bin/sleep 3
+    nap 3
     OCOUT="$($C --profile "$P" open-comments "$TAG-v$i-oc2" </dev/null 2>/dev/null || true)"
     if ! print -- "$OCOUT" | grep -q "^comments_opened=1"; then
       log "  评论区重试仍打不开,跳过"
@@ -244,15 +250,15 @@ for CARDLINE in "${(f)CARDS}"; do
           log "  行$j 身份验证第${IDTRY}次失败: $(tail -1 $IDERR 2>/dev/null | head -c 120)"
           # 0915 真凶: card-link收尾恢复不可靠→评论面板丢失→后续行全灭。恢复=back+重开评论面板
           $C --profile "$P" back >/dev/null 2>&1
-          /bin/sleep 2
+          nap 2
           REOPEN_OK=0
           if $C --profile "$P" open-comments "$TAG-v$i-u$j-ro$IDTRY" </dev/null >/dev/null 2>&1; then
             REOPEN_OK=1
           else
-            $C --profile "$P" back >/dev/null 2>&1; /bin/sleep 2
+            $C --profile "$P" back >/dev/null 2>&1; nap 2
             $C --profile "$P" open-comments "$TAG-v$i-u$j-ro${IDTRY}b" </dev/null >/dev/null 2>&1 && REOPEN_OK=1
           fi
-          /bin/sleep 2
+          nap 2
           # 0929修复(生产实证: 悦升3条线索"来源视频"标A、原始评论内容其实是完全不相关的B——
           # 追溯为本处 back 抢救落到了别的视频/推荐页,commenter-identity 却在错误页面上验证
           # 成功): 退栈深度不是固定的(取决于此前逐条评论者主页往返次数,0922已实证退栈次数
@@ -286,7 +292,7 @@ for CARDLINE in "${(f)CARDS}"; do
         fi
         # 0914 主理人验收:每人顺取名片主页直链(identity已回评论区,重进主页跑card-link,其自带恢复)
         "$C" --profile "$P" tap-evidence "$TXX" "$TXY" "$TAG-v$i-u$j-re" </dev/null >/dev/null 2>&1
-        sleep 3
+        nap 3
         CARD="$("$C" --profile "$P" commenter-card-link "$TAG-v$i-u$j-cl" </dev/null 2>/dev/null || true)"
         PURL="$(print -- "$CARD" | sed -n "s/^profile_url=//p")"
         # 0929修复(DoD审计发现): 底层 commenter-card-link 失败(面板打不开/按钮找不到等)有
@@ -296,7 +302,7 @@ for CARDLINE in "${(f)CARDS}"; do
         # 但缺失必须留痕，不能悄悄发出一条主页链接是空的线索。
         [[ -z "$PURL" ]] && log "  行$j 主页直链解析失败(douyin_id=${OID:-空})，线索仍保留但触达阶段需退回抖音号搜索"
         print -- "LEAD	$ONICK	${OID:-}	${ATYPE:-personal}	$BODY	$DATE	$REGION	$TITLE	$KWTXT	${PIP:-}	${PURL:-}	${VURL:-}"
-        sleep 4
+        nap 4
       done
     fi
     if (( AUTHOR_IS_OWN == 1 || VIDEO_DRIFTED == 1 )); then break; fi
@@ -307,7 +313,7 @@ for CARDLINE in "${(f)CARDS}"; do
     if [[ "$TIER" == "large" ]] && (( TOTAL >= LARGE_CAP )); then log "  大户已达封顶${LARGE_CAP}条,停止翻屏"; break; fi
     if (( EMPTY_ROUNDS >= 2 )); then log "  连续2屏无新增,停止翻屏(防卡死)"; break; fi
     $C --profile "$P" swipe 600 2000 600 900 400 </dev/null >/dev/null 2>&1
-    sleep 1.5
+    nap 1.5
   done
   unset SEEN_LINES
   CC="$(print -- "$CC" | grep -E "	tap=" || true)"
@@ -324,6 +330,6 @@ for CARDLINE in "${(f)CARDS}"; do
   # 归位不数 back 次数：取过链接的视频栈里多一层，写死的次数必然退多或退少
   # （0922 实证：跳过分支 back 一次落在暂存解析页，后面每个视频都在错页面上瞎点）。
   $C --profile "$P" back-to-results >/dev/null 2>&1 || true
-  sleep 3
+  nap 3
 done
 log "关键词完成: $KWTXT"

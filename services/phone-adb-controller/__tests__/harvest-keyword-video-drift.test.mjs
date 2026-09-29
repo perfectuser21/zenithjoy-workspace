@@ -103,7 +103,7 @@ function setup() {
   writeFileSync(join(home, "seq-commenter-identity"), "\n" + "nickname=WRONGNICK\\ndouyin_id=wrongid123\n");
   // current-video-link: 第1次(tap进视频后)=VID_A ; 第2次(抢救重开后的漂移核对)=VID_B(漂移)
   writeFileSync(join(home, "seq-current-video-link"), "video_id=VID_A\\nshort_url=urlA\n" + "video_id=VID_B\\nshort_url=urlB\n");
-  const env = { ...process.env, HOME: home, PATH: `${join(home, ".local", "bin")}:${process.env.PATH}` };
+  const env = { ...process.env, HOME: home, PATH: `${join(home, ".local", "bin")}:${process.env.PATH}`, HARVEST_KEYWORD_TESTING: "1" };
   return { home, env };
 }
 
