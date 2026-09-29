@@ -395,6 +395,29 @@ back_to_results() {
       return 0
     fi
   fi
+  # 0929 真机实证补丁：光靠"多按几次返回键"赌不赢——长时间在线设备的 back 栈
+  # 深度不可预期(实测按满 4 次后落在了跟本次搜索八竿子打不着的历史搜索页
+  # "会计信息系统生命周期"，不是这次搜的"人工智能"，说明栈里堆的是设备长期
+  # 运行积累的陈年页面，不是简单"多一层"能覆盖的)。传了 KEYWORD 时，重试耗尽
+  # 不再继续赌栈深度，直接确定性重新发起这次搜索的意图——不依赖任何历史状态。
+  if [[ -n "$kw" ]]; then
+    local kw_encoded rtry
+    kw_encoded="$(/usr/bin/python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$kw" 2>/dev/null || true)"
+    if [[ -n "$kw_encoded" ]]; then
+      # 重试2次：0929实测手动逐步执行必成功，脚本里紧接着连续8次back+check之后
+      # 立刻打这一枪，偶尔1.5秒等不到界面真正稳定(uiautomator dump本身也有3波内部
+      # 重试，但架不住外层已经连轴转了8轮)，给多一次机会比死等更长时间更稳。
+      for rtry in 1 2; do
+        "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "snssdk1128://search/tabs?keyword=${kw_encoded}" >/dev/null 2>&1
+        wait_ms 1800
+        xml_path="$EVIDENCE_ROOT/${eid}-recover${rtry}.xml"
+        if _ui_evidence_wave "${eid}-recover${rtry}" >/dev/null 2>&1 && _search_kw_matches "$kw" "$xml_path"; then
+          print -- "back_to_results=1 backs=$max recovered_via=research"
+          return 0
+        fi
+      done
+    fi
+  fi
   # 退不回去就明说，别让调用方以为已经归位——那正是这个 bug 的形状。
   print -u2 -- "back-to-results: still off the search result page after ${max} backs (fg=${fg})"
   return 1

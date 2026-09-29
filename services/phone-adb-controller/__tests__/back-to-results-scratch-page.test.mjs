@@ -112,6 +112,21 @@ test('UI 树文件读不到时判不匹配（拿不到证据宁可多退，不�
 // 上面锁的是"判定对不对"。但本 bug 的形状恰恰是：判定能力可以有，出口没接线，
 // 只测判定函数是漏的——把 back_to_results 的关键词核对段删掉，上面每一条依然全绿。
 
+test('接线守卫：重试耗尽后必须有确定性兜底重搜，不能只靠 back 键赌栈深度', () => {
+  // 0929真机实证：单靠"多按几次返回键"赌不赢——实测按满4次后落在了跟本次
+  // 搜索完全不相干的历史搜索页("会计信息系统生命周期")，说明长时间在线设备
+  // 的 back 栈深度不可预期。必须有不依赖历史状态的确定性兜底：重新发起本次
+  // 搜索的意图(deep link)，不是继续加大 back 次数。
+  const src = readFileSync(SCRIPT, 'utf8');
+  const start = src.indexOf('back_to_results() {');
+  const end = src.indexOf('\n}\n', start);
+  const body = src.slice(start, end);
+  assert.match(body, /search\/tabs\?keyword=/,
+    '重试耗尽后没有重新发起搜索意图兜底——单靠 back 键次数赌不赢深度不可预期的历史栈');
+  assert.match(body, /recovered_via=research/,
+    '兜底重搜成功时要显式标注 recovered_via，方便排障时区分"正常归位"和"靠重搜救回来的"');
+});
+
 test('接线守卫：back_to_results 传了关键词时必须真的调用 _search_kw_matches', () => {
   const src = readFileSync(SCRIPT, 'utf8');
   const start = src.indexOf('back_to_results() {');
