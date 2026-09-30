@@ -231,6 +231,9 @@ probes:
   - key: coll_rescan_rate
     stage: collection
     journey_cell: "stage:collection"
+    target:
+      type: step
+      key: keyword_acquisition.collection.return_to_results
     probe:
       type: metric
       ref: "metrics.rescan_rate"
