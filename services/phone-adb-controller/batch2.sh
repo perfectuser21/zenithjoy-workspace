@@ -22,6 +22,13 @@ word_rescan_metrics(){ # LOGFILE FROM → stdout "<rescan_count> <links_opened> 
   if (( l > 0 )); then r=$(awk -v c="$c" -v l="$l" 'BEGIN{printf "%.3f", c/l}'); else r=0; fi
   print -- "$c $l $r"
 }
+# 7d150e33(阶段1): 整批总时限(词边界判到点平滑收工)+ 落池/分拣段按契约预算封顶,函数在 wf-limits.sh;
+#   库缺失(旧部署/单独手跑)→ 函数不存在,下面全用 $+functions 守卫,行为与并入前一致
+source "${0:A:h}/wf-limits.sh" 2>/dev/null || true
+deadline_hit(){ (( $+functions[wf_deadline_reached] )) && wf_deadline_reached }
+budget_of(){ if (( $+functions[wf_budget_of] )); then wf_budget_of "$1"; else print 0; fi }
+timeout_class(){ if (( $+functions[wf_timeout_class] )); then wf_timeout_class "$1"; else print record; fi }
+run_bounded(){ if (( $+functions[wf_run_bounded] )); then wf_run_bounded "$@"; else shift; "$@"; fi }
 [[ -n "${BATCH2_LIB:-}" ]] && return 0
 P="$1"; WF="$2"; TAG="$3"; PUSH="${4:-0}"; SERIAL="${5:-}"
 # 这批活的回填去向（业务线名 / key / 研发用 dev）。不传就按 profile 走——
@@ -43,8 +50,8 @@ wfr(){ wfr_on && bash "$WFR" "$@" >/dev/null 2>>$LOG; true }
 export WFR_LOG_FILE=$LOG WFR_TSV=$OUT WFR_LOG_FROM=0
 count(){ local c; c=$(grep -c "^$1" $OUT 2>/dev/null || true); print -- "${c:-0}"; }
 count_qual(){ local c; c=$(grep -cE "^QUAL	[^	]*	($1)	" $OUT 2>/dev/null || true); print -- "${c:-0}"; }
-# 出口码→阶段状态(决策 af061588): 0+有候选 completed / 0 无候选 blocked no_cards / 3 blocked lock_busy / 其它 failed
-# harvest-keyword.sh 出口码契约(勿改): 3 锁被占 / 1 open-search 失败 / 0 正常或无卡片
+# 出口码→阶段状态(决策 af061588): 0+有候选 completed / 0 无候选 blocked no_cards / 3 blocked lock_busy / 4 failed budget_exceeded / 其它 failed
+# harvest-keyword.sh 出口码契约(勿改): 3 锁被占 / 1 open-search 失败 / 0 正常或无卡片 / 4 发现段超契约预算(7d150e33)
 # 6b133a81: 每词写 discovery→qualification→collection 三个工件(契约设计顺序),各自读回判探针并拦截(workflow-result.sh apply_gate)。
 #   QUAL 行(8bb3af55 先判后采,harvest-keyword.sh 每个进判定的视频一行 QUAL\t视频\t结论\t来源):
 #   discovery.candidates = 进判定的视频数(QUAL 行,缺则回落 VIDEO 行);qualification.candidates_judged = matched+rejected,
@@ -72,6 +79,8 @@ wfr_word_stages(){ # n word rc dv dl q qj qm
          wfr stage discovery blocked "$n" "word=$W no_cards" "$EV" '{"candidates":0,"keywords_processed":1,"screens_scanned":0}' "$W"
        fi;;
     3) wfr stage discovery blocked "$n" "word=$W lock_busy" "$EV" '{"candidates":0,"keywords_processed":1,"screens_scanned":0}' "$W";;
+    # 7d150e33: 4 = 发现段超契约预算(harvest-keyword 按 WF_BUDGET_discovery 封顶),记账 failed 后进入下一个词
+    4) wfr stage discovery failed "$n" "word=$W budget_exceeded" "$EV" '{"candidates":0,"keywords_processed":1,"screens_scanned":0}' "$W";;
     *) wfr stage discovery failed "$n" "word=$W rc=$rc" "$EV" '{"candidates":0,"keywords_processed":1,"screens_scanned":0}' "$W";;
   esac
 }
@@ -149,6 +158,7 @@ if wfr_on && [[ -n "${WFR_HASH:-}" ]]; then
 fi
 n=0
 STOPPED=0
+DEADLINE_HIT=0
 for W in "${(f)$(cat $WF)}"; do
   [[ -z "$W" ]] && continue
   n=$((n+1))
@@ -163,6 +173,12 @@ for W in "${(f)$(cat $WF)}"; do
   if (( 10#$H >= 8 && 10#$H < 22 )); then
     print "[$(date +%H:%M:%S)] 触达时窗到,采收收工(词$n: $W 起未开跑)" >> $LOG
     break
+  fi
+  # 7d150e33: 整批总时限(wf-run 起跑 export WF_RUN_START_TS/WF_RUN_MAX_SECONDS)在词边界判——到点不开新词,
+  # 已采的照常落池/分拣,末尾报 BATCH2_STOP_REASON=deadline 让 wf-run 把账本终态记 partial。不 kill 正在采的词。
+  if deadline_hit; then
+    print "[$(date +%H:%M:%S)] 整批总时限到(${WF_RUN_MAX_SECONDS:-14400}s),采收收工(词$n: $W 起未开跑)" >> $LOG
+    DEADLINE_HIT=1; break
   fi
   # 续跑: skip_words 里的词已在上一 attempt 完成(只有账本在跑时才有这个概念)
   if wfr_on && [[ -n "${WFR_SKIP_WORDS:-}" && "|${WFR_SKIP_WORDS}|" == *"|${W}|"* ]]; then
@@ -209,8 +225,20 @@ elif [[ "$PUSH" == "1" && -s $OUT ]]; then
   # 不受影响,但为了让两条命令共享同一次ssh session的env,统一放在同一行source。
   PUSH_OFF=""; wfr_on && PUSH_OFF=$(log_off)   # 本次 ssh 之前的日志行数: 之后新增的输出里才有本批的 PUSH_*_STATS
   WFR_LOG_FROM=${PUSH_OFF:-0}
-  ssh -o ConnectTimeout=20 mmv "set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; node /Users/administrator/.openclaw/leadgen-scripts/push-videos.js /tmp/$TAG.tsv $TAG $LINE && node /Users/administrator/.openclaw/leadgen-scripts/push-raw-comments.js /tmp/$TAG.tsv $TAG $LINE" >> $LOG 2>&1
-  prc=$?
+  # 7d150e33: 落池段按契约 delivery 预算封顶(远程调用,超时可安全收掉子进程);超时按契约分类——delivery 的 retryable
+  # 声明了「scp/ssh 失败」→ 重试 1 次,仍超时记账(prc=124 → delivery failed)进入下一单元,不崩批
+  PUSH_BUDGET=$(budget_of delivery)
+  push_pool(){ run_bounded "$PUSH_BUDGET" ssh -o ConnectTimeout=20 mmv "set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; node /Users/administrator/.openclaw/leadgen-scripts/push-videos.js /tmp/$TAG.tsv $TAG $LINE && node /Users/administrator/.openclaw/leadgen-scripts/push-raw-comments.js /tmp/$TAG.tsv $TAG $LINE" >> $LOG 2>&1 }
+  push_pool; prc=$?
+  if (( prc == 124 )); then
+    if [[ "$(timeout_class delivery)" == retryable ]]; then
+      print "[$(date +%H:%M:%S)] 落池超预算(${PUSH_BUDGET}s),契约 retryable 重试 1 次" >> $LOG
+      push_pool; prc=$?
+      (( prc == 124 )) && print "[$(date +%H:%M:%S)] 落池超预算(${PUSH_BUDGET}s),重试仍超时,记账进入下一单元" >> $LOG
+    else
+      print "[$(date +%H:%M:%S)] 落池超预算(${PUSH_BUDGET}s),记账进入下一单元" >> $LOG
+    fi
+  fi
   # 账本 delivery: 落池 ssh 的出口码决定 completed/failed; readback_verified 由探针读回(checks/ YAML)填,这里不硬编码;
   # leads_written/duplicates_skipped/videos_pushed 取落池脚本的真实统计(缺统计回落 $NL),见 wfr_delivery_stage
   wfr_delivery_stage "$prc" "$NL" "$PUSH_OFF"
@@ -227,8 +255,18 @@ elif [[ "$PUSH" == "1" && -s $OUT ]]; then
   # 分拣失败不影响本轮采收已经落池的事实,只吞错不重试(留给下一批/下次人工核)。
   SORT_OFF=""; wfr_on && SORT_OFF=$(log_off)
   WFR_LOG_FROM=${SORT_OFF:-0}
-  ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/sort-comments.js $LINE" >> $LOG 2>&1
+  # 7d150e33: 分拣段按契约 scoring 预算封顶;契约 scoring 的 retryable 没声明超时 → 只记账(src=124 → scoring failed),不重试
+  SORT_BUDGET=$(budget_of scoring)
+  run_bounded "$SORT_BUDGET" ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/sort-comments.js $LINE" >> $LOG 2>&1
   src=$?
+  if (( src == 124 )); then
+    if [[ "$(timeout_class scoring)" == retryable ]]; then
+      print "[$(date +%H:%M:%S)] 分拣超预算(${SORT_BUDGET}s),契约 retryable 重试 1 次" >> $LOG
+      run_bounded "$SORT_BUDGET" ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/sort-comments.js $LINE" >> $LOG 2>&1
+      src=$?
+    fi
+    (( src == 124 )) && print "[$(date +%H:%M:%S)] 分拣超预算(${SORT_BUDGET}s),记账进入下一单元" >> $LOG
+  fi
   print "[$(date +%H:%M:%S)] 已分拣(判定链)" >> $LOG
   # 账本 scoring: 分拣之后才有真实工件(有 SORT_STATS → completed, 否则 failed); n=1 覆盖 init 写的 blocked 占位项
   wfr_scoring_stage "$src" "$SORT_OFF"
@@ -241,3 +279,6 @@ elif [[ "$PUSH" == "1" && -s $OUT ]]; then
 else
   wfr stage delivery blocked 1 "push=$PUSH skipped" '[]' '{"leads_written":0,"videos_pushed":0,"duplicates_skipped":0,"readback_verified":0,"cursor_updates":0}'
 fi
+# 7d150e33: 到点收工的信号给 wf-run.sh(它据此把账本终态记 partial 原因 deadline);放在落池/分拣之后,已采线索已经落完
+(( DEADLINE_HIT )) && print "BATCH2_STOP_REASON=deadline"
+exit 0
