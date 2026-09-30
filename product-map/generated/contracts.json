@@ -2,29 +2,29 @@
   "object_types": "06f4d4bda5a98920fad6eef0c73a908803c529e87e51b28fd624f610078bcd2c",
   "capabilities": {
     "benchmark_link_acquisition": {
-      "sha256": "91c876f2518371b60e5216021d5634fbd9dd19baf78573aa493f4d8cba5b9007",
+      "sha256": "f2b7af4ea445c1005202310b555202f2bcb4a98392a4ee0d49f33557262ffc5d",
       "activities": {
-        "preflight": "bbd8474cd89f4bb46ba476db8737594d5cc9bebe3949ea0580f56f74fa65cc5b",
-        "discovery": "d2c50e3dd35cbad7d26598e29d6fbc02310ef54207abbbf19f4bf9b02f1cd445",
-        "qualification": "81dc464286c8b3670af71764b158c5a003f067621857c4c0701e61b5cc958345",
-        "collection": "8cd075d21374a2d6fd1fd2131bae707450307135144e49dd5d0c80127221a370",
-        "scoring": "c97565e601210efe2a3d611086def8701678a7d945ae04bc9ecaa2f903429212",
-        "delivery": "2673525a7637891bbcba90062a3fc6006810e83cecdbca3214746c9260edbb4d",
-        "outreach": "00c77c10d04befffa6f0fc8fad632064c7f2e13d692fb0c9b1a1fe1bd5a7ec43",
-        "cleanup": "c1f393e5a11e894225a791ad939530bd941ecb93706129877a39938908a0ee49"
+        "preflight": "b06ed33caf360ec7483ebf915953e36c757fb40f0c78d03da0057449b2627f99",
+        "discovery": "76c8b51da5b617d95089cd53b690cef163444a556b65fdeda052ff751775b8fb",
+        "qualification": "23e791f0287f37d5d4d83be651dca879602eec73e0082f3bb604e9914c38d7ab",
+        "collection": "3e6981c3647daf86b4c4d536e16f860e9f0baaf3a9ab12228a9dbc7127b19e66",
+        "scoring": "7ac44bd6837722c33a3c47ce6fe528f638617ba6db89f63a485c6ed2562fe3bb",
+        "delivery": "4928e39c463f6be938961d9804169469ba19dd2fda13e68616eee4d9ad5b706b",
+        "outreach": "5bcb6b1230eea500b2f051baddafff057e812fd72bb6afee0ebcff707dfcc20e",
+        "cleanup": "bb92e6cb5f598fe38b333b06ac904d46759e8805954e85d7daf91bf5b176d5ef"
       }
     },
     "keyword_acquisition": {
-      "sha256": "eee17aaa3465002776187f22dd01b47eaed5e5418a5fd46961daaf101839705e",
+      "sha256": "31a47b3f43cff25a942952b298647bc4968557deddc2085eaaa900b93cac3f6a",
       "activities": {
-        "preflight": "bbd8474cd89f4bb46ba476db8737594d5cc9bebe3949ea0580f56f74fa65cc5b",
-        "discovery": "2c62719f1b47055786fcfde4e7dba61d6203d1f991cf775b18294b494cdf2989",
-        "qualification": "81dc464286c8b3670af71764b158c5a003f067621857c4c0701e61b5cc958345",
-        "collection": "8cd075d21374a2d6fd1fd2131bae707450307135144e49dd5d0c80127221a370",
-        "scoring": "c97565e601210efe2a3d611086def8701678a7d945ae04bc9ecaa2f903429212",
-        "delivery": "2673525a7637891bbcba90062a3fc6006810e83cecdbca3214746c9260edbb4d",
-        "outreach": "00c77c10d04befffa6f0fc8fad632064c7f2e13d692fb0c9b1a1fe1bd5a7ec43",
-        "cleanup": "c1f393e5a11e894225a791ad939530bd941ecb93706129877a39938908a0ee49"
+        "preflight": "b06ed33caf360ec7483ebf915953e36c757fb40f0c78d03da0057449b2627f99",
+        "discovery": "8ea64fe0f47a42a18e0cb47577d73bb3bae21cef8761ba5ebc0563cc82b767e3",
+        "qualification": "23e791f0287f37d5d4d83be651dca879602eec73e0082f3bb604e9914c38d7ab",
+        "collection": "3e6981c3647daf86b4c4d536e16f860e9f0baaf3a9ab12228a9dbc7127b19e66",
+        "scoring": "7ac44bd6837722c33a3c47ce6fe528f638617ba6db89f63a485c6ed2562fe3bb",
+        "delivery": "4928e39c463f6be938961d9804169469ba19dd2fda13e68616eee4d9ad5b706b",
+        "outreach": "5bcb6b1230eea500b2f051baddafff057e812fd72bb6afee0ebcff707dfcc20e",
+        "cleanup": "bb92e6cb5f598fe38b333b06ac904d46759e8805954e85d7daf91bf5b176d5ef"
       }
     }
   }
