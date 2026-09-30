@@ -28,7 +28,8 @@ ${fail ? 'echo "curl: (7) Failed to connect to brain.test port 5221: Connection 
   chmodSync(join(bin, "curl"), 0o755);
   return { PATH: `${bin}:${process.env.PATH}`, calls };
 }
-function curlCalls(calls) { return existsSync(calls) ? readFileSync(calls, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []; }
+// 只看回执（execution-callback）：④b 起同一假 curl 还会记 span 上报与活动表 GET，那些由 workflow-result-span.test.mjs 断言
+function curlCalls(calls) { return existsSync(calls) ? readFileSync(calls, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)).filter((a) => a.some((x) => String(x).includes("/api/brain/execution-callback"))) : []; }
 function argAfter(args, flag) { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : undefined; }
 const BRAIN = { BRAIN_URL: "http://brain.test:5221", BRAIN_INTERNAL_TOKEN: "tok-brain", WFR_BRAIN_TASK_ID: "11111111-1111-4111-8111-111111111111" };
 function brainEnv(dir, opts) { const c = fakeCurl(dir, opts); return { env: { ...BRAIN, PATH: c.PATH }, calls: c.calls }; }

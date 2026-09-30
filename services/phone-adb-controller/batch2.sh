@@ -218,6 +218,7 @@ for W in "${(f)$(cat $WF)}"; do
   ENC=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$W")
   WFR_LOG_FROM=$(log_off); WFR_LOG_FROM=${WFR_LOG_FROM:-0}
   print "[$(date +%H:%M:%S)] 词$n: $W" >> $LOG
+  wfr mark-start collection "$n"   # span started_at：本词采集从这一刻算
   wr step "$SERIAL" 3 doing "词$n: $W"
   V0=$(count VIDEO); L0=$(count LEAD); Q0=$(count QUAL); QJ0=$(count_qual 'matched|rejected'); QM0=$(count_qual matched)
   rc=0; "${HARVEST_KEYWORD:-$HOME/bin-harvest/harvest-keyword.sh}" "$P" "$ENC" "$MAXV" "$TAG-w$n" unlimited "$LINE" >> $OUT 2>> $LOG || rc=$?
@@ -247,6 +248,7 @@ elif [[ "$PUSH" == "1" && -s $OUT ]]; then
   # 双写会连到pg默认本地库(压根没有zenithjoy.leadgen_videos表)而不是生产库,
   # 全部静默失败——真机验证时才发现(见0923 handoff)。push-raw-comments.js不碰Postgres,
   # 不受影响,但为了让两条命令共享同一次ssh session的env,统一放在同一行source。
+  wfr mark-start delivery 1
   PUSH_OFF=""; wfr_on && PUSH_OFF=$(log_off)   # 本次 ssh 之前的日志行数: 之后新增的输出里才有本批的 PUSH_*_STATS
   WFR_LOG_FROM=${PUSH_OFF:-0}
   # 7d150e33: 落池段按契约 delivery 预算封顶(远程调用,超时可安全收掉子进程);超时按契约分类——delivery 的 retryable
@@ -277,6 +279,7 @@ elif [[ "$PUSH" == "1" && -s $OUT ]]; then
   # 从没真正跑通过)。落池跟分拣本就是同一批活的下一步,原地接上即可,不给它
   # 单独另开一条定时链路(那样反而多一层"两条链步调不一致"的新风险)。
   # 分拣失败不影响本轮采收已经落池的事实,只吞错不重试(留给下一批/下次人工核)。
+  wfr mark-start scoring 1
   SORT_OFF=""; wfr_on && SORT_OFF=$(log_off)
   WFR_LOG_FROM=${SORT_OFF:-0}
   # 7d150e33: 分拣段按契约 scoring 预算封顶;契约 scoring 的 retryable 没声明超时 → 只记账(src=124 → scoring failed),不重试

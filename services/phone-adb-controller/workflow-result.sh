@@ -133,6 +133,49 @@ brain_post(){
   case "$code" in 2*) ;; *) warn "brain callback HTTP $code (run_id=$run_id): ${out%$'\n'*}";; esac
   return 0
 }
+# ── span 上报（价值流建模④b，决策 3e867cad）：每个 Backbone Activity 的工件写成后向 Brain 报一条运行记录 ──
+# cmd09300230 批 134/134 走兜底重搜跑了 6 小时而结果探针全绿——过程指标（时长/重试/兜底）没人记，这里补。
+# 契约 POST /api/brain/spans（数组批量，Bearer 内部 token）；幂等键 (run_id, activity_id, started_at)，所以 started_at
+# 取 mark-start 写下的标记（同 stage/n 重发不变），没标记才退回工件 observed_at。上报失败只 warn，绝不影响主流程。
+WFR_SPAN_JOURNEY_ID="${WFR_SPAN_JOURNEY_ID:-afa6abca-53c0-4815-8594-b7fb81ca547f}"
+span_marker(){ printf '%s' "${WFR_RUN_DIR:-/nonexistent}/span-start.${WFR_ATTEMPT:-a0}.$1.$2"; }
+span_mark_start(){ local m; m=$(span_marker "$1" "$2"); [[ -s "$m" ]] || date -u +%Y-%m-%dT%H:%M:%SZ > "$m" 2>/dev/null || warn "span mark-start write failed ($1/$2)"; }
+# 活动表一次 GET 缓存进 run 目录；解析 activity_key → "id workflow_id"，取不到留空（evidence 里仍带 activity_key）
+span_activity(){
+  local cache="${WFR_RUN_DIR:-/nonexistent}/activities.json" out
+  if [[ ! -s "$cache" ]]; then
+    out=$(curl -s --connect-timeout 3 -m 6 "${BRAIN_URL%/}/api/brain/journey_steps?journey_id=${WFR_SPAN_JOURNEY_ID}&limit=200" 2>/dev/null) || out=""
+    printf '%s' "$out" | "$WFR_JQ" -c 'if type=="array" then . else [] end' > "$cache" 2>/dev/null || printf '[]' > "$cache"
+  fi
+  "$WFR_JQ" -r --arg k "$1" '[.[] | select(.activity_key==$k)] | sort_by(.backbone_version) | last // empty | "\(.id) \(.workflow_id // "")"' "$cache" 2>/dev/null
+}
+span_post(){ # stage status n artifact_file [word]
+  local stage="$1" status="$2" n="$3" f="$4" word="${5:-}"
+  if [[ -z "${BRAIN_URL:-}" || -z "${BRAIN_INTERNAL_TOKEN:-}" ]]; then warn "span skipped: missing BRAIN_URL/BRAIN_INTERNAL_TOKEN (stage=$stage)"; return 0; fi
+  local started ended ex_kind outcome fallback=false attempts=1 rescan rate act aid wid body out code m
+  ended=$("$WFR_JQ" -r '.observed_at // empty' "$f" 2>/dev/null); [[ -n "$ended" ]] || ended=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  m=$(span_marker "$stage" "$n"); if [[ -s "$m" ]]; then started=$(<"$m"); else started="$ended"; fi
+  case "$stage" in qualification|scoring) ex_kind=agent;; *) ex_kind=code;; esac
+  case "$status" in completed) outcome=pass;; failed) outcome=fail;; blocked) outcome=skipped;; *) outcome=unknown;; esac
+  rescan=$("$WFR_JQ" -r '.metrics.rescan_count // 0' "$f" 2>/dev/null); rescan=${rescan%.*}; [[ "$rescan" =~ ^[0-9]+$ ]] || rescan=0
+  rate=$("$WFR_JQ" -r '.metrics.rescan_rate // 0' "$f" 2>/dev/null); [[ "$rate" =~ ^[0-9.]+$ ]] || rate=0
+  if [[ "$stage" == collection ]] && (( rescan > 0 )); then fallback=true; attempts=$(( rescan + 1 )); fi
+  act=$(span_activity "$stage" || true); aid="${act%% *}"; wid="${act#* }"; [[ "$wid" == "$act" ]] && wid=""
+  body=$("$WFR_JQ" -cn --arg run "${WFR_RUN_ID:-}__${WFR_ATTEMPT:-a0}" --arg aid "$aid" --arg wid "$wid" --arg st "$started" --arg en "$ended" \
+      --arg ek "$ex_kind" --arg eid "${WFR_HOSTKEY:-$(hostname -s 2>/dev/null || echo unknown)}" --argjson att "$attempts" --argjson fb "$fallback" \
+      --arg oc "$outcome" --arg stage "$stage" --argjson n "$n" --arg w "$word" --arg art "$(basename "$f")" --argjson rc "$rescan" --argjson rr "$rate" \
+      '[{run_id:$run, workflow_id:(if $wid=="" then null else $wid end), activity_id:(if $aid=="" then null else $aid end),
+         step_id:null, enabler_id:null, started_at:$st, ended_at:$en, executor_kind:$ek, executor_id:$eid,
+         attempts:$att, fallback:$fb, outcome:$oc,
+         evidence:{activity_key:$stage, stage_attempt:$n, word:$w, artifact:$art, rescan_count:$rc, rescan_rate:$rr}}]' 2>&1) \
+    || { warn "span body build failed (stage=$stage): $body"; return 0; }
+  out=$(curl -s --connect-timeout 3 -m 8 -w '\n%{http_code}' -X POST "${BRAIN_URL%/}/api/brain/spans" \
+        -H "Authorization: Bearer $BRAIN_INTERNAL_TOKEN" -H 'Content-Type: application/json' -d "$body" 2>&1) \
+    || { warn "span curl failed (stage=$stage): $out"; return 0; }
+  code=${out##*$'\n'}
+  case "$code" in 2*) ;; *) warn "span HTTP $code (stage=$stage): ${out%$'\n'*}";; esac
+  return 0
+}
 # led: 原样透传 stdout，不 tail——供 show（多行美化 JSON，tail -1 会把 JSON 砍成只剩 "}"）
 led(){ "$WFR_NODE" "$WFR_LEDGER_MJS" "$@" --run-dir "${WFR_RUN_DIR:-}"; }
 # led1: 2>&1 | tail -1——供 init/set/next-attempt（单行 JSON，且吞掉夹杂的 stderr 行）
@@ -235,6 +278,8 @@ write_stage(){
   if [[ "$stage" != cleanup ]]; then
     brain_post "${WFR_RUN_ID:-}__${attempt}.${stage}" in_progress "$stage" "$f" '[]' "$probes"
   fi
+  # 拦截后的工件状态就是这条 span 的 outcome（cleanup 也报：它是骨干最后一格）
+  span_post "$stage" "$("$WFR_JQ" -r '.status' "$f" 2>/dev/null || echo "$status")" "$n" "$f" "$word"
 }
 
 cmd="${1:-}"; shift || true
@@ -246,9 +291,10 @@ case "$cmd" in
     WFR_HASH="$(calc_hash "$P" "$WF" "$PUSH")"
     WFR_RUN_DIR="$WFR_HOME/ledger/$WFR_RUN_ID"; WFR_ART_DIR="$WFR_HOME/workflow-runs"
     WFR_TAG="$TAG"; WFR_PROFILE="$P"   # 棒3b: 探针占位符 $RUN_TAG / $LINE_KEY(经 line-routes routeOf 由 profile 解析)
+    WFR_HOSTKEY="$HOSTKEY"             # span executor_id：哪台执行机跑的
     mkdir -p "$WFR_RUN_DIR" "$WFR_ART_DIR" 2>/dev/null || warn "mkdir failed errno: $(mkdir -p "$WFR_RUN_DIR" "$WFR_ART_DIR" 2>&1)"
     led1 init --run-id "$WFR_RUN_ID" --hash "$WFR_HASH" --profile "$P" --serial "$SERIAL" --hostkey "$HOSTKEY" >/dev/null
-    export WFR_RUN_ID WFR_HASH WFR_RUN_DIR WFR_ART_DIR WFR_TAG WFR_PROFILE
+    export WFR_RUN_ID WFR_HASH WFR_RUN_DIR WFR_ART_DIR WFR_TAG WFR_PROFILE WFR_HOSTKEY
     # 6b133a81: preflight 四项指标全部取 harvest-cron.sh 的真实预检结果(DEVICE_VERIFIED=adb get-state 通过 /
     # ACCOUNT_VERIFIED=我页抖音号在注册表 / CALL_STATE_IDLE=mCallState 空闲 / LOCK_ACQUIRED=preflight_lock_acquire 以本批 TAG
     # 拿到设备锁),没读到一律 0——不再写死 1/0。读回 pf_* 探针不过 → stop_run,批次不开采。
@@ -257,7 +303,10 @@ case "$cmd" in
       "[{\"type\":\"preflight\",\"serial\":\"$SERIAL\",\"hostkey\":\"$HOSTKEY\"}]" \
       "{\"device_verified\":${DEVICE_VERIFIED:-0},\"account_verified\":${ACCOUNT_VERIFIED:-0},\"call_state_idle\":${CALL_STATE_IDLE:-0},\"lock_acquired\":${LOCK_ACQUIRED:-0}}"
     echo "WFR_RUN_ID=$WFR_RUN_ID"; echo "WFR_HASH=$WFR_HASH"; echo "WFR_RUN_DIR=$WFR_RUN_DIR"; echo "WFR_ART_DIR=$WFR_ART_DIR"
-    echo "WFR_TAG=$WFR_TAG"; echo "WFR_PROFILE=$WFR_PROFILE";;
+    echo "WFR_TAG=$WFR_TAG"; echo "WFR_PROFILE=$WFR_PROFILE"; echo "WFR_HOSTKEY=$WFR_HOSTKEY";;
+  mark-start)
+    # 记一个活动开始时刻（span started_at 取这里；同 stage/n 已有标记不覆盖，幂等键才稳定）。未 init 直接忽略。
+    if not_initialized; then warn "mark-start called before init"; else span_mark_start "$1" "${2:-1}"; fi;;
   enter)
     if not_initialized; then
       warn "called before init"
