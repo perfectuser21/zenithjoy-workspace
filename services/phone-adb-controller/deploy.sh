@@ -214,7 +214,7 @@ for host in xian-m4 xian-m1; do
 done
 
 # Commander 入口(决策 7f842d12): 启动器落 mmv(openclaw CLI 在本机), skill 落 work-commander 工作区
-echo "=== [5/5] mmv Commander 入口(wf-launch/wf-status + skill workflow-commander) ==="
+echo "=== [5/5] mmv Commander 入口(wf-launch/wf-status + skill workflow-commander + AGENTS.md) ==="
 ssh mmv "mkdir -p ~/.openclaw/commander ~/openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander"
 for f in wf-launch.sh wf-status.sh; do
   if [[ ! -s "$D/commander/$f" ]]; then echo "  ⚠️ 仓库里缺失: commander/$f"; FAILED=1; continue; fi
@@ -230,6 +230,13 @@ done
 if [[ -s "$D/commander/skills/workflow-commander/SKILL.md" ]]; then
   push_atomic "$D/commander/skills/workflow-commander/SKILL.md" mmv "~/openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander" SKILL.md
   echo "  ✅ skills/workflow-commander/SKILL.md"
+fi
+# 0930 阶段 2(任务 81958796): work-commander 工作区 AGENTS.md 真身收进仓,改真身走 PR;工作区副本由这里覆盖(禁止手改)
+if [[ -s "$D/commander/AGENTS.md" ]]; then
+  push_atomic "$D/commander/AGENTS.md" mmv "~/openclaw-root/workspaces-root/clawd-work-commander" AGENTS.md
+  echo "  ✅ commander/AGENTS.md → work-commander 工作区"
+else
+  echo "  ⚠️ 仓库里缺失: commander/AGENTS.md"; FAILED=1
 fi
 
 echo ""
