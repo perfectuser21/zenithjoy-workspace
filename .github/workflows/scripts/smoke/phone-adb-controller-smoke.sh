@@ -112,6 +112,12 @@ grep -qF 'escort_alive "$ESCORT_ID"' "$D/wf-run.sh" || fail "escort 复核未走
 grep -qF 'cron list --json' "$D/wf-run.sh" || fail "escort_alive 未优先走 cron list --json"
 [[ -s "$D/cmdr-escort.txt" ]] || fail "escort SOP文件缺失"
 grep -qF '帮不拦' "$D/cmdr-escort.txt" || fail "escort SOP缺辅佐三原则"
+# 0930 任务 1ebaeb00(决策 3c98fb36 阶段1·稳): escort 在途被自己注销 → run 死循环无人陪跑。
+# wf-run 注销只删 name 全等本 run 的 cron + 在途看门狗重拉; SOP 自杀条款只认「本 TAG 批完成 / 进程已退」。
+grep -qF 'escort_watch_start' "$D/wf-run.sh" || fail "wf-run 缺 escort 在途看门狗(被删不重拉,0930 死循环复发)"
+grep -qF 'escort注销拒绝' "$D/wf-run.sh" || fail "wf-run escort_dismiss 退回盲删(未核 name 就 cron rm)"
+grep -qF '本 TAG' "$D/cmdr-escort.txt" || fail "cmdr-escort.txt 自杀条款缺「本 TAG 批完成」判据(凭日志停滞就自杀会复发)"
+grep -qF 'pgrep -f "wf-run.sh.*--tag' "$D/cmdr-escort.txt" || fail "cmdr-escort.txt 缺进程级收工复核"
 
 # 层5: 落表独立字段(主理人0915逐列验收拍板: 昵称/抖音号/主页链接/IP/留言时间独立成列)
 grep -qF '"留言时间"' "$D/push-raw-comments.js" || fail "push-raw-comments 未写留言时间列"

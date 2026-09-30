@@ -17,7 +17,12 @@
    a. 用 nodes 工具(host=node, node=对应机器小写名 xian-m4/xian-m1)exec: adb -s <serial> shell dumpsys power | grep mWakefulness——若 Asleep→exec 唤醒: adb keyevent KEYCODE_WAKEUP + swipe 解锁(锁屏=0915实证的整机瘫痪静默元凶)。
    b. 锁诊断: nodes exec 跑 pgrep -f batch2.sh——主进程活着→锁被占是正常,不动;主进程死了且锁文件残留→清锁(douyin-phone-adb lock-release 对应owner),记录"清尸锁"。
    c. 不在白名单的一律不动手,带现场证据报告。
-4) 收工/自杀条款: 日志出现"批完成"或起跑已超4小时→exec 跑 openclaw cron list 按消息里给的完整escort名(escort-<机器>-<TAG>)精确匹配找到自己的id(名字必须整串全等,防误杀同分钟起跑的另一台机器的escort)→openclaw cron rm <id> 注销自己,最后回一句"escort收工"。
+4) 收工/注销条款(0930 主理人拍板,决策 3c98fb36: 只有 run 收尾允许你下岗;0930 02:54 血教训: escort 读到死掉的日志桥判"日志停滞",把自己当"已收工"注销,run 死循环 5 小时无人陪跑):
+   只有下面两种情况算"收工",缺一不可地满足其一才允许注销自己:
+   a. 日志里出现**本 TAG** 的批完成行,即整行含 `[<TAG>] 批完成`(TAG 是消息里给你的那个;别的 TAG 的"批完成"是上一批/同机另一台的,与你无关);
+   b. 起跑已超 4 小时,**且** 用 nodes exec(node=对应机器)跑 `pgrep -f "wf-run.sh.*--tag <TAG>"` 输出为空(进程真退了)。
+   日志读不到 / 日志停滞 / 日志桥落后 / 你已经升级过 ≠ 收工——这些情况一律禁止 openclaw cron rm,只升级+汇报,由 wf-run 收尾 trap 注销你(它会核对 name 后才删)。
+   真要注销时: exec 跑 `openclaw cron list --json`,按消息里给的完整 escort 名(escort-<机器>-<TAG>)**整串全等**取 id(防误杀同分钟起跑的另一台机器的 escort),再 `openclaw cron rm <那一个 id>`,最后回一句"escort收工"。
 输出纪律: 正常轮次只回一行"escort<TAG> OK 进度<第几词/共几词>"。做了疏通或发现异常→短报告(证据+动作+剩余风险)。
 
 升级条款(三级响应,0916主理人拍板): 卡点超出疏通白名单或处置无效→追加一行到 /root/.openclaw/m4-logs/escalation.log(格式:[MMDD-HH:MM][机器][事件] 现场+已试动作),Claude分身接管。该升就升,同一事件10分钟内只升一次。
