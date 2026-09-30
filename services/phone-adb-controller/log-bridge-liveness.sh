@@ -31,7 +31,8 @@ PGREP_PATTERN='[w]f-run.sh|[h]arvest-keyword.sh|[b]atch2.sh|[o]utreach-tick.sh|[
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=15)
 
 now() { date +%s; }
-mtime() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null; }
+# GNU stat 先(-c %Y);macOS 的 BSD stat 不认 -c 才退到 -f %m。顺序不能反: GNU 的 -f 是"文件系统信息",不报错但输出 "File: ..." 垃圾
+mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null; }
 ts() { TZ=Asia/Shanghai date '+%F %T'; }
 
 # Brain 在跑清单只拉一次;拉不到当空,由 pgrep 兜底
