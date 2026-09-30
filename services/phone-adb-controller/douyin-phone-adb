@@ -1076,13 +1076,22 @@ search_time_layer() {
       die "not on a Douyin search results page (tab bar missing in readable UI tree); call open-search first"
     fi
   fi
-  # v3: 视觉定位取代 XML（自动播放页 XML 攻防每次烧 20-35s，是宏超时主因）
-  video_center="$(locate_cached vtab "顶部搜索结果标签栏中的「视频」标签" "${evidence_id}-vtab")" || die "video tab locate failed"
+  # 0930（任务 913a6b03）：树定位优先。守卫那一波读到的树里就有 视频 tab（text="视频"）和
+  # 漏斗按钮（content-desc="筛选，按钮"）的真实 bounds，零成本、不依赖 UI-TARS/OpenRouter；
+  # 09-29 三批「筛选失败」风暴 = 视觉定位外部依赖挂了（OpenRouter 402）。树读不到或节点缺失
+  # 才退回 v3 的视觉定位（自动播放页 XML 攻防每次烧 20-35s，所以树只用守卫那一波，不再重读）。
+  local coord_source="vision" fbtn_tree=""
+  if [[ -r "$pretab_xml" ]] && _ctrl="$(results_controls_from_xml "$pretab_xml" 2>/dev/null)"; then
+    video_center="$(print -- "$_ctrl" | /usr/bin/sed -n 's/^vtab=//p')"
+    fbtn_tree="$(print -- "$_ctrl" | /usr/bin/sed -n 's/^fbtn=//p')"
+    coord_source="tree"
+  else
+    video_center="$(locate_cached vtab "顶部搜索结果标签栏中的「视频」标签" "${evidence_id}-vtab")" || die "video tab locate failed"
+  fi
+  print -u2 -- "coord_source=$coord_source"
   read video_x video_y <<< "$video_center"
   "$ADB" -s "$SERIAL" shell input tap "$video_x" "$video_y"
   wait_ms 1200
-  filter_center="$(locate_cached fbtn "右上角的筛选按钮（漏斗图标）" "${evidence_id}-fbtn")" || die "filter button locate failed"
-  read filter_x filter_y <<< "$filter_center"
 
   # 0911 实测：结果页还挂着「加载中，请稍后~」时点筛选会被吞掉，
   # 单次点击 + 900ms 必然失败。改为「先验证面板是否已打开、没打开才点」的有界重试，
@@ -1099,9 +1108,14 @@ search_time_layer() {
       locate_cache_clear vtab; locate_cache_clear fbtn
       die "filter panel did not open after $(( _fp_try - 1 )) attempts; locate cache cleared for fresh retry"
     fi
-    # 每轮重新定位漏斗图标（跳过缓存），避免用一个点歪的坐标反复空点。
-    locate_cache_clear fbtn
-    filter_center="$(locate_cached fbtn "右上角的筛选按钮（漏斗图标）" "${evidence_id}-fbtn-r${_fp_try}")" || { wait_ms 1500; continue; }
+    # 前两轮用树坐标（有的话）；仍没弹出才怀疑树坐标失真，后两轮每轮重新视觉定位漏斗图标
+    # （跳过缓存），避免用一个点歪的坐标反复空点。
+    if [[ -n "$fbtn_tree" && $_fp_try -le 2 ]]; then
+      filter_center="$fbtn_tree"
+    else
+      locate_cache_clear fbtn
+      filter_center="$(locate_cached fbtn "右上角的筛选按钮（漏斗图标）" "${evidence_id}-fbtn-r${_fp_try}")" || { wait_ms 1500; continue; }
+    fi
     read filter_x filter_y <<< "$filter_center"
     "$ADB" -s "$SERIAL" shell input tap "$filter_x" "$filter_y"
     wait_ms 2200
@@ -1109,14 +1123,31 @@ search_time_layer() {
     verify_filter_visual panel "$panel_path" && break
   done
 
-  tap_filter_option "$panel_path" sort "$sort_mode"
-  tap_filter_option "$panel_path" time "$time_layer"
-  tap_filter_option "$panel_path" duration "$duration"
-  tap_filter_option "$panel_path" scope "$scope"
+  # 0930：选项点不到（色块行/列偶发识别失败，面板动画没停）不再一次作废——重抓一次面板再试；
+  # 同一行内是单选，重点已选中的格子不会取消，所以整组重点是安全的。
+  local _tfo_retry=0
+  while true; do
+    if ( tap_filter_option "$panel_path" sort "$sort_mode" \
+        && tap_filter_option "$panel_path" time "$time_layer" \
+        && tap_filter_option "$panel_path" duration "$duration" \
+        && tap_filter_option "$panel_path" scope "$scope" ); then break; fi
+    _tfo_retry=$(( _tfo_retry + 1 ))
+    (( _tfo_retry > 1 )) && die "search filter option locate failed after re-snapshot retry"
+    print -u2 -- "warning: filter option locate failed; re-snapshot panel and retry once"
+    wait_ms 700
+    panel_path="$(snapshot_evidence "${evidence_id}-panel-retry")"
+    verify_filter_visual panel "$panel_path" || die "filter panel vanished before option retry"
+  done
+  # 位置距离：legacy 等账号/版本的面板只有 4 行（无「位置距离」组）。unlimited 天然成立；
+  # same_city 点不到时降级为 unlimited 并在输出里标 location=unavailable（0930 前是整词作废）。
+  local location_effective="$location" location_unavailable=0
   _loc_err="$(mktemp)"
   if ! ( tap_filter_option "$panel_path" location "$location" ) 2>"$_loc_err"; then
     if /usr/bin/grep -q NO_LOCATION_ROW "$_loc_err" && [[ "$location" == "unlimited" ]]; then
       print -u2 -- "warning: 本机面板无「位置距离」组,location=unlimited 天然成立,跳过点选"
+    elif /usr/bin/grep -q NO_LOCATION_ROW "$_loc_err" && [[ "$location" == "same_city" ]]; then
+      print -u2 -- "warning: 本机面板无「位置距离」组,same_city 降级为 unlimited(location=unavailable)"
+      location_effective="unlimited"; location_unavailable=1
     else
       cat "$_loc_err" >&2; rm -f "$_loc_err"; die "location filter option failed"
     fi
@@ -1124,7 +1155,7 @@ search_time_layer() {
   rm -f "$_loc_err"
   wait_ms 600
   selected_path="$(snapshot_evidence "${evidence_id}-selected")"
-  verify_filter_visual selected "$selected_path" "$sort_mode" "$time_layer" "$duration" "$scope" "$location"
+  verify_filter_visual selected "$selected_path" "$sort_mode" "$time_layer" "$duration" "$scope" "$location_effective"
 
   result_position="$(locate_filter_action_button "$selected_path")" || die "could not locate verified result action"
   read result_x result_y <<< "$result_position"
@@ -1139,7 +1170,13 @@ search_time_layer() {
   print -- "time_layer=$time_layer"
   print -- "duration=$duration"
   print -- "scope=$scope"
-  print -- "location=$location"
+  if (( location_unavailable )); then
+    print -- "location=unavailable"
+    print -- "location_requested=$location"
+  else
+    print -- "location=$location"
+  fi
+  print -- "coord_source=$coord_source"
   print -- "panel_evidence=$panel_path"
   print -- "selected_evidence=$selected_path"
   print -- "results_evidence=$results_path"
@@ -2125,6 +2162,31 @@ comment_button_center_from_xml() {
   print -- "$(( (x1 + x2) / 2 )) $(( (y1 + y2) / 2 ))"
 }
 
+# 搜索结果页顶部两个控件的树定位（纯逻辑，可单测；子命令 results-controls-from-xml）。
+# 0930 任务 913a6b03 取证：09-29 三批「筛选失败」风暴（4/12、12/12、6/12）的失败词都留有
+# filter-pretab-guard.xml，树里 综合/视频/筛选 全在——守卫已过，死在后面的视觉定位：
+# 视频 tab / 漏斗按钮走 UI-TARS（经 OpenRouter），09-29 OpenRouter 余额耗尽 402，同时段视觉
+# 定位全挂。结果页的树可读、按钮带 content-desc="筛选，按钮" 且 bounds 真实，树定位零成本
+# 且不依赖外部模型；视觉只做树读不到/节点缺失时的兜底。
+_node_center_by_regex() {
+  local xml="$1" re="$2" line coords x1 y1 x2 y2
+  line="$(/usr/bin/grep -oE "$re" "$xml" | /usr/bin/head -1)"
+  [[ -n "$line" ]] || return 1
+  coords="$(print -- "$line" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
+  read x1 y1 x2 y2 <<< "$coords"
+  [[ "$x1" == <-> && "$y1" == <-> && "$x2" == <-> && "$y2" == <-> ]] || return 1
+  (( x2 > x1 && y2 > y1 )) || return 1
+  print -- "$(( (x1 + x2) / 2 )) $(( (y1 + y2) / 2 ))"
+}
+results_controls_from_xml() {
+  local xml="$1" vt fb
+  [[ -r "$xml" ]] || return 1
+  vt="$(_node_center_by_regex "$xml" '<node[^>]*text="视频"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"')" || return 1
+  print -- "vtab=$vt"
+  fb="$(_node_center_by_regex "$xml" '<node[^>]*content-desc="筛选[^"]*"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"')" || return 1
+  print -- "fbtn=$fb"
+}
+
 # 读评论按钮上的计数标签（纯逻辑，可单测）。有评论返回计数文本，零评论返回 1。
 # 2026-09-09 真机实测两种形态：
 #   content-desc="评论5902，按钮" → 有 5902 条
@@ -2768,6 +2830,25 @@ case "$command" in
     if _search_kw_matches "$2" "$3"; then print -- "kw_matches=1"; exit 0; fi
     print -- "kw_matches=0"; exit 1
     ;;
+  results-controls-from-xml)
+    # 纯判定（0930 任务 913a6b03）：结果页 UI 树 → 视频 tab / 漏斗筛选按钮中心点。不碰设备，CI 可直接测。
+    # 缺任一节点非 0 退出（调用方据此退视觉兜底，不瞎猜坐标）。
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE results-controls-from-xml UI_XML"
+    results_controls_from_xml "$2" && exit 0
+    exit 1
+    ;;
+  filter-panel-location)
+    # 纯判定（0930 任务 913a6b03）：一张筛选面板截图有没有「位置距离」行。复用 locate_filter_option
+    # 的行检测（不另抄一份算法），4 行面板 → has_location=0。不碰设备，CI 可直接测（需 Pillow）。
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE filter-panel-location PANEL_PNG"
+    [[ -r "$2" ]] || die "panel screenshot not readable: $2"
+    _fpl_err="$(mktemp)"
+    if ( locate_filter_option "$2" location same_city ) >/dev/null 2>"$_fpl_err"; then
+      rm -f "$_fpl_err"; print -- "has_location=1"; exit 0
+    fi
+    if /usr/bin/grep -q NO_LOCATION_ROW "$_fpl_err"; then rm -f "$_fpl_err"; print -- "has_location=0"; exit 0; fi
+    cat "$_fpl_err" >&2; rm -f "$_fpl_err"; exit 1
+    ;;
   on-search-results)
     # 纯判定，不碰设备：给定前台串是不是搜索结果页。排障与 CI 用。
     [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE on-search-results FOREGROUND"
@@ -3168,6 +3249,6 @@ case "$command" in
     print -- "foreground=${focus:-unknown}"
     ;;
   *)
-    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link own-profile account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid"
+    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link own-profile account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid results-controls-from-xml filter-panel-location"
     ;;
 esac
