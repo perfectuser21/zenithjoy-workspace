@@ -491,12 +491,22 @@ _leave_scratch_route() {
     fg="$(foreground_package)"
     [[ "$fg" == *"$DOUYIN_PACKAGE"* ]] || { print -u2 -- "leave-scratch: left Douyin after $i backs (fg=$fg)"; return 1 }
     [[ "$fg" == *"$SEARCH_RESULT_ACTIVITY"* ]] && continue
-    xml="$EVIDENCE_ROOT/${eid}-b${i}.xml"
-    _ui_evidence_wave "${eid}-b${i}" >/dev/null 2>&1 || { print -u2 -- "leave-scratch: ui tree unreadable after $i backs"; return 1 }
-    if _is_video_detail_xml "$xml"; then
-      print -u2 -- "leave-scratch: back on the original video detail page after $i backs"
-      return 0
-    fi
+    # 退回原详情页后视频自动续播，HONOR 上 uiautomator 永不 idle——0930 真机三波连读都只有
+    # 13 个骨架节点。与 _current_video_link_once 入口同一招：先中央点击暂停再取证；核验通过
+    # 再点一次恢复播放，让下游（倍速/录制）看到的状态与以前 deep link 重开后一致。
+    "$ADB" -s "$SERIAL" shell input tap $(( SCREEN_W / 2 )) $(( SCREEN_H * 45 / 100 )) >/dev/null 2>&1 || true
+    wait_ms 600
+    local w
+    for w in 1 2 3; do
+      xml="$EVIDENCE_ROOT/${eid}-b${i}w${w}.xml"
+      if _ui_evidence_wave "${eid}-b${i}w${w}" >/dev/null 2>&1 && _is_video_detail_xml "$xml"; then
+        print -u2 -- "leave-scratch: back on the original video detail page after $i backs (wave $w)"
+        "$ADB" -s "$SERIAL" shell input tap $(( SCREEN_W / 2 )) $(( SCREEN_H * 45 / 100 )) >/dev/null 2>&1 || true
+        wait_ms 300
+        return 0
+      fi
+      (( w < 3 )) && wait_ms 1200
+    done
     print -u2 -- "leave-scratch: landed off the search route but not on the video detail page after $i backs (fg=$fg)"
     return 1
   done
