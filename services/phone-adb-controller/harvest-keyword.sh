@@ -64,7 +64,30 @@ find /Volumes/EvidenceRAM/openclaw-phone/evidence -type f \( -name "*.png" -o -n
 SEENVIDS="$(mktemp -t seen-videos)"
 ssh -o ConnectTimeout=15 mmv "node /Users/administrator/.openclaw/leadgen-scripts/fetch-seen-videos.js '$LINE'" > "$SEENVIDS" 2>/dev/null
 
-$C --profile "$P" lock-acquire "$TAG" >/dev/null 2>&1 || { log "锁被占,退出"; rm -f "$SEENVIDS"; exit 3; }
+# 0930修复(夜实测auto09292304发现): 原来锁被占一次就直接放弃(exit 3),导致discover-benchmark.sh
+# (对标发现,同机同设备)持锁的~5分钟里,12个关键词一次性被跳过6个,一整批只跑完一半——设备并发
+# 不该等于丢词。改成限时轮询重试:默认24次×20秒≈8分钟,覆盖实测持锁时长且留余量;仍拿不到才保留
+# 原退出码3语义(batch2.sh依赖这个契约区分"锁被占"和其它失败,不能改)。
+LOCK_ACQUIRE_MAX_RETRIES="${LOCK_ACQUIRE_MAX_RETRIES:-24}"
+LOCK_ACQUIRE_POLL_SECONDS="${LOCK_ACQUIRE_POLL_SECONDS:-20}"
+_lock_acquired=0
+_lock_try=0
+while (( _lock_try < LOCK_ACQUIRE_MAX_RETRIES )); do
+  _lock_try=$((_lock_try+1))
+  if $C --profile "$P" lock-acquire "$TAG" >/dev/null 2>&1; then
+    _lock_acquired=1
+    break
+  fi
+  if (( _lock_try < LOCK_ACQUIRE_MAX_RETRIES )); then
+    log "锁被占,等待重试($_lock_try/$LOCK_ACQUIRE_MAX_RETRIES)"
+    nap "$LOCK_ACQUIRE_POLL_SECONDS"
+  fi
+done
+if (( ! _lock_acquired )); then
+  log "锁被占,重试${LOCK_ACQUIRE_MAX_RETRIES}次(约$((LOCK_ACQUIRE_MAX_RETRIES*LOCK_ACQUIRE_POLL_SECONDS))s)后仍未拿到,退出"
+  rm -f "$SEENVIDS"
+  exit 3
+fi
 # 0929修复(DoD审计发现,批次4主理人纠正): release_lock之前输出全丢进/dev/null,底层
 # "只能释放自己持有的锁"的真实校验结果完全看不见——释放失败会漏锁,下一批误判"锁被占"
 # 或者更糟地跟正在跑的上一批撞车。批次3先做了留痕,主理人纠正"拿不到确认不代表锁真没
