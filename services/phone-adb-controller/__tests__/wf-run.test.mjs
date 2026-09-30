@@ -144,6 +144,18 @@ test("wf_read_sources: 去空行/注释,每行一个对标链接或 sec_uid;文�
   assert.match(lib(`wf_read_sources ${join(dir, "nope")} ${out}; echo rc=$?`, process.env).stdout, /rc=1/);
 });
 
+// 7d150e33（阶段1）：预检段按契约 preflight 预算封顶——拿锁重试循环(PF_LOCK_TRIES×PF_LOCK_WAIT 默认 10 分钟)不得超过预算
+test("preflight_lock_acquire: 锁一直被占时受 WF_BUDGET_preflight 封顶,不等满 PF_LOCK_TRIES 轮", { skip: SKIP }, () => {
+  const home = mkdtempSync(join(tmpdir(), "wfpf-"));
+  const ctl = join(home, "ctl-busy");
+  writeFileSync(ctl, "#!/bin/sh\necho x >> \"$HOME/tries\"\nexit 1\n"); chmodSync(ctl, 0o755);
+  const t0 = Date.now();
+  const r = lib(`C=${ctl} P=p1 TAG=t WF_BUDGET_preflight=1 PF_LOCK_WAIT=1 PF_LOCK_TRIES=10 preflight_lock_acquire; echo acquired=$LOCK_ACQUIRED`, { ...process.env, HOME: home });
+  assert.match(r.stdout, /acquired=0/, r.stderr);
+  assert.ok(Date.now() - t0 < 4000, "1s 预算下最多再等 1 轮,实际 " + (Date.now() - t0) + "ms");
+  assert.ok(read(join(home, "tries")).split("x").length - 1 <= 2, "预算内最多试 2 次");
+});
+
 // 7d150e33（阶段1）：计划里的每活动预算/超时分类必须 export——batch2/harvest-keyword 是子进程，不 export 等于没编进去
 test("wf_load_plan: WF_BUDGET_*/WF_TIMEOUT_CLASS_* 随计划装入并 export 给子进程", { skip: SKIP }, () => {
   const env = { ...process.env, WF_PLAN_DIR: PLANS };
