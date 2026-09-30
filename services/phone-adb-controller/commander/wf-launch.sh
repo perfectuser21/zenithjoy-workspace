@@ -17,6 +17,8 @@ SSH_OPTS=(-o ConnectTimeout=20 -o BatchMode=yes)
 FEISHU_TO="${WF_ESCORT_TO:-chat:oc_ef60d6e3f199d90dd695b6ecc213d662}"
 ESCORT_SOP="${WF_ESCORT_SOP:-/Users/administrator/.openclaw/cmdr-escort.txt}"
 START_WAIT="${WF_START_WAIT:-8}"
+# Brain 心跳/起跑登记入口（决策 3c98fb36 阶段1，任务 17ea4536）：网关 localhost:5221 是 socat 到 us-vps Brain 的代理
+BRAIN_URL="${WF_BRAIN_URL:-http://localhost:5221}"
 
 die(){ echo "wf-launch: $2" >&2; exit "$1"; }
 # 远端 shell 单引号包裹（bash 3.2 的 printf %q 会把中文拆成八进制，不用它）
@@ -65,7 +67,16 @@ fi
 
 # ③ escort 陪跑（Commander 的「陪跑手」，SOP=cmdr-escort.txt；与旧 harvest-cron 同参数，拉起失败不阻塞）
 ESCORT_ID=""
-ESCORT_MSG="先读 $ESCORT_SOP 作为你的SOP并严格遵守辅佐三原则。本轮由 Commander 发起: cap=$CAP TAG=$TAG 机器=$HOST serial=$SERIAL profile=$PROFILE 起跑=$(bj +%H:%M) 日志=/Users/administrator/.openclaw/m4-logs/${HOST}-live.log escort名=escort-$HOST-${TAG}。"
+ESCORT_MSG="先读 $ESCORT_SOP 作为你的SOP并严格遵守辅佐三原则。本轮由 Commander 发起: cap=$CAP TAG=$TAG 机器=$HOST serial=$SERIAL profile=$PROFILE 起跑=$(bj +%H:%M) 日志=/Users/administrator/.openclaw/m4-logs/${HOST}-live.log escort名=escort-$HOST-${TAG}。每轮末尾必须发心跳(SOP 第5条): curl -s -m 8 -X POST $BRAIN_URL/api/brain/commander-heartbeat -H 'Content-Type: application/json' -d '{\"tag\":\"$TAG\",\"host\":\"$HOST\",\"serial\":\"$SERIAL\",\"escort_name\":\"escort-$HOST-$TAG\"}'"
+# 起跑登记（best-effort，Brain 单此刻还没建）：escort id 落 Brain working_memory commander_launch:<TAG>，
+# 心跳/看门狗/lost 善后随后合并进单。失败只记 stderr，绝不阻塞起跑。
+brain_launch_register(){
+  [[ -n "$ESCORT_ID" ]] || return 0
+  curl -s -m 5 -o /dev/null -X POST "$BRAIN_URL/api/brain/commander-heartbeat" -H 'Content-Type: application/json' \
+    -d "{\"kind\":\"launch\",\"tag\":\"$TAG\",\"host\":\"$HOST\",\"serial\":\"$SERIAL\",\"profile\":\"$PROFILE\",\"cap\":\"$CAP\",\"escort_name\":\"escort-$HOST-$TAG\",\"escort_id\":\"$ESCORT_ID\"}" \
+    || echo "wf-launch: Brain 起跑登记未成（不阻塞）" >&2
+  true
+}
 if (( DRY == 0 )); then
   for _try in 1 2 3; do
     ESCORT_ID=$("$OPENCLAW" cron add --timeout 90000 --name "escort-$HOST-$TAG" --agent media \
@@ -94,4 +105,5 @@ if ! rsh "grep -q WF_RUN_STARTED ~/wf-logs/$TAG.out"; then
   undo_escort
   die 5 "${START_WAIT}s 内未见 WF_RUN_STARTED，判定起跑失败: $TAILLOG"
 fi
+brain_launch_register
 echo "WF_LAUNCHED tag=$TAG host=$HOST cap=$CAP serial=$SERIAL escort=${ESCORT_ID:-none} log=~/wf-logs/$TAG.out"
