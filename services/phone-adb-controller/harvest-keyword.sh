@@ -115,8 +115,8 @@ log "卡片数: $(print -- "$CARDS" | wc -l | tr -d " ")"
 # 才归位成功的(见 douyin-phone-adb back_to_results 函数注释)，这个动作会重置筛选
 # 条件，页面上的卡片顺序/内容会变，本批一开始扫描存下的 CARD_ARR 坐标全部作废——
 # 继续拿着旧坐标点后面的卡只会点到不相干的内容(真机实证过一次:点开"NOT_ON_
-# VIDEO_DETAIL: share button absent")。命中就立刻重新扫描一次，把 CARD_ARR/i
-# 重置到新列表头，让外层循环用新坐标继续处理剩余候选，不是继续拿着废坐标瞎点。
+# VIDEO_DETAIL: share button absent")。命中就立刻重新扫描一次，把 CARD_ARR 换成新坐标、
+# 保留 i 从下一张继续处理剩余候选(0930 起,见函数内注释)，不是继续拿着废坐标瞎点。
 # 对标流(WF_SOURCE_KIND=benchmark,wf-run.sh 下传;决策 7f842d12)卡片在对标账号主页网格上: 归位走 back-to-profile 10
 # (0930 真机实测: 主页点卡+取链后要 7 次 back 才回 UserProfileActivity——取链暂存搜索页 4 + UltraDetail 2 + 1;传 5 每源第 1 个视频后必失败)
 # (一路 back 到 UserProfileActivity,见 feed/splash 立即返回 1)。不能用 back-to-results——它只认搜索结果页,
@@ -142,7 +142,15 @@ back_to_results_and_maybe_rescan() {
   fi
   btr_out="$($C --profile "$P" back-to-results 4 "$KWTXT" "$evid" </dev/null 2>&1 || true)"
   if print -- "$btr_out" | grep -q "recovered_via=research"; then
-    log "  归位触发兜底重搜(原卡片坐标已失效)，重新扫描卡片列表"
+    # 0930 事故: 取链接(deep link 重开)后 back 几乎每个视频都回不到结果页,每处理一张就重搜一次。
+    # 每词重扫封顶,超限本词剩余候选作废——无论列表/归位怎么异常,本词都必然终止。
+    RESCANS=$((RESCANS+1))
+    if (( RESCANS > RESCAN_MAX )); then
+      log "  重扫次数超限(${RESCAN_MAX}次),本关键词剩余候选作废"
+      CARD_ARR=()
+      return 0
+    fi
+    log "  归位触发兜底重搜(原卡片坐标已失效)，重新扫描卡片列表(第${RESCANS}/${RESCAN_MAX}次)"
     # 0929真机复现补丁: douyin-phone-adb里的兜底重搜只重新发起了搜索意图(等同于
     # 脚本最开头的open-search)，落地页默认是"综合"tab，不是"视频"tab——
     # search-video-cards前置要求必须在视频tab(见该子命令自己的注释)，不切tab直接
@@ -152,10 +160,12 @@ back_to_results_and_maybe_rescan() {
     $C --profile "$P" search-video-tab "${evid}-rescan-vtab" >/dev/null 2>&1 || true
     $C --profile "$P" search-time-layer six_months "${evid}-rescan-filter" most_liked unlimited unlimited "$LOC" >/dev/null 2>&1 || true
     newcards="$($C --profile "$P" search-video-cards "${evid}-rescan" 2>/dev/null | grep -E "^[0-9]+	" | head -"$MAXV")"
+    # 0930 事故: 原来这里 i=0 从头处理——同一搜索词+同筛选列表顺序稳定,从头 = 把刚处理过的视频 1
+    # 再点一遍,取链接后又回不到结果页又重搜,死循环(真机三台各重扫 116~160 次,卡 6 小时)。
+    # 与对标分支(#2024)同一思路: 保留 i 从下一张继续;万一顺序变了,已处理视频另有 seen/判定缓存兜底。
     if [[ -n "$newcards" ]]; then
       CARD_ARR=("${(@f)newcards}")
-      i=0
-      log "  重新扫描到 ${#CARD_ARR[@]} 张卡片，从头处理剩余候选"
+      log "  重新扫描到 ${#CARD_ARR[@]} 张卡片，从第 $((i+1)) 张继续"
     else
       log "  重新扫描未拿到卡片，本关键词候选到此为止"
       CARD_ARR=()
@@ -167,6 +177,8 @@ back_to_results_and_maybe_rescan() {
 typeset -a CARD_ARR
 CARD_ARR=("${(@f)CARDS}")
 i=0
+RESCANS=0
+RESCAN_MAX="${HARVEST_RESCAN_MAX:-3}"
 while (( i < ${#CARD_ARR[@]} )); do
   i=$((i+1))
   CARDLINE="${CARD_ARR[$i]}"

@@ -143,6 +143,14 @@ for W in "${(f)$(cat $WF)}"; do
     print "[$(date +%H:%M:%S)] 活动后置条件拦截(STOP),停跑后续词: $(cat "$WFR_RUN_DIR/STOP" 2>/dev/null | head -c 200)" >> $LOG
     print "BATCH2_ESCALATE=gate_stop"; STOPPED=1; break
   fi
+  # 0930 事故: 采收卡在重扫死循环里跑过 8 点,占住触达时窗——wf-run.sh 只在开跑前预检一次。
+  # 每词开头按同一口径(date +%H, 8<=H<22)再判:到点不开新词,跳出后照常落池/分拣(已采线索不能丢)。
+  # BATCH2_NOW_HOUR 仅供测试/演练覆盖当前小时。
+  H=${BATCH2_NOW_HOUR:-$(date +%H)}
+  if (( 10#$H >= 8 && 10#$H < 22 )); then
+    print "[$(date +%H:%M:%S)] 触达时窗到,采收收工(词$n: $W 起未开跑)" >> $LOG
+    break
+  fi
   # 续跑: skip_words 里的词已在上一 attempt 完成(只有账本在跑时才有这个概念)
   if wfr_on && [[ -n "${WFR_SKIP_WORDS:-}" && "|${WFR_SKIP_WORDS}|" == *"|${W}|"* ]]; then
     print "[$(date +%H:%M:%S)] 词$n: $W 已完成(续跑跳过)" >> $LOG; continue

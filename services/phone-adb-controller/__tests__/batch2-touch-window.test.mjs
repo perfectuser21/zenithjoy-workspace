@@ -40,8 +40,9 @@ function setup(words, startHour, extra = {}) {
   const hk = join(home, "hk-fake.sh"); writeFileSync(hk, FAKE_HK); chmodSync(hk, 0o755);
   writeFileSync(join(home, "hour"), startHour + "\n");
   const wf = join(home, "kw.txt"); writeFileSync(wf, words.join("\n") + "\n");
-  const env = { ...process.env, HOME: home, HARVEST_KEYWORD: hk, WFR_DISABLED: "1", BATCH_SLEEP: "0", WALL_REPORT: "/nonexistent", ...extra };
+  const env = { ...process.env, HOME: home, HARVEST_KEYWORD: hk, WFR_DISABLED: "1", BATCH_SLEEP: "0", WALL_REPORT: "/nonexistent" };
   delete env.BATCH2_NOW_HOUR;
+  Object.assign(env, extra);
   return { home, wf, env };
 }
 const readOr = (p) => (existsSync(p) ? readFileSync(p, "utf8") : "");

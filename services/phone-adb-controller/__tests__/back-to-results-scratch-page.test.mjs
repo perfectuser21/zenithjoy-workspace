@@ -187,7 +187,8 @@ test('接线守卫：back_to_results_and_maybe_rescan 命中兜底重搜必须�
   assert.ok(okStart > 0 && okEnd > okStart, '找不到重扫成功分支');
   assert.doesNotMatch(body.slice(okStart, okEnd), /\bi=0\b/,
     '重扫成功后把 i 清零从头处理——会把处理过的卡再点一遍，0930 夜间死循环就是这么来的');
-  assert.match(body, /HARVEST_RESCAN_MAX/, '关键词重扫没有次数上限，无法保证必然终止');
+  assert.match(body, /RESCANS > RESCAN_MAX/, '关键词重扫没有次数上限，无法保证必然终止');
+  assert.match(src, /RESCAN_MAX="\$\{HARVEST_RESCAN_MAX:-3\}"/, '重扫上限默认值应为 3');
 });
 
 test('接线守卫：兜底重搜后重扫卡片前必须先切回视频tab(否则永远扫到0张)', () => {
