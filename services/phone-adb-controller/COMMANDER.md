@@ -71,4 +71,4 @@
 | `escort-claude-escalation.sh` | US-Mac `~/bin/`（**必须用户上下文起**：launchd 拿不到 Keychain 凭据会 401）|
 | `disk-gateway-guard.sh` | us-vps `/root/bin/`（crontab `*/5`）|
 | `commander/wf-launch.sh` / `commander/wf-status.sh` | MMV `/Users/administrator/.openclaw/commander/`（deploy.sh 同步）|
-| `commander/skills/workflow-commander/SKILL.md` | MMV `~/openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander/`（deploy.sh 同步；agent 配置 `agents.entries.work-commander.skills` 含 workflow-commander，模型固定 anthropic/*——codex 运行时会话落在跑场池，exec 位置不固定）|
+| `commander/skills/workflow-commander/SKILL.md` | MMV `~/openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander/`（deploy.sh 同步；agent 配置 `agents.entries.work-commander.skills` 含 workflow-commander，模型 openai/*（codex 运行时，经跑场池穿透到 MMV/M4/M1 执行，0930 实测落 M1 可回调 MMV 启动器、直连 M4）；skill 第三节写明按 hostname 选择本地执行或回调 MMV）|

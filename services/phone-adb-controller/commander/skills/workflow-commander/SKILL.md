@@ -36,6 +36,15 @@ ssh xian-m4 'ls ~/bin-harvest/plans/'
 
 ## 三、发起（唯一方式）
 
+**先确认你在哪台机器上**：你的推理与 shell 经跑场池穿透执行，这一轮可能落在 MMV、xian-m4 或 xian-m1（跑哪台由探活守护按空闲内存决定，不由你选）。先跑一次 `hostname`：
+
+| hostname | 你在 | 调启动器/状态脚本的方式 |
+|---|---|---|
+| `aad17-2.macminivault.com` | MMV（网关本机） | 本地执行下面的命令 |
+| `mac-mini-m4-xian` / `mac-mini-m1-us` | 执行机 | 在命令前加 `ssh -o BatchMode=yes administrator@100.71.151.105`，回调 MMV 执行（启动器依赖 MMV 上的 openclaw CLI 与 ssh 别名） |
+
+执行机之间用 IP 直连（不要用 xian-m4 这类别名，各机 ssh 别名不一致）：xian-m4 = `jinnuoshengyuan@100.86.57.69`，xian-m1 = `xx-macmini@100.88.166.55`；落在同一台机器上就本地执行。
+
 ```bash
 bash /Users/administrator/.openclaw/commander/wf-launch.sh <能力> <机器> <profile> <serial> <biz> [--n 词数] [--push 0|1] [--sources "链接1,链接2"]
 ```
