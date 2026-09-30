@@ -478,6 +478,12 @@ _on_video_detail() {
   return 2
 }
 
+# 纯判定：详情页 UI 树里视频是否处于暂停。播放键的 content-desc 反映当前状态
+# （0930 真机证据：暂停时「暂停视频，按钮」，播放时「播放视频，按钮」）；读不到播放键按未暂停处理。
+_video_paused_xml() {
+  /usr/bin/grep -qE 'content-desc="暂停视频[^"]*，按钮"' "$1"
+}
+
 # 从暂存解析页退回「打开它之前的那张视频详情页」。只在前台仍是搜索类 Activity 时继续按返回
 # （暂存路线三层都是 SearchResultActivity），一离开搜索 Activity 就停手核验——所以永远不会
 # 退过头把原详情页也退掉；核验用入口同一把尺子 _is_video_detail_xml（分享按钮在、搜索框里
@@ -501,8 +507,15 @@ _leave_scratch_route() {
       xml="$EVIDENCE_ROOT/${eid}-b${i}w${w}.xml"
       if _ui_evidence_wave "${eid}-b${i}w${w}" >/dev/null 2>&1 && _is_video_detail_xml "$xml"; then
         print -u2 -- "leave-scratch: back on the original video detail page after $i backs (wave $w)"
-        "$ADB" -s "$SERIAL" shell input tap $(( SCREEN_W / 2 )) $(( SCREEN_H * 45 / 100 )) >/dev/null 2>&1 || true
-        wait_ms 300
+        # 下游（倍速/录制）要的是"在播放"——以前 deep link 重开的新页天然自动播放。真机实证
+        # （0930 rcp4）：详情页的播放键 content-desc 反映当前状态，「暂停视频，按钮」= 已暂停，
+        # 「播放视频，按钮」= 在播放；退回来的原页保留着取链接前被暂停的状态，盲目再点一次
+        # 会把它按回暂停（fixtest-rc 录到 -91 dB 死寂）。按状态点，不按次数点。
+        if _video_paused_xml "$xml"; then
+          "$ADB" -s "$SERIAL" shell input tap $(( SCREEN_W / 2 )) $(( SCREEN_H * 45 / 100 )) >/dev/null 2>&1 || true
+          wait_ms 300
+          print -u2 -- "leave-scratch: video was paused, tapped once to resume playback"
+        fi
         return 0
       fi
       (( w < 3 )) && wait_ms 1200
