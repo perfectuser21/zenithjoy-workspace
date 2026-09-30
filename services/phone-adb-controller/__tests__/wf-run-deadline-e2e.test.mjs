@@ -26,10 +26,11 @@ case "$*" in
   *"dumpsys telephony.registry"*) echo "  mCallState=0"; exit 0;;
 esac
 exit 0`;
+// cron list --json 回放的 escort 名按本机 HOSTKEY（wf-run 默认分支 = 小写 hostname）+ 本批 TAG 拼——#2035 起注销要核 name 才肯 rm
 const FAKE_SSH = `#!/bin/sh
 echo "$*" >> "$HOME/ssh.log"
 case "$*" in
-  *"cron list --json"*) printf '{"jobs":[{"id":"cmdr-abc","name":"escort-x"}]}\\n';;
+  *"cron list --json"*) printf '{"jobs":[{"id":"cmdr-abc","name":"escort-%s-%s"}]}\\n' "$(hostname -s | tr '[:upper:]' '[:lower:]')" "$FAKE_TAG";;
   *"kpi-gate.js"*) printf '{"verdict":"go","reason":"缺口 5","words":2}\\n';;
   *"next-keywords.js"*) printf '词一\\n词二\\n';;
 esac
@@ -83,7 +84,7 @@ function setup() {
     // 账本真跑,但不连 mmv/Brain: 探针关、scp 关、Brain 凭据指向不存在的文件
     WFR_HOME: join(home, "wfr"), WFR_NODE: process.execPath, WFR_JQ: JQ, WFR_LEDGER_MJS: join(SRC, "ledger.mjs"),
     WFR_SCP_TARGET: "", WFR_PROBE_STAGES: "", WFR_BRAIN_ENV: join(home, "no-brain.env"), BRAIN_URL: "", BRAIN_INTERNAL_TOKEN: "",
-    WF_RUN_MAX_SECONDS: "60", NOW_AFTER: "1100",
+    WF_RUN_MAX_SECONDS: "60", NOW_AFTER: "1100", FAKE_TAG: "cmd09301400",
   };
   for (const k of ["WFR_DISABLED", "WF_RUN_START_TS", "WF_NOW_TS", "BATCH2_NOW_HOUR"]) delete env[k];
   return { home, env };
@@ -128,7 +129,7 @@ test("WF_RUN_MAX_SECONDS=60 假机整链: 60 秒内自收工、锁 free、已采
 
 test("未到点(时钟不动)→ 两个词全跑,账本 final=completed", { skip: SKIP }, () => {
   const { home, env } = setup();
-  env.NOW_AFTER = "1001";
+  env.NOW_AFTER = "1001"; env.FAKE_TAG = "cmd09301401";
   const r = spawnSync(ZSH, [WR, "keyword_acquisition", "p1", "SER1", "biz", "2", "1", "--commander", "cmdr-abc", "--tag", "cmd09301401"], { encoding: "utf8", env, timeout: 90000 });
   assert.equal(r.status, 0, r.stderr.slice(-3000));
   assert.deepEqual(read(join(home, "hk.log")).trim().split("\n"), ["词一", "词二"]);
