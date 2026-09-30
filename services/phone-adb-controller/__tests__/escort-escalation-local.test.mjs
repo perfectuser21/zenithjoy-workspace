@@ -55,16 +55,17 @@ test("本地 escalation.log 追加一行 → 唤起 claude 分身,提示词含�
   const argv = read(join(home, "claude-argv.log"));
   assert.match(argv, /\[0930-18:10\]\[xian-m4\]\[采收cmd09301800\] 设备离线/, `分身没被唤起或没拿到事件行:\n${argv}`);
   assert.match(argv, new RegExp(`${esc(logs)}/escalation-reports\\.log`), "宪法里报告落点必须是本机 m4-logs 目录");
-  assert.doesNotMatch(argv, /us-vps/);
+  assert.doesNotMatch(argv, /ssh us-vps|\/opt\/openclaw\/state/, "宪法不得再让分身往 us-vps 宿主文件写简报");
   assert.equal(read(join(home, "ssh-argv.log")), "", "watcher 不该再 ssh 任何机器读升级文件");
   assert.match(read(join(home, "escort-escalation.log")), /唤起分身/);
 });
 
 test("源码守卫: watcher/wf-run/SOP/COMMANDER 的升级与日志路径全部指 MMV 本机,不再有 us-vps 宿主路径或 /root 容器路径", () => {
-  const watcher = readFileSync(SCRIPT, "utf8");
-  assert.doesNotMatch(watcher, /us-vps/);
+  const noComments = (s) => s.split("\n").filter((l) => !/^\s*#/.test(l)).join("\n"); // 注释里的病史可以提 us-vps
+  const watcher = noComments(readFileSync(SCRIPT, "utf8"));
+  assert.doesNotMatch(watcher, /ssh (-o \S+ )*us-vps/, "watcher 不得再 ssh us-vps(宪法里提醒分身别往 us-vps 打属允许)");
   assert.doesNotMatch(watcher, /\/opt\/openclaw\/state/);
-  const wfrun = readFileSync(join(SRC, "wf-run.sh"), "utf8");
+  const wfrun = noComments(readFileSync(join(SRC, "wf-run.sh"), "utf8"));
   const at = wfrun.indexOf("escalate() {");
   const body = wfrun.slice(at, at + 600);
   assert.match(body, /ssh [^\n]*\bmmv\b[^\n]*\/Users\/administrator\/\.openclaw\/m4-logs\/escalation\.log/, "wf-run escalate() 必须 ssh mmv 写 MMV 文件");

@@ -78,7 +78,7 @@ test("默认目标 = mmv:/Users/administrator/.openclaw/m4-logs/<host>-live.log(
 });
 
 test("源码守卫: 推流脚本不再出现 us-vps / /opt/openclaw/state 目标", () => {
-  const src = readFileSync(SCRIPT, "utf8");
+  const src = readFileSync(SCRIPT, "utf8").split("\n").filter((l) => !/^\s*#/.test(l)).join("\n"); // 注释里的病史可以提 us-vps
   assert.doesNotMatch(src, /us-vps/);
   assert.doesNotMatch(src, /\/opt\/openclaw\/state/);
 });
