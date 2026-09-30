@@ -168,7 +168,8 @@ test("escort_watch_start/stop：后台循环按 ESCORT_WATCH_INTERVAL 轮询，�
 test("wf-run.sh 源码接线：escort 确认后启动看门狗，退出 trap 先停看门狗再注销，注销经 escort_owned 核 name", () => {
   const src = readFileSync(WR, "utf8");
   assert.match(src, /escort_watch_start\b/, "必须启动看门狗");
-  assert.match(src, /trap 'lease_heartbeat_stop; escort_watch_stop; escort_dismiss; release_run_lock; run_finalize' EXIT INT TERM/);
+  // 40f02c5e: 放锁并入 run_finalize(锁内清场 → 放锁 → 账本),trap 不再单列 release_run_lock
+  assert.match(src, /trap 'lease_heartbeat_stop; escort_watch_stop; escort_dismiss; run_finalize' EXIT INT TERM/);
   assert.match(src, /escort_owned "\$id" "\$want"/, "escort_dismiss 必须先核 name");
   assert.match(src, /openclaw cron rm \$id/, "注销按核对过的 id");
 });

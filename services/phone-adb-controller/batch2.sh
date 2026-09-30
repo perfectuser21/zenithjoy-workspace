@@ -39,6 +39,17 @@ MAXV="${MAXV:-4}"
 # 可视化旁路(0919): 词级进度报给控制塔; 无序列号/上报器缺失/失败一律吞掉
 WR=${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}
 wr(){ [[ -n "$SERIAL" && -x "$WR" ]] && "$WR" "$@" >/dev/null 2>&1; true }
+# 40f02c5e: 词间清场前拿设备锁(控制器 lock-acquire,同 run 前缀幂等);限时重试 CLEAR_LOCK_TRIES×CLEAR_LOCK_WAIT(默认 3×5s,
+#   短等即可——拿不到只是跳过清场,真正的长等在 harvest-keyword 里)。
+C=${C:-$HOME/.local/bin/douyin-phone-adb}
+clear_lock_acquire(){
+  local i tries="${CLEAR_LOCK_TRIES:-3}"
+  for (( i = 1; i <= tries; i++ )); do
+    "$C" --profile "$P" lock-acquire "$1" </dev/null >/dev/null 2>&1 && return 0
+    (( i < tries )) && nap "${CLEAR_LOCK_WAIT:-5}"
+  done
+  return 1
+}
 SLEEP_BASE=${BATCH_SLEEP:-20}   # 词间隔基数(秒),默认与旧行为同(20+随机40);测试传 0
 OUT=~/night-$TAG.tsv; LOG=~/night-$TAG.log
 # ── 账本钩子(基座 1/7 workflow-result.sh): 一行守卫决定全部 no-op ──
@@ -184,11 +195,18 @@ for W in "${(f)$(cat $WF)}"; do
     print "[$(date +%H:%M:%S)] 词$n: $W 已完成(续跑跳过)" >> $LOG; continue
   fi
   # 归位清场: 显式回feed(0914铁律: 不假设重开=干净态)
+  # 40f02c5e: 清场是碰手机的动作,必须在设备锁内——09-29 夜两次把同机持锁任务(对标发现/触达)的现场清掉。
+  #   以本词 TAG-wN 限时拿锁(同 run 前缀幂等,harvest-keyword 随后以同名续用并在词末放锁);拿不到 = 别的 run 在用手机,
+  #   跳过清场记日志,词照常交给 harvest-keyword(它自己有 8 分钟限时等锁,#2028)。
   if [[ -n "$SERIAL" ]]; then
-    adb -s $SERIAL shell am force-stop com.ss.android.ugc.aweme 2>/dev/null
-    nap 2
-    adb -s $SERIAL shell am start -n com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.main.MainActivity >/dev/null 2>&1
-    nap 4
+    if clear_lock_acquire "$TAG-w$n"; then
+      adb -s $SERIAL shell am force-stop com.ss.android.ugc.aweme 2>/dev/null
+      nap 2
+      adb -s $SERIAL shell am start -n com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.main.MainActivity >/dev/null 2>&1
+      nap 4
+    else
+      print "[$(date +%H:%M:%S)] 锁被占,跳过清场(词$n: $W),交给 harvest-keyword 等锁" >> $LOG
+    fi
   fi
   ENC=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$W")
   WFR_LOG_FROM=$(log_off); WFR_LOG_FROM=${WFR_LOG_FROM:-0}
