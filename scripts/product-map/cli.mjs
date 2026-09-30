@@ -152,6 +152,18 @@ async function cmdCheckJson() {
     errors.push(...smokeResult.errors.map(String));
   }
 
+  // 主干活动契约（决策 3240824c）：与文本模式 check 校验同一组东西，contracts.json 漂移不能被 --json 静默放行
+  try {
+    const contracts = contractsState();
+    if (contracts.errors.length > 0) {
+      errors.push(...contracts.errors.map(String));
+    } else if (!existsSync(CONTRACTS_OUT) || readFileSync(CONTRACTS_OUT, 'utf8') !== contractsJson(contracts.digest)) {
+      errors.push('product-map/generated/contracts.json 与当前契约哈希不符。Run npm run product-map:generate.');
+    }
+  } catch (error) {
+    errors.push(`Unable to check activity contracts: ${error.message}`);
+  }
+
   console.log(JSON.stringify({ ok: errors.length === 0, errors }));
   if (errors.length > 0) process.exitCode = 1;
 }
