@@ -100,3 +100,18 @@ test('多个检查问题分别进入 errors 且失败对象严格 keys', () => w
 test('既有 check 位置参数与新增 --json 选项并存', () => withFixture(root => {
   assert.deepEqual(jsonResult(run(root, ['check', '--json']), 0), { ok: true, errors: [] });
 }));
+
+// 0930 回归：主干活动契约（product-map/contracts/*.yaml）改了但 generated/contracts.json 没重生成时，
+// 文本模式 check 报 drift 退 1，而 --json 模式漏了这项校验静默放行——两种模式必须校验同一组东西。
+test('contracts.json 与当前契约哈希不符时 --json 也必须报 drift', () => withFixture(root => {
+  const contractsPath = resolve(root, 'product-map/generated/contracts.json');
+  const stale = JSON.parse(readFileSync(contractsPath, 'utf8'));
+  stale.digest = '0'.repeat(64);
+  writeFileSync(contractsPath, `${JSON.stringify(stale, null, 2)}\n`);
+  const value = jsonResult(run(root), 1);
+  assert.equal(value.ok, false);
+  assert.ok(value.errors.some(error => /contracts\.json/.test(error)), JSON.stringify(value.errors));
+  const text = run(root, ['check']);
+  assert.equal(text.status, 1);
+  assert.match(text.stderr, /contracts\.json/);
+}));
