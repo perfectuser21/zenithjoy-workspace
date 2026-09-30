@@ -16,6 +16,6 @@
     "@astrojs/sitemap": "^3.6.0",
     "@tailwindcss/vite": "^4.1.18",
     "tailwindcss": "^4.1.18",
-    "wrangler": "^4.81.0"
+    "wrangler": "^4.144.0"
   }
 }
