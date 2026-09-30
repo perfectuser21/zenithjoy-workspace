@@ -311,3 +311,24 @@ test("http url 占位符：$BASE/$POOL/$KEYWORD/$LEAD 通过；未知占位符�
   assert.ok(validateSchema(http(`${base}/$BOGUS/tables/$POOL/records`), schema).length > 0, "$BOGUS 应被拒");
   assert.ok(validateSchema(http(`${base}/$BASE/tables/$WORD/records`), schema).length > 0, "$WORD 不是表占位符");
 });
+
+// ── 探针挂点 target（cecelia 迁移 496 / 价值流建模⑤）────────────────────────
+// 库里 coll_rescan_rate 已由迁移挂到 step；YAML 不写 target 的话，下次 sync-step-probes 会按
+// journey_cell 回挂活动级（漂移）。SSOT 是这份 YAML，所以形状必须在这里定死。
+test("coll_rescan_rate 声明 target:{type:step,key:collection.return_to_results}", () => {
+  const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
+  const p = doc.probes.find((x) => x.key === "coll_rescan_rate");
+  assert.ok(p, "缺 coll_rescan_rate");
+  assert.deepEqual(p.target, { type: "step", key: "keyword_acquisition.collection.return_to_results" });
+  assert.equal(p.journey_cell, "stage:collection", "journey_cell（活动格，翻色单位）必须保留");
+  assert.equal(validateSchema(doc, schema).length, 0, "带 target 的文档必须过 schema");
+});
+
+test("target.type 只允许 activity|step|enabler，且 key 必填、无未知键", () => {
+  let errors = validateSchema(withProbe({ target: { type: "foo", key: "x" } }), schema);
+  assert.ok(errors.some((e) => /target/.test(e)), errors.join("\n"));
+  errors = validateSchema(withProbe({ target: { type: "step" } }), schema);
+  assert.ok(errors.some((e) => /target/.test(e)), "缺 key 应被拒");
+  errors = validateSchema(withProbe({ target: { type: "enabler", key: "device_lock", extra: 1 } }), schema);
+  assert.ok(errors.some((e) => /target/.test(e)), "未知键应被拒");
+});
