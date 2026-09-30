@@ -23,12 +23,9 @@ word_rescan_metrics(){ # LOGFILE FROM → stdout "<rescan_count> <links_opened> 
   print -- "$c $l $r"
 }
 # 7d150e33(阶段1): 整批总时限(词边界判到点平滑收工)+ 落池/分拣段按契约预算封顶,函数在 wf-limits.sh;
-#   库缺失(旧部署/单独手跑)→ 函数不存在,下面全用 $+functions 守卫,行为与并入前一致
-source "${0:A:h}/wf-limits.sh" 2>/dev/null || true
-deadline_hit(){ (( $+functions[wf_deadline_reached] )) && wf_deadline_reached }
-budget_of(){ if (( $+functions[wf_budget_of] )); then wf_budget_of "$1"; else print 0; fi }
-timeout_class(){ if (( $+functions[wf_timeout_class] )); then wf_timeout_class "$1"; else print record; fi }
-run_bounded(){ if (( $+functions[wf_run_bounded] )); then wf_run_bounded "$@"; else shift; "$@"; fi }
+#   库缺失(旧部署/单独手跑)→ 兜底为"不限时",行为与并入前一致
+source "${0:A:h}/wf-limits.sh" 2>/dev/null \
+  || { wf_deadline_reached(){ return 1 }; wf_budget_of(){ print 0 }; wf_timeout_class(){ print record }; wf_run_bounded(){ shift; "$@" } }
 [[ -n "${BATCH2_LIB:-}" ]] && return 0
 P="$1"; WF="$2"; TAG="$3"; PUSH="${4:-0}"; SERIAL="${5:-}"
 # 这批活的回填去向（业务线名 / key / 研发用 dev）。不传就按 profile 走——
@@ -176,7 +173,7 @@ for W in "${(f)$(cat $WF)}"; do
   fi
   # 7d150e33: 整批总时限(wf-run 起跑 export WF_RUN_START_TS/WF_RUN_MAX_SECONDS)在词边界判——到点不开新词,
   # 已采的照常落池/分拣,末尾报 BATCH2_STOP_REASON=deadline 让 wf-run 把账本终态记 partial。不 kill 正在采的词。
-  if deadline_hit; then
+  if wf_deadline_reached; then
     print "[$(date +%H:%M:%S)] 整批总时限到(${WF_RUN_MAX_SECONDS:-14400}s),采收收工(词$n: $W 起未开跑)" >> $LOG
     DEADLINE_HIT=1; break
   fi
@@ -227,11 +224,11 @@ elif [[ "$PUSH" == "1" && -s $OUT ]]; then
   WFR_LOG_FROM=${PUSH_OFF:-0}
   # 7d150e33: 落池段按契约 delivery 预算封顶(远程调用,超时可安全收掉子进程);超时按契约分类——delivery 的 retryable
   # 声明了「scp/ssh 失败」→ 重试 1 次,仍超时记账(prc=124 → delivery failed)进入下一单元,不崩批
-  PUSH_BUDGET=$(budget_of delivery)
-  push_pool(){ run_bounded "$PUSH_BUDGET" ssh -o ConnectTimeout=20 mmv "set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; node /Users/administrator/.openclaw/leadgen-scripts/push-videos.js /tmp/$TAG.tsv $TAG $LINE && node /Users/administrator/.openclaw/leadgen-scripts/push-raw-comments.js /tmp/$TAG.tsv $TAG $LINE" >> $LOG 2>&1 }
+  PUSH_BUDGET=$(wf_budget_of delivery)
+  push_pool(){ wf_run_bounded "$PUSH_BUDGET" ssh -o ConnectTimeout=20 mmv "set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; node /Users/administrator/.openclaw/leadgen-scripts/push-videos.js /tmp/$TAG.tsv $TAG $LINE && node /Users/administrator/.openclaw/leadgen-scripts/push-raw-comments.js /tmp/$TAG.tsv $TAG $LINE" >> $LOG 2>&1 }
   push_pool; prc=$?
   if (( prc == 124 )); then
-    if [[ "$(timeout_class delivery)" == retryable ]]; then
+    if [[ "$(wf_timeout_class delivery)" == retryable ]]; then
       print "[$(date +%H:%M:%S)] 落池超预算(${PUSH_BUDGET}s),契约 retryable 重试 1 次" >> $LOG
       push_pool; prc=$?
       (( prc == 124 )) && print "[$(date +%H:%M:%S)] 落池超预算(${PUSH_BUDGET}s),重试仍超时,记账进入下一单元" >> $LOG
@@ -256,13 +253,13 @@ elif [[ "$PUSH" == "1" && -s $OUT ]]; then
   SORT_OFF=""; wfr_on && SORT_OFF=$(log_off)
   WFR_LOG_FROM=${SORT_OFF:-0}
   # 7d150e33: 分拣段按契约 scoring 预算封顶;契约 scoring 的 retryable 没声明超时 → 只记账(src=124 → scoring failed),不重试
-  SORT_BUDGET=$(budget_of scoring)
-  run_bounded "$SORT_BUDGET" ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/sort-comments.js $LINE" >> $LOG 2>&1
+  SORT_BUDGET=$(wf_budget_of scoring)
+  wf_run_bounded "$SORT_BUDGET" ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/sort-comments.js $LINE" >> $LOG 2>&1
   src=$?
   if (( src == 124 )); then
-    if [[ "$(timeout_class scoring)" == retryable ]]; then
+    if [[ "$(wf_timeout_class scoring)" == retryable ]]; then
       print "[$(date +%H:%M:%S)] 分拣超预算(${SORT_BUDGET}s),契约 retryable 重试 1 次" >> $LOG
-      run_bounded "$SORT_BUDGET" ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/sort-comments.js $LINE" >> $LOG 2>&1
+      wf_run_bounded "$SORT_BUDGET" ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/sort-comments.js $LINE" >> $LOG 2>&1
       src=$?
     fi
     (( src == 124 )) && print "[$(date +%H:%M:%S)] 分拣超预算(${SORT_BUDGET}s),记账进入下一单元" >> $LOG
