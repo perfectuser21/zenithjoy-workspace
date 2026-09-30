@@ -34,8 +34,10 @@ test('前置：zsh 可用（缺了就报红，绝不静默跳过）', () => {
 const NODE_TAIL = 'class="android.widget.EditText" package="com.ss.android.ugc.aweme" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[120,120][1000,200]" />';
 const XML_HEAD = `<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation="0"><node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="${PKG}" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[0,0][1200,2664]">`;
 const SHARE_BTN = `<node index="3" text="" resource-id="" class="android.widget.ImageView" package="${PKG}" content-desc="分享，按钮" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[1080,1500][1180,1600]" />`;
-// 从结果页点进的视频详情页：顶部保留搜索框（装着原关键词）+ 分享按钮
-const DETAIL_XML = `${XML_HEAD}<node index="1" text="${KW}" resource-id="${PKG}:id/et_search_kw" ${NODE_TAIL}${SHARE_BTN}</node></hierarchy>`;
+// 从结果页点进的视频详情页：顶部保留搜索框（装着原关键词）+ 分享按钮 + 播放键
+// （播放键 content-desc 反映当前状态：「暂停视频，按钮」=已暂停，「播放视频，按钮」=在播放，0930 真机证据）
+const playBtn = (state) => `<node index="4" text="" resource-id="" class="android.widget.ImageView" package="${PKG}" content-desc="${state === 'paused' ? '暂停视频' : '播放视频'}，按钮" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[560,1200][640,1280]" />`;
+const detailXml = (state) => `${XML_HEAD}<node index="1" text="${KW}" resource-id="${PKG}:id/et_search_kw" ${NODE_TAIL}${SHARE_BTN}${playBtn(state)}</node></hierarchy>`;
 // 分享面板：分享给 / 分享链接
 const PANEL_XML = `${XML_HEAD}${SHARE_BTN}<node index="5" text="分享给" resource-id="" class="android.widget.TextView" package="${PKG}" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[40,1900][300,1960]" /><node index="6" text="分享链接" resource-id="" class="android.widget.TextView" package="${PKG}" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[40,2300][300,2360]" /></node></hierarchy>`;
 // 暂存解析页：搜索框里是整段分享文案+短链，没有分享按钮、没有卡片
@@ -53,10 +55,10 @@ const FEED_XML = `${XML_HEAD}</node></hierarchy>`;
  *  am start search/tabs?keyword=<词> → 压 results（兜底重搜）；keyevent 4 → 出栈一层
  *  scratchPopTo: 暂存路线退完落在哪（默认 detail；'feed' 模拟退飞了）
  */
-function makeFakePhone({ scratchPopTo = 'detail' } = {}) {
+function makeFakePhone({ scratchPopTo = 'detail', playState = 'paused' } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'cvl-leave-'));
   mkdirSync(join(dir, 'fx'));
-  writeFileSync(join(dir, 'fx', 'detail.xml'), DETAIL_XML);
+  writeFileSync(join(dir, 'fx', 'detail.xml'), detailXml(playState));
   writeFileSync(join(dir, 'fx', 'panel.xml'), PANEL_XML);
   writeFileSync(join(dir, 'fx', 'scratch.xml'), SCRATCH_XML);
   writeFileSync(join(dir, 'fx', 'feed.xml'), FEED_XML);
@@ -130,6 +132,7 @@ exit 0
     run,
     stack: () => readFileSync(stack, 'utf8').trim().split('\n'),
     deeplinks: () => Number(readFileSync(join(dir, 'deeplinks'), 'utf8').trim()),
+    taps: () => Number(readFileSync(join(dir, 'taps'), 'utf8').trim()),
   };
 }
 
@@ -150,6 +153,26 @@ test('取完链接后 back-to-results 一次返回就到结果页，不触发兜
   assert.equal(r.code, 0, `back-to-results 失败: ${r.err}`);
   assert.doesNotMatch(r.out, /recovered_via=research/, `还在走兜底重搜: ${r.out}`);
   assert.match(r.out, /backs=1\b/, `应一次返回即到结果页: ${r.out}`);
+});
+
+test('退回原详情页后按状态恢复播放：页面暂停着就点一次，已在播放就不碰（盲目再点会按回暂停）', () => {
+  // 0930 fixtest-rc 实证：退回来的原页保留着取链接前被暂停的状态，多点一次 → 录到 -91 dB 死寂。
+  const paused = makeFakePhone({ playState: 'paused' });
+  assert.equal(paused.run(['current-video-link', 'cvl4']).code, 0);
+  // 详情页上的点击：中央暂停、分享按钮、分享链接、退回后探一下、恢复播放 = 5
+  assert.equal(paused.taps(), 5, `暂停态退回后应恰好再点一次恢复播放，实际详情页点击数=${paused.taps()}`);
+  const playing = makeFakePhone({ playState: 'playing' });
+  assert.equal(playing.run(['current-video-link', 'cvl5']).code, 0);
+  assert.equal(playing.taps(), 4, `已在播放时不该再点（会按回暂停），实际详情页点击数=${playing.taps()}`);
+});
+
+test('proven-to-fire 反向：修复后真机验收日志（fixtest-rc，2 张作品）回放 → 0 次兜底重搜，rescan_rate=0', () => {
+  const BATCH2 = new URL('../batch2.sh', import.meta.url).pathname;
+  const log = join(FIXTURES, 'night-fixtest-rc-w1.txt');
+  const r = spawnSync('zsh', ['-c', `BATCH2_LIB=1 source "${BATCH2}"; word_rescan_metrics "$1" "$2"`, 'zsh', log, '0'], { encoding: 'utf8' });
+  const [count, links, rate] = r.stdout.trim().split(/\s+/).map(Number);
+  assert.deepEqual([count, links, rate], [0, 2, 0], `修复后的真机日志不该有兜底重搜: ${r.stdout} ${r.stderr}`);
+  assert.doesNotMatch(readFileSync(log, 'utf8'), /归位触发兜底重搜/);
 });
 
 test('暂存路线退飞了（底下不是详情页）→ 退回 deep link 重开兜底，取链接仍成功', () => {
