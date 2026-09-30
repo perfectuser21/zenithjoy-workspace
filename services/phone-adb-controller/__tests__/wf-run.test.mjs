@@ -144,6 +144,13 @@ test("wf_read_sources: 去空行/注释,每行一个对标链接或 sec_uid;文�
   assert.match(lib(`wf_read_sources ${join(dir, "nope")} ${out}; echo rc=$?`, process.env).stdout, /rc=1/);
 });
 
+// 7d150e33（阶段1）：计划里的每活动预算/超时分类必须 export——batch2/harvest-keyword 是子进程，不 export 等于没编进去
+test("wf_load_plan: WF_BUDGET_*/WF_TIMEOUT_CLASS_* 随计划装入并 export 给子进程", { skip: SKIP }, () => {
+  const env = { ...process.env, WF_PLAN_DIR: PLANS };
+  const r = lib(`wf_load_plan keyword_acquisition; zsh -c 'echo b=$WF_BUDGET_preflight/$WF_BUDGET_collection c=$WF_TIMEOUT_CLASS_delivery/$WF_TIMEOUT_CLASS_scoring'`, env);
+  assert.match(r.stdout, /b=300\/7200 c=retryable\/record/, r.stdout + r.stderr);
+});
+
 test("wf_load_plan + wf_discover_cmd: 计划里的发现入口解析到 wf-run.sh 同目录", { skip: SKIP }, () => {
   const env = { ...process.env, WF_PLAN_DIR: PLANS };
   const k = lib(`wf_load_plan keyword_acquisition; echo rc=$? kind=$WF_SOURCE_KIND; zsh -c 'echo child_kind=$WF_SOURCE_KIND'; wf_discover_cmd`, env);
