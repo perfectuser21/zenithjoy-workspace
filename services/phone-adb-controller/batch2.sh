@@ -25,7 +25,7 @@ word_rescan_metrics(){ # LOGFILE FROM → stdout "<rescan_count> <links_opened> 
 # 7d150e33(阶段1): 整批总时限(词边界判到点平滑收工)+ 落池/分拣段按契约预算封顶,函数在 wf-limits.sh;
 #   库缺失(旧部署/单独手跑)→ 兜底为"不限时",行为与并入前一致
 source "${0:A:h}/wf-limits.sh" 2>/dev/null \
-  || { wf_deadline_reached(){ return 1 }; wf_budget_of(){ print 0 }; wf_timeout_class(){ print record }; wf_run_bounded(){ shift; "$@" } }
+  || { wf_deadline_reached(){ return 1 }; wf_stop_requested(){ return 1 }; wf_budget_of(){ print 0 }; wf_timeout_class(){ print record }; wf_run_bounded(){ shift; "$@" } }
 # nap SECONDS —— 假机整链测试(wf-run-deadline-e2e)里清场等待不真睡(同 harvest-keyword.sh nap 模式);生产不设 WF_TESTING 不受影响
 nap(){ [[ -n "${WF_TESTING:-}" ]] && return 0; /bin/sleep "$1" }
 [[ -n "${BATCH2_LIB:-}" ]] && return 0
@@ -169,6 +169,7 @@ fi
 n=0
 STOPPED=0
 DEADLINE_HIT=0
+STOP_REASON=""   # deadline / commander_stop / 空(跑完);末尾报给 wf-run
 for W in "${(f)$(cat $WF)}"; do
   [[ -z "$W" ]] && continue
   n=$((n+1))
@@ -188,7 +189,13 @@ for W in "${(f)$(cat $WF)}"; do
   # 已采的照常落池/分拣,末尾报 BATCH2_STOP_REASON=deadline 让 wf-run 把账本终态记 partial。不 kill 正在采的词。
   if wf_deadline_reached; then
     print "[$(date +%H:%M:%S)] 整批总时限到(${WF_RUN_MAX_SECONDS:-14400}s),采收收工(词$n: $W 起未开跑)" >> $LOG
-    DEADLINE_HIT=1; break
+    DEADLINE_HIT=1; STOP_REASON=deadline; break
+  fi
+  # 2fc3b6fc: Commander 请求平滑收工(touch ~/wf-runs/<TAG>.stop,三档「自动做」的正规入口)——与总时限同路径:
+  # 不开新词,已采照常落池/分拣,末尾报 BATCH2_STOP_REASON=commander_stop 让 wf-run 把账本终态记 partial。
+  if wf_stop_requested; then
+    print "[$(date +%H:%M:%S)] Commander 请求收工(${WF_STOP_FILE}),采收收工(词$n: $W 起未开跑)" >> $LOG
+    STOP_REASON=commander_stop; break
   fi
   # 续跑: skip_words 里的词已在上一 attempt 完成(只有账本在跑时才有这个概念)
   if wfr_on && [[ -n "${WFR_SKIP_WORDS:-}" && "|${WFR_SKIP_WORDS}|" == *"|${W}|"* ]]; then
@@ -296,6 +303,6 @@ elif [[ "$PUSH" == "1" && -s $OUT ]]; then
 else
   wfr stage delivery blocked 1 "push=$PUSH skipped" '[]' '{"leads_written":0,"videos_pushed":0,"duplicates_skipped":0,"readback_verified":0,"cursor_updates":0}'
 fi
-# 7d150e33: 到点收工的信号给 wf-run.sh(它据此把账本终态记 partial 原因 deadline);放在落池/分拣之后,已采线索已经落完
-(( DEADLINE_HIT )) && print "BATCH2_STOP_REASON=deadline"
+# 7d150e33 / 2fc3b6fc: 收工原因(deadline / commander_stop)给 wf-run.sh(它据此把账本终态记 partial 并带原因);放在落池/分拣之后,已采线索已经落完
+[[ -n "$STOP_REASON" ]] && print "BATCH2_STOP_REASON=$STOP_REASON"
 exit 0
