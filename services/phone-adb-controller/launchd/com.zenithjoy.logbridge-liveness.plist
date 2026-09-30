@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  MMV 日志桥活性守卫(log-bridge-liveness.sh)每 10 分钟一跑——装在 mmv 本机(任务 975aa6ec)。
+  判据: 执行机有 run 在跑而 ~/.openclaw/m4-logs/<host>-live.log 超 30 分钟没更新 → Bark(同机每小时一次)。
+  脚本由 deploy.sh(MMV_BIN_FILES)同步到 ~/bin/;plist 安装是一次性动作:
+    cp services/phone-adb-controller/launchd/com.zenithjoy.logbridge-liveness.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.zenithjoy.logbridge-liveness.plist
+  手动触发: launchctl kickstart gui/$(id -u)/com.zenithjoy.logbridge-liveness
+  日志: ~/Library/Logs/logbridge-liveness.log
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.zenithjoy.logbridge-liveness</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/administrator/bin/log-bridge-liveness.sh</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>HOME</key>
+    <string>/Users/administrator</string>
+  </dict>
+  <key>StartInterval</key>
+  <integer>600</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/administrator/Library/Logs/logbridge-liveness.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/administrator/Library/Logs/logbridge-liveness.log</string>
+</dict>
+</plist>

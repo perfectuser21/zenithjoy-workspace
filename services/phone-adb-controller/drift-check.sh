@@ -4,7 +4,7 @@
 # 根因: deploy.sh 只能人工一键触发,且部署后没有任何对账。09-27 有人只手拷了 xian-m4,
 # xian-m1 跑了一整天旧版无人发现。GitHub Actions 连不到这几台内网机器,只能由 mmv 本机定时对账。
 #
-# 做法: 从 origin/main 上的 deploy.sh 解析应部署清单(MMV_JS_FILES / MMV_TOPLEVEL_FILES /
+# 做法: 从 origin/main 上的 deploy.sh 解析应部署清单(MMV_JS_FILES / MMV_TOPLEVEL_FILES / MMV_PROBE_FILES / MMV_BIN_FILES /
 # DEVICE_SH_FILES / DEVICE_NODE_FILES / DEVICE_PLAN_FILES / DEVICE_CTL_FILES × DEVICE_CTL_DIRS),逐个用
 # `git show origin/main:<path>` 的 md5 对比三台机器上的实际文件(每台一次 ssh,路径相对 $HOME,
 # 因此 xian-m4 的 /Users/jinnuoshengyuan 与 xian-m1 的 $HOME 天然适配)。
@@ -56,6 +56,7 @@ list_targets() {
   read -ra js <<< "$(parse_array MMV_JS_FILES <<< "$deploy")"
   read -ra top <<< "$(parse_array MMV_TOPLEVEL_FILES <<< "$deploy")"
   read -ra probe <<< "$(parse_array MMV_PROBE_FILES <<< "$deploy")"
+  read -ra mbin <<< "$(parse_array MMV_BIN_FILES <<< "$deploy")"
   read -ra sh <<< "$(parse_array DEVICE_SH_FILES <<< "$deploy")"
   read -ra node <<< "$(parse_array DEVICE_NODE_FILES <<< "$deploy")"
   read -ra plan <<< "$(parse_array DEVICE_PLAN_FILES <<< "$deploy")"
@@ -67,6 +68,7 @@ list_targets() {
   for f in "${js[@]}"; do echo "$MMV_HOST .openclaw/leadgen-scripts/$f $f"; done
   for f in ${top[@]+"${top[@]}"}; do echo "$MMV_HOST .openclaw/$f $f"; done
   for f in ${probe[@]+"${probe[@]}"}; do echo "$MMV_HOST .openclaw/leadgen-scripts/$f $f"; done
+  for f in ${mbin[@]+"${mbin[@]}"}; do echo "$MMV_HOST bin/$f $f"; done
   for h in "${DEVICE_HOSTS[@]}"; do
     for f in "${sh[@]}" ${node[@]+"${node[@]}"} ${plan[@]+"${plan[@]}"}; do echo "$h bin-harvest/$f $f"; done
     for f in "${ctl[@]}"; do

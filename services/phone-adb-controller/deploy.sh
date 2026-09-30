@@ -21,9 +21,14 @@
 #   *.sh  → xian-m4:~/bin-harvest/ 和 xian-m1:~/bin-harvest/(设备/ADB层,两台各一份)
 #   cmdr-escort.txt / cmdr-stream.txt → mmv:~/.openclaw/(agent SOP,按绝对路径引用)
 #   plans/*.plan → xian-m4 / xian-m1:~/bin-harvest/plans/(wf-run.sh 的执行计划,契约生成)
+#   MMV_BIN_FILES → mmv:~/bin/(0930 任务 975aa6ec: 分身 watcher escort-claude-escalation.sh + 日志桥活性守卫
+#     log-bridge-liveness.sh,两者由 mmv launchd 拉起;watcher 换版自动 kickstart -k,守卫按 StartInterval 自然读新版)
+#   常驻 launchd 脚本换版即重载: 执行机 log-stream-push.sh(com.zenithjoy.logstreampush)与 mmv watcher 都是 KeepAlive
+#     长驻进程,mv 换 inode 后跑的仍是旧版——md5 变了就 launchctl kickstart -k,否则"部署成功"了生产照旧跑老代码。
 #
 # 不在本次范围(有意排除,别当成漏了):
-#   - *.plist: launchd 安装是一次性动作,不是"同步文件"能表达的操作
+#   - *.plist: launchd 安装是一次性动作,不是"同步文件"能表达的操作(模板与安装命令见 launchd/*.plist 头注释与
+#     com.zenithjoy.logstreampush.plist)
 #   - config/*.json: 可能含机器本地校准过的实验数据,批量覆盖有丢真实调参的风险
 #   - __tests__/、*.md、package.json: 不需要跑在生产机上
 #
@@ -62,6 +67,25 @@ MMV_JS_FILES=(
   stats-line.js notify-bark.js push-stats-lib.js
 )
 MMV_TOPLEVEL_FILES=(cmdr-escort.txt cmdr-stream.txt)
+# 0930(任务 975aa6ec): mmv 本机 launchd 拉起的两支脚本。escort-claude-escalation.sh 此前列在 DEVICE_SH_FILES 发去执行机
+# 的 bin-harvest(那里从来没人跑它),真身一直是 mmv ~/bin/ 的手工拷贝(0916 起没更新过)。
+MMV_BIN_FILES=(escort-claude-escalation.sh log-bridge-liveness.sh)
+
+# remote_md5 <host> <远端路径(可含~)> —— 文件不存在打空串;用于"换版才重载 launchd"的判断
+remote_md5() { ssh "$1" "if [ -f $2 ]; then if command -v md5 >/dev/null 2>&1; then md5 -q $2; else md5sum $2 | cut -d' ' -f1; fi; fi" 2>/dev/null; }
+# kickstart_if_changed <host> <label> <旧md5> <远端路径> —— md5 变了才 launchctl kickstart -k(KeepAlive 长驻进程读的是旧 inode)
+kickstart_if_changed() {
+  local host="$1" label="$2" before="$3" rpath="$4" after
+  after="$(remote_md5 "$host" "$rpath")"
+  if [[ "$before" == "$after" ]]; then echo "    · $label 内容未变,不重载"; return 0; fi
+  if ssh "$host" "launchctl kickstart -k gui/\$(id -u)/$label" 2>/tmp/deploy-err-$$; then
+    echo "    🔄 $label 已 kickstart -k(脚本换版)"
+  else
+    echo "    ❌ $label 重载失败: $(head -2 /tmp/deploy-err-$$)——生产仍在跑旧版,需人工 launchctl kickstart -k"
+    FAILED=1
+  fi
+  rm -f /tmp/deploy-err-$$
+}
 # 6b133a81: 探针读回+运行时拦截在 mmv 跑(workflow-result.sh probe_stage 经 ssh 调 verify-step.mjs),此前从没进过部署清单——
 # 靠 README 里手工 scp,0929 实测 mmv 上的探针 YAML 已落后 main。路径相对本目录,子目录原样落到 leadgen-scripts/ 下。
 MMV_PROBE_FILES=(
@@ -83,7 +107,7 @@ DEVICE_SH_FILES=(
   harvest-keyword.sh batch2.sh harvest-cron.sh wf-run.sh discover-keyword.sh outreach-tick.sh
   refill-profile-links.sh wall-report.sh wall-lib.sh phone-wall-push.sh
   disk-gateway-guard.sh device-job-claimer.sh log-stream-push.sh
-  workflow-result.sh escort-claude-escalation.sh discover-benchmark.sh wf-limits.sh
+  workflow-result.sh discover-benchmark.sh wf-limits.sh
 )
 # 0927 棒3b-3: 账本钩子内建进 harvest-cron.sh/batch2.sh,workflow-result.sh 硬依赖 ledger.mjs(node),
 # 少了它账本全程 WFR_WARN——单独成组,用 node --check 而不是 zsh -n 验语法。
@@ -129,13 +153,35 @@ for f in "${MMV_TOPLEVEL_FILES[@]}"; do
   echo "  ✅ $f"
 done
 
+echo "=== [2b/3] mmv:~/bin/ (launchd 长驻脚本, ${#MMV_BIN_FILES[@]} 个文件) ==="
+ssh mmv "mkdir -p ~/bin"
+for f in "${MMV_BIN_FILES[@]}"; do
+  if [[ ! -s "$D/$f" ]]; then echo "  ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
+  _before="$(remote_md5 mmv "~/bin/$f")"
+  push_atomic "$D/$f" mmv "~/bin" "$f" x
+  case "$(head -1 "$D/$f")" in *zsh*) _chk="zsh -n ~/bin/$f";; *) _chk="bash -n ~/bin/$f";; esac
+  if ssh mmv "$_chk" 2>/tmp/deploy-err-$$; then
+    echo "  ✅ $f"
+  else
+    echo "  ❌ $f 语法检查失败: $(head -3 /tmp/deploy-err-$$)"
+    FAILED=1
+  fi
+  rm -f /tmp/deploy-err-$$
+  # 分身 watcher 是 KeepAlive 长驻(tail -F 一直挂着),换版必须重载;守卫按 StartInterval 每次新起进程,自然读新版
+  [[ "$f" == "escort-claude-escalation.sh" ]] && kickstart_if_changed mmv com.zenithjoy.escortclaude "$_before" "~/bin/$f"
+done
+
 echo "=== [3/3] xian-m4 + xian-m1:~/bin-harvest/ (设备/ADB层, ${#DEVICE_SH_FILES[@]} 个文件 × 2台) ==="
 for host in xian-m4 xian-m1; do
   echo "  --- $host ---"
   for f in "${DEVICE_SH_FILES[@]}"; do
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; continue; fi
+    _before=""
+    [[ "$f" == "log-stream-push.sh" ]] && _before="$(remote_md5 "$host" "~/bin-harvest/$f")"
     push_atomic "$D/$f" "$host" "~/bin-harvest" "$f" x
     ssh "$host" "chmod +x ~/bin-harvest/$f"
+    # 推流器是 launchd KeepAlive 长驻(com.zenithjoy.logstreampush),换版不重载 = 继续往旧目标推(0930 日志桥断 12 天的病)
+    [[ "$f" == "log-stream-push.sh" ]] && kickstart_if_changed "$host" com.zenithjoy.logstreampush "$_before" "~/bin-harvest/$f"
     # douyin-phone-adb 还要送一份到 ~/.local/bin/ —— **夜批真正调的是那个**：
     # harvest-keyword.sh 里写的是 `C=~/.local/bin/douyin-phone-adb`。
     # 0924 实测两台机 bin-harvest=新版、.local/bin=旧版，下发"成功"了夜批却跑旧的

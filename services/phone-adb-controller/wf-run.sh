@@ -13,7 +13,7 @@
 # 全自动: Commander上岗 → 设备preflight → 取源 → batch2 采收 → 落池 → 效果回写
 # 0916 改序(主理人拍板): Commander是第一步不是第三步——它必须看着 preflight 与取词单,
 #   因为 0915 凌晨三批正是死在这两步、静默 exit、全线 6 小时无人知晓。
-# 失败不静默(同上): 任何非正常退出都先 escalate 再退,报警走 us-vps 宿主文件(容器死了照样能写)。
+# 失败不静默(同上): 任何非正常退出都先 escalate 再退,报警走 MMV 本机文件(网关死了照样能写)。
 # 0927 棒3b-3(决策 2ca30c4d): 账本钩子内建(原 harvest-cron-v4.sh 副本已废——与现网分叉、影子跑拿不到设备、
 #   孤儿清理误杀在跑生产批 escort)。WFR_DISABLED=1 / workflow-result.sh 缺失或不可执行 → 钩子全部 no-op。
 #   孤儿 escort 清理**不并入**: openclaw cron list 只有名字,分不清"上批 kill -9 遗留"与"同机另一批仍在跑"
@@ -309,13 +309,14 @@ case "$(hostname -s)" in
 esac
 
 # ── escalate: 升级给 Claude 分身(三级响应第2级) ──
-# 直写 us-vps **宿主**文件:0916 实证网关容器死时宿主仍活,docker exec 会失效而 ssh+文件追加照常,
-# 且分身 watcher 读的正是这个宿主文件——这条通路是"网关都死了还能叫到人"的唯一保障。
+# 直写 MMV 本机文件(ssh+文件追加,不经网关进程):0916 实证网关死时宿主仍活,这条通路是"网关都死了还能叫到人"的唯一保障。
+# 0930(任务 975aa6ec): 目标由 us-vps 宿主文件改为 MMV ~/.openclaw/m4-logs/escalation.log——0921 网关迁 MMV 后
+# escort/stream 哨兵与分身 watcher 都在 MMV,us-vps 那份已无人读。
 escalate() {
   local msg="$1"
   log "升级分身: $msg"
-  ssh -o ConnectTimeout=20 us-vps "echo '[$(date +%m%d-%H:%M)][$HOSTKEY][采收$TAG] $msg' >> /opt/openclaw/state/m4-logs/escalation.log" 2>>$LOG \
-    || log "升级通道也不可达(us-vps ssh 失败),仅留本地日志"
+  ssh -o ConnectTimeout=20 mmv "echo '[$(date +%m%d-%H:%M)][$HOSTKEY][采收$TAG] $msg' >> /Users/administrator/.openclaw/m4-logs/escalation.log" 2>>$LOG \
+    || log "升级通道也不可达(mmv ssh 失败),仅留本地日志"
 }
 # ── ⓪ 执行计划(契约组装): 无计划/无实现不得跑——在拉 escort 之前拦,拒跑要升级(多半是部署漏了 plans/ 或契约缺口) ──
 if ! wf_load_plan "$WF_ARG_CAP"; then

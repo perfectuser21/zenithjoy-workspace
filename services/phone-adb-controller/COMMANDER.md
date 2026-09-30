@@ -45,7 +45,7 @@
 
 ```
 哨兵/escort 遇到白名单外的事，或白名单动作做了仍未解决
-  └→ 追加一行到 /root/.openclaw/m4-logs/escalation.log
+  └→ 追加一行到 /Users/administrator/.openclaw/m4-logs/escalation.log（MMV 本机；0930 起 wf-run escalate()/哨兵/分身 watcher 三方统一读写这一份，us-vps 那份已退役）
        格式：[MMDD-HH:MM][机器][事件类型] 一句话现场 + 已试过什么
      └→ US-Mac watcher 唤起 Claude 分身（全能力接管，宪法约束）
           └→ 处置 + 简报落 escalation-reports.log

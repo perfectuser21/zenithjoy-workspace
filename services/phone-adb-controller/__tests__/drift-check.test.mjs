@@ -121,13 +121,15 @@ test("--list: 从真实 deploy.sh 解析出全部部署目标(两个控制器目
     const m = deploy.match(new RegExp(`^${name}=\\(([\\s\\S]*?)\\)`, "m"));
     return m[1].split("\n").map((l) => l.replace(/#.*/, "")).join(" ").split(/\s+/).filter(Boolean);
   };
-  const expected = arr("MMV_JS_FILES").length + arr("MMV_TOPLEVEL_FILES").length + arr("MMV_PROBE_FILES").length
+  const expected = arr("MMV_JS_FILES").length + arr("MMV_TOPLEVEL_FILES").length + arr("MMV_PROBE_FILES").length + arr("MMV_BIN_FILES").length
     + 2 * (arr("DEVICE_SH_FILES").length + arr("DEVICE_NODE_FILES").length + arr("DEVICE_PLAN_FILES").length
       + arr("DEVICE_CTL_FILES").length * arr("DEVICE_CTL_DIRS").length);
   assert.equal(lines.length, expected);
   for (const want of [
     "mmv .openclaw/leadgen-scripts/notify-bark.js notify-bark.js",
     "mmv .openclaw/cmdr-escort.txt cmdr-escort.txt",
+    "mmv bin/log-bridge-liveness.sh log-bridge-liveness.sh",
+    "mmv bin/escort-claude-escalation.sh escort-claude-escalation.sh",
     "xian-m4 bin-harvest/ledger.mjs ledger.mjs",
     "xian-m1 bin-harvest/harvest-cron.sh harvest-cron.sh",
     "xian-m1 bin-harvest/wf-run.sh wf-run.sh",
