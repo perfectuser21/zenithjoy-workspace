@@ -165,7 +165,7 @@ test('接线守卫：harvest-keyword.sh 主循环的6处归位调用必须全部
     + `需要人工核对每一处)`);
 });
 
-test('接线守卫：back_to_results_and_maybe_rescan 命中兜底重搜必须重扫卡片并重置 i', () => {
+test('接线守卫：back_to_results_and_maybe_rescan 命中兜底重搜必须重扫卡片,重扫成功保留 i 从下一张继续', () => {
   const kwPath = new URL('../harvest-keyword.sh', import.meta.url).pathname;
   const src = readFileSync(kwPath, 'utf8');
   const start = src.indexOf('back_to_results_and_maybe_rescan() {');
@@ -179,8 +179,16 @@ test('接线守卫：back_to_results_and_maybe_rescan 命中兜底重搜必须�
     '命中兜底重搜后没有重新扫描卡片——原坐标已经跟着重搜动作一起失效了');
   assert.match(body, /CARD_ARR=\(/,
     '没有把重扫结果写回 CARD_ARR——外层循环还是用着旧的失效坐标');
-  assert.match(body, /\bi=0\b/,
-    '没有把 i 重置为 0——外层循环会接着旧的索引位置走，跟新扫到的卡片对不上');
+  // 0930 事故翻案: 原守卫要求重扫后 i=0 从头处理——同一搜索词+同筛选列表顺序稳定，从头处理
+  // 等于把刚处理过的视频 1 再点一遍，取链接后又回不到结果页，形成死循环(真机三台各重扫 116~160 次)。
+  // 现在要求: 重扫成功那一支绝不清零 i，且有重扫次数上限保证必然终止。
+  const okStart = body.indexOf('if [[ -n "$newcards" ]]', body.indexOf('recovered_via=research'));
+  const okEnd = body.indexOf('else', okStart);
+  assert.ok(okStart > 0 && okEnd > okStart, '找不到重扫成功分支');
+  assert.doesNotMatch(body.slice(okStart, okEnd), /\bi=0\b/,
+    '重扫成功后把 i 清零从头处理——会把处理过的卡再点一遍，0930 夜间死循环就是这么来的');
+  assert.match(body, /RESCANS > RESCAN_MAX/, '关键词重扫没有次数上限，无法保证必然终止');
+  assert.match(src, /RESCAN_MAX="\$\{HARVEST_RESCAN_MAX:-3\}"/, '重扫上限默认值应为 3');
 });
 
 test('接线守卫：兜底重搜后重扫卡片前必须先切回视频tab(否则永远扫到0张)', () => {

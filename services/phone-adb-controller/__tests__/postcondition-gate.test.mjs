@@ -274,7 +274,8 @@ function b2(wordsList, extra = {}) {
   for (const b of ["ssh", "scp"]) { writeFileSync(join(home, ".local", "bin", b), FAKE_SSH0); chmodSync(join(home, ".local", "bin", b), 0o755); }
   const wf = join(home, "kw.txt"); writeFileSync(wf, wordsList.join("\n") + "\n");
   const e = { ...process.env, HOME: home, WFR_HOME: join(home, ".config", "zenithjoy"), WFR_NODE: process.execPath, WFR_JQ: JQ, WFR_LEDGER_MJS: LEDGER,
-    WFR: WFR, WFR_SCP_TARGET: "", WFR_PROBE_STAGES: "", WALL_REPORT: "/nonexistent", BATCH_SLEEP: "0", WFR_BRAIN_ENV: join(home, "none") };
+    WFR: WFR, WFR_SCP_TARGET: "", WFR_PROBE_STAGES: "", WALL_REPORT: "/nonexistent", BATCH_SLEEP: "0", WFR_BRAIN_ENV: join(home, "none"),
+    BATCH2_NOW_HOUR: "03" }; // batch2 触达时窗守卫: 固定在采收时段
   const kv = {};
   for (const args of [["init", "t9", "p1", wf, "1", "S", "h"], ["enter"]]) {
     const r = spawnSync("bash", [WFR, ...args], { encoding: "utf8", env: { ...e, ...kv } });

@@ -56,7 +56,9 @@ function setup(wordsList, { init = true, push = "0", stats = false } = {}) {
   const wf = join(home, "kw.txt"); writeFileSync(wf, wordsList.join("\n") + "\n");
   const env = { ...process.env, HOME: home, WFR_HOME: join(home, ".config", "zenithjoy"), WFR_NODE: process.execPath, WFR_JQ: JQ,
     WFR_LEDGER_MJS: join(SRC, "ledger.mjs"), WFR: join(SRC, "workflow-result.sh"), WFR_SCP_TARGET: "", WFR_PROBE_STAGES: "",
-    WALL_REPORT: "/nonexistent", BATCH_SLEEP: "0" };
+    WALL_REPORT: "/nonexistent", BATCH_SLEEP: "0",
+    // 触达时窗守卫按当前小时判,测试固定在采收时段(凌晨 3 点),否则白天跑测试一个词都不开
+    BATCH2_NOW_HOUR: "03" };
   delete env.WFR_DISABLED; delete env.WFR_SKIP_WORDS; delete env.WFR_RUN_ID;
   const kv = {};
   if (init) {
