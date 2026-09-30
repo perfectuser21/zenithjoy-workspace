@@ -16,6 +16,19 @@ wf_deadline_reached(){
   [[ "$now" == <-> ]] || return 1
   (( now - start >= max ))
 }
+# wf_stop_requested —— rc 0 = Commander 请求平滑收工(任务 2fc3b6fc,决策 018e4e84 三档「自动做」的正规入口)。
+#   约定: wf-run.sh 起跑 export WF_STOP_FILE=~/wf-runs/<TAG>.stop;Commander(escort/分身)在执行机 touch 该文件,
+#   batch2 词边界 / harvest-keyword 视频边界检测到即按 deadline 同路径收工(已采落池、放锁、账本 partial)。
+#   缺 WF_STOP_FILE(单独手跑/旧部署)→ 恒 rc 1,行为与并入前一致。禁止用 kill 代替:kill 不清手机现场、不放锁、账本 lost。
+wf_stop_requested(){
+  [[ -n "${WF_STOP_FILE:-}" && -e "$WF_STOP_FILE" ]]
+}
+# wf_stop_reason —— 打印本边界的收工原因: deadline(总时限是硬上限,优先) / commander_stop / 空(继续跑)
+wf_stop_reason(){
+  if wf_deadline_reached; then print -r -- deadline
+  elif wf_stop_requested; then print -r -- commander_stop
+  fi
+}
 # wf_budget_of KEY —— 打印活动 KEY 的预算秒数(WF_BUDGET_<KEY>);未设/非数字 → 0(不限)
 wf_budget_of(){
   local v="${(P)${:-WF_BUDGET_$1}:-0}"
