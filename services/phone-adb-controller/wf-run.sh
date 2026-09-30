@@ -23,6 +23,9 @@ WFR=${WFR:-$HOME/bin-harvest/workflow-result.sh}
 BATCH2=${BATCH2:-$HOME/bin-harvest/batch2.sh}
 WF_HOME=${${(%):-%x}:A:h}                # 本文件所在目录(执行与 source 都对),执行机上 = ~/bin-harvest
 WF_PLAN_DIR=${WF_PLAN_DIR:-$WF_HOME/plans}
+# 7d150e33(阶段1): 整批总时限 + 每活动按契约预算封顶,函数在 wf-limits.sh(deploy.sh 同步);库缺失 → 兜底为"不限时",行为与并入前一致
+source "$WF_HOME/wf-limits.sh" 2>/dev/null \
+  || { wf_deadline_reached(){ return 1 }; wf_budget_of(){ print 0 }; wf_timeout_class(){ print record }; wf_run_bounded(){ shift; "$@" } }
 # wf_parse_args ARGS... —— 位置参数 <能力> <profile> <serial> <biz> [n] [push],选项可出现在任意位置
 wf_parse_args(){
   local -a pos
@@ -47,6 +50,9 @@ wf_load_plan(){
   source "$f" || { WF_LOAD_ERR="执行计划 $f 读取失败"; return 1; }
   [[ -n "$WF_STAGES" && -n "$WF_SOURCE_KIND" && -n "$WF_DISCOVER_CMD" ]] || { WF_LOAD_ERR="执行计划 $f 缺 WF_STAGES/WF_SOURCE_KIND/WF_DISCOVER_CMD"; return 1; }
   export WF_SOURCE_KIND   # harvest-keyword.sh 按它选逐视频归位方式(benchmark = back-to-profile)
+  # 7d150e33: 计划里的每活动预算 WF_BUDGET_<key> / 超时分类 WF_TIMEOUT_CLASS_<key> 要给 batch2/harvest-keyword 子进程看到
+  local k
+  for k in ${(k)parameters}; do [[ "$k" == WF_BUDGET_* || "$k" == WF_TIMEOUT_CLASS_* ]] && export "$k"; done
   if [[ -n "$WF_MISSING" && "${WF_ALLOW_MISSING:-0}" != "1" ]]; then
     WF_LOAD_ERR="拒跑: $1 有步骤未实现(无实现不得跑,真机调试加 --allow-missing): $WF_MISSING"; return 2
   fi
@@ -226,12 +232,19 @@ lease_heartbeat_stop(){
 # preflight_lock_acquire: 以本批 TAG 拿设备锁(契约 preflight.acquire_device_lock),拿到 LOCK_ACQUIRED=1;
 #   被占(触达 tick 在发,单 tick 预算 25 分钟)重试 PF_LOCK_TRIES=10 次(间隔 PF_LOCK_WAIT=60 秒)仍拿不到 → 0(pf_lock_acquired 不过 → stop_run 不开采)。
 #   逐词 harvest-keyword.sh 以 TAG-wN 申请同一把锁,douyin-phone-adb same_run_lock 前缀判同 run → 幂等续用。
+#   7d150e33: 预检段按契约 preflight 预算(WF_BUDGET_preflight,现值 300s)封顶——再等一轮会超预算就不等了(lock_busy 在契约里本就是 retryable,预算只给重试上限)
 preflight_lock_acquire(){
-  local i tries="${PF_LOCK_TRIES:-10}"
+  local i tries="${PF_LOCK_TRIES:-10}" wait="${PF_LOCK_WAIT:-60}" t0=$(date +%s) budget
+  budget=$(wf_budget_of preflight)
   LOCK_ACQUIRED=0
   for (( i = 1; i <= tries; i++ )); do
     if "$C" --profile "$P" lock-acquire "$TAG" </dev/null >/dev/null 2>>${LOG:-/dev/null}; then LOCK_ACQUIRED=1; break; fi
-    (( i < tries )) && /bin/sleep "${PF_LOCK_WAIT:-60}"
+    (( i < tries )) || break
+    if (( budget > 0 && $(date +%s) - t0 + wait > budget )); then
+      (( $+functions[log] )) && log "预检拿锁: 再等 ${wait}s 会超预检预算(${budget}s),不再重试(第${i}次)"
+      break
+    fi
+    /bin/sleep "$wait"
   done
   export LOCK_ACQUIRED
 }
@@ -278,6 +291,8 @@ C=${C:-$HOME/.local/bin/douyin-phone-adb}
 DOUYIN_ACCOUNT_REGISTRY="${DOUYIN_ACCOUNT_REGISTRY:-$HOME/.config/openclaw/douyin-account-routes.tsv}"
 LOG=~/harvest-cron.log
 log(){ print -- "[$(date +%m%d-%H:%M:%S)] [$TAG] $*" >> $LOG }
+# nap SECONDS —— 假机整链测试(wf-run-deadline-e2e)里预检清场等待不真睡(同 harvest-keyword.sh nap 模式);生产不设 WF_TESTING 不受影响
+nap(){ [[ -n "${WF_TESTING:-}" ]] && return 0; /bin/sleep "$1" }
 # 可视化旁路(0919): 每阶段报给控制塔工作机页; 上报器缺失/失败一律吞掉, 绝不影响采收
 WR=${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}
 wr(){ [[ -x "$WR" ]] && "$WR" "$@" >/dev/null 2>&1; true }
@@ -319,7 +334,9 @@ fi
 export DISCOVER_CMD
 # 起跑回执(启动器/Commander 看 nohup 日志确认已起跑);计划拒跑时不打
 print -r -- "WF_RUN_STARTED tag=$TAG cap=$WF_CAP serial=$SERIAL"
-log "执行计划: $WF_CAP 源=$WF_SOURCE_KIND 发现=$DISCOVER_CMD${WF_MISSING:+ 未实现(--allow-missing 放行)=$WF_MISSING}"
+# 7d150e33: 整批总时限——起跑记时刻,默认 4h(WF_RUN_MAX_SECONDS 可覆盖);batch2 在词边界、harvest-keyword 在视频边界各自判到点平滑收工
+export WF_RUN_START_TS=$(date +%s) WF_RUN_MAX_SECONDS="${WF_RUN_MAX_SECONDS:-14400}"
+log "执行计划: $WF_CAP 源=$WF_SOURCE_KIND 发现=$DISCOVER_CMD 总时限=${WF_RUN_MAX_SECONDS}s${WF_MISSING:+ 未实现(--allow-missing 放行)=$WF_MISSING}"
 WF_TITLE=获客采收; [[ "$WF_SOURCE_KIND" == "benchmark" ]] && WF_TITLE=对标采收
 wr start "$SERIAL" "$WF_TITLE·$BIZ" "$WF_STAGES"
 # 服务端镜像给本批的 Brain 单号(棒1 回执线,决策 702949b6): 紧跟 start 读,export 给 workflow-result.sh 做 stage/finalize 回执;
@@ -432,9 +449,9 @@ ACCOUNT_VERIFIED=0
 # 触达刚私信过的他人主页,读号子命令读成别人的号→误判账号不符拦整批;22:30 批停在搜索结果页,
 # 3 步 verified back 退不出。冷启动落在首页,读号子命令再自证是自己主页(第一道闸在它里面)。
 adb -s $SERIAL shell am force-stop com.ss.android.ugc.aweme 2>/dev/null
-/bin/sleep 2
+nap 2
 adb -s $SERIAL shell am start -n com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.main.MainActivity >/dev/null 2>&1
-/bin/sleep 4
+nap 4
 ACCTOUT="$($C --profile "$P" account-current "$TAG-preflight-acct" </dev/null 2>&1)"
 DOUYIN_ID="$(print -- "$ACCTOUT" | sed -n "s/^douyin_id=//p")"
 if [[ -z "$DOUYIN_ID" ]]; then
@@ -463,7 +480,9 @@ if (( H >= 8 && H < 22 )); then log "白天触达时窗,采收退让"; wr step "
 # ── ③ KPI 闸(0916 主理人要求"KPI驱动自动获客,不是一天三次") ──
 # 目标表是 SSOT(飞书「获客｜经营目标」tblpwc9GF9mIhdAG): 改目标改表,不改代码不改 crontab。
 # 达标即退让(省设备省额度),未达标按缺口放大词数。闸自身故障 fail-open(宪法帮不拦)。
-KPI_JSON=$(ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/kpi-gate.js '$BIZ' $N" 2>>$LOG)
+# 7d150e33: 取源段(KPI 闸 + 词单)借发现活动预算封顶——词单是发现的输入,远程调用超时收掉子进程即走既有 fail-open/兜底词单路径
+SRC_BUDGET=$(wf_budget_of discovery)
+KPI_JSON=$(wf_run_bounded "$SRC_BUDGET" ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/kpi-gate.js '$BIZ' $N" 2>>$LOG)
 KPI_VERDICT=$(print -r -- "$KPI_JSON" | sed -n 's/.*"verdict":"\([a-z]*\)".*/\1/p')
 KPI_REASON=$(print -r -- "$KPI_JSON" | sed -n 's/.*"reason":"\([^"]*\)".*/\1/p')
 KPI_WORDS=$(print -r -- "$KPI_JSON" | sed -n 's/.*"words":\([0-9]*\).*/\1/p')
@@ -500,7 +519,8 @@ if [[ "$WF_SOURCE_KIND" == "benchmark" ]]; then
 else
   KWERR=/tmp/kwerr-$TAG.txt
   KWCACHE=~/.kw-cache-$P.txt
-  ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/next-keywords.js '$BIZ' $N" > $WF 2>$KWERR
+  wf_run_bounded "$SRC_BUDGET" ssh -o ConnectTimeout=20 mmv "node /Users/administrator/.openclaw/leadgen-scripts/next-keywords.js '$BIZ' $N" > $WF 2>$KWERR
+  (( $? == 124 )) && print "取词单超发现预算(${SRC_BUDGET}s),远程调用已收掉" >> $KWERR
   [[ -s $KWERR ]] && cat $KWERR >> $LOG
   if [[ -s $WF ]]; then
     cp $WF $KWCACHE 2>/dev/null && log "词单已存本地缓存"
@@ -546,6 +566,12 @@ lease_heartbeat_start "$SERIAL"
 B2OUT=$(/bin/zsh "$BATCH2" "$P" "$WF" "$TAG" "$PUSH" "$SERIAL" 2>&1 | tee -a $LOG || true)
 lease_heartbeat_stop
 if print -r -- "$B2OUT" | grep -q 'BATCH2_ESCALATE=hash_mismatch'; then escalate "词单在 init 后被改动(hash 不一致)，本批已停(fail-closed)"; fi
+# 7d150e33: batch2 报到点收工 → 账本终态记 partial(原因 deadline),收工动作(放锁/回桌面/escort 注销/效果回写)照常
+if print -r -- "$B2OUT" | grep -q 'BATCH2_STOP_REASON=deadline'; then
+  export WFR_FINAL_REASON=deadline
+  log "总时限到,平滑收工(${WF_RUN_MAX_SECONDS}s): 已采线索已落池,账本终态记 partial"
+  wr note "$SERIAL" "总时限到,平滑收工"
+fi
 GATE_STOPPED=0
 if gate_check "采收"; then GATE_STOPPED=1; log "活动后置条件拦截停跑: ${WFR_GATE_STAGE:-}:${WFR_GATE_KEYS:-}"; fi
 # 本批线索数随 done 上报(0929): 0 条线索的批次与出线索的批次不能都只是一个 completed。

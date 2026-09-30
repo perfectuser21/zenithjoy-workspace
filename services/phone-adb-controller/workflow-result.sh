@@ -314,6 +314,9 @@ case "$cmd" in
       [[ -s "${WFR_RUN_DIR:-}/STOP" ]] && stopinfo=" gate_stop=$("$WFR_JQ" -r '.stage + ":" + ((.failed // []) | join(","))' "${WFR_RUN_DIR:-}/STOP" 2>/dev/null)"
       if [[ -n "${WFR_LAST_ARTIFACT:-}" && "$ok" == 1 && -z "$stopinfo" ]] \
          && [[ "$("$WFR_JQ" -r '.status' "${WFR_LAST_ARTIFACT:-/nonexistent}" 2>/dev/null)" == completed ]]; then final=completed; else final=failed; fi
+      # 7d150e33(阶段1): 整批总时限到点平滑收工(已采落池/放锁/回桌面都做了)——本可 completed 的 run 终态记 partial 并带原因;
+      # 有拦截(STOP)/自检不过仍是 failed,原因不覆盖失败
+      if [[ "$final" == completed && -n "${WFR_FINAL_REASON:-}" ]]; then final=partial; stopinfo="$stopinfo reason=$WFR_FINAL_REASON"; fi
       msg="$msg$stopinfo"
       echo "WFR_FINALIZE_OK=$ok"; echo "WFR_FINALIZE_MSG='$msg'"; echo "WFR_FINALIZE_FINAL=$final"
       extra=$("$WFR_JQ" -cn --argjson ok "$ok" --arg msg "$msg" '[{type:"finalize",ok:$ok,msg:$msg}]')

@@ -33,7 +33,29 @@ test('关键词获客：计划 = 5 段阶段串 + keyword 源 + discover-keyword
     WF_SOURCE_KIND: 'keyword',
     WF_DISCOVER_CMD: 'discover-keyword.sh',
     WF_MISSING: '',
+    ...BUDGETS,
   });
+});
+
+// 7d150e33（阶段1）：契约每活动 budget.max_duration_s 编进计划（WF_BUDGET_<key>），执行器按它封顶各活动段；
+// 超时时的失败分类 WF_TIMEOUT_CLASS_<key>：活动 failure.retryable 里有「超时/timeout/scp/ssh 失败」条目 → retryable（重试一次），
+// 否则 record（记账后进入下一单元）。两个能力共享同一套预算（benchmark 的非 discovery 活动都是 ref 过来的）。
+const BUDGETS = {
+  WF_BUDGET_preflight: '300', WF_BUDGET_discovery: '600', WF_BUDGET_qualification: '1800', WF_BUDGET_collection: '7200',
+  WF_BUDGET_scoring: '1800', WF_BUDGET_delivery: '600', WF_BUDGET_outreach: '1500', WF_BUDGET_cleanup: '120',
+  WF_TIMEOUT_CLASS_preflight: 'record', WF_TIMEOUT_CLASS_discovery: 'record', WF_TIMEOUT_CLASS_qualification: 'record',
+  WF_TIMEOUT_CLASS_collection: 'record', WF_TIMEOUT_CLASS_scoring: 'record', WF_TIMEOUT_CLASS_delivery: 'retryable',
+  WF_TIMEOUT_CLASS_outreach: 'record', WF_TIMEOUT_CLASS_cleanup: 'record',
+};
+
+test('活动 failure.retryable 含「超时」→ 该活动超时分类 retryable；缺 budget → 0', () => {
+  const ctx = fresh();
+  act(ctx, 'keyword_acquisition', 'discovery').failure.retryable.push('发现超时 timeout');
+  delete act(ctx, 'keyword_acquisition', 'scoring').budget;
+  const r = planFor(ctx, 'keyword_acquisition');
+  assert.ok(r.ok, r.errors.join('\n'));
+  assert.equal(r.env.WF_TIMEOUT_CLASS_discovery, 'retryable');
+  assert.equal(r.env.WF_BUDGET_scoring, '0');
 });
 
 test('对标链接获客：发现四步已实现（338e3ec7）→ 默认放行，WF_MISSING 为空', () => {
@@ -47,6 +69,7 @@ test('对标链接获客：发现四步已实现（338e3ec7）→ 默认放行�
     WF_SOURCE_KIND: 'benchmark',
     WF_DISCOVER_CMD: 'discover-benchmark.sh',
     WF_MISSING: '',
+    ...BUDGETS,
   });
 });
 

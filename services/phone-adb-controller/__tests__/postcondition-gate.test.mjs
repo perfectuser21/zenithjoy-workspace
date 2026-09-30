@@ -243,6 +243,23 @@ test("finalize: 未给 WFR_LOCK_RELEASED → lock_released=0（不再写死 1）
   assert.equal(art(kv, "cleanup.1").metrics.lock_released, 0);
 });
 
+// 7d150e33（阶段1）：整批总时限到点平滑收工——账本终态不是 completed 也不是 failed，是 partial 并记原因；
+// 有 STOP（后置条件拦截）时仍是 failed，原因不覆盖失败。
+test("finalize: WFR_FINAL_REASON=deadline 且本可 completed → 终态 partial 并记 reason；有 STOP 仍 failed", { skip: !JQ && "no jq" }, () => {
+  const d = mkdtempSync(join(tmpdir(), "gate-"));
+  const ssh = fakeSsh(d);
+  const kv = started(d, ssh);
+  const f = wfr(d, { ...kv, PATH: ssh.PATH, WFR_LOCK_RELEASED: "1", WFR_CLOSE_APP_ATTEMPTS: "1", WFR_SAFE_DESKTOP_VISIBLE: "1", WFR_FINAL_REASON: "deadline" }, "finalize");
+  assert.equal(f.kv.WFR_FINALIZE_OK, "1", f.err);
+  assert.equal(f.kv.WFR_FINALIZE_FINAL, "partial", "到点收工的 run 终态是 partial");
+  assert.match(f.kv.WFR_FINALIZE_MSG, /reason=deadline/);
+  const d2 = mkdtempSync(join(tmpdir(), "gate-"));
+  const ssh2 = fakeSsh(d2, { preflight: FAIL_STOP("preflight", "pf_lock_acquired", "retryable") });
+  const kv2 = started(d2, ssh2, { LOCK_ACQUIRED: "0" });
+  const f2 = wfr(d2, { ...kv2, PATH: ssh2.PATH, WFR_LOCK_RELEASED: "1", WFR_FINAL_REASON: "deadline" }, "finalize");
+  assert.equal(f2.kv.WFR_FINALIZE_FINAL, "failed", "STOP 拦截优先于 partial");
+});
+
 test("outreach-run: 触达进账本——建 outreach run、写 outreach 工件（闭集四键）并读回判 gate", { skip: !JQ && "no jq" }, () => {
   const d = mkdtempSync(join(tmpdir(), "gate-"));
   const ssh = fakeSsh(d, { outreach: FAIL_STAGE("outreach", "out_no_stuck_inflight") });

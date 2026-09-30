@@ -59,7 +59,17 @@ export function planFor(ctx, capId, { allowMissing = false } = {}) {
     WF_DISCOVER_CMD: src.runtime.entry,
     WF_MISSING: missing.join(','),
   };
+  // 7d150e33（阶段1）：每活动 budget.max_duration_s 编进计划，执行器按它封顶各活动段（缺 budget = 0 = 不限）；
+  // 超时时按契约 failure 分类：retryable 里声明了超时类条目 → retryable（重试一次），否则 record（记账后进入下一单元）
+  for (const a of acts) env[`WF_BUDGET_${a.key}`] = String(a.budget?.max_duration_s ?? 0);
+  for (const a of acts) env[`WF_TIMEOUT_CLASS_${a.key}`] = timeoutClass(a);
   return { ok: true, errors: [], activities: acts, env };
+}
+
+// 超时算不算 retryable：看活动 failure.retryable 有没有把超时/远程调用失败声明成可重试（delivery 的「scp/ssh 失败」即是）
+const TIMEOUT_RETRYABLE_RE = /超时|timeout|scp\/ssh 失败/i;
+function timeoutClass(a) {
+  return (a.failure?.retryable || []).some((s) => TIMEOUT_RETRYABLE_RE.test(String(s))) ? 'retryable' : 'record';
 }
 
 const sq = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
