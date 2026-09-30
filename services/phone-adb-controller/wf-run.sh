@@ -336,7 +336,12 @@ export DISCOVER_CMD
 print -r -- "WF_RUN_STARTED tag=$TAG cap=$WF_CAP serial=$SERIAL"
 # 7d150e33: 整批总时限——起跑记时刻,默认 4h(WF_RUN_MAX_SECONDS 可覆盖);batch2 在词边界、harvest-keyword 在视频边界各自判到点平滑收工
 export WF_RUN_START_TS=$(date +%s) WF_RUN_MAX_SECONDS="${WF_RUN_MAX_SECONDS:-14400}"
-log "执行计划: $WF_CAP 源=$WF_SOURCE_KIND 发现=$DISCOVER_CMD 总时限=${WF_RUN_MAX_SECONDS}s${WF_MISSING:+ 未实现(--allow-missing 放行)=$WF_MISSING}"
+# 2fc3b6fc: Commander 平滑收工的正规入口(三档「自动做」,决策 018e4e84)——起跑登记 ~/wf-runs/<TAG>.stop 约定;
+#   escort/分身在执行机 touch 该文件,batch2 词边界 / harvest-keyword 视频边界检测到即按 deadline 同路径收工。
+#   起跑先清残留(同 TAG 上一次遗留的 stop 会让新批第 1 个词都不开);收工 finalize 后再清。
+export WF_STOP_FILE="$HOME/wf-runs/$TAG.stop"
+mkdir -p "$HOME/wf-runs"; rm -f "$WF_STOP_FILE"
+log "执行计划: $WF_CAP 源=$WF_SOURCE_KIND 发现=$DISCOVER_CMD 总时限=${WF_RUN_MAX_SECONDS}s 收工入口=touch $WF_STOP_FILE${WF_MISSING:+ 未实现(--allow-missing 放行)=$WF_MISSING}"
 WF_TITLE=获客采收; [[ "$WF_SOURCE_KIND" == "benchmark" ]] && WF_TITLE=对标采收
 wr start "$SERIAL" "$WF_TITLE·$BIZ" "$WF_STAGES"
 # 服务端镜像给本批的 Brain 单号(棒1 回执线,决策 702949b6): 紧跟 start 读,export 给 workflow-result.sh 做 stage/finalize 回执;
@@ -419,6 +424,8 @@ device_cleanup_in_lock(){
 run_finalize(){
   device_cleanup_in_lock
   release_run_lock
+  # 2fc3b6fc: 收工后清 stop 文件(账本已带 reason=commander_stop,文件本身不是证据;留着会让同 TAG 重跑第 1 个词都不开)
+  [[ -n "${WF_STOP_FILE:-}" ]] && rm -f "$WF_STOP_FILE"
   wfr_on || return 0
   finalize_needed || { log "账本finalize: skipped(not_initialized, 正常退让)"; return 0; }
   # 0929批次4(6b133a81): cleanup 活动"关App"/"回安全桌面"真跑真记——现在在 device_cleanup_in_lock 里(锁内)做,
@@ -598,11 +605,17 @@ lease_heartbeat_start "$SERIAL"
 B2OUT=$(/bin/zsh "$BATCH2" "$P" "$WF" "$TAG" "$PUSH" "$SERIAL" 2>&1 | tee -a $LOG || true)
 lease_heartbeat_stop
 if print -r -- "$B2OUT" | grep -q 'BATCH2_ESCALATE=hash_mismatch'; then escalate "词单在 init 后被改动(hash 不一致)，本批已停(fail-closed)"; fi
-# 7d150e33: batch2 报到点收工 → 账本终态记 partial(原因 deadline),收工动作(放锁/回桌面/escort 注销/效果回写)照常
-if print -r -- "$B2OUT" | grep -q 'BATCH2_STOP_REASON=deadline'; then
-  export WFR_FINAL_REASON=deadline
+# 7d150e33 / 2fc3b6fc: batch2 报收工原因(deadline 到点 / commander_stop Commander touch 了 stop 文件)→ 账本终态记 partial 并带原因,
+#   收工动作(放锁/回桌面/escort 注销/效果回写)照常
+B2_STOP_REASON=$(print -r -- "$B2OUT" | sed -n 's/^BATCH2_STOP_REASON=//p' | tail -1)
+if [[ "$B2_STOP_REASON" == deadline ]]; then
+  export WFR_FINAL_REASON="$B2_STOP_REASON"
   log "总时限到,平滑收工(${WF_RUN_MAX_SECONDS}s): 已采线索已落池,账本终态记 partial"
   wr note "$SERIAL" "总时限到,平滑收工"
+elif [[ "$B2_STOP_REASON" == commander_stop ]]; then
+  export WFR_FINAL_REASON="$B2_STOP_REASON"
+  log "Commander 请求收工,平滑收工($WF_STOP_FILE): 已采线索已落池,账本终态记 partial"
+  wr note "$SERIAL" "Commander 请求收工,平滑收工"
 fi
 GATE_STOPPED=0
 if gate_check "采收"; then GATE_STOPPED=1; log "活动后置条件拦截停跑: ${WFR_GATE_STAGE:-}:${WFR_GATE_KEYS:-}"; fi

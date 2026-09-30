@@ -34,7 +34,7 @@ nap(){ [[ -n "${HARVEST_KEYWORD_TESTING:-}" ]] && return 0; /bin/sleep "$1" }
 # 7d150e33(阶段1): 整批总时限(视频边界判到点平滑收工)+ 发现/采集段按契约预算封顶,函数在 wf-limits.sh;
 #   库缺失(旧部署/单独手跑)→ 兜底为"不限时",行为与并入前一致
 source "${0:A:h}/wf-limits.sh" 2>/dev/null \
-  || { wf_deadline_reached(){ return 1 }; wf_budget_of(){ print 0 }; wf_timeout_class(){ print record }; wf_run_bounded(){ shift; "$@" } }
+  || { wf_deadline_reached(){ return 1 }; wf_stop_requested(){ return 1 }; wf_budget_of(){ print 0 }; wf_timeout_class(){ print record }; wf_run_bounded(){ shift; "$@" } }
 # ── 先判后采(任务 8bb3af55,决策 f18f56b8①「判定合格的视频才采集」) ──
 # 此前视频判定(judge-video.js)挂在 batch2.sh 落池之后跑——评论早已采完落池,判了也挡不住。
 # 现在每个视频在开评论区之前经 ssh 到 mmv(PG 与模型凭据只在 mmv)调 qualify-video.js:
@@ -81,6 +81,12 @@ while (( _lock_try < LOCK_ACQUIRE_MAX_RETRIES )); do
   # 7d150e33: 等锁期间总时限到点 → 本词不开跑(不拿锁、不发现),交给 batch2 在词边界收工
   if wf_deadline_reached; then
     log "整批总时限到(${WF_RUN_MAX_SECONDS:-14400}s),本词不开跑"
+    rm -f "$SEENVIDS"
+    exit 0
+  fi
+  # 2fc3b6fc: Commander 请求平滑收工(stop 文件)同路径——不拿锁、不发现,交给 batch2 在词边界收工
+  if wf_stop_requested; then
+    log "Commander 请求收工,本词不开跑"
     rm -f "$SEENVIDS"
     exit 0
   fi
@@ -205,6 +211,11 @@ while (( i < ${#CARD_ARR[@]} )); do
   # 7d150e33: 视频边界判整批总时限与采集段预算——到点/超预算都不开下一个视频,已采的照常交给 batch2,trap 放锁
   if wf_deadline_reached; then
     log "整批总时限到(${WF_RUN_MAX_SECONDS:-14400}s),本词剩余候选不采"
+    break
+  fi
+  # 2fc3b6fc: Commander 请求平滑收工(stop 文件)——不开下一个视频,已采的照常交给 batch2,trap 放锁
+  if wf_stop_requested; then
+    log "Commander 请求收工,本词剩余候选不采"
     break
   fi
   if (( COLLECT_BUDGET > 0 && $(date +%s) - COLLECT_T0 >= COLLECT_BUDGET )); then

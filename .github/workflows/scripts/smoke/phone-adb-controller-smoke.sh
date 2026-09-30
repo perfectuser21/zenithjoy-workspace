@@ -243,9 +243,19 @@ grep -qF '$workflow-commander' "$D/commander/AGENTS.md" || fail "AGENTS.md 启�
 grep -qF 'COMMANDER_STAGE_RESULT' "$D/commander/AGENTS.md" && fail "AGENTS.md 仍含 n8n V4 协议(COMMANDER_STAGE_RESULT)"
 grep -qF 'commander/AGENTS.md' "$D/deploy.sh" || fail "deploy.sh 未同步 commander/AGENTS.md 到 work-commander 工作区"
 # 6b: 分身唤起词必须内嵌宪法(headless无人监督,宪法不在prompt里=没有约束)
-for pat in '无杀权' '永远救活不弄死' '读不到就说读不到' '不修改任何代码' 'escalation-reports.log'; do
+# 0930 阶段 2 补(任务 2fc3b6fc,决策 018e4e84): 三档权限取代「无杀权」;平滑收工 = touch ~/wf-runs/<TAG>.stop,禁止 kill
+for pat in '与有头会话同权' '三档' '自动做' 'Bark 请示' '只报不做' '平滑收工' 'wf-runs/<TAG>.stop' '禁止 kill' '永远救活不弄死' '读不到就说读不到' '不改任何代码' 'escalation-reports.log'; do
   grep -qF "$pat" "$D/escort-claude-escalation.sh" || fail "分身唤起词缺宪法约束: $pat"
 done
+# 6b2: 三份投影(escort SOP / 哨兵 SOP / 分身唤起词)不得再写旧宪法「无杀权 / 绝不终止」,且都要带 stop 文件收工入口
+for f in cmdr-escort.txt cmdr-stream.txt escort-claude-escalation.sh; do
+  grep -qF '无杀权' "$D/$f" && fail "$f 仍写「无杀权」(决策 018e4e84 已覆盖,投影与真身不同步)"
+  grep -qF '绝不终止' "$D/$f" && fail "$f 仍写「绝不终止」(平滑收工是自动做档)"
+  grep -qF 'wf-runs/<TAG>.stop' "$D/$f" || fail "$f 缺平滑收工入口 touch ~/wf-runs/<TAG>.stop"
+done
+grep -qF 'wf_stop_requested' "$D/batch2.sh" || fail "batch2.sh 未在词边界判 stop 文件(Commander 无法平滑收工)"
+grep -qF 'wf_stop_requested' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 未在视频边界判 stop 文件"
+grep -qF 'WF_STOP_FILE="$HOME/wf-runs/$TAG.stop"' "$D/wf-run.sh" || fail "wf-run.sh 未登记 stop 文件约定"
 # 6c: 推流必须打机器标签(0916实证:不打标签哨兵会把M4事件报成M1)
 grep -qF 's/^/[$HOST] /' "$D/log-stream-push.sh" || fail "推流未给每行打[机器]标签(哨兵会认错机器)"
 # 6d: 哨兵SOP必须带升级条款+机器识别铁律
