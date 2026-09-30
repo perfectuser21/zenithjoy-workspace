@@ -14,7 +14,22 @@ $C --profile "$P" open-app >/dev/null 2>&1; nap 2
 $C --profile "$P" open-search "$KW" >/dev/null 2>&1 || { log "open-search失败"; exit 1; }
 nap 3
 $C --profile "$P" search-video-tab "$TAG-vtab" >/dev/null 2>&1 || log "切视频tab失败(可能已在)"
-$C --profile "$P" search-time-layer six_months "$TAG-filter" most_liked unlimited unlimited "$LOC" >/dev/null 2>&1 || { log "筛选失败"; exit 1; }
+# 0930 任务 913a6b03：原来 stderr 整段丢 /dev/null、日志只剩一句「筛选失败」，09-29 三批风暴
+# （4/12、12/12、6/12 词作废）查不到死因（失败不留原因病）。现在：留底层原因；失败先重开搜索
+# 再来一次（视觉定位偶发/面板没弹出这类瞬时故障值一次重试）；两次都不过才作废本词。
+_stl_err="$(mktemp)"; _stl_ok=0
+for _stl_try in 1 2; do
+  _stl_eid="$TAG-filter"; (( _stl_try == 2 )) && _stl_eid="$TAG-filter-r2"
+  if $C --profile "$P" search-time-layer six_months "$_stl_eid" most_liked unlimited unlimited "$LOC" >/dev/null 2>"$_stl_err"; then _stl_ok=1; break; fi
+  _stl_reason="$(grep -v -e DeprecationWarning -e '^warning' -e '^ *$' "$_stl_err" | tail -1 | head -c 200)"
+  log "筛选失败: ${_stl_reason:-无stderr} (第${_stl_try}次)"
+  if (( _stl_try == 1 )); then
+    $C --profile "$P" open-search "$KW" >/dev/null 2>&1; nap 3
+    $C --profile "$P" search-video-tab "$TAG-vtab-r2" >/dev/null 2>&1 || true
+  fi
+done
+rm -f "$_stl_err"
+(( _stl_ok )) || exit 1
 nap 2
 $C --profile "$P" search-video-cards "$TAG-cards" 2>/dev/null | grep -E "^[0-9]+	" | head -"$MAXV"
 exit 0
