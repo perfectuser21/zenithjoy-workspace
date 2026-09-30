@@ -55,7 +55,22 @@
 
 **健康度双曲线**：SOP 条数与分身出场次数**双降** = 系统在熟化。每次救场收尾必答：这个判例能否固化进 SOP / 白名单 / 代码？
 
-## 五、机器识别铁律
+## 五、escort 注销权（0930 主理人拍板，决策 3c98fb36：只有 run 收尾允许 Commander 下岗）
+
+0930 02:54 事故（Brain 任务 1ebaeb00）：escort 读到 MMV 上 0918 起就死掉的日志桥文件，判「日志停滞」后把自己当「已收工」
+`openclaw cron rm` 注销，run 随后死循环 5 小时无人陪跑；audit_events 0916 起 58 次同形，0928 五批全部在批完成前提前下岗。
+
+| 谁 | 能不能删 escort cron | 条件 |
+|---|---|---|
+| wf-run 收尾 trap | **唯一正式注销者** | `cron list --json` 核对 id 在表且 name 全等 `escort-<机器>-<TAG>` 才删；不在表/别人的/读不到 → 只记日志不删 |
+| escort 自己 | 仅两种收工判据之一 | a) 日志出现 **本 TAG** 的 `[<TAG>] 批完成` 行；b) 起跑超 4 小时**且** `pgrep -f "wf-run.sh.*--tag <TAG>"` 为空 |
+| 其它执行体（哨兵/分身/治理 agent/人）| 禁 | name 以 `escort-` 开头且对应 run 仍在跑的 cron 一律不删，只报告 |
+
+- 日志读不到 / 日志停滞 / 日志桥落后 / 已升级 ≠ 收工：一律禁止 `cron rm`，只升级 + 汇报。
+- 注销前必须 `openclaw cron list --json` 按 name **整串全等**取 id，再删那一个 id。
+- wf-run 在途看门狗（`ESCORT_WATCH_INTERVAL` 默认 5 分钟）发现 escort 不在表 → 同名同会话立即重拉 + 升级留痕；谁删的去 MMV `gateway.log` 查 `cron.remove`。
+
+## 六、机器识别铁律
 
 日志行开头的 `[xian-m4]` / `[xian-m1]` 标签是**唯一**机器判据，必须照抄，禁止靠内容猜。
 （0916 实证：靠猜会把 M4 事件报成 M1；打标签后同一事件立刻认对。）

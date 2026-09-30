@@ -20,9 +20,11 @@ const ZSH = spawnSync("bash", ["-lc", "command -v zsh"], { encoding: "utf8" }).s
 const SKIP = !ZSH && "no zsh (CI: sudo apt-get install -y zsh)";
 
 // 假 ssh/adb：argv 记日志；adb get-state 恒失败（设备离线 → 在触达时窗判断之前就退出，测试与当前钟点无关）
+// cron list --json 回放的 escort 名按本机 HOSTKEY（wf-run 默认分支 = 小写 hostname）+ 固定 TAG cmd09292330 拼——
+// 1ebaeb00 起 escort_dismiss 核 name 全等才 cron rm，用例必须带 --tag cmd09292330 才会真注销
 const FAKE_SSH = `#!/bin/sh
 printf 'ssh' >> "$HOME/ssh-argv.log"; for a in "$@"; do printf '\\t%s' "$a" >> "$HOME/ssh-argv.log"; done; printf '\\n' >> "$HOME/ssh-argv.log"
-case "$*" in *"cron list --json"*) printf '{"jobs":[{"id":"cmdr-abc","name":"escort-x"}]}\\n';; esac
+case "$*" in *"cron list --json"*) printf '{"jobs":[{"id":"cmdr-abc","name":"escort-%s-cmd09292330"}]}\\n' "$(hostname -s | tr '[:upper:]' '[:lower:]')";; esac
 exit 0`;
 const FAKE_ADB = `#!/bin/sh
 echo "adb $*" >> "$HOME/adb-argv.log"
@@ -68,7 +70,7 @@ test("对标获客发现未实现 → 默认拒跑(无实现不得跑),不拉 es
 
 test("--commander <escort cron id> → 不自拉,把它当 ESCORT_ID:按 id 复核、退出 trap 注销;设备离线照旧升级", { skip: SKIP }, () => {
   const { home, env } = setup();
-  const r = run(WR, ["keyword_acquisition", "p1", "SER1", "biz", "--commander", "cmdr-abc"], env);
+  const r = run(WR, ["keyword_acquisition", "p1", "SER1", "biz", "--tag", "cmd09292330", "--commander", "cmdr-abc"], env);
   assert.equal(r.status, 0, r.stderr);
   const log = read(join(home, "harvest-cron.log"));
   assert.match(log, /由 Commander 发起,escort=cmdr-abc/);
