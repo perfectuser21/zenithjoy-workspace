@@ -17,6 +17,16 @@
       "additionalProperties": false,
       "required": ["key", "stage", "journey_cell", "probe", "expect", "severity", "failure_class", "on_fail", "note"],
       "properties": {
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "key"],
+          "properties": {
+            "type": { "enum": ["activity", "step", "enabler"] },
+            "key": { "type": "string", "minLength": 1 }
+          },
+          "description": "探针挂点（cecelia 迁移 496）：缺省按 journey_cell 挂活动格；step/enabler 显式指到 steps.key / enablers.key"
+        },
         "key": { "type": "string", "pattern": "^[a-z][a-z0-9_]+$" },
         "stage": { "$ref": "#/definitions/stage" },
         "journey_cell": { "type": "string", "pattern": "^stage:(preflight|discovery|qualification|collection|scoring|delivery|outreach|cleanup)$" },
