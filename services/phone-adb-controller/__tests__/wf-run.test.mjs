@@ -80,7 +80,7 @@ test("--commander <escort cron id> → 不自拉,把它当 ESCORT_ID:按 id 复�
   assert.doesNotMatch(ssh, /cron add/);
   assert.match(ssh, /openclaw cron list --json/);
   assert.match(ssh, /openclaw cron rm cmdr-abc/);
-  assert.match(ssh, /us-vps/); // escalate 通路不变
+  assert.match(ssh, /mmv\t[^\n]*\/Users\/administrator\/\.openclaw\/m4-logs\/escalation\.log/); // escalate 通路: 0930 起写 MMV 本机文件(任务 975aa6ec)
 });
 
 test("--commander 的 escort 复核未命中 → 升级分身(本批可能无人陪跑),不阻塞", { skip: SKIP }, () => {
@@ -88,7 +88,7 @@ test("--commander 的 escort 复核未命中 → 升级分身(本批可能无人
   const r = run(WR, ["keyword_acquisition", "p1", "SER1", "biz", "--commander", "cmdr-gone"], env);
   assert.equal(r.status, 0, r.stderr);
   assert.match(read(join(home, "harvest-cron.log")), /escort复核未命中\(id=cmdr-gone\)/);
-  assert.match(read(join(home, "ssh-argv.log")), /us-vps.*escort.*cmdr-gone/);
+  assert.match(read(join(home, "ssh-argv.log")), /mmv\t[^\n]*escalation\.log[^\n]*escort.*cmdr-gone/);
 });
 
 test("--tag 覆盖 TAG;起跑向 stdout 打 WF_RUN_STARTED 一行", { skip: SKIP }, () => {
