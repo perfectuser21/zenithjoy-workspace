@@ -44,6 +44,13 @@ test("wf_run_bounded: 超时 rc=124 且子进程被收掉,不等它跑完", { sk
   assert.ok(Date.now() - t0 < 5000, "应在约 1.5s 内返回,实际 " + (Date.now() - t0) + "ms");
 });
 
+test("wf_run_bounded: 超时要连子进程树一起收——孙进程占着 stdout 管道,命令替换会一直等它跑完", { skip: SKIP }, () => {
+  const t0 = Date.now();
+  const r = rc("OUT=$(wf_run_bounded 1 sh -c '/bin/sleep 20; echo late'); echo rc=$? out=$OUT", { WF_BOUNDED_POLL: "0.1" });
+  assert.match(r.stdout, /rc=124 out=$/m, r.stderr);
+  assert.ok(Date.now() - t0 < 5000, "sh 下面的 sleep 也该被收掉,实际 " + (Date.now() - t0) + "ms");
+});
+
 test("wf_run_bounded: 未超时透传 stdout 与出口码;预算 0 = 不限时直接跑", { skip: SKIP }, () => {
   const a = rc("wf_run_bounded 5 sh -c 'echo hi; exit 7'; echo rc=$?", { WF_BOUNDED_POLL: "0.1" });
   assert.equal(a.stdout, "hi\nrc=7\n", a.stderr);

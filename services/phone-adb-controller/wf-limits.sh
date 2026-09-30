@@ -28,7 +28,14 @@ wf_timeout_class(){
   [[ "$v" == retryable ]] || v=record
   print -r -- "$v"
 }
-# wf_run_bounded SECS cmd... —— 子进程跑 cmd,超 SECS 秒 TERM→0.5s→KILL,rc=124;SECS 为 0/非数字 = 不限,直接透传。
+# _wf_kill_tree PID SIG —— 先杀子孙再杀自己:发现脚本/ssh 下面还挂着 adb/sleep 等孙进程,只杀 PID 它们会继续占着
+#   stdout 管道,命令替换 $(...) 就一直等到它们自己跑完,预算等于没封(单测 4s 假发现实证)。
+_wf_kill_tree(){
+  local pid="$1" sig="$2" c
+  for c in $(pgrep -P "$pid" 2>/dev/null); do _wf_kill_tree "$c" "$sig"; done
+  kill "-$sig" "$pid" 2>/dev/null
+}
+# wf_run_bounded SECS cmd... —— 子进程跑 cmd,超 SECS 秒 TERM→0.5s→KILL(整棵子进程树),rc=124;SECS 为 0/非数字 = 不限,直接透传。
 #   stdout/stderr 原样继承(命令替换里照常能拿到输出)。轮询步长 WF_BOUNDED_POLL(默认 1s,单测用 0.1)。
 wf_run_bounded(){
   local secs="$1"; shift
@@ -38,7 +45,7 @@ wf_run_bounded(){
   pid=$!
   while kill -0 $pid 2>/dev/null; do
     if (( waited >= secs )); then
-      kill $pid 2>/dev/null; /bin/sleep 0.5; kill -9 $pid 2>/dev/null
+      _wf_kill_tree $pid TERM; /bin/sleep 0.5; _wf_kill_tree $pid KILL
       wait $pid 2>/dev/null
       return 124
     fi

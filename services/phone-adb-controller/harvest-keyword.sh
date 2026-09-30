@@ -31,6 +31,13 @@ video_drifted() {
 # 的几个真机行为集成测试一叠加直接把这一步的时间预算撑爆(exit 124超时,棘轮闸阻断)。
 # 跟 outreach-tick.sh 的 nap() 同一个模式: 测试环境下不真睡,生产不设这个变量不受影响。
 nap(){ [[ -n "${HARVEST_KEYWORD_TESTING:-}" ]] && return 0; /bin/sleep "$1" }
+# 7d150e33(阶段1): 整批总时限(视频边界判到点平滑收工)+ 发现/采集段按契约预算封顶,函数在 wf-limits.sh;
+#   库缺失(旧部署/单独手跑)→ 函数不存在,全用 $+functions 守卫,行为与并入前一致
+source "${0:A:h}/wf-limits.sh" 2>/dev/null || true
+deadline_hit(){ (( $+functions[wf_deadline_reached] )) && wf_deadline_reached }
+budget_of(){ if (( $+functions[wf_budget_of] )); then wf_budget_of "$1"; else print 0; fi }
+timeout_class(){ if (( $+functions[wf_timeout_class] )); then wf_timeout_class "$1"; else print record; fi }
+run_bounded(){ if (( $+functions[wf_run_bounded] )); then wf_run_bounded "$@"; else shift; "$@"; fi }
 # ── 先判后采(任务 8bb3af55,决策 f18f56b8①「判定合格的视频才采集」) ──
 # 此前视频判定(judge-video.js)挂在 batch2.sh 落池之后跑——评论早已采完落池,判了也挡不住。
 # 现在每个视频在开评论区之前经 ssh 到 mmv(PG 与模型凭据只在 mmv)调 qualify-video.js:
@@ -74,6 +81,12 @@ _lock_acquired=0
 _lock_try=0
 while (( _lock_try < LOCK_ACQUIRE_MAX_RETRIES )); do
   _lock_try=$((_lock_try+1))
+  # 7d150e33: 等锁期间总时限到点 → 本词不开跑(不拿锁、不发现),交给 batch2 在词边界收工
+  if deadline_hit; then
+    log "整批总时限到(${WF_RUN_MAX_SECONDS:-14400}s),本词不开跑"
+    rm -f "$SEENVIDS"
+    exit 0
+  fi
   if $C --profile "$P" lock-acquire "$TAG" >/dev/null 2>&1; then
     _lock_acquired=1
     break
@@ -106,8 +119,20 @@ rm -f "$SEENVIDS"
 
 # 发现(决策 7f842d12 契约组装执行): 抽成可替换实现,接口见 discover-keyword.sh 头注释;
 # wf-run.sh 按契约 runtime.entry 经 env DISCOVER_CMD 注入(对标获客 = discover-benchmark.sh),不设 = 关键词发现。
-CARDS="$("${DISCOVER_CMD:-${0:A:h}/discover-keyword.sh}" "$P" "$KW" "$MAXV" "$TAG" "$LOC")" || exit 1
+# 7d150e33: 发现段按契约 discovery 预算封顶(发现脚本是子进程,超时收掉它不留手机现场;下一词开头有归位清场);
+#   超时按契约分类: retryable 重跑 1 次,仍超 → 记账 exit 4(batch2 记 discovery failed budget_exceeded,进入下一个词)
+DISC_BUDGET=$(budget_of discovery)
+CARDS="$(run_bounded "$DISC_BUDGET" "${DISCOVER_CMD:-${0:A:h}/discover-keyword.sh}" "$P" "$KW" "$MAXV" "$TAG" "$LOC")"; drc=$?
+if (( drc == 124 )) && [[ "$(timeout_class discovery)" == retryable ]]; then
+  log "发现超预算(${DISC_BUDGET}s),契约 retryable 重试 1 次"
+  CARDS="$(run_bounded "$DISC_BUDGET" "${DISCOVER_CMD:-${0:A:h}/discover-keyword.sh}" "$P" "$KW" "$MAXV" "$TAG" "$LOC")"; drc=$?
+fi
+if (( drc == 124 )); then log "发现超预算(${DISC_BUDGET}s),本词作废(记账)"; exit 4; fi
+(( drc == 0 )) || exit 1
 [[ -n "$CARDS" ]] || { log "无卡片"; exit 0; }
+# 采集段(判定+采集两个 per_item 活动共用本词的逐视频循环)预算: 自发现结束起累计,在视频边界判
+COLLECT_T0=$(date +%s)
+COLLECT_BUDGET=$(( $(budget_of qualification) + $(budget_of collection) ))
 log "卡片数: $(print -- "$CARDS" | wc -l | tr -d " ")"
 
 # back_to_results_and_maybe_rescan EVIDENCE_ID_PREFIX —— 0929修复(真机验证补丁):
@@ -180,6 +205,15 @@ i=0
 RESCANS=0
 RESCAN_MAX="${HARVEST_RESCAN_MAX:-3}"
 while (( i < ${#CARD_ARR[@]} )); do
+  # 7d150e33: 视频边界判整批总时限与采集段预算——到点/超预算都不开下一个视频,已采的照常交给 batch2,trap 放锁
+  if deadline_hit; then
+    log "整批总时限到(${WF_RUN_MAX_SECONDS:-14400}s),本词剩余候选不采"
+    break
+  fi
+  if (( COLLECT_BUDGET > 0 && $(date +%s) - COLLECT_T0 >= COLLECT_BUDGET )); then
+    log "采集段超预算(${COLLECT_BUDGET}s),本词剩余候选作废(记账)"
+    break
+  fi
   i=$((i+1))
   CARDLINE="${CARD_ARR[$i]}"
   X="$(print -- "$CARDLINE" | cut -f1)"; Y="$(print -- "$CARDLINE" | cut -f2)"
