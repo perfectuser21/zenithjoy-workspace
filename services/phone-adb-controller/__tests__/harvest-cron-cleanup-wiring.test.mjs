@@ -20,9 +20,11 @@ const HC_IMPL = join(HERE, "..", "wf-run.sh");
 
 test("接线守卫: run_finalize 必须真调 close-app 和 return-safe-desktop,并把结果导出为 WFR_CLOSE_APP_ATTEMPTS/WFR_SAFE_DESKTOP_VISIBLE 供 finalize 使用", () => {
   const src = readFileSync(HC_IMPL, "utf8");
-  const iFn = src.indexOf("run_finalize(){");
-  const iEnd = src.indexOf("\n}", iFn);
-  assert.ok(iFn > 0, "找不到 run_finalize 函数");
+  // 40f02c5e: 真实清场挪进紧邻的 device_cleanup_in_lock(锁内),run_finalize 调它再放锁再写账本——守卫看两函数合段
+  const iFn = src.indexOf("device_cleanup_in_lock(){");
+  const iRun = src.indexOf("run_finalize(){");
+  const iEnd = src.indexOf("\n}", iRun);
+  assert.ok(iFn > 0 && iRun > iFn, "找不到 device_cleanup_in_lock/run_finalize 函数");
   const body = src.slice(iFn, iEnd);
   assert.match(body, /close-app/, "run_finalize 里没有调用 close-app");
   assert.match(body, /return-safe-desktop/, "run_finalize 里没有调用 return-safe-desktop");

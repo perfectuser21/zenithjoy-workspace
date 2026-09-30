@@ -362,7 +362,11 @@ test("接线守卫: harvest-cron 预检真读设备/通话并导出、开跑前�
   assert.ok(iLock > 0 && iLock < iBoot, "拿锁在 wfr_bootstrap(写 preflight 工件) 之前");
   const gates = [...hc.matchAll(/gate_check /g)].length;
   assert.ok(gates >= 3, `bootstrap 后/batch2 后/finalize 后都要查 gate（现 ${gates} 处）`);
-  assert.match(hc, /trap '[^']*release_run_lock[^']*run_finalize'/);
+  // 40f02c5e: 放锁并入 run_finalize(锁内清场 → 放锁 → 账本),trap 只挂 run_finalize;函数体里 close-app 必须在 release_run_lock 之前
+  assert.match(hc, /trap '[^']*run_finalize'/);
+  assert.doesNotMatch(hc, /trap '[^']*release_run_lock[^']*'/, "trap 里不得再先放锁后清场");
+  const fin = hc.slice(hc.indexOf("run_finalize(){"));
+  assert.ok(fin.indexOf("device_cleanup_in_lock") >= 0 && fin.indexOf("device_cleanup_in_lock") < fin.indexOf("release_run_lock"), "收尾清场必须在放锁之前");
   const ot = readFileSync(join(SRC, "outreach-tick.sh"), "utf8");
   assert.match(ot, /outreach-run/);
   assert.match(ot, /messages_sent/);

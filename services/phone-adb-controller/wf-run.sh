@@ -385,21 +385,28 @@ else escort_launch; fi
 # escort 看门狗: 从这里到收尾,在途被移除(不管谁删的)立即同名重拉;trap 里先停看门狗再注销(1ebaeb00)
 escort_watch_start
 # 账本收工(trap 里跑,正常退让路径也会经过): 未 init 只记 skipped;自检不过 escalate
-run_finalize(){
-  wfr_on || return 0
-  finalize_needed || { log "账本finalize: skipped(not_initialized, 正常退让)"; return 0; }
-  # 0929批次4新建(DoD审计发现的死代码,6b133a81): cleanup活动"关App"/"回安全桌面"两步
-  # 从建成起零实现——采收链从没调过 close-app/return-safe-desktop 这两个子命令(前者是
-  # 早就写好的死代码,后者是本批次新建),workflow-result.sh 的 cleanup 段指标一直写死
-  # (close_app_attempts=0/safe_desktop_visible=0),不是真实判定。这里跑真实操作+捕获
-  # 真实结果,供下面 finalize 写进指标。
+# 40f02c5e: 收尾顺序 = 锁内清场(close-app/回桌面) → 放锁 → 账本 finalize。此前 trap 先 release_run_lock 再清场,
+#   下一批一拿到锁就被我们 close-app;现在清场前先以本批 TAG lock-acquire 确认锁仍是本 run 的(幂等),
+#   锁已易主(限时重试仍拿不到)→ 跳过清场记日志,指标 close_app_attempts=0/safe_desktop_visible=0 如实进账本。
+device_cleanup_in_lock(){
+  local i tries="${CLEANUP_LOCK_TRIES:-3}"
+  WFR_CLOSE_APP_ATTEMPTS=0; WFR_SAFE_DESKTOP_VISIBLE=0
+  export WFR_CLOSE_APP_ATTEMPTS WFR_SAFE_DESKTOP_VISIBLE
+  finalize_needed || return 0
+  for (( i = 1; i <= tries; i++ )); do
+    "$C" --profile "$P" lock-acquire "$TAG" </dev/null >/dev/null 2>>$LOG && break
+    (( i < tries )) && nap "${CLEANUP_LOCK_WAIT:-10}"
+  done
+  if (( i > tries )); then
+    log "cleanup: 锁被占,跳过收尾清场(锁已是别的 run 的,不动它的现场)"
+    return 0
+  fi
   WFR_CLOSE_APP_ATTEMPTS=1
   if $C --profile "$P" close-app </dev/null >/dev/null 2>>$LOG; then
     log "cleanup: close-app 成功"
   else
     log "cleanup: close-app 失败(设备可能已离线/前台未能关闭,见日志)"
   fi
-  WFR_SAFE_DESKTOP_VISIBLE=0
   if $C --profile "$P" return-safe-desktop </dev/null >/dev/null 2>>$LOG; then
     WFR_SAFE_DESKTOP_VISIBLE=1
     log "cleanup: 已回到安全桌面"
@@ -408,6 +415,14 @@ run_finalize(){
     escalate "本批收工后未能确认回到安全桌面,设备可能停在异常界面上,请人工查看"
   fi
   export WFR_CLOSE_APP_ATTEMPTS WFR_SAFE_DESKTOP_VISIBLE
+}
+run_finalize(){
+  device_cleanup_in_lock
+  release_run_lock
+  wfr_on || return 0
+  finalize_needed || { log "账本finalize: skipped(not_initialized, 正常退让)"; return 0; }
+  # 0929批次4(6b133a81): cleanup 活动"关App"/"回安全桌面"真跑真记——现在在 device_cleanup_in_lock 里(锁内)做,
+  # 指标 WFR_CLOSE_APP_ATTEMPTS/WFR_SAFE_DESKTOP_VISIBLE 已 export,这里只写账本
   # 9032cdad: 收工时步骤 DoD 判整批(如锁心跳续期失败次数)——日志与产物取本批 night 文件全段
   export WFR_LOG_FILE=~/night-$TAG.log WFR_TSV=~/night-$TAG.tsv WFR_LOG_FROM=0
   eval "$(bash "$WFR" finalize 2>>$LOG)" 2>/dev/null || true
@@ -415,7 +430,8 @@ run_finalize(){
   [[ "${WFR_FINALIZE_OK:-0}" == "1" ]] || escalate "账本收工自检未通过: ${WFR_FINALIZE_MSG:-unknown}"
   gate_check "收工" >/dev/null || true
 }
-if [[ -n "$ESCORT_ID" ]]; then trap 'lease_heartbeat_stop; escort_watch_stop; escort_dismiss; release_run_lock; run_finalize' EXIT INT TERM; else trap 'lease_heartbeat_stop; release_run_lock; run_finalize' EXIT INT TERM; fi
+# 40f02c5e: 放锁并入 run_finalize(锁内清场 → 放锁 → 账本),trap 里不再单列 release_run_lock
+if [[ -n "$ESCORT_ID" ]]; then trap 'lease_heartbeat_stop; escort_watch_stop; escort_dismiss; run_finalize' EXIT INT TERM; else trap 'lease_heartbeat_stop; run_finalize' EXIT INT TERM; fi
 wr step "$SERIAL" 0 done; wr step "$SERIAL" 1 doing
 
 # ── ② 设备 preflight: 在线 + 屏幕亮 + 解锁(0915 锁屏=整机瘫痪且静默的教训) ──
@@ -426,13 +442,19 @@ if ! adb -s $SERIAL get-state >/dev/null 2>&1; then
   exit 0
 fi
 DEVICE_VERIFIED=1   # 6b133a81: 预检指标取真实结果,不再在 workflow-result.sh 写死
+# 40f02c5e: 拿设备锁提前到第一个碰手机的动作(唤醒)之前——此前拿锁排在取词单之后,唤醒/清场/读号全在锁外,
+#   同机另一批(对标发现/触达)持锁时会被我们清场。拿不到锁 = 本批不碰手机(只做只读检测),预检工件 lock_acquired=0 由
+#   pf_lock_acquired 探针拦停;账本关着时下面也显式拦(不开采)。
+preflight_lock_acquire
+log "预检拿锁: lock_acquired=$LOCK_ACQUIRED"
+(( LOCK_ACQUIRED )) || log "预检拿锁失败(锁被占),本批不碰手机: 跳过唤醒/清场/读号"
 W=$(adb -s $SERIAL shell dumpsys power | grep -oE "mWakefulness=[A-Za-z]+" | head -1 | tr -d "\r")
-if [[ "$W" != *Awake* ]]; then
+if (( LOCK_ACQUIRED )) && [[ "$W" != *Awake* ]]; then
   log "屏幕非Awake($W),唤醒解锁"
   adb -s $SERIAL shell input keyevent KEYCODE_WAKEUP; /bin/sleep 1
   adb -s $SERIAL shell input swipe 600 2200 600 800 300; /bin/sleep 1
 fi
-adb -s $SERIAL shell svc power stayon true 2>/dev/null
+(( LOCK_ACQUIRED )) && adb -s $SERIAL shell svc power stayon true 2>/dev/null
 CALLSTATE=$(adb -s $SERIAL shell dumpsys telephony.registry 2>/dev/null | awk -F= '/mCallState=/{gsub(/\r/,"",$2); print $2; exit}')
 if device_call_busy "$CALLSTATE"; then
   log "设备通话中(mCallState=$CALLSTATE),退出"
@@ -448,13 +470,19 @@ ACCOUNT_VERIFIED=0
 # 读号前归位清场(0914铁律: 不假设重开=干净态;写法同 batch2.sh 每词开头)。0930 事故: 抖音重开恢复到
 # 触达刚私信过的他人主页,读号子命令读成别人的号→误判账号不符拦整批;22:30 批停在搜索结果页,
 # 3 步 verified back 退不出。冷启动落在首页,读号子命令再自证是自己主页(第一道闸在它里面)。
+# 40f02c5e: 清场+读号都是碰手机的动作,只在持锁时做;没锁 → DOUYIN_ID 留空、ACCOUNT_VERIFIED=0,由下面的拿锁拦截统一收工
+DOUYIN_ID=""; ACCTOUT=""
+if (( LOCK_ACQUIRED )); then
 adb -s $SERIAL shell am force-stop com.ss.android.ugc.aweme 2>/dev/null
 nap 2
 adb -s $SERIAL shell am start -n com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.main.MainActivity >/dev/null 2>&1
 nap 4
 ACCTOUT="$($C --profile "$P" account-current "$TAG-preflight-acct" </dev/null 2>&1)"
 DOUYIN_ID="$(print -- "$ACCTOUT" | sed -n "s/^douyin_id=//p")"
-if [[ -z "$DOUYIN_ID" ]]; then
+fi
+if (( ! LOCK_ACQUIRED )); then
+  :
+elif [[ -z "$DOUYIN_ID" ]]; then
   log "读账号标记失败(我页读不到抖音号): $(print -- "$ACCTOUT" | tail -1 | head -c 150)"
   escalate "读账号标记失败,读不到我页抖音号,本批无法确认登录账号: $(print -- "$ACCTOUT" | tail -1 | head -c 150)"
   wr fail "$SERIAL" 1 account_read_failed "读账号标记失败"
@@ -548,14 +576,18 @@ NWORDS=$(wc -l < $WF | tr -d ' ')
 log "词单 ${NWORDS}词: $(tr '\n' '/' < $WF)"
 wr step "$SERIAL" 2 done; wr step "$SERIAL" 3 doing "${NWORDS}词"
 # 预检拿锁(契约 preflight.acquire_device_lock):拿到才算设备就绪,结果随 init 写进 preflight 工件读回
-preflight_lock_acquire
-log "预检拿锁: lock_acquired=$LOCK_ACQUIRED"
 wfr_bootstrap "$TAG" "$P" "$WF" "$PUSH" "$SERIAL" "$HOSTKEY"
 wfr_on && log "账本init: run=${WFR_RUN_ID:-?} hash=${WFR_HASH:-?} attempt=${WFR_ATTEMPT:-?} skip=${WFR_SKIP_WORDS:-}"
 # 6b133a81: 预检后置条件(设备/账号/通话/锁)读回不过 → stop_run,本批不开采(收工 trap 照做)
 if gate_check "预检"; then
   log "预检后置条件不过,本批不开采: ${WFR_GATE_STAGE:-}:${WFR_GATE_KEYS:-}"
   wr fail "$SERIAL" 3 preflight_postcondition "${WFR_GATE_KEYS:-}"
+  exit 0
+fi
+# 40f02c5e: 账本/探针关着(测试、WFR_DISABLED)也不许无锁开采——没锁就没碰过手机、也没验过账号
+if (( ! LOCK_ACQUIRED )); then
+  log "预检拿锁失败(锁被占),本批不开采(lock_busy 契约 retryable,下一批再来)"
+  wr fail "$SERIAL" 3 lock_busy "预检拿锁失败"
   exit 0
 fi
 
