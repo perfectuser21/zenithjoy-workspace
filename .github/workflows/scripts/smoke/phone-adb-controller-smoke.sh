@@ -228,9 +228,20 @@ if command -v zsh >/dev/null 2>&1; then
 fi
 bash -n "$D/disk-gateway-guard.sh" || fail "disk-gateway-guard.sh bash 语法错误"
 # 6a: 宪法五条必须在 COMMANDER.md 里(改宪法改这里,禁止只改投影)
-for pat in '帮不拦' '无杀权' '读不到就说读不到' '不改代码' '危险动作绝不做'; do
+# 0930 阶段 2(决策 018e4e84/3c98fb36,任务 81958796): 第 1 条「无杀权」改为「与有头会话同权」+三档;第 5 条「危险动作绝不做」并入 Bark 请示档
+for pat in '帮不拦' '与有头会话同权' '三档' '自动做' 'Bark 请示' '只报不做' '平滑收工' '读不到就说读不到' '不改代码'; do
   grep -qF "$pat" "$D/COMMANDER.md" || fail "COMMANDER.md 宪法缺条款: $pat"
 done
+grep -qF '帮不拦，无杀权' "$D/COMMANDER.md" && fail "COMMANDER.md 第 1 条「无杀权」复活(决策 018e4e84 已覆盖)"
+# 6a2: Commander 只照调度单(决策 3c98fb36/e8f872cb): skill 不得再教选空闲手机/起草契约;AGENTS.md 真身在仓且无 n8n V4 协议残留
+_SK="$D/commander/skills/workflow-commander/SKILL.md"
+grep -qF '调度单' "$_SK" || fail "workflow-commander skill 缺「调度单」定义"
+grep -qF '选空闲' "$_SK" && fail "workflow-commander skill 仍教 Commander 选空闲手机(决策 e8f872cb: 机器由编排选定)"
+grep -qF '起草契约' "$_SK" && fail "workflow-commander skill 仍教 Commander 起草契约(决策 3c98fb36: 不起草)"
+[[ -s "$D/commander/AGENTS.md" ]] || fail "commander/AGENTS.md 真身缺失(工作区副本会漂移)"
+grep -qF '$workflow-commander' "$D/commander/AGENTS.md" || fail "AGENTS.md 启动约定缺「先加载 $workflow-commander」"
+grep -qF 'COMMANDER_STAGE_RESULT' "$D/commander/AGENTS.md" && fail "AGENTS.md 仍含 n8n V4 协议(COMMANDER_STAGE_RESULT)"
+grep -qF 'commander/AGENTS.md' "$D/deploy.sh" || fail "deploy.sh 未同步 commander/AGENTS.md 到 work-commander 工作区"
 # 6b: 分身唤起词必须内嵌宪法(headless无人监督,宪法不在prompt里=没有约束)
 for pat in '无杀权' '永远救活不弄死' '读不到就说读不到' '不修改任何代码' 'escalation-reports.log'; do
   grep -qF "$pat" "$D/escort-claude-escalation.sh" || fail "分身唤起词缺宪法约束: $pat"
