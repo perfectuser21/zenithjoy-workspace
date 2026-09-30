@@ -47,6 +47,9 @@ wf_load_plan(){
   source "$f" || { WF_LOAD_ERR="执行计划 $f 读取失败"; return 1; }
   [[ -n "$WF_STAGES" && -n "$WF_SOURCE_KIND" && -n "$WF_DISCOVER_CMD" ]] || { WF_LOAD_ERR="执行计划 $f 缺 WF_STAGES/WF_SOURCE_KIND/WF_DISCOVER_CMD"; return 1; }
   export WF_SOURCE_KIND   # harvest-keyword.sh 按它选逐视频归位方式(benchmark = back-to-profile)
+  # 7d150e33: 计划里的每活动预算 WF_BUDGET_<key> / 超时分类 WF_TIMEOUT_CLASS_<key> 要给 batch2/harvest-keyword 子进程看到
+  local k
+  for k in ${(k)parameters}; do [[ "$k" == WF_BUDGET_* || "$k" == WF_TIMEOUT_CLASS_* ]] && export "$k"; done
   if [[ -n "$WF_MISSING" && "${WF_ALLOW_MISSING:-0}" != "1" ]]; then
     WF_LOAD_ERR="拒跑: $1 有步骤未实现(无实现不得跑,真机调试加 --allow-missing): $WF_MISSING"; return 2
   fi
