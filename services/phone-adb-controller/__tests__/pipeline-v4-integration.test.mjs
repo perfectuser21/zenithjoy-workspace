@@ -112,7 +112,8 @@ test("四种出口码 → 阶段状态映射（af061588）；工件 n=词序；c
 
 test("collection 工件带归位指标：本词打开 2 张作品、1 次兜底重搜 → rescan_count=1 rescan_rate=0.5；只数本词日志段", { skip: SKIP }, () => {
   const ctx = setup(["ok", "rescan"]);
-  const r = run(ctx);
+  // 统一裁判要显式指到仓内裁判与清单（临时 HOME 里没有 ~/bin-harvest）
+  const r = run(ctx, { env: { WFR_STEP_JUDGE: join(SRC, "step-judge.mjs"), WFR_STEP_SPEC: join(SRC, "step-dod.json"), WFR_EVIDENCE_ROOT: join(ctx.home, "ev") } });
   assert.equal(r.status, 0, r.stderr);
   const c2 = art(ctx, "collection.2");
   assert.deepEqual([c2.metrics.rescan_count, c2.metrics.rescan_rate, c2.metrics.videos_processed], [1, 0.5, 1]);

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "capability": "keyword_acquisition",
-  "contract_sha256": "cb6f6be2ae89db284f013d8bd4cd837a84038968d8aae1fa68673a264e95ca67",
+  "contract_sha256": "31a47b3f43cff25a942952b298647bc4968557deddc2085eaaa900b93cac3f6a",
   "promotion": {
     "min_consecutive_pass": 20
   },
@@ -356,6 +356,20 @@
         "expect": {
           "op": ">=",
           "ref": "metrics.videos_processed"
+        }
+      }
+    },
+    {
+      "key": "keyword_acquisition.collection.return_to_results",
+      "activity": "collection",
+      "at": "collection",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "metric",
+        "ref": "metrics.rescan_rate",
+        "expect": {
+          "op": "<=",
+          "value": 0.3
         }
       }
     },

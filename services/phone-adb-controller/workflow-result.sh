@@ -151,7 +151,7 @@ req_keys(){ case "$1" in
   preflight) echo "device_verified account_verified call_state_idle lock_acquired";;
   discovery) echo "keywords_processed screens_scanned candidates";;
   qualification) echo "candidates_judged qualified";;
-  collection) echo "comments_collected videos_processed cursor_updates";;
+  collection) echo "comments_collected videos_processed cursor_updates rescan_count rescan_rate";;
   scoring) echo "comments_scored strong_intent weak_intent peer irrelevant spam";;
   delivery) echo "leads_written videos_pushed duplicates_skipped readback_verified cursor_updates";;
   outreach) echo "orders_picked messages_sent requeued blocked_orders";;

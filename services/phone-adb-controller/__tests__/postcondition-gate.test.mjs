@@ -30,10 +30,10 @@ const { loadChecks, validateSchema } = require(join(CHECKS, "probes-lib.js"));
 const ALL_STAGES = "preflight discovery qualification collection scoring delivery outreach cleanup";
 
 // ── ① 探针声明失败语义 ─────────────────────────────────────────────────
-test("17 条探针全部声明 failure_class ∈ 契约闭集 + on_fail ∈ {stop_run, fail_stage}", () => {
+test("18 条探针全部声明 failure_class ∈ 契约闭集 + on_fail ∈ {stop_run, fail_stage}", () => {
   const { doc, errors } = loadChecks(join(CHECKS, "social-keyword-leadgen.yaml"), join(CHECKS, "schema.json"));
   assert.deepEqual(errors, []);
-  assert.equal(doc.probes.length, 17);
+  assert.equal(doc.probes.length, 18);
   for (const p of doc.probes) {
     assert.ok(["retryable", "needs_human", "fatal"].includes(p.failure_class), `${p.key} failure_class=${p.failure_class}`);
     assert.ok(["stop_run", "fail_stage"].includes(p.on_fail), `${p.key} on_fail=${p.on_fail}`);
@@ -162,7 +162,7 @@ test("stage: gate fail + stop_run → 工件改 failed/stop、账本 failed、�
   const d = mkdtempSync(join(tmpdir(), "gate-"));
   const ssh = fakeSsh(d, { collection: FAIL_STOP("collection", "coll_only_matched", "fatal") });
   const kv = started(d, ssh);
-  wfr(d, { ...kv, PATH: ssh.PATH }, "stage", "collection", "completed", "1", "word=A", '[{"type":"log","ref":"l"}]', '{"comments_collected":2,"videos_processed":1,"cursor_updates":0}', "A");
+  wfr(d, { ...kv, PATH: ssh.PATH }, "stage", "collection", "completed", "1", "word=A", '[{"type":"log","ref":"l"}]', '{"comments_collected":2,"videos_processed":1,"cursor_updates":0,"rescan_count":0,"rescan_rate":0}', "A");
   const a = art(kv, "collection.1");
   assert.equal(a.status, "failed");
   assert.equal(a.recommended_next_action, "stop");
