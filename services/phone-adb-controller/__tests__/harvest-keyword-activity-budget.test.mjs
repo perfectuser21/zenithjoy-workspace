@@ -62,7 +62,7 @@ const run = (env) => spawnSync(ZSH, [HK, "P", encodeURIComponent("关键词"), "
 const taps = (log) => log.match(/^tap-evidence .*$/gm) || [];
 
 test("发现段超 WF_BUDGET_discovery(分类 record)→ 不等它跑完,记「发现超预算」exit 4,锁照常释放", { skip: SKIP }, () => {
-  const { home, env } = setup({ DISC_SLEEP: "4", WF_BUDGET_discovery: "1", WF_TIMEOUT_CLASS_discovery: "record" });
+  const { home, env } = setup({ DISC_SLEEP: "3", WF_BUDGET_discovery: "1", WF_TIMEOUT_CLASS_discovery: "record" });
   const t0 = Date.now();
   const r = run(env);
   assert.equal(r.status, 4, r.stderr.slice(-2000));
@@ -74,7 +74,7 @@ test("发现段超 WF_BUDGET_discovery(分类 record)→ 不等它跑完,记「�
 });
 
 test("发现段超预算且契约分类 retryable → 重跑 1 次;仍超 → exit 4", { skip: SKIP }, () => {
-  const { home, env } = setup({ DISC_SLEEP: "4", WF_BUDGET_discovery: "1", WF_TIMEOUT_CLASS_discovery: "retryable" });
+  const { home, env } = setup({ DISC_SLEEP: "3", WF_BUDGET_discovery: "1", WF_TIMEOUT_CLASS_discovery: "retryable" });
   const r = run(env);
   assert.equal(r.status, 4, r.stderr.slice(-2000));
   assert.equal(disc(home).length, 2, "retryable 恰好重试 1 次");

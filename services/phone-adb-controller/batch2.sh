@@ -26,6 +26,8 @@ word_rescan_metrics(){ # LOGFILE FROM → stdout "<rescan_count> <links_opened> 
 #   库缺失(旧部署/单独手跑)→ 兜底为"不限时",行为与并入前一致
 source "${0:A:h}/wf-limits.sh" 2>/dev/null \
   || { wf_deadline_reached(){ return 1 }; wf_budget_of(){ print 0 }; wf_timeout_class(){ print record }; wf_run_bounded(){ shift; "$@" } }
+# nap SECONDS —— 假机整链测试(wf-run-deadline-e2e)里清场等待不真睡(同 harvest-keyword.sh nap 模式);生产不设 WF_TESTING 不受影响
+nap(){ [[ -n "${WF_TESTING:-}" ]] && return 0; /bin/sleep "$1" }
 [[ -n "${BATCH2_LIB:-}" ]] && return 0
 P="$1"; WF="$2"; TAG="$3"; PUSH="${4:-0}"; SERIAL="${5:-}"
 # 这批活的回填去向（业务线名 / key / 研发用 dev）。不传就按 profile 走——
@@ -184,9 +186,9 @@ for W in "${(f)$(cat $WF)}"; do
   # 归位清场: 显式回feed(0914铁律: 不假设重开=干净态)
   if [[ -n "$SERIAL" ]]; then
     adb -s $SERIAL shell am force-stop com.ss.android.ugc.aweme 2>/dev/null
-    /bin/sleep 2
+    nap 2
     adb -s $SERIAL shell am start -n com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.main.MainActivity >/dev/null 2>&1
-    /bin/sleep 4
+    nap 4
   fi
   ENC=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$W")
   WFR_LOG_FROM=$(log_off); WFR_LOG_FROM=${WFR_LOG_FROM:-0}

@@ -150,8 +150,10 @@ test("接线守卫：wf-run.sh 预检读号前先 force-stop 抖音 → 冷启�
   assert.ok(iIdle > 0 && iAcct > iIdle, "找不到通话检测/读号锚点");
   const iStop = seg.indexOf("am force-stop com.ss.android.ugc.aweme");
   const iStart = seg.indexOf("am start -n com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.main.MainActivity");
-  const iSleep = seg.indexOf("/bin/sleep 4");
+  // 7d150e33: 等待改经 nap 4(WF_TESTING 下不真睡,假机整链测试用),生产语义仍是 /bin/sleep 4
+  const iSleep = seg.search(/(\/bin\/sleep|nap) 4\b/);
   assert.ok(iStop >= 0, "读号前缺 force-stop 抖音");
   assert.ok(iStart > iStop, "force-stop 之后要冷启动 MainActivity");
   assert.ok(iSleep > iStart, "冷启动后要等 4 秒再读号");
+  assert.match(src, /^nap\(\)\{ \[\[ -n "\$\{WF_TESTING:-\}" \]\] && return 0; \/bin\/sleep "\$1" \}/m, "nap 生产下必须真睡");
 });

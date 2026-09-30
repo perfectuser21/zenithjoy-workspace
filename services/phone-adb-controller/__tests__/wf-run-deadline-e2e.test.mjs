@@ -79,7 +79,7 @@ function setup() {
   const env = {
     ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`,
     WF_PLAN_DIR: join(SRC, "plans"), WFR: join(SRC, "workflow-result.sh"), BATCH2: join(SRC, "batch2.sh"), HARVEST_KEYWORD: hk,
-    WALL_REPORT: join(home, "no-wall"), BATCH_SLEEP: "0", PF_LOCK_WAIT: "0",
+    WALL_REPORT: join(home, "no-wall"), BATCH_SLEEP: "0", PF_LOCK_WAIT: "0", WF_TESTING: "1",
     // 账本真跑,但不连 mmv/Brain: 探针关、scp 关、Brain 凭据指向不存在的文件
     WFR_HOME: join(home, "wfr"), WFR_NODE: process.execPath, WFR_JQ: JQ, WFR_LEDGER_MJS: join(SRC, "ledger.mjs"),
     WFR_SCP_TARGET: "", WFR_PROBE_STAGES: "", WFR_BRAIN_ENV: join(home, "no-brain.env"), BRAIN_URL: "", BRAIN_INTERNAL_TOKEN: "",

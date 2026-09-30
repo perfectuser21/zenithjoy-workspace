@@ -291,6 +291,8 @@ C=${C:-$HOME/.local/bin/douyin-phone-adb}
 DOUYIN_ACCOUNT_REGISTRY="${DOUYIN_ACCOUNT_REGISTRY:-$HOME/.config/openclaw/douyin-account-routes.tsv}"
 LOG=~/harvest-cron.log
 log(){ print -- "[$(date +%m%d-%H:%M:%S)] [$TAG] $*" >> $LOG }
+# nap SECONDS —— 假机整链测试(wf-run-deadline-e2e)里预检清场等待不真睡(同 harvest-keyword.sh nap 模式);生产不设 WF_TESTING 不受影响
+nap(){ [[ -n "${WF_TESTING:-}" ]] && return 0; /bin/sleep "$1" }
 # 可视化旁路(0919): 每阶段报给控制塔工作机页; 上报器缺失/失败一律吞掉, 绝不影响采收
 WR=${WALL_REPORT:-$HOME/bin-harvest/wall-report.sh}
 wr(){ [[ -x "$WR" ]] && "$WR" "$@" >/dev/null 2>&1; true }
@@ -447,9 +449,9 @@ ACCOUNT_VERIFIED=0
 # 触达刚私信过的他人主页,读号子命令读成别人的号→误判账号不符拦整批;22:30 批停在搜索结果页,
 # 3 步 verified back 退不出。冷启动落在首页,读号子命令再自证是自己主页(第一道闸在它里面)。
 adb -s $SERIAL shell am force-stop com.ss.android.ugc.aweme 2>/dev/null
-/bin/sleep 2
+nap 2
 adb -s $SERIAL shell am start -n com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.main.MainActivity >/dev/null 2>&1
-/bin/sleep 4
+nap 4
 ACCTOUT="$($C --profile "$P" account-current "$TAG-preflight-acct" </dev/null 2>&1)"
 DOUYIN_ID="$(print -- "$ACCTOUT" | sed -n "s/^douyin_id=//p")"
 if [[ -z "$DOUYIN_ID" ]]; then

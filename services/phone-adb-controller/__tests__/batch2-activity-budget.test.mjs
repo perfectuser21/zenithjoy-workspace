@@ -45,7 +45,7 @@ const count = (s, re) => (s.match(re) || []).length;
 const run = (c) => spawnSync(ZSH, [BATCH2, "p1", c.wf, "t9", "1", ""], { encoding: "utf8", env: c.env, timeout: 40000 });
 
 test("落池超 WF_BUDGET_delivery 且契约分类 retryable → 记「落池超预算」并重试 1 次,批不崩、分拣照跑", { skip: SKIP }, () => {
-  const c = setup({ SSH_PUSH_SLEEP: "3", WF_BUDGET_delivery: "1", WF_TIMEOUT_CLASS_delivery: "retryable" });
+  const c = setup({ SSH_PUSH_SLEEP: "2", WF_BUDGET_delivery: "1", WF_TIMEOUT_CLASS_delivery: "retryable" });
   const t0 = Date.now();
   const r = run(c);
   assert.equal(r.status, 0, r.stderr);
@@ -59,7 +59,7 @@ test("落池超 WF_BUDGET_delivery 且契约分类 retryable → 记「落池超
 });
 
 test("分拣超 WF_BUDGET_scoring 且分类 record → 记「分拣超预算」不重试,出口 0", { skip: SKIP }, () => {
-  const c = setup({ SSH_SORT_SLEEP: "3", WF_BUDGET_scoring: "1", WF_TIMEOUT_CLASS_scoring: "record" });
+  const c = setup({ SSH_SORT_SLEEP: "2", WF_BUDGET_scoring: "1", WF_TIMEOUT_CLASS_scoring: "record" });
   const r = run(c);
   assert.equal(r.status, 0, r.stderr);
   const ssh = readOr(join(c.home, "ssh.log"));
