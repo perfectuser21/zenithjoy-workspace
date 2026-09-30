@@ -118,6 +118,9 @@ grep -qF 'escort_watch_start' "$D/wf-run.sh" || fail "wf-run 缺 escort 在途�
 grep -qF 'escort注销拒绝' "$D/wf-run.sh" || fail "wf-run escort_dismiss 退回盲删(未核 name 就 cron rm)"
 grep -qF '本 TAG' "$D/cmdr-escort.txt" || fail "cmdr-escort.txt 自杀条款缺「本 TAG 批完成」判据(凭日志停滞就自杀会复发)"
 grep -qF 'pgrep -f "wf-run.sh.*--tag' "$D/cmdr-escort.txt" || fail "cmdr-escort.txt 缺进程级收工复核"
+# 0930 任务 17ea4536: Brain 看门狗只认心跳——SOP 每轮末尾必发心跳,启动器起跑后向 Brain 登记 escort id
+grep -qF 'commander-heartbeat' "$D/cmdr-escort.txt" || fail "cmdr-escort.txt 缺心跳条款(看门狗收不到心跳会重拉 escort)"
+grep -qF 'brain_launch_register' "$D/commander/wf-launch.sh" || fail "wf-launch.sh 缺 Brain 起跑登记(escort id 进不了 Brain,lost 善后无法注销 escort)"
 
 # 层5: 落表独立字段(主理人0915逐列验收拍板: 昵称/抖音号/主页链接/IP/留言时间独立成列)
 grep -qF '"留言时间"' "$D/push-raw-comments.js" || fail "push-raw-comments 未写留言时间列"

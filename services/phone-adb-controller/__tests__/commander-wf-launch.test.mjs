@@ -33,16 +33,23 @@ case "$1 $2" in
 esac
 exit 0`;
 
+// 假 curl：Brain 起跑登记（任务 17ea4536）只记 argv，绝不真打 localhost:5221（本机就是生产 Brain 代理）
+const FAKE_CURL = `#!/bin/sh
+printf '%s\\n' "$*" >> "$HOME/curl-argv.log"
+[ "$STUB_BRAIN" = "down" ] && exit 7
+exit 0`;
+
 function setup(stub = {}) {
   const home = mkdtempSync(join(tmpdir(), "wflaunch-"));
   const bin = join(home, "bin"); mkdirSync(bin);
-  for (const [n, body] of [["ssh", FAKE_SSH], ["openclaw", FAKE_OC]]) {
+  for (const [n, body] of [["ssh", FAKE_SSH], ["openclaw", FAKE_OC], ["curl", FAKE_CURL]]) {
     const p = join(bin, n); writeFileSync(p, body); chmodSync(p, 0o755);
   }
   const env = {
     ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`,
     WF_START_WAIT: "0", WF_ESCORT_RETRY_SLEEP: "0",
     STUB_DEPLOYED: stub.deployed ?? "yes", STUB_BUSY: stub.busy ?? "no", STUB_STARTED: stub.started ?? "yes",
+    STUB_BRAIN: stub.brain ?? "up", WF_BRAIN_URL: "http://brain.test:5221",
   };
   return { home, env };
 }
@@ -83,6 +90,31 @@ test("正常起跑：escort 登记 → 起跑命令带 --tag 与 --commander <es
   assert.ok(launch, "应有一次 nohup 起跑");
   assert.match(launch, /wf-run\.sh keyword_acquisition legacy ANGYVB4402004137 'AI人工智能训练师' 6 1 --tag cmd\d{8} --commander d76fe21a/);
   assert.match(r.stdout.trim().split("\n").pop(), new RegExp(`^WF_LAUNCHED tag=cmd\\d{8} host=xian-m4 cap=keyword_acquisition serial=ANGYVB4402004137 escort=${ESCORT_ID}`));
+});
+
+test("Brain 起跑登记（任务 17ea4536）：起跑确认后 POST commander-heartbeat kind=launch 带 escort id；escort 消息含心跳指令；Brain 不通不阻塞", () => {
+  const { home, env } = setup();
+  const r = run(BASE, env);
+  assert.equal(r.status, 0, r.stderr);
+  const curl = read(home, "curl-argv.log");
+  assert.match(curl, /http:\/\/brain\.test:5221\/api\/brain\/commander-heartbeat/);
+  assert.match(curl, /"kind":"launch"/);
+  assert.match(curl, /"tag":"cmd\d{8}"/);
+  assert.match(curl, /"host":"xian-m4"/);
+  assert.match(curl, new RegExp(`"escort_id":"${ESCORT_ID}"`));
+  assert.match(curl, /"escort_name":"escort-xian-m4-cmd\d{8}"/);
+  const oc = read(home, "oc-argv.log");
+  assert.match(oc, /commander-heartbeat/, "escort 消息里要带心跳 curl 指令");
+  assert.match(oc, /"escort_name":"escort-xian-m4-cmd\d{8}"/);
+  // 起跑失败不登记；Brain 打不通照样 WF_LAUNCHED
+  const failed = setup({ started: "no" });
+  run(BASE, failed.env);
+  assert.equal(read(failed.home, "curl-argv.log"), "", "未起跑不登记");
+  const down = setup({ brain: "down" });
+  const r2 = run(BASE, down.env);
+  assert.equal(r2.status, 0, r2.stderr);
+  assert.match(r2.stderr, /起跑登记未成/);
+  assert.match(r2.stdout, /WF_LAUNCHED/);
 });
 
 test("--sources：中英文逗号都拆成逐行写到执行机，并以 --sources 传给 wf-run", () => {
