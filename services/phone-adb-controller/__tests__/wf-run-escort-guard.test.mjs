@@ -155,9 +155,12 @@ test("escort_watch_tick：escort 还在表 → 不动；网关不可达 → 不�
 
 test("escort_watch_start/stop：后台循环按 ESCORT_WATCH_INTERVAL 轮询，被移除后自动重拉；stop 后不再有循环进程", { skip: SKIP }, () => {
   const { home, env } = setup({ stub: ONLY_OTHER });
-  const r = lib(`ESCORT_ID=${MINE}; escort_watch_start; /bin/sleep 3; escort_watch_stop; cat $ESCORT_ID_FILE; kill -0 $ESCORT_WATCH_PID 2>/dev/null && echo STILL_ALIVE`, env);
+  // 全量并行跑测试时机器负载高，不用固定 3 秒：最多等 15 秒直到看门狗把 id 换掉
+  const r = lib(`ESCORT_ID=${MINE}; escort_watch_start; pid=$ESCORT_WATCH_PID;
+    for i in {1..30}; do [[ "$(cat $ESCORT_ID_FILE)" == "${NEW_ID}" ]] && break; /bin/sleep 0.5; done
+    escort_watch_stop; cat $ESCORT_ID_FILE; kill -0 $pid 2>/dev/null && echo STILL_ALIVE; true`, env);
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(r.stdout.trim(), NEW_ID, "3 秒内应完成至少一轮并换成新 id");
+  assert.equal(r.stdout.trim(), NEW_ID, "15 秒内应完成至少一轮并换成新 id");
   assert.doesNotMatch(r.stdout, /STILL_ALIVE/);
   assert.match(runLog(home), /已重拉/);
 });
@@ -176,7 +179,7 @@ test("SOP 真身与投影：自杀条款只认本 TAG 批完成 / 进程已退�
   for (const [name, txt] of [["cmdr-escort.txt", sop], ["COMMANDER.md", law]]) {
     assert.match(txt, /本 TAG/, `${name} 缺「本 TAG」判据`);
     assert.match(txt, /pgrep -f ["']?wf-run\.sh\.\*--tag/, `${name} 缺进程级复核`);
-    assert.match(txt, /日志(读不到|停滞)[^\n]*(≠|不等于|不算)收工/, `${name} 缺「日志停滞≠收工」禁令`);
+    assert.match(txt, /日志(读不到|停滞)[^\n]*(≠|不等于|不算)\s*收工/, `${name} 缺「日志停滞≠收工」禁令`);
     assert.match(txt, /cron list --json/, `${name} 注销前必须 --json 按 name 全等取 id`);
   }
   assert.doesNotMatch(sop, /日志出现"批完成"或起跑已超4小时→exec 跑 openclaw cron list 按消息里给的完整escort名/, "旧的宽松自杀条款必须删除");

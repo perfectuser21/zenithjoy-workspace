@@ -91,6 +91,96 @@ escort_alive(){
   out=$(ssh -o ConnectTimeout=20 mmv "openclaw cron list" 2>>${LOG:-/dev/null}) || true
   [[ -n "$(awk -v id="$id" '$1==id' <<< "$out")" ]]
 }
+# ── escort 在途保护(任务 1ebaeb00,决策 3c98fb36 阶段1·稳 / fd2a22f4) ──
+# 0930 02:54 实证: escort d417a34c 是被 escort 自己在 run 在途时 `openclaw cron rm` 删掉的(它读到 MMV 上 0918 起就死掉的
+#   日志桥文件,判"日志停滞"后把自己当"已收工"注销),run 随后死循环 5 小时无人陪跑;audit_events 0916 起 58 次同形。
+#   这里三件事: ①注销只删"id 在表且 name 全等 escort-$HOSTKEY-$TAG"的 cron ②看门狗每 ESCORT_WATCH_INTERVAL 秒复核,
+#   在途被移除立即同名同会话重拉(跨轮记忆不断) ③重拉后的新 id 落 ESCORT_ID_FILE,注销跟着用新 id。
+# escort_add —— 单次 cron add(拉起与看门狗重拉共用),stdout 新 id;失败回空。起跑时间用 ESCORT_START_HM(重拉不改起跑)。
+escort_add(){
+  ssh -o ConnectTimeout=20 mmv "openclaw cron add --timeout 90000 --name 'escort-$HOSTKEY-$TAG' --agent media --session 'session:escort-$HOSTKEY-$TAG' --every 10m --announce --channel feishu --to 'chat:oc_ef60d6e3f199d90dd695b6ecc213d662' --account main --best-effort-deliver --message '先读 /Users/administrator/.openclaw/cmdr-escort.txt 作为你的SOP并严格遵守辅佐三原则。本轮上下文: TAG=$TAG 机器=$HOSTKEY serial=$SERIAL profile=$P 起跑=${ESCORT_START_HM:-$(date +%H:%M)} 日志=/Users/administrator/.openclaw/m4-logs/${HOSTKEY}-live.log escort名=escort-$HOSTKEY-$TAG。注意:你上岗时本批尚未做设备preflight与取词单,这两步失败会升级给分身,你看到日志里没有词单行属正常早期阶段。'" 2>>${LOG:-/dev/null} | grep -oE '"id": "[a-f0-9-]+"' | head -1 | cut -d'"' -f4
+}
+# escort_current_id —— 当前 escort id: 看门狗重拉后写在 ESCORT_ID_FILE 的新 id 优先,否则 ESCORT_ID
+escort_current_id(){
+  if [[ -n "${ESCORT_ID_FILE:-}" && -s "$ESCORT_ID_FILE" ]]; then head -1 "$ESCORT_ID_FILE" | tr -d '[:space:]'
+  else print -rn -- "${ESCORT_ID:-}"; fi
+}
+# escort_owned ID WANT_NAME —— 这个 id 是不是本 run 的 escort。stdout: match / absent / mismatch:<name> / unknown(网关读不到)。
+#   优先 cron list --json 按 id 取 name 全等比;--json 不可用退回表格: 首列 id 命中 + Name 列去掉截断的 ... 后是期望名前缀。
+escort_owned(){
+  local id="$1" want="$2" out name rc
+  [[ -n "$id" ]] || { print absent; return 0; }
+  if out=$(ssh -o ConnectTimeout=20 mmv "openclaw cron list --json" 2>>${LOG:-/dev/null}) && [[ -n "$out" ]] && command -v jq >/dev/null 2>&1; then
+    name=$(jq -r --arg id "$id" '[.jobs[]? | select(.id==$id)][0].name // "__absent__"' <<< "$out" 2>/dev/null); rc=$?
+    if (( rc == 0 )) && [[ -n "$name" ]]; then
+      case "$name" in
+        __absent__) print absent;;
+        "$want") print match;;
+        *) print "mismatch:$name";;
+      esac
+      return 0
+    fi
+  fi
+  out=$(ssh -o ConnectTimeout=20 mmv "openclaw cron list" 2>>${LOG:-/dev/null}) || { print unknown; return 0; }
+  [[ -n "$out" ]] || { print unknown; return 0; }
+  name=$(awk -v id="$id" '$1==id {print $3; exit}' <<< "$out"); name="${name%...}"
+  if [[ -z "$name" ]]; then print absent
+  elif [[ "$want" == "$name"* ]]; then print match
+  else print "mismatch:$name"; fi
+}
+# escort_dismiss —— 只注销本 run 登记的 escort: escort_owned 判 match 才 cron rm;不在表/别人的/读不到 → 只记日志不删。
+escort_dismiss(){
+  local id want="escort-$HOSTKEY-$TAG" verdict
+  id=$(escort_current_id)
+  [[ -n "$id" ]] || return 0
+  verdict=$(escort_owned "$id" "$want")
+  case "$verdict" in
+    match)   ssh -o ConnectTimeout=20 mmv "openclaw cron rm $id" >>${LOG:-/dev/null} 2>&1 && log "escort已注销";;
+    absent)  log "escort注销跳过: id=$id 已不在 cron 表(在途被移除/已被别处注销)";;
+    unknown) log "escort注销跳过: id=$id cron list 不可达,不盲删";;
+    *)       log "escort注销拒绝: id=$id name=${verdict#mismatch:} 非本run(期望 $want),不删";;
+  esac
+  [[ -n "${ESCORT_ID_FILE:-}" ]] && rm -f "$ESCORT_ID_FILE"
+  true
+}
+# escort_watch_tick —— 看门狗一轮: 当前 id 判 absent(网关可读且真不在表)才重拉;unknown 不动(防 list 抖动拉出两个陪跑)。
+escort_watch_tick(){
+  local cur new verdict want="escort-$HOSTKEY-$TAG"
+  cur=$(escort_current_id)
+  [[ -n "$cur" ]] || return 0
+  verdict=$(escort_owned "$cur" "$want")
+  [[ "$verdict" == absent ]] || return 0
+  new=$(escort_add)
+  if [[ -n "$new" ]]; then
+    print -r -- "$new" > "$ESCORT_ID_FILE"
+    log "escort在途被移除(id=$cur),已重拉: 新id=$new"
+    escalate "escort(id=$cur)在 run 在途被移除,已同名重拉 新id=$new;移除者查 mmv gateway.log 的 cron.remove"
+  else
+    log "escort在途被移除(id=$cur),重拉失败,下一轮再试"
+  fi
+}
+ESCORT_WATCH_PID=""
+escort_watch_start(){
+  local iv="${ESCORT_WATCH_INTERVAL:-300}" parent=$$
+  [[ -n "${ESCORT_ID:-}" && -n "${ESCORT_ID_FILE:-}" ]] || return 0
+  escort_watch_stop
+  print -r -- "$ESCORT_ID" > "$ESCORT_ID_FILE"
+  ( while kill -0 $parent 2>/dev/null; do
+      /bin/sleep $iv
+      kill -0 $parent 2>/dev/null || break
+      escort_watch_tick
+    done ) </dev/null >/dev/null 2>&1 &
+  ESCORT_WATCH_PID=$!
+}
+escort_watch_stop(){
+  if [[ -n "$ESCORT_WATCH_PID" ]]; then
+    pkill -P "$ESCORT_WATCH_PID" 2>/dev/null
+    kill "$ESCORT_WATCH_PID" 2>/dev/null
+    wait "$ESCORT_WATCH_PID" 2>/dev/null
+  fi
+  ESCORT_WATCH_PID=""
+  true
+}
 # device_call_busy MCALLSTATE —— 0929修复(DoD审计发现): 契约"验通话空闲"是死代码,
 # douyin-phone-adb的preflight子命令里有真实call_state检测(telephony.registry的
 # mCallState),但从建成起就没有调用链路碰过它,harvest-cron.sh自己的preflight只查
@@ -247,9 +337,11 @@ wr step "$SERIAL" 0 doing
 # 原生跑在 MMV,直接 ssh+openclaw 调用,不再经 docker exec。
 # 7f842d12: --commander 给了 = 由 Commander 发起、escort 已由它登记,这里不再自拉(否则一批两个陪跑员)。
 ESCORT_ID=""
+ESCORT_ID_FILE="$HOME/wf-escort-$TAG.id"   # 看门狗重拉后的新 id 落这里,注销读它(escort_current_id)
+ESCORT_START_HM=$(date +%H:%M)
 escort_launch(){
 for _ea in 1 2 3; do
-  ESCORT_ID=$(ssh -o ConnectTimeout=20 mmv "openclaw cron add --timeout 90000 --name 'escort-$HOSTKEY-$TAG' --agent media --session 'session:escort-$HOSTKEY-$TAG' --every 10m --announce --channel feishu --to 'chat:oc_ef60d6e3f199d90dd695b6ecc213d662' --account main --best-effort-deliver --message '先读 /Users/administrator/.openclaw/cmdr-escort.txt 作为你的SOP并严格遵守辅佐三原则。本轮上下文: TAG=$TAG 机器=$HOSTKEY serial=$SERIAL profile=$P 起跑=$(date +%H:%M) 日志=/Users/administrator/.openclaw/m4-logs/${HOSTKEY}-live.log escort名=escort-$HOSTKEY-$TAG。注意:你上岗时本批尚未做设备preflight与取词单,这两步失败会升级给分身,你看到日志里没有词单行属正常早期阶段。'" 2>>$LOG | grep -oE '"id": "[a-f0-9-]+"' | head -1 | cut -d'"' -f4)
+  ESCORT_ID=$(escort_add)
   [[ -n "$ESCORT_ID" ]] && break
   log "escort拉起第${_ea}次失败,30s后重试"
   /bin/sleep 30
@@ -265,7 +357,6 @@ else
   escalate "escort拉起3次均失败,本批全程无陪跑;网关可能不可达或容器异常,请查网关健康"
 fi
 }
-escort_dismiss() { [[ -n "$ESCORT_ID" ]] && ssh -o ConnectTimeout=20 mmv "openclaw cron rm $ESCORT_ID" >>$LOG 2>&1 && log "escort已注销" }
 if [[ -n "$WF_COMMANDER" ]]; then
   # --commander 的值 = 启动器(wf-launch.sh)已登记的 escort cron id: 当本批 ESCORT_ID 用——按 id 复核一次(登记在先,不再等 30s),
   #   退出 trap 照旧 escort_dismiss 注销,生命周期与自拉的 escort 一致
@@ -274,6 +365,8 @@ if [[ -n "$WF_COMMANDER" ]]; then
   if escort_alive "$ESCORT_ID"; then log "escort复核命中(id=$ESCORT_ID)"
   else log "escort复核未命中(id=$ESCORT_ID)"; escalate "Commander 传入的 escort id=$ESCORT_ID 在 cron list(按 id)未命中，本批可能无人陪跑"; fi
 else escort_launch; fi
+# escort 看门狗: 从这里到收尾,在途被移除(不管谁删的)立即同名重拉;trap 里先停看门狗再注销(1ebaeb00)
+escort_watch_start
 # 账本收工(trap 里跑,正常退让路径也会经过): 未 init 只记 skipped;自检不过 escalate
 run_finalize(){
   wfr_on || return 0
@@ -305,7 +398,7 @@ run_finalize(){
   [[ "${WFR_FINALIZE_OK:-0}" == "1" ]] || escalate "账本收工自检未通过: ${WFR_FINALIZE_MSG:-unknown}"
   gate_check "收工" >/dev/null || true
 }
-if [[ -n "$ESCORT_ID" ]]; then trap 'lease_heartbeat_stop; escort_dismiss; release_run_lock; run_finalize' EXIT INT TERM; else trap 'lease_heartbeat_stop; release_run_lock; run_finalize' EXIT INT TERM; fi
+if [[ -n "$ESCORT_ID" ]]; then trap 'lease_heartbeat_stop; escort_watch_stop; escort_dismiss; release_run_lock; run_finalize' EXIT INT TERM; else trap 'lease_heartbeat_stop; release_run_lock; run_finalize' EXIT INT TERM; fi
 wr step "$SERIAL" 0 done; wr step "$SERIAL" 1 doing
 
 # ── ② 设备 preflight: 在线 + 屏幕亮 + 解锁(0915 锁屏=整机瘫痪且静默的教训) ──
