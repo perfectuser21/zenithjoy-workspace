@@ -217,14 +217,24 @@ test('契约 known_gaps 不再挂 6b133a81（运行时读回+拦截已全部落�
 
 // ── 任务 9032cdad：步骤 DoD 可执行化（决策 2a60378a）——文字 check 旁挂结构化 dod，生成物随部署下发 ──
 
-test('43 个步骤全部带 dod：mode ∈ checkpoint|hard；none 须写 reason；hard 不得是 none', () => {
+test('44 个步骤全部带 dod：mode ∈ checkpoint|hard；none 须写 reason；hard 不得是 none', () => {
   const steps = fresh().contracts.keyword_acquisition.activities.flatMap((a) => a.steps.map((s) => ({ ...s, act: a.key })));
-  assert.equal(steps.length, 43);
+  assert.equal(steps.length, 44);
   for (const s of steps) {
     assert.ok(s.dod, `${s.act}.${s.key} 缺 dod`);
     assert.ok(['checkpoint', 'hard'].includes(s.dod.mode));
     if (s.dod.readback.type === 'none') assert.ok(s.dod.reason, `${s.act}.${s.key} 读不回须写原因`);
   }
+});
+
+// 0930 决策 f425e3fd：采集里每张卡片处理完的「归位」此前在 43 步契约里没有自己的步骤——它藏在 collection 实现里，
+// 三次修复（草稿页误判/漏切视频 tab/锁被占）都没有一个格子能变红。补成独立步骤，读回 metrics.rescan_rate（兜底重搜/打开作品数
+// = 1 − 一次做对率 %C&A），checkpoint 起步。
+test('collection 有 return_to_results 步（归位一次做对率）：metric rescan_rate <= 0.3，checkpoint', () => {
+  const s = act(fresh(), 'keyword_acquisition', 'collection').steps.find((x) => x.key === 'return_to_results');
+  assert.ok(s, 'collection 缺 return_to_results 步');
+  assert.equal(s.dod.mode, 'checkpoint');
+  assert.deepEqual(s.dod.readback, { type: 'metric', ref: 'metrics.rescan_rate', expect: { op: '<=', value: 0.3 } });
 });
 
 test('生成物 step-dod.json 与契约一致（改契约必须重跑 gen-step-dod.mjs）', () => {
