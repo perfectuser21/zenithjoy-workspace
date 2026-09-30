@@ -21,8 +21,8 @@ const SRC = join(HERE, "..");
 const SPEC = JSON.parse(readFileSync(join(SRC, "step-dod.json"), "utf8"));
 const JQ = spawnSync("bash", ["-lc", "command -v jq"], { encoding: "utf8" }).stdout.trim();
 
-test("step-dod.json：43 步全覆盖、全部 checkpoint 起步、none 必带 reason、升级门槛 N 已声明", () => {
-  assert.equal(SPEC.steps.length, 43);
+test("step-dod.json：44 步全覆盖、全部 checkpoint 起步、none 必带 reason、升级门槛 N 已声明", () => {
+  assert.equal(SPEC.steps.length, 44);
   assert.ok(SPEC.steps.every((s) => s.mode === "checkpoint"), "新步骤一律 checkpoint 起步(决策 2a60378a)");
   for (const s of SPEC.steps) {
     assert.match(s.key, /^keyword_acquisition\.[a-z_]+\.[a-z_]+$/, "key=能力.活动.步骤");
@@ -30,6 +30,49 @@ test("step-dod.json：43 步全覆盖、全部 checkpoint 起步、none 必带 r
     else assert.ok(s.readback.expect, `${s.key} 缺 expect`);
   }
   assert.ok(Number.isInteger(SPEC.promotion.min_consecutive_pass) && SPEC.promotion.min_consecutive_pass >= 10);
+});
+
+// ── 0930 决策 f425e3fd：归位（每张卡片处理完 back-to-results）成为 collection 的独立步骤，读回 metrics.rescan_rate ──
+// 兜底重搜触发率 = 归位一次没做对的比例（精益 %C&A 的补）。指标由 batch2.sh 从本词日志段算出（word_rescan_metrics），
+// 这里把两批真实生产日志回放给裁判：cmd09300230 词1 41 张卡 41 次兜底 → 判红；auto09292304 词3 2 张卡 0 次 → 判绿。
+const RETURN_STEP = "keyword_acquisition.collection.return_to_results";
+const ZSH = spawnSync("bash", ["-lc", "command -v zsh"], { encoding: "utf8" }).stdout.trim();
+function rescanMetricsOf(logFile, from = 0) {
+  const r = spawnSync(ZSH, ["-c", `BATCH2_LIB=1 source "${join(SRC, "batch2.sh")}"; word_rescan_metrics "$1" "$2"`, "zsh", logFile, String(from)], { encoding: "utf8" });
+  const [count, links, rate] = r.stdout.trim().split(/\s+/);
+  return { stdout: r.stdout, stderr: r.stderr, rescan_count: Number(count), links_opened: Number(links), rescan_rate: Number(rate) };
+}
+
+test("return_to_results 步在 collection 下，metric 读回 rescan_rate <= 0.3，checkpoint 起步", () => {
+  const s = SPEC.steps.find((x) => x.key === RETURN_STEP);
+  assert.ok(s, `step-dod.json 缺 ${RETURN_STEP}`);
+  assert.deepEqual([s.activity, s.at, s.mode], ["collection", "collection", "checkpoint"]);
+  assert.deepEqual(s.readback, { type: "metric", ref: "metrics.rescan_rate", expect: { op: "<=", value: 0.3 } });
+  const judge = (rate) => judgeSteps({ spec: SPEC, stage: "collection", ctx: { metrics: { rescan_rate: rate, videos_processed: 0, comments_collected: 0 } } }).steps.find((x) => x.key === RETURN_STEP);
+  assert.equal(judge(1).pass, false, "全部走兜底 → 不过");
+  assert.equal(judge(0.2).pass, true, "两成以内 → 过");
+  assert.equal(judgeSteps({ spec: SPEC, stage: "collection", ctx: { metrics: { videos_processed: 0 } } }).steps.find((x) => x.key === RETURN_STEP).pass, null, "工件没这个键 → 读不回,不假绿");
+});
+
+test("batch2 word_rescan_metrics：从本词日志段数兜底重搜/打开作品数，算 rescan_rate；空段 0/0/0", { skip: !ZSH && "no zsh" }, () => {
+  const red = rescanMetricsOf(join(HERE, "fixtures", "night-cmd09300230-w1.txt"));
+  assert.deepEqual([red.rescan_count, red.links_opened, red.rescan_rate], [41, 41, 1], red.stderr);
+  const green = rescanMetricsOf(join(HERE, "fixtures", "night-auto09292304-w3.txt"));
+  assert.deepEqual([green.rescan_count, green.links_opened, green.rescan_rate], [0, 2, 0], green.stderr);
+  // 偏移：跳过前 14 行只剩词尾 → 0/0/0（同 batch2 每词开头记 WFR_LOG_FROM，只数本词段）
+  const partial = rescanMetricsOf(join(HERE, "fixtures", "night-auto09292304-w3.txt"), 14);
+  assert.deepEqual([partial.rescan_count, partial.links_opened, partial.rescan_rate], [0, 0, 0]);
+});
+
+test("proven-to-fire：cmd09300230 词1（134/134 兜底那批）回放 → return_to_results 判红；auto09292304 词3 → 判绿", { skip: !ZSH && "no zsh" }, () => {
+  const red = rescanMetricsOf(join(HERE, "fixtures", "night-cmd09300230-w1.txt"));
+  const rr = judgeSteps({ spec: SPEC, stage: "collection", ctx: { metrics: { rescan_rate: red.rescan_rate, rescan_count: red.rescan_count, videos_processed: 4, comments_collected: 4 } } });
+  const rs = rr.steps.find((x) => x.key === RETURN_STEP);
+  assert.deepEqual([rs.observed, rs.pass], [1, false]);
+  assert.deepEqual(rr.hard_failed, [], "checkpoint 起步只记录不拦");
+  const green = rescanMetricsOf(join(HERE, "fixtures", "night-auto09292304-w3.txt"));
+  const gs = judgeSteps({ spec: SPEC, stage: "collection", ctx: { metrics: { rescan_rate: green.rescan_rate, rescan_count: green.rescan_count, videos_processed: 0, comments_collected: 0 } } }).steps.find((x) => x.key === RETURN_STEP);
+  assert.deepEqual([gs.observed, gs.pass], [0, true]);
 });
 
 test("renderTemplate：{tag}{n}{word} 替换；正则场景下 word 转义", () => {

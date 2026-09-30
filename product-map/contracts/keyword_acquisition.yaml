@@ -259,6 +259,9 @@ activities:
       - { key: mark_video_collected, name: 标记视频已采, order: 5, reads: [Video.video_id], writes: [Video.process_status],
           check: "process_status=评论已采 只写给 matched 视频", implementation: { status: implemented, ref: "harvest-keyword.sh 采完 qual_remote collected → qualify-video.js collected → leadgen-db-lib.js markVideoCollected（WHERE judgment_status=matched 兜底，8bb3af55）" }, uses_llm: false,
           dod: {"mode": "checkpoint", "readback": {"type": "sql", "query": "SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG' AND keyword = '$WORD' AND process_status = '评论已采'", "expect": {"op": ">=", "ref": "metrics.videos_processed"}}} }
+      - { key: return_to_results, name: 归位回结果页, order: 6, reads: [Video.video_url], writes: [],
+          check: "每张卡片处理完 back-to-results 一次做对（Activity=搜索结果页且搜索框=本词）；走了兜底重搜（deeplink 重发搜索+重扫卡片）算一次没做对。0930 决策 f425e3fd：此前不是步骤，三次修复都没有格子能变红；cmd09300230 批 134/134 走兜底、跑 6 小时", implementation: { status: implemented, ref: "harvest-keyword.sh back_to_results_and_maybe_rescan → douyin-phone-adb back_to_results（_search_kw_matches）；指标 batch2.sh word_rescan_metrics" }, uses_llm: false,
+          dod: {"mode": "checkpoint", "readback": {"type": "metric", "ref": "metrics.rescan_rate", "expect": {"op": "<=", "value": 0.3}}} }
     known_gaps:
       - { gap: "coll_video_binding_consistent 只能核对孤儿归属（评论来源视频必须是本批落过库的视频），抓不住漂移到同批另一条真实视频的语义错配；行内防线是 harvest-keyword.sh video_drifted（0929）。要抓同批错配需账本记每条评论采集时的视频身份序列做交叉核验", task: 878fe194 }
 

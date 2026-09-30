@@ -11,6 +11,18 @@
 #   原 v4 副本 batch2-v4.sh 已废: 与现网分叉四处(LINE 第6参/分拣/音频判定链/MAXV),影子跑又拿不到设备。
 set -uo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+# 0930 决策 f425e3fd: 归位一次做对率(精益 %C&A 的补)——采集里每张卡片处理完 back-to-results 走了兜底重搜
+# ("归位触发兜底重搜")= 一次没做对。只读本词日志段(WFR_LOG_FROM 起)、不写日志;分母 = 本词打开的作品数("作品链接:")。
+# cmd09300230 批 134/134 走兜底跑了 6 小时而结果探针全绿,就是缺这个过程指标。单测以 BATCH2_LIB=1 source 只取函数。
+word_rescan_metrics(){ # LOGFILE FROM → stdout "<rescan_count> <links_opened> <rescan_rate>"
+  local f="$1" from="${2:-0}" seg c l r
+  seg=$(tail -n +$((from+1)) "$f" 2>/dev/null || true)
+  c=$(print -r -- "$seg" | grep -a -c '归位触发兜底重搜' 2>/dev/null); c=${c:-0}
+  l=$(print -r -- "$seg" | grep -a -c '作品链接:' 2>/dev/null); l=${l:-0}
+  if (( l > 0 )); then r=$(awk -v c="$c" -v l="$l" 'BEGIN{printf "%.3f", c/l}'); else r=0; fi
+  print -- "$c $l $r"
+}
+[[ -n "${BATCH2_LIB:-}" ]] && return 0
 P="$1"; WF="$2"; TAG="$3"; PUSH="${4:-0}"; SERIAL="${5:-}"
 # 这批活的回填去向（业务线名 / key / 研发用 dev）。不传就按 profile 走——
 # 隔离点在「活」上不在「机器」上（0922 主理人定），所以它是可以被调用方覆盖的。
@@ -39,9 +51,10 @@ count_qual(){ local c; c=$(grep -cE "^QUAL	[^	]*	($1)	" $OUT 2>/dev/null || true
 #   qualified = matched(pending = 判定接口故障留待重判,qual_none_pending 判 retryable);collection 只在有合格视频时 completed。
 wfr_word_stages(){ # n word rc dv dl q qj qm
   wfr_on || return 0
-  local n="$1" W="$2" rc="$3" DV="$4" DL="$5" Q="${6:-0}" QJ="${7:-0}" QM="${8:-0}" cand
+  local n="$1" W="$2" rc="$3" DV="$4" DL="$5" Q="${6:-0}" QJ="${7:-0}" QM="${8:-0}" cand RESC RLINKS RRATE
   local EV='[{"type":"log","ref":"'"$LOG"'","word":"'"$W"'","rc":'"$rc"'}]'
   cand=$(( Q > DV ? Q : DV ))
+  read -r RESC RLINKS RRATE <<< "$(word_rescan_metrics "$LOG" "${WFR_LOG_FROM:-0}")"
   case "$rc" in
     0) if (( cand > 0 )); then
          wfr stage discovery completed "$n" "word=$W candidates=$cand" "$EV" '{"candidates":'"$cand"',"keywords_processed":1,"screens_scanned":0}' "$W"
@@ -51,9 +64,9 @@ wfr_word_stages(){ # n word rc dv dl q qj qm
            wfr stage qualification blocked "$n" "word=$W no_qual_lines" "$EV" '{"candidates_judged":0,"qualified":0}' "$W"
          fi
          if (( QM > 0 || DV > 0 )); then
-           wfr stage collection completed "$n" "word=$W leads=$DL" "$EV" '{"comments_collected":'"$DL"',"videos_processed":'"$DV"',"cursor_updates":0}' "$W"
+           wfr stage collection completed "$n" "word=$W leads=$DL rescan=$RESC/$RLINKS" "$EV" '{"comments_collected":'"$DL"',"videos_processed":'"$DV"',"cursor_updates":0,"rescan_count":'"$RESC"',"rescan_rate":'"$RRATE"'}' "$W"
          else
-           wfr stage collection blocked "$n" "word=$W no_qualified" "$EV" '{"comments_collected":0,"videos_processed":0,"cursor_updates":0}' "$W"
+           wfr stage collection blocked "$n" "word=$W no_qualified" "$EV" '{"comments_collected":0,"videos_processed":0,"cursor_updates":0,"rescan_count":'"$RESC"',"rescan_rate":'"$RRATE"'}' "$W"
          fi
        else
          wfr stage discovery blocked "$n" "word=$W no_cards" "$EV" '{"candidates":0,"keywords_processed":1,"screens_scanned":0}' "$W"

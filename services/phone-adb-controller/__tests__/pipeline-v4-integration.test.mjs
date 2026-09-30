@@ -26,6 +26,7 @@ print -r -- "$#\t$1\t$2\t$3\t$4\t$5\t\${6:-<unset>}" >> "$HOME/hk-argv.log"
 W=$(python3 -c "import urllib.parse,sys;print(urllib.parse.unquote(sys.argv[1]))" "$2")
 case "$W" in
   ok)     print "VIDEO\\t1\\thttps://v/1\\ttitle\\t$W\\t2"; print "LEAD\\tnick\\tid1\\tpersonal\\tbody\\t09-01\\t上海\\ttitle\\t$W\\t\\t\\thttps://v/1"; print "LEAD\\tnick2\\tid2\\tpersonal\\tbody\\t09-01\\t上海\\ttitle\\t$W\\t\\t\\thttps://v/1"; exit 0;;
+  rescan) print -u2 "  作品链接: https://v/1"; print -u2 "  归位触发兜底重搜(原卡片坐标已失效)，重新扫描卡片列表"; print -u2 "  作品链接: https://v/2"; print "VIDEO\\t2\\thttps://v/2\\ttitle\\t$W\\t1"; exit 0;;
   nocard) exit 0;;
   lock)   exit 3;;
   fail)   exit 1;;
@@ -104,8 +105,22 @@ test("四种出口码 → 阶段状态映射（af061588）；工件 n=词序；c
   assert.ok(a.includes("social-keyword-leadgen-crontab-t9__a1.discovery.4.worker-result.json"));
   const c1 = art(ctx, "collection.1");
   assert.equal(c1.metrics.comments_collected, 2); assert.equal(c1.metrics.videos_processed, 1);
+  assert.deepEqual([c1.metrics.rescan_count, c1.metrics.rescan_rate], [0, 0], "没走兜底的词 rescan 指标为 0");
   assert.match(art(ctx, "discovery.3").summary, /lock_busy/);
   assert.match(art(ctx, "discovery.4").summary, /rc=1/);
+});
+
+test("collection 工件带归位指标：本词打开 2 张作品、1 次兜底重搜 → rescan_count=1 rescan_rate=0.5；只数本词日志段", { skip: SKIP }, () => {
+  const ctx = setup(["ok", "rescan"]);
+  // 统一裁判要显式指到仓内裁判与清单（临时 HOME 里没有 ~/bin-harvest）
+  const r = run(ctx, { env: { WFR_STEP_JUDGE: join(SRC, "step-judge.mjs"), WFR_STEP_SPEC: join(SRC, "step-dod.json"), WFR_EVIDENCE_ROOT: join(ctx.home, "ev") } });
+  assert.equal(r.status, 0, r.stderr);
+  const c2 = art(ctx, "collection.2");
+  assert.deepEqual([c2.metrics.rescan_count, c2.metrics.rescan_rate, c2.metrics.videos_processed], [1, 0.5, 1]);
+  assert.deepEqual([art(ctx, "collection.1").metrics.rescan_count, art(ctx, "collection.1").metrics.rescan_rate], [0, 0], "词1 不受词2 日志影响");
+  const sd = c2.step_dod.find((s) => s.key === "keyword_acquisition.collection.return_to_results");
+  assert.deepEqual([sd.observed, sd.pass], [0.5, false], "裁判读到 rescan_rate=0.5 > 0.3 → 不过（checkpoint 只记录）");
+  assert.equal(c2.status, "completed");
 });
 
 test("LINE 第 6 参照旧传递：显式传 devline → harvest-keyword 与落池/分拣/判定 ssh 都拿到 devline", { skip: SKIP }, () => {

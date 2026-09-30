@@ -228,6 +228,26 @@ probes:
       归入 6b133a81（运行时读回目前只接 delivery/scoring）范畴，此处如实注明能力边界，不假
       装它能查出这种同批内的语义错配。
 
+  - key: coll_rescan_rate
+    stage: collection
+    journey_cell: "stage:collection"
+    probe:
+      type: metric
+      ref: "metrics.rescan_rate"
+    expect:
+      op: "<="
+      value: 0.3
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: >
+      0930 决策 f425e3fd：归位一次做对率（精益 %C&A 的补）。采集里每张卡片处理完 back-to-results
+      走了兜底重搜（harvest-keyword.sh 日志「归位触发兜底重搜」）= 一次没做对；rescan_rate =
+      兜底次数 / 本词打开的作品数（batch2.sh:17 word_rescan_metrics 从本词日志段算，写进 collection 工件；
+      归位本体 harvest-keyword.sh back_to_results_and_maybe_rescan → douyin-phone-adb:371 back_to_results）。
+      cmd09300230 批 134/134 走兜底、12 词跑 6 小时只出 4 条线索，而 delivery/scoring 的结果探针全绿——
+      过程病结果探针看不见，这条补的就是过程指标。超 0.3 判该词 collection 失败（fail_stage，不停跑）。
+
   # ── delivery：落池读回（batch2-v4.sh:64-65 scp TSV → push-videos.js + push-raw-comments.js）──
   - key: videos_readback
     stage: delivery

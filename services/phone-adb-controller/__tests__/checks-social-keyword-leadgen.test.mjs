@@ -54,6 +54,19 @@ test("8 个活动每个都至少挂 1 条探针（缺探针=后置条件无判�
   for (const s of STAGES) assert.ok(doc.probes.some((p) => p.stage === s), `stage ${s} 没有探针`);
 });
 
+// 0930 决策 f425e3fd：归位一次做对率进探针——collection 工件 metrics.rescan_rate（兜底重搜/打开作品数）超 0.3 判红。
+// severity 按 schema 只能 error（f18f56b8）；on_fail=fail_stage 只判该词 collection 失败，不停跑。
+test("coll_rescan_rate：collection 上的 metric 探针，ref metrics.rescan_rate <= 0.3，rescan_rate 在 collection 闭集里", () => {
+  const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
+  const p = doc.probes.find((x) => x.key === "coll_rescan_rate");
+  assert.ok(p, "缺 coll_rescan_rate 探针");
+  assert.equal(p.stage, "collection");
+  assert.deepEqual(p.probe, { type: "metric", ref: "metrics.rescan_rate" });
+  assert.deepEqual(p.expect, { op: "<=", value: 0.3 });
+  assert.equal(p.on_fail, "fail_stage");
+  assert.ok(reqKeysOf("collection").includes("rescan_rate") && reqKeysOf("collection").includes("rescan_count"), "collection 闭集缺 rescan_count/rescan_rate");
+});
+
 test("metric 探针：ref 只能引本 stage 的 req_keys 闭集键", () => {
   const { doc } = loadChecks(YAML_PATH, SCHEMA_PATH);
   const metric = doc.probes.filter((p) => p.probe.type === "metric");
