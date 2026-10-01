@@ -249,7 +249,10 @@ test('JSON真实CLI读取提交的绑定文件且旧YAML/shell计划仍不切换
   assert.ok(existsSync(BINDINGS), '缺opt-in绑定文件');
   const result = cli('keyword_acquisition', '--json', '--bindings', BINDINGS, '--allow-missing');
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(JSON.parse(result.stdout).contract.activities.length, 4);
+  const activities = JSON.parse(result.stdout).contract.activities;
+  assert.equal(activities.length, 4);
+  assert.deepEqual(activities.map(a => a.runtime.entry), ['video-activity.js', 'video-activity.js', 'comment-activity.js', 'comment-activity.js']);
+  assert.deepEqual(activities.slice(0, 2).map(a => a.runtime.cleanup_grace_s), [30, 30]);
   assert.equal(cli('--check').status, 0);
 });
 
@@ -278,4 +281,13 @@ test('schema只对JSON允许安全相对JS/MJS/SH路径，legacy仍只允许原s
   assert.equal(validate({ phase: 'batch_end', entry: 'scoring.js' }), false);
   const ctx = fresh(); act(ctx, 'keyword_acquisition', 'scoring').runtime = runtime;
   assert.ok(planFor(ctx, 'keyword_acquisition').errors.some(e => /JSON|json-stdio/.test(e)));
+});
+
+test('per_item.items只允许累计上下文顶层数组，避免schema放行执行器无法合并的nested路径', () => {
+  const bindings = bindingsFixture();
+  bindings.activities.qualification.runtime.per_item.items = '$.nested.videos';
+  const result = jsonCli(bindings);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /schema/);
+  assert.equal(result.stdout, '');
 });

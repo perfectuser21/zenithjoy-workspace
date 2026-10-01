@@ -21,7 +21,7 @@
     "qualification": {
       "runtime": {
         "phase": "per_item",
-        "entry": "services/phone-adb-controller/video-activity.js",
+        "entry": "video-activity.js",
         "protocol": "json-stdio-v1",
         "argv": [
           "qualification"
@@ -40,13 +40,13 @@
         },
         "on_failure": "continue",
         "max_attempts": 1,
-        "cleanup_grace_s": 10
+        "cleanup_grace_s": 30
       }
     },
     "collection": {
       "runtime": {
         "phase": "per_item",
-        "entry": "services/phone-adb-controller/video-activity.js",
+        "entry": "video-activity.js",
         "protocol": "json-stdio-v1",
         "argv": [
           "collection"
@@ -69,13 +69,13 @@
         },
         "on_failure": "continue",
         "max_attempts": 1,
-        "cleanup_grace_s": 10
+        "cleanup_grace_s": 30
       }
     },
     "scoring": {
       "runtime": {
         "phase": "batch_end",
-        "entry": "services/phone-adb-controller/comment-activity.js",
+        "entry": "comment-activity.js",
         "protocol": "json-stdio-v1",
         "argv": [
           "scoring"
@@ -106,7 +106,7 @@
     "delivery": {
       "runtime": {
         "phase": "batch_end",
-        "entry": "services/phone-adb-controller/comment-activity.js",
+        "entry": "comment-activity.js",
         "protocol": "json-stdio-v1",
         "argv": [
           "raw-delivery"
