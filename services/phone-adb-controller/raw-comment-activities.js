@@ -2,6 +2,7 @@
 
 const { validateInput } = require('./comment-activities.js');
 const { txt } = require('./sort-comments-lib.js');
+const { readCommentIdentity } = require('./lead-fields-lib.js');
 
 const RAW_COMMENT_FIELDS = ['原始评论ID', '运行批次', '采集时间', '命中关键词', '来源视频',
   '评论作品视频链接', '评论原文', '评论者昵称', '用户主页标识', '抖音号', '主页链接',
@@ -9,25 +10,7 @@ const RAW_COMMENT_FIELDS = ['原始评论ID', '运行批次', '采集时间', '�
 
 // 显式字段优先；旧池对象只带拼串时仍可使用。不读TSV、账号配置或历史评分。
 function identity(fields) {
-  const nick = txt(fields.评论者昵称);
-  const comment = txt(fields.评论原文);
-  const parts = txt(fields.用户主页标识).split(' | ').filter(Boolean);
-  const rawid = txt(fields.原始评论ID);
-  const prefix = nick + '|', suffix = '|' + comment.slice(0, 20);
-  // 旧拼串过滤了空值，只有类型时parts[0]不能当抖音号。
-  // 已落池rawid补足该歧义；完整昵称前缀允许昵称自身含竖线。
-  const hint = rawid.startsWith(prefix) && rawid.endsWith(suffix)
-    ? rawid.slice(prefix.length, rawid.length - suffix.length) : undefined;
-  const dyid = txt(fields.抖音号 !== undefined ? fields.抖音号
-    : hint !== undefined ? (hint === 'noid' ? '' : hint)
-      : (parts.length > 1 && !parts[0].startsWith('http') ? parts[0] : ''));
-  const purl = txt(fields.主页链接 !== undefined ? fields.主页链接 : parts.find(value => value.startsWith('http')));
-  const remaining = [...parts];
-  if (dyid && remaining[0] === dyid) remaining.shift();
-  if (purl && remaining[0] === purl) remaining.shift();
-  const atype = txt(fields.账号类型 !== undefined ? fields.账号类型 : remaining.join(' | '));
-  return { nick, dyid, purl, atype, comment,
-    profile: fields.用户主页标识 !== undefined ? txt(fields.用户主页标识) : [dyid, purl, atype].filter(Boolean).join(' | ') };
+  return readCommentIdentity(fields, txt);
 }
 
 function rawCommentId(fields) {

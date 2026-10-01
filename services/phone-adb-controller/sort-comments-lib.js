@@ -21,7 +21,7 @@
 
 'use strict';
 
-const { buildLeadCoreFields } = require('./lead-fields-lib.js');
+const { buildLeadCoreFields, readCommentIdentity } = require('./lead-fields-lib.js');
 
 const txt = (v) => (Array.isArray(v)
   ? v.map((x) => x.text || x.name || x).join('')
@@ -62,9 +62,9 @@ async function settlePending({ row, verdict, deps, route, seen, now, asLeadTime 
     return { moved: 0, duped: 0, retryable: false, reason: '判定不相关' };
   }
 
-  const nick = txt(f['评论者昵称']);
-  const [dyid, purl] = txt(f['用户主页标识']).split(' | ');
-  const comment = txt(f['评论原文']);
+  const identity = readCommentIdentity(f, txt);
+  const nick = identity.nick.trim(), dyid = identity.dyid.trim(), purl = identity.purl.trim();
+  const comment = identity.comment;
   const videoCaption = txt(f['来源视频']);
 
   // 失败时把原因写回池，但**处理状态保持不动**，下一轮还扫得到它。
@@ -76,7 +76,7 @@ async function settlePending({ row, verdict, deps, route, seen, now, asLeadTime 
     return { moved: 0, duped: 0, retryable: true, reason: why };
   };
 
-  const hit = (dyid && seen.get(dyid.trim())) || seen.get(nick);
+  const hit = (dyid && seen.get(dyid)) || (nick && seen.get(nick));
 
   // ── 重复客户 = 强意向信号：高亮已有行，不新建 ──
   if (hit) {
@@ -129,8 +129,9 @@ async function settlePending({ row, verdict, deps, route, seen, now, asLeadTime 
 
   // 0915 修真 bug：seen 是 Map，原代码误用 Set 的 add 抛 TypeError，每轮搬第一条后即断
   const leadId = res.data && res.data.record && res.data.record.record_id;
-  seen.set(nick, { id: leadId, dup: 0 });
-  if (dyid) seen.set(dyid.trim(), { id: leadId, dup: 0 });
+  const customer = { id: leadId, dup: 0 };
+  if (nick) seen.set(nick, customer);
+  if (dyid) seen.set(dyid, customer);
 
   // ── 线索落地了，这才推进池状态 ──
   await deps.putPool(row.id, { 处理状态: '已分拣', 进入最终线索: true, ...verdictFields(verdict, true) });
