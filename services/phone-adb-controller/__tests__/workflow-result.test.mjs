@@ -42,6 +42,29 @@ function words(dir, list) { const f = join(dir, "kw.txt"); writeFileSync(f, list
 function artifacts(kv) { return readdirSync(kv.WFR_ART_DIR).filter((f) => f.endsWith(".worker-result.json")).sort(); }
 const IS_ROOT = typeof process.getuid === "function" && process.getuid() === 0; // root 无视权限位，chmod 000 测试对它无意义
 
+test("逐词 collection 回执分开记账：首词 blocked 不吞成功词，同词重发保持幂等身份", { skip: !JQ && "no jq" }, () => {
+  const d = mkdtempSync(join(tmpdir(), "wfr-word-receipt-"));
+  try {
+    const b = brainEnv(d);
+    const i = wfr(d, {}, "init", "auto10010315", "p1", words(d, ["无候选", "企业AI办公"]), "1", "S", "h");
+    const extra = { ...i.kv, ...b.env, WFR_ATTEMPT: "a1" };
+    const metrics = (count) => JSON.stringify({ comments_collected: count, videos_processed: count, cursor_updates: 0, rescan_count: 0, rescan_rate: 0 });
+    const ev = '[{"type":"log","ref":"night-auto10010315.log"}]';
+    wfr(d, extra, "stage", "collection", "blocked", "1", "no_cards", ev, metrics(0), "无候选");
+    wfr(d, extra, "stage", "collection", "completed", "2", "采集完成", ev, metrics(2), "企业AI办公");
+    wfr(d, extra, "stage", "collection", "completed", "2", "采集完成", ev, metrics(2), "企业AI办公");
+    const bodies = curlCalls(b.calls).map((args) => JSON.parse(argAfter(args, "-d")));
+    assert.equal(bodies.length, 3);
+    assert.equal(bodies[0].result.stage_status, "blocked");
+    assert.equal(bodies[1].result.stage_status, "completed");
+    assert.notEqual(bodies[0].run_id, bodies[1].run_id, "不同活动实例必须各自触发 run.finished");
+    assert.equal(bodies[1].run_id, bodies[2].run_id, "同一实例重发不能制造重复运行");
+    assert.equal(bodies[1].run_id, "social-keyword-leadgen-crontab-auto10010315__a1.collection.2");
+  } finally {
+    rmSync(d, { recursive: true, force: true });
+  }
+});
+
 test("hash: 同词单不同 TAG 相同；顺序无关；改一词即变；不含 SERIAL", { skip: !JQ && "no jq" }, () => {
   const d = mkdtempSync(join(tmpdir(), "wfr-"));
   const a = wfr(d, {}, "hash", "p1", words(d, ["A", "B"]), "1").kv.WFR_HASH;
@@ -217,4 +240,3 @@ test("stage delivery: 远端 stderr 噪音夹在 stdout 前也只取末行 JSON"
   assert.equal(s.code, 0);
   assert.deepEqual(JSON.parse(argAfter(curlCalls(b.calls)[0], "-d")).result.probes, JSON.parse(CANNED).probes);
 });
-

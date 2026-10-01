@@ -276,7 +276,8 @@ write_stage(){
   [[ "$status" == blocked && "$summary" == not_run* ]] || hard=$(judge_steps "$stage" "$n" "$word" "$f" "$(printf '%s' "$pr" | "$WFR_JQ" -c '.steps // []' 2>/dev/null)")
   apply_gate "$stage" "$n" "$word" "$f" "$gate" "$hard"
   if [[ "$stage" != cleanup ]]; then
-    brain_post "${WFR_RUN_ID:-}__${attempt}.${stage}" in_progress "$stage" "$f" '[]' "$probes"
+    # 每词是独立活动实例：Brain 首条终态不可覆盖，同一 stage/n 重发仍幂等。
+    brain_post "${WFR_RUN_ID:-}__${attempt}.${stage}.${n}" in_progress "$stage" "$f" '[]' "$probes"
   fi
   # 拦截后的工件状态就是这条 span 的 outcome（cleanup 也报：它是骨干最后一格）
   span_post "$stage" "$("$WFR_JQ" -r '.status' "$f" 2>/dev/null || echo "$status")" "$n" "$f" "$word"
