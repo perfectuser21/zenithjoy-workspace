@@ -2604,75 +2604,9 @@ case "$command" in
     check_target_fast
     print -- "foreground=$(foreground_package)"
     ;;
-  lock-acquire)
-    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE lock-acquire RUN_ID"
-    require_run_id "$2"
-    lock_owner_id="$(normalize_run_id "$2")"
-    /bin/mkdir -p "$LOCK_ROOT"
-    # 0914 竞态实证：上一轮 release 的 rm -rf 与本次 acquire 并发时,mkdir 失败后目录又消失,
-    # 旧 stale 分支直接写 owner 报 no such file。修法:一切"抢占/重建"都回到 mkdir 原子原语重试。
-    _lk_ok=0
-    for _lk_try in 1 2 3; do
-      if /bin/mkdir "$LOCK_DIR" 2>/dev/null; then
-        /usr/bin/printf '%s\n' "$lock_owner_id" > "$LOCK_DIR/owner"
-        /bin/date +%s > "$LOCK_DIR/acquired_at"
-        print -- "lock=acquired owner=$lock_owner_id"
-        _lk_ok=1; break
-      elif [[ -r "$LOCK_DIR/owner" ]] && same_run_lock "$(<"$LOCK_DIR/owner")" "$lock_owner_id"; then
-        print -- "lock=held owner=$(<"$LOCK_DIR/owner") idempotent=true"
-        _lk_ok=1; break
-      elif lock_is_stale; then
-        owner="unknown"; [[ -r "$LOCK_DIR/owner" ]] && owner="$(<"$LOCK_DIR/owner")"
-        print -u2 -- "warning: reclaiming stale lock (prev owner=$owner); retrying atomic acquire"
-        /bin/rm -rf "$LOCK_DIR" 2>/dev/null
-        /bin/sleep 0.2
-        continue
-      else
-        break
-      fi
-    done
-    if (( ! _lk_ok )); then
-      owner="unknown"
-      [[ -r "$LOCK_DIR/owner" ]] && owner="$(<"$LOCK_DIR/owner")"
-      _age=""; [[ -r "$LOCK_DIR/acquired_at" ]] && _age="age=$(( $(/bin/date +%s) - $(<"$LOCK_DIR/acquired_at") ))s/ttl=${LOCK_TTL_SECONDS}s"
-      die "lock is held by another run: $owner $_age"
-    fi
-    ;;
-  lock-status)
-    [[ "$#" == 1 ]] || die "usage: douyin-phone-adb --profile PROFILE lock-status"
-    if [[ -r "$LOCK_DIR/owner" ]]; then
-      _age="?"; [[ -r "$LOCK_DIR/acquired_at" ]] && _age="$(( $(/bin/date +%s) - $(<"$LOCK_DIR/acquired_at") ))"
-      if lock_is_stale; then
-        print -- "lock=held owner=$(<"$LOCK_DIR/owner") age=${_age}s stale=true ttl=${LOCK_TTL_SECONDS}s"
-      else
-        print -- "lock=held owner=$(<"$LOCK_DIR/owner") age=${_age}s stale=false ttl=${LOCK_TTL_SECONDS}s"
-      fi
-    else
-      print -- "lock=free"
-    fi
-    ;;
-  lock-refresh)
-    # 0914 融合刀6: 活锁心跳续期。长任务(采收/回填)每处理若干目标续一次,
-    # 免得 TTL(1800s)到点被别的轮次判 stale 抢占;只有同 run 才允许续。
-    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE lock-refresh RUN_ID"
-    require_run_id "$2"
-    lock_owner_id="$(normalize_run_id "$2")"
-    [[ -r "$LOCK_DIR/owner" ]] || die "lock is not held; acquire it first"
-    owner="$(<"$LOCK_DIR/owner")"
-    same_run_lock "$owner" "$lock_owner_id" || die "refusing to refresh lock owned by another run: $owner"
-    /bin/date +%s > "$LOCK_DIR/acquired_at"
-    print -- "lock=refreshed owner=$owner ttl=${LOCK_TTL_SECONDS}s"
-    ;;
-  lock-release)
-    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE lock-release RUN_ID"
-    require_run_id "$2"
-    lock_owner_id="$(normalize_run_id "$2")"
-    [[ -r "$LOCK_DIR/owner" ]] || { print -- "lock=free"; exit 0; }
-    owner="$(<"$LOCK_DIR/owner")"
-    same_run_lock "$owner" "$lock_owner_id" || die "refusing to release lock owned by another run: $owner"
-    # 整目录删除：owner + acquired_at 一起清（0912 加 TTL 后 rmdir 遇 acquired_at 残留会失败）。
-    /bin/rm -rf "$LOCK_DIR"
-    print -- "lock=released owner=$lock_owner_id"
+  lock-acquire|lock-release|lock-status|lock-refresh|lock-reap|lock-cleanup|with-lock)
+    source "${0:A:h}/phone-lock-lib.sh"
+    phone_lock_command "$@"
     ;;
   refresh)
     "$ADB" kill-server
@@ -3249,6 +3183,6 @@ case "$command" in
     print -- "foreground=${focus:-unknown}"
     ;;
   *)
-    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link own-profile account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid results-controls-from-xml filter-panel-location"
+    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release lock-refresh lock-reap with-lock refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link own-profile account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid results-controls-from-xml filter-panel-location"
     ;;
 esac
