@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, symlinkSync, writeFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { runInNewContext } from 'node:vm';
 import { stringify, parse, uneval } from 'devalue';
@@ -78,3 +79,54 @@ test('the actual workspace npm audit has no high/critical devalue advisory', () 
   assert.ok(!advisory || !['high', 'critical'].includes(advisory.severity), JSON.stringify(advisory));
   // The existing global audit-gate remains responsible for every other dependency and its allowlist.
 });
+
+// CI bootstrap regression: inner fixtures retain the nine real serialization/audit tests above.
+for (const state of ['missing', 'present', 'install-fails']) {
+  test(`CI bootstrap ${state}: rebuild missing workspace dependencies and fail closed`, () => {
+    const own = mkdtempSync(join(tmpdir(), 'devalue-ci-bootstrap-'));
+    try {
+      const testDir = join(own, '.github/workflows/scripts/tests');
+      const smokeDir = join(own, '.github/workflows/scripts/smoke');
+      const bin = join(own, 'bin');
+      for (const dir of [testDir, smokeDir, bin]) mkdirSync(dir, { recursive: true });
+      for (const name of ['package.json', 'package-lock.json']) {
+        writeFileSync(join(own, name), readFileSync(join(root, name)));
+      }
+      writeFileSync(join(testDir, 'devalue-security.test.mjs'),
+        readFileSync(import.meta.filename, 'utf8').split('// CI bootstrap regression:')[0]);
+      writeFileSync(join(smokeDir, 'devalue-security-smoke.sh'),
+        readFileSync(join(root, '.github/workflows/scripts/smoke/devalue-security-smoke.sh')));
+      const npmPath = spawnSync('sh', ['-c', 'command -v npm'], { encoding: 'utf8' }).stdout.trim();
+      assert.ok(npmPath.startsWith('/'), 'real npm audit binary must resolve before the fixture PATH');
+      writeFileSync(join(bin, 'npm'), `#!/bin/sh
+if [ "$1" = ci ]; then
+  printf '%s\\n' "$*" >> "$CI_NPM_CALLS"
+  if [ "$CI_INSTALL_FAILS" = yes ]; then exit 42; fi
+  ln -s "$CI_INSTALLED_MODULES" "$CI_PROJECT/node_modules"
+  exit 0
+fi
+exec "$CI_REAL_NPM" "$@"
+`, { mode: 0o700 });
+      if (state === 'present') symlinkSync(join(root, 'node_modules'), join(own, 'node_modules'));
+      const calls = join(own, 'npm-ci-calls');
+      const childEnv = { ...process.env };
+      delete childEnv.NODE_TEST_CONTEXT; // The fixture runs an independent Node test process.
+      const result = spawnSync('bash', [join(smokeDir, 'devalue-security-smoke.sh')], {
+        cwd: own, encoding: 'utf8', timeout: 65000, maxBuffer: 4 * 1024 * 1024,
+        env: { ...childEnv, PATH: bin + ':' + process.env.PATH,
+          CI_NPM_CALLS: calls, CI_INSTALL_FAILS: state === 'install-fails' ? 'yes' : 'no',
+          CI_INSTALLED_MODULES: join(root, 'node_modules'), CI_PROJECT: own, CI_REAL_NPM: npmPath },
+      });
+      assert.equal(result.error, undefined, result.error?.message);
+      assert.equal(result.status, state === 'install-fails' ? 42 : 0, result.stdout + result.stderr);
+      let recorded = '';
+      try { recorded = readFileSync(calls, 'utf8'); } catch { /* no installation expected for present */ }
+      if (state === 'present') assert.equal(recorded, '');
+      else assert.match(recorded, /^ci --no-audit --no-fund/);
+      if (state !== 'install-fails') assert.match(result.stdout, /(?:fail 0|# fail 0)/);
+      // The ci command is the only fixture boundary. Installed bytes and npm audit above stay real.
+    } finally {
+      rmSync(own, { recursive: true, force: true });
+    }
+  });
+}
