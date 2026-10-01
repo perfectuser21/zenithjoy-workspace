@@ -468,7 +468,12 @@ if [[ -n "$_CALL_PATH" ]]; then
   # ssh 桩也要记账,才能断言"最终落到了调用方目录的正式文件名"。
   printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> "%s/ssh.log"\nexit 0\n' "$_STUB" > "$_STUB/ssh"
   chmod +x "$_STUB/scp" "$_STUB/ssh"
-  PATH="$_STUB:$PATH" bash "$D/deploy.sh" > "$_STUB/run.log" 2>&1 || true
+  # 上游 smoke 可改共享树，PR HEAD 也尚未 main 准入；真实部署保护必须继续拒绝。
+  # 用原 HEAD Git 对象的私有 clean 夹具测试落点，不对共享树 reset/清理/改引用。
+  _DEPLOY_FIXTURE="$_STUB/repo"
+  bash .github/workflows/scripts/prepare-phone-deploy-fixture.sh "$PWD" "$_DEPLOY_FIXTURE"
+  PATH="$_STUB:$PATH" DEPLOY_SHA="$(git -C "$_DEPLOY_FIXTURE" rev-parse HEAD)" \
+    bash "$_DEPLOY_FIXTURE/$D/deploy.sh" > "$_STUB/run.log" 2>&1 || true
   for _h in xian-m4 xian-m1; do
     if ! grep -qx "$_h:${_CALL_DIR}/.douyin-phone-adb.deploy-new" "$_STUB/scp.log" 2>/dev/null \
        || ! grep -qE "^$_h .*mv -f ${_CALL_DIR}/\.douyin-phone-adb\.deploy-new ${_CALL_DIR}/douyin-phone-adb\$" "$_STUB/ssh.log" 2>/dev/null; then
