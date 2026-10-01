@@ -6979,6 +6979,14 @@ agent_suite:
     product: 智能获客
     note: "真实视频JSON根进程TERM平滑收工：手机动作完成后停止、已采产物保留、锁释放。"
 
+  - id: cecelia-activity-runtime
+    path: services/phone-adb-controller/__tests__/cecelia-activity-runtime.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "跨仓真实CLI离线验收：编译器、Cecelia执行器及四个业务进程；显式环境指定运行器后验交错、无评分、拦截、预算、取消恢复，未提供则明确跳过。"
+
   - id: phase3-activity-chain
     path: services/phone-adb-controller/__tests__/phase3-activity-chain.test.mjs
     type: unit
