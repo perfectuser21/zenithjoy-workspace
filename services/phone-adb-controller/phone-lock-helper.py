@@ -83,7 +83,7 @@ def safe_to_reap():
                 print('device-uncertain')
                 return 1
         # 旧执行链未必有 Brain task；宿主上有活采收/触达进程时一律保留。
-        live = subprocess.run(['/usr/bin/pgrep', '-f', '[w]f-run.sh|[h]arvest-keyword.sh|[b]atch2.sh|[o]utreach-tick.sh|[d]iscover-keyword.sh'],
+        live = subprocess.run([os.environ.get('DOUYIN_LOCK_PGREP_BIN', '/usr/bin/pgrep'), '-f', '[w]f-run.sh|[h]arvest-keyword.sh|[b]atch2.sh|[o]utreach-tick.sh|[d]iscover-keyword.sh'],
                               capture_output=True, timeout=3)
         if live.returncode != 1:
             print('local-process-or-unknown')

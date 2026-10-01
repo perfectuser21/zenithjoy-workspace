@@ -9,12 +9,13 @@ const script = new URL('../douyin-phone-adb', import.meta.url).pathname;
 const python = spawnSync('sh', ['-c', 'command -v python3'], {encoding:'utf8'}).stdout.trim();
 function setup(t) {
   const dir=mkdtempSync(join(tmpdir(),'phone-lock-')); t.after(()=>rmSync(dir,{recursive:true,force:true}));
-  const reg=join(dir,'registry.tsv'), adb=join(dir,'adb'), ssh=join(dir,'ssh');
+  const reg=join(dir,'registry.tsv'), adb=join(dir,'adb'), ssh=join(dir,'ssh'), pgrep=join(dir,'pgrep');
+  writeFileSync(pgrep,'#!/bin/sh\n[ -f "$TEST_DIR/local-running" ] && exit 0\nexit 1\n',{mode:0o755});
   writeFileSync(reg,'p1\tSER1\tMODEL\t1199\t2663\n');
   writeFileSync(adb,`#!/bin/sh\nprintf '%s\\n' "$*" >> "$TEST_DIR/adb.log"\ncase "$*" in\n *get-state*) echo device;;\n *'getprop ro.product.model'*) echo MODEL;;\n *'dumpsys window'*) echo 'mCurrentFocus=Window{abc u0 com.android.launcher/.Launcher}';;\n *' pull '*) for last; do :; done; printf fake > "$last";;\nesac\nexit 0\n`,{mode:0o755});
   writeFileSync(ssh,`#!/bin/sh\nprintf '%s\\n' "$*" >> "$TEST_DIR/ssh.log"\n[ -f "$TEST_DIR/ssh-fail" ] && exit 255\ncat "$TEST_DIR/tasks.json"\n`,{mode:0o755});
   writeFileSync(join(dir,'tasks.json'),'[]');
-  const env={...process.env,TEST_DIR:dir,DOUYIN_PHONE_REGISTRY:reg,DOUYIN_ADB_BIN:adb,DOUYIN_PHONE_TMP_ROOT:join(dir,'tmp'),DOUYIN_PYTHON_BIN:python,DOUYIN_LOCK_SSH_BIN:ssh};
+  const env={...process.env,TEST_DIR:dir,DOUYIN_PHONE_REGISTRY:reg,DOUYIN_ADB_BIN:adb,DOUYIN_PHONE_TMP_ROOT:join(dir,'tmp'),DOUYIN_PYTHON_BIN:python,DOUYIN_LOCK_SSH_BIN:ssh,DOUYIN_LOCK_PGREP_BIN:pgrep};
   const lock=join(dir,'tmp','locks','SER1.lock');
   const run=(...args)=>spawnSync('zsh',[script,'--profile','p1',...args],{env,encoding:'utf8',timeout:20000});
   const stale=(owner='probe-btr-budget')=>{mkdirSync(lock,{recursive:true});writeFileSync(join(lock,'owner'),owner+'\n');writeFileSync(join(lock,'acquired_at'),String(Math.floor(Date.now()/1000)-1900));};
@@ -114,4 +115,9 @@ test('lock-reap 清场期间互斥guard阻止并发拿锁，清场结束后可�
  const r=c.run('lock-acquire','new-owner');assert.notEqual(r.status,0);assert.match(r.stderr,/lock operation busy/);
  assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),'probe-btr-budget');writeFileSync(join(c.dir,'proceed'),'1');
  assert.equal(await ended,0);assert.equal(c.run('lock-acquire','new-owner').status,0);
+});
+
+test('lock-reap 本地旧执行链活进程保留',t=>{
+ const c=setup(t);c.stale();writeFileSync(join(c.dir,'local-running'),'1');const r=c.run('lock-reap');
+ assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/lock=preserved.*local-process/);assert.ok(existsSync(c.lock));assert.equal(c.actions(),'');
 });
