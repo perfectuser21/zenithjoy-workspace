@@ -99,7 +99,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: perfectuser21/cecelia
-          ref: 2b79ab76c45dd47b29ac9fe0a9dec6108385d877
+          ref: 4f084b9eb1ae76662dee183e445013d19ccebbb5
           path: .cecelia-activity-runtime
           persist-credentials: false
 
