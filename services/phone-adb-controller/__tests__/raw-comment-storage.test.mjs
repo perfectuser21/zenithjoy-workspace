@@ -182,3 +182,44 @@ test('旧push入口复用真实活动/适配器，仍输出PUSH_COMMENTS_STATS�
       { created: fail ? 0 : 1, dup: 0, input: 1 });
   }
 });
+
+for (const [label, dyid, purl] of [
+  ['只有账号类型', '', ''],
+  ['只有主页URL及账号类型', '', 'https://example.com/user'],
+  ['有抖音号但无主页URL', '123', ''],
+]) {
+  test(`HTTP读回省略空独立字段仍能重试：${label}，昵称含竖线`, async () => {
+    const { persistRawComments } = require('../raw-comment-activities.js');
+    const source = { id: 'source', fields: { 评论者昵称: '甲|乙', 评论原文: '想了解',
+      抖音号: dyid, 主页链接: purl, 账号类型: '个人',
+      用户主页标识: [dyid, purl, '个人'].filter(Boolean).join(' | ') } };
+    const batch = input([source]);
+    const records = [];
+    let writes = 0;
+    const http = transport({ records, write: async (_url, options) => {
+      writes++;
+      const fields = Object.fromEntries(Object.entries(JSON.parse(options.body).fields).filter(([, value]) => value !== ''));
+      const record = { record_id: 'pool-sparse', fields };
+      records.push(record);
+      return response({ code: 0, data: { record } });
+    } });
+    const run = async () => persistRawComments(batch, await load().createRawCommentDeps(batch, { env, request: http.request }));
+    assert.equal((await run()).status, 'completed');
+    const assertReplay = result => {
+      assert.equal(result.status, 'completed');
+      assert.equal(result.outputs.comments[0].id, 'pool-sparse');
+      assert.deepEqual(result.metrics, { comments_written: 0, duplicates: 1, pending: 0 });
+    };
+    assertReplay(await run());
+    // 存量仅有原始ID与旧过滤空项的主页拼串，也能恢复三独立身份字段。
+    for (const name of ['抖音号', '主页链接', '账号类型']) delete records[0].fields[name];
+    assertReplay(await run());
+    assert.equal(writes, 1);
+    records[0].fields.用户主页标识 += ' | 其他类型';
+    const conflict = await run();
+    assert.equal(conflict.failure_class, 'fatal');
+    assert.equal(conflict.outputs.comments.length, 0);
+    assert.equal(conflict.evidence[0].reason_code, 'rawid_conflict');
+    assert.equal(writes, 1);
+  });
+}
