@@ -8,6 +8,8 @@
  *
  * 用法:
  *   node scripts/product-map/wf-plan.mjs <能力> [--allow-missing]   stdout 输出可 eval 的 shell 赋值
+ *   node scripts/product-map/wf-plan.mjs <能力> --json [--bindings 文件] [--allow-missing]
+ *     stdout 输出 {contract:{workflow,activities}}；绑定只声明显式活动调用链，输入由调用方另行包装。
  *   node scripts/product-map/wf-plan.mjs --write                    重生成全部 plans/*.plan
  *   node scripts/product-map/wf-plan.mjs --check                    校验提交的 plans/*.plan 与契约一致
  *
@@ -19,6 +21,7 @@
 import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import Ajv2020 from 'ajv/dist/2020.js';
 import { loadContractsFromDisk, assemble } from './contracts-lib.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -40,7 +43,10 @@ export function planFor(ctx, capId, { allowMissing = false } = {}) {
   if (!r.ok) return { ok: false, errors: r.errors, activities: r.activities };
   const acts = r.activities;
   const errors = [];
-  for (const a of acts) if (!a.runtime) errors.push(`${capId}.${a.key}: 缺 runtime（无实现绑定不得跑）`);
+  for (const a of acts) {
+    if (!a.runtime) errors.push(`${capId}.${a.key}: 缺 runtime（无实现绑定不得跑）`);
+    else if (a.runtime.protocol) errors.push(`${capId}.${a.key}: JSON runtime 不可生成 shellplan，请使用 --json（json-stdio-v1）`);
+  }
   const missing = acts.flatMap((a) => (a.steps || []).filter((s) => s.implementation?.status === 'missing').map((s) => `${a.key}.${s.key}`));
   if (missing.length && !allowMissing) errors.push(`${capId}: 步骤 implementation=missing 不得跑（无实现不得跑，真机调试加 --allow-missing）：${missing.join(', ')}`);
   if (errors.length) return { ok: false, errors, activities: acts };
@@ -64,6 +70,62 @@ export function planFor(ctx, capId, { allowMissing = false } = {}) {
   for (const a of acts) env[`WF_BUDGET_${a.key}`] = String(a.budget?.max_duration_s ?? 0);
   for (const a of acts) env[`WF_TIMEOUT_CLASS_${a.key}`] = timeoutClass(a);
   return { ok: true, errors: [], activities: acts, env };
+}
+
+// 独立的活动调用链：先组装原契约解析ref，再按显式绑定组装变体。
+// 变体不沿用生产全链的ledger；未选择的preflight/discovery/finalize未迁移。
+export function jsonPlanFor(ctx, capId, { allowMissing = false, bindings } = {}) {
+  const base = assemble(ctx, capId);
+  if (!base.ok) return base;
+  const errors = [];
+  const schema = JSON.parse(readFileSync(join(ctx.repoRoot, 'product-map/contracts/activity-contract.schema.json'), 'utf8'));
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  const validateContract = ajv.compile(schema);
+  for (const id of new Set([capId, ...base.activities.map(a => a.from)])) {
+    if (!validateContract(ctx.contracts[id])) errors.push(`${id}: schema ${ajv.errorsText(validateContract.errors)}`);
+  }
+  if (bindings !== undefined) {
+    const validateBindings = ajv.compile({ $defs: schema.$defs, type: 'object', additionalProperties: false,
+      required: ['version', 'capability', 'source', 'select', 'trigger_inputs', 'activities'], properties: {
+        version: { const: 1 }, capability: { const: capId },
+        source: { type: 'object', additionalProperties: false, required: ['contract', 'scope'], properties: {
+          contract: { const: `product-map/contracts/${capId}.yaml` }, scope: { const: 'activity-chain' } } },
+        select: { type: 'array', minItems: 1, uniqueItems: true, items: { $ref: '#/$defs/key' } },
+        trigger_inputs: { type: 'array', minItems: 1, uniqueItems: true, items: { $ref: '#/$defs/typeName' } },
+        activities: { type: 'object', additionalProperties: { type: 'object', additionalProperties: false, properties: {
+          runtime: { $ref: '#/$defs/runtime' }, inputs: schema.$defs.activity.properties.inputs,
+          outputs: schema.$defs.activity.properties.outputs } } },
+      } });
+    if (!validateBindings(bindings)) errors.push(`bindings: schema ${ajv.errorsText(validateBindings.errors)}`);
+    if (errors.length) return { ok: false, errors, activities: [] };
+    const availableKeys = new Set(base.activities.map(a => a.key));
+    for (const key of bindings.select) if (!availableKeys.has(key)) errors.push(`bindings: 活动 ${key} 不在真实契约`);
+    for (const key of Object.keys(bindings.activities)) if (!bindings.select.includes(key)) errors.push(`bindings: ${key} 未被显式选择`);
+  }
+  const acts = base.activities.filter(a => !bindings || bindings.select.includes(a.key)).map(a => ({
+    ...structuredClone(a), ...structuredClone(bindings?.activities[a.key] || {}),
+    source_contract: { capability: a.from, version: a.version },
+  }));
+  const triggerInputs = bindings?.trigger_inputs || ctx.contracts[capId].trigger_inputs;
+  for (const type of triggerInputs) if (!ctx.objectTypes[type]) errors.push(`bindings: trigger_inputs ${type} 未登记`);
+  for (const a of acts) {
+    if (a.runtime?.protocol !== 'json-stdio-v1') errors.push(`${capId}.${a.key}: JSON调用要求显式 json-stdio-v1 runtime`);
+    for (const io of [...a.inputs, ...a.outputs]) {
+      const type = ctx.objectTypes[io.type];
+      if (!type || io.fields.some(field => !type.fields.includes(field))) errors.push(`${capId}.${a.key}: ${io.type} IO类型/字段未登记`);
+    }
+    if (a.inputs.some(i => i.type === 'Comment') && a.runtime?.input?.comments !== '$.comments') {
+      errors.push(`${capId}.${a.key}: Comment输入必须显式映射本批 $.comments`);
+    }
+  }
+  const missing = acts.flatMap(a => (a.steps || []).filter(s => s.implementation?.status === 'missing').map(s => `${a.key}.${s.key}`));
+  if (missing.length && !allowMissing) errors.push(`${capId}: 步骤 implementation=missing 不得跑：${missing.join(', ')}`);
+  const variant = { ...ctx.contracts[capId], trigger_inputs: triggerInputs, activities: acts };
+  delete variant.ledger;
+  const assembled = assemble({ ...ctx, contracts: { ...ctx.contracts, [capId]: variant } }, capId);
+  errors.push(...assembled.errors);
+  if (errors.length) return { ok: false, errors, activities: acts };
+  return { ok: true, errors: [], activities: acts, contract: { workflow: variant.workflow, activities: acts } };
 }
 
 // 超时算不算 retryable：看活动 failure.retryable 有没有把超时/远程调用失败声明成可重试（delivery 的「scp/ssh 失败」即是）
@@ -104,10 +166,20 @@ function main(argv) {
     return bad;
   }
   const capId = argv.find((a) => !a.startsWith('--'));
-  if (!capId) { console.error('用法: wf-plan.mjs <能力> [--allow-missing] | --write | --check'); return 1; }
-  const r = planFor(ctx, capId, { allowMissing: argv.includes('--allow-missing') });
+  if (!capId) { console.error('用法: wf-plan.mjs <能力> [--json [--bindings 文件]] [--allow-missing] | --write | --check'); return 1; }
+  if (argv.includes('--bindings') && !argv.includes('--json')) { console.error('--bindings 仅用于显式 --json 活动调用链'); return 1; }
+  let bindings;
+  if (argv.includes('--bindings')) {
+    const file = argv[argv.indexOf('--bindings') + 1];
+    try {
+      if (!file || file.startsWith('--')) throw new Error('缺绑定文件');
+      bindings = JSON.parse(readFileSync(resolve(file), 'utf8'));
+    } catch (error) { console.error(`bindings读取失败: ${error.message}`); return 1; }
+  }
+  const r = argv.includes('--json') ? jsonPlanFor(ctx, capId, { allowMissing: argv.includes('--allow-missing'), bindings })
+    : planFor(ctx, capId, { allowMissing: argv.includes('--allow-missing') });
   if (!r.ok) { console.error(`拒跑 ${capId}:\n  ${r.errors.join('\n  ')}`); return 1; }
-  process.stdout.write(renderEnv(r.env));
+  process.stdout.write(argv.includes('--json') ? JSON.stringify({ contract: r.contract }) + '\n' : renderEnv(r.env));
   return 0;
 }
 
