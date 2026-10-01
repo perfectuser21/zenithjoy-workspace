@@ -47,7 +47,7 @@ export function acquireRecoveryLock(root, serial, owner) {
   return true;
 }
 
-export async function recoverPhones({ targets, run, sleep, notify, bins, state, now, log, acquire, owns = () => false, loadState = () => null, persist = () => {} }) {
+export async function recoverPhones({ targets, run, sleep, notify, bins, state, now, log, acquire, owns = () => false, loadState = () => null, persist = () => {}, notifyManagesState = false }) {
   const results = [];
   const call = (bin, args) => run(bins[bin], args);
   const online = serial => {
@@ -108,19 +108,40 @@ export async function recoverPhones({ targets, run, sleep, notify, bins, state, 
     log(`${serial} ${reason}`);
     results.push({ serial, status: 'offline', reason });
     if (!record.lastAlert || now - record.lastAlert >= 21600000) {
-      const alertOwner = `phone-recovery-alert-${process.pid}-${now}`;
-      if (acquire?.(serial, alertOwner)) {
-        try {
-          const latest = loadState(serial) || record;
-          if ((!latest.lastAlert || now - latest.lastAlert >= 21600000) && owns(serial, alertOwner)) {
-            if (await notify(`${hostname()} ${serial} ${reason}`)) { record.lastAlert = now; persist(serial, { lastAlert: now }); }
-          }
-        } finally { call('ctl', ['--profile', profile, 'lock-release', alertOwner]); }
-      } else log(`${serial} 告警等待设备空闲锁`);
+      if (await notify(`${hostname()} ${serial} ${reason}`, serial, now)) {
+        record.lastAlert = now;
+        if (!notifyManagesState) persist(serial, { lastAlert: now });
+      }
     }
   }
   return { ok: targets.length > 0 && results.every(x => x.status !== 'offline'), results };
 }
+
+// fcntl.flock随进程退出自动释放；稳定锁文件不删除，避免PID回收竞态与崩溃遗留静默。
+export const BARK_ONCE_PY = `
+import fcntl, os, sys, subprocess
+base, serial, stamp, node, script, title, body = sys.argv[1:]
+stamp = int(stamp)
+lock_path = os.path.join(base, 'phone-recovery-' + serial + '.alert.lock')
+fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+with os.fdopen(fd, 'a+') as lock:
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    state = os.path.join(base, 'phone-recovery-' + serial + '.lastAlert')
+    try:
+        with open(state) as current: last = int(current.read())
+    except (OSError, ValueError): last = 0
+    if last and stamp - last < 21600000:
+        print('BARK_SKIPPED')
+    else:
+        out = subprocess.run([node, script, title, body, 'timeSensitive'], capture_output=True, text=True, timeout=25)
+        if out.returncode == 0 and 'BARK_OK' in out.stdout:
+            temp = state + '.' + str(os.getpid()) + '.new'
+            out_fd = os.open(temp, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+            with os.fdopen(out_fd, 'w') as output: output.write(str(stamp))
+            os.replace(temp, state)
+            print('BARK_SENT')
+        else: print('BARK_FAILED')
+`;
 
 async function main() {
   const base = join(homedir(), '.config/zenithjoy');
@@ -153,14 +174,14 @@ async function main() {
     const acquire = (serial, owner) => acquireRecoveryLock(root, serial, owner);
     const owns = (serial, owner) => { try { return readFileSync(join(root, `${serial}.lock/owner`), 'utf8').trim() === owner; } catch { return false; } };
     const bins = { adb: '/opt/homebrew/bin/adb', ctl: join(homedir(), '.local/bin/douyin-phone-adb'), hub: '/opt/homebrew/bin/uhubctl', profiler: '/usr/sbin/system_profiler', disk: '/usr/sbin/diskutil' };
-    const notify = async body => {
-      const out = run('/opt/homebrew/bin/node', [join(homedir(), 'bin-harvest/notify-bark.js'), Buffer.from('手机ADB自检异常').toString('base64'), Buffer.from(body).toString('base64'), 'timeSensitive']);
-      const ok = out.status === 0 && out.stdout.includes('BARK_OK');
-      console.log(`PHONE_RECOVERY bark=${ok ? 'sent' : 'failed'}`);
+    const notify = async (body, serial, now) => {
+      const out = run('/usr/bin/python3', ['-c', BARK_ONCE_PY, base, serial, String(now), '/opt/homebrew/bin/node', join(homedir(), 'bin-harvest/notify-bark.js'), Buffer.from('手机ADB自检异常').toString('base64'), Buffer.from(body).toString('base64')]);
+      const ok = out.status === 0 && out.stdout.includes('BARK_SENT');
+      console.log(`PHONE_RECOVERY bark=${ok ? 'sent' : out.stdout.includes('BARK_SKIPPED') ? 'cooldown' : 'failed'}`);
       return ok;
     };
     const log = text => console.log(`${new Date().toISOString()} PHONE_RECOVERY ${text}`);
-    const result = await recoverPhones({ targets, run, sleep: ms => new Promise(resolve => setTimeout(resolve, ms)), notify, bins, state, now: Date.now(), log, acquire, owns, loadState, persist });
+    const result = await recoverPhones({ targets, run, sleep: ms => new Promise(resolve => setTimeout(resolve, ms)), notify, bins, state, now: Date.now(), log, acquire, owns, loadState, persist, notifyManagesState: true });
     if (!targets.length) { log('本机registry无目标，配置失败'); process.exitCode = 1; }
     log(JSON.stringify(result));
   }

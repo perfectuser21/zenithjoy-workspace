@@ -157,7 +157,7 @@ test('两个并发自检实例只发送一次同serial告警，锁内重读冷�
     r.options.persist = (serial, patch) => Object.assign(records[serial], patch);
     const run = r.options.run;
     r.options.run = (bin, args) => { if (args.includes('lock-release')) held = null; return run(bin, args); };
-    r.options.notify = async () => { await new Promise(resolve => setTimeout(resolve, 10)); notified++; return true; };
+    r.options.notify = async () => { if (held) return false; held = 'alert'; try { if (records.SERIAL1.lastAlert) return false; await new Promise(resolve => setTimeout(resolve, 10)); notified++; records.SERIAL1.lastAlert = 100000; return true; } finally { held = null; } };
     return r.options;
   };
   await Promise.all([recoverPhones(options()), recoverPhones(options())]);
@@ -171,4 +171,29 @@ test('离线且设备锁被占仍通知，保持USB与设备锁只读', async ()
   assert.equal(r.alerts.length, 1);
   assert.match(r.alerts[0], /SERIAL1/);
   assert.equal(r.calls.some(x => x.includes('lock-acquire') || x.includes('cycle')), false);
+});
+
+test('真实跨进程告警锁只发送一次，进程异常退出后锁自动释放', async () => {
+  const { BARK_ONCE_PY } = await import('../phone-recovery.mjs');
+  const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+  const { spawn } = await import('node:child_process');
+  const root = mkdtempSync('/tmp/phone-alert-');
+  const notifier = `${root}/notify.sh`;
+  writeFileSync(notifier, 'printf "sent\\n" >> "$NOTIFY_TEST_ROOT/calls"; sleep 0.1; echo BARK_OK\n');
+  const execute = serial => new Promise((resolve, reject) => {
+    const child = spawn('/usr/bin/python3', ['-c', BARK_ONCE_PY, root, serial, '100000', '/bin/sh', notifier, 'title', 'body'], { env: { ...process.env, NOTIFY_TEST_ROOT: root } });
+    let stdout = '', stderr = '';
+    child.stdout.on('data', chunk => stdout += chunk); child.stderr.on('data', chunk => stderr += chunk);
+    child.on('error', reject); child.on('close', code => code === 0 ? resolve(stdout.trim()) : reject(Error(stderr)));
+  });
+  try {
+    const results = await Promise.all([execute('SERIAL1'), execute('SERIAL1')]);
+    assert.deepEqual(results.sort(), ['BARK_SENT', 'BARK_SKIPPED']);
+    assert.equal(readFileSync(`${root}/calls`, 'utf8').trim().split('\n').length, 1);
+    const holder = spawn('/usr/bin/python3', ['-u', '-c', 'import os,fcntl,time,sys; f=open(sys.argv[1],"a+"); fcntl.flock(f,fcntl.LOCK_EX); print("locked",flush=True); time.sleep(60)', `${root}/phone-recovery-SERIAL2.alert.lock`]);
+    await new Promise((resolve, reject) => { holder.stdout.once('data', resolve); holder.once('error', reject); });
+    const closed = new Promise(resolve => holder.once('close', resolve)); holder.kill('SIGKILL'); await closed;
+    assert.equal(await execute('SERIAL2'), 'BARK_SENT');
+    assert.equal(readFileSync(`${root}/calls`, 'utf8').trim().split('\n').length, 2);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
