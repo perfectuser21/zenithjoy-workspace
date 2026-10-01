@@ -16,7 +16,7 @@ WFR_NODE="${WFR_NODE:-/opt/homebrew/bin/node}"
 WFR_PRODUCER_FILE="${BASH_SOURCE[0]}"
 # 从 bash 正在执行的 inode 复制描述符，禁止部署换路径后误认成新脚本。
 WFR_PRODUCER_FD=""
-if { exec 9<&255; } 2>/dev/null; then WFR_PRODUCER_FD=/dev/fd/9; fi
+if [[ "$WFR_PRODUCER_FILE" == "$0" ]] && { exec 9<&255; } 2>/dev/null; then WFR_PRODUCER_FD=/dev/fd/9; fi
 WFR_JQ="${WFR_JQ:-/usr/bin/jq}"
 WFR_LEDGER_MJS="${WFR_LEDGER_MJS:-$HOME/bin-harvest/ledger.mjs}"
 WFR_SCP_TARGET="${WFR_SCP_TARGET-mmv:/Users/administrator/openclaw-root/workspaces-root/clawd-work-commander/state/workflow-runs/}"

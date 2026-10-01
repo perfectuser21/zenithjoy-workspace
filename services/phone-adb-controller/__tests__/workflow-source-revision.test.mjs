@@ -64,7 +64,7 @@ function fixture(manifestChange, { sourced = false, replaceAtStartup = false, in
     writeFileSync(entry, sourced ? `source '${script}' "$@"\n` : `exec 255<&-\nsource '${script}' "$@"\n`);
   }
   const result = spawnSync('bash', [entry, ...args], { env, encoding: 'utf8' });
-  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.status, 0, JSON.stringify({ signal: result.signal, error: result.error?.message, stderr: result.stderr }));
   const artdir = result.stdout.match(/^WFR_ART_DIR=(.+)$/m)?.[1];
   const artifact = JSON.parse(readFileSync(join(artdir, readdirSync(artdir).find(f => f.endsWith('.worker-result.json')))));
   const payloads = readFileSync(calls, 'utf8').trim().split('\n').map(line => JSON.parse(line))
