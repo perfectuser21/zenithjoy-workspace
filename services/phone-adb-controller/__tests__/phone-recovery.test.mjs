@@ -164,3 +164,11 @@ test('两个并发自检实例只发送一次同serial告警，锁内重读冷�
   assert.equal(notified, 1);
   assert.equal(records.SERIAL1.lastAlert, 100000);
 });
+
+test('离线且设备锁被占仍通知，保持USB与设备锁只读', async () => {
+  const r = rig({ locked: true });
+  await recoverPhones(r.options);
+  assert.equal(r.alerts.length, 1);
+  assert.match(r.alerts[0], /SERIAL1/);
+  assert.equal(r.calls.some(x => x.includes('lock-acquire') || x.includes('cycle')), false);
+});
