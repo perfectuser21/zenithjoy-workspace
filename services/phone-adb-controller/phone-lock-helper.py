@@ -139,7 +139,7 @@ if __name__ == '__main__':
         path = os.environ.get('DOUYIN_PHONE_REGISTRY', os.path.expanduser('~/.config/openclaw/douyin-phone-profiles.tsv'))
         with open(path, newline='') as handle:
             columns = None
-            for row in csv.reader(handle, delimiter='\t'):
+            for row in csv.reader(handle, delimiter='\t', quoting=csv.QUOTE_NONE):
                 if not row:
                     continue
                 if row[0] in ('profile', '#profile'):
