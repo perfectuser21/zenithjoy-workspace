@@ -119,9 +119,12 @@ jobs:
       # 分两次独立调用时第二条一样会把第一条装好的依赖树清掉（本地实测复现：先
       # `npm ci --workspace=apps/api` 装出 express，再单独 `npm ci --workspace=apps/agent-panel`
       # 后 express 消失）。必须像 golden-path-4-smoke.yml Fix 1 一样合并成一条命令、
-      # 同时声明两个 workspace。
-      - name: Install apps/api + apps/agent-panel deps
-        run: npm ci --workspace=apps/api --workspace=apps/agent-panel --include-workspace-root
+      # 同时声明所需 workspace。
+      # 快手发布 smoke 要执行真实 UI 断言，必须显式安装 dashboard 依赖。
+      # 根编译器依赖装好后，较早 smoke 不再隐式执行全仓 npm ci，
+      # 不能让 dashboard 的运行依赖随之缺失。
+      - name: Install apps/api + apps/agent-panel + apps/dashboard and root deps
+        run: npm ci --workspace=apps/api --workspace=apps/agent-panel --workspace=apps/dashboard --include-workspace-root
 
       # golden-path-4-smoke.sh 的 Step 17c/17e 需要 services/agent/node_modules 存在才能用
       # npx tsx 真跑 panel-event-bus proven-to-fire。此前这条 workflow 从不显式装它，全靠字母序
