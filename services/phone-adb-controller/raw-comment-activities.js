@@ -53,7 +53,7 @@ async function persistRawComments(input, deps = {}) {
     throw new Error('落池缺少显式存储依赖/去重表/时间上下文');
   }
   const comments = [], pending_comments = [], evidence = [];
-  const outputIds = new Set();
+  const outputRows = new Map();
   const metrics = { comments_written: 0, duplicates: 0, pending: 0 };
   let fatal = false;
   for (const source of input.comments) {
@@ -80,10 +80,17 @@ async function persistRawComments(input, deps = {}) {
         metrics.comments_written++;
       }
       if (duplicate) metrics.duplicates++;
-      if (!outputIds.has(id)) {
-        comments.push({ ...structuredClone(source), source_id: source.source_id || source.id,
-          id, fields, persist_status: 'completed' });
-        outputIds.add(id);
+      if (!outputRows.has(id)) {
+        const row = { ...structuredClone(source), source_id: source.source_id || source.id,
+          id, fields, persist_status: 'completed' };
+        comments.push(row);
+        outputRows.set(id, row);
+      } else if (outputRows.get(id).verdict === undefined && source.verdict !== undefined) {
+        // 同内容只结算一次，但不能因未评分源先出现而丢掉后续评分。
+        const row = outputRows.get(id);
+        row.verdict = structuredClone(source.verdict);
+        if (source.score_status !== undefined) row.score_status = source.score_status;
+        else delete row.score_status;
       }
       evidence.push({ source_id: source.source_id || source.id, comment_id: id, rawid,
         status: 'completed', duplicate });
