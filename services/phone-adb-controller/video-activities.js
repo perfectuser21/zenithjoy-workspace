@@ -1,5 +1,7 @@
 'use strict';
 const path = require('node:path');
+const { mkdtempSync, writeFileSync, rmSync } = require('node:fs');
+const { tmpdir } = require('node:os');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { routeOf } = require('./line-routes.js');
@@ -29,11 +31,21 @@ function validateVideoInput(input) {
 }
 
 async function runPhone(action, input) {
-  return execute('zsh', [path.join(__dirname, 'video-phone-activity.sh'), action, input.device.profile,
-    routeOf(input.line_key).key, input.video.video_id, Buffer.from(input.video.title).toString('base64'),
-    input.video.duration || '', input.run_tag, encodeURIComponent(input.video.keyword || ''),
-    String(input.budget ? input.budget.max_duration_s : 0), input.device.serial, input.device.lock_holder],
-  { maxBuffer: 16 * 1024 * 1024 });
+  // 程序执行器只向活动根进程发TERM；手机动作做完后在业务安全边界收工。
+  const cancellation = mkdtempSync(path.join(tmpdir(), 'video-activity-stop-'));
+  const stopFile = path.join(cancellation, 'requested');
+  const stop = () => writeFileSync(stopFile, '', { mode: 0o600 });
+  process.on('SIGTERM', stop); process.on('SIGINT', stop);
+  try {
+    return await execute('zsh', [path.join(__dirname, 'video-phone-activity.sh'), action, input.device.profile,
+      routeOf(input.line_key).key, input.video.video_id, Buffer.from(input.video.title).toString('base64'),
+      input.video.duration || '', input.run_tag, encodeURIComponent(input.video.keyword || ''),
+      String(input.budget ? input.budget.max_duration_s : 0), input.device.serial, input.device.lock_holder],
+    { maxBuffer: 16 * 1024 * 1024, env: { ...process.env, VIDEO_ACTIVITY_STOP_FILE: stopFile } });
+  } finally {
+    process.off('SIGTERM', stop); process.off('SIGINT', stop);
+    rmSync(cancellation, { recursive: true, force: true });
+  }
 }
 
 async function runVideoActivity(action, input, { run = runPhone } = {}) {

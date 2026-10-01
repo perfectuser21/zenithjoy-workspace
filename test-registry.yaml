@@ -6971,6 +6971,14 @@ agent_suite:
     product: 智能获客
     note: "独立视频活动真实JSON进程：隔离ADB及SSH边界，预算、锁、身份与自有账号过滤。"
 
+  - id: video-activity-cancellation
+    path: services/phone-adb-controller/__tests__/video-activity-cancellation.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实视频JSON根进程TERM平滑收工：手机动作完成后停止、已采产物保留、锁释放。"
+
   - id: phase3-activity-chain
     path: services/phone-adb-controller/__tests__/phase3-activity-chain.test.mjs
     type: unit

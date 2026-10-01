@@ -9,7 +9,7 @@ VID="$VIDEO_ID"; TITLE="$(print -rn -- "$TITLE_B64" | base64 -d)"; DUR="$DURATIO
 ACTIVITY_T0=$(date +%s); ACTIVITY_REASON=""; OWNED_LOCK=0; RELEASE_CONFIRMED=1
 activity_should_stop() {
   if wf_deadline_reached; then ACTIVITY_REASON=deadline; return 0; fi
-  if wf_stop_requested; then ACTIVITY_REASON=commander_stop; return 0; fi
+  if wf_stop_requested || [[ -n "${VIDEO_ACTIVITY_STOP_FILE:-}" && -e "$VIDEO_ACTIVITY_STOP_FILE" ]]; then ACTIVITY_REASON=commander_stop; return 0; fi
   if (( BUDGET > 0 && $(date +%s) - ACTIVITY_T0 >= BUDGET )); then ACTIVITY_REASON=budget_exceeded; return 0; fi
   return 1
 }
