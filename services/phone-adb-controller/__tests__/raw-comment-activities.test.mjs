@@ -72,6 +72,15 @@ test('旧rawid相同的同内容输入合并一个真实池ID，证据覆盖每�
   assert.deepEqual(replay.metrics, { comments_written: 0, duplicates: 2, pending: 0 });
 });
 
+test('同批合并重复池ID时，后续源记录评分仍保留在唯一配送输出中', async () => {
+  const scored = { ...row('scored'), verdict, score_status: 'completed' };
+  const result = await load().persistRawComments(input([row('unscored'), scored]), deps());
+  assert.equal(result.outputs.comments.length, 1);
+  assert.deepEqual(result.outputs.comments[0].verdict, verdict);
+  assert.equal(result.outputs.comments[0].score_status, 'completed');
+  assert.equal(result.evidence.length, 2);
+});
+
 test('前20字rawid碰撞不同原文永久拒绝，不能返回别人的池ID', async () => {
   const historical = row('old', '同'.repeat(20) + '旧内容');
   const source = row('new', '同'.repeat(20) + '新内容');
