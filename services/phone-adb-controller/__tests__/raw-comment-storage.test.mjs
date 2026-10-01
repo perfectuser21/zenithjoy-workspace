@@ -223,3 +223,95 @@ for (const [label, dyid, purl] of [
     assert.equal(writes, 1);
   });
 }
+
+function settlementHttp() {
+  const pool = new Map(), leads = new Map();
+  const writes = [];
+  const request = async (url, options) => {
+    if (url.includes('/auth/')) return response({ code: 0, tenant_access_token: 'fixture-token' });
+    if (url.includes('/fields')) return response({ code: 0, data: { items: fields.map(field_name => ({ field_name, type: 1 })) } });
+    const isPool = url.includes('/tables/tblQzIHcmGSPUAZm/');
+    const store = isPool ? pool : leads;
+    if (options.method === 'GET') {
+      const id = url.match(/\/records\/([^/?]+)/)?.[1];
+      return response({ code: 0, data: id ? { record: store.get(id) } : { items: [...store.values()], has_more: false } });
+    }
+    const body = JSON.parse(options.body);
+    writes.push({ isPool, method: options.method, fields: body.fields });
+    const id = options.method === 'POST' ? `${isPool ? 'pool' : 'lead'}-${store.size + 1}` : url.split('/').at(-1);
+    const record = { record_id: id, fields: { ...store.get(id)?.fields, ...body.fields } };
+    store.set(id, record);
+    return response({ code: 0, data: { record } });
+  };
+  const run = async batch => require('../raw-comment-delivery.js').deliverRawComments(batch, {
+    persistDeps: await load().createRawCommentDeps(batch, { env, request }),
+    createDeliveryDeps: payload => require('../comment-delivery-storage.js').createDeliveryDeps(payload, { env, request }),
+  });
+  return { pool, leads, writes, request, run };
+}
+
+const scoredSource = (id, nick, dyid = '', purl = '', comment = '想了解') => ({ id,
+  fields: { 评论者昵称: nick, 评论原文: comment, 抖音号: dyid, 主页链接: purl,
+    账号类型: '个人', 用户主页标识: [dyid, purl, '个人'].filter(Boolean).join(' | ') },
+  verdict: { grade: 'A', relevance: '相关', reason: '主动咨询' }, score_status: 'completed' });
+
+test('真实落池配送HTTP闭环：两个不同昵称的无ID个人各自建线索，不以类型当抖音号误合并', async () => {
+  const http = settlementHttp();
+  const result = await http.run(input([scoredSource('one', '甲'), scoredSource('two', '乙')]));
+  assert.equal(result.status, 'completed');
+  assert.equal(result.metrics.leads_written, 2);
+  assert.equal(result.metrics.duplicates_highlighted, 0);
+  assert.deepEqual([...http.leads.values()].map(r => [r.fields.抖音昵称, r.fields.抖音号, r.fields.主页链接]),
+    [['甲', '', ''], ['乙', '', '']]);
+});
+
+test('真实落池配送HTTP闭环：无抖音号的主页URL写到独立主页列', async () => {
+  const http = settlementHttp();
+  const result = await http.run(input([scoredSource('one', '丙', '', 'https://example.com/user')]));
+  assert.equal(result.status, 'completed');
+  assert.equal(http.leads.get('lead-1').fields.抖音号, '');
+  assert.equal(http.leads.get('lead-1').fields.主页链接, 'https://example.com/user');
+});
+
+test('真实落池配送HTTP闭环：有抖音号但无URL时不把账号类型写进主页列', async () => {
+  const http = settlementHttp();
+  const result = await http.run(input([scoredSource('one', '丁', '456')]));
+  assert.equal(result.status, 'completed');
+  assert.equal(http.leads.get('lead-1').fields.抖音号, '456');
+  assert.equal(http.leads.get('lead-1').fields.主页链接, '');
+});
+
+test('真实结算HTTP：旧稀疏池身份fallback不把个人或URL当ID', async () => {
+  const http = settlementHttp();
+  const sources = [scoredSource('one', '甲'), scoredSource('two', '乙', '', 'https://example.com/user'), scoredSource('three', '丙', '789')];
+  for (const [index, source] of sources.entries()) {
+    const fields = { ...source.fields, 原始评论ID: `${source.fields.评论者昵称}|${source.fields.抖音号 || 'noid'}|想了解` };
+    for (const name of ['抖音号', '主页链接', '账号类型']) delete fields[name];
+    const id = 'legacy-' + index;
+    http.pool.set(id, { record_id: id, fields });
+    source.id = id; source.fields = fields;
+  }
+  const batch = input(sources);
+  const deps = await require('../comment-delivery-storage.js').createDeliveryDeps(batch, { env, request: http.request });
+  const result = await require('../comment-activities.js').deliverComments(batch, deps);
+  assert.equal(result.metrics.leads_written, 3);
+  assert.deepEqual([...http.leads.values()].map(r => [r.fields.抖音号, r.fields.主页链接]),
+    [['', ''], ['', 'https://example.com/user'], ['789', '']]);
+});
+
+test('真实落池配送HTTP闭环：昵称/抖音号去重键trim一致并共享重复次数', async () => {
+  const http = settlementHttp();
+  const sources = [scoredSource('one', ' 丁 ', ' 456 ', '', '一'),
+    scoredSource('two', '丁', '456', '', '二'), scoredSource('three', '丁', '', '', '三')];
+  const result = await http.run(input(sources));
+  assert.equal(result.metrics.leads_written, 1);
+  assert.equal(result.metrics.duplicates_highlighted, 2);
+  assert.equal(http.leads.get('lead-1').fields.重复命中次数, 2);
+  // 远端历史字段带空白，重新初始化适配器后也必须按同一规范查找。
+  http.leads.get('lead-1').fields.抖音昵称 = ' 丁 ';
+  http.leads.get('lead-1').fields.抖音号 = ' 456 ';
+  const retry = await http.run(input([scoredSource('four', '丁', '456', '', '四')]));
+  assert.equal(retry.metrics.leads_written, 0);
+  assert.equal(retry.metrics.duplicates_highlighted, 1);
+  assert.equal(http.leads.get('lead-1').fields.重复命中次数, 3);
+});
