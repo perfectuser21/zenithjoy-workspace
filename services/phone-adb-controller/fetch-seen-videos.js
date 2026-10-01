@@ -61,6 +61,7 @@ async function main() {
   do {
     const page = await request(`https://open.feishu.cn/open-apis/bitable/v1/apps/${route.base}/tables/${route.video}/records?page_size=100${cursor ? '&page_token=' + encodeURIComponent(cursor) : ''}`, { token: auth.tenant_access_token });
     if (!Array.isArray(page.data?.items)) refuse('history_readback_invalid');
+    if (typeof page.data.has_more !== 'boolean') refuse('history_pagination_unconfirmed');
     for (const record of page.data.items) {
       if (!record || !record.fields || typeof record.fields !== 'object') refuse('history_record_invalid');
       const value = record.fields['视频ID'];

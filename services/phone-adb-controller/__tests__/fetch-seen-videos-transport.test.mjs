@@ -103,6 +103,9 @@ for(const [name,options] of [
   ['历史HTTP失败',{recordsStatus:500}],['历史业务失败',{recordsBody:{code:999,data:{items:[]}}}],
   ['历史缺items',{recordsBody:{code:0,data:{}}}],['坏JSON',{badJson:true}],
   ['分页不推进',{recordsBody:{code:0,data:{items:[],has_more:true,page_token:''}}}],
+  ['分页标记缺失',{recordsBody:{code:0,data:{items:[]}}}],
+  ['分页标记null',{recordsBody:{code:0,data:{items:[{fields:{视频ID:id1}}],has_more:null}}}],
+  ['分页标记字符串',{recordsBody:{code:0,data:{items:[],has_more:'false'}}}],
 ])test(`${name}必须非零退出，不能伪造空历史`,async t=>{
   const f=await fixture(t,options);const r=await f.run('jinuo',f.credentials);assert.equal(r.code,1);assert.equal(r.stdout,'');
   assert.equal(f.privateConfigAttempted(),false);assert.ok(f.calls.length>=1);
