@@ -89,9 +89,16 @@ with_lock() {
     WRAP_DONE=1
     /bin/zsh "$PHONE_CTL" --profile "$PROFILE" lock-cleanup "$WRAP_OWNER" "$WRAP_PID" || print -u2 -- 'warning: close-app cleanup failed'
   }
+  wrapper_stop() {
+    # 信号可夹在fork和WRAP_CHILD赋值之间；$!补齐刚启动的孩子。
+    local child="${WRAP_CHILD:-${!:-}}"
+    [[ "$child" == <-> ]] || return 0
+    "$PYTHON_BIN" "$PHONE_LOCK_HELPER" stop "$child" "$WRAP_PID" || true
+    wait "$child" 2>/dev/null || true
+  }
   TRAPEXIT() { wrapper_cleanup; }
-  TRAPTERM() { [[ -n "$WRAP_CHILD" ]] && kill -TERM -- "-$WRAP_CHILD" 2>/dev/null || true; [[ -n "$WRAP_CHILD" ]] && wait "$WRAP_CHILD" 2>/dev/null || true; wrapper_cleanup; exit 143; }
-  TRAPINT() { [[ -n "$WRAP_CHILD" ]] && kill -TERM -- "-$WRAP_CHILD" 2>/dev/null || true; [[ -n "$WRAP_CHILD" ]] && wait "$WRAP_CHILD" 2>/dev/null || true; wrapper_cleanup; exit 130; }
+  TRAPTERM() { wrapper_stop; wrapper_cleanup; exit 143; }
+  TRAPINT() { wrapper_stop; wrapper_cleanup; exit 130; }
   "$PYTHON_BIN" "$PHONE_LOCK_HELPER" run "$@" &
   WRAP_CHILD=$!
   wait "$WRAP_CHILD" || rc=$?

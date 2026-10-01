@@ -4,6 +4,8 @@ import fcntl
 import csv
 import json
 import os
+import signal
+import time
 import subprocess
 import sys
 
@@ -20,6 +22,35 @@ def guarded():
     os.set_inheritable(fd, True)
     os.environ['DOUYIN_LOCK_GUARDED'] = serial + ':' + command
     os.execv('/bin/zsh', ['zsh', script, '--profile', profile, command, *args])
+
+
+def stop_child():
+    pid, parent = map(int, sys.argv[2:4])
+    if pid <= 1 or parent <= 1:
+        raise ValueError('invalid child identity')
+
+    def send_group(sig):
+        try:
+            os.killpg(pid, sig)
+        except ProcessLookupError:
+            pass
+
+    def send_child(sig):
+        # 建组之前仍按直接孩子终止；已结束且PID易主时不能杀后来者。
+        result = subprocess.run(['/bin/ps', '-o', 'ppid=', '-p', str(pid)],
+                                capture_output=True, text=True, timeout=1)
+        if result.returncode == 0 and result.stdout.strip() == str(parent):
+            try:
+                os.kill(pid, sig)
+            except ProcessLookupError:
+                pass
+
+    send_group(signal.SIGTERM)
+    send_child(signal.SIGTERM)
+    time.sleep(0.2)
+    # 业务命令可能屏蔽TERM；有界升级后再wait，不能清场时孩子还在操作UI。
+    send_group(signal.SIGKILL)
+    send_child(signal.SIGKILL)
 
 
 def task_list():
@@ -78,7 +109,7 @@ def safe_to_reap():
                     or serial.lower() in raw or profile.lower() in profiles):
                 print('active-task')
                 return 1
-            if task.get('task_type') in ('qiumi_task', 'workflow_run') and not serials:
+            if task.get('task_type') in ('qiumi_task', 'workflow_run', 'device_job') and not serials:
                 # 外部手机任务字段分散；未命中本机不能据此证明属于另一手机。
                 print('device-uncertain')
                 return 1
@@ -98,6 +129,8 @@ def safe_to_reap():
 if __name__ == '__main__':
     if sys.argv[1] == 'guard':
         guarded()
+    elif sys.argv[1] == 'stop':
+        stop_child()
     elif sys.argv[1] == 'run':
         os.setsid()
         os.execvp(sys.argv[2], sys.argv[2:])
