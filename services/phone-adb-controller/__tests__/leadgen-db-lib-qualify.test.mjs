@@ -34,6 +34,14 @@ test("discoverVideo: 已判过的视频回报库里的判定（缓存，不重�
   assert.equal(out.has_transcript, true);
 });
 
+test("discoverVideo: 返回真实历史采集状态，防止已采视频进入本批候选", async () => {
+  const pool = fakePool([{ rows: [{ judgment_status: "matched", process_status: "评论已采", inserted: false }] }]);
+  const out = await discoverVideo(pool, { lineKey: "jinuo", videoId: "v1" });
+  assert.equal(out.process_status, "评论已采");
+  assert.match(pool.calls[0].sql, /RETURNING[^`]*process_status/);
+  assert.deepEqual(pool.calls[0].params.slice(0, 2), ["jinuo", "v1"]);
+});
+
 test("discoverVideo: lineKey/videoId 必填", async () => {
   await assert.rejects(() => discoverVideo(fakePool([]), { lineKey: "jinuo" }), /必填/);
 });

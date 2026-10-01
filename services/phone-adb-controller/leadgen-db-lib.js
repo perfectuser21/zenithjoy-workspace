@@ -98,11 +98,12 @@ async function discoverVideo(pool, row) {
                           THEN zenithjoy.leadgen_videos.keyword ELSE COALESCE(EXCLUDED.keyword, zenithjoy.leadgen_videos.keyword) END,
            video_url = COALESCE(zenithjoy.leadgen_videos.video_url, EXCLUDED.video_url),
            updated_at = now()
-     RETURNING judgment_status, (transcript IS NOT NULL AND transcript <> '') AS has_transcript, (xmax = 0) AS inserted`,
+     RETURNING judgment_status, process_status, (transcript IS NOT NULL AND transcript <> '') AS has_transcript, (xmax = 0) AS inserted`,
     [lineKey, videoId, videoUrl, title, keyword, harvestBatch, "待判定"]
   );
   const r = res.rows[0] || {};
-  return { status: r.judgment_status || "pending", has_transcript: !!r.has_transcript, inserted: !!r.inserted };
+  return { status: r.judgment_status || "pending", has_transcript: !!r.has_transcript, inserted: !!r.inserted,
+    ...(r.process_status !== undefined ? { process_status: r.process_status } : {}) };
 }
 
 async function getVideo(pool, lineKey, videoId) {
