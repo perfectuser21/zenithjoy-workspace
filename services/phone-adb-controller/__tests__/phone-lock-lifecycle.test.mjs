@@ -108,13 +108,14 @@ test('lock-reap 已明确属于另一手机的任务不阻止本机回收（短p
 });
 test('lock-reap 清场期间互斥guard阻止并发拿锁，清场结束后可再拿',async t=>{
  const c=setup(t), adb=join(c.dir,'adb');c.stale();const original=readFileSync(adb,'utf8');
- writeFileSync(adb,original.replace('case "$*" in','case "$*" in\n *"am force-stop"*) touch "$TEST_DIR/cleaning"; while [ ! -f "$TEST_DIR/proceed" ]; do sleep 0.02; done; exit 0;;'),{mode:0o755});
+ writeFileSync(adb,original.replace('case "$*" in','case "$*" in\n *"am force-stop"*) touch "$TEST_DIR/cleaning"; tries=0; while [ ! -f "$TEST_DIR/proceed" ]; do tries=$((tries+1)); [ "$tries" -lt 600 ] || exit 1; sleep 0.02; done; exit 0;;'),{mode:0o755});
  const p=spawn('zsh',[script,'--profile','p1','lock-reap'],{env:c.env,stdio:'ignore'});t.after(()=>p.kill('SIGKILL'));
  const ended=new Promise(resolve=>p.once('exit',code=>resolve(code)));
  await new Promise((resolve,reject)=>{const deadline=Date.now()+4000;const tick=()=>existsSync(join(c.dir,'cleaning'))?resolve():Date.now()>deadline?reject(Error('未开始清场')):setTimeout(tick,20);tick();});
- const r=c.run('lock-acquire','new-owner');assert.notEqual(r.status,0);assert.match(r.stderr,/lock operation busy/);
- assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),'probe-btr-budget');writeFileSync(join(c.dir,'proceed'),'1');
- assert.equal(await ended,0);assert.equal(c.run('lock-acquire','new-owner').status,0);
+ const r=c.run('lock-acquire','new-owner'), owner=readFileSync(join(c.lock,'owner'),'utf8').trim();
+ writeFileSync(join(c.dir,'proceed'),'1');const code=await ended;
+ assert.notEqual(r.status,0);assert.match(r.stderr,/lock operation busy/);assert.match(r.stderr,/lock is held by another run/);
+ assert.equal(owner,'probe-btr-budget');assert.equal(code,0);assert.equal(c.run('lock-acquire','new-owner').status,0);
 });
 
 test('lock-reap 本地旧执行链活进程保留',t=>{

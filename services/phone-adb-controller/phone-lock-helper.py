@@ -15,7 +15,7 @@ def guarded():
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
-        print('lock operation busy; preserving device', file=sys.stderr)
+        print('lock is held by another run: lock operation busy; preserving device', file=sys.stderr)
         sys.exit(2)
     os.set_inheritable(fd, True)
     os.environ['DOUYIN_LOCK_GUARDED'] = serial + ':' + command
