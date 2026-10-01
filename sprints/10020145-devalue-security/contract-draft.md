@@ -6,6 +6,10 @@
 
 仅root package-lock.json既有devalue节点version/resolved/integrity三字段更新5.8.1→5.9.3，永久真实Buffer/解析/npm audit测试、smoke/baseline及原生合同工件。保Astro ^5.6.2、原audit-gate/allowlist、业务与生产字节。Buffer池保护不等同于普通显式TypedArray backing裁剪。
 
+## 官方发行来源验收
+
+锁定来源必须与 npm 官方 devalue@5.9.3 dist 一致：tarball 为 https://registry.npmjs.org/devalue/-/devalue-5.9.3.tgz，integrity 为 sha512-xRumYOCUZN/EesqHEU3WOXanOZNvfZFZ/o1AHVFDX1yI0UAkZkOgDXt341CzKoBVIkgQba55/+DjGBKrIoKcHw==。合同验收实际 lock 与官方 dist 元数据逐字节对照，不能只凭版本字符串；独立源码审查已核对两者并确认只改既有节点三个字段。
+
 ## E2E 验收（target_environment: local_api）
 
 ```bash
