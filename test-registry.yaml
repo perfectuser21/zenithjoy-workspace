@@ -6923,6 +6923,22 @@ agent_suite:
     product: 工作机排程
     note: "工作目录（主理人要的「这个部门有哪些活、每件活要填什么」）：断言**只列真能跑的活**——目前只有智能获客一条线有（采收/私信/触达三件的脚本在工作机 ~/bin-harvest 下），其余部门返回空让页面明说「还没有可派的活」而不是给会失败的假菜单；每件活必须写清「派下去会发生什么」、id 唯一（领单器按它分派，撞车会派错脚本）、碰平台的标 outbound（决定 30 分钟窗口约束）；每个输入框有 label，非必填项要么有默认值要么有说明；组装的 params 只含 job_type 与用户填的值，**不含 profile/action**（工作机本地概念，中台猜必错，见单 03aa758d）。"
 
+  - id: comment-activities
+    path: services/phone-adb-controller/__tests__/comment-activities.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "显式评分/配送与JSON进程入口：失败待重试、无评分、账号拒绝、真实写入计数及部署依赖顺序。"
+
+  - id: comment-delivery-storage
+    path: services/phone-adb-controller/__tests__/comment-delivery-storage.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实存储适配器与结算活动，替换HTTP运输边界：跨池拒绝、读回、整批重放与线索已写池失败恢复。"
+
   - id: locate-element
     path: services/phone-adb-controller/__tests__/locate-element.test.mjs
     type: unit

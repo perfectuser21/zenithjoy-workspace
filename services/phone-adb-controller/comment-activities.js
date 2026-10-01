@@ -4,7 +4,7 @@
 const { routeOf } = require('./line-routes.js');
 const { TARGET_PROFILES } = require('./judge-video.js');
 const { judgeComment, GRADES } = require('./judge-comment.js');
-const { settlePending, txt } = require('./sort-comments-lib.js');
+const { settlePending, verdictFields, txt } = require('./sort-comments-lib.js');
 
 function validateInput(input) {
   if (!input || typeof input.run_tag !== 'string' || !input.run_tag.trim()) {
@@ -27,6 +27,16 @@ function validateInput(input) {
 function validVerdict(verdict) {
   return verdict && GRADES.includes(verdict.grade)
     && verdict.relevance === (verdict.grade === '不相关' ? '不相关' : '相关');
+}
+
+function validateDeliveryInput(input) {
+  const route = validateInput(input);
+  for (const row of input.comments) {
+    if (row.verdict !== undefined && (!validVerdict(row.verdict) || row.score_status === 'pending')) {
+      throw new Error('配送收到非法或未完成的评分结果: ' + row.id);
+    }
+  }
+  return route;
 }
 
 function activityResult(input, comments, metrics, evidence, pending) {
@@ -72,13 +82,8 @@ async function scoreComments(input, { judge = judgeComment, judgeOptions = {} } 
 // 配送的这一单元结算已落池评论；原始评论落池仍由 push-raw-comments 完成。
 // 评分可在落池之前独立调用，配送时 id 是持久化池记录 id。
 async function deliverComments(input, deps = {}) {
-  const route = validateInput(input);
+  const route = validateDeliveryInput(input);
   const storage = deps.deps || {};
-  for (const row of input.comments) {
-    if (row.verdict !== undefined && (!validVerdict(row.verdict) || row.score_status === 'pending')) {
-      throw new Error('配送收到非法或未完成的评分结果: ' + row.id);
-    }
-  }
   const scored = input.comments.some(row => row.verdict !== undefined);
   if (scored && (!(deps.seen instanceof Map) || typeof deps.asLeadTime !== 'function'
       || typeof deps.now !== 'string'
@@ -89,9 +94,9 @@ async function deliverComments(input, deps = {}) {
   const evidence = [];
   const metrics = { leads_written: 0, duplicates_highlighted: 0, pending: 0, unscored: 0 };
   const settle = deps.settle || settlePending;
-  const writes = {
+  const writesFor = commentId => ({
     postLead: async fields => {
-      const result = await storage.postLead(fields);
+      const result = await storage.postLead(fields, commentId);
       if (result && result.code === 0) {
         if (!(result.data && result.data.record && result.data.record.record_id)) {
           throw new Error('线索写入未返回 record_id');
@@ -101,7 +106,7 @@ async function deliverComments(input, deps = {}) {
       return result;
     },
     putLead: async (id, fields) => {
-      const result = await storage.putLead(id, fields);
+      const result = await storage.putLead(id, fields, commentId);
       if (result && result.code === 0) metrics.duplicates_highlighted++;
       return result;
     },
@@ -110,7 +115,7 @@ async function deliverComments(input, deps = {}) {
       if (!result || result.code !== 0) throw new Error('评论池写入未确认');
       return result;
     },
-  };
+  });
   for (const source of input.comments) {
     const row = structuredClone(source);
     if (!row.verdict) {
@@ -120,9 +125,24 @@ async function deliverComments(input, deps = {}) {
       comments.push(row);
       continue;
     }
+    if (deps.settled_ids instanceof Set && deps.settled_ids.has(row.id)) {
+      row.delivery_status = 'completed';
+      evidence.push({ comment_id: row.id, status: 'completed', replay: true });
+      comments.push(row);
+      continue;
+    }
+    const writes = writesFor(row.id);
     try {
-      const result = await settle({ row, verdict: row.verdict, deps: writes, route,
-        seen: deps.seen, now: deps.now, asLeadTime: deps.asLeadTime });
+      let result;
+      if (deps.lead_receipts instanceof Map && deps.lead_receipts.has(row.id)) {
+        // 线索落地但池回执失败：本次只补池，不把同一条评论再算成重复意向。
+        await writes.putPool(row.id, { 处理状态: '已分拣', 进入最终线索: true,
+          ...verdictFields(row.verdict, true) });
+        result = { retryable: false };
+      } else {
+        result = await settle({ row, verdict: row.verdict, deps: writes, route,
+          seen: deps.seen, now: deps.now, asLeadTime: deps.asLeadTime });
+      }
       row.delivery_status = result.retryable ? 'pending' : 'completed';
       if (result.retryable) metrics.pending++;
     } catch (_) {
@@ -136,4 +156,4 @@ async function deliverComments(input, deps = {}) {
   return activityResult(input, comments, metrics, evidence, metrics.pending);
 }
 
-module.exports = { scoreComments, deliverComments, validateInput };
+module.exports = { scoreComments, deliverComments, validateInput, validateDeliveryInput };

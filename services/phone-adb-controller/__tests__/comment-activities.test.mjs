@@ -180,6 +180,22 @@ test('活动接入真实Jev判定函数，低置信复核仍按四档闭集输�
   assert.match(calls[0].payload.state, /在哪里报名/);
 });
 
+test('配送非法评分与账号归属错误返回fatal，不能进入无限存储重试', () => {
+  const entry = new URL('../comment-activity.js', import.meta.url).pathname;
+  for (const [request, extra, reason] of [
+    [input([{ ...row(), verdict: null }]), {}, 'invalid_input'],
+    [input([{ ...row(), verdict }]), { FEISHU_ACCOUNT: 'main', FEISHU_APP_ID: 'fixture', FEISHU_APP_SECRET: 'fixture' }, 'account_mismatch'],
+  ]) {
+    const result = spawnSync(process.execPath, [entry, 'delivery'], {
+      input: JSON.stringify(request), encoding: 'utf8', env: { PATH: process.env.PATH, ...extra },
+    });
+    const output = JSON.parse(result.stdout);
+    assert.equal(result.status, 1);
+    assert.equal(output.failure_class, 'fatal');
+    assert.equal(output.reason_code, reason);
+  }
+});
+
 test('部署先上传独立活动依赖，再替换旧分拣入口，首次上线无缺模块窗口', async () => {
   const { readFileSync } = await import('node:fs');
   const source = readFileSync(new URL('../deploy.sh', import.meta.url), 'utf8');
