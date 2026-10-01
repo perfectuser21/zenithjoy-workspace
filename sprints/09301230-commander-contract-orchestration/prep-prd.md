@@ -143,7 +143,7 @@ npm run product-map:check
 
 部署可携带入口显式接受 `--contract plans/keyword_workflow.contract.json`，文件由真实 `wf-plan.mjs keyword_acquisition --json --bindings plans/keyword_workflow.bindings.json` 在源仓库生成，是编译投影；绑定与原契约才是真身。离线守卫逐次对比投影与编译器输出，再按 `deploy.sh` 清单复制到无仓库编译器、无 node_modules 的平铺目录，使用真实 Cecelia CLI跑完整链及删除评分版。`--contract` 与 `--bindings` 互斥，非法文件先拒绝。Cecelia runtime仍须显式绝对路径，由所属仓库单独准备；本轮仅更新业务文件携带清单，未下发设备。
 
-历史读取与候选持久化同样接受显式 `execution.gateway`，不再绕回固定生产脚本。历史CLI凭据优先使用完整显式环境，否则读取1Password导出的0600 `~/.credentials/feishu.env`，禁止读取工具私有配置；既有无账户标记镜像兼容，只读业务线固定，有标记则必须匹配。HTTP/API/分页失败不输出假空历史。旧视频池明确占位 `id未取到` 单独计数跳过，其他异常仍报告；有效ID继续去重。
+历史读取与候选持久化同样接受显式 `execution.gateway`，不再绕回固定生产脚本。历史CLI凭据优先使用完整显式环境，否则读取1Password导出的0600 `~/.credentials/feishu.env`，禁止读取工具私有配置；既有无账户标记镜像兼容，只读业务线固定，有标记则必须匹配。HTTP/API/分页失败不输出假空历史；末页必须明确读回布尔 `has_more=false`，缺失或错误类型不能确认完整历史。旧视频池明确占位 `id未取到` 单独计数跳过，其他异常仍报告；有效ID继续去重。
 
 #### 接手时设备阻塞（10-01）
 
