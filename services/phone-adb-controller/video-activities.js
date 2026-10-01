@@ -27,6 +27,12 @@ function validateVideoInput(input) {
   if (input.budget && (!Number.isSafeInteger(input.budget.max_duration_s) || input.budget.max_duration_s < 0)) {
     throw new Error('活动预算非法');
   }
+  if (input.return_to_results !== undefined && typeof input.return_to_results !== 'boolean') {
+    throw new Error('归位开关非法');
+  }
+  if (input.return_to_results === true && (typeof video.keyword !== 'string' || !video.keyword.trim())) {
+    throw new Error('归位需要显式关键词');
+  }
   return route;
 }
 
@@ -40,7 +46,8 @@ async function runPhone(action, input) {
     return await execute('zsh', [path.join(__dirname, 'video-phone-activity.sh'), action, input.device.profile,
       routeOf(input.line_key).key, input.video.video_id, Buffer.from(input.video.title).toString('base64'),
       input.video.duration || '', input.run_tag, encodeURIComponent(input.video.keyword || ''),
-      String(input.budget ? input.budget.max_duration_s : 0), input.device.serial, input.device.lock_holder],
+      String(input.budget ? input.budget.max_duration_s : 0), input.device.serial, input.device.lock_holder,
+      String(input.return_to_results === true)],
     { maxBuffer: 16 * 1024 * 1024, env: { ...process.env, VIDEO_ACTIVITY_STOP_FILE: stopFile } });
   } finally {
     process.off('SIGTERM', stop); process.off('SIGINT', stop);
@@ -72,7 +79,7 @@ async function runVideoActivity(action, input, { run = runPhone } = {}) {
   }
   const lines = String(stdout).trim().split('\n');
   const statusLine = lines.filter(line => line.startsWith('ACTIVITY_STATUS\t')).at(-1);
-  const [, state = 'pending', reason = 'invalid_phone_result'] = (statusLine || '').split('\t');
+  let [, state = 'pending', reason = 'invalid_phone_result'] = (statusLine || '').split('\t');
   const cleanupFailed = lines.includes('ACTIVITY_CLEANUP\tfailed');
   if (action === 'qualification') {
     const qualification = lines.filter(line => line.startsWith('QUAL\t')).at(-1);
@@ -93,6 +100,24 @@ async function runVideoActivity(action, input, { run = runPhone } = {}) {
         video_id: video.video_id, fields });
     }
     result.metrics.comments_collected = result.outputs.comments.length;
+    if (input.return_to_results === true) {
+      const marker = lines.filter(line => line.startsWith('ACTIVITY_RETURN\t')).at(-1);
+      const [, attempted, confirmed, rescans, returnReason] = (marker || '').split('\t');
+      const valid = ['0', '1'].includes(attempted) && ['0', '1'].includes(confirmed)
+        && (confirmed !== '1' || (attempted === '1' && ['0', '1'].includes(rescans)));
+      const returned = valid && confirmed === '1';
+      const attemptCount = valid ? Number(attempted) : null;
+      result.evidence[0].return_to_results = { attempted: attemptCount,
+        confirmed: returned ? 1 : 0, rescans: returned ? Number(rescans) : null,
+        reason_code: returned ? null : returnReason || 'return_to_results_unconfirmed' };
+      if (attemptCount !== null) result.metrics.returns_attempted = attemptCount;
+      if (returned) {
+        result.metrics.rescan_count = Number(rescans);
+        result.metrics.rescan_rate = Number(rescans) / attemptCount;
+      } else if (state === 'completed') {
+        state = 'pending'; reason = returnReason || 'return_to_results_unconfirmed';
+      }
+    }
     if (state === 'completed' && !cleanupFailed) result.metrics.videos_processed = 1;
   }
   const invalidQualification = action === 'qualification' && video.judgment_status === 'pending';

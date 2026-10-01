@@ -3,6 +3,9 @@
 set -uo pipefail
 ACTION="$1"; PROFILE="$2"; LINE_HINT="$3"; VIDEO_ID="$4"; TITLE_B64="$5"
 DURATION="$6"; RUN_TAG="$7"; KEYWORD_ENC="$8"; BUDGET="$9"; EXPECTED_SERIAL="${10}"; LOCK_HOLDER="${11}"
+RETURN_TO_RESULTS="${12:-false}"; RETURN_ATTEMPTED=0; RETURN_CONFIRMED=0; RETURN_RESCANS=unknown
+# 直接调用shell也必须先拒绝非法flag；不能先source远端/手机活动。
+[[ "$RETURN_TO_RESULTS" == true || "$RETURN_TO_RESULTS" == false ]] || { print -- $'ACTIVITY_STATUS\tfatal\tinvalid_input'; exit 1; }
 export HARVEST_KEYWORD_LIB=1 VIDEO_ACTIVITY_MODE=1
 source "${0:A:h}/harvest-keyword.sh" "$PROFILE" "$KEYWORD_ENC" 1 "$RUN_TAG" unlimited "$LINE_HINT"
 VID="$VIDEO_ID"; TITLE="$(print -rn -- "$TITLE_B64" | base64 -d)"; DUR="$DURATION"; i=1
@@ -25,8 +28,13 @@ activity_cleanup() {
   (( RELEASE_CONFIRMED )) || print -- $'ACTIVITY_CLEANUP\tfailed'
 }
 trap 'activity_cleanup' EXIT
-trap 'ACTIVITY_REASON=interrupted; print -- "ACTIVITY_STATUS\tpending\tinterrupted"; exit 1' TERM INT
+return_evidence() {
+  [[ "$ACTION" == collection && "$RETURN_TO_RESULTS" == true ]] || return 0
+  print -- "ACTIVITY_RETURN\t$RETURN_ATTEMPTED\t$RETURN_CONFIRMED\t$RETURN_RESCANS\t${1:-}"
+}
+trap 'ACTIVITY_REASON=interrupted; return_evidence interrupted; print -- "ACTIVITY_STATUS\tpending\tinterrupted"; exit 1' TERM INT
 finish_activity() {
+  return_evidence "${2:-}"
   print -- "ACTIVITY_STATUS\t$1\t${2:-}"
   exit 0
 }
@@ -68,7 +76,21 @@ if [[ "$ACTION" == qualification ]]; then
   finish_activity pending "${ACTIVITY_REASON:-qualification_pending}"
 else
   collect_current_video; rc=$?
-  if (( rc == 0 )); then finish_activity completed; fi
+  if (( rc == 0 )); then
+    if [[ "$RETURN_TO_RESULTS" == true ]]; then
+      # 单视频direct ID链只读取controller真实恢复标志，不复用旧卡片坐标重扫循环。
+      activity_should_stop && finish_activity pending "$ACTIVITY_REASON"
+      RETURN_ATTEMPTED=1
+      RETURN_OUT="$($C --profile "$P" back-to-results 4 "$KWTXT" "$TAG-v1-return" </dev/null)"; return_rc=$?
+      RETURN_RESULT="$(print -r -- "$RETURN_OUT" | grep -E '^back_to_results=1([[:space:]]|$)' | tail -1)"
+      if (( return_rc != 0 )) || [[ -z "$RETURN_RESULT" ]]; then
+        finish_activity pending return_to_results_unconfirmed
+      fi
+      RETURN_CONFIRMED=1; RETURN_RESCANS=0
+      print -r -- "$RETURN_RESULT" | grep -qE '(^|[[:space:]])recovered_via=research([[:space:]]|$)' && RETURN_RESCANS=1
+    fi
+    finish_activity completed
+  fi
   if (( rc == 124 )); then finish_activity pending "${ACTIVITY_REASON:-budget_exceeded}"; fi
   if (( rc == 2 )); then finish_activity pending video_mismatch; fi
   finish_activity pending collection_unconfirmed
