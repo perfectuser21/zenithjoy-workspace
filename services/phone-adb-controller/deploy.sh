@@ -104,20 +104,20 @@ MMV_PROBE_FILES=(
 # 生产跑的却仍是 ~/.local/bin 的旧版本,音量棘轮修复完全没生效,最后靠人工 scp 才落地。
 # 漏任一目录 = 两份副本版本分叉,且部署过程不会报任何错。层26 smoke 守卫盯这件事。
 DEVICE_CTL_FILES=(
-  douyin-phone-adb
+  phone-lock-lib.sh phone-lock-helper.py douyin-phone-adb
 )
 DEVICE_CTL_DIRS=(bin-harvest .local/bin)
 DEVICE_SH_FILES=(
   harvest-keyword.sh video-phone-activity.sh batch2.sh harvest-cron.sh wf-run.sh discover-keyword.sh outreach-tick.sh
   refill-profile-links.sh wall-report.sh wall-lib.sh phone-wall-push.sh
   disk-gateway-guard.sh device-job-claimer.sh log-stream-push.sh
-  workflow-result.sh discover-benchmark.sh wf-limits.sh
+  workflow-result.sh discover-benchmark.sh wf-limits.sh install-phone-recovery.sh
 )
 # 0927 棒3b-3: 账本钩子内建进 harvest-cron.sh/batch2.sh,workflow-result.sh 硬依赖 ledger.mjs(node),
 # 少了它账本全程 WFR_WARN——单独成组,用 node --check 而不是 zsh -n 验语法。
 # 9032cdad: 步骤 DoD 统一裁判在执行机本地判 metric/evidence/log/tsv/ledger 类,清单 step-dod.json 由契约生成(json 用 JSON.parse 验)
 DEVICE_NODE_FILES=(
-  ledger.mjs step-judge.mjs step-dod.json line-routes.js
+  ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js line-routes.js
   own-accounts-lib.js check-own-account.js config/own-accounts.json
   video-activities.js video-activity.js
   batch-activities.js batch-activity.js keyword-workflow.js keyword-workflow-control.js keyword-workflow-activity.js
@@ -261,7 +261,12 @@ for host in xian-m4 xian-m1; do
       ssh "$host" "mkdir -p ~/$dir"
       push_atomic "$D/$f" "$host" "~/$dir" "$f" x
       ssh "$host" "chmod +x ~/$dir/$f"
-      if ssh "$host" "zsh -n ~/$dir/$f" 2>/tmp/deploy-err-$$; then
+      if [[ "$f" == *.py ]]; then
+        _ctl_check="/opt/homebrew/bin/python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' ~/$dir/$f"
+      else
+        _ctl_check="zsh -n ~/$dir/$f"
+      fi
+      if ssh "$host" "$_ctl_check" 2>/tmp/deploy-err-$$; then
         echo "    ✅ $dir/$f"
       else
         echo "    ❌ $dir/$f 语法检查失败: $(head -3 /tmp/deploy-err-$$)"
@@ -304,6 +309,10 @@ if [[ -s "$D/commander/AGENTS.md" ]]; then
   echo "  ✅ commander/AGENTS.md → work-commander 工作区"
 else
   echo "  ⚠️ 仓库里缺失: commander/AGENTS.md"; FAILED=1
+fi
+
+if ! ssh xian-m4 "bash ~/bin-harvest/install-phone-recovery.sh xian-m4"; then
+  echo "❌ PHONE_RECOVERY 开机自检安装失败"; FAILED=1
 fi
 
 echo ""

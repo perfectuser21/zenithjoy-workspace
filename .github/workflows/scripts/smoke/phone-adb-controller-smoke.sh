@@ -40,9 +40,13 @@ node --check "$D/notify-bark.js" || fail "notify-bark.js 语法错误"
 
 # 层2: 融合刀函数/命令存在性(六刀签名)
 # 注: 'locate_cached utab' 于 0916 随搜索路线一并删除(见层12),故不再要求存在
-for pat in 'clip_guard_check' 'clip_guard_record' 'foreground_gate' 'FG_DISMISS_LABELS' 'lock-refresh)' 'failure_class=' 'ensure_feed' 'profile url shape not allowed' 'link route:' '"$#" == 5 || "$#" == 6' 'AppLinkHandler' '打开抖音看更多内容' ; do
+for pat in 'clip_guard_check' 'clip_guard_record' 'foreground_gate' 'FG_DISMISS_LABELS' 'failure_class=' 'ensure_feed' 'profile url shape not allowed' 'link route:' '"$#" == 5 || "$#" == 6' 'AppLinkHandler' '打开抖音看更多内容' ; do
   grep -qF "$pat" "$C" || fail "融合刀签名缺失: $pat"
 done
+# 1001 锁命令真身迁入 helper；入口和实现同时核对，避免盯旧位置假红或只剩孤立 helper 假绿。
+grep -qF 'source "${0:A:h}/phone-lock-lib.sh"' "$C" || fail "控制器未加载锁 helper"
+grep -qF 'phone_lock_command "$@"' "$C" || fail "控制器未分发锁命令"
+grep -qF 'lock-refresh)' "$D/phone-lock-lib.sh" || fail "锁 helper 缺 lock-refresh 心跳命令"
 # harvest 必须接了心跳与作品地址
 grep -qF 'lock-refresh' "$D/harvest-keyword.sh" || fail "harvest 未接 lock-refresh 心跳"
 grep -qF 'current-video-link' "$D/harvest-keyword.sh" || fail "harvest 未接原爆款作品地址"

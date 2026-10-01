@@ -83,6 +83,22 @@ if (( ${#SERIALS[@]} == 0 )); then
   exit 0
 fi
 
+# 297d7f32：既有每分钟入口巡检；只检查本机在线手机的过期锁。
+# 真正的任务全集/PID核验与互斥清场在控制器 lock-reap，失败保留且不影响领单。
+LOCK_HELPER="$(dirname "$PHONE_CTL")/phone-lock-helper.py"
+if [[ -x "$PHONE_CTL" && -r "$LOCK_HELPER" && -r "$PHONE_REGISTRY" ]]; then
+  while IFS=$'\t' read -r sweep_profile sweep_serial; do
+    [[ -n "$sweep_profile" ]] || continue
+    sweep_status=$("$PHONE_CTL" --profile "$sweep_profile" lock-status 2>/dev/null) || continue
+    case "$sweep_status" in
+      lock=stale*)
+        sweep_result=$("$PHONE_CTL" --profile "$sweep_profile" lock-reap 2>&1)
+        log "手机锁巡检 serial=$sweep_serial $sweep_result"
+        ;;
+    esac
+  done < <(python3 "$LOCK_HELPER" profiles "${SERIALS[@]}" 2>/dev/null)
+fi
+
 SERIAL_JSON=$(printf '%s\n' "${SERIALS[@]}" | python3 -c 'import sys,json; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')
 CLAIMER="$(hostname -s)-claimer"
 
