@@ -125,6 +125,14 @@ main() {
         if ((p in miss) || !(p in got)) print "MISSING " h ":" p
         else if (got[p] != want[f]) print "DRIFT " h ":" p }
     ' "$work/want" "$work/got" "$work/tg" >> "$work/problems"
+    # 仅新部署清单启用来源对账；旧清单无 reader 时保留原核验行为。
+    if awk -v h="$h" '$1==h && $3=="workflow-source.mjs" {found=1} END {exit !found}' <<< "$targets"; then
+      local provenance
+      provenance="$(ssh "${SSH_OPTS[@]}" "$h" '/opt/homebrew/bin/node ~/bin-harvest/workflow-source.mjs read ~/bin-harvest/workflow-result.sh' 2>/dev/null)"
+      if ! node "$(dirname "$0")/workflow-source.mjs" verify "$REPO" "$(git -C "$REPO" rev-parse "$REF")" "$provenance" >/dev/null 2>&1; then
+        echo "SOURCE_UNKNOWN $h:bin-harvest/workflow-result.source.json" >> "$work/problems"
+      fi
+    fi
   done
   local -a problems=()
   while IFS= read -r line; do [[ -n "$line" ]] && problems+=("$line"); done < "$work/problems"

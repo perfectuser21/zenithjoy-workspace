@@ -13,6 +13,10 @@
 set -u
 WFR_HOME="${WFR_HOME:-$HOME/.config/zenithjoy}"
 WFR_NODE="${WFR_NODE:-/opt/homebrew/bin/node}"
+WFR_PRODUCER_FILE="${BASH_SOURCE[0]}"
+# 从 bash 正在执行的 inode 复制描述符，禁止部署换路径后误认成新脚本。
+WFR_PRODUCER_FD=""
+if { exec 9<&255; } 2>/dev/null; then WFR_PRODUCER_FD=/dev/fd/9; fi
 WFR_JQ="${WFR_JQ:-/usr/bin/jq}"
 WFR_LEDGER_MJS="${WFR_LEDGER_MJS:-$HOME/bin-harvest/ledger.mjs}"
 WFR_SCP_TARGET="${WFR_SCP_TARGET-mmv:/Users/administrator/openclaw-root/workspaces-root/clawd-work-commander/state/workflow-runs/}"
@@ -118,12 +122,12 @@ brain_post(){
   if [[ -n "$missing" ]]; then warn "brain callback skipped: missing$missing (run_id=$run_id)"; return 0; fi
   if [[ -n "$f" && -s "$f" ]]; then
     body=$("$WFR_JQ" -c --arg t "$WFR_BRAIN_TASK_ID" --arg r "$run_id" --arg s "$status" --argjson extra "$extra" --argjson probes "$probes" \
-      '{task_id:$t,run_id:$r,status:$s,result:{stage:.stage_id,stage_status:.status,metrics:.metrics,evidence:(.evidence+$extra),probes:$probes}}' "$f" 2>&1) \
+      '{task_id:$t,run_id:$r,status:$s,result:{stage:.stage_id,stage_status:.status,metrics:.metrics,evidence:(.evidence+$extra),probes:$probes,source_sha:(.source_sha // null),source_provenance:(.source_provenance // {status:"unknown",reason:"artifact_source_unavailable"})}}' "$f" 2>&1) \
       || { warn "brain callback body build failed (run_id=$run_id): $body"; return 0; }
   else
     # 工件没写成(finalize 的 cleanup 写失败): stage/metrics 取默认, evidence 只剩 extra——终态仍要发,否则 Brain 永远挂 in_progress
     body=$("$WFR_JQ" -cn --arg t "$WFR_BRAIN_TASK_ID" --arg r "$run_id" --arg s "$status" --arg st "$stage" --argjson extra "$extra" --argjson probes "$probes" \
-      '{task_id:$t,run_id:$r,status:$s,result:{stage:$st,stage_status:"failed",metrics:{},evidence:$extra,probes:$probes}}' 2>&1) \
+      '{task_id:$t,run_id:$r,status:$s,result:{stage:$st,stage_status:"failed",metrics:{},evidence:$extra,probes:$probes,source_sha:null,source_provenance:{status:"unknown",reason:"artifact_unavailable"}}}' 2>&1) \
       || { warn "brain callback body build failed (run_id=$run_id): $body"; return 0; }
   fi
   out=$(curl -s --connect-timeout 3 -m 8 -w '\n%{http_code}' -X POST "${BRAIN_URL%/}/api/brain/execution-callback" \
@@ -162,12 +166,13 @@ span_post(){ # stage status n artifact_file [word]
   if [[ "$stage" == collection ]] && (( rescan > 0 )); then fallback=true; attempts=$(( rescan + 1 )); fi
   act=$(span_activity "$stage" || true); aid="${act%% *}"; wid="${act#* }"; [[ "$wid" == "$act" ]] && wid=""
   body=$("$WFR_JQ" -cn --arg run "${WFR_RUN_ID:-}__${WFR_ATTEMPT:-a0}" --arg aid "$aid" --arg wid "$wid" --arg st "$started" --arg en "$ended" \
+      --argjson source "$("$WFR_JQ" -c '{source_sha:(.source_sha // null),source_provenance:(.source_provenance // {status:"unknown",reason:"artifact_source_unavailable"})}' "$f")" \
       --arg ek "$ex_kind" --arg eid "${WFR_HOSTKEY:-$(hostname -s 2>/dev/null || echo unknown)}" --argjson att "$attempts" --argjson fb "$fallback" \
       --arg oc "$outcome" --arg stage "$stage" --argjson n "$n" --arg w "$word" --arg art "$(basename "$f")" --argjson rc "$rescan" --argjson rr "$rate" \
       '[{run_id:$run, workflow_id:(if $wid=="" then null else $wid end), activity_id:(if $aid=="" then null else $aid end),
          step_id:null, enabler_id:null, started_at:$st, ended_at:$en, executor_kind:$ek, executor_id:$eid,
          attempts:$att, fallback:$fb, outcome:$oc,
-         evidence:{activity_key:$stage, stage_attempt:$n, word:$w, artifact:$art, rescan_count:$rc, rescan_rate:$rr}}]' 2>&1) \
+         evidence:({activity_key:$stage, stage_attempt:$n, word:$w, artifact:$art, rescan_count:$rc, rescan_rate:$rr} + $source)}]' 2>&1) \
     || { warn "span body build failed (stage=$stage): $body"; return 0; }
   out=$(curl -s --connect-timeout 3 -m 8 -w '\n%{http_code}' -X POST "${BRAIN_URL%/}/api/brain/spans" \
         -H "Authorization: Bearer $BRAIN_INTERNAL_TOKEN" -H 'Content-Type: application/json' -d "$body" 2>&1) \
@@ -237,6 +242,15 @@ gate_report(){
 }
 next_action(){ case "$1" in completed) echo accept;; blocked) echo block;; failed) echo retry;; *) echo stop;; esac; }
 
+# 每份新工件验证本 producer 与部署来源清单；回执与 spans 只传播工件固化的来源。
+producer_source(){
+  local out helper="$(dirname "$WFR_PRODUCER_FILE")/workflow-source.mjs"
+  [[ -n "$WFR_PRODUCER_FD" ]] && out=$("$WFR_NODE" "$helper" read "$WFR_PRODUCER_FILE" /dev/stdin <&9 2>/dev/null) || out=''
+  printf '%s' "$out" | "$WFR_JQ" -e 'type=="object" and has("source_sha") and (.source_provenance|type=="object")' >/dev/null 2>&1 \
+    || out='{"source_sha":null,"source_provenance":{"status":"unknown","reason":"source_reader_unavailable"}}'
+  printf '%s' "$out"
+}
+
 # 写一个工件：stage status n summary evidence_json metrics_json [word]
 write_stage(){
   WFR_LAST_ARTIFACT=""   # 本次写成的工件路径(空=没写成); finalize 据此定终态
@@ -249,11 +263,11 @@ write_stage(){
   local body
   body=$("$WFR_JQ" -n --arg run "${WFR_RUN_ID:-}" --arg att "$attempt" --arg st "$stage" --argjson n "$n" \
       --arg hash "${WFR_HASH:-}" --arg status "$status" --arg na "$(next_action "$status")" --arg sum "$summary" \
-      --argjson ev "$evidence" --argjson m "$metrics" \
+      --argjson ev "$evidence" --argjson m "$metrics" --argjson source "$(producer_source)" \
       '{schema_version:2,run_id:$run,attempt_id:$att,stage_id:$st,stage_attempt:$n,task_request_hash:$hash,
         status:$status,recommended_next_action:$na,summary:$sum,evidence:$ev,artifacts:[],
         metrics:({external_interactions:0,business_reads:0,business_writes:0,artifact_writes:0}+$m),
-        observed_at:(now|todate)}' 2>&1) || { warn "stage=$stage jq build failed: $body"; return 0; }
+        observed_at:(now|todate)} + $source' 2>&1) || { warn "stage=$stage jq build failed: $body"; return 0; }
   local err
   if ! err=$(printf '%s\n' "$body" > "$f" 2>&1); then warn "stage=$stage write failed errno: $err"; return 0; fi
   [[ -s "$f" ]] || { warn "stage=$stage write produced empty file (errno: $(ls -ld "${WFR_ART_DIR:-}" 2>&1))"; return 0; }
