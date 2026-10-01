@@ -32,14 +32,30 @@ function viewFixture(kind) {
 
 for (const kind of ['Uint8Array', 'Buffer']) {
   for (const method of ['stringify', 'uneval']) {
-    test(`${method} ${kind}: preserve the view without exposing unrelated backing bytes`, () => {
+    test(`${method} ${kind}: protect Buffer pools and retain explicit ArrayBuffer view semantics`, () => {
       const view = viewFixture(kind);
-      const output = method === 'stringify' ? parse(stringify(view)) : runInNewContext(uneval(view));
+      const output = method === 'stringify' ? parse(stringify(view)) : runInNewContext(`(${uneval(view)})`);
       assert.deepEqual(Array.from(output), [1, 2]);
-      assert.equal(output.buffer.byteLength, 2, 'shared backing bytes must not be serialized');
-      assert.equal(Array.from(new Uint8Array(output.buffer)).includes(77), false);
+      if (kind === 'Buffer') {
+        assert.equal(output.buffer.byteLength, 2, 'Node Buffer shared-pool bytes must not be serialized');
+        assert.equal(Array.from(new Uint8Array(output.buffer)).includes(77), false);
+      } else {
+        // Ordinary typed-array views intentionally retain their caller-supplied backing object.
+        assert.equal(output.buffer.byteLength, 64); assert.equal(output.byteOffset, 8);
+      }
     });
   }
+}
+
+for (const method of ['stringify', 'uneval']) {
+  test(`${method}: nested Buffer views never hoist their shared backing pool`, () => {
+    const first = viewFixture('Buffer');
+    const second = Buffer.from(first.buffer, 20, 2); second[0] = 3; second[1] = 4;
+    const value = { first, second };
+    const output = method === 'stringify' ? parse(stringify(value)) : runInNewContext(`(${uneval(value)})`);
+    assert.deepEqual([...output.first], [1, 2]); assert.deepEqual([...output.second], [3, 4]);
+    assert.equal(output.first.buffer.byteLength, 2); assert.equal(output.second.buffer.byteLength, 2);
+  });
 }
 
 test('normal structured values and deliberately supplied full ArrayBuffers still round trip', () => {
