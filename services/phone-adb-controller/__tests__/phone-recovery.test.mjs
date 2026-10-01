@@ -70,3 +70,17 @@ test('启动安装随部署执行；采收离线预检保留可见日志及事�
   assert.match(wf, /log "设备离线,退出"/);
   assert.match(wf, /wr fail "\$SERIAL" 1 device_offline/);
 });
+
+test('不回收任何既有设备锁目录，含owner尚未写的起锁窗口', async () => {
+  const { acquireRecoveryLock } = await import('../phone-recovery.mjs');
+  const { mkdtempSync, mkdirSync, readFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const root = mkdtempSync(`${tmpdir()}/recovery-lock-`);
+  try {
+    mkdirSync(`${root}/SERIAL1.lock`);
+    assert.equal(acquireRecoveryLock(root, 'SERIAL1', 'recovery'), false);
+    assert.equal(acquireRecoveryLock(root, 'SERIAL2', 'recovery'), true);
+    assert.equal(readFileSync(`${root}/SERIAL2.lock/owner`, 'utf8').trim(), 'recovery');
+    assert.match(readFileSync(`${root}/SERIAL2.lock/acquired_at`, 'utf8'), /^\d+\n$/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
