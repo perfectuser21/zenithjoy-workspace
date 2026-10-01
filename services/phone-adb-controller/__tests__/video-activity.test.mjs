@@ -4,6 +4,8 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 
 const entry = new URL('../video-activity.js', import.meta.url).pathname;
 const vid = '7412345678901234567';
@@ -15,7 +17,7 @@ const adb = `#!/bin/sh
 shift 2
 cmd="$1"; shift
 printf 'adb %s %s\\n' "$cmd" "$*" >> "$HOME/calls"
-if [ "$cmd" = "$ADVANCE_ON" ]; then n=$(cat "$HOME/now"); echo $((n + ADVANCE_BY)) > "$HOME/now"; fi
+if [ "$cmd" = "$ADVANCE_ON" ]; then n=$(cat "$HOME/now"); echo $((n + ADVANCE_BY)) > "$HOME/now"; [ "$DYNAMIC_CLOCK" = 1 ] && /bin/date +%s > "$HOME/clock-start"; fi
 case "$cmd" in
  preflight) printf 'serial=%s\\nstate=device\\n' "\${TARGET_SERIAL:-fixture-serial}";;
  lock-status) [ -z "$BORROWED_OWNER" ] && echo 'lock=free' || echo "lock=held owner=$BORROWED_OWNER stale=false";;
@@ -25,8 +27,8 @@ case "$cmd" in
  open-video) echo 'video_opened=1';;
  current-video-link) printf 'video_id=%s\\nshort_url=https://v.douyin.com/fixture/\\n' "\${CURRENT_VID:-7412345678901234567}";;
  open-comments) [ "$OPEN_FAIL" = 1 ] && exit 2; printf 'comments_opened=1\\ncomment_count=1\\n';;
- collect-comments) printf '小李\\t如何报名\\t今天\\t北京\\tpersonal\\ttap=10 20\\tb64=AAA\\nexhausted=1\\n';;
- commenter-identity) printf 'nickname=小李\\ndouyin_id=123\\naccount_type=personal\\n';;
+ collect-comments) [ "$OWN_FIRST" = 1 ] && printf '躺赢AI学姐\\t自有评论\\t今天\\t北京\\tpersonal\\ttap=30 40\\tb64=BBB\\n'; printf '小李\\t如何报名\\t今天\\t北京\\tpersonal\\ttap=10 20\\tb64=AAA\\nexhausted=1\\n';;
+ commenter-identity) if [ "$1" = 30 ]; then printf 'nickname=躺赢AI学姐\\ndouyin_id=langzi63485\\naccount_type=personal\\n'; else printf 'nickname=小李\\ndouyin_id=123\\naccount_type=personal\\n'; fi;;
  commenter-card-link) echo 'profile_url=https://www.douyin.com/user/fixture';;
  record-stop) echo 'record_stopped duration_seconds=15 mean_volume_db=-30';;
  record-extract-audio) echo 'audio_extracted path=/tmp/fixture.wav';;
@@ -35,20 +37,26 @@ exit 0`;
 const ssh = `#!/bin/sh
 printf 'ssh %s\\n' "$*" >> "$HOME/calls"
 case "$*" in
- *'qualify-video.js discover'*) printf 'QUAL_DISCOVER {"status":"%s","has_transcript":true}\\n' "\${DISCOVER_STATUS:-matched}";;
- *'qualify-video.js judge'*) printf 'QUAL_RESULT {"verdict":"%s","kind":"judged"}\\n' "\${JUDGE_STATUS:-matched}";;
+ *'qualify-video.js discover'*) printf 'QUAL_DISCOVER {"status":"%s","has_transcript":%s}\\n' "\${DISCOVER_STATUS:-matched}" "\${HAS_TRANSCRIPT:-true}";;
+ *'qualify-video.js judge'*) [ -n "$JUDGE_SLEEP" ] && /bin/sleep "$JUDGE_SLEEP"; printf 'QUAL_RESULT {"verdict":"%s","kind":"judged"}\\n' "\${JUDGE_STATUS:-matched}";;
  *'qualify-video.js collected'*) echo 'QUAL_COLLECTED {"updated":1}';;
 esac`;
+const scp = `#!/bin/sh
+printf 'scp started\\n' >> "$HOME/calls"
+[ -n "$SCP_SLEEP" ] && /bin/sleep "$SCP_SLEEP"
+printf 'scp ended\\n' >> "$HOME/calls"
+exit 0`;
 function run(action, request = input(), extra = {}) {
   const home = mkdtempSync(join(tmpdir(), 'video-activity-'));
   const bin = join(home, '.local', 'bin'); mkdirSync(bin, { recursive: true });
-  for (const [name, code] of [['douyin-phone-adb', adb], ['ssh', ssh], ['date', `#!/bin/sh\n[ "$1" = +%s ] && { cat "$HOME/now"; exit; }\nexec /bin/date "$@"`]]) {
+  for (const [name, code] of [['douyin-phone-adb', adb], ['ssh', ssh], ['scp', scp], ['date', `#!/bin/sh\n[ "$1" = +%s ] && { n=$(cat "$HOME/now"); [ "$DYNAMIC_CLOCK" = 1 ] && [ -f "$HOME/clock-start" ] && n=$(( $(/bin/date +%s) - $(cat "$HOME/clock-start") + n )); echo "$n"; exit; }\nexec /bin/date "$@"`]]) {
+    if (name === 'date' && extra.REAL_CLOCK === '1') continue;
     writeFileSync(join(bin, name), code); chmodSync(join(bin, name), 0o755);
   }
   writeFileSync(join(home, 'now'), '1000');
   const result = spawnSync(process.execPath, [entry, action], { encoding: 'utf8', input: JSON.stringify(request),
     timeout: 20000, env: { ...process.env, HOME: home, PATH: bin + ':' + process.env.PATH,
-      HARVEST_KEYWORD_TESTING: '1', ...extra } });
+      HARVEST_KEYWORD_TESTING: '1', WF_BOUNDED_POLL: '0.05', ...extra } });
   const calls = existsSync(join(home, 'calls')) ? readFileSync(join(home, 'calls'), 'utf8') : '';
   return { ...result, calls, output: result.stdout.trim() ? JSON.parse(result.stdout) : null };
 }
@@ -60,6 +68,59 @@ test('判定JSON入口仅判显式视频，缓存matched不录音、不采集、
   assert.equal(result.output.metrics.videos_matched, 1);
   assert.match(result.calls, /lock-release phase3-smoke/);
   assert.doesNotMatch(result.calls, /open-comments|collect-comments|record-start|search-video/);
+});
+
+test('函数提取后自有账号检查仍执行，跳过自有评论但继续采后面的真实客户', () => {
+  const result = run('collection', input(), { OWN_FIRST: '1' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(result.output.outputs.comments.map(row => row.fields.评论者昵称), ['小李']);
+  assert.match(result.calls, /commenter-identity 10 20/);
+});
+
+test('真实子进程非零退出携带已采stdout时，活动仍保留评论产物供落池', async () => {
+  const { runVideoActivity } = require('../video-activities.js');
+  const error = Object.assign(new Error('child interrupted'), { code: 1,
+    stdout: 'LEAD\t小李\t123\tpersonal\t如何报名\t今天\t北京\tAI课程\tAI 考证\t\t\thttps://v.douyin.com/fixture/\nACTIVITY_STATUS\tpending\tinterrupted\n' });
+  const result = await runVideoActivity('collection', input(), { run: async () => { throw error; } });
+  assert.equal(result.status, 'partial');
+  assert.equal(result.reason_code, 'interrupted');
+  assert.equal(result.outputs.comments[0].fields.评论原文, '如何报名');
+});
+
+test('采集在单条评论后的预算边界停止，已采产物仍可落池，不能标整视频采完', () => {
+  const result = run('collection', { ...input(), budget: { max_duration_s: 2 } },
+    { ADVANCE_ON: 'commenter-card-link', ADVANCE_BY: '3' });
+  assert.equal(result.status, 2, result.stderr);
+  assert.equal(result.output.status, 'partial');
+  assert.equal(result.output.outputs.comments.length, 1);
+  assert.equal(result.output.metrics.videos_processed, 0);
+  assert.doesNotMatch(result.calls, /qualify-video.js collected/);
+  assert.match(result.calls, /lock-release/);
+});
+
+test('判定远端调用卡住也受自身预算封顶，手机锁仍正常收尾', () => {
+  const start = Date.now();
+  const result = run('qualification', { ...input('pending'), budget: { max_duration_s: 3 } },
+    { DISCOVER_STATUS: 'pending', JUDGE_SLEEP: '8', REAL_CLOCK: '1' });
+  assert.equal(result.status, 1, result.stderr);
+  assert.equal(result.output.reason_code, 'budget_exceeded');
+  assert.match(result.calls, /qualify-video.js judge/, '必须实际进入卡住的远端模型边界');
+  assert.ok(Date.now() - start < 7500, '不应等待8秒判定调用完成');
+  assert.match(result.calls, /lock-release/);
+});
+
+test('有效音频上传卡住受活动剩余预算封顶，停止判定并释放手机锁', () => {
+  const start = Date.now();
+  const result = run('qualification', { ...input('pending'),
+    video: { ...input('pending').video, duration: '00:01' }, budget: { max_duration_s: 20 } },
+  { DISCOVER_STATUS: 'pending', HAS_TRANSCRIPT: 'false', SCP_SLEEP: '8', DYNAMIC_CLOCK: '1',
+    ADVANCE_ON: 'record-extract-audio', ADVANCE_BY: '17' });
+  assert.match(result.calls, /scp started/, '必须实际进入有效音频上传边界');
+  assert.equal(result.status, 1, result.stderr);
+  assert.equal(result.output.reason_code, 'budget_exceeded');
+  assert.doesNotMatch(result.calls, /scp ended|qualify-video.js judge/);
+  assert.ok(Date.now() - start < 6500, '不能等待8秒上传完成；只剩最多3秒活动预算');
+  assert.match(result.calls, /lock-release phase3-smoke/);
 });
 
 test('未判过的视频复用真实资格判定函数；pending保持可重试', () => {

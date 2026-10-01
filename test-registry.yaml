@@ -6939,6 +6939,46 @@ agent_suite:
     product: 智能获客
     note: "真实存储适配器与结算活动，替换HTTP运输边界：跨池拒绝、读回、整批重放与线索已写池失败恢复。"
 
+  - id: raw-comment-activities
+    path: services/phone-adb-controller/__tests__/raw-comment-activities.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "显式原始评论落池：去重保留评分，失败产物重试，旧TSV兼容。"
+
+  - id: raw-comment-storage
+    path: services/phone-adb-controller/__tests__/raw-comment-storage.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "HTTP落池及结算闭环：身份列读回、稀疏字段、同批及客户去重。"
+
+  - id: raw-comment-delivery
+    path: services/phone-adb-controller/__tests__/raw-comment-delivery.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "显式本批落池到结算：可选评分、持久化产物保留及永久拒绝分类。"
+
+  - id: video-activity
+    path: services/phone-adb-controller/__tests__/video-activity.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "独立视频活动真实JSON进程：隔离ADB及SSH边界，预算、锁、身份与自有账号过滤。"
+
+  - id: phase3-activity-chain
+    path: services/phone-adb-controller/__tests__/phase3-activity-chain.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实采集JSON进程到实际评分、HTTP落池、线索结算闭环；删除评分不改实现仍只保存评论。"
+
   - id: locate-element
     path: services/phone-adb-controller/__tests__/locate-element.test.mjs
     type: unit

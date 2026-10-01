@@ -29,7 +29,7 @@
 # 不在本次范围(有意排除,别当成漏了):
 #   - *.plist: launchd 安装是一次性动作,不是"同步文件"能表达的操作(模板与安装命令见 launchd/*.plist 头注释与
 #     com.zenithjoy.logstreampush.plist)
-#   - config/*.json: 可能含机器本地校准过的实验数据,批量覆盖有丢真实调参的风险
+#   - config/*.json: 除自有账号过滤名单own-accounts.json外，不批量覆盖机器校准数据
 #   - __tests__/、*.md、package.json: 不需要跑在生产机上
 #
 # 每份文件同步后立刻在目标机上跑语法检查(zsh -n / node -c),同步一份验证一份,
@@ -58,13 +58,15 @@ push_atomic() {
 }
 
 MMV_JS_FILES=(
-  push-videos.js push-raw-comments.js sort-comments-lib.js
-  comment-activities.js comment-delivery-storage.js comment-activity.js sort-comments.js next-outreach.js next-outreach-lib.js
-  leadgen-db-lib.js leadgen-db-connect.js judge-jev.js judge-comment.js judge-video.js
-  judge-video-lib.js qualify-video.js transcribe-qwen-audio.js comment-tier-lib.js line-routes.js
-  lead-fields-lib.js kpi-gate.js next-keywords.js keyword-enabled-lib.js update-keyword-stats.js keyword-stats-lib.js
-  fetch-seen-videos.js check-own-account.js dm-daily-cap.js dm-rate-ramp-lib.js
-  own-accounts-lib.js push-leads.js update-profile-links.js nickname-match-lib.js
+  line-routes.js lead-fields-lib.js own-accounts-lib.js leadgen-db-lib.js
+  leadgen-db-connect.js judge-jev.js judge-video-lib.js judge-video.js
+  judge-comment.js sort-comments-lib.js comment-activities.js comment-delivery-storage.js
+  raw-comment-activities.js raw-comment-storage.js raw-comment-delivery.js comment-activity.js
+  push-videos.js push-raw-comments.js sort-comments.js next-outreach.js
+  next-outreach-lib.js qualify-video.js transcribe-qwen-audio.js comment-tier-lib.js
+  kpi-gate.js next-keywords.js keyword-enabled-lib.js update-keyword-stats.js
+  keyword-stats-lib.js fetch-seen-videos.js check-own-account.js dm-daily-cap.js
+  dm-rate-ramp-lib.js push-leads.js update-profile-links.js nickname-match-lib.js
   stats-line.js notify-bark.js push-stats-lib.js
 )
 MMV_TOPLEVEL_FILES=(cmdr-escort.txt cmdr-stream.txt)
@@ -105,7 +107,7 @@ DEVICE_CTL_FILES=(
 )
 DEVICE_CTL_DIRS=(bin-harvest .local/bin)
 DEVICE_SH_FILES=(
-  harvest-keyword.sh batch2.sh harvest-cron.sh wf-run.sh discover-keyword.sh outreach-tick.sh
+  harvest-keyword.sh video-phone-activity.sh batch2.sh harvest-cron.sh wf-run.sh discover-keyword.sh outreach-tick.sh
   refill-profile-links.sh wall-report.sh wall-lib.sh phone-wall-push.sh
   disk-gateway-guard.sh device-job-claimer.sh log-stream-push.sh
   workflow-result.sh discover-benchmark.sh wf-limits.sh
@@ -113,7 +115,11 @@ DEVICE_SH_FILES=(
 # 0927 棒3b-3: 账本钩子内建进 harvest-cron.sh/batch2.sh,workflow-result.sh 硬依赖 ledger.mjs(node),
 # 少了它账本全程 WFR_WARN——单独成组,用 node --check 而不是 zsh -n 验语法。
 # 9032cdad: 步骤 DoD 统一裁判在执行机本地判 metric/evidence/log/tsv/ledger 类,清单 step-dod.json 由契约生成(json 用 JSON.parse 验)
-DEVICE_NODE_FILES=(ledger.mjs step-judge.mjs step-dod.json)
+DEVICE_NODE_FILES=(
+  ledger.mjs step-judge.mjs step-dod.json line-routes.js
+  own-accounts-lib.js check-own-account.js config/own-accounts.json
+  video-activities.js video-activity.js
+)
 # 7f842d12 契约组装执行: wf-run.sh 读 ~/bin-harvest/plans/<能力>.plan(wf-plan.mjs 从契约生成、提交在仓库)。
 # 执行机没有仓库 node_modules,所以计划不在执行机上生成;漏发 = wf-run 拒跑并升级(不会静默跑错)。
 DEVICE_PLAN_FILES=(plans/keyword_acquisition.plan plans/benchmark_link_acquisition.plan)
@@ -207,7 +213,9 @@ for host in xian-m4 xian-m1; do
   done
   for f in "${DEVICE_NODE_FILES[@]}"; do
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
-    push_atomic "$D/$f" "$host" "~/bin-harvest" "$f"
+    _nd="$(dirname "$f")"; _ndir="~/bin-harvest"; [[ "$_nd" != "." ]] && _ndir="$_ndir/$_nd"
+    ssh "$host" "mkdir -p $_ndir"
+    push_atomic "$D/$f" "$host" "$_ndir" "$(basename "$f")"
     if [[ "$f" == *.json ]]; then _nchk="/opt/homebrew/bin/node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f"
     else _nchk="/opt/homebrew/bin/node --check ~/bin-harvest/$f"; fi
     if ssh "$host" "$_nchk" 2>/tmp/deploy-err-$$; then

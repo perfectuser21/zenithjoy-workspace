@@ -3,7 +3,7 @@
 'use strict';
 
 const { routeOf } = require('./line-routes.js');
-const { statsLine } = require('./stats-line.js');
+const { statsLine } = require("./stats-line.js");
 const { pushAllFailed } = require('./push-stats-lib.js');
 const { persistRawComments, harvestTsvInput } = require('./raw-comment-activities.js');
 const { createRawCommentDeps } = require('./raw-comment-storage.js');
@@ -30,7 +30,7 @@ async function runLegacyPush(tsv, batch, line, {
     log(`FAIL ${item.source_id} ${item.failure_class}`);
   }
   log(`落池 ${created} | 去重 ${dup} | 输入 ${input.comments.length}`);
-  log(statsLine('PUSH_COMMENTS_STATS', { created, dup, input: input.comments.length }));
+  log(statsLine("PUSH_COMMENTS_STATS", { created, dup, input: input.comments.length }));
   const allFailed = pushAllFailed(created, dup, input.comments.length);
   if (allFailed) error(`评论落池全部失败(${input.comments.length - dup}条新评论0条成功) — 不再继续`);
   return { result, exitCode: allFailed ? 1 : 0 };

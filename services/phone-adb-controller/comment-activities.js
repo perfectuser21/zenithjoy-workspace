@@ -94,28 +94,38 @@ async function deliverComments(input, deps = {}) {
   const evidence = [];
   const metrics = { leads_written: 0, duplicates_highlighted: 0, pending: 0, unscored: 0 };
   const settle = deps.settle || settlePending;
-  const writesFor = commentId => ({
-    postLead: async fields => {
-      const result = await storage.postLead(fields, commentId);
-      if (result && result.code === 0) {
-        if (!(result.data && result.data.record && result.data.record.record_id)) {
-          throw new Error('线索写入未返回 record_id');
-        }
-        metrics.leads_written++;
+  const permanentFailures = [];
+  const writesFor = (commentId, failure) => {
+    const call = async (name, ...args) => {
+      try { return await storage[name](...args); }
+      catch (error) {
+        if (error.failure_class === 'fatal') failure.error = error;
+        throw error;
       }
-      return result;
-    },
-    putLead: async (id, fields) => {
-      const result = await storage.putLead(id, fields, commentId);
-      if (result && result.code === 0) metrics.duplicates_highlighted++;
-      return result;
-    },
-    putPool: async (id, fields) => {
-      const result = await storage.putPool(id, fields);
-      if (!result || result.code !== 0) throw new Error('评论池写入未确认');
-      return result;
-    },
-  });
+    };
+    return {
+      postLead: async fields => {
+        const result = await call('postLead', fields, commentId);
+        if (result && result.code === 0) {
+          if (!(result.data && result.data.record && result.data.record.record_id)) {
+            throw new Error('线索写入未返回 record_id');
+          }
+          metrics.leads_written++;
+        }
+        return result;
+      },
+      putLead: async (id, fields) => {
+        const result = await call('putLead', id, fields, commentId);
+        if (result && result.code === 0) metrics.duplicates_highlighted++;
+        return result;
+      },
+      putPool: async (id, fields) => {
+        const result = await call('putPool', id, fields);
+        if (!result || result.code !== 0) throw new Error('评论池写入未确认');
+        return result;
+      },
+    };
+  };
   for (const source of input.comments) {
     const row = structuredClone(source);
     if (!row.verdict) {
@@ -131,7 +141,8 @@ async function deliverComments(input, deps = {}) {
       comments.push(row);
       continue;
     }
-    const writes = writesFor(row.id);
+    const failure = {};
+    const writes = writesFor(row.id, failure);
     try {
       let result;
       if (deps.lead_receipts instanceof Map && deps.lead_receipts.has(row.id)) {
@@ -150,10 +161,17 @@ async function deliverComments(input, deps = {}) {
       metrics.pending++;
     }
     evidence.push({ comment_id: row.id, status: row.delivery_status,
-      ...(row.delivery_status === 'pending' ? { failure_class: 'retryable' } : {}) });
+      ...(row.delivery_status === 'pending' ? { failure_class: failure.error ? 'fatal' : 'retryable',
+        ...(failure.error ? { reason_code: failure.error.reason_code || 'storage_rejected' } : {}) } : {}) });
+    if (row.delivery_status === 'pending' && failure.error) permanentFailures.push(failure.error);
     comments.push(row);
   }
-  return activityResult(input, comments, metrics, evidence, metrics.pending);
+  const result = activityResult(input, comments, metrics, evidence, metrics.pending);
+  if (permanentFailures.length) {
+    result.failure_class = 'fatal';
+    result.reason_code = permanentFailures[0].reason_code || 'storage_rejected';
+  }
+  return result;
 }
 
 module.exports = { scoreComments, deliverComments, validateInput, validateDeliveryInput };

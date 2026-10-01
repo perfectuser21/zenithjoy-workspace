@@ -203,3 +203,25 @@ test('部署先上传独立活动依赖，再替换旧分拣入口，首次上�
   assert.ok(files.indexOf('comment-activities.js') < files.indexOf('sort-comments.js'));
   for (const name of ['comment-activity.js', 'comment-delivery-storage.js']) assert.ok(files.includes(name));
 });
+
+
+test('阶段3部署携带完整原始评论与视频活动依赖，设备自有账号过滤可运行', async () => {
+  const { readFileSync, existsSync } = await import('node:fs');
+  const source = readFileSync(new URL('../deploy.sh', import.meta.url), 'utf8');
+  const array = name => source.match(new RegExp(name + '=\\(([\\s\\S]*?)\\)'))[1].trim().split(/\s+/);
+  const mmv = array('MMV_JS_FILES');
+  for (const name of ['raw-comment-activities.js', 'raw-comment-storage.js', 'raw-comment-delivery.js']) {
+    assert.ok(mmv.includes(name), name);
+    assert.ok(mmv.indexOf(name) < mmv.indexOf('push-raw-comments.js'));
+    assert.ok(mmv.indexOf(name) < mmv.indexOf('comment-activity.js'));
+  }
+  assert.ok(array('DEVICE_SH_FILES').includes('video-phone-activity.sh'));
+  const device = array('DEVICE_NODE_FILES');
+  for (const name of ['line-routes.js', 'video-activities.js', 'video-activity.js',
+    'own-accounts-lib.js', 'check-own-account.js', 'config/own-accounts.json']) {
+    assert.ok(device.includes(name), name);
+    assert.ok(existsSync(new URL('../' + name, import.meta.url)));
+  }
+  assert.match(source, /_ndir=.*bin-harvest/);
+  assert.match(source, /mkdir -p \$_ndir/);
+});

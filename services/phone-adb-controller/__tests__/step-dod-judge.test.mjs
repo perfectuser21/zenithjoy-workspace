@@ -224,6 +224,7 @@ test("接线守卫：批次/收工/触达三处给裁判读回上下文；部署
   assert.match(rd("wf-run.sh"), /export WFR_LOG_FILE=~\/night-\$TAG\.log/);
   assert.match(rd("outreach-tick.sh"), /WFR_LOG_FILE=\$LOG WFR_LOG_FROM=/);
   const dep = rd("deploy.sh");
-  assert.match(dep, /DEVICE_NODE_FILES=\(ledger\.mjs step-judge\.mjs step-dod\.json\)/);
+  const deviceFiles = dep.match(/DEVICE_NODE_FILES=\(([\s\S]*?)\)/)[1].trim().split(/\s+/);
+  for (const file of ['ledger.mjs', 'step-judge.mjs', 'step-dod.json']) assert.ok(deviceFiles.includes(file), file);
   assert.match(dep.slice(dep.indexOf("MMV_PROBE_FILES=(")), /step-judge\.mjs step-dod\.json step-dod-stats\.mjs/);
 });
