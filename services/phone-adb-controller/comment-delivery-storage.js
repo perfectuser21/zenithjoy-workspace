@@ -8,6 +8,35 @@ function refusal(message, reason) {
   return Object.assign(new Error(message), { failure_class: 'fatal', reason_code: reason });
 }
 
+const receiptMarker = (pool, id) => `[comment-delivery:${pool}:${encodeURIComponent(id)}]`;
+
+// 新旧入口共用；线索写入和凭证同一次请求确认，池失败仍能恢复。
+function withDeliveryReceipts(storage, { pool, leadHistory, lead_receipts }) {
+  return {
+    putPool: storage.putPool,
+    putLead: async (id, fields, commentId) => {
+      const history = [leadHistory.get(id), fields.重复轨迹, receiptMarker(pool, commentId)].filter(Boolean).join('\n');
+      const result = await storage.putLead(id, { ...fields, 重复轨迹: history });
+      if (result && result.code === 0) {
+        leadHistory.set(id, history);
+        lead_receipts.set(commentId, id);
+      }
+      return result;
+    },
+    postLead: async (fields, commentId) => {
+      const history = receiptMarker(pool, commentId);
+      const result = await storage.postLead({ ...fields, 重复轨迹: history });
+      if (result && result.code === 0) {
+        const id = result.data && result.data.record && result.data.record.record_id;
+        if (!id) throw new Error('飞书线索写入未返回 record_id');
+        leadHistory.set(id, history);
+        lead_receipts.set(commentId, id);
+      }
+      return result;
+    },
+  };
+}
+
 // 调用方由 1Password/凭据缓存注入环境；不从业务配置文件或输入对象取密钥。
 async function createDeliveryDeps(input, { env = process.env, request = fetch } = {}) {
   const route = validateDeliveryInput(input);
@@ -51,7 +80,7 @@ async function createDeliveryDeps(input, { env = process.env, request = fetch } 
   const lead_receipts = new Map();
   const leadHistory = new Map();
   // 复用已有文本字段保留池记录凭证，无需新增生产列。包含池ID防业务线串账。
-  const marker = id => `[comment-delivery:${route.pool}:${encodeURIComponent(id)}]`;
+  const marker = id => receiptMarker(route.pool, id);
   let cursor = '';
   const cursors = new Set();
   do {
@@ -78,30 +107,12 @@ async function createDeliveryDeps(input, { env = process.env, request = fetch } 
     settled_ids, lead_receipts,
     now: new Date(Date.now() + 8 * 3600e3).toISOString().replace('T', ' ').slice(0, 16) + '(UTC+8)',
     asLeadTime: (name, value) => fieldTypes[name] === 5 ? Date.now() : value,
-    deps: {
+    deps: withDeliveryReceipts({
       putPool: (id, fields) => feishu(`/tables/${route.pool}/records/${encodeURIComponent(id)}`, 'PUT', { fields }),
-      putLead: async (id, fields, commentId) => {
-        const history = [leadHistory.get(id), fields.重复轨迹, marker(commentId)].filter(Boolean).join('\n');
-        const result = await feishu(`/tables/${route.lead}/records/${encodeURIComponent(id)}`, 'PUT', {
-          fields: { ...fields, 重复轨迹: history },
-        });
-        leadHistory.set(id, history);
-        lead_receipts.set(commentId, id);
-        return result;
-      },
-      postLead: async (fields, commentId) => {
-        const history = marker(commentId);
-        const result = await feishu(`/tables/${route.lead}/records`, 'POST', { fields: { ...fields, 重复轨迹: history } });
-        if (!(result.data && result.data.record && result.data.record.record_id)) {
-          throw new Error('飞书线索写入未返回 record_id');
-        }
-        const id = result.data.record.record_id;
-        leadHistory.set(id, history);
-        lead_receipts.set(commentId, id);
-        return result;
-      },
-    },
+      putLead: (id, fields) => feishu(`/tables/${route.lead}/records/${encodeURIComponent(id)}`, 'PUT', { fields }),
+      postLead: fields => feishu(`/tables/${route.lead}/records`, 'POST', { fields }),
+    }, { pool: route.pool, leadHistory, lead_receipts }),
   };
 }
 
-module.exports = { createDeliveryDeps };
+module.exports = { createDeliveryDeps, withDeliveryReceipts, receiptMarker };

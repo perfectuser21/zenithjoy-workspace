@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 const require = createRequire(import.meta.url);
 const load = () => require('../comment-delivery-storage.js');
 const env = { FEISHU_ACCOUNT: 'jinoshengyuan', FEISHU_APP_ID: 'fixture-app', FEISHU_APP_SECRET: 'fixture-secret' };
@@ -65,7 +67,11 @@ function remote({ existing = false, failPoolOnce = false } = {}) {
     let result;
     if (url.includes('/auth/')) result = { code: 0, tenant_access_token: 'fixture-token' };
     else if (url.includes('/fields?')) result = { code: 0, data: { items: [] } };
-    else if (opts.method === 'GET' && url.includes('/records?')) result = { code: 0, data: { items: structuredClone(leads), has_more: false } };
+    else if (opts.method === 'GET' && url.includes('/records?')) {
+      const records = url.includes(require('../line-routes.js').routeOf('jinuo').pool)
+        ? [...pool].map(([record_id, fields]) => ({ record_id, fields })) : leads;
+      result = { code: 0, data: { items: structuredClone(records), has_more: false } };
+    }
     else if (opts.method === 'GET') {
       const id = url.split('/').at(-1);
       result = { code: 0, data: { record: { record_id: id, fields: structuredClone(pool.get(id)) } } };
@@ -87,7 +93,20 @@ function remote({ existing = false, failPoolOnce = false } = {}) {
   };
   const deliver = async (batch = input) => require('../comment-activities.js').deliverComments(batch,
     await load().createDeliveryDeps(batch, { env, request }));
-  return { pool, leads, writes, deliver };
+  const sort = async () => {
+    const activities = require('../comment-activities.js');
+    const sandbox = vm.createContext({
+      require: name => name === 'fs' ? { readFileSync: () => JSON.stringify({ channels: { feishu: { accounts: {
+        jinoshengyuan: { appId: 'fixture-app', appSecret: 'fixture-secret' },
+      } } } }) } : name === './comment-activities.js' ? { ...activities,
+        scoreComments: batch => activities.scoreComments(batch, { judge: async () => input.comments[0].verdict }),
+      } : require('../' + name.replace(/^\.\//, '')),
+      process: { argv: ['node', 'sort-comments.js', 'jinuo'], env: { WFR_TAG: 'legacy-smoke' } },
+      fetch: request, Map, Set, console: { log() {}, error() {} },
+    });
+    await vm.runInContext(readFileSync(new URL('../sort-comments.js', import.meta.url), 'utf8'), sandbox);
+  };
+  return { pool, leads, writes, deliver, sort };
 }
 
 test('成功配送后重放同批不再写线索或增加重复次数', async () => {
@@ -123,3 +142,17 @@ for (const existing of [false, true]) {
     assert.equal(state.leads[0].fields.重复命中次数, existing ? 2 : 1);
   });
 }
+
+test('真实旧分拣入口与独立配送交替执行，不能擦掉已成线索的结算凭证', async () => {
+  const state = remote({ existing: true, failPoolOnce: true });
+  assert.equal((await state.deliver()).status, 'failed');
+  state.pool.get('rec1').处理状态 = '暂不分拣';
+  state.pool.set('rec2', { ...input.comments[0].fields, 处理状态: '待分拣' });
+  await state.sort();
+  assert.equal(state.leads[0].fields.重复命中次数, 2);
+  state.pool.get('rec1').处理状态 = '待分拣';
+  const repaired = await state.deliver();
+  assert.equal(repaired.status, 'completed');
+  assert.equal(repaired.metrics.duplicates_highlighted, 0);
+  assert.equal(state.leads[0].fields.重复命中次数, 2);
+});

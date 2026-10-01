@@ -16,6 +16,7 @@ const { extractSeenEntries } = require("./lead-fields-lib.js");
 // 跑一遍才看得出来(池状态必须最后推进,否则写线索失败的那条下轮就扫不到了,146条就是这么丢的)。
 const { settlePending } = require("./sort-comments-lib.js");
 const { scoreComments, deliverComments } = require("./comment-activities.js");
+const { withDeliveryReceipts, receiptMarker } = require("./comment-delivery-storage.js");
 const { statsLine } = require("./stats-line.js");
 
 const LINE = process.argv[2] || "";
@@ -68,6 +69,7 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
 
   // 线索表去重映射(token→record) —— 0914 主理人拍板: 重复≠噪音,是强意向信号,要高亮不要扔
   const seen = new Map(); let lp = "";
+  const leadHistory = new Map(), lead_receipts = new Map();
   do {
     const r = await feishu(`/tables/${LEADS}/records?page_size=100${lp ? "&page_token=" + lp : ""}`, "GET", null, tok);
     for (const e of extractSeenEntries(r.data.items || [], txt)) {
@@ -75,10 +77,22 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
       if (e.nick) seen.set(e.nick, val);
       if (e.dyid) seen.set(e.dyid, val);
     }
+    for (const record of r.data.items || []) {
+      const history = txt(record.fields["重复轨迹"]);
+      leadHistory.set(record.record_id, history);
+      for (const row of pend) {
+        if (history.includes(receiptMarker(POOL, row.id))) lead_receipts.set(row.id, record.record_id);
+      }
+    }
     lp = r.data.has_more ? r.data.page_token : "";
   } while (lp);
 
   const now = new Date(Date.now() + 8 * 3600e3).toISOString().replace("T", " ").slice(0, 16) + "(UTC+8)";
+  const deliveryStorage = withDeliveryReceipts({
+    putPool: (id, fields) => feishu(`/tables/${POOL}/records/${id}`, "PUT", { fields }, tok),
+    postLead: fields => feishu(`/tables/${LEADS}/records`, "POST", { fields }, tok),
+    putLead: (id, fields) => feishu(`/tables/${LEADS}/records/${id}`, "PUT", { fields }, tok),
+  }, { pool: POOL, leadHistory, lead_receipts });
 
   for (const row of pend) {
     const scored = await scoreComments({ run_tag: RUN_TAG, line_key: ROUTE.key, comments: [row] });
@@ -92,14 +106,10 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
     judged++;
     if (verdict.grade in grades) grades[verdict.grade]++;
     const delivered = await deliverComments({ run_tag: RUN_TAG, line_key: ROUTE.key, comments: [scoredRow] }, {
-      seen, now, asLeadTime,
+      seen, now, asLeadTime, lead_receipts,
       // 既有结算闸仍为唯一实现，独立活动增加结果封装与存储确认。
       settle: args => settlePending(args),
-      deps: {
-        putPool:  (id, fields) => feishu(`/tables/${POOL}/records/${id}`, "PUT",  { fields }, tok),
-        postLead: (fields)     => feishu(`/tables/${LEADS}/records`,      "POST", { fields }, tok),
-        putLead:  (id, fields) => feishu(`/tables/${LEADS}/records/${id}`, "PUT", { fields }, tok),
-      },
+      deps: deliveryStorage,
     });
     moved += delivered.metrics.leads_written;
     duped += delivered.metrics.duplicates_highlighted;
