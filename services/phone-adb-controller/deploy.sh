@@ -100,7 +100,7 @@ MMV_PROBE_FILES=(
 # 生产跑的却仍是 ~/.local/bin 的旧版本,音量棘轮修复完全没生效,最后靠人工 scp 才落地。
 # 漏任一目录 = 两份副本版本分叉,且部署过程不会报任何错。层26 smoke 守卫盯这件事。
 DEVICE_CTL_FILES=(
-  douyin-phone-adb
+  phone-lock-lib.sh phone-lock-helper.py douyin-phone-adb
 )
 DEVICE_CTL_DIRS=(bin-harvest .local/bin)
 DEVICE_SH_FILES=(
@@ -240,7 +240,12 @@ for host in xian-m4 xian-m1; do
       ssh "$host" "mkdir -p ~/$dir"
       push_atomic "$D/$f" "$host" "~/$dir" "$f" x
       ssh "$host" "chmod +x ~/$dir/$f"
-      if ssh "$host" "zsh -n ~/$dir/$f" 2>/tmp/deploy-err-$$; then
+      if [[ "$f" == *.py ]]; then
+        _ctl_check="/opt/homebrew/bin/python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' ~/$dir/$f"
+      else
+        _ctl_check="zsh -n ~/$dir/$f"
+      fi
+      if ssh "$host" "$_ctl_check" 2>/tmp/deploy-err-$$; then
         echo "    ✅ $dir/$f"
       else
         echo "    ❌ $dir/$f 语法检查失败: $(head -3 /tmp/deploy-err-$$)"

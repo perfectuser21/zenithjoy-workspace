@@ -377,3 +377,15 @@ test('老的 adb 原语单仍然能跑（不破坏已在跑的东西）', async 
   await run(makeEnv(dir, { apiBase: api.url, adb: makeFakeAdb(dir, { serials: ['SER1'] }), phoneCtl: ctl.path, registry: withReg(dir) }));
   assert.match(readFileSync(ctl.argsFile, 'utf8'), /open-search/);
 });
+
+test('每分钟巡检只回收在线手机stale锁，v2表头调序和失败不影响领单', async (t) => {
+  const dir=makeTmp(), api=await startFakeApi({job:null});t.after(()=>api.close());
+  const ctl=makeFakePhoneCtl(dir);
+  writeFileSync(join(dir,'phone-lock-helper.py'),readFileSync(new URL('../phone-lock-helper.py',import.meta.url)));
+  writeFileSync(ctl.path,`#!/bin/sh\necho "$@" >> "${ctl.argsFile}"\ncase "$3" in\n lock-status) echo 'lock=stale owner=probe reclaimable=true';;\n lock-reap) echo 'lock=preserved reason=brain-unavailable'; exit 2;;\nesac\n`,{mode:0o755});
+  const registry=makeRegistry(dir,[['#schema=v2'],['profile','model','serial'],['legacy','model','SER1'],['offline','model','SER2']]);
+  const r=await run(makeEnv(dir,{apiBase:api.url,adb:makeFakeAdb(dir,{serials:['SER1']}),phoneCtl:ctl.path,registry}));
+  assert.equal(r.status,0,r.stderr);const args=readFileSync(ctl.argsFile,'utf8');
+  assert.match(args,/--profile legacy lock-status/);assert.match(args,/--profile legacy lock-reap/);assert.doesNotMatch(args,/offline/);
+  assert.ok(api.requests.some(q=>q.url==='/api/schedule/claim'));assert.match(readFileSync(join(dir,'claimer.log'),'utf8'),/手机锁巡检.*brain-unavailable/);
+});
