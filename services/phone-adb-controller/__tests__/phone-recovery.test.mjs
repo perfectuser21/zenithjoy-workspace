@@ -17,7 +17,7 @@ function rig({ online = false, locked = false, recover = false, usb = hub } = {}
     return { status: 0, stdout: 'OK' };
   };
   const alerts = [];
-  return { calls, alerts, options: { targets: [target], run, sleep: async () => {}, notify: async x => alerts.push(x), bins: { adb: 'adb', ctl: 'ctl', hub: 'hub', profiler: 'profiler', disk: 'disk' }, state: {}, now: 100000, log: () => {}, acquire: (serial, owner) => run('ctl', ['--profile', 'legacy', 'lock-acquire', owner]).status === 0, owns: () => true } };
+  return { calls, alerts, options: { targets: [target], run, sleep: async () => {}, notify: async x => alerts.push(x), bins: { adb: 'adb', ctl: 'ctl', hub: 'hub', profiler: 'profiler', disk: 'disk' }, state: {}, now: 100000, log: () => {}, acquire: (serial, owner) => !locked && run('ctl', ['--profile', 'legacy', 'lock-acquire', owner]).status === 0, owns: () => true } };
 }
 test('正常设备不弹光盘不cycle', async () => {
   const r = rig({ online: true });
@@ -128,4 +128,39 @@ test('安装bootstrap失败后，plist相同的下一次部署仍可重新加载
     assert.equal(execute().status, 0, '同plist重试应bootstrap成功');
     assert.ok(existsSync(`${root}/loaded`));
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('第一次确认成功但eject后端口serial变化，禁止cycle', async () => {
+  const r = rig();
+  const actualRun = r.options.run;
+  let checks = 0;
+  r.options.run = (bin, args) => {
+    const out = actualRun(bin, args);
+    if (bin === 'hub' && !args.length && ++checks === 2) out.stdout = hub.replace('SERIAL1', 'OTHER');
+    return out;
+  };
+  await recoverPhones(r.options);
+  assert.ok(r.calls.some(x => x.includes('eject')));
+  assert.equal(r.calls.some(x => x.includes('cycle')), false);
+});
+
+test('两个并发自检实例只发送一次同serial告警，锁内重读冷却', async () => {
+  const records = { SERIAL1: { lastAttempt: 99999 } };
+  let held = null;
+  let notified = 0;
+  const options = () => {
+    const r = rig();
+    r.options.state.SERIAL1 = { ...records.SERIAL1 };
+    r.options.acquire = (serial, owner) => { if (held) return false; held = owner; return true; };
+    r.options.owns = (serial, owner) => held === owner;
+    r.options.loadState = serial => records[serial];
+    r.options.persist = (serial, patch) => Object.assign(records[serial], patch);
+    const run = r.options.run;
+    r.options.run = (bin, args) => { if (args.includes('lock-release')) held = null; return run(bin, args); };
+    r.options.notify = async () => { await new Promise(resolve => setTimeout(resolve, 10)); notified++; return true; };
+    return r.options;
+  };
+  await Promise.all([recoverPhones(options()), recoverPhones(options())]);
+  assert.equal(notified, 1);
+  assert.equal(records.SERIAL1.lastAlert, 100000);
 });

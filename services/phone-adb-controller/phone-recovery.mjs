@@ -108,7 +108,15 @@ export async function recoverPhones({ targets, run, sleep, notify, bins, state, 
     log(`${serial} ${reason}`);
     results.push({ serial, status: 'offline', reason });
     if (!record.lastAlert || now - record.lastAlert >= 21600000) {
-      if (await notify(`${hostname()} ${serial} ${reason}`)) { record.lastAlert = now; persist(serial, { lastAlert: now }); }
+      const alertOwner = `phone-recovery-alert-${process.pid}-${now}`;
+      if (acquire?.(serial, alertOwner)) {
+        try {
+          const latest = loadState(serial) || record;
+          if ((!latest.lastAlert || now - latest.lastAlert >= 21600000) && owns(serial, alertOwner)) {
+            if (await notify(`${hostname()} ${serial} ${reason}`)) { record.lastAlert = now; persist(serial, { lastAlert: now }); }
+          }
+        } finally { call('ctl', ['--profile', profile, 'lock-release', alertOwner]); }
+      } else log(`${serial} 告警等待设备空闲锁`);
     }
   }
   return { ok: targets.length > 0 && results.every(x => x.status !== 'offline'), results };
@@ -146,7 +154,7 @@ async function main() {
     const owns = (serial, owner) => { try { return readFileSync(join(root, `${serial}.lock/owner`), 'utf8').trim() === owner; } catch { return false; } };
     const bins = { adb: '/opt/homebrew/bin/adb', ctl: join(homedir(), '.local/bin/douyin-phone-adb'), hub: '/opt/homebrew/bin/uhubctl', profiler: '/usr/sbin/system_profiler', disk: '/usr/sbin/diskutil' };
     const notify = async body => {
-      const out = run('/usr/bin/ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15', 'mmv', 'node', '/Users/administrator/.openclaw/leadgen-scripts/notify-bark.js', Buffer.from('手机ADB自检异常').toString('base64'), Buffer.from(body).toString('base64'), 'timeSensitive']);
+      const out = run('/opt/homebrew/bin/node', [join(homedir(), 'bin-harvest/notify-bark.js'), Buffer.from('手机ADB自检异常').toString('base64'), Buffer.from(body).toString('base64'), 'timeSensitive']);
       const ok = out.status === 0 && out.stdout.includes('BARK_OK');
       console.log(`PHONE_RECOVERY bark=${ok ? 'sent' : 'failed'}`);
       return ok;
