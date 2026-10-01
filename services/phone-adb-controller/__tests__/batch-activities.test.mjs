@@ -80,6 +80,25 @@ test('preflight CLI verifies explicit device/account and holds the batch lock', 
   }finally{f.dispose();}
 });
 
+test('preflight accepts the real controller idle protocol and rejects active or unknown calls', async () => {
+  const f=fixture({call_state:'idle'});
+  try {
+    const r=await f.run('preflight');
+    assert.equal(r.code,0,r.stdout);
+    assert.equal(r.result.metrics.call_state_idle,1);
+    assert.equal(f.state().owner,'batch-fixture');
+  } finally { f.dispose(); }
+  for (const call_state of ['ringing','offhook','unknown']) {
+    const f=fixture({call_state});
+    try {
+      const r=await f.run('preflight');
+      assert.equal(r.code,1);
+      assert.equal(r.result.reason_code,call_state==='unknown'?'call_state_unknown':'call_busy');
+      assert.ok(!actions(f).includes('lock-acquire'));
+    } finally { f.dispose(); }
+  }
+});
+
 test('invalid route, lock owner, sender, keywords, and budget reject before transport', async () => {
   for(const change of [v=>v.device.profile='yueshengyun-work',v=>v.device.lock_holder='other-run',v=>delete v.account.sender_id,
     v=>v.keywords=[{word:''}],v=>v.budget.max_duration_s=-1]){

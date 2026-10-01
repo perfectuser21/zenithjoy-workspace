@@ -4,6 +4,7 @@ const { runVideoActivity } = require('./video-activities.js');
 async function main(action, stream = process.stdin) {
   let input;
   try {
+    stream.setEncoding?.('utf8');
     let text = '';
     for await (const chunk of stream) {
       text += chunk;

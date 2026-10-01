@@ -134,7 +134,10 @@ async function preflight(ctx, input) {
   result.outputs.device.observed_state = read.state; result.outputs.device.observed_serial = read.serial;
   result.metrics.device_verified = 1;
   result.outputs.device.observed_call_state = read.call_state || null;
-  if (!['0', 'IDLE'].includes(read.call_state)) throw new ActivityFailure(read.call_state === '1' || read.call_state === '2' ? 'call_busy' : 'call_state_unknown');
+  if (!['0', 'idle'].includes(String(read.call_state).toLowerCase())) {
+    const busy = ['1', '2', 'ringing', 'offhook'].includes(String(read.call_state).toLowerCase());
+    throw new ActivityFailure(busy ? 'call_busy' : 'call_state_unknown');
+  }
   result.metrics.call_state_idle = 1;
   let lock = lockState(await ctx.phone('lock-status'));
   result.outputs.device.lock_holder = lock.owner;

@@ -10,6 +10,7 @@ async function main(action, stream = process.stdin) {
   let input;
   let phase = 'input';
   try {
+    stream.setEncoding?.('utf8');
     let text = '';
     for await (const chunk of stream) {
       text += chunk;

@@ -6995,6 +6995,86 @@ agent_suite:
     product: 智能获客
     note: "真实采集JSON进程到实际评分、HTTP落池、线索结算闭环；删除评分不改实现仍只保存评论。"
 
+  - id: batch-activities
+    path: services/phone-adb-controller/__tests__/batch-activities.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "预检、逐词候选发现与归位真实JSON进程：账号、实际call_state、根设备锁、历史去重、候选持久化及清场读回。"
+
+  - id: collection-return-probe
+    path: services/phone-adb-controller/__tests__/collection-return-probe.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实单视频采集入口回结果页：实际back-to-results回执、重搜率、预算/取消保留评论、缺失指标记未知。"
+
+  - id: keyword-workflow
+    path: services/phone-adb-controller/__tests__/keyword-workflow.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实完整绑定编译、删除评分仅改绑定、显式输入拒绝与失败/未知阶段累积；配送和归位依次finalize。"
+
+  - id: keyword-workflow-cli
+    path: services/phone-adb-controller/__tests__/keyword-workflow-cli.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实编译器→整批入口→Cecelia CLI→七个业务活动及探针；多词去重、资格拦截、无评分、父取消、整批期限、逐词归位率与根锁释放。须显式提供CECELIA_ACTIVITY_RUNTIME，不跳过验收。"
+
+  - id: keyword-workflow-control
+    path: services/phone-adb-controller/__tests__/keyword-workflow-control.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "根设备锁实际owner读回与续租、foreign锁软停、整批截止、旧回执隔离及cleanup起跑停止续租。"
+
+  - id: workflow-probes
+    path: services/phone-adb-controller/__tests__/workflow-probes.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "复用原声明探针与真实gateway读回入口：哈希、预期key完整性、配送新增评论口径、延后评估、非法读回及缺归位率记unknown。"
+
+  - id: workflow-activity-artifacts
+    path: services/phone-adb-controller/__tests__/workflow-activity-artifacts.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "阶段事实累积：逐词重搜率不能跨词稀释，较严重失败分类不能被后续成功或重试覆盖。"
+
+  - id: workflow-cancel-window
+    path: services/phone-adb-controller/__tests__/workflow-cancel-window.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实wrapper进程在native返回与probe开始间收到TERM，保留已采产物及可读JSON，避免取消窗口丢评论。"
+
+  - id: workflow-transport-utf8
+    path: services/phone-adb-controller/__tests__/workflow-transport-utf8.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实子进程逐字节JSON输入/输出：跨管道分片仍保留中文评论、输入身份及证据。"
+
+  - id: keyword-workflow-portable
+    path: services/phone-adb-controller/__tests__/keyword-workflow-portable.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实编译投影一致性；按deploy清单复制到无源码编译器/无node_modules平铺目录，用显式--contract和真实Cecelia CLI跑完整链及删除评分。非法文件与contract/bindings冲突必须先拒绝；真实子进程拆分UTF-8不得损坏中文产物或回执。须显式提供CECELIA_ACTIVITY_RUNTIME，不跳过验收。"
+
   - id: locate-element
     path: services/phone-adb-controller/__tests__/locate-element.test.mjs
     type: unit

@@ -154,3 +154,28 @@ test('env总预算生效，未知锁及非法预算拒绝', async () => {
     assert.throws(() => f.control({ leaseIntervalMs: 1800000 }), /budget_invalid/);
   } finally { await c?.dispose(); f.dispose(); }
 });
+
+test('生产起跑门槛：当前WF_START回执出现前不得刷新既有本run锁', async () => {
+  const f = fixture(); let c;
+  try {
+    c = f.control({ waitForRunStart: true });
+    await sleep(120); assert.deepEqual(f.rows(), []);
+    writeFileSync(f.receiptPath, JSON.stringify({ run_tag: input.run_tag,
+      last_event: { event_type: 'WF_RUN_STARTED', cursor: 1 } }));
+    await until(() => f.rows().some(r => r.phase === 'refreshed'), '真正起跑后未续租');
+  } finally { await c?.dispose(); f.dispose(); }
+});
+
+test('同run旧完成回执不误停新调用续租，只有新cleanup停止', async () => {
+  const f = fixture(); let c;
+  try {
+    f.cleanup(); c = f.control({ waitForRunStart: true });
+    await sleep(120); assert.deepEqual(f.rows(), []);
+    writeFileSync(f.receiptPath, JSON.stringify({ run_tag: input.run_tag,
+      last_event: { event_type: 'ACTIVITY_STARTED', activity: 'preflight', cursor: 2 } }));
+    await until(() => f.rows().some(r => r.phase === 'refreshed'), '旧cleanup误停本次新续租');
+    f.cleanup(); await sleep(80); await c.dispose();
+    assert.ok(c.events.some(event => event.event_type === 'LOCK_LEASE_STOPPED'));
+    assert.equal(c.signal.aborted, false);
+  } finally { await c?.dispose(); f.dispose(); }
+});

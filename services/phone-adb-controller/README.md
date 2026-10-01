@@ -137,6 +137,44 @@ harvest-keyword.sh 出口码契约（账本 stage 映射依赖，勿改）：`3`
 
 触达命令 `private-message-send` 机械已修,但 `outreach_policy.enabled=false`(默认关闸)。真实发送需主理人批话术、批发送账号、批频控,AI 不得自行触发。
 
+## 阶段3 JSON活动链与可携带执行入口
+
+通用契约执行器归 Cecelia，获客活动归本目录。`keyword-workflow.js` 接收调度单声明的设备、账号、关键词与业务线，按真实契约调用预检→发现→逐视频判定/采集→可选评分→配送→归位。手机活动在入口所在机器执行；评分、配送与数据库/飞书探针可由输入中的 `execution.gateway` 显式指定远端。调用方负责声明机器，入口不选手机。
+
+| 文件 | 作用 |
+| --- | --- |
+| `plans/keyword_workflow.bindings.json` | 完整 JSON活动绑定真身；判定与采集共用逐视频组，配送和归位依次 finalize |
+| `plans/keyword_workflow.contract.json` | 真实编译器生成的投影，供平铺 `~/bin-harvest/` 使用；不手改 |
+| `keyword-workflow.js` / `keyword-workflow-control.js` | 显式入口、整批软停止与根设备锁续租 |
+| `keyword-workflow-activity.js` | 独立业务入口与后置探针接线，失败保留产物和阶段事实 |
+| `batch-activity.js` / `batch-activities.js` | 真实预检、候选持久化、归位；释放前读回锁 owner |
+| `workflow-probe.js` / `workflow-probes.mjs` | 复用原 `checks/social-keyword-leadgen.yaml`，缺读回记 unknown |
+
+在源仓库内更新绑定后生成编译投影，并运行一致性守卫：
+
+```bash
+node scripts/product-map/wf-plan.mjs keyword_acquisition --json \
+  --bindings services/phone-adb-controller/plans/keyword_workflow.bindings.json \
+  > services/phone-adb-controller/plans/keyword_workflow.contract.json
+CECELIA_ACTIVITY_RUNTIME=/absolute/path/to/cecelia/packages/brain/scripts/activity-contract-run.js \
+  node --test services/phone-adb-controller/__tests__/keyword-workflow-portable.test.mjs
+```
+
+源仓库入口默认调用 `wf-plan.mjs`；部署目录没有仓库编译器及其依赖，必须显式传入编译投影：
+
+```bash
+cd ~/bin-harvest
+node keyword-workflow.js --contract "$PWD/plans/keyword_workflow.contract.json" \
+  --runtime /absolute/path/to/cecelia/packages/brain/scripts/activity-contract-run.js \
+  --receipt /absolute/path/to/run-receipt.json < schedule.json
+```
+
+`schedule.json` 必填 `run_tag`、路由键 `line_key`、`device.profile/serial/lock_holder`（holder等于run_tag）、`account.sender_id` 和非空 `keywords:[{word,max_videos}]`；可选 `run_budget_s`。远端存储显式声明 `execution.gateway:{host,cwd,node?,env_file?}`，其中 cwd 是远端业务模块目录。凭据只从1Password取并放在该机器的 `~/.credentials/`（600）；新探针不会回退读取工具私有配置，缺凭据或连接读回记 unknown。`--contract` 与 `--bindings` 不能同时提供；删除评分需在源仓库修改绑定、重新编译，然后替换显式投影。
+
+启用数据库事件账须另加 `--event-db --brain-run-id <已存在的initiative_runs UUID> --event-source-id <本次唯一UUID>`，并显式提供 `ACTIVITY_EVENT_DATABASE_URL`；run UUID不是Brain任务UUID。本地回执、数据库游标及事件由 Cecelia 管理，`deploy.sh` 不复制 Cecelia 执行器，也不复制凭据。
+
+`deploy.sh` 已列出入口、全部业务依赖、原 checks 和编译投影；设备端仅使用携带的活动与投影。旧shell流程仍使用原部署及探针通道。离线 portable 守卫从该部署清单复制到隔离目录，以真实 Cecelia CLI验证完整链及去掉评分；ADB/SSH、模型、数据库与飞书运输使用隔离 fixture。当前代码尚未下发设备，阶段3尚未真机验收。
+
 ## 守卫
 
 `.github/workflows/scripts/smoke/phone-adb-controller-smoke.sh`(已在 Smoke Glob Gate 基线内):五件套存在性+zsh/node 语法闸+六刀签名存在性+烂死模式检测(变量展开尸块/死函数复活),proven-to-fire 验证过报红能力。

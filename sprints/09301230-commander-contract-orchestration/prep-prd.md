@@ -111,7 +111,7 @@ workflow 在设计时用契约写死；运行时由执行器（程序）照契�
 | 组合业务产物 | `comment-activity.js` 增加落池及原始评论配送；部署清单和测试登记 | 显式本批采集→可选评分→落池→结算；无评分只保存评论；CLI单JSON输出 |
 | 通用调用框架 | Cecelia独立工作树，沿用本任务与原PRD | 读取契约顺序/入口/预算/失败/逐条目分组，业务仓库只提供活动 |
 
-Cecelia通用执行器现位于 `packages/brain/src/orchestrator/activity-{contract,process,runtime}.js`，JSON入口为 `packages/brain/scripts/activity-contract-run.js --cwd <业务目录> --receipt <账本文件>`。ZenithJoy `wf-plan.mjs <能力> --json --bindings <显式绑定文件>`编译原契约解析后的调用链；绑定真身为 `plans/keyword_activities.bindings.json`，生产YAML和shell计划不切换。逐视频组内判定→采集，只让matched采集；评分、配送取本批显式comments，删除评分无需改执行器。当前绑定范围为四个拆分活动；整批预检、发现、归位与生产Brain事件存储接线尚未迁移。
+Cecelia通用执行器现位于 `packages/brain/src/orchestrator/activity-{contract,process,runtime}.js`，JSON入口为 `packages/brain/scripts/activity-contract-run.js --cwd <业务目录> --receipt <账本文件>`。ZenithJoy `wf-plan.mjs <能力> --json --bindings <显式绑定文件>`编译原契约解析后的调用链；首个增量的绑定真身为 `plans/keyword_activities.bindings.json`，生产YAML和shell计划不切换。逐视频组内判定→采集，只让matched采集；评分、配送取本批显式comments，删除评分无需改执行器。该首个增量仅含四个拆分活动，整批预检、发现、归位与Brain事件接线当时尚未迁移；完整离线接线与可携带入口见下文续作。
 
 本轮业务活动已实现并经过隔离边界复核：稀疏身份与客户去重在落池、结算共用解析；自有账号跳过后继续采客户；SCP/SSH使用本活动剩余预算；非零退出保留已采评论；明确永久存储拒绝保留fatal。原始配送先落池再结算，删除评分仍可保存待分拣评论。实际部署清单携带所有新增模块及设备自有账号过滤依赖；这些修改尚未下发生产。
 
@@ -119,9 +119,39 @@ Cecelia通用执行器现位于 `packages/brain/src/orchestrator/activity-{contr
 
 每项先运行真实入口的失败测试，再实现、验证、独立复核。新视频入口以输入中的设备、锁上下文和视频身份为准，按业务线串行；自建锁只释放自己的锁，借用调用者已持有的锁不提前释放。旧整批入口保留兼容，尚不替换生产契约或切换真机。
 
+#### 整批接线实施（10-01 续作）
+
+目标：在现有四活动基础上，以显式关键词、设备与登录账号启动完整关键词采收；原入口保持兼容，通用事件账接线仍归 Cecelia。
+
+实施顺序与文件职责：
+
+1. `batch-activity.js` / `batch-activities.js` 提供预检、发现、归位入口。输入声明 `account.sender_id`；预检读真实设备、通话、登录号与锁，发现按词取真实视频 ID 并持久化候选，归位只清理本 run 持锁现场。先运行隔离真实 CLI 失败测试，再实现；不以卡片坐标代替视频 ID，不以命令退出码代替锁读回。
+2. `plans/keyword_workflow.bindings.json` 从原契约选择预检、发现、判定、采集、评分、配送、归位；判定与采集保持逐视频分组。配送设为 `finalize`，位于归位之前，使已采评论在取消、总时限或主链失败时仍落池；空评论输入同样合法。删除评分只改绑定，不保留 Lead 必填依赖。独立触达 cron 不并入采收批次。
+3. `keyword-workflow.js` 负责显式输入、调用真实编译器与 Cecelia CLI、整批停止信号及租约续期。业务后置探针复用现有声明与 `verify-step.mjs` 读回，失败保留探针、分类与真实产物；不复制新的成功判定口径，不静默吞掉探针失败。
+4. Cecelia `activity-event-sink.js` 将显式已登记的 Brain run UUID 与唯一调用 source UUID 接入现有 `run-event-store`。开始事件写入先于活动副作用；数据库游标与本地游标分别留痕；参数/归属错误、source 重用与写入失败不得假记成功。连接只在调用方显式启用时建立，验证只写本机 `cecelia_scratch` 或隔离 CI 数据库。
+
+验证路径：
+
+```bash
+node --test services/phone-adb-controller/__tests__/batch-activities.test.mjs services/phone-adb-controller/__tests__/collection-return-probe.test.mjs
+CECELIA_ACTIVITY_RUNTIME=/absolute/path/to/cecelia/packages/brain/scripts/activity-contract-run.js node --test services/phone-adb-controller/__tests__/keyword-workflow.test.mjs services/phone-adb-controller/__tests__/keyword-workflow-cli.test.mjs services/phone-adb-controller/__tests__/keyword-workflow-portable.test.mjs
+node scripts/product-map/wf-plan.mjs --check
+npm run product-map:check
+```
+
+固定运输 fixture 同时调用旧采收入口与新完整调用链，核对评论/线索产物、活动阶段、探针与锁；覆盖多关键词、资格拦截、无评分、取消、总时限与落池失败。测试使用隔离 HOME/PATH 和本地 HTTP/数据库，拒绝真实 ADB、SSH 或凭据访问。ADB恢复仅解除设备离线阻塞；完成真机验收与上线切换前保持阶段3未完成，部署与真机验收分别留痕。
+
+部署可携带入口显式接受 `--contract plans/keyword_workflow.contract.json`，文件由真实 `wf-plan.mjs keyword_acquisition --json --bindings plans/keyword_workflow.bindings.json` 在源仓库生成，是编译投影；绑定与原契约才是真身。离线守卫逐次对比投影与编译器输出，再按 `deploy.sh` 清单复制到无仓库编译器、无 node_modules 的平铺目录，使用真实 Cecelia CLI跑完整链及删除评分版。`--contract` 与 `--bindings` 互斥，非法文件先拒绝。Cecelia runtime仍须显式绝对路径，由所属仓库单独准备；本轮仅更新业务文件携带清单，未下发设备。
+
 #### 接手时设备阻塞（10-01）
 
-M4 已恢复在线，但 SSH 读回 `adb devices -l` 为空。对应已有任务 `76554bd9`（panic 与设备离线）及 `48ba8a2d`（重启后 ADB 接口恢复）。后一任务交接记载已试过重启 ADB、弹 HonorSuite 光盘、USB 重枚举，仍无效；早先“macOS USB 信任弹窗”属于假设，不作为已证实根因。实时状态与复核证据回写上述任务，不手改设备状态投影。
+10-01接手时的历史观测：M4主机恢复在线，但 SSH 读回 `adb devices -l` 为空。对应已有任务 `76554bd9`（panic 与设备离线）及 `48ba8a2d`（重启后 ADB 接口恢复）；当时交接记载已试过重启ADB、弹HonorSuite光盘和USB重枚举，仍无效。早先“macOS USB信任弹窗”属于假设，不作为已证实根因。
+
+10-01续作最新只读复核：M4的 `adb devices -l` 已列出 `ANGYVB4227006983`、`ANGYVB4402004137`，两台均为 `device`；`jinoshengyuan-work` 与 legacy锁均 `free`。控制器预检真实返回 `call_state=idle`，新增实现已据实际接口兼容该值，并保留 ringing/offhook 拦截。此观测不等于阶段3真机验收通过，也不代表代码已部署；实时状态与复核证据回写原任务，不手改设备状态投影。
+
+#### 真机边界增量验收（10-01）
+
+研发手机 legacy（ANGYVB4402004137）在隔离临时目录通过真实 Cecelia CLI 预检与归位：登录号44997267357匹配，四项预检指标均为1；收尾关应用、桌面可见、放锁及真实close-app次数均为1，回读锁free。发现控制器真实call_state=idle协议差异及macOS /tmp软链接入口问题，已用永久回归复现并修正。完整七活动真机采收与旧链等价尚未验收；本增量未切换生产入口或cron。
 
 ### 阶段 4｜陪跑 skill（3–5 天）
 

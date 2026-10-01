@@ -14,7 +14,7 @@ function lockState(text) {
 
 // 只控制主链的取消信号；通用执行器的 finalize 活动不接此 signal。
 function createWorkflowControl(input, { receiptPath, stopFile, signal, env = process.env,
-  maxSeconds, leaseIntervalMs = DEFAULT_LEASE_INTERVAL_MS } = {}) {
+  maxSeconds, leaseIntervalMs = DEFAULT_LEASE_INTERVAL_MS, waitForRunStart = false } = {}) {
   if (!/^[a-zA-Z0-9_.-]{1,96}$/.test(input?.run_tag || '')
     || !/^[a-zA-Z0-9_.-]+$/.test(input?.device?.profile || '')
     || typeof env.HOME !== 'string' || !env.HOME
@@ -28,6 +28,14 @@ function createWorkflowControl(input, { receiptPath, stopFile, signal, env = pro
   }
   const controller = new AbortController(), events = [];
   const binary = path.join(env.HOME, '.local/bin/douyin-phone-adb');
+  const receiptVersion = () => {
+    try {
+      const stat = fs.statSync(receiptPath, { bigint: true });
+      return [stat.dev, stat.ino, stat.mtimeNs, stat.ctimeNs, stat.size].join(':');
+    } catch { return null; }
+  };
+  const initialReceiptVersion = receiptVersion();
+  let runStarted = !waitForRunStart;
   let stoppedReason = null, disposed = false, cleanupStarted = false, owned = false;
   let leaseTimer, deadlineTimer, receiptTimer, inflight = Promise.resolve(), activeChild = null;
   const event = (event_type, details = {}) => events.push({ event_type, run_tag: input.run_tag, ...details });
@@ -48,6 +56,13 @@ function createWorkflowControl(input, { receiptPath, stopFile, signal, env = pro
     try { receipt = JSON.parse(fs.readFileSync(receiptPath, 'utf8')); }
     catch (_) { return false; } // 文件创建前/原子改名期间允许等待。
     if (receipt.run_tag !== input.run_tag) return false;
+    if (!runStarted) {
+      if (receiptVersion() === initialReceiptVersion
+          || !['WF_RUN_STARTED', 'ACTIVITY_STARTED', 'ACTIVITY_FINISHED', 'ACTIVITY_HEARTBEAT', 'ACTIVITY_SKIPPED']
+            .includes(receipt.last_event?.event_type)) return false;
+      runStarted = true;
+      event('WF_RUN_START_CONFIRMED');
+    }
     // 原子回执可能在两次观察间已推进到 FINISHED；活动记录同样证明 cleanup 已起跑。
     if ((receipt.last_event?.event_type === 'ACTIVITY_STARTED' && receipt.last_event.activity === 'cleanup')
       || receipt.activities?.some(activity => activity.key === 'cleanup')) {
@@ -57,12 +72,13 @@ function createWorkflowControl(input, { receiptPath, stopFile, signal, env = pro
     return cleanupStarted;
   }
   function command(action) {
-    if (checkCleanup()) return Promise.resolve(null);
+    if (checkCleanup() || !runStarted) return Promise.resolve(null);
     return new Promise(resolve => {
       const args = ['--profile', input.device.profile, action, ...(action === 'lock-refresh' ? [input.run_tag] : [])];
       const child = spawn(binary, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
       activeChild = child;
       let stdout = '', failed = false;
+      child.stdout.setEncoding('utf8');
       child.stdout.on('data', data => { if (stdout.length < 8192) stdout += data.toString(); });
       child.stderr.resume();
       child.on('error', () => { failed = true; });

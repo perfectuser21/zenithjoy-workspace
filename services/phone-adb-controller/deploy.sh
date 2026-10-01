@@ -93,6 +93,7 @@ kickstart_if_changed() {
 # 靠 README 里手工 scp,0929 实测 mmv 上的探针 YAML 已落后 main。路径相对本目录,子目录原样落到 leadgen-scripts/ 下。
 MMV_PROBE_FILES=(
   verify-step.mjs checks/probes-lib.js checks/schema.json checks/social-keyword-leadgen.yaml checks/social-benchmark-leadgen.yaml
+  workflow-probe.js workflow-probes.mjs
   step-judge.mjs step-dod.json step-dod-stats.mjs
 )
 # 设备控制器单独成组: 它必须同时落到**两个**目录,因为两类消费者各指一个——
@@ -119,10 +120,16 @@ DEVICE_NODE_FILES=(
   ledger.mjs step-judge.mjs step-dod.json line-routes.js
   own-accounts-lib.js check-own-account.js config/own-accounts.json
   video-activities.js video-activity.js
+  batch-activities.js batch-activity.js keyword-workflow.js keyword-workflow-control.js keyword-workflow-activity.js
+  workflow-probe.js workflow-probes.mjs verify-step.mjs checks/probes-lib.js checks/schema.json checks/social-keyword-leadgen.yaml
+  comment-activity.js comment-activities.js comment-delivery-storage.js
+  raw-comment-activities.js raw-comment-storage.js raw-comment-delivery.js
+  judge-comment.js judge-jev.js judge-video.js judge-video-lib.js sort-comments-lib.js lead-fields-lib.js
+  leadgen-db-connect.js leadgen-db-lib.js transcribe-qwen-audio.js
 )
 # 7f842d12 契约组装执行: wf-run.sh 读 ~/bin-harvest/plans/<能力>.plan(wf-plan.mjs 从契约生成、提交在仓库)。
 # 执行机没有仓库 node_modules,所以计划不在执行机上生成;漏发 = wf-run 拒跑并升级(不会静默跑错)。
-DEVICE_PLAN_FILES=(plans/keyword_acquisition.plan plans/benchmark_link_acquisition.plan)
+DEVICE_PLAN_FILES=(plans/keyword_acquisition.plan plans/benchmark_link_acquisition.plan plans/keyword_workflow.contract.json)
 
 echo "=== [1/3] mmv:~/.openclaw/leadgen-scripts/ (判定链+数据层, ${#MMV_JS_FILES[@]} 个文件) ==="
 for f in "${MMV_JS_FILES[@]}"; do
@@ -216,8 +223,11 @@ for host in xian-m4 xian-m1; do
     _nd="$(dirname "$f")"; _ndir="~/bin-harvest"; [[ "$_nd" != "." ]] && _ndir="$_ndir/$_nd"
     ssh "$host" "mkdir -p $_ndir"
     push_atomic "$D/$f" "$host" "$_ndir" "$(basename "$f")"
-    if [[ "$f" == *.json ]]; then _nchk="/opt/homebrew/bin/node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f"
-    else _nchk="/opt/homebrew/bin/node --check ~/bin-harvest/$f"; fi
+    case "$f" in
+      *.json) _nchk="/opt/homebrew/bin/node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f";;
+      *.js|*.mjs) _nchk="/opt/homebrew/bin/node --check ~/bin-harvest/$f";;
+      *) _nchk="test -s ~/bin-harvest/$f";;
+    esac
     if ssh "$host" "$_nchk" 2>/tmp/deploy-err-$$; then
       echo "    ✅ $f"
     else
@@ -230,7 +240,9 @@ for host in xian-m4 xian-m1; do
   for f in "${DEVICE_PLAN_FILES[@]}"; do
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
     push_atomic "$D/$f" "$host" "~/bin-harvest/plans" "$(basename "$f")"
-    if ssh "$host" "zsh -n ~/bin-harvest/$f" 2>/tmp/deploy-err-$$; then
+    if [[ "$f" == *.json ]]; then _pchk="/opt/homebrew/bin/node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f"
+    else _pchk="zsh -n ~/bin-harvest/$f"; fi
+    if ssh "$host" "$_pchk" 2>/tmp/deploy-err-$$; then
       echo "    ✅ $f"
     else
       echo "    ❌ $f 语法检查失败: $(head -3 /tmp/deploy-err-$$)"
