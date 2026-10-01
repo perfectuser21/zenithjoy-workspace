@@ -178,7 +178,7 @@ test('旧push入口复用真实活动/适配器，仍输出PUSH_COMMENTS_STATS�
     assert.equal(outcome.result.metrics.comments_written, fail ? 0 : 1);
     const stats = logs.find(line => line.startsWith('PUSH_COMMENTS_STATS '));
     assert.ok(stats);
-    assert.match(stats, /input=1/);
-    assert.match(stats, new RegExp('created=' + (fail ? 0 : 1)));
+    assert.deepEqual(JSON.parse(stats.slice('PUSH_COMMENTS_STATS '.length)),
+      { created: fail ? 0 : 1, dup: 0, input: 1 });
   }
 });
