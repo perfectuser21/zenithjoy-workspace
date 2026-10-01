@@ -107,12 +107,12 @@ DEVICE_SH_FILES=(
   harvest-keyword.sh batch2.sh harvest-cron.sh wf-run.sh discover-keyword.sh outreach-tick.sh
   refill-profile-links.sh wall-report.sh wall-lib.sh phone-wall-push.sh
   disk-gateway-guard.sh device-job-claimer.sh log-stream-push.sh
-  workflow-result.sh discover-benchmark.sh wf-limits.sh
+  workflow-result.sh discover-benchmark.sh wf-limits.sh install-phone-recovery.sh
 )
 # 0927 棒3b-3: 账本钩子内建进 harvest-cron.sh/batch2.sh,workflow-result.sh 硬依赖 ledger.mjs(node),
 # 少了它账本全程 WFR_WARN——单独成组,用 node --check 而不是 zsh -n 验语法。
 # 9032cdad: 步骤 DoD 统一裁判在执行机本地判 metric/evidence/log/tsv/ledger 类,清单 step-dod.json 由契约生成(json 用 JSON.parse 验)
-DEVICE_NODE_FILES=(ledger.mjs step-judge.mjs step-dod.json)
+DEVICE_NODE_FILES=(ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs)
 # 7f842d12 契约组装执行: wf-run.sh 读 ~/bin-harvest/plans/<能力>.plan(wf-plan.mjs 从契约生成、提交在仓库)。
 # 执行机没有仓库 node_modules,所以计划不在执行机上生成;漏发 = wf-run 拒跑并升级(不会静默跑错)。
 DEVICE_PLAN_FILES=(plans/keyword_acquisition.plan plans/benchmark_link_acquisition.plan)
@@ -283,6 +283,10 @@ if [[ -s "$D/commander/AGENTS.md" ]]; then
   echo "  ✅ commander/AGENTS.md → work-commander 工作区"
 else
   echo "  ⚠️ 仓库里缺失: commander/AGENTS.md"; FAILED=1
+fi
+
+if ! ssh xian-m4 "bash ~/bin-harvest/install-phone-recovery.sh xian-m4"; then
+  echo "❌ PHONE_RECOVERY 开机自检安装失败"; FAILED=1
 fi
 
 echo ""
