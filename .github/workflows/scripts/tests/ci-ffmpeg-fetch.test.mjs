@@ -14,6 +14,10 @@ const tools = { ffmpeg: real('ffmpeg'), ffprobe: real('ffprobe'), timeout: real(
 function scenario(mode) {
   const dir = mkdtempSync(join(tmpdir(), 'ci-ffmpeg-test-'));
   const bin = join(dir, 'bin'); mkdirSync(bin);
+  // Isolate system ffmpeg as well: Ubuntu runners may have it in /usr/bin.
+  for (const name of ['cat', 'ln', 'touch', 'sleep', 'rm', 'mktemp']) {
+    writeFileSync(join(bin, name), '#!/bin/bash\nexec ' + JSON.stringify(real(name)) + ' "$@"\n', { mode: 0o755 });
+  }
   const script = (name, content) => writeFileSync(join(bin, name), '#!/bin/bash\nset -eu\n' + content + '\n', { mode: 0o755 });
   script('sudo', 'exec "$@"');
   // The real timeout utility fires on a sleeping acquisition child; no apt/dpkg process is touched.
@@ -47,7 +51,7 @@ fi
   const block = text.split('      - name: Install ffmpeg')[1].split('\n      - name:')[0].split('        run: |\n')[1];
   const command = existsSync(helper) ? ['/bin/bash', [helper]]
     : ['/bin/bash', ['-e', '-o', 'pipefail', '-c', block.split('\n').map((line) => line.slice(10)).join('\n')]];
-  const env = { ...process.env, PATH: `${bin}:/usr/bin:/bin`, FIXTURE: dir, MODE: mode,
+  const env = { ...process.env, GITHUB_ACTIONS: 'true', PATH: bin, FIXTURE: dir, MODE: mode,
     REAL_TIMEOUT: tools.timeout, REAL_FFMPEG: tools.ffmpeg, REAL_FFPROBE: tools.ffprobe };
   const result = spawnSync(command[0], command[1], { cwd: root, env, encoding: 'utf8', timeout: 5000 });
   const log = existsSync(join(dir, 'apt.log')) ? readFileSync(join(dir, 'apt.log'), 'utf8') : '';
@@ -76,7 +80,7 @@ test('both acquisition sources fail: stop before installation', () => {
   assert.notEqual(result.status, 0); assert.equal(installed, false);
 });
 test('ffmpeg without ffprobe fails closed', () => {
-  const { result } = scenario('missing-probe'); assert.notEqual(result.status, 0);
+  const { result } = scenario('missing-probe'); assert.notEqual(result.status, 0, result.stderr);
 });
 test('both existing tools really execute without downloading', () => {
   const { result, log } = scenario('present'); assert.equal(result.status, 0, result.stderr); assert.equal(log, '');
@@ -87,11 +91,23 @@ test('an existing nonfunctional executable fails verification', () => {
 test('successful acquisition installs without another network download', () => {
   const { result, log, sources } = scenario('normal');
   assert.equal(result.status, 0, result.stderr); assert.equal(sources, '');
-  assert.match(log, /--download-only/); assert.match(log, /--no-download/);
+  assert.match(log, /--download-only/); assert.match(log, /--no-download/, JSON.stringify(result));
 });
 test('workflow keeps the full smoke gate and 25-minute limit', () => {
   const text = readFileSync(workflow, 'utf8');
   assert.match(text, /timeout-minutes: 25/);
   assert.match(text, /bash \.github\/workflows\/scripts\/install-ci-ffmpeg\.sh/);
   assert.match(text, /Discover \+ run all CI-capable smoke scripts/);
+});
+
+test('real ffmpeg generates a video and real ffprobe reads its stream', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ci-ffmpeg-real-'));
+  try {
+    const file = join(dir, 'video.mkv');
+    execFileSync(tools.ffmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:s=16x16:r=1',
+      '-frames:v', '1', '-c:v', 'ffv1', file]);
+    const probe = JSON.parse(execFileSync(tools.ffprobe, ['-v', 'error', '-show_streams', '-of', 'json', file], { encoding: 'utf8' }));
+    assert.equal(probe.streams[0].codec_type, 'video');
+    assert.equal(probe.streams[0].width, 16); assert.equal(probe.streams[0].height, 16);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
