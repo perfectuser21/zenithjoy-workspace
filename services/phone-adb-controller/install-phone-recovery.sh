@@ -27,12 +27,18 @@ cat > "$stage" <<PLIST
 PLIST
 /usr/bin/plutil -lint "$stage"
 if [[ -f "$plist" ]] && cmp -s "$stage" "$plist"; then
-  sudo -n launchctl print "system/$label" >/dev/null
+  if ! sudo -n launchctl print "system/$label" >/dev/null 2>&1; then
+    sudo -n launchctl bootstrap system "$plist"
+    sudo -n launchctl print "system/$label" >/dev/null
+  fi
   echo 'PHONE_RECOVERY installed unchanged'
 else
   sudo -n install -o root -g wheel -m 644 "$stage" "$plist"
   if sudo -n launchctl print "system/$label" >/dev/null 2>&1; then sudo -n launchctl bootout "system/$label"; fi
   sudo -n launchctl bootstrap system "$plist"
-  sudo -n launchctl print "system/$label" >/dev/null
+  if ! sudo -n launchctl print "system/$label" >/dev/null 2>&1; then
+    sudo -n launchctl bootstrap system "$plist"
+    sudo -n launchctl print "system/$label" >/dev/null
+  fi
   echo 'PHONE_RECOVERY installed'
 fi
