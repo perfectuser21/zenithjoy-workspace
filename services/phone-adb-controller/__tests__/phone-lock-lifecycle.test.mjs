@@ -122,3 +122,18 @@ test('lock-reap 本地旧执行链活进程保留',t=>{
  const c=setup(t);c.stale();writeFileSync(join(c.dir,'local-running'),'1');const r=c.run('lock-reap');
  assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/lock=preserved.*local-process/);assert.ok(existsSync(c.lock));assert.equal(c.actions(),'');
 });
+test('lock-reap device_job缺设备字段保留原锁与现场',t=>{
+ const c=setup(t);c.stale();writeFileSync(join(c.dir,'tasks.json'),JSON.stringify([{id:'device-job',status:'in_progress',task_type:'device_job',payload:{}}]));
+ const r=c.run('lock-reap');assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/lock=preserved.*device-uncertain/);assert.ok(existsSync(c.lock));assert.equal(c.actions(),'');
+});
+test('with-lock 子进程建组前TERM必须及时退出且不执行业务命令',async t=>{
+ const c=setup(t), launcher=join(c.dir,'slow-python');
+ writeFileSync(launcher,`#!${python}\nimport os,sys,time\nif len(sys.argv)>2 and sys.argv[2]=='run':\n open(os.environ['TEST_DIR']+'/pre-session','w').write(str(os.getpid()))\n time.sleep(8)\nos.execv(${JSON.stringify(python)},[${JSON.stringify(python)},*sys.argv[1:]])\n`,{mode:0o755});
+ const p=spawn('zsh',[script,'--profile','p1','with-lock','probe','--','sh','-c','touch "$TEST_DIR/business-started"; exec sleep 30'],{env:{...c.env,DOUYIN_PYTHON_BIN:launcher},stdio:'ignore'});
+ let child=0;t.after(()=>{for(const pid of [child,-child]){if(pid)try{process.kill(pid,'SIGKILL');}catch{}}p.kill('SIGKILL');});
+ const exited=new Promise(resolve=>p.once('exit',(code,signal)=>resolve({code,signal})));
+ await new Promise((resolve,reject)=>{const deadline=Date.now()+4000;const tick=()=>existsSync(join(c.dir,'pre-session'))?resolve():Date.now()>deadline?reject(Error('未进入建组窗口')):setTimeout(tick,20);tick();});
+ child=Number(readFileSync(join(c.dir,'pre-session'),'utf8'));p.kill('SIGTERM');
+ const r=await Promise.race([exited,new Promise(resolve=>setTimeout(()=>resolve({timeout:true}),1800))]);
+ assert.equal(r.timeout,undefined,'TERM未在建组前结束launcher');assert.equal(r.code,143);assert.ok(!existsSync(join(c.dir,'business-started')));assert.ok(!existsSync(c.lock));
+});
