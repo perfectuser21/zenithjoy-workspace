@@ -15,7 +15,7 @@ function scenario(mode) {
   const dir = mkdtempSync(join(tmpdir(), 'ci-ffmpeg-test-'));
   const bin = join(dir, 'bin'); mkdirSync(bin);
   // Isolate system ffmpeg as well: Ubuntu runners may have it in /usr/bin.
-  for (const name of ['cat', 'ln', 'touch', 'sleep', 'rm', 'mktemp']) {
+  for (const name of ['cat', 'ln', 'touch', 'sleep', 'rm', 'mktemp', 'head']) {
     writeFileSync(join(bin, name), '#!/bin/bash\nexec ' + JSON.stringify(real(name)) + ' "$@"\n', { mode: 0o755 });
   }
   const script = (name, content) => writeFileSync(join(bin, name), '#!/bin/bash\nset -eu\n' + content + '\n', { mode: 0o755 });
@@ -30,7 +30,7 @@ for arg in "$@"; do
     fallback=1; cat "\${arg#*=}" > "$FIXTURE/official.sources"
   fi
 done
-if [[ "$*" == *--download-only* ]]; then
+if [[ "$*" == *install* && "$*" != *--no-download* ]]; then
   if [[ "$MODE" == both-fail ]]; then exit 100; fi
   if [[ "$fallback" == 0 && "$MODE" == download-fail ]]; then exit 100; fi
   if [[ "$fallback" == 0 && "$MODE" == slow ]]; then sleep 2; fi

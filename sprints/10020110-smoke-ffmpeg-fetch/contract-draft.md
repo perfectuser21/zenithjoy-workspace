@@ -20,4 +20,4 @@ bash .github/workflows/scripts/smoke/ci-ffmpeg-fetch-smoke.sh
 
 | Workstream | Test File | BEHAVIOR 覆盖 | 预期 Red 证据 |
 |---|---|---|---|
-| 原生入口 | `sprints/10020110-smoke-ffmpeg-fetch/tests/ffmpeg-fetch.test.mjs` | `native entry verifies bounded signed ffmpeg acquisition and real tools` | 永久b55ea00e，旧脚本8项2pass6fail；日志 /tmp/ffmpeg-ci-permanent-red.log |
+| 原生入口 | `sprints/10020110-smoke-ffmpeg-fetch/tests/ffmpeg-fetch.test.mjs` | `native entry verifies bounded signed ffmpeg acquisition and real tools` | 最终永久fixture对d782旧工作流公平RED：9项4pass5fail；日志 /tmp/ffmpeg-ci-permanent-red-final.log。b55初RED夹具误差已纠正留痕，不主张旧双源失败仍安装 |
