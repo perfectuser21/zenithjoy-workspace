@@ -91,7 +91,7 @@ function updateArtifacts(previous, stage, result, { word } = {}) {
 function nativeInput(stage, input) {
   const result = { run_tag: input.run_tag, line_key: input.line_key, budget: input.budget };
   if (['preflight', 'discovery', 'cleanup'].includes(stage)) {
-    Object.assign(result, { device: input.device, account: input.account, keywords: input.keywords });
+    Object.assign(result, { device: input.device, account: input.account, keywords: input.keywords, execution: input.execution });
   } else if (stage === 'qualification' || stage === 'collection') {
     Object.assign(result, { device: input.device, video: input.video });
     if (stage === 'collection') result.return_to_results = input.return_to_results;

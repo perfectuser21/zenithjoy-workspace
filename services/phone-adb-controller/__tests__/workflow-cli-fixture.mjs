@@ -21,6 +21,7 @@ function cli(entry, args, { cwd, env, input, timeout = 45000, cancelWhen }) {
   return new Promise((done, reject) => {
     const child = spawn(process.execPath, [entry, ...args], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '', stderr = '';
+    child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
     const timer = setTimeout(() => { child.kill('SIGKILL'); reject(new Error(`fixture CLI timeout: ${entry}`)); }, timeout);
     const cancel = cancelWhen && setInterval(() => {
       if (existsSync(cancelWhen)) { clearInterval(cancel); child.kill('SIGTERM'); }

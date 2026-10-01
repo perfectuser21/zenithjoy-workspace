@@ -143,11 +143,15 @@ npm run product-map:check
 
 部署可携带入口显式接受 `--contract plans/keyword_workflow.contract.json`，文件由真实 `wf-plan.mjs keyword_acquisition --json --bindings plans/keyword_workflow.bindings.json` 在源仓库生成，是编译投影；绑定与原契约才是真身。离线守卫逐次对比投影与编译器输出，再按 `deploy.sh` 清单复制到无仓库编译器、无 node_modules 的平铺目录，使用真实 Cecelia CLI跑完整链及删除评分版。`--contract` 与 `--bindings` 互斥，非法文件先拒绝。Cecelia runtime仍须显式绝对路径，由所属仓库单独准备；本轮仅更新业务文件携带清单，未下发设备。
 
+历史读取与候选持久化同样接受显式 `execution.gateway`，不再绕回固定生产脚本。历史CLI凭据优先使用完整显式环境，否则读取1Password导出的0600 `~/.credentials/feishu.env`，禁止读取工具私有配置；既有无账户标记镜像兼容，只读业务线固定，有标记则必须匹配。HTTP/API/分页失败不输出假空历史。旧视频池明确占位 `id未取到` 单独计数跳过，其他异常仍报告；有效ID继续去重。
+
 #### 接手时设备阻塞（10-01）
 
 10-01接手时的历史观测：M4主机恢复在线，但 SSH 读回 `adb devices -l` 为空。对应已有任务 `76554bd9`（panic 与设备离线）及 `48ba8a2d`（重启后 ADB 接口恢复）；当时交接记载已试过重启ADB、弹HonorSuite光盘和USB重枚举，仍无效。早先“macOS USB信任弹窗”属于假设，不作为已证实根因。
 
-10-01续作最新只读复核：M4的 `adb devices -l` 已列出 `ANGYVB4227006983`、`ANGYVB4402004137`，两台均为 `device`；`jinoshengyuan-work` 与 legacy锁均 `free`。控制器预检真实返回 `call_state=idle`，新增实现已据实际接口兼容该值，并保留 ringing/offhook 拦截。此观测不等于阶段3真机验收通过，也不代表代码已部署；实时状态与复核证据回写原任务，不手改设备状态投影。
+10-01续作只读复核曾确认M4的 `adb devices -l` 列出 `ANGYVB4227006983`、`ANGYVB4402004137`，两台均为 `device`；`jinoshengyuan-work` 与 legacy锁均 `free`。控制器预检真实返回 `call_state=idle`，新增实现已据实际接口兼容该值，并保留 ringing/offhook 拦截。此观测不等于阶段3真机验收通过，也不代表代码已部署；实时状态与复核证据回写原任务，不手改设备状态投影。
+
+完整七活动真机第一轮在历史占位读取处报partial，仍完成归位并回读锁free；修复后第二轮在发现阶段收到心跳，随后SSH连接以255结束，连续直接连接超时。第二轮终态、设备锁与归位当前未能读回，不能记真机通过，也不能将未证实的主机panic当根因。已有任务 `76554bd9` 与阶段3原任务留痕；生产入口与cron未切换。
 
 #### 真机边界增量验收（10-01）
 

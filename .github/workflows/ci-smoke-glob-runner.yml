@@ -45,6 +45,7 @@ jobs:
           --health-retries 5
 
     env:
+      CECELIA_ACTIVITY_RUNTIME: ${{ github.workspace }}/.cecelia-activity-runtime/packages/brain/scripts/activity-contract-run.js
       # 与 ci-l4-e2e-smoke.yml 的 smoke-api-contract job 保持一致
       DATABASE_HOST: localhost
       DATABASE_PORT: 5432
@@ -95,6 +96,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: perfectuser21/cecelia
+          ref: 7c87b30b4990119864986ad59a916917a9aab1e2
+          path: .cecelia-activity-runtime
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -114,7 +121,7 @@ jobs:
       # 后 express 消失）。必须像 golden-path-4-smoke.yml Fix 1 一样合并成一条命令、
       # 同时声明两个 workspace。
       - name: Install apps/api + apps/agent-panel deps
-        run: npm ci --workspace=apps/api --workspace=apps/agent-panel
+        run: npm ci --workspace=apps/api --workspace=apps/agent-panel --include-workspace-root
 
       # golden-path-4-smoke.sh 的 Step 17c/17e 需要 services/agent/node_modules 存在才能用
       # npx tsx 真跑 panel-event-bus proven-to-fire。此前这条 workflow 从不显式装它，全靠字母序
@@ -213,7 +220,7 @@ jobs:
               structured-workbench-smoke.sh) echo 180 ;;
               # 整个 phone-adb-controller 测试套件(600+ 条,含假机整链/有界子进程真等待)当一步跑,main 上已贴 90s 天花板靠重试苟过;
               # 7d150e33 加总时限/预算整链验收后必超,放宽到 180
-              leadgen-field-cleanup-smoke.sh) echo 180 ;;
+              leadgen-field-cleanup-smoke.sh) echo 300 ;;  # 含真实跨仓七活动及软停止/finalize，不省略活动验收
               *) echo 90 ;;
             esac
           }

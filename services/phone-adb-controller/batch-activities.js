@@ -35,6 +35,19 @@ function validateBatchInput(action, input) {
       || (k.max_videos !== undefined && (!Number.isSafeInteger(k.max_videos) || k.max_videos < 1 || k.max_videos > 100))
       || (k.location !== undefined && !['same_city', 'unlimited'].includes(k.location))))) throw new Error('关键词非法');
   if (input.location !== undefined && !['same_city', 'unlimited'].includes(input.location)) throw new Error('位置非法');
+  if (input.execution !== undefined && (!input.execution || typeof input.execution !== 'object' || Array.isArray(input.execution))) throw new Error('执行上下文非法');
+  if (input.execution && Object.hasOwn(input.execution, 'gateway')) {
+    const gateway = input.execution.gateway;
+    const absolute = value => typeof value === 'string' && value.startsWith('/') && !/[\n\r\0]/.test(value)
+      && !value.split('/').includes('..');
+    if (!gateway || typeof gateway !== 'object' || Array.isArray(gateway)
+        || typeof gateway.host !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.@:-]{0,127}$/.test(gateway.host)
+        || !absolute(gateway.cwd)
+        || (gateway.node !== undefined && (typeof gateway.node !== 'string'
+          || !/^(?:node|\/[A-Za-z0-9_./-]+)$/.test(gateway.node) || gateway.node.split('/').includes('..')))
+        || (gateway.env_file !== undefined && (!absolute(gateway.env_file)
+          || !/^\/[A-Za-z0-9_./-]+\/\.credentials\/[A-Za-z0-9_.-]+\.env$/.test(gateway.env_file)))) throw new Error('网关上下文非法');
+  }
   return route;
 }
 
@@ -91,10 +104,16 @@ function context(action, input, route) {
     return command(path.join(process.env.HOME, '.local/bin/douyin-phone-adb'), ['--profile', input.device.profile, name, ...args]);
   }
   async function remote(script, args, failure, cap = 45) {
-    const cmd = script === 'fetch-seen-videos.js'
+    const gateway = input.execution?.gateway;
+    let cmd = script === 'fetch-seen-videos.js'
       ? `node /Users/administrator/.openclaw/leadgen-scripts/fetch-seen-videos.js ${shellQuote(route.key)}`
       : `set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; cd ~/.openclaw/leadgen-scripts && node qualify-video.js discover ${args.slice(1).map(shellQuote).join(' ')}`;
-    return command('ssh', ['-o', 'ConnectTimeout=20', '-o', 'BatchMode=yes', 'mmv', cmd],
+    if (gateway) {
+      const prefix = gateway.env_file ? `set -e; set -a; . ${shellQuote(gateway.env_file)}; set +a; ` : '';
+      cmd = prefix + 'exec ' + [gateway.node || 'node', path.posix.join(gateway.cwd, script),
+        ...(script === 'fetch-seen-videos.js' ? [route.key] : args)].map(shellQuote).join(' ');
+    }
+    return command('ssh', ['-o', 'ConnectTimeout=20', '-o', 'BatchMode=yes', gateway?.host || 'mmv', cmd],
       { label: script, timeout: remoteCap(cap), failure });
   }
   function issue(reason, detail = {}) {
@@ -221,6 +240,11 @@ async function discovery(ctx, input) {
   const historical = await ctx.remote('fetch-seen-videos.js', [], 'seen_fetch_failed', 30);
   const seen = new Set();
   for (const id of historical.split('\n').filter(Boolean)) {
+    // 旧视频池明确使用该占位文本；保留其余真实ID去重，不把占位当视频或空历史。
+    if (id.trim() === 'id未取到') {
+      result.metrics.history_placeholders_skipped = (result.metrics.history_placeholders_skipped || 0) + 1;
+      continue;
+    }
     if (!VIDEO_ID.test(id.trim())) throw new ActivityFailure('seen_fetch_invalid', 'partial');
     seen.add(id.trim());
   }

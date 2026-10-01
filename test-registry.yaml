@@ -7003,6 +7003,14 @@ agent_suite:
     product: 智能获客
     note: "预检、逐词候选发现与归位真实JSON进程：账号、实际call_state、根设备锁、历史去重、候选持久化及清场读回。"
 
+  - id: fetch-seen-videos-transport
+    path: services/phone-adb-controller/__tests__/fetch-seen-videos-transport.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实历史CLI与隔离HTTP运输：环境/0600镜像边界、账户匹配、分页完整读回、失败非零且不输出假空历史；禁止读取工具私有cfg。"
+
   - id: collection-return-probe
     path: services/phone-adb-controller/__tests__/collection-return-probe.test.mjs
     type: unit

@@ -74,7 +74,7 @@ fs.appendFileSync(path.join(home,'ssh-events.jsonl'),JSON.stringify({command,eve
 if(command.includes('fetch-seen-videos.js')){emit(${JSON.stringify(ids[2])});}
 else if(command.includes('qualify-video.js')){
  const value=name=>{const match=command.match(new RegExp('--'+name+"'? +(?:'([^']*)'|([^ ]+))"));return match?.[1]??match?.[2];};
- const action=command.match(/qualify-video.js (discover|judge|collected)/)?.[1];
+ const action=command.match(/qualify-video.js'? +'?(discover|judge|collected)'?(?: |$)/)?.[1];
  const id=value('video-id'),db=read('pg.json'),config=read('fixture-config.json');
  if(!${JSON.stringify(ids)}.includes(id))throw Error('unknown fixture video');
  if(action==='discover'){

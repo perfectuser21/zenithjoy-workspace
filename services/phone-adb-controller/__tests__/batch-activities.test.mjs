@@ -50,26 +50,61 @@ default:console.error('unknown fixture command '+c);process.exitCode=99;
 }}
 main();`, { mode: 0o755 });
   writeFileSync(path.join(bin, 'ssh'), preamble + `
-if(a.at(-1).includes('fetch-seen-videos.js')){if(s.seen_fails){console.error('seen unavailable');process.exitCode=1;}else for(const id of s.seen||[])console.log(id);}
+if(s.execute_gateway){if(a.at(-2)!=='fixture-gateway'){console.error('nonfixture gateway rejected');process.exitCode=99;}else{const r=require('node:child_process').spawnSync('/bin/sh',['-c',a.at(-1)],{env:process.env,stdio:'inherit'});process.exitCode=r.status??99;}}
+else if(a.at(-1).includes('fetch-seen-videos.js')){if(s.seen_fails){console.error('seen unavailable');process.exitCode=1;}else for(const id of s.seen||[])console.log(id);}
 else if(a.at(-1).includes('qualify-video.js discover')){const id=a.at(-1).match(/--video-id'? '([0-9]+)'/)[1];if(s.persist_empty){console.log('no persistence receipt');}else if(s.persist_fails===id){console.log('QUAL_DISCOVER '+JSON.stringify({status:'error',error:'write failed'}));}else{console.log('QUAL_DISCOVER '+JSON.stringify({status:s.cached_status||'pending',video_id:id,process_status:s.process_status||'待判定'}));if(s.stop_after_persist)fs.writeFileSync(process.env.WF_STOP_FILE,'');}}
 else{console.error('nonfixture transport rejected');process.exitCode=99;}`, { mode: 0o755 });
+  const gatewayCwd=path.join(home,"isolated source's"), credentials=path.join(home,'.credentials');
+  mkdirSync(gatewayCwd);mkdirSync(credentials);
+  const envFile=path.join(credentials,'gateway.env');writeFileSync(envFile,"GATEWAY_MARKER='fixture-isolated-source'\n",{mode:0o600});
+  writeFileSync(path.join(gatewayCwd,'fetch-seen-videos.js'), `const fs=require('node:fs');const s=JSON.parse(fs.readFileSync(process.env.FIXTURE_STATE));for(const id of s.seen||[])console.log(id);`);
+  writeFileSync(path.join(gatewayCwd,'qualify-video.js'), `const fs=require('node:fs'),path=require('node:path');const a=process.argv.slice(2);if(a[0]!=='discover')throw Error('unexpected gateway activity');const value=k=>a[a.indexOf('--'+k)+1];const row={id:value('video-id'),word:Buffer.from(value('keyword-b64'),'base64').toString(),marker:process.env.GATEWAY_MARKER};fs.appendFileSync(path.join(process.env.HOME,'gateway-records.jsonl'),JSON.stringify(row)+'\\n');console.log('QUAL_DISCOVER '+JSON.stringify({status:'pending',process_status:'待判定'}));`);
+  writeFileSync(path.join(gatewayCwd,'workflow-probe.js'), `const fs=require('node:fs'),path=require('node:path');let text='';process.stdin.on('data',c=>text+=c);process.stdin.on('end',()=>{const r=JSON.parse(text);let rows=[];try{rows=fs.readFileSync(path.join(process.env.HOME,'gateway-records.jsonl'),'utf8').trim().split('\\n').map(JSON.parse);}catch{}console.log(JSON.stringify({checks_sha256:r.checks_sha256,probes:[{key:'disc_candidates_persisted',observed:rows.filter(x=>x.word===r.word).length,probed_at:new Date().toISOString()}]}));});`);
   writeFileSync(path.join(bin, 'adb'), '#!/bin/sh\necho "fixture rejects adb" >&2\nexit 99\n', { mode: 0o755 });
   const env = { HOME: home, PATH: `${bin}:/usr/bin:/bin`, FIXTURE_STATE: state, FIXTURE_LOG: log,
     FIXTURE_MARKER: path.join(home, 'marker'), WF_STOP_FILE: path.join(home, 'stop'), HARVEST_KEYWORD_TESTING: '1' };
-  function run(action, value = input(), extra = {}, onStart) {
+  function run(action, value = input(), extra = {}, onStart, executable = entry) {
     return new Promise((resolve, reject) => {
-      const child = spawn(process.execPath, [entry, action], { env: { ...env, ...extra } });
+      const child = spawn(process.execPath, [executable, action], { env: { ...env, ...extra } });
       let stdout = '', stderr = '';child.stdout.on('data', c => stdout += c);child.stderr.on('data', c => stderr += c);
       child.on('error', reject);child.on('close', code => resolve({ code, stdout, stderr,
         result: stdout.trim() ? JSON.parse(stdout) : null }));
       child.stdin.end(JSON.stringify(value));onStart?.(child);
     });
   }
-  return { run, home, env, state: () => JSON.parse(readFileSync(state)),
+  return { run, home, env, gateway:{host:'fixture-gateway',cwd:gatewayCwd,node:process.execPath,env_file:envFile}, state: () => JSON.parse(readFileSync(state)),
     commands: () => { try { return readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse); } catch { return []; } },
     dispose: () => rmSync(home, { recursive: true, force: true }) };
 }
 const actions = f => f.commands().filter(a=>a[0]==='--profile').map(a=>a[2]);
+
+test('explicit gateway executes isolated discovery modules and safely quotes its source path', async () => {
+  const f=fixture({owner:'batch-fixture',execute_gateway:true,seen:[id1]});try{
+    const v=input();v.execution={gateway:f.gateway};const r=await f.run('discovery',v);assert.equal(r.code,0,r.stdout);
+    assert.deepEqual(r.result.outputs.videos.map(v=>v.video_id),[id2,id3]);
+    const remote=f.commands().filter(a=>a[0]!=='--profile');assert.ok(remote.every(a=>a.at(-2)==='fixture-gateway'));
+    const records=readFileSync(path.join(f.home,'gateway-records.jsonl'),'utf8').trim().split('\n').map(JSON.parse);
+    assert.equal(records.length,2);assert.ok(records.every(row=>row.marker==='fixture-isolated-source'));
+    assert.ok(remote.every(a=>!a.at(-1).includes('.openclaw/leadgen-scripts')));
+  }finally{f.dispose();}
+});
+
+test('native workflow discovery retains execution gateway through its real CLI boundary', async () => {
+  const f=fixture({owner:'batch-fixture',execute_gateway:true,seen:[id1]});try{
+    const v=input();v.execution={gateway:f.gateway};const wrapper=fileURLToPath(new URL('../keyword-workflow-activity.js',import.meta.url));
+    const r=await f.run('discovery',v,{},undefined,wrapper);assert.equal(r.code,0,r.stdout);
+    assert.deepEqual(r.result.outputs.videos.map(v=>v.video_id),[id2,id3]);
+    assert.equal(r.result.outputs.workflow_artifacts.discovery.status,'completed');
+  }finally{f.dispose();}
+});
+
+test('invalid gateway host, source, node or credential mirror rejects before transport', async () => {
+  for(const change of [g=>g.host='-bad',g=>g.cwd='relative',g=>g.node='node; echo injected',g=>g.env_file='/tmp/tool-private.env']){
+    const f=fixture({owner:'batch-fixture'});try{const v=input();v.execution={gateway:{...f.gateway}};change(v.execution.gateway);
+      const r=await f.run('discovery',v);assert.equal(r.code,1);assert.equal(r.result.reason_code,'invalid_input');assert.deepEqual(f.commands(),[]);
+    }finally{f.dispose();}
+  }
+});
 
 test('preflight CLI verifies explicit device/account and holds the batch lock', async () => {
   const f=fixture();try{const r=await f.run('preflight');assert.equal(r.code,0,r.stderr);assert.equal(r.result.status,'completed');
@@ -203,6 +238,24 @@ test('history fetch failure stops conservatively before search instead of using 
   const f=fixture({owner:'batch-fixture',seen_fails:true});try{const r=await f.run('discovery');assert.equal(r.code,2);
     assert.equal(r.result.reason_code,'seen_fetch_failed');assert.deepEqual(r.result.outputs.videos,[]);assert.ok(!actions(f).includes('open-search'));
   }finally{f.dispose();}
+});
+
+test('known historical missing-ID placeholders keep valid dedup IDs; unrelated malformed history rejects', async () => {
+  const f=fixture({owner:'batch-fixture',seen:[id1,'id未取到','id未取到']});
+  try {
+    const r=await f.run('discovery');
+    assert.equal(r.code,0,r.stdout);
+    assert.deepEqual(r.result.outputs.videos.map(v=>v.video_id),[id2,id3]);
+    assert.equal(r.result.metrics.history_placeholders_skipped,2);
+    assert.ok(r.result.metrics.seen_skipped>=1);
+  } finally { f.dispose(); }
+  const bad=fixture({owner:'batch-fixture',seen:[id1,'unexpected-history']});
+  try {
+    const r=await bad.run('discovery');
+    assert.equal(r.code,2);
+    assert.equal(r.result.reason_code,'seen_fetch_invalid');
+    assert.ok(!actions(bad).includes('open-search'));
+  } finally { bad.dispose(); }
 });
 
 test('deadline and stop retain candidates and start no new card', async () => {

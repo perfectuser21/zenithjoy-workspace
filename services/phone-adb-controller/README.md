@@ -139,7 +139,7 @@ harvest-keyword.sh 出口码契约（账本 stage 映射依赖，勿改）：`3`
 
 ## 阶段3 JSON活动链与可携带执行入口
 
-通用契约执行器归 Cecelia，获客活动归本目录。`keyword-workflow.js` 接收调度单声明的设备、账号、关键词与业务线，按真实契约调用预检→发现→逐视频判定/采集→可选评分→配送→归位。手机活动在入口所在机器执行；评分、配送与数据库/飞书探针可由输入中的 `execution.gateway` 显式指定远端。调用方负责声明机器，入口不选手机。
+通用契约执行器归 Cecelia，获客活动归本目录。`keyword-workflow.js` 接收调度单声明的设备、账号、关键词与业务线，按真实契约调用预检→发现→逐视频判定/采集→可选评分→配送→归位。手机活动在入口所在机器执行；历史去重、候选持久化、评分、配送与数据库/飞书探针可由输入中的 `execution.gateway` 显式指定远端。调用方负责声明机器，入口不选手机。
 
 | 文件 | 作用 |
 | --- | --- |
@@ -173,7 +173,7 @@ node keyword-workflow.js --contract "$PWD/plans/keyword_workflow.contract.json" 
 
 启用数据库事件账须另加 `--event-db --brain-run-id <已存在的initiative_runs UUID> --event-source-id <本次唯一UUID>`，并显式提供 `ACTIVITY_EVENT_DATABASE_URL`；run UUID不是Brain任务UUID。本地回执、数据库游标及事件由 Cecelia 管理，`deploy.sh` 不复制 Cecelia 执行器，也不复制凭据。
 
-`deploy.sh` 已列出入口、全部业务依赖、原 checks 和编译投影；设备端仅使用携带的活动与投影。旧shell流程仍使用原部署及探针通道。离线 portable 守卫从该部署清单复制到隔离目录，以真实 Cecelia CLI验证完整链及去掉评分；ADB/SSH、模型、数据库与飞书运输使用隔离 fixture。当前代码尚未下发设备，阶段3尚未真机验收。
+`deploy.sh` 已列出入口、全部业务依赖、原 checks 和编译投影；设备端仅使用携带的活动与投影。旧shell流程仍使用原部署及探针通道。离线 portable 守卫从该部署清单复制到隔离目录，以真实 Cecelia CLI验证完整链及去掉评分；ADB/SSH、模型、数据库与飞书运输使用隔离 fixture。M4隔离临时目录的真实预检和归位已通过；完整采收与旧链等价尚未验收，生产入口尚未切换。
 
 ## 守卫
 

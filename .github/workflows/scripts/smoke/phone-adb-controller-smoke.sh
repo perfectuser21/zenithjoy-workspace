@@ -127,8 +127,11 @@ grep -qF 'commander-heartbeat' "$D/cmdr-escort.txt" || fail "cmdr-escort.txt 缺
 grep -qF 'brain_launch_register' "$D/commander/wf-launch.sh" || fail "wf-launch.sh 缺 Brain 起跑登记(escort id 进不了 Brain,lost 善后无法注销 escort)"
 
 # 层5: 落表独立字段(主理人0915逐列验收拍板: 昵称/抖音号/主页链接/IP/留言时间独立成列)
-grep -qF '"留言时间"' "$D/push-raw-comments.js" || fail "push-raw-comments 未写留言时间列"
-grep -qF '"主页IP"' "$D/push-raw-comments.js" || fail "push-raw-comments 未写主页IP列"
+# 字段构造随阶段3拆分进入共享原始评论活动；旧入口同样复用该真身。
+grep -qF 'persistRawComments(input, deps)' "$D/push-raw-comments.js" || fail "旧落池入口未调用共享原始评论活动"
+grep -qE '留言时间:[[:space:]]*value' "$D/raw-comment-activities.js" || fail "共享原始评论活动未写留言时间列"
+grep -qE '主页IP:[[:space:]]*value' "$D/raw-comment-activities.js" || fail "共享原始评论活动未写主页IP列"
+node --test "$D/__tests__/raw-comment-activities.test.mjs" "$D/__tests__/raw-comment-storage.test.mjs" || fail "原始评论字段实际写入或旧入口兼容回归失败"
 # 0923 搬运逻辑抽进 sort-comments-lib.js(池状态必须最后推进,顺序只有注入假飞书跑一遍才测得出),
 # 列的字面量跟着挪过去了,检查点也跟着挪——盯着旧文件 grep 会在重构后变成假绿。
 # 认两种写法: "IP属地": 和 ES6 简写 IP属地: —— 只认带引号那种，重构成简写时会假红
@@ -817,7 +820,12 @@ grep -qF 'nickname="unknown"' "$C" || fail "read_current_account 取不准昵称
 # step-dod.json 与契约一致由 scripts/product-map/__tests__/contracts.test.js 钉(改契约必须重跑 gen-step-dod.mjs)。
 for _sf in step-judge.mjs step-dod-stats.mjs; do [[ -s "$D/$_sf" ]] || fail "$_sf 缺失"; node --check "$D/$_sf" || fail "$_sf 语法错误"; done
 node -e 'const s=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(!Array.isArray(s.steps)||s.steps.length<43) process.exit(1)' "$D/step-dod.json" || fail "step-dod.json 缺失/坏/不足 43 步"
-grep -qE '^DEVICE_NODE_FILES=\(.*step-judge\.mjs.*step-dod\.json' "$_DEPLOY" || fail "deploy.sh DEVICE_NODE_FILES 漏了 step-judge.mjs/step-dod.json(执行机判不了步骤 DoD)"
+node - "$_DEPLOY" <<'JS' || fail "deploy.sh DEVICE_NODE_FILES 漏了 step-judge.mjs/step-dod.json(执行机判不了步骤 DoD)"
+const source = require('node:fs').readFileSync(process.argv[2], 'utf8');
+const body = /^DEVICE_NODE_FILES=\(([\s\S]*?)\)/m.exec(source)?.[1];
+const files = (body || '').replace(/#[^\n]*/g, '').trim().split(/\s+/);
+if (!['step-judge.mjs', 'step-dod.json'].every(file => files.includes(file))) process.exit(1);
+JS
 grep -qF 'step-judge.mjs step-dod.json step-dod-stats.mjs' <<< "$(sed -n '/^MMV_PROBE_FILES=(/,/)/p' "$_DEPLOY")" || fail "deploy.sh MMV_PROBE_FILES 漏了裁判/清单/统计"
 grep -qF 'judge_steps "$stage"' "$D/workflow-result.sh" || fail "workflow-result.sh 写工件时没调步骤 DoD 裁判"
 grep -qF 'remote="$remote --steps"' "$D/workflow-result.sh" || fail "probe_stage 没带 --steps(sql/http 步骤读不回)"
