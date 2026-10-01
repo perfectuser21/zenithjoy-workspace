@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 
 const require = createRequire(import.meta.url);
 const load = () => require('../raw-comment-storage.js');
@@ -92,4 +93,92 @@ test('文本采集时间保留旧UTC+8字符串，env缺凭据不读取配置', 
   assert.equal(deps.asTime('采集时间', deps.now), deps.now);
   assert.match(deps.now, /\(UTC\+8\)$/);
   await assert.rejects(load().createRawCommentDeps(input(), { env: {}, request: http.request }), /凭据/);
+});
+
+test('HTTP边界整条闭环：真实评分、原始池存储及配送适配器按池ID结算', async () => {
+  const { scoreComments, deliverComments } = require('../comment-activities.js');
+  const { persistRawComments } = require('../raw-comment-activities.js');
+  const { createDeliveryDeps } = require('../comment-delivery-storage.js');
+  const { routeOf } = require('../line-routes.js');
+  const route = routeOf('yuesheng');
+  const pool = new Map();
+  const leads = new Map();
+  const writes = [];
+  const request = async (url, options) => {
+    if (url.includes('/auth/')) return response({ code: 0, tenant_access_token: 'fixture-token' });
+    if (url.includes('/fields')) return response({ code: 0, data: { items: fields.map(field_name => ({ field_name, type: 1 })) } });
+    const isPool = url.includes(`/tables/${route.pool}/`);
+    const store = isPool ? pool : leads;
+    if (options.method === 'GET') {
+      const id = url.match(/\/records\/([^/?]+)/)?.[1];
+      return response({ code: 0, data: id ? { record: store.get(id) } : { items: [...store.values()], has_more: false } });
+    }
+    const body = JSON.parse(options.body);
+    writes.push({ isPool, method: options.method, fields: body.fields });
+    const id = options.method === 'POST' ? (isPool ? 'pool-1' : 'lead-1') : url.split('/').at(-1);
+    const record = { record_id: id, fields: { ...store.get(id)?.fields, ...body.fields } };
+    store.set(id, record);
+    return response({ code: 0, data: { record } });
+  };
+  const scored = await scoreComments(input(), { judgeOptions: {
+    apiKey: 'fixture-model-key', httpPost: async () => ({ answers: { grade: { choice: 'A', confidence: 0.95 } } }),
+  } });
+  const scoredInput = { ...input(), comments: scored.outputs.comments };
+  const persisted = await persistRawComments(scoredInput, await load().createRawCommentDeps(scoredInput, { env, request }));
+  const deliveryInput = { ...input(), comments: persisted.outputs.comments };
+  const delivered = await deliverComments(deliveryInput, await createDeliveryDeps(deliveryInput, { env, request }));
+  assert.equal(delivered.status, 'completed');
+  assert.equal(delivered.metrics.leads_written, 1);
+  assert.equal(pool.get('pool-1').fields.处理状态, '已分拣');
+  assert.deepEqual(writes.map(w => [w.isPool, w.method]), [[true, 'POST'], [false, 'POST'], [true, 'PUT']]);
+  const replay = await persistRawComments(scoredInput, await load().createRawCommentDeps(scoredInput, { env, request }));
+  assert.equal(replay.metrics.comments_written, 0);
+  assert.equal(replay.outputs.comments[0].id, 'pool-1');
+  const againInput = { ...input(), comments: replay.outputs.comments };
+  const again = await deliverComments(againInput, await createDeliveryDeps(againInput, { env, request }));
+  assert.equal(again.metrics.leads_written, 0);
+  assert.equal(writes.length, 3);
+});
+
+test('跨适配器整批重试只补失败源记录，已写入记录恢复真实ID', async () => {
+  const { persistRawComments } = require('../raw-comment-activities.js');
+  const comments = [row('one'), { ...row('two'), fields: { ...row().fields, 评论者昵称: '乙' } }];
+  const batch = input(comments);
+  const records = [];
+  let posts = 0;
+  const http = transport({ records, write: async (_url, options) => {
+    if (++posts === 1) return { ok: false, json: async () => ({ code: 1 }) };
+    const record = { record_id: 'pool-' + posts, fields: JSON.parse(options.body).fields };
+    records.push(record);
+    return response({ code: 0, data: { record } });
+  } });
+  const first = await persistRawComments(batch, await load().createRawCommentDeps(batch, { env, request: http.request }));
+  assert.equal(first.status, 'partial');
+  assert.deepEqual(first.outputs.comments.map(r => r.source_id), ['two']);
+  assert.deepEqual(first.outputs.pending_comments.map(r => r.source_id), ['one']);
+  const retry = await persistRawComments(batch, await load().createRawCommentDeps(batch, { env, request: http.request }));
+  assert.equal(retry.status, 'completed');
+  assert.deepEqual(retry.metrics, { comments_written: 1, duplicates: 1, pending: 0 });
+  assert.deepEqual(retry.outputs.comments.map(r => r.id), ['pool-3', 'pool-2']);
+  assert.equal(posts, 3);
+});
+
+test('旧push入口复用真实活动/适配器，仍输出PUSH_COMMENTS_STATS与全失败exit语义', async () => {
+  assert.match(readFileSync(new URL('../push-raw-comments.js', import.meta.url), 'utf8'), /module\.exports\s*=\s*\{\s*runLegacyPush\s*\}/);
+  const { runLegacyPush } = require('../push-raw-comments.js');
+  const config = { channels: { feishu: { accounts: { main: { appId: env.FEISHU_APP_ID, appSecret: env.FEISHU_APP_SECRET } } } } };
+  const tsv = 'LEAD\t甲\t123\t个人\t想了解\t昨天\t广东\t视频\t关键词\t深圳\thttps://example.com/123\thttps://example.com/v';
+  for (const fail of [false, true]) {
+    const logs = [];
+    const http = transport({ write: fail ? async () => response({ code: 1 }) : undefined });
+    const outcome = await runLegacyPush(tsv, 'legacy-batch', 'yuesheng', {
+      config, request: http.request, log: line => logs.push(line), error: () => {},
+    });
+    assert.equal(outcome.exitCode, fail ? 1 : 0);
+    assert.equal(outcome.result.metrics.comments_written, fail ? 0 : 1);
+    const stats = logs.find(line => line.startsWith('PUSH_COMMENTS_STATS '));
+    assert.ok(stats);
+    assert.match(stats, /input=1/);
+    assert.match(stats, new RegExp('created=' + (fail ? 0 : 1)));
+  }
 });

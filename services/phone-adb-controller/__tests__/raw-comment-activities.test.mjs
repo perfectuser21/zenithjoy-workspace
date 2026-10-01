@@ -124,3 +124,17 @@ test('复用显式输入验证，在写入前拒绝未知线及重复源ID', asy
   await assert.rejects(load().persistRawComments({ ...input(), line_key: 'unknown' }, deps()), /未配路由/);
   await assert.rejects(load().persistRawComments(input([row(), row()]), deps()), /重复/);
 });
+
+test('TSV纯转换仅保留本批LEAD行，重复内容仍用独立源ID交落池去重', () => {
+  const tsv = ['debug line',
+    'LEAD\t甲\t123\t个人\t想报名\t昨天\t广东\t视频\t培训\t深圳\thttps://example.com/123\thttps://example.com/v',
+    'LEAD\t甲\t123\t个人\t想报名\t昨天\t广东\t视频\t培训\t深圳\thttps://example.com/123\thttps://example.com/v',
+  ].join('\n');
+  const batch = load().harvestTsvInput(tsv, { run_tag: 'legacy', line_key: 'jinuo' });
+  assert.equal(batch.run_tag, 'legacy');
+  assert.equal(batch.comments.length, 2);
+  assert.notEqual(batch.comments[0].id, batch.comments[1].id);
+  assert.equal(batch.comments[0].fields.抖音号, '123');
+  assert.equal(batch.comments[0].fields.主页链接, 'https://example.com/123');
+  assert.equal(batch.comments[0].fields.用户主页标识, '123 | https://example.com/123 | 个人');
+});
