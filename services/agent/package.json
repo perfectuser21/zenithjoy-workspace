@@ -20,7 +20,7 @@
     "node-notifier": "^10.0.1",
     "playwright": "^1.49.0",
     "systray2": "^2.1.4",
-    "ws": "^8.18.0"
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
