@@ -31,3 +31,10 @@ test('观测网络重试持久同event与body；409固定blocked',async()=>{
  await assert.rejects(observeDeployment(f.options),/network/);await observeDeployment(f.options);assert.deepEqual(sent[0],sent[1]);
  const conflict=fixture();let posts=0;const original=conflict.options.request;conflict.options.request=async(url,body)=>{if(body){posts++;throw Object.assign(Error('conflict'),{status:409});}return original(url,body);};await assert.rejects(observeDeployment(conflict.options),/conflict/);await assert.rejects(observeDeployment(conflict.options),/blocked/);assert.equal(posts,1);
 });
+test('deploy入口发布新模块且必须在观测回读后才原子发布manifest',()=>{
+ const source=readFileSync(new URL('../deploy.sh',import.meta.url),'utf8');
+ const files=source.match(/DEVICE_NODE_FILES=\(([^)]+)\)/s)[1];
+ for(const name of ['runtime-binding.mjs','runtime-release.mjs','deployment-manifest.mjs'])assert.ok(files.includes(name),`部署漏发${name}`);
+ assert.match(source,/deployment-release\.mjs/);assert.ok(source.lastIndexOf('deployment-release.mjs')<source.lastIndexOf('deployment-manifest.json'));
+ assert.match(source,/push_atomic "\$OBSERVED_MANIFEST"/);
+});
