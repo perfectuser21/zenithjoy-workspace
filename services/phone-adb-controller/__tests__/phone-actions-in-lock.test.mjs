@@ -1,3 +1,4 @@
+import { seedRunner } from './fixtures/frozen-runtime.mjs';
 // 碰手机的动作全部进设备锁内(任务 40f02c5e,决策 3c98fb36 阶段1 / 77ad8635)。
 // 09-29 夜两次事故: batch2 词间「归位清场」(force-stop 重开抖音)不拿设备锁,把同机持锁任务(对标发现/触达)的现场清掉;
 // wf-run 收尾 close-app/return-safe-desktop 排在 release_run_lock 之后,下一批一拿到锁就被上一批清场;
@@ -97,7 +98,11 @@ function setup(tag, extra = {}) {
 }
 const read = (p) => (existsSync(p) ? readFileSync(p, "utf8") : "");
 const holdLockBy = (home, owner) => { mkdirSync(join(home, "lock"), { recursive: true }); writeFileSync(join(home, "lock", "owner"), owner + "\n"); };
-const runWf = (env, tag) => spawnSync(ZSH, [WR, "keyword_acquisition", "p1", "SER1", "biz", "2", "1", "--commander", "cmdr-abc", "--tag", tag], { encoding: "utf8", env, timeout: 90000 });
+const runWf = (env, tag) => {
+  const args = ["keyword_acquisition", "p1", "SER1", "biz", "2", "1", "--commander", "cmdr-abc", "--tag", tag];
+  seedRunner(env, args);
+  return spawnSync(ZSH, [WR, ...args], { encoding: "utf8", env, timeout: 90000 });
+};
 const runB2 = (home, env, words) => {
   const wf = join(home, "kw.txt"); writeFileSync(wf, words.join("\n") + "\n");
   return spawnSync(ZSH, [BATCH2, "p1", wf, "t9", "0", "SER1"], { encoding: "utf8", env: { ...env, WFR_DISABLED: "1" }, timeout: 60000 });
