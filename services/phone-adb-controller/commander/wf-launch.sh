@@ -88,7 +88,7 @@ brain_launch_register(){
 }
 if (( DRY == 0 )); then
   for _try in 1 2 3; do
-    ESCORT_ID=$("$OPENCLAW" cron add --timeout 90000 --name "escort-$HOST-$TAG" --agent media \
+    ESCORT_ID=$("$OPENCLAW" cron add --timeout 90000 --name "escort-$HOST-$TAG" --agent work-commander \
       --session "session:escort-$HOST-$TAG" --every 10m --announce --channel feishu --to "$FEISHU_TO" \
       --account main --best-effort-deliver --message "$ESCORT_MSG" 2>/dev/null \
       | grep -oE '"id": *"[a-f0-9-]+"' | head -1 | grep -oE '[a-f0-9-]{36}')

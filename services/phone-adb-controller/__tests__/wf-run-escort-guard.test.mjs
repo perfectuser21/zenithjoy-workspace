@@ -251,7 +251,7 @@ test("escort_watch_tick：escort 在途被移除（id 不在表）→ 同名同�
   assert.equal(r.status, 0, r.stderr);
   const add = sshLog(home).split("\n").filter((l) => /cron add/.test(l));
   assert.equal(add.length, 1, "应重拉一次");
-  assert.match(add[0], new RegExp(`--name '${WANT}' --agent media --session 'session:${WANT}'`), "重拉必须同名同会话（跨轮记忆不断）");
+  assert.match(add[0], new RegExp(`--name '${WANT}' --agent work-commander --session 'session:${WANT}'`), "重拉必须同名同会话（跨轮记忆不断）");
   assert.equal(read(join(home, `wf-escort-${TAG}.id`)).trim(), NEW_ID);
   assert.match(runLog(home), new RegExp(`escort在途被移除\\(id=${MINE}\\),已重拉: 新id=${NEW_ID}`));
   assert.match(runLog(home), /升级分身: escort/);

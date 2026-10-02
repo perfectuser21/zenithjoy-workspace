@@ -104,7 +104,7 @@ test("正常起跑：escort 登记 → 起跑命令带 --tag 与 --commander <es
   const r = run(BASE, env);
   assert.equal(r.status, 0, r.stderr);
   const oc = read(home, "oc-argv.log");
-  assert.match(oc, /cron add .*--agent media/);
+  assert.match(oc, /cron add .*--agent work-commander/);
   assert.match(oc, /escort-xian-m4-cmd\d{8}/);
   const launch = read(home, "ssh-argv.log").split("\n").find((l) => l.includes("nohup"));
   assert.ok(launch, "应有一次 nohup 起跑");
