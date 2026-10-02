@@ -67,6 +67,38 @@ const sshLog = (home) => read(join(home, "ssh-argv.log"));
 const runLog = (home) => read(join(home, "log"));
 const rmLines = (home) => sshLog(home).split("\n").filter((l) => /cron rm/.test(l));
 
+test("Brain 接班已存在唯一同名陪跑：本地看门狗收养新 ID，不再拉第三个", { skip: SKIP }, () => {
+  const { home, env } = setup({ stub: jobs([{ id: NEW_ID, name: WANT }, { id: OTHER, name: "other-run" }]) });
+  const result = lib(`ESCORT_ID=${MINE}; print -r -- $ESCORT_ID > $ESCORT_ID_FILE; escort_watch_tick`, env);
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(sshLog(home), /cron add/, "已接班时不得重复创建");
+  assert.equal(read(join(home, `wf-escort-${TAG}.id`)).trim(), NEW_ID);
+  assert.match(runLog(home), /escort已接班.*收养/);
+});
+
+test("finalize 后即使本地 ID 过期，也注销唯一同名的新陪跑", { skip: SKIP }, () => {
+  const { home, env } = setup({ stub: jobs([{ id: NEW_ID, name: WANT }, { id: OTHER, name: "other-run" }]) });
+  lib(`ESCORT_ID=${MINE}; print -r -- $ESCORT_ID > $ESCORT_ID_FILE; escort_dismiss`, env);
+  assert.equal(rmLines(home).length, 1);
+  assert.match(rmLines(home)[0], new RegExp(`cron rm ${NEW_ID}$`));
+  assert.ok(!existsSync(join(home, `wf-escort-${TAG}.id`)));
+});
+
+test("同名陪跑不唯一：不再创建、不猜测删除并保留本地 ID 以便对账", { skip: SKIP }, () => {
+  const { home, env } = setup({ stub: jobs([{ id: NEW_ID, name: WANT }, { id: OTHER, name: WANT }]) });
+  lib(`ESCORT_ID=${MINE}; print -r -- $ESCORT_ID > $ESCORT_ID_FILE; escort_watch_tick; escort_dismiss`, env);
+  assert.doesNotMatch(sshLog(home), /cron add|cron rm/);
+  assert.equal(read(join(home, `wf-escort-${TAG}.id`)).trim(), MINE);
+  assert.match(runLog(home), /同名陪跑不唯一/);
+});
+
+test("注销时网关未知：保留本地 ID，不能把未确认下岗抹掉", { skip: SKIP }, () => {
+  const { home, env } = setup({ json: "down" });
+  lib(`ESCORT_ID=${MINE}; print -r -- $ESCORT_ID > $ESCORT_ID_FILE; escort_dismiss`, env);
+  assert.equal(rmLines(home).length, 0);
+  assert.equal(read(join(home, `wf-escort-${TAG}.id`)).trim(), MINE);
+});
+
 test("执行器自拉陪跑也先通过 SSH 读取网关 SOP", { skip: SKIP }, () => {
   const { home, env } = setup();
   const result = lib("escort_add", env);
