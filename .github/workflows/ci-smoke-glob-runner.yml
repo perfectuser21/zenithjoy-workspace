@@ -114,7 +114,7 @@ jobs:
       # 后 express 消失）。必须像 golden-path-4-smoke.yml Fix 1 一样合并成一条命令、
       # 同时声明两个 workspace。
       - name: Install apps/api + apps/agent-panel deps
-        run: npm ci --workspace=apps/api --workspace=apps/agent-panel
+        run: npm ci --workspace=apps/api --workspace=apps/agent-panel --include-workspace-root
 
       # golden-path-4-smoke.sh 的 Step 17c/17e 需要 services/agent/node_modules 存在才能用
       # npx tsx 真跑 panel-event-bus proven-to-fire。此前这条 workflow 从不显式装它，全靠字母序
@@ -131,6 +131,11 @@ jobs:
         run: |
           command -v ffmpeg >/dev/null 2>&1 || (sudo apt-get update -y && sudo apt-get install -y ffmpeg)
           ffmpeg -version | head -1
+
+      - name: Install capability protocol regression dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y zsh python3 jq libxml2-utils
 
       - name: Create zenithjoy schema + pgcrypto
         run: |
