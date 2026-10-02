@@ -536,8 +536,9 @@ current_video_link() {
   (( _g == 2 )) && die "UI_TREE_UNAVAILABLE: could not read the UI hierarchy to verify the video detail page; transient, safe to retry" NO_ROOT
   (( _g == 1 )) && die "NOT_ON_VIDEO_DETAIL: current-video-link requires an opened video detail page (share button absent); open the video card first"
   for i in {1..$tries}; do
-    if ( _current_video_link_once "${eid}-t${i}" ); then return 0; fi
-    rc=$?
+    if ( _current_video_link_once "${eid}-t${i}" ); then return 0; else rc=$?; fi
+    # 网络失败已在同一已复制URL上有界重试；不能再经外层重拍分享。
+    (( rc == 75 )) && return 2
     print -u2 -- "warning: current-video-link attempt $i/$tries failed (rc=$rc); recovering to detail page"
     # 回退到详情页干净态：连按返回收掉可能半开的分享面板/临时搜索框
     "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1
@@ -557,6 +558,7 @@ _current_video_link_once() {
   local link_x1 link_y1 link_x2 link_y2 link_x link_y
   local copied_path scratch_xml search_line search_center search_x search_y
   local result_xml result_line escaped_text short_url resolved_url video_id note_id content_type content_id reopen_url
+  local resolve_headers resolve_rc resolve_try
   evidence_id="$1"
   require_evidence_id "$evidence_id"
 
@@ -632,7 +634,19 @@ _current_video_link_once() {
   short_url="$(print -- "$escaped_text" | /usr/bin/grep -oE 'https://v\.douyin\.com/[A-Za-z0-9_/-]+' | /usr/bin/head -1 || true)"
   [[ "$short_url" == https://v.douyin.com/* ]] || die "copied text did not contain a verified Douyin short link" TARGET_ABSENT
   clip_guard_check "$short_url"
-  resolved_url="$("$CURL" -sSIL --max-time 20 -A 'Mozilla/5.0' "$short_url" | /usr/bin/awk -F ': ' 'tolower($1) == "location" { gsub(/\r/, "", $2); location=$2 } END { print location }' || true)"
+  # 连接超时只重试同一份已验证短链一次，避免先回退手机再重复分享。
+  # 必须检查curl返回码：部分重定向头不能把失败的请求伪装成取链成功。
+  for resolve_try in 1 2; do
+    resolve_rc=0
+    resolve_headers="$("$CURL" -sSIL --max-time 20 -A 'Mozilla/5.0' "$short_url")" || resolve_rc=$?
+    (( resolve_rc == 0 )) && break
+    if ! (( resolve_rc == 28 && resolve_try == 1 )); then
+      print -u2 -- "short link resolution failed curl_exit=$resolve_rc attempts=$resolve_try"
+      print -u2 -- "failure_class=SHORT_LINK_TRANSPORT_UNAVAILABLE"
+      return 75
+    fi
+  done
+  resolved_url="$(print -r -- "$resolve_headers" | /usr/bin/awk -F ': ' 'tolower($1) == "location" { gsub(/\r/, "", $2); location=$2 } END { print location }')"
   video_id="$(print -- "$resolved_url" | /usr/bin/grep -oE '/video/[0-9]+' | /usr/bin/tail -1 | /usr/bin/cut -d/ -f3 || true)"
   note_id="$(print -- "$resolved_url" | /usr/bin/grep -oE '/note/[0-9]+' | /usr/bin/tail -1 | /usr/bin/cut -d/ -f3 || true)"
   if [[ "$video_id" == <-> && ${#video_id} -ge 16 && ${#video_id} -le 24 ]]; then

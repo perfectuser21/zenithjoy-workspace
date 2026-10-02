@@ -16,7 +16,10 @@
 // 这里用一台"假手机"（DOUYIN_ADB_BIN）把返回栈模型化：暂存路线按真机实测占 3 次返回。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { createServer } from 'node:http';
+const execute = promisify(execFile);
 import { writeFileSync, mkdtempSync, readFileSync, mkdirSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -55,7 +58,7 @@ const FEED_XML = `${XML_HEAD}</node></hierarchy>`;
  *  am start search/tabs?keyword=<词> → 压 results（兜底重搜）；keyevent 4 → 出栈一层
  *  scratchPopTo: 暂存路线退完落在哪（默认 detail；'feed' 模拟退飞了）
  */
-function makeFakePhone({ scratchPopTo = 'detail', playState = 'paused', centreNavigates = false } = {}) {
+function makeFakePhone({ scratchPopTo = 'detail', playState = 'paused', centreNavigates = false, scratchLayers = 3 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'cvl-leave-'));
   mkdirSync(join(dir, 'fx'));
   writeFileSync(join(dir, 'fx', 'detail.xml'), detailXml(playState));
@@ -84,7 +87,7 @@ push() { echo "$1" >> "$D/stack"; }
 case "$*" in
   *get-state*) echo device ;;
   *getprop*) echo ANY-MODEL ;;
-  *"am start"*"search/tabs?keyword=%20"*) push scratch_res; push scratch_input; push scratch_kbd ;;
+  *"am start"*"search/tabs?keyword=%20"*) [ ${scratchLayers} = 3 ] && push scratch_res; push scratch_input; push scratch_kbd ;;
   *"am start"*"search/tabs?keyword="*) push results ;;
   *"am start"*"aweme/detail/"*) n=$(cat "$D/deeplinks"); echo $((n+1)) > "$D/deeplinks"; push detail2 ;;
   *"input keyevent 4"*)
@@ -142,6 +145,17 @@ exit 0
   };
   return {
     run,
+    dir,
+    async runNetwork(args, curlPath) {
+      try {
+        const r = await execute('zsh', [SCRIPT, '--profile', 'legacy', ...args], {
+          env: { ...env, DOUYIN_CURL_BIN: curlPath }, timeout: 20000,
+        });
+        return { code: 0, out: r.stdout.trim(), err: r.stderr.trim() };
+      } catch (r) {
+        return { code: r.code, out: String(r.stdout || '').trim(), err: String(r.stderr || '').trim() };
+      }
+    },
     stack: () => readFileSync(stack, 'utf8').trim().split('\n'),
     deeplinks: () => Number(readFileSync(join(dir, 'deeplinks'), 'utf8').trim()),
     taps: () => Number(readFileSync(join(dir, 'taps'), 'utf8').trim()),
@@ -209,4 +223,73 @@ test('中央点击会导航识别画面时，完整取链和暂存页归位仍�
   assert.deepEqual(ph.stack(), ['results', 'detail']);
   assert.equal(ph.centre(), 0, '暂停与恢复不能靠坐标点击');
   assert.equal(ph.deeplinks(), 0, '正常归位不能增加详情页层级');
+});
+
+async function shortlinkNetworkFixture(t, mode) {
+  const requests = [], sockets = new Set();
+  const server = createServer((req, res) => {
+    requests.push({ method: req.method, path: req.url });
+    if (req.url.startsWith('/video/') && mode === 'partial-header-timeout') return;
+    if (req.url.startsWith('/video/')) { res.writeHead(200); res.end(); return; }
+    if (mode === 'timeout-always' || (mode === 'timeout-once' && requests.length === 1)) return;
+    res.writeHead(302, { Location: `http://127.0.0.1:${server.address().port}/video/7000000000000000001` });
+    res.end();
+  });
+  server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => { for (const socket of sockets) socket.destroy(); server.close(); });
+  // 两层暂存：外层原有两次back可恢复详情，不能靠恢复guard失败伪造HTTP封顶。
+  const ph = makeFakePhone({ scratchLayers: 2 });
+  const curl = join(ph.dir, 'real-curl-fixture');
+  // 只替换公开短链目的地与20秒封顶为200ms；仍运行真正curl产生rc28/真实HTTP头。
+  writeFileSync(curl, `#!${process.execPath}
+const { spawnSync } = require('node:child_process');
+const fs = require('node:fs');
+const args = process.argv.slice(2).map(arg => arg === ${JSON.stringify(LINK)} ? 'http://127.0.0.1:${server.address().port}/short' : arg === '20' ? '0.2' : arg);
+fs.appendFileSync(${JSON.stringify(join(ph.dir, 'curl-calls'))}, JSON.stringify(args)+'\\n');
+if (${JSON.stringify(mode)} === 'non-timeout') process.exit(7);
+const r = spawnSync('/usr/bin/curl', args, { encoding: 'utf8', env: { ...process.env, NO_PROXY: '127.0.0.1' } });
+process.stdout.write(r.stdout || ''); process.stderr.write(r.stderr || ''); process.exit(r.status || 0);
+`, { mode: 0o755 });
+  return { ph, curl, requests, calls: () => readFileSync(join(ph.dir, 'curl-calls'), 'utf8').trim().split('\n').map(JSON.parse) };
+}
+
+test('真实curl：同短链首次超时第二次成功，仅一次手机分享并正常归位', { timeout: 30000 }, async t => {
+  const f = await shortlinkNetworkFixture(t, 'timeout-once');
+  const r = await f.ph.runNetwork(['current-video-link', 'cvl-http-retry'], f.curl);
+  assert.equal(r.code, 0, r.err);
+  assert.match(r.out, /video_id=7000000000000000001/);
+  assert.equal(f.calls().length, 2);
+  assert.ok(f.calls().every(args => args.at(-1).endsWith('/short')), '两次使用同一已复制URL');
+  assert.deepEqual(f.requests.filter(row => row.path === '/short'), [{ method: 'HEAD', path: '/short' }, { method: 'HEAD', path: '/short' }]);
+  assert.equal(f.ph.taps(), 2, '分享按钮和分享链接各一次，不因网络失败重复点击');
+  assert.deepEqual(f.ph.stack(), ['results', 'detail']);
+});
+
+test('真实curl：持续超时两次封顶，仍拒绝输出视频身份', { timeout: 30000 }, async t => {
+  const f = await shortlinkNetworkFixture(t, 'timeout-always');
+  const r = await f.ph.runNetwork(['current-video-link', 'cvl-http-stop'], f.curl);
+  assert.notEqual(r.code, 0);
+  assert.equal(f.calls().length, 2);
+  assert.equal(f.requests.length, 2);
+  assert.doesNotMatch(r.out, /^video_id=/m);
+  assert.equal(f.ph.taps(), 2);
+});
+
+test('短链非超时连接错误不得重复HTTP请求或放行身份', { timeout: 30000 }, async t => {
+  const f = await shortlinkNetworkFixture(t, 'non-timeout');
+  const r = await f.ph.runNetwork(['current-video-link', 'cvl-http-other'], f.curl);
+  assert.notEqual(r.code, 0);
+  assert.equal(f.calls().length, 1);
+  assert.equal(f.requests.length, 0);
+  assert.doesNotMatch(r.out, /^video_id=/m);
+});
+
+test('真实curl：非零退出即使已读到合法重定向ID也不得放行', { timeout: 30000 }, async t => {
+  const f = await shortlinkNetworkFixture(t, 'partial-header-timeout');
+  const r = await f.ph.runNetwork(['current-video-link', 'cvl-http-partial'], f.curl);
+  assert.notEqual(r.code, 0, 'HTTP链尚未成功，不能吞掉curl返回码而放行部分头');
+  assert.equal(f.calls().length, 2);
+  assert.doesNotMatch(r.out, /^video_id=/m);
+  assert.equal(f.ph.taps(), 2);
 });
