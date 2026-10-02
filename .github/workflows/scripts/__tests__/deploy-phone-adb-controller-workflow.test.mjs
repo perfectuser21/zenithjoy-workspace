@@ -94,3 +94,11 @@ test("DEPLOY_FAIL_DETAIL赋值带 || true(防set -e下grep空匹配杀脚本回�
     "DEPLOY_FAIL_DETAIL赋值末尾必须有 || true，否则deploy.sh输出里没有❌时(最常见失败场景之一，比如某台机器连不上)set -e会直接杀死整个脚本，导致连专属Bark告警都发不出去",
   );
 });
+
+test('主线部署消费已成功的Implementation impact同run证据且凭据不进artifact',()=>{
+ const text=fs.readFileSync(WORKFLOW_PATH,'utf8');
+ assert.match(text,/workflow_run:/);assert.match(text,/Implementation impact/);assert.match(text,/implementation_run_id/);
+ assert.match(text,/phone-deploy-evidence\.mjs/);assert.match(text,/deployment-prepare\.mjs/);
+ assert.doesNotMatch(text,/secrets\.CECELIA_INTERNAL_TOKEN/,'Brain token必须留在mmv已有镜像');
+ assert.ok(text.indexOf('phone-deploy-evidence.mjs')<text.indexOf('uses: tailscale/github-action'),'证据身份先于目标网络操作');
+});
