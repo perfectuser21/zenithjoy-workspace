@@ -66,6 +66,10 @@ activities:
     runtime: { phase: setup, entry: wf-run.sh, args: "<能力> <profile> <serial> <biz> [n] [push] [--sources 文件] [--commander 标签]（preflight 内建于 wf-run.sh）" }
     implementation_bindings:
       - { kind: code, repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/wf-run.sh, revision: contract }
+      - { kind: code, repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/douyin-phone-adb, revision: contract, enabler_key: device_lock }
+      - { kind: code, repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/phone-lock-lib.sh, revision: contract, enabler_key: device_lock }
+      - { kind: code, repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/phone-lock-helper.py, revision: contract, enabler_key: device_lock }
+      - { kind: code, repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/douyin-phone-adb, revision: contract, enabler_key: account_selfcheck }
     steps:
       - { key: acquire_device_lock, name: 拿设备锁, order: 1, reads: [Device.serial], writes: [Device.lock_holder],
           check: "lock-acquire rc=0 且锁文件 owner=本 run（TTL 1800s）", implementation: { status: implemented, ref: "harvest-cron.sh preflight_lock_acquire（以本批 TAG 持锁，逐词 TAG-wN 同 run 幂等续用）→ douyin-phone-adb lock-acquire" }, uses_llm: false,
@@ -251,6 +255,7 @@ activities:
     runtime: { phase: per_item, entry: harvest-keyword.sh, args: "PROFILE SOURCE_ENC MAXV TAG LOC LINE（判定 matched 才采评论）" }
     implementation_bindings:
       - { kind: code, repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/harvest-keyword.sh, revision: contract }
+      - { kind: code, repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/douyin-phone-adb, revision: contract, enabler_key: return_to_results }
     model:
       - { provider: openrouter, model: bytedance/ui-tars-1.5-7b, purpose: "评论图标兜底定位（douyin-phone-adb:2076）" }
     steps:
@@ -486,6 +491,9 @@ activities:
     runtime: { phase: finalize, entry: wf-run.sh, args: "trap 里 close-app → return-safe-desktop → 账本 finalize" }
     implementation_bindings:
       - { kind: code, repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/wf-run.sh, revision: contract }
+      - { kind: code, repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/douyin-phone-adb, revision: contract, enabler_key: device_lock }
+      - { kind: code, repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/phone-lock-lib.sh, revision: contract, enabler_key: device_lock }
+      - { kind: code, repo: perfectuser21/zenithjoy-workspace, path: services/phone-adb-controller/phone-lock-helper.py, revision: contract, enabler_key: device_lock }
     steps:
       - { key: close_app, name: 关App, order: 1, reads: [Device.serial], writes: [],
           check: "前台不再是 com.ss.android.ugc.aweme", implementation: { status: implemented, ref: "harvest-cron.sh run_finalize() 调 close-app（douyin-phone-adb:2639），0929批次4接线" }, uses_llm: false,
