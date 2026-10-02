@@ -47,7 +47,9 @@ wfr_bootstrap(){
   wfr_on || return 0
   eval "$(bash "$WFR" init "$1" "$2" "$3" "$4" "$5" "$6" 2>>${LOG:-/dev/null})" 2>/dev/null || true
   export WFR_RUN_ID WFR_HASH WFR_RUN_DIR WFR_ART_DIR WFR_TAG WFR_PROFILE   # WFR_TAG/WFR_PROFILE: 棒3b 探针读回的 --run-tag/--line-key
-  eval "$(bash "$WFR" enter 2>>${LOG:-/dev/null})" 2>/dev/null || true
+  if [[ -z "${WFR_ATTEMPT:-}" ]]; then
+    eval "$(bash "$WFR" enter 2>>${LOG:-/dev/null})" 2>/dev/null || true
+  fi
   export WFR_ATTEMPT WFR_SKIP_WORDS
 }
 # escort_alive ESCORT_ID —— 30s 复核只按 id 精确判(决策 711ca6cf,判定点 4f85a74d)。

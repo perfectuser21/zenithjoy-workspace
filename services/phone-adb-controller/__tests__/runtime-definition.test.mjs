@@ -41,6 +41,11 @@ test('无版本、被篡改快照或相同SHA标签下实际文件不同，均�
 
 test('HTTP→符号链接真实prepare CLI→冻结目录：读取精确历史版本，运行后latest和步骤清单变化不替换冻结快照',async t=>{
  const {createServer}=await import('node:http');const {spawn}=await import('node:child_process');const f=fixture();const seen=[];
+ const payload={schema_version:1,workflows:[f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version],activities:[f.routes['/api/brain/activities/activity-1/versions/av-1'].version]};
+ const release={id:'release-fixed',environment:'scratch',target:'fixture',payload};release.manifest_sha256=hash({environment:release.environment,target:release.target,payload});
+ f.routes['/api/brain/releases/release-fixed']={release};
+ const manifestFile=join(f.dir,'deployment-manifest.json');const manifest=JSON.parse(readFileSync(manifestFile,'utf8'));
+ writeFileSync(manifestFile,JSON.stringify({...manifest,release_id:release.id,observation_id:'observation-fixed',environment:release.environment,target:release.target}));
  const server=createServer((req,res)=>{seen.push(req.url);res.setHeader('Content-Type','application/json');res.end(JSON.stringify(f.routes[req.url]));});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
  const cli=join(f.dir,'runtime-cli-link.mjs');
@@ -51,9 +56,9 @@ test('HTTP→符号链接真实prepare CLI→冻结目录：读取精确历史�
  const {locateRun}=await import('../runtime-definition.mjs');
  assert.equal(locateRun(join(f.dir,'run-index'),{capability:'test',tag:'fixture',profile:'p',serial:'S'}),f.options.runDir);
  assert.throws(()=>locateRun(join(f.dir,'run-index'),{capability:'test',tag:'fixture',profile:'other',serial:'S'}),/身份不匹配/);
- assert.deepEqual(seen,['/api/brain/workflows','/api/brain/workflows/workflow-1/versions/wv-1','/api/brain/activities/activity-1/versions/av-1']);
+ assert.deepEqual(seen,['/api/brain/releases/release-fixed']);
  f.routes['/api/brain/workflows'][0].current_definition_version_id='wv-2';writeFileSync(f.options.stepSpecPath,'global changed');
- assert.deepEqual(await run(),{code:0,err:''});assert.equal(seen.length,3);assert.equal(JSON.parse(readFileSync(join(f.options.runDir,'run-definition.json'),'utf8')).workflow_version.id,'wv-1');
+ assert.deepEqual(await run(),{code:0,err:''});assert.equal(seen.length,1);assert.equal(JSON.parse(readFileSync(join(f.options.runDir,'run-definition.json'),'utf8')).workflow_version.id,'wv-1');
 });
 test('部署清单未覆盖实际plan/step清单时拒绝，不能借正确契约摘要注入其它执行文件',async()=>{
  const f=fixture();

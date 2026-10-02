@@ -255,6 +255,9 @@ case "$cmd" in
   locate-run)
     "$WFR_NODE" "$WFR_RUNTIME_MJS" locate-run "$@" || exit 1
     exit 0;;
+  bind-run)
+    "$WFR_NODE" "$WFR_RUNTIME_MJS" bind-run || exit 1
+    exit 0;;
   prepare)
     export BRAIN_URL BRAIN_INTERNAL_TOKEN
     "$WFR_NODE" "$WFR_RUNTIME_MJS" prepare || exit 1
@@ -271,7 +274,7 @@ case "$cmd" in
     WFR_TAG="$TAG"; WFR_PROFILE="$P"   # 棒3b: 探针占位符 $RUN_TAG / $LINE_KEY(经 line-routes routeOf 由 profile 解析)
     WFR_HOSTKEY="$HOSTKEY"             # span executor_id：哪台执行机跑的
     mkdir -p "$WFR_RUN_DIR" "$WFR_ART_DIR" 2>/dev/null || warn "mkdir failed errno: $(mkdir -p "$WFR_RUN_DIR" "$WFR_ART_DIR" 2>&1)"
-    led1 init --run-id "$WFR_RUN_ID" --hash "$WFR_HASH" --profile "$P" --serial "$SERIAL" --hostkey "$HOSTKEY" >/dev/null
+    led1 init ${WFR_ATTEMPT:+--preserve} --run-id "$WFR_RUN_ID" --hash "$WFR_HASH" --profile "$P" --serial "$SERIAL" --hostkey "$HOSTKEY" >/dev/null
     export WFR_RUN_ID WFR_HASH WFR_RUN_DIR WFR_ART_DIR WFR_TAG WFR_PROFILE WFR_HOSTKEY
     [[ -r "$WFR_RUN_DIR/step-dod.json" ]] && WFR_STEP_SPEC="$WFR_RUN_DIR/step-dod.json"
     export WFR_STEP_SPEC

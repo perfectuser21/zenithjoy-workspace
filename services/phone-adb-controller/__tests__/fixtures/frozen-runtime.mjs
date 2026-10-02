@@ -1,5 +1,6 @@
 import { mkdirSync,writeFileSync,readFileSync,existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { hostname } from 'node:os';
+import { join,basename } from 'node:path';
 import { digest,registerRun } from '../../runtime-definition.mjs';
 // 原设备预算/回执测试使用已完成prepare的合法运行目录；真实prepare由独立HTTP E2E覆盖。
 export function seedFrozen(dir,planPath,env={}){
@@ -18,8 +19,18 @@ export function seedFrozen(dir,planPath,env={}){
     const bytes=existsSync(source)?readFileSync(source):Buffer.from('#!/bin/sh\nexit 0\n');
     writeFileSync(join(dir,'runtime',name),bytes,{mode:0o755});files[`runtime/${name}`]=digest(bytes);
   }
-  const body={schema_version:1,workflow_version:{id:'workflow-version',payload:{workflow_id:'b1000000-0000-4000-8000-000000000001',contract:{capability:env.runIdentity?.capability}}},activities,files,...(env.runIdentity?{run_identity:env.runIdentity}:{})};
-  writeFileSync(join(dir,'workflow.plan'),plan);writeFileSync(join(dir,'step-dod.json'),steps);writeFileSync(join(dir,'run-definition.json'),JSON.stringify({...body,snapshot_sha256:digest(body)}));
+  const body={schema_version:2,release:{id:'release-fixture'},deployment:{observation_id:'observation-fixture'},workflow_version:{id:'workflow-version',payload_sha256:'d'.repeat(64),payload:{workflow_id:'b1000000-0000-4000-8000-000000000001',contract:{capability:env.runIdentity?.capability}}},activities,files,...(env.runIdentity?{run_identity:env.runIdentity}:{})};
+  const snapshot={...body,snapshot_sha256:digest(body)};
+  writeFileSync(join(dir,'workflow.plan'),plan);writeFileSync(join(dir,'step-dod.json'),steps);writeFileSync(join(dir,'run-definition.json'),JSON.stringify(snapshot));
+  const host=env.WFR_HOSTKEY||hostname().split('.')[0].toLowerCase();const runId=env.runIdentity?.run_id||env.runId||basename(dir);
+  mkdirSync(join(dir,'run-bindings'),{recursive:true});
+  for(const attempt of ['a0','a1']){
+    const body={release_id:snapshot.release.id,observation_id:snapshot.deployment.observation_id,workflow_id:snapshot.workflow_version.payload.workflow_id,workflow_definition_version_id:snapshot.workflow_version.id,snapshot_sha256:snapshot.workflow_version.payload_sha256,runtime_snapshot_sha256:snapshot.snapshot_sha256,source_kind:'external',external_origin:`zenithjoy:${host}`,attempt_key:attempt,actor:'runtime:phone-adb-controller',expected_path:activities.map(a=>({reference_id:a.reference.reference_id,activity_id:a.reference.activity_id,activity_definition_version_id:a.version.id,required:true}))};
+    const run_id=`${runId}__${attempt}`;
+    writeFileSync(join(dir,'run-bindings',`${attempt}.request.json`),JSON.stringify({run_id,endpoint:`http://fixture/api/brain/runs/${run_id}/definition`,body,runtime_snapshot_sha256:snapshot.snapshot_sha256}));
+    writeFileSync(join(dir,'run-bindings',`${attempt}.ack.json`),JSON.stringify({binding:{id:`binding-${attempt}`,run_id,...body}}));
+  }
+  writeFileSync(join(dir,'run-bindings/reservation.json'),JSON.stringify({attempt_key:'a1',skip_words:[],started:false}));
 }
 export function seedRunner(env,args){
   const i=args.indexOf('--tag');const date=new Date();const pad=v=>String(v).padStart(2,'0');const tag=i>=0?args[i+1]:`auto${pad(date.getMonth()+1)}${pad(date.getDate())}${pad(date.getHours())}${pad(date.getMinutes())}`;

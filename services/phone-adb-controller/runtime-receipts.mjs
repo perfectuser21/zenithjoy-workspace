@@ -4,11 +4,18 @@ import { readFileSync,writeFileSync,realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { freezeDefinition,readFrozen,registerRun,locateRun } from './runtime-definition.mjs';
+import { bindRun,readBinding } from './runtime-binding.mjs';
+import { hostname } from 'node:os';
 import { enqueue,flush,occurrence } from './runtime-outbox.mjs';
 const e=process.env;
-function request(path){
+function request(path,body){
   if(!e.BRAIN_URL)throw Error('BRAIN_URL缺失，不能固定运行版本');
-  return JSON.parse(execFileSync('curl',['-fsS','--connect-timeout','3','-m','8',`${e.BRAIN_URL.replace(/\/$/,'')}${path}`,'-H',`Authorization: Bearer ${e.BRAIN_INTERNAL_TOKEN||''}`],{encoding:'utf8',maxBuffer:10*1024*1024}));
+  const endpoint=path.startsWith('http')?path:`${e.BRAIN_URL.replace(/\/$/,'')}${path}`;
+  const args=['-sS','--connect-timeout','3','-m','8',endpoint,'-H',`Authorization: Bearer ${e.BRAIN_INTERNAL_TOKEN||''}`,'-w','\n%{http_code}'];
+  if(body)args.push('-X','POST','-H','Content-Type: application/json','-d',JSON.stringify(body));
+  const output=execFileSync('curl',args,{encoding:'utf8',maxBuffer:10*1024*1024});const split=output.lastIndexOf('\n'),status=Number(output.slice(split+1));
+  if(status<200||status>=300){const err=Error(`Brain HTTP ${status}`);err.status=status;throw err;}
+  return JSON.parse(output.slice(0,split));
 }
 export function send(event){
   if(!e.BRAIN_INTERNAL_TOKEN)return 0;
@@ -26,9 +33,10 @@ export async function run(args){
   if(cmd==='prepare'){
     const runIdentity=e.WF_ARG_CAP?{capability:e.WF_ARG_CAP,tag:e.WFR_TAG,profile:e.P,serial:e.SERIAL,run_id:e.WFR_RUN_ID}:null;
     const root=e.WF_DEPLOYMENT_ROOT||e.WF_HOME;
-    await freezeDefinition({runIdentity,runDir:dir,deploymentRoot:root,manifestPath:e.WF_DEPLOYMENT_MANIFEST,workflowKey:e.WF_BRAIN_WORKFLOW,rawContractSha256:e.WF_CONTRACT_RAW_SHA256,activityRefs:e.WF_ACTIVITY_REFS?JSON.parse(e.WF_ACTIVITY_REFS):null,planPath:e.WF_PLAN_PATH,stepSpecPath:resolve(root,e.WF_STEP_SPEC||''),get:request});
+    await freezeDefinition({requireRelease:true,releaseId:e.WF_RELEASE_ID,runIdentity,runDir:dir,deploymentRoot:root,manifestPath:e.WF_DEPLOYMENT_MANIFEST,workflowKey:e.WF_BRAIN_WORKFLOW,rawContractSha256:e.WF_CONTRACT_RAW_SHA256,activityRefs:e.WF_ACTIVITY_REFS?JSON.parse(e.WF_ACTIVITY_REFS):null,planPath:e.WF_PLAN_PATH,stepSpecPath:resolve(root,e.WF_STEP_SPEC||''),get:request});
     if(runIdentity)registerRun(indexRoot,dir,runIdentity);return;
   }
+  if(cmd==='bind-run'){const result=await bindRun({dir,runId:e.WFR_RUN_ID,brainUrl:e.BRAIN_URL,host:e.WFR_HOSTKEY||hostname(),request});process.stdout.write(`WFR_ATTEMPT=${result.attempt_key}\nWFR_SKIP_WORDS='${result.skip_words.join('|').replace(/'/g,"'\\''")}'\n`);return;}
   if(cmd==='flush'){const status=await flushReceipts(dir);process.stdout.write(`WFR_EVIDENCE_STATUS=${status.blocked?'blocked':status.pending?'pending':'sent'}\n`);return;}
   if(cmd==='mark-start'){
     const started=occurrence(dir,`${e.WFR_ATTEMPT||'a0'}.${rest[0]}.${rest[1]||1}`,true);
@@ -40,11 +48,13 @@ export async function run(args){
   }
   if(cmd==='span'){
     const [stage,status,n,file,word='']=rest;const frozen=readFrozen(dir);
+    const binding=readBinding(dir,e.WFR_ATTEMPT||'a0',frozen);
+    if(binding.run_id!==`${e.WFR_RUN_ID}__${e.WFR_ATTEMPT||'a0'}`)throw Error('span运行身份与绑定不匹配');
     const a=frozen.activities.find(a=>a.reference.slot_key===stage);
     if(!a)throw Error(`冻结定义无活动: ${stage}`);
     const artifact=JSON.parse(readFileSync(file,'utf8'));const oc=occurrence(dir,`${e.WFR_ATTEMPT||'a0'}.${stage}.${n}`,false,artifact.observed_at);
     const rescan=stage==='collection'?Math.max(0,Number(artifact.metrics?.rescan_count||0)):0;
-    const body=[{run_id:`${e.WFR_RUN_ID}__${e.WFR_ATTEMPT||'a0'}`,occurrence_key:oc.key,workflow_id:frozen.workflow_version.payload.workflow_id,activity_id:a.reference.activity_id,step_id:null,enabler_id:null,started_at:oc.started_at,ended_at:artifact.observed_at||new Date().toISOString(),executor_kind:['qualification','scoring'].includes(stage)?'agent':'code',executor_id:e.WFR_HOSTKEY||'unknown',attempts:rescan+1,fallback:rescan>0,outcome:({completed:'pass',failed:'fail',blocked:'skipped'})[status]||'unknown',evidence:{activity_key:stage,stage_attempt:Number(n),word,artifact:file.split('/').at(-1),rescan_count:rescan,rescan_rate:Number(artifact.metrics?.rescan_rate||0),workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,reference_id:a.reference.reference_id,slot_key:a.reference.slot_key,sequence_no:a.reference.sequence_no,implementation_bindings:a.implementations,steps:a.version.payload.steps,snapshot_sha256:frozen.snapshot_sha256}}];
+    const body=[{identity_protocol:2,run_binding_id:binding.id,reference_id:a.reference.reference_id,workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,attempt_key:binding.attempt_key,enabler_call_id:null,run_id:`${e.WFR_RUN_ID}__${e.WFR_ATTEMPT||'a0'}`,occurrence_key:oc.key,workflow_id:frozen.workflow_version.payload.workflow_id,activity_id:a.reference.activity_id,step_id:null,enabler_id:null,started_at:oc.started_at,ended_at:artifact.observed_at||new Date().toISOString(),executor_kind:['qualification','scoring'].includes(stage)?'agent':'code',executor_id:e.WFR_HOSTKEY||'unknown',attempts:rescan+1,fallback:rescan>0,outcome:({completed:'pass',failed:'fail',blocked:'skipped'})[status]||'unknown',evidence:{...(status==='blocked'?{skip_reason:artifact.skip_reason||artifact.summary||artifact.reason||'stage_blocked'}:{}),activity_key:stage,stage_attempt:Number(n),word,artifact:file.split('/').at(-1),rescan_count:rescan,rescan_rate:Number(artifact.metrics?.rescan_rate||0),workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,reference_id:a.reference.reference_id,slot_key:a.reference.slot_key,sequence_no:a.reference.sequence_no,implementation_bindings:a.implementations,steps:a.version.payload.steps,runtime_snapshot_sha256:frozen.snapshot_sha256}}];
     enqueue(dir,{key:oc.key,endpoint:`${e.BRAIN_URL?.replace(/\/$/,'')}/api/brain/spans`,body});await flushReceipts(dir);return;
   }
   throw Error(`未知runtime命令: ${cmd}`);
