@@ -286,7 +286,7 @@ for host in xian-m4 xian-m1; do
 done
 
 # Commander 入口(决策 7f842d12): 启动器落 mmv(openclaw CLI 在本机), skill 落 work-commander 工作区
-echo "=== [5/5] mmv Commander 入口(wf-launch/wf-status + skill workflow-commander + AGENTS.md) ==="
+echo "=== [5/5] mmv Commander 入口(wf-launch/wf-status + skill workflow-commander + 身份文件) ==="
 ssh mmv "mkdir -p ~/.openclaw/commander ~/openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander"
 for f in wf-launch.sh wf-status.sh; do
   if [[ ! -s "$D/commander/$f" ]]; then echo "  ⚠️ 仓库里缺失: commander/$f"; FAILED=1; continue; fi
@@ -309,6 +309,13 @@ if [[ -s "$D/commander/AGENTS.md" ]]; then
   echo "  ✅ commander/AGENTS.md → work-commander 工作区"
 else
   echo "  ⚠️ 仓库里缺失: commander/AGENTS.md"; FAILED=1
+fi
+# IDENTITY 也从 git 真身同步，避免旧总调度身份覆盖陪跑职责。
+if [[ -s "$D/commander/IDENTITY.md" ]]; then
+  push_atomic "$D/commander/IDENTITY.md" mmv "~/openclaw-root/workspaces-root/clawd-work-commander" IDENTITY.md
+  echo "  ✅ commander/IDENTITY.md → work-commander 工作区"
+else
+  echo "  ⚠️ 仓库里缺失: commander/IDENTITY.md"; FAILED=1
 fi
 
 if ! ssh xian-m4 "bash ~/bin-harvest/install-phone-recovery.sh xian-m4"; then
