@@ -67,6 +67,45 @@ const sshLog = (home) => read(join(home, "ssh-argv.log"));
 const runLog = (home) => read(join(home, "log"));
 const rmLines = (home) => sshLog(home).split("\n").filter((l) => /cron rm/.test(l));
 
+// 执行生产脚本的 trap 声明，隔离设备/账本边界，观察真实 shell 的退出顺序。
+for (const finalizeStatus of [0, 1]) {
+  test(`退出时先 finalize；finalize ${finalizeStatus === 0 ? "成功才下岗" : "失败保留陪跑"}`, { skip: SKIP }, () => {
+    const source = readFileSync(WR, "utf8");
+    const wiring = source.split("\n").find((line) => line.startsWith('if [[ -n "$ESCORT_ID" ]]; then trap '));
+    assert.ok(wiring, "必须找到生产退出接线");
+    const result = spawnSync(ZSH, ["-c", `
+      ESCORT_ID=mine
+      lease_heartbeat_stop(){ print lease_stop; }
+      escort_watch_stop(){ print watch_stop; }
+      escort_dismiss(){ print dismiss; }
+      run_finalize(){ print finalize; return ${finalizeStatus}; }
+      ${wiring}
+      exit 0
+    `], { encoding: "utf8" });
+    assert.deepEqual(result.stdout.trim().split("\n"), finalizeStatus === 0
+      ? ["lease_stop", "watch_stop", "finalize", "dismiss"]
+      : ["lease_stop", "watch_stop", "finalize"]);
+  });
+}
+
+test("finalize 自检失败必须返回失败，收工闸检查不能把失败抹成成功", { skip: SKIP }, () => {
+  const source = readFileSync(WR, "utf8");
+  const fn = source.match(/run_finalize\(\)\{[\s\S]*?\n\}/)?.[0];
+  assert.ok(fn);
+  const { home, env } = setup();
+  const receipt = join(home, "receipt.sh");
+  writeFileSync(receipt, 'echo "WFR_FINALIZE_OK=0; WFR_FINALIZE_MSG=storage_failed"\n');
+  const result = spawnSync(ZSH, ["-c", `
+    device_cleanup_in_lock(){ :; }; release_run_lock(){ :; }
+    wfr_on(){ return 0; }; finalize_needed(){ return 0; }
+    log(){ :; }; escalate(){ :; }; gate_check(){ return 0; }
+    WFR=${receipt}; LOG=${join(home, "finalize.log")}; TAG=test
+    ${fn}
+    run_finalize
+  `], { env, encoding: "utf8" });
+  assert.equal(result.status, 1, "账本失败必须阻止下岗");
+});
+
 test("escort_owned：id 在表且 name 全等 → match；name 是别的 run → mismatch:<name>；id 不在表 → absent", { skip: SKIP }, () => {
   const { env } = setup();
   assert.equal(lib(`escort_owned ${MINE} ${WANT}`, env).stdout.trim(), "match");
