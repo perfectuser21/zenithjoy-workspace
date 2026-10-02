@@ -437,9 +437,11 @@ run_finalize(){
   log "账本finalize: ok=${WFR_FINALIZE_OK:-?} final=${WFR_FINALIZE_FINAL:-?} lock_released=${WFR_LOCK_RELEASED:-?} ${WFR_FINALIZE_MSG:-}"
   [[ "${WFR_FINALIZE_OK:-0}" == "1" ]] || escalate "账本收工自检未通过: ${WFR_FINALIZE_MSG:-unknown}"
   gate_check "收工" >/dev/null || true
+  # finalize 未确认成功时保留陪跑，不让后续闸检查的退出码抹掉账本失败。
+  [[ "${WFR_FINALIZE_OK:-0}" == "1" ]]
 }
 # 40f02c5e: 放锁并入 run_finalize(锁内清场 → 放锁 → 账本),trap 里不再单列 release_run_lock
-if [[ -n "$ESCORT_ID" ]]; then trap 'lease_heartbeat_stop; escort_watch_stop; escort_dismiss; run_finalize' EXIT INT TERM; else trap 'lease_heartbeat_stop; run_finalize' EXIT INT TERM; fi
+if [[ -n "$ESCORT_ID" ]]; then trap 'lease_heartbeat_stop; escort_watch_stop; run_finalize && escort_dismiss' EXIT INT TERM; else trap 'lease_heartbeat_stop; run_finalize' EXIT INT TERM; fi
 wr step "$SERIAL" 0 done; wr step "$SERIAL" 1 doing
 
 # ── ② 设备 preflight: 在线 + 屏幕亮 + 解锁(0915 锁屏=整机瘫痪且静默的教训) ──
