@@ -129,3 +129,7 @@ test("整链路(对照): 抢救后视频未漂移(仍是VID_A) → 正常产出 
   assert.match(r.stdout, /^LEAD\t/m, `未漂移应正常产出 LEAD 行, stdout=${r.stdout}\nstderr=${r.stderr}`);
   assert.doesNotMatch(r.stderr, /漂移/);
 });
+
+test("video_drifted: 坏格式观测仍保守拒绝，独立身份分类不能放开旧守卫", { skip: SKIP }, () => {
+  assert.equal(lib(`video_drifted 7412345678901234567 malformed`).status, 0);
+});

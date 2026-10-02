@@ -107,6 +107,6 @@ else
     finish_activity completed
   fi
   if (( rc == 124 )); then finish_activity pending "${ACTIVITY_REASON:-budget_exceeded}"; fi
-  if (( rc == 2 )); then finish_activity pending video_mismatch; fi
+  if (( rc == 2 )); then finish_activity pending "${COLLECTION_REASON:-video_mismatch}"; fi
   finish_activity pending collection_unconfirmed
 fi

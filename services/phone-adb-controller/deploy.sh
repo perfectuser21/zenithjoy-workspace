@@ -126,7 +126,7 @@ DEVICE_SH_FILES=(
 # 9032cdad: 步骤 DoD 统一裁判在执行机本地判 metric/evidence/log/tsv/ledger 类,清单 step-dod.json 由契约生成(json 用 JSON.parse 验)
 DEVICE_NODE_FILES=(
   gateway-context.js runtime-host.mjs runtime-release.mjs runtime-binding.mjs deployment-manifest.mjs runtime-definition.mjs runtime-outbox.mjs runtime-receipts.mjs ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js line-routes.js
-  own-accounts-lib.js check-own-account.js config/own-accounts.json
+  own-accounts-lib.js check-own-account.js comment-tier-lib.js config/own-accounts.json
   video-activities.js video-activity.js
   batch-activities.js batch-activity.js keyword-workflow.js keyword-workflow-control.js keyword-workflow-activity.js
   workflow-probe.js workflow-probes.mjs verify-step.mjs checks/probes-lib.js checks/schema.json checks/social-keyword-leadgen.yaml

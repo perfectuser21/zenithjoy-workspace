@@ -1886,7 +1886,7 @@ read_commenter_identity() {
   [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
   before_xml="$EVIDENCE_ROOT/${evidence_id}-comments.xml"
   ui_evidence "${evidence_id}-comments" >/dev/null
-  /usr/bin/grep -Eq '评论|comment' "$before_xml" || die "verified comment context was not found"
+  strict_comment_panel_open "$before_xml" || die "verified comment context was not found"
   "$ADB" -s "$SERIAL" shell input tap "$tap_x" "$tap_y"
   wait_ms 1200
   profile_xml="$EVIDENCE_ROOT/${evidence_id}-profile.xml"
@@ -1930,7 +1930,7 @@ read_commenter_identity() {
   wait_ms 900
   back_xml="$EVIDENCE_ROOT/${evidence_id}-returned.xml"
   ui_evidence "${evidence_id}-returned" >/dev/null
-  /usr/bin/grep -Eq '评论|comment' "$back_xml" || die "comment context was not restored after identity readback"
+  strict_comment_panel_open "$back_xml" || die "comment context was not restored after identity readback"
   # 0914 主理人要求:主页 IP 属地随身份一并输出(树里现成,text="IP：陕西" 全角冒号)
   profile_ip="$(/usr/bin/grep -oE 'text="IP：[^"]+"' "$profile_xml" | /usr/bin/head -1 | /usr/bin/sed -E 's/text="IP：([^"]+)"/\1/' || true)"
   print -- "nickname=$observed_nickname"
@@ -2477,6 +2477,18 @@ video_page_ready() {
 #   发条评论 / 放大评论区 / 回复 按钮 / 展开N条回复（都只在评论抽屉里出现）
 # ⚠️ 陷阱：视频页右侧按钮的 content-desc 是「评论5902，按钮」，绝不能拿它当已打开信号，
 # 否则没点开也会被判成已打开。故不匹配「评论<数字>，按钮」这种形态。
+# 评论面板必须同时有专属输入控件和面板结构，详情页评论按钮/搜索推荐文案都不能证明恢复。
+strict_comment_panel_open() {
+  local xml="$1"
+  [[ -r "$xml" ]] || return 1
+  /usr/bin/grep -qE 'resource-id="com.ss.android.ugc.aweme:id/ety"' "$xml" || return 1
+  # 标题必须是同一个title节点上的评论计数；详情页作者/视频标题不能替代。
+  /usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/title"[^>]*>' "$xml" \
+    | /usr/bin/grep -qE 'text="([0-9]+([.][0-9]+)?万? ?条评论|评论 ?[0-9]+([.][0-9]+)?万?)"' || return 1
+  /usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/(kdn|back_btn)"[^>]*>' "$xml" \
+    | /usr/bin/grep -qE 'content-desc="(放大评论区|关闭)"'
+}
+
 comment_panel_open() {
   local xml="$1"
   [[ -r "$xml" ]] || return 1
@@ -2580,7 +2592,7 @@ open_comments() {
   wait_ms 1500
   panel_xml="$EVIDENCE_ROOT/${evidence_id}-panel.xml"
   ui_evidence "${evidence_id}-panel" >/dev/null
-  if comment_panel_open "$panel_xml"; then
+  if strict_comment_panel_open "$panel_xml"; then
     print -- "comments_opened=1"
     print -- "comment_count=${count_label:-unknown}"
     print -- "coord_source=$src"
@@ -2908,7 +2920,13 @@ case "$command" in
     "$ADB" -s "$SERIAL" shell input keyevent 4; wait_ms 1200
     "$ADB" -s "$SERIAL" shell input keyevent 4; wait_ms 1500
     ui_evidence "$2-restored" >/dev/null 2>&1 || true
-    /usr/bin/grep -Eq '评论|comment' "$EVIDENCE_ROOT/$2-restored.xml" 2>/dev/null       || print -u2 -- "warning: comment context not confirmed after card-link restore"
+    print -- "comment_context_frame=$EVIDENCE_ROOT/$2-restored.xml"
+    if strict_comment_panel_open "$EVIDENCE_ROOT/$2-restored.xml"; then
+      print -- "comment_context_restored=1"
+    else
+      print -- "comment_context_restored=0"
+      print -u2 -- "warning: comment context not confirmed after card-link restore"
+    fi
     ;;
   commenter-identity)
     [[ "$#" == 5 ]] || die "usage: douyin-phone-adb --profile PROFILE commenter-identity X Y NICKNAME_B64 EVIDENCE_ID"
@@ -3051,7 +3069,7 @@ case "$command" in
     [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE collect-comments EVIDENCE_ID"
     check_target
     cc_xml="$(ui_evidence "$2-comments")" || die "could not capture comment panel hierarchy"
-    comment_panel_open "$cc_xml" || die "comment panel is not open; run open-comments first"
+    strict_comment_panel_open "$cc_xml" || die "comment panel is not open; run open-comments first"
     cc_w="$("$ADB" -s "$SERIAL" shell wm size | /usr/bin/sed -E 's/.*: ([0-9]+)x[0-9]+.*/\1/' | tr -d '\r' | /usr/bin/head -1)"
     [[ "$cc_w" == <-> ]] || die "could not read screen width"
     comments_from_xml "$cc_xml" "$cc_w"

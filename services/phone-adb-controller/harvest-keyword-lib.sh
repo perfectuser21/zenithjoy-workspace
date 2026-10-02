@@ -158,16 +158,77 @@ qualify_current_video() {
   fi
   print -- "QUAL	$VID	$QV	$QSRC"
 }
+# 沿用现有物理命令与超时工具；单episode总上限60秒，同时取活动剩余预算的更小值。
+context_command() {
+  local cap=$((60 - ($(date +%s) - CONTEXT_T0))) remaining
+  activity_should_stop && return 124
+  (( cap > 0 )) || { ACTIVITY_REASON=comment_context_unavailable; return 124; }
+  remaining="$(activity_remote_budget)" || { ACTIVITY_REASON=budget_exceeded; return 124; }
+  if (( remaining > 0 && remaining < cap )); then cap=$remaining; fi
+  wf_run_bounded "$cap" "$C" --profile "$P" "$@"
+}
+# 独立视频活动：每次丢失只尝试一次直接重开，不追退栈；函数调用受活动停止/预算边界约束。
+recover_comment_context() {
+  local opened orc link lrc observed valid="" panel prc raw rrc
+  CONTEXT_EPISODE=$((CONTEXT_EPISODE+1))
+  local context_tag="$TAG-v$i-u$j-context$CONTEXT_EPISODE"
+  COLLECTION_REASON=comment_context_unavailable
+  CONTEXT_T0=$(date +%s)
+  activity_should_stop && return 124
+  opened="$(context_command open-video "$VID" "$context_tag-open" </dev/null 2>/dev/null)"; orc=$?
+  (( orc == 124 )) && { activity_should_stop || ACTIVITY_REASON=comment_context_unavailable; return 124; }
+  (( orc == 0 )) && print -r -- "$opened" | grep -q '^video_opened=1$' || return 2
+  activity_should_stop && return 124
+  link="$(context_command current-video-link "$context_tag-binding" </dev/null 2>/dev/null)"; lrc=$?
+  observed="$(print -r -- "$link" | sed -n 's/^video_id=//p')"
+  [[ "$observed" == <-> && ${#observed} -ge 16 && ${#observed} -le 24 ]] && valid="$observed"
+  print -- "ACTIVITY_BINDING\t$VID\t$valid\t$lrc"
+  if (( lrc == 124 )); then activity_should_stop && return 124; fi
+  COLLECTION_REASON=video_identity_unavailable
+  (( lrc == 0 )) && [[ -n "$valid" && "$VID" == <-> && ${#VID} -ge 16 && ${#VID} -le 24 ]] || return 2
+  COLLECTION_REASON=video_mismatch
+  [[ "$valid" == "$VID" ]] || return 2
+  COLLECTION_REASON=comment_context_unavailable
+  activity_should_stop && return 124
+  panel="$(context_command open-comments "$context_tag-panel" </dev/null 2>/dev/null)"; prc=$?
+  (( prc == 124 )) && { activity_should_stop || ACTIVITY_REASON=comment_context_unavailable; return 124; }
+  (( prc == 0 )) && print -r -- "$panel" | grep -q '^comments_opened=1$' || return 2
+  activity_should_stop && return 124
+  raw="$(context_command collect-comments "$context_tag-fresh" </dev/null 2>/dev/null)"; rrc=$?
+  (( rrc == 124 )) && { activity_should_stop || ACTIVITY_REASON=comment_context_unavailable; return 124; }
+  (( rrc == 0 )) && print -r -- "$raw" | grep -qE '^exhausted=[01]$' || return 2
+  CONTEXT_ROWS="$raw"; CONTEXT_DIRTY=0; CONTEXT_REFRESHED=1
+  return 0
+}
+# 重开后只能用唯一昵称+正文匹配当前屏；重复行、缺行、坏坐标均不能借旧坐标继续。
+refresh_comment_row() {
+  local row count=0 candidate nick body
+  for row in "${(f)CONTEXT_ROWS}"; do
+    [[ "$row" == *$'\ttap='* ]] || continue
+    nick="$(print -r -- "$row" | cut -f1)"; body="$(print -r -- "$row" | cut -f2)"
+    if [[ "$nick" == "$NICK" && "$body" == "$BODY" ]]; then candidate="$row"; count=$((count+1)); fi
+  done
+  (( count == 1 )) || { COLLECTION_REASON=comment_context_unavailable; return 2; }
+  TAPF="$(print -r -- "$candidate" | cut -f6)"; NB="$(print -r -- "$candidate" | cut -f7)"; NB="${NB#b64=}"
+  local xy="${TAPF#tap=}"
+  TXX="${xy%% *}"; TXY="${xy##* }"
+  [[ "$TXX" == <-> && "$TXY" == <-> && -n "$NB" ]] || { COLLECTION_REASON=comment_context_unavailable; return 2; }
+}
 collect_current_video() {
   ACTIVITY_INTERRUPTED=0
+  COLLECTION_REASON=""; CONTEXT_EPISODE=0; CONTEXT_DIRTY=0; CONTEXT_REFRESHED=0; CONTEXT_ROWS=""
   activity_should_stop && return 124
-  OCOUT="$($C --profile "$P" open-comments "$TAG-v$i-oc" </dev/null 2>/dev/null || true)"
-  if ! print -- "$OCOUT" | grep -q "^comments_opened=1"; then
+  local open_rc=0 collect_rc=0
+  OCOUT="$($C --profile "$P" open-comments "$TAG-v$i-oc" </dev/null 2>/dev/null)"; open_rc=$?
+  if [[ -n "${VIDEO_ACTIVITY_MODE:-}" ]] && (( open_rc != 0 )); then COLLECTION_REASON=comment_context_unavailable; return 2; fi
+  if ! print -- "$OCOUT" | grep -q "^comments_opened=1$"; then
     log "  评论区打不开,3秒后重试1次"
     nap 3
-    OCOUT="$($C --profile "$P" open-comments "$TAG-v$i-oc2" </dev/null 2>/dev/null || true)"
-    if ! print -- "$OCOUT" | grep -q "^comments_opened=1"; then
+    OCOUT="$($C --profile "$P" open-comments "$TAG-v$i-oc2" </dev/null 2>/dev/null)"; open_rc=$?
+    if [[ -n "${VIDEO_ACTIVITY_MODE:-}" ]] && (( open_rc != 0 )); then COLLECTION_REASON=comment_context_unavailable; return 2; fi
+    if ! print -- "$OCOUT" | grep -q "^comments_opened=1$"; then
       log "  评论区重试仍打不开,跳过"
+      if [[ -n "${VIDEO_ACTIVITY_MODE:-}" ]]; then COLLECTION_REASON=comment_context_unavailable; return 2; fi
       # 0929修复(DoD审计发现真机复现): back-to-results 不传关键词只核实页面类型，
     # 分不清"真结果页"和 current-video-link 内部的暂存草稿页(两者同 Activity)——
     # 12词×3卡实测100%误判。传 $KW 让它多核一遍搜索框文字是不是这次搜的词。
@@ -202,8 +263,9 @@ collect_current_video() {
   # 要等commenter-identity才拿得到,这里只能先用"评论正文行本身"整行去重防止原地重复读
   # 同一屏——真正的昵称+抖音号精确去重key在下面逐条处理commenter-identity之后再算一次,
   # 跟push-raw-comments.js现有rid逻辑对齐,两层去重不冲突)。
-  typeset -A SEEN_LINES
+  typeset -A SEEN_LINES CONFIRMED_COMMENTS CONFIRMED_IDENTITY_RELATIONS
   CC=""
+  local confirmed_count=0 screen_before=0 comment_key="" comment_tuple="" identity_relation="" key_rc=0
   EMPTY_ROUNDS=0
   SCREEN=0
   j=0
@@ -212,20 +274,32 @@ collect_current_video() {
   while true; do
     if activity_should_stop; then ACTIVITY_INTERRUPTED=1; break; fi
     SCREEN=$((SCREEN+1))
-    RAW="$($C --profile "$P" collect-comments "$TAG-v$i-cc$SCREEN" 2>/dev/null || true)"
+    CONTEXT_REFRESHED=0
+    screen_before=$confirmed_count
+    RAW="$($C --profile "$P" collect-comments "$TAG-v$i-cc$SCREEN" 2>/dev/null)"; collect_rc=$?
+    if [[ -n "${VIDEO_ACTIVITY_MODE:-}" ]]; then
+      if (( collect_rc != 0 )) || ! print -r -- "$RAW" | grep -qE '^exhausted=[01]$'; then
+        COLLECTION_REASON=comment_context_unavailable; return 2
+      fi
+    fi
     EXHAUSTED=0
     print -- "$RAW" | grep -q "^exhausted=1" && EXHAUSTED=1
     NEWLINES=""
     while IFS= read -r LN; do
       [[ "$LN" == *"	tap="* ]] || continue
-      if [[ -z "${SEEN_LINES[$LN]:-}" ]]; then
+      if [[ -n "${VIDEO_ACTIVITY_MODE:-}" ]]; then
+        # 昵称/正文/坐标都不是身份。每屏逐行读身份后才能去重，同名客户不能在此合并。
+        NEWLINES="$NEWLINES$LN"$'\n'
+      elif [[ -z "${SEEN_LINES[$LN]:-}" ]]; then
         SEEN_LINES[$LN]=1
         NEWLINES="$NEWLINES$LN"$'\n'
         CC="$CC$LN"$'\n'
       fi
     done <<< "$RAW"
     NEWCOUNT=$(print -- "$NEWLINES" | grep -c "	tap=" || true)
-    if (( NEWCOUNT == 0 )); then EMPTY_ROUNDS=$((EMPTY_ROUNDS+1)); else EMPTY_ROUNDS=0; fi
+    if [[ -z "${VIDEO_ACTIVITY_MODE:-}" ]]; then
+      if (( NEWCOUNT == 0 )); then EMPTY_ROUNDS=$((EMPTY_ROUNDS+1)); else EMPTY_ROUNDS=0; fi
+    fi
     TOTAL=$(print -- "$CC" | grep -c "	tap=" || true)
     log "  第${SCREEN}屏: 新增${NEWCOUNT}条 累计${TOTAL}条 exhausted=$EXHAUSTED"
 
@@ -246,12 +320,24 @@ collect_current_video() {
         TX="${TAPF#tap=}"; TXX="${TX%% *}"; TXY="${TX##* }"
         NB="${B64F#b64=}"
         [[ "$TXX" == <-> && "$TXY" == <-> && -n "$NB" ]] || { log "  行$j 坐标缺失($TAPF),跳过"; continue; }
+        if [[ -n "${VIDEO_ACTIVITY_MODE:-}" ]]; then
+          if (( CONTEXT_DIRTY )); then recover_comment_context || return $?; fi
+          if (( CONTEXT_REFRESHED )); then refresh_comment_row || return $?; fi
+        fi
+        local identity_recovered=$CONTEXT_REFRESHED identity_rc=0
         # 0915: 评论者是真实存在的,一次读不到只说明时序/网络抖——3次重试+死因留档(0912原则)
         IDOUT=""; IDERR=/tmp/iderr-$$.txt
         for IDTRY in 1 2 3; do
-          IDOUT="$($C --profile "$P" commenter-identity "$TXX" "$TXY" "$NB" "$TAG-v$i-u$j-t$IDTRY" </dev/null 2>$IDERR || true)"
+          IDOUT="$($C --profile "$P" commenter-identity "$TXX" "$TXY" "$NB" "$TAG-v$i-u$j-t$IDTRY" </dev/null 2>$IDERR)"; identity_rc=$?
           ONICK="$(print -- "$IDOUT" | sed -n "s/^nickname=//p")"
-          [[ -n "$ONICK" ]] && break
+          if [[ -n "$ONICK" && ( -z "${VIDEO_ACTIVITY_MODE:-}" || "$identity_rc" == 0 ) ]]; then break; fi
+          if [[ -n "${VIDEO_ACTIVITY_MODE:-}" ]]; then
+            if (( identity_recovered )); then COLLECTION_REASON=comment_context_unavailable; return 2; fi
+            recover_comment_context || return $?
+            refresh_comment_row || return $?
+            identity_recovered=1
+            continue
+          fi
           log "  行$j 身份验证第${IDTRY}次失败: $(tail -1 $IDERR 2>/dev/null | head -c 120)"
           # 0915 真凶: card-link收尾恢复不可靠→评论面板丢失→后续行全灭。恢复=back+重开评论面板
           $C --profile "$P" back >/dev/null 2>&1
@@ -295,6 +381,24 @@ collect_current_video() {
           log "  跳过自有账号: $ONICK"
           continue
         fi
+        if [[ -n "${VIDEO_ACTIVITY_MODE:-}" ]]; then
+          # 同昵称+全文再次出现时，任一观测缺ID就无法证明是另一客户。
+          # 这是身份关系守卫，不改变既有rawid公式或首次合法稀疏身份的采集政策。
+          identity_relation="$ONICK"$'\t'"$BODY"
+          if [[ -n "${CONFIRMED_IDENTITY_RELATIONS[$identity_relation]:-}" && ( -z "$OID" || "${CONFIRMED_IDENTITY_RELATIONS[$identity_relation]}" == noid ) ]]; then
+            COLLECTION_REASON=comment_context_unavailable; return 2
+          fi
+          # 复用既有rawid政策；只在身份确认后判断重复，保留全文以暴露前20字碰撞。
+          comment_key="$(node -e 'const {commentDedupKey}=require(process.argv[1]);process.stdout.write(commentDedupKey(...process.argv.slice(2)))' "$HARVEST_SCRIPT_DIR/comment-tier-lib.js" "$ONICK" "${OID:-}" "$BODY")"; key_rc=$?
+          (( key_rc == 0 )) && [[ -n "$comment_key" ]] || { COLLECTION_REASON=comment_context_unavailable; return 2; }
+          comment_tuple="$ONICK"$'\t'"${OID:-}"$'\t'"$BODY"
+          if [[ -n "${CONFIRMED_COMMENTS[$comment_key]:-}" ]]; then
+            if [[ -z "$OID" || "${CONFIRMED_COMMENTS[$comment_key]}" != "$comment_tuple" ]]; then
+              COLLECTION_REASON=comment_context_unavailable; return 2
+            fi
+            continue
+          fi
+        fi
         # 0914 主理人验收:每人顺取名片主页直链(identity已回评论区,重进主页跑card-link,其自带恢复)
         "$C" --profile "$P" tap-evidence "$TXX" "$TXY" "$TAG-v$i-u$j-re" </dev/null >/dev/null 2>&1
         nap 3
@@ -304,20 +408,54 @@ collect_current_video() {
         # 重试呗"——跟 commenter-identity 同一个病同一个药,先重试3次,3次都拿不到才降级
         # (线索仍保留，douyin_id 仍是有效线索，但触达阶段需退回抖音号搜索)。
         PURL=""
+        local card_rc=0 card_stop_rc=0 retry_rc=0
         for CLTRY in 1 2 3; do
-          CARD="$("$C" --profile "$P" commenter-card-link "$TAG-v$i-u$j-cl$CLTRY" </dev/null 2>/dev/null || true)"
+          if [[ -n "${VIDEO_ACTIVITY_MODE:-}" ]] && (( CLTRY > 1 )); then
+            # 上次失败名片是一个独立丢失episode；安全恢复一次后才按fresh坐标重新进入此人主页。
+            # 失败不能直接return：此行已经在原视频上核验，先输出一次再pending。
+            recover_comment_context; retry_rc=$?
+            if (( retry_rc != 0 )); then card_stop_rc=$retry_rc; break; fi
+            refresh_comment_row; retry_rc=$?
+            if (( retry_rc != 0 )); then card_stop_rc=$retry_rc; break; fi
+            activity_should_stop && { card_stop_rc=124; break; }
+            "$C" --profile "$P" tap-evidence "$TXX" "$TXY" "$TAG-v$i-u$j-cl$CLTRY-re" </dev/null >/dev/null 2>&1; retry_rc=$?
+            if (( retry_rc != 0 )); then COLLECTION_REASON=comment_context_unavailable; card_stop_rc=2; break; fi
+            nap 3
+          fi
+          CARD="$("$C" --profile "$P" commenter-card-link "$TAG-v$i-u$j-cl$CLTRY" </dev/null 2>/dev/null)"; card_rc=$?
+          if [[ -n "${VIDEO_ACTIVITY_MODE:-}" ]]; then
+            CONTEXT_REFRESHED=0
+            CONTEXT_DIRTY=1
+            if (( card_rc == 0 )) && print -r -- "$CARD" | grep -q '^comment_context_restored=1$'; then CONTEXT_DIRTY=0; fi
+          fi
           PURL="$(print -- "$CARD" | sed -n "s/^profile_url=//p")"
+          if [[ -n "${VIDEO_ACTIVITY_MODE:-}" ]] && (( card_rc != 0 )); then PURL=""; fi
           [[ -n "$PURL" ]] && break
           log "  行$j 主页直链解析第${CLTRY}次失败(可能网络抖动)"
           (( CLTRY < 3 )) && nap 2
         done
         [[ -z "$PURL" ]] && log "  行$j 主页直链解析3次仍失败(douyin_id=${OID:-空})，线索仍保留但触达阶段需退回抖音号搜索"
         print -- "LEAD	$ONICK	${OID:-}	${ATYPE:-personal}	$BODY	$DATE	$REGION	$TITLE	$KWTXT	${PIP:-}	${PURL:-}	${VURL:-}"
+        if [[ -n "${VIDEO_ACTIVITY_MODE:-}" ]]; then
+          CONFIRMED_COMMENTS[$comment_key]="$comment_tuple"
+          if [[ -n "$OID" ]]; then CONFIRMED_IDENTITY_RELATIONS[$identity_relation]=known; else CONFIRMED_IDENTITY_RELATIONS[$identity_relation]=noid; fi
+          confirmed_count=$((confirmed_count+1))
+          CC="$CC$CLINE"$'\n'
+        fi
+        (( card_stop_rc != 0 )) && return $card_stop_rc
         nap 4
       done
     fi
     if (( AUTHOR_IS_OWN == 1 || VIDEO_DRIFTED == 1 || ACTIVITY_INTERRUPTED == 1 )); then break; fi
 
+    if [[ -n "${VIDEO_ACTIVITY_MODE:-}" ]] && (( CONTEXT_DIRTY )); then
+      recover_comment_context || return $?
+      refresh_comment_row || return $?
+    fi
+    if [[ -n "${VIDEO_ACTIVITY_MODE:-}" ]]; then
+      TOTAL=$confirmed_count
+      if (( confirmed_count == screen_before )); then EMPTY_ROUNDS=$((EMPTY_ROUNDS+1)); else EMPTY_ROUNDS=0; fi
+    fi
     # 停止条件(跟comment-tier-lib.js的shouldKeepScrolling同一套判据):
     #   真到底了 / 大户已攒够封顶数 / 连续2屏没有新增(可能卡住了,防死循环) → 停
     if (( EXHAUSTED == 1 )); then break; fi
@@ -326,7 +464,7 @@ collect_current_video() {
     $C --profile "$P" swipe 600 2000 600 900 400 </dev/null >/dev/null 2>&1
     nap 1.5
   done
-  unset SEEN_LINES
+  unset SEEN_LINES CONFIRMED_COMMENTS CONFIRMED_IDENTITY_RELATIONS
   if (( ACTIVITY_INTERRUPTED )) || activity_should_stop; then return 124; fi
   (( VIDEO_DRIFTED )) && return 2
   CC="$(print -- "$CC" | grep -E "	tap=" || true)"

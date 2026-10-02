@@ -7334,3 +7334,11 @@ agent_suite:
     status: active
     product: 智能获客
     note: "固定commit角色快照完整性；真实fetchseen与qualify discover/judge/collected、评分配送、探针只在显式gateway路径执行，PG/HTTP/手机边界替身。缺文件不回退生产，保留产物释放锁；音频SCP/judge同host/path、无gateway旧默认、0600虚构凭据与pg实际加载前检。须显式CECELIA_ACTIVITY_RUNTIME。"
+
+  - id: comment-context-recovery
+    path: services/phone-adb-controller/__tests__/comment-context-recovery.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实本地shell/controller CLI，外部物理与网关边界替身：名片有界恢复/三次重试、fresh坐标、身份分类、返回码拒绝与旧loop兼容。"

@@ -57,6 +57,9 @@ const controller = header + `
    locked();if(process.env.FIXTURE_STOP_MODE==='cancel'){
      fs.writeFileSync(path.join(home,'cancel-ready'),'');await new Promise(r=>setTimeout(r,700));log('native-action-completed commenter-card-link');
    }
+   // 此运输替身成功名片分支不导航，state.video保持原值；保存模拟面板证据并报告真实替身状态。
+   fs.writeFileSync(path.join(home,'card-restored-fixture.xml'),'<hierarchy><node resource-id="com.ss.android.ugc.aweme:id/title" text="1条评论"/><node resource-id="com.ss.android.ugc.aweme:id/ety"/><node resource-id="com.ss.android.ugc.aweme:id/kdn" content-desc="放大评论区"/></hierarchy>');
+   emit('comment_context_restored=1\\ncomment_context_frame='+path.join(home,'card-restored-fixture.xml'));
    emit('profile_url=https://www.douyin.com/user/'+state.video);break;
  case 'back-to-results':
    locked();let research=argv[2]?.endsWith('-return')&&read('fixture-config.json').rescanWords.includes(argv[1]);
