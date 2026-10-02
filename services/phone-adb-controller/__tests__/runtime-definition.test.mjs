@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -39,11 +39,12 @@ test('无版本、被篡改快照或相同SHA标签下实际文件不同，均�
   await assert.rejects(freezeDefinition(f.options),/digest|摘要/);
 });
 
-test('HTTP→真实prepare CLI→冻结目录：读取精确历史版本，运行后latest和步骤清单变化不替换冻结快照',async t=>{
+test('HTTP→符号链接真实prepare CLI→冻结目录：读取精确历史版本，运行后latest和步骤清单变化不替换冻结快照',async t=>{
  const {createServer}=await import('node:http');const {spawn}=await import('node:child_process');const f=fixture();const seen=[];
  const server=createServer((req,res)=>{seen.push(req.url);res.setHeader('Content-Type','application/json');res.end(JSON.stringify(f.routes[req.url]));});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
- const cli=new URL('../runtime-receipts.mjs',import.meta.url).pathname;
+ const cli=join(f.dir,'runtime-cli-link.mjs');
+ symlinkSync(new URL('../runtime-receipts.mjs',import.meta.url).pathname,cli);
  const env={...process.env,BRAIN_URL:`http://127.0.0.1:${server.address().port}`,BRAIN_INTERNAL_TOKEN:'fixture-token',WFR_RUN_DIR:f.options.runDir,WF_DEPLOYMENT_ROOT:f.dir,WF_BRAIN_WORKFLOW:'brain-test',WF_CONTRACT_RAW_SHA256:f.options.rawContractSha256,WF_PLAN_PATH:f.options.planPath,WF_STEP_SPEC:'steps.json'};
  const run=()=>new Promise(resolve=>{const child=spawn(process.execPath,[cli,'prepare'],{env});let err='';child.stderr.on('data',b=>err+=b);child.on('exit',code=>resolve({code,err}));});
  assert.deepEqual(await run(),{code:0,err:''});assert.deepEqual(seen,['/api/brain/workflows','/api/brain/workflows/workflow-1/versions/wv-1','/api/brain/activities/activity-1/versions/av-1']);
