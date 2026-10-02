@@ -40,7 +40,7 @@ function setup() {
   return { home, env };
 }
 const read = (p) => (existsSync(p) ? readFileSync(p, "utf8") : "");
-const run = (script, args, env) => { if (existsSync(join(env.WF_PLAN_DIR,"keyword_acquisition.plan"))) seedRunner(env,args); return spawnSync(ZSH, [script, ...args], { encoding: "utf8", env, timeout: 30000 }); };
+const run = (script, args, env) => { if (existsSync(join(env.WF_PLAN_DIR,"keyword_acquisition.plan")) && !/^WF_MISSING='[^']+'/m.test(read(join(env.WF_PLAN_DIR,`${args[0]}.plan`)))) seedRunner(env,args); return spawnSync(ZSH, [script, ...args], { encoding: "utf8", env, timeout: 30000 }); };
 const lib = (cmd, env) => spawnSync(ZSH, ["-c", `WF_RUN_LIB=1 source ${WR}; ${cmd}`], { encoding: "utf8", env });
 
 test("计划文件缺失 → exit 1 拒跑,不拉 escort", { skip: SKIP }, () => {
@@ -201,4 +201,12 @@ test('同cap/tag续跑先用已登记运行快照，全局最新plan缺失不得
  env.WF_PLAN_DIR=join(home,'new-deployment-plans');mkdirSync(env.WF_PLAN_DIR);
  const r=spawnSync(ZSH,[WR,...args],{encoding:'utf8',env,timeout:30000});
  assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/WF_RUN_STARTED tag=resume-old /);
+});
+test('同cap/tag但profile或设备不符：明确拒绝，不能借索引续错run', { skip: SKIP },()=>{
+ const {home,env}=setup();seedRunner(env,['keyword_acquisition','p1','SER1','biz','--tag','identity']);
+ for(const pair of [['p2','SER1'],['p1','SER2']]){
+  const r=spawnSync(ZSH,[WR,'keyword_acquisition',...pair,'biz','--tag','identity'],{encoding:'utf8',env,timeout:30000});
+  assert.equal(r.status,1);assert.match(r.stderr,/运行身份不匹配/);assert.doesNotMatch(r.stdout,/WF_RUN_STARTED/);
+ }
+ assert.equal(existsSync(join(home,'adb-argv.log')),false);
 });

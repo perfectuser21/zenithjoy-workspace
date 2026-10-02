@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync,writeFileSync,realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { freezeDefinition,readFrozen } from './runtime-definition.mjs';
+import { freezeDefinition,readFrozen,registerRun,locateRun } from './runtime-definition.mjs';
 import { enqueue,flush,occurrence } from './runtime-outbox.mjs';
 const e=process.env;
 function request(path){
@@ -18,9 +18,16 @@ export function send(event){
 async function flushReceipts(dir){const status=await flush(dir,{send,limit:Math.max(1,Math.min(20,Number(e.WFR_OUTBOX_LIMIT)||3))});if(status.pending||status.blocked)process.stderr.write(`WFR_WARN span/callback evidence pending=${status.pending} blocked=${status.blocked}\n`);return status;}
 export async function run(args){
   const [cmd,...rest]=args; const dir=e.WFR_RUN_DIR;
+  const indexRoot=resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'run-index');
+  if(cmd==='locate-run'){
+    const [capability,tag,profile,serial]=rest;const runDir=locateRun(indexRoot,{capability,tag,profile,serial});
+    if(runDir)process.stdout.write(runDir+'\n');return;
+  }
   if(cmd==='prepare'){
+    const runIdentity=e.WF_ARG_CAP?{capability:e.WF_ARG_CAP,tag:e.WFR_TAG,profile:e.P,serial:e.SERIAL,run_id:e.WFR_RUN_ID}:null;
     const root=e.WF_DEPLOYMENT_ROOT||e.WF_HOME;
-    await freezeDefinition({runDir:dir,deploymentRoot:root,manifestPath:e.WF_DEPLOYMENT_MANIFEST,workflowKey:e.WF_BRAIN_WORKFLOW,rawContractSha256:e.WF_CONTRACT_RAW_SHA256,activityRefs:e.WF_ACTIVITY_REFS?JSON.parse(e.WF_ACTIVITY_REFS):null,planPath:e.WF_PLAN_PATH,stepSpecPath:resolve(root,e.WF_STEP_SPEC||''),get:request});return;
+    await freezeDefinition({runIdentity,runDir:dir,deploymentRoot:root,manifestPath:e.WF_DEPLOYMENT_MANIFEST,workflowKey:e.WF_BRAIN_WORKFLOW,rawContractSha256:e.WF_CONTRACT_RAW_SHA256,activityRefs:e.WF_ACTIVITY_REFS?JSON.parse(e.WF_ACTIVITY_REFS):null,planPath:e.WF_PLAN_PATH,stepSpecPath:resolve(root,e.WF_STEP_SPEC||''),get:request});
+    if(runIdentity)registerRun(indexRoot,dir,runIdentity);return;
   }
   if(cmd==='flush'){const status=await flushReceipts(dir);process.stdout.write(`WFR_EVIDENCE_STATUS=${status.blocked?'blocked':status.pending?'pending':'sent'}\n`);return;}
   if(cmd==='mark-start'){

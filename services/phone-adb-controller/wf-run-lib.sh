@@ -256,3 +256,15 @@ gate_check(){
   fi
   [[ "${WFR_GATE_STOP:-0}" == 1 ]]
 }
+
+# 固定原始TAG与本机执行根，普通续跑和首次prepare共用。
+wf_exec_frozen(){
+  export WF_FROZEN_ROOT="$WFR_RUN_DIR/runtime" WF_PLAN_DIR="$WFR_RUN_DIR"
+  export WFR="$WF_FROZEN_ROOT/workflow-result.sh" BATCH2="$WF_FROZEN_ROOT/batch2.sh"
+  export HARVEST_KEYWORD="$WF_FROZEN_ROOT/harvest-keyword.sh" C="$WF_FROZEN_ROOT/douyin-phone-adb"
+  export DOUYIN_LOCATE_SCRIPT="$WF_FROZEN_ROOT/locate-element.py"
+  export DOUYIN_PHONE_ADB="$C" WALL_REPORT="$WF_FROZEN_ROOT/wall-report.sh"
+  export WFR_LEDGER_MJS="$WF_FROZEN_ROOT/ledger.mjs" WFR_STEP_JUDGE="$WF_FROZEN_ROOT/step-judge.mjs"
+  export WFR_RUNTIME_MJS="$WF_FROZEN_ROOT/runtime-receipts.mjs"
+  exec zsh "$WF_FROZEN_ROOT/wf-run.sh" "$@" --tag "$TAG"
+}

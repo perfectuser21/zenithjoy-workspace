@@ -35,6 +35,14 @@ TAG="${WF_TAG:-auto$(date +%m%d%H%M)}"   # --tag 覆盖(启动器传 cmdMMDDHHMM
 C=${C:-$HOME/.local/bin/douyin-phone-adb}
 DOUYIN_ACCOUNT_REGISTRY="${DOUYIN_ACCOUNT_REGISTRY:-$HOME/.config/openclaw/douyin-account-routes.tsv}"
 LOG=~/harvest-cron.log
+# cap+tag索引仅定位，身份与完整性仍由run-definition验证；在latest计划门禁之前续跑。
+if [[ -z "${WF_FROZEN_ROOT:-}" ]]; then
+  frozen_run=$(bash "$WFR" locate-run "$WF_ARG_CAP" "$TAG" "$P" "$SERIAL") || exit 1
+  if [[ -n "$frozen_run" ]]; then
+    export WFR_RUN_DIR="$frozen_run"
+    wf_exec_frozen "$@"
+  fi
+fi
 log(){ print -- "[$(date +%m%d-%H:%M:%S)] [$TAG] $*" >> $LOG }
 # nap SECONDS —— 假机整链测试(wf-run-deadline-e2e)里预检清场等待不真睡(同 harvest-keyword.sh nap 模式);生产不设 WF_TESTING 不受影响
 nap(){ [[ -n "${WF_TESTING:-}" ]] && return 0; /bin/sleep "$1" }
@@ -84,6 +92,7 @@ if [[ ! -x "$DISCOVER_CMD" ]]; then
 fi
 export DISCOVER_CMD
 # 固定版本失败时只留本地错误；在控制塔、escort、设备动作之前拒跑。
+export WF_ARG_CAP P SERIAL WFR_TAG="$TAG"
 export WF_HOME WF_DEPLOYMENT_ROOT="${WF_DEPLOYMENT_ROOT:-$WF_HOME}"
 export WF_PLAN_PATH="$WF_PLAN_DIR/$WF_ARG_CAP.plan" WF_BRAIN_WORKFLOW WF_CONTRACT_RAW_SHA256 WF_ACTIVITY_REFS WF_STEP_SPEC
 export WFR_RUN_ID="${WF_WORKFLOW}-crontab-$TAG"
@@ -95,14 +104,7 @@ if ! bash "$WFR" prepare; then
 fi
 # 转到冻结shell本身：zsh后续读取与相对source也不能再命中全局部署目录。
 if [[ "$WF_HOME" != "${WFR_RUN_DIR:A}/runtime" ]]; then
-  export WF_FROZEN_ROOT="$WFR_RUN_DIR/runtime" WF_PLAN_DIR="$WFR_RUN_DIR"
-  export WFR="$WF_FROZEN_ROOT/workflow-result.sh" BATCH2="$WF_FROZEN_ROOT/batch2.sh"
-  export HARVEST_KEYWORD="$WF_FROZEN_ROOT/harvest-keyword.sh" C="$WF_FROZEN_ROOT/douyin-phone-adb"
-  export DOUYIN_LOCATE_SCRIPT="$WF_FROZEN_ROOT/locate-element.py"
-  export DOUYIN_PHONE_ADB="$C" WALL_REPORT="$WF_FROZEN_ROOT/wall-report.sh"
-  export WFR_LEDGER_MJS="$WF_FROZEN_ROOT/ledger.mjs" WFR_STEP_JUDGE="$WF_FROZEN_ROOT/step-judge.mjs"
-  export WFR_RUNTIME_MJS="$WF_FROZEN_ROOT/runtime-receipts.mjs"
-  exec zsh "$WF_FROZEN_ROOT/wf-run.sh" "$@"
+  wf_exec_frozen "$@"
 fi
 source "$WFR_RUN_DIR/workflow.plan"
 export DISCOVER_CMD="$(wf_discover_cmd)"

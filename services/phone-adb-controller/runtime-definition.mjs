@@ -1,7 +1,7 @@
 // 运行前只读固定版本；运行目录是之后所有判定与身份解析的唯一来源。
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync, realpathSync, statSync } from 'node:fs';
-import { resolve, dirname, sep } from 'node:path';
+import { resolve, dirname, sep, basename } from 'node:path';
 export const canonical = value => JSON.stringify(value, (_, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(k => [k,v[k]])) : v);
 export const digest = value => createHash('sha256').update(Buffer.isBuffer(value) || typeof value === 'string' ? value : canonical(value)).digest('hex');
 export function localPath(root, relative) {
@@ -21,6 +21,23 @@ export function readFrozen(runDir) {
   for (const [file,hash] of Object.entries(snapshot.files)) if (digest(readFileSync(resolve(runDir,file)))!==hash) throw Error(`冻结文件digest不符: ${file}`);
   return snapshot;
 }
+function assertRunIdentity(snapshot,identity,runDir){
+  const recorded=snapshot.run_identity;
+  if(recorded && (!['capability','tag','profile','serial','run_id'].every(key=>typeof recorded[key]==='string' && recorded[key].length) || (runDir && basename(resolve(runDir))!==recorded.run_id))) throw Error('运行身份或目录不匹配');
+  if(!recorded || snapshot.workflow_version.payload.contract?.capability!==identity.capability) throw Error('运行快照capability身份不匹配');
+  for(const key of ['capability','tag','profile','serial','run_id']) if(identity[key]!==undefined && identity[key]!==recorded[key]) throw Error(`运行身份不匹配: ${key}`);
+}
+export function registerRun(indexRoot,runDir,identity){
+  assertRunIdentity(readFrozen(runDir),identity,runDir);
+  mkdirSync(indexRoot,{recursive:true,mode:0o700});
+  const file=resolve(indexRoot,`${digest([identity.capability,identity.tag])}.json`);
+  const temp=`${file}.${randomUUID()}.tmp`;writeFileSync(temp,JSON.stringify({run_dir:resolve(runDir)}),{mode:0o600});renameSync(temp,file);
+}
+export function locateRun(indexRoot,identity){
+  const file=resolve(indexRoot,`${digest([identity.capability,identity.tag])}.json`);
+  if(!existsSync(file))return null;
+  const record=JSON.parse(readFileSync(file,'utf8'));assertRunIdentity(readFrozen(record.run_dir),identity,record.run_dir);return record.run_dir;
+}
 export async function freezeDefinition(o) {
   if (existsSync(resolve(o.runDir,'run-definition.json'))) return readFrozen(o.runDir);
   const list=await o.get('/api/brain/workflows'); const matches=(Array.isArray(list)?list:list.workflows||[]).filter(w=>w.key===o.workflowKey);
@@ -36,10 +53,15 @@ export async function freezeDefinition(o) {
     const bytes=readFileSync(sourcePath); const mode=statSync(sourcePath).mode & 0o555;
     const actual=digest(bytes);
     if(actual!==file.content_sha256) throw Error(`实际部署文件digest不符: ${file.path}`);
-    checked.set(file.path,{...file,actual_content_sha256:actual,status:'verified_local',bytes,mode});
+    checked.set(file.path,{...file,actual_content_sha256:actual,status:'verified_local',bytes,mode,sourcePath});
   }
   if(!checked.size) throw Error('部署实现清单为空');
-  for(const path of [o.planPath,o.stepSpecPath]) if(![...checked.values()].some(file=>localPath(o.deploymentRoot,file.deployed_path)===realpathSync(path))) throw Error('实际plan/step文件不在部署清单manifest');
+  const checkedBytes=path=>{
+    const file=[...checked.values()].find(file=>file.sourcePath===realpathSync(path));
+    if(!file)throw Error('实际plan/step文件不在部署清单manifest');
+    return file.bytes;
+  };
+  const plan=checkedBytes(o.planPath);const steps=checkedBytes(o.stepSpecPath);JSON.parse(steps);
   const activities=[];
   for(const ref of version.payload.activities||[]) {
     if(!ref.reference_id || !ref.activity_version_id) throw Error('缺少活动使用位置或版本');
@@ -64,10 +86,10 @@ export async function freezeDefinition(o) {
     const actual=activities.find(a=>a.reference.slot_key===expected.slot_key);
     if(!actual || actual.reference.sequence_no!==expected.sequence_no || actual.version.payload.definition_key!==expected.definition_key || actual.version.contract_sha256!==expected.contract_sha256) throw Error('部署计划活动引用与版本不同');
   }
-  const plan=readFileSync(o.planPath); const steps=readFileSync(o.stepSpecPath); JSON.parse(steps);
   const files={'workflow.plan':digest(plan),'step-dod.json':digest(steps)};
   for(const file of checked.values()) files[`runtime/${file.deployed_path}`]=file.actual_content_sha256;
-  const body={schema_version:1,workflow_version:version,activities,deployment:manifest,files};
+  const body={schema_version:1,workflow_version:version,activities,deployment:manifest,files,...(o.runIdentity?{run_identity:o.runIdentity}:{})};
+  if(o.runIdentity)assertRunIdentity(body,o.runIdentity);
   const snapshot={...body,snapshot_sha256:digest(body)};
   const staging=`${o.runDir}.freeze-${randomUUID()}`; mkdirSync(staging,{recursive:true,mode:0o700});
   try {

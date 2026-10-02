@@ -252,6 +252,9 @@ write_stage(){
 
 cmd="${1:-}"; shift || true
 case "$cmd" in
+  locate-run)
+    "$WFR_NODE" "$WFR_RUNTIME_MJS" locate-run "$@" || exit 1
+    exit 0;;
   prepare)
     export BRAIN_URL BRAIN_INTERNAL_TOKEN
     "$WFR_NODE" "$WFR_RUNTIME_MJS" prepare || exit 1
