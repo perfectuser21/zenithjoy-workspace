@@ -67,6 +67,16 @@ const sshLog = (home) => read(join(home, "ssh-argv.log"));
 const runLog = (home) => read(join(home, "log"));
 const rmLines = (home) => sshLog(home).split("\n").filter((l) => /cron rm/.test(l));
 
+test("停看门狗先暂停循环：杀sleep不能抢先唤醒一轮重拉", { skip: SKIP }, () => {
+  const { home, env } = setup({ stub: ONLY_OTHER });
+  env.ESCORT_WATCH_INTERVAL = '60';
+  const result = lib(`ESCORT_ID=${MINE};
+    pkill(){ command pkill "$@"; /bin/sleep 0.3; }
+    escort_watch_start; /bin/sleep 0.2; escort_watch_stop; print stopped`, env);
+  assert.match(result.stdout, /stopped/);
+  assert.doesNotMatch(sshLog(home), /cron add/, 'stop不能变成最后一次重拉');
+});
+
 test("Brain 接班已存在唯一同名陪跑：本地看门狗收养新 ID，不再拉第三个", { skip: SKIP }, () => {
   const { home, env } = setup({ stub: jobs([{ id: NEW_ID, name: WANT }, { id: OTHER, name: "other-run" }]) });
   const result = lib(`ESCORT_ID=${MINE}; print -r -- $ESCORT_ID > $ESCORT_ID_FILE; escort_watch_tick`, env);

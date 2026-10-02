@@ -86,6 +86,17 @@ function fakeWr(dir) {
   return { p, count: () => (existsSync(log) ? readFileSync(log, 'utf8').split('\n').filter((l) => l.startsWith('heartbeat SER1')).length : 0) };
 }
 
+test('停止心跳先暂停循环：杀sleep与终止父循环之间不能抢发下一次', { skip: SKIP_ZSH }, async () => {
+  const f = fakeWr(makeTmp());
+  const result = await runBash(`export WALL_REPORT=${q(f.p)} LEASE_HB_INTERVAL=60;
+    HARVEST_CRON_LIB=1 source ${q(HC)};
+    pkill(){ command pkill "$@"; /bin/sleep 0.3; }
+    lease_heartbeat_start SER1; /bin/sleep 0.2; lease_heartbeat_stop; echo stopped`,
+    process.env, { bash: ZSH, timeoutMs: 10000 });
+  assert.match(result.stdout, /stopped/);
+  assert.equal(f.count(), 0, '提前终止sleep不能产生新心跳');
+});
+
 test('harvest-cron lease_heartbeat_start/stop：按间隔发 heartbeat，stop 后不再发', { skip: SKIP_ZSH }, async () => {
   const dir = makeTmp();
   const f = fakeWr(dir);
