@@ -116,6 +116,16 @@ test("执行器自拉陪跑也先通过 SSH 读取网关 SOP", { skip: SKIP }, (
   assert.match(sshLog(home), /--message '先执行 ssh -o BatchMode=yes -o ConnectTimeout=10 administrator@100\.71\.151\.105 cat \/Users\/administrator\/\.openclaw\/cmdr-escort\.txt/);
 });
 
+test('执行器重拉相同能力的陪跑时要求读取专属skill', { skip: SKIP }, () => {
+  const { home, env } = setup();
+  const result = lib('WF_ARG_CAP=keyword_acquisition; escort_add', env);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(sshLog(home), /wf-keyword_acquisition\/SKILL.md/);
+  assert.match(sshLog(home), /专属skill/);
+  assert.match(sshLog(home), /心跳JSON必须带cap=keyword_acquisition/);
+  for (const file of ['COMMANDER.md', 'cmdr-escort.txt']) assert.match(readFileSync(join(SRC, file), 'utf8'), /"cap":"<能力>"/);
+});
+
 test("宪法与 SOP 明确网关读写路由，心跳不能在跑场本机访问 localhost", () => {
   const law = readFileSync(join(SRC, "COMMANDER.md"), "utf8");
   const sop = readFileSync(join(SRC, "cmdr-escort.txt"), "utf8");

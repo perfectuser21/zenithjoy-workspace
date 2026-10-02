@@ -42,6 +42,11 @@ exit 0`;
 function setup(stub = {}) {
   const home = mkdtempSync(join(tmpdir(), "wflaunch-"));
   const bin = join(home, "bin"); mkdirSync(bin);
+  const skillRoot = join(home, 'skills'); mkdirSync(skillRoot);
+  for (const cap of ['keyword_acquisition', 'benchmark_link_acquisition']) {
+    mkdirSync(join(skillRoot, 'wf-' + cap));
+    writeFileSync(join(skillRoot, 'wf-' + cap, 'SKILL.md'), `---\nname: wf-${cap}\ncommander_capability: ${cap}\n---\n契约生成的陪跑指令\n`);
+  }
   for (const [n, body] of [["ssh", FAKE_SSH], ["openclaw", FAKE_OC], ["curl", FAKE_CURL]]) {
     const p = join(bin, n); writeFileSync(p, body); chmodSync(p, 0o755);
   }
@@ -50,12 +55,27 @@ function setup(stub = {}) {
     WF_START_WAIT: "0", WF_ESCORT_RETRY_SLEEP: "0",
     STUB_DEPLOYED: stub.deployed ?? "yes", STUB_BUSY: stub.busy ?? "no", STUB_STARTED: stub.started ?? "yes",
     STUB_BRAIN: stub.brain ?? "up", WF_BRAIN_URL: "http://brain.test:5221",
+    WF_COMMANDER_SKILL_ROOT: skillRoot,
   };
   return { home, env };
 }
 const run = (args, env) => spawnSync("bash", [LAUNCH, ...args], { encoding: "utf8", env });
 const read = (home, f) => (existsSync(join(home, f)) ? readFileSync(join(home, f), "utf8") : "");
 const BASE = ["keyword_acquisition", "xian-m4", "legacy", "ANGYVB4402004137", "AI人工智能训练师"];
+
+test('专属skill缺失或能力不符时退4，不SSH、不登记escort；正常起跑打印并让陪跑读取同一skill', () => {
+  const missing = setup(); missing.env.WF_COMMANDER_SKILL_ROOT = join(missing.home, 'absent');
+  assert.equal(run(BASE, missing.env).status, 4);
+  assert.equal(read(missing.home, 'ssh-argv.log'), ''); assert.equal(read(missing.home, 'oc-argv.log'), '');
+  const wrong = setup();
+  writeFileSync(join(wrong.env.WF_COMMANDER_SKILL_ROOT, 'wf-keyword_acquisition', 'SKILL.md'), 'commander_capability: other\n');
+  assert.equal(run(BASE, wrong.env).status, 4);
+  const valid = setup(), r = run(BASE, valid.env);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /WF_COMMANDER_SKILL .*wf-keyword_acquisition\/SKILL.md/);
+  assert.match(r.stdout, /契约生成的陪跑指令/);
+  assert.match(read(valid.home, 'oc-argv.log'), /cat.*wf-keyword_acquisition\/SKILL.md/);
+});
 
 test("参数校验：未知 host / 非法 capability 直接退 2，不碰 ssh", () => {
   const { home, env } = setup();

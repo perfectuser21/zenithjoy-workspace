@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {"code":"screen_asleep","observed":"按本run调度单serial读取dumpsys power，Wakefulness=Dozing/Asleep，且同TAG仍持锁","permission":"automatic","action":"在调度指定执行机调用本run控制器 --profile <profile> wake，再 unlock；不重新启动执行器","verify":"同serial的Wakefulness=Awake，登录号仍符合调度单，心跳仍匹配同TAG；失败保留证据，不循环重试"},
+    {"code":"progress_stalled","observed":"同TAG当前活动超过契约预算，连续日志/活动回执无进展；不得只凭网关日志桥停更判定","permission":"automatic","action":"经网关到调度指定执行机 touch ~/wf-runs/<TAG>.stop 请求程序平滑收工；禁止kill或另起一批","verify":"程序产生同TAG partial/commander_stop终态，已采产物保留，清场与锁释放读回；未finalize保留陪跑"},
+    {"code":"account_mismatch","observed":"控制器读取登录号与调度单sender_id不符，不把昵称或OCR猜测当账号证据","permission":"ask","action":"不切换登录号、不继续采集；保留实际登录号核验工件，请求程序收工并报告账号不符","verify":"本run未采集/配送，程序终态与账号探针失败一致；不泄露凭据"},
+    {"code":"lock_busy","observed":"控制器lock-status读到owner不是本TAG，或lock-acquire拒绝","permission":"automatic","action":"退让且记录实际owner，不释放别人的锁、不清场、不换手机、不重复启动","verify":"他人锁owner不变，本run没有手机写操作；等待程序失败/退让回执"},
+    {"code":"return_to_home_failed","observed":"收尾桌面探针未通过，或前台未确认launcher；同时确认锁仍属于本run","permission":"automatic","action":"仅在仍持有本run锁时通过本run控制器 return-safe-desktop一次并读回；锁已释放/易主时只留证据，不再触碰手机","verify":"真实foreground读到设备默认launcher；否则将unknown/失败及锁状态写复盘，保留现场"},
+    {"code":"implementation_defect","observed":"实际退出码、异常栈或契约与产物矛盾指向代码问题，运输超时与业务失败分别记录","permission":"report_only","action":"写根因、源码/回执证据与修法；陪跑不得改代码、契约、配置或扩大活动预算","verify":"复盘含事实、证据、actor；不把单项读回成功记成整批成功"}
+  ]
+}

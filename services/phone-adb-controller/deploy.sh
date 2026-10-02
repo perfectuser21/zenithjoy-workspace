@@ -44,6 +44,14 @@ cd "$(dirname "$0")"
 D="."
 FAILED=0
 
+# 先在本机准备契约生成的专属skill；缺Cecelia生成器时在任何远端写入前拒绝部署。
+SKILL_BUILD_DIR=$(mktemp -d)
+trap 'rm -rf "$SKILL_BUILD_DIR"' EXIT
+for cap in keyword_acquisition benchmark_link_acquisition; do
+  node "$D/commander/build-workflow-skill.mjs" "$cap" --assembled \
+    "$D/commander/keyword-acquisition-sop.json" "$SKILL_BUILD_DIR/wf-$cap/SKILL.md"
+done
+
 # push_atomic <本地文件> <host> <远端目录(可含~)> <文件名> [x]
 #   先 scp 到同目录临时名,再远端 mv -f 换 inode;带第 5 参 x 时在 mv 之前先 chmod +x(不留"新文件无执行权限"的窗口)。
 push_atomic() {
@@ -288,6 +296,11 @@ done
 # Commander 入口(决策 7f842d12): 启动器落 mmv(openclaw CLI 在本机), skill 落 work-commander 工作区
 echo "=== [5/5] mmv Commander 入口(wf-launch/wf-status + skill workflow-commander + 身份文件) ==="
 ssh mmv "mkdir -p ~/.openclaw/commander ~/openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander"
+for cap in keyword_acquisition benchmark_link_acquisition; do
+  ssh mmv "mkdir -p ~/openclaw-root/workspaces-root/clawd-work-commander/skills/wf-$cap"
+  push_atomic "$SKILL_BUILD_DIR/wf-$cap/SKILL.md" mmv \
+    "~/openclaw-root/workspaces-root/clawd-work-commander/skills/wf-$cap" SKILL.md
+done
 for f in wf-launch.sh wf-status.sh; do
   if [[ ! -s "$D/commander/$f" ]]; then echo "  ⚠️ 仓库里缺失: commander/$f"; FAILED=1; continue; fi
   push_atomic "$D/commander/$f" mmv "~/.openclaw/commander" "$f" x

@@ -37,7 +37,7 @@
    在网关读取 ~/.openclaw/commander-aftercare/escort-<机器>-<TAG>.request.json，只接受本 TAG、机器、唯一 cron id 和 finalized:true 的请求。读回终态、清场/锁释放、产物与异常处置，完成必要的补落池/复盘后，原子写同目录 escort-<机器>-<TAG>.json：schema_version:1、run_tag、host、escort_id、nonce（原样取请求）、finalize_verified:true、status:"completed"、actor（真实执行者）、facts（非空事实数组）、evidence（非空真实证据引用数组）。缺任一证据就不写 completed。
    禁止 openclaw cron rm 自删，即使 finalize 已成功。末轮写完回执并正常结束，Cecelia 程序确认 Brain 留痕与 tick 退出后才注销。日志读不到 / 日志停滞 / 日志桥落后 / 刚 touch stop ≠ 收工；协调器缺失、记账失败或超时保留现场并记录。程序注销前用 cron list --json 核完整 name 与 id。
 5) 心跳(0930 决策 3c98fb36 阶段1,任务 17ea4536: Brain 看门狗只认心跳,不认"登记过"): 每轮末尾——不论正常轮、疏通轮、升级轮——都用 exec 在网关跑一次
-   curl -s -m 8 -X POST localhost:5221/api/brain/commander-heartbeat -H 'Content-Type: application/json' -d '{"tag":"<TAG>","host":"<机器>","serial":"<serial>","escort_name":"escort-<机器>-<TAG>","escort_id":"<你的 cron id>"}'
+   curl -s -m 8 -X POST localhost:5221/api/brain/commander-heartbeat -H 'Content-Type: application/json' -d '{"tag":"<TAG>","host":"<机器>","serial":"<serial>","profile":"<profile>","cap":"<能力>","escort_name":"escort-<机器>-<TAG>","escort_id":"<你的 cron id>"}'
    escort_id 首轮用 exec 跑 `openclaw cron list --json` 按 escort 名整串全等取到后记住(跨轮记忆),取不到就不带这个键。
    回 200 matched:true 正常;回 202/连不上只在报告里记一句"心跳未落",不升级、不停看护、不注销自己。
    心跳超过 15 分钟没到 Brain,Brain 会同名重拉一个你(接班者只读账本与日志接上现场,不重新发起 run);同一批接班 3 次仍失联 → Bark 主理人。

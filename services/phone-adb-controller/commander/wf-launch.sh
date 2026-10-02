@@ -20,6 +20,7 @@ START_WAIT="${WF_START_WAIT:-8}"
 # Brain 心跳/起跑登记入口（决策 3c98fb36 阶段1，任务 17ea4536）：网关 localhost:5221 是 socat 到 us-vps Brain 的代理
 BRAIN_URL="${WF_BRAIN_URL:-http://localhost:5221}"
 ESCORT_GATEWAY="${WF_ESCORT_GATEWAY:-administrator@100.71.151.105}"
+SKILL_ROOT="${WF_COMMANDER_SKILL_ROOT:-/Users/administrator/openclaw-root/workspaces-root/clawd-work-commander/skills}"
 
 die(){ echo "wf-launch: $2" >&2; exit "$1"; }
 # 远端 shell 单引号包裹（bash 3.2 的 printf %q 会把中文拆成八进制，不用它）
@@ -44,6 +45,11 @@ done
 [[ "$PROFILE" =~ ^[A-Za-z0-9_.-]+$ ]] || die 2 "profile 非法: $PROFILE"
 [[ "$SERIAL" =~ ^[A-Za-z0-9]+$ ]] || die 2 "serial 非法: $SERIAL"
 [[ "$N" =~ ^[0-9]+$ && "$PUSH" =~ ^[01]$ ]] || die 2 "--n 须为整数、--push 须为 0/1"
+WORKFLOW_SKILL="$SKILL_ROOT/wf-$CAP/SKILL.md"
+[[ -r "$WORKFLOW_SKILL" ]] && grep -qx "commander_capability: $CAP" "$WORKFLOW_SKILL" \
+  || die 4 "缺少或不匹配专属陪跑 skill: ${WORKFLOW_SKILL}（请从已批准契约生成并部署）"
+echo "WF_COMMANDER_SKILL path=$WORKFLOW_SKILL"
+cat "$WORKFLOW_SKILL"
 
 # 网关 MMV 系统时区是美西(us-mac 约定 LA),TAG/起跑时间一律按北京时间,与执行机日志、采收时窗对得上
 bj(){ TZ=Asia/Shanghai date "$@"; }
@@ -70,7 +76,7 @@ fi
 ESCORT_ID=""
 GATEWAY_EXEC="ssh -o BatchMode=yes -o ConnectTimeout=10 $ESCORT_GATEWAY"
 HEARTBEAT_CMD="curl -fsS --max-time 8 -X POST $BRAIN_URL/api/brain/commander-heartbeat -H $(sq 'Content-Type: application/json') -d $(sq "{\"tag\":\"$TAG\",\"host\":\"$HOST\",\"serial\":\"$SERIAL\",\"escort_name\":\"escort-$HOST-$TAG\"}")"
-ESCORT_MSG="先执行 $GATEWAY_EXEC $(sq "cat $(sq "$ESCORT_SOP")") 读取网关 SOP 并严格遵守辅佐三原则。你可能落在任意跑场机；SOP、日志、findings、openclaw CLI 均在网关，相关读写经 $GATEWAY_EXEC 执行，不能把本机文件不存在当成网关文件不存在。本轮由 Commander 发起: cap=$CAP TAG=$TAG 机器=$HOST serial=$SERIAL profile=$PROFILE 起跑=$(bj +%H:%M) 日志=/Users/administrator/.openclaw/m4-logs/${HOST}-live.log escort名=escort-$HOST-${TAG}。每轮末尾必须发心跳(SOP 第5条): $GATEWAY_EXEC $(sq "$HEARTBEAT_CMD")"
+ESCORT_MSG="先执行 $GATEWAY_EXEC $(sq "cat $(sq "$WORKFLOW_SKILL") $(sq "$ESCORT_SOP")") 读取本workflow专属skill与网关 SOP 并严格遵守辅佐三原则。专属skill读不到或能力不符，记缺证据并保留现场，不套用别的workflow。你可能落在任意跑场机；SOP、日志、findings、openclaw CLI 均在网关，相关读写经 $GATEWAY_EXEC 执行，不能把本机文件不存在当成网关文件不存在。本轮由 Commander 发起: cap=$CAP TAG=$TAG 机器=$HOST serial=$SERIAL profile=$PROFILE 起跑=$(bj +%H:%M) 日志=/Users/administrator/.openclaw/m4-logs/${HOST}-live.log escort名=escort-$HOST-${TAG}。每轮末尾必须发心跳(SOP 第5条): $GATEWAY_EXEC $(sq "$HEARTBEAT_CMD")"
 # 起跑登记（best-effort，Brain 单此刻还没建）：escort id 落 Brain working_memory commander_launch:<TAG>，
 # 心跳/看门狗/lost 善后随后合并进单。失败只记 stderr，绝不阻塞起跑。
 brain_launch_register(){

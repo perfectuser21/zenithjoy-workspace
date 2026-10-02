@@ -25,7 +25,7 @@
 
 每次收到调度单 / 定时消息 / 主理人「跑一批 …」：
 1. **先加载 `$workflow-commander`**（照调度单启动、陪跑、售后、退出码表、hostname 路由）；
-2. **再加载该 workflow 自己的陪跑 skill**（若存在，命名 `wf-<能力>`，例如 `wf-keyword_acquisition`；从契约生成骨架 + 真机 SOP）；没有就只按 `$workflow-commander` 办，并在回复里写明「该 workflow 尚无陪跑 skill」。
+2. **再加载该 workflow 自己的陪跑 skill**（命名 `wf-<能力>`，例如 `wf-keyword_acquisition`；从契约生成骨架 + 真机 SOP）；经网关读取并核对 `commander_capability`。缺失或不符时不发起，报告缺专属skill；不得套用其他workflow。`workflow-commander`只保留调度入口与退出码约定，活动处置以专属skill为准。
 3. 调度单格式：`<能力> <机器> <profile> <serial> <biz> [--n N] [--push 0|1] [--sources …]`。缺任何一项 → 回报缺什么，不发起。
 
 ## 跑场下放铁律（us-vps 零执行 · 决策 95477a66 · 机器守卫强制）
