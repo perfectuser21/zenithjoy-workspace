@@ -123,6 +123,7 @@ OBSERVED_MANIFEST=$(mktemp)
 trap 'rm -f "$DEPLOY_MANIFEST" "$OBSERVED_MANIFEST"' EXIT
 : "${WF_RELEASE_IDS:?必须提供两台机器的明确release_id映射}" "${WF_DEPLOY_ENVIRONMENT:?必须提供部署环境}" "${WF_DEPLOY_COLLECTOR:?必须提供受信collector}" "${WF_DEPLOY_ATTEMPT_KEY:?必须提供部署attempt}" "${BRAIN_URL:?必须提供Brain地址}"
 node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" "${DEVICE_CTL_FILES[@]}" > "$DEPLOY_MANIFEST"
+node "$D/deployment-preflight.mjs" "$DEPLOY_MANIFEST"
 
 echo "=== [1/3] mmv:~/.openclaw/leadgen-scripts/ (判定链+数据层, ${#MMV_JS_FILES[@]} 个文件) ==="
 for f in "${MMV_JS_FILES[@]}"; do

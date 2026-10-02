@@ -100,3 +100,12 @@ test('主线部署消费已成功的Pilot release verification同run证据且凭
  assert.doesNotMatch(text,/secrets\.CECELIA_INTERNAL_TOKEN/,'Brain token必须留在mmv已有镜像');
  assert.ok(text.indexOf('phone-deploy-evidence.mjs')<text.indexOf('uses: tailscale/github-action'),'证据身份先于目标网络操作');
 });
+
+test('控制SSH运输只携带固定SHA与编码JSON，远端仍拒绝旧main',()=>{
+ const text=fs.readFileSync(WORKFLOW_PATH,'utf8');
+ assert.match(text,/DEPLOY_SHA: \$\{\{ steps\.evidence\.outputs\.sha \}\}/);
+ assert.match(text,/CI_BUNDLE_B64='%s'/);assert.match(text,/Buffer\.from\(fs\.readFileSync\(0,"utf8"\),"base64"\)/);
+ assert.match(text,/rev-parse origin\/main\)" != "\$DEPLOY_SHA"/);
+ assert.match(text,/bash -s -- "\$DEPLOY_SHA" "\$IMPLEMENTATION_RUN_ID" "\$GITHUB_RUN_ID" "\$GITHUB_RUN_ATTEMPT"/);
+ assert.doesNotMatch(text,/upload-artifact|CECELIA_INTERNAL_TOKEN=/);
+});
