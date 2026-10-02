@@ -19,7 +19,7 @@
 import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadContractsFromDisk, assemble } from './contracts-lib.mjs';
+import { loadContractsFromDisk, assemble, contractsDigest, contractHash } from './contracts-lib.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 export const PLANS_DIR = 'services/phone-adb-controller/plans';
@@ -40,6 +40,9 @@ export function planFor(ctx, capId, { allowMissing = false } = {}) {
   if (!r.ok) return { ok: false, errors: r.errors, activities: r.activities };
   const acts = r.activities;
   const errors = [];
+  const doc = ctx.contracts[capId];
+  if (!/^[a-z][a-z0-9_]+$/.test(doc.brain_workflow_key || '')) errors.push(`${capId}: 缺有效 brain_workflow_key`);
+  if (!/^[\w.-]+\/[\w.-]+$/.test(doc.source_repo || '')) errors.push(`${capId}: 缺有效 source_repo`);
   for (const a of acts) if (!a.runtime) errors.push(`${capId}.${a.key}: 缺 runtime（无实现绑定不得跑）`);
   const missing = acts.flatMap((a) => (a.steps || []).filter((s) => s.implementation?.status === 'missing').map((s) => `${a.key}.${s.key}`));
   if (missing.length && !allowMissing) errors.push(`${capId}: 步骤 implementation=missing 不得跑（无实现不得跑，真机调试加 --allow-missing）：${missing.join(', ')}`);
@@ -54,6 +57,15 @@ export function planFor(ctx, capId, { allowMissing = false } = {}) {
   const env = {
     WF_CAP: capId,
     WF_WORKFLOW: ctx.contracts[capId].workflow,
+    WF_BRAIN_WORKFLOW: doc.brain_workflow_key,
+    WF_SOURCE_REPO: doc.source_repo,
+    WF_CONTRACT_SHA256: contractsDigest(ctx).capabilities[capId].sha256,
+    WF_CONTRACT_RAW_SHA256: contractHash(doc),
+    WF_ACTIVITY_REFS: JSON.stringify(acts.map(a => {
+      const { from, ...contract } = a;
+      return { slot_key: a.key, sequence_no: a.order, definition_key: `${from}.${a.key}`, source_capability: from, contract_sha256: contractHash(contract) };
+    })),
+    WF_STEP_SPEC: `plans/${capId}.steps.json`,
     WF_STAGES: stagesOf(acts, kinds[0]),
     WF_SOURCE_KIND: kinds[0],
     WF_DISCOVER_CMD: src.runtime.entry,

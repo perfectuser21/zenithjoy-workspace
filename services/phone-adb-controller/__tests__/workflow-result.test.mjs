@@ -54,11 +54,11 @@ test("逐词 collection 回执分开记账：首词 blocked 不吞成功词，�
     wfr(d, extra, "stage", "collection", "completed", "2", "采集完成", ev, metrics(2), "企业AI办公");
     wfr(d, extra, "stage", "collection", "completed", "2", "采集完成", ev, metrics(2), "企业AI办公");
     const bodies = curlCalls(b.calls).map((args) => JSON.parse(argAfter(args, "-d")));
-    assert.equal(bodies.length, 3);
+    assert.equal(bodies.length, 2, "ack后同一实例不重复POST");
     assert.equal(bodies[0].result.stage_status, "blocked");
     assert.equal(bodies[1].result.stage_status, "completed");
     assert.notEqual(bodies[0].run_id, bodies[1].run_id, "不同活动实例必须各自触发 run.finished");
-    assert.equal(bodies[1].run_id, bodies[2].run_id, "同一实例重发不能制造重复运行");
+    assert.equal(new Set(bodies.map(b=>b.run_id)).size, 2, "同一实例重发不能制造重复运行");
     assert.equal(bodies[1].run_id, "social-keyword-leadgen-crontab-auto10010315__a1.collection.2");
   } finally {
     rmSync(d, { recursive: true, force: true });

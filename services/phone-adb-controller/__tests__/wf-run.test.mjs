@@ -1,3 +1,4 @@
+import { seedRunner } from './fixtures/frozen-runtime.mjs';
 // wf-run.sh —— 契约组装执行的通用驱动（决策 7f842d12：Commander 当入口 + 契约组装执行）。
 // harvest-cron.sh 已退成薄壳 `exec wf-run.sh keyword_acquisition "$@"`（现网 crontab 一字不改），
 // 计划由 scripts/product-map/wf-plan.mjs 从契约生成、提交在 plans/<能力>.plan。
@@ -35,11 +36,11 @@ function setup() {
   const bin = join(home, ".local", "bin");
   mkdirSync(bin, { recursive: true });
   for (const [n, body] of [["ssh", FAKE_SSH], ["adb", FAKE_ADB]]) { writeFileSync(join(bin, n), body); chmodSync(join(bin, n), 0o755); }
-  const env = { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`, WALL_REPORT: join(home, "no-wall"), WFR_DISABLED: "1", WF_PLAN_DIR: PLANS };
+  const env = { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`, WALL_REPORT: join(home, "no-wall"), WFR_DISABLED: "1", WFR: join(SRC,"workflow-result.sh"), WFR_NODE: process.execPath, WF_PLAN_DIR: PLANS };
   return { home, env };
 }
 const read = (p) => (existsSync(p) ? readFileSync(p, "utf8") : "");
-const run = (script, args, env) => spawnSync(ZSH, [script, ...args], { encoding: "utf8", env, timeout: 30000 });
+const run = (script, args, env) => { if (existsSync(join(env.WF_PLAN_DIR,"keyword_acquisition.plan")) && !/^WF_MISSING='[^']+'/m.test(read(join(env.WF_PLAN_DIR,`${args[0]}.plan`)))) seedRunner(env,args); return spawnSync(ZSH, [script, ...args], { encoding: "utf8", env, timeout: 30000 }); };
 const lib = (cmd, env) => spawnSync(ZSH, ["-c", `WF_RUN_LIB=1 source ${WR}; ${cmd}`], { encoding: "utf8", env });
 
 test("计划文件缺失 → exit 1 拒跑,不拉 escort", { skip: SKIP }, () => {
@@ -177,4 +178,35 @@ test("wf_load_plan + wf_discover_cmd: 计划里的发现入口解析到 wf-run.s
   assert.match(b.stdout, /rc=2/);
   const bm = lib(`WF_ALLOW_MISSING=1; wf_load_plan benchmark_link_acquisition; echo rc=$?`, { ...env, WF_PLAN_DIR: missingPlanDir(home) });
   assert.match(bm.stdout, /rc=0/);
+});
+
+test('自动TAG冻结后跨分钟exec：继续原run，不重新生成TAG或创建第二个run', { skip: SKIP },()=>{
+ const {home,env}=setup();
+ const date=join(home,'.local/bin/date');
+ writeFileSync(date,`#!/bin/sh
+if [ "$1" = '+%m%d%H%M' ]; then
+  if [ -f "$HOME/tag-generated" ]; then echo 10021900; else touch "$HOME/tag-generated"; echo 10021859; fi
+  exit 0
+fi
+exec /bin/date "$@"
+`,{mode:0o755});
+ seedRunner(env,['keyword_acquisition','--tag','auto10021859']);
+ const r=spawnSync(ZSH,[WR,'keyword_acquisition','p1','SER1','biz','--commander','cmdr-abc'],{encoding:'utf8',env,timeout:30000});
+ assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/WF_RUN_STARTED tag=auto10021859 /);
+ assert.equal(existsSync(join(home,'.config/zenithjoy/ledger/social-keyword-leadgen-crontab-auto10021900')),false);
+});
+test('同cap/tag续跑先用已登记运行快照，全局最新plan缺失不得阻断旧run', { skip: SKIP },()=>{
+ const {home,env}=setup();const args=['keyword_acquisition','p1','SER1','biz','--tag','resume-old','--commander','cmdr-abc'];
+ seedRunner(env,args);
+ env.WF_PLAN_DIR=join(home,'new-deployment-plans');mkdirSync(env.WF_PLAN_DIR);
+ const r=spawnSync(ZSH,[WR,...args],{encoding:'utf8',env,timeout:30000});
+ assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/WF_RUN_STARTED tag=resume-old /);
+});
+test('同cap/tag但profile或设备不符：明确拒绝，不能借索引续错run', { skip: SKIP },()=>{
+ const {home,env}=setup();seedRunner(env,['keyword_acquisition','p1','SER1','biz','--tag','identity']);
+ for(const pair of [['p2','SER1'],['p1','SER2']]){
+  const r=spawnSync(ZSH,[WR,'keyword_acquisition',...pair,'biz','--tag','identity'],{encoding:'utf8',env,timeout:30000});
+  assert.equal(r.status,1);assert.match(r.stderr,/运行身份不匹配/);assert.doesNotMatch(r.stdout,/WF_RUN_STARTED/);
+ }
+ assert.equal(existsSync(join(home,'adb-argv.log')),false);
 });

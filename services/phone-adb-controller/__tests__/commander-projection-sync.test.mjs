@@ -1,3 +1,4 @@
+import { seedRunner } from './fixtures/frozen-runtime.mjs';
 // Commander 投影与三档权限对齐 + 平滑收工正规入口（Brain 任务 2fc3b6fc，决策 3c98fb36 阶段 2 补 / 018e4e84 同权 / ce4849e0）。
 // #2043 只把真身 COMMANDER.md 改成三档（自动做 / Bark 请示 / 只报不做），三份投影（escort SOP / stream 哨兵 SOP / 分身唤起词）
 // 仍写「无杀权 / 绝不终止 run」，escort、哨兵、分身照旧宪法行事；而「平滑收工」在真身里只有定义没有入口——Commander 想停只能
@@ -292,6 +293,7 @@ function setupE2E(tag) {
 test("wf-run 假机整链：Commander touch ~/wf-runs/<TAG>.stop → 第 2 个词不开、已采落池、锁 free、账本 final=partial reason=commander_stop、escort 注销、stop 文件收工后清除", { skip: SKIP_E2E }, () => {
   const TAG = "cmd09301800";
   const { home, env } = setupE2E(TAG);
+  seedRunner(env,["keyword_acquisition","--tag",TAG]);
   const r = spawnSync(ZSH, [join(SRC, "wf-run.sh"), "keyword_acquisition", "p1", "SER1", "biz", "2", "1", "--commander", "cmdr-abc", "--tag", TAG], { encoding: "utf8", env, timeout: 90000 });
   assert.notEqual(r.status, null, "wf-run 90 秒内没退出");
   assert.equal(r.status, 0, r.stderr.slice(-3000));
@@ -324,7 +326,7 @@ test("wf-run.sh 源码接线：起跑 export WF_STOP_FILE 并清残留；command
   assert.match(src, /rm -f "\$WF_STOP_FILE"/, "起跑清残留 / 收工清除");
   assert.match(src, /WFR_FINAL_REASON=\$?\{?B2_STOP_REASON|WFR_FINAL_REASON="\$B2_STOP_REASON"/, "终态原因取 batch2 报的 STOP_REASON（deadline / commander_stop 同路径）");
   for (const f of ["batch2.sh", "harvest-keyword.sh"]) {
-    const s = read(f);
+    const s = read(f) + (f === "harvest-keyword.sh" ? read("harvest-keyword-lib.sh") : "");
     assert.match(s, /wf_stop_requested/, `${f} 必须在边界判 stop 文件`);
     assert.match(s, /wf_stop_requested\(\)\{ return 1 \}/, `${f} 旧部署缺库时的兜底桩必须恒不停`);
   }

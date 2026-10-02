@@ -193,10 +193,13 @@ export function validateContracts(ctx) {
 
 export function stepDodSpec(ctx, capId) {
   const doc = ctx.contracts[capId];
+  const assembly = assemble(ctx, capId);
+  if (!assembly.ok) throw new Error(assembly.errors.join('\n'));
   const steps = [];
-  for (const a of [...doc.activities].filter((x) => !x.ref).sort((x, y) => x.order - y.order)) {
+  for (const a of assembly.activities) {
     for (const s of [...a.steps].sort((x, y) => x.order - y.order)) {
-      const e = { key: `${capId}.${a.key}.${s.key}`, activity: a.key, at: s.dod.at || a.key, mode: s.dod.mode, readback: s.dod.readback };
+      const e = { key: `${a.from}.${a.key}.${s.key}`, activity: a.key, at: s.dod.at || a.key, mode: s.dod.mode, readback: s.dod.readback,
+        usage: { workflow_key: doc.brain_workflow_key, slot_key: a.key, sequence_no: a.order } };
       if (s.dod.reason) e.reason = s.dod.reason;
       steps.push(e);
     }
@@ -204,6 +207,7 @@ export function stepDodSpec(ctx, capId) {
   return {
     version: 1,
     capability: capId,
+    brain_workflow_key: doc.brain_workflow_key,
     contract_sha256: contractsDigest(ctx).capabilities[capId].sha256,
     promotion: doc.dod_promotion || { min_consecutive_pass: 20 },
     steps,
@@ -236,7 +240,8 @@ function canonical(v) {
   if (v && typeof v === 'object') return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(',')}}`;
   return JSON.stringify(v);
 }
-const sha = (v) => createHash('sha256').update(canonical(v)).digest('hex');
+export const contractHash = (v) => createHash('sha256').update(canonical(v)).digest('hex');
+const sha = contractHash;
 
 export function contractsDigest(ctx) {
   const capabilities = {};

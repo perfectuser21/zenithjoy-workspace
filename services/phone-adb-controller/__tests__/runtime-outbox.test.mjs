@@ -1,0 +1,26 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { enqueue, flush, occurrence } from '../runtime-outbox.mjs';
+test('网络前落固定body，断网/进程重启后同occurrence重传；ack才sent，409blocked',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'outbox-')); const first=occurrence(dir,'a1.collection.1',true);
+  const body=[{run_id:'run',occurrence_key:first.key,evidence:{version:'v1'}}];
+  const event=enqueue(dir,{key:first.key,endpoint:'http://localhost/spans',body});
+  await flush(dir,{send:async(record)=>{assert.equal(JSON.parse(readFileSync(join(dir,'outbox',`${event.event_id}.json`))).state,'pending');throw Error('offline');}});
+  const delivered=[]; await flush(dir,{send:async(record)=>{delivered.push(record);return 200;}});
+  assert.deepEqual(delivered[0].body,body); assert.equal(delivered[0].event_id,event.event_id);
+  assert.equal(occurrence(dir,'a1.collection.1',false).key,first.key);
+  assert.notEqual(occurrence(dir,'a1.collection.1',true).key,first.key);
+  const next=enqueue(dir,{key:'conflict',endpoint:'http://localhost/spans',body});
+  await flush(dir,{send:async()=>409});
+  assert.equal(JSON.parse(readFileSync(join(dir,'outbox',`${next.event_id}.json`))).state,'blocked');
+  assert.ok(readdirSync(join(dir,'outbox')).every(name=>!readFileSync(join(dir,'outbox',name),'utf8').includes('Bearer')));
+});
+test('同occurrence重发保持首次endpoint/body，配置或重建payload变化不能另造事件',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'outbox-fixed-'));
+ const first=enqueue(dir,{key:'same',endpoint:'http://localhost/old',body:{value:1}});
+ const second=enqueue(dir,{key:'same',endpoint:'http://localhost/new',body:{value:2}});
+ assert.deepEqual(second,first);assert.equal(readdirSync(join(dir,'outbox')).length,1);
+});

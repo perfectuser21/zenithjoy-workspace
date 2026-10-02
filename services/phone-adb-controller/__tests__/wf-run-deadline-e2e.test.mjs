@@ -1,3 +1,4 @@
+import { seedRunner } from './fixtures/frozen-runtime.mjs';
 // 整批总时限验收(任务 7d150e33,PRD 阶段1「人为制造死循环,4h 内自收工,账本 final=partial,锁 free,线索已落池」):
 // 全假机整链——adb/ssh/scp/douyin-phone-adb/date 全假、harvest-keyword 假(采完第 1 个词就把时钟拨过总时限),
 // 账本(workflow-result.sh + ledger.mjs)真跑。断言: 进程 60 秒内自收工 rc=0;第 2 个词不开;已采 TSV 被 scp+落池+分拣;
@@ -94,6 +95,11 @@ const read = (p) => (existsSync(p) ? readFileSync(p, "utf8") : "");
 test("WF_RUN_MAX_SECONDS=60 假机整链: 60 秒内自收工、锁 free、已采 TSV 落池、账本 final=partial、escort 注销", { skip: SKIP }, () => {
   const { home, env } = setup();
   const t0 = Date.now();
+  seedRunner(env,["keyword_acquisition","--tag",env.FAKE_TAG]);
+  // 模拟起跑快照之后全局部署替换：真正跑到的batch2/harvest必须仍是运行目录副本。
+  writeFileSync(env.HARVEST_KEYWORD, '#!/bin/sh\necho changed > "$HOME/global-runtime-called"\nexit 1\n');
+  env.BATCH2=join(home,'changed-batch2.sh');
+  writeFileSync(env.BATCH2,'#!/bin/sh\necho changed > "$HOME/global-runtime-called"\nexit 1\n',{mode:0o755});
   const r = spawnSync(ZSH, [WR, "keyword_acquisition", "p1", "SER1", "biz", "2", "1", "--commander", "cmdr-abc", "--tag", "cmd09301400"], { encoding: "utf8", env, timeout: 90000 });
   const elapsed = Date.now() - t0;
   assert.notEqual(r.status, null, "wf-run 90 秒内没退出");
@@ -101,6 +107,8 @@ test("WF_RUN_MAX_SECONDS=60 假机整链: 60 秒内自收工、锁 free、已采
   assert.ok(elapsed < 60000, `应在 60 秒内自收工,实际 ${elapsed}ms`);
   assert.match(r.stdout, /^WF_RUN_STARTED tag=cmd09301400 cap=keyword_acquisition serial=SER1$/m);
   const log = read(join(home, "harvest-cron.log"));
+  assert.equal(existsSync(join(home,"global-runtime-called")),false,"运行与续跑不得调用被替换的全局实现");
+  assert.match(log,/ledger\/social-keyword-leadgen-crontab-[^/]+\/runtime\/discover-keyword\.sh/,"实际发现入口必须来自冻结部署目录");
   assert.match(log, /总时限=60s/, "起跑要记总时限");
   assert.equal(read(join(home, "hk.log")).trim(), "词一", "到点后第 2 个词不开");
   assert.match(read(join(home, "night-cmd09301400.log")), /整批总时限到\(60s\),采收收工\(词2: 词二 起未开跑\)/);
@@ -130,10 +138,17 @@ test("WF_RUN_MAX_SECONDS=60 假机整链: 60 秒内自收工、锁 free、已采
 test("未到点(时钟不动)→ 两个词全跑,账本 final=completed", { skip: SKIP }, () => {
   const { home, env } = setup();
   env.NOW_AFTER = "1001"; env.FAKE_TAG = "cmd09301401";
+  seedRunner(env,["keyword_acquisition","--tag",env.FAKE_TAG]);
+  // 模拟起跑快照之后全局部署替换：真正跑到的batch2/harvest必须仍是运行目录副本。
+  writeFileSync(env.HARVEST_KEYWORD, '#!/bin/sh\necho changed > "$HOME/global-runtime-called"\nexit 1\n');
+  env.BATCH2=join(home,'changed-batch2.sh');
+  writeFileSync(env.BATCH2,'#!/bin/sh\necho changed > "$HOME/global-runtime-called"\nexit 1\n',{mode:0o755});
   const r = spawnSync(ZSH, [WR, "keyword_acquisition", "p1", "SER1", "biz", "2", "1", "--commander", "cmdr-abc", "--tag", "cmd09301401"], { encoding: "utf8", env, timeout: 90000 });
   assert.equal(r.status, 0, r.stderr.slice(-3000));
   assert.deepEqual(read(join(home, "hk.log")).trim().split("\n"), ["词一", "词二"]);
   const log = read(join(home, "harvest-cron.log"));
+  assert.equal(existsSync(join(home,"global-runtime-called")),false,"运行与续跑不得调用被替换的全局实现");
+  assert.match(log,/ledger\/social-keyword-leadgen-crontab-[^/]+\/runtime\/discover-keyword\.sh/,"实际发现入口必须来自冻结部署目录");
   assert.doesNotMatch(log, /总时限到/);
   assert.match(log, /账本finalize: ok=1 final=completed/);
   assert.ok(!existsSync(join(home, "lock")));
