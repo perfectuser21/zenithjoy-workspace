@@ -1881,7 +1881,7 @@ read_commenter_identity() {
   [[ "$nickname_b64" == [A-Za-z0-9+/=]## ]] || die "commenter nickname must be standard base64"
   (( ${#nickname_b64} <= 800 )) || die "commenter nickname base64 is too long"
   require_evidence_id "$evidence_id"
-  expected_nickname="$(print -n -- "$nickname_b64" | /usr/bin/base64 -D 2>/dev/null)" || die "commenter nickname base64 could not be decoded"
+  expected_nickname="$(print -n -- "$nickname_b64" | /usr/bin/base64 -d 2>/dev/null)" || die "commenter nickname base64 could not be decoded"
   [[ -n "$expected_nickname" && "$expected_nickname" != *$'\n'* && "$expected_nickname" != *$'\r'* ]] || die "commenter nickname must be one non-empty line"
   [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
   before_xml="$EVIDENCE_ROOT/${evidence_id}-comments.xml"
