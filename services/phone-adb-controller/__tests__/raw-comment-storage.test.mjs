@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { once } from 'node:events';
 
 const require = createRequire(import.meta.url);
 const load = () => require('../raw-comment-storage.js');
@@ -315,3 +317,59 @@ test('真实落池配送HTTP闭环：昵称/抖音号去重键trim一致并共�
   assert.equal(retry.metrics.duplicates_highlighted, 1);
   assert.equal(http.leads.get('lead-1').fields.重复命中次数, 3);
 });
+
+const secretCanary = 'credential-canary-raw-storage';
+const bodyCanary = 'response-body-canary-raw-storage';
+for (const scenario of [
+  { name: 'HTTP503', status: 503, body: { code: 999, msg: bodyCanary }, expected: { reason_code: 'raw_storage_http_failed', http_status: 503 } },
+  { name: 'API非零', status: 200, body: { code: 1254060, msg: bodyCanary }, expected: { reason_code: 'raw_storage_api_failed', http_status: 200, feishu_code: 1254060 } },
+  { name: '坏JSON', status: 200, body: bodyCanary, expected: { reason_code: 'raw_storage_response_invalid', http_status: 200 } },
+  { name: 'API非法码', status: 200, body: { code: bodyCanary, msg: bodyCanary }, expected: { reason_code: 'raw_storage_response_invalid', http_status: 200 } },
+]) {
+  test(`回环HTTP永久smoke：${scenario.name}真实适配器到pending证据只带安全诊断`, async () => {
+    let writes = 0;
+    const server = createServer((req, res) => {
+      res.statusCode = scenario.status;
+      res.setHeader('X-Private-Canary', secretCanary);
+      req.resume();
+      writes++;
+      res.end(typeof scenario.body === 'string' ? scenario.body : JSON.stringify(scenario.body));
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    try {
+      const http = transport({ write: async (_url, options) => fetch(`http://127.0.0.1:${server.address().port}/records`, options) });
+      const deps = await load().createRawCommentDeps(input(), { env: { ...env, FEISHU_APP_SECRET: secretCanary }, request: http.request });
+      let storageError;
+      try { await deps.postPool({}); } catch (error) { storageError = error; }
+      assert.ok(storageError instanceof Error);
+      assert.match(storageError.message, /^飞书/);
+      assert.deepEqual(Object.fromEntries(Object.entries(storageError)), scenario.expected);
+      assert.doesNotMatch(JSON.stringify(storageError) + storageError.message, new RegExp(`${secretCanary}|${bodyCanary}|127\\.0\\.0\\.1|Authorization`));
+      const result = await require('../raw-comment-activities.js').persistRawComments(input(), deps);
+      assert.equal(result.status, 'failed');
+      assert.equal(result.failure_class, 'retryable');
+      assert.equal(result.metrics.pending, 1);
+      assert.equal(result.outputs.comments.length, 0);
+      const { source_id, rawid, status, failure_class, ...diagnostic } = result.evidence[0];
+      assert.deepEqual(diagnostic, scenario.expected);
+      assert.doesNotMatch(JSON.stringify(result), new RegExp(`${secretCanary}|${bodyCanary}|Authorization`));
+      assert.equal(writes, 2, '每次显式调用仅一次POST，无额外重试');
+    } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+  });
+}
+
+for (const [name, reason_code] of [['TimeoutError', 'raw_storage_timeout'], ['AbortError', 'raw_storage_timeout'], ['TypeError', 'raw_storage_transport_failed'], [bodyCanary, 'raw_storage_transport_failed']]) {
+  test(`网络错误白名单：${reason_code}/${name === bodyCanary ? '任意名称' : name}`, async () => {
+    const http = transport({ write: async () => { throw Object.assign(new Error(secretCanary), {
+      name, cause: bodyCanary, code: bodyCanary, http_status: bodyCanary, feishu_code: bodyCanary,
+      reason_code: bodyCanary, headers: { authorization: secretCanary },
+    }); } });
+    const deps = await load().createRawCommentDeps(input(), { env, request: http.request });
+    const result = await require('../raw-comment-activities.js').persistRawComments(input(), deps);
+    assert.equal(result.evidence[0].reason_code, reason_code);
+    assert.equal(result.evidence[0].http_status, undefined);
+    assert.equal(result.evidence[0].feishu_code, undefined);
+    assert.doesNotMatch(JSON.stringify(result), new RegExp(`${secretCanary}|${bodyCanary}`));
+  });
+}

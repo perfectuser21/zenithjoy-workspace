@@ -147,3 +147,106 @@ test('TSV纯转换仅保留本批LEAD行，重复内容仍用独立源ID交落�
   assert.equal(batch.comments[0].fields.主页链接, 'https://example.com/123');
   assert.equal(batch.comments[0].fields.用户主页标识, '123 | https://example.com/123 | 个人');
 });
+
+for (const diagnostic of [
+  { reason_code: 'raw_storage_http_failed', http_status: 503 },
+  { reason_code: 'raw_storage_api_failed', http_status: 200, feishu_code: 1254060 },
+  { reason_code: 'raw_storage_timeout' },
+  { reason_code: 'raw_storage_transport_failed' },
+  { reason_code: 'raw_storage_response_invalid', http_status: 200 },
+]) {
+  test(`落池安全字段白名单传播：${diagnostic.reason_code}`, async () => {
+    const result = await load().persistRawComments(input(), deps({ postPool: async () => {
+      throw Object.assign(new Error('message-canary'), diagnostic, { cause: 'cause-canary', body: 'body-canary', headers: 'headers-canary', credential: 'credential-canary', url: 'url-canary' });
+    } }));
+    const { source_id, rawid, status, failure_class, ...actual } = result.evidence[0];
+    assert.deepEqual(actual, diagnostic);
+    assert.doesNotMatch(JSON.stringify(result), /canary/);
+  });
+}
+
+test('落池拒绝伪造诊断任意值及越界状态码，不做字符串数字转换', async () => {
+  for (const value of ['secret-canary', '503', -1, 0.5, NaN, Infinity, {}, 2147483648]) {
+    const result = await load().persistRawComments(input(), deps({ postPool: async () => {
+      throw Object.assign(new Error('message-canary'), { reason_code: 'secret-canary', http_status: value, feishu_code: value });
+    } }));
+    assert.equal(result.evidence[0].reason_code, 'raw_storage_unconfirmed');
+    assert.equal(result.evidence[0].http_status, undefined);
+    assert.equal(result.evidence[0].feishu_code, undefined);
+    assert.doesNotMatch(JSON.stringify(result), /canary/);
+  }
+  for (const http_status of [99, 600, 2147483647]) {
+    const result = await load().persistRawComments(input(), deps({ postPool: async () => {
+      throw { reason_code: 'raw_storage_http_failed', http_status };
+    } }));
+    assert.equal(result.evidence[0].http_status, undefined);
+  }
+});
+
+test('缺记录ID或未确认返回保留pending并明确unconfirmed', async () => {
+  for (const result of [{ code: 0 }, { code: 1 }, null]) {
+    const receipt = await load().persistRawComments(input(), deps({ postPool: async () => result }));
+    assert.equal(receipt.evidence[0].reason_code, 'raw_storage_unconfirmed');
+    assert.equal(receipt.metrics.pending, 1);
+  }
+});
+
+
+test('不可信错误的动态getter只读一次快照，不能绕过白名单把秘密带进证据', async () => {
+  const reads = { reason_code: 0, http_status: 0, feishu_code: 0 };
+  const error = new Error('message-getter-canary-secret');
+  const first = { reason_code: 'raw_storage_http_failed', http_status: 503, feishu_code: 1254060 };
+  for (const key of Object.keys(reads)) Object.defineProperty(error, key, { get() {
+    reads[key]++;
+    return reads[key] === 1 ? first[key] : `${key}-getter-canary-secret`;
+  } });
+  const receipt = await load().persistRawComments(input(), deps({ postPool: async () => { throw error; } }));
+  assert.equal(receipt.status, 'failed');
+  assert.equal(receipt.metrics.pending, 1);
+  assert.equal(receipt.outputs.pending_comments[0].id, 'source-1');
+  const { source_id, rawid, status, failure_class, ...diagnostic } = receipt.evidence[0];
+  assert.deepEqual(diagnostic, first);
+  assert.deepEqual(reads, { reason_code: 1, http_status: 1, feishu_code: 1 });
+  assert.doesNotMatch(JSON.stringify(receipt), /canary-secret/);
+});
+
+for (const key of ['reason_code', 'http_status', 'feishu_code']) {
+  test(`不可信错误${key} getter抛错仍保留pending并安全回退`, async () => {
+    let reads = 0;
+    const error = new Error('message-getter-canary-secret');
+    Object.defineProperty(error, key, { get() { reads++; throw new Error('getter-canary-secret'); } });
+    const receipt = await load().persistRawComments(input(), deps({ postPool: async () => { throw error; } }));
+    assert.equal(receipt.status, 'failed');
+    assert.equal(receipt.failure_class, 'retryable');
+    assert.equal(receipt.metrics.pending, 1);
+    assert.equal(receipt.outputs.pending_comments[0].id, 'source-1');
+    const { source_id, rawid, status, failure_class, ...diagnostic } = receipt.evidence[0];
+    assert.deepEqual(diagnostic, { reason_code: 'raw_storage_unconfirmed' });
+    assert.equal(reads, 1);
+    assert.doesNotMatch(JSON.stringify(receipt), /canary-secret/);
+  });
+}
+
+
+test('诊断getter抛错不终止后续行：第一条pending第二条真实落池产生partial', async () => {
+  for (const key of ['reason_code', 'http_status', 'feishu_code']) {
+    const error = new Error('message-getter-canary-secret');
+    Object.defineProperty(error, key, { get() { throw new Error('getter-canary-secret'); } });
+    let posts = 0;
+    const first = row('one');
+    const second = { ...row('two'), fields: { ...row().fields, 评论者昵称: '小王' } };
+    const receipt = await load().persistRawComments(input([first, second]), deps({ postPool: async () => {
+      if (++posts === 1) throw error;
+      return { code: 0, data: { record: { record_id: 'pool-two' } } };
+    } }));
+    assert.equal(posts, 2);
+    assert.equal(receipt.status, 'partial');
+    assert.equal(receipt.failure_class, 'retryable');
+    assert.deepEqual(receipt.metrics, { comments_written: 1, duplicates: 0, pending: 1 });
+    assert.equal(receipt.outputs.pending_comments[0].id, 'one');
+    assert.equal(receipt.outputs.comments[0].id, 'pool-two');
+    assert.equal(receipt.evidence[0].reason_code, 'raw_storage_unconfirmed');
+    assert.equal(receipt.evidence[1].status, 'completed');
+    assert.doesNotMatch(JSON.stringify(receipt), /canary-secret/);
+  }
+});

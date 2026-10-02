@@ -2,6 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 const require = createRequire(import.meta.url);
 const load = () => require('../raw-comment-delivery.js');
 const verdict = { grade: 'A', relevance: '相关', reason: '询问报名' };
@@ -99,4 +102,50 @@ test('独立JSON进程支持空批persist和raw-delivery，无凭据仍恰好一
     assert.equal(result.status, 0, result.stderr);
     assert.equal(JSON.parse(result.stdout).status, 'completed');
   }
+});
+
+test('真实CLI落池和配送传播安全诊断，stdout单回执且stderr无运输层秘密', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'raw-storage-cli-'));
+  const preload = join(directory, 'transport.cjs');
+  writeFileSync(preload, `
+    global.fetch = async (url, options) => {
+      const response = body => ({ ok: true, status: 200, json: async () => body });
+      if (url.includes('/auth/')) return response({ code: 0, tenant_access_token: 'token-canary-cli' });
+      if (url.includes('/fields')) return response({ code: 0, data: { items: ${JSON.stringify(require('../raw-comment-activities.js').RAW_COMMENT_FIELDS)}.map(field_name => ({ field_name, type: 1 })) } });
+      if (options.method === 'GET') return response({ code: 0, data: { items: [], has_more: false } });
+      if (process.env.TEST_FAILURE === 'http') return { ok: false, status: 503, headers: { private: 'headers-canary-cli' }, json: async () => ({ code: 123, msg: 'body-canary-cli' }) };
+      if (process.env.TEST_FAILURE === 'api') return response({ code: 1254060, msg: 'body-canary-cli' });
+      if (process.env.TEST_FAILURE === 'json') return { ok: true, status: 200, json: async () => { throw new Error('body-canary-cli'); } };
+      throw Object.assign(new Error('message-canary-cli'), { name: 'TimeoutError', cause: 'cause-canary-cli' });
+    };
+  `);
+  try {
+    for (const action of ['persist', 'raw-delivery']) {
+      for (const [mode, reason_code, numbers] of [
+        ['http', 'raw_storage_http_failed', { http_status: 503 }],
+        ['api', 'raw_storage_api_failed', { http_status: 200, feishu_code: 1254060 }],
+        ['json', 'raw_storage_response_invalid', { http_status: 200 }],
+        ['timeout', 'raw_storage_timeout', {}],
+      ]) {
+        const result = spawnSync(process.execPath, ['--require', preload, new URL('../comment-activity.js', import.meta.url).pathname, action], {
+          input: JSON.stringify(input([row('one')])), encoding: 'utf8',
+          env: { PATH: process.env.PATH, FEISHU_ACCOUNT: 'jinoshengyuan', FEISHU_APP_ID: 'app-canary-cli', FEISHU_APP_SECRET: 'secret-canary-cli', TEST_FAILURE: mode },
+        });
+        assert.equal(result.status, 1, result.stderr);
+        assert.equal(result.stderr, '');
+        assert.equal(result.stdout.trim().split('\n').length, 1);
+        assert.doesNotMatch(result.stdout + result.stderr, /canary-cli|Authorization|open\.feishu\.cn/);
+        const receipt = JSON.parse(result.stdout);
+        assert.equal(receipt.status, 'failed');
+        assert.equal(receipt.failure_class, 'retryable');
+        assert.equal(receipt.metrics.pending, 1);
+        assert.equal(receipt.metrics.comments_written, 0);
+        assert.equal(receipt.metrics.leads_written || 0, 0);
+        assert.equal(receipt.outputs.pending_comments[0].id, 'one');
+        const evidence = receipt.evidence.find(item => !item.step || item.step === 'persist');
+        const { source_id, rawid, status, failure_class, step, ...actual } = evidence;
+        assert.deepEqual(actual, { reason_code, ...numbers });
+      }
+    }
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });

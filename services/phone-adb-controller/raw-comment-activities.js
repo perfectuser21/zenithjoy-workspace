@@ -8,6 +8,29 @@ const RAW_COMMENT_FIELDS = ['原始评论ID', '运行批次', '采集时间', '�
   '评论作品视频链接', '评论原文', '评论者昵称', '用户主页标识', '抖音号', '主页链接',
   '账号类型', '留言时间', '主页IP', '地区', '处理状态'];
 
+const RAW_STORAGE_REASONS = new Set(['raw_storage_http_failed', 'raw_storage_api_failed',
+  'raw_storage_response_invalid', 'raw_storage_timeout', 'raw_storage_transport_failed',
+  'raw_storage_unconfirmed']);
+
+// 运输错误只过枚举和严格整数范围；不复制 message/cause/body/headers/URL。
+function rawStorageDiagnostic(error) {
+  const snapshot = {};
+  for (const key of ['reason_code', 'http_status', 'feishu_code']) {
+    // 不可信getter只调用一次；访问失败等同字段缺失，不中断逐条落池。
+    try { snapshot[key] = error && error[key]; } catch (_) { snapshot[key] = undefined; }
+  }
+  const { reason_code, http_status, feishu_code } = snapshot;
+  const diagnostic = { reason_code: RAW_STORAGE_REASONS.has(reason_code)
+    ? reason_code : 'raw_storage_unconfirmed' };
+  if (Number.isInteger(http_status) && http_status >= 100 && http_status <= 599) {
+    diagnostic.http_status = http_status;
+  }
+  if (Number.isInteger(feishu_code) && feishu_code >= 0 && feishu_code <= 2147483647) {
+    diagnostic.feishu_code = feishu_code;
+  }
+  return diagnostic;
+}
+
 // 显式字段优先；旧池对象只带拼串时仍可使用。不读TSV、账号配置或历史评分。
 function identity(fields) {
   return readCommentIdentity(fields, txt);
@@ -96,7 +119,7 @@ async function persistRawComments(input, deps = {}) {
         persist_status: 'pending' });
       evidence.push({ source_id: source.source_id || source.id, rawid, status: 'pending',
         failure_class: permanent ? 'fatal' : 'retryable',
-        ...(permanent ? { reason_code: 'rawid_conflict' } : {}) });
+        ...(permanent ? { reason_code: 'rawid_conflict' } : rawStorageDiagnostic(error)) });
     }
   }
   return {
@@ -123,4 +146,4 @@ function harvestTsvInput(tsv, { run_tag = 'manual', line_key } = {}) {
   return { run_tag, line_key, comments };
 }
 
-module.exports = { persistRawComments, harvestTsvInput, rawCommentId, sameRawComment, RAW_COMMENT_FIELDS };
+module.exports = { persistRawComments, harvestTsvInput, rawCommentId, sameRawComment, RAW_COMMENT_FIELDS, rawStorageDiagnostic };

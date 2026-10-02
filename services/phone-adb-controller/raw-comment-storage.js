@@ -2,10 +2,20 @@
 
 const { validateInput } = require('./comment-activities.js');
 const { txt } = require('./sort-comments-lib.js');
-const { rawCommentId, sameRawComment, RAW_COMMENT_FIELDS } = require('./raw-comment-activities.js');
+const { rawCommentId, sameRawComment, RAW_COMMENT_FIELDS, rawStorageDiagnostic } = require('./raw-comment-activities.js');
 
 function refusal(message, reason) {
   return Object.assign(new Error(message), { failure_class: 'fatal', reason_code: reason });
+}
+
+function storageError(message, reason_code, response, feishu_code) {
+  return Object.assign(new Error(message), rawStorageDiagnostic({
+    reason_code, http_status: response && response.status, feishu_code,
+  }));
+}
+
+function isTimeout(error) {
+  return error && ['TimeoutError', 'AbortError'].includes(error.name);
 }
 
 // 环境由调用方注入；不从业务配置或输入中读取凭据，且不依赖模型/线索表。
@@ -21,11 +31,18 @@ async function createRawCommentDeps(input, { env = process.env, request = fetch 
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
-    } catch (_) { throw new Error('飞书 HTTP 请求失败'); }
-    if (!response || !response.ok) throw new Error('飞书 HTTP 请求失败');
+    } catch (error) {
+      throw storageError('飞书 HTTP 请求失败', isTimeout(error) ? 'raw_storage_timeout' : 'raw_storage_transport_failed');
+    }
+    if (!response || !response.ok) throw storageError('飞书 HTTP 请求失败', 'raw_storage_http_failed', response);
     let result;
-    try { result = await response.json(); } catch (_) { throw new Error('飞书响应未读回'); }
-    if (!result || result.code !== 0) throw new Error('飞书未确认操作成功');
+    try { result = await response.json(); } catch (error) {
+      throw storageError('飞书响应未读回', isTimeout(error) ? 'raw_storage_timeout' : 'raw_storage_response_invalid', response);
+    }
+    if (!result || !Number.isInteger(result.code) || result.code < 0 || result.code > 2147483647) {
+      throw storageError('飞书未确认操作成功', 'raw_storage_response_invalid', response);
+    }
+    if (result.code !== 0) throw storageError('飞书未确认操作成功', 'raw_storage_api_failed', response, result.code);
     return result;
   };
   const auth = await send('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', 'POST', {
