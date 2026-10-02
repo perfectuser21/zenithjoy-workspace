@@ -8,11 +8,11 @@ import { join } from 'node:path';
 import { digest } from '../runtime-definition.mjs';
 function fixture(){
  const dir=mkdtempSync(join(tmpdir(),'binding-runtime-'));const steps=JSON.stringify({steps:[{key:'test.run.execute',usage:{slot_key:'run'},mode:'checkpoint'}]});writeFileSync(join(dir,'step-dod.json'),steps);
- const body={schema_version:2,release:{id:'release'},deployment:{observation_id:'observation',target:'fixture'},workflow_version:{id:'wv',payload:{workflow_id:'workflow'}},activities:[{reference:{reference_id:'ref',slot_key:'run',activity_id:'activity',activity_version_id:'av'},version:{id:'av',payload:{steps:[{step_id:'step',locator:{step_key:'execute'},contract:{key:'execute'}}]}}}],files:{'step-dod.json':digest(steps)}};
+ const body={schema_version:2,release:{id:'release'},deployment:{observation_id:'observation',target:'fixture'},workflow_version:{id:'wv',payload_sha256:'a'.repeat(64),payload:{workflow_id:'workflow'}},activities:[{reference:{reference_id:'ref',slot_key:'run',activity_id:'activity',activity_version_id:'av'},version:{id:'av',payload:{steps:[{step_id:'step',locator:{step_key:'execute'},contract:{key:'execute'}}]}}}],files:{'step-dod.json':digest(steps)}};
  writeFileSync(join(dir,'run-definition.json'),JSON.stringify({...body,snapshot_sha256:digest(body)}));return dir;
 }
 async function server(t,handler){const seen=[];const s=createServer(async(req,res)=>{let raw='';for await(const part of req)raw+=part;const event={method:req.method,path:req.url,body:raw?JSON.parse(raw):null};seen.push(event);const answer=handler(event);res.writeHead(answer.status||200,{'Content-Type':'application/json'});res.end(JSON.stringify(answer.body));});await new Promise(r=>s.listen(0,'127.0.0.1',r));t.after(()=>s.close());return {seen,url:`http://127.0.0.1:${s.address().port}`};}
-const cli=(dir,url)=>new Promise(resolve=>{const child=spawn(process.execPath,[new URL('../runtime-receipts.mjs',import.meta.url).pathname,'bind-run'],{env:{...process.env,WFR_RUN_DIR:dir,WFR_RUN_ID:'run',BRAIN_URL:url,BRAIN_INTERNAL_TOKEN:'fixture-token',WFR_HOSTKEY:'fixture'}});let out='',err='';child.stdout.on('data',b=>out+=b);child.stderr.on('data',b=>err+=b);child.on('exit',code=>resolve({code,out,err}));});
+const cli=(dir,url,args=['bind-run'])=>new Promise(resolve=>{const child=spawn(process.execPath,[new URL('../runtime-receipts.mjs',import.meta.url).pathname,...args],{env:{...process.env,WFR_RUN_DIR:dir,WFR_RUN_ID:'run',WFR_ATTEMPT:'a1',BRAIN_URL:url,BRAIN_INTERNAL_TOKEN:'fixture-token',WFR_HOSTKEY:'fixture'}});let out='',err='';child.stdout.on('data',b=>out+=b);child.stderr.on('data',b=>err+=b);child.on('exit',code=>resolve({code,out,err}));});
 test('HTTP绑定ACK前持久请求；失联重试同attempt/内容，ACK后真实续跑新attempt',async t=>{
  const dir=fixture();let failure=true,last;
  const s=await server(t,e=>{if(e.method==='POST'){assert.ok(existsSync(join(dir,'run-bindings',`${e.body.attempt_key}.request.json`)));last=e.body;if(failure)return {status:503,body:{error:'offline'}};return {body:{binding:{id:`binding-${e.body.attempt_key}`,run_id:e.path.split('/')[4],...e.body}}};}return {body:{binding:{id:`binding-${last.attempt_key}`,run_id:e.path.split('/')[4],...last}}};});
@@ -26,4 +26,21 @@ test('409绑定冲突明确拒绝且持久blocked，不作为网络pending重复
  const dir=fixture();const s=await server(t,()=>({status:409,body:{code:'CONFLICT'}}));
  assert.equal((await cli(dir,s.url)).code,1);assert.equal(s.seen.length,1);
  assert.equal((await cli(dir,s.url)).code,1);assert.equal(s.seen.length,1);
+});
+
+test('v2 span必须带已ACK绑定及版本/位置/attempt；skipped保留明确原因',async t=>{
+ const dir=fixture();let last;const s=await server(t,e=>{
+  if(e.path.endsWith('/spans'))return {body:{inserted:1}};
+  if(e.method==='POST')last=e.body;return {body:{binding:{id:'binding-a1',run_id:'run__a1',...last}}};
+ });
+ assert.equal((await cli(dir,s.url)).code,0);
+ const artifact=join(dir,'artifact.json');writeFileSync(artifact,JSON.stringify({observed_at:new Date().toISOString(),summary:'本词判定未通过',metrics:{}}));
+ const sent=await cli(dir,s.url,['span','run','blocked','1',artifact]);assert.equal(sent.code,0,sent.err);
+ const span=s.seen.find(e=>e.path.endsWith('/spans')).body[0];
+ assert.equal(span.identity_protocol,2);assert.equal(span.run_binding_id,'binding-a1');assert.equal(span.reference_id,'ref');assert.equal(span.activity_definition_version_id,'av');assert.equal(span.workflow_definition_version_id,'wv');assert.equal(span.attempt_key,'a1');assert.equal(span.enabler_call_id,null);
+ assert.equal(span.evidence.runtime_snapshot_sha256,last.runtime_snapshot_sha256);assert.equal(span.evidence.skip_reason,'本词判定未通过');
+});
+test('缺绑定ACK不能生成新span；不能降级v1冒充兼容',async t=>{
+ const dir=fixture();const s=await server(t,()=>({body:{inserted:1}}));const file=join(dir,'artifact.json');writeFileSync(file,'{"metrics":{}}');
+ assert.equal((await cli(dir,s.url,['span','run','completed','1',file])).code,1);assert.equal(s.seen.length,0);
 });
