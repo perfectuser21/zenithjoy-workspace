@@ -4,6 +4,9 @@ import { mkdtempSync,mkdirSync,writeFileSync,symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { hostname } from 'node:os';
+import { spawnSync } from 'node:child_process';
 import { deploymentManifest } from '../deployment-manifest.mjs';
 test('部署manifest必须绑定git固定commit的真实字节，dirty同HEAD不能盖章',()=>{
  const root=mkdtempSync(join(tmpdir(),'deployment-fixed-'));const source=join(root,'services/phone-adb-controller');mkdirSync(source,{recursive:true});writeFileSync(join(source,'run.sh'),'original\n');
@@ -15,4 +18,15 @@ test('部署manifest必须绑定git固定commit的真实字节，dirty同HEAD不
  const output=execFileSync(process.execPath,[cli,root,'run.sh'],{encoding:'utf8'});
  assert.deepEqual(JSON.parse(output),manifest,'符号链接部署入口必须真正执行并输出manifest');
  writeFileSync(join(source,'run.sh'),'dirty\n');assert.throws(()=>deploymentManifest(root,['run.sh'],{commit}),/固定commit/);
+});
+
+test('部署后collect必须读实际文件字节和机器身份，篡改拒绝而非复制声明摘要',()=>{
+ const root=mkdtempSync(join(tmpdir(),'deployment-readback-'));writeFileSync(join(root,'run.sh'),'actual\n');
+ const manifest={source_repo:'fixture/repo',source_commit:'a'.repeat(40),files:[{path:'services/phone-adb-controller/run.sh',deployed_path:'run.sh',content_sha256:createHash('sha256').update('actual\n').digest('hex')}]};
+ const mf=join(root,'manifest.json');writeFileSync(mf,JSON.stringify(manifest));
+ const cli=new URL('../deployment-manifest.mjs',import.meta.url).pathname;
+ const r=spawnSync(process.execPath,[cli,'collect',root,mf],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+ const result=JSON.parse(r.stdout);assert.equal(result.files[0].content_sha256,manifest.files[0].content_sha256);assert.equal(result.observed_hostname,hostname());
+ writeFileSync(join(root,'run.sh'),'tampered');const bad=spawnSync(process.execPath,[cli,'collect',root,mf],{encoding:'utf8'});assert.notEqual(bad.status,0);assert.match(bad.stderr,/实际.*digest/);
+
 });
