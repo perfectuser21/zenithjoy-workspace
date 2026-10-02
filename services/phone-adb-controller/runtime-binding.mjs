@@ -3,6 +3,7 @@ import { existsSync,readFileSync,mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { readFrozen,digest } from './runtime-definition.mjs';
+import { assertRuntimeHost } from './runtime-host.mjs';
 import { atomic } from './runtime-outbox.mjs';
 export function expectedPath(frozen,stepSpec){
  const result=[];
@@ -28,8 +29,9 @@ export function readBinding(dir,attempt,frozen=readFrozen(dir)){
  const ack=JSON.parse(readFileSync(join(dir,'run-bindings',`${attempt}.ack.json`),'utf8'));
  return verifyBinding(ack.binding,record);
 }
-export async function bindRun({dir,runId,brainUrl,host,request,ledgerPath=new URL('./ledger.mjs',import.meta.url).pathname}){
+export async function bindRun({dir,runId,brainUrl,request,ledgerPath=new URL('./ledger.mjs',import.meta.url).pathname}){
  const frozen=readFrozen(dir);if(!frozen.release?.id || !frozen.deployment?.observation_id)throw Error('运行缺少明确release及观测，不能登记');
+ const host=assertRuntimeHost(frozen.release,frozen.deployment);
  const folder=join(dir,'run-bindings');mkdirSync(folder,{recursive:true,mode:0o700});const reservationPath=join(folder,'reservation.json');
  let reservation=existsSync(reservationPath)?JSON.parse(readFileSync(reservationPath,'utf8')):null;
  const ledger=(...args)=>JSON.parse(execFileSync(process.execPath,[ledgerPath,...args,'--run-dir',dir],{encoding:'utf8'}));

@@ -7,12 +7,8 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {digest} from './runtime-definition.mjs';
 import {atomic} from './runtime-outbox.mjs';
-export function deploymentTarget(hostname){
- const name=hostname.toLowerCase().split('.')[0];
- if(name.includes('m4-xian'))return 'xian-m4';
- if(name.includes('m1-us'))return 'xian-m1';
- return name;
-}
+import {deploymentTarget} from './runtime-host.mjs';
+export {deploymentTarget} from './runtime-host.mjs';
 function actualComponents(release,observed,manifest){
  if(observed.source_repo!==manifest.source_repo||observed.source_commit!==manifest.source_commit)throw Error('实际来源与部署commit不符');
  if(digest(observed.files)!==digest(manifest.files))throw Error('实际文件组件与部署manifest不符');

@@ -1,3 +1,4 @@
+import { assertRuntimeHost } from './runtime-host.mjs';
 import { loadRuntimeRelease } from './runtime-release.mjs';
 // 运行前只读固定版本；运行目录是之后所有判定与身份解析的唯一来源。
 import { createHash, randomUUID } from 'node:crypto';
@@ -40,11 +41,11 @@ export function locateRun(indexRoot,identity){
   const record=JSON.parse(readFileSync(file,'utf8'));assertRunIdentity(readFrozen(record.run_dir),identity,record.run_dir);return record.run_dir;
 }
 export async function freezeDefinition(o) {
-  if (existsSync(resolve(o.runDir,'run-definition.json'))) return readFrozen(o.runDir);
+  if (existsSync(resolve(o.runDir,'run-definition.json'))) {const frozen=readFrozen(o.runDir);if(frozen.release)assertRuntimeHost(frozen.release,frozen.deployment);return frozen;}
   const manifest=JSON.parse(readFileSync(o.manifestPath||resolve(o.deploymentRoot,'deployment-manifest.json'),'utf8'));
   const fixed=(o.releaseId||manifest.release_id||o.requireRelease)?await loadRuntimeRelease(o,manifest,digest):null;
   let version;
-  if(fixed)version=fixed.version;
+  if(fixed){assertRuntimeHost(fixed.release,manifest);version=fixed.version;}
   else {
     const list=await o.get('/api/brain/workflows');const matches=(Array.isArray(list)?list:list.workflows||[]).filter(w=>w.key===o.workflowKey);
     if(matches.length!==1 || !matches[0].current_definition_version_id)throw Error('工作流必须有唯一已登记current version');

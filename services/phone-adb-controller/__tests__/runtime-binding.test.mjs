@@ -21,7 +21,7 @@ test('HTTP绑定ACK前持久请求；失联重试同attempt/内容，ACK后真�
  const first=await cli(dir,s.url);assert.equal(first.code,1);assert.equal(s.seen.length,1,'失败应发生在真实POST，而非未知CLI命令');
  failure=false;const second=await cli(dir,s.url);assert.equal(second.code,0,second.err);assert.match(second.out,/WFR_ATTEMPT=a1/);
  assert.deepEqual(s.seen[0].body,s.seen[1].body);assert.equal(last.expected_path.filter(p=>p.step_id==='step'&&p.required).length,1);
- const third=await cli(dir,s.url);assert.equal(third.code,0,third.err);assert.match(third.out,/WFR_ATTEMPT=a2/);assert.equal(last.run_binding_id,undefined);
+ const third=await cli(dir,s.url);assert.equal(third.code,0,third.err);assert.match(third.out,/WFR_ATTEMPT=a2/);assert.equal(last.run_binding_id,undefined);assert.equal(last.external_origin,`zenithjoy:${actualHost}`,'WFR_HOSTKEY不能覆盖实际主机身份');
  assert.doesNotMatch(readFileSync(join(dir,'run-bindings/a1.request.json'),'utf8'),/fixture-token/);
 });
 test('409绑定冲突明确拒绝且持久blocked，不作为网络pending重复提交',async t=>{

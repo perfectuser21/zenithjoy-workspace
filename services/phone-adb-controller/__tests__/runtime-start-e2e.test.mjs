@@ -19,7 +19,7 @@ test('E2E：已有完整冻结件但运行绑定无ACK，仍禁止首次ssh/adb/
  const env={...process.env,HOME:home,PATH:`${bin}:${process.env.PATH}`,BRAIN_URL:'http://127.0.0.1:1',BRAIN_INTERNAL_TOKEN:'fixture',WFR_HOME:join(home,'wfr'),WFR_NODE:process.execPath,WALL_REPORT:join(bin,'wall-report.sh'),WF_PLAN_DIR:resolve('services/phone-adb-controller/plans'),WF_TESTING:'1'};
  seedRunner(env,args);const dir=join(env.WFR_HOME,'ledger/social-keyword-leadgen-crontab-binding-gate'),file=join(dir,'run-definition.json');
  rmSync(join(dir,'run-bindings'),{recursive:true,force:true});
- const {snapshot_sha256,...body}=JSON.parse(readFileSync(file,'utf8'));body.release={id:'release'};body.deployment={observation_id:'observation'};body.workflow_version.payload_sha256='a'.repeat(64);body.schema_version=2;
+ const {snapshot_sha256,...body}=JSON.parse(readFileSync(file,'utf8'));body.release={...body.release,id:'release'};body.deployment={...body.deployment,observation_id:'observation'};body.workflow_version.payload_sha256='a'.repeat(64);body.schema_version=2;
  writeFileSync(file,JSON.stringify({...body,snapshot_sha256:digest(body)}));
  const result=spawnSync('zsh',[resolve('services/phone-adb-controller/wf-run.sh'),...args],{encoding:'utf8',timeout:15000,env});
  assert.doesNotMatch(result.stdout,/WF_RUN_STARTED/);assert.equal(result.status,1);assert.equal(existsSync(join(home,'external')),false);

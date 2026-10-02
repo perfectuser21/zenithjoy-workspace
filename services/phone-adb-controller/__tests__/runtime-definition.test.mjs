@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, symlinkSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir,hostname } from 'node:os';
+import { deploymentTarget } from '../runtime-host.mjs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { freezeDefinition } from '../runtime-definition.mjs';
@@ -42,7 +43,7 @@ test('无版本、被篡改快照或相同SHA标签下实际文件不同，均�
 test('HTTP→符号链接真实prepare CLI→冻结目录：读取精确历史版本，运行后latest和步骤清单变化不替换冻结快照',async t=>{
  const {createServer}=await import('node:http');const {spawn}=await import('node:child_process');const f=fixture();const seen=[];
  const payload={schema_version:1,workflows:[f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version],activities:[f.routes['/api/brain/activities/activity-1/versions/av-1'].version]};
- const release={id:'release-fixed',environment:'scratch',target:'fixture',payload};release.manifest_sha256=hash({environment:release.environment,target:release.target,payload});
+ const release={id:'release-fixed',environment:'scratch',target:deploymentTarget(hostname()),payload};release.manifest_sha256=hash({environment:release.environment,target:release.target,payload});
  f.routes['/api/brain/releases/release-fixed']={release};
  const manifestFile=join(f.dir,'deployment-manifest.json');const manifest=JSON.parse(readFileSync(manifestFile,'utf8'));
  writeFileSync(manifestFile,JSON.stringify({...manifest,release_id:release.id,observation_id:'observation-fixed',environment:release.environment,target:release.target}));
