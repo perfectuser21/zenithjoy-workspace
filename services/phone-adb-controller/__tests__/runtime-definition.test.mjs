@@ -69,3 +69,11 @@ test('冻结全部本机实现：全局入口和依赖被部署替换后，续�
  await freezeDefinition(f.options);
  assert.equal(execFileSync('bash',[join(f.options.runDir,'runtime','entry.sh')],{encoding:'utf8'}),'frozen');
 });
+test('Activity版本读取期间全局plan/spec被替换，冻结只能使用首次已核验字节',async()=>{
+ const f=fixture();const plan=readFileSync(f.options.planPath,'utf8');const spec=readFileSync(f.options.stepSpecPath,'utf8');const get=f.options.get;
+ f.options.get=async path=>{if(path.includes('/activities/')){writeFileSync(f.options.planPath,'WF_CAP=changed_after_verification\n');writeFileSync(f.options.stepSpecPath,'{"steps":[{"key":"injected"}]}');}return get(path);};
+ await freezeDefinition(f.options);
+ assert.equal(readFileSync(join(f.options.runDir,'workflow.plan'),'utf8'),plan);
+ assert.equal(readFileSync(join(f.options.runDir,'step-dod.json'),'utf8'),spec);
+ assert.equal(readFileSync(join(f.options.runDir,'runtime','workflow.plan'),'utf8'),plan);
+});

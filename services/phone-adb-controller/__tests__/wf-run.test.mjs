@@ -179,3 +179,19 @@ test("wf_load_plan + wf_discover_cmd: 计划里的发现入口解析到 wf-run.s
   const bm = lib(`WF_ALLOW_MISSING=1; wf_load_plan benchmark_link_acquisition; echo rc=$?`, { ...env, WF_PLAN_DIR: missingPlanDir(home) });
   assert.match(bm.stdout, /rc=0/);
 });
+
+test('自动TAG冻结后跨分钟exec：继续原run，不重新生成TAG或创建第二个run', { skip: SKIP },()=>{
+ const {home,env}=setup();
+ const date=join(home,'.local/bin/date');
+ writeFileSync(date,`#!/bin/sh
+if [ "$1" = '+%m%d%H%M' ]; then
+  if [ -f "$HOME/tag-generated" ]; then echo 10021900; else touch "$HOME/tag-generated"; echo 10021859; fi
+  exit 0
+fi
+exec /bin/date "$@"
+`,{mode:0o755});
+ seedRunner(env,['keyword_acquisition','--tag','auto10021859']);
+ const r=spawnSync(ZSH,[WR,'keyword_acquisition','p1','SER1','biz','--commander','cmdr-abc'],{encoding:'utf8',env,timeout:30000});
+ assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/WF_RUN_STARTED tag=auto10021859 /);
+ assert.equal(existsSync(join(home,'.config/zenithjoy/ledger/social-keyword-leadgen-crontab-auto10021900')),false);
+});
