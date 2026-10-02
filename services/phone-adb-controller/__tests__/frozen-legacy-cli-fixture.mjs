@@ -65,6 +65,22 @@ const event={event_type:'LEGACY_LEDGER_READ',ledger:JSON.parse(fs.readFileSync($
     curl: blocked, sleep: '#!/bin/sh\nexit 0\n',
     date: '#!/bin/sh\n[ "$1" = +%H ] && { echo 23; exit; }\n[ "$1" = +%s ] && { cat "$HOME/now"; exit; }\nexec /bin/date "$@"\n' };
   for (const [name, code] of Object.entries(scripts)) { const file = join(f.home, '.local/bin', name); writeFileSync(file, code); chmodSync(file, 0o755); }
+  // 冻结archive使用BSD mktemp -t prefix；仅转换该运输参数，文件仍由真实系统工具创建。
+  const mktemp = join(f.home, '.local/bin/mktemp');
+  writeFileSync(mktemp, `#!${process.execPath}
+const cp=require('node:child_process'),fs=require('node:fs'),path=require('node:path');
+const backend=${JSON.stringify(options.mktempBackend || '/usr/bin/mktemp')};
+const requested=process.argv.slice(2),args=[...requested];
+for(let i=0;i<args.length;i++)if(args[i]==='-t'&&i+1<args.length){
+ if(!args[i+1].includes('XXXXXX'))args[i+1]+='.XXXXXXXX';i++;
+}
+const result=cp.spawnSync(backend,args,{encoding:'utf8'});
+fs.appendFileSync(path.join(process.env.HOME,'mktemp-events.jsonl'),JSON.stringify({backend,requested,args,status:result.status,stdout:result.stdout})+'\\n');
+process.stdout.write(result.stdout||'');process.stderr.write(result.stderr||'');
+if(result.error)process.stderr.write(result.error.message+'\\n');
+process.exitCode=result.status??1;
+if(result.signal)process.kill(process.pid,result.signal);
+`, { mode:0o700 });
   const preloadPath = join(f.home, 'http-fixture.cjs');
   writeFileSync(preloadPath, readFileSync(preloadPath, 'utf8') + `
 const fs=require('node:fs'),path=require('node:path'),Module=require('node:module');

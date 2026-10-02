@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, lstatSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
@@ -236,4 +236,28 @@ test('冻结时钟跨JS与shell同源且继续推进，不会随现实日期越�
  assert.ok(nodeTime()-first>=1000,'统一时钟必须推进，不能冻结预算');
  assert.ok(shellTime()-firstShell>=1000,'shell时钟也必须推进，不能冻结预算');
  assert.ok(Math.abs(nodeTime()-shellTime())<2000);
+});
+
+test('真实mktemp跨平台运输保留冻结BSD -t前缀语义，历史seen与完整视频PG产物不漂移', { timeout:60000 },async t=>{
+ const backend=process.platform==='darwin'&&existsSync('/opt/homebrew/bin/gmktemp')?'/opt/homebrew/bin/gmktemp':'/usr/bin/mktemp';
+ assert.ok(existsSync(backend),'永久回归必须有真实backend，不允许跳过或用假seen清单');
+ if(process.platform!=='darwin'||backend.endsWith('/gmktemp'))assert.match(execFileSync(backend,['--version'],{encoding:'utf8'}),/GNU coreutils/);
+ const old=await legacyFixture(t,['matched','matched'],{mktempBackend:backend});
+ const current=await keywordFixture(t);seedHistory(old);seedHistory(current);
+ const otherArgs=['-d','-t','adapter-args'];
+ const directory=execFileSync(join(old.home,'.local/bin/mktemp'),otherArgs,{env:old.env,encoding:'utf8'}).trim();
+ assert.ok(lstatSync(directory).isDirectory(),'其它参数必须交给真实backend创建实际目录');rmSync(directory,{recursive:true});
+ const legacy=await old.run();
+ alignFixtureClock(current);const modern=await current.run();
+ const temps=readFileSync(join(old.home,'mktemp-events.jsonl'),'utf8').trim().split('\n').map(JSON.parse);
+ assert.deepEqual(temps[0].requested,otherArgs);assert.deepEqual(temps[0].args,['-d','-t','adapter-args.XXXXXXXX']);
+ assert.ok(temps.some(row=>row.backend===backend&&row.requested[0]==='-t'&&row.requested[1]==='seen-videos'&&row.args[1]==='seen-videos.XXXXXXXX'&&row.status===0));
+ assert.equal(legacy.output.code,0,legacy.output.stderr+legacy.log);
+ assert.equal(old.videos.size,2,'实际GNU backend创建seen文件后，已结算历史视频不得被重采');
+ assertVideoPool(old,current,twoVideos(),{requireEquality:true});
+ assert.equal(modern.output.code,0,modern.output.stderr);assert.equal(modern.receipt.status,'completed');
+ assert.deepEqual(old.read('pg.json'),current.read('pg.json'),'真实GNU旧链与真实当前compiler CLI完整PG正本逐字段对账');
+ assert.deepEqual(old.read('pg.json').videos[ids[2]],history.video,'历史资格/批次/状态完整保留，不移入本批');
+ assert.equal(old.read('phone-state.json').owner,null);assert.equal(current.read('phone-state.json').owner,null);
+ assert.ok(!(legacy.output.stderr+legacy.log).includes('too few X'));
 });
