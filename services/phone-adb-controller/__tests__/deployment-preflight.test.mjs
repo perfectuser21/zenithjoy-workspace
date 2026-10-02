@@ -65,3 +65,9 @@ test('真实deploy.sh在任何目标SSH/scp前拒绝无真实release（不只是
  let stderr='';child.stdout.resume();child.stderr.on('data',v=>stderr+=v);const code=await new Promise(r=>child.on('close',r));
  assert.notEqual(code,0);assert.equal(existsSync(marker),false,`缺真实release已触目标副作用: ${stderr}`);
 });
+test('同一CI证据重试部署时release声明完全相同，attempt只用于部署观测',async()=>{
+ const {prepareDeploymentReleases}=await implementation(),f=fixture(),posted=[];
+ const request=async(path,body)=>{if(body){posted.push(body);return {release:release(f,body.target)};}return {release:release(f,path.endsWith(vid[0])?'xian-m4':'xian-m1')};};
+ for(const attemptKey of ['github:42:100:1','github:42:101:2'])await prepareDeploymentReleases({...f,sha,environment:'production',attemptKey,request,readFile:()=>bytes});
+ assert.deepEqual(posted[0],posted[2]);assert.deepEqual(posted[1],posted[3]);
+});
