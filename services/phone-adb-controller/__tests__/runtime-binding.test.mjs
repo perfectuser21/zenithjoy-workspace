@@ -44,3 +44,8 @@ test('缺绑定ACK不能生成新span；不能降级v1冒充兼容',async t=>{
  const dir=fixture();const s=await server(t,()=>({body:{inserted:1}}));const file=join(dir,'artifact.json');writeFileSync(file,'{"metrics":{}}');
  assert.equal((await cli(dir,s.url,['span','run','completed','1',file])).code,1);assert.equal(s.seen.length,0);
 });
+test('有规范UUID的Step必须在冻结计划出现，缺计划不得静默省略绑定路径',async()=>{
+ const {expectedPath}=await import('../runtime-binding.mjs');const frozen=JSON.parse(readFileSync(join(fixture(),'run-definition.json'),'utf8'));
+ assert.throws(()=>expectedPath(frozen,{steps:[]}),/Step.*冻结计划/);
+ const path=expectedPath(frozen,{steps:[{key:'test.run.execute',usage:{slot_key:'run'}}]});assert.equal(path.length,2);assert.equal(path[1].required,true);
+});
