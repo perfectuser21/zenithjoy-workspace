@@ -82,6 +82,14 @@ test("宪法与 SOP 明确网关读写路由，心跳不能在跑场本机访问
   assert.match(sop, /心跳.*网关.*执行/);
 });
 
+test("陪跑自行下岗也必须读回本 TAG finalize 成功，批完成日志不是收尾证明", () => {
+  for (const file of ["COMMANDER.md", "cmdr-escort.txt"]) {
+    const text = readFileSync(join(SRC, file), "utf8");
+    assert.match(text, /\[<TAG>\] 账本finalize: ok=1/, `${file} 必须核对同批账本收尾`);
+    assert.match(text, /批完成.*(?:早于|不代表).*finalize/, `${file} 不能凭主链结束下岗`);
+  }
+});
+
 // 执行生产脚本的 trap 声明，隔离设备/账本边界，观察真实 shell 的退出顺序。
 for (const finalizeStatus of [0, 1]) {
   test(`退出时先 finalize；finalize ${finalizeStatus === 0 ? "成功才下岗" : "失败保留陪跑"}`, { skip: SKIP }, () => {
