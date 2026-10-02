@@ -498,9 +498,9 @@ _leave_scratch_route() {
     [[ "$fg" == *"$DOUYIN_PACKAGE"* ]] || { print -u2 -- "leave-scratch: left Douyin after $i backs (fg=$fg)"; return 1 }
     [[ "$fg" == *"$SEARCH_RESULT_ACTIVITY"* ]] && continue
     # 退回原详情页后视频自动续播，HONOR 上 uiautomator 永不 idle——0930 真机三波连读都只有
-    # 13 个骨架节点。与 _current_video_link_once 入口同一招：先中央点击暂停再取证；核验通过
-    # 再点一次恢复播放，让下游（倍速/录制）看到的状态与以前 deep link 重开后一致。
-    "$ADB" -s "$SERIAL" shell input tap $(( SCREEN_W / 2 )) $(( SCREEN_H * 45 / 100 )) >/dev/null 2>&1 || true
+    # 13 个骨架节点。与 _current_video_link_once 入口同一招：先用媒体键暂停再取证；核验通过
+    # 再用媒体键恢复播放，让下游（倍速/录制）看到的状态与以前 deep link 重开后一致。
+    "$ADB" -s "$SERIAL" shell input keyevent 85 >/dev/null 2>&1 || true
     wait_ms 600
     local w
     for w in 1 2 3; do
@@ -510,11 +510,11 @@ _leave_scratch_route() {
         # 下游（倍速/录制）要的是"在播放"——以前 deep link 重开的新页天然自动播放。真机实证
         # （0930 rcp4）：详情页的播放键 content-desc 反映当前状态，「暂停视频，按钮」= 已暂停，
         # 「播放视频，按钮」= 在播放；退回来的原页保留着取链接前被暂停的状态，盲目再点一次
-        # 会把它按回暂停（fixtest-rc 录到 -91 dB 死寂）。按状态点，不按次数点。
+        # 会把它按回暂停（fixtest-rc 录到 -91 dB 死寂）。按状态恢复，不盲目切换。
         if _video_paused_xml "$xml"; then
-          "$ADB" -s "$SERIAL" shell input tap $(( SCREEN_W / 2 )) $(( SCREEN_H * 45 / 100 )) >/dev/null 2>&1 || true
+          "$ADB" -s "$SERIAL" shell input keyevent 85 >/dev/null 2>&1 || true
           wait_ms 300
-          print -u2 -- "leave-scratch: video was paused, tapped once to resume playback"
+          print -u2 -- "leave-scratch: video was paused, sent media key to resume playback"
         fi
         return 0
       fi
@@ -562,12 +562,13 @@ _current_video_link_once() {
 
   [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
   # 详情页自动播放会让部分机型（HONOR 实测）uiautomator 永不 idle：
-  # 先中央点击暂停播放再取证；流程末尾跳离本页，无需恢复播放。
-  "$ADB" -s "$SERIAL" shell input tap $(( SCREEN_W / 2 )) $(( SCREEN_H * 45 / 100 ))
+  # 先用已验证的媒体键暂停播放再取证；中央点击可能打开识别画面（10-02 M4 positive5）。
+  # 媒体键不触发页面导航；仍以分享按钮与详情页守卫确认现场。
+  "$ADB" -s "$SERIAL" shell input keyevent 85
   wait_ms 600
   # 分享按钮是详情页上"已知存在"的东西，一次读不到不该放弃（0913 实证：前置守卫刚放行、
-  # 正式取证却报找不到，两者之间只隔了上面那次中央点击）。有界重抓，并区分两种死因：
-  #   a) 中央点击把页面点飞了 → 已不在详情页
+  # 正式取证却报找不到，两者之间只隔了暂停操作）。有界重抓，并区分两种死因：
+  #   a) 页面发生导航 → 已不在详情页
   #   b) 还在详情页但按钮没渲染出来 → 纯时序问题，重抓即可
   share_xml="$EVIDENCE_ROOT/${evidence_id}-share.xml"
   share_line=""
@@ -582,7 +583,7 @@ _current_video_link_once() {
   done
   if [[ -z "$share_line" ]]; then
     _sg=0; _on_video_detail "${evidence_id}-share-diag" || _sg=$?
-    (( _sg == 1 )) && die "the centre tap navigated away from the video detail page (share button gone); this is not a missing-button problem"
+    (( _sg == 1 )) && die "the video detail page changed during link capture (share button gone); this is not a missing-button problem"
     die "verified share button was not found after 3 captures while still on the video detail page" TARGET_ABSENT
   fi
   share_center="$(node_center "$share_line")" || die "share button bounds could not be parsed"

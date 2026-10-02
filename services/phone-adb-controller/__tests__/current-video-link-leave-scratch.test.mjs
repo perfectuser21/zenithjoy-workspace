@@ -55,7 +55,7 @@ const FEED_XML = `${XML_HEAD}</node></hierarchy>`;
  *  am start search/tabs?keyword=<词> → 压 results（兜底重搜）；keyevent 4 → 出栈一层
  *  scratchPopTo: 暂存路线退完落在哪（默认 detail；'feed' 模拟退飞了）
  */
-function makeFakePhone({ scratchPopTo = 'detail', playState = 'paused' } = {}) {
+function makeFakePhone({ scratchPopTo = 'detail', playState = 'paused', centreNavigates = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'cvl-leave-'));
   mkdirSync(join(dir, 'fx'));
   writeFileSync(join(dir, 'fx', 'detail.xml'), detailXml(playState));
@@ -69,6 +69,8 @@ function makeFakePhone({ scratchPopTo = 'detail', playState = 'paused' } = {}) {
   writeFileSync(join(dir, 'panel'), '0');
   writeFileSync(join(dir, 'taps'), '0');
   writeFileSync(join(dir, 'deeplinks'), '0');
+  writeFileSync(join(dir, 'media'), '0');
+  writeFileSync(join(dir, 'centre'), '0');
   const reg = join(dir, 'r.tsv');
   writeFileSync(reg, 'legacy\tSER1\tANY-MODEL\t1199\t2663\n');
   const curl = join(dir, 'curl');
@@ -92,11 +94,21 @@ case "$*" in
       else
         pop
       fi ;;
+  *"input keyevent 85"*)
+      n=$(cat "$D/media"); echo $((n+1)) > "$D/media" ;;
   *"input tap"*)
+      set -- $*; x=$6; y=$7
       t=$(top)
       if [ "$t" = "detail" ] || [ "$t" = "detail2" ]; then
         n=$(cat "$D/taps"); n=$((n+1)); echo $n > "$D/taps"
-        case $n in 2) echo 1 > "$D/panel";; 3) echo 0 > "$D/panel";; esac
+        if [ "$x" = "600" ] && [ "$y" = "1198" ]; then
+          n=$(cat "$D/centre"); echo $((n+1)) > "$D/centre"
+          if [ "${centreNavigates}" = "true" ]; then push visual_search; fi
+        elif [ "$x" = "1130" ] && [ "$y" = "1550" ]; then
+          echo 1 > "$D/panel"
+        elif [ "$x" = "170" ] && [ "$y" = "2204" ]; then
+          echo 0 > "$D/panel"
+        fi
       fi ;;
   *"uiautomator dump"*)
       t=$(top)
@@ -133,6 +145,8 @@ exit 0
     stack: () => readFileSync(stack, 'utf8').trim().split('\n'),
     deeplinks: () => Number(readFileSync(join(dir, 'deeplinks'), 'utf8').trim()),
     taps: () => Number(readFileSync(join(dir, 'taps'), 'utf8').trim()),
+    media: () => Number(readFileSync(join(dir, 'media'), 'utf8').trim()),
+    centre: () => Number(readFileSync(join(dir, 'centre'), 'utf8').trim()),
   };
 }
 
@@ -155,15 +169,17 @@ test('取完链接后 back-to-results 一次返回就到结果页，不触发兜
   assert.match(r.out, /backs=1\b/, `应一次返回即到结果页: ${r.out}`);
 });
 
-test('退回原详情页后按状态恢复播放：页面暂停着就点一次，已在播放就不碰（盲目再点会按回暂停）', () => {
+test('退回原详情页后按状态恢复播放：暂停态用媒体键恢复，已在播放不再切换', () => {
   // 0930 fixtest-rc 实证：退回来的原页保留着取链接前被暂停的状态，多点一次 → 录到 -91 dB 死寂。
   const paused = makeFakePhone({ playState: 'paused' });
   assert.equal(paused.run(['current-video-link', 'cvl4']).code, 0);
-  // 详情页上的点击：中央暂停、分享按钮、分享链接、退回后探一下、恢复播放 = 5
-  assert.equal(paused.taps(), 5, `暂停态退回后应恰好再点一次恢复播放，实际详情页点击数=${paused.taps()}`);
+  // UI 点击只用于分享按钮与分享链接；媒体键用于取链暂停、返回时暂停及恢复。
+  assert.equal(paused.taps(), 2);
+  assert.equal(paused.media(), 3, '暂停态退回后应恢复播放');
   const playing = makeFakePhone({ playState: 'playing' });
   assert.equal(playing.run(['current-video-link', 'cvl5']).code, 0);
-  assert.equal(playing.taps(), 4, `已在播放时不该再点（会按回暂停），实际详情页点击数=${playing.taps()}`);
+  assert.equal(playing.taps(), 2);
+  assert.equal(playing.media(), 2, '已在播放时不能再次切换');
 });
 
 test('proven-to-fire 反向：修复后真机验收日志（fixtest-rc，2 张作品）回放 → 0 次兜底重搜，rescan_rate=0', () => {
@@ -181,4 +197,16 @@ test('暂存路线退飞了（底下不是详情页）→ 退回 deep link 重�
   assert.equal(r.code, 0, `兜底路径也失败了: ${r.err}`);
   assert.equal(ph.deeplinks(), 1, '退不回详情页时必须用 deep link 重开兜底');
   assert.equal(ph.stack().at(-1), 'detail2', `兜底后应停在重开的详情页: ${ph.stack().join('>')}`);
+});
+
+// 2026-10-02 M4 positive5 原始回执：取链入口分享按钮存在，中央暂停之后进入识别画面 AI 页。
+// 回放这条导航边界：暂停和恢复只能改变媒体状态，不能让本来正确的视频页丢失。
+test('中央点击会导航识别画面时，完整取链和暂存页归位仍成功，媒体控制不触碰页面', () => {
+  const ph = makeFakePhone({ centreNavigates: true });
+  const r = ph.run(['current-video-link', 'cvl-centre-nav']);
+  assert.equal(r.code, 0, r.err);
+  assert.match(r.out, /video_id=7000000000000000001/);
+  assert.deepEqual(ph.stack(), ['results', 'detail']);
+  assert.equal(ph.centre(), 0, '暂停与恢复不能靠坐标点击');
+  assert.equal(ph.deeplinks(), 0, '正常归位不能增加详情页层级');
 });
