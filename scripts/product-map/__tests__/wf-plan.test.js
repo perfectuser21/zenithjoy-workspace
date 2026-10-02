@@ -21,6 +21,8 @@ const CLI = resolve(ROOT, 'scripts/product-map/wf-plan.mjs');
 const fresh = () => loadContractsFromDisk();
 const act = (ctx, cap, key) => ctx.contracts[cap].activities.find((a) => a.key === key);
 const cli = (...args) => spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8', cwd: ROOT });
+const versionFields = ['WF_BRAIN_WORKFLOW','WF_SOURCE_REPO','WF_CONTRACT_SHA256','WF_CONTRACT_RAW_SHA256','WF_ACTIVITY_REFS','WF_STEP_SPEC'];
+const legacyEnv = env => Object.fromEntries(Object.entries(env).filter(([key]) => !versionFields.includes(key)));
 
 test('计划含明确Brain身份、两种契约摘要与规范活动位置，无当前提交自引用', () => {
   const ctx = fresh(), r = planFor(ctx, 'benchmark_link_acquisition');
@@ -49,7 +51,7 @@ test('关键词获客：计划 = 5 段阶段串 + keyword 源 + discover-keyword
   const r = planFor(fresh(), 'keyword_acquisition');
   assert.deepEqual(r.errors, []);
   assert.ok(r.ok);
-  assert.deepEqual(r.env, {
+  assert.deepEqual(legacyEnv(r.env), {
     WF_CAP: 'keyword_acquisition',
     WF_WORKFLOW: 'social-keyword-leadgen',
     WF_STAGES: '拉Commander,预检,取词单,发现·判定·采集·评分·配送,效果回写',
@@ -85,7 +87,7 @@ test('对标链接获客：发现四步已实现（338e3ec7）→ 默认放行�
   const r = planFor(fresh(), 'benchmark_link_acquisition');
   assert.deepEqual(r.errors, []);
   assert.ok(r.ok);
-  assert.deepEqual(r.env, {
+  assert.deepEqual(legacyEnv(r.env), {
     WF_CAP: 'benchmark_link_acquisition',
     WF_WORKFLOW: 'social-benchmark-leadgen',
     WF_STAGES: '拉Commander,预检,取对标源,对标发现·判定·采集·评分·配送,效果回写',

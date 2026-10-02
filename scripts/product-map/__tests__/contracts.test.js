@@ -39,6 +39,7 @@ test('对标清单展开共享36步但保持关键词规范身份，独有4步�
   }
   assert.equal(benchmark.steps.filter(s => s.key.startsWith('benchmark_link_acquisition.discovery.')).length, 4);
   assert.equal(benchmark.brain_workflow_key, 'douyin_benchmark_leadgen');
+  assert.deepEqual(JSON.parse(readFileSyncCt(new URL('../../../services/phone-adb-controller/plans/benchmark_link_acquisition.steps.json', import.meta.url), 'utf8')), benchmark);
 });
 test('结构化实现引用允许契约来源版本，拒绝浮动main及越界路径', () => {
   const ctx = fresh(), a = act(ctx, 'keyword_acquisition', 'preflight');
