@@ -1,3 +1,5 @@
+import { assertRuntimeHost } from './runtime-host.mjs';
+import { loadRuntimeRelease } from './runtime-release.mjs';
 // 运行前只读固定版本；运行目录是之后所有判定与身份解析的唯一来源。
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync, realpathSync, statSync } from 'node:fs';
@@ -39,13 +41,19 @@ export function locateRun(indexRoot,identity){
   const record=JSON.parse(readFileSync(file,'utf8'));assertRunIdentity(readFrozen(record.run_dir),identity,record.run_dir);return record.run_dir;
 }
 export async function freezeDefinition(o) {
-  if (existsSync(resolve(o.runDir,'run-definition.json'))) return readFrozen(o.runDir);
-  const list=await o.get('/api/brain/workflows'); const matches=(Array.isArray(list)?list:list.workflows||[]).filter(w=>w.key===o.workflowKey);
-  if(matches.length!==1 || !matches[0].current_definition_version_id) throw Error('工作流必须有唯一已登记current version');
-  const w=matches[0]; const version=(await o.get(`/api/brain/workflows/${w.id}/versions/${w.current_definition_version_id}`))?.version;
-  verifyVersion(version,'workflow',w.id,w.current_definition_version_id);
-  if (!o.rawContractSha256 || version.contract_sha256!==o.rawContractSha256) throw Error('部署计划contract摘要与版本不同');
+  if (existsSync(resolve(o.runDir,'run-definition.json'))) {const frozen=readFrozen(o.runDir);if(frozen.release)assertRuntimeHost(frozen.release,frozen.deployment);return frozen;}
   const manifest=JSON.parse(readFileSync(o.manifestPath||resolve(o.deploymentRoot,'deployment-manifest.json'),'utf8'));
+  const fixed=(o.releaseId||manifest.release_id||o.requireRelease)?await loadRuntimeRelease(o,manifest,digest):null;
+  let version;
+  if(fixed){assertRuntimeHost(fixed.release,manifest);version=fixed.version;}
+  else {
+    const list=await o.get('/api/brain/workflows');const matches=(Array.isArray(list)?list:list.workflows||[]).filter(w=>w.key===o.workflowKey);
+    if(matches.length!==1 || !matches[0].current_definition_version_id)throw Error('工作流必须有唯一已登记current version');
+    const w=matches[0];version=(await o.get(`/api/brain/workflows/${w.id}/versions/${w.current_definition_version_id}`))?.version;
+    verifyVersion(version,'workflow',w.id,w.current_definition_version_id);
+  }
+  verifyVersion(version,'workflow',version.payload.workflow_id,version.id);
+  if (!o.rawContractSha256 || version.contract_sha256!==o.rawContractSha256) throw Error('部署计划contract摘要与版本不同');
   if(manifest.source_commit!==version.source_commit || manifest.source_repo!==version.source_repo) throw Error('部署来源与固定版本不同');
   const checked=new Map();
   for (const file of manifest.files||[]) {
@@ -65,7 +73,7 @@ export async function freezeDefinition(o) {
   const activities=[];
   for(const ref of version.payload.activities||[]) {
     if(!ref.reference_id || !ref.activity_version_id) throw Error('缺少活动使用位置或版本');
-    const av=(await o.get(`/api/brain/activities/${ref.activity_id}/versions/${ref.activity_version_id}`))?.version;
+    const av=fixed?fixed.activityVersion(ref):(await o.get(`/api/brain/activities/${ref.activity_id}/versions/${ref.activity_version_id}`))?.version;
     verifyVersion(av,'activity',ref.activity_id,ref.activity_version_id);
     const implementations=(av.payload.implementation_bindings||[]).map(binding=>{
       const deployed=checked.get(binding.path);
@@ -88,7 +96,7 @@ export async function freezeDefinition(o) {
   }
   const files={'workflow.plan':digest(plan),'step-dod.json':digest(steps)};
   for(const file of checked.values()) files[`runtime/${file.deployed_path}`]=file.actual_content_sha256;
-  const body={schema_version:1,workflow_version:version,activities,deployment:manifest,files,...(o.runIdentity?{run_identity:o.runIdentity}:{})};
+  const body={schema_version:fixed?2:1,...(fixed?{release:fixed.release}:{}),workflow_version:version,activities,deployment:manifest,files,...(o.runIdentity?{run_identity:o.runIdentity}:{})};
   if(o.runIdentity)assertRunIdentity(body,o.runIdentity);
   const snapshot={...body,snapshot_sha256:digest(body)};
   const staging=`${o.runDir}.freeze-${randomUUID()}`; mkdirSync(staging,{recursive:true,mode:0o700});

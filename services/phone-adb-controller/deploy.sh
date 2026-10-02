@@ -125,7 +125,7 @@ DEVICE_SH_FILES=(
 # 少了它账本全程 WFR_WARN——单独成组,用 node --check 而不是 zsh -n 验语法。
 # 9032cdad: 步骤 DoD 统一裁判在执行机本地判 metric/evidence/log/tsv/ledger 类,清单 step-dod.json 由契约生成(json 用 JSON.parse 验)
 DEVICE_NODE_FILES=(
-  gateway-context.js runtime-definition.mjs runtime-outbox.mjs runtime-receipts.mjs ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js line-routes.js
+  gateway-context.js runtime-host.mjs runtime-release.mjs runtime-binding.mjs deployment-manifest.mjs runtime-definition.mjs runtime-outbox.mjs runtime-receipts.mjs ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js line-routes.js
   own-accounts-lib.js check-own-account.js config/own-accounts.json
   video-activities.js video-activity.js
   batch-activities.js batch-activity.js keyword-workflow.js keyword-workflow-control.js keyword-workflow-activity.js
@@ -140,8 +140,12 @@ DEVICE_NODE_FILES=(
 DEVICE_PLAN_FILES=(plans/keyword_acquisition.plan plans/benchmark_link_acquisition.plan plans/keyword_acquisition.steps.json plans/benchmark_link_acquisition.steps.json plans/keyword_workflow.contract.json plans/keyword_raw_comments.contract.json plans/keyword_gateway_activities.contract.json)
 # 在任何SSH前核验部署源字节属于固定commit；manifest最后发布，半次部署不能通过起跑核验。
 DEPLOY_MANIFEST=$(mktemp)
-trap 'rm -rf "$SKILL_BUILD_DIR"; rm -f "$DEPLOY_MANIFEST"' EXIT
+OBSERVED_MANIFEST=$(mktemp)
+trap 'rm -rf "$SKILL_BUILD_DIR"; rm -f "$DEPLOY_MANIFEST" "$OBSERVED_MANIFEST"' EXIT
+# Bash 3.2 参数展开错误会使 EXIT trap 看见状态0；显式拒绝状态避免假绿。
+( : "${WF_RELEASE_IDS:?必须提供两台机器的明确release_id映射}" "${WF_DEPLOY_ENVIRONMENT:?必须提供部署环境}" "${WF_DEPLOY_COLLECTOR:?必须提供受信collector}" "${WF_DEPLOY_ATTEMPT_KEY:?必须提供部署attempt}" "${BRAIN_URL:?必须提供Brain地址}" ) || exit 1
 node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" "${DEVICE_CTL_FILES[@]}" > "$DEPLOY_MANIFEST"
+node "$D/deployment-preflight.mjs" "$DEPLOY_MANIFEST"
 
 echo "=== [1/3] mmv:~/.openclaw/leadgen-scripts/ (判定链+数据层, ${#MMV_JS_FILES[@]} 个文件) ==="
 for f in "${MMV_JS_FILES[@]}"; do
@@ -344,6 +348,7 @@ if [[ "$FAILED" == "1" ]]; then
   exit 1
 fi
 for host in xian-m4 xian-m1; do
-  push_atomic "$DEPLOY_MANIFEST" "$host" "~/bin-harvest" deployment-manifest.json
+  node "$D/deployment-release.mjs" "$host" "$DEPLOY_MANIFEST" > "$OBSERVED_MANIFEST"
+  push_atomic "$OBSERVED_MANIFEST" "$host" "~/bin-harvest" deployment-manifest.json
 done
 echo "✅ 全部同步完成(mmv + xian-m4 + xian-m1,控制器覆盖两个执行路径),每个文件都过了语法检查。"

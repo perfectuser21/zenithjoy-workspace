@@ -66,8 +66,8 @@ test('CI显式提供生成器路径；真实部署准备后两条专属技能与
     }
     const log = join(root, 'calls.log');
     for (const tool of ['ssh', 'scp']) writeFileSync(join(root, tool), `#!/bin/sh\nprintf '%s\\n' "$*" >> "$DEPLOY_TEST_LOG"\ncase "$*" in *"sort -u | wc -l"*) printf '1\\n';; esac\n`, { mode: 0o700 });
-    const result = spawnSync('bash', [join(business, 'deploy.sh')], {
-      env: { ...process.env, PATH: `${root}:${process.env.PATH}`, DEPLOY_TEST_LOG: log,
+    const result = spawnSync(process.execPath, [join(business, '__tests__/fixtures/deploy-smoke-runner.mjs'), join(business, 'deploy.sh')], {
+      env: { ...process.env, PATH: `${root}:${process.env.PATH}`, DEPLOY_TEST_LOG: log, WF_DEPLOY_TEST_TRANSPORT_DIR: root,
         CECELIA_COMMANDER_SKILL_GENERATOR: generator }, encoding: 'utf8', timeout: 30000 });
     assert.equal(result.status, 0, result.stderr + result.stdout.slice(-4000));
     const calls = readFileSync(log, 'utf8');

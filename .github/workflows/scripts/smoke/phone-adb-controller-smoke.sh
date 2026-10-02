@@ -494,7 +494,7 @@ if [[ -n "$_CALL_PATH" ]]; then
   # ssh 桩也要记账,才能断言"最终落到了调用方目录的正式文件名"。
   printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> "%s/ssh.log"\nexit 0\n' "$_STUB" > "$_STUB/ssh"
   chmod +x "$_STUB/scp" "$_STUB/ssh"
-  PATH="$_STUB:$PATH" bash "$D/deploy.sh" > "$_STUB/run.log" 2>&1 || true
+  PATH="$_STUB:$PATH" WF_DEPLOY_TEST_TRANSPORT_DIR="$_STUB" node "$D/__tests__/fixtures/deploy-smoke-runner.mjs" "$D/deploy.sh" > "$_STUB/run.log" 2>&1 || true
   for _h in xian-m4 xian-m1; do
     if ! grep -qx "$_h:${_CALL_DIR}/.douyin-phone-adb.deploy-new" "$_STUB/scp.log" 2>/dev/null \
        || ! grep -qE "^$_h .*mv -f ${_CALL_DIR}/\.douyin-phone-adb\.deploy-new ${_CALL_DIR}/douyin-phone-adb\$" "$_STUB/ssh.log" 2>/dev/null; then

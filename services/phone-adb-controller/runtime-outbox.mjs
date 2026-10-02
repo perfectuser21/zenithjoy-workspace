@@ -2,7 +2,7 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync, readdirSync, openSync, closeSync, fsyncSync } from 'node:fs';
 import { join,dirname } from 'node:path';
-function atomic(path,value){const temp=`${path}.${randomUUID()}.tmp`;writeFileSync(temp,JSON.stringify(value,null,2),{mode:0o600});const fd=openSync(temp,'r');fsyncSync(fd);closeSync(fd);renameSync(temp,path);const parent=openSync(dirname(path),'r');fsyncSync(parent);closeSync(parent);}
+export function atomic(path,value){const temp=`${path}.${randomUUID()}.tmp`;writeFileSync(temp,JSON.stringify(value,null,2),{mode:0o600});const fd=openSync(temp,'r');fsyncSync(fd);closeSync(fd);renameSync(temp,path);const parent=openSync(dirname(path),'r');fsyncSync(parent);closeSync(parent);}
 const id = key => createHash('sha256').update(key).digest('hex');
 export function occurrence(dir,slot,start=false,startedAt=null) {
   mkdirSync(join(dir,'occurrences'),{recursive:true,mode:0o700});const file=join(dir,'occurrences',`${id(slot)}.json`);

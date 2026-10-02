@@ -111,6 +111,13 @@ fi
 source "$WFR_RUN_DIR/workflow.plan"
 export DISCOVER_CMD="$(wf_discover_cmd)"
 export WFR_STEP_SPEC="$WFR_RUN_DIR/step-dod.json"
+# 发布绑定ACK必须先于控制塔、escort与设备动作；失败保留本地固定请求。
+export WFR_HOSTKEY="$HOSTKEY"
+if ! WF_BIND_EXPORTS=$(bash "$WFR" bind-run); then
+  log "拒跑: 运行发布绑定未确认"; print -u2 -- "拒跑: 运行发布绑定未确认"; exit 1
+fi
+eval "$WF_BIND_EXPORTS"
+export WFR_ATTEMPT WFR_SKIP_WORDS
 # 起跑回执(启动器/Commander 看 nohup 日志确认已起跑);计划拒跑时不打
 print -r -- "WF_RUN_STARTED tag=$TAG cap=$WF_CAP serial=$SERIAL"
 # 7d150e33: 整批总时限——起跑记时刻,默认 4h(WF_RUN_MAX_SECONDS 可覆盖);batch2 在词边界、harvest-keyword 在视频边界各自判到点平滑收工

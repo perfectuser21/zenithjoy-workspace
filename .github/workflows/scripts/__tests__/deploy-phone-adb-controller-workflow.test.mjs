@@ -16,14 +16,10 @@ test("workflow 文件存在", () => {
   assert.ok(fs.existsSync(WORKFLOW_PATH), `workflow 文件不存在: ${WORKFLOW_PATH}`);
 });
 
-test("push trigger 的 paths 命中 services/phone-adb-controller/**", () => {
-  const yamlText = fs.readFileSync(WORKFLOW_PATH, "utf8");
-  assert.match(
-    yamlText,
-    /paths:\s*\n\s*-\s*["']?services\/phone-adb-controller\/\*\*["']?/,
-    "push.paths 必须包含 services/phone-adb-controller/**",
-  );
-  assert.match(yamlText, /branches:\s*\[main\]|branches:\s*\n\s*-\s*main/, "push.branches 必须包含 main");
+test("发布由主线Pilot release verification完成触发，不抢在证据前裸push",()=>{
+ const text=fs.readFileSync(WORKFLOW_PATH,'utf8');
+ assert.match(text,/workflow_run:/);assert.match(text,/workflows: \[Pilot release verification\]/);assert.match(text,/types: \[completed\]/);assert.match(text,/branches: \[main\]/);
+ assert.doesNotMatch(text,/^  push:/m);
 });
 
 test("含 workflow_dispatch 手动触发入口", () => {
@@ -42,7 +38,9 @@ test("使用 tailscale/github-action@v3 接入 tailnet，复用同名 secrets", 
 
 test("远程执行块调用 deploy.sh 和 drift-check.sh", () => {
   const yamlText = fs.readFileSync(WORKFLOW_PATH, "utf8");
-  assert.match(yamlText, /services\/phone-adb-controller\/deploy\.sh/, "必须调用现有 deploy.sh，不能重新实现部署逻辑");
+  assert.match(yamlText, /services\/phone-adb-controller\/deployment-prepare\.mjs/);
+  const wrapper=fs.readFileSync(path.join(__dirname,"../../../../services/phone-adb-controller/deployment-prepare.mjs"),"utf8");
+  assert.match(wrapper, /spawn\('bash',\[join\(root,'services\/phone-adb-controller\/deploy\.sh'\)/, "wrapper必须调用现有deploy.sh");
   assert.match(yamlText, /services\/phone-adb-controller\/drift-check\.sh/, "必须调用现有 drift-check.sh 做后验");
 });
 
@@ -67,7 +65,7 @@ test("deploy.sh 和 drift-check.sh 调用都重定向 stdin（防 heredoc 假绿
   const yamlText = fs.readFileSync(WORKFLOW_PATH, "utf8");
   assert.match(
     yamlText,
-    /deploy\.sh\s*<\/dev\/null/,
+    /deployment-prepare\.mjs[^\n]*<\/dev\/null/,
     "deploy.sh 调用必须加 </dev/null，否则会吃掉heredoc剩余内容导致后续步骤被跳过但job仍是绿的(C1)",
   );
   assert.match(
@@ -93,4 +91,21 @@ test("DEPLOY_FAIL_DETAIL赋值带 || true(防set -e下grep空匹配杀脚本回�
     /grep '❌' \| head -3 \| tr '\\n' ';' \|\| true\)"/,
     "DEPLOY_FAIL_DETAIL赋值末尾必须有 || true，否则deploy.sh输出里没有❌时(最常见失败场景之一，比如某台机器连不上)set -e会直接杀死整个脚本，导致连专属Bark告警都发不出去",
   );
+});
+
+test('主线部署消费已成功的Pilot release verification同run证据且凭据不进artifact',()=>{
+ const text=fs.readFileSync(WORKFLOW_PATH,'utf8');
+ assert.match(text,/workflow_run:/);assert.match(text,/Pilot release verification/);assert.match(text,/implementation_run_id/);
+ assert.match(text,/phone-deploy-evidence\.mjs/);assert.match(text,/deployment-prepare\.mjs/);
+ assert.doesNotMatch(text,/secrets\.CECELIA_INTERNAL_TOKEN/,'Brain token必须留在mmv已有镜像');
+ assert.ok(text.indexOf('phone-deploy-evidence.mjs')<text.indexOf('uses: tailscale/github-action'),'证据身份先于目标网络操作');
+});
+
+test('控制SSH运输只携带固定SHA与编码JSON，远端仍拒绝旧main',()=>{
+ const text=fs.readFileSync(WORKFLOW_PATH,'utf8');
+ assert.match(text,/DEPLOY_SHA: \$\{\{ steps\.evidence\.outputs\.sha \}\}/);
+ assert.match(text,/CI_BUNDLE_B64='%s'/);assert.match(text,/Buffer\.from\(fs\.readFileSync\(0,"utf8"\),"base64"\)/);
+ assert.match(text,/rev-parse origin\/main\)" != "\$DEPLOY_SHA"/);
+ assert.match(text,/bash -s -- "\$DEPLOY_SHA" "\$IMPLEMENTATION_RUN_ID" "\$GITHUB_RUN_ID" "\$GITHUB_RUN_ATTEMPT"/);
+ assert.doesNotMatch(text,/upload-artifact|CECELIA_INTERNAL_TOKEN=/);
 });

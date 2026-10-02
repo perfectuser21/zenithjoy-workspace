@@ -4,6 +4,8 @@ import { mkdtempSync,mkdirSync,writeFileSync,symlinkSync,readFileSync,rmSync } f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync, execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { hostname } from 'node:os';
 import { deploymentManifest } from '../deployment-manifest.mjs';
 test('部署manifest必须绑定git固定commit的真实字节，dirty同HEAD不能盖章',()=>{
  const root=mkdtempSync(join(tmpdir(),'deployment-fixed-'));const source=join(root,'services/phone-adb-controller');mkdirSync(source,{recursive:true});writeFileSync(join(source,'run.sh'),'original\n');
@@ -57,4 +59,14 @@ exit "$FAILED"
   const invalid = run();
   assert.equal(invalid.status, 1, '非法JSON不得完成部署');
   assert.match(invalid.stdout, /语法检查失败/);
+});
+
+test('部署后collect必须读实际文件字节和机器身份，篡改拒绝而非复制声明摘要',()=>{
+ const root=mkdtempSync(join(tmpdir(),'deployment-readback-'));writeFileSync(join(root,'run.sh'),'actual\n');
+ const manifest={source_repo:'fixture/repo',source_commit:'a'.repeat(40),files:[{path:'services/phone-adb-controller/run.sh',deployed_path:'run.sh',content_sha256:createHash('sha256').update('actual\n').digest('hex')}]};
+ const mf=join(root,'manifest.json');writeFileSync(mf,JSON.stringify(manifest));
+ const cli=new URL('../deployment-manifest.mjs',import.meta.url).pathname;
+ const r=spawnSync(process.execPath,[cli,'collect',root,mf],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+ const result=JSON.parse(r.stdout);assert.equal(result.files[0].content_sha256,manifest.files[0].content_sha256);assert.equal(result.observed_hostname,hostname());
+ writeFileSync(join(root,'run.sh'),'tampered');const bad=spawnSync(process.execPath,[cli,'collect',root,mf],{encoding:'utf8'});assert.notEqual(bad.status,0);assert.match(bad.stderr,/实际.*digest/);
 });
