@@ -117,3 +117,43 @@ for (const withoutScore of [false, true]) {
     assert.equal(f.errors.length, 0);
   });
 }
+
+
+test('第二条原始评论workflow仅改绑定；六活动投影来自真身且沿用原执行器与Commander生成器', { timeout: 60000 }, async t => {
+  const variantBindings = join(service, 'plans/keyword_raw_comments.bindings.json');
+  const variantProjection = join(service, 'plans/keyword_raw_comments.contract.json');
+  const selected = JSON.parse(readFileSync(variantBindings, 'utf8'));
+  const original = JSON.parse(readFileSync(bindings, 'utf8'));
+  assert.deepEqual(selected.select, original.select.filter(key => key !== 'scoring'));
+  assert.deepEqual(Object.keys(selected.activities), Object.keys(original.activities).filter(key => key !== 'scoring'));
+  for (const key of selected.select) assert.deepEqual(selected.activities[key], original.activities[key]);
+  const generated = compile(variantBindings);
+  assert.deepEqual(JSON.parse(readFileSync(variantProjection, 'utf8')), generated);
+  assert.deepEqual(generated.contract.activities.map(a => a.key), selected.select);
+  const f = await keywordFixture(t, ['matched', 'matched'], { withoutScore: true });
+  const directory = join(f.home, 'raw-comments', 'bin-harvest'); mkdirSync(directory, { recursive: true });
+  deviceBundle(directory);
+  const contract = join(directory, 'plans/keyword_raw_comments.contract.json');
+  assert.ok(existsSync(contract), '部署清单必须携带第二条编译投影');
+  delete f.input.execution.gateway;
+  const output = await cli(join(directory, 'keyword-workflow.js'), [
+    '--runtime', runtime, '--contract', contract, '--receipt', f.receiptPath,
+  ], { cwd: directory, env: f.env, input: f.input });
+  assert.equal(output.code, 0, output.stderr);
+  const receipt = JSON.parse(output.stdout);
+  assert.equal(receipt.status, 'completed');
+  assert.deepEqual(JSON.parse(readFileSync(f.receiptPath, 'utf8')), receipt);
+  assert.equal(f.pool.size, 2); assert.equal(f.leads.size, 0); assert.equal(f.modelCalls.length, 0);
+  assert.equal(receipt.activities.some(a => a.key === 'scoring'), false);
+  assert.deepEqual(receipt.activities.slice(-2).map(a => a.key), ['delivery', 'cleanup']);
+  assert.equal(f.read('phone-state.json').owner, null); assert.equal(f.errors.length, 0);
+  const skillPath = join(f.home, 'skills/wf-keyword_acquisition/SKILL.md');
+  const builder = spawnSync(process.execPath, [join(service, 'commander/build-workflow-skill.mjs'),
+    'keyword_acquisition', variantProjection, join(service, 'commander/keyword-acquisition-sop.json'), skillPath], {
+    env: { ...process.env, CECELIA_COMMANDER_SKILL_GENERATOR: join(runtime, '..', 'generate-commander-skill.mjs') }, encoding: 'utf8' });
+  assert.equal(builder.status, 0, builder.stderr);
+  const skill = readFileSync(skillPath, 'utf8');
+  assert.equal((skill.match(/^## \d+\./gm) || []).length, 6);
+  assert.equal(skill.includes('intent_scored'), false);
+  assert.match(skill, /cl_lock_released/);
+});

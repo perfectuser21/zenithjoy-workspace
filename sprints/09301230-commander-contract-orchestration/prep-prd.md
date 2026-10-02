@@ -171,6 +171,8 @@ npm run product-map:check
 |---|---|---|
 | `529325d9` | 组装一条不只换"发现"的 workflow（例：去掉评分或加一步） | 只改契约 + 补新活动，不改执行器与 Commander |
 
+阶段5隔离增量：`plans/keyword_raw_comments.bindings.json`从关键词完整绑定移除评分，保留预检、发现、逐视频判定/采集、原始评论配送、归位六活动；其余活动绑定完全复用。`keyword_raw_comments.contract.json`由真实编译器生成并加入携带清单。永久smoke在无仓库编译器和node_modules的平铺目录调用同一Cecelia执行器，读回两条原始评论入池、评分模型调用与线索写入均为0、delivery/cleanup终态顺序与锁free；同一Commander生成器直接生成六活动陪跑skill。该证据只覆盖隔离真实CLI与运输替身，未部署生产，也不替代完整七活动真机验收。
+
 ## 不包含
 
 - 不换编排引擎（Temporal / DBOS 三次复议结论不变，只借概念）。
