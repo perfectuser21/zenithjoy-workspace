@@ -21,8 +21,10 @@ export function fixture(){
  const snapshot={schema_version:1,scope:'zenithjoy',repo,revision:sha,status:'verified',gaps:[],definitions:{workflows,activities}};
  snapshot.snapshot_sha256=digest(snapshot);
  const report={source:{repo,base_revision:'b'.repeat(40),head_revision:sha,changed_files:[file]},mapping_status:'verified',truncated:false,gaps:[],
-  ci_context:{purpose:'release',head_snapshot_sha256:snapshot.snapshot_sha256},head:{definition_versions:{workflows,activities}},required_assertions:[{assertion_ref:'test.sh'}]};
- const receipt={purpose:'release',actor:'implementation_ci_gate',verdict:'PASS',scope:'regression_tests',source:report.source,report_sha256:digest(Buffer.from(JSON.stringify(report))),assertions:[{assertion_ref:'test.sh',source_repo:repo,source_revision:sha,test_sha256:'c'.repeat(64),exit_code:0}]};
+  protocol:'pilot_release_verification_v1',purpose:'release_verification',scope:'zenithjoy',snapshot_sha256:snapshot.snapshot_sha256,verification_status:'verified',assertion_source:'current_registration',definition_versions:{workflows,activities},expected_usages:[{workflow_id:'b1000000-0000-4000-8000-000000000001'}],required_assertions:[{assertion_ref:'test.sh'}]};
+ report.source={repo,head_revision:sha};
+ report.assertion_plan_sha256=digest(Object.fromEntries(['scope','source','definition_versions','expected_usages','required_assertions','assertion_source'].map(k=>[k,report[k]])));
+ const receipt={purpose:'release_verification',actor:'pilot_release_verification',verdict:'PASS',scope:'declared_pilot_regressions',business_runtime_status:'not_evaluated',snapshot_sha256:snapshot.snapshot_sha256,assertion_plan_sha256:report.assertion_plan_sha256,source:report.source,report_sha256:digest(Buffer.from(JSON.stringify(report))),assertions:[{assertion_ref:'test.sh',source_repo:repo,source_revision:sha,test_sha256:'c'.repeat(64),exit_code:0}]};
  const manifest={source_repo:repo,source_commit:sha,files:[{path:file,content_sha256:digest(bytes)}]};
  return {bundle:{snapshot,report,receipt},manifest};
 }
@@ -39,7 +41,7 @@ test('固定证据生成两目标release；真实Brain回读后才返回可部�
 });
 test('错误固定SHA、PR/unknown/admission_only或篡改快照在创建release前拒绝',async()=>{
  const {prepareDeploymentReleases}=await implementation();
- for(const mutate of [f=>f.bundle.report.source.head_revision='b'.repeat(40),f=>f.bundle.report.mapping_status='unknown',f=>f.bundle.receipt.purpose='admission_only',f=>f.bundle.snapshot.definitions.activities[0].payload.steps.push({key:'forged'})]){
+ for(const mutate of [f=>f.bundle.report.source.head_revision='b'.repeat(40),f=>f.bundle.report.verification_status='unknown',f=>f.bundle.receipt.purpose='admission_only',f=>f.bundle.snapshot.definitions.activities[0].payload.steps.push({key:'forged'})]){
   const f=fixture();mutate(f);let calls=0;await assert.rejects(prepareDeploymentReleases({...f,sha,environment:'production',attemptKey:'test',request:async()=>{calls++;},readFile:()=>bytes}));assert.equal(calls,0);
  }
 });
