@@ -59,7 +59,7 @@ export async function observeDeployment(o){
 }
 async function request(url,body){
  const headers={'Content-Type':'application/json'};
- if(process.env.BRAIN_TOKEN)headers.Authorization=`Bearer ${process.env.BRAIN_TOKEN}`;
+ if(process.env.BRAIN_INTERNAL_TOKEN)headers.Authorization=`Bearer ${process.env.BRAIN_INTERNAL_TOKEN}`;
  const response=await fetch(url,{method:body?'POST':'GET',headers,body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(30000)});
  if(!response.ok)throw Object.assign(Error(`Brain部署观测HTTP ${response.status}`),{status:response.status});return response.json();
 }
