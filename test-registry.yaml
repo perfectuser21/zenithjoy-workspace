@@ -7318,3 +7318,11 @@ agent_suite:
     status: active
     product: 新媒体运营
     note: "合并定义版本冻结后，采集入口优先使用已核验冻结控制器；独立活动仍允许显式隔离控制器覆盖默认路径。"
+
+  - id: gateway-freeze
+    path: services/phone-adb-controller/__tests__/gateway-freeze.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "固定commit角色快照完整性；真实fetchseen与qualify discover/judge/collected、评分配送、探针只在显式gateway路径执行，PG/HTTP/手机边界替身。缺文件不回退生产，保留产物释放锁；音频SCP/judge同host/path、无gateway旧默认、0600虚构凭据与pg实际加载前检。须显式CECELIA_ACTIVITY_RUNTIME。"

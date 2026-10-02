@@ -6,6 +6,13 @@ DURATION="$6"; RUN_TAG="$7"; KEYWORD_ENC="$8"; BUDGET="$9"; EXPECTED_SERIAL="${1
 RETURN_TO_RESULTS="${12:-false}"; RETURN_ATTEMPTED=0; RETURN_CONFIRMED=0; RETURN_RESCANS=unknown
 # 直接调用shell也必须先拒绝非法flag；不能先source远端/手机活动。
 [[ "$RETURN_TO_RESULTS" == true || "$RETURN_TO_RESULTS" == false ]] || { print -- $'ACTIVITY_STATUS\tfatal\tinvalid_input'; exit 1; }
+# 仅使用execFile显式参数，清除继承环境里的网关值。
+QUAL_GATEWAY_HOST="${13:-}"; QUAL_GATEWAY_CWD="${14:-}"; QUAL_GATEWAY_NODE="${15:-}"; QUAL_GATEWAY_ENV_FILE="${16:-}"
+if [[ -n "$QUAL_GATEWAY_HOST$QUAL_GATEWAY_CWD$QUAL_GATEWAY_NODE$QUAL_GATEWAY_ENV_FILE" ]]; then
+  [[ "$QUAL_GATEWAY_HOST" =~ '^[A-Za-z0-9][A-Za-z0-9_.@:-]{0,127}$' && "$QUAL_GATEWAY_CWD" == /* && ! "$QUAL_GATEWAY_CWD" =~ '[[:cntrl:]]' && "/$QUAL_GATEWAY_CWD/" != *'/../'* ]] || { print -- $'ACTIVITY_STATUS\tfatal\tinvalid_gateway'; exit 1; }
+  [[ -z "$QUAL_GATEWAY_NODE" || ( "$QUAL_GATEWAY_NODE" =~ '^/[A-Za-z0-9_./-]+$' && "/$QUAL_GATEWAY_NODE/" != *'/../'* ) ]] || { print -- $'ACTIVITY_STATUS\tfatal\tinvalid_gateway'; exit 1; }
+  [[ -z "$QUAL_GATEWAY_ENV_FILE" || ( "$QUAL_GATEWAY_ENV_FILE" =~ '^/[A-Za-z0-9_./-]+/\.credentials/[A-Za-z0-9_.-]+\.env$' && "/$QUAL_GATEWAY_ENV_FILE/" != *'/../'* ) ]] || { print -- $'ACTIVITY_STATUS\tfatal\tinvalid_gateway'; exit 1; }
+fi
 export HARVEST_KEYWORD_LIB=1 VIDEO_ACTIVITY_MODE=1
 source "${0:A:h}/harvest-keyword.sh" "$PROFILE" "$KEYWORD_ENC" 1 "$RUN_TAG" unlimited "$LINE_HINT"
 VID="$VIDEO_ID"; TITLE="$(print -rn -- "$TITLE_B64" | base64 -d)"; DUR="$DURATION"; i=1

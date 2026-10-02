@@ -9,6 +9,7 @@ const execute = promisify(execFile);
 
 function validateVideoInput(input) {
   if (!input || !/^[a-zA-Z0-9_.-]{1,96}$/.test(input.run_tag || '')) throw new Error('run标识非法');
+  require('./gateway-context.js').validateExecution(input.execution);
   const route = routeOf(input.line_key);
   const device = input.device;
   if (!device || !route.profiles.includes(device.profile)
@@ -47,7 +48,8 @@ async function runPhone(action, input) {
       routeOf(input.line_key).key, input.video.video_id, Buffer.from(input.video.title).toString('base64'),
       input.video.duration || '', input.run_tag, encodeURIComponent(input.video.keyword || ''),
       String(input.budget ? input.budget.max_duration_s : 0), input.device.serial, input.device.lock_holder,
-      String(input.return_to_results === true)],
+      String(input.return_to_results === true), input.execution?.gateway?.host || '',
+      input.execution?.gateway?.cwd || '', input.execution?.gateway?.node || '', input.execution?.gateway?.env_file || ''],
     { maxBuffer: 16 * 1024 * 1024, env: { ...process.env, VIDEO_ACTIVITY_STOP_FILE: stopFile } });
   } finally {
     process.off('SIGTERM', stop); process.off('SIGINT', stop);

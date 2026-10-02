@@ -90,7 +90,8 @@ else if(command.includes('qualify-video.js')){
    const row=db.videos[id];if(row?.judgment_status!=='matched')throw Error('collected nonmatched');
    row.process_status='评论已采';write('pg.json',db);emit('QUAL_COLLECTED {"updated":1}');
  }else throw Error('unknown qualify command');
-}else if(command.startsWith('exec ')&&command.includes(${JSON.stringify(service)})){
+}else if(command.startsWith('exec ')||command.startsWith('cd ')){
+ if(!command.includes(${JSON.stringify(service)}))throw Error('blocked non-fixture source');
  const child=require('node:child_process').spawn('/bin/zsh',['-c',command],{env:process.env,stdio:'inherit'});
  child.on('exit',(code,signal)=>{process.exitCode=code??1;});
 }else throw Error('blocked non-fixture SSH');

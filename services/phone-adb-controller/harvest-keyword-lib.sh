@@ -38,11 +38,20 @@ activity_remote_budget(){
   print -r -- "$cap"
 }
 qual_remote(){
-  local sub="$1" args="" a cap
+  local sub="$1" args="" a cap remote prefix host=mmv
   shift
+  [[ "$sub" == discover || "$sub" == judge || "$sub" == collected ]] || return 1
   for a in "$@"; do args="$args $(qsq "$a")"; done
   cap="$(activity_remote_budget)" || return 124
-  wf_run_bounded "$cap" ssh -o ConnectTimeout=20 -o BatchMode=yes mmv "set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; cd ~/.openclaw/leadgen-scripts && node qualify-video.js $sub$args" 2>/dev/null </dev/null | grep '^QUAL_' | tail -1
+  if [[ -n "${VIDEO_ACTIVITY_MODE:-}" && -n "${QUAL_GATEWAY_HOST:-}" ]]; then
+    host="$QUAL_GATEWAY_HOST"
+    prefix="set -e; "
+    if [[ -n "${QUAL_GATEWAY_ENV_FILE:-}" ]]; then prefix+="set -a; . $(qsq "$QUAL_GATEWAY_ENV_FILE"); set +a; "; fi
+    remote="${prefix}cd $(qsq "$QUAL_GATEWAY_CWD"); exec $(qsq "${QUAL_GATEWAY_NODE:-node}") $(qsq "$QUAL_GATEWAY_CWD/qualify-video.js") $(qsq "$sub")$args"
+  else
+    remote="set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; cd ~/.openclaw/leadgen-scripts && node qualify-video.js $sub$args"
+  fi
+  wf_run_bounded "$cap" ssh -o ConnectTimeout=20 -o BatchMode=yes "$host" "$remote" 2>/dev/null </dev/null | grep '^QUAL_' | tail -1
 }
 # qual_field JSON行 键 → 值(字符串或 true/false)
 qual_field(){ print -r -- "$1" | sed -n "s/.*\"$2\":\"\{0,1\}\([^\",}]*\).*/\1/p" | head -1; }
@@ -131,9 +140,15 @@ qualify_current_video() {
   if [[ "$QSRC" == judged ]]; then
     QAUD=()
     if [[ -n "$AUDIO_PATH" ]]; then
-      RAUD="/tmp/qa-${HBATCH}-${VID}.${AUDIO_PATH##*.}"
+      local audio_ext="${AUDIO_PATH##*.}"
+      if [[ -n "${VIDEO_ACTIVITY_MODE:-}" && -n "${QUAL_GATEWAY_HOST:-}" ]]; then
+        [[ "$HBATCH" =~ '^[A-Za-z0-9_.-]+$' && "$VID" == <-> && "$audio_ext" =~ '^[A-Za-z0-9]+$' ]] || { QV=pending; return 1; }
+      fi
+      RAUD="/tmp/qa-${HBATCH}-${VID}.${audio_ext}"
       UPLOAD_CAP="$(activity_remote_budget)" || { QV=pending; return 124; }
-      if wf_run_bounded "$UPLOAD_CAP" scp -o ConnectTimeout=20 -o BatchMode=yes "$AUDIO_PATH" "mmv:$RAUD" </dev/null >/dev/null 2>&1; then QAUD=(--audio "$RAUD")
+      local audio_upload_host=mmv
+      [[ -n "${VIDEO_ACTIVITY_MODE:-}" && -n "${QUAL_GATEWAY_HOST:-}" ]] && audio_upload_host="$QUAL_GATEWAY_HOST"
+      if wf_run_bounded "$UPLOAD_CAP" scp -o ConnectTimeout=20 -o BatchMode=yes "$AUDIO_PATH" "$audio_upload_host:$RAUD" </dev/null >/dev/null 2>&1; then QAUD=(--audio "$RAUD")
       else log "  音频传 mmv 失败,本视频退回标题判定"; fi
     fi
     activity_should_stop && { QV=pending; return 124; }

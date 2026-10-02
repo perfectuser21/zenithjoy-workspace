@@ -17,22 +17,13 @@ function invokeJson(entry, args, input, { gateway, timeoutMs } = {}) {
   return new Promise((resolve, reject) => {
     let command = process.execPath, argv = [join(__dirname, entry), ...args];
     if (gateway) {
-      if (!gateway || typeof gateway.host !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.@:-]{0,127}$/.test(gateway.host)
-          || typeof gateway.cwd !== 'string' || !gateway.cwd.startsWith('/') || /[\n\r\0]/.test(gateway.cwd)) {
-        return reject(new Error('invalid_gateway'));
-      }
+      try { require('./gateway-context.js').validateExecution({ gateway }); }
+      catch (error) { return reject(error); }
       const node = gateway.node || 'node';
-      if (typeof node !== 'string' || !/^(?:node|\/[A-Za-z0-9_./-]+)$/.test(node)) return reject(new Error('invalid_gateway'));
-      let prefix = '';
-      if (gateway.env_file !== undefined) {
-        if (typeof gateway.env_file !== 'string' || !/^\/[A-Za-z0-9_./-]+\/\.credentials\/[A-Za-z0-9_.-]+$/.test(gateway.env_file)) {
-          return reject(new Error('invalid_gateway_credentials_path'));
-        }
-        prefix = `set -e; set -a; . ${shellQuote(gateway.env_file)}; set +a; `;
-      }
+      const prefix = gateway.env_file ? `set -e; set -a; . ${shellQuote(gateway.env_file)}; set +a; ` : '';
       command = 'ssh';
       argv = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', gateway.host,
-        prefix + 'exec ' + [node, posix.join(gateway.cwd, entry), ...args].map(shellQuote).join(' ')];
+        prefix + 'cd ' + shellQuote(gateway.cwd) + ' && exec ' + [node, posix.join(gateway.cwd, entry), ...args].map(shellQuote).join(' ')];
     }
     const child = spawn(command, argv, { env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '', settled = false, timedOut = false;
@@ -93,7 +84,7 @@ function nativeInput(stage, input) {
   if (['preflight', 'discovery', 'cleanup'].includes(stage)) {
     Object.assign(result, { device: input.device, account: input.account, keywords: input.keywords, execution: input.execution });
   } else if (stage === 'qualification' || stage === 'collection') {
-    Object.assign(result, { device: input.device, video: input.video });
+    Object.assign(result, { device: input.device, video: input.video, execution: input.execution });
     if (stage === 'collection') result.return_to_results = input.return_to_results;
   } else {
     result.comments = input.comments;
@@ -113,6 +104,7 @@ function markGate(result, reports) {
 
 async function runWorkflowActivity(stage, input, { invoke = invokeJson, isStopping = () => false } = {}) {
   if (!NATIVE[stage]) throw new Error('invalid_activity');
+  require('./gateway-context.js').validateExecution(input.execution);
   const [entry, action] = NATIVE[stage];
   const gateway = ['scoring', 'delivery'].includes(stage) ? input.execution?.gateway : undefined;
   let result;
@@ -128,6 +120,20 @@ async function runWorkflowActivity(stage, input, { invoke = invokeJson, isStoppi
   } catch {
     result = { schema_version: 1, run_tag: input.run_tag, line_key: input.line_key, status: 'failed',
       failure_class: 'retryable', reason_code: 'activity_transport_unavailable', outputs: {}, metrics: {}, evidence: [] };
+  }
+  // 兼容固定旧网关：其存储失败回执已有validated pending_comments，不能清空上游产物。
+  if (stage === 'delivery' && result.status === 'failed' && result.failure_class === 'retryable'
+      && result.reason_code === 'storage_unavailable' && result.outputs.pending_comments?.length
+      && !result.outputs.comments?.length) {
+    require('./comment-activities.js').validateDeliveryInput(input);
+    result.outputs.comments = structuredClone(result.outputs.pending_comments);
+    if (Array.isArray(input.videos)) {
+      result.outputs.videos = structuredClone(input.videos);
+      result.outputs.pending_videos = input.videos.filter(video => {
+        try { require('./video-collection-receipt.js').validateReceipt(video, input.run_tag); return true; }
+        catch { return false; }
+      }).map(video => structuredClone(video));
+    }
   }
   const artifacts = updateArtifacts(input.workflow_artifacts, stage, result, { word: input.video?.keyword });
   try {

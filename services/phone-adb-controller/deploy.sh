@@ -66,9 +66,9 @@ push_atomic() {
 }
 
 MMV_JS_FILES=(
-  line-routes.js lead-fields-lib.js own-accounts-lib.js leadgen-db-lib.js
+  gateway-context.js line-routes.js lead-fields-lib.js own-accounts-lib.js leadgen-db-lib.js
   leadgen-db-connect.js judge-jev.js judge-video-lib.js judge-video.js
-  judge-comment.js sort-comments-lib.js comment-activities.js comment-delivery-storage.js video-delivery-storage.js
+  judge-comment.js sort-comments-lib.js comment-activities.js comment-delivery-storage.js video-delivery-storage.js video-collection-receipt.js
   raw-comment-activities.js raw-comment-storage.js raw-comment-delivery.js comment-activity.js
   push-videos.js push-raw-comments.js sort-comments.js next-outreach.js
   next-outreach-lib.js qualify-video.js transcribe-qwen-audio.js comment-tier-lib.js
@@ -125,19 +125,19 @@ DEVICE_SH_FILES=(
 # 少了它账本全程 WFR_WARN——单独成组,用 node --check 而不是 zsh -n 验语法。
 # 9032cdad: 步骤 DoD 统一裁判在执行机本地判 metric/evidence/log/tsv/ledger 类,清单 step-dod.json 由契约生成(json 用 JSON.parse 验)
 DEVICE_NODE_FILES=(
-  runtime-definition.mjs runtime-outbox.mjs runtime-receipts.mjs ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js line-routes.js
+  gateway-context.js runtime-definition.mjs runtime-outbox.mjs runtime-receipts.mjs ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js line-routes.js
   own-accounts-lib.js check-own-account.js config/own-accounts.json
   video-activities.js video-activity.js
   batch-activities.js batch-activity.js keyword-workflow.js keyword-workflow-control.js keyword-workflow-activity.js
   workflow-probe.js workflow-probes.mjs verify-step.mjs checks/probes-lib.js checks/schema.json checks/social-keyword-leadgen.yaml
-  comment-activity.js comment-activities.js comment-delivery-storage.js video-delivery-storage.js
+  comment-activity.js comment-activities.js comment-delivery-storage.js video-delivery-storage.js video-collection-receipt.js
   raw-comment-activities.js raw-comment-storage.js raw-comment-delivery.js
   judge-comment.js judge-jev.js judge-video.js judge-video-lib.js sort-comments-lib.js lead-fields-lib.js
   leadgen-db-connect.js leadgen-db-lib.js transcribe-qwen-audio.js
 )
 # 7f842d12 契约组装执行: wf-run.sh 读 ~/bin-harvest/plans/<能力>.plan(wf-plan.mjs 从契约生成、提交在仓库)。
 # 执行机没有仓库 node_modules,所以计划不在执行机上生成;漏发 = wf-run 拒跑并升级(不会静默跑错)。
-DEVICE_PLAN_FILES=(plans/keyword_acquisition.plan plans/benchmark_link_acquisition.plan plans/keyword_acquisition.steps.json plans/benchmark_link_acquisition.steps.json plans/keyword_workflow.contract.json plans/keyword_raw_comments.contract.json)
+DEVICE_PLAN_FILES=(plans/keyword_acquisition.plan plans/benchmark_link_acquisition.plan plans/keyword_acquisition.steps.json plans/benchmark_link_acquisition.steps.json plans/keyword_workflow.contract.json plans/keyword_raw_comments.contract.json plans/keyword_gateway_activities.contract.json)
 # 在任何SSH前核验部署源字节属于固定commit；manifest最后发布，半次部署不能通过起跑核验。
 DEPLOY_MANIFEST=$(mktemp)
 trap 'rm -rf "$SKILL_BUILD_DIR"; rm -f "$DEPLOY_MANIFEST"' EXIT

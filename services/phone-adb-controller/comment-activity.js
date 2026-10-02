@@ -5,6 +5,7 @@
 // node comment-activity.js scoring|persist|delivery|raw-delivery
 // delivery 当前结算已落池ID；原始评论持久化由独立落池单元承接。
 const { scoreComments, deliverComments, validateInput, validateDeliveryInput } = require('./comment-activities.js');
+const { validateReceipt } = require('./video-collection-receipt.js');
 
 async function main(action, stream = process.stdin) {
   let input;
@@ -43,12 +44,21 @@ async function main(action, stream = process.stdin) {
     process.stdout.write(JSON.stringify(result) + '\n');
     return result.status === 'completed' ? 0 : result.status === 'partial' ? 2 : 1;
   } catch (error) {
+    const retain = phase === 'storage' && error.failure_class !== 'fatal'
+      && !error.reason_code && ['delivery', 'raw-delivery'].includes(action);
+    const outputs = { comments: retain ? structuredClone(input.comments) : [],
+      ...(retain || (phase === 'storage' && ['persist', 'raw-delivery'].includes(action))
+        ? { pending_comments: structuredClone(input.comments) } : {}) };
+    if (retain && Array.isArray(input.videos)) {
+      outputs.videos = structuredClone(input.videos);
+      outputs.pending_videos = structuredClone(input.videos.filter(video =>
+        { try { validateReceipt(video, input.run_tag); return true; } catch { return false; } }));
+    }
     process.stdout.write(JSON.stringify({ schema_version: 1,
       run_tag: input && input.run_tag || null, line_key: input && input.line_key || null,
       status: 'failed', failure_class: error.failure_class || (phase === 'storage' ? 'retryable' : 'fatal'),
       reason_code: error.reason_code || (phase === 'storage' ? 'storage_unavailable' : 'invalid_input'),
-      outputs: { comments: [], ...(phase === 'storage' && ['persist', 'raw-delivery'].includes(action)
-        ? { pending_comments: input.comments } : {}) }, metrics: {}, evidence: [],
+      outputs, metrics: {}, evidence: [],
     }) + '\n');
     return 1;
   }
