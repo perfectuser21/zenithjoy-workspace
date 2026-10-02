@@ -36,6 +36,7 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts --workspaces=false
       - run: node --test scripts/ci/__tests__/implementation-impact-workflow.test.mjs
+      - run: node --test scripts/ci/__tests__/pilot-release-workflow.test.mjs
 
   impact:
     name: Implementation impact

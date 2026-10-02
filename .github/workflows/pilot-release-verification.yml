@@ -1,0 +1,45 @@
+name: Pilot release verification
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  caller-contract:
+    name: Pilot release caller contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 发布验证只接受main
+        env:
+          RUN_REF: ${{ github.ref }}
+        run: test "$RUN_REF" = refs/heads/main
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --workspaces=false
+      - run: node --test scripts/ci/__tests__/pilot-release-workflow.test.mjs
+
+  verify:
+    name: Complete pilot release verification
+    if: github.ref == 'refs/heads/main'
+    needs: caller-contract
+    uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@e42c76127768d408c471cd0e1085a6b2de5e2029
+    with:
+      source_repo: perfectuser21/zenithjoy-workspace
+      scope: zenithjoy
+      head_revision: ${{ github.sha }}
+      tooling_revision: e42c76127768d408c471cd0e1085a6b2de5e2029
+    secrets:
+      TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+      CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
+      BRAIN_DEPLOY_URL: ${{ secrets.BRAIN_DEPLOY_URL }}
