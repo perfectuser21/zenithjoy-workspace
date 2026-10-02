@@ -273,3 +273,32 @@ test('dod 缺失 / none 无 reason / hard 却 none / sql 不带 $RUN_TAG / at �
   ctx = fresh(); s0(ctx).dod = { mode: 'checkpoint', readback: { type: 'sql', query: 'SELECT 1', expect: { op: '>=', value: 1 } } }; expectError(ctx, /RUN_TAG/);
   ctx = fresh(); s0(ctx).dod = { mode: 'checkpoint', at: 'preflight', readback: { type: 'metric', ref: 'metrics.videos_pushed', expect: { op: '>=', value: 0 } } }; expectError(ctx, /at/);
 });
+
+test('两真实Workflow四调用位置各自声明Enabler完整文件来源，实际manifest可固定全部字节', async () => {
+  const {deploymentManifest}=await import('../../../services/phone-adb-controller/deployment-manifest.mjs');
+  const {fileURLToPath}=await import('node:url');
+  const root=fileURLToPath(new URL('../../../',import.meta.url));
+  const lock=['douyin-phone-adb','phone-lock-lib.sh','phone-lock-helper.py'];
+  const expected={preflight:{device_lock:lock,account_selfcheck:['douyin-phone-adb']},collection:{return_to_results:['douyin-phone-adb']},cleanup:{device_lock:lock}};
+  const manifest=deploymentManifest(root,lock);
+  const deploy=readFileSyncCt(new URL('../../../services/phone-adb-controller/deploy.sh',import.meta.url),'utf8');
+  const deviceFiles=/DEVICE_CTL_FILES=\(([\s\S]*?)\)/.exec(deploy)[1].trim().split(/\s+/);
+  for(const name of lock)assert.ok(deviceFiles.includes(name),`实际部署清单缺${name}`);
+  for(const cap of ['keyword_acquisition','benchmark_link_acquisition']){
+    const activities=assemble(fresh(),cap).activities;
+    for(const [key,groups] of Object.entries(expected))for(const [enabler,files] of Object.entries(groups)){
+      const a=activities.find(a=>a.key===key),bindings=a.implementation_bindings.filter(b=>b.enabler_key===enabler);
+      assert.deepEqual(bindings.map(b=>b.path.split('/').at(-1)),files,`${cap}/${key}/${enabler}`);
+      for(const b of bindings){
+        assert.equal(b.kind,'code');assert.equal(b.revision,'contract');assert.equal(b.repo,'perfectuser21/zenithjoy-workspace');assert.equal(b.symbol,undefined);
+        assert.ok(manifest.files.some(f=>f.path===b.path&&/^[a-f0-9]{64}$/.test(f.content_sha256)));
+      }
+    }
+  }
+});
+test('Enabler声明schema只允许非空稳定键，保留显式固定文件规则',()=>{
+  const ctx=fresh(),a=act(ctx,'keyword_acquisition','preflight');
+  a.implementation_bindings[0].enabler_key='device_lock';assert.deepEqual(validateContracts(ctx),[]);
+  a.implementation_bindings[0].enabler_key='';expectError(ctx,/enabler_key/);
+  a.implementation_bindings[0].enabler_key='../other';expectError(ctx,/enabler_key/);
+});
