@@ -453,7 +453,24 @@ node --check "$_NICK_LIB" || fail "nickname-match-lib.js 语法错误"
 # deploy.sh 的注释已经写过「不下发 = 改了控制器却永远到不了手机机」，但落点选错了，
 # 等于只把文件搬到了一个没人读的地方（同款形状见 memory
 # phone_controller_live_path_is_local_bin_not_repo：这条路径长期两份不同步）。
-_CALL_PATH=$(grep -ohE '[~$][^ ]*/douyin-phone-adb' "$D/harvest-keyword.sh" 2>/dev/null | sort -u | head -1)
+_CALL_PATH=$(python3 - "$D/harvest-keyword.sh" <<'PY'
+import pathlib, re, sys
+lines = [line for line in pathlib.Path(sys.argv[1]).read_text().splitlines() if line.startswith('C=')]
+if len(lines) != 1:
+    sys.exit('控制器 C= 赋值必须唯一')
+value = lines[0][2:]
+match = re.fullmatch(r'"\$\{DOUYIN_PHONE_CONTROLLER:-([^{}]+)\}"', value)
+if match:
+    value = match.group(1)
+elif value.startswith('"') and value.endswith('"'):
+    value = value[1:-1]
+if value.startswith('$HOME/'):
+    value = '~/' + value[len('$HOME/'):]
+if not re.fullmatch(r'~/[A-Za-z0-9._/-]+/douyin-phone-adb', value):
+    sys.exit('无法安全解析默认控制器路径: ' + lines[0])
+print(value)
+PY
+) || fail '无法从唯一 C= 赋值解析默认控制器路径'
 if [[ -n "$_CALL_PATH" ]]; then
   # 调用方用的目录（去掉文件名），必须出现在 deploy.sh 的下发目标里
   _CALL_DIR="${_CALL_PATH%/douyin-phone-adb}"
@@ -480,7 +497,7 @@ if [[ -n "$_CALL_PATH" ]]; then
       tail -15 "$_STUB/run.log" >&2 2>/dev/null || echo "(没有输出)" >&2
       echo "--- 实际送出的目标 ---" >&2
       grep -E '^[a-z0-9-]+:' "$_STUB/scp.log" 2>/dev/null | sort -u >&2 || echo "(scp.log 为空)" >&2
-      fail "deploy.sh 空跑后没往 $_h:${_CALL_DIR}/ 送 douyin-phone-adb —— 夜批调的就是这个路径(harvest-keyword.sh 里写死 ${_CALL_PATH})，下发到别处=手机上永远跑旧版"
+      fail "deploy.sh 空跑后没往 $_h:${_CALL_DIR}/ 送 douyin-phone-adb —— harvest-keyword.sh 默认调用 ${_CALL_PATH}，下发到别处=手机上永远跑旧版"
     fi
   done
 fi
@@ -704,7 +721,7 @@ _EMV_RAW_READ="$(grep -c 'cur="\$(media_volume)"' <<< "$_EMV_BODY" || true)"
 #  让"部署路径 != 执行路径"这一整类问题被 CI 挡住,而不是靠人记得。)
 _CTL_LINE="$(grep -m1 '^C=' "$D/harvest-keyword.sh" || true)"
 [[ -n "$_CTL_LINE" ]] || fail "harvest-keyword.sh 找不到 C= 控制器路径定义(守卫失去锚点,先修守卫)"
-_CTL_PATH="${_CTL_LINE#C=}"
+_CTL_PATH="$_CALL_PATH"
 _CTL_DIR="${_CTL_PATH%/*}"
 _CTL_DIR="${_CTL_DIR#\~/}"
 [[ -n "$_CTL_DIR" ]] || fail "从 harvest-keyword.sh 的 C= 解析不出控制器目录: $_CTL_LINE"

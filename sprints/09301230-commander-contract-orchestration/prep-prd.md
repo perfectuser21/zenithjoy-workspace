@@ -139,7 +139,7 @@ node scripts/product-map/wf-plan.mjs --check
 npm run product-map:check
 ```
 
-固定运输 fixture 同时调用旧采收入口与新完整调用链，核对评论/线索产物、活动阶段、探针与锁；覆盖多关键词、资格拦截、无评分、取消、总时限与落池失败。测试使用隔离 HOME/PATH 和本地 HTTP/数据库，拒绝真实 ADB、SSH 或凭据访问。ADB恢复仅解除设备离线阻塞；完成真机验收与上线切换前保持阶段3未完成，部署与真机验收分别留痕。
+固定运输 fixture 分别验证旧采收入口和新完整调用链的行为；新链覆盖多关键词、资格拦截、无评分、取消、总时限与落池失败，但这不能证明同一固定输入的旧新完整链直接等价。测试使用隔离 HOME/PATH 和本地 HTTP/数据库，拒绝真实 ADB、SSH 或凭据访问。10-02 新增评论边界直接对账：两份独立远端账本、固定时间和同一TSV，旧 `runLegacyPush` 加真实 `sort-comments.js` 与当前显式评分/落池/配送对比全部池字段、线索字段、统计及重放写入；覆盖相关、无关、重复高亮及去评分，2/2通过，相关27/27，全业务968/968。它使用当前兼容入口，只证明评论边界兼容，不替代冻结旧基线的整链产物、视频状态、活动阶段、探针、超时与锁对账。ADB恢复仅解除设备离线阻塞；完成完整等价、真机验收与上线切换前保持阶段3未完成，部署与真机验收分别留痕。
 
 部署可携带入口显式接受 `--contract plans/keyword_workflow.contract.json`，文件由真实 `wf-plan.mjs keyword_acquisition --json --bindings plans/keyword_workflow.bindings.json` 在源仓库生成，是编译投影；绑定与原契约才是真身。离线守卫逐次对比投影与编译器输出，再按 `deploy.sh` 清单复制到无仓库编译器、无 node_modules 的平铺目录，使用真实 Cecelia CLI跑完整链及删除评分版。`--contract` 与 `--bindings` 互斥，非法文件先拒绝。Cecelia runtime仍须显式绝对路径，由所属仓库单独准备；本轮仅更新业务文件携带清单，未下发设备。
 
