@@ -9,7 +9,7 @@ import { seedFrozen } from './fixtures/frozen-runtime.mjs';
 const CLI=resolve('services/phone-adb-controller/runtime-receipts.mjs');
 function invoke(env,...args){return new Promise((done,reject)=>{const child=spawn(process.execPath,[CLI,...args],{env:{...process.env,...env}});let out='',err='';child.stdout.on('data',b=>out+=b);child.stderr.on('data',b=>err+=b);child.on('error',reject);child.on('exit',code=>done({code,out,err}));});}
 test('真实HTTP: receipt断线留pending，重启flush字节不变，ack后sent，真重试新occurrence且409 blocked',async t=>{
- const dir=mkdtempSync(join(tmpdir(),'runtime-http-'));seedFrozen(dir);let mode='drop';const bodies=[];
+ const dir=mkdtempSync(join(tmpdir(),'runtime-http-'));seedFrozen(dir,null,{runId:'http-run'});let mode='drop';const bodies=[];
  const server=createServer((req,res)=>{let body='';req.on('data',b=>body+=b);req.on('end',()=>{bodies.push(body);assert.equal(req.headers.authorization,'Bearer fixture-token');if(mode==='drop')return req.socket.destroy();res.writeHead(mode==='conflict'?409:200,{'Content-Type':'application/json'});res.end('{"inserted":1}');});});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
  const env={WFR_RUN_DIR:dir,WFR_RUN_ID:'http-run',WFR_ATTEMPT:'a1',BRAIN_URL:`http://127.0.0.1:${server.address().port}`,BRAIN_INTERNAL_TOKEN:'fixture-token'};
@@ -25,4 +25,11 @@ test('真实HTTP: receipt断线留pending，重启flush字节不变，ack后sent
  assert.equal(files().find(f=>f.event_id!==first.event_id).state,'blocked');
  assert.equal(new Set(files().map(f=>f.occurrence_key)).size,2);
  assert.ok(files().every(f=>!JSON.stringify(f).includes('fixture-token')));
+});
+test('旧v1 outbox无需release或binding仍原body重传，禁止升级改写历史事件',async t=>{
+ const {enqueue}=await import('../runtime-outbox.mjs');const dir=mkdtempSync(join(tmpdir(),'runtime-v1-replay-'));let received;
+ const server=createServer(async(req,res)=>{let body='';for await(const chunk of req)body+=chunk;received=JSON.parse(body);res.end('{"skipped":1}');});await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
+ const body=[{run_id:'legacy-run',occurrence_key:'legacy-occurrence',activity_id:'legacy-activity',outcome:'pass',evidence:{original:true}}];
+ enqueue(dir,{key:'legacy-occurrence',endpoint:`http://127.0.0.1:${server.address().port}/api/brain/spans`,body});
+ const result=await invoke({WFR_RUN_DIR:dir,BRAIN_URL:'',BRAIN_INTERNAL_TOKEN:'fixture-token'},'flush');assert.equal(result.code,0,result.err);assert.deepEqual(received,body);assert.equal(received[0].identity_protocol,undefined);
 });

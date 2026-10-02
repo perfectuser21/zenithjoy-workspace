@@ -60,7 +60,9 @@ const runDir = args["run-dir"];
 if (!runDir) { console.error("missing --run-dir"); process.exit(2); }
 
 if (cmd === "init") {
-  const ledger = freshLedger(args["run-id"] || `run-${Date.now()}`, args);
+  const fresh = freshLedger(args["run-id"] || `run-${Date.now()}`, args);
+  const ledger = args.preserve && fs.existsSync(ledgerPath(runDir))
+    ? { ...JSON.parse(fs.readFileSync(ledgerPath(runDir), "utf8")), task_request_hash: fresh.task_request_hash, run_meta: fresh.run_meta } : fresh;
   saveLedger(runDir, ledger);
   console.log(JSON.stringify({ ok: true, run_id: ledger.run_id, attempt_id: ledger.attempt_id }));
 } else if (cmd === "set") {
