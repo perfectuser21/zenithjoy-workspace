@@ -10,7 +10,7 @@ export function seedFrozen(dir,planPath,env={}){
     version:{id:`av-${i}`,payload:{steps:[]}},implementations:[],
   }));
   const files={'workflow.plan':digest(plan),'step-dod.json':digest(steps)};
-  const names=['wf-run.sh','wf-run-lib.sh','wf-limits.sh','batch2.sh','harvest-keyword.sh','harvest-keyword-lib.sh','workflow-result.sh','runtime-definition.mjs','runtime-outbox.mjs','runtime-receipts.mjs','ledger.mjs','step-judge.mjs','discover-keyword.sh','discover-benchmark.sh','douyin-phone-adb','phone-lock-lib.sh','phone-lock-helper.py','locate-element.py','wall-report.sh','wall-lib.sh'];
+  const names=['wf-run.sh','wf-run-lib.sh','wf-limits.sh','batch2.sh','harvest-keyword.sh','harvest-keyword-lib.sh','workflow-result.sh','runtime-definition.mjs','runtime-release.mjs','runtime-binding.mjs','runtime-outbox.mjs','runtime-receipts.mjs','ledger.mjs','step-judge.mjs','discover-keyword.sh','discover-benchmark.sh','douyin-phone-adb','phone-lock-lib.sh','phone-lock-helper.py','locate-element.py','wall-report.sh','wall-lib.sh'];
   const overrides={'harvest-keyword.sh':env.HARVEST_KEYWORD,'douyin-phone-adb':env.C|| (env.HOME&&join(env.HOME,'.local/bin/douyin-phone-adb')),'wall-report.sh':env.WALL_REPORT};
   mkdirSync(join(dir,'runtime'),{recursive:true});
   for(const name of names){
