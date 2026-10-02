@@ -121,7 +121,8 @@ test("WF_RUN_MAX_SECONDS=60 假机整链: 60 秒内自收工、锁 free、已采
   assert.match(ctl, /lock-release cmd09301400/);
   assert.match(ctl, /close-app/);
   assert.match(ctl, /return-safe-desktop/);
-  assert.match(ssh, /openclaw cron rm cmdr-abc/, "escort 照常注销");
+  assert.doesNotMatch(ssh, /openclaw cron rm/, "finalize不能取消在途售后tick");
+  assert.match(log, /escort售后(?:已交接|保留)/, "收尾必须交接售后或留痕保留陪跑");
   assert.match(log, /账本finalize: ok=1 final=partial lock_released=1 .*reason=deadline/);
   const art = readdirSync(join(home, "wfr", "workflow-runs"));
   assert.ok(art.some((f) => /cleanup\.1\.worker-result\.json$/.test(f)), "cleanup 工件要写成: " + art.join(","));

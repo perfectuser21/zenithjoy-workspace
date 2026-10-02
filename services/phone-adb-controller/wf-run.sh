@@ -23,6 +23,8 @@ WFR=${WFR:-$HOME/bin-harvest/workflow-result.sh}
 BATCH2=${BATCH2:-$HOME/bin-harvest/batch2.sh}
 WF_HOME=${${(%):-%x}:A:h}                # 本文件所在目录(执行与 source 都对),执行机上 = ~/bin-harvest
 WF_PLAN_DIR=${WF_PLAN_DIR:-$WF_HOME/plans}
+source "$WF_HOME/wf-aftercare.sh" 2>/dev/null \
+  || { escort_aftercare(){ log 'escort售后保留: wf-aftercare.sh缺失，未注销'; } }
 # 7d150e33(阶段1): 整批总时限 + 每活动按契约预算封顶,函数在 wf-limits.sh(deploy.sh 同步);库缺失 → 兜底为"不限时",行为与并入前一致
 source "$WF_HOME/wf-limits.sh" 2>/dev/null \
   || { wf_deadline_reached(){ return 1 }; wf_budget_of(){ print 0 }; wf_timeout_class(){ print record }; wf_run_bounded(){ shift; "$@" } }
@@ -487,7 +489,7 @@ run_finalize(){
   [[ "${WFR_FINALIZE_OK:-0}" == "1" ]]
 }
 # 40f02c5e: 放锁并入 run_finalize(锁内清场 → 放锁 → 账本),trap 里不再单列 release_run_lock
-if [[ -n "$ESCORT_ID" ]]; then trap 'lease_heartbeat_stop; escort_watch_stop; run_finalize && escort_dismiss' EXIT INT TERM; else trap 'lease_heartbeat_stop; run_finalize' EXIT INT TERM; fi
+if [[ -n "$ESCORT_ID" ]]; then trap 'lease_heartbeat_stop; escort_watch_stop; run_finalize && escort_aftercare' EXIT INT TERM; else trap 'lease_heartbeat_stop; run_finalize' EXIT INT TERM; fi
 wr step "$SERIAL" 0 done; wr step "$SERIAL" 1 doing
 
 # ── ② 设备 preflight: 在线 + 屏幕亮 + 解锁(0915 锁屏=整机瘫痪且静默的教训) ──

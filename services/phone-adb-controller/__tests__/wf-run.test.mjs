@@ -79,7 +79,8 @@ test("--commander <escort cron id> → 不自拉,把它当 ESCORT_ID:按 id 复�
   const ssh = read(join(home, "ssh-argv.log"));
   assert.doesNotMatch(ssh, /cron add/);
   assert.match(ssh, /openclaw cron list --json/);
-  assert.match(ssh, /openclaw cron rm cmdr-abc/);
+  assert.doesNotMatch(ssh, /openclaw cron rm/, '未确认finalize和售后时必须保留陪跑');
+  assert.match(log, /escort售后保留/, '离线退让没有真实finalize，不可冒充已下岗');
   assert.match(ssh, /mmv\t[^\n]*\/Users\/administrator\/\.openclaw\/m4-logs\/escalation\.log/); // escalate 通路: 0930 起写 MMV 本机文件(任务 975aa6ec)
 });
 

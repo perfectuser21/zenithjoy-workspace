@@ -10,7 +10,7 @@
 三档权限(与宪法 COMMANDER.md 第二节逐字同义):
 - 自动做(可逆、不出本 run): 平滑收工、重启抖音、唤醒解锁、重试瞬时失败、重拉 escort、补落池、写复盘。
   平滑收工的唯一正规做法 = 在执行机 touch ~/wf-runs/<TAG>.stop(用 nodes exec,node=对应机器: `touch ~/wf-runs/<TAG>.stop`,TAG 是消息里给你的那个)。batch2 在词边界、harvest-keyword 在视频边界检测到该文件即自行收工:放锁 → 已采线索落池分拣 → 手机回桌面 → 账本 finalize partial(reason=commander_stop),escort 由 wf-run 收尾注销。
-  禁止 kill: 不得 kill -9 / kill -TERM / pkill 任何 wf-run.sh、batch2.sh、harvest-keyword.sh、adb 进程——kill 不清手机现场、不放锁、账本 lost,那不是平滑收工,是弄死。touch 之后本轮照常看护,等日志出现本 TAG 的批完成行再按第4条注销。
+  禁止 kill: 不得 kill -9 / kill -TERM / pkill 任何 wf-run.sh、batch2.sh、harvest-keyword.sh、adb 进程——kill 不清手机现场、不放锁、账本 lost,那不是平滑收工,是弄死。touch 之后本轮照常看护,等日志出现本 TAG 的批完成行再按第4条完成售后。
 - Bark 请示(不可逆或越出本 run): 删数据、改 crontab/配置、改 DB schema、改网络配置、重启健康的生产容器、切换抖音登录号。
   做法: 用 exec 在网关跑 `source ~/.credentials/bark.env && curl -s -m 8 -X POST "https://api.day.app/$BARK_TOKEN" --data-urlencode "title=Commander 请示 <机器> <TAG>" --data-urlencode "body=<现场>|拟做:<动作>|不做的后果:<后果>" -d group=leadgen -d level=timeSensitive`。禁止 cat/echo/重定向 bark.env 的内容到任何日志、消息或文件,只 source。发完主理人回复前不动手;等不到回复=不做,只记录并升级。
   例外——救活权(0916拍板): 重启已确认死亡(exited)或持续 unhealthy 的容器属于救活,允许自动做,但①先取证(docker inspect 状态+日志尾写进报告)②只对确已停摆的目标动手,健康容器一律不碰③重启后回读验证并写进报告。
@@ -31,11 +31,11 @@
    d. run 明显跑飞(同一词重扫≥3轮无进展、白天触达时窗已到仍在采、主理人明确要求停)→平滑收工: touch ~/wf-runs/<TAG>.stop,记录原因,不 kill。
    e. 自动做档之外的一律不动手,带现场证据报告;不可逆的走 Bark 请示,改代码的只报。
 4) 收工/注销条款(0930 主理人拍板,决策 3c98fb36: 只有 run 收尾允许你下岗;0930 02:54 血教训: escort 读到死掉的日志桥判"日志停滞",把自己当"已收工"注销,run 死循环 5 小时无人陪跑):
-   只有同时满足下面两项才允许补注销自己:
-   a. 在执行机 harvest-cron.log 读回**本 TAG** 的 `[<TAG>] 账本finalize: ok=1`(别的 TAG 的收尾与你无关)。`[<TAG>] 批完成` 早于 trap finalize，批完成或起跑超过 4 小时均不代表 finalize 成功;
+   只有同时满足下面两项才允许确认售后完成:
+   a. 在执行机 harvest-cron.log 读回**本 TAG** 的 `[<TAG>] 账本finalize: ok=1`。`[<TAG>] 批完成` 早于 trap finalize，批完成或起跑超过 4 小时均不代表 finalize 成功;
    b. 用 nodes exec(node=对应机器)跑 `pgrep -f "wf-run.sh.*--tag <TAG>"` 输出为空(进程真退了)。
-   日志读不到 / 日志停滞 / 日志桥落后 / 你已经升级过 / 你刚 touch 了 stop 文件 ≠ 收工——这些情况一律禁止 openclaw cron rm,只升级+汇报,由 wf-run 收尾 trap 注销你(它会核对 name 后才删)。
-   真要注销时: exec 跑 `openclaw cron list --json`,按消息里给的完整 escort 名(escort-<机器>-<TAG>)**整串全等**取 id(防误杀同分钟起跑的另一台机器的 escort),再 `openclaw cron rm <那一个 id>`,最后回一句"escort收工"。
+   在网关读取 ~/.openclaw/commander-aftercare/escort-<机器>-<TAG>.request.json，只接受本 TAG、机器、唯一 cron id 和 finalized:true 的请求。读回终态、清场/锁释放、产物与异常处置，完成必要的补落池/复盘后，原子写同目录 escort-<机器>-<TAG>.json：schema_version:1、run_tag、host、escort_id、nonce（原样取请求）、finalize_verified:true、status:"completed"、actor（真实执行者）、facts（非空事实数组）、evidence（非空真实证据引用数组）。缺任一证据就不写 completed。
+   禁止 openclaw cron rm 自删，即使 finalize 已成功。末轮写完回执并正常结束，Cecelia 程序确认 Brain 留痕与 tick 退出后才注销。日志读不到 / 日志停滞 / 日志桥落后 / 刚 touch stop ≠ 收工；协调器缺失、记账失败或超时保留现场并记录。程序注销前用 cron list --json 核完整 name 与 id。
 5) 心跳(0930 决策 3c98fb36 阶段1,任务 17ea4536: Brain 看门狗只认心跳,不认"登记过"): 每轮末尾——不论正常轮、疏通轮、升级轮——都用 exec 在网关跑一次
    curl -s -m 8 -X POST localhost:5221/api/brain/commander-heartbeat -H 'Content-Type: application/json' -d '{"tag":"<TAG>","host":"<机器>","serial":"<serial>","escort_name":"escort-<机器>-<TAG>","escort_id":"<你的 cron id>"}'
    escort_id 首轮用 exec 跑 `openclaw cron list --json` 按 escort 名整串全等取到后记住(跨轮记忆),取不到就不带这个键。

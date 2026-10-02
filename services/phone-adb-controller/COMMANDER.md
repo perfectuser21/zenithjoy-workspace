@@ -72,8 +72,8 @@
 
 | 谁 | 能不能删 escort cron | 条件 |
 |---|---|---|
-| wf-run 收尾 trap | **唯一正式注销者** | finalize 自检成功后，`cron list --json` 核对 id 在表且 name 全等 `escort-<机器>-<TAG>` 才删；自检失败/不在表/别人的/读不到 → 只记日志不删 |
-| escort 自己 | 收尾后的补注销 | 读回 **本 TAG** 的 `[<TAG>] 账本finalize: ok=1`，且 `pgrep -f "wf-run.sh.*--tag <TAG>"` 为空；再按完整 name 核 id |
+| wf-run 收尾 trap → Cecelia 售后协调器 | **唯一正式注销者** | finalize 自检成功后异步请求末轮；同 run 售后回执（含随机 nonce）已记入 Brain 且读回成功、tick 已退出，再按完整 name 与 id 复核删除；缺证据、在途、未知或超时均保留 |
+| escort 自己 | 完成售后，禁止自删 | 读回 **本 TAG** 的 `[<TAG>] 账本finalize: ok=1`，且 `pgrep -f "wf-run.sh.*--tag <TAG>"` 为空；执行售后并写同 nonce 回执，让本 tick 正常结束，由协调器注销 |
 | 其它执行体（哨兵/分身/治理 agent/人）| 禁 | name 以 `escort-` 开头且对应 run 仍在跑的 cron 一律不删，只报告 |
 
 - 日志读不到 / 日志停滞 / 日志桥落后 / 已升级 ≠ 收工：一律禁止 `cron rm`，只升级 + 汇报。

@@ -15,7 +15,8 @@ test('真实shell将已finalize本run交给异步售后；退出不直接删cron
     TAG=cmd-test; HOSTKEY=xian-m4; WFR_FINALIZE_OK=1;
     WFR_BRAIN_TASK_ID=11111111-2222-4333-8444-555555555555;
     ESCORT_ID_FILE=/Users/test/wf-escort-cmd-test.id; LOG=/dev/null;
-    escort_current_id(){ print 11111111-2222-4333-8444-555555555555; }
+    escort_by_name(){ print 11111111-2222-4333-8444-555555555555; }
+    escort_adopt_id(){ :; }
     log(){ :; }; escort_aftercare`], { encoding: 'utf8', env: { ...process.env, TEST_ROOT: root, PATH: `${root}/bin:${process.env.PATH}` } });
   assert.equal(result.status, 0, result.stderr);
   const ctx = JSON.parse(readFileSync(join(root, 'context.json')));

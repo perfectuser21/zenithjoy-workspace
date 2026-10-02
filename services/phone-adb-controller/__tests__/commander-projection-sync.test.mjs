@@ -311,7 +311,8 @@ test("wf-run 假机整链：Commander touch ~/wf-runs/<TAG>.stop → 第 2 个�
   assert.match(ctl, new RegExp(`lock-release ${TAG}`));
   assert.match(ctl, /close-app/);
   assert.match(ctl, /return-safe-desktop/);
-  assert.match(ssh, /openclaw cron rm cmdr-abc/, "escort 照常注销");
+  assert.doesNotMatch(ssh, /openclaw cron rm/, "finalize不能取消仍在做售后的tick");
+  assert.match(log, /escort售后(?:已交接|保留)/, "必须请求售后或保留现场并说明原因");
   assert.match(log, /账本finalize: ok=1 final=partial lock_released=1 .*reason=commander_stop/);
   assert.ok(!existsSync(join(home, "wf-runs", `${TAG}.stop`)), "收工后 stop 文件应清除（下一批同 TAG 不受影响）");
   const art = readdirSync(join(home, "wfr", "workflow-runs"));

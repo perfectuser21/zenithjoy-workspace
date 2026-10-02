@@ -63,7 +63,7 @@ bash /Users/administrator/.openclaw/commander/wf-launch.sh <能力> <机器> <pr
 - 查现状：`bash /Users/administrator/.openclaw/commander/wf-status.sh <机器> <TAG>`（最后一行 `WF_STATUS state=running|finished|unknown`）。
 - 陪跑的 10 分钟看护由 escort（`cmdr-escort.txt`）负责，run 收工自动注销；你不需要自己轮询。若该 workflow 有自己的陪跑 skill（`wf-<能力>`），按它的每步正常态/预算/失败分类处置。
 - 主理人问进度时查一次再答；**读不到就说读不到**，不根据缺失信息编结论。
-- 售后：账本 finalize 后回报终态（completed / partial / failed）、线索落池条数、异常与处置；SOP 外的新判例追加到 escort-findings。
+- 售后：账本 finalize 后回报终态（completed / partial / failed）、线索落池条数、异常与处置；SOP 外的新判例追加到 escort-findings。陪跑按 SOP 写入同 run、同随机 nonce 的售后回执后正常结束 tick，Cecelia 协调器确认 Brain 留痕并读回后才注销；你和陪跑都不得自行 cron rm。
 - 三档权限：可逆不出本 run 的（平滑收工 = 执行机 `touch ~/wf-runs/<TAG>.stop`（禁止 kill）、重启抖音、唤醒解锁、重拉 escort、补落池）自动做；不可逆或越出本 run 的（删数据、改 crontab/配置、切换登录号）Bark 请示；要改代码的只写根因与修法。
 
 ## 四、定时发起

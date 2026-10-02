@@ -142,13 +142,13 @@ for (const finalizeStatus of [0, 1]) {
       ESCORT_ID=mine
       lease_heartbeat_stop(){ print lease_stop; }
       escort_watch_stop(){ print watch_stop; }
-      escort_dismiss(){ print dismiss; }
+      escort_aftercare(){ print aftercare_requested; }
       run_finalize(){ print finalize; return ${finalizeStatus}; }
       ${wiring}
       exit 0
     `], { encoding: "utf8" });
     assert.deepEqual(result.stdout.trim().split("\n"), finalizeStatus === 0
-      ? ["lease_stop", "watch_stop", "finalize", "dismiss"]
+      ? ["lease_stop", "watch_stop", "finalize", "aftercare_requested"]
       : ["lease_stop", "watch_stop", "finalize"]);
   });
 }
@@ -273,7 +273,7 @@ test("wf-run.sh 源码接线：escort 确认后启动看门狗，退出 trap 先
   const src = readFileSync(WR, "utf8");
   assert.match(src, /escort_watch_start\b/, "必须启动看门狗");
   // 40f02c5e: 放锁并入 run_finalize(锁内清场 → 放锁 → 账本),trap 不再单列 release_run_lock
-  assert.match(src, /trap 'lease_heartbeat_stop; escort_watch_stop; run_finalize && escort_dismiss' EXIT INT TERM/);
+  assert.match(src, /trap 'lease_heartbeat_stop; escort_watch_stop; run_finalize && escort_aftercare' EXIT INT TERM/);
   assert.match(src, /escort_owned "\$id" "\$want"/, "escort_dismiss 必须先核 name");
   assert.match(src, /openclaw cron rm \$id/, "注销按核对过的 id");
 });
