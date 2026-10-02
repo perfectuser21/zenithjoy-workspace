@@ -111,6 +111,27 @@ escort_current_id(){
   if [[ -n "${ESCORT_ID_FILE:-}" && -s "$ESCORT_ID_FILE" ]]; then head -1 "$ESCORT_ID_FILE" | tr -d '[:space:]'
   else print -rn -- "${ESCORT_ID:-}"; fi
 }
+# 6751323e: Brain 接班只回写账本，执行机可能仍持旧 id。仅收养完整 JSON 中唯一同名的陪跑；
+# 表格名字会截断，不能据此换 id。absent 才允许新建，unknown/ambiguous 均保留现场。
+escort_by_name(){
+  local want="$1" out found
+  out=$(ssh -o ConnectTimeout=20 mmv "openclaw cron list --json" 2>>${LOG:-/dev/null}) \
+    || { print unknown; return 0; }
+  found=$(jq -er --arg want "$want" '
+    if (.jobs | type) != "array" then error("invalid jobs") else
+      [.jobs[] | select(.name == $want)] as $matches |
+      if ($matches | length) == 0 then "absent"
+      elif ($matches | length) > 1 then "ambiguous"
+      elif ($matches[0].id | type) != "string" then error("invalid id")
+      elif ($matches[0].id | test("^[A-Za-z0-9._-]{4,64}$")) then $matches[0].id
+      else error("invalid id") end
+    end' <<< "$out" 2>/dev/null) || found=unknown
+  print -r -- "$found"
+}
+escort_adopt_id(){
+  [[ -n "${ESCORT_ID_FILE:-}" ]] || return 1
+  print -r -- "$1" > "$ESCORT_ID_FILE.tmp.$$" && mv -f "$ESCORT_ID_FILE.tmp.$$" "$ESCORT_ID_FILE"
+}
 # escort_owned ID WANT_NAME —— 这个 id 是不是本 run 的 escort。stdout: match / absent / mismatch:<name> / unknown(网关读不到)。
 #   优先 cron list --json 按 id 取 name 全等比;--json 不可用退回表格: 首列 id 命中 + Name 列去掉截断的 ... 后是期望名前缀。
 escort_owned(){
@@ -136,15 +157,26 @@ escort_owned(){
 }
 # escort_dismiss —— 只注销本 run 登记的 escort: escort_owned 判 match 才 cron rm;不在表/别人的/读不到 → 只记日志不删。
 escort_dismiss(){
-  local id want="escort-$HOSTKEY-$TAG" verdict
+  local id want="escort-$HOSTKEY-$TAG" verdict replacement
   id=$(escort_current_id)
   [[ -n "$id" ]] || return 0
   verdict=$(escort_owned "$id" "$want")
+  if [[ "$verdict" == absent ]]; then
+    replacement=$(escort_by_name "$want")
+    case "$replacement" in
+      absent) ;;
+      ambiguous) log "escort注销跳过: 同名陪跑不唯一($want),保留 id 供对账"; return 0;;
+      unknown) log "escort注销跳过: 同名陪跑不可确认($want),保留 id 供对账"; return 0;;
+      *) id="$replacement"; escort_adopt_id "$id" || return 0
+         verdict=$(escort_owned "$id" "$want");;
+    esac
+  fi
   case "$verdict" in
-    match)   ssh -o ConnectTimeout=20 mmv "openclaw cron rm $id" >>${LOG:-/dev/null} 2>&1 && log "escort已注销";;
+    match)   ssh -o ConnectTimeout=20 mmv "openclaw cron rm $id" >>${LOG:-/dev/null} 2>&1 || return 0
+             log "escort已注销";;
     absent)  log "escort注销跳过: id=$id 已不在 cron 表(在途被移除/已被别处注销)";;
-    unknown) log "escort注销跳过: id=$id cron list 不可达,不盲删";;
-    *)       log "escort注销拒绝: id=$id name=${verdict#mismatch:} 非本run(期望 $want),不删";;
+    unknown) log "escort注销跳过: id=$id cron list 不可达,不盲删"; return 0;;
+    *)       log "escort注销拒绝: id=$id name=${verdict#mismatch:} 非本run(期望 $want),不删"; return 0;;
   esac
   [[ -n "${ESCORT_ID_FILE:-}" ]] && rm -f "$ESCORT_ID_FILE"
   true
@@ -156,6 +188,14 @@ escort_watch_tick(){
   [[ -n "$cur" ]] || return 0
   verdict=$(escort_owned "$cur" "$want")
   [[ "$verdict" == absent ]] || return 0
+  new=$(escort_by_name "$want")
+  case "$new" in
+    unknown) return 0;;
+    ambiguous) log "escort接班暂停: 同名陪跑不唯一($want),不再创建"; return 0;;
+    absent) ;;
+    *) escort_adopt_id "$new" || return 0
+       log "escort已接班(id=$cur),收养同名新id=$new"; return 0;;
+  esac
   new=$(escort_add)
   if [[ -n "$new" ]]; then
     print -r -- "$new" > "$ESCORT_ID_FILE"
