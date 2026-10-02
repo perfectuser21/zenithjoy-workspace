@@ -1,0 +1,54 @@
+name: Implementation impact
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      base_revision:
+        description: '固定基线40位SHA；main中央快照必须已登记'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  caller-contract:
+    name: Implementation caller contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 手动运行只接受main
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RUN_REF: ${{ github.ref }}
+        run: test "$RUN_REF" = refs/heads/main
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --workspaces=false
+      - run: node --test scripts/ci/__tests__/implementation-impact-workflow.test.mjs
+
+  impact:
+    name: Implementation impact
+    needs: caller-contract
+    uses: perfectuser21/cecelia/.github/workflows/implementation-impact.yml@9c4f81a9071d36769a7189a40c991301ab784fbc
+    with:
+      source_repo: perfectuser21/zenithjoy-workspace
+      scope: zenithjoy
+      base_revision: ${{ github.event.pull_request.base.sha || inputs.base_revision || github.event.before }}
+      head_revision: ${{ github.event.pull_request.head.sha || github.sha }}
+      mode: ${{ github.event_name == 'pull_request' && 'pr' || 'main' }}
+      tooling_revision: 9c4f81a9071d36769a7189a40c991301ab784fbc
+    secrets:
+      TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+      CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
+      BRAIN_DEPLOY_URL: ${{ secrets.BRAIN_DEPLOY_URL }}
