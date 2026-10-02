@@ -1,3 +1,4 @@
+import { seedFrozen } from './fixtures/frozen-runtime.mjs';
 // 价值流建模④b（决策 3e867cad）：执行机每个 Backbone Activity 结束时向 Brain 上报一条 span。
 // 事故形状：cmd09300230 批 134/134 走兜底重搜跑了 6 小时，结果探针全绿——过程指标（时长/重试/兜底）没人记。
 // 契约：POST ${BRAIN_URL}/api/brain/spans（数组批量，Bearer 内部 token），字段 run_id/activity_id/started_at/ended_at/
@@ -56,6 +57,7 @@ function setup({ fail } = {}) {
   const d = mkdtempSync(join(tmpdir(), "wfr-span-"));
   const c = fakeCurl(d, { fail });
   const env = { ...BRAIN, PATH: c.PATH, DEVICE_VERIFIED: "1", ACCOUNT_VERIFIED: "1", CALL_STATE_IDLE: "1", LOCK_ACQUIRED: "1" };
+  seedFrozen(join(d,"ledger","social-keyword-leadgen-crontab-spanA"));
   const init = wfr(d, env, "init", "spanA", "legacy", words(d, ["A"]), "1", "SER1", "xian-m4");
   assert.equal(init.code, 0, init.err);
   return { d, calls: c.calls, env: { ...env, ...init.kv, WFR_ATTEMPT: "a1" } };
@@ -68,7 +70,7 @@ function rescanMetricsOf(logFile) {
 const EV = '[{"type":"log","ref":"x.log"}]';
 function collMetrics(m) { return JSON.stringify({ comments_collected: 3, videos_processed: m.links_opened, cursor_updates: 0, rescan_count: m.rescan_count, rescan_rate: m.rescan_rate }); }
 
-test("init(preflight) 就上报一条 span：数组批量、Bearer、outcome=pass、executor_id=hostkey、activity_id 从 Brain 活动表解析", { skip: SKIP }, () => {
+test("init(preflight) 就上报一条 span：数组批量、Bearer、outcome=pass、executor_id=hostkey、activity_id 从冻结版本解析", { skip: SKIP }, () => {
   const { calls: cf } = setup();
   const sc = spanCalls(cf);
   assert.equal(sc.length, 1, `期望 1 次 spans 上报，实际 ${sc.length}`);
@@ -112,8 +114,8 @@ test("mark-start 后 started_at 取标记时刻且同一 stage/n 重发不变（
   const started = readFileSync(marker, "utf8").trim();
   wfr(d, env, "stage", "collection", "blocked", "1", "word=X no_qualified", EV, collMetrics({ links_opened: 0, rescan_count: 0, rescan_rate: 0 }), "X");
   wfr(d, env, "stage", "collection", "blocked", "1", "word=X no_qualified", EV, collMetrics({ links_opened: 0, rescan_count: 0, rescan_rate: 0 }), "X");
-  const sc = spanCalls(cf); assert.equal(sc.length, 3);
-  const a = bodyOf(sc[1])[0], b = bodyOf(sc[2])[0];
+  const sc = spanCalls(cf); assert.equal(sc.length, 2, "ack后重发不再发网络请求");
+  const a = bodyOf(sc[1])[0], b = bodyOf(sc[1])[0];
   assert.equal(a.started_at, started); assert.equal(b.started_at, started);
   assert.equal(a.outcome, "skipped");
   assert.ok(a.ended_at >= a.started_at, "ended_at 不早于 started_at");

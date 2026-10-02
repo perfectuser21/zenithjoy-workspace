@@ -1,3 +1,4 @@
+import { seedRunner } from './fixtures/frozen-runtime.mjs';
 // wf-run.sh —— 契约组装执行的通用驱动（决策 7f842d12：Commander 当入口 + 契约组装执行）。
 // harvest-cron.sh 已退成薄壳 `exec wf-run.sh keyword_acquisition "$@"`（现网 crontab 一字不改），
 // 计划由 scripts/product-map/wf-plan.mjs 从契约生成、提交在 plans/<能力>.plan。
@@ -35,11 +36,11 @@ function setup() {
   const bin = join(home, ".local", "bin");
   mkdirSync(bin, { recursive: true });
   for (const [n, body] of [["ssh", FAKE_SSH], ["adb", FAKE_ADB]]) { writeFileSync(join(bin, n), body); chmodSync(join(bin, n), 0o755); }
-  const env = { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`, WALL_REPORT: join(home, "no-wall"), WFR_DISABLED: "1", WF_PLAN_DIR: PLANS };
+  const env = { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`, WALL_REPORT: join(home, "no-wall"), WFR_DISABLED: "1", WFR: join(SRC,"workflow-result.sh"), WFR_NODE: process.execPath, WF_PLAN_DIR: PLANS };
   return { home, env };
 }
 const read = (p) => (existsSync(p) ? readFileSync(p, "utf8") : "");
-const run = (script, args, env) => spawnSync(ZSH, [script, ...args], { encoding: "utf8", env, timeout: 30000 });
+const run = (script, args, env) => { if (existsSync(join(env.WF_PLAN_DIR,"keyword_acquisition.plan"))) seedRunner(env,args); return spawnSync(ZSH, [script, ...args], { encoding: "utf8", env, timeout: 30000 }); };
 const lib = (cmd, env) => spawnSync(ZSH, ["-c", `WF_RUN_LIB=1 source ${WR}; ${cmd}`], { encoding: "utf8", env });
 
 test("计划文件缺失 → exit 1 拒跑,不拉 escort", { skip: SKIP }, () => {

@@ -18,3 +18,9 @@ test('网络前落固定body，断网/进程重启后同occurrence重传；ack�
   assert.equal(JSON.parse(readFileSync(join(dir,'outbox',`${next.event_id}.json`))).state,'blocked');
   assert.ok(readdirSync(join(dir,'outbox')).every(name=>!readFileSync(join(dir,'outbox',name),'utf8').includes('Bearer')));
 });
+test('同occurrence重发保持首次endpoint/body，配置或重建payload变化不能另造事件',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'outbox-fixed-'));
+ const first=enqueue(dir,{key:'same',endpoint:'http://localhost/old',body:{value:1}});
+ const second=enqueue(dir,{key:'same',endpoint:'http://localhost/new',body:{value:2}});
+ assert.deepEqual(second,first);assert.equal(readdirSync(join(dir,'outbox')).length,1);
+});
