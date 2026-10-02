@@ -41,3 +41,9 @@ test('完整动态回归进入必绿基线，Glob runner显式安装所选套的
  assert.match(workflow,/apt-get install -y zsh python3 jq libxml2-utils/);
  assert.match(workflow,/npm ci --workspace=apps\/api --workspace=apps\/agent-panel --include-workspace-root/);
 });
+test('OpenClaw全套执行真实YAML契约前安装已锁定根依赖，不靠全局包或跳过',()=>{
+ const workflow=readFileSync(new URL('../../../.github/workflows/ci-l3-code.yml',import.meta.url),'utf8');
+ const job=workflow.split('  openclaw-scripts-test:')[1].split('  api-scripts-test:')[0];
+ assert.match(job,/run: npm ci --ignore-scripts --workspaces=false/);
+ assert.ok(job.indexOf('npm ci --ignore-scripts --workspaces=false')<job.indexOf('run: node --test'));
+});
