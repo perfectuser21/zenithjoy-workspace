@@ -219,13 +219,19 @@ jobs:
   # 独立脚本，不属于任何 workspace，不会被 apps/api 的 vitest 捡到——不接进某个
   # 具体闸就是孤儿测试（devgate/detect-review-issues.js 已吃过这个亏，见 PR#1769：
   # 两份回归测试写了半年从未跑过，同一类误判复发 4 次）。无条件跑（纯 node --test，
-  # 无需装依赖，几秒钟），不按变更路径过滤。
+  # 读取真实契约需安装已锁定根依赖），不按变更路径过滤。
   openclaw-scripts-test:
     name: OpenClaw Scripts Test
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked real-contract test dependencies
+        run: npm ci --ignore-scripts --workspaces=false
       # douyin-phone-adb 是 zsh 脚本，ubuntu runner 默认没有 zsh。
       # 不装就只能让测试 skip，而"在 CI 里从不执行的守卫"等于没有守卫
       # （0916 自查：279 个 smoke 里 55 个是 pipefail 假绿，同一个病）。
