@@ -7,6 +7,7 @@ import {execFileSync} from 'node:child_process';
 import {createServer} from 'node:http';
 import {prepareAndDeploy} from '../deployment-prepare.mjs';
 import {digest} from '../runtime-definition.mjs';
+import {normalizedDescriptions} from './fixtures/normalized-description-bindings.mjs';
 const repo='perfectuser21/zenithjoy-workspace';
 const uuid=n=>`${String(n).repeat(8)}-${String(n).repeat(4)}-4${String(n).repeat(3)}-8${String(n).repeat(3)}-${String(n).repeat(12)}`;
 async function fixture(t){
@@ -17,7 +18,7 @@ async function fixture(t){
  const git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();git('init','-q','-b','cp-fixture');git('config','core.hooksPath','/dev/null');git('add','.');git('-c','user.name=fixture','-c','user.email=fixture@example.invalid','commit','-qm','fixture');
  const sha=git('rev-parse','HEAD');git('remote','add','origin',`https://github.com/${repo}.git`);git('update-ref','refs/remotes/origin/main',sha);
  const make=(id,payload,extra)=>({id,...extra,source_repo:repo,source_path:'product-map/contracts/phone.yaml',source_commit:sha,payload,payload_sha256:digest({source:{repo,path:'product-map/contracts/phone.yaml',commit:sha},payload})});
- const activities=[make(uuid(3),{activity_id:uuid(4),steps:[],implementation_bindings:[{kind:'code',status:'verified',repo,path,revision:sha,digest:'sha256:'+digest(readFileSync(join(root,path)))}]},{activity_id:uuid(4)})];
+ const activities=[make(uuid(3),{activity_id:uuid(4),steps:[],implementation_bindings:[{kind:'code',scope:'activity',status:'verified',repo,path,revision:sha,digest:'sha256:'+digest(readFileSync(join(root,path)))},...structuredClone(normalizedDescriptions)]},{activity_id:uuid(4)})];
  const workflows=[1,2].map(n=>{const workflow_id=`b1000000-0000-4000-8000-00000000000${n}`;return make(uuid(n),{workflow_id,activities:[{activity_id:uuid(4),activity_version_id:uuid(3)}]},{workflow_id});});
  const snapshot={schema_version:1,scope:'zenithjoy',repo,revision:sha,status:'verified',gaps:[],definitions:{workflows,activities}};snapshot.snapshot_sha256=digest(snapshot);
  const report={source:{repo,base_revision:'b'.repeat(40),head_revision:sha,changed_files:[path]},mapping_status:'verified',truncated:false,gaps:[],protocol:'pilot_release_verification_v1',purpose:'release_verification',scope:'zenithjoy',snapshot_sha256:snapshot.snapshot_sha256,verification_status:'verified',assertion_source:'current_registration',definition_versions:{workflows,activities},expected_usages:[{workflow_id:'b1000000-0000-4000-8000-000000000001'}],required_assertions:[{assertion_ref:'fixture.test.sh'}]};
@@ -31,7 +32,7 @@ async function fixture(t){
   assert.equal(req.headers.authorization,'Bearer fixture-private-token');let body='';for await(const part of req)body+=part;requests.push({method:req.method,path:req.url});
   let release;
   if(req.method==='POST'){
-   const input=JSON.parse(body),id=input.target==='xian-m4'?uuid(5):uuid(6);
+   const input=JSON.parse(body);assert.ok(input.components.every(c=>c.kind!=='raw'));assert.deepEqual(snapshot.definitions.activities[0].payload.implementation_bindings.slice(1),normalizedDescriptions);const id=input.target==='xian-m4'?uuid(5):uuid(6);
    release={id,environment:input.environment,target:input.target,payload:{...snapshot.definitions,components:input.components,verification:{status:mode==='unknown'?'unknown':'verified'}}};
    if(mode==='wrong_target')release.target='elsewhere';
    release.manifest_sha256=digest({environment:release.environment,target:release.target,payload:release.payload});releases.set(id,release);
@@ -40,7 +41,7 @@ async function fixture(t){
  });await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
  return {root,sha,bundlePath,attemptKey:'github:42:100:1',brainUrl:`http://127.0.0.1:${server.address().port}`,tokenPath,marker,requests,setMode:value=>mode=value};
 }
-test('真实Git+HTTP两release创建与固定回读后wrapper才调用部署入口，凭据不入请求body',async t=>{
+test('真实normalized描述保留unknown，Git+HTTP两release回读后才部署固定组件',async t=>{
  const f=await fixture(t);await prepareAndDeploy(f);const actual=JSON.parse(readFileSync(f.marker));
  assert.equal(actual.collector,'phone-adb-deployer');assert.equal(actual.environment,'production');assert.equal(actual.token_present,true);assert.equal(actual.attempt,'github:42:100:1');assert.equal(Object.keys(actual.ids).length,2);
  assert.deepEqual(f.requests.map(r=>r.method),['POST','POST','GET','GET']);
