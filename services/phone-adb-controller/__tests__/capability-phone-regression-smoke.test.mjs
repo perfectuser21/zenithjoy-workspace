@@ -47,3 +47,9 @@ test('OpenClaw全套执行真实YAML契约前安装已锁定根依赖，不靠�
  assert.match(job,/run: npm ci --ignore-scripts --workspaces=false/);
  assert.ok(job.indexOf('npm ci --ignore-scripts --workspaces=false')<job.indexOf('run: node --test'));
 });
+test('聚合16套真实时序回归使用180秒有界时限，普通smoke仍90秒',()=>{
+ const workflow=readFileSync(new URL('../../../.github/workflows/ci-smoke-glob-runner.yml',import.meta.url),'utf8');
+ const fn=workflow.match(/script_timeout\(\) \{[\s\S]*?\n\s*\}/)?.[0];assert.ok(fn);
+ const result=spawnSync('bash',['-c',`${fn}\nscript_timeout capability-phone-regression-smoke.sh\nscript_timeout ordinary-smoke.sh`],{encoding:'utf8'});
+ assert.equal(result.status,0,result.stderr);assert.deepEqual(result.stdout.trim().split('\n'),['180','90']);
+});
