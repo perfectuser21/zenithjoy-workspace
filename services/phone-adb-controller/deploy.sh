@@ -100,11 +100,11 @@ MMV_PROBE_FILES=(
 # 生产跑的却仍是 ~/.local/bin 的旧版本,音量棘轮修复完全没生效,最后靠人工 scp 才落地。
 # 漏任一目录 = 两份副本版本分叉,且部署过程不会报任何错。层26 smoke 守卫盯这件事。
 DEVICE_CTL_FILES=(
-  phone-lock-lib.sh phone-lock-helper.py douyin-phone-adb
+  phone-lock-lib.sh phone-lock-helper.py locate-element.py douyin-phone-adb
 )
 DEVICE_CTL_DIRS=(bin-harvest .local/bin)
 DEVICE_SH_FILES=(
-  harvest-keyword.sh batch2.sh harvest-cron.sh wf-run.sh wf-run-lib.sh discover-keyword.sh outreach-tick.sh
+  harvest-keyword.sh harvest-keyword-lib.sh batch2.sh harvest-cron.sh wf-run.sh wf-run-lib.sh discover-keyword.sh outreach-tick.sh
   refill-profile-links.sh wall-report.sh wall-lib.sh phone-wall-push.sh
   disk-gateway-guard.sh device-job-claimer.sh log-stream-push.sh
   workflow-result.sh discover-benchmark.sh wf-limits.sh install-phone-recovery.sh
@@ -120,7 +120,7 @@ DEVICE_PLAN_FILES=(plans/keyword_acquisition.plan plans/benchmark_link_acquisiti
 # 在任何SSH前核验部署源字节属于固定commit；manifest最后发布，半次部署不能通过起跑核验。
 DEPLOY_MANIFEST=$(mktemp)
 trap 'rm -f "$DEPLOY_MANIFEST"' EXIT
-node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" > "$DEPLOY_MANIFEST"
+node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" "${DEVICE_CTL_FILES[@]}" > "$DEPLOY_MANIFEST"
 
 echo "=== [1/3] mmv:~/.openclaw/leadgen-scripts/ (判定链+数据层, ${#MMV_JS_FILES[@]} 个文件) ==="
 for f in "${MMV_JS_FILES[@]}"; do
@@ -235,7 +235,6 @@ for host in xian-m4 xian-m1; do
     fi
     rm -f /tmp/deploy-err-$$
   done
-  if (( FAILED == 0 )); then push_atomic "$DEPLOY_MANIFEST" "$host" "~/bin-harvest" deployment-manifest.json; fi
 done
 
 echo "=== [4/4] 设备控制器 → 每台机器的 ${#DEVICE_CTL_DIRS[@]} 个执行路径 (${#DEVICE_CTL_FILES[@]} 个文件) ==="
@@ -306,4 +305,7 @@ if [[ "$FAILED" == "1" ]]; then
   echo "⚠️ 部分文件语法检查失败,见上方 ❌ 标记——已同步的文件里可能有半成品,立刻核查"
   exit 1
 fi
+for host in xian-m4 xian-m1; do
+  push_atomic "$DEPLOY_MANIFEST" "$host" "~/bin-harvest" deployment-manifest.json
+done
 echo "✅ 全部同步完成(mmv + xian-m4 + xian-m1,控制器覆盖两个执行路径),每个文件都过了语法检查。"

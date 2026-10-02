@@ -1,6 +1,6 @@
 // 运行前只读固定版本；运行目录是之后所有判定与身份解析的唯一来源。
 import { createHash, randomUUID } from 'node:crypto';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync, realpathSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync, realpathSync, statSync } from 'node:fs';
 import { resolve, dirname, sep } from 'node:path';
 export const canonical = value => JSON.stringify(value, (_, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(k => [k,v[k]])) : v);
 export const digest = value => createHash('sha256').update(Buffer.isBuffer(value) || typeof value === 'string' ? value : canonical(value)).digest('hex');
@@ -32,9 +32,11 @@ export async function freezeDefinition(o) {
   if(manifest.source_commit!==version.source_commit || manifest.source_repo!==version.source_repo) throw Error('部署来源与固定版本不同');
   const checked=new Map();
   for (const file of manifest.files||[]) {
-    const actual=digest(readFileSync(localPath(o.deploymentRoot,file.deployed_path)));
+    const sourcePath=localPath(o.deploymentRoot,file.deployed_path);
+    const bytes=readFileSync(sourcePath); const mode=statSync(sourcePath).mode & 0o555;
+    const actual=digest(bytes);
     if(actual!==file.content_sha256) throw Error(`实际部署文件digest不符: ${file.path}`);
-    checked.set(file.path,{...file,actual_content_sha256:actual,status:'verified_local'});
+    checked.set(file.path,{...file,actual_content_sha256:actual,status:'verified_local',bytes,mode});
   }
   if(!checked.size) throw Error('部署实现清单为空');
   for(const path of [o.planPath,o.stepSpecPath]) if(![...checked.values()].some(file=>localPath(o.deploymentRoot,file.deployed_path)===realpathSync(path))) throw Error('实际plan/step文件不在部署清单manifest');
@@ -48,7 +50,7 @@ export async function freezeDefinition(o) {
       if(binding.status==='verified' && deployed) {
         const expected=binding.content_sha256 || binding.digest?.replace(/^sha256:/,'');
         if(binding.repo!==manifest.source_repo || binding.revision!==manifest.source_commit || expected!==deployed.actual_content_sha256) throw Error(`实现binding digest或来源不符: ${binding.path}`);
-        return {...binding,execution_verification:'verified_local',actual_content_sha256:deployed.actual_content_sha256};
+        return {...binding,execution_verification:'verified_local',actual_content_sha256:deployed.actual_content_sha256,execution_path:`runtime/${deployed.deployed_path}`};
       }
       return {...binding,execution_verification:'unknown',execution_reason:'not_verified_on_execution_host'};
     });
@@ -63,10 +65,16 @@ export async function freezeDefinition(o) {
     if(!actual || actual.reference.sequence_no!==expected.sequence_no || actual.version.payload.definition_key!==expected.definition_key || actual.version.contract_sha256!==expected.contract_sha256) throw Error('部署计划活动引用与版本不同');
   }
   const plan=readFileSync(o.planPath); const steps=readFileSync(o.stepSpecPath); JSON.parse(steps);
-  const body={schema_version:1,workflow_version:version,activities,deployment:manifest,files:{'workflow.plan':digest(plan),'step-dod.json':digest(steps)}};
+  const files={'workflow.plan':digest(plan),'step-dod.json':digest(steps)};
+  for(const file of checked.values()) files[`runtime/${file.deployed_path}`]=file.actual_content_sha256;
+  const body={schema_version:1,workflow_version:version,activities,deployment:manifest,files};
   const snapshot={...body,snapshot_sha256:digest(body)};
   const staging=`${o.runDir}.freeze-${randomUUID()}`; mkdirSync(staging,{recursive:true,mode:0o700});
   try {
+    for(const file of checked.values()){
+      const target=resolve(staging,'runtime',file.deployed_path);mkdirSync(dirname(target),{recursive:true});
+      writeFileSync(target,file.bytes,{mode:file.mode});
+    }
     writeFileSync(resolve(staging,'workflow.plan'),plan);writeFileSync(resolve(staging,'step-dod.json'),steps);
     writeFileSync(resolve(staging,'run-definition.json'),JSON.stringify(snapshot,null,2));
     mkdirSync(dirname(o.runDir),{recursive:true}); renameSync(staging,o.runDir);

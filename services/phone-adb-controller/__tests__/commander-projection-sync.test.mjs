@@ -326,7 +326,7 @@ test("wf-run.sh 源码接线：起跑 export WF_STOP_FILE 并清残留；command
   assert.match(src, /rm -f "\$WF_STOP_FILE"/, "起跑清残留 / 收工清除");
   assert.match(src, /WFR_FINAL_REASON=\$?\{?B2_STOP_REASON|WFR_FINAL_REASON="\$B2_STOP_REASON"/, "终态原因取 batch2 报的 STOP_REASON（deadline / commander_stop 同路径）");
   for (const f of ["batch2.sh", "harvest-keyword.sh"]) {
-    const s = read(f);
+    const s = read(f) + (f === "harvest-keyword.sh" ? read("harvest-keyword-lib.sh") : "");
     assert.match(s, /wf_stop_requested/, `${f} 必须在边界判 stop 文件`);
     assert.match(s, /wf_stop_requested\(\)\{ return 1 \}/, `${f} 旧部署缺库时的兜底桩必须恒不停`);
   }

@@ -19,9 +19,9 @@
 #   孤儿 escort 清理**不并入**: openclaw cron list 只有名字,分不清"上批 kill -9 遗留"与"同机另一批仍在跑"
 #   (三批衔接无空窗),kill -9 遗留由 escort 自身 --timeout 与分身值守兜底。
 # ── 库块(WF_RUN_LIB=1 / HARVEST_CRON_LIB=1 source 只装函数不跑主体,供单测)——默认值必须在 set -u 之前定义 ──
-WFR=${WFR:-$HOME/bin-harvest/workflow-result.sh}
-BATCH2=${BATCH2:-$HOME/bin-harvest/batch2.sh}
-WF_HOME=${${(%):-%x}:A:h}                # 本文件所在目录(执行与 source 都对),执行机上 = ~/bin-harvest
+WF_HOME=${${(%):-%x}:A:h}
+WFR=${WFR:-$WF_HOME/workflow-result.sh}
+BATCH2=${BATCH2:-$WF_HOME/batch2.sh}
 WF_PLAN_DIR=${WF_PLAN_DIR:-$WF_HOME/plans}
 # 7d150e33(阶段1): 整批总时限 + 每活动按契约预算封顶,函数在 wf-limits.sh(deploy.sh 同步);库缺失 → 兜底为"不限时",行为与并入前一致
 source "$WF_HOME/wf-limits.sh" 2>/dev/null \
@@ -64,11 +64,16 @@ escalate() {
     || log "升级通道也不可达(mmv ssh 失败),仅留本地日志"
 }
 # ── ⓪ 执行计划(契约组装): 无计划/无实现不得跑——在拉 escort 之前拦,拒跑要升级(多半是部署漏了 plans/ 或契约缺口) ──
+if [[ -n "${WF_FROZEN_ROOT:-}" && "$WF_HOME" == "${WF_FROZEN_ROOT:A}" ]]; then
+  source "$WFR_RUN_DIR/workflow.plan"
+  for k in ${(k)parameters}; do [[ "$k" == WF_BUDGET_* || "$k" == WF_TIMEOUT_CLASS_* ]] && export "$k"; done
+else
 if ! wf_load_plan "$WF_ARG_CAP"; then
   log "$WF_LOAD_ERR"
   print -u2 -- "$WF_LOAD_ERR"
   escalate "${WF_ARG_CAP:-未指定能力} 未起跑: $WF_LOAD_ERR"
   exit 1
+fi
 fi
 DISCOVER_CMD="$(wf_discover_cmd)"
 if [[ ! -x "$DISCOVER_CMD" ]]; then
@@ -87,6 +92,17 @@ if ! bash "$WFR" prepare; then
   log "拒跑: 工作流定义版本冻结失败"
   print -u2 -- "拒跑: 工作流定义版本冻结失败"
   exit 1
+fi
+# 转到冻结shell本身：zsh后续读取与相对source也不能再命中全局部署目录。
+if [[ "$WF_HOME" != "${WFR_RUN_DIR:A}/runtime" ]]; then
+  export WF_FROZEN_ROOT="$WFR_RUN_DIR/runtime" WF_PLAN_DIR="$WFR_RUN_DIR"
+  export WFR="$WF_FROZEN_ROOT/workflow-result.sh" BATCH2="$WF_FROZEN_ROOT/batch2.sh"
+  export HARVEST_KEYWORD="$WF_FROZEN_ROOT/harvest-keyword.sh" C="$WF_FROZEN_ROOT/douyin-phone-adb"
+  export DOUYIN_LOCATE_SCRIPT="$WF_FROZEN_ROOT/locate-element.py"
+  export DOUYIN_PHONE_ADB="$C" WALL_REPORT="$WF_FROZEN_ROOT/wall-report.sh"
+  export WFR_LEDGER_MJS="$WF_FROZEN_ROOT/ledger.mjs" WFR_STEP_JUDGE="$WF_FROZEN_ROOT/step-judge.mjs"
+  export WFR_RUNTIME_MJS="$WF_FROZEN_ROOT/runtime-receipts.mjs"
+  exec zsh "$WF_FROZEN_ROOT/wf-run.sh" "$@"
 fi
 source "$WFR_RUN_DIR/workflow.plan"
 export DISCOVER_CMD="$(wf_discover_cmd)"
