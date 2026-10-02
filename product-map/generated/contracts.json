@@ -15,10 +15,10 @@
       }
     },
     "keyword_acquisition": {
-      "sha256": "31a47b3f43cff25a942952b298647bc4968557deddc2085eaaa900b93cac3f6a",
+      "sha256": "6732649156796ef4428f32153b29c99358b735face476d6595fc1befa61af7ad",
       "activities": {
         "preflight": "b06ed33caf360ec7483ebf915953e36c757fb40f0c78d03da0057449b2627f99",
-        "discovery": "8ea64fe0f47a42a18e0cb47577d73bb3bae21cef8761ba5ebc0563cc82b767e3",
+        "discovery": "ef437afee084496cebf17360b4d72f19a72e17dc09254d534973cdf5b83aaf2e",
         "qualification": "23e791f0287f37d5d4d83be651dca879602eec73e0082f3bb604e9914c38d7ab",
         "collection": "3e6981c3647daf86b4c4d536e16f860e9f0baaf3a9ab12228a9dbc7127b19e66",
         "scoring": "7ac44bd6837722c33a3c47ce6fe528f638617ba6db89f63a485c6ed2562fe3bb",

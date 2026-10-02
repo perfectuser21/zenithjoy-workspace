@@ -102,7 +102,7 @@ activities:
     postconditions:
       - { probe: disc_candidates_persisted, asserts: "本词候选视频全部落 leadgen_videos" }
     execution: { location: phone, via: "xian-m4 batch2.sh:78 → harvest-keyword.sh:35-43 → douyin-phone-adb" }
-    budget: { max_duration_s: 600, heartbeat_s: 60 }
+    budget: { max_duration_s: 900, heartbeat_s: 60 }
     resources:
       locks: ["device:<serial>"]
       limits: [{ name: max_videos_per_word, value: 4 }]

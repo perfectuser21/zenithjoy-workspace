@@ -1,7 +1,7 @@
 {
   "version": 1,
   "capability": "keyword_acquisition",
-  "contract_sha256": "31a47b3f43cff25a942952b298647bc4968557deddc2085eaaa900b93cac3f6a",
+  "contract_sha256": "6732649156796ef4428f32153b29c99358b735face476d6595fc1befa61af7ad",
   "promotion": {
     "min_consecutive_pass": 20
   },
