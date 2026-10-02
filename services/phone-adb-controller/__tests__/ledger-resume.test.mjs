@@ -56,3 +56,9 @@ test("坏账本 fail-open：警告并重建，attempt 从 a1", () => {
   assert.equal(r.json.attempt_id, "a1");
   assert.deepEqual(r.json.skip_words, []);
 });
+
+test('绑定前已分配attempt，后置init preserve只补元数据不清历史执行',()=>{
+ const d=mkdtempSync(join(tmpdir(),'led-bound-'));led(d,'init','--run-id','r');led(d,'next-attempt');led(d,'set','--stage','collection','--status','completed','--n','1','--word','A');
+ const r=led(d,'init','--run-id','r','--hash','actual-hash','--preserve');assert.equal(r.code,0);assert.equal(r.json.attempt_id,'a1');
+ const book=JSON.parse(readFileSync(join(d,'ledger.json'),'utf8'));assert.equal(book.task_request_hash,'actual-hash');assert.equal(book.stages.collection.items[0].word,'A');
+});
