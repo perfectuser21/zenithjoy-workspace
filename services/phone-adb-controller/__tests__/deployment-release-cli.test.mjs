@@ -20,6 +20,7 @@ test('真实部署CLI经过假SSH采集本机文件、HTTP观测及回读后输�
  release.manifest_sha256=digest({environment:release.environment,target:release.target,payload:release.payload});
  const requests=[];let observation;
  const server=createServer(async(req,res)=>{
+  if(req.headers.authorization!=='Bearer fixture-deploy-token'){res.writeHead(401);res.end('{}');return;}
   requests.push(req.url);let body='';for await(const chunk of req)body+=chunk;
   res.setHeader('Content-Type','application/json');
   if(req.method==='POST'){observation={id:'observation-cli',release_id:release.id,payload:JSON.parse(body)};res.end(JSON.stringify({observation}));}
@@ -29,7 +30,7 @@ test('真实部署CLI经过假SSH采集本机文件、HTTP观测及回读后输�
  });
  await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
  const run=()=>new Promise(resolve=>{
-  const child=spawn(process.execPath,[new URL('../deployment-release.mjs',import.meta.url).pathname,target,file],{env:{...process.env,PATH:`${bin}:${process.env.PATH}`,WF_RELEASE_IDS:JSON.stringify({[target]:release.id}),WF_DEPLOY_ENVIRONMENT:'fixture',WF_DEPLOY_COLLECTOR:'trusted-fixture',WF_DEPLOY_ATTEMPT_KEY:'deploy-cli',WF_DEPLOY_STATE_DIR:join(root,'state'),BRAIN_URL:`http://127.0.0.1:${server.address().port}`}});
+  const child=spawn(process.execPath,[new URL('../deployment-release.mjs',import.meta.url).pathname,target,file],{env:{...process.env,PATH:`${bin}:${process.env.PATH}`,BRAIN_TOKEN:'',BRAIN_INTERNAL_TOKEN:'fixture-deploy-token',WF_RELEASE_IDS:JSON.stringify({[target]:release.id}),WF_DEPLOY_ENVIRONMENT:'fixture',WF_DEPLOY_COLLECTOR:'trusted-fixture',WF_DEPLOY_ATTEMPT_KEY:'deploy-cli',WF_DEPLOY_STATE_DIR:join(root,'state'),BRAIN_URL:`http://127.0.0.1:${server.address().port}`}});
   let stdout='',stderr='';child.stdout.on('data',v=>stdout+=v);child.stderr.on('data',v=>stderr+=v);child.on('close',status=>resolve({status,stdout,stderr}));
  });
  const result=await run();assert.equal(result.status,0,result.stderr);const published=JSON.parse(result.stdout);assert.equal(published.observation_id,observation.id);assert.equal(published.release_id,release.id);
