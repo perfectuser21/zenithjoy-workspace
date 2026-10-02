@@ -5,7 +5,7 @@
 # 全部动作走 douyin-phone-adb(锁/守卫/频控内建),本脚本只做序列编排。
 set -uo pipefail
 HARVEST_SCRIPT_DIR="${0:A:h}"
-C=~/.local/bin/douyin-phone-adb
+C="${DOUYIN_PHONE_CONTROLLER:-$HOME/.local/bin/douyin-phone-adb}"
 P="$1"; KW="$2"; MAXV="${3:-4}"; TAG="$4"; LOC="${5:-same_city}"
 # 这批活回填给谁：优先用调用方传进来的业务线标记（$6），没传就退回 profile 名
 # ——两者 line-routes.js 都认。

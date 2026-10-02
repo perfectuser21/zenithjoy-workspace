@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
 import { keywordFixture, ids, route, words } from './keyword-workflow-cli-fixture.mjs';
 
 const opts = { timeout: 60000 };
@@ -113,3 +113,39 @@ for (const budgetSource of ['run_budget_s', 'WF_RUN_MAX_SECONDS']) {
     lockReleased(f);
   });
 }
+
+function isolatedController(f) {
+  const original = join(f.home, '.local/bin/douyin-phone-adb');
+  const selected = join(f.home, 'isolated phone controller');
+  writeFileSync(selected, readFileSync(original)); chmodSync(selected, 0o755);
+  const marker = join(f.home, 'default-controller-called');
+  writeFileSync(original, `#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(marker)},'called');process.exit(95);\n`);
+  f.env.DOUYIN_PHONE_CONTROLLER = selected;
+  return marker;
+}
+
+test('整批CLI：显式隔离控制器覆盖预检发现和逐视频采集，默认入口不得被调用', opts, async t => {
+  const f = await keywordFixture(t);
+  const marker = isolatedController(f);
+  const { output, receipt } = await f.run();
+  assert.equal(output.code, 0, diagnostic(receipt));
+  assert.equal(receipt.status, 'completed');
+  assert.equal(existsSync(marker), false, '显式控制器配置不能退回默认入口');
+  assert.equal(f.pool.size, 2); assert.equal(f.leads.size, 2);
+  assert.equal(f.modelCalls.length, 2);
+  assert.ok(receipt.activities.every(a => a.status === 'completed'));
+  lockReleased(f);
+});
+
+test('整批CLI：显式控制器文件缺失时失败，不回退默认控制器或制造成功', opts, async t => {
+  const f = await keywordFixture(t);
+  const marker = isolatedController(f);
+  f.env.DOUYIN_PHONE_CONTROLLER = join(f.home, 'missing-controller');
+  const { output, receipt } = await f.run();
+  assert.notEqual(output.code, 0);
+  assert.notEqual(receipt.status, 'completed');
+  assert.equal(existsSync(marker), false, '不存在的显式控制器也不能退回默认入口');
+  assert.equal(f.pool.size, 0); assert.equal(f.leads.size, 0);
+  assert.equal(f.modelCalls.length, 0);
+  assert.equal(f.read('phone-state.json').owner, null);
+});

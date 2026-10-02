@@ -101,7 +101,7 @@ function context(action, input, route) {
   async function phone(name, ...args) {
     boundary();
     // 手机动作无进程超时；TERM仅写自己的停止标记，动作结束再检查安全边界。
-    return command(path.join(process.env.HOME, '.local/bin/douyin-phone-adb'), ['--profile', input.device.profile, name, ...args]);
+    return command(process.env.DOUYIN_PHONE_CONTROLLER || path.join(process.env.HOME, '.local/bin/douyin-phone-adb'), ['--profile', input.device.profile, name, ...args]);
   }
   async function remote(script, args, failure, cap = 45) {
     const gateway = input.execution?.gateway;
