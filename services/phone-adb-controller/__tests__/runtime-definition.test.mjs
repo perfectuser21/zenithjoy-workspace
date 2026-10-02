@@ -55,3 +55,17 @@ test('部署清单未覆盖实际plan/step清单时拒绝，不能借正确契�
  const f=fixture();
  await assert.rejects(freezeDefinition({...f.options,planPath:(()=>{const p=join(f.dir,'injected.plan');writeFileSync(p,'WF_DISCOVER_CMD=other.sh\n');return p;})()}),/部署清单|manifest/);
 });
+test('冻结全部本机实现：全局入口和依赖被部署替换后，续跑实际执行仍为旧字节',async()=>{
+ const {execFileSync}=await import('node:child_process');const f=fixture();
+ writeFileSync(join(f.dir,'entry.sh'),'#!/bin/sh\n. "$(dirname "$0")/dependency.sh"\nprintf "%s" "$VALUE"\n');
+ writeFileSync(join(f.dir,'dependency.sh'),'VALUE=frozen\n');
+ const manifest=JSON.parse(readFileSync(join(f.dir,'deployment-manifest.json'),'utf8'));
+ manifest.files[0].content_sha256=hash(readFileSync(join(f.dir,'entry.sh'),'utf8'));
+ manifest.files.push({path:'services/phone-adb-controller/dependency.sh',deployed_path:'dependency.sh',content_sha256:hash(readFileSync(join(f.dir,'dependency.sh'),'utf8'))});
+ writeFileSync(join(f.dir,'deployment-manifest.json'),JSON.stringify(manifest));
+ const av=f.routes['/api/brain/activities/activity-1/versions/av-1'].version;av.payload.implementation_bindings[0].content_sha256=manifest.files[0].content_sha256;
+ av.payload_sha256=hash({source:{repo:av.source_repo,path:av.source_path,commit:av.source_commit},payload:av.payload});
+ await freezeDefinition(f.options);writeFileSync(join(f.dir,'entry.sh'),'echo changed\n');writeFileSync(join(f.dir,'dependency.sh'),'VALUE=changed\n');
+ await freezeDefinition(f.options);
+ assert.equal(execFileSync('bash',[join(f.options.runDir,'runtime','entry.sh')],{encoding:'utf8'}),'frozen');
+});
