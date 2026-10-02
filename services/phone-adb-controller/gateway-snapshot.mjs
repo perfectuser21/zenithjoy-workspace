@@ -27,7 +27,8 @@ function sourceFiles(root,commit,role){
    if(!posix.extname(dep))dep+='.js';files.add(dep);
   }
   // 同目录静态资产也是真身依赖，例如own-account/ramp配置与探针YAML。
-  for(const match of text.matchAll(/(?:\w+\.)?join\(\s*__dirname\s*,((?:\s*['"][^'"]+['"]\s*,?)+)\)/g)){
+  // 静态字符串参数之间必须有逗号，允许单个尾逗号，避免缺逗号源码触发指数回溯。
+  for(const match of text.matchAll(/join\(\s*__dirname\s*,\s*(['"][^'"]+['"](?:\s*,\s*['"][^'"]+['"])*)\s*(?:,\s*)?\)/g)){
    const parts=[...match[1].matchAll(/['"]([^'"]+)['"]/g)].map(item=>item[1]);
    files.add(safe(posix.normalize(posix.join(posix.dirname(name),...parts))));
   }

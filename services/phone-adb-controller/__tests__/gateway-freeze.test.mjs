@@ -54,6 +54,35 @@ test('原设备角色冒充网关确实漏fetch-seen CLI；gateway快照应完�
  }
  assert.throws(()=>prepareSnapshot({root,commit:sha,role:'gateway',directory:gateway}),/存在/);
 });
+test('恶意缺逗号静态join源在有界子进程内完成固定快照且保留有效资产闭包',t=>{
+ const home=mkdtempSync(join(tmpdir(),'gateway-snapshot-redos-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
+ const repo=join(home,'repo'),dir=join(repo,'services/phone-adb-controller');mkdirSync(join(dir,'config'),{recursive:true});
+ const env={HOME:home,PATH:process.env.PATH,GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null'};
+ const git=(...args)=>execFileSync('git',['-C',repo,...args],{env,encoding:'utf8',stdio:['ignore','pipe','pipe']});
+ git('init');
+ writeFileSync(join(dir,'deploy.sh'),'MMV_JS_FILES=(entry.js)\nMMV_PROBE_FILES=(probe.js)\n');
+ const malicious='// join(__dirname,"!"'+ '\t"!"'.repeat(48)+'\n';
+ const entry=`const path=require('node:path'),fs=require('node:fs');
+const own=JSON.parse(fs.readFileSync(path.join(__dirname, 'config', 'own-accounts.json')));
+const ramp=JSON.parse(fs.readFileSync(path.join(__dirname, "config", "dm-rate-ramp.json")));
+const trailing=JSON.parse(fs.readFileSync(path.join(__dirname, 'config', 'trailing.json',)));
+console.log(JSON.stringify({own,ramp,trailing}));\n`+malicious;
+ writeFileSync(join(dir,'entry.js'),entry);writeFileSync(join(dir,'probe.js'),'module.exports={};');
+ writeFileSync(join(dir,'config/trailing.json'),'{"fixture":"trailing"}');
+ writeFileSync(join(dir,'config/own-accounts.json'),'{"fixture":"own"}');writeFileSync(join(dir,'config/dm-rate-ramp.json'),'{"fixture":"ramp"}');
+ git('add','.');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','-m','fixed fixture');const commit=git('rev-parse','HEAD').trim();
+ const directory=join(home,'gateway');
+ const child=spawnSync(process.execPath,['--input-type=module','-e',`
+import {prepareSnapshot,verifySnapshot} from ${JSON.stringify('file://'+join(service,'gateway-snapshot.mjs'))};
+const options=${JSON.stringify({root:repo,commit,role:'gateway',directory})};prepareSnapshot(options);console.log(JSON.stringify(verifySnapshot(options)));
+`],{env,encoding:'utf8',timeout:2000});
+ assert.equal(child.status,0,JSON.stringify({error:child.error?.code,signal:child.signal,stderr:child.stderr}));
+ const manifest=JSON.parse(child.stdout);assert.equal(manifest.source_commit,commit);assert.equal(manifest.role,'gateway');
+ assert.deepEqual(manifest.files.map(f=>f.path),['config/dm-rate-ramp.json','config/own-accounts.json','config/trailing.json','entry.js','probe.js']);
+ assert.equal(readFileSync(join(directory,'entry.js'),'utf8'),entry);
+ const actual=spawnSync(process.execPath,[join(directory,'entry.js')],{env,encoding:'utf8',timeout:2000});assert.equal(actual.status,0,actual.stderr);
+ assert.deepEqual(JSON.parse(actual.stdout),{own:{fixture:'own'},ramp:{fixture:'ramp'},trailing:{fixture:'trailing'}});
+});
 import {gatewayFixture} from './gateway-cli-fixture.mjs';
 test('永久真实CLI在冻结gateway执行历史/资格三命令/评分配送与探针', {timeout:60000},async t=>{
  const f=await gatewayFixture(t);const result=await f.run();
