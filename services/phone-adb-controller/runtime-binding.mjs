@@ -11,6 +11,7 @@ export function expectedPath(frozen,stepSpec){
   const base={reference_id:a.reference.reference_id,activity_id:a.reference.activity_id,activity_definition_version_id:a.version.id};
   result.push({...base,required:true});
   for(const step of a.version.payload.steps||[]){
+   if(step.locator?.activity_id && step.locator.activity_id!==a.reference.activity_id)throw Error('Step父Activity归属与冻结引用不同');
    const plan=(stepSpec.steps||[]).find(p=>(p.usage?.slot_key||p.activity)===a.reference.slot_key && (p.key===step.locator?.step_key||p.key?.endsWith(`.${step.locator?.step_key}`)));
    if(step.step_id && !plan)throw Error(`Step不在冻结计划: ${step.locator?.step_key}`);
    if(step.step_id)result.push({...base,step_id:step.step_id,required:step.contract?.optional!==true});

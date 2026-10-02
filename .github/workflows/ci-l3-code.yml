@@ -237,11 +237,11 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-      - name: 安装契约编译器依赖（隔离目录，保留仓库锁文件）
-        run: |
-          npm install --prefix "$RUNNER_TEMP/commander-deps" --no-save --package-lock=false --ignore-scripts --no-audit --no-fund ajv@8.20.0 ajv-formats@3.0.1 yaml@2.9.0
-          ln -s "$RUNNER_TEMP/commander-deps/node_modules" node_modules
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install locked real-contract test dependencies
+        run: npm ci --ignore-scripts --workspaces=false
       # douyin-phone-adb 是 zsh 脚本，ubuntu runner 默认没有 zsh。
       # 不装就只能让测试 skip，而"在 CI 里从不执行的守卫"等于没有守卫
       # （0916 自查：279 个 smoke 里 55 个是 pipefail 假绿，同一个病）。

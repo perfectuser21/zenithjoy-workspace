@@ -1,3 +1,4 @@
+capability-phone-regression-smoke.sh
 account-me-smoke.sh
 acq-sse-smoke.sh
 acquisition-sse-nginx-route-smoke.sh
