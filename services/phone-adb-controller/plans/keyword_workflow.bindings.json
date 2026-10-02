@@ -1,0 +1,285 @@
+{
+  "version": 1,
+  "capability": "keyword_acquisition",
+  "source": {
+    "contract": "product-map/contracts/keyword_acquisition.yaml",
+    "scope": "activity-chain"
+  },
+  "select": [
+    "preflight",
+    "discovery",
+    "qualification",
+    "collection",
+    "scoring",
+    "delivery",
+    "cleanup"
+  ],
+  "trigger_inputs": [
+    "Keyword",
+    "Device",
+    "Account",
+    "Run"
+  ],
+  "activities": {
+    "preflight": {
+      "runtime": {
+        "phase": "setup",
+        "entry": "keyword-workflow-activity.js",
+        "protocol": "json-stdio-v1",
+        "argv": [
+          "preflight"
+        ],
+        "input": {
+          "run_tag": "$.run_tag",
+          "line_key": "$.line_key",
+          "device": "$.device",
+          "account": "$.account",
+          "keywords": "$input.keywords",
+          "videos": "$.videos",
+          "comments": "$.comments",
+          "workflow_artifacts": "$.workflow_artifacts",
+          "execution": "$input.execution",
+          "return_to_results": "$input.return_to_results"
+        },
+        "on_failure": "continue",
+        "max_attempts": 1,
+        "cleanup_grace_s": 30
+      }
+    },
+    "discovery": {
+      "runtime": {
+        "phase": "source",
+        "entry": "keyword-workflow-activity.js",
+        "protocol": "json-stdio-v1",
+        "argv": [
+          "discovery"
+        ],
+        "input": {
+          "run_tag": "$.run_tag",
+          "line_key": "$.line_key",
+          "device": "$.device",
+          "account": "$.account",
+          "keywords": "$input.keywords",
+          "videos": "$.videos",
+          "comments": "$.comments",
+          "workflow_artifacts": "$.workflow_artifacts",
+          "execution": "$input.execution",
+          "return_to_results": "$input.return_to_results"
+        },
+        "on_failure": "continue",
+        "max_attempts": 1,
+        "cleanup_grace_s": 30
+      }
+    },
+    "qualification": {
+      "runtime": {
+        "phase": "per_item",
+        "entry": "keyword-workflow-activity.js",
+        "protocol": "json-stdio-v1",
+        "argv": [
+          "qualification"
+        ],
+        "input": {
+          "run_tag": "$.run_tag",
+          "line_key": "$.line_key",
+          "device": "$.device",
+          "account": "$.account",
+          "keywords": "$input.keywords",
+          "videos": "$.videos",
+          "comments": "$.comments",
+          "workflow_artifacts": "$.workflow_artifacts",
+          "execution": "$input.execution",
+          "return_to_results": "$input.return_to_results",
+          "video": "$item"
+        },
+        "on_failure": "continue",
+        "max_attempts": 1,
+        "cleanup_grace_s": 30,
+        "per_item": {
+          "group": "videos",
+          "items": "$.videos",
+          "input": "video",
+          "identity": "video_id"
+        }
+      }
+    },
+    "collection": {
+      "runtime": {
+        "phase": "per_item",
+        "entry": "keyword-workflow-activity.js",
+        "protocol": "json-stdio-v1",
+        "argv": [
+          "collection"
+        ],
+        "input": {
+          "run_tag": "$.run_tag",
+          "line_key": "$.line_key",
+          "device": "$.device",
+          "account": "$.account",
+          "keywords": "$input.keywords",
+          "videos": "$.videos",
+          "comments": "$.comments",
+          "workflow_artifacts": "$.workflow_artifacts",
+          "execution": "$input.execution",
+          "return_to_results": "$input.return_to_results",
+          "video": "$item"
+        },
+        "on_failure": "continue",
+        "max_attempts": 1,
+        "cleanup_grace_s": 30,
+        "per_item": {
+          "group": "videos",
+          "items": "$.videos",
+          "input": "video",
+          "identity": "video_id",
+          "when": {
+            "path": "$item.judgment_status",
+            "equals": "matched"
+          }
+        }
+      }
+    },
+    "scoring": {
+      "runtime": {
+        "phase": "batch_end",
+        "entry": "keyword-workflow-activity.js",
+        "protocol": "json-stdio-v1",
+        "argv": [
+          "scoring"
+        ],
+        "input": {
+          "run_tag": "$.run_tag",
+          "line_key": "$.line_key",
+          "device": "$.device",
+          "account": "$.account",
+          "keywords": "$input.keywords",
+          "videos": "$.videos",
+          "comments": "$.comments",
+          "workflow_artifacts": "$.workflow_artifacts",
+          "execution": "$input.execution",
+          "return_to_results": "$input.return_to_results"
+        },
+        "on_failure": "continue",
+        "max_attempts": 1,
+        "cleanup_grace_s": 30
+      },
+      "outputs": [
+        {
+          "type": "Comment",
+          "cardinality": "many",
+          "effect": "update",
+          "fields": [
+            "process_status",
+            "relevance",
+            "intent_grade",
+            "promoted"
+          ]
+        }
+      ]
+    },
+    "delivery": {
+      "runtime": {
+        "phase": "finalize",
+        "entry": "keyword-workflow-activity.js",
+        "protocol": "json-stdio-v1",
+        "argv": [
+          "delivery"
+        ],
+        "input": {
+          "run_tag": "$.run_tag",
+          "line_key": "$.line_key",
+          "device": "$.device",
+          "account": "$.account",
+          "keywords": "$input.keywords",
+          "videos": "$.videos",
+          "comments": "$.comments",
+          "workflow_artifacts": "$.workflow_artifacts",
+          "execution": "$input.execution",
+          "return_to_results": "$input.return_to_results"
+        },
+        "on_failure": "continue",
+        "max_attempts": 1,
+        "cleanup_grace_s": 30
+      },
+      "inputs": [
+        {
+          "type": "Video",
+          "cardinality": "many",
+          "fields": [
+            "line_key",
+            "video_id",
+            "harvest_batch"
+          ]
+        },
+        {
+          "type": "Comment",
+          "cardinality": "many",
+          "fields": [
+            "line_key",
+            "dedup_key",
+            "harvest_batch"
+          ]
+        },
+        {
+          "type": "Run",
+          "cardinality": "one",
+          "fields": [
+            "run_tag"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Comment",
+          "cardinality": "many",
+          "effect": "upsert",
+          "fields": [
+            "line_key",
+            "dedup_key",
+            "harvest_batch"
+          ]
+        },
+        {
+          "type": "Lead",
+          "cardinality": "many",
+          "effect": "upsert",
+          "fields": [
+            "line_key",
+            "douyin_id",
+            "nickname",
+            "profile_url",
+            "intent_grade",
+            "repeat_hits",
+            "status"
+          ],
+          "optional": true
+        }
+      ]
+    },
+    "cleanup": {
+      "runtime": {
+        "phase": "finalize",
+        "entry": "keyword-workflow-activity.js",
+        "protocol": "json-stdio-v1",
+        "argv": [
+          "cleanup"
+        ],
+        "input": {
+          "run_tag": "$.run_tag",
+          "line_key": "$.line_key",
+          "device": "$input.device",
+          "account": "$.account",
+          "keywords": "$input.keywords",
+          "videos": "$.videos",
+          "comments": "$.comments",
+          "workflow_artifacts": "$.workflow_artifacts",
+          "execution": "$input.execution",
+          "return_to_results": "$input.return_to_results"
+        },
+        "on_failure": "continue",
+        "max_attempts": 1,
+        "cleanup_grace_s": 30
+      }
+    }
+  }
+}

@@ -43,7 +43,7 @@ case "$CMD" in
   commenter-card-link)
     cnt="$HOME/cardlink-count"; n=$(cat "$cnt" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$cnt"
     if [ "$n" -le "$CARDLINK_FAIL_COUNT" ]; then exit 1; fi
-    printf 'profile_url=https://profile-ok\\n'; exit 0;;
+    printf 'profile_url=https://profile-ok\\ncomment_context_restored=0\\n'; exit 0;;
   back) exit 0;;
   back-to-results) exit 0;;
   swipe) exit 0;;
@@ -76,6 +76,8 @@ test("commenter-card-link 前2次失败第3次成功 → LEAD行带上正确的�
   const n = Number(readFileSync(join(home, "cardlink-count"), "utf8").trim());
   assert.equal(n, 3, `应该重试到第3次才成功, 实际调用次数=${n}`);
   assert.doesNotMatch(r.stderr, /主页直链解析3次仍失败/);
+  assert.doesNotMatch(readFileSync(join(home, "adb-calls.log"), "utf8"), /^open-video /m,
+    "旧loop保持原契约，不启用独立活动恢复");
 });
 
 test("commenter-card-link 连续3次都失败 → 重试3次后降级(线索保留但链接为空),留痕日志", { skip: SKIP }, () => {

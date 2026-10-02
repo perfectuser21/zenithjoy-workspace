@@ -27,6 +27,16 @@ const expectError = (ctx, re) => {
   assert.ok(errors.some((e) => re.test(e)), `应报 ${re}，实际：\n${errors.join('\n')}`);
 };
 
+test('optional输出不能满足后续必填输入；未声明optional保持既有组装语义', () => {
+  const ctx = fresh();
+  assert.equal(assemble(ctx, 'keyword_acquisition').ok, true);
+  act(ctx, 'keyword_acquisition', 'scoring').outputs.find(o => o.type === 'Lead').optional = true;
+  const result = assemble(ctx, 'keyword_acquisition');
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some(e => /delivery 输入 Lead 未由/.test(e)), result.errors.join('\n'));
+  act(ctx, 'keyword_acquisition', 'scoring').outputs.find(o => o.type === 'Lead').optional = false;
+  assert.equal(assemble(ctx, 'keyword_acquisition').ok, true);
+});
 test('对标清单展开共享36步但保持关键词规范身份，独有4步归对标', () => {
   const ctx = fresh(), keyword = stepDodSpec(ctx, 'keyword_acquisition'), benchmark = stepDodSpec(ctx, 'benchmark_link_acquisition');
   assert.equal(keyword.steps.length, 44); assert.equal(benchmark.steps.length, 40);

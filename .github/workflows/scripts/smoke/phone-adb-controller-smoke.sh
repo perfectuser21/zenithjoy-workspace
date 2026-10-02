@@ -31,8 +31,8 @@ fi
 # 层21: commenter-identity 必须在**逐屏**(NEWLINES)上做,不能在**翻完屏后的累积列表**(CC)上做
 # (0923生产实证:三台并发批次、两条业务线,逐行身份验证100%炸"nickname mismatch"——根因是
 # 翻屏累积再统一处理时,早期屏的tap坐标早就对不上手机翻到最后一屏后的实际画面)。
-grep -qE 'for CLINE in "\$\{\(f\)NEWLINES\}"' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 的身份验证循环没有改成逐屏处理(NEWLINES),翻屏后tap坐标必然作废"
-if grep -B3 'commenter-identity' "$D/harvest-keyword.sh" | grep -qE 'for CLINE in "\$\{\(f\)CC\}"'; then
+grep -qE 'for CLINE in "\$\{\(f\)NEWLINES\}"' "$D/harvest-keyword-lib.sh" || fail "harvest-keyword.sh 的身份验证循环没有改成逐屏处理(NEWLINES),翻屏后tap坐标必然作废"
+if grep -B3 'commenter-identity' "$D/harvest-keyword-lib.sh" | grep -qE 'for CLINE in "\$\{\(f\)CC\}"'; then
   fail "harvest-keyword.sh 身份验证仍在累积列表(CC)上做,复发0923的翻屏坐标失效bug"
 fi
 node --check "$D/push-leads.js" || fail "push-leads.js 语法错误"
@@ -131,8 +131,11 @@ grep -qF 'commander-heartbeat' "$D/cmdr-escort.txt" || fail "cmdr-escort.txt 缺
 grep -qF 'brain_launch_register' "$D/commander/wf-launch.sh" || fail "wf-launch.sh 缺 Brain 起跑登记(escort id 进不了 Brain,lost 善后无法注销 escort)"
 
 # 层5: 落表独立字段(主理人0915逐列验收拍板: 昵称/抖音号/主页链接/IP/留言时间独立成列)
-grep -qF '"留言时间"' "$D/push-raw-comments.js" || fail "push-raw-comments 未写留言时间列"
-grep -qF '"主页IP"' "$D/push-raw-comments.js" || fail "push-raw-comments 未写主页IP列"
+# 字段构造随阶段3拆分进入共享原始评论活动；旧入口同样复用该真身。
+grep -qF 'persistRawComments(input, deps)' "$D/push-raw-comments.js" || fail "旧落池入口未调用共享原始评论活动"
+grep -qE '留言时间:[[:space:]]*value' "$D/raw-comment-activities.js" || fail "共享原始评论活动未写留言时间列"
+grep -qE '主页IP:[[:space:]]*value' "$D/raw-comment-activities.js" || fail "共享原始评论活动未写主页IP列"
+node --test "$D/__tests__/raw-comment-activities.test.mjs" "$D/__tests__/raw-comment-storage.test.mjs" || fail "原始评论字段实际写入或旧入口兼容回归失败"
 # 0923 搬运逻辑抽进 sort-comments-lib.js(池状态必须最后推进,顺序只有注入假飞书跑一遍才测得出),
 # 列的字面量跟着挪过去了,检查点也跟着挪——盯着旧文件 grep 会在重构后变成假绿。
 # 认两种写法: "IP属地": 和 ES6 简写 IP属地: —— 只认带引号那种，重构成简写时会假红
@@ -454,9 +457,24 @@ node --check "$_NICK_LIB" || fail "nickname-match-lib.js 语法错误"
 # deploy.sh 的注释已经写过「不下发 = 改了控制器却永远到不了手机机」，但落点选错了，
 # 等于只把文件搬到了一个没人读的地方（同款形状见 memory
 # phone_controller_live_path_is_local_bin_not_repo：这条路径长期两份不同步）。
-# 未进入冻结run时仍需下发默认控制器；运行中由DOUYIN_PHONE_ADB指向核验副本。
-_CALL_PATH=$(sed -n 's@^C="${DOUYIN_PHONE_ADB:-$HOME/\([^}]*\)}"$@~/\1@p' "$D/harvest-keyword.sh")
-[[ -n "$_CALL_PATH" ]] || fail "无法解析 harvest 控制器默认部署路径"
+_CALL_PATH=$(python3 - "$D/harvest-keyword.sh" <<'PY'
+import pathlib, re, sys
+lines = [line for line in pathlib.Path(sys.argv[1]).read_text().splitlines() if line.startswith('C=')]
+if len(lines) != 1:
+    sys.exit('控制器 C= 赋值必须唯一')
+value = lines[0][2:]
+match = re.fullmatch(r'"\$\{DOUYIN_PHONE_ADB:-\$\{DOUYIN_PHONE_CONTROLLER:-([^{}]+)\}\}"', value)
+if match:
+    value = match.group(1)
+elif value.startswith('"') and value.endswith('"'):
+    value = value[1:-1]
+if value.startswith('$HOME/'):
+    value = '~/' + value[len('$HOME/'):]
+if not re.fullmatch(r'~/[A-Za-z0-9._/-]+/douyin-phone-adb', value):
+    sys.exit('无法安全解析默认控制器路径: ' + lines[0])
+print(value)
+PY
+) || fail '无法从唯一 C= 赋值解析默认控制器路径'
 grep -qF 'C="$WF_FROZEN_ROOT/douyin-phone-adb"' "$D/wf-run-lib.sh" || fail "冻结run未使用私有控制器"
 grep -qF 'export DOUYIN_PHONE_ADB="$C"' "$D/wf-run-lib.sh" || fail "冻结run未传递控制器路径"
 if [[ -n "$_CALL_PATH" ]]; then
@@ -476,7 +494,7 @@ if [[ -n "$_CALL_PATH" ]]; then
   # ssh 桩也要记账,才能断言"最终落到了调用方目录的正式文件名"。
   printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> "%s/ssh.log"\nexit 0\n' "$_STUB" > "$_STUB/ssh"
   chmod +x "$_STUB/scp" "$_STUB/ssh"
-  PATH="$_STUB:$PATH" node "$D/__tests__/fixtures/deploy-smoke-runner.mjs" "$D/deploy.sh" > "$_STUB/run.log" 2>&1 || true
+  PATH="$_STUB:$PATH" WF_DEPLOY_TEST_TRANSPORT_DIR="$_STUB" node "$D/__tests__/fixtures/deploy-smoke-runner.mjs" "$D/deploy.sh" > "$_STUB/run.log" 2>&1 || true
   for _h in xian-m4 xian-m1; do
     if ! grep -qx "$_h:${_CALL_DIR}/.douyin-phone-adb.deploy-new" "$_STUB/scp.log" 2>/dev/null \
        || ! grep -qE "^$_h .*mv -f ${_CALL_DIR}/\.douyin-phone-adb\.deploy-new ${_CALL_DIR}/douyin-phone-adb\$" "$_STUB/ssh.log" 2>/dev/null; then
@@ -485,7 +503,7 @@ if [[ -n "$_CALL_PATH" ]]; then
       tail -15 "$_STUB/run.log" >&2 2>/dev/null || echo "(没有输出)" >&2
       echo "--- 实际送出的目标 ---" >&2
       grep -E '^[a-z0-9-]+:' "$_STUB/scp.log" 2>/dev/null | sort -u >&2 || echo "(scp.log 为空)" >&2
-      fail "deploy.sh 空跑后没往 $_h:${_CALL_DIR}/ 送 douyin-phone-adb —— 夜批调的就是这个路径(harvest-keyword.sh 里写死 ${_CALL_PATH})，下发到别处=手机上永远跑旧版"
+      fail "deploy.sh 空跑后没往 $_h:${_CALL_DIR}/ 送 douyin-phone-adb —— harvest-keyword.sh 默认调用 ${_CALL_PATH}，下发到别处=手机上永远跑旧版"
     fi
   done
 fi
@@ -651,12 +669,15 @@ done
 #   (不能只有title兜底) ③触发端: batch2.sh必须把录到的音频传到mmv并调用judge-video.js。
 grep -qE 'await upsertVideo\(pool' "$D/push-videos.js" || fail "push-videos.js 未接入Postgres双写(judge-video.js会永远无数据可判)"
 grep -qF 'leadgen-db-connect' "$D/push-videos.js" || fail "push-videos.js 未引入leadgen-db-connect(Postgres连接缺失)"
-grep -qF 'record-start' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 未接真机录制(record-start),视频判定只能靠标题兜底"
-grep -qF 'record-extract-audio' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 未接音频提取(record-extract-audio)"
+grep -qF 'record-start' "$D/harvest-keyword-lib.sh" || fail "harvest-keyword.sh 未接真机录制(record-start),视频判定只能靠标题兜底"
+grep -qF 'record-extract-audio' "$D/harvest-keyword-lib.sh" || fail "harvest-keyword.sh 未接音频提取(record-extract-audio)"
 # 8bb3af55 先判后采(决策 f18f56b8①): 触发端从 batch2.sh 落池之后前移到 harvest-keyword.sh 逐视频开评论区之前——
 #   discover(候选落库) → judge(音频 scp 到 mmv 交给判定) → 只有 matched 才 open-comments → collected(评论已采)。
 #   反向守卫: batch2.sh 落池后不得再跑 judge-video.js(那时评论早已采完,判了也挡不住,先采后判复活)。
-_HK_CODE="$(grep -vE '^[[:space:]]*#' "$D/harvest-keyword.sh")"
+_HK_CODE="$(cat "$D/harvest-keyword-lib.sh" "$D/harvest-keyword.sh" | grep -vE '^[[:space:]]*#')"
+for _fn in qualify_current_video collect_current_video; do
+  grep -qE "^[[:space:]]+$_fn([[:space:]]|$)" "$D/harvest-keyword.sh" || fail "harvest未调用 $_fn"
+done
 [[ -s "$D/qualify-video.js" ]] || fail "qualify-video.js 缺失(先判后采的远端判定入口)"
 node --check "$D/qualify-video.js" || fail "qualify-video.js 语法错误"
 for _q in 'qual_remote discover' 'qual_remote judge' 'qual_remote collected'; do
@@ -678,10 +699,10 @@ grep -qF 'source ~/.credentials/zenithjoy-db.env' <<< "$_PV_SSH_LINE" \
   || fail "batch2.sh 调用push-videos.js的ssh命令没有source ~/.credentials/zenithjoy-db.env(Postgres双写会静默连错库)"
 # 8bb3af55: 判定触发端移到 harvest-keyword.sh 的 qual_remote(唯一一条 ssh),同样必须先 source 凭据
 grep -qE '^source "\$\{0:A:h\}/harvest-keyword-lib\.sh" \|\| exit 1$' "$D/harvest-keyword.sh" || fail "harvest未加载判定函数库"
-_QR_SSH_LINE="$(grep 'node qualify-video\.js' "$D/harvest-keyword-lib.sh" | grep 'ssh ' || true)"
-[[ -n "$_QR_SSH_LINE" ]] || fail "harvest-keyword.sh 找不到调用 qualify-video.js 的 ssh(层23应该已经守住,层24逻辑错了)"
-grep -qF 'source ~/.credentials/zenithjoy-db.env' <<< "$_QR_SSH_LINE" \
-  || fail "harvest-keyword.sh 调 qualify-video.js 的 ssh 没有 source ~/.credentials/zenithjoy-db.env(判定读写不到 Postgres)"
+# 执行共享 qual_remote 捕获实际 SSH argv；同时验证旧默认凭据与显式 env/cwd/node。
+# 测试隔离 HOME，仅使用 fake SSH 和虚构凭据，不依赖 C runtime、不连接真实网关。
+node --test --test-name-pattern='未传gateway保留旧默认mmv路径' "$D/__tests__/gateway-freeze.test.mjs" \
+  || fail "qual_remote 资格路由未先加载正确凭据或未传递冻结 host/cwd/node"
 
 # 层25: 录制前音量必须幂等驱动到 RECORD_MEDIA_VOLUME,不能再无脑 VOLUME_UP x2
 # (0924 真机复盘: record_start 每条视频无条件按两次 KEYCODE_VOLUME_UP 且录完不复位,
@@ -738,7 +759,7 @@ _MDB_STMT="$(awk '/mean_db="\$\(/{f=1} f{print; if (!/\\$/) exit}' <<< "$_RSTOP_
 grep -q 'volumedetect' <<< "$_MDB_STMT" || fail "mean_db 不是用 ffmpeg volumedetect 实测的(写死值=假打点,新机型翻车照样看不见)"
 grep -q '|| true' <<< "$_MDB_STMT" || fail "mean_db 的命令替换没带 || true(set -e 下 ffmpeg 一失败就打死整个控制器,连 record_stopped 都发不出去)"
 # 打点不进日志 = 等于没打
-grep -q 'mean_volume_db' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 没把 mean_volume_db 写进采收日志(打点没人看得见,等于没做)"
+grep -q 'mean_volume_db' "$D/harvest-keyword-lib.sh" || fail "harvest-keyword.sh 没把 mean_volume_db 写进采收日志(打点没人看得见,等于没做)"
 
 # 层28: 棒1 回执线(决策 702949b6/280bd091)——账本 stage/finalize 必须 best-effort 回执 Brain execution-callback,
 # 且 brain_task_id 的整条取数链(服务端返回体 → wall-report stdout → harvest-cron export)一环都不能断:
@@ -828,7 +849,12 @@ grep -qF 'nickname="unknown"' "$C" || fail "read_current_account 取不准昵称
 # step-dod.json 与契约一致由 scripts/product-map/__tests__/contracts.test.js 钉(改契约必须重跑 gen-step-dod.mjs)。
 for _sf in step-judge.mjs step-dod-stats.mjs; do [[ -s "$D/$_sf" ]] || fail "$_sf 缺失"; node --check "$D/$_sf" || fail "$_sf 语法错误"; done
 node -e 'const s=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(!Array.isArray(s.steps)||s.steps.length<43) process.exit(1)' "$D/step-dod.json" || fail "step-dod.json 缺失/坏/不足 43 步"
-grep -qE '^DEVICE_NODE_FILES=\(.*step-judge\.mjs.*step-dod\.json' "$_DEPLOY" || fail "deploy.sh DEVICE_NODE_FILES 漏了 step-judge.mjs/step-dod.json(执行机判不了步骤 DoD)"
+node - "$_DEPLOY" <<'JS' || fail "deploy.sh DEVICE_NODE_FILES 漏了 step-judge.mjs/step-dod.json(执行机判不了步骤 DoD)"
+const source = require('node:fs').readFileSync(process.argv[2], 'utf8');
+const body = /^DEVICE_NODE_FILES=\(([\s\S]*?)\)/m.exec(source)?.[1];
+const files = (body || '').replace(/#[^\n]*/g, '').trim().split(/\s+/);
+if (!['step-judge.mjs', 'step-dod.json'].every(file => files.includes(file))) process.exit(1);
+JS
 grep -qF 'step-judge.mjs step-dod.json step-dod-stats.mjs' <<< "$(sed -n '/^MMV_PROBE_FILES=(/,/)/p' "$_DEPLOY")" || fail "deploy.sh MMV_PROBE_FILES 漏了裁判/清单/统计"
 grep -qF 'judge_steps "$stage"' "$D/workflow-result.sh" || fail "workflow-result.sh 写工件时没调步骤 DoD 裁判"
 grep -qF 'remote="$remote --steps"' "$D/workflow-result.sh" || fail "probe_stage 没带 --steps(sql/http 步骤读不回)"

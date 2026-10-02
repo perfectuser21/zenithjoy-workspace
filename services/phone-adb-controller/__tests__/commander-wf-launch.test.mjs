@@ -42,6 +42,11 @@ exit 0`;
 function setup(stub = {}) {
   const home = mkdtempSync(join(tmpdir(), "wflaunch-"));
   const bin = join(home, "bin"); mkdirSync(bin);
+  const skillRoot = join(home, 'skills'); mkdirSync(skillRoot);
+  for (const cap of ['keyword_acquisition', 'benchmark_link_acquisition']) {
+    mkdirSync(join(skillRoot, 'wf-' + cap));
+    writeFileSync(join(skillRoot, 'wf-' + cap, 'SKILL.md'), `---\nname: wf-${cap}\ncommander_capability: ${cap}\n---\n契约生成的陪跑指令\n`);
+  }
   for (const [n, body] of [["ssh", FAKE_SSH], ["openclaw", FAKE_OC], ["curl", FAKE_CURL]]) {
     const p = join(bin, n); writeFileSync(p, body); chmodSync(p, 0o755);
   }
@@ -50,12 +55,27 @@ function setup(stub = {}) {
     WF_START_WAIT: "0", WF_ESCORT_RETRY_SLEEP: "0",
     STUB_DEPLOYED: stub.deployed ?? "yes", STUB_BUSY: stub.busy ?? "no", STUB_STARTED: stub.started ?? "yes",
     STUB_BRAIN: stub.brain ?? "up", WF_BRAIN_URL: "http://brain.test:5221",
+    WF_COMMANDER_SKILL_ROOT: skillRoot,
   };
   return { home, env };
 }
 const run = (args, env) => spawnSync("bash", [LAUNCH, ...args], { encoding: "utf8", env });
 const read = (home, f) => (existsSync(join(home, f)) ? readFileSync(join(home, f), "utf8") : "");
 const BASE = ["keyword_acquisition", "xian-m4", "legacy", "ANGYVB4402004137", "AI人工智能训练师"];
+
+test('专属skill缺失或能力不符时退4，不SSH、不登记escort；正常起跑打印并让陪跑读取同一skill', () => {
+  const missing = setup(); missing.env.WF_COMMANDER_SKILL_ROOT = join(missing.home, 'absent');
+  assert.equal(run(BASE, missing.env).status, 4);
+  assert.equal(read(missing.home, 'ssh-argv.log'), ''); assert.equal(read(missing.home, 'oc-argv.log'), '');
+  const wrong = setup();
+  writeFileSync(join(wrong.env.WF_COMMANDER_SKILL_ROOT, 'wf-keyword_acquisition', 'SKILL.md'), 'commander_capability: other\n');
+  assert.equal(run(BASE, wrong.env).status, 4);
+  const valid = setup(), r = run(BASE, valid.env);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /WF_COMMANDER_SKILL .*wf-keyword_acquisition\/SKILL.md/);
+  assert.match(r.stdout, /契约生成的陪跑指令/);
+  assert.match(read(valid.home, 'oc-argv.log'), /cat.*wf-keyword_acquisition\/SKILL.md/);
+});
 
 test("参数校验：未知 host / 非法 capability 直接退 2，不碰 ssh", () => {
   const { home, env } = setup();
@@ -84,12 +104,24 @@ test("正常起跑：escort 登记 → 起跑命令带 --tag 与 --commander <es
   const r = run(BASE, env);
   assert.equal(r.status, 0, r.stderr);
   const oc = read(home, "oc-argv.log");
-  assert.match(oc, /cron add .*--agent media/);
+  assert.match(oc, /cron add .*--agent work-commander/);
   assert.match(oc, /escort-xian-m4-cmd\d{8}/);
   const launch = read(home, "ssh-argv.log").split("\n").find((l) => l.includes("nohup"));
   assert.ok(launch, "应有一次 nohup 起跑");
   assert.match(launch, /wf-run\.sh keyword_acquisition legacy ANGYVB4402004137 'AI人工智能训练师' 6 1 --tag cmd\d{8} --commander d76fe21a/);
   assert.match(r.stdout.trim().split("\n").pop(), new RegExp(`^WF_LAUNCHED tag=cmd\\d{8} host=xian-m4 cap=keyword_acquisition serial=ANGYVB4402004137 escort=${ESCORT_ID}`));
+});
+
+test("跑场上的 escort 先经 SSH 读网关 SOP，并经网关发送心跳", () => {
+  const { home, env } = setup();
+  const result = run(BASE, env);
+  assert.equal(result.status, 0, result.stderr);
+  const message = read(home, "oc-argv.log");
+  assert.match(message, /ssh -o BatchMode=yes -o ConnectTimeout=10 administrator@100\.71\.151\.105/);
+  assert.match(message, /cat.*cmdr-escort\.txt/);
+  assert.match(message, /日志.*网关/);
+  assert.match(message, /终态优先/);
+  assert.match(message, /ssh[^\n]*curl[^\n]*commander-heartbeat/);
 });
 
 test("Brain 起跑登记（任务 17ea4536）：起跑确认后 POST commander-heartbeat kind=launch 带 escort id；escort 消息含心跳指令；Brain 不通不阻塞", () => {

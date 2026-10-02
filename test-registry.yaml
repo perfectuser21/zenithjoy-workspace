@@ -6923,6 +6923,206 @@ agent_suite:
     product: 工作机排程
     note: "工作目录（主理人要的「这个部门有哪些活、每件活要填什么」）：断言**只列真能跑的活**——目前只有智能获客一条线有（采收/私信/触达三件的脚本在工作机 ~/bin-harvest 下），其余部门返回空让页面明说「还没有可派的活」而不是给会失败的假菜单；每件活必须写清「派下去会发生什么」、id 唯一（领单器按它分派，撞车会派错脚本）、碰平台的标 outbound（决定 30 分钟窗口约束）；每个输入框有 label，非必填项要么有默认值要么有说明；组装的 params 只含 job_type 与用户填的值，**不含 profile/action**（工作机本地概念，中台猜必错，见单 03aa758d）。"
 
+  - id: comment-activities
+    path: services/phone-adb-controller/__tests__/comment-activities.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "显式评分/配送与JSON进程入口：失败待重试、无评分、账号拒绝、真实写入计数及部署依赖顺序。"
+
+  - id: comment-delivery-storage
+    path: services/phone-adb-controller/__tests__/comment-delivery-storage.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实存储适配器与结算活动，替换HTTP运输边界：跨池拒绝、读回、整批重放与线索已写池失败恢复。"
+
+  - id: raw-comment-activities
+    path: services/phone-adb-controller/__tests__/raw-comment-activities.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "显式原始评论落池：去重保留评分，失败产物重试，旧TSV兼容。"
+
+  - id: raw-comment-storage
+    path: services/phone-adb-controller/__tests__/raw-comment-storage.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "HTTP落池及结算闭环：身份列读回、稀疏字段、同批及客户去重。"
+
+  - id: raw-comment-delivery
+    path: services/phone-adb-controller/__tests__/raw-comment-delivery.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "显式本批落池到结算：可选评分、持久化产物保留及永久拒绝分类。"
+
+  - id: video-pool-delivery
+    path: services/phone-adb-controller/__tests__/video-pool-delivery.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "确认采集凭证到视频池真实JSON/HTTP配送；完整字段、分页去重、失败后保留视频及继续评论配送、非法凭证拒绝。"
+
+  - id: frozen-legacy-full-equivalence
+    path: services/phone-adb-controller/__tests__/frozen-legacy-full-equivalence.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "冻结cdf718dc旧整链与新真实CLI的业务池/视频池/PG直接对账；异常差异显式保留。通过不代表全面等价；预算停止点不同、去评分只比旧模型前检查点。须显式CECELIA_ACTIVITY_RUNTIME。"
+
+  - id: legacy-new-comment-equivalence
+    path: services/phone-adb-controller/__tests__/legacy-new-comment-equivalence.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "同固定TSV和独立HTTP账本，对账当前兼容入口与新评分/评论配送的全部字段、重复计数与重放；仅评论边界。"
+
+  - id: current-video-link-leave-scratch
+    path: services/phone-adb-controller/__tests__/current-video-link-leave-scratch.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实控制器CLI回放详情/暂存返回栈、媒体键；真实curl本地HTTP超时只重试同URL一次，网络失败不重拍分享，非零部分头拒绝。"
+
+  - id: video-activity
+    path: services/phone-adb-controller/__tests__/video-activity.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "独立视频活动真实JSON进程：隔离ADB及SSH边界，预算、锁、身份与自有账号过滤。"
+
+  - id: video-activity-cancellation
+    path: services/phone-adb-controller/__tests__/video-activity-cancellation.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实视频JSON根进程TERM平滑收工：手机动作完成后停止、已采产物保留、锁释放。"
+
+  - id: cecelia-activity-runtime
+    path: services/phone-adb-controller/__tests__/cecelia-activity-runtime.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "跨仓真实CLI离线验收：编译器、Cecelia执行器及四个业务进程；显式环境指定运行器后验交错、无评分、拦截、预算、取消恢复，未提供则明确跳过。"
+
+  - id: phase3-activity-chain
+    path: services/phone-adb-controller/__tests__/phase3-activity-chain.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实采集JSON进程到实际评分、HTTP落池、线索结算闭环；删除评分不改实现仍只保存评论。"
+
+  - id: batch-activities
+    path: services/phone-adb-controller/__tests__/batch-activities.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "预检、逐词候选发现与归位真实JSON进程：账号、实际call_state、根设备锁、历史去重、候选持久化及清场读回。"
+
+  - id: fetch-seen-videos-transport
+    path: services/phone-adb-controller/__tests__/fetch-seen-videos-transport.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实历史CLI与隔离HTTP运输：环境/0600镜像边界、账户匹配、分页完整读回、失败非零且不输出假空历史；禁止读取工具私有cfg。"
+
+  - id: collection-return-probe
+    path: services/phone-adb-controller/__tests__/collection-return-probe.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实单视频采集入口回结果页：实际back-to-results回执、重搜率、预算/取消保留评论、缺失指标记未知。"
+
+  - id: keyword-workflow
+    path: services/phone-adb-controller/__tests__/keyword-workflow.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实完整绑定编译、删除评分仅改绑定、显式输入拒绝与失败/未知阶段累积；配送和归位依次finalize。"
+
+  - id: keyword-workflow-cli
+    path: services/phone-adb-controller/__tests__/keyword-workflow-cli.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实编译器→整批入口→Cecelia CLI→七个业务活动及探针；多词去重、资格拦截、无评分、父取消、整批期限、逐词归位率与根锁释放。须显式提供CECELIA_ACTIVITY_RUNTIME，不跳过验收。"
+
+  - id: keyword-start-confirmation
+    path: services/phone-adb-controller/__tests__/keyword-start-confirmation.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实编译与唯一原生CLI启动；终态前/快终态只读确认START，绑定本轮UUID、契约、归一化输入与完整设备调度身份；错误能力、身份和文件拒绝，helper零执行副作用。"
+
+  - id: keyword-workflow-control
+    path: services/phone-adb-controller/__tests__/keyword-workflow-control.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "根设备锁实际owner读回与续租、foreign锁软停、整批截止、旧回执隔离及cleanup起跑停止续租。"
+
+  - id: workflow-probes
+    path: services/phone-adb-controller/__tests__/workflow-probes.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "复用原声明探针与真实gateway读回入口：哈希、预期key完整性、配送新增评论口径、延后评估、非法读回及缺归位率记unknown。"
+
+  - id: workflow-activity-artifacts
+    path: services/phone-adb-controller/__tests__/workflow-activity-artifacts.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "阶段事实累积：逐词重搜率不能跨词稀释，较严重失败分类不能被后续成功或重试覆盖。"
+
+  - id: workflow-cancel-window
+    path: services/phone-adb-controller/__tests__/workflow-cancel-window.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实wrapper进程在native返回与probe开始间收到TERM，保留已采产物及可读JSON，避免取消窗口丢评论。"
+
+  - id: workflow-transport-utf8
+    path: services/phone-adb-controller/__tests__/workflow-transport-utf8.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实子进程逐字节JSON输入/输出：跨管道分片仍保留中文评论、输入身份及证据。"
+
+  - id: keyword-workflow-portable
+    path: services/phone-adb-controller/__tests__/keyword-workflow-portable.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实编译投影一致性；按deploy清单复制到无源码编译器/无node_modules平铺目录，用显式--contract和真实Cecelia CLI跑完整链及删除评分。非法文件与contract/bindings冲突必须先拒绝；真实子进程拆分UTF-8不得损坏中文产物或回执。须显式提供CECELIA_ACTIVITY_RUNTIME，不跳过验收。"
+
   - id: locate-element
     path: services/phone-adb-controller/__tests__/locate-element.test.mjs
     type: unit
@@ -7118,3 +7318,27 @@ agent_suite:
     status: active
     product: 中台认证
     note: "Brain task database 读取客户端。锁两件会咬人的事：①每个请求必须带 status——/api/brain/tasks 不带过滤参数时只返回 10 个精简字段，带上才返回完整 70+ 字段（0923 实测：不带参数查得出「device_job 有 0 个」，直接查库是 4 条），少了 task_type/tenant_id 页面就分不出哪条是派给手机的活、算哪个客户的；②HTTP 错误必须抛出来绝不 catch 成空数组，任意一个状态取失败整体就算失败——半真的列表比报错更坏。"
+
+  - id: phone-controller-path-precedence
+    path: services/phone-adb-controller/__tests__/controller-path-precedence.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 新媒体运营
+    note: "合并定义版本冻结后，采集入口优先使用已核验冻结控制器；独立活动仍允许显式隔离控制器覆盖默认路径。"
+
+  - id: gateway-freeze
+    path: services/phone-adb-controller/__tests__/gateway-freeze.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "固定commit角色快照完整性；真实fetchseen与qualify discover/judge/collected、评分配送、探针只在显式gateway路径执行，PG/HTTP/手机边界替身。缺文件不回退生产，保留产物释放锁；音频SCP/judge同host/path、无gateway旧默认、0600虚构凭据与pg实际加载前检。须显式CECELIA_ACTIVITY_RUNTIME。"
+
+  - id: comment-context-recovery
+    path: services/phone-adb-controller/__tests__/comment-context-recovery.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实本地shell/controller CLI，外部物理与网关边界替身：名片有界恢复/三次重试、fresh坐标、身份分类、返回码拒绝与旧loop兼容。"

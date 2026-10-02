@@ -67,6 +67,121 @@ const sshLog = (home) => read(join(home, "ssh-argv.log"));
 const runLog = (home) => read(join(home, "log"));
 const rmLines = (home) => sshLog(home).split("\n").filter((l) => /cron rm/.test(l));
 
+test("停看门狗先暂停循环：杀sleep不能抢先唤醒一轮重拉", { skip: SKIP }, () => {
+  const { home, env } = setup({ stub: ONLY_OTHER });
+  env.ESCORT_WATCH_INTERVAL = '60';
+  const result = lib(`ESCORT_ID=${MINE};
+    pkill(){ command pkill "$@"; /bin/sleep 0.3; }
+    escort_watch_start; /bin/sleep 0.2; escort_watch_stop; print stopped`, env);
+  assert.match(result.stdout, /stopped/);
+  assert.doesNotMatch(sshLog(home), /cron add/, 'stop不能变成最后一次重拉');
+});
+
+test("Brain 接班已存在唯一同名陪跑：本地看门狗收养新 ID，不再拉第三个", { skip: SKIP }, () => {
+  const { home, env } = setup({ stub: jobs([{ id: NEW_ID, name: WANT }, { id: OTHER, name: "other-run" }]) });
+  const result = lib(`ESCORT_ID=${MINE}; print -r -- $ESCORT_ID > $ESCORT_ID_FILE; escort_watch_tick`, env);
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(sshLog(home), /cron add/, "已接班时不得重复创建");
+  assert.equal(read(join(home, `wf-escort-${TAG}.id`)).trim(), NEW_ID);
+  assert.match(runLog(home), /escort已接班.*收养/);
+});
+
+test("finalize 后即使本地 ID 过期，也注销唯一同名的新陪跑", { skip: SKIP }, () => {
+  const { home, env } = setup({ stub: jobs([{ id: NEW_ID, name: WANT }, { id: OTHER, name: "other-run" }]) });
+  lib(`ESCORT_ID=${MINE}; print -r -- $ESCORT_ID > $ESCORT_ID_FILE; escort_dismiss`, env);
+  assert.equal(rmLines(home).length, 1);
+  assert.match(rmLines(home)[0], new RegExp(`cron rm ${NEW_ID}$`));
+  assert.ok(!existsSync(join(home, `wf-escort-${TAG}.id`)));
+});
+
+test("同名陪跑不唯一：不再创建、不猜测删除并保留本地 ID 以便对账", { skip: SKIP }, () => {
+  const { home, env } = setup({ stub: jobs([{ id: NEW_ID, name: WANT }, { id: OTHER, name: WANT }]) });
+  lib(`ESCORT_ID=${MINE}; print -r -- $ESCORT_ID > $ESCORT_ID_FILE; escort_watch_tick; escort_dismiss`, env);
+  assert.doesNotMatch(sshLog(home), /cron add|cron rm/);
+  assert.equal(read(join(home, `wf-escort-${TAG}.id`)).trim(), MINE);
+  assert.match(runLog(home), /同名陪跑不唯一/);
+});
+
+test("注销时网关未知：保留本地 ID，不能把未确认下岗抹掉", { skip: SKIP }, () => {
+  const { home, env } = setup({ json: "down" });
+  lib(`ESCORT_ID=${MINE}; print -r -- $ESCORT_ID > $ESCORT_ID_FILE; escort_dismiss`, env);
+  assert.equal(rmLines(home).length, 0);
+  assert.equal(read(join(home, `wf-escort-${TAG}.id`)).trim(), MINE);
+});
+
+test("执行器自拉陪跑也先通过 SSH 读取网关 SOP", { skip: SKIP }, () => {
+  const { home, env } = setup();
+  const result = lib("escort_add", env);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(sshLog(home), /--message '先执行 ssh -o BatchMode=yes -o ConnectTimeout=10 administrator@100\.71\.151\.105 cat \/Users\/administrator\/\.openclaw\/cmdr-escort\.txt/);
+});
+
+test('执行器重拉相同能力的陪跑时要求读取专属skill', { skip: SKIP }, () => {
+  const { home, env } = setup();
+  const result = lib('WF_ARG_CAP=keyword_acquisition; escort_add', env);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(sshLog(home), /wf-keyword_acquisition\/SKILL.md/);
+  assert.match(sshLog(home), /专属skill/);
+  assert.match(sshLog(home), /终态优先/);
+  assert.match(sshLog(home), /心跳JSON必须带cap=keyword_acquisition/);
+  for (const file of ['COMMANDER.md', 'cmdr-escort.txt']) assert.match(readFileSync(join(SRC, file), 'utf8'), /"cap":"<能力>"/);
+});
+
+test("宪法与 SOP 明确网关读写路由，心跳不能在跑场本机访问 localhost", () => {
+  const law = readFileSync(join(SRC, "COMMANDER.md"), "utf8");
+  const sop = readFileSync(join(SRC, "cmdr-escort.txt"), "utf8");
+  for (const text of [law, sop]) assert.match(text, /SOP、日志、findings、openclaw CLI.*网关/);
+  assert.match(sop, /ssh -o BatchMode=yes -o ConnectTimeout=10 administrator@100\.71\.151\.105/);
+  assert.match(sop, /心跳.*网关.*执行/);
+});
+
+test("陪跑自行下岗也必须读回本 TAG finalize 成功，批完成日志不是收尾证明", () => {
+  for (const file of ["COMMANDER.md", "cmdr-escort.txt"]) {
+    const text = readFileSync(join(SRC, file), "utf8");
+    assert.match(text, /\[<TAG>\] 账本finalize: ok=1/, `${file} 必须核对同批账本收尾`);
+    assert.match(text, /批完成.*(?:早于|不代表).*finalize/, `${file} 不能凭主链结束下岗`);
+  }
+});
+
+// 执行生产脚本的 trap 声明，隔离设备/账本边界，观察真实 shell 的退出顺序。
+for (const finalizeStatus of [0, 1]) {
+  test(`退出时先 finalize；finalize ${finalizeStatus === 0 ? "成功才下岗" : "失败保留陪跑"}`, { skip: SKIP }, () => {
+    const source = readFileSync(WR, "utf8");
+    const wiring = source.split("\n").find((line) => line.startsWith('if [[ -n "$ESCORT_ID" ]]; then trap '));
+    assert.ok(wiring, "必须找到生产退出接线");
+    const result = spawnSync(ZSH, ["-c", `
+      ESCORT_ID=mine
+      lease_heartbeat_stop(){ print lease_stop; }
+      escort_watch_stop(){ print watch_stop; }
+      escort_aftercare(){ print aftercare_requested; }
+      run_finalize(){ print finalize; return ${finalizeStatus}; }
+      ${wiring}
+      exit 0
+    `], { encoding: "utf8" });
+    assert.deepEqual(result.stdout.trim().split("\n"), finalizeStatus === 0
+      ? ["lease_stop", "watch_stop", "finalize", "aftercare_requested"]
+      : ["lease_stop", "watch_stop", "finalize"]);
+  });
+}
+
+test("finalize 自检失败必须返回失败，收工闸检查不能把失败抹成成功", { skip: SKIP }, () => {
+  const source = readFileSync(WR, "utf8");
+  const fn = source.match(/run_finalize\(\)\{[\s\S]*?\n\}/)?.[0];
+  assert.ok(fn);
+  const { home, env } = setup();
+  const receipt = join(home, "receipt.sh");
+  writeFileSync(receipt, 'echo "WFR_FINALIZE_OK=0; WFR_FINALIZE_MSG=storage_failed"\n');
+  const result = spawnSync(ZSH, ["-c", `
+    device_cleanup_in_lock(){ :; }; release_run_lock(){ :; }
+    wfr_on(){ return 0; }; finalize_needed(){ return 0; }
+    log(){ :; }; escalate(){ :; }; gate_check(){ return 0; }
+    WFR=${receipt}; LOG=${join(home, "finalize.log")}; TAG=test
+    ${fn}
+    run_finalize
+  `], { env, encoding: "utf8" });
+  assert.equal(result.status, 1, "账本失败必须阻止下岗");
+});
+
 test("escort_owned：id 在表且 name 全等 → match；name 是别的 run → mismatch:<name>；id 不在表 → absent", { skip: SKIP }, () => {
   const { env } = setup();
   assert.equal(lib(`escort_owned ${MINE} ${WANT}`, env).stdout.trim(), "match");
@@ -137,7 +252,7 @@ test("escort_watch_tick：escort 在途被移除（id 不在表）→ 同名同�
   assert.equal(r.status, 0, r.stderr);
   const add = sshLog(home).split("\n").filter((l) => /cron add/.test(l));
   assert.equal(add.length, 1, "应重拉一次");
-  assert.match(add[0], new RegExp(`--name '${WANT}' --agent media --session 'session:${WANT}'`), "重拉必须同名同会话（跨轮记忆不断）");
+  assert.match(add[0], new RegExp(`--name '${WANT}' --agent work-commander --session 'session:${WANT}'`), "重拉必须同名同会话（跨轮记忆不断）");
   assert.equal(read(join(home, `wf-escort-${TAG}.id`)).trim(), NEW_ID);
   assert.match(runLog(home), new RegExp(`escort在途被移除\\(id=${MINE}\\),已重拉: 新id=${NEW_ID}`));
   assert.match(runLog(home), /升级分身: escort/);
@@ -169,7 +284,7 @@ test("wf-run.sh 源码接线：escort 确认后启动看门狗，退出 trap 先
   const src = readFileSync(WR, "utf8") + readFileSync(join(SRC,"wf-run-lib.sh"),"utf8");
   assert.match(src, /escort_watch_start\b/, "必须启动看门狗");
   // 40f02c5e: 放锁并入 run_finalize(锁内清场 → 放锁 → 账本),trap 不再单列 release_run_lock
-  assert.match(src, /trap 'lease_heartbeat_stop; escort_watch_stop; escort_dismiss; run_finalize' EXIT INT TERM/);
+  assert.match(src, /trap 'lease_heartbeat_stop; escort_watch_stop; run_finalize && escort_aftercare' EXIT INT TERM/);
   assert.match(src, /escort_owned "\$id" "\$want"/, "escort_dismiss 必须先核 name");
   assert.match(src, /openclaw cron rm \$id/, "注销按核对过的 id");
 });

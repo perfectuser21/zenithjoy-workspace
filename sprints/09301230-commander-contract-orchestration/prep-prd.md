@@ -3,6 +3,7 @@
 > 设计定案：Brain decisions `3c98fb36`（09-30），关联 `7f842d12` / `018e4e84` / `e8f872cb`。
 > 可读版（含架构图、路线图）：https://claude.ai/code/artifact/4397493d-832b-4ff4-9d7d-fbd6415cf1c4
 > 本文件是执行体读的 PRD 正本；每个阶段一个 Brain 任务，payload.prd_section 指向本文对应小节。
+> 归属更正：Brain decisions `8e9fb6d6-ca08-410e-80f7-e7c480afded5`（10-01）。通用 Commander 与契约执行框架归 Cecelia；本仓库承载业务活动与设备适配。
 
 ## 一句话
 
@@ -24,6 +25,17 @@ workflow 在设计时用契约写死；运行时由执行器（程序）照契�
 | 执行 | 执行器照契约逐个调用活动，每步写账本 | `wf-run.sh`（程序，不思考） | — |
 | 活动 | 预检/发现/判定/采集/评分/配送/归位；判断类 = skill，动作类 = 脚本 | 多 workflow 共享 | — |
 | 兜底 | 执行器底线 → 看门狗拉新 Commander → Brain 判 lost → Bark | 全是程序 | — |
+
+## 仓库归属（10-01 更正）
+
+| 责任 | 真身归属 | 本仓库承接部分 |
+|---|---|---|
+| Commander 身份、上岗、心跳、接班、看门狗、终态对账 | Cecelia | 业务陪跑 SOP、启动回执与活动证据 |
+| 通用契约执行：顺序、逐条目分组、活动调用、预算、失败分类 | Cecelia | 获客契约、业务输入输出适配、执行机部署接线 |
+| 抖音判定、采集、评分、配送 | ZenithJoy | 独立活动入口与业务效果验收 |
+| ADB、设备锁、现场恢复 | ZenithJoy | 手机操作、锁内清场、设备预检 |
+
+源码当前落点是历史现状，不据此扩大业务仓库的职责。已有 Brain 看门狗与 lost 判定沿用 Cecelia 实现；阶段 3 沿用 `b0bae881`，不另建同义阶段任务。物理迁移、生产切换分别需要实现和验收，归属确认不代表已经迁移。
 
 ## Commander 定位
 
@@ -50,7 +62,7 @@ workflow 在设计时用契约写死；运行时由执行器（程序）照契�
 
 叫人边界：连续 2 晚零产出 / 同故障 3 次接班失败 / 不可逆动作 / 一台手机 24h 无成功批 → Bark；单批 0 线索、单次接班、单批 lost 不叫。主理人每日看一张程序生成的趋势表。
 
-## 阶段与任务（Brain tasks，均 queued，payload.decision_id=3c98fb36）
+## 阶段与任务（状态以 Brain tasks 为准，原始设计决策为 3c98fb36）
 
 ### 阶段 1｜稳（2–3 天）
 
@@ -76,6 +88,77 @@ workflow 在设计时用契约写死；运行时由执行器（程序）照契�
 |---|---|---|
 | `b0bae881` | 从契约倒推，把判定/采集/评分/配送从 `harvest-keyword.sh`/`batch2.sh` 切成可独立调用单元（统一入口：显式输入对象 → 显式输出对象）；执行器改为读契约 order / runtime.entry / budget / failure 逐个调用；逐条目流转（每视频 判定→采集）在契约里显式声明 | 新执行器跑通关键词获客，产出（线索数、账本阶段、探针）与旧脚本一致；契约里去掉"评分"后不改代码即可跑 |
 
+#### 接续实施边界
+
+1. **先固定活动接口与逐条目语义**：输入携带 run 标识、业务线、设备/锁上下文和本批对象；输出携带状态、产物、指标、证据与失败分类。判定和采集按同一视频分组，只有判定 `matched` 才采；`pending`、`rejected` 不采。每活动分别使用自身预算，不能继续把两个活动预算相加当作独立超时。
+2. **在 ZenithJoy 拆业务活动**：判定/采集不再共同指向整条 `harvest-keyword.sh`；评分/配送不再共同指向整批 `batch2.sh`。先写调用真实活动入口的离线 smoke，再拆实现；保持缓存判定、去重、已采落池、失败留待重试和锁释放行为。
+3. **消除评分的隐式前置条件**：现有 `batch2.sh` 先配送落池，再调用 `sort-comments.js` 扫描该业务线的整个待分拣池；契约却声明评分在配送之前。评分须改成只接收显式输入评论并输出判定结果，配送负责落池及按结果写最终线索。无评分版本须使用仅接收 Video/Comment/Run 的配送契约，并移除依赖 Lead 的触达活动，才能通过组装检查并保存未评分评论；不能只删除评分而保留当前配送契约的 Lead 必填输入。不得仅重排 shell 调用而让评分读取尚未落池的数据，也不得把历史池内容算成本 run 产出。
+4. **在 Cecelia 实现通用调用框架**：读取契约顺序、入口、预算、失败策略和逐条目分组；通过活动输入输出与业务仓库交互。框架不内置抖音脚本名、手机选择或获客业务分支；现有 Brain 状态账与监督机制继续复用。
+5. **先离线等价，再真机切换**：同一固定输入分别走旧链和新活动链，对比产物、账本活动与探针；覆盖去掉评分、判定未通过、超时、收工与锁释放。M4 设备离线阻塞真机验收，不阻塞接口拆分和离线 smoke；真机未通过前不得把阶段 3 收为完成。
+
+#### 阶段 3 首个实现增量（10-01）
+
+- `comment-activities.js` 提供显式输入的评分与已落池评论结算；`comment-activity.js scoring|delivery` 接收 stdin JSON，输出单个 JSON 回执。评分不扫描历史池；未评分评论不写最终线索。
+- `comment-delivery-storage.js` 从调用方环境接收飞书凭据，先读回输入池记录核对归属，再写线索、最后推进池。已结算记录重放不写；在线索现有「重复轨迹」文本列保存池记录凭证，线索成功而池失败时重试只补池。调用须按业务线串行；本增量未实现跨进程并发写的互斥。
+- 旧 `sort-comments.js` 接入活动函数以保持现有扫描入口兼容。首个增量只涵盖已落池结算；下方继续实施已补原始落池与视频拆分。生产全链与真机验收仍待接通，尚未部署。
+
+#### 阶段 3 继续实施顺序（10-01）
+
+| 工作项 | 代码位置 | 验证 |
+|---|---|---|
+| 原始评论落池 | `raw-comment-activities.js` / `raw-comment-storage.js`；旧 `push-raw-comments.js` 复用 | 先评分后落池保留结论；无评分落池；持久化ID读回、去重、失败评论保留重试 |
+| 判定与采集拆开 | `harvest-keyword.sh` 提取同一套逐视频函数；`video-phone-activity.sh` / `video-activities.js` / `video-activity.js` 独立调用 | 真实进程入口，替换ADB/SSH边界；缓存判定；只有matched采；独立预算；错误视频、设备和锁拒绝；失败/收工放锁 |
+| 组合业务产物 | `comment-activity.js` 增加落池及原始评论配送；部署清单和测试登记 | 显式本批采集→可选评分→落池→结算；无评分只保存评论；CLI单JSON输出 |
+| 通用调用框架 | Cecelia独立工作树，沿用本任务与原PRD | 读取契约顺序/入口/预算/失败/逐条目分组，业务仓库只提供活动 |
+
+Cecelia通用执行器现位于 `packages/brain/src/orchestrator/activity-{contract,process,runtime}.js`，JSON入口为 `packages/brain/scripts/activity-contract-run.js --cwd <业务目录> --receipt <账本文件>`。ZenithJoy `wf-plan.mjs <能力> --json --bindings <显式绑定文件>`编译原契约解析后的调用链；首个增量的绑定真身为 `plans/keyword_activities.bindings.json`，生产YAML和shell计划不切换。逐视频组内判定→采集，只让matched采集；评分、配送取本批显式comments，删除评分无需改执行器。该首个增量仅含四个拆分活动，整批预检、发现、归位与Brain事件接线当时尚未迁移；完整离线接线与可携带入口见下文续作。
+
+本轮业务活动已实现并经过隔离边界复核：稀疏身份与客户去重在落池、结算共用解析；自有账号跳过后继续采客户；SCP/SSH使用本活动剩余预算；非零退出保留已采评论；明确永久存储拒绝保留fatal。原始配送先落池再结算，删除评分仍可保存待分拣评论。实际部署清单携带所有新增模块及设备自有账号过滤依赖；这些修改尚未下发生产。
+
+跨仓库离线验收使用真实编译器、Cecelia CLI与四个ZenithJoy CLI；只替换ADB/SSH和模型/飞书运输，验证两视频交错、删除评分、pending/rejected不采、预算保留评论继续配送、父取消后按持久回执恢复配送。视频根进程收到取消只写自身停止信号，当前手机动作结束后在安全边界停止；通用执行器先向根进程TERM请求清理，30秒手机清理宽限后才收割失响应的进程树。
+
+每项先运行真实入口的失败测试，再实现、验证、独立复核。新视频入口以输入中的设备、锁上下文和视频身份为准，按业务线串行；自建锁只释放自己的锁，借用调用者已持有的锁不提前释放。旧整批入口保留兼容，尚不替换生产契约或切换真机。
+
+#### 整批接线实施（10-01 续作）
+
+目标：在现有四活动基础上，以显式关键词、设备与登录账号启动完整关键词采收；原入口保持兼容，通用事件账接线仍归 Cecelia。
+
+实施顺序与文件职责：
+
+1. `batch-activity.js` / `batch-activities.js` 提供预检、发现、归位入口。输入声明 `account.sender_id`；预检读真实设备、通话、登录号与锁，发现按词取真实视频 ID 并持久化候选，归位只清理本 run 持锁现场。先运行隔离真实 CLI 失败测试，再实现；不以卡片坐标代替视频 ID，不以命令退出码代替锁读回。
+2. `plans/keyword_workflow.bindings.json` 从原契约选择预检、发现、判定、采集、评分、配送、归位；判定与采集保持逐视频分组。配送设为 `finalize`，位于归位之前，使已采评论在取消、总时限或主链失败时仍落池；空评论输入同样合法。删除评分只改绑定，不保留 Lead 必填依赖。独立触达 cron 不并入采收批次。
+3. `keyword-workflow.js` 负责显式输入、调用真实编译器与 Cecelia CLI、整批停止信号及租约续期。业务后置探针复用现有声明与 `verify-step.mjs` 读回，失败保留探针、分类与真实产物；不复制新的成功判定口径，不静默吞掉探针失败。
+4. Cecelia `activity-event-sink.js` 将显式已登记的 Brain run UUID 与唯一调用 source UUID 接入现有 `run-event-store`。开始事件写入先于活动副作用；数据库游标与本地游标分别留痕；参数/归属错误、source 重用与写入失败不得假记成功。连接只在调用方显式启用时建立，验证只写本机 `cecelia_scratch` 或隔离 CI 数据库。
+
+验证路径：
+
+```bash
+node --test services/phone-adb-controller/__tests__/batch-activities.test.mjs services/phone-adb-controller/__tests__/collection-return-probe.test.mjs
+CECELIA_ACTIVITY_RUNTIME=/absolute/path/to/cecelia/packages/brain/scripts/activity-contract-run.js node --test services/phone-adb-controller/__tests__/keyword-workflow.test.mjs services/phone-adb-controller/__tests__/keyword-workflow-cli.test.mjs services/phone-adb-controller/__tests__/keyword-workflow-portable.test.mjs
+node scripts/product-map/wf-plan.mjs --check
+npm run product-map:check
+```
+
+固定运输 fixture 分别验证旧采收入口和新完整调用链的行为；新链覆盖多关键词、资格拦截、无评分、取消、总时限与落池失败，但这不能证明同一固定输入的旧新完整链直接等价。测试使用隔离 HOME/PATH 和本地 HTTP/数据库，拒绝真实 ADB、SSH 或凭据访问。10-02 新增评论边界直接对账：两份独立远端账本、固定时间和同一TSV，旧 `runLegacyPush` 加真实 `sort-comments.js` 与当前显式评分/落池/配送对比全部池字段、线索字段、统计及重放写入；覆盖相关、无关、重复高亮及去评分，2/2通过，相关27/27，全业务968/968。它使用当前兼容入口，只证明评论边界兼容，不替代冻结旧基线的整链产物、视频状态、活动阶段、探针、超时与锁对账。ADB恢复仅解除设备离线阻塞；完成完整等价、真机验收与上线切换前保持阶段3未完成，部署与真机验收分别留痕。
+
+部署可携带入口显式接受 `--contract plans/keyword_workflow.contract.json`，文件由真实 `wf-plan.mjs keyword_acquisition --json --bindings plans/keyword_workflow.bindings.json` 在源仓库生成，是编译投影；绑定与原契约才是真身。离线守卫逐次对比投影与编译器输出，再按 `deploy.sh` 清单复制到无仓库编译器、无 node_modules 的平铺目录，使用真实 Cecelia CLI跑完整链及删除评分版。`--contract` 与 `--bindings` 互斥，非法文件先拒绝。Cecelia runtime仍须显式绝对路径，由所属仓库单独准备；本轮仅更新业务文件携带清单，未下发设备。
+
+历史读取与候选持久化同样接受显式 `execution.gateway`，不再绕回固定生产脚本。历史CLI凭据优先使用完整显式环境，否则读取1Password导出的0600 `~/.credentials/feishu.env`，禁止读取工具私有配置；既有无账户标记镜像兼容，只读业务线固定，有标记则必须匹配。HTTP/API/分页失败不输出假空历史；末页必须明确读回布尔 `has_more=false`，缺失或错误类型不能确认完整历史。旧视频池明确占位 `id未取到` 单独计数跳过，其他异常仍报告；有效ID继续去重。
+
+#### 接手时设备阻塞（10-01）
+
+10-01接手时的历史观测：M4主机恢复在线，但 SSH 读回 `adb devices -l` 为空。对应已有任务 `76554bd9`（panic 与设备离线）及 `48ba8a2d`（重启后 ADB 接口恢复）；当时交接记载已试过重启ADB、弹HonorSuite光盘和USB重枚举，仍无效。早先“macOS USB信任弹窗”属于假设，不作为已证实根因。
+
+10-01续作只读复核曾确认M4的 `adb devices -l` 列出 `ANGYVB4227006983`、`ANGYVB4402004137`，两台均为 `device`；`jinoshengyuan-work` 与 legacy锁均 `free`。控制器预检真实返回 `call_state=idle`，新增实现已据实际接口兼容该值，并保留 ringing/offhook 拦截。此观测不等于阶段3真机验收通过，也不代表代码已部署；实时状态与复核证据回写原任务，不手改设备状态投影。
+
+完整七活动真机第一轮在历史占位读取处报partial，仍完成归位并回读锁free；修复后第二轮在发现阶段收到心跳，随后SSH连接以255结束，连续直接连接超时。第二轮终态、设备锁与归位当前未能读回，不能记真机通过，也不能将未证实的主机panic当根因。已有任务 `76554bd9` 与阶段3原任务留痕；生产入口与cron未切换。
+
+17:25只读更新：SSH恢复，主机启动时间17:01:26；17:01:33的panic报告记录configd watchdog超时180秒。USB仍枚举两部手机，ADB列表为空，legacy当前锁free；两个隔离临时目录已消失，第二轮回执缺失。当前锁free不能证明运行器已完成归位，panic报告也不能证明故障由本调用链导致；完整真机验收仍阻塞。
+
+#### 真机边界增量验收（10-01）
+
+研发手机 legacy（ANGYVB4402004137）在隔离临时目录通过真实 Cecelia CLI 预检与归位：登录号44997267357匹配，四项预检指标均为1；收尾关应用、桌面可见、放锁及真实close-app次数均为1，回读锁free。发现控制器真实call_state=idle协议差异及macOS /tmp软链接入口问题，已用永久回归复现并修正。完整七活动真机采收与旧链等价尚未验收；本增量未切换生产入口或cron。
+
 ### 阶段 4｜陪跑 skill（3–5 天）
 
 | Brain 任务 | 做什么 | 验收 |
@@ -87,6 +170,8 @@ workflow 在设计时用契约写死；运行时由执行器（程序）照契�
 | Brain 任务 | 做什么 | 验收 |
 |---|---|---|
 | `529325d9` | 组装一条不只换"发现"的 workflow（例：去掉评分或加一步） | 只改契约 + 补新活动，不改执行器与 Commander |
+
+阶段5隔离增量：`plans/keyword_raw_comments.bindings.json`从关键词完整绑定移除评分，保留预检、发现、逐视频判定/采集、原始评论配送、归位六活动；其余活动绑定完全复用。`keyword_raw_comments.contract.json`由真实编译器生成并加入携带清单。永久smoke在无仓库编译器和node_modules的平铺目录调用同一Cecelia执行器，读回两条原始评论入池、评分模型调用与线索写入均为0、delivery/cleanup终态顺序与锁free；同一Commander生成器直接生成六活动陪跑skill。该证据只覆盖隔离真实CLI与运输替身，未部署生产，也不替代完整七活动真机验收。
 
 ## 不包含
 
@@ -104,3 +189,18 @@ workflow 在设计时用契约写死；运行时由执行器（程序）照契�
 ## GP-Anchor
 
 GP-Anchor: none(infra)
+
+2026-10-02 真机预算校准：M4 隔离七活动试验已产生真实 matched 候选，但完整正向链未通过。1200 秒总预算试验在采集阶段到期；改为 2400 秒总预算后，另一轮发现活动触发原 600 秒独立超时。发现需解析默认四个卡片的真实视频 ID 并持久化候选，现将契约发现预算校准为 900 秒，保留 60 秒心跳、四卡片上限及其他活动预算。两份携带 JSON 由真实编译器再生成。该调整仍待新 tag 真机复验；不改生产入口，不抢其他任务设备锁，不记完整七活动验收通过。
+
+2026-10-02 取链导航修复：900 秒发现预算的隔离正向试验 positive5 提前返回 partial/phone_transport_unavailable，未触发独立预算超时。原始 UI 显示取链入口处分享按钮存在；暂停中央点击后变为识别画面 AI 回答页。设备控制器哈希与仓库一致。新增永久真实 CLI 回放先 RED；取链入口及暂存页归位的暂停/恢复改用已在读树兜底中实测的媒体键85，保留语义分享定位、返回栈及状态守卫。相关16/16、全套964/964、skip0，独立复核无新增Critical/Important。媒体键真实取链效果仍待隔离固定手机探针，不覆盖生产控制器，不记正向七活动验收通过。
+
+2026-10-02 隔离控制器接线：整批 JS 活动与共用 harvest 物理函数统一接受显式 `DOUYIN_PHONE_CONTROLLER`，不提供时保持原默认，显式文件缺失不得回退生产。永久完整 CLI 测试使用含空格隔离路径，默认入口拒绝任何调用；先 RED 后 GREEN，验证两视频真实活动调用、2 条评论配送、2 次评分、2 条线索与根锁释放；缺失路径另测失败且零产出、无持锁。全套966/966、skip0，独立复核无新增Critical/Important。实际固定M4隔离控制器探针 pause-link3 已取真实 video_id=7656391703864086757，返回结果页、cleanup、PID退出和锁free；暂存页归位使用既有deep-link兜底，不算快速返回栈通过。前两次隔离准备因依赖缺失在手机操作前失败，记录保留。完整七活动正向仍未通过，生产控制器/入口/cron未变。
+2026-10-02 positive6 原件闭环：固定M4、当前隔离控制器及71份SHA核验源码、默认四卡片、发现900秒/总预算2400秒，终态completed/exit0；回执与stdout逐字节一致，cleanup四项1，运行器及执行器退出，独立进程读回空且锁free。四卡均真实历史已采，候选/评论/线索0；只验收历史去重空批次，不验收完整正向。新旧评论边界对账与部署路径检查修复已提交4d4259f7：全套968/968、相关27/27，部署替身smoke通过，隔离漏部署突变仍exit1；冻结阶段3前基线的完整链对账继续实施。positive7沿正常启用的“人工智能训练师含金量”准备，仍默认四卡与正常去重，不强制历史重采；终态以Brain任务原件为准。
+
+2026-10-02 positive7 真实终态：固定M4“人工智能训练师含金量”，唯一start 13:08:02 UTC，终态partial/exit2；发现持久化候选1、历史跳过2，取链失败原stderr含curl超时。资格活动video_mismatch、采集跳过，评论/线索0；该资格脚本未保留原取链stderr，空观察ID也会报mismatch，不能推断实际打开了不同视频。回执与stdout逐字节一致，cleanup四项1，独立PS读回运行器/执行器均退、锁free；原件与closure归档且Brain读回核同。完整正向仍未通过。后续先用真实CLI回归区分身份不可用与不同合法ID，保留拒绝守卫，不在证据不足时盲开下一轮。
+
+2026-10-02 身份与网络边界补修：positive7资格取链命令非零或没有单一合法ID时改为video_identity_unavailable；合法不同ID仍video_mismatch，回执只记录受校验ID及退出码。实际M4同已复制短链只读请求一次5.722秒返回合法ID、另一次20.037秒连接超时且无HTTP头，不能据此推断-L为根因。curl仅对rc28同URL再试一次，单次20秒；专用失败返回75由外层直接结束，网络失败不重拍分享。永久真实curl+本地HTTP回归先RED，独立review发现原外层UI重试可绕过封顶，两层暂存再现6次请求后修正；相关20/20、review独立4/4，失败叶子交上层cleanup归位，不称其已自行退回详情。提交e107957a，未覆盖生产控制器。
+
+2026-10-02 冻结整链对账与视频配送恢复：cdf718dc的26份旧源码逐SHA对应Git，真实旧wf-run/batch2/harvest/push/sort/ledger/verify-step与新compiler/Cecelia CLI独立跑五场景。评审发现旧视频池2条、新0条且初对账遗漏，修复前原件永久保留；原delivery合同要求push_videos，没有批准取消该产物。现在从matched成功采集的原生VIDEO生成显式确认凭证，视频池按ID分页去重并读真实record_id；视频失败仍保留并配送评论，评论存储初始化失败也保留已落池视频。无效/多行/缺失采集凭证拒绝标已采，零评论沿旧无VIDEO语义不写。正常、去评分、混合资格的视频池8字段和ID完整相等；正常原池/线索/PG相等，新增精确幂等凭证单独核验。旧跨词重复探针误红、pending后旧completed/new partial、TERM旧继续批次而新停止等真实差异保留；去评分只比旧模型前存储检查点，预算输入/预算/停止点不同，仅各自deadline边界证据，缺截图DoD仍unknown，不称全面等价。
+
+2026-10-02 提交版统一验证：535f538e完整998/998、skip0；第一次全套995/997真实失败原件保留。旧partial bindings配送漏传videos造成状态被空数组清除已修，comments-only旧输入不输出视频数组，永久回归及独立review通过。deploy新依赖在MMV/M1/M4三处，staged真实清单188/188、部署替身smoke27/27+PASS；原drift测试读取HEAD与工作树差异在正式提交后通过，未改门禁。编译器22/22、product-map无漂移、最终独立评审无Critical/Important。当前准备positive8的本机/MMV与固定M4双冻结快照，gateway不再引用可变worktree；一次SSH准备传输255、未启动业务，需独立读回后再启动。两个PR保持draft，阶段3继续in_progress，完整正向和真实通知验收仍未完成。

@@ -39,7 +39,7 @@ test('完整动态回归进入必绿基线，Glob runner显式安装所选套的
  assert.ok(baseline.includes('capability-phone-regression-smoke.sh'),'新动态回归必须纳入必绿棘轮');
  const workflow=readFileSync(new URL('../../../.github/workflows/ci-smoke-glob-runner.yml',import.meta.url),'utf8');
  assert.match(workflow,/apt-get install -y zsh python3 jq libxml2-utils/);
- assert.match(workflow,/npm ci --workspace=apps\/api --workspace=apps\/agent-panel --include-workspace-root/);
+ assert.match(workflow,/npm ci --workspace=apps\/api --workspace=apps\/agent-panel --workspace=apps\/dashboard --include-workspace-root/);
 });
 test('OpenClaw全套执行真实YAML契约前安装已锁定根依赖，不靠全局包或跳过',()=>{
  const workflow=readFileSync(new URL('../../../.github/workflows/ci-l3-code.yml',import.meta.url),'utf8');

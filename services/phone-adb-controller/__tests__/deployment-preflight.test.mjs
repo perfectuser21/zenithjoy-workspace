@@ -1,9 +1,9 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,chmodSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,chmodSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {execFileSync,spawn} from 'node:child_process';
+import {execFileSync,spawn,spawnSync} from 'node:child_process';
 import {createServer} from 'node:http';
 import {digest} from '../runtime-definition.mjs';
 import {normalizedDescriptions} from './fixtures/normalized-description-bindings.mjs';
@@ -79,6 +79,20 @@ test('不同受信CI run即使报告相同仍有独立不可变release key',asyn
  assert.notEqual(keys[0],keys[2]);
 });
 
+// /bin/bash 3.2 的参数展开失败与 EXIT trap 曾把拒绝误报为0；必须直接验真实CLI。
+test('任一必填发布参数缺失时真实bash非零拒绝且不触SSH/scp',t=>{
+ const dir=mkdtempSync(join(tmpdir(),'deploy-missing-env-')),marker=join(dir,'side-effect');
+ t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ for(const name of ['ssh','scp'])writeFileSync(join(dir,name),`#!/bin/sh\nprintf invoked > '${marker}'\nexit 99\n`,{mode:0o755});
+ const mandatory={WF_RELEASE_IDS:JSON.stringify({'xian-m4':vid[0],'xian-m1':vid[1]}),WF_DEPLOY_ENVIRONMENT:'fixture',WF_DEPLOY_COLLECTOR:'fixture',WF_DEPLOY_ATTEMPT_KEY:'fixture',BRAIN_URL:'http://127.0.0.1:1'};
+ for(const missing of Object.keys(mandatory)){
+  const env={...process.env,...mandatory,PATH:`${dir}:${process.env.PATH}`,BRAIN_INTERNAL_TOKEN:'fixture-only'};delete env[missing];
+  const result=spawnSync('/bin/bash',[new URL('../deploy.sh',import.meta.url).pathname],{env,encoding:'utf8',timeout:30000});
+  assert.notEqual(result.status,0,`${missing}: ${result.stdout} ${result.stderr}`);
+  assert.match(result.stderr,new RegExp(missing));
+  assert.equal(existsSync(marker),false,`${missing}缺失时禁止运输副作用`);
+ }
+});
 function withBindings(bindings){
  const f=fixture(),{snapshot,report,receipt}=f.bundle,a=snapshot.definitions.activities[0];
  a.payload.implementation_bindings=bindings;a.payload_sha256=digest({source:{repo:a.source_repo,path:a.source_path,commit:a.source_commit},payload:a.payload});

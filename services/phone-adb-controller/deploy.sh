@@ -29,7 +29,7 @@
 # 不在本次范围(有意排除,别当成漏了):
 #   - *.plist: launchd 安装是一次性动作,不是"同步文件"能表达的操作(模板与安装命令见 launchd/*.plist 头注释与
 #     com.zenithjoy.logstreampush.plist)
-#   - config/*.json: 可能含机器本地校准过的实验数据,批量覆盖有丢真实调参的风险
+#   - config/*.json: 除自有账号过滤名单own-accounts.json外，不批量覆盖机器校准数据
 #   - __tests__/、*.md、package.json: 不需要跑在生产机上
 #
 # 每份文件同步后立刻在目标机上跑语法检查(zsh -n / node -c),同步一份验证一份,
@@ -43,6 +43,14 @@ set -euo pipefail
 cd "$(dirname "$0")"
 D="."
 FAILED=0
+
+# 先在本机准备契约生成的专属skill；缺Cecelia生成器时在任何远端写入前拒绝部署。
+SKILL_BUILD_DIR=$(mktemp -d)
+trap 'rm -rf "$SKILL_BUILD_DIR"' EXIT
+for cap in keyword_acquisition benchmark_link_acquisition; do
+  node "$D/commander/build-workflow-skill.mjs" "$cap" --assembled \
+    "$D/commander/keyword-acquisition-sop.json" "$SKILL_BUILD_DIR/wf-$cap/SKILL.md"
+done
 
 # push_atomic <本地文件> <host> <远端目录(可含~)> <文件名> [x]
 #   先 scp 到同目录临时名,再远端 mv -f 换 inode;带第 5 参 x 时在 mv 之前先 chmod +x(不留"新文件无执行权限"的窗口)。
@@ -58,12 +66,15 @@ push_atomic() {
 }
 
 MMV_JS_FILES=(
-  push-videos.js push-raw-comments.js sort-comments.js sort-comments-lib.js next-outreach.js next-outreach-lib.js
-  leadgen-db-lib.js leadgen-db-connect.js judge-jev.js judge-comment.js judge-video.js
-  judge-video-lib.js qualify-video.js transcribe-qwen-audio.js comment-tier-lib.js line-routes.js
-  lead-fields-lib.js kpi-gate.js next-keywords.js keyword-enabled-lib.js update-keyword-stats.js keyword-stats-lib.js
-  fetch-seen-videos.js check-own-account.js dm-daily-cap.js dm-rate-ramp-lib.js
-  own-accounts-lib.js push-leads.js update-profile-links.js nickname-match-lib.js
+  gateway-context.js line-routes.js lead-fields-lib.js own-accounts-lib.js leadgen-db-lib.js
+  leadgen-db-connect.js judge-jev.js judge-video-lib.js judge-video.js
+  judge-comment.js sort-comments-lib.js comment-activities.js comment-delivery-storage.js video-delivery-storage.js video-collection-receipt.js
+  raw-comment-activities.js raw-comment-storage.js raw-comment-delivery.js comment-activity.js
+  push-videos.js push-raw-comments.js sort-comments.js next-outreach.js
+  next-outreach-lib.js qualify-video.js transcribe-qwen-audio.js comment-tier-lib.js
+  kpi-gate.js next-keywords.js keyword-enabled-lib.js update-keyword-stats.js
+  keyword-stats-lib.js fetch-seen-videos.js check-own-account.js dm-daily-cap.js
+  dm-rate-ramp-lib.js push-leads.js update-profile-links.js nickname-match-lib.js
   stats-line.js notify-bark.js push-stats-lib.js
 )
 MMV_TOPLEVEL_FILES=(cmdr-escort.txt cmdr-stream.txt)
@@ -90,6 +101,7 @@ kickstart_if_changed() {
 # 靠 README 里手工 scp,0929 实测 mmv 上的探针 YAML 已落后 main。路径相对本目录,子目录原样落到 leadgen-scripts/ 下。
 MMV_PROBE_FILES=(
   verify-step.mjs checks/probes-lib.js checks/schema.json checks/social-keyword-leadgen.yaml checks/social-benchmark-leadgen.yaml
+  workflow-probe.js workflow-probes.mjs
   step-judge.mjs step-dod.json step-dod-stats.mjs
 )
 # 设备控制器单独成组: 它必须同时落到**两个**目录,因为两类消费者各指一个——
@@ -104,24 +116,34 @@ DEVICE_CTL_FILES=(
 )
 DEVICE_CTL_DIRS=(bin-harvest .local/bin)
 DEVICE_SH_FILES=(
-  harvest-keyword.sh harvest-keyword-lib.sh batch2.sh harvest-cron.sh wf-run.sh wf-run-lib.sh discover-keyword.sh outreach-tick.sh
+  harvest-keyword.sh video-phone-activity.sh harvest-keyword-lib.sh batch2.sh harvest-cron.sh wf-run.sh wf-run-lib.sh discover-keyword.sh outreach-tick.sh
   refill-profile-links.sh wall-report.sh wall-lib.sh phone-wall-push.sh
   disk-gateway-guard.sh device-job-claimer.sh log-stream-push.sh
-  workflow-result.sh discover-benchmark.sh wf-limits.sh install-phone-recovery.sh
+  workflow-result.sh discover-benchmark.sh wf-limits.sh wf-aftercare.sh install-phone-recovery.sh
 )
 # 0927 棒3b-3: 账本钩子内建进 harvest-cron.sh/batch2.sh,workflow-result.sh 硬依赖 ledger.mjs(node),
 # 少了它账本全程 WFR_WARN——单独成组,用 node --check 而不是 zsh -n 验语法。
 # 9032cdad: 步骤 DoD 统一裁判在执行机本地判 metric/evidence/log/tsv/ledger 类,清单 step-dod.json 由契约生成(json 用 JSON.parse 验)
-DEVICE_NODE_FILES=(runtime-host.mjs runtime-definition.mjs runtime-release.mjs runtime-binding.mjs runtime-outbox.mjs runtime-receipts.mjs deployment-manifest.mjs ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js)
+DEVICE_NODE_FILES=(
+  gateway-context.js runtime-host.mjs runtime-release.mjs runtime-binding.mjs deployment-manifest.mjs runtime-definition.mjs runtime-outbox.mjs runtime-receipts.mjs ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js line-routes.js
+  own-accounts-lib.js check-own-account.js comment-tier-lib.js config/own-accounts.json
+  video-activities.js video-activity.js
+  batch-activities.js batch-activity.js keyword-workflow.js keyword-workflow-control.js keyword-workflow-activity.js
+  workflow-probe.js workflow-probes.mjs verify-step.mjs checks/probes-lib.js checks/schema.json checks/social-keyword-leadgen.yaml
+  comment-activity.js comment-activities.js comment-delivery-storage.js video-delivery-storage.js video-collection-receipt.js
+  raw-comment-activities.js raw-comment-storage.js raw-comment-delivery.js
+  judge-comment.js judge-jev.js judge-video.js judge-video-lib.js sort-comments-lib.js lead-fields-lib.js
+  leadgen-db-connect.js leadgen-db-lib.js transcribe-qwen-audio.js
+)
 # 7f842d12 契约组装执行: wf-run.sh 读 ~/bin-harvest/plans/<能力>.plan(wf-plan.mjs 从契约生成、提交在仓库)。
 # 执行机没有仓库 node_modules,所以计划不在执行机上生成;漏发 = wf-run 拒跑并升级(不会静默跑错)。
-DEVICE_PLAN_FILES=(plans/keyword_acquisition.plan plans/benchmark_link_acquisition.plan plans/keyword_acquisition.steps.json plans/benchmark_link_acquisition.steps.json)
-
+DEVICE_PLAN_FILES=(plans/keyword_acquisition.plan plans/benchmark_link_acquisition.plan plans/keyword_acquisition.steps.json plans/benchmark_link_acquisition.steps.json plans/keyword_workflow.contract.json plans/keyword_raw_comments.contract.json plans/keyword_gateway_activities.contract.json)
 # 在任何SSH前核验部署源字节属于固定commit；manifest最后发布，半次部署不能通过起跑核验。
 DEPLOY_MANIFEST=$(mktemp)
 OBSERVED_MANIFEST=$(mktemp)
-trap 'rm -f "$DEPLOY_MANIFEST" "$OBSERVED_MANIFEST"' EXIT
-: "${WF_RELEASE_IDS:?必须提供两台机器的明确release_id映射}" "${WF_DEPLOY_ENVIRONMENT:?必须提供部署环境}" "${WF_DEPLOY_COLLECTOR:?必须提供受信collector}" "${WF_DEPLOY_ATTEMPT_KEY:?必须提供部署attempt}" "${BRAIN_URL:?必须提供Brain地址}"
+trap 'rm -rf "$SKILL_BUILD_DIR"; rm -f "$DEPLOY_MANIFEST" "$OBSERVED_MANIFEST"' EXIT
+# Bash 3.2 参数展开错误会使 EXIT trap 看见状态0；显式拒绝状态避免假绿。
+( : "${WF_RELEASE_IDS:?必须提供两台机器的明确release_id映射}" "${WF_DEPLOY_ENVIRONMENT:?必须提供部署环境}" "${WF_DEPLOY_COLLECTOR:?必须提供受信collector}" "${WF_DEPLOY_ATTEMPT_KEY:?必须提供部署attempt}" "${BRAIN_URL:?必须提供Brain地址}" ) || exit 1
 node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" "${DEVICE_CTL_FILES[@]}" > "$DEPLOY_MANIFEST"
 node "$D/deployment-preflight.mjs" "$DEPLOY_MANIFEST"
 
@@ -214,9 +236,14 @@ for host in xian-m4 xian-m1; do
   done
   for f in "${DEVICE_NODE_FILES[@]}"; do
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
-    push_atomic "$D/$f" "$host" "~/bin-harvest" "$f"
-    if [[ "$f" == *.json ]]; then _nchk="/opt/homebrew/bin/node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f"
-    else _nchk="/opt/homebrew/bin/node --check ~/bin-harvest/$f"; fi
+    _nd="$(dirname "$f")"; _ndir="~/bin-harvest"; [[ "$_nd" != "." ]] && _ndir="$_ndir/$_nd"
+    ssh "$host" "mkdir -p $_ndir"
+    push_atomic "$D/$f" "$host" "$_ndir" "$(basename "$f")"
+    case "$f" in
+      *.json) _nchk="/opt/homebrew/bin/node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f";;
+      *.js|*.mjs) _nchk="/opt/homebrew/bin/node --check ~/bin-harvest/$f";;
+      *) _nchk="test -s ~/bin-harvest/$f";;
+    esac
     if ssh "$host" "$_nchk" 2>/tmp/deploy-err-$$; then
       echo "    ✅ $f"
     else
@@ -229,7 +256,7 @@ for host in xian-m4 xian-m1; do
   for f in "${DEVICE_PLAN_FILES[@]}"; do
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
     push_atomic "$D/$f" "$host" "~/bin-harvest/plans" "$(basename "$f")"
-    if [[ "$f" == *.json ]]; then _pchk="node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f"; else _pchk="zsh -n ~/bin-harvest/$f"; fi
+    if [[ "$f" == *.json ]]; then _pchk="/opt/homebrew/bin/node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f"; else _pchk="zsh -n ~/bin-harvest/$f"; fi
     if ssh "$host" "$_pchk" 2>/tmp/deploy-err-$$; then
       echo "    ✅ $f"
     else
@@ -274,8 +301,13 @@ for host in xian-m4 xian-m1; do
 done
 
 # Commander 入口(决策 7f842d12): 启动器落 mmv(openclaw CLI 在本机), skill 落 work-commander 工作区
-echo "=== [5/5] mmv Commander 入口(wf-launch/wf-status + skill workflow-commander + AGENTS.md) ==="
+echo "=== [5/5] mmv Commander 入口(wf-launch/wf-status + skill workflow-commander + 身份文件) ==="
 ssh mmv "mkdir -p ~/.openclaw/commander ~/openclaw-root/workspaces-root/clawd-work-commander/skills/workflow-commander"
+for cap in keyword_acquisition benchmark_link_acquisition; do
+  ssh mmv "mkdir -p ~/openclaw-root/workspaces-root/clawd-work-commander/skills/wf-$cap"
+  push_atomic "$SKILL_BUILD_DIR/wf-$cap/SKILL.md" mmv \
+    "~/openclaw-root/workspaces-root/clawd-work-commander/skills/wf-$cap" SKILL.md
+done
 for f in wf-launch.sh wf-status.sh; do
   if [[ ! -s "$D/commander/$f" ]]; then echo "  ⚠️ 仓库里缺失: commander/$f"; FAILED=1; continue; fi
   push_atomic "$D/commander/$f" mmv "~/.openclaw/commander" "$f" x
@@ -297,6 +329,13 @@ if [[ -s "$D/commander/AGENTS.md" ]]; then
   echo "  ✅ commander/AGENTS.md → work-commander 工作区"
 else
   echo "  ⚠️ 仓库里缺失: commander/AGENTS.md"; FAILED=1
+fi
+# IDENTITY 也从 git 真身同步，避免旧总调度身份覆盖陪跑职责。
+if [[ -s "$D/commander/IDENTITY.md" ]]; then
+  push_atomic "$D/commander/IDENTITY.md" mmv "~/openclaw-root/workspaces-root/clawd-work-commander" IDENTITY.md
+  echo "  ✅ commander/IDENTITY.md → work-commander 工作区"
+else
+  echo "  ⚠️ 仓库里缺失: commander/IDENTITY.md"; FAILED=1
 fi
 
 if ! ssh xian-m4 "bash ~/bin-harvest/install-phone-recovery.sh xian-m4"; then

@@ -45,6 +45,8 @@ jobs:
           --health-retries 5
 
     env:
+      CECELIA_ACTIVITY_RUNTIME: ${{ github.workspace }}/.cecelia-activity-runtime/packages/brain/scripts/activity-contract-run.js
+      CECELIA_COMMANDER_SKILL_GENERATOR: ${{ github.workspace }}/.cecelia-activity-runtime/packages/brain/scripts/generate-commander-skill.mjs
       # 与 ci-l4-e2e-smoke.yml 的 smoke-api-contract job 保持一致
       DATABASE_HOST: localhost
       DATABASE_PORT: 5432
@@ -95,6 +97,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: perfectuser21/cecelia
+          ref: ce42923d1c1476a779cec34a0cc7f1002dfb8168
+          path: .cecelia-activity-runtime
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -112,9 +120,12 @@ jobs:
       # 分两次独立调用时第二条一样会把第一条装好的依赖树清掉（本地实测复现：先
       # `npm ci --workspace=apps/api` 装出 express，再单独 `npm ci --workspace=apps/agent-panel`
       # 后 express 消失）。必须像 golden-path-4-smoke.yml Fix 1 一样合并成一条命令、
-      # 同时声明两个 workspace。
-      - name: Install apps/api + apps/agent-panel deps
-        run: npm ci --workspace=apps/api --workspace=apps/agent-panel --include-workspace-root
+      # 同时声明所需 workspace。
+      # 快手发布 smoke 要执行真实 UI 断言，必须显式安装 dashboard 依赖。
+      # 根编译器依赖装好后，较早 smoke 不再隐式执行全仓 npm ci，
+      # 不能让 dashboard 的运行依赖随之缺失。
+      - name: Install apps/api + apps/agent-panel + apps/dashboard and root deps
+        run: npm ci --workspace=apps/api --workspace=apps/agent-panel --workspace=apps/dashboard --include-workspace-root
 
       # golden-path-4-smoke.sh 的 Step 17c/17e 需要 services/agent/node_modules 存在才能用
       # npx tsx 真跑 panel-event-bus proven-to-fire。此前这条 workflow 从不显式装它，全靠字母序
@@ -218,7 +229,7 @@ jobs:
               structured-workbench-smoke.sh) echo 180 ;;
               # 整个 phone-adb-controller 测试套件(600+ 条,含假机整链/有界子进程真等待)当一步跑,main 上已贴 90s 天花板靠重试苟过;
               # 7d150e33 加总时限/预算整链验收后必超,放宽到 180
-              leadgen-field-cleanup-smoke.sh) echo 180 ;;
+              leadgen-field-cleanup-smoke.sh) echo 300 ;;  # 含真实跨仓七活动及软停止/finalize，不省略活动验收
               capability-phone-regression-smoke.sh) echo 180 ;;  # 16套串行真实时序回归实测约122秒
               *) echo 90 ;;
             esac

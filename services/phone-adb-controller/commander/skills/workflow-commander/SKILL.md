@@ -33,6 +33,8 @@ description: "Commander 照调度单发起并陪跑 workflow run：主理人在�
 
 ## 二、发起（唯一方式）
 
+发起前经网关读取 `~/openclaw-root/workspaces-root/clawd-work-commander/skills/wf-<能力>/SKILL.md`，核对 `commander_capability`。这是从已批准契约与业务SOP生成的执行现场规则；读不到或能力不符不发起，不用通用入口替代活动SOP。启动器同样检查并打印专属skill，陪跑与接班须读取同一份。
+
 **先确认你在哪台机器上**：你的推理与 shell 经跑场池穿透执行，这一轮可能落在 MMV、xian-m4 或 xian-m1（跑哪台由探活守护按空闲内存决定，不由你选）。先跑一次 `hostname`：
 
 | hostname | 你在 | 调启动器/状态脚本的方式 |
@@ -61,9 +63,10 @@ bash /Users/administrator/.openclaw/commander/wf-launch.sh <能力> <机器> <pr
 ## 三、陪跑与售后
 
 - 查现状：`bash /Users/administrator/.openclaw/commander/wf-status.sh <机器> <TAG>`（最后一行 `WF_STATUS state=running|finished|unknown`）。
-- 陪跑的 10 分钟看护由 escort（`cmdr-escort.txt`）负责，run 收工自动注销；你不需要自己轮询。若该 workflow 有自己的陪跑 skill（`wf-<能力>`），按它的每步正常态/预算/失败分类处置。
+- 陪跑的 10 分钟看护由 escort 负责，必须先读该 workflow 的专属 skill（`wf-<能力>`），按每步正常态/预算/失败分类处置；`cmdr-escort.txt`承载公共网关与售后协议。run 售后确认后由程序注销。
 - 主理人问进度时查一次再答；**读不到就说读不到**，不根据缺失信息编结论。
-- 售后：账本 finalize 后回报终态（completed / partial / failed）、线索落池条数、异常与处置；SOP 外的新判例追加到 escort-findings。
+- 终态优先：每tick先检查同TAG协调器请求；有finalize请求只做售后，不发运行期心跳、不触碰手机。每轮重新核验并写回执，at由网关程序当场生成带时区时间；旧回执不能绑定新tick。
+- 售后：账本 finalize 后回报终态（completed / partial / failed）、线索落池条数、异常与处置；SOP 外的新判例追加到 escort-findings。陪跑按 SOP 写入同 run、同随机 nonce 的售后回执后正常结束 tick，Cecelia 协调器确认 Brain 留痕并读回后才注销；你和陪跑都不得自行 cron rm。
 - 三档权限：可逆不出本 run 的（平滑收工 = 执行机 `touch ~/wf-runs/<TAG>.stop`（禁止 kill）、重启抖音、唤醒解锁、重拉 escort、补落池）自动做；不可逆或越出本 run 的（删数据、改 crontab/配置、切换登录号）Bark 请示；要改代码的只写根因与修法。
 
 ## 四、定时发起

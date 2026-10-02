@@ -15,7 +15,8 @@ const { extractSeenEntries } = require("./lead-fields-lib.js");
 // 0923: 「判完之后怎么落账」抽进 sort-comments-lib.js —— 顺序错没错只有注入假飞书
 // 跑一遍才看得出来(池状态必须最后推进,否则写线索失败的那条下轮就扫不到了,146条就是这么丢的)。
 const { settlePending } = require("./sort-comments-lib.js");
-const { judgeComment } = require("./judge-comment.js");
+const { scoreComments, deliverComments } = require("./comment-activities.js");
+const { withDeliveryReceipts, receiptMarker } = require("./comment-delivery-storage.js");
 const { statsLine } = require("./stats-line.js");
 
 const LINE = process.argv[2] || "";
@@ -24,13 +25,8 @@ const acc = cfg.channels.feishu.accounts[ROUTE.account];
 const B = ROUTE.base, POOL = ROUTE.pool, LEADS = ROUTE.lead;
 console.error("line-route: " + ROUTE.key + " base=" + B + " POOL=" + POOL + " LEADS=" + LEADS);
 
-// ⚠️ 跟judge-video.js里的TARGET_PROFILES是同一份数据,暂时各自维护一份(两个PR互相独立
-// 开工,合并顺序未定);后续两个PR都进main之后应该抽成共享的target-profiles.js,避免两处
-// 各自维护容易漂移。
-const TARGET_PROFILES = {
-  jinuo: "AI人工智能训练师考证意向人群:关注AI技能证书、求职提升、培训报名的用户",
-  yuesheng: "悦升云端目标客户:企业级AI部署决策者/OPC小微主体主/AI办公入门学习者",
-};
+// 兼容旧入口的整池扫描；独立活动只接显式输入，不承担扫描职责。
+const RUN_TAG = process.env.WFR_TAG || "sort-" + Date.now();
 
 async function feishu(path, method, body, tok) {
   const r = await fetch("https://open.feishu.cn/open-apis/bitable/v1/apps/" + B + path,
@@ -42,9 +38,6 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
 (async () => {
   const tr = await fetch("https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ app_id: acc.appId, app_secret: acc.appSecret }) });
   const tok = (await tr.json()).tenant_access_token;
-
-  const targetProfile = TARGET_PROFILES[ROUTE.key];
-  if (!targetProfile) { console.error("sort-comments: 未配置" + ROUTE.key + "的目标客户画像,退出"); process.exit(1); }
 
   // 扫池取「待分拣」行
   let pt = "", pend = [];
@@ -76,6 +69,7 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
 
   // 线索表去重映射(token→record) —— 0914 主理人拍板: 重复≠噪音,是强意向信号,要高亮不要扔
   const seen = new Map(); let lp = "";
+  const leadHistory = new Map(), lead_receipts = new Map();
   do {
     const r = await feishu(`/tables/${LEADS}/records?page_size=100${lp ? "&page_token=" + lp : ""}`, "GET", null, tok);
     for (const e of extractSeenEntries(r.data.items || [], txt)) {
@@ -83,41 +77,48 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : S
       if (e.nick) seen.set(e.nick, val);
       if (e.dyid) seen.set(e.dyid, val);
     }
+    for (const record of r.data.items || []) {
+      const history = txt(record.fields["重复轨迹"]);
+      leadHistory.set(record.record_id, history);
+      for (const row of pend) {
+        if (history.includes(receiptMarker(POOL, row.id))) lead_receipts.set(row.id, record.record_id);
+      }
+    }
     lp = r.data.has_more ? r.data.page_token : "";
   } while (lp);
 
   const now = new Date(Date.now() + 8 * 3600e3).toISOString().replace("T", " ").slice(0, 16) + "(UTC+8)";
+  const deliveryStorage = withDeliveryReceipts({
+    putPool: (id, fields) => feishu(`/tables/${POOL}/records/${id}`, "PUT", { fields }, tok),
+    postLead: fields => feishu(`/tables/${LEADS}/records`, "POST", { fields }, tok),
+    putLead: (id, fields) => feishu(`/tables/${LEADS}/records/${id}`, "PUT", { fields }, tok),
+  }, { pool: POOL, leadHistory, lead_receipts });
 
   for (const row of pend) {
-    const f = row.fields;
-    const comment = txt(f["评论原文"]);
-    const videoCaption = txt(f["来源视频"]);
-    let verdict;
-    try {
-      verdict = await judgeComment(comment, videoCaption, targetProfile);
-    } catch (e) {
+    const scored = await scoreComments({ run_tag: RUN_TAG, line_key: ROUTE.key, comments: [row] });
+    const [scoredRow] = scored.outputs.comments;
+    const verdict = scoredRow.verdict;
+    if (!verdict) {
       failed++;
-      console.error(`  判定失败 id=${row.id}: ${String(e.message || e).slice(0, 120)}(留在待分拣,下一轮重试)`);
+      console.error(`  判定失败 id=${row.id}(留在待分拣,下一轮重试)`);
       continue;
     }
     judged++;
     if (verdict.grade in grades) grades[verdict.grade]++;
-    const r = await settlePending({
-      row, verdict, route: ROUTE, seen, now, asLeadTime,
-      deps: {
-        putPool:  (id, fields) => feishu(`/tables/${POOL}/records/${id}`, "PUT",  { fields }, tok),
-        postLead: (fields)     => feishu(`/tables/${LEADS}/records`,      "POST", { fields }, tok),
-        putLead:  (id, fields) => feishu(`/tables/${LEADS}/records/${id}`, "PUT", { fields }, tok),
-      },
+    const delivered = await deliverComments({ run_tag: RUN_TAG, line_key: ROUTE.key, comments: [scoredRow] }, {
+      seen, now, asLeadTime, lead_receipts,
+      // 既有结算闸仍为唯一实现，独立活动增加结果封装与存储确认。
+      settle: args => settlePending(args),
+      deps: deliveryStorage,
     });
-    moved += r.moved;
-    duped += r.duped;
-    if (r.retryable) {
+    moved += delivered.metrics.leads_written;
+    duped += delivered.metrics.duplicates_highlighted;
+    if (delivered.metrics.pending) {
       parked++;
       // 关键: 池状态没被推进,这条下一轮还在「待分拣」里,会被自然重捞。
       // 原实现在这里只打一行日志就过,而池早已标成「已分拣+进入最终线索=true」——
       // 下一轮 `sv !== "待分拣" → continue` 再也扫不到它,线索就这么没了(金诺41 悦升105)。
-      console.log("LEAD_PARKED", txt(row.fields["评论者昵称"]), r.reason, "(留待分拣,下轮重试)");
+      console.log("LEAD_PARKED", txt(row.fields["评论者昵称"]), "配送未确认", "(留待分拣,下轮重试)");
     }
   }
   console.log(`判定完成 ${judged}/${pend.length} | 搬入线索表 ${moved} 条 | 重复高亮 ${duped} 条 | 判定异常${failed}条(留待分拣) | 搬运失败${parked}条(留待分拣下轮重试)`);

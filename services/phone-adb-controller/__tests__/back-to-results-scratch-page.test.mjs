@@ -142,7 +142,7 @@ test('接线守卫：back_to_results 传了关键词时必须真的调用 _searc
     '核对关键词前必须先真的 dump 一份 UI 树，不能凭空判断');
 });
 
-test('接线守卫：harvest-keyword.sh 主循环的6处归位调用必须全部走封装函数', () => {
+test('接线守卫：harvest-keyword.sh 主循环全部归位调用必须全部走封装函数', () => {
   const kwPath = new URL('../harvest-keyword.sh', import.meta.url).pathname;
   const src = readFileSync(kwPath, 'utf8');
   // 主循环里所有归位动作都必须走 back_to_results_and_maybe_rescan(不能有裸调
@@ -159,8 +159,10 @@ test('接线守卫：harvest-keyword.sh 主循环的6处归位调用必须全部
   // 0929 rebase到main后发现主分支并发合并的PR(#2011"先判后采")又新增了一处裸调用——
   // 数量断言故意留在这里而不是只判断">0"，就是为了让这类"新增调用点没跟上封装函数"
   // 的情况在CI里报红，不是宽松地"只要有一些走了封装函数就算过"。
-  assert.equal(wrapperCalls.length, 7,
-    `期望主循环7处归位调用都用封装函数，实际找到 ${wrapperCalls.length} 处`
+  // 阶段3把评论打不开/零评论的提前归位并入提取函数后的统一尾部；
+  // 图文、无身份、已采、判定不通过、采集返回这5个出口仍逐一受封装守卫。
+  assert.equal(wrapperCalls.length, 5,
+    `期望主循环5处归位调用都用封装函数，实际找到 ${wrapperCalls.length} 处`
     + `(数量对不上说明有调用点被漏改、或者脚本结构变了/main并发合并引入了新调用点，`
     + `需要人工核对每一处)`);
 });

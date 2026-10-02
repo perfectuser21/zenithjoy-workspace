@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "capability": "keyword_acquisition",
+  "source": {
+    "contract": "product-map/contracts/keyword_acquisition.yaml",
+    "scope": "activity-chain"
+  },
+  "select": [
+    "qualification",
+    "collection",
+    "scoring",
+    "delivery"
+  ],
+  "trigger_inputs": [
+    "Video",
+    "Device",
+    "Account",
+    "Run"
+  ],
+  "activities": {
+    "qualification": {
+      "runtime": {
+        "phase": "per_item",
+        "entry": "video-activity.js",
+        "protocol": "json-stdio-v1",
+        "argv": [
+          "qualification"
+        ],
+        "input": {
+          "run_tag": "$.run_tag",
+          "line_key": "$.line_key",
+          "device": "$.device",
+          "video": "$item"
+        },
+        "per_item": {
+          "group": "videos",
+          "items": "$.videos",
+          "input": "video",
+          "identity": "video_id"
+        },
+        "on_failure": "continue",
+        "max_attempts": 1,
+        "cleanup_grace_s": 30
+      }
+    },
+    "collection": {
+      "runtime": {
+        "phase": "per_item",
+        "entry": "video-activity.js",
+        "protocol": "json-stdio-v1",
+        "argv": [
+          "collection"
+        ],
+        "input": {
+          "run_tag": "$.run_tag",
+          "line_key": "$.line_key",
+          "device": "$.device",
+          "video": "$item"
+        },
+        "per_item": {
+          "group": "videos",
+          "items": "$.videos",
+          "input": "video",
+          "identity": "video_id",
+          "when": {
+            "path": "$item.judgment_status",
+            "equals": "matched"
+          }
+        },
+        "on_failure": "continue",
+        "max_attempts": 1,
+        "cleanup_grace_s": 30
+      }
+    },
+    "scoring": {
+      "runtime": {
+        "phase": "batch_end",
+        "entry": "comment-activity.js",
+        "protocol": "json-stdio-v1",
+        "argv": [
+          "scoring"
+        ],
+        "input": {
+          "run_tag": "$.run_tag",
+          "line_key": "$.line_key",
+          "comments": "$.comments"
+        },
+        "on_failure": "continue",
+        "max_attempts": 1,
+        "cleanup_grace_s": 10
+      },
+      "outputs": [
+        {
+          "type": "Comment",
+          "cardinality": "many",
+          "effect": "update",
+          "fields": [
+            "process_status",
+            "relevance",
+            "intent_grade",
+            "promoted"
+          ]
+        }
+      ]
+    },
+    "delivery": {
+      "runtime": {
+        "phase": "batch_end",
+        "entry": "comment-activity.js",
+        "protocol": "json-stdio-v1",
+        "argv": [
+          "raw-delivery"
+        ],
+        "input": {
+          "run_tag": "$.run_tag",
+          "line_key": "$.line_key",
+          "comments": "$.comments",
+          "videos": "$.videos"
+        },
+        "on_failure": "continue",
+        "max_attempts": 1,
+        "cleanup_grace_s": 10
+      },
+      "inputs": [
+        {
+          "type": "Video",
+          "cardinality": "many",
+          "fields": [
+            "line_key",
+            "video_id",
+            "harvest_batch"
+          ]
+        },
+        {
+          "type": "Comment",
+          "cardinality": "many",
+          "fields": [
+            "line_key",
+            "dedup_key",
+            "harvest_batch"
+          ]
+        },
+        {
+          "type": "Run",
+          "cardinality": "one",
+          "fields": [
+            "run_tag"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Comment",
+          "cardinality": "many",
+          "effect": "upsert",
+          "fields": [
+            "line_key",
+            "dedup_key",
+            "harvest_batch"
+          ]
+        },
+        {
+          "type": "Lead",
+          "cardinality": "many",
+          "effect": "upsert",
+          "fields": [
+            "line_key",
+            "douyin_id",
+            "nickname",
+            "profile_url",
+            "intent_grade",
+            "repeat_hits",
+            "status"
+          ],
+          "optional": true
+        }
+      ]
+    }
+  }
+}

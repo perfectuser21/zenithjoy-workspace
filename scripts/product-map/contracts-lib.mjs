@@ -226,7 +226,7 @@ export function assemble(ctx, capId) {
     for (const i of a.inputs || []) {
       if (!available.has(i.type)) errors.push(`${capId}: ${a.key} 输入 ${i.type} 未由 trigger_inputs 或前序活动交出`);
     }
-    for (const o of a.outputs || []) available.add(o.type);
+    for (const o of a.outputs || []) if (!o.optional) available.add(o.type);
   }
   const need = [...(ctx.ledgerStages[doc.ledger] || [])];
   for (const s of need) if (!acts.some((a) => a.key === s)) errors.push(`${capId}: 账本 stage ${s} 无契约（无契约不得进工作流）`);

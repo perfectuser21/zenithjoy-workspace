@@ -498,9 +498,9 @@ _leave_scratch_route() {
     [[ "$fg" == *"$DOUYIN_PACKAGE"* ]] || { print -u2 -- "leave-scratch: left Douyin after $i backs (fg=$fg)"; return 1 }
     [[ "$fg" == *"$SEARCH_RESULT_ACTIVITY"* ]] && continue
     # 退回原详情页后视频自动续播，HONOR 上 uiautomator 永不 idle——0930 真机三波连读都只有
-    # 13 个骨架节点。与 _current_video_link_once 入口同一招：先中央点击暂停再取证；核验通过
-    # 再点一次恢复播放，让下游（倍速/录制）看到的状态与以前 deep link 重开后一致。
-    "$ADB" -s "$SERIAL" shell input tap $(( SCREEN_W / 2 )) $(( SCREEN_H * 45 / 100 )) >/dev/null 2>&1 || true
+    # 13 个骨架节点。与 _current_video_link_once 入口同一招：先用媒体键暂停再取证；核验通过
+    # 再用媒体键恢复播放，让下游（倍速/录制）看到的状态与以前 deep link 重开后一致。
+    "$ADB" -s "$SERIAL" shell input keyevent 85 >/dev/null 2>&1 || true
     wait_ms 600
     local w
     for w in 1 2 3; do
@@ -510,11 +510,11 @@ _leave_scratch_route() {
         # 下游（倍速/录制）要的是"在播放"——以前 deep link 重开的新页天然自动播放。真机实证
         # （0930 rcp4）：详情页的播放键 content-desc 反映当前状态，「暂停视频，按钮」= 已暂停，
         # 「播放视频，按钮」= 在播放；退回来的原页保留着取链接前被暂停的状态，盲目再点一次
-        # 会把它按回暂停（fixtest-rc 录到 -91 dB 死寂）。按状态点，不按次数点。
+        # 会把它按回暂停（fixtest-rc 录到 -91 dB 死寂）。按状态恢复，不盲目切换。
         if _video_paused_xml "$xml"; then
-          "$ADB" -s "$SERIAL" shell input tap $(( SCREEN_W / 2 )) $(( SCREEN_H * 45 / 100 )) >/dev/null 2>&1 || true
+          "$ADB" -s "$SERIAL" shell input keyevent 85 >/dev/null 2>&1 || true
           wait_ms 300
-          print -u2 -- "leave-scratch: video was paused, tapped once to resume playback"
+          print -u2 -- "leave-scratch: video was paused, sent media key to resume playback"
         fi
         return 0
       fi
@@ -536,8 +536,9 @@ current_video_link() {
   (( _g == 2 )) && die "UI_TREE_UNAVAILABLE: could not read the UI hierarchy to verify the video detail page; transient, safe to retry" NO_ROOT
   (( _g == 1 )) && die "NOT_ON_VIDEO_DETAIL: current-video-link requires an opened video detail page (share button absent); open the video card first"
   for i in {1..$tries}; do
-    if ( _current_video_link_once "${eid}-t${i}" ); then return 0; fi
-    rc=$?
+    if ( _current_video_link_once "${eid}-t${i}" ); then return 0; else rc=$?; fi
+    # 网络失败已在同一已复制URL上有界重试；不能再经外层重拍分享。
+    (( rc == 75 )) && return 2
     print -u2 -- "warning: current-video-link attempt $i/$tries failed (rc=$rc); recovering to detail page"
     # 回退到详情页干净态：连按返回收掉可能半开的分享面板/临时搜索框
     "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1
@@ -557,17 +558,19 @@ _current_video_link_once() {
   local link_x1 link_y1 link_x2 link_y2 link_x link_y
   local copied_path scratch_xml search_line search_center search_x search_y
   local result_xml result_line escaped_text short_url resolved_url video_id note_id content_type content_id reopen_url
+  local resolve_headers resolve_rc resolve_try
   evidence_id="$1"
   require_evidence_id "$evidence_id"
 
   [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
   # 详情页自动播放会让部分机型（HONOR 实测）uiautomator 永不 idle：
-  # 先中央点击暂停播放再取证；流程末尾跳离本页，无需恢复播放。
-  "$ADB" -s "$SERIAL" shell input tap $(( SCREEN_W / 2 )) $(( SCREEN_H * 45 / 100 ))
+  # 先用已验证的媒体键暂停播放再取证；中央点击可能打开识别画面（10-02 M4 positive5）。
+  # 媒体键不触发页面导航；仍以分享按钮与详情页守卫确认现场。
+  "$ADB" -s "$SERIAL" shell input keyevent 85
   wait_ms 600
   # 分享按钮是详情页上"已知存在"的东西，一次读不到不该放弃（0913 实证：前置守卫刚放行、
-  # 正式取证却报找不到，两者之间只隔了上面那次中央点击）。有界重抓，并区分两种死因：
-  #   a) 中央点击把页面点飞了 → 已不在详情页
+  # 正式取证却报找不到，两者之间只隔了暂停操作）。有界重抓，并区分两种死因：
+  #   a) 页面发生导航 → 已不在详情页
   #   b) 还在详情页但按钮没渲染出来 → 纯时序问题，重抓即可
   share_xml="$EVIDENCE_ROOT/${evidence_id}-share.xml"
   share_line=""
@@ -582,7 +585,7 @@ _current_video_link_once() {
   done
   if [[ -z "$share_line" ]]; then
     _sg=0; _on_video_detail "${evidence_id}-share-diag" || _sg=$?
-    (( _sg == 1 )) && die "the centre tap navigated away from the video detail page (share button gone); this is not a missing-button problem"
+    (( _sg == 1 )) && die "the video detail page changed during link capture (share button gone); this is not a missing-button problem"
     die "verified share button was not found after 3 captures while still on the video detail page" TARGET_ABSENT
   fi
   share_center="$(node_center "$share_line")" || die "share button bounds could not be parsed"
@@ -631,7 +634,19 @@ _current_video_link_once() {
   short_url="$(print -- "$escaped_text" | /usr/bin/grep -oE 'https://v\.douyin\.com/[A-Za-z0-9_/-]+' | /usr/bin/head -1 || true)"
   [[ "$short_url" == https://v.douyin.com/* ]] || die "copied text did not contain a verified Douyin short link" TARGET_ABSENT
   clip_guard_check "$short_url"
-  resolved_url="$("$CURL" -sSIL --max-time 20 -A 'Mozilla/5.0' "$short_url" | /usr/bin/awk -F ': ' 'tolower($1) == "location" { gsub(/\r/, "", $2); location=$2 } END { print location }' || true)"
+  # 连接超时只重试同一份已验证短链一次，避免先回退手机再重复分享。
+  # 必须检查curl返回码：部分重定向头不能把失败的请求伪装成取链成功。
+  for resolve_try in 1 2; do
+    resolve_rc=0
+    resolve_headers="$("$CURL" -sSIL --max-time 20 -A 'Mozilla/5.0' "$short_url")" || resolve_rc=$?
+    (( resolve_rc == 0 )) && break
+    if ! (( resolve_rc == 28 && resolve_try == 1 )); then
+      print -u2 -- "short link resolution failed curl_exit=$resolve_rc attempts=$resolve_try"
+      print -u2 -- "failure_class=SHORT_LINK_TRANSPORT_UNAVAILABLE"
+      return 75
+    fi
+  done
+  resolved_url="$(print -r -- "$resolve_headers" | /usr/bin/awk -F ': ' 'tolower($1) == "location" { gsub(/\r/, "", $2); location=$2 } END { print location }')"
   video_id="$(print -- "$resolved_url" | /usr/bin/grep -oE '/video/[0-9]+' | /usr/bin/tail -1 | /usr/bin/cut -d/ -f3 || true)"
   note_id="$(print -- "$resolved_url" | /usr/bin/grep -oE '/note/[0-9]+' | /usr/bin/tail -1 | /usr/bin/cut -d/ -f3 || true)"
   if [[ "$video_id" == <-> && ${#video_id} -ge 16 && ${#video_id} -le 24 ]]; then
@@ -1866,12 +1881,12 @@ read_commenter_identity() {
   [[ "$nickname_b64" == [A-Za-z0-9+/=]## ]] || die "commenter nickname must be standard base64"
   (( ${#nickname_b64} <= 800 )) || die "commenter nickname base64 is too long"
   require_evidence_id "$evidence_id"
-  expected_nickname="$(print -n -- "$nickname_b64" | /usr/bin/base64 -D 2>/dev/null)" || die "commenter nickname base64 could not be decoded"
+  expected_nickname="$(print -n -- "$nickname_b64" | /usr/bin/base64 -d 2>/dev/null)" || die "commenter nickname base64 could not be decoded"
   [[ -n "$expected_nickname" && "$expected_nickname" != *$'\n'* && "$expected_nickname" != *$'\r'* ]] || die "commenter nickname must be one non-empty line"
   [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
   before_xml="$EVIDENCE_ROOT/${evidence_id}-comments.xml"
   ui_evidence "${evidence_id}-comments" >/dev/null
-  /usr/bin/grep -Eq '评论|comment' "$before_xml" || die "verified comment context was not found"
+  strict_comment_panel_open "$before_xml" || die "verified comment context was not found"
   "$ADB" -s "$SERIAL" shell input tap "$tap_x" "$tap_y"
   wait_ms 1200
   profile_xml="$EVIDENCE_ROOT/${evidence_id}-profile.xml"
@@ -1915,7 +1930,7 @@ read_commenter_identity() {
   wait_ms 900
   back_xml="$EVIDENCE_ROOT/${evidence_id}-returned.xml"
   ui_evidence "${evidence_id}-returned" >/dev/null
-  /usr/bin/grep -Eq '评论|comment' "$back_xml" || die "comment context was not restored after identity readback"
+  strict_comment_panel_open "$back_xml" || die "comment context was not restored after identity readback"
   # 0914 主理人要求:主页 IP 属地随身份一并输出(树里现成,text="IP：陕西" 全角冒号)
   profile_ip="$(/usr/bin/grep -oE 'text="IP：[^"]+"' "$profile_xml" | /usr/bin/head -1 | /usr/bin/sed -E 's/text="IP：([^"]+)"/\1/' || true)"
   print -- "nickname=$observed_nickname"
@@ -2462,6 +2477,18 @@ video_page_ready() {
 #   发条评论 / 放大评论区 / 回复 按钮 / 展开N条回复（都只在评论抽屉里出现）
 # ⚠️ 陷阱：视频页右侧按钮的 content-desc 是「评论5902，按钮」，绝不能拿它当已打开信号，
 # 否则没点开也会被判成已打开。故不匹配「评论<数字>，按钮」这种形态。
+# 评论面板必须同时有专属输入控件和面板结构，详情页评论按钮/搜索推荐文案都不能证明恢复。
+strict_comment_panel_open() {
+  local xml="$1"
+  [[ -r "$xml" ]] || return 1
+  /usr/bin/grep -qE 'resource-id="com.ss.android.ugc.aweme:id/ety"' "$xml" || return 1
+  # 标题必须是同一个title节点上的评论计数；详情页作者/视频标题不能替代。
+  /usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/title"[^>]*>' "$xml" \
+    | /usr/bin/grep -qE 'text="([0-9]+([.][0-9]+)?万? ?条评论|评论 ?[0-9]+([.][0-9]+)?万?)"' || return 1
+  /usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/(kdn|back_btn)"[^>]*>' "$xml" \
+    | /usr/bin/grep -qE 'content-desc="(放大评论区|关闭)"'
+}
+
 comment_panel_open() {
   local xml="$1"
   [[ -r "$xml" ]] || return 1
@@ -2565,7 +2592,7 @@ open_comments() {
   wait_ms 1500
   panel_xml="$EVIDENCE_ROOT/${evidence_id}-panel.xml"
   ui_evidence "${evidence_id}-panel" >/dev/null
-  if comment_panel_open "$panel_xml"; then
+  if strict_comment_panel_open "$panel_xml"; then
     print -- "comments_opened=1"
     print -- "comment_count=${count_label:-unknown}"
     print -- "coord_source=$src"
@@ -2893,7 +2920,13 @@ case "$command" in
     "$ADB" -s "$SERIAL" shell input keyevent 4; wait_ms 1200
     "$ADB" -s "$SERIAL" shell input keyevent 4; wait_ms 1500
     ui_evidence "$2-restored" >/dev/null 2>&1 || true
-    /usr/bin/grep -Eq '评论|comment' "$EVIDENCE_ROOT/$2-restored.xml" 2>/dev/null       || print -u2 -- "warning: comment context not confirmed after card-link restore"
+    print -- "comment_context_frame=$EVIDENCE_ROOT/$2-restored.xml"
+    if strict_comment_panel_open "$EVIDENCE_ROOT/$2-restored.xml"; then
+      print -- "comment_context_restored=1"
+    else
+      print -- "comment_context_restored=0"
+      print -u2 -- "warning: comment context not confirmed after card-link restore"
+    fi
     ;;
   commenter-identity)
     [[ "$#" == 5 ]] || die "usage: douyin-phone-adb --profile PROFILE commenter-identity X Y NICKNAME_B64 EVIDENCE_ID"
@@ -3036,7 +3069,7 @@ case "$command" in
     [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE collect-comments EVIDENCE_ID"
     check_target
     cc_xml="$(ui_evidence "$2-comments")" || die "could not capture comment panel hierarchy"
-    comment_panel_open "$cc_xml" || die "comment panel is not open; run open-comments first"
+    strict_comment_panel_open "$cc_xml" || die "comment panel is not open; run open-comments first"
     cc_w="$("$ADB" -s "$SERIAL" shell wm size | /usr/bin/sed -E 's/.*: ([0-9]+)x[0-9]+.*/\1/' | tr -d '\r' | /usr/bin/head -1)"
     [[ "$cc_w" == <-> ]] || die "could not read screen width"
     comments_from_xml "$cc_xml" "$cc_w"

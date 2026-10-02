@@ -1,5 +1,5 @@
 #!/bin/zsh
-# wf-run 原函数块，保持库模式与执行模式使用相同实现。
+# 同一运行库保留 Commander 接班与固定版本续跑。
 # wf_parse_args ARGS... —— 位置参数 <能力> <profile> <serial> <biz> [n] [push],选项可出现在任意位置
 wf_parse_args(){
   local -a pos
@@ -80,12 +80,37 @@ escort_alive(){
 #   在途被移除立即同名同会话重拉(跨轮记忆不断) ③重拉后的新 id 落 ESCORT_ID_FILE,注销跟着用新 id。
 # escort_add —— 单次 cron add(拉起与看门狗重拉共用),stdout 新 id;失败回空。起跑时间用 ESCORT_START_HM(重拉不改起跑)。
 escort_add(){
-  ssh -o ConnectTimeout=20 mmv "openclaw cron add --timeout 90000 --name 'escort-$HOSTKEY-$TAG' --agent media --session 'session:escort-$HOSTKEY-$TAG' --every 10m --announce --channel feishu --to 'chat:oc_ef60d6e3f199d90dd695b6ecc213d662' --account main --best-effort-deliver --message '先读 /Users/administrator/.openclaw/cmdr-escort.txt 作为你的SOP并严格遵守辅佐三原则。本轮上下文: TAG=$TAG 机器=$HOSTKEY serial=$SERIAL profile=$P 起跑=${ESCORT_START_HM:-$(date +%H:%M)} 日志=/Users/administrator/.openclaw/m4-logs/${HOSTKEY}-live.log escort名=escort-$HOSTKEY-$TAG。注意:你上岗时本批尚未做设备preflight与取词单,这两步失败会升级给分身,你看到日志里没有词单行属正常早期阶段。'" 2>>${LOG:-/dev/null} | grep -oE '"id": "[a-f0-9-]+"' | head -1 | cut -d'"' -f4
+  local skill_hint="能力缺失，只读现场并写心跳，不自选workflow。"
+  if [[ "${WF_ARG_CAP:-}" =~ ^[a-z][a-z0-9_]*$ ]]; then
+    skill_hint="先经网关读取 /Users/administrator/openclaw-root/workspaces-root/clawd-work-commander/skills/wf-${WF_ARG_CAP}/SKILL.md 专属skill，核对commander_capability=${WF_ARG_CAP}；心跳JSON必须带cap=${WF_ARG_CAP}和profile=$P，让Brain接班沿同能力读取skill；读不到或不符保留现场，不套用其他workflow。"
+  fi
+  ssh -o ConnectTimeout=20 mmv "openclaw cron add --timeout 90000 --name 'escort-$HOSTKEY-$TAG' --agent work-commander --session 'session:escort-$HOSTKEY-$TAG' --every 10m --announce --channel feishu --to 'chat:oc_ef60d6e3f199d90dd695b6ecc213d662' --account main --best-effort-deliver --message '先执行 ssh -o BatchMode=yes -o ConnectTimeout=10 administrator@100.71.151.105 cat /Users/administrator/.openclaw/cmdr-escort.txt 读取网关 SOP 并严格遵守辅佐三原则。你可能落在任意跑场机；SOP、日志、findings、openclaw CLI 均在网关，相关读写经 ssh -o BatchMode=yes -o ConnectTimeout=10 administrator@100.71.151.105 执行，不能把本机文件不存在当成网关文件不存在。终态优先：先检查同TAG协调器请求；已有finalize请求时只核终态并完成售后，不再发运行期心跳或触碰手机。$skill_hint 本轮上下文: cap=${WF_ARG_CAP:-未知} TAG=$TAG 机器=$HOSTKEY serial=$SERIAL profile=$P 起跑=${ESCORT_START_HM:-$(date +%H:%M)} 日志=/Users/administrator/.openclaw/m4-logs/${HOSTKEY}-live.log escort名=escort-$HOSTKEY-$TAG。注意:你上岗时本批尚未做设备preflight与取词单,这两步失败会升级给分身,你看到日志里没有词单行属正常早期阶段。'" 2>>${LOG:-/dev/null} | grep -oE '"id": "[a-f0-9-]+"' | head -1 | cut -d'"' -f4
 }
 # escort_current_id —— 当前 escort id: 看门狗重拉后写在 ESCORT_ID_FILE 的新 id 优先,否则 ESCORT_ID
 escort_current_id(){
   if [[ -n "${ESCORT_ID_FILE:-}" && -s "$ESCORT_ID_FILE" ]]; then head -1 "$ESCORT_ID_FILE" | tr -d '[:space:]'
   else print -rn -- "${ESCORT_ID:-}"; fi
+}
+# 6751323e: Brain 接班只回写账本，执行机可能仍持旧 id。仅收养完整 JSON 中唯一同名的陪跑；
+# 表格名字会截断，不能据此换 id。absent 才允许新建，unknown/ambiguous 均保留现场。
+escort_by_name(){
+  local want="$1" out found
+  out=$(ssh -o ConnectTimeout=20 mmv "openclaw cron list --json" 2>>${LOG:-/dev/null}) \
+    || { print unknown; return 0; }
+  found=$(jq -er --arg want "$want" '
+    if (.jobs | type) != "array" then error("invalid jobs") else
+      [.jobs[] | select(.name == $want)] as $matches |
+      if ($matches | length) == 0 then "absent"
+      elif ($matches | length) > 1 then "ambiguous"
+      elif ($matches[0].id | type) != "string" then error("invalid id")
+      elif ($matches[0].id | test("^[A-Za-z0-9._-]{4,64}$")) then $matches[0].id
+      else error("invalid id") end
+    end' <<< "$out" 2>/dev/null) || found=unknown
+  print -r -- "$found"
+}
+escort_adopt_id(){
+  [[ -n "${ESCORT_ID_FILE:-}" ]] || return 1
+  print -r -- "$1" > "$ESCORT_ID_FILE.tmp.$$" && mv -f "$ESCORT_ID_FILE.tmp.$$" "$ESCORT_ID_FILE"
 }
 # escort_owned ID WANT_NAME —— 这个 id 是不是本 run 的 escort。stdout: match / absent / mismatch:<name> / unknown(网关读不到)。
 #   优先 cron list --json 按 id 取 name 全等比;--json 不可用退回表格: 首列 id 命中 + Name 列去掉截断的 ... 后是期望名前缀。
@@ -112,15 +137,26 @@ escort_owned(){
 }
 # escort_dismiss —— 只注销本 run 登记的 escort: escort_owned 判 match 才 cron rm;不在表/别人的/读不到 → 只记日志不删。
 escort_dismiss(){
-  local id want="escort-$HOSTKEY-$TAG" verdict
+  local id want="escort-$HOSTKEY-$TAG" verdict replacement
   id=$(escort_current_id)
   [[ -n "$id" ]] || return 0
   verdict=$(escort_owned "$id" "$want")
+  if [[ "$verdict" == absent ]]; then
+    replacement=$(escort_by_name "$want")
+    case "$replacement" in
+      absent) ;;
+      ambiguous) log "escort注销跳过: 同名陪跑不唯一($want),保留 id 供对账"; return 0;;
+      unknown) log "escort注销跳过: 同名陪跑不可确认($want),保留 id 供对账"; return 0;;
+      *) id="$replacement"; escort_adopt_id "$id" || return 0
+         verdict=$(escort_owned "$id" "$want");;
+    esac
+  fi
   case "$verdict" in
-    match)   ssh -o ConnectTimeout=20 mmv "openclaw cron rm $id" >>${LOG:-/dev/null} 2>&1 && log "escort已注销";;
+    match)   ssh -o ConnectTimeout=20 mmv "openclaw cron rm $id" >>${LOG:-/dev/null} 2>&1 || return 0
+             log "escort已注销";;
     absent)  log "escort注销跳过: id=$id 已不在 cron 表(在途被移除/已被别处注销)";;
-    unknown) log "escort注销跳过: id=$id cron list 不可达,不盲删";;
-    *)       log "escort注销拒绝: id=$id name=${verdict#mismatch:} 非本run(期望 $want),不删";;
+    unknown) log "escort注销跳过: id=$id cron list 不可达,不盲删"; return 0;;
+    *)       log "escort注销拒绝: id=$id name=${verdict#mismatch:} 非本run(期望 $want),不删"; return 0;;
   esac
   [[ -n "${ESCORT_ID_FILE:-}" ]] && rm -f "$ESCORT_ID_FILE"
   true
@@ -132,6 +168,14 @@ escort_watch_tick(){
   [[ -n "$cur" ]] || return 0
   verdict=$(escort_owned "$cur" "$want")
   [[ "$verdict" == absent ]] || return 0
+  new=$(escort_by_name "$want")
+  case "$new" in
+    unknown) return 0;;
+    ambiguous) log "escort接班暂停: 同名陪跑不唯一($want),不再创建"; return 0;;
+    absent) ;;
+    *) escort_adopt_id "$new" || return 0
+       log "escort已接班(id=$cur),收养同名新id=$new"; return 0;;
+  esac
   new=$(escort_add)
   if [[ -n "$new" ]]; then
     print -r -- "$new" > "$ESCORT_ID_FILE"
@@ -156,8 +200,11 @@ escort_watch_start(){
 }
 escort_watch_stop(){
   if [[ -n "$ESCORT_WATCH_PID" ]]; then
+    # 先暂停循环；先杀 sleep 会唤醒父循环，让它在 TERM 到达前抢跑一轮重拉。
+    kill -STOP "$ESCORT_WATCH_PID" 2>/dev/null
     pkill -P "$ESCORT_WATCH_PID" 2>/dev/null
     kill "$ESCORT_WATCH_PID" 2>/dev/null
+    kill -CONT "$ESCORT_WATCH_PID" 2>/dev/null
     wait "$ESCORT_WATCH_PID" 2>/dev/null
   fi
   ESCORT_WATCH_PID=""
@@ -197,8 +244,11 @@ lease_heartbeat_start(){
 }
 lease_heartbeat_stop(){
   if [[ -n "$LEASE_HB_PID" ]]; then
+    # 冻结循环后再收子进程，避免 stop 途中提前唤醒并发出下一次续租。
+    kill -STOP "$LEASE_HB_PID" 2>/dev/null
     pkill -P "$LEASE_HB_PID" 2>/dev/null   # 先收掉在睡的 sleep 子进程,免得留 5 分钟孤儿
     kill "$LEASE_HB_PID" 2>/dev/null
+    kill -CONT "$LEASE_HB_PID" 2>/dev/null
     wait "$LEASE_HB_PID" 2>/dev/null
   fi
   LEASE_HB_PID=""
@@ -258,7 +308,6 @@ gate_check(){
   fi
   [[ "${WFR_GATE_STOP:-0}" == 1 ]]
 }
-
 # 固定原始TAG与本机执行根，普通续跑和首次prepare共用。
 wf_exec_frozen(){
   export WF_FROZEN_ROOT="$WFR_RUN_DIR/runtime" WF_PLAN_DIR="$WFR_RUN_DIR"

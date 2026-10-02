@@ -1,0 +1,32 @@
+{
+  "baseline_commit": "cdf718dc595996a319928cab0c89f030235b9ee3",
+  "meaning": "此套测试确认指定评论原池/线索/飞书视频池/PG字段对账，并完整保留已观察过程、探针和取消差异。正常/去评分/混合的已完成VIDEO视频池八业务字段直接相等；测试通过不表示全部行为等价或阶段3完成。",
+  "business_assertions": [
+    "正常两词：独立克隆历史原池、历史视频与历史线索；所有原池字段直接相等，线索字段仅精确剥离新增comment-delivery凭证；重复命中次数2→3相等",
+    "逐词/整批真实SQL探针读回按key+values直接相等；旧第二词candidates=2与实际PG读回1的误红精确保留",
+    "matched/rejected/pending混合：全部PG视频业务字段与原池直接相等；不合格及pending零开评论区",
+    "去评分：新终态对账旧第一次真实模型请求前的配送检查点；历史旧batch2仍真实执行无条件评分",
+    "总预算与根TERM：首条原评论逐字段对账，仅规范明确采集时间格式；本tag锁释放；所有已观察结算/视频状态/终态差异显式断言",
+    "每场景完整审计old/current飞书视频池videos原件；正常/去评分各2行、资格混合1行，全部八业务字段与实际record_id直接相等。预算各1行且新真实发现时间精确保留；TERM旧2行每条评论数2、新未确认VIDEO零行，不将局部评论伪装成完整视频确认。"
+  ],
+  "declared_implementation_differences": [
+    "旧先落原池后整池评分，新显式评分后配送",
+    "新线索重复轨迹精确追加[comment-delivery:<pool>:<recordId>]；保留并比较旧重复业务文本",
+    "旧跨词重复视频再次采集后push去重，新discovery在采集前跳过同批重复"
+  ],
+  "observed_behavior_differences": [
+    "正常重复输入：旧第二词discovery fail_stage，新discovery completed；池/线索和真实SQL读回相同",
+    "正常重复输入：旧第二词collection.mark_video_collected真实SQL检查点observed=1低于自报videos_processed=2，pass=false但collection工件仍completed；该失败原样保留，未宣称全部DoD通过",
+    "pending资格：旧qualification failed但旧finalize completed，新root partial",
+    "总预算：旧在视频/词边界停采后仍评分进线索，新在模型活动中软取消评分、原池待分拣；两侧root partial",
+    "首评论后根TERM：旧真实wf-run trap未停止在途batch2，继续两词并final completed；新只保留首条原评论、root partial；旧视频评论已采，新第一视频采集未完成、第二候选pending",
+    "视频池缺写修复前RED原件永久保留：正常旧2/新0，去评分旧2/新0，资格混合旧1/新0，预算旧1/新0，TERM旧2/新0。原PRD delivery合同包含push_videos，该缺口未经批准，已独立修复；当前正常/去评分/mixed视频池完整相等门禁，不把漏写视为批准差异。预算发现时间为旧固定业务样本时间与新真实运行时间；TERM旧继续采完产生VIDEO2行、新采集取消未确认VIDEO零行，仍精确保留。"
+  ],
+  "limits": [
+    "只替换手机、SSH/SCP、HTTP、PG、模型与配置边界，不覆盖真实设备、真实网络或真实数据库故障形态",
+    "设备截图证据由本地fixture文件系统隔离，历史step-dod的缺截图检查点为unknown；不宣称全部步骤DoD验证完成",
+    "旧已分拣原池历史行使用固定已结算样本；历史待分拣积压、评分故障重试、同原始评论历史重放的广泛组合未纳入本套",
+    "总预算案例并非同输入/同预算/同停止点A/B：旧侧为两词、5秒预算，首评论profile-link后fixture date从1000推进到1006，在视频/词边界停采后仍评分；新侧为单词、16秒真实时间预算、模型响应延迟20秒，在评分活动中软取消。该案例仅证明各自deadline边界的原评论保留与锁释放，不能作为同停止点整链等价证据。",
+    "视频池修复前RED与修复后原件同时保留。正常/去评分/mixed完整视频字段对账；预算仅各自deadline边界证据，其发现时间实际不同。TERM旧2行与新0行源于真实原生VIDEO确认差异，不能称视频产物或停止点等价。"
+  ]
+}
