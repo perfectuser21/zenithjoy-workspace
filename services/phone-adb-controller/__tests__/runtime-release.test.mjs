@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync,writeFileSync,readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir,hostname } from 'node:os';
+import { deploymentTarget } from '../deployment-release.mjs';
+const actualHost=deploymentTarget(hostname());
 import { join } from 'node:path';
 import { freezeDefinition,digest } from '../runtime-definition.mjs';
 function fixture(){
@@ -11,8 +13,8 @@ function fixture(){
  const av=version('av-fixed',{activity_id:'activity',definition_key:'test.run',contract:{id:'run'},steps:[],implementation_bindings:[{kind:'code',status:'verified',repo,path:files[0].path,revision:sha,content_sha256:files[0].content_sha256}]});
  const wv=version('wv-fixed',{workflow_id:'workflow',key:'brain-test',contract:{capability:'test'},activities:[{reference_id:'ref',slot_key:'run',sequence_no:1,activity_id:'activity',activity_version_id:av.id}]});
  const payload={schema_version:1,workflows:[wv],activities:[av],components:[],ci_evidence:[],allowed_enabler_calls:[],verification:{}};
- const release={id:'release-fixed',release_key:'fixture',manifest_sha256:digest({environment:'scratch',target:'fixture-host',payload}),environment:'scratch',target:'fixture-host',payload};
- const manifest={source_repo:repo,source_commit:sha,release_id:release.id,observation_id:'observation',environment:'scratch',target:'fixture-host',files};writeFileSync(join(root,'deployment-manifest.json'),JSON.stringify(manifest));
+ const release={id:'release-fixed',release_key:'fixture',manifest_sha256:digest({environment:'scratch',target:actualHost,payload}),environment:'scratch',target:actualHost,payload};
+ const manifest={source_repo:repo,source_commit:sha,release_id:release.id,observation_id:'observation',environment:'scratch',target:actualHost,files};writeFileSync(join(root,'deployment-manifest.json'),JSON.stringify(manifest));
  const calls=[];const get=async path=>{calls.push(path);if(path===`/api/brain/releases/${release.id}`)return {release};if(path.startsWith('/api/brain/activities/'))return {version:av};if(path==='/api/brain/workflows')return [{id:'workflow',key:'brain-test',current_definition_version_id:'wv-latest'}];return {version:version('wv-latest',{...wv.payload})};};
  return {root,release,manifest,calls,options:{releaseId:release.id,runDir:join(root,'run'),deploymentRoot:root,planPath:join(root,'workflow.plan'),stepSpecPath:join(root,'steps.json'),rawContractSha256:wv.contract_sha256,workflowKey:'brain-test',get}};
 }
@@ -28,4 +30,13 @@ test('release摘要或部署release身份冲突拒绝，不产生部分运行快
  const f=fixture();f.release.manifest_sha256='b'.repeat(64);
  await assert.rejects(freezeDefinition(f.options),/release.*摘要|release.*digest/);
  const g=fixture();await assert.rejects(freezeDefinition({...g.options,releaseId:'other'}),/release.*不匹配|release.*不同/);
+});
+
+test('freeze及已有冻结件resume必须核实际主机，不接受复制的目标声明',async()=>{
+ const f=fixture();f.release.target='totally-other-machine';f.manifest.target=f.release.target;
+ f.release.manifest_sha256=digest({environment:f.release.environment,target:f.release.target,payload:f.release.payload});writeFileSync(join(f.root,'deployment-manifest.json'),JSON.stringify(f.manifest));
+ await assert.rejects(freezeDefinition(f.options),/实际.*机器|实际.*主机/);
+ const g=fixture();await freezeDefinition(g.options);const path=join(g.options.runDir,'run-definition.json');const {snapshot_sha256,...body}=JSON.parse(readFileSync(path,'utf8'));
+ body.release.target='totally-other-machine';body.deployment.target=body.release.target;writeFileSync(path,JSON.stringify({...body,snapshot_sha256:digest(body)}));
+ await assert.rejects(freezeDefinition(g.options),/实际.*机器|实际.*主机/);
 });
