@@ -65,6 +65,9 @@ case "$cmd" in
    printf 'nickname=客户%s\\ndouyin_id=10%s\\naccount_type=personal\\n' "$n" "$n";;
  commenter-card-link)
    if [ "$FIXTURE_STOP_MODE" = cancel ]; then touch "$HOME/cancel-ready"; /bin/sleep 1; fi
+   # 此替身成功名片分支不导航，current-video保持原值；保存模拟面板证据并报告恢复状态。
+   printf '%s\\n' '<hierarchy><node resource-id="com.ss.android.ugc.aweme:id/title" text="1条评论"/><node resource-id="com.ss.android.ugc.aweme:id/ety"/><node resource-id="com.ss.android.ugc.aweme:id/kdn" content-desc="放大评论区"/></hierarchy>' > "$HOME/card-restored-fixture.xml"
+   printf 'comment_context_restored=1\\ncomment_context_frame=%s\\n' "$HOME/card-restored-fixture.xml"
    printf 'profile_url=https://www.douyin.com/user/%s\\n' "$(cat "$HOME/current-video")"
    if [ "$FIXTURE_STOP_MODE" = budget ]; then echo 1006 > "$HOME/now"; fi;;
  tap-evidence) exit 0;;
