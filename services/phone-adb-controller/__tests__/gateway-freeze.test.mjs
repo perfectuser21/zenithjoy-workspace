@@ -97,13 +97,42 @@ test('真实共享音频资格分支上传和judge同一host/path，SCP失败保
   assert.equal(judge.includes('/tmp/qa-audio-test-7412345678901234567.wav'),fail==='0');
  }
 });
-test('未传gateway保留旧默认mmv路径，拒绝继承脏gateway环境',t=>{
+test('未传gateway保留旧默认mmv路径，拒绝继承脏gateway环境；显式资格路由加载独立env',t=>{
  const home=mkdtempSync(join(tmpdir(),'gateway-default-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
- mkdirSync(join(home,'bin'));writeFileSync(join(home,'bin/ssh'),'#!/bin/sh\nprintf "%s\\n" "$*" > "$HOME/calls"\necho \'QUAL_DISCOVER {"status":"pending"}\'\n',{mode:0o700});
- const code=`source ${JSON.stringify(join(service,'harvest-keyword-lib.sh'))}\nqsq(){ print -r -- "'$1'"; }; wf_run_bounded(){ shift; "$@"; }\nqual_remote discover --line jinuo\n`;
- const result=spawnSync('/bin/zsh',['-c',code],{env:{HOME:home,PATH:join(home,'bin')+':/usr/bin:/bin',QUAL_GATEWAY_HOST:'dirty-host',QUAL_GATEWAY_CWD:'/tmp/dirty'},encoding:'utf8'});
- assert.equal(result.status,0,result.stderr);const call=readFileSync(join(home,'calls'),'utf8');
- assert.match(call,/BatchMode=yes mmv/);assert.match(call,/leadgen-scripts && node qualify-video.js/);assert.ok(!call.includes('dirty'));
+ const bin=join(home,'bin');mkdirSync(bin);
+ const gateway=join(home,'frozen gateway');mkdirSync(gateway);
+ const envFile=join(home,'.credentials','fake.env');mkdirSync(join(home,'.credentials'));
+ writeFileSync(envFile,'QUAL_FIXTURE_MARKER=loaded-fixture\n',{mode:0o600});
+ const node=join(bin,'fixture-node');writeFileSync(node,`#!${process.execPath}
+const fs=require('node:fs');fs.appendFileSync(process.env.HOME+'/execution',JSON.stringify({cwd:process.cwd(),args:process.argv.slice(2),marker:process.env.QUAL_FIXTURE_MARKER})+'\\n');console.log('QUAL_RESULT {}');`,{mode:0o700});
+ writeFileSync(join(bin,'ssh'),`#!${process.execPath}
+const fs=require('node:fs'),cp=require('node:child_process');const args=process.argv.slice(2);fs.appendFileSync(process.env.HOME+'/calls',JSON.stringify(args)+'\\n');
+if(args.at(-2)==='frozen-host'){const out=cp.spawnSync('/bin/zsh',['-c',args.at(-1)],{env:process.env,encoding:'utf8'});process.stdout.write(out.stdout);process.stderr.write(out.stderr);process.exit(out.status??1);}console.log('QUAL_RESULT {}');`,{mode:0o700});
+ const code=`source ${JSON.stringify(join(service,'harvest-keyword-lib.sh'))}
+wf_run_bounded(){ shift; "$@"; }
+for sub in discover judge collected; do qual_remote "$sub" --line jinuo --title "$QUAL_FIXTURE_TITLE"; done
+`;
+ const title="fixture ' title; $(printf substituted)";
+ const env={HOME:home,PATH:bin+':/usr/bin:/bin',QUAL_FIXTURE_TITLE:title,QUAL_GATEWAY_HOST:'dirty-host',QUAL_GATEWAY_CWD:'/tmp/dirty'};
+ const run=extra=>spawnSync('/bin/zsh',['-c',code],{env:{...env,...extra},encoding:'utf8'});
+ const result=run({});assert.equal(result.status,0,result.stderr);
+ const calls=()=>readFileSync(join(home,'calls'),'utf8').trim().split('\n').map(JSON.parse);
+ const legacy=calls();assert.equal(legacy.length,3);
+ for(const [i,args] of legacy.entries()){
+  assert.equal(args.at(-2),'mmv');assert.ok(args.includes('BatchMode=yes'));
+  assert.match(args.at(-1),/source ~\/\.credentials\/zenithjoy-db\.env.*cd ~\/\.openclaw\/leadgen-scripts && node qualify-video\.js/);
+  assert.ok(args.at(-1).includes(`qualify-video.js ${['discover','judge','collected'][i]}`));assert.ok(!args.join(' ').includes('dirty'));
+ }
+ writeFileSync(join(home,'calls'),'');
+ const explicit=run({VIDEO_ACTIVITY_MODE:'1',BUDGET:'0',QUAL_GATEWAY_HOST:'frozen-host',QUAL_GATEWAY_CWD:gateway,QUAL_GATEWAY_NODE:node,QUAL_GATEWAY_ENV_FILE:envFile});
+ assert.equal(explicit.status,0,explicit.stderr);assert.equal(calls().length,3);
+ for(const args of calls()){
+  assert.equal(args.at(-2),'frozen-host');const remote=args.at(-1);
+  assert.ok(remote.includes(`. '${envFile}'`));assert.ok(remote.indexOf(`. '${envFile}'`)<remote.indexOf('exec '));
+  assert.ok(remote.includes(`cd '${gateway}'`));assert.ok(remote.includes(`exec '${node}'`));assert.ok(!remote.includes('zenithjoy-db.env'));
+ }
+ const execution=readFileSync(join(home,'execution'),'utf8').trim().split('\n').map(JSON.parse);assert.equal(execution.length,3);
+ for(const [i,row] of execution.entries())assert.deepEqual(row,{cwd:realpathSync(gateway),args:[join(gateway,'qualify-video.js'),['discover','judge','collected'][i],'--line','jinuo','--title',title],marker:'loaded-fixture'});
 });
 for(const missing of ['fetch-seen-videos.js','video-delivery-storage.js','workflow-probe.js']){
  test(`真实CLI缺冻结${missing}不回退生产，保留产物并释放锁`,{timeout:60000},async t=>{

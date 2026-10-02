@@ -699,10 +699,10 @@ grep -qF 'source ~/.credentials/zenithjoy-db.env' <<< "$_PV_SSH_LINE" \
   || fail "batch2.sh 调用push-videos.js的ssh命令没有source ~/.credentials/zenithjoy-db.env(Postgres双写会静默连错库)"
 # 8bb3af55: 判定触发端移到 harvest-keyword.sh 的 qual_remote(唯一一条 ssh),同样必须先 source 凭据
 grep -qE '^source "\$\{0:A:h\}/harvest-keyword-lib\.sh" \|\| exit 1$' "$D/harvest-keyword.sh" || fail "harvest未加载判定函数库"
-_QR_SSH_LINE="$(grep 'node qualify-video\.js' "$D/harvest-keyword-lib.sh" | grep 'ssh ' || true)"
-[[ -n "$_QR_SSH_LINE" ]] || fail "harvest-keyword.sh 找不到调用 qualify-video.js 的 ssh(层23应该已经守住,层24逻辑错了)"
-grep -qF 'source ~/.credentials/zenithjoy-db.env' <<< "$_QR_SSH_LINE" \
-  || fail "harvest-keyword.sh 调 qualify-video.js 的 ssh 没有 source ~/.credentials/zenithjoy-db.env(判定读写不到 Postgres)"
+# 执行共享 qual_remote 捕获实际 SSH argv；同时验证旧默认凭据与显式 env/cwd/node。
+# 测试隔离 HOME，仅使用 fake SSH 和虚构凭据，不依赖 C runtime、不连接真实网关。
+node --test --test-name-pattern='未传gateway保留旧默认mmv路径' "$D/__tests__/gateway-freeze.test.mjs" \
+  || fail "qual_remote 资格路由未先加载正确凭据或未传递冻结 host/cwd/node"
 
 # 层25: 录制前音量必须幂等驱动到 RECORD_MEDIA_VOLUME,不能再无脑 VOLUME_UP x2
 # (0924 真机复盘: record_start 每条视频无条件按两次 KEYCODE_VOLUME_UP 且录完不复位,
