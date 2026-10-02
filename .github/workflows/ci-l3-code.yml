@@ -226,6 +226,7 @@ jobs:
     timeout-minutes: 20
     env:
       CECELIA_ACTIVITY_RUNTIME: ${{ github.workspace }}/.cecelia-activity-runtime/packages/brain/scripts/activity-contract-run.js
+      CECELIA_COMMANDER_SKILL_GENERATOR: ${{ github.workspace }}/.cecelia-activity-runtime/packages/brain/scripts/generate-commander-skill.mjs
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -45,5 +45,29 @@ test('现有两条workflow从真身契约组装生成，只有发现活动不同
     const first = stages(skills[0]), second = stages(skills[1]);
     assert.equal(first.length, second.length);
     for (let i = 0; i < first.length; i++) if (i !== 1) assert.equal(first[i], second[i]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+
+test('CI显式提供生成器路径；真实部署准备后两条专属技能与两机控制器均进入原子下发', () => {
+  const repo = resolve(business, '../..');
+  const root = mkdtempSync(join(tmpdir(), 'wf-skill-deploy-'));
+  try {
+    for (const workflow of ['ci-smoke-glob-runner.yml', 'ci-l3-code.yml']) {
+      const source = readFileSync(join(repo, '.github/workflows', workflow), 'utf8');
+      assert.match(source, /CECELIA_COMMANDER_SKILL_GENERATOR: \$\{\{ github\.workspace \}\}\/\.cecelia-activity-runtime\/packages\/brain\/scripts\/generate-commander-skill\.mjs/, workflow);
+    }
+    const log = join(root, 'calls.log');
+    for (const tool of ['ssh', 'scp']) writeFileSync(join(root, tool), `#!/bin/sh\nprintf '%s\\n' "$*" >> "$DEPLOY_TEST_LOG"\ncase "$*" in *"sort -u | wc -l"*) printf '1\\n';; esac\n`, { mode: 0o700 });
+    const result = spawnSync('bash', [join(business, 'deploy.sh')], {
+      env: { ...process.env, PATH: `${root}:${process.env.PATH}`, DEPLOY_TEST_LOG: log,
+        CECELIA_COMMANDER_SKILL_GENERATOR: generator }, encoding: 'utf8', timeout: 30000 });
+    assert.equal(result.status, 0, result.stderr + result.stdout.slice(-4000));
+    const calls = readFileSync(log, 'utf8');
+    for (const cap of ['keyword_acquisition', 'benchmark_link_acquisition']) assert.ok(calls.includes(`wf-${cap}/.SKILL.md.deploy-new`), cap);
+    for (const host of ['xian-m4', 'xian-m1']) for (const directory of ['~/.local/bin', '~/bin-harvest']) {
+      assert.ok(calls.includes(`${host}:${directory}/.douyin-phone-adb.deploy-new`));
+      assert.ok(calls.includes(`mv -f ${directory}/.douyin-phone-adb.deploy-new ${directory}/douyin-phone-adb`));
+    }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

@@ -46,6 +46,7 @@ jobs:
 
     env:
       CECELIA_ACTIVITY_RUNTIME: ${{ github.workspace }}/.cecelia-activity-runtime/packages/brain/scripts/activity-contract-run.js
+      CECELIA_COMMANDER_SKILL_GENERATOR: ${{ github.workspace }}/.cecelia-activity-runtime/packages/brain/scripts/generate-commander-skill.mjs
       # 与 ci-l4-e2e-smoke.yml 的 smoke-api-contract job 保持一致
       DATABASE_HOST: localhost
       DATABASE_PORT: 5432
