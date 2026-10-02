@@ -18,7 +18,7 @@ test('回归入口从任意目录选择实际动态套，不混入 phone-wall，
   assert.equal(result.status, 0, result.stderr);
   const args = readFileSync(result.calls, 'utf8');
   assert.match(args, /--test\n/);
-  for (const name of ['wf-run', 'discover-keyword', 'discover-benchmark', 'harvest-keyword-judge-before-collect', 'harvest-keyword-profile-link-retry', 'pipeline-v4-integration', 'qualify-video', 'outreach-tick-guard', 'phone-lock-lifecycle', 'lease-heartbeat']) assert.ok(args.includes(`/${name}.test.mjs`), name);
+  for (const name of ['real-contract-step-protocol', 'wf-run', 'discover-keyword', 'discover-benchmark', 'harvest-keyword-judge-before-collect', 'harvest-keyword-profile-link-retry', 'pipeline-v4-integration', 'qualify-video', 'outreach-tick-guard', 'phone-lock-lifecycle', 'lease-heartbeat']) assert.ok(args.includes(`/${name}.test.mjs`), name);
   assert.doesNotMatch(args, /phone-wall-push|wall-lib|wall-report\.test/);
   assert.match(result.stdout, /PASS capability-phone-regression-smoke/);
   assert.match(result.stdout, /regression_only/);
