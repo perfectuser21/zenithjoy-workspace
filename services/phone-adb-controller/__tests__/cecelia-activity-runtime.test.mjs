@@ -69,6 +69,17 @@ test('跨仓CLI：真实编译与Cecelia执行两视频qual→collect交错，�
   assert.equal(f.modelCalls.length, 2); assert.ok(f.modelCalls.every(call => call.event.activity === 'scoring'));
   assert.ok(f.calls.every(call => call.event.activity === 'delivery'));
   assert.equal(f.pool.size, 2); assert.equal(f.leads.size, 2);
+  assert.equal(f.videos.size, 2);
+  for (const [index, video] of f.receipt.outputs.videos.entries()) {
+    const record = f.videos.get(video.video_pool_record_id);
+    assert.ok(record, '视频必须保留真实视频表 record_id');
+    assert.deepEqual(record.fields, {
+      视频ID: ids[index], 视频链接: { link: 'https://v.douyin.com/fixture/', text: 'https://v.douyin.com/fixture/' },
+      '视频标题/文案': `AI课程${index + 1}`, 命中关键词: 'AI 考证', 评论数: 1,
+      发现时间: record.fields.发现时间, 处理状态: '评论已采', 采收批次: f.input.run_tag,
+    });
+    assert.match(record.fields.发现时间, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}\(UTC\+8\)$/);
+  }
   const comments = f.receipt.outputs.comments;
   assert.deepEqual(comments.map(row => row.id), ['pool-1', 'pool-2']);
   assert.deepEqual(comments.map(row => row.source_id), ids.slice(0, 2).map(id => `${id}:1`));
@@ -104,6 +115,9 @@ test('跨仓CLI：rejected/pending真实资格结果阻止采集，已采matched
   assert.equal(f.receipt.outputs.videos[1].judgment_status, 'rejected');
   assert.equal(f.receipt.outputs.videos[2].judgment_status, 'pending');
   assert.equal(f.pool.size, 1); assert.equal(f.leads.size, 1); assert.equal(f.modelCalls.length, 1);
+  assert.equal(f.videos.size, 1);
+  assert.equal(f.videos.get(f.receipt.outputs.videos[0].video_pool_record_id).fields.视频ID, ids[0]);
+  assert.ok(![...f.videos.values()].some(record => ids.slice(1).includes(record.fields.视频ID)));
   const phone = readFileSync(join(f.home, 'calls'), 'utf8');
   assert.equal((phone.match(/adb collect-comments/g) || []).length, 1);
 });

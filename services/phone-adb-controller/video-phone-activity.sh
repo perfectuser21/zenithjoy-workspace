@@ -65,7 +65,15 @@ OPENED="$($C --profile "$P" open-video "$VID" "$TAG-v1-open" 2>/dev/null)"
 print -r -- "$OPENED" | grep -q '^video_opened=1' || finish_activity pending video_unavailable
 activity_should_stop && finish_activity pending "$ACTIVITY_REASON"
 VLINK="$($C --profile "$P" current-video-link "$TAG-v1-binding" 2>/dev/null)"
+LINK_RC=$?
 OBSERVED="$(print -r -- "$VLINK" | sed -n 's/^video_id=//p')"
+BINDING_ID=""
+if [[ "$OBSERVED" == <-> && ${#OBSERVED} -ge 16 && ${#OBSERVED} -le 24 ]]; then
+  BINDING_ID="$OBSERVED"
+fi
+# 只记录受校验的ID与返回码；原始stderr/分享文案不进入结构化回执。
+print -- "ACTIVITY_BINDING\t$VID\t$BINDING_ID\t$LINK_RC"
+(( LINK_RC == 0 )) && [[ -n "$BINDING_ID" ]] || finish_activity pending video_identity_unavailable
 [[ "$OBSERVED" == "$VID" ]] || finish_activity pending video_mismatch
 VURL="$(print -r -- "$VLINK" | sed -n 's/^short_url=//p')"
 [[ -n "$VURL" ]] || finish_activity pending video_unavailable

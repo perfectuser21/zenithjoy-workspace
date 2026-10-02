@@ -95,7 +95,10 @@ function nativeInput(stage, input) {
   } else if (stage === 'qualification' || stage === 'collection') {
     Object.assign(result, { device: input.device, video: input.video });
     if (stage === 'collection') result.return_to_results = input.return_to_results;
-  } else result.comments = input.comments;
+  } else {
+    result.comments = input.comments;
+    if (stage === 'delivery') result.videos = input.videos;
+  }
   return result;
 }
 

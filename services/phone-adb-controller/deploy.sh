@@ -68,7 +68,7 @@ push_atomic() {
 MMV_JS_FILES=(
   line-routes.js lead-fields-lib.js own-accounts-lib.js leadgen-db-lib.js
   leadgen-db-connect.js judge-jev.js judge-video-lib.js judge-video.js
-  judge-comment.js sort-comments-lib.js comment-activities.js comment-delivery-storage.js
+  judge-comment.js sort-comments-lib.js comment-activities.js comment-delivery-storage.js video-delivery-storage.js
   raw-comment-activities.js raw-comment-storage.js raw-comment-delivery.js comment-activity.js
   push-videos.js push-raw-comments.js sort-comments.js next-outreach.js
   next-outreach-lib.js qualify-video.js transcribe-qwen-audio.js comment-tier-lib.js
@@ -130,7 +130,7 @@ DEVICE_NODE_FILES=(
   video-activities.js video-activity.js
   batch-activities.js batch-activity.js keyword-workflow.js keyword-workflow-control.js keyword-workflow-activity.js
   workflow-probe.js workflow-probes.mjs verify-step.mjs checks/probes-lib.js checks/schema.json checks/social-keyword-leadgen.yaml
-  comment-activity.js comment-activities.js comment-delivery-storage.js
+  comment-activity.js comment-activities.js comment-delivery-storage.js video-delivery-storage.js
   raw-comment-activities.js raw-comment-storage.js raw-comment-delivery.js
   judge-comment.js judge-jev.js judge-video.js judge-video-lib.js sort-comments-lib.js lead-fields-lib.js
   leadgen-db-connect.js leadgen-db-lib.js transcribe-qwen-audio.js

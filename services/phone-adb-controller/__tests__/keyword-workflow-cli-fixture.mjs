@@ -79,7 +79,7 @@ else if(command.includes('qualify-video.js')){
  if(!${JSON.stringify(ids)}.includes(id))throw Error('unknown fixture video');
  if(action==='discover'){
    db.videos[id]||={video_id:id,harvest_batch:value('batch'),keyword:Buffer.from(value('keyword-b64'),'base64').toString(),
-     video_url:value('video-url'),line_key:value('line'),judgment_status:'pending',judgment_reason:null,process_status:'待判定'};
+     video_url:value('video-url'),line_key:value('line'),judgment_status:'pending',judgment_reason:null,transcript:'fixture录音转写',process_status:'待判定'};
    write('pg.json',db);const row=db.videos[id];
    emit('QUAL_DISCOVER '+JSON.stringify({status:row.judgment_status,process_status:row.process_status,has_transcript:true}));
  }else if(action==='judge'){
@@ -185,4 +185,4 @@ globalThis.fetch=async(value,options)=>{
   f.events = name => readFileSync(join(f.home, name), 'utf8').trim().split('\n').map(JSON.parse);
   return f;
 }
-export { ids, route };
+export { ids, route, controller, ssh, depsSource };

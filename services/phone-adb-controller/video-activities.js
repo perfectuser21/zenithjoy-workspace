@@ -59,6 +59,7 @@ async function runVideoActivity(action, input, { run = runPhone } = {}) {
   const route = validateVideoInput(input);
   if (!['qualification', 'collection'].includes(action)) throw new Error('未知视频活动');
   const video = structuredClone(input.video);
+  delete video.collection_receipt;
   const result = { schema_version: 1, run_tag: input.run_tag, line_key: route.key,
     status: 'completed', failure_class: null, outputs: { videos: [video], comments: [] },
     metrics: { videos_matched: 0, videos_rejected: 0, videos_skipped: 0, videos_processed: 0, comments_collected: 0 },
@@ -78,6 +79,15 @@ async function runVideoActivity(action, input, { run = runPhone } = {}) {
     }
   }
   const lines = String(stdout).trim().split('\n');
+  const binding = lines.filter(line => line.startsWith('ACTIVITY_BINDING\t')).at(-1);
+  if (binding) {
+    const [, expected, observed, exitCode] = binding.split('\t');
+    if (expected === video.video_id && /^\d{1,3}$/.test(exitCode || '') && Number(exitCode) <= 255
+      && (!observed || /^\d{16,24}$/.test(observed))) {
+      result.evidence[0].identity_binding = { expected_video_id: expected,
+        observed_video_id: observed || null, command_exit_code: Number(exitCode) };
+    }
+  }
   const statusLine = lines.filter(line => line.startsWith('ACTIVITY_STATUS\t')).at(-1);
   let [, state = 'pending', reason = 'invalid_phone_result'] = (statusLine || '').split('\t');
   const cleanupFailed = lines.includes('ACTIVITY_CLEANUP\tfailed');
@@ -118,7 +128,24 @@ async function runVideoActivity(action, input, { run = runPhone } = {}) {
         state = 'pending'; reason = returnReason || 'return_to_results_unconfirmed';
       }
     }
-    if (state === 'completed' && !cleanupFailed) result.metrics.videos_processed = 1;
+    if (state === 'completed' && !cleanupFailed) {
+      result.metrics.videos_processed = 1;
+      const nativeVideos = lines.filter(line => line.startsWith('VIDEO\t'));
+      if (nativeVideos.length === 1) {
+        const [, id, url, title, keyword, count, extra] = nativeVideos[0].split('\t');
+        const receipt = { video_id: id, url, title, keyword, comment_count: Number(count), batch: input.run_tag };
+        if (extra === undefined && /^\d+$/.test(count || '')) {
+          try {
+            require('./video-delivery-storage.js').validateReceipt({ ...video, collection_receipt: receipt }, input.run_tag);
+            video.collection_receipt = receipt;
+          } catch (_) { /* 下方统一拒绝无法证实的原生 VIDEO 行。 */ }
+        }
+      }
+      if ((nativeVideos.length || result.outputs.comments.length) && !video.collection_receipt) {
+        result.metrics.videos_processed = 0;
+        state = 'pending'; reason = 'video_collection_receipt_unconfirmed';
+      }
+    }
   }
   const invalidQualification = action === 'qualification' && video.judgment_status === 'pending';
   if (state !== 'completed' || cleanupFailed || invalidQualification) {

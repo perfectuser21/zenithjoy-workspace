@@ -25,7 +25,7 @@ case "$cmd" in
  lock-refresh) echo "lock=refreshed owner=$1";;
  lock-release) echo "lock=released owner=$1";;
  open-video) echo 'video_opened=1';;
- current-video-link) printf 'video_id=%s\\nshort_url=https://v.douyin.com/fixture/\\n' "\${CURRENT_VID:-7412345678901234567}";;
+ current-video-link) [ "$LINK_EMPTY" = 1 ] && exit 0; [ "$LINK_MULTIPLE" = 1 ] && echo video_id=7412345678901234568; printf 'video_id=%s\\nshort_url=https://v.douyin.com/fixture/\\n' "\${CURRENT_VID:-7412345678901234567}"; exit "\${LINK_RC:-0}";;
  open-comments) [ "$OPEN_FAIL" = 1 ] && exit 2; printf 'comments_opened=1\\ncomment_count=1\\n';;
  collect-comments) [ "$OWN_FIRST" = 1 ] && printf '躺赢AI学姐\\t自有评论\\t今天\\t北京\\tpersonal\\ttap=30 40\\tb64=BBB\\n'; printf '小李\\t如何报名\\t今天\\t北京\\tpersonal\\ttap=10 20\\tb64=AAA\\nexhausted=1\\n';;
  commenter-identity) if [ "$1" = 30 ]; then printf 'nickname=躺赢AI学姐\\ndouyin_id=langzi63485\\naccount_type=personal\\n'; else printf 'nickname=小李\\ndouyin_id=123\\naccount_type=personal\\n'; fi;;
@@ -66,6 +66,9 @@ test('判定JSON入口仅判显式视频，缓存matched不录音、不采集、
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.output.outputs.videos[0].judgment_status, 'matched');
   assert.equal(result.output.metrics.videos_matched, 1);
+  assert.deepEqual(result.output.evidence[0].identity_binding, {
+    expected_video_id: vid, observed_video_id: vid, command_exit_code: 0,
+  });
   assert.match(result.calls, /lock-release phase3-smoke/);
   assert.doesNotMatch(result.calls, /open-comments|collect-comments|record-start|search-video/);
 });
@@ -200,3 +203,48 @@ test('手机实际落点换视频则拒绝采集；平滑停止不启动下一�
   assert.equal(stopped.output.reason_code, 'commander_stop');
   assert.doesNotMatch(stopped.calls, /open-video|record-start/);
 });
+
+for (const [label, extra, expectedExit, expectedObserved] of [
+  ['命令非零但输出匹配ID', { LINK_RC: '28' }, 28, vid],
+  ['成功但无ID', { LINK_EMPTY: '1' }, 0, null],
+  ['非法ID', { CURRENT_VID: 'not-an-id' }, 0, null],
+  ['多个ID', { LINK_MULTIPLE: '1' }, 0, null],
+]) {
+  test(`真实资格CLI：${label}应为身份不可用且禁止判定/采集`, () => {
+    const result = run('qualification', input('pending'), extra);
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(result.output.reason_code, 'video_identity_unavailable');
+    assert.equal(result.output.failure_class, 'retryable');
+    assert.equal(result.output.outputs.videos[0].judgment_status, 'pending');
+    assert.deepEqual(result.output.evidence[0].identity_binding, {
+      expected_video_id: vid, observed_video_id: expectedObserved, command_exit_code: expectedExit,
+    });
+    assert.equal(result.output.outputs.comments.length, 0);
+    assert.doesNotMatch(result.calls, /qualify-video.js (?:discover|judge)|open-comments|collect-comments/);
+    assert.match(result.calls, /lock-release phase3-smoke/);
+  });
+}
+
+test('真实资格CLI：合法不同ID仍为视频不匹配，证据保留两侧ID', () => {
+  const observed = '7412345678901234568';
+  const result = run('qualification', input('pending'), { CURRENT_VID: observed });
+  assert.equal(result.status, 1, result.stderr);
+  assert.equal(result.output.reason_code, 'video_mismatch');
+  assert.deepEqual(result.output.evidence[0].identity_binding, {
+    expected_video_id: vid, observed_video_id: observed, command_exit_code: 0,
+  });
+  assert.doesNotMatch(result.calls, /qualify-video.js (?:discover|judge)|open-comments|collect-comments/);
+  assert.match(result.calls, /lock-release phase3-smoke/);
+});
+
+for (const extra of [{ LINK_RC: '28' }, { LINK_EMPTY: '1' }]) {
+  test(`真实采集CLI：身份不可用禁止评论开窗并释放自有锁 ${JSON.stringify(extra)}`, () => {
+    const result = run('collection', input(), extra);
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(result.output.reason_code, 'video_identity_unavailable');
+    assert.equal(result.output.outputs.comments.length, 0);
+    assert.equal(result.output.metrics.videos_processed, 0);
+    assert.doesNotMatch(result.calls, /open-comments|collect-comments|qualify-video.js (?:judge|collected)/);
+    assert.match(result.calls, /lock-release phase3-smoke/);
+  });
+}

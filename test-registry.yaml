@@ -6963,6 +6963,38 @@ agent_suite:
     product: 智能获客
     note: "显式本批落池到结算：可选评分、持久化产物保留及永久拒绝分类。"
 
+  - id: video-pool-delivery
+    path: services/phone-adb-controller/__tests__/video-pool-delivery.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "确认采集凭证到视频池真实JSON/HTTP配送；完整字段、分页去重、失败后保留视频及继续评论配送、非法凭证拒绝。"
+
+  - id: frozen-legacy-full-equivalence
+    path: services/phone-adb-controller/__tests__/frozen-legacy-full-equivalence.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "冻结cdf718dc旧整链与新真实CLI的业务池/视频池/PG直接对账；异常差异显式保留。通过不代表全面等价；预算停止点不同、去评分只比旧模型前检查点。须显式CECELIA_ACTIVITY_RUNTIME。"
+
+  - id: legacy-new-comment-equivalence
+    path: services/phone-adb-controller/__tests__/legacy-new-comment-equivalence.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "同固定TSV和独立HTTP账本，对账当前兼容入口与新评分/评论配送的全部字段、重复计数与重放；仅评论边界。"
+
+  - id: current-video-link-leave-scratch
+    path: services/phone-adb-controller/__tests__/current-video-link-leave-scratch.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实控制器CLI回放详情/暂存返回栈、媒体键；真实curl本地HTTP超时只重试同URL一次，网络失败不重拍分享，非零部分头拒绝。"
+
   - id: video-activity
     path: services/phone-adb-controller/__tests__/video-activity.test.mjs
     type: unit

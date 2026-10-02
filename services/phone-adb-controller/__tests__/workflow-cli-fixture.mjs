@@ -82,7 +82,7 @@ globalThis.fetch = (value, options) => {
   return realFetch(process.env.FIXTURE_HTTP + '/proxy?target=' + encodeURIComponent(url.href), options);
 };`;
 
-async function fixture(t, statuses, mode = '') {
+async function fixture(t, statuses, mode = '', transport = {}) {
   const home = mkdtempSync(join(tmpdir(), 'cecelia-activity-'));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const bin = join(home, '.local/bin'); mkdirSync(bin, { recursive: true });
@@ -108,7 +108,7 @@ esac`;
     ['curl', '#!/bin/sh\necho blocked-non-fixture-network >&2\nexit 97'],
   ]) { writeFileSync(join(bin, name), code); chmodSync(join(bin, name), 0o755); }
   const preloadPath = join(home, 'http-fixture.cjs'); writeFileSync(preloadPath, preload);
-  const pool = new Map(), leads = new Map(), calls = [], modelCalls = [], persistedEvents = [], errors = [];
+  const pool = new Map(), leads = new Map(), videos = new Map(), calls = [], modelCalls = [], persistedEvents = [], modelSnapshots = [], errors = [];
   const server = createServer(async (req, res) => {
     const send = (body, code = 200) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
     try {
@@ -117,14 +117,15 @@ esac`;
       const url = new URL(local.searchParams.get('target'));
       let text = ''; for await (const chunk of req) text += chunk;
       const body = text ? JSON.parse(text) : undefined;
-      const snapshot = JSON.parse(readFileSync(receiptPath, 'utf8'));
-      assert.equal(snapshot.last_event.event_type, 'ACTIVITY_STARTED');
+      const snapshot = transport.snapshot ? transport.snapshot(home) : JSON.parse(readFileSync(receiptPath, 'utf8'));
+      if (!transport.snapshot) assert.equal(snapshot.last_event.event_type, 'ACTIVITY_STARTED');
       persistedEvents.push(snapshot.last_event);
       if (url.origin === 'https://openrouter.ai') {
         assert.equal(url.pathname, '/api/alpha/decisions');
         assert.equal(req.headers.authorization, 'Bearer fixture-model-key');
-        assert.match(body.state, /如何报名/);
+        assert.match(body.state, transport.modelPattern || /如何报名/);
         modelCalls.push({ body, event: snapshot.last_event });
+        if (transport.snapshot) modelSnapshots.push({ pool: structuredClone([...pool.values()]), leads: structuredClone([...leads.values()]) });
         return send({ answers: { grade: { choice: 'A', confidence: 0.95 } } });
       }
       assert.equal(url.origin, 'https://open.feishu.cn');
@@ -136,11 +137,12 @@ esac`;
       assert.equal(req.headers.authorization, 'Bearer fixture-token');
       const match = url.pathname.match(/^\/open-apis\/bitable\/v1\/apps\/([^/]+)\/tables\/([^/]+)\/(fields|records)(?:\/([^/]+))?$/);
       assert.ok(match); const [, base, table, resource, encodedId] = match;
-      assert.equal(base, route.base); assert.ok([route.pool, route.lead].includes(table));
-      const store = table === route.pool ? pool : leads;
+      assert.equal(base, route.base); assert.ok([route.pool, route.lead, route.video].includes(table));
+      const store = table === route.pool ? pool : table === route.lead ? leads : videos;
       if (resource === 'fields') {
-        const names = table === route.pool ? RAW_COMMENT_FIELDS : ['采集时间'];
-        return send({ code: 0, data: { items: names.map(field_name => ({ field_name, type: 1 })) } });
+        const names = table === route.pool ? RAW_COMMENT_FIELDS : table === route.video
+          ? ['视频ID','视频链接','视频标题/文案','命中关键词','评论数','发现时间','处理状态','采收批次'] : ['采集时间'];
+        return send({ code: 0, data: { items: names.map(field_name => ({ field_name, type: table === route.video && field_name === '评论数' ? 2 : table === route.video && field_name === '视频链接' ? 15 : 1 })) } });
       }
       const id = encodedId && decodeURIComponent(encodedId);
       if (req.method === 'GET') {
@@ -166,7 +168,7 @@ esac`;
   const input = { run_tag: 'cecelia-cli-smoke', line_key: route.key,
     device: { profile: 'jinoshengyuan-work', serial: 'fixture-serial', lock_holder: 'cecelia-cli-smoke' },
     videos: statuses.map((_, i) => ({ video_id: ids[i], title: `AI课程${i + 1}`, keyword: 'AI 考证', duration: '00:30' })) };
-  return { home, env, input, receiptPath, pool, leads, calls, modelCalls, persistedEvents, errors };
+  return { home, env, input, receiptPath, pool, leads, videos, calls, modelCalls, persistedEvents, modelSnapshots, errors };
 }
 
 

@@ -114,7 +114,8 @@
         "input": {
           "run_tag": "$.run_tag",
           "line_key": "$.line_key",
-          "comments": "$.comments"
+          "comments": "$.comments",
+          "videos": "$.videos"
         },
         "on_failure": "continue",
         "max_attempts": 1,
