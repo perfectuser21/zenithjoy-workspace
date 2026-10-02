@@ -55,7 +55,7 @@ test('有规范UUID的Step必须在冻结计划出现，缺计划不得静默省
 test('异机复制冻结件且伪造WFR_HOSTKEY仍拒绝，零ledger和HTTP',async t=>{
  const dir=fixture(),file=join(dir,'run-definition.json');const {snapshot_sha256,...body}=JSON.parse(readFileSync(file,'utf8'));
  body.release.target='fixture';body.deployment.target='fixture';writeFileSync(file,JSON.stringify({...body,snapshot_sha256:digest(body)}));
- const s=await server(t,e=>({body:{binding:{id:'binding',run_id:'run__a1',...e.body}}}));
+ let requestBody;const s=await server(t,e=>{if(e.body)requestBody=e.body;return {body:{binding:{id:'binding',run_id:'run__a1',...requestBody}}};});
  const result=await cli(dir,s.url);assert.equal(result.code,1);assert.match(result.err,/实际.*机器|实际.*主机/);
  assert.equal(s.seen.length,0);assert.equal(existsSync(join(dir,'ledger.json')),false);assert.equal(existsSync(join(dir,'run-bindings')),false);
 });
