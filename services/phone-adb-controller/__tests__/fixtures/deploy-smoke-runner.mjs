@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {execFileSync,spawn} from 'node:child_process';
 import {resolve,join} from 'node:path';
 import {digest} from '../../runtime-definition.mjs';
+import {normalizedDescriptions} from './normalized-description-bindings.mjs';
 const deploy=resolve(process.argv[2]),root=execFileSync('git',['-C',resolve(deploy,'..'),'rev-parse','--show-toplevel'],{encoding:'utf8'}).trim();
 const sha=execFileSync('git',['-C',root,'rev-parse','HEAD'],{encoding:'utf8'}).trim();
 const repo='perfectuser21/zenithjoy-workspace',path='services/phone-adb-controller/douyin-phone-adb';
@@ -12,7 +13,7 @@ const activity='33333333-3333-4333-8333-333333333333',av='44444444-4444-4444-844
 const ids={'xian-m4':'55555555-5555-4555-8555-555555555555','xian-m1':'66666666-6666-4666-8666-666666666666'};
 const component={kind:'code',repo,path,revision:sha,digest:'sha256:'+digest(readFileSync(join(root,path)))};
 const row=(id,payload,extra)=>({id,...extra,source_repo:repo,source_path:'fixture-only.json',source_commit:sha,payload,payload_sha256:digest({source:{repo,path:'fixture-only.json',commit:sha},payload})});
-const definitions={workflows:[1,2].map(n=>{const id=`b1000000-0000-4000-8000-00000000000${n}`;return row(id,{workflow_id:id,activities:[{activity_id:activity,activity_version_id:av}]},{workflow_id:id});}),activities:[row(av,{activity_id:activity,steps:[],implementation_bindings:[{...component,status:'verified'}]},{activity_id:activity})]};
+const definitions={workflows:[1,2].map(n=>{const id=`b1000000-0000-4000-8000-00000000000${n}`;return row(id,{workflow_id:id,activities:[{activity_id:activity,activity_version_id:av}]},{workflow_id:id});}),activities:[row(av,{activity_id:activity,steps:[],implementation_bindings:[{...component,scope:'activity',status:'verified'},...normalizedDescriptions]},{activity_id:activity})]};
 const releases=Object.fromEntries(Object.entries(ids).map(([target,id])=>{const payload={...definitions,components:[{kind:'repo',repo,revision:sha},component],verification:{status:'verified'}};const release={id,target,environment:'fixture',payload};release.manifest_sha256=digest({environment:release.environment,target,payload});return [id,release];}));
 // 完整部署fixture把SSH采集明确映射到本地真实源文件；机器名只是运输桩，绝不代表设备验收。
 const originalSSH=execFileSync('/bin/sh',['-c','command -v ssh'],{encoding:'utf8'}).trim();

@@ -6,6 +6,7 @@ import {join} from 'node:path';
 import {execFileSync,spawn,spawnSync} from 'node:child_process';
 import {createServer} from 'node:http';
 import {digest} from '../runtime-definition.mjs';
+import {normalizedDescriptions} from './fixtures/normalized-description-bindings.mjs';
 const moduleUrl=new URL('../deployment-preflight.mjs',import.meta.url);
 async function implementation(){assert.ok(existsSync(moduleUrl),'部署必须具备真实release预检');return import(moduleUrl);}
 const repo='perfectuser21/zenithjoy-workspace',sha='a'.repeat(40);
@@ -15,7 +16,7 @@ const avId='33333333-3333-4333-8333-333333333333',aid='44444444-4444-4444-8444-4
 const file='services/phone-adb-controller/entry.sh',bytes=Buffer.from('fixed code\n');
 function row(id,payload,extra={}){const source={repo,path:'product-map/contracts/phone.json',commit:sha};return {id,...extra,source_repo:repo,source_path:source.path,source_commit:sha,payload,payload_sha256:digest({source,payload})};}
 export function fixture(){
- const binding={kind:'code',repo,path:file,revision:sha,digest:'sha256:'+digest(bytes),status:'verified'};
+ const binding={kind:'code',scope:'activity',repo,path:file,revision:sha,digest:'sha256:'+digest(bytes),status:'verified'};
  const activities=[row(avId,{activity_id:aid,implementation_bindings:[binding],steps:[]},{activity_id:aid})];
  const workflows=wid.map((id,i)=>row(vid[i],{workflow_id:id,key:['douyin_keyword_leadgen','douyin_benchmark_leadgen'][i],activities:[{activity_id:aid,activity_version_id:avId}]},{workflow_id:id}));
  const snapshot={schema_version:1,scope:'zenithjoy',repo,revision:sha,status:'verified',gaps:[],definitions:{workflows,activities}};
@@ -91,4 +92,42 @@ test('任一必填发布参数缺失时真实bash非零拒绝且不触SSH/scp',t
   assert.match(result.stderr,new RegExp(missing));
   assert.equal(existsSync(marker),false,`${missing}缺失时禁止运输副作用`);
  }
+});
+function withBindings(bindings){
+ const f=fixture(),{snapshot,report,receipt}=f.bundle,a=snapshot.definitions.activities[0];
+ a.payload.implementation_bindings=bindings;a.payload_sha256=digest({source:{repo:a.source_repo,path:a.source_path,commit:a.source_commit},payload:a.payload});
+ delete snapshot.snapshot_sha256;snapshot.snapshot_sha256=digest(snapshot);report.snapshot_sha256=snapshot.snapshot_sha256;
+ report.assertion_plan_sha256=digest(Object.fromEntries(['scope','source','definition_versions','expected_usages','required_assertions','assertion_source'].map(k=>[k,report[k]])));
+ Object.assign(receipt,{snapshot_sha256:snapshot.snapshot_sha256,assertion_plan_sha256:report.assertion_plan_sha256,report_sha256:digest(Buffer.from(JSON.stringify(report)))});
+ return f;
+}
+const validBinding=()=>fixture().bundle.snapshot.definitions.activities[0].payload.implementation_bindings[0];
+test('raw规范声明原样保留但不列组件，Activity固定Skill仍可作为入口',async()=>{
+ const {validateDeploymentEvidence}=await implementation();
+ for(const kind of ['code','skill']){
+  const bindings=[{...validBinding(),kind},...structuredClone(normalizedDescriptions)],before=structuredClone(bindings),f=withBindings(bindings);
+  const result=validateDeploymentEvidence(f.bundle,sha,()=>bytes);
+  assert.deepEqual(result.definitions.activities[0].payload.implementation_bindings,before);
+  assert.equal(result.components.length,2);assert.deepEqual(result.components.map(c=>c.kind).sort(),[kind,'repo'].sort());
+ }
+});
+const rejectedBindings={
+ '只有raw没有固定入口':()=>structuredClone(normalizedDescriptions),
+ '只有Step代码不能冒充Activity入口':()=>[{...validBinding(),scope:'step',step_key:'open_search'},...normalizedDescriptions],
+ '无scope不能冒充Activity入口':()=>[{...validBinding(),scope:undefined}],
+ '未知kind不能静默过滤':()=>[validBinding(),{kind:'extension',status:'unresolved'}],
+ 'raw伪标verified不能放行':()=>[validBinding(),{...normalizedDescriptions[0],status:'verified'}],
+ '额外坏Code仍拒':()=>[validBinding(),{...validBinding(),status:'unresolved'}],
+ '额外坏Skill仍拒':()=>[validBinding(),{...validBinding(),kind:'skill',status:'unresolved'}],
+ '组件错固定SHA仍拒':()=>[validBinding(),{...validBinding(),revision:'b'.repeat(40)}],
+ '组件路径穿越仍拒':()=>[validBinding(),{...validBinding(),path:'../entry.sh'}],
+};
+for(const [name,bindings] of Object.entries(rejectedBindings))test(name+'，网络前拒绝',async()=>{
+ const {prepareDeploymentReleases}=await implementation(),f=withBindings(bindings());let calls=0;
+ await assert.rejects(prepareDeploymentReleases({...f,sha,environment:'production',attemptKey:'github:42:100:1',readFile:()=>bytes,request:async()=>{calls++;}}),/部署预检: (缺Activity固定实现|实现绑定未核验|组件路径无效)/);
+ assert.equal(calls,0);
+});
+test('raw共存不放宽固定实现实际字节核验',async()=>{
+ const {validateDeploymentEvidence}=await implementation(),f=withBindings([validBinding(),...normalizedDescriptions]);
+ assert.throws(()=>validateDeploymentEvidence(f.bundle,sha,()=>Buffer.from('drift')),/本机部署组件字节不符/);
 });

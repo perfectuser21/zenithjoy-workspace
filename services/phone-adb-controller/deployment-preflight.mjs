@@ -26,10 +26,13 @@ function componentsFor(definitions,sha){
  for(const a of definitions.activities){
   requireThat(Array.isArray(a.payload.implementation_bindings)&&a.payload.implementation_bindings.length>0,'缺实现绑定');
   for(const b of a.payload.implementation_bindings){
+   // raw是规范化保留的来源描述，不是可执行组件，不能被伪标为已核验。
+   if(b.kind==='raw'&&b.status==='unresolved')continue;
    requireThat(['code','skill'].includes(b.kind)&&b.status==='verified'&&b.repo===DEPLOY_REPO&&b.revision===sha&&/^sha256:[0-9a-f]{64}$/.test(b.digest||''),'实现绑定未核验');
    requireThat(typeof b.path==='string'&&!b.path.startsWith('/')&&!b.path.includes('\\')&&!b.path.split('/').some(p=>['.','..',''].includes(p)),'组件路径无效');
    add({kind:b.kind,repo:b.repo,path:b.path,revision:b.revision,digest:b.digest});
   }
+  requireThat(a.payload.implementation_bindings.some(b=>b.scope==='activity'&&['code','skill'].includes(b.kind)&&b.status==='verified'),'缺Activity固定实现');
  }
  return [...components.values()].sort((a,b)=>key(a).localeCompare(key(b)));
 }
