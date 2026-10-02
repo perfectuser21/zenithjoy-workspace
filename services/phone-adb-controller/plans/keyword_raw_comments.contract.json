@@ -154,6 +154,14 @@
           "max_attempts": 1,
           "cleanup_grace_s": 30
         },
+        "implementation_bindings": [
+          {
+            "kind": "code",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/phone-adb-controller/wf-run.sh",
+            "revision": "contract"
+          }
+        ],
         "steps": [
           {
             "key": "acquire_device_lock",
@@ -479,6 +487,14 @@
           "max_attempts": 1,
           "cleanup_grace_s": 30
         },
+        "implementation_bindings": [
+          {
+            "kind": "code",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/phone-adb-controller/discover-keyword.sh",
+            "revision": "contract"
+          }
+        ],
         "model": [
           {
             "provider": "openrouter",
@@ -858,6 +874,14 @@
             "identity": "video_id"
           }
         },
+        "implementation_bindings": [
+          {
+            "kind": "code",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/phone-adb-controller/harvest-keyword.sh",
+            "revision": "contract"
+          }
+        ],
         "model": [
           {
             "provider": "dashscope",
@@ -1215,6 +1239,14 @@
             }
           }
         },
+        "implementation_bindings": [
+          {
+            "kind": "code",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/phone-adb-controller/harvest-keyword.sh",
+            "revision": "contract"
+          }
+        ],
         "model": [
           {
             "provider": "openrouter",
@@ -1559,6 +1591,14 @@
           "max_attempts": 1,
           "cleanup_grace_s": 30
         },
+        "implementation_bindings": [
+          {
+            "kind": "code",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/phone-adb-controller/batch2.sh",
+            "revision": "contract"
+          }
+        ],
         "steps": [
           {
             "key": "push_videos",
@@ -1785,6 +1825,14 @@
           "max_attempts": 1,
           "cleanup_grace_s": 30
         },
+        "implementation_bindings": [
+          {
+            "kind": "code",
+            "repo": "perfectuser21/zenithjoy-workspace",
+            "path": "services/phone-adb-controller/wf-run.sh",
+            "revision": "contract"
+          }
+        ],
         "steps": [
           {
             "key": "close_app",

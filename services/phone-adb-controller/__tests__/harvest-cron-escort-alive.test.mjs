@@ -97,5 +97,7 @@ test("harvest-cron.sh 源码：复核与注销都按 ESCORT_ID，不再按 escor
   assert.ok(!/grep -F "escort-\$HOSTKEY-\$TAG"/.test(src), "旧的按名字 grep -F 复核必须删除");
   assert.ok(/escort_alive "\$ESCORT_ID"/.test(src), "复核主体必须调用 escort_alive 按 id 判");
   // 1ebaeb00 起注销经 escort_dismiss 核过 name 后按 $id 删（$id = escort_current_id 取回的 ESCORT_ID / 看门狗重拉的新 id）
-  assert.ok(/openclaw cron rm \$(id|ESCORT_ID)\b/.test(src), "注销按 id");
+  assert.match(src, /^source "\$WF_HOME\/wf-run-lib\.sh" \|\| exit 1$/m);
+  const libSource = readFileSync(new URL("../wf-run-lib.sh", import.meta.url), "utf8");
+  assert.ok(/openclaw cron rm \$(id|ESCORT_ID)\b/.test(libSource), "注销按 id");
 });

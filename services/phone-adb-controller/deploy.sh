@@ -112,11 +112,11 @@ MMV_PROBE_FILES=(
 # 生产跑的却仍是 ~/.local/bin 的旧版本,音量棘轮修复完全没生效,最后靠人工 scp 才落地。
 # 漏任一目录 = 两份副本版本分叉,且部署过程不会报任何错。层26 smoke 守卫盯这件事。
 DEVICE_CTL_FILES=(
-  phone-lock-lib.sh phone-lock-helper.py douyin-phone-adb
+  phone-lock-lib.sh phone-lock-helper.py locate-element.py douyin-phone-adb
 )
 DEVICE_CTL_DIRS=(bin-harvest .local/bin)
 DEVICE_SH_FILES=(
-  harvest-keyword.sh video-phone-activity.sh batch2.sh harvest-cron.sh wf-run.sh discover-keyword.sh outreach-tick.sh
+  harvest-keyword.sh video-phone-activity.sh harvest-keyword-lib.sh batch2.sh harvest-cron.sh wf-run.sh wf-run-lib.sh discover-keyword.sh outreach-tick.sh
   refill-profile-links.sh wall-report.sh wall-lib.sh phone-wall-push.sh
   disk-gateway-guard.sh device-job-claimer.sh log-stream-push.sh
   workflow-result.sh discover-benchmark.sh wf-limits.sh wf-aftercare.sh install-phone-recovery.sh
@@ -125,7 +125,7 @@ DEVICE_SH_FILES=(
 # 少了它账本全程 WFR_WARN——单独成组,用 node --check 而不是 zsh -n 验语法。
 # 9032cdad: 步骤 DoD 统一裁判在执行机本地判 metric/evidence/log/tsv/ledger 类,清单 step-dod.json 由契约生成(json 用 JSON.parse 验)
 DEVICE_NODE_FILES=(
-  ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js line-routes.js
+  runtime-definition.mjs runtime-outbox.mjs runtime-receipts.mjs ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js line-routes.js
   own-accounts-lib.js check-own-account.js config/own-accounts.json
   video-activities.js video-activity.js
   batch-activities.js batch-activity.js keyword-workflow.js keyword-workflow-control.js keyword-workflow-activity.js
@@ -137,7 +137,11 @@ DEVICE_NODE_FILES=(
 )
 # 7f842d12 契约组装执行: wf-run.sh 读 ~/bin-harvest/plans/<能力>.plan(wf-plan.mjs 从契约生成、提交在仓库)。
 # 执行机没有仓库 node_modules,所以计划不在执行机上生成;漏发 = wf-run 拒跑并升级(不会静默跑错)。
-DEVICE_PLAN_FILES=(plans/keyword_acquisition.plan plans/benchmark_link_acquisition.plan plans/keyword_workflow.contract.json plans/keyword_raw_comments.contract.json)
+DEVICE_PLAN_FILES=(plans/keyword_acquisition.plan plans/benchmark_link_acquisition.plan plans/keyword_acquisition.steps.json plans/benchmark_link_acquisition.steps.json plans/keyword_workflow.contract.json plans/keyword_raw_comments.contract.json)
+# 在任何SSH前核验部署源字节属于固定commit；manifest最后发布，半次部署不能通过起跑核验。
+DEPLOY_MANIFEST=$(mktemp)
+trap 'rm -rf "$SKILL_BUILD_DIR"; rm -f "$DEPLOY_MANIFEST"' EXIT
+node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" "${DEVICE_CTL_FILES[@]}" > "$DEPLOY_MANIFEST"
 
 echo "=== [1/3] mmv:~/.openclaw/leadgen-scripts/ (判定链+数据层, ${#MMV_JS_FILES[@]} 个文件) ==="
 for f in "${MMV_JS_FILES[@]}"; do
@@ -248,8 +252,7 @@ for host in xian-m4 xian-m1; do
   for f in "${DEVICE_PLAN_FILES[@]}"; do
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
     push_atomic "$D/$f" "$host" "~/bin-harvest/plans" "$(basename "$f")"
-    if [[ "$f" == *.json ]]; then _pchk="/opt/homebrew/bin/node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f"
-    else _pchk="zsh -n ~/bin-harvest/$f"; fi
+    if [[ "$f" == *.json ]]; then _pchk="/opt/homebrew/bin/node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f"; else _pchk="zsh -n ~/bin-harvest/$f"; fi
     if ssh "$host" "$_pchk" 2>/tmp/deploy-err-$$; then
       echo "    ✅ $f"
     else
@@ -340,4 +343,7 @@ if [[ "$FAILED" == "1" ]]; then
   echo "⚠️ 部分文件语法检查失败,见上方 ❌ 标记——已同步的文件里可能有半成品,立刻核查"
   exit 1
 fi
+for host in xian-m4 xian-m1; do
+  push_atomic "$DEPLOY_MANIFEST" "$host" "~/bin-harvest" deployment-manifest.json
+done
 echo "✅ 全部同步完成(mmv + xian-m4 + xian-m1,控制器覆盖两个执行路径),每个文件都过了语法检查。"

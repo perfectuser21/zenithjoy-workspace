@@ -9,6 +9,10 @@ fail() { echo "::error::phone-adb-controller-smoke: $1"; exit 1; }
 # 禁止 `echo "$VAR" | grep`——本文件头部是 set -euo pipefail,大变量下 grep 命中即退、
 # echo 收 SIGPIPE 退 141,pipefail 把整条管道判失败 → `if...then fail` 永不触发(实锤假绿)。
 
+# 拆分函数必须仍由真实入口加载，下面的函数守卫检查其真身文件。
+grep -qE '^source "\$WF_HOME/wf-run-lib\.sh" \|\| exit 1$' "$D/wf-run.sh" || fail "wf-run 未加载函数库"
+[[ -s "$D/wf-run-lib.sh" ]] || fail "wf-run-lib.sh 缺失或为空"
+
 # 层0: 八件套存在
 for f in douyin-phone-adb harvest-keyword.sh refill-profile-links.sh push-leads.js update-profile-links.js next-outreach.js next-outreach-lib.js outreach-tick.sh; do
   [[ -s "$D/$f" ]] || fail "$f 缺失或为空"
@@ -27,8 +31,8 @@ fi
 # 层21: commenter-identity 必须在**逐屏**(NEWLINES)上做,不能在**翻完屏后的累积列表**(CC)上做
 # (0923生产实证:三台并发批次、两条业务线,逐行身份验证100%炸"nickname mismatch"——根因是
 # 翻屏累积再统一处理时,早期屏的tap坐标早就对不上手机翻到最后一屏后的实际画面)。
-grep -qE 'for CLINE in "\$\{\(f\)NEWLINES\}"' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 的身份验证循环没有改成逐屏处理(NEWLINES),翻屏后tap坐标必然作废"
-if grep -B3 'commenter-identity' "$D/harvest-keyword.sh" | grep -qE 'for CLINE in "\$\{\(f\)CC\}"'; then
+grep -qE 'for CLINE in "\$\{\(f\)NEWLINES\}"' "$D/harvest-keyword-lib.sh" || fail "harvest-keyword.sh 的身份验证循环没有改成逐屏处理(NEWLINES),翻屏后tap坐标必然作废"
+if grep -B3 'commenter-identity' "$D/harvest-keyword-lib.sh" | grep -qE 'for CLINE in "\$\{\(f\)CC\}"'; then
   fail "harvest-keyword.sh 身份验证仍在累积列表(CC)上做,复发0923的翻屏坐标失效bug"
 fi
 node --check "$D/push-leads.js" || fail "push-leads.js 语法错误"
@@ -108,18 +112,18 @@ grep -qF '> "$COUNT_FILE"' <<< "$RATELIMIT_BRANCH2" && fail "风控分支不该�
 grep -qF 'requeue_transient' "$D/outreach-tick.sh" || fail "tick 未接 requeue_transient"
 # 层6: 夜批run伴随Commander(决策dcdaa83e: 起跑拉起escort,收工注销,辅佐姿态)
 grep -qF 'escort-' "$D/wf-run.sh" || fail "harvest 未拉起伴随escort"
-grep -qF 'cron rm' "$D/wf-run.sh" || fail "harvest 未注销escort(泄漏cron)"
+grep -qF 'cron rm' "$D/wf-run-lib.sh" || fail "harvest 未注销escort(泄漏cron)"
 # 0927 决策 711ca6cf: escort 30s 复核只按 id——cron list 表格 Name 列定宽截断(escort-xian-m4-auto09...),
 # 按名字 grep 永不命中,两批误升级分身。复核/注销一律 ESCORT_ID,禁止回抄 name 列 grep。
-if grep -qF 'grep -F "escort-$HOSTKEY-$TAG"' "$D/wf-run.sh"; then fail "escort 复核按截断的 name 列 grep 复活(0927 假阳性根因,必须按 ESCORT_ID 判)"; fi
+if grep -qF 'grep -F "escort-$HOSTKEY-$TAG"' "$D/wf-run.sh" "$D/wf-run-lib.sh"; then fail "escort 复核按截断的 name 列 grep 复活(0927 假阳性根因,必须按 ESCORT_ID 判)"; fi
 grep -qF 'escort_alive "$ESCORT_ID"' "$D/wf-run.sh" || fail "escort 复核未走 escort_alive 按 id 判"
-grep -qF 'cron list --json' "$D/wf-run.sh" || fail "escort_alive 未优先走 cron list --json"
+grep -qF 'cron list --json' "$D/wf-run-lib.sh" || fail "escort_alive 未优先走 cron list --json"
 [[ -s "$D/cmdr-escort.txt" ]] || fail "escort SOP文件缺失"
 grep -qF '帮不拦' "$D/cmdr-escort.txt" || fail "escort SOP缺辅佐三原则"
 # 0930 任务 1ebaeb00(决策 3c98fb36 阶段1·稳): escort 在途被自己注销 → run 死循环无人陪跑。
 # wf-run 注销只删 name 全等本 run 的 cron + 在途看门狗重拉; SOP 自杀条款只认「本 TAG 批完成 / 进程已退」。
 grep -qF 'escort_watch_start' "$D/wf-run.sh" || fail "wf-run 缺 escort 在途看门狗(被删不重拉,0930 死循环复发)"
-grep -qF 'escort注销拒绝' "$D/wf-run.sh" || fail "wf-run escort_dismiss 退回盲删(未核 name 就 cron rm)"
+grep -qF 'escort注销拒绝' "$D/wf-run-lib.sh" || fail "wf-run escort_dismiss 退回盲删(未核 name 就 cron rm)"
 grep -qF '本 TAG' "$D/cmdr-escort.txt" || fail "cmdr-escort.txt 自杀条款缺「本 TAG 批完成」判据(凭日志停滞就自杀会复发)"
 grep -qF 'pgrep -f "wf-run.sh.*--tag' "$D/cmdr-escort.txt" || fail "cmdr-escort.txt 缺进程级收工复核"
 # 0930 任务 17ea4536: Brain 看门狗只认心跳——SOP 每轮末尾必发心跳,启动器起跑后向 Brain 登记 escort id
@@ -218,10 +222,10 @@ grep -qE '^exec /bin/zsh "\$\{0:A:h\}/wf-run.sh" keyword_acquisition "\$@"$' "$D
 grep -qF 'HARVEST_CRON_LIB' "$D/harvest-cron.sh" || fail "harvest-cron.sh 薄壳丢了库模式(HARVEST_CRON_LIB=1 source),既有单测会全挂"
 # 5b: escort 拉起必须用 custom session 且带机器名(0915首夜实证: M4/M1同分钟起跑TAG撞名,
 #     session 不带 HOSTKEY=两机escort共享会话互相污染,name 不带=SOP自杀条款按名找id误杀对方)
-grep -qF -- "--session 'session:escort-\$HOSTKEY-\$TAG'" "$D/wf-run.sh" || fail "escort 会话未带 HOSTKEY(session:escort-\$HOSTKEY-\$TAG),同分钟跨机撞名串线"
-grep -qF -- "--name 'escort-\$HOSTKEY-\$TAG'" "$D/wf-run.sh" || fail "escort cron名未带 HOSTKEY(escort-\$HOSTKEY-\$TAG),自杀条款按名找id会误杀对方"
-if grep -F -- "--session isolated" "$D/wf-run.sh" | grep -qF "escort-"; then fail "escort 拉起回退成 --session isolated(失忆形态复活)"; fi
-if grep -F -- "--session isolated" "$D/wf-run.sh" | grep -qF "escort-"; then fail "escort 拉起回退成 --session isolated(失忆形态复活)"; fi
+grep -qF -- "--session 'session:escort-\$HOSTKEY-\$TAG'" "$D/wf-run-lib.sh" || fail "escort 会话未带 HOSTKEY(session:escort-\$HOSTKEY-\$TAG),同分钟跨机撞名串线"
+grep -qF -- "--name 'escort-\$HOSTKEY-\$TAG'" "$D/wf-run-lib.sh" || fail "escort cron名未带 HOSTKEY(escort-\$HOSTKEY-\$TAG),自杀条款按名找id会误杀对方"
+if grep -F -- "--session isolated" "$D/wf-run-lib.sh" | grep -qF "escort-"; then fail "escort 拉起回退成 --session isolated(失忆形态复活)"; fi
+if grep -F -- "--session isolated" "$D/wf-run-lib.sh" | grep -qF "escort-"; then fail "escort 拉起回退成 --session isolated(失忆形态复活)"; fi
 # 5c: SOP 必须带 FINDINGS 夜际记忆条款(读历史判例+追加新判例)
 grep -qF "escort-findings.md" "$D/cmdr-escort.txt" || fail "cmdr-escort.txt 缺 escort-findings.md 夜际记忆条款"
 
@@ -272,7 +276,7 @@ grep -qF 'escalation.log' "$D/cmdr-escort.txt" || fail "cmdr-escort.txt 缺升�
 # 层7: Commander第一步上岗+失败不静默(0916主理人指出;昨晚凌晨三批静默全灭6小时无告警的根治)
 H="$D/wf-run.sh"
 # 7a: escort 拉起必须排在 preflight(设备检查)与取词单之前——Commander是第一步,不是第三步
-_ln_escort=$(grep -n 'openclaw cron add' "$H" | head -1 | cut -d: -f1)
+_ln_escort=$(grep -n 'ESCORT_ID=$(escort_add)' "$H" | head -1 | cut -d: -f1)
 _ln_pre=$(grep -n 'mWakefulness' "$H" | head -1 | cut -d: -f1)
 _ln_kw=$(grep -n 'next-keywords.js' "$H" | head -1 | cut -d: -f1)
 [[ -n "$_ln_escort" && -n "$_ln_pre" && -n "$_ln_kw" ]] || fail "harvest-cron.sh 关键锚点缺失(escort拉起/preflight/取词单)"
@@ -459,7 +463,7 @@ lines = [line for line in pathlib.Path(sys.argv[1]).read_text().splitlines() if 
 if len(lines) != 1:
     sys.exit('控制器 C= 赋值必须唯一')
 value = lines[0][2:]
-match = re.fullmatch(r'"\$\{DOUYIN_PHONE_CONTROLLER:-([^{}]+)\}"', value)
+match = re.fullmatch(r'"\$\{DOUYIN_PHONE_ADB:-\$\{DOUYIN_PHONE_CONTROLLER:-([^{}]+)\}\}"', value)
 if match:
     value = match.group(1)
 elif value.startswith('"') and value.endswith('"'):
@@ -471,6 +475,8 @@ if not re.fullmatch(r'~/[A-Za-z0-9._/-]+/douyin-phone-adb', value):
 print(value)
 PY
 ) || fail '无法从唯一 C= 赋值解析默认控制器路径'
+grep -qF 'C="$WF_FROZEN_ROOT/douyin-phone-adb"' "$D/wf-run-lib.sh" || fail "冻结run未使用私有控制器"
+grep -qF 'export DOUYIN_PHONE_ADB="$C"' "$D/wf-run-lib.sh" || fail "冻结run未传递控制器路径"
 if [[ -n "$_CALL_PATH" ]]; then
   # 调用方用的目录（去掉文件名），必须出现在 deploy.sh 的下发目标里
   _CALL_DIR="${_CALL_PATH%/douyin-phone-adb}"
@@ -663,12 +669,15 @@ done
 #   (不能只有title兜底) ③触发端: batch2.sh必须把录到的音频传到mmv并调用judge-video.js。
 grep -qE 'await upsertVideo\(pool' "$D/push-videos.js" || fail "push-videos.js 未接入Postgres双写(judge-video.js会永远无数据可判)"
 grep -qF 'leadgen-db-connect' "$D/push-videos.js" || fail "push-videos.js 未引入leadgen-db-connect(Postgres连接缺失)"
-grep -qF 'record-start' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 未接真机录制(record-start),视频判定只能靠标题兜底"
-grep -qF 'record-extract-audio' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 未接音频提取(record-extract-audio)"
+grep -qF 'record-start' "$D/harvest-keyword-lib.sh" || fail "harvest-keyword.sh 未接真机录制(record-start),视频判定只能靠标题兜底"
+grep -qF 'record-extract-audio' "$D/harvest-keyword-lib.sh" || fail "harvest-keyword.sh 未接音频提取(record-extract-audio)"
 # 8bb3af55 先判后采(决策 f18f56b8①): 触发端从 batch2.sh 落池之后前移到 harvest-keyword.sh 逐视频开评论区之前——
 #   discover(候选落库) → judge(音频 scp 到 mmv 交给判定) → 只有 matched 才 open-comments → collected(评论已采)。
 #   反向守卫: batch2.sh 落池后不得再跑 judge-video.js(那时评论早已采完,判了也挡不住,先采后判复活)。
-_HK_CODE="$(grep -vE '^[[:space:]]*#' "$D/harvest-keyword.sh")"
+_HK_CODE="$(cat "$D/harvest-keyword-lib.sh" "$D/harvest-keyword.sh" | grep -vE '^[[:space:]]*#')"
+for _fn in qualify_current_video collect_current_video; do
+  grep -qE "^[[:space:]]+$_fn([[:space:]]|$)" "$D/harvest-keyword.sh" || fail "harvest未调用 $_fn"
+done
 [[ -s "$D/qualify-video.js" ]] || fail "qualify-video.js 缺失(先判后采的远端判定入口)"
 node --check "$D/qualify-video.js" || fail "qualify-video.js 语法错误"
 for _q in 'qual_remote discover' 'qual_remote judge' 'qual_remote collected'; do
@@ -689,7 +698,8 @@ _PV_SSH_LINE="$(grep 'node .*push-videos\.js' "$D/batch2.sh" | grep 'ssh ' || tr
 grep -qF 'source ~/.credentials/zenithjoy-db.env' <<< "$_PV_SSH_LINE" \
   || fail "batch2.sh 调用push-videos.js的ssh命令没有source ~/.credentials/zenithjoy-db.env(Postgres双写会静默连错库)"
 # 8bb3af55: 判定触发端移到 harvest-keyword.sh 的 qual_remote(唯一一条 ssh),同样必须先 source 凭据
-_QR_SSH_LINE="$(grep 'node qualify-video\.js' "$D/harvest-keyword.sh" | grep 'ssh ' || true)"
+grep -qE '^source "\$\{0:A:h\}/harvest-keyword-lib\.sh" \|\| exit 1$' "$D/harvest-keyword.sh" || fail "harvest未加载判定函数库"
+_QR_SSH_LINE="$(grep 'node qualify-video\.js' "$D/harvest-keyword-lib.sh" | grep 'ssh ' || true)"
 [[ -n "$_QR_SSH_LINE" ]] || fail "harvest-keyword.sh 找不到调用 qualify-video.js 的 ssh(层23应该已经守住,层24逻辑错了)"
 grep -qF 'source ~/.credentials/zenithjoy-db.env' <<< "$_QR_SSH_LINE" \
   || fail "harvest-keyword.sh 调 qualify-video.js 的 ssh 没有 source ~/.credentials/zenithjoy-db.env(判定读写不到 Postgres)"
@@ -749,14 +759,16 @@ _MDB_STMT="$(awk '/mean_db="\$\(/{f=1} f{print; if (!/\\$/) exit}' <<< "$_RSTOP_
 grep -q 'volumedetect' <<< "$_MDB_STMT" || fail "mean_db 不是用 ffmpeg volumedetect 实测的(写死值=假打点,新机型翻车照样看不见)"
 grep -q '|| true' <<< "$_MDB_STMT" || fail "mean_db 的命令替换没带 || true(set -e 下 ffmpeg 一失败就打死整个控制器,连 record_stopped 都发不出去)"
 # 打点不进日志 = 等于没打
-grep -q 'mean_volume_db' "$D/harvest-keyword.sh" || fail "harvest-keyword.sh 没把 mean_volume_db 写进采收日志(打点没人看得见,等于没做)"
+grep -q 'mean_volume_db' "$D/harvest-keyword-lib.sh" || fail "harvest-keyword.sh 没把 mean_volume_db 写进采收日志(打点没人看得见,等于没做)"
 
 # 层28: 棒1 回执线(决策 702949b6/280bd091)——账本 stage/finalize 必须 best-effort 回执 Brain execution-callback,
 # 且 brain_task_id 的整条取数链(服务端返回体 → wall-report stdout → harvest-cron export)一环都不能断:
 # 断任一环,wfr 全程 "brain callback skipped",工件照写、日志照绿,Brain task_runs 永远空——静默失效形态。
-grep -qF '/api/brain/execution-callback' "$D/workflow-result.sh" || fail "workflow-result.sh 未接 Brain execution-callback 回执"
+grep -qF '/api/brain/execution-callback' "$D/runtime-receipts.mjs" || fail "workflow-result.sh 未接 Brain execution-callback 回执"
+grep -qF 'runtime-receipts.mjs}' "$D/workflow-result.sh" || fail "workflow-result未加载可靠回执模块"
+grep -qF '"$WFR_RUNTIME_MJS" callback' "$D/workflow-result.sh" || fail "回执未调用可靠发送入口"
 grep -qF 'brain_post' "$D/workflow-result.sh" || fail "workflow-result.sh 缺 brain_post(回执函数被删/改名)"
-grep -qF 'Authorization: Bearer $BRAIN_INTERNAL_TOKEN' "$D/workflow-result.sh" || fail "workflow-result.sh 回执未带 Bearer 内部 token(Brain 侧 internalAuthOrLoopback 会 401)"
+grep -qF 'Authorization: Bearer ${e.BRAIN_INTERNAL_TOKEN}' "$D/runtime-receipts.mjs" || fail "workflow-result.sh 回执未带 Bearer 内部 token(Brain 侧 internalAuthOrLoopback 会 401)"
 grep -qF 'brain callback skipped' "$D/workflow-result.sh" || fail "workflow-result.sh 缺 env 时不记 skipped 日志(静默失效不可见)"
 grep -qF 'WFR_BRAIN_TASK_ID=' "$D/wall-report.sh" || fail "wall-report.sh do_start 未把 brain_task_id 打到 stdout"
 grep -qF 'export WFR_BRAIN_TASK_ID' "$D/wf-run.sh" || fail "harvest-cron.sh 未 export WFR_BRAIN_TASK_ID(子进程 wfr 看不到)"
@@ -774,7 +786,7 @@ grep -qF -- '--argjson probes' "$D/workflow-result.sh" || fail "workflow-result.
 grep -qF 'WFR_PROBE_HOST="${WFR_PROBE_HOST:-mmv}"' "$D/workflow-result.sh" || fail "workflow-result.sh probe_stage 未经 ssh 到 WFR_PROBE_HOST(默认 mmv)执行(执行机本地跑 PG/飞书探针必 error)"
 grep -qF 'source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; cd $WFR_PROBE_DIR && node verify-step.mjs' "$D/workflow-result.sh" || fail "probe_stage 远端命令形状漂离 batch2.sh:55(须先 source zenithjoy-db.env 再 cd WFR_PROBE_DIR 跑 verify-step)"
 grep -qF 'resolveLineKey(' "$D/verify-step.mjs" || fail "verify-step.mjs 未把 --line-key(profile 名)经 routeOf().key 归一(SQL 按 line_key 过滤会读 0)"
-grep -qF 'WFR_TAG WFR_PROFILE' "$D/wf-run.sh" || fail "harvest-cron.sh 未 export WFR_TAG WFR_PROFILE(子进程 wfr 拿不到 --run-tag/--line-key)"
+grep -qF 'WFR_TAG WFR_PROFILE' "$D/wf-run-lib.sh" || fail "harvest-cron.sh 未 export WFR_TAG WFR_PROFILE(子进程 wfr 拿不到 --run-tag/--line-key)"
 for pat in 'leadgen-scripts/' 'WFR_PROBE_HOST' 'zenithjoy-db.env'; do
   grep -qF "$pat" "$D/README.md" || fail "README 基座 1/7 部署段缺 $pat(部署漏件/落错机器=探针全程 error)"
 done
@@ -791,7 +803,7 @@ for st in discovery collection delivery; do
   grep -qE "wfr stage $st " <<< "$_B2" || fail "batch2.sh 未写账本 stage $st"
 done
 grep -qF 'harvest-keyword.sh}" "$P" "$ENC" "$MAXV" "$TAG-w$n" unlimited "$LINE"' <<< "$_B2" || fail "batch2.sh 调 harvest-keyword.sh 的签名漂了(必须原样 P ENC MAXV TAG unlimited LINE——LINE 第6参丢了=悦升数据写进金诺表)"
-_HC="$(grep -vE '^[[:space:]]*#' "$D/wf-run.sh")"
+_HC="$(cat "$D/wf-run.sh" "$D/wf-run-lib.sh" | grep -vE '^[[:space:]]*#')"
 grep -qE '^wfr_bootstrap\(\)' <<< "$_HC" || fail "harvest-cron.sh 缺 wfr_bootstrap()(init→export→enter→export,否则账本 attempt_id 永远 null)"
 grep -qE '^run_finalize\(\)' <<< "$_HC" || fail "harvest-cron.sh 缺 run_finalize()(收工不记账)"
 grep -qE "trap .*run_finalize" <<< "$_HC" || fail "harvest-cron.sh 的 trap 没挂 run_finalize(早退路径不收工)"

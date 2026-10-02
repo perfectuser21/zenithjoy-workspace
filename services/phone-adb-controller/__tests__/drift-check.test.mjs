@@ -116,7 +116,8 @@ test("--list: 从真实 deploy.sh 解析出全部部署目标(两个控制器目
   });
   assert.equal(r.status, 0, r.stderr);
   const lines = r.stdout.split("\n").filter(Boolean);
-  const deploy = readFileSync(join(SRC, "deploy.sh"), "utf8");
+  // --list读取DRIFT_REF=HEAD；期望也取同一固定commit，避免把未提交工作树与HEAD混比。
+  const deploy = spawnSync("git", ["-C", SRC, "show", "HEAD:services/phone-adb-controller/deploy.sh"], {encoding:"utf8"}).stdout;
   const arr = (name) => {
     const m = deploy.match(new RegExp(`^${name}=\\(([\\s\\S]*?)\\)`, "m"));
     return m[1].split("\n").map((l) => l.replace(/#.*/, "")).join(" ").split(/\s+/).filter(Boolean);

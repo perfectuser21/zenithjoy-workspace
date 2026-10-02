@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # workflow-result.sh — crontab 获客流水线的 WORKER_RESULT 工件写手（基座 1/7）。
-# 永远 exit 0，绝不阻塞主流程（照 wall-report.sh 范式）。子命令把导出变量打印到 stdout，调用方 eval。
+# prepare 在起跑前严格校验并可失败；运行后的证据故障保留outbox，不覆盖业务结果。子命令stdout供eval。
 # 用法:
 #   eval "$(workflow-result.sh init <TAG> <profile> <wordfile> <push> <serial> <hostkey>)"
 #   eval "$(workflow-result.sh enter)"
@@ -11,6 +11,7 @@
 #   workflow-result.sh hash <profile> <wordfile> <push>
 # 契约: protocol.md WORKER_RESULT（schema_version=2 / evidence 非空 / metrics 闭集）；判定点 544cd6a3 判据用产物。
 set -u
+WFR_RUNTIME_MJS="${WFR_RUNTIME_MJS:-$(cd "$(dirname "$0")" && pwd)/runtime-receipts.mjs}"
 WFR_HOME="${WFR_HOME:-$HOME/.config/zenithjoy}"
 WFR_NODE="${WFR_NODE:-/opt/homebrew/bin/node}"
 WFR_JQ="${WFR_JQ:-/usr/bin/jq}"
@@ -26,6 +27,8 @@ if [[ ( -z "${BRAIN_URL:-}" || -z "${BRAIN_INTERNAL_TOKEN:-}" ) && -r "$WFR_BRAI
   . "$WFR_BRAIN_ENV"
   [[ -n "$_wfr_u" ]] && BRAIN_URL="$_wfr_u"; [[ -n "$_wfr_t" ]] && BRAIN_INTERNAL_TOKEN="$_wfr_t"
 fi
+export BRAIN_URL BRAIN_INTERNAL_TOKEN
+[[ -r "${WFR_RUN_DIR:-/nonexistent}/step-dod.json" ]] && WFR_STEP_SPEC="$WFR_RUN_DIR/step-dod.json"
 # 棒3b 探针读回(决策 95e29afd): stage 回执前把探针 observed 读回, Brain 只判定。
 # 棒3b-2(决策 8f38f5fd): 读回改经 ssh 在 MMV 跑——leadgen PG(zenithjoy 库)只在 MMV 127.0.0.1:5432 监听、飞书凭据
 # ~/.openclaw/clawdbot.json 也只在 MMV,执行机(xian-m4/M1)本地跑 verify-step 三条必 error(09-26 实证)。远端命令形状完全照
@@ -56,7 +59,13 @@ probe_stage(){
   stage_has_probes "$stage" || { echo "{\"probes\":[],\"gate\":$GATE_NONE,\"steps\":[]}"; return 0; }
   remote="set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; cd $WFR_PROBE_DIR && node verify-step.mjs --stage $(sq "$stage") --run-tag $(sq "${WFR_TAG:-${WFR_RUN_ID#social-keyword-leadgen-crontab-}}") --line-key $(sq "${WFR_PROFILE:-}") --word $(sq "$word")"
   [[ -n "$metrics" ]] && remote="$remote --metrics $(sq "$metrics")"
-  remote="$remote --steps"
+  if [[ -r "${WFR_RUN_DIR:-/nonexistent}/step-dod.json" ]]; then
+    local encoded
+    encoded=$(base64 < "$WFR_RUN_DIR/step-dod.json" | tr -d '\n')
+    remote="step_spec=\$(mktemp); trap 'rm -f \"\$step_spec\"' EXIT; printf %s $(sq "$encoded") | node -e 'process.stdout.write(Buffer.from(require(\"fs\").readFileSync(0,\"utf8\"),\"base64\"))' > \"\$step_spec\"; $remote --steps \"\$step_spec\""
+  else
+    remote="$remote --steps"
+  fi
   errf=$(mktemp 2>/dev/null || echo /dev/null)
   out=$(ssh -o ConnectTimeout=20 -o BatchMode=yes "$WFR_PROBE_HOST" "$remote" 2>"$errf") || rc=$?
   # 远端 stderr(verify-step: 单条 error / ssh 报错)原样透传到本机 stderr → harvest-cron.log 可查
@@ -108,12 +117,11 @@ apply_gate(){
   return 0
 }
 # brain_post: run_id status stage artifact_file extra_evidence_json [probes_json] —— best-effort POST Brain execution-callback。
-# 缺 BRAIN_URL/BRAIN_INTERNAL_TOKEN/WFR_BRAIN_TASK_ID 任一 → 记 skipped 返回; curl 失败记 raw 输出; 任何情况 return 0。
+# 缺 endpoint/task 身份记 skipped；缺 token/网络故障保留 pending，后续有界重传。
 # result 直接从校验通过的工件派生({stage,stage_status,metrics,evidence,probes}),Brain 侧 task_runs.result 原样保留。
 brain_post(){
   local run_id="$1" status="$2" stage="$3" f="${4:-}" extra="${5:-[]}" probes="${6:-[]}" missing="" body out code
   [[ -n "${BRAIN_URL:-}" ]] || missing="$missing BRAIN_URL"
-  [[ -n "${BRAIN_INTERNAL_TOKEN:-}" ]] || missing="$missing BRAIN_INTERNAL_TOKEN"
   [[ -n "${WFR_BRAIN_TASK_ID:-}" ]] || missing="$missing WFR_BRAIN_TASK_ID"
   if [[ -n "$missing" ]]; then warn "brain callback skipped: missing$missing (run_id=$run_id)"; return 0; fi
   if [[ -n "$f" && -s "$f" ]]; then
@@ -126,55 +134,14 @@ brain_post(){
       '{task_id:$t,run_id:$r,status:$s,result:{stage:$st,stage_status:"failed",metrics:{},evidence:$extra,probes:$probes}}' 2>&1) \
       || { warn "brain callback body build failed (run_id=$run_id): $body"; return 0; }
   fi
-  out=$(curl -s --connect-timeout 3 -m 8 -w '\n%{http_code}' -X POST "${BRAIN_URL%/}/api/brain/execution-callback" \
-        -H "Authorization: Bearer $BRAIN_INTERNAL_TOKEN" -H 'Content-Type: application/json' -d "$body" 2>&1) \
-    || { warn "brain callback curl failed (run_id=$run_id): $out"; return 0; }
-  code=${out##*$'\n'}
-  case "$code" in 2*) ;; *) warn "brain callback HTTP $code (run_id=$run_id): ${out%$'\n'*}";; esac
+  printf '%s' "$body" | "$WFR_NODE" "$WFR_RUNTIME_MJS" callback || warn "brain callback pending in outbox (run_id=$run_id)"
   return 0
 }
-# ── span 上报（价值流建模④b，决策 3e867cad）：每个 Backbone Activity 的工件写成后向 Brain 报一条运行记录 ──
-# cmd09300230 批 134/134 走兜底重搜跑了 6 小时而结果探针全绿——过程指标（时长/重试/兜底）没人记，这里补。
-# 契约 POST /api/brain/spans（数组批量，Bearer 内部 token）；幂等键 (run_id, activity_id, started_at)，所以 started_at
-# 取 mark-start 写下的标记（同 stage/n 重发不变），没标记才退回工件 observed_at。上报失败只 warn，绝不影响主流程。
-WFR_SPAN_JOURNEY_ID="${WFR_SPAN_JOURNEY_ID:-afa6abca-53c0-4815-8594-b7fb81ca547f}"
-span_marker(){ printf '%s' "${WFR_RUN_DIR:-/nonexistent}/span-start.${WFR_ATTEMPT:-a0}.$1.$2"; }
-span_mark_start(){ local m; m=$(span_marker "$1" "$2"); [[ -s "$m" ]] || date -u +%Y-%m-%dT%H:%M:%SZ > "$m" 2>/dev/null || warn "span mark-start write failed ($1/$2)"; }
-# 活动表一次 GET 缓存进 run 目录；解析 activity_key → "id workflow_id"，取不到留空（evidence 里仍带 activity_key）
-span_activity(){
-  local cache="${WFR_RUN_DIR:-/nonexistent}/activities.json" out
-  if [[ ! -s "$cache" ]]; then
-    out=$(curl -s --connect-timeout 3 -m 6 "${BRAIN_URL%/}/api/brain/journey_steps?journey_id=${WFR_SPAN_JOURNEY_ID}&limit=200" 2>/dev/null) || out=""
-    printf '%s' "$out" | "$WFR_JQ" -c 'if type=="array" then . else [] end' > "$cache" 2>/dev/null || printf '[]' > "$cache"
-  fi
-  "$WFR_JQ" -r --arg k "$1" '[.[] | select(.activity_key==$k)] | sort_by(.backbone_version) | last // empty | "\(.id) \(.workflow_id // "")"' "$cache" 2>/dev/null
-}
-span_post(){ # stage status n artifact_file [word]
-  local stage="$1" status="$2" n="$3" f="$4" word="${5:-}"
-  if [[ -z "${BRAIN_URL:-}" || -z "${BRAIN_INTERNAL_TOKEN:-}" ]]; then warn "span skipped: missing BRAIN_URL/BRAIN_INTERNAL_TOKEN (stage=$stage)"; return 0; fi
-  local started ended ex_kind outcome fallback=false attempts=1 rescan rate act aid wid body out code m
-  ended=$("$WFR_JQ" -r '.observed_at // empty' "$f" 2>/dev/null); [[ -n "$ended" ]] || ended=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  m=$(span_marker "$stage" "$n"); if [[ -s "$m" ]]; then started=$(<"$m"); else started="$ended"; fi
-  case "$stage" in qualification|scoring) ex_kind=agent;; *) ex_kind=code;; esac
-  case "$status" in completed) outcome=pass;; failed) outcome=fail;; blocked) outcome=skipped;; *) outcome=unknown;; esac
-  rescan=$("$WFR_JQ" -r '.metrics.rescan_count // 0' "$f" 2>/dev/null); rescan=${rescan%.*}; [[ "$rescan" =~ ^[0-9]+$ ]] || rescan=0
-  rate=$("$WFR_JQ" -r '.metrics.rescan_rate // 0' "$f" 2>/dev/null); [[ "$rate" =~ ^[0-9.]+$ ]] || rate=0
-  if [[ "$stage" == collection ]] && (( rescan > 0 )); then fallback=true; attempts=$(( rescan + 1 )); fi
-  act=$(span_activity "$stage" || true); aid="${act%% *}"; wid="${act#* }"; [[ "$wid" == "$act" ]] && wid=""
-  body=$("$WFR_JQ" -cn --arg run "${WFR_RUN_ID:-}__${WFR_ATTEMPT:-a0}" --arg aid "$aid" --arg wid "$wid" --arg st "$started" --arg en "$ended" \
-      --arg ek "$ex_kind" --arg eid "${WFR_HOSTKEY:-$(hostname -s 2>/dev/null || echo unknown)}" --argjson att "$attempts" --argjson fb "$fallback" \
-      --arg oc "$outcome" --arg stage "$stage" --argjson n "$n" --arg w "$word" --arg art "$(basename "$f")" --argjson rc "$rescan" --argjson rr "$rate" \
-      '[{run_id:$run, workflow_id:(if $wid=="" then null else $wid end), activity_id:(if $aid=="" then null else $aid end),
-         step_id:null, enabler_id:null, started_at:$st, ended_at:$en, executor_kind:$ek, executor_id:$eid,
-         attempts:$att, fallback:$fb, outcome:$oc,
-         evidence:{activity_key:$stage, stage_attempt:$n, word:$w, artifact:$art, rescan_count:$rc, rescan_rate:$rr}}]' 2>&1) \
-    || { warn "span body build failed (stage=$stage): $body"; return 0; }
-  out=$(curl -s --connect-timeout 3 -m 8 -w '\n%{http_code}' -X POST "${BRAIN_URL%/}/api/brain/spans" \
-        -H "Authorization: Bearer $BRAIN_INTERNAL_TOKEN" -H 'Content-Type: application/json' -d "$body" 2>&1) \
-    || { warn "span curl failed (stage=$stage): $out"; return 0; }
-  code=${out##*$'\n'}
-  case "$code" in 2*) ;; *) warn "span HTTP $code (stage=$stage): ${out%$'\n'*}";; esac
-  return 0
+# Activity身份、版本、位置只来自run-definition；mark-start代表一次真实执行，重发复用outbox正文。
+span_mark_start(){ "$WFR_NODE" "$WFR_RUNTIME_MJS" mark-start "$1" "${2:-1}" || warn "span mark-start failed"; }
+span_post(){
+  [[ -n "${BRAIN_URL:-}" ]] || { warn "span skipped: missing BRAIN_URL"; return 0; }
+  "$WFR_NODE" "$WFR_RUNTIME_MJS" span "$@" || warn "span evidence pending/blocked; business artifact retained"
 }
 # led: 原样透传 stdout，不 tail——供 show（多行美化 JSON，tail -1 会把 JSON 砍成只剩 "}"）
 led(){ "$WFR_NODE" "$WFR_LEDGER_MJS" "$@" --run-dir "${WFR_RUN_DIR:-}"; }
@@ -285,10 +252,20 @@ write_stage(){
 
 cmd="${1:-}"; shift || true
 case "$cmd" in
+  locate-run)
+    "$WFR_NODE" "$WFR_RUNTIME_MJS" locate-run "$@" || exit 1
+    exit 0;;
+  prepare)
+    export BRAIN_URL BRAIN_INTERNAL_TOKEN
+    "$WFR_NODE" "$WFR_RUNTIME_MJS" prepare || exit 1
+    exit 0;;
+  flush)
+    "$WFR_NODE" "$WFR_RUNTIME_MJS" flush || warn "outbox flush failed"
+    exit 0;;
   hash) echo "WFR_HASH=$(calc_hash "$1" "$2" "$3")";;
   init)
     TAG="$1"; P="$2"; WF="$3"; PUSH="$4"; SERIAL="${5:-}"; HOSTKEY="${6:-}"
-    WFR_RUN_ID="social-keyword-leadgen-crontab-$TAG"
+    WFR_RUN_ID="${WFR_RUN_ID:-social-keyword-leadgen-crontab-$TAG}"
     WFR_HASH="$(calc_hash "$P" "$WF" "$PUSH")"
     WFR_RUN_DIR="$WFR_HOME/ledger/$WFR_RUN_ID"; WFR_ART_DIR="$WFR_HOME/workflow-runs"
     WFR_TAG="$TAG"; WFR_PROFILE="$P"   # 棒3b: 探针占位符 $RUN_TAG / $LINE_KEY(经 line-routes routeOf 由 profile 解析)
@@ -296,6 +273,9 @@ case "$cmd" in
     mkdir -p "$WFR_RUN_DIR" "$WFR_ART_DIR" 2>/dev/null || warn "mkdir failed errno: $(mkdir -p "$WFR_RUN_DIR" "$WFR_ART_DIR" 2>&1)"
     led1 init --run-id "$WFR_RUN_ID" --hash "$WFR_HASH" --profile "$P" --serial "$SERIAL" --hostkey "$HOSTKEY" >/dev/null
     export WFR_RUN_ID WFR_HASH WFR_RUN_DIR WFR_ART_DIR WFR_TAG WFR_PROFILE WFR_HOSTKEY
+    [[ -r "$WFR_RUN_DIR/step-dod.json" ]] && WFR_STEP_SPEC="$WFR_RUN_DIR/step-dod.json"
+    export WFR_STEP_SPEC
+    "$WFR_NODE" "$WFR_RUNTIME_MJS" flush >/dev/null || warn "init outbox pending"
     # 6b133a81: preflight 四项指标全部取 harvest-cron.sh 的真实预检结果(DEVICE_VERIFIED=adb get-state 通过 /
     # ACCOUNT_VERIFIED=我页抖音号在注册表 / CALL_STATE_IDLE=mCallState 空闲 / LOCK_ACQUIRED=preflight_lock_acquire 以本批 TAG
     # 拿到设备锁),没读到一律 0——不再写死 1/0。读回 pf_* 探针不过 → stop_run,批次不开采。
@@ -306,7 +286,7 @@ case "$cmd" in
     echo "WFR_RUN_ID=$WFR_RUN_ID"; echo "WFR_HASH=$WFR_HASH"; echo "WFR_RUN_DIR=$WFR_RUN_DIR"; echo "WFR_ART_DIR=$WFR_ART_DIR"
     echo "WFR_TAG=$WFR_TAG"; echo "WFR_PROFILE=$WFR_PROFILE"; echo "WFR_HOSTKEY=$WFR_HOSTKEY";;
   mark-start)
-    # 记一个活动开始时刻（span started_at 取这里；同 stage/n 已有标记不覆盖，幂等键才稳定）。未 init 直接忽略。
+    # 显式mark-start产生新occurrence；同一次stage回执重发沿用当前occurrence。未init只告警。
     if not_initialized; then warn "mark-start called before init"; else span_mark_start "$1" "${2:-1}"; fi;;
   enter)
     if not_initialized; then
@@ -371,6 +351,7 @@ case "$cmd" in
       echo "WFR_FINALIZE_OK=$ok"; echo "WFR_FINALIZE_MSG='$msg'"; echo "WFR_FINALIZE_FINAL=$final"
       extra=$("$WFR_JQ" -cn --argjson ok "$ok" --arg msg "$msg" '[{type:"finalize",ok:$ok,msg:$msg}]')
       brain_post "${WFR_RUN_ID:-}__${WFR_ATTEMPT:-a0}.cleanup" "$final" cleanup "${WFR_LAST_ARTIFACT:-}" "$extra"
+      "$WFR_NODE" "$WFR_RUNTIME_MJS" flush || warn "finalize outbox pending"
     fi;;
   *) warn "unknown subcommand: $cmd";;
 esac

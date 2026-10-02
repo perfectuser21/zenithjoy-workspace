@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "capability": "keyword_acquisition",
-  "brain_workflow_key": "douyin_keyword_leadgen",
-  "contract_sha256": "9bef0621e6c8c522290926a9dfb7c7978f82f592a2d74c73992b1f22346eff25",
+  "capability": "benchmark_link_acquisition",
+  "brain_workflow_key": "douyin_benchmark_leadgen",
+  "contract_sha256": "3a8ff0e11f4edceefae6297c9ae3d84fbf20e0d76dad3ba540f2560b4267ad5d",
   "promotion": {
     "min_consecutive_pass": 20
   },
@@ -21,7 +21,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "preflight",
         "sequence_no": 1
       }
@@ -40,7 +40,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "preflight",
         "sequence_no": 1
       }
@@ -59,7 +59,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "preflight",
         "sequence_no": 1
       }
@@ -78,7 +78,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "preflight",
         "sequence_no": 1
       }
@@ -98,7 +98,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "preflight",
         "sequence_no": 1
       }
@@ -119,129 +119,51 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "preflight",
         "sequence_no": 1
       }
     },
     {
-      "key": "keyword_acquisition.discovery.open_search",
+      "key": "benchmark_link_acquisition.discovery.open_benchmark_profile",
       "activity": "discovery",
       "at": "discovery",
       "mode": "checkpoint",
       "readback": {
-        "type": "evidence",
-        "glob": "{tag}-w{n}-vtab-tabs.xml",
-        "match": "text=\"综合\"",
+        "type": "log",
+        "regex": "已打开对标主页 sec_uid=[^ ]+",
         "expect": {
           "op": ">=",
           "value": 1
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "discovery",
         "sequence_no": 2
       }
     },
     {
-      "key": "keyword_acquisition.discovery.switch_video_tab",
+      "key": "benchmark_link_acquisition.discovery.list_recent_videos",
       "activity": "discovery",
       "at": "discovery",
       "mode": "checkpoint",
       "readback": {
         "type": "evidence",
-        "glob": "{tag}-w{n}-vtab-aftertab.xml",
-        "match": "视频[^>]*selected=\"true\"",
+        "glob": "{tag}-w{n}-pcards*",
         "expect": {
           "op": ">=",
           "value": 1
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "discovery",
         "sequence_no": 2
       }
     },
     {
-      "key": "keyword_acquisition.discovery.open_filter_panel",
-      "activity": "discovery",
-      "at": "discovery",
-      "mode": "checkpoint",
-      "readback": {
-        "type": "evidence",
-        "glob": "{tag}-w{n}-filter-panel1.*",
-        "expect": {
-          "op": ">=",
-          "value": 1
-        }
-      },
-      "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
-        "slot_key": "discovery",
-        "sequence_no": 2
-      }
-    },
-    {
-      "key": "keyword_acquisition.discovery.choose_filters",
-      "activity": "discovery",
-      "at": "discovery",
-      "mode": "checkpoint",
-      "readback": {
-        "type": "evidence",
-        "glob": "{tag}-w{n}-filter-selected.*",
-        "expect": {
-          "op": ">=",
-          "value": 1
-        }
-      },
-      "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
-        "slot_key": "discovery",
-        "sequence_no": 2
-      }
-    },
-    {
-      "key": "keyword_acquisition.discovery.apply_filters",
-      "activity": "discovery",
-      "at": "discovery",
-      "mode": "checkpoint",
-      "readback": {
-        "type": "evidence",
-        "glob": "{tag}-w{n}-filter-results.*",
-        "expect": {
-          "op": ">=",
-          "value": 1
-        }
-      },
-      "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
-        "slot_key": "discovery",
-        "sequence_no": 2
-      }
-    },
-    {
-      "key": "keyword_acquisition.discovery.extract_video_cards",
-      "activity": "discovery",
-      "at": "discovery",
-      "mode": "checkpoint",
-      "readback": {
-        "type": "evidence",
-        "glob": "{tag}-w{n}-cards-grid.xml",
-        "expect": {
-          "op": ">=",
-          "value": 1
-        }
-      },
-      "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
-        "slot_key": "discovery",
-        "sequence_no": 2
-      }
-    },
-    {
-      "key": "keyword_acquisition.discovery.resolve_video_links",
+      "key": "benchmark_link_acquisition.discovery.resolve_video_links",
       "activity": "discovery",
       "at": "discovery",
       "mode": "checkpoint",
@@ -254,26 +176,26 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "discovery",
         "sequence_no": 2
       }
     },
     {
-      "key": "keyword_acquisition.discovery.persist_candidates",
+      "key": "benchmark_link_acquisition.discovery.persist_candidates",
       "activity": "discovery",
       "at": "discovery",
       "mode": "checkpoint",
       "readback": {
         "type": "sql",
-        "query": "SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG' AND keyword = '$WORD'",
+        "query": "SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG'",
         "expect": {
           "op": ">=",
           "ref": "metrics.candidates"
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "discovery",
         "sequence_no": 2
       }
@@ -287,7 +209,7 @@
         "type": "none"
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "qualification",
         "sequence_no": 3
       },
@@ -307,7 +229,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "qualification",
         "sequence_no": 3
       }
@@ -326,7 +248,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "qualification",
         "sequence_no": 3
       }
@@ -345,7 +267,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "qualification",
         "sequence_no": 3
       }
@@ -364,7 +286,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "qualification",
         "sequence_no": 3
       }
@@ -383,7 +305,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "qualification",
         "sequence_no": 3
       }
@@ -403,7 +325,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "collection",
         "sequence_no": 4
       }
@@ -422,7 +344,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "collection",
         "sequence_no": 4
       }
@@ -442,7 +364,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "collection",
         "sequence_no": 4
       }
@@ -461,7 +383,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "collection",
         "sequence_no": 4
       }
@@ -480,7 +402,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "collection",
         "sequence_no": 4
       }
@@ -499,7 +421,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "collection",
         "sequence_no": 4
       }
@@ -518,7 +440,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "scoring",
         "sequence_no": 5
       }
@@ -542,7 +464,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "scoring",
         "sequence_no": 5
       }
@@ -556,7 +478,7 @@
         "type": "none"
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "scoring",
         "sequence_no": 5
       },
@@ -581,7 +503,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "scoring",
         "sequence_no": 5
       }
@@ -600,7 +522,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "delivery",
         "sequence_no": 6
       }
@@ -623,7 +545,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "delivery",
         "sequence_no": 6
       }
@@ -641,7 +563,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "delivery",
         "sequence_no": 6
       }
@@ -660,7 +582,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "outreach",
         "sequence_no": 7
       }
@@ -679,7 +601,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "outreach",
         "sequence_no": 7
       }
@@ -693,7 +615,7 @@
         "type": "none"
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "outreach",
         "sequence_no": 7
       },
@@ -713,7 +635,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "outreach",
         "sequence_no": 7
       }
@@ -732,7 +654,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "outreach",
         "sequence_no": 7
       }
@@ -746,7 +668,7 @@
         "type": "none"
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "outreach",
         "sequence_no": 7
       },
@@ -770,7 +692,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "outreach",
         "sequence_no": 7
       }
@@ -789,7 +711,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "cleanup",
         "sequence_no": 8
       }
@@ -808,7 +730,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "cleanup",
         "sequence_no": 8
       }
@@ -827,7 +749,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "cleanup",
         "sequence_no": 8
       }
@@ -846,7 +768,7 @@
         }
       },
       "usage": {
-        "workflow_key": "douyin_keyword_leadgen",
+        "workflow_key": "douyin_benchmark_leadgen",
         "slot_key": "cleanup",
         "sequence_no": 8
       }

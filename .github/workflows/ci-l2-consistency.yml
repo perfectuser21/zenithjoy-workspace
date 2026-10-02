@@ -237,6 +237,9 @@ jobs:
       - name: Check wf-plan execution plans drift
         run: node scripts/product-map/wf-plan.mjs --check
 
+      - name: Check workflow-specific step specifications drift
+        run: node scripts/product-map/gen-step-dod.mjs --check
+
   acceptance-spec-contract:
     name: Line02 Acceptance Spec Contract
     runs-on: ubuntu-latest

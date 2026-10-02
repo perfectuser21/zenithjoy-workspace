@@ -37,6 +37,27 @@ test('optional输出不能满足后续必填输入；未声明optional保持既�
   act(ctx, 'keyword_acquisition', 'scoring').outputs.find(o => o.type === 'Lead').optional = false;
   assert.equal(assemble(ctx, 'keyword_acquisition').ok, true);
 });
+test('对标清单展开共享36步但保持关键词规范身份，独有4步归对标', () => {
+  const ctx = fresh(), keyword = stepDodSpec(ctx, 'keyword_acquisition'), benchmark = stepDodSpec(ctx, 'benchmark_link_acquisition');
+  assert.equal(keyword.steps.length, 44); assert.equal(benchmark.steps.length, 40);
+  const shared = benchmark.steps.filter(s => s.key.startsWith('keyword_acquisition.'));
+  assert.equal(shared.length, 36);
+  for (const s of shared) {
+    assert.ok(keyword.steps.some(k => k.key === s.key));
+    assert.equal(s.usage.workflow_key, 'douyin_benchmark_leadgen');
+    assert.equal(s.usage.slot_key, s.activity);
+  }
+  assert.equal(benchmark.steps.filter(s => s.key.startsWith('benchmark_link_acquisition.discovery.')).length, 4);
+  assert.equal(benchmark.brain_workflow_key, 'douyin_benchmark_leadgen');
+  assert.deepEqual(JSON.parse(readFileSyncCt(new URL('../../../services/phone-adb-controller/plans/benchmark_link_acquisition.steps.json', import.meta.url), 'utf8')), benchmark);
+});
+test('结构化实现引用允许契约来源版本，拒绝浮动main及越界路径', () => {
+  const ctx = fresh(), a = act(ctx, 'keyword_acquisition', 'preflight');
+  a.implementation_bindings = [{ kind: 'code', repo: 'perfectuser21/zenithjoy-workspace', path: 'services/phone-adb-controller/wf-run.sh', revision: 'contract' }];
+  assert.deepEqual(validateContracts(ctx), []);
+  a.implementation_bindings[0].revision = 'main'; expectError(ctx, /revision/);
+  a.implementation_bindings[0].revision = 'contract'; a.implementation_bindings[0].path = '../secret'; expectError(ctx, /path/);
+});
 
 // ── 真实仓库 ────────────────────────────────────────────────────────────────
 

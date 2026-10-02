@@ -5,7 +5,7 @@
 #   调用时本 run 已持设备锁、seen-videos 已拉(锁/trap 留在 harvest-keyword.sh);执行后屏幕停在可点卡片的列表页;
 #   stdout 每行 X\tY\tDUR\tTITLE(与 search-video-cards 同格式,最多 MAXV 行);无卡片 exit 0 空输出;失败 exit 1;日志走 stderr。
 set -uo pipefail
-C=~/.local/bin/douyin-phone-adb
+C="${DOUYIN_PHONE_ADB:-$HOME/.local/bin/douyin-phone-adb}"
 P="$1"; KW="$2"; MAXV="${3:-4}"; TAG="$4"; LOC="${5:-same_city}"
 log(){ print -u2 -- "[$(date +%H:%M:%S)] $*"; }
 nap(){ [[ -n "${HARVEST_KEYWORD_TESTING:-}" ]] && return 0; /bin/sleep "$1" }
