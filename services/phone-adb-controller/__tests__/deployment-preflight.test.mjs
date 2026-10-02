@@ -71,3 +71,9 @@ test('同一CI证据重试部署时release声明完全相同，attempt只用于�
  for(const attemptKey of ['github:42:100:1','github:42:101:2'])await prepareDeploymentReleases({...f,sha,environment:'production',attemptKey,request,readFile:()=>bytes});
  assert.deepEqual(posted[0],posted[2]);assert.deepEqual(posted[1],posted[3]);
 });
+test('不同受信CI run即使报告相同仍有独立不可变release key',async()=>{
+ const {prepareDeploymentReleases}=await implementation(),f=fixture(),keys=[];
+ const request=async(path,body)=>{if(body){keys.push(body.release_key);return {release:release(f,body.target)};}return {release:release(f,path.endsWith(vid[0])?'xian-m4':'xian-m1')};};
+ for(const attemptKey of ['github:42:100:1','github:43:101:1'])await prepareDeploymentReleases({...f,sha,environment:'production',attemptKey,request,readFile:()=>bytes});
+ assert.notEqual(keys[0],keys[2]);
+});
