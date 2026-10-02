@@ -1,10 +1,13 @@
-import { appendFileSync, readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { legacyFixture, manifest } from './frozen-legacy-cli-fixture.mjs';
 import { route, ids } from './workflow-cli-fixture.mjs';
 import { keywordFixture } from './keyword-workflow-cli-fixture.mjs';
+import { alignFixtureClock } from './fixture-clock.mjs';
 
 function audit(name,old,current,legacy,modern){
  const directory=process.env.FROZEN_EQUIVALENCE_REPORT_DIR;if(!directory)return;
@@ -56,8 +59,8 @@ test('冻结历史整链与真实新compiler CLI：同两词评论/线索/视频
   const old = await legacyFixture(t);
   const current = await keywordFixture(t);
   seedHistory(old);seedHistory(current);
-  appendFileSync(join(current.home,'http-fixture.cjs'), '\nDate.now=()=>1790937600000;\n');
   const legacy = await old.run();
+  alignFixtureClock(current);
   const modern = await current.run();
   audit('normal-history-duplicates',old,current,legacy,modern);
   assertVideoPool(old,current,twoVideos(),{requireEquality:true});
@@ -103,8 +106,9 @@ test('冻结历史整链与真实新compiler CLI：同两词评论/线索/视频
 test('去评分：评论/线索对账冻结旧模型前检查点；视频池完整相等门禁', { timeout: 120000 }, async t => {
   const old = await legacyFixture(t);
   const current = await keywordFixture(t,['matched','matched'],{withoutScore:true});
-  appendFileSync(join(current.home,'http-fixture.cjs'), '\nDate.now=()=>1790937600000;\n');
-  const legacy = await old.run(), modern = await current.run();
+  const legacy = await old.run();
+  alignFixtureClock(current);
+  const modern = await current.run();
   audit('without-scoring-checkpoint',old,current,legacy,modern);
   assertVideoPool(old,current,twoVideos(),{requireEquality:true});
   assert.equal(legacy.output.code,0,legacy.log);assert.equal(legacy.final,'completed');
@@ -133,8 +137,9 @@ test('资格混合：冻结旧与新真实探针、matched/rejected/pending视�
   const statuses=['matched','rejected','pending'];
   const old=await legacyFixture(t,statuses),current=await keywordFixture(t,statuses,{singleWord:true});
   writeFileSync(join(old.home,'words'),'AI 考证\n');mixedPhoneInput(old);mixedPhoneInput(current);
-  appendFileSync(join(current.home,'http-fixture.cjs'),'\nDate.now=()=>1790937600000;\n');
-  const legacy=await old.run(),modern=await current.run();
+  const legacy=await old.run();
+  alignFixtureClock(current);
+  const modern=await current.run();
   audit('mixed-qualification',old,current,legacy,modern);
   assertVideoPool(old,current,twoVideos().slice(0,1),{requireEquality:true});
   assert.equal(legacy.output.code,0,legacy.log);assert.equal(modern.output.code,2,modern.output.stderr);
@@ -212,4 +217,23 @@ test('首评论后根TERM：冻结旧继续整批与新软取消差异；双方�
   assert.deepEqual(oldDb.videos[ids[1]],{...newDb.videos[ids[1]],judgment_status:'matched',judgment_reason:'fixture真实资格理由',process_status:'评论已采'},'第二视频完整比较，精确保留旧继续判采与新候选pending差异');
   assert.equal(old.read('phone-state.json').owner,null);assert.equal(current.read('phone-state.json').owner,null);
   assert.match(legacy.log,/词2: AI 报名/);assert.doesNotMatch(current.log(),/commenter-identity 30 40/);
+});
+
+
+test('冻结时钟跨JS与shell同源且继续推进，不会随现实日期越过整链deadline', async t => {
+ const home=mkdtempSync(join(tmpdir(),'frozen-clock-contract-'));
+ t.after(()=>rmSync(home,{recursive:true,force:true}));
+ mkdirSync(join(home,'.local/bin'),{recursive:true});
+ writeFileSync(join(home,'http-fixture.cjs'),'');
+ const f={home,env:{HOME:home,PATH:process.env.PATH}};
+ // 故意使用遥远历史，不能依赖今天更新某个固定常量。
+ const epoch=Date.parse('2001-01-01T00:00:00Z');alignFixtureClock(f,epoch);
+ const nodeTime=()=>Number(execFileSync(process.execPath,['--require',join(home,'http-fixture.cjs'),'-e','process.stdout.write(String(Date.now()))'],{env:f.env,encoding:'utf8'}));
+ const shellTime=()=>Number(execFileSync(join(home,'.local/bin/date'),['+%s'],{env:f.env,encoding:'utf8'}))*1000;
+ const first=nodeTime(), firstShell=shellTime();assert.ok(Math.abs(first-epoch)<2000);
+ assert.ok(Math.abs(first-shellTime())<2000,'原JS历史时间与shell现实时间差距必须消除');
+ await new Promise(resolve=>setTimeout(resolve,1100));
+ assert.ok(nodeTime()-first>=1000,'统一时钟必须推进，不能冻结预算');
+ assert.ok(shellTime()-firstShell>=1000,'shell时钟也必须推进，不能冻结预算');
+ assert.ok(Math.abs(nodeTime()-shellTime())<2000);
 });
