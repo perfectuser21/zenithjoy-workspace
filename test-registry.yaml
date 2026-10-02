@@ -7067,6 +7067,14 @@ agent_suite:
     product: 智能获客
     note: "真实编译器→整批入口→Cecelia CLI→七个业务活动及探针；多词去重、资格拦截、无评分、父取消、整批期限、逐词归位率与根锁释放。须显式提供CECELIA_ACTIVITY_RUNTIME，不跳过验收。"
 
+  - id: keyword-start-confirmation
+    path: services/phone-adb-controller/__tests__/keyword-start-confirmation.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实编译与唯一原生CLI启动；终态前/快终态只读确认START，绑定本轮UUID、契约、归一化输入与完整设备调度身份；错误能力、身份和文件拒绝，helper零执行副作用。"
+
   - id: keyword-workflow-control
     path: services/phone-adb-controller/__tests__/keyword-workflow-control.test.mjs
     type: unit
