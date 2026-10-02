@@ -26,13 +26,14 @@ async function prepare(t, { block=false, badCapability=false, referenceOnly=fals
   if(block){const p=join(f.home,'.local/bin/douyin-phone-adb');const source=readFileSync(p,'utf8');
     writeFileSync(p,source.replace("case 'preflight':", "case 'preflight': while(!fs.existsSync(path.join(home,'release')))await new Promise(done=>setTimeout(done,20));"));}
   f.preload=join(f.home,'count-spawns.cjs');
-  writeFileSync(f.preload,`const fs=require('node:fs'),cp=require('node:child_process');const old=cp.spawn;
-cp.spawn=function(file,args,...rest){if(args?.[0]===${JSON.stringify(runtime)})fs.appendFileSync(${JSON.stringify(join(f.home,'runtime-calls'))},'runtime\\n');return old.call(this,file,args,...rest);};`);
+  writeFileSync(f.preload,`const fs=require('node:fs'),cp=require('node:child_process'),path=require('node:path');const old=cp.spawn;
+cp.spawn=function(file,args,...rest){if(args?.[0]===process.env.WF_CONFIRMATION_RUNTIME_PATH)fs.appendFileSync(path.join(process.env.WF_CONFIRMATION_FIXTURE_HOME,'runtime-calls'),'runtime\\n');return old.call(this,file,args,...rest);};`);
+  f.env.WF_CONFIRMATION_RUNTIME_PATH=runtime;f.env.WF_CONFIRMATION_FIXTURE_HOME=f.home;
   f.env.NODE_OPTIONS=(f.env.NODE_OPTIONS||'')+' --require '+f.preload;
   f.args=['--runtime',runtime,'--contract',f.contract,'--receipt',f.receiptPath,'--startup-receipt',f.startup,'--startup-id',f.id];
   f.confirm=async (input=f.input, args=[], path=f.startup,id=f.id,helperEntry=entry)=>{
     const trap=join(f.home,'helper-trap.cjs');
-    writeFileSync(trap,`const fs=require('node:fs');const blocked=()=>{fs.appendFileSync(${JSON.stringify(join(f.home,'helper-side-effects'))},'called\\n');throw Error('只读模式不得执行');};
+    writeFileSync(trap,`const fs=require('node:fs'),path=require('node:path');const blocked=()=>{fs.appendFileSync(path.join(process.env.WF_CONFIRMATION_FIXTURE_HOME,'helper-side-effects'),'called\\n');throw Error('只读模式不得执行');};
 for(const name of ['spawn','spawnSync','exec','execSync','execFile','execFileSync','fork'])require('node:child_process')[name]=blocked;
 require('node:net').Socket.prototype.connect=blocked;globalThis.fetch=blocked;`);
     const out=await cli(helperEntry,['--confirm-start','--contract',f.contract,'--startup-receipt',path,'--startup-id',id,...args],

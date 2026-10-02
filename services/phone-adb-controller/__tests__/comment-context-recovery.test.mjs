@@ -173,7 +173,7 @@ for (const [frame, restored] of [['context-search.xml', 0], ['context-panel.xml'
  test(`真实名片controller CLI ${frame} 保存frame并严格报告restored=${restored}`, () => {
   const r = controllerReplay('commenter-card-link', frame);
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /profile_url=https:\/\/v.douyin.com\/fixture\//);
+  assert.match(r.stdout, /profile_url=https:\/\/v\.douyin\.com\/fixture\//);
   assert.match(r.stdout, new RegExp(`^comment_context_restored=${restored}$`, 'm'));
   const path = r.stdout.match(/^comment_context_frame=(.+)$/m)?.[1];
   assert.equal(readFileSync(path, 'utf8'), readFileSync(join(here, '__tests__/fixtures', frame), 'utf8'));
@@ -234,7 +234,7 @@ for (const failures of ['0', '2', '3']) {
   const leads = r.stdout.split('\n').filter(x => x.startsWith('LEAD\t'));
   assert.equal(leads.length, 1);
   assert.equal(r.calls.match(/^commenter-card-link /gm)?.length, failures === '0' ? 1 : 3);
-  if (failures !== '3') assert.match(leads[0], /https:\/\/v.douyin.com\/person\//);
+  if (failures !== '3') assert.match(leads[0], /https:\/\/v\.douyin\.com\/person\//);
   else assert.equal(leads[0].split('\t')[10], '');
   if (failures !== '0') {
    assert.match(r.calls, /tap-evidence 210 220 .*cl2-re/);
