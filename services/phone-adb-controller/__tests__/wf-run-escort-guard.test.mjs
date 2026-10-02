@@ -122,6 +122,7 @@ test('执行器重拉相同能力的陪跑时要求读取专属skill', { skip: S
   assert.equal(result.status, 0, result.stderr);
   assert.match(sshLog(home), /wf-keyword_acquisition\/SKILL.md/);
   assert.match(sshLog(home), /专属skill/);
+  assert.match(sshLog(home), /终态优先/);
   assert.match(sshLog(home), /心跳JSON必须带cap=keyword_acquisition/);
   for (const file of ['COMMANDER.md', 'cmdr-escort.txt']) assert.match(readFileSync(join(SRC, file), 'utf8'), /"cap":"<能力>"/);
 });

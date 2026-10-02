@@ -76,7 +76,7 @@ fi
 ESCORT_ID=""
 GATEWAY_EXEC="ssh -o BatchMode=yes -o ConnectTimeout=10 $ESCORT_GATEWAY"
 HEARTBEAT_CMD="curl -fsS --max-time 8 -X POST $BRAIN_URL/api/brain/commander-heartbeat -H $(sq 'Content-Type: application/json') -d $(sq "{\"tag\":\"$TAG\",\"host\":\"$HOST\",\"serial\":\"$SERIAL\",\"escort_name\":\"escort-$HOST-$TAG\"}")"
-ESCORT_MSG="先执行 $GATEWAY_EXEC $(sq "cat $(sq "$WORKFLOW_SKILL") $(sq "$ESCORT_SOP")") 读取本workflow专属skill与网关 SOP 并严格遵守辅佐三原则。专属skill读不到或能力不符，记缺证据并保留现场，不套用别的workflow。你可能落在任意跑场机；SOP、日志、findings、openclaw CLI 均在网关，相关读写经 $GATEWAY_EXEC 执行，不能把本机文件不存在当成网关文件不存在。本轮由 Commander 发起: cap=$CAP TAG=$TAG 机器=$HOST serial=$SERIAL profile=$PROFILE 起跑=$(bj +%H:%M) 日志=/Users/administrator/.openclaw/m4-logs/${HOST}-live.log escort名=escort-$HOST-${TAG}。每轮末尾必须发心跳(SOP 第5条): $GATEWAY_EXEC $(sq "$HEARTBEAT_CMD")"
+ESCORT_MSG="先执行 $GATEWAY_EXEC $(sq "cat $(sq "$ESCORT_SOP")") 读取网关 SOP；再另一次执行 $GATEWAY_EXEC $(sq "cat $(sq "$WORKFLOW_SKILL")") 读取本workflow专属skill 并严格遵守辅佐三原则。专属skill读不到或能力不符，记缺证据并保留现场，不套用别的workflow。终态优先：先检查同TAG协调器请求；已有finalize请求时只核终态并完成售后，不再发运行期心跳或触碰手机。你可能落在任意跑场机；SOP、日志、findings、openclaw CLI 均在网关，相关读写经 $GATEWAY_EXEC 执行，不能把本机文件不存在当成网关文件不存在。本轮由 Commander 发起: cap=$CAP TAG=$TAG 机器=$HOST serial=$SERIAL profile=$PROFILE 起跑=$(bj +%H:%M) 日志=/Users/administrator/.openclaw/m4-logs/${HOST}-live.log escort名=escort-$HOST-${TAG}。仅运行期每轮末尾必须发心跳(SOP 第5条): $GATEWAY_EXEC $(sq "$HEARTBEAT_CMD")"
 # 起跑登记（best-effort，Brain 单此刻还没建）：escort id 落 Brain working_memory commander_launch:<TAG>，
 # 心跳/看门狗/lost 善后随后合并进单。失败只记 stderr，绝不阻塞起跑。
 brain_launch_register(){

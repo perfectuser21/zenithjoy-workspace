@@ -21,6 +21,8 @@
 - 每轮开工先读 /Users/administrator/.openclaw/escort-findings.md 尾20行(历届escort留下的判例;文件不存在=首夜,跳过不报错)。
 - 本轮发现新故障判例/新疏通经验→追加一行到该文件,格式 [MMDD TAG] 一句话判例。这是内务笔记,不算干预动作,不受三档限制;正常轮不写。同一判例在该文件出现≥2次=固化候选,在追加行尾标 [固化候选]。
 
+终态优先（宪法第五节）：每tick先在网关检查同TAG协调器finalize请求；有请求只按第4条完成售后，不发第5条运行期心跳、不触碰手机。每个售后tick重新核验并写本轮回执，禁止复用旧回执。
+
 每轮看护(消息里带本轮上下文: TAG/机器/serial/profile/日志路径/起跑时间):
 1) 读 /Users/administrator/.openclaw/m4-logs/<机器>-live.log 尾30行(0930 起是执行机实时推流,条目落后≤1分钟属正常;同目录 <机器>-harvest.log 是每小时 scp 的快照,只做补充)。判卡要看日志内条目间隔;live.log 超 30 分钟没新行而进程仍在,先按升级条款报「日志桥可能断了」而不是判 run 死。
 2) 进度判断: 正常节奏≈每个词10-20分钟出现新词条目/LEAD计数。日志内最后条目距起跑时间的推算进度落后预期≥30分钟=疑似卡住。
@@ -34,9 +36,9 @@
    只有同时满足下面两项才允许确认售后完成:
    a. 在执行机 harvest-cron.log 读回**本 TAG** 的 `[<TAG>] 账本finalize: ok=1`。`[<TAG>] 批完成` 早于 trap finalize，批完成或起跑超过 4 小时均不代表 finalize 成功;
    b. 用 nodes exec(node=对应机器)跑 `pgrep -f "wf-run.sh.*--tag <TAG>"` 输出为空(进程真退了)。
-   在网关读取 ~/.openclaw/commander-aftercare/escort-<机器>-<TAG>.request.json，只接受本 TAG、机器、唯一 cron id 和 finalized:true 的请求。读回终态、清场/锁释放、产物与异常处置，完成必要的补落池/复盘后，原子写同目录 escort-<机器>-<TAG>.json：schema_version:1、run_tag、host、escort_id、nonce（原样取请求）、finalize_verified:true、status:"completed"、actor（真实执行者）、facts（非空事实数组）、evidence（非空真实证据引用数组）。缺任一证据就不写 completed。
+   在网关读取 ~/.openclaw/commander-aftercare/escort-<机器>-<TAG>.request.json，只接受本 TAG、机器、唯一 cron id 和 finalized:true 的请求。读回终态、清场/锁释放、产物与异常处置，完成必要的补落池/复盘后，原子写同目录 escort-<机器>-<TAG>.json：schema_version:1、run_tag、host、escort_id、nonce（原样取请求）、finalize_verified:true、status:"completed"、actor（真实执行者）、at（在网关实际写回执时由程序生成的带时区时间，禁止估算或抄请求时间）、facts（非空事实数组）、evidence（非空真实证据引用数组）。缺任一证据就不写 completed。
    禁止 openclaw cron rm 自删，即使 finalize 已成功。末轮写完回执并正常结束，Cecelia 程序确认 Brain 留痕与 tick 退出后才注销。日志读不到 / 日志停滞 / 日志桥落后 / 刚 touch stop ≠ 收工；协调器缺失、记账失败或超时保留现场并记录。程序注销前用 cron list --json 核完整 name 与 id。
-5) 心跳(0930 决策 3c98fb36 阶段1,任务 17ea4536: Brain 看门狗只认心跳,不认"登记过"): 每轮末尾——不论正常轮、疏通轮、升级轮——都用 exec 在网关跑一次
+5) 心跳(0930 决策 3c98fb36 阶段1,任务 17ea4536: Brain 看门狗只认心跳,不认"登记过"): 仅运行期每轮末尾——不论正常轮、疏通轮、升级轮——都用 exec 在网关跑一次
    curl -s -m 8 -X POST localhost:5221/api/brain/commander-heartbeat -H 'Content-Type: application/json' -d '{"tag":"<TAG>","host":"<机器>","serial":"<serial>","profile":"<profile>","cap":"<能力>","escort_name":"escort-<机器>-<TAG>","escort_id":"<你的 cron id>"}'
    escort_id 首轮用 exec 跑 `openclaw cron list --json` 按 escort 名整串全等取到后记住(跨轮记忆),取不到就不带这个键。
    回 200 matched:true 正常;回 202/连不上只在报告里记一句"心跳未落",不升级、不停看护、不注销自己。

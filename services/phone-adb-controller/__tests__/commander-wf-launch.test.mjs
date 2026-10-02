@@ -120,6 +120,7 @@ test("跑场上的 escort 先经 SSH 读网关 SOP，并经网关发送心跳", 
   assert.match(message, /ssh -o BatchMode=yes -o ConnectTimeout=10 administrator@100\.71\.151\.105/);
   assert.match(message, /cat.*cmdr-escort\.txt/);
   assert.match(message, /日志.*网关/);
+  assert.match(message, /终态优先/);
   assert.match(message, /ssh[^\n]*curl[^\n]*commander-heartbeat/);
 });
 
