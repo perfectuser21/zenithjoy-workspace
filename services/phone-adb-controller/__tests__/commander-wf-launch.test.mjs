@@ -92,6 +92,17 @@ test("正常起跑：escort 登记 → 起跑命令带 --tag 与 --commander <es
   assert.match(r.stdout.trim().split("\n").pop(), new RegExp(`^WF_LAUNCHED tag=cmd\\d{8} host=xian-m4 cap=keyword_acquisition serial=ANGYVB4402004137 escort=${ESCORT_ID}`));
 });
 
+test("跑场上的 escort 先经 SSH 读网关 SOP，并经网关发送心跳", () => {
+  const { home, env } = setup();
+  const result = run(BASE, env);
+  assert.equal(result.status, 0, result.stderr);
+  const message = read(home, "oc-argv.log");
+  assert.match(message, /ssh -o BatchMode=yes -o ConnectTimeout=10 administrator@100\.71\.151\.105/);
+  assert.match(message, /cat.*cmdr-escort\.txt/);
+  assert.match(message, /日志.*网关/);
+  assert.match(message, /ssh[^\n]*curl[^\n]*commander-heartbeat/);
+});
+
 test("Brain 起跑登记（任务 17ea4536）：起跑确认后 POST commander-heartbeat kind=launch 带 escort id；escort 消息含心跳指令；Brain 不通不阻塞", () => {
   const { home, env } = setup();
   const r = run(BASE, env);
