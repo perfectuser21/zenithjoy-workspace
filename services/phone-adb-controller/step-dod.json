@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "keyword_acquisition",
   "brain_workflow_key": "douyin_keyword_leadgen",
-  "contract_sha256": "4980e1a1604668029146115a264d58fa0b2320f44c7d3e0ba498f75ace208f6a",
+  "contract_sha256": "200d53e462ac55e43a4a2d1c04744a6566bb5e621f0dccb12808ecb08cfd68a8",
   "promotion": {
     "min_consecutive_pass": 20
   },
