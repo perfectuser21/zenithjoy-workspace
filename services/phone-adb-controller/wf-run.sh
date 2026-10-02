@@ -220,8 +220,11 @@ escort_watch_start(){
 }
 escort_watch_stop(){
   if [[ -n "$ESCORT_WATCH_PID" ]]; then
+    # 先暂停循环；先杀 sleep 会唤醒父循环，让它在 TERM 到达前抢跑一轮重拉。
+    kill -STOP "$ESCORT_WATCH_PID" 2>/dev/null
     pkill -P "$ESCORT_WATCH_PID" 2>/dev/null
     kill "$ESCORT_WATCH_PID" 2>/dev/null
+    kill -CONT "$ESCORT_WATCH_PID" 2>/dev/null
     wait "$ESCORT_WATCH_PID" 2>/dev/null
   fi
   ESCORT_WATCH_PID=""
@@ -261,8 +264,11 @@ lease_heartbeat_start(){
 }
 lease_heartbeat_stop(){
   if [[ -n "$LEASE_HB_PID" ]]; then
+    # 冻结循环后再收子进程，避免 stop 途中提前唤醒并发出下一次续租。
+    kill -STOP "$LEASE_HB_PID" 2>/dev/null
     pkill -P "$LEASE_HB_PID" 2>/dev/null   # 先收掉在睡的 sleep 子进程,免得留 5 分钟孤儿
     kill "$LEASE_HB_PID" 2>/dev/null
+    kill -CONT "$LEASE_HB_PID" 2>/dev/null
     wait "$LEASE_HB_PID" 2>/dev/null
   fi
   LEASE_HB_PID=""
