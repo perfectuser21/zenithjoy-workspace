@@ -195,3 +195,10 @@ exec /bin/date "$@"
  assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/WF_RUN_STARTED tag=auto10021859 /);
  assert.equal(existsSync(join(home,'.config/zenithjoy/ledger/social-keyword-leadgen-crontab-auto10021900')),false);
 });
+test('同cap/tag续跑先用已登记运行快照，全局最新plan缺失不得阻断旧run', { skip: SKIP },()=>{
+ const {home,env}=setup();const args=['keyword_acquisition','p1','SER1','biz','--tag','resume-old','--commander','cmdr-abc'];
+ seedRunner(env,args);
+ env.WF_PLAN_DIR=join(home,'new-deployment-plans');mkdirSync(env.WF_PLAN_DIR);
+ const r=spawnSync(ZSH,[WR,...args],{encoding:'utf8',env,timeout:30000});
+ assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/WF_RUN_STARTED tag=resume-old /);
+});
