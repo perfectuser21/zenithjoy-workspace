@@ -67,6 +67,21 @@ const sshLog = (home) => read(join(home, "ssh-argv.log"));
 const runLog = (home) => read(join(home, "log"));
 const rmLines = (home) => sshLog(home).split("\n").filter((l) => /cron rm/.test(l));
 
+test("执行器自拉陪跑也先通过 SSH 读取网关 SOP", { skip: SKIP }, () => {
+  const { home, env } = setup();
+  const result = lib("escort_add", env);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(sshLog(home), /--message '先执行 ssh -o BatchMode=yes -o ConnectTimeout=10 administrator@100\.71\.151\.105 cat \/Users\/administrator\/\.openclaw\/cmdr-escort\.txt/);
+});
+
+test("宪法与 SOP 明确网关读写路由，心跳不能在跑场本机访问 localhost", () => {
+  const law = readFileSync(join(SRC, "COMMANDER.md"), "utf8");
+  const sop = readFileSync(join(SRC, "cmdr-escort.txt"), "utf8");
+  for (const text of [law, sop]) assert.match(text, /SOP、日志、findings、openclaw CLI.*网关/);
+  assert.match(sop, /ssh -o BatchMode=yes -o ConnectTimeout=10 administrator@100\.71\.151\.105/);
+  assert.match(sop, /心跳.*网关.*执行/);
+});
+
 // 执行生产脚本的 trap 声明，隔离设备/账本边界，观察真实 shell 的退出顺序。
 for (const finalizeStatus of [0, 1]) {
   test(`退出时先 finalize；finalize ${finalizeStatus === 0 ? "成功才下岗" : "失败保留陪跑"}`, { skip: SKIP }, () => {
