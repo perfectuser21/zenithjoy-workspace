@@ -72,15 +72,18 @@
 
 | 谁 | 能不能删 escort cron | 条件 |
 |---|---|---|
-| wf-run 收尾 trap | **唯一正式注销者** | `cron list --json` 核对 id 在表且 name 全等 `escort-<机器>-<TAG>` 才删；不在表/别人的/读不到 → 只记日志不删 |
-| escort 自己 | 仅两种收工判据之一 | a) 日志出现 **本 TAG** 的 `[<TAG>] 批完成` 行；b) 起跑超 4 小时**且** `pgrep -f "wf-run.sh.*--tag <TAG>"` 为空 |
+| wf-run 收尾 trap | **唯一正式注销者** | finalize 自检成功后，`cron list --json` 核对 id 在表且 name 全等 `escort-<机器>-<TAG>` 才删；自检失败/不在表/别人的/读不到 → 只记日志不删 |
+| escort 自己 | 收尾后的补注销 | 读回 **本 TAG** 的 `[<TAG>] 账本finalize: ok=1`，且 `pgrep -f "wf-run.sh.*--tag <TAG>"` 为空；再按完整 name 核 id |
 | 其它执行体（哨兵/分身/治理 agent/人）| 禁 | name 以 `escort-` 开头且对应 run 仍在跑的 cron 一律不删，只报告 |
 
 - 日志读不到 / 日志停滞 / 日志桥落后 / 已升级 ≠ 收工：一律禁止 `cron rm`，只升级 + 汇报。
+- `[<TAG>] 批完成` 早于 trap finalize；批完成或超过 4 小时均不代表 finalize 成功，缺同 TAG 收尾证据就保留陪跑。
 - 注销前必须 `openclaw cron list --json` 按 name **整串全等**取 id，再删那一个 id。
 - wf-run 在途看门狗（`ESCORT_WATCH_INTERVAL` 默认 5 分钟）发现 escort 不在表 → 同名同会话立即重拉 + 升级留痕；谁删的去 MMV `gateway.log` 查 `cron.remove`。
 
 ## 六、机器识别铁律
+
+陪跑推理可能落在 MMV、M4 或 M1。SOP、日志、findings、openclaw CLI 均在网关 MMV（`administrator@100.71.151.105`）；先执行 `hostname`，在跑场上时通过 `ssh -o BatchMode=yes -o ConnectTimeout=10 administrator@100.71.151.105` 执行网关读写。心跳中的 `localhost:5221` 指网关代理，必须在网关执行；不得在跑场本机连接，也不得把跑场文件不存在报告成网关文件不存在。手机现场操作仍按调度单的目标机器执行。
 
 日志行开头的 `[xian-m4]` / `[xian-m1]` 标签是**唯一**机器判据，必须照抄，禁止靠内容猜。
 （0916 实证：靠猜会把 M4 事件报成 M1；打标签后同一事件立刻认对。）
