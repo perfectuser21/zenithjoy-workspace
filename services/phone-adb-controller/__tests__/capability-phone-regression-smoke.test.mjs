@@ -34,3 +34,10 @@ test('任何动态用例跳过都拒绝宣称完整回归通过', t => {
   assert.match(result.stderr, /跳过/);
   assert.doesNotMatch(result.stdout, /PASS capability-phone-regression-smoke/);
 });
+test('完整动态回归进入必绿基线，Glob runner显式安装所选套的真实依赖',()=>{
+ const baseline=readFileSync(new URL('../../../.github/workflows/scripts/smoke-baseline.txt',import.meta.url),'utf8').split('\n');
+ assert.ok(baseline.includes('capability-phone-regression-smoke.sh'),'新动态回归必须纳入必绿棘轮');
+ const workflow=readFileSync(new URL('../../../.github/workflows/ci-smoke-glob-runner.yml',import.meta.url),'utf8');
+ assert.match(workflow,/apt-get install -y zsh python3 jq libxml2-utils/);
+ assert.match(workflow,/npm ci --workspace=apps\/api --workspace=apps\/agent-panel --include-workspace-root/);
+});
