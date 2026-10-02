@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync,realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { digest } from './runtime-definition.mjs';
@@ -17,7 +17,7 @@ export function deploymentManifest(root,files,{commit,repo='perfectuser21/zenith
   });
   return {schema_version:1,source_repo:repo,source_commit:commit,files:entries};
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))){
   try{process.stdout.write(JSON.stringify(deploymentManifest(resolve(process.argv[2]),process.argv.slice(3)),null,2)+'\n');}
   catch(err){process.stderr.write(err.message+'\n');process.exitCode=1;}
 }

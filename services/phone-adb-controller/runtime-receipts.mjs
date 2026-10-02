@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { readFileSync,writeFileSync } from 'node:fs';
+import { readFileSync,writeFileSync,realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { freezeDefinition,readFrozen } from './runtime-definition.mjs';
@@ -42,4 +42,4 @@ export async function run(args){
   }
   throw Error(`未知runtime命令: ${cmd}`);
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))run(process.argv.slice(2)).catch(err=>{process.stderr.write(`WFR_RUNTIME_ERROR ${err.message}\n`);process.exitCode=1;});
+if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url)))run(process.argv.slice(2)).catch(err=>{process.stderr.write(`WFR_RUNTIME_ERROR ${err.message}\n`);process.exitCode=1;});
