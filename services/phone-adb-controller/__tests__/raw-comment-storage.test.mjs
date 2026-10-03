@@ -321,7 +321,7 @@ test('真实落池配送HTTP闭环：昵称/抖音号去重键trim一致并共�
 const secretCanary = 'credential-canary-raw-storage';
 const bodyCanary = 'response-body-canary-raw-storage';
 for (const scenario of [
-  { name: 'HTTP503', status: 503, body: { code: 999, msg: bodyCanary }, expected: { reason_code: 'raw_storage_http_failed', http_status: 503 } },
+  { name: 'HTTP503', status: 503, body: { code: 999, msg: bodyCanary }, expected: { reason_code: 'raw_storage_http_failed', http_status: 503, feishu_code: 999 } },
   { name: 'API非零', status: 200, body: { code: 1254060, msg: bodyCanary }, expected: { reason_code: 'raw_storage_api_failed', http_status: 200, feishu_code: 1254060 } },
   { name: '坏JSON', status: 200, body: bodyCanary, expected: { reason_code: 'raw_storage_response_invalid', http_status: 200 } },
   { name: 'API非法码', status: 200, body: { code: bodyCanary, msg: bodyCanary }, expected: { reason_code: 'raw_storage_response_invalid', http_status: 200 } },

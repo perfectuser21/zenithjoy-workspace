@@ -18,6 +18,38 @@ function isTimeout(error) {
   return error && ['TimeoutError', 'AbortError'].includes(error.name);
 }
 
+// 拒绝响应只保留平台整数码；大小和时间均有界，正文绝不进入诊断。
+async function rejectedResponseCode(response) {
+  let reader, timer;
+  try {
+    if (!response.body || typeof response.body.getReader !== 'function') return;
+    reader = response.body.getReader();
+    const deadline = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('error-body-timeout')), 1000);
+    });
+    const chunks = [];
+    let bytes = 0;
+    while (true) {
+      const { done, value } = await Promise.race([reader.read(), deadline]);
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > 8192) return;
+      chunks.push(value);
+    }
+    const result = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    if (Number.isInteger(result && result.code) && result.code >= 0 && result.code <= 2147483647) {
+      return result.code;
+    }
+  } catch (_) {
+    // 缺失、无效或读取失败的body不改变已确认的HTTP拒绝。
+  } finally {
+    clearTimeout(timer);
+    if (reader) {
+      try { Promise.resolve(reader.cancel()).catch(() => {}); } catch (_) { /* no body diagnostics */ }
+    }
+  }
+}
+
 // 环境由调用方注入；不从业务配置或输入中读取凭据，且不依赖模型/线索表。
 async function createRawCommentDeps(input, { env = process.env, request = fetch } = {}) {
   const route = validateInput(input);
@@ -34,7 +66,10 @@ async function createRawCommentDeps(input, { env = process.env, request = fetch 
     } catch (error) {
       throw storageError('飞书 HTTP 请求失败', isTimeout(error) ? 'raw_storage_timeout' : 'raw_storage_transport_failed');
     }
-    if (!response || !response.ok) throw storageError('飞书 HTTP 请求失败', 'raw_storage_http_failed', response);
+    if (!response || !response.ok) {
+      const code = response ? await rejectedResponseCode(response) : undefined;
+      throw storageError('飞书 HTTP 请求失败', 'raw_storage_http_failed', response, code);
+    }
     let result;
     try { result = await response.json(); } catch (error) {
       throw storageError('飞书响应未读回', isTimeout(error) ? 'raw_storage_timeout' : 'raw_storage_response_invalid', response);
