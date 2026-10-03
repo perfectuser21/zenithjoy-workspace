@@ -369,7 +369,8 @@ _search_kw_matches() {
 # 传入 KEYWORD 时，Activity 判真之后再核一遍搜索框文字是不是这次搜的词，
 # 两关都过才算真的回到结果页；不传 KEYWORD 时保留旧行为(向后兼容旧调用方)。
 back_to_results() {
-  local max="${1:-4}" kw="${2:-}" eid="${3:-btr-$$}" i fg xml_path
+  local max="${1:-4}" kw="${2:-}" eid="${3:-btr-$$}" rmax="${4:-2}" i fg xml_path
+  require_uint "$rmax"; (( rmax <= 2 )) || die "research retries must be <= 2"
   for i in {1..$max}; do
     fg="$(foreground_package)"
     if _is_search_results_fg "$fg"; then
@@ -403,14 +404,14 @@ back_to_results() {
   # "会计信息系统生命周期"，不是这次搜的"人工智能"，说明栈里堆的是设备长期
   # 运行积累的陈年页面，不是简单"多一层"能覆盖的)。传了 KEYWORD 时，重试耗尽
   # 不再继续赌栈深度，直接确定性重新发起这次搜索的意图——不依赖任何历史状态。
-  if [[ -n "$kw" ]]; then
+  if [[ -n "$kw" ]] && (( rmax > 0 )); then
     local kw_encoded rtry
     kw_encoded="$(/usr/bin/python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$kw" 2>/dev/null || true)"
     if [[ -n "$kw_encoded" ]]; then
       # 重试2次：0929实测手动逐步执行必成功，脚本里紧接着连续8次back+check之后
       # 立刻打这一枪，偶尔1.5秒等不到界面真正稳定(uiautomator dump本身也有3波内部
       # 重试，但架不住外层已经连轴转了8轮)，给多一次机会比死等更长时间更稳。
-      for rtry in 1 2; do
+      for rtry in {1..$rmax}; do
         "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "snssdk1128://search/tabs?keyword=${kw_encoded}" >/dev/null 2>&1
         wait_ms 1800
         xml_path="$EVIDENCE_ROOT/${eid}-recover${rtry}.xml"
@@ -422,6 +423,7 @@ back_to_results() {
     fi
   fi
   # 退不回去就明说，别让调用方以为已经归位——那正是这个 bug 的形状。
+  (( rmax == 0 )) && print -u2 -- "DISCOVERY_TARGET_UNCONFIRMED"
   print -u2 -- "back-to-results: still off the search result page after ${max} backs (fg=${fg})"
   return 1
 }
@@ -2703,6 +2705,32 @@ case "$command" in
     wait_ms "${4:-800}"
     snapshot
     ;;
+  tap-search-video-target)
+    # Discovery专用：判据与坐标全部来自这一份fresh XML，禁止旧坐标/视觉兜底。
+    [[ "$#" == 8 || "$#" == 9 ]] || die "usage: tap-search-video-target KW_B64 TITLE_B64 DURATION EVIDENCE OWNER STOP_FILE DEADLINE_MS [WAIT_MS]"
+    require_evidence_id "$5"; require_run_id "$6"; require_uint "$8"
+    target_guard() {
+      [[ -r "$LOCK_DIR/owner" && "$(<"$LOCK_DIR/owner")" == "$6" ]] || die "DISCOVERY_FOREIGN_LOCK"
+      [[ ! -e "$7" && ( -z "${WF_STOP_FILE:-}" || ! -e "$WF_STOP_FILE" ) ]] || die "DISCOVERY_STOP_REQUESTED"
+      target_now="$(/usr/bin/env node -p 'Date.now()')"
+      (( target_now < $8 )) || die "DISCOVERY_DEADLINE_EXCEEDED"
+    }
+    # 函数参数沿用完整argv，避免函数自己的位置参数替换外层上下文。
+    [[ -r "${0:A:h}/search-video-target.js" ]] || die "Discovery target parser is missing"
+    target_guard "$@"; check_target
+    target_xml="$(_ui_evidence_wave "$5-target")" || die "DISCOVERY_TARGET_UNCONFIRMED"
+    target_xy="$(/usr/bin/env node "${0:A:h}/search-video-target.js" "$target_xml" "$2" "$3" "$4" "$SCREEN_W" "$SCREEN_H")" || die "DISCOVERY_TARGET_UNCONFIRMED"
+    read target_x target_y <<< "$target_xy"
+    require_uint "$target_x"; require_uint "$target_y"
+    target_guard "$@"; check_target_fast; target_guard "$@"
+    "$ADB" -s "$SERIAL" shell input tap "$target_x" "$target_y"
+    target_guard "$@"
+    wait_ms "${9:-800}"
+    snapshot_evidence_cmd "$5"
+    target_guard "$@"
+    print -- "tapped=$target_x $target_y"
+    print -- "target_evidence=$target_xml"
+    ;;
   tap-evidence)
     [[ "$#" == 4 || "$#" == 5 ]] || die "usage: douyin-phone-adb --profile PROFILE tap-evidence X Y EVIDENCE_ID [WAIT_MS]"
     require_uint "$2"; require_uint "$3"
@@ -2781,9 +2809,9 @@ case "$command" in
   back-to-results)
     # 退回搜索结果页（采收循环处理完一个视频后的归位动作）。
     # KEYWORD 传了才会核实搜索框文字，不传保留旧行为(0929前的调用方向后兼容)。
-    [[ "$#" -ge 1 && "$#" -le 4 ]] || die "usage: douyin-phone-adb --profile PROFILE back-to-results [MAX_BACKS] [KEYWORD] [EVIDENCE_ID_PREFIX]"
+    [[ "$#" -ge 1 && "$#" -le 5 ]] || die "usage: douyin-phone-adb --profile PROFILE back-to-results [MAX_BACKS] [KEYWORD] [EVIDENCE_ID_PREFIX] [RESEARCH_RETRIES]"
     check_target
-    back_to_results "${2:-4}" "${3:-}" "${4:-btr-$$}"
+    back_to_results "${2:-4}" "${3:-}" "${4:-btr-$$}" "${5:-2}"
     ;;
   search-kw-matches)
     # 纯判定：一份 UI 树里搜索框文字是不是等于预期关键词。不碰设备，CI 可直接测。
@@ -3216,6 +3244,6 @@ case "$command" in
     print -- "foreground=${focus:-unknown}"
     ;;
   *)
-    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release lock-refresh lock-reap with-lock refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link own-profile account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid results-controls-from-xml filter-panel-location"
+    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release lock-refresh lock-reap with-lock refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence tap-search-video-target swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link own-profile account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid results-controls-from-xml filter-panel-location"
     ;;
 esac

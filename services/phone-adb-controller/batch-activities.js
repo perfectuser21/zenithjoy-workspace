@@ -6,6 +6,7 @@ const { tmpdir } = require('node:os');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { routeOf } = require('./line-routes.js');
+const { decodeXml } = require('./search-video-target.js');
 const execute = promisify(execFile);
 const VIDEO_ID = /^\d{16,24}$/;
 const RUN_ID = /^[a-zA-Z0-9_.-]{1,96}$/;
@@ -83,7 +84,20 @@ function context(action, input, route) {
       observation.stderr = String(error.stderr || '').slice(0, 500); observation.timed_out = !!error.killed;
       result.evidence.push(observation);
       if (error.killed) boundary();
-      throw new ActivityFailure(options.failure || 'phone_transport_unavailable', action === 'discovery' ? 'partial' : 'failed');
+      let failure = options.failure || 'phone_transport_unavailable';
+      // 只分类Discovery真实命令的精确上下文错误；其他stderr仍属于原运输失败。
+      if (action === 'discovery') {
+        const lines = String(error.stderr || '').split('\n').map(line => line.trim());
+        if (args[2] === 'tap-search-video-target') {
+          if (lines.includes('DISCOVERY_TARGET_UNCONFIRMED')) failure = 'discovery_context_unconfirmed';
+          if (lines.includes('DISCOVERY_FOREIGN_LOCK')) failure = 'foreign_lock';
+          if (lines.includes('DISCOVERY_STOP_REQUESTED')) { boundary(); failure = 'interrupted'; }
+          if (lines.includes('DISCOVERY_DEADLINE_EXCEEDED')) { boundary(); failure = 'budget_exceeded'; }
+        }
+        if (args[2] === 'current-video-link' && lines.some(line => line.startsWith('NOT_ON_VIDEO_DETAIL: current-video-link requires an opened video detail page'))
+            || args[2] === 'back-to-results' && lines.includes('DISCOVERY_TARGET_UNCONFIRMED')) failure = 'discovery_context_unconfirmed';
+      }
+      throw new ActivityFailure(failure, action === 'discovery' ? 'partial' : 'failed');
     }
   }
   async function phone(name, ...args) {
@@ -112,7 +126,7 @@ function context(action, input, route) {
     if (!process.env.HARVEST_KEYWORD_TESTING) await new Promise(resolve => setTimeout(resolve, seconds * 1000));
     boundary();
   }
-  return { result, boundary, phone, remote, issue, nap, dispose() {
+  return { result, boundary, phone, remote, issue, nap, targetBoundary: () => [stopFile, String(Date.now() + remoteCap(180))], dispose() {
     process.off('SIGTERM', stop); process.off('SIGINT', stop); fs.rmSync(cancellation, { recursive: true, force: true });
   } };
 }
@@ -189,15 +203,15 @@ async function preflight(ctx, input) {
 
 function cardsOf(text, max) {
   return String(text).split('\n').filter(line => /^\d+\t\d+\t/.test(line)).slice(0, max).map(line => {
-    const [x, y, duration, ...title] = line.split('\t'); return { x, y, duration, title: title.join('\t') };
+    const [x, y, duration, ...title] = line.split('\t'); return { x, y, duration, title: decodeXml(title.join('\t')) };
   });
 }
-async function scan(ctx, input, keyword, tag, reopen = true) {
+async function scan(ctx, input, keyword, tag, reopen = true, attempts = 2) {
   await assertLock(ctx, input);
   if (reopen) { await ctx.phone('open-app'); await ctx.nap(2); }
   // 打开搜索或筛选失败均同词重开一次；video tab 已在页的容错沿用旧实现。
   let filtered = false, failureReason = 'search_filter_failed';
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       if (reopen || attempt > 1) {
         failureReason = 'search_open_failed';
@@ -215,7 +229,7 @@ async function scan(ctx, input, keyword, tag, reopen = true) {
   }
   if (!filtered) throw new ActivityFailure(failureReason, 'partial');
   await ctx.nap(2);
-  const cards = cardsOf(await ctx.phone('search-video-cards', `${tag}-cards`), keyword.max_videos || 4);
+  const cards = cardsOf(await ctx.phone('search-video-cards', `${tag}-cards`), Math.min(keyword.max_videos || 4, 4));
   ctx.result.metrics.screens_scanned++;
   return cards;
 }
@@ -241,13 +255,31 @@ async function discovery(ctx, input) {
     ctx.boundary(); const keyword = input.keywords[wordIndex]; const tag = `${input.run_tag}-w${wordIndex + 1}`;
     try {
       await assertLock(ctx, input); await ctx.phone('close-app');
-      let cards = await scan(ctx, input, keyword, tag); let rescans = 0;
+      const cards = await scan(ctx, input, keyword, tag); let rescans = 0;
+      async function recover(eid) {
+        ctx.boundary(); await assertLock(ctx, input);
+        if (rescans >= 3) throw new ActivityFailure('discovery_context_unconfirmed', 'partial');
+        rescans++;
+        // 恢复只重新打开同词并应用同一filters；返回卡片不替换初始目标队列。
+        await scan(ctx, input, keyword, `${eid}-rescan-${rescans}`, true, 1);
+      }
       for (let cardIndex = 0; cardIndex < cards.length; cardIndex++) {
-        ctx.boundary(); await verifyDevice(ctx, input); await assertLock(ctx, input);
         const card = cards[cardIndex], eid = `${tag}-v${cardIndex + 1}`;
-        await ctx.phone('tap-evidence', card.x, card.y, eid);
-        await ctx.nap(3);
-        const link = fields(await ctx.phone('current-video-link', `${eid}-vl`));
+        let link;
+        for (;;) {
+          ctx.boundary(); await verifyDevice(ctx, input); await assertLock(ctx, input);
+          try {
+            await ctx.phone('tap-search-video-target', Buffer.from(keyword.word).toString('base64'),
+              Buffer.from(card.title).toString('base64'), card.duration, eid, input.run_tag, ...ctx.targetBoundary());
+            await ctx.nap(3); await assertLock(ctx, input);
+            link = fields(await ctx.phone('current-video-link', `${eid}-vl`));
+            ctx.boundary(); await assertLock(ctx, input);
+            break;
+          } catch (e) {
+            if (e.reason !== 'discovery_context_unconfirmed') throw e;
+            await recover(eid);
+          }
+        }
         ctx.boundary();
         if (link.excluded_non_video === 'true') { result.evidence.push({ video_id: null, reason_code: 'non_video_skipped' }); }
         else if (!VIDEO_ID.test(link.video_id || '') || !/^https?:\/\//.test(link.short_url || '')) { ctx.issue('video_link_invalid', { observed: link }); }
@@ -276,12 +308,14 @@ async function discovery(ctx, input) {
           } else { ctx.issue('candidate_persist_failed', { video_id: link.video_id, persisted }); }
         }
         ctx.boundary(); await assertLock(ctx, input);
-        const returned = await ctx.phone('back-to-results', '4', keyword.word, `${eid}-btr`);
-        if (returned.includes('recovered_via=research')) {
-          if (++rescans > 3) { ctx.issue('rescan_limit'); break; }
-          cards = await scan(ctx, input, keyword, `${eid}-rescan`, false);
-          // 重新筛选可能改变卡片坐标；从下一卡继续，批内 ID 去重，禁止重扫从头死循环。
+        try {
+          // 本调用方统一计数恢复；不允许控制器在内部再悄悄重搜两次。
+          await ctx.phone('back-to-results', '4', keyword.word, `${eid}-btr`, '0');
+        } catch (e) {
+          if (e.reason !== 'discovery_context_unconfirmed') throw e;
+          await recover(eid);
         }
+        ctx.boundary(); await assertLock(ctx, input);
       }
       result.metrics.keywords_processed++;
     } catch (e) {

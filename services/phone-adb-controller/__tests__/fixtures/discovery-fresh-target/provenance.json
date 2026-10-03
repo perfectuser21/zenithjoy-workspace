@@ -1,0 +1,17 @@
+[
+  {
+    "fixture": "initial.xml",
+    "original": "/tmp/commander-native16-tagged-ui-originals-20261003/commander-20261003-2dd3-m4-native16-w1-cards-grid.xml",
+    "sha256": "5fa729d3e45d480fae16f309d2743ea5791f66b127723375265ee0b246ac4ca6"
+  },
+  {
+    "fixture": "moved.xml",
+    "original": "/tmp/commander-native16-tagged-ui-originals-20261003/commander-20261003-2dd3-m4-native16-w1-v2-btr-check4.xml",
+    "sha256": "849a2ec5cf6876b7e96c91cd474f2907e4f665723f7cde7a0799e5b1692a7510"
+  },
+  {
+    "fixture": "wrong-keyword.xml",
+    "original": "/tmp/commander-native16-tagged-ui-originals-20261003/commander-20261003-2dd3-m4-native16-w1-v3-vl-detail-guard-w1.xml",
+    "sha256": "27230f990ab653eaae25b9f0698230fd8c9c3904aff4a6773b7b2db323ea0d0a"
+  }
+]

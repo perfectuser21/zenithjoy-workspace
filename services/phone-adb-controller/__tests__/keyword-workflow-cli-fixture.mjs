@@ -37,6 +37,8 @@ const controller = header + `
  case 'open-search':locked();state.word=decodeURIComponent(argv[0]);save();break;
  case 'search-video-cards':
    locked();emit(state.word===${JSON.stringify(words[0])}?'10\\t100\\t00:30\\tAI课程1\\n20\\t200\\t00:30\\t历史课程':'10\\t100\\t00:30\\t批内重复\\n30\\t300\\t00:30\\tAI课程2');break;
+ case 'tap-search-video-target':
+   locked();const title=Buffer.from(argv[1],'base64').toString();const byTitle={'AI课程1':${JSON.stringify(ids[0])},'批内重复':${JSON.stringify(ids[0])},'历史课程':${JSON.stringify(ids[2])},'待判课程':${JSON.stringify(ids[2])},'AI课程2':${JSON.stringify(ids[1])}};if(!Object.hasOwn(byTitle,title))throw Error('unknown fixture target title');state.video=byTitle[title];save();break;
  case 'tap-evidence':
    locked();if(argv[2]?.includes('-w')){state.video=argv[0]==='10'?${JSON.stringify(ids[0])}:argv[0]==='20'?${JSON.stringify(ids[2])}:${JSON.stringify(ids[1])};save();}break;
  case 'open-video':

@@ -42,9 +42,10 @@ case 'return-safe-desktop':s.foreground=s.unsafe_desktop?'com.other':'com.launch
 case 'open-search':s.search_attempts=(s.search_attempts||0)+1;save();if(s.search_attempts<=(s.search_fail_count||0)){console.error('fixture search unavailable');process.exitCode=1;break;}s.keyword=decodeURIComponent(a[3]);save();emit('search_opened=1');break;
 case 'search-video-tab':emit('ok=1');break;
 case 'search-time-layer':s.filter_attempts=(s.filter_attempts||0)+1;save();if(s.filter_first_fails&&s.filter_attempts===1){process.exitCode=1;break;}emit('ok=1');break;
-case 'search-video-cards':for(let i=0;i<(s.ids[s.keyword]||[]).length;i++)emit((100+i)+'\\t200\\t01:30\\t'+s.keyword+'标题'+i);break;
+case 'search-video-cards':for(let i=0;i<(s.ids[s.keyword]||[]).length;i++)emit((100+i)+'\\t200\\t01:30\\t'+(s.entity_title?'AT&amp;T &quot;课程&quot;'+i:s.keyword+'标题'+i));break;
 case 'tap-evidence':s.tapped=Number(a[3])-100;save();emit('tap=1');break;
-case 'current-video-link':const id=(s.ids[s.keyword]||[])[s.tapped];emit('video_id='+id+'\\nshort_url=https://www.douyin.com/video/'+id);break;
+case 'tap-search-video-target':s.target_attempts=(s.target_attempts||0)+1;save();if(s.target_always_missing||s.target_attempts<=(s.target_fail_count||0)){console.error('DISCOVERY_TARGET_UNCONFIRMED');process.exitCode=2;break;}const title=Buffer.from(a[4],'base64').toString();s.target_titles=(s.target_titles||[]).concat(title);s.tapped=Number(title.at(-1));if(s.foreign_on_target===s.target_attempts)s.owner='foreign-run';save();emit('tap=1');break;
+case 'current-video-link':if(s.link_context_error){console.error('NOT_ON_VIDEO_DETAIL: current-video-link requires an opened video detail page');process.exitCode=2;break;}if(s.link_bad_exit){console.log('video_id=1234567890123456789\\nshort_url=https://www.douyin.com/video/1234567890123456789');process.exitCode=2;break;}const id=s.invalid_vid?'not-a-video':(s.ids[s.keyword]||[])[s.tapped];emit('video_id='+id+'\\nshort_url=https://www.douyin.com/video/'+id);break;
 case 'back-to-results':emit('back_to_results=1');break;
 default:console.error('unknown fixture command '+c);process.exitCode=99;
 }}
@@ -260,7 +261,7 @@ test('known historical missing-ID placeholders keep valid dedup IDs; unrelated m
 
 test('deadline and stop retain candidates and start no new card', async () => {
   const f=fixture({owner:'batch-fixture',stop_after_persist:true});try{const r=await f.run('discovery');assert.equal(r.code,2);
-    assert.equal(r.result.reason_code,'commander_stop');assert.equal(r.result.outputs.videos.length,1);assert.equal(actions(f).filter(c=>c==='tap-evidence').length,1);
+    assert.equal(r.result.reason_code,'commander_stop');assert.equal(r.result.outputs.videos.length,1);assert.equal(actions(f).filter(c=>c==='tap-search-video-target').length,1);
   }finally{f.dispose();}
   const d=fixture({owner:'batch-fixture'});try{const r=await d.run('discovery',input(),{WF_RUN_START_TS:'1',WF_RUN_MAX_SECONDS:'1'});
     assert.equal(r.code,2);assert.equal(r.result.reason_code,'deadline');assert.deepEqual(d.commands(),[]);
@@ -268,7 +269,7 @@ test('deadline and stop retain candidates and start no new card', async () => {
 });
 
 test('own TERM waits for in-flight phone action and ends at safe boundary', async () => {
-  const f=fixture({owner:'batch-fixture',delay_command:'tap-evidence',delay_ms:450});try{
+  const f=fixture({owner:'batch-fixture',delay_command:'tap-search-video-target',delay_ms:450});try{
     const r=await f.run('discovery',input(),{},child=>{
       const timer=setInterval(()=>{try{readFileSync(f.env.FIXTURE_MARKER);clearInterval(timer);child.kill('SIGTERM');}catch{}},10);
       child.on('close',()=>clearInterval(timer));
@@ -278,7 +279,7 @@ test('own TERM waits for in-flight phone action and ends at safe boundary', asyn
 });
 
 test('activity budget ends at completed phone-action boundary', async () => {
-  const f=fixture({owner:'batch-fixture',delay_command:'tap-evidence',delay_ms:3500});try{
+  const f=fixture({owner:'batch-fixture',delay_command:'tap-search-video-target',delay_ms:3500});try{
     const v=input();v.budget.max_duration_s=3;const r=await f.run('discovery',v);assert.equal(r.code,2);
     assert.equal(r.result.reason_code,'budget_exceeded');assert.equal(readFileSync(f.env.FIXTURE_MARKER,'utf8'),'started');assert.ok(!actions(f).includes('current-video-link'));
   }finally{f.dispose();}
@@ -301,4 +302,32 @@ test('unsafe desktop remains a cleanup failure even when lock release succeeds',
   const f=fixture({owner:'batch-fixture',unsafe_desktop:true});try{const r=await f.run('cleanup');assert.equal(r.code,1);
     assert.equal(r.result.metrics.safe_desktop_visible,0);assert.equal(r.result.metrics.lock_released,1);assert.equal(f.state().owner,null);
   }finally{f.dispose();}
+});
+
+
+test('discovery uses fresh identity command and preserves original target queue after recovery', async () => {
+ const f=fixture({owner:'batch-fixture',target_fail_count:1});try{const v=input();v.keywords=[v.keywords[0]];const r=await f.run('discovery',v);assert.equal(r.code,0,r.stdout);
+ assert.deepEqual(f.state().target_titles,['人工智能标题0','人工智能标题1']);assert.ok(!actions(f).includes('tap-evidence'));
+ const targets=f.commands().filter(a=>a[2]==='tap-search-video-target');assert.equal(targets.length,3);assert.deepEqual(targets.map(a=>Buffer.from(a[4],'base64').toString()),['人工智能标题0','人工智能标题0','人工智能标题1']);
+ }finally{f.dispose();}
+});
+test('missing target is bounded to three same-keyword recovery cycles, never swaps target', async()=>{
+ const f=fixture({owner:'batch-fixture',target_always_missing:true});try{const v=input();v.keywords=[v.keywords[0]];const r=await f.run('discovery',v);assert.equal(r.code,2,r.stdout);assert.equal(r.result.reason_code,'discovery_context_unconfirmed');assert.equal(f.state().target_attempts,4);assert.ok(!actions(f).includes('current-video-link'));assert.equal(r.result.outputs.videos.length,0);
+ }finally{f.dispose();}
+});
+test('NOT_ON_VIDEO_DETAIL is a local Discovery context failure, transport and invalid VID never persist',async()=>{
+ for(const cfg of [{link_context_error:true},{invalid_vid:true},{link_bad_exit:true}]){
+  const f=fixture({owner:'batch-fixture',...cfg});try{const v=input();v.keywords=[v.keywords[0]];const r=await f.run('discovery',v);assert.equal(r.code,2,r.stdout);assert.equal(r.result.metrics.persisted,0);assert.ok(!f.commands().some(a=>a.at(-1).includes('qualify-video.js discover')));if(cfg.link_context_error)assert.equal(r.result.reason_code,'discovery_context_unconfirmed');if(cfg.link_bad_exit)assert.equal(r.result.reason_code,'phone_transport_unavailable');
+  }finally{f.dispose();}
+ }
+});
+
+test('lock changes after target operation retain earlier output and prevent further link or persist', async()=>{
+ const f=fixture({owner:'batch-fixture',foreign_on_target:2});try{const v=input();v.keywords=[v.keywords[0]];const r=await f.run('discovery',v);assert.equal(r.code,2,r.stdout);assert.equal(r.result.reason_code,'foreign_lock');assert.equal(r.result.outputs.videos.length,1);assert.equal(actions(f).filter(c=>c==='current-video-link').length,1);assert.equal(r.result.metrics.persisted,1);
+ }finally{f.dispose();}
+});
+
+test('scan raw XML title entities are decoded once for immutable target identity and persisted title',async()=>{
+ const f=fixture({owner:'batch-fixture',entity_title:true});try{const v=input();v.keywords=[v.keywords[0]];const r=await f.run('discovery',v);assert.equal(r.code,0,r.stdout);assert.deepEqual(f.state().target_titles,['AT&T "课程"0','AT&T "课程"1']);assert.equal(r.result.outputs.videos[0].title,'AT&T "课程"0');
+ }finally{f.dispose();}
 });

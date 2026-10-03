@@ -112,7 +112,7 @@ MMV_PROBE_FILES=(
 # 生产跑的却仍是 ~/.local/bin 的旧版本,音量棘轮修复完全没生效,最后靠人工 scp 才落地。
 # 漏任一目录 = 两份副本版本分叉,且部署过程不会报任何错。层26 smoke 守卫盯这件事。
 DEVICE_CTL_FILES=(
-  phone-lock-lib.sh phone-lock-helper.py locate-element.py douyin-phone-adb
+  phone-lock-lib.sh phone-lock-helper.py locate-element.py search-video-target.js douyin-phone-adb
 )
 DEVICE_CTL_DIRS=(bin-harvest .local/bin)
 DEVICE_SH_FILES=(
@@ -128,7 +128,7 @@ DEVICE_NODE_FILES=(
   gateway-context.js runtime-host.mjs runtime-release.mjs runtime-binding.mjs deployment-manifest.mjs runtime-definition.mjs runtime-outbox.mjs runtime-receipts.mjs ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js line-routes.js
   own-accounts-lib.js check-own-account.js comment-tier-lib.js config/own-accounts.json
   video-activities.js video-activity.js
-  batch-activities.js batch-activity.js keyword-workflow.js keyword-workflow-control.js keyword-workflow-activity.js
+  search-video-target.js batch-activities.js batch-activity.js keyword-workflow.js keyword-workflow-control.js keyword-workflow-activity.js
   workflow-probe.js workflow-probes.mjs verify-step.mjs checks/probes-lib.js checks/schema.json checks/social-keyword-leadgen.yaml
   comment-activity.js comment-activities.js comment-delivery-storage.js video-delivery-storage.js video-collection-receipt.js
   raw-comment-activities.js raw-comment-storage.js raw-comment-delivery.js
@@ -278,6 +278,8 @@ for host in xian-m4 xian-m1; do
       ssh "$host" "chmod +x ~/$dir/$f"
       if [[ "$f" == *.py ]]; then
         _ctl_check="/opt/homebrew/bin/python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' ~/$dir/$f"
+      elif [[ "$f" == *.js || "$f" == *.mjs ]]; then
+        _ctl_check="/opt/homebrew/bin/node --check ~/$dir/$f"
       else
         _ctl_check="zsh -n ~/$dir/$f"
       fi

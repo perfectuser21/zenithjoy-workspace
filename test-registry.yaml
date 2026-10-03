@@ -7342,3 +7342,11 @@ agent_suite:
     status: active
     product: 智能获客
     note: "真实本地shell/controller CLI，外部物理与网关边界替身：名片有界恢复/三次重试、fresh坐标、身份分类、返回码拒绝与旧loop兼容。"
+
+  - id: discovery-fresh-target
+    path: services/phone-adb-controller/__tests__/discovery-fresh-target.test.mjs
+    type: unit
+    ci: L3
+    status: active
+    product: 智能获客
+    note: "真实控制器+封存XML：同帧目标重定位、旧坐标误点复现、歧义/错词/tab/坏frame/bounds拒绝、stop/deadline/foreign锁及平铺parser缺失拒绝。"
