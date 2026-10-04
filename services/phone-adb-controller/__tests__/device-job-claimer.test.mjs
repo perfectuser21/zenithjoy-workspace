@@ -389,3 +389,30 @@ test('每分钟巡检只回收在线手机stale锁，v2表头调序和失败不�
   assert.match(args,/--profile legacy lock-status/);assert.match(args,/--profile legacy lock-reap/);assert.doesNotMatch(args,/offline/);
   assert.ok(api.requests.some(q=>q.url==='/api/schedule/claim'));assert.match(readFileSync(join(dir,'claimer.log'),'utf8'),/手机锁巡检.*brain-unavailable/);
 });
+
+// 10-01 起两台机日志"静默"被误判为故障：没单时本就不写日志，而"请求根本没发出去"也不写——两者分不清（任务 ed591256）。
+// 修后：每轮认领拿到合法应答（有单没单都算）就刷新心跳文件；无应答/非 JSON 记「认领无响应」，按小时限频。
+test('没活时刷新心跳文件，仍不碰手机', async (t) => {
+  const dir = makeTmp();
+  const api = await startFakeApi({ job: null });
+  t.after(() => api.close());
+  const ctl = makeFakePhoneCtl(dir);
+  const r = await run(makeEnv(dir, { apiBase: api.url, adb: makeFakeAdb(dir, { serials: ['SER1'] }), phoneCtl: ctl.path }));
+  assert.equal(r.status, 0, r.stderr);
+  const hb = join(dir, '.config', 'zenithjoy', 'devicejobclaimer.heartbeat');
+  assert.ok(existsSync(hb), '没活也要有心跳，才能和"请求没发出去"区分');
+  assert.match(readFileSync(hb, 'utf8'), /^\d{10}/);
+  assert.equal(existsSync(ctl.argsFile), false);
+});
+
+test('中台连不上：记「认领无响应」，不刷新心跳；连跑两轮只记一行（按小时限频）', async () => {
+  const dir = makeTmp();
+  const env = makeEnv(dir, { apiBase: 'http://127.0.0.1:9', adb: makeFakeAdb(dir, { serials: ['SER1'] }), phoneCtl: makeFakePhoneCtl(dir).path });
+  const r1 = await run({ ...env, ZJ_API_TIMEOUT: '2' });
+  const r2 = await run({ ...env, ZJ_API_TIMEOUT: '2' });
+  assert.equal(r1.status, 0, r1.stderr);
+  assert.equal(r2.status, 0, r2.stderr);
+  const log = existsSync(env.ZJ_CLAIMER_LOG) ? readFileSync(env.ZJ_CLAIMER_LOG, 'utf8') : '';
+  assert.equal((log.match(/认领无响应/g) || []).length, 1, log);
+  assert.equal(existsSync(join(dir, '.config', 'zenithjoy', 'devicejobclaimer.heartbeat')), false);
+});
