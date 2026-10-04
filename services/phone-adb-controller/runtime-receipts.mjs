@@ -7,12 +7,21 @@ import { freezeDefinition,readFrozen,registerRun,locateRun } from './runtime-def
 import { bindRun,readBinding } from './runtime-binding.mjs';
 import { enqueue,flush,occurrence } from './runtime-outbox.mjs';
 const e=process.env;
-function request(path,body){
+// release 整包数百 KB，执行机经中继跨境下载晚高峰要 6–10 秒：GET 给 60 秒并重试；POST 只放宽超时不盲目重试。
+// curl 失败时 Node 的报错会带整条命令（含 Bearer token），这里换成只含方法/路径/退出码/stderr 摘要的错误。
+export function request(path,body){
   if(!e.BRAIN_URL)throw Error('BRAIN_URL缺失，不能固定运行版本');
   const endpoint=path.startsWith('http')?path:`${e.BRAIN_URL.replace(/\/$/,'')}${path}`;
-  const args=['-sS','--connect-timeout','3','-m','8',endpoint,'-H',`Authorization: Bearer ${e.BRAIN_INTERNAL_TOKEN||''}`,'-w','\n%{http_code}'];
+  const timing=body?['--connect-timeout','10','-m','30']:['--connect-timeout','10','-m','60','--retry','3','--retry-all-errors','--retry-delay','2'];
+  const args=['-sS',...timing,endpoint,'-H',`Authorization: Bearer ${e.BRAIN_INTERNAL_TOKEN||''}`,'-w','\n%{http_code}'];
   if(body)args.push('-X','POST','-H','Content-Type: application/json','-d',JSON.stringify(body));
-  const output=execFileSync('curl',args,{encoding:'utf8',maxBuffer:10*1024*1024});const split=output.lastIndexOf('\n'),status=Number(output.slice(split+1));
+  let output;
+  try{output=execFileSync('curl',args,{encoding:'utf8',maxBuffer:10*1024*1024,stdio:['ignore','pipe','pipe']});}
+  catch(err){
+    const why=String(err.stderr||'').replace(/Bearer\s+\S+/g,'Bearer ***').trim().split('\n').slice(-2).join(' ').slice(0,200);
+    throw Error(`Brain请求失败 ${body?'POST':'GET'} ${path} curl=${err.status??'?'} ${why}`);
+  }
+  const split=output.lastIndexOf('\n'),status=Number(output.slice(split+1));
   if(status<200||status>=300){const err=Error(`Brain HTTP ${status}`);err.status=status;throw err;}
   return JSON.parse(output.slice(0,split));
 }
@@ -32,7 +41,7 @@ export async function run(args){
   if(cmd==='prepare'){
     const runIdentity=e.WF_ARG_CAP?{capability:e.WF_ARG_CAP,tag:e.WFR_TAG,profile:e.P,serial:e.SERIAL,run_id:e.WFR_RUN_ID}:null;
     const root=e.WF_DEPLOYMENT_ROOT||e.WF_HOME;
-    await freezeDefinition({requireRelease:true,releaseId:e.WF_RELEASE_ID,runIdentity,runDir:dir,deploymentRoot:root,manifestPath:e.WF_DEPLOYMENT_MANIFEST,workflowKey:e.WF_BRAIN_WORKFLOW,rawContractSha256:e.WF_CONTRACT_RAW_SHA256,activityRefs:e.WF_ACTIVITY_REFS?JSON.parse(e.WF_ACTIVITY_REFS):null,planPath:e.WF_PLAN_PATH,stepSpecPath:resolve(root,e.WF_STEP_SPEC||''),get:request});
+    await freezeDefinition({requireRelease:true,releaseId:e.WF_RELEASE_ID,runIdentity,runDir:dir,deploymentRoot:root,manifestPath:e.WF_DEPLOYMENT_MANIFEST,workflowKey:e.WF_BRAIN_WORKFLOW,rawContractSha256:e.WF_CONTRACT_RAW_SHA256,activityRefs:e.WF_ACTIVITY_REFS?JSON.parse(e.WF_ACTIVITY_REFS):null,planPath:e.WF_PLAN_PATH,stepSpecPath:resolve(root,e.WF_STEP_SPEC||''),releaseCacheDir:resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'release-cache'),get:request});
     if(runIdentity)registerRun(indexRoot,dir,runIdentity);return;
   }
   if(cmd==='bind-run'){const result=await bindRun({dir,runId:e.WFR_RUN_ID,brainUrl:e.BRAIN_URL,request});process.stdout.write(`WFR_ATTEMPT=${result.attempt_key}\nWFR_SKIP_WORDS='${result.skip_words.join('|').replace(/'/g,"'\\''")}'\n`);return;}

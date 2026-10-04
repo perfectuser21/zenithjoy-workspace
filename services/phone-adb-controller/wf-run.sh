@@ -97,11 +97,19 @@ export WF_HOME WF_DEPLOYMENT_ROOT="${WF_DEPLOYMENT_ROOT:-$WF_HOME}"
 export WF_PLAN_PATH="$WF_PLAN_DIR/$WF_ARG_CAP.plan" WF_BRAIN_WORKFLOW WF_CONTRACT_RAW_SHA256 WF_ACTIVITY_REFS WF_STEP_SPEC
 export WFR_RUN_ID="${WF_WORKFLOW}-crontab-$TAG"
 export WFR_RUN_DIR="${WFR_HOME:-$HOME/.config/zenithjoy}/ledger/$WFR_RUN_ID"
-if ! bash "$WFR" prepare; then
-  log "拒跑: 工作流定义版本冻结失败"
-  print -u2 -- "拒跑: 工作流定义版本冻结失败"
+# 运行时子命令的 stderr 先落临时文件再脱敏进日志：crontab 把 stderr 丢 /dev/null，且原始报错可能带 Bearer token。
+wf_runtime_why() {  # $1=stderr 文件 → 打印脱敏后的末尾两行（≤400 字）
+  sed -E 's/(Bearer )[^ "]+/\1***/g; s/(BRAIN_INTERNAL_TOKEN=)[^ ]+/\1***/g' "$1" 2>/dev/null | grep -v '^[[:space:]]*$' | tail -2 | tr '\n' ' ' | cut -c1-400
+}
+WF_RT_ERR=$(mktemp -t wfrt.XXXXXX)
+if ! bash "$WFR" prepare 2>"$WF_RT_ERR"; then
+  WHY=$(wf_runtime_why "$WF_RT_ERR"); rm -f "$WF_RT_ERR"
+  log "拒跑: 工作流定义版本冻结失败: $WHY"
+  print -u2 -- "拒跑: 工作流定义版本冻结失败: $WHY"
+  escalate "${WF_CAP:-$WF_ARG_CAP} 未起跑: 工作流定义版本冻结失败: $WHY"
   exit 1
 fi
+rm -f "$WF_RT_ERR"
 # 转到冻结shell本身：zsh后续读取与相对source也不能再命中全局部署目录。
 if [[ "$WF_HOME" != "${WFR_RUN_DIR:A}/runtime" ]]; then
   wf_exec_frozen "$@"
@@ -111,9 +119,14 @@ export DISCOVER_CMD="$(wf_discover_cmd)"
 export WFR_STEP_SPEC="$WFR_RUN_DIR/step-dod.json"
 # 发布绑定ACK必须先于控制塔、escort与设备动作；失败保留本地固定请求。
 export WFR_HOSTKEY="$HOSTKEY"
-if ! WF_BIND_EXPORTS=$(bash "$WFR" bind-run); then
-  log "拒跑: 运行发布绑定未确认"; print -u2 -- "拒跑: 运行发布绑定未确认"; exit 1
+WF_RT_ERR=$(mktemp -t wfrt.XXXXXX)
+if ! WF_BIND_EXPORTS=$(bash "$WFR" bind-run 2>"$WF_RT_ERR"); then
+  WHY=$(wf_runtime_why "$WF_RT_ERR"); rm -f "$WF_RT_ERR"
+  log "拒跑: 运行发布绑定未确认: $WHY"; print -u2 -- "拒跑: 运行发布绑定未确认: $WHY"
+  escalate "${WF_CAP:-$WF_ARG_CAP} 未起跑: 运行发布绑定未确认: $WHY"
+  exit 1
 fi
+rm -f "$WF_RT_ERR"
 eval "$WF_BIND_EXPORTS"
 export WFR_ATTEMPT WFR_SKIP_WORDS
 # 起跑回执(启动器/Commander 看 nohup 日志确认已起跑);计划拒跑时不打

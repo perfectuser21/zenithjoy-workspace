@@ -108,9 +108,24 @@ RESP=$(curl -s -m "${API_TIMEOUT}" -X POST "${API_BASE}/api/schedule/claim" \
   -H "Authorization: Bearer ${TOKEN}" \
   -d "{\"serials\": ${SERIAL_JSON}, \"claimer\": \"${CLAIMER}\"}" 2>>"${LOG}")
 
+# 心跳：拿到合法 JSON 应答（有单没单都算）就刷新；无应答/非 JSON 记「认领无响应」，按小时限频。
+# 否则"没单"和"请求根本没发出去"一样不写日志，分不清（10-01 起被误判为故障）。
+HEARTBEAT="${ZJ_CLAIMER_HEARTBEAT:-$HOME/.config/zenithjoy/devicejobclaimer.heartbeat}"
+if printf '%s' "${RESP}" | python3 -c 'import sys,json;json.load(sys.stdin)' 2>/dev/null; then
+  mkdir -p "$(dirname "$HEARTBEAT")" 2>/dev/null && date +%s > "$HEARTBEAT"
+else
+  NORESP_STAMP="${HEARTBEAT}.noresp-last"
+  now=$(date +%s); last=$(cat "$NORESP_STAMP" 2>/dev/null || echo 0)
+  if (( now - last >= 3600 )); then
+    mkdir -p "$(dirname "$NORESP_STAMP")" 2>/dev/null && echo "$now" > "$NORESP_STAMP"
+    log "认领无响应（中台不可达或应答非 JSON，本小时内不再重复记）: $(printf '%s' "${RESP}" | head -c 120)"
+  fi
+  exit 0
+fi
+
 JOB_ID=$(printf '%s' "${RESP}" | python3 -c 'import sys,json;d=json.load(sys.stdin);j=(d.get("data") or {}).get("job");print(j["id"] if j else "")' 2>/dev/null)
 if [[ -z "${JOB_ID}" ]]; then
-  # 没活是常态（每分钟一轮），不记日志免刷屏；认领报错才记
+  # 没活是常态（每分钟一轮），不记日志免刷屏（心跳文件已刷新）；认领报错才记
   printf '%s' "${RESP}" | grep -q '"success":false' && log "认领异常: ${RESP}"
   exit 0
 fi
