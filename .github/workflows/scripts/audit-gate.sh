@@ -35,6 +35,13 @@ DIR="${1:-.}"
 # 生态结构性未修复状态，非选型错误；③威胁模型：本仓库只解析固定模型名对应的、来自
 # HuggingFace Hub 的模型文件，不解析任何客户/用户可控 protobuf 字节，注入面为 0。
 # 已建 issue 1db295ce 跟踪，到期条件=ONNX.js 生态任一方发布修复版本后升级删除这四项。
+# 2026-10-04：npm 漏洞库 09-18 新公布两条 high，均无修复版本（first_patched_version 为空），
+# lock 早于公布、非代码改动引入：①braces GHSA-vfj7-8cjw-p6xm（深度嵌套 brace 模式栈耗尽，
+# braces 最新版即 3.0.3）——micromatch/fast-glob/chokidar/tailwindcss 是经 braces 连带标红，
+# 均为构建/开发工具链对本仓库自有 glob 常量的解析，不处理用户可控模式；
+# ②http-cache-semantics GHSA-ch52-4w7c-c8xp（max-stale 处理致跨用户缓存泄露），传递依赖。
+# 已建 Brain 任务 1994bb97 跟踪，到期条件=两包发布修复版后升级并删除这六项。
+# 同一 braces 公告也卡住 cecelia 仓库 dep-audit，已于 cecelia PR #5943 同样处理。
 ALLOWLIST=(
   "js-yaml"
   "@tiptap/core"
@@ -47,6 +54,7 @@ ALLOWLIST=(
   "brace-expansion" "ejs" "eslint-plugin-react" "filelist" "glob"
   "jake" "minimatch" "postcss" "rimraf" "test-exclude" "ts-node-dev"
   "workbox-build" "@trickfilm400/rollup-plugin-off-main-thread"
+  "braces" "micromatch" "fast-glob" "chokidar" "tailwindcss" "http-cache-semantics"
 )
 
 cd "$DIR"

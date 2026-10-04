@@ -98,6 +98,7 @@ export WF_PLAN_PATH="$WF_PLAN_DIR/$WF_ARG_CAP.plan" WF_BRAIN_WORKFLOW WF_CONTRAC
 export WFR_RUN_ID="${WF_WORKFLOW}-crontab-$TAG"
 export WFR_RUN_DIR="${WFR_HOME:-$HOME/.config/zenithjoy}/ledger/$WFR_RUN_ID"
 # 运行时子命令的 stderr 先落临时文件再脱敏进日志：crontab 把 stderr 丢 /dev/null，且原始报错可能带 Bearer token。
+# 固定版本/绑定失败只留本地错误（不 ssh、不 escalate）：拒跑必须先于任何外部动作；告警由 MMV 侧读日志桥完成。
 wf_runtime_why() {  # $1=stderr 文件 → 打印脱敏后的末尾两行（≤400 字）
   sed -E 's/(Bearer )[^ "]+/\1***/g; s/(BRAIN_INTERNAL_TOKEN=)[^ ]+/\1***/g' "$1" 2>/dev/null | grep -v '^[[:space:]]*$' | tail -2 | tr '\n' ' ' | cut -c1-400
 }
@@ -106,7 +107,6 @@ if ! bash "$WFR" prepare 2>"$WF_RT_ERR"; then
   WHY=$(wf_runtime_why "$WF_RT_ERR"); rm -f "$WF_RT_ERR"
   log "拒跑: 工作流定义版本冻结失败: $WHY"
   print -u2 -- "拒跑: 工作流定义版本冻结失败: $WHY"
-  escalate "${WF_CAP:-$WF_ARG_CAP} 未起跑: 工作流定义版本冻结失败: $WHY"
   exit 1
 fi
 rm -f "$WF_RT_ERR"
@@ -123,7 +123,6 @@ WF_RT_ERR=$(mktemp -t wfrt.XXXXXX)
 if ! WF_BIND_EXPORTS=$(bash "$WFR" bind-run 2>"$WF_RT_ERR"); then
   WHY=$(wf_runtime_why "$WF_RT_ERR"); rm -f "$WF_RT_ERR"
   log "拒跑: 运行发布绑定未确认: $WHY"; print -u2 -- "拒跑: 运行发布绑定未确认: $WHY"
-  escalate "${WF_CAP:-$WF_ARG_CAP} 未起跑: 运行发布绑定未确认: $WHY"
   exit 1
 fi
 rm -f "$WF_RT_ERR"
