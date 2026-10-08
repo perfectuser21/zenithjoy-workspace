@@ -418,3 +418,16 @@ test('旧close-app全过程与新独立认领互斥，不能在旧动作未结�
  await new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const tick=()=>existsSync(join(c.dir,'closing'))?resolve():Date.now()>deadline?reject(Error('旧关闭未启动')):setTimeout(tick,10);tick();});
  const overlapping=c.run('lock-acquire-new',run);assert.notEqual(overlapping.status,0);assert.equal(await ended,0);assert.ok(!existsSync(c.lock));assert.equal(c.run('lock-acquire-new',run).status,0);
 });
+
+test('新认领部分写入失败不发布无标记锁，claim保留且不能重试',t=>{
+ const c=setup(t),lib=new URL('../phone-lock-lib.sh',import.meta.url).pathname,helper=new URL('../phone-lock-helper.py',import.meta.url).pathname;
+ const code=`source "$1"; PHONE_LOCK_HELPER="$2"; PYTHON_BIN="$3"; LOCK_ROOT="$TEST_DIR/tmp/locks"; LOCK_DIR="$LOCK_ROOT/SER1.lock"; SERIAL=SER1
+ normalize_run_id(){ builtin print -r -- "$1"; }; require_run_id(){ :; }; die(){ builtin print -u2 -- "$*"; exit 1; }
+ typeset -i writes=0
+ print(){ (( writes+=1 )); (( writes != 2 )) || return 1; builtin print "$@"; }
+ lock_acquire qiumi-a1234567-1791427263848 fresh`;
+ const r=spawnSync('zsh',['-c',code,'test',lib,helper,python],{env:c.env,encoding:'utf8'});
+ assert.notEqual(r.status,0);assert.ok(!existsSync(c.lock),'部分写入不能留下可被旧回收器认领的锁');
+ assert.ok(existsSync(join(c.dir,'tmp','locks','standalone-claims','SER1','qiumi-a1234567-1791427263848')));
+ assert.notEqual(c.run('lock-acquire-new','qiumi-a1234567-1791427263848').status,0);assert.equal(c.actions(),'');
+});

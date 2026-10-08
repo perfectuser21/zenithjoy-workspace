@@ -35,12 +35,21 @@ lock_acquire() {
   fi
   if [[ "${2:-compatible}" == fresh ]]; then
     "$PYTHON_BIN" "$PHONE_LOCK_HELPER" record-claim "$LOCK_ROOT/standalone-claims/$SERIAL/$run" "$run" || die 'standalone run already claimed or claim storage unavailable'
+    local staging
+    staging="$(/usr/bin/mktemp -d "$LOCK_ROOT/.standalone-stage.XXXXXXXX")" || die 'claim retained: staging unavailable'
+    if ! { print -r -- "$run" > "$staging/standalone_review_required" &&
+           print -r -- "$run" > "$staging/owner" &&
+           /bin/date +%s > "$staging/acquired_at"; }; then
+      /bin/rm -rf "$staging"
+      die 'claim retained: incomplete lock preparation'
+    fi
+    /bin/mv "$staging" "$LOCK_DIR" || { /bin/rm -rf "$staging"; die 'claim retained: lock publication failed'; }
+  else
+    /bin/mkdir "$LOCK_DIR" || die 'could not acquire device lock'
+    print -r -- "$run" > "$LOCK_DIR/owner"
+    /bin/date +%s > "$LOCK_DIR/acquired_at"
+    if [[ "${DOUYIN_LOCK_PID:-}" == <-> ]]; then print -r -- "$DOUYIN_LOCK_PID" > "$LOCK_DIR/pid"; fi
   fi
-  /bin/mkdir "$LOCK_DIR" || die 'could not acquire device lock'
-  print -r -- "$run" > "$LOCK_DIR/owner"
-  [[ "${2:-compatible}" != fresh ]] || print -r -- "$run" > "$LOCK_DIR/standalone_review_required"
-  /bin/date +%s > "$LOCK_DIR/acquired_at"
-  if [[ "${DOUYIN_LOCK_PID:-}" == <-> ]]; then print -r -- "$DOUYIN_LOCK_PID" > "$LOCK_DIR/pid"; fi
   print -- "lock=acquired owner=$run"
 }
 lock_release() {
