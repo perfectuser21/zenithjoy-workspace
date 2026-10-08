@@ -1575,7 +1575,7 @@ read_current_account() {
     # 他人主页没有底部导航，重抓也等不来「我」tab，直接进下面的 verified back。
     [[ "$_kind" == foreign ]] && { print -u2 -- "warning: current page is someone else's profile (has 私信 button); stepping back instead of reading its 抖音号"; break; }
     me_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="我，按钮"[^>]*>' "$first_xml" || true)"
-    [[ -z "$me_line" || "$me_line" != *$'\n'* ]] || die 'Me tab is ambiguous: multiple matching controls' 
+    [[ -z "$me_line" || "$me_line" != *$'\n'* ]] || die 'Me tab is ambiguous: multiple matching controls'
     [[ -n "$me_line" ]] && break
     _sz="$(/usr/bin/wc -c < "$first_xml" 2>/dev/null || print -- 0)"
     print -u2 -- "warning: Me tab absent from hierarchy (try $_try/4, ${_sz} bytes) — bottom nav likely not attached yet; recapturing"
@@ -1600,7 +1600,7 @@ read_current_account() {
       _kind="$(profile_owner_kind "$first_xml")"
       [[ "$_kind" == own ]] && { me_line="ALREADY_ON_PROFILE"; break; }
       me_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="我，按钮"[^>]*>' "$first_xml" || true)"
-    [[ -z "$me_line" || "$me_line" != *$'\n'* ]] || die 'Me tab is ambiguous: multiple matching controls' 
+    [[ -z "$me_line" || "$me_line" != *$'\n'* ]] || die 'Me tab is ambiguous: multiple matching controls'
       [[ -n "$me_line" ]] && { print -u2 -- "info: bottom nav reached after $_try verified back step(s)"; break; }
     done
   fi
