@@ -19,6 +19,7 @@ lock_acquire() {
   require_run_id "$1"
   /bin/mkdir -p "$LOCK_ROOT"
   if [[ -d "$LOCK_DIR" ]]; then
+    [[ ! -f "$LOCK_DIR/standalone_review_required" ]] || die 'standalone lock requires verified cleanup; adoption and stale reclaim refused'
     [[ "${2:-compatible}" != fresh ]] || die 'fresh acquisition refused: existing lock must not be adopted or reclaimed'
     [[ -r "$LOCK_DIR/owner" ]] && owner="$(<"$LOCK_DIR/owner")"
     if same_run_lock "$owner" "$run"; then
@@ -34,6 +35,7 @@ lock_acquire() {
   fi
   /bin/mkdir "$LOCK_DIR" || die 'could not acquire device lock'
   print -r -- "$run" > "$LOCK_DIR/owner"
+  [[ "${2:-compatible}" != fresh ]] || print -r -- "$run" > "$LOCK_DIR/standalone_review_required"
   /bin/date +%s > "$LOCK_DIR/acquired_at"
   if [[ "${DOUYIN_LOCK_PID:-}" == <-> ]]; then print -r -- "$DOUYIN_LOCK_PID" > "$LOCK_DIR/pid"; fi
   print -- "lock=acquired owner=$run"
@@ -67,6 +69,9 @@ lock_reap() {
   local owner reason
   [[ -r "$LOCK_DIR/owner" ]] || { print -- 'lock=free'; return 0; }
   owner="$(<"$LOCK_DIR/owner")"
+  if [[ -f "$LOCK_DIR/standalone_review_required" ]]; then
+    print -- "lock=preserved owner=$owner reason=standalone-review-required"; return 0
+  fi
   if ! lock_is_stale || lock_pid_live; then
     print -- "lock=preserved owner=$owner reason=fresh-or-live-pid"; return 0
   fi
@@ -126,7 +131,9 @@ phone_lock_command() {
     lock-status)
       [[ "$#" == 1 ]] || die 'usage: lock-status'
       if [[ -r "$LOCK_DIR/owner" ]]; then
-        if lock_is_stale && ! lock_pid_live; then
+        if [[ -f "$LOCK_DIR/standalone_review_required" ]] && lock_is_stale; then
+          print -- "lock=stale owner=$(<"$LOCK_DIR/owner") age=$(lock_age)s stale=true reclaimable=false ttl=${LOCK_TTL_SECONDS}s reason=standalone-review-required"
+        elif lock_is_stale && ! lock_pid_live; then
           print -- "lock=stale owner=$(<"$LOCK_DIR/owner") age=$(lock_age)s stale=true reclaimable=true ttl=${LOCK_TTL_SECONDS}s"
         else
           print -- "lock=held owner=$(<"$LOCK_DIR/owner") age=$(lock_age)s stale=false reclaimable=false ttl=${LOCK_TTL_SECONDS}s"
