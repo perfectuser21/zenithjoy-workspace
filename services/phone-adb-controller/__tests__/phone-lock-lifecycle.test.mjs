@@ -221,3 +221,15 @@ test('独立前台复合命令有整条硬截止并终止子进程，保留原�
  assert.equal(r.status,124,r.stderr);assert.match(r.stderr,/guarded command timeout/);assert.ok(!existsSync(join(c.dir,'late-ui')));
  assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);assert.equal(c.run('lock-release-exact',run).status,0);
 });
+
+test('取消独立前台命令终止整个原进程组，不留下继续动手机的孩子',async t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';c.run('lock-acquire',run);
+ const adb=join(c.dir,'adb'),original=readFileSync(adb,'utf8');
+ writeFileSync(adb,original.replace('case "$*" in','case "$*" in\n *"am force-stop"*) touch "$TEST_DIR/acting"; sleep 2; touch "$TEST_DIR/late-ui"; exit 0;;'),{mode:0o755});
+ const p=spawn('zsh',[script,'--profile','p1','--lock-owner',run,'close-app'],{env:c.env,stdio:'ignore'});t.after(()=>p.kill('SIGKILL'));
+ const ended=new Promise(resolve=>p.once('exit',code=>resolve(code)));
+ await new Promise((resolve,reject)=>{const deadline=Date.now()+4000;const tick=()=>existsSync(join(c.dir,'acting'))?resolve():Date.now()>deadline?reject(Error('未开始动作')):setTimeout(tick,20);tick();});
+ p.kill('SIGTERM');assert.equal(await ended,143);
+ await new Promise(resolve=>setTimeout(resolve,2100));assert.ok(!existsSync(join(c.dir,'late-ui')));
+ assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);assert.equal(c.run('lock-release-exact',run).status,0);
+});

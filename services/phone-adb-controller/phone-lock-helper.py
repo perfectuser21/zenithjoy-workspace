@@ -51,6 +51,13 @@ def bounded_command(argv, fd):
             os.killpg(child.pid, sig)
         except ProcessLookupError:
             pass
+        except PermissionError:
+            # Darwin可能对已无活成员的僵尸进程组报EPERM；只能读回确认无活成员后接受。
+            rows = subprocess.run(['/bin/ps', '-axo', 'pgid=,stat='], check=True,
+                                  capture_output=True, text=True, timeout=2).stdout.splitlines()
+            if any(len(parts := row.split()) == 2 and parts[0] == str(child.pid)
+                   and not parts[1].startswith('Z') for row in rows):
+                raise
         if sig == signal.SIGTERM:
             time.sleep(0.2)
     child.wait()
