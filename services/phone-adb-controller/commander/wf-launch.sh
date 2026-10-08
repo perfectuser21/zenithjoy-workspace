@@ -14,7 +14,7 @@ set -uo pipefail
 
 OPENCLAW="${OPENCLAW:-openclaw}"
 SSH_OPTS=(-o ConnectTimeout=20 -o BatchMode=yes)
-FEISHU_TO="${WF_ESCORT_TO:-chat:oc_ef60d6e3f199d90dd695b6ecc213d662}"
+# 陪跑不投递飞书（决策 c7ff6e02）：运行记录进 Brain runs → Notion「最近执行」
 ESCORT_SOP="${WF_ESCORT_SOP:-/Users/administrator/.openclaw/cmdr-escort.txt}"
 START_WAIT="${WF_START_WAIT:-8}"
 # Brain 心跳/起跑登记入口（决策 3c98fb36 阶段1，任务 17ea4536）：网关 localhost:5221 是 socat 到 us-vps Brain 的代理
@@ -80,8 +80,7 @@ brain_launch_register(){
 if (( DRY == 0 )); then
   for _try in 1 2 3; do
     ESCORT_ID=$("$OPENCLAW" cron add --timeout 90000 --name "escort-$HOST-$TAG" --agent media \
-      --session "session:escort-$HOST-$TAG" --every 10m --announce --channel feishu --to "$FEISHU_TO" \
-      --account main --best-effort-deliver --message "$ESCORT_MSG" 2>/dev/null \
+      --session "session:escort-$HOST-$TAG" --every 10m --no-deliver --message "$ESCORT_MSG" 2>/dev/null \
       | grep -oE '"id": *"[a-f0-9-]+"' | head -1 | grep -oE '[a-f0-9-]{36}')
     [[ -n "$ESCORT_ID" ]] && break
     sleep "${WF_ESCORT_RETRY_SLEEP:-20}"

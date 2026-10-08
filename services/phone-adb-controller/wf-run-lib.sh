@@ -80,7 +80,7 @@ escort_alive(){
 #   在途被移除立即同名同会话重拉(跨轮记忆不断) ③重拉后的新 id 落 ESCORT_ID_FILE,注销跟着用新 id。
 # escort_add —— 单次 cron add(拉起与看门狗重拉共用),stdout 新 id;失败回空。起跑时间用 ESCORT_START_HM(重拉不改起跑)。
 escort_add(){
-  ssh -o ConnectTimeout=20 mmv "openclaw cron add --timeout 90000 --name 'escort-$HOSTKEY-$TAG' --agent media --session 'session:escort-$HOSTKEY-$TAG' --every 10m --announce --channel feishu --to 'chat:oc_ef60d6e3f199d90dd695b6ecc213d662' --account main --best-effort-deliver --message '先读 /Users/administrator/.openclaw/cmdr-escort.txt 作为你的SOP并严格遵守辅佐三原则。本轮上下文: TAG=$TAG 机器=$HOSTKEY serial=$SERIAL profile=$P 起跑=${ESCORT_START_HM:-$(date +%H:%M)} 日志=/Users/administrator/.openclaw/m4-logs/${HOSTKEY}-live.log escort名=escort-$HOSTKEY-$TAG。注意:你上岗时本批尚未做设备preflight与取词单,这两步失败会升级给分身,你看到日志里没有词单行属正常早期阶段。'" 2>>${LOG:-/dev/null} | grep -oE '"id": "[a-f0-9-]+"' | head -1 | cut -d'"' -f4
+  ssh -o ConnectTimeout=20 mmv "openclaw cron add --timeout 90000 --name 'escort-$HOSTKEY-$TAG' --agent media --session 'session:escort-$HOSTKEY-$TAG' --every 10m --no-deliver --message '先读 /Users/administrator/.openclaw/cmdr-escort.txt 作为你的SOP并严格遵守辅佐三原则。本轮上下文: TAG=$TAG 机器=$HOSTKEY serial=$SERIAL profile=$P 起跑=${ESCORT_START_HM:-$(date +%H:%M)} 日志=/Users/administrator/.openclaw/m4-logs/${HOSTKEY}-live.log escort名=escort-$HOSTKEY-$TAG。注意:你上岗时本批尚未做设备preflight与取词单,这两步失败会升级给分身,你看到日志里没有词单行属正常早期阶段。'" 2>>${LOG:-/dev/null} | grep -oE '"id": "[a-f0-9-]+"' | head -1 | cut -d'"' -f4
 }
 # escort_current_id —— 当前 escort id: 看门狗重拉后写在 ESCORT_ID_FILE 的新 id 优先,否则 ESCORT_ID
 escort_current_id(){
