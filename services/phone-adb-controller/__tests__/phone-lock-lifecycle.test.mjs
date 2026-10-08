@@ -233,3 +233,19 @@ test('取消独立前台命令终止整个原进程组，不留下继续动手�
  await new Promise(resolve=>setTimeout(resolve,2100));assert.ok(!existsSync(join(c.dir,'late-ui')));
  assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);assert.equal(c.run('lock-release-exact',run).status,0);
 });
+
+test('父命令在启动许可前已取消时，不再创建手机命令孩子',()=>{
+ const helper=new URL('../phone-lock-helper.py',import.meta.url).pathname;
+ const program=`import importlib.util,sys
+s=importlib.util.spec_from_file_location('lock_helper',sys.argv[1]); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+def register(sig, handler):
+ if sig==m.signal.SIGTERM: handler(sig,None)
+m.signal.signal=register
+def forbidden(*args,**kwargs): raise AssertionError('spawned after cancel')
+m.subprocess.Popen=forbidden
+try: m.bounded_command([],9)
+except SystemExit as e: assert e.code==143
+else: raise AssertionError('not canceled')
+`;
+ const r=spawnSync(python,['-c',program,helper],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+});
