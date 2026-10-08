@@ -343,3 +343,27 @@ for(const tail of ['\r\n','\n\n']) for(const command of ['lock-release-exact','c
  const r=command==='close-app'?spawnSync('zsh',[script,'--profile','p1','--lock-owner',run,command],{env:c.env,encoding:'utf8'}):c.run(command,run);
  assert.notEqual(r.status,0);assert.equal(readFileSync(join(c.lock,'owner'),'utf8'),run+tail);assert.equal(c.actions(),'');
 });
+
+
+test('根正常退出但仍有活子进程时不能给出可信成功终态',t=>{
+ const c=setup(t),helper=new URL('../phone-lock-helper.py',import.meta.url).pathname,owner=join(c.dir,'owner');writeFileSync(owner,'run\n');
+ const program=`import importlib.util,sys,types
+s=importlib.util.spec_from_file_location('lock_helper',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+m.signal.signal=lambda *a:None
+class Child:
+ pid=123456789
+ def wait(self,timeout):return 0
+m.subprocess.Popen=lambda *a,**k:Child()
+m.subprocess.run=lambda *a,**k:types.SimpleNamespace(stdout='123456789 S\\n')
+try:m.bounded_command([],9,sys.argv[2],'run')
+except RuntimeError as e:assert 'live process group' in str(e)
+except SystemExit as e:raise AssertionError('live child accepted termination '+str(e.code))
+else:raise AssertionError('live child accepted as success')
+`;
+ const r=spawnSync(python,['-c',program,helper,owner],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);assert.equal(readFileSync(owner,'utf8'),'run\n');
+});
+test('标记独立锁的续租也必须原owner精确相等，不认attempt变体',t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';c.run('lock-acquire-new',run);
+ writeFileSync(join(c.lock,'owner'),run+'-a1-cleanup-1\n');const stamp=readFileSync(join(c.lock,'acquired_at'),'utf8');
+ const r=c.run('lock-refresh',run);assert.notEqual(r.status,0);assert.equal(readFileSync(join(c.lock,'owner'),'utf8'),run+'-a1-cleanup-1\n');assert.equal(readFileSync(join(c.lock,'acquired_at'),'utf8'),stamp);assert.equal(c.actions(),'');
+});
