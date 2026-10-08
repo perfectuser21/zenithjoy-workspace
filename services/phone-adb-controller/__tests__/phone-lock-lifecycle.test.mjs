@@ -336,3 +336,10 @@ for(const cmd of ['lock-release','lock-cleanup']) test(`通用${cmd}不能删除
  assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);assert.equal(c.actions(),'');
  assert.equal(c.run('lock-release-exact',run).status,0);assert.ok(!existsSync(c.lock));
 });
+
+
+for(const tail of ['\r\n','\n\n']) for(const command of ['lock-release-exact','close-app']) test(`原owner换行异常${JSON.stringify(tail)}拒绝${command}`,t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';c.run('lock-acquire',run);writeFileSync(join(c.lock,'owner'),run+tail);
+ const r=command==='close-app'?spawnSync('zsh',[script,'--profile','p1','--lock-owner',run,command],{env:c.env,encoding:'utf8'}):c.run(command,run);
+ assert.notEqual(r.status,0);assert.equal(readFileSync(join(c.lock,'owner'),'utf8'),run+tail);assert.equal(c.actions(),'');
+});
