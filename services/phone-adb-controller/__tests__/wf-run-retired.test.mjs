@@ -40,7 +40,7 @@ for (const capability of ['keyword_acquisition', 'benchmark_link_acquisition']) 
       assert.match(result.stderr, /旧获客流程已退役/);
       assert.doesNotMatch(result.stdout, /WF_RUN_STARTED/);
       assert.equal(read(join(home, 'external-actions.log')), '', '退役拒跑必须先于设备、escort、队列和控制塔动作');
-      assert.equal(read(join(home, 'runtime-actions.log')), 'locate-run\n', '不能开始 prepare、绑定或执行活动');
+      assert.equal(read(join(home, 'runtime-actions.log')), '', '不能定位旧快照或开始 prepare、绑定、执行活动');
       assert.equal(existsSync(join(env.WFR_HOME, 'ledger')), false);
     });
   }
