@@ -42,6 +42,11 @@ DIR="${1:-.}"
 # ②http-cache-semantics GHSA-ch52-4w7c-c8xp（max-stale 处理致跨用户缓存泄露），传递依赖。
 # 已建 Brain 任务 1994bb97 跟踪，到期条件=两包发布修复版后升级并删除这六项。
 # 同一 braces 公告也卡住 cecelia 仓库 dep-audit，已于 cecelia PR #5943 同样处理。
+# 2026-10-08：npm 漏洞库当天新公布 5 项（lock 最后改动 10-02，早于公布，非代码改动引入）：
+# proxy-addr/source-map-js/prosemirror-view 均为补丁级修复，已在 package-lock 精确升级（依赖不变）；
+# vitest(GHSA-82fw-gwwq-j7x9，修复版 4.1.11)与 tinypool(GHSA-5gmw/85c8，修复版 2.1.2)只用于跑测试、
+# 不进任何产物，且 apps/api 仍在 vitest 3（tinypool 1.x）需 semver major 升级——已建 Brain 任务
+# b3d1d5f8 跟踪，到期条件=全仓 vitest 统一到 ≥4.1.11 后删除这两项。
 ALLOWLIST=(
   "js-yaml"
   "@tiptap/core"
@@ -55,6 +60,7 @@ ALLOWLIST=(
   "jake" "minimatch" "postcss" "rimraf" "test-exclude" "ts-node-dev"
   "workbox-build" "@trickfilm400/rollup-plugin-off-main-thread"
   "braces" "micromatch" "fast-glob" "chokidar" "tailwindcss" "http-cache-semantics"
+  "vitest" "tinypool"
 )
 
 cd "$DIR"
