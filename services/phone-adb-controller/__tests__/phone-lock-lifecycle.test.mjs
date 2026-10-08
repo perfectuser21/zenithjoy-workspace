@@ -277,3 +277,17 @@ test('超时owner首尾空格变化不能被吞掉当作原owner保留',t=>{
  const r=spawnSync('zsh',[script,'--profile','p1','--lock-owner',run,'close-app'],{env:{...c.env,DOUYIN_GUARDED_COMMAND_TIMEOUT_SECONDS:'1'},encoding:'utf8',timeout:10000});
  assert.notEqual(r.status,124);assert.match(r.stderr,/owner preservation unproven/);assert.equal(readFileSync(join(c.lock,'owner'),'utf8'),' '+run+' ');
 });
+
+
+for(const existing of ['same','other','stale']) test(`独立新认领${existing}已有锁一律拒绝且不续接`,t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';
+ if(existing==='stale') c.stale('other');else c.run('lock-acquire',existing==='same'?run:'other');
+ const owner=readFileSync(join(c.lock,'owner'),'utf8'),stamp=readFileSync(join(c.lock,'acquired_at'),'utf8');
+ const r=c.run('lock-acquire-new',run);assert.notEqual(r.status,0);assert.match(r.stderr,/fresh acquisition.*existing lock/);
+ assert.equal(readFileSync(join(c.lock,'owner'),'utf8'),owner);assert.equal(readFileSync(join(c.lock,'acquired_at'),'utf8'),stamp);assert.equal(c.actions(),'');
+});
+test('独立新认领只有原子空锁取得者拿到acquired回执',t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';const first=c.run('lock-acquire-new',run);
+ assert.equal(first.status,0,first.stderr);assert.match(first.stdout,/lock=acquired/);
+ assert.notEqual(c.run('lock-acquire-new',run).status,0);assert.equal(c.actions(),'');
+});
