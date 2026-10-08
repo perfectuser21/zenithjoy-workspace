@@ -15,7 +15,7 @@ export async function runWorkflow({activities,context,handlers,commander,record,
     if(typeof handlers[activity.key]!=='function')throw Error(`活动缺实现: ${activity.key}`);
     try {
       const result=await runActivity({activity,context,execute:handlers[activity.key],commander,record});
-      if(result.result?.status==='paused')result.status='partial';
+      if(['paused','partial'].includes(result.result?.status))result.status='partial';
       if(result.result?.status==='skipped')result.status='skipped';
       if(result.status==='completed'&&verify){
         result.verification=await verify(activity,result);
@@ -187,8 +187,9 @@ async function main(){
     r={...r,observed_at:new Date().toISOString()};
     records.push(r);appendFileSync(join(dir,'activity-events.jsonl'),JSON.stringify(r)+'\n',{mode:0o600});
     if(r.phase==='execution'){
+      const ledgerStatus=['partial','paused','skipped'].includes(r.evidence.result?.status)?'blocked':r.evidence.status;
       const updated=await execInput(process.execPath,[join(root,'ledger.mjs'),'set','--run-dir',dir,
-        '--stage',r.activity,'--status',r.evidence.status,'--n','1','--word','']);
+        '--stage',r.activity,'--status',ledgerStatus,'--n','1','--word','']);
       if(updated.code!==0)throw Error('实际活动账本更新失败');
     }
   };
