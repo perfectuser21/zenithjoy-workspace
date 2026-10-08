@@ -1,0 +1,170 @@
+# 新流程独立读回探针，severity=error；无真实证据不得判通过。
+version: 1
+workflow: douyin-lead-outreach
+probes:
+  - key: pf_device_verified
+    stage: preflight
+    journey_cell: stage:preflight
+    probe:
+      type: metric
+      ref: metrics.device_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: stop_run
+    note: |
+      设备 serial 在线且身份对得上。harvest-cron.sh:121-133 做 adb 在线/唤醒，workflow-result.sh:161 写 preflight 工件。
+  - key: pf_account_verified
+    stage: preflight
+    journey_cell: stage:preflight
+    probe:
+      type: metric
+      ref: metrics.account_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: stop_run
+    note: >
+      手机上登录的抖音号 = 本 run 声明的 profile。现状 workflow-result.sh:161 写死 account_verified=0（采收链不读我页）， 本探针会如实判红，直到任务
+      6b133a81 让预检真读账号标记（Notion 步骤「读账号标记(我页)」）。
+  - key: pf_call_idle
+    stage: preflight
+    journey_cell: stage:preflight
+    probe:
+      type: metric
+      ref: metrics.call_state_idle
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: stop_run
+    note: |
+      手机不在通话中（通话中操作会误触）。workflow-result.sh:161 写 call_state_idle。
+  - key: pf_lock_acquired
+    stage: preflight
+    journey_cell: stage:preflight
+    probe:
+      type: metric
+      ref: metrics.lock_acquired
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: stop_run
+    note: >
+      拿到设备锁（douyin-phone-adb lock-acquire，TTL 1800s）。现状 workflow-result.sh:161 写死 lock_acquired=0 （锁在
+      harvest-keyword.sh 按词拿），判红直到 6b133a81。
+  - key: preflight_commander_verified
+    stage: preflight
+    journey_cell: stage:preflight
+    probe:
+      type: metric
+      ref: metrics.commander_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: out_zero_send_while_paused
+    stage: send_dm
+    journey_cell: stage:send_dm
+    probe:
+      type: metric
+      ref: metrics.messages_sent_while_paused
+    expect:
+      op: <=
+      value: 0
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: send_dm_commander_verified
+    stage: send_dm
+    journey_cell: stage:send_dm
+    probe:
+      type: metric
+      ref: metrics.commander_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: out_no_stuck_inflight
+    stage: write_back
+    journey_cell: stage:write_back
+    probe:
+      type: metric
+      ref: metrics.outreach_readback_failures
+    expect:
+      op: <=
+      value: 0
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: write_back_commander_verified
+    stage: write_back
+    journey_cell: stage:write_back
+    probe:
+      type: metric
+      ref: metrics.commander_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: cl_app_closed
+    stage: cleanup
+    journey_cell: stage:cleanup
+    probe:
+      type: metric
+      ref: metrics.close_app_attempts
+    expect:
+      op: ">="
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: fail_stage
+    note: >
+      收工必须关抖音（douyin-phone-adb close-app）。现状 workflow-result.sh:182 写死 close_app_attempts=0（采收链没调 close-app），
+      判红直到 6b133a81。
+  - key: cl_lock_released
+    stage: cleanup
+    journey_cell: stage:cleanup
+    probe:
+      type: metric
+      ref: metrics.lock_released
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: fail_stage
+    note: |
+      设备锁已释放，否则触达拿不到手机。workflow-result.sh:182 当前写死 1（锁实际由 harvest-keyword.sh trap 按词释放）， 6b133a81 改为真读锁目录。
+  - key: cl_safe_desktop_visible
+    stage: cleanup
+    journey_cell: stage:cleanup
+    probe:
+      type: metric
+      ref: metrics.safe_desktop_visible
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: fail_stage
+    note: |
+      手机回到安全桌面（不停在私信/评论页，防误触）。workflow-result.sh:182 写死 0，判红直到 6b133a81。

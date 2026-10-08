@@ -8,3 +8,8 @@ test('部署与运行共享机器规范名，并以实际hostname同时核releas
  assert.throws(()=>assertRuntimeHost({target:'other-machine'},{target}),/实际机器/);
  assert.throws(()=>assertRuntimeHost({target},{target:'other-machine'}),/实际机器/);
 });
+
+test('中央登记MMV实际hostname规范为mmv，不能宽泛匹配相似机器',()=>{
+ assert.equal(deploymentTarget('aad17-2'),'mmv');assert.equal(deploymentTarget('aad17-2.macminivault.com'),'mmv');
+ assert.equal(deploymentTarget('aad17-20.macminivault.com'),'aad17-20');
+});

@@ -1,4 +1,4 @@
-import { seedRunner } from './fixtures/frozen-runtime.mjs';
+import { seedRunner, HISTORICAL_ENGINE_PLAN_DIR } from './fixtures/frozen-runtime.mjs';
 // Commander 投影与三档权限对齐 + 平滑收工正规入口（Brain 任务 2fc3b6fc，决策 3c98fb36 阶段 2 补 / 018e4e84 同权 / ce4849e0）。
 // #2043 只把真身 COMMANDER.md 改成三档（自动做 / Bark 请示 / 只报不做），三份投影（escort SOP / stream 哨兵 SOP / 分身唤起词）
 // 仍写「无杀权 / 绝不终止 run」，escort、哨兵、分身照旧宪法行事；而「平滑收工」在真身里只有定义没有入口——Commander 想停只能
@@ -280,7 +280,7 @@ function setupE2E(tag) {
   writeFileSync(join(home, ".config", "openclaw", "douyin-account-routes.tsv"), "p1\tdy001\n");
   const env = {
     ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`,
-    WF_PLAN_DIR: join(SRC, "plans"), WFR: join(SRC, "workflow-result.sh"), BATCH2: join(SRC, "batch2.sh"), HARVEST_KEYWORD: hk,
+    WF_PLAN_DIR: HISTORICAL_ENGINE_PLAN_DIR, WFR: join(SRC, "workflow-result.sh"), BATCH2: join(SRC, "batch2.sh"), HARVEST_KEYWORD: hk,
     WALL_REPORT: join(home, "no-wall"), BATCH_SLEEP: "0", PF_LOCK_WAIT: "0", WF_TESTING: "1",
     WFR_HOME: join(home, "wfr"), WFR_NODE: process.execPath, WFR_JQ: JQ, WFR_LEDGER_MJS: join(SRC, "ledger.mjs"),
     WFR_SCP_TARGET: "", WFR_PROBE_STAGES: "", WFR_BRAIN_ENV: join(home, "no-brain.env"), BRAIN_URL: "", BRAIN_INTERNAL_TOKEN: "",

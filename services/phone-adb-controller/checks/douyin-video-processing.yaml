@@ -1,0 +1,268 @@
+# 新流程独立读回探针，severity=error；无真实证据不得判通过。
+version: 1
+workflow: douyin-video-processing
+probes:
+  - key: pf_device_verified
+    stage: preflight
+    journey_cell: stage:preflight
+    probe:
+      type: metric
+      ref: metrics.device_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: stop_run
+    note: |
+      设备 serial 在线且身份对得上。harvest-cron.sh:121-133 做 adb 在线/唤醒，workflow-result.sh:161 写 preflight 工件。
+  - key: pf_account_verified
+    stage: preflight
+    journey_cell: stage:preflight
+    probe:
+      type: metric
+      ref: metrics.account_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: stop_run
+    note: >
+      手机上登录的抖音号 = 本 run 声明的 profile。现状 workflow-result.sh:161 写死 account_verified=0（采收链不读我页）， 本探针会如实判红，直到任务
+      6b133a81 让预检真读账号标记（Notion 步骤「读账号标记(我页)」）。
+  - key: pf_call_idle
+    stage: preflight
+    journey_cell: stage:preflight
+    probe:
+      type: metric
+      ref: metrics.call_state_idle
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: stop_run
+    note: |
+      手机不在通话中（通话中操作会误触）。workflow-result.sh:161 写 call_state_idle。
+  - key: pf_lock_acquired
+    stage: preflight
+    journey_cell: stage:preflight
+    probe:
+      type: metric
+      ref: metrics.lock_acquired
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: stop_run
+    note: >
+      拿到设备锁（douyin-phone-adb lock-acquire，TTL 1800s）。现状 workflow-result.sh:161 写死 lock_acquired=0 （锁在
+      harvest-keyword.sh 按词拿），判红直到 6b133a81。
+  - key: preflight_commander_verified
+    stage: preflight
+    journey_cell: stage:preflight
+    probe:
+      type: metric
+      ref: metrics.commander_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: qual_none_pending
+    stage: qualification
+    journey_cell: stage:qualification
+    probe:
+      type: sql
+      target: pg_zenithjoy
+      query: |
+        SELECT count(*)
+          FROM zenithjoy.leadgen_videos
+         WHERE harvest_batch = '$RUN_TAG'
+           AND judgment_status = 'pending'
+    expect:
+      op: <=
+      value: 0
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: >
+      判定交出 = 每个候选视频 matched/rejected（CHECK 约束见 20260922_220000_leadgen_ssot_tables.sql:44）。 judge-video.js 经
+      leadgen-db-lib.js:54 回写 judgment_status；仍 pending = 没判完就往下走。
+  - key: qual_reason_present
+    stage: qualification
+    journey_cell: stage:qualification
+    probe:
+      type: sql
+      target: pg_zenithjoy
+      query: |
+        SELECT judgment_reason
+          FROM zenithjoy.leadgen_videos
+         WHERE harvest_batch = '$RUN_TAG'
+           AND judgment_status <> 'pending'
+    expect:
+      op: not_null_all
+    severity: error
+    failure_class: needs_human
+    on_fail: fail_stage
+    note: |
+      判过的视频必须带理由（leadgen-db-lib.js:54 同时写 judgment_reason），无理由的判定不可审计。
+  - key: qualification_commander_verified
+    stage: qualification
+    journey_cell: stage:qualification
+    probe:
+      type: metric
+      ref: metrics.commander_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: coll_only_matched
+    stage: collection
+    journey_cell: stage:collection
+    probe:
+      type: sql
+      target: pg_zenithjoy
+      query: |
+        SELECT count(*)
+          FROM zenithjoy.leadgen_videos
+         WHERE harvest_batch = '$RUN_TAG'
+           AND judgment_status <> 'matched'
+           AND process_status = '评论已采'
+    expect:
+      op: <=
+      value: 0
+    severity: error
+    failure_class: fatal
+    on_fail: stop_run
+    note: >
+      设计顺序（决策 f18f56b8）：判定合格才采评论。未 matched 却已「评论已采」= 白采。 8bb3af55 先判后采后，候选视频落库时 process_status=待判定，只有 matched
+      且采完评论才经 qualify-video.js collected → markVideoCollected（leadgen-db-lib.js:116）标「评论已采」（WHERE
+      judgment_status='matched' 兜底）。
+  - key: coll_video_binding_consistent
+    stage: collection
+    journey_cell: stage:collection
+    probe:
+      type: sql
+      target: pg_zenithjoy
+      query: |
+        SELECT count(*)
+          FROM zenithjoy.leadgen_comments c
+         WHERE c.harvest_batch = '$RUN_TAG'
+           AND c.source_video_url <> ''
+           AND NOT EXISTS (
+             SELECT 1 FROM zenithjoy.leadgen_videos v
+              WHERE v.harvest_batch = c.harvest_batch
+                AND v.video_url = c.source_video_url
+           )
+    expect:
+      op: <=
+      value: 0
+    severity: error
+    failure_class: fatal
+    on_fail: stop_run
+    note: >
+      0929修（生产实证：悦升云端线索表 2026-09-28 晚 3 条记录，来源视频/视频链接都标着同一条 视频，但原始评论内容完全不相关——commenter-identity
+      验证失败抢救(back+重开评论区)落到 了别的视频/推荐页，退栈深度不固定(取决于此前逐条评论者主页往返次数，0922 已实证退栈 次数写死必错)，harvest-keyword.sh:213-231 的
+      video_drifted 已加行内防线，漂移即整条 视频剩余评论作废）。 本探针只能核对"孤儿归属"：评论的来源视频链接必须是本批确实开过、已落 leadgen_videos
+      的视频——抓不住"归属到本批内另一条真实存在的视频"这种同批错配（即本次生产实锤的那 种，因为漂移到的视频往往也在同一批被正常打开过，通不过孤儿检测）。要抓住这一类需要 账本记录每条评论采集时的
+      commenter-identity 通过序列与视频身份的对应关系做交叉核验， 归入 6b133a81（运行时读回目前只接 delivery/scoring）范畴，此处如实注明能力边界，不假
+      装它能查出这种同批内的语义错配。
+  - key: coll_rescan_rate
+    stage: collection
+    journey_cell: stage:collection
+    target:
+      type: step
+      key: douyin_video_processing.collection.return_to_results
+    probe:
+      type: metric
+      ref: metrics.rescan_rate
+    expect:
+      op: <=
+      value: 0.3
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: >
+      0930 决策 f425e3fd：归位一次做对率（精益 %C&A 的补）。采集里每张卡片处理完 back-to-results 走了兜底重搜（harvest-keyword.sh 日志「归位触发兜底重搜」）=
+      一次没做对；rescan_rate = 兜底次数 / 本词打开的作品数（batch2.sh:17 word_rescan_metrics 从本词日志段算，写进 collection 工件； 归位本体
+      harvest-keyword.sh back_to_results_and_maybe_rescan → douyin-phone-adb:371 back_to_results）。 cmd09300230
+      批 134/134 走兜底、12 词跑 6 小时只出 4 条线索，而 delivery/scoring 的结果探针全绿—— 过程病结果探针看不见，这条补的就是过程指标。超 0.3 判该词 collection
+      失败（fail_stage，不停跑）。
+  - key: comments_readback
+    stage: collection
+    journey_cell: stage:collection
+    probe:
+      type: sql
+      target: pg_zenithjoy
+      query: SELECT count(*) FROM zenithjoy.leadgen_comments WHERE harvest_batch = '$RUN_TAG'
+    expect:
+      op: ">="
+      ref: metrics.comments_collected
+    severity: error
+    failure_class: needs_human
+    on_fail: stop_run
+    note: 保留评论落库读回门槛，真身改为PG；比较已提交的评论数，不能只读执行者自报。
+  - key: collection_commander_verified
+    stage: collection
+    journey_cell: stage:collection
+    probe:
+      type: metric
+      ref: metrics.commander_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: cl_app_closed
+    stage: cleanup
+    journey_cell: stage:cleanup
+    probe:
+      type: metric
+      ref: metrics.close_app_attempts
+    expect:
+      op: ">="
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: fail_stage
+    note: >
+      收工必须关抖音（douyin-phone-adb close-app）。现状 workflow-result.sh:182 写死 close_app_attempts=0（采收链没调 close-app），
+      判红直到 6b133a81。
+  - key: cl_lock_released
+    stage: cleanup
+    journey_cell: stage:cleanup
+    probe:
+      type: metric
+      ref: metrics.lock_released
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: fail_stage
+    note: |
+      设备锁已释放，否则触达拿不到手机。workflow-result.sh:182 当前写死 1（锁实际由 harvest-keyword.sh trap 按词释放）， 6b133a81 改为真读锁目录。
+  - key: cl_safe_desktop_visible
+    stage: cleanup
+    journey_cell: stage:cleanup
+    probe:
+      type: metric
+      ref: metrics.safe_desktop_visible
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: fail_stage
+    note: |
+      手机回到安全桌面（不停在私信/评论页，防误触）。workflow-result.sh:182 写死 0，判红直到 6b133a81。

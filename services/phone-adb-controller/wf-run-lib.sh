@@ -218,7 +218,8 @@ lease_heartbeat_start(){
   [[ -n "$serial" && -x "$hbwr" ]] || return 0
   lease_heartbeat_stop
   ( while kill -0 $parent 2>/dev/null; do
-      /bin/sleep $iv
+      # stop 会先取消 sleep；取消不是定时到期，不能在终止循环前抢发一次续租。
+      /bin/sleep $iv || break
       kill -0 $parent 2>/dev/null || break
       "$hbwr" heartbeat "$serial" >/dev/null 2>&1
     done ) </dev/null >/dev/null 2>&1 &

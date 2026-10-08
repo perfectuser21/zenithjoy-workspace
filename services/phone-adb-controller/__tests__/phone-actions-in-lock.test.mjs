@@ -1,4 +1,4 @@
-import { seedRunner } from './fixtures/frozen-runtime.mjs';
+import { seedRunner, HISTORICAL_ENGINE_PLAN_DIR } from './fixtures/frozen-runtime.mjs';
 // 碰手机的动作全部进设备锁内(任务 40f02c5e,决策 3c98fb36 阶段1 / 77ad8635)。
 // 09-29 夜两次事故: batch2 词间「归位清场」(force-stop 重开抖音)不拿设备锁,把同机持锁任务(对标发现/触达)的现场清掉;
 // wf-run 收尾 close-app/return-safe-desktop 排在 release_run_lock 之后,下一批一拿到锁就被上一批清场;
@@ -87,7 +87,7 @@ function setup(tag, extra = {}) {
   writeFileSync(join(home, ".config", "openclaw", "douyin-account-routes.tsv"), "p1\tdy001\n");
   const env = {
     ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`,
-    WF_PLAN_DIR: join(SRC, "plans"), WFR: join(SRC, "workflow-result.sh"), BATCH2, HARVEST_KEYWORD: hk,
+    WF_PLAN_DIR: HISTORICAL_ENGINE_PLAN_DIR, WFR: join(SRC, "workflow-result.sh"), BATCH2, HARVEST_KEYWORD: hk,
     WALL_REPORT: join(home, "no-wall"), BATCH_SLEEP: "0", PF_LOCK_WAIT: "0", PF_LOCK_TRIES: "2", CLEAR_LOCK_WAIT: "0", WF_TESTING: "1",
     WFR_HOME: join(home, "wfr"), WFR_NODE: process.execPath, WFR_JQ: JQ, WFR_LEDGER_MJS: join(SRC, "ledger.mjs"),
     WFR_SCP_TARGET: "", WFR_PROBE_STAGES: "", WFR_BRAIN_ENV: join(home, "no-brain.env"), BRAIN_URL: "", BRAIN_INTERNAL_TOKEN: "",

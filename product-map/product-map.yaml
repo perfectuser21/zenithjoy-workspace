@@ -142,6 +142,7 @@ golden_paths:
     status: active
     smoke_files:
       - .github/workflows/scripts/smoke/golden-path-2-smoke.sh
+      - scripts/smoke/leadgen-split-smoke.sh
     # 承诺式骨干 4 步（决策 60da58cf，2026-08-15，按 capability/references/step-cutting.md 四测试扫出）。
     # 每步是「客户可观察的状态变化」承诺；注册/装机/建表/填画像=共享前置件(复用 Path1)，不算本路骨干；
     # 挂片/FR/NFR/判定点/断言落 Brain 账本(journey_features + journey_step_links)，不进本文件（决策 26793221）。

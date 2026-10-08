@@ -1,61 +1,129 @@
-# 对象类型表（决策 3240824c 前置件）
-#
-# 契约的输入/输出/步骤读写只能引这里登记的类型与字段（contracts-lib.mjs 交叉校验）。
-# identity = 身份键（全局唯一定位一个对象）；source_of_truth = 正本在哪（不是投影）。
-# 依据全部取自代码（文件:行），字段名用英文 snake_case，飞书中文列名在 note 里对照。
-
 version: 1
 types:
   Device:
-    identity: [serial]
-    source_of_truth: "adb 设备 + douyin-phone-adb 锁目录 /private/tmp/openclaw-phone/locks/<serial>.lock"
-    fields: [serial, host, online, call_state, lock_holder]
-    note: "锁按 serial（douyin-phone-adb:94-95），TTL 1800s（douyin-phone-adb:1137）"
-
+    identity:
+      - serial
+    source_of_truth: adb 设备 + douyin-phone-adb 锁目录 /private/tmp/openclaw-phone/locks/<serial>.lock
+    fields:
+      - serial
+      - host
+      - online
+      - call_state
+      - lock_holder
+    note: 锁按 serial（douyin-phone-adb:94-95），TTL 1800s（douyin-phone-adb:1137）
   Account:
-    identity: [platform, profile]
-    source_of_truth: "services/phone-adb-controller/config/own-accounts.json + douyin-phone-adb 账号 TSV"
-    fields: [platform, profile, sender_id, nickname, logged_in, dm_paused, daily_cap]
-    note: "profile 如 jinoshengyuan-work/legacy（line-routes.js:18）；sender_id = 抖音号（next-outreach.js:103-105）；熔断 = state/dm-paused-<profile>.flag"
-
+    identity:
+      - platform
+      - profile
+    source_of_truth: services/phone-adb-controller/config/own-accounts.json + douyin-phone-adb 账号 TSV
+    fields:
+      - platform
+      - profile
+      - sender_id
+      - nickname
+      - logged_in
+      - dm_paused
+      - daily_cap
+    note: profile 如 jinoshengyuan-work/legacy（line-routes.js:18）；sender_id = 抖音号（next-outreach.js:103-105）；熔断 =
+      state/dm-paused-<profile>.flag
   Keyword:
-    identity: [line_key, word]
-    source_of_truth: "飞书关键词配置表（line-routes.js keyword，金诺 tbleP4LgzkcwAhiZ）"
-    fields: [line_key, word, business_line, effective_leads]
-    note: "word = 列「抖音获客-关键词配置」（next-keywords.js:29）；effective_leads = 列「有效线索数」（update-keyword-stats.js:79）"
-
+    identity:
+      - line_key
+      - word
+    source_of_truth: 飞书关键词配置表（line-routes.js keyword，金诺 tbleP4LgzkcwAhiZ）
+    fields:
+      - line_key
+      - word
+      - business_line
+      - effective_leads
+    note: word = 列「抖音获客-关键词配置」（next-keywords.js:29）；effective_leads = 列「有效线索数」（update-keyword-stats.js:79）
   BenchmarkAccount:
-    identity: [platform, sec_uid]
-    source_of_truth: "客户手填对标账号链接（product-map.yaml benchmark_link_acquisition step1），正本表待建"
-    fields: [platform, sec_uid, profile_url, line_key]
-
+    identity:
+      - platform
+      - sec_uid
+    source_of_truth: 客户手填对标账号链接（product-map.yaml benchmark_link_acquisition step1），正本表待建
+    fields:
+      - platform
+      - sec_uid
+      - profile_url
+      - line_key
   Video:
-    identity: [line_key, video_id]
-    source_of_truth: "pg zenithjoy.leadgen_videos（apps/api/db/migrations/20260922_220000_leadgen_ssot_tables.sql:28-45，UNIQUE(line_key, video_id)）"
-    fields: [line_key, video_id, video_url, title, keyword, comment_count, harvest_batch, process_status,
-             judgment_status, judgment_reason, transcript, feishu_record_id]
-
+    identity:
+      - line_key
+      - video_id
+    source_of_truth: pg
+      zenithjoy.leadgen_videos（apps/api/db/migrations/20260922_220000_leadgen_ssot_tables.sql:28-45，UNIQUE(line_key,
+      video_id)）
+    fields:
+      - line_key
+      - video_id
+      - video_url
+      - title
+      - keyword
+      - comment_count
+      - harvest_batch
+      - process_status
+      - judgment_status
+      - judgment_reason
+      - transcript
+      - feishu_record_id
   Comment:
-    identity: [line_key, dedup_key]
-    source_of_truth: "飞书原始评论池（line-routes.js pool，金诺 tblmrJTyVgzTj89P）"
-    fields: [line_key, dedup_key, nickname, douyin_id, profile_url, body, video_id, harvest_batch,
-             process_status, relevance, intent_grade, promoted]
-    note: "dedup_key = nick|dyid|正文前20字（push-raw-comments.js:43）；process_status 待分拣/已分拣；promoted = 列「进入最终线索」"
-
+    identity:
+      - line_key
+      - dedup_key
+    source_of_truth: pg zenithjoy.leadgen_comments；飞书评论池为投影
+    fields:
+      - line_key
+      - dedup_key
+      - nickname
+      - douyin_id
+      - profile_url
+      - body
+      - video_id
+      - harvest_batch
+      - process_status
+      - relevance
+      - intent_grade
+      - promoted
+    note: dedup_key = nick|dyid|正文前20字（push-raw-comments.js:43）；process_status 待分拣/已分拣；promoted = 列「进入最终线索」
   Lead:
-    identity: [line_key, douyin_id]
-    source_of_truth: "飞书线索表（line-routes.js lead，金诺 tblTLFj69CflUqSr）"
-    fields: [line_key, douyin_id, nickname, profile_url, intent_grade, repeat_hits, status, send_status,
-             script_id, sender_id, reached_at]
-    note: "Lead 身份 = 平台账号 id（决策 3240824c）；status 待触达/触达中/已触达/触达受阻（next-outreach-lib.js:37-56）"
-
+    identity:
+      - line_key
+      - douyin_id
+    source_of_truth: pg zenithjoy.leadgen_leads；飞书线索表为投影
+    fields:
+      - line_key
+      - douyin_id
+      - nickname
+      - profile_url
+      - intent_grade
+      - repeat_hits
+      - status
+      - send_status
+      - script_id
+      - sender_id
+      - reached_at
+    note: repeat_hits 对应PG dup_hit_count；按人身份保留重复命中和触达标记，不删除人。
   OutreachOrder:
-    identity: [lead_record_id]
-    source_of_truth: "无独立表：线索表行 record_id 即单号（next-outreach.js:112）"
-    fields: [lead_record_id, douyin_id, sender_id, script_id, message, result]
-
+    identity:
+      - lead_record_id
+    source_of_truth: PG线索认领与本run订单回执；未发送不得伪造送达
+    fields:
+      - lead_record_id
+      - douyin_id
+      - sender_id
+      - script_id
+      - message
+      - result
   Run:
-    identity: [run_tag]
-    source_of_truth: "执行机账本 ledger.mjs + worker-result 工件（workflow-result.sh）"
-    fields: [run_tag, profile, serial, stage, status, metrics]
-    note: "run_tag = auto%m%d%H%M（harvest-cron.sh:50）= leadgen_videos.harvest_batch = 评论池「运行批次」"
+    identity:
+      - run_tag
+    source_of_truth: cecelia.runs + 本run持久化activity/Commander工件
+    fields:
+      - run_tag
+      - profile
+      - serial
+      - stage
+      - status
+      - metrics
+    note: run_tag = auto%m%d%H%M（harvest-cron.sh:50）= leadgen_videos.harvest_batch = 评论池「运行批次」

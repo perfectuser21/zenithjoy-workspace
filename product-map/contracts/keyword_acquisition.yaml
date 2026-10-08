@@ -9,6 +9,7 @@
 
 version: 1
 capability: keyword_acquisition
+lifecycle: retired
 name: 关键词获客
 workflow: social-keyword-leadgen
 brain_workflow_key: douyin_keyword_leadgen

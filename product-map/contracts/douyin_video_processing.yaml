@@ -1,0 +1,985 @@
+version: 1
+capability: keyword_acquisition
+contract_key: douyin_video_processing
+name: 抖音视频处理
+workflow: douyin-video-processing
+brain_workflow_key: douyin_video_processing
+source_repo: perfectuser21/zenithjoy-workspace
+checks: services/phone-adb-controller/checks/douyin-video-processing.yaml
+dod_promotion:
+  min_consecutive_pass: 20
+runner:
+  entry: leadgen-workflow.mjs
+  queue: pending_videos
+trigger_inputs:
+  - Video
+  - Account
+  - Device
+known_gaps: []
+activities:
+  - key: preflight
+    name: 预检
+    order: 1
+    version: 2.0.0
+    compatibility: breaking
+    owner:
+      department: line02 智能获客
+      agent: 获客采收员
+    inputs:
+      - type: Device
+        cardinality: one
+        fields:
+          - serial
+          - host
+      - type: Account
+        cardinality: one
+        fields:
+          - platform
+          - profile
+          - sender_id
+    outputs:
+      - type: Device
+        cardinality: one
+        effect: update
+        fields:
+          - online
+          - call_state
+          - lock_holder
+      - type: Account
+        cardinality: one
+        effect: update
+        fields:
+          - logged_in
+      - type: Run
+        cardinality: one
+        effect: create
+        fields:
+          - run_tag
+          - profile
+          - serial
+    preconditions:
+      - 不在触达时窗 8-22 点（采收给触达让路，harvest-cron.sh:139）
+      - 当日 KPI 未达标（kpi-gate.js 经 ssh mmv，harvest-cron.sh:145-149）
+    postconditions:
+      - probe: pf_device_verified
+        asserts: 保留原后置条件：pf_device_verified
+      - probe: pf_account_verified
+        asserts: 保留原后置条件：pf_account_verified
+      - probe: pf_call_idle
+        asserts: 保留原后置条件：pf_call_idle
+      - probe: pf_lock_acquired
+        asserts: 保留原后置条件：pf_lock_acquired
+      - probe: preflight_commander_verified
+        asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
+    execution:
+      location: phone
+      via: leadgen-workflow.mjs → preflight独立活动 → 持久化队列读回
+    budget:
+      max_duration_s: 300
+      heartbeat_s: 60
+    resources:
+      locks:
+        - device:<serial>
+      limits: []
+    idempotency:
+      dedupe_key: Run.run_tag
+      on_duplicate: reject
+    failure:
+      empty_ok: []
+      retryable:
+        - lock_busy 设备锁被占
+      needs_human:
+        cases:
+          - device_offline 设备离线
+          - account_mismatch 手机登录号不符
+          - call_busy 设备通话中（未挂断的电话）
+        alert:
+          channel: bark
+          object: harvest-cron.sh:121-125 离线升级分身 → Bark
+      fatal:
+        - run_tag 重复
+    side_effects: []
+    invokers:
+      - code
+    runtime:
+      phase: setup
+      entry: leadgen-activity.sh
+      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
+    implementation_bindings:
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/douyin-phone-adb
+        revision: contract
+        enabler_key: device_lock
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/phone-lock-lib.sh
+        revision: contract
+        enabler_key: device_lock
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/phone-lock-helper.py
+        revision: contract
+        enabler_key: device_lock
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/douyin-phone-adb
+        revision: contract
+        enabler_key: account_selfcheck
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-workflow.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-activity.sh
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/activity-commander.mjs
+        revision: contract
+    steps:
+      - key: acquire_device_lock
+        name: 拿设备锁
+        order: 1
+        reads:
+          - Device.serial
+        writes:
+          - Device.lock_holder
+        check: lock-acquire rc=0 且锁文件 owner=本 run（TTL 1800s）
+        implementation:
+          status: implemented
+          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.acquire_device_lock（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: metric
+            ref: metrics.lock_acquired
+            expect:
+              op: ==
+              value: 1
+      - key: refresh_lock_heartbeat
+        name: 锁心跳续期
+        order: 2
+        reads:
+          - Device.lock_holder
+        writes:
+          - Device.lock_holder
+        check: lock-refresh 后锁文件 mtime 更新
+        implementation:
+          status: implemented
+          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.refresh_lock_heartbeat（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          at: cleanup
+          readback:
+            type: log
+            regex: 锁心跳续期3次仍未确认成功
+            expect:
+              op: <=
+              value: 0
+      - key: verify_device_identity
+        name: 验设备身份
+        order: 3
+        reads:
+          - Device.serial
+        writes:
+          - Device.online
+        check: adb get-state == device 且 serial 与声明一致
+        implementation:
+          status: implemented
+          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.verify_device_identity（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: metric
+            ref: metrics.device_verified
+            expect:
+              op: ==
+              value: 1
+      - key: verify_call_idle
+        name: 验通话空闲
+        order: 4
+        reads:
+          - Device.serial
+        writes:
+          - Device.call_state
+        check: telephony call_state == IDLE
+        implementation:
+          status: implemented
+          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.verify_call_idle（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: metric
+            ref: metrics.call_state_idle
+            expect:
+              op: ==
+              value: 1
+      - key: read_account_mark
+        name: 读账号标记(我页)
+        order: 5
+        reads:
+          - Account.sender_id
+        writes:
+          - Account.logged_in
+        check: 我页抖音号 in profile 的注册账号列表(account-current + account_registered)
+        implementation:
+          status: implemented
+          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.read_account_mark（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: evidence
+            glob: "{tag}-account-profile.xml"
+            match: 抖音号：
+            expect:
+              op: ">="
+              value: 1
+      - key: open_run_ledger
+        name: 开账本
+        order: 6
+        reads:
+          - Account.profile
+          - Device.serial
+        writes:
+          - Run.run_tag
+          - Run.profile
+          - Run.serial
+        check: ledger init 成功且 preflight 工件通过闭集键校验；四项指标取 harvest-cron
+          真实预检结果（DEVICE_VERIFIED/ACCOUNT_VERIFIED/CALL_STATE_IDLE/LOCK_ACQUIRED，读不到即 0）
+        implementation:
+          status: implemented
+          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.open_run_ledger（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: ledger
+            stage: preflight
+            field: status
+            equals: completed
+            expect:
+              op: ==
+              value: 1
+    commander:
+      entry: activity-commander.mjs
+  - key: qualification
+    name: 判定视频
+    order: 2
+    version: 2.0.0
+    compatibility: breaking
+    owner:
+      department: line02 智能获客
+      agent: 视频判定员
+    inputs:
+      - type: Video
+        cardinality: many
+        fields:
+          - line_key
+          - video_id
+          - video_url
+          - title
+          - comment_count
+          - judgment_status
+      - type: Device
+        cardinality: one
+        fields:
+          - serial
+          - lock_holder
+    outputs:
+      - type: Video
+        cardinality: many
+        effect: update
+        fields:
+          - judgment_status
+          - judgment_reason
+          - transcript
+    preconditions:
+      - 从PG认领pending视频，租约绑定本run
+      - 深链打开后current-video-link读到的实际video_id必须等于认领ID，不能认控制器回显的期望ID
+    postconditions:
+      - probe: qual_none_pending
+        asserts: 保留原后置条件：qual_none_pending
+      - probe: qual_reason_present
+        asserts: 保留原后置条件：qual_reason_present
+      - probe: qualification_commander_verified
+        asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
+    execution:
+      location: phone
+      via: leadgen-workflow.mjs → qualification独立活动 → 持久化队列读回
+    budget:
+      max_duration_s: 1800
+      heartbeat_s: 60
+    resources:
+      locks:
+        - device:<serial>
+      limits:
+        - name: record_budget_s_per_video
+          value: 10-105（(时长+2)/3+5）
+    idempotency:
+      dedupe_key: Video.line_key+Video.video_id
+      on_duplicate: skip
+    failure:
+      empty_ok:
+        - 本批无 pending 视频
+      retryable:
+        - 转写调用失败留 pending 下轮重判（judge-video.js 转写 catch）
+        - 判定 API 故障（OpenRouter 402/429/网络）留 pending，judgment_reason 记「判定异常(待重判)」（judge-video.js
+          markVideoJudgeError）
+        - 录音死寂（harvest-keyword.sh 电平打点）
+      needs_human:
+        cases:
+          - 整批转写/判定失败（DashScope/OpenRouter 鉴权或欠费）
+        alert:
+          channel: bark
+          object: judge-video.js 整批失败 → Bark
+      fatal: []
+    side_effects:
+      - kind: internal_write
+        target: pg zenithjoy.leadgen_videos
+        description: 写 judgment_status/judgment_reason/transcript
+    invokers:
+      - code
+      - agent
+    runtime:
+      phase: per_item
+      entry: leadgen-activity.sh
+      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
+    implementation_bindings:
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-workflow.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-activity.sh
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/activity-commander.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/process-queued-video.sh
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/queued-video-lib.sh
+        revision: contract
+    model:
+      - provider: dashscope
+        model: qwen-audio-3.0-asr-flash
+        purpose: 视频口播转写（transcribe-qwen-audio.js:19）
+      - provider: openrouter
+        model: typesafe/jev-1.13
+        purpose: 文案×目标人群主判（judge-jev.js:16）
+      - provider: openrouter
+        model: google/gemini-2.5-flash
+        purpose: 低置信（<0.6）复核（judge-jev.js:17-18）
+    steps:
+      - key: cheap_gate
+        name: 便宜闸
+        order: 1
+        reads:
+          - Video.comment_count
+        writes:
+          - Video.judgment_status
+        check: 实际current-video-link回读content_type=video且video_id与认领ID完全一致，图文或空身份在录音前排除；零评论以开评论区真实结果处理
+        implementation:
+          status: implemented
+          ref: queued-video-lib.sh qv_verify_video：原始控制器输出与期望/实际ID写入独立工件，失败覆盖旧成功
+        uses_llm: false
+        dod:
+          mode: hard
+          readback:
+            type: evidence
+            glob: "{tag}-identity-*.json"
+            match: '"verified"\s*:\s*true[\s\S]*"content_type"\s*:\s*"video"'
+            expect:
+              op: ">="
+              ref: metrics.videos_verified
+      - key: unmute_before_record
+        name: 录前取消静音
+        order: 2
+        reads:
+          - Video.video_url
+          - Device.lock_holder
+        writes: []
+        check: 媒体音量回读 >0
+        implementation:
+          status: implemented
+          ref: process-queued-video.sh + queued-video-lib.sh qualification.unmute_before_record（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: log
+            regex: audio_rejected reason=silent_or_unknown_volume
+            expect:
+              op: <=
+              value: 0
+      - key: record_triple_speed
+        name: 3倍速录屏
+        order: 3
+        reads:
+          - Video.video_url
+        writes: []
+        check: 录屏文件存在且时长 ≥ 预算的 80%
+        implementation:
+          status: implemented
+          ref: process-queued-video.sh + queued-video-lib.sh qualification.record_triple_speed（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: log
+            regex: audio_rejected reason=short_or_unknown_duration
+            expect:
+              op: <=
+              value: 0
+      - key: extract_audio
+        name: 提取16k音频
+        order: 4
+        reads:
+          - Video.video_id
+        writes: []
+        check: ffprobe 有 16kHz 音频流且电平非死寂
+        implementation:
+          status: implemented
+          ref: process-queued-video.sh + queued-video-lib.sh qualification.extract_audio（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: log
+            regex: audio_upload_failed
+            expect:
+              op: <=
+              value: 0
+      - key: transcribe
+        name: 通义ASR转写
+        order: 5
+        reads:
+          - Video.video_id
+        writes:
+          - Video.transcript
+        check: transcript 非空；空/静音 → rejected
+        implementation:
+          status: implemented
+          ref: process-queued-video.sh + queued-video-lib.sh qualification.transcribe（原约束保留，真PG/证据读回）
+        uses_llm: true
+        dod:
+          mode: checkpoint
+          readback:
+            type: sql
+            query: SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG' AND judgment_status <>
+              'pending' AND coalesce(transcript, '') = '' AND coalesce(judgment_reason, '') NOT LIKE '转写为空%'
+              AND coalesce(judgment_reason, '') NOT LIKE 'V2便宜闸%'
+            expect:
+              op: <=
+              value: 0
+      - key: judge_content
+        name: 意向判定
+        order: 6
+        reads:
+          - Video.transcript
+          - Video.title
+        writes:
+          - Video.judgment_status
+          - Video.judgment_reason
+        check: judgment_status ∈ {matched, rejected} 且 judgment_reason 非空
+        implementation:
+          status: implemented
+          ref: process-queued-video.sh + queued-video-lib.sh qualification.judge_content（原约束保留，真PG/证据读回）
+        uses_llm: true
+        dod:
+          mode: checkpoint
+          readback:
+            type: sql
+            query: SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG' AND judgment_status <>
+              'pending' AND coalesce(judgment_reason, '') = ''
+            expect:
+              op: <=
+              value: 0
+    commander:
+      entry: activity-commander.mjs
+  - key: collection
+    name: 采集评论
+    order: 3
+    version: 2.0.0
+    compatibility: breaking
+    owner:
+      department: line02 智能获客
+      agent: 获客采收员
+    inputs:
+      - type: Video
+        cardinality: many
+        fields:
+          - line_key
+          - video_id
+          - video_url
+          - judgment_status
+      - type: Device
+        cardinality: one
+        fields:
+          - serial
+          - lock_holder
+      - type: Account
+        cardinality: one
+        fields:
+          - sender_id
+          - nickname
+      - type: Run
+        cardinality: one
+        fields:
+          - run_tag
+    outputs:
+      - type: Comment
+        cardinality: many
+        effect: create
+        fields:
+          - line_key
+          - dedup_key
+          - nickname
+          - douyin_id
+          - profile_url
+          - body
+          - video_id
+          - harvest_batch
+      - type: Video
+        cardinality: many
+        effect: update
+        fields:
+          - process_status
+    preconditions:
+      - 仅matched视频可采评论
+      - 恢复后的当前视频ID再次核验，评论坐标必须来自当前屏
+    postconditions:
+      - probe: coll_only_matched
+        asserts: 保留原后置条件：coll_only_matched
+      - probe: coll_video_binding_consistent
+        asserts: 保留原后置条件：coll_video_binding_consistent
+      - probe: coll_rescan_rate
+        asserts: 保留原后置条件：coll_rescan_rate
+      - probe: comments_readback
+        asserts: 保留原后置条件：comments_readback
+      - probe: collection_commander_verified
+        asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
+    execution:
+      location: phone
+      via: leadgen-workflow.mjs → collection独立活动 → 持久化队列读回
+    budget:
+      max_duration_s: 7200
+      heartbeat_s: 300
+    resources:
+      locks:
+        - device:<serial>
+      limits:
+        - name: max_comments_big_video
+          value: 50
+        - name: stop_after_empty_screens
+          value: 2
+    idempotency:
+      dedupe_key: Comment.line_key+Comment.dedup_key
+      on_duplicate: skip
+    failure:
+      empty_ok:
+        - 视频无新评论
+      retryable:
+        - 评论区打不开重试 1 次（harvest-keyword.sh:115-125）
+        - commenter-identity 重试 3 次（harvest-keyword.sh:197-214）
+      needs_human:
+        cases:
+          - 评论数>0 却整词 0 评论，疑改版
+        alert:
+          channel: bark
+          object: escort 升级 → Bark
+      fatal:
+        - 未判合格的视频被采了评论（先采后判复活）
+        - 评论归属到本批没打开过的视频（视频漂移错配）
+    side_effects:
+      - kind: internal_write
+        target: pg zenithjoy.leadgen_comments + leadgen_videos
+        description: 评论事务提交后才标视频评论已采，不发私信
+    invokers:
+      - code
+      - agent
+    runtime:
+      phase: per_item
+      entry: leadgen-activity.sh
+      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
+    implementation_bindings:
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/douyin-phone-adb
+        revision: contract
+        enabler_key: return_to_results
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-workflow.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-activity.sh
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/activity-commander.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/process-queued-video.sh
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/queued-video-lib.sh
+        revision: contract
+    model:
+      - provider: openrouter
+        model: bytedance/ui-tars-1.5-7b
+        purpose: 评论图标兜底定位（douyin-phone-adb:2076）
+    steps:
+      - key: open_comment_section
+        name: 开评论区
+        order: 1
+        reads:
+          - Video.video_url
+          - Video.judgment_status
+        writes: []
+        check: 评论区面板节点可见
+        implementation:
+          status: implemented
+          ref: process-queued-video.sh + queued-video-lib.sh collection.open_comment_section（原约束保留，真PG/证据读回）
+        uses_llm: true
+        dod:
+          mode: checkpoint
+          readback:
+            type: evidence
+            glob: "{tag}*-comments-panel.xml"
+            match: "[0-9万.]+条评论"
+            expect:
+              op: ">="
+              ref: metrics.videos_processed
+      - key: collect_comments
+        name: 采集评论
+        order: 2
+        reads:
+          - Video.video_id
+          - Account.nickname
+        writes:
+          - Comment.body
+          - Comment.nickname
+          - Comment.video_id
+          - Comment.dedup_key
+          - Comment.harvest_batch
+          - Comment.line_key
+        check: 逐屏整行去重，连续 2 屏无新增即停；过滤作者本人与自有账号
+        implementation:
+          status: implemented
+          ref: process-queued-video.sh + queued-video-lib.sh collection.collect_comments（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: evidence
+            glob: "{tag}*-screen*-comments.xml"
+            expect:
+              op: ">="
+              ref: metrics.videos_processed
+      - key: verify_commenter_identity
+        name: 评论人身份验证
+        order: 3
+        reads:
+          - Comment.nickname
+        writes:
+          - Comment.douyin_id
+        check: 主页强校验：抖音号合法 + 账号三态 + 非自有账号；验证失败抢救(back+重开评论区)后核对 current-video-link 仍是本视频，漂移即本视频剩余评论作废(0929修，见下
+          known_gaps)
+        implementation:
+          status: implemented
+          ref: process-queued-video.sh + queued-video-lib.sh collection.verify_commenter_identity（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: evidence
+            glob: "{tag}*-person*-profile.xml"
+            match: 抖音号：
+            expect:
+              op: ">="
+              ref: metrics.comments_collected
+      - key: resolve_profile_link
+        name: 客户主页直链
+        order: 4
+        reads:
+          - Comment.douyin_id
+        writes:
+          - Comment.profile_url
+        check: 分享名片 → sec_uid，剪贴板守卫回读；失败重试3次(同commenter-identity套路)，3次仍失败才降级为线索保留但链接为空
+        implementation:
+          status: implemented
+          ref: process-queued-video.sh + queued-video-lib.sh collection.resolve_profile_link（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: tsv
+            regex: ^LEAD\t([^\t]*\t){7}{word}\t[^\t]*\t\t
+            expect:
+              op: <=
+              value: 0
+      - key: mark_video_collected
+        name: 标记视频已采
+        order: 5
+        reads:
+          - Video.video_id
+        writes:
+          - Video.process_status
+        check: process_status=评论已采 只写给 matched 视频
+        implementation:
+          status: implemented
+          ref: process-queued-video.sh + queued-video-lib.sh collection.mark_video_collected（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: sql
+            query: SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG' AND process_status =
+              '评论已采'
+            expect:
+              op: ">="
+              ref: metrics.videos_processed
+      - key: return_to_results
+        name: 归位回结果页
+        order: 6
+        reads:
+          - Video.video_url
+        writes: []
+        check: 每张卡片处理完 back-to-results 一次做对（Activity=搜索结果页且搜索框=本词）；走了兜底重搜（deeplink 重发搜索+重扫卡片）算一次没做对。0930 决策
+          f425e3fd：此前不是步骤，三次修复都没有格子能变红；cmd09300230 批 134/134 走兜底、跑 6 小时
+        implementation:
+          status: implemented
+          ref: process-queued-video.sh + queued-video-lib.sh collection.return_to_results（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: metric
+            ref: metrics.rescan_rate
+            expect:
+              op: <=
+              value: 0.3
+      - key: push_raw_comments
+        name: 评论落池
+        order: 7
+        reads:
+          - Comment.dedup_key
+          - Run.run_tag
+        writes:
+          - Comment.harvest_batch
+          - Comment.dedup_key
+          - Comment.line_key
+        check: 评论池「运行批次」计数 ≥ leads_written（= push-raw-comments.js 本批实际落池数
+          PUSH_COMMENTS_STATS.created，不含被历史全池去重掉的）；0929修：同push_videos，全军覆没时 exit 1
+        implementation:
+          status: implemented
+          ref: process-queued-video.sh + queued-video-lib.sh collection.push_raw_comments（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: sql
+            query: SELECT count(*) FROM zenithjoy.leadgen_comments WHERE harvest_batch = '$RUN_TAG'
+            expect:
+              op: ">="
+              ref: metrics.comments_collected
+    known_gaps:
+      - gap: coll_video_binding_consistent 只能核对孤儿归属（评论来源视频必须是本批落过库的视频），抓不住漂移到同批另一条真实视频的语义错配；行内防线是 harvest-keyword.sh
+          video_drifted（0929）。要抓同批错配需账本记每条评论采集时的视频身份序列做交叉核验
+        task: 878fe194
+    commander:
+      entry: activity-commander.mjs
+  - key: cleanup
+    name: 收尾
+    order: 4
+    version: 2.0.0
+    compatibility: breaking
+    owner:
+      department: line02 智能获客
+      agent: 获客采收员
+    inputs:
+      - type: Device
+        cardinality: one
+        fields:
+          - serial
+          - lock_holder
+      - type: Run
+        cardinality: one
+        fields:
+          - run_tag
+    outputs:
+      - type: Device
+        cardinality: one
+        effect: update
+        fields:
+          - lock_holder
+      - type: Run
+        cardinality: one
+        effect: update
+        fields:
+          - status
+    preconditions:
+      - 本 run 各阶段已写工件或已判失败
+    postconditions:
+      - probe: cl_app_closed
+        asserts: 保留原后置条件：cl_app_closed
+      - probe: cl_lock_released
+        asserts: 保留原后置条件：cl_lock_released
+      - probe: cl_safe_desktop_visible
+        asserts: 保留原后置条件：cl_safe_desktop_visible
+    execution:
+      location: phone
+      via: leadgen-workflow.mjs → cleanup独立活动 → 持久化队列读回
+    budget:
+      max_duration_s: 120
+      heartbeat_s: 30
+    resources:
+      locks:
+        - device:<serial>
+      limits: []
+    idempotency:
+      dedupe_key: Run.run_tag
+      on_duplicate: skip
+    failure:
+      empty_ok: []
+      retryable:
+        - 工件 scp 到 mmv 失败（本地保留）
+      needs_human:
+        cases:
+          - finalize 自检 artifact_count_mismatch
+        alert:
+          channel: brain_alert
+          object: Brain 终态 failed 回执（workflow-result.sh:200）
+      fatal: []
+    side_effects: []
+    invokers:
+      - code
+    runtime:
+      phase: finalize
+      entry: leadgen-activity.sh
+      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
+    implementation_bindings:
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/douyin-phone-adb
+        revision: contract
+        enabler_key: device_lock
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/phone-lock-lib.sh
+        revision: contract
+        enabler_key: device_lock
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/phone-lock-helper.py
+        revision: contract
+        enabler_key: device_lock
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-workflow.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-activity.sh
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/activity-commander.mjs
+        revision: contract
+    steps:
+      - key: close_app
+        name: 关App
+        order: 1
+        reads:
+          - Device.serial
+        writes: []
+        check: 前台不再是 com.ss.android.ugc.aweme
+        implementation:
+          status: implemented
+          ref: leadgen-workflow.mjs + leadgen-queue.js cleanup.close_app（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: metric
+            ref: metrics.close_app_attempts
+            expect:
+              op: ">="
+              value: 1
+      - key: release_lock
+        name: 放锁
+        order: 2
+        reads:
+          - Device.lock_holder
+        writes:
+          - Device.lock_holder
+        check: 锁文件不存在或 owner≠本 run；失败重试3次(同commenter-identity套路)，3次仍失败才留告警
+        implementation:
+          status: implemented
+          ref: leadgen-workflow.mjs + leadgen-queue.js cleanup.release_lock（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: metric
+            ref: metrics.lock_released
+            expect:
+              op: ==
+              value: 1
+      - key: return_safe_desktop
+        name: 回安全桌面
+        order: 3
+        reads:
+          - Device.serial
+        writes: []
+        check: 前台 = launcher（用 HOME intent resolve-activity 查设备自身默认桌面包名,不 hardcode 厂商launcher）
+        implementation:
+          status: implemented
+          ref: leadgen-workflow.mjs + leadgen-queue.js cleanup.return_safe_desktop（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: metric
+            ref: metrics.safe_desktop_visible
+            expect:
+              op: ==
+              value: 1
+      - key: finalize_run
+        name: 终态回执
+        order: 4
+        reads:
+          - Run.run_tag
+        writes:
+          - Run.status
+        check: n_items>0 且 n_files>=n_items（workflow-result.sh:194）
+        implementation:
+          status: implemented
+          ref: leadgen-workflow.mjs + leadgen-queue.js cleanup.finalize_run（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: ledger
+            field: items_total
+            expect:
+              op: ">="
+              value: 1
+    commander:
+      entry: activity-commander.mjs

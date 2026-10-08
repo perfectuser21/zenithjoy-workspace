@@ -33,3 +33,18 @@ test('旧v1 outbox无需release或binding仍原body重传，禁止升级改写�
  enqueue(dir,{key:'legacy-occurrence',endpoint:`http://127.0.0.1:${server.address().port}/api/brain/spans`,body});
  const result=await invoke({WFR_RUN_DIR:dir,BRAIN_URL:'',BRAIN_INTERNAL_TOKEN:'fixture-token'},'flush');assert.equal(result.code,0,result.err);assert.deepEqual(received,body);assert.equal(received[0].identity_protocol,undefined);
 });
+
+test('真实HTTP步骤证据引用冻结owner，跨活动清场读回仍属于原preflight',async t=>{
+ const dir=mkdtempSync(join(tmpdir(),'runtime-step-span-'));
+ seedFrozen(dir,null,{runId:'step-run',steps:{preflight:[{step_id:'step-identity',locator:{step_key:'account'}}]}});
+ let received;const server=createServer(async(req,res)=>{let raw='';for await(const chunk of req)raw+=chunk;received=JSON.parse(raw);res.end('{"inserted":2}');});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
+ const env={WFR_RUN_DIR:dir,WFR_RUN_ID:'step-run',WFR_ATTEMPT:'a1',BRAIN_URL:`http://127.0.0.1:${server.address().port}`,BRAIN_INTERNAL_TOKEN:'fixture-token'};
+ const file=join(dir,'artifact.json');writeFileSync(file,JSON.stringify({observed_at:new Date().toISOString(),verification:{step_dod:[{steps:[{key:'flow.preflight.account',activity:'preflight',pass:true}]}]}}));
+ const result=await invoke(env,'span','cleanup','completed','1',file);assert.equal(result.code,0,result.err);
+ assert.equal(received.length,2);assert.equal(received[0].step_id,null);
+ assert.equal(received[1].step_id,'step-identity');assert.equal(received[1].reference_id,'reference-0');
+ assert.equal(received[1].activity_definition_version_id,'av-0');assert.equal(received[1].evidence.observed_at_stage,'cleanup');
+ writeFileSync(file,JSON.stringify({verification:{step_dod:[{steps:[{key:'flow.preflight.missing',activity:'preflight',pass:true}]}]}}));
+ assert.equal((await invoke(env,'span','cleanup','completed','2',file)).code,1);
+});

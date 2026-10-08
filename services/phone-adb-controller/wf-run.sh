@@ -35,6 +35,11 @@ TAG="${WF_TAG:-auto$(date +%m%d%H%M)}"   # --tag 覆盖(启动器传 cmdMMDDHHMM
 C=${C:-$HOME/.local/bin/douyin-phone-adb}
 DOUYIN_ACCOUNT_REGISTRY="${DOUYIN_ACCOUNT_REGISTRY:-$HOME/.config/openclaw/douyin-account-routes.tsv}"
 LOG=~/harvest-cron.log
+# 退役是生产入口政策，必须在历史快照续跑前检查；不能由旧冻结副本重新启用。
+if [[ -r "$WF_PLAN_DIR/$WF_ARG_CAP.plan" ]] && ( source "$WF_PLAN_DIR/$WF_ARG_CAP.plan"; [[ "${WF_RETIRED:-0}" == 1 ]] ); then
+  print -u2 -- '旧获客流程已退役；请使用 leadgen-run.sh 的四个独立流程。'
+  exit 1
+fi
 # cap+tag索引仅定位，身份与完整性仍由run-definition验证；在latest计划门禁之前续跑。
 if [[ -z "${WF_FROZEN_ROOT:-}" ]]; then
   frozen_run=$(bash "$WFR" locate-run "$WF_ARG_CAP" "$TAG" "$P" "$SERIAL") || exit 1
@@ -82,6 +87,10 @@ if ! wf_load_plan "$WF_ARG_CAP"; then
   escalate "${WF_ARG_CAP:-未指定能力} 未起跑: $WF_LOAD_ERR"
   exit 1
 fi
+fi
+if [[ "${WF_RETIRED:-0}" == 1 ]]; then
+  print -u2 -- '旧获客流程已退役；请使用 leadgen-run.sh 的四个独立流程。'
+  exit 1
 fi
 DISCOVER_CMD="$(wf_discover_cmd)"
 if [[ ! -x "$DISCOVER_CMD" ]]; then

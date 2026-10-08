@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
 import YAML from 'yaml';
 const file=new URL('../../../.github/workflows/pilot-release-verification.yml',import.meta.url);
-const revision='ae56478f0e1980f5f9d7b318c60c266bd98b552d';
+const revision='32363a5d1e1ba0f259ebc63ba14e9e6580bc691a';
 function config(){assert.ok(existsSync(file),'独立完整发布验证caller必须存在');return YAML.parse(readFileSync(file,'utf8'));}
 test('完整发布caller名称与路径固定，仅main push/手动触发，不借PR影响结果',()=>{
  const w=config();assert.equal(w.name,'Pilot release verification');

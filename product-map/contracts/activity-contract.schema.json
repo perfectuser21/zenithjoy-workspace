@@ -7,8 +7,17 @@
   "additionalProperties": false,
   "required": ["version", "capability", "name", "workflow", "brain_workflow_key", "source_repo", "checks", "trigger_inputs", "activities"],
   "properties": {
+    "lifecycle": {"type": "string", "enum": ["active", "retired"]},
     "version": { "const": 1 },
     "capability": { "$ref": "#/$defs/key" },
+    "contract_key": { "$ref": "#/$defs/key" },
+    "runner": {
+      "type": "object", "additionalProperties": false, "required": ["entry", "queue"],
+      "properties": {
+        "entry": { "const": "leadgen-workflow.mjs" },
+        "queue": { "enum": ["discovery_sources", "pending_videos", "pending_comments", "pending_leads"] }
+      }
+    },
     "name": { "type": "string", "minLength": 2 },
     "workflow": { "type": "string", "pattern": "^[a-z][a-z0-9-]+$" },
     "brain_workflow_key": { "type": "string", "pattern": "^[a-z][a-z0-9_]+$" },
@@ -154,6 +163,11 @@
       "required": ["key", "name", "order", "version", "compatibility", "owner", "inputs", "outputs", "preconditions",
         "postconditions", "execution", "budget", "resources", "idempotency", "failure", "side_effects", "invokers", "steps"],
       "properties": {
+        "commander": {
+          "type": "object", "additionalProperties": false, "required": ["entry"],
+          "properties": { "entry": { "const": "activity-commander.mjs" } }
+        },
+        "retry_safe": { "type": "boolean" },
         "implementation_bindings": { "type": "array", "items": { "$ref": "#/$defs/implementationBinding" } },
         "key": { "$ref": "#/$defs/key" },
         "name": { "type": "string", "minLength": 2 },
