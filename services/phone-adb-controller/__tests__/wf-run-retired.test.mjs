@@ -45,3 +45,13 @@ for (const capability of ['keyword_acquisition', 'benchmark_link_acquisition']) 
     });
   }
 }
+
+for(const capability of ['keyword_acquisition','benchmark_link_acquisition'])test('退役门禁必须先于历史冻结运行索引：'+capability,()=>{
+ const home=mkdtempSync(join(tmpdir(),'wf-retired-resume-')),bin=join(home,'.local/bin'),old=join(home,'old-run/runtime');
+ mkdirSync(bin,{recursive:true});mkdirSync(old,{recursive:true});
+ writeFileSync(join(old,'wf-run.sh'),'#!/bin/zsh\nprint old-run-executed > "$HOME/external-actions.log"\n',{mode:0o755});
+ const wfr=join(bin,'wfr');writeFileSync(wfr,'#!/bin/sh\ncase "$1" in locate-run) printf "%s\n" "$HOME/old-run";; esac\n',{mode:0o755});
+ const env={...process.env,HOME:home,PATH:bin+':'+process.env.PATH,WF_PLAN_DIR:join(SRC,'plans'),WFR:wfr};delete env.WF_FROZEN_ROOT;
+ const result=spawnSync(ZSH,[join(SRC,'wf-run.sh'),capability,'p1','SER1','业务','--tag','retired-resume'],{env,encoding:'utf8',timeout:10000});
+ assert.equal(result.status,1,result.stderr);assert.match(result.stderr,/旧获客流程已退役/);assert.equal(read(join(home,'external-actions.log')),'');
+});
