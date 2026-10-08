@@ -131,7 +131,8 @@
       "name": "关键词获客",
       "status": "active",
       "smoke_files": [
-        ".github/workflows/scripts/smoke/golden-path-2-smoke.sh"
+        ".github/workflows/scripts/smoke/golden-path-2-smoke.sh",
+        "scripts/smoke/leadgen-split-smoke.sh"
       ],
       "steps": [
         {
@@ -597,5 +598,5 @@
       ]
     }
   ],
-  "digest": "edf3e5deb4b69a4ec29d56f2928b53d27b6aa13b43544a5d0b7d430a037d9c5a"
+  "digest": "6d59a7789e0e0a99126d8dad72625a50223fafa63cb7ad33f433305f39e83c7e"
 }
