@@ -43,7 +43,7 @@ test("卡片解析带出作者列(真机网格 fixture): X Y DUR 标题 作者",
   assert.deepEqual(rows[0].slice(0, 3), ["303", "1459", "00:40"], "前 4 列与原格式一致");
 });
 
-test("开关: 环境变量优先,未设读 config/discovery-v2.profiles;只有名单内的号开 v2", { skip: SKIP }, () => {
+test("开关: 环境变量优先,未设用 discovery-v2-lib.sh 默认名单;只有名单内的号开 v2", { skip: SKIP }, () => {
   const probe = (profile, extra = {}) => {
     const env = { ...process.env, ...extra };
     if (!("DISCOVERY_V2_PROFILES" in extra)) delete env.DISCOVERY_V2_PROFILES;
@@ -54,7 +54,14 @@ test("开关: 环境变量优先,未设读 config/discovery-v2.profiles;只有�
   assert.equal(probe("yuesheng-m1"), "off");
   assert.equal(probe("legacy", { DISCOVERY_V2_PROFILES: "legacy,other" }), "on");
   assert.equal(probe("jinoshengyuan-work", { DISCOVERY_V2_PROFILES: "" }), "off", "显式置空 = 全关(回滚开关)");
-  assert.match(read(join(SRC, "config", "discovery-v2.profiles")), /^jinoshengyuan-work$/m);
+  assert.match(read(LIB), /^DV2_DEFAULT_PROFILES="jinoshengyuan-work"$/m);
+});
+
+test("部署清单: 新库进执行机冻结目录,历史标题脚本进 mmv", () => {
+  const deploy = read(join(SRC, "deploy.sh"));
+  const arr = (name) => (deploy.match(new RegExp(`${name}=\\(([\\s\\S]*?)\\)`)) || [, ""])[1].split(/\s+/).filter(Boolean);
+  assert.ok(arr("DEVICE_SH_FILES").includes("discovery-v2-lib.sh"));
+  assert.ok(arr("MMV_JS_FILES").includes("fetch-seen-titles.js"));
 });
 
 // 假控制器: 网格分屏,每屏 4 张卡;search-grid-scroll up/down 改当前屏号(存 $HOME/screen);
@@ -170,7 +177,7 @@ test("v2 采收: 第 1 屏的卡先翻屏再按标题重新定位坐标;兜底�
   assert.equal(r.status, 0, r.stderr.slice(-3000));
   assert.deepEqual(tappedTitles(home), ["标题0-1", "标题0-4", "标题1-2", "标题1-3", "标题1-4"]);
   const log = ctlLines(home);
-  assert.ok(log.filter((l) => / -rescan-filter latest /.test(l)).length >= 4, "重搜后筛选重设为最新");
+  assert.ok(log.filter((l) => /-rescan-filter latest /.test(l)).length >= 4, "重搜后筛选重设为最新");
   assert.ok(!log.some((l) => / most_liked /.test(l)));
   assert.doesNotMatch(r.stderr, /重扫次数超限/);
 });

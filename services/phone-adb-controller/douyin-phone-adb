@@ -2277,11 +2277,15 @@ comments_exhausted() {
 # 判据：真视频卡的标题节点正下方 80px 内必有配套的「未点赞，喜欢N，按钮」，
 # 且该按钮水平落在标题范围内。用它挡掉「相关搜索」区块的推荐词条——那些词条
 # 长度、样式都像标题，但底下没有喜欢按钮（真机 fixture 里的真实干扰项）。
-# 输出每行：x<TAB>y<TAB>标题（x,y = 标题中心，可直接 tap 进入视频）。
+# 输出每行：x<TAB>y<TAB>时长<TAB>标题<TAB>作者（x,y = 标题中心，可直接 tap 进入视频）。
+# 作者（10-08 发现改造补，点开前去重用）：标题正下方 60px 内、落在标题水平范围里最靠左的文字，
+# 排除点赞数/发布日期（真机网格：头像右侧昵称，下一行日期，右侧点赞数）。读不到留空。
 video_cards_from_xml() {
-  local xml="$1" line b t x1 y1 x2 y2 lx1 ly1 lx2 ly2 dx1 dy1 dx2 dy2 dt matched dur
+  local xml="$1" line b t x1 y1 x2 y2 lx1 ly1 lx2 ly2 dx1 dy1 dx2 dy2 dt matched dur ax1 ay1 ax2 ay2 at author ax
   [[ -r "$xml" ]] || return 1
-  local likes_f="${TMPDIR:-/tmp}/.dpa-likes.$$" durs_f="${TMPDIR:-/tmp}/.dpa-durs.$$"
+  local likes_f="${TMPDIR:-/tmp}/.dpa-likes.$$" durs_f="${TMPDIR:-/tmp}/.dpa-durs.$$" texts_f="${TMPDIR:-/tmp}/.dpa-texts.$$"
+  /usr/bin/grep -oE '<node[^>]*text="[^"]+"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$xml" \
+  | /usr/bin/sed -E 's/.*text="([^"]*)".*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\2 \3 \4 \5 \1/' > "$texts_f"
   /usr/bin/grep -oE '<node[^>]*content-desc="[^"]*喜欢[^"]*"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$xml" \
   | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/' > "$likes_f"
   # 时长标签（形如 04:01），贴在缩略图右下角，即标题正上方。ASR 判定阶段靠它优先选短视频。
@@ -2304,9 +2308,16 @@ video_cards_from_xml() {
         [[ "$dx1" == <-> ]] || continue
         (( y1 >= dy2 && y1 - dy2 <= 100 && dx1 >= x1 && dx2 <= x2 )) && { dur="$dt"; break; }
       done < "$durs_f"
-      print -- "$(( (x1 + x2) / 2 ))\t$(( (y1 + y2) / 2 ))\t${dur:-}\t$t"
+      author=""; ax=999999
+      while read ax1 ay1 ax2 ay2 at; do
+        [[ "$ax1" == <-> ]] || continue
+        (( ay1 >= y2 && ay1 - y2 <= 60 && ax1 >= x1 && ax2 <= x2 && ax1 < ax )) || continue
+        print -r -- "$at" | /usr/bin/grep -qE '^([0-9.]+(万|w|亿)?|.*(天前|小时前|分钟前)|刚刚)$' && continue
+        author="$at"; ax=$ax1
+      done < "$texts_f"
+      print -- "$(( (x1 + x2) / 2 ))\t$(( (y1 + y2) / 2 ))\t${dur:-}\t$t\t$author"
     done
-  /bin/rm -f "$likes_f" "$durs_f"
+  /bin/rm -f "$likes_f" "$durs_f" "$texts_f"
 }
 # ── 对标发现：打开对标主页 + 读主页作品网格（0929 对标链接获客·发现，决策 7f842d12）──
 # 0929 真机探明（xian-m4 legacy 机，抖音 UserProfileActivity）：
@@ -2764,6 +2775,25 @@ case "$command" in
     if _search_kw_matches "$2" "$3"; then print -- "kw_matches=1"; exit 0; fi
     print -- "kw_matches=0"; exit 1
     ;;
+  video-cards-from-xml)
+    # 纯解析（10-08 发现改造）：一份视频 tab 网格 UI 树 → 卡片 TSV（同 search-video-cards）。不碰设备，CI 可直接测。
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE video-cards-from-xml UI_XML"
+    video_cards_from_xml "$2"
+    ;;
+  search-grid-scroll)
+    # 10-08 发现改造：视频 tab 网格整屏翻页（up = 看下面的卡，down = 回上面）。慢速拖动减少惯性，
+    # 翻多少不保证整屏对齐——调用方按标题去重/定位，不依赖坐标连续。
+    [[ "$#" == 3 && ( "$3" == up || "$3" == down ) ]] || die "usage: douyin-phone-adb --profile PROFILE search-grid-scroll EVIDENCE_ID up|down"
+    check_target
+    sgs_x=$(( SCREEN_W / 2 )); sgs_hi=$(( SCREEN_H * 85 / 100 )); sgs_lo=$(( SCREEN_H * 15 / 100 ))
+    if [[ "$3" == up ]]; then
+      "$ADB" -s "$SERIAL" shell input swipe "$sgs_x" "$sgs_hi" "$sgs_x" "$sgs_lo" 1000
+    else
+      "$ADB" -s "$SERIAL" shell input swipe "$sgs_x" "$sgs_lo" "$sgs_x" "$sgs_hi" 1000
+    fi
+    wait_ms 1200
+    print -- "scrolled=$3 evidence_id=$2"
+    ;;
   results-controls-from-xml)
     # 纯判定（0930 任务 913a6b03）：结果页 UI 树 → 视频 tab / 漏斗筛选按钮中心点。不碰设备，CI 可直接测。
     # 缺任一节点非 0 退出（调用方据此退视觉兜底，不瞎猜坐标）。
@@ -3183,6 +3213,6 @@ case "$command" in
     print -- "foreground=${focus:-unknown}"
     ;;
   *)
-    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release lock-refresh lock-reap with-lock refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link own-profile account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid results-controls-from-xml filter-panel-location"
+    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release lock-refresh lock-reap with-lock refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link own-profile account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-grid-scroll search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid results-controls-from-xml filter-panel-location"
     ;;
 esac

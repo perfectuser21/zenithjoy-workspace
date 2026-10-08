@@ -31,6 +31,28 @@ find /Volumes/EvidenceRAM/openclaw-phone/evidence -type f \( -name "*.png" -o -n
 # 落到 MMV 原生跑(不再经 docker exec)。
 SEENVIDS="$(mktemp -t seen-videos)"
 ssh -o ConnectTimeout=15 mmv "node /Users/administrator/.openclaw/leadgen-scripts/fetch-seen-videos.js '$LINE'" > "$SEENVIDS" 2>/dev/null
+# 发现改造(Brain 任务 9a8784b7,名单见 discovery-v2-lib.sh): 点开之前先去重。视频库已有标题每批拉一次(按批次键缓存,
+# 本批各词共用);本批已点过的 标题+作者 记在同目录 run 文件,跨词也不重复点。名单外的号不拉不判。
+source "${0:A:h}/discovery-v2-lib.sh" || exit 1
+DV2=0; discovery_v2_on "$P" && DV2=1
+if (( DV2 )); then
+  DV2_DIR="$HOME/.cache/zenithjoy"; mkdir -p "$DV2_DIR"
+  find "$DV2_DIR" -name 'dv2-*' -mtime +2 -delete 2>/dev/null
+  DV2_HIST="$DV2_DIR/dv2-hist-$HBATCH.txt"; DV2_RUN="$DV2_DIR/dv2-run-$HBATCH.txt"
+  touch "$DV2_RUN"
+  if [[ ! -s "$DV2_HIST" ]]; then
+    ssh -o ConnectTimeout=20 -o BatchMode=yes mmv "set -a; source ~/.credentials/zenithjoy-db.env 2>/dev/null; set +a; cd ~/.openclaw/leadgen-scripts && node fetch-seen-titles.js '$LINE'" 2>/dev/null </dev/null \
+      | while IFS= read -r _t; do dv2_title_key "$_t"; done > "$DV2_HIST.tmp.$$"
+    mv -f "$DV2_HIST.tmp.$$" "$DV2_HIST"
+    [[ -s "$DV2_HIST" ]] || log "⚠️ 视频库历史标题拉取为空(库/ssh 不可达?),本词只按本轮+链接 video_id 去重"
+  fi
+  # 自家号昵称: 发布目录里没有 config/,先读执行机 ~/bin-harvest/config/own-accounts.json,没有再读脚本同目录
+  DV2_OWN_CONF="${OWN_ACCOUNTS_CONF:-$HOME/bin-harvest/config/own-accounts.json}"
+  [[ -r "$DV2_OWN_CONF" ]] || DV2_OWN_CONF="${0:A:h}/config/own-accounts.json"
+  typeset -a DV2_OWN
+  DV2_OWN=("${(@f)$(python3 -c 'import json,sys
+for n in json.load(open(sys.argv[1])).get("nicknames",[]): print(n)' "$DV2_OWN_CONF" 2>/dev/null)}")
+fi
 
 # 0930修复(夜实测auto09292304发现): 原来锁被占一次就直接放弃(exit 3),导致discover-benchmark.sh
 # (对标发现,同机同设备)持锁的~5分钟里,12个关键词一次性被跳过6个,一整批只跑完一半——设备并发
@@ -97,6 +119,26 @@ fi
 if (( drc == 124 )); then log "发现超预算(${DISC_BUDGET}s),本词作废(记账)"; exit 4; fi
 (( drc == 0 )) || exit 1
 [[ -n "$CARDS" ]] || { log "无卡片"; exit 0; }
+# v2 点开之前先去重: 自家号作者 → 库里见过的标题 → 本批已点过的 标题+作者;剩下的才点开取链接(取到链接后仍按 video_id 复核)
+if (( DV2 )); then
+  typeset -a _kept; typeset -A _word_seen
+  _hist=0; _dup=0; _own=0; _total=0
+  for _line in "${(@f)CARDS}"; do
+    [[ -n "$_line" ]] || continue
+    _total=$((_total+1))
+    _f=("${(@ps:\t:)_line}"); _key="$(dv2_title_key "${_f[4]:-}")"; _au="${_f[5]:-}"
+    if [[ -n "$_au" ]] && (( ${DV2_OWN[(Ie)$_au]} )); then _own=$((_own+1)); continue; fi
+    if grep -qxF -- "$_key" "$DV2_HIST" 2>/dev/null; then _hist=$((_hist+1)); continue; fi
+    _ka="$_key"$'\t'"$_au"
+    if [[ -n "${_word_seen[$_ka]:-}" ]] || grep -qxF -- "$_ka" "$DV2_RUN" 2>/dev/null; then _dup=$((_dup+1)); continue; fi
+    _word_seen[$_ka]=1
+    _kept+=("$_line")
+  done
+  log "发现漏斗: 卡片=$_total 历史已见=$_hist 本轮重复=$_dup 自家号=$_own 待点=${#_kept}"
+  wr note --profile "$P" "发现漏斗: 卡片=$_total 去重跳过=$((_hist+_dup+_own)) 待点=${#_kept}"
+  CARDS="${(F)_kept}"
+  [[ -n "$CARDS" ]] || { log "去重后无待点卡片"; exit 0; }
+fi
 # 采集段(判定+采集两个 per_item 活动共用本词的逐视频循环)预算: 自发现结束起累计,在视频边界判
 COLLECT_T0=$(date +%s)
 COLLECT_BUDGET=$(( $(wf_budget_of qualification) + $(wf_budget_of collection) ))
@@ -119,6 +161,10 @@ CARD_ARR=("${(@f)CARDS}")
 i=0
 RESCANS=0
 RESCAN_MAX="${HARVEST_RESCAN_MAX:-3}"
+# v2: 每张卡点完多半要兜底重搜(0930 实证),20 张卡不能被 3 次重扫截断;i 每轮必增,终止由卡数+每词限时保证
+DV2_WORD_SECONDS="${HARVEST_V2_WORD_SECONDS:-480}"
+DV2_CUR=0
+(( DV2 )) && RESCAN_MAX="${HARVEST_RESCAN_MAX:-${#CARD_ARR[@]}}"
 while (( i < ${#CARD_ARR[@]} )); do
   # 7d150e33: 视频边界判整批总时限与采集段预算——到点/超预算都不开下一个视频,已采的照常交给 batch2,trap 放锁
   if wf_deadline_reached; then
@@ -134,12 +180,25 @@ while (( i < ${#CARD_ARR[@]} )); do
     log "采集段超预算(${COLLECT_BUDGET}s),本词剩余候选作废(记账)"
     break
   fi
+  # v2 每词限时: 一词最多点 20 张,不限时一批 12 词会拖到下一批/触达时窗;到点不开下一个视频
+  if (( DV2 && $(date +%s) - COLLECT_T0 >= DV2_WORD_SECONDS )); then
+    log "本词限时(${DV2_WORD_SECONDS}s)到,剩余 $(( ${#CARD_ARR[@]} - i )) 张不点"
+    break
+  fi
   i=$((i+1))
   CARDLINE="${CARD_ARR[$i]}"
   X="$(print -- "$CARDLINE" | cut -f1)"; Y="$(print -- "$CARDLINE" | cut -f2)"
   DUR="$(print -- "$CARDLINE" | cut -f3)"; TITLE="$(print -- "$CARDLINE" | cut -f4)"
   log "视频$i: ${TITLE:0:40}"
   wr note --profile "$P" "视频$i: ${TITLE:0:40}"
+  if (( DV2 )); then
+    # 发现时记的是第几屏;翻到那一屏按标题重新取坐标(翻屏/重搜后旧坐标不可信)
+    if ! dv2_locate_card "$TITLE" "$(print -- "$CARDLINE" | cut -f6)" "$TAG-v$i"; then
+      log "  卡片定位失败(翻屏后找不到这条标题),跳过"
+      continue
+    fi
+    print -r -- "$(dv2_title_key "$TITLE")	$(print -- "$CARDLINE" | cut -f5)" >> "$DV2_RUN"
+  fi
   # 0914 融合刀6: 活锁心跳——每视频续一次,长采收绝不再被 TTL 判 stale 抢占
   # 0929修复(DoD审计发现,批次4主理人纠正): 之前输出+退出码全丢进/dev/null+`|| true`——
   # TTL(1800s)到点没人知道续期一直在失败,直到锁被别的轮次抢走才现形(0928夜实证过一次
