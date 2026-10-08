@@ -1,4 +1,4 @@
-import { seedRunner } from './fixtures/frozen-runtime.mjs';
+import { seedRunner, HISTORICAL_ENGINE_PLAN_DIR } from './fixtures/frozen-runtime.mjs';
 // wf-run.sh —— 契约组装执行的通用驱动（决策 7f842d12：Commander 当入口 + 契约组装执行）。
 // harvest-cron.sh 已退成薄壳 `exec wf-run.sh keyword_acquisition "$@"`（现网 crontab 一字不改），
 // 计划由 scripts/product-map/wf-plan.mjs 从契约生成、提交在 plans/<能力>.plan。
@@ -16,7 +16,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = join(HERE, "..");
 const WR = join(SRC, "wf-run.sh");
 const HC = join(SRC, "harvest-cron.sh");
-const PLANS = join(SRC, "plans");
+const PLANS = HISTORICAL_ENGINE_PLAN_DIR;
 const ZSH = spawnSync("bash", ["-lc", "command -v zsh"], { encoding: "utf8" }).stdout.trim();
 const SKIP = !ZSH && "no zsh (CI: sudo apt-get install -y zsh)";
 

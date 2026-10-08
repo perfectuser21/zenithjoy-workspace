@@ -151,7 +151,9 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
       }catch(error){failures.push({video_id:v.video_id,reason:error.message});}}
       return {collected,comments,comments_collected:comments,videos_processed:collected,rescan_count:rescans,
         rescan_rate:qualified.length?rescans/qualified.length:0,failures,...(failures.length?{status:'partial'}:{})};},
-    scoring:async()=>{const r=await queue('score');const readback=await queue('score_readback',{ids:r.ids});
+    scoring:async()=>{const r=await queue('score');
+      appendFileSync(join(env.WFR_RUN_DIR,'activity.log'),`SORT_STATS ${JSON.stringify(r)}\n`,{mode:0o600});
+      const readback=await queue('score_readback',{ids:r.ids});
       writeFileSync(join(env.WFR_RUN_DIR,`${run}-scoring-readback.json`),JSON.stringify(readback));
       return {...r,scoring_readback_failures:readback.failures};},
     mark_leads:async()=>{const r=await queue('mark_leads');const readback=await queue('mark_readback',{ids:r.ids,lead_ids:r.lead_ids});

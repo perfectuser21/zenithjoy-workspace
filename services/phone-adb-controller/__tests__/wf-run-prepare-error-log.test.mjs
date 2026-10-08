@@ -1,3 +1,4 @@
+import { HISTORICAL_ENGINE_PLAN_DIR } from './fixtures/frozen-runtime.mjs';
 // 10-03 采收保底全天拒跑却只留一行「拒跑: 工作流定义版本冻结失败」：prepare 的真实报错走 stderr、
 // crontab 又丢到 /dev/null，且这一处拒跑不升级分身（任务 ed591256）。
 // 修后：日志带脱敏后的原因（不含 token）；仍保持「固定版本失败只留本地错误、拒跑前零外部动作」。
@@ -25,7 +26,7 @@ function setup(prepareBody) {
   writeFileSync(wfr, `#!/bin/bash\ncase "$1" in\n  locate-run) exit 0;;\n  prepare) ${prepareBody};;\n  *) exit 0;;\nesac\n`);
   for (const f of ['ssh', 'adb']) chmodSync(join(bin, f), 0o755);
   chmodSync(wfr, 0o755);
-  const env = { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`, WALL_REPORT: join(home, 'no-wall'), WFR: wfr, WF_PLAN_DIR: join(SRC, 'plans') };
+  const env = { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`, WALL_REPORT: join(home, 'no-wall'), WFR: wfr, WF_PLAN_DIR: HISTORICAL_ENGINE_PLAN_DIR };
   return { home, env };
 }
 

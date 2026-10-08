@@ -1,8 +1,11 @@
 import { mkdirSync,writeFileSync,readFileSync,existsSync } from 'node:fs';
 import { hostname } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { join,basename } from 'node:path';
 import { deploymentTarget } from '../../runtime-host.mjs';
 import { digest,registerRun } from '../../runtime-definition.mjs';
+// 固定历史计划仅供假机通用引擎回归；不得从当前生产计划去掉退役标记。
+export const HISTORICAL_ENGINE_PLAN_DIR=fileURLToPath(new URL('./historical-engine-plans/',import.meta.url));
 // 原设备预算/回执测试使用已完成prepare的合法运行目录；真实prepare由独立HTTP E2E覆盖。
 export function seedFrozen(dir,planPath,env={}){
   mkdirSync(dir,{recursive:true});const plan=planPath?readFileSync(planPath):Buffer.from('WF_CAP=test\n');

@@ -1,4 +1,4 @@
-import { seedRunner } from './fixtures/frozen-runtime.mjs';
+import { seedRunner, HISTORICAL_ENGINE_PLAN_DIR } from './fixtures/frozen-runtime.mjs';
 // 整批总时限验收(任务 7d150e33,PRD 阶段1「人为制造死循环,4h 内自收工,账本 final=partial,锁 free,线索已落池」):
 // 全假机整链——adb/ssh/scp/douyin-phone-adb/date 全假、harvest-keyword 假(采完第 1 个词就把时钟拨过总时限),
 // 账本(workflow-result.sh + ledger.mjs)真跑。断言: 进程 60 秒内自收工 rc=0;第 2 个词不开;已采 TSV 被 scp+落池+分拣;
@@ -80,7 +80,7 @@ function setup() {
   writeFileSync(join(home, ".config", "openclaw", "douyin-account-routes.tsv"), "p1\tdy001\n");
   const env = {
     ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`,
-    WF_PLAN_DIR: join(SRC, "plans"), WFR: join(SRC, "workflow-result.sh"), BATCH2: join(SRC, "batch2.sh"), HARVEST_KEYWORD: hk,
+    WF_PLAN_DIR: HISTORICAL_ENGINE_PLAN_DIR, WFR: join(SRC, "workflow-result.sh"), BATCH2: join(SRC, "batch2.sh"), HARVEST_KEYWORD: hk,
     WALL_REPORT: join(home, "no-wall"), BATCH_SLEEP: "0", PF_LOCK_WAIT: "0", WF_TESTING: "1",
     // 账本真跑,但不连 mmv/Brain: 探针关、scp 关、Brain 凭据指向不存在的文件
     WFR_HOME: join(home, "wfr"), WFR_NODE: process.execPath, WFR_JQ: JQ, WFR_LEDGER_MJS: join(SRC, "ledger.mjs"),

@@ -52,6 +52,7 @@ test('评分必须按实际处理ID读回，缺行在工件记录verified=false'
     assert.equal((await h.scoring()).scoring_readback_failures,1);
     assert.deepEqual(ops[1].ids,['c1']);
     assert.equal(JSON.parse(readFileSync(join(dir,'run-scoring-readback.json'),'utf8')).verified,false);
+    assert.deepEqual(JSON.parse(readFileSync(join(dir,'activity.log'),'utf8').trim().replace(/^SORT_STATS /,'')),{scored:1,ids:['c1']});
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
 

@@ -112,7 +112,7 @@ qv_relocate_comment(){
 qv_collect(){
   local opened raw line total=0 screens=0 empty=0 newlines=0 exhausted count=0 tier cap=50 own_rc identity nick body cdate region author tap nickb64 x y onick oid atype ip profile card attempt
   local -A seen emitted
-  opened="$("$C" --profile "$P" open-comments "$TAG-comments" </dev/null)" || {
+  opened="$("$C" --profile "$P" open-comments "$TAG-v$VID-comments" </dev/null)" || {
     # 无评论是控制器明确识别的正常结果，失败不能伪装成采完。
     if [[ "$opened" == *reason=no_comments_on_this_video* ]]; then
       print -- "COLLECTION\t$VID\tno_comments\t0"; return 0
@@ -138,7 +138,7 @@ except Exception: print("medium")' "$count")"
     (( $(date +%s) - started < budget )) || return 7
     "$C" --profile "$P" lock-refresh "$TAG" </dev/null >/dev/null || return 3
     screens=$((screens+1)); newlines=0
-    raw="$("$C" --profile "$P" collect-comments "$TAG-screen$screens" </dev/null)" || return 6
+    raw="$("$C" --profile "$P" collect-comments "$TAG-v$VID-screen$screens" </dev/null)" || return 6
     exhausted=0; [[ "$raw" == *exhausted=1* ]] && exhausted=1
     for line in "${(@f)raw}"; do
       [[ "$line" == *$'\t'tap=* ]] || continue
@@ -156,7 +156,7 @@ except Exception: print("medium")' "$count")"
         tap="$(print -r -- "$QV_LINE" | cut -f6)"; nickb64="$(print -r -- "$QV_LINE" | cut -f7)"
         x="${${tap#tap=}%% *}"; y="${tap##* }"; nickb64="${nickb64#b64=}"
         [[ "$x" == <-> && "$y" == <-> && -n "$nickb64" ]] || break
-        identity="$("$C" --profile "$P" commenter-identity "$x" "$y" "$nickb64" "$TAG-person$total-t$attempt" </dev/null)" || identity=""
+        identity="$("$C" --profile "$P" commenter-identity "$x" "$y" "$nickb64" "$TAG-v$VID-person$total-t$attempt" </dev/null)" || identity=""
         onick="$(qv_field "$identity" nickname)"
         [[ "$onick" == "$nick" ]] && break
         identity=""
@@ -169,17 +169,17 @@ except Exception: print("medium")' "$count")"
       (( own_rc != 2 )) || return 8
       (( own_rc != 0 )) || continue
       [[ -z "${emitted[$oid$'\t'$body]:-}" ]] || continue
-      "$C" --profile "$P" tap-evidence "$x" "$y" "$TAG-card$total" </dev/null >/dev/null || return 6
+      "$C" --profile "$P" tap-evidence "$x" "$y" "$TAG-v$VID-card$total" </dev/null >/dev/null || return 6
       qv_nap 3; profile=""
       for attempt in 1 2 3; do
-        card="$("$C" --profile "$P" commenter-card-link "$TAG-card$total-t$attempt" </dev/null)" || card=""
+        card="$("$C" --profile "$P" commenter-card-link "$TAG-v$VID-card$total-t$attempt" </dev/null)" || card=""
         profile="$(qv_field "$card" profile_url)"; [[ -n "$profile" ]] && break
         (( attempt < 3 )) && qv_nap 2
       done
       [[ -n "$profile" ]] || qv_log "profile_url_missing row=$total fallback=douyin_id"
       # 名片动作可能改变返回栈，不能仅凭“评论面板重新打开”认作原视频。
-      qv_verify_video "$TAG-after-card$total" || return 4
-      "$C" --profile "$P" open-comments "$TAG-after-card$total-comments" </dev/null >/dev/null || return 6
+      qv_verify_video "$TAG-v$VID-after-card$total" || return 4
+      "$C" --profile "$P" open-comments "$TAG-v$VID-after-card$total-comments" </dev/null >/dev/null || return 6
       emitted[$oid$'\t'$body]=1
       print -- "LEAD\t$onick\t$oid\t${atype:-personal}\t$body\t$cdate\t$region\t$TITLE\t$KWTXT\t$ip\t$profile\t$VURL"
       # 名片返回后页面重排；下一条重新collect，绝不沿用旧坐标。
