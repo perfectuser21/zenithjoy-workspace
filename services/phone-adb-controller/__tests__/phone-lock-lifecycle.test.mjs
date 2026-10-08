@@ -326,3 +326,13 @@ for(const suffix of ['','-a1']) test(`通用获取不能认领独立任务遗留
  const r=c.run('lock-acquire',run+suffix);assert.notEqual(r.status,0);assert.match(r.stderr,/standalone lock requires verified cleanup/);
  assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);assert.equal(c.actions(),'');
 });
+
+
+for(const cmd of ['lock-release','lock-cleanup']) test(`通用${cmd}不能删除独立核查锁`,t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';assert.equal(c.run('lock-acquire-new',run).status,0);
+ writeFileSync(join(c.lock,'pid'),String(process.pid));
+ const args=cmd==='lock-cleanup'?[cmd,run,String(process.pid)]:[cmd,run];
+ assert.notEqual(c.run(...args).status,0);
+ assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);assert.equal(c.actions(),'');
+ assert.equal(c.run('lock-release-exact',run).status,0);assert.ok(!existsSync(c.lock));
+});
