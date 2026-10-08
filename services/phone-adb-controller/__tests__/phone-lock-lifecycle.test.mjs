@@ -291,3 +291,24 @@ test('独立新认领只有原子空锁取得者拿到acquired回执',t=>{
  assert.equal(first.status,0,first.stderr);assert.match(first.stdout,/lock=acquired/);
  assert.notEqual(c.run('lock-acquire-new',run).status,0);assert.equal(c.actions(),'');
 });
+
+test('取消收尾owner的CRLF不能被文本换行转换冒认单LF',t=>{
+ const c=setup(t),helper=new URL('../phone-lock-helper.py',import.meta.url).pathname,owner=join(c.dir,'owner');writeFileSync(owner,'run\r\n');
+ const program=`import importlib.util,sys,types
+s=importlib.util.spec_from_file_location('lock_helper',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+handlers={}
+m.signal.signal=lambda sig,h:handlers.update({sig:h})
+class Child:
+ pid=123456789
+ def wait(self,timeout):
+  if timeout==0.1: handlers[m.signal.SIGTERM](m.signal.SIGTERM,None)
+  return 0
+m.subprocess.Popen=lambda *a,**k:Child()
+m.os.killpg=lambda *a:None
+m.subprocess.run=lambda *a,**k:types.SimpleNamespace(stdout='')
+try: m.bounded_command([],9,sys.argv[2],'run')
+except RuntimeError as e: assert 'owner preservation unproven' in str(e)
+else: raise AssertionError('CRLF owner was accepted')
+`;
+ const r=spawnSync(python,['-c',program,helper,owner],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+});
