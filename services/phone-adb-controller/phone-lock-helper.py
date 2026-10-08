@@ -67,7 +67,7 @@ def bounded_command(argv, fd, owner_path=None, expected_owner=None):
            and not parts[1].startswith('Z') for row in rows):
         raise RuntimeError('guarded command termination unproven: live process group remains')
     child.wait(timeout=2)
-    with open(owner_path, encoding='utf-8') as handle:
+    with open(owner_path, encoding='utf-8', newline='') as handle:
         owner_text = handle.read()
     if owner_text not in (expected_owner, expected_owner + '\n'):
         raise RuntimeError('guarded command owner preservation unproven')
