@@ -78,6 +78,10 @@ kickstart_if_changed() {
   local host="$1" label="$2" before="$3" rpath="$4" after
   after="$(remote_md5 "$host" "$rpath")"
   if [[ "$before" == "$after" ]]; then echo "    · $label 内容未变,不重载"; return 0; fi
+  # 10-08: 有意 launchctl disable 的服务(如 mmv 分身 watcher)kickstart 必失败,不能因此卡住 manifest 发布;文件照常换版,启用时自然读新版
+  if ssh "$host" "launchctl print-disabled gui/\$(id -u)" 2>/dev/null | grep -qF "\"$label\" => disabled"; then
+    echo "    · $label 已被 launchctl disable,不重载(文件已换版)"; return 0
+  fi
   if ssh "$host" "launchctl kickstart -k gui/\$(id -u)/$label" 2>/tmp/deploy-err-$$; then
     echo "    🔄 $label 已 kickstart -k(脚本换版)"
   else
