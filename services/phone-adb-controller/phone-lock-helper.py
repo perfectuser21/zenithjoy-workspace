@@ -11,6 +11,21 @@ import subprocess
 import sys
 
 
+def record_claim():
+    path, owner = sys.argv[2:]
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        print('run already claimed: standalone execution cannot be replayed', file=sys.stderr)
+        sys.exit(2)
+    with os.fdopen(fd, 'w') as handle:
+        handle.write(owner + '\n')
+        handle.flush()
+        os.fsync(handle.fileno())
+    print('run_claim=recorded owner=' + owner)
+
+
 def runtime_contract():
     files = {}
     for path in sys.argv[2:]:
@@ -225,7 +240,9 @@ def safe_to_reap():
 
 
 if __name__ == '__main__':
-    if sys.argv[1] == 'runtime-contract':
+    if sys.argv[1] == 'record-claim':
+        record_claim()
+    elif sys.argv[1] == 'runtime-contract':
         runtime_contract()
     elif sys.argv[1] == 'guard':
         guarded()

@@ -2615,6 +2615,15 @@ if [[ -n "$LOCK_OWNER" ]]; then
   [[ "$_owner_age" == <-> ]] && (( _owner_age + 1000 < LOCK_TTL_SECONDS )) || die 'lock lease budget is insufficient'
 fi
 
+# 旧清理也持有真实设备guard；不能在独立锁下无owner清场或与新认领交错。
+if [[ "$command" == close-app && -z "$LOCK_OWNER" ]]; then
+  source "${0:A:h}/phone-lock-lib.sh"
+  if [[ -z "${DOUYIN_LOCK_GUARD_FD:-}" ]] || ! "$PYTHON_BIN" "$PHONE_LOCK_HELPER" guard-check "$LOCK_ROOT/${SERIAL}.guard" >/dev/null 2>&1; then
+    exec "$PYTHON_BIN" "$PHONE_LOCK_HELPER" guard "$LOCK_ROOT/${SERIAL}.guard" "$SERIAL" close-app "$PHONE_CTL" "$PROFILE"
+  fi
+  [[ ! -f "$LOCK_DIR/standalone_review_required" ]] || die 'standalone lock requires explicit owner cleanup'
+fi
+
 case "$command" in
   runtime-contract)
     [[ "$#" == 1 ]] || die 'usage: runtime-contract'
