@@ -24,12 +24,12 @@ def guarded():
     os.environ['DOUYIN_LOCK_GUARD_FD'] = str(fd)
     argv = ['/bin/zsh', script, '--profile', profile, command, *args]
     if command == '--lock-owner':
-        bounded_command(argv, fd)
+        bounded_command(argv, fd, os.path.join(os.path.dirname(guard_path), serial + ".lock", "owner"), args[0])
     else:
         os.execv('/bin/zsh', argv)
 
 
-def bounded_command(argv, fd):
+def bounded_command(argv, fd, owner_path=None, expected_owner=None):
     budget = int(os.environ.get('DOUYIN_GUARDED_COMMAND_TIMEOUT_SECONDS', '280'))
     if not 1 <= budget <= 280:
         print('guarded command budget must be 1..280 seconds', file=sys.stderr)
@@ -37,6 +37,8 @@ def bounded_command(argv, fd):
     canceled = [0]
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda signum, frame: canceled.__setitem__(0, 128 + signum))
+    if canceled[0]:
+        sys.exit(canceled[0])
     child = subprocess.Popen(argv, pass_fds=(fd,), start_new_session=True)
     deadline = time.monotonic() + budget
     while not canceled[0] and time.monotonic() < deadline:
@@ -52,15 +54,20 @@ def bounded_command(argv, fd):
         except ProcessLookupError:
             pass
         except PermissionError:
-            # Darwin可能对已无活成员的僵尸进程组报EPERM；只能读回确认无活成员后接受。
-            rows = subprocess.run(['/bin/ps', '-axo', 'pgid=,stat='], check=True,
-                                  capture_output=True, text=True, timeout=2).stdout.splitlines()
-            if any(len(parts := row.split()) == 2 and parts[0] == str(child.pid)
-                   and not parts[1].startswith('Z') for row in rows):
-                raise
+            pass  # 必须经下方统一真实组回读，不能凭信号调用接受清场。
         if sig == signal.SIGTERM:
             time.sleep(0.2)
-    child.wait()
+    rows = subprocess.run(['/bin/ps', '-axo', 'pgid=,stat='], check=True,
+                          capture_output=True, text=True, timeout=2).stdout.splitlines()
+    if any(len(parts := row.split()) == 2 and parts[0] == str(child.pid)
+           and not parts[1].startswith('Z') for row in rows):
+        raise RuntimeError('guarded command termination unproven: live process group remains')
+    child.wait(timeout=2)
+    with open(owner_path, encoding='utf-8') as handle:
+        owner = handle.read().strip()
+    if owner != expected_owner:
+        raise RuntimeError('guarded command owner preservation unproven')
+    print('lock=preserved owner=' + owner, file=sys.stderr)
     if not canceled[0]:
         print('guarded command timeout: whole command and children terminated; owner lock retained', file=sys.stderr)
     sys.exit(canceled[0] or 124)

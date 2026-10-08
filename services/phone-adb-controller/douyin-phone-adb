@@ -1573,6 +1573,7 @@ read_current_account() {
     _kind="$(profile_owner_kind "$first_xml")"
     [[ "$_kind" == own ]] && { me_line="ALREADY_ON_PROFILE"; break; }
     # 他人主页没有底部导航，重抓也等不来「我」tab，直接进下面的 verified back。
+    [[ -n "$LOCK_OWNER" && "$_kind" == foreign ]] && die 'standalone account entry is another user profile; navigation refused'
     [[ "$_kind" == foreign ]] && { print -u2 -- "warning: current page is someone else's profile (has 私信 button); stepping back instead of reading its 抖音号"; break; }
     me_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="我，按钮"[^>]*>' "$first_xml" || true)"
     [[ -z "$me_line" || "$me_line" != *$'\n'* ]] || die 'Me tab is ambiguous: multiple matching controls'
@@ -1587,6 +1588,7 @@ read_current_account() {
   # （搜索结果页就是这种：0913 实测树 23295 字节、结构完整，但确实没有「我」tab）。
   # 恢复方式必须是幂等跳转回主界面，不能盲按返回键（返回会把设备越推越偏，见 current-video-link 案卷）。
   if [[ -z "$me_line" ]]; then
+    [[ -z "$LOCK_OWNER" ]] || die 'standalone account entry is unverified; navigation refused'
     # 实测结论（0913，别再重试这些路）：LAUNCHER intent 只把已有任务栈提到前台、页面不变；
     # snssdk1128 的 feed/main/home/profile/mine 等 deeplink 都到不了自己的主页。
     # 可行的只有逐步返回，但**每按一次都必须复验**——无验证的连按正是把设备推乱的老毛病。
