@@ -60,9 +60,14 @@ while :; do
   _scr=$((_scr+1)); nap 2
 done
 log "v2发现: 最新排序翻 $((_scr+1)) 屏取到 $_n 张卡片"
-# 翻回顶部: 采收按屏号从 0 屏起算翻屏定位
-for (( _k = 0; _k <= _scr; _k++ )); do
-  $C --profile "$P" search-grid-scroll "$TAG-top$_k" down >/dev/null 2>&1 || break
-  nap 1
-done
+# 回到确定的顶部: 采收按屏号从 0 屏起算翻屏定位。不能往下翻回去——10-08 真机 auto10081810 多拉一下触发下拉刷新,
+# 列表重排,本词 13 张卡全部定位失败。改为重新搜索(搜索词+视频tab+最新排序),失败只记日志(采收定位时还会再重搜兜底)。
+if (( _scr > 0 )); then
+  $C --profile "$P" open-search "$KW" >/dev/null 2>&1 || log "收尾重新搜索失败(采收定位时兜底重搜)"
+  nap 3
+  $C --profile "$P" search-video-tab "$TAG-top-vtab" >/dev/null 2>&1 || true
+  $C --profile "$P" search-time-layer six_months "$TAG-top-filter" latest unlimited unlimited "$LOC" >/dev/null 2>&1 \
+    || log "收尾重设最新排序失败(采收定位时兜底重搜)"
+  nap 2
+fi
 exit 0

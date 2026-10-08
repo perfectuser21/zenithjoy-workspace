@@ -39,25 +39,45 @@ qual_remote(){
 qual_field(){ print -r -- "$1" | sed -n "s/.*\"$2\":\"\{0,1\}\([^\",}]*\).*/\1/p" | head -1; }
 # dv2_locate_card 标题 屏号 证据前缀 —— 发现改造 v2: 从当前屏(DV2_CUR)往下翻到发现时记的屏号,在当屏卡片里按标题
 # 取坐标写进 X/Y。翻屏距离不保证整屏对齐,当屏找不到再多翻一屏;仍找不到返回 1(调用方跳过本卡,不拿旧坐标瞎点)。
-dv2_locate_card() {
-  local want="$1" scr="${2:-0}" evid="$3" try hit
-  [[ "$scr" == <-> ]] || scr=0
+# 10-08 真机 auto10081810: 列表位置会漂(返回后停在别的屏/下拉刷新重排),当屏+下一屏都找不到时重新搜索回到确定的顶部
+# (搜索词+视频tab+最新排序),翻到记下的屏号再找一轮;仍找不到才跳过本卡。
+dv2_goto_screen() {
+  local scr="$1" evid="$2"
   while (( DV2_CUR < scr )); do
     $C --profile "$P" search-grid-scroll "${evid}-up$DV2_CUR" up >/dev/null 2>&1 || return 1
     DV2_CUR=$((DV2_CUR+1)); nap 2
   done
-  for try in 1 2; do
-    hit="$($C --profile "$P" search-video-cards "${evid}-loc$try" 2>/dev/null | grep -E "^[0-9]+	" \
-      | while IFS= read -r l; do [[ "$(print -r -- "$l" | cut -f4)" == "$want" ]] && { print -r -- "$l"; break; }; done)"
-    if [[ -n "$hit" ]]; then
-      X="$(print -r -- "$hit" | cut -f1)"; Y="$(print -r -- "$hit" | cut -f2)"
-      return 0
+}
+# dv2_find_card 标题 证据ID —— 当屏卡片里按标题取坐标写进 X/Y
+dv2_find_card() {
+  local hit
+  hit="$($C --profile "$P" search-video-cards "$2" 2>/dev/null | grep -E "^[0-9]+	" \
+    | while IFS= read -r l; do [[ "$(print -r -- "$l" | cut -f4)" == "$1" ]] && { print -r -- "$l"; break; }; done)"
+  [[ -n "$hit" ]] || return 1
+  X="$(print -r -- "$hit" | cut -f1)"; Y="$(print -r -- "$hit" | cut -f2)"
+}
+dv2_reset_to_top() {
+  local evid="$1"
+  $C --profile "$P" open-search "$KW" >/dev/null 2>&1 || return 1
+  nap 3
+  $C --profile "$P" search-video-tab "${evid}-vtab" >/dev/null 2>&1 || true
+  $C --profile "$P" search-time-layer six_months "${evid}-filter" latest unlimited unlimited "$LOC" >/dev/null 2>&1 || true
+  DV2_CUR=0; nap 2
+}
+dv2_locate_card() {
+  local want="$1" scr="${2:-0}" evid="$3"
+  [[ "$scr" == <-> ]] || scr=0
+  if dv2_goto_screen "$scr" "$evid"; then
+    dv2_find_card "$want" "${evid}-loc1" && return 0
+    if $C --profile "$P" search-grid-scroll "${evid}-up$DV2_CUR" up >/dev/null 2>&1; then
+      DV2_CUR=$((DV2_CUR+1)); nap 2
+      dv2_find_card "$want" "${evid}-loc2" && return 0
     fi
-    (( try == 1 )) || break
-    $C --profile "$P" search-grid-scroll "${evid}-up$DV2_CUR" up >/dev/null 2>&1 || break
-    DV2_CUR=$((DV2_CUR+1)); nap 2
-  done
-  return 1
+  fi
+  log "  定位不到,重新搜索回顶部再找(第 $scr 屏)"
+  dv2_reset_to_top "${evid}-reset" || return 1
+  dv2_goto_screen "$scr" "${evid}-r" || return 1
+  dv2_find_card "$want" "${evid}-loc3"
 }
 back_to_results_and_maybe_rescan() {
   local evid="$1" btr_out newcards

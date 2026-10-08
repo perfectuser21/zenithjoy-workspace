@@ -66,7 +66,8 @@ test("部署清单: 新库进执行机冻结目录,历史标题脚本进 mmv", (
 
 // 假控制器: 网格分屏,每屏 4 张卡;search-grid-scroll up/down 改当前屏号(存 $HOME/screen);
 // 第 n 屏卡片 = 标题n-1..n-4,且第 n 屏(n>0)第 1 张重复上一屏最后一张(翻屏有重叠,必须按标题去重)。
-// back-to-results: BTR_RESEARCH=1 → 兜底重搜(屏号归 0),否则原地返回(屏号不变)。
+// back-to-results: BTR_RESEARCH=1 → 兜底重搜(屏号归 0),否则原地返回(屏号不变);BTR_JUMP=1 → 返回后列表漂到第 5 屏。
+// 顶部再往下拉 = 下拉刷新(10-08 真机 auto10081810): 列表换成别的内容,直到重新搜索。
 const FAKE_GRID_CTL = `#!/bin/sh
 shift; shift
 echo "$*" >> "$HOME/ctl.log"
@@ -79,11 +80,11 @@ case "$1" in
   lock-acquire) exit 0;;
   lock-release) printf 'lock=released owner=T\\n'; exit 0;;
   lock-refresh) printf 'lock=refreshed owner=T ttl=1800s\\n'; exit 0;;
-  open-search) echo 0 > "$HOME/screen"; exit 0;;
-  search-grid-scroll) if [ "$3" = down ]; then [ "$S" -gt 0 ] && S=$((S-1)); else S=$((S+1)); fi; echo $S > "$HOME/screen"; exit 0;;
-  search-video-cards) [ "$S" -ge \${NSCREENS:-9} ] && exit 0; cards "$S"; exit 0;;
+  open-search) echo 0 > "$HOME/screen"; rm -f "$HOME/refreshed"; exit 0;;
+  search-grid-scroll) if [ "$3" = down ]; then if [ "$S" -gt 0 ]; then S=$((S-1)); else touch "$HOME/refreshed"; fi; else S=$((S+1)); fi; echo $S > "$HOME/screen"; exit 0;;
+  search-video-cards) [ -f "$HOME/refreshed" ] && { printf '100\\t10\\t00:30\\t刷新后的别的视频\\t某人\\n'; exit 0; }; [ "$S" -ge \${NSCREENS:-9} ] && exit 0; cards "$S"; exit 0;;
   current-video-link) printf 'excluded_non_video=true\\n'; exit 0;;
-  back-to-results) if [ "$BTR_RESEARCH" = 1 ]; then echo 0 > "$HOME/screen"; printf 'back_to_results=1 recovered_via=research\\n'; else printf 'back_to_results=1 backs=1\\n'; fi; exit 0;;
+  back-to-results) [ "$BTR_JUMP" = 1 ] && echo 5 > "$HOME/screen"; if [ "$BTR_RESEARCH" = 1 ]; then echo 0 > "$HOME/screen"; printf 'back_to_results=1 recovered_via=research\\n'; else printf 'back_to_results=1 backs=1\\n'; fi; exit 0;;
 esac
 exit 0`;
 // 假 ssh: fetch-seen-titles 回历史标题(第 0 屏第 2 张见过);其他 ssh 静默
@@ -125,8 +126,12 @@ test("v2 发现: 按「最新」筛选,往下翻屏按标题去重取满 20 张,
   const ups = log.filter((l) => /^search-grid-scroll .* up$/.test(l)).length;
   const downs = log.filter((l) => /^search-grid-scroll .* down$/.test(l)).length;
   assert.equal(ups, 6, "20 张需要翻到第 6 屏(每屏新 3 张)");
-  assert.ok(downs >= ups, "收尾翻回顶部,后续按屏号定位从 0 屏算起");
+  assert.equal(downs, 0, "不再靠往下翻回顶部(10-08 真机 auto10081810: 多拉一下=下拉刷新,列表重排,卡片全部定位失败)");
+  const opens = log.map((l, i) => [l, i]).filter(([l]) => l.startsWith("open-search "));
+  assert.equal(opens.length, 2, "收尾重新搜索一次回到确定的顶部");
+  assert.ok(log.slice(opens[1][1]).some((l) => /^search-time-layer .* latest /.test(l)), "重搜后重设最新排序");
   assert.equal(read(join(home, "screen")).trim(), "0");
+  assert.ok(!existsSync(join(home, "refreshed")));
 });
 
 test("v2 发现: 翻到底(没有新卡)提前收手,不空翻", { skip: SKIP }, () => {
@@ -180,6 +185,15 @@ test("v2 采收: 第 1 屏的卡先翻屏再按标题重新定位坐标;兜底�
   assert.ok(log.filter((l) => /-rescan-filter latest /.test(l)).length >= 4, "重搜后筛选重设为最新");
   assert.ok(!log.some((l) => / most_liked /.test(l)));
   assert.doesNotMatch(r.stderr, /重扫次数超限/);
+});
+
+test("v2 采收: 返回后列表漂移(当前屏和下一屏都找不到) → 重新搜索、翻到记下的屏号再找,不整词作废", { skip: SKIP }, () => {
+  const { home, env } = setup({ NSCREENS: "2", BTR_JUMP: "1" });
+  const r = runHK(env);
+  assert.equal(r.status, 0, r.stderr.slice(-3000));
+  assert.deepEqual(tappedTitles(home), ["标题0-1", "标题0-4", "标题1-2", "标题1-3", "标题1-4"]);
+  assert.doesNotMatch(r.stderr, /卡片定位失败/);
+  assert.match(r.stderr, /定位不到,重新搜索回顶部再找/);
 });
 
 test("v2 采收: 同一批里前面词已点过的标题,后面词不再点(本轮跨词去重)", { skip: SKIP }, () => {
