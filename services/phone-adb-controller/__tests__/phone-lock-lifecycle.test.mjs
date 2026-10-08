@@ -312,3 +312,17 @@ else: raise AssertionError('CRLF owner was accepted')
 `;
  const r=spawnSync(python,['-c',program,helper,owner],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
 });
+
+
+test('独立锁的人工核查标记阻止过期巡检擅自清场',t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';assert.equal(c.run('lock-acquire-new',run).status,0);
+ writeFileSync(join(c.lock,'acquired_at'),String(Math.floor(Date.now()/1000)-1900));
+ const r=c.run('lock-reap');assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/lock=preserved.*standalone-review-required/);
+ assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);assert.equal(c.actions(),'');assert.ok(!existsSync(join(c.dir,'ssh.log')));
+});
+for(const suffix of ['','-a1']) test(`通用获取不能认领独立任务遗留锁${suffix}`,t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';assert.equal(c.run('lock-acquire-new',run).status,0);
+ writeFileSync(join(c.lock,'acquired_at'),String(Math.floor(Date.now()/1000)-1900));
+ const r=c.run('lock-acquire',run+suffix);assert.notEqual(r.status,0);assert.match(r.stderr,/standalone lock requires verified cleanup/);
+ assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);assert.equal(c.actions(),'');
+});
