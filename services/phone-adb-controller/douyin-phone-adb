@@ -41,6 +41,12 @@ require_uint() {
 [[ "${1:-}" == "--profile" && "$#" -ge 3 ]] || die "usage: douyin-phone-adb --profile PROFILE COMMAND [ARGS...]"
 PROFILE="$2"
 shift 2
+LOCK_OWNER=""
+if [[ "${1:-}" == --lock-owner ]]; then
+  [[ "$#" -ge 3 ]] || die 'usage: --lock-owner RUN COMMAND [ARGS...]'
+  LOCK_OWNER="$2"
+  shift 2
+fi
 
 [[ -r "$REGISTRY" ]] || die "phone profile registry is not readable"
 # registry 按列名解析，v1(5列无表头) 与 v2(带表头,列可增) 双兼容。
@@ -1568,7 +1574,8 @@ read_current_account() {
     [[ "$_kind" == own ]] && { me_line="ALREADY_ON_PROFILE"; break; }
     # 他人主页没有底部导航，重抓也等不来「我」tab，直接进下面的 verified back。
     [[ "$_kind" == foreign ]] && { print -u2 -- "warning: current page is someone else's profile (has 私信 button); stepping back instead of reading its 抖音号"; break; }
-    me_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="我，按钮"[^>]*>' "$first_xml" | /usr/bin/head -1 || true)"
+    me_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="我，按钮"[^>]*>' "$first_xml" || true)"
+    [[ -z "$me_line" || "$me_line" != *$'\n'* ]] || die 'Me tab is ambiguous: multiple matching controls' 
     [[ -n "$me_line" ]] && break
     _sz="$(/usr/bin/wc -c < "$first_xml" 2>/dev/null || print -- 0)"
     print -u2 -- "warning: Me tab absent from hierarchy (try $_try/4, ${_sz} bytes) — bottom nav likely not attached yet; recapturing"
@@ -1592,7 +1599,8 @@ read_current_account() {
       ui_evidence "${evidence_id}-before" >/dev/null
       _kind="$(profile_owner_kind "$first_xml")"
       [[ "$_kind" == own ]] && { me_line="ALREADY_ON_PROFILE"; break; }
-      me_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="我，按钮"[^>]*>' "$first_xml" | /usr/bin/head -1 || true)"
+      me_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="我，按钮"[^>]*>' "$first_xml" || true)"
+    [[ -z "$me_line" || "$me_line" != *$'\n'* ]] || die 'Me tab is ambiguous: multiple matching controls' 
       [[ -n "$me_line" ]] && { print -u2 -- "info: bottom nav reached after $_try verified back step(s)"; break; }
     done
   fi
@@ -2582,6 +2590,22 @@ open_comments() {
   die "comment panel did not open after tap at ${cx},${cy} (src=$src); recovered with back; evidence=$panel_xml"
 }
 
+# 独立只读任务：在同一flock内检查原owner并执行整个命令，锁操作不能插队。
+if [[ -n "$LOCK_OWNER" ]]; then
+  case "$command" in
+    open-app|account-current|snapshot-evidence|ui-evidence|close-app|return-safe-desktop) ;;
+    *) die 'required lock owner is supported only for standalone read commands';;
+  esac
+  source "${0:A:h}/phone-lock-lib.sh"
+  require_run_id "$LOCK_OWNER"
+  if [[ "${DOUYIN_LOCK_GUARDED:-}" != "$SERIAL:--lock-owner" ]]; then
+    exec "$PYTHON_BIN" "$PHONE_LOCK_HELPER" guard "$LOCK_ROOT/${SERIAL}.guard" "$SERIAL" --lock-owner "$PHONE_CTL" "$PROFILE" "$LOCK_OWNER" "$@"
+  fi
+  [[ -r "$LOCK_DIR/owner" && "$(<"$LOCK_DIR/owner")" == "$LOCK_OWNER" ]] || die 'required lock owner does not match current lock'
+  _owner_age="$(lock_age)"
+  [[ "$_owner_age" == <-> ]] && (( _owner_age + 1000 < LOCK_TTL_SECONDS )) || die 'lock lease budget is insufficient'
+fi
+
 case "$command" in
   status)
     check_target
@@ -3199,10 +3223,12 @@ case "$command" in
       "$ADB" -s "$SERIAL" shell input keyevent 3
       wait_ms 1000
       focus="$(foreground_package)"
-      if [[ "$focus" == *"$launcher_pkg"* ]]; then rsd_ok=1; break; fi
+      focus_pkg="$(print -r -- "$focus" | /usr/bin/sed -nE 's@.*[[:space:]]([A-Za-z0-9_.]+)/[^[:space:]]*.*@\1@p')"
+      if [[ "$focus_pkg" == "$launcher_pkg" ]]; then rsd_ok=1; break; fi
     done
     (( rsd_ok )) || die "still not on safe desktop(launcher=$launcher_pkg) after 3 HOME presses; foreground=${focus:-unknown}"
     print -- "launcher=$launcher_pkg"
+    print -- "foreground_package=$focus_pkg"
     print -- "foreground=${focus:-unknown}"
     ;;
   *)
