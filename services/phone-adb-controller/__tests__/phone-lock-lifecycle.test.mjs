@@ -1,5 +1,6 @@
 // 297d7f32：真实控制器 + 隔离锁目录/fakeADB，人工会话退出必须收尾，不操作手机。
 import { test } from 'node:test';
+import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { spawnSync, spawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
@@ -389,4 +390,14 @@ except SystemExit as e:raise AssertionError('live child accepted termination '+s
 else:raise AssertionError('live child accepted as success')
 `;
  const r=spawnSync(python,['-c',program,helper,owner],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);assert.equal(readFileSync(owner,'utf8'),'run\n');
+});
+
+
+test('运行合同预检读取安装目录全部三个文件哈希，不操作手机或锁',t=>{
+ const c=setup(t),r=c.run('runtime-contract');assert.equal(r.status,0,r.stderr);const value=JSON.parse(r.stdout);
+ assert.equal(value.contract_version,'standalone_account_read_v1');
+ for(const name of ['douyin-phone-adb','phone-lock-lib.sh','phone-lock-helper.py']){
+  const path=new URL('../'+name,import.meta.url).pathname;assert.equal(value.files[name].sha256,createHash('sha256').update(readFileSync(path)).digest('hex'));assert.equal(value.files[name].path,path);
+ }
+ assert.equal(c.actions(),'');assert.ok(!existsSync(c.lock));
 });
