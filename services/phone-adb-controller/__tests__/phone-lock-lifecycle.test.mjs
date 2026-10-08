@@ -367,3 +367,26 @@ test('标记独立锁的续租也必须原owner精确相等，不认attempt变�
  writeFileSync(join(c.lock,'owner'),run+'-a1-cleanup-1\n');const stamp=readFileSync(join(c.lock,'acquired_at'),'utf8');
  const r=c.run('lock-refresh',run);assert.notEqual(r.status,0);assert.equal(readFileSync(join(c.lock,'owner'),'utf8'),run+'-a1-cleanup-1\n');assert.equal(readFileSync(join(c.lock,'acquired_at'),'utf8'),stamp);assert.equal(c.actions(),'');
 });
+
+test('根正常退出后的ps查询超时立即失败，不进入重试等待',t=>{
+ const c=setup(t),helper=new URL('../phone-lock-helper.py',import.meta.url).pathname,owner=join(c.dir,'owner');writeFileSync(owner,'run\n');
+ const program=`import importlib.util,sys,types
+s=importlib.util.spec_from_file_location('lock_helper',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+m.signal.signal=lambda *a:None
+class Child:
+ pid=123456789
+ calls=0
+ def wait(self,timeout):
+  self.calls+=1
+  if self.calls>1:raise AssertionError('query timeout swallowed')
+  return 0
+m.subprocess.Popen=lambda *a,**k:Child()
+def unavailable(*a,**k):raise m.subprocess.TimeoutExpired('ps',2)
+m.subprocess.run=unavailable
+try:m.bounded_command([],9,sys.argv[2],'run')
+except m.subprocess.TimeoutExpired:pass
+except SystemExit as e:raise AssertionError('live child accepted termination '+str(e.code))
+else:raise AssertionError('live child accepted as success')
+`;
+ const r=spawnSync(python,['-c',program,helper,owner],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);assert.equal(readFileSync(owner,'utf8'),'run\n');
+});
