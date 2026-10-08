@@ -182,6 +182,20 @@ test('采收批次 TAG 与词级 TAG-wN 共享同一锁(拿/续/放)', t => {
   assert.equal(c.run('lock-release',run+'-w3').status,0);
   assert.ok(!existsSync(c.lock));
 });
+// 对标采收(benchmark_link_acquisition)与 Commander 发起的批次(cmdMMDDHHMM)同走 wf-run → batch2 → harvest-keyword,
+// 每个对标源/词都以 <批次TAG>-w<N> 拿锁;这里钉住 batch2 的后缀格式,改后缀必须同步改 normalize_run_id。
+test('对标/Commander 批次 cmdTAG 与 cmdTAG-wN 共享锁;batch2 词级锁标识格式就是 <TAG>-w<N>', t => {
+  const c=setup(t), run='cmd10082215';
+  assert.equal(c.run('lock-acquire',run).status,0);
+  const w=c.run('lock-acquire',run+'-w2');
+  assert.equal(w.status,0,w.stderr);
+  assert.equal(c.run('lock-release',run+'-w2').status,0);
+  const b2=readFileSync(new URL('../batch2.sh', import.meta.url),'utf8');
+  assert.match(b2,/clear_lock_acquire "\$TAG-w\$n"/);
+  assert.match(b2,/harvest-keyword\.sh\}" "\$P" "\$ENC" "\$MAXV" "\$TAG-w\$n"/);
+  const wr=readFileSync(new URL('../wf-run.sh', import.meta.url),'utf8');
+  assert.match(wr,/\/bin\/zsh "\$BATCH2" "\$P" "\$WF" "\$TAG"/, '对标与关键词同走 batch2');
+});
 test('词级后缀不放宽短前缀: auto1008-w1 / 相邻批次不能认领别批的锁', t => {
   const c=setup(t);
   assert.equal(c.run('lock-acquire','auto10081559').status,0);
