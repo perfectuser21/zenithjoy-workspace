@@ -157,3 +157,10 @@ test("接线守卫：wf-run.sh 预检读号前先 force-stop 抖音 → 冷启�
   assert.ok(iSleep > iStart, "冷启动后要等 4 秒再读号");
   assert.match(src, /^nap\(\)\{ \[\[ -n "\$\{WF_TESTING:-\}" \]\] && return 0; \/bin\/sleep "\$1" \}/m, "nap 生产下必须真睡");
 });
+
+test('重复的我按钮必须拒绝，不点击任意首项',async()=>{
+ const node=FEED.match(/<node[^>]+content-desc="我，按钮"[^>]*>/)[0];
+ const duplicate=FEED.replace('</hierarchy>',node+'</hierarchy>');
+ const c=setup([duplicate,OWN]);const r=await run(c,['account-current','duplicate-me']);
+ assert.notEqual(r.code,0);assert.match(r.err,/Me tab.*ambiguous/);assert.doesNotMatch(adbLog(c),/input tap/);
+});

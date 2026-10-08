@@ -179,3 +179,27 @@ test('独立清理用原子精确释放：回读后owner变化不能释放新锁
   assert.match(r.stdout,new RegExp('lock=released owner='+run));
   assert.ok(!existsSync(c.lock));
 });
+
+for (const condition of ['other','expired','free']) test(`带精确owner的前台命令拒绝${condition}锁，零手机动作`,t=>{
+ const c=setup(t), run='qiumi-a1234567-1791427263848';
+ if(condition==='other')c.run('lock-acquire','qiumi-b1234567-1791427263848');
+ if(condition==='expired')c.stale(run);
+ const r=c.run('--lock-owner',run,'close-app');
+ assert.notEqual(r.status,0);assert.match(r.stderr,/required lock owner|lock lease budget/);assert.equal(c.actions(),'');
+});
+test('带精确owner的有效前台命令可执行',t=>{
+ const c=setup(t), run='qiumi-a1234567-1791427263848';assert.equal(c.run('lock-acquire',run).status,0);
+ const r=c.run('--lock-owner',run,'close-app');assert.equal(r.status,0,r.stderr);assert.match(c.actions(),/am force-stop/);
+ assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);
+});
+test('前台动作整个期间guard阻止并发释放或易主',async t=>{
+ const c=setup(t), run='qiumi-a1234567-1791427263848';c.run('lock-acquire',run);
+ const adb=join(c.dir,'adb'),original=readFileSync(adb,'utf8');
+ writeFileSync(adb,original.replace('case "$*" in','case "$*" in\n *"am force-stop"*) touch "$TEST_DIR/acting"; tries=0; while [ ! -f "$TEST_DIR/proceed" ]; do tries=$((tries+1)); [ "$tries" -lt 200 ] || exit 1; sleep 0.02; done; exit 0;;'),{mode:0o755});
+ const p=spawn('zsh',[script,'--profile','p1','--lock-owner',run,'close-app'],{env:c.env,stdio:'ignore'});t.after(()=>p.kill('SIGKILL'));
+ const ended=new Promise(resolve=>p.once('exit',code=>resolve(code)));
+ await new Promise(resolve=>{const deadline=Date.now()+1000;const tick=()=>existsSync(join(c.dir,'acting'))||Date.now()>deadline?resolve():setTimeout(tick,20);tick();});
+ assert.ok(existsSync(join(c.dir,'acting')),'有效前台动作未开始');
+ const r=c.run('lock-release-exact',run);assert.notEqual(r.status,0);assert.match(r.stderr,/lock operation busy/);
+ writeFileSync(join(c.dir,'proceed'),'1');assert.equal(await ended,0);assert.equal(c.run('lock-release-exact',run).status,0);
+});

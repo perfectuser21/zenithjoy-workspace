@@ -23,7 +23,7 @@ test("前置：zsh 可用", () => {
 
 // 假 adb：resolve-activity 返回可配置的 launcher 包名；dumpsys window 的前台按
 // "跳过前N次是抖音,之后是launcher"的策略回，模拟"按了几次HOME才真正回到桌面"。
-function makeFakeAdb({ launcherPkg = "com.hihonor.android.launcher", settleAfter = 1 }) {
+function makeFakeAdb({ launcherPkg = "com.hihonor.android.launcher", settleAfter = 1, foregroundPkg = launcherPkg }) {
   return `#!/bin/sh
 HOME_PRESS_COUNT_FILE="\${TMPDIR:-/tmp}/rsd-home-presses-$$-marker"
 [ -n "$RSD_COUNT_FILE" ] && HOME_PRESS_COUNT_FILE="$RSD_COUNT_FILE"
@@ -37,7 +37,7 @@ case "$args" in
   *"dumpsys window"*)
     n=$(cat "$HOME_PRESS_COUNT_FILE" 2>/dev/null || echo 0)
     if [ "$n" -ge "${settleAfter}" ]; then
-      printf 'mCurrentFocus=Window{abc u0 ${launcherPkg}/.MainActivity}\\n'
+      printf 'mCurrentFocus=Window{abc u0 ${foregroundPkg}/.MainActivity}\\n'
     else
       printf 'mCurrentFocus=Window{abc u0 com.ss.android.ugc.aweme/.MainActivity}\\n'
     fi
@@ -48,19 +48,19 @@ esac
 exit 0`;
 }
 
-function setup({ launcherPkg, settleAfter } = {}) {
+function setup({ launcherPkg, settleAfter, foregroundPkg } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "rsd-"));
   const reg = join(dir, "r.tsv");
   writeFileSync(reg, "legacy\tSER1\tANY-MODEL\t1199\t2663\n");
   const adbPath = join(dir, "fake-adb");
-  writeFileSync(adbPath, makeFakeAdb({ launcherPkg, settleAfter }));
+  writeFileSync(adbPath, makeFakeAdb({ launcherPkg, settleAfter, foregroundPkg }));
   chmodSync(adbPath, 0o755);
   const countFile = join(dir, "home-presses");
   return { dir, reg, adbPath, countFile };
 }
 
-function run({ launcherPkg, settleAfter } = {}) {
-  const { reg, adbPath, countFile } = setup({ launcherPkg, settleAfter });
+function run({ launcherPkg, settleAfter, foregroundPkg } = {}) {
+  const { reg, adbPath, countFile } = setup({ launcherPkg, settleAfter, foregroundPkg });
   return new Promise((resolve) => {
     const p = spawn("zsh", [SCRIPT, "--profile", "legacy", "return-safe-desktop"], {
       env: { ...process.env, DOUYIN_PHONE_REGISTRY: reg, DOUYIN_ADB_BIN: adbPath, RSD_COUNT_FILE: countFile },
@@ -94,4 +94,9 @@ test("不 hardcode 厂商包名: 换一个完全不同的launcher包名(vivo)同
   const r = await run({ launcherPkg: "com.bbk.launcher2", settleAfter: 1 });
   assert.equal(r.code, 0, `err=${r.err}`);
   assert.match(r.out, /launcher=com\.bbk\.launcher2/);
+});
+
+test('含桌面包名的其他包不能冒充默认桌面',async()=>{
+ const r=await run({launcherPkg:'com.hihonor.android.launcher',foregroundPkg:'com.hihonor.android.launcher.fake'});
+ assert.notEqual(r.code,0);assert.match(r.err,/still not on safe desktop/);
 });
