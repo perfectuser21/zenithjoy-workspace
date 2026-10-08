@@ -401,3 +401,20 @@ test('运行合同预检读取安装目录全部三个文件哈希，不操作�
  }
  assert.equal(c.actions(),'');assert.ok(!existsSync(c.lock));
 });
+
+
+test('独立运行释放锁后也不能再用同run认领或重做UI',t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';assert.equal(c.run('lock-acquire-new',run).status,0);assert.equal(c.run('lock-release-exact',run).status,0);
+ const second=c.run('lock-acquire-new',run);assert.notEqual(second.status,0);assert.match(second.stderr,/run already claimed/);assert.equal(c.actions(),'');assert.ok(!existsSync(c.lock));
+});
+test('旧无owner清理不能触碰独立核查锁或其前台',t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';c.run('lock-acquire-new',run);const r=c.run('close-app');
+ assert.notEqual(r.status,0);assert.match(r.stderr,/standalone lock requires explicit owner/);assert.equal(c.actions(),'');assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);
+});
+test('旧close-app全过程与新独立认领互斥，不能在旧动作未结束时认领',async t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848',adb=join(c.dir,'adb'),original=readFileSync(adb,'utf8');
+ writeFileSync(adb,original.replace('case "$*" in','case "$*" in\n *"am force-stop"*) touch "$TEST_DIR/closing"; sleep 1; exit 0;;'),{mode:0o755});
+ const p=spawn('zsh',[script,'--profile','p1','close-app'],{env:c.env,stdio:'ignore'});t.after(()=>p.kill('SIGKILL'));const ended=new Promise(resolve=>p.once('exit',code=>resolve(code)));
+ await new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const tick=()=>existsSync(join(c.dir,'closing'))?resolve():Date.now()>deadline?reject(Error('旧关闭未启动')):setTimeout(tick,10);tick();});
+ const overlapping=c.run('lock-acquire-new',run);assert.notEqual(overlapping.status,0);assert.equal(await ended,0);assert.ok(!existsSync(c.lock));assert.equal(c.run('lock-acquire-new',run).status,0);
+});
