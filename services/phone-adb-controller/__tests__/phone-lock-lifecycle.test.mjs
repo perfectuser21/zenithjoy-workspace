@@ -249,3 +249,31 @@ else: raise AssertionError('not canceled')
 `;
  const r=spawnSync(python,['-c',program,helper],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
 });
+
+test('取消与根进程正常退出重叠时不能返回成功',t=>{
+ const c=setup(t),helper=new URL('../phone-lock-helper.py',import.meta.url).pathname,owner=join(c.dir,'owner');writeFileSync(owner,'run\n');
+ const program=`import importlib.util,sys,types
+s=importlib.util.spec_from_file_location('lock_helper',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+handlers={}
+m.signal.signal=lambda sig,h:handlers.update({sig:h})
+class Child:
+ pid=123456789
+ def wait(self,timeout):
+  if timeout==0.1: handlers[m.signal.SIGTERM](m.signal.SIGTERM,None)
+  return 0
+m.subprocess.Popen=lambda *a,**k:Child()
+m.os.killpg=lambda *a:None
+m.subprocess.run=lambda *a,**k:types.SimpleNamespace(stdout='')
+try: m.bounded_command([],9,sys.argv[2],'run')
+except SystemExit as e: assert e.code==143,e.code
+else: raise AssertionError('not canceled')
+`;
+ const r=spawnSync(python,['-c',program,helper,owner],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+});
+test('超时owner首尾空格变化不能被吞掉当作原owner保留',t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';c.run('lock-acquire',run);
+ const adb=join(c.dir,'adb'),original=readFileSync(adb,'utf8');
+ writeFileSync(adb,original.replace('case "$*" in',`case "$*" in\n *"am force-stop"*) printf ' ${run} ' > "$TEST_DIR/tmp/locks/SER1.lock/owner"; sleep 2; exit 0;;`),{mode:0o755});
+ const r=spawnSync('zsh',[script,'--profile','p1','--lock-owner',run,'close-app'],{env:{...c.env,DOUYIN_GUARDED_COMMAND_TIMEOUT_SECONDS:'1'},encoding:'utf8',timeout:10000});
+ assert.notEqual(r.status,124);assert.match(r.stderr,/owner preservation unproven/);assert.equal(readFileSync(join(c.lock,'owner'),'utf8'),' '+run+' ');
+});
