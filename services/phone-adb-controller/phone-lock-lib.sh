@@ -44,9 +44,10 @@ lock_release() {
   local run="$(normalize_run_id "$1")" owner
   require_run_id "$1"
   [[ -r "$LOCK_DIR/owner" ]] || { print -- 'lock=free'; return 0; }
+  [[ ! -f "$LOCK_DIR/standalone_review_required" || "${2:-compatible}" == exact ]] || die 'standalone lock requires exact verified release'
   owner="$(<"$LOCK_DIR/owner")"
   if [[ "${2:-compatible}" == exact ]]; then
-    [[ "$owner" == "$1" ]] || die "refusing exact release: owner changed to $owner"
+    "$PYTHON_BIN" "$PHONE_LOCK_HELPER" owner-check "$LOCK_DIR/owner" "$1" || die "refusing exact release: owner changed to $owner"
   else
     same_run_lock "$owner" "$run" || die "refusing to release lock owned by another run: $owner"
   fi
@@ -56,6 +57,7 @@ lock_release() {
 lock_cleanup() {
   # wrapper 同 run 前缀并非退出所有权凭证；以精确 owner+PID 复验。
   local expected="$1" expected_pid="$2"
+  [[ ! -f "$LOCK_DIR/standalone_review_required" ]] || die 'standalone lock cannot use wrapper cleanup'
   [[ -r "$LOCK_DIR/owner" && -r "$LOCK_DIR/pid" ]] || return 0
   [[ "$(<"$LOCK_DIR/owner")" == "$expected" && "$(<"$LOCK_DIR/pid")" == "$expected_pid" ]] || {
     print -u2 -- 'lock cleanup skipped: ownership changed'; return 0

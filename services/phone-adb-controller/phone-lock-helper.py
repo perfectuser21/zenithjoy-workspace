@@ -77,6 +77,18 @@ def bounded_command(argv, fd, owner_path=None, expected_owner=None):
     sys.exit(canceled[0] or 124)
 
 
+def verify_owner():
+    path, expected = sys.argv[2:]
+    try:
+        with open(path, encoding='utf-8', newline='') as handle:
+            text = handle.read()
+        if text not in (expected, expected + '\n'):
+            raise ValueError('owner mismatch')
+    except (ValueError, OSError):
+        print('exact owner file protocol does not match current run', file=sys.stderr)
+        sys.exit(2)
+
+
 def verify_guard():
     # 实际继承FD须对应本设备guard；取得同一open-description锁，父进程持续持有。
     try:
@@ -197,6 +209,8 @@ def safe_to_reap():
 if __name__ == '__main__':
     if sys.argv[1] == 'guard':
         guarded()
+    elif sys.argv[1] == 'owner-check':
+        verify_owner()
     elif sys.argv[1] == 'guard-check':
         verify_guard()
     elif sys.argv[1] == 'stop':
