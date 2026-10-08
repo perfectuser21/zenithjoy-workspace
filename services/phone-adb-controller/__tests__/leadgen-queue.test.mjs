@@ -68,3 +68,11 @@ test('评分和标记人按实际处理ID独立读回，缺行不得宣称verifi
   assert.equal(result.verified,false);assert.equal(result.failures,1);
   assert.match(pool.calls[0].sql,/line_key=\$1 AND id=ANY/);
 });
+
+test('验收批次可指定上游run，非法批次在任何数据库动作前拒绝',async()=>{
+ const pool=fakePool([]);await assert.rejects(queueRequest(pool,{op:'claim_videos',line:'jinuo',run:'processing',source_run:'bad/run'}),/上游运行号/);assert.equal(pool.calls.length,0);
+ const valid=fakePool([{rows:[]}]);await queueRequest(valid,{op:'claim_videos',line:'jinuo',run:'processing',source_run:'discovery-test'});
+ const claim=valid.calls.find(c=>c.sql.startsWith('WITH'));assert.equal(claim.args.at(-1),'discovery-test');assert.match(claim.sql,/harvest_batch=\$5/);
+ for(const op of ['score','mark_leads']){const p=fakePool(op==='score'?[{rows:[]}]:[{rows:[]},{rows:[]}]);await queueRequest(p,{op,line:'jinuo',run:'scoring',source_run:'processing-test'});
+ const selected=p.calls.find(c=>c.sql.includes('SELECT * FROM zenithjoy.leadgen_comments'));assert.equal(selected.args[1],'processing-test');assert.match(selected.sql,/harvest_batch=\$2/);}
+});
