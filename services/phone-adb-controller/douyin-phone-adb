@@ -27,7 +27,8 @@ REGISTRY="${DOUYIN_PHONE_REGISTRY:-${HOME}/.config/openclaw/douyin-phone-profile
 ACCOUNT_REGISTRY="${DOUYIN_ACCOUNT_REGISTRY:-${HOME}/.config/openclaw/douyin-account-routes.tsv}"
 
 die() {
-  # 0914 融合(抄 Kotlin WaitFailure 三态归因): 可选第二参 NO_ROOT/WRONG_FOREGROUND/TARGET_ABSENT,
+  # 0914 融合(抄 Kotlin WaitFailure 三态归因): 可选第二参 NO_ROOT/WRONG_FOREGROUND/TARGET_ABSENT/TARGET_PENDING,
+  # 1009: TARGET_PENDING=页面还没出来/没跳过去(可重试), TARGET_ABSENT=真的没有或对象不对(终态,安全闸)。
   # 让上游脚本/Commander 不用猜死因就能选对策(重试/救前台/换目标)。
   print -u2 -- "$1"
   [[ -n "${2:-}" ]] && print -u2 -- "failure_class=$2"
@@ -309,7 +310,7 @@ clip_guard_check() {
   _prev="$(<"$_f")"
   if [[ -n "$_prev" && "$_prev" == "$1" ]]; then
     # 仅调用内已实读回并退回原详情的nonce可证明旧clip被替换；expectedID不构成证明。
-    [[ "${2:-}" =~ '^clipnonce[a-f0-9]{32}$' ]] || die "COPY_STALE: clipboard still holds the previous target's link ($1); no fresh same-invocation clipboard proof — refusing to attribute it to this target" TARGET_ABSENT
+    [[ "${2:-}" =~ '^clipnonce[a-f0-9]{32}$' ]] || die "COPY_STALE: clipboard still holds the previous target's link ($1); no fresh same-invocation clipboard proof — refusing to attribute it to this target" TARGET_PENDING
   fi
   return 0
 }
@@ -661,7 +662,7 @@ _current_video_link_once() {
   if [[ -z "$share_line" ]]; then
     _sg=0; _on_video_detail "${evidence_id}-share-diag" || _sg=$?
     (( _sg == 1 )) && die "the centre tap navigated away from the video detail page (share button gone); this is not a missing-button problem"
-    die "verified share button was not found after 3 captures while still on the video detail page" TARGET_ABSENT
+    die "verified share button was not found after 3 captures while still on the video detail page" TARGET_PENDING
   fi
   share_center="$(node_center "$share_line")" || die "share button bounds could not be parsed"
   read share_x share_y <<< "$share_center"
@@ -707,7 +708,7 @@ _current_video_link_once() {
   [[ -n "$result_line" ]] || die "clipboard verification field was not found"
   escaped_text="$(print -- "$result_line" | /usr/bin/sed -E 's/.* text="([^"]*)" resource-id=.*/\1/' | /usr/bin/sed 's/&amp;/\&/g; s/&#47;/\//g')"
   short_url="$(print -- "$escaped_text" | /usr/bin/grep -oE 'https://v\.douyin\.com/[A-Za-z0-9_/-]+' | /usr/bin/head -1 || true)"
-  [[ "$short_url" == https://v.douyin.com/* ]] || die "copied text did not contain a verified Douyin short link" TARGET_ABSENT
+  [[ "$short_url" == https://v.douyin.com/* ]] || die "copied text did not contain a verified Douyin short link" TARGET_PENDING
   clip_guard_check "$short_url" "$nonce_proof"
   resolved_url="$(resolve_content_short_url "$short_url" "$evidence_id")" || die "LINK_RESOLVE_FAILED: see bounded HEAD error classification"
   video_id="$(print -- "$resolved_url" | /usr/bin/grep -oE '/video/[0-9]+' | /usr/bin/tail -1 | /usr/bin/cut -d/ -f3 || true)"
@@ -1839,6 +1840,9 @@ send_private_message() {
         _web_id="$(print -- "$_web_line" | /usr/bin/sed -E 's/.*text="抖音号 ([A-Za-z0-9._]+)".*/\1/')"
         # 0916 真机实测: 同一个号在主页显示 Zenithjoyai、搜索页显示 zenithjoyai——抖音号本身
         # 大小写不敏感,裸 == 会把同一个人判成"不是他"而静默拒发。归一后再比,认错人仍绝不发。
+        # 1009 现场(M4 outreach.log 0921–1008): 17 次终态里 6 次读到的是发送账号自己——深链接没跳过去、停在「我」页,
+        # 不是认错人。归「暂时没出来」可重试;读到陌生人才是对象不对,安全闸照旧判终态、绝不发。
+        [[ "$(print -- "$_web_id" | tr "[:upper:]" "[:lower:]")" != "$(print -- "$current_id" | tr "[:upper:]" "[:lower:]")" ]] || die "link route: deeplink stayed on the sender's own profile (observed ${_web_id}, claimed ${target_douyin_id})" TARGET_PENDING
         [[ "$(print -- "$_web_id" | tr "[:upper:]" "[:lower:]")" == "$(print -- "$target_douyin_id" | tr "[:upper:]" "[:lower:]")" ]] || die "link route: web profile id ${_web_id} does not match claimed ${target_douyin_id}" TARGET_ABSENT
       fi
       _open_line="$(/usr/bin/grep -oE '<node[^>]+text="打开抖音看更多内容"[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
@@ -1848,10 +1852,11 @@ send_private_message() {
         "$ADB" -s "$SERIAL" shell input tap "$_ox" "$_oy"
       fi
     done
-    [[ -n "$target_id_line" ]] || die "link route: profile identity was not readable after deeplink" TARGET_ABSENT
+    [[ -n "$target_id_line" ]] || die "link route: profile identity was not readable after deeplink" TARGET_PENDING
     observed_target_id="$(print -- "$target_id_line" | /usr/bin/sed -E 's/.* text="抖音号：([^"]*)" resource-id=.*/\1/')"
     # 强校验闸原样: 认错人绝不发
     # 同上: 大小写归一后比较(0916 实测 Zenithjoyai vs zenithjoyai 误拒)
+    [[ "$(print -- "$observed_target_id" | tr "[:upper:]" "[:lower:]")" != "$(print -- "$current_id" | tr "[:upper:]" "[:lower:]")" ]] || die "link route: deeplink stayed on the sender's own profile (observed ${observed_target_id}, claimed ${target_douyin_id})" TARGET_PENDING
     [[ "$(print -- "$observed_target_id" | tr "[:upper:]" "[:lower:]")" == "$(print -- "$target_douyin_id" | tr "[:upper:]" "[:lower:]")" ]] || die "link route: profile id ${observed_target_id} does not match claimed ${target_douyin_id}" TARGET_ABSENT
   fi
   # 0916 主理人拍板: 私信入口统一走「更多」面板 —— 官方号/旗舰店/个人号主页都有右上三个点,
@@ -1859,7 +1864,7 @@ send_private_message() {
   # 面板里同时有「发私信」与「联系客服」,只认前者(选错会发进客服通道,对方看不到)。
   local more_line more_c more_x more_y dm_panel_xml pm_line pmx1 pmy1 pmx2 pmy2
   more_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="更多"[^>]*>' "$profile_xml" | /usr/bin/head -1 || true)"
-  [[ -n "$more_line" ]] || die "更多 entry was not found on target profile" TARGET_ABSENT
+  [[ -n "$more_line" ]] || die "更多 entry was not found on target profile" TARGET_PENDING
   more_c="$(node_center "$more_line")" || die "更多 bounds could not be parsed"
   read more_x more_y <<< "$more_c"
   "$ADB" -s "$SERIAL" shell input tap "$more_x" "$more_y"
@@ -2527,7 +2532,7 @@ open_user_profile() {
     (( rc == 0 || rc == 3 )) && break
   done
   (( rc == 3 )) && die "benchmark profile unavailable (private/deregistered/banned): sec_uid=$su evidence=$xml" TARGET_ABSENT
-  (( rc == 0 )) || die "profile deeplink did not land on a verified user profile (sec_uid=$su)" TARGET_ABSENT
+  (( rc == 0 )) || die "profile deeplink did not land on a verified user profile (sec_uid=$su)" TARGET_PENDING
   did="$(/usr/bin/grep -oE 'text="抖音号：[^"]+"' "$xml" | /usr/bin/head -1 | /usr/bin/sed -E 's/^text="抖音号：//; s/"$//')"
   if [[ -n "$expect" ]]; then
     [[ "$(print -- "$did" | tr '[:upper:]' '[:lower:]')" == "$(print -- "$expect" | tr '[:upper:]' '[:lower:]')" ]] \
@@ -2995,7 +3000,7 @@ case "$command" in
     cl_xml3="$EVIDENCE_ROOT/$2-panel2.xml"
     cl_pm2="$(/usr/bin/grep -oE '<node[^>]+text="发私信"[^>]*>' "$cl_xml3" | /usr/bin/head -1)"
     cl_rp="$(/usr/bin/grep -oE '<node[^>]+text="举报"[^>]*>' "$cl_xml3" | /usr/bin/head -1)"
-    [[ -n "$cl_pm2" && -n "$cl_rp" ]] || die "CARD_LINK: post-swipe anchors missing" TARGET_ABSENT
+    [[ -n "$cl_pm2" && -n "$cl_rp" ]] || die "CARD_LINK: post-swipe anchors missing" TARGET_PENDING
     read px1 py1 px2 py2 <<< "$(print -- "$cl_pm2" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
     read rx1 ry1 rx2 ry2 <<< "$(print -- "$cl_rp" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
     cl_pitch=$(( rx1 - px1 ))   # 相邻两格文本左缘间距 = 格距
@@ -3007,7 +3012,7 @@ case "$command" in
     # 分享面板:点「复制链接」
     ui_evidence "$2-share" >/dev/null
     cl_xml4="$EVIDENCE_ROOT/$2-share.xml"
-    /usr/bin/grep -q 'text="分享给"' "$cl_xml4" || die "CARD_LINK: share panel did not open" TARGET_ABSENT
+    /usr/bin/grep -q 'text="分享给"' "$cl_xml4" || die "CARD_LINK: share panel did not open" TARGET_PENDING
     cl_cp="$(/usr/bin/grep -oE '<node[^>]+text="复制链接"[^>]*>' "$cl_xml4" | /usr/bin/head -1)"
     [[ -n "$cl_cp" ]] || die "CARD_LINK: 复制链接 not found in share panel"
     cl_cc="$(node_center "$cl_cp")" || die "CARD_LINK: 复制链接 bounds unparsable"
@@ -3018,14 +3023,14 @@ case "$command" in
     ui_evidence "$2-scratch" >/dev/null
     cl_xml5="$EVIDENCE_ROOT/$2-scratch.xml"
     cl_sf="$(/usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/et_search_kw"[^>]*>' "$cl_xml5" | /usr/bin/head -1)"
-    [[ -n "$cl_sf" ]] || die "CARD_LINK: scratch search field missing" TARGET_ABSENT
+    [[ -n "$cl_sf" ]] || die "CARD_LINK: scratch search field missing" TARGET_PENDING
     cl_sc="$(node_center "$cl_sf")"; read cl_sx cl_sy <<< "$cl_sc"
     "$ADB" -s "$SERIAL" shell input tap "$cl_sx" "$cl_sy"; wait_ms 400
     "$ADB" -s "$SERIAL" shell input keyevent 279; wait_ms 800
     ui_evidence "$2-scratch2" >/dev/null
     cl_txt="$(/usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/et_search_kw"[^>]*>' "$EVIDENCE_ROOT/$2-scratch2.xml" | /usr/bin/head -1 | /usr/bin/grep -oE 'text="[^"]*"' | /usr/bin/sed 's/^text="//;s/"$//' | /usr/bin/sed 's/&amp;/\&/g; s/&#47;/\//g')"
     cl_short="$(print -- "$cl_txt" | /usr/bin/grep -oE 'https://v\.douyin\.com/[A-Za-z0-9_/-]+' | /usr/bin/head -1)"
-    [[ -n "$cl_short" ]] || die "CARD_LINK: clipboard had no douyin short link (got: ${cl_txt:0:60})" TARGET_ABSENT
+    [[ -n "$cl_short" ]] || die "CARD_LINK: clipboard had no douyin short link (got: ${cl_txt:0:60})" TARGET_PENDING
     clip_guard_check "$cl_short"
     # 0915 主理人拍板(决策 f88a5b86): 剪贴板原文短链直存直开,不再 curl 抠 sec_uid 转长链——
     # 短链是抖音 App 全路径认领的形态可直接打开;长链 App 不认领,真机实证 intent 不可解析

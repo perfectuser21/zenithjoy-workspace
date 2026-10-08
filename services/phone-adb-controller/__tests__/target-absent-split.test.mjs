@@ -30,7 +30,7 @@ const EXPECT = [
   ["link route: web profile id", "TARGET_ABSENT"],
   ["link route: profile id ${observed_target_id} does not match", "TARGET_ABSENT"],
   ["发私信 was not present in the 更多 panel", "TARGET_ABSENT"],
-  ["could not resolve sec_uid from", "TARGET_ABSENT"],
+  ["could not resolve sec_uid", "TARGET_ABSENT"],
   ["benchmark profile unavailable (private/deregistered/banned)", "TARGET_ABSENT"],
   ["profile identity mismatch: page shows", "TARGET_ABSENT"],
 ];

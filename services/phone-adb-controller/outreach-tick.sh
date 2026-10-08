@@ -48,6 +48,8 @@ classify_failure() {
   if print -- "$out" | grep -qiE 'sender account does not match the claimed distribution account|Douyin account identity was not visible on the verified Me page'; then
     print account_mismatch; return
   fi
+  # 1009 TARGET_PENDING: 页面还没出来/深链接没跳过去(控制器已与真的没有分开)——按瞬时退避重试,用尽回队列,不废线索。
+  if [[ "$last_fc" == "TARGET_PENDING" ]]; then print transient; return; fi
   tail5=$(print -- "$out" | tail -5)
   if print -- "$tail5" | grep -qiE 'AdbIME|input method|_ime'; then print transient; return; fi
   # 0928 device_ui: 手机界面读取失败(uiautomator dump 不出/回不到抖音首页/前台不对/无root)——设备环境问题,
