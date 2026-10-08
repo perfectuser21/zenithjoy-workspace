@@ -54,10 +54,17 @@ test('标记人的更新与评论完成状态原子提交，已有已触达人�
     { rows: [{ id: 'l1', dup_hit_count: 2 }] }, { rows: [] }, { rows: [] },
   ]);
   const result = await queueRequest(pool, { op: 'mark_leads', line: 'jinuo', run: 'test', limit: 1 });
-  assert.deepEqual(result, { marked: 1, created: 0, repeats: 1 });
+  assert.deepEqual(result, { marked: 1, created: 0, repeats: 1,ids:['c1'],lead_ids:['l1'] });
   const person = pool.calls.find(c => /SET dup_hit_count/.test(c.sql));
   assert.ok(person);
   assert.ok(!/status\s*=|reached_at\s*=|DELETE/.test(person.sql));
   assert.ok(pool.calls.some(c => /SET process_status = '已分拣'/.test(c.sql)));
   assert.ok(pool.calls.some(c => c.sql === 'COMMIT'));
+});
+
+test('评分和标记人按实际处理ID独立读回，缺行不得宣称verified',async()=>{
+  const pool=fakePool([{rows:[{id:'c1',relevance:'相关',intent_grade:'A',process_status:'已分拣'}]},{rows:[]}]);
+  const result=await queueRequest(pool,{op:'mark_readback',line:'jinuo',run:'test',ids:['c1'],lead_ids:['l1']});
+  assert.equal(result.verified,false);assert.equal(result.failures,1);
+  assert.match(pool.calls[0].sql,/line_key=\$1 AND id=ANY/);
 });

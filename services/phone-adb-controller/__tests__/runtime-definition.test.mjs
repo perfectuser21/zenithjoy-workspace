@@ -87,3 +87,45 @@ test('Activity版本读取期间全局plan/spec被替换，冻结只能使用首
  assert.equal(readFileSync(join(f.options.runDir,'step-dod.json'),'utf8'),spec);
  assert.equal(readFileSync(join(f.options.runDir,'runtime','workflow.plan'),'utf8'),plan);
 });
+
+function splitFixture(key='douyin_video_discovery'){
+ const f=fixture();const version=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;
+ version.payload.contract.capability='keyword_acquisition';version.payload.contract.contract_key=key;
+ version.contract_sha256=hash(version.payload.contract);version.payload_sha256=hash({source:{repo:version.source_repo,path:version.source_path,commit:version.source_commit},payload:version.payload});
+ f.options.rawContractSha256=version.contract_sha256;f.options.runIdentity={capability:key,tag:'split-fixture',profile:'work',serial:'PHONE',run_id:'run'};return f;
+}
+
+test('四新技术contract_key保留业务capability并真实冻结、登记及locate续跑',async()=>{
+ const {registerRun,locateRun}=await import('../runtime-definition.mjs');
+ for(const key of ['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring','douyin_lead_outreach']){
+  const f=splitFixture(key),frozen=await freezeDefinition(f.options),index=join(f.dir,'run-index');
+  assert.equal(frozen.workflow_version.payload.contract.capability,'keyword_acquisition');assert.equal(frozen.run_identity.capability,key);
+  registerRun(index,f.options.runDir,f.options.runIdentity);assert.equal(locateRun(index,f.options.runIdentity),f.options.runDir);
+  f.routes['/api/brain/workflows'][0].current_definition_version_id='new-current';
+  assert.equal((await freezeDefinition(f.options)).workflow_version.id,'wv-1');
+ }
+});
+test('新技术key不能被业务分类或另一技术key冒认，起跑与既有冻结续跑均拒绝',async()=>{
+ const {registerRun,locateRun}=await import('../runtime-definition.mjs');
+ const wrong=splitFixture();wrong.options.runIdentity.capability='keyword_acquisition';await assert.rejects(freezeDefinition(wrong.options),/capability身份不匹配/);
+ const f=splitFixture();await freezeDefinition(f.options);const index=join(f.dir,'run-index');registerRun(index,f.options.runDir,f.options.runIdentity);
+ const different={...f.options.runIdentity,capability:'douyin_video_processing'};
+ assert.throws(()=>registerRun(index,f.options.runDir,different),/capability身份不匹配/);
+ writeFileSync(join(index,`${hash([different.capability,different.tag])}.json`),JSON.stringify({run_dir:f.options.runDir}));
+ assert.throws(()=>locateRun(index,different),/capability身份不匹配/);
+ await assert.rejects(freezeDefinition({...f.options,runIdentity:different}),/capability身份不匹配/);
+ await assert.rejects(freezeDefinition({...f.options,runIdentity:{...f.options.runIdentity,profile:'another'}}),/身份不匹配/);
+});
+
+test('冻结manifest副本和中央路由；全局变化不替换，冻结副本篡改拒绝续跑',async()=>{
+ const {readFrozen}=await import('../runtime-definition.mjs');const f=fixture();
+ const transport={machine_id:'mmv-fixture',ssh_hostname:'100.71.151.105',ssh_hostkey_alias:'38.23.47.81'};
+ await freezeDefinition({...f.options,runtimeTransport:transport});
+ const file=join(f.options.runDir,'runtime','deployment-manifest.json');
+ const original=readFileSync(file,'utf8');assert.deepEqual(readFrozen(f.options.runDir).runtime_transport,transport);
+ writeFileSync(join(f.dir,'deployment-manifest.json'),'changed global');
+ await freezeDefinition({...f.options,runtimeTransport:{...transport,ssh_hostname:'100.0.0.1'}});
+ assert.equal(readFileSync(file,'utf8'),original);
+ assert.deepEqual(readFrozen(f.options.runDir).runtime_transport,transport);
+ writeFileSync(file,'tampered');assert.throws(()=>readFrozen(f.options.runDir),/摘要|digest|篡改/);
+});

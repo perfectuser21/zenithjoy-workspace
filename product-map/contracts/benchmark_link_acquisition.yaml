@@ -7,6 +7,7 @@
 
 version: 1
 capability: benchmark_link_acquisition
+lifecycle: retired
 name: 对标链接获客
 workflow: social-benchmark-leadgen
 brain_workflow_key: douyin_benchmark_leadgen

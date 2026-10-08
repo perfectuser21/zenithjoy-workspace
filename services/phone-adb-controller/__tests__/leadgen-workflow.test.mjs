@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync,readFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 
 test('Commander叫停后不执行下一活动，锁内清场仍有前后Commander回执', async () => {
   const {runWorkflow} = await import('../leadgen-workflow.mjs');
@@ -11,6 +14,45 @@ test('Commander叫停后不执行下一活动，锁内清场仍有前后Commande
   assert.deepEqual(executed,['source','cleanup']);
   assert.equal(result.status,'partial');
   assert.equal(records.filter(r=>r.activity==='cleanup'&&['before','after'].includes(r.phase)).length,2);
+});
+
+test('独立读回未知或失败不能让执行exit0成为活动成功',async()=>{
+  const {runWorkflow}=await import('../leadgen-workflow.mjs');let cleaned=0;
+  const r=await runWorkflow({activities:[{key:'source'},{key:'dedup'},{key:'cleanup'}],context:{},
+    handlers:{source:async()=>({cards:2}),dedup:async()=>{throw Error('不应执行');},cleanup:async()=>{cleaned++;return {};}},
+    commander:async()=>({action:'continue',reason:'检查证据'}),record:async()=>{},
+    verify:async()=>({verified:false,reason:'必需步骤读不到'})});
+  assert.equal(r.status,'failed');assert.equal(cleaned,1);
+  assert.equal(r.results.find(a=>a.activity==='dedup').status,'blocked');
+});
+
+test('触达暂停预检不取单、不触碰手机、不发送',async()=>{
+  const {createHandlers}=await import('../leadgen-workflow.mjs');
+  const handlers=createHandlers({root:'/tmp',env:{HOME:'/tmp',P:'jinoshengyuan-work',WF_BRAIN_WORKFLOW:'douyin_lead_outreach'},
+    rpc:async()=>{throw Error('不允许取单');},execute:async()=>{throw Error('不允许操作手机');}});
+  assert.equal((await handlers.preflight()).status,'paused');
+  await assert.rejects(handlers.send_dm(),/暂停/);
+});
+
+test('profile注册的手机与命令serial不符时，在拿锁与手势前拒绝',async()=>{
+  const {createHandlers}=await import('../leadgen-workflow.mjs');const dir=mkdtempSync(join(tmpdir(),'leadgen-identity-'));const calls=[];
+  try{
+    const handlers=createHandlers({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,P:'work',SERIAL:'S1',WFR_TAG:'run'},rpc:async()=>{},
+      execute:async(command,args)=>{calls.push({command,args});return {code:0,stdout:command==='adb'?'device\n':'serial=S2\n',stderr:''};}});
+    await assert.rejects(handlers.preflight(),/serial不一致/);
+    assert.ok(!calls.some(c=>c.args.includes('lock-acquire')||c.args.includes('input')));
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('评分必须按实际处理ID读回，缺行在工件记录verified=false',async()=>{
+  const {createHandlers}=await import('../leadgen-workflow.mjs');const dir=mkdtempSync(join(tmpdir(),'leadgen-score-'));const ops=[];
+  try{
+    const h=createHandlers({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'run',LEADGEN_LINE:'jinuo'},
+      rpc:async body=>{ops.push(body.request);return {result:body.request.op==='score'?{scored:1,ids:['c1']}:{verified:false,failures:1}};}});
+    assert.equal((await h.scoring()).scoring_readback_failures,1);
+    assert.deepEqual(ops[1].ids,['c1']);
+    assert.equal(JSON.parse(readFileSync(join(dir,'run-scoring-readback.json'),'utf8')).verified,false);
+  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
 test('活动抛错与Commander断线都必须清场，并保留失败状态',async()=>{
@@ -32,4 +74,15 @@ test('采集成功必须有同视频完成标记；非零返回时即使有LEAD�
   const comments=parseCollection({code:0,stdout:row+'\nCOLLECTION\t7646309328911907195\tcollected\t1'},'7646309328911907195');
   assert.equal(comments.length,1);assert.equal(comments[0].commentBody,'想报名');
   assert.deepEqual(parseCollection({code:0,stdout:'COLLECTION\t7646309328911907195\tno_comments\t0'},'7646309328911907195'),[]);
+});
+
+// 暂停流程没有本批设备锁，不能拿别批锁清场或伪报close-app通过。
+test('暂停触达的清场标记skipped，保留partial而不伪造手机清场',async()=>{
+ const {createHandlers,runWorkflow}=await import('../leadgen-workflow.mjs');let calls=0,verified=[];
+ const handlers=createHandlers({root:'/tmp',env:{HOME:'/tmp',P:'work',WF_BRAIN_WORKFLOW:'douyin_lead_outreach'},
+ rpc:async()=>{calls++;throw Error('不可调用');},execute:async()=>{calls++;throw Error('不可操作');}});
+ const result=await runWorkflow({activities:[{key:'preflight'},{key:'cleanup'}],context:{},handlers,
+ commander:async()=>({action:'continue',reason:'保留暂停'}),record:async()=>{},verify:async a=>{verified.push(a.key);return {verified:true};}});
+ assert.equal(result.status,'partial');assert.equal(result.results[1].status,'skipped');
+ assert.equal(calls,0);assert.deepEqual(verified,[]);
 });

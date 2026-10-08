@@ -49,10 +49,13 @@ export function planFor(ctx, capId, { allowMissing = false } = {}) {
   if (errors.length) return { ok: false, errors, activities: acts };
 
   const sources = acts.filter((a) => a.runtime.phase === 'source');
-  if (sources.length !== 1) return { ok: false, errors: [`${capId}: phase=source 的活动必须恰好一个，实有 ${sources.length}`], activities: acts };
+  if (!doc.runner && sources.length !== 1) return { ok: false, errors: [`${capId}: phase=source 的活动必须恰好一个，实有 ${sources.length}`], activities: acts };
   const [src] = sources;
-  const kinds = [...new Set(src.inputs.map((i) => SOURCE_KINDS[i.type]).filter(Boolean))];
+  const kinds = doc.runner ? [doc.runner.queue] : [...new Set(src.inputs.map((i) => SOURCE_KINDS[i.type]).filter(Boolean))];
   if (kinds.length !== 1) return { ok: false, errors: [`${capId}.${src.key}: 输入里认不出唯一源类型（Keyword/BenchmarkAccount）`], activities: acts };
+  if (doc.runner && acts.some(a => a.commander?.entry !== 'activity-commander.mjs')) {
+    return { ok: false, errors: [`${capId}: 新流程每个活动必须绑定Commander`], activities: acts };
+  }
 
   const env = {
     WF_CAP: capId,
@@ -66,11 +69,13 @@ export function planFor(ctx, capId, { allowMissing = false } = {}) {
       return { slot_key: a.key, sequence_no: a.order, definition_key: `${from}.${a.key}`, source_capability: from, contract_sha256: contractHash(contract) };
     })),
     WF_STEP_SPEC: `plans/${capId}.steps.json`,
-    WF_STAGES: stagesOf(acts, kinds[0]),
+    WF_STAGES: doc.runner ? acts.map(a => a.name).join(',') : stagesOf(acts, kinds[0]),
     WF_SOURCE_KIND: kinds[0],
-    WF_DISCOVER_CMD: src.runtime.entry,
+    WF_DISCOVER_CMD: doc.runner ? '' : src.runtime.entry,
     WF_MISSING: missing.join(','),
   };
+  if (doc.runner) env.WF_RUNNER = doc.runner.entry;
+  if (doc.lifecycle === 'retired') env.WF_RETIRED = '1';
   // 7d150e33（阶段1）：每活动 budget.max_duration_s 编进计划，执行器按它封顶各活动段（缺 budget = 0 = 不限）；
   // 超时时按契约 failure 分类：retryable 里声明了超时类条目 → retryable（重试一次），否则 record（记账后进入下一单元）
   for (const a of acts) env[`WF_BUDGET_${a.key}`] = String(a.budget?.max_duration_s ?? 0);

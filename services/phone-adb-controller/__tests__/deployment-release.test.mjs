@@ -38,3 +38,39 @@ test('deploy入口发布新模块且必须在观测回读后才原子发布manif
  assert.match(source,/deployment-release\.mjs/);assert.ok(source.lastIndexOf('deployment-release.mjs')<source.lastIndexOf('deployment-manifest.json'));
  assert.match(source,/push_atomic "\$OBSERVED_MANIFEST"/);
 });
+
+test('四流程正式部署覆盖 RPC 固定依赖、四新计划和 MMV 同 SHA 实测 manifest',async()=>{
+ const {RPC_FILES}=await import('../leadgen-client.mjs');
+ const source=readFileSync(new URL('../deploy.sh',import.meta.url),'utf8');
+ const array=name=>source.match(new RegExp(name+'=\\(([^)]+)\\)','s'))?.[1].trim().split(/\s+/);
+ const rpc=array('RPC_FILES');assert.deepEqual([...rpc].sort(),[...RPC_FILES].sort());
+ const mmv=[...array('MMV_JS_FILES'),...array('MMV_PROBE_FILES')];for(const name of RPC_FILES)assert.ok(mmv.includes(name),`MMV漏RPC依赖 ${name}`);
+ const device=[...array('DEVICE_NODE_FILES'),...array('DEVICE_RPC_PROBE_FILES'),...array('DEVICE_PLAN_FILES')];for(const name of RPC_FILES)assert.ok(device.includes(name),`设备冻结漏RPC依赖 ${name}`);
+ for(const key of ['douyin_video_discovery','douyin_video_processing','douyin_comment_scoring','douyin_lead_outreach']){
+  assert.ok(array('DEVICE_PLAN_FILES').includes(`plans/${key}.plan`));assert.ok(array('DEVICE_PLAN_FILES').includes(`plans/${key}.steps.json`));
+ }
+ for(const key of ['keyword_acquisition','benchmark_link_acquisition'])assert.ok(array('DEVICE_PLAN_FILES').includes(`plans/${key}.plan`),'退役入口需覆盖历史plan flag');
+ assert.match(source,/deployment-manifest\.mjs.*MMV_RUNTIME_FILES/);
+ assert.match(source,/MMV_RUNTIME_FILES=/);
+ assert.ok(source.indexOf('deployment-release.mjs" mmv')<source.indexOf('"$MMV_OBSERVED_MANIFEST" mmv'));
+ assert.match(source,/push_atomic "\$MMV_OBSERVED_MANIFEST" mmv/);
+ assert.match(source,/deployment-release\.mjs" mmv "\$MMV_MANIFEST"/,'MMV必须采实机字节并由Brain正式观测，不能借device release');
+});
+
+test('RPC 声明覆盖所有本地静态依赖，防远端部署漏传递依赖',async()=>{
+ const {RPC_FILES}=await import('../leadgen-client.mjs');
+ for(const file of RPC_FILES){
+  const source=readFileSync(new URL('../'+file,import.meta.url),'utf8');
+  const imports=[...source.matchAll(/(?:require\(|import\(|from\s+)['"]\.\/([^'"]+)['"]/g)].map(m=>m[1]);
+  for(const relative of imports){const dependency=new URL(relative,new URL('../'+file,import.meta.url)).pathname.split('/phone-adb-controller/')[1];assert.ok(RPC_FILES.includes(dependency),`${file} 的远端依赖未冻结: ${dependency}`);}
+ }
+});
+
+test('MMV正式观测用真实中央机器hostname；device身份冒认MMV拒绝',async()=>{
+ const {observeDeployment}=await import(path);
+ for(const hostname of ['aad17-2.macminivault.com','m4-xian.local']){
+  const f=fixture();f.release.target='mmv';f.release.manifest_sha256=digest({environment:f.release.environment,target:'mmv',payload:f.release.payload});f.options.host='mmv';f.options.collect=async()=>({...f.options.manifest,observed_hostname:hostname});
+  if(hostname.startsWith('aad17-2')){const actual=await observeDeployment(f.options);assert.equal(actual.target,'mmv');assert.equal(f.calls.find(c=>c.body).body.target,'mmv');}
+  else{await assert.rejects(observeDeployment(f.options),/实际机器身份/);assert.equal(f.calls.some(c=>c.body),false);}
+ }
+});

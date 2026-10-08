@@ -1,0 +1,350 @@
+# 四流程独立契约：同一智能获客能力，每活动Commander，PG交接。
+version: 1
+capability: keyword_acquisition
+contract_key: douyin_comment_scoring
+name: 抖音评论评分
+workflow: douyin-comment-scoring
+brain_workflow_key: douyin_comment_scoring
+source_repo: perfectuser21/zenithjoy-workspace
+checks: services/phone-adb-controller/checks/douyin-comment-scoring.yaml
+dod_promotion:
+  min_consecutive_pass: 20
+runner:
+  entry: leadgen-workflow.mjs
+  queue: pending_comments
+trigger_inputs:
+  - Comment
+  - Video
+known_gaps: []
+activities:
+  - key: scoring
+    name: 评分
+    order: 1
+    version: 2.0.0
+    compatibility: breaking
+    owner:
+      department: line02 智能获客
+      agent: 评论分拣员
+    inputs:
+      - type: Comment
+        cardinality: many
+        fields:
+          - dedup_key
+          - body
+          - nickname
+          - douyin_id
+          - profile_url
+          - process_status
+      - type: Video
+        cardinality: many
+        fields:
+          - title
+          - transcript
+    outputs:
+      - type: Comment
+        cardinality: many
+        effect: update
+        fields:
+          - process_status
+          - relevance
+          - intent_grade
+          - promoted
+    preconditions:
+      - 从PG认领待分拣评论，带关联视频标题与转写
+      - 模型不可达或结果非法留待重判，不伪造C级成功
+    postconditions:
+      - probe: scores_readback
+        asserts: 认领ID在PG独立读回，评论完成必须以线索已落实为前提
+      - probe: scoring_commander_verified
+        asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
+    execution:
+      location: mmv
+      via: leadgen-workflow.mjs → scoring独立活动 → 持久化队列读回
+    budget:
+      max_duration_s: 1800
+      heartbeat_s: 120
+    resources:
+      locks: []
+      limits: []
+    idempotency:
+      dedupe_key: Lead.line_key+Lead.douyin_id
+      on_duplicate: merge
+    failure:
+      empty_ok:
+        - 本批无待分拣评论
+      retryable:
+        - 判定异常/搬运失败留待分拣，下轮重试（sort-comments.js:72-77,94-97）
+      needs_human:
+        cases:
+          - 整批判定失败（模型鉴权/额度）
+        alert:
+          channel: bark
+          object: sort-comments 整批失败 → Bark
+      fatal: []
+    side_effects:
+      - kind: internal_write
+        target: pg zenithjoy.leadgen_comments
+        description: 保存真实relevance与intent_grade，尚未落实线索前不推进完成状态
+    invokers:
+      - code
+      - agent
+    runtime:
+      phase: batch_end
+      entry: leadgen-activity.sh
+      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
+    implementation_bindings:
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-workflow.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-activity.sh
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/activity-commander.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-queue.js
+        revision: contract
+    model:
+      - provider: openrouter
+        model: typesafe/jev-1.13
+        purpose: 评论 A/B/C/不相关分级（judge-comment.js:16）
+      - provider: openrouter
+        model: google/gemini-2.5-flash
+        purpose: 复核（judge-comment.js:17）
+    steps:
+      - key: scan_pending
+        name: 扫池取待分拣
+        order: 1
+        reads:
+          - Comment.process_status
+          - Comment.dedup_key
+        writes: []
+        check: 取到的行 process_status 全为 待分拣
+        implementation:
+          status: implemented
+          ref: leadgen-workflow.mjs + leadgen-queue.js scoring.scan_pending（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: log
+            regex: "^SORT_STATS "
+            expect:
+              op: ">="
+              value: 1
+      - key: judge_grade
+        name: 模型三合一判级
+        order: 2
+        reads:
+          - Comment.body
+          - Video.transcript
+          - Video.title
+        writes:
+          - Comment.relevance
+          - Comment.intent_grade
+        check: intent_grade ∈ {A, B, C, 不相关}；复核解析失败落 C
+        implementation:
+          status: implemented
+          ref: leadgen-workflow.mjs + leadgen-queue.js scoring.judge_grade（原约束保留，真PG/证据读回）
+        uses_llm: true
+        dod:
+          mode: checkpoint
+          readback:
+            type: evidence
+            glob: "{tag}-scoring-readback.json"
+            match: '"verified"\s*:\s*true'
+            expect:
+              op: ">="
+              value: 1
+    known_gaps:
+      - gap: 关键词有效线索数回写（update-keyword-stats）在批次收工后才运行，scoring 是批级的，批内无法按词判定；改为下一批开头对上一批判定（待做）
+        task: 34f69930
+      - gap: scoring 工件的 peer、spam 两个闭集键这条链没有对应分类，恒为 0；strong_intent=A 级、weak_intent=B+C 级为当前映射，五档分级落地（决策
+          b93422c6）后重新定义
+        task: 4ca3b584
+      - gap: "0929实证:
+          决策b93422c6的五档分级(A~E)只在触达筛选层落地了(next-outreach-lib.js的GRADE_ORDER/outreachGrades)，评论判级层(judge-comment\
+          .js:19 GRADES=[A,B,C,不相关])从未升级到五档——D/E两档在触达筛选里永远筛不出东西，是死档。需要判级层同步升到五档才算真落地，不是两层各干各的"
+        task: 4ca3b584
+    commander:
+      entry: activity-commander.mjs
+  - key: mark_leads
+    name: 标记人
+    order: 2
+    version: 2.0.0
+    compatibility: breaking
+    owner:
+      department: line02 智能获客
+      agent: 评论分拣员
+    inputs:
+      - type: Comment
+        cardinality: many
+        fields:
+          - dedup_key
+          - body
+          - nickname
+          - douyin_id
+          - profile_url
+          - process_status
+      - type: Video
+        cardinality: many
+        fields:
+          - title
+          - transcript
+    outputs:
+      - type: Comment
+        cardinality: many
+        effect: update
+        fields:
+          - process_status
+          - relevance
+          - intent_grade
+          - promoted
+      - type: Lead
+        cardinality: many
+        effect: upsert
+        fields:
+          - line_key
+          - douyin_id
+          - nickname
+          - profile_url
+          - intent_grade
+          - repeat_hits
+          - status
+    preconditions:
+      - 评论 process_status=待分拣
+    postconditions:
+      - probe: pool_advanced
+        asserts: 认领ID在PG独立读回，评论完成必须以线索已落实为前提
+      - probe: mark_leads_commander_verified
+        asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
+    execution:
+      location: mmv
+      via: leadgen-workflow.mjs → mark_leads独立活动 → 持久化队列读回
+    budget:
+      max_duration_s: 1800
+      heartbeat_s: 120
+    resources:
+      locks: []
+      limits: []
+    idempotency:
+      dedupe_key: Lead.line_key+Lead.douyin_id
+      on_duplicate: merge
+    failure:
+      empty_ok:
+        - 本批无待分拣评论
+      retryable:
+        - 判定异常/搬运失败留待分拣，下轮重试（sort-comments.js:72-77,94-97）
+      needs_human:
+        cases:
+          - 整批判定失败（模型鉴权/额度）
+        alert:
+          channel: bark
+          object: sort-comments 整批失败 → Bark
+      fatal: []
+    side_effects:
+      - kind: internal_write
+        target: pg zenithjoy.leadgen_leads + leadgen_comments
+        description: 按人身份去重保留人，重复出现计数；线索落地后才推进评论已分拣
+    invokers:
+      - code
+      - agent
+    runtime:
+      phase: batch_end
+      entry: leadgen-activity.sh
+      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
+    implementation_bindings:
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-workflow.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-activity.sh
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/activity-commander.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-queue.js
+        revision: contract
+    model:
+      - provider: openrouter
+        model: typesafe/jev-1.13
+        purpose: 评论 A/B/C/不相关分级（judge-comment.js:16）
+      - provider: openrouter
+        model: google/gemini-2.5-flash
+        purpose: 复核（judge-comment.js:17）
+    steps:
+      - key: upsert_lead
+        name: 合格行进线索表
+        order: 1
+        reads:
+          - Comment.douyin_id
+          - Comment.nickname
+          - Comment.profile_url
+          - Comment.intent_grade
+        writes:
+          - Lead.douyin_id
+          - Lead.nickname
+          - Lead.profile_url
+          - Lead.intent_grade
+          - Lead.repeat_hits
+          - Lead.status
+          - Lead.line_key
+        check: 相关(A/B/C级)：新建（状态=待触达）或已有行
+          repeat_hits+1，按抖音号去重；只排除'不相关'(同行/广告)——0914既有决定,含C级都留档(sort-comments-lib.js:57)
+        implementation:
+          status: implemented
+          ref: leadgen-workflow.mjs + leadgen-queue.js mark_leads.upsert_lead（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: evidence
+            glob: "{tag}-mark_leads-readback.json"
+            match: '"verified"\s*:\s*true'
+            expect:
+              op: ">="
+              value: 1
+      - key: advance_pool
+        name: 推进池状态
+        order: 2
+        reads:
+          - Comment.dedup_key
+        writes:
+          - Comment.process_status
+          - Comment.promoted
+        check: 线索落地之后才推进 已分拣（永远最后一步）
+        implementation:
+          status: implemented
+          ref: leadgen-workflow.mjs + leadgen-queue.js mark_leads.advance_pool（原约束保留，真PG/证据读回）
+        uses_llm: false
+        dod:
+          mode: checkpoint
+          readback:
+            type: evidence
+            glob: "{tag}-mark_leads-readback.json"
+            match: '"verified"\s*:\s*true'
+            expect:
+              op: ">="
+              value: 1
+    known_gaps:
+      - gap: 关键词有效线索数回写（update-keyword-stats）在批次收工后才运行，scoring 是批级的，批内无法按词判定；改为下一批开头对上一批判定（待做）
+        task: 34f69930
+      - gap: scoring 工件的 peer、spam 两个闭集键这条链没有对应分类，恒为 0；strong_intent=A 级、weak_intent=B+C 级为当前映射，五档分级落地（决策
+          b93422c6）后重新定义
+        task: 4ca3b584
+      - gap: "0929实证:
+          决策b93422c6的五档分级(A~E)只在触达筛选层落地了(next-outreach-lib.js的GRADE_ORDER/outreachGrades)，评论判级层(judge-comment\
+          .js:19 GRADES=[A,B,C,不相关])从未升级到五档——D/E两档在触达筛选里永远筛不出东西，是死档。需要判级层同步升到五档才算真落地，不是两层各干各的"
+        task: 4ca3b584
+    commander:
+      entry: activity-commander.mjs

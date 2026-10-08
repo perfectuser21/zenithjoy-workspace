@@ -26,7 +26,8 @@ export function readFrozen(runDir) {
 function assertRunIdentity(snapshot,identity,runDir){
   const recorded=snapshot.run_identity;
   if(recorded && (!['capability','tag','profile','serial','run_id'].every(key=>typeof recorded[key]==='string' && recorded[key].length) || (runDir && basename(resolve(runDir))!==recorded.run_id))) throw Error('运行身份或目录不匹配');
-  if(!recorded || snapshot.workflow_version.payload.contract?.capability!==identity.capability) throw Error('运行快照capability身份不匹配');
+  const contract=snapshot.workflow_version.payload.contract;
+  if(!recorded || (contract?.contract_key??contract?.capability)!==identity.capability) throw Error('运行快照capability身份不匹配');
   for(const key of ['capability','tag','profile','serial','run_id']) if(identity[key]!==undefined && identity[key]!==recorded[key]) throw Error(`运行身份不匹配: ${key}`);
 }
 export function registerRun(indexRoot,runDir,identity){
@@ -41,7 +42,7 @@ export function locateRun(indexRoot,identity){
   const record=JSON.parse(readFileSync(file,'utf8'));assertRunIdentity(readFrozen(record.run_dir),identity,record.run_dir);return record.run_dir;
 }
 export async function freezeDefinition(o) {
-  if (existsSync(resolve(o.runDir,'run-definition.json'))) {const frozen=readFrozen(o.runDir);if(frozen.release)assertRuntimeHost(frozen.release,frozen.deployment);return frozen;}
+  if (existsSync(resolve(o.runDir,'run-definition.json'))) {const frozen=readFrozen(o.runDir);if(o.runIdentity)assertRunIdentity(frozen,o.runIdentity,o.runDir);if(frozen.release)assertRuntimeHost(frozen.release,frozen.deployment);return frozen;}
   const manifest=JSON.parse(readFileSync(o.manifestPath||resolve(o.deploymentRoot,'deployment-manifest.json'),'utf8'));
   const fixed=(o.releaseId||manifest.release_id||o.requireRelease)?await loadRuntimeRelease(o,manifest,digest):null;
   let version;
@@ -96,7 +97,11 @@ export async function freezeDefinition(o) {
   }
   const files={'workflow.plan':digest(plan),'step-dod.json':digest(steps)};
   for(const file of checked.values()) files[`runtime/${file.deployed_path}`]=file.actual_content_sha256;
-  const body={schema_version:fixed?2:1,...(fixed?{release:fixed.release}:{}),workflow_version:version,activities,deployment:manifest,files,...(o.runIdentity?{run_identity:o.runIdentity}:{})};
+  const manifestBytes=Buffer.from(JSON.stringify(manifest,null,2));
+  if(files['runtime/deployment-manifest.json'])throw Error('源码不能占用冻结部署声明路径');
+  files['runtime/deployment-manifest.json']=digest(manifestBytes);
+  const body={schema_version:fixed?2:1,...(fixed?{release:fixed.release}:{}),workflow_version:version,activities,deployment:manifest,files,
+    ...(o.runtimeTransport?{runtime_transport:o.runtimeTransport}:{}),...(o.runIdentity?{run_identity:o.runIdentity}:{})};
   if(o.runIdentity)assertRunIdentity(body,o.runIdentity);
   const snapshot={...body,snapshot_sha256:digest(body)};
   const staging=`${o.runDir}.freeze-${randomUUID()}`; mkdirSync(staging,{recursive:true,mode:0o700});
@@ -105,6 +110,7 @@ export async function freezeDefinition(o) {
       const target=resolve(staging,'runtime',file.deployed_path);mkdirSync(dirname(target),{recursive:true});
       writeFileSync(target,file.bytes,{mode:file.mode});
     }
+    writeFileSync(resolve(staging,'runtime/deployment-manifest.json'),manifestBytes,{mode:0o600});
     writeFileSync(resolve(staging,'workflow.plan'),plan);writeFileSync(resolve(staging,'step-dod.json'),steps);
     writeFileSync(resolve(staging,'run-definition.json'),JSON.stringify(snapshot,null,2));
     mkdirSync(dirname(o.runDir),{recursive:true}); renameSync(staging,o.runDir);

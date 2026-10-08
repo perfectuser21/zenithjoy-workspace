@@ -8,11 +8,20 @@ import {promisify} from 'node:util';
 import {createDiscoveryHandlers} from '../leadgen-discovery.mjs';
 const exec=promisify(execFile),root=resolve('services/phone-adb-controller');
 const vid='7646309328911907195';
-function rig({rejectWrite=false,copyFails=false,emptyHistory=false,benchmark=false,multi=false}={}){
+function rig({rejectWrite=false,copyFails=false,emptyHistory=false,benchmark=false,multi=false,wrongSearch=false}={}){
  const dir=mkdtempSync(join(tmpdir(),'new-discovery-'));const log=join(dir,'calls');const ctl=join(dir,'ctl');
  writeFileSync(ctl,`#!/bin/zsh
 print -r -- "$3 $4 $5" >> "$CALLS"
 case "$3" in
+ open-search) print -r -- "$4" > "$FAKE_TMP/keyword";;
+ search-video-tab) python3 -c 'import sys,os,urllib.parse,xml.sax.saxutils
+word="错误关键词" if os.getenv("WRONG_SEARCH") else urllib.parse.unquote(open(sys.argv[1]).read().strip())
+os.makedirs(os.path.dirname(sys.argv[2]),exist_ok=True)
+open(sys.argv[2],"w").write("<hierarchy><node resource-id=\\"com.ss.android.ugc.aweme:id/et_search_kw\\" text=\\""+xml.sax.saxutils.escape(word)+"\\"/></hierarchy>")' "$FAKE_TMP/keyword" "$DOUYIN_PHONE_TMP_ROOT/evidence/jinoshengyuan-work/$4-aftertab.xml";;
+ search-kw-matches) python3 -c 'import sys,xml.etree.ElementTree as ET
+ok=any(n.get("resource-id","").endswith("et_search_kw") and n.get("text")==sys.argv[1] for n in ET.parse(sys.argv[2]).iter("node"))
+print("kw_matches="+str(int(ok)))
+sys.exit(0 if ok else 1)' "$4" "$5";;
  open-user-profile) print 'works_count=20';print 'nickname=对标作者';;
  profile-video-cards) print '100\\t200\\t\\t';print '300\\t200\\t\\t';;
  search-video-cards)
@@ -24,7 +33,7 @@ case "$3" in
  *) ;;
 esac
 `,{mode:0o755});
- const env={...process.env,CALLS:log,DOUYIN_PHONE_ADB:ctl,HARVEST_KEYWORD_TESTING:'1',COPY_FAILS:copyFails?'1':''};
+ const env={...process.env,CALLS:log,DOUYIN_PHONE_ADB:ctl,HARVEST_KEYWORD_TESTING:'1',COPY_FAILS:copyFails?'1':'',DOUYIN_PHONE_TMP_ROOT:dir,FAKE_TMP:dir,WFR_RUN_DIR:join(dir,'run'),WRONG_SEARCH:wrongSearch?'1':''};
  async function execute(command,args,opts={}){
   if(command==='/bin/sleep') return {code:0,stdout:'',stderr:''};
   try {const r=await exec(command,args,{env:{...env,...opts.env},timeout:5000});return {code:0,...r};}
@@ -36,16 +45,20 @@ esac
   if(op==='history'){if(emptyHistory)throw new Error('PG unavailable');return {videos:[{title:'已见视频',video_id:'7646309328911907000'}]};}
   assert.equal(op,'discover');writes.push(fields);return rejectWrite?{status:'error',error:'PG failed'}:{status:'pending',video_id:fields.video.videoId};
  };
- const h=createDiscoveryHandlers({phone,execute,queue,profile:'jinoshengyuan-work',run:'cmd100822-new',root,limit:2,sourceKind:benchmark?'benchmark':'keyword',sources:multi?['人工智能训练师','AI训练师']:['人工智能训练师'],ownAccounts:{nicknames:['自己'],ids:[]}});
- return {h,writes,calls:()=>readFileSync(log,'utf8'),clean:()=>rmSync(dir,{recursive:true,force:true})};
+ const h=createDiscoveryHandlers({phone,execute,queue,profile:'jinoshengyuan-work',run:'cmd100822-new',root,limit:2,sourceKind:benchmark?'benchmark':'keyword',sources:multi?['人工智能训练师','AI训练师']:['人工智能训练师'],ownAccounts:{nicknames:['自己'],ids:[]},env});
+ return {h,writes,calls:()=>readFileSync(log,'utf8'),receipt:()=>JSON.parse(readFileSync(join(dir,'run','cmd100822-new-source-1-readback.json'),'utf8')),clean:()=>rmSync(dir,{recursive:true,force:true})};
 }
 test('new discovery invokes atomic primitive, filters before tapping, and relocates shifted cards',async()=>{
  const r=rig();try {await r.h.source();await r.h.dedup();await r.h.write_videos();
   assert.equal(r.writes.length,1);assert.equal(r.writes[0].video.videoId,vid);
   assert.match(r.calls(),/tap-evidence 320 520/);assert.doesNotMatch(r.calls(),/tap-evidence 120 220/);
   assert.equal(r.h.state.counts.historical,1);assert.equal(r.h.state.counts.own,1);assert.equal(r.h.state.counts.duplicate,0);
-  assert.equal(r.h.state.counts.persisted,1);
+ assert.equal(r.h.state.counts.persisted,1);
+  assert.equal(r.h.state.counts.sources_succeeded,1);assert.equal(r.receipt().verified,true);
  }finally{r.clean();}
+});
+test('wrong actual search text fails source and writes a false independent receipt',async()=>{
+ const r=rig({wrongSearch:true});try{await assert.rejects(r.h.source(),/全部发现来源执行失败/);assert.equal(r.h.state.counts.sources_succeeded,0);assert.equal(r.receipt().verified,false);assert.equal(r.writes.length,0);assert.ok(r.h.state.failures.some(f=>f.reason==='source_identity_unconfirmed'));}finally{r.clean();}
 });
 test('duplicate title and author across sources is removed before taking links',async()=>{
  const r=rig({multi:true});try{await r.h.source();await r.h.dedup();await r.h.write_videos();assert.equal(r.h.state.counts.duplicate,1);assert.equal(r.writes.length,1);}finally{r.clean();}

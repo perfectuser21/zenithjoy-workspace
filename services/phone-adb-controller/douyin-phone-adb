@@ -300,14 +300,17 @@ ui_evidence() {
 # 0914 融合刀2(抄 Kotlin clearClipboardBaseline 教义): ADB 无法进程内清剪贴板,
 # 等价防线 = 每 profile 记录上次成功取到的短链;本次读数与上次相同 → 本次"复制"动作
 # 大概率静默失败,剪贴板里是上一个目标的旧链接。张冠李戴比取不到更毒,当场拒收。
-# 同目标重试天然安全:上次记录的是上一个目标的链接,同目标重拷出的链接与它不同。
+# 同目标跨流程重拷需本次nonce读回证据；只凭旧URL或expectedID绝不放行。
 clip_state_file() { print -- "$LOCATE_CACHE_DIR/${registry_profile}-last-clip.txt" }
 clip_guard_check() {
   local _prev _f
   _f="$(clip_state_file)"
   [[ -r "$_f" ]] || return 0
   _prev="$(<"$_f")"
-  [[ -n "$_prev" && "$_prev" == "$1" ]] && die "COPY_STALE: clipboard still holds the previous target's link ($1); the copy tap likely failed silently — refusing to attribute it to this target" TARGET_ABSENT
+  if [[ -n "$_prev" && "$_prev" == "$1" ]]; then
+    # 仅调用内已实读回并退回原详情的nonce可证明旧clip被替换；expectedID不构成证明。
+    [[ "${2:-}" =~ '^clipnonce[a-f0-9]{32}$' ]] || die "COPY_STALE: clipboard still holds the previous target's link ($1); no fresh same-invocation clipboard proof — refusing to attribute it to this target" TARGET_ABSENT
+  fi
   return 0
 }
 clip_guard_record() {
@@ -542,8 +545,7 @@ current_video_link() {
   (( _g == 2 )) && die "UI_TREE_UNAVAILABLE: could not read the UI hierarchy to verify the video detail page; transient, safe to retry" NO_ROOT
   (( _g == 1 )) && die "NOT_ON_VIDEO_DETAIL: current-video-link requires an opened video detail page (share button absent); open the video card first"
   for i in {1..$tries}; do
-    if ( _current_video_link_once "${eid}-t${i}" ); then return 0; fi
-    rc=$?
+    if ( _current_video_link_once "${eid}-t${i}" ); then return 0; else rc=$?; fi
     print -u2 -- "warning: current-video-link attempt $i/$tries failed (rc=$rc); recovering to detail page"
     # 回退到详情页干净态：连按返回收掉可能半开的分享面板/临时搜索框
     "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1
@@ -558,15 +560,85 @@ current_video_link() {
   die "current-video-link failed after $tries attempts"
 }
 
+# 有旧短链时，先在不提交搜索的暂存框中复制新nonce并实际粘贴读回。
+# proof只返回给当前_once调用，绝不持久化/清除last-clip；复制或回原详情失败拒绝继续。
+seed_clipboard_nonce() {
+  local eid="$1" nonce xml line text center x y phase
+  nonce="$("$PYTHON_BIN" -c 'import secrets; print("clipnonce" + secrets.token_hex(16))')" || die "CLIPBOARD_NONCE_RANDOM_FAILED"
+  [[ "$nonce" =~ '^clipnonce[a-f0-9]{32}$' ]] || die "CLIPBOARD_NONCE_RANDOM_INVALID"
+  "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "snssdk1128://search/tabs?keyword=%20" >/dev/null || die "CLIPBOARD_NONCE_SCRATCH_FAILED"
+  wait_ms 900
+  ui_evidence "${eid}-seed-field" >/dev/null || die "CLIPBOARD_NONCE_FIELD_UNAVAILABLE"
+  xml="$EVIDENCE_ROOT/${eid}-seed-field.xml"
+  line="$(/usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/et_search_kw"[^>]*>' "$xml" | /usr/bin/head -1 || true)"
+  [[ -n "$line" && "$line" == *'clickable="true"'* ]] || die "CLIPBOARD_NONCE_FIELD_ABSENT"
+  center="$(node_center "$line")" || die "CLIPBOARD_NONCE_FIELD_BOUNDS"
+  read x y <<< "$center"
+  "$ADB" -s "$SERIAL" shell input tap "$x" "$y" >/dev/null || die "CLIPBOARD_NONCE_FOCUS_FAILED"
+  # input help已实测支持keycombination；不能仅以命令退出成功推断copy成功。
+  "$ADB" -s "$SERIAL" shell input keycombination 113 29 >/dev/null || die "CLIPBOARD_NONCE_SELECT_FAILED"
+  "$ADB" -s "$SERIAL" shell input text "$nonce" >/dev/null || die "CLIPBOARD_NONCE_INPUT_FAILED"
+  for phase in typed empty pasted; do
+    wait_ms 300
+    ui_evidence "${eid}-seed-${phase}" >/dev/null || die "CLIPBOARD_NONCE_TREE_UNAVAILABLE:$phase"
+    xml="$EVIDENCE_ROOT/${eid}-seed-${phase}.xml"
+    line="$(/usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/et_search_kw"[^>]*>' "$xml" | /usr/bin/head -1 || true)"
+    [[ -n "$line" ]] || die "CLIPBOARD_NONCE_FIELD_ABSENT:$phase"
+    text="$(print -- "$line" | /usr/bin/sed -E 's/.* text="([^"]*)" resource-id=.*/\1/')"
+    if [[ "$phase" == empty ]]; then
+      [[ -z "$text" ]] || die "CLIPBOARD_NONCE_CLEAR_UNVERIFIED"
+      "$ADB" -s "$SERIAL" shell input keyevent 279 >/dev/null || die "CLIPBOARD_NONCE_PASTE_FAILED"
+    else
+      [[ "$text" == "$nonce" ]] || die "CLIPBOARD_NONCE_READBACK_MISMATCH:$phase"
+      if [[ "$phase" == typed ]]; then
+        "$ADB" -s "$SERIAL" shell input keycombination 113 29 >/dev/null || die "CLIPBOARD_NONCE_SELECT_FAILED"
+        "$ADB" -s "$SERIAL" shell input keyevent 278 >/dev/null || die "CLIPBOARD_NONCE_COPY_FAILED"
+        "$ADB" -s "$SERIAL" shell input keyevent 67 >/dev/null || die "CLIPBOARD_NONCE_DELETE_FAILED"
+      fi
+    fi
+  done
+  _leave_scratch_route "${eid}-seed-leave" || die "CLIPBOARD_NONCE_ORIGINAL_DETAIL_UNVERIFIED"
+  print -- "$nonce"
+}
+
+# HEAD读取失败保留真实原因；两次各10秒，避免单次DNS失败被吞成缺视频ID。
+resolve_content_short_url() {
+  local short_url="$1" evidence_id="$2" headers location attempt rc=0 reason=LINK_RESOLVE_NETWORK
+  local err="$EVIDENCE_ROOT/${evidence_id}-resolve.err"
+  for attempt in 1 2; do
+    if headers="$("$CURL" -sSIL --connect-timeout 5 --max-time 10 -A 'Mozilla/5.0' "$short_url" 2>"$err")"; then
+      location="$(print -- "$headers" | /usr/bin/awk -F ': ' 'tolower($1) == "location" { gsub(/\r/, "", $2); location=$2 } END { print location }')"
+      if [[ -n "$location" ]]; then print -- "$location"; return 0; fi
+      rc=0; reason=LINK_RESOLVE_NO_REDIRECT
+    else
+      rc=$?
+      case "$rc" in
+        5|6) reason=LINK_RESOLVE_DNS;;
+        7) reason=LINK_RESOLVE_CONNECT;;
+        28)
+          reason=LINK_RESOLVE_TIMEOUT
+          /usr/bin/grep -qi 'Resolving timed out' "$err" && reason=LINK_RESOLVE_DNS_TIMEOUT
+          ;;
+        *) reason=LINK_RESOLVE_NETWORK;;
+      esac
+    fi
+    print -u2 -- "warning: $reason attempt=$attempt/2 curl_rc=$rc"
+  done
+  die "$reason after 2 bounded HEAD attempts (curl_rc=$rc)"
+}
+
 _current_video_link_once() {
   local evidence_id share_xml share_line share_center share_x share_y panel_xml panel_line link_line link_bounds
   local link_x1 link_y1 link_x2 link_y2 link_x link_y
   local copied_path scratch_xml search_line search_center search_x search_y
-  local result_xml result_line escaped_text short_url resolved_url video_id note_id content_type content_id reopen_url
+  local result_xml result_line escaped_text short_url resolved_url video_id note_id content_type content_id reopen_url nonce_proof=""
   evidence_id="$1"
   require_evidence_id "$evidence_id"
 
   [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
+  if [[ -s "$(clip_state_file)" ]]; then
+    nonce_proof="$(seed_clipboard_nonce "$evidence_id")" || die "CLIPBOARD_NONCE_PROOF_FAILED"
+  fi
   # 详情页自动播放会让部分机型（HONOR 实测）uiautomator 永不 idle：
   # 先中央点击暂停播放再取证；流程末尾跳离本页，无需恢复播放。
   "$ADB" -s "$SERIAL" shell input tap $(( SCREEN_W / 2 )) $(( SCREEN_H * 45 / 100 ))
@@ -636,8 +708,8 @@ _current_video_link_once() {
   escaped_text="$(print -- "$result_line" | /usr/bin/sed -E 's/.* text="([^"]*)" resource-id=.*/\1/' | /usr/bin/sed 's/&amp;/\&/g; s/&#47;/\//g')"
   short_url="$(print -- "$escaped_text" | /usr/bin/grep -oE 'https://v\.douyin\.com/[A-Za-z0-9_/-]+' | /usr/bin/head -1 || true)"
   [[ "$short_url" == https://v.douyin.com/* ]] || die "copied text did not contain a verified Douyin short link" TARGET_ABSENT
-  clip_guard_check "$short_url"
-  resolved_url="$("$CURL" -sSIL --max-time 20 -A 'Mozilla/5.0' "$short_url" | /usr/bin/awk -F ': ' 'tolower($1) == "location" { gsub(/\r/, "", $2); location=$2 } END { print location }' || true)"
+  clip_guard_check "$short_url" "$nonce_proof"
+  resolved_url="$(resolve_content_short_url "$short_url" "$evidence_id")" || die "LINK_RESOLVE_FAILED: see bounded HEAD error classification"
   video_id="$(print -- "$resolved_url" | /usr/bin/grep -oE '/video/[0-9]+' | /usr/bin/tail -1 | /usr/bin/cut -d/ -f3 || true)"
   note_id="$(print -- "$resolved_url" | /usr/bin/grep -oE '/note/[0-9]+' | /usr/bin/tail -1 | /usr/bin/cut -d/ -f3 || true)"
   if [[ "$video_id" == <-> && ${#video_id} -ge 16 && ${#video_id} -le 24 ]]; then

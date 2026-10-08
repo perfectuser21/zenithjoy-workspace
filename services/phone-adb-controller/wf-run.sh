@@ -83,6 +83,10 @@ if ! wf_load_plan "$WF_ARG_CAP"; then
   exit 1
 fi
 fi
+if [[ "${WF_RETIRED:-0}" == 1 ]]; then
+  print -u2 -- '旧获客流程已退役；请使用 leadgen-run.sh 的四个独立流程。'
+  exit 1
+fi
 DISCOVER_CMD="$(wf_discover_cmd)"
 if [[ ! -x "$DISCOVER_CMD" ]]; then
   log "拒跑: 发现实现 $DISCOVER_CMD 不存在或不可执行"

@@ -42,7 +42,10 @@ export function loadContractsFromDisk(repoRoot = REPO_ROOT) {
   const contracts = {};
   for (const f of readdirSync(dir).filter((n) => n.endsWith('.yaml') && n !== OBJECT_TYPES).sort()) {
     const doc = readYaml(join(dir, f));
-    contracts[doc?.capability ?? f] = doc;
+    const key = doc?.contract_key ?? doc?.capability ?? f;
+    if (contracts[key]) throw new Error(`契约身份重复: ${key}`);
+    if (f !== `${key}.yaml`) throw new Error(`契约文件身份不符: ${f}`);
+    contracts[key] = doc;
   }
   const checks = {};
   const ledgerStages = {};
@@ -166,7 +169,7 @@ export function validateContracts(ctx) {
       for (const e of validate.errors) errors.push(`${capId}: schema ${e.instancePath || '/'} ${e.message} ${JSON.stringify(e.params)}`);
       continue;
     }
-    if (!ctx.productMapIds.has(capId)) errors.push(`${capId}: 能力不在 product-map.yaml golden_paths`);
+    if (!ctx.productMapIds.has(doc.capability)) errors.push(`${capId}: 能力不在 product-map.yaml golden_paths`);
     const checksDoc = ctx.checks[doc.checks];
     if (!checksDoc) { errors.push(`${capId}: 探针文件 ${doc.checks} 未加载`); continue; }
     const probesByKey = new Map((checksDoc.probes || []).map((p) => [p.key, p]));

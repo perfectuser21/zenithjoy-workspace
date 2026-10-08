@@ -67,7 +67,7 @@ if (cmd === "init") {
   console.log(JSON.stringify({ ok: true, run_id: ledger.run_id, attempt_id: ledger.attempt_id }));
 } else if (cmd === "set") {
   const stage = args["stage"], status = args["status"];
-  if (!STAGES.includes(stage)) { console.error(`unknown stage: ${stage}`); process.exit(2); }
+  if (![...STAGES,"source","dedup","write_videos","mark_leads","send_dm","write_back"].includes(stage)) { console.error(`unknown stage: ${stage}`); process.exit(2); }
   if (!STATUSES.includes(status)) { console.error(`invalid status: ${status}`); process.exit(2); }
   const ledger = loadLedgerOrFresh(runDir);
   const st = ledger.stages[stage] || emptyStage();

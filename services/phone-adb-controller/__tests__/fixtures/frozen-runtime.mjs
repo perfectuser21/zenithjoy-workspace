@@ -9,7 +9,7 @@ export function seedFrozen(dir,planPath,env={}){
   const steps=Buffer.from(JSON.stringify({steps:[]}));
   const activities=['preflight','discovery','qualification','collection','scoring','delivery','outreach','cleanup'].map((slot,i)=>({
     reference:{reference_id:`reference-${i}`,slot_key:slot,sequence_no:i+1,activity_id:slot==='collection'?'9b8988e9-a22d-483c-a101-8091728b9e04':slot==='preflight'?'d27e18c9-709f-4c44-899c-85d6fb83671b':`activity-${slot}`,activity_version_id:`av-${i}`},
-    version:{id:`av-${i}`,payload:{steps:[]}},implementations:[],
+    version:{id:`av-${i}`,payload:{steps:env.steps?.[slot]||[]}},implementations:[],
   }));
   const files={'workflow.plan':digest(plan),'step-dod.json':digest(steps)};
   const names=['runtime-host.mjs','wf-run.sh','wf-run-lib.sh','wf-limits.sh','batch2.sh','harvest-keyword.sh','harvest-keyword-lib.sh','workflow-result.sh','runtime-definition.mjs','runtime-release.mjs','runtime-binding.mjs','runtime-outbox.mjs','runtime-receipts.mjs','ledger.mjs','step-judge.mjs','discover-keyword.sh','discover-benchmark.sh','douyin-phone-adb','phone-lock-lib.sh','phone-lock-helper.py','locate-element.py','wall-report.sh','wall-lib.sh'];

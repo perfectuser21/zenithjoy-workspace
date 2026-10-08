@@ -4,94 +4,291 @@
   "description": "决策 702949b6 / e2cef2c9：写完读回的断言以探针文件为 SSOT。Brain 经 cecelia 仓 scripts/sync-step-probes.mjs 登记哈希并把 journey cell 的 assertion_ref 写成 probe:<key>。stage = 契约 8 个主干活动（设计顺序，决策 f18f56b8）：workflow-result.sh req_keys() 的 7 个 stage + outreach；severity 只许 error（每步拦截）；metric 探针 observed 取 stage 工件 metrics[键]；expect.ref 只能引 workflow-result.sh 的闭集 metrics 键（形状在此，键集由单测从脚本实时抽取）。",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "workflow", "probes"],
+  "required": [
+    "version",
+    "workflow",
+    "probes"
+  ],
   "properties": {
-    "version": { "const": 1 },
-    "workflow": { "type": "string", "pattern": "^[a-z][a-z0-9-]+$" },
-    "probes": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/probe" } }
+    "version": {
+      "const": 1
+    },
+    "workflow": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]+$"
+    },
+    "probes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/probe"
+      }
+    }
   },
   "definitions": {
-    "stage": { "enum": ["preflight", "discovery", "qualification", "collection", "scoring", "delivery", "outreach", "cleanup"] },
+    "stage": {
+      "enum": [
+        "preflight",
+        "discovery",
+        "qualification",
+        "collection",
+        "scoring",
+        "delivery",
+        "outreach",
+        "cleanup",
+        "source",
+        "dedup",
+        "write_videos",
+        "mark_leads",
+        "send_dm",
+        "write_back"
+      ]
+    },
     "probe": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["key", "stage", "journey_cell", "probe", "expect", "severity", "failure_class", "on_fail", "note"],
+      "required": [
+        "key",
+        "stage",
+        "journey_cell",
+        "probe",
+        "expect",
+        "severity",
+        "failure_class",
+        "on_fail",
+        "note"
+      ],
       "properties": {
         "target": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["type", "key"],
+          "required": [
+            "type",
+            "key"
+          ],
           "properties": {
-            "type": { "enum": ["activity", "step", "enabler"] },
-            "key": { "type": "string", "minLength": 1 }
+            "type": {
+              "enum": [
+                "activity",
+                "step",
+                "enabler"
+              ]
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1
+            }
           },
           "description": "探针挂点（cecelia 迁移 496）：缺省按 journey_cell 挂活动格；step/enabler 显式指到 steps.key / enablers.key"
         },
-        "key": { "type": "string", "pattern": "^[a-z][a-z0-9_]+$" },
-        "stage": { "$ref": "#/definitions/stage" },
-        "journey_cell": { "type": "string", "pattern": "^stage:(preflight|discovery|qualification|collection|scoring|delivery|outreach|cleanup)$" },
-        "probe": { "oneOf": [{ "$ref": "#/definitions/sqlProbe" }, { "$ref": "#/definitions/httpProbe" }, { "$ref": "#/definitions/metricProbe" }] },
-        "expect": { "$ref": "#/definitions/expect" },
-        "severity": { "enum": ["error"] },
-        "failure_class": { "enum": ["retryable", "needs_human", "fatal"] },
-        "on_fail": { "enum": ["stop_run", "fail_stage"] },
-        "note": { "type": "string", "minLength": 8 }
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]+$"
+        },
+        "stage": {
+          "$ref": "#/definitions/stage"
+        },
+        "journey_cell": {
+          "type": "string",
+          "pattern": "^stage:(preflight|discovery|qualification|collection|scoring|delivery|outreach|cleanup|source|dedup|write_videos|mark_leads|send_dm|write_back)$"
+        },
+        "probe": {
+          "oneOf": [
+            {
+              "$ref": "#/definitions/sqlProbe"
+            },
+            {
+              "$ref": "#/definitions/httpProbe"
+            },
+            {
+              "$ref": "#/definitions/metricProbe"
+            }
+          ]
+        },
+        "expect": {
+          "$ref": "#/definitions/expect"
+        },
+        "severity": {
+          "enum": [
+            "error"
+          ]
+        },
+        "failure_class": {
+          "enum": [
+            "retryable",
+            "needs_human",
+            "fatal"
+          ]
+        },
+        "on_fail": {
+          "enum": [
+            "stop_run",
+            "fail_stage"
+          ]
+        },
+        "note": {
+          "type": "string",
+          "minLength": 8
+        }
       }
     },
     "sqlProbe": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "target", "query"],
+      "required": [
+        "type",
+        "target",
+        "query"
+      ],
       "properties": {
-        "type": { "const": "sql" },
-        "target": { "enum": ["pg_zenithjoy"] },
-        "query": { "type": "string", "minLength": 8 }
+        "type": {
+          "const": "sql"
+        },
+        "target": {
+          "enum": [
+            "pg_zenithjoy"
+          ]
+        },
+        "query": {
+          "type": "string",
+          "minLength": 8
+        }
       }
     },
     "metricProbe": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "ref"],
+      "required": [
+        "type",
+        "ref"
+      ],
       "properties": {
-        "type": { "const": "metric" },
-        "ref": { "type": "string", "pattern": "^metrics\\.[a-z][a-z0-9_]*$" }
+        "type": {
+          "const": "metric"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^metrics\\.[a-z][a-z0-9_]*$"
+        }
       }
     },
     "httpSource": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["url", "filter", "reduce"],
+      "required": [
+        "url",
+        "filter",
+        "reduce"
+      ],
       "properties": {
-        "url": { "type": "string", "pattern": "^https://open\\.feishu\\.cn/open-apis/bitable/v1/apps/(\\$BASE|[A-Za-z0-9]+)/tables/(\\$POOL|\\$KEYWORD|\\$LEAD|tbl[A-Za-z0-9]+)/records" },
-        "filter": { "type": "object", "minProperties": 1 },
-        "reduce": { "type": "string", "pattern": "^(count|field:.+)$" }
+        "url": {
+          "type": "string",
+          "pattern": "^https://open\\.feishu\\.cn/open-apis/bitable/v1/apps/(\\$BASE|[A-Za-z0-9]+)/tables/(\\$POOL|\\$KEYWORD|\\$LEAD|tbl[A-Za-z0-9]+)/records"
+        },
+        "filter": {
+          "type": "object",
+          "minProperties": 1
+        },
+        "reduce": {
+          "type": "string",
+          "pattern": "^(count|field:.+)$"
+        }
       }
     },
     "httpProbe": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "target", "url", "filter", "reduce"],
+      "required": [
+        "type",
+        "target",
+        "url",
+        "filter",
+        "reduce"
+      ],
       "properties": {
-        "type": { "const": "http" },
-        "target": { "enum": ["feishu_jinuo", "feishu_yuesheng"] },
-        "url": { "$ref": "#/definitions/httpSource/properties/url" },
-        "filter": { "$ref": "#/definitions/httpSource/properties/filter" },
-        "reduce": { "$ref": "#/definitions/httpSource/properties/reduce" },
-        "minus": { "$ref": "#/definitions/httpSource" }
+        "type": {
+          "const": "http"
+        },
+        "target": {
+          "enum": [
+            "feishu_jinuo",
+            "feishu_yuesheng"
+          ]
+        },
+        "url": {
+          "$ref": "#/definitions/httpSource/properties/url"
+        },
+        "filter": {
+          "$ref": "#/definitions/httpSource/properties/filter"
+        },
+        "reduce": {
+          "$ref": "#/definitions/httpSource/properties/reduce"
+        },
+        "minus": {
+          "$ref": "#/definitions/httpSource"
+        }
       }
     },
     "expect": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["op"],
+      "required": [
+        "op"
+      ],
       "properties": {
-        "op": { "enum": [">=", "==", "<=", "not_null_all"] },
-        "value": { "type": "number" },
-        "ref": { "type": "string", "pattern": "^metrics\\.[a-z][a-z0-9_]*$" }
+        "op": {
+          "enum": [
+            ">=",
+            "==",
+            "<=",
+            "not_null_all"
+          ]
+        },
+        "value": {
+          "type": "number"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^metrics\\.[a-z][a-z0-9_]*$"
+        }
       },
-      "if": { "properties": { "op": { "const": "not_null_all" } } },
-      "then": { "not": { "anyOf": [{ "required": ["value"] }, { "required": ["ref"] }] } },
-      "else": { "oneOf": [{ "required": ["value"] }, { "required": ["ref"] }] }
+      "if": {
+        "properties": {
+          "op": {
+            "const": "not_null_all"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "value"
+              ]
+            },
+            {
+              "required": [
+                "ref"
+              ]
+            }
+          ]
+        }
+      },
+      "else": {
+        "oneOf": [
+          {
+            "required": [
+              "value"
+            ]
+          },
+          {
+            "required": [
+              "ref"
+            ]
+          }
+        ]
+      }
     }
   }
 }

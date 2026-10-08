@@ -19,9 +19,9 @@ async function fixture(t){
  const sha=git('rev-parse','HEAD');git('remote','add','origin',`https://github.com/${repo}.git`);git('update-ref','refs/remotes/origin/main',sha);
  const make=(id,payload,extra)=>({id,...extra,source_repo:repo,source_path:'product-map/contracts/phone.yaml',source_commit:sha,payload,payload_sha256:digest({source:{repo,path:'product-map/contracts/phone.yaml',commit:sha},payload})});
  const activities=[make(uuid(3),{activity_id:uuid(4),steps:[],implementation_bindings:[{kind:'code',scope:'activity',status:'verified',repo,path,revision:sha,digest:'sha256:'+digest(readFileSync(join(root,path)))},...structuredClone(normalizedDescriptions)]},{activity_id:uuid(4)})];
- const workflows=[1,2].map(n=>{const workflow_id=`b1000000-0000-4000-8000-00000000000${n}`;return make(uuid(n),{workflow_id,activities:[{activity_id:uuid(4),activity_version_id:uuid(3)}]},{workflow_id});});
+ const workflows=[101,102,103,104].map((n,i)=>{const workflow_id=`b1000000-0000-4000-8000-${String(n).padStart(12,'0')}`;return make(uuid(i+1),{workflow_id,activities:[{activity_id:uuid(4),activity_version_id:uuid(3)}]},{workflow_id});});
  const snapshot={schema_version:1,scope:'zenithjoy',repo,revision:sha,status:'verified',gaps:[],definitions:{workflows,activities}};snapshot.snapshot_sha256=digest(snapshot);
- const report={source:{repo,base_revision:'b'.repeat(40),head_revision:sha,changed_files:[path]},mapping_status:'verified',truncated:false,gaps:[],protocol:'pilot_release_verification_v1',purpose:'release_verification',scope:'zenithjoy',snapshot_sha256:snapshot.snapshot_sha256,verification_status:'verified',assertion_source:'current_registration',definition_versions:{workflows,activities},expected_usages:[{workflow_id:'b1000000-0000-4000-8000-000000000001'}],required_assertions:[{assertion_ref:'fixture.test.sh'}]};
+ const report={source:{repo,base_revision:'b'.repeat(40),head_revision:sha,changed_files:[path]},mapping_status:'verified',truncated:false,gaps:[],protocol:'pilot_release_verification_v1',purpose:'release_verification',scope:'zenithjoy',snapshot_sha256:snapshot.snapshot_sha256,verification_status:'verified',assertion_source:'current_registration',definition_versions:{workflows,activities},expected_usages:workflows.map(w=>({workflow_id:w.workflow_id})),required_assertions:[{assertion_ref:'fixture.test.sh'}]};
  report.source={repo,head_revision:sha};
  report.assertion_plan_sha256=digest(Object.fromEntries(['scope','source','definition_versions','expected_usages','required_assertions','assertion_source'].map(k=>[k,report[k]])));
  const receipt={purpose:'release_verification',actor:'pilot_release_verification',verdict:'PASS',scope:'declared_pilot_regressions',business_runtime_status:'not_evaluated',snapshot_sha256:snapshot.snapshot_sha256,assertion_plan_sha256:report.assertion_plan_sha256,source:report.source,report_sha256:digest(Buffer.from(JSON.stringify(report))),assertions:[{assertion_ref:'fixture.test.sh',source_repo:repo,source_revision:sha,test_sha256:'c'.repeat(64),exit_code:0}]};
@@ -32,7 +32,7 @@ async function fixture(t){
   assert.equal(req.headers.authorization,'Bearer fixture-private-token');let body='';for await(const part of req)body+=part;requests.push({method:req.method,path:req.url});
   let release;
   if(req.method==='POST'){
-   const input=JSON.parse(body);assert.ok(input.components.every(c=>c.kind!=='raw'));assert.deepEqual(snapshot.definitions.activities[0].payload.implementation_bindings.slice(1),normalizedDescriptions);const id=input.target==='xian-m4'?uuid(5):uuid(6);
+   const input=JSON.parse(body);assert.ok(input.components.every(c=>c.kind!=='raw'));assert.deepEqual(snapshot.definitions.activities[0].payload.implementation_bindings.slice(1),normalizedDescriptions);const id=input.target==='xian-m4'?uuid(5):input.target==='xian-m1'?uuid(6):uuid(7);
    release={id,environment:input.environment,target:input.target,payload:{...snapshot.definitions,components:input.components,verification:{status:mode==='unknown'?'unknown':'verified'}}};
    if(mode==='wrong_target')release.target='elsewhere';
    release.manifest_sha256=digest({environment:release.environment,target:release.target,payload:release.payload});releases.set(id,release);
@@ -41,10 +41,10 @@ async function fixture(t){
  });await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
  return {root,sha,bundlePath,attemptKey:'github:42:100:1',brainUrl:`http://127.0.0.1:${server.address().port}`,tokenPath,marker,requests,setMode:value=>mode=value};
 }
-test('真实normalized描述保留unknown，Git+HTTP两release回读后才部署固定组件',async t=>{
+test('真实normalized描述保留unknown，Git+HTTP三release回读后才部署固定组件',async t=>{
  const f=await fixture(t);await prepareAndDeploy(f);const actual=JSON.parse(readFileSync(f.marker));
- assert.equal(actual.collector,'phone-adb-deployer');assert.equal(actual.environment,'production');assert.equal(actual.token_present,true);assert.equal(actual.attempt,'github:42:100:1');assert.equal(Object.keys(actual.ids).length,2);
- assert.deepEqual(f.requests.map(r=>r.method),['POST','POST','GET','GET']);
+ assert.equal(actual.collector,'phone-adb-deployer');assert.equal(actual.environment,'production');assert.equal(actual.token_present,true);assert.equal(actual.attempt,'github:42:100:1');assert.equal(Object.keys(actual.ids).length,3);
+ assert.deepEqual(f.requests.map(r=>r.method),['POST','POST','POST','GET','GET','GET']);
 });
 for(const mode of ['unknown','wrong_target'])test(`真实Brain ${mode}回执阻止部署子进程`,async t=>{
  const f=await fixture(t);f.setMode(mode);await assert.rejects(prepareAndDeploy(f));assert.equal(existsSync(f.marker),false);

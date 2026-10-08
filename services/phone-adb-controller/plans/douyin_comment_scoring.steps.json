@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "capability": "douyin_comment_scoring",
+  "brain_workflow_key": "douyin_comment_scoring",
+  "contract_sha256": "bbfeca70c30535e4e815448161645716132a1bf80180edc3de96039aa3217ae4",
+  "promotion": {
+    "min_consecutive_pass": 20
+  },
+  "steps": [
+    {
+      "key": "douyin_comment_scoring.scoring.scan_pending",
+      "activity": "scoring",
+      "at": "scoring",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "log",
+        "regex": "^SORT_STATS ",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      },
+      "usage": {
+        "workflow_key": "douyin_comment_scoring",
+        "slot_key": "scoring",
+        "sequence_no": 1
+      }
+    },
+    {
+      "key": "douyin_comment_scoring.scoring.judge_grade",
+      "activity": "scoring",
+      "at": "scoring",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "{tag}-scoring-readback.json",
+        "match": "\"verified\"\\s*:\\s*true",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      },
+      "usage": {
+        "workflow_key": "douyin_comment_scoring",
+        "slot_key": "scoring",
+        "sequence_no": 1
+      }
+    },
+    {
+      "key": "douyin_comment_scoring.mark_leads.upsert_lead",
+      "activity": "mark_leads",
+      "at": "mark_leads",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "{tag}-mark_leads-readback.json",
+        "match": "\"verified\"\\s*:\\s*true",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      },
+      "usage": {
+        "workflow_key": "douyin_comment_scoring",
+        "slot_key": "mark_leads",
+        "sequence_no": 2
+      }
+    },
+    {
+      "key": "douyin_comment_scoring.mark_leads.advance_pool",
+      "activity": "mark_leads",
+      "at": "mark_leads",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "{tag}-mark_leads-readback.json",
+        "match": "\"verified\"\\s*:\\s*true",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      },
+      "usage": {
+        "workflow_key": "douyin_comment_scoring",
+        "slot_key": "mark_leads",
+        "sequence_no": 2
+      }
+    }
+  ]
+}

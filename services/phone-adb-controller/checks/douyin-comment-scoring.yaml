@@ -1,0 +1,56 @@
+# 新流程独立读回探针，severity=error；无真实证据不得判通过。
+version: 1
+workflow: douyin-comment-scoring
+probes:
+  - key: scores_readback
+    stage: scoring
+    journey_cell: stage:scoring
+    probe:
+      type: metric
+      ref: metrics.scoring_readback_failures
+    expect:
+      op: <=
+      value: 0
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 跨批评分按本run认领ID逐行独立查询PG；不能拿原harvest_batch冒充评分run归属，证据存本run readback工件。
+  - key: scoring_commander_verified
+    stage: scoring
+    journey_cell: stage:scoring
+    probe:
+      type: metric
+      ref: metrics.commander_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: pool_advanced
+    stage: mark_leads
+    journey_cell: stage:mark_leads
+    probe:
+      type: metric
+      ref: metrics.mark_leads_readback_failures
+    expect:
+      op: <=
+      value: 0
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 跨批评分按本run认领ID逐行独立查询PG；不能拿原harvest_batch冒充评分run归属，证据存本run readback工件。
+  - key: mark_leads_commander_verified
+    stage: mark_leads
+    journey_cell: stage:mark_leads
+    probe:
+      type: metric
+      ref: metrics.commander_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。

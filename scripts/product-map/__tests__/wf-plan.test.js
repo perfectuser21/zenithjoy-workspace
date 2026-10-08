@@ -47,12 +47,13 @@ test('Brain工作流映射缺失时计划明确拒跑', () => {
   assert.equal(r.ok, false); assert.ok(r.errors.some(e => /brain_workflow_key/.test(e)));
 });
 
-test('关键词获客：计划 = 5 段阶段串 + keyword 源 + discover-keyword.sh', () => {
+test('旧关键词历史计划保留身份和来源，但正式入口标记退役', () => {
   const r = planFor(fresh(), 'keyword_acquisition');
   assert.deepEqual(r.errors, []);
   assert.ok(r.ok);
   assert.deepEqual(legacyEnv(r.env), {
     WF_CAP: 'keyword_acquisition',
+    WF_RETIRED: '1',
     WF_WORKFLOW: 'social-keyword-leadgen',
     WF_STAGES: '拉Commander,预检,取词单,发现·判定·采集·评分·配送,效果回写',
     WF_SOURCE_KIND: 'keyword',
@@ -83,12 +84,13 @@ test('活动 failure.retryable 含「超时」→ 该活动超时分类 retryabl
   assert.equal(r.env.WF_BUDGET_scoring, '0');
 });
 
-test('对标链接获客：发现四步已实现（338e3ec7）→ 默认放行，WF_MISSING 为空', () => {
+test('旧对标历史计划保留步骤，正式入口标记退役', () => {
   const r = planFor(fresh(), 'benchmark_link_acquisition');
   assert.deepEqual(r.errors, []);
   assert.ok(r.ok);
   assert.deepEqual(legacyEnv(r.env), {
     WF_CAP: 'benchmark_link_acquisition',
+    WF_RETIRED: '1',
     WF_WORKFLOW: 'social-benchmark-leadgen',
     WF_STAGES: '拉Commander,预检,取对标源,对标发现·判定·采集·评分·配送,效果回写',
     WF_SOURCE_KIND: 'benchmark',

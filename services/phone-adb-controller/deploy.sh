@@ -65,6 +65,8 @@ MMV_JS_FILES=(
   fetch-seen-videos.js fetch-seen-titles.js check-own-account.js dm-daily-cap.js dm-rate-ramp-lib.js
   own-accounts-lib.js push-leads.js update-profile-links.js nickname-match-lib.js
   stats-line.js notify-bark.js push-stats-lib.js
+  leadgen-rpc.mjs leadgen-queue.js activity-commander.mjs
+  deployment-manifest.mjs runtime-definition.mjs runtime-host.mjs runtime-release.mjs
 )
 MMV_TOPLEVEL_FILES=(cmdr-escort.txt cmdr-stream.txt)
 # 0930(任务 975aa6ec): mmv 本机 launchd 拉起的两支脚本。escort-claude-escalation.sh 此前列在 DEVICE_SH_FILES 发去执行机
@@ -95,6 +97,8 @@ kickstart_if_changed() {
 MMV_PROBE_FILES=(
   verify-step.mjs checks/probes-lib.js checks/schema.json checks/social-keyword-leadgen.yaml checks/social-benchmark-leadgen.yaml
   step-judge.mjs step-dod.json step-dod-stats.mjs
+  checks/douyin-video-discovery.yaml checks/douyin-video-processing.yaml checks/douyin-comment-scoring.yaml checks/douyin-lead-outreach.yaml
+  plans/douyin_video_discovery.steps.json plans/douyin_video_processing.steps.json plans/douyin_comment_scoring.steps.json plans/douyin_lead_outreach.steps.json
 )
 # 设备控制器单独成组: 它必须同时落到**两个**目录,因为两类消费者各指一个——
 #   ~/.local/bin/  ← harvest-keyword.sh:7 / outreach-tick.sh / refill-profile-links.sh
@@ -108,6 +112,7 @@ DEVICE_CTL_FILES=(
 )
 DEVICE_CTL_DIRS=(bin-harvest .local/bin)
 DEVICE_SH_FILES=(
+  leadgen-run.sh leadgen-activity.sh leadgen-qualify.sh queued-video-lib.sh process-queued-video.sh
   harvest-keyword.sh harvest-keyword-lib.sh batch2.sh harvest-cron.sh wf-run.sh wf-run-lib.sh discover-keyword.sh discovery-v2-lib.sh outreach-tick.sh
   refill-profile-links.sh wall-report.sh wall-lib.sh phone-wall-push.sh
   disk-gateway-guard.sh device-job-claimer.sh log-stream-push.sh
@@ -116,17 +121,28 @@ DEVICE_SH_FILES=(
 # 0927 棒3b-3: 账本钩子内建进 harvest-cron.sh/batch2.sh,workflow-result.sh 硬依赖 ledger.mjs(node),
 # 少了它账本全程 WFR_WARN——单独成组,用 node --check 而不是 zsh -n 验语法。
 # 9032cdad: 步骤 DoD 统一裁判在执行机本地判 metric/evidence/log/tsv/ledger 类,清单 step-dod.json 由契约生成(json 用 JSON.parse 验)
-DEVICE_NODE_FILES=(runtime-host.mjs runtime-definition.mjs runtime-release.mjs runtime-binding.mjs runtime-outbox.mjs runtime-receipts.mjs deployment-manifest.mjs ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js)
+# 同一 RPC 源文件在设备冻结、MMV执行；不能依赖未登记的远端副本。
+RPC_FILES=(leadgen-rpc.mjs leadgen-queue.js activity-commander.mjs leadgen-db-lib.js leadgen-db-connect.js judge-video.js judge-video-lib.js judge-jev.js judge-comment.js qualify-video.js transcribe-qwen-audio.js line-routes.js stats-line.js next-keywords.js keyword-enabled-lib.js verify-step.mjs step-judge.mjs checks/probes-lib.js checks/schema.json checks/douyin-video-discovery.yaml checks/douyin-video-processing.yaml checks/douyin-comment-scoring.yaml checks/douyin-lead-outreach.yaml plans/douyin_video_discovery.steps.json plans/douyin_video_processing.steps.json plans/douyin_comment_scoring.steps.json plans/douyin_lead_outreach.steps.json)
+DEVICE_NODE_FILES=(leadgen-client.mjs leadgen-workflow.mjs leadgen-discovery.mjs own-accounts-lib.js leadgen-rpc.mjs leadgen-queue.js activity-commander.mjs leadgen-db-lib.js leadgen-db-connect.js judge-video.js judge-video-lib.js judge-jev.js judge-comment.js qualify-video.js transcribe-qwen-audio.js line-routes.js stats-line.js next-keywords.js keyword-enabled-lib.js runtime-host.mjs runtime-definition.mjs runtime-release.mjs runtime-binding.mjs runtime-outbox.mjs runtime-receipts.mjs deployment-manifest.mjs ledger.mjs step-judge.mjs step-dod.json phone-recovery.mjs notify-bark.js)
+DEVICE_RPC_PROBE_FILES=(verify-step.mjs checks/probes-lib.js checks/schema.json checks/douyin-video-discovery.yaml checks/douyin-video-processing.yaml checks/douyin-comment-scoring.yaml checks/douyin-lead-outreach.yaml)
 # 7f842d12 契约组装执行: wf-run.sh 读 ~/bin-harvest/plans/<能力>.plan(wf-plan.mjs 从契约生成、提交在仓库)。
 # 执行机没有仓库 node_modules,所以计划不在执行机上生成;漏发 = wf-run 拒跑并升级(不会静默跑错)。
-DEVICE_PLAN_FILES=(plans/keyword_acquisition.plan plans/benchmark_link_acquisition.plan plans/keyword_acquisition.steps.json plans/benchmark_link_acquisition.steps.json)
+DEVICE_PLAN_FILES=(plans/keyword_acquisition.plan plans/benchmark_link_acquisition.plan plans/keyword_acquisition.steps.json plans/benchmark_link_acquisition.steps.json plans/douyin_video_discovery.plan plans/douyin_video_processing.plan plans/douyin_comment_scoring.plan plans/douyin_lead_outreach.plan plans/douyin_video_discovery.steps.json plans/douyin_video_processing.steps.json plans/douyin_comment_scoring.steps.json plans/douyin_lead_outreach.steps.json)
 
+# MMV独立0103 runner与RPC服务均取正式发布字节；完整四流程定义满足Brain完整CI，运行host限制另行核验。
+MMV_RUNTIME_FILES=()
+for f in "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" "${DEVICE_RPC_PROBE_FILES[@]}" "${DEVICE_CTL_FILES[@]}" "${MMV_JS_FILES[@]}" "${MMV_PROBE_FILES[@]}"; do
+  [[ " ${MMV_RUNTIME_FILES[*]} " == *" $f "* ]] || MMV_RUNTIME_FILES+=("$f")
+done
 # 在任何SSH前核验部署源字节属于固定commit；manifest最后发布，半次部署不能通过起跑核验。
 DEPLOY_MANIFEST=$(mktemp)
 OBSERVED_MANIFEST=$(mktemp)
-trap 'rm -f "$DEPLOY_MANIFEST" "$OBSERVED_MANIFEST"' EXIT
-: "${WF_RELEASE_IDS:?必须提供两台机器的明确release_id映射}" "${WF_DEPLOY_ENVIRONMENT:?必须提供部署环境}" "${WF_DEPLOY_COLLECTOR:?必须提供受信collector}" "${WF_DEPLOY_ATTEMPT_KEY:?必须提供部署attempt}" "${BRAIN_URL:?必须提供Brain地址}"
-node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" "${DEVICE_CTL_FILES[@]}" > "$DEPLOY_MANIFEST"
+MMV_MANIFEST=$(mktemp)
+MMV_OBSERVED_MANIFEST=$(mktemp)
+trap 'rm -f "$DEPLOY_MANIFEST" "$OBSERVED_MANIFEST" "$MMV_MANIFEST" "$MMV_OBSERVED_MANIFEST"' EXIT
+: "${WF_RELEASE_IDS:?必须提供全部部署目标的明确release_id映射}" "${WF_DEPLOY_ENVIRONMENT:?必须提供部署环境}" "${WF_DEPLOY_COLLECTOR:?必须提供受信collector}" "${WF_DEPLOY_ATTEMPT_KEY:?必须提供部署attempt}" "${BRAIN_URL:?必须提供Brain地址}"
+node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" "${DEVICE_RPC_PROBE_FILES[@]}" "${DEVICE_CTL_FILES[@]}" > "$DEPLOY_MANIFEST"
+node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${MMV_RUNTIME_FILES[@]}" > "$MMV_MANIFEST"
 node "$D/deployment-preflight.mjs" "$DEPLOY_MANIFEST"
 
 echo "=== [1/3] mmv:~/.openclaw/leadgen-scripts/ (判定链+数据层, ${#MMV_JS_FILES[@]} 个文件) ==="
@@ -229,6 +245,21 @@ for host in xian-m4 xian-m1; do
     fi
     rm -f /tmp/deploy-err-$$
   done
+  # 探针在设备也必须保留原嵌套路径，才能冻结进 runtime/checks/*。
+  for f in "${DEVICE_RPC_PROBE_FILES[@]}"; do
+    if [[ ! -s "$D/$f" ]]; then echo "    ❌ 缺RPC探针文件: $f"; FAILED=1; continue; fi
+    _pd="$(dirname "$f")"; _pdir="~/bin-harvest"; [[ "$_pd" != "." ]] && _pdir="$_pdir/$_pd"
+    ssh "$host" "mkdir -p $_pdir"
+    push_atomic "$D/$f" "$host" "$_pdir" "$(basename "$f")"
+    case "$f" in
+      *.js|*.mjs) _chk="/opt/homebrew/bin/node --check ~/bin-harvest/$f";;
+      *.json) _chk="/opt/homebrew/bin/node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' ~/bin-harvest/$f";;
+      *) _chk="test -s ~/bin-harvest/$f";;
+    esac
+    if ssh "$host" "$_chk" 2>/tmp/deploy-err-$$; then echo "    ✅ $f"
+    else echo "    ❌ $f 校验失败: $(head -3 /tmp/deploy-err-$$)"; FAILED=1; fi
+    rm -f /tmp/deploy-err-$$
+  done
   ssh "$host" "mkdir -p ~/bin-harvest/plans"
   for f in "${DEVICE_PLAN_FILES[@]}"; do
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
@@ -307,11 +338,42 @@ if ! ssh xian-m4 "bash ~/bin-harvest/install-phone-recovery.sh xian-m4"; then
   echo "❌ PHONE_RECOVERY 开机自检安装失败"; FAILED=1
 fi
 
+# 同源完整包落MMV两执行路径：bin-harvest独立调度；leadgen-scripts服务现有设备RPC。
+echo "=== MMV独立评分正式运行包（${#MMV_RUNTIME_FILES[@]} 个固定文件） ==="
+for rroot in "~/bin-harvest" "~/.openclaw/leadgen-scripts"; do
+  for f in "${MMV_RUNTIME_FILES[@]}"; do
+    if [[ ! -s "$D/$f" ]]; then echo "  ❌ 缺MMV运行文件: $f"; FAILED=1; continue; fi
+    _pd="$(dirname "$f")"; _rdir="$rroot"; [[ "$_pd" != "." ]] && _rdir="$_rdir/$_pd"
+    ssh mmv "mkdir -p $_rdir"
+    case "$f" in
+      *.sh|*.py|douyin-phone-adb) _mode=x;;
+      *) _mode="";;
+    esac
+    push_atomic "$D/$f" mmv "$_rdir" "$(basename "$f")" "$_mode"
+    case "$f" in
+      *.js|*.mjs) _chk="node --check $rroot/$f";;
+      *.json) _chk="node -e 'JSON.parse(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))' $rroot/$f";;
+      *.py) _chk="/opt/homebrew/bin/python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' $rroot/$f";;
+      *.sh|*.plan|douyin-phone-adb) _chk="zsh -n $rroot/$f";;
+      *) _chk="test -s $rroot/$f";;
+    esac
+    if ! ssh mmv "$_chk" 2>/tmp/deploy-err-$$; then
+      echo "  ❌ MMV $f 校验失败: $(head -3 /tmp/deploy-err-$$)"; FAILED=1
+    fi
+    rm -f /tmp/deploy-err-$$
+  done
+done
+
 echo ""
 if [[ "$FAILED" == "1" ]]; then
   echo "⚠️ 部分文件语法检查失败,见上方 ❌ 标记——已同步的文件里可能有半成品,立刻核查"
   exit 1
 fi
+# MMV服务目录实读同SHA完整包，再采独立runner真实hostname并绑定第三正式release。
+ssh mmv "cd ~/.openclaw/leadgen-scripts && node deployment-manifest.mjs collect . -" < "$MMV_MANIFEST" > "$MMV_OBSERVED_MANIFEST"
+node "$D/deployment-release.mjs" mmv "$MMV_MANIFEST" > "$MMV_OBSERVED_MANIFEST"
+push_atomic "$MMV_OBSERVED_MANIFEST" mmv "~/.openclaw/leadgen-scripts" deployment-manifest.json
+push_atomic "$MMV_OBSERVED_MANIFEST" mmv "~/bin-harvest" deployment-manifest.json
 for host in xian-m4 xian-m1; do
   node "$D/deployment-release.mjs" "$host" "$DEPLOY_MANIFEST" > "$OBSERVED_MANIFEST"
   push_atomic "$OBSERVED_MANIFEST" "$host" "~/bin-harvest" deployment-manifest.json

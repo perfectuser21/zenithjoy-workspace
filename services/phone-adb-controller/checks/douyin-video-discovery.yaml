@@ -1,0 +1,273 @@
+# 新流程独立读回探针，severity=error；无真实证据不得判通过。
+version: 1
+workflow: douyin-video-discovery
+probes:
+  - key: pf_device_verified
+    stage: preflight
+    journey_cell: stage:preflight
+    probe:
+      type: metric
+      ref: metrics.device_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: stop_run
+    note: |
+      设备 serial 在线且身份对得上。harvest-cron.sh:121-133 做 adb 在线/唤醒，workflow-result.sh:161 写 preflight 工件。
+  - key: pf_account_verified
+    stage: preflight
+    journey_cell: stage:preflight
+    probe:
+      type: metric
+      ref: metrics.account_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: stop_run
+    note: >
+      手机上登录的抖音号 = 本 run 声明的 profile。现状 workflow-result.sh:161 写死 account_verified=0（采收链不读我页）， 本探针会如实判红，直到任务
+      6b133a81 让预检真读账号标记（Notion 步骤「读账号标记(我页)」）。
+  - key: pf_call_idle
+    stage: preflight
+    journey_cell: stage:preflight
+    probe:
+      type: metric
+      ref: metrics.call_state_idle
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: stop_run
+    note: |
+      手机不在通话中（通话中操作会误触）。workflow-result.sh:161 写 call_state_idle。
+  - key: pf_lock_acquired
+    stage: preflight
+    journey_cell: stage:preflight
+    probe:
+      type: metric
+      ref: metrics.lock_acquired
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: stop_run
+    note: >
+      拿到设备锁（douyin-phone-adb lock-acquire，TTL 1800s）。现状 workflow-result.sh:161 写死 lock_acquired=0 （锁在
+      harvest-keyword.sh 按词拿），判红直到 6b133a81。
+  - key: preflight_commander_verified
+    stage: preflight
+    journey_cell: stage:preflight
+    probe:
+      type: metric
+      ref: metrics.commander_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: source_completed
+    stage: source
+    journey_cell: stage:source
+    probe:
+      type: metric
+      ref: metrics.source_completed
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: source_commander_verified
+    stage: source
+    journey_cell: stage:source
+    probe:
+      type: metric
+      ref: metrics.commander_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: dedup_historical_filter_verified
+    stage: dedup
+    journey_cell: stage:dedup
+    probe:
+      type: metric
+      ref: metrics.historical_filter_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: dedup_own_filter_verified
+    stage: dedup
+    journey_cell: stage:dedup
+    probe:
+      type: metric
+      ref: metrics.own_filter_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: dedup_run_dedup_verified
+    stage: dedup
+    journey_cell: stage:dedup
+    probe:
+      type: metric
+      ref: metrics.run_dedup_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: dedup_commander_verified
+    stage: dedup
+    journey_cell: stage:dedup
+    probe:
+      type: metric
+      ref: metrics.commander_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: disc_candidates_persisted
+    stage: write_videos
+    journey_cell: stage:write_videos
+    probe:
+      type: sql
+      target: pg_zenithjoy
+      query: |
+        SELECT count(*)
+          FROM zenithjoy.leadgen_videos
+         WHERE harvest_batch = '$RUN_TAG'
+    expect:
+      op: ">="
+      ref: metrics.persisted
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: >
+      发现交出的对象 = 本词候选视频清单，必须落 leadgen_videos（leadgen-db-lib.js:22-31 upsertVideo，带 keyword/harvest_batch），
+      否则判定无米下锅。batch2.sh:37 写 candidates=DV。8bb3af55 先判后采后，harvest-keyword.sh 在开评论区之前 经 qualify-video.js
+      discover 把每个候选视频落库（pending/待判定，harvest_batch=本批、keyword=本词）。
+  - key: videos_readback
+    stage: write_videos
+    journey_cell: stage:write_videos
+    probe:
+      type: sql
+      target: pg_zenithjoy
+      query: |
+        SELECT count(*)
+          FROM zenithjoy.leadgen_videos
+         WHERE harvest_batch = '$RUN_TAG'
+    expect:
+      op: ">="
+      ref: metrics.videos_pushed
+    severity: error
+    failure_class: needs_human
+    on_fail: stop_run
+    note: >
+      push-videos.js:57-60 经 leadgen-db-lib.js:25-26 upsertVideo 写 leadgen_videos.harvest_batch=$RUN_TAG （ON
+      CONFLICT DO NOTHING，重复视频不计入）。对账基准 = push-videos.js 本批新增视频数：脚本末行
+      PUSH_VIDEOS_STATS.created（push-videos.js:68，飞书视频池按视频ID去重后真正新建的条数），batch2.sh wfr_delivery_stage 解析后写进
+      delivery 工件 metrics.videos_pushed（缺统计/悦升无视频池 push-videos.js:18 提前退出 → 0）。 PG 里本批行数应 >= 该基准（PG
+      写入不阻断，飞书失败的视频仍会入 PG）。此前引 videos_processed 是 collection 工件的键，delivery 工件里不存在，Brain 判 ref_unresolved 恒败。
+      只按 harvest_batch 归属，与 line_key_not_null 同 WHERE（棒3b-2 决策 8f38f5fd）：一个 run 只跑一个 profile， 批次键已唯一定界；09-26
+      实证多带 line_key='$LINE_KEY' 时 --line-key 传的是 profile 名而库里是路由键（push-videos.js:57）， 同 TAG 下本条读
+      0、line_key_not_null 读 7，口径分叉。
+  - key: line_key_not_null
+    stage: write_videos
+    journey_cell: stage:write_videos
+    probe:
+      type: sql
+      target: pg_zenithjoy
+      query: |
+        SELECT line_key
+          FROM zenithjoy.leadgen_videos
+         WHERE harvest_batch = '$RUN_TAG'
+    expect:
+      op: not_null_all
+    severity: error
+    failure_class: needs_human
+    on_fail: stop_run
+    note: >
+      leadgen_videos.line_key NOT NULL（apps/api/db/migrations/20260922_220000_leadgen_ssot_tables.sql:28），
+      push-videos.js:10 由 routeOf() 解析业务线（line-routes.js:62）。飞书原始评论池没有「业务线」列 （push-raw-comments.js:46-55
+      写入字段清单里没有；业务线由 base 本身区分），所以本探针只看 PG 行。 探针存在的意义是把 DDL 约束以声明形式挂到 journey cell 上，DDL 漂移（约束被去掉）时能读回。
+  - key: write_videos_commander_verified
+    stage: write_videos
+    journey_cell: stage:write_videos
+    probe:
+      type: metric
+      ref: metrics.commander_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: cl_app_closed
+    stage: cleanup
+    journey_cell: stage:cleanup
+    probe:
+      type: metric
+      ref: metrics.close_app_attempts
+    expect:
+      op: ">="
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: fail_stage
+    note: >
+      收工必须关抖音（douyin-phone-adb close-app）。现状 workflow-result.sh:182 写死 close_app_attempts=0（采收链没调 close-app），
+      判红直到 6b133a81。
+  - key: cl_lock_released
+    stage: cleanup
+    journey_cell: stage:cleanup
+    probe:
+      type: metric
+      ref: metrics.lock_released
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: fail_stage
+    note: |
+      设备锁已释放，否则触达拿不到手机。workflow-result.sh:182 当前写死 1（锁实际由 harvest-keyword.sh trap 按词释放）， 6b133a81 改为真读锁目录。
+  - key: cl_safe_desktop_visible
+    stage: cleanup
+    journey_cell: stage:cleanup
+    probe:
+      type: metric
+      ref: metrics.safe_desktop_visible
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: needs_human
+    on_fail: fail_stage
+    note: |
+      手机回到安全桌面（不停在私信/评论页，防误触）。workflow-result.sh:182 写死 0，判红直到 6b133a81。

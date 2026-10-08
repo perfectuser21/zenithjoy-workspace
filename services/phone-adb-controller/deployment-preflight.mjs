@@ -3,16 +3,16 @@ import {readFileSync,lstatSync,realpathSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {digest} from './runtime-definition.mjs';
 export const DEPLOY_REPO='perfectuser21/zenithjoy-workspace';
-export const DEPLOY_HOSTS=['xian-m4','xian-m1'];
+export const DEPLOY_HOSTS=['xian-m4','xian-m1','mmv'];
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const SHA=/^[0-9a-f]{40}$/;
-const WORKFLOWS=['b1000000-0000-4000-8000-000000000001','b1000000-0000-4000-8000-000000000002'];
+export const WORKFLOWS=[101,102,103,104].map(n=>`b1000000-0000-4000-8000-${String(n).padStart(12,'0')}`);
 const requireThat=(ok,message)=>{if(!ok)throw Error(`部署预检: ${message}`);};
 const equal=(a,b)=>digest(a)===digest(b);
 const key=c=>`${c.kind}:${c.repo}:${c.path||''}`;
 function componentsFor(definitions,sha){
  requireThat(Array.isArray(definitions?.workflows)&&Array.isArray(definitions?.activities),'缺固定定义');
- requireThat(definitions.workflows.length===2&&WORKFLOWS.every(id=>definitions.workflows.filter(w=>w.workflow_id===id&&w.payload?.workflow_id===id).length===1),'缺两试点唯一Workflow');
+ requireThat(definitions.workflows.length===WORKFLOWS.length&&WORKFLOWS.every(id=>definitions.workflows.filter(w=>w.workflow_id===id&&w.payload?.workflow_id===id).length===1),'缺四流程唯一Workflow');
  const all=[...definitions.workflows,...definitions.activities],components=new Map();
  const add=c=>{const old=components.get(key(c));requireThat(!old||equal(old,c),'组件身份冲突');components.set(key(c),c);};
  for(const row of all){
@@ -66,7 +66,7 @@ function verifyRelease(release,{id,environment,target,manifest}){
 }
 export async function preflightDeploymentReleases({manifest,environment,releaseIds,request}){
  requireThat(typeof environment==='string'&&environment.length>0,'缺部署环境');
- requireThat(releaseIds&&equal(Object.keys(releaseIds).sort(),[...DEPLOY_HOSTS].sort())&&DEPLOY_HOSTS.every(h=>UUID.test(releaseIds[h])),'必须明确两目标release');
+ requireThat(releaseIds&&equal(Object.keys(releaseIds).sort(),[...DEPLOY_HOSTS].sort())&&DEPLOY_HOSTS.every(h=>UUID.test(releaseIds[h])),`必须明确全部${DEPLOY_HOSTS.length}目标release`);
  const releases=[];
  for(const target of DEPLOY_HOSTS){const id=releaseIds[target],response=await request(`/api/brain/releases/${id}`);releases.push(verifyRelease(response?.release,{id,environment,target,manifest}));}
  return releases;
