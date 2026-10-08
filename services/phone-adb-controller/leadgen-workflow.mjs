@@ -73,7 +73,7 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
     const ownerArgs=['close-app','return-safe-desktop'].includes(command)?['--lock-owner',run]:[];
     return checked(ctl,['--profile',profile,...ownerArgs,command,...args]);
   };
-  const queue=async(op,fields={})=>(await rpc({kind:'queue',request:{op,line,run,limit:Number(env.LEADGEN_LIMIT||2),...fields}})).result;
+  const queue=async(op,fields={})=>(await rpc({kind:'queue',request:{op,line,run,source_run:env.LEADGEN_SOURCE_RUN||undefined,limit:Number(env.LEADGEN_LIMIT||2),...fields}})).result;
   const preflight=async()=>{
     if(env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'){
       const flag=join(env.HOME,`bin-harvest/state/dm-paused-${profile}.flag`);

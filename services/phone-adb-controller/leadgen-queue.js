@@ -14,6 +14,8 @@ async function transaction(pool, fn) {
 async function queueRequest(pool, input, deps = { judgeComment }) {
   const { lineKey, targetProfile } = resolveLine(input.line);
   const { op, run } = input;
+  const sourceRun=input.source_run??null;
+  if(sourceRun!==null&&!/^[a-zA-Z0-9_-]{1,120}$/.test(sourceRun))throw Error('上游运行号无效');
   if (!/^[a-zA-Z0-9_-]{1,120}$/.test(run || '')) throw Error('缺有效运行号');
   const limit = Math.max(1, Math.min(50, Number(input.limit) || 10));
   if (op === 'history') {
@@ -30,11 +32,12 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
       // 待采的已合格视频也入队；上次崩溃的租约15分钟后可重领，活动内调用续期。
       const result = await client.query(`WITH pending AS (
         SELECT id FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND judgment_status<>'rejected'
+        AND ($5::text IS NULL OR harvest_batch=$5)
         AND (process_status='待判定' OR process_status='待采评论'
           OR (process_status LIKE '处理中:%' AND updated_at<now()-interval '15 minutes'))
         ORDER BY discovered_at LIMIT $2 FOR UPDATE SKIP LOCKED)
         UPDATE zenithjoy.leadgen_videos v SET process_status=$3,harvest_batch=$4,updated_at=now()
-        FROM pending p WHERE v.id=p.id RETURNING v.*`, [lineKey, limit, `处理中:${run}`, run]);
+        FROM pending p WHERE v.id=p.id RETURNING v.*`, [lineKey, limit, `处理中:${run}`, run, sourceRun]);
       return result.rows;
     });
   }
@@ -68,7 +71,8 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
       const result = await transaction(pool, async client => {
         const rows = (await client.query(`SELECT * FROM zenithjoy.leadgen_comments
           WHERE line_key=$1 AND process_status='待分拣' AND relevance IS NULL
-          ORDER BY collected_at LIMIT 1 FOR UPDATE SKIP LOCKED`, [lineKey])).rows;
+          AND ($2::text IS NULL OR harvest_batch=$2)
+          ORDER BY collected_at LIMIT 1 FOR UPDATE SKIP LOCKED`, [lineKey,sourceRun])).rows;
         if (!rows.length) return false;
         const row = rows[0];
         const verdict = await deps.judgeComment(row.comment_body, row.source_video, targetProfile);
@@ -94,7 +98,8 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`leadgen-people:${lineKey}`]);
         const row = (await client.query(`SELECT * FROM zenithjoy.leadgen_comments
           WHERE line_key=$1 AND process_status='待分拣' AND relevance IS NOT NULL
-          ORDER BY collected_at LIMIT 1 FOR UPDATE SKIP LOCKED`, [lineKey])).rows[0];
+          AND ($2::text IS NULL OR harvest_batch=$2)
+          ORDER BY collected_at LIMIT 1 FOR UPDATE SKIP LOCKED`, [lineKey,sourceRun])).rows[0];
         if (!row) return null;
         let lead = null;
         if (row.relevance === '相关') lead = await db.upsertLead(client, { lineKey,
