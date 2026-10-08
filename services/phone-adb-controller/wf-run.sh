@@ -223,6 +223,7 @@ run_finalize(){
   # 2fc3b6fc: 收工后清 stop 文件(账本已带 reason=commander_stop,文件本身不是证据;留着会让同 TAG 重跑第 1 个词都不开)
   [[ -n "${WF_STOP_FILE:-}" ]] && rm -f "$WF_STOP_FILE"
   wfr_on || return 0
+  [[ "${WF_YIELDED:-0}" == 1 ]] && { log "账本finalize: skipped(时窗退让,未建账本)"; return 0; }
   finalize_needed || { log "账本finalize: skipped(not_initialized, 正常退让)"; return 0; }
   # 0929批次4(6b133a81): cleanup 活动"关App"/"回安全桌面"真跑真记——现在在 device_cleanup_in_lock 里(锁内)做,
   # 指标 WFR_CLOSE_APP_ATTEMPTS/WFR_SAFE_DESKTOP_VISIBLE 已 export,这里只写账本
@@ -304,8 +305,8 @@ wr step "$SERIAL" 1 done
 
 # 触达时窗守卫: 8-22点是触达的地盘,采收 cron 不该在白天抢(冗余保险,crontab已限时)
 # 这是**正常退让**不是故障,不升级(升级=狼来了)。
-H=$(date +%H)
-if (( H >= 8 && H < 22 )); then log "白天触达时窗,采收退让"; wr step "$SERIAL" 1 done "白天时窗退让"; wr done "$SERIAL"; exit 0; fi
+# 退让发生在账本 init 之前: 打 WF_YIELDED 标记,收尾走 skipped,不跑账本自检、不升级(10-08 误报 not_initialized 升级分身)
+if wf_window_yield; then WF_YIELDED=1; log "白天触达时窗,采收退让"; wr step "$SERIAL" 1 done "白天时窗退让"; wr done "$SERIAL"; exit 0; fi
 
 # ── ③ 取源: keyword=词单←网关(关键词表 SSOT) / benchmark=--sources 对标清单 ──
 # ── ③ KPI 闸(0916 主理人要求"KPI驱动自动获客,不是一天三次") ──
