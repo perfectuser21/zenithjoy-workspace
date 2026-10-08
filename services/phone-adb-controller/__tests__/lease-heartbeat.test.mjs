@@ -5,7 +5,7 @@
 // batch2 结束/脚本退出时停；父进程被 kill -9 时心跳自行退出，绝不替死掉的采收永久续租。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, chmodSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, chmodSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { makeTmp, makeFakeAdb, makePassthroughConvert, startFakeApi, makeEnv, runBash } from './wall-helpers.mjs';
@@ -96,6 +96,22 @@ test('harvest-cron lease_heartbeat_start/stop：按间隔发 heartbeat，stop �
   assert.ok(n >= 2, `3.5 秒内至少心跳 2 次，实际 ${n}`);
   await sleep(2500);
   assert.equal(f.count(), n, 'stop 之后心跳必须停');
+});
+
+test('心跳停止竞态：取消 sleep 与终止循环之间不能再发送续租', { skip: SKIP_ZSH }, async () => {
+  const dir = makeTmp();
+  const f = fakeWr(dir);
+  const bin = join(dir, 'bin');
+  mkdirSync(bin);
+  const pkill = spawnSync('bash', ['-lc', 'command -v pkill'], { encoding: 'utf8' }).stdout.trim();
+  assert.ok(pkill, '竞态测试需要 pkill');
+  // 人为让 stop 在取消真实定时器后被调度出去，稳定暴露原本很短的竞态窗口。
+  writeFileSync(join(bin, 'pkill'), `#!/bin/sh\n${q(pkill)} "$@"\nrc=$?\necho "$rc" > ${q(join(dir, 'cancel-rc'))}\n/bin/sleep 0.3\nexit "$rc"\n`, { mode: 0o755 });
+  const result = await runBash(`export WALL_REPORT=${q(f.p)} LEASE_HB_INTERVAL=30 PATH=${q(bin)}:$PATH; HARVEST_CRON_LIB=1 source ${q(HC)}; lease_heartbeat_start SER1; /bin/sleep 0.1; lease_heartbeat_stop; echo stopped`, process.env, { bash: ZSH, timeoutMs: 5000 });
+  assert.equal(result.timedOut, false);
+  assert.match(result.stdout, /stopped/);
+  assert.equal(readFileSync(join(dir, 'cancel-rc'), 'utf8').trim(), '0', '必须确实取消正在等待的子进程');
+  assert.equal(f.count(), 0, '未到周期且正在停止，不能把取消 sleep 当作定时器到期');
 });
 
 test('harvest-cron 心跳：父进程死了（kill -9 没走 trap）心跳自行退出，不替死掉的采收永久续租', { skip: SKIP_ZSH }, async () => {
