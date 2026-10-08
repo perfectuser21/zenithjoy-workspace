@@ -16,6 +16,17 @@ wf_parse_args(){
   WF_ARG_CAP="${pos[1]:-}"; P="${pos[2]:-}"; SERIAL="${pos[3]:-}"
   BIZ="${pos[4]:-AI人工智能训练师}"; N="${pos[5]:-6}"; PUSH="${pos[6]:-1}"
 }
+# wf_window_yield [HOUR] —— 8-22 点是触达时窗,采收退让(rc=0 = 退让)。10-08 试跑(任务 9a8784b7): 发起命令时显式
+# WF_FORCE_OUTSIDE_WINDOW=1(只认 1)可跳过,并记一行发起人(WF_FORCE_BY)/原因(WF_FORCE_REASON);cron 不设,默认行为不变
+wf_window_yield(){
+  local h="${1:-$(date +%H)}"
+  (( 10#$h >= 8 && 10#$h < 22 )) || return 1
+  if [[ "${WF_FORCE_OUTSIDE_WINDOW:-}" == "1" ]]; then
+    log "时窗守卫被手动跳过(WF_FORCE_OUTSIDE_WINDOW=1) 发起人=${WF_FORCE_BY:-未填} 原因=${WF_FORCE_REASON:-未填}"
+    return 1
+  fi
+  return 0
+}
 # wf_load_plan CAP —— source 执行计划;rc=1 计划缺失/残缺,rc=2 有未实现步骤且未 --allow-missing。原因放 WF_LOAD_ERR
 wf_load_plan(){
   local f="$WF_PLAN_DIR/$1.plan"

@@ -181,7 +181,8 @@ for W in "${(f)$(cat $WF)}"; do
   # 每词开头按同一口径(date +%H, 8<=H<22)再判:到点不开新词,跳出后照常落池/分拣(已采线索不能丢)。
   # BATCH2_NOW_HOUR 仅供测试/演练覆盖当前小时。
   H=${BATCH2_NOW_HOUR:-$(date +%H)}
-  if (( 10#$H >= 8 && 10#$H < 22 )); then
+  # WF_FORCE_OUTSIDE_WINDOW=1(只认 1): 发起人显式跳过时窗(wf-run.sh 已记发起人/原因),默认不设
+  if (( 10#$H >= 8 && 10#$H < 22 )) && [[ "${WF_FORCE_OUTSIDE_WINDOW:-}" != "1" ]]; then
     print "[$(date +%H:%M:%S)] 触达时窗到,采收收工(词$n: $W 起未开跑)" >> $LOG
     break
   fi
