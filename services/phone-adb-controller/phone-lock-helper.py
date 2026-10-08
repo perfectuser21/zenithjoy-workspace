@@ -3,11 +3,20 @@
 import fcntl
 import csv
 import json
+import hashlib
 import os
 import signal
 import time
 import subprocess
 import sys
+
+
+def runtime_contract():
+    files = {}
+    for path in sys.argv[2:]:
+        with open(path, 'rb') as handle:
+            files[os.path.basename(path)] = {'path': path, 'sha256': hashlib.sha256(handle.read()).hexdigest()}
+    print(json.dumps({'contract_version': 'standalone_account_read_v1', 'files': files}))
 
 
 def guarded():
@@ -216,7 +225,9 @@ def safe_to_reap():
 
 
 if __name__ == '__main__':
-    if sys.argv[1] == 'guard':
+    if sys.argv[1] == 'runtime-contract':
+        runtime_contract()
+    elif sys.argv[1] == 'guard':
         guarded()
     elif sys.argv[1] == 'owner-check':
         verify_owner()

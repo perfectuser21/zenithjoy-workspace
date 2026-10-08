@@ -2616,6 +2616,10 @@ if [[ -n "$LOCK_OWNER" ]]; then
 fi
 
 case "$command" in
+  runtime-contract)
+    [[ "$#" == 1 ]] || die 'usage: runtime-contract'
+    "$PYTHON_BIN" "${0:A:h}/phone-lock-helper.py" runtime-contract "${0:A}" "${0:A:h}/phone-lock-lib.sh" "${0:A:h}/phone-lock-helper.py"
+    ;;
   status)
     check_target
     print -- "$SERIAL device $MODEL"
@@ -3241,6 +3245,6 @@ case "$command" in
     print -- "foreground=${focus:-unknown}"
     ;;
   *)
-    die "allowed commands: status diagnose preflight foreground lock-acquire lock-acquire-new lock-status lock-release lock-release-exact lock-refresh lock-reap with-lock refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link own-profile account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-grid-scroll search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid results-controls-from-xml filter-panel-location"
+    die "allowed commands: runtime-contract status diagnose preflight foreground lock-acquire lock-acquire-new lock-status lock-release lock-release-exact lock-refresh lock-reap with-lock refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link own-profile account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-grid-scroll search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid results-controls-from-xml filter-panel-location"
     ;;
 esac
