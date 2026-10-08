@@ -22,7 +22,41 @@ def guarded():
     os.set_inheritable(fd, True)
     os.environ['DOUYIN_LOCK_GUARDED'] = serial + ':' + command
     os.environ['DOUYIN_LOCK_GUARD_FD'] = str(fd)
-    os.execv('/bin/zsh', ['zsh', script, '--profile', profile, command, *args])
+    argv = ['/bin/zsh', script, '--profile', profile, command, *args]
+    if command == '--lock-owner':
+        bounded_command(argv, fd)
+    else:
+        os.execv('/bin/zsh', argv)
+
+
+def bounded_command(argv, fd):
+    budget = int(os.environ.get('DOUYIN_GUARDED_COMMAND_TIMEOUT_SECONDS', '280'))
+    if not 1 <= budget <= 280:
+        print('guarded command budget must be 1..280 seconds', file=sys.stderr)
+        sys.exit(2)
+    canceled = [0]
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, lambda signum, frame: canceled.__setitem__(0, 128 + signum))
+    child = subprocess.Popen(argv, pass_fds=(fd,), start_new_session=True)
+    deadline = time.monotonic() + budget
+    while not canceled[0] and time.monotonic() < deadline:
+        try:
+            code = child.wait(timeout=0.1)
+            sys.exit(code if code >= 0 else 128 - code)
+        except subprocess.TimeoutExpired:
+            pass
+    # 不先reap根进程，避免PID被复用；终止整个原进程组后才回收并放开guard。
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(child.pid, sig)
+        except ProcessLookupError:
+            pass
+        if sig == signal.SIGTERM:
+            time.sleep(0.2)
+    child.wait()
+    if not canceled[0]:
+        print('guarded command timeout: whole command and children terminated; owner lock retained', file=sys.stderr)
+    sys.exit(canceled[0] or 124)
 
 
 def verify_guard():
