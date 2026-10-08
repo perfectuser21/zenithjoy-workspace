@@ -19,6 +19,7 @@ lock_acquire() {
   require_run_id "$1"
   /bin/mkdir -p "$LOCK_ROOT"
   if [[ -d "$LOCK_DIR" ]]; then
+    [[ "${2:-compatible}" != fresh ]] || die 'fresh acquisition refused: existing lock must not be adopted or reclaimed'
     [[ -r "$LOCK_DIR/owner" ]] && owner="$(<"$LOCK_DIR/owner")"
     if same_run_lock "$owner" "$run"; then
       print -- "lock=held owner=$owner idempotent=true"
@@ -119,6 +120,7 @@ phone_lock_command() {
   case "$cmd" in
     with-lock) shift; with_lock "$@";;
     lock-acquire) [[ "$#" == 2 ]] || die 'usage: lock-acquire OWNER'; lock_acquire "$2";;
+    lock-acquire-new) [[ "$#" == 2 ]] || die 'usage: lock-acquire-new OWNER'; lock_acquire "$2" fresh;;
     lock-release) [[ "$#" == 2 ]] || die 'usage: lock-release OWNER'; lock_release "$2";;
     lock-release-exact) [[ "$#" == 2 ]] || die 'usage: lock-release-exact OWNER'; lock_release "$2" exact;;
     lock-status)

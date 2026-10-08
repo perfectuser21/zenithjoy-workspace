@@ -41,14 +41,18 @@ def bounded_command(argv, fd, owner_path=None, expected_owner=None):
         sys.exit(canceled[0])
     child = subprocess.Popen(argv, pass_fds=(fd,), start_new_session=True)
     deadline = time.monotonic() + budget
+    root_reaped = False
     while not canceled[0] and time.monotonic() < deadline:
         try:
             code = child.wait(timeout=0.1)
-            sys.exit(code if code >= 0 else 128 - code)
+            if not canceled[0]:
+                sys.exit(code if code >= 0 else 128 - code)
+            root_reaped = True
+            break
         except subprocess.TimeoutExpired:
             pass
     # 不先reap根进程，避免PID被复用；终止整个原进程组后才回收并放开guard。
-    for sig in (signal.SIGTERM, signal.SIGKILL):
+    for sig in (() if root_reaped else (signal.SIGTERM, signal.SIGKILL)):
         try:
             os.killpg(child.pid, sig)
         except ProcessLookupError:
@@ -64,10 +68,10 @@ def bounded_command(argv, fd, owner_path=None, expected_owner=None):
         raise RuntimeError('guarded command termination unproven: live process group remains')
     child.wait(timeout=2)
     with open(owner_path, encoding='utf-8') as handle:
-        owner = handle.read().strip()
-    if owner != expected_owner:
+        owner_text = handle.read()
+    if owner_text not in (expected_owner, expected_owner + '\n'):
         raise RuntimeError('guarded command owner preservation unproven')
-    print('lock=preserved owner=' + owner, file=sys.stderr)
+    print('lock=preserved owner=' + expected_owner, file=sys.stderr)
     if not canceled[0]:
         print('guarded command timeout: whole command and children terminated; owner lock retained', file=sys.stderr)
     sys.exit(canceled[0] or 124)
