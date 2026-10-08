@@ -3,11 +3,35 @@
 import fcntl
 import csv
 import json
+import hashlib
 import os
 import signal
 import time
 import subprocess
 import sys
+
+
+def record_claim():
+    path, owner = sys.argv[2:]
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        print('run already claimed: standalone execution cannot be replayed', file=sys.stderr)
+        sys.exit(2)
+    with os.fdopen(fd, 'w') as handle:
+        handle.write(owner + '\n')
+        handle.flush()
+        os.fsync(handle.fileno())
+    print('run_claim=recorded owner=' + owner)
+
+
+def runtime_contract():
+    files = {}
+    for path in sys.argv[2:]:
+        with open(path, 'rb') as handle:
+            files[os.path.basename(path)] = {'path': path, 'sha256': hashlib.sha256(handle.read()).hexdigest()}
+    print(json.dumps({'contract_version': 'standalone_account_read_v1', 'files': files}))
 
 
 def guarded():
@@ -21,7 +45,96 @@ def guarded():
         sys.exit(2)
     os.set_inheritable(fd, True)
     os.environ['DOUYIN_LOCK_GUARDED'] = serial + ':' + command
-    os.execv('/bin/zsh', ['zsh', script, '--profile', profile, command, *args])
+    os.environ['DOUYIN_LOCK_GUARD_FD'] = str(fd)
+    argv = ['/bin/zsh', script, '--profile', profile, command, *args]
+    if command == '--lock-owner':
+        bounded_command(argv, fd, os.path.join(os.path.dirname(guard_path), serial + ".lock", "owner"), args[0])
+    else:
+        os.execv('/bin/zsh', argv)
+
+
+def bounded_command(argv, fd, owner_path=None, expected_owner=None):
+    budget = int(os.environ.get('DOUYIN_GUARDED_COMMAND_TIMEOUT_SECONDS', '280'))
+    if not 1 <= budget <= 280:
+        print('guarded command budget must be 1..280 seconds', file=sys.stderr)
+        sys.exit(2)
+    canceled = [0]
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, lambda signum, frame: canceled.__setitem__(0, 128 + signum))
+    if canceled[0]:
+        sys.exit(canceled[0])
+    child = subprocess.Popen(argv, pass_fds=(fd,), start_new_session=True)
+    deadline = time.monotonic() + budget
+    root_reaped = False
+    while not canceled[0] and time.monotonic() < deadline:
+        try:
+            code = child.wait(timeout=0.1)
+        except subprocess.TimeoutExpired:
+            continue
+        root_reaped = True
+        if not canceled[0]:
+            require_group_ended(child.pid)
+            if not owner_matches(owner_path, expected_owner):
+                raise RuntimeError('guarded command owner preservation unproven')
+            if not canceled[0]:
+                sys.exit(code if code >= 0 else 128 - code)
+        break
+    # 不先reap根进程，避免PID被复用；终止整个原进程组后才回收并放开guard。
+    for sig in (() if root_reaped else (signal.SIGTERM, signal.SIGKILL)):
+        try:
+            os.killpg(child.pid, sig)
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            pass  # 必须经下方统一真实组回读，不能凭信号调用接受清场。
+        if sig == signal.SIGTERM:
+            time.sleep(0.2)
+    require_group_ended(child.pid)
+    child.wait(timeout=2)
+    if not owner_matches(owner_path, expected_owner):
+        raise RuntimeError('guarded command owner preservation unproven')
+    print('lock=preserved owner=' + expected_owner, file=sys.stderr)
+    if not canceled[0]:
+        print('guarded command timeout: whole command and children terminated; owner lock retained', file=sys.stderr)
+    sys.exit(canceled[0] or 124)
+
+
+def require_group_ended(pid):
+    rows = subprocess.run(['/bin/ps', '-axo', 'pgid=,stat='], check=True,
+                          capture_output=True, text=True, timeout=2).stdout.splitlines()
+    if any(len(parts := row.split()) == 2 and parts[0] == str(pid)
+           and not parts[1].startswith('Z') for row in rows):
+        raise RuntimeError('guarded command termination unproven: live process group remains')
+
+def owner_matches(path, expected):
+    with open(path, encoding='utf-8', newline='') as handle:
+        text = handle.read()
+    return text in (expected, expected + '\n')
+
+
+def verify_owner():
+    path, expected = sys.argv[2:]
+    try:
+        if not owner_matches(path, expected):
+            raise ValueError('owner mismatch')
+    except (ValueError, OSError):
+        print('exact owner file protocol does not match current run', file=sys.stderr)
+        sys.exit(2)
+
+
+def verify_guard():
+    # 实际继承FD须对应本设备guard；取得同一open-description锁，父进程持续持有。
+    try:
+        fd = int(os.environ.get('DOUYIN_LOCK_GUARD_FD', ''))
+        if fd < 3:
+            raise ValueError('invalid fd')
+        actual, expected = os.fstat(fd), os.stat(sys.argv[2])
+        if (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino):
+            raise ValueError('guard file mismatch')
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (ValueError, OSError):
+        print('guard descriptor ownership is not verifiable', file=sys.stderr)
+        sys.exit(2)
 
 
 def stop_child():
@@ -127,8 +240,16 @@ def safe_to_reap():
 
 
 if __name__ == '__main__':
-    if sys.argv[1] == 'guard':
+    if sys.argv[1] == 'record-claim':
+        record_claim()
+    elif sys.argv[1] == 'runtime-contract':
+        runtime_contract()
+    elif sys.argv[1] == 'guard':
         guarded()
+    elif sys.argv[1] == 'owner-check':
+        verify_owner()
+    elif sys.argv[1] == 'guard-check':
+        verify_guard()
     elif sys.argv[1] == 'stop':
         stop_child()
     elif sys.argv[1] == 'run':

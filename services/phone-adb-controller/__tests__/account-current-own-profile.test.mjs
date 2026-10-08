@@ -70,6 +70,7 @@ function run(ctx, args) {
         ...process.env,
         DOUYIN_PHONE_REGISTRY: ctx.reg,
         DOUYIN_ADB_BIN: ctx.adb,
+        DOUYIN_PYTHON_BIN: spawnSync("sh",["-c","command -v python3"],{encoding:"utf8"}).stdout.trim(),
         DOUYIN_PHONE_TMP_ROOT: join(ctx.dir, "phone-tmp"),
         FIXTURE_DIR: ctx.dir,
         DUMP_COUNT: ctx.count,
@@ -156,4 +157,38 @@ test("接线守卫：wf-run.sh 预检读号前先 force-stop 抖音 → 冷启�
   assert.ok(iStart > iStop, "force-stop 之后要冷启动 MainActivity");
   assert.ok(iSleep > iStart, "冷启动后要等 4 秒再读号");
   assert.match(src, /^nap\(\)\{ \[\[ -n "\$\{WF_TESTING:-\}" \]\] && return 0; \/bin\/sleep "\$1" \}/m, "nap 生产下必须真睡");
+});
+
+test('重复的我按钮必须拒绝，不点击任意首项',async()=>{
+ const node=FEED.match(/<node[^>]+content-desc="我，按钮"[^>]*>/)[0];
+ const duplicate=FEED.replace('</hierarchy>',node+'</hierarchy>');
+ const c=setup([duplicate,OWN]);const r=await run(c,['account-current','duplicate-me']);
+ assert.notEqual(r.code,0);assert.match(r.err,/Me tab.*ambiguous/);assert.doesNotMatch(adbLog(c),/input tap/);
+});
+
+test('独立owner入口遇他人主页立即停止，不擅自返回导航',async()=>{
+ const c=setup([FOREIGN,OWN]),owner='qiumi-a1234567-1791427263848';
+ assert.equal((await run(c,['lock-acquire',owner])).code,0);
+ const r=await run(c,['--lock-owner',owner,'account-current','strict-foreign']);
+ assert.notEqual(r.code,0);assert.match(r.err,/standalone account entry/);assert.doesNotMatch(adbLog(c),/input keyevent 4|input tap/);
+});
+
+
+test('独立owner入口抖音已离开前台时拒绝隐式重开',async()=>{
+ const c=setup([OWN]),owner='qiumi-a1234567-1791427263848';
+ writeFileSync(c.adb,FAKE_ADB.replace('com.ss.android.ugc.aweme/.MainActivity','com.android.launcher/.Launcher'));
+ assert.equal((await run(c,['lock-acquire',owner])).code,0);
+ const r=await run(c,['--lock-owner',owner,'account-current','strict-foreground']);
+ assert.notEqual(r.code,0);assert.match(r.err,/standalone account entry.*foreground/);
+ assert.doesNotMatch(adbLog(c),/shell monkey|input keyevent|input tap|uiautomator dump/);
+});
+
+
+test('独立owner前台包不能用抖音包名子串冒认',async()=>{
+ const c=setup([OWN]),owner='qiumi-a1234567-1791427263848';
+ writeFileSync(c.adb,FAKE_ADB.replace('com.ss.android.ugc.aweme/.MainActivity','com.ss.android.ugc.aweme.fake/.MainActivity'));
+ assert.equal((await run(c,['lock-acquire',owner])).code,0);
+ const r=await run(c,['--lock-owner',owner,'account-current','strict-package']);
+ assert.notEqual(r.code,0);assert.match(r.err,/standalone account entry.*foreground/);
+ assert.doesNotMatch(adbLog(c),/shell monkey|input keyevent|input tap|uiautomator dump/);
 });

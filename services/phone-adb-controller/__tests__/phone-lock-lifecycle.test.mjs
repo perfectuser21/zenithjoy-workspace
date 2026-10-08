@@ -1,5 +1,6 @@
 // 297d7f32：真实控制器 + 隔离锁目录/fakeADB，人工会话退出必须收尾，不操作手机。
 import { test } from 'node:test';
+import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { spawnSync, spawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
@@ -140,4 +141,293 @@ for (const ignoreTerm of [false,true]) test(`with-lock 子进程建组前TERM必
 test('lock-reap device_job明确属于别机则允许回收',t=>{
  const c=setup(t);c.stale();writeFileSync(join(c.dir,'tasks.json'),JSON.stringify([{id:'other-job',status:'in_progress',task_type:'device_job',payload:{device_serial:'OTHER'}}]));
  const r=c.run('lock-reap');assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/lock=reaped/);assert.ok(!existsSync(c.lock));
+});
+
+
+test('qiumi合法a开头任务号不被当成attempt裁剪，完整原run保留', t => {
+  const c=setup(t), run='qiumi-a1234567-1791427263848';
+  const r=c.run('lock-acquire',run);
+  assert.equal(r.status,0,r.stderr);
+  assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);
+  assert.equal(c.run('lock-release',run+':a2').status,0);
+});
+test('不同运行不能以短前缀认领或释放别人的锁', t => {
+  const c=setup(t), run='qiumi-e1234567-1791427263848';
+  assert.equal(c.run('lock-acquire',run).status,0);
+  assert.notEqual(c.run('lock-acquire','qiumi').status,0);
+  assert.notEqual(c.run('lock-release','qiumi').status,0);
+  assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);
+});
+test('同原run的明确attempt阶段变体仍共享同一锁', t => {
+  const c=setup(t), run='qiumi-a1234567-1791427263848';
+  assert.equal(c.run('lock-acquire',run).status,0);
+  const second=c.run('lock-acquire',run+'-a2-cleanup-1');
+  assert.equal(second.status,0,second.stderr);
+  assert.match(second.stdout,/idempotent=true/);
+  assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);
+  assert.equal(c.run('lock-release',run+'-a3-cleanup-1').status,0);
+});
+
+test('独立清理用原子精确释放：回读后owner变化不能释放新锁', t => {
+  const c=setup(t), run='qiumi-e1234567-1791427263848';
+  assert.equal(c.run('lock-acquire',run).status,0);
+  writeFileSync(join(c.lock,'owner'),run+'-a2-preflight-1\n');
+  assert.notEqual(c.run('lock-release-exact',run).status,0);
+  assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run+'-a2-preflight-1');
+  writeFileSync(join(c.lock,'owner'),run+'\n');
+  const r=c.run('lock-release-exact',run);
+  assert.equal(r.status,0,r.stderr);
+  assert.match(r.stdout,new RegExp('lock=released owner='+run));
+  assert.ok(!existsSync(c.lock));
+});
+
+for (const condition of ['other','expired','free']) test(`带精确owner的前台命令拒绝${condition}锁，零手机动作`,t=>{
+ const c=setup(t), run='qiumi-a1234567-1791427263848';
+ if(condition==='other')c.run('lock-acquire','qiumi-b1234567-1791427263848');
+ if(condition==='expired')c.stale(run);
+ const r=c.run('--lock-owner',run,'close-app');
+ assert.notEqual(r.status,0);assert.match(r.stderr,/required lock owner|lock lease budget/);assert.equal(c.actions(),'');
+});
+test('带精确owner的有效前台命令可执行',t=>{
+ const c=setup(t), run='qiumi-a1234567-1791427263848';assert.equal(c.run('lock-acquire',run).status,0);
+ const r=c.run('--lock-owner',run,'close-app');assert.equal(r.status,0,r.stderr);assert.match(c.actions(),/am force-stop/);
+ assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);
+});
+test('前台动作整个期间guard阻止并发释放或易主',async t=>{
+ const c=setup(t), run='qiumi-a1234567-1791427263848';c.run('lock-acquire',run);
+ const adb=join(c.dir,'adb'),original=readFileSync(adb,'utf8');
+ writeFileSync(adb,original.replace('case "$*" in','case "$*" in\n *"am force-stop"*) touch "$TEST_DIR/acting"; tries=0; while [ ! -f "$TEST_DIR/proceed" ]; do tries=$((tries+1)); [ "$tries" -lt 200 ] || exit 1; sleep 0.02; done; exit 0;;'),{mode:0o755});
+ const p=spawn('zsh',[script,'--profile','p1','--lock-owner',run,'close-app'],{env:c.env,stdio:'ignore'});t.after(()=>p.kill('SIGKILL'));
+ const ended=new Promise(resolve=>p.once('exit',code=>resolve(code)));
+ await new Promise(resolve=>{const deadline=Date.now()+1000;const tick=()=>existsSync(join(c.dir,'acting'))||Date.now()>deadline?resolve():setTimeout(tick,20);tick();});
+ assert.ok(existsSync(join(c.dir,'acting')),'有效前台动作未开始');
+ const r=c.run('lock-release-exact',run);assert.notEqual(r.status,0);assert.match(r.stderr,/lock operation busy/);
+ writeFileSync(join(c.dir,'proceed'),'1');assert.equal(await ended,0);assert.equal(c.run('lock-release-exact',run).status,0);
+});
+
+for(const command of ['close-app','lock-release-exact']) test(`环境guard字符串不能伪造${command}的真实互斥`,t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';c.run('lock-acquire',run);
+ const label=command==='close-app'?'--lock-owner':command;
+ const args=command==='close-app'?['--lock-owner',run,command]:[command,run];
+ const r=spawnSync('zsh',[script,'--profile','p1',...args],{env:{...c.env,DOUYIN_LOCK_GUARDED:'SER1:'+label},encoding:'utf8'});
+ assert.notEqual(r.status,0);assert.match(r.stderr,/guard.*descriptor|guard.*ownership/);
+ assert.equal(c.actions(),'');assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);
+});
+
+test('独立前台复合命令有整条硬截止并终止子进程，保留原锁',t=>{
+ const c=setup(t), run='qiumi-a1234567-1791427263848';c.run('lock-acquire',run);
+ const adb=join(c.dir,'adb'),original=readFileSync(adb,'utf8');
+ writeFileSync(adb,original.replace('case "$*" in','case "$*" in\n *"am force-stop"*) touch "$TEST_DIR/acting"; sleep 2; touch "$TEST_DIR/late-ui"; exit 0;;'),{mode:0o755});
+ const r=spawnSync('zsh',[script,'--profile','p1','--lock-owner',run,'close-app'],{env:{...c.env,DOUYIN_GUARDED_COMMAND_TIMEOUT_SECONDS:'1'},encoding:'utf8',timeout:10000});
+ assert.equal(r.status,124,r.stderr);assert.match(r.stderr,/guarded command timeout/);assert.ok(!existsSync(join(c.dir,'late-ui')));
+ assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);assert.equal(c.run('lock-release-exact',run).status,0);
+});
+
+test('取消独立前台命令终止整个原进程组，不留下继续动手机的孩子',async t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';c.run('lock-acquire',run);
+ const adb=join(c.dir,'adb'),original=readFileSync(adb,'utf8');
+ writeFileSync(adb,original.replace('case "$*" in','case "$*" in\n *"am force-stop"*) touch "$TEST_DIR/acting"; sleep 2; touch "$TEST_DIR/late-ui"; exit 0;;'),{mode:0o755});
+ const p=spawn('zsh',[script,'--profile','p1','--lock-owner',run,'close-app'],{env:c.env,stdio:'ignore'});t.after(()=>p.kill('SIGKILL'));
+ const ended=new Promise(resolve=>p.once('exit',code=>resolve(code)));
+ await new Promise((resolve,reject)=>{const deadline=Date.now()+4000;const tick=()=>existsSync(join(c.dir,'acting'))?resolve():Date.now()>deadline?reject(Error('未开始动作')):setTimeout(tick,20);tick();});
+ p.kill('SIGTERM');assert.equal(await ended,143);
+ await new Promise(resolve=>setTimeout(resolve,2100));assert.ok(!existsSync(join(c.dir,'late-ui')));
+ assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);assert.equal(c.run('lock-release-exact',run).status,0);
+});
+
+test('父命令在启动许可前已取消时，不再创建手机命令孩子',()=>{
+ const helper=new URL('../phone-lock-helper.py',import.meta.url).pathname;
+ const program=`import importlib.util,sys
+s=importlib.util.spec_from_file_location('lock_helper',sys.argv[1]); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+def register(sig, handler):
+ if sig==m.signal.SIGTERM: handler(sig,None)
+m.signal.signal=register
+def forbidden(*args,**kwargs): raise AssertionError('spawned after cancel')
+m.subprocess.Popen=forbidden
+try: m.bounded_command([],9)
+except SystemExit as e: assert e.code==143
+else: raise AssertionError('not canceled')
+`;
+ const r=spawnSync(python,['-c',program,helper],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+});
+
+test('取消与根进程正常退出重叠时不能返回成功',t=>{
+ const c=setup(t),helper=new URL('../phone-lock-helper.py',import.meta.url).pathname,owner=join(c.dir,'owner');writeFileSync(owner,'run\n');
+ const program=`import importlib.util,sys,types
+s=importlib.util.spec_from_file_location('lock_helper',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+handlers={}
+m.signal.signal=lambda sig,h:handlers.update({sig:h})
+class Child:
+ pid=123456789
+ def wait(self,timeout):
+  if timeout==0.1: handlers[m.signal.SIGTERM](m.signal.SIGTERM,None)
+  return 0
+m.subprocess.Popen=lambda *a,**k:Child()
+m.os.killpg=lambda *a:None
+m.subprocess.run=lambda *a,**k:types.SimpleNamespace(stdout='')
+try: m.bounded_command([],9,sys.argv[2],'run')
+except SystemExit as e: assert e.code==143,e.code
+else: raise AssertionError('not canceled')
+`;
+ const r=spawnSync(python,['-c',program,helper,owner],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+});
+test('超时owner首尾空格变化不能被吞掉当作原owner保留',t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';c.run('lock-acquire',run);
+ const adb=join(c.dir,'adb'),original=readFileSync(adb,'utf8');
+ writeFileSync(adb,original.replace('case "$*" in',`case "$*" in\n *"am force-stop"*) printf ' ${run} ' > "$TEST_DIR/tmp/locks/SER1.lock/owner"; sleep 2; exit 0;;`),{mode:0o755});
+ const r=spawnSync('zsh',[script,'--profile','p1','--lock-owner',run,'close-app'],{env:{...c.env,DOUYIN_GUARDED_COMMAND_TIMEOUT_SECONDS:'1'},encoding:'utf8',timeout:10000});
+ assert.notEqual(r.status,124);assert.match(r.stderr,/owner preservation unproven/);assert.equal(readFileSync(join(c.lock,'owner'),'utf8'),' '+run+' ');
+});
+
+
+for(const existing of ['same','other','stale']) test(`独立新认领${existing}已有锁一律拒绝且不续接`,t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';
+ if(existing==='stale') c.stale('other');else c.run('lock-acquire',existing==='same'?run:'other');
+ const owner=readFileSync(join(c.lock,'owner'),'utf8'),stamp=readFileSync(join(c.lock,'acquired_at'),'utf8');
+ const r=c.run('lock-acquire-new',run);assert.notEqual(r.status,0);assert.match(r.stderr,/fresh acquisition.*existing lock/);
+ assert.equal(readFileSync(join(c.lock,'owner'),'utf8'),owner);assert.equal(readFileSync(join(c.lock,'acquired_at'),'utf8'),stamp);assert.equal(c.actions(),'');
+});
+test('独立新认领只有原子空锁取得者拿到acquired回执',t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';const first=c.run('lock-acquire-new',run);
+ assert.equal(first.status,0,first.stderr);assert.match(first.stdout,/lock=acquired/);
+ assert.notEqual(c.run('lock-acquire-new',run).status,0);assert.equal(c.actions(),'');
+});
+
+test('取消收尾owner的CRLF不能被文本换行转换冒认单LF',t=>{
+ const c=setup(t),helper=new URL('../phone-lock-helper.py',import.meta.url).pathname,owner=join(c.dir,'owner');writeFileSync(owner,'run\r\n');
+ const program=`import importlib.util,sys,types
+s=importlib.util.spec_from_file_location('lock_helper',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+handlers={}
+m.signal.signal=lambda sig,h:handlers.update({sig:h})
+class Child:
+ pid=123456789
+ def wait(self,timeout):
+  if timeout==0.1: handlers[m.signal.SIGTERM](m.signal.SIGTERM,None)
+  return 0
+m.subprocess.Popen=lambda *a,**k:Child()
+m.os.killpg=lambda *a:None
+m.subprocess.run=lambda *a,**k:types.SimpleNamespace(stdout='')
+try: m.bounded_command([],9,sys.argv[2],'run')
+except RuntimeError as e: assert 'owner preservation unproven' in str(e)
+else: raise AssertionError('CRLF owner was accepted')
+`;
+ const r=spawnSync(python,['-c',program,helper,owner],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+});
+
+
+test('独立锁的人工核查标记阻止过期巡检擅自清场',t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';assert.equal(c.run('lock-acquire-new',run).status,0);
+ writeFileSync(join(c.lock,'acquired_at'),String(Math.floor(Date.now()/1000)-1900));
+ const r=c.run('lock-reap');assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/lock=preserved.*standalone-review-required/);
+ assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);assert.equal(c.actions(),'');assert.ok(!existsSync(join(c.dir,'ssh.log')));
+});
+for(const suffix of ['','-a1']) test(`通用获取不能认领独立任务遗留锁${suffix}`,t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';assert.equal(c.run('lock-acquire-new',run).status,0);
+ writeFileSync(join(c.lock,'acquired_at'),String(Math.floor(Date.now()/1000)-1900));
+ const r=c.run('lock-acquire',run+suffix);assert.notEqual(r.status,0);assert.match(r.stderr,/standalone lock requires verified cleanup/);
+ assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);assert.equal(c.actions(),'');
+});
+
+
+for(const cmd of ['lock-release','lock-cleanup']) test(`通用${cmd}不能删除独立核查锁`,t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';assert.equal(c.run('lock-acquire-new',run).status,0);
+ writeFileSync(join(c.lock,'pid'),String(process.pid));
+ const args=cmd==='lock-cleanup'?[cmd,run,String(process.pid)]:[cmd,run];
+ assert.notEqual(c.run(...args).status,0);
+ assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);assert.equal(c.actions(),'');
+ assert.equal(c.run('lock-release-exact',run).status,0);assert.ok(!existsSync(c.lock));
+});
+
+
+for(const tail of ['\r\n','\n\n']) for(const command of ['lock-release-exact','close-app']) test(`原owner换行异常${JSON.stringify(tail)}拒绝${command}`,t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';c.run('lock-acquire',run);writeFileSync(join(c.lock,'owner'),run+tail);
+ const r=command==='close-app'?spawnSync('zsh',[script,'--profile','p1','--lock-owner',run,command],{env:c.env,encoding:'utf8'}):c.run(command,run);
+ assert.notEqual(r.status,0);assert.equal(readFileSync(join(c.lock,'owner'),'utf8'),run+tail);assert.equal(c.actions(),'');
+});
+
+
+test('根正常退出但仍有活子进程时不能给出可信成功终态',t=>{
+ const c=setup(t),helper=new URL('../phone-lock-helper.py',import.meta.url).pathname,owner=join(c.dir,'owner');writeFileSync(owner,'run\n');
+ const program=`import importlib.util,sys,types
+s=importlib.util.spec_from_file_location('lock_helper',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+m.signal.signal=lambda *a:None
+class Child:
+ pid=123456789
+ def wait(self,timeout):return 0
+m.subprocess.Popen=lambda *a,**k:Child()
+m.subprocess.run=lambda *a,**k:types.SimpleNamespace(stdout='123456789 S\\n')
+try:m.bounded_command([],9,sys.argv[2],'run')
+except RuntimeError as e:assert 'live process group' in str(e)
+except SystemExit as e:raise AssertionError('live child accepted termination '+str(e.code))
+else:raise AssertionError('live child accepted as success')
+`;
+ const r=spawnSync(python,['-c',program,helper,owner],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);assert.equal(readFileSync(owner,'utf8'),'run\n');
+});
+test('标记独立锁的续租也必须原owner精确相等，不认attempt变体',t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';c.run('lock-acquire-new',run);
+ writeFileSync(join(c.lock,'owner'),run+'-a1-cleanup-1\n');const stamp=readFileSync(join(c.lock,'acquired_at'),'utf8');
+ const r=c.run('lock-refresh',run);assert.notEqual(r.status,0);assert.equal(readFileSync(join(c.lock,'owner'),'utf8'),run+'-a1-cleanup-1\n');assert.equal(readFileSync(join(c.lock,'acquired_at'),'utf8'),stamp);assert.equal(c.actions(),'');
+});
+
+test('根正常退出后的ps查询超时立即失败，不进入重试等待',t=>{
+ const c=setup(t),helper=new URL('../phone-lock-helper.py',import.meta.url).pathname,owner=join(c.dir,'owner');writeFileSync(owner,'run\n');
+ const program=`import importlib.util,sys,types
+s=importlib.util.spec_from_file_location('lock_helper',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+m.signal.signal=lambda *a:None
+class Child:
+ pid=123456789
+ calls=0
+ def wait(self,timeout):
+  self.calls+=1
+  if self.calls>1:raise AssertionError('query timeout swallowed')
+  return 0
+m.subprocess.Popen=lambda *a,**k:Child()
+def unavailable(*a,**k):raise m.subprocess.TimeoutExpired('ps',2)
+m.subprocess.run=unavailable
+try:m.bounded_command([],9,sys.argv[2],'run')
+except m.subprocess.TimeoutExpired:pass
+except SystemExit as e:raise AssertionError('live child accepted termination '+str(e.code))
+else:raise AssertionError('live child accepted as success')
+`;
+ const r=spawnSync(python,['-c',program,helper,owner],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);assert.equal(readFileSync(owner,'utf8'),'run\n');
+});
+
+
+test('运行合同预检读取安装目录全部三个文件哈希，不操作手机或锁',t=>{
+ const c=setup(t),r=c.run('runtime-contract');assert.equal(r.status,0,r.stderr);const value=JSON.parse(r.stdout);
+ assert.equal(value.contract_version,'standalone_account_read_v1');
+ for(const name of ['douyin-phone-adb','phone-lock-lib.sh','phone-lock-helper.py']){
+  const path=new URL('../'+name,import.meta.url).pathname;assert.equal(value.files[name].sha256,createHash('sha256').update(readFileSync(path)).digest('hex'));assert.equal(value.files[name].path,path);
+ }
+ assert.equal(c.actions(),'');assert.ok(!existsSync(c.lock));
+});
+
+
+test('独立运行释放锁后也不能再用同run认领或重做UI',t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';assert.equal(c.run('lock-acquire-new',run).status,0);assert.equal(c.run('lock-release-exact',run).status,0);
+ const second=c.run('lock-acquire-new',run);assert.notEqual(second.status,0);assert.match(second.stderr,/run already claimed/);assert.equal(c.actions(),'');assert.ok(!existsSync(c.lock));
+});
+test('旧无owner清理不能触碰独立核查锁或其前台',t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';c.run('lock-acquire-new',run);const r=c.run('close-app');
+ assert.notEqual(r.status,0);assert.match(r.stderr,/standalone lock requires explicit owner/);assert.equal(c.actions(),'');assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);
+});
+test('旧close-app全过程与新独立认领互斥，不能在旧动作未结束时认领',async t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848',adb=join(c.dir,'adb'),original=readFileSync(adb,'utf8');
+ writeFileSync(adb,original.replace('case "$*" in','case "$*" in\n *"am force-stop"*) touch "$TEST_DIR/closing"; sleep 1; exit 0;;'),{mode:0o755});
+ const p=spawn('zsh',[script,'--profile','p1','close-app'],{env:c.env,stdio:'ignore'});t.after(()=>p.kill('SIGKILL'));const ended=new Promise(resolve=>p.once('exit',code=>resolve(code)));
+ await new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const tick=()=>existsSync(join(c.dir,'closing'))?resolve():Date.now()>deadline?reject(Error('旧关闭未启动')):setTimeout(tick,10);tick();});
+ const overlapping=c.run('lock-acquire-new',run);assert.notEqual(overlapping.status,0);assert.equal(await ended,0);assert.ok(!existsSync(c.lock));assert.equal(c.run('lock-acquire-new',run).status,0);
+});
+
+test('新认领部分写入失败不发布无标记锁，claim保留且不能重试',t=>{
+ const c=setup(t),lib=new URL('../phone-lock-lib.sh',import.meta.url).pathname,helper=new URL('../phone-lock-helper.py',import.meta.url).pathname;
+ const code=`source "$1"; PHONE_LOCK_HELPER="$2"; PYTHON_BIN="$3"; LOCK_ROOT="$TEST_DIR/tmp/locks"; LOCK_DIR="$LOCK_ROOT/SER1.lock"; SERIAL=SER1
+ normalize_run_id(){ builtin print -r -- "$1"; }; require_run_id(){ :; }; die(){ builtin print -u2 -- "$*"; exit 1; }
+ typeset -i writes=0
+ print(){ (( writes+=1 )); (( writes != 2 )) || return 1; builtin print "$@"; }
+ lock_acquire qiumi-a1234567-1791427263848 fresh`;
+ const r=spawnSync('zsh',['-c',code,'test',lib,helper,python],{env:c.env,encoding:'utf8'});
+ assert.notEqual(r.status,0);assert.ok(!existsSync(c.lock),'部分写入不能留下可被旧回收器认领的锁');
+ assert.ok(existsSync(join(c.dir,'tmp','locks','standalone-claims','SER1','qiumi-a1234567-1791427263848')));
+ assert.notEqual(c.run('lock-acquire-new','qiumi-a1234567-1791427263848').status,0);assert.equal(c.actions(),'');
 });

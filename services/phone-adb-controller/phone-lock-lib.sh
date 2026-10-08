@@ -19,6 +19,8 @@ lock_acquire() {
   require_run_id "$1"
   /bin/mkdir -p "$LOCK_ROOT"
   if [[ -d "$LOCK_DIR" ]]; then
+    [[ ! -f "$LOCK_DIR/standalone_review_required" ]] || die 'standalone lock requires verified cleanup; adoption and stale reclaim refused'
+    [[ "${2:-compatible}" != fresh ]] || die 'fresh acquisition refused: existing lock must not be adopted or reclaimed'
     [[ -r "$LOCK_DIR/owner" ]] && owner="$(<"$LOCK_DIR/owner")"
     if same_run_lock "$owner" "$run"; then
       print -- "lock=held owner=$owner idempotent=true"
@@ -31,24 +33,43 @@ lock_acquire() {
       die "lock is held by another run: $owner age=$(lock_age)s/ttl=${LOCK_TTL_SECONDS}s"
     fi
   fi
-  /bin/mkdir "$LOCK_DIR" || die 'could not acquire device lock'
-  print -r -- "$run" > "$LOCK_DIR/owner"
-  /bin/date +%s > "$LOCK_DIR/acquired_at"
-  if [[ "${DOUYIN_LOCK_PID:-}" == <-> ]]; then print -r -- "$DOUYIN_LOCK_PID" > "$LOCK_DIR/pid"; fi
+  if [[ "${2:-compatible}" == fresh ]]; then
+    "$PYTHON_BIN" "$PHONE_LOCK_HELPER" record-claim "$LOCK_ROOT/standalone-claims/$SERIAL/$run" "$run" || die 'standalone run already claimed or claim storage unavailable'
+    local staging
+    staging="$(/usr/bin/mktemp -d "$LOCK_ROOT/.standalone-stage.XXXXXXXX")" || die 'claim retained: staging unavailable'
+    if ! { print -r -- "$run" > "$staging/standalone_review_required" &&
+           print -r -- "$run" > "$staging/owner" &&
+           /bin/date +%s > "$staging/acquired_at"; }; then
+      /bin/rm -rf "$staging"
+      die 'claim retained: incomplete lock preparation'
+    fi
+    /bin/mv "$staging" "$LOCK_DIR" || { /bin/rm -rf "$staging"; die 'claim retained: lock publication failed'; }
+  else
+    /bin/mkdir "$LOCK_DIR" || die 'could not acquire device lock'
+    print -r -- "$run" > "$LOCK_DIR/owner"
+    /bin/date +%s > "$LOCK_DIR/acquired_at"
+    if [[ "${DOUYIN_LOCK_PID:-}" == <-> ]]; then print -r -- "$DOUYIN_LOCK_PID" > "$LOCK_DIR/pid"; fi
+  fi
   print -- "lock=acquired owner=$run"
 }
 lock_release() {
   local run="$(normalize_run_id "$1")" owner
   require_run_id "$1"
   [[ -r "$LOCK_DIR/owner" ]] || { print -- 'lock=free'; return 0; }
+  [[ ! -f "$LOCK_DIR/standalone_review_required" || "${2:-compatible}" == exact ]] || die 'standalone lock requires exact verified release'
   owner="$(<"$LOCK_DIR/owner")"
-  same_run_lock "$owner" "$run" || die "refusing to release lock owned by another run: $owner"
+  if [[ "${2:-compatible}" == exact ]]; then
+    "$PYTHON_BIN" "$PHONE_LOCK_HELPER" owner-check "$LOCK_DIR/owner" "$1" || die "refusing exact release: owner changed to $owner"
+  else
+    same_run_lock "$owner" "$run" || die "refusing to release lock owned by another run: $owner"
+  fi
   /bin/rm -rf "$LOCK_DIR"
   print -- "lock=released owner=$run"
 }
 lock_cleanup() {
   # wrapper 同 run 前缀并非退出所有权凭证；以精确 owner+PID 复验。
   local expected="$1" expected_pid="$2"
+  [[ ! -f "$LOCK_DIR/standalone_review_required" ]] || die 'standalone lock cannot use wrapper cleanup'
   [[ -r "$LOCK_DIR/owner" && -r "$LOCK_DIR/pid" ]] || return 0
   [[ "$(<"$LOCK_DIR/owner")" == "$expected" && "$(<"$LOCK_DIR/pid")" == "$expected_pid" ]] || {
     print -u2 -- 'lock cleanup skipped: ownership changed'; return 0
@@ -62,6 +83,9 @@ lock_reap() {
   local owner reason
   [[ -r "$LOCK_DIR/owner" ]] || { print -- 'lock=free'; return 0; }
   owner="$(<"$LOCK_DIR/owner")"
+  if [[ -f "$LOCK_DIR/standalone_review_required" ]]; then
+    print -- "lock=preserved owner=$owner reason=standalone-review-required"; return 0
+  fi
   if ! lock_is_stale || lock_pid_live; then
     print -- "lock=preserved owner=$owner reason=fresh-or-live-pid"; return 0
   fi
@@ -109,14 +133,21 @@ phone_lock_command() {
   if [[ "$cmd" != 'with-lock' && "$cmd" != 'lock-status' && "${DOUYIN_LOCK_GUARDED:-}" != "$SERIAL:$cmd" ]]; then
     exec "$PYTHON_BIN" "$PHONE_LOCK_HELPER" guard "$LOCK_ROOT/${SERIAL}.guard" "$SERIAL" "$cmd" "$PHONE_CTL" "$PROFILE" "${@:2}"
   fi
+  if [[ "$cmd" != 'with-lock' && "$cmd" != 'lock-status' ]]; then
+    "$PYTHON_BIN" "$PHONE_LOCK_HELPER" guard-check "$LOCK_ROOT/${SERIAL}.guard" || die 'guard ownership could not be verified'
+  fi
   case "$cmd" in
     with-lock) shift; with_lock "$@";;
     lock-acquire) [[ "$#" == 2 ]] || die 'usage: lock-acquire OWNER'; lock_acquire "$2";;
+    lock-acquire-new) [[ "$#" == 2 ]] || die 'usage: lock-acquire-new OWNER'; lock_acquire "$2" fresh;;
     lock-release) [[ "$#" == 2 ]] || die 'usage: lock-release OWNER'; lock_release "$2";;
+    lock-release-exact) [[ "$#" == 2 ]] || die 'usage: lock-release-exact OWNER'; lock_release "$2" exact;;
     lock-status)
       [[ "$#" == 1 ]] || die 'usage: lock-status'
       if [[ -r "$LOCK_DIR/owner" ]]; then
-        if lock_is_stale && ! lock_pid_live; then
+        if [[ -f "$LOCK_DIR/standalone_review_required" ]] && lock_is_stale; then
+          print -- "lock=stale owner=$(<"$LOCK_DIR/owner") age=$(lock_age)s stale=true reclaimable=false ttl=${LOCK_TTL_SECONDS}s reason=standalone-review-required"
+        elif lock_is_stale && ! lock_pid_live; then
           print -- "lock=stale owner=$(<"$LOCK_DIR/owner") age=$(lock_age)s stale=true reclaimable=true ttl=${LOCK_TTL_SECONDS}s"
         else
           print -- "lock=held owner=$(<"$LOCK_DIR/owner") age=$(lock_age)s stale=false reclaimable=false ttl=${LOCK_TTL_SECONDS}s"
@@ -126,7 +157,11 @@ phone_lock_command() {
       [[ "$#" == 2 ]] || die 'usage: lock-refresh OWNER'
       require_run_id "$2"
       [[ -r "$LOCK_DIR/owner" ]] || die 'lock is not held; acquire it first'
-      same_run_lock "$(<"$LOCK_DIR/owner")" "$2" || die 'refusing to refresh lock owned by another run'
+      if [[ -f "$LOCK_DIR/standalone_review_required" ]]; then
+        "$PYTHON_BIN" "$PHONE_LOCK_HELPER" owner-check "$LOCK_DIR/owner" "$2" || die 'refusing exact standalone owner renewal'
+      else
+        same_run_lock "$(<"$LOCK_DIR/owner")" "$2" || die 'refusing to refresh lock owned by another run'
+      fi
       /bin/date +%s > "$LOCK_DIR/acquired_at"
       print -- "lock=refreshed owner=$(<"$LOCK_DIR/owner") ttl=${LOCK_TTL_SECONDS}s";;
     lock-reap) [[ "$#" == 1 ]] || die 'usage: lock-reap'; lock_reap;;
