@@ -87,3 +87,11 @@ test('暂停触达的清场标记skipped，保留partial而不伪造手机清场
  assert.equal(result.status,'partial');assert.equal(result.results[1].status,'skipped');
  assert.equal(calls,0);assert.deepEqual(verified,[]);
 });
+
+test('部分取链失败必须把活动记partial，不能把部分结果记completed',async()=>{
+ const {runWorkflow}=await import('../leadgen-workflow.mjs');let next=0;
+ const r=await runWorkflow({activities:[{key:'write_videos'},{key:'qualification'},{key:'cleanup'}],context:{},
+ handlers:{write_videos:async()=>({status:'partial',persisted:1,failures:[{reason:'copy_failed'}]}),qualification:async()=>{next++;},cleanup:async()=>({status:'skipped',no_lock:true})},
+ commander:async()=>({action:'continue',reason:'保留部分失败证据'}),record:async()=>{},verify:async()=>({verified:true})});
+ assert.equal(r.status,'partial');assert.equal(r.results[0].status,'partial');assert.equal(next,0);
+});
