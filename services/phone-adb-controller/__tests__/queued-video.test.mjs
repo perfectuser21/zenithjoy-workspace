@@ -42,7 +42,7 @@ print 'QUAL_RESULT {"verdict":"pending","kind":"api_error"}'
 test('queued collection deep-opens and independently verifies identity before comments',()=>{
  const r=run('collection');assert.equal(r.status,0,r.stderr);
  assert.ok(r.stdout.includes('LEAD\t甲\tperson123\tpersonal\t咨询价格'));
- assert.ok(r.stdout.includes('https://www.douyin.com/user/a'));
+ assert.equal(r.stdout.split('\n').find(line=>line.startsWith('LEAD\t')).split('\t')[10],'https://www.douyin.com/user/a');
  assert.deepEqual(r.calls.slice(0,4),['lock-refresh','open-video','current-video-link','open-comments']);
  assert.ok(!r.calls.some(c=>c.startsWith('lock-acquire')||c==='lock-release'));
 });
