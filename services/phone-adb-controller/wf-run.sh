@@ -120,7 +120,7 @@ export WFR_STEP_SPEC="$WFR_RUN_DIR/step-dod.json"
 # 发布绑定ACK必须先于控制塔、escort与设备动作；失败保留本地固定请求。
 export WFR_HOSTKEY="$HOSTKEY"
 WF_RT_ERR=$(mktemp -t wfrt.XXXXXX)
-if ! WF_BIND_EXPORTS=$(bash "$WFR" bind-run 2>"$WF_RT_ERR"); then
+if ! WF_BIND_EXPORTS=$(wf_bind_run "$WF_RT_ERR"); then
   WHY=$(wf_runtime_why "$WF_RT_ERR"); rm -f "$WF_RT_ERR"
   log "拒跑: 运行发布绑定未确认: $WHY"; print -u2 -- "拒跑: 运行发布绑定未确认: $WHY"
   exit 1

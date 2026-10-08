@@ -235,6 +235,9 @@ TICK_LOG_OFF=$(wc -l < $LOG 2>/dev/null | tr -d ' ')   # 9032cdad: 步骤 DoD �
 TICK_BUDGET=1500
 SENDS_THIS_TICK=0
 ORDERS_PICKED=0; BLOCKED_ORDERS=0   # 6b133a81 触达进账本: outreach 工件闭集 orders_picked/messages_sent/requeued/blocked_orders
+# 触达回传 Brain(发私信 span 的 evidence): 送达 sent / 受限 restricted+rate_limited / 失败 failed+device_ui
+DELIVERED=0; RESTRICTED=0; FAILED=0
+TICK_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 # CONSEC_CAP_HITS: 连续撞上限计数器,完整生命周期都在本文件里——这里初始化为0，
 # 命中当日上限的分支里 +1 并在连续两次时收工(见下方"撞上限"分支)，只要有一次
 # 没撞上限(说明选单器换到了另一个号)就立刻重置回0(见本循环体末尾)。
@@ -487,6 +490,11 @@ while (( SECONDS - TICK_BODY_START < TICK_BUDGET )); do
 
   [[ "$ORDER_RESULT" == "sent" || "$ORDER_RESULT" == "restricted" ]] && SENDS_THIS_TICK=$(( SENDS_THIS_TICK + 1 ))
   [[ "$ORDER_RESULT" == "failed" || "$ORDER_RESULT" == "rate_limited" ]] && BLOCKED_ORDERS=$(( BLOCKED_ORDERS + 1 ))
+  [[ "$ORDER_RESULT" == "sent" ]] && DELIVERED=$(( DELIVERED + 1 ))
+  case "$ORDER_RESULT" in
+    restricted|rate_limited) RESTRICTED=$(( RESTRICTED + 1 ));;
+    failed|device_ui) FAILED=$(( FAILED + 1 ));;
+  esac
 
   # 本单已有结果(不是因为设备被占用而收工整个tick),继续取下一单前随机停顿——
   # 一个tick里可能连发好几条,但不是不停顿地机器人式连发。
@@ -503,7 +511,8 @@ outreach_ledger(){
   [[ "${WFR_DISABLED:-0}" != 1 && -x "$wfr_sh" ]] || return 0
   req=$(( ORDERS_PICKED - SENDS_THIS_TICK - BLOCKED_ORDERS )); (( req < 0 )) && req=0
   out=$(WFR_LOG_FILE=$LOG WFR_LOG_FROM=${TICK_LOG_OFF:-0} bash "$wfr_sh" outreach-run "out$(date +%m%d%H%M)" "${OUTREACH_PROFILES[1]}" "" "$(hostname -s)" "tick picked=$ORDERS_PICKED sent=$SENDS_THIS_TICK" \
-    "{\"orders_picked\":$ORDERS_PICKED,\"messages_sent\":$SENDS_THIS_TICK,\"requeued\":$req,\"blocked_orders\":$BLOCKED_ORDERS}" 2>>$LOG)
+    "{\"orders_picked\":$ORDERS_PICKED,\"messages_sent\":$SENDS_THIS_TICK,\"requeued\":$req,\"blocked_orders\":$BLOCKED_ORDERS}" \
+    "{\"orders_picked\":$ORDERS_PICKED,\"delivered\":$DELIVERED,\"restricted\":$RESTRICTED,\"failed\":$FAILED,\"requeued\":$req}" "$TICK_STARTED_AT" 2>>$LOG)
   log "账本(触达): $(print -r -- "$out" | tr '\n' ' ' | head -c 200)"
   if print -r -- "$out" | grep -q '^WFR_GATE_ALERT=1'; then
     notify_once "outreach-gate" "获客触达后置条件不过" "$(print -r -- "$out" | sed -n "s/^WFR_GATE_ALERT_MSG=//p")" 3600

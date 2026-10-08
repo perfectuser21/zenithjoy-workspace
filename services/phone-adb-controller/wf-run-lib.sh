@@ -39,6 +39,24 @@ wf_read_sources(){
   grep -vE '^[[:space:]]*(#|$)' "$1" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' > "$2"
   [[ -s "$2" ]]
 }
+# wf_bind_run ERR_FILE —— 运行发布绑定(bind-run)。10-06 22 点几批全部拒跑: GET /api/brain/runs/<run>/definition curl=28,
+#   一次网络超时就放弃整批。只对网络超时类失败(curl 28 超时 / 52 空应答 / 56 收包中断)按 WF_BIND_RETRY_DELAYS 退避重试
+#   (默认 30/60/120 秒);连不上(7)、解析不了(6)这类配置/地址错误重试也没用,和 409 冲突、发布版本不符、本地校验失败一样立即返回
+#   ——不绕过发布版本校验。bind-run 幂等: 同一 attempt 重发同一份固定请求。
+#   stdout = bind-run 的导出行;失败时 ERR_FILE 留最后一次原因(调用方照旧脱敏写日志)。
+wf_bind_run(){
+  local err="$1" out d
+  local -a delays; delays=(${=${WF_BIND_RETRY_DELAYS:-30 60 120}})
+  for d in "" $delays; do
+    if [[ -n "$d" ]]; then
+      log "运行发布绑定网络超时,${d}s 后重试: $(wf_runtime_why "$err")"
+      /bin/sleep "$d"
+    fi
+    if out=$(bash "$WFR" bind-run 2>"$err"); then print -r -- "$out"; return 0; fi
+    grep -qE 'curl=(28|52|56)([^0-9]|$)' "$err" || return 1
+  done
+  return 1
+}
 wfr_on(){ [[ "${WFR_DISABLED:-0}" != "1" && -x "$WFR" ]] }
 finalize_needed(){ wfr_on && [[ -n "${WFR_RUN_ID:-}" ]] }   # 只有 wfr init 跑过(导出了 WFR_RUN_ID)才需要收工记账
 # wfr_bootstrap: TAG P WF PUSH SERIAL HOSTKEY —— init 后立刻 export 再 enter,子进程(bash "$WFR" / zsh "$BATCH2")

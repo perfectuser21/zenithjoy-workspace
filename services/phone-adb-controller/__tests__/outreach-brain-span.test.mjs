@@ -56,7 +56,7 @@ test('账本 outreach-run 不再走绑定回调/绑定 span，改发 outreach-sp
   const wfr = readFileSync(join(SRC, 'workflow-result.sh'), 'utf8');
   const block = wfr.slice(wfr.indexOf('  outreach-run)'), wfr.indexOf('  finalize)'));
   assert.match(block, /WFR_NO_BINDING=1/);
-  assert.match(block, /outreach-span "\$WFR_RUN_ID"/);
+  assert.match(block, /outreach-span "\$WFR_RUN_ID-\$\{HOSTKEY:-unknown\}"/);
   assert.match(wfr, /brain_post\(\)\{[\s\S]*?\[\[ "\$\{WFR_NO_BINDING:-0\}" == 1 \]\] && return 0/);
   assert.match(wfr, /span_post\(\)\{[\s\S]*?\[\[ "\$\{WFR_NO_BINDING:-0\}" == 1 \]\] && return 0/);
   const tick = readFileSync(join(SRC, 'outreach-tick.sh'), 'utf8');

@@ -32,4 +32,12 @@ function isKeywordEnabled(raw) {
   return ENABLED.includes(v);   // ← 真正起作用的：不在白名单一律不跑
 }
 
-module.exports = { isKeywordEnabled, ENABLED, DISABLED };
+// 10-07 悦升串词：原来按 `k.biz.includes(BIZ) || BIZ.includes(k.biz)` 双向包含过滤，
+// 业务线为空的金诺词因 `"悦升云端".includes("") === true` 被悦升每批拿去补满词单，悦升合格率只剩 16~19%。
+// 改成精确匹配（去首尾空格）：空业务线谁都不匹配——没标业务线就别替任何一家去跑。
+function keywordMatchesBiz(kwBiz, biz) {
+  const k = String(kwBiz == null ? '' : kwBiz).trim();
+  return k !== '' && k === String(biz == null ? '' : biz).trim();
+}
+
+module.exports = { isKeywordEnabled, keywordMatchesBiz, ENABLED, DISABLED };

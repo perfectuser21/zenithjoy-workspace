@@ -1,7 +1,7 @@
 // services/phone-adb-controller/__tests__/wf-run-bind-retry.test.mjs
 //
 // 10-06 22 点几批全部拒跑：`运行发布绑定未确认: WFR_RUNTIME_ERROR Brain请求失败 GET .../api/brain/runs/<run>/definition curl=28`
-// ——一次网络超时就放弃整批。修后：bind-run 只在网络超时类失败（curl 28/7/6/35/52/56）时按退避重试（默认 30/60/120 秒），
+// ——一次网络超时就放弃整批。修后：bind-run 只在网络超时类失败（curl 28/52/56）时按退避重试（默认 30/60/120 秒），
 // 其它失败（409 冲突、发布版本不符、本地校验失败）一律不重试；不绕过发布版本校验。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

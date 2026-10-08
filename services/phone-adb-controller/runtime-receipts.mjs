@@ -65,6 +65,21 @@ export async function run(args){
     const body=[{identity_protocol:2,run_binding_id:binding.id,reference_id:a.reference.reference_id,workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,attempt_key:binding.attempt_key,enabler_call_id:null,run_id:`${e.WFR_RUN_ID}__${e.WFR_ATTEMPT||'a0'}`,occurrence_key:oc.key,workflow_id:frozen.workflow_version.payload.workflow_id,activity_id:a.reference.activity_id,step_id:null,enabler_id:null,started_at:oc.started_at,ended_at:artifact.observed_at||new Date().toISOString(),executor_kind:['qualification','scoring'].includes(stage)?'agent':'code',executor_id:e.WFR_HOSTKEY||'unknown',attempts:rescan+1,fallback:rescan>0,outcome:({completed:'pass',failed:'fail',blocked:'skipped'})[status]||'unknown',evidence:{...(status==='blocked'?{skip_reason:artifact.skip_reason||artifact.summary||artifact.reason||'stage_blocked'}:{}),activity_key:stage,stage_attempt:Number(n),word,artifact:file.split('/').at(-1),rescan_count:rescan,rescan_rate:Number(artifact.metrics?.rescan_rate||0),workflow_definition_version_id:frozen.workflow_version.id,activity_definition_version_id:a.version.id,reference_id:a.reference.reference_id,slot_key:a.reference.slot_key,sequence_no:a.reference.sequence_no,implementation_bindings:a.implementations,steps:a.version.payload.steps,runtime_snapshot_sha256:frozen.snapshot_sha256}}];
     enqueue(dir,{key:oc.key,endpoint:`${e.BRAIN_URL?.replace(/\/$/,'')}/api/brain/spans`,body});await flushReceipts(dir);return;
   }
+  if(cmd==='outreach-span'){
+    // 触达 tick 不是绑定了发布版本的运行(没有 run-definition / run_definition_bindings)：不发绑定 span，
+    // 发一条旧协议 Activity span(发私信，挂「抖音·线索触达」流程，迁移 533)，Brain 的 spans 触发器据此建/汇总 runs 行。
+    // outbox 放固定目录，前几轮没发出去的(断网/无 token)下一轮一起重发。
+    const [runId,startedAt,countsJson]=rest;const counts=JSON.parse(countsJson||'{}');
+    const n=k=>Math.max(0,Number(counts[k])||0);
+    const picked=n('orders_picked'),delivered=n('delivered'),restricted=n('restricted'),failed=n('failed');
+    const outcome=picked===0?'skipped':failed>0&&delivered===0&&restricted===0?'fail':'pass';
+    const body=[{run_id:runId,occurrence_key:`${runId}:send_dm`,workflow_id:e.WFR_OUTREACH_WORKFLOW_ID||'b1000000-0000-4000-8000-000000000104',
+      activity_id:e.WFR_OUTREACH_ACTIVITY_ID||'bb4fdc47-a543-4374-9078-8e78151b69c6',started_at:startedAt,ended_at:new Date().toISOString(),
+      executor_kind:'code',executor_id:e.WFR_HOSTKEY||'unknown',outcome,
+      evidence:{profile:e.WFR_PROFILE||'',orders_picked:picked,delivered,restricted,failed,requeued:n('requeued')}}];
+    const outboxDir=resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'outreach-outbox');
+    enqueue(outboxDir,{key:`${runId}:send_dm`,endpoint:`${e.BRAIN_URL?.replace(/\/$/,'')}/api/brain/spans`,body});await flushReceipts(outboxDir);return;
+  }
   throw Error(`未知runtime命令: ${cmd}`);
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url)))run(process.argv.slice(2)).catch(err=>{process.stderr.write(`WFR_RUNTIME_ERROR ${err.message}\n`);process.exitCode=1;});
