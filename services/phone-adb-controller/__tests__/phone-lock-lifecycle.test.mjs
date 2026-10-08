@@ -141,3 +141,28 @@ test('lock-reap device_job明确属于别机则允许回收',t=>{
  const c=setup(t);c.stale();writeFileSync(join(c.dir,'tasks.json'),JSON.stringify([{id:'other-job',status:'in_progress',task_type:'device_job',payload:{device_serial:'OTHER'}}]));
  const r=c.run('lock-reap');assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/lock=reaped/);assert.ok(!existsSync(c.lock));
 });
+
+
+test('qiumi合法a开头任务号不被当成attempt裁剪，完整原run保留', t => {
+  const c=setup(t), run='qiumi-a1234567-1791427263848';
+  const r=c.run('lock-acquire',run);
+  assert.equal(r.status,0,r.stderr);
+  assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);
+  assert.equal(c.run('lock-release',run+':a2').status,0);
+});
+test('不同运行不能以短前缀认领或释放别人的锁', t => {
+  const c=setup(t), run='qiumi-e1234567-1791427263848';
+  assert.equal(c.run('lock-acquire',run).status,0);
+  assert.notEqual(c.run('lock-acquire','qiumi').status,0);
+  assert.notEqual(c.run('lock-release','qiumi').status,0);
+  assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);
+});
+test('同原run的明确attempt阶段变体仍共享同一锁', t => {
+  const c=setup(t), run='qiumi-a1234567-1791427263848';
+  assert.equal(c.run('lock-acquire',run).status,0);
+  const second=c.run('lock-acquire',run+'-a2-cleanup-1');
+  assert.equal(second.status,0,second.stderr);
+  assert.match(second.stdout,/idempotent=true/);
+  assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);
+  assert.equal(c.run('lock-release',run+'-a3-cleanup-1').status,0);
+});
