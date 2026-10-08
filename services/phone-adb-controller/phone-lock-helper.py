@@ -21,7 +21,23 @@ def guarded():
         sys.exit(2)
     os.set_inheritable(fd, True)
     os.environ['DOUYIN_LOCK_GUARDED'] = serial + ':' + command
+    os.environ['DOUYIN_LOCK_GUARD_FD'] = str(fd)
     os.execv('/bin/zsh', ['zsh', script, '--profile', profile, command, *args])
+
+
+def verify_guard():
+    # 实际继承FD须对应本设备guard；取得同一open-description锁，父进程持续持有。
+    try:
+        fd = int(os.environ.get('DOUYIN_LOCK_GUARD_FD', ''))
+        if fd < 3:
+            raise ValueError('invalid fd')
+        actual, expected = os.fstat(fd), os.stat(sys.argv[2])
+        if (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino):
+            raise ValueError('guard file mismatch')
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (ValueError, OSError):
+        print('guard descriptor ownership is not verifiable', file=sys.stderr)
+        sys.exit(2)
 
 
 def stop_child():
@@ -129,6 +145,8 @@ def safe_to_reap():
 if __name__ == '__main__':
     if sys.argv[1] == 'guard':
         guarded()
+    elif sys.argv[1] == 'guard-check':
+        verify_guard()
     elif sys.argv[1] == 'stop':
         stop_child()
     elif sys.argv[1] == 'run':

@@ -2601,6 +2601,7 @@ if [[ -n "$LOCK_OWNER" ]]; then
   if [[ "${DOUYIN_LOCK_GUARDED:-}" != "$SERIAL:--lock-owner" ]]; then
     exec "$PYTHON_BIN" "$PHONE_LOCK_HELPER" guard "$LOCK_ROOT/${SERIAL}.guard" "$SERIAL" --lock-owner "$PHONE_CTL" "$PROFILE" "$LOCK_OWNER" "$@"
   fi
+  "$PYTHON_BIN" "$PHONE_LOCK_HELPER" guard-check "$LOCK_ROOT/${SERIAL}.guard" || die 'guard ownership could not be verified'
   [[ -r "$LOCK_DIR/owner" && "$(<"$LOCK_DIR/owner")" == "$LOCK_OWNER" ]] || die 'required lock owner does not match current lock'
   _owner_age="$(lock_age)"
   [[ "$_owner_age" == <-> ]] && (( _owner_age + 1000 < LOCK_TTL_SECONDS )) || die 'lock lease budget is insufficient'

@@ -113,6 +113,9 @@ phone_lock_command() {
   if [[ "$cmd" != 'with-lock' && "$cmd" != 'lock-status' && "${DOUYIN_LOCK_GUARDED:-}" != "$SERIAL:$cmd" ]]; then
     exec "$PYTHON_BIN" "$PHONE_LOCK_HELPER" guard "$LOCK_ROOT/${SERIAL}.guard" "$SERIAL" "$cmd" "$PHONE_CTL" "$PROFILE" "${@:2}"
   fi
+  if [[ "$cmd" != 'with-lock' && "$cmd" != 'lock-status' ]]; then
+    "$PYTHON_BIN" "$PHONE_LOCK_HELPER" guard-check "$LOCK_ROOT/${SERIAL}.guard" || die 'guard ownership could not be verified'
+  fi
   case "$cmd" in
     with-lock) shift; with_lock "$@";;
     lock-acquire) [[ "$#" == 2 ]] || die 'usage: lock-acquire OWNER'; lock_acquire "$2";;
