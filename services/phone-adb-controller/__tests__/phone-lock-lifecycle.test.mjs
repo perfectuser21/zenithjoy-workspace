@@ -203,3 +203,12 @@ test('前台动作整个期间guard阻止并发释放或易主',async t=>{
  const r=c.run('lock-release-exact',run);assert.notEqual(r.status,0);assert.match(r.stderr,/lock operation busy/);
  writeFileSync(join(c.dir,'proceed'),'1');assert.equal(await ended,0);assert.equal(c.run('lock-release-exact',run).status,0);
 });
+
+for(const command of ['close-app','lock-release-exact']) test(`环境guard字符串不能伪造${command}的真实互斥`,t=>{
+ const c=setup(t),run='qiumi-a1234567-1791427263848';c.run('lock-acquire',run);
+ const label=command==='close-app'?'--lock-owner':command;
+ const args=command==='close-app'?['--lock-owner',run,command]:[command,run];
+ const r=spawnSync('zsh',[script,'--profile','p1',...args],{env:{...c.env,DOUYIN_LOCK_GUARDED:'SER1:'+label},encoding:'utf8'});
+ assert.notEqual(r.status,0);assert.match(r.stderr,/guard.*descriptor|guard.*ownership/);
+ assert.equal(c.actions(),'');assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);
+});
