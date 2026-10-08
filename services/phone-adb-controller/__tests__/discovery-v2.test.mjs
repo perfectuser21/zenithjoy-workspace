@@ -68,6 +68,7 @@ test("部署清单: 新库进执行机冻结目录,历史标题脚本进 mmv", (
 // 第 n 屏卡片 = 标题n-1..n-4,且第 n 屏(n>0)第 1 张重复上一屏最后一张(翻屏有重叠,必须按标题去重)。
 // back-to-results: BTR_RESEARCH=1 → 兜底重搜(屏号归 0),否则原地返回(屏号不变);BTR_JUMP=1 → 返回后列表漂到第 5 屏。
 // 顶部再往下拉 = 下拉刷新(10-08 真机 auto10081810): 列表换成别的内容,直到重新搜索。
+// RESET_SHIFT=1: 发现之后每次重新搜索,列表整体后移一屏(10-08 真机 auto10081903: 同词同排序重搜后首屏卡片组合变了)。
 const FAKE_GRID_CTL = `#!/bin/sh
 shift; shift
 echo "$*" >> "$HOME/ctl.log"
@@ -80,11 +81,11 @@ case "$1" in
   lock-acquire) exit 0;;
   lock-release) printf 'lock=released owner=T\\n'; exit 0;;
   lock-refresh) printf 'lock=refreshed owner=T ttl=1800s\\n'; exit 0;;
-  open-search) echo 0 > "$HOME/screen"; rm -f "$HOME/refreshed"; exit 0;;
+  open-search) echo 0 > "$HOME/screen"; rm -f "$HOME/refreshed" "$HOME/related"; echo x >> "$HOME/opens"; exit 0;;
   search-grid-scroll) if [ "$3" = down ]; then if [ "$S" -gt 0 ]; then S=$((S-1)); else touch "$HOME/refreshed"; fi; else S=$((S+1)); fi; echo $S > "$HOME/screen"; exit 0;;
-  search-video-cards) [ -f "$HOME/refreshed" ] && { printf '100\\t10\\t00:30\\t刷新后的别的视频\\t某人\\n'; exit 0; }; [ "$S" -ge \${NSCREENS:-9} ] && exit 0; cards "$S"; exit 0;;
+  search-video-cards) [ -f "$HOME/related" ] && exit 0; [ -f "$HOME/refreshed" ] && { printf '100\\t10\\t00:30\\t刷新后的别的视频\\t某人\\n'; exit 0; }; if [ "$RESET_SHIFT" = 1 ] && [ "$(wc -l < "$HOME/opens" 2>/dev/null || echo 0)" -ge 2 ]; then [ "$S" -eq 0 ] && { printf '100\\t5\\t00:30\\t置顶新视频\\t某人\\n'; exit 0; }; S=$((S-1)); fi; [ "$S" -ge \${NSCREENS:-9} ] && exit 0; cards "$S"; exit 0;;
   current-video-link) printf 'excluded_non_video=true\\n'; exit 0;;
-  back-to-results) [ "$BTR_JUMP" = 1 ] && echo 5 > "$HOME/screen"; if [ "$BTR_RESEARCH" = 1 ]; then echo 0 > "$HOME/screen"; printf 'back_to_results=1 recovered_via=research\\n'; else printf 'back_to_results=1 backs=1\\n'; fi; exit 0;;
+  back-to-results) [ "$BTR_RELATED" = 1 ] && { touch "$HOME/related"; exit 1; }; [ "$BTR_JUMP" = 1 ] && echo 5 > "$HOME/screen"; if [ "$BTR_RESEARCH" = 1 ]; then echo 0 > "$HOME/screen"; printf 'back_to_results=1 recovered_via=research\\n'; else printf 'back_to_results=1 backs=1\\n'; fi; exit 0;;
 esac
 exit 0`;
 // 假 ssh: fetch-seen-titles 回历史标题(第 0 屏第 2 张见过);其他 ssh 静默
@@ -187,7 +188,7 @@ test("v2 采收: 第 1 屏的卡先翻屏再按标题重新定位坐标;兜底�
   assert.doesNotMatch(r.stderr, /重扫次数超限/);
 });
 
-test("v2 采收: 返回后列表漂移(当前屏和下一屏都找不到) → 重新搜索、翻到记下的屏号再找,不整词作废", { skip: SKIP }, () => {
+test("v2 采收: 返回后列表漂移(当前屏和下一屏都找不到) → 重新搜索、从顶部逐屏找,不整词作废", { skip: SKIP }, () => {
   const { home, env } = setup({ NSCREENS: "2", BTR_JUMP: "1" });
   const r = runHK(env);
   assert.equal(r.status, 0, r.stderr.slice(-3000));
@@ -233,4 +234,60 @@ test("名单外的号: harvest-keyword 不拉历史标题、不预去重", { ski
   assert.doesNotMatch(read(join(home, "ssh.log")), /fetch-seen-titles/);
   assert.doesNotMatch(r.stderr, /发现漏斗/);
   assert.equal(ctlLines(home).filter((l) => l.startsWith("tap-evidence ")).length, 4);
+});
+
+
+test("v2 采收: 重搜后列表后移一屏且返回位置漂移，逐屏扫描仍点开全部候选", { skip: SKIP }, () => {
+  const { home, env } = setup({ NSCREENS: "4", RESET_SHIFT: "1", BTR_JUMP: "1" });
+  const r = runHK(env);
+  assert.equal(r.status, 0, r.stderr.slice(-3000));
+  assert.deepEqual(tappedTitles(home), ["标题0-1", "标题0-4", ...[1,2,3].flatMap(n => [2,3,4].map(k => `标题${n}-${k}`))]);
+  assert.doesNotMatch(r.stderr, /卡片定位失败/);
+});
+
+test("v2 采收: 返回相关搜索页，重搜恢复视频tab和最新排序后继续", { skip: SKIP }, () => {
+  const { home, env } = setup({ NSCREENS: "2", BTR_RELATED: "1", RESET_SHIFT: "1" });
+  const r = runHK(env);
+  assert.equal(r.status, 0, r.stderr.slice(-3000));
+  assert.deepEqual(tappedTitles(home), ["标题0-1", "标题0-4", "标题1-2", "标题1-3", "标题1-4"]);
+  assert.doesNotMatch(r.stderr, /卡片定位失败/);
+});
+
+
+function probeLocator(script, extra = {}) {
+  const { home, env } = setup(extra);
+  const r = spawnSync(ZSH, ["-c", `TAG=T; source "$1"; C="$HOME/.local/bin/douyin-phone-adb"; P=P; KW=kw; LOC=unlimited; DV2_CUR=0; log(){ print -u2 -- "$*"; }; ${script}`, "probe", join(SRC, "harvest-keyword-lib.sh")], { encoding: "utf8", env, timeout: 10000 });
+  return { home, r };
+}
+
+test("v2 定位: 候选消失时扫描有界且清除旧坐标，不点击其他视频", { skip: SKIP }, () => {
+  const { home, r } = probeLocator('X=999; Y=999; dv2_locate_card 消失的标题 1 E; rc=$?; print "$rc:$X:$Y"');
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), "1::");
+  const log = ctlLines(home);
+  assert.equal(log.filter(l => l.startsWith("search-video-cards ")).length, 7, "当前三屏 + 重搜第0至3屏");
+  assert.equal(log.filter(l => l.startsWith("open-search ")).length, 1);
+  assert.ok(!log.some(l => l.startsWith("tap-evidence ") || l.endsWith(" down")));
+});
+
+test("v2 定位: 同标题不同作者不混用坐标", { skip: SKIP }, () => {
+  const { r } = probeLocator('dv2_locate_card 标题0-1 0 E 别的作者; print "$?"');
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), "1");
+});
+
+test("v2 定位: 扫描中收到停止信号，停止翻屏和重搜", { skip: SKIP }, () => {
+  const { home, r } = probeLocator('wf_stop_requested(){ [[ -f "$HOME/ctl.log" ]]; }; dv2_locate_card 消失的标题 6 E; print "$?"');
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), "1");
+  assert.deepEqual(ctlLines(home), ["search-video-cards E-loc0"]);
+});
+
+test("v2 定位: 每词或采集预算耗尽，不再读卡或翻屏", { skip: SKIP }, () => {
+  for (const budget of ['DV2_WORD_SECONDS=0; COLLECT_BUDGET=0', 'DV2_WORD_SECONDS=480; COLLECT_BUDGET=1']) {
+    const { home, r } = probeLocator(`COLLECT_T0=$(( $(date +%s) - 2 )); ${budget}; dv2_locate_card 标题0-1 6 E; print "$?"`);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout.trim(), "1");
+    assert.deepEqual(ctlLines(home), []);
+  }
 });

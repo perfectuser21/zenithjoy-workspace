@@ -192,9 +192,13 @@ while (( i < ${#CARD_ARR[@]} )); do
   log "视频$i: ${TITLE:0:40}"
   wr note --profile "$P" "视频$i: ${TITLE:0:40}"
   if (( DV2 )); then
-    # 发现时记的是第几屏;翻到那一屏按标题重新取坐标(翻屏/重搜后旧坐标不可信)
-    if ! dv2_locate_card "$TITLE" "$(print -- "$CARDLINE" | cut -f6)" "$TAG-v$i"; then
-      log "  卡片定位失败(翻屏后找不到这条标题),跳过"
+    # 按标题+作者逐屏扫描当前坐标，发现时屏号仅作重搜扫描范围提示
+    if ! dv2_locate_card "$TITLE" "$(print -- "$CARDLINE" | cut -f6)" "$TAG-v$i" "$(print -- "$CARDLINE" | cut -f5)"; then
+      if ! dv2_scan_allowed; then
+        log "  定位期间预算到点或收到停止信号,本词收工"
+        break
+      fi
+      log "  卡片定位失败(扫描范围内找不到这条标题和作者),跳过"
       continue
     fi
     print -r -- "$(dv2_title_key "$TITLE")	$(print -- "$CARDLINE" | cut -f5)" >> "$DV2_RUN"
