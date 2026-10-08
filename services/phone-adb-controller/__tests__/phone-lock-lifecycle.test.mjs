@@ -166,3 +166,16 @@ test('同原run的明确attempt阶段变体仍共享同一锁', t => {
   assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);
   assert.equal(c.run('lock-release',run+'-a3-cleanup-1').status,0);
 });
+
+test('独立清理用原子精确释放：回读后owner变化不能释放新锁', t => {
+  const c=setup(t), run='qiumi-e1234567-1791427263848';
+  assert.equal(c.run('lock-acquire',run).status,0);
+  writeFileSync(join(c.lock,'owner'),run+'-a2-preflight-1\n');
+  assert.notEqual(c.run('lock-release-exact',run).status,0);
+  assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run+'-a2-preflight-1');
+  writeFileSync(join(c.lock,'owner'),run+'\n');
+  const r=c.run('lock-release-exact',run);
+  assert.equal(r.status,0,r.stderr);
+  assert.match(r.stdout,new RegExp('lock=released owner='+run));
+  assert.ok(!existsSync(c.lock));
+});
