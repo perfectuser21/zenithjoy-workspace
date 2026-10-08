@@ -4,7 +4,7 @@
 const fs = require("fs");
 // 判定抽到 keyword-enabled-lib.js：本文件顶层读凭据 + 顶层发网络请求，
 // 不能被测试 require（第一版这么做，CI 直接 ENOENT 报红）。
-const { isKeywordEnabled } = require("./keyword-enabled-lib.js");
+const { isKeywordEnabled, keywordMatchesBiz } = require("./keyword-enabled-lib.js");
 const cfg = JSON.parse(fs.readFileSync("/Users/administrator/.openclaw/clawdbot.json"));
 const acc = cfg.channels.feishu.accounts.jinoshengyuan;
 const BIZ = process.argv[2] || "AI人工智能训练师";
@@ -33,7 +33,7 @@ function txt(v) { return Array.isArray(v) ? v.map(x => x.text || x).join("") : (
       videos: Number(f["搜索视频数"]) || 0,
       lastTest: txt(f["最后测试时间"]),
     };
-  }).filter(k => k.word && isKeywordEnabled(k.enabled) && (!BIZ || k.biz.includes(BIZ) || BIZ.includes(k.biz)));
+  }).filter(k => k.word && isKeywordEnabled(k.enabled) && keywordMatchesBiz(k.biz, BIZ));
   // 效率分 = 线索数/轮次近似(视频数/4≈轮次); 未测词(lastTest空)优先探索
   cand.sort((a, b) => {
     const ea = a.videos ? a.leads / (a.videos / 4) : (a.lastTest ? 0 : 99);

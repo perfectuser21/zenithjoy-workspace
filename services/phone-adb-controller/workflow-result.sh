@@ -121,6 +121,8 @@ apply_gate(){
 # result 直接从校验通过的工件派生({stage,stage_status,metrics,evidence,probes}),Brain 侧 task_runs.result 原样保留。
 brain_post(){
   local run_id="$1" status="$2" stage="$3" f="${4:-}" extra="${5:-[]}" probes="${6:-[]}" missing="" body out code
+  # 没有绑定的运行(触达 tick)没有 Brain 任务身份,回调必然 skipped——不发,由 outreach-span 回传
+  [[ "${WFR_NO_BINDING:-0}" == 1 ]] && return 0
   [[ -n "${BRAIN_URL:-}" ]] || missing="$missing BRAIN_URL"
   [[ -n "${WFR_BRAIN_TASK_ID:-}" ]] || missing="$missing WFR_BRAIN_TASK_ID"
   if [[ -n "$missing" ]]; then warn "brain callback skipped: missing$missing (run_id=$run_id)"; return 0; fi
@@ -140,6 +142,8 @@ brain_post(){
 # Activity身份、版本、位置只来自run-definition；mark-start代表一次真实执行，重发复用outbox正文。
 span_mark_start(){ "$WFR_NODE" "$WFR_RUNTIME_MJS" mark-start "$1" "${2:-1}" || warn "span mark-start failed"; }
 span_post(){
+  # 绑定 span 要 run-definition;没有绑定的运行(触达 tick)发了只会 `paths[0] undefined`——不发,由 outreach-span 回传
+  [[ "${WFR_NO_BINDING:-0}" == 1 ]] && return 0
   [[ -n "${BRAIN_URL:-}" ]] || { warn "span skipped: missing BRAIN_URL"; return 0; }
   "$WFR_NODE" "$WFR_RUNTIME_MJS" span "$@" || warn "span evidence pending/blocked; business artifact retained"
 }
@@ -307,7 +311,8 @@ case "$cmd" in
   outreach-run)
     # 6b133a81 触达进账本: 每个 tick 一个 run(social-keyword-leadgen-outreach-<TAG>),写 outreach 工件并读回 out_no_stuck_inflight
     TAG="$1"; P="$2"; SERIAL="${3:-}"; HOSTKEY="${4:-}"; SUMMARY="${5:-outreach tick}"; METRICS="${6:-}"
-    WFR_RUN_ID="social-keyword-leadgen-outreach-$TAG"; WFR_HASH=""
+    COUNTS="${7:-}"; [[ -n "$COUNTS" ]] || COUNTS='{}'; STARTED="${8:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+    WFR_RUN_ID="social-keyword-leadgen-outreach-$TAG"; WFR_HASH=""; WFR_NO_BINDING=1
     WFR_RUN_DIR="$WFR_HOME/ledger/$WFR_RUN_ID"; WFR_ART_DIR="$WFR_HOME/workflow-runs"; WFR_TAG="$TAG"; WFR_PROFILE="$P"; WFR_ATTEMPT=a1
     mkdir -p "$WFR_RUN_DIR" "$WFR_ART_DIR" 2>/dev/null || warn "mkdir failed errno: $(mkdir -p "$WFR_RUN_DIR" "$WFR_ART_DIR" 2>&1)"
     led1 init --run-id "$WFR_RUN_ID" --profile "$P" --serial "$SERIAL" --hostkey "$HOSTKEY" >/dev/null
@@ -315,6 +320,9 @@ case "$cmd" in
     if [[ -n "${WFR_SCP_TARGET:-}" && -n "${WFR_LAST_ARTIFACT:-}" ]]; then
       scp -q -o ConnectTimeout=20 "$WFR_LAST_ARTIFACT" "$WFR_SCP_TARGET" 2>/dev/null || warn "scp to MMV failed; artifact kept locally"
     fi
+    # 触达结果回 Brain：一条不需要绑定的发私信 span(送达/受限/失败数在 evidence)，Brain 据此建 runs 行。
+    # run_id 带机器名：m4/m1 的 tick 同一分钟起跑，TAG 相同，不带会在 Brain 撞成同一个 run(第二台 409)
+    WFR_HOSTKEY="$HOSTKEY" WFR_PROFILE="$P" "$WFR_NODE" "$WFR_RUNTIME_MJS" outreach-span "$WFR_RUN_ID-${HOSTKEY:-unknown}" "$STARTED" "$COUNTS" || warn "outreach span pending in outbox (run_id=$WFR_RUN_ID)"
     echo "WFR_RUN_ID=$WFR_RUN_ID"; gate_report;;
   finalize)
     if not_initialized; then
