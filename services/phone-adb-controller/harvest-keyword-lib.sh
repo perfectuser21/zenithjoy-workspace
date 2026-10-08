@@ -37,47 +37,69 @@ qual_remote(){
 }
 # qual_field JSON行 键 → 值(字符串或 true/false)
 qual_field(){ print -r -- "$1" | sed -n "s/.*\"$2\":\"\{0,1\}\([^\",}]*\).*/\1/p" | head -1; }
-# dv2_locate_card 标题 屏号 证据前缀 —— 发现改造 v2: 从当前屏(DV2_CUR)往下翻到发现时记的屏号,在当屏卡片里按标题
-# 取坐标写进 X/Y。翻屏距离不保证整屏对齐,当屏找不到再多翻一屏;仍找不到返回 1(调用方跳过本卡,不拿旧坐标瞎点)。
-# 10-08 真机 auto10081810: 列表位置会漂(返回后停在别的屏/下拉刷新重排),当屏+下一屏都找不到时重新搜索回到确定的顶部
-# (搜索词+视频tab+最新排序),翻到记下的屏号再找一轮;仍找不到才跳过本卡。
-dv2_goto_screen() {
-  local scr="$1" evid="$2"
-  while (( DV2_CUR < scr )); do
-    $C --profile "$P" search-grid-scroll "${evid}-up$DV2_CUR" up >/dev/null 2>&1 || return 1
-    DV2_CUR=$((DV2_CUR+1)); nap 2
-  done
+# v2 卡片屏号只作扫描范围提示；重搜/返回后的列表位置不保证稳定。
+# 定位先扫描当前屏及后两屏，未命中则重搜，从顶部扫描到发现屏号+2。
+# 每次读卡/翻屏前检查预算与停止信号，失败时不沿用旧坐标。
+dv2_scan_allowed() {
+  wf_deadline_reached && return 1
+  wf_stop_requested && return 1
+  if [[ -n "${COLLECT_T0:-}" ]]; then
+    local elapsed=$(( $(date +%s) - COLLECT_T0 ))
+    (( elapsed >= ${DV2_WORD_SECONDS:-480} )) && return 1
+    (( ${COLLECT_BUDGET:-0} > 0 && elapsed >= COLLECT_BUDGET )) && return 1
+  fi
+  return 0
 }
-# dv2_find_card 标题 证据ID —— 当屏卡片里按标题取坐标写进 X/Y
+# dv2_find_card 标题 证据ID [作者] —— 只返回匹配卡片的当前坐标。
 dv2_find_card() {
-  local hit
-  hit="$($C --profile "$P" search-video-cards "$2" 2>/dev/null | grep -E "^[0-9]+	" \
-    | while IFS= read -r l; do [[ "$(print -r -- "$l" | cut -f4)" == "$1" ]] && { print -r -- "$l"; break; }; done)"
+  local hit want="$1" author="${3:-}"
+  hit="$($C --profile "$P" search-video-cards "$2" 2>/dev/null \
+    | while IFS= read -r l; do
+        local -a fields; fields=("${(@ps:\t:)l}")
+        [[ "${fields[1]:-}" == <-> && "${fields[2]:-}" == <-> ]] || continue
+        [[ "${fields[4]:-}" == "$want" ]] || continue
+        [[ -z "$author" || "${fields[5]:-}" == "$author" ]] || continue
+        print -r -- "$l"; break
+      done)"
   [[ -n "$hit" ]] || return 1
   X="$(print -r -- "$hit" | cut -f1)"; Y="$(print -r -- "$hit" | cut -f2)"
 }
 dv2_reset_to_top() {
   local evid="$1"
+  dv2_scan_allowed || return 1
   $C --profile "$P" open-search "$KW" >/dev/null 2>&1 || return 1
   nap 3
-  $C --profile "$P" search-video-tab "${evid}-vtab" >/dev/null 2>&1 || true
-  $C --profile "$P" search-time-layer six_months "${evid}-filter" latest unlimited unlimited "$LOC" >/dev/null 2>&1 || true
+  dv2_scan_allowed || return 1
+  $C --profile "$P" search-video-tab "${evid}-vtab" >/dev/null 2>&1 || return 1
+  dv2_scan_allowed || return 1
+  $C --profile "$P" search-time-layer six_months "${evid}-filter" latest unlimited unlimited "$LOC" >/dev/null 2>&1 || return 1
   DV2_CUR=0; nap 2
 }
-dv2_locate_card() {
-  local want="$1" scr="${2:-0}" evid="$3"
-  [[ "$scr" == <-> ]] || scr=0
-  if dv2_goto_screen "$scr" "$evid"; then
-    dv2_find_card "$want" "${evid}-loc1" && return 0
-    if $C --profile "$P" search-grid-scroll "${evid}-up$DV2_CUR" up >/dev/null 2>&1; then
-      DV2_CUR=$((DV2_CUR+1)); nap 2
-      dv2_find_card "$want" "${evid}-loc2" && return 0
+# 最多 steps 次前翻，包含起始屏；不下拉，避免触发刷新。
+dv2_scan_card() {
+  local want="$1" steps="$2" evid="$3" author="${4:-}" n
+  for (( n=0; n<=steps; n++ )); do
+    dv2_scan_allowed || return 1
+    if dv2_find_card "$want" "${evid}-loc$n" "$author"; then
+      dv2_scan_allowed && return 0
+      X=""; Y=""; return 1
     fi
-  fi
-  log "  定位不到,重新搜索回顶部再找(第 $scr 屏)"
+    (( n == steps )) && break
+    dv2_scan_allowed || return 1
+    $C --profile "$P" search-grid-scroll "${evid}-up$DV2_CUR" up >/dev/null 2>&1 || return 1
+    DV2_CUR=$((DV2_CUR+1)); nap 2
+  done
+  return 1
+}
+dv2_locate_card() {
+  local want="$1" scr="${2:-0}" evid="$3" author="${4:-}"
+  [[ "$scr" == <-> ]] || scr=0
+  X=""; Y=""
+  dv2_scan_card "$want" 2 "$evid" "$author" && return 0
+  dv2_scan_allowed || return 1
+  log "  定位不到,重新搜索回顶部再找(扫描第 0~$((scr+2)) 屏)"
   dv2_reset_to_top "${evid}-reset" || return 1
-  dv2_goto_screen "$scr" "${evid}-r" || return 1
-  dv2_find_card "$want" "${evid}-loc3"
+  dv2_scan_card "$want" "$((scr+2))" "${evid}-r" "$author"
 }
 back_to_results_and_maybe_rescan() {
   local evid="$1" btr_out newcards
