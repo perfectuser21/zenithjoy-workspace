@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import YAML from 'yaml';
 
 const path = new URL('../../../.github/workflows/implementation-impact.yml', import.meta.url);
-const fixedRevision = '8e014b50bb5a586a1697eb699a1d97a1ea408e91';
+const fixedRevision = 'ae56478f0e1980f5f9d7b318c60c266bd98b552d';
 function workflow() {
   assert.ok(existsSync(path), '必须存在真实跨仓 implementation-impact caller');
   return YAML.parse(readFileSync(path, 'utf8'));
