@@ -37,6 +37,28 @@ qual_remote(){
 }
 # qual_field JSON行 键 → 值(字符串或 true/false)
 qual_field(){ print -r -- "$1" | sed -n "s/.*\"$2\":\"\{0,1\}\([^\",}]*\).*/\1/p" | head -1; }
+# dv2_locate_card 标题 屏号 证据前缀 —— 发现改造 v2: 从当前屏(DV2_CUR)往下翻到发现时记的屏号,在当屏卡片里按标题
+# 取坐标写进 X/Y。翻屏距离不保证整屏对齐,当屏找不到再多翻一屏;仍找不到返回 1(调用方跳过本卡,不拿旧坐标瞎点)。
+dv2_locate_card() {
+  local want="$1" scr="${2:-0}" evid="$3" try hit
+  [[ "$scr" == <-> ]] || scr=0
+  while (( DV2_CUR < scr )); do
+    $C --profile "$P" search-grid-scroll "${evid}-up$DV2_CUR" up >/dev/null 2>&1 || return 1
+    DV2_CUR=$((DV2_CUR+1)); nap 2
+  done
+  for try in 1 2; do
+    hit="$($C --profile "$P" search-video-cards "${evid}-loc$try" 2>/dev/null | grep -E "^[0-9]+	" \
+      | while IFS= read -r l; do [[ "$(print -r -- "$l" | cut -f4)" == "$want" ]] && { print -r -- "$l"; break; }; done)"
+    if [[ -n "$hit" ]]; then
+      X="$(print -r -- "$hit" | cut -f1)"; Y="$(print -r -- "$hit" | cut -f2)"
+      return 0
+    fi
+    (( try == 1 )) || break
+    $C --profile "$P" search-grid-scroll "${evid}-up$DV2_CUR" up >/dev/null 2>&1 || break
+    DV2_CUR=$((DV2_CUR+1)); nap 2
+  done
+  return 1
+}
 back_to_results_and_maybe_rescan() {
   local evid="$1" btr_out newcards
   if [[ "${WF_SOURCE_KIND:-keyword}" == "benchmark" ]]; then
@@ -64,6 +86,14 @@ back_to_results_and_maybe_rescan() {
     if (( RESCANS > RESCAN_MAX )); then
       log "  重扫次数超限(${RESCAN_MAX}次),本关键词剩余候选作废"
       CARD_ARR=()
+      return 0
+    fi
+    if (( ${DV2:-0} )); then
+      # v2: 全部候选(标题+屏号)发现时已记下,重搜后只需回到视频 tab + 「最新」,从第 0 屏起按标题定位,不重扫列表
+      log "  归位触发兜底重搜,重设视频tab+最新排序,从第 $((i+1)) 张继续(第${RESCANS}/${RESCAN_MAX}次)"
+      $C --profile "$P" search-video-tab "${evid}-rescan-vtab" >/dev/null 2>&1 || true
+      $C --profile "$P" search-time-layer six_months "${evid}-rescan-filter" latest unlimited unlimited "$LOC" >/dev/null 2>&1 || true
+      DV2_CUR=0
       return 0
     fi
     log "  归位触发兜底重搜(原卡片坐标已失效)，重新扫描卡片列表(第${RESCANS}/${RESCAN_MAX}次)"
