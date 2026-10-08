@@ -167,6 +167,28 @@ test('同原run的明确attempt阶段变体仍共享同一锁', t => {
   assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);
   assert.equal(c.run('lock-release',run+'-a3-cleanup-1').status,0);
 });
+// 10-08 回归(任务 9a8784b7 试跑 auto10081559): 同 run 判定收紧后,批次预检锁 owner=TAG,
+// 每个词 harvest-keyword/batch2 用 TAG-wN 拿锁、续锁、放锁全部被判「别的 run」——词 1 起等锁 8 分钟后放弃,整批零采收。
+// 批次词序后缀 -w<数字> 必须与批次根互认;任意短前缀仍然不能认领。
+test('采收批次 TAG 与词级 TAG-wN 共享同一锁(拿/续/放)', t => {
+  const c=setup(t), run='auto10081559';
+  assert.equal(c.run('lock-acquire',run).status,0);
+  const w=c.run('lock-acquire',run+'-w1');
+  assert.equal(w.status,0,w.stderr);
+  assert.match(w.stdout,/idempotent=true/);
+  const rf=c.run('lock-refresh',run+'-w12');
+  assert.equal(rf.status,0,rf.stderr);
+  assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);
+  assert.equal(c.run('lock-release',run+'-w3').status,0);
+  assert.ok(!existsSync(c.lock));
+});
+test('词级后缀不放宽短前缀: auto1008-w1 / 相邻批次不能认领别批的锁', t => {
+  const c=setup(t);
+  assert.equal(c.run('lock-acquire','auto10081559').status,0);
+  assert.notEqual(c.run('lock-acquire','auto1008-w1').status,0);
+  assert.notEqual(c.run('lock-acquire','auto10081558-w1').status,0);
+  assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),'auto10081559');
+});
 
 test('独立清理用原子精确释放：回读后owner变化不能释放新锁', t => {
   const c=setup(t), run='qiumi-e1234567-1791427263848';
