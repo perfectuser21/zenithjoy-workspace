@@ -212,3 +212,12 @@ for(const command of ['close-app','lock-release-exact']) test(`环境guard字符
  assert.notEqual(r.status,0);assert.match(r.stderr,/guard.*descriptor|guard.*ownership/);
  assert.equal(c.actions(),'');assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);
 });
+
+test('独立前台复合命令有整条硬截止并终止子进程，保留原锁',t=>{
+ const c=setup(t), run='qiumi-a1234567-1791427263848';c.run('lock-acquire',run);
+ const adb=join(c.dir,'adb'),original=readFileSync(adb,'utf8');
+ writeFileSync(adb,original.replace('case "$*" in','case "$*" in\n *"am force-stop"*) touch "$TEST_DIR/acting"; sleep 2; touch "$TEST_DIR/late-ui"; exit 0;;'),{mode:0o755});
+ const r=spawnSync('zsh',[script,'--profile','p1','--lock-owner',run,'close-app'],{env:{...c.env,DOUYIN_GUARDED_COMMAND_TIMEOUT_SECONDS:'1'},encoding:'utf8',timeout:10000});
+ assert.equal(r.status,124,r.stderr);assert.match(r.stderr,/guarded command timeout/);assert.ok(!existsSync(join(c.dir,'late-ui')));
+ assert.equal(readFileSync(join(c.lock,'owner'),'utf8').trim(),run);assert.equal(c.run('lock-release-exact',run).status,0);
+});
