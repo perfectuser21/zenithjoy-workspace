@@ -1329,22 +1329,15 @@ call_state() {
 # 归一到「run 根」：剥掉 execution_id 的 ":a1" 与阶段后缀 "-a<数字>-<阶段>-<次数>"。
 # 这样 preflight / discovery / cleanup 各自传的标识都落到同一个 owner。
 normalize_run_id() {
-  local _v="${1%%:*}"
+  local _v="${1%%:*}" _qiumi='^(qiumi-[0-9a-f]{8}-[0-9]{13})([-_]a[0-9]+[-_].*)?$'
+  # qiumi的a开头UUID不是attempt；先取完整受管根，再处理其他格式。
+  if [[ "$_v" =~ $_qiumi ]]; then print -r -- "${match[1]}"; return; fi
   _v="${_v%%[-_]a<->[-_]*}"
-  print -- "$_v"
+  print -r -- "$_v"
 }
-# Worker 各阶段传的锁标识不统一：run_id、execution_id("<run_id>:a1")、
-# 或 "<run_id>-a1-<stage>-<n>"。同一轮的这些变体必须互认，否则 preflight 拿的锁
-# discovery 认不出（0911 实测 discovery 因此 blocked）、cleanup 也放不掉留下孤儿锁。
-# run_id 自带 14 位时间戳，跨轮次不可能出现严格前缀关系，故前缀等价是安全的。
+# 仅明确attempt/冒号变体共享根；任意短前缀不能代表同一运行。
 same_run_lock() {
-  local _a _b
-  _a="$(normalize_run_id "$1")"
-  _b="$(normalize_run_id "$2")"
-  [[ "$_a" == "$_b" ]] && return 0
-  [[ "$_a" == "$_b"* ]] && return 0
-  [[ "$_b" == "$_a"* ]] && return 0
-  return 1
+  [[ "$(normalize_run_id "$1")" == "$(normalize_run_id "$2")" ]]
 }
 
 # 设备锁 TTL（秒）：一轮获客的合理上限。超过它且持有者不是同一轮 → 判过期可安全抢占。
@@ -2615,7 +2608,7 @@ case "$command" in
     check_target_fast
     print -- "foreground=$(foreground_package)"
     ;;
-  lock-acquire|lock-release|lock-status|lock-refresh|lock-reap|lock-cleanup|with-lock)
+  lock-acquire|lock-release|lock-release-exact|lock-status|lock-refresh|lock-reap|lock-cleanup|with-lock)
     source "${0:A:h}/phone-lock-lib.sh"
     phone_lock_command "$@"
     ;;
@@ -3213,6 +3206,6 @@ case "$command" in
     print -- "foreground=${focus:-unknown}"
     ;;
   *)
-    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release lock-refresh lock-reap with-lock refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link own-profile account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-grid-scroll search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid results-controls-from-xml filter-panel-location"
+    die "allowed commands: status diagnose preflight foreground lock-acquire lock-status lock-release lock-release-exact lock-refresh lock-reap with-lock refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link own-profile account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-grid-scroll search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid results-controls-from-xml filter-panel-location"
     ;;
 esac

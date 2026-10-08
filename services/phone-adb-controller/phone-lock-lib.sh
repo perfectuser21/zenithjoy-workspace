@@ -42,7 +42,11 @@ lock_release() {
   require_run_id "$1"
   [[ -r "$LOCK_DIR/owner" ]] || { print -- 'lock=free'; return 0; }
   owner="$(<"$LOCK_DIR/owner")"
-  same_run_lock "$owner" "$run" || die "refusing to release lock owned by another run: $owner"
+  if [[ "${2:-compatible}" == exact ]]; then
+    [[ "$owner" == "$1" ]] || die "refusing exact release: owner changed to $owner"
+  else
+    same_run_lock "$owner" "$run" || die "refusing to release lock owned by another run: $owner"
+  fi
   /bin/rm -rf "$LOCK_DIR"
   print -- "lock=released owner=$run"
 }
@@ -113,6 +117,7 @@ phone_lock_command() {
     with-lock) shift; with_lock "$@";;
     lock-acquire) [[ "$#" == 2 ]] || die 'usage: lock-acquire OWNER'; lock_acquire "$2";;
     lock-release) [[ "$#" == 2 ]] || die 'usage: lock-release OWNER'; lock_release "$2";;
+    lock-release-exact) [[ "$#" == 2 ]] || die 'usage: lock-release-exact OWNER'; lock_release "$2" exact;;
     lock-status)
       [[ "$#" == 1 ]] || die 'usage: lock-status'
       if [[ -r "$LOCK_DIR/owner" ]]; then
