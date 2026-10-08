@@ -172,3 +172,13 @@ test('独立owner入口遇他人主页立即停止，不擅自返回导航',asyn
  const r=await run(c,['--lock-owner',owner,'account-current','strict-foreign']);
  assert.notEqual(r.code,0);assert.match(r.err,/standalone account entry/);assert.doesNotMatch(adbLog(c),/input keyevent 4|input tap/);
 });
+
+
+test('独立owner入口抖音已离开前台时拒绝隐式重开',async()=>{
+ const c=setup([OWN]),owner='qiumi-a1234567-1791427263848';
+ writeFileSync(c.adb,FAKE_ADB.replace('com.ss.android.ugc.aweme/.MainActivity','com.android.launcher/.Launcher'));
+ assert.equal((await run(c,['lock-acquire',owner])).code,0);
+ const r=await run(c,['--lock-owner',owner,'account-current','strict-foreground']);
+ assert.notEqual(r.code,0);assert.match(r.err,/standalone account entry.*foreground/);
+ assert.doesNotMatch(adbLog(c),/shell monkey|input keyevent|input tap|uiautomator dump/);
+});
