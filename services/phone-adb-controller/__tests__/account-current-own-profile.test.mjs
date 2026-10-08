@@ -70,6 +70,7 @@ function run(ctx, args) {
         ...process.env,
         DOUYIN_PHONE_REGISTRY: ctx.reg,
         DOUYIN_ADB_BIN: ctx.adb,
+        DOUYIN_PYTHON_BIN: spawnSync("sh",["-c","command -v python3"],{encoding:"utf8"}).stdout.trim(),
         DOUYIN_PHONE_TMP_ROOT: join(ctx.dir, "phone-tmp"),
         FIXTURE_DIR: ctx.dir,
         DUMP_COUNT: ctx.count,
@@ -163,4 +164,11 @@ test('重复的我按钮必须拒绝，不点击任意首项',async()=>{
  const duplicate=FEED.replace('</hierarchy>',node+'</hierarchy>');
  const c=setup([duplicate,OWN]);const r=await run(c,['account-current','duplicate-me']);
  assert.notEqual(r.code,0);assert.match(r.err,/Me tab.*ambiguous/);assert.doesNotMatch(adbLog(c),/input tap/);
+});
+
+test('独立owner入口遇他人主页立即停止，不擅自返回导航',async()=>{
+ const c=setup([FOREIGN,OWN]),owner='qiumi-a1234567-1791427263848';
+ assert.equal((await run(c,['lock-acquire',owner])).code,0);
+ const r=await run(c,['--lock-owner',owner,'account-current','strict-foreign']);
+ assert.notEqual(r.code,0);assert.match(r.err,/standalone account entry/);assert.doesNotMatch(adbLog(c),/input keyevent 4|input tap/);
 });
