@@ -182,3 +182,13 @@ test('独立owner入口抖音已离开前台时拒绝隐式重开',async()=>{
  assert.notEqual(r.code,0);assert.match(r.err,/standalone account entry.*foreground/);
  assert.doesNotMatch(adbLog(c),/shell monkey|input keyevent|input tap|uiautomator dump/);
 });
+
+
+test('独立owner前台包不能用抖音包名子串冒认',async()=>{
+ const c=setup([OWN]),owner='qiumi-a1234567-1791427263848';
+ writeFileSync(c.adb,FAKE_ADB.replace('com.ss.android.ugc.aweme/.MainActivity','com.ss.android.ugc.aweme.fake/.MainActivity'));
+ assert.equal((await run(c,['lock-acquire',owner])).code,0);
+ const r=await run(c,['--lock-owner',owner,'account-current','strict-package']);
+ assert.notEqual(r.code,0);assert.match(r.err,/standalone account entry.*foreground/);
+ assert.doesNotMatch(adbLog(c),/shell monkey|input keyevent|input tap|uiautomator dump/);
+});
