@@ -81,6 +81,12 @@ failure_class=TARGET_ABSENT')" == "terminal" ]] || fail "classify: warning:foreg
   # 不能落进要等连续2次才反应的"other"桶(继续用错账号重试=用错误身份骚扰真实线索)。
   [[ "$(CF 'current sender account does not match the claimed distribution account')" == "account_mismatch" ]] || fail "classify: 账号身份不符应识别为 account_mismatch,不能落进 other"
   [[ "$(CF 'current Douyin account identity was not visible on the verified Me page')" == "account_mismatch" ]] || fail "classify: Me页身份不可见应识别为 account_mismatch"
+  # 1009 现场(M4 outreach.log 0921–1008): 17 次终态里 9 次是没跳转/没加载(6 次停在发送账号自己主页、3 次读不到身份),
+  # 被判死废掉线索。控制器把这类改报 TARGET_PENDING,这里必须按瞬时退避重试;真的没有/对象不对仍 terminal。
+  [[ "$(CF 'link route: deeplink stayed on the sender'"'"'s own profile (observed langzi63485, claimed heziyi_happy)
+failure_class=TARGET_PENDING')" == "transient" ]] || fail "classify: TARGET_PENDING(停在自己主页/没加载出来)应 transient,不能判死"
+  [[ "$(CF 'current sender account does not match the claimed distribution account
+failure_class=TARGET_PENDING')" == "account_mismatch" ]] || fail "classify: 账号不符须优先于 TARGET_PENDING"
 else
   echo "::warning::zsh 不可用,层4 归因断言跳过(部署侧会跑)"
 fi
@@ -832,5 +838,11 @@ grep -qE '^DEVICE_NODE_FILES=\(.*step-judge\.mjs.*step-dod\.json' "$_DEPLOY" || 
 grep -qF 'step-judge.mjs step-dod.json step-dod-stats.mjs' <<< "$(sed -n '/^MMV_PROBE_FILES=(/,/)/p' "$_DEPLOY")" || fail "deploy.sh MMV_PROBE_FILES 漏了裁判/清单/统计"
 grep -qF 'judge_steps "$stage"' "$D/workflow-result.sh" || fail "workflow-result.sh 写工件时没调步骤 DoD 裁判"
 grep -qF 'remote="$remote --steps"' "$D/workflow-result.sh" || fail "probe_stage 没带 --steps(sql/http 步骤读不回)"
+
+# 层33: 「暂时没出来」与「真的没有」分开(Brain 任务 4e06da4c)——身份不符先判是不是停在发送账号自己的主页
+# (那是深链接没跳过去,报 TARGET_PENDING 可重试),读到陌生人才报 TARGET_ABSENT(安全闸,判终态绝不发)。
+[[ "$(grep -c "deeplink stayed on the sender's own profile.*TARGET_PENDING" "$C")" -ge 2 ]] || fail "身份不符的两处(网页版/原生)缺「停在自己主页」判定"
+grep -qE 'link route: profile id \$\{observed_target_id\} does not match claimed \$\{target_douyin_id\}" TARGET_ABSENT' "$C" || fail "原生主页身份不符必须保持 TARGET_ABSENT(安全闸)"
+grep -qE '发私信 was not present in the 更多 panel" TARGET_ABSENT' "$C" || fail "对方没开私信必须保持 TARGET_ABSENT"
 
 echo "phone-adb-controller-smoke: PASS"
