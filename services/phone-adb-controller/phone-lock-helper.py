@@ -45,12 +45,16 @@ def bounded_command(argv, fd, owner_path=None, expected_owner=None):
     while not canceled[0] and time.monotonic() < deadline:
         try:
             code = child.wait(timeout=0.1)
+        except subprocess.TimeoutExpired:
+            continue
+        root_reaped = True
+        if not canceled[0]:
+            require_group_ended(child.pid)
+            if not owner_matches(owner_path, expected_owner):
+                raise RuntimeError('guarded command owner preservation unproven')
             if not canceled[0]:
                 sys.exit(code if code >= 0 else 128 - code)
-            root_reaped = True
-            break
-        except subprocess.TimeoutExpired:
-            pass
+        break
     # 不先reap根进程，避免PID被复用；终止整个原进程组后才回收并放开guard。
     for sig in (() if root_reaped else (signal.SIGTERM, signal.SIGKILL)):
         try:
@@ -61,15 +65,9 @@ def bounded_command(argv, fd, owner_path=None, expected_owner=None):
             pass  # 必须经下方统一真实组回读，不能凭信号调用接受清场。
         if sig == signal.SIGTERM:
             time.sleep(0.2)
-    rows = subprocess.run(['/bin/ps', '-axo', 'pgid=,stat='], check=True,
-                          capture_output=True, text=True, timeout=2).stdout.splitlines()
-    if any(len(parts := row.split()) == 2 and parts[0] == str(child.pid)
-           and not parts[1].startswith('Z') for row in rows):
-        raise RuntimeError('guarded command termination unproven: live process group remains')
+    require_group_ended(child.pid)
     child.wait(timeout=2)
-    with open(owner_path, encoding='utf-8', newline='') as handle:
-        owner_text = handle.read()
-    if owner_text not in (expected_owner, expected_owner + '\n'):
+    if not owner_matches(owner_path, expected_owner):
         raise RuntimeError('guarded command owner preservation unproven')
     print('lock=preserved owner=' + expected_owner, file=sys.stderr)
     if not canceled[0]:
@@ -77,12 +75,23 @@ def bounded_command(argv, fd, owner_path=None, expected_owner=None):
     sys.exit(canceled[0] or 124)
 
 
+def require_group_ended(pid):
+    rows = subprocess.run(['/bin/ps', '-axo', 'pgid=,stat='], check=True,
+                          capture_output=True, text=True, timeout=2).stdout.splitlines()
+    if any(len(parts := row.split()) == 2 and parts[0] == str(pid)
+           and not parts[1].startswith('Z') for row in rows):
+        raise RuntimeError('guarded command termination unproven: live process group remains')
+
+def owner_matches(path, expected):
+    with open(path, encoding='utf-8', newline='') as handle:
+        text = handle.read()
+    return text in (expected, expected + '\n')
+
+
 def verify_owner():
     path, expected = sys.argv[2:]
     try:
-        with open(path, encoding='utf-8', newline='') as handle:
-            text = handle.read()
-        if text not in (expected, expected + '\n'):
+        if not owner_matches(path, expected):
             raise ValueError('owner mismatch')
     except (ValueError, OSError):
         print('exact owner file protocol does not match current run', file=sys.stderr)

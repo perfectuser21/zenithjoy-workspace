@@ -145,7 +145,11 @@ phone_lock_command() {
       [[ "$#" == 2 ]] || die 'usage: lock-refresh OWNER'
       require_run_id "$2"
       [[ -r "$LOCK_DIR/owner" ]] || die 'lock is not held; acquire it first'
-      same_run_lock "$(<"$LOCK_DIR/owner")" "$2" || die 'refusing to refresh lock owned by another run'
+      if [[ -f "$LOCK_DIR/standalone_review_required" ]]; then
+        "$PYTHON_BIN" "$PHONE_LOCK_HELPER" owner-check "$LOCK_DIR/owner" "$2" || die 'refusing exact standalone owner renewal'
+      else
+        same_run_lock "$(<"$LOCK_DIR/owner")" "$2" || die 'refusing to refresh lock owned by another run'
+      fi
       /bin/date +%s > "$LOCK_DIR/acquired_at"
       print -- "lock=refreshed owner=$(<"$LOCK_DIR/owner") ttl=${LOCK_TTL_SECONDS}s";;
     lock-reap) [[ "$#" == 1 ]] || die 'usage: lock-reap'; lock_reap;;
