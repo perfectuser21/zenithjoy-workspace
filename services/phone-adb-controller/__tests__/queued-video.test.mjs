@@ -6,6 +6,49 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 const script=path.resolve('services/phone-adb-controller/process-queued-video.sh');
 const vid='7646309328911907195';
+test('two queued videos in one run each deliver their own recording to qualification',()=>{
+ const d=mkdtempSync(path.join(tmpdir(),'queued-multi-audio-'));
+ try {
+  const ctl=path.join(d,'ctl'), qualify=path.join(d,'qualify'), scp=path.join(d,'scp');
+  writeFileSync(ctl,`#!/usr/bin/env node
+const fs=require('fs'),p=require('path');const [flag,profile,cmd,...args]=process.argv.slice(2);const d=process.env.FIXTURE;
+const active=()=>fs.readFileSync(p.join(d,'active'),'utf8');
+fs.appendFileSync(p.join(d,'calls'),JSON.stringify({cmd,args})+'\\n');
+switch(cmd){
+case 'lock-refresh': console.log('lock=refreshed owner=multi-video-run');break;
+case 'open-video':fs.writeFileSync(p.join(d,'active'),args[0]);break;
+case 'current-video-link':console.log('content_type=video\\nvideo_id='+active());break;
+case 'record-start':try{fs.writeFileSync(p.join(d,args[0]+'.mkv'),active(),{flag:'wx'});}catch{console.error('recording artifact already exists');process.exit(1);}break;
+case 'record-stop':console.log('record_stopped duration_seconds=25.1 mean_volume_db=-35 audio_streams=1');break;
+case 'record-extract-audio':{
+ const wav=p.join(d,args[0]+'.wav');fs.writeFileSync(wav,fs.readFileSync(p.join(d,args[0]+'.mkv')),{flag:'wx'});console.log('audio_extracted path='+wav);break;}
+}
+`,{mode:0o755});
+  writeFileSync(scp,`#!/usr/bin/env node
+const fs=require('fs'),p=require('path'),a=process.argv.slice(2);
+fs.copyFileSync(a.at(-2),p.join(process.env.FIXTURE,p.basename(a.at(-1))));
+`,{mode:0o755});
+  writeFileSync(qualify,`#!/usr/bin/env node
+const fs=require('fs'),p=require('path'),a=process.argv.slice(2),i=a.indexOf('--audio'),v=a[a.indexOf('--video-id')+1];
+const audio=i<0?null:fs.readFileSync(p.join(process.env.FIXTURE,p.basename(a[i+1])),'utf8');
+fs.appendFileSync(p.join(process.env.FIXTURE,'judgments'),JSON.stringify({video_id:v,audio})+'\\n');
+console.log('QUAL_RESULT {"verdict":"matched"}');
+`,{mode:0o755});
+  const videos=[vid,'7646309328911907196'];
+  for(const id of videos){
+   const r=spawnSync('zsh',[script,'qualification','jinoshengyuan-work',id,`https://www.douyin.com/video/${id}`,Buffer.from('测试视频').toString('base64'),Buffer.from('人工智能训练师').toString('base64'),'multi-video-run','金诺盛源'],{env:{...process.env,PATH:d+path.delimiter+process.env.PATH,FIXTURE:d,DOUYIN_PHONE_ADB:ctl,QUEUED_VIDEO_QUALIFY_CMD:qualify,HARVEST_KEYWORD_TESTING:'1',WFR_RUN_DIR:path.join(d,'run')},encoding:'utf8',timeout:7000});
+   assert.equal(r.status,0,r.stderr);
+  }
+  const judgments=readFileSync(path.join(d,'judgments'),'utf8').trim().split('\n').map(JSON.parse);
+  assert.deepEqual(judgments,videos.map(video_id=>({video_id,audio:video_id})), 'each model call must receive audio from its actual video');
+  const calls=readFileSync(path.join(d,'calls'),'utf8').trim().split('\n').map(JSON.parse);
+  const starts=calls.filter(c=>c.cmd==='record-start').map(c=>c.args[0]);
+  assert.equal(new Set(starts).size,2,'recording artifacts cannot share an ID');
+  for(const cmd of ['record-stop','record-extract-audio'])assert.deepEqual(calls.filter(c=>c.cmd===cmd).map(c=>c.args[0]),starts);
+  assert.deepEqual(calls.filter(c=>c.cmd==='lock-refresh').map(c=>c.args[0]),['multi-video-run','multi-video-run'],'video-specific evidence must preserve run lock ownership');
+  for(const eid of starts)assert.ok(existsSync(path.join(d,eid+'.mkv')),'prior evidence stays intact');
+ } finally {rmSync(d,{recursive:true,force:true});}
+});
 function run(mode,extra={}) {
  const d=mkdtempSync(path.join(tmpdir(),'queued-video-'));
  const ctl=path.join(d,'ctl'); const log=path.join(d,'calls');
@@ -13,12 +56,12 @@ function run(mode,extra={}) {
 print -r -- "$3" >> "$CALLS"
 case "$3" in
  lock-refresh) [[ -z "$LOCK_FAIL" ]] || exit 3;print 'lock=refreshed owner=cmd100822-new';;
- open-video) print 'video_id=${vid}';;
- current-video-link) print "content_type=\${CONTENT_TYPE:-video}";if [[ -n "$DRIFT_AFTER_CARD" && "$(grep -c '^current-video-link$' "$CALLS")" -gt 1 ]]; then print 'video_id=7646309328911907196';else print "video_id=\${OBSERVED_ID:-${vid}}";fi;;
+ open-video) rm -f "$CARD_STATE"; print 'video_id=${vid}';;
+ current-video-link) if [[ -f "$CARD_STATE" ]];then print -u2 'NOT_ON_VIDEO_DETAIL';exit 1;fi;print "content_type=\${CONTENT_TYPE:-video}";if [[ -n "$DRIFT_AFTER_CARD" && "$(grep -c '^current-video-link$' "$CALLS")" -gt 1 ]]; then print 'video_id=7646309328911907196';else print "video_id=\${OBSERVED_ID:-${vid}}";fi;;
  open-comments) if [[ -n "$NO_COMMENTS" ]]; then print 'reason=no_comments_on_this_video'; else print 'comments_opened=1'; print 'comment_count=1'; fi;;
  collect-comments) n=100;if [[ -n "$RELOCATE" && "$(grep -c '^collect-comments$' "$CALLS")" -gt 1 ]];then n=300;fi;print "甲\\t咨询价格\\t今天\\t北京\\treader\\ttap=$n 200\\tb64=55Sy"; print 'exhausted=1';;
  commenter-identity) print "$4 $5" >> "$CALLS_COORD";[[ -z "$IDENTITY_FAIL" ]] || exit 1;if [[ -n "$RELOCATE" && "$(grep -c '^commenter-identity$' "$CALLS")" -eq 1 ]];then exit 1;fi;print 'nickname=甲';print 'douyin_id=person123';print 'account_type=personal';;
- commenter-card-link) print 'profile_url=https://www.douyin.com/user/a';;
+ commenter-card-link) [[ -z "$CARD_RETURNS_OFF_DETAIL" ]] || touch "$CARD_STATE";print 'profile_url=https://www.douyin.com/user/a';;
  *) ;;
 esac
 `,{mode:0o755});
@@ -32,7 +75,7 @@ print 'QUAL_RESULT {"verdict":"pending","kind":"api_error"}'
  writeFileSync(own,JSON.stringify({nicknames:extra.OWN_NICK?['甲']:[],ids:[]}));
  const coords=path.join(d,'coords');
  const evidence=path.join(d,'run');
- const r=spawnSync('zsh',[script,mode,'jinoshengyuan-work',vid,`https://www.douyin.com/video/${vid}`,Buffer.from('测试视频').toString('base64'),Buffer.from('人工智能训练师').toString('base64'),'cmd100822-new','金诺盛源'],{env:{...process.env,DOUYIN_PHONE_ADB:ctl,CALLS:log,CALLS_COORD:coords,WFR_RUN_DIR:evidence,HARVEST_KEYWORD_TESTING:'1',QUEUED_VIDEO_QUALIFY_CMD:qualify,OWN_ACCOUNTS_CONF:own,...extra},encoding:'utf8',timeout:7000});
+ const r=spawnSync('zsh',[script,mode,'jinoshengyuan-work',vid,`https://www.douyin.com/video/${vid}`,Buffer.from('测试视频').toString('base64'),Buffer.from('人工智能训练师').toString('base64'),'cmd100822-new','金诺盛源'],{env:{...process.env,DOUYIN_PHONE_ADB:ctl,CALLS:log,CALLS_COORD:coords,CARD_STATE:path.join(d,'off-detail'),WFR_RUN_DIR:evidence,HARVEST_KEYWORD_TESTING:'1',QUEUED_VIDEO_QUALIFY_CMD:qualify,OWN_ACCOUNTS_CONF:own,...extra},encoding:'utf8',timeout:7000});
  const calls=existsSync(log)?readFileSync(log,'utf8').trim().split('\n'):[];
  const coordinates=existsSync(coords)?readFileSync(coords,'utf8').trim().split('\n'):[];
  const receipt=path.join(evidence,`cmd100822-new-identity-${vid}.json`);
@@ -92,6 +135,12 @@ test('card recovery drift is rejected before attributing comments to queued vide
  const r=run('collection',{DRIFT_AFTER_CARD:'1'});assert.equal(r.status,4,r.stderr);
  assert.ok(!r.stdout.includes('LEAD'));assert.ok(!r.stdout.includes('COLLECTION'));
  assert.equal(r.identity.verified,false,'drift overwrites initial verified receipt');
+});
+test('card link return outside detail reopens and verifies the actual queued video before emitting a lead',()=>{
+ const r=run('collection',{CARD_RETURNS_OFF_DETAIL:'1'});
+ assert.equal(r.status,0,r.stderr);
+ assert.equal(r.identity.verified,true);
+ assert.equal(r.stdout.split('\n').filter(s=>s.startsWith('LEAD\t')).length,1);
 });
 test('model error remains pending and never starts comment collection',()=>{
  const r=run('qualification');assert.equal(r.status,5,r.stderr);
