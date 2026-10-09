@@ -33,12 +33,12 @@ jobs:
     name: Complete pilot release verification
     if: github.ref == 'refs/heads/main'
     needs: caller-contract
-    uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@8916df494e3f6d02c3c9e9f8979e86e4d86fbd80
+    uses: perfectuser21/cecelia/.github/workflows/pilot-release-verification.yml@5a86ca0e120111d29f077de2f2bfe3eb00a72bb5
     with:
       source_repo: perfectuser21/zenithjoy-workspace
       scope: zenithjoy
       head_revision: ${{ github.sha }}
-      tooling_revision: 8916df494e3f6d02c3c9e9f8979e86e4d86fbd80
+      tooling_revision: 5a86ca0e120111d29f077de2f2bfe3eb00a72bb5
     secrets:
       TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
       CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}
