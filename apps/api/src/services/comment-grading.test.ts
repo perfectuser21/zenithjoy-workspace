@@ -205,6 +205,25 @@ describe('comment-grading gradeComments', () => {
    * 表现就是 finish_reason=length + content 空。这种情况必须留下**可检索的 error 日志**，
    * 不能只是静默返回一批 null 让人以为"这些评论就是没意向"。
    */
+  it('截断诊断记录 token 元数据，区分思考耗尽与正文超限且不泄露评论', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(axios.post).mockResolvedValue({
+      data: {
+        choices: [{ finish_reason: 'length', message: { content: '私人回复正文' } }],
+        usage: { completion_tokens: 500, completion_tokens_details: { reasoning_tokens: 490 } },
+      },
+    } as never);
+    const result = await gradeComments('私人画像', '私人标题', null, [{ commentText: '私人评论' }]);
+    expect(result).toEqual([null]);
+    const logs = errSpy.mock.calls.map((args) => args.join(' ')).join('\n');
+    expect(logs).toContain('"completion_tokens":500');
+    expect(logs).toContain('"reasoning_tokens":490');
+    expect(logs).toContain('"content_length":6');
+    expect(logs).not.toContain('私人');
+    expect(logs).not.toContain('test-toapis-key');
+    errSpy.mockRestore();
+  });
+
   it('截断守卫：finish_reason=length 时打 error 日志点名截断，而非静默全 null', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const mockedPost = vi.mocked(axios.post);

@@ -159,9 +159,20 @@ export async function gradeComments(
     // 表现就是 finish_reason=length + content 空。这种情况必须留下可检索的 error 日志，
     // 不能只静默返回一批 null 让人以为"这些评论就是没意向"——真机就是这么瞒了一个多月。
     if (choice?.finish_reason === 'length') {
+      // 只记诊断元数据；不能凭 length 推断思考占满，也不能记录评论/模型正文/凭据。
+      const tokenCount = (value: unknown): number | null =>
+        typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+      const usage = resp.data?.usage;
       console.error(
-        `[comment-grading] 输出被 max_tokens 截断（finish_reason=length），${comments.length} 条留言整批未分档。` +
-        '大概率是 reasoning_effort=none 没生效导致思考吃光预算，请查网关是否仍支持该参数。'
+        '[comment-grading] 输出被 max_tokens 截断：' + JSON.stringify({
+          model: /^[a-zA-Z0-9/_.-]+$/.test(GRADING_MODEL) ? GRADING_MODEL : 'unknown',
+          batch_size: comments.length,
+          finish_reason: 'length',
+          max_tokens: 500,
+          completion_tokens: tokenCount(usage?.completion_tokens),
+          reasoning_tokens: tokenCount(usage?.completion_tokens_details?.reasoning_tokens),
+          content_length: text.length,
+        }),
       );
       return comments.map(() => null);
     }
