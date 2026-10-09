@@ -188,6 +188,27 @@ test("d CLAIM_FAILED：tick 结束、Bark 1 次、无发送、不 mark", { skip:
   assert.equal(barkCalls(c).length, 1);
 });
 
+// ── e0. 「暂时没出来」与「真的没有」分开（Brain 任务 4e06da4c，决策 1b469079 故障处置表）──
+// 页面还没加载出来（深链接没落地、更多/分享按钮/名片锚点没出现、剪贴板没刷新）控制器报 TARGET_PENDING，
+// 应按瞬时失败退避重试、用尽回队列；身份不符 / 对方没开私信 / 私密注销等仍报 TARGET_ABSENT，判终态。
+test("e0 classify_failure：TARGET_PENDING 归 transient，TARGET_ABSENT 仍 terminal，账号不符仍最优先", { skip: SKIP }, () => {
+  const c = setup();
+  const cases = [
+    ["profile deeplink did not land on a verified user profile (sec_uid=x)\nfailure_class=TARGET_PENDING", "transient"],
+    ["更多 entry was not found on target profile\nfailure_class=TARGET_PENDING", "transient"],
+    ["link route: deeplink stayed on the sender's own profile (observed langzi63485, claimed heziyi_happy)\nfailure_class=TARGET_PENDING", "transient"],
+    ["current sender account does not match the claimed distribution account\nfailure_class=TARGET_PENDING", "account_mismatch"],
+    ["link route: profile id a does not match claimed b\nfailure_class=TARGET_ABSENT", "terminal"],
+    ["发私信 was not present in the 更多 panel\nfailure_class=TARGET_ABSENT", "terminal"],
+    // 最后一个 failure_class 为准
+    ["failure_class=TARGET_ABSENT\nretry...\nfailure_class=TARGET_PENDING", "transient"],
+  ];
+  for (const [out, want] of cases) {
+    const r = c.fn('classify_failure "$1"', out);
+    assert.equal(r.stdout.trim(), want, `输出 ${JSON.stringify(out)} 应归 ${want}，实际 ${r.stdout.trim()} ${r.stderr}`);
+  }
+});
+
 // ── e. 分类 / 软熔断 / notify_once ──
 test("e1 classify_failure：device_ui 各信号 + 优先级 + 原有分类不变", { skip: SKIP }, () => {
   const c = setup();
