@@ -5,7 +5,7 @@ import {spawnSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 const controller=readFileSync(new URL('../douyin-phone-adb',import.meta.url),'utf8');
-function run({copyFail=false,clearFail=false,leaveFail=false,inputFail=false,reselectFail=false,noProof=false}={}){
+function run({copyFail=false,clearFail=false,leaveFail=false,inputFail=false,reselectFail=false,emptyHint="",falseHint=false,noProof=false}={}){
  const seed=controller.match(/seed_clipboard_nonce\(\) \{[\s\S]*?\n\}/)?.[0];assert.ok(seed,'必须实际验证nonce已写入clipboard');
  const guard=controller.match(/clip_guard_check\(\) \{[\s\S]*?\n\}/)[0];
  const dir=mkdtempSync(join(tmpdir(),'clipnonce-')),adb=join(dir,'adb');writeFileSync(join(dir,'last'),'https://v.douyin.com/Same/');writeFileSync(join(dir,'clip'),'https://v.douyin.com/Same/');writeFileSync(join(dir,'field'),'');
@@ -18,8 +18,8 @@ case "$*" in
  *'keyevent 279'*) cp "$D/clip" "$D/field";;
  esac
 `,{mode:0o755});
- const script=`set -eu;setopt EXTENDED_GLOB;die(){ print -u2 -- "$1";exit 2; };wait_ms(){ :; };node_center(){print '100 100';};clip_state_file(){print "$D/last";};ui_evidence(){local value="$(cat "$D/field")";printf '<hierarchy><node text="%s" resource-id="com.ss.android.ugc.aweme:id/et_search_kw" clickable="true" bounds="[0,0][200,200]" /></hierarchy>' "$value" > "$EVIDENCE_ROOT/$1.xml";};_leave_scratch_route(){ [[ "$LEAVE_FAIL" != 1 ]];};${seed};${guard};proof="";${noProof?'':'proof="$(seed_clipboard_nonce fixture)" || exit 2;'} clip_guard_check https://v.douyin.com/Same/ "$proof";print OK`;
- return spawnSync('zsh',['-c',script],{env:{...process.env,D:dir,EVIDENCE_ROOT:dir,ADB:adb,SERIAL:'FAKE',PYTHON_BIN:'/usr/bin/python3',COPY_FAIL:copyFail?'1':'0',CLEAR_FAIL:clearFail?'1':'0',LEAVE_FAIL:leaveFail?'1':'0',INPUT_FAIL:inputFail?'1':'0',RESELECT_FAIL:reselectFail?'1':'0'},encoding:'utf8'});
+ const script=`set -eu;setopt EXTENDED_GLOB;die(){ print -u2 -- "$1";exit 2; };wait_ms(){ :; };node_center(){print '100 100';};clip_state_file(){print "$D/last";};ui_evidence(){local value="$(cat "$D/field")" hint="";if [[ -z "$value" ]];then value="$EMPTY_HINT";hint="$EMPTY_HINT";elif [[ "$FALSE_HINT" == 1 ]];then hint="$value";fi;printf '<hierarchy><node text="%s" resource-id="com.ss.android.ugc.aweme:id/et_search_kw" clickable="true" bounds="[0,0][200,200]" hint="%s" /></hierarchy>' "$value" "$hint" > "$EVIDENCE_ROOT/$1.xml";};_leave_scratch_route(){ [[ "$LEAVE_FAIL" != 1 ]];};${seed};${guard};proof="";${noProof?'':'proof="$(seed_clipboard_nonce fixture)" || exit 2;'} clip_guard_check https://v.douyin.com/Same/ "$proof";print OK`;
+ return spawnSync('zsh',['-c',script],{env:{...process.env,D:dir,EVIDENCE_ROOT:dir,ADB:adb,SERIAL:'FAKE',PYTHON_BIN:'/usr/bin/python3',COPY_FAIL:copyFail?'1':'0',CLEAR_FAIL:clearFail?'1':'0',LEAVE_FAIL:leaveFail?'1':'0',INPUT_FAIL:inputFail?'1':'0',RESELECT_FAIL:reselectFail?'1':'0',EMPTY_HINT:emptyHint,FALSE_HINT:falseHint?'1':'0'},encoding:'utf8'});
 }
 test('输入/清空/paste三次真实UI读回nonce且成功退回详情后，同URL合法重拷',()=>{const r=run();assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/OK/);});
 for(const [name,options] of Object.entries({复制未生效:{copyFail:true},复制后重新全选失败:{reselectFail:true},清空未生效:{clearFail:true},输入未生效:{inputFail:true},返回原详情失败:{leaveFail:true}}))test(name+'拒绝本次且不借expectedID放行',()=>{const r=run(options);assert.notEqual(r.status,0);assert.match(r.stderr,/CLIPBOARD_NONCE/);assert.doesNotMatch(r.stdout,/OK/);});
@@ -32,3 +32,6 @@ test('真实入口nonce证明只在本次_once局部生效，先seed再copy，no
  assert.ok(once.indexOf('copied text did not contain a verified Douyin short link')<once.indexOf('clip_guard_check "$short_url" "$nonce_proof"'));
  assert.doesNotMatch(controller.match(/seed_clipboard_nonce\(\) \{[\s\S]*?\n\}/)[0],/clip_guard_record|last-clip.*rm|reopen_url/);
 });
+
+test("Android空框text与动态hint相同，仍需实际粘贴读回nonce才放行",()=>{for(const emptyHint of ["AI证书含金量排名","训练师报考时间"]){const r=run({emptyHint});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/OK/);}});
+test("真实nonce残留即使被标为hint也拒绝清空通过",()=>{const r=run({clearFail:true,falseHint:true});assert.notEqual(r.status,0);assert.match(r.stderr,/CLIPBOARD_NONCE_CLEAR_UNVERIFIED/);assert.doesNotMatch(r.stdout,/OK/);});
