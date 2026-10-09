@@ -46,7 +46,8 @@ esac
   assert.equal(op,'discover');writes.push(fields);return rejectWrite?{status:'error',error:'PG failed'}:{status:'pending',video_id:fields.video.videoId};
  };
  const h=createDiscoveryHandlers({phone,execute,queue,profile:'jinoshengyuan-work',run:'cmd100822-new',root,limit:2,sourceKind:benchmark?'benchmark':'keyword',sources:multi?['人工智能训练师','AI训练师']:['人工智能训练师'],ownAccounts:{nicknames:['自己'],ids:[]},env});
- return {h,writes,calls:()=>readFileSync(log,'utf8'),receipt:()=>JSON.parse(readFileSync(join(dir,'run','cmd100822-new-source-1-readback.json'),'utf8')),clean:()=>rmSync(dir,{recursive:true,force:true})};
+ return {h,writes,calls:()=>readFileSync(log,'utf8'),receipt:()=>JSON.parse(readFileSync(join(dir,'run','cmd100822-new-source-1-readback.json'),'utf8')),
+  progress:()=>JSON.parse(readFileSync(join(dir,'run','discovery-progress.json'),'utf8')),clean:()=>rmSync(dir,{recursive:true,force:true})};
 }
 test('new discovery invokes atomic primitive, filters before tapping, and relocates shifted cards',async()=>{
  const r=rig();try {await r.h.source();await r.h.dedup();await r.h.write_videos();
@@ -70,7 +71,10 @@ test('failed PG persistence is reported and never counted as a successful candid
  const r=rig({rejectWrite:true});try{await r.h.source();await r.h.dedup();await r.h.write_videos();assert.equal(r.h.state.counts.persisted,0);assert.equal(r.h.state.counts.failed,1);assert.ok(r.h.state.failures.some(f=>f.reason==='persistence_failed'));}finally{r.clean();}
 });
 test('copy failure preserves controller cause and never reaches PG discover',async()=>{
- const r=rig({copyFails:true});try{await r.h.source();await r.h.dedup();await r.h.write_videos();assert.equal(r.writes.length,0);assert.match(JSON.stringify(r.h.state.failures),/COPY_STALE/);}finally{r.clean();}
+ const r=rig({copyFails:true});try{await r.h.source();await r.h.dedup();await r.h.write_videos();assert.equal(r.writes.length,0);assert.match(JSON.stringify(r.h.state.failures),/COPY_STALE/);
+  const progress=r.progress();
+  assert.equal(progress.counts.persisted,0);assert.equal(progress.counts.failed,1);assert.match(JSON.stringify(progress.failures),/COPY_STALE/);
+ }finally{r.clean();}
 });
 test('history unavailable aborts instead of treating the database as empty',async()=>{
  const r=rig({emptyHistory:true});try{await r.h.source();await assert.rejects(r.h.dedup(),/PG unavailable/);assert.equal(r.writes.length,0);}finally{r.clean();}

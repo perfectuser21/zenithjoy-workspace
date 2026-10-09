@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync,readFileSync} from 'node:fs';
+import {mkdtempSync,rmSync,readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
@@ -94,4 +94,55 @@ test('部分取链失败必须把活动记partial，不能把部分结果记comp
  handlers:{write_videos:async()=>({status:'partial',persisted:1,failures:[{reason:'copy_failed'}]}),qualification:async()=>{next++;},cleanup:async()=>({status:'skipped',no_lock:true})},
  commander:async()=>({action:'continue',reason:'保留部分失败证据'}),record:async()=>{},verify:async()=>({verified:true})});
  assert.equal(r.status,'partial');assert.equal(r.results[0].status,'partial');assert.equal(next,0);
+});
+
+test('需要140秒的取链能够完整入库，但不能越过活动剩余预算',async()=>{
+ const {createHandlers}=await import('../leadgen-workflow.mjs');
+ // 明示的设备模拟：140秒代表本次真机nonce+UI重抓+复制+归位的完整动作，并不实际睡眠。
+ for(const remaining of [480000,30000]){
+  const dir=mkdtempSync(join(tmpdir(),'leadgen-link-envelope-'));
+  const profile='test-profile',videoId='7663337150875733275',written=[],timeouts=[];
+  const own=join(dir,'own.json'),registry=join(dir,'accounts.tsv');
+  writeFileSync(own,JSON.stringify({nicknames:[],ids:[]}));writeFileSync(registry,`${profile}\ttest-account\n`);
+  const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'new-budget-run',P:profile,SERIAL:'test-serial',LEADGEN_LINE:'jinuo',LEADGEN_LIMIT:'1',
+   DOUYIN_PHONE_ADB:'/test/phone-controller',DOUYIN_PHONE_TMP_ROOT:dir,DOUYIN_ACCOUNT_REGISTRY:registry,OWN_ACCOUNTS_CONF:own};
+  const execute=async(command,args,opts={})=>{
+   let stdout='';
+   if(command==='adb')stdout=args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'';
+   else if(command==='zsh')stdout='100\t200\t00:20\t目标视频\t别人\t0\n';
+   else if(command==='/test/phone-controller'){
+    const op=args[2]==='--lock-owner'?args[4]:args[2];
+    if(op==='preflight')stdout='serial=test-serial\n';
+    if(op==='lock-acquire')stdout='lock=acquired\n';
+    if(op==='lock-refresh')stdout='lock=refreshed\n';
+    if(op==='account-current')stdout='douyin_id=test-account\n';
+    if(op==='search-kw-matches')stdout='kw_matches=1\n';
+    if(op==='search-video-tab'){
+     const path=join(dir,'evidence',profile,`${args[3]}-aftertab.xml`);mkdirSync(join(dir,'evidence',profile),{recursive:true});
+     writeFileSync(path,'<hierarchy><node resource-id="com.ss.android.ugc.aweme:id/et_search_kw" text="人工智能训练师"/></hierarchy>');
+    }
+    if(op==='search-video-cards')stdout='100\t200\t00:20\t目标视频\t别人\t0\n';
+    if(op==='current-video-link'){
+     timeouts.push(opts.timeoutMs);
+     if(opts.timeoutMs<140000)throw Error('EXECUTION_DEADLINE');
+     stdout=`content_type=video\nvideo_id=${videoId}\nshort_url=https://v.douyin.com/newTarget/\n`;
+    }
+   }
+   return {code:0,stdout,stderr:''};
+  };
+  const rpc=async body=>{
+   if(body.kind==='keywords')return {result:['人工智能训练师']};
+   if(body.request.op==='history')return {result:[]};
+   assert.equal(body.request.op,'discover');written.push(body.request.video.videoId);return {result:{status:'pending',inserted:true}};
+  };
+  try{
+   const h=createHandlers({root:dir,env,rpc,execute});
+   await h.preflight();await h.source();await h.dedup();h.state.budgetDeadline=Date.now()+remaining;
+   const result=await h.write_videos();
+   assert.equal(result.persisted,remaining===480000?1:0);
+   assert.deepEqual(written,remaining===480000?[videoId]:[]);
+   assert.equal(timeouts.length,1);assert.ok(timeouts[0]<=remaining);
+   if(remaining===30000)assert.match(JSON.stringify(result.failures),/EXECUTION_DEADLINE/);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+ }
 });

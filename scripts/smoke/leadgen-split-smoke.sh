@@ -6,6 +6,7 @@ node --test scripts/product-map/__tests__/leadgen-split-contracts.test.js \
  services/phone-adb-controller/__tests__/split-workflows.test.mjs \
  services/phone-adb-controller/__tests__/wf-run-retired.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-workflow.test.mjs \
+ services/phone-adb-controller/__tests__/leadgen-client.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-discovery.test.mjs \
  services/phone-adb-controller/__tests__/queued-video.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-queue.test.mjs \
