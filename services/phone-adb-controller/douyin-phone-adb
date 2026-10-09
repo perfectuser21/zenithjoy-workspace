@@ -594,6 +594,8 @@ seed_clipboard_nonce() {
       if [[ "$phase" == typed ]]; then
         "$ADB" -s "$SERIAL" shell input keycombination 113 29 >/dev/null || die "CLIPBOARD_NONCE_SELECT_FAILED"
         "$ADB" -s "$SERIAL" shell input keyevent 278 >/dev/null || die "CLIPBOARD_NONCE_COPY_FAILED"
+        # HONOR复制后会取消全选；重新全选后再删除，不能只删掉nonce末尾一个字符。
+        "$ADB" -s "$SERIAL" shell input keycombination 113 29 >/dev/null || die "CLIPBOARD_NONCE_RESELECT_FAILED"
         "$ADB" -s "$SERIAL" shell input keyevent 67 >/dev/null || die "CLIPBOARD_NONCE_DELETE_FAILED"
       fi
     fi
