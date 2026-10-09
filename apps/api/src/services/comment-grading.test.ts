@@ -195,7 +195,7 @@ describe('comment-grading gradeComments', () => {
     // 这里只认一件事：请求体里必须带上**当前模型对应的那个**关思考开关。
     expect(body).toMatchObject(thinkingOffParam(body.model as string));
     // 而且只带一个——两个都塞会在不认的那一侧 400
-    const switches = ['enable_thinking', 'reasoning_effort'].filter((k) => k in body);
+    const switches = ['enable_thinking', 'reasoning_effort', 'thinking'].filter((k) => k in body);
     // OpenRouter 侧一个都不带；ToAPIs 侧必须恰好带一个（两个都塞会在不认的那侧 400）
     expect(switches).toHaveLength((body.model as string).includes('/') ? 0 : 1);
   });
@@ -267,9 +267,11 @@ describe('thinkingOffParam — 关思考开关按模型分派', () => {
     expect(thinkingOffParam('gpt-5.6-terra')).not.toHaveProperty('enable_thinking');
   });
 
-  it('非 gpt 系列（deepseek 等）用 enable_thinking', async () => {
+  it('DeepSeek V4 使用官方 thinking.type=disabled，保留其他模型参数', async () => {
     const { thinkingOffParam } = await import('./comment-grading');
-    expect(thinkingOffParam('deepseek-v4-flash')).toEqual({ enable_thinking: false });
+    expect(thinkingOffParam('deepseek-v4-flash')).toEqual({ thinking: { type: 'disabled' } });
+    expect(thinkingOffParam('deepseek-v4-pro')).toEqual({ thinking: { type: 'disabled' } });
+    expect(thinkingOffParam('qwen-test')).toEqual({ enable_thinking: false });
   });
 
   it('实际请求体里带的开关必须与当前模型匹配', async () => {
@@ -302,7 +304,8 @@ describe('thinkingOffParam — 关思考开关按模型分派', () => {
       await mod.gradeComments('想考证的在职人员', 't', null, [{ commentText: '怎么报名' }]);
       const [, body] = vi.mocked(axiosMod.post).mock.calls.at(-1) as [string, Record<string, unknown>];
       expect(body.model).toBe('deepseek-v4-flash');
-      expect(body.enable_thinking).toBe(false);
+      expect(body.thinking).toEqual({ type: 'disabled' });
+      expect(body).not.toHaveProperty('enable_thinking');
       expect(body).not.toHaveProperty('reasoning_effort');
     } finally {
       if (prev === undefined) delete process.env.GRADING_MODEL;

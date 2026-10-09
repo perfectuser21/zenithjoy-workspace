@@ -80,6 +80,10 @@ export function thinkingOffParam(model: string): Record<string, unknown> {
   // OpenRouter 风格模型名（vendor/model）：gpt-4o-mini 本来就不是 thinking 模型，
   // 不需要任何开关（实测两种开关它都容忍，但没必要往请求里塞看不懂的参数）。
   if (model.includes('/')) return {};
+  // 2026-10-09 真实 CI：enable_thinking:false 仍返回 500/500 reasoning tokens、
+  // 正文 0，25 条连续三次全空。V4 原生开关采用官方协议，不能沿用旧代理参数。
+  // https://api-docs.deepseek.com/guides/thinking_mode/
+  if (/^deepseek-v4-(flash|pro)$/.test(model)) return { thinking: { type: 'disabled' } };
   // ToAPIs 侧：gpt-* 只认 reasoning_effort，deepseek/terra 只认 enable_thinking，
   // 发错那一个直接 400 Unknown parameter（0922 实证）。
   return model.startsWith('gpt-') ? { reasoning_effort: 'none' } : { enable_thinking: false };
