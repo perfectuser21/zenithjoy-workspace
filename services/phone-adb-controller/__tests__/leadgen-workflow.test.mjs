@@ -210,3 +210,35 @@ test('采集组合预算包含重新打开核验和本身480秒采集，但不�
   }finally{rmSync(dir,{recursive:true,force:true});}
  }
 });
+
+
+test('全部业务与清场验收通过后，清场after的正常finish应汇总为completed',async()=>{
+ const {runWorkflow}=await import('../leadgen-workflow.mjs');const records=[];
+ const r=await runWorkflow({activities:[{key:'write_videos'},{key:'cleanup'}],context:{},
+  handlers:{write_videos:async()=>({persisted:2}),cleanup:async()=>({lock_released:1,no_lock:true})},
+  commander:async q=>({action:q.activity==='cleanup'&&q.phase==='after'?'finish':'continue',reason:'本批收尾完成'}),
+  record:async q=>records.push(q),verify:async()=>({verified:true})});
+ assert.equal(r.status,'completed');assert.ok(r.results.every(a=>a.status==='completed'&&a.verification.verified));
+ assert.equal(records.filter(q=>['before','after'].includes(q.phase)).length,4);
+});
+
+test('无锁清场skipped后的finish属于正常结束，不能把已完成评分标为partial',async()=>{
+ const {runWorkflow}=await import('../leadgen-workflow.mjs');
+ const r=await runWorkflow({activities:[{key:'scoring'},{key:'cleanup'}],context:{},
+  handlers:{scoring:async()=>({scored:2}),cleanup:async()=>({status:'skipped',no_lock:true})},
+  commander:async q=>({action:q.activity==='cleanup'&&q.phase==='after'?'finish':'continue',reason:'没有设备锁，无需清场'}),
+  record:async()=>{},verify:async()=>({verified:true})});
+ assert.equal(r.status,'completed');assert.equal(r.results[1].status,'skipped');
+});
+
+test('正常清场finish不能掩盖业务失败、清场验收失败、partial或escalate',async()=>{
+ const {runWorkflow}=await import('../leadgen-workflow.mjs');
+ for(const scenario of ['business_failure','cleanup_failure','cleanup_partial','cleanup_escalate']){
+  const r=await runWorkflow({activities:[{key:'source'},{key:'cleanup'}],context:{},
+   handlers:{source:async()=>{if(scenario==='business_failure')throw Error('真实失败');return {};},
+    cleanup:async()=>scenario==='cleanup_partial'?{status:'partial',failures:[{reason:'未释放锁'}]}:{}},
+   commander:async q=>({action:q.activity==='cleanup'&&q.phase==='after'?(scenario==='cleanup_escalate'?'escalate':'finish'):'continue',reason:'保留实际失败'}),
+   record:async()=>{},verify:async a=>({verified:!(scenario==='cleanup_failure'&&a.key==='cleanup')})});
+  assert.equal(r.status,['business_failure','cleanup_failure'].includes(scenario)?'failed':'partial');
+ }
+});
