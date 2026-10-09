@@ -52,15 +52,16 @@ qv_open(){
   qv_verify_video "$TAG-identity" || return 4
 }
 qv_qualify(){
-  local seconds="${QUEUED_VIDEO_RECORD_SECONDS:-25}" started stopped extracted audio="" db duration remote result verdict
+  local seconds="${QUEUED_VIDEO_RECORD_SECONDS:-25}" record_eid="$TAG-v$VID-record" started stopped extracted audio="" db duration remote result verdict
   [[ "$seconds" == <-> ]] && (( seconds >= 10 && seconds <= 105 )) || return 2
   # 默认保守录制60秒视频的3倍速片段；队列暂未记录原视频时长。
   if "$C" --profile "$P" set-playback-speed 3.0 "$TAG-speed" </dev/null >/dev/null; then
-    if "$C" --profile "$P" record-start "$TAG-record" "$seconds" </dev/null >/dev/null; then
+    # 同一批的视频各留独立工件；run锁仍使用TAG，既有录像保持不可覆盖。
+    if "$C" --profile "$P" record-start "$record_eid" "$seconds" </dev/null >/dev/null; then
       qv_nap "$((seconds+2))"
-      stopped="$("$C" --profile "$P" record-stop "$TAG-record" </dev/null)" || stopped=""
+      stopped="$("$C" --profile "$P" record-stop "$record_eid" </dev/null)" || stopped=""
       if [[ "$stopped" == record_stopped* ]]; then
-        extracted="$("$C" --profile "$P" record-extract-audio "$TAG-record" </dev/null)" || extracted=""
+        extracted="$("$C" --profile "$P" record-extract-audio "$record_eid" </dev/null)" || extracted=""
         audio="$(print -r -- "$extracted" | sed -n 's/^audio_extracted path=\([^ ]*\).*/\1/p')"
         db="$(print -r -- "$stopped" | sed -n 's/.*mean_volume_db=\([^ ]*\).*/\1/p')"
         duration="$(print -r -- "$stopped" | sed -n 's/.*duration_seconds=\([^ ]*\).*/\1/p')"
@@ -178,6 +179,9 @@ except Exception: print("medium")' "$count")"
       done
       [[ -n "$profile" ]] || qv_log "profile_url_missing row=$total fallback=douyin_id"
       # 名片动作可能改变返回栈，不能仅凭“评论面板重新打开”认作原视频。
+      # 名片复制的暂存页与评论面板都没有可取链的分享按钮；先重开目标，
+      # 再用真实新取链核验实际ID，禁止拿open-video回显的期望ID代替验证。
+      "$C" --profile "$P" open-video "$VID" "$TAG-v$VID-after-card$total-open" </dev/null >/dev/null || return 4
       qv_verify_video "$TAG-v$VID-after-card$total" || return 4
       "$C" --profile "$P" open-comments "$TAG-v$VID-after-card$total-comments" </dev/null >/dev/null || return 6
       emitted[$oid$'\t'$body]=1
