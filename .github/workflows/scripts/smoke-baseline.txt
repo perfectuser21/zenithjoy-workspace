@@ -145,3 +145,4 @@ dispatch-two-step-smoke.sh
 payment-smoke.sh
 brain-tasks-page-smoke.sh
 brain-device-job-mirror-smoke.sh
+devalue-security-smoke.sh
