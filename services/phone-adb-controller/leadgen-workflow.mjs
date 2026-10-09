@@ -115,7 +115,9 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
   };
   const videoAction=(mode,v)=>bounded('zsh',[join(root,'process-queued-video.sh'),mode,profile,
     v.video_id,v.video_url,Buffer.from(v.title||'').toString('base64'),Buffer.from(v.keyword||'').toString('base64'),run,line],
-    {maxDurationS:mode==='collection'?600:300,env:{QUEUED_VIDEO_QUALIFY_CMD:join(root,'leadgen-qualify.sh')}});
+    // 资格是打开、实际取链核验、录音、上传与远端判定的组合，不能沿用单次取链300秒。
+    // 仍由bounded限制在正式qualification活动1800秒的剩余预算内。
+    {maxDurationS:mode==='qualification'?900:mode==='collection'?600:300,env:{QUEUED_VIDEO_QUALIFY_CMD:join(root,'leadgen-qualify.sh')}});
   return {state,preflight,
     source:async()=>(await getDiscovery()).source(),
     dedup:async()=>{const r=await (await getDiscovery()).dedup();return {...r,historical_filter_verified:1,own_filter_verified:1,run_dedup_verified:1};},

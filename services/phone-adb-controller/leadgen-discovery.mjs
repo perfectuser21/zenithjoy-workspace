@@ -99,7 +99,9 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
   if(!rows) throw new Error('PG历史查询未返回实际视频列表');
   const historic=new Set(rows.map(row=>normalized(row.title)).filter(Boolean));
   const seen=new Set();
-  for(const candidate of state.candidates) {
+  // 来源依次核验完成；先消费较新的结果，避免等第二来源时第一来源卡片已发生变化。
+  const freshest=[...state.candidates].sort((a,b)=>(b.sourceIndex??0)-(a.sourceIndex??0));
+  for(const candidate of freshest) {
    const title=normalized(candidate.title),author=normalized(candidate.author);
    if(!title||!author){state.counts.missing_identity++;failed(candidate,'missing_identity','视频卡片无可核验标题或作者，不能沿用旧坐标');
     if(sourceKind==='benchmark'&&!state.known_gaps.some(g=>g.kind==='benchmark_identity_unavailable')) state.known_gaps.push({kind:'benchmark_identity_unavailable',detail:'现有对标主页网格不提供标题，稳定身份核验尚未就绪；旧入口不作回退。'});
@@ -140,8 +142,8 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
   if(state.write_complete)return {counts:{...state.counts},videos:[...state.persisted],failures:[...state.failures],known_gaps:[...state.known_gaps]};
   const started=Date.now(),seenIds=new Set();
   for(const [index,candidate] of state.kept.entries()) {
-   checkBoundary(started);
    if(state.counts.persisted>=limit){state.counts.limit_skipped=state.kept.length-index;break;}
+   checkBoundary(started);
    state.counts.attempted++;const eid=`${run}-candidate${index+1}`;
    let hit;
    try {hit=await locate(candidate,eid,started);} catch(error){failed(candidate,'position_unconfirmed',error);continue;}
