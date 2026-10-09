@@ -41,14 +41,14 @@ jobs:
   impact:
     name: Implementation impact
     needs: caller-contract
-    uses: perfectuser21/cecelia/.github/workflows/implementation-impact.yml@91317659645e4ff6aae1fb3d5dcdde77a5948330
+    uses: perfectuser21/cecelia/.github/workflows/implementation-impact.yml@5a86ca0e120111d29f077de2f2bfe3eb00a72bb5
     with:
       source_repo: perfectuser21/zenithjoy-workspace
       scope: zenithjoy
       base_revision: ${{ github.event.pull_request.base.sha || inputs.base_revision || github.event.before }}
       head_revision: ${{ github.event.pull_request.head.sha || github.sha }}
       mode: ${{ github.event_name == 'pull_request' && 'pr' || 'main' }}
-      tooling_revision: 91317659645e4ff6aae1fb3d5dcdde77a5948330
+      tooling_revision: 5a86ca0e120111d29f077de2f2bfe3eb00a72bb5
     secrets:
       TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
       CECELIA_INTERNAL_TOKEN: ${{ secrets.CECELIA_INTERNAL_TOKEN }}

@@ -1,14 +1,14 @@
-name: Deploy phone-adb-controller to mmv+xian-m4+xian-m1
+name: Deploy phone-adb-controller to mmv+xian-m4
 
 # ───────────────────────────────────────────────────────────────────────────
 # 背景（0929）：services/phone-adb-controller/ 的代码合并到 main 之后，此前完全靠人肉记得
-# 手动跑 deploy.sh 才会真的出现在跑它的三台机器（mmv 本机 + 西安 xian-m4/xian-m1）上——
-# DoD 审计批次4(PR #2006) merge 6 小时后三机仍是旧代码就是实锤。决策 639800cc：
-# 合并自动直推三机，不加人工确认闸（这三台物理机本身就是生产，没有等价的 staging 手机）。
+# 手动跑 deploy.sh 才会真的出现在跑它的两台机器（mmv 本机 + 西安 xian-m4）上——
+# 历史 DoD 审计已确认合并不会自动换执行代码。决策 639800cc：
+# 合并自动直推两机，不加人工确认闸（这两台物理机本身就是生产，没有等价的 staging 手机）。
 #
 # 连接模式完全复用 deploy-us-vps.yml / promote-prod-hk.yml 已验证过的
 # tailscale/github-action + SSH 到 mmv，不新建任何连接通道。
-# mmv 自己已配置好到 xian-m4/xian-m1 的 SSH 别名，deploy.sh 从 mmv 上跑就能推三机。
+# mmv 自己已配置好到 xian-m4 的 SSH 别名，deploy.sh 从 mmv 上跑就能推两机。
 # ───────────────────────────────────────────────────────────────────────────
 
 on:
@@ -33,7 +33,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: 部署到 mmv + xian-m4 + xian-m1
+    name: 部署到 mmv + xian-m4
     if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     outputs:
@@ -70,7 +70,7 @@ jobs:
           echo "── tailscale ping"
           sudo tailscale ping -c 3 --timeout 5s "$SSH_HOST" || echo "⚠️ tailscale ping 不通"
 
-      - name: SSH 到 mmv 部署三机 + drift-check + Bark 通知
+      - name: SSH 到 mmv 部署两机 + drift-check + Bark 通知
         env:
           SSH_KEY: ${{ secrets.US_MAC_SSH_KEY }}
           SSH_HOST: ${{ secrets.US_MAC_TAILSCALE_IP }}
@@ -141,14 +141,14 @@ jobs:
           echo "=== [1/4] git reset --hard → ${DEPLOY_SHA} ==="
           git -C "$REPO" reset --hard "$DEPLOY_SHA"
 
-          echo "=== [2/4] deploy.sh（推 mmv + xian-m4 + xian-m1）==="
+          echo "=== [2/4] deploy.sh（推 mmv + xian-m4）==="
           cd "$REPO"
           # wrapper从mmv 0600凭据镜像读token，先构造/核验release，再调用现有deploy.sh。
           if ! DEPLOY_LOG=$(node services/phone-adb-controller/deployment-prepare.mjs "$DEPLOY_SHA" "$CI_BUNDLE" "$DEPLOY_ATTEMPT" </dev/null 2>&1); then
             echo "$DEPLOY_LOG"
             DEPLOY_FAIL_DETAIL="$(echo "$DEPLOY_LOG" | grep '❌' | head -3 | tr '\n' ';' || true)"
             [[ -z "$DEPLOY_FAIL_DETAIL" ]] && DEPLOY_FAIL_DETAIL="$(echo "$DEPLOY_LOG" | tail -5 | tr '\n' ';')"
-            notify "phone-adb自动部署失败" "deploy.sh失败(可能已部分部署,三机版本可能不一致): ${DEPLOY_FAIL_DETAIL}(sha=${DEPLOY_SHA:0:8})"
+            notify "phone-adb自动部署失败" "deploy.sh失败(可能已部分部署,两机版本可能不一致): ${DEPLOY_FAIL_DETAIL}(sha=${DEPLOY_SHA:0:8})"
             exit 1
           fi
           echo "$DEPLOY_LOG"
@@ -167,7 +167,7 @@ jobs:
             exit 1
           fi
 
-          notify "phone-adb自动部署成功" "已部署到mmv+xian-m4+xian-m1并通过drift-check(sha=${DEPLOY_SHA:0:8})" "active"
+          notify "phone-adb自动部署成功" "已部署到mmv+xian-m4并通过drift-check(sha=${DEPLOY_SHA:0:8})" "active"
           echo "✅ 全部完成"
           REMOTE_EOF
           } | ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=60 \

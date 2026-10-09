@@ -80,6 +80,10 @@ export function thinkingOffParam(model: string): Record<string, unknown> {
   // OpenRouter 风格模型名（vendor/model）：gpt-4o-mini 本来就不是 thinking 模型，
   // 不需要任何开关（实测两种开关它都容忍，但没必要往请求里塞看不懂的参数）。
   if (model.includes('/')) return {};
+  // 2026-10-09 真实 CI：enable_thinking:false 仍返回 500/500 reasoning tokens、
+  // 正文 0，25 条连续三次全空。V4 原生开关采用官方协议，不能沿用旧代理参数。
+  // https://api-docs.deepseek.com/guides/thinking_mode/
+  if (/^deepseek-v4-(flash|pro)$/.test(model)) return { thinking: { type: 'disabled' } };
   // ToAPIs 侧：gpt-* 只认 reasoning_effort，deepseek/terra 只认 enable_thinking，
   // 发错那一个直接 400 Unknown parameter（0922 实证）。
   return model.startsWith('gpt-') ? { reasoning_effort: 'none' } : { enable_thinking: false };
@@ -159,9 +163,20 @@ export async function gradeComments(
     // 表现就是 finish_reason=length + content 空。这种情况必须留下可检索的 error 日志，
     // 不能只静默返回一批 null 让人以为"这些评论就是没意向"——真机就是这么瞒了一个多月。
     if (choice?.finish_reason === 'length') {
+      // 只记诊断元数据；不能凭 length 推断思考占满，也不能记录评论/模型正文/凭据。
+      const tokenCount = (value: unknown): number | null =>
+        typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+      const usage = resp.data?.usage;
       console.error(
-        `[comment-grading] 输出被 max_tokens 截断（finish_reason=length），${comments.length} 条留言整批未分档。` +
-        '大概率是 reasoning_effort=none 没生效导致思考吃光预算，请查网关是否仍支持该参数。'
+        '[comment-grading] 输出被 max_tokens 截断：' + JSON.stringify({
+          model: /^[a-zA-Z0-9/_.-]+$/.test(GRADING_MODEL) ? GRADING_MODEL : 'unknown',
+          batch_size: comments.length,
+          finish_reason: 'length',
+          max_tokens: 500,
+          completion_tokens: tokenCount(usage?.completion_tokens),
+          reasoning_tokens: tokenCount(usage?.completion_tokens_details?.reasoning_tokens),
+          content_length: text.length,
+        }),
       );
       return comments.map(() => null);
     }

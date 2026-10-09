@@ -195,7 +195,7 @@ describe('comment-grading gradeComments', () => {
     // 这里只认一件事：请求体里必须带上**当前模型对应的那个**关思考开关。
     expect(body).toMatchObject(thinkingOffParam(body.model as string));
     // 而且只带一个——两个都塞会在不认的那一侧 400
-    const switches = ['enable_thinking', 'reasoning_effort'].filter((k) => k in body);
+    const switches = ['enable_thinking', 'reasoning_effort', 'thinking'].filter((k) => k in body);
     // OpenRouter 侧一个都不带；ToAPIs 侧必须恰好带一个（两个都塞会在不认的那侧 400）
     expect(switches).toHaveLength((body.model as string).includes('/') ? 0 : 1);
   });
@@ -205,6 +205,25 @@ describe('comment-grading gradeComments', () => {
    * 表现就是 finish_reason=length + content 空。这种情况必须留下**可检索的 error 日志**，
    * 不能只是静默返回一批 null 让人以为"这些评论就是没意向"。
    */
+  it('截断诊断记录 token 元数据，区分思考耗尽与正文超限且不泄露评论', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(axios.post).mockResolvedValue({
+      data: {
+        choices: [{ finish_reason: 'length', message: { content: '私人回复正文' } }],
+        usage: { completion_tokens: 500, completion_tokens_details: { reasoning_tokens: 490 } },
+      },
+    } as never);
+    const result = await gradeComments('私人画像', '私人标题', null, [{ commentText: '私人评论' }]);
+    expect(result).toEqual([null]);
+    const logs = errSpy.mock.calls.map((args) => args.join(' ')).join('\n');
+    expect(logs).toContain('"completion_tokens":500');
+    expect(logs).toContain('"reasoning_tokens":490');
+    expect(logs).toContain('"content_length":6');
+    expect(logs).not.toContain('私人');
+    expect(logs).not.toContain('test-toapis-key');
+    errSpy.mockRestore();
+  });
+
   it('截断守卫：finish_reason=length 时打 error 日志点名截断，而非静默全 null', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const mockedPost = vi.mocked(axios.post);
@@ -248,9 +267,11 @@ describe('thinkingOffParam — 关思考开关按模型分派', () => {
     expect(thinkingOffParam('gpt-5.6-terra')).not.toHaveProperty('enable_thinking');
   });
 
-  it('非 gpt 系列（deepseek 等）用 enable_thinking', async () => {
+  it('DeepSeek V4 使用官方 thinking.type=disabled，保留其他模型参数', async () => {
     const { thinkingOffParam } = await import('./comment-grading');
-    expect(thinkingOffParam('deepseek-v4-flash')).toEqual({ enable_thinking: false });
+    expect(thinkingOffParam('deepseek-v4-flash')).toEqual({ thinking: { type: 'disabled' } });
+    expect(thinkingOffParam('deepseek-v4-pro')).toEqual({ thinking: { type: 'disabled' } });
+    expect(thinkingOffParam('qwen-test')).toEqual({ enable_thinking: false });
   });
 
   it('实际请求体里带的开关必须与当前模型匹配', async () => {
@@ -283,7 +304,8 @@ describe('thinkingOffParam — 关思考开关按模型分派', () => {
       await mod.gradeComments('想考证的在职人员', 't', null, [{ commentText: '怎么报名' }]);
       const [, body] = vi.mocked(axiosMod.post).mock.calls.at(-1) as [string, Record<string, unknown>];
       expect(body.model).toBe('deepseek-v4-flash');
-      expect(body.enable_thinking).toBe(false);
+      expect(body.thinking).toEqual({ type: 'disabled' });
+      expect(body).not.toHaveProperty('enable_thinking');
       expect(body).not.toHaveProperty('reasoning_effort');
     } finally {
       if (prev === undefined) delete process.env.GRADING_MODEL;
