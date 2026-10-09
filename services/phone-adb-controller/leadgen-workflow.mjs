@@ -22,8 +22,10 @@ export async function runWorkflow({activities,context,handlers,commander,record,
         if(result.verification.verified!==true)result.status='failed';
       }
       results.push({activity:activity.key,...result});
+      // 清场完成后Commander正常finish是收尾结果；业务提前停止、失败与升级仍如实保留。
+      const normalCleanupFinish=activity.key==='cleanup'&&['completed','skipped'].includes(result.status)&&result.decision?.action==='finish';
       if(result.status==='failed'){status='failed';stopped=true;}
-      else if(result.status==='partial'||['finish','escalate'].includes(result.decision?.action)
+      else if(result.status==='partial'||(['finish','escalate'].includes(result.decision?.action)&&!normalCleanupFinish)
         ||result.result?.status==='partial'||result.result?.status==='paused'){
         if(status!=='failed')status='partial';stopped=true;
       }
