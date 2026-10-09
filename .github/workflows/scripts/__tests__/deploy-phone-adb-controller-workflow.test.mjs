@@ -109,3 +109,9 @@ test('控制SSH运输只携带固定SHA与编码JSON，远端仍拒绝旧main',(
  assert.match(text,/bash -s -- "\$DEPLOY_SHA" "\$IMPLEMENTATION_RUN_ID" "\$GITHUB_RUN_ID" "\$GITHUB_RUN_ATTEMPT"/);
  assert.doesNotMatch(text,/upload-artifact|CECELIA_INTERNAL_TOKEN=/);
 });
+
+test('正式拓扑文案与通知只声明M4手机和MMV，不要求零手机M1',()=>{
+ const text=fs.readFileSync(WORKFLOW_PATH,'utf8');
+ assert.doesNotMatch(text,/xian-m1|推三机|部署三机|三台物理/);
+ assert.match(text,/已部署到mmv\+xian-m4并通过drift-check/);
+});

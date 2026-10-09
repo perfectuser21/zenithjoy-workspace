@@ -31,13 +31,13 @@ export function fixture(){
 }
 function release(f,target='xian-m4'){
  const payload={...f.bundle.snapshot.definitions,components:[{kind:'repo',repo,revision:sha},{kind:'code',repo,path:file,revision:sha,digest:'sha256:'+digest(bytes)}],verification:{status:'verified'}};
- const r={id:target==='xian-m4'?vid[0]:target==='xian-m1'?vid[1]:vid[2],environment:'production',target,payload};r.manifest_sha256=digest({environment:r.environment,target:r.target,payload});return r;
+ const r={id:target==='xian-m4'?vid[0]:vid[2],environment:'production',target,payload};r.manifest_sha256=digest({environment:r.environment,target:r.target,payload});return r;
 }
-test('固定证据生成三目标release；真实Brain回读后才返回可部署映射',async()=>{
+test('固定证据生成M4与MMV两目标release；真实Brain回读后才返回可部署映射',async()=>{
  const {prepareDeploymentReleases}=await implementation();const f=fixture(),calls=[];
- const request=async(path,body)=>{calls.push({path,body});if(body)return {release:release(f,body.target)};return {release:release(f,path.endsWith(vid[0])?'xian-m4':path.endsWith(vid[1])?'xian-m1':'mmv')};};
+ const request=async(path,body)=>{calls.push({path,body});if(body)return {release:release(f,body.target)};return {release:release(f,path.endsWith(vid[0])?'xian-m4':'mmv')};};
  const result=await prepareDeploymentReleases({...f,sha,environment:'production',attemptKey:'github:1:1',request,readFile:path=>{assert.equal(path,file);return bytes;}});
- assert.deepEqual(Object.keys(result).sort(),['mmv','xian-m1','xian-m4']);assert.equal(calls.filter(c=>c.body).length,3);
+ assert.deepEqual(Object.keys(result).sort(),['mmv','xian-m4']);assert.equal(calls.filter(c=>c.body).length,2);
  for(const c of calls.filter(c=>c.body)){assert.equal(c.body.ci_evidence[0].receipt,f.bundle.receipt);assert.equal(c.body.workflows.length,4);}
 });
 test('错误固定SHA、PR/unknown/admission_only或篡改快照在创建release前拒绝',async()=>{
@@ -49,7 +49,7 @@ test('错误固定SHA、PR/unknown/admission_only或篡改快照在创建release
 test('预检拒缺release、错目标/环境/来源、unknownCI与内容漂移',async()=>{
  const {preflightDeploymentReleases}=await implementation();
  for(const mutate of [r=>null,r=>({...r,target:'unrelated'}),r=>({...r,environment:'staging'}),r=>({...r,payload:{...r.payload,verification:{status:'unknown'}}}),r=>({...r,payload:{...r.payload,components:[]}})]){
-  const f=fixture();await assert.rejects(preflightDeploymentReleases({manifest:f.manifest,environment:'production',releaseIds:{'xian-m4':vid[0],'xian-m1':vid[1],'mmv':vid[2]},request:async path=>({release:mutate(release(f,path.endsWith(vid[0])?'xian-m4':path.endsWith(vid[1])?'xian-m1':'mmv'))})}));
+  const f=fixture();await assert.rejects(preflightDeploymentReleases({manifest:f.manifest,environment:'production',releaseIds:{'xian-m4':vid[0],'mmv':vid[2]},request:async path=>({release:mutate(release(f,path.endsWith(vid[0])?'xian-m4':'mmv'))})}));
  }
 });
 test('凭据镜像仅接受安全权限的CECELIA_INTERNAL_TOKEN，不执行env内容',async()=>{
@@ -62,21 +62,21 @@ test('真实deploy.sh在任何目标SSH/scp前拒绝无真实release（不只是
  const dir=mkdtempSync(join(tmpdir(),'deploy-before-side-effect-')),bin=join(dir,'bin'),marker=join(dir,'side-effect');mkdirSync(bin);
  for(const name of ['ssh','scp'])writeFileSync(join(bin,name),`#!/bin/sh\nprintf invoked > '${marker}'\nexit 99\n`,{mode:0o755});
  const server=createServer((req,res)=>{res.writeHead(404,{'Content-Type':'application/json'});res.end('{}');});await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
- const child=spawn('bash',[new URL('../deploy.sh',import.meta.url).pathname],{env:{...process.env,PATH:`${bin}:${process.env.PATH}`,BRAIN_URL:`http://127.0.0.1:${server.address().port}`,BRAIN_INTERNAL_TOKEN:'fixture-only',WF_RELEASE_IDS:JSON.stringify({'xian-m4':vid[0],'xian-m1':vid[1],'mmv':vid[2]}),WF_DEPLOY_ENVIRONMENT:'production',WF_DEPLOY_COLLECTOR:'phone-adb-deployer',WF_DEPLOY_ATTEMPT_KEY:'fixture'}});
+ const child=spawn('bash',[new URL('../deploy.sh',import.meta.url).pathname],{env:{...process.env,PATH:`${bin}:${process.env.PATH}`,BRAIN_URL:`http://127.0.0.1:${server.address().port}`,BRAIN_INTERNAL_TOKEN:'fixture-only',WF_RELEASE_IDS:JSON.stringify({'xian-m4':vid[0],'mmv':vid[2]}),WF_DEPLOY_ENVIRONMENT:'production',WF_DEPLOY_COLLECTOR:'phone-adb-deployer',WF_DEPLOY_ATTEMPT_KEY:'fixture'}});
  let stderr='';child.stdout.resume();child.stderr.on('data',v=>stderr+=v);const code=await new Promise(r=>child.on('close',r));
  assert.notEqual(code,0);assert.equal(existsSync(marker),false,`缺真实release已触目标副作用: ${stderr}`);
 });
 test('同一CI证据重试部署时release声明完全相同，attempt只用于部署观测',async()=>{
  const {prepareDeploymentReleases}=await implementation(),f=fixture(),posted=[];
- const request=async(path,body)=>{if(body){posted.push(body);return {release:release(f,body.target)};}return {release:release(f,path.endsWith(vid[0])?'xian-m4':path.endsWith(vid[1])?'xian-m1':'mmv')};};
+ const request=async(path,body)=>{if(body){posted.push(body);return {release:release(f,body.target)};}return {release:release(f,path.endsWith(vid[0])?'xian-m4':'mmv')};};
  for(const attemptKey of ['github:42:100:1','github:42:101:2'])await prepareDeploymentReleases({...f,sha,environment:'production',attemptKey,request,readFile:()=>bytes});
- assert.deepEqual(posted[0],posted[3]);assert.deepEqual(posted[1],posted[4]);
+ assert.deepEqual(posted[0],posted[2]);assert.deepEqual(posted[1],posted[3]);
 });
 test('不同受信CI run即使报告相同仍有独立不可变release key',async()=>{
  const {prepareDeploymentReleases}=await implementation(),f=fixture(),keys=[];
- const request=async(path,body)=>{if(body){keys.push(body.release_key);return {release:release(f,body.target)};}return {release:release(f,path.endsWith(vid[0])?'xian-m4':path.endsWith(vid[1])?'xian-m1':'mmv')};};
+ const request=async(path,body)=>{if(body){keys.push(body.release_key);return {release:release(f,body.target)};}return {release:release(f,path.endsWith(vid[0])?'xian-m4':'mmv')};};
  for(const attemptKey of ['github:42:100:1','github:43:101:1'])await prepareDeploymentReleases({...f,sha,environment:'production',attemptKey,request,readFile:()=>bytes});
- assert.notEqual(keys[0],keys[3]);
+ assert.notEqual(keys[0],keys[2]);
 });
 
 function withBindings(bindings){
@@ -132,7 +132,16 @@ test('四新流程冻结集合缺项、重复或夹带旧入口均在发布前�
 
 test('发布映射缺MMV或夹带未知目标，在任何回读前拒绝',async()=>{
  const {preflightDeploymentReleases}=await implementation();
- for(const releaseIds of [{'xian-m4':vid[0],'xian-m1':vid[1]},{'xian-m4':vid[0],'xian-m1':vid[1],mmv:vid[2],forged:vid[3]}]){
+ for(const releaseIds of [{'xian-m4':vid[0]},{'xian-m4':vid[0],mmv:vid[2],forged:vid[3]},{'xian-m4':vid[0],mmv:vid[2],'xian-m1':vid[1]}]){
   let calls=0;await assert.rejects(preflightDeploymentReleases({manifest:fixture().manifest,environment:'production',releaseIds,request:async()=>{calls++;}}),/目标release/);assert.equal(calls,0);
  }
+});
+
+test('四手机只在M4：全部device部署循环仅M4，MMV评分仍正式发布',async()=>{
+ const {DEPLOY_HOSTS}=await implementation();assert.deepEqual(DEPLOY_HOSTS,['xian-m4','mmv']);
+ const deploy=readFileSync(new URL('../deploy.sh',import.meta.url),'utf8');
+ const loops=[...deploy.matchAll(/^for host in ([^;]+); do$/gm)].map(m=>m[1]);
+ assert.ok(loops.length>=3,'设备脚本、控制器及manifest发布必须有真实循环');
+ assert.deepEqual(loops,Array(loops.length).fill('xian-m4'));
+ assert.match(deploy,/node "\$D\/deployment-release\.mjs" mmv/);
 });

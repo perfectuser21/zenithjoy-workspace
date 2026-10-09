@@ -41,10 +41,10 @@ async function fixture(t){
  });await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>server.close());
  return {root,sha,bundlePath,attemptKey:'github:42:100:1',brainUrl:`http://127.0.0.1:${server.address().port}`,tokenPath,marker,requests,setMode:value=>mode=value};
 }
-test('真实normalized描述保留unknown，Git+HTTP三release回读后才部署固定组件',async t=>{
+test('真实normalized描述保留unknown，Git+HTTP两release回读后才部署固定组件',async t=>{
  const f=await fixture(t);await prepareAndDeploy(f);const actual=JSON.parse(readFileSync(f.marker));
- assert.equal(actual.collector,'phone-adb-deployer');assert.equal(actual.environment,'production');assert.equal(actual.token_present,true);assert.equal(actual.attempt,'github:42:100:1');assert.equal(Object.keys(actual.ids).length,3);
- assert.deepEqual(f.requests.map(r=>r.method),['POST','POST','POST','GET','GET','GET']);
+ assert.equal(actual.collector,'phone-adb-deployer');assert.equal(actual.environment,'production');assert.equal(actual.token_present,true);assert.equal(actual.attempt,'github:42:100:1');assert.deepEqual(Object.keys(actual.ids).sort(),['mmv','xian-m4']);
+ assert.deepEqual(f.requests.map(r=>r.method),['POST','POST','GET','GET']);
 });
 for(const mode of ['unknown','wrong_target'])test(`真实Brain ${mode}回执阻止部署子进程`,async t=>{
  const f=await fixture(t);f.setMode(mode);await assert.rejects(prepareAndDeploy(f));assert.equal(existsSync(f.marker),false);

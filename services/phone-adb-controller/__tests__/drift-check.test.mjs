@@ -93,6 +93,7 @@ function setup() {
     DRIFT_SKIP_FETCH: "1",
     DRIFT_STATE_DIR: join(fake, "state"),
     DRIFT_DATE: "20260929",
+    DRIFT_DEVICE_HOSTS: "xian-m4 xian-m1", // 显式额外目标仍可检查；生产默认只M4。
   };
   return {
     fake, repo, env, put,
@@ -123,21 +124,22 @@ test("--list: 从真实 deploy.sh 解析出全部部署目标(两个控制器目
     return m[1].split("\n").map((l) => l.replace(/#.*/, "")).join(" ").split(/\s+/).filter(Boolean);
   };
   const expected = arr("MMV_JS_FILES").length + arr("MMV_TOPLEVEL_FILES").length + arr("MMV_PROBE_FILES").length + arr("MMV_BIN_FILES").length
-    + 2 * (arr("DEVICE_SH_FILES").length + arr("DEVICE_NODE_FILES").length + arr("DEVICE_PLAN_FILES").length
+    + (arr("DEVICE_SH_FILES").length + arr("DEVICE_NODE_FILES").length + arr("DEVICE_PLAN_FILES").length
       + arr("DEVICE_CTL_FILES").length * arr("DEVICE_CTL_DIRS").length);
   assert.equal(lines.length, expected);
+  assert.ok(lines.every(line=>!line.startsWith('xian-m1 ')));
   for (const want of [
     "mmv .openclaw/leadgen-scripts/notify-bark.js notify-bark.js",
     "mmv .openclaw/cmdr-escort.txt cmdr-escort.txt",
     "mmv bin/log-bridge-liveness.sh log-bridge-liveness.sh",
     "mmv bin/escort-claude-escalation.sh escort-claude-escalation.sh",
     "xian-m4 bin-harvest/ledger.mjs ledger.mjs",
-    "xian-m1 bin-harvest/harvest-cron.sh harvest-cron.sh",
-    "xian-m1 bin-harvest/wf-run.sh wf-run.sh",
+    "xian-m4 bin-harvest/harvest-cron.sh harvest-cron.sh",
+    "xian-m4 bin-harvest/wf-run.sh wf-run.sh",
     "xian-m4 bin-harvest/discover-keyword.sh discover-keyword.sh",
     "xian-m4 bin-harvest/plans/keyword_acquisition.plan plans/keyword_acquisition.plan",
-    "xian-m1 bin-harvest/plans/benchmark_link_acquisition.plan plans/benchmark_link_acquisition.plan",
-    "xian-m1 .local/bin/douyin-phone-adb douyin-phone-adb",
+    "xian-m4 bin-harvest/plans/benchmark_link_acquisition.plan plans/benchmark_link_acquisition.plan",
+    "xian-m4 .local/bin/douyin-phone-adb douyin-phone-adb",
     "xian-m4 bin-harvest/douyin-phone-adb douyin-phone-adb",
   ]) assert.ok(lines.includes(want), `缺 ${want}\n${r.stdout}`);
 });
@@ -221,4 +223,13 @@ test("机器连不上: 记 UNREACHABLE 并告警", () => {
     assert.match(r.stdout, /UNREACHABLE xian-m1/);
     assert.equal(c.barks().length, 1);
   } finally { c.cleanup(); }
+});
+
+test('默认只对账M4与MMV，零手机的M1离线不告警也不访问',()=>{
+ const c=setup();try{
+  writeFileSync(join(c.fake,'hosts','xian-m1','UNREACHABLE'),'');
+  const r=c.run({DRIFT_DEVICE_HOSTS:''});assert.equal(r.status,0,r.stdout+r.stderr);
+  assert.equal(c.barks().length,0);
+  assert.doesNotMatch(readFileSync(join(c.fake,'ssh-calls.log'),'utf8'),/^xian-m1 /m);
+ }finally{c.cleanup();}
 });
