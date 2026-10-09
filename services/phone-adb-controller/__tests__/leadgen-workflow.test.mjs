@@ -146,3 +146,33 @@ test('需要140秒的取链能够完整入库，但不能越过活动剩余预�
   }finally{rmSync(dir,{recursive:true,force:true});}
  }
 });
+
+
+test('资格动作容纳已实测的打开与身份核验组合耗时，仍受活动剩余预算限制',async()=>{
+ const {createHandlers}=await import('../leadgen-workflow.mjs');
+ // 明示模拟：真机打开约145秒，加取链、归位、录音、远端判定，整体需520秒。
+ for(const remaining of [1800000,250000]){
+  const dir=mkdtempSync(join(tmpdir(),'leadgen-qualification-envelope-'));
+  const videoId='7663337150875733275',timeouts=[],released=[];
+  const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'fresh-processing',P:'work',SERIAL:'test',LEADGEN_LINE:'jinuo'};
+  const rpc=async body=>{
+   const op=body.request.op;
+   if(op==='claim_videos')return {result:[{video_id:videoId,video_url:'https://v.douyin.com/fresh/',title:'新视频',keyword:'训练师',judgment_status:'pending'}]};
+   if(op==='release_video')released.push(body.request.video_id);
+   return {result:{}};
+  };
+  const execute=async(command,args,opts)=>{
+   assert.equal(args[0],join(dir,'process-queued-video.sh'));assert.equal(args[1],'qualification');
+   timeouts.push(opts.timeoutMs);
+   if(opts.timeoutMs<520000)throw Error('EXECUTION_DEADLINE');
+   writeFileSync(join(dir,`fresh-processing-identity-${videoId}.json`),JSON.stringify({verified:true,observed_video_id:videoId,content_type:'video'}));
+   return {code:0,stdout:`QUAL\t${videoId}\tmatched\tjudged\n`,stderr:''};
+  };
+  try{
+   const h=createHandlers({root:dir,env,rpc,execute});h.state.budgetDeadline=Date.now()+remaining;
+   if(remaining===1800000){const result=await h.qualification();assert.equal(result.matched,1);assert.equal(result.videos_verified,1);assert.deepEqual(result.failures,[]);}
+   else{await assert.rejects(h.qualification(),/EXECUTION_DEADLINE/);await h.cleanup();assert.deepEqual(released,[videoId]);}
+   assert.equal(timeouts.length,1);assert.ok(timeouts[0]<=remaining);assert.ok(timeouts[0]<=900000);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+ }
+});
