@@ -182,6 +182,12 @@ jobs:
           done
           curl -fs http://localhost:5200/health || (cat /tmp/apps-api.log && exit 1)
 
+      # 基线nginx烟测仍跑同一真实镜像与配置；提前缓存，避开Docker Hub匿名限流。
+      - name: Cache pinned nginx smoke image from public mirror
+        run: |
+          docker pull mirror.gcr.io/library/nginx:1.27-alpine
+          docker tag mirror.gcr.io/library/nginx:1.27-alpine nginx:1.27-alpine
+
       - name: Discover + run all CI-capable smoke scripts (ratchet gate)
         id: glob
         run: |
