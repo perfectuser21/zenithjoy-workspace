@@ -25,15 +25,25 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
  for(const [key,fn] of Object.entries({phone,execute,queue})) if(typeof fn!=='function') throw new Error(`缺少执行依赖：${key}`);
  const ownNames=new Set([...asSet(ownAccounts.nicknames)].map(normalized));
  const state={sourceKind,sources:[],source_receipts:[],candidates:[],kept:[],persisted:[],failures:[],known_gaps:[],counts:{sources:0,sources_succeeded:0,source_failed:0,cards:0,historical:0,own:0,duplicate:0,missing_identity:0,eligible:0,attempted:0,opened:0,linked:0,persisted:0,failed:0,limit_skipped:0},source_complete:false,dedup_complete:false,write_complete:false};
+ const writeProgress=(extra={})=>{
+  if(!env.WFR_RUN_DIR)return;
+  mkdirSync(env.WFR_RUN_DIR,{recursive:true});
+  const file=join(env.WFR_RUN_DIR,'discovery-progress.json'),tmp=file+'.tmp';
+  writeFileSync(tmp,JSON.stringify({run,observed_at:new Date().toISOString(),counts:{...state.counts},
+   videos:[...state.persisted],failures:[...state.failures],known_gaps:[...state.known_gaps],...extra}),{mode:0o600});
+  renameSync(tmp,file);
+ };
  const failed=(candidate,reason,error)=>{
   state.counts.failed++;
   state.failures.push({source:candidate.source,title:candidate.title,author:candidate.author,reason,detail:String(error?.stderr||error?.message||error||'').slice(0,1000)});
+  writeProgress();
  };
  function checkBoundary(started=Date.now()) {
-  if(env.WF_STOP_FILE && existsSync(env.WF_STOP_FILE)) throw new Error('Commander请求停止发现');
-  if(Date.now()-started>=480000) throw new Error('发现活动预算已耗尽');
+  const abort=reason=>{writeProgress({abort_reason:reason});throw new Error(reason);};
+  if(env.WF_STOP_FILE && existsSync(env.WF_STOP_FILE)) abort('Commander请求停止发现');
+  if(Date.now()-started>=480000) abort('发现活动预算已耗尽');
   const start=Number(env.WF_RUN_START_TS),max=Number(env.WF_RUN_MAX_SECONDS||14400);
-  if(start>0 && max>0 && Date.now()/1000-start>=max) throw new Error('整批运行预算已耗尽');
+  if(start>0 && max>0 && Date.now()/1000-start>=max) abort('整批运行预算已耗尽');
  }
  async function pause(seconds) {
   const r=await execute('/bin/sleep',[String(seconds)],{maxDurationS:seconds+2});
@@ -147,9 +157,10 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
    try {receipt=await queue('discover',{video});}catch(error){failed(candidate,'persistence_failed',error);continue;}
    const status=receipt?.status??receipt?.judgment_status;
    if(!['pending','matched','rejected'].includes(status)){failed(candidate,'persistence_failed',receipt?.error||'PG未返回实际状态回执');continue;}
-   state.persisted.push({...video,status});state.counts.persisted++;
+   state.persisted.push({...video,status});state.counts.persisted++;writeProgress();
   }
   state.write_complete=true;
+  writeProgress();
   return {counts:{...state.counts},videos:[...state.persisted],failures:[...state.failures],known_gaps:[...state.known_gaps]};
  }
  return {source,dedup,write_videos,state};

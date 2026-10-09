@@ -15,20 +15,34 @@ export const RPC_FILES = ['leadgen-rpc.mjs', 'leadgen-queue.js', 'activity-comma
 
 export function execInput(command, args, { input = '', timeoutMs = 180000, env = process.env } = {}) {
   return new Promise((resolveResult, reject) => {
-    const child = spawn(command, args, { env, stdio: ['pipe', 'pipe', 'pipe'] });
-    let stdout = '', stderr = '', settled = false;
-    const timer = setTimeout(() => { child.kill('SIGTERM'); finish(Error('EXECUTION_DEADLINE')); }, timeoutMs);
+    // Mac/Linux上每次动作独占进程组，只停止本次动作及其子进程，不碰ADB服务或其他批次。
+    const ownGroup = process.platform !== 'win32';
+    const child = spawn(command, args, { env, detached: ownGroup, stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '', stderr = '', settled = false, stoppingError, forceTimer;
+    const timer = setTimeout(() => stop(Error('EXECUTION_DEADLINE')), timeoutMs);
+    function signalOwned(signal) {
+      try { if (ownGroup && child.pid) process.kill(-child.pid, signal); else child.kill(signal); }
+      catch (error) { if (error.code !== 'ESRCH') child.kill(signal); }
+    }
+    function stop(error) {
+      if (settled || stoppingError) return;
+      stoppingError = error;
+      signalOwned('SIGTERM');
+      forceTimer = setTimeout(() => signalOwned('SIGKILL'), 1000);
+    }
     function finish(error, result) {
-      if (settled) return; settled = true; clearTimeout(timer);
+      if (settled) return; settled = true; clearTimeout(timer); clearTimeout(forceTimer);
       if (error) reject(error); else resolveResult(result);
     }
     child.on('error', () => finish(Error('EXECUTION_START_FAILED')));
     child.stdout.on('data', chunk => {
+      if (stoppingError) return;
       stdout += chunk;
-      if (Buffer.byteLength(stdout) > 8 * 1024 * 1024) { child.kill('SIGTERM'); finish(Error('EXECUTION_OUTPUT_LIMIT')); }
+      if (Buffer.byteLength(stdout) > 8 * 1024 * 1024) stop(Error('EXECUTION_OUTPUT_LIMIT'));
     });
     child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-8000); });
-    child.on('close', code => finish(null, { code, stdout, stderr }));
+    // 必须等close：旧动作还活着时不可返回失败并开始操作同一台手机的下一候选。
+    child.on('close', code => finish(stoppingError, { code, stdout, stderr }));
     child.stdin.on('error', () => {});
     child.stdin.end(input);
   });
