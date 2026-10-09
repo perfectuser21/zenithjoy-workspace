@@ -132,7 +132,7 @@ DEVICE_PLAN_FILES=(plans/keyword_acquisition.plan plans/benchmark_link_acquisiti
 # MMV独立0103 runner与RPC服务均取正式发布字节；完整四流程定义满足Brain完整CI，运行host限制另行核验。
 MMV_RUNTIME_FILES=()
 for f in "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" "${DEVICE_RPC_PROBE_FILES[@]}" "${DEVICE_CTL_FILES[@]}" "${MMV_JS_FILES[@]}" "${MMV_PROBE_FILES[@]}"; do
-  [[ " ${MMV_RUNTIME_FILES[*]} " == *" $f "* ]] || MMV_RUNTIME_FILES+=("$f")
+  [[ " ${MMV_RUNTIME_FILES[*]-} " == *" $f "* ]] || MMV_RUNTIME_FILES+=("$f")
 done
 # 在任何SSH前核验部署源字节属于固定commit；manifest最后发布，半次部署不能通过起跑核验。
 DEPLOY_MANIFEST=$(mktemp)

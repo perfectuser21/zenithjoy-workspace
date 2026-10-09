@@ -483,7 +483,7 @@ if [[ -n "$_CALL_PATH" ]]; then
   printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> "%s/ssh.log"\nexit 0\n' "$_STUB" > "$_STUB/ssh"
   chmod +x "$_STUB/scp" "$_STUB/ssh"
   PATH="$_STUB:$PATH" node "$D/__tests__/fixtures/deploy-smoke-runner.mjs" "$D/deploy.sh" > "$_STUB/run.log" 2>&1 || true
-  for _h in xian-m4 xian-m1; do
+  for _h in xian-m4; do
     if ! grep -qx "$_h:${_CALL_DIR}/.douyin-phone-adb.deploy-new" "$_STUB/scp.log" 2>/dev/null \
        || ! grep -qE "^$_h .*mv -f ${_CALL_DIR}/\.douyin-phone-adb\.deploy-new ${_CALL_DIR}/douyin-phone-adb\$" "$_STUB/ssh.log" 2>/dev/null; then
       # 带上现场再死，否则下一个人只能靠猜（本仓死规矩：不拿现场不动手）
@@ -494,6 +494,9 @@ if [[ -n "$_CALL_PATH" ]]; then
       fail "deploy.sh 空跑后没往 $_h:${_CALL_DIR}/ 送 douyin-phone-adb —— 夜批调的就是这个路径(harvest-keyword.sh 里写死 ${_CALL_PATH})，下发到别处=手机上永远跑旧版"
     fi
   done
+  if grep -qE '^xian-m1(:| )' "$_STUB/scp.log" "$_STUB/ssh.log"; then
+    fail "M1无手机，当前发布不应访问M1"
+  fi
 fi
 
 grep -qF 'normalize_nickname' "$D/douyin-phone-adb" \
