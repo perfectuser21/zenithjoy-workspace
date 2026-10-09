@@ -32,7 +32,8 @@ jobs:
 
     services:
       postgres:
-        image: postgres:15
+        # Docker Hub匿名限流会在测试前阻断容器；使用Google公共官方镜像缓存。
+        image: mirror.gcr.io/library/postgres:15
         env:
           POSTGRES_USER: cecelia
           POSTGRES_PASSWORD: cecelia
@@ -180,6 +181,12 @@ jobs:
             sleep 1
           done
           curl -fs http://localhost:5200/health || (cat /tmp/apps-api.log && exit 1)
+
+      # 基线nginx烟测仍跑同一真实镜像与配置；提前缓存，避开Docker Hub匿名限流。
+      - name: Cache pinned nginx smoke image from public mirror
+        run: |
+          docker pull mirror.gcr.io/library/nginx:1.27-alpine
+          docker tag mirror.gcr.io/library/nginx:1.27-alpine nginx:1.27-alpine
 
       - name: Discover + run all CI-capable smoke scripts (ratchet gate)
         id: glob

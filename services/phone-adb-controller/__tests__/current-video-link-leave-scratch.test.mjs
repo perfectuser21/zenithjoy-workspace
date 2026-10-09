@@ -55,10 +55,13 @@ const FEED_XML = `${XML_HEAD}</node></hierarchy>`;
  *  am start search/tabs?keyword=<词> → 压 results（兜底重搜）；keyevent 4 → 出栈一层
  *  scratchPopTo: 暂存路线退完落在哪（默认 detail；'feed' 模拟退飞了）
  */
-function makeFakePhone({ scratchPopTo = 'detail', playState = 'paused' } = {}) {
+function makeFakePhone({ scratchPopTo = 'detail', playState = 'paused', interactiveCenter = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'cvl-leave-'));
   mkdirSync(join(dir, 'fx'));
-  writeFileSync(join(dir, 'fx', 'detail.xml'), detailXml(playState));
+  writeFileSync(join(dir, 'fx', 'detail.xml'), detailXml('playing'));
+  writeFileSync(join(dir, 'play_state'), playState);
+  writeFileSync(join(dir, 'media_keys'), '');
+  writeFileSync(join(dir, 'center_taps'), '0');
   writeFileSync(join(dir, 'fx', 'panel.xml'), PANEL_XML);
   writeFileSync(join(dir, 'fx', 'scratch.xml'), SCRATCH_XML);
   writeFileSync(join(dir, 'fx', 'feed.xml'), FEED_XML);
@@ -92,11 +95,19 @@ case "$*" in
       else
         pop
       fi ;;
+  *"input keyevent 127"*) echo paused > "$D/play_state";echo 127 >> "$D/media_keys" ;;
+  *"input keyevent 126"*) echo playing > "$D/play_state";echo 126 >> "$D/media_keys" ;;
   *"input tap"*)
       t=$(top)
       if [ "$t" = "detail" ] || [ "$t" = "detail2" ]; then
         n=$(cat "$D/taps"); n=$((n+1)); echo $n > "$D/taps"
-        case $n in 2) echo 1 > "$D/panel";; 3) echo 0 > "$D/panel";; esac
+        set -- $*;while [ "$1" != "tap" ];do shift;done;x="$2";y="$3"
+        if [ "$x $y" = "600 1198" ];then
+          n=$(cat "$D/center_taps");echo $((n+1)) > "$D/center_taps"
+          if [ "${interactiveCenter ? '1' : '0'}" = 1 ];then pop;push feed
+          elif [ "$(cat "$D/play_state")" = playing ];then echo paused > "$D/play_state";else echo playing > "$D/play_state";fi
+        elif [ "$x $y" = "1130 1550" ];then echo 1 > "$D/panel"
+        elif [ "$x $y" = "170 2204" ];then echo 0 > "$D/panel";fi
       fi ;;
   *"uiautomator dump"*)
       t=$(top)
@@ -106,7 +117,9 @@ case "$*" in
         scratch_*) f=scratch.xml ;;
         *) f=feed.xml ;;
       esac
-      cp "$D/fx/$f" "$D/remote.xml" ;;
+      if [ "$f" = detail.xml ] && [ "$(cat "$D/play_state")" = paused ];then
+        sed 's/播放视频，按钮/暂停视频，按钮/g' "$D/fx/$f" > "$D/remote.xml"
+      else cp "$D/fx/$f" "$D/remote.xml";fi ;;
   *"stat -c %s"*) wc -c < "$D/remote.xml" | tr -d ' ' ;;
   *screencap*) cp "$D/fx/shot.png" "$D/remote.png" ;;
   *" pull "*)
@@ -133,6 +146,9 @@ exit 0
     stack: () => readFileSync(stack, 'utf8').trim().split('\n'),
     deeplinks: () => Number(readFileSync(join(dir, 'deeplinks'), 'utf8').trim()),
     taps: () => Number(readFileSync(join(dir, 'taps'), 'utf8').trim()),
+    centerTaps: () => Number(readFileSync(join(dir, 'center_taps'), 'utf8').trim()),
+    playback: () => readFileSync(join(dir, 'play_state'), 'utf8').trim(),
+    mediaKeys: () => readFileSync(join(dir, 'media_keys'), 'utf8').trim().split('\n'),
   };
 }
 
@@ -155,15 +171,20 @@ test('取完链接后 back-to-results 一次返回就到结果页，不触发兜
   assert.match(r.out, /backs=1\b/, `应一次返回即到结果页: ${r.out}`);
 });
 
-test('退回原详情页后按状态恢复播放：页面暂停着就点一次，已在播放就不碰（盲目再点会按回暂停）', () => {
-  // 0930 fixtest-rc 实证：退回来的原页保留着取链接前被暂停的状态，多点一次 → 录到 -91 dB 死寂。
-  const paused = makeFakePhone({ playState: 'paused' });
-  assert.equal(paused.run(['current-video-link', 'cvl4']).code, 0);
-  // 详情页上的点击：中央暂停、分享按钮、分享链接、退回后探一下、恢复播放 = 5
-  assert.equal(paused.taps(), 5, `暂停态退回后应恰好再点一次恢复播放，实际详情页点击数=${paused.taps()}`);
-  const playing = makeFakePhone({ playState: 'playing' });
-  assert.equal(playing.run(['current-video-link', 'cvl5']).code, 0);
-  assert.equal(playing.taps(), 4, `已在播放时不该再点（会按回暂停），实际详情页点击数=${playing.taps()}`);
+test('暂停与归位只改变播放状态，不触发中央可点击元素；暂停或播放初态均能恢复播放', () => {
+  for (const playState of ['paused','playing']) {
+    const ph=makeFakePhone({playState});const r=ph.run(['current-video-link','cvl-state']);
+    assert.equal(r.code,0,r.err);assert.equal(ph.playback(),'playing');
+    assert.equal(ph.centerTaps(),0,'暂停/恢复播放不能靠中央点击');
+    assert.ok(ph.mediaKeys().includes('127'));assert.ok(ph.mediaKeys().includes('126'));
+  }
+});
+
+test('真实失败形状回放：视频中央是可点击内容时，取链仍须停留原详情并成功读回实际ID', () => {
+  const ph=makeFakePhone({interactiveCenter:true});const r=ph.run(['current-video-link','cvl-interactive']);
+  assert.equal(r.code,0,r.err);assert.match(r.out,/video_id=7000000000000000001/);
+  assert.deepEqual(ph.stack(),['results','detail']);assert.equal(ph.centerTaps(),0);
+  assert.equal(ph.playback(),'playing');
 });
 
 test('proven-to-fire 反向：修复后真机验收日志（fixtest-rc，2 张作品）回放 → 0 次兜底重搜，rescan_rate=0', () => {
