@@ -564,7 +564,7 @@ current_video_link() {
 # 有旧短链时，先在不提交搜索的暂存框中复制新nonce并实际粘贴读回。
 # proof只返回给当前_once调用，绝不持久化/清除last-clip；复制或回原详情失败拒绝继续。
 seed_clipboard_nonce() {
-  local eid="$1" nonce xml line text center x y phase
+  local eid="$1" nonce xml line text hint center x y phase
   nonce="$("$PYTHON_BIN" -c 'import secrets; print("clipnonce" + secrets.token_hex(16))')" || die "CLIPBOARD_NONCE_RANDOM_FAILED"
   [[ "$nonce" =~ '^clipnonce[a-f0-9]{32}$' ]] || die "CLIPBOARD_NONCE_RANDOM_INVALID"
   "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "snssdk1128://search/tabs?keyword=%20" >/dev/null || die "CLIPBOARD_NONCE_SCRATCH_FAILED"
@@ -585,9 +585,14 @@ seed_clipboard_nonce() {
     xml="$EVIDENCE_ROOT/${eid}-seed-${phase}.xml"
     line="$(/usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/et_search_kw"[^>]*>' "$xml" | /usr/bin/head -1 || true)"
     [[ -n "$line" ]] || die "CLIPBOARD_NONCE_FIELD_ABSENT:$phase"
-    text="$(print -- "$line" | /usr/bin/sed -E 's/.* text="([^"]*)" resource-id=.*/\1/')"
+    text="$(print -r -- "$line" | /usr/bin/sed -E 's/.* text="([^"]*)" resource-id=.*/\1/')"
     if [[ "$phase" == empty ]]; then
-      [[ -z "$text" ]] || die "CLIPBOARD_NONCE_CLEAR_UNVERIFIED"
+      # Android空输入框会把hint同时写成text；仅接受同节点的非空hint，nonce残留仍拒绝。
+      hint=""
+      if [[ "$line" == *' hint="'* ]]; then
+        hint="$(print -r -- "$line" | /usr/bin/sed -E 's/.* hint="([^"]*)".*/\1/')"
+      fi
+      [[ -z "$text" || ( -n "$hint" && "$text" == "$hint" && "$text" != clipnonce* ) ]] || die "CLIPBOARD_NONCE_CLEAR_UNVERIFIED"
       "$ADB" -s "$SERIAL" shell input keyevent 279 >/dev/null || die "CLIPBOARD_NONCE_PASTE_FAILED"
     else
       [[ "$text" == "$nonce" ]] || die "CLIPBOARD_NONCE_READBACK_MISMATCH:$phase"
