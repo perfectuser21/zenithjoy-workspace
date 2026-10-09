@@ -176,3 +176,37 @@ test('资格动作容纳已实测的打开与身份核验组合耗时，仍受�
   }finally{rmSync(dir,{recursive:true,force:true});}
  }
 });
+
+
+test('已匹配视频的身份核验也包含打开与取链，不能沿用单取链时限',async()=>{
+ const {createHandlers}=await import('../leadgen-workflow.mjs');
+ const dir=mkdtempSync(join(tmpdir(),'leadgen-matched-identity-envelope-')),videoId='7657464669711404351';
+ try{
+  const h=createHandlers({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'fresh-matched',P:'work',LEADGEN_LINE:'jinuo'},
+   rpc:async b=>({result:b.request.op==='claim_videos'?[{video_id:videoId,judgment_status:'matched'}]:{}}),
+   execute:async(c,a,o)=>{assert.equal(a[1],'identity');if(o.timeoutMs<420000)throw Error('EXECUTION_DEADLINE');assert.ok(o.timeoutMs<=480000);
+    writeFileSync(join(dir,`fresh-matched-identity-${videoId}.json`),JSON.stringify({verified:true,observed_video_id:videoId,content_type:'video'}));
+    return {code:0,stdout:'',stderr:''};}});
+  h.state.budgetDeadline=Date.now()+1800000;
+  const r=await h.qualification();assert.equal(r.matched,1);assert.equal(r.videos_verified,1);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('采集组合预算包含重新打开核验和本身480秒采集，但不越过活动剩余预算',async()=>{
+ const {createHandlers}=await import('../leadgen-workflow.mjs');
+ for(const remaining of [7200000,250000]){
+  const dir=mkdtempSync(join(tmpdir(),'leadgen-collection-envelope-')),videoId='7657464669711404351',stored=[],timeouts=[];
+  try{
+   const h=createHandlers({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'fresh-collection',P:'work',LEADGEN_LINE:'jinuo'},
+    rpc:async b=>{if(b.request.op==='claim_videos')return {result:[{video_id:videoId,judgment_status:'matched'}]};
+     if(b.request.op==='collect'){stored.push(b.request.video_id);return {result:{comments:0}};}return {result:{}};},
+    execute:async(c,a,o)=>{if(a[1]==='identity')return {code:0,stdout:'',stderr:''};
+     assert.equal(a[1],'collection');timeouts.push(o.timeoutMs);if(o.timeoutMs<800000)throw Error('EXECUTION_DEADLINE');
+     return {code:0,stdout:`COLLECTION\t${videoId}\tno_comments\t0\nRESCAN\t${videoId}\t0\n`,stderr:''};}});
+   h.state.budgetDeadline=Date.now()+1800000;await h.qualification();h.state.budgetDeadline=Date.now()+remaining;
+   const r=await h.collection();assert.equal(r.collected,remaining===7200000?1:0);assert.deepEqual(stored,remaining===7200000?[videoId]:[]);
+   assert.equal(timeouts.length,1);assert.ok(timeouts[0]<=remaining);assert.ok(timeouts[0]<=960000);
+   if(remaining===250000)assert.match(JSON.stringify(r.failures),/EXECUTION_DEADLINE/);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+ }
+});
