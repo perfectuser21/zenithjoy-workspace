@@ -3,6 +3,8 @@
 ### 根本原因
 真实发现批的5个活动全部通过独立验收，2条新视频入库、失败0；正常cleanup after finish被误当成业务提前停止，整批误标partial。随后处理的真实视频身份核验失败：中央点击暂停会触发视频内容链接，或反向切换播放状态，使界面树连续180秒不可读。两条均未进入ASR，原失败与partial记录保留。
 
+正式CI随后在初始化postgres:15时遭Docker Hub匿名拉取限流，重跑仍失败，测试尚未执行。改从Google公开Docker Hub缓存拉取同一PostgreSQL15，保留全部测试与门禁。实际缓存manifest HTTP200并包含linux/amd64。
+
 ### 下次预防
 - [x] 清场汇总与视频中央互动元素均先提交失败测试，再修生产逻辑。
 - [x] 仅cleanup实际completed或skipped的正常finish例外；业务提前finish、失败、partial、escalate和验收失败保持原状态。

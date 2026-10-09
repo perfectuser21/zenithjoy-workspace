@@ -32,7 +32,8 @@ jobs:
 
     services:
       postgres:
-        image: postgres:15
+        # Docker Hub匿名限流会在测试前阻断容器；使用Google公共官方镜像缓存。
+        image: mirror.gcr.io/library/postgres:15
         env:
           POSTGRES_USER: cecelia
           POSTGRES_PASSWORD: cecelia
