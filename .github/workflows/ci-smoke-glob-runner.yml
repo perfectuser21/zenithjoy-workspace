@@ -129,8 +129,7 @@ jobs:
       # 显式装，不能像 golden-path-7-video-remake-smoke.sh 那样绕过（那条本来就没测真抽帧）。
       - name: Install ffmpeg (material-tagging-smoke.sh 真抽帧需要)
         run: |
-          command -v ffmpeg >/dev/null 2>&1 || (sudo apt-get update -y && sudo apt-get install -y ffmpeg)
-          ffmpeg -version | head -1
+          bash .github/workflows/scripts/install-ci-ffmpeg.sh
 
       - name: Install capability protocol regression dependencies
         run: |
