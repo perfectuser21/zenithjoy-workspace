@@ -6,8 +6,8 @@
 #
 # 做法: 从 origin/main 上的 deploy.sh 解析应部署清单(MMV_JS_FILES / MMV_TOPLEVEL_FILES / MMV_PROBE_FILES / MMV_BIN_FILES /
 # DEVICE_SH_FILES / DEVICE_NODE_FILES / DEVICE_PLAN_FILES / DEVICE_CTL_FILES × DEVICE_CTL_DIRS),逐个用
-# `git show origin/main:<path>` 的 md5 对比三台机器上的实际文件(每台一次 ssh,路径相对 $HOME,
-# 因此 xian-m4 的 /Users/jinnuoshengyuan 与 xian-m1 的 $HOME 天然适配)。
+# `git show origin/main:<path>` 的 md5 对比两台机器上的实际文件(每台一次 ssh,路径相对 $HOME,
+# 当前设备仅 xian-m4，mmv 保留独立评分与数据层)。
 # 有不一致/缺失/连不上 → 经 mmv 上的 notify-bark.js 发 Bark(参数 base64,BARK_OK 判成败,
 # 与 outreach-tick.sh notify() 同约定);同一组不一致当天只告警一次,发送失败不记 marker 下次重试。
 #
@@ -27,7 +27,7 @@ REF="${DRIFT_REF:-origin/main}"
 SUBDIR="services/phone-adb-controller"
 STATE_DIR="${DRIFT_STATE_DIR:-$HOME/.leadgen-drift-check}"
 MMV_HOST="${DRIFT_MMV_HOST:-mmv}"
-read -ra DEVICE_HOSTS <<< "${DRIFT_DEVICE_HOSTS:-xian-m4 xian-m1}"
+read -ra DEVICE_HOSTS <<< "${DRIFT_DEVICE_HOSTS:-xian-m4}"
 NOTIFY_HOST="${DRIFT_NOTIFY_HOST:-mmv}"
 NOTIFY_JS="${DRIFT_NOTIFY_JS:-/Users/administrator/.openclaw/leadgen-scripts/notify-bark.js}"
 DATE_TAG="${DRIFT_DATE:-$(TZ=Asia/Shanghai date +%Y%m%d)}"

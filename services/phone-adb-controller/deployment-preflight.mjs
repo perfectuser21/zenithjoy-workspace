@@ -3,7 +3,7 @@ import {readFileSync,lstatSync,realpathSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {digest} from './runtime-definition.mjs';
 export const DEPLOY_REPO='perfectuser21/zenithjoy-workspace';
-export const DEPLOY_HOSTS=['xian-m4','xian-m1','mmv'];
+export const DEPLOY_HOSTS=['xian-m4','mmv'];
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const SHA=/^[0-9a-f]{40}$/;
 export const WORKFLOWS=[101,102,103,104].map(n=>`b1000000-0000-4000-8000-${String(n).padStart(12,'0')}`);

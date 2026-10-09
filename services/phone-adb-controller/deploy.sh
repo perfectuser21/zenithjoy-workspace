@@ -3,24 +3,24 @@
 #
 # 根因(0923主理人真机复盘炸出来的坑): 这套判定链/采收/触达脚本从来没有自动部署链路——
 # GitHub 合并只是更新了"配方书",真正跑在生产上的是 mmv(~/.openclaw/leadgen-scripts/)+
-# xian-m4(~/bin-harvest/)+xian-m1(~/bin-harvest/)三台物理机器上的手工拷贝,每次改代码
-# 都要有人记得手动scp到三个地方,漏一个就是"PR里明明改了,机器上还是老样子"。
+# xian-m4(~/bin-harvest/)两台物理机器上的手工拷贝,每次改代码
+# 都要有人记得手动scp到两个地方,漏一个就是"PR里明明改了,机器上还是老样子"。
 # apps/api那边早就有 promote-prod-hk.yml 这种自动化,这块从来没建过,退化成靠人肉记忆。
 #
-# 用法(必须在装了到 mmv/xian-m4/xian-m1 这三个 SSH 别名的机器上跑,比如这台交互机):
+# 用法(必须在装了到 mmv/xian-m4 这两个 SSH 别名的机器上跑,比如这台交互机):
 #   cd zenithjoy-workspace仓库根目录
 #   bash services/phone-adb-controller/deploy.sh
 #
 # 对账(0929): 部署完/怀疑有机器跑旧版时跑 bash services/phone-adb-controller/drift-check.sh,
-#   逐文件比对 origin/main 与三台机器的 md5,有漂移经 Bark 告警(同组当天只告一次)。mmv 上由 launchd 每天
+#   逐文件比对 origin/main 与两台机器的 md5,有漂移经 Bark 告警(同组当天只告一次)。mmv 上由 launchd 每天
 #   北京时间 09:30 自动跑,模板与安装步骤见 launchd/com.zenithjoy.leadgen-drift-check.plist。
 #   改了本文件里的数组名/形状 → drift-check.sh 的 parse_array 也要跟着改(解析为空会 exit 2 拒绝假绿)。
 #
 # 覆盖范围(v1,有意从小做起,见下方"不在本次范围"):
 #   *.js  → mmv:~/.openclaw/leadgen-scripts/(判定链+数据层)
-#   *.sh  → xian-m4:~/bin-harvest/ 和 xian-m1:~/bin-harvest/(设备/ADB层,两台各一份)
+#   *.sh  → xian-m4:~/bin-harvest/(四台手机所在的设备/ADB层)
 #   cmdr-escort.txt / cmdr-stream.txt → mmv:~/.openclaw/(agent SOP,按绝对路径引用)
-#   plans/*.plan → xian-m4 / xian-m1:~/bin-harvest/plans/(wf-run.sh 的执行计划,契约生成)
+#   plans/*.plan → xian-m4:~/bin-harvest/plans/(wf-run.sh 的执行计划,契约生成)
 #   MMV_BIN_FILES → mmv:~/bin/(0930 任务 975aa6ec: 分身 watcher escort-claude-escalation.sh + 日志桥活性守卫
 #     log-bridge-liveness.sh,两者由 mmv launchd 拉起;watcher 换版自动 kickstart -k,守卫按 StartInterval 自然读新版)
 #   常驻 launchd 脚本换版即重载: 执行机 log-stream-push.sh(com.zenithjoy.logstreampush)与 mmv watcher 都是 KeepAlive
@@ -199,8 +199,8 @@ for f in "${MMV_BIN_FILES[@]}"; do
   [[ "$f" == "escort-claude-escalation.sh" ]] && kickstart_if_changed mmv com.zenithjoy.escortclaude "$_before" "~/bin/$f"
 done
 
-echo "=== [3/3] xian-m4 + xian-m1:~/bin-harvest/ (设备/ADB层, ${#DEVICE_SH_FILES[@]} 个文件 × 2台) ==="
-for host in xian-m4 xian-m1; do
+echo "=== [3/3] xian-m4:~/bin-harvest/ (设备/ADB层, ${#DEVICE_SH_FILES[@]} 个文件 × 1台) ==="
+for host in xian-m4; do
   echo "  --- $host ---"
   for f in "${DEVICE_SH_FILES[@]}"; do
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; continue; fi
@@ -276,7 +276,7 @@ for host in xian-m4 xian-m1; do
 done
 
 echo "=== [4/4] 设备控制器 → 每台机器的 ${#DEVICE_CTL_DIRS[@]} 个执行路径 (${#DEVICE_CTL_FILES[@]} 个文件) ==="
-for host in xian-m4 xian-m1; do
+for host in xian-m4; do
   echo "  --- $host ---"
   for f in "${DEVICE_CTL_FILES[@]}"; do
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
@@ -369,13 +369,13 @@ if [[ "$FAILED" == "1" ]]; then
   echo "⚠️ 部分文件语法检查失败,见上方 ❌ 标记——已同步的文件里可能有半成品,立刻核查"
   exit 1
 fi
-# MMV服务目录实读同SHA完整包，再采独立runner真实hostname并绑定第三正式release。
+# MMV服务目录实读同SHA完整包，再采独立runner真实hostname并绑定MMV正式release。
 ssh mmv "cd ~/.openclaw/leadgen-scripts && node deployment-manifest.mjs collect . -" < "$MMV_MANIFEST" > "$MMV_OBSERVED_MANIFEST"
 node "$D/deployment-release.mjs" mmv "$MMV_MANIFEST" > "$MMV_OBSERVED_MANIFEST"
 push_atomic "$MMV_OBSERVED_MANIFEST" mmv "~/.openclaw/leadgen-scripts" deployment-manifest.json
 push_atomic "$MMV_OBSERVED_MANIFEST" mmv "~/bin-harvest" deployment-manifest.json
-for host in xian-m4 xian-m1; do
+for host in xian-m4; do
   node "$D/deployment-release.mjs" "$host" "$DEPLOY_MANIFEST" > "$OBSERVED_MANIFEST"
   push_atomic "$OBSERVED_MANIFEST" "$host" "~/bin-harvest" deployment-manifest.json
 done
-echo "✅ 全部同步完成(mmv + xian-m4 + xian-m1,控制器覆盖两个执行路径),每个文件都过了语法检查。"
+echo "✅ 全部同步完成(mmv + xian-m4,控制器覆盖两个执行路径),每个文件都过了语法检查。"
