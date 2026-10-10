@@ -50,3 +50,17 @@ test('实际candidate22完整卡时长新露并非屏底裁切，不放宽空时
  const actual=hint(join(fixtures,'candidate22-loc-retry2.xml'),title,'Neo小海');assert.equal(actual.status,0,actual.stderr);assert.equal(actual.stdout.trim(),'clipped=0');
  const r=await run({durationChanged:true,hinted:false});assert.equal(scrolls(r).length,0);assert.equal(taps(r).length,0);assert.equal(r.out.status,'partial');assert.equal(r.out.known_gaps[0].kind,'candidate_disappeared');
 });
+
+test('短reveal露出新的完整B槽位必须先取链，不能整屏滑掉后自报已全扫；双同标题槽都保留',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'reveal-new-slots-')),events=[],saved=[];let reads=0,revealed=false,fullScroll=false,tapped='';
+ const row=(x,title)=>[x,1800,'00:20',title,'作者'].join('\t');
+ const phone=async(cmd,...args)=>{events.push([cmd,...args]);
+  if(cmd==='search-video-cards'){reads++;return (fullScroll?'':reads===1?row(100,'原完整候选A标题'):revealed?[row(450,'原完整候选A标题'),row(600,'新完整候选B标题'),row(800,'新完整候选B标题')].join('\n'):'')+'\nvideo_tab=1\nevidence=/fresh/'+(revealed?'revealed':'initial')+'.xml\nend_of_results='+(fullScroll?'1':'0');}
+  if(cmd==='search-kw-matches')return 'kw_matches=1';
+  if(cmd==='card-bottom-hint-from-xml')return 'clipped=1';
+  if(cmd==='search-grid-scroll'){if(args[1]==='reveal-up')revealed=true;else fullScroll=true;return 'scrolled='+args[1];}
+  if(cmd==='tap-evidence'){assert.equal(fullScroll,false,'新B应在整屏up前采集');tapped=args[0];return '';}
+  if(cmd==='current-video-link')return 'content_type=video\nvideo_id=7685662999797258'+({'450':'401','600':'402','800':'403'}[tapped])+'\nshort_url=https://v.douyin.com/Actual'+tapped+'/\nreturn_mode=results';return '';
+ };
+ try{const h=createDiscoveryHandlers({phone,execute:async()=>({code:0}),queue:async(op,{video})=>{saved.push(video);return {status:'pending',inserted:true};},profile:'p',run:'slots-test',root:base,sources:['AI'],limit:0,env:{WFR_RUN_DIR:dir}});const out=await h.collect_videos();assert.equal(saved.length,3);assert.equal(out.all_results_scanned,true);assert.equal(out.stop_reason,'exhausted');assert.deepEqual(events.filter(e=>e[0]==='tap-evidence').map(e=>e[1]),['450','600','800']);assert.equal(events.filter(e=>e[0]==='search-grid-scroll'&&e[2]==='reveal-up').length,1);}finally{rmSync(dir,{recursive:true,force:true});}
+});
