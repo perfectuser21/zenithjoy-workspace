@@ -60,6 +60,9 @@ if (a[0] === "pull") {
 if (a[0] !== "shell") process.exit(0);
 const sh = a.slice(1);
 const cmd = sh.join(" ");
+if (sh[0] === "readlink" && process.env.FAKE_CANONICAL_MEDIA === "1") {
+  out(sh[sh.length - 1].replace("/sdcard/", "/storage/emulated/0/") + "\\n"); process.exit(0);
+}
 if (cmd.startsWith("getprop ro.product.model")) { out("ANY-MODEL\\n"); process.exit(0); }
 if (sh[0] === "stat") {
   const p = sh[sh.length - 1];
@@ -73,6 +76,12 @@ if (cmd.includes("MEDIA_SCANNER_SCAN_FILE")) { write("scanned", cmd); out("Broad
 if (sh[0] === "content" && sh[1] === "query") {
   const m = cmd.match(/_data='([^']+)'/);
   const p = m && m[1];
+  if (process.env.FAKE_CANONICAL_MEDIA === "1") {
+    if (!p || !p.startsWith("/storage/emulated/0/")) { out("No result found.\\n"); process.exit(0); }
+    const disk = sd(p.replace("/storage/emulated/0/", "/sdcard/"));
+    if (!fs.existsSync(disk) || !read("scanned")) { out("No result found.\\n"); process.exit(0); }
+    out("Row: 0 _id=4242, _size=" + fs.statSync(disk).size + "\\n"); process.exit(0);
+  }
   if (process.env.FAKE_NOT_INDEXED === "1" || !p || !fs.existsSync(sd(p)) || !read("scanned")) { out("No result found.\\n"); process.exit(0); }
   out("Row: 0 _id=4242, _size=" + fs.statSync(sd(p)).size + "\\n"); process.exit(0);
 }
@@ -145,6 +154,15 @@ const ime = (ctx) => readFileSync(join(ctx.state, "ime"), "utf8");
 const parse = (line) => Object.fromEntries(line.split(" ").filter((t) => t.includes("=")).map((t) => [t.slice(0, t.indexOf("=")), t.slice(t.indexOf("=") + 1)]));
 
 // ── media-push ─────────────────────────────────────────────────────────
+
+test("media-push 查询媒体库使用 /sdcard 的真实路径，避免已上传文件被误删", async () => {
+  const ctx = setup();
+  const r = await run(ctx, ["media-push", ctx.video, "--name", "VID_20261010_170000.mp4"], { FAKE_CANONICAL_MEDIA: "1", DOUYIN_MEDIA_SCAN_POLLS: "1" });
+  assert.equal(r.code, 0, `err=${r.err}`);
+  assert.equal(parse(r.out).path, "/sdcard/DCIM/Camera/VID_20261010_170000.mp4");
+  assert.match(calls(ctx), /_data='\/storage\/emulated\/0\/DCIM\/Camera\/VID_20261010_170000.mp4'/);
+  assert.ok(existsSync(join(ctx.state, "sdcard", parse(r.out).path)));
+});
 
 test("media-push 成功：相机风格默认文件名、大小回读一致、媒体库可查到，输出一行可解析结果", async () => {
   const ctx = setup();
