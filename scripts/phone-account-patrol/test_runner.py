@@ -68,6 +68,24 @@ class PatrolContractTests(unittest.TestCase):
         self.assertEqual(runner.outcome({'抖音': {'state': '检测失败'}}), ('failed', 1))
         self.assertEqual(runner.outcome({'抖音': {'state': '未登录'}}), ('completed', 0))
 
+    def test_watchdog_requires_execution_not_schedule_creation(self):
+        schedule = {'id': 's', 'is_active': True}
+        created = [{'recurring_task_id': 's', 'created_at': '2026-10-10T14:01:00+00:00', 'status': 'queued'}]
+        self.assertEqual(runner.schedule_health(schedule, created, '2026-10-10T15:00:00+00:00')['status'], 'delayed')
+        schedule['template'] = {'activated_at': '2026-10-10T09:00:00+00:00'}
+        self.assertEqual(runner.schedule_health(schedule, [], '2026-10-10T09:30:00+00:00')['status'], 'awaiting_first_run')
+
+    def test_watchdog_checks_real_children_and_deferred_receipts(self):
+        batch = {'id': 'b', 'status': 'completed', 'result': {'script': {'stdout': '{"children":[{"task_id":"p"}]}'}}}
+        child = {'id': 'p', 'status': 'queued'}
+        self.assertEqual(runner.batch_execution_health(batch, lambda path: child), 'delayed')
+        child.update(status='failed')
+        self.assertEqual(runner.batch_execution_health(batch, lambda path: child), 'failed')
+        child.update(status='completed', result={'script': {'stdout': '{"status":"deferred"}'}})
+        self.assertEqual(runner.batch_execution_health(batch, lambda path: child), 'deferred')
+        child['result']['script']['stdout'] = '{"status":"completed"}'
+        self.assertEqual(runner.batch_execution_health(batch, lambda path: child), 'healthy')
+
     def test_watchdog_disabled_and_missed_run_are_distinct(self):
         self.assertEqual(runner.schedule_health({'is_active': False}, [], '2026-10-10T15:00:00+00:00')['status'], 'disabled')
         schedule = {'id': 's', 'is_active': True, 'cron_expression': '0 22 * * *'}
