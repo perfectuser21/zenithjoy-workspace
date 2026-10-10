@@ -81,3 +81,41 @@ test('丢失写回执仍留下真实待写ID、URL、证据引用，不计入成
   assert.equal(saved.pending_capture.videoId,id(1));assert.equal(saved.pending_capture.videoUrl,'https://v.douyin.com/'+id(1)+'/');assert.ok(saved.pending_capture.evidence_id.endsWith('-link'));
  }finally{r.cleanup();}
 });
+
+function changedGridRig({transient=false,limit=1}={}) {
+ const r=rig({limit});let reads=0;
+ const h=createDiscoveryHandlers({...r.options,phone:async(cmd,...args)=>{
+  if(cmd==='search-video-cards') {
+   reads++;
+   const out=(await r.options.phone(cmd,...args)).replace('100\t200\t00:20\t同标题视频内容','100\t200\t00:20\t独立候选标题');
+   if(reads>=2&&(!transient||reads===2))return out.split('\n').filter(l=>!l.includes('独立候选标题')).join('\n');
+   return out;
+  }
+  return r.options.phone(cmd,...args);
+ }});return {...r,h};
+}
+test('原候选短暂消失先有界重读，恢复后用新树坐标点击',async()=>{
+ const r=changedGridRig({transient:true});try {
+  const out=await r.h.collect_videos();
+  assert.equal(out.stop_reason,'limit_reached');assert.equal(out.videos[0].videoId,id(1));
+  assert.ok(r.events.some(e=>e[0]==='/bin/sleep'&&e[1]==='1'));
+ }finally{r.cleanup();}
+});
+test('原候选持续消失不得沿用坐标，也不得停止其余候选；达到目标允许交接',async()=>{
+ const r=changedGridRig();try {
+  const out=await r.h.collect_videos();
+  assert.equal(out.stop_reason,'limit_reached');assert.deepEqual(out.videos.map(v=>v.videoId),[id(2)]);
+  assert.equal(out.counts.failed,0);assert.equal(out.counts.relocation_skipped,1);
+  assert.equal(out.known_gaps[0].kind,'candidate_disappeared');
+  assert.ok(out.known_gaps[0].evidence_path);
+  assert.equal(r.events.filter(e=>e[0]==='tap-evidence'&&e[1]==='100').length,0);
+ }finally{r.cleanup();}
+});
+test('出现消失候选仍可继续翻屏，但不能声称已扫描全部结果',async()=>{
+ const r=changedGridRig({limit:0});try {
+  const out=await r.h.collect_videos();
+  assert.deepEqual(out.videos.map(v=>v.videoId),[id(2),id(3)]);
+  assert.equal(out.all_results_scanned,false);assert.equal(out.status,'partial');
+  assert.equal(out.stop_reason,'exhausted_with_gaps');
+ }finally{r.cleanup();}
+});
