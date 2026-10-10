@@ -19,5 +19,6 @@ node --test scripts/product-map/__tests__/leadgen-split-contracts.test.js \
  services/phone-adb-controller/__tests__/runtime-receipts.test.mjs \
  services/phone-adb-controller/__tests__/clipboard-nonce.test.mjs \
  services/phone-adb-controller/__tests__/copied-share-link.test.mjs \
+ services/phone-adb-controller/__tests__/peer-share-link.test.mjs \
  services/phone-adb-controller/__tests__/current-video-link-leave-scratch.test.mjs \
  services/phone-adb-controller/__tests__/video-link-network.test.mjs
