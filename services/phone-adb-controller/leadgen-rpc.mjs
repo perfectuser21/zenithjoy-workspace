@@ -45,7 +45,7 @@ export function verifyRpcSource(source, { read = readFileSync, base = root } = {
     const actual = createHash('sha256').update(read(resolve(base, file.path))).digest('hex');
     if (actual !== file.sha256) throw Error('RPC_SOURCE_BYTES_MISMATCH');
   }
-  for (const path of ['leadgen-rpc.mjs','leadgen-queue.js','activity-commander.mjs','leadgen-db-lib.js',
+  for (const path of ['queued-comment-history.js','leadgen-rpc.mjs','leadgen-queue.js','activity-commander.mjs','leadgen-db-lib.js',
     'leadgen-db-connect.js','judge-video.js','judge-video-lib.js','judge-jev.js','judge-comment.js','qualify-video.js',
     'transcribe-qwen-audio.js','line-routes.js','stats-line.js','next-keywords.js','keyword-enabled-lib.js',
     'verify-step.mjs','step-judge.mjs','checks/probes-lib.js','checks/schema.json',
@@ -91,7 +91,7 @@ export async function handleRpc(input, deps = {}) {
       return {ok:true,result:{...probes,steps}};
     }
     pool = deps.pool || require('./leadgen-db-connect.js').getPool();
-    if (input.kind === 'queue') return { ok: true, result: await require('./leadgen-queue.js').queueRequest(pool, input.request) };
+    if (input.kind === 'queue') return { ok: true, result: await require('./leadgen-queue.js').queueRequest(pool, input.request,{resolveHistoryUrl:url=>resolveCopiedShareLink(url,{execute:deps.resolveExec||exec})}) };
     if (input.kind === 'qualify') {
       const args = input.request;
       if (!['judge'].includes(args?.cmd) || !/^\d{16,24}$/.test(args.videoId || '')) throw Error('RPC_QUALIFY_INVALID');

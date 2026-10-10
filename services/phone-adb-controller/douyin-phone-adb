@@ -489,6 +489,27 @@ _is_video_detail_xml() {
   return 0
 }
 
+# 复制成功引导是详情上的遮罩；它本身绝不是视频详情成功证据。
+_is_copy_success_guide_xml() {
+  local xml="$1"
+  [[ -r "$xml" ]] || return 1
+  "$PYTHON_BIN" - "$xml" "$DOUYIN_PACKAGE" <<'PYGUIDE'
+import sys,xml.etree.ElementTree as ET
+try:
+    tree=ET.parse(sys.argv[1]);root=tree.getroot();pkg=sys.argv[2]
+    if root.tag != 'hierarchy': sys.exit(1)
+    nodes=list(root.iter('node'))
+    if not nodes or any(n.get('package') not in (None,'',pkg) for n in nodes): sys.exit(1)
+    if any(n.get('content-desc','').startswith('分享') for n in nodes): sys.exit(1)
+    markers={'zs0':'链接已复制成功，去粘贴分享：','zsx':'可以通过分享的链接找到我'}
+    for key,text in markers.items():
+        hits=[n for n in nodes if n.get('resource-id') == pkg+':id/'+key]
+        if len(hits)!=1 or hits[0].get('package')!=pkg or hits[0].get('text')!=text: sys.exit(1)
+except (ET.ParseError,OSError):
+    sys.exit(1)
+PYGUIDE
+}
+
 _on_video_detail() {
   local probe_id="$1" probe_xml w
   for w in 1 2; do
@@ -522,8 +543,9 @@ _leave_scratch_route() {
       print -u2 -- "leave-scratch: left scratch search route; results restoration still required"
       return 0
     fi
-    # 退回原详情页后视频自动续播，HONOR 上 uiautomator 永不 idle——0930 真机三波连读都只有
-    # 13 个骨架节点。与 _current_video_link_once 入口同一招：先用MEDIA_PAUSE暂停再取证；核验通过
+    # 退回原详情页后视频可能自动续播，先用 MEDIA_PAUSE 暂停再取证。
+    # 13 节点可能是复制成功提示层，也可能是其他非详情树；必须按新鲜树核验，不能按节点数认定。
+    # 与 _current_video_link_once 入口保持相同暂停策略；核验通过后用
     # MEDIA_PLAY恢复播放，让下游（倍速/录制）看到的状态与以前 deep link 重开后一致。
     # 暂停只能改变媒体状态；视频中央可能是可点击的广告/资料卡，不能用坐标点击。
     "$ADB" -s "$SERIAL" shell input keyevent 127 >/dev/null 2>&1 || return 1
@@ -531,7 +553,20 @@ _leave_scratch_route() {
     local w
     for w in 1 2 3; do
       xml="$EVIDENCE_ROOT/${eid}-b${i}w${w}.xml"
-      if _ui_evidence_wave "${eid}-b${i}w${w}" >/dev/null 2>&1 && _is_video_detail_xml "$xml"; then
+      if _ui_evidence_wave "${eid}-b${i}w${w}" >/dev/null 2>&1; then
+        # 仅精确认出的复制引导允许一次额外BACK；返回后独立新树仍必须是真详情。
+        if (( w == 1 )) && _is_copy_success_guide_xml "$xml"; then
+          "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1 || return 1
+          wait_ms 300
+          fg="$(foreground_package)"
+          [[ "$fg" == *"$DOUYIN_PACKAGE"* ]] || return 1
+          "$ADB" -s "$SERIAL" shell input keyevent 127 >/dev/null 2>&1 || return 1
+          wait_ms 600
+          xml="$EVIDENCE_ROOT/${eid}-guide-dismiss-b${i}.xml"
+          _ui_evidence_wave "${eid}-guide-dismiss-b${i}" >/dev/null 2>&1 || return 1
+          _is_video_detail_xml "$xml" || return 1
+        fi
+        if _is_video_detail_xml "$xml"; then
         print -u2 -- "leave-scratch: back on the original video detail page after $i backs (wave $w)"
         # 下游倍速/录制需要播放。MEDIA_PLAY幂等恢复，不依赖按钮文案推断，也不触发页面点击。
         if [[ "$mode" == detail ]]; then
@@ -540,6 +575,7 @@ _leave_scratch_route() {
           print -u2 -- "leave-scratch: resumed playback with MEDIA_PLAY"
         fi
         return 0
+        fi
       fi
       (( w < 3 )) && wait_ms 1200
     done
@@ -585,7 +621,8 @@ current_video_link() {
 # 有旧短链时，先在不提交搜索的暂存框中复制新nonce并实际粘贴读回。
 # proof只返回给当前_once调用，绝不持久化/清除last-clip；复制或回原详情失败拒绝继续。
 seed_clipboard_nonce() {
-  local eid="$1" nonce xml line text hint center x y phase
+  local eid="$1" leave_mode="${2:-detail}" nonce xml line text hint center x y phase
+  case "$leave_mode" in detail|detail-paused) ;; *) die "CLIPBOARD_NONCE_RETURN_MODE_INVALID" ;; esac
   nonce="$("$PYTHON_BIN" -c 'import secrets; print("clipnonce" + secrets.token_hex(16))')" || die "CLIPBOARD_NONCE_RANDOM_FAILED"
   [[ "$nonce" =~ '^clipnonce[a-f0-9]{32}$' ]] || die "CLIPBOARD_NONCE_RANDOM_INVALID"
   "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "snssdk1128://search/tabs?keyword=%20" >/dev/null || die "CLIPBOARD_NONCE_SCRATCH_FAILED"
@@ -626,7 +663,6 @@ seed_clipboard_nonce() {
       fi
     fi
   done
-  local leave_mode=detail
   [[ "${DETAIL_PLAYBACK:-standard}" != continuous_identity ]] || leave_mode=detail-paused
   _leave_scratch_route "${eid}-seed-leave" "$leave_mode" || die "CLIPBOARD_NONCE_ORIGINAL_DETAIL_UNVERIFIED"
   print -- "$nonce"
@@ -725,7 +761,10 @@ _current_video_link_once() {
 
   [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
   if [[ -s "$(clip_state_file)" ]]; then
-    nonce_proof="$(seed_clipboard_nonce "$evidence_id")" || die "CLIPBOARD_NONCE_PROOF_FAILED"
+    # keyword出口不录音；nonce严格归位后保持暂停，后续分享仍独立取新鲜树。
+    local nonce_seed_mode=detail
+    [[ -z "$return_keyword" ]] || nonce_seed_mode=detail-paused
+    nonce_proof="$(seed_clipboard_nonce "$evidence_id" "$nonce_seed_mode")" || die "CLIPBOARD_NONCE_PROOF_FAILED"
   fi
   # 详情页自动播放会让部分机型（HONOR 实测）uiautomator 永不 idle：
   # 先MEDIA_PAUSE幂等暂停再取证，防中央可点击内容被误触。

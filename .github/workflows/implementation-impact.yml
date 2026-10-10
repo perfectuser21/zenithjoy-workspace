@@ -37,10 +37,43 @@ jobs:
       - run: npm ci --ignore-scripts --workspaces=false
       - run: node --test scripts/ci/__tests__/implementation-impact-workflow.test.mjs
       - run: node --test scripts/ci/__tests__/pilot-release-workflow.test.mjs
+      - run: node --test scripts/ci/__tests__/implementation-patrol-scope.test.mjs
+
+  scope-classification:
+    name: Implementation scope classification
+    needs: caller-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      classification: ${{ steps.scope.outputs.classification }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --workspaces=false
+      - name: Classify fixed patrol contract and complete Git diff
+        id: scope
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || inputs.base_revision || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/ci/implementation-patrol-scope.mjs "$GITHUB_WORKSPACE" "$BASE" "$HEAD" "$RUNNER_TEMP/implementation-scope"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: implementation-scope-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/implementation-scope/scope.json
+          if-no-files-found: error
 
   impact:
     name: Implementation impact
-    needs: caller-contract
+    needs: [caller-contract, scope-classification]
+    if: needs['scope-classification'].outputs.classification == 'applicable'
     uses: perfectuser21/cecelia/.github/workflows/implementation-impact.yml@68ee3bd092ad6c0d765d26b64799529fe4a0f773
     with:
       source_repo: perfectuser21/zenithjoy-workspace

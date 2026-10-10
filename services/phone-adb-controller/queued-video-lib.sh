@@ -1,6 +1,8 @@
 #!/bin/zsh
 # 队列视频手机动作库；不注册入口、不取词、不入库、不获取/释放锁。
 source "${0:A:h}/wf-limits.sh" || return 1
+# 手机证据仅按逐视频+已校验MODE分名；锁与业务run仍使用原TAG。
+QV_EID="$TAG-v$VID-${MODE:-identity}"
 qv_nap(){ [[ -n "${HARVEST_KEYWORD_TESTING:-}" ]] || /bin/sleep "$1"; }
 qv_log(){ print -u2 -r -- "[queue-video] $*"; }
 qv_field(){ print -r -- "$1" | sed -n "s/^$2=//p" | head -1; }
@@ -48,14 +50,14 @@ qv_open(){
   local held
   held="$("$C" --profile "$P" lock-refresh "$TAG" </dev/null)" || return 3
   [[ "$held" == lock=refreshed* ]] || { qv_log 'lock_refresh_unconfirmed'; return 3; }
-  DOUYIN_DETAIL_PLAYBACK=continuous_identity "$C" --profile "$P" open-video "$VID" "$TAG-open" </dev/null >/dev/null || return 4
-  DOUYIN_DETAIL_PLAYBACK=continuous_identity qv_verify_video "$TAG-identity" || return 4
+  DOUYIN_DETAIL_PLAYBACK=continuous_identity "$C" --profile "$P" open-video "$VID" "$QV_EID-open" </dev/null >/dev/null || return 4
+  DOUYIN_DETAIL_PLAYBACK=continuous_identity qv_verify_video "$QV_EID-identity" || return 4
 }
 qv_qualify(){
-  local seconds="${QUEUED_VIDEO_RECORD_SECONDS:-25}" record_eid="$TAG-v$VID-record" started stopped extracted audio="" db duration remote result verdict
+  local seconds="${QUEUED_VIDEO_RECORD_SECONDS:-25}" record_eid="$QV_EID-record" started stopped extracted audio="" db duration remote result verdict
   [[ "$seconds" == <-> ]] && (( seconds >= 10 && seconds <= 105 )) || return 2
   # 默认保守录制60秒视频的3倍速片段；队列暂未记录原视频时长。
-  if "$C" --profile "$P" set-playback-speed 3.0 "$TAG-speed" </dev/null >/dev/null; then
+  if "$C" --profile "$P" set-playback-speed 3.0 "$QV_EID-speed" </dev/null >/dev/null; then
     # 同一批的视频各留独立工件；run锁仍使用TAG，既有录像保持不可覆盖。
     if "$C" --profile "$P" record-start "$record_eid" "$seconds" </dev/null >/dev/null; then
       qv_nap "$((seconds+2))"
@@ -101,19 +103,31 @@ qv_relocate_comment(){
   local nick="$1" body="$2" raw ln
   QV_RESCANS=$(( ${QV_RESCANS:-0} + 1 ))
   "$C" --profile "$P" back </dev/null >/dev/null || return 1
-  qv_verify_video "$TAG-recovery-$QV_ROW" || return 1
-  "$C" --profile "$P" open-comments "$TAG-reopen-$QV_ROW" </dev/null >/dev/null || return 1
-  raw="$("$C" --profile "$P" collect-comments "$TAG-rescan-$QV_ROW" </dev/null)" || return 1
+  qv_verify_video "$QV_EID-recovery-$QV_ROW" || return 1
+  "$C" --profile "$P" open-comments "$QV_EID-reopen-$QV_ROW" </dev/null >/dev/null || return 1
+  raw="$("$C" --profile "$P" collect-comments "$QV_EID-rescan-$QV_ROW" </dev/null)" || return 1
   for ln in "${(@f)raw}"; do
     [[ "$(print -r -- "$ln" | cut -f1)" == "$nick" && "$(print -r -- "$ln" | cut -f2)" == "$body" ]] || continue
     QV_LINE="$ln"; return 0
   done
   return 1
 }
+qv_history_prepare(){
+  typeset -gA QV_HISTORY_ROWS QV_HISTORY_USED
+  QV_HISTORY_HASH=""; QV_HISTORY_STATUS=disabled
+  [[ -n "${QUEUED_COMMENT_HISTORY_FILE:-}" ]] || return 0
+  local rows line key id
+  rows="$(node "$QV_DIR/queued-comment-history.js" load "$QUEUED_COMMENT_HISTORY_FILE" "$WFR_RUN_DIR" "$LINE" "$TAG" "${LEADGEN_SOURCE_RUN:-}" "$VID" "$VURL")" || return 8
+  for line in "${(@f)rows}"; do
+    if [[ "$line" == META$'\t'* ]]; then QV_HISTORY_STATUS="$(print -r -- "$line" | cut -f2)"; QV_HISTORY_HASH="$(print -r -- "$line" | cut -f3)"
+    elif [[ "$line" == ROW$'\t'* ]]; then id="$(print -r -- "$line" | cut -f2)"; key="$(print -r -- "$line" | cut -f3)"; QV_HISTORY_ROWS[$key]="$id"
+    else return 8; fi
+  done
+}
 qv_collect(){
-  local opened raw line total=0 screens=0 empty=0 newlines=0 exhausted count=0 tier cap=50 own_rc identity nick body cdate region author tap nickb64 x y onick oid atype ip profile card attempt
+  local opened raw line total=0 screens=0 empty=0 newlines=0 exhausted count=0 tier cap=50 covered=0 identity_started own_rc identity nick body cdate region author tap nickb64 x y onick oid atype ip profile card attempt
   local -A seen emitted
-  opened="$("$C" --profile "$P" open-comments "$TAG-v$VID-comments" </dev/null)" || {
+  opened="$("$C" --profile "$P" open-comments "$QV_EID-comments" </dev/null)" || {
     # 无评论是控制器明确识别的正常结果，失败不能伪装成采完。
     if [[ "$opened" == *reason=no_comments_on_this_video* ]]; then
       print -- "COLLECTION\t$VID\tno_comments\t0"; return 0
@@ -141,11 +155,17 @@ except Exception: print("medium")' "$count")"
     fi
     "$C" --profile "$P" lock-refresh "$TAG" </dev/null >/dev/null || return 3
     screens=$((screens+1)); newlines=0
-    raw="$("$C" --profile "$P" collect-comments "$TAG-v$VID-screen$screens" </dev/null)" || return 6
+    raw="$("$C" --profile "$P" collect-comments "$QV_EID-screen$screens" </dev/null)" || return 6
     exhausted=0; [[ "$raw" == *exhausted=1* ]] && exhausted=1
     for line in "${(@f)raw}"; do
       [[ "$line" == *$'\t'tap=* ]] || continue
       [[ -z "${seen[$line]:-}" ]] || continue
+      # Capturing the current tree or skipping an owned identity may cross the budget.
+      # Check again before starting the next complete comment action.
+      if wf_deadline_reached || wf_stop_requested || (( $(date +%s) - started >= budget )); then
+        print -- "COLLECTION\t$VID\tpartial\t${#emitted}"
+        return 7
+      fi
       seen[$line]=1; newlines=$((newlines+1)); total=$((total+1)); QV_ROW="$total"
       nick="$(print -r -- "$line" | cut -f1)"; body="$(print -r -- "$line" | cut -f2)"
       cdate="$(print -r -- "$line" | cut -f3)"; region="$(print -r -- "$line" | cut -f4)"
@@ -159,7 +179,8 @@ except Exception: print("medium")' "$count")"
         tap="$(print -r -- "$QV_LINE" | cut -f6)"; nickb64="$(print -r -- "$QV_LINE" | cut -f7)"
         x="${${tap#tap=}%% *}"; y="${tap##* }"; nickb64="${nickb64#b64=}"
         [[ "$x" == <-> && "$y" == <-> && -n "$nickb64" ]] || break
-        identity="$("$C" --profile "$P" commenter-identity "$x" "$y" "$nickb64" "$TAG-v$VID-person$total-t$attempt" </dev/null)" || identity=""
+        identity_started="$(date +%s)"
+        identity="$("$C" --profile "$P" commenter-identity "$x" "$y" "$nickb64" "$QV_EID-person$total-t$attempt" </dev/null)" || identity=""
         onick="$(qv_field "$identity" nickname)"
         [[ "$onick" == "$nick" ]] && break
         identity=""
@@ -172,10 +193,24 @@ except Exception: print("medium")' "$count")"
       (( own_rc != 2 )) || return 8
       (( own_rc != 0 )) || continue
       [[ -z "${emitted[$oid$'\t'$body]:-}" ]] || continue
-      "$C" --profile "$P" tap-evidence "$x" "$y" "$TAG-v$VID-card$total" </dev/null >/dev/null || return 6
+      if [[ "$QV_HISTORY_STATUS" == verified ]]; then
+        local hkey hid
+        hkey="$(node "$QV_DIR/queued-comment-history.js" key "$oid" "$body")" || return 8
+        hid="${QV_HISTORY_ROWS[$hkey]:-}"
+        if [[ -n "$hid" ]]; then
+          if [[ -z "${QV_HISTORY_USED[$hkey]:-}" ]]; then
+            node "$QV_DIR/queued-comment-history.js" proof "$QUEUED_COMMENT_HISTORY_FILE" "$WFR_RUN_DIR" "$LINE" "$TAG" "${LEADGEN_SOURCE_RUN:-}" "$VID" "$VURL" "$P" "$QV_EID-person$total-t$attempt" "$hid" "$oid" "$body" "$(qv_field "$identity" profile_evidence)" "$(qv_field "$identity" return_evidence)" "$identity_started" || return 8
+            QV_HISTORY_USED[$hkey]=1; covered=$((covered+1))
+            print -- "HISTORY\t$VID\t$hid\t$hkey\t$QV_EID-person$total-t$attempt\t$QV_HISTORY_HASH"
+          fi
+          # 身份页返回可能重排评论，历史命中也必须独立重读新树。
+          exhausted=0; break
+        fi
+      fi
+      "$C" --profile "$P" tap-evidence "$x" "$y" "$QV_EID-card$total" </dev/null >/dev/null || return 6
       qv_nap 3; profile=""
       for attempt in 1 2 3; do
-        card="$("$C" --profile "$P" commenter-card-link "$TAG-v$VID-card$total-t$attempt" </dev/null)" || card=""
+        card="$("$C" --profile "$P" commenter-card-link "$QV_EID-card$total-t$attempt" </dev/null)" || card=""
         profile="$(qv_field "$card" profile_url)"; [[ -n "$profile" ]] && break
         (( attempt < 3 )) && qv_nap 2
       done
@@ -183,10 +218,10 @@ except Exception: print("medium")' "$count")"
       # 名片动作可能改变返回栈，不能仅凭“评论面板重新打开”认作原视频。
       # 名片复制的暂存页与评论面板都没有可取链的分享按钮；先重开目标，
       # 再用真实新取链核验实际ID，禁止拿open-video回显的期望ID代替验证。
-      DOUYIN_DETAIL_PLAYBACK=continuous_identity "$C" --profile "$P" open-video "$VID" "$TAG-v$VID-after-card$total-open" </dev/null >/dev/null || return 4
-      DOUYIN_DETAIL_PLAYBACK=continuous_identity qv_verify_video "$TAG-v$VID-after-card$total" || return 4
-      "$C" --profile "$P" open-comments "$TAG-v$VID-after-card$total-comments" </dev/null >/dev/null || return 6
-      emitted[$oid$'\t'$body]=1
+      DOUYIN_DETAIL_PLAYBACK=continuous_identity "$C" --profile "$P" open-video "$VID" "$QV_EID-after-card$total-open" </dev/null >/dev/null || return 4
+      DOUYIN_DETAIL_PLAYBACK=continuous_identity qv_verify_video "$QV_EID-after-card$total" || return 4
+      "$C" --profile "$P" open-comments "$QV_EID-after-card$total-comments" </dev/null >/dev/null || return 6
+      emitted[$oid$'\t'$body]=1; covered=$((covered+1))
       print -- "LEAD\t$onick\t$oid\t${atype:-personal}\t$body\t$cdate\t$region\t$TITLE\t$KWTXT\t$ip\t$profile\t$VURL"
       # 名片返回后页面重排；下一条重新collect，绝不沿用旧坐标。
       # exhausted也必须重读一轮才能确认没有尚未处理的行。
@@ -194,7 +229,7 @@ except Exception: print("medium")' "$count")"
     done
     if (( newlines == 0 )); then empty=$((empty+1)); else empty=0; fi
     (( exhausted == 0 && empty < 2 )) || break
-    [[ "$tier" != large ]] || (( ${#emitted} < cap )) || break
+    [[ "$tier" != large ]] || (( covered < cap )) || break
     # 本屏出现尚未处理的评论时保持现场重读；本屏没有新行才翻屏。
     if (( newlines == 0 )); then
       "$C" --profile "$P" swipe 600 2000 600 900 400 </dev/null >/dev/null || return 6

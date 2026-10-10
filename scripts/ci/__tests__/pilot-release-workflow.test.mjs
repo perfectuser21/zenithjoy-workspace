@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
 import YAML from 'yaml';
+import {validatePatrolCaller} from '../implementation-patrol-scope.mjs';
 const file=new URL('../../../.github/workflows/pilot-release-verification.yml',import.meta.url);
 const revision='5a86ca0e120111d29f077de2f2bfe3eb00a72bb5';
 function config(){assert.ok(existsSync(file),'独立完整发布验证caller必须存在');return YAML.parse(readFileSync(file,'utf8'));}
@@ -29,4 +30,5 @@ test('发布协议断言在现有PR检查和自身main检查永久执行，旧�
  assert.ok(w.jobs['caller-contract'].steps.some(s=>s.run===command));
  assert.ok(legacy.jobs['caller-contract'].steps.some(s=>s.run===command));
  assert.ok(legacy.on.pull_request);assert.match(legacy.jobs.impact.uses,/\/implementation-impact.yml@[a-f0-9]{40}$/);
+ assert.equal(validatePatrolCaller(legacy),true,'独立Pilot协议守卫也拒绝禁用旧caller，避免自检job关闭后失声');
 });
