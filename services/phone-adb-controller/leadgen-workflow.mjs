@@ -170,7 +170,7 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
       return {...result,persisted:result.counts.created,candidates:result.videos.length,videos_pushed:result.counts.created,
         video_manifest_readback_failures:readbackFailures,manifest_verified:Number(readbackFailures===0),
         ...(readbackFailures?{status:'partial'}:{}),
-        ...(result.failures.length||result.known_gaps.length?{status:'partial'}:{})};},
+        ...(result.failures.length||result.known_gaps.some(g=>g.kind!=='candidate_disappeared'||result.stop_reason!=='limit_reached')?{status:'partial'}:{})};},
     qualification:async()=>{
       if(env.WF_BRAIN_WORKFLOW==='douyin_video_processing'&&!Array.isArray(state.intakeVideoIds))throw Error('102必须先核验101明确ID交接');
       leased=await queue('claim_videos',Array.isArray(state.intakeVideoIds)?{video_ids:state.intakeVideoIds}:{});
