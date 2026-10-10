@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { spawnSync } from 'node:child_process';
 const require = createRequire(import.meta.url);
 const { queueRequest } = require('../leadgen-queue.js');
 
@@ -93,4 +94,33 @@ test('发现恢复只按业务线、实际ID、完整本次URL读回，不把不
  assert.match(p.calls[0].sql,/line_key=\$1 AND video_id=\$2 AND video_url=\$3/);assert.deepEqual(p.calls[0].args,['jinuo',input.video.videoId,input.video.videoUrl]);
  assert.equal(await queueRequest(fakePool([{rows:[]}]),input),null);
  const bad=fakePool([]);await assert.rejects(queueRequest(bad,{...input,video:{videoId:'wrong',videoUrl:input.video.videoUrl}}));assert.equal(bad.calls.length,0);
+});
+
+// 执行生产CTE中的选择SQL，只有PG方言（数组、过期时钟、锁）做显式SQLite适配；排序原样执行。
+test('真实领取选择SQL优先新pending而非老matched，仍限定显式VID与limit',async()=>{
+ const ids=['7646309328911907191','7646309328911907192','7646309328911907193'];
+ const rows=[
+  {id:'old',video_id:ids[0],judgment_status:'matched',discovered_at:'2026-10-01'},
+  {id:'new1',video_id:ids[1],judgment_status:'pending',discovered_at:'2026-10-02'},
+  {id:'new2',video_id:ids[2],judgment_status:'pending',discovered_at:'2026-10-03'},
+  {id:'foreign',video_id:'7646309328911907194',judgment_status:'pending',discovered_at:'2026-09-01'},
+ ].map(r=>({...r,line_key:'jinuo',process_status:'待判定',harvest_batch:'old102',updated_at:'2099-01-01'}));
+ const calls=[];const client={release(){},async query(sql,args){calls.push({sql,args});
+  if(/^(BEGIN|COMMIT|ROLLBACK)$/.test(sql))return {rows:[]};
+  assert.match(sql,/FOR UPDATE SKIP LOCKED/);assert.match(sql,/15 minutes/);
+  let selected=sql.match(/WITH pending AS \(\s*([\s\S]*?) FOR UPDATE SKIP LOCKED\)/)?.[1];assert.ok(selected);
+  selected=selected.replace(/\$6::text\[\]/g,'$6').replace(/\$5::text/g,'$5')
+    .replace('video_id=ANY($6)','video_id IN (SELECT value FROM json_each($6))')
+    .replace("now()-interval '15 minutes'","datetime('now','-15 minutes')");
+  const result=spawnSync('python3',['-c',`import json,sqlite3,sys
+p=json.load(sys.stdin);c=sqlite3.connect(':memory:')
+c.execute('CREATE TABLE leadgen_videos (id,video_id,line_key,judgment_status,process_status,harvest_batch,discovered_at,updated_at)')
+for r in p['rows']: c.execute('INSERT INTO leadgen_videos VALUES (?,?,?,?,?,?,?,?)',[r[k] for k in ['id','video_id','line_key','judgment_status','process_status','harvest_batch','discovered_at','updated_at']])
+print(json.dumps([r[0] for r in c.execute(p['sql'].replace('zenithjoy.leadgen_videos','leadgen_videos'),{str(i+1):(json.dumps(a) if isinstance(a,list) else a) for i,a in enumerate(p['args'])})]))`],{input:JSON.stringify({sql:selected,args,rows}),encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr);return {rows:JSON.parse(result.stdout).map(id=>rows.find(r=>r.id===id))};
+ }};
+ const result=await queueRequest({connect:async()=>client},{op:'claim_videos',line:'jinuo',run:'priority102',source_run:'old101',video_ids:ids,limit:2});
+ assert.deepEqual(result.map(r=>r.id),['new1','new2']);
+ const claim=calls.find(c=>c.sql.startsWith('WITH'));assert.equal(claim.args[1],2);assert.deepEqual(claim.args[5],ids);
+ assert.equal(claim.args[2],'处理中:priority102');assert.equal(claim.args[3],'priority102');assert.ok(calls.some(c=>c.sql==='COMMIT'));
 });
