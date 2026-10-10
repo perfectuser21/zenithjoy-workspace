@@ -14,7 +14,7 @@ test('implementation-impact 以固定提交调用受信工具，两个仓库身�
   assert.equal(job.uses, `perfectuser21/cecelia/.github/workflows/implementation-impact.yml@${fixedRevision}`);
   assert.equal(job.with.tooling_revision, fixedRevision);
   assert.equal(job.with.source_repo, 'perfectuser21/zenithjoy-workspace');
-  assert.equal(job.with.scope, 'zenithjoy');
+  assert.equal(job.with.scope, 'cecelia-device-patrol');
   assert.deepEqual(Object.keys(job.with).sort(), ['source_repo', 'scope', 'base_revision', 'head_revision', 'mode', 'tooling_revision'].sort());
 });
 test('PR 使用真实 base/head 而非合并伪提交，main 与手动运行输入明确', () => {
