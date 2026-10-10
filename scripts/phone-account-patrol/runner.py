@@ -26,6 +26,11 @@ def now():
     return dt.datetime.now(dt.timezone.utc).isoformat()
 
 
+def parse_timestamp(value):
+    # MMV /usr/bin/python3 为3.9，Brain返回的UTC Z需显式转为偏移。
+    return dt.datetime.fromisoformat(value[:-1] + '+00:00' if value.endswith('Z') else value)
+
+
 def api(path, body=None, method=None):
     req = urllib.request.Request(API + path, data=json.dumps(body, ensure_ascii=False).encode() if body is not None else None,
                                  headers={'Content-Type': 'application/json'}, method=method)
@@ -168,15 +173,15 @@ def phone_run(serial, task_id, deployment):
 def schedule_health(schedule, tasks, current):
     if not schedule.get('is_active'):
         return {'status': 'disabled'}
-    current = dt.datetime.fromisoformat(current).astimezone(zoneinfo.ZoneInfo('Asia/Shanghai'))
+    current = parse_timestamp(current).astimezone(zoneinfo.ZoneInfo('Asia/Shanghai'))
     expected = current.replace(hour=22, minute=0, second=0, microsecond=0)
     if current < expected + dt.timedelta(minutes=30):
         expected -= dt.timedelta(days=1)
     activated = schedule.get('template', {}).get('activated_at') or schedule.get('created_at')
-    if activated and dt.datetime.fromisoformat(activated).astimezone(expected.tzinfo) > expected:
+    if activated and parse_timestamp(activated).astimezone(expected.tzinfo) > expected:
         return {'status': 'awaiting_first_run', 'expected_at': expected.isoformat()}
     matches = [t for t in tasks if (t.get('recurring_task_id') or t.get('payload', {}).get('recurring_task_id')) == schedule['id']
-               and dt.datetime.fromisoformat(t['created_at']) >= expected]
+               and parse_timestamp(t['created_at']) >= expected]
     if not matches:
         return {'status': 'missed', 'expected_at': expected.isoformat()}
     if any(t['status'] in ['failed', 'cancelled', 'blocked'] for t in matches):
@@ -233,7 +238,7 @@ def monitor(deployment):
             tasks.append(task)
     health = schedule_health(schedule, tasks, now())
     if health['status'] == 'healthy':
-        eligible = [t for t in tasks if dt.datetime.fromisoformat(t['created_at']) >= dt.datetime.fromisoformat(health['expected_at'])]
+        eligible = [t for t in tasks if parse_timestamp(t['created_at']) >= parse_timestamp(health['expected_at'])]
         latest = max(eligible, key=lambda t: t['created_at'])
         health['status'] = batch_execution_health(latest, api)
         health['batch_task_id'] = latest['id']
