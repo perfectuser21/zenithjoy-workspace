@@ -4,7 +4,9 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 const cwd=fileURLToPath(new URL('.',import.meta.url));
 function checked(command,args){
- const result=spawnSync(command,args,{cwd,encoding:'utf8',timeout:90000,maxBuffer:1000000,env:{...process.env,PYTHONDONTWRITEBYTECODE:'1'}});
+ const env={...process.env,PYTHONDONTWRITEBYTECODE:'1'};
+ delete env.NODE_TEST_CONTEXT; // 子进程是独立测试运行，不能继承父node:test的child上下文。
+ const result=spawnSync(command,args,{cwd,encoding:'utf8',timeout:90000,maxBuffer:1000000,env});
  assert.equal(result.status,0,result.stdout+'\n'+result.stderr);
  return result.stdout+result.stderr;
 }
