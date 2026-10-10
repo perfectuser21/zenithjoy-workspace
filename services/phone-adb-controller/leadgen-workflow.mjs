@@ -83,7 +83,8 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
     return checked(ctl,['--profile',profile,...ownerArgs,command,...args],
       command==='current-video-link'?{maxDurationS:300}:{});
   };
-  const queue=async(op,fields={})=>(await rpc({kind:'queue',request:{op,line,run,source_run:env.LEADGEN_SOURCE_RUN||undefined,limit:Number(env.LEADGEN_LIMIT||2),...fields}})).result;
+  const queue=async(op,fields={})=>(await rpc({kind:'queue',request:{op,line,run,source_run:env.LEADGEN_SOURCE_RUN||undefined,limit:Number(env.LEADGEN_LIMIT||2),...fields}},
+    op==='discover'?{timeoutMs:Math.max(1,Math.min(60000,state.budgetDeadline?state.budgetDeadline-Date.now():60000))}:{})).result;
   const preflight=async()=>{
     if(env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'){
       const flag=join(env.HOME,`bin-harvest/state/dm-paused-${profile}.flag`);

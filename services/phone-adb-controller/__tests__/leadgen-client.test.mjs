@@ -44,3 +44,34 @@ test('正常执行保留stdout/stderr与真实退出码',async()=>{
  const result=await execInput(process.execPath,['-e',"process.stdout.write('real-output');process.stderr.write('real-error');process.exitCode=7;"],{timeoutMs:3000});
  assert.deepEqual(result,{code:7,stdout:'real-output',stderr:'real-error'});
 });
+
+const discovery={kind:'queue',request:{op:'discover',line:'jinuo',run:'receipt-test',video:{videoId:'7617105883093603314',videoUrl:'https://v.douyin.com/yjrYaiSbMcg/'}}};
+const receipt=result=>({code:0,stdout:JSON.stringify({ok:true,result}),stderr:''});
+test('发现写入丢回执先精确读回已提交行，不重复写入',async()=>{
+ const calls=[];const rpc=createRpc({frozen,execute:async(_c,_a,o)=>{const b=JSON.parse(o.input);calls.push(b);return calls.length===1?{code:255,stdout:'',stderr:'secret transport diagnostic'}:receipt({status:'pending',inserted:false,recovered:true});}});
+ const out=await rpc(discovery,{timeoutMs:1000});assert.equal(out.result.recovered,true);assert.deepEqual(calls.map(b=>b.request.op),['discover','discover_readback']);assert.deepEqual(calls[1].request.video,discovery.request.video);assert.deepEqual(calls[1].source,calls[0].source);
+});
+test('发现未提交且读回确实缺行才补写一次，同一输入同一总截止时间',async()=>{
+ const calls=[];const rpc=createRpc({frozen,execute:async(_c,_a,o)=>{calls.push({b:JSON.parse(o.input),timeout:o.timeoutMs});return calls.length===1?{code:255,stdout:'',stderr:''}:receipt(calls.length===2?null:{status:'pending',inserted:true});}});
+ const out=await rpc(discovery,{timeoutMs:1000});assert.equal(out.result.inserted,true);assert.deepEqual(calls.map(c=>c.b.request.op),['discover','discover_readback','discover']);assert.deepEqual(calls[2].b,calls[0].b);assert.ok(calls[2].timeout<=calls[0].timeout);
+});
+test('读回自身断网必须失败，不盲补写；补写再次丢失也只做一次',async()=>{
+ for(const readbackFails of [true,false]){
+  const calls=[];const rpc=createRpc({frozen,execute:async(_c,_a,o)=>{calls.push(JSON.parse(o.input).request.op);return calls.length===2&&!readbackFails?receipt(null):{code:255,stdout:'',stderr:''};}});
+  await assert.rejects(rpc(discovery,{timeoutMs:1000}));assert.deepEqual(calls,readbackFails?['discover','discover_readback']:['discover','discover_readback','discover']);
+ }
+});
+test('明确的源校验或数据库错误以及其他写操作不进入发现恢复',async()=>{
+ for(const error of ['RPC_SOURCE_BYTES_MISMATCH','RPC_OPERATION_FAILED']){
+  let calls=0;const rpc=createRpc({frozen,execute:async()=>{calls++;return {code:1,stdout:JSON.stringify({ok:false,error}),stderr:''};}});
+  await assert.rejects(rpc(discovery,{timeoutMs:1000}),new RegExp(error));assert.equal(calls,1);
+ }
+});
+
+test('单次SSH超时已关闭进程后可读回，但总预算用尽不再发请求',async()=>{
+ for(const exhausted of [false,true]){
+  let calls=0;const rpc=createRpc({frozen,execute:async()=>{calls++;if(calls===1){if(exhausted)await delay(280);throw Error('EXECUTION_DEADLINE');}return receipt({status:'pending',inserted:false,recovered:true});}});
+  if(exhausted){await assert.rejects(rpc(discovery,{timeoutMs:250}),/EXECUTION_DEADLINE/);assert.equal(calls,1);}
+  else {const r=await rpc(discovery,{timeoutMs:1000});assert.equal(r.result.recovered,true);assert.equal(calls,2);}
+ }
+});

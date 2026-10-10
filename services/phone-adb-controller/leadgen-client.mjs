@@ -62,23 +62,49 @@ export function createRpc({ frozen, execute = execInput, local = false } = {}) {
   const transport=peer?['-o',`HostName=${peer.ssh_hostname}`,'-o',`HostKeyAlias=${peer.ssh_hostkey_alias}`]:[];
   return async (body, { timeoutMs = 180000 } = {}) => {
     const deadline=Date.now()+timeoutMs;
+    const send=async(payload,maxMs=timeoutMs)=>{
+      const remaining=Math.min(maxMs,deadline-Date.now());
+      if(remaining<=0)throw Error('EXECUTION_DEADLINE');
+      let result;
+      try{
+        if(local)result=await execute(process.execPath,[resolve(process.env.WF_HOME,'leadgen-rpc.mjs')],
+          {input:JSON.stringify({...payload,source}),timeoutMs:remaining});
+        else result=await execute('ssh',['-o','BatchMode=yes','-o','ConnectTimeout=15',
+          '-o','ServerAliveInterval=5','-o','ServerAliveCountMax=2',...transport,'mmv',
+          'set -a; source ~/.credentials/zenithjoy-db.env; set +a; cd ~/.openclaw/leadgen-scripts && node leadgen-rpc.mjs'],
+          {input:JSON.stringify({...payload,source}),timeoutMs:remaining});
+      }catch(error){
+        // 进程已关闭才可恢复；不把源码/数据库明确错误当网络抖动。
+        if(['EXECUTION_DEADLINE','EXECUTION_START_FAILED'].includes(error.message))error.receiptMissing=true;
+        throw error;
+      }
+      let response;
+      try{
+        response=JSON.parse(result.stdout.trim());
+        if(!response||typeof response.ok!=='boolean')throw Error('INVALID_RECEIPT');
+      }catch{
+        const error=Error('远端没有合法回执');error.receiptMissing=true;throw error;
+      }
+      if(result.code!==0||response.ok!==true)throw Error(response.error||'远端执行失败');
+      return response;
+    };
+    if(body.kind==='queue'&&body.request?.op==='discover'){
+      try{return await send(body,20000);}catch(error){
+        if(!error.receiptMissing||Date.now()+250>=deadline)throw error;
+        const readback=await send({...body,request:{...body.request,op:'discover_readback'}},20000);
+        if(readback.result!==null){
+          if(!['pending','matched','rejected'].includes(readback.result?.status)||readback.result.inserted!==false||readback.result.recovered!==true)throw Error('发现恢复读回无效');
+          return readback;
+        }
+        // discover以(line_key,video_id)唯一键upsert，相同输入补写一次；不恢复评论/评分等其他写操作。
+        return send(body,20000);
+      }
+    }
     const attempts=['commander','resolve_share_link'].includes(body.kind)?2:1;
     for(let attempt=0;attempt<attempts;attempt++){
-    const remaining=Math.max(1,deadline-Date.now());
-    let result;
-    if (local) result = await execute(process.execPath, [resolve(process.env.WF_HOME, 'leadgen-rpc.mjs')],
-      { input: JSON.stringify({ ...body, source }), timeoutMs:remaining });
-    else result = await execute('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15',
-      '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=2', ...transport, 'mmv',
-      'set -a; source ~/.credentials/zenithjoy-db.env; set +a; cd ~/.openclaw/leadgen-scripts && node leadgen-rpc.mjs'],
-    { input: JSON.stringify({ ...body, source }), timeoutMs:remaining });
-    let response;
-    try { response = JSON.parse(result.stdout.trim()); } catch {
-      if(attempt+1<attempts&&Date.now()+250<deadline)continue;
-      throw Error('远端没有合法回执');
-    }
-    if (result.code !== 0 || response.ok !== true) throw Error(response.error || '远端执行失败');
-    return response;
+      try{return await send(body);}catch(error){
+        if(!error.receiptMissing||attempt+1>=attempts||Date.now()+250>=deadline)throw error;
+      }
     }
   };
 }
