@@ -8,6 +8,36 @@ import {createRequire} from 'node:module';
 const historyHelper=createRequire(import.meta.url)('../queued-comment-history.js');
 const script=path.resolve('services/phone-adb-controller/process-queued-video.sh');
 const vid='7646309328911907195';
+function recordedQualification({volume='1',db='-35',startFail=false}={}){
+ const dir=mkdtempSync(path.join(tmpdir(),'qv-record-proof-'));try{
+  const ctl=path.join(dir,'ctl'),remote=path.join(dir,'remote');
+  writeFileSync(ctl,`#!/bin/zsh
+print "$3" >> "$FIXTURE/calls"
+case "$3" in
+lock-refresh) print 'lock=refreshed';;
+current-video-link) print 'content_type=video';print 'video_id=${vid}';;
+record-start) ${startFail?'exit 4':`print 'record_started media_volume=${volume}'`};;
+record-stop) print 'record_stopped duration_seconds=25.1 mean_volume_db=${db} audio_streams=1';;
+record-extract-audio) print "audio_extracted path=$FIXTURE/record.wav";;
+esac
+`,{mode:0o755});
+  writeFileSync(remote,`#!/bin/zsh\nprint remote >> "$FIXTURE/calls"\nprint 'QUAL_RESULT {"verdict":"matched"}'\n`,{mode:0o755});
+  writeFileSync(path.join(dir,'scp'),'#!/bin/zsh\nexit 0\n',{mode:0o755});
+  const run='record-proof',runDir=path.join(dir,'run');
+  const r=spawnSync('zsh',[script,'qualification','jinoshengyuan-work',vid,'https://www.douyin.com/video/'+vid,Buffer.from('标题').toString('base64'),Buffer.from('AI').toString('base64'),run,'jinuo'],{env:{...process.env,PATH:dir+path.delimiter+process.env.PATH,FIXTURE:dir,DOUYIN_PHONE_ADB:ctl,QUEUED_VIDEO_QUALIFY_CMD:remote,WFR_RUN_DIR:runDir,HARVEST_KEYWORD_TESTING:'1'},encoding:'utf8',timeout:7000});
+  const proofPath=path.join(runDir,`${run}-recording-${vid}.json`);
+  return {...r,calls:readFileSync(path.join(dir,'calls'),'utf8').trim().split('\n'),proof:existsSync(proofPath)?JSON.parse(readFileSync(proofPath)):null};
+ }finally{rmSync(dir,{recursive:true,force:true});}
+}
+test('实际死寂音轨不得经标题或旧转写回matched，音量回读与音轨事实分别保留',()=>{
+ const r=recordedQualification({db:'-91'});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/QUAL\t7646309328911907195\trejected\trecording_silent/);assert.ok(!r.calls.includes('remote'));assert.equal(r.proof.media_volume,1);assert.equal(r.proof.mean_volume_db,-91);assert.equal(r.proof.audio_status,'silent');assert.equal(r.proof.run,'record-proof');assert.equal(r.proof.video_id,vid);
+});
+for(const volume of ['0','unknown',''])test('录前媒体音量必须真实正数，未知或零不能通过 '+JSON.stringify(volume),()=>{
+ const r=recordedQualification({volume});assert.equal(r.status,5,r.stderr);assert.ok(!r.calls.includes('remote'));assert.ok(r.calls.includes('record-stop'));assert.equal(r.proof.media_volume_verified,false);
+});
+test('真实正数媒体音量与有效音轨才能上传判定并留下本VID工件',()=>{
+ const r=recordedQualification({volume:'2'});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/\tmatched\tjudged/);assert.equal(r.proof.media_volume_verified,true);assert.equal(r.proof.audio_status,'usable');assert.equal(r.proof.video_id,vid);assert.ok(r.calls.includes('remote'));
+});
 test('two queued videos in one run each deliver their own recording to qualification',()=>{
  const d=mkdtempSync(path.join(tmpdir(),'queued-multi-audio-'));
  try {
