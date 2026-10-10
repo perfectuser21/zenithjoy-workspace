@@ -148,17 +148,18 @@ def main():
  serial=sys.argv[1];runid=sys.argv[2];platforms=sys.argv[3:] or list(PACKAGES)
  probe=Probe(serial,runid);results={}
  # Physical users don't participate in the automation lock. Skip their active foreground session.
- if not any(x in runid for x in ['initial','recheck']):
-  focus=probe.adb('shell','dumpsys','window').decode(errors='replace')
-  focus='\n'.join(l for l in focus.splitlines() if 'mCurrentFocus' in l)
-  if not any(x in focus for x in ['launcher','Launcher']):
-   state='占用未查' if focus else '检测失败'
-   reason='前台已有应用或锁屏，本轮不接管人工使用' if focus else '未读取到前台窗口，不能判断是否空闲'
-   print(json.dumps({'serial':serial,'results':{p:{'state':state,'checked_at':stamp(),'reason':reason} for p in platforms+['视频号']}},ensure_ascii=False));return
+ focus=probe.adb('shell','dumpsys','window').decode(errors='replace')
+ focus='\n'.join(l for l in focus.splitlines() if 'mCurrentFocus' in l)
+ if not any(x in focus for x in ['launcher','Launcher']):
+  state='占用未查' if focus else '检测失败'
+  reason='前台已有应用或锁屏，本轮不接管人工使用' if focus else '未读取到前台窗口，不能判断是否空闲'
+  print(json.dumps({'serial':serial,'results':{p:{'state':state,'checked_at':stamp(),'reason':reason} for p in platforms+['视频号']}},ensure_ascii=False));return
  for p in platforms:
   try:
    results[p]=inspect_video(probe,{}) if p=='视频号' else probe.inspect(p)
    if p=='微信':results['视频号']=inspect_video(probe,results[p])
   except Exception as e:results[p]={'state':'检测失败','checked_at':stamp(),'reason':str(e)[:200]}
+ # 本轮取得原生锁后完成检查，回桌面，避免下一轮误判本脚本遗留应用为人工占用。
+ probe.adb('shell','input','keyevent','3')
  print(json.dumps({'serial':serial,'results':results},ensure_ascii=False))
 if __name__=='__main__':main()

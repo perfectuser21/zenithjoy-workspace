@@ -5,12 +5,24 @@ import hashlib
 import io
 import json
 import pathlib
+import re
 import shlex
 import shutil
 import subprocess
 import tarfile
 
 FILES = ['runner.py', 'collector.py', 'dispatch.py', 'preflight.py', 'publish.mjs', 'ocr.swift', 'SKILL.md']
+
+
+def validate_config(config):
+    keys = {'single_workflow_id', 'batch_workflow_id', 'schedule_id', 'project_id'}
+    if set(config) != keys or any(not isinstance(v, str) or not re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', v) for v in config.values()):
+        raise ValueError('部署配置只能包含四个已登记的UUID，不能携带凭据或任意字段')
+
+
+def verify_remote_proof(expected, proof):
+    if proof.get('ok') is not True or proof.get('source_revision') != expected['source_revision'] or proof.get('sha256') != expected['sha256']:
+        raise ValueError('远端部署文件指纹读回不一致，不更新当前部署指针')
 
 
 def main():
@@ -25,7 +37,11 @@ def main():
     if dirty:
         raise SystemExit('巡查源码有未提交改动，拒绝部署')
     config = json.loads(pathlib.Path(args.config).read_text())
-    remote_home = '/Users/jinnuoshengyuan'
+    validate_config(config)
+    ssh = ['/usr/bin/ssh', '-o', 'ProxyJump=none', '-o', 'ProxyCommand=none', '-o', 'BatchMode=yes', '-o', 'ControlMaster=no', '-o', 'ControlPath=none', 'xian-m4']
+    remote_home = subprocess.check_output(ssh + ["/opt/homebrew/bin/python3 -c 'import pathlib; print(pathlib.Path.home())'"], text=True).strip()
+    if not pathlib.PurePosixPath(remote_home).is_absolute() or '\n' in remote_home:
+        raise ValueError('远端用户目录未能可靠读回')
     remote_release = remote_home + '/.local/share/phone-account-patrol/releases/' + revision
     state = pathlib.Path.home() / '.local/share/phone-account-patrol'
     release = state / 'releases' / revision
@@ -53,6 +69,9 @@ def main():
     result = subprocess.run(['/usr/bin/ssh', '-o', 'ProxyJump=none', '-o', 'ProxyCommand=none', '-o', 'BatchMode=yes', '-o', 'ControlMaster=no', '-o', 'ControlPath=none', 'xian-m4', command], input=buffer.getvalue(), capture_output=True)
     if result.returncode:
         raise SystemExit('M4版本部署失败，未改变调度')
+    verification = 'import pathlib,json,hashlib; p=pathlib.Path(' + repr(remote_release) + '); m=json.loads((p/"deployment.json").read_text()); h={n:hashlib.sha256((p/n).read_bytes()).hexdigest() for n in m["sha256"]}; print(json.dumps({"ok":h==m["sha256"],"source_revision":m["source_revision"],"sha256":h}))'
+    proof = json.loads(subprocess.check_output(ssh + ['/opt/homebrew/bin/python3 -c ' + shlex.quote(verification)], text=True))
+    verify_remote_proof(manifest, proof)
     (state / 'deployment-current.json').write_text(json.dumps({'release': str(release), **manifest}, ensure_ascii=False, indent=2))
     print(json.dumps({'local_release': str(release), 'remote_release': remote_release, 'source_revision': revision}, ensure_ascii=False))
 
