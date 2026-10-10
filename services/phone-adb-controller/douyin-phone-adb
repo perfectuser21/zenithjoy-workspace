@@ -603,15 +603,25 @@ seed_clipboard_nonce() {
   print -- "$nonce"
 }
 
-# HEAD读取失败保留真实原因；两次各10秒，避免单次DNS失败被吞成缺视频ID。
+# 只读取实际跳转头；取得真实内容ID便停止，不访问与身份解析无关的落地页。
+# 总请求仍最多两次、各10秒；首跳失败可重试，缺ID的受信中间跳转才继续。
 resolve_content_short_url() {
   local short_url="$1" evidence_id="$2" headers location attempt rc=0 reason=LINK_RESOLVE_NETWORK
+  local next_url="$short_url" response_code
   local err="$EVIDENCE_ROOT/${evidence_id}-resolve.err"
   for attempt in 1 2; do
-    if headers="$("$CURL" -sSIL --connect-timeout 5 --max-time 10 -A 'Mozilla/5.0' "$short_url" 2>"$err")"; then
+    if headers="$("$CURL" -sSI --connect-timeout 5 --max-time 10 -A 'Mozilla/5.0' "$next_url" 2>"$err")"; then
+      response_code="$(print -- "$headers" | /usr/bin/awk '/^HTTP\// { code=$2 } END { print code }')"
       location="$(print -- "$headers" | /usr/bin/awk -F ': ' 'tolower($1) == "location" { gsub(/\r/, "", $2); location=$2 } END { print location }')"
-      if [[ -n "$location" ]]; then print -- "$location"; return 0; fi
       rc=0; reason=LINK_RESOLVE_NO_REDIRECT
+      if [[ "$response_code" == 3[0-9][0-9] && -n "$location" ]]; then
+        [[ "$location" =~ '^https://([A-Za-z0-9-]+\.)*(douyin\.com|iesdouyin\.com)/' ]] \
+          || die "LINK_RESOLVE_UNTRUSTED_REDIRECT"
+        if [[ "$location" =~ '/(video|note)/[0-9]{16,24}([/?#]|$)' ]]; then
+          print -- "$location"; return 0
+        fi
+        next_url="$location"; reason=LINK_RESOLVE_CONTENT_ID_MISSING
+      fi
     else
       rc=$?
       case "$rc" in
