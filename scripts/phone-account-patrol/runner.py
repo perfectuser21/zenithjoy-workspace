@@ -230,15 +230,31 @@ def monitor(deployment):
     schedules = rows(api('recurring-tasks'))
     schedule = next(s for s in schedules if s['id'] == deployment['schedule_id'])
     # last_run_at只是定时器建单时间，必须查实际批次和各手机的执行回执。
-    summaries = rows(api('tasks?project_id=' + deployment['project_id'] + '&task_type=script_run&limit=200'))
-    if len(summaries) >= 200:
-        raise ValueError('巡查项目任务查询达到上限，不能据此宣称健康')
+    current = now()
+    baseline = schedule_health(schedule, [], current)
     tasks = []
-    for summary in summaries:
-        task = api('tasks/' + summary['id'])
-        if task.get('payload', {}).get('recurring_task_id') == schedule['id']:
-            tasks.append(task)
-    health = schedule_health(schedule, tasks, now())
+    if baseline['status'] != 'disabled':
+        # API按created_at倒序分页；只拉当前应执行时段，不随历史累积逐日变慢。
+        cutoff = parse_timestamp(baseline['expected_at'])
+        seen = set()
+        offset = 0
+        while True:
+            summaries = rows(api('tasks?project_id=' + deployment['project_id'] + '&task_type=script_run&limit=200&offset=' + str(offset)))
+            reached_history = False
+            for summary in summaries:
+                if summary['id'] in seen:
+                    raise ValueError('任务分页返回重复记录，不能据此宣称健康')
+                seen.add(summary['id'])
+                if parse_timestamp(summary['created_at']) < cutoff:
+                    reached_history = True
+                    break
+                task = api('tasks/' + summary['id'])
+                if task.get('payload', {}).get('recurring_task_id') == schedule['id']:
+                    tasks.append(task)
+            if reached_history or len(summaries) < 200:
+                break
+            offset += len(summaries)
+    health = schedule_health(schedule, tasks, current)
     if health['status'] == 'healthy':
         eligible = [t for t in tasks if parse_timestamp(t['created_at']) >= parse_timestamp(health['expected_at'])]
         latest = max(eligible, key=lambda t: t['created_at'])
