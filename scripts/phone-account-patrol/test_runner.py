@@ -2,6 +2,8 @@ import importlib.util
 import pathlib
 import tempfile
 import unittest
+from unittest.mock import patch
+from subprocess import CompletedProcess
 
 SPEC = importlib.util.spec_from_file_location('patrol_runner', pathlib.Path(__file__).with_name('runner.py'))
 runner = importlib.util.module_from_spec(SPEC)
@@ -9,6 +11,19 @@ SPEC.loader.exec_module(runner)
 
 
 class PatrolContractTests(unittest.TestCase):
+    def test_mirror_busy_skip_requires_a_real_sync_receipt(self):
+        receipt = {'observed_at': '2026-10-10T10:00:00Z', 'devices': {'errors': []}, 'errors': []}
+        outputs = [CompletedProcess([], 0, ''), CompletedProcess([], 0, __import__('json').dumps(receipt))]
+        with patch.object(runner.subprocess, 'run', side_effect=outputs) as run, patch('time.sleep'):
+            self.assertEqual(runner.sync_mirror(), receipt)
+        self.assertEqual(run.call_count, 2)
+
+    def test_mirror_missing_or_failed_receipt_cannot_confirm_sync(self):
+        for output in ['', '{}', '{"observed_at":"now","devices":{"errors":["设备页失败"]},"errors":[]}']:
+            with self.subTest(output=output), patch.object(runner.subprocess, 'run', return_value=CompletedProcess([], 0, output)), patch('time.sleep'):
+                with self.assertRaises(RuntimeError):
+                    runner.sync_mirror(max_attempts=1)
+
     def test_execution_identity_is_from_real_script_run(self):
         task = 'f8a71543-ad9a-4585-ba49-c8b16792ecfc'
         self.assertEqual(runner.task_from_script('/Users/a/brain-runs/script-' + task + '-a2.sh'), task)
