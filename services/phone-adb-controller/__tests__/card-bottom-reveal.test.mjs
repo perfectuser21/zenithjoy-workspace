@@ -99,3 +99,24 @@ const h=createDiscoveryHandlers({phone,execute:async()=>({code:0}),queue:async()
 
 test('目标仍未恢复但新B完整必须取链，同时原裁切gap使全量partial',async()=>{const r=await run({noHitB:true});assert.equal(r.out.captures.length,1);assert.equal(r.out.captures[0].title,'新完整候选B标题');assert.equal(r.out.known_gaps[0].kind,'candidate_clipped');assert.equal(r.out.all_results_scanned,false);assert.equal(r.out.status,'partial');assert.equal(scrolls(r).length,1);});
 test('短reveal首个loading页不能枚举或点击，第三次完整读树才恢复',async()=>{const r=await run({loadingReveal:true});assert.equal(r.out.videos.length,1);assert.equal(r.events.filter(e=>e[0]==='search-video-cards').length,4);assert.equal(scrolls(r).length,1);assert.equal(taps(r).length,1);assert.equal(r.out.relocation_reveals[0].enumerated_fingerprints.length,1);});
+
+async function actualDurationHandler({known=false,duplicateOld=false,duplicateFresh=false,changedLikes=false,missingOld=false,wrongRun=false,wrongTab=false,wrongKeyword=false}={}){
+ const dir=mkdtempSync(join(tmpdir(),'actual-duration-handler-')),events=[],run='duration-test';
+ const old=join(dir,(wrongRun?'different-run':run)+'-src1-cards-grid.xml'),fresh=join(dir,run+'-candidate1-loc-grid.xml');
+ writeFileSync(old,readFileSync(join(fixtures,'candidate22-original.xml')));let xml=readFileSync(join(fixtures,'candidate22-loc-retry2.xml'),'utf8');if(changedLikes)xml=xml.replaceAll('喜欢2.4万','喜欢2.5万');writeFileSync(fresh,xml);
+ const title='用AI做商业广告大片，原来这么简单 #ai制作视频 #创作者中心 #创作灵感 #ai视频 #ai广告',author='Neo小海';let reads=0;
+ const phone=async(cmd,...args)=>{events.push([cmd,...args]);
+  if(cmd==='search-video-cards'){reads++;if(missingOld&&reads===2)rmSync(old);const row=[897,reads===1?506:1053,reads===1?(known?'00:46':''):'00:47',title,author].join('\t');return row+((reads===1?duplicateOld:duplicateFresh)?'\n'+row.replace('897','1000'):'')+'\nvideo_tab='+(wrongTab&&reads>1?'0':'1')+'\nevidence='+(reads===1?old:fresh)+'\nend_of_results=1';}
+  if(cmd==='search-kw-matches')return 'kw_matches='+(wrongKeyword&&reads>1?'0':'1');
+  if(cmd==='card-unknown-duration-from-xml'){const fn=script.match(/^card_unknown_duration_from_xml\(\) \{[\s\S]*?^\}/m)?.[0];assert.ok(fn);const r=spawnSync('zsh',['-c',`${fn}\ncard_unknown_duration_from_xml "$1" "$2" "$3" "$4" "$5"`,'test',...args],{encoding:'utf8',env:{...process.env,PYTHON_BIN:'python3'}});assert.equal(r.status,0,r.stderr);return r.stdout;}
+  if(cmd==='card-bottom-hint-from-xml')return 'clipped=0';
+  if(cmd==='current-video-link')return 'content_type=video\nvideo_id=7685662999797258401\nshort_url=https://v.douyin.com/Actual/\nreturn_mode=results';return '';
+ };
+ try{const h=createDiscoveryHandlers({phone,execute:async()=>({code:0}),queue:async()=>({status:'pending',inserted:true}),profile:'p',run,root:base,sources:['AI'],limit:1,env:{WFR_RUN_DIR:dir}});return {out:await h.collect_videos(),events,old,fresh};}finally{rmSync(dir,{recursive:true,force:true});}
+}
+test('真实duration helper经实际handler补齐未知时长，完整新树坐标点击且保双树证据',async()=>{
+ const r=await actualDurationHandler();assert.equal(r.out.videos.length,1);assert.equal(r.out.stop_reason,'limit_reached');assert.deepEqual(taps(r).map(e=>e.slice(1,3)),[['897','1053']]);assert.equal(scrolls(r).length,0);assert.equal(r.out.identity_enrichments.length,1);assert.equal(r.out.identity_enrichments[0].old_duration,'');assert.equal(r.out.identity_enrichments[0].duration,'00:47');assert.equal(r.out.identity_enrichments[0].before_evidence_path,r.old);assert.equal(r.out.identity_enrichments[0].after_evidence_path,r.fresh);
+});
+for(const opts of [{known:true},{duplicateOld:true},{duplicateFresh:true},{changedLikes:true},{missingOld:true},{wrongRun:true},{wrongTab:true},{wrongKeyword:true}])test('未知时长入口拒绝不受信例外 '+JSON.stringify(opts),async()=>{
+ const r=await actualDurationHandler(opts);assert.equal(taps(r).length,0);assert.equal(scrolls(r).length,0);assert.equal(r.out.videos.length,0);assert.equal(r.out.identity_enrichments.length,0);if(opts.known||opts.duplicateOld||opts.duplicateFresh||opts.wrongTab||opts.wrongKeyword)assert.equal(r.events.filter(e=>e[0]==='card-unknown-duration-from-xml').length,0);
+});
