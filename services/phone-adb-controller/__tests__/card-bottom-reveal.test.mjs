@@ -87,3 +87,12 @@ const phone=async(cmd,...args)=>{events.push([cmd,...args]);if(cmd==='search-vid
 const h=createDiscoveryHandlers({phone,execute:async()=>({code:0}),queue:async()=>({status:'pending',inserted:true}),profile:'fake',run:'ordinal-review',root:base,sources:['AI'],limit:0,env:{WFR_RUN_DIR:dir}});const out=await h.collect_videos();console.log(JSON.stringify({expected_captures:3,actual_captures:out.captures.length,all_results_scanned:out.all_results_scanned,stop_reason:out.stop_reason,videos:out.videos.map(v=>v.videoId),events},null,2));assert.equal(out.captures.length,3,'短滑改变视口，同identity新视频ordinal0不能被旧视口slot0静默丢弃后仍报告全采');
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+
+test('短滑首次空完整页不能锁死后续第三读新候选枚举',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'reveal-empty-permanent-'));try{
+let stage='initial',reads=0,revealReads=0,lastY='',events=[];const row=(t,y)=>[450,y,'00:20',t,'作者'].join('\t');const page=(rows,end=false)=>rows+'\nvideo_tab=1\nevidence=/fresh/'+stage+'.xml\nend_of_results='+(end?'1':'0');
+const phone=async(cmd,...args)=>{events.push([cmd,...args]);if(cmd==='search-video-cards'){reads++;if(reads===1)return page(row('原完整候选A标题',2600));if(stage==='initial')return page('');if(stage==='revealed'){if(++revealReads===1)return page('');return page(row('原完整候选A标题',2000)+'\n'+row('短滑新露出候选B标题',2450));}return page('',true);}if(cmd==='search-kw-matches')return 'kw_matches=1';if(cmd==='card-bottom-hint-from-xml')return 'clipped=1';if(cmd==='search-grid-scroll'){stage=args[1]==='reveal-up'?'revealed':'after-full-scroll';return 'scrolled='+args[1];}if(cmd==='tap-evidence'){lastY=args[1];return '';}if(cmd==='current-video-link')return 'content_type=video\nvideo_id='+(lastY==='2450'?'7685662999797258402':'7685662999797258401')+'\nshort_url=https://v.douyin.com/Actual'+lastY+'/\nreturn_mode=results';return '';};
+const h=createDiscoveryHandlers({phone,execute:async()=>({code:0}),queue:async()=>({status:'pending',inserted:true}),profile:'fake',run:'review',root:base,sources:['AI'],limit:0,env:{WFR_RUN_DIR:dir}});const out=await h.collect_videos();console.log(JSON.stringify({expected_captures:2,actual_captures:out.captures.length,all_results_scanned:out.all_results_scanned,stop_reason:out.stop_reason,events},null,2));assert.equal(out.captures.length,2,'短滑后的新完整候选必须在离开当前viewport前枚举，不能漏采却报告全扫完');
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
