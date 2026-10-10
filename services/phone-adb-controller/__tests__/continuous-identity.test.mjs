@@ -49,7 +49,7 @@ else if(has('am start')&&has('aweme/detail')){s.page='detail';s.play='playing';s
 else if(has('am start')&&has('search/tabs')){s.page='scratch';s.field='';s.backs=0;}
 else if(has('input keyevent 127')){s.play='paused';s.pauseCount=(s.pauseCount||0)+1;}
 else if(has('input keyevent 126')){if(process.env.PLAY_FAILS==='1')process.exit(1);s.play='playing';}
-else if(has('input keyevent 85'))s.play=s.play==='playing'?'paused':'playing';
+else if(has('input keyevent 85')){s.play=s.play==='playing'?'paused':'playing';s.media85=(s.media85||0)+1;}
 else if(has('input text '))s.field=a.at(-1);
 else if(has('input keyevent 278'))s.clip=s.field;
 else if(has('input keyevent 279'))s.field=s.clip;
@@ -61,7 +61,7 @@ else if(has('shell rm -f')){try{fs.unlinkSync(p.join(d,'remote.xml'));}catch{}}
 else if(has('uiautomator dump')){
  if(process.env.SHARE_IDLE_FALLBACK==='1'&&s.page==='detail'&&s.scratchReturns===1&&s.pauseCount>=3){
   s.shareAttempts=(s.shareAttempts||0)+1;
-  if(s.shareAttempts<=3){fs.writeFileSync(sfile,JSON.stringify(s));console.error('ERROR: could not get idle state.');process.exit(1);}
+  if(!s.media85){fs.writeFileSync(sfile,JSON.stringify(s));console.error('ERROR: could not get idle state.');process.exit(1);}
  }
  const isSkeleton=process.env.SKELETON==='1'||(process.env.FINAL_SKELETON==='1'&&s.scratchReturns>=2&&!(process.env.RECOVER==='1'&&s.detailStarts>=2));
  const xml=s.page==='guide'?fs.readFileSync(p.join(d,'guide.xml'),'utf8'):s.page==='partial'?fs.readFileSync(p.join(d,'skeleton.xml'),'utf8'):s.page==='results'?fs.readFileSync(p.join(d,'results.xml'),'utf8'):s.page==='scratch'?(${field.toString()})(s.field||'人工智能'):fs.readFileSync(p.join(d,s.page==='panel'?'panel.xml':isSkeleton?'skeleton.xml':(s.guideDismisses?'guide-detail.xml':'detail.xml')),'utf8');
@@ -164,11 +164,11 @@ test('keyword内部nonce归位保持暂停，仍新读分享树与原词视频ta
 test('keyword已暂停分享遇idle失败：原85兜底成对恢复原暂停状态且只能用新树成功',()=>{
  const r=phone({mode:'standard',command:'results',shareIdleFallback:true,controlledWait:true});
  assert.equal(r.error,undefined,'必须真实退出，不以timeout代替验收');assert.equal(r.status,0,r.stderr);
- assert.equal(r.state.shareAttempts,4,'先真实三次读树失败，再执行原单次兜底');
+ assert.equal(r.state.shareAttempts,2,'本次新鲜seed详情的首idle失败后，立即单次toggle-dump-toggle，不重复同策略三次');
  assert.equal(r.calls.split('\n').filter(s=>/input keyevent 85$/.test(s)).length,2,'85必须成对，不能把暂停视频永久改成播放');
  assert.equal(r.calls.split('\n').filter(s=>/input keyevent 126$/.test(s)).length,0);
  assert.equal(r.state.play,'paused');assert.equal(r.state.page,'results');
- assert.match(r.stderr,/hierarchy captured via pause-dump-resume fallback/);
+ assert.match(r.stderr,/hierarchy captured via toggle-dump-toggle fallback/);
  assert.match(r.stdout,new RegExp('video_id='+vid));
  const keys=r.calls.split('\n').filter(s=>/input keyevent (85|126|127)$/.test(s));assert.deepEqual(keys.slice(-2).map(s=>s.split(' ').at(-1)),['85','85']);
 });
