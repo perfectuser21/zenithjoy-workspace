@@ -13,7 +13,7 @@ SPEC.loader.exec_module(runner)
 class PatrolContractTests(unittest.TestCase):
     def test_mirror_busy_skip_requires_a_real_sync_receipt(self):
         receipt = {'observed_at': '2026-10-10T10:00:00Z', 'devices': {'errors': []}, 'errors': []}
-        outputs = [CompletedProcess([], 0, ''), CompletedProcess([], 0, __import__('json').dumps(receipt))]
+        outputs = [CompletedProcess([], 0, ''), CompletedProcess([], 0, 'PostgreSQL pool configured: {\n  host: localhost\n}\n' + __import__('json').dumps(receipt) + '\n')]
         with patch.object(runner.subprocess, 'run', side_effect=outputs) as run, patch('time.sleep'):
             self.assertEqual(runner.sync_mirror(), receipt)
         self.assertEqual(run.call_count, 2)
