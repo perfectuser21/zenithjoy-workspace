@@ -1,6 +1,6 @@
 // 101只负责搜索筛选后的真实视频链接；历史状态和资格判断交102。
 import {join} from 'node:path';
-import {existsSync,mkdirSync,writeFileSync,renameSync} from 'node:fs';
+import {existsSync,mkdirSync,writeFileSync,renameSync,readFileSync} from 'node:fs';
 const normalized=v=>String(v??'').normalize('NFKC').replace(/\s+/g,' ').trim();
 const fieldsOf=s=>Object.fromEntries(String(s??'').split('\n').filter(l=>l.includes('=')).map(l=>{const i=l.indexOf('=');return [l.slice(0,i),l.slice(i+1).trim()];}));
 function cardsOf(s,ctx){return String(s??'').split('\n').flatMap(l=>{const f=l.replace(/\r$/,'').split('\t');return /^\d+$/.test(f[0]??'')&&/^\d+$/.test(f[1]??'')?[{...ctx,x:Number(f[0]),y:Number(f[1]),duration:f[2]??'',title:f[3]??'',author:f[4]??''}]:[];});}
@@ -16,8 +16,10 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
  if(!['comprehensive','latest','most_liked','most_commented','most_favorited'].includes(sort)||!['unlimited','one_day','one_week','six_months'].includes(time)||!Number.isSafeInteger(maxScreens)||maxScreens<1||maxScreens>1000)throw Error('搜索筛选或屏数配置无效');
  const contexts=sources.slice(0,2).map((s,i)=>{const value=typeof s==='string'?s:s?.source??s?.keyword??s?.url;if(typeof value!=='string'||!value.trim())throw Error('发现来源格式无效');return {source:value,keyword:sourceKind==='keyword'?value:'',sourceKind,sourceIndex:i,sourceEncoded:encodeURIComponent(value)};});
  const state={sourceKind,sources:contexts,source_receipts:[],persisted:[],captures:[],failures:[],known_gaps:[],counts:{sources:contexts.length,sources_succeeded:0,source_failed:0,cards:0,attempted:0,opened:0,linked:0,persisted:0,created:0,reused:0,duplicate:0,failed:0,screens:0,missing_identity:0,non_video:0},source_complete:false,write_complete:false};
+ const request={keywords:contexts.map(c=>c.source),source_kind:sourceKind,sort,time_layer:time,location,target_count:limit,max_duration_s:Number(env.LEADGEN_DISCOVERY_MAX_SECONDS||2400)};
+ if(!Number.isSafeInteger(request.max_duration_s)||request.max_duration_s<1||request.max_duration_s>2400)throw Error('采集Activity预算须为1至2400秒');
  let firstPage,stopReason=null,allScanned=false;
- const progress=()=>{if(!env.WFR_RUN_DIR)throw Error('缺少本run持久化交接目录');mkdirSync(env.WFR_RUN_DIR,{recursive:true});const file=join(env.WFR_RUN_DIR,'discovery-progress.json');writeFileSync(file+'.tmp',JSON.stringify({run,profile,observed_at:new Date().toISOString(),counts:{...state.counts},videos:state.persisted,captures:state.captures,failures:state.failures,known_gaps:state.known_gaps,stop_reason:stopReason,all_results_scanned:allScanned}),{mode:0o600});renameSync(file+'.tmp',file);};
+ const progress=()=>{if(!env.WFR_RUN_DIR)throw Error('缺少本run持久化交接目录');mkdirSync(env.WFR_RUN_DIR,{recursive:true});const file=join(env.WFR_RUN_DIR,'discovery-progress.json');writeFileSync(file+'.tmp',JSON.stringify({run,profile,request,observed_at:new Date().toISOString(),counts:{...state.counts},videos:state.persisted,captures:state.captures,failures:state.failures,known_gaps:state.known_gaps,stop_reason:stopReason,all_results_scanned:allScanned}),{mode:0o600});renameSync(file+'.tmp',file);};
  const failure=(c,reason,error)=>{state.counts.failed++;state.failures.push({source:c.source,title:c.title,author:c.author,reason,detail:String(error?.stderr||error?.message||error).slice(0,1000)});progress();};
  const boundary=()=>{if(env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))throw Error('stop_requested');const deadline=budgetDeadline();if(deadline&&Date.now()>=deadline)throw Error('budget_exhausted');const start=Number(env.WF_RUN_START_TS),max=Number(env.WF_RUN_MAX_SECONDS||1800);if(start>0&&Date.now()/1000-start>=max)throw Error('budget_exhausted');};
  const pause=async n=>{boundary();const r=await execute('/bin/sleep',[String(n)],{maxDurationS:n+2});if(r?.code!==0)throw Error('发现页面等待失败');};
@@ -73,7 +75,14 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
        else{state.persisted.push({...video,status:stored.status,inserted:stored.inserted});state.counts.persisted++;if(stored.inserted)state.counts.created++;else state.counts.reused++;}
        progress();
        if(f.return_recovered_via==='research'){await filters(ctx,eid+'-recover');for(let s=0;s<screen;s++){await phone('search-grid-scroll',eid+'-restore'+s,'up');await pause(2);}}
-      }catch(e){failure(target,'capture_failed',e);stopReason='capture_failed';break sourceLoop;}
+      }catch(e){
+       try{boundary();}catch(stop){
+        if(['stop_requested','budget_exhausted'].includes(stop.message)){
+         stopReason=stop.message;state.known_gaps.push({source:target.source,title:target.title,author:target.author,kind:'interrupted_capture',reason:stopReason});break sourceLoop;
+        }
+       }
+       failure(target,'capture_failed',e);stopReason='capture_failed';break sourceLoop;
+      }
      }
      if(limit&&state.counts.persisted>=limit){stopReason='limit_reached';break sourceLoop;}
      if(page.end)break;
@@ -87,5 +96,18 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
   }catch(e){stopReason=['stop_requested','budget_exhausted'].includes(e.message)?e.message:'source_failed';state.failures.push({reason:stopReason,detail:e.message});}
   state.write_complete=true;progress();return result();
  }
- return {source,write_videos,state};
+ async function collect_videos(){
+  const saved=env.WFR_RUN_DIR&&join(env.WFR_RUN_DIR,'discovery-progress.json');
+  if(saved&&existsSync(saved)){
+   const prior=JSON.parse(readFileSync(saved,'utf8'));
+   if(prior.run!==run||prior.profile!==profile||JSON.stringify(prior.request)!==JSON.stringify(request))throw Error('采集重试输入与原run不一致');
+   if(!Array.isArray(prior.videos)||prior.videos.length>1000||prior.videos.some(v=>!/^\d{16,24}$/.test(v.videoId)||!validVideoUrl(v.videoUrl,v.videoId)))throw Error('采集重试清单身份无效');
+   state.persisted=[...new Map(prior.videos.map(v=>[v.videoId,v])).values()];state.captures=Array.isArray(prior.captures)?prior.captures:[];
+   state.counts.persisted=state.persisted.length;state.counts.created=state.persisted.filter(v=>v.inserted).length;state.counts.reused=state.persisted.length-state.counts.created;
+  }
+  // 重试从本Activity起点重新搜索，不复用上次屏幕或进程内存坐标。
+  firstPage=undefined;state.source_complete=false;state.write_complete=false;
+  await source();const out=await write_videos();return {...out,source_completed:1};
+ }
+ return {source,write_videos,collect_videos,state};
 }

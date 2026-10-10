@@ -2,6 +2,7 @@
 """手机锁互斥及只读在跑任务检查；未知情况不允许回收。"""
 import fcntl
 import csv
+import datetime
 import json
 import hashlib
 import os
@@ -239,6 +240,137 @@ def safe_to_reap():
         return 1
 
 
+# ── 对外动作账 / 锁回执证据（1010，Brain 任务 d1b395c7）──────────────────
+# 独立核验员只采信能回读的凭据：账本按行只追加（O_APPEND + flock，绝不改写已有行），
+# 锁回执记下每次 lock-acquire / lock-release 的原始回执与随后 lock-status 回读原文。
+LEDGER_SCHEMA = 'outward_ledger_v1'
+RECEIPT_SCHEMA = 'lock_receipt_v1'
+INT_FIELDS = {'x', 'y', 'wait_ms', 'rc', 'tap_rc', 'attempt_seq'}
+BOOL_FIELDS = {'allow_repeat'}
+RESERVED = {'schema', 'seq', 'event', 'at', 'at_epoch_ms', 'action_seq', 'prior_attempt_seqs'}
+
+
+def _now():
+    now = time.time()
+    return datetime.datetime.fromtimestamp(now).astimezone().isoformat(timespec='milliseconds'), int(now * 1000)
+
+
+def _fields(pairs):
+    fields = {}
+    for pair in pairs:
+        key, _, value = pair.partition('=')
+        if not key or key in RESERVED:
+            continue
+        if key in INT_FIELDS and value.lstrip('-').isdigit():
+            value = int(value)
+        elif key in BOOL_FIELDS:
+            value = value == '1'
+        fields[key] = value
+    return fields
+
+
+def _ledger_rows(text):
+    rows = []
+    for number, line in enumerate(text.splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            rows.append(json.loads(line))
+        except ValueError:
+            print('outward ledger line %d is not valid JSON; refusing to guess what already happened' % number, file=sys.stderr)
+            sys.exit(2)
+    return rows
+
+
+def outward_ledger_append():
+    """precheck：只判不写（重复则记一行 refused）；attempt：点击前记账；result：点击后记结果。"""
+    path, mode, *pairs = sys.argv[2:]
+    if mode not in ('precheck', 'attempt', 'result'):
+        sys.exit(2)
+    fields = _fields(pairs)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_APPEND, 0o644)
+    with os.fdopen(fd, 'r+') as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        handle.seek(0)
+        rows = _ledger_rows(handle.read())
+        action = fields.get('action')
+        prior = [row.get('seq') for row in rows if row.get('event') == 'attempt' and row.get('action') == action]
+        at, at_ms = _now()
+        row = {'schema': LEDGER_SCHEMA, 'seq': len(rows) + 1}
+        code, message = 0, ''
+        if mode in ('precheck', 'attempt') and prior and not fields.get('allow_repeat'):
+            row.update({'event': 'refused', 'reason': 'repeat_refused', **fields, 'prior_attempt_seqs': prior})
+            code, message = 3, 'prior_attempts=%d' % len(prior)
+        elif mode == 'precheck':
+            print('clear prior_attempts=%d' % len(prior))
+            return 0
+        elif mode == 'attempt':
+            row.update({'event': 'attempt', **fields, 'action_seq': len(prior) + 1})
+            message = 'attempt_seq=%d action_seq=%d' % (row['seq'], len(prior) + 1)
+        else:
+            row.update({'event': 'result', **fields})
+            message = 'result_seq=%d' % row['seq']
+        row.update({'at': at, 'at_epoch_ms': at_ms})
+        handle.write(json.dumps(row, ensure_ascii=False) + '\n')
+        handle.flush()
+        os.fsync(handle.fileno())
+    print(message)
+    return code
+
+
+def outward_ledger_read():
+    path, run_id, evidence_id = sys.argv[2:]
+    doc = {'schema': LEDGER_SCHEMA, 'run_id': run_id, 'evidence_id': evidence_id, 'ledger_path': path,
+           'exists': os.path.exists(path), 'sha256': None, 'entries': [],
+           'summary': {'attempts_by_action': {}, 'refused_by_action': {}, 'results_by_action': {}}}
+    if doc['exists']:
+        with open(path, 'rb') as handle:
+            raw = handle.read()
+        doc['sha256'] = hashlib.sha256(raw).hexdigest()
+        doc['entries'] = _ledger_rows(raw.decode('utf-8'))
+        names = {'attempt': 'attempts_by_action', 'refused': 'refused_by_action', 'result': 'results_by_action'}
+        for row in doc['entries']:
+            bucket = doc['summary'].get(names.get(row.get('event'), ''), None)
+            if bucket is not None:
+                bucket[row.get('action')] = bucket.get(row.get('action'), 0) + 1
+    print(json.dumps(doc, ensure_ascii=False, indent=2))
+    return 0
+
+
+def lock_receipt():
+    path, kind, run_id, evidence_id, *pairs = sys.argv[2:]
+    fields = _fields(pairs)
+    readback = fields.get('readback', '')
+    first = readback.splitlines()[0] if readback else ''
+    state = first[5:].split(' ', 1)[0] if first.startswith('lock=') else 'unknown'
+    owner = next((tok[6:] for tok in first.split() if tok.startswith('owner=')), None)
+    at, at_ms = _now()
+    doc = {'schema': RECEIPT_SCHEMA, 'evidence_id': evidence_id, 'run_id': run_id, 'kind': kind, 'events': []}
+    if os.path.exists(path):
+        try:
+            with open(path) as handle:
+                old = json.load(handle)
+            if isinstance(old.get('events'), list):
+                doc['events'] = old['events']
+        except (ValueError, OSError, AttributeError):
+            os.replace(path, '%s.corrupt-%d' % (path, at_ms))
+    event = {'seq': len(doc['events']) + 1, 'at': at, 'at_epoch_ms': at_ms, **fields,
+             'result': 'ok' if fields.get('rc') == 0 else 'fail',
+             'readback_command': 'lock-status', 'readback_state': state, 'readback_owner': owner}
+    doc['events'].append(event)
+    doc['latest'] = event
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = '%s.tmp-%d' % (path, os.getpid())
+    with open(tmp, 'w') as handle:
+        json.dump(doc, handle, ensure_ascii=False, indent=2)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(tmp, path)
+    print('lock_receipt=%s readback_state=%s' % (evidence_id, state))
+    return 0
+
+
 if __name__ == '__main__':
     if sys.argv[1] == 'record-claim':
         record_claim()
@@ -275,5 +407,11 @@ if __name__ == '__main__':
                     print(row[pi] + '\t' + row[si])
     elif sys.argv[1] == 'safe-to-reap':
         sys.exit(safe_to_reap())
+    elif sys.argv[1] == 'outward-ledger-append':
+        sys.exit(outward_ledger_append())
+    elif sys.argv[1] == 'outward-ledger-read':
+        sys.exit(outward_ledger_read())
+    elif sys.argv[1] == 'lock-receipt':
+        sys.exit(lock_receipt())
     else:
         sys.exit(2)

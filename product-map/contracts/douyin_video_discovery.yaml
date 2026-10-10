@@ -15,266 +15,16 @@ trigger_inputs:
   - Keyword
   - Account
   - Device
+  - SearchRequest
 known_gaps:
   - gap: 对标主页网格当前不提供标题与作者，缺稳定身份时拒绝取链；旧对标流程退役后不得回退。
     task: dffd5885
 activities:
-  - key: preflight
-    name: 预检
-    order: 1
-    version: 2.0.0
-    compatibility: breaking
-    owner:
-      department: line02 智能获客
-      agent: 获客采收员
-    inputs:
-      - type: Device
-        cardinality: one
-        fields:
-          - serial
-          - host
-      - type: Account
-        cardinality: one
-        fields:
-          - platform
-          - profile
-          - sender_id
-    outputs:
-      - type: Device
-        cardinality: one
-        effect: update
-        fields:
-          - online
-          - call_state
-          - lock_holder
-      - type: Account
-        cardinality: one
-        effect: update
-        fields:
-          - logged_in
-      - type: Run
-        cardinality: one
-        effect: create
-        fields:
-          - run_tag
-          - profile
-          - serial
-    preconditions:
-      - 不在触达时窗 8-22 点（采收给触达让路，harvest-cron.sh:139）
-      - 当日 KPI 未达标（kpi-gate.js 经 ssh mmv，harvest-cron.sh:145-149）
-    postconditions:
-      - probe: pf_device_verified
-        asserts: 保留原后置条件：pf_device_verified
-      - probe: pf_account_verified
-        asserts: 保留原后置条件：pf_account_verified
-      - probe: pf_call_idle
-        asserts: 保留原后置条件：pf_call_idle
-      - probe: pf_lock_acquired
-        asserts: 保留原后置条件：pf_lock_acquired
-      - probe: preflight_commander_verified
-        asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
-    execution:
-      location: phone
-      via: leadgen-workflow.mjs → preflight独立活动 → 持久化队列读回
-    budget:
-      max_duration_s: 300
-      heartbeat_s: 60
-    resources:
-      locks:
-        - device:<serial>
-      limits: []
-    idempotency:
-      dedupe_key: Run.run_tag
-      on_duplicate: reject
-    failure:
-      empty_ok: []
-      retryable:
-        - lock_busy 设备锁被占
-      needs_human:
-        cases:
-          - device_offline 设备离线
-          - account_mismatch 手机登录号不符
-          - call_busy 设备通话中（未挂断的电话）
-        alert:
-          channel: bark
-          object: harvest-cron.sh:121-125 离线升级分身 → Bark
-      fatal:
-        - run_tag 重复
-    side_effects: []
-    invokers:
-      - code
-    runtime:
-      phase: setup
-      entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
-    implementation_bindings:
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/douyin-phone-adb
-        revision: contract
-        enabler_key: device_lock
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/phone-lock-lib.sh
-        revision: contract
-        enabler_key: device_lock
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/phone-lock-helper.py
-        revision: contract
-        enabler_key: device_lock
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/douyin-phone-adb
-        revision: contract
-        enabler_key: account_selfcheck
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-workflow.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-activity.sh
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/activity-commander.mjs
-        revision: contract
-    steps:
-      - key: acquire_device_lock
-        name: 拿设备锁
-        order: 1
-        reads:
-          - Device.serial
-        writes:
-          - Device.lock_holder
-        check: lock-acquire rc=0 且锁文件 owner=本 run（TTL 1800s）
-        implementation:
-          status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.acquire_device_lock（原约束保留，真PG/证据读回）
-        uses_llm: false
-        dod:
-          mode: checkpoint
-          readback:
-            type: metric
-            ref: metrics.lock_acquired
-            expect:
-              op: ==
-              value: 1
-      - key: refresh_lock_heartbeat
-        name: 锁心跳续期
-        order: 2
-        reads:
-          - Device.lock_holder
-        writes:
-          - Device.lock_holder
-        check: lock-refresh 后锁文件 mtime 更新
-        implementation:
-          status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.refresh_lock_heartbeat（原约束保留，真PG/证据读回）
-        uses_llm: false
-        dod:
-          mode: checkpoint
-          at: cleanup
-          readback:
-            type: log
-            regex: 锁心跳续期3次仍未确认成功
-            expect:
-              op: <=
-              value: 0
-      - key: verify_device_identity
-        name: 验设备身份
-        order: 3
-        reads:
-          - Device.serial
-        writes:
-          - Device.online
-        check: adb get-state == device 且 serial 与声明一致
-        implementation:
-          status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.verify_device_identity（原约束保留，真PG/证据读回）
-        uses_llm: false
-        dod:
-          mode: checkpoint
-          readback:
-            type: metric
-            ref: metrics.device_verified
-            expect:
-              op: ==
-              value: 1
-      - key: verify_call_idle
-        name: 验通话空闲
-        order: 4
-        reads:
-          - Device.serial
-        writes:
-          - Device.call_state
-        check: telephony call_state == IDLE
-        implementation:
-          status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.verify_call_idle（原约束保留，真PG/证据读回）
-        uses_llm: false
-        dod:
-          mode: checkpoint
-          readback:
-            type: metric
-            ref: metrics.call_state_idle
-            expect:
-              op: ==
-              value: 1
-      - key: read_account_mark
-        name: 读账号标记(我页)
-        order: 5
-        reads:
-          - Account.sender_id
-        writes:
-          - Account.logged_in
-        check: 我页抖音号 in profile 的注册账号列表(account-current + account_registered)
-        implementation:
-          status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.read_account_mark（原约束保留，真PG/证据读回）
-        uses_llm: false
-        dod:
-          mode: checkpoint
-          readback:
-            type: evidence
-            glob: "{tag}-account-profile.xml"
-            match: 抖音号：
-            expect:
-              op: ">="
-              value: 1
-      - key: open_run_ledger
-        name: 开账本
-        order: 6
-        reads:
-          - Account.profile
-          - Device.serial
-        writes:
-          - Run.run_tag
-          - Run.profile
-          - Run.serial
-        check: ledger init 成功且 preflight 工件通过闭集键校验；四项指标取 harvest-cron
-          真实预检结果（DEVICE_VERIFIED/ACCOUNT_VERIFIED/CALL_STATE_IDLE/LOCK_ACQUIRED，读不到即 0）
-        implementation:
-          status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js preflight.open_run_ledger（原约束保留，真PG/证据读回）
-        uses_llm: false
-        dod:
-          mode: checkpoint
-          readback:
-            type: ledger
-            stage: preflight
-            field: status
-            equals: completed
-            expect:
-              op: ==
-              value: 1
-    commander:
-      entry: activity-commander.mjs
-  - key: source
-    name: 取源
+  - ref: douyin_video_processing.preflight
+  - key: collect_videos
+    name: 搜索采集视频
     order: 2
-    version: 3.0.0
+    version: 4.0.0
     compatibility: breaking
     owner:
       department: line02 智能获客
@@ -294,34 +44,62 @@ activities:
         cardinality: one
         fields:
           - run_tag
-    outputs:
+      - &id001
+        type: SearchRequest
+        cardinality: one
+        fields:
+          - keywords
+          - sort
+          - time_layer
+          - location
+          - target_count
+          - max_duration_s
+    outputs: &id002
       - type: Video
         cardinality: many
         effect: create
         fields:
+          - line_key
+          - video_id
+          - video_url
           - title
-          - comment_count
           - keyword
+          - comment_count
+          - harvest_batch
+          - author
+      - type: Run
+        cardinality: one
+        effect: update
+        fields:
+          - status
+          - stop_reason
+          - all_results_scanned
     preconditions:
-      - 设备锁由本run持有
-      - 关键词和筛选参数来自输入，先核验首屏；每条链接实际保存后继续刷下一屏
+      - 设备预检通过，持有本run设备锁
+      - 关键词、排序、时间、地区、数量和预算已明确；不执行历史或自家号资格过滤
     postconditions:
       - probe: source_completed
         asserts: 来源读取实际成功且无旧入口回退
-      - probe: source_commander_verified
+      - probe: collect_videos_commander_verified
         asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
+      - probe: disc_candidates_persisted
+        asserts: 保留原后置条件：disc_candidates_persisted
+      - probe: videos_readback
+        asserts: 保留原后置条件：videos_readback
+      - probe: line_key_not_null
+        asserts: 保留原后置条件：line_key_not_null
     execution:
       location: phone
-      via: leadgen-workflow.mjs → source独立活动 → 持久化队列读回
+      via: leadgen-workflow.mjs → collect_videos：搜索筛选、逐屏取链、逐条落表及独立PG读回
     budget:
-      max_duration_s: 480
+      max_duration_s: 2400
       heartbeat_s: 60
     resources:
       locks:
         - device:<serial>
       limits:
-        - name: max_screens_per_source
-          value: 100
+        - name: max_requested_videos
+          value: 1000
     idempotency:
       dedupe_key: Video.line_key+Video.video_id
       on_duplicate: skip
@@ -341,7 +119,10 @@ activities:
           object: escort 升级（harvest-cron.sh 陪跑员）→ Bark
       fatal:
         - hash_mismatch 词单在 run 中被改
-    side_effects: []
+    side_effects:
+      - kind: internal_write
+        target: pg zenithjoy.leadgen_videos
+        description: 实际ID和有效链接验证后落库，收到pending/matched/rejected实际回执才计成功
     invokers:
       - code
       - agent
@@ -387,10 +168,10 @@ activities:
           mode: hard
           readback:
             type: evidence
-            glob: "{tag}-source-*-readback.json"
+            glob: '{tag}-source-*-readback.json'
             match: '"verified"\s*:\s*true'
             expect:
-              op: ">="
+              op: '>='
               ref: metrics.sources_succeeded
       - key: switch_video_tab
         name: 切视频tab
@@ -401,16 +182,16 @@ activities:
         check: 视频 tab 节点 selected=true
         implementation:
           status: implemented
-          ref: leadgen-discovery.mjs source.switch_video_tab（原约束保留，真PG/证据读回）
+          ref: leadgen-discovery.mjs collect_videos.switch_video_tab（原约束保留，真PG/证据读回）
         uses_llm: true
         dod:
           mode: checkpoint
           readback:
             type: evidence
-            glob: "{tag}-src*-vtab-aftertab.xml"
+            glob: '{tag}-src*-vtab-aftertab.xml'
             match: 视频[^>]*selected="true"
             expect:
-              op: ">="
+              op: '>='
               ref: metrics.sources_succeeded
       - key: open_filter_panel
         name: 点筛选按钮开面板
@@ -421,15 +202,15 @@ activities:
         check: 筛选面板节点可见
         implementation:
           status: implemented
-          ref: leadgen-discovery.mjs source.open_filter_panel（原约束保留，真PG/证据读回）
+          ref: leadgen-discovery.mjs collect_videos.open_filter_panel（原约束保留，真PG/证据读回）
         uses_llm: true
         dod:
           mode: checkpoint
           readback:
             type: evidence
-            glob: "{tag}-src*-filter-panel1.*"
+            glob: '{tag}-src*-filter-panel1.*'
             expect:
-              op: ">="
+              op: '>='
               ref: metrics.sources_succeeded
       - key: choose_filters
         name: 选筛选项
@@ -440,15 +221,15 @@ activities:
         check: 面板选中项 == 输入参数（时间窗six_months / 最新latest / 指定地域），不能沿用旧排序
         implementation:
           status: implemented
-          ref: leadgen-discovery.mjs source.choose_filters（原约束保留，真PG/证据读回）
+          ref: leadgen-discovery.mjs collect_videos.choose_filters（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
           readback:
             type: evidence
-            glob: "{tag}-src*-filter-selected.*"
+            glob: '{tag}-src*-filter-selected.*'
             expect:
-              op: ">="
+              op: '>='
               ref: metrics.sources_succeeded
       - key: apply_filters
         name: 点查看结果
@@ -459,15 +240,15 @@ activities:
         check: 结果页刷新且筛选标签可见
         implementation:
           status: implemented
-          ref: leadgen-discovery.mjs source.apply_filters（原约束保留，真PG/证据读回）
+          ref: leadgen-discovery.mjs collect_videos.apply_filters（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
           readback:
             type: evidence
-            glob: "{tag}-src*-filter-results.*"
+            glob: '{tag}-src*-filter-results.*'
             expect:
-              op: ">="
+              op: '>='
               ref: metrics.sources_succeeded
       - key: extract_video_cards
         name: 抽视频卡片
@@ -480,137 +261,19 @@ activities:
         check: 视频tab和搜索词均已核验；明确空结果可返回0，不将未加载当空
         implementation:
           status: implemented
-          ref: leadgen-discovery.mjs source.extract_video_cards（原约束保留，真PG/证据读回）
+          ref: leadgen-discovery.mjs collect_videos.extract_video_cards（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
           readback:
             type: evidence
-            glob: "{tag}-src*-cards-grid.xml"
+            glob: '{tag}-src*-cards-grid.xml'
             expect:
-              op: ">="
+              op: '>='
               ref: metrics.sources_succeeded
-    commander:
-      entry: activity-commander.mjs
-  - key: write_videos
-    name: 取链接写视频表
-    order: 3
-    version: 3.0.0
-    compatibility: breaking
-    owner:
-      department: line02 智能获客
-      agent: 获客采收员
-    inputs:
-      - type: Keyword
-        cardinality: many
-        fields:
-          - line_key
-          - word
-      - type: Device
-        cardinality: one
-        fields:
-          - serial
-          - lock_holder
-      - type: Run
-        cardinality: one
-        fields:
-          - run_tag
-      - type: Video
-        cardinality: many
-        fields:
-          - title
-          - keyword
-    outputs:
-      - type: Video
-        cardinality: many
-        effect: create
-        fields:
-          - line_key
-          - video_id
-          - video_url
-          - title
-          - keyword
-          - comment_count
-          - harvest_batch
-    preconditions:
-      - 仅处理经过历史、自家号和本轮去重的候选
-      - 按标题和作者重新读取当前卡片坐标，拒绝COPY_STALE与缺身份
-    postconditions:
-      - probe: disc_candidates_persisted
-        asserts: 保留原后置条件：disc_candidates_persisted
-      - probe: videos_readback
-        asserts: 保留原后置条件：videos_readback
-      - probe: line_key_not_null
-        asserts: 保留原后置条件：line_key_not_null
-      - probe: write_videos_commander_verified
-        asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
-    execution:
-      location: phone
-      via: leadgen-workflow.mjs → write_videos独立活动 → 持久化队列读回
-    budget:
-      max_duration_s: 600
-      heartbeat_s: 60
-    resources:
-      locks:
-        - device:<serial>
-      limits:
-        - name: max_requested_videos
-          value: 1000
-    idempotency:
-      dedupe_key: Video.line_key+Video.video_id
-      on_duplicate: skip
-    failure:
-      empty_ok:
-        - no_cards 本词无视频卡片
-      retryable:
-        - lock_busy
-        - WRONG_FOREGROUND
-        - NO_ROOT
-        - 候选落库失败（库/ssh 不可达）：视频留 pending 本批不采，下批再遇到重判
-      needs_human:
-        cases:
-          - TARGET_ABSENT 连续出现，疑抖音改版
-        alert:
-          channel: bark
-          object: escort 升级（harvest-cron.sh 陪跑员）→ Bark
-      fatal:
-        - hash_mismatch 词单在 run 中被改
-    side_effects:
-      - kind: internal_write
-        target: pg zenithjoy.leadgen_videos
-        description: 实际ID和有效链接验证后落库，收到pending/matched/rejected实际回执才计成功
-    invokers:
-      - code
-      - agent
-    runtime:
-      phase: batch_end
-      entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
-    implementation_bindings:
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-workflow.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-activity.sh
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/activity-commander.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-discovery.mjs
-        revision: contract
-    model:
-      - provider: openrouter
-        model: bytedance/ui-tars-1.5-7b
-        purpose: 视频 tab / 筛选按钮视觉定位兜底（douyin-phone-adb:905-909）
-    steps:
       - key: resolve_video_links
         name: 取视频链接
-        order: 1
+        order: 7
         reads:
           - Video.title
         writes:
@@ -619,7 +282,7 @@ activities:
         check: 每张卡取得 video_id（剪贴板守卫：回读链接含 video_id）
         implementation:
           status: implemented
-          ref: leadgen-discovery.mjs write_videos.resolve_video_links（原约束保留，真PG/证据读回）
+          ref: leadgen-discovery.mjs collect_videos.resolve_video_links（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -631,7 +294,7 @@ activities:
               value: 0
       - key: persist_candidates
         name: 写发现工件+落库
-        order: 2
+        order: 8
         reads:
           - Run.run_tag
           - Video.video_id
@@ -643,7 +306,7 @@ activities:
         check: 本批所有保存VID逐个PG独立读回，含旧批次幂等更新的ID
         implementation:
           status: implemented
-          ref: leadgen-discovery.mjs write_videos.persist_candidates（原约束保留，真PG/证据读回）
+          ref: leadgen-discovery.mjs collect_videos.persist_candidates（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -655,7 +318,7 @@ activities:
               value: 1
       - key: push_videos
         name: 视频持久化读回
-        order: 3
+        order: 9
         reads:
           - Video.video_id
           - Video.harvest_batch
@@ -664,7 +327,7 @@ activities:
         check: PG本批新增行数 ≥ 实际inserted=true新增回执数；旧VID保持旧处理状态和批次，由完整VID清单核验
         implementation:
           status: implemented
-          ref: leadgen-discovery.mjs write_videos.push_videos（原约束保留，真PG/证据读回）
+          ref: leadgen-discovery.mjs collect_videos.push_videos（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -672,18 +335,18 @@ activities:
             type: sql
             query: SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG'
             expect:
-              op: ">="
+              op: '>='
               ref: metrics.videos_pushed
       - key: readback_line_key
         name: 业务线读回
-        order: 4
+        order: 10
         reads:
           - Video.line_key
         writes: []
         check: 本批 leadgen_videos.line_key 全非空
         implementation:
           status: implemented
-          ref: leadgen-discovery.mjs write_videos.readback_line_key（原约束保留，真PG/证据读回）
+          ref: leadgen-discovery.mjs collect_videos.readback_line_key（原约束保留，真PG/证据读回）
         uses_llm: false
         dod:
           mode: checkpoint
@@ -695,181 +358,18 @@ activities:
               value: 1
     commander:
       entry: activity-commander.mjs
-  - key: cleanup
-    name: 收尾
-    order: 4
-    version: 2.0.0
-    compatibility: breaking
-    owner:
-      department: line02 智能获客
-      agent: 获客采收员
-    inputs:
-      - type: Device
-        cardinality: one
-        fields:
-          - serial
-          - lock_holder
-      - type: Run
-        cardinality: one
-        fields:
-          - run_tag
-    outputs:
-      - type: Device
-        cardinality: one
-        effect: update
-        fields:
-          - lock_holder
-      - type: Run
-        cardinality: one
-        effect: update
-        fields:
-          - status
-    preconditions:
-      - 本 run 各阶段已写工件或已判失败
-    postconditions:
-      - probe: cl_app_closed
-        asserts: 保留原后置条件：cl_app_closed
-      - probe: cl_lock_released
-        asserts: 保留原后置条件：cl_lock_released
-      - probe: cl_safe_desktop_visible
-        asserts: 保留原后置条件：cl_safe_desktop_visible
-    execution:
-      location: phone
-      via: leadgen-workflow.mjs → cleanup独立活动 → 持久化队列读回
-    budget:
-      max_duration_s: 120
-      heartbeat_s: 30
-    resources:
-      locks:
-        - device:<serial>
-      limits: []
-    idempotency:
-      dedupe_key: Run.run_tag
-      on_duplicate: skip
-    failure:
-      empty_ok: []
-      retryable:
-        - 工件 scp 到 mmv 失败（本地保留）
-      needs_human:
-        cases:
-          - finalize 自检 artifact_count_mismatch
-        alert:
-          channel: brain_alert
-          object: Brain 终态 failed 回执（workflow-result.sh:200）
-      fatal: []
-    side_effects: []
-    invokers:
-      - code
-    runtime:
-      phase: finalize
-      entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
-    implementation_bindings:
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/douyin-phone-adb
-        revision: contract
-        enabler_key: device_lock
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/phone-lock-lib.sh
-        revision: contract
-        enabler_key: device_lock
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/phone-lock-helper.py
-        revision: contract
-        enabler_key: device_lock
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-workflow.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-activity.sh
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/activity-commander.mjs
-        revision: contract
-    steps:
-      - key: close_app
-        name: 关App
-        order: 1
-        reads:
-          - Device.serial
-        writes: []
-        check: 前台不再是 com.ss.android.ugc.aweme
-        implementation:
-          status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js cleanup.close_app（原约束保留，真PG/证据读回）
-        uses_llm: false
-        dod:
-          mode: checkpoint
-          readback:
-            type: metric
-            ref: metrics.close_app_attempts
-            expect:
-              op: ">="
-              value: 1
-      - key: release_lock
-        name: 放锁
-        order: 2
-        reads:
-          - Device.lock_holder
-        writes:
-          - Device.lock_holder
-        check: 锁文件不存在或 owner≠本 run；失败重试3次(同commenter-identity套路)，3次仍失败才留告警
-        implementation:
-          status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js cleanup.release_lock（原约束保留，真PG/证据读回）
-        uses_llm: false
-        dod:
-          mode: checkpoint
-          readback:
-            type: metric
-            ref: metrics.lock_released
-            expect:
-              op: ==
-              value: 1
-      - key: return_safe_desktop
-        name: 回安全桌面
-        order: 3
-        reads:
-          - Device.serial
-        writes: []
-        check: 前台 = launcher（用 HOME intent resolve-activity 查设备自身默认桌面包名,不 hardcode 厂商launcher）
-        implementation:
-          status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js cleanup.return_safe_desktop（原约束保留，真PG/证据读回）
-        uses_llm: false
-        dod:
-          mode: checkpoint
-          readback:
-            type: metric
-            ref: metrics.safe_desktop_visible
-            expect:
-              op: ==
-              value: 1
-      - key: finalize_run
-        name: 终态回执
-        order: 4
-        reads:
-          - Run.run_tag
-        writes:
-          - Run.status
-        check: n_items>0 且 n_files>=n_items（workflow-result.sh:194）
-        implementation:
-          status: implemented
-          ref: leadgen-workflow.mjs + leadgen-queue.js cleanup.finalize_run（原约束保留，真PG/证据读回）
-        uses_llm: false
-        dod:
-          mode: checkpoint
-          readback:
-            type: ledger
-            field: items_total
-            expect:
-              op: ">="
-              value: 1
-    commander:
-      entry: activity-commander.mjs
+  - ref: douyin_video_processing.cleanup
+inputs:
+  - *id001
+  - type: Device
+    cardinality: one
+    fields:
+      - serial
+      - host
+  - type: Account
+    cardinality: one
+    fields:
+      - platform
+      - profile
+      - sender_id
+outputs: *id002

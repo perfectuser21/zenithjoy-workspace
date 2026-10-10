@@ -116,7 +116,7 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
     const sources=env.LEADGEN_SOURCES_FILE?readFileSync(env.LEADGEN_SOURCES_FILE,'utf8').split('\n').filter(Boolean)
       :(await rpc({kind:'keywords',line,count:2})).result;
     discovery=createDiscoveryHandlers({phone,execute:bounded,queue,profile,run,root,
-      sources,sourceKind:env.LEADGEN_SOURCE_KIND||'keyword',limit:Number(env.LEADGEN_LIMIT??0),env,budgetDeadline:()=>state.budgetDeadline||0});
+      sources,sourceKind:env.LEADGEN_SOURCE_KIND||'keyword',location:env.LEADGEN_LOCATION||'same_city',limit:Number(env.LEADGEN_LIMIT??0),env,budgetDeadline:()=>state.budgetDeadline||0});
     return discovery;
   };
   const intake=async()=>{
@@ -163,7 +163,7 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
   return {state,preflight,
     source:async()=>(await getDiscovery()).source(),
     dedup:intake,
-    write_videos:async()=>{const result=await (await getDiscovery()).write_videos();
+    collect_videos:async()=>{const result=await (await getDiscovery()).collect_videos();
       const readback=await queue('inspect_videos',{video_ids:result.videos.map(v=>v.videoId)});
       const readbackFailures=result.videos.filter(v=>!readback.some(r=>r.video_id===v.videoId&&r.line_key)).length;
       return {...result,persisted:result.counts.created,candidates:result.videos.length,videos_pushed:result.counts.created,
@@ -270,7 +270,10 @@ async function main(){
   };
   const handlers=createHandlers({root,env,rpc});
   const execution=Object.fromEntries(activities.map(activity=>[activity.key,async()=>{
-    handlers.state.budgetDeadline=Date.now()+Number(activity.budget?.max_duration_s||120)*1000;
+    const budget=Number(activity.budget?.max_duration_s||120);
+    const requested=activity.key==='collect_videos'?Number(env.LEADGEN_DISCOVERY_MAX_SECONDS||budget):budget;
+    if(!Number.isSafeInteger(requested)||requested<1||requested>budget)throw Error('请求预算超过Activity合同');
+    handlers.state.budgetDeadline=Date.now()+requested*1000;
     if(activity.key!=='cleanup'&&env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))return {status:'partial',reason:'已收到停止请求'};
     return handlers[activity.key]();
   }]));

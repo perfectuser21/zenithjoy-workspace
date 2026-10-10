@@ -4,6 +4,16 @@ import {mkdtempSync,rmSync,readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
+test('采集返回partial时，Commander收到真实部分状态而不是脚本正常返回后的completed',async()=>{
+ const {runWorkflow}=await import('../leadgen-workflow.mjs');const receipts=[];
+ const result=await runWorkflow({activities:[{key:'collect_videos'},{key:'cleanup'}],context:{},
+  handlers:{collect_videos:async()=>({status:'partial',stop_reason:'capture_failed',counts:{persisted:11,failed:1}}),cleanup:async()=>({released:true})},
+  commander:async receipt=>{receipts.push(receipt);return {action:'continue',reason:'依据真实状态'};},record:async()=>{}});
+ assert.equal(result.status,'partial');
+ assert.equal(receipts.find(r=>r.activity==='collect_videos'&&r.phase==='after').evidence.status,'partial');
+ assert.equal(receipts.find(r=>r.activity==='collect_videos'&&r.phase==='after').evidence.result.counts.persisted,11);
+});
+
 test('Commander叫停后不执行下一活动，锁内清场仍有前后Commander回执', async () => {
   const {runWorkflow} = await import('../leadgen-workflow.mjs');
   const executed=[],records=[];
@@ -137,8 +147,8 @@ test('需要140秒的取链能够完整入库，但不能越过活动剩余预�
   };
   try{
    const h=createHandlers({root:dir,env,rpc,execute});
-   await h.preflight();await h.source();h.state.budgetDeadline=Date.now()+remaining;
-   const result=await h.write_videos();
+   await h.preflight();h.state.budgetDeadline=Date.now()+remaining;
+   const result=await h.collect_videos();
    assert.equal(result.persisted,remaining===480000?1:0);
    assert.deepEqual(written,remaining===480000?[videoId]:[]);
    assert.equal(timeouts.length,1);assert.ok(timeouts[0]<=remaining);
