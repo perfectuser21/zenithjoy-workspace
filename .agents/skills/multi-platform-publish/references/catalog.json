@@ -1,0 +1,536 @@
+{
+  "schema_version": 1,
+  "audited_at": "2026-10-10",
+  "scope": "九平台现有源文件分支；候选清单，不表示Brain正式工作流登记或Codex真机验证",
+  "runtime_validation": "pending",
+  "logical_route_count": 24,
+  "routes": [
+    {
+      "platform": "douyin",
+      "type": "image",
+      "name": "抖音 · 图文",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/douyin-publisher/publish-douyin-image.cjs"
+          },
+          "interface": "位置参数 queue.json：title、content、images。",
+          "instruction": {
+            "root": "skills",
+            "path": "douyin-publisher/SKILL.md"
+          }
+        },
+        "phone": {
+          "source": {
+            "root": "skills",
+            "path": "android-douyin-publish/SKILL.md"
+          },
+          "interface": "单图图文分支：一张已归档静态图片、精确标题、指定账号和私密可见性。",
+          "readback": "同账号私密计数N→N+1；新图文单张指定素材、标题、新时间和私密标识，原单次账本与精确双锁收尾。",
+          "warnings": [
+            "仅本次单张私密图片独立通过；多图、长图、公开不能自动扩大验证范围。"
+          ]
+        }
+      }
+    },
+    {
+      "platform": "douyin",
+      "type": "video",
+      "name": "抖音 · 视频",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/douyin-publisher/publish-douyin-video.cjs"
+          },
+          "interface": "位置参数 queue.json：title、content、video_path、tags。",
+          "instruction": {
+            "root": "skills",
+            "path": "douyin-publisher/SKILL.md"
+          }
+        },
+        "phone": {
+          "source": {
+            "root": "skills",
+            "path": "android-douyin-publish/SKILL.md"
+          }
+        }
+      }
+    },
+    {
+      "platform": "douyin",
+      "type": "article",
+      "name": "抖音 · 长文",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/douyin-publisher/publish-douyin-article.cjs"
+          },
+          "interface": "位置参数 queue.json：title、content、cover、summary。",
+          "instruction": {
+            "root": "skills",
+            "path": "douyin-publisher/SKILL.md"
+          }
+        },
+        "phone": {
+          "source": {
+            "root": "skills",
+            "path": "android-douyin-publish/SKILL.md"
+          },
+          "interface": "原生写长文分支：标题、正文、预期段落、指定账号与私密可见性；不走相册。",
+          "readback": "同账号私密计数N→N+1；进入阅读文章核对作者、标题、全部自然段和新时间；原单次发表账本与双锁收尾。",
+          "warnings": [
+            "2026-10-10原生私密长文独立核验通过；不据此扩大为公开长文或其它App版本已验证。"
+          ]
+        }
+      }
+    },
+    {
+      "platform": "kuaishou",
+      "type": "image",
+      "name": "快手 · 图文",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/kuaishou-publisher/publish-kuaishou-image.cjs"
+          },
+          "interface": "--content 内容目录。",
+          "instruction": {
+            "root": "skills",
+            "path": "kuaishou-publisher/SKILL.md"
+          }
+        },
+        "phone": {
+          "source": {
+            "root": "skills",
+            "path": "android-kuaishou-publish/SKILL.md"
+          }
+        }
+      }
+    },
+    {
+      "platform": "kuaishou",
+      "type": "video",
+      "name": "快手 · 视频",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/kuaishou-publisher/publish-kuaishou-video.cjs"
+          },
+          "interface": "--title 标题 --video 本地视频 --cover 本地封面（可选）；此脚本不读取 --desc。",
+          "instruction": {
+            "root": "skills",
+            "path": "kuaishou-publisher/SKILL.md"
+          }
+        },
+        "phone": {
+          "source": {
+            "root": "skills",
+            "path": "android-kuaishou-publish/SKILL.md"
+          }
+        }
+      }
+    },
+    {
+      "platform": "xiaohongshu",
+      "type": "image",
+      "name": "小红书 · 图文",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/xiaohongshu-publisher/publish-xiaohongshu-image.cjs"
+          },
+          "interface": "--content 内容目录。",
+          "instruction": {
+            "root": "skills",
+            "path": "xiaohongshu-publisher/SKILL.md"
+          }
+        }
+      }
+    },
+    {
+      "platform": "xiaohongshu",
+      "type": "video",
+      "name": "小红书 · 视频",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/xiaohongshu-publisher/publish-xiaohongshu-video.cjs"
+          },
+          "interface": "--title 标题 --video 本地视频 --desc 简介（可选）；先读源码核对额外参数。",
+          "instruction": {
+            "root": "skills",
+            "path": "xiaohongshu-publisher/SKILL.md"
+          }
+        },
+        "phone": {
+          "source": {
+            "root": "skills",
+            "path": "android-xiaohongshu-publish/SKILL.md"
+          }
+        }
+      }
+    },
+    {
+      "platform": "xiaohongshu",
+      "type": "article",
+      "name": "小红书 · 长文",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/xiaohongshu-publisher/publish-xiaohongshu-article.cjs"
+          },
+          "interface": "--title 标题 --content 正文或HTML文件 --cover 封面（可选）。",
+          "instruction": {
+            "root": "skills",
+            "path": "xiaohongshu-publisher/SKILL.md"
+          }
+        }
+      }
+    },
+    {
+      "platform": "toutiao",
+      "type": "image",
+      "name": "头条 · 图文",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/toutiao-publisher/publish-toutiao-image.cjs"
+          },
+          "interface": "位置参数 config.json：content、images。微头条入口。",
+          "instruction": {
+            "root": "skills",
+            "path": "toutiao-publisher/SKILL.md"
+          }
+        },
+        "phone": {
+          "source": {
+            "root": "skills",
+            "path": "android-toutiao-publish/SKILL.md"
+          }
+        }
+      }
+    },
+    {
+      "platform": "toutiao",
+      "type": "video",
+      "name": "头条 · 视频",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/toutiao-publisher/publish-toutiao-video.cjs"
+          },
+          "interface": "--title 标题 --video 本地视频 --desc 简介（可选）；先读源码核对额外参数。",
+          "instruction": {
+            "root": "skills",
+            "path": "toutiao-publisher/SKILL.md"
+          }
+        },
+        "phone": {
+          "source": {
+            "root": "skills",
+            "path": "android-toutiao-publish/SKILL.md"
+          }
+        }
+      }
+    },
+    {
+      "platform": "toutiao",
+      "type": "article",
+      "name": "头条 · 长文",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/toutiao-publisher/publish-toutiao-article.cjs"
+          },
+          "interface": "位置参数 config.json；源码 type=image 进入 graphic/publish，须先核对实际长文界面和字段，不按文件名猜。",
+          "instruction": {
+            "root": "skills",
+            "path": "toutiao-publisher/SKILL.md"
+          },
+          "warnings": [
+            "现有脚本 type=image / graphic 发布与旧 Windows 长文脚本不同，先核对实际内容表单；未完成专门复验。"
+          ]
+        }
+      }
+    },
+    {
+      "platform": "weibo",
+      "type": "image",
+      "name": "微博 · 图文",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/weibo-publisher/publish-weibo-image.cjs"
+          },
+          "interface": "--content 内容目录。",
+          "instruction": {
+            "root": "skills",
+            "path": "weibo-publisher/SKILL.md"
+          }
+        },
+        "phone": {
+          "source": {
+            "root": "skills",
+            "path": "android-weibo-publish/SKILL.md"
+          },
+          "interface": "安卓单张图文分支：一张已归档JPG（可为长图）、精确文案、指定现有账号、仅自己可见。",
+          "readback": "同账号计数仅加一，新时间、单张素材、精确文案及私密锁；原单次发表账本、launcher和双锁精确释放。",
+          "warnings": [
+            "仅单张1080×3240长图独立核验；多图和原生文章不在本分支验证范围。"
+          ]
+        }
+      }
+    },
+    {
+      "platform": "weibo",
+      "type": "video",
+      "name": "微博 · 视频",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/weibo-publisher/publish-weibo-video.cjs"
+          },
+          "interface": "--title 标题 --video 本地视频 --desc 简介（可选）；先读源码核对额外参数。",
+          "instruction": {
+            "root": "skills",
+            "path": "weibo-publisher/SKILL.md"
+          }
+        },
+        "phone": {
+          "source": {
+            "root": "skills",
+            "path": "android-weibo-publish/SKILL.md"
+          }
+        }
+      }
+    },
+    {
+      "platform": "weibo",
+      "type": "article",
+      "name": "微博 · 长文",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/weibo-publisher/publish-weibo-article.cjs"
+          },
+          "interface": "--title 标题 --content 内容目录（含 content.txt）。",
+          "instruction": {
+            "root": "skills",
+            "path": "weibo-publisher/SKILL.md"
+          }
+        }
+      }
+    },
+    {
+      "platform": "shipinhao",
+      "type": "image",
+      "name": "视频号 · 图文",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/shipinhao-publisher/publish-shipinhao-image.cjs"
+          },
+          "interface": "--content 内容目录。"
+        },
+        "phone": {
+          "source": {
+            "root": "skills",
+            "path": "android-shipinhao-publish/SKILL.md"
+          }
+        }
+      }
+    },
+    {
+      "platform": "shipinhao",
+      "type": "video",
+      "name": "视频号 · 视频",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/shipinhao-publisher/publish-shipinhao-video.cjs"
+          },
+          "interface": "--title 标题 --video 本地视频 --desc 简介（可选）；先读源码核对额外参数。"
+        },
+        "phone": {
+          "source": {
+            "root": "skills",
+            "path": "android-shipinhao-publish/SKILL.md"
+          },
+          "interface": "安卓原生视频分支：指定账号、一条视频、精确文案；优先发前私密，否则按已授权公开后单次改私密。",
+          "readback": "同条新视频、时长、文案、时间；私密锁标和反向公开可见菜单；一次发表账本及条件性权限账本、原双锁收尾。",
+          "warnings": [
+            "要求全程私密而发前不能设置时停止；本次初公开后改私密，不冒称全程私密。"
+          ]
+        }
+      }
+    },
+    {
+      "platform": "zhihu",
+      "type": "idea",
+      "name": "知乎 · 想法",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/zhihu-publisher/publish-zhihu-idea.cjs"
+          },
+          "interface": "--content 正文 --images 逗号分隔图片路径（可选）。",
+          "instruction": {
+            "root": "skills",
+            "path": "zhihu-publisher/SKILL.md"
+          }
+        }
+      }
+    },
+    {
+      "platform": "zhihu",
+      "type": "video",
+      "name": "知乎 · 视频",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/zhihu-publisher/publish-zhihu-video.cjs"
+          },
+          "interface": "--title 标题 --video 本地视频 --desc 简介（可选）；先读源码核对额外参数。",
+          "instruction": {
+            "root": "skills",
+            "path": "zhihu-publisher/SKILL.md"
+          }
+        }
+      }
+    },
+    {
+      "platform": "zhihu",
+      "type": "article",
+      "name": "知乎 · 长文",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/zhihu-publisher/publish-zhihu-article.cjs"
+          },
+          "interface": "--content 内容目录。",
+          "instruction": {
+            "root": "skills",
+            "path": "zhihu-publisher/SKILL.md"
+          }
+        }
+      }
+    },
+    {
+      "platform": "wechat",
+      "type": "image",
+      "name": "公众号 · 图文",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/wechat-publisher/publish-wechat-image.cjs"
+          },
+          "interface": "位置参数 queue.json：title、content、images。",
+          "instruction": {
+            "root": "skills",
+            "path": "wechat-publisher/SKILL.md"
+          }
+        }
+      }
+    },
+    {
+      "platform": "wechat",
+      "type": "video",
+      "name": "公众号 · 视频",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/wechat-publisher/publish-wechat-video.cjs"
+          },
+          "interface": "位置参数 queue.json：title、content、video。",
+          "instruction": {
+            "root": "skills",
+            "path": "wechat-publisher/SKILL.md"
+          },
+          "warnings": [
+            "无对应视频 dryrun；不能用图文 dryrun 代替。"
+          ]
+        }
+      }
+    },
+    {
+      "platform": "wechat",
+      "type": "article",
+      "name": "公众号 · 长文",
+      "channels": {
+        "browser": {
+          "source": {
+            "root": "workspace",
+            "path": "services/agent/publishers/wechat-publisher/publish-wechat-article.cjs"
+          },
+          "interface": "位置参数 queue.json：title、body_html 或 markdown_path、digest、cover（可选）。content 字段不能代替 body_html。",
+          "instruction": {
+            "root": "skills",
+            "path": "wechat-publisher/SKILL.md"
+          }
+        },
+        "api": {
+          "source": {
+            "root": "workspace",
+            "path": "apps/api/scripts/wechat-mp-freepublish.py"
+          },
+          "interface": "位置参数：cover_path title body；环境 WECHAT_APPID、WECHAT_APPSECRET。当前 publish() 将 body 包成单个<p>，富文本长文需先检查正文保真。",
+          "readback": "msg_id 后轮询 SEND_SUCCESS；media_id、SENDING 或退出码 0 不算真实发布成功。",
+          "warnings": [
+            "当前实现实际调用 message/mass/sendall 群发，不是仅建草稿或 freepublish 链接。",
+            "HTML 长文正文不能未经检查直接套当前 body 包装。"
+          ]
+        }
+      }
+    },
+    {
+      "platform": "bilibili",
+      "type": "image",
+      "name": "B站 · 图文动态",
+      "channels": {
+        "phone": {
+          "source": {
+            "root": "skills",
+            "path": "android-bilibili-publish/SKILL.md"
+          }
+        }
+      }
+    },
+    {
+      "platform": "bilibili",
+      "type": "video",
+      "name": "B站 · 视频",
+      "channels": {
+        "phone": {
+          "source": {
+            "root": "skills",
+            "path": "android-bilibili-publish/SKILL.md"
+          },
+          "warnings": [
+            "旧手册记录投稿被风控拦；图文动态成功不等于视频投稿成功，须复验。"
+          ]
+        }
+      }
+    }
+  ]
+}
