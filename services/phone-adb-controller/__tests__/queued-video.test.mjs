@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,readFileSync,rmSync,existsSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,readFileSync,rmSync,existsSync,mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -81,7 +81,10 @@ print 'QUAL_RESULT {"verdict":"pending","kind":"api_error"}'
  writeFileSync(own,JSON.stringify({nicknames:extra.OWN_NICK?['甲']:[],ids:[]}));
  const coords=path.join(d,'coords');
  const evidence=path.join(d,'run');
- const r=spawnSync('zsh',[script,mode,'jinoshengyuan-work',vid,`https://www.douyin.com/video/${vid}`,Buffer.from('测试视频').toString('base64'),Buffer.from('人工智能训练师').toString('base64'),'cmd100822-new','金诺盛源'],{env:{...process.env,DOUYIN_PHONE_ADB:ctl,CALLS:log,STRATEGIES:path.join(d,'strategies'),CALLS_COORD:coords,CARD_STATE:path.join(d,'off-detail'),WFR_RUN_DIR:evidence,HARVEST_KEYWORD_TESTING:'1',QUEUED_VIDEO_QUALIFY_CMD:qualify,OWN_ACCOUNTS_CONF:own,...extra},encoding:'utf8',timeout:7000});
+ const historyPath=path.join(evidence,'history-'+vid+'.json');
+ if(extra.HISTORY){requireHistoryDir();writeFileSync(historyPath,JSON.stringify({version:1,status:'verified',line:'jinuo',line_key:'jinuo',run:'cmd100822-new',source_run:'source101',video_id:vid,video_url:'https://www.douyin.com/video/'+vid,observed_at:new Date().toISOString(),rows:[{id:'11111111-1111-4111-8111-111111111111',douyin_id:'person123',comment_body:'咨询价格'}],...extra.HISTORY}));}
+ function requireHistoryDir(){mkdirSync(evidence,{recursive:true});}
+ const r=spawnSync('zsh',[script,mode,'jinoshengyuan-work',vid,`https://www.douyin.com/video/${vid}`,Buffer.from('测试视频').toString('base64'),Buffer.from('人工智能训练师').toString('base64'),'cmd100822-new',extra.HISTORY?'jinuo':'金诺盛源'],{env:{...process.env,DOUYIN_PHONE_ADB:ctl,CALLS:log,STRATEGIES:path.join(d,'strategies'),CALLS_COORD:coords,CARD_STATE:path.join(d,'off-detail'),WFR_RUN_DIR:evidence,HARVEST_KEYWORD_TESTING:'1',QUEUED_VIDEO_QUALIFY_CMD:qualify,OWN_ACCOUNTS_CONF:own,...extra,...(extra.HISTORY?{LEADGEN_SOURCE_RUN:'source101',QUEUED_COMMENT_HISTORY_FILE:historyPath}:{})},encoding:'utf8',timeout:7000});
  const calls=existsSync(log)?readFileSync(log,'utf8').trim().split('\n'):[];
  const coordinates=existsSync(coords)?readFileSync(coords,'utf8').trim().split('\n'):[];
  const receipt=path.join(evidence,`cmd100822-new-identity-${vid}.json`);
@@ -187,4 +190,12 @@ test('所有评论恢复证据按VID和MODE隔离，锁与最新proof仍按原ru
  const commands=['open-video','current-video-link','open-comments','collect-comments'];
  for(const row of r.strategies)if(commands.includes(row[0]))assert.ok(row.slice(2).some(s=>s.startsWith(`cmd100822-new-v${vid}-collection-`)),row.join('|'));
  const locks=r.strategies.filter(row=>row[0]==='lock-refresh');assert.ok(locks.every(row=>row[2]==='cmd100822-new'));
+});
+
+test('可信同VID OID完整正文历史在新鲜identity后免card与aftercard，不输出假新LEAD',()=>{
+ const r=run('collection',{HISTORY:{}});assert.equal(r.status,0,r.stderr);
+ assert.doesNotMatch(r.stdout,/LEAD\t/);assert.match(r.stdout,/HISTORY\t/);
+ assert.ok(r.calls.includes('commenter-identity'));assert.ok(!r.calls.includes('commenter-card-link'));
+ assert.equal(r.calls.filter(x=>x==='current-video-link').length,1);
+ assert.match(r.stdout,/collected\t0/);
 });

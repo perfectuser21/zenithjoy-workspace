@@ -124,3 +124,15 @@ print(json.dumps([r[0] for r in c.execute(p['sql'].replace('zenithjoy.leadgen_vi
  const claim=calls.find(c=>c.sql.startsWith('WITH'));assert.equal(claim.args[1],2);assert.deepEqual(claim.args[5],ids);
  assert.equal(claim.args[2],'处理中:priority102');assert.equal(claim.args[3],'priority102');assert.ok(calls.some(c=>c.sql==='COMMIT'));
 });
+
+
+test('历史评论只读入口严格核本run租约、VID和唯一完整URL，返回完整正文且不改旧batch',async()=>{
+ const v='7646309328911907195',u='https://www.douyin.com/video/'+v,id='11111111-1111-4111-8111-111111111111';
+ const p=fakePool([{rows:[{video_id:v,video_url:u,url_bindings:1}]},{rows:[{id,douyin_id:'person123',comment_body:'完整咨询正文'}]}]);
+ const r=await queueRequest(p,{op:'comment_history',line:'jinuo',run:'new102',source_run:'source101',video_id:v,video_url:u});
+ assert.equal(r.status,'verified');assert.equal(r.video_id,v);assert.equal(r.source_run,'source101');assert.deepEqual(r.rows,[{id,douyin_id:'person123',comment_body:'完整咨询正文'}]);
+ assert.ok(p.calls.every(c=>c.sql.startsWith('SELECT')));assert.match(p.calls[0].sql,/process_status=\$3/);assert.ok(p.calls[0].args.includes('处理中:new102'));
+ assert.match(p.calls[1].sql,/source_video_url=\$2/);assert.deepEqual(p.calls[1].args,['jinuo',u]);
+ const ambiguous=await queueRequest(fakePool([{rows:[{video_id:v,video_url:u,url_bindings:2}]}]),{op:'comment_history',line:'jinuo',run:'new102',video_id:v,video_url:u});assert.equal(ambiguous.status,'unknown');assert.deepEqual(ambiguous.rows,[]);
+ await assert.rejects(queueRequest(fakePool([{rows:[]}]),{op:'comment_history',line:'jinuo',run:'new102',video_id:v,video_url:u}));
+});
