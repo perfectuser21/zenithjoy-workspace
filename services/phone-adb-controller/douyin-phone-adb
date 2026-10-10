@@ -23,6 +23,7 @@ LOCATE_KEY_FILE="${DOUYIN_LOCATE_KEY_FILE:-$HOME/.credentials/openrouter.env}"
 LOCATE_SCRIPT="${DOUYIN_LOCATE_SCRIPT:-${0:A:h}/locate-element.py}"
 LOCATE_ENDPOINT="${DOUYIN_LOCATE_ENDPOINT:-https://openrouter.ai/api/v1/chat/completions}"
 LOCATE_MODEL="${DOUYIN_LOCATE_MODEL:-bytedance/ui-tars-1.5-7b}"
+TEXT_INPUT_FOCUS_HELPER="${0:A:h}/text-input-focus.py"
 REGISTRY="${DOUYIN_PHONE_REGISTRY:-${HOME}/.config/openclaw/douyin-phone-profiles.tsv}"
 ACCOUNT_REGISTRY="${DOUYIN_ACCOUNT_REGISTRY:-${HOME}/.config/openclaw/douyin-account-routes.tsv}"
 
@@ -2826,7 +2827,7 @@ ti_restore_ime() {
 }
 
 text_input() {
-  local text bytes eid before_xml focus_line field typed_xml typed_value enable_out cur b64 restored=1
+  local text bytes eid before_xml focus_line field typed_xml typed_value enable_out cur b64 restored=1 native_selection="" ime_evidence focus_helper="$TEXT_INPUT_FOCUS_HELPER"
   [[ "$#" == 1 ]] || die "usage: douyin-phone-adb --profile PROFILE --lock-owner RUN text-input UTF8_TEXT"
   text="$1"
   require_held_lock text_input
@@ -2842,9 +2843,16 @@ text_input() {
   eid="text-input-$(/bin/date +%Y%m%d%H%M%S)-$$"
   before_xml="$(ui_evidence "${eid}-before")"
   focus_line="$(/usr/bin/grep -oE '<node[^>]+focused="true"[^>]*>' "$before_xml" | /usr/bin/head -1 || true)"
-  [[ -n "$focus_line" && "$focus_line" == *'class="android.widget.EditText"'* ]] \
-    || ctl_fail text_input retryable no_focused_input "no focused EditText on screen; tap the input field first (evidence=$before_xml)"
-  field="$(print -r -- "$focus_line" | /usr/bin/sed -nE 's/.*resource-id="([^"]*)".*/\1/p')"
+  if [[ -n "$focus_line" && "$focus_line" == *'class="android.widget.EditText"'* ]]; then
+    field="$(print -r -- "$focus_line" | /usr/bin/sed -nE 's/.*resource-id="([^"]*)".*/\1/p')"
+  else
+    ime_evidence="$EVIDENCE_ROOT/${eid}-ime-before.txt"
+    native_selection="$EVIDENCE_ROOT/${eid}-native-focus.json"
+    "$ADB" -s "$SERIAL" shell dumpsys input_method > "$ime_evidence"
+    "$PYTHON_BIN" "$focus_helper" resolve "$before_xml" "$ime_evidence" > "$native_selection" \
+      || ctl_fail text_input retryable no_focused_input "no verified focused input; tap the input field first (evidence=$before_xml ime=$ime_evidence)"
+    field="native-editor-title"
+  fi
 
   # 原输入法存全局：EXIT trap 在函数返回/退出时才跑，local 那时已销毁（见 private-message-send 0916 注释）。
   _TI_ORIG_IME="$(current_ime)"
@@ -2866,12 +2874,27 @@ text_input() {
   "$ADB" -s "$SERIAL" shell ime set "$ADBKEYBOARD_IME" >/dev/null 2>&1 || true
   cur="$(current_ime)"
   [[ "$cur" == *adbkeyboard* ]] || ctl_fail text_input retryable ime_switch_failed "AdbIME 切换未生效(当前仍为 $cur)"
+  if [[ -n "$native_selection" ]]; then
+    require_target_for text_input
+    ime_evidence="$EVIDENCE_ROOT/${eid}-ime-ready.txt"
+    "$ADB" -s "$SERIAL" shell dumpsys input_method > "$ime_evidence"
+    if ! "$PYTHON_BIN" "$focus_helper" check "$native_selection" "$ime_evidence"; then
+      ti_restore_ime || restored=0
+      trap - EXIT INT TERM
+      (( restored )) || ctl_fail text_input needs_human ime_restore_failed "input connection changed and original input method could not be restored"
+      ctl_fail text_input retryable no_focused_input "input connection changed before typing (evidence=$ime_evidence)"
+    fi
+  fi
   b64="$(print -rn -- "$text" | /usr/bin/base64 | tr -d '\n')"
   "$ADB" -s "$SERIAL" shell am broadcast -a ADB_CLEAR_TEXT >/dev/null 2>&1 || true
   "$ADB" -s "$SERIAL" shell am broadcast -a ADB_INPUT_B64 --es msg "$b64" >/dev/null 2>&1 || true
   wait_ms 700
   typed_xml="$(ui_evidence "${eid}-typed")"
+  if [[ -n "$native_selection" ]]; then
+    typed_value="$("$PYTHON_BIN" "$focus_helper" readback "$native_selection" "$typed_xml" 2>/dev/null || true)"
+  else
   typed_value="$(/usr/bin/xmllint --xpath 'string((//node[@focused="true"])[1]/@text)' "$typed_xml" 2>/dev/null || true)"
+  fi
 
   # 无论成败先还原输入法并回读，再判结果；还原失败压过一切（手机会卡在 ADBKeyboard 上）。
   ti_restore_ime || restored=0

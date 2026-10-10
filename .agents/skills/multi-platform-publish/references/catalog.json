@@ -62,6 +62,17 @@
             "root": "skills",
             "path": "douyin-publisher/SKILL.md"
           }
+        },
+        "phone": {
+          "source": {
+            "root": "skills",
+            "path": "android-douyin-publish/SKILL.md"
+          },
+          "interface": "原生写长文分支：标题、正文、预期段落、指定账号与私密可见性；不走相册。",
+          "readback": "同账号私密计数N→N+1；进入阅读文章核对作者、标题、全部自然段和新时间；原单次发表账本与双锁收尾。",
+          "warnings": [
+            "2026-10-10原生私密长文独立核验通过；不据此扩大为公开长文或其它App版本已验证。"
+          ]
         }
       }
     },
