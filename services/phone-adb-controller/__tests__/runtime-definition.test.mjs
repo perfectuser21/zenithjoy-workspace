@@ -129,3 +129,19 @@ test('冻结manifest副本和中央路由；全局变化不替换，冻结副本
  assert.deepEqual(readFrozen(f.options.runDir).runtime_transport,transport);
  writeFileSync(file,'tampered');assert.throws(()=>readFrozen(f.options.runDir),/摘要|digest|篡改/);
 });
+
+test('评论采样真实冻结到run-definition摘要，改值/取消/改上游或快照篡改均拒绝',async()=>{
+ const {commentSamplingInput,assertCommentSampling,readFrozen}=await import('../runtime-definition.mjs');const f=fixture();
+ const env={WF_BRAIN_WORKFLOW:'douyin_video_processing',LEADGEN_COMMENT_LIMIT:'5',LEADGEN_SOURCE_RUN:'source101',WFR_TAG:'sample-run',P:'work',SERIAL:'SER',LEADGEN_LINE:'jinuo'};
+ f.options.workflowKey=env.WF_BRAIN_WORKFLOW;f.routes['/api/brain/workflows'][0].key=env.WF_BRAIN_WORKFLOW;
+ const v=f.routes['/api/brain/workflows/workflow-1/versions/wv-1'].version;v.payload.key=env.WF_BRAIN_WORKFLOW;v.payload_sha256=hash({source:{repo:v.source_repo,path:v.source_path,commit:v.source_commit},payload:v.payload});
+ const samplingInput=commentSamplingInput(env);await freezeDefinition({...f.options,samplingInput});const fixed=readFrozen(f.options.runDir);assert.deepEqual(fixed.sampling_input,samplingInput);assert.deepEqual(assertCommentSampling(fixed,env),samplingInput);
+ await freezeDefinition({...f.options,samplingInput});
+ for(const bad of [{...env,LEADGEN_COMMENT_LIMIT:'6'},{...env,LEADGEN_SOURCE_RUN:'other101'},Object.fromEntries(Object.entries(env).filter(([k])=>k!=='LEADGEN_COMMENT_LIMIT'))]){assert.throws(()=>assertCommentSampling(fixed,bad));await assert.rejects(freezeDefinition({...f.options,samplingInput:commentSamplingInput(bad)}));}
+ const file=join(f.options.runDir,'run-definition.json');const tampered=JSON.parse(readFileSync(file));tampered.sampling_input.comment_limit=6;writeFileSync(file,JSON.stringify(tampered));assert.throws(()=>readFrozen(f.options.runDir),/digest/);
+});
+test('采样请求仅合法102整数配额，source/run/profile/serial/line均必有',async()=>{
+ const {commentSamplingInput}=await import('../runtime-definition.mjs');const good={WF_BRAIN_WORKFLOW:'douyin_video_processing',LEADGEN_COMMENT_LIMIT:'5',LEADGEN_SOURCE_RUN:'source101',WFR_TAG:'run',P:'p',SERIAL:'s',LEADGEN_LINE:'line'};
+ assert.equal(commentSamplingInput({}),null);for(const value of ['0','-1','51','abc','','1.5','05'])assert.throws(()=>commentSamplingInput({...good,LEADGEN_COMMENT_LIMIT:value}));
+ for(const k of ['LEADGEN_SOURCE_RUN','WFR_TAG','P','SERIAL','LEADGEN_LINE'])assert.throws(()=>commentSamplingInput({...good,[k]:''}));assert.throws(()=>commentSamplingInput({...good,WF_BRAIN_WORKFLOW:'douyin_video_discovery'}));
+});

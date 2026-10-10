@@ -16,7 +16,12 @@ trigger_inputs:
   - Account
   - Device
   - HistoricalComment
+  - CommentSampleRequest
 inputs:
+  - type: CommentSampleRequest
+    cardinality: one
+    optional: true
+    fields: [run_tag, source_run, profile, serial, line, comment_limit]
   - type: HistoricalComment
     cardinality: many
     optional: true
@@ -433,7 +438,7 @@ activities:
   - key: qualification
     name: 判定视频
     order: 3
-    version: 3.0.0
+    version: 3.1.0
     compatibility: breaking
     owner:
       department: line02 智能获客
@@ -572,7 +577,7 @@ activities:
           - Video.video_url
           - Device.lock_holder
         writes: []
-        check: 媒体音量回读 >0
+        check: 本run逐VID实际record-start媒体音量回读为正整数；未知或零不得通过，音轨静音不能替代媒体音量证据
         implementation:
           status: implemented
           ref: process-queued-video.sh + queued-video-lib.sh qualification.unmute_before_record（原约束保留，真PG/证据读回）
@@ -580,8 +585,8 @@ activities:
         dod:
           mode: checkpoint
           readback:
-            type: log
-            regex: audio_rejected reason=silent_or_unknown_volume
+            type: metric
+            ref: metrics.media_volume_failures
             expect:
               op: <=
               value: 0
@@ -610,7 +615,7 @@ activities:
         reads:
           - Video.video_id
         writes: []
-        check: ffprobe 有 16kHz 音频流且电平非死寂
+        check: 送ASR的本轮音频必须有16kHz音轨且电平非死寂；实际静音仅允许本run租约PG拒绝与独立读回，不得标题或旧转写兜底matched
         implementation:
           status: implemented
           ref: process-queued-video.sh + queued-video-lib.sh qualification.extract_audio（原约束保留，真PG/证据读回）
@@ -618,8 +623,8 @@ activities:
         dod:
           mode: checkpoint
           readback:
-            type: log
-            regex: audio_upload_failed
+            type: metric
+            ref: metrics.recording_outcomes_failures
             expect:
               op: <=
               value: 0
@@ -630,7 +635,7 @@ activities:
           - Video.video_id
         writes:
           - Video.transcript
-        check: transcript 非空；空/静音 → rejected
+        check: 可用本轮音轨正常转写；空/静音 → rejected。静音在ASR前用本轮录音核验拒绝事实终结，保旧transcript但不冒充本轮ASR完成
         implementation:
           status: implemented
           ref: process-queued-video.sh + queued-video-lib.sh qualification.transcribe（原约束保留，真PG/证据读回）
@@ -642,6 +647,7 @@ activities:
             query: SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG' AND judgment_status <>
               'pending' AND coalesce(transcript, '') = '' AND coalesce(judgment_reason, '') NOT LIKE '转写为空%'
               AND coalesce(judgment_reason, '') NOT LIKE 'V2便宜闸%'
+              AND coalesce(judgment_reason, '') NOT LIKE '本轮录音核验拒绝:静音音轨%'
             expect:
               op: <=
               value: 0
@@ -673,12 +679,16 @@ activities:
   - key: collection
     name: 采集评论
     order: 4
-    version: 2.1.0
+    version: 2.2.0
     compatibility: backward
     owner:
       department: line02 智能获客
       agent: 获客采收员
     inputs:
+      - type: CommentSampleRequest
+        cardinality: one
+        optional: true
+        fields: [run_tag, source_run, profile, serial, line, comment_limit]
       - type: Video
         cardinality: many
         fields:
@@ -735,6 +745,7 @@ activities:
         fields:
           - process_status
     preconditions:
+      - 可选CommentSampleRequest由用户请求冻结到本run定义，仅102且source_run与101受信交接一致；整数1..50，配额按已核历史和新distinct评论覆盖，不按own/失败/未核历史表总数计；达配额为sampled，PG保未全采，实际footer另行记录
       - 仅matched视频可采评论
       - 恢复后的当前视频ID再次核验，评论坐标必须来自当前屏
       - 可选HistoricalComment是只读PG系统输入，持本run matched租约且source_run受信VID清单后queue comment_history读取，非用户CLI或qualification输出；当前唯一line+VID+exactURL绑定，旧短链仅标题窄候选后受信只读HEAD实际VID相同才纳入私有工件，unknown仍走原路径，schema或scope异常拒绝
@@ -750,6 +761,8 @@ activities:
         asserts: 保留原后置条件：comments_readback
       - probe: collection_commander_verified
         asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
+      - probe: sampling_readback_verified
+        asserts: 仅显式采样时每个qualified视频须达冻结配额或真实footer/no_comments，逐完整身份独立PG读回；默认无采样required=0不声称采样通过
       - probe: history_scope_verified
         asserts: 本次qualified实际required_count等于私有PG历史工件scope验证数量，0等于0为显式无样本，不当评分样本
       - probe: history_consumption_readback
@@ -872,7 +885,7 @@ activities:
           - Comment.dedup_key
           - Comment.harvest_batch
           - Comment.line_key
-        check: 逐屏整行去重，连续 2 屏无新增即停；过滤作者本人与自有账号；历史加新distinct已核覆盖累计large上限50，medium仍全采，历史命中按本屏新distinct观察记进展，unknown不跳过
+        check: 逐屏整行去重，连续 2 屏无新增即停；过滤作者本人与自有账号；可选冻结采样配额1..50对所有tiers计已核历史加新distinct，达配额单独sampled且非全采；未设置时历史加新distinct已核覆盖累计large上限50，medium仍全采，历史命中按本屏新distinct观察记进展，unknown不跳过
         implementation:
           status: implemented
           ref: process-queued-video.sh + queued-video-lib.sh collection.collect_comments（原约束保留，真PG/证据读回）
@@ -936,7 +949,7 @@ activities:
         writes:
           - Video.process_status
           - Video.comment_count
-        check: process_status=评论已采 只写给 matched 视频；评论提交事务重验历史PGid/OID/fullbody/视频归属，comment_count只写本次distinct已核历史加新覆盖，历史4条加新0条写4，不把未核旧UI总数当历史覆盖
+        check: process_status=评论已采 只写给matched且原默认完整采集或新鲜footer视频；采样quota_reached走collect_partial不写全采状态，fulfilled_sample_video_ids仅本run已核目标，不全局排除；评论提交事务重验历史PGid/OID/fullbody/视频归属，comment_count只写本次distinct已核历史加新覆盖，历史4条加新0条写4，不把未核旧UI总数当历史覆盖
         implementation:
           status: implemented
           ref: process-queued-video.sh + queued-video-lib.sh collection.mark_video_collected（原约束保留，真PG/证据读回）
@@ -949,7 +962,7 @@ activities:
               '评论已采'
             expect:
               op: ">="
-              ref: metrics.videos_processed
+              ref: metrics.videos_collected
       - key: return_to_results
         name: 归位回结果页
         order: 6

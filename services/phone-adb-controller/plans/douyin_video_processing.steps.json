@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "douyin_video_processing",
   "brain_workflow_key": "douyin_video_processing",
-  "contract_sha256": "fdc134e3e0f93a74fb53d3755a81d340012f54c34efe05fbb4de2f68f92be786",
+  "contract_sha256": "1d3992df150f4b1c54bc6a051683ff00a73f0896a04d8551c070d0c88aeb5b50",
   "promotion": {
     "min_consecutive_pass": 20
   },
@@ -207,8 +207,8 @@
       "at": "qualification",
       "mode": "checkpoint",
       "readback": {
-        "type": "log",
-        "regex": "audio_rejected reason=silent_or_unknown_volume",
+        "type": "metric",
+        "ref": "metrics.media_volume_failures",
         "expect": {
           "op": "<=",
           "value": 0
@@ -245,8 +245,8 @@
       "at": "qualification",
       "mode": "checkpoint",
       "readback": {
-        "type": "log",
-        "regex": "audio_upload_failed",
+        "type": "metric",
+        "ref": "metrics.recording_outcomes_failures",
         "expect": {
           "op": "<=",
           "value": 0
@@ -265,7 +265,7 @@
       "mode": "checkpoint",
       "readback": {
         "type": "sql",
-        "query": "SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG' AND judgment_status <> 'pending' AND coalesce(transcript, '') = '' AND coalesce(judgment_reason, '') NOT LIKE '转写为空%' AND coalesce(judgment_reason, '') NOT LIKE 'V2便宜闸%'",
+        "query": "SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG' AND judgment_status <> 'pending' AND coalesce(transcript, '') = '' AND coalesce(judgment_reason, '') NOT LIKE '转写为空%' AND coalesce(judgment_reason, '') NOT LIKE 'V2便宜闸%' AND coalesce(judgment_reason, '') NOT LIKE '本轮录音核验拒绝:静音音轨%'",
         "expect": {
           "op": "<=",
           "value": 0
@@ -384,7 +384,7 @@
         "query": "SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG' AND process_status = '评论已采'",
         "expect": {
           "op": ">=",
-          "ref": "metrics.videos_processed"
+          "ref": "metrics.videos_collected"
         }
       },
       "usage": {

@@ -223,6 +223,19 @@ probes:
     failure_class: retryable
     on_fail: fail_stage
     note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: sampling_readback_verified
+    stage: collection
+    journey_cell: stage:collection
+    probe:
+      type: metric
+      ref: metrics.sampling_readback_count
+    expect:
+      op: ==
+      ref: metrics.sampling_required_count
+    severity: error
+    failure_class: fatal
+    on_fail: stop_run
+    note: 计数来自逐VID真实quota/footer/no_comments与完整PG身份读回，默认0/0仅未请求采样；不把采样视频全局标评论已采或把历史当新评分。
   - key: history_scope_verified
     stage: collection
     journey_cell: stage:collection

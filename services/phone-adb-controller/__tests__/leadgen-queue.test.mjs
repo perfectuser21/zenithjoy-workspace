@@ -21,6 +21,18 @@ function fakePool(responses) {
   };
   return { calls, query: client.query.bind(client), async connect() { return client; } };
 }
+test('本轮静音拒绝必须限定真实租约且保留旧转写，PG回执独立读回',async()=>{
+ const id='7646309328911907195',proof={version:1,run:'audio-run',video_id:id,evidence_id:`audio-run-v${id}-qualification-record`,media_volume_verified:true,media_volume:1,audio_status:'silent',mean_volume_db:-91};
+ const row={video_id:id,judgment_status:'rejected',judgment_reason:'本轮录音核验拒绝:静音音轨',process_status:'处理中:audio-run'};
+ const pool=fakePool([{rows:[row],rowCount:1},{rows:[row],rowCount:1}]);
+ const result=await queueRequest(pool,{op:'reject_recording',line:'jinuo',run:'audio-run',video_id:id,recording:proof});
+ assert.equal(result.verified,true);assert.equal(result.video_id,id);const update=pool.calls.find(c=>c.sql.startsWith('UPDATE'));assert.match(update.sql,/process_status=\$3/);assert.match(update.sql,/judgment_status='pending'/);assert.ok(!/SET[\s\S]*transcript\s*=/.test(update.sql));assert.ok(pool.calls.some(c=>c.sql.startsWith('SELECT')));
+});
+test('租约已失效或伪造静音证据不得写rejected',async()=>{
+ const id='7646309328911907195',proof={version:1,run:'audio-run',video_id:id,evidence_id:`audio-run-v${id}-qualification-record`,media_volume_verified:true,media_volume:1,audio_status:'silent',mean_volume_db:-91};
+ const pool=fakePool([{rows:[],rowCount:0}]);await assert.rejects(queueRequest(pool,{op:'reject_recording',line:'jinuo',run:'audio-run',video_id:id,recording:proof}),/租约|判定/);assert.ok(pool.calls.some(c=>c.sql==='ROLLBACK'));
+ for(const change of [{run:'wrong'},{video_id:'7646309328911907196'},{audio_status:'usable'},{mean_volume_db:-35},{media_volume_verified:false}]){const p=fakePool([]);await assert.rejects(queueRequest(p,{op:'reject_recording',line:'jinuo',run:'audio-run',video_id:id,recording:{...proof,...change}}),/录音/);assert.equal(p.calls.length,0);}
+});
 
 test('视频租约认领同时含待判及合格未采，崩溃可回收，同库竞争跳过锁行', async () => {
   const pool = fakePool([{ rows: [{ video_id: '7646309328911907195' }] }]);
@@ -187,4 +199,27 @@ test('标题候选只做有界只读筛选，超过4短链或1000行均unknown�
   const r=await queueRequest(p,{op:'comment_history',line:'jinuo',run:'new102',source_run:'source101',video_id:v,video_url:url},{resolveHistoryUrl:async()=>{network++;}});
   assert.equal(r.status,'unknown');assert.deepEqual(r.rows,[]);assert.equal(network,0);assert.ok(p.calls.every(c=>c.sql.startsWith('SELECT')));
  }
+});
+
+test('采样独立PG读回严格完整正文URL及真实VID，仅SELECT不抢租约',async()=>{
+ const vid='7646309328911907195',url='https://www.douyin.com/video/'+vid,row={id:'11111111-1111-4111-8111-111111111111',douyin_id:'person123',comment_body:'完整正文',source_video_url:url};
+ const q={op:'sample_readback',line:'jinuo',run:'next102',source_run:'source101',video_id:vid,video_url:url,rows:[{id:row.id,douyinId:row.douyin_id,commentBody:row.comment_body,sourceVideoUrl:url}]};
+ for(const bad of [false,'body','id','missing','duplicate','video']){
+  const video={video_id:vid,video_url:url,judgment_status:bad==='video'?'pending':'matched'};
+  const rows=bad==='missing'?[]:bad==='duplicate'?[row,row]:[{...row,...(bad==='body'?{comment_body:'同前20字另一正文'}:{}),...(bad==='id'?{id:'other'}:{})}];const p=fakePool([{rows:[video]},{rows}]);
+  if(bad)await assert.rejects(queueRequest(p,q));else {const r=await queueRequest(p,q);assert.equal(r.coverage,1);assert.deepEqual(r.rows,q.rows);}
+  assert.ok(p.calls.every(c=>c.sql.startsWith('SELECT')));
+ }
+ const p=fakePool([]);await assert.rejects(queueRequest(p,{...q,source_run:null}));assert.equal(p.calls.length,0);
+});
+
+test('采样5允许已受信4个历史URL加当前URL，旧别名超过4仍拒绝',async()=>{
+ const vid='7646309328911907195',url='https://www.douyin.com/video/'+vid;
+ const wanted=Array.from({length:5},(_,i)=>({id:'id'+i,douyinId:'p'+i,commentBody:'全文'+i,sourceVideoUrl:i===4?url:'https://v.douyin.com/old'+i+'/'}));
+ const actual=wanted.map(r=>({id:r.id,douyin_id:r.douyinId,comment_body:r.commentBody,source_video_url:r.sourceVideoUrl}));
+ const p=fakePool([{rows:[{video_id:vid,video_url:url,judgment_status:'matched'}]},{rows:actual}]);let network=0;
+ const deps={resolveHistoryUrl:async()=>{network++;return {content_type:'video',content_id:vid,resolved_url:url};}};
+ const q={op:'sample_readback',line:'jinuo',run:'run102',source_run:'source101',video_id:vid,video_url:url,rows:wanted};
+ const r=await queueRequest(p,q,deps);assert.equal(r.coverage,5);assert.equal(network,4);
+ const b=fakePool([{rows:[{video_id:vid,video_url:url,judgment_status:'matched'}]}]);await assert.rejects(queueRequest(b,{...q,rows:wanted.map((r,i)=>({...r,sourceVideoUrl:'https://v.douyin.com/old'+i+'/'}))},deps));assert.equal(network,4);
 });

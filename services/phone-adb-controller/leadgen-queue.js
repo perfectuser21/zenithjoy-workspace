@@ -46,6 +46,24 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     if(videoIds===null)throw Error('缺明确视频ID清单');
     return (await pool.query('SELECT video_id,line_key,judgment_status,process_status,harvest_batch FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=ANY($2::text[])',[lineKey,videoIds])).rows;
   }
+  if(op==='sample_readback'){
+    if(!sourceRun||!/^\d{16,24}$/.test(input.video_id||'')||typeof input.video_url!=='string')throw Error('采样读回缺明确上游或视频身份');
+    const wanted=input.rows;
+    if(!Array.isArray(wanted)||wanted.length>50||wanted.some(r=>!r.douyinId||!r.commentBody||typeof r.sourceVideoUrl!=='string')||new Set(wanted.map(r=>JSON.stringify([r.douyinId,r.commentBody]))).size!==wanted.length)throw Error('采样读回身份清单无效');
+    const video=(await pool.query('SELECT video_id,video_url,judgment_status FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND (video_id=$2 OR video_url=$3)',[lineKey,input.video_id,input.video_url])).rows;
+    if(video.length!==1||video[0].video_id!==input.video_id||video[0].video_url!==input.video_url||video[0].judgment_status!=='matched')throw Error('采样视频PG归属不唯一');
+    const urls=[...new Set(wanted.map(r=>r.sourceVideoUrl))];
+    if(urls.length>5||urls.filter(url=>url!==input.video_url).length>4)throw Error('采样URL解析数量超界');
+    await Promise.all(urls.map(url=>historyUrlProof(url,input.video_id,deps)));
+    const actual=wanted.length?(await pool.query('SELECT id,douyin_id,comment_body,source_video_url FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND douyin_id=ANY($2::text[]) AND source_video_url=ANY($3::text[]) LIMIT 1001',[lineKey,[...new Set(wanted.map(r=>r.douyinId))],urls])).rows:[];
+    if(actual.length>1000)throw Error('采样PG候选数量超界');
+    const rows=wanted.map(r=>{
+      const found=actual.filter(a=>a.douyin_id===r.douyinId&&a.comment_body===r.commentBody&&a.source_video_url===r.sourceVideoUrl&&(!r.id||a.id===r.id));
+      if(found.length!==1)throw Error('采样评论完整身份PG读回不唯一');
+      return {id:found[0].id,douyinId:r.douyinId,commentBody:r.commentBody,sourceVideoUrl:r.sourceVideoUrl};
+    });
+    return {verified:true,video_id:input.video_id,coverage:rows.length,rows};
+  }
   if (op === 'history') {
     return (await pool.query('SELECT title,video_id FROM zenithjoy.leadgen_videos WHERE line_key=$1', [lineKey])).rows;
   }
@@ -83,6 +101,22 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     [lineKey, input.video_id, `处理中:${run}`, status]);
     if (result.rowCount !== 1) throw Error('视频租约已失效');
     return { renewed: op === 'renew_video', released: op === 'release_video' };
+  }
+  if(op==='reject_recording'){
+    const p=input.recording;
+    if(!/^\d{16,24}$/.test(input.video_id||'')||p?.version!==1||p.run!==run||p.video_id!==input.video_id
+      ||p.evidence_id!==`${run}-v${input.video_id}-qualification-record`||p.media_volume_verified!==true
+      ||!Number.isSafeInteger(p.media_volume)||p.media_volume<=0||p.audio_status!=='silent'
+      ||typeof p.mean_volume_db!=='number'||!Number.isFinite(p.mean_volume_db)||p.mean_volume_db>-80)throw Error('本轮录音拒绝证据不符');
+    return transaction(pool,async client=>{
+      const reason='本轮录音核验拒绝:静音音轨';
+      const result=await client.query(`UPDATE zenithjoy.leadgen_videos SET judgment_status='rejected',judgment_reason=$4,updated_at=now()
+        WHERE line_key=$1 AND video_id=$2 AND process_status=$3 AND judgment_status='pending' RETURNING video_id`,[lineKey,input.video_id,`处理中:${run}`,reason]);
+      if(result.rowCount!==1)throw Error('本轮录音拒绝租约或判定已失效');
+      const actual=(await client.query('SELECT video_id,judgment_status,judgment_reason,process_status FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=$2',[lineKey,input.video_id])).rows[0];
+      if(actual?.video_id!==input.video_id||actual.judgment_status!=='rejected'||actual.judgment_reason!==reason||actual.process_status!==`处理中:${run}`)throw Error('本轮录音拒绝PG独立读回失败');
+      return {verified:true,video_id:actual.video_id,verdict:'rejected',kind:'recording_silent',reason};
+    });
   }
   if(op==='comment_history'||op==='comment_history_readback'){
     if(!sourceRun)throw Error('历史读取缺受信上游运行号');

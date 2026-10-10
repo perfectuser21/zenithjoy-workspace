@@ -221,9 +221,31 @@ snapshot_evidence_cmd() {
   print_jpg_line "$shot"
 }
 
+# 仅用于本次nonce归位后的share策略；不以Activity或旧截图证明详情。
+_is_fresh_share_detail_xml() {
+  [[ -s "$1" && ! -L "$1" ]] || return 1
+  "$PYTHON_BIN" - "$1" "$DOUYIN_PACKAGE" <<'PYSHARE'
+import sys, xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+    nodes = list(root.iter('node'))
+    if root.tag != 'hierarchy' or not nodes:
+        sys.exit(1)
+    if any(n.get('package') != sys.argv[2] for n in nodes):
+        sys.exit(1)
+    if any('et_search_kw' in n.get('resource-id', '') and any(v in n.get('text', '') for v in ('clipnonce', 'v.douyin.com', '复制打开')) for n in nodes):
+        sys.exit(1)
+    if not any(n.get('clickable') == 'true' and n.get('content-desc', '').startswith('分享') and n.get('content-desc', '').endswith('，按钮') for n in nodes):
+        sys.exit(1)
+except Exception:
+    sys.exit(1)
+PYSHARE
+}
+
 _ui_evidence_wave() {
-  local evidence_id local_path dump_output remote_size dump_attempt dump_status
+  local evidence_id local_path dump_output remote_size dump_attempt dump_status policy="${2:-standard}" started elapsed
   evidence_id="$1"
+  case "$policy" in standard|verified-seed-share|verified-seed-share-retry) ;; *) return 2 ;; esac
   require_evidence_id "$evidence_id"
   local_path="$EVIDENCE_ROOT/${evidence_id}.xml"
   /bin/mkdir -p "$EVIDENCE_ROOT"
@@ -239,6 +261,9 @@ _ui_evidence_wave() {
   for dump_attempt in 1 2 3; do
     /bin/rm -f "$local_path"
     "$ADB" -s "$SERIAL" shell rm -f "$REMOTE_UI" >/dev/null
+    if [[ "$policy" == verified-seed-share && "$dump_attempt" == 1 ]]; then
+      started="$("$PYTHON_BIN" -c 'import time; print(time.monotonic_ns())')"
+    fi
     dump_status=0
     if dump_output="$("$ADB" -s "$SERIAL" shell uiautomator dump --compressed "$REMOTE_UI" 2>&1)"; then
       dump_status=0
@@ -250,7 +275,8 @@ _ui_evidence_wave() {
       "$ADB" -s "$SERIAL" pull "$REMOTE_UI" "$local_path" >/dev/null
       if [[ -s "$local_path" ]] \
         && /usr/bin/grep -q '<hierarchy' "$local_path" \
-        && /usr/bin/grep -q '</hierarchy>' "$local_path"; then
+        && /usr/bin/grep -q '</hierarchy>' "$local_path" \
+        && { [[ "$policy" == standard ]] || _is_fresh_share_detail_xml "$local_path"; }; then
         if (( dump_status != 0 )) || [[ "$dump_output" == *"ERROR:"* ]]; then
           print -u2 -- "warning: accepted fresh complete hierarchy despite dynamic-page idle warning (attempt $dump_attempt)"
         fi
@@ -258,22 +284,29 @@ _ui_evidence_wave() {
         return 0
       fi
     fi
+    if [[ "$policy" == verified-seed-share && "$dump_attempt" == 1 && "$dump_output" == *"could not get idle state"* && ! -s "$local_path" ]]; then
+      elapsed="$("$PYTHON_BIN" -c 'import sys,time; print((time.monotonic_ns()-int(sys.argv[1]))//1000000)' "$started")"
+      print -u2 -- "share-idle: phase=share attempt=1 dump_rc=$dump_status elapsed_ms=$elapsed; could not get idle state; no fresh XML; using single toggle-dump-toggle"
+      break
+    fi
     # 波内也要留时间：背靠背瞬发三次，页面还在动的话必然三次同样失败。
     (( dump_attempt < 3 )) && wait_ms 900
   done
-  # 详情页自动播放机型（HONOR 实测）：暂停→抓→恢复三连兜底，总耗时 ~13s。
+  # 媒体键85是toggle：toggle→dump→toggle成对恢复原媒体状态。
   if [[ "$dump_output" == *"could not get idle state"* ]]; then
     # 改用媒体键：详情页可暂停视频，其它页面无副作用——绝不制造导航（a7 案卷：点击版把搜索页点飞）。
     "$ADB" -s "$SERIAL" shell input keyevent 85
     wait_ms 500
+    /bin/rm -f "$local_path"
     "$ADB" -s "$SERIAL" shell rm -f "$REMOTE_UI" >/dev/null
     dump_output="$("$ADB" -s "$SERIAL" shell uiautomator dump --compressed "$REMOTE_UI" 2>&1)" || true
     remote_size="$("$ADB" -s "$SERIAL" shell stat -c %s "$REMOTE_UI" 2>/dev/null | tr -d $'\r' || print -- 0)"
     "$ADB" -s "$SERIAL" shell input keyevent 85
     if [[ "$remote_size" == <-> ]] && (( remote_size > 0 )); then
       "$ADB" -s "$SERIAL" pull "$REMOTE_UI" "$local_path" >/dev/null
-      if [[ -s "$local_path" ]] && /usr/bin/grep -q "<hierarchy" "$local_path" && /usr/bin/grep -q "</hierarchy>" "$local_path"; then
-        print -u2 -- "warning: hierarchy captured via pause-dump-resume fallback (single-shot)"
+      if [[ -s "$local_path" ]] && /usr/bin/grep -q "<hierarchy" "$local_path" && /usr/bin/grep -q "</hierarchy>" "$local_path" \
+        && { [[ "$policy" == standard ]] || _is_fresh_share_detail_xml "$local_path"; }; then
+        print -u2 -- "warning: hierarchy captured via toggle-dump-toggle fallback (single-shot)"
         print -- "$local_path"
         return 0
       fi
@@ -286,15 +319,18 @@ _ui_evidence_wave() {
 # 分三波，波内 3 次（间隔 0.9s）+ 暂停抓取兜底，波间分别等 20s / 40s，
 # 给页面加载、动画、网络真正留出时间。最坏约 80 秒，仍在 worker 120-180s 预算内。
 ui_evidence() {
-  local evidence_id wave out
+  local evidence_id wave out policy="${2:-standard}" wave_policy
   evidence_id="$1"
   require_evidence_id "$evidence_id"
   # 已知存在的东西不该一次读不到就放弃：三波，波内 3 次 + 暂停抓取兜底，
   # 波间 10s / 20s。成功路径不受影响（实测 2.8 秒返回，其中 2.7 秒是设备端
   # uiautomator dump 本身的地板耗时，封装只占 0.15 秒）。
   # 最坏约 180 秒——skill 侧的 exec timeout 下限已同步抬到 300000ms。
+  case "$policy" in standard|verified-seed-share|verified-seed-share-retry) ;; *) return 2 ;; esac
   for wave in 1 2 3; do
-    if out="$(_ui_evidence_wave "$evidence_id")"; then
+    wave_policy="$policy"
+    if (( wave > 1 )) && [[ "$policy" == verified-seed-share ]]; then wave_policy=verified-seed-share-retry; fi
+    if out="$(_ui_evidence_wave "$evidence_id" "$wave_policy")"; then
       (( wave > 1 )) && print -u2 -- "warning: ui hierarchy obtained on wave $wave/3"
       print -- "$out"
       return 0
@@ -528,10 +564,11 @@ _on_video_detail() {
 # 退过头把原详情页也退掉；核验用入口同一把尺子 _is_video_detail_xml（分享按钮在、搜索框里
 # 没有分享文案）。退到位返回 0；退飞/树读不到/超过上限返回 1，由调用方 deep link 重开兜底。
 _leave_scratch_route() {
-  local eid="$1" mode="${2:-detail}" i fg xml
+  local eid="$1" mode="${2:-detail}" witness_eid="${3:-}" i fg xml
   # results-only仅交还导航；不能据此宣称关键词/视频tab归位成功。
   case "$mode" in detail|detail-paused|results-only) ;; *) print -u2 -- "leave-scratch: unknown mode ($mode)"; return 2 ;; esac
   require_evidence_id "$eid"
+  [[ -z "$witness_eid" ]] || require_evidence_id "$witness_eid"
   for i in {1..5}; do
     "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1 || true
     wait_ms 700
@@ -573,6 +610,9 @@ _leave_scratch_route() {
           "$ADB" -s "$SERIAL" shell input keyevent 126 >/dev/null 2>&1 || return 1
           wait_ms 300
           print -u2 -- "leave-scratch: resumed playback with MEDIA_PLAY"
+        fi
+        if [[ -n "$witness_eid" ]] && _is_fresh_share_detail_xml "$xml"; then
+          /bin/cp "$xml" "$EVIDENCE_ROOT/${witness_eid}.xml" || return 1
         fi
         return 0
         fi
@@ -664,7 +704,7 @@ seed_clipboard_nonce() {
     fi
   done
   [[ "${DETAIL_PLAYBACK:-standard}" != continuous_identity ]] || leave_mode=detail-paused
-  _leave_scratch_route "${eid}-seed-leave" "$leave_mode" || die "CLIPBOARD_NONCE_ORIGINAL_DETAIL_UNVERIFIED"
+  _leave_scratch_route "${eid}-seed-leave" "$leave_mode" "${eid}-seed-detail-verified" || die "CLIPBOARD_NONCE_ORIGINAL_DETAIL_UNVERIFIED"
   print -- "$nonce"
 }
 
@@ -756,15 +796,18 @@ _current_video_link_once() {
   local copied_path scratch_xml search_line search_center search_x search_y
   local result_xml result_line escaped_text parsed_link shared_url short_url resolved_url direct_url share_url_kind video_id note_id content_type content_id reopen_url nonce_proof=""
   evidence_id="$1"
-  local return_keyword="${2:-}" return_result return_xml
+  local return_keyword="${2:-}" return_result return_xml share_policy=standard seed_witness
   require_evidence_id "$evidence_id"
 
   [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
+  seed_witness="$EVIDENCE_ROOT/${evidence_id}-seed-detail-verified.xml"
+  /bin/rm -f "$seed_witness"
   if [[ -s "$(clip_state_file)" ]]; then
     # keyword出口不录音；nonce严格归位后保持暂停，后续分享仍独立取新鲜树。
     local nonce_seed_mode=detail
     [[ -z "$return_keyword" ]] || nonce_seed_mode=detail-paused
     nonce_proof="$(seed_clipboard_nonce "$evidence_id" "$nonce_seed_mode")" || die "CLIPBOARD_NONCE_PROOF_FAILED"
+    if _is_fresh_share_detail_xml "$seed_witness"; then share_policy=verified-seed-share; fi
   fi
   # 详情页自动播放会让部分机型（HONOR 实测）uiautomator 永不 idle：
   # 先MEDIA_PAUSE幂等暂停再取证，防中央可点击内容被误触。
@@ -778,7 +821,8 @@ _current_video_link_once() {
   share_line=""
   local _st _sg
   for _st in 1 2 3; do
-    ui_evidence "${evidence_id}-share" >/dev/null
+    if (( _st == 1 )); then ui_evidence "${evidence_id}-share" "$share_policy" >/dev/null
+    else ui_evidence "${evidence_id}-share" >/dev/null; fi
     share_line="$(/usr/bin/grep -oE '<node[^>]+content-desc="分享[^"]*，按钮"[^>]*>' "$share_xml" | /usr/bin/head -1 || true)"
     [[ -n "$share_line" && "$share_line" == *'clickable="true"'* ]] && break
     share_line=""
@@ -2536,6 +2580,88 @@ _video_card_optional_nodes() {
   (( rc == 0 || rc == 1 )) && return 0
   return "$rc"
 }
+card_unknown_duration_from_xml() {
+  # 两份本run原始树强锚补充可选观测；不输出坐标，不替代取链真实VID。
+  "$PYTHON_BIN" - "$1" "$2" "$3" "$4" "$5" <<'PYDURATION'
+import sys,re,html,unicodedata,urllib.parse,pathlib,xml.etree.ElementTree as ET
+def norm(v): return ' '.join(unicodedata.normalize('NFKC',html.unescape(v)).split())
+def bounds(n):
+ m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.get('bounds',''))
+ if not m: raise ValueError('bad bounds')
+ b=tuple(map(int,m.groups()))
+ if b[0]>=b[2] or b[1]>=b[3]: raise ValueError('empty bounds')
+ return b
+def proof(path,title,author):
+ root=ET.parse(path).getroot();nodes=list(root.iter('node'));parents={c:p for p in root.iter() for c in p}
+ if root.tag!='hierarchy' or not nodes or any(n.get('package')!='com.ss.android.ugc.aweme' for n in nodes): raise ValueError('wrong XML/package')
+ candidates=[]
+ for n in nodes:
+  if norm(n.get('text',''))!=title or n.get('resource-id')!='com.ss.android.ugc.aweme:id/desc': continue
+  p=parents.get(n)
+  if p is None or p.get('resource-id')!='com.ss.android.ugc.aweme:id/dlr' or p.get('clickable')!='true': raise ValueError('wrong card')
+  card=list(p.iter('node')); authors=[a for a in card if a.get('resource-id')=='com.ss.android.ugc.aweme:id/+b' and norm(a.get('text',''))==author]
+  if len(authors)==1: candidates.append((n,p,card,authors[0]))
+ if len(candidates)!=1: raise ValueError('ambiguous title author')
+ n,p,card,a=candidates[0];b=bounds(n);ab=bounds(a)
+ if not (b[0]<=ab[0]<ab[2]<=b[2] and b[3]<=ab[1]<=b[3]+60): raise ValueError('author column')
+ if any('相关搜索' in (x.get('text','')+x.get('content-desc','')) for x in card): raise ValueError('related search')
+ likes=[x for x in card if x.get('resource-id')=='com.ss.android.ugc.aweme:id/pc7' and re.fullmatch(r'(未点赞|已点赞)，喜欢[0-9.]+(?:万|亿|w)?，按钮',x.get('content-desc',''))]
+ dates=[x for x in card if x.get('resource-id')=='com.ss.android.ugc.aweme:id/3+q' and re.fullmatch(r'(?:[0-9]{4}\.)?[0-9]{2}\.[0-9]{2}',x.get('text',''))]
+ if len(likes)!=1 or len(dates)!=1: raise ValueError('missing exact anchors')
+ lb=bounds(likes[0]);db=bounds(dates[0])
+ if not (b[0]<=lb[0]<lb[2]<=b[2] and b[3]<=lb[1]<=b[3]+80 and b[0]<=db[0]<db[2]<=b[2] and db[1]>=ab[1]): raise ValueError('anchor column')
+ durations=[]
+ for x in card:
+  if x.get('resource-id')=='com.ss.android.ugc.aweme:id/5bd' and re.fullmatch(r'[0-9]{1,2}:[0-5][0-9]',x.get('text','')):
+   q=bounds(x)
+   if b[0]<=q[0]<q[2]<=b[2] and 0<=b[1]-q[3]<=100: durations.append(x.get('text'))
+ if len(durations)>1: raise ValueError('ambiguous duration')
+ return (b[0],b[2],likes[0].get('content-desc'),dates[0].get('text')),durations[0] if durations else '',any(x.get('resource-id')=='com.ss.android.ugc.aweme:id/q9g' for x in card)
+try:
+ old,new,title,author,run=sys.argv[1:];title=norm(urllib.parse.unquote(title));author=norm(urllib.parse.unquote(author))
+ if not re.fullmatch(r'[A-Za-z0-9_-]+',run) or not title or not author: raise ValueError('bad scope')
+ op,np=pathlib.Path(old),pathlib.Path(new)
+ if op.is_symlink() or np.is_symlink() or op.parent.resolve()!=np.parent.resolve(): raise ValueError('wrong evidence root')
+ if not re.fullmatch(re.escape(run)+r'-src[0-9]+(?:-screen[0-9]+-wait[0-2]|-cards)-grid.xml',op.name): raise ValueError('wrong original run')
+ if not re.fullmatch(re.escape(run)+r'-candidate[0-9]+-loc(?:-retry[12])?-grid.xml',np.name): raise ValueError('wrong fresh run')
+ old_anchor,old_duration,_=proof(op,title,author);new_anchor,new_duration,thumb=proof(np,title,author)
+ if old_duration or not new_duration or not thumb or old_anchor!=new_anchor: raise ValueError('anchors/duration mismatch')
+ print('augmented=1\nduration='+new_duration)
+except Exception:
+ print('augmented=0')
+PYDURATION
+}
+
+card_bottom_hint_from_xml() {
+  # 仅导航诊断；不输出坐标/卡片身份，不允许用此提示点击。
+  "$PYTHON_BIN" - "$1" "$2" "$3" "$SCREEN_H" <<'PYHINT'
+import sys,re,html,unicodedata,urllib.parse,xml.etree.ElementTree as ET
+def norm(v): return ' '.join(unicodedata.normalize('NFKC',html.unescape(v)).split())
+try:
+ root=ET.parse(sys.argv[1]).getroot()
+ if root.tag!='hierarchy': raise ValueError('not hierarchy')
+ nodes=list(root.iter('node'))
+ if not nodes or any(n.get('package')!='com.ss.android.ugc.aweme' for n in nodes): raise ValueError('wrong package')
+ parents={c:p for p in root.iter() for c in p}
+ title,author=map(lambda v:norm(urllib.parse.unquote(v)),sys.argv[2:4]); height=int(sys.argv[4])
+ def bounds(n):
+  m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.get('bounds',''))
+  return tuple(map(int,m.groups())) if m else None
+ matches=[n for n in nodes if norm(n.get('text',''))==title]
+ clipped=False
+ if title and author and len(matches)==1:
+  node=matches[0]; parent=parents.get(node)
+  card=parent is not None and node.get('resource-id')=='com.ss.android.ugc.aweme:id/desc' and parent.get('resource-id')=='com.ss.android.ugc.aweme:id/dlr' and parent.get('clickable')=='true' and any(n.get('resource-id')=='com.ss.android.ugc.aweme:id/q9g' for n in parent.iter('node')) and not any('相关搜索' in (n.get('text','')+n.get('content-desc','')) for n in parent.iter('node'))
+  b=bounds(node)
+  if card and b and b[0]<b[2] and b[1]<b[3] and height*9//10<=b[1]<b[3]<=height:
+   below=[n for n in nodes if (q:=bounds(n)) and b[0]<=q[0]<q[2]<=b[2] and b[3]<=q[1]<=b[3]+80]
+   clipped=not any('喜欢' in n.get('content-desc','') or norm(n.get('text',''))==author for n in below)
+ print('clipped='+str(int(clipped)))
+except Exception:
+ sys.exit(1)
+PYHINT
+}
+
 video_cards_from_xml() {
   local xml="$1" line b t x1 y1 x2 y2 lx1 ly1 lx2 ly2 dx1 dy1 dx2 dy2 dt matched dur ax1 ay1 ax2 ay2 at author ax
   [[ -r "$xml" ]] || return 1
@@ -3465,13 +3591,23 @@ case "$command" in
     [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE video-cards-from-xml UI_XML"
     video_cards_from_xml "$2"
     ;;
+  card-unknown-duration-from-xml)
+    [[ "$#" == 6 ]] || die "usage: card-unknown-duration-from-xml ORIGINAL_XML FRESH_XML TITLE_ENCODED AUTHOR_ENCODED RUN"
+    card_unknown_duration_from_xml "$2" "$3" "$4" "$5" "$6"
+    ;;
+  card-bottom-hint-from-xml)
+    [[ "$#" == 4 ]] || die "usage: card-bottom-hint-from-xml XML TITLE_ENCODED AUTHOR_ENCODED"
+    card_bottom_hint_from_xml "$2" "$3" "$4"
+    ;;
   search-grid-scroll)
     # 10-08 发现改造：视频 tab 网格整屏翻页（up = 看下面的卡，down = 回上面）。慢速拖动减少惯性，
     # 翻多少不保证整屏对齐——调用方按标题去重/定位，不依赖坐标连续。
-    [[ "$#" == 3 && ( "$3" == up || "$3" == down ) ]] || die "usage: douyin-phone-adb --profile PROFILE search-grid-scroll EVIDENCE_ID up|down"
+    [[ "$#" == 3 && ( "$3" == up || "$3" == down || "$3" == reveal-up ) ]] || die "usage: douyin-phone-adb --profile PROFILE search-grid-scroll EVIDENCE_ID up|down|reveal-up"
     check_target
     sgs_x=$(( SCREEN_W / 2 )); sgs_hi=$(( SCREEN_H * 85 / 100 )); sgs_lo=$(( SCREEN_H * 15 / 100 ))
-    if [[ "$3" == up ]]; then
+    if [[ "$3" == reveal-up ]]; then
+      "$ADB" -s "$SERIAL" shell input swipe "$sgs_x" "$sgs_hi" "$sgs_x" "$(( SCREEN_H * 65 / 100 ))" 500
+    elif [[ "$3" == up ]]; then
       "$ADB" -s "$SERIAL" shell input swipe "$sgs_x" "$sgs_hi" "$sgs_x" "$sgs_lo" 1000
     else
       "$ADB" -s "$SERIAL" shell input swipe "$sgs_x" "$sgs_lo" "$sgs_x" "$sgs_hi" 1000
