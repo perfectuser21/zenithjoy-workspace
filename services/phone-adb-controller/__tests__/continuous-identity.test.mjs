@@ -10,7 +10,7 @@ const queued=new URL('../process-queued-video.sh',import.meta.url).pathname;
 const fixtures=new URL('./fixtures/',import.meta.url).pathname;
 const vid='7646309328911907195';
 // 明示模拟设备：真实控制器+队列shell执行；只有ADB、curl和账号锁回执为假。
-function phone({mode='continuous_identity',command='queued',wrongId=false,skeleton=false,finalSkeleton=false,recover=false,playFails=false,controlledWait=false,shareIdleFallback=false,copyGuide=false,guideWrongMarker=false,guideDismissFails=false}={}){
+function phone({mode='continuous_identity',command='queued',wrongId=false,skeleton=false,finalSkeleton=false,recover=false,playFails=false,controlledWait=false,shareIdleFallback=false,copyGuide=false,guideWrongMarker=false,guideDismissFails=false,guideDismissStuck=false}={}){
  const d=mkdtempSync(join(tmpdir(),'continuous-identity-'));
  let runner=controller;
  if(controlledWait){
@@ -54,7 +54,7 @@ else if(has('input text '))s.field=a.at(-1);
 else if(has('input keyevent 278'))s.clip=s.field;
 else if(has('input keyevent 279'))s.field=s.clip;
 else if(has('input keyevent 67'))s.field='';
-else if(has('input keyevent 4')){if(s.page==='scratch'&&++s.backs>=4){s.scratchReturns=(s.scratchReturns||0)+1;s.page=process.env.COPY_GUIDE==='1'&&s.scratchReturns===2?'guide':'detail';}else if(s.page==='guide'){s.guideDismisses=(s.guideDismisses||0)+1;s.page=process.env.GUIDE_DISMISS_FAILS==='1'?'partial':'detail';}else if(s.page==='panel')s.page='detail';else if(process.env.KEYWORD_RESULTS==='1'&&s.page==='detail'&&s.scratchReturns>=2)s.page='results';}
+else if(has('input keyevent 4')){if(s.page==='scratch'&&++s.backs>=4){s.scratchReturns=(s.scratchReturns||0)+1;s.page=process.env.COPY_GUIDE==='1'&&s.scratchReturns===2?'guide':'detail';}else if(s.page==='guide'){s.guideDismisses=(s.guideDismisses||0)+1;s.page=process.env.GUIDE_DISMISS_STUCK==='1'?'guide':process.env.GUIDE_DISMISS_FAILS==='1'?'partial':'detail';}else if(s.page==='panel')s.page='detail';else if(process.env.KEYWORD_RESULTS==='1'&&s.page==='detail'&&s.scratchReturns>=2)s.page='results';}
 else if(has('input tap')&&s.page==='detail')s.page='panel';
 else if(has('input tap')&&s.page==='panel'){s.clip='https://v.douyin.com/Fresh/';s.page='detail';}
 else if(has('shell rm -f')){try{fs.unlinkSync(p.join(d,'remote.xml'));}catch{}}
@@ -91,7 +91,7 @@ fs.writeFileSync(sfile,JSON.stringify(s));
  const env={...process.env,HOME:d,FAKE_PHONE_DIR:d,DOUYIN_PHONE_REGISTRY:join(d,'registry'),DOUYIN_ADB_BIN:adb,
   DOUYIN_CURL_BIN:curl,DOUYIN_SIPS_BIN:'/usr/bin/true',DOUYIN_PYTHON_BIN:'/usr/bin/python3',DOUYIN_PHONE_TMP_ROOT:tmp,
   DOUYIN_PHONE_ADB:wrapper,WFR_RUN_DIR:join(d,'run'),DOUYIN_DETAIL_PLAYBACK:mode,QUEUED_VIDEO_QUALIFY_CMD:qualify,SKELETON:skeleton?'1':'0',FINAL_SKELETON:finalSkeleton?'1':'0',
-  COPY_GUIDE:copyGuide?'1':'0',GUIDE_DISMISS_FAILS:guideDismissFails?'1':'0',KEYWORD_RESULTS:command==='results'?'1':'0',SHARE_IDLE_FALLBACK:shareIdleFallback?'1':'0',RECOVER:recover?'1':'0',PLAY_FAILS:playFails?'1':'0',HARVEST_KEYWORD_TESTING:'1'};
+  COPY_GUIDE:copyGuide?'1':'0',GUIDE_DISMISS_FAILS:guideDismissFails?'1':'0',GUIDE_DISMISS_STUCK:guideDismissStuck?'1':'0',KEYWORD_RESULTS:command==='results'?'1':'0',SHARE_IDLE_FALLBACK:shareIdleFallback?'1':'0',RECOVER:recover?'1':'0',PLAY_FAILS:playFails?'1':'0',HARVEST_KEYWORD_TESTING:'1'};
  if(command.startsWith('queued'))delete env.DOUYIN_DETAIL_PLAYBACK;
  const args=command.startsWith('queued')?[queued,command==='queued-qualification'?'qualification':'identity','legacy',vid,`https://www.douyin.com/video/${vid}`,'','','continuous-run','jinuo']:
   [runner,'--profile','legacy',...(['results','link'].includes(command)?['current-video-link','continuous-link',...(command==='results'?['人工智能']:[])]:command==='wrong-command'?['preflight']:['open-video',vid,'continuous-open'])];
@@ -188,12 +188,12 @@ test('默认无keyword取链含真实nonce，归位后仍恢复PLAY供后续录�
 
 test('真实13节点复制成功guide仅追加一次BACK，独立新鲜详情通过才恢复PLAY与输出ID',()=>{
  const r=phone({copyGuide:true,controlledWait:true});assert.equal(r.error,undefined);assert.equal(r.status,0,r.stderr);
- assert.equal(r.state.guideDismisses,1);assert.equal(r.state.detailStarts,1,'识别准确guide不应先等三波后重新deep link');
+ assert.equal(r.state.guideDismisses,1);assert.equal(r.calls.split('\n').filter(s=>/input keyevent 4$/.test(s)).length,9,'原两段各4次BACK，仅增加一次guide BACK');assert.equal(r.state.detailStarts,1,'识别准确guide不应先等三波后重新deep link');
  assert.equal(r.state.play,'playing');assert.match(r.stdout,/IDENTITY/);assert.equal(r.calls.split('\n').filter(s=>/input keyevent 126$/.test(s)).length,1);
  assert.match(r.dumps,/guide:paused\ndetail:paused/,'额外BACK后必须重新PAUSE并独立抓树');
 });
 test('guide缺精确标记不dismiss；dismiss后新树仍非详情不能输出ID或PLAY',()=>{
- for(const options of [{guideWrongMarker:true},{guideDismissFails:true}]){
+ for(const options of [{guideWrongMarker:true},{guideDismissFails:true},{guideDismissStuck:true}]){
   const r=phone({copyGuide:true,controlledWait:true,finalSkeleton:true,...options});
   assert.equal(r.error,undefined);assert.equal(r.status,4,r.stderr);assert.doesNotMatch(r.stdout,/IDENTITY/);
   assert.equal(r.calls.split('\n').filter(s=>/input keyevent 126$/.test(s)).length,0);
