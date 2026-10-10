@@ -493,7 +493,9 @@ _on_video_detail() {
 # 退过头把原详情页也退掉；核验用入口同一把尺子 _is_video_detail_xml（分享按钮在、搜索框里
 # 没有分享文案）。退到位返回 0；退飞/树读不到/超过上限返回 1，由调用方 deep link 重开兜底。
 _leave_scratch_route() {
-  local eid="$1" i fg xml
+  local eid="$1" mode="${2:-detail}" i fg xml
+  # results-only仅交还导航；不能据此宣称关键词/视频tab归位成功。
+  case "$mode" in detail|results-only) ;; *) print -u2 -- "leave-scratch: unknown mode ($mode)"; return 2 ;; esac
   require_evidence_id "$eid"
   for i in {1..5}; do
     "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1 || true
@@ -501,6 +503,11 @@ _leave_scratch_route() {
     fg="$(foreground_package)"
     [[ "$fg" == *"$DOUYIN_PACKAGE"* ]] || { print -u2 -- "leave-scratch: left Douyin after $i backs (fg=$fg)"; return 1 }
     [[ "$fg" == *"$SEARCH_RESULT_ACTIVITY"* ]] && continue
+    # keyword出口的真实ID已验收；下游只需回结果页，不读详情树或改变播放。
+    if [[ "$mode" == results-only ]]; then
+      print -u2 -- "leave-scratch: left scratch search route; results restoration still required"
+      return 0
+    fi
     # 退回原详情页后视频自动续播，HONOR 上 uiautomator 永不 idle——0930 真机三波连读都只有
     # 13 个骨架节点。与 _current_video_link_once 入口同一招：先用MEDIA_PAUSE暂停再取证；核验通过
     # MEDIA_PLAY恢复播放，让下游（倍速/录制）看到的状态与以前 deep link 重开后一致。
@@ -542,6 +549,10 @@ current_video_link() {
   for i in {1..$tries}; do
     if ( _current_video_link_once "${eid}-t${i}" "$return_keyword" ); then return 0; else rc=$?; fi
     print -u2 -- "warning: current-video-link attempt $i/$tries failed (rc=$rc); recovering to detail page"
+    # keyword结果出口退到外部时，不让外层重试再按两次BACK破坏外部栈。
+    if [[ -n "$return_keyword" && "$(foreground_package)" != *"$DOUYIN_PACKAGE"* ]]; then
+      die "Douyin left foreground before keyword link retry recovery" WRONG_FOREGROUND
+    fi
     # 回退到详情页干净态：连按返回收掉可能半开的分享面板/临时搜索框
     "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1
     wait_ms 600
@@ -792,8 +803,10 @@ _current_video_link_once() {
   if [[ -n "$return_keyword" ]]; then
     # 先退出已核验的暂存路线，避免逐层反复dump暂存页；失败仍走原有界归位。
     # 原词、视频tab与returned-grid最终核验保持不变，不能凭退出成功推断已归位。
-    _leave_scratch_route "${evidence_id}-leave" >/dev/null \
+    _leave_scratch_route "${evidence_id}-leave" results-only >/dev/null \
       || print -u2 -- "warning: scratch exit not verified; using bounded results restoration"
+    # 外部前台不能继续盲退栈；暂存仍在抖音时才用原有界恢复。
+    [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "LINK_RESULTS_WRONG_FOREGROUND"
     return_result="$(back_to_results 10 "$return_keyword" "${evidence_id}-results")" || die "LINK_RESULTS_RESTORE_FAILED"
     return_xml="$(ui_evidence "${evidence_id}-returned-grid")" || die "LINK_RESULTS_TREE_UNAVAILABLE"
     _search_kw_matches "$return_keyword" "$return_xml" || die "LINK_RESULTS_KEYWORD_MISMATCH"

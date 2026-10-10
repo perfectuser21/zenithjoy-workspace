@@ -274,10 +274,11 @@ test('results-only真实入口：正常详情归位不新增媒体键或详情�
  assert.equal(ph.dumpPages().filter(x=>x==='detail').length,3);assert.equal(ph.mediaKeys().filter(x=>x==='126').length,0);
  assert.equal(ph.dumpPages().filter(x=>x==='results').length,2);assert.deepEqual(ph.stack(),['results']);assert.equal(ph.deeplinks(),0);
 });
-test('results-only真实13节点骨架夹具：跳出暂存不读骨架详情三波，最终原词视频tab通过',()=>{
+test('results-only真实13节点骨架夹具：跳出暂存不读骨架详情三波，最终原词视频tab通过',t=>{
  const ph=makeFakePhone({returnSkeleton:true});const r=ph.run(['current-video-link','cvl-results-skeleton',KW]);assert.equal(r.code,0,r.err);
  assert.equal(ph.dumpPages().filter(x=>x==='detail_skeleton').length,0);assert.equal(ph.mediaKeys().filter(x=>x==='126').length,0);
  assert.equal(ph.dumpPages().filter(x=>x==='results').length,2);assert.deepEqual(ph.stack(),['results']);assert.match(r.out,/video_id=7000000000000000001/);
+ t.diagnostic(JSON.stringify({actual_dump_pages:ph.dumpPages(),media_keys:ph.mediaKeys(),stack:ph.stack()}));
 });
 test('results-only错误关键词或未选视频tab不能输出成功真实ID',()=>{
  for(const opts of [{returnSkeleton:true,resultsKeyword:'其他词'},{returnSkeleton:true,videoTabSelected:false}]){
@@ -292,4 +293,9 @@ test('results-only未知mode在任何ADB动作之前明确拒绝',()=>{
  const code=readFileSync(SCRIPT,'utf8').match(/^_leave_scratch_route\(\) \{[\s\S]*?^\}/m)[0];
  const r=spawnSync('zsh',['-c',`require_evidence_id(){ return 0; }; ADB=/usr/bin/false; SERIAL=SER1; ${code}\n_leave_scratch_route mode-test unknown-mode`],{encoding:'utf8'});
  assert.notEqual(r.status,0);assert.match(r.stderr,/unknown.*mode/i);
+});
+
+test('非keyword严格默认模式仍验收真实骨架三波并用详情深链恢复',()=>{
+ const ph=makeFakePhone({returnSkeleton:true});const r=ph.run(['current-video-link','cvl-strict-skeleton']);assert.equal(r.code,0,r.err);
+ assert.equal(ph.dumpPages().filter(x=>x==='detail_skeleton').length,3);assert.equal(ph.deeplinks(),1);assert.equal(ph.stack().at(-1),'detail2');
 });
