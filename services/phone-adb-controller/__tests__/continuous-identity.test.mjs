@@ -209,3 +209,101 @@ test('复制成功guide纯树精确识别必须拒绝错误包、缺标记、混
   const r=spawnSync('zsh',['-c',`PYTHON_BIN=/usr/bin/python3;DOUYIN_PACKAGE=com.ss.android.ugc.aweme;${fn}\n_is_copy_success_guide_xml "$1"`,'zsh',xmlPath],{encoding:'utf8'});assert.equal(r.status,expected,label+': '+r.stderr);
  }}finally{rmSync(d,{recursive:true,force:true});}
 });
+
+// 运行真实取树函数与文件删除/拉取协议；仅ADB设备响应和等待为测试替身。
+function shareWave({policy='verified-seed-share',error='idle',freshFirst=false,fallback='detail',stale=false,waves=false}={}){
+ const d=mkdtempSync(join(tmpdir(),'share-idle-wave-'));
+ try{
+  const source=readFileSync(controller,'utf8');
+  const functions=['_is_fresh_share_detail_xml','_ui_evidence_wave','ui_evidence'].map(name=>source.match(new RegExp('^'+name+'\\(\\) \\{[\\s\\S]*?^\\}', 'm'))?.[0]);
+  assert.ok(functions.every(Boolean));
+  const detail=readFileSync(join(fixtures,'video-detail-from-search.xml'),'utf8');
+  writeFileSync(join(d,'detail'),detail);
+  writeFileSync(join(d,'wrong'),detail.replaceAll('com.ss.android.ugc.aweme','other.package'));
+  writeFileSync(join(d,'partial'),'<hierarchy><node package="com.ss.android.ugc.aweme"');
+  writeFileSync(join(d,'state'),JSON.stringify({dumps:0,keys:[]}));
+  if(stale){writeFileSync(join(d,'remote'),detail);writeFileSync(join(d,'case.xml'),detail);}
+  const adb=join(d,'adb');
+  writeFileSync(adb,`#!/usr/bin/env node
+const fs=require('fs'),p=require('path'),d=${JSON.stringify(d)},a=process.argv.slice(2),s=JSON.parse(fs.readFileSync(p.join(d,'state')));let code=0;
+if(a[2]==='pull'){if(fs.existsSync(p.join(d,'remote')))fs.copyFileSync(p.join(d,'remote'),a[4]);else code=1;}
+else if(a[3]==='rm')fs.rmSync(p.join(d,'remote'),{force:true});
+else if(a[3]==='stat')console.log(fs.existsSync(p.join(d,'remote'))?fs.statSync(p.join(d,'remote')).size:0);
+else if(a[3]==='input'){s.keys.push(Number(a.at(-1)));}
+else if(a[3]==='uiautomator'){
+ s.dumps++;
+ if(${freshFirst} || (s.keys.length%2===1 && ${JSON.stringify(fallback)}!=='none')){
+  const kind=${freshFirst}?'detail':${JSON.stringify(fallback)};fs.copyFileSync(p.join(d,kind),p.join(d,'remote'));
+ } else {console.error(${JSON.stringify(error==='idle'?'ERROR: could not get idle state.':'ERROR: permission denied.')});code=1;}
+}
+fs.writeFileSync(p.join(d,'state'),JSON.stringify(s));process.exit(code);
+`,{mode:0o755});
+  const script=`set -eu\nADB=${JSON.stringify(adb)}; SERIAL=fake; EVIDENCE_ROOT=${JSON.stringify(d)}; REMOTE_UI=/fake; DOUYIN_PACKAGE=com.ss.android.ugc.aweme; PYTHON_BIN=/usr/bin/python3\nrequire_evidence_id(){ [[ "$1" == case ]]; }; wait_ms(){ :; }; wait_seconds(){ :; }; die(){ print -u2 -- "$1"; exit 4; };\n${functions.join('\n')}\n${waves?'ui_evidence':'_ui_evidence_wave'} case ${policy}`;
+  const r=spawnSync('zsh',['-c',script],{encoding:'utf8',timeout:10000});
+  return {...r,state:JSON.parse(readFileSync(join(d,'state'),'utf8')),xml:existsSync(join(d,'case.xml'))?readFileSync(join(d,'case.xml'),'utf8'):''};
+ }finally{rmSync(d,{recursive:true,force:true});}
+}
+
+test('share typed闲置失败只读两次，标准场景仍三次失败后兜底；85必须成对',()=>{
+ for(const [policy,count] of [['verified-seed-share',2],['standard',4]]){
+  const r=shareWave({policy});assert.equal(r.error,undefined);assert.equal(r.status,0,r.stderr);
+  assert.equal(r.state.dumps,count);assert.deepEqual(r.state.keys,[85,85]);
+ }
+ const fresh=shareWave({freshFirst:true});assert.equal(fresh.status,0);assert.equal(fresh.state.dumps,1);assert.deepEqual(fresh.state.keys,[]);
+});
+test('share typed非idle错误保留三波，旧XML与失败fallback不能通过',()=>{
+ const r=shareWave({error:'permission',stale:true,waves:true});assert.equal(r.error,undefined);assert.equal(r.status,4);
+ assert.equal(r.state.dumps,9);assert.deepEqual(r.state.keys,[]);assert.equal(r.xml,'');
+ const failed=shareWave({fallback:'none',stale:true,waves:true});assert.equal(failed.error,undefined);assert.equal(failed.status,4);
+ assert.equal(failed.state.dumps,10,'首波2次，后两波各原4次');assert.deepEqual(failed.state.keys,[85,85,85,85,85,85]);assert.equal(failed.xml,'');
+});
+test('share typed fallback错包或截断新XML拒绝，未知策略在ADB前拒绝',()=>{
+ for(const fallback of ['wrong','partial']){
+  const r=shareWave({fallback,waves:true});assert.equal(r.error,undefined);assert.equal(r.status,4,r.stderr);
+  assert.equal(r.state.dumps,10);assert.deepEqual(r.state.keys,[85,85,85,85,85,85]);
+ }
+ const invalid=shareWave({policy:'unsupported'});assert.equal(invalid.status,2);assert.equal(invalid.state.dumps,0);assert.deepEqual(invalid.state.keys,[]);
+});
+test('fresh seed witness严格解析package与详情，nonce字串或旧图不是凭证',()=>{
+ const source=readFileSync(controller,'utf8'),fn=source.match(/^_is_fresh_share_detail_xml\(\) \{[\s\S]*?^\}/m)?.[0];assert.ok(fn);
+ const d=mkdtempSync(join(tmpdir(),'share-witness-'));
+ try{
+  const detail=readFileSync(join(fixtures,'video-detail-from-search.xml'),'utf8');
+  for(const [name,xml,code] of [['valid',detail,0],['package',detail.replaceAll('com.ss.android.ugc.aweme','wrong'),1],['scratch',detail.replace('搜你想看的','clipnonce123'),1],['partial',detail.slice(0,-20),1],['guide',readFileSync(join(fixtures,'real-copy-success-guide-13.xml'),'utf8'),1]]){
+   const path=join(d,name);writeFileSync(path,xml);
+   const r=spawnSync('zsh',['-c',`PYTHON_BIN=/usr/bin/python3; DOUYIN_PACKAGE=com.ss.android.ugc.aweme; ${fn}\n_is_fresh_share_detail_xml ${JSON.stringify(path)}`],{encoding:'utf8'});assert.equal(r.status,code,name);
+  }
+  const once=source.match(/^_current_video_link_once\(\) \{[\s\S]*?^\}/m)[0];
+  assert.ok(once.indexOf('/bin/rm -f "$seed_witness"')<once.indexOf('nonce_proof="$(seed_clipboard_nonce'));
+  assert.match(once,/if _is_fresh_share_detail_xml "\$seed_witness"; then share_policy=verified-seed-share/);
+ }finally{rmSync(d,{recursive:true,force:true});}
+});
+
+test('真实once策略边界：先清旧witness，无证据或错包保标准，只有本次新鲜详情可提速',()=>{
+ const source=readFileSync(controller,'utf8');
+ const fns=['_is_fresh_share_detail_xml','_current_video_link_once'].map(name=>source.match(new RegExp('^'+name+'\\(\\) \\{[\\s\\S]*?^\\}','m'))?.[0]);assert.ok(fns.every(Boolean));
+ const d=mkdtempSync(join(tmpdir(),'once-share-policy-'));
+ try{
+  const detail=readFileSync(join(fixtures,'video-detail-from-search.xml'),'utf8');
+  writeFileSync(join(d,'valid'),detail);writeFileSync(join(d,'wrong'),detail.replaceAll('com.ss.android.ugc.aweme','wrong.package'));writeFileSync(join(d,'oldclip'),'old');
+  for(const [kind,expected] of [['none','standard'],['wrong','standard'],['valid','verified-seed-share']]){
+   writeFileSync(join(d,'case-seed-detail-verified.xml'),detail);
+   const seed=kind==='none'?':':`/bin/cp ${JSON.stringify(join(d,kind))} "$EVIDENCE_ROOT/$1-seed-detail-verified.xml"`;
+   const r=spawnSync('zsh',['-c',`set -eu; EVIDENCE_ROOT=${JSON.stringify(d)}; DOUYIN_PACKAGE=com.ss.android.ugc.aweme; PYTHON_BIN=/usr/bin/python3; ADB=/usr/bin/true; SERIAL=fake\nrequire_evidence_id(){ :; }; foreground_package(){ print com.ss.android.ugc.aweme; }; clip_state_file(){ print ${JSON.stringify(join(d,'oldclip'))}; }; wait_ms(){ :; }; die(){ exit 4; }; seed_clipboard_nonce(){ ${seed}; print clipnonceProof; }; ui_evidence(){ print -u2 -- "strategy=$2"; exit 8; };\n${fns.join('\n')}\n_current_video_link_once case 人工智能`],{encoding:'utf8',timeout:10000});
+   assert.equal(r.error,undefined);assert.equal(r.status,8);assert.match(r.stderr,new RegExp('strategy='+expected+'(?:\\n|$)'),kind);
+   if(kind==='none')assert.equal(existsSync(join(d,'case-seed-detail-verified.xml')),false,'旧witness必须真实删除');
+  }
+ }finally{rmSync(d,{recursive:true,force:true});}
+});
+
+test('Python优化模式不能关闭fresh witness的package和完整详情拒绝守卫',()=>{
+ const source=readFileSync(controller,'utf8'),fn=source.match(/^_is_fresh_share_detail_xml\(\) \{[\s\S]*?^\}/m)?.[0];assert.ok(fn);
+ const d=mkdtempSync(join(tmpdir(),'share-optimized-witness-'));
+ try{
+  const detail=readFileSync(join(fixtures,'video-detail-from-search.xml'),'utf8');
+  for(const [name,xml,code] of [['valid',detail,0],['package',detail.replaceAll('com.ss.android.ugc.aweme','wrong'),1],['scratch',detail.replace('搜你想看的','clipnonce123'),1],['partial',detail.slice(0,-20),1],['guide',readFileSync(join(fixtures,'real-copy-success-guide-13.xml'),'utf8'),1]]){
+   const path=join(d,name);writeFileSync(path,xml);
+   const r=spawnSync('zsh',['-c',`PYTHON_BIN=/usr/bin/python3; DOUYIN_PACKAGE=com.ss.android.ugc.aweme; ${fn}\n_is_fresh_share_detail_xml ${JSON.stringify(path)}`],{encoding:'utf8',env:{...process.env,PYTHONOPTIMIZE:'1'}});assert.equal(r.status,code,name);
+  }
+ }finally{rmSync(d,{recursive:true,force:true});}
+});
