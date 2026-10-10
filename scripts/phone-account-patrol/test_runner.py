@@ -41,16 +41,20 @@ class PatrolContractTests(unittest.TestCase):
         self.assertEqual(body['payload']['host'], 'mmv')
         self.assertNotIn('claude', body['payload']['cmd'])
 
-    def test_batch_retry_reuses_existing_children(self):
+    def test_batch_retry_uses_stable_server_idempotency_key(self):
+        keys = []
         def api(path, body=None, method=None):
             if path == 'phone-registry':
                 return {'phones': [{'serial': 'a', 'nickname': '甲', 'enabled': True}]}
-            if path.startswith('tasks?'):
-                return [{'id': 'existing', 'parent_task_id': 'parent', 'payload': {'phone_serial': 'a'}}]
-            raise AssertionError('retry must not create children')
+            if path == 'tasks':
+                keys.append(body['source_id'])
+                return {'id': 'existing'}
+            raise AssertionError('不依赖未经支持的列表过滤')
         with tempfile.TemporaryDirectory() as d:
             r = runner.enqueue_batch(api, 'parent', pathlib.Path(d), 'wf', 'rev')
+            runner.enqueue_batch(api, 'parent', pathlib.Path(d), 'wf', 'rev')
         self.assertEqual(r['children'][0]['task_id'], 'existing')
+        self.assertEqual(keys, ['phone-account-patrol:parent:a'] * 2)
 
     def test_incomplete_and_cross_device_results_fail_closed(self):
         good = {'serial': 'a', 'results': {p: {'state': '待确认'} for p in runner.ALL_PLATFORMS}}
