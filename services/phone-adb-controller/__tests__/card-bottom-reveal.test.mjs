@@ -77,3 +77,13 @@ test('实际22两树未知时长补齐仅在点赞精确文案/日期/唯一完�
  // 原证据已有时长时，不得用未知时长例外改写它。
  assert.notEqual(durationProof(fresh,fresh).stdout.includes('augmented=1'),true);
 });
+
+
+test('新视口同字段新VID不能被旧ordinal吞掉',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'reveal-ordinal-permanent-'));try{
+let stage='initial',x='',events=[];
+const row=(x,y,t)=>[x,y,'00:20',t,'作者'].join('\t');const A='重复完整候选A标题',B='原完整候选B标题';const initial=row(100,500,A)+'\n'+row(300,2600,B);const revealed=row(450,2000,B)+'\n'+row(800,2450,A);const page=rows=>rows+'\nvideo_tab=1\nevidence=/fresh/'+stage+'.xml\nend_of_results='+(stage==='end'?'1':'0');
+const phone=async(cmd,...args)=>{events.push([cmd,...args]);if(cmd==='search-video-cards')return page(stage==='initial'?initial:stage==='revealed'?revealed:'');if(cmd==='search-kw-matches')return 'kw_matches=1';if(cmd==='card-bottom-hint-from-xml')return 'clipped=1';if(cmd==='search-grid-scroll'){stage=args[1]==='reveal-up'?'revealed':'end';return 'scrolled='+args[1];}if(cmd==='tap-evidence'){x=args[0];return '';}if(cmd==='current-video-link'){if(x==='100')stage='A-left-viewport';return 'content_type=video\nvideo_id=7685662999797258'+({'100':'401','450':'402','800':'403'}[x])+'\nshort_url=https://v.douyin.com/Actual'+x+'/\nreturn_mode=results';}return '';};
+const h=createDiscoveryHandlers({phone,execute:async()=>({code:0}),queue:async()=>({status:'pending',inserted:true}),profile:'fake',run:'ordinal-review',root:base,sources:['AI'],limit:0,env:{WFR_RUN_DIR:dir}});const out=await h.collect_videos();console.log(JSON.stringify({expected_captures:3,actual_captures:out.captures.length,all_results_scanned:out.all_results_scanned,stop_reason:out.stop_reason,videos:out.videos.map(v=>v.videoId),events},null,2));assert.equal(out.captures.length,3,'短滑改变视口，同identity新视频ordinal0不能被旧视口slot0静默丢弃后仍报告全采');
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
