@@ -61,22 +61,37 @@ export function createRpc({ frozen, execute = execInput, local = false } = {}) {
   const peer=frozen.runtime_transport;
   const transport=peer?['-o',`HostName=${peer.ssh_hostname}`,'-o',`HostKeyAlias=${peer.ssh_hostkey_alias}`]:[];
   return async (body, { timeoutMs = 180000 } = {}) => {
+    const deadline=Date.now()+timeoutMs;
+    const attempts=['commander','resolve_share_link'].includes(body.kind)?2:1;
+    for(let attempt=0;attempt<attempts;attempt++){
+    const remaining=Math.max(1,deadline-Date.now());
     let result;
     if (local) result = await execute(process.execPath, [resolve(process.env.WF_HOME, 'leadgen-rpc.mjs')],
-      { input: JSON.stringify({ ...body, source }), timeoutMs });
+      { input: JSON.stringify({ ...body, source }), timeoutMs:remaining });
     else result = await execute('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15',
       '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=2', ...transport, 'mmv',
       'set -a; source ~/.credentials/zenithjoy-db.env; set +a; cd ~/.openclaw/leadgen-scripts && node leadgen-rpc.mjs'],
-    { input: JSON.stringify({ ...body, source }), timeoutMs });
+    { input: JSON.stringify({ ...body, source }), timeoutMs:remaining });
     let response;
-    try { response = JSON.parse(result.stdout.trim()); } catch { throw Error('远端没有合法回执'); }
+    try { response = JSON.parse(result.stdout.trim()); } catch {
+      if(attempt+1<attempts&&Date.now()+250<deadline)continue;
+      throw Error('远端没有合法回执');
+    }
     if (result.code !== 0 || response.ok !== true) throw Error(response.error || '远端执行失败');
     return response;
+    }
   };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
+    if(process.argv[2]==='resolve-share-link'){
+      if(process.argv.length!==4)throw Error('解析参数无效');
+      const rpc=createRpc({frozen:readFrozen(process.env.WFR_RUN_DIR),local:process.env.LEADGEN_LOCAL_RPC==='1'});
+      const {result}=await rpc({kind:'resolve_share_link',url:process.argv[3]},{timeoutMs:20000});
+      if(!/^https:\/\/www\.douyin\.com\/(video|note)\/[0-9]{16,24}$/.test(result?.resolved_url||'')||result.resolved_url!==`https://www.douyin.com/${result.content_type}/${result.content_id}`)throw Error('解析回执身份无效');
+      process.stdout.write(result.resolved_url+'\n');
+    }else{
     if (process.argv[2] !== 'qualify' || process.argv[3] !== 'judge') throw Error('未知调用');
     const args = {};
     for (let n = 4; n < process.argv.length; n += 2) {
@@ -87,7 +102,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const rpc = createRpc({ frozen: readFrozen(process.env.WFR_RUN_DIR), local: process.env.LEADGEN_LOCAL_RPC === '1' });
     const { result } = await rpc({ kind: 'qualify', request: { ...args, cmd: 'judge' } });
     process.stdout.write(`QUAL_RESULT ${JSON.stringify(result)}\n`);
+    }
   } catch {
-    process.stdout.write('QUAL_RESULT {"verdict":"pending","kind":"rpc_error"}\n'); process.exitCode = 1;
+    if(process.argv[2]==='resolve-share-link')process.stderr.write('SHARE_LINK_PEER_FAILED\n');
+    else process.stdout.write('QUAL_RESULT {"verdict":"pending","kind":"rpc_error"}\n');
+    process.exitCode = 1;
   }
 }

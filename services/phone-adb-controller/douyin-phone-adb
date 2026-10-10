@@ -664,6 +664,24 @@ resolve_content_short_url() {
     fi
     print -u2 -- "warning: $reason attempt=$attempt/2 curl_rc=$rc"
   done
+  # 只在本地网络失败时使用本run已冻结的RPC；源SHA与所有远端依赖仍逐项核验。
+  # 没有正式冻结上下文的独立命令不启用跨机兜底。
+  case "$reason" in
+    LINK_RESOLVE_DNS|LINK_RESOLVE_CONNECT|LINK_RESOLVE_TIMEOUT|LINK_RESOLVE_DNS_TIMEOUT|LINK_RESOLVE_NETWORK)
+      if [[ -n "${WFR_RUN_DIR:-}" && -f "$WFR_RUN_DIR/run-definition.json" && -f "$WFR_RUN_DIR/runtime/leadgen-client.mjs" ]]; then
+        local peer_url
+        print -u2 -- 'warning: local short link network resolution failed; trying frozen execution peer'
+        if peer_url="$(node "$WFR_RUN_DIR/runtime/leadgen-client.mjs" resolve-share-link "$short_url" 2>"$EVIDENCE_ROOT/${evidence_id}-peer-resolve.err")"; then
+          if [[ "$peer_url" =~ '^https://www\.douyin\.com/(video|note)/[0-9]{16,24}$' ]]; then
+            print -r -- "$peer_url"; return 0
+          fi
+          print -u2 -- 'LINK_RESOLVE_PEER_INVALID_RECEIPT'
+        else
+          print -u2 -- 'LINK_RESOLVE_PEER_FAILED'
+        fi
+      fi
+      ;;
+  esac
   die "$reason after 2 bounded HEAD attempts (curl_rc=$rc)"
 }
 

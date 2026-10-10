@@ -55,7 +55,7 @@ const FEED_XML = `${XML_HEAD}</node></hierarchy>`;
  *  am start search/tabs?keyword=<词> → 压 results（兜底重搜）；keyevent 4 → 出栈一层
  *  scratchPopTo: 暂存路线退完落在哪（默认 detail；'feed' 模拟退飞了）
  */
-function makeFakePhone({ scratchPopTo = 'detail', playState = 'paused', interactiveCenter = false, copiedShareUrl = LINK, forbidHead = false } = {}) {
+function makeFakePhone({ scratchPopTo = 'detail', playState = 'paused', interactiveCenter = false, copiedShareUrl = LINK, forbidHead = false, localHeadFails = false, peerUrl = null } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'cvl-leave-'));
   mkdirSync(join(dir, 'fx'));
   writeFileSync(join(dir, 'fx', 'detail.xml'), detailXml('playing'));
@@ -75,7 +75,7 @@ function makeFakePhone({ scratchPopTo = 'detail', playState = 'paused', interact
   const reg = join(dir, 'r.tsv');
   writeFileSync(reg, 'legacy\tSER1\tANY-MODEL\t1199\t2663\n');
   const curl = join(dir, 'curl');
-  writeFileSync(curl, forbidHead?`#!/bin/sh\necho HEAD_MUST_NOT_BE_CALLED >&2\nexit 99\n`:`#!/bin/sh\nprintf 'HTTP/1.1 302 Found\\r\\nLocation: https://www.douyin.com/video/7000000000000000001?previous_page=app_code_link\\r\\n\\r\\n'\n`, { mode: 0o755 });
+  writeFileSync(curl, localHeadFails?`#!/bin/sh\necho Operation_timed_out >&2\nexit 28\n`:forbidHead?`#!/bin/sh\necho HEAD_MUST_NOT_BE_CALLED >&2\nexit 99\n`:`#!/bin/sh\nprintf 'HTTP/1.1 302 Found\\r\\nLocation: https://www.douyin.com/video/7000000000000000001?previous_page=app_code_link\\r\\n\\r\\n'\n`, { mode: 0o755 });
   const adb = join(dir, 'adb');
   writeFileSync(adb, `#!/bin/sh
 D=${dir}
@@ -137,6 +137,12 @@ esac
 exit 0
 `, { mode: 0o755 });
   const env = { ...process.env, HOME: dir, DOUYIN_PHONE_REGISTRY: reg, DOUYIN_ADB_BIN: adb, DOUYIN_CURL_BIN: curl, DOUYIN_PYTHON_BIN: 'python3', DOUYIN_SIPS_BIN: '/usr/bin/true', DOUYIN_PHONE_TMP_ROOT: join(dir, 'tmp') };
+  if(peerUrl){
+    const runDir=join(dir,'run');mkdirSync(join(runDir,'runtime'),{recursive:true});
+    writeFileSync(join(runDir,'run-definition.json'),'{}');
+    writeFileSync(join(runDir,'runtime','leadgen-client.mjs'),`import fs from 'node:fs';if(process.argv[2]!=='resolve-share-link'||process.argv[3]!==${JSON.stringify(copiedShareUrl)})throw Error('WRONG_FRESH_URL');fs.appendFileSync(${JSON.stringify(join(dir,'peer-calls'))},process.argv[3]+'\\n');console.log(${JSON.stringify(peerUrl)});`);
+    env.WFR_RUN_DIR=runDir;
+  }
   const run = (args) => {
     const r = spawnSync('zsh', [SCRIPT, '--profile', 'legacy', ...args], { env, encoding: 'utf8', timeout: 180000 });
     return { code: r.status, out: (r.stdout || '').trim(), err: (r.stderr || '').trim() };
@@ -149,8 +155,21 @@ exit 0
     centerTaps: () => Number(readFileSync(join(dir, 'center_taps'), 'utf8').trim()),
     playback: () => readFileSync(join(dir, 'play_state'), 'utf8').trim(),
     mediaKeys: () => readFileSync(join(dir, 'media_keys'), 'utf8').trim().split('\n'),
+    peerCalls: () => readFileSync(join(dir,'peer-calls'),'utf8').trim().split('\n'),
   };
 }
+
+test('本地短链HEAD超时后调用本run执行端取真实ID，保持原分享链并回原结果页',()=>{
+ const ph=makeFakePhone({localHeadFails:true,peerUrl:'https://www.douyin.com/video/7000000000000000001'});
+ const r=ph.run(['current-video-link','cvl-peer','人工智能']);
+ assert.equal(r.code,0,r.err);assert.match(r.out,/video_id=7000000000000000001/);assert.ok(r.out.includes('short_url='+LINK));assert.match(r.out,/return_mode=results/);
+ assert.deepEqual(ph.peerCalls(),[LINK]);assert.deepEqual(ph.stack(),['results']);
+});
+
+test('执行端返回伪域名时不能输出视频成功',()=>{
+ const ph=makeFakePhone({localHeadFails:true,peerUrl:'https://evil.com/video/7000000000000000001'});
+ const r=ph.run(['current-video-link','cvl-peer-invalid','人工智能']);assert.notEqual(r.code,0);assert.doesNotMatch(r.out,/video_id=/);
+});
 
 test('真实取链入口接受iesdouyin复制文案并保留ID、归位，不额外HEAD已有ID的长链接',()=>{
  const ph=makeFakePhone({copiedShareUrl:'https://www.iesdouyin.com/share/video/7619696979182935153/?region=CN&from=copy',forbidHead:true});

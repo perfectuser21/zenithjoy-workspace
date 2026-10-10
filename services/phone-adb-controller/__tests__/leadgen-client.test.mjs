@@ -4,7 +4,21 @@ import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
-import {execInput} from '../leadgen-client.mjs';
+import {execInput,createRpc,RPC_FILES} from '../leadgen-client.mjs';
+
+const frozen={deployment:{source_commit:'a'.repeat(40)},files:Object.fromEntries(RPC_FILES.map(path=>['runtime/'+path,'b'.repeat(64)]))};
+test('只读Commander丢失SSH回执时有界重试；仍按原总预算',async()=>{
+ const calls=[];const rpc=createRpc({frozen,execute:async(_cmd,_args,opts)=>{
+  calls.push(opts.timeoutMs);return calls.length===1?{code:255,stdout:'',stderr:'transport closed'}:{code:0,stdout:JSON.stringify({ok:true,decision:{action:'continue',reason:'真实回执'}}),stderr:''};
+ }});
+ const r=await rpc({kind:'commander',receipt:{}},{timeoutMs:1000});assert.equal(r.decision.action,'continue');assert.equal(calls.length,2);assert.ok(calls[1]<=calls[0]);
+});
+test('队列写入和版本校验失败不得自动重跑',async()=>{
+ for(const kind of ['queue','commander']){
+  let calls=0;const rpc=createRpc({frozen,execute:async()=>{calls++;return kind==='queue'?{code:255,stdout:'',stderr:''}:{code:1,stdout:JSON.stringify({ok:false,error:'RPC_SOURCE_BYTES_MISMATCH'}),stderr:''};}});
+  await assert.rejects(rpc({kind},{timeoutMs:1000}));assert.equal(calls,1);
+ }
+});
 
 // 实际启动两层进程；模拟会忽略SIGTERM的设备脚本，不能靠mock声称子进程已停止。
 for(const failure of ['deadline','output_limit']){
