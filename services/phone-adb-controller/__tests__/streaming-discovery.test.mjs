@@ -73,3 +73,11 @@ test('控制器实际终点检测认两种真机文案，同时拒绝把视频�
   assert.throws(()=>execFileSync('grep',['-qE',pattern],{input:'<hierarchy><node text="讲解暂时没有更多了的原因"/></hierarchy>'}));
  }
 });
+
+test('丢失写回执仍留下真实待写ID、URL、证据引用，不计入成功清单',async()=>{
+ const r=rig({failWrite:true});try{
+  const out=await r.h.collect_videos(),saved=JSON.parse(readFileSync(join(r.dir,'discovery-progress.json'),'utf8'));
+  assert.equal(out.status,'partial');assert.equal(saved.videos.length,0);assert.equal(saved.counts.persisted,0);
+  assert.equal(saved.pending_capture.videoId,id(1));assert.equal(saved.pending_capture.videoUrl,'https://v.douyin.com/'+id(1)+'/');assert.ok(saved.pending_capture.evidence_id.endsWith('-link'));
+ }finally{r.cleanup();}
+});

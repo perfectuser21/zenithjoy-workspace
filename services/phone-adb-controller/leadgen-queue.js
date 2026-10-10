@@ -27,10 +27,16 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   if (op === 'history') {
     return (await pool.query('SELECT title,video_id FROM zenithjoy.leadgen_videos WHERE line_key=$1', [lineKey])).rows;
   }
-  if (op === 'discover') {
+  if (op === 'discover' || op === 'discover_readback') {
     const value = input.video;
     const row = value && { ...value, video_id: value.video_id ?? value.videoId, video_url: value.video_url ?? value.videoUrl };
     if (!/^\d{16,24}$/.test(row?.video_id || '') || !/^https:\/\/(?:v\.douyin\.com\/|www\.douyin\.com\/video\/)/.test(row?.video_url || '')) throw Error('候选视频身份无效');
+    if(op==='discover_readback'){
+      const result=await pool.query(`SELECT judgment_status, (transcript IS NOT NULL AND transcript <> '') AS has_transcript
+        FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=$2 AND video_url=$3`,[lineKey,row.video_id,row.video_url]);
+      const actual=result.rows[0];
+      return actual?{status:actual.judgment_status,has_transcript:!!actual.has_transcript,inserted:false,recovered:true}:null;
+    }
     return db.discoverVideo(pool, { lineKey, videoId: row.video_id, videoUrl: row.video_url, title: row.title, keyword: row.keyword, harvestBatch: run });
   }
   if (op === 'claim_videos') {
