@@ -277,3 +277,38 @@ test('102上游清单身份错或PG缺VID时拒绝，不退回全库认领',asyn
  writeFileSync(file,JSON.stringify({run:f.source,profile:'work',videos:[video],captures:[video]}));await assert.rejects(h.dedup(),/PG.*缺/);assert.equal(calls,1);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test('真实workflow包装器达到目标且仅有消失候选缺口时保留成功，数据库缺行仍partial',async()=>{
+ const {createHandlers}=await import('../leadgen-workflow.mjs');
+ for(const missingRow of [false,true]){
+  const dir=mkdtempSync(join(tmpdir(),'leadgen-relocation-wrapper-')),registry=join(dir,'accounts.tsv');
+  writeFileSync(registry,'work\ttest-account\n');
+  let reads=0;const stored=[],taps=[];const vid='7663337150875733275';
+  const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'relocation-run',P:'work',SERIAL:'test-serial',LEADGEN_LINE:'jinuo',LEADGEN_LIMIT:'1',DOUYIN_PHONE_ADB:'/test/phone',DOUYIN_ACCOUNT_REGISTRY:registry};
+  const execute=async(command,args)=>{
+   let stdout='';
+   if(command==='adb')stdout=args.includes('get-state')?'device\n':args.includes('telephony.registry')?'mCallState=0\n':'';
+   if(command==='/test/phone'){
+    const op=args[2]==='--lock-owner'?args[4]:args[2];
+    const values={preflight:'serial=test-serial\n','lock-acquire':'lock=acquired\n','lock-refresh':'lock=refreshed\n','account-current':'douyin_id=test-account\n','search-kw-matches':'kw_matches=1\n'};stdout=values[op]||'';
+    if(op==='search-video-cards'){
+     reads++;stdout=(reads===1?'100\t200\t00:20\t消失候选\t甲\n':'')+'300\t200\t00:20\t存在候选\t乙\nvideo_tab=1\nloading=0\nend_of_results=1\nevidence=/test/fresh.xml\n';
+    }
+    if(op==='tap-evidence')taps.push(args[3]);
+    if(op==='current-video-link')stdout='return_mode=results\ncontent_type=video\nvideo_id='+vid+'\nshort_url=https://v.douyin.com/freshLink/\n';
+   }
+   return {code:0,stdout,stderr:''};
+  };
+  const rpc=async body=>{
+   if(body.kind==='keywords')return {result:['AI']};
+   if(body.request.op==='discover'){stored.push(body.request.video.videoId);return {result:{status:'pending',inserted:true}};}
+   assert.equal(body.request.op,'inspect_videos');return {result:missingRow?[]:stored.map(video_id=>({video_id,line_key:'jinuo'}))};
+  };
+  try {
+   const h=createHandlers({root:dir,env,rpc,execute});await h.preflight();const out=await h.collect_videos();
+   assert.equal(out.stop_reason,'limit_reached');assert.equal(out.counts.persisted,1);assert.equal(out.known_gaps[0].kind,'candidate_disappeared');
+   assert.deepEqual(taps,['300']);assert.equal(out.status,missingRow?'partial':undefined);
+   assert.equal(out.manifest_verified,missingRow?0:1);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+ }
+});

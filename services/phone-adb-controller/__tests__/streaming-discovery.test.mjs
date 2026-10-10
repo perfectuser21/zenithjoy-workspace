@@ -89,8 +89,9 @@ function changedGridRig({transient=false,limit=1}={}) {
    reads++;
    const out=(await r.options.phone(cmd,...args)).replace('100\t200\t00:20\t同标题视频内容','100\t200\t00:20\t独立候选标题');
    if(reads>=2&&(!transient||reads===2))return out.split('\n').filter(l=>!l.includes('独立候选标题')).join('\n');
-   return out;
+   return transient&&reads>=3?out.replace('100\t200\t00:20\t独立候选标题','400\t250\t00:20\t独立候选标题'):out;
   }
+  if(transient&&cmd==='tap-evidence'){r.events.push([cmd,...args]);return '';}
   return r.options.phone(cmd,...args);
  }});return {...r,h};
 }
@@ -98,6 +99,8 @@ test('原候选短暂消失先有界重读，恢复后用新树坐标点击',asy
  const r=changedGridRig({transient:true});try {
   const out=await r.h.collect_videos();
   assert.equal(out.stop_reason,'limit_reached');assert.equal(out.videos[0].videoId,id(1));
+  assert.ok(r.events.some(e=>e[0]==='tap-evidence'&&e[1]==='400'&&e[2]==='250'));
+  assert.ok(!r.events.some(e=>e[0]==='tap-evidence'&&e[1]==='100'));
   assert.ok(r.events.some(e=>e[0]==='/bin/sleep'&&e[1]==='1'));
  }finally{r.cleanup();}
 });
