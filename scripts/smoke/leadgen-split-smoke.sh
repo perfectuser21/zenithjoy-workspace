@@ -23,6 +23,8 @@ node --test scripts/product-map/__tests__/leadgen-split-contracts.test.js \
  services/phone-adb-controller/__tests__/leadgen-rpc.test.mjs \
  services/phone-adb-controller/__tests__/runtime-definition.test.mjs \
  services/phone-adb-controller/__tests__/runtime-receipts.test.mjs \
+ services/phone-adb-controller/__tests__/workflow-result.test.mjs \
+ services/phone-adb-controller/__tests__/workflow-result-span.test.mjs \
  services/phone-adb-controller/__tests__/clipboard-nonce.test.mjs \
  services/phone-adb-controller/__tests__/copied-share-link.test.mjs \
  services/phone-adb-controller/__tests__/peer-share-link.test.mjs \

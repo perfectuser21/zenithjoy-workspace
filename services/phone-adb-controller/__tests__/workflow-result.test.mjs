@@ -17,12 +17,12 @@ function env(home) {
     // 6b133a81 起默认 8 个 stage 全读回(含 init 的 preflight):测试默认关掉,需要读回的用例经 PROBE_ENV 显式打开,绝不连真 mmv
     WFR_PROBE_STAGES: "" };
 }
-// 假 curl：PATH 前置，把每次 argv 记成一行 JSON；默认回 body+"\n200"（对应 -w '\n%{http_code}'），fail=true 时模拟连不上（exit 7 + raw 错误）
+// 假 curl：PATH 前置，记录argv及真实stdin正文为一行JSON；默认回 body+"\n200"（对应 -w '\n%{http_code}'），fail=true 时模拟连不上（exit 7 + raw 错误）
 function fakeCurl(dir, { fail = false } = {}) {
   const bin = join(dir, "bin"); mkdirSync(bin, { recursive: true });
   const calls = join(dir, "curl.calls");
   writeFileSync(join(bin, "curl"), `#!/usr/bin/env bash
-python3 -c 'import json,sys;print(json.dumps(sys.argv[1:]))' "$@" >> "${calls}"
+python3 -c 'import json,sys;a=sys.argv[1:];a.extend(["--test-stdin-json",sys.stdin.read()] if "--data-binary" in a else []);print(json.dumps(a))' "$@" >> "${calls}"
 ${fail ? 'echo "curl: (7) Failed to connect to brain.test port 5221: Connection refused" >&2; exit 7' : "printf '{\"success\":true}\\n200'"}
 `);
   chmodSync(join(bin, "curl"), 0o755);
@@ -30,7 +30,7 @@ ${fail ? 'echo "curl: (7) Failed to connect to brain.test port 5221: Connection 
 }
 // 只看回执（execution-callback）：④b 起同一假 curl 还会记 span 上报与活动表 GET，那些由 workflow-result-span.test.mjs 断言
 function curlCalls(calls) { return existsSync(calls) ? readFileSync(calls, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)).filter((a) => a.some((x) => String(x).includes("/api/brain/execution-callback"))) : []; }
-function argAfter(args, flag) { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : undefined; }
+function argAfter(args, flag) { const i = args.indexOf(flag === "-d" && !args.includes("-d") ? "--test-stdin-json" : flag); return i >= 0 ? args[i + 1] : undefined; }
 const BRAIN = { BRAIN_URL: "http://brain.test:5221", BRAIN_INTERNAL_TOKEN: "tok-brain", WFR_BRAIN_TASK_ID: "11111111-1111-4111-8111-111111111111" };
 function brainEnv(dir, opts) { const c = fakeCurl(dir, opts); return { env: { ...BRAIN, PATH: c.PATH }, calls: c.calls }; }
 function wfr(home, extra, ...args) {
