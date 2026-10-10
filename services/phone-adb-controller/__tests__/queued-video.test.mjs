@@ -16,8 +16,9 @@ const active=()=>fs.readFileSync(p.join(d,'active'),'utf8');
 fs.appendFileSync(p.join(d,'calls'),JSON.stringify({cmd,args})+'\\n');
 switch(cmd){
 case 'lock-refresh': console.log('lock=refreshed owner=multi-video-run');break;
-case 'open-video':fs.writeFileSync(p.join(d,'active'),args[0]);break;
-case 'current-video-link':console.log('content_type=video\\nvideo_id='+active());break;
+case 'open-video':fs.writeFileSync(p.join(d,'active'),args[0]);fs.writeFileSync(p.join(d,args[1]+'.xml'),args[0]);break;
+case 'current-video-link':fs.writeFileSync(p.join(d,args[0]+'.xml'),active());console.log('content_type=video\\nvideo_id='+active());break;
+case 'open-comments':console.log('reason=no_comments_on_this_video');break;
 case 'record-start':try{fs.writeFileSync(p.join(d,args[0]+'.mkv'),active(),{flag:'wx'});}catch{console.error('recording artifact already exists');process.exit(1);}break;
 case 'record-stop':console.log('record_stopped duration_seconds=25.1 mean_volume_db=-35 audio_streams=1');break;
 case 'record-extract-audio':{
@@ -35,8 +36,8 @@ fs.appendFileSync(p.join(process.env.FIXTURE,'judgments'),JSON.stringify({video_
 console.log('QUAL_RESULT {"verdict":"matched"}');
 `,{mode:0o755});
   const videos=[vid,'7646309328911907196'];
-  for(const id of videos){
-   const r=spawnSync('zsh',[script,'qualification','jinoshengyuan-work',id,`https://www.douyin.com/video/${id}`,Buffer.from('测试视频').toString('base64'),Buffer.from('人工智能训练师').toString('base64'),'multi-video-run','金诺盛源'],{env:{...process.env,PATH:d+path.delimiter+process.env.PATH,FIXTURE:d,DOUYIN_PHONE_ADB:ctl,QUEUED_VIDEO_QUALIFY_CMD:qualify,HARVEST_KEYWORD_TESTING:'1',WFR_RUN_DIR:path.join(d,'run')},encoding:'utf8',timeout:7000});
+  for(const id of videos)for(const mode of ['identity','qualification','collection']){
+   const r=spawnSync('zsh',[script,mode,'jinoshengyuan-work',id,`https://www.douyin.com/video/${id}`,Buffer.from('测试视频').toString('base64'),Buffer.from('人工智能训练师').toString('base64'),'multi-video-run','金诺盛源'],{env:{...process.env,PATH:d+path.delimiter+process.env.PATH,FIXTURE:d,DOUYIN_PHONE_ADB:ctl,QUEUED_VIDEO_QUALIFY_CMD:qualify,HARVEST_KEYWORD_TESTING:'1',WFR_RUN_DIR:path.join(d,'run')},encoding:'utf8',timeout:7000});
    assert.equal(r.status,0,r.stderr);
   }
   const judgments=readFileSync(path.join(d,'judgments'),'utf8').trim().split('\n').map(JSON.parse);
@@ -45,7 +46,11 @@ console.log('QUAL_RESULT {"verdict":"matched"}');
   const starts=calls.filter(c=>c.cmd==='record-start').map(c=>c.args[0]);
   assert.equal(new Set(starts).size,2,'recording artifacts cannot share an ID');
   for(const cmd of ['record-stop','record-extract-audio'])assert.deepEqual(calls.filter(c=>c.cmd===cmd).map(c=>c.args[0]),starts);
-  assert.deepEqual(calls.filter(c=>c.cmd==='lock-refresh').map(c=>c.args[0]),['multi-video-run','multi-video-run'],'video-specific evidence must preserve run lock ownership');
+  assert.deepEqual(calls.filter(c=>c.cmd==='lock-refresh').map(c=>c.args[0]),Array(6).fill('multi-video-run'),'video-specific evidence must preserve run lock ownership');
+  for(const id of videos)for(const mode of ['identity','qualification','collection'])for(const step of ['open','identity']){
+   assert.equal(readFileSync(path.join(d,`multi-video-run-v${id}-${mode}-${step}.xml`),'utf8'),id,'VID/MODE证据必须独立并保留原字节');
+  }
+  for(const id of videos){const proof=JSON.parse(readFileSync(path.join(d,'run',`multi-video-run-identity-${id}.json`)));assert.equal(proof.evidence_id,`multi-video-run-v${id}-collection-identity`);assert.equal(proof.observed_video_id,id);assert.equal(proof.verified,true);}
   for(const eid of starts)assert.ok(existsSync(path.join(d,eid+'.mkv')),'prior evidence stays intact');
  } finally {rmSync(d,{recursive:true,force:true});}
 });
@@ -174,4 +179,12 @@ test('standalone comment relocation retains its default identity strategy',()=>{
  const r=run('collection',{RELOCATE:'1'});assert.equal(r.status,0,r.stderr);
  const back=r.strategies.findIndex(row=>row[0]==='back');assert.ok(back>=0);
  assert.deepEqual(r.strategies[back+1].slice(0,2),['current-video-link','standard']);
+});
+
+test('所有评论恢复证据按VID和MODE隔离，锁与最新proof仍按原run归属',()=>{
+ const r=run('collection',{RELOCATE:'1'});assert.equal(r.status,0,r.stderr);
+ assert.equal(r.identity.evidence_id,`cmd100822-new-v${vid}-collection-after-card1`);
+ const commands=['open-video','current-video-link','open-comments','collect-comments'];
+ for(const row of r.strategies)if(commands.includes(row[0]))assert.ok(row.slice(2).some(s=>s.startsWith(`cmd100822-new-v${vid}-collection-`)),row.join('|'));
+ const locks=r.strategies.filter(row=>row[0]==='lock-refresh');assert.ok(locks.every(row=>row[2]==='cmd100822-new'));
 });
