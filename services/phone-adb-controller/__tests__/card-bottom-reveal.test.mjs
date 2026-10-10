@@ -12,10 +12,10 @@ for(const [n,screen] of [[9,2],[12,3],[16,4]])test(`真实candidate${n}仅底部
  const title=n===9?'&#129323; 偷偷扒了小胖的AI数字人Skill｜附教程 「小胖」的 Vlog 数字人博主提示词工程Skill，完整拆解给你&#128071; #小云雀Seedance25  #小云雀Seedance25全能专业制作  #小云雀AI #AI演员的自我修养  #人工智能会取代人类吗':n===12?'不会用AI？4句指令让AI自己写提示词 #AI新星计划  #ai教程 #提示词 #ai技巧 #ai提示词':'如何让豆包自行撰写提示词？只需要一条指令！#豆包 #ai #ai工具 #提示词 #ai指令';
  const author=n===9?'AIGC自修室':n===12?'赛博紫紫AIGC':'会点AI的琪琪';assert.ok(xml.includes(title));assert.equal(hint(clipped,title,author).stdout.trim(),'clipped=1');assert.equal(hint(original,title,author).stdout.trim(),'clipped=0');
 });
-async function run({hinted=true,wrongAuthor=false,failScroll=false,wrongKeyword=false,duplicates=false,expire=false}={}){
+async function run({hinted=true,wrongAuthor=false,failScroll=false,wrongKeyword=false,duplicates=false,expire=false,durationChanged=false}={}){
  const dir=mkdtempSync(join(tmpdir(),'bottom-handler-')),events=[];let reads=0,revealed=false,deadline=Date.now()+60000;
- const row=(x,y,a='作者')=>[x,y,'00:20','完整候选视频标题',a].join('\t');
- const phone=async(cmd,...args)=>{events.push([cmd,...args]);if(cmd==='search-video-cards'){reads++;return (reads===1?row(100,200)+(duplicates?'\n'+row(300,200):''):revealed?row(450,1700,wrongAuthor?'错误作者':'作者'):'')+'\nvideo_tab=1\nevidence=/fresh/grid.xml\nend_of_results=1';}if(cmd==='search-kw-matches')return 'kw_matches='+(wrongKeyword&&reads>1?'0':'1');if(cmd==='card-bottom-hint-from-xml')return 'clipped='+(hinted?'1':'0');if(cmd==='search-grid-scroll'){assert.equal(args[1],'reveal-up');if(failScroll)throw Error('scroll failed');revealed=true;if(expire)deadline=Date.now()-1;return 'scrolled=reveal-up';}if(cmd==='current-video-link')return 'content_type=video\nvideo_id=7685662999797258401\nshort_url=https://v.douyin.com/Actual/\nreturn_mode=results';return '';};
+ const row=(x,y,a='作者')=>[x,y,durationChanged?(reads===1?'':'00:47'):'00:20','完整候选视频标题',a].join('\t');
+ const phone=async(cmd,...args)=>{events.push([cmd,...args]);if(cmd==='search-video-cards'){reads++;return (reads===1?row(100,200)+(duplicates?'\n'+row(300,200):''):(revealed||durationChanged)?row(450,1700,wrongAuthor?'错误作者':'作者'):'')+'\nvideo_tab=1\nevidence=/fresh/grid.xml\nend_of_results=1';}if(cmd==='search-kw-matches')return 'kw_matches='+(wrongKeyword&&reads>1?'0':'1');if(cmd==='card-bottom-hint-from-xml')return 'clipped='+(hinted?'1':'0');if(cmd==='search-grid-scroll'){assert.equal(args[1],'reveal-up');if(failScroll)throw Error('scroll failed');revealed=true;if(expire)deadline=Date.now()-1;return 'scrolled=reveal-up';}if(cmd==='current-video-link')return 'content_type=video\nvideo_id=7685662999797258401\nshort_url=https://v.douyin.com/Actual/\nreturn_mode=results';return '';};
  try{const h=createDiscoveryHandlers({phone,execute:async()=>({code:0}),queue:async()=>({status:'pending',inserted:true}),profile:'p',run:'bottom-test',root:base,sources:['AI'],limit:1,budgetDeadline:()=>deadline,env:{WFR_RUN_DIR:dir}});return {out:await h.collect_videos(),events};}finally{rmSync(dir,{recursive:true,force:true});}
 }
 const taps=r=>r.events.filter(e=>e[0]==='tap-evidence'),scrolls=r=>r.events.filter(e=>e[0]==='search-grid-scroll');
@@ -43,4 +43,10 @@ test('短滑真实case只允许受限20%距离，不修改整屏up/down',()=>{
   assert.equal(r.status,0,r.stderr);assert.ok(r.stdout.includes(mode==='down'?`swipe 600 399 600 ${end} ${duration}`:`swipe 600 2264 600 ${end} ${duration}`),r.stdout);
  }
  }finally{rmSync(d,{recursive:true,force:true});}
+});
+
+test('实际candidate22完整卡时长新露并非屏底裁切，不放宽空时长身份/不短滑/不点旧坐标',async()=>{
+ const title='用AI做商业广告大片，原来这么简单 #ai制作视频 #创作者中心 #创作灵感 #ai视频 #ai广告';
+ const actual=hint(join(fixtures,'candidate22-loc-retry2.xml'),title,'Neo小海');assert.equal(actual.status,0,actual.stderr);assert.equal(actual.stdout.trim(),'clipped=0');
+ const r=await run({durationChanged:true,hinted:false});assert.equal(scrolls(r).length,0);assert.equal(taps(r).length,0);assert.equal(r.out.status,'partial');assert.equal(r.out.known_gaps[0].kind,'candidate_disappeared');
 });
