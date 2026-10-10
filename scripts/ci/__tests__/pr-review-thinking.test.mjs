@@ -2,12 +2,12 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
-import YAML from 'yaml';
 
 const path=new URL('../../../.github/workflows/pr-review.yml',import.meta.url);
 test('真实CI请求关闭DeepSeek推理并给最终审查留足输出，拒绝仅推理内容',()=>{
- const workflow=YAML.parse(readFileSync(path,'utf8'));
- const step=workflow.jobs['deepseek-review'].steps.find(s=>s.id==='ai-review');
+ const source=readFileSync(path,'utf8');
+ const step={run:source.match(/id: ai-review[\s\S]*?run: \|([\s\S]*?)(?=\n      - name:|$)/)?.[1]};
+ assert.ok(step.run,'实际审查步骤存在，测试只用Node内置模块');
  const fragment=step.run.match(/jq -n([\s\S]*?)\n\s*\)"/);
  assert.ok(fragment,'验证CI真正发送的jq请求');
  const built=spawnSync('bash',['-c','jq -n'+fragment[1]],{encoding:'utf8',env:{...process.env,SYSTEM_PROMPT:'审查代码',USER_PROMPT:'diff --git a/a.py b/a.py'}});
