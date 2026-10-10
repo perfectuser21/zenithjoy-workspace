@@ -10,6 +10,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 import urllib.parse
 import urllib.request
 import zoneinfo
@@ -125,6 +126,29 @@ def ssh(host, command, *, input=None, timeout=60):
     return result.stdout
 
 
+def sync_mirror(max_attempts=3):
+    # 既有镜子遇到锁占用会零退出且无输出；必须等真实同步回执。
+    for attempt in range(max_attempts):
+        mirror = subprocess.run(['/usr/bin/python3', str(STATE.parent / 'phone-task-view/run.py')],
+                                capture_output=True, text=True, timeout=450)
+        if mirror.returncode:
+            raise RuntimeError('台账已写回，设备页面镜子更新失败')
+        if not mirror.stdout.strip():
+            if attempt + 1 < max_attempts:
+                time.sleep(5)
+                continue
+            raise RuntimeError('台账已写回，镜子仍占用，尚未确认设备页面同步')
+        try:
+            receipt = json.loads(mirror.stdout)
+        except ValueError as error:
+            raise RuntimeError('设备页面镜子回执不是有效JSON') from error
+        if (not receipt.get('observed_at') or not isinstance(receipt.get('devices'), dict)
+                or receipt.get('errors') != [] or receipt['devices'].get('errors') != []):
+            raise RuntimeError('设备页面镜子缺少成功同步回执')
+        return receipt
+    raise RuntimeError('没有执行设备页面镜子同步')
+
+
 def phone_run(serial, task_id, deployment):
     phones = api('phone-registry')['phones']
     selected = [p for p in phones if p['serial'] == serial and p.get('enabled')]
@@ -158,14 +182,12 @@ def phone_run(serial, task_id, deployment):
     if not reports or len(reports[-1]['published']) != 1:
         raise RuntimeError('账号台账写回缺少确认回执')
     publish_path = save(task_id + '.publish.json', reports[-1])
-    mirror = subprocess.run(['/usr/bin/python3', str(STATE.parent / 'phone-task-view/run.py')], capture_output=True, text=True, timeout=450)
-    if mirror.returncode:
-        raise RuntimeError('台账已写回，设备页面镜子更新失败')
+    mirror_path = save(task_id + '.mirror.json', sync_mirror())
     status, code = outcome(observation['results'])
     receipt = {'status': status, 'task_id': task_id, 'phone': phone['nickname'], 'serial': serial, 'checked_at': now(),
                'workflow_id': deployment['single_workflow_id'], 'source_revision': deployment['source_revision'],
                'states': {p: observation['results'][p]['state'] for p in ALL_PLATFORMS},
-               'evidence': [observation_path, publish_path, phone['host'] + ':' + str(pathlib.PurePosixPath('~/.local/share/phone-account-patrol/evidence') / runid)],
+               'evidence': [observation_path, publish_path, mirror_path, phone['host'] + ':' + str(pathlib.PurePosixPath('~/.local/share/phone-account-patrol/evidence') / runid)],
                'actor': 'phone-account-patrol', 'maintenance_owner': '主理人'}
     save('phone-' + serial + '.latest.json', receipt)
     print(json.dumps(receipt, ensure_ascii=False))
