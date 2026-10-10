@@ -54,11 +54,12 @@ function run(mode,extra={}) {
  const ctl=path.join(d,'ctl'); const log=path.join(d,'calls');
  writeFileSync(ctl,`#!/bin/zsh
 print -r -- "$3" >> "$CALLS"
+print -r -- "$3|\${DOUYIN_DETAIL_PLAYBACK:-standard}|$4|$5" >> "$STRATEGIES"
 case "$3" in
  lock-refresh) [[ -z "$LOCK_FAIL" ]] || exit 3;print 'lock=refreshed owner=cmd100822-new';;
- open-video) rm -f "$CARD_STATE"; print 'video_id=${vid}';;
- current-video-link) if [[ -f "$CARD_STATE" ]];then print -u2 'NOT_ON_VIDEO_DETAIL';exit 1;fi;print "content_type=\${CONTENT_TYPE:-video}";if [[ -n "$DRIFT_AFTER_CARD" && "$(grep -c '^current-video-link$' "$CALLS")" -gt 1 ]]; then print 'video_id=7646309328911907196';else print "video_id=\${OBSERVED_ID:-${vid}}";fi;;
- open-comments) if [[ -n "$NO_COMMENTS" ]]; then print 'reason=no_comments_on_this_video'; else print 'comments_opened=1'; print 'comment_count=1'; fi;;
+ open-video) if [[ -n "$AFTER_CARD_OPEN_FAIL" && "$5" == *after-card* ]];then exit 4;fi;rm -f "$CARD_STATE"; print 'video_id=${vid}';;
+ current-video-link) if [[ "$4" == *after-card* ]];then [[ -z "$AFTER_CARD_LINK_FAIL" ]] || exit 1;[[ -z "$AFTER_CARD_NOTE" ]] || export CONTENT_TYPE=note;fi;if [[ -f "$CARD_STATE" ]];then print -u2 'NOT_ON_VIDEO_DETAIL';exit 1;fi;print "content_type=\${CONTENT_TYPE:-video}";if [[ -n "$DRIFT_AFTER_CARD" && "$(grep -c '^current-video-link$' "$CALLS")" -gt 1 ]]; then print 'video_id=7646309328911907196';else print "video_id=\${OBSERVED_ID:-${vid}}";fi;;
+ open-comments) if [[ "$4" == *after-card* && -n "$AFTER_CARD_COMMENTS_FAIL" ]];then exit 6;fi;if [[ -n "$NO_COMMENTS" ]]; then print 'reason=no_comments_on_this_video'; else print 'comments_opened=1'; print 'comment_count=1'; fi;;
  collect-comments) n=100;if [[ -n "$RELOCATE" && "$(grep -c '^collect-comments$' "$CALLS")" -gt 1 ]];then n=300;fi;print "甲\\t咨询价格\\t今天\\t北京\\treader\\ttap=$n 200\\tb64=55Sy"; print 'exhausted=1';;
  commenter-identity) print "$4 $5" >> "$CALLS_COORD";[[ -z "$IDENTITY_FAIL" ]] || exit 1;if [[ -n "$RELOCATE" && "$(grep -c '^commenter-identity$' "$CALLS")" -eq 1 ]];then exit 1;fi;print 'nickname=甲';print 'douyin_id=person123';print 'account_type=personal';;
  commenter-card-link) [[ -z "$CARD_RETURNS_OFF_DETAIL" ]] || touch "$CARD_STATE";print 'profile_url=https://www.douyin.com/user/a';;
@@ -75,12 +76,13 @@ print 'QUAL_RESULT {"verdict":"pending","kind":"api_error"}'
  writeFileSync(own,JSON.stringify({nicknames:extra.OWN_NICK?['甲']:[],ids:[]}));
  const coords=path.join(d,'coords');
  const evidence=path.join(d,'run');
- const r=spawnSync('zsh',[script,mode,'jinoshengyuan-work',vid,`https://www.douyin.com/video/${vid}`,Buffer.from('测试视频').toString('base64'),Buffer.from('人工智能训练师').toString('base64'),'cmd100822-new','金诺盛源'],{env:{...process.env,DOUYIN_PHONE_ADB:ctl,CALLS:log,CALLS_COORD:coords,CARD_STATE:path.join(d,'off-detail'),WFR_RUN_DIR:evidence,HARVEST_KEYWORD_TESTING:'1',QUEUED_VIDEO_QUALIFY_CMD:qualify,OWN_ACCOUNTS_CONF:own,...extra},encoding:'utf8',timeout:7000});
+ const r=spawnSync('zsh',[script,mode,'jinoshengyuan-work',vid,`https://www.douyin.com/video/${vid}`,Buffer.from('测试视频').toString('base64'),Buffer.from('人工智能训练师').toString('base64'),'cmd100822-new','金诺盛源'],{env:{...process.env,DOUYIN_PHONE_ADB:ctl,CALLS:log,STRATEGIES:path.join(d,'strategies'),CALLS_COORD:coords,CARD_STATE:path.join(d,'off-detail'),WFR_RUN_DIR:evidence,HARVEST_KEYWORD_TESTING:'1',QUEUED_VIDEO_QUALIFY_CMD:qualify,OWN_ACCOUNTS_CONF:own,...extra},encoding:'utf8',timeout:7000});
  const calls=existsSync(log)?readFileSync(log,'utf8').trim().split('\n'):[];
  const coordinates=existsSync(coords)?readFileSync(coords,'utf8').trim().split('\n'):[];
  const receipt=path.join(evidence,`cmd100822-new-identity-${vid}.json`);
  const identity=existsSync(receipt)?JSON.parse(readFileSync(receipt,'utf8')):null;
- rmSync(d,{recursive:true,force:true}); return {...r,calls,coordinates,identity};
+ const strategies=existsSync(path.join(d,'strategies'))?readFileSync(path.join(d,'strategies'),'utf8').trim().split('\n').map(line=>line.split('|')):[];
+ rmSync(d,{recursive:true,force:true}); return {...r,calls,coordinates,identity,strategies};
 }
 test('queued collection deep-opens and independently verifies identity before comments',()=>{
  const r=run('collection');assert.equal(r.status,0,r.stderr);
@@ -151,4 +153,25 @@ test('remote model stall has an absolute execution deadline',()=>{
  const t=Date.now();const r=run('qualification',{MODEL_HANG:'1',QUEUED_VIDEO_REMOTE_SECONDS:'1',WF_BOUNDED_POLL:'0.1'});
  assert.equal(r.status,5,r.stderr);assert.ok(Date.now()-t<5000);
  assert.match(r.stdout,/\tpending\tjudged/);
+});
+
+test('after-card paired identity stays paused locally and restores comments before the only lead',()=>{
+ const r=run('collection',{CARD_RETURNS_OFF_DETAIL:'1'});assert.equal(r.status,0,r.stderr);
+ const pair=r.strategies.filter(row=>row.some(value=>value.includes('after-card')));
+ assert.deepEqual(pair.map(row=>row.slice(0,2)),[['open-video','continuous_identity'],['current-video-link','continuous_identity'],['open-comments','standard']]);
+ assert.equal(r.stdout.split('\n').filter(line=>line.startsWith('LEAD\t')).length,1);
+ for(const row of r.strategies)if(!['open-video','current-video-link'].includes(row[0]))assert.equal(row[1],'standard',row.join('|'));
+});
+test('after-card failures never emit leads or continue through an unverified page',()=>{
+ for(const [flag,exit] of [['AFTER_CARD_OPEN_FAIL',4],['AFTER_CARD_LINK_FAIL',4],['AFTER_CARD_NOTE',4],['AFTER_CARD_COMMENTS_FAIL',6]]){
+  const r=run('collection',{[flag]:'1'});assert.equal(r.status,exit,flag+': '+r.stderr);
+  assert.ok(!r.stdout.includes('LEAD\t'),flag);assert.ok(!r.stdout.includes('COLLECTION\t'),flag);
+  const after=r.strategies.filter(row=>row.some(value=>value.includes('after-card')));
+  assert.deepEqual(after.map(row=>row[0]),flag==='AFTER_CARD_OPEN_FAIL'?['open-video']:flag==='AFTER_CARD_COMMENTS_FAIL'?['open-video','current-video-link','open-comments']:['open-video','current-video-link']);
+ }
+});
+test('standalone comment relocation retains its default identity strategy',()=>{
+ const r=run('collection',{RELOCATE:'1'});assert.equal(r.status,0,r.stderr);
+ const back=r.strategies.findIndex(row=>row[0]==='back');assert.ok(back>=0);
+ assert.deepEqual(r.strategies[back+1].slice(0,2),['current-video-link','standard']);
 });
