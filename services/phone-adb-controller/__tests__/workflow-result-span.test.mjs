@@ -36,7 +36,7 @@ function fakeCurl(dir, { fail = false } = {}) {
     { id: "d27e18c9-709f-4c44-899c-85d6fb83671b", journey_id: JOURNEY, activity_key: "preflight", backbone_version: "3.0", workflow_id: WF_ID, executor_kind: "code" },
   ]);
   writeFileSync(join(bin, "curl"), `#!/usr/bin/env bash
-python3 -c 'import json,sys;print(json.dumps(sys.argv[1:]))' "$@" >> "${calls}"
+python3 -c 'import json,sys; a=sys.argv[1:]; a += ["--test-stdin-json",sys.stdin.read()] if "--data-binary" in a and a[a.index("--data-binary")+1]=="@-" else []; print(json.dumps(a))' "$@" >> "${calls}"
 ${fail ? 'echo "curl: (7) Failed to connect to brain.test port 5221: Connection refused" >&2; exit 7' : ''}
 case "$*" in *journey_steps*) printf '%s' '${steps}';; *) printf '{"success":true}\\n200';; esac
 `);
@@ -46,7 +46,7 @@ case "$*" in *journey_steps*) printf '%s' '${steps}';; *) printf '{"success":tru
 const BRAIN = { BRAIN_URL: "http://brain.test:5221", BRAIN_INTERNAL_TOKEN: "tok-brain", WFR_BRAIN_TASK_ID: "11111111-1111-4111-8111-111111111111" };
 function calls(file) { return existsSync(file) ? readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []; }
 function spanCalls(file) { return calls(file).filter((a) => a.some((x) => String(x).endsWith("/api/brain/spans"))); }
-function bodyOf(args) { const i = args.indexOf("-d"); return JSON.parse(args[i + 1]); }
+function bodyOf(args) { const i = args.indexOf("-d") >= 0 ? args.indexOf("-d") : args.indexOf("--test-stdin-json"); return JSON.parse(args[i + 1]); }
 function wfr(home, extra, ...args) {
   const r = spawnSync("bash", [WFR, ...args], { encoding: "utf8", env: { ...baseEnv(home), ...extra } });
   const kv = Object.fromEntries(r.stdout.split("\n").filter((l) => /^WFR_[A-Z_]+=/.test(l)).map((l) => { const i = l.indexOf("="); return [l.slice(0, i), l.slice(i + 1)]; }));
