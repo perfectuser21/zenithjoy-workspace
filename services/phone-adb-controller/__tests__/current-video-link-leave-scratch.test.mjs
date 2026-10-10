@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { writeFileSync, mkdtempSync, readFileSync, mkdirSync, copyFileSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, readFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -55,7 +55,7 @@ const FEED_XML = `${XML_HEAD}</node></hierarchy>`;
  *  am start search/tabs?keyword=<词> → 压 results（兜底重搜）；keyevent 4 → 出栈一层
  *  scratchPopTo: 暂存路线退完落在哪（默认 detail；'feed' 模拟退飞了）
  */
-function makeFakePhone({ scratchPopTo = 'detail', playState = 'paused', interactiveCenter = false, copiedShareUrl = LINK, forbidHead = false, localHeadFails = false, peerUrl = null } = {}) {
+function makeFakePhone({ resultsKeyword = KW, scratchPopTo = 'detail', playState = 'paused', interactiveCenter = false, copiedShareUrl = LINK, forbidHead = false, localHeadFails = false, peerUrl = null } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'cvl-leave-'));
   mkdirSync(join(dir, 'fx'));
   writeFileSync(join(dir, 'fx', 'detail.xml'), detailXml('playing'));
@@ -65,7 +65,8 @@ function makeFakePhone({ scratchPopTo = 'detail', playState = 'paused', interact
   writeFileSync(join(dir, 'fx', 'panel.xml'), PANEL_XML);
   writeFileSync(join(dir, 'fx', 'scratch.xml'), SCRATCH_XML.replace(LINK,copiedShareUrl.replaceAll('&','&amp;')));
   writeFileSync(join(dir, 'fx', 'feed.xml'), FEED_XML);
-  copyFileSync(join(FIXTURES, 'real-search-results-grid.xml'), join(dir, 'fx', 'results.xml'));
+  writeFileSync(join(dir, 'fx', 'results.xml'),readFileSync(join(FIXTURES, 'real-search-results-grid.xml'),'utf8').replace('text="人工智能" resource-id=', 'text="'+resultsKeyword+'" resource-id='));
+  writeFileSync(join(dir,'dump_pages'),'');
   writeFileSync(join(dir, 'fx', 'shot.png'), 'png');
   const stack = join(dir, 'stack');
   writeFileSync(stack, 'results\ndetail\n');
@@ -111,6 +112,7 @@ case "$*" in
       fi ;;
   *"uiautomator dump"*)
       t=$(top)
+      echo "$t" >> "$D/dump_pages"
       case "$t" in
         results) f=results.xml ;;
         detail|detail2) if [ "$(cat "$D/panel")" = "1" ]; then f=panel.xml; else f=detail.xml; fi ;;
@@ -150,6 +152,7 @@ exit 0
   return {
     run,
     stack: () => readFileSync(stack, 'utf8').trim().split('\n'),
+    dumpPages: () => readFileSync(join(dir,'dump_pages'),'utf8').trim().split('\n'),
     deeplinks: () => Number(readFileSync(join(dir, 'deeplinks'), 'utf8').trim()),
     taps: () => Number(readFileSync(join(dir, 'taps'), 'utf8').trim()),
     centerTaps: () => Number(readFileSync(join(dir, 'center_taps'), 'utf8').trim()),
@@ -235,4 +238,25 @@ test('暂存路线退飞了（底下不是详情页）→ 退回 deep link 重�
 
 test('101取链可直接回本词真实搜索结果，无须重开详情，原默认归位行为保留',()=>{
  const ph=makeFakePhone();const r=ph.run(['current-video-link','cvl-results',KW]);assert.equal(r.code,0,r.err);assert.match(r.out,/video_id=7000000000000000001/);assert.match(r.out,/return_mode=results/);assert.equal(ph.stack().at(-1),'results');assert.equal(ph.deeplinks(),0);
+});
+
+
+test('keyword取链先退出暂存路线：真实入口只在粘贴读回时dump暂存两次，归位仍核验原词和视频tab',t=>{
+ const ph=makeFakePhone();const r=ph.run(['current-video-link','cvl-fast-keyword',KW]);
+ assert.equal(r.code,0,r.err);assert.match(r.out,/video_id=7000000000000000001/);assert.match(r.out,/return_mode=results/);
+ assert.deepEqual(ph.stack(),['results']);assert.equal(ph.deeplinks(),0);
+ const dumps=ph.dumpPages();assert.equal(dumps.filter(p=>p.startsWith('scratch_')).length,2,'归位不应反复dump暂存键盘/输入/结果页');
+ assert.equal(dumps.filter(p=>p==='results').length,2,'仍需back_to_results和returned-grid两次真实结果核验');
+ t.diagnostic(JSON.stringify({normal_keyword_dump_pages:dumps,scratch_dumps:dumps.filter(p=>p.startsWith('scratch_')).length,total_dumps:dumps.length}));
+});
+
+test('keyword退出暂存核验失败：原有界归位仍核验真关键词，错误结果页不能伪成功',t=>{
+ const ph=makeFakePhone({scratchPopTo:'feed'});const r=ph.run(['current-video-link','cvl-fast-fallback',KW]);
+ assert.equal(r.code,0,r.err);assert.match(r.err,/leave-scratch: landed off the search route but not on the video detail page/);
+ assert.match(r.out,/return_mode=results/);assert.deepEqual(ph.stack(),['results']);assert.equal(ph.deeplinks(),0);
+ assert.ok(ph.dumpPages().includes('feed'),'必须真实读到错误详情并拒绝快捷归位');
+ assert.equal(ph.dumpPages().filter(p=>p==='results').length,2,'失败兜底仍读回原词及returned-grid');
+ const wrong=makeFakePhone({scratchPopTo:'feed',resultsKeyword:'其他词'});const bad=wrong.run(['current-video-link','cvl-fast-wrong-keyword',KW]);
+ assert.notEqual(bad.code,0);assert.doesNotMatch(bad.out,/video_id=|return_mode=results/);assert.ok(wrong.dumpPages().includes('results'));
+ t.diagnostic(JSON.stringify({fallback_dump_pages:ph.dumpPages(),wrong_keyword_exit:bad.code,wrong_keyword_success_output:false}));
 });

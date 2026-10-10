@@ -790,7 +790,10 @@ _current_video_link_once() {
   reopen_url="snssdk1128://aweme/detail/$content_id"
 
   if [[ -n "$return_keyword" ]]; then
-    # 101下一步需要原结果列表；复制新鲜度及真实ID验证仍完整执行。
+    # 先退出已核验的暂存路线，避免逐层反复dump暂存页；失败仍走原有界归位。
+    # 原词、视频tab与returned-grid最终核验保持不变，不能凭退出成功推断已归位。
+    _leave_scratch_route "${evidence_id}-leave" >/dev/null \
+      || print -u2 -- "warning: scratch exit not verified; using bounded results restoration"
     return_result="$(back_to_results 10 "$return_keyword" "${evidence_id}-results")" || die "LINK_RESULTS_RESTORE_FAILED"
     return_xml="$(ui_evidence "${evidence_id}-returned-grid")" || die "LINK_RESULTS_TREE_UNAVAILABLE"
     _search_kw_matches "$return_keyword" "$return_xml" || die "LINK_RESULTS_KEYWORD_MISMATCH"
