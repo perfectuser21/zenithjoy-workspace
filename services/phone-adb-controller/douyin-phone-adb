@@ -3428,7 +3428,7 @@ case "$command" in
       fi
       svc_out="$(video_cards_from_xml "$svc_xml")"
       [[ -n "$svc_out" ]] && break
-      if /usr/bin/grep -qE 'text="(搜索结果为空|没有更多了|暂无更多|已经到底了|到底了)[！!。…~ ]*"' "$svc_xml"; then
+      if /usr/bin/grep -qE 'text="(搜索结果为空|暂时没有更多了|没有更多了|暂无更多(，查看所有内容)?|已经到底了|到底了)[！!。…~ ]*"' "$svc_xml"; then
         print -- "cards=0"
         print -- "empty_results=true"
         if /usr/bin/grep -qE '<node[^>]*text="视频"[^>]*selected="true"' "$svc_xml"; then print -- "video_tab=1"; else print -- "video_tab=0"; fi
@@ -3445,7 +3445,7 @@ case "$command" in
     print -- "evidence=$svc_xml"
     if /usr/bin/grep -qE '<node[^>]*text="视频"[^>]*selected="true"' "$svc_xml"; then print -- "video_tab=1"; else print -- "video_tab=0"; fi
     if /usr/bin/grep -qE 'text="(加载中[.。…~ ]*|正在加载[.。…~ ]*|加载失败|网络异常)"' "$svc_xml"; then print -- "loading=1"; else print -- "loading=0"; fi
-    if /usr/bin/grep -qE 'text="(没有更多了|暂无更多|已经到底了|到底了)[！!。…~ ]*"' "$svc_xml"; then print -- "end_of_results=1"; else print -- "end_of_results=0"; fi
+    if /usr/bin/grep -qE 'text="(暂时没有更多了|没有更多了|暂无更多(，查看所有内容)?|已经到底了|到底了)[！!。…~ ]*"' "$svc_xml"; then print -- "end_of_results=1"; else print -- "end_of_results=0"; fi
     ;;
   open-user-profile)
     # 对标发现 step1：deeplink 打开对标主页并回读校验（0929 对标链接获客·发现）。

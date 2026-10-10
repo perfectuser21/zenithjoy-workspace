@@ -137,8 +137,8 @@ test('需要140秒的取链能够完整入库，但不能越过活动剩余预�
   };
   try{
    const h=createHandlers({root:dir,env,rpc,execute});
-   await h.preflight();await h.source();h.state.budgetDeadline=Date.now()+remaining;
-   const result=await h.write_videos();
+   await h.preflight();h.state.budgetDeadline=Date.now()+remaining;
+   const result=await h.collect_videos();
    assert.equal(result.persisted,remaining===480000?1:0);
    assert.deepEqual(written,remaining===480000?[videoId]:[]);
    assert.equal(timeouts.length,1);assert.ok(timeouts[0]<=remaining);

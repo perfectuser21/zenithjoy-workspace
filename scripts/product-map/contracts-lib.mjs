@@ -183,6 +183,7 @@ export function validateContracts(ctx) {
     const orders = acts.map((a) => a.order);
     if (new Set(orders).size !== orders.length) errors.push(`${capId}: 活动 order 重复`);
     for (const t of doc.trigger_inputs) if (!ctx.objectTypes[t]) errors.push(`${capId}: trigger_inputs ${t} 未登记在 ${OBJECT_TYPES}`);
+    for (const io of [...(doc.inputs||[]),...(doc.outputs||[])]) checkFields(ctx, `${capId} workflow`,io.type,io.fields,errors);
 
     const need = new Set([...(ctx.ledgerStages[doc.ledger] || []), ...(checksDoc.probes || []).map((p) => p.stage)]);
     for (const s of need) if (!keys.includes(s)) errors.push(`${capId}: 账本/探针 stage ${s} 无契约（无契约不得进工作流）`);

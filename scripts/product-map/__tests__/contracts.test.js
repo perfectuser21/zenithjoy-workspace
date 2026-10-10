@@ -27,6 +27,15 @@ const expectError = (ctx, re) => {
   assert.ok(errors.some((e) => re.test(e)), `应报 ${re}，实际：\n${errors.join('\n')}`);
 };
 
+test('101只有预检、搜索采集、收尾，预检收尾与102引用相同合同',()=>{
+ const ctx=fresh(),r=assemble(ctx,'douyin_video_discovery');assert.equal(r.ok,true,r.errors.join('\n'));
+ assert.deepEqual(r.activities.map(a=>a.key),['preflight','collect_videos','cleanup']);
+ for(const key of ['preflight','cleanup'])assert.equal(r.activities.find(a=>a.key===key).from,'douyin_video_processing');
+ const doc=ctx.contracts.douyin_video_discovery;
+ assert.ok(doc.inputs.some(i=>i.type==='SearchRequest'));
+ assert.ok(doc.outputs.some(i=>i.type==='Video'&&i.fields.includes('video_url')));
+});
+
 test('对标清单展开共享36步但保持关键词规范身份，独有4步归对标', () => {
   const ctx = fresh(), keyword = stepDodSpec(ctx, 'keyword_acquisition'), benchmark = stepDodSpec(ctx, 'benchmark_link_acquisition');
   assert.equal(keyword.steps.length, 44); assert.equal(benchmark.steps.length, 40);
