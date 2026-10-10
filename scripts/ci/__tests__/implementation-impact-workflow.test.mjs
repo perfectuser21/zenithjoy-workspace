@@ -28,13 +28,14 @@ test('PR 使用真实 base/head 而非合并伪提交，main 与手动运行输�
   assert.equal(job.with.mode, "${{ github.event_name == 'pull_request' && 'pr' || 'main' }}");
   assert.equal(config.on.pull_request_target, undefined);
 });
-test('只传约定三项 secrets，artifact 来源校验所需工作流路径和读权限保持稳定', () => {
+test('只传约定认证和独立只读来源 token，artifact 来源校验路径和权限保持稳定', () => {
   const config = workflow(), job = config.jobs.impact;
   assert.deepEqual(config.permissions, { contents: 'read', actions: 'read' });
   assert.deepEqual(job.secrets, {
     TS_AUTHKEY: '${{ secrets.TS_AUTHKEY }}',
     CECELIA_INTERNAL_TOKEN: '${{ secrets.CECELIA_INTERNAL_TOKEN }}',
     BRAIN_DEPLOY_URL: '${{ secrets.BRAIN_DEPLOY_URL }}',
+    CECELIA_ACTIONS_READ_TOKEN: '${{ secrets.CECELIA_ACTIONS_READ_TOKEN }}',
   });
   assert.equal(path.pathname.endsWith('/.github/workflows/implementation-impact.yml'), true);
   assert.equal(config.concurrency, undefined, '并发组仅由受信callee控制，防止嵌套调用自行取消');
