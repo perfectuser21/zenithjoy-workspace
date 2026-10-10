@@ -20,11 +20,12 @@ test('real queued CLI soft-budget completion persists verified rows and keeps th
   const ctl=join(d,'ctl');
   writeFileSync(ctl,`#!/usr/bin/env node
 const fs=require('fs'),p=require('path');const d=process.env.FAKE_COLLECTION_DIR,cmd=process.argv[4];
+fs.appendFileSync(p.join(d,'phone-calls'),cmd+'\\n');
 switch(cmd){
 case 'lock-refresh':console.log('lock=refreshed owner=budget-progress');break;
 case 'current-video-link':console.log('content_type=video\\nvideo_id=${vid}');break;
-case 'open-comments':{const f=p.join(d,'opens');let n=fs.existsSync(f)?+fs.readFileSync(f):0;fs.writeFileSync(f,String(++n));if(n===2)fs.writeFileSync(p.join(d,'clock'),'500');console.log('comments_opened=1\\ncomment_count=68');break;}
-case 'collect-comments':console.log('甲\\t如何报名\\t今天\\t北京\\treader\\ttap=100 200\\tb64=55Sy\\nexhausted=0');break;
+case 'open-comments':{const f=p.join(d,'opens');let n=fs.existsSync(f)?+fs.readFileSync(f):0;fs.writeFileSync(f,String(++n));if(n===2&&process.env.CONTINUE_BUDGET!=='1')fs.writeFileSync(p.join(d,'clock'),'479');console.log('comments_opened=1\\ncomment_count=68');break;}
+case 'collect-comments':{const f=p.join(d,'collects');let n=fs.existsSync(f)?+fs.readFileSync(f):0;fs.writeFileSync(f,String(++n));if(n===2&&process.env.CONTINUE_BUDGET!=='1')fs.writeFileSync(p.join(d,'clock'),'500');console.log('甲\\t如何报名\\t今天\\t北京\\treader\\ttap=100 200\\tb64=55Sy\\n甲\\t费用咨询\\t今天\\t北京\\treader\\ttap=300 200\\tb64=55Sy\\nexhausted=0');break;}
 case 'commenter-identity':console.log('nickname=甲\\ndouyin_id=person123\\naccount_type=personal');break;
 case 'commenter-card-link':console.log('profile_url=https://v.douyin.com/person123/');break;
 }
@@ -32,7 +33,7 @@ case 'commenter-card-link':console.log('profile_url=https://v.douyin.com/person1
   const calls=[],actual=[];
   const env={...process.env,HOME:d,WFR_RUN_DIR:d,WFR_TAG:'budget-progress',P:'work',LEADGEN_LINE:'jinuo',
    DOUYIN_PHONE_ADB:ctl,OWN_ACCOUNTS_CONF:join(d,'own.json'),FAKE_COLLECTION_DIR:d,PATH:d+':'+process.env.PATH,
-   HARVEST_KEYWORD_TESTING:'1',QUEUED_VIDEO_COLLECTION_SECONDS:'1'};
+   HARVEST_KEYWORD_TESTING:'1',QUEUED_VIDEO_COLLECTION_SECONDS:'480'};
   const h=createHandlers({root,env,rpc:async({request:q})=>{
    calls.push(q);
    if(q.op==='claim_videos')return {result:[{video_id:vid,video_url:'https://v.douyin.com/video123/',title:'测试培训',keyword:'人工智能训练师',judgment_status:'matched'}]};
@@ -49,8 +50,15 @@ case 'commenter-card-link':console.log('profile_url=https://v.douyin.com/person1
   assert.equal(calls.filter(c=>c.op==='collect').length,0,'partial cannot mark the video collected');
   const saved=calls.filter(c=>c.op==='collect_partial');assert.equal(saved.length,1);
   assert.equal(saved[0].comments[0].douyinId,'person123');assert.equal(saved[0].comments[0].commentBody,'如何报名');
+  const phoneCalls=readFileSync(join(d,'phone-calls'),'utf8').trim().split('\n');
+  assert.equal(phoneCalls.filter(c=>c==='collect-comments').length,2);
+  assert.equal(phoneCalls.filter(c=>c==='commenter-identity').length,1);
   await h.cleanup();assert.ok(calls.some(c=>c.op==='release_video'&&c.video_id===vid));
   assert.match(readFileSync(join(d,'comments.tsv'),'utf8'),/LEAD\t甲\tperson123/);
+  for(const f of ['clock','opens','collects'])writeFileSync(join(d,f),'0');
+  const normal=spawnSync('zsh',[join(root,'process-queued-video.sh'),'collection','work',vid,'https://v.douyin.com/video123/','','','budget-normal','jinuo'],{env:{...env,CONTINUE_BUDGET:'1'},encoding:'utf8',timeout:7000});
+  assert.equal(normal.status,0,normal.stderr);assert.equal(normal.stdout.split('\n').filter(l=>l.startsWith('LEAD\t')).length,2);
+  assert.match(normal.stdout,new RegExp('COLLECTION\\t'+vid+'\\tcollected\\t2'));
  }finally{rmSync(d,{recursive:true,force:true});}
 });
 
@@ -78,4 +86,27 @@ test('partial comment transaction commits rows without changing the video comple
  assert.equal(result.status,'partial');assert.equal(result.inserted,1);
  assert.ok(calls.some(c=>c.sql==='COMMIT'));
  assert.ok(!calls.some(c=>c.sql.includes('UPDATE zenithjoy.leadgen_videos')));
+});
+
+test('own-account identity skipped inside one parsed screen still checks budget before the next row',()=>{
+ const d=mkdtempSync(join(tmpdir(),'queued-own-row-budget-'));
+ try{
+  writeFileSync(join(d,'clock'),'0');writeFileSync(join(d,'own.json'),JSON.stringify({nicknames:[],ids:['own123']}));
+  writeFileSync(join(d,'date'),'#!/bin/sh\ncat "$ROW_BUDGET_DIR/clock"\n',{mode:0o755});
+  const ctl=join(d,'ctl');writeFileSync(ctl,`#!/usr/bin/env node
+const fs=require('fs'),p=require('path'),d=process.env.ROW_BUDGET_DIR,cmd=process.argv[4];
+fs.appendFileSync(p.join(d,'calls'),cmd+'\\n');
+switch(cmd){
+case 'lock-refresh':console.log('lock=refreshed');break;
+case 'current-video-link':console.log('content_type=video\\nvideo_id=${vid}');break;
+case 'open-comments':console.log('comments_opened=1\\ncomment_count=68');break;
+case 'collect-comments':console.log('甲\\t报名\\t今天\\t北京\\treader\\ttap=100 200\\tb64=55Sy\\n甲\\t费用\\t今天\\t北京\\treader\\ttap=300 200\\tb64=55Sy');break;
+case 'commenter-identity':fs.writeFileSync(p.join(d,'clock'),'500');console.log('nickname=甲\\ndouyin_id=own123\\naccount_type=personal');break;
+}
+`,{mode:0o755});
+  const r=spawnSync('zsh',[join(root,'process-queued-video.sh'),'collection','work',vid,'https://www.douyin.com/video/'+vid,'','','own-budget','jinuo'],{env:{...process.env,DOUYIN_PHONE_ADB:ctl,OWN_ACCOUNTS_CONF:join(d,'own.json'),ROW_BUDGET_DIR:d,PATH:d+':'+process.env.PATH,HARVEST_KEYWORD_TESTING:'1',QUEUED_VIDEO_COLLECTION_SECONDS:'480'},encoding:'utf8',timeout:7000});
+  assert.equal(r.error,undefined);assert.equal(r.status,7,r.stderr);assert.doesNotMatch(r.stdout,/LEAD\t/);
+  assert.match(r.stdout,new RegExp('COLLECTION\\t'+vid+'\\tpartial\\t0'));
+  assert.equal(readFileSync(join(d,'calls'),'utf8').split('\n').filter(c=>c==='commenter-identity').length,1,'own continue cannot start a second identity action after 480s');
+ }finally{rmSync(d,{recursive:true,force:true});}
 });
