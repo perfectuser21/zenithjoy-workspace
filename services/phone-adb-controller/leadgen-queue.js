@@ -48,7 +48,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         AND ($6::text[] IS NULL OR video_id=ANY($6::text[]))
         AND (process_status='待判定' OR process_status='待采评论'
           OR (process_status LIKE '处理中:%' AND updated_at<now()-interval '15 minutes'))
-        ORDER BY discovered_at LIMIT $2 FOR UPDATE SKIP LOCKED)
+        ORDER BY CASE WHEN judgment_status='pending' THEN 0 ELSE 1 END, discovered_at LIMIT $2 FOR UPDATE SKIP LOCKED)
         UPDATE zenithjoy.leadgen_videos v SET process_status=$3,harvest_batch=$4,updated_at=now()
         FROM pending p WHERE v.id=p.id RETURNING v.*`, [lineKey, limit, `处理中:${run}`, run, sourceRun, videoIds]);
       return result.rows;
