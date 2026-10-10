@@ -29,7 +29,7 @@ test('真实入口nonce证明只在本次_once局部生效，先seed再copy，no
  const once=controller.slice(controller.indexOf('_current_video_link_once() {'),controller.indexOf('_current_video_link_once() {')+19000);
  assert.match(once,/nonce_proof=""/);assert.match(once,/nonce_proof="\$\(seed_clipboard_nonce "\$evidence_id"\)" \|\| die/);
  assert.ok(once.indexOf('seed_clipboard_nonce')<once.indexOf('share_xml='));
- assert.ok(once.indexOf('copied text did not contain a verified Douyin short link')<once.indexOf('clip_guard_check "$short_url" "$nonce_proof"'));
+ assert.ok(once.indexOf('copied text did not contain a verified Douyin short link')<once.indexOf('clip_guard_check "$shared_url" "$nonce_proof"'));
  assert.doesNotMatch(controller.match(/seed_clipboard_nonce\(\) \{[\s\S]*?\n\}/)[0],/clip_guard_record|last-clip.*rm|reopen_url/);
 });
 

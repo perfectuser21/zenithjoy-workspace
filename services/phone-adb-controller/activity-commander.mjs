@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 const safeError = error => String(error?.message || error)
   .replace(/Bearer\s+[^\s"']+/gi, 'Bearer ***')
   .replace(/(?:api[_-]?key|token|password)\s*[=:]\s*[^\s"']+/gi, '凭据=***').slice(0, 400);
-const workflowProgressRule = 'workflow_progress.remaining_activity_keys列出真实剩余活动。单个活动成功不等于全流程完成；当前活动成功且还有剩余活动时应continue。finish是停止整个流程并清场，正常完成只能在最后活动成功后使用；提前安全停止必须明确停止原因，不能把活动完成当全流程完成。';
+const workflowProgressRule = 'workflow_progress.remaining_activity_keys列出当前活动之后的剩余活动，不含当前活动；当前活动pending表示即将执行，不表示已跳过。单个活动成功不等于全流程完成；当前活动成功且还有剩余活动时应continue。evidence.status为partial/failed表示本活动未完整完成，不能称其成功，须依据stop_reason及实际保存数量说明。finish是停止整个流程并清场，正常完成只能在最后活动成功后使用；提前安全停止必须明确停止原因，不能把活动完成当全流程完成。';
 
 export function parseCommanderResponse(raw) {
   const body = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -91,7 +91,11 @@ export async function runActivity({ activity, context, execute, commander, recor
   const maxAttempts = activity.retry_safe === true ? 2 : 1;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     let evidence;
-    try { evidence = { status: 'completed', attempt, result: await execute() }; }
+    try {
+      const result=await execute();
+      const status=result?.status==='paused'?'partial':['partial','failed','skipped'].includes(result?.status)?result.status:'completed';
+      evidence = { status, attempt, result };
+    }
     catch (error) { evidence = { status: 'failed', attempt, error: safeError(error) }; }
     await record({ ...context, activity: activity.key, phase: 'execution', evidence });
     const after = await consult('after', evidence);

@@ -603,6 +603,34 @@ seed_clipboard_nonce() {
   print -- "$nonce"
 }
 
+extract_copied_share_link() {
+  "$PYTHON_BIN" - "$1" <<'PY'
+import re,sys
+from urllib.parse import urlsplit
+found={}
+for token in re.findall(r'https?://[^\s<>"\']+',sys.argv[1]):
+    url=token.rstrip('.,;!)]}，。》）')
+    try:
+        parsed=urlsplit(url)
+        if parsed.scheme!='https' or parsed.username or parsed.password or parsed.port is not None:continue
+    except ValueError:
+        continue
+    if parsed.hostname=='v.douyin.com' and re.fullmatch(r'/[A-Za-z0-9_/-]+',parsed.path):
+        found[url]=('short','')
+    elif parsed.hostname in ('www.douyin.com','www.iesdouyin.com'):
+        match=re.fullmatch(r'/(?:share/)?(video|note)/([0-9]{16,24})/?',parsed.path)
+        if match:found[url]=('direct','https://www.douyin.com/'+match[1]+'/'+match[2])
+if len(found)!=1:
+    print('SHARE_LINK_AMBIGUOUS' if len(found)>1 else 'SHARE_LINK_UNSUPPORTED',file=sys.stderr)
+    sys.exit(2)
+url,(kind,canonical)=next(iter(found.items()))
+print('shared_url='+url)
+print('short_url='+(url if kind=='short' else ''))
+print('canonical_url='+canonical)
+print('share_url_kind='+kind)
+PY
+}
+
 # 只读取实际跳转头；取得真实内容ID便停止，不访问与身份解析无关的落地页。
 # 总请求仍最多两次、各10秒；首跳失败可重试，缺ID的受信中间跳转才继续。
 resolve_content_short_url() {
@@ -643,7 +671,7 @@ _current_video_link_once() {
   local evidence_id share_xml share_line share_center share_x share_y panel_xml panel_line link_line link_bounds
   local link_x1 link_y1 link_x2 link_y2 link_x link_y
   local copied_path scratch_xml search_line search_center search_x search_y
-  local result_xml result_line escaped_text short_url resolved_url video_id note_id content_type content_id reopen_url nonce_proof=""
+  local result_xml result_line escaped_text parsed_link shared_url short_url resolved_url direct_url share_url_kind video_id note_id content_type content_id reopen_url nonce_proof=""
   evidence_id="$1"
   local return_keyword="${2:-}" return_result return_xml
   require_evidence_id "$evidence_id"
@@ -719,10 +747,17 @@ _current_video_link_once() {
   result_line="$(/usr/bin/grep -oE '<node[^>]+resource-id="com.ss.android.ugc.aweme:id/et_search_kw"[^>]*>' "$result_xml" | /usr/bin/head -1 || true)"
   [[ -n "$result_line" ]] || die "clipboard verification field was not found"
   escaped_text="$(print -- "$result_line" | /usr/bin/sed -E 's/.* text="([^"]*)" resource-id=.*/\1/' | /usr/bin/sed 's/&amp;/\&/g; s/&#47;/\//g')"
-  short_url="$(print -- "$escaped_text" | /usr/bin/grep -oE 'https://v\.douyin\.com/[A-Za-z0-9_/-]+' | /usr/bin/head -1 || true)"
-  [[ "$short_url" == https://v.douyin.com/* ]] || die "copied text did not contain a verified Douyin short link" TARGET_PENDING
-  clip_guard_check "$short_url" "$nonce_proof"
-  resolved_url="$(resolve_content_short_url "$short_url" "$evidence_id")" || die "LINK_RESOLVE_FAILED: see bounded HEAD error classification"
+  parsed_link="$(extract_copied_share_link "$escaped_text")" || die "copied text did not contain a verified Douyin short link or trusted direct content link" TARGET_PENDING
+  shared_url="$(print -r -- "$parsed_link" | /usr/bin/sed -n 's/^shared_url=//p')"
+  short_url="$(print -r -- "$parsed_link" | /usr/bin/sed -n 's/^short_url=//p')"
+  direct_url="$(print -r -- "$parsed_link" | /usr/bin/sed -n 's/^canonical_url=//p')"
+  share_url_kind="$(print -r -- "$parsed_link" | /usr/bin/sed -n 's/^share_url_kind=//p')"
+  clip_guard_check "$shared_url" "$nonce_proof"
+  if [[ -n "$direct_url" ]]; then
+    resolved_url="$direct_url"
+  else
+    resolved_url="$(resolve_content_short_url "$short_url" "$evidence_id")" || die "LINK_RESOLVE_FAILED: see bounded HEAD error classification"
+  fi
   video_id="$(print -- "$resolved_url" | /usr/bin/grep -oE '/video/[0-9]+' | /usr/bin/tail -1 | /usr/bin/cut -d/ -f3 || true)"
   note_id="$(print -- "$resolved_url" | /usr/bin/grep -oE '/note/[0-9]+' | /usr/bin/tail -1 | /usr/bin/cut -d/ -f3 || true)"
   if [[ "$video_id" == <-> && ${#video_id} -ge 16 && ${#video_id} -le 24 ]]; then
@@ -799,7 +834,9 @@ _current_video_link_once() {
     # 图文帖走的是"离开暂存页回到关键词"，目标不是详情页，故仍只验包名。
     [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "resolved content did not restore to Douyin" WRONG_FOREGROUND
   fi
-  clip_guard_record "$short_url"
+  clip_guard_record "$shared_url"
+  print -- "shared_url=$shared_url"
+  print -- "share_url_kind=$share_url_kind"
   print -- "content_type=$content_type"
   if [[ "$content_type" == "video" ]]; then
     print -- "content_id=$content_id"
