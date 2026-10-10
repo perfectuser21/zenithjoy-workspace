@@ -51,7 +51,7 @@ else if(has('input text '))s.field=a.at(-1);
 else if(has('input keyevent 278'))s.clip=s.field;
 else if(has('input keyevent 279'))s.field=s.clip;
 else if(has('input keyevent 67'))s.field='';
-else if(has('input keyevent 4')){if(s.page==='scratch'&&++s.backs>=4){s.page='detail';s.scratchReturns=(s.scratchReturns||0)+1;}else if(s.page==='panel')s.page='detail';else if(s.page==='detail'&&s.scratchReturns>=2)s.page='results';}
+else if(has('input keyevent 4')){if(s.page==='scratch'&&++s.backs>=4){s.page='detail';s.scratchReturns=(s.scratchReturns||0)+1;}else if(s.page==='panel')s.page='detail';else if(process.env.KEYWORD_RESULTS==='1'&&s.page==='detail'&&s.scratchReturns>=2)s.page='results';}
 else if(has('input tap')&&s.page==='detail')s.page='panel';
 else if(has('input tap')&&s.page==='panel'){s.clip='https://v.douyin.com/Fresh/';s.page='detail';}
 else if(has('shell rm -f')){try{fs.unlinkSync(p.join(d,'remote.xml'));}catch{}}
@@ -88,10 +88,10 @@ fs.writeFileSync(sfile,JSON.stringify(s));
  const env={...process.env,HOME:d,FAKE_PHONE_DIR:d,DOUYIN_PHONE_REGISTRY:join(d,'registry'),DOUYIN_ADB_BIN:adb,
   DOUYIN_CURL_BIN:curl,DOUYIN_SIPS_BIN:'/usr/bin/true',DOUYIN_PYTHON_BIN:'/usr/bin/python3',DOUYIN_PHONE_TMP_ROOT:tmp,
   DOUYIN_PHONE_ADB:wrapper,WFR_RUN_DIR:join(d,'run'),DOUYIN_DETAIL_PLAYBACK:mode,QUEUED_VIDEO_QUALIFY_CMD:qualify,SKELETON:skeleton?'1':'0',FINAL_SKELETON:finalSkeleton?'1':'0',
-  SHARE_IDLE_FALLBACK:shareIdleFallback?'1':'0',RECOVER:recover?'1':'0',PLAY_FAILS:playFails?'1':'0',HARVEST_KEYWORD_TESTING:'1'};
+  KEYWORD_RESULTS:command==='results'?'1':'0',SHARE_IDLE_FALLBACK:shareIdleFallback?'1':'0',RECOVER:recover?'1':'0',PLAY_FAILS:playFails?'1':'0',HARVEST_KEYWORD_TESTING:'1'};
  if(command.startsWith('queued'))delete env.DOUYIN_DETAIL_PLAYBACK;
  const args=command.startsWith('queued')?[queued,command==='queued-qualification'?'qualification':'identity','legacy',vid,`https://www.douyin.com/video/${vid}`,'','','continuous-run','jinuo']:
-  [runner,'--profile','legacy',...(command==='results'?['current-video-link','continuous-link','人工智能']:command==='wrong-command'?['preflight']:['open-video',vid,'continuous-open'])];
+  [runner,'--profile','legacy',...(['results','link'].includes(command)?['current-video-link','continuous-link',...(command==='results'?['人工智能']:[])]:command==='wrong-command'?['preflight']:['open-video',vid,'continuous-open'])];
  const r=spawnSync('zsh',args,{env,encoding:'utf8',timeout:60000});
  const calls=existsSync(join(d,'calls'))?readFileSync(join(d,'calls'),'utf8'):'';
  const result={...r,calls,state:JSON.parse(readFileSync(join(d,'state.json'),'utf8')),dumps:existsSync(join(d,'dumps'))?readFileSync(join(d,'dumps'),'utf8'):'',
@@ -174,4 +174,11 @@ test('nonce内部typed归位未知值在随机数/ADB前拒绝',()=>{
  const seed=readFileSync(controller,'utf8').match(/^seed_clipboard_nonce\(\) \{[\s\S]*?^\}/m)[0];
  const r=spawnSync('zsh',['-c',`set -eu; die(){ print -u2 -- "$1"; exit 2; }; ADB=/usr/bin/false; PYTHON_BIN=/usr/bin/false; ${seed}\nseed_clipboard_nonce fixture unsupported`],{encoding:'utf8'});
  assert.equal(r.status,2);assert.match(r.stderr,/CLIPBOARD_NONCE_RETURN_MODE_INVALID/);
+});
+
+test('默认无keyword取链含真实nonce，归位后仍恢复PLAY供后续录音',()=>{
+ const r=phone({mode:'standard',command:'link'});assert.equal(r.error,undefined);assert.equal(r.status,0,r.stderr);
+ assert.match(r.stdout,new RegExp('video_id='+vid));assert.equal(r.state.play,'playing');assert.equal(r.state.page,'detail');
+ assert.equal(r.calls.split('\n').filter(s=>/input keyevent 126$/.test(s)).length,2,'默认nonce及最终归位两处PLAY保持');
+ assert.match(r.calls,/input keyevent 278/);assert.match(r.calls,/input keyevent 279/);
 });
