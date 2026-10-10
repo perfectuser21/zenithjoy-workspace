@@ -54,6 +54,7 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
      state.counts.screens++;state.counts.cards+=page.cards.length;
      // 只枚举这一屏的卡片槽位；不按全局标题过滤，同标题不同视频都取真实ID。
      const targets=page.cards.map((c,i,a)=>({...c,ordinal:a.slice(0,i).filter(x=>identity(x)===identity(c)).length}));
+     const slots=new Set(targets.map(c=>JSON.stringify([identity(c),c.ordinal])));
      for(const target of targets){
       if(limit&&state.counts.persisted>=limit){stopReason='limit_reached';break sourceLoop;}
       if(state.counts.persisted>=1000){stopReason='manifest_limit';break sourceLoop;}
@@ -64,8 +65,20 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
        for(let attempt=0;attempt<3;attempt++){
         if(attempt)await pause(1);
         fresh=await readPage(ctx,eid+'-loc'+(attempt?'-retry'+attempt:''));
-        if(revealReceipt){revealReceipt.after_evidence_path=fresh.evidence;progress();}
         if(!fresh.loading){const matches=fresh.cards.filter(c=>identity(c)===identity(target));hit=revealed?(matches.length===1?matches[0]:undefined):matches[target.ordinal];}
+        if(revealReceipt){
+         revealReceipt.after_evidence_path=fresh.evidence;
+         if(!fresh.loading){
+          // 短滑改变本页视口，新完整槽位必须先处理；只记本页identity+ordinal，绝不全局按标题去重。
+          page=fresh;
+          const exposed=fresh.cards.map((c,i,a)=>({...c,ordinal:a.slice(0,i).filter(x=>identity(x)===identity(c)).length}));
+          for(const c of exposed){
+           // 当前恢复目标同标题但元数据冲突，不能改名为新槽绕过原身份拒绝；原目标会留下裁切gap。
+           if(!hit&&normalized(c.title)===normalized(target.title)&&identity(c)!==identity(target))continue;
+           const key=JSON.stringify([identity(c),c.ordinal]);if(!slots.has(key)){slots.add(key);targets.push(c);state.counts.cards++;}}
+         }
+         progress();
+        }
         if(hit)break;
         // hint仅帮助露出屏底元数据；下一次读树仍要求原完整身份，不复用旧坐标。
         if(!fresh.loading&&!revealed&&attempt<2&&targets.filter(c=>identity(c)===identity(target)).length===1){
