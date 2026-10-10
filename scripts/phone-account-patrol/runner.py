@@ -172,39 +172,79 @@ def schedule_health(schedule, tasks, current):
     expected = current.replace(hour=22, minute=0, second=0, microsecond=0)
     if current < expected + dt.timedelta(minutes=30):
         expected -= dt.timedelta(days=1)
-    # 刚启用的配置不追责过去不存在的巡查。
-    if schedule.get('created_at') and dt.datetime.fromisoformat(schedule['created_at']).astimezone(expected.tzinfo) > expected:
+    activated = schedule.get('template', {}).get('activated_at') or schedule.get('created_at')
+    if activated and dt.datetime.fromisoformat(activated).astimezone(expected.tzinfo) > expected:
         return {'status': 'awaiting_first_run', 'expected_at': expected.isoformat()}
-    matches = [t for t in tasks if t.get('recurring_task_id') == schedule['id'] and dt.datetime.fromisoformat(t['created_at']) >= expected]
+    matches = [t for t in tasks if (t.get('recurring_task_id') or t.get('payload', {}).get('recurring_task_id')) == schedule['id']
+               and dt.datetime.fromisoformat(t['created_at']) >= expected]
     if not matches:
         return {'status': 'missed', 'expected_at': expected.isoformat()}
-    if any(t['status'] == 'failed' for t in matches):
+    if any(t['status'] in ['failed', 'cancelled', 'blocked'] for t in matches):
         return {'status': 'failed', 'expected_at': expected.isoformat()}
+    if any(t['status'] != 'completed' for t in matches):
+        return {'status': 'delayed', 'expected_at': expected.isoformat()}
     return {'status': 'healthy', 'expected_at': expected.isoformat()}
+
+
+def execution_receipt(task):
+    lines = task.get('result', {}).get('script', {}).get('stdout', '').splitlines()
+    for line in reversed(lines):
+        try:
+            value = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(value, dict):
+            return value
+    raise ValueError('中央运行缺少代码结果回执：' + task['id'])
+
+
+def batch_execution_health(task, call):
+    if task['status'] in ['failed', 'cancelled', 'blocked']:
+        return 'failed'
+    if task['status'] != 'completed':
+        return 'delayed'
+    receipt = execution_receipt(task)
+    if not isinstance(receipt.get('children'), list) or not receipt['children']:
+        raise ValueError('批次缺少真实子任务清单')
+    states = []
+    for item in receipt['children']:
+        child = call('tasks/' + item['task_id'])
+        if child['status'] in ['failed', 'cancelled', 'blocked']:
+            states.append('failed')
+        elif child['status'] != 'completed':
+            states.append('delayed')
+        else:
+            status = execution_receipt(child).get('status')
+            states.append({'completed': 'healthy', 'deferred': 'deferred', 'failed': 'failed'}.get(status, 'unknown'))
+    return next((s for s in ['failed', 'unknown', 'delayed', 'deferred'] if s in states), 'healthy')
 
 
 def monitor(deployment):
     schedules = rows(api('recurring-tasks'))
     schedule = next(s for s in schedules if s['id'] == deployment['schedule_id'])
+    # last_run_at只是定时器建单时间，必须查实际批次和各手机的执行回执。
+    summaries = rows(api('tasks?project_id=' + deployment['project_id'] + '&task_type=script_run&limit=200'))
+    if len(summaries) >= 200:
+        raise ValueError('巡查项目任务查询达到上限，不能据此宣称健康')
     tasks = []
-    if schedule.get('last_run_at'):
-        tasks.append({'recurring_task_id': schedule['id'], 'created_at': schedule['last_run_at'], 'status': schedule.get('last_run_status') or 'queued'})
+    for summary in summaries:
+        task = api('tasks/' + summary['id'])
+        if task.get('payload', {}).get('recurring_task_id') == schedule['id']:
+            tasks.append(task)
     health = schedule_health(schedule, tasks, now())
-    failed = []
-    for file in STATE.glob('phone-*.latest.json'):
-        latest = json.loads(file.read_text())
-        if latest.get('task_id'):
-            task = api('tasks/' + latest['task_id'])
-            if task.get('status') == 'failed':
-                failed.append(task)
-    health['failed_task_ids'] = [t['id'] for t in failed]
-    key = json.dumps({'status': health['status'], 'expected_at': health.get('expected_at') if health['status'] == 'missed' else None,
-                      'failed': sorted(health['failed_task_ids'])}, sort_keys=True)
+    if health['status'] == 'healthy':
+        eligible = [t for t in tasks if dt.datetime.fromisoformat(t['created_at']) >= dt.datetime.fromisoformat(health['expected_at'])]
+        latest = max(eligible, key=lambda t: t['created_at'])
+        health['status'] = batch_execution_health(latest, api)
+        health['batch_task_id'] = latest['id']
+    health['batch_task_ids'] = [t['id'] for t in tasks]
+    key = json.dumps({'status': health['status'], 'expected_at': health.get('expected_at')}, sort_keys=True)
     marker = STATE / 'monitor.latest.json'
     previous = json.loads(marker.read_text()) if marker.exists() else {}
-    if (health['status'] in ['missed', 'failed'] or failed) and previous.get('anomaly_key') != key:
-        issue = api('tasks', {'title': '账号巡查异常：漏跑或执行失败', 'task_type': 'research', 'priority': 'P1', 'lane': '待分拣',
-                             'description': '维护负责人：主理人。请查看关联失败运行；此任务仅记账，不自动调用AI修复。',
+    if health['status'] in ['missed', 'failed', 'unknown', 'delayed', 'deferred'] and previous.get('anomaly_key') != key:
+        issue = api('tasks', {'title': '账号巡查异常：漏跑、等待或执行失败 · ' + health.get('expected_at', ''),
+                             'task_type': 'research', 'priority': 'P1',
+                             'description': '维护负责人：主理人。请查看关联运行；此任务仅记账，不自动调用AI修复。',
                              'payload': {'headed_manual': True, 'source': 'phone-account-patrol-monitor', 'health': health}})
         health['attention_task_id'] = issue['id']
     health.update({'checked_at': now(), 'anomaly_key': key, 'maintenance_owner': '主理人'})
