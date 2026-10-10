@@ -74,8 +74,8 @@ probes:
     on_fail: fail_stage
     note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
   - key: source_completed
-    stage: source
-    journey_cell: stage:source
+    stage: collect_videos
+    journey_cell: stage:collect_videos
     probe:
       type: metric
       ref: metrics.source_completed
@@ -86,9 +86,9 @@ probes:
     failure_class: retryable
     on_fail: fail_stage
     note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
-  - key: source_commander_verified
-    stage: source
-    journey_cell: stage:source
+  - key: collect_videos_commander_verified
+    stage: collect_videos
+    journey_cell: stage:collect_videos
     probe:
       type: metric
       ref: metrics.commander_verified
@@ -100,8 +100,8 @@ probes:
     on_fail: fail_stage
     note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
   - key: disc_candidates_persisted
-    stage: write_videos
-    journey_cell: stage:write_videos
+    stage: collect_videos
+    journey_cell: stage:collect_videos
     probe:
       type: sql
       target: pg_zenithjoy
@@ -120,8 +120,8 @@ probes:
       否则判定无米下锅。batch2.sh:37 写 candidates=DV。8bb3af55 先判后采后，harvest-keyword.sh 在开评论区之前 经 qualify-video.js
       discover 把每个候选视频落库（pending/待判定，harvest_batch=本批、keyword=本词）。
   - key: videos_readback
-    stage: write_videos
-    journey_cell: stage:write_videos
+    stage: collect_videos
+    journey_cell: stage:collect_videos
     probe:
       type: sql
       target: pg_zenithjoy
@@ -145,8 +145,8 @@ probes:
       实证多带 line_key='$LINE_KEY' 时 --line-key 传的是 profile 名而库里是路由键（push-videos.js:57）， 同 TAG 下本条读
       0、line_key_not_null 读 7，口径分叉。
   - key: line_key_not_null
-    stage: write_videos
-    journey_cell: stage:write_videos
+    stage: collect_videos
+    journey_cell: stage:collect_videos
     probe:
       type: sql
       target: pg_zenithjoy
@@ -163,19 +163,6 @@ probes:
       leadgen_videos.line_key NOT NULL（apps/api/db/migrations/20260922_220000_leadgen_ssot_tables.sql:28），
       push-videos.js:10 由 routeOf() 解析业务线（line-routes.js:62）。飞书原始评论池没有「业务线」列 （push-raw-comments.js:46-55
       写入字段清单里没有；业务线由 base 本身区分），所以本探针只看 PG 行。 探针存在的意义是把 DDL 约束以声明形式挂到 journey cell 上，DDL 漂移（约束被去掉）时能读回。
-  - key: write_videos_commander_verified
-    stage: write_videos
-    journey_cell: stage:write_videos
-    probe:
-      type: metric
-      ref: metrics.commander_verified
-    expect:
-      op: ==
-      value: 1
-    severity: error
-    failure_class: retryable
-    on_fail: fail_stage
-    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
   - key: cl_app_closed
     stage: cleanup
     journey_cell: stage:cleanup
@@ -220,8 +207,8 @@ probes:
     note: |
       手机回到安全桌面（不停在私信/评论页，防误触）。workflow-result.sh:182 写死 0，判红直到 6b133a81。
   - key: write_video_manifest_verified
-    stage: write_videos
-    journey_cell: stage:write_videos
+    stage: collect_videos
+    journey_cell: stage:collect_videos
     probe:
       type: metric
       ref: metrics.manifest_verified

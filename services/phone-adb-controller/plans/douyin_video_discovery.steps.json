@@ -2,13 +2,13 @@
   "version": 1,
   "capability": "douyin_video_discovery",
   "brain_workflow_key": "douyin_video_discovery",
-  "contract_sha256": "32983924a11143836920b414b3ad4f8458df6b7e0482cc1233a58d2dd901e1b8",
+  "contract_sha256": "a38a93e16d6c4caa87fdb76e741f883b42aa34f83f759d4e3d1f63968203f6dd",
   "promotion": {
     "min_consecutive_pass": 20
   },
   "steps": [
     {
-      "key": "douyin_video_discovery.preflight.acquire_device_lock",
+      "key": "douyin_video_processing.preflight.acquire_device_lock",
       "activity": "preflight",
       "at": "preflight",
       "mode": "checkpoint",
@@ -27,7 +27,7 @@
       }
     },
     {
-      "key": "douyin_video_discovery.preflight.refresh_lock_heartbeat",
+      "key": "douyin_video_processing.preflight.refresh_lock_heartbeat",
       "activity": "preflight",
       "at": "cleanup",
       "mode": "checkpoint",
@@ -46,7 +46,7 @@
       }
     },
     {
-      "key": "douyin_video_discovery.preflight.verify_device_identity",
+      "key": "douyin_video_processing.preflight.verify_device_identity",
       "activity": "preflight",
       "at": "preflight",
       "mode": "checkpoint",
@@ -65,7 +65,7 @@
       }
     },
     {
-      "key": "douyin_video_discovery.preflight.verify_call_idle",
+      "key": "douyin_video_processing.preflight.verify_call_idle",
       "activity": "preflight",
       "at": "preflight",
       "mode": "checkpoint",
@@ -84,7 +84,7 @@
       }
     },
     {
-      "key": "douyin_video_discovery.preflight.read_account_mark",
+      "key": "douyin_video_processing.preflight.read_account_mark",
       "activity": "preflight",
       "at": "preflight",
       "mode": "checkpoint",
@@ -104,7 +104,7 @@
       }
     },
     {
-      "key": "douyin_video_discovery.preflight.open_run_ledger",
+      "key": "douyin_video_processing.preflight.open_run_ledger",
       "activity": "preflight",
       "at": "preflight",
       "mode": "checkpoint",
@@ -125,9 +125,9 @@
       }
     },
     {
-      "key": "douyin_video_discovery.source.open_search",
-      "activity": "source",
-      "at": "source",
+      "key": "douyin_video_discovery.collect_videos.open_search",
+      "activity": "collect_videos",
+      "at": "collect_videos",
       "mode": "hard",
       "readback": {
         "type": "evidence",
@@ -140,14 +140,14 @@
       },
       "usage": {
         "workflow_key": "douyin_video_discovery",
-        "slot_key": "source",
+        "slot_key": "collect_videos",
         "sequence_no": 2
       }
     },
     {
-      "key": "douyin_video_discovery.source.switch_video_tab",
-      "activity": "source",
-      "at": "source",
+      "key": "douyin_video_discovery.collect_videos.switch_video_tab",
+      "activity": "collect_videos",
+      "at": "collect_videos",
       "mode": "checkpoint",
       "readback": {
         "type": "evidence",
@@ -160,14 +160,14 @@
       },
       "usage": {
         "workflow_key": "douyin_video_discovery",
-        "slot_key": "source",
+        "slot_key": "collect_videos",
         "sequence_no": 2
       }
     },
     {
-      "key": "douyin_video_discovery.source.open_filter_panel",
-      "activity": "source",
-      "at": "source",
+      "key": "douyin_video_discovery.collect_videos.open_filter_panel",
+      "activity": "collect_videos",
+      "at": "collect_videos",
       "mode": "checkpoint",
       "readback": {
         "type": "evidence",
@@ -179,14 +179,14 @@
       },
       "usage": {
         "workflow_key": "douyin_video_discovery",
-        "slot_key": "source",
+        "slot_key": "collect_videos",
         "sequence_no": 2
       }
     },
     {
-      "key": "douyin_video_discovery.source.choose_filters",
-      "activity": "source",
-      "at": "source",
+      "key": "douyin_video_discovery.collect_videos.choose_filters",
+      "activity": "collect_videos",
+      "at": "collect_videos",
       "mode": "checkpoint",
       "readback": {
         "type": "evidence",
@@ -198,14 +198,14 @@
       },
       "usage": {
         "workflow_key": "douyin_video_discovery",
-        "slot_key": "source",
+        "slot_key": "collect_videos",
         "sequence_no": 2
       }
     },
     {
-      "key": "douyin_video_discovery.source.apply_filters",
-      "activity": "source",
-      "at": "source",
+      "key": "douyin_video_discovery.collect_videos.apply_filters",
+      "activity": "collect_videos",
+      "at": "collect_videos",
       "mode": "checkpoint",
       "readback": {
         "type": "evidence",
@@ -217,14 +217,14 @@
       },
       "usage": {
         "workflow_key": "douyin_video_discovery",
-        "slot_key": "source",
+        "slot_key": "collect_videos",
         "sequence_no": 2
       }
     },
     {
-      "key": "douyin_video_discovery.source.extract_video_cards",
-      "activity": "source",
-      "at": "source",
+      "key": "douyin_video_discovery.collect_videos.extract_video_cards",
+      "activity": "collect_videos",
+      "at": "collect_videos",
       "mode": "checkpoint",
       "readback": {
         "type": "evidence",
@@ -236,14 +236,14 @@
       },
       "usage": {
         "workflow_key": "douyin_video_discovery",
-        "slot_key": "source",
+        "slot_key": "collect_videos",
         "sequence_no": 2
       }
     },
     {
-      "key": "douyin_video_discovery.write_videos.resolve_video_links",
-      "activity": "write_videos",
-      "at": "write_videos",
+      "key": "douyin_video_discovery.collect_videos.resolve_video_links",
+      "activity": "collect_videos",
+      "at": "collect_videos",
       "mode": "checkpoint",
       "readback": {
         "type": "log",
@@ -255,14 +255,14 @@
       },
       "usage": {
         "workflow_key": "douyin_video_discovery",
-        "slot_key": "write_videos",
-        "sequence_no": 3
+        "slot_key": "collect_videos",
+        "sequence_no": 2
       }
     },
     {
-      "key": "douyin_video_discovery.write_videos.persist_candidates",
-      "activity": "write_videos",
-      "at": "write_videos",
+      "key": "douyin_video_discovery.collect_videos.persist_candidates",
+      "activity": "collect_videos",
+      "at": "collect_videos",
       "mode": "checkpoint",
       "readback": {
         "type": "metric",
@@ -274,14 +274,14 @@
       },
       "usage": {
         "workflow_key": "douyin_video_discovery",
-        "slot_key": "write_videos",
-        "sequence_no": 3
+        "slot_key": "collect_videos",
+        "sequence_no": 2
       }
     },
     {
-      "key": "douyin_video_discovery.write_videos.push_videos",
-      "activity": "write_videos",
-      "at": "write_videos",
+      "key": "douyin_video_discovery.collect_videos.push_videos",
+      "activity": "collect_videos",
+      "at": "collect_videos",
       "mode": "checkpoint",
       "readback": {
         "type": "sql",
@@ -293,14 +293,14 @@
       },
       "usage": {
         "workflow_key": "douyin_video_discovery",
-        "slot_key": "write_videos",
-        "sequence_no": 3
+        "slot_key": "collect_videos",
+        "sequence_no": 2
       }
     },
     {
-      "key": "douyin_video_discovery.write_videos.readback_line_key",
-      "activity": "write_videos",
-      "at": "write_videos",
+      "key": "douyin_video_discovery.collect_videos.readback_line_key",
+      "activity": "collect_videos",
+      "at": "collect_videos",
       "mode": "checkpoint",
       "readback": {
         "type": "metric",
@@ -312,12 +312,12 @@
       },
       "usage": {
         "workflow_key": "douyin_video_discovery",
-        "slot_key": "write_videos",
-        "sequence_no": 3
+        "slot_key": "collect_videos",
+        "sequence_no": 2
       }
     },
     {
-      "key": "douyin_video_discovery.cleanup.close_app",
+      "key": "douyin_video_processing.cleanup.close_app",
       "activity": "cleanup",
       "at": "cleanup",
       "mode": "checkpoint",
@@ -332,11 +332,11 @@
       "usage": {
         "workflow_key": "douyin_video_discovery",
         "slot_key": "cleanup",
-        "sequence_no": 4
+        "sequence_no": 5
       }
     },
     {
-      "key": "douyin_video_discovery.cleanup.release_lock",
+      "key": "douyin_video_processing.cleanup.release_lock",
       "activity": "cleanup",
       "at": "cleanup",
       "mode": "checkpoint",
@@ -351,11 +351,11 @@
       "usage": {
         "workflow_key": "douyin_video_discovery",
         "slot_key": "cleanup",
-        "sequence_no": 4
+        "sequence_no": 5
       }
     },
     {
-      "key": "douyin_video_discovery.cleanup.return_safe_desktop",
+      "key": "douyin_video_processing.cleanup.return_safe_desktop",
       "activity": "cleanup",
       "at": "cleanup",
       "mode": "checkpoint",
@@ -370,11 +370,11 @@
       "usage": {
         "workflow_key": "douyin_video_discovery",
         "slot_key": "cleanup",
-        "sequence_no": 4
+        "sequence_no": 5
       }
     },
     {
-      "key": "douyin_video_discovery.cleanup.finalize_run",
+      "key": "douyin_video_processing.cleanup.finalize_run",
       "activity": "cleanup",
       "at": "cleanup",
       "mode": "checkpoint",
@@ -389,7 +389,7 @@
       "usage": {
         "workflow_key": "douyin_video_discovery",
         "slot_key": "cleanup",
-        "sequence_no": 4
+        "sequence_no": 5
       }
     }
   ]

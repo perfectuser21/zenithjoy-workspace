@@ -24,6 +24,8 @@
     "source_repo": { "type": "string", "pattern": "^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$" },
     "checks": { "type": "string", "pattern": "^services/.+\\.yaml$" },
     "ledger": { "type": "string", "pattern": "^services/.+\\.sh$" },
+    "inputs": { "type": "array", "items": { "$ref": "#/$defs/io" } },
+    "outputs": { "type": "array", "items": { "$ref": "#/$defs/output" } },
     "trigger_inputs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/typeName" } },
     "activities": {
       "type": "array",
