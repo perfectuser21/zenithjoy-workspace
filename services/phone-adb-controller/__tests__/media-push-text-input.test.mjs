@@ -339,25 +339,30 @@ test("text-input 空文本 → empty_ok，退出码 0，不碰输入法", async 
   assert.doesNotMatch(calls(ctx), /"ime"/);
 });
 
+const NATIVE_INPUT_ENV = {
+  FAKE_XHS_NATIVE_INPUT: "1",
+  DOUYIN_PYTHON_BIN: spawnSync("sh", ["-c", "command -v python3"], { encoding: "utf8" }).stdout.trim(),
+};
+
 // 真机判例：小红书长文 UnderLineRichEdit 实际输入已连通，UI focused 仍为 false。
 // 移除有效 IME 连接匹配或精确回读，应使成功例失败；放宽包名检查应使拒绝例失败。
 test("text-input 小红书原生长文标题在有效IME连接下精确回读，尽管UI焦点为false", async () => {
   const ctx=setup();
-  const r=await run(ctx,["text-input","傍晚的颜色"],{FAKE_XHS_NATIVE_INPUT:"1"});
+  const r=await run(ctx,["text-input","傍晚的颜色"],{...NATIVE_INPUT_ENV});
   assert.equal(r.code,0, r.err);
   assert.equal(readFileSync(join(ctx.state,"typed"),"utf8"),"傍晚的颜色");
   assert.equal(ime(ctx),ORIG_IME);
 });
 test("text-input 小红书无障碍缺焦点且IME连接属于其它App时拒绝，不能清空或输入", async () => {
   const ctx=setup();
-  const r=await run(ctx,["text-input","傍晚的颜色"],{FAKE_XHS_NATIVE_INPUT:"1",FAKE_IME_EDITOR_PACKAGE:"com.other.app"});
+  const r=await run(ctx,["text-input","傍晚的颜色"],{...NATIVE_INPUT_ENV,FAKE_IME_EDITOR_PACKAGE:"com.other.app"});
   assert.equal(r.code,2);
   assert.doesNotMatch(calls(ctx), /ADB_CLEAR_TEXT|ADB_INPUT_B64/);
 });
 
 test("text-input 小红书原生标题读回错误必须失败并还原输入法", async () => {
   const ctx=setup();
-  const r=await run(ctx,["text-input","傍晚的颜色"],{FAKE_XHS_NATIVE_INPUT:"1",FAKE_TYPED_OVERRIDE:"错误文本"});
+  const r=await run(ctx,["text-input","傍晚的颜色"],{...NATIVE_INPUT_ENV,FAKE_TYPED_OVERRIDE:"错误文本"});
   assert.equal(r.code,2);
   assert.match(r.err,/readback_mismatch|readback did not exactly match/);
   assert.equal(ime(ctx),ORIG_IME);
@@ -365,7 +370,7 @@ test("text-input 小红书原生标题读回错误必须失败并还原输入法
 
 test("text-input 切换输入法后原生连接换到其它App时停止，不能发送并还原输入法", async () => {
   const ctx=setup();
-  const r=await run(ctx,["text-input","傍晚的颜色"],{FAKE_XHS_NATIVE_INPUT:"1",FAKE_IME_EDITOR_CHANGED_ON_SWITCH:"1"});
+  const r=await run(ctx,["text-input","傍晚的颜色"],{...NATIVE_INPUT_ENV,FAKE_IME_EDITOR_CHANGED_ON_SWITCH:"1"});
   assert.equal(r.code,2);
   assert.doesNotMatch(calls(ctx),/ADB_CLEAR_TEXT|ADB_INPUT_B64/);
   assert.equal(ime(ctx),ORIG_IME);
@@ -373,7 +378,7 @@ test("text-input 切换输入法后原生连接换到其它App时停止，不能
 
 test("text-input 原生连接变化且输入法无法恢复时必须needs_human，不能报可重试", async () => {
   const ctx=setup();
-  const r=await run(ctx,["text-input","傍晚的颜色"],{FAKE_XHS_NATIVE_INPUT:"1",FAKE_IME_EDITOR_CHANGED_ON_SWITCH:"1",FAKE_RESTORE_STUCK:"1"});
+  const r=await run(ctx,["text-input","傍晚的颜色"],{...NATIVE_INPUT_ENV,FAKE_IME_EDITOR_CHANGED_ON_SWITCH:"1",FAKE_RESTORE_STUCK:"1"});
   assert.equal(r.code,2);
   assert.doesNotMatch(calls(ctx),/ADB_CLEAR_TEXT|ADB_INPUT_B64/);
   assert.match(r.err,/failure_class=needs_human/);
