@@ -55,7 +55,7 @@ const FEED_XML = `${XML_HEAD}</node></hierarchy>`;
  *  am start search/tabs?keyword=<词> → 压 results（兜底重搜）；keyevent 4 → 出栈一层
  *  scratchPopTo: 暂存路线退完落在哪（默认 detail；'feed' 模拟退飞了）
  */
-function makeFakePhone({ resultsKeyword = KW, scratchPopTo = 'detail', playState = 'paused', interactiveCenter = false, copiedShareUrl = LINK, forbidHead = false, localHeadFails = false, peerUrl = null } = {}) {
+function makeFakePhone({ resultsKeyword = KW, scratchPopTo = 'detail', playState = 'paused', interactiveCenter = false, copiedShareUrl = LINK, forbidHead = false, localHeadFails = false, peerUrl = null, returnSkeleton = false, videoTabSelected = true } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'cvl-leave-'));
   mkdirSync(join(dir, 'fx'));
   writeFileSync(join(dir, 'fx', 'detail.xml'), detailXml('playing'));
@@ -66,6 +66,8 @@ function makeFakePhone({ resultsKeyword = KW, scratchPopTo = 'detail', playState
   writeFileSync(join(dir, 'fx', 'scratch.xml'), SCRATCH_XML.replace(LINK,copiedShareUrl.replaceAll('&','&amp;')));
   writeFileSync(join(dir, 'fx', 'feed.xml'), FEED_XML);
   writeFileSync(join(dir, 'fx', 'results.xml'),readFileSync(join(FIXTURES, 'real-search-results-grid.xml'),'utf8').replace('text="人工智能" resource-id=', 'text="'+resultsKeyword+'" resource-id='));
+  if (!videoTabSelected) {const p=join(dir,'fx','results.xml');writeFileSync(p,readFileSync(p,'utf8').replace(/(<node[^>]*text="视频"[^>]*selected=")true/g,'$1false'));}
+  writeFileSync(join(dir,'fx','return-skeleton.xml'),readFileSync(join(FIXTURES,'real-keyword-return-skeleton-13.xml'),'utf8'));
   writeFileSync(join(dir,'dump_pages'),'');
   writeFileSync(join(dir, 'fx', 'shot.png'), 'png');
   const stack = join(dir, 'stack');
@@ -91,6 +93,7 @@ case "$*" in
   *"am start"*"aweme/detail/"*) n=$(cat "$D/deeplinks"); echo $((n+1)) > "$D/deeplinks"; push detail2 ;;
   *"input keyevent 4"*)
       t=$(top)
+      if [ "$t" = "scratch_res" ];then echo 1 > "$D/left_scratch";fi
       if [ "$t" = "scratch_res" ] && [ "${scratchPopTo}" != "detail" ]; then
         pop; pop; push ${scratchPopTo}
       else
@@ -112,6 +115,9 @@ case "$*" in
       fi ;;
   *"uiautomator dump"*)
       t=$(top)
+      if [ "${returnSkeleton ? 1 : 0}" = 1 ] && [ "$t" = detail ] && [ -f "$D/left_scratch" ];then
+        echo detail_skeleton >> "$D/dump_pages";cp "$D/fx/return-skeleton.xml" "$D/remote.xml";exit 0
+      fi
       echo "$t" >> "$D/dump_pages"
       case "$t" in
         results) f=results.xml ;;
@@ -131,6 +137,7 @@ case "$*" in
   *dumpsys*)
       case "$(top)" in
         results|scratch_*) echo "  mCurrentFocus=Window{1 u0 ${PKG}/${PKG}.search.activity.SearchResultActivity}" ;;
+        outside) echo "  mCurrentFocus=Window{1 u0 com.android.launcher/com.android.launcher.MainActivity}" ;;
         detail|detail2)    echo "  mCurrentFocus=Window{1 u0 ${PKG}/${PKG}.detail.ui.DetailActivity}" ;;
         *)                 echo "  mCurrentFocus=Window{1 u0 ${PKG}/${PKG}.main.MainActivity}" ;;
       esac ;;
@@ -259,4 +266,30 @@ test('keyword退出暂存核验失败：原有界归位仍核验真关键词，�
  const wrong=makeFakePhone({scratchPopTo:'feed',resultsKeyword:'其他词'});const bad=wrong.run(['current-video-link','cvl-fast-wrong-keyword',KW]);
  assert.notEqual(bad.code,0);assert.doesNotMatch(bad.out,/video_id=|return_mode=results/);assert.ok(wrong.dumpPages().includes('results'));
  t.diagnostic(JSON.stringify({fallback_dump_pages:ph.dumpPages(),wrong_keyword_exit:bad.code,wrong_keyword_success_output:false}));
+});
+
+// 真机2026-10-10原批前三条均三份13节点骨架；只回搜索结果时不该验收详情页。
+test('results-only真实入口：正常详情归位不新增媒体键或详情树，最终原词视频tab仍核验',()=>{
+ const ph=makeFakePhone();const r=ph.run(['current-video-link','cvl-results-only',KW]);assert.equal(r.code,0,r.err);
+ assert.equal(ph.dumpPages().filter(x=>x==='detail').length,3);assert.equal(ph.mediaKeys().filter(x=>x==='126').length,0);
+ assert.equal(ph.dumpPages().filter(x=>x==='results').length,2);assert.deepEqual(ph.stack(),['results']);assert.equal(ph.deeplinks(),0);
+});
+test('results-only真实13节点骨架夹具：跳出暂存不读骨架详情三波，最终原词视频tab通过',()=>{
+ const ph=makeFakePhone({returnSkeleton:true});const r=ph.run(['current-video-link','cvl-results-skeleton',KW]);assert.equal(r.code,0,r.err);
+ assert.equal(ph.dumpPages().filter(x=>x==='detail_skeleton').length,0);assert.equal(ph.mediaKeys().filter(x=>x==='126').length,0);
+ assert.equal(ph.dumpPages().filter(x=>x==='results').length,2);assert.deepEqual(ph.stack(),['results']);assert.match(r.out,/video_id=7000000000000000001/);
+});
+test('results-only错误关键词或未选视频tab不能输出成功真实ID',()=>{
+ for(const opts of [{returnSkeleton:true,resultsKeyword:'其他词'},{returnSkeleton:true,videoTabSelected:false}]){
+ const ph=makeFakePhone(opts);const r=ph.run(['current-video-link','cvl-results-reject',KW]);assert.notEqual(r.code,0);assert.doesNotMatch(r.out,/video_id=/);}
+});
+test('results-only退到外部主屏明确失败，不盲退外部栈后伪成功',()=>{
+ const ph=makeFakePhone({scratchPopTo:'outside'});const r=ph.run(['current-video-link','cvl-results-outside',KW]);assert.notEqual(r.code,0);assert.doesNotMatch(r.out,/video_id=/);
+ assert.deepEqual(ph.stack(),['results','outside']);
+});
+
+test('results-only未知mode在任何ADB动作之前明确拒绝',()=>{
+ const code=readFileSync(SCRIPT,'utf8').match(/^_leave_scratch_route\(\) \{[\s\S]*?^\}/m)[0];
+ const r=spawnSync('zsh',['-c',`require_evidence_id(){ return 0; }; ADB=/usr/bin/false; SERIAL=SER1; ${code}\n_leave_scratch_route mode-test unknown-mode`],{encoding:'utf8'});
+ assert.notEqual(r.status,0);assert.match(r.stderr,/unknown.*mode/i);
 });

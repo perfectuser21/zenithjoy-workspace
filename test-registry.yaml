@@ -7198,3 +7198,11 @@ agent_suite:
   status: active
   product: AI员工
   note: "正式退役计划拒绝启动，设备与外部动作零调用"
+
+- id: keyword-return-route-smoke
+  path: .github/workflows/scripts/smoke/keyword-return-route-smoke.sh
+  type: smoke
+  ci: L4
+  status: active
+  product: AI员工
+  note: "GP-Anchor: line02/keyword_acquisition#step2；关键词真实CLI骨架归位与错误最终状态守卫，隔离假ADB不操作真机"
