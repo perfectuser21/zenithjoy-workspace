@@ -148,7 +148,9 @@ def phone_run(serial, task_id, deployment):
     observation = candidates[-1]
     validate_observation(observation, serial)
     observation_path = save(task_id + '.observation.json', observation)
+    schedule = next(s for s in rows(api('recurring-tasks')) if s['id'] == deployment['schedule_id'])
     incoming = {'task_id': task_id, 'actor': 'phone-account-patrol', 'checked_at': now(), 'schedule': '每天22:00（Asia/Shanghai）',
+                'schedule_status': 'active' if schedule['is_active'] else 'paused', 'recurring_task_id': schedule['id'],
                 'phones': {phone['nickname']: observation}}
     source = (ROOT / 'publish.mjs').read_text().replace('__INPUT__', json.dumps(incoming, ensure_ascii=False))
     output = ssh('us-vps', 'docker exec -i -w /app cecelia-node-brain node --input-type=module', input=source, timeout=200)

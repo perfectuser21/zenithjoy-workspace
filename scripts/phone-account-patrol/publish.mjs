@@ -11,6 +11,12 @@ for(const [nickname,data] of Object.entries(incoming.phones)) {
  const id=sources[nickname];if(!id)throw Error('Unknown phone');
  const page=await notionReq(token,`/pages/${id}`);
  let previous={};try{previous=JSON.parse(val(page.properties['账号巡查快照']));}catch{}
+ if(incoming.metadata_only){
+  if(!['active','paused'].includes(incoming.schedule_status))throw Error('维护调度状态必须明确');
+  const snapshot={...previous,schedule_status:incoming.schedule_status,recurring_task_id:incoming.recurring_task_id??previous.recurring_task_id,schedule:incoming.schedule??previous.schedule,schedule_actor:incoming.actor??'phone-account-patrol'};
+  await notionReq(token,`/pages/${id}`,'PATCH',{properties:{'账号巡查快照':txt(JSON.stringify(snapshot))}});
+  report.push({phone:nickname,metadata_only:true});continue;
+ }
  const results={};
  for(const platform of platforms){
   const old=previous.results?.[platform]??{};
@@ -29,7 +35,7 @@ for(const [nickname,data] of Object.entries(incoming.phones)) {
   if(obs.state==='未登录'||obs.state==='未安装')last=last?{...last,historical:true}:null;
   results[platform]={...obs,last_verified:last};
  }
- const snapshot={version:1,schedule_status:previous.schedule_status??'active',recurring_task_id:previous.recurring_task_id??null,registry_id:previous.registry_id??null,actor:incoming.actor??'phone-account-patrol',task_id:incoming.task_id,checked_at:incoming.checked_at,schedule:incoming.schedule??'每天22:00（Asia/Shanghai）',serial:data.serial,results};
+ const snapshot={version:1,schedule_status:incoming.schedule_status??previous.schedule_status??'paused',recurring_task_id:incoming.recurring_task_id??previous.recurring_task_id??null,registry_id:previous.registry_id??null,actor:incoming.actor??'phone-account-patrol',task_id:incoming.task_id,checked_at:incoming.checked_at,schedule:incoming.schedule??'每天22:00（Asia/Shanghai）',serial:data.serial,results};
  const props={'账号核验时间':{date:{start:incoming.checked_at}}};
  const conflicts=[];snapshot.rendered_props={};
  for(const p of platforms){const o=results[p];const last=o.last_verified;const identity=last?`${last.nickname??'昵称待确认'}${last.account_id?'（'+(last.id_verified_at&&last.id_verified_at!==last.verified_at?'上次ID：':'')+last.account_id+'）':''}`:'';
