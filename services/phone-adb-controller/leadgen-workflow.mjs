@@ -11,10 +11,14 @@ import {judgeSteps} from './step-judge.mjs';
 // 任一普通活动失败或Commander叫停，停止后续业务；清场总在最后执行。
 export async function runWorkflow({activities,context,handlers,commander,record,verify}) {
   const results=[];let status='completed',stopped=false;
+  const ordered=[...activities.filter(a=>a.key!=='cleanup'),...activities.filter(a=>a.key==='cleanup')];
   const execute=async activity=>{
     if(typeof handlers[activity.key]!=='function')throw Error(`活动缺实现: ${activity.key}`);
     try {
-      const result=await runActivity({activity,context,execute:handlers[activity.key],commander,record});
+      const remaining=ordered.slice(ordered.indexOf(activity)+1).map(a=>a.key);
+      const activityContext={...context,workflow_progress:{completed_activity_keys:results.filter(r=>['completed','skipped'].includes(r.status)).map(r=>r.activity),
+        remaining_activity_keys:remaining}};
+      const result=await runActivity({activity,context:activityContext,execute:handlers[activity.key],commander,record});
       if(['paused','partial'].includes(result.result?.status))result.status='partial';
       if(result.result?.status==='skipped')result.status='skipped';
       if(result.status==='completed'&&verify){
@@ -24,8 +28,9 @@ export async function runWorkflow({activities,context,handlers,commander,record,
       results.push({activity:activity.key,...result});
       // 清场完成后Commander正常finish是收尾结果；业务提前停止、失败与升级仍如实保留。
       const normalCleanupFinish=activity.key==='cleanup'&&['completed','skipped'].includes(result.status)&&result.decision?.action==='finish';
+      const normalFinalFinish=remaining.length===0&&result.status==='completed'&&result.decision?.action==='finish';
       if(result.status==='failed'){status='failed';stopped=true;}
-      else if(result.status==='partial'||(['finish','escalate'].includes(result.decision?.action)&&!normalCleanupFinish)
+      else if(result.status==='partial'||(['finish','escalate'].includes(result.decision?.action)&&!normalCleanupFinish&&!normalFinalFinish)
         ||result.result?.status==='partial'||result.result?.status==='paused'){
         if(status!=='failed')status='partial';stopped=true;
       }
@@ -42,11 +47,12 @@ export async function runWorkflow({activities,context,handlers,commander,record,
   return {status,results};
 }
 
-export function parseCollection(result,videoId) {
-  if(result.code!==0)throw Error(`采集未完成 code=${result.code}`);
+export function parseCollection(result,videoId,{allowPartial=false}={}) {
+  if(result.code!==0&&!(allowPartial&&result.code===7))throw Error(`采集未完成 code=${result.code}`);
   const lines=result.stdout.split('\n').map(s=>s.replace(/\r$/,''));
   const marker=lines.find(s=>s.startsWith(`COLLECTION\t${videoId}\t`))?.split('\t');
-  if(!marker||!['collected','no_comments'].includes(marker[2]))throw Error('缺同视频采集完成标记');
+  const allowed=result.code===7?['partial']:['collected','no_comments'];
+  if(!marker||!allowed.includes(marker[2]))throw Error('缺同视频采集完成标记');
   const comments=lines.filter(s=>s.startsWith('LEAD\t')).map(s=>{
     const f=s.split('\t');if(f.length!==12)throw Error('评论字段损坏');
     return {nickname:f[1],douyinId:f[2],accountType:f[3],commentBody:f[4],commentTime:f[5],
@@ -149,12 +155,15 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
       for(const v of qualified){try{
         await queue('renew_video',{video_id:v.video_id});const result=await videoAction('collection',v);
         appendFileSync(join(env.WFR_RUN_DIR,'comments.tsv'),result.stdout);
-        const rows=parseCollection(result,v.video_id);
+        const rows=parseCollection(result,v.video_id,{allowPartial:true});
         const telemetry=result.stdout.split('\n').find(s=>s.startsWith(`RESCAN\t${v.video_id}\t`))?.split('\t')[2];
         if(!/^\d+$/.test(telemetry||''))throw Error('缺实际重扫计数，不能宣称采集通过');
         rescans+=Number(telemetry);
-        const stored=await queue('collect',{video_id:v.video_id,comments:rows});
-        comments+=stored.comments;collected++;leased=leased.filter(p=>p.video_id!==v.video_id);
+        const partial=result.code===7;
+        const stored=await queue(partial?'collect_partial':'collect',{video_id:v.video_id,comments:rows});
+        comments+=stored.comments;
+        if(partial)failures.push({video_id:v.video_id,code:7,reason:'采集在预算或停止边界结束，已保存核验评论，视频仍未采完',comments_saved:stored.comments});
+        else {collected++;leased=leased.filter(p=>p.video_id!==v.video_id);}
       }catch(error){failures.push({video_id:v.video_id,reason:error.message});}}
       return {collected,comments,comments_collected:comments,videos_processed:collected,rescan_count:rescans,
         rescan_rate:qualified.length?rescans/qualified.length:0,failures,...(failures.length?{status:'partial'}:{})};},

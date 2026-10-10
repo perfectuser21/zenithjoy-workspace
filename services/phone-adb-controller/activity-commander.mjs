@@ -10,6 +10,7 @@ const require = createRequire(import.meta.url);
 const safeError = error => String(error?.message || error)
   .replace(/Bearer\s+[^\s"']+/gi, 'Bearer ***')
   .replace(/(?:api[_-]?key|token|password)\s*[=:]\s*[^\s"']+/gi, '凭据=***').slice(0, 400);
+const workflowProgressRule = 'workflow_progress.remaining_activity_keys列出真实剩余活动。单个活动成功不等于全流程完成；当前活动成功且还有剩余活动时应continue。finish是停止整个流程并清场，正常完成只能在最后活动成功后使用；提前安全停止必须明确停止原因，不能把活动完成当全流程完成。';
 
 export function parseCommanderResponse(raw) {
   const body = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -31,7 +32,7 @@ export function openClawCommander({ agent = 'media', model, timeoutMs = 60000, e
       + `只输出JSON {"action":"continue|retry|finish|escalate","reason":"证据与理由"}。`
       + `retry仅建议失败活动重试，finish要求执行器保留产物并清场。读不到必须写读不到，不得编造成功。\n${JSON.stringify(receipt)}`;
     const args = ['agent', '--agent', agent, '--session-id', key, '--thinking', 'low',
-      '--timeout', String(Math.floor(timeoutMs / 1000)), '--json', '--message', prompt];
+      '--timeout', String(Math.floor(timeoutMs / 1000)), '--json', '--message', workflowProgressRule+prompt];
     if (model) args.push('--model', model);
     try {
       const { stdout } = await execute('openclaw', args, { timeout: timeoutMs + 5000, maxBuffer: 1024 * 1024 });
@@ -54,7 +55,7 @@ export function openRouterCommander({ model = 'google/gemini-2.5-flash', timeout
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model, temperature: 0, max_tokens: 350,
         response_format: { type: 'json_object' }, messages: [
-          { role: 'system', content: '你是逐活动Commander。reason必须是简体中文。只根据本次证据判断；缺信息说读不到，不编造成功。不能发私信或变更网络、账号、凭据、代码和定时器。只输出JSON action=continue|retry|finish|escalate和reason。失败仅建议安全重试；finish由执行器保留产物后清场。' },
+          { role: 'system', content: '你是逐活动Commander。reason必须是简体中文。只根据本次证据判断；缺信息说读不到，不编造成功。不能发私信或变更网络、账号、凭据、代码和定时器。只输出JSON action=continue|retry|finish|escalate和reason。失败仅建议安全重试；finish由执行器保留产物后清场。'+workflowProgressRule },
           { role: 'user', content: JSON.stringify(receipt) },
         ] }),
     });

@@ -134,9 +134,11 @@ except Exception: print("medium")' "$count")"
   local started="$(date +%s)" budget="${QUEUED_VIDEO_COLLECTION_SECONDS:-480}"
   [[ "$budget" == <-> ]] && (( budget > 0 )) || return 2
   while (( screens < 100 )); do
-    wf_deadline_reached && return 7
-    wf_stop_requested && return 7
-    (( $(date +%s) - started < budget )) || return 7
+    if wf_deadline_reached || wf_stop_requested || (( $(date +%s) - started >= budget )); then
+      # 只在完整评论动作的边界保存已核验行；仍返回非成功，不标整视频采完。
+      print -- "COLLECTION\t$VID\tpartial\t${#emitted}"
+      return 7
+    fi
     "$C" --profile "$P" lock-refresh "$TAG" </dev/null >/dev/null || return 3
     screens=$((screens+1)); newlines=0
     raw="$("$C" --profile "$P" collect-comments "$TAG-v$VID-screen$screens" </dev/null)" || return 6
@@ -199,7 +201,10 @@ except Exception: print("medium")' "$count")"
       qv_nap 1.5
     fi
   done
-  (( screens < 100 )) || return 7
+  if (( screens >= 100 )); then
+    print -- "COLLECTION\t$VID\tpartial\t${#emitted}"
+    return 7
+  fi
   print -- "COLLECTION\t$VID\tcollected\t${#emitted}"
   # collected 状态只由调用方在评论事务提交后回填，禁止在手机脚本标记。
 }

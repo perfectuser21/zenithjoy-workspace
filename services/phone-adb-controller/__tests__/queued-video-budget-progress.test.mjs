@@ -4,7 +4,9 @@ import {mkdtempSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
-import {createHandlers} from '../leadgen-workflow.mjs';
+import {createHandlers,parseCollection} from '../leadgen-workflow.mjs';
+import {createRequire} from 'node:module';
+const {queueRequest}=createRequire(import.meta.url)('../leadgen-queue.js');
 
 const root = new URL('../',import.meta.url).pathname;
 const vid = '7681632828384394202';
@@ -50,4 +52,30 @@ case 'commenter-card-link':console.log('profile_url=https://v.douyin.com/person1
   await h.cleanup();assert.ok(calls.some(c=>c.op==='release_video'&&c.video_id===vid));
   assert.match(readFileSync(join(d,'comments.tsv'),'utf8'),/LEAD\t甲\tperson123/);
  }finally{rmSync(d,{recursive:true,force:true});}
+});
+
+test('partial progress requires its exact video marker and count, and never accepts hard failures',()=>{
+ const row='LEAD\t甲\tperson123\tpersonal\t如何报名\t今天\t北京\t培训\t人工智能\t\thttps://v.douyin.com/person123/\thttps://v.douyin.com/video123/\n';
+ const good={code:7,stdout:row+`COLLECTION\t${vid}\tpartial\t1\n`};
+ assert.equal(parseCollection(good,vid,{allowPartial:true}).length,1);
+ assert.throws(()=>parseCollection(good,vid));
+ for(const bad of [{...good,code:124},{...good,code:4},{...good,code:0},
+  {code:7,stdout:row},{code:7,stdout:row+`COLLECTION\t${vid}\tpartial\t2\n`},
+  {code:7,stdout:row+'COLLECTION\t7669710300359075529\tpartial\t1\n'}]){
+  assert.throws(()=>parseCollection(bad,vid,{allowPartial:true}));
+ }
+});
+
+test('partial comment transaction commits rows without changing the video completion state',async()=>{
+ const calls=[];const client={query:async(sql,args)=>{
+  calls.push({sql,args});
+  if(sql.startsWith('SELECT video_id'))return {rows:[{judgment_status:'matched'}]};
+  if(sql.includes('INSERT INTO zenithjoy.leadgen_comments'))return {rows:[{id:'new-comment'}]};
+  assert.ok(['BEGIN','COMMIT','ROLLBACK'].includes(sql),`unexpected video status change: ${sql}`);return {rows:[]};
+ },release(){}};
+ const result=await queueRequest({connect:async()=>client},{op:'collect_partial',line:'jinuo',run:'budget-progress',video_id:vid,
+  comments:[{nickname:'甲',douyinId:'person123',commentBody:'如何报名'}]});
+ assert.equal(result.status,'partial');assert.equal(result.inserted,1);
+ assert.ok(calls.some(c=>c.sql==='COMMIT'));
+ assert.ok(!calls.some(c=>c.sql.includes('UPDATE zenithjoy.leadgen_videos')));
 });
