@@ -13,7 +13,7 @@ const JQ = spawnSync("bash", ["-lc", "command -v jq"], { encoding: "utf8" }).std
 
 function env(home) {
   // WFR_BRAIN_ENV 指向不存在的文件：开发机 ~/.credentials/brain.env 真实存在，不隔离会把测试工件回执到生产 Brain
-  return { ...process.env, WFR_HOME: home, WFR_NODE: process.execPath, WFR_JQ: JQ, WFR_LEDGER_MJS: LEDGER, WFR_SCP_TARGET: "", WFR_BRAIN_ENV: join(home, "no-brain.env"), BRAIN_URL: "", BRAIN_INTERNAL_TOKEN: "", WFR_BRAIN_TASK_ID: "",
+  return { ...process.env, HOME: home, WFR_HOME: home, WFR_NODE: process.execPath, WFR_JQ: JQ, WFR_LEDGER_MJS: LEDGER, WFR_SCP_TARGET: "", WFR_BRAIN_ENV: join(home, "no-brain.env"), BRAIN_URL: "", BRAIN_INTERNAL_TOKEN: "", WFR_BRAIN_TASK_ID: "",
     // 6b133a81 起默认 8 个 stage 全读回(含 init 的 preflight):测试默认关掉,需要读回的用例经 PROBE_ENV 显式打开,绝不连真 mmv
     WFR_PROBE_STAGES: "" };
 }
