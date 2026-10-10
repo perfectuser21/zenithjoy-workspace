@@ -13,3 +13,5 @@
 这份记录只证明代码和模拟控制器回归，正式部署与新实机批次必须另留实际发布、设备、PG和耗时证据；104暂停发送。
 
 提交后的69项product-map全套测试通过；null明确VID清单先红后绿，队列9项通过。PR 2099首轮缺少GP-Anchor声明，被既有L1门禁正确拦截；已补读真实GP分类并修正PR说明，未改门禁。DeepSeek审查3次均返回空content，记录provider异常，不伪造审查通过。
+
+本次GP锚定读取product-map/generated/product-map.md：line02/keyword_acquisition为active，包含leadgen-split-smoke；模板customer_smart_acquisition已deprecated，按SSOT采用active GP。
