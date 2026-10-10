@@ -2701,8 +2701,187 @@ open_comments() {
   die "comment panel did not open after tap at ${cx},${cy} (src=$src); recovered with back; evidence=$panel_xml"
 }
 
+# ── 受控素材下发 / 中文输入（1010，Brain 任务 8fdeaeb4）────────────────────
+# 技能工厂规定手机操作只能经本控制器、禁止裸 adb；发布类技能缺这两个原子动作就无法起步。
+# 两条命令都是「写设备」动作：必须由当前持锁 run 调用（全局 --lock-owner RUN 声明身份），
+# 结果只输出一行 key=value；失败时 stdout 打一行 <cmd>=fail class=<分类> reason=<代码>，
+# stderr 照 die 风格打人话 + failure_class=<分类>，退出码 2。
+# 分类：empty_ok(无事可做,退出码0) / retryable(重试可能成功) / fatal(调用方参数或协议错,重试无用)
+#       / needs_human(设备状态需人处理,如未装 ADBKeyboard、输入法还原不了)。
+MEDIA_CAMERA_DIR="/sdcard/DCIM/Camera"
+ADBKEYBOARD_IME="com.android.adbkeyboard/.AdbIME"
+
+ctl_fail() {
+  # ctl_fail <结果键> <分类> <原因代码> <人话>
+  print -- "$1=fail class=$2 reason=$3"
+  die "$1: $4" "$2"
+}
+
+# 写设备命令的持锁闸：锁必须存在、属于 --lock-owner 声明的 run（同 run 归一规则）、且未过 TTL。
+require_held_lock() {
+  local key="$1" owner
+  [[ -n "$LOCK_OWNER" ]] || ctl_fail "$key" fatal lock_owner_required "requires --lock-owner RUN (the run that holds the device lock)"
+  require_run_id "$LOCK_OWNER"
+  [[ -r "$LOCK_DIR/owner" ]] || ctl_fail "$key" fatal lock_not_held "device lock is free; lock-acquire it first"
+  owner="$(<"$LOCK_DIR/owner")"
+  same_run_lock "$owner" "$LOCK_OWNER" || ctl_fail "$key" fatal lock_not_held "device lock is held by another run: $owner"
+  ! lock_is_stale || ctl_fail "$key" fatal lock_stale "device lock is past its TTL (${LOCK_TTL_SECONDS}s); lock-refresh before writing to the device"
+}
+
+# 设备在线 + 型号核对，失败按分类报（check_target 的 die 不带分类，这里单独写）。
+require_target_for() {
+  local key="$1" state actual_model
+  state="$($ADB -s "$SERIAL" get-state 2>/dev/null || print -- offline)"
+  [[ "$state" == "device" ]] || ctl_fail "$key" retryable target_offline "target phone is offline (state=$state)"
+  actual_model="$($ADB -s "$SERIAL" shell getprop ro.product.model 2>/dev/null | tr -d '\r')"
+  [[ "$actual_model" == "$MODEL" ]] || ctl_fail "$key" fatal target_model_mismatch "target model mismatch (expected $MODEL, got ${actual_model:-unknown})"
+}
+
+# 相机风格文件名：VID_/IMG_ + yyyymmdd_hhmmss (+ 可选 _N 序号) + 扩展名；前缀必须与媒体类型一致。
+media_name_ok() {
+  local name="$1" prefix="$2" ext="$3"
+  [[ "$name" =~ "^${prefix}_[0-9]{8}_[0-9]{6}(_[0-9]{1,3})?\\.${ext}\$" ]]
+}
+
+remote_file_size() {
+  "$ADB" -s "$SERIAL" shell stat -c %s "$1" 2>/dev/null | tr -d '\r' || true
+}
+
+media_push() {
+  local src name="" ext prefix remote local_size remote_size polls i row media_id media_size
+  [[ "$#" -ge 1 ]] || die "usage: douyin-phone-adb --profile PROFILE --lock-owner RUN media-push LOCAL_FILE [--name VID_yyyymmdd_hhmmss.mp4]"
+  src="$1"; shift
+  while (( $# )); do
+    case "$1" in
+      --name) [[ "$#" -ge 2 ]] || die "usage: media-push LOCAL_FILE [--name NAME]"; name="$2"; shift 2;;
+      *) die "usage: media-push LOCAL_FILE [--name NAME]";;
+    esac
+  done
+  require_held_lock media_push
+  [[ -f "$src" && -r "$src" ]] || ctl_fail media_push fatal local_file_missing "local file is missing or unreadable: $src"
+  local_size="$(/usr/bin/wc -c < "$src" | tr -d ' ')"
+  [[ "$local_size" == <-> ]] && (( local_size > 0 )) || ctl_fail media_push fatal local_file_empty "local file is empty: $src"
+  ext="${${src:e}:l}"
+  case "$ext" in
+    mp4) prefix=VID;;
+    jpg|jpeg|png) prefix=IMG;;
+    *) ctl_fail media_push fatal unsupported_media_type "only mp4/jpg/jpeg/png are supported (got .$ext)";;
+  esac
+  [[ -n "$name" ]] || name="${prefix}_$(/bin/date +%Y%m%d_%H%M%S).${ext}"
+  media_name_ok "$name" "$prefix" "$ext" \
+    || ctl_fail media_push fatal bad_media_name "name must be camera style ${prefix}_yyyymmdd_hhmmss.${ext} matching the local file type (got $name)"
+  remote="$MEDIA_CAMERA_DIR/$name"
+  require_target_for media_push
+  [[ "$(remote_file_size "$remote")" != <-> ]] || ctl_fail media_push fatal remote_name_taken "refusing to overwrite existing $remote"
+  "$ADB" -s "$SERIAL" push "$src" "$remote" >/dev/null 2>&1 || {
+    "$ADB" -s "$SERIAL" shell rm -f "$remote" >/dev/null 2>&1 || true
+    ctl_fail media_push retryable push_failed "adb push failed for $remote"
+  }
+  remote_size="$(remote_file_size "$remote")"
+  if [[ "$remote_size" != "$local_size" ]]; then
+    "$ADB" -s "$SERIAL" shell rm -f "$remote" >/dev/null 2>&1 || true
+    ctl_fail media_push retryable size_mismatch "remote size ${remote_size:-missing} != local size $local_size; partial file removed"
+  fi
+  "$ADB" -s "$SERIAL" shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file://$remote" >/dev/null 2>&1 || true
+  polls="${DOUYIN_MEDIA_SCAN_POLLS:-10}"
+  require_uint "$polls"
+  (( polls >= 1 && polls <= 20 )) || die "DOUYIN_MEDIA_SCAN_POLLS must be 1..20"
+  media_id=""
+  for (( i = 1; i <= polls; i++ )); do
+    row="$("$ADB" -s "$SERIAL" shell content query --uri content://media/external/file --projection _id:_size --where "\"_data='$remote'\"" 2>/dev/null | tr -d '\r' | /usr/bin/grep -m1 '^Row:' || true)"
+    media_id="$(print -r -- "$row" | /usr/bin/sed -nE 's/.*[[:space:]]_id=([0-9]+).*/\1/p')"
+    media_size="$(print -r -- "$row" | /usr/bin/sed -nE 's/.*[[:space:]]_size=([0-9]+).*/\1/p')"
+    [[ -n "$media_id" && "$media_size" == "$local_size" ]] && break
+    media_id=""
+    # 中途补发一次扫描：个别 ROM 首个广播落在扫描器忙时会被丢。
+    (( i == (polls + 1) / 2 )) && "$ADB" -s "$SERIAL" shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file://$remote" >/dev/null 2>&1 || true
+    (( i < polls )) && wait_ms 500
+  done
+  if [[ -z "$media_id" ]]; then
+    # 相册查不到的文件对发布流程等于不存在；删掉免得重试时堆出重复素材。
+    "$ADB" -s "$SERIAL" shell rm -f "$remote" >/dev/null 2>&1 || true
+    "$ADB" -s "$SERIAL" shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file://$remote" >/dev/null 2>&1 || true
+    ctl_fail media_push retryable media_not_indexed "media library did not index $remote after $polls polls; file removed"
+  fi
+  print -- "media_push=ok path=$remote name=$name size=$local_size media_id=$media_id scan=indexed"
+}
+
+current_ime() {
+  "$ADB" -s "$SERIAL" shell settings get secure default_input_method 2>/dev/null | tr -d '\r' || true
+}
+
+# 还原输入法并回读；回读不一致再试一次。成功返回 0。
+ti_restore_ime() {
+  local try
+  [[ -n "${_TI_ORIG_IME:-}" ]] || return 0
+  for try in 1 2; do
+    "$ADB" -s "$SERIAL" shell ime set "$_TI_ORIG_IME" >/dev/null 2>&1 || true
+    [[ "$(current_ime)" == "$_TI_ORIG_IME" ]] && return 0
+    wait_ms 300
+  done
+  return 1
+}
+
+text_input() {
+  local text bytes eid before_xml focus_line field typed_xml typed_value enable_out cur b64 restored=1
+  [[ "$#" == 1 ]] || die "usage: douyin-phone-adb --profile PROFILE --lock-owner RUN text-input UTF8_TEXT"
+  text="$1"
+  require_held_lock text_input
+  if [[ -z "$text" ]]; then
+    print -- "text_input=empty_ok bytes=0"
+    return 0
+  fi
+  [[ "$text" != *$'\r'* ]] || ctl_fail text_input fatal bad_text "text must not contain carriage returns"
+  bytes="$(print -rn -- "$text" | /usr/bin/wc -c | tr -d ' ')"
+  (( bytes <= 6000 )) || ctl_fail text_input fatal bad_text "text is longer than 6000 UTF-8 bytes"
+  print -rn -- "$text" | /usr/bin/iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1 || ctl_fail text_input fatal bad_text "text is not valid UTF-8"
+  require_target_for text_input
+  eid="text-input-$(/bin/date +%Y%m%d%H%M%S)-$$"
+  before_xml="$(ui_evidence "${eid}-before")"
+  focus_line="$(/usr/bin/grep -oE '<node[^>]+focused="true"[^>]*>' "$before_xml" | /usr/bin/head -1 || true)"
+  [[ -n "$focus_line" && "$focus_line" == *'class="android.widget.EditText"'* ]] \
+    || ctl_fail text_input retryable no_focused_input "no focused EditText on screen; tap the input field first (evidence=$before_xml)"
+  field="$(print -r -- "$focus_line" | /usr/bin/sed -nE 's/.*resource-id="([^"]*)".*/\1/p')"
+
+  # 原输入法存全局：EXIT trap 在函数返回/退出时才跑，local 那时已销毁（见 private-message-send 0916 注释）。
+  _TI_ORIG_IME="$(current_ime)"
+  [[ -n "$_TI_ORIG_IME" && "$_TI_ORIG_IME" != "null" ]] || ctl_fail text_input needs_human ime_unreadable "original input method could not be read"
+  trap 'ti_restore_ime || true' EXIT
+  trap 'ti_restore_ime || true; exit 130' INT
+  trap 'ti_restore_ime || true; exit 143' TERM
+  # 校验沿用 private-message-send 的 0916 判例：enable 结果当场判，区分没装 / 装了启不了。
+  enable_out="$("$ADB" -s "$SERIAL" shell ime enable "$ADBKEYBOARD_IME" 2>&1 | tr -d '\r')"
+  case "$enable_out" in
+    *"now enabled"*|*"already enabled"*) : ;;
+    *)
+      if ! "$ADB" -s "$SERIAL" shell pm list packages 2>/dev/null | /usr/bin/grep -q adbkeyboard; then
+        ctl_fail text_input needs_human adbkeyboard_not_installed "AdbIME 未安装(pm list 无 com.android.adbkeyboard)——该机需先装 ADBKeyboard.apk 才能输入"
+      fi
+      ctl_fail text_input needs_human adbkeyboard_enable_failed "AdbIME 已安装但启用失败(疑 ROM 限制): $enable_out"
+      ;;
+  esac
+  "$ADB" -s "$SERIAL" shell ime set "$ADBKEYBOARD_IME" >/dev/null 2>&1 || true
+  cur="$(current_ime)"
+  [[ "$cur" == *adbkeyboard* ]] || ctl_fail text_input retryable ime_switch_failed "AdbIME 切换未生效(当前仍为 $cur)"
+  b64="$(print -rn -- "$text" | /usr/bin/base64 | tr -d '\n')"
+  "$ADB" -s "$SERIAL" shell am broadcast -a ADB_CLEAR_TEXT >/dev/null 2>&1 || true
+  "$ADB" -s "$SERIAL" shell am broadcast -a ADB_INPUT_B64 --es msg "$b64" >/dev/null 2>&1 || true
+  wait_ms 700
+  typed_xml="$(ui_evidence "${eid}-typed")"
+  typed_value="$(/usr/bin/xmllint --xpath 'string((//node[@focused="true"])[1]/@text)' "$typed_xml" 2>/dev/null || true)"
+
+  # 无论成败先还原输入法并回读，再判结果；还原失败压过一切（手机会卡在 ADBKeyboard 上）。
+  ti_restore_ime || restored=0
+  trap - EXIT INT TERM
+  (( restored )) || ctl_fail text_input needs_human ime_restore_failed "input method stuck at $(current_ime); expected $_TI_ORIG_IME"
+  [[ "$typed_value" == "$text" ]] \
+    || ctl_fail text_input retryable readback_mismatch "focused field readback did not exactly match the requested text (evidence=$typed_xml)"
+  print -- "text_input=ok bytes=$bytes sha256=$(print -rn -- "$text" | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}') field=${field:-unknown} ime_restored=$_TI_ORIG_IME evidence=$typed_xml"
+}
+
 # 独立只读任务：在同一flock内检查原owner并执行整个命令，锁操作不能插队。
-if [[ -n "$LOCK_OWNER" ]]; then
+# media-push / text-input 也用 --lock-owner 声明调用方 run，但只做持锁核对(require_held_lock)，不走 guard 包装。
+if [[ -n "$LOCK_OWNER" && "$command" != (media-push|text-input) ]]; then
   case "$command" in
     open-app|account-current|snapshot-evidence|ui-evidence|close-app|return-safe-desktop) ;;
     *) die 'required lock owner is supported only for standalone read commands';;
@@ -3343,6 +3522,12 @@ case "$command" in
     print -- "foreground=${focus:-unknown}"
     snapshot
     ;;
+  media-push)
+    media_push "${@:2}"
+    ;;
+  text-input)
+    text_input "${@:2}"
+    ;;
   return-safe-desktop)
     # 0929批次4新建(契约"回安全桌面"此前零实现,6b133a81): 契约要求"前台=launcher"。
     # 不 hardcode 任何厂商 launcher 包名——0929 真机(xian-m4 两台荣耀机)实测是
@@ -3367,6 +3552,6 @@ case "$command" in
     print -- "foreground=${focus:-unknown}"
     ;;
   *)
-    die "allowed commands: runtime-contract status diagnose preflight foreground lock-acquire lock-acquire-new lock-status lock-release lock-release-exact lock-refresh lock-reap with-lock refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link own-profile account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-grid-scroll search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid results-controls-from-xml filter-panel-location"
+    die "allowed commands: runtime-contract status diagnose preflight foreground lock-acquire lock-acquire-new lock-status lock-release lock-release-exact lock-refresh lock-reap with-lock refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link own-profile account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-grid-scroll search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid results-controls-from-xml filter-panel-location media-push text-input"
     ;;
 esac
