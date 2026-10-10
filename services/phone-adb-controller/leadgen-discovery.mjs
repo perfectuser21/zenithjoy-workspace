@@ -75,7 +75,14 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
        else{state.persisted.push({...video,status:stored.status,inserted:stored.inserted});state.counts.persisted++;if(stored.inserted)state.counts.created++;else state.counts.reused++;}
        progress();
        if(f.return_recovered_via==='research'){await filters(ctx,eid+'-recover');for(let s=0;s<screen;s++){await phone('search-grid-scroll',eid+'-restore'+s,'up');await pause(2);}}
-      }catch(e){failure(target,'capture_failed',e);stopReason='capture_failed';break sourceLoop;}
+      }catch(e){
+       try{boundary();}catch(stop){
+        if(['stop_requested','budget_exhausted'].includes(stop.message)){
+         stopReason=stop.message;state.known_gaps.push({source:target.source,title:target.title,author:target.author,kind:'interrupted_capture',reason:stopReason});break sourceLoop;
+        }
+       }
+       failure(target,'capture_failed',e);stopReason='capture_failed';break sourceLoop;
+      }
      }
      if(limit&&state.counts.persisted>=limit){stopReason='limit_reached';break sourceLoop;}
      if(page.end)break;

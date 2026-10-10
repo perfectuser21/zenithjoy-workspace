@@ -26,7 +26,7 @@ test('DNS timeout两次后明确归因，不能变成缺video ID；总网络预�
 });
 test('瞬时DNS失败后第二次HEAD可恢复，保留真实成功redirect',()=>{const r=run({firstFail:true,rc:6,message:'Could not resolve host: v.douyin.com'});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'https://www.douyin.com/video/7000000000000000001');assert.equal(r.calls.length,2);assert.match(r.stderr,/LINK_RESOLVE_DNS.*curl_rc=6/);});
 test('第一轮解析成功不增加请求，连接失败归因不冒充DNS',()=>{assert.equal(run().calls.length,1);const r=run({alwaysFail:true,rc:7,message:'Failed to connect'});assert.match(r.stderr,/LINK_RESOLVE_CONNECT.*curl_rc=7/);assert.doesNotMatch(r.stderr,/LINK_RESOLVE_DNS/);});
-test('current-video-link生产入口实际使用新解析器且保留COPY_STALE护栏',()=>{assert.match(controller,/resolved_url="\$\(resolve_content_short_url "\$short_url" "\$evidence_id"\)"/);assert.match(controller,/clip_guard_check "\$short_url"/);});
+test('current-video-link生产入口实际使用新解析器且保留COPY_STALE护栏',()=>{assert.match(controller,/resolved_url="\$\(resolve_content_short_url "\$short_url" "\$evidence_id"\)"/);assert.match(controller,/clip_guard_check "\$shared_url"/);});
 test('真实首跳已有视频ID时不访问落地页，后续DNS失败不能丢掉已验证ID',()=>{
  const r=run({downstreamTimeout:true});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'https://www.douyin.com/video/7000000000000000001');assert.equal(r.calls.length,1);assert.doesNotMatch(r.calls[0],/-sSIL|--location/);
 });

@@ -4,6 +4,16 @@ import {mkdtempSync,rmSync,readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
+test('采集返回partial时，Commander收到真实部分状态而不是脚本正常返回后的completed',async()=>{
+ const {runWorkflow}=await import('../leadgen-workflow.mjs');const receipts=[];
+ const result=await runWorkflow({activities:[{key:'collect_videos'},{key:'cleanup'}],context:{},
+  handlers:{collect_videos:async()=>({status:'partial',stop_reason:'capture_failed',counts:{persisted:11,failed:1}}),cleanup:async()=>({released:true})},
+  commander:async receipt=>{receipts.push(receipt);return {action:'continue',reason:'依据真实状态'};},record:async()=>{}});
+ assert.equal(result.status,'partial');
+ assert.equal(receipts.find(r=>r.activity==='collect_videos'&&r.phase==='after').evidence.status,'partial');
+ assert.equal(receipts.find(r=>r.activity==='collect_videos'&&r.phase==='after').evidence.result.counts.persisted,11);
+});
+
 test('Commander叫停后不执行下一活动，锁内清场仍有前后Commander回执', async () => {
   const {runWorkflow} = await import('../leadgen-workflow.mjs');
   const executed=[],records=[];

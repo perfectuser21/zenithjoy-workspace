@@ -55,7 +55,7 @@ const FEED_XML = `${XML_HEAD}</node></hierarchy>`;
  *  am start search/tabs?keyword=<词> → 压 results（兜底重搜）；keyevent 4 → 出栈一层
  *  scratchPopTo: 暂存路线退完落在哪（默认 detail；'feed' 模拟退飞了）
  */
-function makeFakePhone({ scratchPopTo = 'detail', playState = 'paused', interactiveCenter = false } = {}) {
+function makeFakePhone({ scratchPopTo = 'detail', playState = 'paused', interactiveCenter = false, copiedShareUrl = LINK, forbidHead = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'cvl-leave-'));
   mkdirSync(join(dir, 'fx'));
   writeFileSync(join(dir, 'fx', 'detail.xml'), detailXml('playing'));
@@ -63,7 +63,7 @@ function makeFakePhone({ scratchPopTo = 'detail', playState = 'paused', interact
   writeFileSync(join(dir, 'media_keys'), '');
   writeFileSync(join(dir, 'center_taps'), '0');
   writeFileSync(join(dir, 'fx', 'panel.xml'), PANEL_XML);
-  writeFileSync(join(dir, 'fx', 'scratch.xml'), SCRATCH_XML);
+  writeFileSync(join(dir, 'fx', 'scratch.xml'), SCRATCH_XML.replace(LINK,copiedShareUrl.replaceAll('&','&amp;')));
   writeFileSync(join(dir, 'fx', 'feed.xml'), FEED_XML);
   copyFileSync(join(FIXTURES, 'real-search-results-grid.xml'), join(dir, 'fx', 'results.xml'));
   writeFileSync(join(dir, 'fx', 'shot.png'), 'png');
@@ -75,7 +75,7 @@ function makeFakePhone({ scratchPopTo = 'detail', playState = 'paused', interact
   const reg = join(dir, 'r.tsv');
   writeFileSync(reg, 'legacy\tSER1\tANY-MODEL\t1199\t2663\n');
   const curl = join(dir, 'curl');
-  writeFileSync(curl, `#!/bin/sh\nprintf 'HTTP/1.1 302 Found\\r\\nLocation: https://www.douyin.com/video/7000000000000000001?previous_page=app_code_link\\r\\n\\r\\n'\n`, { mode: 0o755 });
+  writeFileSync(curl, forbidHead?`#!/bin/sh\necho HEAD_MUST_NOT_BE_CALLED >&2\nexit 99\n`:`#!/bin/sh\nprintf 'HTTP/1.1 302 Found\\r\\nLocation: https://www.douyin.com/video/7000000000000000001?previous_page=app_code_link\\r\\n\\r\\n'\n`, { mode: 0o755 });
   const adb = join(dir, 'adb');
   writeFileSync(adb, `#!/bin/sh
 D=${dir}
@@ -151,6 +151,16 @@ exit 0
     mediaKeys: () => readFileSync(join(dir, 'media_keys'), 'utf8').trim().split('\n'),
   };
 }
+
+test('真实取链入口接受iesdouyin复制文案并保留ID、归位，不额外HEAD已有ID的长链接',()=>{
+ const ph=makeFakePhone({copiedShareUrl:'https://www.iesdouyin.com/share/video/7619696979182935153/?region=CN&from=copy',forbidHead:true});
+ const r=ph.run(['current-video-link','cvl-direct',KW]);
+ assert.equal(r.code,0,r.err);assert.match(r.out,/video_id=7619696979182935153/);
+ assert.match(r.out,/resolved_url=https:\/\/www\.douyin\.com\/video\/7619696979182935153/);
+ assert.match(r.out,/^short_url=$/m);assert.match(r.out,/return_mode=results/);
+ assert.match(r.out,/shared_url=https:\/\/www\.iesdouyin\.com\/share\/video\/7619696979182935153/);
+ assert.deepEqual(ph.stack(),['results']);assert.equal(ph.deeplinks(),0);
+});
 
 test('取完链接后返回栈只剩 结果页→详情页（暂存路线已退干净，不再 deep link 重开）', () => {
   const ph = makeFakePhone();
