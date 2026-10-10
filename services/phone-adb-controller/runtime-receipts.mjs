@@ -25,12 +25,24 @@ export function request(path,body){
   if(status<200||status>=300){const err=Error(`Brain HTTP ${status}`);err.status=status;throw err;}
   return JSON.parse(output.slice(0,split));
 }
-export function send(event){
+// 上报最多60秒；正式入口已有整轮起点/预算，证据不能越过剩余预算。
+function deliveryDeadline(now=Date.now()){
+  let deadline=now+60000;
+  const start=Number(e.WF_RUN_START_TS),budget=Number(e.WF_RUN_MAX_SECONDS);
+  if(Number.isFinite(start)&&start>0&&Number.isFinite(budget)&&budget>0)deadline=Math.min(deadline,(start+budget)*1000);
+  const explicit=Number(e.WFR_EVIDENCE_DEADLINE_MS);
+  if(Number.isFinite(explicit)&&explicit>0)deadline=Math.min(deadline,explicit);
+  return deadline;
+}
+export function send(event,{deadline=deliveryDeadline()}={}){
   if(!e.BRAIN_INTERNAL_TOKEN)return 0;
-  const output=execFileSync('curl',['-s','--connect-timeout','3','-m','8','-w','\n%{http_code}','-X','POST',event.endpoint,'-H',`Authorization: Bearer ${e.BRAIN_INTERNAL_TOKEN}`,'-H','Content-Type: application/json','-d',JSON.stringify(event.body)],{encoding:'utf8'});
+  const remaining=(deadline-Date.now())/1000;
+  if(remaining<=0)return 0;
+  const maxTime=String(Math.min(60,remaining));
+  const output=execFileSync('curl',['-s','--connect-timeout','3','-m',maxTime,'-w','\n%{http_code}','-X','POST',event.endpoint,'-H',`Authorization: Bearer ${e.BRAIN_INTERNAL_TOKEN}`,'-H','Content-Type: application/json','-d',JSON.stringify(event.body)],{encoding:'utf8'});
   return Number(output.trim().split('\n').at(-1));
 }
-async function flushReceipts(dir){const status=await flush(dir,{send,limit:Math.max(1,Math.min(20,Number(e.WFR_OUTBOX_LIMIT)||3))});if(status.pending||status.blocked)process.stderr.write(`WFR_WARN span/callback evidence pending=${status.pending} blocked=${status.blocked}\n`);return status;}
+async function flushReceipts(dir){const deadline=deliveryDeadline();const status=await flush(dir,{send:event=>send(event,{deadline}),limit:Math.max(1,Math.min(20,Number(e.WFR_OUTBOX_LIMIT)||3))});if(status.pending||status.blocked)process.stderr.write(`WFR_WARN span/callback evidence pending=${status.pending} blocked=${status.blocked}\n`);return status;}
 export async function run(args){
   const [cmd,...rest]=args; const dir=e.WFR_RUN_DIR;
   const indexRoot=resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'run-index');
