@@ -75,6 +75,10 @@ class PatrolContractTests(unittest.TestCase):
         schedule['template'] = {'activated_at': '2026-10-10T09:00:00+00:00'}
         self.assertEqual(runner.schedule_health(schedule, [], '2026-10-10T09:30:00+00:00')['status'], 'awaiting_first_run')
 
+    def test_watchdog_accepts_brain_utc_timestamps_on_native_python(self):
+        schedule = {'id': 's', 'is_active': True, 'template': {'activated_at': '2026-10-10T09:00:00.000Z'}}
+        self.assertEqual(runner.schedule_health(schedule, [], '2026-10-10T09:30:00.000Z')['status'], 'awaiting_first_run')
+
     def test_watchdog_checks_real_children_and_deferred_receipts(self):
         batch = {'id': 'b', 'status': 'completed', 'result': {'script': {'stdout': '{"children":[{"task_id":"p"}]}'}}}
         child = {'id': 'p', 'status': 'queued'}
