@@ -15,11 +15,11 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
  const sort=env.LEADGEN_SORT||'latest',time=env.LEADGEN_TIME_LAYER||'six_months',maxScreens=Number(env.LEADGEN_MAX_SCREENS||100);
  if(!['comprehensive','latest','most_liked','most_commented','most_favorited'].includes(sort)||!['unlimited','one_day','one_week','six_months'].includes(time)||!Number.isSafeInteger(maxScreens)||maxScreens<1||maxScreens>1000)throw Error('搜索筛选或屏数配置无效');
  const contexts=sources.slice(0,2).map((s,i)=>{const value=typeof s==='string'?s:s?.source??s?.keyword??s?.url;if(typeof value!=='string'||!value.trim())throw Error('发现来源格式无效');return {source:value,keyword:sourceKind==='keyword'?value:'',sourceKind,sourceIndex:i,sourceEncoded:encodeURIComponent(value)};});
- const state={sourceKind,sources:contexts,source_receipts:[],persisted:[],captures:[],failures:[],known_gaps:[],relocation_reveals:[],counts:{sources:contexts.length,sources_succeeded:0,source_failed:0,cards:0,attempted:0,opened:0,linked:0,persisted:0,created:0,reused:0,duplicate:0,failed:0,screens:0,missing_identity:0,non_video:0,relocation_skipped:0},pending_capture:null,source_complete:false,write_complete:false};
+ const state={sourceKind,sources:contexts,source_receipts:[],persisted:[],captures:[],failures:[],known_gaps:[],relocation_reveals:[],identity_enrichments:[],counts:{sources:contexts.length,sources_succeeded:0,source_failed:0,cards:0,attempted:0,opened:0,linked:0,persisted:0,created:0,reused:0,duplicate:0,failed:0,screens:0,missing_identity:0,non_video:0,relocation_skipped:0},pending_capture:null,source_complete:false,write_complete:false};
  const request={keywords:contexts.map(c=>c.source),source_kind:sourceKind,sort,time_layer:time,location,target_count:limit,max_duration_s:Number(env.LEADGEN_DISCOVERY_MAX_SECONDS||2400)};
  if(!Number.isSafeInteger(request.max_duration_s)||request.max_duration_s<1||request.max_duration_s>2400)throw Error('采集Activity预算须为1至2400秒');
  let firstPage,stopReason=null,allScanned=false;
- const progress=()=>{if(!env.WFR_RUN_DIR)throw Error('缺少本run持久化交接目录');mkdirSync(env.WFR_RUN_DIR,{recursive:true});const file=join(env.WFR_RUN_DIR,'discovery-progress.json');writeFileSync(file+'.tmp',JSON.stringify({run,profile,request,observed_at:new Date().toISOString(),counts:{...state.counts},videos:state.persisted,captures:state.captures,pending_capture:state.pending_capture,failures:state.failures,known_gaps:state.known_gaps,relocation_reveals:state.relocation_reveals,stop_reason:stopReason,all_results_scanned:allScanned}),{mode:0o600});renameSync(file+'.tmp',file);};
+ const progress=()=>{if(!env.WFR_RUN_DIR)throw Error('缺少本run持久化交接目录');mkdirSync(env.WFR_RUN_DIR,{recursive:true});const file=join(env.WFR_RUN_DIR,'discovery-progress.json');writeFileSync(file+'.tmp',JSON.stringify({run,profile,request,observed_at:new Date().toISOString(),counts:{...state.counts},videos:state.persisted,captures:state.captures,pending_capture:state.pending_capture,failures:state.failures,known_gaps:state.known_gaps,relocation_reveals:state.relocation_reveals,identity_enrichments:state.identity_enrichments,stop_reason:stopReason,all_results_scanned:allScanned}),{mode:0o600});renameSync(file+'.tmp',file);};
  const failure=(c,reason,error)=>{state.counts.failed++;state.failures.push({source:c.source,title:c.title,author:c.author,reason,detail:String(error?.stderr||error?.message||error).slice(0,1000)});progress();};
  const boundary=()=>{if(env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))throw Error('stop_requested');const deadline=budgetDeadline();if(deadline&&Date.now()>=deadline)throw Error('budget_exhausted');const start=Number(env.WF_RUN_START_TS),max=Number(env.WF_RUN_MAX_SECONDS||1800);if(start>0&&Date.now()/1000-start>=max)throw Error('budget_exhausted');};
  const pause=async n=>{boundary();const r=await execute('/bin/sleep',[String(n)],{maxDurationS:n+2});if(r?.code!==0)throw Error('发现页面等待失败');};
@@ -34,7 +34,7 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
   mkdirSync(env.WFR_RUN_DIR,{recursive:true});writeFileSync(join(env.WFR_RUN_DIR,run+'-source-'+(ctx.sourceIndex+1)+'-readback.json'),JSON.stringify(receipt,null,2),{mode:0o600});
   state.source_receipts.push(receipt);state.counts.sources_succeeded++;return page;
  }
- const result=()=>({counts:{...state.counts},videos:[...state.persisted],captures:[...state.captures],pending_capture:state.pending_capture,failures:[...state.failures],known_gaps:[...state.known_gaps],relocation_reveals:[...state.relocation_reveals],stop_reason:stopReason,all_results_scanned:allScanned,...(state.failures.length||(!allScanned&&stopReason!=='limit_reached')?{status:'partial'}:{})});
+ const result=()=>({counts:{...state.counts},videos:[...state.persisted],captures:[...state.captures],pending_capture:state.pending_capture,failures:[...state.failures],known_gaps:[...state.known_gaps],relocation_reveals:[...state.relocation_reveals],identity_enrichments:[...state.identity_enrichments],stop_reason:stopReason,all_results_scanned:allScanned,...(state.failures.length||(!allScanned&&stopReason!=='limit_reached')?{status:'partial'}:{})});
  async function source(){
   if(!state.source_complete){try{firstPage=await setup(contexts[0]);state.source_complete=true;}catch(e){state.counts.source_failed++;failure(contexts[0],'source_identity_unconfirmed',e);throw e;}}
   return {counts:{...state.counts},source_completed:1,sources_succeeded:state.counts.sources_succeeded,sources:[...state.source_receipts],candidates:firstPage.cards.length};
@@ -53,7 +53,7 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
      boundary();if(page.loading){page=await nextPage(ctx,{cards:[]},run+'-src'+ctx.sourceIndex+'-initial');if(!page){stopReason='stalled';break sourceLoop;}}
      state.counts.screens++;state.counts.cards+=page.cards.length;
      // 只枚举这一屏的卡片槽位；不按全局标题过滤，同标题不同视频都取真实ID。
-     const targets=page.cards.map((c,i,a)=>({...c,revealEligible:true,ordinal:a.slice(0,i).filter(x=>identity(x)===identity(c)).length}));
+     const targets=page.cards.map((c,i,a)=>({...c,sourceEvidence:page.evidence,revealEligible:true,ordinal:a.slice(0,i).filter(x=>identity(x)===identity(c)).length}));
      for(const target of targets){
       if(limit&&state.counts.persisted>=limit){stopReason='limit_reached';break sourceLoop;}
       if(state.counts.persisted>=1000){stopReason='manifest_limit';break sourceLoop;}
@@ -65,6 +65,16 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
         if(attempt)await pause(1);
         fresh=await readPage(ctx,eid+'-loc'+(attempt?'-retry'+attempt:''));
         if(!fresh.loading){const matches=fresh.cards.filter(c=>identity(c)===identity(target));hit=revealed?(matches.length===1?matches[0]:undefined):matches[target.ordinal];}
+        if(!hit&&!fresh.loading&&!target.duration&&target.sourceEvidence&&targets.filter(c=>normalized(c.title)===normalized(target.title)&&normalized(c.author)===normalized(target.author)).length===1){
+         const named=fresh.cards.filter(c=>normalized(c.title)===normalized(target.title)&&normalized(c.author)===normalized(target.author));
+         if(named.length===1&&/^[0-9]{1,2}:[0-5][0-9]$/.test(named[0].duration)){
+          boundary();const proof=fieldsOf(await phone('card-unknown-duration-from-xml',target.sourceEvidence,fresh.evidence,encodeURIComponent(target.title),encodeURIComponent(target.author),run));boundary();
+          if(proof.augmented==='1'&&proof.duration===named[0].duration){
+           const expected=identity({...target,duration:proof.duration}),matches=fresh.cards.filter(c=>identity(c)===expected);
+           if(matches.length===1){hit=matches[0];state.identity_enrichments.push({candidate_evidence_id:eid,source:ctx.source,title:target.title,author:target.author,old_duration:'',duration:proof.duration,before_evidence_path:target.sourceEvidence,after_evidence_path:fresh.evidence,verified:true});progress();}
+          }
+         }
+        }
         if(revealReceipt){
          revealReceipt.after_evidence_path=fresh.evidence;
          if(!fresh.loading){
@@ -75,7 +85,7 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
            // 视口改变后旧ordinal不是新卡ID。除本次已定位的具体fresh槽外，全部完整槽再取真实VID。
            revealReceipt.enumerated_fingerprints.push(snapshot);
            const hitIndex=fresh.cards.indexOf(hit);
-           const exposed=fresh.cards.map((c,i,a)=>({...c,revealEligible:false,ordinal:a.slice(0,i).filter(x=>identity(x)===identity(c)).length}));
+           const exposed=fresh.cards.map((c,i,a)=>({...c,sourceEvidence:fresh.evidence,revealEligible:false,ordinal:a.slice(0,i).filter(x=>identity(x)===identity(c)).length}));
            for(let i=0;i<exposed.length;i++){
             const c=exposed[i];if(i===hitIndex)continue;
             // 当前目标元数据冲突不改名绕过拒绝；原目标仍留下真实gap。

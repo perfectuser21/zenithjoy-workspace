@@ -2580,6 +2580,58 @@ _video_card_optional_nodes() {
   (( rc == 0 || rc == 1 )) && return 0
   return "$rc"
 }
+card_unknown_duration_from_xml() {
+  # 两份本run原始树强锚补充可选观测；不输出坐标，不替代取链真实VID。
+  "$PYTHON_BIN" - "$1" "$2" "$3" "$4" "$5" <<'PYDURATION'
+import sys,re,html,unicodedata,urllib.parse,pathlib,xml.etree.ElementTree as ET
+def norm(v): return ' '.join(unicodedata.normalize('NFKC',html.unescape(v)).split())
+def bounds(n):
+ m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.get('bounds',''))
+ if not m: raise ValueError('bad bounds')
+ b=tuple(map(int,m.groups()))
+ if b[0]>=b[2] or b[1]>=b[3]: raise ValueError('empty bounds')
+ return b
+def proof(path,title,author):
+ root=ET.parse(path).getroot();nodes=list(root.iter('node'));parents={c:p for p in root.iter() for c in p}
+ if root.tag!='hierarchy' or not nodes or any(n.get('package')!='com.ss.android.ugc.aweme' for n in nodes): raise ValueError('wrong XML/package')
+ candidates=[]
+ for n in nodes:
+  if norm(n.get('text',''))!=title or n.get('resource-id')!='com.ss.android.ugc.aweme:id/desc': continue
+  p=parents.get(n)
+  if p is None or p.get('resource-id')!='com.ss.android.ugc.aweme:id/dlr' or p.get('clickable')!='true': raise ValueError('wrong card')
+  card=list(p.iter('node')); authors=[a for a in card if a.get('resource-id')=='com.ss.android.ugc.aweme:id/+b' and norm(a.get('text',''))==author]
+  if len(authors)==1: candidates.append((n,p,card,authors[0]))
+ if len(candidates)!=1: raise ValueError('ambiguous title author')
+ n,p,card,a=candidates[0];b=bounds(n);ab=bounds(a)
+ if not (b[0]<=ab[0]<ab[2]<=b[2] and b[3]<=ab[1]<=b[3]+60): raise ValueError('author column')
+ if any('相关搜索' in (x.get('text','')+x.get('content-desc','')) for x in card): raise ValueError('related search')
+ likes=[x for x in card if x.get('resource-id')=='com.ss.android.ugc.aweme:id/pc7' and re.fullmatch(r'(未点赞|已点赞)，喜欢[0-9.]+(?:万|亿|w)?，按钮',x.get('content-desc',''))]
+ dates=[x for x in card if x.get('resource-id')=='com.ss.android.ugc.aweme:id/3+q' and re.fullmatch(r'(?:[0-9]{4}\.)?[0-9]{2}\.[0-9]{2}',x.get('text',''))]
+ if len(likes)!=1 or len(dates)!=1: raise ValueError('missing exact anchors')
+ lb=bounds(likes[0]);db=bounds(dates[0])
+ if not (b[0]<=lb[0]<lb[2]<=b[2] and b[3]<=lb[1]<=b[3]+80 and b[0]<=db[0]<db[2]<=b[2] and db[1]>=ab[1]): raise ValueError('anchor column')
+ durations=[]
+ for x in card:
+  if x.get('resource-id')=='com.ss.android.ugc.aweme:id/5bd' and re.fullmatch(r'[0-9]{1,2}:[0-5][0-9]',x.get('text','')):
+   q=bounds(x)
+   if b[0]<=q[0]<q[2]<=b[2] and 0<=b[1]-q[3]<=100: durations.append(x.get('text'))
+ if len(durations)>1: raise ValueError('ambiguous duration')
+ return (b[0],b[2],likes[0].get('content-desc'),dates[0].get('text')),durations[0] if durations else '',any(x.get('resource-id')=='com.ss.android.ugc.aweme:id/q9g' for x in card)
+try:
+ old,new,title,author,run=sys.argv[1:];title=norm(urllib.parse.unquote(title));author=norm(urllib.parse.unquote(author))
+ if not re.fullmatch(r'[A-Za-z0-9_-]+',run) or not title or not author: raise ValueError('bad scope')
+ op,np=pathlib.Path(old),pathlib.Path(new)
+ if op.is_symlink() or np.is_symlink() or op.parent.resolve()!=np.parent.resolve(): raise ValueError('wrong evidence root')
+ if not re.fullmatch(re.escape(run)+r'-src[0-9]+(?:-screen[0-9]+-wait[0-2]|-cards)-grid.xml',op.name): raise ValueError('wrong original run')
+ if not re.fullmatch(re.escape(run)+r'-candidate[0-9]+-loc(?:-retry[12])?-grid.xml',np.name): raise ValueError('wrong fresh run')
+ old_anchor,old_duration,_=proof(op,title,author);new_anchor,new_duration,thumb=proof(np,title,author)
+ if old_duration or not new_duration or not thumb or old_anchor!=new_anchor: raise ValueError('anchors/duration mismatch')
+ print('augmented=1\nduration='+new_duration)
+except Exception:
+ print('augmented=0')
+PYDURATION
+}
+
 card_bottom_hint_from_xml() {
   # 仅导航诊断；不输出坐标/卡片身份，不允许用此提示点击。
   "$PYTHON_BIN" - "$1" "$2" "$3" "$SCREEN_H" <<'PYHINT'
@@ -3538,6 +3590,10 @@ case "$command" in
     # 纯解析（10-08 发现改造）：一份视频 tab 网格 UI 树 → 卡片 TSV（同 search-video-cards）。不碰设备，CI 可直接测。
     [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE video-cards-from-xml UI_XML"
     video_cards_from_xml "$2"
+    ;;
+  card-unknown-duration-from-xml)
+    [[ "$#" == 6 ]] || die "usage: card-unknown-duration-from-xml ORIGINAL_XML FRESH_XML TITLE_ENCODED AUTHOR_ENCODED RUN"
+    card_unknown_duration_from_xml "$2" "$3" "$4" "$5" "$6"
     ;;
   card-bottom-hint-from-xml)
     [[ "$#" == 4 ]] || die "usage: card-bottom-hint-from-xml XML TITLE_ENCODED AUTHOR_ENCODED"
