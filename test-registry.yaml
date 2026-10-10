@@ -7206,3 +7206,11 @@ agent_suite:
   status: active
   product: AI员工
   note: "GP-Anchor: line02/keyword_acquisition#step2；关键词真实CLI骨架归位与错误最终状态守卫，隔离假ADB不操作真机"
+
+- id: video-card-optional-fields
+  path: services/phone-adb-controller/__tests__/video-card-optional-fields.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "GP-Anchor: line02/keyword_acquisition#step2；原AI30真实零时长树、可选字段无匹配及grep2错误保留"

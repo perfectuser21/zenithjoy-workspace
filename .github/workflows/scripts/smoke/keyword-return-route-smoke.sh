@@ -5,4 +5,5 @@ set -euo pipefail
 cd "$(dirname "$0")/../../../.."
 test -s services/phone-adb-controller/__tests__/fixtures/real-keyword-return-skeleton-13.xml
 zsh -n services/phone-adb-controller/douyin-phone-adb
+node --test services/phone-adb-controller/__tests__/video-card-optional-fields.test.mjs
 node --test --test-name-pattern='results-only' services/phone-adb-controller/__tests__/current-video-link-leave-scratch.test.mjs

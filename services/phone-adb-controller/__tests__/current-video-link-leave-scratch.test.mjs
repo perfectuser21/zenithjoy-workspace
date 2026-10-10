@@ -159,6 +159,7 @@ exit 0
   return {
     run,
     stack: () => readFileSync(stack, 'utf8').trim().split('\n'),
+    returnedGridXml: (eid) => readFileSync(join(dir,'tmp','evidence','legacy',eid+'-t1-returned-grid.xml'),'utf8'),
     dumpPages: () => readFileSync(join(dir,'dump_pages'),'utf8').trim().split('\n'),
     deeplinks: () => Number(readFileSync(join(dir, 'deeplinks'), 'utf8').trim()),
     taps: () => Number(readFileSync(join(dir, 'taps'), 'utf8').trim()),
@@ -259,7 +260,9 @@ test('keyword取链先退出暂存路线：真实入口只在粘贴读回时dump
 
 test('keyword退出暂存核验失败：原有界归位仍核验真关键词，错误结果页不能伪成功',t=>{
  const ph=makeFakePhone({scratchPopTo:'feed'});const r=ph.run(['current-video-link','cvl-fast-fallback',KW]);
- assert.equal(r.code,0,r.err);assert.match(r.err,/leave-scratch: landed off the search route but not on the video detail page/);
+ assert.equal(r.code,0,r.err);assert.match(r.err,/leave-scratch: left scratch search route; results restoration still required/);
+ const finalXml=ph.returnedGridXml('cvl-fast-fallback');assert.match(finalXml,/text="人工智能"[^>]*et_search_kw/);assert.match(finalXml,/<node[^>]*text="视频"[^>]*selected="true"/);
+ assert.deepEqual(ph.stack(),['results']);assert.equal(ph.dumpPages().filter(x=>x==='results').length,2);assert.equal(ph.mediaKeys().filter(x=>x==='126').length,0);
  assert.match(r.out,/return_mode=results/);assert.deepEqual(ph.stack(),['results']);assert.equal(ph.deeplinks(),0);
  assert.ok(ph.dumpPages().includes('feed'),'必须真实读到错误详情并拒绝快捷归位');
  assert.equal(ph.dumpPages().filter(p=>p==='results').length,2,'失败兜底仍读回原词及returned-grid');
