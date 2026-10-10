@@ -16,6 +16,7 @@ QV_DIR="${0:A:h}"; C="${DOUYIN_PHONE_ADB:-$HOME/.local/bin/douyin-phone-adb}"
 QV_OWN_CONF="${OWN_ACCOUNTS_CONF:-$HOME/bin-harvest/config/own-accounts.json}"
 [[ -r "$QV_OWN_CONF" ]] || QV_OWN_CONF="$QV_DIR/config/own-accounts.json"
 source "$QV_DIR/queued-video-lib.sh" || exit 2
+[[ "$MODE" != collection ]] || { qv_history_prepare || exit $?; }
 qv_open || exit $?
 if [[ "$MODE" == identity ]]; then
   print -- "IDENTITY\t$VID\tverified"

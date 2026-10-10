@@ -86,6 +86,26 @@ types:
       - intent_grade
       - promoted
     note: dedup_key = nick|dyid|正文前20字（push-raw-comments.js:43）；process_status 待分拣/已分拣；promoted = 列「进入最终线索」
+  HistoricalComment:
+    identity:
+      - line_key
+      - video_id
+      - id
+    source_of_truth: 只读PG zenithjoy.leadgen_comments；comment_history核本run matched租约及line+VID+精确URL唯一归属；旧source_video只用于至多1000行/4短链候选筛选，既有受信只读HEAD实际VID相同才证旧URL映射；私有0600本RUN_DIR工件
+    fields:
+      - id
+      - line_key
+      - run_tag
+      - source_run
+      - video_id
+      - video_url
+      - schema_version
+      - status
+      - douyin_id
+      - body
+      - history_sha256
+      - coverage
+    note: 可选历史输入；verified才允许fresh实际OID+完整正文匹配，unknown回原采集；scope/schema/证据异常拒绝，不迁旧harvest_batch或评分终态；历史无新增不是新评分样本。
   Lead:
     identity:
       - line_key

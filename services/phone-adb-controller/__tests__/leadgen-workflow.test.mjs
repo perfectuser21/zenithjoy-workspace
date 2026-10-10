@@ -208,8 +208,10 @@ test('采集组合预算包含重新打开核验和本身480秒采集，但不�
   const dir=mkdtempSync(join(tmpdir(),'leadgen-collection-envelope-')),videoId='7657464669711404351',stored=[],timeouts=[];
   try{
    const h=createHandlers({root:dir,env:{HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'fresh-collection',P:'work',LEADGEN_LINE:'jinuo'},
-    rpc:async b=>{if(b.request.op==='claim_videos')return {result:[{video_id:videoId,judgment_status:'matched'}]};
-     if(b.request.op==='collect'){stored.push(b.request.video_id);return {result:{comments:0}};}return {result:{}};},
+    rpc:async b=>{if(b.request.op==='claim_videos')return {result:[{video_id:videoId,video_url:'https://www.douyin.com/video/'+videoId,judgment_status:'matched'}]};
+     if(b.request.op==='comment_history')return {result:{version:1,status:'verified',line:'jinuo',line_key:'jinuo',run:'fresh-collection',source_run:null,video_id:videoId,video_url:b.request.video_url,rows:[]}};
+     if(b.request.op==='comment_history_readback')return {result:{verified:true,video_id:videoId,ids:[],history_verified:0}};
+     if(b.request.op==='collect'){stored.push(b.request.video_id);return {result:{comments:0,inserted:0,history_verified:0,coverage:0}};}return {result:{}};},
     execute:async(c,a,o)=>{if(a[1]==='identity')return {code:0,stdout:'',stderr:''};
      assert.equal(a[1],'collection');timeouts.push(o.timeoutMs);if(o.timeoutMs<800000)throw Error('EXECUTION_DEADLINE');
      return {code:0,stdout:`COLLECTION\t${videoId}\tno_comments\t0\nRESCAN\t${videoId}\t0\n`,stderr:''};}});
@@ -311,4 +313,29 @@ test('真实workflow包装器达到目标且仅有消失候选缺口时保留成
    assert.equal(out.manifest_verified,missingRow?0:1);
   }finally{rmSync(dir,{recursive:true,force:true});}
  }
+});
+
+
+test('历史输入逐VID局部绑定，scope失败不假报通过；无qualified明确0样本',async()=>{
+ const {createHandlers}=await import('../leadgen-workflow.mjs');
+ const dir=mkdtempSync(join(tmpdir(),'history-workflow-')),ids=['7646309328911907195','7646309328911907196'],actions=[];
+ try{
+  const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'history-run',P:'work',LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:'source101',QUEUED_COMMENT_HISTORY_FILE:'/outside/previous-video.json'};
+  const h=createHandlers({root:dir,env,rpc:async({request:q})=>{
+   if(q.op==='claim_videos')return {result:ids.map(video_id=>({video_id,video_url:'https://www.douyin.com/video/'+video_id,judgment_status:'matched'}))};
+   if(q.op==='renew_video')return {result:{renewed:true}};
+   if(q.op==='comment_history')return {result:{version:1,status:'verified',line:q.video_id===ids[0]?'jinuo':'yuesheng',line_key:'jinuo',run:'history-run',source_run:'source101',video_id:q.video_id,video_url:q.video_url,rows:[]}};
+   if(q.op==='collect')return {result:{comments:0,inserted:0,history_verified:0,coverage:0}};
+   if(q.op==='comment_history_readback')return {result:{verified:true,video_id:q.video_id,ids:[],history_verified:0}};
+   throw Error('unexpected '+q.op);
+  },execute:async(c,a,o)=>{actions.push({args:a,env:o.env});if(a[1]==='identity'){assert.equal(o.env.QUEUED_COMMENT_HISTORY_FILE,'');return {code:0,stdout:'',stderr:''};}
+   assert.equal(o.env.QUEUED_COMMENT_HISTORY_FILE,join(dir,'history-run-history-'+a[3]+'.json'));
+   return {code:0,stdout:`COLLECTION\t${a[3]}\tcollected\t0\nRESCAN\t${a[3]}\t0\n`,stderr:''};}});
+  await h.qualification();const r=await h.collection();
+  assert.equal(r.status,'partial');assert.equal(r.history_required_count,2);assert.equal(r.history_scoped_count,1);assert.equal(r.history_consumption_count,1);assert.equal(r.history_failures,1);
+  assert.equal(r.history_scope_verified,0);assert.equal(r.history_consumption_readback,0);assert.equal(actions.filter(a=>a.args[1]==='collection').length,1);
+  assert.equal(env.QUEUED_COMMENT_HISTORY_FILE,'/outside/previous-video.json');
+  const empty=createHandlers({root:dir,env:{...env,WFR_TAG:'empty'},rpc:async()=>{throw Error('无qualified不应查PG历史');},execute:async()=>{throw Error('无qualified不应动手机');}});
+  const zero=await empty.collection();assert.equal(zero.history_required_count,0);assert.equal(zero.history_scoped_count,0);assert.equal(zero.history_consumption_count,0);assert.equal(zero.history_failures,0);assert.equal(zero.history_scope_verified,0);assert.equal(zero.history_consumption_readback,0);assert.equal(zero.status,undefined);
+ }finally{rmSync(dir,{recursive:true,force:true});}
 });

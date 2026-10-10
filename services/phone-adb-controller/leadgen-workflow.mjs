@@ -1,4 +1,4 @@
-import {readFileSync,writeFileSync,appendFileSync,existsSync} from 'node:fs';
+import {readFileSync,writeFileSync,appendFileSync,existsSync,renameSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {runActivity} from './activity-commander.mjs';
@@ -6,6 +6,7 @@ import {readFrozen} from './runtime-definition.mjs';
 import {readBinding} from './runtime-binding.mjs';
 import {createRpc,execInput} from './leadgen-client.mjs';
 import {createDiscoveryHandlers} from './leadgen-discovery.mjs';
+import history from './queued-comment-history.js';
 import {judgeSteps} from './step-judge.mjs';
 
 // 任一普通活动失败或Commander叫停，停止后续业务；清场总在最后执行。
@@ -64,7 +65,7 @@ export function parseCollection(result,videoId,{allowPartial=false}={}) {
 
 export function createHandlers({root,env,rpc,execute=execInput}) {
   const {P:profile,SERIAL:serial,WFR_TAG:run,LEADGEN_LINE:line}=env;
-  let locked=false,leased=[],qualified=[],discovery;
+  let locked=false,leased=[],qualified=[],discovery,historyScoped=0;
   const state={profile,line,run};
   const bounded=async(command,args,opts={})=>{const result=await execute(command,args,{...opts,
     timeoutMs:Math.max(1,Math.min(opts.timeoutMs||Number(opts.maxDurationS||120)*1000,
@@ -84,7 +85,7 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
       command==='current-video-link'?{maxDurationS:300}:{});
   };
   const queue=async(op,fields={})=>(await rpc({kind:'queue',request:{op,line,run,source_run:env.LEADGEN_SOURCE_RUN||undefined,limit:Number(env.LEADGEN_LIMIT||2),...fields}},
-    op==='discover'?{timeoutMs:Math.max(1,Math.min(60000,state.budgetDeadline?state.budgetDeadline-Date.now():60000))}:{})).result;
+    ['discover','comment_history','comment_history_readback','collect','collect_partial'].includes(op)?{timeoutMs:Math.max(1,Math.min(60000,state.budgetDeadline?state.budgetDeadline-Date.now():60000))}:{})).result;
   const preflight=async()=>{
     if(env.WF_BRAIN_WORKFLOW==='douyin_lead_outreach'){
       const flag=join(env.HOME,`bin-harvest/state/dm-paused-${profile}.flag`);
@@ -155,12 +156,34 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
       received:ids.length,eligible:eligible.length,skipped_completed:skipped.filter(v=>v.reason==='completed').length,
       skipped_rejected:skipped.filter(v=>v.reason==='rejected').length,skipped_own:skipped.filter(v=>v.reason==='own').length,duplicate_observations:proof.duplicate_observations};
   };
-  const videoAction=(mode,v)=>bounded('zsh',[join(root,'process-queued-video.sh'),mode,profile,
-    v.video_id,v.video_url,Buffer.from(v.title||'').toString('base64'),Buffer.from(v.keyword||'').toString('base64'),run,line],
-    // 资格是打开、实际取链核验、录音、上传与远端判定的组合，不能沿用单次取链300秒。
-    // 身份组合：打开180秒+取链300秒；采集组合另含内部480秒采集预算。
-    // 仍由bounded限制在各正式活动的剩余预算内。
-    {maxDurationS:mode==='qualification'?900:mode==='collection'?960:480,env:{QUEUED_VIDEO_QUALIFY_CMD:join(root,'leadgen-qualify.sh')}});
+  const videoAction=async(mode,v)=>{
+    let historyFile='';
+    if(mode==='collection'){
+      const receipt=await queue('comment_history',{video_id:v.video_id,video_url:v.video_url});
+      historyFile=join(env.WFR_RUN_DIR,`${run}-history-${v.video_id}.json`);
+      const temp=historyFile+`.tmp-${process.pid}`;
+      writeFileSync(temp,JSON.stringify(receipt),{mode:0o600,flag:'wx'});renameSync(temp,historyFile);
+      history.load(historyFile,env.WFR_RUN_DIR,{line,run,source_run:env.LEADGEN_SOURCE_RUN||null,video_id:v.video_id,video_url:v.video_url});
+      historyScoped++;
+    }
+    return bounded('zsh',[join(root,'process-queued-video.sh'),mode,profile,
+      v.video_id,v.video_url,Buffer.from(v.title||'').toString('base64'),Buffer.from(v.keyword||'').toString('base64'),run,line],
+      {maxDurationS:mode==='qualification'?900:mode==='collection'?960:480,
+        env:{QUEUED_VIDEO_QUALIFY_CMD:join(root,'leadgen-qualify.sh'),QUEUED_COMMENT_HISTORY_FILE:historyFile}});
+  };
+  const consumedHistory=(result,v)=>{
+    const file=join(env.WFR_RUN_DIR,`${run}-history-${v.video_id}.json`);
+    const h=history.load(file,env.WFR_RUN_DIR,{line,run,source_run:env.LEADGEN_SOURCE_RUN||null,video_id:v.video_id,video_url:v.video_url});
+    const consumed=[],ids=new Set();
+    for(const line of result.stdout.split('\n').filter(s=>s.startsWith('HISTORY\t'))){
+      const f=line.split('\t'),r=h.rows.get(f[3]);
+      if(f.length!==6||f[1]!==v.video_id||h.receipt.status!=='verified'||!r||r.id!==f[2]||ids.has(r.id)||f[5]!==h.sha256||!/^[-a-zA-Z0-9]+$/.test(f[4]))throw Error('历史消费证据scope不符');
+      const proof=JSON.parse(readFileSync(join(env.WFR_RUN_DIR,f[4]+'-history-readback.json'),'utf8'));
+      if(proof.verified!==true||proof.id!==r.id||proof.video_id!==v.video_id||proof.douyin_id!==r.douyin_id||proof.comment_body!==r.comment_body||proof.history_sha256!==h.sha256||proof.identity_eid!==f[4]||proof.comment_context_verified!==true||!/^([a-f0-9]{64})$/.test(proof.profile_sha256)||!/^([a-f0-9]{64})$/.test(proof.returned_sha256))throw Error('历史新鲜身份或评论返回读回失败');
+      ids.add(r.id);consumed.push({id:r.id,douyinId:r.douyin_id,commentBody:r.comment_body,identity_eid:f[4],history_sha256:h.sha256,...(r.source_video_url?{sourceVideoUrl:r.source_video_url}:{})});
+    }
+    return {consumed,status:h.receipt.status,receipt:h.receipt,sha256:h.sha256};
+  };
   return {state,preflight,
     source:async()=>(await getDiscovery()).source(),
     dedup:intake,
@@ -192,7 +215,7 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
         return proof.verified===true&&proof.observed_video_id===v.video_id&&proof.content_type==='video';}catch{return false;}}).length;
       return {claimed:leased.length,matched:qualified.length,videos_verified:verified,failures,...(failures.length?{status:'partial'}:{})};
     },
-    collection:async()=>{let comments=0,collected=0,rescans=0;const failures=[];
+    collection:async()=>{historyScoped=0;let comments=0,collected=0,rescans=0,inserted=0,historyVerified=0,coverage=0,historyConsumed=0;const failures=[];
       for(const v of qualified){try{
         await queue('renew_video',{video_id:v.video_id});const result=await videoAction('collection',v);
         appendFileSync(join(env.WFR_RUN_DIR,'comments.tsv'),result.stdout);
@@ -201,13 +224,20 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
         if(!/^\d+$/.test(telemetry||''))throw Error('缺实际重扫计数，不能宣称采集通过');
         rescans+=Number(telemetry);
         const partial=result.code===7;
-        const stored=await queue(partial?'collect_partial':'collect',{video_id:v.video_id,comments:rows});
+        const old=consumedHistory(result,v);
+        const stored=await queue(partial?'collect_partial':'collect',{video_id:v.video_id,video_url:v.video_url,comments:rows,history:old.consumed});
+        if(stored.history_verified!==old.consumed.length)throw Error('历史PG事务重验回执缺失');
+        const readback=await queue('comment_history_readback',{video_id:v.video_id,video_url:v.video_url,history:old.consumed});
+        if(readback.verified!==true||readback.video_id!==v.video_id||readback.history_verified!==old.consumed.length||!Array.isArray(readback.ids)||readback.ids.length!==old.consumed.length||old.consumed.some(r=>!readback.ids.includes(r.id)))throw Error('历史独立PG读回缺失');
+        historyConsumed++;
+        inserted+=stored.inserted;historyVerified+=stored.history_verified;coverage+=stored.coverage;
+        writeFileSync(join(env.WFR_RUN_DIR,`${run}-history-consumption-${v.video_id}.json`),JSON.stringify({version:1,verified:true,line,line_key:old.receipt.line_key,run,source_run:old.receipt.source_run,video_id:v.video_id,video_url:v.video_url,history_status:old.status,history_sha256:old.sha256,ids:old.consumed.map(r=>r.id),rows:old.consumed.map(r=>({id:r.id,douyin_id:r.douyinId,comment_body:r.commentBody,source_video_url:r.sourceVideoUrl||v.video_url,identity_eid:r.identity_eid})),history_verified:stored.history_verified,coverage:stored.coverage}),{mode:0o600});
         comments+=stored.comments;
         if(partial)failures.push({video_id:v.video_id,code:7,reason:'采集在预算或停止边界结束，已保存核验评论，视频仍未采完',comments_saved:stored.comments});
         else {collected++;leased=leased.filter(p=>p.video_id!==v.video_id);}
       }catch(error){failures.push({video_id:v.video_id,reason:error.message});}}
       if(state.remainingVideoIds?.length)failures.push({reason:'本次认领上限或并发租约留下待处理视频',remaining_video_ids:state.remainingVideoIds});
-      return {collected,comments,comments_collected:comments,videos_processed:collected,rescan_count:rescans,
+      return {collected,comments,comments_collected:comments,comments_inserted:inserted,history_verified:historyVerified,coverage,history_required_count:qualified.length,history_scoped_count:historyScoped,history_consumption_count:historyConsumed,history_failures:qualified.length-historyConsumed,history_scope_verified:Number(qualified.length>0&&historyScoped===qualified.length),history_consumption_readback:Number(qualified.length>0&&historyConsumed===qualified.length),videos_processed:collected,rescan_count:rescans,
         rescan_rate:qualified.length?rescans/qualified.length:0,failures,...(failures.length?{status:'partial'}:{})};},
     scoring:async()=>{const r=await queue('score');
       appendFileSync(join(env.WFR_RUN_DIR,'activity.log'),`SORT_STATS ${JSON.stringify(r)}\n`,{mode:0o600});

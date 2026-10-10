@@ -80,6 +80,7 @@
       "properties": {
         "type": { "$ref": "#/$defs/typeName" },
         "cardinality": { "enum": ["one", "many"] },
+        "optional": { "type": "boolean" },
         "fields": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/fieldName" } }
       }
     },

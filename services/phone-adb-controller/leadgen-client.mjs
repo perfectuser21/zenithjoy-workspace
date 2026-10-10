@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFrozen } from './runtime-definition.mjs';
 
-export const RPC_FILES = ['leadgen-rpc.mjs', 'leadgen-queue.js', 'activity-commander.mjs',
+export const RPC_FILES = ['queued-comment-history.js','leadgen-rpc.mjs', 'leadgen-queue.js', 'activity-commander.mjs',
   'leadgen-db-lib.js', 'leadgen-db-connect.js', 'judge-video.js', 'judge-video-lib.js',
   'judge-jev.js', 'judge-comment.js', 'qualify-video.js', 'transcribe-qwen-audio.js',
   'line-routes.js', 'stats-line.js', 'next-keywords.js', 'keyword-enabled-lib.js',
