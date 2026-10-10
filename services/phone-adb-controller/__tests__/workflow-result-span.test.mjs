@@ -24,7 +24,7 @@ const ACT_COLLECTION = "9b8988e9-a22d-483c-a101-8091728b9e04";
 const WF_ID = "b1000000-0000-4000-8000-000000000001";
 
 function baseEnv(home) {
-  return { ...process.env, WFR_HOME: home, WFR_NODE: process.execPath, WFR_JQ: JQ, WFR_LEDGER_MJS: LEDGER, WFR_SCP_TARGET: "",
+  return { ...process.env, HOME: home, WFR_HOME: home, WFR_NODE: process.execPath, WFR_JQ: JQ, WFR_LEDGER_MJS: LEDGER, WFR_SCP_TARGET: "",
     WFR_BRAIN_ENV: join(home, "no-brain.env"), BRAIN_URL: "", BRAIN_INTERNAL_TOKEN: "", WFR_BRAIN_TASK_ID: "", WFR_PROBE_STAGES: "" };
 }
 // 假 curl：记录每次 argv；GET journey_steps 回一份最小活动表（collection 挂 workflow）；其余回 {"success":true}\n200；fail 时连不上
