@@ -18,6 +18,12 @@
 
 ## 怎么查看
 
+Notion入口：
+
+- [代码运行记录](https://app.notion.com/p/3f5c40c2ba6381d4bb03e18fcb566f2c)：中央`task_runs`的正式投影，每个手机独立一条Run；查看任务ID、Run ID、状态、开始/结束时间和退出码。四台手机的手动验收Run已逐页核对；自动定时验收需另核实际定时实例。
+- [设备清单](https://app.notion.com/p/3d4c40c2ba63816db72dd520f2cd090a)：打开手机页面，查看八个平台及视频号的当前状态、账号身份和实际核验时间。
+- [Workflows总库](https://app.notion.com/p/3d9c40c2ba638145bfa8f4c0c006e0af)：单手机、批次及维护流程均已同步，4+3+3个Activity页和流程关联已逐一核对。
+
 通过Brain API读取，不能直写SQL或修改Notion投影：
 
 - `GET /api/brain/registry/1d7335b8-fdfe-4c7f-b246-52180c03339a`：实际部署和维护状态。
