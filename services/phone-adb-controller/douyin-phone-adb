@@ -2580,6 +2580,36 @@ _video_card_optional_nodes() {
   (( rc == 0 || rc == 1 )) && return 0
   return "$rc"
 }
+card_bottom_hint_from_xml() {
+  # 仅导航诊断；不输出坐标/卡片身份，不允许用此提示点击。
+  "$PYTHON_BIN" - "$1" "$2" "$3" "$SCREEN_H" <<'PYHINT'
+import sys,re,html,unicodedata,urllib.parse,xml.etree.ElementTree as ET
+def norm(v): return ' '.join(unicodedata.normalize('NFKC',html.unescape(v)).split())
+try:
+ root=ET.parse(sys.argv[1]).getroot()
+ if root.tag!='hierarchy': raise ValueError('not hierarchy')
+ nodes=list(root.iter('node'))
+ if not nodes or any(n.get('package')!='com.ss.android.ugc.aweme' for n in nodes): raise ValueError('wrong package')
+ parents={c:p for p in root.iter() for c in p}
+ title,author=map(lambda v:norm(urllib.parse.unquote(v)),sys.argv[2:4]); height=int(sys.argv[4])
+ def bounds(n):
+  m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.get('bounds',''))
+  return tuple(map(int,m.groups())) if m else None
+ matches=[n for n in nodes if norm(n.get('text',''))==title]
+ clipped=False
+ if title and author and len(matches)==1:
+  node=matches[0]; parent=parents.get(node)
+  card=parent is not None and node.get('resource-id')=='com.ss.android.ugc.aweme:id/desc' and parent.get('resource-id')=='com.ss.android.ugc.aweme:id/dlr' and parent.get('clickable')=='true' and any(n.get('resource-id')=='com.ss.android.ugc.aweme:id/q9g' for n in parent.iter('node')) and not any('相关搜索' in (n.get('text','')+n.get('content-desc','')) for n in parent.iter('node'))
+  b=bounds(node)
+  if card and b and b[0]<b[2] and b[1]<b[3] and height*9//10<=b[1]<b[3]<=height:
+   below=[n for n in nodes if (q:=bounds(n)) and b[0]<=q[0]<q[2]<=b[2] and b[3]<=q[1]<=b[3]+80]
+   clipped=not any('喜欢' in n.get('content-desc','') or norm(n.get('text',''))==author for n in below)
+ print('clipped='+str(int(clipped)))
+except Exception:
+ sys.exit(1)
+PYHINT
+}
+
 video_cards_from_xml() {
   local xml="$1" line b t x1 y1 x2 y2 lx1 ly1 lx2 ly2 dx1 dy1 dx2 dy2 dt matched dur ax1 ay1 ax2 ay2 at author ax
   [[ -r "$xml" ]] || return 1
@@ -3509,13 +3539,19 @@ case "$command" in
     [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE video-cards-from-xml UI_XML"
     video_cards_from_xml "$2"
     ;;
+  card-bottom-hint-from-xml)
+    [[ "$#" == 4 ]] || die "usage: card-bottom-hint-from-xml XML TITLE_ENCODED AUTHOR_ENCODED"
+    card_bottom_hint_from_xml "$2" "$3" "$4"
+    ;;
   search-grid-scroll)
     # 10-08 发现改造：视频 tab 网格整屏翻页（up = 看下面的卡，down = 回上面）。慢速拖动减少惯性，
     # 翻多少不保证整屏对齐——调用方按标题去重/定位，不依赖坐标连续。
-    [[ "$#" == 3 && ( "$3" == up || "$3" == down ) ]] || die "usage: douyin-phone-adb --profile PROFILE search-grid-scroll EVIDENCE_ID up|down"
+    [[ "$#" == 3 && ( "$3" == up || "$3" == down || "$3" == reveal-up ) ]] || die "usage: douyin-phone-adb --profile PROFILE search-grid-scroll EVIDENCE_ID up|down|reveal-up"
     check_target
     sgs_x=$(( SCREEN_W / 2 )); sgs_hi=$(( SCREEN_H * 85 / 100 )); sgs_lo=$(( SCREEN_H * 15 / 100 ))
-    if [[ "$3" == up ]]; then
+    if [[ "$3" == reveal-up ]]; then
+      "$ADB" -s "$SERIAL" shell input swipe "$sgs_x" "$sgs_hi" "$sgs_x" "$(( SCREEN_H * 65 / 100 ))" 500
+    elif [[ "$3" == up ]]; then
       "$ADB" -s "$SERIAL" shell input swipe "$sgs_x" "$sgs_hi" "$sgs_x" "$sgs_lo" 1000
     else
       "$ADB" -s "$SERIAL" shell input swipe "$sgs_x" "$sgs_lo" "$sgs_x" "$sgs_hi" 1000
