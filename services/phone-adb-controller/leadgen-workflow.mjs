@@ -228,7 +228,7 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
       if(env.WF_BRAIN_WORKFLOW==='douyin_video_processing'&&!Array.isArray(state.intakeVideoIds))throw Error('102必须先核验101明确ID交接');
       leased=await queue('claim_videos',Array.isArray(state.intakeVideoIds)?{video_ids:state.intakeVideoIds}:{});
       state.remainingVideoIds=state.intakeVideoIds?.filter(id=>!leased.some(v=>v.video_id===id))||[];
-      const failures=[];qualified=[];
+      const failures=[];qualified=[];let recordingsRequired=0,mediaVerified=0,recordingSilentRejected=0,recordingOutcomesFailures=0;
       for(const v of leased){await queue('renew_video',{video_id:v.video_id});
         if(v.judgment_status==='matched'){
           const identity=await videoAction('identity',v);
@@ -236,14 +236,31 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
           continue;
         }
         const result=await videoAction('qualification',v);
+        recordingsRequired++;
         appendFileSync(join(env.WFR_RUN_DIR,'qualification.tsv'),result.stdout);
-        const verdict=result.stdout.split('\n').find(s=>s.startsWith(`QUAL\t${v.video_id}\t`))?.split('\t')[2];
+        const marker=result.stdout.split('\n').find(s=>s.startsWith(`QUAL\t${v.video_id}\t`))?.split('\t');
+        const verdict=marker?.[2];
+        try{
+          const path=join(env.WFR_RUN_DIR,`${run}-recording-${v.video_id}.json`);
+          if(lstatSync(path).isSymbolicLink())throw Error('本轮录音工件不得是symlink');
+          const proof=JSON.parse(readFileSync(path,'utf8'));
+          if(proof.version!==1||proof.run!==run||proof.video_id!==v.video_id||proof.evidence_id!==`${run}-v${v.video_id}-qualification-record`)throw Error('本轮录音工件scope不符');
+          if(proof.media_volume_verified!==true||!Number.isSafeInteger(proof.media_volume)||proof.media_volume<=0)throw Error('本轮媒体音量未实际读回正数');
+          mediaVerified++;
+          if(result.code===0&&verdict==='rejected'&&marker[3]==='recording_silent'){
+            const receipt=await queue('reject_recording',{video_id:v.video_id,recording:proof});
+            if(receipt?.verified!==true||receipt.video_id!==v.video_id||receipt.verdict!=='rejected'||receipt.kind!=='recording_silent')throw Error('本轮录音拒绝缺真实PG回执');
+            writeFileSync(join(env.WFR_RUN_DIR,`${run}-recording-rejection-${v.video_id}.json`),JSON.stringify({run,video_id:v.video_id,recording_evidence_id:proof.evidence_id,...receipt}),{mode:0o600});
+            recordingSilentRejected++;continue;
+          }
+          if(proof.audio_status!=='usable'||!Number.isFinite(proof.mean_volume_db)||proof.mean_volume_db<=-80)throw Error('本轮音轨不可用，禁止标题或旧转写冒充ASR');
+        }catch(error){recordingOutcomesFailures++;failures.push({video_id:v.video_id,reason:error.message});continue;}
         if(result.code===0&&verdict==='matched')qualified.push(v);
-        else if(result.code!==0||verdict!=='rejected')failures.push({video_id:v.video_id,code:result.code,reason:result.stderr.slice(-500)});
+        else if(result.code!==0||verdict!=='rejected'){recordingOutcomesFailures++;failures.push({video_id:v.video_id,code:result.code,reason:result.stderr.slice(-500)});}
       }
       const verified=leased.filter(v=>{try {const proof=JSON.parse(readFileSync(join(env.WFR_RUN_DIR,`${run}-identity-${v.video_id}.json`),'utf8'));
         return proof.verified===true&&proof.observed_video_id===v.video_id&&proof.content_type==='video';}catch{return false;}}).length;
-      return {claimed:leased.length,matched:qualified.length,videos_verified:verified,failures,...(failures.length?{status:'partial'}:{})};
+      return {claimed:leased.length,matched:qualified.length,videos_verified:verified,recordings_required:recordingsRequired,media_volume_verified:mediaVerified,media_volume_failures:recordingsRequired-mediaVerified,recordings_silent_rejected:recordingSilentRejected,recording_outcomes_failures:recordingOutcomesFailures,failures,...(failures.length?{status:'partial'}:{})};
     },
     collection:async()=>{historyScoped=0;let comments=0,collected=0,sampled=0,rescans=0,inserted=0,historyVerified=0,coverage=0,historyConsumed=0;const failures=[],sampleReceipts=[];
       for(const v of qualified){try{

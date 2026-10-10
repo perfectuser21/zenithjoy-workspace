@@ -54,26 +54,58 @@ qv_open(){
   DOUYIN_DETAIL_PLAYBACK=continuous_identity qv_verify_video "$QV_EID-identity" || return 4
 }
 qv_qualify(){
-  local seconds="${QUEUED_VIDEO_RECORD_SECONDS:-25}" record_eid="$QV_EID-record" started stopped extracted audio="" db duration remote result verdict
+  local seconds="${QUEUED_VIDEO_RECORD_SECONDS:-25}" record_eid="$QV_EID-record" started="" stopped="" extracted audio="" db duration remote result verdict media="" media_ok=0 audio_status=unavailable
   [[ "$seconds" == <-> ]] && (( seconds >= 10 && seconds <= 105 )) || return 2
   # 默认保守录制60秒视频的3倍速片段；队列暂未记录原视频时长。
   if "$C" --profile "$P" set-playback-speed 3.0 "$QV_EID-speed" </dev/null >/dev/null; then
     # 同一批的视频各留独立工件；run锁仍使用TAG，既有录像保持不可覆盖。
-    if "$C" --profile "$P" record-start "$record_eid" "$seconds" </dev/null >/dev/null; then
+    if started="$("$C" --profile "$P" record-start "$record_eid" "$seconds" </dev/null)"; then
+      media="$(print -r -- "$started" | sed -n 's/.*media_volume=\([^ ]*\).*/\1/p')"
+      [[ "$started" == record_started* && "$media" == <-> ]] && (( media > 0 )) && media_ok=1
       qv_nap "$((seconds+2))"
       stopped="$("$C" --profile "$P" record-stop "$record_eid" </dev/null)" || stopped=""
       if [[ "$stopped" == record_stopped* ]]; then
-        extracted="$("$C" --profile "$P" record-extract-audio "$record_eid" </dev/null)" || extracted=""
-        audio="$(print -r -- "$extracted" | sed -n 's/^audio_extracted path=\([^ ]*\).*/\1/p')"
         db="$(print -r -- "$stopped" | sed -n 's/.*mean_volume_db=\([^ ]*\).*/\1/p')"
         duration="$(print -r -- "$stopped" | sed -n 's/.*duration_seconds=\([^ ]*\).*/\1/p')"
         if [[ "$duration" != <->(.<->|) ]] || (( duration < seconds*0.8 )); then
-          qv_log 'audio_rejected reason=short_or_unknown_duration'; audio=""
+          qv_log 'audio_rejected reason=short_or_unknown_duration'; audio_status=unknown
         elif [[ "$db" != -<->(.<->|) && "$db" != <->(.<->|) ]] || (( db <= -80 )); then
-          qv_log 'audio_rejected reason=silent_or_unknown_volume'; audio=""
+          qv_log 'audio_rejected reason=silent_or_unknown_volume'; audio_status=unknown
+          [[ "$db" == -<->(.<->|) || "$db" == <->(.<->|) ]] && (( db <= -80 )) && audio_status=silent
+        else
+          audio_status=usable
+          if (( media_ok )); then
+            extracted="$("$C" --profile "$P" record-extract-audio "$record_eid" </dev/null)" || extracted=""
+            audio="$(print -r -- "$extracted" | sed -n 's/^audio_extracted path=\([^ ]*\).*/\1/p')"
+          fi
         fi
       fi
     fi
+  fi
+  # 媒体音量与内容电平分别存证；静音不是模型内容判定，也不得用旧转写伪装本轮ASR。
+  [[ -n "${WFR_RUN_DIR:-}" ]] || return 5
+  python3 - "$WFR_RUN_DIR" "$TAG" "$VID" "$record_eid" "$media" "$media_ok" "$audio_status" "${db:-}" "${duration:-}" "$started" "$stopped" <<'PYRECORD' || return 5
+import sys,json,os,tempfile,datetime,math
+d,run,vid,eid,media,ok,status,db,duration,started,stopped=sys.argv[1:]
+def number(v):
+ try:
+  n=float(v);return n if math.isfinite(n) else None
+ except ValueError:return None
+os.makedirs(d,mode=0o700,exist_ok=True)
+p={"version":1,"run":run,"video_id":vid,"evidence_id":eid,"media_volume":int(media) if media.isdigit() else None,"media_volume_verified":ok=="1","audio_status":status,"mean_volume_db":number(db),"duration_seconds":number(duration),"record_started_stdout":started,"record_stopped_stdout":stopped,"observed_at":datetime.datetime.now(datetime.timezone.utc).isoformat()}
+fd,tmp=tempfile.mkstemp(prefix='.recording-',dir=d)
+with os.fdopen(fd,'w') as f:json.dump(p,f)
+os.replace(tmp,os.path.join(d,run+'-recording-'+vid+'.json'))
+PYRECORD
+  if (( ! media_ok )); then
+    qv_log 'recording_pending reason=media_volume_unverified'
+    print -- "QUAL\t$VID\tpending\tmedia_volume_unverified"; return 5
+  fi
+  if [[ "$audio_status" == silent ]]; then
+    print -- "QUAL\t$VID\trejected\trecording_silent"; return 0
+  fi
+  if [[ "$audio_status" != usable || -z "$audio" ]]; then
+    print -- "QUAL\t$VID\tpending\trecording_unavailable"; return 5
   fi
   local -a audio_args=()
   if [[ -n "$audio" ]]; then
@@ -86,7 +118,7 @@ qv_qualify(){
     if wf_run_bounded "${QUEUED_VIDEO_REMOTE_SECONDS:-180}" scp "${transport[@]}" -o ConnectTimeout=15 -o BatchMode=yes \
       -o ServerAliveInterval=5 -o ServerAliveCountMax=2 "$audio" "mmv:$remote" </dev/null >/dev/null; then
       audio_args=(--audio "$remote")
-    else qv_log 'audio_upload_failed'; fi
+    else qv_log 'audio_upload_failed'; print -- "QUAL\t$VID\tpending\taudio_upload_failed"; return 5; fi
   fi
   result="$(qv_remote judge --line "$LINE" --video-id "$VID" "${audio_args[@]}")" || result=""
   verdict="$(print -r -- "$result" | python3 -c 'import json,sys

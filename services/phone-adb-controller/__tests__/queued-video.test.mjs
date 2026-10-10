@@ -38,6 +38,9 @@ for(const volume of ['0','unknown',''])test('录前媒体音量必须真实正�
 test('真实正数媒体音量与有效音轨才能上传判定并留下本VID工件',()=>{
  const r=recordedQualification({volume:'2'});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/\tmatched\tjudged/);assert.equal(r.proof.media_volume_verified,true);assert.equal(r.proof.audio_status,'usable');assert.equal(r.proof.video_id,vid);assert.ok(r.calls.includes('remote'));
 });
+test('未知音轨电平或录制启动失败保pending，不能伪静音拒绝或内容matched',()=>{
+ for(const opts of [{db:'unknown'},{startFail:true}]){const r=recordedQualification(opts);assert.equal(r.status,5,r.stderr);assert.ok(!r.calls.includes('remote'));assert.ok(!r.stdout.includes('\trejected\t'));assert.ok(!r.stdout.includes('\tmatched\t'));}
+});
 test('two queued videos in one run each deliver their own recording to qualification',()=>{
  const d=mkdtempSync(path.join(tmpdir(),'queued-multi-audio-'));
  try {
@@ -51,7 +54,7 @@ case 'lock-refresh': console.log('lock=refreshed owner=multi-video-run');break;
 case 'open-video':fs.writeFileSync(p.join(d,'active'),args[0]);fs.writeFileSync(p.join(d,args[1]+'.xml'),args[0]);break;
 case 'current-video-link':fs.writeFileSync(p.join(d,args[0]+'.xml'),active());console.log('content_type=video\\nvideo_id='+active());break;
 case 'open-comments':console.log('reason=no_comments_on_this_video');break;
-case 'record-start':try{fs.writeFileSync(p.join(d,args[0]+'.mkv'),active(),{flag:'wx'});}catch{console.error('recording artifact already exists');process.exit(1);}break;
+case 'record-start':try{fs.writeFileSync(p.join(d,args[0]+'.mkv'),active(),{flag:'wx'});}catch{console.error('recording artifact already exists');process.exit(1);}console.log('record_started media_volume=1');break;
 case 'record-stop':console.log('record_stopped duration_seconds=25.1 mean_volume_db=-35 audio_streams=1');break;
 case 'record-extract-audio':{
  const wav=p.join(d,args[0]+'.wav');fs.writeFileSync(wav,fs.readFileSync(p.join(d,args[0]+'.mkv')),{flag:'wx'});console.log('audio_extracted path='+wav);break;}
@@ -100,10 +103,14 @@ case "$3" in
  collect-comments) if [[ -n "$BULK_NEW" ]];then for j in {1..8};do print "甲\\t新评论$j\\t今天\\t北京\\treader\\ttap=100 $((200+j))\\tb64=55Sy";done;print 'exhausted=1';exit 0;fi;if [[ -n "$REORDER_AFTER_HISTORY" ]];then if [[ "$(grep -c '^commenter-identity$' "$CALLS")" -gt 0 ]];then xy=900;else xy=300;fi;print "甲\\t咨询价格\\t今天\\t北京\\treader\\ttap=100 200\\tb64=55Sy";print "乙\\t新咨询\\t今天\\t北京\\treader\\ttap=$xy 200\\tb64=5LmZ";print 'exhausted=1';exit 0;fi;if [[ -n "$BULK_HISTORY" ]];then for j in {1..51};do print "甲\\t历史$j\\t今天\\t北京\\treader\\ttap=100 $((200+j))\\tb64=55Sy";done;print 'exhausted=1';exit 0;fi;n=100;if [[ -n "$RELOCATE" && "$(grep -c '^collect-comments$' "$CALLS")" -gt 1 ]];then n=300;fi;print "甲\\t咨询价格\\t今天\\t北京\\treader\\ttap=$n 200\\tb64=55Sy"; if [[ -n "$NEXT_NEW_ROW" ]];then print '甲\\t新咨询\\t今天\\t北京\\treader\\ttap=300 200\\tb64=55Sy';fi;print 'exhausted=1';;
  commenter-identity) print "$4 $5" >> "$CALLS_COORD";[[ -z "$IDENTITY_FAIL" ]] || exit 1;if [[ -n "$RELOCATE" && "$(grep -c '^commenter-identity$' "$CALLS")" -eq 1 ]];then exit 1;fi;if [[ -n "$REORDER_AFTER_HISTORY" && "$4" != 100 ]];then if [[ "$4" == 900 ]];then print 'nickname=乙';else print 'nickname=错位';fi;print 'douyin_id=person999';else print 'nickname=甲';print 'douyin_id=person123';fi;print 'account_type=personal';if [[ -n "$QUEUED_COMMENT_HISTORY_FILE" ]];then mkdir -p "$DOUYIN_PHONE_TMP_ROOT/evidence/jinoshengyuan-work";pf="$DOUYIN_PHONE_TMP_ROOT/evidence/jinoshengyuan-work/$7-profile.xml";rf="$DOUYIN_PHONE_TMP_ROOT/evidence/jinoshengyuan-work/$7-returned.xml";print '<hierarchy><node package="com.ss.android.ugc.aweme" text="抖音号：person123" /></hierarchy>' > "$pf";print '<hierarchy><node package="com.ss.android.ugc.aweme" text="评论 1" /><node package="com.ss.android.ugc.aweme" class="android.widget.EditText" text="发条评论" /></hierarchy>' > "$rf";print "profile_evidence=$pf";print "return_evidence=$rf";fi;;
  commenter-card-link) [[ -z "$CARD_RETURNS_OFF_DETAIL" ]] || touch "$CARD_STATE";print 'profile_url=https://www.douyin.com/user/a';;
+ record-start) print 'record_started media_volume=1';;
+ record-stop) print 'record_stopped duration_seconds=25.1 mean_volume_db=-35 audio_streams=1';;
+ record-extract-audio) print "audio_extracted path=$FIXTURE_AUDIO";;
  *) ;;
 esac
 `,{mode:0o755});
  const qualify=path.join(d,'qualify');
+ writeFileSync(path.join(d,'scp'),'#!/bin/zsh\nexit 0\n',{mode:0o755});
  writeFileSync(qualify,`#!/bin/zsh
 print -r -- "remote-$1" >> "$CALLS"
 if [[ -n "$MODEL_HANG" ]]; then sleep 30; fi
@@ -116,7 +123,7 @@ print 'QUAL_RESULT {"verdict":"pending","kind":"api_error"}'
  const historyPath=path.join(evidence,'history-'+vid+'.json');
  if(extra.HISTORY){requireHistoryDir();writeFileSync(historyPath,JSON.stringify({version:1,status:'verified',line:'jinuo',line_key:'jinuo',run:'cmd100822-new',source_run:'source101',video_id:vid,video_url:'https://www.douyin.com/video/'+vid,observed_at:new Date().toISOString(),rows:[{id:'11111111-1111-4111-8111-111111111111',douyin_id:'person123',comment_body:'咨询价格'}],...extra.HISTORY}),{mode:0o600});}
  function requireHistoryDir(){mkdirSync(evidence,{recursive:true});}
- const r=spawnSync('zsh',[script,mode,'jinoshengyuan-work',vid,`https://www.douyin.com/video/${vid}`,Buffer.from('测试视频').toString('base64'),Buffer.from('人工智能训练师').toString('base64'),'cmd100822-new',extra.HISTORY?'jinuo':'金诺盛源'],{env:{...process.env,DOUYIN_PHONE_ADB:ctl,CALLS:log,STRATEGIES:path.join(d,'strategies'),CALLS_COORD:coords,CARD_STATE:path.join(d,'off-detail'),WFR_RUN_DIR:evidence,HARVEST_KEYWORD_TESTING:'1',QUEUED_VIDEO_QUALIFY_CMD:qualify,OWN_ACCOUNTS_CONF:own,...extra,...(extra.HISTORY?{LEADGEN_SOURCE_RUN:'source101',QUEUED_COMMENT_HISTORY_FILE:historyPath,DOUYIN_PHONE_TMP_ROOT:path.join(d,'phone')}:{})},encoding:'utf8',timeout:extra.FIXTURE_TIMEOUT_MS||7000});
+ const r=spawnSync('zsh',[script,mode,'jinoshengyuan-work',vid,`https://www.douyin.com/video/${vid}`,Buffer.from('测试视频').toString('base64'),Buffer.from('人工智能训练师').toString('base64'),'cmd100822-new',extra.HISTORY?'jinuo':'金诺盛源'],{env:{...process.env,PATH:d+path.delimiter+process.env.PATH,FIXTURE_AUDIO:path.join(d,'audio.wav'),DOUYIN_PHONE_ADB:ctl,CALLS:log,STRATEGIES:path.join(d,'strategies'),CALLS_COORD:coords,CARD_STATE:path.join(d,'off-detail'),WFR_RUN_DIR:evidence,HARVEST_KEYWORD_TESTING:'1',QUEUED_VIDEO_QUALIFY_CMD:qualify,OWN_ACCOUNTS_CONF:own,...extra,...(extra.HISTORY?{LEADGEN_SOURCE_RUN:'source101',QUEUED_COMMENT_HISTORY_FILE:historyPath,DOUYIN_PHONE_TMP_ROOT:path.join(d,'phone')}:{})},encoding:'utf8',timeout:extra.FIXTURE_TIMEOUT_MS||7000});
  const calls=existsSync(log)?readFileSync(log,'utf8').trim().split('\n'):[];
  const coordinates=existsSync(coords)?readFileSync(coords,'utf8').trim().split('\n'):[];
  const receipt=path.join(evidence,`cmd100822-new-identity-${vid}.json`);

@@ -438,7 +438,7 @@ activities:
   - key: qualification
     name: 判定视频
     order: 3
-    version: 3.0.0
+    version: 3.1.0
     compatibility: breaking
     owner:
       department: line02 智能获客
@@ -577,7 +577,7 @@ activities:
           - Video.video_url
           - Device.lock_holder
         writes: []
-        check: 媒体音量回读 >0
+        check: 本run逐VID实际record-start媒体音量回读为正整数；未知或零不得通过，音轨静音不能替代媒体音量证据
         implementation:
           status: implemented
           ref: process-queued-video.sh + queued-video-lib.sh qualification.unmute_before_record（原约束保留，真PG/证据读回）
@@ -585,8 +585,8 @@ activities:
         dod:
           mode: checkpoint
           readback:
-            type: log
-            regex: audio_rejected reason=silent_or_unknown_volume
+            type: metric
+            ref: metrics.media_volume_failures
             expect:
               op: <=
               value: 0
@@ -615,7 +615,7 @@ activities:
         reads:
           - Video.video_id
         writes: []
-        check: ffprobe 有 16kHz 音频流且电平非死寂
+        check: 送ASR的本轮音频必须有16kHz音轨且电平非死寂；实际静音仅允许本run租约PG拒绝与独立读回，不得标题或旧转写兜底matched
         implementation:
           status: implemented
           ref: process-queued-video.sh + queued-video-lib.sh qualification.extract_audio（原约束保留，真PG/证据读回）
@@ -623,8 +623,8 @@ activities:
         dod:
           mode: checkpoint
           readback:
-            type: log
-            regex: audio_upload_failed
+            type: metric
+            ref: metrics.recording_outcomes_failures
             expect:
               op: <=
               value: 0
@@ -635,7 +635,7 @@ activities:
           - Video.video_id
         writes:
           - Video.transcript
-        check: transcript 非空；空/静音 → rejected
+        check: 可用本轮音轨正常转写；空/静音 → rejected。静音在ASR前用本轮录音核验拒绝事实终结，保旧transcript但不冒充本轮ASR完成
         implementation:
           status: implemented
           ref: process-queued-video.sh + queued-video-lib.sh qualification.transcribe（原约束保留，真PG/证据读回）
@@ -647,6 +647,7 @@ activities:
             query: SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG' AND judgment_status <>
               'pending' AND coalesce(transcript, '') = '' AND coalesce(judgment_reason, '') NOT LIKE '转写为空%'
               AND coalesce(judgment_reason, '') NOT LIKE 'V2便宜闸%'
+              AND coalesce(judgment_reason, '') NOT LIKE '本轮录音核验拒绝:静音音轨%'
             expect:
               op: <=
               value: 0

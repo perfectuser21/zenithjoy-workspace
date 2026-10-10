@@ -102,6 +102,22 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     if (result.rowCount !== 1) throw Error('视频租约已失效');
     return { renewed: op === 'renew_video', released: op === 'release_video' };
   }
+  if(op==='reject_recording'){
+    const p=input.recording;
+    if(!/^\d{16,24}$/.test(input.video_id||'')||p?.version!==1||p.run!==run||p.video_id!==input.video_id
+      ||p.evidence_id!==`${run}-v${input.video_id}-qualification-record`||p.media_volume_verified!==true
+      ||!Number.isSafeInteger(p.media_volume)||p.media_volume<=0||p.audio_status!=='silent'
+      ||typeof p.mean_volume_db!=='number'||!Number.isFinite(p.mean_volume_db)||p.mean_volume_db>-80)throw Error('本轮录音拒绝证据不符');
+    return transaction(pool,async client=>{
+      const reason='本轮录音核验拒绝:静音音轨';
+      const result=await client.query(`UPDATE zenithjoy.leadgen_videos SET judgment_status='rejected',judgment_reason=$4,updated_at=now()
+        WHERE line_key=$1 AND video_id=$2 AND process_status=$3 AND judgment_status='pending' RETURNING video_id`,[lineKey,input.video_id,`处理中:${run}`,reason]);
+      if(result.rowCount!==1)throw Error('本轮录音拒绝租约或判定已失效');
+      const actual=(await client.query('SELECT video_id,judgment_status,judgment_reason,process_status FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=$2',[lineKey,input.video_id])).rows[0];
+      if(actual?.video_id!==input.video_id||actual.judgment_status!=='rejected'||actual.judgment_reason!==reason||actual.process_status!==`处理中:${run}`)throw Error('本轮录音拒绝PG独立读回失败');
+      return {verified:true,video_id:actual.video_id,verdict:'rejected',kind:'recording_silent',reason};
+    });
+  }
   if(op==='comment_history'||op==='comment_history_readback'){
     if(!sourceRun)throw Error('历史读取缺受信上游运行号');
     if(!/^\d{16,24}$/.test(input.video_id||'')||typeof input.video_url!=='string')throw Error('历史视频身份无效');
