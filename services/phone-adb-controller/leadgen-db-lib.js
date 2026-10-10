@@ -96,7 +96,7 @@ async function discoverVideo(pool, row) {
                                 THEN zenithjoy.leadgen_videos.harvest_batch ELSE EXCLUDED.harvest_batch END,
            keyword = CASE WHEN zenithjoy.leadgen_videos.process_status = '评论已采'
                           THEN zenithjoy.leadgen_videos.keyword ELSE COALESCE(EXCLUDED.keyword, zenithjoy.leadgen_videos.keyword) END,
-           video_url = COALESCE(zenithjoy.leadgen_videos.video_url, EXCLUDED.video_url),
+           video_url = COALESCE(EXCLUDED.video_url, zenithjoy.leadgen_videos.video_url),
            updated_at = now()
      RETURNING judgment_status, (transcript IS NOT NULL AND transcript <> '') AS has_transcript, (xmax = 0) AS inserted`,
     [lineKey, videoId, videoUrl, title, keyword, harvestBatch, "待判定"]

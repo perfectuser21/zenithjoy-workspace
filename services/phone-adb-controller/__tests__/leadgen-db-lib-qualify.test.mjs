@@ -38,6 +38,14 @@ test("discoverVideo: lineKey/videoId 必填", async () => {
   await assert.rejects(() => discoverVideo(fakePool([]), { lineKey: "jinuo" }), /必填/);
 });
 
+test("discoverVideo: 重复视频本次新链接优先，没提供新链接才保留原链接",async()=>{
+ const pool=fakePool([{rows:[{judgment_status:'matched',has_transcript:true,inserted:false}]}]);
+ const out=await discoverVideo(pool,{lineKey:'jinuo',videoId:'7685662999797258401',videoUrl:'https://v.douyin.com/freshLink/'});
+ assert.equal(out.status,'matched');assert.equal(out.has_transcript,true);
+ assert.match(pool.calls[0].sql,/video_url = COALESCE\(EXCLUDED\.video_url, zenithjoy\.leadgen_videos\.video_url\)/);
+ assert.equal(pool.calls[0].params[2],'https://v.douyin.com/freshLink/');
+});
+
 test("getVideo: 取单个视频（含判定与转写），不存在返回 null", async () => {
   const pool = fakePool([{ rows: [{ video_id: "v1", judgment_status: "pending" }] }, { rows: [] }]);
   assert.equal((await getVideo(pool, "jinuo", "v1")).video_id, "v1");
