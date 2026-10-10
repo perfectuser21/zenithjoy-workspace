@@ -92,6 +92,17 @@
 - `account-switch` — 切换到指定抖音号
 - `private-message-send` — 私信触达(见下方安全声明,默认关闸)
 
+### 素材下发/文字输入(写设备,必须持锁,1010 任务 8fdeaeb4)
+两条命令都要用全局 `--lock-owner RUN` 声明调用方 run;锁空闲/属于别的 run/超 TTL 一律拒绝,不碰设备。
+成功输出**一行** `key=value`;失败 stdout 一行 `<cmd>=fail class=<分类> reason=<代码>`,stderr 人话 + `failure_class=<分类>`,退出码 2。
+分类:`empty_ok`(无事可做,退出码 0)/`retryable`(重试可能成功)/`fatal`(参数或协议错,重试无用)/`needs_human`(设备需人处理)。
+- `media-push LOCAL_FILE [--name VID_yyyymmdd_hhmmss.mp4]` — 推到 `/sdcard/DCIM/Camera/`,缺省按当前时间生成相机风格文件名(mp4→`VID_`,jpg/jpeg/png→`IMG_`,可带 `_N` 序号),拒绝覆盖同名;回读大小一致 → 发 `MEDIA_SCANNER_SCAN_FILE` → 轮询媒体库查到同大小记录才算成功。
+  例:`douyin-phone-adb --profile p1 --lock-owner RUN media-push /tmp/a.mp4` → `media_push=ok path=/sdcard/DCIM/Camera/VID_20261010_153000.mp4 name=VID_20261010_153000.mp4 size=2048 media_id=4242 scan=indexed`
+  失败码:`lock_owner_required`/`lock_not_held`/`lock_stale`/`local_file_missing`/`local_file_empty`/`unsupported_media_type`/`bad_media_name`/`remote_name_taken`/`target_model_mismatch`(fatal);`target_offline`/`push_failed`/`size_mismatch`/`media_not_indexed`(retryable,残缺/未入库文件已删)
+- `text-input UTF8_TEXT` — 向**当前焦点 EditText** 输入(先清空再输入,调用前先点中输入框):切 ADBKeyboard(未装/启不了明确报错)→ `ADB_INPUT_B64` → uiautomator 回读焦点框文字须逐字一致;**无论成败**都还原原输入法并回读确认。
+  例:`douyin-phone-adb --profile p1 --lock-owner RUN text-input '今天发一条 #AI 学姐'` → `text_input=ok bytes=33 sha256=<hex> field=com.ss.android.ugc.aweme:id/xxx ime_restored=com.baidu.input_huawei/.ImeService evidence=<xml>`;空文本 → `text_input=empty_ok bytes=0`
+  失败码:`no_focused_input`/`ime_switch_failed`/`readback_mismatch`(retryable);`adbkeyboard_not_installed`/`adbkeyboard_enable_failed`/`ime_unreadable`/`ime_restore_failed`(needs_human);`bad_text`/锁类(fatal)
+
 ### 播放/录制
 - `set-playback-speed` — 设播放倍速
 - `record-start` / `record-status` / `record-stop` — 录屏起/查/停

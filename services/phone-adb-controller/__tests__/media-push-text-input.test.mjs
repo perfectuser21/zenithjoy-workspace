@@ -255,7 +255,7 @@ test("text-input 成功：经 ADBKeyboard 输入，焦点框回读一致，输�
   assert.equal(lines.length, 1, `必须只输出一行: ${r.out}`);
   const kv = parse(lines[0]);
   assert.equal(kv.text_input, "ok");
-  assert.equal(kv.chars, String([...text].length));
+  assert.equal(kv.bytes, String(Buffer.byteLength(text)));
   assert.equal(kv.field, "com.ss.android.ugc.aweme:id/caption_et");
   assert.equal(kv.ime_restored, ORIG_IME);
   assert.equal(ime(ctx), ORIG_IME, "输入法必须还原");
@@ -307,6 +307,6 @@ test("text-input 空文本 → empty_ok，退出码 0，不碰输入法", async 
   const ctx = setup();
   const r = await run(ctx, ["text-input", ""]);
   assert.equal(r.code, 0, `err=${r.err}`);
-  assert.equal(r.out, "text_input=empty_ok chars=0");
+  assert.equal(r.out, "text_input=empty_ok bytes=0");
   assert.doesNotMatch(calls(ctx), /"ime"/);
 });
