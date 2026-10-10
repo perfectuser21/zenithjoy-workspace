@@ -1,5 +1,5 @@
 import subprocess,sys,json,datetime,pathlib
-from collector import PACKAGES
+from collector import PACKAGES, is_home_foreground
 serial,profile,runid=sys.argv[1:4]
 adb='/opt/homebrew/bin/adb'
 try:
@@ -7,7 +7,7 @@ try:
  focus='\n'.join(l for l in p.stdout.splitlines() if 'mCurrentFocus' in l)
  if p.returncode:state='离线未查';reason='ADB设备当前不可达'
  elif not focus:state='检测失败';reason='没有读到前台窗口，未接管手机'
- elif not any(x in focus for x in ['launcher','Launcher']):state='占用未查';reason='前台已有应用或锁屏，未接管手机'
+ elif not is_home_foreground(focus):state='占用未查';reason='前台已有应用或锁屏，未接管手机'
  else:state=None
 except Exception:state='检测失败';reason='设备可用性检查失败，未接管手机'
 if state:

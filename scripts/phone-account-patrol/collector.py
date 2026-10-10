@@ -2,6 +2,10 @@ import subprocess,sys,time,json,re,datetime,xml.etree.ElementTree as E
 from pathlib import Path
 PACKAGES={'抖音':'com.ss.android.ugc.aweme','小红书':'com.xingin.xhs','微信':'com.tencent.mm','快手':'com.smile.gifmaker','今日头条':'com.ss.android.article.news','知乎':'com.zhihu.android','微博':'com.sina.weibo','B站':'tv.danmaku.bili'}
 ADB='/opt/homebrew/bin/adb'; BASE=Path.home()/'.local/share/phone-account-patrol'
+def is_home_foreground(focus):
+ # 只检查组件的包名；微信LauncherUI不是桌面，不能按组件含Launcher判空闲。
+ packages=re.findall(r'\b([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)/',focus)
+ return bool(packages) and all('.launcher' in package.lower() or package=='com.miui.home' for package in packages)
 def stamp():return datetime.datetime.now(datetime.timezone.utc).isoformat()
 def classify(platform,nodes,ocr,own):
  labels=[n.get('text','') or n.get('content-desc','') for n in nodes]+[o['text'] for o in ocr]
@@ -150,7 +154,7 @@ def main():
  # Physical users don't participate in the automation lock. Skip their active foreground session.
  focus=probe.adb('shell','dumpsys','window').decode(errors='replace')
  focus='\n'.join(l for l in focus.splitlines() if 'mCurrentFocus' in l)
- if not any(x in focus for x in ['launcher','Launcher']):
+ if not is_home_foreground(focus):
   state='占用未查' if focus else '检测失败'
   reason='前台已有应用或锁屏，本轮不接管人工使用' if focus else '未读取到前台窗口，不能判断是否空闲'
   print(json.dumps({'serial':serial,'results':{p:{'state':state,'checked_at':stamp(),'reason':reason} for p in platforms+['视频号']}},ensure_ascii=False));return
