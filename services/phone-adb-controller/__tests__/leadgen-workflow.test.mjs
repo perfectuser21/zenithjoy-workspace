@@ -187,6 +187,17 @@ test('资格动作容纳已实测的打开与身份核验组合耗时，仍受�
  }
 });
 
+test('实际静音本轮只经租约PG拒绝回执终结，不能进入matched或内容模型',async()=>{
+ const {createHandlers}=await import('../leadgen-workflow.mjs');
+ for(const badScope of [false,true]){
+  const dir=mkdtempSync(join(tmpdir(),'silent-workflow-')),id='7663337150875733275',ops=[];
+  const env={HOME:dir,WFR_RUN_DIR:dir,WFR_TAG:'silent-processing',P:'work',SERIAL:'test',LEADGEN_LINE:'jinuo'};
+  const rpc=async body=>{const op=body.request.op;ops.push(op);if(op==='claim_videos')return {result:[{video_id:id,video_url:'https://v.douyin.com/fresh/',title:'新视频',keyword:'AI',judgment_status:'pending'}]};if(op==='reject_recording')return {result:{verified:true,video_id:id,verdict:'rejected',kind:'recording_silent'}};return {result:{}};};
+  const execute=async()=>{writeFileSync(join(dir,`silent-processing-identity-${id}.json`),JSON.stringify({verified:true,observed_video_id:id,content_type:'video'}));writeFileSync(join(dir,`silent-processing-recording-${id}.json`),JSON.stringify({version:1,run:badScope?'other':'silent-processing',video_id:id,evidence_id:`silent-processing-v${id}-qualification-record`,media_volume_verified:true,media_volume:1,audio_status:'silent',mean_volume_db:-91}));return {code:0,stdout:`QUAL\t${id}\trejected\trecording_silent\n`,stderr:''};};
+  try{const h=createHandlers({root:dir,env,rpc,execute});h.state.budgetDeadline=Date.now()+1800000;const r=await h.qualification();assert.equal(r.matched,0);if(badScope){assert.equal(r.failures.length,1);assert.ok(!ops.includes('reject_recording'));assert.equal(r.media_volume_failures,1);}else{assert.equal(r.failures.length,0);assert.ok(ops.includes('reject_recording'));assert.equal(r.media_volume_failures,0);assert.equal(r.recordings_silent_rejected,1);}}finally{rmSync(dir,{recursive:true,force:true});}
+ }
+});
+
 
 test('已匹配视频的身份核验也包含打开与取链，不能沿用单取链时限',async()=>{
  const {createHandlers}=await import('../leadgen-workflow.mjs');
