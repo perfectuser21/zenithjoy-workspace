@@ -4,6 +4,6 @@
 - 读回缺行才同请求补写一次，源SHA不变，总截止时间不扩大。
 - 读回失败不得盲补写；明确错误及其他写操作不自动重跑。
 - 丢失回执时待写原始候选证据可查，计数如实partial。
-- 正式发布smoke与Linux CI通过。
+- 完整RPC→队列→SQL链路覆盖已提交和未提交两种丢回执情况，各只生成一条真实身份；注册正式发布smoke并通过Linux CI。
 
 GP-Anchor: line02/keyword_acquisition#step2
