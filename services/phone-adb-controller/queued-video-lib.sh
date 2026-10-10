@@ -148,6 +148,12 @@ except Exception: print("medium")' "$count")"
     for line in "${(@f)raw}"; do
       [[ "$line" == *$'\t'tap=* ]] || continue
       [[ -z "${seen[$line]:-}" ]] || continue
+      # Capturing the current tree or skipping an owned identity may cross the budget.
+      # Check again before starting the next complete comment action.
+      if wf_deadline_reached || wf_stop_requested || (( $(date +%s) - started >= budget )); then
+        print -- "COLLECTION\t$VID\tpartial\t${#emitted}"
+        return 7
+      fi
       seen[$line]=1; newlines=$((newlines+1)); total=$((total+1)); QV_ROW="$total"
       nick="$(print -r -- "$line" | cut -f1)"; body="$(print -r -- "$line" | cut -f2)"
       cdate="$(print -r -- "$line" | cut -f3)"; region="$(print -r -- "$line" | cut -f4)"

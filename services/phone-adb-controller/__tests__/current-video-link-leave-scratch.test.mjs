@@ -55,7 +55,7 @@ const FEED_XML = `${XML_HEAD}</node></hierarchy>`;
  *  am start search/tabs?keyword=<词> → 压 results（兜底重搜）；keyevent 4 → 出栈一层
  *  scratchPopTo: 暂存路线退完落在哪（默认 detail；'feed' 模拟退飞了）
  */
-function makeFakePhone({ resultsKeyword = KW, scratchPopTo = 'detail', playState = 'paused', interactiveCenter = false, copiedShareUrl = LINK, forbidHead = false, localHeadFails = false, peerUrl = null, returnSkeleton = false, videoTabSelected = true, scratchExtra = 0 } = {}) {
+function makeFakePhone({ resultsKeyword = KW, scratchPopTo = 'detail', playState = 'paused', interactiveCenter = false, copiedShareUrl = LINK, forbidHead = false, localHeadFails = false, peerUrl = null, returnSkeleton = false, unrecognizedGuide = false, videoTabSelected = true, scratchExtra = 0 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'cvl-leave-'));
   mkdirSync(join(dir, 'fx'));
   writeFileSync(join(dir, 'fx', 'detail.xml'), detailXml('playing'));
@@ -67,7 +67,9 @@ function makeFakePhone({ resultsKeyword = KW, scratchPopTo = 'detail', playState
   writeFileSync(join(dir, 'fx', 'feed.xml'), FEED_XML);
   writeFileSync(join(dir, 'fx', 'results.xml'),readFileSync(join(FIXTURES, 'real-search-results-grid.xml'),'utf8').replace('text="人工智能" resource-id=', 'text="'+resultsKeyword+'" resource-id='));
   if (!videoTabSelected) {const p=join(dir,'fx','results.xml');writeFileSync(p,readFileSync(p,'utf8').replace(/(<node[^>]*text="视频"[^>]*selected=")true/g,'$1false'));}
-  writeFileSync(join(dir,'fx','return-skeleton.xml'),readFileSync(join(FIXTURES,'real-keyword-return-skeleton-13.xml'),'utf8'));
+  // 历史13节点实屏是复制成功guide；未知变体仅故障注入，不冒充实屏。
+  const guideXml=readFileSync(join(FIXTURES,'real-keyword-return-skeleton-13.xml'),'utf8');
+  writeFileSync(join(dir,'fx','return-skeleton.xml'),unrecognizedGuide?guideXml.replace('可以通过分享的链接找到我','故障注入：未知引导'):guideXml);
   writeFileSync(join(dir,'foreground_pages'),'');
   writeFileSync(join(dir,'dump_pages'),'');
   writeFileSync(join(dir, 'fx', 'shot.png'), 'png');
@@ -91,7 +93,7 @@ case "$*" in
   *getprop*) echo ANY-MODEL ;;
   *"am start"*"search/tabs?keyword=%20"*) push scratch_res; push scratch_input; i=0; while [ "$i" -lt "${scratchExtra}" ];do push scratch_input; i=$((i+1));done; push scratch_kbd ;;
   *"am start"*"search/tabs?keyword="*) push results ;;
-  *"am start"*"aweme/detail/"*) n=$(cat "$D/deeplinks"); echo $((n+1)) > "$D/deeplinks"; push detail2 ;;
+  *"am start"*"aweme/detail/"*) n=$(cat "$D/deeplinks"); echo $((n+1)) > "$D/deeplinks"; push detail2; echo playing > "$D/play_state" ;;
   *"input keyevent 4"*)
       t=$(top)
       if [ "$t" = "scratch_res" ];then echo 1 > "$D/left_scratch";fi
@@ -162,6 +164,7 @@ exit 0
     run,
     stack: () => readFileSync(stack, 'utf8').trim().split('\n'),
     foregroundPages: () => readFileSync(join(dir,'foreground_pages'),'utf8').trim().split('\n'),
+    guideDismissXml: (eid) => readFileSync(join(dir,'tmp','evidence','legacy',eid+'-t1-leave-guide-dismiss-b3.xml'),'utf8'),
     returnedGridXml: (eid) => readFileSync(join(dir,'tmp','evidence','legacy',eid+'-t1-returned-grid.xml'),'utf8'),
     dumpPages: () => readFileSync(join(dir,'dump_pages'),'utf8').trim().split('\n'),
     deeplinks: () => Number(readFileSync(join(dir, 'deeplinks'), 'utf8').trim()),
@@ -281,7 +284,7 @@ test('results-only真实入口：正常详情归位不新增媒体键或详情�
  assert.equal(ph.dumpPages().filter(x=>x==='detail').length,3);assert.equal(ph.mediaKeys().filter(x=>x==='126').length,0);
  assert.equal(ph.dumpPages().filter(x=>x==='results').length,2);assert.deepEqual(ph.stack(),['results']);assert.equal(ph.deeplinks(),0);
 });
-test('results-only真实13节点骨架夹具：跳出暂存不读骨架详情三波，最终原词视频tab通过',t=>{
+test('results-only真实13节点guide夹具：跳出暂存不读guide详情三波，最终原词视频tab通过',t=>{
  const ph=makeFakePhone({returnSkeleton:true});const r=ph.run(['current-video-link','cvl-results-skeleton',KW]);assert.equal(r.code,0,r.err);
  assert.equal(ph.dumpPages().filter(x=>x==='detail_skeleton').length,0);assert.equal(ph.mediaKeys().filter(x=>x==='126').length,0);
  assert.equal(ph.dumpPages().filter(x=>x==='results').length,2);assert.deepEqual(ph.stack(),['results']);assert.match(r.out,/video_id=7000000000000000001/);
@@ -302,9 +305,24 @@ test('results-only未知mode在任何ADB动作之前明确拒绝',()=>{
  assert.notEqual(r.status,0);assert.match(r.stderr,/unknown.*mode/i);
 });
 
-test('非keyword严格默认模式仍验收真实骨架三波并用详情深链恢复',()=>{
- const ph=makeFakePhone({returnSkeleton:true});const r=ph.run(['current-video-link','cvl-strict-skeleton']);assert.equal(r.code,0,r.err);
- assert.equal(ph.dumpPages().filter(x=>x==='detail_skeleton').length,3);assert.equal(ph.deeplinks(),1);assert.equal(ph.stack().at(-1),'detail2');
+test('非keyword已知复制guide额外BACK后独立错误新树仍拒绝，再深链恢复默认播放',()=>{
+ const ph=makeFakePhone({returnSkeleton:true});const r=ph.run(['current-video-link','cvl-strict-guide']);assert.equal(r.code,0,r.err);
+ assert.equal(ph.dumpPages().filter(x=>x==='detail_skeleton').length,1);
+ const fresh=ph.guideDismissXml('cvl-strict-guide');
+ assert.match(fresh,/text="人工智能"/);assert.doesNotMatch(fresh,/content-desc="分享/);
+ assert.match(r.err,/share button absent/);assert.match(r.err,/falling back to deep link reopen/);
+ assert.equal(ph.deeplinks(),1);assert.equal(ph.stack().at(-1),'detail2');
+ assert.equal(ph.playback(),'playing');assert.equal(ph.mediaKeys().filter(x=>x==='126').length,0); // 默认deep link自动播放，不增126。
+ assert.match(r.out,/video_id=7000000000000000001/);
+});
+
+test('非keyword未知13节点故障注入guide保持三波严格拒绝，再深链恢复默认播放',()=>{
+ const ph=makeFakePhone({returnSkeleton:true,unrecognizedGuide:true});const r=ph.run(['current-video-link','cvl-strict-unknown']);assert.equal(r.code,0,r.err);
+ assert.equal(ph.dumpPages().filter(x=>x==='detail_skeleton').length,3);
+ assert.doesNotMatch(r.err,/guide-dismiss|guide dismiss/);
+ assert.equal(ph.deeplinks(),1);assert.equal(ph.stack().at(-1),'detail2');
+ assert.equal(ph.playback(),'playing');assert.equal(ph.mediaKeys().filter(x=>x==='126').length,0); // 默认deep link自动播放，不增126。
+ assert.match(r.out,/video_id=7000000000000000001/);
 });
 
 test('results-only仍在搜索栈超过5次BACK：helper失败后原有界恢复真实原词视频tab',t=>{
