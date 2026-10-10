@@ -183,8 +183,8 @@ except Exception: print("medium")' "$count")"
       # 名片动作可能改变返回栈，不能仅凭“评论面板重新打开”认作原视频。
       # 名片复制的暂存页与评论面板都没有可取链的分享按钮；先重开目标，
       # 再用真实新取链核验实际ID，禁止拿open-video回显的期望ID代替验证。
-      "$C" --profile "$P" open-video "$VID" "$TAG-v$VID-after-card$total-open" </dev/null >/dev/null || return 4
-      qv_verify_video "$TAG-v$VID-after-card$total" || return 4
+      DOUYIN_DETAIL_PLAYBACK=continuous_identity "$C" --profile "$P" open-video "$VID" "$TAG-v$VID-after-card$total-open" </dev/null >/dev/null || return 4
+      DOUYIN_DETAIL_PLAYBACK=continuous_identity qv_verify_video "$TAG-v$VID-after-card$total" || return 4
       "$C" --profile "$P" open-comments "$TAG-v$VID-after-card$total-comments" </dev/null >/dev/null || return 6
       emitted[$oid$'\t'$body]=1
       print -- "LEAD\t$onick\t$oid\t${atype:-personal}\t$body\t$cdate\t$region\t$TITLE\t$KWTXT\t$ip\t$profile\t$VURL"
