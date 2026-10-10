@@ -3,17 +3,20 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync,readFileSync,writeFileSync,mkdirSync,chmodSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {createRequire} from 'node:module';
+import {parse as parseYaml} from 'yaml';
 
 test('正式录前音量Step判真实媒体回读，不能用静音内容电平代替',async()=>{
- const yaml=createRequire(import.meta.url)('js-yaml'),contract=yaml.load(readFileSync('product-map/contracts/douyin_video_processing.yaml','utf8'));
+ const contract=parseYaml(readFileSync('product-map/contracts/douyin_video_processing.yaml','utf8'));
  const step=contract.activities.find(a=>a.key==='qualification').steps.find(s=>s.key==='unmute_before_record');
  const {judgeSteps}=await import('../step-judge.mjs');const d=mkdtempSync(join(tmpdir(),'media-step-'));
  try{const log=join(d,'activity.log');writeFileSync(log,'audio_rejected reason=silent_or_unknown_volume\n');
- const spec={steps:[{key:'volume',at:'qualification',mode:'checkpoint',readback:step.dod.readback}]};
- const ok=judgeSteps({spec,stage:'qualification',ctx:{logFile:log,metrics:{media_volume_failures:0}}});assert.equal(ok.steps[0].pass,true);
- const bad=judgeSteps({spec,stage:'qualification',ctx:{logFile:log,metrics:{media_volume_failures:1}}});assert.equal(bad.steps[0].pass,false);
- const unknown=judgeSteps({spec,stage:'qualification',ctx:{logFile:log,metrics:{}}});assert.equal(unknown.steps[0].pass,null);
+ const deployed=JSON.parse(readFileSync('services/phone-adb-controller/plans/douyin_video_processing.steps.json','utf8')).steps.find(s=>s.key.endsWith('.unmute_before_record'));
+ for(const s of [{key:'volume',at:'qualification',mode:'checkpoint',readback:step.dod.readback},deployed]){
+  const spec={steps:[s]};
+  const ok=judgeSteps({spec,stage:'qualification',ctx:{logFile:log,metrics:{media_volume_failures:0}}});assert.equal(ok.steps[0].pass,true);
+  const bad=judgeSteps({spec,stage:'qualification',ctx:{logFile:log,metrics:{media_volume_failures:1}}});assert.equal(bad.steps[0].pass,false);
+  const unknown=judgeSteps({spec,stage:'qualification',ctx:{logFile:log,metrics:{}}});assert.equal(unknown.steps[0].pass,null);
+ }
  }finally{rmSync(d,{recursive:true,force:true});}
 });
 
