@@ -257,3 +257,9 @@ for(const value of ['0','-1','abc','51','1.5',''])test('非法采样值任何手
 test('显式采样必须绑定受信来源run，不能零配置冒充5配额',()=>{const r=run('collection',{LEADGEN_COMMENT_LIMIT:'5',LEADGEN_SOURCE_RUN:''});assert.equal(r.status,2);assert.equal(r.calls.length,0);});
 test('历史+新评论共享显式配额，历史0新增不变假LEAD',()=>{const r=run('collection',{HISTORY:{},NEXT_NEW_ROW:'1',LEADGEN_COMMENT_LIMIT:'2'});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.split('\n').filter(l=>l.startsWith('HISTORY\t')).length,1);assert.equal(r.stdout.split('\n').filter(l=>l.startsWith('LEAD\t')).length,1);assert.match(r.stdout,/sampled\t1\t2\t2/);});
 test('自家评论不充采样配额，不得输出采样5达标',()=>{const r=run('collection',{OWN_NICK:'1',BULK_NEW:'1',LEADGEN_COMMENT_LIMIT:'5',LEADGEN_SOURCE_RUN:'source101'});assert.equal(r.status,0,r.stderr);assert.doesNotMatch(r.stdout,/sampled\t|LEAD\t/);});
+test('显式5条历史配额所有tiers只核5历史，不伪新评论或评分样本',()=>{
+ const rows=Array.from({length:50},(_,i)=>({id:'11111111-1111-4111-8111-'+String(i+1).padStart(12,'0'),douyin_id:'person123',comment_body:'历史'+(i+1)}));
+ for(const count of ['80','1000']){
+  const r=run('collection',{HISTORY:{rows},BULK_HISTORY:'1',FIXTURE_COMMENT_COUNT:count,FIXTURE_TIMEOUT_MS:60000,LEADGEN_COMMENT_LIMIT:'5',LEADGEN_SOURCE_RUN:'source101'});assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.split('\n').filter(l=>l.startsWith('HISTORY\t')).length,5);assert.equal(r.stdout.split('\n').filter(l=>l.startsWith('LEAD\t')).length,0);assert.match(r.stdout,/COLLECTION\t\d+\tsampled\t0\t5\t5/);assert.equal(r.calls.filter(c=>c==='commenter-card-link').length,0);
+ }
+});

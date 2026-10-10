@@ -188,3 +188,15 @@ test('标题候选只做有界只读筛选，超过4短链或1000行均unknown�
   assert.equal(r.status,'unknown');assert.deepEqual(r.rows,[]);assert.equal(network,0);assert.ok(p.calls.every(c=>c.sql.startsWith('SELECT')));
  }
 });
+
+test('采样独立PG读回严格完整正文URL及真实VID，仅SELECT不抢租约',async()=>{
+ const vid='7646309328911907195',url='https://www.douyin.com/video/'+vid,row={id:'11111111-1111-4111-8111-111111111111',douyin_id:'person123',comment_body:'完整正文',source_video_url:url};
+ const q={op:'sample_readback',line:'jinuo',run:'next102',source_run:'source101',video_id:vid,video_url:url,rows:[{id:row.id,douyinId:row.douyin_id,commentBody:row.comment_body,sourceVideoUrl:url}]};
+ for(const bad of [false,'body','id','missing','duplicate','video']){
+  const video={video_id:vid,video_url:url,judgment_status:bad==='video'?'pending':'matched'};
+  const rows=bad==='missing'?[]:bad==='duplicate'?[row,row]:[{...row,...(bad==='body'?{comment_body:'同前20字另一正文'}:{}),...(bad==='id'?{id:'other'}:{})}];const p=fakePool([{rows:[video]},{rows}]);
+  if(bad)await assert.rejects(queueRequest(p,q));else {const r=await queueRequest(p,q);assert.equal(r.coverage,1);assert.deepEqual(r.rows,q.rows);}
+  assert.ok(p.calls.every(c=>c.sql.startsWith('SELECT')));
+ }
+ const p=fakePool([]);await assert.rejects(queueRequest(p,{...q,source_run:null}));assert.equal(p.calls.length,0);
+});
