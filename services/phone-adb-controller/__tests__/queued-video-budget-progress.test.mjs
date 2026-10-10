@@ -37,7 +37,9 @@ case 'commenter-card-link':console.log('profile_url=https://v.douyin.com/person1
   const h=createHandlers({root,env,rpc:async({request:q})=>{
    calls.push(q);
    if(q.op==='claim_videos')return {result:[{video_id:vid,video_url:'https://v.douyin.com/video123/',title:'测试培训',keyword:'人工智能训练师',judgment_status:'matched'}]};
-   if(q.op==='collect_partial')return {result:{comments:q.comments.length,inserted:q.comments.length}};
+   if(q.op==='comment_history')return {result:{version:1,status:'verified',line:'jinuo',line_key:'jinuo',run:'budget-progress',source_run:null,video_id:vid,video_url:q.video_url,rows:[]}};
+   if(q.op==='comment_history_readback')return {result:{verified:true,video_id:vid,ids:[],history_verified:0}};
+   if(q.op==='collect_partial')return {result:{comments:q.comments.length,inserted:q.comments.length,history_verified:0,coverage:q.comments.length}};
    return {result:{}};
   },execute:async(cmd,args,opts)=>{
    const r=spawnSync(cmd,args,{env:opts.env,encoding:'utf8',timeout:7000});

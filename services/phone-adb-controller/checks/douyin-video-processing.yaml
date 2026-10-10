@@ -223,6 +223,45 @@ probes:
     failure_class: retryable
     on_fail: fail_stage
     note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: history_scope_verified
+    stage: collection
+    journey_cell: stage:collection
+    probe:
+      type: metric
+      ref: metrics.history_scoped_count
+    expect:
+      op: ==
+      ref: metrics.history_required_count
+    severity: error
+    failure_class: fatal
+    on_fail: stop_run
+    note: 本run真实输入scope/消费PG读回数量；required=0仅无qualified样本，不能当历史采集或新评分样本，原评论读回门槛不变。
+  - key: history_consumption_readback
+    stage: collection
+    journey_cell: stage:collection
+    probe:
+      type: metric
+      ref: metrics.history_consumption_count
+    expect:
+      op: ==
+      ref: metrics.history_required_count
+    severity: error
+    failure_class: fatal
+    on_fail: stop_run
+    note: 本run真实输入scope/消费PG读回数量；required=0仅无qualified样本，不能当历史采集或新评分样本，原评论读回门槛不变。
+  - key: history_no_failures
+    stage: collection
+    journey_cell: stage:collection
+    probe:
+      type: metric
+      ref: metrics.history_failures
+    expect:
+      op: ==
+      value: 0
+    severity: error
+    failure_class: fatal
+    on_fail: stop_run
+    note: 本run真实输入scope/消费PG读回数量；required=0仅无qualified样本，不能当历史采集或新评分样本，原评论读回门槛不变。
   - key: cl_app_closed
     stage: cleanup
     journey_cell: stage:cleanup

@@ -112,8 +112,20 @@ qv_relocate_comment(){
   done
   return 1
 }
+qv_history_prepare(){
+  typeset -gA QV_HISTORY_ROWS QV_HISTORY_USED
+  QV_HISTORY_HASH=""; QV_HISTORY_STATUS=disabled
+  [[ -n "${QUEUED_COMMENT_HISTORY_FILE:-}" ]] || return 0
+  local rows line key id
+  rows="$(node "$QV_DIR/queued-comment-history.js" load "$QUEUED_COMMENT_HISTORY_FILE" "$WFR_RUN_DIR" "$LINE" "$TAG" "${LEADGEN_SOURCE_RUN:-}" "$VID" "$VURL")" || return 8
+  for line in "${(@f)rows}"; do
+    if [[ "$line" == META$'\t'* ]]; then QV_HISTORY_STATUS="$(print -r -- "$line" | cut -f2)"; QV_HISTORY_HASH="$(print -r -- "$line" | cut -f3)"
+    elif [[ "$line" == ROW$'\t'* ]]; then id="$(print -r -- "$line" | cut -f2)"; key="$(print -r -- "$line" | cut -f3)"; QV_HISTORY_ROWS[$key]="$id"
+    else return 8; fi
+  done
+}
 qv_collect(){
-  local opened raw line total=0 screens=0 empty=0 newlines=0 exhausted count=0 tier cap=50 own_rc identity nick body cdate region author tap nickb64 x y onick oid atype ip profile card attempt
+  local opened raw line total=0 screens=0 empty=0 newlines=0 exhausted count=0 tier cap=50 covered=0 identity_started own_rc identity nick body cdate region author tap nickb64 x y onick oid atype ip profile card attempt
   local -A seen emitted
   opened="$("$C" --profile "$P" open-comments "$QV_EID-comments" </dev/null)" || {
     # 无评论是控制器明确识别的正常结果，失败不能伪装成采完。
@@ -167,6 +179,7 @@ except Exception: print("medium")' "$count")"
         tap="$(print -r -- "$QV_LINE" | cut -f6)"; nickb64="$(print -r -- "$QV_LINE" | cut -f7)"
         x="${${tap#tap=}%% *}"; y="${tap##* }"; nickb64="${nickb64#b64=}"
         [[ "$x" == <-> && "$y" == <-> && -n "$nickb64" ]] || break
+        identity_started="$(date +%s)"
         identity="$("$C" --profile "$P" commenter-identity "$x" "$y" "$nickb64" "$QV_EID-person$total-t$attempt" </dev/null)" || identity=""
         onick="$(qv_field "$identity" nickname)"
         [[ "$onick" == "$nick" ]] && break
@@ -180,6 +193,20 @@ except Exception: print("medium")' "$count")"
       (( own_rc != 2 )) || return 8
       (( own_rc != 0 )) || continue
       [[ -z "${emitted[$oid$'\t'$body]:-}" ]] || continue
+      if [[ "$QV_HISTORY_STATUS" == verified ]]; then
+        local hkey hid
+        hkey="$(node "$QV_DIR/queued-comment-history.js" key "$oid" "$body")" || return 8
+        hid="${QV_HISTORY_ROWS[$hkey]:-}"
+        if [[ -n "$hid" ]]; then
+          if [[ -z "${QV_HISTORY_USED[$hkey]:-}" ]]; then
+            node "$QV_DIR/queued-comment-history.js" proof "$QUEUED_COMMENT_HISTORY_FILE" "$WFR_RUN_DIR" "$LINE" "$TAG" "${LEADGEN_SOURCE_RUN:-}" "$VID" "$VURL" "$P" "$QV_EID-person$total-t$attempt" "$hid" "$oid" "$body" "$(qv_field "$identity" profile_evidence)" "$(qv_field "$identity" return_evidence)" "$identity_started" || return 8
+            QV_HISTORY_USED[$hkey]=1; covered=$((covered+1))
+            print -- "HISTORY\t$VID\t$hid\t$hkey\t$QV_EID-person$total-t$attempt\t$QV_HISTORY_HASH"
+          fi
+          # 身份页返回可能重排评论，历史命中也必须独立重读新树。
+          exhausted=0; break
+        fi
+      fi
       "$C" --profile "$P" tap-evidence "$x" "$y" "$QV_EID-card$total" </dev/null >/dev/null || return 6
       qv_nap 3; profile=""
       for attempt in 1 2 3; do
@@ -194,7 +221,7 @@ except Exception: print("medium")' "$count")"
       DOUYIN_DETAIL_PLAYBACK=continuous_identity "$C" --profile "$P" open-video "$VID" "$QV_EID-after-card$total-open" </dev/null >/dev/null || return 4
       DOUYIN_DETAIL_PLAYBACK=continuous_identity qv_verify_video "$QV_EID-after-card$total" || return 4
       "$C" --profile "$P" open-comments "$QV_EID-after-card$total-comments" </dev/null >/dev/null || return 6
-      emitted[$oid$'\t'$body]=1
+      emitted[$oid$'\t'$body]=1; covered=$((covered+1))
       print -- "LEAD\t$onick\t$oid\t${atype:-personal}\t$body\t$cdate\t$region\t$TITLE\t$KWTXT\t$ip\t$profile\t$VURL"
       # 名片返回后页面重排；下一条重新collect，绝不沿用旧坐标。
       # exhausted也必须重读一轮才能确认没有尚未处理的行。
@@ -202,7 +229,7 @@ except Exception: print("medium")' "$count")"
     done
     if (( newlines == 0 )); then empty=$((empty+1)); else empty=0; fi
     (( exhausted == 0 && empty < 2 )) || break
-    [[ "$tier" != large ]] || (( ${#emitted} < cap )) || break
+    [[ "$tier" != large ]] || (( covered < cap )) || break
     # 本屏出现尚未处理的评论时保持现场重读；本屏没有新行才翻屏。
     if (( newlines == 0 )); then
       "$C" --profile "$P" swipe 600 2000 600 900 400 </dev/null >/dev/null || return 6

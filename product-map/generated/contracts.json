@@ -1,5 +1,5 @@
 {
-  "object_types": "604f4e4a0f1b8083e5ed463845967f1d8466fdc0f35c05856d019618cc4bc327",
+  "object_types": "7cbe596fa79bea768f4ed6a51de612138b5c975909caef2cdca9932cfd85b7f7",
   "capabilities": {
     "benchmark_link_acquisition": {
       "sha256": "f4a811707076a37cb8ff33433863fbc914acb0707c7710016659bae477e23633",
@@ -39,12 +39,12 @@
       }
     },
     "douyin_video_processing": {
-      "sha256": "f9b61404783f8266c22a0589523897dc2fc77126a32ca582fe97a0b499451425",
+      "sha256": "fdc134e3e0f93a74fb53d3755a81d340012f54c34efe05fbb4de2f68f92be786",
       "activities": {
         "preflight": "41213546c9efc1e758c6c00522ff51e5a1c5696affdc3985aa4c60c79189e096",
         "dedup": "b7990d59c1612fcb659717ec8cebc200db3f5be06bf6fbf3690a8c7b72c31d04",
         "qualification": "ddc1afc02a0677329b0bc61f592d039e2c4555b38aa40b5d164d71edcf56af3a",
-        "collection": "139f55daca7a1aaf12547e74c43e488a39ba5d645a472f79255d92cc922a925d",
+        "collection": "474d596ef42cfa29373ae3f4b4cea8169b244e82c9af1c2d0b38294faa56a2bb",
         "cleanup": "644781cb13cd244641ec876a0bcb46e794eb0fbdc55ad16748db8cc3a562ebbd"
       }
     },
