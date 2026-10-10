@@ -341,7 +341,7 @@ test('历史输入逐VID局部绑定，scope失败不假报通过；无qualified
 });
 
 async function sampleFixture(dir){
- const f=upstreamFixture(dir);Object.assign(f.env,{SERIAL:'S',WF_BRAIN_WORKFLOW:'douyin_video_processing',LEADGEN_COMMENT_LIMIT:'5'});await freezeFixture(f);
+ const f=upstreamFixture(dir);Object.assign(f.env,{SERIAL:'S',WFR_RUN_ID:'douyin_video_processing-process102',WFR_ATTEMPT:'a1',WF_BRAIN_WORKFLOW:'douyin_video_processing',LEADGEN_COMMENT_LIMIT:'5'});await freezeFixture(f);
  const {digest}=await import('../runtime-definition.mjs');
  const file=join(f.current,'run-definition.json'),{snapshot_sha256,...body}=JSON.parse(readFileSync(file));body.sampling_input={schema_version:1,workflow_key:'douyin_video_processing',run_tag:'process102',profile:'work',serial:'S',line:'jinuo',source_run:f.source,comment_limit:5};writeFileSync(file,JSON.stringify({...body,snapshot_sha256:digest(body)}));
  const videoId='7646309328911907195',video={videoId,title:'AI',author:'别人'};writeFileSync(join(f.upstream,'discovery-progress.json'),JSON.stringify({run:f.source,profile:'work',videos:[video],captures:[video]}));
@@ -392,4 +392,10 @@ for(const bad of ['none','pg_missing','wrong_quota','wrong_source','failed_activ
   if(!['none','wrong_quota','wrong_source'].includes(bad))await assert.rejects(h.dedup());
   else {const out=await h.dedup();assert.deepEqual(h.state.intakeVideoIds,bad==='none'?[]:[f.videoId]);assert.equal(out.skipped_sample_fulfilled,bad==='none'?1:0);await h.qualification();assert.deepEqual(calls.find(q=>q.op==='claim_videos').video_ids,h.state.intakeVideoIds);}
  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+for(const verified of [true,false])test('采样collection partial仍执行原独立verify，不把失败回执兑现 '+verified,async()=>{
+ const {runWorkflow}=await import('../leadgen-workflow.mjs');let called=0;
+ const out=await runWorkflow({activities:[{key:'collection'},{key:'cleanup'}],context:{},handlers:{collection:async()=>({status:'partial',sampling_receipts:[{video_id:'7646309328911907195',coverage:5}],remaining_video_ids:['other']}),cleanup:async()=>({status:'skipped'})},commander:async()=>({action:'continue'}),record:async()=>{},verify:async(a)=>{assert.equal(a.key,'collection');called++;return {verified};}});
+ assert.equal(called,1);assert.equal(out.status,verified?'partial':'failed');assert.equal(out.results[0].verification.verified,verified);assert.equal(out.results[0].status,verified?'partial':'failed');
 });
