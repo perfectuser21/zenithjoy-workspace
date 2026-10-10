@@ -64,3 +64,16 @@ test('短reveal露出新的完整B槽位必须先取链，不能整屏滑掉后�
  };
  try{const h=createDiscoveryHandlers({phone,execute:async()=>({code:0}),queue:async(op,{video})=>{saved.push(video);return {status:'pending',inserted:true};},profile:'p',run:'slots-test',root:base,sources:['AI'],limit:0,env:{WFR_RUN_DIR:dir}});const out=await h.collect_videos();assert.equal(saved.length,3);assert.equal(out.all_results_scanned,true);assert.equal(out.stop_reason,'exhausted');assert.deepEqual(events.filter(e=>e[0]==='tap-evidence').map(e=>e[1]),['450','600','800']);assert.equal(events.filter(e=>e[0]==='search-grid-scroll'&&e[2]==='reveal-up').length,1);}finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+function durationProof(oldXml,newXml,{wrongRun=false}={}){
+ const fn=script.match(/^card_unknown_duration_from_xml\(\) \{[\s\S]*?^\}/m)?.[0];assert.ok(fn,'实际未知时长证据判定必须存在');
+ const d=mkdtempSync(join(tmpdir(),'duration-proof-')),run='codex10110519_ai30h_101',old=join(d,run+'-src0-screen6-wait0-grid.xml'),fresh=join(d,run+'-candidate22-loc-retry2-grid.xml');
+ try{writeFileSync(old,oldXml);writeFileSync(fresh,newXml);return spawnSync('zsh',['-c',`${fn}\ncard_unknown_duration_from_xml "$1" "$2" "$3" "$4" "$5"`,'test',old,fresh,encodeURIComponent('用AI做商业广告大片，原来这么简单 #ai制作视频 #创作者中心 #创作灵感 #ai视频 #ai广告'),encodeURIComponent('Neo小海'),wrongRun?'other_run':run],{encoding:'utf8',env:{...process.env,PYTHON_BIN:'python3'}});}finally{rmSync(d,{recursive:true,force:true});}
+}
+test('实际22两树未知时长补齐仅在点赞精确文案/日期/唯一完整卡结构同列均核验',()=>{
+ const old=readFileSync(join(fixtures,'candidate22-original.xml'),'utf8'),fresh=readFileSync(join(fixtures,'candidate22-loc-retry2.xml'),'utf8');const r=durationProof(old,fresh);assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/augmented=1/);assert.match(r.stdout,/duration=00:47/);
+ for(const changed of [fresh.replaceAll('喜欢2.4万','喜欢2.5万'),fresh.replaceAll('text="03.13"','text="03.14"'),fresh.replaceAll('package="com.ss.android.ugc.aweme"','package="wrong"'),fresh.replaceAll('com.ss.android.ugc.aweme:id/pc7','other'),fresh.replaceAll('com.ss.android.ugc.aweme:id/dlr','other'),fresh.slice(0,-100),fresh.replace('[1014,1145][1161,1233]','[0,1145][100,1233]')]){assert.notEqual(durationProof(old,changed).stdout.includes('augmented=1'),true);}
+ assert.notEqual(durationProof(old,fresh,{wrongRun:true}).stdout.includes('augmented=1'),true);
+ // 原证据已有时长时，不得用未知时长例外改写它。
+ assert.notEqual(durationProof(fresh,fresh).stdout.includes('augmented=1'),true);
+});
