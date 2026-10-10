@@ -19,7 +19,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   if (!/^[a-zA-Z0-9_-]{1,120}$/.test(run || '')) throw Error('缺有效运行号');
   const limit = Math.max(1, Math.min(50, Number(input.limit) || 10));
   const videoIds=input.video_ids===undefined?null:input.video_ids;
-  if(videoIds!==null&&(!Array.isArray(videoIds)||videoIds.length>1000||videoIds.some(id=>typeof id!=='string'||!/^\d{16,24}$/.test(id))))throw Error('视频ID清单无效');
+  if(Object.hasOwn(input,'video_ids')&&(!Array.isArray(videoIds)||videoIds.length>1000||videoIds.some(id=>typeof id!=='string'||!/^\d{16,24}$/.test(id))))throw Error('视频ID清单无效');
   if(op==='inspect_videos'){
     if(videoIds===null)throw Error('缺明确视频ID清单');
     return (await pool.query('SELECT video_id,line_key,judgment_status,process_status,harvest_batch FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=ANY($2::text[])',[lineKey,videoIds])).rows;
