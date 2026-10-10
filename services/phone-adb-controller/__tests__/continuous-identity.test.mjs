@@ -10,7 +10,7 @@ const queued=new URL('../process-queued-video.sh',import.meta.url).pathname;
 const fixtures=new URL('./fixtures/',import.meta.url).pathname;
 const vid='7646309328911907195';
 // 明示模拟设备：真实控制器+队列shell执行；只有ADB、curl和账号锁回执为假。
-function phone({mode='continuous_identity',command='queued',wrongId=false,skeleton=false,finalSkeleton=false,recover=false,playFails=false,controlledWait=false}={}){
+function phone({mode='continuous_identity',command='queued',wrongId=false,skeleton=false,finalSkeleton=false,recover=false,playFails=false,controlledWait=false,shareIdleFallback=false}={}){
  const d=mkdtempSync(join(tmpdir(),'continuous-identity-'));
  let runner=controller;
  if(controlledWait){
@@ -30,6 +30,7 @@ function phone({mode='continuous_identity',command='queued',wrongId=false,skelet
  const field=value=>head+`<node text="${value}" resource-id="com.ss.android.ugc.aweme:id/et_search_kw" hint="人工智能" clickable="true" bounds="[0,0][200,200]"/></node></hierarchy>`;
  const panel=head+'<node text="分享给"/><node text="分享链接" clickable="true" bounds="[40,2300][300,2360]"/></node></hierarchy>';
  writeFileSync(join(d,'registry'),'legacy\tSER1\tANY-MODEL\t1200\t2664\n');
+ writeFileSync(join(d,'results.xml'),readFileSync(join(fixtures,'real-search-results-grid.xml')));
  writeFileSync(join(d,'detail.xml'),detail);writeFileSync(join(d,'panel.xml'),panel);
  writeFileSync(join(d,'skeleton.xml'),readFileSync(join(fixtures,'real-keyword-return-skeleton-13.xml')));
  writeFileSync(join(d,'state.json'),JSON.stringify({page:'detail',play:'playing',field:'',clip:'https://v.douyin.com/Fresh/',backs:0}));
@@ -40,23 +41,27 @@ const s=JSON.parse(fs.readFileSync(sfile,'utf8'));fs.appendFileSync(p.join(d,'ca
 const has=x=>a.join(' ').includes(x);const out=x=>console.log(x);
 if(has('get-state'))out('device');
 else if(has('getprop'))out('ANY-MODEL');
-else if(has('dumpsys'))out('mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.'+(s.page==='scratch'?'search.activity.SearchResultActivity':'detail.ui.DetailActivity')+'}');
+else if(has('dumpsys'))out('mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.'+(['scratch','results'].includes(s.page)?'search.activity.SearchResultActivity':'detail.ui.DetailActivity')+'}');
 else if(has('am start')&&has('aweme/detail')){s.page='detail';s.play='playing';s.detailStarts=(s.detailStarts||0)+1;}
 else if(has('am start')&&has('search/tabs')){s.page='scratch';s.field='';s.backs=0;}
-else if(has('input keyevent 127'))s.play='paused';
+else if(has('input keyevent 127')){s.play='paused';s.pauseCount=(s.pauseCount||0)+1;}
 else if(has('input keyevent 126')){if(process.env.PLAY_FAILS==='1')process.exit(1);s.play='playing';}
 else if(has('input keyevent 85'))s.play=s.play==='playing'?'paused':'playing';
 else if(has('input text '))s.field=a.at(-1);
 else if(has('input keyevent 278'))s.clip=s.field;
 else if(has('input keyevent 279'))s.field=s.clip;
 else if(has('input keyevent 67'))s.field='';
-else if(has('input keyevent 4')){if(s.page==='scratch'&&++s.backs>=4){s.page='detail';s.scratchReturns=(s.scratchReturns||0)+1;}else if(s.page==='panel')s.page='detail';}
+else if(has('input keyevent 4')){if(s.page==='scratch'&&++s.backs>=4){s.page='detail';s.scratchReturns=(s.scratchReturns||0)+1;}else if(s.page==='panel')s.page='detail';else if(s.page==='detail'&&s.scratchReturns>=2)s.page='results';}
 else if(has('input tap')&&s.page==='detail')s.page='panel';
 else if(has('input tap')&&s.page==='panel'){s.clip='https://v.douyin.com/Fresh/';s.page='detail';}
 else if(has('shell rm -f')){try{fs.unlinkSync(p.join(d,'remote.xml'));}catch{}}
 else if(has('uiautomator dump')){
+ if(process.env.SHARE_IDLE_FALLBACK==='1'&&s.page==='detail'&&s.scratchReturns===1&&s.pauseCount>=3){
+  s.shareAttempts=(s.shareAttempts||0)+1;
+  if(s.shareAttempts<=3){fs.writeFileSync(sfile,JSON.stringify(s));console.error('ERROR: could not get idle state.');process.exit(1);}
+ }
  const isSkeleton=process.env.SKELETON==='1'||(process.env.FINAL_SKELETON==='1'&&s.scratchReturns>=2&&!(process.env.RECOVER==='1'&&s.detailStarts>=2));
- const xml=s.page==='scratch'?(${field.toString()})(s.field||'人工智能'):fs.readFileSync(p.join(d,s.page==='panel'?'panel.xml':isSkeleton?'skeleton.xml':'detail.xml'),'utf8');
+ const xml=s.page==='results'?fs.readFileSync(p.join(d,'results.xml'),'utf8'):s.page==='scratch'?(${field.toString()})(s.field||'人工智能'):fs.readFileSync(p.join(d,s.page==='panel'?'panel.xml':isSkeleton?'skeleton.xml':'detail.xml'),'utf8');
  fs.writeFileSync(p.join(d,'remote.xml'),xml);fs.appendFileSync(p.join(d,'dumps'),s.page+':'+s.play+'\\n');
 }else if(has('stat -c %s'))out(fs.existsSync(p.join(d,'remote.xml'))?fs.statSync(p.join(d,'remote.xml')).size:0);
 else if(a.includes('pull')){const i=a.indexOf('pull');if(a[i+1].endsWith('.xml'))fs.copyFileSync(p.join(d,'remote.xml'),a[i+2]);else fs.writeFileSync(a[i+2],'png');}
@@ -83,7 +88,7 @@ fs.writeFileSync(sfile,JSON.stringify(s));
  const env={...process.env,HOME:d,FAKE_PHONE_DIR:d,DOUYIN_PHONE_REGISTRY:join(d,'registry'),DOUYIN_ADB_BIN:adb,
   DOUYIN_CURL_BIN:curl,DOUYIN_SIPS_BIN:'/usr/bin/true',DOUYIN_PYTHON_BIN:'/usr/bin/python3',DOUYIN_PHONE_TMP_ROOT:tmp,
   DOUYIN_PHONE_ADB:wrapper,WFR_RUN_DIR:join(d,'run'),DOUYIN_DETAIL_PLAYBACK:mode,QUEUED_VIDEO_QUALIFY_CMD:qualify,SKELETON:skeleton?'1':'0',FINAL_SKELETON:finalSkeleton?'1':'0',
-  RECOVER:recover?'1':'0',PLAY_FAILS:playFails?'1':'0',HARVEST_KEYWORD_TESTING:'1'};
+  SHARE_IDLE_FALLBACK:shareIdleFallback?'1':'0',RECOVER:recover?'1':'0',PLAY_FAILS:playFails?'1':'0',HARVEST_KEYWORD_TESTING:'1'};
  if(command.startsWith('queued'))delete env.DOUYIN_DETAIL_PLAYBACK;
  const args=command.startsWith('queued')?[queued,command==='queued-qualification'?'qualification':'identity','legacy',vid,`https://www.douyin.com/video/${vid}`,'','','continuous-run','jinuo']:
   [runner,'--profile','legacy',...(command==='results'?['current-video-link','continuous-link','人工智能']:command==='wrong-command'?['preflight']:['open-video',vid,'continuous-open'])];
@@ -142,4 +147,31 @@ test('qv局部暂停策略不污染锁或录音，record-start必须收到恢复
  assert.deepEqual(commands.slice(0,3),['lock-refresh:standard','open-video:continuous_identity','current-video-link:continuous_identity']);
  assert.deepEqual(commands.slice(3),['set-playback-speed:standard','record-start:standard','record-stop:standard','record-extract-audio:standard']);
  assert.equal(r.state.play,'playing');
+});
+
+test('keyword内部nonce归位保持暂停，仍新读分享树与原词视频tab后输出实际VID',()=>{
+ const r=phone({mode:'standard',command:'results'});assert.equal(r.error,undefined);assert.equal(r.status,0,r.stderr);
+ assert.match(r.stdout,new RegExp('video_id='+vid));assert.match(r.stdout,/return_mode=results/);
+ assert.equal(r.calls.split('\n').filter(s=>/input keyevent 126$/.test(s)).length,0,'keyword nonce不能中途恢复PLAY');
+ assert.equal(r.state.play,'paused');assert.equal(r.state.page,'results');
+ assert.ok(!r.dumps.includes('detail:playing'));assert.equal(r.dumps.split('\n').filter(s=>s==='detail:paused').length,3,'入口、nonce归位及分享仍三次独立新鲜树');
+ assert.equal(r.dumps.split('\n').filter(s=>s==='results:paused').length,2,'原词与视频tab归位仍两次新鲜树');
+ assert.match(r.calls,/input keyevent 278/);assert.match(r.calls,/input keyevent 279/);
+});
+test('keyword已暂停分享遇idle失败：原85兜底成对恢复原暂停状态且只能用新树成功',()=>{
+ const r=phone({mode:'standard',command:'results',shareIdleFallback:true,controlledWait:true});
+ assert.equal(r.error,undefined,'必须真实退出，不以timeout代替验收');assert.equal(r.status,0,r.stderr);
+ assert.equal(r.state.shareAttempts,4,'先真实三次读树失败，再执行原单次兜底');
+ assert.equal(r.calls.split('\n').filter(s=>/input keyevent 85$/.test(s)).length,2,'85必须成对，不能把暂停视频永久改成播放');
+ assert.equal(r.calls.split('\n').filter(s=>/input keyevent 126$/.test(s)).length,0);
+ assert.equal(r.state.play,'paused');assert.equal(r.state.page,'results');
+ assert.match(r.stderr,/hierarchy captured via pause-dump-resume fallback/);
+ assert.match(r.stdout,new RegExp('video_id='+vid));
+ const keys=r.calls.split('\n').filter(s=>/input keyevent (85|126|127)$/.test(s));assert.deepEqual(keys.slice(-2).map(s=>s.split(' ').at(-1)),['85','85']);
+});
+
+test('nonce内部typed归位未知值在随机数/ADB前拒绝',()=>{
+ const seed=readFileSync(controller,'utf8').match(/^seed_clipboard_nonce\(\) \{[\s\S]*?^\}/m)[0];
+ const r=spawnSync('zsh',['-c',`set -eu; die(){ print -u2 -- "$1"; exit 2; }; ADB=/usr/bin/false; PYTHON_BIN=/usr/bin/false; ${seed}\nseed_clipboard_nonce fixture unsupported`],{encoding:'utf8'});
+ assert.equal(r.status,2);assert.match(r.stderr,/CLIPBOARD_NONCE_RETURN_MODE_INVALID/);
 });
