@@ -63,7 +63,7 @@
 - `open-app` / `close-app` — 起停指定应用
 - `tap` / `swipe` / `back` — 裸点/滑/返回
 - `tap-snapshot` / `swipe-snapshot` / `back-snapshot` — 操作后带截图
-- `tap-evidence` / `swipe-evidence` / `back-evidence` — 操作后带截图+UI树全证据
+- `tap-evidence` / `swipe-evidence` / `back-evidence` — 操作后带截图+UI树全证据(`tap-evidence` 支持 `--outward`、取证有界与退出码 3,见下方「对外动作账」)
 
 ### 证据链
 - `screencap` — 截屏
@@ -102,6 +102,24 @@
 - `text-input UTF8_TEXT` — 向**当前焦点 EditText** 输入(先清空再输入,调用前先点中输入框):切 ADBKeyboard(未装/启不了明确报错)→ `ADB_INPUT_B64` → uiautomator 回读焦点框文字须逐字一致;**无论成败**都还原原输入法并回读确认。
   例:`douyin-phone-adb --profile p1 --lock-owner RUN text-input '今天发一条 #AI 学姐'` → `text_input=ok bytes=33 sha256=<hex> field=com.ss.android.ugc.aweme:id/xxx ime_restored=com.baidu.input_huawei/.ImeService evidence=<xml>`;空文本 → `text_input=empty_ok bytes=0`
   失败码:`no_focused_input`/`ime_switch_failed`/`readback_mismatch`(retryable);`adbkeyboard_not_installed`/`adbkeyboard_enable_failed`/`ime_unreadable`/`ime_restore_failed`(needs_human);`bad_text`/锁类(fatal)
+
+### 对外动作账 / 锁回执证据 / 点击取证有界(1010 任务 d1b395c7)
+给独立核验员(run-verify)留**可回读的凭据**,不靠执行者自述。证据都落节点 `/private/tmp/openclaw-phone/evidence/<profile>/`,
+文件名按证据 ID 规则以 run 开头(run 经 `normalize_run_id` 归一:同一 run 的 `-a2-…` 重试、`:a1` 执行号共用一份)。
+- **对外动作**(发布/发送/点赞/关注/评论/私信等会改变外部世界的点击)= `tap-evidence` / `locate-tap` 加 `--outward <动作名>`(小写英文短名,如 `publish`/`send`/`like`/`follow`/`comment`/`dm`),选项可写在任意位置,**必须**带全局 `--lock-owner RUN` 且该 run 持锁。
+  流程:点击前截图 `<证据ID>-before` → 账本记 `attempt` → 点击 → 等待 → 截图 `<证据ID>` → 账本记 `result`。
+  账本 `<run>-outward-ledger.jsonl`:每行一个 JSON(`schema/seq/event=attempt|result|refused/run_id/lock_owner/action/action_seq/command/x/y/control/before_evidence_id/after_evidence_id/at/at_epoch_ms`…),**只追加**(O_APPEND+flock,已有行永不改写)。
+  同 run 同动作第二次**默认拒绝**(不碰设备,拒绝也记一行 `event=refused`);确需重复时显式加 `--allow-repeat`。
+  例:`douyin-phone-adb --profile p1 --lock-owner RUN tap-evidence 600 2400 RUN-07-publish --outward publish` →
+  `<png>` / `jpg=<jpg>` / `outward=ok action=publish run_id=RUN attempt_seq=1 action_seq=1 tapped=yes evidence=ok before_evidence_id=RUN-07-publish-before after_evidence_id=RUN-07-publish ledger=<path> ledger_evidence_id=RUN-outward-ledger`
+  重复:`outward=fail class=fatal reason=repeat_refused action=publish prior_attempts=1 tapped=no ledger=<path> ledger_evidence_id=RUN-outward-ledger`(退出码 2)
+  语义闸:证据 ID 形如 `<run>-NN-<短名>` 且短名含 `publish/post/send/like/follow/dm/reply` 却没标 `--outward` → `reason=outward_flag_required`,不点击。`tap`/`tap-snapshot` 不接受 `--outward`(没有前后证据)。
+- `outward-ledger RUN_ID` — 只读输出该 run 的账本(JSON:`exists/sha256/entries/summary.attempts_by_action|refused_by_action|results_by_action`),不需持锁、不碰设备,核验员直接调。
+- **锁回执**:`lock-acquire`/`lock-acquire-new`/`lock-release`/`lock-release-exact` 成功或失败,都在同一把 guard 内随即回读 `lock-status`,把时间/owner/退出码/回执原文/回读原文写进 `<run>-lock-acquire.json` / `<run>-lock-release.json`(`events[]` 追加 + `latest`)。原回执首行不变,随后多打一行
+  `lock_evidence_id=RUN-lock-release lock_evidence=<path> readback_state=free`。
+- **tap-evidence 等待上限**:`WAIT_MS` 在**点击之前**校验,上限 `DOUYIN_TAP_WAIT_MAX_MS`(默认 15000,最大 60000),超限 → `tap_evidence=fail class=fatal reason=wait_over_limit tapped=no`(退出码 2,没点)。
+  点击后的取证有界 `DOUYIN_TAP_EVIDENCE_TIMEOUT_MS`(默认 20000):超时/失败不再报参数错误,而是 `tap_evidence=partial tapped=yes evidence=timeout|failed evidence_id=… x=… y=…`,stderr `failure_class=evidence_timeout|evidence_failed`,**退出码 3**,对外动作已记 `result evidence=timeout`。
+  退出码约定:`0` 成功 / `2` 没点(可放心改参重试)/ `3` 点了但证据不全(**禁止据此重试对外动作**,先 `outward-ledger` 回读)。
 
 ### 播放/录制
 - `set-playback-speed` — 设播放倍速

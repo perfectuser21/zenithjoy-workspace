@@ -2879,9 +2879,211 @@ text_input() {
   print -- "text_input=ok bytes=$bytes sha256=$(print -rn -- "$text" | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}') field=${field:-unknown} ime_restored=$_TI_ORIG_IME evidence=$typed_xml"
 }
 
+
+# ── 对外动作账 / 锁回执证据 / 点击取证有界（1010，Brain 任务 d1b395c7）────────────
+# 背景：技能工厂样板「试跑 抖音·视频发布」执行成功，独立核验却判 fail——
+#   ①「发布按钮只触发一次」只有执行者自述，没有可独立回读的凭据；
+#   ②「原 run 锁已释放并回读 free」没有对应证据 ID；
+#   ③ tap-evidence 等 5681ms 撞 5000 上限：点击已发生，却以参数错误退出，按退出码判断会误以为没点而重复发布。
+# 对外动作 = 会改变外部世界的点击（发布/发送/点赞/关注/评论/私信…）。tap-evidence / locate-tap 加
+# --outward <动作名> 标记：必须持锁（--lock-owner RUN），点击前截图 → 账本记 attempt → 点击 → 截图 → 记 result。
+# 账本 = 证据目录 <run>-outward-ledger.jsonl（run 按 normalize_run_id 归一，同一 run 的重试 attempt 共用一本），
+# 只追加；同 run 同动作第二次默认拒绝（--allow-repeat 显式放行），拒绝也记一行。只读命令 outward-ledger RUN 输出账本。
+# 退出码：0 成功；2 未点击（参数/持锁/重复被拒/点击前取证失败，stdout 带 tapped=no）；
+#         3 点击已发出但取证超时/失败（stdout 带 tapped=yes evidence=timeout|failed）——禁止据此重试同一对外动作。
+OUTWARD_HELPER="${0:A:h}/phone-lock-helper.py"
+TAP_WAIT_MAX_MS="${DOUYIN_TAP_WAIT_MAX_MS:-15000}"
+TAP_EVIDENCE_TIMEOUT_MS="${DOUYIN_TAP_EVIDENCE_TIMEOUT_MS:-20000}"
+# 证据 ID 约定 <run_id>-<两位步号>-<英文短名>：短名含这些词 = 对外动作，没标 --outward 一律拒绝。
+OUTWARD_SEMANTIC_TOKENS=(publish post send like follow dm reply)
+OUTWARD_ACTION=""
+OUTWARD_ALLOW_REPEAT=0
+OUTWARD_RUN=""
+OUTWARD_LEDGER=""
+
+# 点击前失败：明确 tapped=no，调用方可以放心重试或改参数。
+pre_tap_fail() {
+  print -- "$1=fail class=fatal reason=$2 tapped=no"
+  die "$1: $3" fatal
+}
+
+validate_tap_wait() {
+  require_uint "$TAP_WAIT_MAX_MS"
+  (( TAP_WAIT_MAX_MS <= 60000 )) || die "DOUYIN_TAP_WAIT_MAX_MS must be <= 60000"
+  [[ "$2" == <-> ]] || pre_tap_fail "$1" bad_wait "WAIT_MS must be a non-negative integer; nothing was tapped"
+  (( $2 <= TAP_WAIT_MAX_MS )) || pre_tap_fail "$1" wait_over_limit "WAIT_MS $2 exceeds DOUYIN_TAP_WAIT_MAX_MS=$TAP_WAIT_MAX_MS; nothing was tapped"
+}
+
+long_wait_ms() {
+  local ms="$1"
+  while (( ms > 5000 )); do wait_ms 5000; (( ms -= 5000 )); done
+  wait_ms "$ms"
+}
+
+kill_tree() {
+  local child
+  for child in $(/usr/bin/pgrep -P "$1" 2>/dev/null); do kill_tree "$child"; done
+  kill -TERM "$1" 2>/dev/null || true
+}
+
+# run_bounded <超时ms> <输出文件> <命令...>：后台执行，超时整棵进程树杀掉。返回 0 / 124(超时) / 命令自身退出码。
+run_bounded() {
+  local limit="$1" outf="$2" pid waited=0 rc=0
+  shift 2
+  ( "$@" ) >"$outf" 2>"$outf.err" &
+  pid=$!
+  while kill -0 "$pid" 2>/dev/null; do
+    if (( waited >= limit )); then
+      kill_tree "$pid"
+      wait "$pid" 2>/dev/null || true
+      return 124
+    fi
+    /bin/sleep 0.1
+    (( waited += 100 ))
+  done
+  wait "$pid" || rc=$?
+  return "$rc"
+}
+
+outward_semantic_check() {
+  local key="$1" eid="$2" tok
+  [[ -z "$OUTWARD_ACTION" ]] || return 0
+  [[ "$eid" =~ '-[0-9][0-9]-([A-Za-z0-9-]+)$' ]] || return 0
+  for tok in ${(s:-:)${(L)match[1]}}; do
+    if (( ${OUTWARD_SEMANTIC_TOKENS[(Ie)$tok]} )); then
+      print -- "$key=fail class=fatal reason=outward_flag_required tapped=no evidence_id=$eid"
+      die "$key: evidence id '$eid' names an outward action ($tok); pass --outward <action> under --lock-owner RUN so it is ledgered" fatal
+    fi
+  done
+}
+
+# outward_ledger_call <precheck|attempt> k=v...：重复被拒 → 打印拒绝行并以 tapped=no 退出（拒绝已记账）。
+# 结果放全局 OUTWARD_LEDGER_OUT，不能用 $(...) 调——子 shell 里的 die 拦不住后面的点击。
+OUTWARD_LEDGER_OUT=""
+outward_ledger_call() {
+  local mode="$1" out rc=0
+  shift
+  out="$("$PYTHON_BIN" "$OUTWARD_HELPER" outward-ledger-append "$OUTWARD_LEDGER" "$mode" run_id="$OUTWARD_RUN" \
+    lock_owner="$LOCK_OWNER" action="$OUTWARD_ACTION" allow_repeat="$OUTWARD_ALLOW_REPEAT" profile="$PROFILE" serial="$SERIAL" "$@" 2>&1)" || rc=$?
+  if (( rc == 3 )); then
+    print -- "outward=fail class=fatal reason=repeat_refused action=$OUTWARD_ACTION $out tapped=no ledger=$OUTWARD_LEDGER ledger_evidence_id=${OUTWARD_RUN}-outward-ledger"
+    die "outward: action '$OUTWARD_ACTION' was already triggered in run $OUTWARD_RUN; nothing was tapped (pass --allow-repeat only for an intended repeat)" fatal
+  fi
+  (( rc == 0 )) || pre_tap_fail outward ledger_unavailable "outward ledger could not be read/written ($out)"
+  OUTWARD_LEDGER_OUT="$out"
+}
+
+# 点击前的全部闸（不碰设备）：持锁 + 账本可用 + 未重复。
+outward_prepare() {
+  require_held_lock outward
+  OUTWARD_RUN="$(normalize_run_id "$LOCK_OWNER")"
+  require_evidence_id "${OUTWARD_RUN}-outward-ledger"
+  OUTWARD_LEDGER="$EVIDENCE_ROOT/${OUTWARD_RUN}-outward-ledger.jsonl"
+  outward_ledger_call precheck
+}
+
+# tap_with_evidence <结果键> <命令名> <X> <Y> <证据ID> <等待ms> <控件描述> <取证函数>
+# 点击 + 有界取证；--outward 时点击前截图并前后记账。取证函数的输出（png/jpg 行）原样透传。
+tap_with_evidence() {
+  local key="$1" cmd="$2" x="$3" y="$4" eid="$5" wait="$6" control="$7" capture="$8"
+  local before_id="" attempt_out="" attempt_seq="" action_seq="" tap_rc=0 cap_rc=0 ev=ok capf tapped=yes
+  capf="$(/usr/bin/mktemp "${TMPDIR:-/tmp}/tapev.XXXXXX")"
+  if [[ -n "$OUTWARD_ACTION" ]]; then
+    before_id="${eid}-before"
+    run_bounded "$TAP_EVIDENCE_TIMEOUT_MS" "$capf" snapshot_evidence "$before_id" \
+      || { /bin/rm -f "$capf" "$capf.err"; pre_tap_fail "$key" before_evidence_failed "screenshot before the outward tap failed or timed out; nothing was tapped"; }
+    outward_ledger_call attempt command="$cmd" x="$x" y="$y" control="$control" \
+      before_evidence_id="$before_id" after_evidence_id="$eid" wait_ms="$wait"
+    attempt_out="$OUTWARD_LEDGER_OUT"
+    [[ "$attempt_out" =~ 'attempt_seq=([0-9]+) action_seq=([0-9]+)' ]] && { attempt_seq="${match[1]}"; action_seq="${match[2]}"; }
+  fi
+  "$ADB" -s "$SERIAL" shell input tap "$x" "$y" || tap_rc=$?
+  if (( tap_rc != 0 )); then
+    tapped=unknown; ev=none
+  else
+    long_wait_ms "$wait"
+    run_bounded "$TAP_EVIDENCE_TIMEOUT_MS" "$capf" "$capture" "$eid" || cap_rc=$?
+    if (( cap_rc == 124 )); then ev=timeout; elif (( cap_rc != 0 )); then ev=failed; fi
+  fi
+  if [[ -n "$OUTWARD_ACTION" ]]; then
+    "$PYTHON_BIN" "$OUTWARD_HELPER" outward-ledger-append "$OUTWARD_LEDGER" result run_id="$OUTWARD_RUN" lock_owner="$LOCK_OWNER" \
+      action="$OUTWARD_ACTION" attempt_seq="$attempt_seq" command="$cmd" tapped="$tapped" tap_rc="$tap_rc" evidence="$ev" \
+      after_evidence_id="$eid" after_evidence_path="$EVIDENCE_ROOT/${eid}.png" >/dev/null 2>&1 \
+      || print -u2 -- "warning: outward ledger result line could not be written (attempt line seq=$attempt_seq stands)"
+  fi
+  local outward_fields=""
+  [[ -z "$OUTWARD_ACTION" ]] || outward_fields=" outward=$OUTWARD_ACTION run_id=$OUTWARD_RUN attempt_seq=$attempt_seq action_seq=$action_seq before_evidence_id=$before_id ledger=$OUTWARD_LEDGER ledger_evidence_id=${OUTWARD_RUN}-outward-ledger"
+  [[ ! -s "$capf.err" ]] || /bin/cat "$capf.err" >&2
+  if [[ "$ev" != ok ]]; then
+    /bin/rm -f "$capf" "$capf.err"
+    print -- "$key=partial tapped=$tapped evidence=$ev evidence_id=$eid x=$x y=$y$outward_fields"
+    print -u2 -- "$key: tap was sent (tapped=$tapped) but evidence capture is $ev; do NOT repeat this action based on the exit code"
+    print -u2 -- "failure_class=evidence_$ev"
+    exit 3
+  fi
+  /bin/cat "$capf"
+  /bin/rm -f "$capf" "$capf.err"
+  [[ -z "$OUTWARD_ACTION" ]] || print -- "outward=ok action=$OUTWARD_ACTION run_id=$OUTWARD_RUN attempt_seq=$attempt_seq action_seq=$action_seq tapped=yes evidence=ok before_evidence_id=$before_id after_evidence_id=$eid ledger=$OUTWARD_LEDGER ledger_evidence_id=${OUTWARD_RUN}-outward-ledger"
+  return 0
+}
+
+# lock-acquire / lock-release（含 -new / -exact）回执证据：原回执照常打印（首行不变），
+# 随后在同一把 guard 内回读 lock-status，连同时间/owner/退出码写 <run>-lock-<acquire|release>.json（事件追加），
+# 并打印 lock_evidence_id=<证据ID>。失败也写。
+lock_with_receipt() {
+  local cmd="$1" kind out err errf rc=0 run eid path readback state
+  kind="${${cmd#lock-}%%-*}"
+  errf="$(/usr/bin/mktemp "${TMPDIR:-/tmp}/lockrc.XXXXXX")"
+  out="$(phone_lock_command "$@" 2>"$errf")" || rc=$?
+  err="$(<"$errf")"
+  /bin/rm -f "$errf"
+  [[ -z "$out" ]] || print -r -- "$out"
+  [[ -z "$err" ]] || print -ru2 -- "$err"
+  if [[ "$#" == 2 ]] && ( require_run_id "$2" ) 2>/dev/null; then
+    run="$(normalize_run_id "$2")"
+    eid="${run}-lock-${kind}"
+    path="$EVIDENCE_ROOT/${eid}.json"
+    readback="$(phone_lock_command lock-status 2>&1)" || true
+    state="${${readback%%$'\n'*}#lock=}"; state="${state%% *}"
+    if "$PYTHON_BIN" "$OUTWARD_HELPER" lock-receipt "$path" "$kind" "$run" "$eid" command="$cmd" requested_owner="$2" \
+         rc="$rc" receipt="$out" stderr="$err" readback="$readback" profile="$PROFILE" serial="$SERIAL" pid="$$" >/dev/null 2>&1; then
+      print -- "lock_evidence_id=$eid lock_evidence=$path readback_state=${state:-unknown}"
+    else
+      print -- "lock_evidence_id=none reason=receipt_write_failed"
+      print -u2 -- "warning: lock receipt evidence could not be written to $path"
+    fi
+  fi
+  return "$rc"
+}
+
+# tap 类命令的 --outward / --allow-repeat 选项可写在任意位置，先剥出来再按原位置参数校验。
+if [[ "$command" == (tap|tap-snapshot|tap-evidence|locate-tap) ]]; then
+  _tap_args=("${@:2}")
+  _tap_rest=()
+  while (( ${#_tap_args} )); do
+    case "${_tap_args[1]}" in
+      --outward)
+        (( ${#_tap_args} >= 2 )) || pre_tap_fail outward bad_action "usage: --outward ACTION"
+        OUTWARD_ACTION="${_tap_args[2]}"; shift 2 _tap_args;;
+      --allow-repeat) OUTWARD_ALLOW_REPEAT=1; shift 1 _tap_args;;
+      *) _tap_rest+=("${_tap_args[1]}"); shift 1 _tap_args;;
+    esac
+  done
+  set -- "$command" "${_tap_rest[@]}"
+  if [[ -n "$OUTWARD_ACTION" ]]; then
+    [[ "$OUTWARD_ACTION" == [a-z][a-z0-9_-]# && ${#OUTWARD_ACTION} -le 40 ]] \
+      || pre_tap_fail outward bad_action "--outward ACTION must be a short lowercase English name (e.g. publish/send/like/follow/comment/dm)"
+    [[ "$command" == (tap-evidence|locate-tap) ]] \
+      || pre_tap_fail outward outward_requires_evidence "outward taps must use tap-evidence or locate-tap so before/after evidence is captured"
+  else
+    (( ! OUTWARD_ALLOW_REPEAT )) || pre_tap_fail outward bad_action "--allow-repeat only applies together with --outward ACTION"
+    [[ -z "$LOCK_OWNER" ]] || require_held_lock "${command//-/_}"
+  fi
+fi
+
 # 独立只读任务：在同一flock内检查原owner并执行整个命令，锁操作不能插队。
-# media-push / text-input 也用 --lock-owner 声明调用方 run，但只做持锁核对(require_held_lock)，不走 guard 包装。
-if [[ -n "$LOCK_OWNER" && "$command" != (media-push|text-input) ]]; then
+# media-push / text-input / tap 类命令也用 --lock-owner 声明调用方 run，但只做持锁核对(require_held_lock)，不走 guard 包装。
+if [[ -n "$LOCK_OWNER" && "$command" != (media-push|text-input|tap|tap-snapshot|tap-evidence|locate-tap) ]]; then
   case "$command" in
     open-app|account-current|snapshot-evidence|ui-evidence|close-app|return-safe-desktop) ;;
     *) die 'required lock owner is supported only for standalone read commands';;
@@ -2938,7 +3140,20 @@ case "$command" in
     ;;
   lock-acquire|lock-acquire-new|lock-release|lock-release-exact|lock-status|lock-refresh|lock-reap|lock-cleanup|with-lock)
     source "${0:A:h}/phone-lock-lib.sh"
-    phone_lock_command "$@"
+    # 回执证据只在 guard 内层写（外层 phone_lock_command 会 exec 进 guard，回不来）。
+    if [[ "$command" == (lock-acquire|lock-acquire-new|lock-release|lock-release-exact) && "${DOUYIN_LOCK_GUARDED:-}" == "$SERIAL:$command" ]]; then
+      lock_with_receipt "$@"
+    else
+      phone_lock_command "$@"
+    fi
+    ;;
+  outward-ledger)
+    # 只读：核验员独立回读某 run 的对外动作账（JSON，含 sha256），不需要持锁、不碰设备。
+    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE outward-ledger RUN_ID"
+    require_run_id "$2"
+    ol_run="$(normalize_run_id "$2")"
+    require_evidence_id "${ol_run}-outward-ledger"
+    exec "$PYTHON_BIN" "$OUTWARD_HELPER" outward-ledger-read "$EVIDENCE_ROOT/${ol_run}-outward-ledger.jsonl" "$ol_run" "${ol_run}-outward-ledger"
     ;;
   refresh)
     "$ADB" kill-server
@@ -3009,14 +3224,16 @@ case "$command" in
     snapshot
     ;;
   tap-evidence)
-    [[ "$#" == 4 || "$#" == 5 ]] || die "usage: douyin-phone-adb --profile PROFILE tap-evidence X Y EVIDENCE_ID [WAIT_MS]"
+    [[ "$#" == 4 || "$#" == 5 ]] || die "usage: douyin-phone-adb --profile PROFILE [--lock-owner RUN] tap-evidence X Y EVIDENCE_ID [WAIT_MS] [--outward ACTION [--allow-repeat]]"
     require_uint "$2"; require_uint "$3"
     (( $2 <= MAX_X && $3 <= MAX_Y )) || die "tap is outside target screen"
     require_evidence_id "$4"
+    # 等待时长在点击之前校验（上限 DOUYIN_TAP_WAIT_MAX_MS，默认 15000）：参数错误绝不发生在点击之后。
+    validate_tap_wait tap_evidence "${5:-800}"
+    outward_semantic_check tap_evidence "$4"
+    [[ -z "$OUTWARD_ACTION" ]] || outward_prepare
     check_target_fast
-    "$ADB" -s "$SERIAL" shell input tap "$2" "$3"
-    wait_ms "${5:-800}"
-    snapshot_evidence_cmd "$4"
+    tap_with_evidence tap_evidence tap-evidence "$2" "$3" "$4" "${5:-800}" "" snapshot_evidence_cmd
     ;;
   swipe)
     [[ "$#" == 6 ]] || die "usage: douyin-phone-adb --profile PROFILE swipe X1 Y1 X2 Y2 MS"
@@ -3290,11 +3507,19 @@ case "$command" in
     locate_element "$desc_txt" "$3"
     ;;
   locate-tap)
-    [[ "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE locate-tap DESC_B64 EVIDENCE_ID"
+    [[ "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE [--lock-owner RUN] locate-tap DESC_B64 EVIDENCE_ID [--outward ACTION [--allow-repeat]]"
+    require_evidence_id "$3"
+    outward_semantic_check locate_tap "$3"
+    [[ -z "$OUTWARD_ACTION" ]] || outward_prepare
     check_target
     desc_txt="$(print -- "$2" | /usr/bin/base64 -d 2>/dev/null)" || die "DESC must be base64"
     pos="$(locate_element "$desc_txt" "$3")" || exit 1
     read lx ly <<< "$pos"
+    if [[ -n "$OUTWARD_ACTION" ]]; then
+      [[ "$lx" == <-> && "$ly" == <-> ]] && (( lx <= MAX_X && ly <= MAX_Y )) || pre_tap_fail locate_tap bad_locate "located point '$pos' is outside the target screen"
+      tap_with_evidence locate_tap locate-tap "$lx" "$ly" "$3-after" 800 "$desc_txt" snapshot_evidence_cmd
+      exit 0
+    fi
     "$ADB" -s "$SERIAL" shell input tap "$lx" "$ly"
     wait_ms 800
     "$ADB" -s "$SERIAL" exec-out screencap -p > "$EVIDENCE_ROOT/$3-after.png"
@@ -3552,6 +3777,6 @@ case "$command" in
     print -- "foreground=${focus:-unknown}"
     ;;
   *)
-    die "allowed commands: runtime-contract status diagnose preflight foreground lock-acquire lock-acquire-new lock-status lock-release lock-release-exact lock-refresh lock-reap with-lock refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link own-profile account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-grid-scroll search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid results-controls-from-xml filter-panel-location media-push text-input"
+    die "allowed commands: runtime-contract status diagnose preflight foreground lock-acquire lock-acquire-new lock-status lock-release lock-release-exact lock-refresh lock-reap with-lock refresh telecom window open-app screencap pull snapshot snapshot-evidence ui-evidence tap tap-snapshot tap-evidence swipe swipe-snapshot swipe-evidence back back-snapshot back-evidence wake unlock open-search search-time-layer evidence-bundle current-video-link own-profile account-current account-switch commenter-identity private-message-send close-app return-safe-desktop record-start record-status record-stop record-extract-audio set-playback-speed locate locate-tap detail-restored back-to-results on-search-results open-comments collect-comments search-video-cards search-grid-scroll search-video-tab open-user-profile profile-video-cards back-to-profile on-user-profile profile-check profile-grid-cards resolve-sec-uid results-controls-from-xml filter-panel-location media-push text-input outward-ledger"
     ;;
 esac
