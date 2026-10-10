@@ -2748,7 +2748,7 @@ remote_file_size() {
 }
 
 media_push() {
-  local src name="" ext prefix remote local_size remote_size polls i row media_id media_size
+  local src name="" ext prefix remote indexed_remote local_size remote_size polls i row media_id media_size
   [[ "$#" -ge 1 ]] || die "usage: douyin-phone-adb --profile PROFILE --lock-owner RUN media-push LOCAL_FILE [--name VID_yyyymmdd_hhmmss.mp4]"
   src="$1"; shift
   while (( $# )); do
@@ -2783,12 +2783,15 @@ media_push() {
     ctl_fail media_push retryable size_mismatch "remote size ${remote_size:-missing} != local size $local_size; partial file removed"
   fi
   "$ADB" -s "$SERIAL" shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file://$remote" >/dev/null 2>&1 || true
+  # MediaStore 保存真实路径；/sdcard 别名可上传，却无法用它匹配 _data。
+  indexed_remote="$("$ADB" -s "$SERIAL" shell readlink -f "$remote" 2>/dev/null | tr -d '\r' || true)"
+  [[ "$indexed_remote" == /* && "$indexed_remote" != *$'\n'* ]] || indexed_remote="$remote"
   polls="${DOUYIN_MEDIA_SCAN_POLLS:-10}"
   require_uint "$polls"
   (( polls >= 1 && polls <= 20 )) || die "DOUYIN_MEDIA_SCAN_POLLS must be 1..20"
   media_id=""
   for (( i = 1; i <= polls; i++ )); do
-    row="$("$ADB" -s "$SERIAL" shell content query --uri content://media/external/file --projection _id:_size --where "\"_data='$remote'\"" 2>/dev/null | tr -d '\r' | /usr/bin/grep -m1 '^Row:' || true)"
+    row="$("$ADB" -s "$SERIAL" shell content query --uri content://media/external/file --projection _id:_size --where "\"_data='$indexed_remote'\"" 2>/dev/null | tr -d '\r' | /usr/bin/grep -m1 '^Row:' || true)"
     media_id="$(print -r -- "$row" | /usr/bin/sed -nE 's/.*[[:space:]]_id=([0-9]+).*/\1/p')"
     media_size="$(print -r -- "$row" | /usr/bin/sed -nE 's/.*[[:space:]]_size=([0-9]+).*/\1/p')"
     [[ -n "$media_id" && "$media_size" == "$local_size" ]] && break
