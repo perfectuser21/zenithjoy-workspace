@@ -138,10 +138,17 @@ def sync_mirror(max_attempts=3):
                 time.sleep(5)
                 continue
             raise RuntimeError('台账已写回，镜子仍占用，尚未确认设备页面同步')
-        try:
-            receipt = json.loads(mirror.stdout)
-        except ValueError as error:
-            raise RuntimeError('设备页面镜子回执不是有效JSON') from error
+        receipt = None
+        for line in reversed(mirror.stdout.splitlines()):
+            try:
+                candidate = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(candidate, dict) and 'observed_at' in candidate:
+                receipt = candidate
+                break
+        if receipt is None:
+            raise RuntimeError('设备页面镜子缺少有效JSON回执')
         if (not receipt.get('observed_at') or not isinstance(receipt.get('devices'), dict)
                 or receipt.get('errors') != [] or receipt['devices'].get('errors') != []):
             raise RuntimeError('设备页面镜子缺少成功同步回执')
