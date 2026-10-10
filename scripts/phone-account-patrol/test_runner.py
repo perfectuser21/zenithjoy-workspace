@@ -90,6 +90,25 @@ class PatrolContractTests(unittest.TestCase):
         child['result']['script']['stdout'] = '{"status":"completed"}'
         self.assertEqual(runner.batch_execution_health(batch, lambda path: child), 'healthy')
 
+    def test_monitor_reads_recent_pages_without_historical_limit_failure(self):
+        schedule = {'id': 's', 'is_active': True, 'template': {'activated_at': '2026-10-10T09:00:00.000Z'}}
+        calls = []
+        page = [{'id': 'p'+str(i), 'created_at': '2026-10-10T14:05:00Z'} for i in range(200)]
+        def call(path, body=None, method=None):
+            calls.append(path)
+            if path == 'recurring-tasks':
+                return [schedule]
+            if path.startswith('tasks?'):
+                return page if 'offset=0' in path else [{'id': 'old', 'created_at': '2026-10-09T10:00:00Z'}]
+            if path.startswith('tasks/p'):
+                return {'id': path.split('/')[-1], 'created_at': '2026-10-10T14:05:00Z', 'status': 'queued', 'payload': {}}
+            raise AssertionError('不读取无关历史任务正文：'+path)
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory, patch.object(runner, 'api', call), patch.object(runner, 'STATE', pathlib.Path(directory)), patch.object(runner, 'now', lambda: '2026-10-10T14:15:00Z'):
+            self.assertEqual(runner.monitor({'schedule_id': 's', 'project_id': 'project'}), 0)
+        self.assertTrue(any('offset=200' in path for path in calls))
+        self.assertNotIn('tasks/old', calls)
+
     def test_watchdog_disabled_and_missed_run_are_distinct(self):
         self.assertEqual(runner.schedule_health({'is_active': False}, [], '2026-10-10T15:00:00+00:00')['status'], 'disabled')
         schedule = {'id': 's', 'is_active': True, 'cron_expression': '0 22 * * *'}
