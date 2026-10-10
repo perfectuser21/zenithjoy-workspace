@@ -20,6 +20,17 @@
             "root": "skills",
             "path": "douyin-publisher/SKILL.md"
           }
+        },
+        "phone": {
+          "source": {
+            "root": "skills",
+            "path": "android-douyin-publish/SKILL.md"
+          },
+          "interface": "单图图文分支：一张已归档静态图片、精确标题、指定账号和私密可见性。",
+          "readback": "同账号私密计数N→N+1；新图文单张指定素材、标题、新时间和私密标识，原单次账本与精确双锁收尾。",
+          "warnings": [
+            "仅本次单张私密图片独立通过；多图、长图、公开不能自动扩大验证范围。"
+          ]
         }
       }
     },
@@ -268,6 +279,17 @@
             "root": "skills",
             "path": "weibo-publisher/SKILL.md"
           }
+        },
+        "phone": {
+          "source": {
+            "root": "skills",
+            "path": "android-weibo-publish/SKILL.md"
+          },
+          "interface": "安卓单张图文分支：一张已归档JPG（可为长图）、精确文案、指定现有账号、仅自己可见。",
+          "readback": "同账号计数仅加一，新时间、单张素材、精确文案及私密锁；原单次发表账本、launcher和双锁精确释放。",
+          "warnings": [
+            "仅单张1080×3240长图独立核验；多图和原生文章不在本分支验证范围。"
+          ]
         }
       }
     },
@@ -344,6 +366,17 @@
             "path": "services/agent/publishers/shipinhao-publisher/publish-shipinhao-video.cjs"
           },
           "interface": "--title 标题 --video 本地视频 --desc 简介（可选）；先读源码核对额外参数。"
+        },
+        "phone": {
+          "source": {
+            "root": "skills",
+            "path": "android-shipinhao-publish/SKILL.md"
+          },
+          "interface": "安卓原生视频分支：指定账号、一条视频、精确文案；优先发前私密，否则按已授权公开后单次改私密。",
+          "readback": "同条新视频、时长、文案、时间；私密锁标和反向公开可见菜单；一次发表账本及条件性权限账本、原双锁收尾。",
+          "warnings": [
+            "要求全程私密而发前不能设置时停止；本次初公开后改私密，不冒称全程私密。"
+          ]
         }
       }
     },
