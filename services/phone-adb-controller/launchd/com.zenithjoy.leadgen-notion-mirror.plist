@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  获客业务数据 PG → Notion 镜像（leadgen-notion-mirror.js）每 5 分钟一跑——装在 mmv 本机（任务 f6ad056e，决策 a029a7a7）。
+  读 hk-vps zenithjoy 库（经常驻隧道 com.zenithjoy.pg-tunnel-hk 127.0.0.1:15532），写 Notion「获客·视频/评论/线索」三张库；飞书不碰。
+  凭据：脚本自己读 ~/.credentials/zenithjoy-db.env（DATABASE_URL）与 ~/.credentials/notion.env（NOTION_API_KEY），plist 不放任何凭据。
+  脚本由 deploy.sh（MMV_JS_FILES）同步到 ~/.openclaw/leadgen-scripts/；plist 安装是一次性动作:
+    cp services/phone-adb-controller/launchd/com.zenithjoy.leadgen-notion-mirror.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.zenithjoy.leadgen-notion-mirror.plist
+  手动触发: launchctl kickstart gui/$(id -u)/com.zenithjoy.leadgen-notion-mirror
+  日志: ~/Library/Logs/leadgen-notion-mirror.log（每轮一行 JSON：各表 PG 行数 / Notion 行数 / 新建 / 更新 / 跳过 / 失败）
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.zenithjoy.leadgen-notion-mirror</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>/Users/administrator/.openclaw/leadgen-scripts/leadgen-notion-mirror.js</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/administrator/.openclaw/leadgen-scripts</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>HOME</key>
+    <string>/Users/administrator</string>
+  </dict>
+  <key>StartInterval</key>
+  <integer>300</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/administrator/Library/Logs/leadgen-notion-mirror.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/administrator/Library/Logs/leadgen-notion-mirror.log</string>
+</dict>
+</plist>

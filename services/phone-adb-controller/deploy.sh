@@ -66,6 +66,7 @@ MMV_JS_FILES=(
   own-accounts-lib.js push-leads.js update-profile-links.js nickname-match-lib.js
   stats-line.js notify-bark.js push-stats-lib.js
   leadgen-rpc.mjs leadgen-queue.js activity-commander.mjs
+  pg-notion-mirror-lib.js leadgen-notion-mirror.js
   deployment-manifest.mjs runtime-definition.mjs runtime-host.mjs runtime-release.mjs
 )
 MMV_TOPLEVEL_FILES=(cmdr-escort.txt cmdr-stream.txt)
