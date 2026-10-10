@@ -49,6 +49,20 @@ if [[ "${1:-}" == --lock-owner ]]; then
   shift 2
 fi
 
+# 队列身份核验的局部播放策略；未知值或出口组合在任何设备动作前拒绝。
+# 不接收旧截图/期望ID作为详情证明，各阶段仍读取新鲜分享按钮与实际复制链接。
+DETAIL_PLAYBACK="${DOUYIN_DETAIL_PLAYBACK:-standard}"
+case "$DETAIL_PLAYBACK" in
+  standard) ;;
+  continuous_identity)
+    case "$1" in
+      open-video) [[ "$#" == 3 ]] || die 'CONTINUOUS_IDENTITY_INVALID_COMMAND';;
+      current-video-link) [[ "$#" == 2 ]] || die 'CONTINUOUS_IDENTITY_RESULTS_NOT_ALLOWED';;
+      *) die 'CONTINUOUS_IDENTITY_INVALID_COMMAND';;
+    esac;;
+  *) die 'UNKNOWN_DETAIL_PLAYBACK_MODE';;
+esac
+
 [[ -r "$REGISTRY" ]] || die "phone profile registry is not readable"
 # registry 按列名解析，v1(5列无表头) 与 v2(带表头,列可增) 双兼容。
 # 不按位置读：shell 的 read 会把多余列全挤进最后一个变量，registry 一加列
@@ -495,7 +509,7 @@ _on_video_detail() {
 _leave_scratch_route() {
   local eid="$1" mode="${2:-detail}" i fg xml
   # results-only仅交还导航；不能据此宣称关键词/视频tab归位成功。
-  case "$mode" in detail|results-only) ;; *) print -u2 -- "leave-scratch: unknown mode ($mode)"; return 2 ;; esac
+  case "$mode" in detail|detail-paused|results-only) ;; *) print -u2 -- "leave-scratch: unknown mode ($mode)"; return 2 ;; esac
   require_evidence_id "$eid"
   for i in {1..5}; do
     "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1 || true
@@ -520,9 +534,11 @@ _leave_scratch_route() {
       if _ui_evidence_wave "${eid}-b${i}w${w}" >/dev/null 2>&1 && _is_video_detail_xml "$xml"; then
         print -u2 -- "leave-scratch: back on the original video detail page after $i backs (wave $w)"
         # 下游倍速/录制需要播放。MEDIA_PLAY幂等恢复，不依赖按钮文案推断，也不触发页面点击。
-        "$ADB" -s "$SERIAL" shell input keyevent 126 >/dev/null 2>&1 || return 1
-        wait_ms 300
-        print -u2 -- "leave-scratch: resumed playback with MEDIA_PLAY"
+        if [[ "$mode" == detail ]]; then
+          "$ADB" -s "$SERIAL" shell input keyevent 126 >/dev/null 2>&1 || return 1
+          wait_ms 300
+          print -u2 -- "leave-scratch: resumed playback with MEDIA_PLAY"
+        fi
         return 0
       fi
       (( w < 3 )) && wait_ms 1200
@@ -610,7 +626,9 @@ seed_clipboard_nonce() {
       fi
     fi
   done
-  _leave_scratch_route "${eid}-seed-leave" || die "CLIPBOARD_NONCE_ORIGINAL_DETAIL_UNVERIFIED"
+  local leave_mode=detail
+  [[ "${DETAIL_PLAYBACK:-standard}" != continuous_identity ]] || leave_mode=detail-paused
+  _leave_scratch_route "${eid}-seed-leave" "$leave_mode" || die "CLIPBOARD_NONCE_ORIGINAL_DETAIL_UNVERIFIED"
   print -- "$nonce"
 }
 
@@ -829,13 +847,18 @@ _current_video_link_once() {
     # 采完评论 back_to_results 按 4 次返回全落在暂存页（搜索框里是分享文案不是关键词），
     # 只能走 1.5-3 分钟的兜底重搜：cmd09300230 批 134/134，%C&A=0。
     # 先按返回退出暂存路线、回到打开它之前的那张详情页（同一把尺子核验）；退不回去才重开。
-    if _leave_scratch_route "${evidence_id}-leave"; then
+    local final_leave_mode=detail
+    [[ "${DETAIL_PLAYBACK:-standard}" != continuous_identity ]] || final_leave_mode=detail-paused
+    if _leave_scratch_route "${evidence_id}-leave" "$final_leave_mode"; then
       _vr_ok=1
     else
       print -u2 -- "warning: could not back out of the scratch route onto the original video detail page; falling back to deep link reopen"
     fi
     (( _vr_ok )) || for _vr_try in 1 2; do
       "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "$reopen_url" >/dev/null
+      if [[ "${DETAIL_PLAYBACK:-standard}" == continuous_identity ]]; then
+        "$ADB" -s "$SERIAL" shell input keyevent 127 >/dev/null || die "MEDIA_PAUSE_FAILED"
+      fi
       for _vr_poll in 1 2 3; do
         wait_ms 900
         _vr_fg="$(foreground_package)"
@@ -856,6 +879,10 @@ _current_video_link_once() {
       "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1 || true
       wait_ms 1200
       die "deep link did not restore the video detail page (fg=${_vr_fg}); recovered with back" WRONG_FOREGROUND
+    fi
+    # 只有实际链接已解析且严格详情归位通过后才恢复播放；录音仍看到原有播放状态。
+    if [[ "${DETAIL_PLAYBACK:-standard}" == continuous_identity ]]; then
+      "$ADB" -s "$SERIAL" shell input keyevent 126 >/dev/null || die "MEDIA_PLAY_FAILED"
     fi
   else
     # The scratch search field still has keyboard focus. First back hides the
@@ -3643,7 +3670,9 @@ case "$command" in
     ov_cc_xml="$EVIDENCE_ROOT/$3-openvideo-w1.xml"
     [[ -s "$EVIDENCE_ROOT/$3-openvideo-w2-w1.xml" ]] && ov_cc_xml="$EVIDENCE_ROOT/$3-openvideo-w2-w1.xml"
     ov_cc="$(/usr/bin/grep -oE 'content-desc="评论[0-9][^，"]*，按钮"' "$ov_cc_xml" 2>/dev/null | /usr/bin/head -1 | /usr/bin/sed -E 's/.*评论([0-9][^，"]*)，按钮.*/\1/' || true)"
-    "$ADB" -s "$SERIAL" shell input keyevent 126 || die "MEDIA_PLAY_FAILED"
+    if [[ "$DETAIL_PLAYBACK" == standard ]]; then
+      "$ADB" -s "$SERIAL" shell input keyevent 126 || die "MEDIA_PLAY_FAILED"
+    fi
     print -- "video_opened=1"
     print -- "video_id=$ov_id"
     print -- "comment_count=${ov_cc:-0}"

@@ -7183,6 +7183,14 @@ agent_suite:
   product: AI员工
   note: "四独立获客流程代码回归；设备和业务PG用隔离夹具，真实运行另行验收"
 
+- id: leadgen-split-continuous-identity
+  path: services/phone-adb-controller/__tests__/continuous-identity.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "真实队列shell与控制器、隔离假ADB；连续暂停、nonce读回、VID匹配、骨架拒绝、严格归位与录音恢复"
+
 - id: leadgen-split-video-link-network
   path: services/phone-adb-controller/__tests__/video-link-network.test.mjs
   type: unit

@@ -10,8 +10,21 @@ const queued=new URL('../process-queued-video.sh',import.meta.url).pathname;
 const fixtures=new URL('./fixtures/',import.meta.url).pathname;
 const vid='7646309328911907195';
 // 明示模拟设备：真实控制器+队列shell执行；只有ADB、curl和账号锁回执为假。
-function phone({mode='continuous_identity',command='queued',wrongId=false,skeleton=false}={}){
+function phone({mode='continuous_identity',command='queued',wrongId=false,skeleton=false,finalSkeleton=false,recover=false,playFails=false,controlledWait=false}={}){
  const d=mkdtempSync(join(tmpdir(),'continuous-identity-'));
+ let runner=controller;
+ if(controlledWait){
+  // 沿用nonce/network测试的wait_ms替身，仅在测试临时副本控制等待。
+  // 5轮真实CLI重试、设备读回、nonce与失败处理完全保留；没有生产测试开关。
+  const source=readFileSync(controller,'utf8'),wait=source.match(/^wait_ms\(\) \{[\s\S]*?^\}/m)?.[0];
+  assert.ok(wait?.includes('/bin/sleep "$seconds"'),'只能替换既有等待函数');
+  assert.equal(source.match(/^wait_ms\(\) \{/gm)?.length,1,'等待定义必须恰好一处');
+  const controlled='wait_ms() { require_uint "$1"; (( $1 <= 5000 )) || die "wait must be <= 5000 ms"; }';
+  const patched=source.replace(wait,controlled);
+  assert.equal(patched.split(controlled).length-1,1,'仅替换一处等待函数');
+  assert.equal(patched.replace(controlled,wait),source,'归一化等待后所有业务与CLI字节必须完全相同');
+  runner=join(d,'controller-controlled-wait');writeFileSync(runner,patched);
+ }
  const detail=readFileSync(join(fixtures,'video-detail-from-search.xml'),'utf8');
  const head='<hierarchy><node package="com.ss.android.ugc.aweme" bounds="[0,0][1200,2664]">';
  const field=value=>head+`<node text="${value}" resource-id="com.ss.android.ugc.aweme:id/et_search_kw" hint="人工智能" clickable="true" bounds="[0,0][200,200]"/></node></hierarchy>`;
@@ -28,21 +41,22 @@ const has=x=>a.join(' ').includes(x);const out=x=>console.log(x);
 if(has('get-state'))out('device');
 else if(has('getprop'))out('ANY-MODEL');
 else if(has('dumpsys'))out('mCurrentFocus=Window{1 u0 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.'+(s.page==='scratch'?'search.activity.SearchResultActivity':'detail.ui.DetailActivity')+'}');
-else if(has('am start')&&has('aweme/detail')){s.page='detail';s.play='playing';}
+else if(has('am start')&&has('aweme/detail')){s.page='detail';s.play='playing';s.detailStarts=(s.detailStarts||0)+1;}
 else if(has('am start')&&has('search/tabs')){s.page='scratch';s.field='';s.backs=0;}
 else if(has('input keyevent 127'))s.play='paused';
-else if(has('input keyevent 126'))s.play='playing';
+else if(has('input keyevent 126')){if(process.env.PLAY_FAILS==='1')process.exit(1);s.play='playing';}
 else if(has('input keyevent 85'))s.play=s.play==='playing'?'paused':'playing';
 else if(has('input text '))s.field=a.at(-1);
 else if(has('input keyevent 278'))s.clip=s.field;
 else if(has('input keyevent 279'))s.field=s.clip;
 else if(has('input keyevent 67'))s.field='';
-else if(has('input keyevent 4')){if(s.page==='scratch'&&++s.backs>=4)s.page='detail';else if(s.page==='panel')s.page='detail';}
+else if(has('input keyevent 4')){if(s.page==='scratch'&&++s.backs>=4){s.page='detail';s.scratchReturns=(s.scratchReturns||0)+1;}else if(s.page==='panel')s.page='detail';}
 else if(has('input tap')&&s.page==='detail')s.page='panel';
 else if(has('input tap')&&s.page==='panel'){s.clip='https://v.douyin.com/Fresh/';s.page='detail';}
 else if(has('shell rm -f')){try{fs.unlinkSync(p.join(d,'remote.xml'));}catch{}}
 else if(has('uiautomator dump')){
- const xml=s.page==='scratch'?(${field.toString()})(s.field||'人工智能'):fs.readFileSync(p.join(d,s.page==='panel'?'panel.xml':process.env.SKELETON==='1'?'skeleton.xml':'detail.xml'),'utf8');
+ const isSkeleton=process.env.SKELETON==='1'||(process.env.FINAL_SKELETON==='1'&&s.scratchReturns>=2&&!(process.env.RECOVER==='1'&&s.detailStarts>=2));
+ const xml=s.page==='scratch'?(${field.toString()})(s.field||'人工智能'):fs.readFileSync(p.join(d,s.page==='panel'?'panel.xml':isSkeleton?'skeleton.xml':'detail.xml'),'utf8');
  fs.writeFileSync(p.join(d,'remote.xml'),xml);fs.appendFileSync(p.join(d,'dumps'),s.page+':'+s.play+'\\n');
 }else if(has('stat -c %s'))out(fs.existsSync(p.join(d,'remote.xml'))?fs.statSync(p.join(d,'remote.xml')).size:0);
 else if(a.includes('pull')){const i=a.indexOf('pull');if(a[i+1].endsWith('.xml'))fs.copyFileSync(p.join(d,'remote.xml'),a[i+2]);else fs.writeFileSync(a[i+2],'png');}
@@ -51,18 +65,32 @@ fs.writeFileSync(sfile,JSON.stringify(s));
  // field 的闭包变量替换为字面XML前缀，不涉及生产parser。
  const adbText=readFileSync(adb,'utf8').replace('head+`',JSON.stringify(head)+'+`');writeFileSync(adb,adbText,{mode:0o755});
  const curl=join(d,'curl');writeFileSync(curl,`#!/bin/sh\nprintf 'HTTP/1.1 302 Found\\r\\nLocation: https://www.douyin.com/video/${wrongId?'7646309328911907196':vid}\\r\\n\\r\\n'\n`,{mode:0o755});
- const wrapper=join(d,'ctl');writeFileSync(wrapper,`#!/bin/zsh\nif [[ "$3" == lock-refresh ]];then print lock=refreshed;exit 0;fi\nexec zsh '${controller}' "$@"\n`,{mode:0o755});
+ const wrapper=join(d,'ctl');writeFileSync(wrapper,`#!/bin/zsh
+ print -r -- "$3:\${DOUYIN_DETAIL_PLAYBACK:-standard}" >> "$FAKE_PHONE_DIR/command-env"
+ case "$3" in
+  lock-refresh) print lock=refreshed;exit 0;;
+  set-playback-speed) exit 0;;
+  record-start) node -e 'const f=require("fs"),p=require("path"),d=process.env.FAKE_PHONE_DIR;process.exit(JSON.parse(f.readFileSync(p.join(d,"state.json"))).play==="playing"?0:1)';exit $?;;
+  record-stop) print 'record_stopped duration_seconds=25.1 mean_volume_db=-35';exit 0;;
+  record-extract-audio) exit 0;;
+ esac
+ exec zsh '${runner}' "$@"
+`,{mode:0o755});
+ const qualify=join(d,'qualify');writeFileSync(qualify,"#!/bin/sh\nprintf 'QUAL_RESULT {\"verdict\":\"matched\"}\\n'\n",{mode:0o755});
  const tmp=join(d,'tmp'),cache=join(d,'.config/openclaw/locate-cache');mkdirSync(cache,{recursive:true});
  // 同目标旧短链使本次必须走nonce；不得关闭COPY_STALE。
  writeFileSync(join(cache,'legacy-last-clip.txt'),'https://v.douyin.com/Fresh/\n');
  const env={...process.env,HOME:d,FAKE_PHONE_DIR:d,DOUYIN_PHONE_REGISTRY:join(d,'registry'),DOUYIN_ADB_BIN:adb,
   DOUYIN_CURL_BIN:curl,DOUYIN_SIPS_BIN:'/usr/bin/true',DOUYIN_PYTHON_BIN:'/usr/bin/python3',DOUYIN_PHONE_TMP_ROOT:tmp,
-  DOUYIN_PHONE_ADB:wrapper,WFR_RUN_DIR:join(d,'run'),DOUYIN_DETAIL_PLAYBACK:mode,SKELETON:skeleton?'1':'0',HARVEST_KEYWORD_TESTING:'1'};
- const args=command==='queued'?[queued,'identity','legacy',vid,`https://www.douyin.com/video/${vid}`,'','','continuous-run','jinuo']:
-  [controller,'--profile','legacy',...(command==='results'?['current-video-link','continuous-link','人工智能']:command==='wrong-command'?['preflight']:['open-video',vid,'continuous-open'])];
- const r=spawnSync('zsh',args,{env,encoding:'utf8',timeout:30000});
+  DOUYIN_PHONE_ADB:wrapper,WFR_RUN_DIR:join(d,'run'),DOUYIN_DETAIL_PLAYBACK:mode,QUEUED_VIDEO_QUALIFY_CMD:qualify,SKELETON:skeleton?'1':'0',FINAL_SKELETON:finalSkeleton?'1':'0',
+  RECOVER:recover?'1':'0',PLAY_FAILS:playFails?'1':'0',HARVEST_KEYWORD_TESTING:'1'};
+ if(command.startsWith('queued'))delete env.DOUYIN_DETAIL_PLAYBACK;
+ const args=command.startsWith('queued')?[queued,command==='queued-qualification'?'qualification':'identity','legacy',vid,`https://www.douyin.com/video/${vid}`,'','','continuous-run','jinuo']:
+  [runner,'--profile','legacy',...(command==='results'?['current-video-link','continuous-link','人工智能']:command==='wrong-command'?['preflight']:['open-video',vid,'continuous-open'])];
+ const r=spawnSync('zsh',args,{env,encoding:'utf8',timeout:60000});
  const calls=existsSync(join(d,'calls'))?readFileSync(join(d,'calls'),'utf8'):'';
- const result={...r,calls,state:JSON.parse(readFileSync(join(d,'state.json'),'utf8')),dumps:existsSync(join(d,'dumps'))?readFileSync(join(d,'dumps'),'utf8'):''};
+ const result={...r,calls,state:JSON.parse(readFileSync(join(d,'state.json'),'utf8')),dumps:existsSync(join(d,'dumps'))?readFileSync(join(d,'dumps'),'utf8'):'',
+  commandEnv:existsSync(join(d,'command-env'))?readFileSync(join(d,'command-env'),'utf8'):''};
  rmSync(d,{recursive:true,force:true});return result;
 }
 
@@ -88,4 +116,30 @@ test('连续暂停不能用深链回显掩盖实际链接VID错误',()=>{
 });
 test('DetailActivity中13节点骨架仍拒绝，不能以类名或播放策略冒充详情证据',()=>{
  const r=phone({command:'open',skeleton:true});assert.notEqual(r.status,0);assert.doesNotMatch(r.stdout,/video_opened=1/);
+});
+test('最终归位13节点必须重新打开并暂停读回真实分享树，再恢复播放',()=>{
+ const r=phone({finalSkeleton:true,recover:true});assert.equal(r.status,0,r.stderr+' '+r.error?.code);
+ assert.equal(r.state.detailStarts,2);assert.equal(r.state.play,'playing');
+ assert.equal(r.calls.split('\n').filter(s=>/input keyevent 126$/.test(s)).length,1);
+ assert.match(r.stdout,/IDENTITY/);assert.match(r.stderr,/falling back to deep link reopen/);
+});
+test('严格归位持续骨架或最终播放失败，真实exit非零且不能输出IDENTITY成功',()=>{
+ for(const options of [{finalSkeleton:true},{playFails:true,controlledWait:true}]){
+  const r=phone(options);assert.equal(r.error,undefined,'必须得到真实退出，不能用测试超时替代失败');
+  assert.equal(r.status,4,r.stderr);assert.doesNotMatch(r.stdout,/IDENTITY/);
+  if(options.finalSkeleton)assert.equal(r.calls.split('\n').filter(s=>/input keyevent 126$/.test(s)).length,0);
+  if(options.playFails){
+   assert.match(r.stderr,/current-video-link failed after 5 attempts/);
+   assert.equal(r.calls.split('\n').filter(s=>/input keyevent 126$/.test(s)).length,5,'所有5轮失败均真实执行，不能缩成成功或提前绕过');
+   assert.equal(r.state.play,'paused');
+  }
+ }
+});
+test('qv局部暂停策略不污染锁或录音，record-start必须收到恢复后的播放状态',()=>{
+ const r=phone({command:'queued-qualification'});assert.equal(r.status,0,r.stderr+' '+r.error?.code);
+ assert.match(r.stdout,new RegExp('QUAL\\t'+vid+'\\tmatched'));
+ const commands=r.commandEnv.trim().split('\n');
+ assert.deepEqual(commands.slice(0,3),['lock-refresh:standard','open-video:continuous_identity','current-video-link:continuous_identity']);
+ assert.deepEqual(commands.slice(3),['set-playback-speed:standard','record-start:standard','record-stop:standard','record-extract-audio:standard']);
+ assert.equal(r.state.play,'playing');
 });

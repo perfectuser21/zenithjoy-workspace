@@ -48,8 +48,8 @@ qv_open(){
   local held
   held="$("$C" --profile "$P" lock-refresh "$TAG" </dev/null)" || return 3
   [[ "$held" == lock=refreshed* ]] || { qv_log 'lock_refresh_unconfirmed'; return 3; }
-  "$C" --profile "$P" open-video "$VID" "$TAG-open" </dev/null >/dev/null || return 4
-  qv_verify_video "$TAG-identity" || return 4
+  DOUYIN_DETAIL_PLAYBACK=continuous_identity "$C" --profile "$P" open-video "$VID" "$TAG-open" </dev/null >/dev/null || return 4
+  DOUYIN_DETAIL_PLAYBACK=continuous_identity qv_verify_video "$TAG-identity" || return 4
 }
 qv_qualify(){
   local seconds="${QUEUED_VIDEO_RECORD_SECONDS:-25}" record_eid="$TAG-v$VID-record" started stopped extracted audio="" db duration remote result verdict
