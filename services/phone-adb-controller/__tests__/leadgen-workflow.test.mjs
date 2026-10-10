@@ -121,23 +121,23 @@ test('需要140秒的取链能够完整入库，但不能越过活动剩余预�
      const path=join(dir,'evidence',profile,`${args[3]}-aftertab.xml`);mkdirSync(join(dir,'evidence',profile),{recursive:true});
      writeFileSync(path,'<hierarchy><node resource-id="com.ss.android.ugc.aweme:id/et_search_kw" text="人工智能训练师"/></hierarchy>');
     }
-    if(op==='search-video-cards')stdout='100\t200\t00:20\t目标视频\t别人\t0\n';
+    if(op==='search-video-cards')stdout='100\t200\t00:20\t目标视频\t别人\t0\nvideo_tab=1\nend_of_results=1\nevidence=/test/grid.xml\n';
     if(op==='current-video-link'){
      timeouts.push(opts.timeoutMs);
      if(opts.timeoutMs<140000)throw Error('EXECUTION_DEADLINE');
-     stdout=`content_type=video\nvideo_id=${videoId}\nshort_url=https://v.douyin.com/newTarget/\n`;
+     stdout=`return_mode=results\ncontent_type=video\nvideo_id=${videoId}\nshort_url=https://v.douyin.com/newTarget/\n`;
     }
    }
    return {code:0,stdout,stderr:''};
   };
   const rpc=async body=>{
    if(body.kind==='keywords')return {result:['人工智能训练师']};
-   if(body.request.op==='history')return {result:[]};
+   if(body.request.op==='inspect_videos')return {result:written.map(video_id=>({video_id,line_key:'jinuo'}))};
    assert.equal(body.request.op,'discover');written.push(body.request.video.videoId);return {result:{status:'pending',inserted:true}};
   };
   try{
    const h=createHandlers({root:dir,env,rpc,execute});
-   await h.preflight();await h.source();await h.dedup();h.state.budgetDeadline=Date.now()+remaining;
+   await h.preflight();await h.source();h.state.budgetDeadline=Date.now()+remaining;
    const result=await h.write_videos();
    assert.equal(result.persisted,remaining===480000?1:0);
    assert.deepEqual(written,remaining===480000?[videoId]:[]);
@@ -241,4 +241,29 @@ test('正常清场finish不能掩盖业务失败、清场验收失败、partial�
    record:async()=>{},verify:async a=>({verified:!(scenario==='cleanup_failure'&&a.key==='cleanup')})});
   assert.equal(r.status,['business_failure','cleanup_failure'].includes(scenario)?'failed':'partial');
  }
+});
+
+function upstreamFixture(dir,profile='work'){
+ const source='capture101',upstream=join(dir,'douyin_video_discovery-'+source),current=join(dir,'douyin_video_processing-process102');mkdirSync(upstream);mkdirSync(current);
+ return {source,upstream,current,env:{HOME:dir,WFR_RUN_DIR:current,WFR_TAG:'process102',P:profile,LEADGEN_LINE:'jinuo',LEADGEN_SOURCE_RUN:source,OWN_ACCOUNTS_CONF:join(dir,'own.json')}};
+}
+async function freezeFixture(f){const {digest}=await import('../runtime-definition.mjs');for(const [dir,cap,tag] of [[f.upstream,'douyin_video_discovery',f.source],[f.current,'douyin_video_processing','process102']]){
+ const body={files:{},deployment:{source_commit:'a'.repeat(40)},run_identity:{capability:cap,tag,profile:f.env.P}};writeFileSync(join(dir,'run-definition.json'),JSON.stringify({...body,snapshot_sha256:digest(body)}));
+ }writeFileSync(f.env.OWN_ACCOUNTS_CONF,JSON.stringify({nicknames:['自己'],ids:[]}));}
+test('102按上游实际VID和PG终态判重，旧批次已采不重录、同标题新VID保留',async()=>{
+ const {createHandlers}=await import('../leadgen-workflow.mjs'),dir=mkdtempSync(join(tmpdir(),'intake102-'));
+ try{const f=upstreamFixture(dir);await freezeFixture(f);const ids=['7685662999797258417','7684845398191623487','7684845398191623488'];
+ const videos=ids.map((videoId,i)=>({videoId,title:'同标题',author:i===2?'自己':'别人'}));writeFileSync(join(f.upstream,'discovery-progress.json'),JSON.stringify({run:f.source,profile:'work',videos,captures:videos}));
+ const requests=[];const h=createHandlers({root:dir,env:f.env,rpc:async b=>{requests.push(b.request);return {result:ids.map((video_id,i)=>({video_id,line_key:'jinuo',judgment_status:'pending',process_status:i===0?'评论已采':'待判定',harvest_batch:'old101'}))};}});
+ const result=await h.dedup();assert.deepEqual(h.state.intakeVideoIds,[ids[1]]);assert.equal(result.skipped_completed,1);assert.equal(result.skipped_own,1);assert.equal(result.historical_filter_verified,1);assert.equal(requests[0].op,'inspect_videos');assert.deepEqual(requests[0].video_ids,ids);
+ const proof=JSON.parse(readFileSync(join(f.current,'process102-intake-readback.json'),'utf8'));assert.equal(proof.verified,true);assert.deepEqual(proof.eligible_video_ids,[ids[1]]);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+test('102上游清单身份错或PG缺VID时拒绝，不退回全库认领',async()=>{
+ const {createHandlers}=await import('../leadgen-workflow.mjs'),dir=mkdtempSync(join(tmpdir(),'intake102-guard-'));
+ try{const f=upstreamFixture(dir);await freezeFixture(f);const file=join(f.upstream,'discovery-progress.json'),video={videoId:'7685662999797258417',title:'标题',author:'别人'};let calls=0;
+ writeFileSync(file,JSON.stringify({run:'wrong',profile:'work',videos:[video],captures:[video]}));const h=createHandlers({root:dir,env:f.env,rpc:async()=>{calls++;return {result:[]};}});
+ await assert.rejects(h.dedup(),/上游/);assert.equal(calls,0);
+ writeFileSync(file,JSON.stringify({run:f.source,profile:'work',videos:[video],captures:[video]}));await assert.rejects(h.dedup(),/PG.*缺/);assert.equal(calls,1);
+ }finally{rmSync(dir,{recursive:true,force:true});}
 });

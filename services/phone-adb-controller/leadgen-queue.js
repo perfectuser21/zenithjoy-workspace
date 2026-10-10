@@ -18,6 +18,12 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   if(sourceRun!==null&&!/^[a-zA-Z0-9_-]{1,120}$/.test(sourceRun))throw Error('上游运行号无效');
   if (!/^[a-zA-Z0-9_-]{1,120}$/.test(run || '')) throw Error('缺有效运行号');
   const limit = Math.max(1, Math.min(50, Number(input.limit) || 10));
+  const videoIds=input.video_ids===undefined?null:input.video_ids;
+  if(videoIds!==null&&(!Array.isArray(videoIds)||videoIds.length>1000||videoIds.some(id=>typeof id!=='string'||!/^\d{16,24}$/.test(id))))throw Error('视频ID清单无效');
+  if(op==='inspect_videos'){
+    if(videoIds===null)throw Error('缺明确视频ID清单');
+    return (await pool.query('SELECT video_id,line_key,judgment_status,process_status,harvest_batch FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=ANY($2::text[])',[lineKey,videoIds])).rows;
+  }
   if (op === 'history') {
     return (await pool.query('SELECT title,video_id FROM zenithjoy.leadgen_videos WHERE line_key=$1', [lineKey])).rows;
   }
@@ -32,12 +38,13 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
       // 待采的已合格视频也入队；上次崩溃的租约15分钟后可重领，活动内调用续期。
       const result = await client.query(`WITH pending AS (
         SELECT id FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND judgment_status<>'rejected'
-        AND ($5::text IS NULL OR harvest_batch=$5)
+        AND ($6::text[] IS NOT NULL OR $5::text IS NULL OR harvest_batch=$5)
+        AND ($6::text[] IS NULL OR video_id=ANY($6::text[]))
         AND (process_status='待判定' OR process_status='待采评论'
           OR (process_status LIKE '处理中:%' AND updated_at<now()-interval '15 minutes'))
         ORDER BY discovered_at LIMIT $2 FOR UPDATE SKIP LOCKED)
         UPDATE zenithjoy.leadgen_videos v SET process_status=$3,harvest_batch=$4,updated_at=now()
-        FROM pending p WHERE v.id=p.id RETURNING v.*`, [lineKey, limit, `处理中:${run}`, run, sourceRun]);
+        FROM pending p WHERE v.id=p.id RETURNING v.*`, [lineKey, limit, `处理中:${run}`, run, sourceRun, videoIds]);
       return result.rows;
     });
   }

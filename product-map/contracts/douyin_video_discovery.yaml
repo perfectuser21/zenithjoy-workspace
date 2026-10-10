@@ -274,7 +274,7 @@ activities:
   - key: source
     name: 取源
     order: 2
-    version: 2.0.0
+    version: 3.0.0
     compatibility: breaking
     owner:
       department: line02 智能获客
@@ -304,7 +304,7 @@ activities:
           - keyword
     preconditions:
       - 设备锁由本run持有
-      - 词或对标源来自用户配置，最多2个来源，最多20张候选卡片
+      - 关键词和筛选参数来自输入，先核验首屏；每条链接实际保存后继续刷下一屏
     postconditions:
       - probe: source_completed
         asserts: 来源读取实际成功且无旧入口回退
@@ -320,8 +320,8 @@ activities:
       locks:
         - device:<serial>
       limits:
-        - name: max_cards_per_source
-          value: 20
+        - name: max_screens_per_source
+          value: 100
     idempotency:
       dedupe_key: Video.line_key+Video.video_id
       on_duplicate: skip
@@ -381,7 +381,7 @@ activities:
         check: 搜索框回读 == Keyword.word
         implementation:
           status: implemented
-          ref: leadgen-discovery.mjs source：控制器search-kw-matches逐来源读取实际aftertab树；不一致或无树立即失败，记录原始回话
+          ref: leadgen-discovery.mjs source：首来源搜索词与视频tab实际核验；其他来源在流式取链时独立核验
         uses_llm: false
         dod:
           mode: hard
@@ -477,7 +477,7 @@ activities:
         writes:
           - Video.title
           - Video.comment_count
-        check: 卡片数 ≥1，否则判 empty_ok（no_cards）
+        check: 视频tab和搜索词均已核验；明确空结果可返回0，不将未加载当空
         implementation:
           status: implemented
           ref: leadgen-discovery.mjs source.extract_video_cards（原约束保留，真PG/证据读回）
@@ -492,163 +492,10 @@ activities:
               ref: metrics.sources_succeeded
     commander:
       entry: activity-commander.mjs
-  - key: dedup
-    name: 过滤去重
-    order: 3
-    version: 2.0.0
-    compatibility: breaking
-    owner:
-      department: line02 智能获客
-      agent: 获客采收员
-    inputs:
-      - type: Video
-        cardinality: many
-        fields:
-          - title
-          - comment_count
-          - keyword
-    outputs:
-      - type: Video
-        cardinality: many
-        effect: create
-        fields:
-          - title
-          - comment_count
-          - keyword
-    preconditions:
-      - 自家号名单必须可读取
-      - PG历史查询成功，失败不可当作空历史
-    postconditions:
-      - probe: dedup_historical_filter_verified
-        asserts: PG历史、自家号配置和当前run去重证据读回
-      - probe: dedup_own_filter_verified
-        asserts: PG历史、自家号配置和当前run去重证据读回
-      - probe: dedup_run_dedup_verified
-        asserts: PG历史、自家号配置和当前run去重证据读回
-      - probe: dedup_commander_verified
-        asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
-    execution:
-      location: phone
-      via: leadgen-workflow.mjs → dedup独立活动 → 持久化队列读回
-    budget:
-      max_duration_s: 600
-      heartbeat_s: 60
-    resources:
-      locks:
-        - device:<serial>
-      limits: []
-    idempotency:
-      dedupe_key: Video.line_key+Video.video_id
-      on_duplicate: skip
-    failure:
-      empty_ok:
-        - no_cards 本词无视频卡片
-      retryable:
-        - lock_busy
-        - WRONG_FOREGROUND
-        - NO_ROOT
-        - 候选落库失败（库/ssh 不可达）：视频留 pending 本批不采，下批再遇到重判
-      needs_human:
-        cases:
-          - TARGET_ABSENT 连续出现，疑抖音改版
-        alert:
-          channel: bark
-          object: escort 升级（harvest-cron.sh 陪跑员）→ Bark
-      fatal:
-        - hash_mismatch 词单在 run 中被改
-    side_effects: []
-    invokers:
-      - code
-      - agent
-    runtime:
-      phase: batch_end
-      entry: leadgen-activity.sh
-      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
-    implementation_bindings:
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-workflow.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-activity.sh
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/activity-commander.mjs
-        revision: contract
-      - kind: code
-        repo: perfectuser21/zenithjoy-workspace
-        path: services/phone-adb-controller/leadgen-discovery.mjs
-        revision: contract
-    model:
-      - provider: openrouter
-        model: bytedance/ui-tars-1.5-7b
-        purpose: 视频 tab / 筛选按钮视觉定位兜底（douyin-phone-adb:905-909）
-    steps:
-      - key: filter_history
-        name: 历史视频过滤
-        order: 1
-        reads:
-          - Video.title
-        writes: []
-        check: 读取真实证据，historical_filter_verified == 1，不得用默认值代替
-        implementation:
-          status: implemented
-          ref: leadgen-discovery.mjs dedup.filter_history（原约束保留，真PG/证据读回）
-        uses_llm: false
-        dod:
-          mode: hard
-          readback:
-            type: metric
-            ref: metrics.historical_filter_verified
-            expect:
-              op: ==
-              value: 1
-      - key: filter_own_accounts
-        name: 自家号过滤
-        order: 2
-        reads:
-          - Video.title
-        writes: []
-        check: 读取真实证据，own_filter_verified == 1，不得用默认值代替
-        implementation:
-          status: implemented
-          ref: leadgen-discovery.mjs dedup.filter_own_accounts（原约束保留，真PG/证据读回）
-        uses_llm: false
-        dod:
-          mode: hard
-          readback:
-            type: metric
-            ref: metrics.own_filter_verified
-            expect:
-              op: ==
-              value: 1
-      - key: filter_current_run
-        name: 本轮重复过滤
-        order: 3
-        reads:
-          - Video.title
-        writes: []
-        check: 读取真实证据，run_dedup_verified == 1，不得用默认值代替
-        implementation:
-          status: implemented
-          ref: leadgen-discovery.mjs dedup.filter_current_run（原约束保留，真PG/证据读回）
-        uses_llm: false
-        dod:
-          mode: hard
-          readback:
-            type: metric
-            ref: metrics.run_dedup_verified
-            expect:
-              op: ==
-              value: 1
-    commander:
-      entry: activity-commander.mjs
   - key: write_videos
     name: 取链接写视频表
-    order: 4
-    version: 2.0.0
+    order: 3
+    version: 3.0.0
     compatibility: breaking
     owner:
       department: line02 智能获客
@@ -707,8 +554,8 @@ activities:
       locks:
         - device:<serial>
       limits:
-        - name: max_persisted_videos
-          value: 2
+        - name: max_requested_videos
+          value: 1000
     idempotency:
       dedupe_key: Video.line_key+Video.video_id
       on_duplicate: skip
@@ -793,7 +640,7 @@ activities:
           - Video.harvest_batch
           - Video.keyword
           - Video.line_key
-        check: leadgen_videos 本词行数 ≥ 工件 candidates
+        check: 本批所有保存VID逐个PG独立读回，含旧批次幂等更新的ID
         implementation:
           status: implemented
           ref: leadgen-discovery.mjs write_videos.persist_candidates（原约束保留，真PG/证据读回）
@@ -801,21 +648,20 @@ activities:
         dod:
           mode: checkpoint
           readback:
-            type: sql
-            query: SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG'
+            type: metric
+            ref: metrics.manifest_verified
             expect:
-              op: ">="
-              ref: metrics.candidates
+              op: ==
+              value: 1
       - key: push_videos
-        name: 视频落池
+        name: 视频持久化读回
         order: 3
         reads:
           - Video.video_id
           - Video.harvest_batch
         writes:
-          - Video.feishu_record_id
-        check: PG 本批行数 ≥ videos_pushed（= push-videos.js 本批新增视频数 PUSH_VIDEOS_STATS.created）；0929修：有新视频要推但一条都没成功(全军覆没)时
-          exit 1，不再无声无息(push-stats-lib.js pushAllFailed，部分失败仍exit 0避免连累batch2.sh链式调用的下一步)
+          - Video.line_key
+        check: PG本批新增行数 ≥ 实际inserted=true新增回执数；旧VID保持旧处理状态和批次，由完整VID清单核验
         implementation:
           status: implemented
           ref: leadgen-discovery.mjs write_videos.push_videos（原约束保留，真PG/证据读回）
@@ -842,15 +688,16 @@ activities:
         dod:
           mode: checkpoint
           readback:
-            type: sql
-            query: SELECT line_key FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG'
+            type: metric
+            ref: metrics.manifest_verified
             expect:
-              op: not_null_all
+              op: ==
+              value: 1
     commander:
       entry: activity-commander.mjs
   - key: cleanup
     name: 收尾
-    order: 5
+    order: 4
     version: 2.0.0
     compatibility: breaking
     owner:

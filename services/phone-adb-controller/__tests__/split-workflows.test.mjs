@@ -4,8 +4,8 @@ import { loadContractsFromDisk, validateContracts } from '../../../scripts/produ
 import { planFor } from '../../../scripts/product-map/wf-plan.mjs';
 
 const workflows = {
-  douyin_video_discovery: ['preflight', 'source', 'dedup', 'write_videos', 'cleanup'],
-  douyin_video_processing: ['preflight', 'qualification', 'collection', 'cleanup'],
+  douyin_video_discovery: ['preflight', 'source', 'write_videos', 'cleanup'],
+  douyin_video_processing: ['preflight', 'dedup', 'qualification', 'collection', 'cleanup'],
   douyin_comment_scoring: ['scoring', 'mark_leads'],
   douyin_lead_outreach: ['preflight', 'send_dm', 'write_back', 'cleanup'],
 };

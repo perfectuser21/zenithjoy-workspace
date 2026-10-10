@@ -203,3 +203,7 @@ test('暂存路线退飞了（底下不是详情页）→ 退回 deep link 重�
   assert.equal(ph.deeplinks(), 1, '退不回详情页时必须用 deep link 重开兜底');
   assert.equal(ph.stack().at(-1), 'detail2', `兜底后应停在重开的详情页: ${ph.stack().join('>')}`);
 });
+
+test('101取链可直接回本词真实搜索结果，无须重开详情，原默认归位行为保留',()=>{
+ const ph=makeFakePhone();const r=ph.run(['current-video-link','cvl-results',KW]);assert.equal(r.code,0,r.err);assert.match(r.out,/video_id=7000000000000000001/);assert.match(r.out,/return_mode=results/);assert.equal(ph.stack().at(-1),'results');assert.equal(ph.deeplinks(),0);
+});

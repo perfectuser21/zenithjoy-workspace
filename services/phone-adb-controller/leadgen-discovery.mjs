@@ -1,169 +1,91 @@
-// 0101三个独立活动；调用方持锁并为每个活动安排Commander。
+// 101只负责搜索筛选后的真实视频链接；历史状态和资格判断交102。
 import {join} from 'node:path';
 import {existsSync,mkdirSync,writeFileSync,renameSync} from 'node:fs';
-const normalized = value => String(value ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim();
-const asSet = value => value instanceof Set ? value : new Set(value);
-function cardsOf(stdout, context) {
- return String(stdout ?? '').split('\n').flatMap(line => {
-  const f=line.replace(/\r$/, '').split('\t');
-  if(!/^\d+$/.test(f[0]??'') || !/^\d+$/.test(f[1]??'')) return [];
-  return [{...context,x:Number(f[0]),y:Number(f[1]),duration:f[2]??'',title:f[3]??'',author:f[4]??'',screen:/^\d+$/.test(f[5]??'')?Number(f[5]):0}];
- });
-}
-const fieldsOf=stdout=>Object.fromEntries(String(stdout??'').split('\n').filter(s=>s.includes('=')).map(s=>{const p=s.indexOf('=');return [s.slice(0,p),s.slice(p+1).trim()];}));
-function validVideoUrl(value,id) {
- try {const u=new URL(value);if(u.protocol!=='https:'||u.username||u.password)return false;
-  if(u.hostname==='v.douyin.com')return /^\/[A-Za-z0-9_-]+\/?$/.test(u.pathname);
-  return ['www.douyin.com','douyin.com','www.iesdouyin.com','iesdouyin.com'].includes(u.hostname) && new RegExp(`/video/${id}(?:/|$)`).test(u.pathname);}
- catch {return false;}
-}
-export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,limit=2,sourceKind='keyword',sources,location='same_city',ownAccounts,env=process.env}) {
- if(!ownAccounts || !(Array.isArray(ownAccounts.nicknames)||ownAccounts.nicknames instanceof Set) || !(Array.isArray(ownAccounts.ids)||ownAccounts.ids instanceof Set)) throw new Error('自家账号配置缺失或读取失败，拒绝发现');
- if(!['keyword','benchmark'].includes(sourceKind)) throw new Error('发现来源类型无效');
- if(!Array.isArray(sources) || sources.length===0) throw new Error('发现来源为空');
- if(!Number.isSafeInteger(limit)||limit<1||limit>20) throw new Error('发现成功目标上限无效');
- for(const [key,fn] of Object.entries({phone,execute,queue})) if(typeof fn!=='function') throw new Error(`缺少执行依赖：${key}`);
- const ownNames=new Set([...asSet(ownAccounts.nicknames)].map(normalized));
- const state={sourceKind,sources:[],source_receipts:[],candidates:[],kept:[],persisted:[],failures:[],known_gaps:[],counts:{sources:0,sources_succeeded:0,source_failed:0,cards:0,historical:0,own:0,duplicate:0,missing_identity:0,eligible:0,attempted:0,opened:0,linked:0,persisted:0,failed:0,limit_skipped:0},source_complete:false,dedup_complete:false,write_complete:false};
- const writeProgress=(extra={})=>{
-  if(!env.WFR_RUN_DIR)return;
-  mkdirSync(env.WFR_RUN_DIR,{recursive:true});
-  const file=join(env.WFR_RUN_DIR,'discovery-progress.json'),tmp=file+'.tmp';
-  writeFileSync(tmp,JSON.stringify({run,observed_at:new Date().toISOString(),counts:{...state.counts},
-   videos:[...state.persisted],failures:[...state.failures],known_gaps:[...state.known_gaps],...extra}),{mode:0o600});
-  renameSync(tmp,file);
- };
- const failed=(candidate,reason,error)=>{
-  state.counts.failed++;
-  state.failures.push({source:candidate.source,title:candidate.title,author:candidate.author,reason,detail:String(error?.stderr||error?.message||error||'').slice(0,1000)});
-  writeProgress();
- };
- function checkBoundary(started=Date.now()) {
-  const abort=reason=>{writeProgress({abort_reason:reason});throw new Error(reason);};
-  if(env.WF_STOP_FILE && existsSync(env.WF_STOP_FILE)) abort('Commander请求停止发现');
-  if(Date.now()-started>=480000) abort('发现活动预算已耗尽');
-  const start=Number(env.WF_RUN_START_TS),max=Number(env.WF_RUN_MAX_SECONDS||14400);
-  if(start>0 && max>0 && Date.now()/1000-start>=max) abort('整批运行预算已耗尽');
+const normalized=v=>String(v??'').normalize('NFKC').replace(/\s+/g,' ').trim();
+const fieldsOf=s=>Object.fromEntries(String(s??'').split('\n').filter(l=>l.includes('=')).map(l=>{const i=l.indexOf('=');return [l.slice(0,i),l.slice(i+1).trim()];}));
+function cardsOf(s,ctx){return String(s??'').split('\n').flatMap(l=>{const f=l.replace(/\r$/,'').split('\t');return /^\d+$/.test(f[0]??'')&&/^\d+$/.test(f[1]??'')?[{...ctx,x:Number(f[0]),y:Number(f[1]),duration:f[2]??'',title:f[3]??'',author:f[4]??''}]:[];});}
+const identity=c=>JSON.stringify([normalized(c.title),normalized(c.author),c.duration]);
+const fingerprint=cards=>JSON.stringify(cards.map(c=>[identity(c),c.x,c.y]));
+function validVideoUrl(value,id){try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password&&((u.hostname==='v.douyin.com'&&/^\/[A-Za-z0-9_-]+\/?$/.test(u.pathname))||(['www.douyin.com','douyin.com','www.iesdouyin.com','iesdouyin.com'].includes(u.hostname)&&new RegExp('/video/'+id+'(?:/|$)').test(u.pathname)));}catch{return false;}}
+export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,limit=0,sourceKind='keyword',sources,location='same_city',ownAccounts,env=process.env,budgetDeadline=()=>0}){
+ if(!['keyword','benchmark'].includes(sourceKind))throw Error('发现来源类型无效');
+ if(!Array.isArray(sources)||!sources.length)throw Error('发现来源为空');
+ if(!Number.isSafeInteger(limit)||limit<0||limit>1000)throw Error('发现成功目标上限无效');
+ for(const [k,fn] of Object.entries({phone,execute,queue}))if(typeof fn!=='function')throw Error('缺少执行依赖：'+k);
+ const sort=env.LEADGEN_SORT||'latest',time=env.LEADGEN_TIME_LAYER||'six_months',maxScreens=Number(env.LEADGEN_MAX_SCREENS||100);
+ if(!['comprehensive','latest','most_liked','most_commented','most_favorited'].includes(sort)||!['unlimited','one_day','one_week','six_months'].includes(time)||!Number.isSafeInteger(maxScreens)||maxScreens<1||maxScreens>1000)throw Error('搜索筛选或屏数配置无效');
+ const contexts=sources.slice(0,2).map((s,i)=>{const value=typeof s==='string'?s:s?.source??s?.keyword??s?.url;if(typeof value!=='string'||!value.trim())throw Error('发现来源格式无效');return {source:value,keyword:sourceKind==='keyword'?value:'',sourceKind,sourceIndex:i,sourceEncoded:encodeURIComponent(value)};});
+ const state={sourceKind,sources:contexts,source_receipts:[],persisted:[],captures:[],failures:[],known_gaps:[],counts:{sources:contexts.length,sources_succeeded:0,source_failed:0,cards:0,attempted:0,opened:0,linked:0,persisted:0,created:0,reused:0,duplicate:0,failed:0,screens:0,missing_identity:0,non_video:0},source_complete:false,write_complete:false};
+ let firstPage,stopReason=null,allScanned=false;
+ const progress=()=>{if(!env.WFR_RUN_DIR)throw Error('缺少本run持久化交接目录');mkdirSync(env.WFR_RUN_DIR,{recursive:true});const file=join(env.WFR_RUN_DIR,'discovery-progress.json');writeFileSync(file+'.tmp',JSON.stringify({run,profile,observed_at:new Date().toISOString(),counts:{...state.counts},videos:state.persisted,captures:state.captures,failures:state.failures,known_gaps:state.known_gaps,stop_reason:stopReason,all_results_scanned:allScanned}),{mode:0o600});renameSync(file+'.tmp',file);};
+ const failure=(c,reason,error)=>{state.counts.failed++;state.failures.push({source:c.source,title:c.title,author:c.author,reason,detail:String(error?.stderr||error?.message||error).slice(0,1000)});progress();};
+ const boundary=()=>{if(env.WF_STOP_FILE&&existsSync(env.WF_STOP_FILE))throw Error('stop_requested');const deadline=budgetDeadline();if(deadline&&Date.now()>=deadline)throw Error('budget_exhausted');const start=Number(env.WF_RUN_START_TS),max=Number(env.WF_RUN_MAX_SECONDS||1800);if(start>0&&Date.now()/1000-start>=max)throw Error('budget_exhausted');};
+ const pause=async n=>{boundary();const r=await execute('/bin/sleep',[String(n)],{maxDurationS:n+2});if(r?.code!==0)throw Error('发现页面等待失败');};
+ async function readPage(ctx,eid){boundary();const output=await phone('search-video-cards',eid),f=fieldsOf(output);if(f.video_tab!=='1'||!f.evidence)throw Error('当前页面未实际核验视频tab及UI树');let kw;try{kw=await phone('search-kw-matches',ctx.source,f.evidence);}catch(e){throw Error('搜索框回读与本来源关键词不一致: '+e.message);}if(!/^kw_matches=1$/m.test(kw))throw Error('搜索框回读与本来源关键词不一致');return {cards:cardsOf(output,ctx),loading:f.loading==='1',end:f.end_of_results==='1'||f.empty_results==='true',evidence:f.evidence};}
+ async function filters(ctx,eid){await phone('search-video-tab',eid+'-vtab');await phone('search-time-layer',time,eid+'-filter',sort,'unlimited','unlimited',location);await pause(1);}
+ async function setup(ctx){
+  boundary();const eid=run+'-src'+(ctx.sourceIndex+1);
+  if(sourceKind==='benchmark'){state.known_gaps.push({source:ctx.source,kind:'benchmark_identity_unavailable',reason:'对标主页无稳定标题作者'});throw Error('对标主页无稳定标题作者，拒绝沿用坐标取链');}
+  await phone('open-search',ctx.sourceEncoded);await pause(2);await filters(ctx,eid);
+  const page=await readPage(ctx,eid+'-cards');
+  const receipt={source:ctx.source,source_index:ctx.sourceIndex+1,source_kind:sourceKind,cards:page.cards.length,verified:true,evidence_path:page.evidence,observed_at:new Date().toISOString()};
+  mkdirSync(env.WFR_RUN_DIR,{recursive:true});writeFileSync(join(env.WFR_RUN_DIR,run+'-source-'+(ctx.sourceIndex+1)+'-readback.json'),JSON.stringify(receipt,null,2),{mode:0o600});
+  state.source_receipts.push(receipt);state.counts.sources_succeeded++;return page;
  }
- async function pause(seconds) {
-  const r=await execute('/bin/sleep',[String(seconds)],{maxDurationS:seconds+2});
-  if(r?.code!==0) throw new Error('发现页面等待失败');
+ const result=()=>({counts:{...state.counts},videos:[...state.persisted],captures:[...state.captures],failures:[...state.failures],known_gaps:[...state.known_gaps],stop_reason:stopReason,all_results_scanned:allScanned,...(state.failures.length||(!allScanned&&stopReason!=='limit_reached')?{status:'partial'}:{})});
+ async function source(){
+  if(!state.source_complete){try{firstPage=await setup(contexts[0]);state.source_complete=true;}catch(e){state.counts.source_failed++;failure(contexts[0],'source_identity_unconfirmed',e);throw e;}}
+  return {counts:{...state.counts},source_completed:1,sources_succeeded:state.counts.sources_succeeded,sources:[...state.source_receipts],candidates:firstPage.cards.length};
  }
- async function source() {
-  const resultOf=()=>({counts:{...state.counts},candidates:state.candidates.length,sources_succeeded:state.counts.sources_succeeded,
-   source_completed:state.counts.sources_succeeded===state.counts.sources?1:0,sources:[...state.source_receipts],failures:[...state.failures]});
-  if(state.source_complete) return resultOf();
-  // Commander重试取源时重建当轮结果，不拼接上次失败的半成品。
-  state.sources=[];state.source_receipts=[];state.candidates=[];state.counts.sources=0;state.counts.sources_succeeded=0;state.counts.source_failed=0;state.counts.cards=0;
-  const started=Date.now();
-  for(const [index,entry] of sources.slice(0,2).entries()) {
-   checkBoundary(started);
-   const value=typeof entry==='string'?entry:entry?.source??entry?.keyword??entry?.url;
-   if(typeof value!=='string'||!value.trim()) throw new Error('发现来源格式无效');
-   const context={source:value,keyword:sourceKind==='keyword'?value:'',sourceKind,sourceIndex:index,sourceEncoded:encodeURIComponent(value)};
-   state.sources.push(context);state.counts.sources++;
-   const result=await execute('zsh',[join(root,sourceKind==='keyword'?'discover-keyword.sh':'discover-benchmark.sh'),profile,context.sourceEncoded,'20',`${run}-src${index+1}`,location],{env:{DISCOVERY_V2_PROFILES:profile,DISCOVERY_V2_CARDS:'20'},maxDurationS:480});
-   if(result?.code!==0){state.counts.source_failed++;state.failures.push({source:value,reason:'source_failed',detail:String(result?.stderr??'发现脚本未确认成功').slice(0,1000)});continue;}
-   const found=cardsOf(result.stdout,context).slice(0,20);
-   const receipt={source:value,source_index:index+1,source_kind:sourceKind,cards:found.length,verified:false,observed_at:new Date().toISOString()};
-   if(sourceKind==='keyword'){
-    receipt.evidence_path=join(env.DOUYIN_PHONE_TMP_ROOT||'/private/tmp/openclaw-phone','evidence',profile,`${run}-src${index+1}-vtab-aftertab.xml`);
-    try{
-     receipt.controller_stdout=await phone('search-kw-matches',value,receipt.evidence_path);
-     receipt.verified=/^kw_matches=1$/m.test(receipt.controller_stdout);
-     if(!receipt.verified)throw new Error('搜索框回读与本来源关键词不一致');
-    }catch(error){receipt.error=String(error?.stderr||error?.message||error).slice(0,1000);}
-   }else{
-    // 对标原子入口已经验主页；卡片稳定身份仍由dedup明确缺口并拒绝取链。
-    receipt.verified=result.code===0;receipt.controller_stdout=result.stdout;
+ async function nextPage(ctx,old,eid){
+  for(let attempt=0;attempt<3;attempt++){boundary();await pause(attempt+1);const page=await readPage(ctx,eid+'-wait'+attempt);if(page.loading)continue;if(page.end||fingerprint(page.cards)!==fingerprint(old.cards))return page;}
+  return null;
+ }
+ async function write_videos(){
+  if(!state.source_complete)throw Error('必须先执行取源');
+  if(state.write_complete)return result();
+  try{
+   sourceLoop:for(const ctx of contexts){
+    let page=ctx.sourceIndex===0?firstPage:await setup(ctx),screen=0;
+    while(true){
+     boundary();if(page.loading){page=await nextPage(ctx,{cards:[]},run+'-src'+ctx.sourceIndex+'-initial');if(!page){stopReason='stalled';break sourceLoop;}}
+     state.counts.screens++;state.counts.cards+=page.cards.length;
+     // 只枚举这一屏的卡片槽位；不按全局标题过滤，同标题不同视频都取真实ID。
+     const targets=page.cards.map((c,i,a)=>({...c,ordinal:a.slice(0,i).filter(x=>identity(x)===identity(c)).length}));
+     for(const target of targets){
+      if(limit&&state.counts.persisted>=limit){stopReason='limit_reached';break sourceLoop;}
+      if(state.counts.persisted>=1000){stopReason='manifest_limit';break sourceLoop;}
+      boundary();const eid=run+'-candidate'+(state.counts.attempted+1);state.counts.attempted++;
+      if(!normalized(target.title)||!normalized(target.author)){state.counts.missing_identity++;failure(target,'missing_identity','卡片无稳定标题或作者');continue;}
+      try{
+       const fresh=await readPage(ctx,eid+'-loc'),hit=fresh.cards.filter(c=>identity(c)===identity(target))[target.ordinal];
+       if(!hit)throw Error('当前位置没有原候选，拒绝沿用旧坐标');
+       await phone('tap-evidence',String(hit.x),String(hit.y),eid+'-open');state.counts.opened++;await pause(1);
+       const f=fieldsOf(await phone('current-video-link',eid+'-link',ctx.source));
+       if(f.content_type!=='video'){state.counts.non_video++;continue;}
+       if(!/^\d{16,24}$/.test(f.video_id??'')||!validVideoUrl(f.short_url||f.resolved_url,f.video_id)||f.return_mode!=='results')throw Error('视频ID、链接或结果页归位未核验');
+       state.counts.linked++;
+       const video={videoId:f.video_id,videoUrl:f.short_url||f.resolved_url,title:target.title,keyword:ctx.keyword,author:target.author,harvestBatch:run};
+       let stored;try{stored=await queue('discover',{video});}catch(e){failure(target,'persistence_failed',e);stopReason='persistence_failed';break sourceLoop;}
+       if(!['pending','matched','rejected'].includes(stored?.status)||typeof stored.inserted!=='boolean'){failure(target,'persistence_failed','PG无实际入库回执');stopReason='persistence_failed';break sourceLoop;}
+       state.captures.push({...video,status:stored.status,inserted:stored.inserted,observed_at:new Date().toISOString()});
+       if(state.persisted.some(v=>v.videoId===video.videoId))state.counts.duplicate++;
+       else{state.persisted.push({...video,status:stored.status,inserted:stored.inserted});state.counts.persisted++;if(stored.inserted)state.counts.created++;else state.counts.reused++;}
+       progress();
+       if(f.return_recovered_via==='research'){await filters(ctx,eid+'-recover');for(let s=0;s<screen;s++){await phone('search-grid-scroll',eid+'-restore'+s,'up');await pause(2);}}
+      }catch(e){failure(target,'capture_failed',e);stopReason='capture_failed';break sourceLoop;}
+     }
+     if(limit&&state.counts.persisted>=limit){stopReason='limit_reached';break sourceLoop;}
+     if(page.end)break;
+     if(screen+1>=maxScreens){stopReason='screen_limit';break sourceLoop;}
+     await phone('search-grid-scroll',run+'-src'+ctx.sourceIndex+'-scroll'+screen,'up');
+     const next=await nextPage(ctx,page,run+'-src'+ctx.sourceIndex+'-screen'+(screen+1));
+     if(!next){stopReason='stalled';break sourceLoop;}page=next;screen++;
+    }
    }
-   if(!env.WFR_RUN_DIR)throw new Error('缺少本run来源回读工件目录');
-   mkdirSync(env.WFR_RUN_DIR,{recursive:true,mode:0o700});
-   const file=join(env.WFR_RUN_DIR,`${run}-source-${index+1}-readback.json`),tmp=`${file}.${process.pid}.tmp`;
-   writeFileSync(tmp,JSON.stringify(receipt,null,2),{mode:0o600});renameSync(tmp,file);
-   state.source_receipts.push(receipt);
-   if(!receipt.verified){state.counts.source_failed++;state.failures.push({source:value,reason:'source_identity_unconfirmed',detail:receipt.error||'搜索词实际读回失败'});continue;}
-   state.counts.sources_succeeded++;
-   state.candidates.push(...found);state.counts.cards+=found.length;
-  }
-  if(state.counts.source_failed===state.counts.sources) throw new Error('全部发现来源执行失败');
-  state.source_complete=true;
-  return resultOf();
+   if(!stopReason){stopReason='exhausted';allScanned=true;}
+  }catch(e){stopReason=['stop_requested','budget_exhausted'].includes(e.message)?e.message:'source_failed';state.failures.push({reason:stopReason,detail:e.message});}
+  state.write_complete=true;progress();return result();
  }
- async function dedup() {
-  if(!state.source_complete) throw new Error('必须先执行取源');
-  if(state.dedup_complete)return {counts:{...state.counts},eligible:state.kept.length};
-  // 查询失败或未知结构不能降级为空历史。
-  const history=await queue('history',{});
-  const rows=Array.isArray(history)?history:Array.isArray(history?.videos)?history.videos:null;
-  if(!rows) throw new Error('PG历史查询未返回实际视频列表');
-  const historic=new Set(rows.map(row=>normalized(row.title)).filter(Boolean));
-  const seen=new Set();
-  // 来源依次核验完成；先消费较新的结果，避免等第二来源时第一来源卡片已发生变化。
-  const freshest=[...state.candidates].sort((a,b)=>(b.sourceIndex??0)-(a.sourceIndex??0));
-  for(const candidate of freshest) {
-   const title=normalized(candidate.title),author=normalized(candidate.author);
-   if(!title||!author){state.counts.missing_identity++;failed(candidate,'missing_identity','视频卡片无可核验标题或作者，不能沿用旧坐标');
-    if(sourceKind==='benchmark'&&!state.known_gaps.some(g=>g.kind==='benchmark_identity_unavailable')) state.known_gaps.push({kind:'benchmark_identity_unavailable',detail:'现有对标主页网格不提供标题，稳定身份核验尚未就绪；旧入口不作回退。'});
-    continue;}
-   if(author && ownNames.has(author)){state.counts.own++;continue;}
-   if(historic.has(title)){state.counts.historical++;continue;}
-   const key=`${title}\t${author}`;
-   if(seen.has(key)){state.counts.duplicate++;continue;}
-   seen.add(key);state.kept.push(candidate);
-  }
-  state.counts.eligible=state.kept.length;state.dedup_complete=true;
-  return {counts:{...state.counts},eligible:state.kept.length,known_gaps:[...state.known_gaps]};
- }
- async function locate(candidate,eid,started) {
-  checkBoundary(started);
-  if(sourceKind==='keyword') {
-   await phone('open-search',candidate.sourceEncoded);await pause(3);
-   await phone('search-video-tab',`${eid}-vtab`);
-   await phone('search-time-layer','six_months',`${eid}-filter`,'latest','unlimited','unlimited',location);await pause(2);
-  }else {await phone('open-user-profile',candidate.source,`${eid}-profile`);await pause(2);}
-  // 记下的屏号只决定扫描范围；始终按当前标题+作者找，拒绝发现时坐标。
-  const maxScreen=Math.min(22,candidate.screen+2);
-  for(let screen=0;screen<=maxScreen;screen++) {
-   checkBoundary(started);
-   const output=await phone(sourceKind==='keyword'?'search-video-cards':'profile-video-cards',`${eid}-loc${screen}`);
-   const hit=cardsOf(output,candidate).find(card=>normalized(card.title)===normalized(candidate.title) && normalized(card.author)===normalized(candidate.author));
-   if(hit)return hit;
-   if(screen<maxScreen){
-    if(sourceKind==='keyword')await phone('search-grid-scroll',`${eid}-scroll${screen}`,'up');
-    else await phone('swipe','600','2000','600','900','1000');
-    await pause(2);
-   }
-  }
-  throw new Error('当前位置扫描找不到候选的标题和作者');
- }
- async function write_videos() {
-  if(!state.dedup_complete) throw new Error('必须先执行过滤去重');
-  if(state.write_complete)return {counts:{...state.counts},videos:[...state.persisted],failures:[...state.failures],known_gaps:[...state.known_gaps]};
-  const started=Date.now(),seenIds=new Set();
-  for(const [index,candidate] of state.kept.entries()) {
-   if(state.counts.persisted>=limit){state.counts.limit_skipped=state.kept.length-index;break;}
-   checkBoundary(started);
-   state.counts.attempted++;const eid=`${run}-candidate${index+1}`;
-   let hit;
-   try {hit=await locate(candidate,eid,started);} catch(error){failed(candidate,'position_unconfirmed',error);continue;}
-   try {await phone('tap-evidence',String(hit.x),String(hit.y),`${eid}-open`);await pause(3);state.counts.opened++;}catch(error){failed(candidate,'open_failed',error);continue;}
-   let output;
-   try {output=await phone('current-video-link',`${eid}-link`);}catch(error){failed(candidate,'link_failed',error);continue;}
-   const parsed=fieldsOf(output),id=parsed.video_id,url=parsed.short_url||parsed.resolved_url;
-   if(parsed.content_type && parsed.content_type!=='video'){failed(candidate,'non_video','当前对象不是视频');continue;}
-   if(!/^\d{16,24}$/.test(id??'')||!validVideoUrl(url,id)){failed(candidate,'link_invalid','未取得实际视频ID和有效视频链接');continue;}
-   if(seenIds.has(id)){state.counts.duplicate++;continue;}seenIds.add(id);state.counts.linked++;
-   const video={videoId:id,videoUrl:url,title:candidate.title,keyword:candidate.keyword,author:candidate.author,harvestBatch:run};
-   let receipt;
-   try {receipt=await queue('discover',{video});}catch(error){failed(candidate,'persistence_failed',error);continue;}
-   const status=receipt?.status??receipt?.judgment_status;
-   if(!['pending','matched','rejected'].includes(status)){failed(candidate,'persistence_failed',receipt?.error||'PG未返回实际状态回执');continue;}
-   state.persisted.push({...video,status});state.counts.persisted++;writeProgress();
-  }
-  state.write_complete=true;
-  writeProgress();
-  return {counts:{...state.counts},videos:[...state.persisted],failures:[...state.failures],known_gaps:[...state.known_gaps]};
- }
- return {source,dedup,write_videos,state};
+ return {source,write_videos,state};
 }
