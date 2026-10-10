@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import tarfile
 
-FILES = ['runner.py', 'collector.py', 'dispatch.py', 'preflight.py', 'publish.mjs', 'ocr.swift', 'SKILL.md']
+FILES = ['runner.py', 'collector.py', 'dispatch.py', 'preflight.py', 'publish.mjs', 'ocr.swift', 'SKILL.md', 'mirror.mjs']
 
 
 def validate_config(config):
@@ -72,6 +72,11 @@ def main():
     verification = 'import pathlib,json,hashlib; p=pathlib.Path(' + repr(remote_release) + '); m=json.loads((p/"deployment.json").read_text()); h={n:hashlib.sha256((p/n).read_bytes()).hexdigest() for n in m["sha256"]}; print(json.dumps({"ok":h==m["sha256"],"source_revision":m["source_revision"],"sha256":h}))'
     proof = json.loads(subprocess.check_output(ssh + ['/opt/homebrew/bin/python3 -c ' + shlex.quote(verification)], text=True))
     verify_remote_proof(manifest, proof)
+    # 沿用既有设备镜子的执行器与定时，不新增服务；镜子源码也落Git固定release。
+    mirror_target = state.parent / 'phone-task-view/mirror.mjs'
+    if not mirror_target.parent.is_dir():
+        raise ValueError('既有设备镜子执行器缺失，不能冒称页面已接通')
+    mirror_target.write_bytes((release / 'mirror.mjs').read_bytes())
     (state / 'deployment-current.json').write_text(json.dumps({'release': str(release), **manifest}, ensure_ascii=False, indent=2))
     print(json.dumps({'local_release': str(release), 'remote_release': remote_release, 'source_revision': revision}, ensure_ascii=False))
 

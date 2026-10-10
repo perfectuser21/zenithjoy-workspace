@@ -21,7 +21,7 @@ async function mirrorAccountBody(page,snapshot,token,cache) {
   const rt=s=>[{type:'text',text:{content:String(s??'').slice(0,1700)}}];
   const label=s=>s?new Date(s).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'尚未确认';
   const recent=Date.parse(snapshot.checked_at)>Date.now()-36*3600000;
-  const paragraph=`${snapshot.schedule_status==='paused'?'周期任务已注册，当前停用，待接入统一调度。原执行器：MMV触发，M4 Python脚本执行；OpenClaw尚未接管。':'每日09:00（北京时间）自动巡查。'}设备在线状态由设备镜子维护；账号登录以此表为准。${recent?'':'⚠ 巡查已超过36小时，请检查维护任务。'}本轮：${label(snapshot.checked_at)}。待确认、检测失败、占用或离线时，保留上次身份，不代表仍在登录。`;
+  const paragraph=`${snapshot.schedule_status==='active'?'中央计划已启用：':'中央计划已注册，当前暂停：'}${snapshot.schedule??'计划时间待核对'}。中央Brain定时、MMV代码启动、M4实机检查；维护负责人：${snapshot.maintenance_owner??'主理人'}。设备在线状态由设备镜子维护；账号登录以此表为准。${recent?'':'⚠ 巡查已超过36小时，请检查维护任务。'}本轮：${label(snapshot.checked_at)}。待确认、检测失败、占用或离线时，保留上次身份，不代表仍在登录。`;
   const cells=[['平台','安装','本次状态','账号（最近确认）','本次检查','身份确认']];
   for(const p of ['抖音','小红书','微信','视频号','快手','今日头条','知乎','微博','B站']){
     const o=snapshot.results?.[p]??{},v=o.last_verified;

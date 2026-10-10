@@ -19,7 +19,7 @@ test('手机Activity：部署指纹、前台保护、本人身份、独立回执
  assert.match(output,/test_watchdog_requires_execution_not_schedule_creation/);
 });
 test('账号写回Activity：保留历史身份、人工覆盖和真实核验时间',()=>{
- const output=checked('node',['--test','test_publish.mjs']);
- assert.match(output,/tests 3/);
+ const output=checked('node',['--test','test_publish.mjs','test_mirror.mjs']);
+ assert.match(output,/tests 5/);
  assert.match(output,/fail 0/);
 });

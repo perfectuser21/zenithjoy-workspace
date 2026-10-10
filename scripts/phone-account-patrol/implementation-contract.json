@@ -34,7 +34,8 @@
           "key": "account-ledger-writeback",
           "name": "汇总并写回账号台账",
           "bindings": [
-            "scripts/phone-account-patrol/publish.mjs"
+            "scripts/phone-account-patrol/publish.mjs",
+            "scripts/phone-account-patrol/mirror.mjs"
           ],
           "assertion_ref": "node --test scripts/phone-account-patrol/implementation-regression.test.mjs"
         },
@@ -93,7 +94,8 @@
     "scripts/phone-account-patrol/RUNBOOK.md",
     "scripts/phone-account-patrol/test_deploy.py",
     "scripts/phone-account-patrol/test_runtime_safety.py",
-    "scripts/phone-account-patrol/test_publish.mjs"
+    "scripts/phone-account-patrol/test_publish.mjs",
+    "scripts/phone-account-patrol/test_mirror.mjs"
   ],
   "maintenance_owner": "主理人",
   "schedule": {
