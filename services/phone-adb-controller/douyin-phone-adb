@@ -543,8 +543,9 @@ _leave_scratch_route() {
       print -u2 -- "leave-scratch: left scratch search route; results restoration still required"
       return 0
     fi
-    # 退回原详情页后视频自动续播，HONOR 上 uiautomator 永不 idle——0930 真机三波连读都只有
-    # 13 个骨架节点。与 _current_video_link_once 入口同一招：先用MEDIA_PAUSE暂停再取证；核验通过
+    # 退回原详情页后视频可能自动续播，先用 MEDIA_PAUSE 暂停再取证。
+    # 13 节点可能是复制成功提示层，也可能是其他非详情树；必须按新鲜树核验，不能按节点数认定。
+    # 与 _current_video_link_once 入口保持相同暂停策略；核验通过后用
     # MEDIA_PLAY恢复播放，让下游（倍速/录制）看到的状态与以前 deep link 重开后一致。
     # 暂停只能改变媒体状态；视频中央可能是可点击的广告/资料卡，不能用坐标点击。
     "$ADB" -s "$SERIAL" shell input keyevent 127 >/dev/null 2>&1 || return 1
