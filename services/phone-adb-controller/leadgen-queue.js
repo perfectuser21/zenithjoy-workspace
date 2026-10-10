@@ -49,7 +49,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     if (result.rowCount !== 1) throw Error('视频租约已失效');
     return { renewed: op === 'renew_video', released: op === 'release_video' };
   }
-  if (op === 'collect') {
+  if (op === 'collect' || op === 'collect_partial') {
     return transaction(pool, async client => {
       const owned = await client.query(`SELECT video_id,judgment_status FROM zenithjoy.leadgen_videos
         WHERE line_key=$1 AND video_id=$2 AND process_status=$3 FOR UPDATE`, [lineKey, input.video_id, `处理中:${run}`]);
@@ -60,6 +60,8 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         const result = await db.upsertComment(client, { ...comment, lineKey, harvestBatch: run });
         if (result.inserted) inserted++;
       }
+      // 软预算只提交已核验评论；视频保持租约，交清场释放，不伪造“评论已采”。
+      if (op === 'collect_partial') return { inserted, comments: (input.comments || []).length, video_id: input.video_id, status: 'partial' };
       const result = await db.markVideoCollected(client, { lineKey, videoId: input.video_id, commentCount: (input.comments || []).length });
       if (!result.updated) throw Error('评论已写但视频完成状态未确认');
       return { inserted, comments: (input.comments || []).length, video_id: input.video_id };

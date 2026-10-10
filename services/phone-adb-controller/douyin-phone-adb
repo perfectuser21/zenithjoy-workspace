@@ -3118,6 +3118,9 @@ case "$command" in
       [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] && { ov_fg=1; break }
     done
     (( ov_fg )) || die "Douyin did not come to foreground after the detail deeplink" WRONG_FOREGROUND
+    # 深链打开后会自动播放；先幂等暂停，避免每次名片归位都等动态页idle重试。
+    "$ADB" -s "$SERIAL" shell input keyevent 127 || die "MEDIA_PAUSE_FAILED"
+    wait_ms 600
     foreground_gate "$3-gate"
     ov_g=0; _on_video_detail "$3-openvideo" || ov_g=$?
     if (( ov_g == 2 )); then
@@ -3133,6 +3136,7 @@ case "$command" in
     ov_cc_xml="$EVIDENCE_ROOT/$3-openvideo-w1.xml"
     [[ -s "$EVIDENCE_ROOT/$3-openvideo-w2-w1.xml" ]] && ov_cc_xml="$EVIDENCE_ROOT/$3-openvideo-w2-w1.xml"
     ov_cc="$(/usr/bin/grep -oE 'content-desc="评论[0-9][^，"]*，按钮"' "$ov_cc_xml" 2>/dev/null | /usr/bin/head -1 | /usr/bin/sed -E 's/.*评论([0-9][^，"]*)，按钮.*/\1/' || true)"
+    "$ADB" -s "$SERIAL" shell input keyevent 126 || die "MEDIA_PLAY_FAILED"
     print -- "video_opened=1"
     print -- "video_id=$ov_id"
     print -- "comment_count=${ov_cc:-0}"
