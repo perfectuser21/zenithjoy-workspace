@@ -160,3 +160,6 @@ b1221a58be60b2a2173215535ef6a47e8f38e132:apps/api/src/routes/walking-skeleton.te
 # fingerprint 忽略。真实的微信 APIv3 密钥走 ~/.credentials/wechat-pay.env，
 # 私钥走 secrets 卷挂载的 PEM 文件，均不入库（见 provider-registry.ts 文件头）。
 628bf451d94ca9274aaff970b6a59647284fb7b8:docs/superpowers/plans/2026-09-22-credits-recharge-payment.md:generic-api-key:1891
+
+# phone-patrol deploy测试：公开已注册Workflow UUID（非API凭据），仅豁免历史单行误报
+0c261e463550d31c98106484ff0b14a3f970dedd:scripts/phone-account-patrol/test_deploy.py:generic-api-key:7

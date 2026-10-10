@@ -1,0 +1,32 @@
+name: Phone Account Patrol
+on:
+  pull_request:
+    paths:
+      - 'scripts/phone-account-patrol/**'
+      - '.github/workflows/phone-account-patrol.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/phone-account-patrol/**'
+      - '.github/workflows/phone-account-patrol.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 巡查合同与身份误判回归
+        run: python -m unittest discover -s scripts/phone-account-patrol -p 'test_*.py'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Activity源码与真实回归入口
+        run: node --test scripts/phone-account-patrol/implementation-regression.test.mjs
+      - name: 语法检查
+        run: python -m compileall -q scripts/phone-account-patrol

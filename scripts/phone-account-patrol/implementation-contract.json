@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "scope": "cecelia-device-patrol",
+  "capability_id": "2173a385-a743-41f3-bb7d-d0e4b1d51d4e",
+  "workflows": [
+    {
+      "id": "66fe22f5-1a60-4e23-bcfb-7b4df2f0fbff",
+      "key": "single-phone-account-patrol",
+      "name": "单手机八平台当前账号巡查",
+      "activities": [
+        {
+          "id": "d51eefa1-0ffd-43d7-94ba-16ff6b4d3800",
+          "key": "device-readiness",
+          "name": "检查设备连接、占用与原生锁",
+          "bindings": [
+            "scripts/phone-account-patrol/dispatch.py",
+            "scripts/phone-account-patrol/preflight.py",
+            "scripts/phone-account-patrol/deploy.py"
+          ],
+          "assertion_ref": "node --test scripts/phone-account-patrol/implementation-regression.test.mjs"
+        },
+        {
+          "id": "1553eb1f-fff3-4d27-8826-d232f82fd04b",
+          "key": "platform-current-accounts",
+          "name": "逐平台检查当前账号",
+          "bindings": [
+            "scripts/phone-account-patrol/collector.py",
+            "scripts/phone-account-patrol/ocr.swift"
+          ],
+          "assertion_ref": "node --test scripts/phone-account-patrol/implementation-regression.test.mjs"
+        },
+        {
+          "id": "9978b2c6-7466-4d9a-84a0-020c4bd4a28c",
+          "key": "account-ledger-writeback",
+          "name": "汇总并写回账号台账",
+          "bindings": [
+            "scripts/phone-account-patrol/publish.mjs",
+            "scripts/phone-account-patrol/mirror.mjs"
+          ],
+          "assertion_ref": "node --test scripts/phone-account-patrol/implementation-regression.test.mjs"
+        },
+        {
+          "id": "a2b3fe4f-9533-4135-a783-13512719490a",
+          "key": "phone-run-receipt",
+          "name": "记录单手机结果与证据",
+          "bindings": [
+            "scripts/phone-account-patrol/runner.py"
+          ],
+          "assertion_ref": "node --test scripts/phone-account-patrol/implementation-regression.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "7dfd3b5d-bc5a-4d96-b744-10d26bc7eb70",
+      "key": "phone-account-patrol-batch",
+      "name": "手机账号巡查批次派发",
+      "activities": [
+        {
+          "id": "b33c9f29-5c5f-4fb1-908c-475bb9566085",
+          "key": "enabled-phone-list",
+          "name": "读取启用手机清单",
+          "bindings": [
+            "scripts/phone-account-patrol/runner.py"
+          ],
+          "assertion_ref": "node --test scripts/phone-account-patrol/implementation-regression.test.mjs"
+        },
+        {
+          "id": "3d1809d6-a6c9-4ba1-a99c-ef4630502c71",
+          "key": "enqueue-phone-patrol",
+          "name": "逐手机登记单手机巡查",
+          "bindings": [
+            "scripts/phone-account-patrol/runner.py"
+          ],
+          "assertion_ref": "node --test scripts/phone-account-patrol/implementation-regression.test.mjs"
+        },
+        {
+          "id": "e545c791-957f-4bb7-8b4d-47f964f2a7c3",
+          "key": "batch-queue-receipt",
+          "name": "保存批次排队回执",
+          "bindings": [
+            "scripts/phone-account-patrol/runner.py"
+          ],
+          "assertion_ref": "node --test scripts/phone-account-patrol/implementation-regression.test.mjs"
+        }
+      ]
+    }
+  ],
+  "auxiliary_paths": [
+    "scripts/phone-account-patrol/implementation-contract.json",
+    "scripts/phone-account-patrol/implementation-regression.test.mjs",
+    "scripts/phone-account-patrol/test_runner.py",
+    "scripts/phone-account-patrol/test_identity.py",
+    "scripts/phone-account-patrol/SKILL.md",
+    "scripts/phone-account-patrol/RUNBOOK.md",
+    "scripts/phone-account-patrol/test_deploy.py",
+    "scripts/phone-account-patrol/test_runtime_safety.py",
+    "scripts/phone-account-patrol/test_publish.mjs",
+    "scripts/phone-account-patrol/test_mirror.mjs"
+  ],
+  "maintenance_owner": "主理人",
+  "schedule": {
+    "time": "22:00",
+    "timezone": "Asia/Shanghai"
+  }
+}

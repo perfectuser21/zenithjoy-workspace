@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import YAML from 'yaml';
 
 const path = new URL('../../../.github/workflows/implementation-impact.yml', import.meta.url);
-const fixedRevision = '5a86ca0e120111d29f077de2f2bfe3eb00a72bb5';
+const fixedRevision = '68ee3bd092ad6c0d765d26b64799529fe4a0f773';
 function workflow() {
   assert.ok(existsSync(path), '必须存在真实跨仓 implementation-impact caller');
   return YAML.parse(readFileSync(path, 'utf8'));
@@ -14,7 +14,7 @@ test('implementation-impact 以固定提交调用受信工具，两个仓库身�
   assert.equal(job.uses, `perfectuser21/cecelia/.github/workflows/implementation-impact.yml@${fixedRevision}`);
   assert.equal(job.with.tooling_revision, fixedRevision);
   assert.equal(job.with.source_repo, 'perfectuser21/zenithjoy-workspace');
-  assert.equal(job.with.scope, 'zenithjoy');
+  assert.equal(job.with.scope, 'cecelia-device-patrol');
   assert.deepEqual(Object.keys(job.with).sort(), ['source_repo', 'scope', 'base_revision', 'head_revision', 'mode', 'tooling_revision'].sort());
 });
 test('PR 使用真实 base/head 而非合并伪提交，main 与手动运行输入明确', () => {
@@ -28,13 +28,14 @@ test('PR 使用真实 base/head 而非合并伪提交，main 与手动运行输�
   assert.equal(job.with.mode, "${{ github.event_name == 'pull_request' && 'pr' || 'main' }}");
   assert.equal(config.on.pull_request_target, undefined);
 });
-test('只传约定三项 secrets，artifact 来源校验所需工作流路径和读权限保持稳定', () => {
+test('只传约定认证和独立只读来源 token，artifact 来源校验路径和权限保持稳定', () => {
   const config = workflow(), job = config.jobs.impact;
   assert.deepEqual(config.permissions, { contents: 'read', actions: 'read' });
   assert.deepEqual(job.secrets, {
     TS_AUTHKEY: '${{ secrets.TS_AUTHKEY }}',
     CECELIA_INTERNAL_TOKEN: '${{ secrets.CECELIA_INTERNAL_TOKEN }}',
     BRAIN_DEPLOY_URL: '${{ secrets.BRAIN_DEPLOY_URL }}',
+    CECELIA_ACTIONS_READ_TOKEN: '${{ secrets.CECELIA_ACTIONS_READ_TOKEN }}',
   });
   assert.equal(path.pathname.endsWith('/.github/workflows/implementation-impact.yml'), true);
   assert.equal(config.concurrency, undefined, '并发组仅由受信callee控制，防止嵌套调用自行取消');
