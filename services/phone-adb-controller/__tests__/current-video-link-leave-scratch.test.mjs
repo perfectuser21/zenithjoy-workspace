@@ -136,7 +136,7 @@ case "$*" in
 esac
 exit 0
 `, { mode: 0o755 });
-  const env = { ...process.env, HOME: dir, DOUYIN_PHONE_REGISTRY: reg, DOUYIN_ADB_BIN: adb, DOUYIN_CURL_BIN: curl, DOUYIN_SIPS_BIN: '/usr/bin/true', DOUYIN_PHONE_TMP_ROOT: join(dir, 'tmp') };
+  const env = { ...process.env, HOME: dir, DOUYIN_PHONE_REGISTRY: reg, DOUYIN_ADB_BIN: adb, DOUYIN_CURL_BIN: curl, DOUYIN_PYTHON_BIN: 'python3', DOUYIN_SIPS_BIN: '/usr/bin/true', DOUYIN_PHONE_TMP_ROOT: join(dir, 'tmp') };
   const run = (args) => {
     const r = spawnSync('zsh', [SCRIPT, '--profile', 'legacy', ...args], { env, encoding: 'utf8', timeout: 180000 });
     return { code: r.status, out: (r.stdout || '').trim(), err: (r.stderr || '').trim() };
