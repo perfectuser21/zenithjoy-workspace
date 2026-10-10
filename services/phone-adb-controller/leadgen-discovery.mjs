@@ -53,8 +53,7 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
      boundary();if(page.loading){page=await nextPage(ctx,{cards:[]},run+'-src'+ctx.sourceIndex+'-initial');if(!page){stopReason='stalled';break sourceLoop;}}
      state.counts.screens++;state.counts.cards+=page.cards.length;
      // 只枚举这一屏的卡片槽位；不按全局标题过滤，同标题不同视频都取真实ID。
-     const targets=page.cards.map((c,i,a)=>({...c,ordinal:a.slice(0,i).filter(x=>identity(x)===identity(c)).length}));
-     const slots=new Set(targets.map(c=>JSON.stringify([identity(c),c.ordinal])));
+     const targets=page.cards.map((c,i,a)=>({...c,revealEligible:true,ordinal:a.slice(0,i).filter(x=>identity(x)===identity(c)).length}));
      for(const target of targets){
       if(limit&&state.counts.persisted>=limit){stopReason='limit_reached';break sourceLoop;}
       if(state.counts.persisted>=1000){stopReason='manifest_limit';break sourceLoop;}
@@ -71,17 +70,24 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
          if(!fresh.loading){
           // 短滑改变本页视口，新完整槽位必须先处理；只记本页identity+ordinal，绝不全局按标题去重。
           page=fresh;
-          const exposed=fresh.cards.map((c,i,a)=>({...c,ordinal:a.slice(0,i).filter(x=>identity(x)===identity(c)).length}));
-          for(const c of exposed){
-           // 当前恢复目标同标题但元数据冲突，不能改名为新槽绕过原身份拒绝；原目标会留下裁切gap。
-           if(!hit&&normalized(c.title)===normalized(target.title)&&identity(c)!==identity(target))continue;
-           const key=JSON.stringify([identity(c),c.ordinal]);if(!slots.has(key)){slots.add(key);targets.push(c);state.counts.cards++;}}
+          if(!revealReceipt.enumerated){
+           // 视口改变后旧ordinal不是新卡ID。除本次已定位的具体fresh槽外，全部完整槽再取真实VID。
+           revealReceipt.enumerated=true;
+           const hitIndex=fresh.cards.indexOf(hit);
+           const exposed=fresh.cards.map((c,i,a)=>({...c,revealEligible:false,ordinal:a.slice(0,i).filter(x=>identity(x)===identity(c)).length}));
+           for(let i=0;i<exposed.length;i++){
+            const c=exposed[i];if(i===hitIndex)continue;
+            // 当前目标元数据冲突不改名绕过拒绝；原目标仍留下真实gap。
+            if(!hit&&normalized(c.title)===normalized(target.title)&&identity(c)!==identity(target))continue;
+            targets.push(c);state.counts.cards++;
+           }
+          }
          }
          progress();
         }
         if(hit)break;
         // hint仅帮助露出屏底元数据；下一次读树仍要求原完整身份，不复用旧坐标。
-        if(!fresh.loading&&!revealed&&attempt<2&&targets.filter(c=>identity(c)===identity(target)).length===1){
+        if(!fresh.loading&&target.revealEligible!==false&&!revealed&&attempt<2&&targets.filter(c=>identity(c)===identity(target)).length===1){
          boundary();
          const hint=fieldsOf(await phone('card-bottom-hint-from-xml',fresh.evidence,encodeURIComponent(target.title),encodeURIComponent(target.author)));
          boundary();
