@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
+import {createHash} from 'node:crypto';
 import { mkdtempSync,writeFileSync,readFileSync,readdirSync,chmodSync,mkdirSync,existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join,resolve } from 'node:path';
@@ -54,13 +55,13 @@ test('大证据可使用60秒上传预算，整体剩余预算更小时必须收
  const {enqueue}=await import('../runtime-outbox.mjs');
  for(const [remaining,source] of [[120000,'workflow'],[2000,'workflow'],[0,'workflow'],[2000,'explicit']]){
   const dir=mkdtempSync(join(tmpdir(),'runtime-upload-budget-')),bin=join(dir,'bin'),trace=join(dir,'curl-timeout.json');mkdirSync(bin);
-  const curl=join(bin,'curl');writeFileSync(curl,'#!/usr/bin/env node\nconst fs=require("node:fs");const a=process.argv.slice(2);fs.writeFileSync(process.env.CURL_TRACE,JSON.stringify({maxTime:Number(a[a.indexOf("-m")+1])}));process.stdout.write("\\n200");');chmodSync(curl,0o700);
+  const curl=join(bin,'curl');writeFileSync(curl,'#!/usr/bin/env node\nconst fs=require("node:fs");const a=process.argv.slice(2),body=fs.readFileSync(0,"utf8");fs.writeFileSync(process.env.CURL_TRACE,JSON.stringify({maxTime:Number(a[a.indexOf("-m")+1]),stdin_sha256:require("node:crypto").createHash("sha256").update(body).digest("hex"),stdin_bytes:Buffer.byteLength(body),binary_stdin:a[a.indexOf("--data-binary")+1]==="@-"}));process.stdout.write("\\n200");');chmodSync(curl,0o700);
   const body=[{run_id:'large-real-evidence',occurrence_key:'original-key',evidence:{artifact:'x'.repeat(152352)}}];
   enqueue(dir,{key:'original-key',endpoint:'http://fixture.invalid/api/brain/spans',body});
   const result=await invoke({WFR_RUN_DIR:dir,BRAIN_INTERNAL_TOKEN:'fixture-token',PATH:bin+':'+process.env.PATH,CURL_TRACE:trace,...(source==='explicit'?{WFR_EVIDENCE_DEADLINE_MS:String(Date.now()+remaining)}:{WF_RUN_START_TS:String(Date.now()/1000-100),WF_RUN_MAX_SECONDS:String(100+remaining/1000)})},'flush');
   assert.equal(result.code,0,result.err);
   const event=JSON.parse(readFileSync(join(dir,'outbox',readdirSync(join(dir,'outbox'))[0])));assert.deepEqual(event.body,body);
   if(remaining===0){assert.equal(existsSync(trace),false);assert.equal(event.state,'pending');assert.match(result.out,/WFR_EVIDENCE_STATUS=pending/);}
-  else{const timing=JSON.parse(readFileSync(trace));assert.ok(timing.maxTime<=60);if(remaining===120000)assert.ok(timing.maxTime>8,'大证据不能仍限制8秒');else assert.ok(timing.maxTime<=2,'上传不得超出整轮余量');assert.equal(event.state,'sent');}
+  else{const timing=JSON.parse(readFileSync(trace));assert.equal(timing.binary_stdin,true);assert.equal(timing.stdin_sha256,createHash('sha256').update(JSON.stringify(body)).digest('hex'));assert.ok(timing.stdin_bytes>152352);assert.ok(timing.maxTime<=60);if(remaining===120000)assert.ok(timing.maxTime>8,'大证据不能仍限制8秒');else assert.ok(timing.maxTime<=2,'上传不得超出整轮余量');assert.equal(event.state,'sent');}
  }
 });

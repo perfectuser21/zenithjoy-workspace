@@ -39,7 +39,7 @@ export function send(event,{deadline=deliveryDeadline()}={}){
   const remaining=(deadline-Date.now())/1000;
   if(remaining<=0)return 0;
   const maxTime=String(Math.min(60,remaining));
-  const output=execFileSync('curl',['-s','--connect-timeout','3','-m',maxTime,'-w','\n%{http_code}','-X','POST',event.endpoint,'-H',`Authorization: Bearer ${e.BRAIN_INTERNAL_TOKEN}`,'-H','Content-Type: application/json','-d',JSON.stringify(event.body)],{encoding:'utf8'});
+  const output=execFileSync('curl',['-s','--connect-timeout','3','-m',maxTime,'-w','\n%{http_code}','-X','POST',event.endpoint,'-H',`Authorization: Bearer ${e.BRAIN_INTERNAL_TOKEN}`,'-H','Content-Type: application/json','--data-binary','@-'],{encoding:'utf8',input:JSON.stringify(event.body)});
   return Number(output.trim().split('\n').at(-1));
 }
 async function flushReceipts(dir){const deadline=deliveryDeadline();const status=await flush(dir,{send:event=>send(event,{deadline}),limit:Math.max(1,Math.min(20,Number(e.WFR_OUTBOX_LIMIT)||3))});if(status.pending||status.blocked)process.stderr.write(`WFR_WARN span/callback evidence pending=${status.pending} blocked=${status.blocked}\n`);return status;}
