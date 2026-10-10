@@ -13,10 +13,12 @@ node --test --test-name-pattern='原候选|出现消失候选|真实workflow包�
  services/phone-adb-controller/__tests__/runtime-receipts.test.mjs \
  services/phone-adb-controller/__tests__/current-video-link-leave-scratch.test.mjs
 node --test scripts/product-map/__tests__/leadgen-split-contracts.test.js \
+ services/phone-adb-controller/__tests__/video-card-optional-fields.test.mjs \
  services/phone-adb-controller/__tests__/split-workflows.test.mjs \
  services/phone-adb-controller/__tests__/wf-run-retired.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-workflow.test.mjs \
  services/phone-adb-controller/__tests__/open-video-playing-page.test.mjs \
+ services/phone-adb-controller/__tests__/continuous-identity.test.mjs \
  services/phone-adb-controller/__tests__/queued-video-budget-progress.test.mjs \
  services/phone-adb-controller/__tests__/commander-workflow-progress.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-client.test.mjs \

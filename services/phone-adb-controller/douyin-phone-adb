@@ -49,6 +49,20 @@ if [[ "${1:-}" == --lock-owner ]]; then
   shift 2
 fi
 
+# 队列身份核验的局部播放策略；未知值或出口组合在任何设备动作前拒绝。
+# 不接收旧截图/期望ID作为详情证明，各阶段仍读取新鲜分享按钮与实际复制链接。
+DETAIL_PLAYBACK="${DOUYIN_DETAIL_PLAYBACK:-standard}"
+case "$DETAIL_PLAYBACK" in
+  standard) ;;
+  continuous_identity)
+    case "$1" in
+      open-video) [[ "$#" == 3 ]] || die 'CONTINUOUS_IDENTITY_INVALID_COMMAND';;
+      current-video-link) [[ "$#" == 2 ]] || die 'CONTINUOUS_IDENTITY_RESULTS_NOT_ALLOWED';;
+      *) die 'CONTINUOUS_IDENTITY_INVALID_COMMAND';;
+    esac;;
+  *) die 'UNKNOWN_DETAIL_PLAYBACK_MODE';;
+esac
+
 [[ -r "$REGISTRY" ]] || die "phone profile registry is not readable"
 # registry 按列名解析，v1(5列无表头) 与 v2(带表头,列可增) 双兼容。
 # 不按位置读：shell 的 read 会把多余列全挤进最后一个变量，registry 一加列
@@ -493,7 +507,9 @@ _on_video_detail() {
 # 退过头把原详情页也退掉；核验用入口同一把尺子 _is_video_detail_xml（分享按钮在、搜索框里
 # 没有分享文案）。退到位返回 0；退飞/树读不到/超过上限返回 1，由调用方 deep link 重开兜底。
 _leave_scratch_route() {
-  local eid="$1" i fg xml
+  local eid="$1" mode="${2:-detail}" i fg xml
+  # results-only仅交还导航；不能据此宣称关键词/视频tab归位成功。
+  case "$mode" in detail|detail-paused|results-only) ;; *) print -u2 -- "leave-scratch: unknown mode ($mode)"; return 2 ;; esac
   require_evidence_id "$eid"
   for i in {1..5}; do
     "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1 || true
@@ -501,6 +517,11 @@ _leave_scratch_route() {
     fg="$(foreground_package)"
     [[ "$fg" == *"$DOUYIN_PACKAGE"* ]] || { print -u2 -- "leave-scratch: left Douyin after $i backs (fg=$fg)"; return 1 }
     [[ "$fg" == *"$SEARCH_RESULT_ACTIVITY"* ]] && continue
+    # keyword出口的真实ID已验收；下游只需回结果页，不读详情树或改变播放。
+    if [[ "$mode" == results-only ]]; then
+      print -u2 -- "leave-scratch: left scratch search route; results restoration still required"
+      return 0
+    fi
     # 退回原详情页后视频自动续播，HONOR 上 uiautomator 永不 idle——0930 真机三波连读都只有
     # 13 个骨架节点。与 _current_video_link_once 入口同一招：先用MEDIA_PAUSE暂停再取证；核验通过
     # MEDIA_PLAY恢复播放，让下游（倍速/录制）看到的状态与以前 deep link 重开后一致。
@@ -513,9 +534,11 @@ _leave_scratch_route() {
       if _ui_evidence_wave "${eid}-b${i}w${w}" >/dev/null 2>&1 && _is_video_detail_xml "$xml"; then
         print -u2 -- "leave-scratch: back on the original video detail page after $i backs (wave $w)"
         # 下游倍速/录制需要播放。MEDIA_PLAY幂等恢复，不依赖按钮文案推断，也不触发页面点击。
-        "$ADB" -s "$SERIAL" shell input keyevent 126 >/dev/null 2>&1 || return 1
-        wait_ms 300
-        print -u2 -- "leave-scratch: resumed playback with MEDIA_PLAY"
+        if [[ "$mode" == detail ]]; then
+          "$ADB" -s "$SERIAL" shell input keyevent 126 >/dev/null 2>&1 || return 1
+          wait_ms 300
+          print -u2 -- "leave-scratch: resumed playback with MEDIA_PLAY"
+        fi
         return 0
       fi
       (( w < 3 )) && wait_ms 1200
@@ -542,6 +565,10 @@ current_video_link() {
   for i in {1..$tries}; do
     if ( _current_video_link_once "${eid}-t${i}" "$return_keyword" ); then return 0; else rc=$?; fi
     print -u2 -- "warning: current-video-link attempt $i/$tries failed (rc=$rc); recovering to detail page"
+    # keyword结果出口退到外部时，不让外层重试再按两次BACK破坏外部栈。
+    if [[ -n "$return_keyword" && "$(foreground_package)" != *"$DOUYIN_PACKAGE"* ]]; then
+      die "Douyin left foreground before keyword link retry recovery" WRONG_FOREGROUND
+    fi
     # 回退到详情页干净态：连按返回收掉可能半开的分享面板/临时搜索框
     "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1
     wait_ms 600
@@ -599,7 +626,9 @@ seed_clipboard_nonce() {
       fi
     fi
   done
-  _leave_scratch_route "${eid}-seed-leave" || die "CLIPBOARD_NONCE_ORIGINAL_DETAIL_UNVERIFIED"
+  local leave_mode=detail
+  [[ "${DETAIL_PLAYBACK:-standard}" != continuous_identity ]] || leave_mode=detail-paused
+  _leave_scratch_route "${eid}-seed-leave" "$leave_mode" || die "CLIPBOARD_NONCE_ORIGINAL_DETAIL_UNVERIFIED"
   print -- "$nonce"
 }
 
@@ -792,8 +821,10 @@ _current_video_link_once() {
   if [[ -n "$return_keyword" ]]; then
     # 先退出已核验的暂存路线，避免逐层反复dump暂存页；失败仍走原有界归位。
     # 原词、视频tab与returned-grid最终核验保持不变，不能凭退出成功推断已归位。
-    _leave_scratch_route "${evidence_id}-leave" >/dev/null \
+    _leave_scratch_route "${evidence_id}-leave" results-only >/dev/null \
       || print -u2 -- "warning: scratch exit not verified; using bounded results restoration"
+    # 外部前台不能继续盲退栈；暂存仍在抖音时才用原有界恢复。
+    [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "LINK_RESULTS_WRONG_FOREGROUND"
     return_result="$(back_to_results 10 "$return_keyword" "${evidence_id}-results")" || die "LINK_RESULTS_RESTORE_FAILED"
     return_xml="$(ui_evidence "${evidence_id}-returned-grid")" || die "LINK_RESULTS_TREE_UNAVAILABLE"
     _search_kw_matches "$return_keyword" "$return_xml" || die "LINK_RESULTS_KEYWORD_MISMATCH"
@@ -816,13 +847,18 @@ _current_video_link_once() {
     # 采完评论 back_to_results 按 4 次返回全落在暂存页（搜索框里是分享文案不是关键词），
     # 只能走 1.5-3 分钟的兜底重搜：cmd09300230 批 134/134，%C&A=0。
     # 先按返回退出暂存路线、回到打开它之前的那张详情页（同一把尺子核验）；退不回去才重开。
-    if _leave_scratch_route "${evidence_id}-leave"; then
+    local final_leave_mode=detail
+    [[ "${DETAIL_PLAYBACK:-standard}" != continuous_identity ]] || final_leave_mode=detail-paused
+    if _leave_scratch_route "${evidence_id}-leave" "$final_leave_mode"; then
       _vr_ok=1
     else
       print -u2 -- "warning: could not back out of the scratch route onto the original video detail page; falling back to deep link reopen"
     fi
     (( _vr_ok )) || for _vr_try in 1 2; do
       "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "$reopen_url" >/dev/null
+      if [[ "${DETAIL_PLAYBACK:-standard}" == continuous_identity ]]; then
+        "$ADB" -s "$SERIAL" shell input keyevent 127 >/dev/null || die "MEDIA_PAUSE_FAILED"
+      fi
       for _vr_poll in 1 2 3; do
         wait_ms 900
         _vr_fg="$(foreground_package)"
@@ -843,6 +879,10 @@ _current_video_link_once() {
       "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1 || true
       wait_ms 1200
       die "deep link did not restore the video detail page (fg=${_vr_fg}); recovered with back" WRONG_FOREGROUND
+    fi
+    # 只有实际链接已解析且严格详情归位通过后才恢复播放；录音仍看到原有播放状态。
+    if [[ "${DETAIL_PLAYBACK:-standard}" == continuous_identity ]]; then
+      "$ADB" -s "$SERIAL" shell input keyevent 126 >/dev/null || die "MEDIA_PLAY_FAILED"
     fi
   else
     # The scratch search field still has keyboard focus. First back hides the
@@ -2450,18 +2490,25 @@ comments_exhausted() {
 # 输出每行：x<TAB>y<TAB>时长<TAB>标题<TAB>作者（x,y = 标题中心，可直接 tap 进入视频）。
 # 作者（10-08 发现改造补，点开前去重用）：标题正下方 60px 内、落在标题水平范围里最靠左的文字，
 # 排除点赞数/发布日期（真机网格：头像右侧昵称，下一行日期，右侧点赞数）。读不到留空。
+# 卡片元数据均可缺省；只归一grep的无匹配(1)，读取/表达式错误(2)必须保留。
+_video_card_optional_nodes() {
+  local rc=0
+  /usr/bin/grep -oE "$1" "$2" || rc=$?
+  (( rc == 0 || rc == 1 )) && return 0
+  return "$rc"
+}
 video_cards_from_xml() {
   local xml="$1" line b t x1 y1 x2 y2 lx1 ly1 lx2 ly2 dx1 dy1 dx2 dy2 dt matched dur ax1 ay1 ax2 ay2 at author ax
   [[ -r "$xml" ]] || return 1
   local likes_f="${TMPDIR:-/tmp}/.dpa-likes.$$" durs_f="${TMPDIR:-/tmp}/.dpa-durs.$$" texts_f="${TMPDIR:-/tmp}/.dpa-texts.$$"
-  /usr/bin/grep -oE '<node[^>]*text="[^"]+"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$xml" \
-  | /usr/bin/sed -E 's/.*text="([^"]*)".*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\2 \3 \4 \5 \1/' > "$texts_f"
-  /usr/bin/grep -oE '<node[^>]*content-desc="[^"]*喜欢[^"]*"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$xml" \
-  | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/' > "$likes_f"
+  _video_card_optional_nodes '<node[^>]*text="[^"]+"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$xml" \
+  | /usr/bin/sed -E 's/.*text="([^"]*)".*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\2 \3 \4 \5 \1/' > "$texts_f" || return $?
+  _video_card_optional_nodes '<node[^>]*content-desc="[^"]*喜欢[^"]*"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$xml" \
+  | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/' > "$likes_f" || return $?
   # 时长标签（形如 04:01），贴在缩略图右下角，即标题正上方。ASR 判定阶段靠它优先选短视频。
-  /usr/bin/grep -oE '<node[^>]*text="[0-9]{1,2}:[0-9]{2}"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$xml" \
-  | /usr/bin/sed -E 's/.*text="([^"]*)".*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4 \5/' > "$durs_f"
-  /usr/bin/grep -oE '<node[^>]*text="[^"]{8,}"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$xml" \
+  _video_card_optional_nodes '<node[^>]*text="[0-9]{1,2}:[0-9]{2}"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$xml" \
+  | /usr/bin/sed -E 's/.*text="([^"]*)".*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4 \5/' > "$durs_f" || return $?
+  _video_card_optional_nodes '<node[^>]*text="[^"]{8,}"[^>]*bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' "$xml" \
   | while IFS= read -r line; do
       t="$(print -- "$line" | /usr/bin/sed -E 's/.*text="([^"]*)".*/\1/')"
       b="$(print -- "$line" | /usr/bin/sed -E 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/')"
@@ -2486,7 +2533,7 @@ video_cards_from_xml() {
         author="$at"; ax=$ax1
       done < "$texts_f"
       print -- "$(( (x1 + x2) / 2 ))\t$(( (y1 + y2) / 2 ))\t${dur:-}\t$t\t$author"
-    done
+    done || return $?
   /bin/rm -f "$likes_f" "$durs_f" "$texts_f"
 }
 # ── 对标发现：打开对标主页 + 读主页作品网格（0929 对标链接获客·发现，决策 7f842d12）──
@@ -3623,7 +3670,9 @@ case "$command" in
     ov_cc_xml="$EVIDENCE_ROOT/$3-openvideo-w1.xml"
     [[ -s "$EVIDENCE_ROOT/$3-openvideo-w2-w1.xml" ]] && ov_cc_xml="$EVIDENCE_ROOT/$3-openvideo-w2-w1.xml"
     ov_cc="$(/usr/bin/grep -oE 'content-desc="评论[0-9][^，"]*，按钮"' "$ov_cc_xml" 2>/dev/null | /usr/bin/head -1 | /usr/bin/sed -E 's/.*评论([0-9][^，"]*)，按钮.*/\1/' || true)"
-    "$ADB" -s "$SERIAL" shell input keyevent 126 || die "MEDIA_PLAY_FAILED"
+    if [[ "$DETAIL_PLAYBACK" == standard ]]; then
+      "$ADB" -s "$SERIAL" shell input keyevent 126 || die "MEDIA_PLAY_FAILED"
+    fi
     print -- "video_opened=1"
     print -- "video_id=$ov_id"
     print -- "comment_count=${ov_cc:-0}"

@@ -7183,6 +7183,14 @@ agent_suite:
   product: AI员工
   note: "四独立获客流程代码回归；设备和业务PG用隔离夹具，真实运行另行验收"
 
+- id: leadgen-split-continuous-identity
+  path: services/phone-adb-controller/__tests__/continuous-identity.test.mjs
+  type: integration
+  ci: L3
+  status: active
+  product: AI员工
+  note: "真实队列shell与控制器、隔离假ADB；连续暂停、nonce读回、VID匹配、骨架拒绝、严格归位与录音恢复"
+
 - id: leadgen-split-video-link-network
   path: services/phone-adb-controller/__tests__/video-link-network.test.mjs
   type: unit
@@ -7198,3 +7206,19 @@ agent_suite:
   status: active
   product: AI员工
   note: "正式退役计划拒绝启动，设备与外部动作零调用"
+
+- id: keyword-return-route-smoke
+  path: .github/workflows/scripts/smoke/keyword-return-route-smoke.sh
+  type: smoke
+  ci: L4
+  status: active
+  product: AI员工
+  note: "GP-Anchor: line02/keyword_acquisition#step2；关键词真实CLI骨架归位与错误最终状态守卫，隔离假ADB不操作真机"
+
+- id: video-card-optional-fields
+  path: services/phone-adb-controller/__tests__/video-card-optional-fields.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "GP-Anchor: line02/keyword_acquisition#step2；原AI30真实零时长树、可选字段无匹配及grep2错误保留"
