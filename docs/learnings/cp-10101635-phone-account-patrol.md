@@ -15,4 +15,4 @@
 
 ### 本轮证据边界
 
-固定运行源 4f899cab6425341646e27c5fca20979b8ac42be7 已完成四台手机的中央手动运行和设备页九行读回。当前自动派发、正式 CI 发布和独立 Notion 代码运行记录仍在验收，不把手动证据记为自动上线。实时入口与最终验收见 scripts/phone-account-patrol/RUNBOOK.md 及项目 8386209b-ed0f-4f0f-a1f0-9ddf1bddbff6。
+固定运行源 4f899cab6425341646e27c5fca20979b8ac42be7 已完成四台手机的中央手动运行和设备页九行读回。独立 Notion 代码运行记录已通过正式投影上线，四台手机的 RunId、TaskId、成功状态和退出码已逐页读回。手动证据不能替代中央自动派发验收；正式 CI 发布、自动运行及计划启用须分别记录真实回执。实时状态与最终验收见 scripts/phone-account-patrol/RUNBOOK.md 及项目 8386209b-ed0f-4f0f-a1f0-9ddf1bddbff6。
