@@ -10,6 +10,8 @@ function fakePool(responses) {
   const client = {
     async query(sql, args) {
       calls.push({ sql, args });
+      const placeholders=[...sql.matchAll(/\$(\d+)/g)].map(m=>Number(m[1]));
+      assert.equal(args?.length||0,Math.max(0,...placeholders),"PG bind参数数必须与SQL最大placeholder一致");
       if (/^(BEGIN|COMMIT|ROLLBACK)$/.test(sql)) return { rows: [], rowCount: 0 };
       const response = responses.shift();
       if (response instanceof Error) throw response;
@@ -133,25 +135,25 @@ test('历史评论只读入口严格核本run租约、VID和唯一完整URL，�
  assert.equal(r.status,'verified');assert.equal(r.video_id,v);assert.equal(r.source_run,'source101');assert.deepEqual(r.rows,[{id,douyin_id:'person123',comment_body:'完整咨询正文'}]);
  assert.ok(p.calls.every(c=>c.sql.startsWith('SELECT')));assert.match(p.calls[0].sql,/process_status=\$3/);assert.ok(p.calls[0].args.includes('处理中:new102'));
  assert.match(p.calls[1].sql,/source_video_url=\$2/);assert.deepEqual(p.calls[1].args,['jinuo',u]);
- const ambiguous=await queueRequest(fakePool([{rows:[{video_id:v,video_url:u,url_bindings:2}]}]),{op:'comment_history',line:'jinuo',run:'new102',video_id:v,video_url:u});assert.equal(ambiguous.status,'unknown');assert.deepEqual(ambiguous.rows,[]);
- await assert.rejects(queueRequest(fakePool([{rows:[]}]),{op:'comment_history',line:'jinuo',run:'new102',video_id:v,video_url:u}));
+ const ambiguous=await queueRequest(fakePool([{rows:[{video_id:v,video_url:u,url_bindings:2}]}]),{op:'comment_history',line:'jinuo',run:'new102',source_run:'source101',video_id:v,video_url:u});assert.equal(ambiguous.status,'unknown');assert.deepEqual(ambiguous.rows,[]);
+ await assert.rejects(queueRequest(fakePool([{rows:[]}]),{op:'comment_history',line:'jinuo',run:'new102',source_run:'source101',video_id:v,video_url:u}));
 });
 
 
 test('历史消费事务和独立PG读回逐字重验，不搬旧batch，不将已采数冲0',async()=>{
  const v='7646309328911907195',u='https://www.douyin.com/video/'+v,id='11111111-1111-4111-8111-111111111111',old={id,douyinId:'person123',commentBody:'完整正文'};
- const owned={video_id:v,video_url:u,judgment_status:'matched',url_bindings:1},row={id,douyin_id:'person123',comment_body:'完整正文'};
+ const owned={video_id:v,video_url:u,judgment_status:'matched',url_bindings:1},row={id,douyin_id:'person123',comment_body:'完整正文',source_video_url:u};
  const p=fakePool([{rows:[owned]},{rows:[row]},{rows:[{id:'video'}]}]);
- const r=await queueRequest(p,{op:'collect',line:'jinuo',run:'run102',video_id:v,video_url:u,comments:[],history:[old]});
+ const r=await queueRequest(p,{op:'collect',line:'jinuo',run:'run102',source_run:'source101',video_id:v,video_url:u,comments:[],history:[old]});
  assert.equal(r.comments,0);assert.equal(r.inserted,0);assert.equal(r.history_verified,1);assert.equal(r.coverage,1);
  assert.ok(!p.calls.some(c=>/UPDATE zenithjoy.leadgen_comments|INSERT INTO zenithjoy.leadgen_comments/.test(c.sql)));
  const marked=p.calls.find(c=>/SET process_status = '评论已采'/.test(c.sql));assert.match(marked.sql,/comment_count = \$3/);assert.equal(marked.args[2],1);assert.doesNotMatch(marked.sql,/GREATEST/);
  for(const actual of [[],[{...row,douyin_id:'person1234'}],[{...row,comment_body:'完整正文不同'}]]){
-  const bad=fakePool([{rows:[owned]},{rows:actual}]);await assert.rejects(queueRequest(bad,{op:'collect_partial',line:'jinuo',run:'run102',video_id:v,video_url:u,comments:[],history:[old]}));
+  const bad=fakePool([{rows:[owned]},{rows:actual}]);await assert.rejects(queueRequest(bad,{op:'collect_partial',line:'jinuo',run:'run102',source_run:'source101',video_id:v,video_url:u,comments:[],history:[old]}));
   assert.ok(bad.calls.some(c=>c.sql==='ROLLBACK'));assert.ok(!bad.calls.some(c=>c.sql.startsWith('UPDATE')));
  }
- const b=fakePool([{rows:[owned]},{rows:[row]}]);assert.deepEqual(await queueRequest(b,{op:'comment_history_readback',line:'jinuo',run:'run102',video_id:v,video_url:u,history:[old]}),{verified:true,video_id:v,ids:[id],history_verified:1});
- await assert.rejects(queueRequest(fakePool([{rows:[owned]},{rows:[]}]),{op:'comment_history_readback',line:'jinuo',run:'run102',video_id:v,video_url:u,history:[old]}));
+ const b=fakePool([{rows:[owned]},{rows:[row]},{rows:[row]}]);assert.deepEqual(await queueRequest(b,{op:'comment_history_readback',line:'jinuo',run:'run102',source_run:'source101',video_id:v,video_url:u,history:[old]}),{verified:true,video_id:v,ids:[id],history_verified:1});
+ await assert.rejects(queueRequest(fakePool([{rows:[owned]},{rows:[]},{rows:[]}]),{op:'comment_history_readback',line:'jinuo',run:'run102',source_run:'source101',video_id:v,video_url:u,history:[old]}));
 });
 
 test('两不同短链经只读受信resolver核同VID才纳入历史，异VID和未知不skip',async()=>{
@@ -162,4 +164,27 @@ test('两不同短链经只读受信resolver核同VID才纳入历史，异VID和
  const r=await queueRequest(p,{op:'comment_history',line:'jinuo',run:'new102',source_run:'source101',video_id:v,video_url:current},{resolveHistoryUrl:async url=>{resolved.push(url);if(url===unknown)throw Error('NETWORK');return {content_id:url===old?v:'7000000000000000001',content_type:'video',resolved_url:'https://www.douyin.com/video/'+(url===old?v:'7000000000000000001')};}});
  assert.equal(r.status,'verified');assert.deepEqual(r.rows,[row]);assert.deepEqual(resolved,[old,other,unknown]);assert.deepEqual(r.url_proofs,[{source_video_url:old,video_id:v,resolved_url:'https://www.douyin.com/video/'+v}]);
  assert.match(p.calls[2].sql,/source_video=\$2/);assert.match(p.calls[2].sql,/LIMIT 1001/);assert.deepEqual(p.calls[2].args,['jinuo','同一真实标题']);
+});
+
+test('旧短链历史消费和独立读回重新解析实际VID，错VID回滚不改旧评论',async()=>{
+ const v='7646309328911907195',current='https://v.douyin.com/current/',url='https://v.douyin.com/old/',id='11111111-1111-4111-8111-111111111111';
+ const owned={video_id:v,video_url:current,judgment_status:'matched',url_bindings:1},row={id,douyin_id:'person123',comment_body:'完整正文',source_video_url:url},old={id,douyinId:row.douyin_id,commentBody:row.comment_body,sourceVideoUrl:url};
+ const input={op:'collect',line:'jinuo',run:'new102',source_run:'source101',video_id:v,video_url:current,comments:[],history:[old]};
+ let calls=0;const deps={resolveHistoryUrl:async actual=>{calls++;assert.equal(actual,url);return {content_id:v,content_type:'video',resolved_url:'https://www.douyin.com/video/'+v};}};
+ const p=fakePool([{rows:[owned]},{rows:[row]},{rows:[{id:'video'}]}]);
+ assert.equal((await queueRequest(p,input,deps)).coverage,1);assert.equal(calls,1);assert.ok(p.calls.some(c=>c.sql==='COMMIT'));
+ const b=fakePool([{rows:[owned]},{rows:[]},{rows:[row]}]);assert.equal((await queueRequest(b,{...input,op:'comment_history_readback'},deps)).verified,true);assert.equal(calls,2);
+ for(const bad of [{content_id:'7000000000000000001',content_type:'video',resolved_url:'https://www.douyin.com/video/7000000000000000001'},null]){
+  const q=fakePool([{rows:[owned]},{rows:[row]}]);await assert.rejects(queueRequest(q,input,{resolveHistoryUrl:async()=>{if(!bad)throw Error('NETWORK');return bad;}}));
+  assert.ok(q.calls.some(c=>c.sql==='ROLLBACK'));assert.ok(!q.calls.some(c=>/^(UPDATE|INSERT)/.test(c.sql)));
+ }
+});
+
+test('标题候选只做有界只读筛选，超过4短链或1000行均unknown不发网络请求',async()=>{
+ const v='7646309328911907195',url='https://v.douyin.com/current/';
+ for(const rows of [Array.from({length:5},(_,i)=>({source_video_url:'https://v.douyin.com/old'+i+'/'})),Array.from({length:1001},()=>({source_video_url:'https://v.douyin.com/old/'}))]){
+  let network=0;const p=fakePool([{rows:[{video_id:v,video_url:url,url_bindings:1,title:'title'}]},{rows:[]},{rows}]);
+  const r=await queueRequest(p,{op:'comment_history',line:'jinuo',run:'new102',source_run:'source101',video_id:v,video_url:url},{resolveHistoryUrl:async()=>{network++;}});
+  assert.equal(r.status,'unknown');assert.deepEqual(r.rows,[]);assert.equal(network,0);assert.ok(p.calls.every(c=>c.sql.startsWith('SELECT')));
+ }
 });
