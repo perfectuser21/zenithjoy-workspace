@@ -17,3 +17,14 @@ GP-Anchor: none(config)
 - 缺坏合同、身份漂移、异常来源不得N/A。
 - 共享baseline移除巡查、deny或吞掉巡查失败，隔离消费者守卫必须真实报红。
 - 首次RED提交后GREEN；本阶段只本地提交，不push/PR/merge/部署/手机。
+
+## 真实验证与独立审查
+- 原守卫RED：17测试、0pass/17fail、exit1，提交c83e9295。
+- 独立审查发现paths-ignore绕过：两新守卫先RED 0/2、exit1，随后修复。
+- 最终三个正式caller测试文件合跑：30/30 PASS、0fail，exit0。
+- 原067真实Git差异（03d4→067，17文件）CLI：exit0/not_applicable，完整changed_files保留，没有verdict或receipt。
+- 合同注册字节SHA256：eea0f1aaa5a3ec60decd3cdf30360fb4789aafd3aec9a62b00dcd62fe89e2437；base/head合同字节均a4588ff2a07e206545113e544d1e7390bc608b03c10f98ab6e041f50a046e68b。
+- product-map:check与git diff --check通过。尚未运行远端CI，尚未push、开PR或合并。
+
+## 范围边界
+共享glob/baseline属于开发治理，不冒认巡查来源。真实隔离消费者要求巡查成功执行且失败阻断，禁止paths/paths-ignore、job/执行step条件与continue-on-error；独立Pilot caller也执行永久legacy caller协议验证。巡查专属CI、合同、注册bindings/auxiliary或未登记巡查目录变更才交原完整diff门禁；混合未声明文件仍由原受信门禁拒绝。

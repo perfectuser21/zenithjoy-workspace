@@ -43,7 +43,7 @@ test('只传约定认证和独立只读来源 token，artifact 来源校验路�
 test('caller协议检查永久在CI执行，不因触发路径或continue-on-error变绿', () => {
   const config = workflow(), job = config.jobs['caller-contract'];
   assert.ok(job.steps.some(step => step.run === 'node --test scripts/ci/__tests__/implementation-impact-workflow.test.mjs'));
-  assert.equal(config.jobs.impact.needs, 'caller-contract');
+  assert.deepEqual(config.jobs.impact.needs, ['caller-contract', 'scope-classification']);
   assert.equal(config.jobs.impact['continue-on-error'], undefined);
   assert.equal(config.on.pull_request.paths, undefined);
   assert.equal(config.on.push.paths, undefined);
