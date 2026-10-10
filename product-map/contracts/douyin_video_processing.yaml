@@ -269,10 +269,165 @@ activities:
               value: 1
     commander:
       entry: activity-commander.mjs
+  - key: dedup
+    name: 按视频ID判重和筛选
+    order: 2
+    version: 3.0.0
+    compatibility: breaking
+    owner:
+      department: line02 智能获客
+      agent: 获客采收员
+    inputs:
+      - type: Video
+        cardinality: many
+        fields:
+          - video_id
+          - author
+          - comment_count
+          - keyword
+    outputs:
+      - type: Video
+        cardinality: many
+        effect: create
+        fields:
+          - video_id
+          - author
+          - comment_count
+          - keyword
+    preconditions:
+      - 自家号名单必须可读取
+      - 101冻结身份和本批VID清单校验成功，PG按VID独立读回无缺行
+    postconditions:
+      - probe: dedup_historical_filter_verified
+        asserts: PG按实际VID读回已采与拒绝状态、自家作者配置、本批VID交接证据
+      - probe: dedup_own_filter_verified
+        asserts: PG按实际VID读回已采与拒绝状态、自家作者配置、本批VID交接证据
+      - probe: dedup_run_dedup_verified
+        asserts: PG按实际VID读回已采与拒绝状态、自家作者配置、本批VID交接证据
+      - probe: dedup_commander_verified
+        asserts: 本活动Commander前后真实模型回执已独立留痕，鉴权失败不得自报上岗
+    execution:
+      location: phone
+      via: leadgen-workflow.mjs → dedup独立活动 → 持久化队列读回
+    budget:
+      max_duration_s: 600
+      heartbeat_s: 60
+    resources:
+      locks:
+        - device:<serial>
+      limits: []
+    idempotency:
+      dedupe_key: Video.line_key+Video.video_id
+      on_duplicate: skip
+    failure:
+      empty_ok:
+        - no_cards 本词无视频卡片
+      retryable:
+        - lock_busy
+        - WRONG_FOREGROUND
+        - NO_ROOT
+        - 候选落库失败（库/ssh 不可达）：视频留 pending 本批不采，下批再遇到重判
+      needs_human:
+        cases:
+          - TARGET_ABSENT 连续出现，疑抖音改版
+        alert:
+          channel: bark
+          object: escort 升级（harvest-cron.sh 陪跑员）→ Bark
+      fatal:
+        - hash_mismatch 词单在 run 中被改
+    side_effects: []
+    invokers:
+      - code
+      - agent
+    runtime:
+      phase: batch_end
+      entry: leadgen-activity.sh
+      args: WORKFLOW_KEY ACTIVITY_KEY PROFILE SERIAL LINE RUN_TAG（队列持久化交接，每活动Commander前后核验）
+    implementation_bindings:
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-workflow.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-activity.sh
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/activity-commander.mjs
+        revision: contract
+      - kind: code
+        repo: perfectuser21/zenithjoy-workspace
+        path: services/phone-adb-controller/leadgen-queue.js
+        revision: contract
+    model:
+      - provider: openrouter
+        model: bytedance/ui-tars-1.5-7b
+        purpose: 视频 tab / 筛选按钮视觉定位兜底（douyin-phone-adb:905-909）
+    steps:
+      - key: filter_history
+        name: 已处理视频过滤
+        order: 1
+        reads:
+          - Video.video_id
+        writes: []
+        check: 按实际VID查询PG；已采或已拒绝不再录音，同标题不同VID保留
+        implementation:
+          status: implemented
+          ref: leadgen-workflow.mjs intake：inspect_videos按本批明确VID读回PG
+        uses_llm: false
+        dod:
+          mode: hard
+          readback:
+            type: metric
+            ref: metrics.historical_filter_verified
+            expect:
+              op: ==
+              value: 1
+      - key: filter_own_accounts
+        name: 自家号过滤
+        order: 2
+        reads:
+          - Video.author
+        writes: []
+        check: 按101实际作者证据读取自家号配置，不以标题判断
+        implementation:
+          status: implemented
+          ref: leadgen-workflow.mjs intake：101实际作者与own-accounts配置比对
+        uses_llm: false
+        dod:
+          mode: hard
+          readback:
+            type: metric
+            ref: metrics.own_filter_verified
+            expect:
+              op: ==
+              value: 1
+      - key: filter_current_run
+        name: 本轮重复过滤
+        order: 3
+        reads:
+          - Video.video_id
+        writes: []
+        check: 按实际VID清单核验本批重复观测，不以标题作者合并不同视频
+        implementation:
+          status: implemented
+          ref: leadgen-workflow.mjs intake：核验上游captures和videos实际VID一致性
+        uses_llm: false
+        dod:
+          mode: hard
+          readback:
+            type: metric
+            ref: metrics.run_dedup_verified
+            expect:
+              op: ==
+              value: 1
+    commander:
+      entry: activity-commander.mjs
   - key: qualification
     name: 判定视频
-    order: 2
-    version: 2.0.0
+    order: 3
+    version: 3.0.0
     compatibility: breaking
     owner:
       department: line02 智能获客
@@ -511,7 +666,7 @@ activities:
       entry: activity-commander.mjs
   - key: collection
     name: 采集评论
-    order: 3
+    order: 4
     version: 2.0.0
     compatibility: breaking
     owner:
@@ -807,7 +962,7 @@ activities:
       entry: activity-commander.mjs
   - key: cleanup
     name: 收尾
-    order: 4
+    order: 5
     version: 2.0.0
     compatibility: breaking
     owner:

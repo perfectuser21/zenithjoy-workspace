@@ -59,6 +59,7 @@ types:
       - video_id
       - video_url
       - title
+      - author # 101真实UI卡片元数据保存在本批交接工件；不是PG作者列
       - keyword
       - comment_count
       - harvest_batch

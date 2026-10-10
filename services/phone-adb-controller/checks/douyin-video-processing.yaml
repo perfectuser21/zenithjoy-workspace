@@ -266,3 +266,55 @@ probes:
     on_fail: fail_stage
     note: |
       手机回到安全桌面（不停在私信/评论页，防误触）。workflow-result.sh:182 写死 0，判红直到 6b133a81。
+  - key: dedup_historical_filter_verified
+    stage: dedup
+    journey_cell: stage:dedup
+    probe:
+      type: metric
+      ref: metrics.historical_filter_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: dedup_own_filter_verified
+    stage: dedup
+    journey_cell: stage:dedup
+    probe:
+      type: metric
+      ref: metrics.own_filter_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: dedup_run_dedup_verified
+    stage: dedup
+    journey_cell: stage:dedup
+    probe:
+      type: metric
+      ref: metrics.run_dedup_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。
+  - key: dedup_commander_verified
+    stage: dedup
+    journey_cell: stage:dedup
+    probe:
+      type: metric
+      ref: metrics.commander_verified
+    expect:
+      op: ==
+      value: 1
+    severity: error
+    failure_class: retryable
+    on_fail: fail_stage
+    note: 指标必须来自本run真实证据或PG独立读回，未提供证据不得判定通过。

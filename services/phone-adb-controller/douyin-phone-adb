@@ -530,7 +530,7 @@ _leave_scratch_route() {
 # 取链接偶发失败(面板没弹/剪贴板没同步/超时)不该一击致死：整体包重试，连试到成功。
 # 每次在干净的详情页重来(die在subshell里只退出子壳,外层捕获重试)。
 current_video_link() {
-  local eid="$1" tries=5 i rc _g
+  local eid="$1" return_keyword="${2:-}" tries=5 i rc _g
   require_evidence_id "$eid"
   [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground" WRONG_FOREGROUND
   # 先以非导航的MEDIA_PAUSE稳定播放状态，再读取真正的详情守卫。
@@ -540,7 +540,7 @@ current_video_link() {
   (( _g == 2 )) && die "UI_TREE_UNAVAILABLE: could not read the UI hierarchy to verify the video detail page; transient, safe to retry" NO_ROOT
   (( _g == 1 )) && die "NOT_ON_VIDEO_DETAIL: current-video-link requires an opened video detail page (share button absent); open the video card first"
   for i in {1..$tries}; do
-    if ( _current_video_link_once "${eid}-t${i}" ); then return 0; else rc=$?; fi
+    if ( _current_video_link_once "${eid}-t${i}" "$return_keyword" ); then return 0; else rc=$?; fi
     print -u2 -- "warning: current-video-link attempt $i/$tries failed (rc=$rc); recovering to detail page"
     # 回退到详情页干净态：连按返回收掉可能半开的分享面板/临时搜索框
     "$ADB" -s "$SERIAL" shell input keyevent 4 >/dev/null 2>&1
@@ -635,6 +635,7 @@ _current_video_link_once() {
   local copied_path scratch_xml search_line search_center search_x search_y
   local result_xml result_line escaped_text short_url resolved_url video_id note_id content_type content_id reopen_url nonce_proof=""
   evidence_id="$1"
+  local return_keyword="${2:-}" return_result return_xml
   require_evidence_id "$evidence_id"
 
   [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
@@ -725,7 +726,18 @@ _current_video_link_once() {
   fi
   reopen_url="snssdk1128://aweme/detail/$content_id"
 
-  if [[ "$content_type" == "video" ]]; then
+  if [[ -n "$return_keyword" ]]; then
+    # 101下一步需要原结果列表；复制新鲜度及真实ID验证仍完整执行。
+    return_result="$(back_to_results 10 "$return_keyword" "${evidence_id}-results")" || die "LINK_RESULTS_RESTORE_FAILED"
+    return_xml="$(ui_evidence "${evidence_id}-returned-grid")" || die "LINK_RESULTS_TREE_UNAVAILABLE"
+    _search_kw_matches "$return_keyword" "$return_xml" || die "LINK_RESULTS_KEYWORD_MISMATCH"
+    if ! /usr/bin/grep -qE '<node[^>]*text="视频"[^>]*selected="true"' "$return_xml"; then
+      /bin/zsh "${0:A}" --profile "$PROFILE" search-video-tab "${evidence_id}-returned-vtab" >/dev/null \
+        || die "LINK_RESULTS_VIDEO_TAB_UNVERIFIED"
+    fi
+    print -- "return_mode=results"
+    [[ "$return_result" != *"recovered_via=research"* ]] || print -- "return_recovered_via=research"
+  elif [[ "$content_type" == "video" ]]; then
     # deep link 重开视频后**必须验证真的回到了详情页**。
     # 0921 夜批 auto09212230 实证：deep link 会间歇性不生效，人留在暂存搜索页；
     # 那里同样是抖音包名，旧的「只验包名」守卫直接放行 → 调用方以为已回到视频页 →
@@ -2878,9 +2890,9 @@ case "$command" in
     exec "$ADB" -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "snssdk1128://search/tabs?keyword=$2"
     ;;
   current-video-link)
-    [[ "$#" == 2 ]] || die "usage: douyin-phone-adb --profile PROFILE current-video-link EVIDENCE_ID"
+    [[ "$#" == 2 || "$#" == 3 ]] || die "usage: douyin-phone-adb --profile PROFILE current-video-link EVIDENCE_ID [RETURN_KEYWORD]"
     check_target
-    current_video_link "$2"
+    current_video_link "$2" "${3:-}"
     ;;
   back-to-results)
     # 退回搜索结果页（采收循环处理完一个视频后的归位动作）。
@@ -3227,9 +3239,12 @@ case "$command" in
       fi
       svc_out="$(video_cards_from_xml "$svc_xml")"
       [[ -n "$svc_out" ]] && break
-      if /usr/bin/grep -q "搜索结果为空" "$svc_xml"; then
+      if /usr/bin/grep -qE 'text="(搜索结果为空|没有更多了|暂无更多|已经到底了|到底了)[！!。…~ ]*"' "$svc_xml"; then
         print -- "cards=0"
         print -- "empty_results=true"
+        if /usr/bin/grep -qE '<node[^>]*text="视频"[^>]*selected="true"' "$svc_xml"; then print -- "video_tab=1"; else print -- "video_tab=0"; fi
+        print -- "loading=0"
+        print -- "end_of_results=1"
         print -- "evidence=$svc_xml"
         exit 0
       fi
@@ -3239,6 +3254,9 @@ case "$command" in
     [[ -n "$svc_out" ]] || die "no video cards found after 3 business retries and the page never reported 搜索结果为空; likely still on 综合 tab (auto-playing feed never reaches idle)"
     print -- "$svc_out"
     print -- "evidence=$svc_xml"
+    if /usr/bin/grep -qE '<node[^>]*text="视频"[^>]*selected="true"' "$svc_xml"; then print -- "video_tab=1"; else print -- "video_tab=0"; fi
+    if /usr/bin/grep -qE 'text="(加载中[.。…~ ]*|正在加载[.。…~ ]*|加载失败|网络异常)"' "$svc_xml"; then print -- "loading=1"; else print -- "loading=0"; fi
+    if /usr/bin/grep -qE 'text="(没有更多了|暂无更多|已经到底了|到底了)[！!。…~ ]*"' "$svc_xml"; then print -- "end_of_results=1"; else print -- "end_of_results=0"; fi
     ;;
   open-user-profile)
     # 对标发现 step1：deeplink 打开对标主页并回读校验（0929 对标链接获客·发现）。

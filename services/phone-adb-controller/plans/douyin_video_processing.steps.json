@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "douyin_video_processing",
   "brain_workflow_key": "douyin_video_processing",
-  "contract_sha256": "aa86458108c442435751ced161253a54fdb8da46c82e22e50cef2ab19a0f3490",
+  "contract_sha256": "f9b61404783f8266c22a0589523897dc2fc77126a32ca582fe97a0b499451425",
   "promotion": {
     "min_consecutive_pass": 20
   },
@@ -125,6 +125,63 @@
       }
     },
     {
+      "key": "douyin_video_processing.dedup.filter_history",
+      "activity": "dedup",
+      "at": "dedup",
+      "mode": "hard",
+      "readback": {
+        "type": "metric",
+        "ref": "metrics.historical_filter_verified",
+        "expect": {
+          "op": "==",
+          "value": 1
+        }
+      },
+      "usage": {
+        "workflow_key": "douyin_video_processing",
+        "slot_key": "dedup",
+        "sequence_no": 2
+      }
+    },
+    {
+      "key": "douyin_video_processing.dedup.filter_own_accounts",
+      "activity": "dedup",
+      "at": "dedup",
+      "mode": "hard",
+      "readback": {
+        "type": "metric",
+        "ref": "metrics.own_filter_verified",
+        "expect": {
+          "op": "==",
+          "value": 1
+        }
+      },
+      "usage": {
+        "workflow_key": "douyin_video_processing",
+        "slot_key": "dedup",
+        "sequence_no": 2
+      }
+    },
+    {
+      "key": "douyin_video_processing.dedup.filter_current_run",
+      "activity": "dedup",
+      "at": "dedup",
+      "mode": "hard",
+      "readback": {
+        "type": "metric",
+        "ref": "metrics.run_dedup_verified",
+        "expect": {
+          "op": "==",
+          "value": 1
+        }
+      },
+      "usage": {
+        "workflow_key": "douyin_video_processing",
+        "slot_key": "dedup",
+        "sequence_no": 2
+      }
+    },
+    {
       "key": "douyin_video_processing.qualification.cheap_gate",
       "activity": "qualification",
       "at": "qualification",
@@ -141,7 +198,7 @@
       "usage": {
         "workflow_key": "douyin_video_processing",
         "slot_key": "qualification",
-        "sequence_no": 2
+        "sequence_no": 3
       }
     },
     {
@@ -160,7 +217,7 @@
       "usage": {
         "workflow_key": "douyin_video_processing",
         "slot_key": "qualification",
-        "sequence_no": 2
+        "sequence_no": 3
       }
     },
     {
@@ -179,7 +236,7 @@
       "usage": {
         "workflow_key": "douyin_video_processing",
         "slot_key": "qualification",
-        "sequence_no": 2
+        "sequence_no": 3
       }
     },
     {
@@ -198,7 +255,7 @@
       "usage": {
         "workflow_key": "douyin_video_processing",
         "slot_key": "qualification",
-        "sequence_no": 2
+        "sequence_no": 3
       }
     },
     {
@@ -217,7 +274,7 @@
       "usage": {
         "workflow_key": "douyin_video_processing",
         "slot_key": "qualification",
-        "sequence_no": 2
+        "sequence_no": 3
       }
     },
     {
@@ -236,7 +293,7 @@
       "usage": {
         "workflow_key": "douyin_video_processing",
         "slot_key": "qualification",
-        "sequence_no": 2
+        "sequence_no": 3
       }
     },
     {
@@ -256,7 +313,7 @@
       "usage": {
         "workflow_key": "douyin_video_processing",
         "slot_key": "collection",
-        "sequence_no": 3
+        "sequence_no": 4
       }
     },
     {
@@ -275,7 +332,7 @@
       "usage": {
         "workflow_key": "douyin_video_processing",
         "slot_key": "collection",
-        "sequence_no": 3
+        "sequence_no": 4
       }
     },
     {
@@ -295,7 +352,7 @@
       "usage": {
         "workflow_key": "douyin_video_processing",
         "slot_key": "collection",
-        "sequence_no": 3
+        "sequence_no": 4
       }
     },
     {
@@ -314,7 +371,7 @@
       "usage": {
         "workflow_key": "douyin_video_processing",
         "slot_key": "collection",
-        "sequence_no": 3
+        "sequence_no": 4
       }
     },
     {
@@ -333,7 +390,7 @@
       "usage": {
         "workflow_key": "douyin_video_processing",
         "slot_key": "collection",
-        "sequence_no": 3
+        "sequence_no": 4
       }
     },
     {
@@ -352,7 +409,7 @@
       "usage": {
         "workflow_key": "douyin_video_processing",
         "slot_key": "collection",
-        "sequence_no": 3
+        "sequence_no": 4
       }
     },
     {
@@ -371,7 +428,7 @@
       "usage": {
         "workflow_key": "douyin_video_processing",
         "slot_key": "collection",
-        "sequence_no": 3
+        "sequence_no": 4
       }
     },
     {
@@ -390,7 +447,7 @@
       "usage": {
         "workflow_key": "douyin_video_processing",
         "slot_key": "cleanup",
-        "sequence_no": 4
+        "sequence_no": 5
       }
     },
     {
@@ -409,7 +466,7 @@
       "usage": {
         "workflow_key": "douyin_video_processing",
         "slot_key": "cleanup",
-        "sequence_no": 4
+        "sequence_no": 5
       }
     },
     {
@@ -428,7 +485,7 @@
       "usage": {
         "workflow_key": "douyin_video_processing",
         "slot_key": "cleanup",
-        "sequence_no": 4
+        "sequence_no": 5
       }
     },
     {
@@ -447,7 +504,7 @@
       "usage": {
         "workflow_key": "douyin_video_processing",
         "slot_key": "cleanup",
-        "sequence_no": 4
+        "sequence_no": 5
       }
     }
   ]

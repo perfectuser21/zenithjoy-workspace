@@ -1,5 +1,5 @@
 {
-  "object_types": "d1172d746a938cdb996671b1f59b5955dbf2e6c6c0cb7c6dc55c324ac0938839",
+  "object_types": "233508aaeee14debba2a3be25481d82c73f767c701068957d902afc776bcb8f3",
   "capabilities": {
     "benchmark_link_acquisition": {
       "sha256": "f4a811707076a37cb8ff33433863fbc914acb0707c7710016659bae477e23633",
@@ -31,22 +31,22 @@
       }
     },
     "douyin_video_discovery": {
-      "sha256": "3514dd404f38225ced5ad06453ea2fd079c7a76a50681b2c8ccb8d56b63f3480",
+      "sha256": "32983924a11143836920b414b3ad4f8458df6b7e0482cc1233a58d2dd901e1b8",
       "activities": {
         "preflight": "f450cf0112c2be9a114230e11ef866b98a81948e3a1413f4806a872d1b1ec247",
-        "source": "16c8831c31e46d096bf9b35e4bcaeb8446e59976e1766ef5ed5fd76721b9a277",
-        "dedup": "f040a904f64ffc154bf17fbb37fb8bde96174ac39a83fb59977cddf254797e36",
-        "write_videos": "f1cedbde6bf1f7278ef1ff6f563a3ab576f85021122528a796229602e7ed9c93",
-        "cleanup": "cad89b18eee3307d88eed07da3fd63112c88a1e9ea8baf1ebd69a2e3e428df5b"
+        "source": "b4c8dc0e3543671a6bdb1e2a697fc48b62d2756b3fa27253db0c776b888e9a94",
+        "write_videos": "b2ca008319f7f2ff5a52a87034477e45992e2d27cb3f0dfca2f749990660becd",
+        "cleanup": "7790590c4ee6d338747fbd0b204628c6d3abfd370a95956fc4f04c2f8f71bb17"
       }
     },
     "douyin_video_processing": {
-      "sha256": "aa86458108c442435751ced161253a54fdb8da46c82e22e50cef2ab19a0f3490",
+      "sha256": "f9b61404783f8266c22a0589523897dc2fc77126a32ca582fe97a0b499451425",
       "activities": {
         "preflight": "41213546c9efc1e758c6c00522ff51e5a1c5696affdc3985aa4c60c79189e096",
-        "qualification": "6165b3b1081d5d59154829a63082a77403705a57f3e4355cbb32522e6fcd05bd",
-        "collection": "3267d3308c8cce140ca698c909102d881b1985d3c7d1f5bc895428bc38bde7fa",
-        "cleanup": "77b9a3ab18871888020257a2deb6a17fda3d9e51fddb1a6897553ea5160b9c03"
+        "dedup": "b7990d59c1612fcb659717ec8cebc200db3f5be06bf6fbf3690a8c7b72c31d04",
+        "qualification": "ddc1afc02a0677329b0bc61f592d039e2c4555b38aa40b5d164d71edcf56af3a",
+        "collection": "139f55daca7a1aaf12547e74c43e488a39ba5d645a472f79255d92cc922a925d",
+        "cleanup": "644781cb13cd244641ec876a0bcb46e794eb0fbdc55ad16748db8cc3a562ebbd"
       }
     },
     "keyword_acquisition": {

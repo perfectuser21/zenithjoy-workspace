@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "douyin_video_discovery",
   "brain_workflow_key": "douyin_video_discovery",
-  "contract_sha256": "3514dd404f38225ced5ad06453ea2fd079c7a76a50681b2c8ccb8d56b63f3480",
+  "contract_sha256": "32983924a11143836920b414b3ad4f8458df6b7e0482cc1233a58d2dd901e1b8",
   "promotion": {
     "min_consecutive_pass": 20
   },
@@ -241,63 +241,6 @@
       }
     },
     {
-      "key": "douyin_video_discovery.dedup.filter_history",
-      "activity": "dedup",
-      "at": "dedup",
-      "mode": "hard",
-      "readback": {
-        "type": "metric",
-        "ref": "metrics.historical_filter_verified",
-        "expect": {
-          "op": "==",
-          "value": 1
-        }
-      },
-      "usage": {
-        "workflow_key": "douyin_video_discovery",
-        "slot_key": "dedup",
-        "sequence_no": 3
-      }
-    },
-    {
-      "key": "douyin_video_discovery.dedup.filter_own_accounts",
-      "activity": "dedup",
-      "at": "dedup",
-      "mode": "hard",
-      "readback": {
-        "type": "metric",
-        "ref": "metrics.own_filter_verified",
-        "expect": {
-          "op": "==",
-          "value": 1
-        }
-      },
-      "usage": {
-        "workflow_key": "douyin_video_discovery",
-        "slot_key": "dedup",
-        "sequence_no": 3
-      }
-    },
-    {
-      "key": "douyin_video_discovery.dedup.filter_current_run",
-      "activity": "dedup",
-      "at": "dedup",
-      "mode": "hard",
-      "readback": {
-        "type": "metric",
-        "ref": "metrics.run_dedup_verified",
-        "expect": {
-          "op": "==",
-          "value": 1
-        }
-      },
-      "usage": {
-        "workflow_key": "douyin_video_discovery",
-        "slot_key": "dedup",
-        "sequence_no": 3
-      }
-    },
-    {
       "key": "douyin_video_discovery.write_videos.resolve_video_links",
       "activity": "write_videos",
       "at": "write_videos",
@@ -313,7 +256,7 @@
       "usage": {
         "workflow_key": "douyin_video_discovery",
         "slot_key": "write_videos",
-        "sequence_no": 4
+        "sequence_no": 3
       }
     },
     {
@@ -322,17 +265,17 @@
       "at": "write_videos",
       "mode": "checkpoint",
       "readback": {
-        "type": "sql",
-        "query": "SELECT count(*) FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG'",
+        "type": "metric",
+        "ref": "metrics.manifest_verified",
         "expect": {
-          "op": ">=",
-          "ref": "metrics.candidates"
+          "op": "==",
+          "value": 1
         }
       },
       "usage": {
         "workflow_key": "douyin_video_discovery",
         "slot_key": "write_videos",
-        "sequence_no": 4
+        "sequence_no": 3
       }
     },
     {
@@ -351,7 +294,7 @@
       "usage": {
         "workflow_key": "douyin_video_discovery",
         "slot_key": "write_videos",
-        "sequence_no": 4
+        "sequence_no": 3
       }
     },
     {
@@ -360,16 +303,17 @@
       "at": "write_videos",
       "mode": "checkpoint",
       "readback": {
-        "type": "sql",
-        "query": "SELECT line_key FROM zenithjoy.leadgen_videos WHERE harvest_batch = '$RUN_TAG'",
+        "type": "metric",
+        "ref": "metrics.manifest_verified",
         "expect": {
-          "op": "not_null_all"
+          "op": "==",
+          "value": 1
         }
       },
       "usage": {
         "workflow_key": "douyin_video_discovery",
         "slot_key": "write_videos",
-        "sequence_no": 4
+        "sequence_no": 3
       }
     },
     {
@@ -388,7 +332,7 @@
       "usage": {
         "workflow_key": "douyin_video_discovery",
         "slot_key": "cleanup",
-        "sequence_no": 5
+        "sequence_no": 4
       }
     },
     {
@@ -407,7 +351,7 @@
       "usage": {
         "workflow_key": "douyin_video_discovery",
         "slot_key": "cleanup",
-        "sequence_no": 5
+        "sequence_no": 4
       }
     },
     {
@@ -426,7 +370,7 @@
       "usage": {
         "workflow_key": "douyin_video_discovery",
         "slot_key": "cleanup",
-        "sequence_no": 5
+        "sequence_no": 4
       }
     },
     {
@@ -445,7 +389,7 @@
       "usage": {
         "workflow_key": "douyin_video_discovery",
         "slot_key": "cleanup",
-        "sequence_no": 5
+        "sequence_no": 4
       }
     }
   ]

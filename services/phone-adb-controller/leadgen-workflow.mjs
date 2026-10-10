@@ -115,11 +115,44 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
     if(discovery)return discovery;
     const sources=env.LEADGEN_SOURCES_FILE?readFileSync(env.LEADGEN_SOURCES_FILE,'utf8').split('\n').filter(Boolean)
       :(await rpc({kind:'keywords',line,count:2})).result;
-    const confPath=env.OWN_ACCOUNTS_CONF||join(env.HOME,'bin-harvest/config/own-accounts.json');
-    const ownAccounts=JSON.parse(readFileSync(confPath,'utf8'));
     discovery=createDiscoveryHandlers({phone,execute:bounded,queue,profile,run,root,
-      sources,sourceKind:env.LEADGEN_SOURCE_KIND||'keyword',limit:Number(env.LEADGEN_LIMIT||2),ownAccounts,env});
+      sources,sourceKind:env.LEADGEN_SOURCE_KIND||'keyword',limit:Number(env.LEADGEN_LIMIT??0),env,budgetDeadline:()=>state.budgetDeadline||0});
     return discovery;
+  };
+  const intake=async()=>{
+    const sourceRun=env.LEADGEN_SOURCE_RUN;
+    if(!/^[a-zA-Z0-9_-]{1,120}$/.test(sourceRun||''))throw Error('102缺有效上游101运行号');
+    const upstreamDir=resolve(env.WFR_RUN_DIR,'..',`douyin_video_discovery-${sourceRun}`);
+    const upstream=readFrozen(upstreamDir),current=readFrozen(env.WFR_RUN_DIR);
+    if(upstream.run_identity?.capability!=='douyin_video_discovery'||upstream.run_identity.tag!==sourceRun
+      ||upstream.run_identity.profile!==profile||upstream.deployment.source_commit!==current.deployment.source_commit)throw Error('上游101冻结身份或发布来源不一致');
+    const input=JSON.parse(readFileSync(join(upstreamDir,'discovery-progress.json'),'utf8'));
+    if(input.run!==sourceRun||input.profile!==profile||!Array.isArray(input.videos)||input.videos.length>1000
+      ||!Array.isArray(input.captures)||input.captures.length>10000)throw Error('上游101交接清单身份或数量无效');
+    const all=[...input.videos,...input.captures];
+    if(all.some(v=>!/^\d{16,24}$/.test(v.videoId||'')||typeof v.author!=='string'||!v.author.trim()))throw Error('上游视频ID或作者证据无效');
+    const ids=[...new Set(input.videos.map(v=>v.videoId))];
+    if(ids.length!==input.videos.length||input.captures.some(v=>!ids.includes(v.videoId))||ids.some(id=>!input.captures.some(v=>v.videoId===id)))throw Error('上游真实取链与保存ID清单不一致');
+    const rows=await queue('inspect_videos',{video_ids:ids});
+    if(!Array.isArray(rows)||rows.length!==ids.length||ids.some(id=>rows.filter(r=>r.video_id===id).length!==1))throw Error('PG读回缺上游真实视频ID');
+    const own=JSON.parse(readFileSync(env.OWN_ACCOUNTS_CONF||join(env.HOME,'bin-harvest/config/own-accounts.json'),'utf8'));
+    if(!Array.isArray(own.nicknames)||!Array.isArray(own.ids))throw Error('自家账号配置缺失');
+    const normalize=v=>String(v??'').normalize('NFKC').replace(/\s+/g,' ').trim();
+    const ownNames=new Set([...own.nicknames,...own.ids].map(normalize));
+    const skipped=[],eligible=[];
+    for(const v of input.videos){const row=rows.find(r=>r.video_id===v.videoId);
+      if(!['pending','matched','rejected'].includes(row.judgment_status)||typeof row.process_status!=='string')throw Error('PG视频状态缺合法终态');
+      const reason=row.judgment_status==='rejected'?'rejected':row.process_status==='评论已采'?'completed':ownNames.has(normalize(v.author))?'own':null;
+      if(reason)skipped.push({video_id:v.videoId,reason});else eligible.push(v.videoId);
+    }
+    state.intakeVideoIds=eligible;
+    const proof={verified:true,source_run:sourceRun,source_commit:upstream.deployment.source_commit,
+      observed_at:new Date().toISOString(),video_ids:ids,eligible_video_ids:eligible,skipped,rows,
+      duplicate_observations:input.captures.length-ids.length};
+    writeFileSync(join(env.WFR_RUN_DIR,`${run}-intake-readback.json`),JSON.stringify(proof),{mode:0o600});
+    return {historical_filter_verified:Number(rows.length===ids.length),own_filter_verified:Number(Array.isArray(own.nicknames)&&Array.isArray(own.ids)),run_dedup_verified:Number(new Set(eligible).size===eligible.length),
+      received:ids.length,eligible:eligible.length,skipped_completed:skipped.filter(v=>v.reason==='completed').length,
+      skipped_rejected:skipped.filter(v=>v.reason==='rejected').length,skipped_own:skipped.filter(v=>v.reason==='own').length,duplicate_observations:proof.duplicate_observations};
   };
   const videoAction=(mode,v)=>bounded('zsh',[join(root,'process-queued-video.sh'),mode,profile,
     v.video_id,v.video_url,Buffer.from(v.title||'').toString('base64'),Buffer.from(v.keyword||'').toString('base64'),run,line],
@@ -129,12 +162,19 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
     {maxDurationS:mode==='qualification'?900:mode==='collection'?960:480,env:{QUEUED_VIDEO_QUALIFY_CMD:join(root,'leadgen-qualify.sh')}});
   return {state,preflight,
     source:async()=>(await getDiscovery()).source(),
-    dedup:async()=>{const r=await (await getDiscovery()).dedup();return {...r,historical_filter_verified:1,own_filter_verified:1,run_dedup_verified:1};},
+    dedup:intake,
     write_videos:async()=>{const result=await (await getDiscovery()).write_videos();
-      return {...result,persisted:result.videos.length,candidates:result.videos.length,videos_pushed:result.videos.length,
+      const readback=await queue('inspect_videos',{video_ids:result.videos.map(v=>v.videoId)});
+      const readbackFailures=result.videos.filter(v=>!readback.some(r=>r.video_id===v.videoId&&r.line_key)).length;
+      return {...result,persisted:result.counts.created,candidates:result.videos.length,videos_pushed:result.counts.created,
+        video_manifest_readback_failures:readbackFailures,manifest_verified:Number(readbackFailures===0),
+        ...(readbackFailures?{status:'partial'}:{}),
         ...(result.failures.length||result.known_gaps.length?{status:'partial'}:{})};},
     qualification:async()=>{
-      leased=await queue('claim_videos');const failures=[];qualified=[];
+      if(env.WF_BRAIN_WORKFLOW==='douyin_video_processing'&&!Array.isArray(state.intakeVideoIds))throw Error('102必须先核验101明确ID交接');
+      leased=await queue('claim_videos',Array.isArray(state.intakeVideoIds)?{video_ids:state.intakeVideoIds}:{});
+      state.remainingVideoIds=state.intakeVideoIds?.filter(id=>!leased.some(v=>v.video_id===id))||[];
+      const failures=[];qualified=[];
       for(const v of leased){await queue('renew_video',{video_id:v.video_id});
         if(v.judgment_status==='matched'){
           const identity=await videoAction('identity',v);
@@ -165,6 +205,7 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
         if(partial)failures.push({video_id:v.video_id,code:7,reason:'采集在预算或停止边界结束，已保存核验评论，视频仍未采完',comments_saved:stored.comments});
         else {collected++;leased=leased.filter(p=>p.video_id!==v.video_id);}
       }catch(error){failures.push({video_id:v.video_id,reason:error.message});}}
+      if(state.remainingVideoIds?.length)failures.push({reason:'本次认领上限或并发租约留下待处理视频',remaining_video_ids:state.remainingVideoIds});
       return {collected,comments,comments_collected:comments,videos_processed:collected,rescan_count:rescans,
         rescan_rate:qualified.length?rescans/qualified.length:0,failures,...(failures.length?{status:'partial'}:{})};},
     scoring:async()=>{const r=await queue('score');
