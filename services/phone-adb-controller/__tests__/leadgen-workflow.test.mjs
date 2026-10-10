@@ -3,6 +3,19 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync,readFileSync,writeFileSync,mkdirSync,chmodSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {createRequire} from 'node:module';
+
+test('正式录前音量Step判真实媒体回读，不能用静音内容电平代替',async()=>{
+ const yaml=createRequire(import.meta.url)('js-yaml'),contract=yaml.load(readFileSync('product-map/contracts/douyin_video_processing.yaml','utf8'));
+ const step=contract.activities.find(a=>a.key==='qualification').steps.find(s=>s.key==='unmute_before_record');
+ const {judgeSteps}=await import('../step-judge.mjs');const d=mkdtempSync(join(tmpdir(),'media-step-'));
+ try{const log=join(d,'activity.log');writeFileSync(log,'audio_rejected reason=silent_or_unknown_volume\n');
+ const spec={steps:[{key:'volume',at:'qualification',mode:'checkpoint',readback:step.dod.readback}]};
+ const ok=judgeSteps({spec,stage:'qualification',ctx:{logFile:log,metrics:{media_volume_failures:0}}});assert.equal(ok.steps[0].pass,true);
+ const bad=judgeSteps({spec,stage:'qualification',ctx:{logFile:log,metrics:{media_volume_failures:1}}});assert.equal(bad.steps[0].pass,false);
+ const unknown=judgeSteps({spec,stage:'qualification',ctx:{logFile:log,metrics:{}}});assert.equal(unknown.steps[0].pass,null);
+ }finally{rmSync(d,{recursive:true,force:true});}
+});
 
 test('采集返回partial时，Commander收到真实部分状态而不是脚本正常返回后的completed',async()=>{
  const {runWorkflow}=await import('../leadgen-workflow.mjs');const receipts=[];
@@ -176,6 +189,7 @@ test('资格动作容纳已实测的打开与身份核验组合耗时，仍受�
    timeouts.push(opts.timeoutMs);
    if(opts.timeoutMs<520000)throw Error('EXECUTION_DEADLINE');
    writeFileSync(join(dir,`fresh-processing-identity-${videoId}.json`),JSON.stringify({verified:true,observed_video_id:videoId,content_type:'video'}));
+   writeFileSync(join(dir,`fresh-processing-recording-${videoId}.json`),JSON.stringify({version:1,run:'fresh-processing',video_id:videoId,evidence_id:`fresh-processing-v${videoId}-qualification-record`,media_volume_verified:true,media_volume:1,audio_status:'usable',mean_volume_db:-35}));
    return {code:0,stdout:`QUAL\t${videoId}\tmatched\tjudged\n`,stderr:''};
   };
   try{
