@@ -70,9 +70,10 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
          if(!fresh.loading){
           // 短滑改变本页视口，新完整槽位必须先处理；只记本页identity+ordinal，绝不全局按标题去重。
           page=fresh;
-          if(!revealReceipt.enumerated){
+          const snapshot=fingerprint(fresh.cards);
+          if(!revealReceipt.enumerated_fingerprints.includes(snapshot)){
            // 视口改变后旧ordinal不是新卡ID。除本次已定位的具体fresh槽外，全部完整槽再取真实VID。
-           revealReceipt.enumerated=true;
+           revealReceipt.enumerated_fingerprints.push(snapshot);
            const hitIndex=fresh.cards.indexOf(hit);
            const exposed=fresh.cards.map((c,i,a)=>({...c,revealEligible:false,ordinal:a.slice(0,i).filter(x=>identity(x)===identity(c)).length}));
            for(let i=0;i<exposed.length;i++){
@@ -93,7 +94,7 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
          boundary();
          if(hint.clipped==='1'){
           clipped=true;revealed=true;
-          revealReceipt={candidate_evidence_id:eid,source:ctx.source,title:target.title,author:target.author,before_evidence_path:fresh.evidence,scroll_mode:'reveal-up',verified:false};
+          revealReceipt={candidate_evidence_id:eid,source:ctx.source,title:target.title,author:target.author,before_evidence_path:fresh.evidence,scroll_mode:'reveal-up',verified:false,enumerated_fingerprints:[]};
           state.relocation_reveals.push(revealReceipt);progress();
           await phone('search-grid-scroll',eid+'-reveal','reveal-up');boundary();
          }
