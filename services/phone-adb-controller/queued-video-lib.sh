@@ -127,6 +127,8 @@ qv_history_prepare(){
 qv_collect(){
   local opened raw line total=0 screens=0 empty=0 newlines=0 exhausted count=0 tier cap=50 covered=0 identity_started own_rc identity nick body cdate region author tap nickb64 x y onick oid atype ip profile card attempt
   local -A seen emitted
+  local sampling=0
+  if (( ${+LEADGEN_COMMENT_LIMIT} )); then sampling=1; cap="$LEADGEN_COMMENT_LIMIT"; fi
   opened="$("$C" --profile "$P" open-comments "$QV_EID-comments" </dev/null)" || {
     # 无评论是控制器明确识别的正常结果，失败不能伪装成采完。
     if [[ "$opened" == *reason=no_comments_on_this_video* ]]; then
@@ -228,6 +230,10 @@ except Exception: print("medium")' "$count")"
       exhausted=0; break
     done
     if (( newlines == 0 )); then empty=$((empty+1)); else empty=0; fi
+    if (( sampling && covered >= cap )); then
+      print -- "COLLECTION\t$VID\tsampled\t${#emitted}\t$covered\t$cap"
+      return 0
+    fi
     (( exhausted == 0 && empty < 2 )) || break
     [[ "$tier" != large ]] || (( covered < cap )) || break
     # 本屏出现尚未处理的评论时保持现场重读；本屏没有新行才翻屏。
@@ -240,6 +246,12 @@ except Exception: print("medium")' "$count")"
     print -- "COLLECTION\t$VID\tpartial\t${#emitted}"
     return 7
   fi
-  print -- "COLLECTION\t$VID\tcollected\t${#emitted}"
+  if (( sampling )); then
+    # 只接受新鲜树明确footer，停滞不能冒充全量结束。
+    if (( exhausted != 1 )); then print -- "COLLECTION\t$VID\tpartial\t${#emitted}"; return 7; fi
+    print -- "COLLECTION\t$VID\tcollected\t${#emitted}\t$covered\t$cap\tfooter=1"
+  else
+    print -- "COLLECTION\t$VID\tcollected\t${#emitted}"
+  fi
   # collected 状态只由调用方在评论事务提交后回填，禁止在手机脚本标记。
 }
