@@ -104,3 +104,7 @@ test('real four-profile v2 registry header format resolves every kernel serial (
  const r=spawnSync('python3',['-c',code,script,join(service,'__tests__/fixtures/input-runtime-real-registry-sanitized.tsv')],{encoding:'utf8'});
  assert.equal(r.status,0,r.stderr);assert.deepEqual(JSON.parse(r.stdout),['ANGYVB4227006983','ANGYVB4311010223','ANGYVB4402004137','e6c7ef34']);
 });
+test('atomic registry replacement immediately after parse cannot bind old serials to a new hash',()=>{
+ const c=setup();const code=`import importlib.util,pathlib,sys,os\ns=importlib.util.spec_from_file_location('guard',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\nregistry=pathlib.Path(sys.argv[2]);original=m.registry_serials\ndef replace_after_parse(*args):\n serials=original(*args)\n replacement=registry.with_suffix('.new');replacement.write_bytes(registry.read_bytes()+b'new\\tSER5\\tm\\n');os.replace(replacement,registry)\n (pathlib.Path(sys.argv[3])/'SER5.guard').write_text('')\n return serials\nm.registry_serials=replace_after_parse\ntry:\n with m.device_barrier(registry,sys.argv[3]): pass\nexcept ValueError as e: assert 'registry changed' in str(e),str(e)\nelse: raise AssertionError('accepted old serials with replacement registry hash; SER5 was never guarded')\n`;
+ const r=spawnSync('python3',['-c',code,script,c.registry,c.locks],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+});

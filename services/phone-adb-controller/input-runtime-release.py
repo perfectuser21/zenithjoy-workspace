@@ -67,10 +67,11 @@ def check_component_floor(info, directories):
                 raise ValueError("input component would regress or mutate an existing revision; preserve the verified function/helper or bump the paired revision")
 
 
-def registry_serials(registry):
+def registry_serials(registry, raw=None):
+    raw = Path(registry).read_bytes() if raw is None else raw
     rows = []
     header = None
-    for row in csv.reader(Path(registry).read_text().splitlines(), delimiter="\t"):
+    for row in csv.reader(raw.decode("utf-8").splitlines(), delimiter="\t"):
         if not row or not any(row):
             continue
         if row[0] in ("profile", "#profile"):
@@ -92,8 +93,9 @@ def registry_serials(registry):
 @contextmanager
 def device_barrier(registry, lock_root):
     # Same serial.guard kernel flock as phone-lock-helper.py; never reap/adopt/release owners.
-    serials = registry_serials(registry)
-    registry_hash = digest(Path(registry).read_bytes())
+    registry_raw = Path(registry).read_bytes()
+    serials = registry_serials(registry, registry_raw)
+    registry_hash = digest(registry_raw)
     root = Path(lock_root)
     if not root.is_dir():
         raise ValueError("kernel device lock root missing; installation safety is unknown")
