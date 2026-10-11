@@ -25,10 +25,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  smoke-glob-runner:
-    name: Smoke Glob Runner
+  smoke-glob-shards:
+    name: Smoke Glob Shard ${{ matrix.shard }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1]
 
     services:
       postgres:
@@ -46,6 +50,8 @@ jobs:
           --health-retries 5
 
     env:
+      SMOKE_SHARD_INDEX: ${{ matrix.shard }}
+      SMOKE_SHARD_COUNT: '2'
       # 与 ci-l4-e2e-smoke.yml 的 smoke-api-contract job 保持一致
       DATABASE_HOST: localhost
       DATABASE_PORT: 5432
@@ -223,9 +229,9 @@ jobs:
               golden-path-f1-anchor-smoke.sh) echo 180 ;;  # 现场npm ci根依赖(ajv/yaml)，冷cache偶发慢
               # 路③ 全跑要真起一次 apps/api 再跑十几段真库判定；90s 光等就绪就烧掉大半
               structured-workbench-smoke.sh) echo 180 ;;
-              # 整个 phone-adb-controller 测试套件(600+ 条,含假机整链/有界子进程真等待)当一步跑,main 上已贴 90s 天花板靠重试苟过;
-              # 真实194条完整获客回归218.241s；全目录600+与vitest仍要有界余量，给300s。
-              leadgen-field-cleanup-smoke.sh) echo 300 ;;
+              # 全目录 phone-adb-controller 回归保留；受测merge708的L3全量1765条通过耗时309.265s。
+              # 此脚本还含vitest与字段回归检查，仅本case给420s有限预算；重试1次和job25m上限不变。
+              leadgen-field-cleanup-smoke.sh) echo 420 ;;
               capability-phone-regression-smoke.sh) echo 180 ;;  # 16套串行真实时序回归实测约122秒
               *) echo 90 ;;
             esac
@@ -233,9 +239,35 @@ jobs:
 
           run_one() { timeout "$(script_timeout "$1")" bash "$DIR/$1"; }
 
-          RESULTS=$(mktemp)
+          # 每个 worker 拥有独立数据库/API；这里只分完整文件清单，不在共享服务上并发脚本。
+          SHARD_INDEX="${SMOKE_SHARD_INDEX:-0}"
+          SHARD_COUNT="${SMOKE_SHARD_COUNT:-1}"
+          if [[ ! "$SHARD_COUNT" =~ ^[12]$ || ! "$SHARD_INDEX" =~ ^[01]$ ]] || (( SHARD_INDEX >= SHARD_COUNT )); then
+            echo "::error::invalid smoke shard index/count"; exit 1
+          fi
+          # C顺序仅用于glob发现；真实脚本保留原UTF-8环境（Kotlin类名含非ASCII）。
+          SCRIPTS=()
+          while IFS= read -r -d '' discovered_script; do
+            SCRIPTS+=("$discovered_script")
+          done < <(LC_ALL=C; export LC_ALL; printf '%s\0' "$DIR"/*.sh)
+          [ -f "${SCRIPTS[0]}" ] || { echo "::error::empty smoke inventory"; exit 1; }
+          REPORT_DIR="$RUNNER_TEMP/smoke-glob-shard-$SHARD_INDEX"
+          mkdir -p "$REPORT_DIR"
+          RESULTS="$REPORT_DIR/results.tsv"
+          : > "$RESULTS"
+          python3 - "$REPORT_DIR/manifest.json" "$SHARD_INDEX" "$SHARD_COUNT" "$DENYLIST" "${SCRIPTS[@]}" <<'PY'
+          import json, os, pathlib, sys
+          dest, index, count, denied, *files = sys.argv[1:]
+          json.dump({"source_sha": os.environ["GITHUB_SHA"], "shard_index": int(index),
+                     "shard_count": int(count), "inventory": [pathlib.Path(f).name for f in files],
+                     "denylist": denied.split(), "complete": False}, open(dest, "w"))
+          PY
           PASS=0; DEBT_FAIL=0; GATE_FAIL=0; SKIP=0
-          for f in "$DIR"/*.sh; do
+          ordinal=0
+          for f in "${SCRIPTS[@]}"; do
+            assigned=$((ordinal % SHARD_COUNT))
+            ordinal=$((ordinal+1))
+            [ "$assigned" -eq "$SHARD_INDEX" ] || continue
             name=$(basename "$f")
             if is_denied "$name"; then
               if in_baseline "$name"; then
@@ -264,7 +296,7 @@ jobs:
                   PASS=$((PASS+1))
                 else
                   rc2=$?
-                  echo "::error::基线内 smoke $name FAIL (exit $rc2，含重试)——棘轮闸阻断"
+                  echo "::error::基线内 smoke $name FAIL (exit ${rc2}，含重试)——棘轮闸阻断"
                   printf '%s\tGATE-FAIL\t%s\n' "$name" "$rc2" >> "$RESULTS"
                   GATE_FAIL=$((GATE_FAIL+1))
                 fi
@@ -287,6 +319,16 @@ jobs:
               GATE_FAIL=$((GATE_FAIL+1))
             fi
           done < "$BASELINE"
+
+          python3 - "$REPORT_DIR/manifest.json" "$GATE_FAIL" <<'PY'
+          import json, sys
+          path, failures = sys.argv[1:]
+          with open(path) as f:
+              manifest = json.load(f)
+          manifest.update(complete=True, gate_fail=int(failures))
+          with open(path, "w") as f:
+              json.dump(manifest, f)
+          PY
 
           TOTAL=$((PASS+DEBT_FAIL+GATE_FAIL))
           {
@@ -313,6 +355,75 @@ jobs:
             exit 1
           fi
           exit 0
+
+      - name: Preserve every shard report including failures or partial cancellation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-glob-shard-${{ matrix.shard }}
+          path: ${{ runner.temp }}/smoke-glob-shard-${{ matrix.shard }}/
+          if-no-files-found: error
+
+  smoke-glob-runner:
+    name: Smoke Glob Runner
+    needs: [smoke-glob-shards]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SMOKE_ARTIFACTS: smoke-shard-reports
+      SMOKE_SHARDS_RESULT: ${{ needs.smoke-glob-shards.result }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: smoke-glob-shard-*
+          path: smoke-shard-reports
+      - name: Verify complete shard coverage and original gates
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ["SMOKE_ARTIFACTS"])
+          manifests = sorted(root.rglob("manifest.json"))
+          assert len(manifests) == 2, "missing or duplicate shard artifacts"
+          inventory = sorted(p.name for p in pathlib.Path(".github/workflows/scripts/smoke").glob("*.sh"))
+          baseline = set(pathlib.Path(".github/workflows/scripts/smoke-baseline.txt").read_text().splitlines()) - {""}
+          denied = {"wechat-auto-launch-smoke.sh", "wechat-rpa-auto-reply-smoke.sh",
+                    "wechat-cs-visible-delivery-smoke.sh", "line04-preflight-smoke.sh",
+                    "line02-android-collect-realmachine-smoke.sh", "line02-android-cancel-realmachine-smoke.sh",
+                    "account-scan-realmachine-smoke.sh", "dm-send-realmachine-smoke.sh"}
+          assert inventory and baseline <= set(inventory), "missing baseline script"
+          assert not baseline & denied, "baseline script in denylist"
+          indices, all_rows = set(), []
+          for path in manifests:
+              meta = json.loads(path.read_text())
+              index = meta["shard_index"]
+              assert type(index) is int and index in {0, 1} and index not in indices, "duplicate/invalid shard"
+              indices.add(index)
+              assert meta["shard_count"] == 2 and meta["source_sha"] == os.environ["GITHUB_SHA"], "wrong shard/source"
+              assert meta["inventory"] == inventory and set(meta["denylist"]) == denied, "changed inventory/denylist"
+              assert meta["complete"] is True and meta["gate_fail"] == 0, "incomplete or failed shard"
+              rows = [line.split("\t") for line in (path.parent / "results.tsv").read_text().splitlines()]
+              assert all(len(row) == 3 for row in rows), "malformed result row"
+              assigned = inventory[index::2]
+              assert sorted(row[0] for row in rows) == assigned, "missing/duplicate result coverage"
+              for name, status, rc in rows:
+                  if name in denied:
+                      assert status == "SKIP" and rc == "-", "denylist result mismatch"
+                  elif status in {"PASS", "PASS-RETRY"}:
+                      assert rc == "0", "invalid success exit"
+                  else:
+                      assert status == "DEBT-FAIL" and name not in baseline and int(rc) != 0, "failed baseline/invalid result"
+              all_rows.extend(rows)
+          assert indices == {0, 1} and len(all_rows) == len(inventory), "incomplete total coverage"
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write("# Complete Smoke Glob shard results\n\n")
+              f.write("| Script | Result | Exit |\n|---|---|---|\n")
+              for row in sorted(all_rows):
+                  f.write("| " + " | ".join(row) + " |\n")
+          assert os.environ["SMOKE_SHARDS_RESULT"] == "success", "worker job failed/cancelled"
+          print("Complete smoke inventory covered exactly once; original ratchet gates passed")
+          PY
 
   baseline-lint:
     name: Smoke Baseline Lint

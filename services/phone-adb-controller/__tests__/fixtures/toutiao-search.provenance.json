@@ -1,0 +1,12 @@
+{
+  "toutiao-search-before.xml": {
+    "source": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/toutiao-search-input-native-probe/text-input-20261010235114-69267-before.xml",
+    "sha256": "5b7a7f1b5756190ccbe14a25f3335ca3a78e45750789e8bc897aab77627f6b5e",
+    "status": "真实before原件，未作为ready/typed"
+  },
+  "toutiao-search-ime-before.txt": {
+    "source": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/toutiao-search-input-native-probe/text-input-20261010235114-69267-ime-before.txt",
+    "sha256": "f5666fb715a4cf0597336b99b1aeca57fe1ac8e584055ffc123891ac39e392cc",
+    "status": "真实before原件，未作为ready/typed"
+  }
+}

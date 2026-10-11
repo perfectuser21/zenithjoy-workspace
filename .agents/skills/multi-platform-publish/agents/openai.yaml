@@ -1,0 +1,4 @@
+interface:
+  display_name: "九平台发布"
+  short_description: "用 Codex 按平台与成品类型选择已有发布通道、核验实际结果并回写任务"
+  default_prompt: "使用 $multi-platform-publish 执行指定账号和内容的发布任务，并返回真实结果与证据。"

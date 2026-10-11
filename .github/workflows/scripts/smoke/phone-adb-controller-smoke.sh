@@ -477,21 +477,19 @@ if [[ -n "$_CALL_PATH" ]]; then
   # 这条断言本身就拦得住去掉 scp / 条件恒假 / 送错目录 / 漏掉一台四种改法。
   _STUB=$(mktemp -d)
   trap 'rm -rf "$_STUB"' EXIT   # fail 走 exit 1,显式 rm 够不着,交给 trap 兜底
-  printf '#!/bin/bash\nfor a in "$@"; do printf "%%s\\n" "$a"; done >> "%s/scp.log"\nexit 0\n' "$_STUB" > "$_STUB/scp"
-  # 0928 起 deploy.sh 是原子替换(scp 到 .<名>.deploy-new 再 ssh mv -f 换 inode,防运行中脚本被覆盖搞坏):
-  # ssh 桩也要记账,才能断言"最终落到了调用方目录的正式文件名"。
-  printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> "%s/ssh.log"\nexit 0\n' "$_STUB" > "$_STUB/ssh"
-  chmod +x "$_STUB/scp" "$_STUB/ssh"
+  # 配套输入现在经capture/install CAS安装，不能再要求旧版controller单文件scp/mv。
+  # 临时运输桩只执行本地真实installer；其它部署仍只记账，不接触远端。
+  node "$D/__tests__/fixtures/paired-deploy-smoke-transport.mjs" prepare "$_STUB"
   PATH="$_STUB:$PATH" node "$D/__tests__/fixtures/deploy-smoke-runner.mjs" "$D/deploy.sh" > "$_STUB/run.log" 2>&1 || true
   for _h in xian-m4; do
-    if ! grep -qx "$_h:${_CALL_DIR}/.douyin-phone-adb.deploy-new" "$_STUB/scp.log" 2>/dev/null \
-       || ! grep -qE "^$_h .*mv -f ${_CALL_DIR}/\.douyin-phone-adb\.deploy-new ${_CALL_DIR}/douyin-phone-adb\$" "$_STUB/ssh.log" 2>/dev/null; then
+    if [[ "$_CALL_DIR" != "~/.local/bin" ]] \
+       || ! node "$D/__tests__/fixtures/paired-deploy-smoke-transport.mjs" verify "$_STUB" > "$_STUB/pair-verified.json"; then
       # 带上现场再死，否则下一个人只能靠猜（本仓死规矩：不拿现场不动手）
       echo "--- deploy.sh 空跑输出(末 15 行) ---" >&2
       tail -15 "$_STUB/run.log" >&2 2>/dev/null || echo "(没有输出)" >&2
       echo "--- 实际送出的目标 ---" >&2
       grep -E '^[a-z0-9-]+:' "$_STUB/scp.log" 2>/dev/null | sort -u >&2 || echo "(scp.log 为空)" >&2
-      fail "deploy.sh 空跑后没往 $_h:${_CALL_DIR}/ 送 douyin-phone-adb —— 夜批调的就是这个路径(harvest-keyword.sh 里写死 ${_CALL_PATH})，下发到别处=手机上永远跑旧版"
+      fail "deploy.sh 配套输入未在 $_h 的两个真实消费者目录完成CAS安装和字节回读（默认消费者 ${_CALL_PATH}）"
     fi
   done
   if grep -qE '^xian-m1(:| )' "$_STUB/scp.log" "$_STUB/ssh.log"; then

@@ -1,0 +1,35 @@
+{
+  "before": {
+    "source": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/toutiao-external-frozen-search-xiaohuang/text-input-20261011095556-48165-before.xml",
+    "sha256": "82dffbdc17fe6d3cde7dbae30bdffedbe5b8c8ac5ca2a348628384825bf56136",
+    "synthetic": false
+  },
+  "ready": {
+    "source": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/toutiao-external-frozen-search-xiaohuang/text-input-20261011095556-48165-ready.xml",
+    "sha256": "82dffbdc17fe6d3cde7dbae30bdffedbe5b8c8ac5ca2a348628384825bf56136",
+    "synthetic": false
+  },
+  "typed": {
+    "source": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/toutiao-external-frozen-search-xiaohuang/text-input-20261011095556-48165-typed.xml",
+    "sha256": "6fabd4d20e30acf59225c49a8ec45b9a1bd1bdd74379cca3b448863a4b91813d",
+    "synthetic": false
+  },
+  "ime_before": {
+    "source": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/toutiao-external-frozen-search-xiaohuang/text-input-20261011095556-48165-ime-before.txt",
+    "sha256": "4af597ce02d32097a6fd17724c81b09392239c2487aa3a5a4a72a8c2e810dcee",
+    "synthetic": false,
+    "note": "real original IME"
+  },
+  "ime_ready": {
+    "source": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/toutiao-external-frozen-search-xiaohuang/text-input-20261011095556-48165-ime-ready.txt",
+    "sha256": "4af597ce02d32097a6fd17724c81b09392239c2487aa3a5a4a72a8c2e810dcee",
+    "synthetic": false,
+    "note": "real original IME"
+  },
+  "ime_typed": {
+    "source": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/toutiao-external-frozen-search-xiaohuang/text-input-20261011095556-48165-ime-ready.txt",
+    "sha256": "4af597ce02d32097a6fd17724c81b09392239c2487aa3a5a4a72a8c2e810dcee",
+    "synthetic": true,
+    "note": "typed IME is a ready-copy model; original live run has no typed IME evidence"
+  }
+}

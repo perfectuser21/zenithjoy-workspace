@@ -65,19 +65,51 @@ export function classifyPatrolDiff({repoRoot,base,head,registeredRevision=REGIST
 export function verifyPatrolSmokeConsumer(repoRoot){
  const name='phone-account-patrol-smoke.sh',baseline=readFileSync(join(repoRoot,'.github/workflows/scripts/smoke-baseline.txt'),'utf8');
  if(!baseline.split(/\r?\n/).includes(name))fail('SMOKE_BASELINE_REMOVED');
- const w=YAML.parse(readFileSync(join(repoRoot,'.github/workflows/ci-smoke-glob-runner.yml'),'utf8')),j=w.jobs?.['smoke-glob-runner'];
- if(!w.on?.pull_request||!w.on?.push||['pull_request','push'].some(e=>w.on[e].paths!==undefined||w.on[e]['paths-ignore']!==undefined)||j?.if!==undefined||j?.['continue-on-error']!==undefined||!Number.isFinite(j?.['timeout-minutes']))fail('SMOKE_DISABLED');
- const step=j.steps.find(s=>s.id==='glob');if(!step?.run||step.if!==undefined||step['continue-on-error']!==undefined)fail('SMOKE_DISABLED');
+ const w=YAML.parse(readFileSync(join(repoRoot,'.github/workflows/ci-smoke-glob-runner.yml'),'utf8'));
+ const worker=w.jobs?.['smoke-glob-shards'],aggregate=w.jobs?.['smoke-glob-runner'],gate=w.jobs?.gate;
+ const permanent=s=>s&&s.if===undefined&&s['continue-on-error']===undefined;
+ const timed=j=>Number.isFinite(j?.['timeout-minutes'])&&j['timeout-minutes']>0;
+ const step=worker?.steps?.find(s=>s.id==='glob'),verify=aggregate?.steps?.find(s=>s.name==='Verify complete shard coverage and original gates');
+ const upload=worker?.steps?.find(s=>s.uses==='actions/upload-artifact@v4'),download=aggregate?.steps?.find(s=>s.uses==='actions/download-artifact@v4');
+ if(!w.on?.pull_request||!w.on?.push||['pull_request','push'].some(e=>w.on[e].paths!==undefined||w.on[e]['paths-ignore']!==undefined)||
+    !permanent(worker)||!timed(worker)||worker.strategy?.['fail-fast']!==false||JSON.stringify(worker.strategy?.matrix)!==JSON.stringify({shard:[0,1]})||
+    worker.env?.SMOKE_SHARD_INDEX!=='${{ matrix.shard }}'||worker.env?.SMOKE_SHARD_COUNT!=='2'||!permanent(step)||!step.run||
+    upload?.if!=='always()'||upload['continue-on-error']!==undefined||upload.with?.name!=='smoke-glob-shard-${{ matrix.shard }}'||upload.with?.path!=='${{ runner.temp }}/smoke-glob-shard-${{ matrix.shard }}/'||upload.with?.['if-no-files-found']!=='error'||
+    aggregate?.name!=='Smoke Glob Runner'||aggregate.if!=='always()'||aggregate['continue-on-error']!==undefined||!timed(aggregate)||JSON.stringify(aggregate.needs)!==JSON.stringify(['smoke-glob-shards'])||
+    aggregate.env?.SMOKE_ARTIFACTS!=='smoke-shard-reports'||aggregate.env?.SMOKE_SHARDS_RESULT!=='${{ needs.smoke-glob-shards.result }}'||!permanent(verify)||!verify.run||
+    !permanent(download)||download.with?.pattern!=='smoke-glob-shard-*'||download.with?.path!=='smoke-shard-reports'||
+    gate?.name!=='Smoke Glob Gate Passed'||gate.if!=="always() && github.event_name == 'pull_request'"||gate['continue-on-error']!==undefined||!timed(gate)||
+    JSON.stringify(gate.needs)!==JSON.stringify(['smoke-glob-runner','baseline-lint'])||!gate.steps?.length||gate.steps.some(s=>!permanent(s)||!s.run))fail('SMOKE_DISABLED');
  const root=mkdtempSync(join(tmpdir(),'patrol-smoke-consumer-'));
  try{
-  const dir=join(root,'.github/workflows/scripts/smoke');mkdirSync(dir,{recursive:true});
-  writeFileSync(join(dirname(dir),'smoke-baseline.txt'),name+'\n');
+  const dir=join(root,'.github/workflows/scripts/smoke'),reports=join(root,'reports');mkdirSync(dir,{recursive:true});mkdirSync(reports);
+  const companion='a-consumer-smoke.sh',source='f'.repeat(40);
+  writeFileSync(join(dirname(dir),'smoke-baseline.txt'),companion+'\n'+name+'\n');
+  const env={PATH:'/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin',HOME:root,CI:'true',GITHUB_SHA:source,GITHUB_STEP_SUMMARY:join(root,'summary'),RUNNER_TEMP:reports,SMOKE_SHARD_COUNT:'2',SMOKE_ARTIFACTS:reports};
+  const run=(script,extra={})=>spawnSync('/bin/bash',['-c',script],{cwd:root,env:{...env,...extra},encoding:'utf8',timeout:20000,maxBuffer:2*1024*1024});
+  const ok=r=>!r.error&&!r.signal&&r.status===0;
+  const requireBlocked=r=>{if(r.error||r.signal||r.status===0)fail('SMOKE_CONSUMER_BYPASSED')};
+  const gateRun=(result,lint)=>gate.steps.map(s=>s.run).join('\n').replaceAll('${{ needs.smoke-glob-runner.result }}',result).replaceAll('${{ needs.baseline-lint.result }}',lint);
+  if(!ok(run(gateRun('success','success'))))fail('SMOKE_CONSUMER_BYPASSED');
+  requireBlocked(run(gateRun('failure','success')));requireBlocked(run(gateRun('success','failure')));
   for(const exitCode of [0,1]){
-   const marker=join(root,'ran-'+exitCode);writeFileSync(join(dir,name),`#!/bin/bash\nprintf executed >> '${marker}'\nexit ${exitCode}\n`);
-   const r=spawnSync('/bin/bash',['-c',step.run],{cwd:root,env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin',HOME:root,CI:'true',GITHUB_STEP_SUMMARY:join(root,'summary')},encoding:'utf8',timeout:20000,maxBuffer:2*1024*1024});
-   if(r.error||r.signal||!existsSync(marker)||(exitCode===0?r.status!==0:r.status===0))fail('SMOKE_CONSUMER_BYPASSED');
+   const marker=join(root,'ran-'+exitCode),other=join(root,'companion-'+exitCode);
+   writeFileSync(join(dir,companion),`#!/bin/bash\nprintf executed >> '${other}'\nexit 0\n`);
+   writeFileSync(join(dir,name),`#!/bin/bash\nprintf executed >> '${marker}'\nexit ${exitCode}\n`);
+   const workers=[0,1].map(i=>run(step.run,{SMOKE_SHARD_INDEX:String(i)}));
+   if(!existsSync(marker)||!existsSync(other)||readFileSync(other,'utf8')!=='executed'||readFileSync(marker,'utf8')!==(exitCode?'executedexecuted':'executed'))fail('SMOKE_CONSUMER_BYPASSED');
+   const result=workers.every(ok)?'success':'failure';
+   if(exitCode){if(!ok(workers[0]))fail('SMOKE_CONSUMER_BYPASSED');requireBlocked(workers[1]);requireBlocked(run(verify.run,{SMOKE_SHARDS_RESULT:result}));continue}
+   if(result!=='success'||!ok(run(verify.run,{SMOKE_SHARDS_RESULT:result})))fail('SMOKE_CONSUMER_BYPASSED');
+   // 使用真实聚合器及真实worker产物证明不可漏覆盖、串source或吞worker失败。
+   requireBlocked(run(verify.run,{SMOKE_SHARDS_RESULT:'failure'}));
+   const metaPath=join(reports,'smoke-glob-shard-1/manifest.json'),rowsPath=join(reports,'smoke-glob-shard-1/results.tsv');
+   const originalMeta=readFileSync(metaPath,'utf8'),originalRows=readFileSync(rowsPath,'utf8');
+   const meta=JSON.parse(originalMeta);meta.source_sha='e'.repeat(40);writeFileSync(metaPath,JSON.stringify(meta));
+   requireBlocked(run(verify.run,{SMOKE_SHARDS_RESULT:'success'}));writeFileSync(metaPath,originalMeta);
+   writeFileSync(rowsPath,'');requireBlocked(run(verify.run,{SMOKE_SHARDS_RESULT:'success'}));writeFileSync(rowsPath,originalRows);
   }
-  return {verified:true,scope:'development_governance',source_sha256:sha(step.run),success_executed:true,failure_blocked:true};
+  return {verified:true,scope:'development_governance',source_sha256:sha(step.run+'\n'+verify.run),success_executed:true,failure_blocked:true,shards_executed:2,aggregate_verified:true,coverage_source_failure_blocked:true};
  }finally{rmSync(root,{recursive:true,force:true})}
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){

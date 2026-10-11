@@ -1,0 +1,6 @@
+{
+  "source": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/remaining-zhihu-article/text-input-20261011004126-29318-before.xml",
+  "sha256": "8cc0aee3a36d971ba5cf08f0bf61ca5d3916ad785db90ec6e687c6ba7a316ad5",
+  "source_run": "codex-1011-zhihu-article-xiaobai",
+  "purpose": "标准EditText与祖先WebView同时focused回归"
+}

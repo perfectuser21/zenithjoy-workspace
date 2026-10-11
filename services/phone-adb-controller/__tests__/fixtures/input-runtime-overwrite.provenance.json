@@ -1,0 +1,12 @@
+{
+  "input-runtime-legacy-dc3be59e-function.zsh": {
+    "source": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/input-deployment-overwrite-review/live-text-input-original.zsh",
+    "sha256": "4ad63299b05e50370f9381a5ca1aacc595812e540b4a1d9a26b99d69177a389f",
+    "note": "Real archived deployment overwrite input components; no fabricated phone evidence"
+  },
+  "input-runtime-live-helper-38d341de.py": {
+    "source": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/input-deployment-overwrite-review/host-original/Users/jinnuoshengyuan/.local/bin/text-input-focus.py",
+    "sha256": "38d341de53fbc397af87541d65ae88a836d43309fd3c3e19f5617dd5eac104c9",
+    "note": "Real archived deployment overwrite input components; no fabricated phone evidence"
+  }
+}

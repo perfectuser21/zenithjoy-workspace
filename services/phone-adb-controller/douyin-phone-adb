@@ -24,6 +24,7 @@ LOCATE_SCRIPT="${DOUYIN_LOCATE_SCRIPT:-${0:A:h}/locate-element.py}"
 COMMENT_EVIDENCE_HELPER="${0:A:h}/queued-comment-history.js"
 LOCATE_ENDPOINT="${DOUYIN_LOCATE_ENDPOINT:-https://openrouter.ai/api/v1/chat/completions}"
 LOCATE_MODEL="${DOUYIN_LOCATE_MODEL:-bytedance/ui-tars-1.5-7b}"
+TEXT_INPUT_FOCUS_HELPER="${0:A:h}/text-input-focus.py"
 REGISTRY="${DOUYIN_PHONE_REGISTRY:-${HOME}/.config/openclaw/douyin-phone-profiles.tsv}"
 ACCOUNT_REGISTRY="${DOUYIN_ACCOUNT_REGISTRY:-${HOME}/.config/openclaw/douyin-account-routes.tsv}"
 
@@ -3251,7 +3252,8 @@ ti_restore_ime() {
 }
 
 text_input() {
-  local text bytes eid before_xml focus_line field typed_xml typed_value enable_out cur b64 restored=1
+  # INPUT_RUNTIME_REVISION=2
+  local text bytes eid before_xml field typed_xml typed_value enable_out cur b64 restored=1 standard_selection="" standard_rc=0 readback_policy="exact" comparison_json actual_bytes actual_sha paragraphs=0 ready_xml native_selection="" native_kind="" native_compare_rc=0 ime_evidence focus_helper="$TEXT_INPUT_FOCUS_HELPER"
   [[ "$#" == 1 ]] || die "usage: douyin-phone-adb --profile PROFILE --lock-owner RUN text-input UTF8_TEXT"
   text="$1"
   require_held_lock text_input
@@ -3266,10 +3268,22 @@ text_input() {
   require_target_for text_input
   eid="text-input-$(/bin/date +%Y%m%d%H%M%S)-$$"
   before_xml="$(ui_evidence "${eid}-before")"
-  focus_line="$(/usr/bin/grep -oE '<node[^>]+focused="true"[^>]*>' "$before_xml" | /usr/bin/head -1 || true)"
-  [[ -n "$focus_line" && "$focus_line" == *'class="android.widget.EditText"'* ]] \
-    || ctl_fail text_input retryable no_focused_input "no focused EditText on screen; tap the input field first (evidence=$before_xml)"
-  field="$(print -r -- "$focus_line" | /usr/bin/sed -nE 's/.*resource-id="([^"]*)".*/\1/p')"
+  standard_selection="$EVIDENCE_ROOT/${eid}-standard-focus.json"
+  "$PYTHON_BIN" "$focus_helper" standard-resolve "$before_xml" > "$standard_selection" || standard_rc=$?
+  if (( standard_rc == 0 )); then
+    field="$("$PYTHON_BIN" -c 'import json,sys; print(json.load(open(sys.argv[1]))["resource-id"])' "$standard_selection")"
+  elif (( standard_rc == 3 )); then
+    standard_selection=""
+    ime_evidence="$EVIDENCE_ROOT/${eid}-ime-before.txt"
+    native_selection="$EVIDENCE_ROOT/${eid}-native-focus.json"
+    "$ADB" -s "$SERIAL" shell dumpsys input_method > "$ime_evidence"
+    "$PYTHON_BIN" "$focus_helper" resolve "$before_xml" "$ime_evidence" > "$native_selection" \
+      || ctl_fail text_input retryable no_focused_input "no verified focused input; tap the input field first (evidence=$before_xml ime=$ime_evidence)"
+    field="$("$PYTHON_BIN" -c 'import json,sys; x=json.load(open(sys.argv[1])); print(x["resource_id"] if x.get("kind") == "toutiao_search" else "native-editor-title")' "$native_selection")"
+    native_kind="$("$PYTHON_BIN" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("kind",""))' "$native_selection")"
+  else
+    ctl_fail text_input retryable no_focused_input "focused standard input is unsafe or ambiguous (evidence=$before_xml)"
+  fi
 
   # 原输入法存全局：EXIT trap 在函数返回/退出时才跑，local 那时已销毁（见 private-message-send 0916 注释）。
   _TI_ORIG_IME="$(current_ime)"
@@ -3291,20 +3305,64 @@ text_input() {
   "$ADB" -s "$SERIAL" shell ime set "$ADBKEYBOARD_IME" >/dev/null 2>&1 || true
   cur="$(current_ime)"
   [[ "$cur" == *adbkeyboard* ]] || ctl_fail text_input retryable ime_switch_failed "AdbIME 切换未生效(当前仍为 $cur)"
+  if [[ -n "$native_selection" ]]; then
+    require_target_for text_input
+    ime_evidence="$EVIDENCE_ROOT/${eid}-ime-ready.txt"
+    "$ADB" -s "$SERIAL" shell dumpsys input_method > "$ime_evidence"
+    # 原生路由都用fresh ready XML重验同字段及明确保护属性，再允许CLEAR/INPUT。
+    ready_xml="$(ui_evidence "${eid}-ready")"
+    if ! "$PYTHON_BIN" "$focus_helper" check "$native_selection" "$ime_evidence" "$ready_xml"; then
+      ti_restore_ime || restored=0
+      trap - EXIT INT TERM
+      (( restored )) || ctl_fail text_input needs_human ime_restore_failed "input connection changed and original input method could not be restored"
+      ctl_fail text_input retryable no_focused_input "input connection changed before typing (evidence=$ime_evidence)"
+    fi
+  fi
+  if [[ -n "$standard_selection" ]]; then
+    ready_xml="$(ui_evidence "${eid}-ready")"
+    if ! "$PYTHON_BIN" "$focus_helper" standard-check "$standard_selection" "$ready_xml"; then
+      ti_restore_ime || restored=0
+      trap - EXIT INT TERM
+      (( restored )) || ctl_fail text_input needs_human ime_restore_failed "standard focus changed and original input method could not be restored"
+      ctl_fail text_input retryable no_focused_input "standard input changed before typing (evidence=$ready_xml)"
+    fi
+  fi
   b64="$(print -rn -- "$text" | /usr/bin/base64 | tr -d '\n')"
   "$ADB" -s "$SERIAL" shell am broadcast -a ADB_CLEAR_TEXT >/dev/null 2>&1 || true
   "$ADB" -s "$SERIAL" shell am broadcast -a ADB_INPUT_B64 --es msg "$b64" >/dev/null 2>&1 || true
   wait_ms 700
   typed_xml="$(ui_evidence "${eid}-typed")"
-  typed_value="$(/usr/bin/xmllint --xpath 'string((//node[@focused="true"])[1]/@text)' "$typed_xml" 2>/dev/null || true)"
+  if [[ "$native_kind" == "toutiao_search" ]]; then
+    # Fresh post-broadcast connection evidence is mandatory for this native search mode.
+    ime_evidence="$EVIDENCE_ROOT/${eid}-ime-typed.txt"
+    "$ADB" -s "$SERIAL" shell dumpsys input_method > "$ime_evidence"
+    comparison_json="$("$PYTHON_BIN" "$focus_helper" toutiao-compare "$native_selection" "$typed_xml" "$ime_evidence" "$text" 2> "$EVIDENCE_ROOT/${eid}-comparison-error.txt")" || native_compare_rc=$?
+  elif [[ -n "$native_selection" ]]; then
+    typed_value="$("$PYTHON_BIN" "$focus_helper" readback "$native_selection" "$typed_xml" 2>/dev/null || true)"
+  else
+    typed_value="$("$PYTHON_BIN" "$focus_helper" standard-readback "$standard_selection" "$typed_xml" 2>/dev/null || true)"
+  fi
 
   # 无论成败先还原输入法并回读，再判结果；还原失败压过一切（手机会卡在 ADBKeyboard 上）。
   ti_restore_ime || restored=0
   trap - EXIT INT TERM
   (( restored )) || ctl_fail text_input needs_human ime_restore_failed "input method stuck at $(current_ime); expected $_TI_ORIG_IME"
-  [[ "$typed_value" == "$text" ]] \
-    || ctl_fail text_input retryable readback_mismatch "focused field readback did not exactly match the requested text (evidence=$typed_xml)"
-  print -- "text_input=ok bytes=$bytes sha256=$(print -rn -- "$text" | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}') field=${field:-unknown} ime_restored=$_TI_ORIG_IME evidence=$typed_xml"
+  if [[ -n "$standard_selection" || "$native_kind" == "toutiao_search" ]]; then
+    if [[ -n "$standard_selection" ]]; then
+      comparison_json="$("$PYTHON_BIN" "$focus_helper" standard-compare "$standard_selection" "$typed_xml" "$text" 2>/dev/null)" \
+        || ctl_fail text_input retryable readback_mismatch "selected field readback did not match the requested text (evidence=$typed_xml)"
+    else
+      (( native_compare_rc == 0 )) || ctl_fail text_input retryable readback_mismatch "native search raw text or typed identity did not match (evidence=$typed_xml ime=$ime_evidence)"
+    fi
+    print -r -- "$comparison_json" > "$EVIDENCE_ROOT/${eid}-comparison.json"
+    IFS=$'\t' read -r readback_policy actual_bytes actual_sha paragraphs <<< "$("$PYTHON_BIN" -c 'import json,sys; x=json.loads(sys.argv[1]); print(x["comparison_mode"],x["actual"]["bytes"],x["actual"]["sha256"],x["paragraphs"],sep="\t")' "$comparison_json")"
+  else
+    [[ "$typed_value" == "$text" ]] \
+      || ctl_fail text_input retryable readback_mismatch "focused field readback did not exactly match the requested text (evidence=$typed_xml)"
+    actual_bytes=$bytes
+    actual_sha="$(print -rn -- "$typed_value" | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')"
+  fi
+  print -- "text_input=ok bytes=$bytes sha256=$(print -rn -- "$text" | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}') field=${field:-unknown} ime_restored=$_TI_ORIG_IME comparison_mode=$readback_policy source_bytes=$bytes source_sha256=$(print -rn -- "$text" | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}') actual_bytes=$actual_bytes actual_sha256=$actual_sha paragraphs=$paragraphs evidence=$typed_xml"
 }
 
 
