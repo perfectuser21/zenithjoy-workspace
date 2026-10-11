@@ -201,3 +201,14 @@ test("harvest-cron.sh 在已持锁（HARVEST_BRAIN_LOCK_HELD=1）或缺 harvest-
   assert.deepEqual(c.calls(), []);
   assert.equal(readFileSync(join(c.home, "wfrun-args"), "utf8").trim().split("\n").length, 2);
 });
+
+// 1011 生产实测（xian-m4）：run 正常结束后 EXIT trap 里 rlog 引用 cmd_run 的局部变量 serial，
+// set -u 下报 "serial: unbound variable"，放锁那行日志丢了（锁本身已放）。钉死：收尾日志完整、stderr 无 unbound。
+test("run 包装：正常结束后的 EXIT 收尾不报 unbound variable，放锁结果写进 --log", { skip: SKIP }, () => {
+  const c = setup();
+  const logf = join(c.home, "run.log");
+  const r = c.lock("run", "SER1", "harvest-fallback:t", "--log", logf, "--", "/bin/sh", "-c", "true");
+  assert.equal(r.status, 0, r.stderr);
+  assert.doesNotMatch(r.stderr, /unbound variable/);
+  assert.match(readFileSync(logf, "utf8"), /放锁: BRAIN_LOCK=released/);
+});

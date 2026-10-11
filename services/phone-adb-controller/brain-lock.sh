@@ -119,7 +119,9 @@ cmd_run(){
   done
   [[ "${1:-}" == "--" && $# -ge 2 ]] || { echo "brain-lock run: missing -- CMD" >&2; return 64; }
   shift
-  rlog(){ local m="[$(date +%m%d-%H:%M:%S)] brain-lock[$serial]: $*"; if [[ -n "$logf" ]]; then echo "$m" >> "$logf"; fi; echo "$m"; }
+  # rlog 也会在 EXIT trap 里调用(那时 cmd_run 已返回、局部变量没了),只能读全局 RUN_SERIAL/RUN_LOG
+  RUN_SERIAL="$serial"; RUN_LOG="$logf"
+  rlog(){ local m="[$(date +%m%d-%H:%M:%S)] brain-lock[${RUN_SERIAL:-?}]: $*"; if [[ -n "${RUN_LOG:-}" ]]; then echo "$m" >> "$RUN_LOG"; fi; echo "$m"; }
 
   local out rc held=0
   out=$(cmd_acquire "$serial" "$owner" "$ttl"); rc=$?
