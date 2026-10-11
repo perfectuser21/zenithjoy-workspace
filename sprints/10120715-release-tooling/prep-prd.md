@@ -1,0 +1,13 @@
+# 发布验证器与中央多流程合同兼容
+
+GP-Anchor: line02/keyword_acquisition keep-green
+
+根任务713e4691-6fb1-444c-9e1a-bd5a8cea28b7，用户明确要求直接部署最新获客修复，send0。
+
+真实Pilot38183018536在snapshot通过后，被固定工具5a86ca0e的SOURCE_REGISTRY_OWNER_INVALID拦住：旧sourceOwnerRequirements按capability匹配源合同，最新中央定义已分离contract_key与父capability，一个能力下有多个流程。所有12新流程的源owner被旧逻辑拒绝。
+
+最窄修复：只把Pilot调用uses与tooling_revision同步固定到已合并818b623d0616d11e3c03c2e7fde4f550533f6998。该版本逐workflow ID/key/contract_key/source_repo/source_workflow核验源owner，并保留父能力与规范树匹配，接受既有旧合同。主线来源、只读权限、三secret、三份artifact与部署gate不变。
+
+先升级caller合同测试期望，真实红；再升级两个SHA引用，12关联测试绿。用本次实际已验证snapshot直接调用固定新版校验器通过；篡改workflow与重复owner仍拒绝。证明/tmp/codex-pilot-tooling-compatibility-proof-20261012.json。正式发布验收与两机部署尚待完成，不能把代码测试当业务完成。
+
+发布配置审计：PR2125标记[CONFIG]；变更仅两个同值固定SHA，来源校验与全部拒绝门禁仍启用。
