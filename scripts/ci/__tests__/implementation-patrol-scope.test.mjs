@@ -75,7 +75,7 @@ test('caller永久执行并仅根据成功分类控制巡查；所有事件保�
 });
 test('共享smoke真实隔离消费者守卫：正常执行且巡查失败必非零',async()=>{
  const {verifyPatrolSmokeConsumer}=await api();const root=new URL('../../../',import.meta.url).pathname;
- assert.equal(verifyPatrolSmokeConsumer(root).verified,true);
+ const r=verifyPatrolSmokeConsumer(root);assert.equal(r.verified,true);assert.equal(r.shards_executed,2);assert.equal(r.aggregate_verified,true);assert.equal(r.coverage_source_failure_blocked,true);
 });
 test('共享baseline删巡查、deny巡查不得通过消费者守卫',async t=>{
  const {verifyPatrolSmokeConsumer}=await api(),f=fixture(t);const base='.github/workflows/scripts/smoke-baseline.txt',runner='.github/workflows/ci-smoke-glob-runner.yml';
@@ -99,4 +99,21 @@ test('真实caller配置关掉job或node步骤必须被永久协议守卫拒绝'
   if(target==='scope-if')w.jobs['scope-classification'].if='false';if(target==='scope-step-if')w.jobs['scope-classification'].steps.find(s=>s.id==='scope').if='false';
   assert.throws(()=>validatePatrolCaller(w),/PATROL_SCOPE_/);
  }
+});
+
+for(const target of ['worker-if','worker-continue','worker-count','matrix','fail-fast','glob-if','upload-if','aggregate-if','aggregate-needs','aggregate-continue','verify-if','download-pattern','gate-needs','gate-run','source-check','coverage-check','failure-check'])test('两worker及原required聚合真实消费者不可弱化：'+target,async t=>{
+ const {verifyPatrolSmokeConsumer}=await api(),f=fixture(t),path='.github/workflows/ci-smoke-glob-runner.yml';
+ f.put('.github/workflows/scripts/smoke-baseline.txt','phone-account-patrol-smoke.sh\n');
+ const w=YAML.parse(readFileSync(new URL('../../../'+path,import.meta.url),'utf8')),worker=w.jobs['smoke-glob-shards'],aggregate=w.jobs['smoke-glob-runner'];
+ const glob=worker.steps.find(s=>s.id==='glob'),verify=aggregate.steps.find(s=>s.name==='Verify complete shard coverage and original gates');
+ if(target==='worker-if')worker.if='false';if(target==='worker-continue')worker['continue-on-error']=true;
+ if(target==='worker-count')worker.env.SMOKE_SHARD_COUNT='1';if(target==='matrix')worker.strategy.matrix.shard=[0];if(target==='fail-fast')worker.strategy['fail-fast']=true;
+ if(target==='glob-if')glob.if='false';if(target==='upload-if')worker.steps.find(s=>s.uses==='actions/upload-artifact@v4').if='success()';
+ if(target==='aggregate-if')aggregate.if='success()';if(target==='aggregate-needs')aggregate.needs=[];if(target==='aggregate-continue')aggregate['continue-on-error']=true;
+ if(target==='verify-if')verify.if='false';if(target==='download-pattern')aggregate.steps.find(s=>s.uses==='actions/download-artifact@v4').with.pattern='other-*';
+ if(target==='gate-needs')w.jobs.gate.needs=['baseline-lint'];if(target==='gate-run')w.jobs.gate.steps[0].run='exit 0';
+ if(target==='source-check')verify.run=verify.run.replace('meta["source_sha"] == os.environ["GITHUB_SHA"]','True');
+ if(target==='coverage-check')verify.run=verify.run.replace('sorted(row[0] for row in rows) == assigned','True').replace('len(all_rows) == len(inventory)','True');
+ if(target==='failure-check')verify.run=verify.run.replace('os.environ["SMOKE_SHARDS_RESULT"] == "success"','True');
+ f.put(path,YAML.stringify(w));assert.throws(()=>verifyPatrolSmokeConsumer(f.root),/PATROL_SCOPE_/);
 });
