@@ -28,6 +28,7 @@ node --test scripts/product-map/__tests__/leadgen-split-contracts.test.js \
  services/phone-adb-controller/__tests__/leadgen-discovery.test.mjs \
  services/phone-adb-controller/__tests__/streaming-discovery.test.mjs \
  services/phone-adb-controller/__tests__/queued-video.test.mjs \
+ services/phone-adb-controller/__tests__/deregistered-comment.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-queue.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-rpc.test.mjs \
  services/phone-adb-controller/__tests__/runtime-definition.test.mjs \

@@ -21,6 +21,7 @@ SIPS="${DOUYIN_SIPS_BIN:-/usr/bin/sips}"
 # 实现抽到 locate-element.py，与朋友圈控制器共用一份，改一次不用改两处。
 LOCATE_KEY_FILE="${DOUYIN_LOCATE_KEY_FILE:-$HOME/.credentials/openrouter.env}"
 LOCATE_SCRIPT="${DOUYIN_LOCATE_SCRIPT:-${0:A:h}/locate-element.py}"
+COMMENT_EVIDENCE_HELPER="${0:A:h}/queued-comment-history.js"
 LOCATE_ENDPOINT="${DOUYIN_LOCATE_ENDPOINT:-https://openrouter.ai/api/v1/chat/completions}"
 LOCATE_MODEL="${DOUYIN_LOCATE_MODEL:-bytedance/ui-tars-1.5-7b}"
 REGISTRY="${DOUYIN_PHONE_REGISTRY:-${HOME}/.config/openclaw/douyin-phone-profiles.tsv}"
@@ -263,7 +264,7 @@ PYDOUYIN
 }
 
 _ui_evidence_wave() {
-  local evidence_id local_path dump_output remote_size dump_attempt dump_status policy="${2:-standard}" started elapsed fg
+  local evidence_id local_path dump_output remote_size dump_attempt dump_status policy="${2:-standard}" started elapsed fg stat_output stat_status remote_absent absent_ack
   evidence_id="$1"
   case "$policy" in standard|verified-seed-share|verified-seed-share-retry|paused-douyin|paused-detail) ;; *) return 2 ;; esac
   require_evidence_id "$evidence_id"
@@ -297,7 +298,23 @@ _ui_evidence_wave() {
     else
       dump_status=$?
     fi
-    remote_size="$("$ADB" -s "$SERIAL" shell stat -c %s "$REMOTE_UI" 2>/dev/null | tr -d '\r' || print -- unknown)"
+    remote_absent=0
+    if [[ "$policy" == paused-* && "$dump_attempt" == 1 ]]; then
+      stat_status=0
+      stat_output="$("$ADB" -s "$SERIAL" shell stat -c %s "$REMOTE_UI" 2>&1)" || stat_status=$?
+      remote_size="$(print -r -- "$stat_output" | tr -d '\r')"
+      # Android缺文件stat不是大小0。ENOENT只允许再查同路径，不是absence证据。
+      if (( stat_status != 0 )) && [[ "$remote_size" == "stat: '$REMOTE_UI': No such file or directory" \
+          && "$dump_output" == *"could not get idle state"* && ! -e "$local_path" ]]; then
+        if absent_ack="$("$ADB" -s "$SERIAL" shell "if [ ! -e '$REMOTE_UI' ] && [ ! -L '$REMOTE_UI' ]; then printf '%s' 'REMOTE_UI_ABSENT_V1'; else exit 1; fi" 2>/dev/null)" \
+            && [[ "$absent_ack" == REMOTE_UI_ABSENT_V1 ]]; then
+          remote_absent=1
+        fi
+      fi
+      (( stat_status == 0 )) || remote_size=unknown
+    else
+      remote_size="$("$ADB" -s "$SERIAL" shell stat -c %s "$REMOTE_UI" 2>/dev/null | tr -d '\r' || print -- unknown)"
+    fi
     if [[ "$remote_size" == <-> ]] && (( remote_size > 0 )); then
       "$ADB" -s "$SERIAL" pull "$REMOTE_UI" "$local_path" >/dev/null || { [[ "$policy" != paused-* ]] || return 3; }
       if [[ -s "$local_path" ]] \
@@ -318,7 +335,7 @@ _ui_evidence_wave() {
         return 3
       fi
     fi
-    if [[ ( "$policy" == verified-seed-share || "$policy" == paused-* ) && "$dump_attempt" == 1 && "$dump_output" == *"could not get idle state"* && ! -s "$local_path" ]] && { [[ "$policy" == verified-seed-share ]] || { [[ "$remote_size" == <-> ]] && (( remote_size == 0 )); }; }; then
+    if [[ ( "$policy" == verified-seed-share || "$policy" == paused-* ) && "$dump_attempt" == 1 && "$dump_output" == *"could not get idle state"* && ! -s "$local_path" ]] && { [[ "$policy" == verified-seed-share ]] || { [[ "$remote_size" == <-> ]] && (( remote_size == 0 )); } || (( remote_absent == 1 )); }; then
       elapsed="$("$PYTHON_BIN" -c 'import sys,time; print((time.monotonic_ns()-int(sys.argv[1]))//1000000)' "$started")"
       if [[ "$policy" == verified-seed-share ]]; then
         print -u2 -- "share-idle: phase=share attempt=1 dump_rc=$dump_status elapsed_ms=$elapsed; could not get idle state; no fresh XML; using single toggle-dump-toggle"
@@ -2211,7 +2228,7 @@ send_private_message() {
 }
 
 read_commenter_identity() {
-  local tap_x tap_y nickname_b64 evidence_id expected_nickname before_xml profile_xml ident observed_nickname observed_id back_xml
+  local tap_x tap_y nickname_b64 evidence_id expected_nickname before_xml profile_xml ident observed_nickname observed_id back_xml identity_started unavailable_proof
   tap_x="$1"
   tap_y="$2"
   nickname_b64="$3"
@@ -2224,6 +2241,7 @@ read_commenter_identity() {
   expected_nickname="$(print -n -- "$nickname_b64" | /usr/bin/base64 -D 2>/dev/null)" || die "commenter nickname base64 could not be decoded"
   [[ -n "$expected_nickname" && "$expected_nickname" != *$'\n'* && "$expected_nickname" != *$'\r'* ]] || die "commenter nickname must be one non-empty line"
   [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
+  identity_started="$(date +%s)"
   before_xml="$EVIDENCE_ROOT/${evidence_id}-comments.xml"
   ui_evidence "${evidence_id}-comments" >/dev/null
   /usr/bin/grep -Eq '评论|comment' "$before_xml" || die "verified comment context was not found"
@@ -2273,6 +2291,12 @@ read_commenter_identity() {
   /usr/bin/grep -Eq '评论|comment' "$back_xml" || die "comment context was not restored after identity readback"
   # 0914 主理人要求:主页 IP 属地随身份一并输出(树里现成,text="IP：陕西" 全角冒号)
   profile_ip="$(/usr/bin/grep -oE 'text="IP：[^"]+"' "$profile_xml" | /usr/bin/head -1 | /usr/bin/sed -E 's/text="IP：([^"]+)"/\1/' || true)"
+  # 已注销不虚构抖音号；前/后评论上下文和本次主页证据均须严格通过。
+  if [[ -z "$observed_id" ]] && unavailable_proof="$(node "$COMMENT_EVIDENCE_HELPER" unavailable "$EVIDENCE_ROOT" "$evidence_id" "$observed_nickname" "$before_xml" "$profile_xml" "$back_xml" "$identity_started" 2>/dev/null)"; then
+    print -- "profile_status=unavailable"
+    print -- "unavailable_reason=account_deregistered"
+    print -- "comment_evidence=$before_xml"
+  fi
   print -- "nickname=$observed_nickname"
   print -- "douyin_id=$observed_id"
   print -- "account_type=$account_type"

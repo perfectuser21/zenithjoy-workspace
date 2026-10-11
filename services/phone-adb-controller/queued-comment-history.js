@@ -45,12 +45,37 @@ assert all(n.get('package') in (None,'',pkg) for n in b.iter('node'))`],{input:J
  const target=path.join(root,eid+'-history-readback.json'),tmp=target+'.tmp-'+process.pid;
  fs.writeFileSync(tmp,JSON.stringify(out),{mode:0o600,flag:'wx'});fs.renameSync(tmp,target);return out;
 }
+// 注销仅是不可用候选证明，不产生 OID/LEAD/覆盖配额。控制器和队列独立复核。
+function unavailable(root,eid,nickname,before,profile,returned,started){
+ if(!/^[a-zA-Z0-9_-]+$/.test(eid)||typeof nickname!=='string'||!nickname||/[\r\n]/.test(nickname)||!Number.isSafeInteger(Number(started))||Number(started)<=0)throw Error('UNAVAILABLE_SCOPE_INVALID');
+ const read=(file,suffix)=>{const st=fs.lstatSync(file);if(!st.isFile()||st.isSymbolicLink()||st.size>4*1024*1024||st.mtimeMs<Number(started)*1000||path.dirname(fs.realpathSync(file))!==fs.realpathSync(root)||path.basename(file)!==eid+suffix)throw Error('UNAVAILABLE_FRESH_PROOF_INVALID');return fs.readFileSync(file);};
+ const a=read(before,'-comments.xml'),p=read(profile,'-profile.xml'),b=read(returned,'-returned.xml');
+ const check=spawnSync('python3',['-c',`import json,sys,re,xml.etree.ElementTree as E
+v=json.load(sys.stdin); pkg='com.ss.android.ugc.aweme'
+def nodes(xml):
+ r=E.fromstring(xml); ns=list(r.iter('node'))
+ if r.tag!='hierarchy' or not ns or any(n.get('package')!=pkg for n in ns): raise ValueError('package')
+ return ns
+def panel(ns):
+ return any(re.fullmatch(r'(评论 ?[0-9]+|[0-9万.]+ ?条评论|暂无评论)',n.get('text','')) for n in ns) and any(n.get('content-desc')=='放大评论区' for n in ns) and any(n.get('content-desc')=='关闭' for n in ns)
+a,p,b=map(nodes,[v['before'],v['profile'],v['returned']])
+if not panel(a) or not panel(b): raise ValueError('panel')
+if sum(n.get('text')==v['nickname'] for n in p)!=1: raise ValueError('nickname')
+if not any(n.get('text')==v['nickname'] and n.get('resource-id')==pkg+':id/tj1' and n.get('content-desc')==v['nickname']+'，复制名字和修改备注' for n in p): raise ValueError('profile')
+if not any(n.get('text')=='暂无作品' for n in p): raise ValueError('works')
+if not any(n.get('text')=='账号已经注销' for n in p): raise ValueError('deregistered')
+if any('抖音号' in n.get('text','') or '抖音号' in n.get('content-desc','') for n in p): raise ValueError('id')
+`],{input:JSON.stringify({before:a.toString(),profile:p.toString(),returned:b.toString(),nickname}),encoding:'utf8',timeout:5000});
+ if(check.status!==0)throw Error('UNAVAILABLE_IDENTITY_PROOF_INVALID');
+ return {version:1,verified:true,reason:'account_deregistered',identity_eid:eid,comment_context_verified:true,before_sha256:digest(a),profile_sha256:digest(p),returned_sha256:digest(b),before_path:before,profile_path:profile,returned_path:returned};
+}
 if(require.main===module){try{
  const [op,file,root,line,run,source_run,video_id,video_url,...a]=process.argv.slice(2);
- if(op==='key'){console.log(key(file,root));}
+ if(op==='unavailable'){console.log(JSON.stringify(unavailable(file,root,line,run,source_run,video_id,video_url)));}
+ else if(op==='key'){console.log(key(file,root));}
  else {const h=load(file,root,{line,run,source_run:source_run||null,video_id,video_url});
   if(op==='load'){console.log(`META\t${h.receipt.status}\t${h.sha256}`);for(const [k,v] of h.rows)console.log(`ROW\t${v.id}\t${k}`);}
   else if(op==='proof'){proof(h,root,...a);}
   else throw Error('HISTORY_OPERATION_INVALID');}
  }catch{process.stderr.write('HISTORY_VALIDATION_FAILED\n');process.exitCode=8;}}
-module.exports={load,key,proof};
+module.exports={load,key,proof,unavailable};
