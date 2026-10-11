@@ -49,3 +49,12 @@ test('手册配置和引用资源是skill组成，不冒充运行code',()=>{
   if(b.path.startsWith('.agents/skills/')&&!b.path.includes('/scripts/'))assert.equal(b.kind,'skill',b.path);
  }
 });
+test('当前来源全集仅21安卓和公众号API，七个补入口保真实证据及非严格声明',()=>{
+ const d=JSON.parse(readFileSync(new URL('../../../product-map/publishing/native-source-bindings.json',import.meta.url),'utf8'));
+ assert.equal(d.branches.length,22);assert.equal(new Set(d.branches.map(b=>b.branch)).size,22);
+ assert.equal(d.branches.filter(b=>b.channel==='android_rpa').length,21);
+ assert.equal(d.branches.filter(b=>b.channel==='wechat_api').length,1);
+ const extra=['xiaohongshu.image.phone','xiaohongshu.article.phone','toutiao.article.phone','weibo.article.phone','zhihu.idea.phone','zhihu.video.phone','zhihu.article.phone'];
+ for(const key of extra){const b=d.branches.find(b=>b.branch===key);assert.ok(b,key);assert.match(b.skill_source_ref,/android-additional-modes\.md$/);assert.ok(b.evidence.length>0,key);for(const e of b.evidence)assert.match(e.sha256,/^[a-f0-9]{64}$/);}
+ for(const b of d.branches){assert.equal(b.strict_all_guards_pass,'not_asserted');assert.equal(b.root_confirmed_effect,true);if(b.channel==='wechat_api')assert.equal(b.existing_platform_video_workflow_id,null);else assert.equal(b.capability_id,'24987ee5-53a0-4c37-946f-1b749954cac7');}
+});

@@ -41,6 +41,7 @@ export function planFor(ctx, capId, { allowMissing = false } = {}) {
   const acts = r.activities;
   const errors = [];
   const doc = ctx.contracts[capId];
+  if (doc?.execution_profile === 'codex_agent') return { ok: false, errors: [`${capId}: Codex agent合同不属于wf-run获客计划`], activities: [] };
   if (!/^[a-z][a-z0-9_]+$/.test(doc.brain_workflow_key || '')) errors.push(`${capId}: 缺有效 brain_workflow_key`);
   if (!/^[\w.-]+\/[\w.-]+$/.test(doc.source_repo || '')) errors.push(`${capId}: 缺有效 source_repo`);
   for (const a of acts) if (!a.runtime) errors.push(`${capId}.${a.key}: 缺 runtime（无实现绑定不得跑）`);
@@ -107,6 +108,8 @@ function main(argv) {
     let bad = 0;
     const want = new Set();
     for (const capId of Object.keys(ctx.contracts).sort()) {
+      // 明确Codex执行归属不产获客plan；直接请求仍拒绝，孤儿plan检查照常。
+      if (ctx.contracts[capId].execution_profile === 'codex_agent') continue;
       const r = planFile(ctx, capId);
       if (!r.ok) { console.error(`FAIL ${capId}:\n  ${r.errors.join('\n  ')}`); bad = 1; continue; }
       const p = join(dir, `${capId}.plan`);

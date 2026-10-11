@@ -457,3 +457,24 @@ golden_paths:
     line_id: line11
     name: 组织与权限底座·多组织切换
     status: proposed
+
+  # 六层真树既有能力：24987ee5-53a0-4c37-946f-1b749954cac7；不是新业务能力。
+  # parent 内容生产1489c4e5... / 新媒体部708dab3c...；历史line01锚仍保留。
+  - id: android_worker_publish
+    app_id: customer_app
+    line_id: line01
+    name: 内容生产 · 多平台发布
+    status: active
+    smoke_files:
+      - .github/workflows/scripts/smoke/codex-publish-contract-smoke.sh
+    steps:
+      - id: step1
+        name: 取得本人账号与同run发布上下文
+      - id: step2
+        name: 准确素材及文案形成待发布稿
+      - id: step3
+        name: 单次提交并保原outward账本
+      - id: step4
+        name: 读回准确目标及实际作品状态
+      - id: step5
+        name: 安全归位与精确双锁释放

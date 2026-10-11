@@ -1,0 +1,296 @@
+version: 1
+execution_profile: codex_agent
+capability: android_worker_publish
+contract_key: toutiao_video_publish
+name: toutiao · 视频发布（既有安卓流程）
+workflow: toutiao-video-publish
+brain_workflow_key: toutiao_video_publish.android
+source_repo: perfectuser21/zenithjoy-workspace
+checks: services/phone-adb-controller/checks/multi-platform-publish.yaml
+trigger_inputs:
+- PublishRequest
+activities:
+- ref: douyin_video_publish.preflight
+- key: prepare
+  name: 形成准确待发布稿
+  order: 2
+  version: 1.0.0
+  compatibility: backward
+  owner:
+    department: 新媒体部
+    agent: Codex发布执行者
+  inputs:
+  - type: PublishContext
+    cardinality: one
+    fields:
+    - task_id
+    - run_id
+    - serial
+    - owner
+    - account
+    - source_verified
+  outputs:
+  - type: PublishDraft
+    cardinality: one
+    effect: create
+    fields: &id001
+    - task_id
+    - run_id
+    - title
+    - body
+    - media_sha256
+    - privacy
+    - fields_exact
+  preconditions:
+  - 用户发布授权存在且来源内容/账号/分支验收合同明确
+  - 遵循当前真实设备owner/TTL和同run执行边界；未知不行动
+  postconditions:
+  - probe: publish_prepare_verified
+    asserts: 原标题正文素材逐字和hash准确、私密/音乐定位及当日余量符合
+  execution:
+    location: xian-m4
+    via: Codex multi-platform-publish + 本run受控controller原生路径
+  budget:
+    max_duration_s: 600
+    heartbeat_s: 60
+  resources:
+    locks:
+    - controller serial.guard + Brain同owner设备锁
+    limits:
+    - name: publish_attempts
+      value: 0
+  idempotency:
+    dedupe_key: task_id/run_id/platform/content_type
+    on_duplicate: reject
+  failure:
+    empty_ok: []
+    retryable:
+    - 仅只读可按合同有限重试；不得重复发表
+    needs_human:
+      cases:
+      - 原证缺失或输入/权限/账号/锁/预算未知
+      - 登录短信风控或付费
+      alert:
+        channel: brain_alert
+        object: 本task真实result/handoff
+    fatal:
+    - 源身份或owner不一致立即停止
+  side_effects: []
+  invokers:
+  - agent
+  implementation_bindings:
+  - kind: code
+    repo: perfectuser21/zenithjoy-workspace
+    path: services/phone-adb-controller/douyin-phone-adb
+    revision: contract
+  - kind: code
+    repo: perfectuser21/zenithjoy-workspace
+    path: services/phone-adb-controller/text-input-focus.py
+    revision: contract
+  - kind: code
+    repo: perfectuser21/zenithjoy-workspace
+    path: services/phone-adb-controller/__tests__/media-push-text-input.test.mjs
+    revision: contract
+  - kind: code
+    repo: perfectuser21/zenithjoy-workspace
+    path: services/phone-adb-controller/__tests__/text-input-focus.test.mjs
+    revision: contract
+  steps:
+  - key: prepare_evidence
+    name: 原标题正文素材逐字和hash准确、私密/音乐定位及当日余量符合
+    order: 1
+    reads:
+    - PublishContext.task_id
+    writes:
+    - PublishDraft.task_id
+    check: 原标题正文素材逐字和hash准确、私密/音乐定位及当日余量符合
+    implementation:
+      status: missing
+      ref: Codex实机轨迹已有；归档执行runner对应阶段metrics自动产出尚待接入，不冒已有通用工厂实现
+    uses_llm: false
+    dod:
+      mode: checkpoint
+      readback:
+        type: evidence
+        glob: '*prepare*original.json'
+        expect:
+          op: '>='
+          value: 1
+- key: publish
+  name: 提交唯一发布请求
+  order: 3
+  version: 1.0.0
+  compatibility: backward
+  owner:
+    department: 新媒体部
+    agent: Codex发布执行者
+  inputs:
+  - type: PublishDraft
+    cardinality: one
+    fields: *id001
+  outputs:
+  - type: PublishSubmission
+    cardinality: one
+    effect: create
+    fields: &id002
+    - task_id
+    - run_id
+    - attempt_count
+    - submitted_at
+    - receipt_path
+  preconditions:
+  - 用户发布授权存在且来源内容/账号/分支验收合同明确
+  - 遵循当前真实设备owner/TTL和同run执行边界；未知不行动
+  postconditions:
+  - probe: publish_publish_verified
+    asserts: 原outward账本最多1次attempt，不重复点发表；提交时间和receipt保真
+  execution:
+    location: xian-m4
+    via: Codex multi-platform-publish + 本run受控controller原生路径
+  budget:
+    max_duration_s: 600
+    heartbeat_s: 60
+  resources:
+    locks:
+    - controller serial.guard + Brain同owner设备锁
+    limits:
+    - name: publish_attempts
+      value: 1
+  idempotency:
+    dedupe_key: task_id/run_id/platform/content_type
+    on_duplicate: reject
+  failure:
+    empty_ok: []
+    retryable:
+    - 仅只读可按合同有限重试；不得重复发表
+    needs_human:
+      cases:
+      - 原证缺失或输入/权限/账号/锁/预算未知
+      - 登录短信风控或付费
+      alert:
+        channel: brain_alert
+        object: 本task真实result/handoff
+    fatal:
+    - 源身份或owner不一致立即停止
+  side_effects:
+  - kind: external_visible
+    target: 声明平台的本人账号
+    description: 单次真实发布；权限以最终作品读回为准
+  invokers:
+  - agent
+  implementation_bindings:
+  - kind: code
+    repo: perfectuser21/zenithjoy-workspace
+    path: services/phone-adb-controller/douyin-phone-adb
+    revision: contract
+  steps:
+  - key: publish_evidence
+    name: 原outward账本最多1次attempt，不重复点发表；提交时间和receipt保真
+    order: 1
+    reads:
+    - PublishDraft.task_id
+    writes:
+    - PublishSubmission.task_id
+    check: 原outward账本最多1次attempt，不重复点发表；提交时间和receipt保真
+    implementation:
+      status: missing
+      ref: Codex实机轨迹已有；归档执行runner对应阶段metrics自动产出尚待接入，不冒已有通用工厂实现
+    uses_llm: false
+    dod:
+      mode: checkpoint
+      readback:
+        type: evidence
+        glob: '*publish*original.json'
+        expect:
+          op: '>='
+          value: 1
+- key: verify
+  name: 读回目标作品效果
+  order: 4
+  version: 1.0.0
+  compatibility: backward
+  owner:
+    department: 新媒体部
+    agent: Codex发布执行者
+  inputs:
+  - type: PublishSubmission
+    cardinality: one
+    fields: *id002
+  outputs:
+  - type: PublishEvidence
+    cardinality: one
+    effect: create
+    fields:
+    - task_id
+    - run_id
+    - work_id
+    - actual_privacy
+    - effect_status
+    - strict_status
+  preconditions:
+  - 用户发布授权存在且来源内容/账号/分支验收合同明确
+  - 遵循当前真实设备owner/TTL和同run执行边界；未知不行动
+  postconditions:
+  - probe: publish_verify_verified
+    asserts: 正确目标本人work_id/原标题正文素材/当前权限/真实效果，unknown不当PASS；执行者不独立判自己run
+  execution:
+    location: xian-m4
+    via: Codex multi-platform-publish + 本run受控controller原生路径
+  budget:
+    max_duration_s: 900
+    heartbeat_s: 60
+  resources:
+    locks:
+    - controller serial.guard + Brain同owner设备锁
+    limits:
+    - name: publish_attempts
+      value: 0
+  idempotency:
+    dedupe_key: task_id/run_id/platform/content_type
+    on_duplicate: reject
+  failure:
+    empty_ok: []
+    retryable:
+    - 仅只读可按合同有限重试；不得重复发表
+    needs_human:
+      cases:
+      - 原证缺失或输入/权限/账号/锁/预算未知
+      - 登录短信风控或付费
+      alert:
+        channel: brain_alert
+        object: 本task真实result/handoff
+    fatal:
+    - 源身份或owner不一致立即停止
+  side_effects: []
+  invokers:
+  - agent
+  implementation_bindings:
+  - kind: code
+    repo: perfectuser21/zenithjoy-workspace
+    path: services/phone-adb-controller/douyin-phone-adb
+    revision: contract
+  steps:
+  - key: verify_evidence
+    name: 正确目标本人work_id/原标题正文素材/当前权限/真实效果，unknown不当PASS；执行者不独立判自己run
+    order: 1
+    reads:
+    - PublishSubmission.task_id
+    writes:
+    - PublishEvidence.task_id
+    check: 正确目标本人work_id/原标题正文素材/当前权限/真实效果，unknown不当PASS；执行者不独立判自己run
+    implementation:
+      status: missing
+      ref: Codex实机轨迹已有；归档执行runner对应阶段metrics自动产出尚待接入，不冒已有通用工厂实现
+    uses_llm: false
+    dod:
+      mode: checkpoint
+      readback:
+        type: evidence
+        glob: '*verify*original.json'
+        expect:
+          op: '>='
+          value: 1
+- ref: douyin_video_publish.cleanup
+known_gaps:
+- gap: 真实运行已有独立原证；工厂runner阶段metrics自动写入和共享持久部署未完成，缺证不判通过
+  task: 5d2e620a

@@ -7,6 +7,7 @@
   "additionalProperties": false,
   "required": ["version", "capability", "name", "workflow", "brain_workflow_key", "source_repo", "checks", "trigger_inputs", "activities"],
   "properties": {
+    "execution_profile": { "type": "string", "enum": ["codex_agent"] },
     "lifecycle": {"type": "string", "enum": ["active", "retired"]},
     "version": { "const": 1 },
     "capability": { "$ref": "#/$defs/key" },
@@ -20,7 +21,7 @@
     },
     "name": { "type": "string", "minLength": 2 },
     "workflow": { "type": "string", "pattern": "^[a-z][a-z0-9-]+$" },
-    "brain_workflow_key": { "type": "string", "pattern": "^[a-z][a-z0-9_]+$" },
+    "brain_workflow_key": { "type": "string", "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$" },
     "source_repo": { "type": "string", "pattern": "^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$" },
     "checks": { "type": "string", "pattern": "^services/.+\\.yaml$" },
     "ledger": { "type": "string", "pattern": "^services/.+\\.sh$" },

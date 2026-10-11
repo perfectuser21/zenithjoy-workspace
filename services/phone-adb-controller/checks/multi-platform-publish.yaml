@@ -1,0 +1,68 @@
+version: 1
+workflow: multi-platform-publish
+probes:
+- key: publish_preflight_verified
+  stage: preflight
+  journey_cell: stage:preflight
+  probe:
+    type: metric
+    ref: metrics.publish_preflight_verified
+  expect:
+    op: ==
+    value: 1
+  severity: error
+  failure_class: needs_human
+  on_fail: stop_run
+  note: 待归档执行runner产出对应原证据绑定metric；当前没有自动metrics写入，缺失必须判红。本人账号与声明一致、source SHA准确、run同owner两层锁及真实根inode前后在线
+- key: publish_prepare_verified
+  stage: prepare
+  journey_cell: stage:prepare
+  probe:
+    type: metric
+    ref: metrics.publish_prepare_verified
+  expect:
+    op: ==
+    value: 1
+  severity: error
+  failure_class: needs_human
+  on_fail: stop_run
+  note: 待归档执行runner产出对应原证据绑定metric；当前没有自动metrics写入，缺失必须判红。原标题正文素材逐字和hash准确、私密/音乐定位及当日余量符合
+- key: publish_publish_verified
+  stage: publish
+  journey_cell: stage:publish
+  probe:
+    type: metric
+    ref: metrics.publish_publish_verified
+  expect:
+    op: ==
+    value: 1
+  severity: error
+  failure_class: needs_human
+  on_fail: stop_run
+  note: 待归档执行runner产出对应原证据绑定metric；当前没有自动metrics写入，缺失必须判红。原outward账本最多1次attempt，不重复点发表；提交时间和receipt保真
+- key: publish_verify_verified
+  stage: verify
+  journey_cell: stage:verify
+  probe:
+    type: metric
+    ref: metrics.publish_verify_verified
+  expect:
+    op: ==
+    value: 1
+  severity: error
+  failure_class: needs_human
+  on_fail: stop_run
+  note: 待归档执行runner产出对应原证据绑定metric；当前没有自动metrics写入，缺失必须判红。正确目标本人work_id/原标题正文素材/当前权限/真实效果，unknown不当PASS；执行者不独立判自己run
+- key: publish_cleanup_verified
+  stage: cleanup
+  journey_cell: stage:cleanup
+  probe:
+    type: metric
+    ref: metrics.publish_cleanup_verified
+  expect:
+    op: ==
+    value: 1
+  severity: error
+  failure_class: needs_human
+  on_fail: stop_run
+  note: 待归档执行runner产出对应原证据绑定metric；当前没有自动metrics写入，缺失必须判红。原launcher及sameowner controllerfree/Brain请求响应null，所有命令结束

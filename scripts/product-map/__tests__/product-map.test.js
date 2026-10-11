@@ -79,6 +79,7 @@ test('T3: staff_app/line00 精确 5 个 GP（含gp_anchor_enforcement、f1_dev_l
   assert.deepEqual(
     customerGps.map(g => `${g.line_id}/${g.id}`).sort(),
     [
+      'line01/android_worker_publish',
       'line01/customer_first_success',
       'line02/benchmark_link_acquisition',
       'line02/customer_smart_acquisition',
