@@ -20,7 +20,7 @@ class CatalogSmoke(unittest.TestCase):
         # CI 路由测试使用独立文件夹具，不依赖执行机的真实账号和旧手册安装。
         cls.skill_fixture = tempfile.TemporaryDirectory()
         cls.catalog.SKILLS = Path(cls.skill_fixture.name)
-        for name in ("douyin-publisher", "wechat-publisher"):
+        for name in ("douyin-publisher", "wechat-publisher", "android-publish"):
             folder = cls.catalog.SKILLS / name
             folder.mkdir()
             (folder / "SKILL.md").write_text("# 路由文件夹具；不代表实际发布手册\n")
@@ -35,9 +35,28 @@ class CatalogSmoke(unittest.TestCase):
         self.assertFalse(plan["executed"])
         self.assertEqual(plan["runtime_validation"], "pending")
 
-    def test_missing_phone_zhihu_has_no_fallback(self):
+    def test_unknown_phone_zhihu_type_has_no_fallback(self):
         with self.assertRaisesRegex(ValueError, "未找到"):
-            self.catalog.plan("zhihu", "video", "phone")
+            self.catalog.plan("zhihu", "image", "phone")
+
+    def test_additional_android_modes_use_phone_guidance(self):
+        for platform, kind in (("xiaohongshu", "image"), ("xiaohongshu", "article"),
+                               ("toutiao", "article"), ("weibo", "article"),
+                               ("zhihu", "idea"), ("zhihu", "video"), ("zhihu", "article")):
+            with self.subTest(platform=platform, kind=kind):
+                plan = self.catalog.plan(platform, kind, "phone")
+                self.assertTrue(plan["entrypoint"].endswith("android-additional-modes.md"))
+                self.assertEqual(plan["channel"], "phone")
+                self.assertTrue(any(p.endswith("android-publish/SKILL.md") for p in plan["instructions"]))
+                self.assertFalse(plan["executed"])
+                self.assertEqual(plan["runtime_validation"], "pending")
+
+    def test_current_scope_has_21_android_modes_and_one_wechat_api(self):
+        scope = self.catalog.load_catalog()["active_acceptance_scope"]
+        self.assertEqual(len(scope), 22)
+        self.assertEqual(len(set(scope)), 22)
+        self.assertEqual(sum(r.endswith(".phone") for r in scope), 21)
+        self.assertEqual([r for r in scope if r.startswith("wechat.")], ["wechat.article.api"])
 
     def test_wechat_api_is_mass_send_not_draft_completion(self):
         plan = self.catalog.plan("wechat", "article", "api")
