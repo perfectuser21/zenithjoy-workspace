@@ -140,3 +140,8 @@ test('可信本次前台及PAUSE成立但无树，保原合法视觉定位并新
 test('paused策略remote stat未知不得首idle提前兜底',()=>{
  const r=pausedIdle({command:'wave',unknownStat:true});assert.notEqual(r.status,0);assert.equal(r.state.dumps,4);assert.equal(r.state.toggles,2);assert.doesNotMatch(r.stderr,/paused-idle:/);
 });
+
+for(const options of [{wrongFocus:true},{ambiguousFocus:true},{pauseFails:true},{toggleFails:1},{toggleFails:2},{wrongPackage:true},{partial:true}])test('真实open-video硬错误不重试软归位也不输出已打开 '+JSON.stringify(options),()=>{
+ const r=pausedIdle(options);assert.notEqual(r.status,0,r.stderr);assert.doesNotMatch(r.stdout,/video_opened=1/);assert.doesNotMatch(r.calls,/input tap|input keyevent 126/);
+ if(options.wrongFocus||options.ambiguousFocus||options.pauseFails)assert.equal(r.state.dumps,0);
+});

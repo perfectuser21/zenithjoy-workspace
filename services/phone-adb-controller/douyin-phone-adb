@@ -242,11 +242,38 @@ except Exception:
 PYSHARE
 }
 
+# 局部暂停取树的可信动作前提，不是视频身份凭据。
+_foreground_is_exact_douyin() {
+  "$PYTHON_BIN" - "$1" "$DOUYIN_PACKAGE" <<'PYFOCUS'
+import re,sys
+components=re.findall(r'(?<![\w.])([A-Za-z][\w.]*)/[\w.$]+',sys.argv[1])
+sys.exit(0 if components==[sys.argv[2]] else 1)
+PYFOCUS
+}
+
+_is_complete_douyin_xml() {
+  [[ -s "$1" && ! -L "$1" ]] || return 1
+  "$PYTHON_BIN" - "$1" "$DOUYIN_PACKAGE" <<'PYDOUYIN'
+import sys,xml.etree.ElementTree as ET
+try:
+    root=ET.parse(sys.argv[1]).getroot();nodes=list(root.iter('node'))
+    if root.tag!='hierarchy' or not nodes or any(n.get('package')!=sys.argv[2] for n in nodes):sys.exit(1)
+except (ET.ParseError,OSError):sys.exit(1)
+PYDOUYIN
+}
+
 _ui_evidence_wave() {
-  local evidence_id local_path dump_output remote_size dump_attempt dump_status policy="${2:-standard}" started elapsed
+  local evidence_id local_path dump_output remote_size dump_attempt dump_status policy="${2:-standard}" started elapsed fg
   evidence_id="$1"
-  case "$policy" in standard|verified-seed-share|verified-seed-share-retry) ;; *) return 2 ;; esac
+  case "$policy" in standard|verified-seed-share|verified-seed-share-retry|paused-douyin|paused-detail) ;; *) return 2 ;; esac
   require_evidence_id "$evidence_id"
+  if [[ "$policy" == paused-* ]]; then
+    # 每个call重新建立前提，不能继承gate上轮dismiss前或父进程的许可。
+    fg="$(foreground_package)"; _foreground_is_exact_douyin "$fg" || return 3
+    "$ADB" -s "$SERIAL" shell input keyevent 127 >/dev/null || return 3
+    fg="$(foreground_package)"; _foreground_is_exact_douyin "$fg" || return 3
+    wait_ms 300
+  fi
   local_path="$EVIDENCE_ROOT/${evidence_id}.xml"
   /bin/mkdir -p "$EVIDENCE_ROOT"
 
@@ -261,7 +288,7 @@ _ui_evidence_wave() {
   for dump_attempt in 1 2 3; do
     /bin/rm -f "$local_path"
     "$ADB" -s "$SERIAL" shell rm -f "$REMOTE_UI" >/dev/null
-    if [[ "$policy" == verified-seed-share && "$dump_attempt" == 1 ]]; then
+    if [[ ( "$policy" == verified-seed-share || "$policy" == paused-* ) && "$dump_attempt" == 1 ]]; then
       started="$("$PYTHON_BIN" -c 'import time; print(time.monotonic_ns())')"
     fi
     dump_status=0
@@ -270,23 +297,28 @@ _ui_evidence_wave() {
     else
       dump_status=$?
     fi
-    remote_size="$("$ADB" -s "$SERIAL" shell stat -c %s "$REMOTE_UI" 2>/dev/null | tr -d '\r' || print -- 0)"
+    remote_size="$("$ADB" -s "$SERIAL" shell stat -c %s "$REMOTE_UI" 2>/dev/null | tr -d '\r' || print -- unknown)"
     if [[ "$remote_size" == <-> ]] && (( remote_size > 0 )); then
-      "$ADB" -s "$SERIAL" pull "$REMOTE_UI" "$local_path" >/dev/null
+      "$ADB" -s "$SERIAL" pull "$REMOTE_UI" "$local_path" >/dev/null || { [[ "$policy" != paused-* ]] || return 3; }
       if [[ -s "$local_path" ]] \
         && /usr/bin/grep -q '<hierarchy' "$local_path" \
         && /usr/bin/grep -q '</hierarchy>' "$local_path" \
-        && { [[ "$policy" == standard ]] || _is_fresh_share_detail_xml "$local_path"; }; then
+        && { [[ "$policy" == standard ]] || { [[ "$policy" == paused-douyin ]] && _is_complete_douyin_xml "$local_path"; } || _is_fresh_share_detail_xml "$local_path"; }; then
         if (( dump_status != 0 )) || [[ "$dump_output" == *"ERROR:"* ]]; then
           print -u2 -- "warning: accepted fresh complete hierarchy despite dynamic-page idle warning (attempt $dump_attempt)"
         fi
         print -- "$local_path"
         return 0
       fi
+      [[ "$policy" != paused-* ]] || return 3
     fi
-    if [[ "$policy" == verified-seed-share && "$dump_attempt" == 1 && "$dump_output" == *"could not get idle state"* && ! -s "$local_path" ]]; then
+    if [[ ( "$policy" == verified-seed-share || "$policy" == paused-* ) && "$dump_attempt" == 1 && "$dump_output" == *"could not get idle state"* && ! -s "$local_path" ]] && { [[ "$policy" == verified-seed-share ]] || { [[ "$remote_size" == <-> ]] && (( remote_size == 0 )); }; }; then
       elapsed="$("$PYTHON_BIN" -c 'import sys,time; print((time.monotonic_ns()-int(sys.argv[1]))//1000000)' "$started")"
-      print -u2 -- "share-idle: phase=share attempt=1 dump_rc=$dump_status elapsed_ms=$elapsed; could not get idle state; no fresh XML; using single toggle-dump-toggle"
+      if [[ "$policy" == verified-seed-share ]]; then
+        print -u2 -- "share-idle: phase=share attempt=1 dump_rc=$dump_status elapsed_ms=$elapsed; could not get idle state; no fresh XML; using single toggle-dump-toggle"
+      else
+        print -u2 -- "paused-idle: phase=$policy evidence_id=$evidence_id attempt=1 dump_rc=$dump_status elapsed_ms=$elapsed; could not get idle state; no fresh XML; using single toggle-dump-toggle"
+      fi
       break
     fi
     # 波内也要留时间：背靠背瞬发三次，页面还在动的话必然三次同样失败。
@@ -295,21 +327,22 @@ _ui_evidence_wave() {
   # 媒体键85是toggle：toggle→dump→toggle成对恢复原媒体状态。
   if [[ "$dump_output" == *"could not get idle state"* ]]; then
     # 改用媒体键：详情页可暂停视频，其它页面无副作用——绝不制造导航（a7 案卷：点击版把搜索页点飞）。
-    "$ADB" -s "$SERIAL" shell input keyevent 85
+    "$ADB" -s "$SERIAL" shell input keyevent 85 || { [[ "$policy" != paused-* ]] || return 3; }
     wait_ms 500
     /bin/rm -f "$local_path"
     "$ADB" -s "$SERIAL" shell rm -f "$REMOTE_UI" >/dev/null
     dump_output="$("$ADB" -s "$SERIAL" shell uiautomator dump --compressed "$REMOTE_UI" 2>&1)" || true
-    remote_size="$("$ADB" -s "$SERIAL" shell stat -c %s "$REMOTE_UI" 2>/dev/null | tr -d $'\r' || print -- 0)"
-    "$ADB" -s "$SERIAL" shell input keyevent 85
+    remote_size="$("$ADB" -s "$SERIAL" shell stat -c %s "$REMOTE_UI" 2>/dev/null | tr -d $'\r' || print -- unknown)"
+    "$ADB" -s "$SERIAL" shell input keyevent 85 || { [[ "$policy" != paused-* ]] || return 3; }
     if [[ "$remote_size" == <-> ]] && (( remote_size > 0 )); then
-      "$ADB" -s "$SERIAL" pull "$REMOTE_UI" "$local_path" >/dev/null
+      "$ADB" -s "$SERIAL" pull "$REMOTE_UI" "$local_path" >/dev/null || { [[ "$policy" != paused-* ]] || return 3; }
       if [[ -s "$local_path" ]] && /usr/bin/grep -q "<hierarchy" "$local_path" && /usr/bin/grep -q "</hierarchy>" "$local_path" \
-        && { [[ "$policy" == standard ]] || _is_fresh_share_detail_xml "$local_path"; }; then
+        && { [[ "$policy" == standard ]] || { [[ "$policy" == paused-douyin ]] && _is_complete_douyin_xml "$local_path"; } || _is_fresh_share_detail_xml "$local_path"; }; then
         print -u2 -- "warning: hierarchy captured via toggle-dump-toggle fallback (single-shot)"
         print -- "$local_path"
         return 0
       fi
+      [[ "$policy" != paused-* ]] || return 3
     fi
   fi
   return 1
@@ -547,10 +580,17 @@ PYGUIDE
 }
 
 _on_video_detail() {
-  local probe_id="$1" probe_xml w
+  local probe_id="$1" probe_xml w policy="${2:-standard}" read_rc
   for w in 1 2; do
     probe_xml="$EVIDENCE_ROOT/${probe_id}-w${w}.xml"
-    if _ui_evidence_wave "${probe_id}-w${w}" >/dev/null 2>&1; then
+    read_rc=0
+    if [[ "$policy" == paused-* ]]; then
+      _ui_evidence_wave "${probe_id}-w${w}" "$policy" >/dev/null || read_rc=$?
+    else
+      _ui_evidence_wave "${probe_id}-w${w}" "$policy" >/dev/null 2>&1 || read_rc=$?
+    fi
+    (( read_rc == 3 )) && return 3
+    if (( read_rc == 0 )); then
       _is_video_detail_xml "$probe_xml" && return 0
       return 1
     fi
@@ -600,7 +640,7 @@ _leave_scratch_route() {
           "$ADB" -s "$SERIAL" shell input keyevent 127 >/dev/null 2>&1 || return 1
           wait_ms 600
           xml="$EVIDENCE_ROOT/${eid}-guide-dismiss-b${i}.xml"
-          _ui_evidence_wave "${eid}-guide-dismiss-b${i}" >/dev/null 2>&1 || return 1
+          _ui_evidence_wave "${eid}-guide-dismiss-b${i}" paused-detail >/dev/null || return 1
           _is_video_detail_xml "$xml" || return 1
         fi
         if _is_video_detail_xml "$xml"; then
@@ -1530,12 +1570,22 @@ foreground_package() {
 # 树读不到时不拦路(闸是保护不是关卡);三轮后前台仍非抖音 → WRONG_FOREGROUND。
 FG_DISMISS_LABELS=("跳过" "关闭" "稍后" "取消" "我知道了" "以后再说" "暂不")
 foreground_gate() {
-  local eid="$1" round fg gate_xml lbl line c gx gy acted
+  local eid="$1" round fg gate_xml lbl line c gx gy acted policy="${2:-standard}" gate_rc
   require_evidence_id "$eid"
   for round in 1 2 3; do
     fg="$(foreground_package)"
+    if [[ "$policy" == paused-* ]]; then
+      _foreground_is_exact_douyin "$fg" || return 3
+    fi
     if [[ "$fg" == *"$DOUYIN_PACKAGE"* ]]; then
-      gate_xml="$(_ui_evidence_wave "${eid}-fg${round}" 2>/dev/null)" || return 0
+      if [[ "$policy" == paused-* ]]; then
+        gate_rc=0
+        gate_xml="$(_ui_evidence_wave "${eid}-fg${round}" "$policy")" || gate_rc=$?
+        (( gate_rc == 3 )) && return 3
+        (( gate_rc == 0 )) || return 0
+      else
+        gate_xml="$(_ui_evidence_wave "${eid}-fg${round}" "$policy" 2>/dev/null)" || return 0
+      fi
       acted=0
       for lbl in "${FG_DISMISS_LABELS[@]}"; do
         line="$(/usr/bin/grep -oE "<node[^>]+text=\"${lbl}[^\"]*\"[^>]*clickable=\"true\"[^>]*>" "$gate_xml" | /usr/bin/head -1 || true)"
@@ -2974,7 +3024,7 @@ locate_cache_clear() { /bin/rm -f "$LOCATE_CACHE_DIR/${registry_profile}-$1.xy" 
 # 且 clickable=false，取不到真实坐标，只能视觉定位。故本命令＝固化描述＋坐标护栏＋
 # 点击后验证面板真开＋没开就安全 back 恢复（绝不留在已聚焦输入框的状态触发风控）。
 open_comments() {
-  local evidence_id pos cx cy panel_xml tree_xml src count_label i
+  local evidence_id pos cx cy panel_xml tree_xml src count_label i tree_rc
   evidence_id="$1"
   require_evidence_id "$evidence_id"
   [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
@@ -2983,7 +3033,10 @@ open_comments() {
   tree_xml="$EVIDENCE_ROOT/${evidence_id}-before.xml"
   # 同为「机会性读树」：读得到就用确定性坐标，读不到立刻退视觉兜底，
   # 所以用单波；用带三波重试的 ui_evidence 会白烧约 180 秒。
-  if _ui_evidence_wave "${evidence_id}-before" >/dev/null 2>&1; then
+  tree_rc=0
+  _ui_evidence_wave "${evidence_id}-before" paused-douyin >/dev/null || tree_rc=$?
+  (( tree_rc != 3 )) || die "UNTRUSTED_COMMENT_EVIDENCE: foreground, media or fresh XML validation failed"
+  if (( tree_rc == 0 )); then
     if pos="$(comment_button_center_from_xml "$tree_xml")"; then
       # 零评论视频不点：点开就是带「发送」的发布框，属风控高危，且本来也没评论可采。
       if ! count_label="$(comment_count_label_from_xml "$tree_xml")"; then
@@ -3905,11 +3958,11 @@ case "$command" in
     # 深链打开后会自动播放；先幂等暂停，避免每次名片归位都等动态页idle重试。
     "$ADB" -s "$SERIAL" shell input keyevent 127 || die "MEDIA_PAUSE_FAILED"
     wait_ms 600
-    foreground_gate "$3-gate"
-    ov_g=0; _on_video_detail "$3-openvideo" || ov_g=$?
+    foreground_gate "$3-gate" paused-douyin || die "UNTRUSTED_FOREGROUND_EVIDENCE"
+    ov_g=0; _on_video_detail "$3-openvideo" paused-detail || ov_g=$?
     if (( ov_g == 2 )); then
       wait_ms 3000
-      ov_g=0; _on_video_detail "$3-openvideo-w2" || ov_g=$?
+      ov_g=0; _on_video_detail "$3-openvideo-w2" paused-detail || ov_g=$?
     fi
     (( ov_g == 0 )) || die "detail deeplink for $ov_id did not land on a verified video detail page (guard rc=$ov_g)"
     snapshot_evidence "$3-openvideo-ok" >/dev/null
