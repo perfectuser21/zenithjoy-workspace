@@ -245,8 +245,11 @@ jobs:
           if [[ ! "$SHARD_COUNT" =~ ^[12]$ || ! "$SHARD_INDEX" =~ ^[01]$ ]] || (( SHARD_INDEX >= SHARD_COUNT )); then
             echo "::error::invalid smoke shard index/count"; exit 1
           fi
-          export LC_ALL=C
-          SCRIPTS=("$DIR"/*.sh)
+          # C顺序仅用于glob发现；真实脚本保留原UTF-8环境（Kotlin类名含非ASCII）。
+          SCRIPTS=()
+          while IFS= read -r -d '' discovered_script; do
+            SCRIPTS+=("$discovered_script")
+          done < <(LC_ALL=C; export LC_ALL; printf '%s\0' "$DIR"/*.sh)
           [ -f "${SCRIPTS[0]}" ] || { echo "::error::empty smoke inventory"; exit 1; }
           REPORT_DIR="$RUNNER_TEMP/smoke-glob-shard-$SHARD_INDEX"
           mkdir -p "$REPORT_DIR"
@@ -293,7 +296,7 @@ jobs:
                   PASS=$((PASS+1))
                 else
                   rc2=$?
-                  echo "::error::基线内 smoke $name FAIL (exit $rc2，含重试)——棘轮闸阻断"
+                  echo "::error::基线内 smoke $name FAIL (exit ${rc2}，含重试)——棘轮闸阻断"
                   printf '%s\tGATE-FAIL\t%s\n' "$name" "$rc2" >> "$RESULTS"
                   GATE_FAIL=$((GATE_FAIL+1))
                 fi
