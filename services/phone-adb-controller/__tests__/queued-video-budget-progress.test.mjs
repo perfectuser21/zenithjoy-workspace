@@ -112,3 +112,5 @@ case 'commenter-identity':fs.writeFileSync(p.join(d,'clock'),'500');console.log(
   assert.equal(readFileSync(join(d,'calls'),'utf8').split('\n').filter(c=>c==='commenter-identity').length,1,'own continue cannot start a second identity action after 480s');
  }finally{rmSync(d,{recursive:true,force:true});}
 });
+
+test('真实collection CLI非法预算在history/lock/所有手机动作前拒绝',()=>{const d=mkdtempSync(join(tmpdir(),'bad-collection-budget-'));try{const ctl=join(d,'ctl'),calls=join(d,'calls');writeFileSync(ctl,'#!/bin/sh\nprintf called >> "'+calls+'"\nexit 99\n',{mode:0o755});for(const value of ['0','-1','6721','abc','1.5','0480','']){const r=spawnSync('zsh',[join(root,'process-queued-video.sh'),'collection','work',vid,'https://www.douyin.com/video/'+vid,'','','bad-budget','jinuo'],{encoding:'utf8',env:{...process.env,DOUYIN_PHONE_ADB:ctl,QUEUED_VIDEO_COLLECTION_SECONDS:value}});assert.equal(r.status,2,value);assert.equal(spawnSync('test',['-e',calls]).status,1,'非法预算不能触碰phone');}}finally{rmSync(d,{recursive:true,force:true});}});
