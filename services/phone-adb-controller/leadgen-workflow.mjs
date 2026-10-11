@@ -2,7 +2,7 @@ import {readFileSync,writeFileSync,appendFileSync,existsSync,renameSync,readdirS
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {runActivity} from './activity-commander.mjs';
-import {readFrozen,commentSamplingInput,assertCommentSampling} from './runtime-definition.mjs';
+import {readFrozen,commentSamplingInput,assertCommentSampling,collectionBudgetSeconds} from './runtime-definition.mjs';
 import {readBinding} from './runtime-binding.mjs';
 import {createRpc,execInput} from './leadgen-client.mjs';
 import {createDiscoveryHandlers} from './leadgen-discovery.mjs';
@@ -65,7 +65,7 @@ export function parseCollection(result,videoId,{allowPartial=false}={}) {
 }
 
 export function createHandlers({root,env,rpc,execute=execInput}) {
-  const sampleInput=commentSamplingInput(env);
+  const sampleInput=commentSamplingInput(env),collectionBudget=collectionBudgetSeconds(env),collectionBudgetExplicit=Object.hasOwn(env,'QUEUED_VIDEO_COLLECTION_SECONDS');
   if(sampleInput||(env.WFR_RUN_DIR&&existsSync(join(env.WFR_RUN_DIR,'run-definition.json'))))assertCommentSampling(readFrozen(env.WFR_RUN_DIR),env);
   const {P:profile,SERIAL:serial,WFR_TAG:run,LEADGEN_LINE:line}=env;
   let locked=false,leased=[],qualified=[],discovery,historyScoped=0;
@@ -186,8 +186,20 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
       received:ids.length,eligible:eligible.length,skipped_completed:skipped.filter(v=>v.reason==='completed').length,
       skipped_sample_fulfilled:skipped.filter(v=>v.reason==='sample_fulfilled').length,skipped_rejected:skipped.filter(v=>v.reason==='rejected').length,skipped_own:skipped.filter(v=>v.reason==='own').length,duplicate_observations:proof.duplicate_observations};
   };
+  const collectionTiming=()=>{
+    const actionMax=collectionBudgetExplicit?collectionBudget+480:960;
+    const now=Date.now(),start=env.WF_RUN_START_TS===undefined?null:Number(env.WF_RUN_START_TS),globalSeconds=Number(env.WF_RUN_MAX_SECONDS||1800);
+    if(!Number.isSafeInteger(globalSeconds)||globalSeconds<1||(start!==null&&(!Number.isSafeInteger(start)||start<=0)))throw Error('评论采集全局预算或起点无效');
+    const globalRemaining=start===null?globalSeconds*1000:start*1000+globalSeconds*1000-now;
+    const activityRemaining=state.budgetDeadline?state.budgetDeadline-now:Infinity;
+    const timeoutMs=Math.min(actionMax*1000,globalRemaining,activityRemaining);
+    if(timeoutMs<=0)throw Error('EXECUTION_DEADLINE: 评论采集剩余预算已尽');
+    return {action_max_duration_s:actionMax,timeout_ms:timeoutMs,global_remaining_ms:globalRemaining,activity_remaining_ms:Number.isFinite(activityRemaining)?activityRemaining:null};
+  };
+  const collectionBudgetVideos=[];
   const videoAction=async(mode,v)=>{
     let historyFile='';
+    if(mode==='collection')collectionTiming();
     if(mode==='collection'){
       const receipt=await queue('comment_history',{video_id:v.video_id,video_url:v.video_url});
       historyFile=join(env.WFR_RUN_DIR,`${run}-history-${v.video_id}.json`);
@@ -196,10 +208,16 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
       history.load(historyFile,env.WFR_RUN_DIR,{line,run,source_run:env.LEADGEN_SOURCE_RUN||null,video_id:v.video_id,video_url:v.video_url});
       historyScoped++;
     }
+    let timing;
+    if(mode==='collection'){
+      timing=collectionTiming();
+      collectionBudgetVideos.push({video_id:v.video_id,...timing,observed_at:new Date().toISOString()});
+      writeFileSync(join(env.WFR_RUN_DIR,`${run}-collection-budget-readback.json`),JSON.stringify({run_tag:run,profile,serial,line,source_run:env.LEADGEN_SOURCE_RUN||null,collection_budget_s:collectionBudget,requested_explicit:collectionBudgetExplicit,global_start_ts:env.WF_RUN_START_TS===undefined?null:Number(env.WF_RUN_START_TS),global_max_seconds:Number(env.WF_RUN_MAX_SECONDS||1800),activity_deadline_ms:state.budgetDeadline||null,action_max_duration_s:timing.action_max_duration_s,sampling_input:sampleInput,videos:collectionBudgetVideos}),{mode:0o600});
+    }
     return bounded('zsh',[join(root,'process-queued-video.sh'),mode,profile,
       v.video_id,v.video_url,Buffer.from(v.title||'').toString('base64'),Buffer.from(v.keyword||'').toString('base64'),run,line],
-      {maxDurationS:mode==='qualification'?900:mode==='collection'?960:480,
-        env:{QUEUED_VIDEO_QUALIFY_CMD:join(root,'leadgen-qualify.sh'),QUEUED_COMMENT_HISTORY_FILE:historyFile,...(sampleInput?{LEADGEN_COMMENT_LIMIT:String(sampleInput.comment_limit)}:{})}});
+      {maxDurationS:mode==='qualification'?900:mode==='collection'?timing.action_max_duration_s:480,...(timing?{timeoutMs:timing.timeout_ms}:{}),
+        env:{...(mode==='collection'?{QUEUED_VIDEO_COLLECTION_SECONDS:String(collectionBudget)}:{}),QUEUED_VIDEO_QUALIFY_CMD:join(root,'leadgen-qualify.sh'),QUEUED_COMMENT_HISTORY_FILE:historyFile,...(sampleInput?{LEADGEN_COMMENT_LIMIT:String(sampleInput.comment_limit)}:{})}});
   };
   const consumedHistory=(result,v)=>{
     const file=join(env.WFR_RUN_DIR,`${run}-history-${v.video_id}.json`);
@@ -226,7 +244,7 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
         ...(result.failures.length||result.known_gaps.some(g=>g.kind!=='candidate_disappeared'||result.stop_reason!=='limit_reached')?{status:'partial'}:{})};},
     qualification:async()=>{
       if(env.WF_BRAIN_WORKFLOW==='douyin_video_processing'&&!Array.isArray(state.intakeVideoIds))throw Error('102必须先核验101明确ID交接');
-      leased=await queue('claim_videos',Array.isArray(state.intakeVideoIds)?{video_ids:state.intakeVideoIds}:{});
+      leased=await queue('claim_videos',{...(Array.isArray(state.intakeVideoIds)?{video_ids:state.intakeVideoIds}:{}),...(sampleInput?{prefer_matched:true}:{})});
       state.remainingVideoIds=state.intakeVideoIds?.filter(id=>!leased.some(v=>v.video_id===id))||[];
       const failures=[];qualified=[];let recordingsRequired=0,mediaVerified=0,recordingSilentRejected=0,recordingOutcomesFailures=0;
       for(const v of leased){await queue('renew_video',{video_id:v.video_id});
@@ -264,6 +282,7 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
     },
     collection:async()=>{historyScoped=0;let comments=0,collected=0,sampled=0,rescans=0,inserted=0,historyVerified=0,coverage=0,historyConsumed=0;const failures=[],sampleReceipts=[];
       for(const v of qualified){try{
+        collectionTiming();
         await queue('renew_video',{video_id:v.video_id});const result=await videoAction('collection',v);
         appendFileSync(join(env.WFR_RUN_DIR,'comments.tsv'),result.stdout);
         const rows=parseCollection(result,v.video_id,{allowPartial:true});

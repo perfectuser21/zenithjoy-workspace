@@ -21,7 +21,7 @@ inputs:
   - type: CommentSampleRequest
     cardinality: one
     optional: true
-    fields: [run_tag, source_run, profile, serial, line, comment_limit]
+    fields: [run_tag, source_run, profile, serial, line, comment_limit, collection_budget_s]
   - type: HistoricalComment
     cardinality: many
     optional: true
@@ -679,7 +679,7 @@ activities:
   - key: collection
     name: 采集评论
     order: 4
-    version: 2.2.0
+    version: 2.2.1
     compatibility: backward
     owner:
       department: line02 智能获客
@@ -688,7 +688,7 @@ activities:
       - type: CommentSampleRequest
         cardinality: one
         optional: true
-        fields: [run_tag, source_run, profile, serial, line, comment_limit]
+        fields: [run_tag, source_run, profile, serial, line, comment_limit, collection_budget_s]
       - type: Video
         cardinality: many
         fields:
@@ -745,7 +745,7 @@ activities:
         fields:
           - process_status
     preconditions:
-      - 可选CommentSampleRequest由用户请求冻结到本run定义，仅102且source_run与101受信交接一致；整数1..50，配额按已核历史和新distinct评论覆盖，不按own/失败/未核历史表总数计；达配额为sampled，PG保未全采，实际footer另行记录
+      - 可选CommentSampleRequest由用户请求冻结到本run定义，仅102且source_run与101受信交接一致；整数1..50，可选collection_budget_s仅显式配置时冻结为1..6720整数，默认480和进程960保持，显式进程预算加480收尾并受Activity/真实全局剩余时间限制；配额按已核历史和新distinct评论覆盖，不按own/失败/未核历史表总数计；达配额为sampled，PG保未全采，实际footer另行记录
       - 仅matched视频可采评论
       - 恢复后的当前视频ID再次核验，评论坐标必须来自当前屏
       - 可选HistoricalComment是只读PG系统输入，持本run matched租约且source_run受信VID清单后queue comment_history读取，非用户CLI或qualification输出；当前唯一line+VID+exactURL绑定，旧短链仅标题窄候选后受信只读HEAD实际VID相同才纳入私有工件，unknown仍走原路径，schema或scope异常拒绝

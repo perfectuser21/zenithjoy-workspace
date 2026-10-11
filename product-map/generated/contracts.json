@@ -1,5 +1,5 @@
 {
-  "object_types": "147fb048c13fbc5b6f01273db201a2514b277a3f4d5d7e85a63eb0c8844c97a7",
+  "object_types": "65669e7c4b030955bfe16b14f3ffea486b8c747daf8a00ea66d1086d6d06fda5",
   "capabilities": {
     "benchmark_link_acquisition": {
       "sha256": "f4a811707076a37cb8ff33433863fbc914acb0707c7710016659bae477e23633",
@@ -39,12 +39,12 @@
       }
     },
     "douyin_video_processing": {
-      "sha256": "1d3992df150f4b1c54bc6a051683ff00a73f0896a04d8551c070d0c88aeb5b50",
+      "sha256": "69acbc21132a78df508a104d668bf55d815b8befcfe6d4bec77bb6cbebd52f2f",
       "activities": {
         "preflight": "41213546c9efc1e758c6c00522ff51e5a1c5696affdc3985aa4c60c79189e096",
         "dedup": "b7990d59c1612fcb659717ec8cebc200db3f5be06bf6fbf3690a8c7b72c31d04",
         "qualification": "ce057b60778321a66a34536b3ccc568a2691716473531058f915c4a3b87a0eb7",
-        "collection": "3ef80ae6e06dbab050480a9dc93ce892882b9dcb042f2ebd211b82b1ead5b399",
+        "collection": "708fb662b6135f384e86e2e36648d6c18184f6e95abddea0014930926efbd1d6",
         "cleanup": "644781cb13cd244641ec876a0bcb46e794eb0fbdc55ad16748db8cc3a562ebbd"
       }
     },
