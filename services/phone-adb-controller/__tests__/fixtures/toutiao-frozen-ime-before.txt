@@ -1,0 +1,1338 @@
+Input Method Manager Service state:
+  mSystemReady=true
+  mInteractive=true
+  mConcurrentMultiUserModeEnabled=false
+  mCurrentImeUserId=0
+  mStylusIds=
+  mMenuControllerNew:
+    isShowing: false
+  mClientController:
+    ClientState{f4b58fe mUid=10205 mPid=12451 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@f510a38
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@5ee9a11
+      sessionRequested=false
+      sessionRequestedForAccessibility=true
+      curSession=SessionState{uid=10205 pid=12451 method=96e8800 session=e84374f channel=ClientState{f4b58fe mUid=10205 mPid=12451 mSelfReportedDisplayId=0} userId=0}
+      selfReportedDisplayId=0
+      uid=10205
+      pid=12451
+    ClientState{4e1be1c mUid=10207 mPid=16376 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@3aef776
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@c298177
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=SessionState{uid=10207 pid=16376 method=96e8800 session=d9ee64c channel=ClientState{4e1be1c mUid=10207 mPid=16376 mSelfReportedDisplayId=0} userId=0}
+      selfReportedDisplayId=0
+      uid=10207
+      pid=16376
+    ClientState{ff5da14 mUid=10175 mPid=20130 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@64d0480
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@12a1ab9
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=SessionState{uid=10175 pid=20130 method=96e8800 session=a8d05fe channel=ClientState{ff5da14 mUid=10175 mPid=20130 mSelfReportedDisplayId=0} userId=0}
+      selfReportedDisplayId=0
+      uid=10175
+      pid=20130
+    ClientState{727eefe mUid=10079 mPid=24950 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@d46565f
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@1bde8ac
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=null
+      selfReportedDisplayId=0
+      uid=10079
+      pid=24950
+    ClientState{98767f1 mUid=10073 mPid=7865 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@5b8dfd6
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@96eb257
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=null
+      selfReportedDisplayId=0
+      uid=10073
+      pid=7865
+    ClientState{4c2a144 mUid=10167 mPid=1099 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@299922d
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@1bb2362
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=null
+      selfReportedDisplayId=0
+      uid=10167
+      pid=1099
+    ClientState{1421cf3 mUid=10066 mPid=3836 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@4ea8db0
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@52a2429
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=null
+      selfReportedDisplayId=0
+      uid=10066
+      pid=3836
+    ClientState{1358dcd mUid=10210 mPid=2416 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@aac13ae
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@fd7954f
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=SessionState{uid=10210 pid=2416 method=96e8800 session=fda9193 channel=ClientState{1358dcd mUid=10210 mPid=2416 mSelfReportedDisplayId=0} userId=0}
+      selfReportedDisplayId=0
+      uid=10210
+      pid=2416
+    ClientState{625af14 mUid=10208 mPid=18214 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@c2891e4
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@411c64d
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=SessionState{uid=10208 pid=18214 method=96e8800 session=37e810a channel=ClientState{625af14 mUid=10208 mPid=18214 mSelfReportedDisplayId=0} userId=0}
+      selfReportedDisplayId=0
+      uid=10208
+      pid=18214
+    ClientState{1b662c8 mUid=1000 mPid=23976 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@b712f61
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@1a6ea86
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=null
+      selfReportedDisplayId=0
+      uid=1000
+      pid=23976
+    ClientState{aa4492e mUid=10098 mPid=4188 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@cc70dd7
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@92adf47
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=SessionState{uid=10098 pid=4188 method=96e8800 session=accd955 channel=ClientState{aa4492e mUid=10098 mPid=4188 mSelfReportedDisplayId=0} userId=0}
+      selfReportedDisplayId=0
+      uid=10098
+      pid=4188
+    ClientState{f32e374 mUid=10209 mPid=19294 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@9b0609d
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@3f72912
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=null
+      selfReportedDisplayId=0
+      uid=10209
+      pid=19294
+    ClientState{4ac28e3 mUid=10186 mPid=12890 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@454c2e0
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@4b76999
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=null
+      selfReportedDisplayId=0
+      uid=10186
+      pid=12890
+    ClientState{f9bd0a2 mUid=10057 mPid=25734 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@99ac45e
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@d6e703f
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=SessionState{uid=10057 pid=25734 method=96e8800 session=c7fa269 channel=ClientState{f9bd0a2 mUid=10057 mPid=25734 mSelfReportedDisplayId=0} userId=0}
+      selfReportedDisplayId=0
+      uid=10057
+      pid=25734
+    ClientState{5317f30 mUid=10212 mPid=32262 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@14f1a9e
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@28b1502
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=SessionState{uid=10212 pid=32262 method=96e8800 session=7e75e5c channel=ClientState{5317f30 mUid=10212 mPid=32262 mSelfReportedDisplayId=0} userId=0}
+      selfReportedDisplayId=0
+      uid=10212
+      pid=32262
+    ClientState{8721b16 mUid=10187 mPid=17670 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@df32d0c
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@b8c0655
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=SessionState{uid=10187 pid=17670 method=96e8800 session=553766d channel=ClientState{8721b16 mUid=10187 mPid=17670 mSelfReportedDisplayId=0} userId=0}
+      selfReportedDisplayId=0
+      uid=10187
+      pid=17670
+    ClientState{ef6bcd0 mUid=10206 mPid=6307 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@72abe13
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@8cee850
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=SessionState{uid=10206 pid=6307 method=96e8800 session=d0772da channel=ClientState{ef6bcd0 mUid=10206 mPid=6307 mSelfReportedDisplayId=0} userId=0}
+      selfReportedDisplayId=0
+      uid=10206
+      pid=6307
+    ClientState{ed6c496 mUid=10096 mPid=8247 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@f4ac86a
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@7e3d15b
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=null
+      selfReportedDisplayId=0
+      uid=10096
+      pid=8247
+    ClientState{9c6a0a mUid=10027 mPid=6890 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@d6b97c2
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@d2c0df8
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=SessionState{uid=10027 pid=6890 method=96e8800 session=f2ef9da channel=ClientState{9c6a0a mUid=10027 mPid=6890 mSelfReportedDisplayId=0} userId=0}
+      selfReportedDisplayId=0
+      uid=10027
+      pid=6890
+    ClientState{197e7fb mUid=10176 mPid=10722 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@dd3b2d1
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@2450136
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=null
+      selfReportedDisplayId=0
+      uid=10176
+      pid=10722
+    ClientState{3842837 mUid=1000 mPid=4224 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@51011a4
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@60fab0d
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=null
+      selfReportedDisplayId=0
+      uid=1000
+      pid=4224
+    ClientState{b3efb9 mUid=10201 mPid=19410 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@8c17a49
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@b197f4e
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=SessionState{uid=10201 pid=19410 method=96e8800 session=597267b channel=ClientState{b3efb9 mUid=10201 mPid=19410 mSelfReportedDisplayId=0} userId=0}
+      selfReportedDisplayId=0
+      uid=10201
+      pid=19410
+    ClientState{2007c98 mUid=1000 mPid=25527 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@70ea410
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@b98eb09
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=SessionState{uid=1000 pid=25527 method=96e8800 session=476e444 channel=ClientState{2007c98 mUid=1000 mPid=25527 mSelfReportedDisplayId=0} userId=0}
+      selfReportedDisplayId=0
+      uid=1000
+      pid=25527
+    ClientState{49836ea mUid=10167 mPid=31883 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@9af010e
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@a9e72f
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=SessionState{uid=10167 pid=31883 method=96e8800 session=a601440 channel=ClientState{49836ea mUid=10167 mPid=31883 mSelfReportedDisplayId=0} userId=0}
+      selfReportedDisplayId=0
+      uid=10167
+      pid=31883
+    ClientState{a21f13c mUid=1000 mPid=16036 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@85c2ec5
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@6de201a
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=null
+      selfReportedDisplayId=0
+      uid=1000
+      pid=16036
+    ClientState{f34a0ef mUid=10211 mPid=26166 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@877c74b
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@8bae528
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=SessionState{uid=10211 pid=26166 method=96e8800 session=21c74da channel=ClientState{f34a0ef mUid=10211 mPid=26166 mSelfReportedDisplayId=0} userId=0}
+      selfReportedDisplayId=0
+      uid=10211
+      pid=26166
+    ClientState{e55f241 mUid=10211 mPid=26707 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@9ae23e6
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@7f98d27
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=null
+      selfReportedDisplayId=0
+      uid=10211
+      pid=26707
+    ClientState{e3cf61c mUid=10011 mPid=15093 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@a289872
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@be7d4c3
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=null
+      selfReportedDisplayId=0
+      uid=10011
+      pid=15093
+    ClientState{8c2d4f7 mUid=10156 mPid=6805 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@65b3140
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@555a879
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=SessionState{uid=10156 pid=6805 method=96e8800 session=deff6fc channel=ClientState{8c2d4f7 mUid=10156 mPid=6805 mSelfReportedDisplayId=0} userId=0}
+      selfReportedDisplayId=0
+      uid=10156
+      pid=6805
+    ClientState{7e2df5f mUid=1001 mPid=4134 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@563c9be
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@9e8fa1f
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=SessionState{uid=1001 pid=4134 method=96e8800 session=35dee57 channel=ClientState{7e2df5f mUid=1001 mPid=4134 mSelfReportedDisplayId=0} userId=0}
+      selfReportedDisplayId=0
+      uid=1001
+      pid=4134
+    ClientState{cab87ac mUid=10166 mPid=24468 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@2f9286f
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@342397c
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=SessionState{uid=10166 pid=24468 method=96e8800 session=c1f7298 channel=ClientState{cab87ac mUid=10166 mPid=24468 mSelfReportedDisplayId=0} userId=0}
+      selfReportedDisplayId=0
+      uid=10166
+      pid=24468
+    ClientState{762216c mUid=1000 mPid=4058 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@7f5335
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@18ec3ca
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=null
+      selfReportedDisplayId=0
+      uid=1000
+      pid=4058
+    ClientState{1ad193b mUid=10173 mPid=7649 mSelfReportedDisplayId=0}:
+      client=com.android.server.inputmethod.IInputMethodClientInvoker@305e858
+      fallbackInputConnection=com.android.internal.inputmethod.IRemoteInputConnection$Stub$Proxy@25eedb1
+      sessionRequested=false
+      sessionRequestedForAccessibility=false
+      curSession=null
+      selfReportedDisplayId=0
+      uid=10173
+      pid=7649
+  mUserDataRepository:
+    userId=0
+      unlocked=true
+      hasMainConnection=true
+      isVisibleBound=true
+      boundToMethod=true
+      curClient=ClientState{f4b58fe mUid=10205 mPid=12451 mSelfReportedDisplayId=0}
+      curEditorInfo:
+        inputType=0x1 imeOptions=0x3 privateImeOptions=null
+        actionLabel=null actionId=0
+        initialSelStart=0 initialSelEnd=0 initialToolType=0 initialCapsMode=0x0
+        hintText=领导发淫秽照女下属母亲讨说法 label=null
+        packageName=com.ss.android.article.news autofillId=1073741824 fieldId=2131624075 fieldName=null
+        hintLocales=null
+        supportedHandwritingGestureTypes=SELECT|SELECT_RANGE|INSERT|DELETE|DELETE_RANGE|REMOVE_SPACE|JOIN_OR_SPLIT
+        supportedHandwritingGesturePreviewTypes=SELECT|SELECT_RANGE|DELETE|DELETE_RANGE
+        isStylusHandwritingEnabled=true
+        writingToolsEnabled=true
+        contentMimeTypes=null
+      imeBindingState:
+        mFocusedWindow=android.os.BinderProxy@4d52561
+        mFocusedWindowSoftInputMode=STATE_ALWAYS_VISIBLE|ADJUST_PAN|IS_FORWARD_NAVIGATION
+        mFocusedWindowClient=ClientState{f4b58fe mUid=10205 mPid=12451 mSelfReportedDisplayId=0}
+      enabledSession=SessionState{uid=10205 pid=12451 method=96e8800 session=e84374f channel=ClientState{f4b58fe mUid=10205 mPid=12451 mSelfReportedDisplayId=0} userId=0}
+      inFullscreenMode=false
+      imeDrawsNavBar=true
+      switchingController:
+        mSwitchingAwareRotationList:
+        mSwitchingUnawareRotationList:
+          rank=0 item=ImeSubtypeListItem{mImeName=ADB Keyboard mSubtypeName=null mSubtypeIndex=-1 mIsSystemLocale=false mIsSystemLanguage=false}
+          rank=1 item=ImeSubtypeListItem{mImeName=百度输入法荣耀版 mSubtypeName=null mSubtypeIndex=0 mIsSystemLocale=false mIsSystemLanguage=false}
+        mRotationList:
+          Static order:
+            i=0 item=ImeSubtypeListItem{mImeName=ADB Keyboard mSubtypeName=null mSubtypeIndex=-1 mIsSystemLocale=false mIsSystemLanguage=false}
+            i=1 item=ImeSubtypeListItem{mImeName=百度输入法荣耀版 mSubtypeName=null mSubtypeIndex=0 mIsSystemLocale=false mIsSystemLanguage=false}
+          Recency order:
+            i=0 item=ImeSubtypeListItem{mImeName=ADB Keyboard mSubtypeName=null mSubtypeIndex=-1 mIsSystemLocale=false mIsSystemLanguage=false}
+            i=1 item=ImeSubtypeListItem{mImeName=百度输入法荣耀版 mSubtypeName=null mSubtypeIndex=0 mIsSystemLocale=false mIsSystemLanguage=false}
+        mHardwareRotationList:
+          Static order:
+            i=0 item=ImeSubtypeListItem{mImeName=百度输入法荣耀版 mSubtypeName=null mSubtypeIndex=0 mIsSystemLocale=false mIsSystemLanguage=false}
+            i=1 item=ImeSubtypeListItem{mImeName=ADB Keyboard mSubtypeName=null mSubtypeIndex=-1 mIsSystemLocale=false mIsSystemLanguage=false}
+          Recency order:
+            i=0 item=ImeSubtypeListItem{mImeName=ADB Keyboard mSubtypeName=null mSubtypeIndex=-1 mIsSystemLocale=false mIsSystemLanguage=false}
+            i=1 item=ImeSubtypeListItem{mImeName=百度输入法荣耀版 mSubtypeName=null mSubtypeIndex=0 mIsSystemLocale=false mIsSystemLanguage=false}
+        User action since last switch: true
+      mLastEnabledInputMethodsStr=com.baidu.input_hihonor/com.baidu.input_honor.ImeService:com.android.adbkeyboard/.AdbIME
+    userId=128
+      unlocked=true
+      hasMainConnection=false
+      isVisibleBound=false
+      boundToMethod=false
+      curClient=null
+      curEditorInfo: null
+      imeBindingState:
+        mFocusedWindow=null
+        mFocusedWindowSoftInputMode=STATE_UNSPECIFIED|ADJUST_UNSPECIFIED
+        mFocusedWindowClient=null
+      enabledSession=null
+      inFullscreenMode=false
+      imeDrawsNavBar=true
+      switchingController:
+        mSwitchingAwareRotationList:
+        mSwitchingUnawareRotationList:
+        mRotationList:
+          Static order:
+          Recency order:
+        mHardwareRotationList:
+          Static order:
+          Recency order:
+        User action since last switch: false
+      mLastEnabledInputMethodsStr=
+  mStartInputHistory:
+    StartInput #35860:
+      time=2026-10-11 09:12:03.024 (timestamp=2784770567) reason=SESSION_CREATED_BY_IME restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@5abfb71 [tv.danmaku.bili] targetUserId=0 targetDisplayId=0 clientBindSeq=35864
+      softInputMode=STATE_UNSPECIFIED|ADJUST_PAN
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35861:
+      time=2026-10-11 09:12:11.770 (timestamp=2784779312) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@a1220b0 [com.hihonor.android.launcher] targetUserId=0 targetDisplayId=0 clientBindSeq=35865
+      softInputMode=STATE_ALWAYS_HIDDEN|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35862:
+      time=2026-10-11 09:31:55.116 (timestamp=2785962658) reason=SESSION_CREATED_BY_IME restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@651d245 [com.ss.android.ugc.aweme] targetUserId=0 targetDisplayId=0 clientBindSeq=35866
+      softInputMode=STATE_HIDDEN|ADJUST_RESIZE|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35863:
+      time=2026-10-11 09:32:19.631 (timestamp=2785987174) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@a1220b0 [com.hihonor.android.launcher] targetUserId=0 targetDisplayId=0 clientBindSeq=35867
+      softInputMode=STATE_ALWAYS_HIDDEN|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35864:
+      time=2026-10-11 09:32:21.147 (timestamp=2785988689) reason=SESSION_CREATED_BY_IME restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@59c734c [com.xingin.xhs] targetUserId=0 targetDisplayId=0 clientBindSeq=35868
+      softInputMode=STATE_UNSPECIFIED|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35865:
+      time=2026-10-11 09:32:30.467 (timestamp=2785998010) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@a1220b0 [com.hihonor.android.launcher] targetUserId=0 targetDisplayId=0 clientBindSeq=35869
+      softInputMode=STATE_ALWAYS_HIDDEN|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35866:
+      time=2026-10-11 09:32:32.667 (timestamp=2786000210) reason=SESSION_CREATED_BY_IME restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@c97a943 [com.tencent.mm] targetUserId=0 targetDisplayId=0 clientBindSeq=35870
+      softInputMode=STATE_UNSPECIFIED|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35867:
+      time=2026-10-11 09:32:34.522 (timestamp=2786002064) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@9269fac [com.tencent.mm] targetUserId=0 targetDisplayId=0 clientBindSeq=35871
+      softInputMode=STATE_HIDDEN|ADJUST_NOTHING|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35868:
+      time=2026-10-11 09:32:48.022 (timestamp=2786015565) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@b99faa8 [com.tencent.mm] targetUserId=0 targetDisplayId=0 clientBindSeq=35872
+      softInputMode=STATE_UNSPECIFIED|ADJUST_RESIZE|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35869:
+      time=2026-10-11 09:32:53.015 (timestamp=2786020558) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@a1220b0 [com.hihonor.android.launcher] targetUserId=0 targetDisplayId=0 clientBindSeq=35873
+      softInputMode=STATE_ALWAYS_HIDDEN|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35870:
+      time=2026-10-11 09:32:54.826 (timestamp=2786022369) reason=SESSION_CREATED_BY_IME restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@a3f71e8 [com.tencent.mm] targetUserId=0 targetDisplayId=0 clientBindSeq=35874
+      softInputMode=STATE_UNSPECIFIED|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35871:
+      time=2026-10-11 09:32:56.088 (timestamp=2786023630) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@c59dcb2 [com.tencent.mm] targetUserId=0 targetDisplayId=0 clientBindSeq=35875
+      softInputMode=STATE_HIDDEN|ADJUST_NOTHING|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35872:
+      time=2026-10-11 09:33:09.820 (timestamp=2786037362) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@7a880f0 [com.tencent.mm] targetUserId=0 targetDisplayId=0 clientBindSeq=35876
+      softInputMode=STATE_HIDDEN|ADJUST_NOTHING|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35873:
+      time=2026-10-11 09:33:18.253 (timestamp=2786045796) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@a1220b0 [com.hihonor.android.launcher] targetUserId=0 targetDisplayId=0 clientBindSeq=35877
+      softInputMode=STATE_ALWAYS_HIDDEN|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35874:
+      time=2026-10-11 09:33:20.530 (timestamp=2786048073) reason=SESSION_CREATED_BY_IME restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@732bfca [com.smile.gifmaker] targetUserId=0 targetDisplayId=0 clientBindSeq=35878
+      softInputMode=STATE_ALWAYS_HIDDEN|ADJUST_NOTHING|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35875:
+      time=2026-10-11 09:33:44.534 (timestamp=2786072077) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@c2a0f0f [com.smile.gifmaker] targetUserId=0 targetDisplayId=0 clientBindSeq=35879
+      softInputMode=STATE_ALWAYS_HIDDEN|ADJUST_RESIZE|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35876:
+      time=2026-10-11 09:33:50.525 (timestamp=2786078067) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@a1220b0 [com.hihonor.android.launcher] targetUserId=0 targetDisplayId=0 clientBindSeq=35880
+      softInputMode=STATE_ALWAYS_HIDDEN|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35877:
+      time=2026-10-11 09:33:53.365 (timestamp=2786080908) reason=SESSION_CREATED_BY_IME restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@b41cabf [com.ss.android.article.news] targetUserId=0 targetDisplayId=0 clientBindSeq=35881
+      softInputMode=STATE_UNSPECIFIED|ADJUST_NOTHING
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35878:
+      time=2026-10-11 09:34:06.868 (timestamp=2786094411) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@b41cabf [com.ss.android.article.news] targetUserId=0 targetDisplayId=0 clientBindSeq=35882
+      softInputMode=STATE_UNSPECIFIED|ADJUST_NOTHING
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35879:
+      time=2026-10-11 09:34:15.055 (timestamp=2786102598) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@a1220b0 [com.hihonor.android.launcher] targetUserId=0 targetDisplayId=0 clientBindSeq=35883
+      softInputMode=STATE_ALWAYS_HIDDEN|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35880:
+      time=2026-10-11 09:34:18.127 (timestamp=2786105669) reason=SESSION_CREATED_BY_IME restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@1cd5819 [com.zhihu.android] targetUserId=0 targetDisplayId=0 clientBindSeq=35884
+      softInputMode=STATE_ALWAYS_HIDDEN|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35881:
+      time=2026-10-11 09:34:23.736 (timestamp=2786111279) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@2725a4d [com.zhihu.android] targetUserId=0 targetDisplayId=0 clientBindSeq=35885
+      softInputMode=STATE_HIDDEN|ADJUST_RESIZE|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35882:
+      time=2026-10-11 09:34:34.916 (timestamp=2786122459) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@a1220b0 [com.hihonor.android.launcher] targetUserId=0 targetDisplayId=0 clientBindSeq=35886
+      softInputMode=STATE_ALWAYS_HIDDEN|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35883:
+      time=2026-10-11 09:34:36.596 (timestamp=2786124138) reason=SESSION_CREATED_BY_IME restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@5c88fd9 [com.sina.weibo] targetUserId=0 targetDisplayId=0 clientBindSeq=35887
+      softInputMode=STATE_UNSPECIFIED|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35884:
+      time=2026-10-11 09:34:37.130 (timestamp=2786124672) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@9741696 [com.sina.weibo] targetUserId=0 targetDisplayId=0 clientBindSeq=35888
+      softInputMode=STATE_UNSPECIFIED|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35885:
+      time=2026-10-11 09:34:42.634 (timestamp=2786130177) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@8129fe2 [com.sina.weibo] targetUserId=0 targetDisplayId=0 clientBindSeq=35889
+      softInputMode=STATE_UNSPECIFIED|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35886:
+      time=2026-10-11 09:34:53.533 (timestamp=2786141076) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@a4ff357 [com.sina.weibo] targetUserId=0 targetDisplayId=0 clientBindSeq=35890
+      softInputMode=STATE_ALWAYS_HIDDEN|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35887:
+      time=2026-10-11 09:34:58.927 (timestamp=2786146469) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@a1220b0 [com.hihonor.android.launcher] targetUserId=0 targetDisplayId=0 clientBindSeq=35891
+      softInputMode=STATE_ALWAYS_HIDDEN|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35888:
+      time=2026-10-11 09:35:00.605 (timestamp=2786148148) reason=SESSION_CREATED_BY_IME restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@72213dd [tv.danmaku.bili] targetUserId=0 targetDisplayId=0 clientBindSeq=35892
+      softInputMode=STATE_UNSPECIFIED|ADJUST_PAN
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35889:
+      time=2026-10-11 09:35:09.167 (timestamp=2786156710) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@a1220b0 [com.hihonor.android.launcher] targetUserId=0 targetDisplayId=0 clientBindSeq=35893
+      softInputMode=STATE_ALWAYS_HIDDEN|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35890:
+      time=2026-10-11 09:54:42.234 (timestamp=2787329776) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@b41cabf [com.ss.android.article.news] targetUserId=0 targetDisplayId=0 clientBindSeq=35894
+      softInputMode=STATE_UNSPECIFIED|ADJUST_NOTHING|IS_FORWARD_NAVIGATION
+      inputType=0x0 imeOptions=0x0 fieldId=0x0 fieldName=null actionId=0 actionLabel=null
+    StartInput #35891:
+      time=2026-10-11 09:55:36.292 (timestamp=2787383835) reason=WINDOW_FOCUS_GAIN restarting=false
+      imeToken=android.os.Binder@7169a93 [com.android.adbkeyboard/.AdbIME] imeUserId=0 imeDisplayId=0
+      targetWin=android.os.BinderProxy@4d52561 [com.ss.android.article.news] targetUserId=0 targetDisplayId=0 clientBindSeq=35895
+      softInputMode=STATE_ALWAYS_VISIBLE|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      inputType=0x1 imeOptions=0x3 fieldId=0x7f0e008b fieldName=null actionId=0 actionLabel=null
+  mSoftInputShowHideHistory:
+    SoftInputShowHide[0] #22804:
+      time=2026-10-11 08:33:57.277 (timestamp=2782484820)
+      reason=HIDE_SOFT_INPUT inFullscreenMode=false
+      requestClient=ClientState{acc0b1d mUid=10061 mPid=31772 mSelfReportedDisplayId=0}
+      focusedWindowName=68c2b24 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      requestWindowName=68c2b24 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeControlTargetName=68c2b24 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeTargetNameFromWm=ff1688f com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeSurfaceParentName=Surface(name=ActivityRecord{117151372 u0 com.ss.android.ugc.aweme/.search.activity.SearchResultActivity t14517})/@0x827fa45
+      editorInfo: inputType=524289 privateImeOptions=null fieldId (viewId)=2131376912
+      focusedWindowSoftInputMode=STATE_ALWAYS_VISIBLE|ADJUST_RESIZE
+    SoftInputShowHide[0] #22805:
+      time=2026-10-11 08:35:24.924 (timestamp=2782572467)
+      reason=SHOW_SOFT_INPUT inFullscreenMode=false
+      requestClient=ClientState{acc0b1d mUid=10061 mPid=31772 mSelfReportedDisplayId=0}
+      focusedWindowName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      requestWindowName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeControlTargetName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeTargetNameFromWm=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeSurfaceParentName=Surface(name=ActivityRecord{187214676 u0 com.ss.android.ugc.aweme/.search.activity.SearchResultActivity t14517})/@0x99c3b97
+      editorInfo: inputType=524289 privateImeOptions=null fieldId (viewId)=2131376912
+      focusedWindowSoftInputMode=STATE_ALWAYS_VISIBLE|ADJUST_RESIZE
+    SoftInputShowHide[0] #22806:
+      time=2026-10-11 08:35:28.488 (timestamp=2782576031)
+      reason=SHOW_SOFT_INPUT inFullscreenMode=false
+      requestClient=ClientState{acc0b1d mUid=10061 mPid=31772 mSelfReportedDisplayId=0}
+      focusedWindowName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      requestWindowName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeControlTargetName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeTargetNameFromWm=a9feaaa com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeSurfaceParentName=Surface(name=ActivityRecord{187214676 u0 com.ss.android.ugc.aweme/.search.activity.SearchResultActivity t14517})/@0x99c3b97
+      editorInfo: inputType=524289 privateImeOptions=null fieldId (viewId)=2131376912
+      focusedWindowSoftInputMode=STATE_ALWAYS_VISIBLE|ADJUST_RESIZE
+    SoftInputShowHide[0] #22807:
+      time=2026-10-11 08:35:39.287 (timestamp=2782586829)
+      reason=SHOW_SOFT_INPUT inFullscreenMode=false
+      requestClient=ClientState{acc0b1d mUid=10061 mPid=31772 mSelfReportedDisplayId=0}
+      focusedWindowName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      requestWindowName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeControlTargetName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeTargetNameFromWm=a9feaaa com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeSurfaceParentName=Surface(name=ActivityRecord{187214676 u0 com.ss.android.ugc.aweme/.search.activity.SearchResultActivity t14517})/@0x99c3b97
+      editorInfo: inputType=524289 privateImeOptions=null fieldId (viewId)=2131376912
+      focusedWindowSoftInputMode=STATE_ALWAYS_VISIBLE|ADJUST_RESIZE
+    SoftInputShowHide[0] #22808:
+      time=2026-10-11 08:35:39.297 (timestamp=2782586840)
+      reason=HIDE_SOFT_INPUT inFullscreenMode=false
+      requestClient=ClientState{acc0b1d mUid=10061 mPid=31772 mSelfReportedDisplayId=0}
+      focusedWindowName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      requestWindowName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeControlTargetName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeTargetNameFromWm=a9feaaa com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeSurfaceParentName=Surface(name=ActivityRecord{187214676 u0 com.ss.android.ugc.aweme/.search.activity.SearchResultActivity t14517})/@0x99c3b97
+      editorInfo: inputType=524289 privateImeOptions=null fieldId (viewId)=2131376912
+      focusedWindowSoftInputMode=STATE_ALWAYS_VISIBLE|ADJUST_RESIZE
+    SoftInputShowHide[0] #22809:
+      time=2026-10-11 08:35:40.298 (timestamp=2782587841)
+      reason=SHOW_SOFT_INPUT inFullscreenMode=false
+      requestClient=ClientState{acc0b1d mUid=10061 mPid=31772 mSelfReportedDisplayId=0}
+      focusedWindowName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      requestWindowName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeControlTargetName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeTargetNameFromWm=a9feaaa com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeSurfaceParentName=Surface(name=ActivityRecord{187214676 u0 com.ss.android.ugc.aweme/.search.activity.SearchResultActivity t14517})/@0x99c3b97
+      editorInfo: inputType=524289 privateImeOptions=null fieldId (viewId)=2131376912
+      focusedWindowSoftInputMode=STATE_ALWAYS_VISIBLE|ADJUST_RESIZE
+    SoftInputShowHide[0] #22810:
+      time=2026-10-11 08:35:41.303 (timestamp=2782588846)
+      reason=SHOW_SOFT_INPUT inFullscreenMode=false
+      requestClient=ClientState{acc0b1d mUid=10061 mPid=31772 mSelfReportedDisplayId=0}
+      focusedWindowName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      requestWindowName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeControlTargetName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeTargetNameFromWm=a9feaaa com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeSurfaceParentName=Surface(name=ActivityRecord{187214676 u0 com.ss.android.ugc.aweme/.search.activity.SearchResultActivity t14517})/@0x99c3b97
+      editorInfo: inputType=524289 privateImeOptions=null fieldId (viewId)=2131376912
+      focusedWindowSoftInputMode=STATE_ALWAYS_VISIBLE|ADJUST_RESIZE
+    SoftInputShowHide[0] #22811:
+      time=2026-10-11 08:35:41.335 (timestamp=2782588878)
+      reason=HIDE_SOFT_INPUT inFullscreenMode=false
+      requestClient=ClientState{acc0b1d mUid=10061 mPid=31772 mSelfReportedDisplayId=0}
+      focusedWindowName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      requestWindowName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeControlTargetName=1b6ff4a com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeTargetNameFromWm=a9feaaa com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeSurfaceParentName=Surface(name=ActivityRecord{187214676 u0 com.ss.android.ugc.aweme/.search.activity.SearchResultActivity t14517})/@0x99c3b97
+      editorInfo: inputType=524289 privateImeOptions=null fieldId (viewId)=2131376912
+      focusedWindowSoftInputMode=STATE_ALWAYS_VISIBLE|ADJUST_RESIZE
+    SoftInputShowHide[0] #22812:
+      time=2026-10-11 08:36:09.143 (timestamp=2782616685)
+      reason=SHOW_SOFT_INPUT inFullscreenMode=false
+      requestClient=ClientState{acc0b1d mUid=10061 mPid=31772 mSelfReportedDisplayId=0}
+      focusedWindowName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      requestWindowName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeControlTargetName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeTargetNameFromWm=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeSurfaceParentName=Surface(name=ActivityRecord{1656249 u0 com.ss.android.ugc.aweme/.search.activity.SearchResultActivity t14517})/@0x58d22ae
+      editorInfo: inputType=524289 privateImeOptions=null fieldId (viewId)=2131376912
+      focusedWindowSoftInputMode=STATE_ALWAYS_VISIBLE|ADJUST_RESIZE
+    SoftInputShowHide[0] #22813:
+      time=2026-10-11 08:36:12.584 (timestamp=2782620126)
+      reason=SHOW_SOFT_INPUT inFullscreenMode=false
+      requestClient=ClientState{acc0b1d mUid=10061 mPid=31772 mSelfReportedDisplayId=0}
+      focusedWindowName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      requestWindowName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeControlTargetName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeTargetNameFromWm=236db10 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeSurfaceParentName=Surface(name=ActivityRecord{1656249 u0 com.ss.android.ugc.aweme/.search.activity.SearchResultActivity t14517})/@0x58d22ae
+      editorInfo: inputType=524289 privateImeOptions=null fieldId (viewId)=2131376912
+      focusedWindowSoftInputMode=STATE_ALWAYS_VISIBLE|ADJUST_RESIZE
+    SoftInputShowHide[0] #22814:
+      time=2026-10-11 08:36:18.444 (timestamp=2782625987)
+      reason=SHOW_SOFT_INPUT inFullscreenMode=false
+      requestClient=ClientState{acc0b1d mUid=10061 mPid=31772 mSelfReportedDisplayId=0}
+      focusedWindowName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      requestWindowName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeControlTargetName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeTargetNameFromWm=236db10 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeSurfaceParentName=Surface(name=ActivityRecord{1656249 u0 com.ss.android.ugc.aweme/.search.activity.SearchResultActivity t14517})/@0x58d22ae
+      editorInfo: inputType=524289 privateImeOptions=null fieldId (viewId)=2131376912
+      focusedWindowSoftInputMode=STATE_ALWAYS_VISIBLE|ADJUST_RESIZE
+    SoftInputShowHide[0] #22815:
+      time=2026-10-11 08:36:18.465 (timestamp=2782626008)
+      reason=HIDE_SOFT_INPUT inFullscreenMode=false
+      requestClient=ClientState{acc0b1d mUid=10061 mPid=31772 mSelfReportedDisplayId=0}
+      focusedWindowName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      requestWindowName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeControlTargetName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeTargetNameFromWm=236db10 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeSurfaceParentName=Surface(name=ActivityRecord{1656249 u0 com.ss.android.ugc.aweme/.search.activity.SearchResultActivity t14517})/@0x58d22ae
+      editorInfo: inputType=524289 privateImeOptions=null fieldId (viewId)=2131376912
+      focusedWindowSoftInputMode=STATE_ALWAYS_VISIBLE|ADJUST_RESIZE
+    SoftInputShowHide[0] #22816:
+      time=2026-10-11 08:36:19.426 (timestamp=2782626969)
+      reason=SHOW_SOFT_INPUT inFullscreenMode=false
+      requestClient=ClientState{acc0b1d mUid=10061 mPid=31772 mSelfReportedDisplayId=0}
+      focusedWindowName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      requestWindowName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeControlTargetName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeTargetNameFromWm=236db10 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeSurfaceParentName=Surface(name=ActivityRecord{1656249 u0 com.ss.android.ugc.aweme/.search.activity.SearchResultActivity t14517})/@0x58d22ae
+      editorInfo: inputType=524289 privateImeOptions=null fieldId (viewId)=2131376912
+      focusedWindowSoftInputMode=STATE_ALWAYS_VISIBLE|ADJUST_RESIZE
+    SoftInputShowHide[0] #22817:
+      time=2026-10-11 08:36:20.428 (timestamp=2782627970)
+      reason=SHOW_SOFT_INPUT inFullscreenMode=false
+      requestClient=ClientState{acc0b1d mUid=10061 mPid=31772 mSelfReportedDisplayId=0}
+      focusedWindowName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      requestWindowName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeControlTargetName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeTargetNameFromWm=236db10 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeSurfaceParentName=Surface(name=ActivityRecord{1656249 u0 com.ss.android.ugc.aweme/.search.activity.SearchResultActivity t14517})/@0x58d22ae
+      editorInfo: inputType=524289 privateImeOptions=null fieldId (viewId)=2131376912
+      focusedWindowSoftInputMode=STATE_ALWAYS_VISIBLE|ADJUST_RESIZE
+    SoftInputShowHide[0] #22818:
+      time=2026-10-11 08:36:20.447 (timestamp=2782627989)
+      reason=HIDE_SOFT_INPUT inFullscreenMode=false
+      requestClient=ClientState{acc0b1d mUid=10061 mPid=31772 mSelfReportedDisplayId=0}
+      focusedWindowName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      requestWindowName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeControlTargetName=bd0f2f1 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeTargetNameFromWm=236db10 com.ss.android.ugc.aweme/com.ss.android.ugc.aweme.search.activity.SearchResultActivity
+      imeSurfaceParentName=Surface(name=ActivityRecord{1656249 u0 com.ss.android.ugc.aweme/.search.activity.SearchResultActivity t14517})/@0x58d22ae
+      editorInfo: inputType=524289 privateImeOptions=null fieldId (viewId)=2131376912
+      focusedWindowSoftInputMode=STATE_ALWAYS_VISIBLE|ADJUST_RESIZE
+    SoftInputShowHide[0] #22819:
+      time=2026-10-11 09:55:36.374 (timestamp=2787383916)
+      reason=SHOW_SOFT_INPUT inFullscreenMode=false
+      requestClient=ClientState{f4b58fe mUid=10205 mPid=12451 mSelfReportedDisplayId=0}
+      focusedWindowName=126c547 com.ss.android.article.news/com.android.bytedance.search.SearchActivity
+      requestWindowName=126c547 com.ss.android.article.news/com.android.bytedance.search.SearchActivity
+      imeControlTargetName=126c547 com.ss.android.article.news/com.android.bytedance.search.SearchActivity
+      imeTargetNameFromWm=126c547 com.ss.android.article.news/com.android.bytedance.search.SearchActivity
+      imeSurfaceParentName=Surface(name=ActivityRecord{232787780 u0 com.ss.android.article.news/com.android.bytedance.search.SearchActivity t14534})/@0x437db0c
+      editorInfo: inputType=1 privateImeOptions=null fieldId (viewId)=2131624075
+      focusedWindowSoftInputMode=STATE_ALWAYS_VISIBLE|ADJUST_PAN|IS_FORWARD_NAVIGATION
+  mImeTrackerService#History:
+    mLiveEntries: 0 elements
+    mEntries: 100 elements
+      #121516 TYPE_HIDE - STATUS_CANCEL - system_server:5d384072 (34ms):
+        startTime=2026-10-11 09:11:20.256 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121517 TYPE_HIDE - STATUS_CANCEL - com.hihonor.android.launcher:5452bd2a (0ms):
+        startTime=2026-10-11 09:11:23.820 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121518 TYPE_HIDE - STATUS_CANCEL - system_server:fa163826 (2ms):
+        startTime=2026-10-11 09:11:23.838 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121519 TYPE_HIDE - STATUS_CANCEL - system_server:751557ea (2ms):
+        startTime=2026-10-11 09:11:23.838 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121520 TYPE_HIDE - STATUS_CANCEL - com.zhihu.android:48ebdf2b (0ms):
+        startTime=2026-10-11 09:11:26.453 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121521 TYPE_HIDE - STATUS_CANCEL - system_server:56f82226 (12ms):
+        startTime=2026-10-11 09:11:26.464 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121522 TYPE_HIDE - STATUS_CANCEL - system_server:4fd2cb22 (2ms):
+        startTime=2026-10-11 09:11:26.892 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121523 TYPE_HIDE - STATUS_FAIL - com.hihonor.android.launcher:6297c240 (1ms):
+        startTime=2026-10-11 09:11:40.829 ORIGIN_CLIENT
+        reason=HIDE_SOFT_INPUT PHASE_CLIENT_VIEW_SERVED
+        requestWindowName=not set
+      #121524 TYPE_HIDE - STATUS_CANCEL - system_server:94577b95 (92ms):
+        startTime=2026-10-11 09:11:40.944 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121526 TYPE_HIDE - STATUS_CANCEL - com.hihonor.android.launcher:20d43001 (4ms):
+        startTime=2026-10-11 09:11:42.565 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121525 TYPE_HIDE - STATUS_CANCEL - com.sina.weibo:ee8f60e3 (14ms):
+        startTime=2026-10-11 09:11:42.564 ORIGIN_SERVER
+        reason=HIDE_UNSPECIFIED_WINDOW PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121527 TYPE_HIDE - STATUS_CANCEL - system_server:a9ab16b3 (2ms):
+        startTime=2026-10-11 09:11:42.604 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121529 TYPE_HIDE - STATUS_CANCEL - system_server:54b3d9c7 (1ms):
+        startTime=2026-10-11 09:11:43.945 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121528 TYPE_HIDE - STATUS_CANCEL - com.sina.weibo:25fa9371 (80ms):
+        startTime=2026-10-11 09:11:43.934 ORIGIN_SERVER
+        reason=HIDE_UNSPECIFIED_WINDOW PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121530 TYPE_HIDE - STATUS_CANCEL - system_server:30e09508 (0ms):
+        startTime=2026-10-11 09:11:56.004 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121531 TYPE_HIDE - STATUS_FAIL - com.hihonor.android.launcher:3dc255fc (5ms):
+        startTime=2026-10-11 09:12:01.253 ORIGIN_CLIENT
+        reason=HIDE_SOFT_INPUT PHASE_CLIENT_VIEW_SERVED
+        requestWindowName=not set
+      #121532 TYPE_HIDE - STATUS_CANCEL - com.sina.weibo:b779ba28 (2ms):
+        startTime=2026-10-11 09:12:01.424 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121533 TYPE_HIDE - STATUS_CANCEL - system_server:d70c48b (8ms):
+        startTime=2026-10-11 09:12:01.435 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121535 TYPE_HIDE - STATUS_CANCEL - com.hihonor.android.launcher:f3ab6b99 (2ms):
+        startTime=2026-10-11 09:12:03.004 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121534 TYPE_HIDE - STATUS_CANCEL - tv.danmaku.bili:a3033064 (6ms):
+        startTime=2026-10-11 09:12:03.003 ORIGIN_SERVER
+        reason=HIDE_UNSPECIFIED_WINDOW PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121536 TYPE_HIDE - STATUS_CANCEL - system_server:386c27db (7ms):
+        startTime=2026-10-11 09:12:03.031 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121537 TYPE_HIDE - STATUS_CANCEL - system_server:50a07e0c (0ms):
+        startTime=2026-10-11 09:12:03.273 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121538 TYPE_HIDE - STATUS_FAIL - com.hihonor.android.launcher:df7c3e3d (0ms):
+        startTime=2026-10-11 09:12:11.624 ORIGIN_CLIENT
+        reason=HIDE_SOFT_INPUT PHASE_CLIENT_VIEW_SERVED
+        requestWindowName=not set
+      #121539 TYPE_HIDE - STATUS_CANCEL - system_server:ec08e2cb (1ms):
+        startTime=2026-10-11 09:12:11.781 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121540 TYPE_HIDE - STATUS_CANCEL - system_server:b78f5a00 (0ms):
+        startTime=2026-10-11 09:12:11.959 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121541 TYPE_HIDE - STATUS_CANCEL - com.hihonor.android.launcher:e03e531 (28ms):
+        startTime=2026-10-11 09:31:53.072 ORIGIN_CLIENT
+        reason=HIDE_SOFT_INPUT PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121542 TYPE_HIDE - STATUS_CANCEL - com.hihonor.android.launcher:f0cede (1ms):
+        startTime=2026-10-11 09:31:55.097 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121543 TYPE_HIDE - STATUS_CANCEL - system_server:86220413 (2ms):
+        startTime=2026-10-11 09:31:55.126 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121544 TYPE_HIDE - STATUS_FAIL - com.hihonor.android.launcher:1cab7881 (2ms):
+        startTime=2026-10-11 09:32:19.469 ORIGIN_CLIENT
+        reason=HIDE_SOFT_INPUT PHASE_CLIENT_VIEW_SERVED
+        requestWindowName=not set
+      #121545 TYPE_HIDE - STATUS_CANCEL - system_server:1cb16c50 (105ms):
+        startTime=2026-10-11 09:32:19.643 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121547 TYPE_HIDE - STATUS_CANCEL - com.hihonor.android.launcher:657b4752 (1ms):
+        startTime=2026-10-11 09:32:21.132 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121546 TYPE_HIDE - STATUS_CANCEL - com.xingin.xhs:bf84eebc (15ms):
+        startTime=2026-10-11 09:32:21.130 ORIGIN_SERVER
+        reason=HIDE_UNSPECIFIED_WINDOW PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121548 TYPE_HIDE - STATUS_CANCEL - system_server:d941b3fb (6ms):
+        startTime=2026-10-11 09:32:21.157 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121549 TYPE_HIDE - STATUS_FAIL - com.hihonor.android.launcher:6e8ff120 (3ms):
+        startTime=2026-10-11 09:32:30.349 ORIGIN_CLIENT
+        reason=HIDE_SOFT_INPUT PHASE_CLIENT_VIEW_SERVED
+        requestWindowName=not set
+      #121550 TYPE_HIDE - STATUS_CANCEL - system_server:c2f47645 (194ms):
+        startTime=2026-10-11 09:32:30.477 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121551 TYPE_HIDE - STATUS_CANCEL - com.tencent.mm:b4bf93f (3ms):
+        startTime=2026-10-11 09:32:32.634 ORIGIN_SERVER
+        reason=HIDE_UNSPECIFIED_WINDOW PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121552 TYPE_HIDE - STATUS_CANCEL - com.hihonor.android.launcher:212ad9a7 (6ms):
+        startTime=2026-10-11 09:32:32.640 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121553 TYPE_HIDE - STATUS_CANCEL - system_server:fac2fb7 (4ms):
+        startTime=2026-10-11 09:32:32.675 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121554 TYPE_HIDE - STATUS_CANCEL - system_server:182c3667 (2ms):
+        startTime=2026-10-11 09:32:34.529 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121555 TYPE_HIDE - STATUS_CANCEL - com.tencent.mm:928ae421 (7ms):
+        startTime=2026-10-11 09:32:47.651 ORIGIN_CLIENT
+        reason=HIDE_SOFT_INPUT PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121556 TYPE_HIDE - STATUS_CANCEL - com.tencent.mm:c07b425a (1ms):
+        startTime=2026-10-11 09:32:48.022 ORIGIN_SERVER
+        reason=HIDE_UNSPECIFIED_WINDOW PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121557 TYPE_HIDE - STATUS_CANCEL - system_server:98730a20 (1ms):
+        startTime=2026-10-11 09:32:48.037 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121558 TYPE_HIDE - STATUS_CANCEL - system_server:dbe0684 (66ms):
+        startTime=2026-10-11 09:32:53.028 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121559 TYPE_HIDE - STATUS_CANCEL - com.tencent.mm:c5458228 (1ms):
+        startTime=2026-10-11 09:32:54.819 ORIGIN_SERVER
+        reason=HIDE_UNSPECIFIED_WINDOW PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121560 TYPE_HIDE - STATUS_CANCEL - com.hihonor.android.launcher:df89b7f0 (2ms):
+        startTime=2026-10-11 09:32:54.820 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121561 TYPE_HIDE - STATUS_CANCEL - system_server:56c2ae22 (0ms):
+        startTime=2026-10-11 09:32:54.835 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121562 TYPE_HIDE - STATUS_CANCEL - system_server:d5d69e62 (2ms):
+        startTime=2026-10-11 09:32:56.098 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121563 TYPE_HIDE - STATUS_CANCEL - com.tencent.mm:37d17f16 (3ms):
+        startTime=2026-10-11 09:33:08.255 ORIGIN_CLIENT
+        reason=HIDE_SOFT_INPUT PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121564 TYPE_HIDE - STATUS_CANCEL - system_server:5f1270e0 (2ms):
+        startTime=2026-10-11 09:33:09.827 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121565 TYPE_HIDE - STATUS_FAIL - com.hihonor.android.launcher:d4383a5f (5ms):
+        startTime=2026-10-11 09:33:18.061 ORIGIN_CLIENT
+        reason=HIDE_SOFT_INPUT PHASE_CLIENT_VIEW_SERVED
+        requestWindowName=not set
+      #121566 TYPE_HIDE - STATUS_CANCEL - system_server:61a83d36 (1ms):
+        startTime=2026-10-11 09:33:18.272 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121567 TYPE_HIDE - STATUS_CANCEL - com.hihonor.android.launcher:39e84186 (1ms):
+        startTime=2026-10-11 09:33:20.507 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121568 TYPE_HIDE - STATUS_CANCEL - system_server:8878208 (0ms):
+        startTime=2026-10-11 09:33:20.538 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121569 TYPE_HIDE - STATUS_CANCEL - com.smile.gifmaker:fa1a1ffb (1ms):
+        startTime=2026-10-11 09:33:44.511 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121570 TYPE_HIDE - STATUS_CANCEL - system_server:3a740485 (1ms):
+        startTime=2026-10-11 09:33:44.540 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121571 TYPE_HIDE - STATUS_FAIL - com.hihonor.android.launcher:8dbbb823 (2ms):
+        startTime=2026-10-11 09:33:50.436 ORIGIN_CLIENT
+        reason=HIDE_SOFT_INPUT PHASE_CLIENT_VIEW_SERVED
+        requestWindowName=not set
+      #121573 TYPE_HIDE - STATUS_CANCEL - com.smile.gifmaker:675ac32c (2ms):
+        startTime=2026-10-11 09:33:50.582 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121572 TYPE_HIDE - STATUS_CANCEL - system_server:16ea2a06 (122ms):
+        startTime=2026-10-11 09:33:50.546 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121575 TYPE_HIDE - STATUS_CANCEL - com.hihonor.android.launcher:d7406229 (1ms):
+        startTime=2026-10-11 09:33:53.351 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121574 TYPE_HIDE - STATUS_CANCEL - com.ss.android.article.news:e89c18e7 (31ms):
+        startTime=2026-10-11 09:33:53.348 ORIGIN_SERVER
+        reason=HIDE_UNSPECIFIED_WINDOW PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121576 TYPE_HIDE - STATUS_CANCEL - system_server:bb51cabe (4ms):
+        startTime=2026-10-11 09:33:53.404 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121577 TYPE_HIDE - STATUS_CANCEL - system_server:cd5f6ce2 (1ms):
+        startTime=2026-10-11 09:33:54.361 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121578 TYPE_HIDE - STATUS_CANCEL - com.ss.android.article.news:8172670 (2ms):
+        startTime=2026-10-11 09:34:06.868 ORIGIN_SERVER
+        reason=HIDE_SAME_WINDOW_FOCUSED_WITHOUT_EDITOR PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121579 TYPE_HIDE - STATUS_FAIL - com.hihonor.android.launcher:b5e3a81e (2ms):
+        startTime=2026-10-11 09:34:14.928 ORIGIN_CLIENT
+        reason=HIDE_SOFT_INPUT PHASE_CLIENT_VIEW_SERVED
+        requestWindowName=not set
+      #121580 TYPE_HIDE - STATUS_CANCEL - system_server:b2ca7240 (16ms):
+        startTime=2026-10-11 09:34:15.078 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121581 TYPE_HIDE - STATUS_CANCEL - com.hihonor.android.launcher:1ffbca0a (1ms):
+        startTime=2026-10-11 09:34:18.101 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121582 TYPE_HIDE - STATUS_CANCEL - system_server:1dbfbbad (1ms):
+        startTime=2026-10-11 09:34:18.156 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121583 TYPE_HIDE - STATUS_CANCEL - system_server:ce840566 (1ms):
+        startTime=2026-10-11 09:34:18.537 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121584 TYPE_HIDE - STATUS_CANCEL - com.zhihu.android:26e4f3d7 (1ms):
+        startTime=2026-10-11 09:34:23.732 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121585 TYPE_HIDE - STATUS_CANCEL - system_server:d71c3d35 (2ms):
+        startTime=2026-10-11 09:34:23.743 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121586 TYPE_HIDE - STATUS_CANCEL - system_server:70a2f37b (1ms):
+        startTime=2026-10-11 09:34:24.281 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121587 TYPE_HIDE - STATUS_FAIL - com.hihonor.android.launcher:36547221 (4ms):
+        startTime=2026-10-11 09:34:34.758 ORIGIN_CLIENT
+        reason=HIDE_SOFT_INPUT PHASE_CLIENT_VIEW_SERVED
+        requestWindowName=not set
+      #121588 TYPE_HIDE - STATUS_CANCEL - system_server:ca85e1dd (29ms):
+        startTime=2026-10-11 09:34:34.934 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121590 TYPE_HIDE - STATUS_CANCEL - com.hihonor.android.launcher:9ca73216 (2ms):
+        startTime=2026-10-11 09:34:36.566 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121589 TYPE_HIDE - STATUS_CANCEL - com.sina.weibo:89c12026 (15ms):
+        startTime=2026-10-11 09:34:36.562 ORIGIN_SERVER
+        reason=HIDE_UNSPECIFIED_WINDOW PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121591 TYPE_HIDE - STATUS_CANCEL - system_server:efddea84 (7ms):
+        startTime=2026-10-11 09:34:36.609 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121593 TYPE_HIDE - STATUS_CANCEL - system_server:f0cfb52e (3ms):
+        startTime=2026-10-11 09:34:37.138 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121592 TYPE_HIDE - STATUS_CANCEL - com.sina.weibo:b3c360a2 (141ms):
+        startTime=2026-10-11 09:34:37.128 ORIGIN_SERVER
+        reason=HIDE_UNSPECIFIED_WINDOW PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121594 TYPE_HIDE - STATUS_CANCEL - system_server:8ebd9da1 (0ms):
+        startTime=2026-10-11 09:34:37.393 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121596 TYPE_HIDE - STATUS_CANCEL - system_server:233d8341 (7ms):
+        startTime=2026-10-11 09:34:42.638 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121595 TYPE_HIDE - STATUS_CANCEL - com.sina.weibo:7b4e4ba5 (64ms):
+        startTime=2026-10-11 09:34:42.633 ORIGIN_SERVER
+        reason=HIDE_UNSPECIFIED_WINDOW PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121597 TYPE_HIDE - STATUS_CANCEL - system_server:38829ecf (0ms):
+        startTime=2026-10-11 09:34:43.128 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121598 TYPE_HIDE - STATUS_CANCEL - system_server:c24912a6 (1ms):
+        startTime=2026-10-11 09:34:53.539 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121599 TYPE_HIDE - STATUS_FAIL - com.hihonor.android.launcher:4290e5ee (6ms):
+        startTime=2026-10-11 09:34:58.747 ORIGIN_CLIENT
+        reason=HIDE_SOFT_INPUT PHASE_CLIENT_VIEW_SERVED
+        requestWindowName=not set
+      #121600 TYPE_HIDE - STATUS_CANCEL - com.sina.weibo:1dbd8f9 (4ms):
+        startTime=2026-10-11 09:34:58.931 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121601 TYPE_HIDE - STATUS_CANCEL - system_server:6ef13b0b (51ms):
+        startTime=2026-10-11 09:34:58.944 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121602 TYPE_HIDE - STATUS_CANCEL - tv.danmaku.bili:884f5cb2 (3ms):
+        startTime=2026-10-11 09:35:00.587 ORIGIN_SERVER
+        reason=HIDE_UNSPECIFIED_WINDOW PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121603 TYPE_HIDE - STATUS_CANCEL - com.hihonor.android.launcher:a7d1cc8 (1ms):
+        startTime=2026-10-11 09:35:00.591 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121604 TYPE_HIDE - STATUS_CANCEL - system_server:16f6f6d2 (2ms):
+        startTime=2026-10-11 09:35:00.614 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121605 TYPE_HIDE - STATUS_CANCEL - system_server:aa90d229 (1ms):
+        startTime=2026-10-11 09:35:00.864 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121606 TYPE_HIDE - STATUS_FAIL - com.hihonor.android.launcher:ac8cb29c (1ms):
+        startTime=2026-10-11 09:35:09.026 ORIGIN_CLIENT
+        reason=HIDE_SOFT_INPUT PHASE_CLIENT_VIEW_SERVED
+        requestWindowName=not set
+      #121607 TYPE_HIDE - STATUS_CANCEL - system_server:64960fff (42ms):
+        startTime=2026-10-11 09:35:09.176 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121608 TYPE_HIDE - STATUS_CANCEL - system_server:497ddf22 (1ms):
+        startTime=2026-10-11 09:35:09.368 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121609 TYPE_HIDE - STATUS_CANCEL - com.ss.android.article.news:e9f10791 (4ms):
+        startTime=2026-10-11 09:54:42.228 ORIGIN_SERVER
+        reason=HIDE_UNSPECIFIED_WINDOW PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121610 TYPE_HIDE - STATUS_CANCEL - com.hihonor.android.launcher:68a56b03 (1ms):
+        startTime=2026-10-11 09:54:42.234 ORIGIN_CLIENT
+        reason=HIDE_WINDOW_LOST_FOCUS PHASE_CLIENT_ALREADY_HIDDEN
+        requestWindowName=not set
+      #121611 TYPE_HIDE - STATUS_CANCEL - system_server:3405056a (1ms):
+        startTime=2026-10-11 09:54:42.243 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_SERVER_SHOULD_HIDE
+        requestWindowName=not set
+      #121612 TYPE_SHOW - STATUS_FAIL - com.ss.android.article.news:10ca37aa (2ms):
+        startTime=2026-10-11 09:55:36.025 ORIGIN_CLIENT
+        reason=SHOW_SOFT_INPUT PHASE_CLIENT_VIEW_SERVED
+        requestWindowName=not set
+      #121613 TYPE_SHOW - STATUS_FAIL - com.ss.android.article.news:4c608bbb (8ms):
+        startTime=2026-10-11 09:55:36.239 ORIGIN_CLIENT
+        reason=SHOW_SOFT_INPUT PHASE_SERVER_UPDATE_CLIENT_VISIBILITY
+        requestWindowName=not set
+      #121614 TYPE_SHOW - STATUS_CANCEL - com.ss.android.article.news:8628cd67 (18ms):
+        startTime=2026-10-11 09:55:36.294 ORIGIN_SERVER
+        reason=SHOW_STATE_ALWAYS_VISIBLE PHASE_CLIENT_REPORT_REQUESTED_VISIBLE_TYPES
+        requestWindowName=not set
+      #121615 TYPE_SHOW - STATUS_SUCCESS - system_server:e2784f1c (536ms):
+        startTime=2026-10-11 09:55:36.311 ORIGIN_SERVER
+        reason=IME_REQUESTED_CHANGED_LISTENER PHASE_CLIENT_ANIMATION_FINISHED_SHOW
+        requestWindowName=126c547 com.ss.android.article.news/com.android.bytedance.search.SearchActivity
+  UserId=0
+    mBindingController:
+      mSelectedMethodId=com.android.adbkeyboard/.AdbIME
+      mCurrentSubtype=null
+      mCurSeq=35895
+      mCurId=com.android.adbkeyboard/.AdbIME
+      mHasMainConnection=true
+      mVisibleBound=true
+      mCurToken=android.os.Binder@7169a93
+      mCurTokenDisplayId=0
+      mCurHostInputToken=null
+      mCurIntent=Intent { act=android.view.InputMethod xflg=0x4 cmp=com.android.adbkeyboard/.AdbIME (has extras) }
+      mCurMethod=com.android.server.inputmethod.IInputMethodInvoker@f393fc1
+      mImeWindowVis=3
+      mBackDisposition=0
+      mDisplayIdToShowIme=0
+      mDeviceIdToShowIme=0
+      mSupportsStylusHw=false
+      mSupportsConnectionlessStylusHw=false
+    mCurClient=ClientState{f4b58fe mUid=10205 mPid=12451 mSelfReportedDisplayId=0}
+    mFocusedWindowPerceptible={android.os.BinderProxy@72f4ed9=true, android.os.BinderProxy@a4ff357=true, android.os.BinderProxy@761cc7b=false, android.os.BinderProxy@572e923=true, android.os.BinderProxy@732bfca=true, android.os.BinderProxy@c623f4e=true, android.os.BinderProxy@f13f60a=true, android.os.BinderProxy@d5dd5a=true, android.os.BinderProxy@5c88fd9=true, android.os.BinderProxy@8129fe2=true, android.os.BinderProxy@4a9d6a4=true, android.os.BinderProxy@759f483=true, android.os.BinderProxy@2725a4d=true, android.os.BinderProxy@9741696=true, android.os.BinderProxy@7a880f0=true, android.os.BinderProxy@72213dd=true, android.os.BinderProxy@c59dcb2=true, android.os.BinderProxy@a3f71e8=true, android.os.BinderProxy@b99faa8=true, android.os.BinderProxy@961978=true, android.os.BinderProxy@59c734c=true, android.os.BinderProxy@4d52561=true, android.os.BinderProxy@a1220b0=true, android.os.BinderProxy@c2a0f0f=true, android.os.BinderProxy@1cd5819=true, android.os.BinderProxy@b41cabf=true, null=true}
+    mImeBindingState:
+      mFocusedWindow=android.os.BinderProxy@4d52561
+      mFocusedWindowSoftInputMode=STATE_ALWAYS_VISIBLE|ADJUST_PAN|IS_FORWARD_NAVIGATION
+      mFocusedWindowClient=ClientState{f4b58fe mUid=10205 mPid=12451 mSelfReportedDisplayId=0}
+    mBoundToMethod=true
+    mEnabledSession=SessionState{uid=10205 pid=12451 method=96e8800 session=e84374f channel=ClientState{f4b58fe mUid=10205 mPid=12451 mSelfReportedDisplayId=0} userId=0}
+    mVisibilityStateComputer:
+      mRequestedShowExplicitly=true mShowForced=false
+      mImeHiddenByDisplayPolicy=false
+      mInputShown=true
+      mLastImeTargetWindow=android.os.BinderProxy@4d52561
+    mInFullscreenMode=false
+    Input Methods:
+      InputMethod #0:
+        mId=com.android.adbkeyboard/.AdbIME mSettingsActivityName=null mLanguageSettingsActivityName=null mIsVrOnly=false mIsVirtualDeviceOnly=false mSupportsSwitchingToNextInputMethod=false mInlineSuggestionsEnabled=false mSupportsInlineSuggestionsWithTouchExploration=false mSuppressesSpellChecker=false mShowInInputMethodPicker=true mSupportsStylusHandwriting=false mSupportsConnectionlessStylusHandwriting=false mStylusHandwritingSettingsActivityAttr=null
+        mIsDefaultResId=0x0
+        Service:
+          priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=false
+          ServiceInfo:
+            name=com.android.adbkeyboard.AdbIME
+            packageName=com.android.adbkeyboard
+            labelRes=0x7f030001 nonLocalizedLabel=null icon=0x0 banner=0x0
+            enabled=true exported=false directBootAware=false
+            permission=android.permission.BIND_INPUT_METHOD
+            flags=0x0
+            ApplicationInfo:
+              packageName=com.android.adbkeyboard
+              labelRes=0x7f030000 nonLocalizedLabel=null icon=0x7f010000 banner=0x0
+              processName=com.android.adbkeyboard
+              taskAffinity=com.android.adbkeyboard
+              uid=10209 flags=0x3088be46 privateFlags=0x8c001000 theme=0x7f040001
+              requiresSmallestWidthDp=0 compatibleWidthLimitDp=0 largestWidthLimitDp=0
+              sourceDir=/data/app/~~k_oOtYpVYpH_5V8ZXMeM1g==/com.android.adbkeyboard-PvAWjx2neOcr-kfiIOhokg==/base.apk
+              resourceDirs=[/system/app/NavBarHideOverlay/NavBarHideOverlay.apk]
+              overlayPaths=[/system/app/NavBarHideOverlay/NavBarHideOverlay.apk, /data/resource-cache/com.android.systemui-neutral-vXxe.frro, /data/resource-cache/com.android.systemui-accent-LHcg.frro, /data/resource-cache/com.android.systemui-dynamic-n3Gv.frro]
+              seinfo=default:targetSdkVersion=33
+              seinfoUser=:complete
+              dataDir=/data/user/0/com.android.adbkeyboard
+              deviceProtectedDataDir=/data/user_de/0/com.android.adbkeyboard
+              credentialProtectedDataDir=/data/user/0/com.android.adbkeyboard
+              enabled=true minSdkVersion=15 targetSdkVersion=33 versionCode=2 targetSandboxVersion=1
+              supportsRtl=false
+               hwFlags=0x0
+              fullBackupContent=true
+              crossProfile=false
+              HiddenApiEnforcementPolicy=2
+              usesNonSdkApi=false
+              allowsPlaybackCapture=true
+              nativeHeapZeroInitialized=0
+              forceDarkMode=2
+              hasAllowAudioPlaybackCaptureConfig=false
+              enableOnBackInvokedCallback=false
+              allowCrossUidActivitySwitchFromBelow=true
+              mPageSizeAppCompatFlags=0
+              createTimestamp=2786156888
+        InputMethodSubtype array: count=0
+      InputMethod #1:
+        mId=com.baidu.input_hihonor/com.baidu.input_honor.ImeService mSettingsActivityName=com.baidu.input.ImeMainConfigActivity mLanguageSettingsActivityName=null mIsVrOnly=false mIsVirtualDeviceOnly=false mSupportsSwitchingToNextInputMethod=false mInlineSuggestionsEnabled=false mSupportsInlineSuggestionsWithTouchExploration=false mSuppressesSpellChecker=false mShowInInputMethodPicker=true mSupportsStylusHandwriting=false mSupportsConnectionlessStylusHandwriting=false mStylusHandwritingSettingsActivityAttr=null
+        mIsDefaultResId=0x7f050013
+        Service:
+          priority=100 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true
+          ServiceInfo:
+            name=com.baidu.input_honor.ImeService
+            packageName=com.baidu.input_hihonor
+            enabled=true exported=true directBootAware=true
+            permission=android.permission.BIND_INPUT_METHOD
+            flags=0x0
+            ApplicationInfo:
+              name=com.baidu.input.ImeApplication
+              packageName=com.baidu.input_hihonor
+              labelRes=0x7f1201a6 nonLocalizedLabel=null icon=0x7f080b42 banner=0x0
+              className=com.baidu.input.ImeApplication
+              processName=com.baidu.input_hihonor
+              taskAffinity=com.baidu.input_hihonor
+              uid=10073 flags=0x28c83e45 privateFlags=0xac400950 theme=0x2060008
+              requiresSmallestWidthDp=0 compatibleWidthLimitDp=0 largestWidthLimitDp=0
+              sourceDir=/system/app/BaiduInput_for_Honor/BaiduInput_for_Honor.apk
+              resourceDirs=[/system/app/NavBarHideOverlay/NavBarHideOverlay.apk]
+              overlayPaths=[/system/app/NavBarHideOverlay/NavBarHideOverlay.apk, /data/resource-cache/com.android.systemui-neutral-vXxe.frro, /data/resource-cache/com.android.systemui-accent-LHcg.frro, /data/resource-cache/com.android.systemui-dynamic-n3Gv.frro]
+              seinfo=default:targetSdkVersion=33:partition=system
+              seinfoUser=:complete
+              dataDir=/data/user/0/com.baidu.input_hihonor
+              deviceProtectedDataDir=/data/user_de/0/com.baidu.input_hihonor
+              credentialProtectedDataDir=/data/user/0/com.baidu.input_hihonor
+              sharedLibraryFiles=[/system/framework/org.apache.http.legacy.jar]
+              enabled=true minSdkVersion=29 targetSdkVersion=33 versionCode=10162 targetSandboxVersion=1
+              supportsRtl=true
+               hwFlags=0x0
+              fullBackupContent=true
+              crossProfile=false
+              networkSecurityConfigRes=0x7f1500e9
+              HiddenApiEnforcementPolicy=0
+              usesNonSdkApi=true
+              allowsPlaybackCapture=true
+              nativeHeapZeroInitialized=0
+              forceDarkMode=2
+              hasAllowAudioPlaybackCaptureConfig=false
+              enableOnBackInvokedCallback=false
+              allowCrossUidActivitySwitchFromBelow=true
+              mPageSizeAppCompatFlags=0
+              createTimestamp=2786156887
+        InputMethodSubtype array: count=2
+          InputMethodSubtype #0:
+            mSubtypeNameOverride= mLayoutLabelNonLocalized= mPkLanguageTag= mPkLayoutType= mSubtypeId=0 mSubtypeLocale=zh_CN mSubtypeLanguageTag= mSubtypeMode=keyboard mIsAuxiliary=false mOverridesImplicitlyEnabledSubtype=true mIsAsciiCapable=false mSubtypeHashCode=-1364526123
+          InputMethodSubtype #1:
+            mSubtypeNameOverride= mLayoutLabelNonLocalized= mPkLanguageTag= mPkLayoutType= mSubtypeId=0 mSubtypeLocale=en mSubtypeLanguageTag= mSubtypeMode=keyboard mIsAuxiliary=false mOverridesImplicitlyEnabledSubtype=false mIsAsciiCapable=false mSubtypeHashCode=1827377896
+
+Input method client state for android.view.inputmethod.InputMethodManager@913f539:
+  mFallbackInputConnection=RemoteInputConnectionImpl{connection=android.view.inputmethod.BaseInputConnection@54cf77e mDeactivateRequested=false mServedView=null}
+  mActive=true mRestartOnNextWindowFocus=false mBindSequence=35895 mCurImeId=com.android.adbkeyboard/.AdbIME
+  mFullscreenMode=false
+  mCurMethod=com.android.internal.inputmethod.IInputMethodSession$Stub$Proxy@f932908
+  mCurRootView=android.view.ViewRootImpl@ea1f4df
+  mServedView=com.android.bytedance.search.views.SearchAutoCompleteTextView{96f00b3 VFED..CL. .F...... 99,0-777,131 #7f0e008b app:id/cx aid=1073741824}
+  mNextServedView=com.android.bytedance.search.views.SearchAutoCompleteTextView{96f00b3 VFED..CL. .F...... 99,0-777,131 #7f0e008b app:id/cx aid=1073741824}
+  mServedConnecting=false
+  mCurrentEditorInfo:
+    inputType=0x1 imeOptions=0x3 privateImeOptions=null
+    actionLabel=null actionId=0
+    initialSelStart=0 initialSelEnd=0 initialToolType=0 initialCapsMode=0x0
+    hintText=领导发淫秽照女下属母亲讨说法 label=null
+    packageName=com.ss.android.article.news autofillId=1073741824 fieldId=2131624075 fieldName=null
+    hintLocales=null
+    supportedHandwritingGestureTypes=SELECT|SELECT_RANGE|INSERT|DELETE|DELETE_RANGE|REMOVE_SPACE|JOIN_OR_SPLIT
+    supportedHandwritingGesturePreviewTypes=SELECT|SELECT_RANGE|DELETE|DELETE_RANGE
+    isStylusHandwritingEnabled=false
+    writingToolsEnabled=true
+    contentMimeTypes=null
+  mServedInputConnection=RemoteInputConnectionImpl{connection=com.android.internal.inputmethod.EditableInputConnection@c5918a1 mDeactivateRequested=false mServedView=com.android.bytedance.search.views.SearchAutoCompleteTextView{96f00b3 VFED..CL. .F...... 99,0-777,131 #7f0e008b app:id/cx aid=1073741824}}
+  mServedInputConnectionHandler=null
+  mLastPendingStartSeqId=-1
+  mCompletions=null
+  mCursorRect=Rect(0, 0 - 0, 0)
+  mCursorSelStart=0 mCursorSelEnd=0 mCursorCandStart=-1 mCursorCandEnd=-1
+
+Input method service state for com.android.adbkeyboard.AdbIME@eb62494:
+  mViewsCreated=true
+  mDecorViewVisible=true mDecorViewWasVisible=true mWindowVisible=true mInShowWindow=false
+  Configuration={1.0 460mcc11mnc [zh_CN_#Hans] ldltr sw366dp w366dp h776dp 524dpi nrml long hdr widecg port finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1200, 2664) mAppBounds=Rect(0, 121 - 1200, 2664) mMaxBounds=Rect(0, 0 - 1200, 2664) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0 mPopOverMode=undefined} as.2 suim:1 fontWeightScale:100 changeUserFlag:0 changeUiModeFlag:0 fullScreenVideoFlag:0 splitScreenState:0 landScapeFreeformFlag:1 hoverMode:0 changeIconStyleFlag:0 changeThemeStyleFlag:0 transparentMode:2097152 s.18624 fontWeightAdjustment=0}
+  mToken=android.os.BinderProxy@ba1d1e8
+  mInputBinding=InputBinding{android.os.BinderProxy@7d2b7e7 / uid 10205 / pid 12451}
+  mInputConnection=RemoteInputConnection{idHash=#5c1995c}
+  mStartedInputConnection=RemoteInputConnection{idHash=#a03db1d}
+  mInputStarted=true mInputViewStarted=true mCandidatesViewStarted=false
+  mInputEditorInfo:
+    inputType=0x1 imeOptions=0x3 privateImeOptions=null
+    actionLabel=null actionId=0
+    initialSelStart=0 initialSelEnd=0 initialToolType=0 initialCapsMode=0x0
+    hintText=领导发淫秽照女下属母亲讨说法 label=null
+    packageName=com.ss.android.article.news autofillId=1073741824 fieldId=2131624075 fieldName=null
+    hintLocales=null
+    supportedHandwritingGestureTypes=SELECT|SELECT_RANGE|INSERT|DELETE|DELETE_RANGE|REMOVE_SPACE|JOIN_OR_SPLIT
+    supportedHandwritingGesturePreviewTypes=SELECT|SELECT_RANGE|DELETE|DELETE_RANGE
+    isStylusHandwritingEnabled=true
+    writingToolsEnabled=true
+    contentMimeTypes=null
+  mShowInputRequested=true mLastShowInputRequested=true mShowInputFlags=0x1
+  mCandidatesVisibility=4 mFullscreenApplied=true mIsFullscreen=false mExtractViewHidden=false
+  mExtractedText: null
+  mExtractedToken=0
+  mIsInputViewShown=true mStatusIcon=0
+  Last computed insets:
+    contentTopInsets=0 visibleTopInsets=0 touchableInsets=2 touchableRegion=SkRegion()
+  mSettingsObserver=SettingsObserver{mShowImeWithHardKeyboard=2}
+  mNavigationBarController={mImeDrawsImeNavBar=true mNavigationBarFrame=null mShouldShowImeSwitcherWhenImeIsShown=true mCustomImeSwitcherButtonRequestedVisible=true mAppearance=0x8 mDarkIntensity=1.0 mDrawLegacyNavigationBarBackground=false}
+  mCustomImeSwitcherButtonRequestedVisible=false

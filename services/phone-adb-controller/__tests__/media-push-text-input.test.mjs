@@ -10,7 +10,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { writeFileSync, mkdtempSync, chmodSync, mkdirSync, readFileSync, existsSync } from "node:fs";
+import { writeFileSync, mkdtempSync, chmodSync, mkdirSync, readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -57,10 +57,11 @@ if (a[0] === "pull") {
     fs.writeFileSync(a[2],xml);process.exit(0);
   }
   if (process.env.FAKE_TOUTIAO_SEARCH_FIXTURES) {
-    let xml=fs.readFileSync(path.join(process.env.FAKE_TOUTIAO_SEARCH_FIXTURES,"toutiao-search-before.xml"),"utf8");
     const text=read("typed");
+    const phase=text ? "typed" : read("ime").includes("adbkeyboard") ? "ready" : "before";
+    let xml=fs.readFileSync(path.join(process.env.FAKE_TOUTIAO_SEARCH_FIXTURES,"toutiao-frozen-"+phase+".xml"),"utf8");
     xml=xml.replace(new RegExp('<node[^>]*resource-id="com.ss.android.article.news:id/cx"[^>]*>'),n=>{
-      if(text)n=n.replace(/text="[^"]*"/,'text="'+esc(process.env.FAKE_TOUTIAO_PREFIX === "1" ? "搜索框，"+text : text)+'"');
+      if(text)n=n.replace(/text="[^"]*"/,'text="'+esc(process.env.FAKE_TOUTIAO_BAD_PREFIX === "1" ? "搜索框:"+text : process.env.FAKE_TOUTIAO_PREFIX === "1" ? "搜索框，"+text : text)+'"');
       if(process.env.FAKE_TOUTIAO_UNSAFE === "1")n=n.replace('password="false"','password="true"');
       if(read("ime").includes("adbkeyboard") && process.env.FAKE_TOUTIAO_READY_DRIFT === "1")n=n.replace('[230,141][908,272]','[230,142][908,273]');
       return n;
@@ -144,8 +145,11 @@ if (cmd.includes("ADB_INPUT_B64")) {
 }
 if (cmd.includes("dumpsys input_method")) {
   if (process.env.FAKE_TOUTIAO_SEARCH_FIXTURES) {
-    let raw=fs.readFileSync(path.join(process.env.FAKE_TOUTIAO_SEARCH_FIXTURES,"toutiao-search-ime-before.txt"),"utf8");
-    if(read("ime").includes("adbkeyboard") && process.env.FAKE_TOUTIAO_READY_TOKEN === "1")raw=raw.replaceAll('SearchAutoCompleteTextView{9ce2558','SearchAutoCompleteTextView{abc123');
+    const phase=read("typed") ? "typed" : read("ime").includes("adbkeyboard") ? "ready" : "before";
+    let raw=fs.readFileSync(path.join(process.env.FAKE_TOUTIAO_SEARCH_FIXTURES,"toutiao-frozen-ime-"+phase+".txt"),"utf8");
+    if(read("ime").includes("adbkeyboard") && process.env.FAKE_TOUTIAO_READY_TOKEN === "1")raw=raw.replaceAll('SearchAutoCompleteTextView{96f00b3','SearchAutoCompleteTextView{abc123');
+    if(phase==="typed" && process.env.FAKE_TOUTIAO_TYPED_TOKEN === "1")raw=raw.replaceAll('EditableInputConnection@c5918a1','EditableInputConnection@abc123');
+    if(phase==="typed" && process.env.FAKE_TOUTIAO_TYPED_INACTIVE === "1")raw=raw.replaceAll('mDeactivateRequested=false','mDeactivateRequested=true');
     out(raw);process.exit(0);
   }
 
@@ -468,7 +472,7 @@ test('text-input 知乎正文ready的bounds漂移不clear不输入且恢复IME',
 });
 
 const TT_SEARCH_ENV={FAKE_TOUTIAO_SEARCH_FIXTURES:zhBodyFixtures};
-// ready/typed是受控模型数据；只有before XML/IME是原真机fixture，不声明真实搜索已通过。
+// XML and before/ready IME are real originals; typed IME is an explicitly synthetic ready-copy model.
 test('text-input 头条真实前置和模拟精确typed成功且恢复IME',async()=>{
  const c=setup();const title='傍晚的颜色，慢一点也很好';const r=await run(c,['text-input',title],TT_SEARCH_ENV);
  assert.equal(r.code,0,r.err);assert.match(r.out,/field=com.ss.android.article.news:id\/cx/);assert.match(r.out,/comparison_mode=exact/);assert.equal(ime(c),ORIG_IME);
@@ -482,10 +486,19 @@ test('text-input 头条不安全XML在切IME前拒绝',async()=>{
  const c=setup();const r=await run(c,['text-input','测试'],{...TT_SEARCH_ENV,FAKE_TOUTIAO_UNSAFE:'1'});
  assert.equal(r.code,2);assert.doesNotMatch(calls(c),/ADB_CLEAR_TEXT|ADB_INPUT_B64|"ime","set"/);assert.equal(ime(c),ORIG_IME);
 });
-test('text-input 头条模拟typed带搜索框前缀仍失败，不擅自剥离且恢复IME',async()=>{
- const c=setup();const r=await run(c,['text-input','测试'],{...TT_SEARCH_ENV,FAKE_TOUTIAO_PREFIX:'1'});
- assert.equal(r.code,2);assert.match(r.out,/readback_mismatch/);assert.equal(ime(c),ORIG_IME);
+test('text-input TT literal accessibility wrapper saves distinct raw/source hashes and restores IME (synthetic typed IME)',async()=>{
+ const c=setup();const r=await run(c,['text-input','傍晚的颜色，慢一点也很好'],{...TT_SEARCH_ENV,FAKE_TOUTIAO_PREFIX:'1'});
+ assert.equal(r.code,0,r.err);assert.match(r.out,/comparison_mode=toutiao_search_accessibility_prefix source_bytes=36/);assert.match(r.out,/actual_bytes=48/);assert.equal(ime(c),ORIG_IME);
+ const evidence=join(c.tmpRoot,'evidence','legacy');
+ const comparison=JSON.parse(readFileSync(readdirSync(evidence).filter(x=>x.endsWith('-comparison.json')).map(x=>join(evidence,x))[0],'utf8'));
+ assert.equal(comparison.raw.bytes,48);assert.notEqual(comparison.raw.sha256,comparison.source.sha256);
+ assert.ok(readdirSync(evidence).some(x=>x.endsWith('-ime-typed.txt')));
+ assert.equal((calls(c).match(/dumpsys.*input_method/g)||[]).length,3);
  assert.equal((calls(c).match(/ADB_INPUT_B64/g)||[]).length,1);
+});
+for(const [name,env] of [['bad prefix',{FAKE_TOUTIAO_BAD_PREFIX:'1'}],['typed token',{FAKE_TOUTIAO_TYPED_TOKEN:'1'}],['typed inactive',{FAKE_TOUTIAO_TYPED_INACTIVE:'1'}]])test('text-input TT '+name+' rejects after one broadcast and restores IME',async()=>{
+ const c=setup();const r=await run(c,['text-input','测试'],{...TT_SEARCH_ENV,...env});
+ assert.equal(r.code,2);assert.match(r.out,/readback_mismatch/);assert.equal(ime(c),ORIG_IME);assert.equal((calls(c).match(/ADB_INPUT_B64/g)||[]).length,1);
 });
 test('text-input 头条身份变化且IME无法恢复时needs_human',async()=>{
  const c=setup();const r=await run(c,['text-input','测试'],{...TT_SEARCH_ENV,FAKE_TOUTIAO_READY_TOKEN:'1',FAKE_RESTORE_STUCK:'1'});

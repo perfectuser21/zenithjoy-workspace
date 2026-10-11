@@ -2827,7 +2827,7 @@ ti_restore_ime() {
 }
 
 text_input() {
-  local text bytes eid before_xml field typed_xml typed_value enable_out cur b64 restored=1 standard_selection="" standard_rc=0 readback_policy="exact" comparison_json actual_bytes actual_sha paragraphs=0 ready_xml native_selection="" ime_evidence focus_helper="$TEXT_INPUT_FOCUS_HELPER"
+  local text bytes eid before_xml field typed_xml typed_value enable_out cur b64 restored=1 standard_selection="" standard_rc=0 readback_policy="exact" comparison_json actual_bytes actual_sha paragraphs=0 ready_xml native_selection="" native_kind="" native_compare_rc=0 ime_evidence focus_helper="$TEXT_INPUT_FOCUS_HELPER"
   [[ "$#" == 1 ]] || die "usage: douyin-phone-adb --profile PROFILE --lock-owner RUN text-input UTF8_TEXT"
   text="$1"
   require_held_lock text_input
@@ -2854,6 +2854,7 @@ text_input() {
     "$PYTHON_BIN" "$focus_helper" resolve "$before_xml" "$ime_evidence" > "$native_selection" \
       || ctl_fail text_input retryable no_focused_input "no verified focused input; tap the input field first (evidence=$before_xml ime=$ime_evidence)"
     field="$("$PYTHON_BIN" -c 'import json,sys; x=json.load(open(sys.argv[1])); print(x["resource_id"] if x.get("kind") == "toutiao_search" else "native-editor-title")' "$native_selection")"
+    native_kind="$("$PYTHON_BIN" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("kind",""))' "$native_selection")"
   else
     ctl_fail text_input retryable no_focused_input "focused standard input is unsafe or ambiguous (evidence=$before_xml)"
   fi
@@ -2884,7 +2885,7 @@ text_input() {
     "$ADB" -s "$SERIAL" shell dumpsys input_method > "$ime_evidence"
     # 头条窄native路由同时检查ready XML；原XHS只核它已有的IME身份。
     ready_xml=""
-    if [[ "$("$PYTHON_BIN" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("kind",""))' "$native_selection")" == "toutiao_search" ]]; then
+    if [[ "$native_kind" == "toutiao_search" ]]; then
       ready_xml="$(ui_evidence "${eid}-ready")"
     fi
     if ! "$PYTHON_BIN" "$focus_helper" check "$native_selection" "$ime_evidence" "$ready_xml"; then
@@ -2908,7 +2909,12 @@ text_input() {
   "$ADB" -s "$SERIAL" shell am broadcast -a ADB_INPUT_B64 --es msg "$b64" >/dev/null 2>&1 || true
   wait_ms 700
   typed_xml="$(ui_evidence "${eid}-typed")"
-  if [[ -n "$native_selection" ]]; then
+  if [[ "$native_kind" == "toutiao_search" ]]; then
+    # Fresh post-broadcast connection evidence is mandatory for this native search mode.
+    ime_evidence="$EVIDENCE_ROOT/${eid}-ime-typed.txt"
+    "$ADB" -s "$SERIAL" shell dumpsys input_method > "$ime_evidence"
+    comparison_json="$("$PYTHON_BIN" "$focus_helper" toutiao-compare "$native_selection" "$typed_xml" "$ime_evidence" "$text" 2> "$EVIDENCE_ROOT/${eid}-comparison-error.txt")" || native_compare_rc=$?
+  elif [[ -n "$native_selection" ]]; then
     typed_value="$("$PYTHON_BIN" "$focus_helper" readback "$native_selection" "$typed_xml" 2>/dev/null || true)"
   else
     typed_value="$("$PYTHON_BIN" "$focus_helper" standard-readback "$standard_selection" "$typed_xml" 2>/dev/null || true)"
@@ -2918,9 +2924,13 @@ text_input() {
   ti_restore_ime || restored=0
   trap - EXIT INT TERM
   (( restored )) || ctl_fail text_input needs_human ime_restore_failed "input method stuck at $(current_ime); expected $_TI_ORIG_IME"
-  if [[ -n "$standard_selection" ]]; then
-    comparison_json="$("$PYTHON_BIN" "$focus_helper" standard-compare "$standard_selection" "$typed_xml" "$text" 2>/dev/null)" \
-      || ctl_fail text_input retryable readback_mismatch "selected field readback did not match the requested text (evidence=$typed_xml)"
+  if [[ -n "$standard_selection" || "$native_kind" == "toutiao_search" ]]; then
+    if [[ -n "$standard_selection" ]]; then
+      comparison_json="$("$PYTHON_BIN" "$focus_helper" standard-compare "$standard_selection" "$typed_xml" "$text" 2>/dev/null)" \
+        || ctl_fail text_input retryable readback_mismatch "selected field readback did not match the requested text (evidence=$typed_xml)"
+    else
+      (( native_compare_rc == 0 )) || ctl_fail text_input retryable readback_mismatch "native search raw text or typed identity did not match (evidence=$typed_xml ime=$ime_evidence)"
+    fi
     print -r -- "$comparison_json" > "$EVIDENCE_ROOT/${eid}-comparison.json"
     IFS=$'\t' read -r readback_policy actual_bytes actual_sha paragraphs <<< "$("$PYTHON_BIN" -c 'import json,sys; x=json.loads(sys.argv[1]); print(x["comparison_mode"],x["actual"]["bytes"],x["actual"]["sha256"],x["paragraphs"],sep="\t")' "$comparison_json")"
   else

@@ -222,3 +222,80 @@ test('真实知乎长query高度增长仍拒绝，不能继承短query许可',()
  const r=run('standard-resolve',fixture('before'));assert.equal(r.status,0,r.stderr);writeFileSync(c.selection,r.stdout);
  assert.equal(run('standard-check',c.selection,fixture('ready')).status,0);assert.equal(run('standard-readback',c.selection,fixture('typed')).status,2);
 });
+
+const ttFrozen=phase=>new URL('./fixtures/toutiao-frozen-'+phase+'.xml',import.meta.url).pathname;
+const ttFrozenIME=phase=>new URL('./fixtures/toutiao-frozen-ime-'+phase+'.txt',import.meta.url).pathname;
+test('TT real typed XML wrapper and clear slot: synthetic typed IME model only',()=>{
+ const c=setup();const r=run('toutiao-resolve',ttFrozen('before'),ttFrozenIME('before'));assert.equal(r.status,0,r.stderr);writeFileSync(c.selection,r.stdout);
+ assert.equal(run('check',c.selection,ttFrozenIME('ready'),ttFrozen('ready')).status,0);
+ const compared=run('toutiao-compare',c.selection,ttFrozen('typed'),ttFrozenIME('typed'),'傍晚的颜色，慢一点也很好');assert.equal(compared.status,0,compared.stderr);
+ const report=JSON.parse(compared.stdout);assert.equal(report.comparison_mode,'toutiao_search_accessibility_prefix');assert.equal(report.source.bytes,36);assert.equal(report.raw.bytes,48);assert.notEqual(report.raw.sha256,report.source.sha256);
+});
+
+const ttFrozenTyped=readFileSync(ttFrozen('typed'),'utf8'),ttFrozenReadyIME=readFileSync(ttFrozenIME('ready'),'utf8');
+const ttTitle='傍晚的颜色，慢一点也很好';
+const ttMarkerChange=(x,id,fn)=>x.replace(new RegExp('<node[^>]*resource-id="com.ss.android.article.news:id/'+id+'"[^>]*>'),fn);
+function ttFrozenSelection(){const c=setup();const r=run('toutiao-resolve',ttFrozen('before'),ttFrozenIME('before'));assert.equal(r.status,0,r.stderr);writeFileSync(c.selection,r.stdout);return c;}
+for(const [name,change] of [
+ ['badprefix',x=>x.replace('搜索框，'+ttTitle,'搜索框:'+ttTitle)],
+ ['extra',x=>x.replace('搜索框，'+ttTitle,'搜索框，'+ttTitle+'。')],
+ ['wrongtext',x=>x.replace('搜索框，'+ttTitle,'搜索框，傍晚的颜色，慢一点也很差')],
+ ['reorderedtext',x=>x.replace('搜索框，'+ttTitle,'搜索框，慢一点也很好，傍晚的颜色')],
+ ['wrongpkg',x=>ttNodeChange(x,n=>n.replace('package="com.ss.android.article.news"','package="com.other.app"'))],
+ ['wrongid',x=>x.replaceAll('com.ss.android.article.news:id/cx','com.ss.android.article.news:id/other')],
+ ['wrongclass',x=>ttNodeChange(x,n=>n.replace('class=""','class="android.widget.EditText"'))],
+ ['password',x=>ttNodeChange(x,n=>n.replace('password="false"','password="true"'))],
+ ['disabled',x=>ttNodeChange(x,n=>n.replace('enabled="true"','enabled="false"'))],
+ ['readonly',x=>ttNodeChange(x,n=>n.replace('enabled="true"','enabled="true" editable="false"'))],
+ ['multifocus',x=>x.replace('</hierarchy>','<node focused="true"/></hierarchy>')],
+ ['duplicateinput',x=>x.replace('</hierarchy>','<node resource-id="com.ss.android.article.news:id/cx"/></hierarchy>')],
+ ['wrongparentid',x=>x.replace('com.ss.android.article.news:id/kk8','com.ss.android.article.news:id/other_parent')],
+ ['parentbounds',x=>x.replace('[0,0][1200,292]','[0,0][1200,293]')],
+ ['wrongback',x=>ttMarkerChange(x,'xp',n=>n.replace('content-desc="返回"','content-desc="关闭"'))],
+ ['searchbuttonmove',x=>x.replace('[1005,141][1187,272]','[1006,141][1188,272]')],
+ ['wrongsearch',x=>ttMarkerChange(x,'e0',n=>n.replace('text="搜索"','text="发送"'))],
+ ['wrongclear',x=>ttMarkerChange(x,'ee',n=>n.replace('content-desc="清除"','content-desc="返回"'))],
+ ['clearclass',x=>ttMarkerChange(x,'ee',n=>n.replace('android.widget.ImageView','android.widget.RelativeLayout'))],
+ ['clearpassword',x=>ttMarkerChange(x,'ee',n=>n.replace('password="false"','password="true"'))],
+ ['clearleftgap',x=>x.replace('[913,173][979,239]','[914,173][980,239]')],
+ ['clearoversearch',x=>x.replace('[913,173][979,239]','[913,173][1006,239]')],
+ ['clearoutsideheight',x=>x.replace('[913,173][979,239]','[913,140][979,239]')],
+ ['fieldheight',x=>ttNodeChange(x,n=>n.replace('[230,141][913,272]','[230,141][913,273]'))],
+ ['fieldleft',x=>ttNodeChange(x,n=>n.replace('[230,141][913,272]','[231,141][913,272]'))],
+ ['fieldtop',x=>ttNodeChange(x,n=>n.replace('[230,141][913,272]','[230,142][913,272]'))],
+ ['voiceinsteadclear',x=>x.replaceAll('com.ss.android.article.news:id/ee','com.ss.android.article.news:id/m4j')],
+ ['extravoice',x=>x.replace('</hierarchy>','<node resource-id="com.ss.android.article.news:id/m4j"/></hierarchy>')],
+ ['duplicateclear',x=>x.replace('</hierarchy>','<node resource-id="com.ss.android.article.news:id/ee"/></hierarchy>')],
+])test('TT scoped typed wrapper/slot rejects '+name,()=>{
+ const c=ttFrozenSelection();writeFileSync(c.xp,change(ttFrozenTyped));writeFileSync(c.ip,ttFrozenReadyIME);
+ assert.equal(run('toutiao-compare',c.selection,c.xp,c.ip,ttTitle).status,2);
+});
+for(const [name,change] of [
+ ['viewtoken',x=>x.replaceAll('SearchAutoCompleteTextView{96f00b3','SearchAutoCompleteTextView{abc123')],
+ ['connectiontoken',x=>x.replaceAll('EditableInputConnection@c5918a1','EditableInputConnection@abc123')],
+ ['inactive',x=>x.replaceAll('mDeactivateRequested=false','mDeactivateRequested=true')],
+ ['pending',x=>x.replaceAll('mServedConnecting=false','mServedConnecting=true')],
+ ['field',x=>x.replaceAll('fieldId=2131624075','fieldId=2131624076')],
+ ['package',x=>x.replaceAll('packageName=com.ss.android.article.news','packageName=com.other.app')],
+ ['passwordtype',x=>x.replaceAll('inputType=0x1 imeOptions=0x3','inputType=0x81 imeOptions=0x3')],
+ ['autofill',x=>x.replaceAll('autofillId=1073741824','autofillId=1073741825')],
+ ['missing',()=> ''],
+])test('TT typed synthetic current IME rejects '+name,()=>{
+ const c=ttFrozenSelection();writeFileSync(c.ip,change(ttFrozenReadyIME));
+ assert.equal(run('toutiao-compare',c.selection,ttFrozen('typed'),c.ip,ttTitle).status,2);
+});
+test('TT typed exact-source model preserves raw/source equality without prefix mode',()=>{
+ const c=ttFrozenSelection();writeFileSync(c.xp,ttFrozenTyped.replace('搜索框，'+ttTitle,ttTitle));
+ const r=run('toutiao-compare',c.selection,c.xp,ttFrozenIME('typed'),ttTitle);assert.equal(r.status,0,r.stderr);
+ const report=JSON.parse(r.stdout);assert.equal(report.comparison_mode,'exact');assert.equal(report.raw.bytes,36);assert.deepEqual(report.raw,report.source);
+});
+for(const [name,change] of [
+ ['parent',x=>x.replace('com.ss.android.article.news:id/kk8','com.ss.android.article.news:id/other_parent')],
+ ['back',x=>ttMarkerChange(x,'xp',n=>n.replace('content-desc="返回"','content-desc="关闭"'))],
+ ['search',x=>ttMarkerChange(x,'e0',n=>n.replace('text="搜索"','text="发布"'))],
+ ['voiceleft',x=>x.replace('[908,177][966,235]','[909,177][967,235]')],
+ ['slotdisabled',x=>ttMarkerChange(x,'m4j',n=>n.replace('enabled="true"','enabled="false"'))],
+])test('TT before-ready full header marker rejects '+name,()=>{
+ const c=ttFrozenSelection();writeFileSync(c.xp,change(readFileSync(ttFrozen('ready'),'utf8')));
+ assert.equal(run('check',c.selection,ttFrozenIME('ready'),c.xp).status,2);
+});

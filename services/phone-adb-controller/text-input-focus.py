@@ -254,7 +254,82 @@ def toutiao_resolve(xml_path, ime_path):
     identity = toutiao_editor(ime_path)
     field = toutiao_field(xml_path)
     return {"kind": "toutiao_search", "editor": identity, "package": field.get("package"),
-            "resource_id": field.get("resource-id"), "class": field.get("class"), "bounds": field.get("bounds")}
+            "resource_id": field.get("resource-id"), "class": field.get("class"), "bounds": field.get("bounds"),
+            "structure": toutiao_structure(xml_path, "voice")}
+
+
+def toutiao_structure(xml_path, slot):
+    tree = ET.parse(xml_path)
+    nodes = list(tree.iter("node"))
+    field = toutiao_field(xml_path)
+    # Find the field from this tree rather than compare Element instances across parses.
+    field = next(n for n in nodes if n.get("resource-id") == TOUTIAO_ID)
+    parent_id = TOUTIAO_PACKAGE + ":id/kk8"
+    parents = [n for n in nodes if n.get("resource-id") == parent_id]
+    if len(parents) != 1 or field not in list(parents[0]):
+        raise ValueError("search field is not in the unique native search header")
+    parent = parents[0]
+    def snapshot(node, cls, text, desc):
+        if (node.get("package") != TOUTIAO_PACKAGE or node.get("class") != cls
+                or node.get("text") != text or node.get("content-desc") != desc
+                or node.get("enabled") != "true" or node.get("password") != "false"
+                or node.get("focusable") != "true" or node.get("focused") != "false"):
+            raise ValueError("native search header marker is unsafe or changed")
+        bounds_rect(node.get("bounds"))
+        return {k: node.get(k, "") for k in ("package", "class", "resource-id", "text", "content-desc", "bounds")}
+    result = {"parent": snapshot(parent, "android.widget.FrameLayout", "", "")}
+    slot_id, slot_class, slot_desc = (("m4j", "android.widget.LinearLayout", "") if slot == "voice"
+                                     else ("ee", "android.widget.ImageView", "清除"))
+    expected = ["xp", "cx", slot_id, "e0"]
+    if [n.get("resource-id") for n in list(parent)] != [TOUTIAO_PACKAGE + ":id/" + k for k in expected]:
+        raise ValueError("native search header children changed")
+    if any(n.get("resource-id") == TOUTIAO_PACKAGE + ":id/" + ("ee" if slot == "voice" else "m4j") for n in nodes):
+        raise ValueError("conflicting voice and clear slots")
+    for key, cls, text, desc in (("xp", "android.widget.ImageView", "", "返回"),
+                                 ("e0", "android.widget.Button", "搜索", ""),
+                                 (slot_id, slot_class, "", slot_desc)):
+        matches = [n for n in nodes if n.get("resource-id") == TOUTIAO_PACKAGE + ":id/" + key]
+        if len(matches) != 1 or matches[0] not in list(parent):
+            raise ValueError("native search sibling is absent or ambiguous")
+        result[key] = snapshot(matches[0], cls, text, desc)
+    left, top, right, bottom = bounds_rect(field.get("bounds"))
+    pl, pt, pr, pb = bounds_rect(result["parent"]["bounds"])
+    sl, st, sr, sb = bounds_rect(result[slot_id]["bounds"])
+    search_left, _, search_right, _ = bounds_rect(result["e0"]["bounds"])
+    if (not pl <= left < right <= pr or not pt <= top < bottom <= pb
+            or sl != right or not top <= st < sb <= bottom or sr > search_left
+            or search_right > pr):
+        raise ValueError("search field is not adjacent to its bounded native slot")
+    return result
+
+
+def toutiao_compare(xml_path, ime_path, selection, source):
+    if selection.get("kind") != "toutiao_search" or toutiao_editor(ime_path) != selection["editor"]:
+        raise ValueError("typed search input connection changed")
+    field = toutiao_field(xml_path)
+    for key, attr in (("package", "package"), ("resource_id", "resource-id"), ("class", "class")):
+        if field.get(attr) != selection[key]:
+            raise ValueError("typed search accessibility identity changed")
+    actual = toutiao_structure(xml_path, "clear")
+    original = selection["structure"]
+    if any(actual[key] != original[key] for key in ("parent", "xp", "e0")):
+        raise ValueError("typed search header identity changed")
+    left, top, _, bottom = bounds_rect(selection["bounds"])
+    now_left, now_top, _, now_bottom = bounds_rect(field.get("bounds"))
+    if (left, top, bottom) != (now_left, now_top, now_bottom):
+        raise ValueError("typed search changed left, top or height")
+    raw = field.get("text", "")
+    if raw == source:
+        mode = "exact"
+    elif raw == "搜索框，" + source:
+        mode = "toutiao_search_accessibility_prefix"
+    else:
+        raise ValueError("typed search raw text differs from source or literal accessibility prefix")
+    def stats(text):
+        value = text.encode("utf-8")
+        return {"bytes": len(value), "sha256": hashlib.sha256(value).hexdigest()}
+    return {"comparison_mode": mode, "identity_policy": "toutiao_search_voice_to_clear_v1",
+            "source": stats(source), "raw": stats(raw), "actual": stats(raw), "paragraphs": 0}
 
 
 def toutiao_readback(xml_path, selection):
@@ -303,6 +378,9 @@ def main():
         print(json.dumps(standard_compare(sys.argv[3], selection, sys.argv[4])))
     elif command == "toutiao-resolve":
         print(json.dumps(toutiao_resolve(sys.argv[2], sys.argv[3]), ensure_ascii=False))
+    elif command == "toutiao-compare":
+        selection = json.loads(Path(sys.argv[2]).read_text())
+        print(json.dumps(toutiao_compare(sys.argv[3], sys.argv[4], selection, sys.argv[5])))
     elif command == "resolve":
         print(json.dumps(resolve(sys.argv[2], sys.argv[3]), ensure_ascii=False))
     elif command == "check":
