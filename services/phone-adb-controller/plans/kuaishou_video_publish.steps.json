@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "kuaishou_video_publish",
   "brain_workflow_key": "kuaishou_video_publish.android",
-  "contract_sha256": "3c45d35a7fcf52dec84234fe1fdf5919e6a18e4d39203f55eeca5f106224f740",
+  "contract_sha256": "25716937f2dd23072f5d1152f51a0c63c4790b1ece3755a04d732e7a86d66bac",
   "promotion": {
     "min_consecutive_pass": 20
   },

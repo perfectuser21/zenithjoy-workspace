@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "toutiao_video_publish",
   "brain_workflow_key": "toutiao_video_publish.android",
-  "contract_sha256": "30062974bcfd664abd1e70b8019a05d02857e4b7205605006450e9667dcf8d56",
+  "contract_sha256": "f1dfaf97a101c1cb5844c7f744248e6e2c07df54c979bc523f908e403d6dbdb8",
   "promotion": {
     "min_consecutive_pass": 20
   },
