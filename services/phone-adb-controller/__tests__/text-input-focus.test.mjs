@@ -30,7 +30,7 @@ test('切换输入法后同App同字段但servedView实例变化，必须拒绝�
   const c=setup();const selected=run('resolve',c.xp,c.ip);
   assert.equal(selected.status,0,selected.stderr);writeFileSync(c.selection,selected.stdout);
   writeFileSync(c.ip,ime.replaceAll('UnderLineRichEdit{abc','UnderLineRichEdit{def'));
-  const checked=run('check',c.selection,c.ip);
+  const checked=run('check',c.selection,c.ip,c.xp);
   assert.equal(checked.status,2,'新编辑器实例不能继承旧输入授权');
 });
 

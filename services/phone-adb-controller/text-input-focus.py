@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """只读绑定标准焦点EditText及既有小红书标题输入连接，拒绝猜测焦点。"""
-INPUT_RUNTIME_REVISION = 1
+INPUT_RUNTIME_REVISION = 2
 import json
 import hashlib
 import re
@@ -342,6 +342,13 @@ def toutiao_readback(xml_path, selection):
     return field.get("text", "")
 
 
+def check_xhs_native_field(node):
+    # 与标准路由使用相同缺省语义；原生无障碍缺焦点不豁免明确保护属性。
+    if (node.get("password") == "true" or node.get("enabled", "true") != "true"
+            or node.get("focusable", "true") != "true" or node.get("editable", "true") != "true"):
+        raise ValueError("native XHS title is protected, disabled or noneditable")
+
+
 def resolve(xml_path, ime_path):
     if any(n.get("package") == TOUTIAO_PACKAGE for n in ET.parse(xml_path).iter("node")):
         return toutiao_resolve(xml_path, ime_path)
@@ -353,6 +360,7 @@ def resolve(xml_path, ime_path):
     if len(candidates) != 1 or not candidates[0].get("bounds") or not candidates[0].get("resource-id"):
         raise ValueError("editor hint does not identify a unique input")
     node = candidates[0]
+    check_xhs_native_field(node)
     return {"editor": identity, "bounds": node.get("bounds"), "resource_id": node.get("resource-id")}
 
 
@@ -362,6 +370,7 @@ def readback(xml_path, selection):
     candidates = [n for n in ET.parse(xml_path).iter("node") if n.get("package") == selection["editor"]["package"] and n.get("class") == "android.widget.EditText" and n.get("resource-id") == selection["resource_id"] and n.get("bounds") == selection["bounds"]]
     if len(candidates) != 1:
         raise ValueError("selected input is absent or ambiguous after typing")
+    check_xhs_native_field(candidates[0])
     return candidates[0].get("text", "")
 
 
@@ -389,8 +398,8 @@ def main():
         if selection.get("kind") == "toutiao_search":
             if toutiao_resolve(sys.argv[4], sys.argv[3]) != selection:
                 raise ValueError("search input connection or accessibility field changed before typing")
-        elif editor(sys.argv[3]) != selection["editor"]:
-            raise ValueError("input connection changed before typing")
+        elif resolve(sys.argv[4], sys.argv[3]) != selection:
+            raise ValueError("native XHS input connection or safe field changed before typing")
     elif command == "readback":
         selection = json.loads(Path(sys.argv[2]).read_text())
         sys.stdout.write(readback(sys.argv[3], selection))

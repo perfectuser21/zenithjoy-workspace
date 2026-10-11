@@ -3228,7 +3228,7 @@ ti_restore_ime() {
 }
 
 text_input() {
-  # INPUT_RUNTIME_REVISION=1
+  # INPUT_RUNTIME_REVISION=2
   local text bytes eid before_xml field typed_xml typed_value enable_out cur b64 restored=1 standard_selection="" standard_rc=0 readback_policy="exact" comparison_json actual_bytes actual_sha paragraphs=0 ready_xml native_selection="" native_kind="" native_compare_rc=0 ime_evidence focus_helper="$TEXT_INPUT_FOCUS_HELPER"
   [[ "$#" == 1 ]] || die "usage: douyin-phone-adb --profile PROFILE --lock-owner RUN text-input UTF8_TEXT"
   text="$1"
@@ -3285,11 +3285,8 @@ text_input() {
     require_target_for text_input
     ime_evidence="$EVIDENCE_ROOT/${eid}-ime-ready.txt"
     "$ADB" -s "$SERIAL" shell dumpsys input_method > "$ime_evidence"
-    # 头条窄native路由同时检查ready XML；原XHS只核它已有的IME身份。
-    ready_xml=""
-    if [[ "$native_kind" == "toutiao_search" ]]; then
-      ready_xml="$(ui_evidence "${eid}-ready")"
-    fi
+    # 原生路由都用fresh ready XML重验同字段及明确保护属性，再允许CLEAR/INPUT。
+    ready_xml="$(ui_evidence "${eid}-ready")"
     if ! "$PYTHON_BIN" "$focus_helper" check "$native_selection" "$ime_evidence" "$ready_xml"; then
       ti_restore_ime || restored=0
       trap - EXIT INT TERM
