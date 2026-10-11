@@ -299,3 +299,20 @@ for(const [name,change] of [
  const c=ttFrozenSelection();writeFileSync(c.xp,change(readFileSync(ttFrozen('ready'),'utf8')));
  assert.equal(run('check',c.selection,ttFrozenIME('ready'),c.xp).status,2);
 });
+
+for (const [name, attrs] of [
+ ['disabled','enabled="false"'],['unfocusable','focusable="false"'],
+ ['readonly','editable="false"'],['password','password="true"'],
+]) test('XHS native protected field rejects all stages: '+name,()=>{
+ const c=setup();const original=run('resolve',c.xp,c.ip);assert.equal(original.status,0,original.stderr);writeFileSync(c.selection,original.stdout);
+ writeFileSync(c.xp,'<hierarchy>'+body+title.replace('focused="false"',attrs+' focused="false"')+'</hierarchy>');
+ assert.equal(run('resolve',c.xp,c.ip).status,2);
+ assert.equal(run('check',c.selection,c.ip,c.xp).status,2);
+ assert.equal(run('readback',c.selection,c.xp).status,2);
+});
+test('XHS native valid missing-default attributes still pass resolve ready and typed',()=>{
+ const c=setup();const original=run('resolve',c.xp,c.ip);assert.equal(original.status,0,original.stderr);writeFileSync(c.selection,original.stdout);
+ assert.equal(run('check',c.selection,c.ip,c.xp).status,0);
+ writeFileSync(c.xp,'<hierarchy>'+body+title.replace('输入标题','验收标题')+'</hierarchy>');
+ assert.equal(run('readback',c.selection,c.xp).stdout,'验收标题');
+});

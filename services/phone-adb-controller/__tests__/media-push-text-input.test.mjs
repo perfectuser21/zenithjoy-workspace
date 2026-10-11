@@ -85,7 +85,9 @@ if (a[0] === "pull") {
   if (process.env.FAKE_XHS_NATIVE_INPUT === "1") {
     const title = read("typed", "") || "输入标题";
     const pkg = "com.xingin.xhs";
-    fs.writeFileSync(a[2], '<hierarchy><node class="android.widget.EditText" package="'+pkg+'" resource-id="com.xingin.xhs:id/0_resource_name_obfuscated" text="正文占位" focused="false" bounds="[79,265][1121,2354]"/><node class="android.widget.EditText" package="'+pkg+'" resource-id="com.xingin.xhs:id/0_resource_name_obfuscated" text="'+esc(title)+'" focused="false" bounds="[79,265][1121,385]"/></hierarchy>');
+    const nativePhase = read("typed") ? "typed" : read("ime").includes("adbkeyboard") ? "ready" : "before";
+    const protectedAttrs = nativePhase === process.env.FAKE_XHS_PROTECTED_PHASE ? (process.env.FAKE_XHS_PROTECTED_ATTRS || "") : "";
+    fs.writeFileSync(a[2], '<hierarchy><node class="android.widget.EditText" package="'+pkg+'" resource-id="com.xingin.xhs:id/0_resource_name_obfuscated" text="正文占位" focused="false" bounds="[79,265][1121,2354]"/><node class="android.widget.EditText" package="'+pkg+'" resource-id="com.xingin.xhs:id/0_resource_name_obfuscated" text="'+esc(title)+'" '+protectedAttrs+' focused="false" bounds="[79,265][1121,385]"/></hierarchy>');
     process.exit(0);
   }
   const typed = read("typed");
@@ -519,4 +521,17 @@ test('text-input 知乎搜索ready收窄必须在clear/input前拒绝并恢复IM
 test('text-input 知乎搜索实字变化拒绝并恢复IME，不重输',async()=>{
  const c=setup();const r=await run(c,['text-input','傍晚的颜色，慢一点也很好'],{...ZH_SEARCH_ENV,FAKE_ZHIHU_SEARCH_WRONG_TEXT:'1'});
  assert.equal(r.code,2);assert.match(r.out,/readback_mismatch/);assert.equal(ime(c),ORIG_IME);assert.equal((calls(c).match(/ADB_INPUT_B64/g)||[]).length,1);
+});
+
+// REVIEW165: complete bootstrap, real flock/owner guard and real focus helper; fake device only.
+for (const [name, attrs] of [
+  ["disabled", 'enabled="false"'], ["unfocusable", 'focusable="false"'],
+  ["readonly", 'editable="false"'], ["password", 'password="true"'],
+  ["combined", 'enabled="false" focusable="false" editable="false" password="true"'],
+]) for (const phase of ["before", "ready", "typed"]) test('text-input XHS native protected '+name+' at '+phase, async()=>{
+ const c=setup();const r=await run(c,['text-input','验收标题'],{...NATIVE_INPUT_ENV,FAKE_XHS_PROTECTED_PHASE:phase,FAKE_XHS_PROTECTED_ATTRS:attrs});
+ assert.equal(r.code,2,r.out);assert.equal(ime(c),ORIG_IME);
+ if(phase==='typed') {assert.match(r.out,/readback_mismatch/);assert.equal((calls(c).match(/ADB_INPUT_B64/g)||[]).length,1);}
+ else {assert.match(r.out,/no_focused_input/);assert.doesNotMatch(calls(c),/ADB_CLEAR_TEXT|ADB_INPUT_B64/);}
+ if(phase==='before')assert.doesNotMatch(calls(c),/"ime","set"/);
 });
