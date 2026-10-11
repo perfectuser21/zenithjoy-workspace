@@ -10,6 +10,31 @@ const root = dirname(fileURLToPath(import.meta.url));
 const exec = promisify(execFile);
 const require = createRequire(import.meta.url);
 
+function trustedShort(value) {
+  if(typeof value!=='string'||!/^https:\/\/v\.douyin\.com\/[A-Za-z0-9_-]+\/?(?:\?[^\s#]*)?(?:#[^\s]*)?$/.test(value))throw Error('RPC_SHARE_LINK_INVALID');
+  return value;
+}
+
+// 只解析本次已复制的受信短链；不抓正文，不从标题猜ID，不动PG。
+export async function resolveCopiedShareLink(value,{execute=exec}={}) {
+  let url=trustedShort(value);
+  for(let hop=0;hop<2;hop++){
+    let stdout;
+    try {({stdout}=await execute('curl',['-sS','-I','--connect-timeout','5','--max-time','10','-A','Mozilla/5.0',url],{timeout:12000,maxBuffer:1024*1024}));}
+    catch {throw Error('RPC_SHARE_LINK_NETWORK');}
+    const lines=stdout.split(/\r?\n/),statuses=lines.filter(s=>/^HTTP\//.test(s));
+    const status=statuses.at(-1)?.match(/^HTTP\/\S+\s+(\d{3})/)?.[1];
+    const location=lines.filter(s=>/^location:/i.test(s)).at(-1)?.replace(/^location:\s*/i,'').trim();
+    if(!/^3\d\d$/.test(status||'')||!location)throw Error('RPC_SHARE_LINK_HTTP');
+    let next;try {next=new URL(location);}catch {throw Error('RPC_SHARE_LINK_UNTRUSTED');}
+    if(next.protocol!=='https:'||!['v.douyin.com','www.douyin.com','www.iesdouyin.com'].includes(location.split('/')[2])||next.username||next.password)throw Error('RPC_SHARE_LINK_UNTRUSTED');
+    const match=next.pathname.match(/^\/(?:share\/)?(video|note)\/([0-9]{16,24})\/?$/);
+    if(match&&['www.douyin.com','www.iesdouyin.com'].includes(next.hostname))return {resolved_url:`https://www.douyin.com/${match[1]}/${match[2]}`,content_id:match[2],content_type:match[1]};
+    try {url=trustedShort(location);}catch {throw Error('RPC_SHARE_LINK_ID_MISSING');}
+  }
+  throw Error('RPC_SHARE_LINK_ID_MISSING');
+}
+
 export function verifyRpcSource(source, { read = readFileSync, base = root } = {}) {
   if (!/^[a-f0-9]{40}$/.test(source?.commit || '') || !Array.isArray(source.files) || !source.files.length) throw Error('RPC_SOURCE_MISSING');
   const manifest = JSON.parse(read(resolve(base, 'deployment-manifest.json'), 'utf8'));
@@ -20,7 +45,7 @@ export function verifyRpcSource(source, { read = readFileSync, base = root } = {
     const actual = createHash('sha256').update(read(resolve(base, file.path))).digest('hex');
     if (actual !== file.sha256) throw Error('RPC_SOURCE_BYTES_MISMATCH');
   }
-  for (const path of ['leadgen-rpc.mjs','leadgen-queue.js','activity-commander.mjs','leadgen-db-lib.js',
+  for (const path of ['queued-comment-history.js','leadgen-rpc.mjs','leadgen-queue.js','activity-commander.mjs','leadgen-db-lib.js',
     'leadgen-db-connect.js','judge-video.js','judge-video-lib.js','judge-jev.js','judge-comment.js','qualify-video.js',
     'transcribe-qwen-audio.js','line-routes.js','stats-line.js','next-keywords.js','keyword-enabled-lib.js',
     'verify-step.mjs','step-judge.mjs','checks/probes-lib.js','checks/schema.json',
@@ -35,6 +60,7 @@ export async function handleRpc(input, deps = {}) {
   (deps.verify || verifyRpcSource)(input.source);
   let pool;
   try {
+    if(input.kind==='resolve_share_link')return {ok:true,result:await resolveCopiedShareLink(input.url,{execute:deps.resolveExec||exec})};
     if (input.kind === 'commander') {
       const { openRouterCommander } = await import('./activity-commander.mjs');
       return { ok: true, decision: await openRouterCommander()(input.receipt) };
@@ -65,7 +91,7 @@ export async function handleRpc(input, deps = {}) {
       return {ok:true,result:{...probes,steps}};
     }
     pool = deps.pool || require('./leadgen-db-connect.js').getPool();
-    if (input.kind === 'queue') return { ok: true, result: await require('./leadgen-queue.js').queueRequest(pool, input.request) };
+    if (input.kind === 'queue') return { ok: true, result: await require('./leadgen-queue.js').queueRequest(pool, input.request,{resolveHistoryUrl:url=>resolveCopiedShareLink(url,{execute:deps.resolveExec||exec})}) };
     if (input.kind === 'qualify') {
       const args = input.request;
       if (!['judge'].includes(args?.cmd) || !/^\d{16,24}$/.test(args.videoId || '')) throw Error('RPC_QUALIFY_INVALID');

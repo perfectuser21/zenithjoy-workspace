@@ -1,0 +1,44 @@
+[
+  {
+    "fixture": "candidate10-loc-retry1-grid.xml",
+    "actual_original_path": "/private/tmp/openclaw-phone/evidence/legacy/codex10110735_ai30s5_101-candidate10-loc-retry1-grid.xml",
+    "original_sha256": "8ab282f16763b18c9ce24579003da2c84e53aeb90ffbc7b40eff476febe2aebf",
+    "fixture_sha256": "a9690d36de5deb38c4c131a39d82cc641fe8ad537e3da5e77f49c35b64ca6754",
+    "transform": "保留真实dlr卡片子树及keyword/tab；移除无关UI节点与非身份属性，不改变标题作者/时长/点赞/日期/实际坐标"
+  },
+  {
+    "fixture": "candidate12-link-t1-returned-grid.xml",
+    "actual_original_path": "/private/tmp/openclaw-phone/evidence/legacy/codex10110735_ai30s5_101-candidate12-link-t1-returned-grid.xml",
+    "original_sha256": "f83be3a69dd6eba6323ed816e64f5257308be86636bae88982f78ee23ccf6bd9",
+    "fixture_sha256": "d7caf6cda92bb7474f9f4bba3f9c00aa657e05b70e9aaa877493bfe6f21b09f6",
+    "transform": "保留真实dlr卡片子树及keyword/tab；移除无关UI节点与非身份属性，不改变标题作者/时长/点赞/日期/实际坐标"
+  },
+  {
+    "fixture": "src0-screen4-wait0-grid.xml",
+    "actual_original_path": "/private/tmp/openclaw-phone/evidence/legacy/codex10110735_ai30s5_101-src0-screen4-wait0-grid.xml",
+    "original_sha256": "301de188763b2f692626c086e7fa7006d86b5491a8675b8837ee4c81f4a57d53",
+    "fixture_sha256": "32b6a901482ee0f46ce489109ba3ef2d35595c17840dc93e23d8fa6aa1359bab",
+    "transform": "保留真实dlr卡片子树及keyword/tab；移除无关UI节点与非身份属性，不改变标题作者/时长/点赞/日期/实际坐标"
+  },
+  {
+    "fixture": "candidate20-link-t1-returned-grid.xml",
+    "actual_original_path": "/private/tmp/openclaw-phone/evidence/legacy/codex10110735_ai30s5_101-candidate20-link-t1-returned-grid.xml",
+    "original_sha256": "522145053a3d4bc1afcd67f97360a38eae3d9b3f162016faac59d90f8ea12134",
+    "fixture_sha256": "d543bfd4d1ccfa6553aaff31f3923dfcd6429e009624347893df1851437858ec",
+    "transform": "保留真实dlr卡片子树及keyword/tab；移除无关UI节点与非身份属性，不改变标题作者/时长/点赞/日期/实际坐标"
+  },
+  {
+    "fixture": "src0-screen5-wait0-grid.xml",
+    "actual_original_path": "/private/tmp/openclaw-phone/evidence/legacy/codex10110735_ai30s5_101-src0-screen5-wait0-grid.xml",
+    "original_sha256": "cf2cfd35d6f51a7b6665f1b504d45e7e452eeae1a581b598d56a094c887ecffe",
+    "fixture_sha256": "981ed6943da94956da2822376f7e239e91cba532da3fda8743c6a7f4fdc60765",
+    "transform": "保留真实dlr卡片子树及keyword/tab；移除无关UI节点与非身份属性，不改变标题作者/时长/点赞/日期/实际坐标"
+  },
+  {
+    "fixture": "candidate25-link-t1-returned-grid.xml",
+    "actual_original_path": "/private/tmp/openclaw-phone/evidence/legacy/codex10110735_ai30s5_101-candidate25-link-t1-returned-grid.xml",
+    "original_sha256": "93c5f92036cc9d72aef09689295ed3fc70a341dc983a50f5f0882148d3b30e20",
+    "fixture_sha256": "7d2cb9a80668d5ddefe307b4b8dc012396f13259fbbf876ffe911816454f392c",
+    "transform": "保留真实dlr卡片子树及keyword/tab；移除无关UI节点与非身份属性，不改变标题作者/时长/点赞/日期/实际坐标"
+  }
+]

@@ -8,6 +8,11 @@ MODE="$1"; P="$2"; VID="$3"; VURL="$4"; TAG="$7"; LINE="$8"
 [[ "$MODE" == qualification || "$MODE" == collection || "$MODE" == identity ]] || exit 2
 [[ "$VID" == <-> && ${#VID} -ge 16 && ${#VID} -le 24 ]] || exit 2
 [[ "$TAG" == [A-Za-z0-9_-]## && -n "$P" && -n "$LINE" ]] || exit 2
+# 采样请求必须在任何手机动作之前合法且绑定本轮上游。
+if [[ "$MODE" == collection && ${+LEADGEN_COMMENT_LIMIT} == 1 ]]; then
+  [[ "$LEADGEN_COMMENT_LIMIT" == [1-9] || "$LEADGEN_COMMENT_LIMIT" == [1-4][0-9] || "$LEADGEN_COMMENT_LIMIT" == 50 ]] || exit 2
+  [[ "${LEADGEN_SOURCE_RUN:-}" == [A-Za-z0-9_-]## ]] || exit 2
+fi
 TITLE="$(python3 -c 'import base64,sys;print(base64.b64decode(sys.argv[1],validate=True).decode())' "$5")" || exit 2
 KWTXT="$(python3 -c 'import base64,sys;print(base64.b64decode(sys.argv[1],validate=True).decode())' "$6")" || exit 2
 # 输出TSV，禁止队列文本换行/制表符破坏字段边界。
@@ -16,6 +21,7 @@ QV_DIR="${0:A:h}"; C="${DOUYIN_PHONE_ADB:-$HOME/.local/bin/douyin-phone-adb}"
 QV_OWN_CONF="${OWN_ACCOUNTS_CONF:-$HOME/bin-harvest/config/own-accounts.json}"
 [[ -r "$QV_OWN_CONF" ]] || QV_OWN_CONF="$QV_DIR/config/own-accounts.json"
 source "$QV_DIR/queued-video-lib.sh" || exit 2
+[[ "$MODE" != collection ]] || { qv_collection_budget >/dev/null || exit 2; qv_history_prepare || exit $?; }
 qv_open || exit $?
 if [[ "$MODE" == identity ]]; then
   print -- "IDENTITY\t$VID\tverified"

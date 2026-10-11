@@ -16,6 +16,7 @@ deploy-version-selfcheck-smoke.sh
 golden-path-4-smoke.sh
 golden-path-f1-anchor-smoke.sh
 heartbeat-modules-smoke.sh
+keyword-return-route-smoke.sh
 leadgen-field-cleanup-smoke.sh
 line02-dm-dispatch-smoke.sh
 line04-client-wiring-smoke.sh
@@ -146,3 +147,4 @@ payment-smoke.sh
 brain-tasks-page-smoke.sh
 brain-device-job-mirror-smoke.sh
 codex-publish-catalog-smoke.sh
+phone-account-patrol-smoke.sh

@@ -132,7 +132,8 @@
       "status": "active",
       "smoke_files": [
         ".github/workflows/scripts/smoke/golden-path-2-smoke.sh",
-        "scripts/smoke/leadgen-split-smoke.sh"
+        "scripts/smoke/leadgen-split-smoke.sh",
+        ".github/workflows/scripts/smoke/keyword-return-route-smoke.sh"
       ],
       "steps": [
         {
@@ -598,5 +599,5 @@
       ]
     }
   ],
-  "digest": "6d59a7789e0e0a99126d8dad72625a50223fafa63cb7ad33f433305f39e83c7e"
+  "digest": "b99105c2199453fcea8b111948155411c9f2f45fabd69185f669db388b36c10b"
 }

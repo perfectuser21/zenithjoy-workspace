@@ -1756,7 +1756,11 @@ if (!fn.includes('_is_search_results_fg')) process.exit(1);
 if (!/return 1/.test(fn.slice(0, fn.indexOf('\n}\n')))) process.exit(1);
 
 // ② 判定不能只看包名——暂存解析页、搜索输入页都是抖音自己的页面
-const judge = ctl.slice(ctl.indexOf('_is_search_results_fg() {'), ctl.indexOf('_is_video_detail_xml'));
+const judgeStart = ctl.search(/^_is_search_results_fg\(\) \{$/m);
+if (judgeStart < 0) process.exit(1);
+const judgeEnd = ctl.slice(judgeStart + 1).search(/^_is_video_detail_xml\(\) \{$/m);
+if (judgeEnd < 0) process.exit(1);
+const judge = ctl.slice(judgeStart, judgeStart + 1 + judgeEnd);
 if (!judge.includes('SEARCH_RESULT_ACTIVITY')) process.exit(1);
 
 // ③ 采收循环里不许再出现"自己数 back 次数"的归位

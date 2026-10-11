@@ -1,5 +1,5 @@
 {
-  "object_types": "604f4e4a0f1b8083e5ed463845967f1d8466fdc0f35c05856d019618cc4bc327",
+  "object_types": "65669e7c4b030955bfe16b14f3ffea486b8c747daf8a00ea66d1086d6d06fda5",
   "capabilities": {
     "benchmark_link_acquisition": {
       "sha256": "f4a811707076a37cb8ff33433863fbc914acb0707c7710016659bae477e23633",
@@ -39,12 +39,12 @@
       }
     },
     "douyin_video_processing": {
-      "sha256": "f9b61404783f8266c22a0589523897dc2fc77126a32ca582fe97a0b499451425",
+      "sha256": "69acbc21132a78df508a104d668bf55d815b8befcfe6d4bec77bb6cbebd52f2f",
       "activities": {
         "preflight": "41213546c9efc1e758c6c00522ff51e5a1c5696affdc3985aa4c60c79189e096",
         "dedup": "b7990d59c1612fcb659717ec8cebc200db3f5be06bf6fbf3690a8c7b72c31d04",
-        "qualification": "ddc1afc02a0677329b0bc61f592d039e2c4555b38aa40b5d164d71edcf56af3a",
-        "collection": "139f55daca7a1aaf12547e74c43e488a39ba5d645a472f79255d92cc922a925d",
+        "qualification": "ce057b60778321a66a34536b3ccc568a2691716473531058f915c4a3b87a0eb7",
+        "collection": "708fb662b6135f384e86e2e36648d6c18184f6e95abddea0014930926efbd1d6",
         "cleanup": "644781cb13cd244641ec876a0bcb46e794eb0fbdc55ad16748db8cc3a562ebbd"
       }
     },

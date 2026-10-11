@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFrozen } from './runtime-definition.mjs';
 
-export const RPC_FILES = ['leadgen-rpc.mjs', 'leadgen-queue.js', 'activity-commander.mjs',
+export const RPC_FILES = ['queued-comment-history.js','leadgen-rpc.mjs', 'leadgen-queue.js', 'activity-commander.mjs',
   'leadgen-db-lib.js', 'leadgen-db-connect.js', 'judge-video.js', 'judge-video-lib.js',
   'judge-jev.js', 'judge-comment.js', 'qualify-video.js', 'transcribe-qwen-audio.js',
   'line-routes.js', 'stats-line.js', 'next-keywords.js', 'keyword-enabled-lib.js',
@@ -61,22 +61,63 @@ export function createRpc({ frozen, execute = execInput, local = false } = {}) {
   const peer=frozen.runtime_transport;
   const transport=peer?['-o',`HostName=${peer.ssh_hostname}`,'-o',`HostKeyAlias=${peer.ssh_hostkey_alias}`]:[];
   return async (body, { timeoutMs = 180000 } = {}) => {
-    let result;
-    if (local) result = await execute(process.execPath, [resolve(process.env.WF_HOME, 'leadgen-rpc.mjs')],
-      { input: JSON.stringify({ ...body, source }), timeoutMs });
-    else result = await execute('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15',
-      '-o', 'ServerAliveInterval=5', '-o', 'ServerAliveCountMax=2', ...transport, 'mmv',
-      'set -a; source ~/.credentials/zenithjoy-db.env; set +a; cd ~/.openclaw/leadgen-scripts && node leadgen-rpc.mjs'],
-    { input: JSON.stringify({ ...body, source }), timeoutMs });
-    let response;
-    try { response = JSON.parse(result.stdout.trim()); } catch { throw Error('远端没有合法回执'); }
-    if (result.code !== 0 || response.ok !== true) throw Error(response.error || '远端执行失败');
-    return response;
+    const deadline=Date.now()+timeoutMs;
+    const send=async(payload,maxMs=timeoutMs)=>{
+      const remaining=Math.min(maxMs,deadline-Date.now());
+      if(remaining<=0)throw Error('EXECUTION_DEADLINE');
+      let result;
+      try{
+        if(local)result=await execute(process.execPath,[resolve(process.env.WF_HOME,'leadgen-rpc.mjs')],
+          {input:JSON.stringify({...payload,source}),timeoutMs:remaining});
+        else result=await execute('ssh',['-o','BatchMode=yes','-o','ConnectTimeout=15',
+          '-o','ServerAliveInterval=5','-o','ServerAliveCountMax=2',...transport,'mmv',
+          'set -a; source ~/.credentials/zenithjoy-db.env; set +a; cd ~/.openclaw/leadgen-scripts && node leadgen-rpc.mjs'],
+          {input:JSON.stringify({...payload,source}),timeoutMs:remaining});
+      }catch(error){
+        // 进程已关闭才可恢复；不把源码/数据库明确错误当网络抖动。
+        if(['EXECUTION_DEADLINE','EXECUTION_START_FAILED'].includes(error.message))error.receiptMissing=true;
+        throw error;
+      }
+      let response;
+      try{
+        response=JSON.parse(result.stdout.trim());
+        if(!response||typeof response.ok!=='boolean')throw Error('INVALID_RECEIPT');
+      }catch{
+        const error=Error('远端没有合法回执');error.receiptMissing=true;throw error;
+      }
+      if(result.code!==0||response.ok!==true)throw Error(response.error||'远端执行失败');
+      return response;
+    };
+    if(body.kind==='queue'&&body.request?.op==='discover'){
+      try{return await send(body,20000);}catch(error){
+        if(!error.receiptMissing||Date.now()+250>=deadline)throw error;
+        const readback=await send({...body,request:{...body.request,op:'discover_readback'}},20000);
+        if(readback.result!==null){
+          if(!['pending','matched','rejected'].includes(readback.result?.status)||readback.result.inserted!==false||readback.result.recovered!==true)throw Error('发现恢复读回无效');
+          return readback;
+        }
+        // discover以(line_key,video_id)唯一键upsert，相同输入补写一次；不恢复评论/评分等其他写操作。
+        return send(body,20000);
+      }
+    }
+    const attempts=['commander','resolve_share_link'].includes(body.kind)?2:1;
+    for(let attempt=0;attempt<attempts;attempt++){
+      try{return await send(body);}catch(error){
+        if(!error.receiptMissing||attempt+1>=attempts||Date.now()+250>=deadline)throw error;
+      }
+    }
   };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
+    if(process.argv[2]==='resolve-share-link'){
+      if(process.argv.length!==4)throw Error('解析参数无效');
+      const rpc=createRpc({frozen:readFrozen(process.env.WFR_RUN_DIR),local:process.env.LEADGEN_LOCAL_RPC==='1'});
+      const {result}=await rpc({kind:'resolve_share_link',url:process.argv[3]},{timeoutMs:20000});
+      if(!/^https:\/\/www\.douyin\.com\/(video|note)\/[0-9]{16,24}$/.test(result?.resolved_url||'')||result.resolved_url!==`https://www.douyin.com/${result.content_type}/${result.content_id}`)throw Error('解析回执身份无效');
+      process.stdout.write(result.resolved_url+'\n');
+    }else{
     if (process.argv[2] !== 'qualify' || process.argv[3] !== 'judge') throw Error('未知调用');
     const args = {};
     for (let n = 4; n < process.argv.length; n += 2) {
@@ -87,7 +128,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const rpc = createRpc({ frozen: readFrozen(process.env.WFR_RUN_DIR), local: process.env.LEADGEN_LOCAL_RPC === '1' });
     const { result } = await rpc({ kind: 'qualify', request: { ...args, cmd: 'judge' } });
     process.stdout.write(`QUAL_RESULT ${JSON.stringify(result)}\n`);
+    }
   } catch {
-    process.stdout.write('QUAL_RESULT {"verdict":"pending","kind":"rpc_error"}\n'); process.exitCode = 1;
+    if(process.argv[2]==='resolve-share-link')process.stderr.write('SHARE_LINK_PEER_FAILED\n');
+    else process.stdout.write('QUAL_RESULT {"verdict":"pending","kind":"rpc_error"}\n');
+    process.exitCode = 1;
   }
 }

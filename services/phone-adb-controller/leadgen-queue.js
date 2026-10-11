@@ -11,7 +11,29 @@ async function transaction(pool, fn) {
   finally { client.release(); }
 }
 
+// 标题仅限定候选集合；身份只接受实际受信跳转中的VID。
+async function historyUrlProof(url, videoId, deps) {
+  if (url === `https://www.douyin.com/video/${videoId}`) return {source_video_url:url,video_id:videoId,resolved_url:url};
+  const resolver=deps.resolveHistoryUrl || (await import('./leadgen-rpc.mjs')).resolveCopiedShareLink;
+  const r=await resolver(url);
+  if(r.content_type!=='video'||r.content_id!==videoId||r.resolved_url!==`https://www.douyin.com/video/${videoId}`)throw Error('历史URL实际VID不符');
+  return {source_video_url:url,video_id:videoId,resolved_url:r.resolved_url};
+}
+async function validateHistoryRows(client,lineKey,input,old,deps) {
+  const actual=(await client.query('SELECT id,douyin_id,comment_body,source_video_url FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND id=ANY($2::uuid[])',[lineKey,old.map(r=>r.id)])).rows;
+  if(actual.length!==old.length)throw Error('历史消费PG重验失败');
+  const aliases=new Set();
+  for(const r of old){const a=actual.find(a=>a.id===r.id);
+    if(!a||a.douyin_id!==r.douyinId||a.comment_body!==r.commentBody||a.source_video_url!==(r.sourceVideoUrl||input.video_url))throw Error('历史消费PG重验失败');
+    if(a.source_video_url!==input.video_url)aliases.add(a.source_video_url);
+  }
+  if(aliases.size>4)throw Error('历史URL解析数量超界');
+  const verified=await Promise.allSettled([...aliases].map(url=>historyUrlProof(url,input.video_id,deps)));
+  if(verified.some(r=>r.status!=='fulfilled'))throw Error('历史URL实际VID重验失败');
+}
+
 async function queueRequest(pool, input, deps = { judgeComment }) {
+  deps={judgeComment,...deps};
   const { lineKey, targetProfile } = resolveLine(input.line);
   const { op, run } = input;
   const sourceRun=input.source_run??null;
@@ -20,20 +42,46 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   const limit = Math.max(1, Math.min(50, Number(input.limit) || 10));
   const videoIds=input.video_ids===undefined?null:input.video_ids;
   if(Object.hasOwn(input,'video_ids')&&(!Array.isArray(videoIds)||videoIds.length>1000||videoIds.some(id=>typeof id!=='string'||!/^\d{16,24}$/.test(id))))throw Error('视频ID清单无效');
+  if(Object.hasOwn(input,'prefer_matched')&&(op!=='claim_videos'||typeof input.prefer_matched!=='boolean'||input.prefer_matched===true&&(!sourceRun||videoIds===null)))throw Error('采样优先必须真boolean及明确上游VID范围');
   if(op==='inspect_videos'){
     if(videoIds===null)throw Error('缺明确视频ID清单');
     return (await pool.query('SELECT video_id,line_key,judgment_status,process_status,harvest_batch FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=ANY($2::text[])',[lineKey,videoIds])).rows;
   }
+  if(op==='sample_readback'){
+    if(!sourceRun||!/^\d{16,24}$/.test(input.video_id||'')||typeof input.video_url!=='string')throw Error('采样读回缺明确上游或视频身份');
+    const wanted=input.rows;
+    if(!Array.isArray(wanted)||wanted.length>50||wanted.some(r=>!r.douyinId||!r.commentBody||typeof r.sourceVideoUrl!=='string')||new Set(wanted.map(r=>JSON.stringify([r.douyinId,r.commentBody]))).size!==wanted.length)throw Error('采样读回身份清单无效');
+    const video=(await pool.query('SELECT video_id,video_url,judgment_status FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND (video_id=$2 OR video_url=$3)',[lineKey,input.video_id,input.video_url])).rows;
+    if(video.length!==1||video[0].video_id!==input.video_id||video[0].video_url!==input.video_url||video[0].judgment_status!=='matched')throw Error('采样视频PG归属不唯一');
+    const urls=[...new Set(wanted.map(r=>r.sourceVideoUrl))];
+    if(urls.length>5||urls.filter(url=>url!==input.video_url).length>4)throw Error('采样URL解析数量超界');
+    await Promise.all(urls.map(url=>historyUrlProof(url,input.video_id,deps)));
+    const actual=wanted.length?(await pool.query('SELECT id,douyin_id,comment_body,source_video_url FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND douyin_id=ANY($2::text[]) AND source_video_url=ANY($3::text[]) LIMIT 1001',[lineKey,[...new Set(wanted.map(r=>r.douyinId))],urls])).rows:[];
+    if(actual.length>1000)throw Error('采样PG候选数量超界');
+    const rows=wanted.map(r=>{
+      const found=actual.filter(a=>a.douyin_id===r.douyinId&&a.comment_body===r.commentBody&&a.source_video_url===r.sourceVideoUrl&&(!r.id||a.id===r.id));
+      if(found.length!==1)throw Error('采样评论完整身份PG读回不唯一');
+      return {id:found[0].id,douyinId:r.douyinId,commentBody:r.commentBody,sourceVideoUrl:r.sourceVideoUrl};
+    });
+    return {verified:true,video_id:input.video_id,coverage:rows.length,rows};
+  }
   if (op === 'history') {
     return (await pool.query('SELECT title,video_id FROM zenithjoy.leadgen_videos WHERE line_key=$1', [lineKey])).rows;
   }
-  if (op === 'discover') {
+  if (op === 'discover' || op === 'discover_readback') {
     const value = input.video;
     const row = value && { ...value, video_id: value.video_id ?? value.videoId, video_url: value.video_url ?? value.videoUrl };
     if (!/^\d{16,24}$/.test(row?.video_id || '') || !/^https:\/\/(?:v\.douyin\.com\/|www\.douyin\.com\/video\/)/.test(row?.video_url || '')) throw Error('候选视频身份无效');
+    if(op==='discover_readback'){
+      const result=await pool.query(`SELECT judgment_status, (transcript IS NOT NULL AND transcript <> '') AS has_transcript
+        FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=$2 AND video_url=$3`,[lineKey,row.video_id,row.video_url]);
+      const actual=result.rows[0];
+      return actual?{status:actual.judgment_status,has_transcript:!!actual.has_transcript,inserted:false,recovered:true}:null;
+    }
     return db.discoverVideo(pool, { lineKey, videoId: row.video_id, videoUrl: row.video_url, title: row.title, keyword: row.keyword, harvestBatch: run });
   }
   if (op === 'claim_videos') {
+    const priority=input.prefer_matched===true?"CASE WHEN judgment_status='matched' THEN 0 ELSE 1 END":"CASE WHEN judgment_status='pending' THEN 0 ELSE 1 END";
     return transaction(pool, async client => {
       // 待采的已合格视频也入队；上次崩溃的租约15分钟后可重领，活动内调用续期。
       const result = await client.query(`WITH pending AS (
@@ -42,7 +90,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         AND ($6::text[] IS NULL OR video_id=ANY($6::text[]))
         AND (process_status='待判定' OR process_status='待采评论'
           OR (process_status LIKE '处理中:%' AND updated_at<now()-interval '15 minutes'))
-        ORDER BY discovered_at LIMIT $2 FOR UPDATE SKIP LOCKED)
+        ORDER BY ${priority}, discovered_at LIMIT $2 FOR UPDATE SKIP LOCKED)
         UPDATE zenithjoy.leadgen_videos v SET process_status=$3,harvest_batch=$4,updated_at=now()
         FROM pending p WHERE v.id=p.id RETURNING v.*`, [lineKey, limit, `处理中:${run}`, run, sourceRun, videoIds]);
       return result.rows;
@@ -56,11 +104,70 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     if (result.rowCount !== 1) throw Error('视频租约已失效');
     return { renewed: op === 'renew_video', released: op === 'release_video' };
   }
+  if(op==='reject_recording'){
+    const p=input.recording;
+    if(!/^\d{16,24}$/.test(input.video_id||'')||p?.version!==1||p.run!==run||p.video_id!==input.video_id
+      ||p.evidence_id!==`${run}-v${input.video_id}-qualification-record`||p.media_volume_verified!==true
+      ||!Number.isSafeInteger(p.media_volume)||p.media_volume<=0||p.audio_status!=='silent'
+      ||typeof p.mean_volume_db!=='number'||!Number.isFinite(p.mean_volume_db)||p.mean_volume_db>-80)throw Error('本轮录音拒绝证据不符');
+    return transaction(pool,async client=>{
+      const reason='本轮录音核验拒绝:静音音轨';
+      const result=await client.query(`UPDATE zenithjoy.leadgen_videos SET judgment_status='rejected',judgment_reason=$4,updated_at=now()
+        WHERE line_key=$1 AND video_id=$2 AND process_status=$3 AND judgment_status='pending' RETURNING video_id`,[lineKey,input.video_id,`处理中:${run}`,reason]);
+      if(result.rowCount!==1)throw Error('本轮录音拒绝租约或判定已失效');
+      const actual=(await client.query('SELECT video_id,judgment_status,judgment_reason,process_status FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=$2',[lineKey,input.video_id])).rows[0];
+      if(actual?.video_id!==input.video_id||actual.judgment_status!=='rejected'||actual.judgment_reason!==reason||actual.process_status!==`处理中:${run}`)throw Error('本轮录音拒绝PG独立读回失败');
+      return {verified:true,video_id:actual.video_id,verdict:'rejected',kind:'recording_silent',reason};
+    });
+  }
+  if(op==='comment_history'||op==='comment_history_readback'){
+    if(!sourceRun)throw Error('历史读取缺受信上游运行号');
+    if(!/^\d{16,24}$/.test(input.video_id||'')||typeof input.video_url!=='string')throw Error('历史视频身份无效');
+    const statusGuard=op==='comment_history'?"process_status=$3":"(process_status=$3 OR (process_status='评论已采' AND harvest_batch=$5))";
+    const owned=(await pool.query(`SELECT video_id,video_url,title,
+      (SELECT count(*) FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_url=$4) AS url_bindings
+      FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=$2 AND ${statusGuard} AND video_url=$4 AND judgment_status='matched'`,
+      (op==='comment_history'?[lineKey,input.video_id,`处理中:${run}`,input.video_url]:[lineKey,input.video_id,`处理中:${run}`,input.video_url,run]))).rows[0];
+    if(!owned)throw Error('历史读取租约或视频URL不符');
+    const receipt={version:1,line:input.line,line_key:lineKey,run,source_run:sourceRun,video_id:input.video_id,video_url:input.video_url,observed_at:new Date().toISOString(),rows:[]};
+    if(op==='comment_history_readback'&&input.history?.length&&Number(owned.url_bindings)!==1)throw Error('历史读回URL归属不唯一');
+    if(op==='comment_history'&&Number(owned.url_bindings)!==1)return {...receipt,status:'unknown',reason:'video_url_ambiguous'};
+    const rows=(await pool.query('SELECT id,douyin_id,comment_body,source_video_url FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND source_video_url=$2 LIMIT 1001',[lineKey,input.video_url])).rows;
+    if(rows.length>1000)return {...receipt,status:'unknown',reason:'historical_candidates_exceed_bound'};
+    const urlProofs=[];
+    if(op==='comment_history' && typeof owned.title==='string' && owned.title.trim()){
+      const candidates=(await pool.query('SELECT id,douyin_id,comment_body,source_video_url FROM zenithjoy.leadgen_comments WHERE line_key=$1 AND source_video=$2 ORDER BY collected_at DESC LIMIT 1001',[lineKey,owned.title])).rows;
+      const aliases=[...new Set(candidates.map(r=>r.source_video_url).filter(u=>u&&u!==input.video_url))];
+      if(candidates.length>1000||aliases.length>4)return {...receipt,status:'unknown',reason:'historical_candidates_exceed_bound'};
+      const proofs=await Promise.allSettled(aliases.map(url=>historyUrlProof(url,input.video_id,deps)));
+      for(const result of proofs){if(result.status!=='fulfilled')continue;
+        const proof=result.value;urlProofs.push(proof);
+        for(const r of candidates.filter(r=>r.source_video_url===proof.source_video_url))if(!rows.some(a=>a.id===r.id))rows.push(r);
+      }
+    }
+    if(op==='comment_history_readback'){
+      const wanted=input.history;
+      if(!Array.isArray(wanted)||new Set(wanted.map(r=>r.id)).size!==wanted.length)throw Error('历史读回清单无效');
+      if(wanted.length)await validateHistoryRows(pool,lineKey,input,wanted,deps);
+      return {verified:true,video_id:input.video_id,ids:wanted.map(r=>r.id),history_verified:wanted.length};
+    }
+    if(rows.some(r=>!r.douyin_id||!r.comment_body)||new Set(rows.map(r=>JSON.stringify([r.douyin_id,r.comment_body]))).size!==rows.length)return {...receipt,status:'unknown',reason:'historical_identity_incomplete'};
+    return {...receipt,status:'verified',rows,...(urlProofs.length?{url_proofs:urlProofs}:{})};
+  }
   if (op === 'collect' || op === 'collect_partial') {
     return transaction(pool, async client => {
-      const owned = await client.query(`SELECT video_id,judgment_status FROM zenithjoy.leadgen_videos
-        WHERE line_key=$1 AND video_id=$2 AND process_status=$3 FOR UPDATE`, [lineKey, input.video_id, `处理中:${run}`]);
+      const owned = await client.query(`SELECT video_id,judgment_status,video_url,
+        (SELECT count(*) FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_url=$4) AS url_bindings FROM zenithjoy.leadgen_videos
+        WHERE line_key=$1 AND video_id=$2 AND process_status=$3 FOR UPDATE`, [lineKey, input.video_id, `处理中:${run}`,input.video_url||null]);
       if (owned.rows[0]?.judgment_status !== 'matched') throw Error('只许采集持有租约的合格视频');
+      const old=input.history||[];
+      if(!Array.isArray(old)||old.length>100000||new Set(old.map(r=>r.id)).size!==old.length)throw Error('历史消费清单无效');
+      if(old.length){
+        if(owned.rows[0].video_url!==input.video_url||Number(owned.rows[0].url_bindings)!==1)throw Error('历史视频URL归属不唯一');
+        if(old.some(r=>!/^[-a-f0-9]{36}$/i.test(r.id||'')||!r.douyinId||!r.commentBody))throw Error('历史消费身份无效');
+        await validateHistoryRows(client,lineKey,input,old,deps);
+      }
+      const coverage=new Set([...old,...(input.comments||[])].map(r=>JSON.stringify([r.douyinId,r.commentBody]))).size;
       let inserted = 0;
       for (const comment of input.comments || []) {
         if (!comment.nickname || !comment.commentBody) throw Error('评论身份或正文缺失');
@@ -68,10 +175,10 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         if (result.inserted) inserted++;
       }
       // 软预算只提交已核验评论；视频保持租约，交清场释放，不伪造“评论已采”。
-      if (op === 'collect_partial') return { inserted, comments: (input.comments || []).length, video_id: input.video_id, status: 'partial' };
-      const result = await db.markVideoCollected(client, { lineKey, videoId: input.video_id, commentCount: (input.comments || []).length });
+      if (op === 'collect_partial') return { inserted, comments: (input.comments || []).length, video_id: input.video_id, status: 'partial',history_verified:old.length,coverage };
+      const result = await db.markVideoCollected(client, { lineKey, videoId: input.video_id, commentCount: coverage });
       if (!result.updated) throw Error('评论已写但视频完成状态未确认');
-      return { inserted, comments: (input.comments || []).length, video_id: input.video_id };
+      return { inserted, comments: (input.comments || []).length, video_id: input.video_id,history_verified:old.length,coverage };
     });
   }
   if (op === 'score') {

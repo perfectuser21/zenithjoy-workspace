@@ -30,6 +30,9 @@ jobs:
         with:
           node-version: '20'
 
+      - name: 验证审查请求参数（防推理耗尽最终输出）
+        run: node --test scripts/ci/__tests__/pr-review-thinking.test.mjs
+
       - name: 获取 PR diff
         id: get-diff
         env:
@@ -71,6 +74,8 @@ jobs:
           ${PR_DIFF}
           \`\`\`"
 
+          # 实测旧enable_thinking被忽略，900 token全部耗在reasoning。
+          # 用官方thinking.type关闭推理；保留空content失败，不拿推理冒充审查。
           MAX_RETRY=3
           RETRY_COUNT=0
           REVIEW_CONTENT=""
@@ -93,9 +98,9 @@ jobs:
                     {"role": "system", "content": $sys},
                     {"role": "user", "content": $usr}
                   ],
-                  "max_tokens": 900,
+                  "max_tokens": 4096,
                   "temperature": 0.1,
-                  "enable_thinking": false
+                  "thinking": {"type": "disabled"}
                 }'
               )" 2>/dev/null || echo "")
 
