@@ -9,3 +9,5 @@ GP-Anchor: line02/keyword_acquisition keep-green
 最窄修复：只把Pilot调用uses与tooling_revision同步固定到已合并818b623d0616d11e3c03c2e7fde4f550533f6998。该版本逐workflow ID/key/contract_key/source_repo/source_workflow核验源owner，并保留父能力与规范树匹配，接受既有旧合同。主线来源、只读权限、三secret、三份artifact与部署gate不变。
 
 先升级caller合同测试期望，真实红；再升级两个SHA引用，12关联测试绿。用本次实际已验证snapshot直接调用固定新版校验器通过；篡改workflow与重复owner仍拒绝。证明/tmp/codex-pilot-tooling-compatibility-proof-20261012.json。正式发布验收与两机部署尚待完成，不能把代码测试当业务完成。
+
+发布配置审计：PR2125标记[CONFIG]；变更仅两个同值固定SHA，来源校验与全部拒绝门禁仍启用。
