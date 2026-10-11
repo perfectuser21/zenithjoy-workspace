@@ -48,7 +48,7 @@ else if(a.includes(' pull ')){const n=process.argv.indexOf('pull');if(process.ar
 });
 
 // 实际控制器CLI；只在临时副本替换既有等待函数，业务函数与守卫字节保持。
-function pausedIdle({command='open-video',policy='paused-detail',error='idle',wrongPackage=false,wrongFocus=false,ambiguousFocus=false,pauseFails=false,toggleFails=0,partial=false,freshOnFirst=false,stale=false,panelFails=false,fallbackFails=false,focusChangesAfterPause=false,gateDismiss=false,visionFallback=false,unknownStat=false}={}) {
+function pausedIdle({command='open-video',policy='paused-detail',error='idle',wrongPackage=false,wrongFocus=false,ambiguousFocus=false,pauseFails=false,toggleFails=0,partial=false,freshOnFirst=false,stale=false,panelFails=false,fallbackFails=false,focusChangesAfterPause=false,gateDismiss=false,visionFallback=false,unknownStat=false,androidStat=false,statError='enoent',absence='absent'}={}) {
   const dir=mkdtempSync(join(tmpdir(),'paused-detail-idle-'));
   try {
     const source=readFileSync(script,'utf8'),wait=source.match(/^wait_ms\(\) \{[\s\S]*?^\}/m)?.[0];
@@ -78,7 +78,14 @@ else if(has('uiautomator dump')){s.dumps++;save();
  else if((s.toggled&&!${fallbackFails})||${freshOnFirst}||(${JSON.stringify(error)}==='nonidle'&&s.dumps%3===0)){if(${gateDismiss}&&!s.dismissed)fs.writeFileSync(p.join(d,'remote.xml'),'<hierarchy><node package="com.ss.android.ugc.aweme" text="关闭" clickable="true" bounds="[10,10][110,110]"/></hierarchy>');else fs.copyFileSync(p.join(d,'detail.xml'),p.join(d,'remote.xml'));if(${freshOnFirst}){console.error('ERROR: could not get idle state');process.exit(1);}}
  else {console.error(${JSON.stringify(error)}==='idle'?'ERROR: could not get idle state':'ERROR: transport unavailable');process.exit(1);}
 }else if(has('exec-out screencap'))process.stdout.write('fixture-image');
-else if(has('stat -c %s'))console.log(${unknownStat}?'unknown':fs.existsSync(p.join(d,'remote.xml'))?fs.statSync(p.join(d,'remote.xml')).size:0);
+else if(has('stat -c %s')){
+ if(${androidStat}&&!fs.existsSync(p.join(d,'remote.xml'))){console.error(${JSON.stringify(statError)}==='enoent'?"stat: '"+a[a.length-1]+"': No such file or directory":'stat: Permission denied');process.exit(1);}
+ console.log(${unknownStat}?'unknown':fs.existsSync(p.join(d,'remote.xml'))?fs.statSync(p.join(d,'remote.xml')).size:0);
+}else if(has('REMOTE_UI_ABSENT_V1')){
+ if(fs.existsSync(p.join(d,'remote.xml'))||${JSON.stringify(absence)}==='exists'||${JSON.stringify(absence)}==='dangling')process.exit(1);
+ if(${JSON.stringify(absence)}==='permission'||${JSON.stringify(absence)}==='timeout'){console.error('absence probe unavailable');process.exit(${JSON.stringify(absence)}==='timeout'?124:1);}
+ process.stdout.write(${JSON.stringify(absence)}==='absent'?'REMOTE_UI_ABSENT_V1':${JSON.stringify(absence)}==='malformed'?'REMOTE_UI_ABSENT_V1 extra':${JSON.stringify(absence)}==='duplicate'?'REMOTE_UI_ABSENT_V1\\nREMOTE_UI_ABSENT_V1':'');
+}
 else if(a.includes('pull')){const i=a.indexOf('pull');if(a[i+1].endsWith('.xml'))fs.copyFileSync(p.join(d,'remote.xml'),a[i+2]);else fs.writeFileSync(a[i+2],'png');}
 save();
 `,{mode:0o755});
@@ -159,4 +166,21 @@ test('CLI夹具显式使用实际Python，外界错误DOUYIN_PYTHON_BIN不能使
  } finally {
   if(previous===undefined)delete process.env.DOUYIN_PYTHON_BIN;else process.env.DOUYIN_PYTHON_BIN=previous;
  }
+});
+
+// Android真实stat ENOENT语义：无文件退出1、stdout空，而非伪造大小0。
+test('Android ENOENT加本次独立absence ACK使真实open-video首idle仅一次失败后成对兜底',()=>{
+ const r=pausedIdle({androidStat:true});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/video_opened=1/);
+ assert.equal(r.state.dumps,4,'两阶段各首次idle失败+新鲜兜底，不能仍各3失败');assert.equal(r.state.toggles,4);assert.equal(r.state.play,'playing');
+ assert.match(r.calls,/REMOTE_UI_ABSENT_V1/);assert.match(r.stderr,/paused-idle:/);
+});
+for(const absence of ['permission','timeout','exists','dangling','empty','malformed','duplicate'])test('Android ENOENT但absence不可信保三次尝试 '+absence,()=>{
+ const r=pausedIdle({command:'wave',androidStat:true,absence});assert.equal(r.status,0,r.stderr);
+ assert.equal(r.state.dumps,4);assert.equal(r.state.toggles,2);assert.doesNotMatch(r.stderr,/paused-idle:/);
+});
+test('stat权限错误不能靠absence ACK提速，非idle和standard/share保持原策略',()=>{
+ const permission=pausedIdle({command:'wave',androidStat:true,statError:'permission'});assert.equal(permission.state.dumps,4);assert.doesNotMatch(permission.calls,/REMOTE_UI_ABSENT_V1/);assert.doesNotMatch(permission.stderr,/paused-idle:/);
+ const nonidle=pausedIdle({command:'wave',androidStat:true,error:'nonidle'});assert.equal(nonidle.status,0,nonidle.stderr);assert.equal(nonidle.state.dumps,3);assert.doesNotMatch(nonidle.calls,/REMOTE_UI_ABSENT_V1/);
+ const standard=pausedIdle({command:'wave',policy:'standard',androidStat:true});assert.equal(standard.status,0,standard.stderr);assert.equal(standard.state.dumps,4);assert.doesNotMatch(standard.calls,/REMOTE_UI_ABSENT_V1/);
+ const share=pausedIdle({command:'wave',policy:'verified-seed-share',androidStat:true});assert.equal(share.status,0,share.stderr);assert.equal(share.state.dumps,2);assert.doesNotMatch(share.calls,/REMOTE_UI_ABSENT_V1/);
 });
