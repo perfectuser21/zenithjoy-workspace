@@ -7143,6 +7143,14 @@ agent_suite:
   product: AI员工
   note: "四独立获客流程代码回归；设备和业务PG用隔离夹具，真实运行另行验收"
 
+- id: leadgen-split-empty-collection
+  path: services/phone-adb-controller/__tests__/empty-collection.test.mjs
+  type: unit
+  ci: L3
+  status: active
+  product: AI员工
+  note: "无合格视频真实空评论工件；缺文件与坏主页链接仍拦截，零评论不冒充采样成功"
+
 - id: leadgen-split-leadgen-discovery
   path: services/phone-adb-controller/__tests__/leadgen-discovery.test.mjs
   type: unit

@@ -281,6 +281,8 @@ export function createHandlers({root,env,rpc,execute=execInput}) {
       return {claimed:leased.length,matched:qualified.length,videos_verified:verified,recordings_required:recordingsRequired,media_volume_verified:mediaVerified,media_volume_failures:recordingsRequired-mediaVerified,recordings_silent_rejected:recordingSilentRejected,recording_outcomes_failures:recordingOutcomesFailures,failures,...(failures.length?{status:'partial'}:{})};
     },
     collection:async()=>{historyScoped=0;let comments=0,collected=0,sampled=0,rescans=0,inserted=0,historyVerified=0,coverage=0,historyConsumed=0;const failures=[],sampleReceipts=[];
+      // 空候选也产出可读回的空工件；保留已有行，缺文件判定仍由统一裁判严格执行。
+      appendFileSync(join(env.WFR_RUN_DIR,'comments.tsv'),'',{mode:0o600});
       for(const v of qualified){try{
         collectionTiming();
         await queue('renew_video',{video_id:v.video_id});const result=await videoAction('collection',v);
