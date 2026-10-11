@@ -78,10 +78,10 @@ test('错误分片参数必须执行前拒绝，不产生任何脚本副作用',
     assert.doesNotMatch(r.stdout, /→ PASS/);
   }
 });
-function verify(root) {
+function verify(root, workersResult = 'success') {
   return spawnSync('bash', ['-c', step('Verify complete shard coverage and original gates')], { cwd: root, encoding: 'utf8',
     env: { ...process.env, GITHUB_SHA: 'f'.repeat(40), GITHUB_STEP_SUMMARY: join(root, 'aggregate-summary.md'),
-      SMOKE_ARTIFACTS: root, SMOKE_SHARDS_RESULT: 'success' } });
+      SMOKE_ARTIFACTS: root, SMOKE_SHARDS_RESULT: workersResult } });
 }
 function artifact(root, index) {
   return join(root, `worker-${index}/smoke-glob-shard-${index}`);
@@ -104,4 +104,25 @@ test('正式聚合器拒绝漏分片/缺行/重复行/错source，不凭worker�
   value.source_sha = 'e'.repeat(40);
   writeFileSync(meta, JSON.stringify(value));
   assert.notEqual(verify(root).status, 0, '错受测source必须红');
+});
+test('原聚合拒绝未完成/伪跳过/伪债务基线/worker失败，不修改原失败意义', t => {
+  const { root } = fixture(t);
+  const workers = [run(root, 0), run(root, 1)];
+  for (const r of workers) assert.equal(r.status, 0, r.stderr);
+  assert.equal(verify(root).status, 0);
+  assert.notEqual(verify(root, 'failure').status, 0);
+  assert.notEqual(verify(root, 'cancelled').status, 0);
+  const metaPath = join(artifact(root, 0), 'manifest.json');
+  const originalMeta = readFileSync(metaPath, 'utf8');
+  const meta = JSON.parse(originalMeta);
+  meta.complete = false;
+  writeFileSync(metaPath, JSON.stringify(meta));
+  assert.notEqual(verify(root).status, 0);
+  writeFileSync(metaPath, originalMeta);
+  const file = join(artifact(root, 0), 'results.tsv');
+  const originalRows = readFileSync(file, 'utf8');
+  writeFileSync(file, originalRows.replace('PASS\t0', 'SKIP\t-'));
+  assert.notEqual(verify(root).status, 0, '非denylist不能变成SKIP');
+  writeFileSync(file, originalRows.replace('PASS\t0', 'DEBT-FAIL\t7'));
+  assert.notEqual(verify(root).status, 0, '基线失败不能改标存量债');
 });
