@@ -34,7 +34,7 @@ const FAKE_ADB = `#!/bin/sh
 echo "$*" >> "$HOME/adb-calls.log"
 exit 0`;
 const FAKE_WFR = `#!/bin/bash
-printf '%s\\n' "$7" >> "$HOME/wfr-counts.log"
+printf '%s\\n' "$8" >> "$HOME/wfr-counts.log"
 echo WFR_RUN_ID=fake`;
 
 function setup() {

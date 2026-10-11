@@ -112,7 +112,9 @@ export async function run(args){
     const body=[{run_id:runId,occurrence_key:`${runId}:send_dm`,workflow_id:e.WFR_OUTREACH_WORKFLOW_ID||'b1000000-0000-4000-8000-000000000104',
       activity_id:e.WFR_OUTREACH_ACTIVITY_ID||'bb4fdc47-a543-4374-9078-8e78151b69c6',started_at:startedAt,ended_at:new Date().toISOString(),
       executor_kind:'code',executor_id:e.WFR_HOSTKEY||'unknown',outcome,
-      evidence:{profile:e.WFR_PROFILE||'',orders_picked:picked,delivered,restricted,failed,requeued:n('requeued')}}];
+      evidence:{profile:e.WFR_PROFILE||'',orders_picked:picked,delivered,restricted,failed,requeued:n('requeued'),
+        // 派发总闸D(dd7767b8)：手机 Brain 设备锁的领取/释放/跳过证据原样带上（只收对象）
+        ...(counts.brain_lock&&typeof counts.brain_lock==='object'&&!Array.isArray(counts.brain_lock)?{brain_lock:counts.brain_lock}:{})}}];
     const outboxDir=resolve(e.WFR_HOME||resolve(e.HOME,'.config/zenithjoy'),'outreach-outbox');
     enqueue(outboxDir,{key:`${runId}:send_dm`,endpoint:`${e.BRAIN_URL?.replace(/\/$/,'')}/api/brain/spans`,body});await flushReceipts(outboxDir);return;
   }

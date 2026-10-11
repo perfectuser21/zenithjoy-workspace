@@ -117,6 +117,7 @@ DEVICE_SH_FILES=(
   harvest-keyword.sh harvest-keyword-lib.sh batch2.sh harvest-cron.sh wf-run.sh wf-run-lib.sh discover-keyword.sh discovery-v2-lib.sh outreach-tick.sh
   refill-profile-links.sh wall-report.sh wall-lib.sh phone-wall-push.sh
   disk-gateway-guard.sh device-job-claimer.sh log-stream-push.sh
+  brain-lock.sh harvest-fallback.sh
   workflow-result.sh discover-benchmark.sh wf-limits.sh install-phone-recovery.sh
 )
 # 0927 棒3b-3: 账本钩子内建进 harvest-cron.sh/batch2.sh,workflow-result.sh 硬依赖 ledger.mjs(node),
