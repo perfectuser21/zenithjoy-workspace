@@ -15,6 +15,7 @@ node --test --test-name-pattern='原候选|出现消失候选|真实workflow包�
 node --test scripts/product-map/__tests__/leadgen-split-contracts.test.js \
  services/phone-adb-controller/__tests__/video-card-optional-fields.test.mjs \
  services/phone-adb-controller/__tests__/card-bottom-reveal.test.mjs \
+ services/phone-adb-controller/__tests__/viewport-restore.test.mjs \
  services/phone-adb-controller/__tests__/split-workflows.test.mjs \
  services/phone-adb-controller/__tests__/wf-run-retired.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-workflow.test.mjs \

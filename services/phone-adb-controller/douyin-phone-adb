@@ -2632,6 +2632,72 @@ except Exception:
 PYDURATION
 }
 
+card_viewport_hint_from_xml() {
+  # 只提出一次受限导航距离；一锚不是视口连续性证明，最终点击仍由fresh完整身份决定。
+  "$PYTHON_BIN" - "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$SCREEN_H" <<'PYVIEWPORT'
+import sys,re,html,unicodedata,urllib.parse,pathlib,xml.etree.ElementTree as ET
+from collections import defaultdict
+def norm(v): return ' '.join(unicodedata.normalize('NFKC',html.unescape(v)).split())
+def box(n):
+ m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.get('bounds',''))
+ if not m: raise ValueError('bounds')
+ q=tuple(map(int,m.groups()))
+ if q[0]>=q[2] or q[1]>=q[3]: raise ValueError('bounds')
+ return q
+def cards(path,kw,height):
+ root=ET.parse(path).getroot();ns=list(root.iter('node'))
+ if root.tag!='hierarchy' or not ns or any(n.get('package')!='com.ss.android.ugc.aweme' for n in ns): raise ValueError('package')
+ searches=[n for n in ns if n.get('resource-id','').endswith('/et_search_kw')]
+ tabs=[n for n in ns if n.get('text')=='视频' and n.get('selected')=='true']
+ if len(searches)!=1 or norm(searches[0].get('text',''))!=kw or len(tabs)!=1: raise ValueError('query/tab')
+ floor=box(tabs[0])[3];result=[];names=[]
+ for p in ns:
+  if p.get('resource-id')!='com.ss.android.ugc.aweme:id/dlr' or p.get('clickable')!='true': continue
+  cs=list(p.iter('node'));ts=[n for n in cs if n.get('resource-id')=='com.ss.android.ugc.aweme:id/desc'];authors=[n for n in cs if n.get('resource-id')=='com.ss.android.ugc.aweme:id/+b']
+  if len(ts)==1: names.append((norm(ts[0].get('text','')),norm(authors[0].get('text','')) if len(authors)==1 else ''))
+  if len(ts)!=1 or len(authors)!=1 or not any(n.get('resource-id')=='com.ss.android.ugc.aweme:id/q9g' for n in cs) or any('相关搜索' in n.get('text','')+n.get('content-desc','') for n in cs): continue
+  title,author=ts[0],authors[0];tb,ab=box(title),box(author)
+  likes=[n for n in cs if n.get('resource-id')=='com.ss.android.ugc.aweme:id/pc7' and re.fullmatch(r'(未点赞|已点赞)，喜欢[0-9.]+(?:万|亿|w)?，按钮',n.get('content-desc',''))]
+  dates=[n for n in cs if n.get('resource-id')=='com.ss.android.ugc.aweme:id/3+q' and re.fullmatch(r'(?:[0-9]{4}\.)?[0-9]{2}\.[0-9]{2}',n.get('text',''))]
+  durations=[n for n in cs if n.get('resource-id')=='com.ss.android.ugc.aweme:id/5bd' and re.fullmatch(r'[0-9]{1,2}:[0-5][0-9]',n.get('text',''))]
+  if len(likes)!=1 or len(dates)!=1 or len(durations)!=1:continue
+  lb,db,ub=map(box,(likes[0],dates[0],durations[0]))
+  if not (floor<=tb[1]<tb[3]<=height and tb[0]<=ab[0]<ab[2]<=tb[2] and tb[3]<=ab[1]<=tb[3]+60 and ab[3]<=height and tb[0]<=lb[0]<lb[2]<=tb[2] and tb[3]<=lb[1]<=tb[3]+80 and lb[3]<=height and tb[0]<=db[0]<db[2]<=tb[2] and ab[1]<=db[1]<db[3]<=height and tb[0]<=ub[0]<ub[2]<=tb[2] and floor<=ub[1]<ub[3]<=tb[1] and tb[1]-ub[3]<=100):continue
+  identity=(norm(title.get('text','')),norm(author.get('text','')),durations[0].get('text'))
+  if not identity[0] or not identity[1]:continue
+  result.append({'identity':identity,'like':likes[0].get('content-desc'),'date':dates[0].get('text'),'boxes':(tb,ab,lb,db,ub)})
+ return result,names
+try:
+ old,fresh,title,author,duration,kw,run,hs=sys.argv[1:];title,author,kw=map(lambda v:norm(urllib.parse.unquote(v)),(title,author,kw));height=int(hs)
+ if not re.fullmatch(r'[A-Za-z0-9_-]+',run) or not re.fullmatch(r'[0-9]{1,2}:[0-5][0-9]',duration) or not 400<=height<=10000 or not title or not author or not kw:raise ValueError('scope')
+ op,np=pathlib.Path(old),pathlib.Path(fresh)
+ if op.is_symlink() or np.is_symlink() or op.parent.resolve()!=np.parent.resolve():raise ValueError('root')
+ source_pattern=re.escape(run)+r'-(?:src[0-9]+(?:-screen[0-9]+-wait[0-2]|-cards)|candidate[0-9]+-loc(?:-retry[12])?)-grid.xml'
+ if not re.fullmatch(source_pattern,op.name) or not re.fullmatch(re.escape(run)+r'-candidate[0-9]+-loc(?:-retry[12])?-grid.xml',np.name):raise ValueError('run')
+ oldcards,oldnames=cards(op,kw,height);newcards,newnames=cards(np,kw,height)
+ target=(title,author,duration);original=[c for c in oldcards if c['identity']==target]
+ if len(original)!=1 or oldnames.count((title,author))!=1 or any(t==title for t,a in newnames):raise ValueError('target absent/unique')
+ om,nm=defaultdict(list),defaultdict(list)
+ for c in oldcards:om[c['identity']].append(c)
+ for c in newcards:nm[c['identity']].append(c)
+ deltas=[]
+ for key in om.keys()&nm.keys():
+  if len(om[key])!=1 or len(nm[key])!=1:raise ValueError('ambiguous anchor')
+  a,b=om[key][0],nm[key][0]
+  if (a['like'],a['date'])!=(b['like'],b['date']):raise ValueError('anchor changed')
+  dy=b['boxes'][0][1]-a['boxes'][0][1]
+  for x,y in zip(a['boxes'],b['boxes']):
+   if (x[0],x[2])!=(y[0],y[2]) or abs((y[1]-x[1])-dy)>2 or abs((y[3]-x[3])-dy)>2:raise ValueError('nontranslation')
+  deltas.append(dy)
+ if not deltas or max(deltas)-min(deltas)>2:raise ValueError('inconsistent')
+ offset=round(sum(deltas)/len(deltas))
+ if not 80<=offset<=height*40//100 or original[0]['boxes'][0][1]+offset<height:raise ValueError('not bounded bottom exit')
+ print('restore=1\noffset_px='+str(offset)+'\nanchor_count='+str(len(deltas))+'\nnavigation_only=1\ncontinuity_verified=0')
+except Exception:
+ print('restore=0')
+PYVIEWPORT
+}
+
 card_bottom_hint_from_xml() {
   # 仅导航诊断；不输出坐标/卡片身份，不允许用此提示点击。
   "$PYTHON_BIN" - "$1" "$2" "$3" "$SCREEN_H" <<'PYHINT'
@@ -3599,13 +3665,22 @@ case "$command" in
     [[ "$#" == 4 ]] || die "usage: card-bottom-hint-from-xml XML TITLE_ENCODED AUTHOR_ENCODED"
     card_bottom_hint_from_xml "$2" "$3" "$4"
     ;;
+  card-viewport-hint-from-xml)
+    [[ "$#" == 8 ]] || die "usage: card-viewport-hint-from-xml OLD_XML FRESH_XML TITLE AUTHOR DURATION KEYWORD RUN"
+    card_viewport_hint_from_xml "$2" "$3" "$4" "$5" "$6" "$7" "$8"
+    ;;
   search-grid-scroll)
     # 10-08 发现改造：视频 tab 网格整屏翻页（up = 看下面的卡，down = 回上面）。慢速拖动减少惯性，
     # 翻多少不保证整屏对齐——调用方按标题去重/定位，不依赖坐标连续。
-    [[ "$#" == 3 && ( "$3" == up || "$3" == down || "$3" == reveal-up ) ]] || die "usage: douyin-phone-adb --profile PROFILE search-grid-scroll EVIDENCE_ID up|down|reveal-up"
+    [[ ( "$#" == 3 && ( "$3" == up || "$3" == down || "$3" == reveal-up ) ) || ( "$#" == 4 && "$3" == restore-offset && "$4" == <-> ) ]] || die "usage: search-grid-scroll EVIDENCE_ID up|down|reveal-up|restore-offset [PIXELS]"
+    if [[ "$3" == restore-offset ]]; then
+      (( $4 >= 80 && $4 <= SCREEN_H * 40 / 100 )) || die "restore offset out of range"
+    fi
     check_target
     sgs_x=$(( SCREEN_W / 2 )); sgs_hi=$(( SCREEN_H * 85 / 100 )); sgs_lo=$(( SCREEN_H * 15 / 100 ))
-    if [[ "$3" == reveal-up ]]; then
+    if [[ "$3" == restore-offset ]]; then
+      "$ADB" -s "$SERIAL" shell input swipe "$sgs_x" "$sgs_hi" "$sgs_x" "$(( sgs_hi - $4 ))" 500 || die "restore offset gesture failed"
+    elif [[ "$3" == reveal-up ]]; then
       "$ADB" -s "$SERIAL" shell input swipe "$sgs_x" "$sgs_hi" "$sgs_x" "$(( SCREEN_H * 65 / 100 ))" 500
     elif [[ "$3" == up ]]; then
       "$ADB" -s "$SERIAL" shell input swipe "$sgs_x" "$sgs_hi" "$sgs_x" "$sgs_lo" 1000

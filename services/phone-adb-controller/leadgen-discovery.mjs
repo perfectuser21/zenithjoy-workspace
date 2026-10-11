@@ -34,7 +34,7 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
   mkdirSync(env.WFR_RUN_DIR,{recursive:true});writeFileSync(join(env.WFR_RUN_DIR,run+'-source-'+(ctx.sourceIndex+1)+'-readback.json'),JSON.stringify(receipt,null,2),{mode:0o600});
   state.source_receipts.push(receipt);state.counts.sources_succeeded++;return page;
  }
- const result=()=>({counts:{...state.counts},videos:[...state.persisted],captures:[...state.captures],pending_capture:state.pending_capture,failures:[...state.failures],known_gaps:[...state.known_gaps],relocation_reveals:[...state.relocation_reveals],identity_enrichments:[...state.identity_enrichments],stop_reason:stopReason,all_results_scanned:allScanned,...(state.failures.length||(!allScanned&&stopReason!=='limit_reached')?{status:'partial'}:{})});
+ const result=()=>({counts:{...state.counts},videos:[...state.persisted],captures:[...state.captures],pending_capture:state.pending_capture,failures:[...state.failures],known_gaps:[...state.known_gaps],relocation_reveals:[...state.relocation_reveals],identity_enrichments:[...state.identity_enrichments],stop_reason:stopReason,all_results_scanned:allScanned,...(state.failures.length||state.known_gaps.some(g=>g.kind==='candidate_viewport_unrestored')||(!allScanned&&stopReason!=='limit_reached')?{status:'partial'}:{})});
  async function source(){
   if(!state.source_complete){try{firstPage=await setup(contexts[0]);state.source_complete=true;}catch(e){state.counts.source_failed++;failure(contexts[0],'source_identity_unconfirmed',e);throw e;}}
   return {counts:{...state.counts},source_completed:1,sources_succeeded:state.counts.sources_succeeded,sources:[...state.source_receipts],candidates:firstPage.cards.length};
@@ -89,7 +89,7 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
            for(let i=0;i<exposed.length;i++){
             const c=exposed[i];if(i===hitIndex)continue;
             // 当前目标元数据冲突不改名绕过拒绝；原目标仍留下真实gap。
-            if(!hit&&normalized(c.title)===normalized(target.title)&&identity(c)!==identity(target))continue;
+            if(!hit&&normalized(c.title)===normalized(target.title))continue;
             targets.push(c);state.counts.cards++;
            }
           }
@@ -107,12 +107,21 @@ export function createDiscoveryHandlers({phone,execute,queue,profile,run,root,li
           revealReceipt={candidate_evidence_id:eid,source:ctx.source,title:target.title,author:target.author,before_evidence_path:fresh.evidence,scroll_mode:'reveal-up',verified:false,enumerated_fingerprints:[]};
           state.relocation_reveals.push(revealReceipt);progress();
           await phone('search-grid-scroll',eid+'-reveal','reveal-up');boundary();
+         }else if(target.sourceEvidence&&target.duration){
+          // 离屏hint不证明身份或视口连续性；仍只在下一fresh完整唯一匹配后点击。
+          const nav=fieldsOf(await phone('card-viewport-hint-from-xml',target.sourceEvidence,fresh.evidence,encodeURIComponent(target.title),encodeURIComponent(target.author),target.duration,encodeURIComponent(ctx.source),run));boundary();
+          if(nav.restore==='1'&&nav.navigation_only==='1'&&nav.continuity_verified==='0'&&/^[0-9]+$/.test(nav.offset_px??'')&&/^[1-9][0-9]*$/.test(nav.anchor_count??'')){
+           revealed=true;
+           revealReceipt={candidate_evidence_id:eid,source:ctx.source,title:target.title,author:target.author,before_evidence_path:fresh.evidence,source_evidence_path:target.sourceEvidence,scroll_mode:'restore-offset',offset_px:Number(nav.offset_px),anchor_count:Number(nav.anchor_count),navigation_only:true,continuity_verified:false,verified:false,enumerated_fingerprints:[]};
+           state.relocation_reveals.push(revealReceipt);progress();
+           await phone('search-grid-scroll',eid+'-restore','restore-offset',nav.offset_px);boundary();
+          }
          }
         }
        }
        if(!hit){
         state.counts.relocation_skipped++;
-        state.known_gaps.push({source:target.source,title:target.title,author:target.author,kind:clipped?'candidate_clipped':'candidate_disappeared',reason:clipped?'屏底裁切有界露出后三次读树仍无完整唯一身份，跳过旧坐标并继续':'三次读树仍没有原候选，跳过旧坐标并继续',evidence_path:fresh.evidence});
+        state.known_gaps.push({source:target.source,title:target.title,author:target.author,kind:clipped?'candidate_clipped':revealReceipt?.scroll_mode==='restore-offset'?'candidate_viewport_unrestored':'candidate_disappeared',reason:clipped?'屏底裁切有界露出后三次读树仍无完整唯一身份，跳过旧坐标并继续':revealReceipt?.scroll_mode==='restore-offset'?'离屏候选一次有界导航后三次读树仍无完整唯一身份，跳过旧坐标并继续':'三次读树仍没有原候选，跳过旧坐标并继续',evidence_path:fresh.evidence});
         progress();continue;
        }
        if(revealReceipt){revealReceipt.verified=true;progress();}
