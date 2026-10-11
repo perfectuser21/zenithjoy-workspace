@@ -1,7 +1,7 @@
 // 仅验证 smoke 编排与失败传播；实际业务回归由 smoke 调用真实 node --test 独立执行。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -52,4 +52,39 @@ test('聚合16套真实时序回归使用180秒有界时限，普通smoke仍90�
  const fn=workflow.match(/script_timeout\(\) \{[\s\S]*?\n\s*\}/)?.[0];assert.ok(fn);
  const result=spawnSync('bash',['-c',`${fn}\nscript_timeout capability-phone-regression-smoke.sh\nscript_timeout ordinary-smoke.sh`],{encoding:'utf8'});
  assert.equal(result.status,0,result.stderr);assert.deepEqual(result.stdout.trim().split('\n'),['180','90']);
+});
+
+// 直接执行正式Step34的Node门禁；不复制一个平行validator。
+const gp2Smoke = new URL('../../../.github/workflows/scripts/smoke/golden-path-2-smoke.sh', import.meta.url);
+const gp2Controller = readFileSync(new URL('../douyin-phone-adb', import.meta.url), 'utf8');
+const gp2Harvest = readFileSync(new URL('../harvest-keyword.sh', import.meta.url), 'utf8');
+function runCanonicalStep34(t, ctl=gp2Controller, harvest=gp2Harvest) {
+ const smoke=readFileSync(gp2Smoke,'utf8');const block=smoke.slice(smoke.indexOf('# Step 34：'));
+ const code=block.match(/node - <<'NODE'[^\n]*\n([\s\S]*?)\nNODE\n/)?.[1];assert.ok(code,'必须提取正式Step34代码');
+ const dir=mkdtempSync(join(tmpdir(),'canonical-step34-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ mkdirSync(join(dir,'services/phone-adb-controller'),{recursive:true});
+ writeFileSync(join(dir,'services/phone-adb-controller/douyin-phone-adb'),ctl);
+ writeFileSync(join(dir,'services/phone-adb-controller/harvest-keyword.sh'),harvest);
+ return spawnSync(process.execPath,['-'],{input:code,cwd:dir,encoding:'utf8'});
+}
+test('正式Step34接受当前完整守卫，早于函数定义的detail调用不能截断判定',t=>{
+ assert.ok(gp2Controller.indexOf('_is_video_detail_xml "$local_path"')<gp2Controller.indexOf('_is_search_results_fg() {'));
+ const r=runCanonicalStep34(t);assert.equal(r.status,0,r.stderr);
+});
+test('正式Step34拒绝结果页判定缺SEARCH_RESULT_ACTIVITY',t=>{
+ const r=runCanonicalStep34(t,gp2Controller.replaceAll('SEARCH_RESULT_ACTIVITY','UNTRUSTED_ACTIVITY'));assert.equal(r.status,1,r.stderr);
+});
+test('正式Step34拒绝归位函数不再失败return1，其他函数return1不能冒充',t=>{
+ const ctl=gp2Controller.replace(/^back_to_results\(\) \{[\s\S]*?^\}/m,fn=>fn.replaceAll('return 1','return 0'));
+ assert.notEqual(ctl,gp2Controller);const r=runCanonicalStep34(t,ctl);assert.equal(r.status,1,r.stderr);
+});
+test('正式Step34拒绝采收循环新增裸back，合法控制器归位不能掩盖它',t=>{
+ const harvest=gp2Harvest+'\n'+Array(6).fill('# neutral fixture').join('\n')+'\n"$CTL" --profile "$P" back\n';
+ const r=runCanonicalStep34(t,gp2Controller,harvest);assert.equal(r.status,1,r.stderr);
+});
+test('正式Step34拒绝缺失真正的判定或详情函数定义',t=>{
+ for(const name of ['_is_search_results_fg','_is_video_detail_xml']) {
+  const ctl=gp2Controller.replace(new RegExp('^'+name+'\\(\\) \\{','m'),name+'_missing() {');
+  const r=runCanonicalStep34(t,ctl);assert.equal(r.status,1,r.stderr);
+ }
 });
