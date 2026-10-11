@@ -18,6 +18,7 @@ node --test scripts/product-map/__tests__/leadgen-split-contracts.test.js \
  services/phone-adb-controller/__tests__/viewport-restore.test.mjs \
  services/phone-adb-controller/__tests__/split-workflows.test.mjs \
  services/phone-adb-controller/__tests__/wf-run-retired.test.mjs \
+ services/phone-adb-controller/__tests__/empty-collection.test.mjs \
  services/phone-adb-controller/__tests__/leadgen-workflow.test.mjs \
  services/phone-adb-controller/__tests__/open-video-playing-page.test.mjs \
  services/phone-adb-controller/__tests__/continuous-identity.test.mjs \
