@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""只读核对已观察到的小红书长文标题输入连接，拒绝猜测焦点。"""
+"""只读绑定标准焦点EditText及既有小红书标题输入连接，拒绝猜测焦点。"""
 import json
+import hashlib
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -8,6 +9,102 @@ from pathlib import Path
 
 PACKAGE = "com.xingin.xhs"
 VIEW = "com.xingin.capa.post.ui.UnderLineRichEdit"
+
+
+class NoStandardInput(ValueError):
+    """只有完全没有标准焦点输入时，才允许走既有native白名单。"""
+
+
+def zhihu_body_structure(tree, field):
+    """只认原生写文章页中已实证的唯一Web编辑器正文，不按空id泛化。"""
+    package = "com.zhihu.android"
+    nodes = list(tree.iter("node"))
+    markers = {"com.zhihu.android:id/fake_article_editor_title": "写文章",
+               "com.zhihu.android:id/preview_button": "预览",
+               "com.zhihu.android:id/fake_article_editor_publish": "发布"}
+    for rid, text in markers.items():
+        matches = [n for n in nodes if n.get("resource-id") == rid]
+        if (len(matches) != 1 or matches[0].get("package") != package or matches[0].get("text") != text
+                or matches[0].get("class") != "android.widget.TextView"):
+            raise ValueError("Zhihu native article screen changed")
+    editors = [n for n in nodes if n.get("class") == "android.webkit.WebView" and n.get("text") == "Zhihu Editor"]
+    roots = [n for n in nodes if n.get("resource-id") == "root"]
+    if (len(editors) != 1 or editors[0].get("package") != package
+            or len(roots) != 1 or roots[0] not in list(editors[0])
+            or roots[0].get("class") != "android.view.View" or roots[0].get("package") != package):
+        raise ValueError("Zhihu editor root is absent or ambiguous")
+    editor, root = editors[0], roots[0]
+    parents = [n for n in list(root) if field in list(n)]
+    if (len(parents) != 1 or parents[0].get("class") != "android.view.View"
+            or parents[0].get("package") != package or parents[0].get("resource-id") != ""):
+        raise ValueError("Zhihu body parent changed")
+    fields = [n for n in editor.iter("node") if n.get("class") == "android.widget.EditText"]
+    if (fields != [field] or field not in list(root.iter("node"))
+            or field.get("package") != package or field.get("resource-id") != ""
+            or any(n.get("focused") == "true" and n is not field for n in nodes)):
+        raise ValueError("Zhihu body field is absent or conflicting")
+    for n in (editor, root, parents[0], field):
+        if n.get("enabled") != "true" or n.get("password") != "false":
+            raise ValueError("Zhihu body structure is unsafe")
+    if field.get("focusable") != "true" or field.get("editable", "true") != "true":
+        raise ValueError("Zhihu body field is noneditable")
+    return {"policy": "zhihu_native_article_body_v1", "editor_text": "Zhihu Editor", "root_id": "root"}
+
+
+def standard_resolve(xml_path):
+    tree = ET.parse(xml_path)
+    nodes = [n for n in tree.iter("node")
+             if n.get("focused") == "true" and n.get("class") == "android.widget.EditText"]
+    if not nodes:
+        raise NoStandardInput("no focused standard input")
+    if len(nodes) != 1:
+        raise ValueError("multiple focused editable inputs")
+    node = nodes[0]
+    if (node.get("password") == "true" or node.get("enabled", "true") != "true"
+            or node.get("focusable", "true") != "true" or node.get("editable", "true") != "true"):
+        raise ValueError("focused input is protected, disabled or noneditable")
+    identity = {key: node.get(key, "") for key in ("package", "resource-id", "class", "bounds")}
+    if not identity["package"] or not identity["bounds"]:
+        raise ValueError("focused input identity is incomplete")
+    if identity["package"] == "com.zhihu.android" and identity["resource-id"] == "":
+        # 不满足原生正文结构时仍保留原通用严格bounds许可，不能获得布局兼容。
+        try:
+            identity["body_structure"] = zhihu_body_structure(tree, node)
+        except ValueError:
+            pass
+    return identity
+
+
+def standard_readback(xml_path, selection, allow_body_growth=False):
+    current = standard_resolve(xml_path)
+    if allow_body_growth and selection.get("body_structure"):
+        current = dict(current)
+        current["bounds"] = selection["bounds"]
+    if current != selection:
+        raise ValueError("focused input identity changed")
+    # 兼容分支也必须重验同屏、唯一命名editor/root以及唯一安全焦点，绝不按空id全局读。
+    keys = ("package", "resource-id", "class") if allow_body_growth and selection.get("body_structure") else ("package", "resource-id", "class", "bounds")
+    candidates = [n for n in ET.parse(xml_path).iter("node")
+                  if (not (allow_body_growth and selection.get("body_structure")) or n.get("focused") == "true")
+                  and all(n.get(k, "") == selection[k] for k in keys)]
+    if len(candidates) != 1:
+        raise ValueError("selected input is absent or ambiguous")
+    return candidates[0].get("text", "")
+
+
+def standard_compare(xml_path, selection, source):
+    actual = standard_readback(xml_path, selection, allow_body_growth=True)
+    if actual == source:
+        mode = "exact"
+    elif selection.get("body_structure") and source.split("\n\n") == actual.split("\n"):
+        mode = "zhihu_article_paragraphs"
+    else:
+        raise ValueError("selected field text differs from requested text")
+    def identity(text):
+        raw = text.encode("utf-8")
+        return {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+    return {"comparison_mode": mode, "source": identity(source), "actual": identity(actual),
+            "paragraphs": len(source.split("\n\n")) if selection.get("body_structure") else 0}
 
 
 def editor(path):
@@ -59,7 +156,17 @@ def readback(xml_path, selection):
 
 def main():
     command = sys.argv[1]
-    if command == "resolve":
+    if command == "standard-resolve":
+        print(json.dumps(standard_resolve(sys.argv[2]), ensure_ascii=False))
+    elif command in ("standard-check", "standard-readback"):
+        selection = json.loads(Path(sys.argv[2]).read_text())
+        value = standard_readback(sys.argv[3], selection, allow_body_growth=command == "standard-readback")
+        if command == "standard-readback":
+            sys.stdout.write(value)
+    elif command == "standard-compare":
+        selection = json.loads(Path(sys.argv[2]).read_text())
+        print(json.dumps(standard_compare(sys.argv[3], selection, sys.argv[4])))
+    elif command == "resolve":
         print(json.dumps(resolve(sys.argv[2], sys.argv[3]), ensure_ascii=False))
     elif command == "check":
         selection = json.loads(Path(sys.argv[2]).read_text())
@@ -75,6 +182,9 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+    except NoStandardInput as error:
+        print(str(error), file=sys.stderr)
+        sys.exit(3)
     except (ValueError, OSError, ET.ParseError, IndexError) as error:
         print(str(error), file=sys.stderr)
         sys.exit(2)

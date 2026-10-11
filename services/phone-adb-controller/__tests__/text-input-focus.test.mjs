@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync,writeFileSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
@@ -44,4 +44,78 @@ for(const [name,raw,xml] of [
 ])test('真实输入连接选择拒绝：'+name,()=>{
   const c=setup(raw,xml);const result=run('resolve',c.xp,c.ip);
   assert.equal(result.status,2,result.stdout);
+});
+
+const standard='<node class="android.widget.EditText" package="com.zhihu.android" resource-id="com.zhihu.android:id/editArticleTitle" text="标题" focused="true" enabled="true" focusable="true" password="false" bounds="[48,278][1032,422]"/>';
+const container='<node class="android.webkit.WebView" focused="true"/>';
+for(const [name,node] of [
+  ['多个编辑框',standard+standard],
+  ['密码',standard.replace('password="false"','password="true"')],
+  ['禁用',standard.replace('enabled="true"','enabled="false"')],
+  ['不可聚焦',standard.replace('focusable="true"','focusable="false"')],
+  ['只读',standard.replace('enabled="true"','editable="false" enabled="true"')],
+])test('标准输入拒绝：'+name,()=>{
+  const c=setup(ime,'<hierarchy>'+container+node+'</hierarchy>');
+  const r=run('standard-resolve',c.xp);assert.equal(r.status,2,r.stdout);
+});
+for(const [key,value] of [['package','com.other.app'],['resource-id','other'],['bounds','[1,2][3,4]'],['class','android.webkit.WebView']])test('标准输入绑定拒绝变化：'+key,()=>{
+  const c=setup(ime,'<hierarchy>'+container+standard+'</hierarchy>');
+  const r=run('standard-resolve',c.xp);assert.equal(r.status,0,r.stderr);writeFileSync(c.selection,r.stdout);
+  writeFileSync(c.xp,'<hierarchy>'+container+standard.replace(new RegExp(key+'="[^"]*"'),key+'="'+value+'"')+'</hierarchy>');
+  assert.notEqual(run('standard-check',c.selection,c.xp).status,0);
+  assert.notEqual(run('standard-readback',c.selection,c.xp).status,0);
+});
+test('标准输入回读拒绝同身份重复节点',()=>{
+  const c=setup(ime,'<hierarchy>'+container+standard+'</hierarchy>');
+  const r=run('standard-resolve',c.xp);writeFileSync(c.selection,r.stdout);
+  writeFileSync(c.xp,'<hierarchy>'+standard+standard.replace('focused="true"','focused="false"')+'</hierarchy>');
+  assert.equal(run('standard-readback',c.selection,c.xp).status,2);
+});
+
+const zhBody = phase => new URL('./fixtures/zhihu-body-'+phase+'.xml',import.meta.url).pathname;
+test('真实知乎正文增长bounds仍绑定同root唯一空id字段',()=>{
+ const c=setup();const selected=run('standard-resolve',zhBody('before'));
+ assert.equal(selected.status,0,selected.stderr);writeFileSync(c.selection,selected.stdout);
+ assert.equal(run('standard-check',c.selection,zhBody('ready')).status,0);
+ const typed=run('standard-readback',c.selection,zhBody('typed'));
+ assert.equal(typed.status,0,typed.stderr);assert.match(typed.stdout,/愿今晚的灯光温柔一点/);
+});
+
+const bodySource=JSON.parse(readFileSync(new URL('./fixtures/zhihu-body-content-variants.json',import.meta.url),'utf8')).article.split('\n\n').slice(1).join('\n\n');
+const typedBody=readFileSync(zhBody('typed'),'utf8');
+function bodySelection(){const c=setup();const r=run('standard-resolve',zhBody('before'));assert.equal(r.status,0,r.stderr);writeFileSync(c.selection,r.stdout);return c;}
+test('知乎正文仅允许原素材双换行折单换行并保留实际读回',()=>{
+ const c=bodySelection();const r=run('standard-compare',c.selection,zhBody('typed'),bodySource);
+ assert.equal(r.status,0,r.stderr);const report=JSON.parse(r.stdout);assert.equal(report.comparison_mode,'zhihu_article_paragraphs');assert.equal(report.source.bytes,1150);assert.equal(report.actual.bytes,1145);assert.equal(report.paragraphs,6);assert.equal(report.source.sha256,'7f165422d5f889cf64c2b3bf596614e88ce75c14e392f81e403f2131e7820fcb');assert.equal(report.actual.sha256,'07f26ffe1b35d1aa938c45731685e4bdd76b18d758297e2cf574a689a0f6b541');
+ const actual=run('standard-readback',c.selection,zhBody('typed'));assert.equal(actual.stdout,bodySource.replaceAll('\n\n','\n'));
+});
+for(const [name,change] of [
+ ['原生写文章标识',x=>x.replace('text="写文章"','text="写想法"')],
+ ['命名WebView',x=>x.replace('text="Zhihu Editor"','text="Other Editor"')],
+ ['root',x=>x.replace('resource-id="root"','resource-id="otherRoot"')],
+ ['package',x=>x.replaceAll('com.zhihu.android','com.other.app')],
+ ['同root第二个编辑框',x=>x.replace('</hierarchy>','<node class="android.widget.EditText" focused="true"/></hierarchy>')],
+ ['password',x=>x.replace(/<node[^>]*class="android.widget.EditText"[^>]*focused="true"[^>]*>/,n=>n.replace('password="false"','password="true"'))],
+ ['disabled',x=>x.replace(/<node[^>]*class="android.widget.EditText"[^>]*focused="true"[^>]*>/,n=>n.replace('enabled="true"','enabled="false"'))],
+ ['noneditable',x=>x.replace(/<node[^>]*class="android.widget.EditText"[^>]*focused="true"[^>]*>/,n=>n.replace('enabled="true"','enabled="true" editable="false"'))],
+ ['命名容器class',x=>x.replace(/<node[^>]*text="Zhihu Editor"[^>]*>/,n=>n.replace('class="android.webkit.WebView"','class="android.view.View"'))],
+ ['同root非focused第二字段',x=>x.replace(/(<node[^>]*class="android.widget.EditText"[^>]*focused="true"[^>]*\/>)/,'$1<node class="android.widget.EditText" focused="false"/>')],
+ ['root重复',x=>x.replace('</hierarchy>','<node resource-id="root"/></hierarchy>')],
+ ['实字改变',x=>x.replace('傍晚最舒服的时刻','傍晚最忙碌的时刻')],
+ ['实字空格改变',x=>x.replace('傍晚最舒服的时刻','傍晚 最舒服的时刻')],
+])test('知乎正文精确回读拒绝：'+name,()=>{
+ const c=bodySelection();writeFileSync(c.xp,change(typedBody));assert.notEqual(run('standard-compare',c.selection,c.xp,bodySource).status,0);
+});
+test('知乎正文段序变化不允许换行兼容掩盖',()=>{
+ const c=bodySelection();const parts=bodySource.split('\n\n');[parts[0],parts[1]]=[parts[1],parts[0]];
+ assert.equal(run('standard-compare',c.selection,zhBody('typed'),parts.join('\n\n')).status,2);
+});
+test('知乎正文ready广播前bounds改变仍拒绝',()=>{
+ const c=bodySelection();assert.equal(run('standard-check',c.selection,zhBody('typed')).status,2);
+});
+test('通用空id正文仍严格bounds与换行，不继承知乎许可',()=>{
+ const c=setup(ime,'<hierarchy>'+standard.replace('resource-id="com.zhihu.android:id/editArticleTitle"','resource-id=""').replace('text="标题"','text="一&#10;二"')+'</hierarchy>');
+ const r=run('standard-resolve',c.xp);writeFileSync(c.selection,r.stdout);assert.equal(JSON.parse(r.stdout).body_structure,undefined);
+ assert.equal(run('standard-compare',c.selection,c.xp,'一\n\n二').status,2);
+ writeFileSync(c.xp,readFileSync(c.xp,'utf8').replace('[48,278][1032,422]','[0,0][2,2]'));assert.equal(run('standard-readback',c.selection,c.xp).status,2);
 });

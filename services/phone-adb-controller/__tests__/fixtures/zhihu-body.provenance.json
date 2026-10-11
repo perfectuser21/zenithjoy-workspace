@@ -1,0 +1,20 @@
+{
+  "before": {
+    "source": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/remaining-zhihu-article-focus-final/text-input-20261011092444-2430-before.xml",
+    "sha256": "7a4e2f6ac7f15214320e2d48805d7628b9af952a7bb34131a6cca02ccabeb46f"
+  },
+  "ready": {
+    "source": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/remaining-zhihu-article-focus-final/text-input-20261011092444-2430-ready.xml",
+    "sha256": "f1c51fdd72bd19f436f670af3b95eb3d2ef09936de0ac6e8802ac58a1edf70c3"
+  },
+  "typed": {
+    "source": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/remaining-zhihu-article-focus-final/text-input-20261011092444-2430-typed.xml",
+    "sha256": "0be05cea7971892f93d989fccd64db7d76af38441378dbef5fb30b0e7a308d09"
+  },
+  "source": {
+    "source": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/remaining-content-variants.json",
+    "sha256": "7c23039ee33b9d1e57d8f671f96e01753475b7d06a3f942340f9d9c4403e51e7",
+    "body_sha256": "7f165422d5f889cf64c2b3bf596614e88ce75c14e392f81e403f2131e7820fcb",
+    "basis": "原始归档article字段，去标题与首双换行"
+  }
+}

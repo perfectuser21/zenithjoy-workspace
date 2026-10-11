@@ -49,6 +49,19 @@ if (a[0] === "push") {
   fs.copyFileSync(a[1], dst); out("1 file pushed\\n"); process.exit(0);
 }
 if (a[0] === "pull") {
+  if (process.env.FAKE_ZHIHU_BODY_FIXTURES) {
+    const phase=read("typed") ? "typed" : read("ime").includes("adbkeyboard") ? "ready" : "before";
+    let xml=fs.readFileSync(path.join(process.env.FAKE_ZHIHU_BODY_FIXTURES,"zhihu-body-"+phase+".xml"),"utf8");
+    if(phase==="typed" && process.env.FAKE_ZHIHU_BODY_WRONG_TEXT==="1")xml=xml.replace("傍晚最舒服的时刻","傍晚最忙碌的时刻");
+    if(phase==="ready" && process.env.FAKE_ZHIHU_BODY_READY_DRIFT==="1")xml=xml.replace('bounds="[0,422][1080,602]"','bounds="[0,422][1080,603]"');
+    fs.writeFileSync(a[2],xml);process.exit(0);
+  }
+  if (process.env.FAKE_NESTED_FOCUS_XML) {
+    let xml=fs.readFileSync(process.env.FAKE_NESTED_FOCUS_XML,"utf8");
+    xml=xml.replace('text="请输入标题"', 'text="'+esc(read("typed") || "请输入标题")+'"');
+    if ((read("typed") && process.env.FAKE_NESTED_TARGET_DRIFT === "1") || (read("ime").includes("adbkeyboard") && process.env.FAKE_NESTED_READY_DRIFT === "1")) xml=xml.replace('com.zhihu.android:id/editArticleTitle','com.zhihu.android:id/otherTitle');
+    fs.writeFileSync(a[2],xml);process.exit(0);
+  }
   if (process.env.FAKE_XHS_NATIVE_INPUT === "1") {
     const title = read("typed", "") || "输入标题";
     const pkg = "com.xingin.xhs";
@@ -382,4 +395,50 @@ test("text-input 原生连接变化且输入法无法恢复时必须needs_human�
   assert.equal(r.code,2);
   assert.doesNotMatch(calls(ctx),/ADB_CLEAR_TEXT|ADB_INPUT_B64/);
   assert.match(r.err,/failure_class=needs_human/);
+});
+
+const nestedFixture=new URL('./fixtures/zhihu-article-nested-focus.xml',import.meta.url).pathname;
+test("text-input 真实知乎focused WebView容器不能遮蔽唯一标准EditText",async()=>{
+ const ctx=setup();const r=await run(ctx,["text-input","傍晚的颜色"],{FAKE_NESTED_FOCUS_XML:nestedFixture});
+ assert.equal(r.code,0,r.err);assert.equal(ime(ctx),ORIG_IME);
+ assert.match(r.out,/field=com.zhihu.android:id\/editArticleTitle/);
+});
+test("text-input nested焦点成功输入后目标id变化必须失败并恢复IME",async()=>{
+ const ctx=setup();const r=await run(ctx,["text-input","傍晚的颜色"],{FAKE_NESTED_FOCUS_XML:nestedFixture,FAKE_NESTED_TARGET_DRIFT:"1"});
+ assert.equal(r.code,2);assert.match(r.out,/readback_mismatch/);assert.equal(ime(ctx),ORIG_IME);
+});
+
+for (const [name, change] of [
+  ["多编辑框", x => x.replace('</hierarchy>', '<node class="android.widget.EditText" focused="true"/></hierarchy>')],
+  ["password", x => x.replace(/<node[^>]*resource-id="com.zhihu.android:id\/editArticleTitle"[^>]*>/, n => n.replace('password="false"', 'password="true"'))],
+  ["disabled", x => x.replace(/<node[^>]*resource-id="com.zhihu.android:id\/editArticleTitle"[^>]*>/, n => n.replace('enabled="true"', 'enabled="false"'))],
+]) test('text-input 标准焦点'+name+'不降级native且不发送', async () => {
+  const ctx=setup();const fixture=join(ctx.dir,'unsafe.xml');writeFileSync(fixture,change(readFileSync(nestedFixture,'utf8')));
+  const r=await run(ctx,['text-input','测试'],{FAKE_NESTED_FOCUS_XML:fixture});
+  assert.notEqual(r.code,0);assert.equal(ime(ctx),ORIG_IME);
+  assert.doesNotMatch(calls(ctx),/ADB_CLEAR_TEXT|ADB_INPUT_B64|dumpsys input_method|"ime","set"/);
+});
+test('text-input 切IME后标准目标变化不clear不输入且恢复IME',async()=>{
+  const ctx=setup();const r=await run(ctx,['text-input','测试'],{FAKE_NESTED_FOCUS_XML:nestedFixture,FAKE_NESTED_READY_DRIFT:'1'});
+  assert.notEqual(r.code,0);assert.equal(parse(r.out).reason,'no_focused_input');assert.equal(ime(ctx),ORIG_IME);
+  assert.doesNotMatch(calls(ctx),/ADB_CLEAR_TEXT|ADB_INPUT_B64/);
+});
+
+const zhBodyFixtures=new URL('./fixtures/',import.meta.url).pathname;
+const zhSource=JSON.parse(readFileSync(join(zhBodyFixtures,'zhihu-body-content-variants.json'),'utf8')).article.split('\n\n').slice(1).join('\n\n');
+test('text-input 真实知乎正文布局增长与五个空行折叠精确验收且恢复IME',async()=>{
+ const c=setup();const r=await run(c,['text-input',zhSource],{FAKE_ZHIHU_BODY_FIXTURES:zhBodyFixtures});
+ assert.equal(r.code,0,r.err);assert.match(r.out,/comparison_mode=zhihu_article_paragraphs source_bytes=1150/);assert.equal(ime(c),ORIG_IME);
+ assert.match(r.out,/actual_bytes=1145 actual_sha256=07f26ffe1b35d1aa938c45731685e4bdd76b18d758297e2cf574a689a0f6b541 paragraphs=6/);
+ assert.equal(readFileSync(join(c.state,'typed'),'utf8'),zhSource);
+ assert.equal((calls(c).match(/ADB_INPUT_B64/g)||[]).length,1);
+});
+test('text-input 知乎正文实字变化仍失败并恢复IME，不重输',async()=>{
+ const c=setup();const r=await run(c,['text-input',zhSource],{FAKE_ZHIHU_BODY_FIXTURES:zhBodyFixtures,FAKE_ZHIHU_BODY_WRONG_TEXT:'1'});
+ assert.equal(r.code,2);assert.match(r.out,/readback_mismatch/);assert.equal(ime(c),ORIG_IME);
+ assert.equal((calls(c).match(/ADB_INPUT_B64/g)||[]).length,1);
+});
+test('text-input 知乎正文ready的bounds漂移不clear不输入且恢复IME',async()=>{
+ const c=setup();const r=await run(c,['text-input',zhSource],{FAKE_ZHIHU_BODY_FIXTURES:zhBodyFixtures,FAKE_ZHIHU_BODY_READY_DRIFT:'1'});
+ assert.equal(r.code,2);assert.match(r.out,/no_focused_input/);assert.equal(ime(c),ORIG_IME);assert.doesNotMatch(calls(c),/ADB_CLEAR_TEXT|ADB_INPUT_B64/);
 });
