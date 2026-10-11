@@ -6,13 +6,21 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync,
 import { resolve, dirname, sep, basename } from 'node:path';
 export const canonical = value => JSON.stringify(value, (_, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(k => [k,v[k]])) : v);
 export const digest = value => createHash('sha256').update(Buffer.isBuffer(value) || typeof value === 'string' ? value : canonical(value)).digest('hex');
+// 单视频软预算加480秒收尾不得超过collection的7200秒合同。
+export function collectionBudgetSeconds(env){
+ if(!Object.hasOwn(env,'QUEUED_VIDEO_COLLECTION_SECONDS'))return 480;
+ const value=String(env.QUEUED_VIDEO_COLLECTION_SECONDS);
+ if(!/^[1-9][0-9]{0,3}$/.test(value)||Number(value)>6720)throw Error('评论采集预算必须为1至6720整数');
+ return Number(value);
+}
 // 本轮可选采样输入是冻结定义的一部分，续跑不许改变配额或上游来源。
 export function commentSamplingInput(env){
+ const collectionBudget=collectionBudgetSeconds(env);
  if(!Object.hasOwn(env,'LEADGEN_COMMENT_LIMIT'))return null;
  if(!/^(?:[1-9]|[1-4][0-9]|50)$/.test(String(env.LEADGEN_COMMENT_LIMIT)))throw Error('评论采样上限必须为1至50整数');
  if(env.WF_BRAIN_WORKFLOW!=='douyin_video_processing')throw Error('评论采样只允许102视频处理流程');
  if(!/^[A-Za-z0-9_-]+$/.test(env.LEADGEN_SOURCE_RUN||'')||!/^[A-Za-z0-9_-]+$/.test(env.WFR_TAG||'')||!env.P||!env.SERIAL||!env.LEADGEN_LINE)throw Error('评论采样缺少本run及上游来源身份');
- return {schema_version:1,workflow_key:env.WF_BRAIN_WORKFLOW,run_tag:env.WFR_TAG,profile:env.P,serial:env.SERIAL,line:env.LEADGEN_LINE,source_run:env.LEADGEN_SOURCE_RUN,comment_limit:Number(env.LEADGEN_COMMENT_LIMIT)};
+ return {schema_version:1,workflow_key:env.WF_BRAIN_WORKFLOW,run_tag:env.WFR_TAG,profile:env.P,serial:env.SERIAL,line:env.LEADGEN_LINE,source_run:env.LEADGEN_SOURCE_RUN,comment_limit:Number(env.LEADGEN_COMMENT_LIMIT),...(Object.hasOwn(env,'QUEUED_VIDEO_COLLECTION_SECONDS')?{collection_budget_s:collectionBudget}:{})};
 }
 export function assertCommentSampling(snapshot,env){
  const requested=commentSamplingInput(env),fixed=snapshot.sampling_input||null;
@@ -57,7 +65,7 @@ export function locateRun(indexRoot,identity){
 export async function freezeDefinition(o) {
   if(o.samplingInput){
     const q=o.samplingInput;
-    const checked=commentSamplingInput({LEADGEN_COMMENT_LIMIT:String(q.comment_limit),WF_BRAIN_WORKFLOW:q.workflow_key,WFR_TAG:q.run_tag,P:q.profile,SERIAL:q.serial,LEADGEN_LINE:q.line,LEADGEN_SOURCE_RUN:q.source_run});
+    const checked=commentSamplingInput({LEADGEN_COMMENT_LIMIT:String(q.comment_limit),WF_BRAIN_WORKFLOW:q.workflow_key,WFR_TAG:q.run_tag,P:q.profile,SERIAL:q.serial,LEADGEN_LINE:q.line,LEADGEN_SOURCE_RUN:q.source_run,...(Object.hasOwn(q,'collection_budget_s')?{QUEUED_VIDEO_COLLECTION_SECONDS:String(q.collection_budget_s)}:{})});
     if(canonical(checked)!==canonical(q)||q.workflow_key!==o.workflowKey)throw Error('冻结采样输入scope/schema非法');
     if(o.runIdentity&&['tag','profile','serial'].some(k=>o.runIdentity[k]!==q[k==='tag'?'run_tag':k]))throw Error('冻结采样输入运行身份不符');
   }

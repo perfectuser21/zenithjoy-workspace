@@ -10,7 +10,7 @@ const queued=new URL('../process-queued-video.sh',import.meta.url).pathname;
 const fixtures=new URL('./fixtures/',import.meta.url).pathname;
 const vid='7646309328911907195';
 // 明示模拟设备：真实控制器+队列shell执行；只有ADB、curl和账号锁回执为假。
-function phone({mode='continuous_identity',command='queued',wrongId=false,skeleton=false,finalSkeleton=false,recover=false,playFails=false,controlledWait=false,shareIdleFallback=false,copyGuide=false,guideWrongMarker=false,guideDismissFails=false,guideDismissStuck=false}={}){
+function phone({mode='continuous_identity',command='queued',wrongId=false,skeleton=false,finalSkeleton=false,recover=false,playFails=false,controlledWait=false,shareIdleFallback=false,copyGuide=false,guideWrongMarker=false,guideDismissFails=false,guideDismissStuck=false,guideDismissIdle=false}={}){
  const d=mkdtempSync(join(tmpdir(),'continuous-identity-'));
  let runner=controller;
  if(controlledWait){
@@ -59,6 +59,11 @@ else if(has('input tap')&&s.page==='detail')s.page='panel';
 else if(has('input tap')&&s.page==='panel'){s.clip='https://v.douyin.com/Fresh/';s.page='detail';}
 else if(has('shell rm -f')){try{fs.unlinkSync(p.join(d,'remote.xml'));}catch{}}
 else if(has('uiautomator dump')){
+ if(process.env.GUIDE_DISMISS_IDLE==='1'&&s.page==='detail'&&s.guideDismisses&&!s.guideIdleRecovered){
+  s.guideIdleAttempts=(s.guideIdleAttempts||0)+1;
+  if(s.play==='paused'){fs.writeFileSync(sfile,JSON.stringify(s));console.error('ERROR: could not get idle state.');process.exit(1);}
+  s.guideIdleRecovered=true;
+ }
  if(process.env.SHARE_IDLE_FALLBACK==='1'&&s.page==='detail'&&s.scratchReturns===1&&s.pauseCount>=3){
   s.shareAttempts=(s.shareAttempts||0)+1;
   if(!s.media85){fs.writeFileSync(sfile,JSON.stringify(s));console.error('ERROR: could not get idle state.');process.exit(1);}
@@ -92,7 +97,7 @@ fs.writeFileSync(sfile,JSON.stringify(s));
  const env={...process.env,PATH:d+':'+process.env.PATH,HOME:d,FAKE_PHONE_DIR:d,DOUYIN_PHONE_REGISTRY:join(d,'registry'),DOUYIN_ADB_BIN:adb,
   DOUYIN_CURL_BIN:curl,DOUYIN_SIPS_BIN:'/usr/bin/true',DOUYIN_PYTHON_BIN:'/usr/bin/python3',DOUYIN_PHONE_TMP_ROOT:tmp,
   DOUYIN_PHONE_ADB:wrapper,WFR_RUN_DIR:join(d,'run'),DOUYIN_DETAIL_PLAYBACK:mode,QUEUED_VIDEO_QUALIFY_CMD:qualify,SKELETON:skeleton?'1':'0',FINAL_SKELETON:finalSkeleton?'1':'0',
-  COPY_GUIDE:copyGuide?'1':'0',GUIDE_DISMISS_FAILS:guideDismissFails?'1':'0',GUIDE_DISMISS_STUCK:guideDismissStuck?'1':'0',KEYWORD_RESULTS:command==='results'?'1':'0',SHARE_IDLE_FALLBACK:shareIdleFallback?'1':'0',RECOVER:recover?'1':'0',PLAY_FAILS:playFails?'1':'0',HARVEST_KEYWORD_TESTING:'1'};
+  COPY_GUIDE:copyGuide?'1':'0',GUIDE_DISMISS_FAILS:guideDismissFails?'1':'0',GUIDE_DISMISS_STUCK:guideDismissStuck?'1':'0',GUIDE_DISMISS_IDLE:guideDismissIdle?'1':'0',KEYWORD_RESULTS:command==='results'?'1':'0',SHARE_IDLE_FALLBACK:shareIdleFallback?'1':'0',RECOVER:recover?'1':'0',PLAY_FAILS:playFails?'1':'0',HARVEST_KEYWORD_TESTING:'1'};
  if(command.startsWith('queued'))delete env.DOUYIN_DETAIL_PLAYBACK;
  const args=command.startsWith('queued')?[queued,command==='queued-qualification'?'qualification':'identity','legacy',vid,`https://www.douyin.com/video/${vid}`,'','','continuous-run','jinuo']:
   [runner,'--profile','legacy',...(['results','link'].includes(command)?['current-video-link','continuous-link',...(command==='results'?['人工智能']:[])]:command==='wrong-command'?['preflight']:['open-video',vid,'continuous-open'])];
@@ -307,4 +312,9 @@ test('Python优化模式不能关闭fresh witness的package和完整详情拒绝
    const r=spawnSync('zsh',['-c',`PYTHON_BIN=/usr/bin/python3; DOUYIN_PACKAGE=com.ss.android.ugc.aweme; ${fn}\n_is_fresh_share_detail_xml ${JSON.stringify(path)}`],{encoding:'utf8',env:{...process.env,PYTHONOPTIMIZE:'1'}});assert.equal(r.status,code,name);
   }
  }finally{rmSync(d,{recursive:true,force:true});}
+});
+
+test('精确复制guide受限BACK后本次PAUSE首idle即成对85，新详情仍实际nonce和VID核验',()=>{
+ const r=phone({copyGuide:true,guideDismissIdle:true,controlledWait:true});assert.equal(r.error,undefined);assert.equal(r.status,0,r.stderr);
+ assert.match(r.stdout,new RegExp('IDENTITY\\t'+vid+'\\tverified'));assert.equal(r.state.guideDismisses,1);assert.equal(r.state.guideIdleAttempts,2);assert.equal(r.state.media85,2);assert.equal(r.state.play,'playing');
 });

@@ -89,8 +89,8 @@ types:
   CommentSampleRequest:
     identity: [run_tag, source_run]
     source_of_truth: 用户下一轮采样配置LEADGEN_COMMENT_LIMIT，经runtime-receipts prepare纳入本run run-definition sampling_input和snapshot_sha256；102启动核对冻结请求
-    fields: [run_tag, source_run, profile, serial, line, comment_limit]
-    note: 可选整数1..50，每合格视频按实际verified历史+新distinct评论覆盖计配额；未设置保留原large50/medium全采。quota_reached不等于全footer，不标PG评论已采，不把历史当新评分样本。
+    fields: [run_tag, source_run, profile, serial, line, comment_limit, collection_budget_s]
+    note: 可选整数1..50，每合格视频按实际verified历史+新distinct评论覆盖计配额；未设置保留原large50/medium全采。collection_budget_s仅显式QUEUED_VIDEO_COLLECTION_SECONDS时冻结，整数1..6720；缺省480不新增字段，进程缺省上限960，显式预算加480收尾且受Activity和真实全局剩余时间夹紧。quota_reached不等于全footer，不标PG评论已采，不把历史当新评分样本。
   HistoricalComment:
     identity:
       - line_key

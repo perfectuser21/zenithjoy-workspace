@@ -42,6 +42,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
   const limit = Math.max(1, Math.min(50, Number(input.limit) || 10));
   const videoIds=input.video_ids===undefined?null:input.video_ids;
   if(Object.hasOwn(input,'video_ids')&&(!Array.isArray(videoIds)||videoIds.length>1000||videoIds.some(id=>typeof id!=='string'||!/^\d{16,24}$/.test(id))))throw Error('视频ID清单无效');
+  if(Object.hasOwn(input,'prefer_matched')&&(op!=='claim_videos'||typeof input.prefer_matched!=='boolean'||input.prefer_matched===true&&(!sourceRun||videoIds===null)))throw Error('采样优先必须真boolean及明确上游VID范围');
   if(op==='inspect_videos'){
     if(videoIds===null)throw Error('缺明确视频ID清单');
     return (await pool.query('SELECT video_id,line_key,judgment_status,process_status,harvest_batch FROM zenithjoy.leadgen_videos WHERE line_key=$1 AND video_id=ANY($2::text[])',[lineKey,videoIds])).rows;
@@ -80,6 +81,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
     return db.discoverVideo(pool, { lineKey, videoId: row.video_id, videoUrl: row.video_url, title: row.title, keyword: row.keyword, harvestBatch: run });
   }
   if (op === 'claim_videos') {
+    const priority=input.prefer_matched===true?"CASE WHEN judgment_status='matched' THEN 0 ELSE 1 END":"CASE WHEN judgment_status='pending' THEN 0 ELSE 1 END";
     return transaction(pool, async client => {
       // 待采的已合格视频也入队；上次崩溃的租约15分钟后可重领，活动内调用续期。
       const result = await client.query(`WITH pending AS (
@@ -88,7 +90,7 @@ async function queueRequest(pool, input, deps = { judgeComment }) {
         AND ($6::text[] IS NULL OR video_id=ANY($6::text[]))
         AND (process_status='待判定' OR process_status='待采评论'
           OR (process_status LIKE '处理中:%' AND updated_at<now()-interval '15 minutes'))
-        ORDER BY CASE WHEN judgment_status='pending' THEN 0 ELSE 1 END, discovered_at LIMIT $2 FOR UPDATE SKIP LOCKED)
+        ORDER BY ${priority}, discovered_at LIMIT $2 FOR UPDATE SKIP LOCKED)
         UPDATE zenithjoy.leadgen_videos v SET process_status=$3,harvest_batch=$4,updated_at=now()
         FROM pending p WHERE v.id=p.id RETURNING v.*`, [lineKey, limit, `处理中:${run}`, run, sourceRun, videoIds]);
       return result.rows;

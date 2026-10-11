@@ -156,7 +156,14 @@ qv_history_prepare(){
     else return 8; fi
   done
 }
+qv_collection_budget(){
+  local budget="${QUEUED_VIDEO_COLLECTION_SECONDS-480}"
+  [[ "$budget" == [1-9][0-9]# && ${#budget} -le 4 ]] && (( budget <= 6720 )) || return 2
+  print -- "$budget"
+}
 qv_collect(){
+  local budget
+  budget="$(qv_collection_budget)" || return 2
   local opened raw line total=0 screens=0 empty=0 newlines=0 exhausted count=0 tier cap=50 covered=0 identity_started own_rc identity nick body cdate region author tap nickb64 x y onick oid atype ip profile card attempt
   local -A seen emitted
   local sampling=0
@@ -179,8 +186,7 @@ try:
  print("large" if n>100 else "medium")
 except Exception: print("medium")' "$count")"
   # 记录阶段预算并每屏续锁；不在手机动作半途中强杀。
-  local started="$(date +%s)" budget="${QUEUED_VIDEO_COLLECTION_SECONDS:-480}"
-  [[ "$budget" == <-> ]] && (( budget > 0 )) || return 2
+  local started="$(date +%s)"
   while (( screens < 100 )); do
     if wf_deadline_reached || wf_stop_requested || (( $(date +%s) - started >= budget )); then
       # 只在完整评论动作的边界保存已核验行；仍返回非成功，不标整视频采完。

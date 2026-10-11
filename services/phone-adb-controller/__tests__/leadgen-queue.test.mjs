@@ -223,3 +223,37 @@ test('采样5允许已受信4个历史URL加当前URL，旧别名超过4仍拒�
  const r=await queueRequest(p,q,deps);assert.equal(r.coverage,5);assert.equal(network,4);
  const b=fakePool([{rows:[{video_id:vid,video_url:url,judgment_status:'matched'}]}]);await assert.rejects(queueRequest(b,{...q,rows:wanted.map((r,i)=>({...r,sourceVideoUrl:'https://v.douyin.com/old'+i+'/'}))},deps));assert.equal(network,4);
 });
+
+test('采样真实领取SQL先matched仍严格source manifest/line/limit',async()=>{
+ const ids=['7646309328911907191','7646309328911907192','7646309328911907193'];
+ const rows=[
+  {id:'old',video_id:ids[0],judgment_status:'matched',discovered_at:'2026-10-01'},
+  {id:'new1',video_id:ids[1],judgment_status:'pending',discovered_at:'2026-10-02'},
+  {id:'new2',video_id:ids[2],judgment_status:'pending',discovered_at:'2026-10-03'},
+  {id:'foreign',video_id:'7646309328911907194',judgment_status:'pending',discovered_at:'2026-09-01'},
+ ].map(r=>({...r,line_key:'jinuo',process_status:'待判定',harvest_batch:'old102',updated_at:'2099-01-01'}));
+ const calls=[];const client={release(){},async query(sql,args){calls.push({sql,args});
+  if(/^(BEGIN|COMMIT|ROLLBACK)$/.test(sql))return {rows:[]};
+  assert.match(sql,/FOR UPDATE SKIP LOCKED/);assert.match(sql,/15 minutes/);
+  let selected=sql.match(/WITH pending AS \(\s*([\s\S]*?) FOR UPDATE SKIP LOCKED\)/)?.[1];assert.ok(selected);
+  selected=selected.replace(/\$6::text\[\]/g,'$6').replace(/\$5::text/g,'$5')
+    .replace('video_id=ANY($6)','video_id IN (SELECT value FROM json_each($6))')
+    .replace("now()-interval '15 minutes'","datetime('now','-15 minutes')");
+  const result=spawnSync('python3',['-c',`import json,sqlite3,sys
+p=json.load(sys.stdin);c=sqlite3.connect(':memory:')
+c.execute('CREATE TABLE leadgen_videos (id,video_id,line_key,judgment_status,process_status,harvest_batch,discovered_at,updated_at)')
+for r in p['rows']: c.execute('INSERT INTO leadgen_videos VALUES (?,?,?,?,?,?,?,?)',[r[k] for k in ['id','video_id','line_key','judgment_status','process_status','harvest_batch','discovered_at','updated_at']])
+print(json.dumps([r[0] for r in c.execute(p['sql'].replace('zenithjoy.leadgen_videos','leadgen_videos'),{str(i+1):(json.dumps(a) if isinstance(a,list) else a) for i,a in enumerate(p['args'])})]))`],{input:JSON.stringify({sql:selected,args,rows}),encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr);return {rows:JSON.parse(result.stdout).map(id=>rows.find(r=>r.id===id))};
+ }};
+ const result=await queueRequest({connect:async()=>client},{op:'claim_videos',line:'jinuo',run:'priority102',source_run:'old101',video_ids:ids,limit:2,prefer_matched:true});
+ assert.deepEqual(result.map(r=>r.id),['old','new1']);
+ const claim=calls.find(c=>c.sql.startsWith('WITH'));assert.equal(claim.args[1],2);assert.deepEqual(claim.args[5],ids);
+ assert.equal(claim.args[2],'处理中:priority102');assert.equal(claim.args[3],'priority102');assert.ok(calls.some(c=>c.sql==='COMMIT'));
+});
+
+test('采样领取优先flag必须真boolean且有明确source与VID清单，非法beforeSQL拒绝',async()=>{
+ for(const q of [{prefer_matched:'true',source_run:'s',video_ids:[]},{prefer_matched:1,source_run:'s',video_ids:[]},{prefer_matched:true,video_ids:[]},{prefer_matched:true,source_run:'s'},{prefer_matched:true,source_run:'s',video_ids:null}]){const p=fakePool([]);await assert.rejects(queueRequest(p,{op:'claim_videos',line:'jinuo',run:'sample-run',...q}));assert.equal(p.calls.length,0);}
+ const p=fakePool([{rows:[]}]);await queueRequest(p,{op:'claim_videos',line:'jinuo',run:'sample-run',source_run:'s',video_ids:[],prefer_matched:true});assert.deepEqual(p.calls.find(c=>c.sql.startsWith('WITH')).args[5],[]);
+ const legacy=fakePool([{rows:[]}]);await queueRequest(legacy,{op:'claim_videos',line:'jinuo',run:'legacy',prefer_matched:false});assert.match(legacy.calls.find(c=>c.sql.startsWith('WITH')).sql,/judgment_status='pending' THEN 0/);
+});
