@@ -29,7 +29,10 @@ function controllerIdentity({profile=xml(profileNick(nick)+node('账号已经注
  try{
  const ctl=new URL('../douyin-phone-adb',import.meta.url).pathname;
  const source=readFileSync(ctl,'utf8'),originalEntry=source.match(/^read_commenter_identity\(\) \{[\s\S]*?^\}/m)[0];
- const decoder='/usr/bin/base64 -D',adaptedDecoder=`'${base64Bin}' -D`;
+ const encoded=Buffer.from(nick).toString('base64');
+ const decoderFlag=['-D','--decode'].find(flag=>{const r=spawnSync(base64Bin,[flag],{input:encoded,encoding:'utf8',timeout:2000});return r.status===0&&r.stdout===nick;});
+ assert.ok(decoderFlag,'实际base64必须成功解码同一UTF8昵称，不能跳过controller守卫');
+ const decoder='/usr/bin/base64 -D',adaptedDecoder=`'${base64Bin}' ${decoderFlag}`;
  assert.equal(originalEntry.split(decoder).length,2);
  const entry=originalEntry.replace(decoder,adaptedDecoder);assert.equal(entry.replace(adaptedDecoder,decoder),originalEntry);
  symlinkSync(new URL('../queued-comment-history.js',import.meta.url).pathname,path.join(d,'queued-comment-history.js'));
