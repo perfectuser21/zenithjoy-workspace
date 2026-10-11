@@ -21,6 +21,7 @@ SIPS="${DOUYIN_SIPS_BIN:-/usr/bin/sips}"
 # 实现抽到 locate-element.py，与朋友圈控制器共用一份，改一次不用改两处。
 LOCATE_KEY_FILE="${DOUYIN_LOCATE_KEY_FILE:-$HOME/.credentials/openrouter.env}"
 LOCATE_SCRIPT="${DOUYIN_LOCATE_SCRIPT:-${0:A:h}/locate-element.py}"
+COMMENT_EVIDENCE_HELPER="${0:A:h}/queued-comment-history.js"
 LOCATE_ENDPOINT="${DOUYIN_LOCATE_ENDPOINT:-https://openrouter.ai/api/v1/chat/completions}"
 LOCATE_MODEL="${DOUYIN_LOCATE_MODEL:-bytedance/ui-tars-1.5-7b}"
 REGISTRY="${DOUYIN_PHONE_REGISTRY:-${HOME}/.config/openclaw/douyin-phone-profiles.tsv}"
@@ -2227,7 +2228,7 @@ send_private_message() {
 }
 
 read_commenter_identity() {
-  local tap_x tap_y nickname_b64 evidence_id expected_nickname before_xml profile_xml ident observed_nickname observed_id back_xml
+  local tap_x tap_y nickname_b64 evidence_id expected_nickname before_xml profile_xml ident observed_nickname observed_id back_xml identity_started unavailable_proof
   tap_x="$1"
   tap_y="$2"
   nickname_b64="$3"
@@ -2240,6 +2241,7 @@ read_commenter_identity() {
   expected_nickname="$(print -n -- "$nickname_b64" | /usr/bin/base64 -D 2>/dev/null)" || die "commenter nickname base64 could not be decoded"
   [[ -n "$expected_nickname" && "$expected_nickname" != *$'\n'* && "$expected_nickname" != *$'\r'* ]] || die "commenter nickname must be one non-empty line"
   [[ "$(foreground_package)" == *"$DOUYIN_PACKAGE"* ]] || die "Douyin is not foreground"
+  identity_started="$(date +%s)"
   before_xml="$EVIDENCE_ROOT/${evidence_id}-comments.xml"
   ui_evidence "${evidence_id}-comments" >/dev/null
   /usr/bin/grep -Eq '评论|comment' "$before_xml" || die "verified comment context was not found"
@@ -2289,6 +2291,12 @@ read_commenter_identity() {
   /usr/bin/grep -Eq '评论|comment' "$back_xml" || die "comment context was not restored after identity readback"
   # 0914 主理人要求:主页 IP 属地随身份一并输出(树里现成,text="IP：陕西" 全角冒号)
   profile_ip="$(/usr/bin/grep -oE 'text="IP：[^"]+"' "$profile_xml" | /usr/bin/head -1 | /usr/bin/sed -E 's/text="IP：([^"]+)"/\1/' || true)"
+  # 已注销不虚构抖音号；前/后评论上下文和本次主页证据均须严格通过。
+  if [[ -z "$observed_id" ]] && unavailable_proof="$(node "$COMMENT_EVIDENCE_HELPER" unavailable "$EVIDENCE_ROOT" "$evidence_id" "$observed_nickname" "$before_xml" "$profile_xml" "$back_xml" "$identity_started" 2>/dev/null)"; then
+    print -- "profile_status=unavailable"
+    print -- "unavailable_reason=account_deregistered"
+    print -- "comment_evidence=$before_xml"
+  fi
   print -- "nickname=$observed_nickname"
   print -- "douyin_id=$observed_id"
   print -- "account_type=$account_type"

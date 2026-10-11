@@ -228,6 +228,16 @@ except Exception: print("medium")' "$count")"
       done
       [[ -n "$identity" ]] || { qv_log "identity_unconfirmed row=$total"; return 6; }
       oid="$(qv_field "$identity" douyin_id)"; atype="$(qv_field "$identity" account_type)"; ip="$(qv_field "$identity" profile_ip)"
+      if [[ -z "$oid" && "$(qv_field "$identity" profile_status)" == unavailable && "$(qv_field "$identity" unavailable_reason)" == account_deregistered ]]; then
+        local unavailable_proof unavailable_eid="$QV_EID-person$total-t$attempt" unavailable_root="${DOUYIN_PHONE_TMP_ROOT:-/private/tmp/openclaw-phone}/evidence/$P" unavailable_file
+        unavailable_proof="$(node "$QV_DIR/queued-comment-history.js" unavailable "$unavailable_root" "$unavailable_eid" "$onick" "$(qv_field "$identity" comment_evidence)" "$(qv_field "$identity" profile_evidence)" "$(qv_field "$identity" return_evidence)" "$identity_started")" || { qv_log "unavailable_proof_invalid row=$total"; return 6; }
+        unavailable_file="$WFR_RUN_DIR/$unavailable_eid-unavailable.json"
+        print -r -- "$unavailable_proof" | node -e 'const fs=require("fs");fs.writeFileSync(process.argv[1],fs.readFileSync(0),{flag:"wx",mode:0o600});' "$unavailable_file" || return 6
+        print -- "COMMENT_SKIP\t$VID\taccount_deregistered\t$unavailable_eid\t$unavailable_file"
+        qv_log "comment_skipped row=$total reason=account_deregistered evidence=$unavailable_file"
+        # 返回评论页可能重排。注销不计覆盖/配额，下一条必须重新读取当前树。
+        exhausted=0; break
+      fi
       [[ -n "$oid" ]] || { qv_log "douyin_id_missing row=$total"; return 6; }
       qv_own "$onick" "$oid"; own_rc=$?
       (( own_rc != 2 )) || return 8
