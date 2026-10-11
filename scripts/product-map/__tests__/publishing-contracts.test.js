@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {planFor} from '../wf-plan.mjs';
 import {readFileSync} from 'node:fs';
+import {parse as parseYaml} from 'yaml';
 import {loadContractsFromDisk,validateContracts,assemble} from '../contracts-lib.mjs';
 const keys=['bilibili','douyin','kuaishou','toutiao','wechat_channels','weibo','xiaohongshu','zhihu'];
 test('既有发布workflow点号身份必须原样接受，禁止偷换稳定key',()=>{
@@ -57,4 +58,23 @@ test('当前来源全集仅21安卓和公众号API，七个补入口保真实证
  const extra=['xiaohongshu.image.phone','xiaohongshu.article.phone','toutiao.article.phone','weibo.article.phone','zhihu.idea.phone','zhihu.video.phone','zhihu.article.phone'];
  for(const key of extra){const b=d.branches.find(b=>b.branch===key);assert.ok(b,key);assert.match(b.skill_source_ref,/android-additional-modes\.md$/);assert.ok(b.evidence.length>0,key);for(const e of b.evidence)assert.match(e.sha256,/^[a-f0-9]{64}$/);}
  for(const b of d.branches){assert.equal(b.strict_all_guards_pass,'not_asserted');assert.equal(b.root_confirmed_effect,true);if(b.channel==='wechat_api')assert.equal(b.existing_platform_video_workflow_id,null);else assert.equal(b.capability_id,'24987ee5-53a0-4c37-946f-1b749954cac7');}
+});
+
+test('Codex根Skill以合法metadata声明非空版本，不增加顶层version',()=>{
+ const text=readFileSync(new URL('../../../.agents/skills/multi-platform-publish/SKILL.md',import.meta.url),'utf8');
+ const metadata=parseYaml(text.match(/^---\n([\s\S]*?)\n---/)[1]);
+ assert.equal(metadata.name,'multi-platform-publish');
+ assert.equal(metadata.version,undefined);
+ assert.match(metadata.metadata?.version||'',/^\d+\.\d+\.\d+$/);
+});
+test('正式Skill绑定仅指根SKILL.md，配置和资料通过根Skill辅助引用保留',()=>{
+ const c=loadContractsFromDisk();
+ for(const platform of keys)for(const a of assemble(c,platform+'_video_publish').activities){
+  for(const b of a.implementation_bindings||[])if(b.kind==='skill')assert.match(b.path,/(^|\/)SKILL\.md$/);
+ }
+ const root=readFileSync(new URL('../../../.agents/skills/multi-platform-publish/SKILL.md',import.meta.url),'utf8');
+ for(const path of ['agents/openai.yaml','references/catalog.json','references/publishing-matrix.md','references/android-additional-modes.md']){
+  assert.ok(root.includes(']('+path+')'),path+'缺根技能辅助关系');
+  assert.ok(readFileSync(new URL('../../../.agents/skills/multi-platform-publish/'+path,import.meta.url),'utf8').trim());
+ }
 });
