@@ -119,3 +119,55 @@ test('通用空id正文仍严格bounds与换行，不继承知乎许可',()=>{
  assert.equal(run('standard-compare',c.selection,c.xp,'一\n\n二').status,2);
  writeFileSync(c.xp,readFileSync(c.xp,'utf8').replace('[48,278][1032,422]','[0,0][2,2]'));assert.equal(run('standard-readback',c.selection,c.xp).status,2);
 });
+
+const ttXML=new URL('./fixtures/toutiao-search-before.xml',import.meta.url).pathname;
+const ttIME=new URL('./fixtures/toutiao-search-ime-before.txt',import.meta.url).pathname;
+test('真实头条唯一focused cx及SearchAutoComplete当前连接前置可识别',()=>{
+ const r=run('toutiao-resolve',ttXML,ttIME);assert.equal(r.status,0,r.stderr);
+ const identity=JSON.parse(r.stdout);assert.equal(identity.kind,'toutiao_search');assert.equal(identity.resource_id,'com.ss.android.article.news:id/cx');assert.equal(identity.editor.field_id,'2131624075');
+});
+
+const ttBefore=readFileSync(ttXML,'utf8'),ttBeforeIME=readFileSync(ttIME,'utf8');
+const ttNodeChange=(x,change)=>x.replace(/<node[^>]*resource-id="com.ss.android.article.news:id\/cx"[^>]*>/,change);
+function ttSelection(){const c=setup();const r=run('toutiao-resolve',ttXML,ttIME);assert.equal(r.status,0,r.stderr);writeFileSync(c.selection,r.stdout);return c;}
+for(const [name,xml,imeRaw] of [
+ ['wrongpkg',ttNodeChange(ttBefore,n=>n.replace('package="com.ss.android.article.news"','package="com.other.app"')),ttBeforeIME],
+ ['wrongid',ttBefore.replaceAll('com.ss.android.article.news:id/cx','com.ss.android.article.news:id/other'),ttBeforeIME],
+ ['class非空',ttNodeChange(ttBefore,n=>n.replace('class=""','class="android.widget.RelativeLayout"')),ttBeforeIME],
+ ['password',ttNodeChange(ttBefore,n=>n.replace('password="false"','password="true"')),ttBeforeIME],
+ ['disabled',ttNodeChange(ttBefore,n=>n.replace('enabled="true"','enabled="false"')),ttBeforeIME],
+ ['readonly',ttNodeChange(ttBefore,n=>n.replace('enabled="true"','enabled="true" editable="false"')),ttBeforeIME],
+ ['多focus',ttBefore.replace('</hierarchy>','<node focused="true"/></hierarchy>'),ttBeforeIME],
+ ['重复id',ttBefore.replace('</hierarchy>','<node resource-id="com.ss.android.article.news:id/cx"/></hierarchy>'),ttBeforeIME],
+ ['无focus',ttNodeChange(ttBefore,n=>n.replace('focused="true"','focused="false"')),ttBeforeIME],
+ ['native包变化',ttBefore,ttBeforeIME.replaceAll('packageName=com.ss.android.article.news','packageName=com.other.app')],
+ ['IME失活',ttBefore,ttBeforeIME.replaceAll('mDeactivateRequested=false','mDeactivateRequested=true')],
+ ['IME连接中',ttBefore,ttBeforeIME.replaceAll('mServedConnecting=false','mServedConnecting=true')],
+ ['field变化',ttBefore,ttBeforeIME.replaceAll('fieldId=2131624075','fieldId=2131624076')],
+ ['aid不匹配',ttBefore,ttBeforeIME.replaceAll('aid=1073741824','aid=1073741825')],
+ ['nativeid变化',ttBefore,ttBeforeIME.replaceAll('app:id/cx','app:id/other')],
+ ['密码type',ttBefore,ttBeforeIME.replaceAll('inputType=0x1 imeOptions=0x3','inputType=0x81 imeOptions=0x3')],
+ ['IMEaction变化',ttBefore,ttBeforeIME.replaceAll('inputType=0x1 imeOptions=0x3','inputType=0x1 imeOptions=0x4')],
+])test('头条真实前置fixture mutation拒绝：'+name,()=>{
+ const c=setup(imeRaw,xml);assert.equal(run('toutiao-resolve',c.xp,c.ip).status,2);
+});
+for(const [name,modify] of [
+ ['served token',x=>x.replaceAll('SearchAutoCompleteTextView{9ce2558','SearchAutoCompleteTextView{abc123')],
+ ['connection token',x=>x.replaceAll('EditableInputConnection@e511c5b','EditableInputConnection@abc123')],
+])test('头条before-ready拒绝变化：'+name,()=>{
+ const c=ttSelection();writeFileSync(c.ip,modify(ttBeforeIME));writeFileSync(c.xp,ttBefore);
+ assert.equal(run('check',c.selection,c.ip,c.xp).status,2);
+});
+test('头条before-ready同identity模型及XMLbounds漂移拒绝',()=>{
+ const c=ttSelection();writeFileSync(c.ip,ttBeforeIME);writeFileSync(c.xp,ttBefore);
+ assert.equal(run('check',c.selection,c.ip,c.xp).status,0);
+ writeFileSync(c.xp,ttNodeChange(ttBefore,n=>n.replace('[230,141][908,272]','[230,142][908,273]')));
+ assert.equal(run('check',c.selection,c.ip,c.xp).status,2);
+});
+test('头条typed严格原text回读模型，不猜测搜索框前缀',()=>{
+ const c=ttSelection();const title='傍晚的颜色，慢一点也很好';
+ writeFileSync(c.xp,ttNodeChange(ttBefore,n=>n.replace(/text="[^"]*"/,'text="'+title+'"')));
+ assert.equal(run('readback',c.selection,c.xp).stdout,title);
+ writeFileSync(c.xp,ttNodeChange(ttBefore,n=>n.replace(/text="[^"]*"/,'text="搜索框，'+title+'"')));
+ assert.equal(run('readback',c.selection,c.xp).stdout,'搜索框，'+title);
+});

@@ -135,7 +135,76 @@ def editor(path):
     return {"package": package[1], "autofill_id": package[2], "field_id": package[3], "hint": hint[1], "input_type": kind[1], "view_token": view[1]}
 
 
+TOUTIAO_PACKAGE = "com.ss.android.article.news"
+TOUTIAO_VIEW = "com.android.bytedance.search.views.SearchAutoCompleteTextView"
+TOUTIAO_ID = TOUTIAO_PACKAGE + ":id/cx"
+
+
+def toutiao_editor(ime_path):
+    raw = Path(ime_path).read_text()
+    markers = list(re.finditer(r"^  mServedView=", raw, re.M))
+    if not markers:
+        raise ValueError("current search editor missing")
+    current = raw[markers[-1].start():]
+    view = re.search(r"^  mServedView=" + re.escape(TOUTIAO_VIEW) + r"\{([a-f0-9]+)\b([^\n]*)", current, re.M)
+    if not view or not re.search(r"#7f0e008b app:id/cx aid=(\d+)\}", view[2]):
+        raise ValueError("unsupported search native view or id")
+    if not re.search(r"^  mServedConnecting=false$", current, re.M):
+        raise ValueError("search input connection pending")
+    info = re.search(r"^  mCurrentEditorInfo:\n(.*?)^  mServedInputConnection=(.*)$", current, re.M | re.S)
+    if not info:
+        raise ValueError("search editor info missing")
+    block, connection = info.groups()
+    connection = connection.splitlines()[0]
+    package = re.search(r"packageName=(\S+) autofillId=(\d+) fieldId=(\d+)", block)
+    types = re.search(r"inputType=(\S+) imeOptions=(\S+)", block)
+    aid = re.search(r"\baid=(\d+)\}", view[2])
+    connected = re.search(r"connection=com\.android\.internal\.inputmethod\.EditableInputConnection@([a-f0-9]+) mDeactivateRequested=false mServedView=" + re.escape(TOUTIAO_VIEW) + r"\{" + re.escape(view[1]) + r"\b", connection)
+    if (not package or package[1] != TOUTIAO_PACKAGE or package[3] != "2131624075"
+            or not aid or aid[1] != package[2] or not types or types.groups() != ("0x1", "0x3") or not connected):
+        raise ValueError("unsupported or inactive search editor identity")
+    return {"package": package[1], "field_id": package[3], "autofill_id": package[2],
+            "input_type": types[1], "ime_options": types[2], "view_class": TOUTIAO_VIEW,
+            "view_token": view[1], "connection_token": connected[1]}
+
+
+def toutiao_field(xml_path):
+    nodes = list(ET.parse(xml_path).iter("node"))
+    focused = [n for n in nodes if n.get("focused") == "true"]
+    candidates = [n for n in nodes if n.get("resource-id") == TOUTIAO_ID]
+    if len(focused) != 1 or len(candidates) != 1 or focused[0] is not candidates[0]:
+        raise ValueError("search accessibility focus is absent or ambiguous")
+    node = candidates[0]
+    if (node.get("package") != TOUTIAO_PACKAGE or node.get("class") != ""
+            or node.get("enabled") != "true" or node.get("focusable") != "true"
+            or node.get("password") != "false" or node.get("editable", "true") != "true"
+            or not re.fullmatch(r"\[\d+,\d+\]\[\d+,\d+\]", node.get("bounds", ""))):
+        raise ValueError("unsupported or unsafe search accessibility field")
+    left, top, right, bottom = map(int, re.findall(r"\d+", node.get("bounds")))
+    if left >= right or top >= bottom:
+        raise ValueError("search field bounds are empty")
+    return node
+
+
+def toutiao_resolve(xml_path, ime_path):
+    identity = toutiao_editor(ime_path)
+    field = toutiao_field(xml_path)
+    return {"kind": "toutiao_search", "editor": identity, "package": field.get("package"),
+            "resource_id": field.get("resource-id"), "class": field.get("class"), "bounds": field.get("bounds")}
+
+
+def toutiao_readback(xml_path, selection):
+    field = toutiao_field(xml_path)
+    for key, attr in (("package", "package"), ("resource_id", "resource-id"), ("class", "class"), ("bounds", "bounds")):
+        if field.get(attr) != selection[key]:
+            raise ValueError("selected search field changed after typing")
+    # 真实typed原证尚待独立真机；严格读取原text，不猜测或剥离“搜索框”前缀。
+    return field.get("text", "")
+
+
 def resolve(xml_path, ime_path):
+    if any(n.get("package") == TOUTIAO_PACKAGE for n in ET.parse(xml_path).iter("node")):
+        return toutiao_resolve(xml_path, ime_path)
     identity = editor(ime_path)
     nodes = list(ET.parse(xml_path).iter("node"))
     if any(node.get("focused") == "true" for node in nodes):
@@ -148,6 +217,8 @@ def resolve(xml_path, ime_path):
 
 
 def readback(xml_path, selection):
+    if selection.get("kind") == "toutiao_search":
+        return toutiao_readback(xml_path, selection)
     candidates = [n for n in ET.parse(xml_path).iter("node") if n.get("package") == selection["editor"]["package"] and n.get("class") == "android.widget.EditText" and n.get("resource-id") == selection["resource_id"] and n.get("bounds") == selection["bounds"]]
     if len(candidates) != 1:
         raise ValueError("selected input is absent or ambiguous after typing")
@@ -166,11 +237,16 @@ def main():
     elif command == "standard-compare":
         selection = json.loads(Path(sys.argv[2]).read_text())
         print(json.dumps(standard_compare(sys.argv[3], selection, sys.argv[4])))
+    elif command == "toutiao-resolve":
+        print(json.dumps(toutiao_resolve(sys.argv[2], sys.argv[3]), ensure_ascii=False))
     elif command == "resolve":
         print(json.dumps(resolve(sys.argv[2], sys.argv[3]), ensure_ascii=False))
     elif command == "check":
         selection = json.loads(Path(sys.argv[2]).read_text())
-        if editor(sys.argv[3]) != selection["editor"]:
+        if selection.get("kind") == "toutiao_search":
+            if toutiao_resolve(sys.argv[4], sys.argv[3]) != selection:
+                raise ValueError("search input connection or accessibility field changed before typing")
+        elif editor(sys.argv[3]) != selection["editor"]:
             raise ValueError("input connection changed before typing")
     elif command == "readback":
         selection = json.loads(Path(sys.argv[2]).read_text())

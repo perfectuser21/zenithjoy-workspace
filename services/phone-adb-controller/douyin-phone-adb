@@ -2853,7 +2853,7 @@ text_input() {
     "$ADB" -s "$SERIAL" shell dumpsys input_method > "$ime_evidence"
     "$PYTHON_BIN" "$focus_helper" resolve "$before_xml" "$ime_evidence" > "$native_selection" \
       || ctl_fail text_input retryable no_focused_input "no verified focused input; tap the input field first (evidence=$before_xml ime=$ime_evidence)"
-    field="native-editor-title"
+    field="$("$PYTHON_BIN" -c 'import json,sys; x=json.load(open(sys.argv[1])); print(x["resource_id"] if x.get("kind") == "toutiao_search" else "native-editor-title")' "$native_selection")"
   else
     ctl_fail text_input retryable no_focused_input "focused standard input is unsafe or ambiguous (evidence=$before_xml)"
   fi
@@ -2882,7 +2882,12 @@ text_input() {
     require_target_for text_input
     ime_evidence="$EVIDENCE_ROOT/${eid}-ime-ready.txt"
     "$ADB" -s "$SERIAL" shell dumpsys input_method > "$ime_evidence"
-    if ! "$PYTHON_BIN" "$focus_helper" check "$native_selection" "$ime_evidence"; then
+    # 头条窄native路由同时检查ready XML；原XHS只核它已有的IME身份。
+    ready_xml=""
+    if [[ "$("$PYTHON_BIN" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("kind",""))' "$native_selection")" == "toutiao_search" ]]; then
+      ready_xml="$(ui_evidence "${eid}-ready")"
+    fi
+    if ! "$PYTHON_BIN" "$focus_helper" check "$native_selection" "$ime_evidence" "$ready_xml"; then
       ti_restore_ime || restored=0
       trap - EXIT INT TERM
       (( restored )) || ctl_fail text_input needs_human ime_restore_failed "input connection changed and original input method could not be restored"

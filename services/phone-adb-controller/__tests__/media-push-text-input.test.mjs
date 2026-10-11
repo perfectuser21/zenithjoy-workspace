@@ -49,6 +49,17 @@ if (a[0] === "push") {
   fs.copyFileSync(a[1], dst); out("1 file pushed\\n"); process.exit(0);
 }
 if (a[0] === "pull") {
+  if (process.env.FAKE_TOUTIAO_SEARCH_FIXTURES) {
+    let xml=fs.readFileSync(path.join(process.env.FAKE_TOUTIAO_SEARCH_FIXTURES,"toutiao-search-before.xml"),"utf8");
+    const text=read("typed");
+    xml=xml.replace(new RegExp('<node[^>]*resource-id="com.ss.android.article.news:id/cx"[^>]*>'),n=>{
+      if(text)n=n.replace(/text="[^"]*"/,'text="'+esc(process.env.FAKE_TOUTIAO_PREFIX === "1" ? "搜索框，"+text : text)+'"');
+      if(process.env.FAKE_TOUTIAO_UNSAFE === "1")n=n.replace('password="false"','password="true"');
+      if(read("ime").includes("adbkeyboard") && process.env.FAKE_TOUTIAO_READY_DRIFT === "1")n=n.replace('[230,141][908,272]','[230,142][908,273]');
+      return n;
+    });
+    fs.writeFileSync(a[2],xml);process.exit(0);
+  }
   if (process.env.FAKE_ZHIHU_BODY_FIXTURES) {
     const phase=read("typed") ? "typed" : read("ime").includes("adbkeyboard") ? "ready" : "before";
     let xml=fs.readFileSync(path.join(process.env.FAKE_ZHIHU_BODY_FIXTURES,"zhihu-body-"+phase+".xml"),"utf8");
@@ -125,6 +136,12 @@ if (cmd.includes("ADB_INPUT_B64")) {
   process.exit(0);
 }
 if (cmd.includes("dumpsys input_method")) {
+  if (process.env.FAKE_TOUTIAO_SEARCH_FIXTURES) {
+    let raw=fs.readFileSync(path.join(process.env.FAKE_TOUTIAO_SEARCH_FIXTURES,"toutiao-search-ime-before.txt"),"utf8");
+    if(read("ime").includes("adbkeyboard") && process.env.FAKE_TOUTIAO_READY_TOKEN === "1")raw=raw.replaceAll('SearchAutoCompleteTextView{9ce2558','SearchAutoCompleteTextView{abc123');
+    out(raw);process.exit(0);
+  }
+
   const pkg = process.env.FAKE_IME_EDITOR_CHANGED_ON_SWITCH === "1" && read("ime").includes("adbkeyboard") ? "com.other.app" : (process.env.FAKE_IME_EDITOR_PACKAGE || "com.xingin.xhs");
   out("  mServedView=com.xingin.capa.post.ui.UnderLineRichEdit{abc VFED..CL. 79,0-1121,120 #7f090fa2 app:id/0_resource_name_obfuscated aid=1073741825}\\n  mServedConnecting=false\\n  mCurrentEditorInfo:\\n    inputType=0x20001 imeOptions=0x48000005 privateImeOptions=null\\n    hintText=输入标题 label=null\\n    packageName="+pkg+" autofillId=1073741825 fieldId=2131300258 fieldName=null\\n  mServedInputConnection=RemoteInputConnectionImpl{connection=com.xingin.redview.richtext.RichEditTextPro$h@abc mDeactivateRequested=false mServedView=com.xingin.capa.post.ui.UnderLineRichEdit{abc}}\\n  mServedInputConnectionHandler=null\\n"); process.exit(0);
 }
@@ -441,4 +458,29 @@ test('text-input 知乎正文实字变化仍失败并恢复IME，不重输',asyn
 test('text-input 知乎正文ready的bounds漂移不clear不输入且恢复IME',async()=>{
  const c=setup();const r=await run(c,['text-input',zhSource],{FAKE_ZHIHU_BODY_FIXTURES:zhBodyFixtures,FAKE_ZHIHU_BODY_READY_DRIFT:'1'});
  assert.equal(r.code,2);assert.match(r.out,/no_focused_input/);assert.equal(ime(c),ORIG_IME);assert.doesNotMatch(calls(c),/ADB_CLEAR_TEXT|ADB_INPUT_B64/);
+});
+
+const TT_SEARCH_ENV={FAKE_TOUTIAO_SEARCH_FIXTURES:zhBodyFixtures};
+// ready/typed是受控模型数据；只有before XML/IME是原真机fixture，不声明真实搜索已通过。
+test('text-input 头条真实前置和模拟精确typed成功且恢复IME',async()=>{
+ const c=setup();const title='傍晚的颜色，慢一点也很好';const r=await run(c,['text-input',title],TT_SEARCH_ENV);
+ assert.equal(r.code,0,r.err);assert.match(r.out,/field=com.ss.android.article.news:id\/cx/);assert.match(r.out,/comparison_mode=exact/);assert.equal(ime(c),ORIG_IME);
+ assert.equal((calls(c).match(/ADB_INPUT_B64/g)||[]).length,1);
+});
+for(const [name,env] of [['ready XML变化',{FAKE_TOUTIAO_READY_DRIFT:'1'}],['ready实例变化',{FAKE_TOUTIAO_READY_TOKEN:'1'}]])test('text-input 头条'+name+'不clear不输入且恢复IME',async()=>{
+ const c=setup();const r=await run(c,['text-input','测试'],{...TT_SEARCH_ENV,...env});
+ assert.equal(r.code,2);assert.match(r.out,/no_focused_input/);assert.doesNotMatch(calls(c),/ADB_CLEAR_TEXT|ADB_INPUT_B64/);assert.equal(ime(c),ORIG_IME);
+});
+test('text-input 头条不安全XML在切IME前拒绝',async()=>{
+ const c=setup();const r=await run(c,['text-input','测试'],{...TT_SEARCH_ENV,FAKE_TOUTIAO_UNSAFE:'1'});
+ assert.equal(r.code,2);assert.doesNotMatch(calls(c),/ADB_CLEAR_TEXT|ADB_INPUT_B64|"ime","set"/);assert.equal(ime(c),ORIG_IME);
+});
+test('text-input 头条模拟typed带搜索框前缀仍失败，不擅自剥离且恢复IME',async()=>{
+ const c=setup();const r=await run(c,['text-input','测试'],{...TT_SEARCH_ENV,FAKE_TOUTIAO_PREFIX:'1'});
+ assert.equal(r.code,2);assert.match(r.out,/readback_mismatch/);assert.equal(ime(c),ORIG_IME);
+ assert.equal((calls(c).match(/ADB_INPUT_B64/g)||[]).length,1);
+});
+test('text-input 头条身份变化且IME无法恢复时needs_human',async()=>{
+ const c=setup();const r=await run(c,['text-input','测试'],{...TT_SEARCH_ENV,FAKE_TOUTIAO_READY_TOKEN:'1',FAKE_RESTORE_STUCK:'1'});
+ assert.equal(r.code,2);assert.match(r.err,/failure_class=needs_human/);assert.doesNotMatch(calls(c),/ADB_CLEAR_TEXT|ADB_INPUT_B64/);
 });
