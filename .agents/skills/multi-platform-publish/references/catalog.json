@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "audited_at": "2026-10-10",
-  "scope": "九平台现有源文件分支；候选清单，不表示Brain正式工作流登记或Codex真机验证",
+  "audited_at": "2026-10-11",
+  "scope": "历史24逻辑候选保留；本轮授权21安卓模式+公众号长文官方API共22。各路由仅定位执行参考，实时效果与严格验收分别以Brain原回执为准。",
   "runtime_validation": "pending",
   "logical_route_count": 24,
   "routes": [
@@ -150,6 +150,17 @@
             "root": "skills",
             "path": "xiaohongshu-publisher/SKILL.md"
           }
+        },
+        "phone": {
+          "source": {
+            "root": "workspace",
+            "path": ".agents/skills/multi-platform-publish/references/android-additional-modes.md"
+          },
+          "interface": "小红书 · 单图图文（图片可为长图）：读取补充手册中本路由的入口/设置/DoD，沿公共底座当前控制器执行。",
+          "readback": "独立回读本次账号唯一新作品、任务文字/素材与发表时间；权限、审核终态、完整输入保真和同owner双锁收尾分别判定，缺项保unknown。",
+          "warnings": [
+            "本模式作品发表效果有原证据，不等于所有严格断言通过；每次新任务按要求重新核对，禁止自动重复发表。"
+          ]
         }
       }
     },
@@ -192,6 +203,18 @@
             "root": "skills",
             "path": "xiaohongshu-publisher/SKILL.md"
           }
+        },
+        "phone": {
+          "source": {
+            "root": "workspace",
+            "path": ".agents/skills/multi-platform-publish/references/android-additional-modes.md"
+          },
+          "interface": "小红书 · 原生写长文：读取补充手册中本路由的入口/设置/DoD，沿公共底座当前控制器执行。",
+          "readback": "独立回读本次账号唯一新作品、任务文字/素材与发表时间；权限、审核终态、完整输入保真和同owner双锁收尾分别判定，缺项保unknown。",
+          "warnings": [
+            "本模式作品发表效果有原证据，不等于所有严格断言通过；每次新任务按要求重新核对，禁止自动重复发表。",
+            "177验证完整已填稿恢复排版及私密发表；此前156输入FAIL保留。"
+          ]
         }
       }
     },
@@ -260,6 +283,17 @@
           },
           "warnings": [
             "现有脚本 type=image / graphic 发布与旧 Windows 长文脚本不同，先核对实际内容表单；未完成专门复验。"
+          ]
+        },
+        "phone": {
+          "source": {
+            "root": "workspace",
+            "path": ".agents/skills/multi-platform-publish/references/android-additional-modes.md"
+          },
+          "interface": "头条 · 原生文章：读取补充手册中本路由的入口/设置/DoD，沿公共底座当前控制器执行。",
+          "readback": "独立回读本次账号唯一新作品、任务文字/素材与发表时间；权限、审核终态、完整输入保真和同owner双锁收尾分别判定，缺项保unknown。",
+          "warnings": [
+            "本模式作品发表效果有原证据，不等于所有严格断言通过；每次新任务按要求重新核对，禁止自动重复发表。"
           ]
         }
       }
@@ -332,6 +366,18 @@
             "root": "skills",
             "path": "weibo-publisher/SKILL.md"
           }
+        },
+        "phone": {
+          "source": {
+            "root": "workspace",
+            "path": ".agents/skills/multi-platform-publish/references/android-additional-modes.md"
+          },
+          "interface": "微博 · 原生文章/已填草稿：读取补充手册中本路由的入口/设置/DoD，沿公共底座当前控制器执行。",
+          "readback": "独立回读本次账号唯一新作品、任务文字/素材与发表时间；权限、审核终态、完整输入保真和同owner双锁收尾分别判定，缺项保unknown。",
+          "warnings": [
+            "本模式作品发表效果有原证据，不等于所有严格断言通过；每次新任务按要求重新核对，禁止自动重复发表。",
+            "188为完整已填草稿恢复发表，185从空编辑器正文标准回读FAIL保留；guard拒绝即停止。"
+          ]
         }
       }
     },
@@ -395,6 +441,17 @@
             "root": "skills",
             "path": "zhihu-publisher/SKILL.md"
           }
+        },
+        "phone": {
+          "source": {
+            "root": "workspace",
+            "path": ".agents/skills/multi-platform-publish/references/android-additional-modes.md"
+          },
+          "interface": "知乎 · 原生纯文本想法：读取补充手册中本路由的入口/设置/DoD，沿公共底座当前控制器执行。",
+          "readback": "独立回读本次账号唯一新作品、任务文字/素材与发表时间；权限、审核终态、完整输入保真和同owner双锁收尾分别判定，缺项保unknown。",
+          "warnings": [
+            "本模式作品发表效果有原证据，不等于所有严格断言通过；每次新任务按要求重新核对，禁止自动重复发表。"
+          ]
         }
       }
     },
@@ -413,6 +470,18 @@
             "root": "skills",
             "path": "zhihu-publisher/SKILL.md"
           }
+        },
+        "phone": {
+          "source": {
+            "root": "workspace",
+            "path": ".agents/skills/multi-platform-publish/references/android-additional-modes.md"
+          },
+          "interface": "知乎 · 原生视频素材投稿：读取补充手册中本路由的入口/设置/DoD，沿公共底座当前控制器执行。",
+          "readback": "独立回读本次账号唯一新作品、任务文字/素材与发表时间；权限、审核终态、完整输入保真和同owner双锁收尾分别判定，缺项保unknown。",
+          "warnings": [
+            "本模式作品发表效果有原证据，不等于所有严格断言通过；每次新任务按要求重新核对，禁止自动重复发表。",
+            "原验仅基础素材投稿和外部播放；准确标题/正文及播放器数字总时长未全验，任务要求这些字段时不得降级。"
+          ]
         }
       }
     },
@@ -431,6 +500,17 @@
             "root": "skills",
             "path": "zhihu-publisher/SKILL.md"
           }
+        },
+        "phone": {
+          "source": {
+            "root": "workspace",
+            "path": ".agents/skills/multi-platform-publish/references/android-additional-modes.md"
+          },
+          "interface": "知乎 · 原生文章：读取补充手册中本路由的入口/设置/DoD，沿公共底座当前控制器执行。",
+          "readback": "独立回读本次账号唯一新作品、任务文字/素材与发表时间；权限、审核终态、完整输入保真和同owner双锁收尾分别判定，缺项保unknown。",
+          "warnings": [
+            "本模式作品发表效果有原证据，不等于所有严格断言通过；每次新任务按要求重新核对，禁止自动重复发表。"
+          ]
         }
       }
     },
@@ -532,5 +612,29 @@
         }
       }
     }
+  ],
+  "active_acceptance_scope": [
+    "douyin.image.phone",
+    "douyin.video.phone",
+    "douyin.article.phone",
+    "kuaishou.image.phone",
+    "kuaishou.video.phone",
+    "xiaohongshu.image.phone",
+    "xiaohongshu.video.phone",
+    "xiaohongshu.article.phone",
+    "toutiao.image.phone",
+    "toutiao.video.phone",
+    "toutiao.article.phone",
+    "weibo.image.phone",
+    "weibo.video.phone",
+    "weibo.article.phone",
+    "shipinhao.image.phone",
+    "shipinhao.video.phone",
+    "zhihu.idea.phone",
+    "zhihu.video.phone",
+    "zhihu.article.phone",
+    "bilibili.image.phone",
+    "bilibili.video.phone",
+    "wechat.article.api"
   ]
 }
