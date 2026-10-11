@@ -65,3 +65,14 @@ test('账本 outreach-run 不再走绑定回调/绑定 span，改发 outreach-sp
   assert.match(tick, /failed\|device_ui\) FAILED=/);
   assert.match(tick, /\\"delivered\\":\$DELIVERED,\\"restricted\\":\$RESTRICTED,\\"failed\\":\$FAILED/);
 });
+
+test('派发总闸D（dd7767b8）：span evidence 原样带上 Brain 设备锁证据（领取/释放/跳过原因），没有就不加', () => {
+  const brainLock = { owner: 'outreach-tick:xian-m4:20261011T213000:4242', profiles: { 'jinoshengyuan-work': 'acquired_released', legacy: 'busy' } };
+  const { events } = outreachSpan({ orders_picked: 1, delivered: 1, restricted: 0, failed: 0, requeued: 0, brain_lock: brainLock });
+  assert.deepEqual(events[0].body[0].evidence.brain_lock, brainLock);
+  const skipped = outreachSpan({ orders_picked: 0, delivered: 0, restricted: 0, failed: 0, requeued: 0, brain_lock: { ...brainLock, skip_reason: 'brain_lock_busy' } });
+  assert.equal(skipped.events[0].body[0].outcome, 'skipped');
+  assert.equal(skipped.events[0].body[0].evidence.brain_lock.skip_reason, 'brain_lock_busy');
+  assert.equal(outreachSpan({ orders_picked: 0 }).events[0].body[0].evidence.brain_lock, undefined);
+  assert.equal(outreachSpan({ orders_picked: 0, brain_lock: 'junk' }).events[0].body[0].evidence.brain_lock, undefined, '非对象不透传');
+});

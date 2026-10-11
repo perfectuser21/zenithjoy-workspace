@@ -33,6 +33,8 @@ nap(){ [[ -n "${OUTREACH_TICK_TESTING:-}" ]] && return 0; /bin/sleep "$1" }
 SCRIPT_DIR="${0:a:h}"
 STATE_DIR="$SCRIPT_DIR/state"
 OUTREACH_PROFILES=(jinoshengyuan-work legacy)
+# 派发总闸D(dd7767b8): 本轮 Brain 设备锁被别的 run 持有的 profile(取单时 --exclude 掉,不动那台手机)
+BRAIN_BUSY_PROFILES=()
 NOTIFY_JS=/Users/administrator/.openclaw/leadgen-scripts/notify-bark.js
 
 # ── 归因分类(决策 c5828297): 按归因行不按整段——warning: foreground 等非致命行禁止污染判定 ──
@@ -107,11 +109,12 @@ mark(){
 # ── 0928 账号可用性: 取单前算出哪些号不可用,经 --exclude 交给选单器(修 20 秒空转) ──
 # 软熔断 flag 第一行 soft_until=<epoch秒>(device_ui 连续3次写入,2小时后自动恢复);其余内容(空文件/普通文本)=永久熔断,须人工删。
 soft_pause_until(){ local l; l=$(head -1 "$1" 2>/dev/null); [[ "$l" == soft_until=<-> ]] && print -- "${l#soft_until=}"; return 0 }
-# profile_unavailable <profile>: 空=可用;否则输出原因 paused|halted|cap(按此顺序判)
+# profile_unavailable <profile>: 空=可用;否则输出原因 brain_lock|paused|halted|cap(按此顺序判)
 profile_unavailable(){
   local p="$1" flag until_ts now dtag count cap
   flag="$STATE_DIR/dm-paused-$p.flag"
   now=$(date +%s)
+  (( ${BRAIN_BUSY_PROFILES[(Ie)$p]} )) && { print brain_lock; return 0 }
   if [[ -f "$flag" ]]; then
     until_ts=$(soft_pause_until "$flag")
     if [[ -z "$until_ts" ]] || (( now <= until_ts )); then print paused; return 0; fi
@@ -183,6 +186,99 @@ expire_soft_pauses(){
   return 0
 }
 
+# ── 派发总闸D(Brain 任务 dd7767b8): 动手机前先向 Brain 领每台手机的设备锁 ──
+# 为什么: 本 tick 只认本机 mkdir 锁,Brain 派下来的手机活(秋米任务/调度单)看不见它,它也看不见 Brain 的锁。
+# 做法: 延迟结束、取单之前,对本轮可能用到的每个号(熔断/停发/撞上限的号本轮本来不发,不领)按手机 serial 领 Brain 锁,
+#   owner=outreach-tick:<机器>:<时间>:<pid>。领到 → 心跳续租到收工;被别的 run 占着 → 这台手机本轮 --exclude 掉
+#   (另一台照发,发送量不因此变少);全部被占 → 本轮跳过(不取单=不预写触达中、不动手机),执行记录留 skip 证据;
+#   Brain 不可用/设备未注册/没有 serial → 降级放行(不停业务,本机锁仍是第二道)。收工与异常退出(trap)都放锁。
+BRAIN_LOCK_SH="${BRAIN_LOCK_SH:-$SCRIPT_DIR/brain-lock.sh}"
+BRAIN_LOCK_TTL="${BRAIN_LOCK_TTL:-15}"        # 分钟;心跳每 BRAIN_LOCK_HB 秒续一次,进程没了 ≤TTL 自动过期
+BRAIN_LOCK_HB="${BRAIN_LOCK_HB:-240}"
+BRAIN_LOCK_OWNER=""
+typeset -gA BRAIN_LOCK_STATE BRAIN_LOCK_SERIAL BRAIN_HB_PID
+BRAIN_LOCK_SKIP=""
+# profile_serial <profile>: 从手机注册表(douyin-phone-adb 同一份)读 serial;读不到输出空
+profile_serial(){
+  local reg="${DOUYIN_PHONE_REGISTRY:-$HOME/.config/openclaw/douyin-phone-profiles.tsv}"
+  [[ -r "$reg" ]] || return 0
+  /usr/bin/awk -F'\t' -v p="$1" '
+    ($1=="#profile"||$1=="profile"){for(i=1;i<=NF;i++){n=$i;sub(/^#/,"",n);c[n]=i};next}
+    /^#/{next}
+    $1==p{print (c["serial"]?$(c["serial"]):$2); exit}' "$reg"
+}
+brain_locks_acquire(){
+  local p s out rc holder
+  BRAIN_LOCK_OWNER="outreach-tick:$(hostname -s):$(date +%Y%m%dT%H%M%S):$$"
+  for p in "${OUTREACH_PROFILES[@]}"; do
+    if [[ -n "$(profile_unavailable "$p")" ]]; then BRAIN_LOCK_STATE[$p]=not_needed; continue; fi
+    s=$(profile_serial "$p")
+    if [[ -z "$s" || ! -f "$BRAIN_LOCK_SH" ]]; then
+      BRAIN_LOCK_STATE[$p]=unavailable
+      log "⚠️ Brain设备锁: $p ${s:+($s)}无法领锁(${s:+brain-lock.sh 缺失}${s:-注册表无 serial}),降级放行(本机锁仍生效)"
+      continue
+    fi
+    BRAIN_LOCK_SERIAL[$p]="$s"
+    out=$(/bin/bash "$BRAIN_LOCK_SH" acquire "$s" "$BRAIN_LOCK_OWNER" "$BRAIN_LOCK_TTL" 2>>$LOG); rc=$?
+    case $rc in
+      0)
+        BRAIN_LOCK_STATE[$p]=acquired
+        /bin/bash "$BRAIN_LOCK_SH" heartbeat "$s" "$BRAIN_LOCK_OWNER" "$BRAIN_LOCK_TTL" "$BRAIN_LOCK_HB" $$ </dev/null >/dev/null 2>>$LOG &!
+        BRAIN_HB_PID[$p]=$!
+        log "🔒 Brain设备锁已领: $p($s) owner=$BRAIN_LOCK_OWNER";;
+      1)
+        holder="${out#*BRAIN_LOCK_HOLDER=}"; holder="${holder%% *}"
+        BRAIN_LOCK_STATE[$p]=busy; BRAIN_BUSY_PROFILES+=("$p")
+        log "⛔ Brain设备锁被占: $p($s) holder=${holder},本轮不动这台手机";;
+      *)
+        BRAIN_LOCK_STATE[$p]=unavailable
+        log "⚠️ Brain设备锁服务不可用($p/$s: ${out#*REASON=}),降级放行(本机锁仍生效)";;
+    esac
+  done
+  # 全部要用的手机都被别的 run 占着(没有一台领到/降级) → 本轮跳过
+  local any_busy=0 any_ok=0
+  for p in "${OUTREACH_PROFILES[@]}"; do
+    case "${BRAIN_LOCK_STATE[$p]:-}" in busy) any_busy=1;; acquired|unavailable) any_ok=1;; esac
+  done
+  (( any_busy && ! any_ok )) && BRAIN_LOCK_SKIP=brain_lock_busy
+  return 0
+}
+# brain_locks_release: 放掉本 tick 领到的锁(幂等;只放自己 owner 的,Brain 侧也只认 owner)
+brain_locks_release(){
+  local p out rc
+  for p in "${OUTREACH_PROFILES[@]}"; do
+    [[ "${BRAIN_LOCK_STATE[$p]:-}" == acquired ]] || continue
+    [[ -n "${BRAIN_HB_PID[$p]:-}" ]] && kill "${BRAIN_HB_PID[$p]}" 2>/dev/null
+    out=$(/bin/bash "$BRAIN_LOCK_SH" release "${BRAIN_LOCK_SERIAL[$p]}" "$BRAIN_LOCK_OWNER" 2>>$LOG); rc=$?
+    if (( rc == 0 )); then BRAIN_LOCK_STATE[$p]=acquired_released; log "🔓 Brain设备锁已放: $p(${BRAIN_LOCK_SERIAL[$p]})"
+    else BRAIN_LOCK_STATE[$p]=acquired_release_failed; log "⚠️ Brain设备锁释放未确认: $p(${BRAIN_LOCK_SERIAL[$p]}) ${out}(TTL ${BRAIN_LOCK_TTL} 分钟后自动过期)"; fi
+  done
+  return 0
+}
+# brain_lock_json: 执行记录里的锁证据 {"owner":..,"profiles":{p:state},"skip_reason":..}
+brain_lock_json(){
+  local p j="" st
+  for p in "${OUTREACH_PROFILES[@]}"; do st="${BRAIN_LOCK_STATE[$p]:-not_attempted}"; j+="${j:+,}\"$p\":\"$st\""; done
+  print -rn -- "{\"owner\":\"${BRAIN_LOCK_OWNER//\"/}\",\"profiles\":{$j}${BRAIN_LOCK_SKIP:+,\"skip_reason\":\"$BRAIN_LOCK_SKIP\"}}"
+}
+
+# ── 6b133a81 触达进账本: 每 tick 收工写一个 outreach 工件(workflow-result.sh outreach-run),读回 out_no_stuck_inflight
+#   (本 tick 结束后线索表不得留悬空「触达中」);不过按探针失败语义(retryable→本 tick 判失败,由选单 40 分钟回收兜底)。
+#   WFR_DISABLED=1 或账本脚本不在 → no-op(测试把脚本拷到临时目录时即不在)。
+outreach_ledger(){
+  local wfr_sh="${WFR:-$SCRIPT_DIR/workflow-result.sh}" out req
+  [[ "${WFR_DISABLED:-0}" != 1 && -x "$wfr_sh" ]] || return 0
+  req=$(( ORDERS_PICKED - SENDS_THIS_TICK - BLOCKED_ORDERS )); (( req < 0 )) && req=0
+  out=$(WFR_LOG_FILE=$LOG WFR_LOG_FROM=${TICK_LOG_OFF:-0} bash "$wfr_sh" outreach-run "out$(date +%m%d%H%M)" "${OUTREACH_PROFILES[1]}" "" "$(hostname -s)" "tick picked=$ORDERS_PICKED sent=$SENDS_THIS_TICK" \
+    "{\"orders_picked\":$ORDERS_PICKED,\"messages_sent\":$SENDS_THIS_TICK,\"requeued\":$req,\"blocked_orders\":$BLOCKED_ORDERS}" \
+    "{\"orders_picked\":$ORDERS_PICKED,\"delivered\":$DELIVERED,\"restricted\":$RESTRICTED,\"failed\":$FAILED,\"requeued\":$req,\"brain_lock\":$(brain_lock_json)}" "$TICK_STARTED_AT" 2>>$LOG)
+  log "账本(触达): $(print -r -- "$out" | tr '\n' ' ' | head -c 200)"
+  if print -r -- "$out" | grep -q '^WFR_GATE_ALERT=1'; then
+    notify_once "outreach-gate" "获客触达后置条件不过" "$(print -r -- "$out" | sed -n "s/^WFR_GATE_ALERT_MSG=//p")" 3600
+  fi
+  return 0
+}
+
 # source 守卫: smoke 层4 以 OUTREACH_TICK_SOURCED=1 source 本文件只取函数,不执行主体
 [[ -n "${OUTREACH_TICK_SOURCED:-}" ]] && return 0
 
@@ -213,7 +309,17 @@ if ! /bin/mkdir "$TICK_LOCK" 2>/dev/null; then
 else
   echo $$ > "$TICK_LOCK/pid"
 fi
-trap '[[ "$(cat "$TICK_LOCK/pid" 2>/dev/null)" == "$$" ]] && /bin/rm -rf "$TICK_LOCK"' EXIT INT TERM
+# 收工/异常退出统一清理(幂等): 先放 Brain 设备锁(派发总闸D),再删本机 tick 锁(只删自己抢到的)
+tick_cleanup(){
+  (( ${TICK_CLEANED:-0} )) && return 0; TICK_CLEANED=1
+  brain_locks_release
+  [[ "$(cat "$TICK_LOCK/pid" 2>/dev/null)" == "$$" ]] && /bin/rm -rf "$TICK_LOCK"
+  return 0
+}
+trap 'tick_cleanup' EXIT
+trap 'log "收到 TERM,清理后退出"; tick_cleanup; exit 143' TERM
+trap 'tick_cleanup; exit 130' INT
+trap 'tick_cleanup; exit 129' HUP
 
 # 拟人②: 随机延迟 0-1200 秒(0920 拉宽区间,弱化"整点/半点必发"的规律感)
 DELAY=$(( RANDOM % 300 ))
@@ -240,6 +346,15 @@ ORDERS_PICKED=0; BLOCKED_ORDERS=0   # 6b133a81 触达进账本: outreach 工件�
 # 触达回传 Brain(发私信 span 的 evidence): 送达 sent / 受限 restricted+rate_limited / 失败 failed+device_ui
 DELIVERED=0; RESTRICTED=0; FAILED=0
 TICK_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+# 派发总闸D: 动手机前领 Brain 设备锁;全部被别的 run 占着 → 本轮跳过(不取单、不动手机),执行记录照写(带 skip 证据)
+expire_soft_pauses
+brain_locks_acquire
+if [[ -n "$BRAIN_LOCK_SKIP" ]]; then
+  log "Brain设备锁全部被别的 run 持有(${BRAIN_BUSY_PROFILES[*]}),本轮跳过,不取单不动手机"
+  outreach_ledger
+  exit 0
+fi
 # CONSEC_CAP_HITS: 连续撞上限计数器,完整生命周期都在本文件里——这里初始化为0，
 # 命中当日上限的分支里 +1 并在连续两次时收工(见下方"撞上限"分支)，只要有一次
 # 没撞上限(说明选单器换到了另一个号)就立刻重置回0(见本循环体末尾)。
@@ -505,20 +620,5 @@ while (( SECONDS - TICK_BODY_START < TICK_BUDGET )); do
   nap $BETWEEN_ORDERS_PAUSE
 done
 log "本tick收工,累计发送(含受限)${SENDS_THIS_TICK}条"
-# ── 6b133a81 触达进账本: 每 tick 收工写一个 outreach 工件(workflow-result.sh outreach-run),读回 out_no_stuck_inflight
-#   (本 tick 结束后线索表不得留悬空「触达中」);不过按探针失败语义(retryable→本 tick 判失败,由选单 40 分钟回收兜底)。
-#   WFR_DISABLED=1 或账本脚本不在 → no-op(测试把脚本拷到临时目录时即不在)。
-outreach_ledger(){
-  local wfr_sh="${WFR:-$SCRIPT_DIR/workflow-result.sh}" out req
-  [[ "${WFR_DISABLED:-0}" != 1 && -x "$wfr_sh" ]] || return 0
-  req=$(( ORDERS_PICKED - SENDS_THIS_TICK - BLOCKED_ORDERS )); (( req < 0 )) && req=0
-  out=$(WFR_LOG_FILE=$LOG WFR_LOG_FROM=${TICK_LOG_OFF:-0} bash "$wfr_sh" outreach-run "out$(date +%m%d%H%M)" "${OUTREACH_PROFILES[1]}" "" "$(hostname -s)" "tick picked=$ORDERS_PICKED sent=$SENDS_THIS_TICK" \
-    "{\"orders_picked\":$ORDERS_PICKED,\"messages_sent\":$SENDS_THIS_TICK,\"requeued\":$req,\"blocked_orders\":$BLOCKED_ORDERS}" \
-    "{\"orders_picked\":$ORDERS_PICKED,\"delivered\":$DELIVERED,\"restricted\":$RESTRICTED,\"failed\":$FAILED,\"requeued\":$req}" "$TICK_STARTED_AT" 2>>$LOG)
-  log "账本(触达): $(print -r -- "$out" | tr '\n' ' ' | head -c 200)"
-  if print -r -- "$out" | grep -q '^WFR_GATE_ALERT=1'; then
-    notify_once "outreach-gate" "获客触达后置条件不过" "$(print -r -- "$out" | sed -n "s/^WFR_GATE_ALERT_MSG=//p")" 3600
-  fi
-  return 0
-}
+brain_locks_release   # 先放锁再记账: 执行记录里带上 acquired_released 证据
 outreach_ledger
