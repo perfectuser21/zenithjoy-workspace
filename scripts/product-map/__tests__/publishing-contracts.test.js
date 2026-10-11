@@ -44,3 +44,8 @@ test('发布能力有真正执行合同断言的node smoke而非静态空占位'
  const text=readFileSync(new URL('../../../.github/workflows/scripts/smoke/codex-publish-contract-smoke.sh',import.meta.url),'utf8');
  assert.match(text,/node --test/);assert.match(text,/publishing-contracts\.test\.js/);
 });
+test('手册配置和引用资源是skill组成，不冒充运行code',()=>{
+ for(const d of Object.values(loadContractsFromDisk().contracts))for(const a of d.activities.filter(a=>!a.ref))for(const b of a.implementation_bindings||[]){
+  if(b.path.startsWith('.agents/skills/')&&!b.path.includes('/scripts/'))assert.equal(b.kind,'skill',b.path);
+ }
+});
