@@ -9,3 +9,5 @@ GP-Anchor: line02/keyword_acquisition keep-green
 最窄修复：collection开始以0600 append模式打开本批comments.tsv，空候选产生空工件且保留已有行；不改变统一裁判，缺文件仍unknown、坏主页链接仍false。资格门禁、采样配额、PG读回与评分保持。
 
 先写真实handler+正式step计划的smoke，修复前ENOENT触发失败；修复后相关73测试通过。零评论、零采样仍如实为零，不当作首5样本验收成功。真机收益须正式发布后重新验收，保留旧失败回执。
+
+发布检查：PR 必须声明同一 GP-Anchor，并等待正式 CI/Pilot 验证通过后部署，不热改冻结批次。
