@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 const SCRIPT = new URL("../douyin-phone-adb", import.meta.url).pathname;
 const ORIG_IME = "com.baidu.input_huawei/.ImeService";
 const RUN = "skill-factory-douyin-publish-1010";
+const TEST_PYTHON_BIN = spawnSync("sh", ["-c", "command -v python3"], { encoding: "utf8" }).stdout.trim();
 
 test("前置：zsh 与 /usr/bin/xmllint 可用", () => {
   assert.equal(spawnSync("zsh", ["-c", "exit 0"]).error, undefined, "没有 zsh，请在 CI 里装上");
@@ -190,7 +191,7 @@ function run(ctx, args, extraEnv = {}, { owner = RUN } = {}) {
     const p = spawn("zsh", [SCRIPT, "--profile", "legacy", ...pre, ...args], {
       env: {
         ...process.env, STATE_DIR: ctx.state, DOUYIN_PHONE_REGISTRY: ctx.reg, DOUYIN_ADB_BIN: ctx.adb,
-        DOUYIN_PHONE_TMP_ROOT: ctx.tmpRoot, ...extraEnv,
+        DOUYIN_PHONE_TMP_ROOT: ctx.tmpRoot, DOUYIN_PYTHON_BIN: TEST_PYTHON_BIN, ...extraEnv,
       },
     });
     let out = "", err = "";

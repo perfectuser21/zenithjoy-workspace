@@ -125,7 +125,7 @@ try {
   let cursor;
   do {
     const response = await notionReq(token, `/databases/${DEVICE_DB}/query`, 'POST', {
-      page_size: 100,
+      page_size: 100, 
       ...(cursor ? { start_cursor: cursor } : {}),
     });
     for (const p of response.results ?? []) {
