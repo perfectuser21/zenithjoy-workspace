@@ -145,3 +145,15 @@ for(const options of [{wrongFocus:true},{ambiguousFocus:true},{pauseFails:true},
  const r=pausedIdle(options);assert.notEqual(r.status,0,r.stderr);assert.doesNotMatch(r.stdout,/video_opened=1/);assert.doesNotMatch(r.calls,/input tap|input keyevent 126/);
  if(options.wrongFocus||options.ambiguousFocus||options.pauseFails)assert.equal(r.state.dumps,0);
 });
+
+test('CLI夹具显式使用实际Python，外界错误DOUYIN_PYTHON_BIN不能使正例失败或负例假绿',()=>{
+ const previous=process.env.DOUYIN_PYTHON_BIN;
+ process.env.DOUYIN_PYTHON_BIN='/fixture-invalid-python-bin/python3';
+ try {
+  const good=pausedIdle({command:'open-comments'});assert.equal(good.status,0,good.stderr);assert.match(good.stdout,/comments_opened=1/);
+  const bad=pausedIdle({command:'open-comments',visionFallback:true,wrongPackage:true});assert.notEqual(bad.status,0);assert.doesNotMatch(bad.stdout,/comments_opened=1/);assert.doesNotMatch(bad.calls,/LOCATE|input tap/);
+  assert.doesNotMatch(good.stderr+bad.stderr,/no such file|not found|fixture-invalid-python/);
+ } finally {
+  if(previous===undefined)delete process.env.DOUYIN_PYTHON_BIN;else process.env.DOUYIN_PYTHON_BIN=previous;
+ }
+});
