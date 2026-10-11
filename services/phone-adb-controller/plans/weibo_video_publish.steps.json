@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "weibo_video_publish",
   "brain_workflow_key": "weibo_video_publish.android",
-  "contract_sha256": "a2bd8c85bab648bdf373dbd57e286b6a451d6bdbab4edcbf074012cf6836f656",
+  "contract_sha256": "8b24fa98f863a26113107925be8aa512e1a2148542211190ba2d272067a53af1",
   "promotion": {
     "min_consecutive_pass": 20
   },

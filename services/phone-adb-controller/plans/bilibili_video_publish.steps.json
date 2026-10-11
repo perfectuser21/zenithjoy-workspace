@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "bilibili_video_publish",
   "brain_workflow_key": "bilibili_video_publish.android",
-  "contract_sha256": "a94933375dbb6c541dad11f2746cb22347bc8e4d911439275c939efc2942c095",
+  "contract_sha256": "102836070bbc766cf9a6f599c1bbd101e3f175f0d65a401acb56d87dfddc4088",
   "promotion": {
     "min_consecutive_pass": 20
   },

@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "wechat_channels_video_publish",
   "brain_workflow_key": "wechat_channels_video_publish.android",
-  "contract_sha256": "2f9698bc8ce3bf9c7ffe2a2965c064c3f5467e15785b375707e5c91b602956f5",
+  "contract_sha256": "494fc4114d8da23b92ea7cc4e62f9a8e37d52fdc5304c4415a16c4cd46187766",
   "promotion": {
     "min_consecutive_pass": 20
   },

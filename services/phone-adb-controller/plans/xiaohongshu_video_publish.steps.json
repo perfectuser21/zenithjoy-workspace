@@ -2,7 +2,7 @@
   "version": 1,
   "capability": "xiaohongshu_video_publish",
   "brain_workflow_key": "xiaohongshu_video_publish.android",
-  "contract_sha256": "f509dd6ea0338a1632b3f1ffbc7d845b3c9368040ed31f380a2070e51a175567",
+  "contract_sha256": "62ce17fc017a037d4354f757219acc00eeaf4bdef67539bba18bf57313f0c9d7",
   "promotion": {
     "min_consecutive_pass": 20
   },

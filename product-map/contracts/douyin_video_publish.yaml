@@ -83,22 +83,6 @@ activities:
     repo: perfectuser21/zenithjoy-workspace
     path: .agents/skills/multi-platform-publish/SKILL.md
     revision: contract
-  - kind: skill
-    repo: perfectuser21/zenithjoy-workspace
-    path: .agents/skills/multi-platform-publish/agents/openai.yaml
-    revision: contract
-  - kind: skill
-    repo: perfectuser21/zenithjoy-workspace
-    path: .agents/skills/multi-platform-publish/references/catalog.json
-    revision: contract
-  - kind: skill
-    repo: perfectuser21/zenithjoy-workspace
-    path: .agents/skills/multi-platform-publish/references/publishing-matrix.md
-    revision: contract
-  - kind: skill
-    repo: perfectuser21/zenithjoy-workspace
-    path: .agents/skills/multi-platform-publish/references/android-additional-modes.md
-    revision: contract
   - kind: code
     repo: perfectuser21/zenithjoy-workspace
     path: .agents/skills/multi-platform-publish/scripts/publish_catalog.py
