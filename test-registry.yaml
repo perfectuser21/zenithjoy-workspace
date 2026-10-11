@@ -7230,3 +7230,11 @@ agent_suite:
   status: active
   product: AI员工
   note: "GP-Anchor: line02/keyword_acquisition#step2；原AI30真实零时长树、可选字段无匹配及grep2错误保留"
+
+- id: codex-native-publishing-contracts
+  path: scripts/product-map/__tests__/publishing-contracts.test.js
+  type: unit
+  ci: L2
+  status: active
+  product: 多平台发布
+  note: "QA189：8既有安卓视频来源合同/点号稳定key/共享正本/探针阶段/Codex隔离/skill资源归属与21安卓+公众号API来源范围；正常静态CI不触手机"
