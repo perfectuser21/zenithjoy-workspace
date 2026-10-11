@@ -109,7 +109,7 @@ MMV_PROBE_FILES=(
 # 生产跑的却仍是 ~/.local/bin 的旧版本,音量棘轮修复完全没生效,最后靠人工 scp 才落地。
 # 漏任一目录 = 两份副本版本分叉,且部署过程不会报任何错。层26 smoke 守卫盯这件事。
 DEVICE_CTL_FILES=(
-  phone-lock-lib.sh phone-lock-helper.py locate-element.py douyin-phone-adb
+  phone-lock-lib.sh phone-lock-helper.py locate-element.py douyin-phone-adb text-input-focus.py input-runtime-release.py
 )
 DEVICE_CTL_DIRS=(bin-harvest .local/bin)
 DEVICE_SH_FILES=(
@@ -145,6 +145,9 @@ trap 'rm -f "$DEPLOY_MANIFEST" "$OBSERVED_MANIFEST" "$MMV_MANIFEST" "$MMV_OBSERV
 node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${DEVICE_SH_FILES[@]}" "${DEVICE_NODE_FILES[@]}" "${DEVICE_PLAN_FILES[@]}" "${DEVICE_RPC_PROBE_FILES[@]}" "${DEVICE_CTL_FILES[@]}" > "$DEPLOY_MANIFEST"
 node "$D/deployment-manifest.mjs" "$(git rev-parse --show-toplevel)" "${MMV_RUNTIME_FILES[@]}" > "$MMV_MANIFEST"
 node "$D/deployment-preflight.mjs" "$DEPLOY_MANIFEST"
+# Reject incomplete/legacy input sources before any remote mutation. The paired revision
+# protects only deployments using this script; older deployment writers must adopt it too.
+python3 "$D/input-runtime-release.py" source-info "$D/douyin-phone-adb" "$D/text-input-focus.py" >/dev/null
 
 echo "=== [1/3] mmv:~/.openclaw/leadgen-scripts/ (判定链+数据层, ${#MMV_JS_FILES[@]} 个文件) ==="
 for f in "${MMV_JS_FILES[@]}"; do
@@ -279,7 +282,21 @@ done
 echo "=== [4/4] 设备控制器 → 每台机器的 ${#DEVICE_CTL_DIRS[@]} 个执行路径 (${#DEVICE_CTL_FILES[@]} 个文件) ==="
 for host in xian-m4; do
   echo "  --- $host ---"
+  # Capture both runtime paths before upload; install compares them under one deployment guard.
+  # A new paused/viewport controller is allowed when it carries the same verified input pair.
+  _input_stage="$(ssh "$host" 'mktemp -d /tmp/input-runtime-deploy.XXXXXX')"
+  scp -q -p "$D/input-runtime-release.py" "$host:$_input_stage/input-runtime-release.py"
+  if ssh "$host" "python3 $_input_stage/input-runtime-release.py capture ~/bin-harvest ~/.local/bin > $_input_stage/expected.json" && \
+     scp -q -p "$D/douyin-phone-adb" "$D/text-input-focus.py" "$host:$_input_stage/" && \
+     ssh "$host" "python3 $_input_stage/input-runtime-release.py install $_input_stage/douyin-phone-adb $_input_stage/text-input-focus.py $_input_stage/expected.json ~/.config/openclaw/douyin-phone-profiles.tsv /private/tmp/openclaw-phone/locks ~/bin-harvest ~/.local/bin"; then
+    echo "    ✅ input controller/helper pair CAS verified in both runtime paths"
+  else
+    echo "    ❌ input pair rejected (revision/source/CAS/readback); deployment cannot be declared successful"
+    FAILED=1
+  fi
+  ssh "$host" "rm -f $_input_stage/input-runtime-release.py $_input_stage/douyin-phone-adb $_input_stage/text-input-focus.py $_input_stage/expected.json; rmdir $_input_stage" || true
   for f in "${DEVICE_CTL_FILES[@]}"; do
+    [[ "$f" != "douyin-phone-adb" && "$f" != "text-input-focus.py" ]] || continue
     if [[ ! -s "$D/$f" ]]; then echo "    ⚠️ 仓库里缺失: $f (跳过)"; FAILED=1; continue; fi
     for dir in "${DEVICE_CTL_DIRS[@]}"; do
       ssh "$host" "mkdir -p ~/$dir"

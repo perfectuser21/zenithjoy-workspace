@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """只读绑定标准焦点EditText及既有小红书标题输入连接，拒绝猜测焦点。"""
+INPUT_RUNTIME_REVISION = 1
 import json
 import hashlib
 import re
