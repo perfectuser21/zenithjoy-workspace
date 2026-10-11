@@ -304,5 +304,5 @@ test('显式5条历史配额所有tiers只核5历史，不伪新评论或评分�
 });
 
 test('注销候选不毒死采样，重读树后5真实评论才满足配额',()=>{
- const r=run('collection',{DEREGISTERED_FIRST:'1',LEADGEN_COMMENT_LIMIT:'5'});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/COMMENT_SKIP\t7646309328911907195\taccount_deregistered/);assert.match(r.stdout,/COLLECTION\t7646309328911907195\tsampled\t5\t5\t5/);assert.equal(r.stdout.split('\n').filter(x=>x.startsWith('LEAD\t')).length,5);assert.deepEqual(r.coordinates.slice(0,2),['100 200','900 301']);assert.equal(r.calls.filter(x=>x==='commenter-card-link').length,5);assert.ok(r.calls.indexOf('collect-comments',r.calls.indexOf('commenter-identity')+1)<r.calls.indexOf('tap-evidence'));
+ const r=run('collection',{DEREGISTERED_FIRST:'1',LEADGEN_COMMENT_LIMIT:'5',LEADGEN_SOURCE_RUN:'source101'});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/COMMENT_SKIP\t7646309328911907195\taccount_deregistered/);assert.match(r.stdout,/COLLECTION\t7646309328911907195\tsampled\t5\t5\t5/);assert.equal(r.stdout.split('\n').filter(x=>x.startsWith('LEAD\t')).length,5);assert.deepEqual(r.coordinates.slice(0,2),['100 200','900 301']);assert.equal(r.calls.filter(x=>x==='commenter-card-link').length,5);assert.ok(r.calls.indexOf('collect-comments',r.calls.indexOf('commenter-identity')+1)<r.calls.indexOf('tap-evidence'));
 });
