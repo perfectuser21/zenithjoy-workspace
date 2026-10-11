@@ -1,12 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync} from 'node:fs';
-import {join} from 'node:path';
+import {mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, accessSync, constants} from 'node:fs';
+import {join, isAbsolute} from 'node:path';
 import {tmpdir} from 'node:os';
 
 const script = new URL('../douyin-phone-adb', import.meta.url).pathname;
 const fixture = new URL('./fixtures/video-detail-from-search.xml', import.meta.url).pathname;
+const pythonProbe=spawnSync('python3',['-c','import sys;print(sys.executable)'],{encoding:'utf8'});
+assert.equal(pythonProbe.status,0,pythonProbe.stderr);
+const pythonBin=pythonProbe.stdout.trim();assert.ok(isAbsolute(pythonBin));accessSync(pythonBin,constants.X_OK);
 
 test('open-video pauses an autoplaying detail before reading its UI and restores playback', () => {
   const dir = mkdtempSync(join(tmpdir(), 'open-video-autoplay-'));
@@ -32,7 +35,7 @@ else if(a.includes('stat -c %s'))console.log(fs.existsSync(p.join(d,'remote.xml'
 else if(a.includes(' pull ')){const n=process.argv.indexOf('pull');if(process.argv[n+1].endsWith('.xml'))fs.copyFileSync(p.join(d,'remote.xml'),process.argv[n+2]);else fs.writeFileSync(process.argv[n+2],'png');}
 `, {mode: 0o755});
     const r = spawnSync('zsh', [script, '--profile', 'legacy', 'open-video', '7681632828384394202', 'fresh-after-card-open'], {
-      env: {...process.env, HOME: dir, DOUYIN_PHONE_REGISTRY: join(dir,'registry.tsv'), DOUYIN_ADB_BIN: adb,
+      env: {...process.env, HOME: dir, DOUYIN_PYTHON_BIN: pythonBin, DOUYIN_PHONE_REGISTRY: join(dir,'registry.tsv'), DOUYIN_ADB_BIN: adb,
         DOUYIN_SIPS_BIN: '/usr/bin/true', DOUYIN_PHONE_TMP_ROOT: join(dir,'tmp'), FAKE_PHONE_DIR: dir, FAKE_DETAIL_XML: fixture},
       encoding: 'utf8', timeout: 8000,
     });
@@ -82,13 +85,13 @@ save();
     const evidence=join(dir,'evidence');mkdirSync(evidence,{recursive:true});
     if(stale){writeFileSync(join(evidence,'read.xml'),detail);writeFileSync(join(dir,'remote.xml'),detail);}
     const key=join(dir,'fixture-key');writeFileSync(key,'FIXTURE_ONLY=1\n');const locator=join(dir,'locate.py');writeFileSync(locator,`import os\nwith open(os.path.join(os.environ['FAKE_PHONE_DIR'],'calls'),'a') as f:f.write('LOCATE\\n')\nprint('1100 1600')\n`);
-    const env={...process.env,HOME:dir,FAKE_PHONE_DIR:dir,DOUYIN_PHONE_REGISTRY:join(dir,'registry.tsv'),DOUYIN_ADB_BIN:adb,DOUYIN_SIPS_BIN:'/usr/bin/true',DOUYIN_PHONE_TMP_ROOT:join(dir,'tmp'),...(visionFallback?{DOUYIN_LOCATE_SCRIPT:locator,DOUYIN_LOCATE_KEY_FILE:key}:{})};
+    const env={...process.env,HOME:dir,DOUYIN_PYTHON_BIN:pythonBin,FAKE_PHONE_DIR:dir,DOUYIN_PHONE_REGISTRY:join(dir,'registry.tsv'),DOUYIN_ADB_BIN:adb,DOUYIN_SIPS_BIN:'/usr/bin/true',DOUYIN_PHONE_TMP_ROOT:join(dir,'tmp'),...(visionFallback?{DOUYIN_LOCATE_SCRIPT:locator,DOUYIN_LOCATE_KEY_FILE:key}:{})};
     let args=[runner,'--profile','legacy',command,...(command==='open-video'?['7681632828384394202','idle-open']:['idle-comments'])];
     if(command==='wave'){
       const names=['_is_video_detail_xml','_is_fresh_share_detail_xml','_is_complete_douyin_xml','_foreground_is_exact_douyin','_ui_evidence_wave'];
       const functions=names.map(n=>source.match(new RegExp('^'+n+'\\(\\) \\{[\\s\\S]*?^\\}','m'))?.[0]||'').join('\n');
       args=['-c',`set -eu; require_evidence_id(){ :; }; wait_ms(){ :; }; foreground_package(){ "$ADB" -s "$SERIAL" shell dumpsys window; }; ${functions}\n_ui_evidence_wave read "$TEST_POLICY"`];
-      Object.assign(env,{ADB:adb,SERIAL:'SER1',EVIDENCE_ROOT:evidence,REMOTE_UI:'/sdcard/ui.xml',PYTHON_BIN:'/usr/bin/python3',DOUYIN_PACKAGE:'com.ss.android.ugc.aweme',TEST_POLICY:policy});
+      Object.assign(env,{ADB:adb,SERIAL:'SER1',EVIDENCE_ROOT:evidence,REMOTE_UI:'/sdcard/ui.xml',PYTHON_BIN:pythonBin,DOUYIN_PACKAGE:'com.ss.android.ugc.aweme',TEST_POLICY:policy});
     }
     const r=spawnSync('zsh',args,{env,encoding:'utf8',timeout:15000});
     return {...r,state:JSON.parse(readFileSync(join(dir,'state.json'))),calls:existsSync(join(dir,'calls'))?readFileSync(join(dir,'calls'),'utf8'):''};
