@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "capability": "bilibili_video_publish",
+  "brain_workflow_key": "bilibili_video_publish.android",
+  "contract_sha256": "a94933375dbb6c541dad11f2746cb22347bc8e4d911439275c939efc2942c095",
+  "promotion": {
+    "min_consecutive_pass": 20
+  },
+  "steps": [
+    {
+      "key": "douyin_video_publish.preflight.preflight_evidence",
+      "activity": "preflight",
+      "at": "preflight",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "*preflight*original.json",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      },
+      "usage": {
+        "workflow_key": "bilibili_video_publish.android",
+        "slot_key": "preflight",
+        "sequence_no": 1
+      }
+    },
+    {
+      "key": "bilibili_video_publish.prepare.prepare_evidence",
+      "activity": "prepare",
+      "at": "prepare",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "*prepare*original.json",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      },
+      "usage": {
+        "workflow_key": "bilibili_video_publish.android",
+        "slot_key": "prepare",
+        "sequence_no": 2
+      }
+    },
+    {
+      "key": "bilibili_video_publish.publish.publish_evidence",
+      "activity": "publish",
+      "at": "publish",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "*publish*original.json",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      },
+      "usage": {
+        "workflow_key": "bilibili_video_publish.android",
+        "slot_key": "publish",
+        "sequence_no": 3
+      }
+    },
+    {
+      "key": "bilibili_video_publish.verify.verify_evidence",
+      "activity": "verify",
+      "at": "verify",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "*verify*original.json",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      },
+      "usage": {
+        "workflow_key": "bilibili_video_publish.android",
+        "slot_key": "verify",
+        "sequence_no": 4
+      }
+    },
+    {
+      "key": "douyin_video_publish.cleanup.cleanup_evidence",
+      "activity": "cleanup",
+      "at": "cleanup",
+      "mode": "checkpoint",
+      "readback": {
+        "type": "evidence",
+        "glob": "*cleanup*original.json",
+        "expect": {
+          "op": ">=",
+          "value": 1
+        }
+      },
+      "usage": {
+        "workflow_key": "bilibili_video_publish.android",
+        "slot_key": "cleanup",
+        "sequence_no": 5
+      }
+    }
+  ]
+}

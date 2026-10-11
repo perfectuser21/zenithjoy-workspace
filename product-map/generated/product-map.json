@@ -57,6 +57,38 @@
   ],
   "golden_paths": [
     {
+      "id": "android_worker_publish",
+      "app_id": "customer_app",
+      "line_id": "line01",
+      "name": "内容生产 · 多平台发布",
+      "status": "active",
+      "smoke_files": [
+        ".github/workflows/scripts/smoke/codex-publish-contract-smoke.sh"
+      ],
+      "steps": [
+        {
+          "id": "step1",
+          "name": "取得本人账号与同run发布上下文"
+        },
+        {
+          "id": "step2",
+          "name": "准确素材及文案形成待发布稿"
+        },
+        {
+          "id": "step3",
+          "name": "单次提交并保原outward账本"
+        },
+        {
+          "id": "step4",
+          "name": "读回准确目标及实际作品状态"
+        },
+        {
+          "id": "step5",
+          "name": "安全归位与精确双锁释放"
+        }
+      ]
+    },
+    {
       "id": "customer_first_success",
       "app_id": "customer_app",
       "line_id": "line01",
@@ -599,5 +631,5 @@
       ]
     }
   ],
-  "digest": "b99105c2199453fcea8b111948155411c9f2f45fabd69185f669db388b36c10b"
+  "digest": "22e980828662b602f1c9688a7287d262dc912d53394120de20a8c91b579effd0"
 }

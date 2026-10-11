@@ -42,7 +42,10 @@
         "collect_videos",
         "mark_leads",
         "send_dm",
-        "write_back"
+        "write_back",
+        "prepare",
+        "publish",
+        "verify"
       ]
     },
     "probe": {
@@ -91,7 +94,7 @@
         },
         "journey_cell": {
           "type": "string",
-          "pattern": "^stage:(preflight|discovery|qualification|collection|scoring|delivery|outreach|cleanup|source|dedup|write_videos|collect_videos|mark_leads|send_dm|write_back)$"
+          "pattern": "^stage:(preflight|discovery|qualification|collection|scoring|delivery|outreach|cleanup|source|dedup|write_videos|collect_videos|mark_leads|send_dm|write_back|prepare|publish|verify)$"
         },
         "probe": {
           "oneOf": [

@@ -81,7 +81,7 @@ def main(argv=None):
     if args.command == "matrix":
         print("<!-- 由 scripts/publish_catalog.py matrix 生成；真身为 catalog.json -->")
         print("# 发布内容分支清单\n")
-        print("2026-10-10：24 个逻辑内容分支候选；按平台与成品类型计数，同分支的通道不重复计数。")
+        print("2026-10-11：保留24个历史逻辑候选；当前授权范围为21个安卓模式及公众号长文官方API，共22类。候选或模式数不冒正式workflow登记数量。")
         print("此清单只记录源文件路由；实时验收状态以 Brain 任务回执为准。源文件存在不等于已上线或已跑通。\n")
         print("| 平台与类型 | 已找到的源文件通道 | 状态 |")
         print("|---|---|---|")
@@ -90,7 +90,7 @@ def main(argv=None):
             channels = "、".join(labels[c] for c in route["channels"])
             print("| " + route["name"] + " | " + channels + " | 源文件已定位 |")
         print("\n长图片归 image，渲染成品视频归 video；是否是新的独立工作流，要看触发、输入、编辑入口和结果，不能仅按叫法增加条数。")
-        print("\n缺口：知乎无独立安卓发布手册；部分手机手册只覆盖视频或图片；头条长文要核对当前 graphic 接口；公众号 API 长文正文保真、群发与链接发布模式需核对。")
+        print("\n安卓补充模式见 [补充手册](android-additional-modes.md)：小红书图文/原生长文、头条文章、微博原生文章和知乎三类。发表效果、字段保真、权限、审核终态及安全收尾分别验收；未全验的严格断言与限制保留。公众号本轮只走官方API，群发、草稿及链接模式分开判定。")
         return 0
     try:
         result = load_catalog() if args.command == "list" else plan(args.platform, args.type, args.channel)

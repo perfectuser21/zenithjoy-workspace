@@ -170,3 +170,71 @@ types:
       - location
       - target_count
       - max_duration_s
+
+  PublishRequest:
+    identity:
+    - task_id
+    source_of_truth: cecelia.tasks.result + 本run冻结receipt/原图XML/原outward账本；内容原件来自Notion
+    fields:
+    - task_id
+    - platform
+    - content_type
+    - account
+    - title
+    - body
+    - media_sha256
+    - authorized
+  PublishContext:
+    identity:
+    - task_id
+    source_of_truth: cecelia.tasks.result + 本run冻结receipt/原图XML/原outward账本；内容原件来自Notion
+    fields:
+    - task_id
+    - run_id
+    - serial
+    - owner
+    - account
+    - source_verified
+  PublishDraft:
+    identity:
+    - task_id
+    source_of_truth: cecelia.tasks.result + 本run冻结receipt/原图XML/原outward账本；内容原件来自Notion
+    fields:
+    - task_id
+    - run_id
+    - title
+    - body
+    - media_sha256
+    - privacy
+    - fields_exact
+  PublishSubmission:
+    identity:
+    - task_id
+    source_of_truth: cecelia.tasks.result + 本run冻结receipt/原图XML/原outward账本；内容原件来自Notion
+    fields:
+    - task_id
+    - run_id
+    - attempt_count
+    - submitted_at
+    - receipt_path
+  PublishEvidence:
+    identity:
+    - task_id
+    source_of_truth: cecelia.tasks.result + 本run冻结receipt/原图XML/原outward账本；内容原件来自Notion
+    fields:
+    - task_id
+    - run_id
+    - work_id
+    - actual_privacy
+    - effect_status
+    - strict_status
+  PublishCleanup:
+    identity:
+    - task_id
+    source_of_truth: cecelia.tasks.result + 本run冻结receipt/原图XML/原outward账本；内容原件来自Notion
+    fields:
+    - task_id
+    - run_id
+    - launcher
+    - controller_free
+    - brain_free

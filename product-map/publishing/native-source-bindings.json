@@ -1,0 +1,350 @@
+{
+  "schema_version": 1,
+  "authority": {
+    "root_task_id": "cbddfcdc-3c99-4872-9386-93e67b0b086a",
+    "source_result_sha256": "35c77d87b8e0f0fdcd68450c9c3dfd7450f0f7e1c1a4d7c3a4cb61c1e0908285",
+    "decision_id": "b83518cd-4516-4ffc-958a-f2c1287c0fe3",
+    "scope": "21安卓+公众号API；原24候选为历史，不作当前执行全集",
+    "verification_actor": "Codex /root；作品效果由根独立核验，source映射不替代严格运行验收"
+  },
+  "workflow_policy": "沿8个真实平台注册视频工作流绑定共享契约；22逻辑分支不机械建22流程。新增form的实际独立运行边界/工作流登记另依合同，不冒已有。",
+  "factory_status": "源码归属定义可核；自动metrics/严格守卫全通过/共享部署不据作品效果断言",
+  "branches": [
+    {
+      "branch": "douyin.video.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "25a86421-a774-40d1-8d66-54ee1d87f68d",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/catalog.json",
+      "source_state": "沿既有native或API条目；不据记录扩发布能力",
+      "skill_source_sha256": "a8d9e1911274cd30406381d1d3d9f9d9a79aceef2162d173e5a69ad0451e5878"
+    },
+    {
+      "branch": "kuaishou.video.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "020e027d-315a-4cf5-8800-70ab1e719e51",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/catalog.json",
+      "source_state": "沿既有native或API条目；不据记录扩发布能力",
+      "skill_source_sha256": "a8d9e1911274cd30406381d1d3d9f9d9a79aceef2162d173e5a69ad0451e5878"
+    },
+    {
+      "branch": "kuaishou.image.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "020e027d-315a-4cf5-8800-70ab1e719e51",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/catalog.json",
+      "source_state": "沿既有native或API条目；不据记录扩发布能力",
+      "skill_source_sha256": "a8d9e1911274cd30406381d1d3d9f9d9a79aceef2162d173e5a69ad0451e5878"
+    },
+    {
+      "branch": "xiaohongshu.video.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "ca528e34-df8b-4b8a-be58-8df3cc4f23fb",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/catalog.json",
+      "source_state": "沿既有native或API条目；不据记录扩发布能力",
+      "skill_source_sha256": "a8d9e1911274cd30406381d1d3d9f9d9a79aceef2162d173e5a69ad0451e5878"
+    },
+    {
+      "branch": "weibo.video.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "9695257a-8225-422b-8406-1353baa5aaf5",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/catalog.json",
+      "source_state": "沿既有native或API条目；不据记录扩发布能力",
+      "skill_source_sha256": "a8d9e1911274cd30406381d1d3d9f9d9a79aceef2162d173e5a69ad0451e5878"
+    },
+    {
+      "branch": "shipinhao.image.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "11dcad5a-4e3d-4f6b-a5c6-2052aec79180",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/catalog.json",
+      "source_state": "沿既有native或API条目；不据记录扩发布能力",
+      "skill_source_sha256": "a8d9e1911274cd30406381d1d3d9f9d9a79aceef2162d173e5a69ad0451e5878"
+    },
+    {
+      "branch": "toutiao.image.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "86f946f5-7262-40f5-b8d7-d99f95c2e1cb",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/catalog.json",
+      "source_state": "沿既有native或API条目；不据记录扩发布能力",
+      "skill_source_sha256": "a8d9e1911274cd30406381d1d3d9f9d9a79aceef2162d173e5a69ad0451e5878"
+    },
+    {
+      "branch": "toutiao.video.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "86f946f5-7262-40f5-b8d7-d99f95c2e1cb",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/catalog.json",
+      "source_state": "沿既有native或API条目；不据记录扩发布能力",
+      "skill_source_sha256": "a8d9e1911274cd30406381d1d3d9f9d9a79aceef2162d173e5a69ad0451e5878"
+    },
+    {
+      "branch": "douyin.image.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "25a86421-a774-40d1-8d66-54ee1d87f68d",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/catalog.json",
+      "source_state": "沿既有native或API条目；不据记录扩发布能力",
+      "skill_source_sha256": "a8d9e1911274cd30406381d1d3d9f9d9a79aceef2162d173e5a69ad0451e5878"
+    },
+    {
+      "branch": "xiaohongshu.image.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "ca528e34-df8b-4b8a-be58-8df3cc4f23fb",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/android-additional-modes.md",
+      "source_state": "facade_scoped_reference_available；真实native手册与发表/补核证据，不冒独立skill熟化或strict全通过",
+      "evidence": [
+        {
+          "path": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/remaining-xhs-image/receipt.json",
+          "sha256": "971c2ad56cbdd39d20bb83624f00ad8a28b70c1c7c79a2554420c88360c2a6ac"
+        }
+      ],
+      "skill_source_sha256": "dafccea0daa82ebd2491e219eea821c7e9f86417fd9500bb4d1e107474bd78f2"
+    },
+    {
+      "branch": "shipinhao.video.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "11dcad5a-4e3d-4f6b-a5c6-2052aec79180",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/catalog.json",
+      "source_state": "沿既有native或API条目；不据记录扩发布能力",
+      "skill_source_sha256": "a8d9e1911274cd30406381d1d3d9f9d9a79aceef2162d173e5a69ad0451e5878"
+    },
+    {
+      "branch": "douyin.article.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "25a86421-a774-40d1-8d66-54ee1d87f68d",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/catalog.json",
+      "source_state": "沿既有native或API条目；不据记录扩发布能力",
+      "skill_source_sha256": "a8d9e1911274cd30406381d1d3d9f9d9a79aceef2162d173e5a69ad0451e5878"
+    },
+    {
+      "branch": "weibo.image.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "9695257a-8225-422b-8406-1353baa5aaf5",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/catalog.json",
+      "source_state": "沿既有native或API条目；不据记录扩发布能力",
+      "skill_source_sha256": "a8d9e1911274cd30406381d1d3d9f9d9a79aceef2162d173e5a69ad0451e5878"
+    },
+    {
+      "branch": "bilibili.video.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "9dc337f9-26bb-4d48-8420-d2eeacf763b6",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/catalog.json",
+      "source_state": "沿既有native或API条目；不据记录扩发布能力",
+      "skill_source_sha256": "a8d9e1911274cd30406381d1d3d9f9d9a79aceef2162d173e5a69ad0451e5878"
+    },
+    {
+      "branch": "zhihu.article.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "27f9e99d-ed9c-4742-8363-bedb261bb694",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/android-additional-modes.md",
+      "source_state": "facade_scoped_reference_available；真实native手册与发表/补核证据，不冒独立skill熟化或strict全通过",
+      "evidence": [
+        {
+          "path": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/remaining-zhihu-article-paragraph-final/receipt.json",
+          "sha256": "2bc6aefd549676d251b65a046ca44c429e06af0ac81412079c9359d8204d7741"
+        }
+      ],
+      "skill_source_sha256": "dafccea0daa82ebd2491e219eea821c7e9f86417fd9500bb4d1e107474bd78f2"
+    },
+    {
+      "branch": "zhihu.idea.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "27f9e99d-ed9c-4742-8363-bedb261bb694",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/android-additional-modes.md",
+      "source_state": "facade_scoped_reference_available；真实native手册与发表/补核证据，不冒独立skill熟化或strict全通过",
+      "evidence": [
+        {
+          "path": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/remaining-zhihu-idea/receipt.json",
+          "sha256": "bd7636aa8ff7ae81dab80fd300b0e17e5b369e6ff51b4a4cc6626dea3c1a21ab"
+        }
+      ],
+      "skill_source_sha256": "dafccea0daa82ebd2491e219eea821c7e9f86417fd9500bb4d1e107474bd78f2"
+    },
+    {
+      "branch": "zhihu.video.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "27f9e99d-ed9c-4742-8363-bedb261bb694",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/android-additional-modes.md",
+      "source_state": "facade_scoped_reference_available；真实native手册与发表/补核证据，不冒独立skill熟化或strict全通过",
+      "evidence": [
+        {
+          "path": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/remaining-zhihu-video/receipt.json",
+          "sha256": "a33d08f6328a4dcb016456fb8810d0b9ed2aff659f80da15d336d34e91db10ee"
+        }
+      ],
+      "skill_source_sha256": "dafccea0daa82ebd2491e219eea821c7e9f86417fd9500bb4d1e107474bd78f2"
+    },
+    {
+      "branch": "bilibili.image.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "9dc337f9-26bb-4d48-8420-d2eeacf763b6",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/catalog.json",
+      "source_state": "沿既有native或API条目；不据记录扩发布能力",
+      "skill_source_sha256": "a8d9e1911274cd30406381d1d3d9f9d9a79aceef2162d173e5a69ad0451e5878"
+    },
+    {
+      "branch": "xiaohongshu.article.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "ca528e34-df8b-4b8a-be58-8df3cc4f23fb",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/android-additional-modes.md",
+      "source_state": "facade_scoped_reference_available；真实native手册与发表/补核证据，不冒独立skill熟化或strict全通过",
+      "evidence": [
+        {
+          "path": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/xhs-white-existing-full-draft-typeset-publish/receipt.json",
+          "sha256": "909eb06e07a31e1433c819e5443101f7a426a62c1ba1cd5061201a7a1ef6215e"
+        },
+        {
+          "path": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/xhs-existing-full-draft-root-verification/verify.json",
+          "sha256": "4e52c93a2573603276e4062d6e212eee8095627a9d8a0f6be32bb0b23b024500"
+        }
+      ],
+      "skill_source_sha256": "dafccea0daa82ebd2491e219eea821c7e9f86417fd9500bb4d1e107474bd78f2"
+    },
+    {
+      "branch": "toutiao.article.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "86f946f5-7262-40f5-b8d7-d99f95c2e1cb",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/android-additional-modes.md",
+      "source_state": "facade_scoped_reference_available；真实native手册与发表/补核证据，不冒独立skill熟化或strict全通过",
+      "evidence": [
+        {
+          "path": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/toutiao-existing-article-private-continuation/receipt.json",
+          "sha256": "a32804762da22fda08191fb96bd45c0b609a775935baf5e36132602c09853059"
+        }
+      ],
+      "skill_source_sha256": "dafccea0daa82ebd2491e219eea821c7e9f86417fd9500bb4d1e107474bd78f2"
+    },
+    {
+      "branch": "weibo.article.phone",
+      "channel": "android_rpa",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": "24987ee5-53a0-4c37-946f-1b749954cac7",
+      "existing_platform_video_workflow_id": "9695257a-8225-422b-8406-1353baa5aaf5",
+      "existing_workflow_use": "平台真身归属参考；不把本分支冒称已登记独立workflow",
+      "controller_code": "services/phone-adb-controller/douyin-phone-adb",
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/android-additional-modes.md",
+      "source_state": "facade_scoped_reference_available；真实native手册与发表/补核证据，不冒独立skill熟化或strict全通过",
+      "evidence": [
+        {
+          "path": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/weibo-wbox-publish-cli-order-fix/execution-effect-receipt.json",
+          "sha256": "820ba51338534fb4c132e234d62e9c5c28e421f8bce21060e8ae3c48111814c3"
+        },
+        {
+          "path": "/Users/administrator/perfect21/zenithjoy-workspace/sprints/1010-codex-publish-migration/evidence/weibo-wbox-publish-cli-order-fix/root-final-effect-cleanup-manifest-review.json",
+          "sha256": "485879708739cdecbe4d801c408e4dd244da8e65c0d1212e26e59780748356d4"
+        }
+      ],
+      "skill_source_sha256": "dafccea0daa82ebd2491e219eea821c7e9f86417fd9500bb4d1e107474bd78f2"
+    },
+    {
+      "branch": "wechat.article.api",
+      "channel": "wechat_api",
+      "root_confirmed_effect": true,
+      "strict_all_guards_pass": "not_asserted",
+      "capability_id": null,
+      "existing_platform_video_workflow_id": null,
+      "existing_workflow_use": "API分支按用户最新决定；不创建安卓公众号工作流",
+      "controller_code": null,
+      "skill_source_ref": ".agents/skills/multi-platform-publish/references/catalog.json",
+      "source_state": "沿既有native或API条目；不据记录扩发布能力",
+      "skill_source_sha256": "a8d9e1911274cd30406381d1d3d9f9d9a79aceef2162d173e5a69ad0451e5878"
+    }
+  ]
+}

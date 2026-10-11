@@ -25,7 +25,7 @@ python3 scripts/publish_catalog.py plan --platform douyin --type article --chann
 python3 scripts/publish_catalog.py plan --platform wechat --type article --channel api
 ```
 
-命令路径相对本 skill 目录。脚本只输出计划，**不执行发布**。输出的 `entrypoint`、`instructions` 和 `warnings` 是需要读取的真实源文件与缺口；不支持的通道显式失败。详情见 [内容分支清单](references/publishing-matrix.md)。
+命令路径相对本 skill 目录。脚本只输出计划，**不执行发布**。输出的 `entrypoint`、`instructions` 和 `warnings` 是需要读取的真实源文件与缺口；不支持的通道显式失败。详情见 [内容分支清单](references/publishing-matrix.md)。 当前任务范围为21个安卓模式与公众号长文API，共22类；历史24候选不是正式workflow数量，公众号本轮只走官方API。小红书图文/原生长文、头条文章、微博原生文章、知乎三类原生模式的步骤与真实验收范围见 [安卓补充手册](references/android-additional-modes.md)，使用这些phone路由时读取对应小节。
 
 默认从当前仓库定位脚本，从相邻 `zenithjoy-skills` 或已安装的 `~/.agents/skills` 定位手册。跨目录部署时可分别设置 `ZENITHJOY_WORKSPACE_ROOT` 和 `ZENITHJOY_SKILLS_ROOT`；覆盖仓库路径不会自动改变手册路径。CI 使用路由文件夹具验证索引，真实源路径与真实发布分别在执行环境验收。
 
