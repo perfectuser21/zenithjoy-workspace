@@ -26,12 +26,12 @@ function fixture(t, { fail = false, denied = false } = {}) {
   writeFileSync(join(root, '.github/workflows/scripts/smoke-baseline.txt'), names.filter(n => !n.startsWith('wechat-')).join('\n') + '\n');
   return { root, names };
 }
-function run(root, index, count = 2) {
+function run(root, index, count = 2, extraEnv = {}) {
   const output = join(root, `worker-${index}`);
   mkdirSync(output, { recursive: true });
   const result = spawnSync('bash', ['-c', caller], { cwd: root, encoding: 'utf8', timeout: 15000,
     env: { ...process.env, RUNNER_TEMP: output, GITHUB_SHA: 'f'.repeat(40), GITHUB_STEP_SUMMARY: join(output, 'summary.md'),
-      TRACE: join(output, 'trace'), SMOKE_SHARD_INDEX: String(index), SMOKE_SHARD_COUNT: String(count) } });
+      TRACE: join(output, 'trace'), SMOKE_SHARD_INDEX: String(index), SMOKE_SHARD_COUNT: String(count), ...extraEnv } });
   return { ...result, output };
 }
 function rows(output, index) {
@@ -125,4 +125,24 @@ test('原聚合拒绝未完成/伪跳过/伪债务基线/worker失败，不修�
   assert.notEqual(verify(root).status, 0, '非denylist不能变成SKIP');
   writeFileSync(file, originalRows.replace('PASS\t0', 'DEBT-FAIL\t7'));
   assert.notEqual(verify(root).status, 0, '基线失败不能改标存量债');
+});
+
+test('C排序只限发现：非ASCII UTF8脚本实际执行且继承原编码环境，完整inventory顺序一致', t => {
+  const { root, names } = fixture(t);
+  const name = 'é-中文-smoke.sh';names.push(name);
+  const dir = join(root, '.github/workflows/scripts/smoke');
+  writeFileSync(join(dir, name), `#!/bin/bash\nset -eu\nprintf '%s\\n' '${name}' >> "$TRACE"\n[ "$(locale charmap)" = UTF-8 ]\nprintf '中文→é' > "$RUNNER_TEMP/中文→é.txt"\n[ "$(cat "$RUNNER_TEMP/中文→é.txt")" = '中文→é' ]\n`);
+  writeFileSync(join(root, '.github/workflows/scripts/smoke-baseline.txt'), names.join('\n') + '\n');
+  const locale = process.platform === 'darwin' ? 'en_US.UTF-8' : 'C.UTF-8';
+  const workers = [run(root, 0, 2, { LANG: locale, LC_ALL: locale }), run(root, 1, 2, { LANG: locale, LC_ALL: locale })];
+  for (const worker of workers) assert.equal(worker.status, 0, worker.stderr + worker.stdout);
+  const all = workers.flatMap((worker, index) => rows(worker.output, index));
+  assert.deepEqual(all.map(row => row[0]).sort(), names.sort());
+  for (const [index, worker] of workers.entries()) {
+    const meta = JSON.parse(readFileSync(join(worker.output, `smoke-glob-shard-${index}/manifest.json`), 'utf8'));
+    assert.deepEqual(meta.inventory, names);
+    assert.deepEqual(rows(worker.output, index).map(row => row[0]), names.filter((_, ordinal) => ordinal % 2 === index));
+  }
+  assert.equal(readFileSync(join(workers[0].output, '中文→é.txt'), 'utf8'), '中文→é');
+  assert.equal(verify(root).status, 0);
 });
