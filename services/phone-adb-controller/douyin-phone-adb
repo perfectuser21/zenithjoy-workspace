@@ -310,7 +310,13 @@ _ui_evidence_wave() {
         print -- "$local_path"
         return 0
       fi
-      [[ "$policy" != paused-* ]] || return 3
+      if [[ "$policy" == paused-* ]]; then
+        # 仅复用旧严格判据的拒绝诊断；其结果不能覆盖新鲜包/nonce校验失败。
+        if [[ "$policy" == paused-detail ]]; then
+          _is_video_detail_xml "$local_path" >/dev/null || true
+        fi
+        return 3
+      fi
     fi
     if [[ ( "$policy" == verified-seed-share || "$policy" == paused-* ) && "$dump_attempt" == 1 && "$dump_output" == *"could not get idle state"* && ! -s "$local_path" ]] && { [[ "$policy" == verified-seed-share ]] || { [[ "$remote_size" == <-> ]] && (( remote_size == 0 )); }; }; then
       elapsed="$("$PYTHON_BIN" -c 'import sys,time; print((time.monotonic_ns()-int(sys.argv[1]))//1000000)' "$started")"
@@ -342,7 +348,13 @@ _ui_evidence_wave() {
         print -- "$local_path"
         return 0
       fi
-      [[ "$policy" != paused-* ]] || return 3
+      if [[ "$policy" == paused-* ]]; then
+        # 仅复用旧严格判据的拒绝诊断；其结果不能覆盖新鲜包/nonce校验失败。
+        if [[ "$policy" == paused-detail ]]; then
+          _is_video_detail_xml "$local_path" >/dev/null || true
+        fi
+        return 3
+      fi
     fi
   fi
   return 1

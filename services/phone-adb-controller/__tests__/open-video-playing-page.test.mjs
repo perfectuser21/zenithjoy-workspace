@@ -85,7 +85,7 @@ save();
     const env={...process.env,HOME:dir,FAKE_PHONE_DIR:dir,DOUYIN_PHONE_REGISTRY:join(dir,'registry.tsv'),DOUYIN_ADB_BIN:adb,DOUYIN_SIPS_BIN:'/usr/bin/true',DOUYIN_PHONE_TMP_ROOT:join(dir,'tmp'),...(visionFallback?{DOUYIN_LOCATE_SCRIPT:locator,DOUYIN_LOCATE_KEY_FILE:key}:{})};
     let args=[runner,'--profile','legacy',command,...(command==='open-video'?['7681632828384394202','idle-open']:['idle-comments'])];
     if(command==='wave'){
-      const names=['_is_fresh_share_detail_xml','_is_complete_douyin_xml','_foreground_is_exact_douyin','_ui_evidence_wave'];
+      const names=['_is_video_detail_xml','_is_fresh_share_detail_xml','_is_complete_douyin_xml','_foreground_is_exact_douyin','_ui_evidence_wave'];
       const functions=names.map(n=>source.match(new RegExp('^'+n+'\\(\\) \\{[\\s\\S]*?^\\}','m'))?.[0]||'').join('\n');
       args=['-c',`set -eu; require_evidence_id(){ :; }; wait_ms(){ :; }; foreground_package(){ "$ADB" -s "$SERIAL" shell dumpsys window; }; ${functions}\n_ui_evidence_wave read "$TEST_POLICY"`];
       Object.assign(env,{ADB:adb,SERIAL:'SER1',EVIDENCE_ROOT:evidence,REMOTE_UI:'/sdcard/ui.xml',PYTHON_BIN:'/usr/bin/python3',DOUYIN_PACKAGE:'com.ss.android.ugc.aweme',TEST_POLICY:policy});
