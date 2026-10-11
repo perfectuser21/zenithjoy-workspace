@@ -79,7 +79,7 @@ else if(has('uiautomator dump')){s.dumps++;save();
  else {console.error(${JSON.stringify(error)}==='idle'?'ERROR: could not get idle state':'ERROR: transport unavailable');process.exit(1);}
 }else if(has('exec-out screencap'))process.stdout.write('fixture-image');
 else if(has('stat -c %s')){
- if(${androidStat}&&!fs.existsSync(p.join(d,'remote.xml'))){console.error(${JSON.stringify(statError)}==='enoent'?"stat: '"+a[a.length-1]+"': No such file or directory":'stat: Permission denied');process.exit(1);}
+ if(${androidStat}&&!fs.existsSync(p.join(d,'remote.xml'))){if(${JSON.stringify(statError)}==='numeric_failure'){console.log('0');process.exit(1);}console.error(${JSON.stringify(statError)}==='enoent'?"stat: '"+a[a.length-1]+"': No such file or directory":'stat: Permission denied');process.exit(1);}
  console.log(${unknownStat}?'unknown':fs.existsSync(p.join(d,'remote.xml'))?fs.statSync(p.join(d,'remote.xml')).size:0);
 }else if(has('REMOTE_UI_ABSENT_V1')){
  if(fs.existsSync(p.join(d,'remote.xml'))||${JSON.stringify(absence)}==='exists'||${JSON.stringify(absence)}==='dangling')process.exit(1);
@@ -173,6 +173,11 @@ test('Android ENOENT加本次独立absence ACK使真实open-video首idle仅一�
  const r=pausedIdle({androidStat:true});assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/video_opened=1/);
  assert.equal(r.state.dumps,4,'两阶段各首次idle失败+新鲜兜底，不能仍各3失败');assert.equal(r.state.toggles,4);assert.equal(r.state.play,'playing');
  assert.match(r.calls,/REMOTE_UI_ABSENT_V1/);assert.match(r.stderr,/paused-idle:/);
+ const statCall=r.calls.split('\n').find(l=>l.includes('stat -c %s'));const path=statCall.split(' ').at(-1);
+ const absenceCalls=r.calls.split('\n').filter(l=>l.includes('REMOTE_UI_ABSENT_V1'));assert.ok(absenceCalls.every(l=>l.includes(`[ ! -e '${path}' ] && [ ! -L '${path}' ]`)));
+});
+test('stat非零即使stdout伪数字0也不能当成功大小0',()=>{
+ const r=pausedIdle({command:'wave',androidStat:true,statError:'numeric_failure'});assert.equal(r.status,0,r.stderr);assert.equal(r.state.dumps,4);assert.doesNotMatch(r.stderr,/paused-idle:/);assert.doesNotMatch(r.calls,/REMOTE_UI_ABSENT_V1/);
 });
 for(const absence of ['permission','timeout','exists','dangling','empty','malformed','duplicate'])test('Android ENOENT但absence不可信保三次尝试 '+absence,()=>{
  const r=pausedIdle({command:'wave',androidStat:true,absence});assert.equal(r.status,0,r.stderr);
