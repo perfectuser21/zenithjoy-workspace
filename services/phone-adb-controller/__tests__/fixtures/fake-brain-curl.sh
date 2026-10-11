@@ -6,6 +6,7 @@
 #   unknown-<serial>  存在 → acquire 返回 404 未注册设备
 #   held-<serial>     acquire 成功后写入 owner；release 只放本 owner
 # 每次调用追加一行到 $FAKE_BRAIN_DIR/calls.log：<acquire|release> <serial> <owner> <ttl> <鉴权头>
+#   旁路上报 /bypass-actions/report 记一行：bypass-report<TAB><鉴权头><TAB><原始 JSON body>
 D="${FAKE_BRAIN_DIR:?}"
 url="" data="" auth=""
 while [ $# -gt 0 ]; do
@@ -37,6 +38,10 @@ case "$url" in
     else
       printf '{"success":false,"error":"not locked by %s"}\n409' "$owner"
     fi;;
+  */bypass-actions/report)
+    # 旁路报警（派发总闸 H）：整行 body 原样记下，供测试解析
+    printf 'bypass-report\t%s\t%s\n' "$auth" "$data" >> "$D/calls.log"
+    printf '{"success":true,"bypass":true,"recorded":true}\n200';;
   *) printf '{}\n404';;
 esac
 exit 0
