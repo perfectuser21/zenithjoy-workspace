@@ -15,9 +15,9 @@
       }
     },
     "bilibili_video_publish": {
-      "sha256": "a94933375dbb6c541dad11f2746cb22347bc8e4d911439275c939efc2942c095",
+      "sha256": "102836070bbc766cf9a6f599c1bbd101e3f175f0d65a401acb56d87dfddc4088",
       "activities": {
-        "preflight": "d25756a20c3aefa718bb0423b87dd8b2b8bf4d4881eb593cbb9138ca4f3e700d",
+        "preflight": "5e6451ce088066250e1c053ed7af0a97785e25791b8ea54e91918ea558051ebf",
         "prepare": "2e386c57a1c06126c85284e27bd806ab13128067c42dd5e392a5a7850162d7e3",
         "publish": "d501cb09a40a44b6c92cd32e0a05c67c515911a83e797e539cb1fe646d699422",
         "verify": "ffc959a4bc03c751f99836c8ce3b97dbdf010c99044a09f563d8e26485936685",
@@ -59,9 +59,9 @@
       }
     },
     "douyin_video_publish": {
-      "sha256": "b105a21bdfef34e5dd40fd6bbc05cb1ee011a2d68c8d0ce3a3ddd0ed6900e13c",
+      "sha256": "9d692bdecd87356c9d8082be64421a6961e3d9dedc91244a6e83858daa837816",
       "activities": {
-        "preflight": "d25756a20c3aefa718bb0423b87dd8b2b8bf4d4881eb593cbb9138ca4f3e700d",
+        "preflight": "5e6451ce088066250e1c053ed7af0a97785e25791b8ea54e91918ea558051ebf",
         "prepare": "db39a0fa0b836a64b8f818e3f1df4c14d39f5e100a82dda819ee2c3e8d967ecd",
         "publish": "23544f5c2017f88f2c145efc5e07223f79844b49ef3cd09e4dd0b2e8a4126998",
         "verify": "af27ef29e080a45e6358437f8d3710668d31be599500aa78114a7c7ccfb49336",
@@ -82,9 +82,9 @@
       }
     },
     "kuaishou_video_publish": {
-      "sha256": "3c45d35a7fcf52dec84234fe1fdf5919e6a18e4d39203f55eeca5f106224f740",
+      "sha256": "25716937f2dd23072f5d1152f51a0c63c4790b1ece3755a04d732e7a86d66bac",
       "activities": {
-        "preflight": "d25756a20c3aefa718bb0423b87dd8b2b8bf4d4881eb593cbb9138ca4f3e700d",
+        "preflight": "5e6451ce088066250e1c053ed7af0a97785e25791b8ea54e91918ea558051ebf",
         "prepare": "b9c25cd8be7fb844064dcb3eac6294b68a24de4d0df3216e0f18b358ba5b60a7",
         "publish": "d7d6f1a40ca1ac75a96f6981bd47ca4fec483c698ec670a40436de17368c3261",
         "verify": "cc90a06e38c8943666088207610186f67cdb3069d6eddc5ccfc050405fd3aafc",
@@ -92,9 +92,9 @@
       }
     },
     "toutiao_video_publish": {
-      "sha256": "30062974bcfd664abd1e70b8019a05d02857e4b7205605006450e9667dcf8d56",
+      "sha256": "f1dfaf97a101c1cb5844c7f744248e6e2c07df54c979bc523f908e403d6dbdb8",
       "activities": {
-        "preflight": "d25756a20c3aefa718bb0423b87dd8b2b8bf4d4881eb593cbb9138ca4f3e700d",
+        "preflight": "5e6451ce088066250e1c053ed7af0a97785e25791b8ea54e91918ea558051ebf",
         "prepare": "78666569e097baa73863725af8a4a8ec1b1de1edaf955cf1726cfc556acf7f2e",
         "publish": "cac17ddd0ed85602c3b3e10118095727d30eaa59549e8b434ce79f27488cb100",
         "verify": "23817eabf69547f0b084792e4e263f0e982e72018dffc882d95d895b22fd136a",
@@ -102,9 +102,9 @@
       }
     },
     "wechat_channels_video_publish": {
-      "sha256": "2f9698bc8ce3bf9c7ffe2a2965c064c3f5467e15785b375707e5c91b602956f5",
+      "sha256": "494fc4114d8da23b92ea7cc4e62f9a8e37d52fdc5304c4415a16c4cd46187766",
       "activities": {
-        "preflight": "d25756a20c3aefa718bb0423b87dd8b2b8bf4d4881eb593cbb9138ca4f3e700d",
+        "preflight": "5e6451ce088066250e1c053ed7af0a97785e25791b8ea54e91918ea558051ebf",
         "prepare": "3740282155f9bbc75eedfab5f19c7a5ea0407c1208643ee7e199f5fcb43f9b41",
         "publish": "c6b353552c3c669de77d0b6b5f504d60ca4a0ba070ab03982518ca1ef696c75b",
         "verify": "26c86d065776bcdb50f91fa515acaa2c2558c930746f6e937f23d74921ece662",
@@ -112,9 +112,9 @@
       }
     },
     "weibo_video_publish": {
-      "sha256": "a2bd8c85bab648bdf373dbd57e286b6a451d6bdbab4edcbf074012cf6836f656",
+      "sha256": "8b24fa98f863a26113107925be8aa512e1a2148542211190ba2d272067a53af1",
       "activities": {
-        "preflight": "d25756a20c3aefa718bb0423b87dd8b2b8bf4d4881eb593cbb9138ca4f3e700d",
+        "preflight": "5e6451ce088066250e1c053ed7af0a97785e25791b8ea54e91918ea558051ebf",
         "prepare": "76e9521c960ac8fc9079e801f59ae1eb1556fe8098322e1a124cd7bfe5d6dc99",
         "publish": "da240a8cc1ebed2cb3f6e44762d1d25fdae0a229ff29d5acd53597bec1d85cee",
         "verify": "d4c9e6d86419fd7485256916de0250d8b1e28216694b60101337b378610e5750",
@@ -122,9 +122,9 @@
       }
     },
     "xiaohongshu_video_publish": {
-      "sha256": "f509dd6ea0338a1632b3f1ffbc7d845b3c9368040ed31f380a2070e51a175567",
+      "sha256": "62ce17fc017a037d4354f757219acc00eeaf4bdef67539bba18bf57313f0c9d7",
       "activities": {
-        "preflight": "d25756a20c3aefa718bb0423b87dd8b2b8bf4d4881eb593cbb9138ca4f3e700d",
+        "preflight": "5e6451ce088066250e1c053ed7af0a97785e25791b8ea54e91918ea558051ebf",
         "prepare": "bffeefa16034b6c6fb4dad2b94b79af845ad46874fca064bc905293894637744",
         "publish": "5b91c55e66f64b539be038399b99f3e72d0d94323aeff4ebf5130419fca0477a",
         "verify": "54b548bbdbbef51628519b4806a73bf3fd04e512401c16560871e00dea5accd3",
@@ -132,9 +132,9 @@
       }
     },
     "zhihu_video_publish": {
-      "sha256": "186960ad183dac14f431198609b6338d3031c8fc7e0457006f974487c7879c6a",
+      "sha256": "3143cb06eaa7a56c4ddb7f536e1f4f5eda56bb57238255e9bfca9e9253cf14f8",
       "activities": {
-        "preflight": "d25756a20c3aefa718bb0423b87dd8b2b8bf4d4881eb593cbb9138ca4f3e700d",
+        "preflight": "5e6451ce088066250e1c053ed7af0a97785e25791b8ea54e91918ea558051ebf",
         "prepare": "40f0bc5c2ce09efc1e93b66406ec9a30e022a1072b15c97394d00cd6b30ea040",
         "publish": "4d7591ea1f94d1cdfaf2a178f97c9be0196618e98feafca133ee814f5cda7bd9",
         "verify": "ef5cd0c44413678db42d479feb351c45d387a178eb8f2978246e27332c2a3efc",

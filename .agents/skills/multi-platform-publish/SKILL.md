@@ -1,6 +1,8 @@
 ---
 name: multi-platform-publish
 description: 用 Codex 执行 ZenithJoy 九平台发布；按平台、图文、视频、长文或想法选择已有手机手册、浏览器脚本或公众号 API。用于发布任务、发布队列和迁移后的发布检查。
+metadata:
+  version: "1.0.0"
 ---
 
 # 九平台发布
@@ -54,3 +56,12 @@ python3 scripts/publish_catalog.py plan --platform wechat --type article --chann
 - 公众号群发先拿 `msg_id`，再读回 `SEND_SUCCESS`；仅有 `media_id` 是草稿。源码若返回 `SENDING` 仍以 0 退出，也不能报成功。
 
 结果输出简体中文，短表列出平台、类型、通道、任务 id、实际结果和证据位置。准确区分源文件已找到、Codex 静态适配完成、真机验证通过。
+
+## 根技能与辅助资料
+
+本技能的版本身份由上方 `name` 与 `metadata.version` 声明；正式 Skill 绑定指向本 `SKILL.md`。下列文件是此根技能的配置或参考资料，通过这些关系读取，不作为独立 Skill 或运行代码绑定：
+
+- [Codex 展示配置](agents/openai.yaml)
+- [发布源目录](references/catalog.json)
+- [内容分支矩阵](references/publishing-matrix.md)
+- [安卓补充模式](references/android-additional-modes.md)
