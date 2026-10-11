@@ -49,6 +49,13 @@ if (a[0] === "push") {
   fs.copyFileSync(a[1], dst); out("1 file pushed\\n"); process.exit(0);
 }
 if (a[0] === "pull") {
+  if (process.env.FAKE_ZHIHU_SEARCH_FIXTURES) {
+    const phase=read("typed") ? "typed" : read("ime").includes("adbkeyboard") ? "ready" : "before";
+    let xml=fs.readFileSync(path.join(process.env.FAKE_ZHIHU_SEARCH_FIXTURES,"zhihu-search-"+phase+".xml"),"utf8");
+    if(phase==="typed" && process.env.FAKE_ZHIHU_SEARCH_WRONG_TEXT==="1")xml=xml.replace("傍晚的颜色，慢一点也很好","傍晚的颜色，慢一点也很差");
+    if(phase==="ready" && process.env.FAKE_ZHIHU_SEARCH_READY_DRIFT==="1")xml=xml.replace('[180,177][1109,243]','[180,177][1057,243]');
+    fs.writeFileSync(a[2],xml);process.exit(0);
+  }
   if (process.env.FAKE_TOUTIAO_SEARCH_FIXTURES) {
     let xml=fs.readFileSync(path.join(process.env.FAKE_TOUTIAO_SEARCH_FIXTURES,"toutiao-search-before.xml"),"utf8");
     const text=read("typed");
@@ -483,4 +490,19 @@ test('text-input 头条模拟typed带搜索框前缀仍失败，不擅自剥离�
 test('text-input 头条身份变化且IME无法恢复时needs_human',async()=>{
  const c=setup();const r=await run(c,['text-input','测试'],{...TT_SEARCH_ENV,FAKE_TOUTIAO_READY_TOKEN:'1',FAKE_RESTORE_STUCK:'1'});
  assert.equal(r.code,2);assert.match(r.err,/failure_class=needs_human/);assert.doesNotMatch(calls(c),/ADB_CLEAR_TEXT|ADB_INPUT_B64/);
+});
+
+const ZH_SEARCH_ENV={FAKE_ZHIHU_SEARCH_FIXTURES:zhBodyFixtures};
+test('text-input 真实知乎短标题原三XML清除按钮收窄精确回读并恢复IME',async()=>{
+ const c=setup();const r=await run(c,['text-input','傍晚的颜色，慢一点也很好'],ZH_SEARCH_ENV);
+ assert.equal(r.code,0,r.err);assert.match(r.out,/comparison_mode=exact source_bytes=36/);assert.match(r.out,/actual_bytes=36/);assert.equal(ime(c),ORIG_IME);
+ assert.equal((calls(c).match(/ADB_INPUT_B64/g)||[]).length,1);
+});
+test('text-input 知乎搜索ready收窄必须在clear/input前拒绝并恢复IME',async()=>{
+ const c=setup();const r=await run(c,['text-input','傍晚的颜色，慢一点也很好'],{...ZH_SEARCH_ENV,FAKE_ZHIHU_SEARCH_READY_DRIFT:'1'});
+ assert.equal(r.code,2);assert.match(r.out,/no_focused_input/);assert.doesNotMatch(calls(c),/ADB_CLEAR_TEXT|ADB_INPUT_B64/);assert.equal(ime(c),ORIG_IME);
+});
+test('text-input 知乎搜索实字变化拒绝并恢复IME，不重输',async()=>{
+ const c=setup();const r=await run(c,['text-input','傍晚的颜色，慢一点也很好'],{...ZH_SEARCH_ENV,FAKE_ZHIHU_SEARCH_WRONG_TEXT:'1'});
+ assert.equal(r.code,2);assert.match(r.out,/readback_mismatch/);assert.equal(ime(c),ORIG_IME);assert.equal((calls(c).match(/ADB_INPUT_B64/g)||[]).length,1);
 });

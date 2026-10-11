@@ -171,3 +171,54 @@ test('头条typed严格原text回读模型，不猜测搜索框前缀',()=>{
  writeFileSync(c.xp,ttNodeChange(ttBefore,n=>n.replace(/text="[^"]*"/,'text="搜索框，'+title+'"')));
  assert.equal(run('readback',c.selection,c.xp).stdout,'搜索框，'+title);
 });
+
+const zhSearch=phase=>new URL('./fixtures/zhihu-search-'+phase+'.xml',import.meta.url).pathname;
+test('真实知乎短标题search清除按钮出现只缩右缘可精确回读',()=>{
+ const c=setup();const r=run('standard-resolve',zhSearch('before'));assert.equal(r.status,0,r.stderr);writeFileSync(c.selection,r.stdout);
+ assert.equal(run('standard-check',c.selection,zhSearch('ready')).status,0);
+ const read=run('standard-readback',c.selection,zhSearch('typed'));assert.equal(read.status,0,read.stderr);assert.equal(read.stdout,'傍晚的颜色，慢一点也很好');
+});
+
+const zhSearchTyped=readFileSync(zhSearch('typed'),'utf8');
+const searchFieldChange=(x,fn)=>x.replace(/<node[^>]*resource-id="com.zhihu.android:id\/input_text"[^>]*>/,fn);
+function searchSelection(){const c=setup();const r=run('standard-resolve',zhSearch('before'));assert.equal(r.status,0,r.stderr);writeFileSync(c.selection,r.stdout);return c;}
+for(const [name,change] of [
+ ['wrongmarker',x=>x.replace('text="搜索"','text="发送"')],
+ ['wrongpkg',x=>searchFieldChange(x,n=>n.replace('package="com.zhihu.android"','package="com.other.app"'))],
+ ['wrongid',x=>x.replaceAll('com.zhihu.android:id/input_text','com.zhihu.android:id/other_text')],
+ ['wrongclass',x=>searchFieldChange(x,n=>n.replace('android.widget.EditText','android.widget.RelativeLayout'))],
+ ['重复input',x=>x.replace('</hierarchy>','<node resource-id="com.zhihu.android:id/input_text" class="android.widget.EditText" focused="false"/></hierarchy>')],
+ ['多focus',x=>x.replace('</hierarchy>','<node focused="true"/></hierarchy>')],
+ ['password',x=>searchFieldChange(x,n=>n.replace('password="false"','password="true"'))],
+ ['disabled',x=>searchFieldChange(x,n=>n.replace('enabled="true"','enabled="false"'))],
+ ['readonly',x=>searchFieldChange(x,n=>n.replace('enabled="true"','enabled="true" editable="false"'))],
+ ['changeheight',x=>searchFieldChange(x,n=>n.replace('[180,177][1057,243]','[180,177][1057,309]'))],
+ ['changeleft',x=>searchFieldChange(x,n=>n.replace('[180,177][1057,243]','[181,177][1057,243]'))],
+ ['changeTop',x=>searchFieldChange(x,n=>n.replace('[180,177][1057,243]','[180,176][1057,242]'))],
+ ['growRight',x=>searchFieldChange(x,n=>n.replace('[180,177][1057,243]','[180,177][1110,243]'))],
+ ['wrongBackClass',x=>x.replace(/<node[^>]*resource-id="com.zhihu.android:id\/back_layout"[^>]*>/,n=>n.replace('android.widget.FrameLayout','android.view.View'))],
+ ['wrongClearClass',x=>x.replace(/<node[^>]*resource-id="com.zhihu.android:id\/close_layer"[^>]*>/,n=>n.replace('android.view.View','android.widget.TextView'))],
+ ['noClear',x=>x.replaceAll('com.zhihu.android:id/close_layer','com.zhihu.android:id/not_clear')],
+ ['duplicateClear',x=>x.replace('</hierarchy>','<node resource-id="com.zhihu.android:id/close_layer"/></hierarchy>')],
+ ['clearRightMismatch',x=>x.replace('[1031,161][1109,265]','[1031,161][1108,265]')],
+ ['clearGiant',x=>x.replace('[1031,161][1109,265]','[0,0][1109,2664]')],
+])test('知乎search typed窄布局拒绝：'+name,()=>{
+ const c=searchSelection();writeFileSync(c.xp,change(zhSearchTyped));assert.notEqual(run('standard-readback',c.selection,c.xp).status,0);
+});
+test('知乎search before-ready仍严格旧bounds和标识',()=>{
+ const c=searchSelection();assert.notEqual(run('standard-check',c.selection,zhSearch('typed')).status,0);
+});
+for(const [name,text] of [['实字改变','傍晚的颜色，慢一点也很差'],['段字顺序改变','慢一点也很好，傍晚的颜色']])test('知乎search exact比较拒绝：'+name,()=>{
+ const c=searchSelection();writeFileSync(c.xp,searchFieldChange(zhSearchTyped,n=>n.replace(/text="[^"]*"/,'text="'+text+'"')));
+ assert.equal(run('standard-compare',c.selection,c.xp,'傍晚的颜色，慢一点也很好').status,2);
+});
+test('知乎search actual短标题36bytes仍exact，不继承正文换行兼容',()=>{
+ const c=searchSelection();const r=run('standard-compare',c.selection,zhSearch('typed'),'傍晚的颜色，慢一点也很好');assert.equal(r.status,0,r.stderr);
+ const report=JSON.parse(r.stdout);assert.equal(report.comparison_mode,'exact');assert.equal(report.identity_policy,'zhihu_search_clear_v1');assert.equal(report.actual.bytes,36);assert.equal(report.actual.sha256,report.source.sha256);
+});
+
+test('真实知乎长query高度增长仍拒绝，不能继承短query许可',()=>{
+ const c=setup();const fixture=phase=>new URL('./fixtures/zhihu-search-long-'+phase+'.xml',import.meta.url).pathname;
+ const r=run('standard-resolve',fixture('before'));assert.equal(r.status,0,r.stderr);writeFileSync(c.selection,r.stdout);
+ assert.equal(run('standard-check',c.selection,fixture('ready')).status,0);assert.equal(run('standard-readback',c.selection,fixture('typed')).status,2);
+});

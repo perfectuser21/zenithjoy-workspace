@@ -51,6 +51,59 @@ def zhihu_body_structure(tree, field):
     return {"policy": "zhihu_native_article_body_v1", "editor_text": "Zhihu Editor", "root_id": "root"}
 
 
+def bounds_rect(value):
+    if not re.fullmatch(r"\[\d+,\d+\]\[\d+,\d+\]", value or ""):
+        raise ValueError("invalid field geometry")
+    values = tuple(map(int, re.findall(r"\d+", value)))
+    if values[0] >= values[2] or values[1] >= values[3]:
+        raise ValueError("empty field geometry")
+    return values
+
+
+def zhihu_search_structure(tree, field):
+    package = "com.zhihu.android"
+    nodes = list(tree.iter("node"))
+    inputs = [n for n in nodes if n.get("resource-id") == package + ":id/input_text"]
+    parents = [n for n in nodes if field in list(n)]
+    if (inputs != [field] or len(parents) != 1 or parents[0].get("class") != "android.widget.FrameLayout"
+            or parents[0].get("package") != package
+            or any(n.get("focused") == "true" and n is not field for n in nodes)):
+        raise ValueError("native Zhihu search input or parent is ambiguous")
+    parent = parents[0]
+    def identity(node):
+        if node.get("package") != package or node.get("enabled") != "true" or node.get("password") != "false":
+            raise ValueError("unsafe native search structure")
+        bounds_rect(node.get("bounds"))
+        return {k: node.get(k, "") for k in ("package", "class", "resource-id", "text", "bounds")}
+    result = {"policy": "zhihu_search_clear_v1", "parent": identity(parent)}
+    for key, cls, text in (("back_layout", "android.widget.FrameLayout", ""),
+                           ("search_button", "android.widget.TextView", "搜索"),
+                           ("close_layer", "android.view.View", "")):
+        matches = [n for n in nodes if n.get("resource-id") == package + ":id/" + key]
+        if (len(matches) != 1 or matches[0] not in list(parent) or matches[0].get("class") != cls
+                or matches[0].get("text") != text or matches[0].get("focusable") != "true"
+                or matches[0].get("focused") != "false"):
+            raise ValueError("native search sibling marker changed")
+        result[key] = identity(matches[0])
+    return result
+
+
+def check_zhihu_search_shrink(selection, current):
+    original, actual = selection["search_structure"], current.get("search_structure")
+    if not actual or any(actual[k] != original[k] for k in ("policy", "parent", "back_layout", "search_button")):
+        raise ValueError("native search structure changed after typing")
+    left, top, right, bottom = bounds_rect(selection["bounds"])
+    now_left, now_top, now_right, now_bottom = bounds_rect(current["bounds"])
+    old_close = bounds_rect(original["close_layer"]["bounds"])
+    clear_left, clear_top, clear_right, clear_bottom = bounds_rect(actual["close_layer"]["bounds"])
+    if (now_left != left or now_top != top or now_bottom != bottom or not left < now_right < right
+            or old_close[2] > left or old_close[3] > top
+            or clear_right != right or not clear_left <= now_right < clear_right
+            or clear_left < left or clear_top > top or clear_bottom < bottom
+            or clear_right - clear_left > 2 * (bottom - top) or clear_bottom - clear_top > 2 * (bottom - top)):
+        raise ValueError("search geometry is not the observed clear-button right shrink")
+
+
 def standard_resolve(xml_path):
     tree = ET.parse(xml_path)
     nodes = [n for n in tree.iter("node")
@@ -72,6 +125,11 @@ def standard_resolve(xml_path):
             identity["body_structure"] = zhihu_body_structure(tree, node)
         except ValueError:
             pass
+    if identity["package"] == "com.zhihu.android" and identity["resource-id"] == "com.zhihu.android:id/input_text":
+        try:
+            identity["search_structure"] = zhihu_search_structure(tree, node)
+        except ValueError:
+            pass
     return identity
 
 
@@ -80,12 +138,18 @@ def standard_readback(xml_path, selection, allow_body_growth=False):
     if allow_body_growth and selection.get("body_structure"):
         current = dict(current)
         current["bounds"] = selection["bounds"]
+    if allow_body_growth and selection.get("search_structure") and current != selection:
+        check_zhihu_search_shrink(selection, current)
+        current = dict(current)
+        current["bounds"] = selection["bounds"]
+        current["search_structure"] = selection["search_structure"]
     if current != selection:
         raise ValueError("focused input identity changed")
     # 兼容分支也必须重验同屏、唯一命名editor/root以及唯一安全焦点，绝不按空id全局读。
-    keys = ("package", "resource-id", "class") if allow_body_growth and selection.get("body_structure") else ("package", "resource-id", "class", "bounds")
+    layout_bound = allow_body_growth and (selection.get("body_structure") or selection.get("search_structure"))
+    keys = ("package", "resource-id", "class") if layout_bound else ("package", "resource-id", "class", "bounds")
     candidates = [n for n in ET.parse(xml_path).iter("node")
-                  if (not (allow_body_growth and selection.get("body_structure")) or n.get("focused") == "true")
+                  if (not layout_bound or n.get("focused") == "true")
                   and all(n.get(k, "") == selection[k] for k in keys)]
     if len(candidates) != 1:
         raise ValueError("selected input is absent or ambiguous")
@@ -103,7 +167,7 @@ def standard_compare(xml_path, selection, source):
     def identity(text):
         raw = text.encode("utf-8")
         return {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
-    return {"comparison_mode": mode, "source": identity(source), "actual": identity(actual),
+    return {"comparison_mode": mode, "identity_policy": selection.get("search_structure", {}).get("policy", selection.get("body_structure", {}).get("policy", "strict_standard")), "source": identity(source), "actual": identity(actual),
             "paragraphs": len(source.split("\n\n")) if selection.get("body_structure") else 0}
 
 

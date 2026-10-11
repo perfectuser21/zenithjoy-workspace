@@ -1,0 +1,29 @@
+{
+  "before": {
+    "source": "/Users/administrator/worktrees/zenithjoy-workspace/codex-multi-platform-publish/sprints/10101713-codex-publish-migration/evidence/zhihu-external-short-title-1011/remote-original/text-input-20261011094852-40112-before.xml",
+    "sha256": "884f24ca9a33ff99ce2808a6c2f151d259286eb8bd61e8af8766ded9562a466b"
+  },
+  "ready": {
+    "source": "/Users/administrator/worktrees/zenithjoy-workspace/codex-multi-platform-publish/sprints/10101713-codex-publish-migration/evidence/zhihu-external-short-title-1011/remote-original/text-input-20261011094852-40112-ready.xml",
+    "sha256": "884f24ca9a33ff99ce2808a6c2f151d259286eb8bd61e8af8766ded9562a466b"
+  },
+  "typed": {
+    "source": "/Users/administrator/worktrees/zenithjoy-workspace/codex-multi-platform-publish/sprints/10101713-codex-publish-migration/evidence/zhihu-external-short-title-1011/remote-original/text-input-20261011094852-40112-typed.xml",
+    "sha256": "7a7be83c4c7c123e5ad38aa38d753cbe7e4a84fe6a2beea02ffc1e0924114946"
+  },
+  "long_before": {
+    "source": "/Users/administrator/worktrees/zenithjoy-workspace/codex-multi-platform-publish/sprints/10101713-codex-publish-migration/evidence/zhihu-external-article-1011/remote-original/text-input-20261011094701-37810-before.xml",
+    "sha256": "a49c9f83f4b4aacacf64a7d1162158c3d1d738003cf7348b75e8bcb63a516f00",
+    "purpose": "真实长query增高仍拒绝"
+  },
+  "long_ready": {
+    "source": "/Users/administrator/worktrees/zenithjoy-workspace/codex-multi-platform-publish/sprints/10101713-codex-publish-migration/evidence/zhihu-external-article-1011/remote-original/text-input-20261011094701-37810-ready.xml",
+    "sha256": "a49c9f83f4b4aacacf64a7d1162158c3d1d738003cf7348b75e8bcb63a516f00",
+    "purpose": "真实长query增高仍拒绝"
+  },
+  "long_typed": {
+    "source": "/Users/administrator/worktrees/zenithjoy-workspace/codex-multi-platform-publish/sprints/10101713-codex-publish-migration/evidence/zhihu-external-article-1011/remote-original/text-input-20261011094701-37810-typed.xml",
+    "sha256": "294eec9b16d6ca07a6cc7c50c075e11893b2eb3a75d0ea61fbdeddbb96b5dc62",
+    "purpose": "真实长query增高仍拒绝"
+  }
+}
