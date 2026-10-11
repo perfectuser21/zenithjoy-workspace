@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {loadContractsFromDisk,validateContracts,assemble} from '../contracts-lib.mjs';
 const keys=['bilibili','douyin','kuaishou','toutiao','wechat_channels','weibo','xiaohongshu','zhihu'];
 test('既有发布workflow点号身份必须原样接受，禁止偷换稳定key',()=>{
@@ -27,4 +28,8 @@ test('八个现有发布流程加厚同一真实能力，共享预检收尾且�
   }
  }
  assert.deepEqual(validateContracts(c),[]);
+});
+test('发布阶段探针只增加明确阶段，旧获客阶段保留',()=>{
+ const s=JSON.parse(readFileSync(new URL('../../../services/phone-adb-controller/checks/schema.json',import.meta.url),'utf8'));
+ for(const key of ['prepare','publish','verify','discovery','collection'])assert.ok(s.definitions.stage.enum.includes(key),key);
 });
