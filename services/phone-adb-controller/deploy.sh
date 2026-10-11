@@ -110,6 +110,7 @@ MMV_PROBE_FILES=(
 # 漏任一目录 = 两份副本版本分叉,且部署过程不会报任何错。层26 smoke 守卫盯这件事。
 DEVICE_CTL_FILES=(
   phone-lock-lib.sh phone-lock-helper.py locate-element.py douyin-phone-adb text-input-focus.py input-runtime-release.py
+  bypass-report.sh
 )
 DEVICE_CTL_DIRS=(bin-harvest .local/bin)
 DEVICE_SH_FILES=(

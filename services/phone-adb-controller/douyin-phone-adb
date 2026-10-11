@@ -3481,6 +3481,7 @@ tap_with_evidence() {
     outward_ledger_call attempt command="$cmd" x="$x" y="$y" control="$control" \
       before_evidence_id="$before_id" after_evidence_id="$eid" wait_ms="$wait"
     attempt_out="$OUTWARD_LEDGER_OUT"
+    bypass_report phone_outward "$SERIAL" "$OUTWARD_RUN" "$OUTWARD_ACTION" "$cmd"
     [[ "$attempt_out" =~ 'attempt_seq=([0-9]+) action_seq=([0-9]+)' ]] && { attempt_seq="${match[1]}"; action_seq="${match[2]}"; }
   fi
   "$ADB" -s "$SERIAL" shell input tap "$x" "$y" || tap_rc=$?
@@ -3513,6 +3514,16 @@ tap_with_evidence() {
   return 0
 }
 
+# 旁路报警（派发总闸 H，Brain 任务 865b502c）：领锁成功 / 对外动作点击前，后台调 bypass-report.sh 把
+# 「谁（run/持有者）在哪台手机做了什么」报给 Brain，是否关联 Brain 任务由 Brain 侧判定、只记旁路。
+# 先只告警不拦截：后台跑且 disown，上报器缺失、DOUYIN_BYPASS_REPORT=off、Brain 不可用都不影响本命令。
+BYPASS_REPORT_BIN="${DOUYIN_BYPASS_REPORT_BIN:-${0:A:h}/bypass-report.sh}"
+bypass_report() {
+  [[ "${DOUYIN_BYPASS_REPORT:-on}" != off && -r "$BYPASS_REPORT_BIN" ]] || return 0
+  /bin/bash "$BYPASS_REPORT_BIN" "$@" </dev/null >/dev/null 2>&1 &!
+  return 0
+}
+
 # lock-acquire / lock-release（含 -new / -exact）回执证据：原回执照常打印（首行不变），
 # 随后在同一把 guard 内回读 lock-status，连同时间/owner/退出码写 <run>-lock-<acquire|release>.json（事件追加），
 # 并打印 lock_evidence_id=<证据ID>。失败也写。
@@ -3529,6 +3540,7 @@ lock_with_receipt() {
     run="$(normalize_run_id "$2")"
     eid="${run}-lock-${kind}"
     path="$EVIDENCE_ROOT/${eid}.json"
+    [[ "$kind" == acquire && "$rc" == 0 ]] && bypass_report phone_lock "$SERIAL" "$run" lock-acquire "$cmd"
     readback="$(phone_lock_command lock-status 2>&1)" || true
     state="${${readback%%$'\n'*}#lock=}"; state="${state%% *}"
     if "$PYTHON_BIN" "$OUTWARD_HELPER" lock-receipt "$path" "$kind" "$run" "$eid" command="$cmd" requested_owner="$2" \
@@ -3893,6 +3905,9 @@ case "$command" in
   private-message-send)
     [[ "$#" == 5 || "$#" == 6 ]] || die "usage: douyin-phone-adb --profile PROFILE private-message-send SENDER_DOUYIN_ID TARGET_DOUYIN_ID MESSAGE_B64 EVIDENCE_ID [PROFILE_URL]"
     check_target
+    # 私信不带 --lock-owner：持有者取本机锁 owner（读不到报 unknown），由 Brain 判是否关联 Brain 任务
+    pm_owner="unknown"; [[ -r "$LOCK_DIR/owner" ]] && pm_owner="$(<"$LOCK_DIR/owner")"
+    bypass_report phone_outward "$SERIAL" "${pm_owner:-unknown}" dm private-message-send
     send_private_message "$2" "$3" "$4" "$5" "${6:-}"
     ;;
   commenter-card-link)
