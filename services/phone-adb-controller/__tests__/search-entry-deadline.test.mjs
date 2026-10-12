@@ -7,9 +7,9 @@ import {execInput} from '../leadgen-client.mjs';
 import {createHandlers} from '../leadgen-workflow.mjs';
 
 test('实际进程超时保留安全首因，跨chunk凭据和长图片不得进入回执',async()=>{
- const code=`process.stderr.write('phase=vision HTTP waiting\\nAuthorization: Bear');setTimeout(()=>process.stderr.write('er sk-fake-token\\n{"api_key":"fake-private"}\\ndata:image/png;base64,'+'A'.repeat(12000)+'\\n'),25);setInterval(()=>{},1000)`;
+ const code=`process.stdout.write('phase=vision request-start\\n');process.stderr.write('phase=vision HTTP waiting\\nAuthorization: Bear');setTimeout(()=>process.stderr.write('er sk-fake-token\\n{"api_key":"fake-private"}\\ndata:image/png;base64,'+'A'.repeat(12000)+'\\n'),25);setInterval(()=>{},1000)`;
  let failure;try{await execInput(process.execPath,['-e',code],{timeoutMs:300});}catch(e){failure=e;}
- assert.equal(failure?.message,'EXECUTION_DEADLINE');assert.match(failure.stderr,/phase=vision HTTP waiting/);
+ assert.equal(failure?.message,'EXECUTION_DEADLINE');assert.match(failure.stdout,/phase=vision request-start/);assert.match(failure.stderr,/phase=vision HTTP waiting/);
  assert.doesNotMatch(failure.stderr,/sk-fake-token|fake-private|A{30}|Bearer sk/);
  assert.ok(failure.stderr.length<=8000);
 });
