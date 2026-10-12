@@ -1,5 +1,6 @@
 """回归：只有真实 Gateway 执行和中央子任务证据才能承认派发。"""
 import contextlib
+import datetime as dt
 import copy
 import hashlib
 import importlib.util
@@ -51,7 +52,7 @@ class OpenClawCommanderTests(unittest.TestCase):
             return {'phones': [{'serial': 'phone-a', 'enabled': True}, {'serial': 'disabled', 'enabled': False}]}
         if path == 'tasks/' + TASK:
             return {'id': TASK, 'status': 'in_progress', 'task_type': 'script_run', 'project_id': PROJECT,
-                    'payload': {'workflow_id': BATCH}}
+                    'payload': {'workflow_id': BATCH, 'phone_source_revision': commander.PHONE_SOURCE_REVISION, 'source_revision': 'a' * 40}}
         if path == 'tasks/' + CHILD:
             return self.child
         raise AssertionError(path)
@@ -64,7 +65,12 @@ class OpenClawCommanderTests(unittest.TestCase):
         self.assertIn(str(self.release / 'runner.py'), message['command'])
         self.assertIn('--task-id ' + TASK, message['command'])
         (self.state / ('batch-' + TASK + '.json')).write_text(json.dumps(self.receipt))
-        return subprocess.CompletedProcess(command, 0, json.dumps({'runId': 'gateway-run-1', 'status': 'ok', 'result': {'text': '已经完成'}}), '')
+        return subprocess.CompletedProcess(command, 0, json.dumps(self.envelope()), '')
+
+    def envelope(self):
+        return {'runId': 'gateway-run-1', 'status': 'ok', 'result': {'meta': {'aborted': False, 'agentMeta': {
+            'sessionId': 'session-1', 'terminalReceipt': {'runId': 'gateway-run-1', 'sessionId': 'session-1',
+            'successfulToolNames': ['gateway_exec']}}}}}
 
     def run_launch(self, gateway=None):
         with patch.object(commander.subprocess, 'run', side_effect=gateway or self.gateway):
@@ -105,8 +111,32 @@ class OpenClawCommanderTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0][0], '/opt/homebrew/bin/openclaw')
         self.assertFalse((self.state / ('batch-' + TASK + '.json')).exists())
 
+    def test_parent_identity_must_be_real_running_registered_batch(self):
+        for key, value in [('status', 'completed'), ('project_id', WF), ('task_type', 'dev'),
+                           ('workflow_id', WF), ('source_revision', 'not-git'), ('phone_source_revision', 'old')]:
+            def bad(path):
+                task = self.api(path)
+                if path == 'tasks/' + TASK:
+                    if key in ['workflow_id', 'source_revision', 'phone_source_revision']:
+                        task['payload'][key] = value
+                    else:
+                        task[key] = value
+                return task
+            with self.subTest(key=key), patch.object(commander.subprocess, 'run') as run, self.assertRaises(ValueError):
+                commander.launch(TASK, self.deployment, self.state, bad)
+            run.assert_not_called()
+
+    def test_missing_enabled_phone_cannot_be_hidden_by_short_receipt(self):
+        def two_phones(path):
+            value = self.api(path)
+            if path == 'phone-registry':
+                value['phones'].append({'serial': 'phone-b', 'enabled': True})
+            return value
+        with patch.object(commander.subprocess, 'run', side_effect=self.gateway), self.assertRaises(ValueError):
+            commander.launch(TASK, self.deployment, self.state, two_phones)
+
     def test_ai_success_without_real_batch_receipt_is_failure(self):
-        output = json.dumps({'runId': 'r', 'status': 'ok', 'result': {'text': json.dumps(self.receipt)}})
+        output = json.dumps(self.envelope())
         with self.assertRaises((ValueError, RuntimeError, FileNotFoundError)):
             self.run_launch(lambda *a, **k: subprocess.CompletedProcess([], 0, output, ''))
 
@@ -118,6 +148,16 @@ class OpenClawCommanderTests(unittest.TestCase):
                 return subprocess.CompletedProcess([], 0, json.dumps(result), '')
             with self.subTest(result=result), self.assertRaises(ValueError):
                 self.run_launch(fake)
+
+    def test_missing_aborted_or_unrelated_terminal_tool_receipt_is_rejected(self):
+        for key, value in [('aborted', True), ('aborted', None), ('runId', 'other-run'), ('sessionId', 'other-session'), ('successfulToolNames', ['bash'])]:
+            result = self.envelope()
+            if key == 'aborted':
+                result['result']['meta'][key] = value
+            else:
+                result['result']['meta']['agentMeta']['terminalReceipt'][key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                self.run_launch(lambda *a, **k: subprocess.CompletedProcess([], 0, json.dumps(result), ''))
 
     def test_wrong_or_missing_batch_identity_is_rejected(self):
         for field, value in [('task_id', CHILD), ('source_revision', 'old'), ('status', 'completed'), ('children', [])]:
@@ -181,6 +221,68 @@ class OpenClawCommanderTests(unittest.TestCase):
         last = json.loads(output.getvalue().splitlines()[-1])
         self.assertEqual(last['children'], self.receipt['children'])
         self.assertEqual(last['commander']['openclaw_run_id'], 'gateway-run-1')
+
+    def review_api(self, path):
+        if path == 'tasks/' + BATCH:
+            return {'id': BATCH, 'status': 'in_progress', 'task_type': 'script_run'}
+        if path == 'tasks/' + TASK:
+            task = self.api(path)
+            task['status'] = 'completed'
+            task['result'] = {'script': {'stdout': json.dumps(self.receipt)}}
+            return task
+        if path == 'tasks/' + CHILD:
+            task = dict(self.child, status='completed', result={'script': {'run_id': 'child-run-a1', 'exit_code': 0,
+                'stdout': json.dumps({'task_id': CHILD, 'status': 'deferred'})}})
+            return task
+        return self.api(path)
+
+    def test_review_requires_real_inspect_snapshot_and_preserves_business_deferred(self):
+        def gateway(command, **kwargs):
+            message = json.loads(command[command.index('--message') + 1])
+            self.assertIn(' inspect --batch-task-id ' + TASK, message['command'])
+            commander.inspection(TASK, BATCH, self.deployment, self.state, self.review_api)
+            return subprocess.CompletedProcess([], 0, json.dumps(self.envelope()), '')
+        with patch.object(commander.subprocess, 'run', side_effect=gateway):
+            result = commander.review(BATCH, TASK, self.deployment, self.state, self.review_api)
+        self.assertEqual(result['children'][0]['business_status'], 'deferred')
+        self.assertEqual(result['children'][0]['run_id'], 'child-run-a1')
+        self.assertEqual(result['children'][0]['business_receipt'], {'task_id': CHILD, 'status': 'deferred'})
+        self.assertEqual(result['children'][0]['exit_code'], 0)
+        self.assertEqual(result['actor'], 'OpenClaw:infra')
+        self.assertEqual(result['commander']['session_key'], 'agent:infra:phone-patrol:' + BATCH + ':review')
+
+    def test_review_rejects_ai_only_result_or_fake_inspect_status(self):
+        for fake_snapshot in [False, True]:
+            def gateway(command, **kwargs):
+                if fake_snapshot:
+                    value = commander.inspection(TASK, BATCH, self.deployment, self.state, self.review_api)
+                    value['children'][0]['status'] = 'failed'
+                    commander.save(self.state, 'review-' + BATCH + '.json', value)
+                return subprocess.CompletedProcess([], 0, json.dumps(self.envelope()), '')
+            with patch.object(commander.subprocess, 'run', side_effect=gateway), self.assertRaises((ValueError, FileNotFoundError)):
+                commander.review(BATCH, TASK, self.deployment, self.state, self.review_api)
+
+    def test_automatic_review_uses_only_verified_same_day_formal_launch(self):
+        with self.assertRaises(ValueError):
+            commander.resolve_batch(None, self.deployment, self.state, self.review_api)
+        latest = dict(self.receipt, commander={'agent_id': 'infra', 'openclaw_run_id': 'verified-run'}, verified=True)
+        commander.save(self.state, 'openclaw-commander.latest.json', latest)
+        current = dt.datetime(2026, 10, 12, 14, 45, tzinfo=dt.timezone.utc)
+        def formal(path):
+            value = self.review_api(path)
+            if path == 'tasks/' + TASK:
+                value['payload']['recurring_task_id'] = self.deployment['schedule_id']
+                value['payload']['recurring_slot'] = '2026-10-12T14:00:00.000Z'
+            return value
+        self.assertEqual(commander.resolve_batch(None, self.deployment, self.state, formal, current), TASK)
+        for slot in ['2026-10-11T14:00:00Z', '2026-10-12T13:00:00Z']:
+            def stale(path):
+                value = formal(path)
+                if path == 'tasks/' + TASK:
+                    value['payload']['recurring_slot'] = slot
+                return value
+            with self.subTest(slot=slot), self.assertRaises(ValueError):
+                commander.resolve_batch(None, self.deployment, self.state, stale, current)
 
     def test_timeout_is_unknown_not_gateway_cancellation_and_no_secret_output(self):
         output = io.StringIO()
